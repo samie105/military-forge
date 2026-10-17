@@ -1,0 +1,67 @@
+{
+  "file": "art/weapons/shredder.glb",
+  "kind": "weapon",
+  "pass": true,
+  "rows": [
+    {
+      "status": "INFO",
+      "check": "file size",
+      "detail": "51 KB"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles",
+      "detail": "740 of 1000"
+    },
+    {
+      "status": "PASS",
+      "check": "one mesh, one material",
+      "detail": "1 draw call(s)"
+    },
+    {
+      "status": "INFO",
+      "check": "GPU texture memory (KTX2 est.)",
+      "detail": "0.00 MB, 0 image(s)"
+    },
+    {
+      "status": "PASS",
+      "check": "extras weaponId/family/aimPose/hands",
+      "detail": "ok"
+    },
+    {
+      "status": "WARN",
+      "check": "weaponId in packages/content",
+      "detail": "shredder is not in packages/content/src/{weapons,grenades}.ts yet"
+    },
+    {
+      "status": "INFO",
+      "check": "nodes",
+      "detail": "eject, muzzle, offhand"
+    },
+    {
+      "status": "PASS",
+      "check": "origin on the weapon (the grip)",
+      "detail": "bbox (-0.14, -0.16, -0.13)..(0.06, 0.1, 0.6)"
+    },
+    {
+      "status": "PASS",
+      "check": "family is a docs/04 \u00a74.2 family",
+      "detail": "'heavy'"
+    },
+    {
+      "status": "PASS",
+      "check": "aimPose has clips",
+      "detail": "'rifle'"
+    },
+    {
+      "status": "PASS",
+      "check": "muzzle node ahead of the grip (+Y)",
+      "detail": "muzzle at glTF y +0.61 m"
+    },
+    {
+      "status": "PASS",
+      "check": "offhand node within 0.1 m of the grip",
+      "detail": "0.099 m"
+    }
+  ]
+}

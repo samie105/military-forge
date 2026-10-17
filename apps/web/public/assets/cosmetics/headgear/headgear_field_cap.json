@@ -1,0 +1,38 @@
+{
+  "id": "headgear_field_cap",
+  "slot": "headgear",
+  "name": "Field Cap",
+  "skeleton": "shared-v1",
+  "default": false,
+  "lods": {
+    "lod0": "headgear_field_cap.glb",
+    "lod1": "headgear_field_cap_lod1.glb"
+  },
+  "dye": {
+    "lod0": {
+      "mask": "textures/headgear_field_cap_dye_mask.png",
+      "albedo": "textures/headgear_field_cap_dye_albedo.webp",
+      "defaults": {
+        "primary": "#7a7243",
+        "secondary": "#615844",
+        "accent": "#cfb16c"
+      }
+    },
+    "lod1": {
+      "mask": "textures/headgear_field_cap_lod1_dye_mask.png",
+      "albedo": "textures/headgear_field_cap_lod1_dye_albedo.webp",
+      "defaults": {
+        "primary": "#787041",
+        "secondary": "#615944",
+        "accent": "#caae6d"
+      }
+    }
+  },
+  "tris": {
+    "lod0": 450,
+    "lod1": 200
+  },
+  "source": "generated",
+  "attachBone": "head",
+  "socket": "socket_hat"
+}

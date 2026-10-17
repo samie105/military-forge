@@ -1,0 +1,45 @@
+{
+  "id": "jetpack_twin_tank",
+  "slot": "jetpack",
+  "name": "Twin Tank",
+  "skeleton": "shared-v1",
+  "default": true,
+  "socket": "socket_jetpack",
+  "attachBone": "spine2",
+  "lods": {
+    "lod0": "jetpack_twin_tank.glb",
+    "lod1": "jetpack_twin_tank_lod1.glb"
+  },
+  "dye": {
+    "lod0": {
+      "mask": "textures/jetpack_twin_tank_dye_mask.png",
+      "albedo": "textures/jetpack_twin_tank_dye_albedo.webp",
+      "defaults": {
+        "secondary": "#70623d"
+      }
+    },
+    "lod1": {
+      "mask": "textures/jetpack_twin_tank_lod1_dye_mask.png",
+      "albedo": "textures/jetpack_twin_tank_lod1_dye_albedo.webp",
+      "defaults": {
+        "secondary": "#70623c"
+      }
+    }
+  },
+  "tris": {
+    "lod0": 549,
+    "lod1": 250
+  },
+  "nozzles": [
+    [
+      -0.064,
+      0.536,
+      -0.297
+    ],
+    [
+      0.069,
+      0.536,
+      -0.233
+    ]
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "id": "boots_jungle",
+  "slot": "boots",
+  "name": "Jungle Boots",
+  "skeleton": "shared-v1",
+  "default": false,
+  "lods": {
+    "lod0": "boots_jungle.glb",
+    "lod1": "boots_jungle_lod1.glb"
+  },
+  "dye": {
+    "lod0": {
+      "mask": "textures/boots_jungle_dye_mask.png",
+      "albedo": "textures/boots_jungle_dye_albedo.webp",
+      "defaults": {
+        "primary": "#687345",
+        "secondary": "#19191b",
+        "accent": "#dbad3d"
+      }
+    },
+    "lod1": {
+      "mask": "textures/boots_jungle_lod1_dye_mask.png",
+      "albedo": "textures/boots_jungle_lod1_dye_albedo.webp",
+      "defaults": {
+        "primary": "#687345",
+        "secondary": "#3e3e44",
+        "accent": "#dbad3d"
+      }
+    }
+  },
+  "tris": {
+    "lod0": 300,
+    "lod1": 130
+  }
+}

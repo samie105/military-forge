@@ -1,0 +1,15 @@
+asset-check: art/weapons/hawk50.glb  [weapon]
+------------------------------------------------------------------------------------------------
+INFO  file size                             20 KB
+PASS  triangles                             268 of 1000
+PASS  one mesh, one material                1 draw call(s)
+INFO  GPU texture memory (KTX2 est.)        0.00 MB, 0 image(s)
+PASS  extras weaponId/family/aimPose/hands  ok
+WARN  weaponId in packages/content          hawk50 is not in packages/content/src/{weapons,grenades}.ts yet
+INFO  nodes                                 eject, mag, muzzle
+PASS  origin on the weapon (the grip)       bbox (-0.02, -0.08, -0.05)..(0.02, 0.11, 0.23)
+PASS  family is a docs/04 §4.2 family       'pistol'
+PASS  aimPose has clips                     'pistol'
+PASS  muzzle node ahead of the grip (+Y)    muzzle at glTF y +0.23 m
+------------------------------------------------------------------------------------------------
+RESULT: PASS  (7 pass, 1 warn, 0 fail)

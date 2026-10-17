@@ -1,0 +1,242 @@
+{
+  "file": "art/character/rookie_body_lod1.glb,art/character/parts/headgear_brim_helmet_lod1.glb,art/character/parts/boots_combat_lod1.glb,art/character/parts/jetpack_twin_tank_lod1.glb",
+  "kind": "character",
+  "pass": true,
+  "rows": [
+    {
+      "status": "INFO",
+      "check": "file size",
+      "detail": "215 KB over 4 files"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles (LOD1)",
+      "detail": "1578 of 1800"
+    },
+    {
+      "status": "PASS",
+      "check": "draw calls after part merge (docs/04 \u00a75.3)",
+      "detail": "1 of 3 (4 before merging)"
+    },
+    {
+      "status": "PASS",
+      "check": "texture size: boots_combat_lod1_albedo",
+      "detail": "128x128 (max 1024)"
+    },
+    {
+      "status": "PASS",
+      "check": "texture POT: boots_combat_lod1_albedo",
+      "detail": "power of two"
+    },
+    {
+      "status": "PASS",
+      "check": "texture size: headgear_brim_helmet_lod1_albedo",
+      "detail": "128x128 (max 1024)"
+    },
+    {
+      "status": "PASS",
+      "check": "texture POT: headgear_brim_helmet_lod1_albedo",
+      "detail": "power of two"
+    },
+    {
+      "status": "PASS",
+      "check": "texture size: jetpack_twin_tank_lod1_albedo",
+      "detail": "128x128 (max 1024)"
+    },
+    {
+      "status": "PASS",
+      "check": "texture POT: jetpack_twin_tank_lod1_albedo",
+      "detail": "power of two"
+    },
+    {
+      "status": "PASS",
+      "check": "texture size: rookie_body_lod1_albedo",
+      "detail": "256x256 (max 1024)"
+    },
+    {
+      "status": "PASS",
+      "check": "texture POT: rookie_body_lod1_albedo",
+      "detail": "power of two"
+    },
+    {
+      "status": "PASS",
+      "check": "texture size: rookie_body_lod1_dye_mask.png",
+      "detail": "256x256 (max 1024)"
+    },
+    {
+      "status": "PASS",
+      "check": "texture POT: rookie_body_lod1_dye_mask.png",
+      "detail": "power of two"
+    },
+    {
+      "status": "PASS",
+      "check": "texture size: headgear_brim_helmet_lod1_dye_mask.png",
+      "detail": "128x128 (max 1024)"
+    },
+    {
+      "status": "PASS",
+      "check": "texture POT: headgear_brim_helmet_lod1_dye_mask.png",
+      "detail": "power of two"
+    },
+    {
+      "status": "PASS",
+      "check": "texture size: boots_combat_lod1_dye_mask.png",
+      "detail": "128x128 (max 1024)"
+    },
+    {
+      "status": "PASS",
+      "check": "texture POT: boots_combat_lod1_dye_mask.png",
+      "detail": "power of two"
+    },
+    {
+      "status": "PASS",
+      "check": "texture size: jetpack_twin_tank_lod1_dye_mask.png",
+      "detail": "128x128 (max 1024)"
+    },
+    {
+      "status": "PASS",
+      "check": "texture POT: jetpack_twin_tank_lod1_dye_mask.png",
+      "detail": "power of two"
+    },
+    {
+      "status": "PASS",
+      "check": "GPU texture memory (KTX2 est.)",
+      "detail": "0.22 MB of 1.50 MB, 8 image(s)"
+    },
+    {
+      "status": "PASS",
+      "check": "dye round trip: rookie_body_lod1",
+      "detail": "dyed 53%: mean 0.004 p95 0.006 (max 0.012/0.04); undyed 47%: mean 0.0 p95 0.0/255 (max 5/16)"
+    },
+    {
+      "status": "PASS",
+      "check": "dye round trip: rookie_headgear_lod1",
+      "detail": "dyed 89%: mean 0.002 p95 0.005 (max 0.015/0.06); undyed 11%: mean 0.0 p95 0.0/255 (max 8/32)"
+    },
+    {
+      "status": "PASS",
+      "check": "dye round trip: rookie_boots_lod1",
+      "detail": "undyed 100%: mean 0.0 p95 0.0/255 (max 8/32)"
+    },
+    {
+      "status": "PASS",
+      "check": "dye round trip: rookie_jetpack_lod1",
+      "detail": "dyed 79%: mean 0.002 p95 0.005 (max 0.015/0.06); undyed 21%: mean 0.0 p95 0.0/255 (max 8/32)"
+    },
+    {
+      "status": "PASS",
+      "check": "armature",
+      "detail": "4 armature(s) with identical bones (assembled parts)"
+    },
+    {
+      "status": "PASS",
+      "check": "deform bones (docs/04 \u00a74.1)",
+      "detail": "all 25 present"
+    },
+    {
+      "status": "PASS",
+      "check": "sockets (docs/04 \u00a74.1)",
+      "detail": "all 7 present"
+    },
+    {
+      "status": "PASS",
+      "check": "no unexpected bones",
+      "detail": "none"
+    },
+    {
+      "status": "PASS",
+      "check": "meshes skinned to the armature",
+      "detail": "4/4"
+    },
+    {
+      "status": "PASS",
+      "check": "every vertex weighted",
+      "detail": "0 unweighted of 2361"
+    },
+    {
+      "status": "PASS",
+      "check": "\u2264 4 influences per vertex",
+      "detail": "0 vertices over"
+    },
+    {
+      "status": "PASS",
+      "check": "weights normalised",
+      "detail": "0 vertices off by > 2%"
+    },
+    {
+      "status": "PASS",
+      "check": "sockets are non-deform (no weights)",
+      "detail": "none weighted"
+    },
+    {
+      "status": "PASS",
+      "check": "weights only on skeleton bones",
+      "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "same bind pose in every file",
+      "detail": "worst -: 0.0 mm, 0.00\u00b0"
+    },
+    {
+      "status": "INFO",
+      "check": "bounds (m)",
+      "detail": "x -0.47..+0.47  depth(y) -0.27..+0.35  z +0.00..+1.48"
+    },
+    {
+      "status": "PASS",
+      "check": "feet on the ground (min z = 0)",
+      "detail": "min z +0.001 m"
+    },
+    {
+      "status": "PASS",
+      "check": "height vs hitbox top",
+      "detail": "1.476 m, hitbox top 1.48 m (allowed 1.41-1.63)"
+    },
+    {
+      "status": "PASS",
+      "check": "faces glTF +Z (toes ahead of ankles)",
+      "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "head centre vs head hitbox",
+      "detail": "1.230 m vs 1.24 m (\u00b10.08); head height 0.49 m vs 0.48 m"
+    },
+    {
+      "status": "PASS",
+      "check": "chibi head \u2248 \u2153 of height",
+      "detail": "head 33% of height"
+    },
+    {
+      "status": "INFO",
+      "check": "hitbox source",
+      "detail": "packages/content/src/hitboxes.ts"
+    },
+    {
+      "status": "PASS",
+      "check": "silhouette covers hitboxes (no tiny skins)",
+      "detail": "68% of the hitbox area is drawn (min 60%)"
+    },
+    {
+      "status": "PASS",
+      "check": "silhouette within hitbox envelope",
+      "detail": "1% of the silhouette is outside hitboxes x1.10 (max 25%; jetpack/arms)"
+    },
+    {
+      "status": "INFO",
+      "check": "base bbox (cosmetics may grow it \u2264 x1.10)",
+      "detail": "{\"min\": [-0.471, -0.271, 0.001], \"max\": [0.471, 0.354, 1.476]}"
+    },
+    {
+      "status": "INFO",
+      "check": "animation clips",
+      "detail": "none"
+    },
+    {
+      "status": "PASS",
+      "check": "custom properties (docs/04 \u00a78)",
+      "detail": "bodyTypes, envelopeOk, slot"
+    }
+  ]
+}

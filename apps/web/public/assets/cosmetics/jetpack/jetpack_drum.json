@@ -1,0 +1,44 @@
+{
+  "id": "jetpack_drum",
+  "slot": "jetpack",
+  "name": "Drum Pack",
+  "skeleton": "shared-v1",
+  "default": false,
+  "lods": {
+    "lod0": "jetpack_drum.glb",
+    "lod1": "jetpack_drum_lod1.glb"
+  },
+  "dye": {
+    "lod0": {
+      "mask": "textures/jetpack_drum_dye_mask.png",
+      "albedo": "textures/jetpack_drum_dye_albedo.webp",
+      "defaults": {
+        "primary": "#3162a8",
+        "secondary": "#974c2e",
+        "accent": "#ffd32c"
+      }
+    },
+    "lod1": {
+      "mask": "textures/jetpack_drum_lod1_dye_mask.png",
+      "albedo": "textures/jetpack_drum_lod1_dye_albedo.webp",
+      "defaults": {
+        "primary": "#3162a8",
+        "secondary": "#b46136",
+        "accent": "#ffd32c"
+      }
+    }
+  },
+  "tris": {
+    "lod0": 550,
+    "lod1": 248
+  },
+  "attachBone": "spine2",
+  "socket": "socket_jetpack",
+  "nozzles": [
+    [
+      0.0,
+      0.519,
+      -0.266
+    ]
+  ]
+}

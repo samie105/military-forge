@@ -1,0 +1,14 @@
+asset-check: art/weapons/machete.glb  [weapon]
+------------------------------------------------------------------------------------------------
+INFO  file size                             22 KB
+PASS  triangles                             312 of 1000
+PASS  one mesh, one material                1 draw call(s)
+INFO  GPU texture memory (KTX2 est.)        0.00 MB, 0 image(s)
+PASS  extras weaponId/family/aimPose/hands  ok
+PASS  weaponId in packages/content          machete
+INFO  nodes                                 tip
+PASS  origin on the weapon (the grip)       bbox (-0.02, -0.05, -0.06)..(0.02, 0.03, 0.52)
+PASS  family is a docs/04 §4.2 family       'melee'
+PASS  aimPose has clips                     'pistol'
+------------------------------------------------------------------------------------------------
+RESULT: PASS  (7 pass, 0 warn, 0 fail)

@@ -1,0 +1,16 @@
+asset-check: art/weapons/k47.glb  [weapon]
+-------------------------------------------------------------------------------------------------
+INFO  file size                              36 KB
+PASS  triangles                              492 of 1000
+PASS  one mesh, one material                 1 draw call(s)
+INFO  GPU texture memory (KTX2 est.)         0.00 MB, 0 image(s)
+PASS  extras weaponId/family/aimPose/hands   ok
+PASS  weaponId in packages/content           k47
+INFO  nodes                                  eject, mag, muzzle, offhand
+PASS  origin on the weapon (the grip)        bbox (-0.03, -0.1, -0.34)..(0.03, 0.17, 0.57)
+PASS  family is a docs/04 §4.2 family        'rifle'
+PASS  aimPose has clips                      'rifle'
+PASS  muzzle node ahead of the grip (+Y)     muzzle at glTF y +0.58 m
+PASS  offhand node within 0.1 m of the grip  0.091 m
+-------------------------------------------------------------------------------------------------
+RESULT: PASS  (9 pass, 0 warn, 0 fail)

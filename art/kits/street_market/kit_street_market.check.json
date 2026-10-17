@@ -1,0 +1,437 @@
+{
+  "file": "art/kits/street_market/kit_street_market.glb",
+  "kind": "kit",
+  "pass": true,
+  "rows": [
+    {
+      "status": "INFO",
+      "check": "file size",
+      "detail": "880 KB"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: sm_billboard",
+      "detail": "550 of 3000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: sm_billboard",
+      "detail": "y +0.00..+20.20 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "collision on a 0.05 m grid: sm_billboard",
+      "detail": "14 coordinates"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: sm_billboard",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: sm_billboard",
+      "detail": "blue \u0394E 59, orange \u0394E 74 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: sm_crates",
+      "detail": "260 of 3000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: sm_crates",
+      "detail": "y +0.00..+1.60 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "collision on a 0.05 m grid: sm_crates",
+      "detail": "12 coordinates"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: sm_crates",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: sm_crates",
+      "detail": "blue \u0394E 93, orange \u0394E 50 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: sm_east_block",
+      "detail": "588 of 3000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: sm_east_block",
+      "detail": "y +0.00..+26.50 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: sm_edge_block",
+      "detail": "872 of 3000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: sm_edge_block",
+      "detail": "y +0.00..+54.00 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "collision on a 0.05 m grid: sm_edge_block",
+      "detail": "3 coordinates"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: sm_edge_block",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: sm_edge_block",
+      "detail": "blue \u0394E 72, orange \u0394E 73 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: sm_far_block_a",
+      "detail": "216 of 3000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: sm_far_block_a",
+      "detail": "y +0.00..+14.30 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: sm_far_block_b",
+      "detail": "168 of 3000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: sm_far_block_b",
+      "detail": "y +0.00..+10.30 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: sm_flyover",
+      "detail": "264 of 3000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: sm_flyover",
+      "detail": "y +0.00..+23.30 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: sm_ground_4m",
+      "detail": "336 of 3000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: sm_ground_4m",
+      "detail": "y -1.50..+0.00 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "collision on a 0.05 m grid: sm_ground_4m",
+      "detail": "3 coordinates"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: sm_ground_4m",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: sm_ground_4m",
+      "detail": "blue \u0394E 78, orange \u0394E 47 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: sm_hoarding_18x3",
+      "detail": "232 of 3000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: sm_hoarding_18x3",
+      "detail": "y +0.00..+3.50 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "ad surface off the gameplay plane: sm_hoarding_18x3",
+      "detail": "hoarding 6:1 18 x 3 m, layer mid"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: sm_hoarding_21x3_5",
+      "detail": "232 of 3000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: sm_hoarding_21x3_5",
+      "detail": "y +0.00..+4.00 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "ad surface off the gameplay plane: sm_hoarding_21x3_5",
+      "detail": "hoarding 6:1 21 x 3.5 m, layer mid"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: sm_house_2f",
+      "detail": "976 of 3000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: sm_house_2f",
+      "detail": "y +0.00..+8.15 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "collision on a 0.05 m grid: sm_house_2f",
+      "detail": "7 coordinates"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: sm_house_2f",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: sm_house_2f",
+      "detail": "blue \u0394E 70, orange \u0394E 53 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: sm_house_3f",
+      "detail": "1356 of 3000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: sm_house_3f",
+      "detail": "y +0.00..+12.15 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "collision on a 0.05 m grid: sm_house_3f",
+      "detail": "11 coordinates"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: sm_house_3f",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: sm_house_3f",
+      "detail": "blue \u0394E 69, orange \u0394E 70 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: sm_house_3f_blue",
+      "detail": "1356 of 3000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: sm_house_3f_blue",
+      "detail": "y +0.00..+12.15 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "collision on a 0.05 m grid: sm_house_3f_blue",
+      "detail": "11 coordinates"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: sm_house_3f_blue",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: sm_house_3f_blue",
+      "detail": "blue \u0394E 63, orange \u0394E 71 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: sm_junction_block",
+      "detail": "324 of 3000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: sm_junction_block",
+      "detail": "y +0.00..+24.60 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: sm_minibus",
+      "detail": "884 of 3000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: sm_minibus",
+      "detail": "y +0.01..+2.80 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "collision on a 0.05 m grid: sm_minibus",
+      "detail": "10 coordinates"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: sm_minibus",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: sm_minibus",
+      "detail": "blue \u0394E 36, orange \u0394E 46 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: sm_power_pole",
+      "detail": "156 of 3000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: sm_power_pole",
+      "detail": "y +0.00..+9.00 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: sm_screen_8x6",
+      "detail": "232 of 3000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: sm_screen_8x6",
+      "detail": "y +0.00..+6.60 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "ad surface off the gameplay plane: sm_screen_8x6",
+      "detail": "screen 4:3 8 x 6 m, layer mid"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: sm_screen_mast",
+      "detail": "212 of 3000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: sm_screen_mast",
+      "detail": "y +0.00..+13.30 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: sm_screen_tower",
+      "detail": "220 of 3000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: sm_screen_tower",
+      "detail": "y +0.00..+28.00 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: sm_signboard",
+      "detail": "215 of 3000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: sm_signboard",
+      "detail": "y +0.00..+3.40 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: sm_stall_4m",
+      "detail": "1544 of 3000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: sm_stall_4m",
+      "detail": "y +0.00..+3.10 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "collision on a 0.05 m grid: sm_stall_4m",
+      "detail": "12 coordinates"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: sm_stall_4m",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: sm_stall_4m",
+      "detail": "blue \u0394E 58, orange \u0394E 32 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: sm_tank_tower",
+      "detail": "332 of 3000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: sm_tank_tower",
+      "detail": "y +0.00..+5.45 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "collision on a 0.05 m grid: sm_tank_tower",
+      "detail": "16 coordinates"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: sm_tank_tower",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: sm_tank_tower",
+      "detail": "blue \u0394E 69, orange \u0394E 90 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: sm_umbrella_stall",
+      "detail": "360 of 3000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: sm_umbrella_stall",
+      "detail": "y +0.00..+3.05 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "collision on a 0.05 m grid: sm_umbrella_stall",
+      "detail": "16 coordinates"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: sm_umbrella_stall",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: sm_umbrella_stall",
+      "detail": "blue \u0394E 69, orange \u0394E 33 (min 25)"
+    },
+    {
+      "status": "INFO",
+      "check": "kit total triangles",
+      "detail": "11885"
+    },
+    {
+      "status": "PASS",
+      "check": "materials per piece",
+      "detail": "23 draw calls total"
+    },
+    {
+      "status": "INFO",
+      "check": "GPU texture memory (KTX2 est.)",
+      "detail": "0.00 MB, 0 image(s)"
+    }
+  ]
+}

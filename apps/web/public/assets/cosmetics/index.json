@@ -1,0 +1,96 @@
+{
+  "boots": [
+    {
+      "id": "boots_combat",
+      "name": "Combat Boots",
+      "default": true,
+      "manifest": "boots/boots_combat.json"
+    },
+    {
+      "id": "boots_jungle",
+      "name": "Jungle Boots",
+      "default": false,
+      "manifest": "boots/boots_jungle.json"
+    },
+    {
+      "id": "boots_sneakers",
+      "name": "Sneakers",
+      "default": false,
+      "manifest": "boots/boots_sneakers.json"
+    }
+  ],
+  "eyewear": [
+    {
+      "id": "eyewear_aviators",
+      "name": "Aviators",
+      "default": false,
+      "manifest": "eyewear/eyewear_aviators.json"
+    },
+    {
+      "id": "eyewear_gas_mask",
+      "name": "Gas Mask",
+      "default": false,
+      "manifest": "eyewear/eyewear_gas_mask.json"
+    }
+  ],
+  "gloves": [
+    {
+      "id": "gloves_tactical",
+      "name": "Tactical Gloves",
+      "default": false,
+      "manifest": "gloves/gloves_tactical.json"
+    }
+  ],
+  "headgear": [
+    {
+      "id": "headgear_bandana",
+      "name": "Bandana",
+      "default": false,
+      "manifest": "headgear/headgear_bandana.json"
+    },
+    {
+      "id": "headgear_beret",
+      "name": "Beret",
+      "default": false,
+      "manifest": "headgear/headgear_beret.json"
+    },
+    {
+      "id": "headgear_brim_helmet",
+      "name": "Brim Helmet",
+      "default": true,
+      "manifest": "headgear/headgear_brim_helmet.json"
+    },
+    {
+      "id": "headgear_combat_helmet",
+      "name": "Combat Helmet",
+      "default": false,
+      "manifest": "headgear/headgear_combat_helmet.json"
+    },
+    {
+      "id": "headgear_field_cap",
+      "name": "Field Cap",
+      "default": false,
+      "manifest": "headgear/headgear_field_cap.json"
+    }
+  ],
+  "jetpack": [
+    {
+      "id": "jetpack_drum",
+      "name": "Drum Pack",
+      "default": false,
+      "manifest": "jetpack/jetpack_drum.json"
+    },
+    {
+      "id": "jetpack_rocket",
+      "name": "Rocket Pack",
+      "default": false,
+      "manifest": "jetpack/jetpack_rocket.json"
+    },
+    {
+      "id": "jetpack_twin_tank",
+      "name": "Twin Tank",
+      "default": true,
+      "manifest": "jetpack/jetpack_twin_tank.json"
+    }
+  ]
+}

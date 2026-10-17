@@ -1,0 +1,16 @@
+asset-check: art/weapons/breacher.glb  [weapon]
+-------------------------------------------------------------------------------------------------
+INFO  file size                              35 KB
+PASS  triangles                              496 of 1000
+PASS  one mesh, one material                 1 draw call(s)
+INFO  GPU texture memory (KTX2 est.)         0.00 MB, 0 image(s)
+PASS  extras weaponId/family/aimPose/hands   ok
+PASS  weaponId in packages/content           breacher
+INFO  nodes                                  eject, muzzle, offhand
+PASS  origin on the weapon (the grip)        bbox (-0.03, -0.1, -0.34)..(0.03, 0.09, 0.6)
+PASS  family is a docs/04 §4.2 family        'shotgun'
+PASS  aimPose has clips                      'rifle'
+PASS  muzzle node ahead of the grip (+Y)     muzzle at glTF y +0.61 m
+PASS  offhand node within 0.1 m of the grip  0.096 m
+-------------------------------------------------------------------------------------------------
+RESULT: PASS  (9 pass, 0 warn, 0 fail)

@@ -1,0 +1,27 @@
+{
+  "id": "boots_combat",
+  "slot": "boots",
+  "name": "Combat Boots",
+  "skeleton": "shared-v1",
+  "default": true,
+  "lods": {
+    "lod0": "boots_combat.glb",
+    "lod1": "boots_combat_lod1.glb"
+  },
+  "dye": {
+    "lod0": {
+      "mask": "textures/boots_combat_dye_mask.png",
+      "albedo": "textures/boots_combat_dye_albedo.webp",
+      "defaults": {}
+    },
+    "lod1": {
+      "mask": "textures/boots_combat_lod1_dye_mask.png",
+      "albedo": "textures/boots_combat_lod1_dye_albedo.webp",
+      "defaults": {}
+    }
+  },
+  "tris": {
+    "lod0": 299,
+    "lod1": 129
+  }
+}

@@ -1,0 +1,103 @@
+{
+  "id": "rookie",
+  "skeleton": "shared-v1",
+  "heightM": 1.5,
+  "lods": {
+    "lod0": "rookie_body.glb",
+    "lod1": "rookie_body_lod1.glb"
+  },
+  "anims": "rookie_anims.glb",
+  "dye": {
+    "lod0": {
+      "mask": "textures/rookie_body_dye_mask.png",
+      "albedo": "textures/rookie_body_dye_albedo.webp",
+      "defaults": {
+        "primary": "#b99664",
+        "secondary": "#665b2c",
+        "accent": "#239090"
+      }
+    },
+    "lod1": {
+      "mask": "textures/rookie_body_lod1_dye_mask.png",
+      "albedo": "textures/rookie_body_lod1_dye_albedo.webp",
+      "defaults": {
+        "primary": "#bf9b67",
+        "secondary": "#6e6230",
+        "accent": "#239090"
+      }
+    }
+  },
+  "defaultParts": {
+    "headgear": "headgear_brim_helmet",
+    "boots": "boots_combat",
+    "jetpack": "jetpack_twin_tank"
+  },
+  "clips": [
+    "idle",
+    "walk",
+    "run",
+    "crouch_idle",
+    "crouch_walk",
+    "slide",
+    "jet_ascend",
+    "jet_hover",
+    "fall",
+    "land",
+    "aim_pistol_down90",
+    "aim_pistol_down45",
+    "aim_pistol_level",
+    "aim_pistol_up45",
+    "aim_pistol_up90",
+    "aim_dual_down90",
+    "aim_dual_down45",
+    "aim_dual_level",
+    "aim_dual_up45",
+    "aim_dual_up90",
+    "aim_rifle_down90",
+    "aim_rifle_down45",
+    "aim_rifle_level",
+    "aim_rifle_up45",
+    "aim_rifle_up90",
+    "reload_rifle",
+    "reload_pistol",
+    "swap",
+    "throw",
+    "melee"
+  ],
+  "upperBodyBones": [
+    "spine1",
+    "spine2",
+    "neck",
+    "head",
+    "clavicle_L",
+    "clavicle_R",
+    "upperarm_L",
+    "upperarm_R",
+    "forearm_L",
+    "forearm_R",
+    "hand_L",
+    "hand_R"
+  ],
+  "aimAngles": {
+    "down90": -90,
+    "down45": -45,
+    "level": 0,
+    "up45": 45,
+    "up90": 90
+  },
+  "aimPoseFallback": {
+    "pistol": "pistol",
+    "dual": "dual",
+    "rifle": "rifle",
+    "shotgun": "rifle",
+    "sniper": "rifle",
+    "launcher": "rifle",
+    "heavy": "rifle",
+    "melee": "pistol",
+    "thrown": "pistol"
+  },
+  "requires": [
+    "EXT_meshopt_compression (GLTFLoader.setMeshoptDecoder)",
+    "EXT_texture_webp"
+  ]
+}

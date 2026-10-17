@@ -1,0 +1,38 @@
+{
+  "id": "headgear_combat_helmet",
+  "slot": "headgear",
+  "name": "Combat Helmet",
+  "skeleton": "shared-v1",
+  "default": false,
+  "lods": {
+    "lod0": "headgear_combat_helmet.glb",
+    "lod1": "headgear_combat_helmet_lod1.glb"
+  },
+  "dye": {
+    "lod0": {
+      "mask": "textures/headgear_combat_helmet_dye_mask.png",
+      "albedo": "textures/headgear_combat_helmet_dye_albedo.webp",
+      "defaults": {
+        "primary": "#7a7b45",
+        "secondary": "#937155",
+        "accent": "#2f9da0"
+      }
+    },
+    "lod1": {
+      "mask": "textures/headgear_combat_helmet_lod1_dye_mask.png",
+      "albedo": "textures/headgear_combat_helmet_lod1_dye_albedo.webp",
+      "defaults": {
+        "primary": "#7a7b45",
+        "secondary": "#8e6e56",
+        "accent": "#2e9a9e"
+      }
+    }
+  },
+  "tris": {
+    "lod0": 449,
+    "lod1": 199
+  },
+  "source": "generated",
+  "attachBone": "head",
+  "socket": "socket_hat"
+}

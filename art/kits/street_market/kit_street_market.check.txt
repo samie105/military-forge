@@ -1,0 +1,90 @@
+asset-check: art/kits/street_market/kit_street_market.glb  [kit]
+-----------------------------------------------------------------------------------------------------------------------
+INFO  file size                                                    880 KB
+PASS  triangles: sm_billboard                                      550 of 3000
+PASS  pivot: sm_billboard                                          y +0.00..+20.20 m: top or bottom on the origin
+PASS  collision on a 0.05 m grid: sm_billboard                     14 coordinates
+PASS  render = collision on the gameplay plane: sm_billboard       nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: sm_billboard                           blue ΔE 59, orange ΔE 74 (min 25)
+PASS  triangles: sm_crates                                         260 of 3000
+PASS  pivot: sm_crates                                             y +0.00..+1.60 m: top or bottom on the origin
+PASS  collision on a 0.05 m grid: sm_crates                        12 coordinates
+PASS  render = collision on the gameplay plane: sm_crates          nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: sm_crates                              blue ΔE 93, orange ΔE 50 (min 25)
+PASS  triangles: sm_east_block                                     588 of 3000
+PASS  pivot: sm_east_block                                         y +0.00..+26.50 m: top or bottom on the origin
+PASS  triangles: sm_edge_block                                     872 of 3000
+PASS  pivot: sm_edge_block                                         y +0.00..+54.00 m: top or bottom on the origin
+PASS  collision on a 0.05 m grid: sm_edge_block                    3 coordinates
+PASS  render = collision on the gameplay plane: sm_edge_block      nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: sm_edge_block                          blue ΔE 72, orange ΔE 73 (min 25)
+PASS  triangles: sm_far_block_a                                    216 of 3000
+PASS  pivot: sm_far_block_a                                        y +0.00..+14.30 m: top or bottom on the origin
+PASS  triangles: sm_far_block_b                                    168 of 3000
+PASS  pivot: sm_far_block_b                                        y +0.00..+10.30 m: top or bottom on the origin
+PASS  triangles: sm_flyover                                        264 of 3000
+PASS  pivot: sm_flyover                                            y +0.00..+23.30 m: top or bottom on the origin
+PASS  triangles: sm_ground_4m                                      336 of 3000
+PASS  pivot: sm_ground_4m                                          y -1.50..+0.00 m: top or bottom on the origin
+PASS  collision on a 0.05 m grid: sm_ground_4m                     3 coordinates
+PASS  render = collision on the gameplay plane: sm_ground_4m       nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: sm_ground_4m                           blue ΔE 78, orange ΔE 47 (min 25)
+PASS  triangles: sm_hoarding_18x3                                  232 of 3000
+PASS  pivot: sm_hoarding_18x3                                      y +0.00..+3.50 m: top or bottom on the origin
+PASS  ad surface off the gameplay plane: sm_hoarding_18x3          hoarding 6:1 18 x 3 m, layer mid
+PASS  triangles: sm_hoarding_21x3_5                                232 of 3000
+PASS  pivot: sm_hoarding_21x3_5                                    y +0.00..+4.00 m: top or bottom on the origin
+PASS  ad surface off the gameplay plane: sm_hoarding_21x3_5        hoarding 6:1 21 x 3.5 m, layer mid
+PASS  triangles: sm_house_2f                                       976 of 3000
+PASS  pivot: sm_house_2f                                           y +0.00..+8.15 m: top or bottom on the origin
+PASS  collision on a 0.05 m grid: sm_house_2f                      7 coordinates
+PASS  render = collision on the gameplay plane: sm_house_2f        nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: sm_house_2f                            blue ΔE 70, orange ΔE 53 (min 25)
+PASS  triangles: sm_house_3f                                       1356 of 3000
+PASS  pivot: sm_house_3f                                           y +0.00..+12.15 m: top or bottom on the origin
+PASS  collision on a 0.05 m grid: sm_house_3f                      11 coordinates
+PASS  render = collision on the gameplay plane: sm_house_3f        nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: sm_house_3f                            blue ΔE 69, orange ΔE 70 (min 25)
+PASS  triangles: sm_house_3f_blue                                  1356 of 3000
+PASS  pivot: sm_house_3f_blue                                      y +0.00..+12.15 m: top or bottom on the origin
+PASS  collision on a 0.05 m grid: sm_house_3f_blue                 11 coordinates
+PASS  render = collision on the gameplay plane: sm_house_3f_blue   nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: sm_house_3f_blue                       blue ΔE 63, orange ΔE 71 (min 25)
+PASS  triangles: sm_junction_block                                 324 of 3000
+PASS  pivot: sm_junction_block                                     y +0.00..+24.60 m: top or bottom on the origin
+PASS  triangles: sm_minibus                                        884 of 3000
+PASS  pivot: sm_minibus                                            y +0.01..+2.80 m: top or bottom on the origin
+PASS  collision on a 0.05 m grid: sm_minibus                       10 coordinates
+PASS  render = collision on the gameplay plane: sm_minibus         nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: sm_minibus                             blue ΔE 36, orange ΔE 46 (min 25)
+PASS  triangles: sm_power_pole                                     156 of 3000
+PASS  pivot: sm_power_pole                                         y +0.00..+9.00 m: top or bottom on the origin
+PASS  triangles: sm_screen_8x6                                     232 of 3000
+PASS  pivot: sm_screen_8x6                                         y +0.00..+6.60 m: top or bottom on the origin
+PASS  ad surface off the gameplay plane: sm_screen_8x6             screen 4:3 8 x 6 m, layer mid
+PASS  triangles: sm_screen_mast                                    212 of 3000
+PASS  pivot: sm_screen_mast                                        y +0.00..+13.30 m: top or bottom on the origin
+PASS  triangles: sm_screen_tower                                   220 of 3000
+PASS  pivot: sm_screen_tower                                       y +0.00..+28.00 m: top or bottom on the origin
+PASS  triangles: sm_signboard                                      215 of 3000
+PASS  pivot: sm_signboard                                          y +0.00..+3.40 m: top or bottom on the origin
+PASS  triangles: sm_stall_4m                                       1544 of 3000
+PASS  pivot: sm_stall_4m                                           y +0.00..+3.10 m: top or bottom on the origin
+PASS  collision on a 0.05 m grid: sm_stall_4m                      12 coordinates
+PASS  render = collision on the gameplay plane: sm_stall_4m        nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: sm_stall_4m                            blue ΔE 58, orange ΔE 32 (min 25)
+PASS  triangles: sm_tank_tower                                     332 of 3000
+PASS  pivot: sm_tank_tower                                         y +0.00..+5.45 m: top or bottom on the origin
+PASS  collision on a 0.05 m grid: sm_tank_tower                    16 coordinates
+PASS  render = collision on the gameplay plane: sm_tank_tower      nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: sm_tank_tower                          blue ΔE 69, orange ΔE 90 (min 25)
+PASS  triangles: sm_umbrella_stall                                 360 of 3000
+PASS  pivot: sm_umbrella_stall                                     y +0.00..+3.05 m: top or bottom on the origin
+PASS  collision on a 0.05 m grid: sm_umbrella_stall                16 coordinates
+PASS  render = collision on the gameplay plane: sm_umbrella_stall  nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: sm_umbrella_stall                      blue ΔE 69, orange ΔE 33 (min 25)
+INFO  kit total triangles                                          11885
+PASS  materials per piece                                          23 draw calls total
+INFO  GPU texture memory (KTX2 est.)                               0.00 MB, 0 image(s)
+-----------------------------------------------------------------------------------------------------------------------
+RESULT: PASS  (83 pass, 0 warn, 0 fail)

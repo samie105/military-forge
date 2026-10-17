@@ -1,0 +1,35 @@
+{
+  "id": "eyewear_aviators",
+  "slot": "eyewear",
+  "name": "Aviators",
+  "skeleton": "shared-v1",
+  "default": false,
+  "lods": {
+    "lod0": "eyewear_aviators.glb",
+    "lod1": "eyewear_aviators_lod1.glb"
+  },
+  "dye": {
+    "lod0": {
+      "mask": "textures/eyewear_aviators_dye_mask.png",
+      "albedo": "textures/eyewear_aviators_dye_albedo.webp",
+      "defaults": {
+        "secondary": "#ebba42",
+        "accent": "#2c3742"
+      }
+    },
+    "lod1": {
+      "mask": "textures/eyewear_aviators_lod1_dye_mask.png",
+      "albedo": "textures/eyewear_aviators_lod1_dye_albedo.webp",
+      "defaults": {
+        "secondary": "#ebba42",
+        "accent": "#566b80"
+      }
+    }
+  },
+  "tris": {
+    "lod0": 150,
+    "lod1": 70
+  },
+  "attachBone": "head",
+  "socket": "socket_hat"
+}

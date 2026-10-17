@@ -1,0 +1,36 @@
+{
+  "id": "headgear_bandana",
+  "slot": "headgear",
+  "name": "Bandana",
+  "skeleton": "shared-v1",
+  "default": false,
+  "lods": {
+    "lod0": "headgear_bandana.glb",
+    "lod1": "headgear_bandana_lod1.glb"
+  },
+  "dye": {
+    "lod0": {
+      "mask": "textures/headgear_bandana_dye_mask.png",
+      "albedo": "textures/headgear_bandana_dye_albedo.webp",
+      "defaults": {
+        "primary": "#dd483d",
+        "secondary": "#43403b"
+      }
+    },
+    "lod1": {
+      "mask": "textures/headgear_bandana_lod1_dye_mask.png",
+      "albedo": "textures/headgear_bandana_lod1_dye_albedo.webp",
+      "defaults": {
+        "primary": "#d9473c",
+        "secondary": "#423f3a"
+      }
+    }
+  },
+  "tris": {
+    "lod0": 449,
+    "lod1": 199
+  },
+  "source": "generated",
+  "attachBone": "head",
+  "socket": "socket_hat"
+}

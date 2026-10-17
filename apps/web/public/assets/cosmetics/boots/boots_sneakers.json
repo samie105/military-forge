@@ -1,0 +1,35 @@
+{
+  "id": "boots_sneakers",
+  "slot": "boots",
+  "name": "Sneakers",
+  "skeleton": "shared-v1",
+  "default": false,
+  "lods": {
+    "lod0": "boots_sneakers.glb",
+    "lod1": "boots_sneakers_lod1.glb"
+  },
+  "dye": {
+    "lod0": {
+      "mask": "textures/boots_sneakers_dye_mask.png",
+      "albedo": "textures/boots_sneakers_dye_albedo.webp",
+      "defaults": {
+        "primary": "#fefef9",
+        "secondary": "#aa7342",
+        "accent": "#29a8a8"
+      }
+    },
+    "lod1": {
+      "mask": "textures/boots_sneakers_lod1_dye_mask.png",
+      "albedo": "textures/boots_sneakers_lod1_dye_albedo.webp",
+      "defaults": {
+        "primary": "#fefef9",
+        "secondary": "#df9957",
+        "accent": "#35d8d8"
+      }
+    }
+  },
+  "tris": {
+    "lod0": 300,
+    "lod1": 130
+  }
+}

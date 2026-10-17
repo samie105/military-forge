@@ -1,0 +1,62 @@
+{
+  "file": "art/weapons/frag.glb",
+  "kind": "weapon",
+  "pass": true,
+  "rows": [
+    {
+      "status": "INFO",
+      "check": "file size",
+      "detail": "32 KB"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles",
+      "detail": "448 of 1000"
+    },
+    {
+      "status": "PASS",
+      "check": "one mesh, one material",
+      "detail": "1 draw call(s)"
+    },
+    {
+      "status": "INFO",
+      "check": "GPU texture memory (KTX2 est.)",
+      "detail": "0.00 MB, 0 image(s)"
+    },
+    {
+      "status": "PASS",
+      "check": "extras weaponId/family/aimPose/hands",
+      "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "weaponId in packages/content",
+      "detail": "frag"
+    },
+    {
+      "status": "INFO",
+      "check": "nodes",
+      "detail": "ground"
+    },
+    {
+      "status": "PASS",
+      "check": "origin on the weapon (the grip)",
+      "detail": "bbox (-0.04, -0.09, -0.05)..(0.04, 0.05, 0.05)"
+    },
+    {
+      "status": "PASS",
+      "check": "family is a docs/04 \u00a74.2 family",
+      "detail": "'thrown'"
+    },
+    {
+      "status": "PASS",
+      "check": "aimPose has clips",
+      "detail": "'pistol'"
+    },
+    {
+      "status": "PASS",
+      "check": "ground node (rest frame)",
+      "detail": "ok"
+    }
+  ]
+}

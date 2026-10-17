@@ -17,10 +17,14 @@
     #panel {
       position: fixed; top: 12px; right: 12px; width: 236px; padding: 12px 14px;
       background: var(--panel); border-radius: 10px; backdrop-filter: blur(6px);
+      max-height: calc(100vh - 24px); overflow-y: auto;
     }
     #panel h1 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
     #panel label { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 6px 0; }
     #panel select, #panel input[type="range"] { width: 120px; }
+    #panel input[type="color"] { width: 32px; height: 22px; padding: 0; border: 0; background: none; }
+    #panel .row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin: 6px 0; }
+    #panel .row button { margin: 0; padding: 4px 0; font-weight: 500; background: #3a4552; color: var(--text); }
     #panel button {
       width: 100%; margin-top: 8px; padding: 6px 8px; border: 0; border-radius: 6px;
       background: var(--accent); color: #1b1b1b; font-weight: 600; cursor: pointer;
@@ -40,9 +44,10 @@
 </head>
 <body>
   <div id="panel">
-    <h1>Art test: Rookie + yard kit</h1>
+    <h1>Rookie + yard kit</h1>
     <label>Zoom
       <select id="zoom">
+        <option value="0.16">portrait</option>
         <option value="0.4">close-up</option>
         <option value="1" selected>1× (36 m)</option>
         <option value="1.2">2×</option>
@@ -52,12 +57,23 @@
       </select>
     </label>
     <label>Hero clip <select id="clip"></select></label>
+    <label>Hero weapon <select id="family"></select></label>
+    <label>Hero aim <input id="aim" type="range" min="-90" max="90" value="0" /></label>
+    <div class="row">
+      <button data-action="reload">reload</button><button data-action="swap">swap</button>
+      <button data-action="throw">throw</button><button data-action="melee">melee</button>
+    </div>
+    <div id="locker"></div>
     <label>Shading
       <select id="shading">
-        <option value="toon" selected>toon ramp</option>
+        <option value="dye" selected>toon + dye mask</option>
+        <option value="toon">toon (baked albedo)</option>
         <option value="flat">flat (unlit)</option>
         <option value="lit">PBR lit</option>
       </select>
+    </label>
+    <label>Dyes
+      <span><input id="dyeP" type="color" /><input id="dyeS" type="color" /><input id="dyeA" type="color" /></span>
     </label>
     <label>Character LOD
       <select id="lod"><option value="0" selected>LOD0 (≤4k)</option><option value="1">LOD1 (≤1.8k)</option></select>

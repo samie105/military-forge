@@ -1,0 +1,397 @@
+{
+  "headgear_field_cap": {
+    "id": "headgear_field_cap",
+    "slot": "headgear",
+    "name": "Field Cap",
+    "skeleton": "shared-v1",
+    "default": false,
+    "lods": {
+      "lod0": "headgear_field_cap.glb",
+      "lod1": "headgear_field_cap_lod1.glb"
+    },
+    "dye": {
+      "lod0": {
+        "mask": "textures/headgear_field_cap_dye_mask.png",
+        "albedo": "textures/headgear_field_cap_dye_albedo.webp",
+        "defaults": {
+          "primary": "#7a7243",
+          "secondary": "#615844",
+          "accent": "#cfb16c"
+        }
+      },
+      "lod1": {
+        "mask": "textures/headgear_field_cap_lod1_dye_mask.png",
+        "albedo": "textures/headgear_field_cap_lod1_dye_albedo.webp",
+        "defaults": {
+          "primary": "#787041",
+          "secondary": "#615944",
+          "accent": "#caae6d"
+        }
+      }
+    },
+    "tris": {
+      "lod0": 450,
+      "lod1": 200
+    },
+    "source": "generated",
+    "attachBone": "head",
+    "socket": "socket_hat"
+  },
+  "headgear_beret": {
+    "id": "headgear_beret",
+    "slot": "headgear",
+    "name": "Beret",
+    "skeleton": "shared-v1",
+    "default": false,
+    "lods": {
+      "lod0": "headgear_beret.glb",
+      "lod1": "headgear_beret_lod1.glb"
+    },
+    "dye": {
+      "lod0": {
+        "mask": "textures/headgear_beret_dye_mask.png",
+        "albedo": "textures/headgear_beret_dye_albedo.webp",
+        "defaults": {
+          "primary": "#873d41",
+          "secondary": "#5d564e",
+          "accent": "#e9b46d"
+        }
+      },
+      "lod1": {
+        "mask": "textures/headgear_beret_lod1_dye_mask.png",
+        "albedo": "textures/headgear_beret_lod1_dye_albedo.webp",
+        "defaults": {
+          "primary": "#833b3f",
+          "secondary": "#504a44"
+        }
+      }
+    },
+    "tris": {
+      "lod0": 449,
+      "lod1": 200
+    },
+    "source": "generated",
+    "attachBone": "head",
+    "socket": "socket_hat"
+  },
+  "headgear_bandana": {
+    "id": "headgear_bandana",
+    "slot": "headgear",
+    "name": "Bandana",
+    "skeleton": "shared-v1",
+    "default": false,
+    "lods": {
+      "lod0": "headgear_bandana.glb",
+      "lod1": "headgear_bandana_lod1.glb"
+    },
+    "dye": {
+      "lod0": {
+        "mask": "textures/headgear_bandana_dye_mask.png",
+        "albedo": "textures/headgear_bandana_dye_albedo.webp",
+        "defaults": {
+          "primary": "#dd483d",
+          "secondary": "#43403b"
+        }
+      },
+      "lod1": {
+        "mask": "textures/headgear_bandana_lod1_dye_mask.png",
+        "albedo": "textures/headgear_bandana_lod1_dye_albedo.webp",
+        "defaults": {
+          "primary": "#d9473c",
+          "secondary": "#423f3a"
+        }
+      }
+    },
+    "tris": {
+      "lod0": 449,
+      "lod1": 199
+    },
+    "source": "generated",
+    "attachBone": "head",
+    "socket": "socket_hat"
+  },
+  "headgear_combat_helmet": {
+    "id": "headgear_combat_helmet",
+    "slot": "headgear",
+    "name": "Combat Helmet",
+    "skeleton": "shared-v1",
+    "default": false,
+    "lods": {
+      "lod0": "headgear_combat_helmet.glb",
+      "lod1": "headgear_combat_helmet_lod1.glb"
+    },
+    "dye": {
+      "lod0": {
+        "mask": "textures/headgear_combat_helmet_dye_mask.png",
+        "albedo": "textures/headgear_combat_helmet_dye_albedo.webp",
+        "defaults": {
+          "primary": "#7a7b45",
+          "secondary": "#937155",
+          "accent": "#2f9da0"
+        }
+      },
+      "lod1": {
+        "mask": "textures/headgear_combat_helmet_lod1_dye_mask.png",
+        "albedo": "textures/headgear_combat_helmet_lod1_dye_albedo.webp",
+        "defaults": {
+          "primary": "#7a7b45",
+          "secondary": "#8e6e56",
+          "accent": "#2e9a9e"
+        }
+      }
+    },
+    "tris": {
+      "lod0": 449,
+      "lod1": 199
+    },
+    "source": "generated",
+    "attachBone": "head",
+    "socket": "socket_hat"
+  },
+  "eyewear_aviators": {
+    "id": "eyewear_aviators",
+    "slot": "eyewear",
+    "name": "Aviators",
+    "skeleton": "shared-v1",
+    "lods": {
+      "lod0": "eyewear_aviators.glb",
+      "lod1": "eyewear_aviators_lod1.glb"
+    },
+    "dye": {
+      "lod0": {
+        "mask": "textures/eyewear_aviators_dye_mask.png",
+        "albedo": "textures/eyewear_aviators_dye_albedo.webp",
+        "defaults": {
+          "secondary": "#ebba42",
+          "accent": "#29333d"
+        }
+      },
+      "lod1": {
+        "mask": "textures/eyewear_aviators_lod1_dye_mask.png",
+        "albedo": "textures/eyewear_aviators_lod1_dye_albedo.webp",
+        "defaults": {
+          "secondary": "#e9b841",
+          "accent": "#323e4a"
+        }
+      }
+    },
+    "tris": {
+      "lod0": 150,
+      "lod1": 70
+    }
+  },
+  "eyewear_gas_mask": {
+    "id": "eyewear_gas_mask",
+    "slot": "eyewear",
+    "name": "Gas Mask",
+    "skeleton": "shared-v1",
+    "lods": {
+      "lod0": "eyewear_gas_mask.glb",
+      "lod1": "eyewear_gas_mask_lod1.glb"
+    },
+    "dye": {
+      "lod0": {
+        "mask": "textures/eyewear_gas_mask_dye_mask.png",
+        "albedo": "textures/eyewear_gas_mask_dye_albedo.webp",
+        "defaults": {
+          "secondary": "#687345",
+          "accent": "#29a8a8"
+        }
+      },
+      "lod1": {
+        "mask": "textures/eyewear_gas_mask_lod1_dye_mask.png",
+        "albedo": "textures/eyewear_gas_mask_lod1_dye_albedo.webp",
+        "defaults": {
+          "secondary": "#677349",
+          "accent": "#29a8a8"
+        }
+      }
+    },
+    "tris": {
+      "lod0": 150,
+      "lod1": 70
+    }
+  },
+  "jetpack_rocket": {
+    "id": "jetpack_rocket",
+    "slot": "jetpack",
+    "name": "Rocket Pack",
+    "skeleton": "shared-v1",
+    "default": false,
+    "lods": {
+      "lod0": "jetpack_rocket.glb",
+      "lod1": "jetpack_rocket_lod1.glb"
+    },
+    "dye": {
+      "lod0": {
+        "mask": "textures/jetpack_rocket_dye_mask.png",
+        "albedo": "textures/jetpack_rocket_dye_albedo.webp",
+        "defaults": {
+          "primary": "#cdbea1",
+          "secondary": "#486077",
+          "accent": "#79663e"
+        }
+      },
+      "lod1": {
+        "mask": "textures/jetpack_rocket_lod1_dye_mask.png",
+        "albedo": "textures/jetpack_rocket_lod1_dye_albedo.webp",
+        "defaults": {
+          "primary": "#c9ba9f",
+          "secondary": "#465c73",
+          "accent": "#77643c"
+        }
+      }
+    },
+    "tris": {
+      "lod0": 550,
+      "lod1": 250
+    },
+    "source": "generated",
+    "attachBone": "spine2",
+    "socket": "socket_jetpack",
+    "nozzles": [
+      [
+        -0.066,
+        0.554,
+        -0.283
+      ],
+      [
+        0.069,
+        0.554,
+        -0.284
+      ]
+    ]
+  },
+  "jetpack_drum": {
+    "id": "jetpack_drum",
+    "slot": "jetpack",
+    "name": "Drum Pack",
+    "skeleton": "shared-v1",
+    "lods": {
+      "lod0": "jetpack_drum.glb",
+      "lod1": "jetpack_drum_lod1.glb"
+    },
+    "dye": {
+      "lod0": {
+        "mask": "textures/jetpack_drum_dye_mask.png",
+        "albedo": "textures/jetpack_drum_dye_albedo.webp",
+        "defaults": {
+          "primary": "#3162a8",
+          "secondary": "#974c2e",
+          "accent": "#ffd32c"
+        }
+      },
+      "lod1": {
+        "mask": "textures/jetpack_drum_lod1_dye_mask.png",
+        "albedo": "textures/jetpack_drum_lod1_dye_albedo.webp",
+        "defaults": {
+          "primary": "#2e5c9e",
+          "secondary": "#904e2c",
+          "accent": "#ffd32c"
+        }
+      }
+    },
+    "tris": {
+      "lod0": 550,
+      "lod1": 248
+    }
+  },
+  "boots_sneakers": {
+    "id": "boots_sneakers",
+    "slot": "boots",
+    "name": "Sneakers",
+    "skeleton": "shared-v1",
+    "lods": {
+      "lod0": "boots_sneakers.glb",
+      "lod1": "boots_sneakers_lod1.glb"
+    },
+    "dye": {
+      "lod0": {
+        "mask": "textures/boots_sneakers_dye_mask.png",
+        "albedo": "textures/boots_sneakers_dye_albedo.webp",
+        "defaults": {
+          "primary": "#fefef9",
+          "secondary": "#aa7341",
+          "accent": "#29a8a8"
+        }
+      },
+      "lod1": {
+        "mask": "textures/boots_sneakers_lod1_dye_mask.png",
+        "albedo": "textures/boots_sneakers_lod1_dye_albedo.webp",
+        "defaults": {
+          "primary": "#fefef9",
+          "secondary": "#a97442",
+          "accent": "#2aacac"
+        }
+      }
+    },
+    "tris": {
+      "lod0": 300,
+      "lod1": 130
+    }
+  },
+  "boots_jungle": {
+    "id": "boots_jungle",
+    "slot": "boots",
+    "name": "Jungle Boots",
+    "skeleton": "shared-v1",
+    "lods": {
+      "lod0": "boots_jungle.glb",
+      "lod1": "boots_jungle_lod1.glb"
+    },
+    "dye": {
+      "lod0": {
+        "mask": "textures/boots_jungle_dye_mask.png",
+        "albedo": "textures/boots_jungle_dye_albedo.webp",
+        "defaults": {
+          "primary": "#687345",
+          "secondary": "#19191b",
+          "accent": "#dbad3d"
+        }
+      },
+      "lod1": {
+        "mask": "textures/boots_jungle_lod1_dye_mask.png",
+        "albedo": "textures/boots_jungle_lod1_dye_albedo.webp",
+        "defaults": {
+          "primary": "#687345",
+          "secondary": "#222225",
+          "accent": "#dbad3d"
+        }
+      }
+    },
+    "tris": {
+      "lod0": 300,
+      "lod1": 130
+    }
+  },
+  "gloves_tactical": {
+    "id": "gloves_tactical",
+    "slot": "gloves",
+    "name": "Tactical Gloves",
+    "skeleton": "shared-v1",
+    "lods": {
+      "lod0": "gloves_tactical.glb",
+      "lod1": "gloves_tactical_lod1.glb"
+    },
+    "dye": {
+      "lod0": {
+        "mask": "textures/gloves_tactical_dye_mask.png",
+        "albedo": "textures/gloves_tactical_dye_albedo.webp",
+        "defaults": {
+          "primary": "#171719"
+        }
+      },
+      "lod1": {
+        "mask": "textures/gloves_tactical_lod1_dye_mask.png",
+        "albedo": "textures/gloves_tactical_lod1_dye_albedo.webp",
+        "defaults": {
+          "primary": "#171719"
+        }
+      }
+    },
+    "tris": {
+      "lod0": 138,
+      "lod1": 69
+    }
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "file": "art/weapons/machete.glb",
+  "kind": "weapon",
+  "pass": true,
+  "rows": [
+    {
+      "status": "INFO",
+      "check": "file size",
+      "detail": "22 KB"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles",
+      "detail": "312 of 1000"
+    },
+    {
+      "status": "PASS",
+      "check": "one mesh, one material",
+      "detail": "1 draw call(s)"
+    },
+    {
+      "status": "INFO",
+      "check": "GPU texture memory (KTX2 est.)",
+      "detail": "0.00 MB, 0 image(s)"
+    },
+    {
+      "status": "PASS",
+      "check": "extras weaponId/family/aimPose/hands",
+      "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "weaponId in packages/content",
+      "detail": "machete"
+    },
+    {
+      "status": "INFO",
+      "check": "nodes",
+      "detail": "tip"
+    },
+    {
+      "status": "PASS",
+      "check": "origin on the weapon (the grip)",
+      "detail": "bbox (-0.02, -0.05, -0.06)..(0.02, 0.03, 0.52)"
+    },
+    {
+      "status": "PASS",
+      "check": "family is a docs/04 \u00a74.2 family",
+      "detail": "'melee'"
+    },
+    {
+      "status": "PASS",
+      "check": "aimPose has clips",
+      "detail": "'pistol'"
+    }
+  ]
+}

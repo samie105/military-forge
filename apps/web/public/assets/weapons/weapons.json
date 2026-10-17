@@ -1,0 +1,276 @@
+{
+  "frame": "origin at the main grip; +Y muzzle, +Z up (docs/04 \u00a79.4): attach to socket_weapon_R with an identity transform",
+  "ground": "frag/mine `ground` node = the rest frame in the world (local +Y up, origin on the floor): world = floorPoint \u00d7 inverse(ground.local)",
+  "requires": [
+    "EXT_meshopt_compression (GLTFLoader.setMeshoptDecoder)"
+  ],
+  "weapons": {
+    "hawk50": {
+      "name": "Hawk .50",
+      "archetype": "heavy pistol",
+      "family": "pistol",
+      "aimPose": "pistol",
+      "hands": 1,
+      "tris": 268,
+      "nodes": {
+        "eject": [
+          0.02,
+          0.06,
+          0.07
+        ],
+        "mag": [
+          0.0,
+          -0.015,
+          -0.1
+        ],
+        "muzzle": [
+          0.0,
+          0.231,
+          0.058
+        ]
+      },
+      "lengthM": 0.281,
+      "file": "hawk50.glb"
+    },
+    "hammer44": {
+      "name": "Hammer .44",
+      "archetype": "magnum revolver",
+      "family": "pistol",
+      "aimPose": "pistol",
+      "hands": 1,
+      "tris": 520,
+      "nodes": {
+        "eject": [
+          0.03,
+          0.045,
+          0.055
+        ],
+        "muzzle": [
+          0.0,
+          0.296,
+          0.062
+        ]
+      },
+      "lengthM": 0.362,
+      "file": "hammer44.glb"
+    },
+    "buzz": {
+      "name": "Buzz",
+      "archetype": "compact SMG",
+      "family": "pistol",
+      "aimPose": "pistol",
+      "hands": 1,
+      "tris": 404,
+      "nodes": {
+        "eject": [
+          0.03,
+          0.08,
+          0.07
+        ],
+        "mag": [
+          0.0,
+          0.11,
+          -0.14
+        ],
+        "muzzle": [
+          0.0,
+          0.306,
+          0.062
+        ]
+      },
+      "lengthM": 0.424,
+      "file": "buzz.glb"
+    },
+    "k47": {
+      "name": "K-47",
+      "archetype": "assault rifle",
+      "family": "rifle",
+      "aimPose": "rifle",
+      "hands": 2,
+      "tris": 492,
+      "nodes": {
+        "eject": [
+          0.03,
+          0.08,
+          0.07
+        ],
+        "mag": [
+          0.0,
+          0.11,
+          -0.17
+        ],
+        "muzzle": [
+          0.0,
+          0.576,
+          0.06
+        ],
+        "offhand": [
+          -0.05,
+          0.07,
+          -0.03
+        ]
+      },
+      "lengthM": 0.917,
+      "file": "k47.glb"
+    },
+    "breacher": {
+      "name": "Breacher",
+      "archetype": "pump shotgun",
+      "family": "shotgun",
+      "aimPose": "rifle",
+      "hands": 2,
+      "tris": 496,
+      "nodes": {
+        "eject": [
+          0.035,
+          0.06,
+          0.06
+        ],
+        "muzzle": [
+          0.0,
+          0.606,
+          0.068
+        ],
+        "offhand": [
+          -0.05,
+          0.08,
+          -0.02
+        ]
+      },
+      "lengthM": 0.946,
+      "file": "breacher.glb"
+    },
+    "widow": {
+      "name": "Widow",
+      "archetype": "bolt sniper",
+      "family": "sniper",
+      "aimPose": "rifle",
+      "hands": 2,
+      "tris": 880,
+      "nodes": {
+        "eject": [
+          0.035,
+          0.05,
+          0.07
+        ],
+        "muzzle": [
+          0.0,
+          0.776,
+          0.055
+        ],
+        "offhand": [
+          -0.05,
+          0.07,
+          -0.03
+        ]
+      },
+      "lengthM": 1.147,
+      "file": "widow.glb"
+    },
+    "thumper": {
+      "name": "Thumper",
+      "archetype": "rocket launcher",
+      "family": "launcher",
+      "aimPose": "rifle",
+      "hands": 2,
+      "tris": 616,
+      "nodes": {
+        "muzzle": [
+          0.0,
+          0.6,
+          0.095
+        ],
+        "offhand": [
+          -0.05,
+          0.08,
+          -0.03
+        ]
+      },
+      "lengthM": 1.08,
+      "file": "thumper.glb"
+    },
+    "shredder": {
+      "name": "Shredder",
+      "archetype": "minigun",
+      "family": "heavy",
+      "aimPose": "rifle",
+      "hands": 2,
+      "tris": 740,
+      "nodes": {
+        "eject": [
+          0.07,
+          0.05,
+          0.05
+        ],
+        "muzzle": [
+          0.0,
+          0.606,
+          0.07
+        ],
+        "offhand": [
+          -0.05,
+          0.08,
+          -0.03
+        ]
+      },
+      "lengthM": 0.734,
+      "file": "shredder.glb"
+    },
+    "machete": {
+      "name": "Machete",
+      "archetype": "melee",
+      "family": "melee",
+      "aimPose": "pistol",
+      "hands": 1,
+      "tris": 312,
+      "nodes": {
+        "tip": [
+          0.0,
+          0.52,
+          -0.0
+        ]
+      },
+      "lengthM": 0.585,
+      "file": "machete.glb"
+    },
+    "frag": {
+      "name": "Frag grenade",
+      "archetype": "grenade",
+      "family": "thrown",
+      "aimPose": "pistol",
+      "hands": 1,
+      "tris": 448,
+      "nodes": {
+        "ground": [
+          0.0,
+          -0.0,
+          -0.052
+        ]
+      },
+      "lengthM": 0.093,
+      "file": "frag.glb"
+    },
+    "mine": {
+      "name": "Proximity mine",
+      "archetype": "mine",
+      "family": "thrown",
+      "aimPose": "pistol",
+      "hands": 1,
+      "tris": 472,
+      "nodes": {
+        "ground": [
+          0.0,
+          -0.0,
+          -0.02
+        ],
+        "light": [
+          0.0,
+          0.0,
+          0.04
+        ]
+      },
+      "lengthM": 0.2,
+      "file": "mine.glb"
+    }
+  }
+}

@@ -2,14 +2,164 @@
   "name": "rookie",
   "height_m": 1.5,
   "source": "rookie_tripo_raw.glb",
-  "tris": {
-    "raw": 29860,
-    "lod0": 3900,
-    "lod1": 1750
+  "skeleton": "shared-v1",
+  "parts": {
+    "body": "rookie_body",
+    "headgear": "headgear_brim_helmet",
+    "boots": "boots_combat",
+    "jetpack": "jetpack_twin_tank"
   },
-  "albedo": {
-    "lod0": 1024,
-    "lod1": 512
+  "tris": {
+    "raw": 30130,
+    "body_lod0": 2349,
+    "jetpack_lod0": 549,
+    "headgear_lod0": 450,
+    "boots_lod0": 299,
+    "body_lod1": 999,
+    "jetpack_lod1": 250,
+    "headgear_lod1": 200,
+    "boots_lod1": 129
+  },
+  "textures": {
+    "body_lod0": 512,
+    "jetpack_lod0": 256,
+    "headgear_lod0": 256,
+    "boots_lod0": 256,
+    "body_lod1": 256,
+    "jetpack_lod1": 128,
+    "headgear_lod1": 128,
+    "boots_lod1": 128
+  },
+  "dyeDefaults": {
+    "body_lod0": {
+      "primary": "#b99664",
+      "secondary": "#665b2c",
+      "accent": "#239090"
+    },
+    "jetpack_lod0": {
+      "secondary": "#70623d"
+    },
+    "headgear_lod0": {
+      "primary": "#b2925f",
+      "accent": "#1a7a79"
+    },
+    "boots_lod0": {},
+    "body_lod1": {
+      "primary": "#bf9b67",
+      "secondary": "#6e6230",
+      "accent": "#239090"
+    },
+    "jetpack_lod1": {
+      "secondary": "#70623c"
+    },
+    "headgear_lod1": {
+      "primary": "#b39260",
+      "accent": "#1a7a79"
+    },
+    "boots_lod1": {}
+  },
+  "dyeCoverage": {
+    "body_lod0": {
+      "primary": 0.372,
+      "secondary": 0.129,
+      "accent": 0.014,
+      "emissive": 0.007
+    },
+    "jetpack_lod0": {
+      "primary": 0.0,
+      "secondary": 0.525,
+      "accent": 0.0,
+      "emissive": 0.0
+    },
+    "headgear_lod0": {
+      "primary": 0.643,
+      "secondary": 0.0,
+      "accent": 0.036,
+      "emissive": 0.0
+    },
+    "boots_lod0": {
+      "primary": 0.0,
+      "secondary": 0.0,
+      "accent": 0.0,
+      "emissive": 0.0
+    },
+    "body_lod1": {
+      "primary": 0.401,
+      "secondary": 0.111,
+      "accent": 0.015,
+      "emissive": 0.007
+    },
+    "jetpack_lod1": {
+      "primary": 0.0,
+      "secondary": 0.538,
+      "accent": 0.0,
+      "emissive": 0.0
+    },
+    "headgear_lod1": {
+      "primary": 0.683,
+      "secondary": 0.0,
+      "accent": 0.043,
+      "emissive": 0.0
+    },
+    "boots_lod1": {
+      "primary": 0.0,
+      "secondary": 0.0,
+      "accent": 0.0,
+      "emissive": 0.0
+    }
+  },
+  "clips": [
+    "idle",
+    "walk",
+    "run",
+    "crouch_idle",
+    "crouch_walk",
+    "slide",
+    "jet_ascend",
+    "jet_hover",
+    "fall",
+    "land",
+    "aim_pistol_down90",
+    "aim_pistol_down45",
+    "aim_pistol_level",
+    "aim_pistol_up45",
+    "aim_pistol_up90",
+    "aim_dual_down90",
+    "aim_dual_down45",
+    "aim_dual_level",
+    "aim_dual_up45",
+    "aim_dual_up90",
+    "aim_rifle_down90",
+    "aim_rifle_down45",
+    "aim_rifle_level",
+    "aim_rifle_up45",
+    "aim_rifle_up90",
+    "reload_rifle",
+    "reload_pistol",
+    "swap",
+    "throw",
+    "melee"
+  ],
+  "upperBodyBones": [
+    "spine1",
+    "spine2",
+    "neck",
+    "head",
+    "clavicle_L",
+    "clavicle_R",
+    "upperarm_L",
+    "upperarm_R",
+    "forearm_L",
+    "forearm_R",
+    "hand_L",
+    "hand_R"
+  ],
+  "aimAngles": {
+    "down90": -90,
+    "down45": -45,
+    "level": 0,
+    "up45": 45,
+    "up90": 90
   },
   "landmarks_blender_zup": {
     "neck_z": 0.96,
@@ -67,13 +217,5 @@
     "face_y": -0.2446,
     "jetpack_back_y": 0.1723,
     "jetpack_mid_z": 0.726
-  },
-  "clips": [
-    "crouch_idle",
-    "fall",
-    "idle",
-    "jet_ascend",
-    "jet_hover",
-    "run"
-  ]
+  }
 }

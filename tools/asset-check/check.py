@@ -1,16 +1,23 @@
 """Headless asset check for the game's glTF assets (docs/04 §5 and §8, docs/11 §3-§4).
 
-    blender -b --factory-startup --python tools/asset-check/check.py -- <file.glb> [options]
+    blender -b --factory-startup --python-exit-code 1 --python tools/asset-check/check.py -- <file.glb>[,<part.glb>...] [options]
+
+Several comma-separated files are checked as one assembled character (body + parts): the
+triangle, draw-call and texture budgets in docs/04 §5 are per character on screen.
 
 Options:
-    --kind character|part|kit   what the file is (default: character)
+    --kind character|part|weapon|kit   what the file is (default: character)
     --lod 0|1                   character LOD budget: 0 = 4k tris, 1 = 1.8k tris (default 0)
-    --base <body.glb>           part only: the base body that defines the cosmetic envelope
+    --base <body.glb[,...]>     part only: the base body whose bounding box ×1.10, from the floor
+                                up, is the cosmetic envelope for every slot (docs/04 §1.2). Only
+                                meshes with slot `body` (or no slot) count: default parts are ignored.
+                                Pass the LOD0 body for every LOD.
     --max-tris N                override the triangle budget
     --max-tex N                 max texture edge in px (default 1024)
     --json <out.json>           also write the report as JSON
 
-Prints a PASS/WARN/FAIL table and exits 1 if anything FAILs, so CI can gate on it.
+Prints a PASS/WARN/FAIL table and exits 1 if anything FAILs (2 if the check itself crashed), so
+CI can gate on it. Keep `--python-exit-code 1`: without it Blender exits 0 when a script raises.
 
 Characters are checked against the shared skeleton (docs/04 §4.1) and against the damage hitboxes
 in packages/content/src/hitboxes.ts, read from source so the check can't drift from the sim.
@@ -24,6 +31,7 @@ import sys
 from pathlib import Path
 
 import bpy
+import numpy as np
 from mathutils import Vector
 
 REPO = Path(__file__).resolve().parents[2]
@@ -44,8 +52,39 @@ CHAR_TRIS = {0: 4000, 1: 1800}         # docs/04 §5.6
 CHAR_DRAW_CALLS = 3                     # docs/04 §5 "1-3 draw calls"
 CHAR_GPU_TEX_BYTES = 1.5 * 1024 * 1024  # docs/04 §5 "≤ 1.5 MB GPU texture memory"
 KIT_TRIS = 3000
+# Map kits: gameplay-layer colours stay ≥ 25 ΔE (CIE76) from both team colours (docs/01 §7: players
+# highest contrast; tools/art-preview TEAM), and nothing is drawn on the gameplay plane (|depth| <
+# the 0.35 m capsule radius) more than 0.1 m outside the piece's collision, except thin poles
+TEAM_RGB = {"blue": 0x2f7dff, "orange": 0xff7a1a}
+TEAM_DE = 25.0
+PLANE_DEPTH = 0.35
+RVC_TOL, RVC_CELL = 0.1, 0.05
 MAX_INFLUENCES = 4                      # three.js reads JOINTS_0/WEIGHTS_0 only
 ENVELOPE_SCALE = 1.10                   # docs/04 §1.2
+# Dye round trip (docs/04 §5.4) on covered texels. Means catch a shifted dye albedo (the AgX bug was
+# 22-29/255 mean); the p95 limits leave room for JPEG/WebP chroma loss at colour edges.
+DYE_DYED = (0.012, 0.04)                # dyed: (mean, p95) |linear luminance of dyeAlbedo × defaults − albedo|
+DYE_UNDYED = (5 / 255, 16 / 255)        # undyed: (mean, p95) |dyeAlbedo − albedo| per channel (sRGB)
+DYE_SMALL = (0.015, 0.06, 8 / 255, 32 / 255)  # the same for ≤ 128² textures, where WebP loss is heavier
+FIREARMS = {"pistol", "dual", "rifle", "shotgun", "sniper", "launcher", "heavy"}  # docs/04 §4.2
+FAMILIES = FIREARMS | {"melee", "thrown"}  # docs/04 §9.5
+AIM_POSES = {"pistol", "dual", "rifle"}  # the aim sets the clips provide (rookie.json aimPoseFallback)
+PART_SLOTS = {"headgear", "eyewear", "top", "gloves", "legs", "boots", "jetpack"}  # docs/04 §3
+PART_TEX = {0: 256, 1: 128}             # max texture edge per part LOD (albedo and dye mask)
+REST_TOL = (0.001, 0.1)                 # m, degrees: a part's bind pose must match the body's
+# docs/04 §1.2 locality: the body bones a slot is worn on. A part must also stay inside the box of
+# the body vertices skinned to them (plus the slot's default part), ×1.10.
+REGION_BONES = {
+    "headgear": {"head", "jaw", "eye_L", "eye_R", "neck"},
+    "eyewear": {"head", "jaw", "eye_L", "eye_R", "neck"},
+    "boots": {"calf_L", "calf_R", "foot_L", "foot_R", "toe_L", "toe_R"},
+    "gloves": {"hand_L", "hand_R"},
+    "jetpack": {"spine1", "spine2"},
+    "top": {"pelvis", "spine1", "spine2", "clavicle_L", "clavicle_R", "upperarm_L", "upperarm_R", "forearm_L", "forearm_R"},
+    "legs": {"pelvis", "thigh_L", "thigh_R", "calf_L", "calf_R"},
+}
+HEAD_SLOTS = {"headgear", "eyewear"}  # eyewear's region also counts the default headgear
+LOCAL_MARGIN = 0.03                     # m added to the region box on every side
 RASTER = 0.02                           # silhouette raster cell (m)
 
 
@@ -91,18 +130,29 @@ def parse_args(argv):
         a = argv[i]
         if a.startswith("--"):
             key = a[2:].replace("-", "_")
+            if i + 1 >= len(argv) or argv[i + 1].startswith("--"):
+                print(f"check.py: {a} needs a value")
+                sys.exit(2)
             args[key] = argv[i + 1]
             i += 2
         else:
             files.append(a)
             i += 1
-    if len(files) != 1:
-        sys.exit("usage: blender -b --python check.py -- <file.glb> [--kind character|part|kit] ...")
+    if len(files) != 1 or args["kind"] not in ("character", "part", "weapon", "kit"):
+        print("usage: blender -b --python-exit-code 1 --python check.py -- <file.glb> [--kind character|part|weapon|kit] ...")
+        sys.exit(2)
     args["file"] = files[0]
-    args["lod"] = int(args["lod"])
-    args["max_tex"] = int(args["max_tex"])
-    if args["max_tris"] is not None:
-        args["max_tris"] = int(args["max_tris"])
+    try:
+        args["lod"] = int(args["lod"])
+        args["max_tex"] = int(args["max_tex"])
+        if args["max_tris"] is not None:
+            args["max_tris"] = int(args["max_tris"])
+    except ValueError as e:
+        print(f"check.py: bad option value: {e}")
+        sys.exit(2)
+    if args["lod"] not in (0, 1):
+        print("check.py: --lod must be 0 or 1")
+        sys.exit(2)
     return args
 
 
@@ -129,8 +179,9 @@ def load_hitboxes():
     return hb
 
 
-def import_glb(path: str):
-    bpy.ops.wm.read_homefile(use_empty=True)
+def import_glb(path: str, reset: bool = True):
+    if reset:
+        bpy.ops.wm.read_homefile(use_empty=True)
     before = set(bpy.data.objects)
     # disable_bone_shape: otherwise the importer adds an icosphere mesh to draw the bones
     bpy.ops.import_scene.gltf(filepath=str(path), disable_bone_shape=True)
@@ -216,16 +267,164 @@ def vertex_weights(objs):
     return out
 
 
-def image_report(r: Report, max_tex: int, budget_bytes=None):
-    images = [im for im in bpy.data.images if im.size[0] > 0 and im.users > 0]
+def _texture_dir(name, files):
+    """<glb dir>/textures/, or one level up (art/character/parts/*.glb use art/character/textures/)."""
+    for f in files:
+        for d in (Path(f).parent / "textures", Path(f).parent.parent / "textures"):
+            if (d / name).exists():
+                return d
+    return None
+
+
+def dye_mask_images(objs, files):
+    """Dye masks referenced by the parts' extras (`dyeMask`), found next to the GLBs (_texture_dir)."""
+    out = []
+    for o in objs:
+        name = o.get("dyeMask")
+        d = _texture_dir(name, files) if name else None
+        if d:
+            out.append(bpy.data.images.load(str(d / name), check_existing=True))
+    return out
+
+
+def _base_color_image(o):
+    for m in o.data.materials:
+        if not m or not m.node_tree:
+            continue
+        for n in m.node_tree.nodes:
+            if n.type == "BSDF_PRINCIPLED" and n.inputs["Base Color"].links:
+                src = n.inputs["Base Color"].links[0].from_node
+                if src.type == "TEX_IMAGE" and src.image:
+                    return src.image
+    return None
+
+
+def _px(img):
+    w, h = img.size
+    return np.array(img.pixels[:], dtype=np.float32).reshape(h, w, 4)
+
+
+def _to_linear(c):
+    return np.where(c <= 0.04045, c / 12.92, ((np.maximum(c, 0) + 0.055) / 1.055) ** 2.4)
+
+
+def uv_coverage(o, w, h):
+    """Texels covered by the mesh's UV triangles (Blender pixel rows, bottom first)."""
+    me = o.data
+    cov = np.zeros((h, w), dtype=bool)
+    if not me.uv_layers.active:
+        return cov
+    uvs = np.array([d.uv[:] for d in me.uv_layers.active.data], dtype=np.float64).reshape(-1, 2) * (w, h)
+    me.calc_loop_triangles()
+    for t in me.loop_triangles:
+        (ax, ay), (bx, by), (cx, cy) = uvs[list(t.loops)]
+        x0, x1 = max(int(min(ax, bx, cx)), 0), min(int(max(ax, bx, cx)) + 1, w - 1)
+        y0, y1 = max(int(min(ay, by, cy)), 0), min(int(max(ay, by, cy)) + 1, h - 1)
+        den = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy)
+        if x1 < x0 or y1 < y0 or abs(den) < 1e-12:
+            continue
+        xs, ys = np.meshgrid(np.arange(x0, x1 + 1) + 0.5, np.arange(y0, y1 + 1) + 0.5)
+        l1 = ((by - cy) * (xs - cx) + (cx - bx) * (ys - cy)) / den
+        l2 = ((cy - ay) * (xs - cx) + (ax - cx) * (ys - cy)) / den
+        cov[y0:y1 + 1, x0:x1 + 1] |= (l1 >= 0) & (l2 >= 0) & (1 - l1 - l2 >= 0)
+    return cov
+
+
+def dye_roundtrip(r: Report, objs, files):
+    """docs/04 §5.4: on every texel the mesh covers, the shader with the default dyes must give back
+    the painted albedo. Dyed texels: dyeAlbedo × Π lerp(1, default_i, mask_i) vs the albedo, linear
+    luminance (one default per channel flattens hue inside a channel by design). Undyed texels:
+    dyeAlbedo must equal the albedo (WebP loss only). Catches a tone-mapped or wrong dye albedo
+    anywhere on the part, and dye files that are missing."""
+    lum = np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+    for o in objs:
+        if o.type != "MESH" or not (o.get("dyeAlbedo") or o.get("dyeMask")):
+            continue
+        check = f"dye round trip: {o.name}"
+        tex = _texture_dir(o["dyeMask"], files) if o.get("dyeMask") else None
+        albedo = _base_color_image(o)
+        dalb = next((tex / f"{o['dyeAlbedo']}{ext}" for ext in (".png", ".webp")
+                     if tex and o.get("dyeAlbedo") and (tex / f"{o['dyeAlbedo']}{ext}").exists()), None)
+        missing = [what for what, found in ((f"dye mask {o.get('dyeMask')}", tex), (f"dye albedo {o.get('dyeAlbedo')}", dalb),
+                                            ("embedded albedo", albedo)) if found is None]
+        if missing:
+            r.add("FAIL", check, "missing: " + ", ".join(missing))
+            continue
+        # the lossless albedo PNG the GLB was made from, when it sits next to the dye files (art/
+        # sources embed JPEG); otherwise the embedded albedo (the web build's WebP)
+        png = tex / o["dyeMask"].replace("_dye_mask.png", "_albedo.png")
+        a = _px(bpy.data.images.load(str(png), check_existing=True) if png.exists() else albedo)[..., :3]
+        d = _px(bpy.data.images.load(str(dalb), check_existing=True))[..., :3]
+        m = _px(bpy.data.images.load(str(tex / o["dyeMask"]), check_existing=True))
+        if a.shape != d.shape or a.shape[:2] != m.shape[:2]:
+            r.add("FAIL", check, f"sizes differ: albedo {a.shape[:2]}, dye albedo {d.shape[:2]}, mask {m.shape[:2]}")
+            continue
+        cov = uv_coverage(o, a.shape[1], a.shape[0])
+        # one texel in from every island border: WebP/JPEG bleeds neighbouring islands into it
+        p = np.pad(cov, 1)
+        cov = cov & p[:-2, 1:-1] & p[2:, 1:-1] & p[1:-1, :-2] & p[1:-1, 2:]
+        if not cov.any():
+            r.add("FAIL", check, "the mesh's UVs cover no texels")
+            continue
+        tint = np.ones_like(a)
+        defaults = o.get("dyeDefaults") or {}
+        for i, key in enumerate(("primary", "secondary", "accent")):
+            if key in defaults:
+                hexc = str(defaults[key]).lstrip("#")
+                dye = np.array([int(hexc[j:j + 2], 16) / 255 for j in (0, 2, 4)], dtype=np.float32)
+                tint *= 1 + m[..., i:i + 1] * (_to_linear(dye) - 1)
+        mm = m[..., :3].max(axis=-1)
+        dyed, undyed = cov & (mm > 0.02), cov & (mm <= 0.02)
+        parts = []
+        ok = True
+        few = 0.02 * cov.sum()  # a class this small (a few texels) says nothing either way
+        lim_d, lim_u = (DYE_SMALL[:2], DYE_SMALL[2:]) if max(a.shape[:2]) <= 128 else (DYE_DYED, DYE_UNDYED)
+        if dyed.sum() > few:
+            e = np.abs((_to_linear(d) * tint - _to_linear(a)) @ lum)[dyed]
+            mean, p95 = float(e.mean()), float(np.percentile(e, 95))
+            ok &= mean <= lim_d[0] and p95 <= lim_d[1]
+            parts.append(f"dyed {dyed.sum() / cov.sum():.0%}: mean {mean:.3f} p95 {p95:.3f} (max {lim_d[0]}/{lim_d[1]})")
+        if undyed.sum() > few:
+            e = np.abs(d - a).max(axis=-1)[undyed]
+            mean, p95 = float(e.mean()), float(np.percentile(e, 95))
+            ok &= mean <= lim_u[0] and p95 <= lim_u[1]
+            parts.append(f"undyed {undyed.sum() / cov.sum():.0%}: mean {mean * 255:.1f} p95 {p95 * 255:.1f}/255 "
+                         f"(max {lim_u[0] * 255:.0f}/{lim_u[1] * 255:.0f})")
+        r.ok(ok, check, "; ".join(parts))
+
+
+def content_cosmetic_ids():
+    """Item ids in W2's catalogue, packages/content/src/cosmetics.ts (`item(n, 'id', ...)`)."""
+    try:
+        return set(re.findall(r"\bitem\(\s*\d+,\s*'([^']+)'", (REPO / "packages/content/src/cosmetics.ts").read_text()))
+    except OSError:
+        return set()
+
+
+def content_weapon_ids():
+    """Weapon and grenade ids defined in packages/content (read from source, like the hitboxes)."""
+    ids = set()
+    for name in ("weapons.ts", "grenades.ts"):
+        try:
+            ids |= set(re.findall(r"\bid:\s*'([^']+)'", (REPO / "packages/content/src" / name).read_text()))
+        except OSError:
+            pass
+    return ids
+
+
+def image_report(r: Report, max_tex: int, budget_bytes=None, extra=()):
+    """`extra` = the dye masks named by the extras (costed as masks); every other image is colour."""
+    masks = {im.name for im in extra}
+    images = [im for im in bpy.data.images if im.size[0] > 0 and im.users > 0 and im.name not in masks] + list(extra)
     total = 0.0
     for im in images:
         w, h = im.size
         pot = (w & (w - 1)) == 0 and (h & (h - 1)) == 0
         r.ok(max(w, h) <= max_tex, f"texture size: {im.name}", f"{w}x{h} (max {max_tex})")
         r.ok(pot, f"texture POT: {im.name}", "power of two" if pot else "not a power of two (mips/KTX2 need POT)", warn_only=True)
-        # KTX2 estimate: UASTC→BC7/ASTC = 1 byte/px, + 1/3 for mips. ETC1S RGB albedo is half that.
-        total += w * h * 1.0 * 4 / 3
+        # KTX2 estimate (docs/11 §4): ETC1S colour → BC1/ETC1 at 0.5 byte/px; masks are data and
+        # go UASTC → BC7/ASTC at 1 byte/px. +1/3 for mips.
+        total += w * h * (1.0 if im.name in masks else 0.5) * 4 / 3
     if budget_bytes is not None:
         r.ok(total <= budget_bytes, "GPU texture memory (KTX2 est.)",
              f"{total / 1048576:.2f} MB of {budget_bytes / 1048576:.2f} MB, {len(images)} image(s)")
@@ -243,20 +442,15 @@ def draw_calls(meshes):
 
 # ---------------------------------------------------------------- checks
 
-def check_character(r: Report, objs, args):
-    meshes = [o for o in objs if o.type == "MESH"]
+def check_skeleton(r: Report, objs, meshes):
+    """Shared skeleton, sockets and skin weights (docs/04 §4.1, §9.2). Returns (arm, bones, weights)."""
     arms = [o for o in objs if o.type == "ARMATURE"]
-    tris = world_tris(meshes)
-    budget = args["max_tris"] or CHAR_TRIS[args["lod"]]
-    r.ok(len(tris) <= budget, f"triangles (LOD{args['lod']})", f"{len(tris)} of {budget}")
-    dc = draw_calls(meshes)
-    r.ok(dc <= CHAR_DRAW_CALLS, "draw calls (mesh x material)", f"{dc} of {CHAR_DRAW_CALLS}")
-    image_report(r, args["max_tex"], CHAR_GPU_TEX_BYTES)
-
-    # Skeleton
-    r.ok(len(arms) == 1, "armature", f"{len(arms)} armature(s)")
+    # Assembled characters: every part file carries a copy of the shared skeleton.
+    same = len({tuple(sorted(b.name for b in a.data.bones)) for a in arms}) == 1
+    r.ok(len(arms) >= 1 and same, "armature",
+         f"{len(arms)} armature(s)" + (" with identical bones (assembled parts)" if len(arms) > 1 and same else ""))
     if not arms:
-        return
+        return None
     arm = arms[0]
     bones = {b.name for b in arm.data.bones}
     missing = [b for b in DEFORM_BONES if b not in bones]
@@ -266,8 +460,8 @@ def check_character(r: Report, objs, args):
     r.ok(not missing_s, "sockets (docs/04 §4.1)",
          f"all {len(SOCKETS)} present" if not missing_s else "missing: " + ", ".join(missing_s))
     extra = sorted(bones - set(DEFORM_BONES) - set(SOCKETS))
-    r.ok(not extra, "no unexpected bones", "none" if not extra else ", ".join(extra), warn_only=True)
-    skinned = [m for m in meshes if any(md.type == "ARMATURE" for md in m.modifiers) or m.parent == arm]
+    r.ok(not extra, "no unexpected bones", "none" if not extra else ", ".join(extra))
+    skinned = [m for m in meshes if any(md.type == "ARMATURE" for md in m.modifiers) or m.parent in arms]
     r.ok(len(skinned) == len(meshes), "meshes skinned to the armature", f"{len(skinned)}/{len(meshes)}")
 
     # Weights
@@ -277,13 +471,61 @@ def check_character(r: Report, objs, args):
     bad_sum = sum(1 for _, w in vw if w and abs(sum(w.values()) - 1) > 0.02)
     r.ok(unweighted == 0, "every vertex weighted", f"{unweighted} unweighted of {len(vw)}")
     r.ok(over == 0, f"≤ {MAX_INFLUENCES} influences per vertex", f"{over} vertices over")
-    r.ok(bad_sum == 0, "weights normalised", f"{bad_sum} vertices off by > 2%", warn_only=True)
+    r.ok(bad_sum == 0, "weights normalised", f"{bad_sum} vertices off by > 2%")
     used = {g for _, w in vw for g in w}
     socket_weighted = sorted(used & set(SOCKETS))
     r.ok(not socket_weighted, "sockets are non-deform (no weights)",
          "none weighted" if not socket_weighted else "weighted: " + ", ".join(socket_weighted))
     unknown = sorted(used - set(DEFORM_BONES))
     r.ok(not unknown, "weights only on skeleton bones", "ok" if not unknown else ", ".join(unknown))
+    if len(arms) > 1:  # an assembled outfit: every part must be bound to the same bind pose
+        ref = rest_pose(arms[0])
+        worst = max((rest_diff(ref, rest_pose(a)) for a in arms[1:]), key=lambda t: (t[0], t[1]))
+        r.ok(worst[0] <= REST_TOL[0] and worst[1] <= REST_TOL[1], "same bind pose in every file",
+             f"worst {worst[2]}: {worst[0] * 1000:.1f} mm, {worst[1]:.2f}°")
+    return arm, bones, vw
+
+
+def rest_pose(arm):
+    return {b.name: arm.matrix_world @ b.matrix_local for b in arm.data.bones}
+
+
+def rest_diff(ref, other):
+    """(metres, degrees, bone) of the worst bone that differs between two rest poses."""
+    worst = (0.0, 0.0, "-")
+    for name, m in other.items():
+        if name not in ref:
+            continue
+        dt = (m.translation - ref[name].translation).length
+        da = math.degrees((ref[name].to_3x3().transposed() @ m.to_3x3()).to_quaternion().angle)
+        da = min(da, 360 - da)
+        if (dt, da) > worst[:2]:
+            worst = (dt, da, name)
+    return worst
+
+
+def check_character(r: Report, objs, args):
+    meshes = [o for o in objs if o.type == "MESH"]
+    tris = world_tris(meshes)
+    budget = args["max_tris"] or CHAR_TRIS[args["lod"]]
+    r.ok(len(tris) <= budget, f"triangles (LOD{args['lod']})", f"{len(tris)} of {budget}")
+    # docs/04 §5.3: parts sharing the skeleton merge into one SkinnedMesh with one material
+    # (texture array), so an assembled character costs one draw call; anything not skinned to the
+    # shared skeleton stays separate.
+    dc = draw_calls(meshes)
+    arms = [o for o in objs if o.type == "ARMATURE"]
+    skinned = [m for m in meshes if m.parent in arms or any(md.type == "ARMATURE" for md in m.modifiers)]
+    # one merged draw call, plus one per extra material any skinned part brings (each part must be one material)
+    merged = (1 + sum(draw_calls([m]) - 1 for m in skinned) if skinned else 0) + draw_calls([m for m in meshes if m not in skinned])
+    r.ok(merged <= CHAR_DRAW_CALLS, "draw calls after part merge (docs/04 §5.3)",
+         f"{merged} of {CHAR_DRAW_CALLS} ({dc} before merging)")
+    image_report(r, args["max_tex"], CHAR_GPU_TEX_BYTES, dye_mask_images(meshes, args["files"]))
+    dye_roundtrip(r, objs, args["files"])
+
+    found = check_skeleton(r, objs, meshes)
+    if not found:
+        return
+    arm, bones, vw = found
 
     # Orientation, scale and fairness vs the hitboxes
     hb = load_hitboxes()
@@ -335,26 +577,249 @@ def check_character(r: Report, objs, args):
     r.ok(want <= props, "custom properties (docs/04 §8)", ", ".join(sorted(props & want)) or "none", warn_only=True)
 
 
+# Per-slot LOD0 / LOD1 triangle budgets (art/pipeline/build_cosmetics.py): body 2,350 plus one
+# item per slot stays ≤ 3,950 / 1,720 tris, inside docs/04 §5.6.
+SLOT_TRIS = {"headgear": (450, 200), "eyewear": (150, 70), "boots": (300, 130), "gloves": (150, 70),
+             "jetpack": (550, 250)}
+BODY_TRIS = (2350, 1000)
+# the body plus one item in every slot must fit a character (docs/04 §5.6); top/legs/back get budgets
+# only when the slots are re-balanced to keep this true
+assert all(BODY_TRIS[i] + sum(t[i] for t in SLOT_TRIS.values()) <= CHAR_TRIS[i] for i in (0, 1)), "slot budgets exceed CHAR_TRIS"
+
+
 def check_part(r: Report, objs, args):
     meshes = [o for o in objs if o.type == "MESH"]
     tris = world_tris(meshes)
-    budget = args["max_tris"] or 1500
-    r.ok(len(tris) <= budget, "triangles", f"{len(tris)} of {budget}")
-    image_report(r, args["max_tex"])
+    pmap = {}
+    for o in meshes:
+        pmap.update({k: o[k] for k in o.keys() if not k.startswith("_")})
+    slot = pmap.get("slot")
+    r.ok(slot in PART_SLOTS, "slot extra (docs/04 §3, §9.5)",
+         slot if slot in PART_SLOTS else f"{slot!r}: missing or not a part slot (extras exported?)")
+    # no fallback budget: a part without a known slot already FAILs above
+    budget = args["max_tris"] or SLOT_TRIS.get(slot, (0, 0))[args["lod"]]
+    r.ok(len(tris) <= budget, f"triangles (slot {slot}, LOD{args['lod']})", f"{len(tris)} of {budget}")
+    dc = draw_calls(meshes)
+    r.ok(len(meshes) == 1 and dc == 1, "one mesh, one material (docs/04 §5.3)", f"{len(meshes)} mesh(es), {dc} draw call(s)")
+    image_report(r, min(args["max_tex"], PART_TEX[args["lod"]]), extra=dye_mask_images(meshes, args["files"]))
+    need = ["bodyTypes", "envelopeOk", "cosmeticId", "hidesHair"] + ([] if pmap.get("dyeable") is False else ["dyeMask", "dyeAlbedo", "dyeDefaults"])
+    missing = [k for k in need if k not in pmap]
+    r.ok(not missing, "required extras (docs/04 §9.5)", "ok" if not missing else "missing: " + ", ".join(missing))
+    known = content_cosmetic_ids()
+    cid = pmap.get("cosmeticId")
+    if known and cid:
+        r.ok(cid in known, "cosmeticId in packages/content", cid if cid in known else
+             f"{cid} is not in packages/content/src/cosmetics.ts (W2's catalogue names the items)", warn_only=True)
+    dye_roundtrip(r, objs, args["files"])
+    part_rest = {a.name: rest_pose(a) for a in objs if a.type == "ARMATURE"}
+    # docs/04 §9.3: parts are skinned to the shared skeleton in character space, never socket-local
+    weights = vertex_weights(meshes)
+    skinned = any(o.type == "ARMATURE" for o in objs) and weights and all(w for _, w in weights)
+    r.ok(bool(skinned), "skinned in character space (docs/04 §9.3)",
+         "every vertex weighted to the shared skeleton" if skinned else "no skin: parts carry the skeleton, they don't hang off sockets")
+    if any(o.type == "ARMATURE" for o in objs):
+        check_skeleton(r, objs, meshes)
+    attach = pmap.get("attachBone")
+    if attach and weights:
+        rigid = all(abs(w.get(attach, 0.0) - 1.0) < 1e-3 for _, w in weights)
+        r.ok(rigid, f"rigid to {attach} (attachBone)", "100% one bone" if rigid else "some vertices weighted to other bones")
     if not args["base"]:
-        r.add("FAIL", "cosmetic envelope", "pass --base <body.glb> to check the envelope")
+        r.add("FAIL", "cosmetic envelope", "pass --base <body.glb[,default_part.glb...]> to check the envelope")
         return
     part_lo, part_hi = bbox([p for t in tris for p in t])
-    base_objs = import_glb(args["base"])
-    base_tris = world_tris([o for o in base_objs if o.type == "MESH"])
+    base_objs = []
+    for i, base in enumerate(args["base"].split(",")):
+        base_objs += import_glb(base, reset=i == 0)
+    ref = [o for o in base_objs if o.type == "MESH" and o.get("slot", "body") == "body"]  # the body alone (docs/04 §1.2)
+    body_arm = next((o for o in base_objs if o.type == "ARMATURE"), None)
+    if body_arm and part_rest:
+        worst = max(rest_diff(rest_pose(body_arm), rp) for rp in part_rest.values())
+        r.ok(worst[0] <= REST_TOL[0] and worst[1] <= REST_TOL[1], "bind pose = the base body's",
+             f"worst {worst[2]}: {worst[0] * 1000:.1f} mm, {worst[1]:.2f}° (max {REST_TOL[0] * 1000:.0f} mm, {REST_TOL[1]}°)")
+    base_tris = world_tris(ref)
     blo, bhi = bbox([p for t in base_tris for p in t])
     c, half = (blo + bhi) / 2, (bhi - blo) / 2 * ENVELOPE_SCALE
     elo, ehi = c - half, c + half
-    elo.z = blo.z  # the envelope grows up and out, not into the floor
+    elo.z = min(blo.z, 0.0)  # from the floor up: footwear fills the gap below a bare body's calves
     inside = all(elo[i] - 1e-4 <= part_lo[i] and part_hi[i] <= ehi[i] + 1e-4 for i in range(3))
-    r.ok(inside, f"cosmetic envelope (base x{ENVELOPE_SCALE:.2f})",
+    # Locality: near the bones the slot is worn on (a 1 m-wide hat, or eyewear hanging to the shins,
+    # fits the body box but not this): the body verts skinned to the slot's bones plus the slot's
+    # default part, ×1.10, inside the body envelope.
+    region = REGION_BONES.get(slot)
+    if region:
+        pts = [co for co, w in vertex_weights(ref) if w and max(w, key=w.get) in region]
+        pts += [p for t in world_tris([o for o in base_objs if o.type == "MESH" and (o.get("slot") == slot or (
+            slot in HEAD_SLOTS and o.get("slot") in HEAD_SLOTS))]) for p in t]
+        if pts:
+            rlo, rhi = bbox(pts)
+            # ×1.10 plus 3 cm: a hand's box is only ~15 cm, and 10% of it is less than a glove's lining
+            rc, rh = (rlo + rhi) / 2, (rhi - rlo) / 2 * ENVELOPE_SCALE + Vector((LOCAL_MARGIN,) * 3)
+            llo = Vector([max(rc[i] - rh[i], elo[i]) for i in range(3)])
+            lhi = Vector([min(rc[i] + rh[i], ehi[i]) for i in range(3)])
+            near = all(llo[i] - 1e-4 <= part_lo[i] and part_hi[i] <= lhi[i] + 1e-4 for i in range(3))
+            r.ok(near, f"near its {slot} bones (docs/04 §1.2 locality)",
+                 f"part {tuple(round(v, 2) for v in part_lo)}..{tuple(round(v, 2) for v in part_hi)} vs "
+                 f"region {tuple(round(v, 2) for v in llo)}..{tuple(round(v, 2) for v in lhi)}")
+    claimed = pmap.get("envelopeOk")
+    if claimed is not None and bool(claimed) != inside:
+        r.add("FAIL", "envelopeOk extra", f"says {bool(claimed)}, measured {inside}")
+    r.ok(inside, f"cosmetic envelope ({slot or 'part'}: base x{ENVELOPE_SCALE:.2f})",
          f"part {tuple(round(v, 2) for v in part_lo)}..{tuple(round(v, 2) for v in part_hi)} vs "
          f"envelope {tuple(round(v, 2) for v in elo)}..{tuple(round(v, 2) for v in ehi)}")
+
+
+WEAPON_TRIS = 1000
+OFFHAND_REACH = 0.10  # chibi arms: the left hand can't get further from the grip (docs/04 §9.4)
+
+
+def check_weapon(r: Report, objs, args):
+    """docs/04 §9.4: origin at the grip, +Y muzzle (Blender +Z after import), +Z up; nodes."""
+    meshes = [o for o in objs if o.type == "MESH"]
+    tris = world_tris(meshes)
+    budget = args["max_tris"] or WEAPON_TRIS
+    r.ok(len(tris) <= budget, "triangles", f"{len(tris)} of {budget}")
+    dc = draw_calls(meshes)
+    r.ok(dc == 1, "one mesh, one material", f"{dc} draw call(s)")
+    image_report(r, args["max_tex"])
+    props = {}
+    for o in meshes:
+        props.update({k: o[k] for k in o.keys() if not k.startswith("_")})
+    missing = [k for k in ("weaponId", "family", "aimPose", "hands") if k not in props]
+    r.ok(not missing, "extras weaponId/family/aimPose/hands", "ok" if not missing else "missing: " + ", ".join(missing))
+    known = content_weapon_ids()
+    wid = props.get("weaponId")
+    if known and wid:
+        r.ok(wid in known, "weaponId in packages/content", wid if wid in known else
+             f"{wid} is not in packages/content/src/{{weapons,grenades}}.ts yet", warn_only=True)
+    nodes = {o.name.split(".")[0]: o.matrix_world.translation.copy() for o in objs if o.type == "EMPTY"}
+    lo, hi = bbox([p for t in tris for p in t])
+    r.info("nodes", ", ".join(sorted(nodes)) or "none")
+    r.ok(lo.x - 0.02 <= 0 <= hi.x + 0.02 and lo.y - 0.02 <= 0 <= hi.y + 0.02 and lo.z - 0.02 <= 0 <= hi.z + 0.02,
+         "origin on the weapon (the grip)", f"bbox {tuple(round(v, 2) for v in lo)}..{tuple(round(v, 2) for v in hi)}")
+    family = props.get("family")
+    r.ok(family in FAMILIES, "family is a docs/04 §4.2 family", f"{family!r}" + ("" if family in FAMILIES else f" not in {sorted(FAMILIES)}"))
+    aim = props.get("aimPose")
+    r.ok(aim in AIM_POSES, "aimPose has clips", f"{aim!r}" + ("" if aim in AIM_POSES else f" not in {sorted(AIM_POSES)}"))
+    if family == "thrown":
+        r.ok("ground" in nodes, "ground node (rest frame)", "ok" if "ground" in nodes else "throwables need a `ground` node (docs/04 §9.4)")
+    if family in FIREARMS:
+        m = nodes.get("muzzle")
+        r.ok(m is not None and m.z > 0.05 and abs(m.x) < 0.05, "muzzle node ahead of the grip (+Y)",
+             f"muzzle at glTF y {m.z:+.2f} m" if m is not None else "no muzzle node")
+    if props.get("hands") == 2:
+        o = nodes.get("offhand")
+        r.ok(o is not None and o.length <= OFFHAND_REACH, f"offhand node within {OFFHAND_REACH} m of the grip",
+             f"{o.length:.3f} m" if o is not None else "no offhand node (two-handed)")
+
+
+def _lab(lin):
+    """CIE Lab (D65) of linear sRGB rows."""
+    m = np.array([[0.4124, 0.3576, 0.1805], [0.2126, 0.7152, 0.0722], [0.0193, 0.1192, 0.9505]])
+    xyz = (lin @ m.T) / np.array([0.95047, 1.0, 1.08883])
+    f = np.where(xyz > 216 / 24389, np.cbrt(np.clip(xyz, 0, None)), (24389 / 27 * xyz + 16) / 116)
+    return np.stack([116 * f[:, 1] - 16, 500 * (f[:, 0] - f[:, 1]), 200 * (f[:, 1] - f[:, 2])], -1)
+
+
+def team_contrast(o):
+    """Smallest ΔE between the piece's vertex colours and each team colour."""
+    attr = o.data.color_attributes.active_color or (o.data.color_attributes[0] if o.data.color_attributes else None)
+    if attr is None or not len(attr.data):
+        return None
+    col = np.empty(len(attr.data) * 4, dtype=np.float32)
+    attr.data.foreach_get("color", col)
+    lab = _lab(col.reshape(-1, 4)[:, :3].astype(np.float64))
+    out = {}
+    for team, hx in TEAM_RGB.items():
+        srgb = np.array([(hx >> 16) & 255, (hx >> 8) & 255, hx & 255]) / 255
+        lin = np.where(srgb <= 0.04045, srgb / 12.92, ((srgb + 0.055) / 1.055) ** 2.4)
+        out[team] = float(np.sqrt(((lab - _lab(lin[None, :])) ** 2).sum(-1)).min())
+    return out
+
+
+def _in_poly(x, y, pts):
+    inside = np.zeros(x.shape, dtype=bool)
+    n = len(pts)
+    for i in range(n):
+        x1, y1 = pts[i]
+        x2, y2 = pts[(i + 1) % n]
+        if y1 == y2:
+            continue
+        cross = ((y1 > y) != (y2 > y)) & (x < (x2 - x1) * (y - y1) / (y2 - y1) + x1)
+        inside ^= cross
+    return inside
+
+
+def plane_samples(o):
+    """Points on the piece's triangles within PLANE_DEPTH of the gameplay plane: x, depth, height."""
+    me = o.data
+    me.calc_loop_triangles()
+    co = np.empty(len(me.vertices) * 3)
+    me.vertices.foreach_get("co", co)
+    co = co.reshape(-1, 3) @ np.array(o.matrix_world)[:3, :3].T + np.array(o.matrix_world)[:3, 3]
+    tri = np.empty(len(me.loop_triangles) * 3, dtype=np.int64)
+    me.loop_triangles.foreach_get("vertices", tri)
+    tris = co[tri.reshape(-1, 3)]
+    keep = (tris[:, :, 1].min(1) < PLANE_DEPTH) & (tris[:, :, 1].max(1) > -PLANE_DEPTH)
+    pts = []
+    for a, b, c in tris[keep]:
+        n = int(np.ceil(max(np.linalg.norm(b - a), np.linalg.norm(c - a), np.linalg.norm(c - b)) / (RVC_CELL * 0.6))) + 1
+        u, v = np.meshgrid(np.linspace(0, 1, n), np.linspace(0, 1, n))
+        m = u + v <= 1
+        p = a + np.outer(u[m], b - a) + np.outer(v[m], c - a)
+        pts.append(p[np.abs(p[:, 1]) < PLANE_DEPTH])
+    p = np.concatenate(pts) if pts else np.zeros((0, 3))
+    return p[:, 0], p[:, 1], p[:, 2]
+
+
+def _shapes(o, key):
+    return [[float(c) for c in shape] for shape in o.get(key, [])]
+
+
+def uncovered_blobs(o):
+    """Regions drawn on the gameplay plane that the piece's collision doesn't account for: not
+    inside a solid or the terrain and not on a one-way, within RVC_TOL. Blobs thinner than 3 cells
+    (0.15 m) either way are ignored (rims, bevels), and so are thin posts that are also shallow in
+    depth (a pole, not an end plate across the walkway)."""
+    x, y, z = plane_samples(o)
+    if not len(x):
+        return []
+    cov = np.zeros(x.shape, dtype=bool)
+    for x0, x1, h in _shapes(o, "terrain"):
+        cov |= (x >= x0 - RVC_TOL) & (x <= x1 + RVC_TOL) & (z <= h + RVC_TOL)
+    for poly in _shapes(o, "solids"):
+        pts = list(zip(poly[0::2], poly[1::2]))
+        for dx, dz in ((0, 0), (0, RVC_TOL), (0, -RVC_TOL), (RVC_TOL, 0), (-RVC_TOL, 0)):
+            cov |= _in_poly(x + dx, z + dz, pts)
+    for ax, ay, bx, by in _shapes(o, "oneWays"):
+        t = np.clip((x - ax) / max(1e-9, bx - ax), 0, 1)
+        line = ay + (by - ay) * t
+        cov |= (x >= min(ax, bx) - RVC_TOL) & (x <= max(ax, bx) + RVC_TOL) & (z >= line - 0.25) & (z <= line + RVC_TOL)
+    ix, iz, uy = np.floor(x[~cov] / RVC_CELL).astype(int), np.floor(z[~cov] / RVC_CELL).astype(int), y[~cov]
+    depth = {}
+    for c, d in zip(zip(ix.tolist(), iz.tolist()), uy.tolist()):
+        lo, hi = depth.get(c, (d, d))
+        depth[c] = (min(lo, d), max(hi, d))
+    cells = set(depth)
+    blobs, seen = [], set()
+    for c in cells:
+        if c in seen:
+            continue
+        stack, comp = [c], []
+        seen.add(c)
+        while stack:
+            cx, cz = stack.pop()
+            comp.append((cx, cz))
+            for d in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                q = (cx + d[0], cz + d[1])
+                if q in cells and q not in seen:
+                    seen.add(q)
+                    stack.append(q)
+        xs, zs = [q[0] for q in comp], [q[1] for q in comp]
+        w, h = max(xs) - min(xs) + 1, max(zs) - min(zs) + 1
+        deep = max(depth[q][1] for q in comp) - min(depth[q][0] for q in comp) >= 0.2
+        if h >= 3 and (w >= 3 or deep):
+            blobs.append(((min(xs) * RVC_CELL, (max(xs) + 1) * RVC_CELL), (min(zs) * RVC_CELL, (max(zs) + 1) * RVC_CELL)))
+    return blobs
 
 
 def check_kit(r: Report, objs, args):
@@ -370,9 +835,32 @@ def check_kit(r: Report, objs, args):
         pivot = abs(lo.z) <= 0.01 or abs(hi.z) <= 0.01
         r.ok(pivot, f"pivot: {o.name}", f"y {lo.z:+.2f}..{hi.z:+.2f} m: "
              + ("top or bottom on the origin" if pivot else "neither the walkable top nor the bottom is at y = 0"))
-        on_grid = all(abs(round(s / 0.25) * 0.25 - s) <= 0.02 for s in (size.x, size.z))
-        r.ok(on_grid, f"0.25 m grid: {o.name}", f"{size.x:.2f} x {size.z:.2f} m (w x h), depth {size.y:.2f} m",
-             warn_only=True)
+        coll = [c for key in ("terrain", "solids", "oneWays") for shape in o.get(key, []) for c in shape]
+        if coll:
+            # map kits: the collision is what must snap (render = collision, docs/11 §2)
+            off = [c for c in coll if abs(round(c / 0.05) * 0.05 - c) > 1e-3]
+            r.ok(not off, f"collision on a 0.05 m grid: {o.name}",
+                 f"{len(coll)} coordinates" + (f", off-grid: {off[:4]}" if off else ""), warn_only=True)
+        elif o.get("layer", "gameplay") == "gameplay":
+            on_grid = all(abs(round(s / 0.25) * 0.25 - s) <= 0.02 for s in (size.x, size.z))
+            r.ok(on_grid, f"0.25 m grid: {o.name}", f"{size.x:.2f} x {size.z:.2f} m (w x h), depth {size.y:.2f} m",
+                 warn_only=True)
+        if coll and o.get("layer", "gameplay") == "gameplay":
+            blobs = uncovered_blobs(o)
+            r.ok(not blobs, f"render = collision on the gameplay plane: {o.name}",
+                 "nothing drawn within 0.35 m of the plane outside the collision" if not blobs else
+                 "; ".join(f"x {a:+.2f}..{b:+.2f} y {c:.2f}..{d:.2f}" for (a, b), (c, d) in blobs[:3])
+                 + " drawn with no collision")
+        if o.get("layer", "gameplay") == "gameplay":
+            de = team_contrast(o)
+            if de is not None:
+                r.ok(min(de.values()) >= TEAM_DE, f"team-colour contrast: {o.name}",
+                     ", ".join(f"{t} ΔE {v:.0f}" for t, v in de.items()) + f" (min {TEAM_DE:.0f})")
+        if o.get("adSlot"):
+            ad = o["adSlot"]
+            r.ok(not coll and o.get("layer") != "gameplay", f"ad surface off the gameplay plane: {o.name}",
+                 f"{ad['kind']} {ad['format']} {ad['size'][0]:g} x {ad['size'][1]:g} m, layer {o.get('layer')}"
+                 + (", has collision" if coll else ""))
     r.info("kit total triangles", str(total))
     r.ok(draw_calls(meshes) <= 3 * max(1, len(meshes)), "materials per piece", f"{draw_calls(meshes)} draw calls total")
     image_report(r, args["max_tex"])
@@ -381,19 +869,38 @@ def check_kit(r: Report, objs, args):
 def main():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     args = parse_args(argv)
-    path = Path(args["file"])
-    r = Report(str(path), args["kind"])
-    if not path.exists():
-        r.add("FAIL", "file exists", str(path))
-    else:
-        size = path.stat().st_size
-        objs = import_glb(path)
-        r.info("file size", f"{size / 1024:.0f} KB")
-        {"character": check_character, "part": check_part, "kit": check_kit}[args["kind"]](r, objs, args)
+    path = Path(args["file"].split(",")[0])
+    r = Report(args["file"], args["kind"])
+    crashed = False
+    try:
+        if not all(Path(f).exists() for f in args["file"].split(",")):
+            r.add("FAIL", "file exists", str(path))
+        else:
+            files = args["file"].split(",")
+            args["files"] = files
+            objs = []
+            for i, f in enumerate(files):
+                objs += import_glb(f, reset=i == 0)
+            size = sum(Path(f).stat().st_size for f in files)
+            r.info("file size", f"{size / 1024:.0f} KB" + (f" over {len(files)} files" if len(files) > 1 else ""))
+            if not any(o.type == "MESH" and o.data.polygons for o in objs):
+                r.add("FAIL", "has a mesh", "no mesh in the file (an animation-only GLB?)")
+            else:
+                {"character": check_character, "part": check_part, "weapon": check_weapon,
+                 "kit": check_kit}[args["kind"]](r, objs, args)
+    except Exception as e:  # a crash must never read as a PASS
+        crashed = True
+        r.add("FAIL", "check crashed", f"{type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
     r.print()
     if args["json"]:
-        Path(args["json"]).write_text(json.dumps({"file": r.path, "kind": r.kind, "pass": not r.failed, "rows": r.rows}, indent=2))
-    sys.exit(1 if r.failed else 0)
+        try:
+            Path(args["json"]).write_text(json.dumps({"file": r.path, "kind": r.kind, "pass": not r.failed, "rows": r.rows}, indent=2))
+        except OSError as e:
+            print(f"check.py: can't write {args['json']}: {e}")
+            crashed = True
+    sys.exit(2 if crashed else 1 if r.failed else 0)
 
 
 main()

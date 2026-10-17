@@ -7,7 +7,14 @@
 ## 1. Rules that protect fairness and readability
 
 1. **Hitboxes are fixed** (02-physics §6). Every character, skin and body type uses the same hitboxes.
-2. **Silhouette envelope:** every head/hat/backpack must fit within a **cosmetic bounding envelope** (≤ 10% larger than the base body) and must not *shrink* the visual (no "tiny" skins that hide the real hitbox).
+2. **Silhouette envelope:** every cosmetic part must fit within a **cosmetic bounding envelope** and must not *shrink* the visual (no "tiny" skins that hide the real hitbox). **No cosmetic sticks out past the body**:
+   - the envelope is the bounding box of the **base body alone** (rest pose, LOD0, no parts), grown **10%** about its centre;
+   - its bottom is the floor (y = 0), or the body's lowest point if that is lower. The body stands on the floor, so footwear fills the gap below a bare body's calves;
+   - it is the same box for **every slot, default parts included**. No part widens it for another: not the default jetpack, not the default helmet;
+   - every LOD is measured against the LOD0 body;
+   - **locality:** a part must also stay near where it is worn. That is the box of the body vertices skinned to its slot's bones, plus the slot's default part, grown 10% and kept inside the body box. The bones are head, jaw, eyes and neck for headgear and eyewear; calves, feet and toes for boots; hands for gloves; spine1 and spine2 for the jetpack. A 1 m-wide hat fits the body box but not the head's.
+
+   `tools/asset-check --kind part` measures this (§9.7), and the part's `envelopeOk` extra records the measured result.
 3. **Visibility floor:** skins must pass an automated contrast check against each map's palette (§8). There are no full-camo skins.
 4. **Team readability:** in team modes an **outline + armband/visor glow** uses the team colour (or the player's chosen enemy-highlight colour), regardless of skin.
 5. **Audio parity:** cosmetic footstep/jetpack sounds keep the same loudness and frequency band. Only the timbre changes.
@@ -71,7 +78,7 @@ These are **original IPs**. Design them for the core audience (India, Nigeria, S
 |---|---|---|
 | Base locomotion (lower body) | idle, walk, run, crouch idle/walk, jet ascend, hover, fall, land (additive dip), slide | velocity + move state |
 | Upper-body aim | **aim offset**: 5 poses (−90°, −45°, 0°, +45°, +90°) **per weapon family** (pistol, dual, rifle, shotgun, sniper, launcher, heavy, melee), blended by aim angle | aim angle |
-| IK | off-hand to the weapon's `socket_offhand_IK` (two-handed weapons); head look-at the aim point | per frame |
+| IK | left hand to the weapon's `offhand` node, or to the rig's `socket_offhand_IK` if the weapon has none (two-handed weapons); head look-at the aim point | per frame |
 | Actions (override upper body) | fire recoil (additive), reload per family, swap, throw, melee ×2, heal, revive, interact | events |
 | Full-body | emotes, victory poses, knocked crawl, hit reactions (additive), spawn-in | events / state |
 | Ragdoll | client Verlet ragdoll on death (02-physics §16) | death event |
@@ -94,6 +101,9 @@ These are **original IPs**. Design them for the core audience (India, Nigeria, S
    - each vertex carries a `partIndex` attribute → the shader samples the right layer.
    - Result: **1 draw call per character** (+ weapon + jetpack flame).
 4. **Dye system:** each part has `albedo` + `mask` (R = primary, G = secondary, B = accent, A = emissive). The shader computes `color = albedo × lerp(1, dye[channel], mask)`. Dyes are unlockable cosmetics with zero texture cost.
+   - The **default dyes are per part** (each part's `dyeDefaults`), because every part is painted differently.
+   - The **player's dye is one colour per channel**, shared by every part: picking a primary colour replaces each part's default primary.
+   - The shipped `albedo` (the dye albedo) is neutral grey in the mask core and the exact inverse of the shader on soft mask edges, so the default dyes give back the painted look everywhere.
 5. **Outline:** inverted-hull or screen-space outline pass in team colour, toggleable and colour-configurable (accessibility).
 6. **LOD:** LOD0 ≤ 4k tris, LOD1 ≤ 1.8k tris (when zoomed out with a sniper scope or in BR spectate), shared clip set.
 7. **Cache** assembled characters by `loadoutHash` (same skin twice = one build).
@@ -129,13 +139,102 @@ Each effect is authored with a **low-quality variant** for the graphics "Low" pr
 
 ## 8. Content pipeline for cosmetics
 
-1. **Blender** → glTF (one file per part) with custom properties: `slot`, `bodyTypes`, `hidesHair`, `envelopeOk`.
-2. `tools/asset-pipeline` automatically:
-   - validates bone names against the skeleton;
-   - checks the triangle budget and the cosmetic envelope (bounding box vs the base body);
+1. **Blender** → glTF (one file per part) with custom properties (§9.5). The W8 source builds live in `art/pipeline/` (Blender scripts, art/README.md).
+2. `tools/asset-check` (Blender, headless) validates every source and runtime GLB:
+   - bone names against the skeleton;
+   - the triangle budget per slot;
+   - the cosmetic envelope (§1.2);
+   - the dye textures (§5.4).
+3. `tools/asset-pipeline` (W1's export stage, docs/11 §4):
    - converts to meshopt + KTX2;
    - generates thumbnails (headless render);
    - writes a manifest entry.
-3. **Readability lint:** renders the character silhouette over each map's background palette and computes luminance contrast. It fails below a threshold.
-4. Items are defined in `content/cosmetics/*.json` (`id`, `slot`, `rarity`, `assets`, `dyeable`, `source`, `releaseSeason`, `tags`).
-5. Store and battle pass reference item ids, so new cosmetics ship as content-only deploys (CDN assets + content.bin) without touching the game server.
+4. **Readability lint:** renders the character silhouette over each map's background palette and computes luminance contrast. It fails below a threshold.
+5. Items are defined in `content/cosmetics/*.json` (`id`, `slot`, `rarity`, `assets`, `dyeable`, `source`, `releaseSeason`, `tags`).
+6. Store and battle pass reference item ids, so new cosmetics ship as content-only deploys (CDN assets + content.bin) without touching the game server.
+
+---
+
+## 9. Asset conventions (from the Phase 0 art test)
+
+These are the rules every character, cosmetic, weapon and kit asset follows. `tools/asset-check` enforces the checkable ones; `art/README.md` has the worked example (the Rookie).
+
+### 9.1 Units, axes and scale
+- Metres. glTF axes: **+Y up, the character faces +Z**, feet on y = 0, centred on x = z = 0 under the pelvis.
+- Standing height 1.50 m to the top of the headgear. The head's centre sits on the head hitbox centre (1.24 m, docs/02 §6).
+- In game the character faces ±X: the renderer turns it about Y (§4.2), never mirrors it.
+
+### 9.2 Bone axes
+- Every bone's local **+Y runs along the bone**, toward its child.
+- Local **+Z points forward** (the facing direction) for bones that run up, down or sideways. For bones that already point forward (`foot`, `toe`, `eye_L/R`, the weapon sockets), +Z points **up**.
+- So clips can share one sign convention: **+X rotation flexes any vertical bone forward** (spine bends forward, a thigh swings forward). Calves bend back with −X. Raising an arm sideways is +Z on `upperarm_L` and −Z on `upperarm_R`.
+- Skinning: at most **4 influences per vertex** (three.js reads `JOINTS_0`/`WEIGHTS_0` only), weights normalised. Sockets carry no weights.
+
+### 9.3 Sockets
+Rest positions are for the Rookie (glTF metres, character at the origin facing +Z). Other bodies may differ; code must read the socket nodes, not these numbers.
+
+| Socket | Parent | Rest position | Local axes | Use |
+|---|---|---|---|---|
+| `socket_weapon_R` | `hand_R` | (−0.40, 0.54, −0.02) | **+Y muzzle**, +Z up, +X the gun's right | main weapon grip: a weapon GLB attaches with an **identity** transform |
+| `socket_weapon_L` | `hand_L` | (0.40, 0.54, −0.02) | same | second pistol (dual wield) |
+| `socket_offhand_IK` | `socket_weapon_R` | 0.07 m along +Y, 0.02 m along +Z | same | default left-hand IK target, within the off-hand reach (§9.4); a weapon's own `offhand` node overrides it |
+| `socket_jetpack` | `spine2` | (0, 0.73, −0.17), on the back surface | +Y up, +Z forward, +X the character's left | jetpack flame and VFX anchor; not a parent for the jetpack part (see below) |
+| `socket_back` | `spine2` | (0, 0.86, −0.40), behind the top of the jetpack | same | rigid props that aren't cosmetic parts (radio, flag pole, plushie) |
+| `socket_hat` | `head` | (0, 1.42, −0.01), 8 cm below the top of the helmet | same | hat-mounted VFX anchor (e.g. a lamp); not a parent for headgear parts |
+| `socket_nameplate` | `root` | (0, 1.75, 0) | same | UI anchor; parented to `root` so it doesn't bob with the head |
+
+**Cosmetic parts are skinned, not parented to sockets.** Every part GLB is authored in **character space** (the same origin as the body) and **carries the shared skeleton**, so the renderer can merge it into the body's single `SkinnedMesh` (§5.3):
+- rigid parts (headgear, eyewear, jetpack) are weighted **100% to one bone**, named in the `attachBone` extra (`head`, `head`, `spine2`);
+- boots blend from `foot_*` into `calf_*`; gloves are rigid to `hand_*`;
+- the `socket` extra names the socket the part sits next to, for VFX and tooling only. Adding a part under that socket would apply the offset twice.
+
+`tools/asset-check --kind part` fails a part with no skin. Weapons are the only GLBs attached at a socket.
+
+### 9.4 Weapons
+- Origin at the **main grip**, oriented like `socket_weapon_R`: **+Y toward the muzzle, +Z up**. Attaching is `socket.add(weapon)` with no extra rotation.
+- Named child nodes:
+  - `muzzle`: flash and tracer origin, required for every firearm family;
+  - `offhand`: left-hand IK target, on two-handed weapons. It must be **within 0.10 m of the grip** (the weapon check enforces this). The rifle aim poses are solved so the left hand reaches it, and `socket_offhand_IK`, in every pose (the character build asserts this);
+  - `eject`: casing spawn;
+  - optional: `mag` (reload), `tip` (melee hit point, e.g. the machete), `light` (blinking LED, e.g. the mine);
+  - `ground` on throwables and deployables (frag, mine): the frame of the item **at rest in the world**. Its local +Y (glTF) is world up and its origin is the point that touches the floor. To place it, set `world = floorPoint × inverse(ground.local)`. The GLB itself stays in the hand frame.
+- Budget: **≤ 1,000 tris**, one mesh, one material, ≤ 256² texture per weapon (LOD0; weapons have no LOD1).
+
+### 9.5 Node extras
+Blender custom properties export as glTF `extras` (`export_extras`):
+- **Characters and cosmetic parts:**
+  - `slot` and `bodyTypes`;
+  - `envelopeOk`: the measured result of §1.2;
+  - `hidesHair`;
+  - `dyeDefaults` {primary, secondary, accent}: §5.4 default dye colours (sRGB hex);
+  - `dyeMask`: the mask texture file name (RGBA = primary/secondary/accent/glow, linear data, same UVs);
+  - `dyeAlbedo`: the stem of the albedo with the dyeable texels turned neutral grey (§5.4). `dyeAlbedo × lerp(1, dyeDefaults, mask)` gives back the painted albedo;
+  - `attachBone` and `socket` (§9.3), on rigid parts;
+  - the Locker manifest also carries `name` and `cosmeticId`.
+- **Weapons:**
+  - `weaponId`, matching `packages/content`;
+  - `family`: the §4.2 weapon family (pistol, dual, rifle, shotgun, sniper, launcher, heavy, melee, plus `thrown` for grenades and deployables);
+  - `aimPose`: the aim-pose set the clips provide for it today (`pistol` or `rifle`; dual wield uses `dual`). Families without their own poses map to the nearest set until those clips exist. The character manifest's `aimPoseFallback` holds the same mapping per family;
+  - `hands` (1 or 2), `name` and `archetype` (the docs/03 role).
+- **Kit pieces:** `kitPiece` and `layer` (gameplay, mid or far, docs/11 §2). Gameplay pieces also carry collision in piece-local metres, which the map compiler turns into a MapDef:
+  - `terrain` [[x0, x1, h]];
+  - `solids` [[x, y, …]];
+  - `oneWays` [[ax, ay, bx, by]];
+  - `material` (the sim material id).
+
+### 9.6 Map kit pieces
+- Pivot on the **walkable top surface** (ground blocks, platforms) or on the **bottom** (props).
+- Width and height on a **0.25 m grid**; where a piece carries collision extras, it is the collision that must snap (to 0.05 m). Gameplay-plane pieces are 2 m deep (z −1…+1, docs/11 §2).
+- Baked AO and colour in vertex colours or a shared atlas: **one material per kit**, so pieces instance cleanly.
+
+### 9.7 Validation
+```bash
+blender -b --factory-startup --python-exit-code 1 --python tools/asset-check/check.py -- <a.glb[,b.glb...]> \
+    [--kind character|part|weapon|kit] [--lod 1] [--base body.glb[,default_part.glb...]]
+blender -b --factory-startup --python-exit-code 1 --python tools/asset-check/selftest.py
+```
+- Several comma-separated files are checked **as one assembled character**, because the §5 budgets apply per character on screen.
+- `--base` gives the base body for the part envelope (§1.2). Only meshes whose `slot` is `body` (or that have no slot) count: default parts listed there are ignored. Pass the LOD0 body for every LOD.
+- It reads the hitboxes from `packages/content/src/hitboxes.ts` and the weapon ids from `packages/content/src/{weapons,grenades}.ts`.
+- It prints PASS/WARN/FAIL lines and **exits 1 on any FAIL** (2 if the check itself crashed), so CI can gate on it.
+- Keep `--python-exit-code 1`: without it Blender exits 0 even when the script raises.

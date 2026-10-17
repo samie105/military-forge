@@ -103,8 +103,8 @@ z =  +1 … +6    FOREGROUND       grass tufts, railings, pipes. Dither-fades wh
 
 ### Asset pipeline (`tools/asset-pipeline`)
 
-1. Blender (or Maya) → glTF with custom properties (slot, LOD, collision tag for editor use).
-2. `gltf-transform`: dedup → prune → weld → resample animations → quantize → **meshopt** → textures to **KTX2** (ETC1S for albedo/masks, UASTC for normals).
+1. Blender (or Maya) → glTF with custom properties (docs/04 §9.5). W8's Blender source builds and the `tools/asset-check` validator feed this stage (docs/04 §8).
+2. `gltf-transform`: dedup → prune → weld → resample animations → quantize → **meshopt** → textures to **KTX2** (ETC1S for albedo, **UASTC for dye masks** (ETC1S block artefacts bleed between the mask channels) and normals).
 3. Budget checks: tris, texture size, file size, bone count, envelope (cosmetics). CI fails over budget.
 4. Thumbnails (headless render) + manifest entry with content hash.
 5. Upload to R2 under content-hashed paths. The client loads by manifest.

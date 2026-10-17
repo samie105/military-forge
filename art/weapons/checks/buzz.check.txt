@@ -1,0 +1,15 @@
+asset-check: art/weapons/buzz.glb  [weapon]
+------------------------------------------------------------------------------------------------
+INFO  file size                             29 KB
+PASS  triangles                             404 of 1000
+PASS  one mesh, one material                1 draw call(s)
+INFO  GPU texture memory (KTX2 est.)        0.00 MB, 0 image(s)
+PASS  extras weaponId/family/aimPose/hands  ok
+PASS  weaponId in packages/content          buzz
+INFO  nodes                                 eject, mag, muzzle
+PASS  origin on the weapon (the grip)       bbox (-0.03, -0.1, -0.12)..(0.03, 0.14, 0.3)
+PASS  family is a docs/04 §4.2 family       'pistol'
+PASS  aimPose has clips                     'pistol'
+PASS  muzzle node ahead of the grip (+Y)    muzzle at glTF y +0.31 m
+------------------------------------------------------------------------------------------------
+RESULT: PASS  (8 pass, 0 warn, 0 fail)

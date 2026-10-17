@@ -1,0 +1,16 @@
+asset-check: art/weapons/thumper.glb  [weapon]
+-------------------------------------------------------------------------------------------------
+INFO  file size                              43 KB
+PASS  triangles                              616 of 1000
+PASS  one mesh, one material                 1 draw call(s)
+INFO  GPU texture memory (KTX2 est.)         0.00 MB, 0 image(s)
+PASS  extras weaponId/family/aimPose/hands   ok
+WARN  weaponId in packages/content           thumper is not in packages/content/src/{weapons,grenades}.ts yet
+INFO  nodes                                  muzzle, offhand
+PASS  origin on the weapon (the grip)        bbox (-0.08, -0.18, -0.47)..(0.09, 0.06, 0.62)
+PASS  family is a docs/04 §4.2 family        'launcher'
+PASS  aimPose has clips                      'rifle'
+PASS  muzzle node ahead of the grip (+Y)     muzzle at glTF y +0.60 m
+PASS  offhand node within 0.1 m of the grip  0.099 m
+-------------------------------------------------------------------------------------------------
+RESULT: PASS  (8 pass, 1 warn, 0 fail)

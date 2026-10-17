@@ -1,0 +1,35 @@
+{
+  "id": "eyewear_gas_mask",
+  "slot": "eyewear",
+  "name": "Gas Mask",
+  "skeleton": "shared-v1",
+  "default": false,
+  "lods": {
+    "lod0": "eyewear_gas_mask.glb",
+    "lod1": "eyewear_gas_mask_lod1.glb"
+  },
+  "dye": {
+    "lod0": {
+      "mask": "textures/eyewear_gas_mask_dye_mask.png",
+      "albedo": "textures/eyewear_gas_mask_dye_albedo.webp",
+      "defaults": {
+        "secondary": "#687345",
+        "accent": "#29a8a8"
+      }
+    },
+    "lod1": {
+      "mask": "textures/eyewear_gas_mask_lod1_dye_mask.png",
+      "albedo": "textures/eyewear_gas_mask_lod1_dye_albedo.webp",
+      "defaults": {
+        "secondary": "#687346",
+        "accent": "#29a8a8"
+      }
+    }
+  },
+  "tris": {
+    "lod0": 150,
+    "lod1": 70
+  },
+  "attachBone": "head",
+  "socket": "socket_hat"
+}
