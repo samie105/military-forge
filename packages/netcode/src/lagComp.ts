@@ -1,8 +1,8 @@
 /**
  * Server-side lag compensation for hitscan (docs/05 §7.1).
  *
- * The room records every player's hit pose (position, crouch, alive) at the end of each tick in a
- * 1 s ring. When a client's input fires on tick T, the room tells us the tick that client's screen
+ * The room records every player's hit pose (position, crouch, alive, facing, riot shield up or
+ * slung) at the end of each tick in a 1 s ring. When a client's input fires on tick T, the room tells us the tick that client's screen
  * was showing remote players at (its render tick, sent in INPUT). Hitscan then tests each target at
  * the pose the shooter saw: the two snapshot ticks around that render tick, interpolated exactly as
  * the client interpolates them (interpolation.ts). The shooter itself is never rewound, and damage
@@ -15,7 +15,7 @@
  * shot at that RTT uncompensated. Beyond ~175 ms RTT players lead their shots, and fake lag gains
  * at most the cap.
  */
-import { MAX_PLAYERS, type HitPose, type PlayerState, type TargetRewind } from '@military-forge/sim';
+import { MAX_PLAYERS, shieldRaised, shieldSlung, type HitPose, type PlayerState, type TargetRewind } from '@military-forge/sim';
 import { lerpPosition } from './interpolation';
 import { TICK_MS } from './ticks';
 
@@ -28,6 +28,11 @@ export const POSE_HISTORY_TICKS = 64;
 const MASK = POSE_HISTORY_TICKS - 1;
 const ALIVE = 1;
 const CROUCHED = 2;
+const FACING_LEFT = 4;
+/** riot shield up and blocking the front: the shield is rewound with its owner */
+const SHIELD = 8;
+/** riot shield slung, blocking the back */
+const SHIELD_BACK = 16;
 
 export interface LagCompOptions {
   /** the room's snapshot interval in ticks: clients interpolate between those ticks */
@@ -104,7 +109,9 @@ export class LagCompensator implements TargetRewind {
         this.occupant[id] = p;
         this.since[id] = tick;
       }
-      this.flags[base + id] = p ? (p.alive ? ALIVE : 0) | (p.crouched ? CROUCHED : 0) : 0;
+      this.flags[base + id] = p
+        ? (p.alive ? ALIVE : 0) | (p.crouched ? CROUCHED : 0) | (p.facing < 0 ? FACING_LEFT : 0) | (shieldRaised(p) ? SHIELD : 0) | (shieldSlung(p) ? SHIELD_BACK : 0)
+        : 0;
       this.xs[base + id] = p ? p.x : 0;
       this.ys[base + id] = p ? p.y : 0;
     }
@@ -156,6 +163,9 @@ export class LagCompensator implements TargetRewind {
     const f = alpha < 0.5 ? this.flags[ia]! : this.flags[ib]!;
     out.alive = (f & ALIVE) !== 0;
     out.crouched = (f & CROUCHED) !== 0;
+    out.facing = (f & FACING_LEFT) !== 0 ? -1 : 1;
+    out.shield = (f & SHIELD) !== 0;
+    out.shieldBack = (f & SHIELD_BACK) !== 0;
     this.rewinds++;
     if (clamped) this.clamped++;
     if (this.logging) {

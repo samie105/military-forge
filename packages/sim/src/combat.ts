@@ -3,16 +3,17 @@
  * seeded spread, muzzle-in-wall guard, reload/swap/dual-wield, falloff and hit zones, airborne
  * recoil push, weight, and melee (lunge, arc hit test, knockback, the one-hit Machete).
  */
-import { CROUCHED_HITBOXES, FRAG, HitZone, NO_WEAPON, STANDING_HITBOXES, weapons, type WeaponClass, type WeaponDef } from '@military-forge/content';
+import { CROUCHED_HITBOXES, FRAG, HitZone, NO_WEAPON, RIOT_SHIELD, STANDING_HITBOXES, weapons, type WeaponClass, type WeaponDef } from '@military-forge/content';
 import { DEG2RAD, hash4, hashToUnit, quantize, simCosSin, SCALAR_INV } from '@military-forge/shared';
 import { DT, TICK_RATE, ticks } from './constants';
 import { DamageSource } from './events';
 import type { Game } from './game';
 import { rayCapsule, rayCircle } from './geometry';
 import { Btn, isDown, wasPressed } from './input';
-import { hitboxLayout, knockOutOfDash, type PlayerState, type WeaponSlot } from './player';
+import { DUAL_TOGGLE_TIME, cancelReloads, knockOutOfDash, type PlayerState, type WeaponSlot } from './player';
 import { throwGrenade } from './grenades';
 import { createHitPose } from './rewind';
+import { damageShield, shieldHitT, shieldInFront, shieldRaised, shieldSlung } from './shield';
 import { SegFlag, createRayHit } from './world';
 
 const dir = { x: 0, y: 0 };
@@ -20,8 +21,6 @@ const aimDir = { x: 0, y: 0 };
 const hit = createRayHit();
 const guard = createRayHit();
 const pose = createHitPose();
-
-const DUAL_TOGGLE_TIME = 0.45;
 
 /** Pellet jitter: each pellet strays up to ± this fraction of half the gap between neighbouring pellets (docs/03 §7). */
 const PELLET_JITTER = 0.25;
@@ -103,13 +102,8 @@ function dualable(slot: WeaponSlot): boolean {
   return def !== undefined && def.hands === 1 && def.fireMode !== 'melee';
 }
 
-function cancelReloads(p: PlayerState): void {
-  p.weapons[0].reloadTicks = 0;
-  p.weapons[1].reloadTicks = 0;
-}
-
 /** Result of traceTargets. Module scratch: the sim is single-threaded. */
-const target = { id: -1, t: 0, zone: 0 };
+const target = { id: -1, t: 0, zone: 0, shield: false, nx: 1 };
 
 /**
  * The nearest player hitbox along a ray, closer than `maxT`, skipping the shooter and the players
@@ -117,11 +111,28 @@ const target = { id: -1, t: 0, zone: 0 };
  * an earlier pellet of the same shot just killed still stops the later pellets (pellets don't
  * penetrate, docs/03 §11). Bullets, pellets and melee rays all test players here, so lag
  * compensation (rewound target poses, docs/05 §7.1) applies to all of them in one place.
+ *
+ * With `shields` (bullets and pellets: melee bypasses shields, docs/03 §9), a riot shield in the
+ * way is struck before the body behind it: `target.shield`, with its outward normal's x in
+ * `target.nx`. A raised one guards the front, a slung one the back. The shield is rewound with its
+ * owner; one that broke since the shooter saw it no longer blocks.
  */
-function traceTargets(game: Game, shooter: PlayerState, sx: number, sy: number, dx: number, dy: number, maxT: number, skipMask = 0, blockMask = 0): boolean {
+function traceTargets(
+  game: Game,
+  shooter: PlayerState,
+  sx: number,
+  sy: number,
+  dx: number,
+  dy: number,
+  maxT: number,
+  skipMask = 0,
+  blockMask = 0,
+  shields = false,
+): boolean {
   target.id = -1;
   target.t = maxT;
   target.zone = HitZone.None;
+  target.shield = false;
   for (const q of game.players) {
     if (!q || q.id === shooter.id || (skipMask & (1 << q.id)) !== 0) continue;
     if (!q.alive && (blockMask & (1 << q.id)) === 0) continue;
@@ -138,7 +149,8 @@ function traceTargets(game: Game, shooter: PlayerState, sx: number, sy: number, 
     const perp = Math.abs(cx * dy - cy * dx);
     if (perp > 1.2) continue;
 
-    const box = rewound ? (pose.crouched ? CROUCHED_HITBOXES : STANDING_HITBOXES) : hitboxLayout(q);
+    const crouched = rewound ? pose.crouched : q.crouched;
+    const box = crouched ? CROUCHED_HITBOXES : STANDING_HITBOXES;
     const tHead = rayCircle(sx, sy, dx, dy, qx, qy + box.head.y, box.head.r);
     const tTorso = rayCapsule(sx, sy, dx, dy, qx, qy + box.torso.y0, qx, qy + box.torso.y1, box.torso.r);
     const tLegs = rayCapsule(sx, sy, dx, dy, qx, qy + box.legs.y0, qx, qy + box.legs.y1, box.legs.r);
@@ -152,10 +164,27 @@ function traceTargets(game: Game, shooter: PlayerState, sx: number, sy: number, 
       tq = tLegs;
       z = HitZone.Legs;
     }
+    let onShield = false;
+    let side = 0;
+    if (shields && q.shieldHp > 0) {
+      const facing = rewound ? pose.facing : q.facing;
+      const front = rewound ? pose.shield : shieldRaised(q);
+      if (front || (rewound ? pose.shieldBack : shieldSlung(q))) {
+        side = front ? facing : -facing;
+        const ts = shieldHitT(sx, sy, dx, dy, qx, qy, side, crouched, front ? RIOT_SHIELD.forward : RIOT_SHIELD.backOffset);
+        if (ts < tq) {
+          tq = ts;
+          z = HitZone.None;
+          onShield = true;
+        }
+      }
+    }
     if (tq < target.t) {
       target.t = tq;
       target.id = q.id;
       target.zone = z;
+      target.shield = onShield;
+      target.nx = side;
     }
   }
   return target.id >= 0;
@@ -203,10 +232,11 @@ function fireShot(game: Game, p: PlayerState, slot: WeaponSlot, def: WeaponDef):
 }
 
 /**
- * One bullet or pellet along `dir`: world, then players; the first hit wins. Returns the player hit,
- * or -1. On maps with mechanics (docs/02 §20) its range is what the map leaves of the weapon's: a
- * map-wide multiplier, and damping zones it crosses use the range up faster; damage falls off over
- * that used-up range, not the metres flown.
+ * One bullet or pellet along `dir`: world, then players; the first hit wins. A riot shield in the
+ * way takes it instead, and it may bounce off (strikeShield). Returns the player hit by the bullet
+ * or its ricochet, or -1. On maps with mechanics (docs/02 §20) its range is what the map leaves of
+ * the weapon's: a map-wide multiplier, and damping zones it crosses use the range up faster;
+ * damage falls off over that used-up range, not the metres flown.
  */
 function traceBullet(game: Game, p: PlayerState, def: WeaponDef, sx: number, sy: number, visX: number, visY: number, maxT: number, blocked: boolean, struck: number): number {
   const mech = blocked ? null : game.mech;
@@ -215,7 +245,7 @@ function traceBullet(game: Game, p: PlayerState, def: WeaponDef, sx: number, sy:
     mech.castBullet(sx, sy, dir.x, dir.y);
     endT = mech.bulletReach(def.range);
   }
-  let hitKind: 0 | 1 | 2 = 0;
+  let hitKind: 0 | 1 | 2 | 3 = 0;
   if (blocked) hitKind = 1;
   // walls only count within the bullet's reach: the weapon's range, or what the map leaves of it
   // (shorter in fog, longer under a map-wide multiplier above 1)
@@ -226,11 +256,11 @@ function traceBullet(game: Game, p: PlayerState, def: WeaponDef, sx: number, sy:
 
   let victimId = -1;
   let zone: number = HitZone.None;
-  if (traceTargets(game, p, sx, sy, dir.x, dir.y, endT, 0, struck)) {
+  if (traceTargets(game, p, sx, sy, dir.x, dir.y, endT, 0, struck, true)) {
     endT = target.t;
     victimId = target.id;
     zone = target.zone;
-    hitKind = 2;
+    hitKind = target.shield ? 3 : 2;
   }
 
   game.events.push({
@@ -246,11 +276,89 @@ function traceBullet(game: Game, p: PlayerState, def: WeaponDef, sx: number, sy:
     zone,
   });
 
+  // weapon range used up so far (the map's damping and multiplier included): falloff reads it
+  const used = mech ? mech.bulletCost(endT) : endT;
+  if (hitKind === 3) return strikeShield(game, p, def, victimId, target.nx, sx + dir.x * endT, sy + dir.y * endT, used, 0, struck, 1, 0);
   if (victimId >= 0) {
     const victim = game.players[victimId]!;
     const mul = zone === HitZone.Head ? def.headMul : 1;
     if (def.hitImpulse > 0 && victim.alive) push(game, victim, dir.x, dir.y, def.hitImpulse); // a corpse blocks but is not shoved
-    game.damage(victim, def.damage * falloff(def, mech ? mech.bulletCost(endT) : endT) * mul, p.id, def.index, zone);
+    game.damage(victim, def.damage * falloff(def, used) * mul, p.id, def.index, zone);
+  }
+  return victimId;
+}
+
+/**
+ * A bullet travelling along `dir`, with `used` of its weapon range spent and `damageMul` of its
+ * damage left, strikes `ownerId`'s shield (raised or slung) at (bx, by); the shield's outward normal
+ * is (nx, 0). The shield takes the damage, with the same falloff as a body hit (a Breacher's pellets
+ * shove its owner too). Unless that breaks it, or the bullet is out of bounces, the bullet reflects
+ * about the normal and flies on with the range it has left and ricochetDamageMul of its damage. On
+ * maps with mechanics the ricochet leg spends the same budget: the map's reach from the bounce
+ * point (castBullet + bulletReach), and its falloff reads the range used over both legs. A ricochet
+ * goes through the same target loop (lag compensation applies) and can hit anyone but the shield's
+ * owner and the shooter: bullets never hurt their shooter (docs/03 §8; owner's call, 17 Oct 2026).
+ * Returns the player the ricochet hit, or -1.
+ */
+function strikeShield(
+  game: Game,
+  p: PlayerState,
+  def: WeaponDef,
+  ownerId: number,
+  nx: number,
+  bx: number,
+  by: number,
+  used: number,
+  bounces: number,
+  struck: number,
+  damageMul: number,
+  skipMask: number,
+): number {
+  const owner = game.players[ownerId]!;
+  if (def.hitImpulse > 0) {
+    push(game, owner, dir.x, dir.y, def.hitImpulse);
+    // a shove is an attack: a carrier pushed into a pit is the shooter's kill (docs/03 §8), as with a body hit
+    owner.lastAttacker = p.id;
+    owner.lastAttackTick = game.tick;
+  }
+  if (damageShield(game, owner, def.damage * damageMul * falloff(def, used), p.id, bx, by)) return -1; // the bullet that breaks it is spent
+  if (bounces >= RIOT_SHIELD.maxBounces) return -1;
+
+  // reflect about the normal n = (nx, 0), nx = ±1: d − 2(d·n)n turns the horizontal part around
+  dir.x = -dir.x;
+  const mul = damageMul * RIOT_SHIELD.ricochetDamageMul;
+  const skip = skipMask | (1 << ownerId);
+  const left = Math.max(0, def.range - used);
+  const mech = game.mech;
+  let endT = left;
+  if (mech) {
+    mech.castBullet(bx, by, dir.x, dir.y);
+    endT = mech.bulletReach(left);
+  }
+  let hitKind: 0 | 1 | 2 | 3 = 0;
+  if (game.world.raycast(bx, by, dir.x, dir.y, endT, SegFlag.BulletPass, hit)) {
+    endT = hit.t;
+    hitKind = 1;
+  }
+  let victimId = -1;
+  let zone: number = HitZone.None;
+  if (traceTargets(game, p, bx, by, dir.x, dir.y, endT, skip, struck, true)) {
+    endT = target.t;
+    victimId = target.id;
+    zone = target.zone;
+    hitKind = target.shield ? 3 : 2;
+  }
+  const ex = bx + dir.x * endT;
+  const ey = by + dir.y * endT;
+  game.events.push({ type: 'ricochet', shooter: p.id, owner: ownerId, weapon: def.index, x: bx, y: by, nx, ny: 0, ex, ey, hit: hitKind, target: victimId, zone });
+
+  const usedNow = used + (mech ? mech.bulletCost(endT) : endT);
+  if (hitKind === 3) return strikeShield(game, p, def, victimId, target.nx, ex, ey, usedNow, bounces + 1, struck, mul, skip);
+  if (victimId >= 0) {
+    const victim = game.players[victimId]!;
+    const zoneMul = zone === HitZone.Head ? def.headMul : 1;
+    if (def.hitImpulse > 0 && victim.alive) push(game, victim, dir.x, dir.y, def.hitImpulse);
+    game.damage(victim, def.damage * mul * falloff(def, usedNow) * zoneMul, p.id, def.index, zone);
   }
   return victimId;
 }
@@ -269,7 +377,8 @@ function push(game: Game, q: PlayerState, dx: number, dy: number, speed: number)
 
 /**
  * The swing lands (docs/02 §12): a fan of rays across a 70° arc from the shoulder hits every
- * player in reach that a wall doesn't cover, once each, and shoves them along the aim.
+ * player in reach that a wall doesn't cover, once each, and shoves them along the aim. Melee
+ * bypasses riot shields (docs/03 §9).
  */
 function landMelee(game: Game, p: PlayerState): void {
   const t = game.tuning;
@@ -284,11 +393,13 @@ function landMelee(game: Game, p: PlayerState): void {
     while (traceTargets(game, p, sx, sy, dir.x, dir.y, maxT, struck)) struck |= 1 << target.id;
   }
   if (struck === 0) return;
+  // a gun's bash with the riot shield up is a shield bash (docs/03 §5); a melee weapon swings as itself
+  const damage = def?.fireMode === 'melee' ? def.meleeDamage : shieldInFront(p) ? RIOT_SHIELD.bashDamage : def ? def.meleeDamage : FIST_DAMAGE;
   simCosSin(p.aim, aimDir);
   for (const q of game.players) {
     if (!q || (struck & (1 << q.id)) === 0) continue;
     push(game, q, aimDir.x, aimDir.y, MELEE_KNOCKBACK);
-    game.damage(q, def ? def.meleeDamage : FIST_DAMAGE, p.id, DamageSource.Melee, HitZone.Torso);
+    game.damage(q, damage, p.id, DamageSource.Melee, HitZone.Torso);
   }
 }
 

@@ -12,6 +12,8 @@ export * from './hitboxes';
 export * from './maps/mapJson';
 export * from './maps/mechanics';
 export * from './maps/types';
+export * from './pickups';
+export * from './shield';
 export * from './tuning';
 export * from './weapons';
 export { fluxLabMap, lunarOutpostMap, mechanicsTestMap, movementTestMap, stormFrontMap };

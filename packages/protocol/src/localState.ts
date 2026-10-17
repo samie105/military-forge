@@ -62,13 +62,19 @@ export const LS = {
   dashDir: 42,
   dashCooldown: 43,
   airDashUsed: 44,
+  // riot shield (v9), its own group after the dash: the carry mode and raise timer set the speed
+  // and what the shield key does, so prediction needs them. HP is the server's (bullets), but it
+  // rides along.
+  shieldHp: 45,
+  shieldStowed: 46,
+  shieldTicks: 47,
 } as const;
 
 /** Offsets inside a weapon slot. */
 export const LS_SLOT = { def: 0, mag: 1, reserve: 2, cooldown: 3, reloadTicks: 4, bloom: 5, ticksSinceShot: 6 } as const;
 const SLOT_FIELDS = 7;
 
-export const LOCAL_STATE_FIELDS = LS.airDashUsed + 1;
+export const LOCAL_STATE_FIELDS = LS.shieldTicks + 1;
 
 /** [start, end) field ranges sent as a unit in delta snapshots. */
 const GROUPS: readonly (readonly [number, number])[] = [
@@ -80,7 +86,8 @@ const GROUPS: readonly (readonly [number, number])[] = [
   [LS.slot0, LS.slot1],
   [LS.slot1, LS.meleeTicks],
   [LS.meleeTicks, LS.dashTicks],
-  [LS.dashTicks, LOCAL_STATE_FIELDS],
+  [LS.dashTicks, LS.shieldHp],
+  [LS.shieldHp, LOCAL_STATE_FIELDS],
 ];
 
 /** Ground normals are quantised to 1/65536 by the sim (quantizeMovement). */
@@ -100,6 +107,7 @@ const BITS: readonly number[] = [
   ...SLOT_BITS,
   6, // meleeTicks (a swing lasts ≤ 0.6 s = 36 ticks)
   6, 3, 8, 1, // dashTicks (≤ 63), dashDir (8-way), dashCooldown (≤ 255 ticks), airDashUsed
+  19, 1, 5, // shieldHp (1/1024, ≤ 300), shieldStowed, shieldTicks (≤ raise time, 15)
 ];
 
 if (BITS.length !== LOCAL_STATE_FIELDS) throw new Error('local state layout out of sync');
@@ -173,6 +181,9 @@ export function captureLocalState(p: PlayerState, out: LocalState): LocalState {
   out[LS.dashDir] = p.dashTicks > 0 ? p.dashDir : 0;
   out[LS.dashCooldown] = p.dashCooldown;
   out[LS.airDashUsed] = p.airDashUsed ? 1 : 0;
+  out[LS.shieldHp] = fx(p.shieldHp, SCALAR_INV);
+  out[LS.shieldStowed] = p.shieldStowed ? 1 : 0;
+  out[LS.shieldTicks] = p.shieldTicks;
   for (let i = 0; i < LOCAL_STATE_FIELDS; i++) out[i] = fit(out[i]!, BITS[i]!);
   return out;
 }
@@ -223,6 +234,9 @@ export function applyLocalState(s: LocalState, p: PlayerState): void {
   p.dashDir = s[LS.dashDir]!;
   p.dashCooldown = s[LS.dashCooldown]!;
   p.airDashUsed = s[LS.airDashUsed] === 1;
+  p.shieldHp = s[LS.shieldHp]! / SCALAR_INV;
+  p.shieldStowed = s[LS.shieldStowed] === 1;
+  p.shieldTicks = s[LS.shieldTicks]!;
 }
 
 export function localStatesEqual(a: LocalState, b: LocalState): boolean {
@@ -244,10 +258,11 @@ export function describeLocalDiff(predicted: LocalState, server: LocalState): st
   return out.join(', ');
 }
 
-/** Fields the encoder skips after field i (they're zero): ground details in the air, empty slots. */
+/** Fields the encoder skips after field i (they're zero): ground details in the air, empty slots, no shield. */
 function skipAfter(i: number, v: number): number {
   if (i === LS.grounded && v === 0) return LS.groundFlags - LS.grounded;
   if ((i === LS.slot0 || i === LS.slot1) && v === NO_WEAPON) return SLOT_FIELDS - 1;
+  if (i === LS.shieldHp && v === 0) return LS.shieldTicks - LS.shieldHp;
   return 0;
 }
 

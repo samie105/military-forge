@@ -104,10 +104,11 @@ describe('dash', () => {
     expect(p.grounded).toBe(true);
   });
 
-  it('stops at walls: move-and-slide, no tunnelling (even through a thin wall)', () => {
+  it('stops at walls: move-and-slide, no tunnelling (even through a 2 cm wall)', () => {
     for (const [x0, x1] of [
       [21.32 + 0.6, 24],
       [21, 21.15],
+      [21, 21.02],
     ] as const) {
       const { game, p } = makeGame(flatMap([rect(x0, 0, x1, 6)], [], 120));
       placeOnGround(game, p, x0 - 1 - 0.32 + (x1 - x0 < 1 ? 0.6 : 0));

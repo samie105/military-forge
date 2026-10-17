@@ -65,6 +65,8 @@ export interface RoomOptions {
   mapId?: string;
   maxHumans?: number;
   dummies?: boolean;
+  /** the map's pickup spawners (riot shields…) and drops on death (default on) */
+  pickups?: boolean;
   /** send a snapshot every N ticks (2 → 30 Hz) */
   snapshotEvery?: number;
   /** allow dev commands (live tuning, respawn) */
@@ -192,7 +194,7 @@ export class Room {
   readonly lagComp: LagCompensator | null;
 
   constructor(options: RoomOptions = {}) {
-    this.game = new Game({ seed: options.seed ?? 1, mapId: options.mapId ?? 'movement-test', dummies: options.dummies ?? true });
+    this.game = new Game({ seed: options.seed ?? 1, mapId: options.mapId ?? 'movement-test', dummies: options.dummies ?? true, pickups: options.pickups ?? true });
     this.maxHumans = options.maxHumans ?? 8;
     this.snapshotEvery = options.snapshotEvery ?? 2;
     this.dev = options.dev ?? true;

@@ -7,6 +7,8 @@ export const SKIN = 0.002;
 
 export const MAX_PLAYERS = 16;
 export const MAX_GRENADES = 64;
+/** items lying on the map at once: spawner items and drops (pickups.ts) */
+export const MAX_PICKUPS = 32;
 
 /** Broadphase cell size in metres (docs/02 §5). */
 export const GRID_CELL = 4;

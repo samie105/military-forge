@@ -13,6 +13,7 @@ import { MAX_PLAYERS, ticks } from './constants';
 import type { Game } from './game';
 import { Fnv32 } from './hash';
 import { createInput, type Input } from './input';
+import { resetPickups } from './pickups';
 import type { PlayerState } from './player';
 
 export const MatchPhase = {
@@ -507,6 +508,7 @@ export class Match {
     this.departed.length = 0;
     const game = this.game;
     for (const g of game.grenades) g.alive = false;
+    resetPickups(game); // warm-up items gone, spawners start over
     // Everyone dead first, then respawned in id order: each spawn is the farthest from those placed before it.
     for (const p of game.players) if (p) p.alive = false;
     for (const p of game.players) {

@@ -12,6 +12,7 @@ import { closestSegSeg, createClosestPair, rayCapsule, closestPointOnSegment } f
 import { Btn, isDown, wasPressed } from './input';
 import type { BodyEnv } from './mechanics';
 import { capDashExit, heldSpeedMul, type PlayerState } from './player';
+import { shieldInFront } from './shield';
 import { CollisionWorld, SegFlag } from './world';
 
 const pair = createClosestPair();
@@ -57,6 +58,11 @@ function oneWaySolid(world: CollisionWorld, seg: number, x: number, rule: OneWay
 /**
  * Finds the deepest penetration between a capsule (feet at x,y; height h; radius r) and the
  * world. Returns false if nothing overlaps.
+ *
+ * A contact in front of a face beats any contact from behind one, however deep. A capsule touching
+ * the near face of a solid thinner than its radius also reaches the far face from behind, and that
+ * contact is always the deeper one (r + dist): pushing out along it carried the player through thin
+ * walls and floors (docs/02 §10). Behind-face contacts still resolve a capsule that is inside.
  */
 export function deepestContact(
   world: CollisionWorld,
@@ -73,6 +79,7 @@ export function deepestContact(
   const r2 = r * r;
   out.depth = 0;
   out.seg = -1;
+  let outBehind = false;
   for (let k = 0; k < count; k++) {
     const seg = world.queryResult[k]!;
     const flags = world.flags[seg]!;
@@ -97,6 +104,7 @@ export function deepestContact(
     let nx: number;
     let ny: number;
     let depth: number;
+    let behind = false;
     if (dist > 1e-9) {
       nx = (pair.ax - pair.bx) / dist;
       ny = (pair.ay - pair.by) / dist;
@@ -107,6 +115,7 @@ export function deepestContact(
         nx = segNx;
         ny = segNy;
         depth = r + dist;
+        behind = true;
       } else depth = r - dist;
     } else {
       nx = segNx;
@@ -114,8 +123,11 @@ export function deepestContact(
       depth = r;
     }
     if (flags & SegFlag.OneWay && ny <= 0.3) continue; // platforms only ever push up
-    // ascending segment order + strict comparison = ties keep the lowest index (deterministic)
-    if (depth > out.depth + 1e-12) {
+    if (depth <= 1e-9) continue; // grazing: not a contact
+    // front contacts first, then the deepest; ascending segment order + strict comparison = ties
+    // keep the lowest index (deterministic)
+    if (out.seg < 0 || (behind === outBehind ? depth > out.depth + 1e-12 : !behind)) {
+      outBehind = behind;
       out.depth = depth;
       out.nx = nx;
       out.ny = ny;
@@ -439,10 +451,12 @@ const DASH_INDEX = [
 
 /**
  * A dash is a jetpack burst, so whatever cuts the jetpack (an EMP field or storm) blocks it too.
- * The riot shield (in progress) adds its rule here: no dash while it is raised.
+ * A riot shield up or coming up blocks it as well: lower the shield to dash. A blocked press costs
+ * nothing (no cooldown, no fuel).
  */
-export function dashBlocked(_p: PlayerState, env: BodyEnv | null): boolean {
-  return env !== null && env.jetDisabled;
+export function dashBlocked(p: PlayerState, env: BodyEnv | null): boolean {
+  // a riot shield up (or coming up) holds you back: lower it to dash (mechanics-dash.md)
+  return (env !== null && env.jetDisabled) || shieldInFront(p);
 }
 
 /**

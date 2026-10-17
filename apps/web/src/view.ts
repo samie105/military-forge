@@ -2,7 +2,7 @@
  * Render-side view model. Both local mode (in-browser sim) and online mode (server snapshots)
  * produce a Frame; the renderer never touches sim state directly (docs/06 §4, layer L3).
  */
-import type { SimEvent } from '@military-forge/sim';
+import { shieldRaised, type PlayerState, type SimEvent } from '@military-forge/sim';
 
 export interface WeaponView {
   def: number;
@@ -38,6 +38,13 @@ export interface PlayerView {
   meleeTicks?: number;
   /** in a dash burst (docs/02 §21): pose and streak. The 'dash' event carries its start and direction */
   dashing?: boolean;
+  /**
+   * Riot shield: absent = none; 'front' = up, guarding the front; 'back' = slung, guarding the
+   * back; 'raising' = on its way up (0.25 s), guarding neither side
+   */
+  shield?: 'front' | 'back' | 'raising';
+  /** the riot shield's HP left (local player, and every player in local mode) */
+  shieldHp?: number;
   respawnTicks: number;
   kills: number;
   deaths: number;
@@ -47,6 +54,15 @@ export interface GrenadeView {
   x: number;
   y: number;
   fuse: number;
+}
+
+/** An item lying on the map: `def` is its PickupDef.index (@military-forge/content pickups). */
+export interface PickupView {
+  id: number;
+  def: number;
+  /** the point it rests on */
+  x: number;
+  y: number;
 }
 
 /** Client-side prediction + clock sync numbers (docs/05 §15.1). */
@@ -126,6 +142,8 @@ export interface Frame {
   grenades: GrenadeView[];
   /** the map event being announced or running (maps with events only) */
   mapEvent?: MapEventView | null;
+  /** items on the map (riot shields…) */
+  pickups?: PickupView[];
   net?: NetStats;
   recording?: number;
   /** online + hitboxes on: recent server rewinds of our shots (docs/05 §15.3) */
@@ -133,3 +151,9 @@ export interface Frame {
 }
 
 export type FrameEventSink = (events: readonly SimEvent[]) => void;
+
+/** How a player carries its riot shield (PlayerView.shield). */
+export function shieldView(p: PlayerState): PlayerView['shield'] {
+  if (p.shieldHp <= 0) return undefined;
+  return shieldRaised(p) ? 'front' : p.shieldTicks > 0 ? 'raising' : 'back';
+}

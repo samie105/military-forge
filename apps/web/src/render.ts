@@ -7,9 +7,11 @@ import {
   FRAG,
   HitZone,
   NO_WEAPON,
+  RIOT_SHIELD,
   STANDING_HITBOXES,
   ZONE_KINDS,
   defaultTuning,
+  pickups as pickupDefs,
   resolveEvent,
   resolveZone,
   weapons,
@@ -18,18 +20,30 @@ import {
   type MapZone,
   type Tuning,
 } from '@military-forge/content';
-import { DamageSource, MELEE_ARC_DEG, MELEE_REACH, MELEE_WINDUP_TICKS, TICK_RATE, type SimEvent } from '@military-forge/sim';
+import { DamageSource, MELEE_ARC_DEG, MELEE_REACH, MELEE_WINDUP_TICKS, TICK_RATE, shieldBottom, type SimEvent } from '@military-forge/sim';
 import type { Camera } from './camera';
-import type { Frame, PlayerView, RewindView } from './view';
+import type { Frame, PickupView, PlayerView, RewindView } from './view';
 
 interface Tracer {
   ox: number;
   oy: number;
   ex: number;
   ey: number;
+  /** 0 nothing, 1 wall, 2 player, 3 riot shield */
   hit: number;
   age: number;
   local: boolean;
+  /** the leg of a bullet after it bounced off a riot shield */
+  ricochet?: boolean;
+}
+
+/** Where a bullet bounced off a riot shield, along the shield's normal. */
+interface Spark {
+  x: number;
+  y: number;
+  nx: number;
+  ny: number;
+  age: number;
 }
 
 interface Burst {
@@ -141,11 +155,21 @@ const COLORS = {
   local: '#58a6ff',
   enemy: '#f0883e',
   bot: '#8b949e',
+  shield: '#79c0ff',
+  ricochet: '#a5f3fc',
 };
+
+/** Shield colour by the HP left (local mode and the local player online know it). */
+function shieldColor(hp: number | undefined): string {
+  if (hp === undefined) return COLORS.shield;
+  const k = hp / RIOT_SHIELD.hp;
+  return k > 0.5 ? COLORS.shield : k > 0.25 ? '#d29922' : '#f85149';
+}
 
 export class Renderer {
   private readonly ctx: CanvasRenderingContext2D;
   private readonly tracers: Tracer[] = [];
+  private readonly sparks: Spark[] = [];
   private readonly bursts: Burst[] = [];
   private readonly dashes: DashStreak[] = [];
   private readonly floats: FloatText[] = [];
@@ -199,6 +223,17 @@ export class Renderer {
           break;
         case 'explosion':
           this.bursts.push({ x: e.x, y: e.y, r: e.radius, age: 0 });
+          break;
+        case 'ricochet':
+          this.tracers.push({ ox: e.x, oy: e.y, ex: e.ex, ey: e.ey, hit: e.hit, age: 0, local: e.shooter === localId, ricochet: true });
+          this.sparks.push({ x: e.x, y: e.y, nx: e.nx, ny: e.ny, age: 0 });
+          break;
+        case 'shieldBreak':
+          this.bursts.push({ x: e.x, y: e.y, r: 0.6, age: 0 });
+          this.floats.push({ target: e.owner, x: Number.NaN, y: Number.NaN, text: 'shield broken', color: COLORS.shield, age: 0 });
+          break;
+        case 'pickup':
+          this.floats.push({ target: e.player, x: Number.NaN, y: Number.NaN, text: `+ ${pickupDefs[e.item]?.name ?? 'item'}`, color: COLORS.shield, age: 0 });
           break;
         case 'hit':
           this.floats.push({
@@ -261,6 +296,7 @@ export class Renderer {
 
     // floating damage numbers follow their target
     const byId = new Map(frame.players.map((p) => [p.id, p]));
+    if (frame.pickups) for (const k of frame.pickups) this.drawPickup(k);
     for (const p of frame.players) this.drawPlayer(p, opts.showHitboxes);
     if (opts.showHitboxes && frame.rewinds) for (const r of frame.rewinds) this.drawRewind(r);
     for (const g of frame.grenades) this.drawGrenade(g.x, g.y, g.fuse);
@@ -502,6 +538,7 @@ export class Renderer {
     }
 
     if (p.meleeTicks) this.drawSwing(p, shoulderX, shoulderY);
+    if (p.shield) this.drawShield(p);
 
     if (showHitboxes) {
       const box = p.crouched ? CROUCHED_HITBOXES : STANDING_HITBOXES;
@@ -529,6 +566,52 @@ export class Renderer {
     ctx.textAlign = 'center';
     ctx.font = '11px ui-monospace, monospace';
     ctx.fillText(name, sx, sy - 4);
+  }
+
+  /**
+   * Riot shield: the sim's blocking segment exactly, RIOT_SHIELD.height tall and lower when
+   * crouched, coloured by the HP left when known. Up, RIOT_SHIELD.forward in front of the body;
+   * slung, RIOT_SHIELD.backOffset behind it (it guards the back), a little thinner; on its way up,
+   * dashed in front (it guards neither side yet).
+   */
+  private drawShield(p: PlayerView): void {
+    const ctx = this.ctx;
+    const cam = this.camera;
+    const facing = Math.cos(p.aim) >= 0 ? 1 : -1;
+    const front = p.shield !== 'back';
+    const x = p.x + (front ? facing * RIOT_SHIELD.forward : -facing * RIOT_SHIELD.backOffset);
+    const y0 = p.y + shieldBottom(p.crouched);
+    ctx.save();
+    ctx.lineCap = 'butt';
+    ctx.strokeStyle = shieldColor(p.shieldHp) + (p.shield === 'front' ? '' : 'cc');
+    ctx.lineWidth = Math.max(front ? 4 : 3, (front ? 0.07 : 0.05) * cam.ppm);
+    if (p.shield === 'raising') ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(cam.toScreenX(x), cam.toScreenY(y0));
+    ctx.lineTo(cam.toScreenX(x), cam.toScreenY(y0 + RIOT_SHIELD.height));
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /** An item on the map: a riot shield standing on its edge, with its name. */
+  private drawPickup(k: PickupView): void {
+    const ctx = this.ctx;
+    const cam = this.camera;
+    const w = 0.34 * cam.ppm;
+    const h = 0.6 * cam.ppm;
+    const sx = cam.toScreenX(k.x);
+    const sy = cam.toScreenY(k.y);
+    ctx.fillStyle = COLORS.shield + '66';
+    ctx.strokeStyle = COLORS.shield;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.rect(sx - w / 2, sy - h, w, h);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = COLORS.shield;
+    ctx.font = '11px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(pickupDefs[k.def]?.name ?? 'item', sx, sy - h - 6);
   }
 
   /** Melee swing: a faint wedge over the 70° arc during the windup, then a flash as it lands. */
@@ -617,14 +700,14 @@ export class Renderer {
         continue;
       }
       const a = 1 - tr.age / 0.12;
-      ctx.strokeStyle = tr.local ? `rgba(255,236,150,${a})` : `rgba(255,180,120,${a})`;
+      ctx.strokeStyle = tr.ricochet ? `rgba(165,243,252,${a})` : tr.local ? `rgba(255,236,150,${a})` : `rgba(255,180,120,${a})`;
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(cam.toScreenX(tr.ox), cam.toScreenY(tr.oy));
       ctx.lineTo(cam.toScreenX(tr.ex), cam.toScreenY(tr.ey));
       ctx.stroke();
       if (tr.hit) {
-        ctx.fillStyle = tr.hit === 2 ? `rgba(255,123,114,${a})` : `rgba(230,237,243,${a})`;
+        ctx.fillStyle = tr.hit === 2 ? `rgba(255,123,114,${a})` : tr.hit === 3 ? `rgba(121,192,255,${a})` : `rgba(230,237,243,${a})`;
         ctx.beginPath();
         ctx.arc(cam.toScreenX(tr.ex), cam.toScreenY(tr.ey), 4, 0, Math.PI * 2);
         ctx.fill();
@@ -649,6 +732,29 @@ export class Renderer {
       ctx.lineTo(cam.toScreenX(d.x + ux * len), cam.toScreenY(d.y + 0.75 + uy * len));
       ctx.stroke();
       ctx.lineCap = 'butt';
+    }
+    // ricochet sparks: a short fan along the shield's normal
+    for (let i = this.sparks.length - 1; i >= 0; i--) {
+      const sp = this.sparks[i]!;
+      sp.age += dt;
+      if (sp.age > 0.18) {
+        this.sparks.splice(i, 1);
+        continue;
+      }
+      const k = sp.age / 0.18;
+      const len = (0.15 + 0.35 * k) * cam.ppm;
+      ctx.strokeStyle = `rgba(255,244,200,${1 - k})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (const spread of [-0.7, -0.25, 0.25, 0.7]) {
+        const c = Math.cos(spread);
+        const sn = Math.sin(spread);
+        const dx = sp.nx * c - sp.ny * sn;
+        const dy = sp.nx * sn + sp.ny * c;
+        ctx.moveTo(cam.toScreenX(sp.x), cam.toScreenY(sp.y));
+        ctx.lineTo(cam.toScreenX(sp.x) + dx * len, cam.toScreenY(sp.y) - dy * len);
+      }
+      ctx.stroke();
     }
     for (let i = this.bursts.length - 1; i >= 0; i--) {
       const b = this.bursts[i]!;
@@ -777,7 +883,8 @@ export class Renderer {
     });
     y += 34;
     ctx.fillStyle = '#e6edf3';
-    ctx.fillText(`${p.dual ? 'DUAL  ' : ''}frags ${p.frags}   K ${p.kills}  D ${p.deaths}   zoom ${cam.zoom + 1}x`, x, y);
+    const shield = p.shield ? `   shield ${Math.ceil(p.shieldHp ?? 0)} ${p.shield === 'front' ? 'up' : p.shield === 'back' ? 'slung' : 'raising'}` : '';
+    ctx.fillText(`${p.dual ? 'DUAL  ' : ''}frags ${p.frags}   K ${p.kills}  D ${p.deaths}   zoom ${cam.zoom + 1}x${shield}`, x, y);
 
     // kill feed
     ctx.textAlign = 'right';

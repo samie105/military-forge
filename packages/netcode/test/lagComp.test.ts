@@ -1,7 +1,7 @@
-import { BREACHER, HAMMER, STANDING_HITBOXES, type MapDef } from '@military-forge/content';
+import { BREACHER, HAMMER, RIOT_SHIELD, STANDING_HITBOXES, WIDOW, type MapDef } from '@military-forge/content';
 import type { SnapshotMsg, SnapshotPlayer } from '@military-forge/protocol';
 import { angleToU16 } from '@military-forge/shared';
-import { Btn, Game, createHitPose, createInput, type Input, type PlayerState } from '@military-forge/sim';
+import { Btn, Game, SHIELD_RAISE_TICKS, createHitPose, createInput, giveShield, type Input, type PlayerState } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
 import { LagCompensator, bracketSnapshots, lerpPosition, type SnapshotBracket } from '../src';
 
@@ -241,5 +241,115 @@ describe('LagCompensator', () => {
     expect(withRewind.pellets.every((e) => e.type === 'shot' && e.target === target.id)).toBe(true);
     expect(withRewind.hits.length).toBe(BREACHER.pellets);
     expect(target.alive).toBe(false); // all five pellets at 3.5 m: one shot kills
+  });
+
+  it('a riot shield is rewound with its owner: up and facing the shooter where its screen showed it', () => {
+    const game = new Game({ seed: 13, dummies: false });
+    const shooter = game.addPlayer('shooter');
+    const target = game.addPlayer('target');
+    game.setLoadout(shooter, [WIDOW.index, HAMMER.index]);
+    shooter.x = 2;
+    target.x = 9;
+    shooter.y = target.y = 0.01;
+    giveShield(target, RIOT_SHIELD.hp);
+    const lc = new LagCompensator();
+    const inputs: Input[] = [];
+    const run = (n: number, targetAim: number) => {
+      for (let t = 0; t < n; t++) {
+        inputs[shooter.id] = createInput();
+        inputs[target.id] = { ...createInput(), aim: targetAim };
+        game.step(inputs);
+        lc.record(game.tick, game.players);
+      }
+    };
+    lc.record(game.tick, game.players);
+    run(SHIELD_RAISE_TICKS + 20, 32768); // shield up, facing the shooter (left)
+    const view = game.tick - 2;
+    run(12, 0); // since then it turned away: the shield faces right
+    expect(target.facing).toBe(1);
+
+    const seen = createHitPose();
+    lc.begin(game.tick);
+    lc.setView(shooter.id, view);
+    expect(lc.pose(target, shooter, seen)).toBe(true);
+    expect([seen.facing, seen.shield]).toEqual([-1, true]);
+
+    const fire = (rewind: boolean) => {
+      const t = game.tuning;
+      const aim = angleToU16(Math.atan2(target.y + 0.8 - shooter.shoulderY(t), target.x - shooter.shoulderX(t)));
+      inputs[shooter.id] = { ...createInput(), buttons: Btn.Fire, aim };
+      inputs[target.id] = createInput();
+      shooter.prevButtons = 0;
+      shooter.weapons[shooter.active]!.cooldown = 0;
+      game.rewind = rewind ? lc : null;
+      lc.begin(game.tick);
+      lc.setView(shooter.id, view);
+      game.step(inputs);
+      lc.record(game.tick, game.players);
+      return game.events.find((e) => e.type === 'shot');
+    };
+    // where the shooter saw it, the shield stops the bullet; now (facing away) it would hit the back
+    const blocked = fire(true);
+    expect(blocked?.type === 'shot' && [blocked.hit, blocked.target]).toEqual([3, target.id]);
+    expect(target.shieldHp).toBe(RIOT_SHIELD.hp - WIDOW.damage);
+    expect(target.hp).toBe(100);
+    const hit = fire(false);
+    expect(hit?.type === 'shot' && [hit.hit, hit.target]).toEqual([2, target.id]);
+    expect(target.hp).toBeLessThan(100);
+  });
+
+  it('a slung riot shield is recorded and rewound too: it guards the back the shooter saw', () => {
+    const game = new Game({ seed: 14, dummies: false });
+    const shooter = game.addPlayer('shooter');
+    const target = game.addPlayer('target');
+    game.setLoadout(shooter, [WIDOW.index, HAMMER.index]);
+    shooter.x = 2;
+    target.x = 9;
+    shooter.y = target.y = 0.01;
+    giveShield(target, RIOT_SHIELD.hp);
+    target.shieldStowed = true; // slung, facing away from the shooter: its back is covered
+    const lc = new LagCompensator();
+    const inputs: Input[] = [];
+    const run = (n: number, buttons = 0) => {
+      for (let t = 0; t < n; t++) {
+        inputs[shooter.id] = createInput();
+        inputs[target.id] = { ...createInput(), aim: 0, buttons: t === 0 ? buttons : 0 };
+        game.step(inputs);
+        lc.record(game.tick, game.players);
+      }
+    };
+    lc.record(game.tick, game.players);
+    run(20);
+    const view = game.tick; // what the shooter's screen shows…
+    run(SHIELD_RAISE_TICKS + 1, Btn.Shield); // …and since then it raised it (in front, away from the shooter)
+    expect(target.shieldTicks).toBe(SHIELD_RAISE_TICKS);
+    expect(game.tick - view).toBeLessThan(lc.maxRewindTicks); // inside the 300 ms cap
+
+    const seen = createHitPose();
+    lc.begin(game.tick);
+    lc.setView(shooter.id, view);
+    expect(lc.pose(target, shooter, seen)).toBe(true);
+    expect([seen.facing, seen.shield, seen.shieldBack]).toEqual([1, false, true]);
+
+    const fire = (rewind: boolean) => {
+      const t = game.tuning;
+      const aim = angleToU16(Math.atan2(target.y + 0.8 - shooter.shoulderY(t), target.x - shooter.shoulderX(t)));
+      inputs[shooter.id] = { ...createInput(), buttons: Btn.Fire, aim };
+      inputs[target.id] = { ...createInput(), aim: 0 };
+      shooter.prevButtons = 0;
+      shooter.weapons[shooter.active]!.cooldown = 0;
+      game.rewind = rewind ? lc : null;
+      lc.begin(game.tick);
+      lc.setView(shooter.id, view);
+      game.step(inputs);
+      lc.record(game.tick, game.players);
+      return game.events.find((e) => e.type === 'shot');
+    };
+    const blocked = fire(true);
+    expect(blocked?.type === 'shot' && [blocked.hit, blocked.target]).toEqual([3, target.id]);
+    expect(target.hp).toBe(100);
+    const hit = fire(false); // now the shield is up in front: the back is bare
+    expect(hit?.type === 'shot' && [hit.hit, hit.target]).toEqual([2, target.id]);
+    expect(target.hp).toBeLessThan(100);
   });
 });

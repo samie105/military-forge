@@ -488,3 +488,99 @@ Caveat: real TCP loss needs kernel-level impairment (dummynet, root), so WebSock
 - **Flux Lab pads** launch at 17.5 m/s (7.8 m apex) so they reach the 7 m catwalks (the default 16 peaks at 6.6 m); a test pins it.
 - **Kinds** validate with `Object.hasOwn` ("toString" and "constructor" were accepted); no brand string in the map schema; clean-room wording for the dash request.
 - No golden changed. Each fix has a test that fails on the old code.
+
+### Thin solids (review follow-up, 17 Oct 2026)
+
+- **Cause:** move-and-slide resolved the deepest contact first. A capsule touching the near face of a solid thinner than its radius (0.32 m) also reaches the far face from behind. That contact (`r + dist`) always won, so the body was pushed out the far side. Dashes, walks, falls and launches all did it. On main, a dash went through every wall up to 0.1 m, a walk through walls up to 0.08 m at some offsets, and a slam through floors up to 0.1 m. A probe counted 1,128 of 3,850 cases through, and 805 of 2,400 for slabs tilted up to 30°. Now both counts are 0.
+- **Fix:** a contact in front of a face beats any contact from behind a face (`deepestContact`). Contacts from behind still push out a body that is inside a solid (spawn depenetration).
+- **Lint:** the map compiler warns about a solid thinner than 0.3 m between two facing edges (`MIN_THICKNESS`, `thinnestSolid`). Ramps, wedge tips and notches don't count. Shipped maps have no warnings (the thinnest solid is 0.4 m), and a test pins that.
+- No golden changed. The new tests fail on the old resolver.
+
+## 20. Riot shield: random pickups, carry modes, ricochet (17 Oct 2026, owner request)
+
+> "You can randomly pick shield and how you can carry it and how bullets bounce off it." Built in four stacked PRs: spawners and carry modes; block, break and ricochet; protocol and rendering; then the slung shield guarding the back (the owner's answers, 17 Oct: ricochets never hit their shooter, a slung shield blocks from behind, keep 300 HP). They landed as one PR rebased onto map mechanics + dash, as **protocol v9** (§20.5). Rules are in docs/03 §9 and §12.
+
+**Shape of the block.** The shield is a vertical segment 0.9 m tall: 0.35–1.25 m standing, 0.12–1.02 m crouched.
+- **Raised**, it sits 0.42 m in front of the body and blocks bullets from within ±60° of the facing. Standing, a precise shot can still go over it (the top of the head) or under it (the legs); crouched behind it, almost nothing is exposed.
+- **Slung**, it sits 0.40 m behind the body, where the 3D back socket shows it. It blocks bullets from within ±60° of the back (the owner's call, 17 Oct).
+- **On its way up** (0.25 s) it blocks neither side.
+- Front and back share the one 300 HP pool, which the owner chose to keep.
+
+**Ricochet.** A bullet that strikes the shield, front or back, reflects about its normal. A vertical shield flips the horizontal direction, so a level shot comes straight back.
+- The ricochet keeps the range it has left and 60% of its damage.
+- It can hit anyone except the shield's owner and **its own shooter**. That was the owner's call (17 Oct), and it matches docs/03 §8, which has no bullet self-damage. Without it, a head-on shot would always hit its own shooter.
+- It bounces at most once; the next shield it meets stops it.
+- Pellets ricochet one by one.
+
+### 20.1 Feel table: a shooter against a shield carrier (`pnpm --filter @military-forge/sim feel`)
+The carrier stands with a Hammer. The shooter, grounded, re-aims at the carrier's torso every tick (no aiming over or under the shield). 10 seeds each.
+- **Front:** the carrier faces the shooter with the shield raised.
+- **Flank:** it faces away with the shield raised, so its back is bare.
+- **Back:** it faces away with the shield slung.
+
+| Weapon @ distance | Front TTK | Shield broke, front (runs, mean time) | Bullets on the shield, front | Flank TTK | Back TTK | Front ÷ flank | Back ÷ flank |
+|---|---|---|---|---|---|---|---|
+| Hammer .44 @ 5 / 12 m | 10.62 s | 100%, 6.80 s | 71% | 1.82 s | 10.62 s | ×5.8 | ×5.8 |
+| Buzz @ 5 m | 6.27 s | 70%, 6.47 s | 75% | 1.34 s | 6.28 s | ×4.7 | ×4.7 |
+| Buzz @ 12 m | 9.02 s | never | 35% | 2.73 s | 8.92 s | ×3.3 | ×3.3 |
+| K-47 @ 5 m | 3.66 s | 30%, 5.57 s | 73% | 0.90 s | 3.58 s | ×4.1 | ×4.0 |
+| K-47 @ 12 m | 6.79 s | 10%, 7.80 s | 34% | 1.59 s | 6.79 s | ×4.3 | ×4.3 |
+| Breacher @ 5 m | 5.62 s | 30%, 5.82 s | 39% | 0.78 s | 5.37 s | ×7.2 | ×6.9 |
+| Breacher @ 12 m | no kill in 20 s | never | 20% | 7.88 s | no kill in 20 s | — | — |
+| Widow @ 5 / 12 m | 5.72 s | 100%, 4.10 s | 67% | 0.82 s | 5.72 s | ×7.0 | ×7.0 |
+
+**Read.**
+- Accurate guns (Hammer, Widow) must break the shield first: 300 HP is 10 Hammer or 4 Widow rounds, plus reloads.
+- Wild automatics (Buzz, K-47, with bloom) mostly kill *around* it, through the head and legs, long before it breaks.
+- From the front, the shield multiplies time to kill by ×3–7. That's a power-item number, paid for by:
+  - the ×0.75 speed;
+  - no dual;
+  - melee, frags and flanks ignoring it;
+  - aimed shots over and under it.
+- **Slung is as strong from behind as raised is from the front,** and it weighs nothing (×1.0 vs ×0.75 raised). So a rifle carrier with a slung shield gets a free, strong back guard against flankers. If playtests say it's too much, the knob is `RIOT_SHIELD.slungSpeedMul` (e.g. 0.9).
+- **Playtest question:** is ×7 against a Breacher too much? Bashing in close should be the answer.
+
+### 20.2 Determinism
+- Spawner draws are stateless hashes of (seed, tick, spawner, draw).
+- A map without spawners, or a game with pickups off, is bit-identical: every older golden is unchanged (the 10 from before, and mechanics + dash's `mech-zones`, `mech-bullets`, `mech-events` and `dash`).
+- The new `shield` golden (841 ticks, 3 players, pickups on; re-recorded for v9, where the shield key moved to bit 14) covers:
+  - the spawn and pickup;
+  - five pellet ricochets, two of them into a third player;
+  - the Buzz through a slung shield;
+  - a death with the shield up but turned away, and the drop;
+  - another player taking the dropped shield;
+  - that player slinging it and turning its back: five ricochets off the back guard;
+  - a shield bash;
+  - a point-blank break.
+
+### 20.3 Online and on screen (protocol v9)
+- **Prediction:** the carry state rides in the local block. A carrier who toggles the shield and swaps to a two-handed weapon predicts with **0 mispredictions** (`apps/game-server/test/shield.test.ts`). Picking a shield up is the server's call, so the first tick after a pickup arrives as a correction.
+- **Bandwidth:**
+  - Items on the map cost 1 bit per snapshot unless they changed.
+  - A ricochet event is ~17 bytes; break and pickup events ~8 bytes.
+  - Two more bits of remote flags (bits 8–9), and 19 bits of local block without a shield (25 with one), sent only when they change.
+- **Lag compensation:** the pose history records the shield up (front) and slung (back) separately, with the facing, so both are rewound with their owner. No wire change: remote flags already say carried and up.
+- **Screenshots:** `docs/screenshots/shield/`, taken with `node apps/web/scripts/shield-shots.mjs`:
+  - 3D: an item at its spot; raised; raised with the H overlay (the sim's blocking segment); a ricochet; slung;
+  - 2D: raised; ricochet rays; slung.
+- **The 3D ricochet spark is a Vfx module** (`RicochetSparks` registered with render3d's `Vfx`): it hears the sim events the 2D renderer forwards (`Renderer.forwardEvents`), so frames carry no event list.
+- **The 3D shield is a placeholder.** The model spec and socket offsets for the Forge are in the shared notes (`shield-sockets.md`). The Rookie's short arms hold it ~5 cm inside the sim's line; the H overlay shows the exact segment.
+
+### 20.4 Review fixes (17 Oct)
+- **H1:** the shield stack and mechanics + dash both took protocol v8 and the same wire slots (INPUT bit 13, remote flag bit 7, tag-7 ext kind 0, local block 41+). Fixed by the re-allocation in the protocol registry: v9, the shield key at bit 14, flags 256/512, ext kinds 1–3, the shield group at 45–47 (§20.5).
+- **M1:** a ricochet from a culled shooter is sent as its spark only. Un-reflecting two ricochet lines placed the hidden shooter within 2 cm.
+- **L1:** pellets that shove a carrier through its shield count as an attack, so a pit kill is credited to the shooter, not a suicide.
+- **L2:** items on the map are culled by view.
+- **L3:** the 0.25 s raise travels and draws as its own state ("raising": dashed in 2D, held low and tipped in 3D), because it guards neither side.
+- **L4:** a leaving carrier drops its shield.
+- **L5:** a structured fuzz now reaches the item list and tag-7 decoders, and the `shield` golden has 5 ricochets off a back guard (re-recorded: now 841 ticks, 3 players).
+- **L6:** the placeholder plate sits 10 cm further out so the hand stays behind it, and the ricochet spark is bigger, warm and drawn on top.
+
+### 20.5 Rebased onto mechanics + dash (protocol v9)
+- **Wire (protocol registry):** `Btn.Shield` is INPUT bit 14 (X on the web; Shift stays Dash); the remote shield state is flag bits 8–9 (256/512) in a 10-bit flags field (DASHING keeps 128); ricochet, shield break and pickup are tag-7 ext kinds 1, 2 and 3 (DASH keeps 0; tag 6 is MAP_EVENT); the shield group follows the dash group at 45–47. One bump, to 9, with its line in `messages.ts`.
+- **A shield strike pushes like any hit:** `strikeShield` uses `push()`, so the map's knockback multiplier applies and a shove ends a dash.
+- **Ricochets fly through the map's air:** the leg after the bounce is cast with the map's bullet reach (`mech.bulletReach`) for the range it has left, and falloff reads the budget used (`mech.bulletCost`), so fog shortens and weakens a ricochet like any shot.
+- **Movement then the shield:** the tick runs `stepMovement(…, env)` for everyone, then `stepShield`, before anyone fires.
+- **No dashing behind a raised shield:** `dashBlocked()` refuses a dash while the shield is up or coming up; lower it (X) to dash. A slung shield doesn't stop a dash.
+- **Maps:** `MapDef.spawners` is in the map JSON format and its schema (`parseMapJson`, `map.schema.json`).
+- **CONTENT_HASH** carries both the zone/event defaults and the pickups.

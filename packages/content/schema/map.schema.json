@@ -157,9 +157,82 @@
     },
     "events": {
       "$ref": "#/$defs/events"
+    },
+    "spawners": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/spawner"
+      },
+      "description": "Pickup spawners: items at random spots and times (docs/03 §12)."
     }
   },
   "$defs": {
+    "spawner": {
+      "type": "object",
+      "required": [
+        "id",
+        "pool",
+        "spots",
+        "first",
+        "respawn"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "For debug views and logs."
+        },
+        "pool": {
+          "enum": [
+            "shield"
+          ],
+          "description": "What can appear (SPAWN_POOLS in packages/content pickups.ts)."
+        },
+        "spots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "x",
+              "y"
+            ],
+            "properties": {
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              }
+            }
+          },
+          "minItems": 1,
+          "description": "Where an item can appear: the point it rests on, on the floor."
+        },
+        "first": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "Seconds before the first item, uniformly random in [min, max]."
+        },
+        "respawn": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "Seconds from an item being taken until the next one appears, uniformly random in [min, max]."
+        },
+        "maxActive": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Items from this spawner on the map at once (default 1, at most its spots' count)."
+        }
+      }
+    },
     "modifiers": {
       "type": "object",
       "additionalProperties": false,

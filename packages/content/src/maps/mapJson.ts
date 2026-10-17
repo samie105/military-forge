@@ -2,13 +2,15 @@
  * The map JSON format (docs/02 §20.6): the compiled MapDef as plain JSON, the way the art pipeline
  * writes it (art/maps/<map>/<map>.map.json) and the map editor will.
  *
- * - `parseMapJson` checks the shape and returns a MapDef. Unknown keys in rules, zones and events
- *   are errors (a misspelt "gravitymul" must not be silently ignored). The sim checks the meaning
- *   when it compiles the map: ranges, ids, the schedule (packages/sim checkMechanics).
+ * - `parseMapJson` checks the shape and returns a MapDef. Unknown keys in rules, zones, events and
+ *   spawners are errors (a misspelt "gravitymul" must not be silently ignored). The sim checks the
+ *   meaning when it compiles the map: ranges, ids, the schedule (packages/sim checkMechanics), and
+ *   the spawners' spots and timers (packages/sim pickups.ts).
  * - `mapJsonSchema` is the same format as JSON Schema, generated from the zone and event catalogue,
  *   so editors validate and autocomplete it (with each kind's description and defaults). It is
  *   committed as packages/content/schema/map.schema.json (`pnpm --filter @military-forge/content schema`).
  */
+import { SPAWN_POOLS } from '../pickups';
 import { EVENT_KINDS, MODIFIER_FIELDS, ZONE_KINDS } from './mechanics';
 import type { MapDef } from './types';
 
@@ -21,7 +23,8 @@ const isPair = (v: unknown) => Array.isArray(v) && v.length === 2 && v.every(isN
 const MODIFIER_KEYS = MODIFIER_FIELDS.map((f) => f.key as string);
 const ZONE_KEYS = ['id', 'kind', 'rect', 'points', 'launch', 'event', 'label', ...MODIFIER_KEYS];
 const EVENT_KEYS = ['id', 'kind', 'name', 'description', 'duration', 'warning', 'gustPeriod', 'windFlip', 'pickOneZone', ...MODIFIER_KEYS];
-const TOP_KEYS = ['$schema', 'id', 'name', 'bounds', 'solids', 'oneWays', 'spawns', 'dummies', 'labels', 'rules', 'zones', 'events'];
+const SPAWNER_KEYS = ['id', 'pool', 'spots', 'first', 'respawn', 'maxActive'];
+const TOP_KEYS = ['$schema', 'id', 'name', 'bounds', 'solids', 'oneWays', 'spawns', 'dummies', 'labels', 'rules', 'zones', 'events', 'spawners'];
 
 class Problems {
   readonly list: string[] = [];
@@ -150,6 +153,18 @@ export function parseMapJson(json: unknown, source = 'map'): MapDef {
         });
       });
     }
+    if (m.spawners !== undefined) {
+      p.array('$.spawners', m.spawners, (sp, at) =>
+        p.object(at, sp, (o) => {
+          p.keys(at, o, SPAWNER_KEYS);
+          p.str(`${at}.id`, o.id);
+          if (typeof o.pool !== 'string' || !Object.hasOwn(SPAWN_POOLS, o.pool)) p.add(`${at}.pool`, `must be one of ${Object.keys(SPAWN_POOLS).join(', ')}`);
+          p.array(`${at}.spots`, o.spots, (s, sat) => p.object(sat, s, (q) => ['x', 'y'].forEach((k) => p.num(`${sat}.${k}`, q[k]))));
+          for (const k of ['first', 'respawn']) if (!isPair(o[k])) p.add(`${at}.${k}`, 'must be [min, max] (seconds)');
+          if (o.maxActive !== undefined && !(Number.isInteger(o.maxActive) && (o.maxActive as number) >= 1)) p.add(`${at}.maxActive`, 'must be a whole number ≥ 1');
+        }),
+      );
+    }
   });
   if (p.list.length) throw new Error(`${source}: ${p.list.join('; ')}`);
   const { $schema: _schema, ...map } = json as Json;
@@ -211,8 +226,22 @@ export function mapJsonSchema(): object {
       rules: { $ref: '#/$defs/modifiers', description: 'Map-wide modifiers (docs/02 §20).' },
       zones: { type: 'array', items: { $ref: '#/$defs/zone' }, description: 'Areas that change the rules inside them (docs/02 §20.2).' },
       events: { $ref: '#/$defs/events' },
+      spawners: { type: 'array', items: { $ref: '#/$defs/spawner' }, description: 'Pickup spawners: items at random spots and times (docs/03 §12).' },
     },
     $defs: {
+      spawner: {
+        type: 'object',
+        required: ['id', 'pool', 'spots', 'first', 'respawn'],
+        additionalProperties: false,
+        properties: {
+          id: { type: 'string', description: 'For debug views and logs.' },
+          pool: { enum: Object.keys(SPAWN_POOLS), description: 'What can appear (SPAWN_POOLS in packages/content pickups.ts).' },
+          spots: { type: 'array', items: point, minItems: 1, description: 'Where an item can appear: the point it rests on, on the floor.' },
+          first: pair('Seconds before the first item, uniformly random in [min, max].'),
+          respawn: pair('Seconds from an item being taken until the next one appears, uniformly random in [min, max].'),
+          maxActive: { type: 'integer', minimum: 1, description: "Items from this spawner on the map at once (default 1, at most its spots' count)." },
+        },
+      },
       modifiers: { type: 'object', additionalProperties: false, properties: modifierProps },
       zone: {
         type: 'object',

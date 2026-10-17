@@ -21,7 +21,7 @@ import type { InputSampler } from './input';
 import { mapEventView } from './mapEvent';
 import type { Renderer } from './render';
 import { connectGame, type GameTransport } from './transport';
-import type { Frame, PlayerView, RewindView } from './view';
+import { shieldView, type Frame, type PlayerView, type RewindView } from './view';
 
 /** how long to keep trying after a drop: the room keeps our player this long */
 const RECONNECT_WINDOW_MS = 20_000;
@@ -298,6 +298,7 @@ export class OnlineMode {
       localId: this.net.myId,
       players,
       grenades: newest.msg.grenades.map((g) => ({ x: g.x, y: g.y, fuse: g.fuse })),
+      pickups: newest.msg.pickups,
       net,
       rewinds: this.rewindViews(now),
       // the predicted game runs the map's event schedule on our own timeline: the banner matches the physics
@@ -343,6 +344,8 @@ export class OnlineMode {
       weapons: p.weapons.map((w) => ({ def: w.def, mag: w.mag, reserve: w.reserve, reloadTicks: w.reloadTicks })),
       meleeTicks: p.meleeTicks,
       dashing: p.dashTicks > 0,
+      shield: shieldView(p),
+      shieldHp: p.shieldHp,
       respawnTicks: server.respawnTicks,
       kills: server.kills,
       deaths: server.deaths,
@@ -373,6 +376,7 @@ export class OnlineMode {
       dashing: src.dashing,
       // other players' ammo isn't sent (only the local block has it)
       weapons: src.weapons.map((w) => ({ def: w.def, mag: 0, reserve: 0, reloadTicks: 0 })),
+      shield: src.shield === 'up' ? 'front' : src.shield === 'slung' ? 'back' : src.shield === 'raising' ? 'raising' : undefined,
       respawnTicks: src.respawnTicks,
       kills: src.kills,
       deaths: src.deaths,

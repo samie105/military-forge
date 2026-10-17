@@ -3,13 +3,14 @@
  * playtest impressions can be compared against measurements (docs/02 §19).
  * Run: pnpm --filter @military-forge/sim feel        (sweep for better values: pnpm --filter @military-forge/sim tune)
  */
-import { weapons } from '@military-forge/content';
+import { BREACHER, BUZZ, HAMMER, K47, WIDOW, weapons } from '@military-forge/content';
 import {
   measureBlast,
   measureDash,
   measureEvents,
   measureGrenade,
   measureMovement,
+  measureShield,
   measureWeapon,
   measureZones,
   type DashMetrics,
@@ -79,6 +80,23 @@ const ev = measureEvents();
 for (const t of EVENT_TARGETS) {
   const v = ev[t.key as keyof EventMetrics];
   rows.push([t.label, v.toFixed(2), `${mark(v >= t.min && v <= t.max)}  (target ${t.min}–${t.max}: ${t.why})`]);
+}
+
+// riot shield: shooting a carrier (Hammer in hand) through the raised shield (front), at its bare
+// back with the shield up (flank), and at the shield slung on its back (back)
+for (const w of [HAMMER, BUZZ, K47, BREACHER, WIDOW]) {
+  for (const dist of [5, 12]) {
+    const f = measureShield(w.index, dist, 'front');
+    const fl = measureShield(w.index, dist, 'flank');
+    const b = measureShield(w.index, dist, 'back');
+    const ttk = (r: typeof f) => (r.killRate === 0 ? 'no kill' : `${r.ttk.toFixed(2)} s${r.killRate < 1 ? ` (${(100 * r.killRate).toFixed(0)}% killed in 20 s)` : ''}`);
+    const brk = (r: typeof f) => (r.breakRate === 0 ? 'never broke' : `broke in ${(100 * r.breakRate).toFixed(0)}% at ${r.breakAt.toFixed(2)} s`);
+    rows.push([
+      `Shield: ${w.name} @ ${dist} m, front / flank / back`,
+      `front ${ttk(f)} (${brk(f)}, ${(100 * f.shieldRate).toFixed(0)}% on it) · flank ${ttk(fl)} · back ${ttk(b)} (${brk(b)}, ${(100 * b.shieldRate).toFixed(0)}% on it)`,
+      f.killRate > 0 && fl.killRate > 0 && b.killRate > 0 ? `front ×${(f.ttk / fl.ttk).toFixed(1)}, back ×${(b.ttk / fl.ttk).toFixed(1)}` : '',
+    ]);
+  }
 }
 
 const w0 = Math.max(...rows.map(([k]) => k.length));

@@ -21,7 +21,7 @@ import type { Camera } from './camera';
 import type { InputSampler } from './input';
 import { mapEventView } from './mapEvent';
 import type { Renderer } from './render';
-import type { Frame, PlayerView } from './view';
+import { shieldView, type Frame, type PlayerView } from './view';
 
 const MAX_CATCHUP = 5;
 const SEED = 1234;
@@ -50,7 +50,7 @@ export class LocalMode {
     mapId = 'movement-test',
   ) {
     this.map = getMap(mapId);
-    this.game = new Game({ map: this.map, seed: SEED, dummies: true });
+    this.game = new Game({ map: this.map, seed: SEED, dummies: true, pickups: true });
     this.me = this.game.addPlayer(name);
     this.reset();
   }
@@ -58,7 +58,7 @@ export class LocalMode {
   /** Fresh world (keeps the current live tuning). Recordings start from here so they replay exactly. */
   reset(): void {
     const tuning = { ...this.game.tuning };
-    this.game = new Game({ map: this.map, seed: SEED, dummies: true, tuning });
+    this.game = new Game({ map: this.map, seed: SEED, dummies: true, pickups: true, tuning });
     this.me = this.game.addPlayer(this.name);
     // loadout before the Match: its countdown respawns everyone through Game.respawn → giveLoadout(p.loadout)
     this.game.setLoadout(this.me, this.loadout);
@@ -135,6 +135,7 @@ export class LocalMode {
         map: this.map.id,
         seed: SEED,
         dummies: true,
+        pickups: true,
         tuning: { ...this.game.tuning },
         loadouts: [[...this.loadout]],
         ...(this.matchRules ? { match: this.matchRules } : {}),
@@ -203,6 +204,8 @@ export class LocalMode {
         weapons: p.weapons.map((w) => ({ def: w.def, mag: w.mag, reserve: w.reserve, reloadTicks: w.reloadTicks })),
         meleeTicks: p.meleeTicks,
         dashing: p.dashTicks > 0,
+        shield: shieldView(p),
+        shieldHp: p.shieldHp,
         respawnTicks: p.respawnTicks,
         kills: p.kills,
         deaths: p.deaths,
@@ -214,6 +217,7 @@ export class LocalMode {
       players,
       grenades: this.game.grenades.filter((g) => g.alive).map((g) => ({ x: g.x, y: g.y, fuse: g.fuse })),
       mapEvent: mapEventView(this.game),
+      pickups: this.game.pickups.filter((k) => k.alive).map((k) => ({ id: k.id, def: k.def, x: k.x, y: k.y })),
       ...(this.recorder ? { recording: this.recorder.length } : {}),
     };
   }

@@ -29,6 +29,7 @@ import type { PlayerView } from '../view';
 import type { CharacterInstance, CharacterLod } from './character';
 import { orientSocket, rotateWorld, solveTwoBone } from './ik';
 import { Locomotion, aimElevation, clipCandidates, facingOf, facingYaw, fadeTime, runTimeScale, stepYaw, type LocoState } from './locomotion';
+import { ShieldKit, ShieldRig } from './shield';
 
 interface WeaponModel {
   geometry: BufferGeometry;
@@ -47,10 +48,13 @@ export class AvatarKit {
   readonly flameInnerGeo: BufferGeometry;
   readonly blobGeo = new PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
   readonly blobTexture: Texture;
+  /** riot shield placeholder, items and sparks (shield.ts) */
+  readonly shield: ShieldKit;
   private readonly models = new Map<number, WeaponModel>();
 
   constructor(ramp: Texture) {
     this.gunMaterial = new MeshToonMaterial({ color: 0x2d3136, gradientMap: ramp });
+    this.shield = new ShieldKit(ramp);
     // twin nozzles ~0.26 m below and 0.1 m behind socket_jetpack (+Y up the back, +Z forward)
     const cones = (r: number, len: number) =>
       mergeGeometries([-0.065, 0.065].map((x) => new ConeGeometry(r, len, 10).rotateX(Math.PI).translate(x, -len / 2, -0.1)))!;
@@ -141,6 +145,7 @@ export class Avatar {
   private readonly flame = new Group();
   private flameScale = 0;
   private time = 0;
+  private readonly shield: ShieldRig;
 
   constructor(
     readonly inst: CharacterInstance,
@@ -167,6 +172,7 @@ export class Avatar {
 
     this.blob = new Mesh(kit.blobGeo, new MeshBasicMaterial({ color: 0x000000, alphaMap: kit.blobTexture, transparent: true, depthWrite: false }));
     this.blob.renderOrder = -1;
+    this.shield = new ShieldRig((name) => inst.bone(name), kit.shield);
   }
 
   private arm(side: 'L' | 'R'): Arm | null {
@@ -205,6 +211,7 @@ export class Avatar {
     this.pivot.updateMatrixWorld(true);
 
     this.aim(p, facing);
+    this.shield.update(p.shield, this.pivot);
     this.updateFlame(p, dt);
     if (blobShadows) this.updateBlob(p, world);
   }
@@ -224,6 +231,7 @@ export class Avatar {
   showAllForWarmUp(): void {
     this.flame.visible = true;
     for (const arm of [this.right, this.left]) if (arm) arm.gun.visible = true;
+    this.shield.showForWarmUp();
   }
 
   /** Spine and head pitch toward the aim, then the gun arm(s) point along it (docs/11 §4: procedural aim). */
@@ -244,6 +252,7 @@ export class Avatar {
     if (this.left) {
       this.left.gun.visible = false;
       if (leftDef !== NO_WEAPON) this.aimArm(this.left, leftDef, -1);
+      else if (p.shield === 'front' || p.shield === 'raising') this.holdShield(this.left);
       else if (active !== NO_WEAPON && weapons[active]?.hands === 2 && this.right) {
         // two-handed weapon: the off hand holds the foregrip (docs/04 §4.2)
         const grip = this.right.gun.localToWorld(_t.copy(this.kit.weapon(active).offhand));
@@ -252,6 +261,18 @@ export class Avatar {
         solveTwoBone(this.left.upper, this.left.lower, this.left.hand, grip, _p);
       }
     }
+  }
+
+  /**
+   * Riot shield up: the left arm held forward at chest height along the body's forward, elbow down
+   * and out; the shield sits on its forearm (ShieldRig). `_lat` holds the body's left (aim()).
+   */
+  private holdShield(arm: Arm): void {
+    arm.upper.getWorldPosition(_s);
+    _p.set(0, 0, 1).applyAxisAngle(UP, this.yaw!); // the body's forward
+    _t.copy(_s).addScaledVector(_p, arm.length * 0.85).addScaledVector(UP, -0.04);
+    _p.multiplyScalar(-0.2).add(_s).addScaledVector(UP, -0.5).addScaledVector(_lat, 0.3);
+    solveTwoBone(arm.upper, arm.lower, arm.hand, _t, _p);
   }
 
   /** side: +1 right arm, −1 left arm */

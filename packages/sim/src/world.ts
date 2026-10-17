@@ -25,6 +25,8 @@ export function createRayHit(): RayHit {
 }
 
 const MIN_EDGE = 0.05;
+/** Solids thinner than this between two facing edges get a compile warning (docs/02 §4). */
+export const MIN_THICKNESS = 0.3;
 
 interface CompiledSegment {
   ax: number;
@@ -64,8 +66,55 @@ function segmentsIntersect(
 }
 
 /**
+ * The thinnest gap (m) across a CCW polygon between two facing edges: outward normals within ~25°
+ * of opposite, side by side for at least MIN_EDGE, with the solid between them. Infinity if none.
+ * Wedges don't count (a ramp thins out to its tip by design), nor do notches (the gap is outside).
+ */
+export function thinnestSolid(pts: readonly number[]): number {
+  const n = pts.length / 2;
+  let thinnest = Infinity;
+  for (let i = 0; i < n; i++) {
+    const i2 = (i + 1) % n;
+    const ax = pts[i * 2]!;
+    const ay = pts[i * 2 + 1]!;
+    const ex = pts[i2 * 2]! - ax;
+    const ey = pts[i2 * 2 + 1]! - ay;
+    const len = Math.sqrt(ex * ex + ey * ey);
+    if (len < 1e-9) continue;
+    const ux = ex / len;
+    const uy = ey / len;
+    for (let k = 0; k < n; k++) {
+      if (k === i) continue;
+      const k2 = (k + 1) % n;
+      const cx = pts[k * 2]!;
+      const cy = pts[k * 2 + 1]!;
+      const fx = pts[k2 * 2]! - cx;
+      const fy = pts[k2 * 2 + 1]! - cy;
+      const flen = Math.sqrt(fx * fx + fy * fy);
+      // outward normals of CCW edges: (uy, −ux) and (fy, −fx)/flen; facing ⇔ dot ≤ −0.9
+      if (flen < 1e-9 || (uy * fy + ux * fx) / flen > -0.9) continue;
+      // edge k's extent along edge i, clipped to edge i
+      const t0 = (cx - ax) * ux + (cy - ay) * uy;
+      const t1 = t0 + fx * ux + fy * uy;
+      const lo = Math.max(0, Math.min(t0, t1));
+      const hi = Math.min(len, Math.max(t0, t1));
+      if (hi - lo < MIN_EDGE) continue;
+      for (const t of [lo, hi]) {
+        // the point of edge k across from t, and how far inside edge i it is (> 0: the solid is between)
+        const s = (t - t0) / (t1 - t0);
+        const px = cx + fx * s - ax;
+        const py = cy + fy * s - ay;
+        const gap = py * ux - px * uy;
+        if (gap > 1e-9 && gap < thinnest) thinnest = gap;
+      }
+    }
+  }
+  return thinnest;
+}
+
+/**
  * Map compiler (docs/02 §4): normalises winding to CCW, drops degenerate vertices, merges
- * collinear edges and rejects self-intersecting polygons.
+ * collinear edges and rejects self-intersecting polygons. Warns about short edges and thin solids.
  */
 export function compileMapSegments(map: MapDef): { segments: CompiledSegment[]; warnings: string[] } {
   const segments: CompiledSegment[] = [];
@@ -114,6 +163,8 @@ export function compileMapSegments(map: MapDef): { segments: CompiledSegment[]; 
       if (len < MIN_EDGE) warnings.push(`solid #${pi}: edge ${i} is only ${len.toFixed(3)} m long`);
       segments.push({ ax, ay, bx, by, flags: SegFlag.Solid, material: poly.material ?? 0 });
     }
+    const thin = thinnestSolid(pts);
+    if (thin < MIN_THICKNESS) warnings.push(`solid #${pi}: only ${thin.toFixed(2)} m thick (walls ≥ ${MIN_THICKNESS} m; a thin floor is a one-way platform)`);
     // self-intersection check (non-adjacent edges)
     for (let i = 0; i < n; i++) {
       for (let k = i + 2; k < n; k++) {

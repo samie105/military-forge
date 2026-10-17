@@ -2,9 +2,22 @@
  * Shared feel measurements (docs/02 §19): run the real sim with scripted inputs and return
  * objective numbers. Used by `feel` (report) and `tune` (target-driven parameter sweep).
  */
-import { BUZZ, DEFAULT_LOADOUT, HAMMER, defaultTuning, weapons, type MapDef, type MapEventKind, type MapZone, type Tuning, type WeaponDef, type ZoneKind } from '@military-forge/content';
+import {
+  BUZZ,
+  DEFAULT_LOADOUT,
+  HAMMER,
+  RIOT_SHIELD,
+  defaultTuning,
+  weapons,
+  type MapDef,
+  type MapEventKind,
+  type MapZone,
+  type Tuning,
+  type WeaponDef,
+  type ZoneKind,
+} from '@military-forge/content';
 import { angleToU16 } from '@military-forge/shared';
-import { Btn, Game, createInput, type Input, type PlayerState } from '../src';
+import { Btn, Game, SHIELD_RAISE_TICKS, createInput, giveShield, type Input, type PlayerState } from '../src';
 
 function flat(width = 400, ceiling = 60): MapDef {
   const rect = (x0: number, y0: number, x1: number, y1: number) => ({ points: [x0, y0, x1, y0, x1, y1, x0, y1] });
@@ -547,4 +560,81 @@ export function measureDash(tuning: Partial<Tuning> = {}): DashMetrics {
   }
   m.burst = (tuning.dashBurstTicks ?? defaultTuning.dashBurstTicks) / 60;
   return m;
+}
+
+export interface ShieldFireResult {
+  /** mean seconds to kill the carrier (one that survives counts as the 20 s cap) */
+  ttk: number;
+  /** mean seconds until the shield broke, over the samples where it did (NaN: never) */
+  breakAt: number;
+  /** samples where the shield broke (the rest died with it up, hit around it, or survived) */
+  breakRate: number;
+  /** bullets/pellets that struck the shield ÷ fired */
+  shieldRate: number;
+  /** samples where the carrier died within 20 s */
+  killRate: number;
+}
+
+/**
+ * How the carrier stands: `front` faces the shooter with the shield up (the bullets must wear it
+ * down first); `flank` faces away with it up (its back is bare); `back` faces away with it slung,
+ * so the shield on its back takes the bullets.
+ */
+export type ShieldStance = 'front' | 'flank' | 'back';
+
+/**
+ * A shooter against a riot-shield carrier holding a Hammer `distance` metres away, both grounded,
+ * the shooter re-aiming at the carrier's torso every tick (no aiming over or under the shield).
+ * Averaged over `samples` seeds.
+ */
+export function measureShield(weapon: number, distance: number, stance: ShieldStance, tuning: Partial<Tuning> = {}, samples = 10): ShieldFireResult {
+  const def = weapons[weapon]!;
+  const semi = def.fireMode !== 'auto';
+  const CAP = 1200;
+  let ttkSum = 0;
+  let breakSum = 0;
+  let breaks = 0;
+  let rateSum = 0;
+  let killed = 0;
+  for (let s = 1; s <= samples; s++) {
+    const game = new Game({ map: flat(), seed: s * 7919, tuning });
+    const p = game.addPlayer('probe');
+    const c = game.addPlayer('carrier');
+    game.setLoadout(p, [weapon, weapon === HAMMER.index ? BUZZ.index : HAMMER.index]);
+    c.x = p.x + distance;
+    const inputs: (Input | undefined)[] = [];
+    const pin: Input = createInput();
+    const cin: Input = { ...createInput(), aim: angleToU16(stance === 'front' ? Math.PI : 0) };
+    inputs[p.id] = pin;
+    inputs[c.id] = cin;
+    for (let i = 0; i < 10; i++) game.step(inputs);
+    giveShield(c, RIOT_SHIELD.hp);
+    c.shieldStowed = stance === 'back';
+    for (let i = 0; i < SHIELD_RAISE_TICKS + 5; i++) game.step(inputs);
+    let shots = 0;
+    let onShield = 0;
+    let t = 0;
+    let firing = false;
+    while (c.alive && t < CAP) {
+      pin.aim = angleToU16(Math.atan2(c.y + 0.7 - p.shoulderY(game.tuning), c.x - p.shoulderX(game.tuning)));
+      pin.buttons = semi && firing ? 0 : Btn.Fire;
+      firing = semi ? !firing : false;
+      game.step(inputs);
+      for (const e of game.events) {
+        if (e.type === 'shot' && e.shooter === p.id) {
+          shots++;
+          if (e.hit === 3) onShield++;
+        }
+        if (e.type === 'shieldBreak' && e.owner === c.id) {
+          breakSum += t / 60;
+          breaks++;
+        }
+      }
+      t++;
+    }
+    if (!c.alive) killed++;
+    ttkSum += t / 60;
+    rateSum += shots ? onShield / shots : 0;
+  }
+  return { ttk: ttkSum / samples, breakAt: breaks ? breakSum / breaks : Number.NaN, breakRate: breaks / samples, shieldRate: rateSum / samples, killRate: killed / samples };
 }

@@ -1,15 +1,17 @@
 /**
- * Every registered map (packages/content maps): it compiles (collision, rules, zones, events), and
- * every spawn stands clear on walkable ground where it's put: no depenetration nudge, no fall.
+ * Every registered map (packages/content maps): it compiles (collision, rules, zones, events) with
+ * no warnings (short edges, thin solids), and every spawn stands clear on walkable ground where
+ * it's put: no depenetration nudge, no fall.
  */
 import { maps } from '@military-forge/content';
 import { describe, expect, it } from 'vitest';
-import { Game, depenetrate } from '../src';
+import { CollisionWorld, Game, depenetrate } from '../src';
 
 describe('registered maps', () => {
   for (const map of Object.values(maps)) {
-    it(`${map.id}: compiles, and every spawn stands where it is put`, () => {
+    it(`${map.id}: compiles without warnings, and every spawn stands where it is put`, () => {
       expect(() => new Game({ map, dummies: true })).not.toThrow();
+      expect(new CollisionWorld(map).warnings).toEqual([]);
       map.spawns.forEach((s, i) => {
         const game = new Game({ map });
         const p = game.addPlayer('probe');

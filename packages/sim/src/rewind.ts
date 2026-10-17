@@ -12,6 +12,12 @@ export interface HitPose {
   y: number;
   crouched: boolean;
   alive: boolean;
+  /** which way it faced: a raised riot shield is on that side, a slung one on the other */
+  facing: 1 | -1;
+  /** its riot shield was all the way up (blocking the front): the shield is rewound with its owner */
+  shield: boolean;
+  /** its riot shield was slung (blocking the back) */
+  shieldBack: boolean;
 }
 
 export interface TargetRewind {
@@ -23,5 +29,5 @@ export interface TargetRewind {
 }
 
 export function createHitPose(): HitPose {
-  return { x: 0, y: 0, crouched: false, alive: true };
+  return { x: 0, y: 0, crouched: false, alive: true, facing: 1, shield: false, shieldBack: false };
 }

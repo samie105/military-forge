@@ -414,10 +414,10 @@ describe('messages', () => {
     expect(snap.events.filter((e) => e.type === 'mapEvent')).toEqual(sent);
     const pocket = sent.find((e) => e.type === 'mapEvent' && e.zone >= 0);
     expect(pocket).toBeDefined(); // the pocket's picked zone survives the trip, and -1 (all) does too
-    expect(PROTOCOL_VERSION).toBe(8);
+    expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(8); // MAP_EVENT since v8
   });
 
-  it('CONTENT_HASH covers tuning, weapons, grenades, hitboxes, maps and zone/event defaults, not key order', () => {
+  it('CONTENT_HASH covers tuning, weapons, grenades, hitboxes, maps, zone/event defaults and pickups, not key order', () => {
     expect(CONTENT_HASH).toBe(contentHashOf(HASHED_CONTENT));
     const changed = (edit: (c: Mutable) => void) => {
       const copy = JSON.parse(JSON.stringify(HASHED_CONTENT)) as Mutable;
@@ -432,6 +432,7 @@ describe('messages', () => {
       maps: Record<string, { solids: { points: number[] }[] }>;
       zoneDefaults: Record<string, { gravityMul?: number }>;
       eventDefaults: Record<string, { duration?: number }>;
+      pickups: { shield: { hp: number }; pools: Record<string, { items: { weight: number }[] }> };
     };
     expect(changed(() => {})).toBe(CONTENT_HASH);
     expect(changed((c) => (c.tuning.walkMax! += 0.5))).not.toBe(CONTENT_HASH);
@@ -441,6 +442,8 @@ describe('messages', () => {
     expect(changed((c) => (Object.values(c.maps)[0]!.solids[0]!.points[0]! += 0.5))).not.toBe(CONTENT_HASH);
     expect(changed((c) => (c.zoneDefaults.lowG!.gravityMul! += 0.05))).not.toBe(CONTENT_HASH);
     expect(changed((c) => (c.eventDefaults.emp!.duration! += 1))).not.toBe(CONTENT_HASH);
+    expect(changed((c) => (c.pickups.shield.hp += 1))).not.toBe(CONTENT_HASH);
+    expect(changed((c) => (c.pickups.pools.shield!.items[0]!.weight += 1))).not.toBe(CONTENT_HASH);
     // key order and undefined fields don't matter
     expect(contentHashOf({ a: 1, b: [2, { c: 3, d: undefined }] })).toBe(contentHashOf({ b: [2, { c: 3 }], a: 1 }));
     // what JSON would silently flatten is refused, not hashed as null or {}

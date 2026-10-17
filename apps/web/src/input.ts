@@ -24,6 +24,7 @@ const KEY_BINDINGS: Record<string, number> = {
   KeyV: Btn.Melee,
   ShiftLeft: Btn.Dash,
   ShiftRight: Btn.Dash,
+  KeyX: Btn.Shield,
 };
 
 /**

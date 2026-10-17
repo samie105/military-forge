@@ -290,6 +290,37 @@ describe('collision edge cases (docs/02 §10)', () => {
     }
   });
 
+  it('a solid thinner than the capsule radius stops a dash, a walk, a fall and a launch at its near face (regression: out the far side)', () => {
+    const r = T.capsuleRadius;
+    const W = 0.05;
+    const wall = () => flatMap([rect(30, 0, 30 + W, 10)]);
+    for (let off = 0; off < 0.2; off += 0.02) {
+      const dash = makeGame(wall());
+      placeOnGround(dash.game, dash.p, 30 - r - 0.002 - off);
+      hold(dash.game, dash.p, Btn.Dash | Btn.Right, 1);
+      hold(dash.game, dash.p, Btn.Right, 20);
+      expect(dash.p.x + r, `dash, ${off.toFixed(2)} m short`).toBeLessThanOrEqual(30 + 1e-3);
+
+      const walk = makeGame(wall());
+      placeOnGround(walk.game, walk.p, 28 - off);
+      hold(walk.game, walk.p, Btn.Right, 60);
+      expect(walk.p.x + r, `walk, ${off.toFixed(2)} m short`).toBeLessThanOrEqual(30 + 1e-3);
+
+      // a slam onto a 5 cm floor 6 m up
+      const slam = makeGame(flatMap([rect(20, 6 - W, 40, 6)]));
+      Object.assign(slam.p, { x: 30, y: 6.002 + off, vx: 0, vy: 0, grounded: false });
+      hold(slam.game, slam.p, Btn.Dash | Btn.Down, 1);
+      hold(slam.game, slam.p, 0, 20);
+      expect(slam.p.y, `slam, ${off.toFixed(2)} m up`).toBeGreaterThanOrEqual(6);
+
+      // thrown at the 36 m/s speed limit (a raised knockback cap)
+      const launch = makeGame({ ...wall(), zones: [{ id: 'k', kind: 'custom', rect: [0, 0, 60, 28], knockbackMul: 4 }] });
+      Object.assign(launch.p, { x: 29 - off, y: 5, vx: 36, vy: 1, grounded: false });
+      hold(launch.game, launch.p, 0, 20);
+      expect(launch.p.x + r, `launch, ${off.toFixed(2)} m short`).toBeLessThanOrEqual(30 + 1e-3);
+    }
+  });
+
   it('depenetrates a spawn inside geometry', () => {
     const { game, p } = makeGame(flatMap([rect(10, 0, 12, 2)]));
     p.x = 10.1;

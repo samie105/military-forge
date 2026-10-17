@@ -31,6 +31,8 @@ export interface ReplayFile {
   players: InputRun[][];
   /** run the replay through a Match with these rules (match.ts); absent = plain Game, as before */
   match?: Partial<MatchRules>;
+  /** map pickups on (GameOptions.pickups); absent = off, as in replays recorded before pickups existed */
+  pickups?: boolean;
   /** lobby commands for the Match (ready-up, rematch votes…) */
   commands?: MatchCommand[];
 }
@@ -56,7 +58,7 @@ export function decodeRuns(runs: readonly InputRun[], ticks: number): Input[] {
 }
 
 export function createReplayGame(replay: ReplayFile): Game {
-  const game = new Game({ mapId: replay.map, seed: replay.seed, dummies: replay.dummies, tuning: replay.tuning ?? {} });
+  const game = new Game({ mapId: replay.map, seed: replay.seed, dummies: replay.dummies, tuning: replay.tuning ?? {}, pickups: replay.pickups ?? false });
   replay.players.forEach((_, i) => {
     const p = game.addPlayer(`P${i + 1}`);
     const start = replay.starts?.[i];
@@ -104,7 +106,7 @@ export class ReplayRecorder {
   private readonly commands: MatchCommand[] = [];
 
   constructor(
-    private readonly meta: Pick<ReplayFile, 'map' | 'seed' | 'dummies' | 'tuning' | 'starts' | 'loadouts' | 'match'>,
+    private readonly meta: Pick<ReplayFile, 'map' | 'seed' | 'dummies' | 'tuning' | 'starts' | 'loadouts' | 'match' | 'pickups'>,
     private readonly name = 'recorded',
   ) {}
 

@@ -172,6 +172,27 @@ armour (BR only): vest absorbs X% of body damage into armour HP; helmet reduces 
 - **Reload:** `R` or automatic when empty (setting). Swapping cancels a reload. Partial reloads keep the remaining mag. Heavy weapons can't reload while jetting (keeps air power in check).
 - **Melee:** `V` / mouse button 4. Damage depends on the held weapon (§5). Lunge (02-physics §12). Bypasses the riot shield.
 - **Riot shield:** occupies the off-hand. You can only use one-handed weapons with it (no dual). It blocks bullets within ±60° of your facing until its 300 HP is gone, and gives no protection from flames, explosions, melee or saws.
+  - **Carry modes** (built: `packages/sim/src/shield.ts`, numbers in `packages/content/src/shield.ts`):
+    - **Raised** in front of the body: it blocks from the front, and it weighs ×0.75 (the heaviest item in hand sets the speed).
+    - **Slung** on the back: it blocks from **behind** (the owner's call, 17 Oct), and it weighs nothing.
+    - It takes 0.25 s to come up and blocks neither side on the way.
+  - It comes up by itself with a one-handed weapon (or a Machete) in hand. A two-handed weapon or going dual slings it, and it comes back up when that ends. The shield key (`X`) slings it on purpose and raises it again; raising it ends a dual pair (like pressing `F`). With a two-handed weapon in hand, the key chooses whether it comes up with your next one-handed weapon.
+  - **Pick-up rules:**
+    - One shield at a time. Touching a shield while yours is more damaged tops yours up to the item's HP.
+    - Dying drops it on the floor below you with the HP it had left, for 30 s (§12). So does leaving the game.
+    - Pellets that shove a carrier through its shield count as an attack: knocked into a pit, it's the shooter's kill (§8).
+  - **Blocking:** the shield is a vertical segment 0.9 m tall (0.35–1.25 m standing, 0.12–1.02 m crouched).
+    - Raised, it sits 0.42 m in front of the body and blocks bullets from within ±60° of the facing.
+    - Slung, it sits 0.40 m behind the body and blocks bullets from within ±60° of the back. A raised shield never guards the back, and a slung one never guards the front.
+    - A bullet that strikes it takes shield HP instead of health, with the usual falloff; pellets still shove the carrier. Front and back share the one 300 HP pool.
+    - Shots over it (the top of the head) or under it (the legs) still land. The bullet that breaks it is stopped by it.
+  - **Ricochet:** a bullet that strikes the shield, front or back, reflects about the shield's normal.
+    - It flies on with the range it has left and ×0.6 damage, and bounces at most once (a second shield stops it). The range left is spent the way the map spends any bullet's (02-physics §20): fog shortens the ricochet and its falloff counts the fog.
+    - It can hit anyone except the shield's owner and **never its own shooter** (bullets never hurt their shooter, §8; the owner's call, 17 Oct).
+    - Lag compensation applies: the shield, raised or slung, is rewound with its owner.
+    - Pellets ricochet one by one.
+  - **Shield bash:** melee with the shield up does 25 (a melee weapon still swings as itself).
+  - **Dash** (02-physics §21): no dash while the shield is up or coming up; lower it (`X`) to dash. Slung, it doesn't stop a dash. Pellets on the shield push its carrier like any hit, so they end a dash too.
 - **Movement speed** is multiplied by `moveSpeedMul` of the held weapon (the heaviest of dual pair).
 - **Zoom:** see §10.
 
@@ -212,6 +233,7 @@ Zoom makes the camera pull **out** so you see more of the map (1×–7×). In 2.
 ## 12. Map weapon spawns
 
 - Maps define **spawner nodes** with a pool (`common` or `power`) and a respawn timer (common 20 s, power 45 s, health pack 25 s, Power Boost 40 s, grenade pairs 20 s). These are estimates, tuned by mode.
+- **Built** (`MapDef.spawners`, `packages/sim/src/pickups.ts`): a spawner owns one or more **spots** and one timer. When the timer fires, the game's seeded PRNG picks a free spot and an item from the spawner's pool (weighted), so items appear at random places and times. Timers are random too: `first` (seconds before the first item) and `respawn` (seconds after an item is taken), each a [min, max] range. `maxActive` caps how many of its items are out at once. A spawner with one spot is a classic fixed spawn. Spawners start over when a match starts. Players take items by touching them. Dropped items stay 30 s. The riot shield is the first item (pool `shield`); the movement-test map has a shield spawner with three spots in front of the shooting range. Map JSON (02-physics §20.6) carries spawners too: `spawners: [{ id, pool, spots: [{x, y}], first: [min, max], respawn: [min, max], maxActive? }]`, in `map.schema.json`.
 - Placement guidelines (map editor lint): power weapons in **contested, exposed** spots (the top of a tower, the middle of a bridge), never next to a spawn point. Health packs away from weapon spawns. No spawner reachable without leaving cover for at least 1.5 s.
 - **Pickups:** **Health pack** (instant full heal, only if hurt), **Power Boost** (unlimited jetpack fuel for 20 s; can't crouch; you *can* fly off the top of the map), **Riot Shield**, **Grenade pair**, **Ammo box** (refills both slots).
 - Some weapons are map-specific (rare guns only on certain maps), which gives maps identity.

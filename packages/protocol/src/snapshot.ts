@@ -6,8 +6,10 @@
  *   u5 changed · { u5 id · u8 groupMask · groups }   players new or changed since the baseline
  *   u5 removed · { u5 id }                           in the baseline, now gone or out of view
  *   u7 grenades · { … }                              in view, full
+ *   u1 pickups changed · [u6 n · { u5 id · u4 def · i24 x · i24 y }]   items in view, when changed (v9)
  *   u8 events · { u3 tag · … }                       in view; gunfire/blasts outside it → SOUND;
- *                                                    map events (v8) always
+ *                                                    map events (v8) always; tag 7 = extended, u4 kind
+ *                                                    (v8 dash; v9 ricochet, shield break, pickup)
  *
  * The baseline is the newest snapshot the client acked (INPUT.ackSnapshotSeq). The server keeps
  * the last 32 it sent to each client (SnapshotBaselines), the client the last 64 it decoded
@@ -19,8 +21,8 @@
  * positions (enough for direction, useless for aiming).
  */
 import { CROUCHED_HITBOXES, STANDING_HITBOXES } from '@military-forge/content';
-import { POS_INV, VEL_INV } from '@military-forge/shared';
-import { MAX_PLAYERS, type Game, type PlayerState, type SimEvent } from '@military-forge/sim';
+import { POS_INV, TAU, VEL_INV, simAtan2, simCosSin } from '@military-forge/shared';
+import { MAX_PICKUPS, MAX_PLAYERS, shieldRaised, type Game, type PlayerState, type SimEvent } from '@military-forge/sim';
 import { BitReader, BitWriter, DecodeError } from './bitstream';
 import {
   captureLocalState,
@@ -63,6 +65,22 @@ export interface SnapshotPlayer {
   respawnTicks: number;
   kills: number;
   deaths: number;
+  /**
+   * Riot shield (v9; its HP is private to the local block): slung on the back (guarding it), on its way
+   * up (guarding neither side), or up in front (guarding it).
+   */
+  shield: SnapshotShield;
+}
+
+export type SnapshotShield = 'none' | 'slung' | 'raising' | 'up';
+const SHIELD_STATES: readonly SnapshotShield[] = ['none', 'slung', 'raising', 'up'];
+
+/** An item lying on the map (pickups.ts): `def` is its PickupDef.index. */
+export interface SnapshotPickup {
+  id: number;
+  def: number;
+  x: number;
+  y: number;
 }
 
 export interface SnapshotGrenade {
@@ -105,6 +123,8 @@ export interface SnapshotMsg {
   /** players in this client's view, by id */
   players: SnapshotPlayer[];
   grenades: SnapshotGrenade[];
+  /** every item on the map (not culled: items are static and give nobody away) */
+  pickups: SnapshotPickup[];
   events: SnapshotEvent[];
 }
 
@@ -141,8 +161,18 @@ const FLAG_JETTING = 16;
 const FLAG_DUAL = 32;
 const FLAG_RELOADING = 64;
 const FLAG_DASHING = 128;
-/** remote flags on the wire (v8: 8, with dashing) */
-const FLAG_BITS = 8;
+/**
+ * Riot shield (v9): a 2-bit state in flag bits 8–9 (the registry's 256 and 512), an index into
+ * SHIELD_STATES: 0 none, 1 slung (guards the back), 2 raising (guards neither side), 3 up.
+ */
+const SHIELD_SHIFT = 8;
+/** remote flags on the wire (v8: 8, with dashing; v9: 10, with the shield state) */
+const FLAG_BITS = 10;
+
+function shieldState(p: PlayerState): number {
+  if (p.shieldHp <= 0) return 0;
+  return shieldRaised(p) ? 3 : p.shieldTicks > 0 ? 2 : 1;
+}
 
 const G_POS = 1;
 const G_VEL = 2;
@@ -171,7 +201,8 @@ function captureRemote(p: PlayerState, out: Int32Array, o: number): void {
     (p.jetting ? FLAG_JETTING : 0) |
     (p.dual ? FLAG_DUAL : 0) |
     (p.weapons[0].reloadTicks > 0 || p.weapons[1].reloadTicks > 0 ? FLAG_RELOADING : 0) |
-    (p.dashTicks > 0 ? FLAG_DASHING : 0);
+    (p.dashTicks > 0 ? FLAG_DASHING : 0) |
+    (shieldState(p) << SHIELD_SHIFT);
   out[o + F_X] = clamp(pos(p.x), -(1 << 23), (1 << 23) - 1);
   out[o + F_Y] = clamp(pos(p.y), -(1 << 23), (1 << 23) - 1);
   out[o + F_VX] = clamp(Math.round(p.vx * REMOTE_VEL_INV), -2048, 2047);
@@ -269,7 +300,57 @@ function toSnapshotPlayer(id: number, s: Int32Array, o: number): SnapshotPlayer 
     respawnTicks: s[o + F_RESPAWN]!,
     kills: s[o + F_KILLS]!,
     deaths: s[o + F_DEATHS]!,
+    shield: SHIELD_STATES[(flags >> SHIELD_SHIFT) & 3]!,
   };
+}
+
+// ---------- pickups ----------
+
+/** One snapshot's items, as integers: count, then (id, def, x, y) each. */
+const PICKUP_FIELDS = 4;
+const PICKUP_LIST = 1 + MAX_PICKUPS * PICKUP_FIELDS;
+
+function capturePickups(game: Game, out: Int32Array): void {
+  let n = 0;
+  for (const k of game.pickups) {
+    if (!k.alive) continue;
+    const o = 1 + n * PICKUP_FIELDS;
+    out[o] = k.id;
+    out[o + 1] = k.def;
+    out[o + 2] = pos(k.x);
+    out[o + 3] = pos(k.y);
+    n++;
+  }
+  out[0] = n;
+}
+
+/** The items in `view` (all of them without one), from a captured list into `out`. */
+function pickupsInView(all: Int32Array, view: ViewRect | null, out: Int32Array): Int32Array {
+  if (view === null) return all;
+  let n = 0;
+  for (let i = 0; i < all[0]!; i++) {
+    const o = 1 + i * PICKUP_FIELDS;
+    if (!inRect(view, all[o + 2]! / POS_INV, all[o + 3]! / POS_INV)) continue;
+    out.set(all.subarray(o, o + PICKUP_FIELDS), 1 + n * PICKUP_FIELDS);
+    n++;
+  }
+  out[0] = n;
+  return out;
+}
+
+function samePickups(a: Int32Array, ao: number, b: Int32Array, bo: number): boolean {
+  const len = 1 + a[ao]! * PICKUP_FIELDS;
+  for (let i = 0; i < len; i++) if (a[ao + i] !== b[bo + i]) return false;
+  return true;
+}
+
+function toPickups(list: Int32Array): SnapshotPickup[] {
+  const out: SnapshotPickup[] = [];
+  for (let i = 0; i < list[0]!; i++) {
+    const o = 1 + i * PICKUP_FIELDS;
+    out.push({ id: list[o]!, def: list[o + 1]!, x: list[o + 2]! / POS_INV, y: list[o + 3]! / POS_INV });
+  }
+  return out;
 }
 
 // ---------- events ----------
@@ -296,6 +377,17 @@ const EVENT_EXT = 7;
 const EXT_BITS = 4;
 /** a dash started (docs/02 §21): u5 player · i24 x · i24 y · u3 direction (8-way, 0 = right, CCW) */
 const EXT_DASH = 0;
+/**
+ * A bullet glanced off a riot shield (v9): u5 shooter · u5 owner · u6 weapon · i24 x · i24 y (the
+ * bounce) · u8 normal (angle) · i24 ex · i24 ey · u2 hit · u5 target · u2 zone.
+ */
+const EXT_RICOCHET = 1;
+/** a riot shield broke (v9): u5 owner · u5 attacker · i24 x · i24 y */
+const EXT_SHIELD_BREAK = 2;
+/** someone took an item (v9): u5 player · u4 item · i24 x · i24 y */
+const EXT_PICKUP = 3;
+/** a ricochet's shield normal travels as a u8 angle */
+const NORMAL_STEPS = 256;
 /** SOUND positions: 4 m grid */
 const SOUND_CELL = 4;
 const GRENADE_SOURCE = 62;
@@ -380,6 +472,60 @@ function writeExplosion(w: BitWriter, x: number, y: number, radius: number, owne
   w.bits(EVENT_EXPLOSION, 3).signed(pos(x), 24).signed(pos(y), 24).unsigned(radius * 16, 8).unsigned(pid(owner), 5);
 }
 
+function writeRicochet(w: BitWriter, e: Extract<SimEvent, { type: 'ricochet' }>, shooter: number, ex: number, ey: number, hit: number, target: number, zone: number): void {
+  const normal = Math.round((simAtan2(e.ny, e.nx) / TAU) * NORMAL_STEPS) & (NORMAL_STEPS - 1);
+  w.bits(EVENT_EXT, 3)
+    .bits(EXT_RICOCHET, EXT_BITS)
+    .unsigned(pid(shooter), 5)
+    .unsigned(pid(e.owner), 5)
+    .unsigned(e.weapon, 6)
+    .signed(pos(e.x), 24)
+    .signed(pos(e.y), 24)
+    .unsigned(normal, 8)
+    .signed(pos(ex), 24)
+    .signed(pos(ey), 24)
+    .unsigned(hit, 2)
+    .unsigned(pid(target), 5)
+    .unsigned(zone, 2);
+}
+
+function writeShieldBreak(w: BitWriter, owner: number, attacker: number, x: number, y: number): void {
+  w.bits(EVENT_EXT, 3).bits(EXT_SHIELD_BREAK, EXT_BITS).unsigned(pid(owner), 5).unsigned(pid(attacker), 5).signed(pos(x), 24).signed(pos(y), 24);
+}
+
+const normalScratch = { x: 0, y: 0 };
+
+function readExtEvent(r: BitReader): SnapshotEvent {
+  const kind = r.bits(EXT_BITS);
+  switch (kind) {
+    case EXT_DASH:
+      return { type: 'dash', player: unPid(r.bits(5)), x: r.signed(24) / POS_INV, y: r.signed(24) / POS_INV, dir: r.bits(3) };
+    case EXT_RICOCHET: {
+      const shooter = unPid(r.bits(5));
+      const owner = unPid(r.bits(5));
+      const weapon = r.bits(6);
+      const x = r.signed(24) / POS_INV;
+      const y = r.signed(24) / POS_INV;
+      simCosSin((r.bits(8) / NORMAL_STEPS) * TAU, normalScratch);
+      const ex = r.signed(24) / POS_INV;
+      const ey = r.signed(24) / POS_INV;
+      const hit = r.bits(2) as 0 | 1 | 2 | 3;
+      const target = unPid(r.bits(5));
+      const zone = r.bits(2);
+      // tidy an axis-aligned normal (a vertical shield's ±x) back to exact values
+      const nx = Math.abs(normalScratch.x) < 1e-9 ? 0 : normalScratch.x;
+      const ny = Math.abs(normalScratch.y) < 1e-9 ? 0 : normalScratch.y;
+      return { type: 'ricochet', shooter, owner, weapon, x, y, nx, ny, ex, ey, hit, target, zone };
+    }
+    case EXT_SHIELD_BREAK:
+      return { type: 'shieldBreak', owner: unPid(r.bits(5)), attacker: unPid(r.bits(5)), x: r.signed(24) / POS_INV, y: r.signed(24) / POS_INV };
+    case EXT_PICKUP:
+      return { type: 'pickup', player: unPid(r.bits(5)), item: r.bits(4), x: r.signed(24) / POS_INV, y: r.signed(24) / POS_INV };
+    default:
+      throw new DecodeError(`unknown extended event kind ${kind}`);
+  }
+}
+
 function writeEvent(w: BitWriter, e: SimEvent): void {
   switch (e.type) {
     case 'shot':
@@ -409,6 +555,15 @@ function writeEvent(w: BitWriter, e: SimEvent): void {
         .bool(e.flip)
         .unsigned(e.ticks, 16);
       break;
+    case 'ricochet':
+      writeRicochet(w, e, e.shooter, e.ex, e.ey, e.hit, e.target, e.zone);
+      break;
+    case 'shieldBreak':
+      writeShieldBreak(w, e.owner, e.attacker, e.x, e.y);
+      break;
+    case 'pickup':
+      w.bits(EVENT_EXT, 3).bits(EXT_PICKUP, EXT_BITS).unsigned(pid(e.player), 5).unsigned(e.item, 4).signed(pos(e.x), 24).signed(pos(e.y), 24);
+      break;
     case 'throw':
       break;
   }
@@ -424,7 +579,7 @@ function readEvent(r: BitReader): SnapshotEvent {
       const oy = r.signed(24) / POS_INV;
       const ex = r.signed(24) / POS_INV;
       const ey = r.signed(24) / POS_INV;
-      const hit = r.bits(2) as 0 | 1 | 2;
+      const hit = r.bits(2) as 0 | 1 | 2 | 3;
       const target = unPid(r.bits(5));
       const zone = r.bits(2);
       return { type: 'shot', shooter, weapon, ox, oy, ex, ey, hit, target, zone };
@@ -439,11 +594,8 @@ function readEvent(r: BitReader): SnapshotEvent {
       return { type: 'spawn', player: unPid(r.bits(5)) };
     case EVENT_SOUND:
       return { type: 'sound', kind: r.bits(1) === 0 ? 'shot' : 'explosion', source: r.bits(6), x: r.signed(8) * SOUND_CELL, y: r.signed(8) * SOUND_CELL };
-    case EVENT_EXT: {
-      const ext = r.bits(EXT_BITS);
-      if (ext !== EXT_DASH) throw new DecodeError(`unknown extended event kind ${ext}`);
-      return { type: 'dash', player: unPid(r.bits(5)), x: r.signed(24) / POS_INV, y: r.signed(24) / POS_INV, dir: r.bits(3) };
-    }
+    case EVENT_EXT:
+      return readExtEvent(r);
     case EVENT_MAP: {
       const event = r.bits(5);
       const phase = r.bits(2);
@@ -475,6 +627,8 @@ export class SnapshotBaselines {
   readonly states = new Int32Array(SnapshotBaselines.SIZE * MAX_PLAYERS * FIELDS);
   readonly locals: LocalState[] = Array.from({ length: SnapshotBaselines.SIZE }, createLocalState);
   readonly hasLocal = new Uint8Array(SnapshotBaselines.SIZE);
+  /** the item list each snapshot left the client with */
+  readonly pickups = new Int32Array(SnapshotBaselines.SIZE * PICKUP_LIST);
 
   ack(seq: number): void {
     if (seq !== 0 && (this.acked === 0 || seqNewer(seq, this.acked))) this.acked = seq;
@@ -523,6 +677,9 @@ export class SnapshotEncoder {
   /** the view shrunk by BODY_REACH (clipping tracers that end on a culled player) */
   private readonly inset: ViewRect = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
   private readonly local = createLocalState();
+  private readonly pickups = new Int32Array(PICKUP_LIST);
+  /** this client's share of `pickups` (the ones in its view) */
+  private readonly viewPickups = new Int32Array(PICKUP_LIST);
   private game: Game | null = null;
   private events: readonly SimEvent[] = [];
   private seq = 0;
@@ -539,6 +696,7 @@ export class SnapshotEncoder {
       this.xs[id] = p.x;
       this.ys[id] = p.y;
     }
+    capturePickups(game, this.pickups);
   }
 
   encodeFor(t: SnapshotTarget): Uint8Array {
@@ -603,6 +761,20 @@ export class SnapshotEncoder {
         .unsigned(g.fuse, 8);
     }
 
+    // items on the map in view, only when they changed: one that vanished or appeared out of view
+    // would give away a hidden player taking it, or dying with a shield
+    const items = pickupsInView(this.pickups, view, this.viewPickups);
+    const pickupsChanged = bslot < 0 || !samePickups(items, 0, bl!.pickups, bslot * PICKUP_LIST);
+    w.bool(pickupsChanged);
+    if (pickupsChanged) {
+      const n = items[0]!;
+      w.bits(n, 6);
+      for (let i = 0; i < n; i++) {
+        const o = 1 + i * PICKUP_FIELDS;
+        w.bits(items[o]!, 5).bits(items[o + 1]!, 4).signed(items[o + 2]!, 24).signed(items[o + 3]!, 24);
+      }
+    }
+
     // events: in view in full, gunfire/blasts outside as SOUND; own shots are drawn from prediction
     const extra = t.extraEvents ?? NO_EVENTS;
     let events = 0;
@@ -615,6 +787,9 @@ export class SnapshotEncoder {
         const k = this.eventKind(e, view, viewer);
         if (k === 0 || written++ >= 255) continue;
         if (k === 3 && e.type === 'shot') this.writeClippedShot(w, e);
+        else if (e.type === 'ricochet') this.writeRicochetFor(w, e, k, view, viewer);
+        // a hidden attacker stays unnamed (as in HIT)
+        else if (e.type === 'shieldBreak') writeShieldBreak(w, e.owner, view === null || this.showsAttacker(e, viewer) ? e.attacker : -1, e.x, e.y);
         // a hidden attacker: no id, and whole HP (1/16 HP plus the weapon's falloff gave its range to centimetres)
         else if (k === 1 && e.type === 'hit' && view !== null && !this.showsAttacker(e, viewer)) writeHit(w, -1, e.target, Math.round(e.damage), e.zone, e.source);
         else if (k === 1 && e.type === 'explosion' && view !== null && e.owner !== viewer && !this.seen(e.owner)) writeExplosion(w, e.x, e.y, e.radius, -1);
@@ -638,6 +813,7 @@ export class SnapshotEncoder {
       }
       bl.hasLocal[slot] = t.local ? 1 : 0;
       if (t.local) bl.locals[slot]!.set(this.local);
+      bl.pickups.set(items.subarray(0, 1 + items[0]! * PICKUP_FIELDS), slot * PICKUP_LIST);
     }
     return w.finish().slice();
   }
@@ -668,13 +844,45 @@ export class SnapshotEncoder {
     );
   }
 
+  /**
+   * A ricochet off a shield in view (kind 1, or 3 when it ends on a culled player or leaves the
+   * view: clipped like a shot, the culled target blanked). Its shooter is named only as in HIT.
+   * A culled shooter's ricochet is the spark only (its point and normal, no line): mirrored, each
+   * line points back at the shooter, and two of them cross where it stands. What it hit stays
+   * blank unless that was you. `lb` holds this segment's clip from the eventKind call just before.
+   */
+  private writeRicochetFor(w: BitWriter, e: Extract<SimEvent, { type: 'ricochet' }>, kind: number, view: ViewRect | null, viewer: number): void {
+    const shooter = view === null || e.shooter === viewer || e.owner === viewer || e.target === viewer || this.seen(e.shooter) ? e.shooter : -1;
+    if (view !== null && e.shooter !== viewer && !this.seen(e.shooter)) {
+      const toMe = viewer >= 0 && e.target === viewer;
+      writeRicochet(w, e, shooter, e.x, e.y, toMe ? e.hit : 0, toMe ? e.target : -1, toMe ? e.zone : 0);
+      return;
+    }
+    if (kind !== 3) {
+      writeRicochet(w, e, shooter, e.ex, e.ey, e.hit, e.target, e.zone);
+      return;
+    }
+    const t1 = lb.t1;
+    const cut = t1 < 1 || (e.target >= 0 && !this.seen(e.target));
+    writeRicochet(
+      w,
+      e,
+      shooter,
+      t1 < 1 ? e.x + t1 * (e.ex - e.x) : e.ex,
+      t1 < 1 ? e.y + t1 * (e.ey - e.y) : e.ey,
+      cut ? 0 : e.hit,
+      this.seen(e.target) ? e.target : -1,
+      cut ? 0 : e.zone,
+    );
+  }
+
   private seen(id: number): boolean {
     return id >= 0 && id < MAX_PLAYERS && this.inView[id] === 1;
   }
 
   /** A HIT names its attacker to the attacker, the victim, and clients that can see the attacker. */
-  private showsAttacker(e: Extract<SimEvent, { type: 'hit' }>, viewer: number): boolean {
-    return e.attacker < 0 || e.attacker === viewer || e.target === viewer || this.seen(e.attacker);
+  private showsAttacker(e: { attacker: number; target?: number; owner?: number }, viewer: number): boolean {
+    return e.attacker < 0 || e.attacker === viewer || (e.target ?? e.owner) === viewer || this.seen(e.attacker);
   }
 
   /** 0 = not sent to this client, 1 = in full, 2 = as a SOUND event, 3 = clipped (writeClippedShot) */
@@ -682,13 +890,36 @@ export class SnapshotEncoder {
     switch (e.type) {
       case 'throw':
         return 0;
+      case 'pickup':
+        return view === null || e.player === viewer || inRect(view, e.x, e.y) ? 1 : 0;
+      case 'shieldBreak':
+        return view === null || e.owner === viewer || this.seen(e.owner) ? 1 : 0;
+      case 'ricochet': {
+        // the spark and its line, from a shield in view; sent to the shooter too (its own shots aren't
+        // echoed, but it can't predict other players' shields). One ending on a culled player, or
+        // leaving the view, is clipped like a shot (3)
+        if (view === null) return 1;
+        if (!inRect(view, e.x, e.y)) return 0;
+        if ((e.hit === 2 || e.hit === 3) && e.target >= 0 && !this.seen(e.target)) {
+          const v = this.inset;
+          v.minX = view.minX + BODY_REACH;
+          v.minY = view.minY + BODY_REACH;
+          v.maxX = view.maxX - BODY_REACH;
+          v.maxY = view.maxY - BODY_REACH;
+          if (!segmentInRect(v, e.x, e.y, e.ex, e.ey)) lb.t0 = lb.t1 = 0;
+          return 3;
+        }
+        segmentInRect(view, e.x, e.y, e.ex, e.ey);
+        return lb.t1 < 1 ? 3 : 1;
+      }
       case 'shot': {
         if (viewer >= 0 && e.shooter === viewer) return 0;
         if (view === null) return 1;
         // a culled shooter's tracer would locate it: its line (two of them cross at the muzzle) and,
         // with the weapon's range, its end. Only the coarse SOUND
         if (e.shooter >= 0 && !this.seen(e.shooter)) return 2;
-        if (e.hit === 2 && e.target >= 0 && !this.seen(e.target)) {
+        // a tracer ending on a culled player's body or shield (hit 3) stops short of it
+        if ((e.hit === 2 || e.hit === 3) && e.target >= 0 && !this.seen(e.target)) {
           const v = this.inset;
           v.minX = view.minX + BODY_REACH;
           v.minY = view.minY + BODY_REACH;
@@ -752,6 +983,9 @@ export class SnapshotDecoder {
   private readonly present = new Uint8Array(SnapshotDecoder.SIZE * MAX_PLAYERS);
   private readonly states = new Int32Array(SnapshotDecoder.SIZE * MAX_PLAYERS * FIELDS);
   private readonly locals: (LocalState | null)[] = new Array<LocalState | null>(SnapshotDecoder.SIZE).fill(null);
+  /** each snapshot's items (shared, never mutated: an unchanged list is the baseline's array) */
+  private readonly pickups: SnapshotPickup[][] = new Array<SnapshotPickup[]>(SnapshotDecoder.SIZE).fill([]);
+  private readonly pickupList = new Int32Array(PICKUP_LIST);
   private readonly nowPresent = new Uint8Array(MAX_PLAYERS);
   private readonly nowStates = new Int32Array(MAX_PLAYERS * FIELDS);
   private readonly reader = new BitReader(new Uint8Array(0));
@@ -820,6 +1054,23 @@ export class SnapshotDecoder {
         fuse: r.bits(8),
       });
     }
+    let pickups: SnapshotPickup[];
+    if (r.bool()) {
+      const list = this.pickupList;
+      const n = r.bits(6);
+      if (n > MAX_PICKUPS) throw new DecodeError(`${n} pickups`);
+      list[0] = n;
+      for (let i = 0; i < n; i++) {
+        const o = 1 + i * PICKUP_FIELDS;
+        list[o] = r.bits(5);
+        list[o + 1] = r.bits(4);
+        list[o + 2] = r.signed(24);
+        list[o + 3] = r.signed(24);
+      }
+      pickups = toPickups(list);
+    } else if (bslot >= 0) pickups = this.pickups[bslot]!;
+    else throw new DecodeError('a full snapshot must carry its pickups');
+
     const events: SnapshotEvent[] = [];
     const eventCount = r.u8();
     for (let i = 0; i < eventCount; i++) events.push(readEvent(r));
@@ -830,10 +1081,11 @@ export class SnapshotDecoder {
     this.present.set(this.nowPresent, slot * MAX_PLAYERS);
     this.states.set(now, slot * MAX_PLAYERS * FIELDS);
     this.locals[slot] = local ? local.slice() : null;
+    this.pickups[slot] = pickups;
 
     const players: SnapshotPlayer[] = [];
     for (let id = 0; id < MAX_PLAYERS; id++) if (this.nowPresent[id]) players.push(toSnapshotPlayer(id, now, id * FIELDS));
-    return { type: MsgType.Snapshot, seq, serverTick, ackInputTick, inputBufferHealth, baselineSeq, local, players, grenades, events };
+    return { type: MsgType.Snapshot, seq, serverTick, ackInputTick, inputBufferHealth, baselineSeq, local, players, grenades, pickups, events };
   }
 }
 

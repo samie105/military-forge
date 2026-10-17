@@ -130,4 +130,18 @@ export const movementTestMap: MapDef = {
     { name: 'Croucher', x: 168, y: 0, script: { kind: 'crouch', periodTicks: 120 } },
   ],
   labels,
+  // F. a riot shield turns up at one of three spots in front of the range, out of the dummies' reach
+  spawners: [
+    {
+      id: 'range-shield',
+      pool: 'shield',
+      spots: [
+        { x: 150.5, y: 0 },
+        { x: 152.5, y: 0 },
+        { x: 154.5, y: 1.2 }, // on top of the cover
+      ],
+      first: [2, 4],
+      respawn: [10, 16],
+    },
+  ],
 };

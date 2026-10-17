@@ -7,7 +7,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BREACHER, HAMMER, K47, MACHETE, WIDOW } from '@military-forge/content';
+import { BREACHER, BUZZ, HAMMER, K47, MACHETE, RIOT_SHIELD, WIDOW } from '@military-forge/content';
 import { angleToU16 } from '@military-forge/shared';
 import {
   Btn,
@@ -16,10 +16,13 @@ import {
   applyMatchCommand,
   createReplayGame,
   encodeRuns,
+  shieldRaised,
+  type Game,
   type Input,
   type MatchCommand,
   type MatchCommandKind,
   type MatchRules,
+  type PlayerState,
   type ReplayFile,
 } from '../src';
 
@@ -393,6 +396,159 @@ scenarios.push(
     return act(b, aim);
   }),
 );
+
+/**
+ * The riot shield, played on the movement-test map with pickups on (closed loop: inputs react to
+ * the game, then the replay only stores them). P1 (Hammer + K-47) takes the shield that spawns in
+ * front of the range and holds it up facing P2 (Breacher + Buzz, 2.5 m away); P3 (Hammer + Buzz)
+ * stands behind P2. The Breacher's pellets ricochet one by one, back past P2 and into P3. Slung,
+ * the shield lets the Buzz through from the front. Up again but turned away, P1 dies to the Breacher
+ * and drops the shield; P3 takes it, slings it and turns its back (the pellets ricochet off the back
+ * guard), raises it again, shield-bashes P2, and P2 breaks it point-blank.
+ */
+function shieldScenario(): ReplayFile {
+  const meta: Omit<ReplayFile, 'ticks' | 'players'> = {
+    version: 1,
+    name: 'shield',
+    map: 'movement-test',
+    seed: 1234,
+    dummies: false,
+    pickups: true,
+    // right of the 12 m tower (x 142–144)
+    starts: [
+      { x: 152, y: 0 },
+      { x: 148, y: 0 },
+      { x: 146.4, y: 0 },
+    ],
+    loadouts: [
+      [HAMMER.index, K47.index],
+      [BREACHER.index, BUZZ.index],
+      [HAMMER.index, BUZZ.index],
+    ],
+  };
+  const game: Game = createReplayGame({ ...meta, ticks: 0, players: [[], [], []] });
+  const [p1, p2, p3] = game.players.filter((p): p is PlayerState => p !== null);
+  const streams: Input[][] = [[], [], []];
+  const t = game.tuning;
+  const aimAt = (p: PlayerState, x: number, y: number) => {
+    const sx = p.x + (x >= p.x ? 1 : -1) * t.shoulderForward;
+    return angleToU16(Math.atan2(y - p.shoulderY(t), x - sx));
+  };
+  const toward = (p: PlayerState, x: number) => (x > p.x + 0.15 ? Btn.Right : x < p.x - 0.15 ? Btn.Left : 0);
+  const item = () => game.pickups.find((k) => k.alive);
+  const left = angleToU16(Math.PI);
+
+  // beats: each sets this tick's inputs and returns true when it's done (it then gets no more ticks)
+  type Beat = (n: number, inputs: [Input, Input, Input]) => boolean;
+  const fire = (who: PlayerState, i: 0 | 1 | 2, tx: () => number, ty: () => number, shots: number, every = 50): Beat => (n, inputs) => {
+    inputs[i] = { ...inputs[i], aim: aimAt(who, tx(), ty()), buttons: n % every === 0 && n < shots * every ? Btn.Fire : 0 };
+    return n >= shots * every - 1;
+  };
+  const press = (i: 0 | 1 | 2, button: number, wait: number): Beat => (n, inputs) => {
+    inputs[i] = { ...inputs[i], buttons: n === 0 ? button : 0 };
+    return n >= wait;
+  };
+  const wait = (ticks: number): Beat => (n) => n >= ticks;
+  const shieldFace = (p: PlayerState) => p.x + p.facing * RIOT_SHIELD.forward;
+  const beats: Beat[] = [
+    (_, inputs) => {
+      inputs[0] = { ...inputs[0], aim: left };
+      return item() !== undefined;
+    },
+    // P1 walks onto it, then back to x 151, facing P2
+    (_, inputs) => {
+      const k = item();
+      inputs[0] = { ...inputs[0], buttons: k ? toward(p1!, k.x) : 0, aim: left };
+      return p1!.shieldHp > 0;
+    },
+    (n, inputs) => {
+      inputs[0] = { ...inputs[0], buttons: toward(p1!, 151), aim: left };
+      return n > 40 && shieldRaised(p1!) && Math.abs(p1!.vx) < 0.01;
+    },
+    // a Breacher shot into the shield: five ricochets
+    fire(p2!, 1, () => shieldFace(p1!), () => 0.8, 1),
+    // slung: P2's Buzz gets through
+    press(0, Btn.Shield, 20),
+    press(1, Btn.Swap, 30),
+    (n, inputs) => {
+      inputs[1] = { ...inputs[1], aim: aimAt(p2!, p1!.x, p1!.y + 0.7), buttons: n < 30 ? Btn.Fire : 0 };
+      return n >= 40;
+    },
+    // up again, but P1 turns its back on P2: the Breacher kills it and the shield drops
+    press(0, Btn.Shield, 30),
+    (n, inputs) => {
+      inputs[0] = { ...inputs[0], aim: 0 };
+      return n >= 10;
+    },
+    press(1, Btn.Swap, 30),
+    (n, inputs) => {
+      inputs[1] = { ...inputs[1], aim: aimAt(p2!, p1!.x, p1!.y + 0.7), buttons: n % 50 === 0 && p1!.alive ? Btn.Fire : 0 };
+      return !p1!.alive || n >= 250;
+    },
+    // P3 picks the dropped shield up and faces P2 with it
+    (_, inputs) => {
+      const k = game.pickups.find((x) => x.alive && x.spawner < 0);
+      inputs[2] = { ...inputs[2], buttons: k ? toward(p3!, k.x) : 0, aim: left };
+      return p3!.shieldHp > 0 || !k;
+    },
+    (n, inputs) => {
+      inputs[2] = { ...inputs[2], buttons: 0, aim: left };
+      return n >= 30;
+    },
+    // P3 slings it and turns its back on P2: the Breacher's pellets ricochet off the back guard
+    press(2, Btn.Shield, 20),
+    (n, inputs) => {
+      inputs[2] = { ...inputs[2], aim: 0 };
+      return n >= 10;
+    },
+    fire(p2!, 1, () => p3!.x - RIOT_SHIELD.backOffset, () => 0.8, 1),
+    // facing P2 again, shield up
+    (n, inputs) => {
+      inputs[2] = { ...inputs[2], aim: left };
+      return n >= 5;
+    },
+    press(2, Btn.Shield, 30),
+    // shield bash: P3 walks up to P2 and swings
+    (_, inputs) => {
+      inputs[2] = { ...inputs[2], buttons: toward(p3!, p2!.x + 1), aim: left };
+      return Math.abs(p3!.x - (p2!.x + 1)) < 0.2;
+    },
+    press(2, Btn.Melee, 50),
+    // P2 breaks it point-blank
+    (n, inputs) => {
+      inputs[1] = { ...inputs[1], aim: aimAt(p2!, shieldFace(p3!), 0.8), buttons: n % 50 === 0 && p3!.shieldHp > 0 ? Btn.Fire : 0 };
+      return p3!.shieldHp === 0 || n >= 300;
+    },
+    wait(60),
+  ];
+
+  let beat = 0;
+  let n = 0;
+  const held: [Input, Input, Input] = [
+    { buttons: 0, aim: left, weaponSelect: 0, throwStrength: 7 },
+    { buttons: 0, aim: 0, weaponSelect: 0, throwStrength: 7 },
+    { buttons: 0, aim: 0, weaponSelect: 0, throwStrength: 7 },
+  ];
+  while (beat < beats.length) {
+    if (game.tick > 3000) throw new Error(`shield scenario stuck in beat ${beat}`);
+    const inputs: [Input, Input, Input] = [{ ...held[0], buttons: 0 }, { ...held[1], buttons: 0 }, { ...held[2], buttons: 0 }];
+    const done = beats[beat]!(n, inputs);
+    for (let i = 0; i < 3; i++) {
+      held[i] = inputs[i]!;
+      streams[i]!.push(inputs[i]!);
+    }
+    const byId: (Input | undefined)[] = [];
+    [p1!, p2!, p3!].forEach((p, i) => (byId[p.id] = inputs[i]));
+    game.step(byId);
+    n++;
+    if (done) {
+      beat++;
+      n = 0;
+    }
+  }
+  return { ...meta, ticks: game.tick, players: streams.map(encodeRuns) };
+}
+scenarios.push(shieldScenario());
 
 mkdirSync(OUT, { recursive: true });
 for (const s of scenarios) {

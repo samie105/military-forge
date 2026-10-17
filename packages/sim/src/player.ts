@@ -3,6 +3,7 @@ import {
   DEFAULT_LOADOUT,
   FRAG,
   NO_WEAPON,
+  RIOT_SHIELD,
   STANDING_HITBOXES,
   weapons,
   type DummyScript,
@@ -93,6 +94,12 @@ export class PlayerState {
   dashCooldown = 0;
   /** this airborne period's one air dash is spent (landing resets it) */
   airDashUsed = false;
+  /** riot shield HP; 0 = no shield (shield.ts). The two fields below are 0/false without one */
+  shieldHp = 0;
+  /** slung on purpose with the shield key: it stays on the back until the key raises it again */
+  shieldStowed = false;
+  /** 0 = on the back; counts up while it comes up; SHIELD_RAISE_TICKS = up and blocking */
+  shieldTicks = 0;
   /** weapons given on respawn: [slot 0, slot 1] weapon indices */
   loadout: [number, number] = [DEFAULT_LOADOUT[0], DEFAULT_LOADOUT[1]];
 
@@ -150,10 +157,22 @@ export class PlayerState {
     this.dashDir = 0;
     this.dashCooldown = 0;
     this.airDashUsed = false;
+    this.shieldHp = 0;
+    this.shieldStowed = false;
+    this.shieldTicks = 0;
     this.lastAttacker = -1;
     this.lastAttackTick = -1;
     this.prevButtons = 0;
   }
+}
+
+/** Seconds to go from one gun to two (or back): also the cost of putting a dual pair away for the shield. */
+export const DUAL_TOGGLE_TIME = 0.45;
+
+/** Swapping weapons, or going in or out of dual, cancels reloads (docs/03 §9). */
+export function cancelReloads(p: PlayerState): void {
+  p.weapons[0].reloadTicks = 0;
+  p.weapons[1].reloadTicks = 0;
 }
 
 /** Fills both slots with full ammo; NO_WEAPON (or an unknown index) leaves a slot empty. */
@@ -178,9 +197,14 @@ export function hitboxLayout(p: PlayerState): HitboxLayout {
 
 const slotSpeedMul = (slot: WeaponSlot) => weapons[slot.def]?.moveSpeedMul ?? 1;
 
-/** Weight (docs/03 §9): the held weapon's moveSpeedMul, the heaviest of a dual pair. */
+/**
+ * Weight (docs/03 §9): the held weapon's moveSpeedMul, the heaviest of a dual pair, or a riot
+ * shield's when that is heavier (up or coming up it weighs moveSpeedMul, slung slungSpeedMul).
+ */
 export function heldSpeedMul(p: PlayerState): number {
-  return p.dual ? Math.min(slotSpeedMul(p.weapons[0]), slotSpeedMul(p.weapons[1])) : slotSpeedMul(p.weapons[p.active]!);
+  const held = p.dual ? Math.min(slotSpeedMul(p.weapons[0]), slotSpeedMul(p.weapons[1])) : slotSpeedMul(p.weapons[p.active]!);
+  if (p.shieldHp <= 0) return held;
+  return Math.min(held, p.shieldTicks > 0 ? RIOT_SHIELD.moveSpeedMul : RIOT_SHIELD.slungSpeedMul);
 }
 
 /**

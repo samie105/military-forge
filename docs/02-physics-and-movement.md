@@ -86,7 +86,7 @@ Segment flags:
 | `BOUNCY` | restitution override for grenades (fun maps) |
 | `KILL` | instant death on contact (pits, crushers, lava) |
 
-Polygon rules enforced by the map compiler: no self-intersections, no edges shorter than 0.05 m, merge collinear edges, wind CCW so normals point outward. Concave polygons are fine because we collide against **edges**, not convex hulls.
+Polygon rules enforced by the map compiler: no self-intersections, no edges shorter than 0.05 m, merge collinear edges, wind CCW so normals point outward. Concave polygons are fine because we collide against **edges**, not convex hulls. The compiler also warns about a solid thinner than **0.3 m** between two facing edges (`MIN_THICKNESS`; ramps and wedge tips don't count). A thin floor should be a `ONE_WAY` platform. Bodies don't pass through thin solids (§10), but a stray line in a layout usually means a wall that was meant to be thicker. Shipped maps compile without warnings (the thinnest solid is 0.4 m).
 
 ---
 
@@ -268,7 +268,7 @@ Per tick:
 2. For each substep:
    1. Advance the position by the substep displacement.
    2. **Collect contacts:** for every segment in nearby grid cells, compute the closest distance between the capsule's inner segment and the edge (segment–segment distance). A contact exists if `dist < r` (with `ONE_WAY` rules applied).
-   3. **Resolve** up to 4 iterations. Push out along the contact normal by `(r − dist) + SKIN` (`SKIN = 0.002 m`), using the deepest contact first.
+   3. **Resolve** up to 4 iterations. Push out along the contact normal by `(r − dist) + SKIN` (`SKIN = 0.002 m`), using the deepest contact first. A contact in front of a face always comes before a contact from behind a face (the core inside a solid, pushed out by `r + dist` along the face normal). A capsule touching the near face of a solid thinner than its radius also reaches the far face from behind, and that contact is always the deeper one, so taking it pushed the body out the far side.
    4. **Clip velocity** against each contact normal: `v -= n * min(0, dot(v, n))` (remove the inward component only, keeping tangential slide).
    5. **Classify the contact:** `n.y ≥ cos(MAX_WALK_SLOPE)` is ground; `n.y ≤ −0.7` is ceiling (bonk); otherwise it is a wall.
 3. **Step-up:** if walking into a wall while grounded, try the move again from `y + STEP_HEIGHT`, then snap down. Accept it if the result is grounded and further along.
@@ -279,6 +279,7 @@ Per tick:
 Edge cases to test (each gets a unit test with a fixed seed and an expected final state):
 - wedge corners (two walls at < 90°) → must not jitter
 - flying into a ceiling at full thrust → no tunnelling, no sticking
+- dashing, walking, falling or being launched (36 m/s) into a solid thinner than the capsule radius, down to 1 cm → stops at the near face
 - landing on a 49° vs 51° slope
 - standing on a `ONE_WAY` platform while another player stands below
 - teleport/respawn into overlap → depenetration routine pushes to nearest free point; fall back to spawn safety volume
@@ -557,7 +558,7 @@ Because only one occurrence can cover a tick and it is found from the tick alone
 
 > Owner request (paraphrased): dash physics for fast movement between spaces, brief like a fighting-game dash, but up and down too, with nice controls.
 
-A dash is a **brief 8-way jetpack burst**: for `dashBurstTicks` (8 ticks, 0.13 s) your velocity is `dashSpeed` (14 m/s, × weapon weight × the map's `moveSpeedMul`) along the dash direction, with no gravity, so up and down dashes are crisp. Then it lets go: sideways speed drops back within the walk cap (on the ground) or the air cap (in the air), × weapon weight and the map's speed but never above `launchSpeedX`, so a dash never flings like a blast (NOTES §17), and upward speed is capped at `dashExitUp` (2 m/s) so an up-dash can't become a free jet launch. The burst moves with the normal move-and-slide: walls stop it (no tunnelling, even through a 0.15 m wall), small steps are climbed, slopes are followed.
+A dash is a **brief 8-way jetpack burst**: for `dashBurstTicks` (8 ticks, 0.13 s) your velocity is `dashSpeed` (14 m/s, × weapon weight × the map's `moveSpeedMul`) along the dash direction, with no gravity, so up and down dashes are crisp. Then it lets go: sideways speed drops back within the walk cap (on the ground) or the air cap (in the air), × weapon weight and the map's speed but never above `launchSpeedX`, so a dash never flings like a blast (NOTES §17), and upward speed is capped at `dashExitUp` (2 m/s) so an up-dash can't become a free jet launch. The burst moves with the normal move-and-slide: walls stop it (no tunnelling, even through a 2 cm wall), small steps are climbed, slopes are followed.
 
 **Controls.** `Btn.Dash` (bit 13, `Shift`). The direction is what you hold: `A`/`D` sideways, `W` (jet) up, `S` (down) down, so 8 ways; none held = along your facing. A tap shorter than a tick still dashes (the client latches the press with the direction held at that moment). Double-tapping `A`, `D` or `S` is an optional binding for the same input (`InputSampler.doubleTapDash`; `?dashtap` until the settings screen offers it). Not `W`: tapping the jet key is how you feather the jetpack, so a double-tap there would fire dashes mid-hover; dash up with `Shift` + `W`.
 
@@ -572,7 +573,7 @@ A dash is a **brief 8-way jetpack burst**: for `dashBurstTicks` (8 ticks, 0.13 s
 **Interactions.**
 - **No invulnerability frames.** Any knockback (a bullet's hit impulse, melee, a blast) ends the dash on the spot: the burst's speed first drops to the exit caps, then the push adds, so a pellet's small push never leaves you flying on at dash speed.
 - **EMP:** a dash is a jetpack burst, so anything that cuts the jetpack blocks it: EMP zones and storms (`jetDisabled`, §20), and the EMP grenade's 3 s jetpack lockout (§14) when it lands. The check is one function, `dashBlocked()` in movement.ts.
-- **Riot shield** (in progress): no dash while the shield is raised; lower it to dash. It hooks into `dashBlocked()` too.
+- **Riot shield** (03-weapons §9): no dash while the shield is up or coming up; lower it (`X`) to dash. Slung on the back, it doesn't stop a dash. The same `dashBlocked()` check; pellets on the shield push its carrier like any hit, so they end a dash.
 - **Map mechanics (§20):** the burst ignores pads, wind and gravity while it lasts; zones act on what's left after it. A dash in zero-g keeps drifting at its exit speed; mud slows the burst through `moveSpeedMul`.
 
 **State and prediction.** `PlayerState.dashTicks`, `dashDir` (0 = right, counter-clockwise in 45° steps), `dashCooldown`, `airDashUsed` are in the local-player block (protocol v8), so your dashes predict exactly (`apps/game-server/test/dash.test.ts`: no mispredictions on a clean LAN while dashing 8 ways). They are hashed only away from rest, so replays that never dash keep their hashes.

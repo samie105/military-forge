@@ -19,16 +19,22 @@ function dasher(k: number, nowMs: number, _net: unknown, out: Input): void {
   else out.buttons = 0;
 }
 
+/**
+ * No items on the map: a riot shield picked up on the way would stop the dashes while it is up
+ * (docs/03 §9), and taking it is the server's call (one correction, apps/game-server/test/shield.test.ts).
+ */
+const ROOM = { dummies: false, pickups: false } as const;
+
 describe('dash predicts exactly', () => {
   it('a clean LAN: no mispredictions while dashing 8 ways, in the air and on the ground', () => {
-    const r = simulate(symmetric(20, 0, 1), 30, { warmupSeconds: 3, room: { dummies: false, seed: 41 }, input: dasher });
+    const r = simulate(symmetric(20, 0, 1), 30, { warmupSeconds: 3, room: { ...ROOM, seed: 41 }, input: dasher });
     expect(r.clients.map((c) => c.mispredictions)).toEqual([0, 0]);
     expect(r.clients.map((c) => c.missedInputs)).toEqual([0, 0]);
     expect(r.clients[0]!.net.predictor!.stats.matches).toBeGreaterThan(700);
   });
 
   it('150 ms RTT, 2 % loss: corrections stay as rare as without dashing', () => {
-    const r = simulate(symmetric(150, 2, 5), 70, { room: { dummies: false, seed: 42 }, input: dasher });
+    const r = simulate(symmetric(150, 2, 5), 70, { room: { ...ROOM, seed: 42 }, input: dasher });
     for (const c of r.clients) {
       expect(c.corrections / r.minutes).toBeLessThan(1);
       expect(c.resyncs).toBe(0);

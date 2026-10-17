@@ -160,8 +160,8 @@ Nothing may follow the last input except the final byte's padding: longer packet
 | 2 | jet (up) | 10 | interact / pick up / swap with ground weapon |
 | 3 | down (crouch / drop-through) | 11 | dual-wield toggle |
 | 4 | fire primary | 12 | cycle grenade type |
-| 5 | fire secondary / zoom toggle | 13 | reload… (reserved) |
-| 6 | reload | 14 | reserved |
+| 5 | fire secondary / zoom toggle | 13 | dash (v8, 02-physics §21) |
+| 6 | reload | 14 | riot shield: raise / sling (toggle, v9) |
 | 7 | swap weapon | 15 | `isRepeat` (client marks a filler/idle input) |
 
 Edge-triggered actions (reload, swap, melee, interact) are derived **in the sim** from button transitions between consecutive ticks, so they replay correctly during reconciliation.
@@ -219,6 +219,19 @@ Repeated in the next 3 snapshots (dedupe by projId+kind) so loss doesn't drop a 
 As built (Phase 0, `packages/protocol/src/snapshot.ts`), the event tags are 0 shot, 1 explosion, 2 death, 3 hit, 4 spawn, 5 sound, **6 map event (v8)**, **7 extended (v8)**: a u4 kind follows, then its fields, so the 3-bit tag never runs out. Extended kind 0 is **DASH** (u5 player, i24 x, i24 y, u3 direction; 02-physics §21), sent to clients that can see the dasher, never to the dasher (it draws its own from prediction). **Extended events carry no length prefix:** a client can't skip a kind it doesn't know, so every new ext kind still needs a PROTOCOL_VERSION bump, and its number is claimed in the protocol registry before use. A MAP_EVENT announces; it doesn't carry state anyone needs to stay in sync, so a lost snapshot only loses a banner cue: the HUD reads the same event from the client's own copy of the schedule (§8).
 
 v8 also appends a **dash group** to the local-player block (dashTicks u6, dashDir u3, normalised to 0 outside a burst, dashCooldown u8, airDashUsed u1: 18 bits, sent only when it changes) and widens the remote-player flags to 8 bits with `dashing`.
+
+**Riot shield and pickups (built, protocol v9; `packages/protocol/src/{localState,snapshot}.ts`; allocations from the protocol registry):**
+- **INPUT:** `buttons` bit 14 = `Btn.Shield` (raise / sling, edge-triggered in the sim). The web client binds it to **X**.
+- **Local block:** a shield group after the dash group, at 45–47: `shieldHp` u19 (1/1024), `shieldStowed` u1, `shieldTicks` u5 (25 bits). The last two are skipped without a shield. With it the block has 10 delta groups, so the group mask is 10 bits.
+- **Remote flags:** 10 bits. Bits 8–9 (256 and 512) are a 2-bit shield state: 0 none, 1 slung (guarding the back), 2 raising (guarding neither side, 0.25 s), 3 up (guarding the front).
+- **Items on the map:** after the grenades, `u1 changed · [u6 n · { u5 id · u4 def · i24 x · i24 y }]`. It's sent only when the list differs from the acked baseline. Items are culled by view like grenades: one that vanished or appeared out of view would give away a hidden player taking it or dying with it.
+- **Events:** extended kinds **1 RICOCHET** (shooter, owner, weapon, bounce point, u8 normal angle, end point, what it hit), **2 SHIELD_BREAK** (owner, attacker, point), **3 PICKUP** (player, item, point).
+- **Shots:** a SHOT's `hit` may be 3 = struck a riot shield (`target` = its owner).
+- **AOI:**
+  - A ricochet is sent when its bounce point is in view, including to the shooter (clients can't predict other players' shields). It is clipped like a tracer when it leaves the view or ends on a culled player.
+  - A ricochet from a culled shooter is the spark only: point and normal, with no line, and with what it hit blanked unless it hit you. Un-reflected, two lines would cross at the hidden shooter. The shooter is named only to the shooter, the shield's owner, the target, and clients that can see the shooter.
+  - A shield break is sent when its owner is in view (or is you), with a hidden attacker blanked as in HIT; a pickup when the item is in view or the taker is you.
+  - A shot into a culled player's shield (hit 3) is treated like a hit on its body: clipped, sent as a miss, no target.
 
 ### 6.3 Reliable EVENT_R examples (msgpackr-encoded, rare)
 

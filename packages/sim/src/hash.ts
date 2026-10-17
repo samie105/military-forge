@@ -79,6 +79,13 @@ export function hashGame(game: Game): number {
       f.int(p.dashCooldown);
       f.bool(p.airDashUsed);
     }
+    // riot shield: likewise (tagged); its other fields rest whenever it has no HP (shield.ts)
+    if (p.shieldHp !== 0) {
+      f.int(0x5e1d);
+      f.fx(p.shieldHp);
+      f.bool(p.shieldStowed);
+      f.int(p.shieldTicks);
+    }
   }
   for (const g of game.grenades) {
     if (!g.alive) continue;
@@ -89,6 +96,22 @@ export function hashGame(game: Game): number {
     f.fx(g.vx);
     f.fx(g.vy);
     f.int(g.fuse);
+  }
+  // pickups: nothing at all without spawners or drops (pickups off, or a map without spawners)
+  for (const k of game.pickups) {
+    if (!k.alive) continue;
+    f.int(k.id);
+    f.int(k.def);
+    f.fx(k.x);
+    f.fx(k.y);
+    f.fx(k.hp);
+    f.int(k.ttl);
+    f.int(k.spawner);
+    f.int(k.spot);
+  }
+  for (const s of game.spawners) {
+    f.int(s.timer);
+    f.int(s.active);
   }
   return f.h >>> 0;
 }

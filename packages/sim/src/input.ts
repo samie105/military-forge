@@ -15,6 +15,8 @@ export const Btn = {
   CycleGrenade: 1 << 12,
   /** dash (docs/02 §21): direction from Left/Right and Jet (up) / Down; none = along the facing */
   Dash: 1 << 13,
+  /** riot shield: raise it / sling it on the back (toggle); v9, protocol-registry.md */
+  Shield: 1 << 14,
   Repeat: 1 << 15,
 } as const;
 

@@ -8,6 +8,8 @@ import {
   EVENT_KINDS,
   FRAG,
   MODIFIER_FIELDS,
+  RIOT_SHIELD,
+  SPAWN_POOLS,
   STANDING_HITBOXES,
   ZONE_KINDS,
   createTuning,
@@ -16,6 +18,8 @@ import {
   maps,
   movementTestMap,
   parseMapJson,
+  pickupById,
+  pickups,
   zonePoints,
   shotDamage,
   timeToKill,
@@ -161,7 +165,54 @@ describe('maps', () => {
         for (let i = 0; i < pts.length; i += 2) expect(inside(pts[i]!, pts[i + 1]!), `zone ${z.id}`).toBe(true);
       }
     });
+
+    it(`${map.id}: pickup spawners use known pools, sit inside the map and can fire`, () => {
+      for (const sp of map.spawners ?? []) {
+        expect(SPAWN_POOLS[sp.pool], `${sp.id} pool`).toBeDefined();
+        expect(sp.spots.length, sp.id).toBeGreaterThan(0);
+        for (const spot of sp.spots) expect(spot.x >= map.bounds.minX && spot.x <= map.bounds.maxX && spot.y >= map.bounds.minY && spot.y <= map.bounds.maxY).toBe(true);
+        const max = sp.maxActive ?? 1;
+        expect(max >= 1 && max <= sp.spots.length, `${sp.id} maxActive`).toBe(true);
+        for (const [a, b] of [sp.first, sp.respawn]) expect(a >= 0 && b >= a, `${sp.id} time range`).toBe(true);
+      }
+    });
   }
+
+  it('the movement test map has a riot shield spawner in front of the shooting range', () => {
+    const sp = movementTestMap.spawners?.find((s) => s.pool === 'shield');
+    expect(sp?.spots.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('pickups and the riot shield', () => {
+  it('pickup indices match their position; pools list real pickups with positive weights', () => {
+    pickups.forEach((p, i) => expect(p.index, p.id).toBe(i));
+    expect(pickups.length).toBeLessThanOrEqual(16); // u4 on the wire
+    expect(new Set(pickups.map((p) => p.id)).size).toBe(pickups.length);
+    for (const pool of Object.values(SPAWN_POOLS)) {
+      expect(pool.items.length, pool.id).toBeGreaterThan(0);
+      for (const it of pool.items) {
+        expect(pickupById(it.pickup), `${pool.id}: ${it.pickup}`).toBeDefined();
+        expect(it.weight).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('the riot shield matches docs/03 §5/§9 and covers the torso from the front', () => {
+    expect([RIOT_SHIELD.hp, RIOT_SHIELD.arcDeg, RIOT_SHIELD.bashDamage, RIOT_SHIELD.moveSpeedMul]).toEqual([300, 60, 25, 0.75]);
+    expect(RIOT_SHIELD.ricochetDamageMul).toBe(0.6);
+    expect(RIOT_SHIELD.maxBounces).toBe(1);
+    // in front of the torso hitbox raised, behind it slung, and spanning most of it standing and crouched
+    expect(RIOT_SHIELD.forward).toBeGreaterThan(STANDING_HITBOXES.torso.r);
+    expect(RIOT_SHIELD.backOffset).toBeGreaterThan(STANDING_HITBOXES.torso.r);
+    for (const [bottom, box] of [
+      [RIOT_SHIELD.bottomStand, STANDING_HITBOXES],
+      [RIOT_SHIELD.bottomCrouch, CROUCHED_HITBOXES],
+    ] as const) {
+      expect(bottom).toBeLessThanOrEqual(box.torso.y0);
+      expect(bottom + RIOT_SHIELD.height).toBeGreaterThanOrEqual(box.torso.y1);
+    }
+  });
 });
 
 describe('map JSON format (docs/02 §20.6)', () => {
@@ -207,5 +258,28 @@ describe('map JSON format (docs/02 §20.6)', () => {
     expect(() => parseMapJson(event)).toThrow(/\$\.events\.defs\[0\]\.kind: must be one of/);
     expect(message).toMatch(/\$\.zones\[2\]: needs exactly one of rect or points/);
     expect(message).toMatch(/\$\.rules\.gravityMul: must be a number/);
+  });
+
+  it('carries pickup spawners: the movement-test map round-trips, and a bad spawner is refused', () => {
+    expect(movementTestMap.spawners?.length).toBeGreaterThan(0);
+    expect(parseMapJson(JSON.parse(JSON.stringify(movementTestMap)))).toEqual(movementTestMap);
+    const schema = mapJsonSchema() as { properties: Record<string, unknown>; $defs: { spawner: { properties: { pool: { enum: string[] } } } } };
+    expect(schema.properties.spawners).toBeDefined();
+    expect(schema.$defs.spawner.properties.pool.enum).toEqual(Object.keys(SPAWN_POOLS));
+    const bad = JSON.parse(JSON.stringify(movementTestMap)) as { spawners: Record<string, unknown>[] };
+    bad.spawners[0]!.pool = 'toString';
+    bad.spawners[0]!.first = [3];
+    bad.spawners[0]!.maxActve = 2;
+    bad.spawners[0]!.maxActive = 0;
+    let message = '';
+    try {
+      parseMapJson(bad, 'bad.map.json');
+    } catch (e) {
+      message = (e as Error).message;
+    }
+    expect(message).toMatch(/\$\.spawners\[0\]\.pool: must be one of shield/);
+    expect(message).toMatch(/\$\.spawners\[0\]\.first: must be \[min, max\]/);
+    expect(message).toMatch(/\$\.spawners\[0\]: unknown key "maxActve"/);
+    expect(message).toMatch(/\$\.spawners\[0\]\.maxActive: must be a whole number/);
   });
 });

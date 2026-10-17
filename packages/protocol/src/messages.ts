@@ -2,7 +2,19 @@
  * Wire messages (docs/05 §5–6) except snapshots, which live in snapshot.ts (delta-compressed,
  * per client). The input format matches the final design (redundant inputs, acks, render tick).
  */
-import { CROUCHED_HITBOXES, EVENT_KINDS, FRAG, STANDING_HITBOXES, ZONE_KINDS, defaultTuning, maps, weapons } from '@military-forge/content';
+import {
+  CROUCHED_HITBOXES,
+  EVENT_KINDS,
+  FRAG,
+  RIOT_SHIELD,
+  SPAWN_POOLS,
+  STANDING_HITBOXES,
+  ZONE_KINDS,
+  defaultTuning,
+  maps,
+  pickups,
+  weapons,
+} from '@military-forge/content';
 import { POS_INV } from '@military-forge/shared';
 import { createInput, type Input } from '@military-forge/sim';
 import { BitReader, BitWriter, DecodeError } from './bitstream';
@@ -24,8 +36,12 @@ export { MsgType } from './wire';
  *     Map events announce a map event's warning, start and end (docs/02 §20.7); map rules, zones and the schedule add
  *     nothing else (they come from the map and the seed). The dash group holds dashTicks, dashDir, dashCooldown and
  *     airDashUsed (docs/02 §21). Extended events carry no length, so each new ext kind is a version bump too.
+ * v9 (riot shield + pickups): ext kinds 1 RICOCHET · 2 SHIELD_BREAK · 3 PICKUP · INPUT bit 14 Shield ·
+ *     remote flags 256/512 = a 2-bit shield state (0 none, 1 slung, 2 raising, 3 up; flags 10 bits) ·
+ *     local block 45–47 (shield group: shieldHp, shieldStowed, shieldTicks) · a pickups section after the grenades
+ *     (items in view, only when changed) · a shot's `hit` may be 3 (a shield; docs/03 §9).
  */
-export const PROTOCOL_VERSION = 8;
+export const PROTOCOL_VERSION = 9;
 
 /**
  * Everything the sim reads from packages/content: a client and server that disagree on any of it
@@ -41,6 +57,8 @@ export const HASHED_CONTENT = {
   /** the effects a map zone or event gets from its kind when it leaves them out (docs/02 §20) */
   zoneDefaults: Object.fromEntries(Object.entries(ZONE_KINDS).map(([kind, info]) => [kind, info.defaults])),
   eventDefaults: Object.fromEntries(Object.entries(EVENT_KINDS).map(([kind, info]) => [kind, info.defaults])),
+  /** the items, spawner pools and the riot shield (docs/03 §9, §12) */
+  pickups: { items: pickups, pools: SPAWN_POOLS, shield: RIOT_SHIELD },
 } as const;
 
 /**

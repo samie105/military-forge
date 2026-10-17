@@ -30,6 +30,7 @@ import { buildMapGeometry } from './mapGeometry';
 import { FOV_DEG, PlaneCamera, applyPlanePose, planePose } from './planeCamera';
 import { ZoneVolumes } from './zones';
 import { DynamicResolution, PRESETS, SampleWindow, parsePreset, type GraphicsPreset, type PresetName } from './presets';
+import { PickupMeshes, RicochetSparks } from './shield';
 import { Vfx } from './vfx';
 
 export { PlaneCamera, parsePreset, type PresetName };
@@ -84,6 +85,9 @@ export class Renderer3D {
   readonly vfx: Vfx;
   private readonly assembler: CharacterAssembler;
   private readonly avatars = new Map<number, Avatar>();
+  /** riot shields lying on the map, and ricochet sparks (shield.ts) */
+  private readonly pickupMeshes: PickupMeshes;
+  private readonly sparks: RicochetSparks;
   private readonly pending = new Set<number>();
   /** after a failed character load, wait this long before trying again (doubles, ≤ 30 s) */
   private retryMs = 1000;
@@ -144,6 +148,11 @@ export class Renderer3D {
     this.vfx = new Vfx(this.scene, this.world, camera, { hemi: this.hemi, sun: this.sun }, ramp, preset);
     // reduced motion (docs/11 §5): the OS setting until the settings screen calls setReducedMotion
     this.setReducedMotion(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
+    // riot shields lying on the map, and the ricochet spark (an effect module: it gets the sim events)
+    this.pickupMeshes = new PickupMeshes(this.kit.shield);
+    this.sparks = new RicochetSparks(this.kit.shield);
+    this.scene.add(this.pickupMeshes.group, this.sparks.group);
+    this.vfx.register(this.sparks);
     this.setPreset(preset.name);
   }
 
@@ -298,6 +307,7 @@ export class Renderer3D {
     }
 
     this.syncAvatars(frame, dt);
+    this.pickupMeshes.sync(frame.pickups, dt);
     updateForeground(this.layers.foreground, frame.players, this.pose, dt);
     this.zones.update(frame, dt, now / 1000);
     this.applyEventAtmosphere(frame, dt);

@@ -6,14 +6,16 @@ import { FRAG, createTuning, getMap, weapons, type DummySpawn, type MapDef, type
 import { IdAllocator } from '@military-forge/shared';
 import { botInput } from './bots';
 import { stepRegen, stepWeapons } from './combat';
-import { MAX_GRENADES, MAX_PLAYERS, ticks } from './constants';
+import { MAX_GRENADES, MAX_PICKUPS, MAX_PLAYERS, ticks } from './constants';
 import { DamageSource, type SimEvent } from './events';
 import { GrenadeState, stepGrenade } from './grenades';
 import { copyInput, type Input } from './input';
 import { MapMechanics, createBodyEnv } from './mechanics';
 import { depenetrate, quantizeMovement, stepMovement } from './movement';
+import { PickupState, createSpawners, dropCarried, resetPickups, stepPickups, type SpawnerState } from './pickups';
 import { PlayerState, giveLoadout } from './player';
 import type { TargetRewind } from './rewind';
+import { stepShield } from './shield';
 import { CollisionWorld } from './world';
 
 export interface GameOptions {
@@ -23,6 +25,12 @@ export interface GameOptions {
   tuning?: Partial<Tuning>;
   /** spawn the map's dummy targets */
   dummies?: boolean;
+  /**
+   * run the map's pickup spawners and drop carried items on death (pickups.ts). Off by default:
+   * the client's prediction world takes pickups from the server, and replays recorded before
+   * pickups existed must play as they did.
+   */
+  pickups?: boolean;
 }
 
 /** Seconds within which a hazard death is credited to the last attacker (docs/03 §8). */
@@ -39,6 +47,12 @@ export class Game {
   tick = 0;
   readonly players: (PlayerState | null)[] = new Array<PlayerState | null>(MAX_PLAYERS).fill(null);
   readonly grenades: GrenadeState[] = Array.from({ length: MAX_GRENADES }, (_, i) => new GrenadeState(i));
+  /** pickups on/off for this game (GameOptions.pickups) */
+  readonly pickupsEnabled: boolean;
+  /** items lying on the map (alive ones) */
+  readonly pickups: PickupState[] = Array.from({ length: MAX_PICKUPS }, (_, i) => new PickupState(i));
+  /** the map's spawners; empty with pickups off */
+  readonly spawners: SpawnerState[];
   /** events produced by the most recent step() */
   readonly events: SimEvent[] = [];
   /** lag compensation for hitscan (server only; null = test targets where they are now) */
@@ -53,6 +67,9 @@ export class Game {
     this.mech = MapMechanics.compile(this.map);
     this.tuning = createTuning(options.tuning);
     this.seed = (options.seed ?? 1) >>> 0;
+    this.pickupsEnabled = options.pickups ?? false;
+    this.spawners = this.pickupsEnabled ? createSpawners(this.map) : [];
+    resetPickups(this);
     if (options.dummies) for (const d of this.map.dummies) this.addDummy(d);
   }
 
@@ -77,7 +94,10 @@ export class Game {
   }
 
   removePlayer(id: number): void {
-    if (!this.players[id]) return;
+    const p = this.players[id];
+    if (!p) return;
+    // a leaving carrier lets go of its shield as a death would: it stays on the floor for others
+    if (p.alive) dropCarried(this, p);
     this.players[id] = null;
     this.ids.free(id);
   }
@@ -149,6 +169,7 @@ export class Game {
     victim.hp = 0;
     victim.alive = false;
     victim.jetting = false;
+    dropCarried(this, victim);
     victim.respawnTicks = ticks(this.tuning.respawnDelay);
     victim.deaths++;
     const k = this.players[killer];
@@ -184,6 +205,8 @@ export class Game {
       const y0 = p.y;
       if (stepMovement(this.world, p, t, mech ? mech.bodyEnv(p, t, bodyEnv) : null)) this.events.push({ type: 'dash', player: p.id, x: x0, y: y0, dir: p.dashDir });
     }
+    // the shield key and carry modes, before anyone fires: every shot this tick meets the same shields
+    for (const p of this.players) if (p?.alive) stepShield(p);
     for (const p of this.players) if (p?.alive) stepWeapons(this, p);
     for (const g of this.grenades) if (g.alive) stepGrenade(this, g, FRAG);
 
@@ -193,6 +216,7 @@ export class Game {
       const credited = p.lastAttacker >= 0 && this.tick - p.lastAttackTick <= ENVIRONMENT_CREDIT_TICKS;
       this.kill(p, credited ? p.lastAttacker : p.id, DamageSource.World);
     }
+    stepPickups(this);
 
     for (const p of this.players) {
       if (!p) continue;

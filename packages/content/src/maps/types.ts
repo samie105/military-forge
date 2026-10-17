@@ -166,6 +166,26 @@ export interface MapEvents {
   schedule: MapEventSchedule;
 }
 
+/**
+ * Random pickups (docs/03 §12): a spawner owns a few spots and shares one timer between them. When
+ * the timer fires, the game's seeded PRNG picks one of the free spots and an item from the pool,
+ * so items turn up at random places and times. A spawner with one spot is a classic fixed spawn.
+ */
+export interface MapSpawner {
+  /** for debug views and logs */
+  id: string;
+  /** SPAWN_POOLS id (pickups.ts): what can appear */
+  pool: string;
+  /** where an item can appear: the point it rests on (on the floor) */
+  spots: { x: number; y: number }[];
+  /** seconds before the first item, uniformly random in [min, max] */
+  first: [number, number];
+  /** seconds from an item being taken until the next one appears, uniformly random in [min, max] */
+  respawn: [number, number];
+  /** items from this spawner on the map at once (default 1, at most spots.length) */
+  maxActive?: number;
+}
+
 export interface MapDef {
   id: string;
   name: string;
@@ -182,4 +202,6 @@ export interface MapDef {
   zones?: MapZone[];
   /** things that just happen, on a seeded schedule */
   events?: MapEvents;
+  /** pickup spawners (docs/03 §12); a map without them plays exactly as before */
+  spawners?: MapSpawner[];
 }
