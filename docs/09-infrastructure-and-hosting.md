@@ -158,10 +158,12 @@ node (e.g. fra-gs-01, 8 vCPU)
 ├─ systemd: gs@1 … gs@7     (one Node process per vCPU, 1 vCPU left for OS + gateway)
 ├─ fleet-agent              (heartbeat → Redis: per-process capacity/rooms/players/cpu/ver/state)
 ├─ beacon                   (WebSocket echo on /ping for region latency probes)
-├─ wt-gateway (phase 2)     (Rust quinn/web-transport → Unix sockets → gs@N)
+├─ wt-gateway (phase 2)     (Rust quinn/web-transport, 443/udp: /wt/N → Unix socket → gs@N)
 ├─ node_exporter + promtail (metrics/logs)
 └─ caddy/nginx (TLS for wss, wildcard cert *.gs.example.com) — or Cloudflare origin cert
 ```
+
+**WebTransport gateway (phase 2).** One `wt-gateway` per node listens on 443/udp (`WT_ADDR=0.0.0.0:443`; the firewall already allows 443/udp) and routes by URL path: `WT_ROUTES=/wt/1=/run/military-forge/gs1.sock,…,/wt/7=/run/military-forge/gs7.sock`, with each gs@N started with `WT_SOCKET=/run/military-forge/gsN.sock`. Each game server advertises its own URL (`https://<node>/wt/<N>`, from `WT_PUBLIC_URL` + its path) in `/health`, so the join ticket only needs the WebSocket address. It uses the node's wildcard certificate (`WT_CERT`/`WT_KEY`; reloaded on SIGHUP or when the files change after renewal). systemd: `wt-gateway.service` runs as the gs@ user, shares `RuntimeDirectory=military-forge` (mode 0700; the sockets are 0600), `Restart=always`, `KillSignal=SIGTERM`, `TimeoutStopSec=10`: on SIGTERM it drains, closing sessions with 1001 so players resume (over WebSocket until it's back) and keep their match. A gs@N restart costs only its own sessions. Limits: 1000 sessions per node and 8 per IP (`WT_MAX_SESSIONS`, `WT_MAX_SESSIONS_PER_IP`). Each game server pings its gateway every second and stops advertising it after 3 s of silence.
 
 Images are built once in CI (`ghcr.io/…/game-server:{sha}`), pulled per node, and rolled with drain (06-architecture §5.4). Node bootstrap is scripted with Ansible or cloud-init, so adding a region is about one hour of work.
 

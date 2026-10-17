@@ -120,44 +120,50 @@ describe('LagCompensator', () => {
   });
 
   it('a reused id never inherits the departed player\'s poses', () => {
-    const game = new Game({ seed: 9, dummies: false });
-    const shooter = game.addPlayer('shooter');
-    const leaver = game.addPlayer('leaver');
-    shooter.x = 143.6;
-    shooter.y = 12;
-    leaver.x = 149;
-    leaver.y = 0;
-    const lc = new LagCompensator();
-    game.rewind = lc;
-    lc.record(game.tick, game.players);
-    const inputs: Input[] = [];
-    for (let t = 0; t < 20; t++) {
-      game.step(inputs);
+    // sameWindow: the leave and the join both happen between two record()s (a kick and a HELLO in
+    // the same receive window), so the history never saw the joiner
+    for (const sameWindow of [false, true]) {
+      const game = new Game({ seed: 9, dummies: false });
+      const shooter = game.addPlayer('shooter');
+      const leaver = game.addPlayer('leaver');
+      shooter.x = 143.6;
+      shooter.y = 12;
+      leaver.x = 149;
+      leaver.y = 0;
+      const lc = new LagCompensator();
+      game.rewind = lc;
       lc.record(game.tick, game.players);
-    }
-    const oldPose = { x: leaver.x, y: leaver.y };
-    const id = leaver.id;
-    game.removePlayer(id);
-    for (let t = 0; t < 3; t++) {
+      const inputs: Input[] = [];
+      for (let t = 0; t < 20; t++) {
+        game.step(inputs);
+        lc.record(game.tick, game.players);
+      }
+      const oldPose = { x: leaver.x, y: leaver.y };
+      const id = leaver.id;
+      game.removePlayer(id);
+      if (!sameWindow) {
+        for (let t = 0; t < 3; t++) {
+          game.step(inputs);
+          lc.record(game.tick, game.players);
+        }
+      }
+      const joiner = game.addPlayer('joiner'); // gets the same id, somewhere else
+      expect(joiner.id).toBe(id);
+      joiner.x = 120;
+      joiner.y = 0;
+      const hp = joiner.hp;
+      if (!sameWindow) lc.record(game.tick, game.players);
+      // a shooter whose screen is 12 ticks behind fires at where the leaver used to stand
+      const t = game.tuning;
+      const torso = (STANDING_HITBOXES.torso.y0 + STANDING_HITBOXES.torso.y1) / 2;
+      inputs[shooter.id] = { ...createInput(), buttons: Btn.Fire, aim: angleToU16(Math.atan2(oldPose.y + torso - shooter.shoulderY(t), oldPose.x - shooter.shoulderX(t))) };
+      lc.begin(game.tick);
+      lc.setView(shooter.id, game.tick - 12);
       game.step(inputs);
-      lc.record(game.tick, game.players);
+      const shot = game.events.find((e) => e.type === 'shot');
+      expect(shot?.type === 'shot' && shot.target, `sameWindow ${sameWindow}`).toBe(-1);
+      expect(joiner.hp).toBe(hp);
     }
-    const joiner = game.addPlayer('joiner'); // gets the same id, somewhere else
-    expect(joiner.id).toBe(id);
-    joiner.x = 120;
-    joiner.y = 0;
-    const hp = joiner.hp;
-    lc.record(game.tick, game.players);
-    // a shooter whose screen is 12 ticks behind fires at where the leaver used to stand
-    const t = game.tuning;
-    const torso = (STANDING_HITBOXES.torso.y0 + STANDING_HITBOXES.torso.y1) / 2;
-    inputs[shooter.id] = { ...createInput(), buttons: Btn.Fire, aim: angleToU16(Math.atan2(oldPose.y + torso - shooter.shoulderY(t), oldPose.x - shooter.shoulderX(t))) };
-    lc.begin(game.tick);
-    lc.setView(shooter.id, game.tick - 12);
-    game.step(inputs);
-    const shot = game.events.find((e) => e.type === 'shot');
-    expect(shot?.type === 'shot' && shot.target).toBe(-1);
-    expect(joiner.hp).toBe(hp);
   });
 
   it('shotgun pellets are lag-compensated: every pellet tests the rewound pose', () => {

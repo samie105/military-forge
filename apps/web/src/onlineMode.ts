@@ -7,6 +7,9 @@
  *
  * A dropped connection reconnects on its own (backoff 250 ms → 2 s, for up to 20 s: the room's
  * grace) and presents the session token, so the player comes back where it was (§13).
+ *
+ * The transport is WebTransport (UDP datagrams) when the server has a gateway and the browser
+ * supports it, else WebSocket (transport.ts, §2.1). `?transport=ws|wt` forces one.
  */
 import { weapons, NO_WEAPON, type MapDef, type Tuning } from '@military-forge/content';
 import { ConditionedLink, NetClient, TICK_MS, describeNetSim, type ConditionerSettings, type RemotePose, type Scheduler } from '@military-forge/netcode';
@@ -16,11 +19,13 @@ import type { PlayerState, SimEvent } from '@military-forge/sim';
 import type { Camera } from './camera';
 import type { InputSampler } from './input';
 import type { Renderer } from './render';
+import { connectGame, type GameTransport } from './transport';
 import type { Frame, PlayerView, RewindView } from './view';
 
 /** how long to keep trying after a drop: the room keeps our player this long */
 const RECONNECT_WINDOW_MS = 20_000;
 /** close codes that mean "don't come back" */
+const WT_SILENCE_MS = 1500;
 const FATAL_CLOSE = new Set<number>([CloseCode.VersionMismatch, CloseCode.RoomFull, CloseCode.BadMessage, CloseCode.RateLimited, CloseCode.DuplicateSession]);
 
 const browserScheduler: Scheduler = {
@@ -30,13 +35,19 @@ const browserScheduler: Scheduler = {
 };
 
 export class OnlineMode {
-  private ws!: WebSocket;
+  private transport: GameTransport | null = null;
+  /** how the current/last connection was made, for the net graph */
+  private transportNote = '';
   private disposed = false;
   private kicked = false;
   /** first drop of the current outage (0 = connected) */
   private droppedAt = 0;
   private reconnectAttempt = 0;
   private reconnectTimer = 0;
+  /** when the transport last delivered anything (the silence watchdog) */
+  private lastMessageAt = 0;
+  /** the next attempt goes straight to WebSocket (WebTransport just went silent on us) */
+  private skipWebTransport = false;
   readonly net: NetClient;
   private readonly up: ConditionedLink;
   private readonly down: ConditionedLink;
@@ -59,6 +70,8 @@ export class OnlineMode {
     private readonly onFatal: (message: string) => void,
     /** network conditioner settings, edited live by the debug panel */
     readonly netSim: ConditionerSettings,
+    /** 'auto': WebTransport when available, else WebSocket */
+    private readonly preferTransport: 'auto' | 'wt' | 'ws' = 'auto',
   ) {
     const seed = (Math.random() * 0xffffffff) >>> 0;
     this.up = new ConditionedLink(netSim.up, () => netSim.enabled, browserScheduler, (b) => this.rawSend(b), isUnreliableMessage, seed);
@@ -76,35 +89,56 @@ export class OnlineMode {
   }
 
   private open(): void {
-    const ws = new WebSocket(this.url);
-    this.ws = ws;
-    ws.binaryType = 'arraybuffer';
-    ws.onopen = () => {
-      this.status = this.droppedAt ? 'resuming…' : 'joining…';
-      this.net.onOpen();
-    };
-    ws.onmessage = (ev) => {
-      const bytes = new Uint8Array(ev.data as ArrayBuffer);
-      this.bytesIn += bytes.length;
-      this.down.send(bytes);
-    };
-    ws.onclose = (ev) => {
-      if (ws !== this.ws || this.disposed) return;
-      const why = `${ev.code}${ev.reason ? `: ${ev.reason}` : ''}`;
-      const now = performance.now();
-      if (!this.droppedAt) this.droppedAt = now;
-      // never welcomed, kicked, refused, or out of time: give up
-      const canRetry = this.net.sessionToken !== '' && !this.kicked && !FATAL_CLOSE.has(ev.code) && now - this.droppedAt < RECONNECT_WINDOW_MS;
-      if (!canRetry) {
-        this.status = `disconnected (${why})`;
-        this.onFatal(`${this.status} — is the game server running? (pnpm dev)`);
-        return;
-      }
-      this.net.onClose();
-      const delay = Math.min(2000, 250 * 2 ** this.reconnectAttempt++);
-      this.status = `reconnecting… (${why}; retry in ${(delay / 1000).toFixed(2)} s)`;
-      this.reconnectTimer = window.setTimeout(() => this.open(), delay);
-    };
+    const attempt = {};
+    this.currentAttempt = attempt;
+    const prefer = this.skipWebTransport && this.preferTransport === 'auto' ? 'ws' : this.preferTransport;
+    this.skipWebTransport = false;
+    connectGame(this.url, prefer, {
+      onMessage: (bytes) => {
+        if (this.currentAttempt !== attempt) return;
+        this.lastMessageAt = performance.now();
+        this.bytesIn += bytes.length;
+        this.down.send(bytes);
+      },
+      onClose: (code, reason) => {
+        if (this.currentAttempt === attempt) this.dropped(code, reason);
+      },
+    }, this.droppedAt !== 0).then(
+      ({ transport, fallbackReason }) => {
+        if (this.currentAttempt !== attempt || this.disposed) return transport.close();
+        this.transport = transport;
+        this.lastMessageAt = performance.now();
+        // the conditioner models what loss does to this transport: retransmit stalls on TCP
+        this.netSim.up.stream = this.netSim.down.stream = transport.kind === 'ws';
+        this.transportNote = transport.kind === 'wt' ? 'WebTransport (UDP)' : `WebSocket${fallbackReason ? ` (${fallbackReason})` : ''}`;
+        this.status = this.droppedAt ? 'resuming…' : 'joining…';
+        this.net.onOpen();
+      },
+      (e: Error) => {
+        if (this.currentAttempt === attempt) this.dropped(1006, e.message);
+      },
+    );
+  }
+
+  private currentAttempt: object | null = null;
+
+  private dropped(code: number, reason: string): void {
+    if (this.disposed) return;
+    this.transport = null;
+    const why = `${code}${reason ? `: ${reason}` : ''}`;
+    const now = performance.now();
+    if (!this.droppedAt) this.droppedAt = now;
+    // never welcomed, kicked, refused, or out of time: give up
+    const canRetry = this.net.sessionToken !== '' && !this.kicked && !FATAL_CLOSE.has(code) && now - this.droppedAt < RECONNECT_WINDOW_MS;
+    if (!canRetry) {
+      this.status = `disconnected (${why})`;
+      this.onFatal(`${this.status} — is the game server running? (pnpm dev)`);
+      return;
+    }
+    this.net.onClose();
+    const delay = Math.min(2000, 250 * 2 ** this.reconnectAttempt++);
+    this.status = `reconnecting… (${why}; retry in ${(delay / 1000).toFixed(2)} s)`;
+    this.reconnectTimer = window.setTimeout(() => this.open(), delay);
   }
 
   get map(): MapDef {
@@ -112,10 +146,9 @@ export class OnlineMode {
   }
 
   private rawSend(bytes: Uint8Array): void {
-    if (this.ws.readyState !== WebSocket.OPEN) return;
-    // encoders return fresh ArrayBuffer-backed copies (never SharedArrayBuffer)
-    this.ws.send(bytes as Uint8Array<ArrayBuffer>);
+    this.transport?.send(bytes);
   }
+
 
   private onMessage(bytes: Uint8Array): void {
     const msg = this.net.receive(bytes);
@@ -175,13 +208,29 @@ export class OnlineMode {
   dispose(): void {
     this.disposed = true;
     window.clearTimeout(this.reconnectTimer);
+    this.currentAttempt = null;
     this.up.dispose();
     this.down.dispose();
-    this.ws.close();
+    this.transport?.close();
+  }
+
+  /**
+   * A WebTransport session can stay "open" with nothing arriving (a hung gateway, a path that went
+   * dark) until QUIC's idle timeout. Snapshots come 15–30 times a second, so after 1.5 s of silence
+   * give up on it and resume over WebSocket.
+   */
+  private checkSilence(now: number): void {
+    const t = this.transport;
+    if (t?.kind !== 'wt' || !this.net.isConnected || now - this.lastMessageAt < WT_SILENCE_MS) return;
+    this.currentAttempt = null; // its close is ours, not a drop to handle twice
+    t.close(1000, 'no traffic');
+    this.skipWebTransport = true;
+    this.dropped(1006, `no traffic for ${WT_SILENCE_MS / 1000} s`);
   }
 
   update(dt: number): Frame {
     const now = performance.now();
+    this.checkSilence(now);
     const t = this.net.tuning;
     // 60 Hz (± the pacer's 3 %) predicted ticks, one input each, aimed from the predicted shoulder
     this.net.update(dt, (me: PlayerState | null, out) => {
@@ -208,7 +257,7 @@ export class OnlineMode {
       kbInPerSec: this.rate.kbIn,
       kbOutPerSec: this.rate.kbOut,
       interpDelayMs: this.net.interpDelay,
-      status: this.status,
+      status: `${this.status}${this.transportNote ? ` · ${this.transportNote}` : ''}`,
       prediction: {
         inputBufferHealth: s.inputBufferHealth,
         timeScale: s.timeScale,

@@ -29,9 +29,22 @@ The game server uses **uWebSockets.js** when `pnpm uws:fetch` has downloaded it 
 | `?time=60&kills=5&countdown=3` · `?sandbox` | local match rules (0 = no limit) · free play with no match |
 | http://localhost:5173/?online | **Online mode**: joins the server's dev room. Open it in **two tabs** to play each other |
 | `?server=ws://host:9001&name=Ade` | explicit server and player name |
+| `?online&transport=ws` / `wt` | force WebSocket / WebTransport (default: WebTransport when the server has a gateway, else WebSocket) |
 | `?online&rtt=150&loss=2&jitter=5` | network conditioner in the client (also live in the panel). Server side: `NET_SIM="rtt=150,loss=2" pnpm --filter @military-forge/game-server dev` |
 
 **Controls:** A/D move · W or Space jetpack · S crouch (hold on a yellow platform to drop through) · mouse aim · LMB fire · R reload · Q swap · F dual-wield · G frag grenade · wheel zoom · H hitboxes · B grid · N net graph · K respawn · \` toggle panel · P record replay · O download replay.
+
+### WebTransport (UDP), optional
+
+The game server also accepts WebTransport sessions through a small Rust gateway (`apps/wt-gateway`, docs/05 §2). It needs a Rust toolchain ([rustup](https://rustup.rs); the version is pinned in `apps/wt-gateway/rust-toolchain.toml`):
+
+```bash
+cd apps/wt-gateway && cargo run --release
+```
+
+In dev the game server listens for the gateway on `military-forge/wt-<port>.sock` in a private directory under `$XDG_RUNTIME_DIR` or the temp dir, and the gateway looks there by default. The gateway serves UDP 4433 with a 13-day self-signed certificate (renewed before it expires) and tells the server its SHA-256, which `/health` advertises. Browsers then pin that hash, so no certificate setup is needed. Clients use WebTransport automatically and fall back to WebSocket when there's no gateway, no browser support, or no datagrams (Safari over HTTP/2). Env: `WT_ADDR`, `WT_PUBLIC_URL`, `WT_SOCKET` (or `WT_ROUTES` for several game servers, docs/09 §8), `WT_CERT`/`WT_KEY` (a real certificate), `WT_MAX_SESSIONS`, `WT_MAX_SESSIONS_PER_IP`. `cargo test` runs its own tests; with the release build present, `pnpm --filter @military-forge/game-server exec vitest run test/gateway.e2e.test.ts` runs the real binary against the game server's bridge.
+
+`pnpm --filter @military-forge/game-server exec tsx scripts/udp-impair.ts --listen 4434 --target 4433 --rtt 150 --loss 2` puts real packet loss between the browser and the gateway (start the gateway with `WT_PUBLIC_URL=https://127.0.0.1:4434/wt`).
 
 ## Test it
 

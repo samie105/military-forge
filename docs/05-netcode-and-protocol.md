@@ -131,7 +131,7 @@ Goal: the client runs **ahead** of the server so each input arrives just before 
 
 All multi-bit fields are little-endian bit-packed via `BitWriter` / `BitReader` over pre-allocated buffers. **Ticks are sent as 16-bit wrapping values** and reconstructed against the known full tick (valid while |Δ| < 32 768 ticks ≈ 9 min, so resync is always far earlier).
 
-### 6.1 INPUT (C→S) — ~25–30 bytes
+### 6.1 INPUT (C→S) — 13–31 bytes (1–4 inputs), protocol v7
 
 ```
 u8   type = 0x10
@@ -145,8 +145,11 @@ repeat count:
   u16 aim                    // 0..65535 ↔ 0..2π
   u3  weaponSelect           // 0 = no change, 1..7 slot
   u3  throwStrength          // grenade (0..7)
-  u2  reserved
+  u8  renderLag              // not on inputs[0]: ticks before renderTick that the frame sampling
+                             // this input was drawn, in 1/16 tick (0–15.94); lag comp rewinds each
+                             // input to its own view (batched inputs, redundant copies after a loss)
 ```
+Nothing may follow the last input except the final byte's padding: longer packets are refused.
 
 `buttons` bits:
 
@@ -233,7 +236,7 @@ onFire(shooter, inputTick, renderTick, renderFrac):
 ```
 - The shooter is **not** rewound (they shoot from where they are).
 - Breakable geometry uses current state (simpler, and fair: you can't shoot through glass that broke a moment ago on your screen).
-- **Favour-the-shooter side effects:** a victim can die ~100–200 ms "after" reaching cover on their own screen. Mitigations: the cap, a clear hit-direction indicator, and killcams that show the shooter's view.
+- **Favour-the-shooter side effects:** a victim can die ~100–300 ms "after" reaching cover on their own screen. Mitigations: the cap, a clear hit-direction indicator, and killcams that show the shooter's view.
 
 ### 7.2 Hit confirmation
 The client shows **predicted** impact sparks and tracers instantly, but the **hit marker and damage number** only appear on the server's `HIT_CONFIRM`. Wrong hit markers feel worse than late ones.
@@ -283,6 +286,8 @@ Rooms (≤ 16 players) send all players every snapshot, but still apply **visibi
 - Each client has a **view rect** = camera bounds at the **maximum zoom their current weapon allows** + 6 m margin + velocity look-ahead.
 - Entities outside the view rect are **not sent** (`out-of-AOI` despawn). This kills zoom hacks and off-screen ESP, the real "wallhack" of a 2D shooter.
 - Gunfire/explosions outside the view rect are sent as `SOUND` events with **4 m-coarse positions** (enough for directional audio, useless for aimbots).
+- A culled player's shots are **only** a `SOUND`, even when the tracer crosses the view: a clipped tracer still locates its shooter to centimetres (two cross at the muzzle). Tracers from visible shooters are clipped to the view; one ending on a culled player stops a body's reach (1.5 m) short of the edge and names no target. A shot at a culled player always reads as a miss with no target. A HIT names a culled attacker only to the attacker and the victim, and to others carries whole-HP damage: with linear falloff that still gives the shooter's distance to ~1 m (the victim's whole-HP health does too). A grenade or blast names its thrower only to clients that can see it.
+- The camera never shows more than the view rect: it is at most 4:3 tall, and taller screens are **letterboxed** (the full view width, bars above and below), never cropped at the sides.
 
 BR (≤ 40–50 players, big map):
 - Spatial hash (16 m cells). Tier A = in the view rect, every snapshot. Tier B = within 80 m, every 3rd snapshot, coarse position (for audio + the minimap ping system only). Beyond = nothing.

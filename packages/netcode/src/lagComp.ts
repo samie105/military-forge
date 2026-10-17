@@ -8,11 +8,12 @@
  * the client interpolates them (interpolation.ts). The shooter itself is never rewound, and damage
  * applies now.
  *
- * Cap: docs/05 asks for a 200 ms rewind cap. In this tick-aligned model a shot at tick T was aimed
- * at render tick ≈ T − (RTT + input buffer + interpolation delay), i.e. ~280 ms back at the 150 ms
- * target profile, so a 200 ms cap on the total would leave every shot at that RTT uncompensated.
- * The default therefore caps the *latency* part at 200 ms on top of the 100 ms interpolation delay
- * (300 ms total): beyond ~175 ms RTT players lead their shots, and fake lag gains at most that.
+ * Cap: docs/05 caps the total rewind at 300 ms: 200 ms of latency on top of the 100 ms
+ * interpolation delay (367 ms for low-bandwidth clients, after a warm-up). In this tick-aligned
+ * model a shot at tick T was aimed at render tick ≈ T − (RTT + input buffer + interpolation delay),
+ * i.e. ~280 ms back at the 150 ms target profile, so a 200 ms cap on the total would leave every
+ * shot at that RTT uncompensated. Beyond ~175 ms RTT players lead their shots, and fake lag gains
+ * at most the cap.
  */
 import { MAX_PLAYERS, type HitPose, type PlayerState, type TargetRewind } from '@military-forge/sim';
 import { lerpPosition } from './interpolation';
@@ -142,8 +143,9 @@ export class LagCompensator implements TargetRewind {
     if (b > newestSnapshot) a = b = newestSnapshot; // past the newest snapshot: the client holds it
     const sa = a & MASK;
     const sb = b & MASK;
-    // older than the history, or from before this player got the id: test the current pose
-    if (this.tickAt[sa] !== a || a < this.since[target.id]!) return false;
+    // older than the history, or from before this player got the id (including a leave and a join
+    // since the last record()): test the current pose, which is where the client draws a new holder
+    if (this.tickAt[sa] !== a || this.occupant[target.id] !== target || a < this.since[target.id]!) return false;
     if (this.tickAt[sb] !== b) b = a;
     const ia = sa * MAX_PLAYERS + target.id;
     const ib = (b & MASK) * MAX_PLAYERS + target.id;

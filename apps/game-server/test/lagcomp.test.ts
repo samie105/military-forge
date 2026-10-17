@@ -4,7 +4,7 @@
  * compensation the server tests the shot against that same picture; without it, against where
  * the target is ~RTT + buffer + interpolation later.
  */
-import { symmetric } from '@military-forge/netcode';
+import { createConditionerSettings, symmetric } from '@military-forge/netcode';
 import { describe, expect, it } from 'vitest';
 import { shootingRange } from './shootingRange';
 
@@ -46,6 +46,21 @@ describe('lag compensation (simulated network)', () => {
       expect(pct(exact, r.poseErrors.length)).toBeGreaterThan(90);
       expect(pct(r.hits, r.shots)).toBeGreaterThan(90);
     }
+  });
+
+  it('low frame rate plus uplink loss: a redundant copy many ticks old still rewinds exactly', () => {
+    // at 15 fps a packet's oldest input was sampled 6+ ticks before its newest; when the packet that
+    // carried it first is lost, that copy's own lag is what the server uses (v7: up to 15.9 ticks)
+    let exact = 0;
+    let n = 0;
+    for (const fireOffset of [0, 1, 2, 3]) {
+      const up = { latencyMs: 75, jitterMs: 5, lossPct: 30 };
+      const r = shootingRange(createConditionerSettings(true, up, { ...up, lossPct: 0 }), { maxRewindMs: 900 }, 40, true, 67, fireOffset);
+      exact += r.poseErrors.filter((e) => e < 0.01).length;
+      n += r.poseErrors.length;
+    }
+    expect(n).toBeGreaterThan(100);
+    expect(pct(exact, n)).toBeGreaterThan(98); // 89.6 % with v5's 3.94-tick ceiling
   });
 });
 

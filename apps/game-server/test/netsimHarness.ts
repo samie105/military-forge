@@ -3,7 +3,7 @@
  * a real Room, on a manual clock, so a minute of play runs in ~100 ms and is reproducible.
  * Used by test/netcode.test.ts and `pnpm --filter @military-forge/game-server netsim`.
  */
-import { isUnreliableMessage } from '@military-forge/protocol';
+import { MsgType, isUnreliableMessage } from '@military-forge/protocol';
 import { ConditionedLink, ManualScheduler, NetClient, type ConditionerSettings, type Scheduler } from '@military-forge/netcode';
 import { Btn, type Input } from '@military-forge/sim';
 import { Room, type Client, type RoomOptions } from '../src/room';
@@ -35,6 +35,11 @@ export interface ClientResult {
   /** messages and payload bytes this client sent after warm-up, per second */
   upPacketsPerSec: number;
   upBytesPerSec: number;
+  /** how old snapshots were on arrival (ms, after warm-up): p50 / p99 */
+  snapshotAgeP50: number;
+  snapshotAgeP99: number;
+  /** % of frames where remote players had to be held (render tick past the newest snapshot) */
+  interpStallPct: number;
 }
 
 export interface SimResult {
@@ -75,6 +80,11 @@ export interface SimOptions {
   afterTick?: (room: Room, nets: NetClient[]) => void;
   /** these clients run in low-bandwidth mode (docs/05 §2.2) */
   lowBandwidth?: number[];
+  /**
+   * 'wt' (default): datagrams, lost unreliable messages are gone (WebTransport).
+   * 'ws': a TCP stream, losses are retransmitted and stall everything behind them (WebSocket).
+   */
+  transport?: 'ws' | 'wt';
 }
 
 /** Defers callbacks to the next whole second while `asleep()` (background-tab timer alignment). */
@@ -96,6 +106,12 @@ function throttled(base: Scheduler, asleep: () => boolean): Scheduler {
   };
 }
 
+function percentile(xs: number[], q: number): number {
+  if (xs.length === 0) return 0;
+  const sorted = [...xs].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))]!;
+}
+
 export function simulate(settings: ConditionerSettings, seconds: number, options: SimOptions = {}): SimResult {
   const warmupSeconds = options.warmupSeconds ?? 10;
   const serverJitterMs = options.serverJitterMs ?? 1;
@@ -104,6 +120,12 @@ export function simulate(settings: ConditionerSettings, seconds: number, options
   const sleep = options.sleep;
   const asleep = () => !!sleep && clock.now() >= sleep.fromMs && clock.now() < sleep.toMs;
   const room = new Room({ dummies: true, seed: 3, ...options.room });
+  if (options.transport === 'ws') {
+    settings = { ...settings, up: { ...settings.up, stream: true }, down: { ...settings.down, stream: true } };
+  }
+  const snapshotAges: number[][] = [[], []];
+  const stallFrames = [0, 0];
+  const frames = [0, 0];
   const nets: NetClient[] = [];
   const conns: Client[] = [];
   const ups: ConditionedLink[] = [];
@@ -122,7 +144,10 @@ export function simulate(settings: ConditionerSettings, seconds: number, options
       () => settings.enabled,
       timers,
       (b) => {
-        if (clock.now() > warmupSeconds * 1000) downBytes[k]! += b.length;
+        if (clock.now() > warmupSeconds * 1000) {
+          downBytes[k]! += b.length;
+          if (b[0] === MsgType.Snapshot) snapshotAges[k]!.push(clock.now() - (b[3]! | (b[4]! << 8) | (b[5]! << 16) | (b[6]! << 24)) * TICK_MS);
+        }
         nets[k]!.receive(b);
       },
       isUnreliableMessage,
@@ -196,7 +221,12 @@ export function simulate(settings: ConditionerSettings, seconds: number, options
     for (let k = 0; k < nets.length; k++) {
       if (now < nextFrame[k]!) continue;
       nets[k]!.update((now - lastFrame[k]!) / 1000, input(k));
-      nets[k]!.remoteRenderTick(now); // "draw" the frame: the next input reports this view
+      const view = nets[k]!.remoteRenderTick(now); // "draw" the frame: the next input reports this view
+      const newest = nets[k]!.snapshots.at(-1)?.msg.serverTick;
+      if (now > warmupSeconds * 1000 && newest !== undefined) {
+        frames[k]!++;
+        if (view > newest) stallFrames[k]!++;
+      }
       lastFrame[k] = now;
       nextFrame[k] = k === 0 && asleep() ? Math.ceil((now + 1) / 1000) * 1000 : now + (options.frameMs ?? TICK_MS) + noise() * frameJitterMs;
     }
@@ -223,6 +253,9 @@ export function simulate(settings: ConditionerSettings, seconds: number, options
       downBytesPerSec: downBytes[k]! / (seconds - warmupSeconds),
       upPacketsPerSec: upPackets[k]! / (seconds - warmupSeconds),
       upBytesPerSec: upBytes[k]! / (seconds - warmupSeconds),
+      snapshotAgeP50: percentile(snapshotAges[k]!, 0.5),
+      snapshotAgeP99: percentile(snapshotAges[k]!, 0.99),
+      interpStallPct: (100 * stallFrames[k]!) / Math.max(1, frames[k]!),
     })),
     healths,
     timeScales,

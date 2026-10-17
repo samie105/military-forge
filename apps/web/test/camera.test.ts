@@ -54,11 +54,37 @@ describe('camera vs AOI', () => {
     expect(checked).toBeGreaterThan(400);
   });
 
-  it('tall screens crop the sides instead of showing more height', () => {
+  it('tall screens are letterboxed: the full view width, and only a 4:3 band of height', () => {
     const cam = new Camera();
     cam.resize(800, 1600); // portrait
     const { halfW, halfH } = cam.halfExtents;
-    expect(halfH / halfW).toBeCloseTo(2, 6); // the screen's shape…
-    expect(halfH * 2).toBeCloseTo(cam.viewWidth * 0.75, 6); // …but only 4:3 of the view width tall
+    expect(halfW * 2).toBeCloseTo(cam.viewWidth, 6); // as wide as on any screen
+    expect(halfH * 2).toBeCloseTo(cam.viewWidth * 0.75, 6); // only 4:3 of it tall
+    const { top, bottom } = cam.band;
+    expect(bottom - top).toBeCloseTo(600, 6);
+    expect(top).toBeCloseTo(500, 6);
+    // wide screens: no bars
+    cam.resize(1600, 900);
+    expect(cam.band).toEqual({ top: 0, bottom: 900 });
+  });
+
+  it('a respawn far away moves the camera at once instead of panning across unsent ground', () => {
+    const map = getMap('movement-test');
+    const game = new Game({ map, dummies: false });
+    const p = game.addPlayer('me');
+    const cam = new Camera();
+    cam.resize(1600, 900);
+    const b = map.bounds;
+    const from = b.minX + 20;
+    for (let i = 0; i < 30; i++) cam.follow(from, 0, from, 0, 1 / 60, map);
+    const to = b.maxX - 20;
+    cam.follow(to, 0, to, 0, 1 / 60, map); // the next frame is already there
+    p.x = to;
+    p.y = 0;
+    const aoi: ViewRect = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    aoiRect(p, map, aoi);
+    const { halfW } = cam.halfExtents;
+    expect(cam.x - halfW).toBeGreaterThanOrEqual(aoi.minX);
+    expect(cam.x + halfW).toBeLessThanOrEqual(aoi.maxX);
   });
 });

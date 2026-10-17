@@ -103,6 +103,9 @@ function addLinkBindings(folder: FolderApi, link: LinkSettings, label: string): 
   folder.addBinding(link, 'lossPct', { label: `${label} loss %`, min: 0, max: 30, step: 0.5 });
   folder.addBinding(link, 'dupPct', { label: `${label} dup %`, min: 0, max: 20, step: 0.5 });
   folder.addBinding(link, 'reorder', { label: `${label} reorder` });
+  // set from the transport on connect (WebSocket = TCP), editable to compare
+  link.stream ??= false;
+  folder.addBinding(link as Required<LinkSettings>, 'stream', { label: `${label} TCP stalls` });
 }
 
 export function createTuningPanel(container: HTMLElement, options: RenderOptions, actions: PanelActions): { pane: Pane; refresh(): void } {

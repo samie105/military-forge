@@ -20,6 +20,14 @@ export interface LinkSettings {
   dupPct: number;
   /** let unreliable messages overtake each other (UDP-like); off = in-order like TCP/WebSocket */
   reorder: boolean;
+  /**
+   * Model a TCP stream (WebSocket) instead of datagrams: nothing is dropped, but a lost message is
+   * resent about one round trip later and everything behind it waits (head-of-line blocking).
+   * Off = datagram-like (WebTransport): lost unreliable messages are simply gone.
+   */
+  stream?: boolean;
+  /** extra delay of a retransmitted message in stream mode, ms (default ≈ one RTT: 2 × latency, ≥ 40) */
+  retransmitMs?: number;
 }
 
 export interface ConditionerSettings {
@@ -153,7 +161,8 @@ export function parseNetSim(spec: string | undefined | null): ConditionerSetting
 
 export function describeNetSim(s: Readonly<ConditionerSettings>): string {
   if (!s.enabled) return 'off';
-  const d = (l: LinkSettings) => `${l.latencyMs.toFixed(0)}±${l.jitterMs.toFixed(0)} ms ${l.lossPct}%${l.dupPct ? ` dup ${l.dupPct}%` : ''}${l.reorder ? ' reorder' : ''}`;
+  const d = (l: LinkSettings) =>
+    `${l.latencyMs.toFixed(0)}±${l.jitterMs.toFixed(0)} ms ${l.lossPct}%${l.stream ? ' (TCP retransmits)' : ''}${l.dupPct ? ` dup ${l.dupPct}%` : ''}${l.reorder ? ' reorder' : ''}`;
   return `up ${d(s.up)} · down ${d(s.down)}`;
 }
 
@@ -162,6 +171,8 @@ export interface LinkStats {
   dropped: number;
   duplicated: number;
   delivered: number;
+  /** stream mode: messages that needed a retransmit (and held up everything behind them) */
+  retransmitted: number;
 }
 
 interface Pending {
@@ -174,7 +185,7 @@ interface Pending {
  * `enabled()` lets the owner switch the whole conditioner off without rebuilding links.
  */
 export class ConditionedLink {
-  readonly stats: LinkStats = { sent: 0, dropped: 0, duplicated: 0, delivered: 0 };
+  readonly stats: LinkStats = { sent: 0, dropped: 0, duplicated: 0, delivered: 0, retransmitted: 0 };
   private readonly queue: Pending[] = [];
   private readonly rng: Xoshiro128;
   private timer: unknown = null;
@@ -209,6 +220,16 @@ export class ConditionedLink {
         this.stats.delivered++;
         this.deliver(bytes);
       } else this.schedule(bytes, this.scheduler.now(), false); // drain what's in flight first, in order
+      return;
+    }
+    if (s.stream) {
+      // TCP: the segment is resent ~1 RTT later and the stream stalls behind it
+      let at = this.scheduler.now() + this.delay();
+      if (this.rng.nextFloat() * 100 < s.lossPct) {
+        this.stats.retransmitted++;
+        at += s.retransmitMs ?? Math.max(40, 2 * s.latencyMs);
+      }
+      this.schedule(bytes, at, false);
       return;
     }
     if (unreliable && this.rng.nextFloat() * 100 < s.lossPct) {

@@ -3,7 +3,7 @@
  * docs/03 §10 (zoom = camera pulls back to show more of the map).
  */
 import type { MapDef } from '@military-forge/content';
-import { VIEW_BASE_WIDTH, VIEW_FOCUS_Y, VIEW_LOOKAHEAD, VIEW_MAX_ASPECT, VIEW_ZOOM_MULTIPLIERS } from '@military-forge/netcode';
+import { AOI_MARGIN, VIEW_BASE_WIDTH, VIEW_FOCUS_Y, VIEW_LOOKAHEAD, VIEW_MAX_ASPECT, VIEW_ZOOM_MULTIPLIERS } from '@military-forge/netcode';
 
 // The camera model is shared with the server's AOI (packages/netcode/src/aoi.ts): keep them one.
 export const BASE_VIEW_WIDTH = VIEW_BASE_WIDTH;
@@ -17,22 +17,31 @@ export class Camera {
   width = 1;
   height = 1;
   private initialised = false;
+  private lastPx = 0;
+  private lastPy = 0;
 
   get viewWidth(): number {
     return BASE_VIEW_WIDTH * ZOOM_MULTIPLIERS[this.zoom]!;
   }
 
-  /**
-   * Pixels per metre. Never shows more height than the server's AOI serves (4:3 of the view width,
-   * packages/netcode/src/aoi.ts): screens taller than that crop the sides instead.
-   */
+  /** pixels per metre: the full view width always fits the screen */
   get ppm(): number {
-    return Math.max(this.width / this.viewWidth, this.height / (this.viewWidth * VIEW_MAX_ASPECT));
+    return this.width / this.viewWidth;
   }
 
-  /** Half the visible width and height in metres. */
+  /**
+   * Half the visible width and height in metres. Never taller than the server's AOI serves (4:3 of
+   * the view width, packages/netcode/src/aoi.ts): taller screens are letterboxed (`band`).
+   */
   get halfExtents(): { halfW: number; halfH: number } {
-    return { halfW: this.width / 2 / this.ppm, halfH: this.height / 2 / this.ppm };
+    return { halfW: this.viewWidth / 2, halfH: Math.min(this.height / 2 / this.ppm, (this.viewWidth * VIEW_MAX_ASPECT) / 2) };
+  }
+
+  /** The screen rows that show the world (the rest are letterbox bars), in pixels. */
+  get band(): { top: number; bottom: number } {
+    const h = Math.min(this.height, this.viewWidth * VIEW_MAX_ASPECT * this.ppm);
+    const top = (this.height - h) / 2;
+    return { top, bottom: top + h };
   }
 
   resize(width: number, height: number): void {
@@ -49,6 +58,10 @@ export class Camera {
     // the mouse's world position is derived from the camera
     if (this.width <= 1 || this.height <= 1) return;
     if (!Number.isFinite(this.x) || !Number.isFinite(this.y)) this.initialised = false;
+    // a teleport (respawn): jump, don't pan across ground the AOI doesn't cover
+    if (Math.abs(px - this.lastPx) > AOI_MARGIN || Math.abs(py - this.lastPy) > AOI_MARGIN) this.initialised = false;
+    this.lastPx = px;
+    this.lastPy = py;
     if (!Number.isFinite(mouseWorldX) || !Number.isFinite(mouseWorldY)) {
       mouseWorldX = px;
       mouseWorldY = py;

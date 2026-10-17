@@ -31,6 +31,7 @@ import {
   encodePong,
   encodeRewindDebug,
   encodeRoster,
+  type RosterEntry,
   encodeTuning,
   encodeWelcome,
   isUnreliableMessage,
@@ -50,7 +51,7 @@ import {
   type ConditionerSettings,
   type Scheduler,
 } from '@military-forge/netcode';
-import { Game, createInput, type Input, type SimEvent } from '@military-forge/sim';
+import { Game, createInput, type Input, type PlayerState, type SimEvent } from '@military-forge/sim';
 
 export interface ClientConn {
   send(bytes: Uint8Array): void;
@@ -99,8 +100,13 @@ const newToken = () => randomBytes(18).toString('base64url');
 
 const MAX_STRIKES = 3;
 const MAX_MESSAGES_PER_SECOND = 200;
-/** docs/05 §14: CMD ≤ 20/s per connection; more is a strike (and ignored) */
-const MAX_CMDS_PER_SECOND = 20;
+/**
+ * docs/05 §14: a token bucket of CMDs per connection (20/s, bursts of 20). Over the limit they're
+ * dropped, not strikes: a TCP stall can bunch up honest ones. A real flood still hits
+ * MAX_MESSAGES_PER_SECOND.
+ */
+const CMDS_PER_SECOND = 20;
+const CMD_BURST = 20;
 /**
  * A low-bandwidth client gets its wider rewind cap and 4-tick pose spacing only after this long
  * in that mode (1 s: past its 150 ms interpolation window with slack). Off takes effect at once,
@@ -131,7 +137,9 @@ export class Client {
   lastSnapshotTick = -1;
   strikes = 0;
   messagesThisSecond = 0;
-  cmdsThisSecond = 0;
+  /** CMD token bucket: tokens left, as of server tick `cmdTokensAt` */
+  cmdTokens = CMD_BURST;
+  cmdTokensAt = 0;
   snapshotsSkipped = 0;
   /** the player this connection drives (null before WELCOME) */
   session: Session | null = null;
@@ -253,10 +261,7 @@ export class Room {
 
   /** Called once per second to reset rate-limit windows. */
   resetRateLimits(): void {
-    for (const c of this.clients) {
-      c.messagesThisSecond = 0;
-      c.cmdsThisSecond = 0;
-    }
+    for (const c of this.clients) c.messagesThisSecond = 0;
   }
 
   /** Bytes from the transport. Must not be retained by the caller's buffer pool when netSim is on (they are queued). */
@@ -304,10 +309,21 @@ export class Room {
         client.conn.send(encodePong(msg.clientTime, this.game.tick));
         break;
       case MsgType.Cmd:
-        if (++client.cmdsThisSecond > MAX_CMDS_PER_SECOND) this.strike(client, new DecodeError('CMD flood'));
-        else this.onCmd(client, msg.kind, msg.payload);
+        // SetLowBandwidth is state, not an action: dropping one would leave this client and the
+        // server in different modes, and its one perk waits out a warm-up anyway
+        if (msg.kind === CmdKind.SetLowBandwidth || this.takeCmdToken(client)) this.onCmd(client, msg.kind, msg.payload);
         break;
     }
+  }
+
+  private takeCmdToken(client: Client): boolean {
+    const now = this.game.tick;
+    const elapsed = Math.max(0, now - client.cmdTokensAt);
+    client.cmdTokens = Math.min(CMD_BURST, client.cmdTokens + (elapsed * TICK_MS * CMDS_PER_SECOND) / 1000);
+    client.cmdTokensAt = now;
+    if (client.cmdTokens < 1) return false;
+    client.cmdTokens--;
+    return true;
   }
 
   private strike(client: Client, e: unknown): void {
@@ -476,8 +492,21 @@ export class Room {
     this.disconnect(client, false);
   }
 
-  private rosterEntries() {
-    return this.game.players.filter((p) => p !== null).map((p) => ({ id: p.id, name: p.name, isBot: p.isBot }));
+  /** When each player first shows in snapshots (ROSTER `since`: ids are reused). */
+  private readonly shownSince = new WeakMap<PlayerState, number>();
+
+  private rosterEntries(): RosterEntry[] {
+    return this.game.players
+      .filter((p) => p !== null)
+      .map((p) => {
+        let since = this.shownSince.get(p);
+        if (since === undefined) {
+          // a roster goes out as soon as a player is added (between ticks): it shows from the next one
+          since = this.game.tick + 1;
+          this.shownSince.set(p, since);
+        }
+        return { id: p.id, name: p.name, isBot: p.isBot, since };
+      });
   }
 
   private broadcastRoster(): void {

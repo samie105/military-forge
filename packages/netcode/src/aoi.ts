@@ -5,7 +5,7 @@
  *
  * The camera model is defined here and imported by the web camera (apps/web/src/camera.ts), so
  * the server's idea of "what you can see" can't drift from what's drawn. The web camera never
- * shows more than 4:3 of the view width (taller screens crop the sides; apps/web/test/camera.test.ts
+ * shows more than 4:3 of the view width (taller screens are letterboxed; apps/web/test/camera.test.ts
  * sweeps it). A renderer that shows more than this (wider zoom, taller than 4:3, bigger
  * look-ahead) will see players pop in.
  */

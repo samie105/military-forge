@@ -1,15 +1,27 @@
-# Builds and tests the Rust WebTransport gateway (apps/wt-gateway, docs/05 §2). It is not part of
-# pnpm or turbo. The workflow runs only when the gateway or this file changes, and it does nothing
-# while the gateway is not in the tree. Because of the path filter, never make it a required check
-# (.github/CI.md).
+# Builds, lints and tests the Rust WebTransport gateway (apps/wt-gateway, docs/05 §2), then runs the
+# Rust↔TypeScript contract test: the real binary against the game server's bridge
+# (apps/game-server/test/gateway.e2e.test.ts, which the main CI job skips without the binaries).
+# The gateway is not part of pnpm or turbo. The workflow runs only when the gateway, the bridge or
+# this file changes, and it does nothing while the gateway is not in the tree. Because of the path
+# filter, never make it a required check (.github/CI.md).
 name: wt-gateway
 
 on:
   pull_request:
-    paths: ['apps/wt-gateway/**', '.github/workflows/wt-gateway.yml']
+    paths:
+      - 'apps/wt-gateway/**'
+      - 'apps/game-server/src/transports.ts'
+      - 'apps/game-server/test/gateway*.ts'
+      - 'packages/protocol/src/**'
+      - '.github/workflows/wt-gateway.yml'
   push:
     branches: [main]
-    paths: ['apps/wt-gateway/**', '.github/workflows/wt-gateway.yml']
+    paths:
+      - 'apps/wt-gateway/**'
+      - 'apps/game-server/src/transports.ts'
+      - 'apps/game-server/test/gateway*.ts'
+      - 'packages/protocol/src/**'
+      - '.github/workflows/wt-gateway.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
@@ -69,10 +81,20 @@ jobs:
           key: cargo-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/wt-gateway/rust-toolchain.toml', 'apps/wt-gateway/Cargo.lock') }}
           restore-keys: cargo-${{ runner.os }}-${{ runner.arch }}-
 
+      - name: Format
+        if: steps.gateway.outputs.present == 'true'
+        working-directory: apps/wt-gateway
+        run: cargo fmt --check
+
       - name: Build (release)
         if: steps.gateway.outputs.present == 'true'
         working-directory: apps/wt-gateway
         run: cargo build --locked --release
+
+      - name: Clippy
+        if: steps.gateway.outputs.present == 'true'
+        working-directory: apps/wt-gateway
+        run: cargo clippy --locked --release --all-targets -- -D warnings
 
       # --release: the tests reuse the dependency artifacts of the release build above, rather than
       # compiling quinn, rustls and tokio a second time under the dev profile. Debug assertions and
@@ -92,3 +114,21 @@ jobs:
             print "`cargo build --locked --release` and `cargo test --locked --release` in apps/wt-gateway."
           }' "$RUNNER_TEMP/cargo-test.log" >> "$GITHUB_STEP_SUMMARY"
           exit "$status"
+
+      # The contract test: the binaries just built, against the TypeScript bridge.
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        if: steps.gateway.outputs.present == 'true'
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.gateway.outputs.present == 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Contract test (real gateway ↔ game-server bridge)
+        if: steps.gateway.outputs.present == 'true'
+        env:
+          WT_GATEWAY_BIN_DIR: ${{ github.workspace }}/apps/wt-gateway/target/release
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @military-forge/game-server exec vitest run test/gateway.e2e.test.ts test/gateway.test.ts

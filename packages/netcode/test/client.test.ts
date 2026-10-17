@@ -1,5 +1,5 @@
 import { createTuning } from '@military-forge/content';
-import { MsgType, encodeSnapshot, encodeWelcome } from '@military-forge/protocol';
+import { MsgType, encodePong, encodeRoster, encodeSnapshot, encodeWelcome } from '@military-forge/protocol';
 import { Game } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
 import { NetClient } from '../src';
@@ -41,6 +41,29 @@ describe('NetClient', () => {
     expect(s.snapshotLossPct).toBeCloseTo((100 * 1) / (9 + 1), 6);
   });
 
+  it('switching low-bandwidth mode off: the 15 Hz snapshots still in flight are not counted as lost', () => {
+    const { net, game, advance } = welcomed();
+    const now = advance(1000);
+    for (let i = 0; i < 5; i++) net.receive(encodePong(now - 150, 0)); // 150 ms RTT
+    net.setLowBandwidth(true);
+    let seq = 1;
+    const feed = (step: number) => {
+      seq += step;
+      game.step([]);
+      advance(66);
+      net.receive(encodeSnapshot(game, seq, []));
+    };
+    for (let i = 0; i < 10; i++) feed(2);
+    net.setLowBandwidth(false);
+    feed(2); // sent before the server saw the CMD
+    feed(2);
+    advance(1000);
+    for (let i = 0; i < 10; i++) feed(1); // full rate again
+    expect(net.stats().snapshotLossPct).toBe(0);
+    feed(2); // a real loss is still a loss
+    expect(net.stats().snapshotLossPct).toBeGreaterThan(0);
+  });
+
   it('a fresh rejoin (new server timeline) drops the old snapshots; a resume keeps them', () => {
     const { net, game, advance } = welcomed();
     for (let seq = 1; seq <= 5; seq++) {
@@ -70,5 +93,43 @@ describe('NetClient', () => {
       }),
     );
     expect(net.snapshots).toHaveLength(0);
+  });
+
+  it('a reused id is never drawn at the departed player\'s poses', () => {
+    const { net, game, me, advance } = welcomed();
+    const leaver = game.addPlayer('leaver');
+    const id = leaver.id;
+    leaver.x = 149;
+    // ROSTER since: the room's rule (shown from the tick after the one it joined in)
+    const since = new Map<object, number>();
+    const added = (p: object) => since.set(p, game.tick + 1);
+    added(me);
+    added(leaver);
+    let seq = 0;
+    const snapshot = () => {
+      game.step([]);
+      advance(33);
+      net.receive(encodeSnapshot(game, ++seq, []));
+    };
+    const roster = () =>
+      net.receive(encodeRoster(game.players.filter((p) => p !== null).map((p) => ({ id: p.id, name: p.name, isBot: false, since: since.get(p) ?? 0 }))));
+    roster();
+    for (let i = 0; i < 6; i++) snapshot();
+    const before = net.snapshots.at(-1)!.msg.serverTick;
+    game.removePlayer(id);
+    roster();
+    const joiner = game.addPlayer('joiner');
+    added(joiner);
+    expect(joiner.id).toBe(id);
+    joiner.x = 120;
+    roster();
+    const pose = { x: 0, y: 0, src: null! } as Parameters<typeof net.remotePose>[2];
+    expect(net.remotePose(id, before - 2, pose)).toBeNull(); // not in any snapshot yet: not drawn
+    snapshot();
+    snapshot();
+    // a render tick from the leaver's time: the joiner at its newest pose, not the leaver's spot
+    expect(net.remotePose(id, before - 2, pose)?.x).toBeCloseTo(joiner.x, 3);
+    // other players are unaffected
+    expect(net.remotePose(me.id, before - 2, pose)).not.toBeNull();
   });
 });

@@ -63,6 +63,7 @@ export interface RenderOptions {
 
 const COLORS = {
   bg: '#0d1117',
+  letterbox: '#05070a',
   grid: 'rgba(255,255,255,0.04)',
   gridMajor: 'rgba(255,255,255,0.08)',
   solid: ['#3d444d', '#4a5568', '#6b4f3a', '#4b3b2a', '#5b8fb9'],
@@ -170,6 +171,7 @@ export class Renderer {
     for (const g of frame.grenades) this.drawGrenade(g.x, g.y, g.fuse);
     this.drawEffects(dt, byId);
     ctx.globalAlpha = 1;
+    this.drawLetterbox();
 
     const local = byId.get(frame.localId);
     if (local) this.drawHud(local, frame, opts, help);
@@ -180,9 +182,24 @@ export class Renderer {
   private drawOverlayHud(frame: Frame, dt: number, opts: RenderOptions, help: string): void {
     const byId = new Map(frame.players.map((p) => [p.id, p]));
     this.drawEffects(dt, byId);
+    this.drawLetterbox();
     const local = byId.get(frame.localId);
     if (local) this.drawHud(local, frame, opts, help);
     this.drawReticle();
+  }
+
+  /**
+   * Bars above and below the 4:3 band on screens taller than that: no view shows more of the world
+   * than the AOI sends (camera.ts). Over the 3D canvas too, which renders into the band only.
+   */
+  private drawLetterbox(): void {
+    const cam = this.camera;
+    const { top, bottom } = cam.band;
+    if (top <= 0) return;
+    const ctx = this.ctx;
+    ctx.fillStyle = COLORS.letterbox;
+    ctx.fillRect(0, 0, cam.width, top);
+    ctx.fillRect(0, bottom, cam.width, cam.height - bottom);
   }
 
   private drawGrid(): void {

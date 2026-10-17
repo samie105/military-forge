@@ -15,9 +15,11 @@ function rig(width: number, height: number, x = 60, y = 8): { cam: PlaneCamera; 
   return { cam, cam3 };
 }
 
+/** Where the 3D view draws a point: it renders into the camera's band (all of a ≤ 4:3 screen). */
 function toScreen(cam3: PerspectiveCamera, cam: PlaneCamera, x: number, y: number, z = 0): [number, number] {
   const p = new Vector3(x, y, z).project(cam3);
-  return [((p.x + 1) / 2) * cam.width, ((1 - p.y) / 2) * cam.height];
+  const { top, bottom } = cam.band;
+  return [((p.x + 1) / 2) * cam.width, top + ((1 - p.y) / 2) * (bottom - top)];
 }
 
 describe('PlaneCamera + planePose', () => {
@@ -27,14 +29,17 @@ describe('PlaneCamera + planePose', () => {
       [1920, 1080],
       [800, 600],
       [2560, 1080],
+      [390, 844], // letterboxed
+      [1280, 1024],
     ] as const) {
       const { cam, cam3 } = rig(w, h);
+      const { top, bottom } = cam.band;
       for (const [x, y] of [
         [60, 8],
         [43.2, -1.5],
         [75.9, 17.25],
-        [cam.toWorldX(0), cam.toWorldY(0)],
-        [cam.toWorldX(w), cam.toWorldY(h)],
+        [cam.toWorldX(0), cam.toWorldY(top)],
+        [cam.toWorldX(w), cam.toWorldY(bottom)],
       ] as const) {
         const [sx, sy] = toScreen(cam3, cam, x, y);
         expect(sx).toBeCloseTo(cam.toScreenX(x), 6);
@@ -52,10 +57,11 @@ describe('PlaneCamera + planePose', () => {
     expect(inFront).toBeGreaterThan(onPlane); // the front edge of a ledge shows below its collision line
   });
 
-  it('never shows more of the plane than the AOI camera model: wide screens keep the width, tall ones crop the sides', () => {
+  it('never shows more of the plane than the AOI camera model: every screen keeps the width, tall ones are letterboxed', () => {
     const visible = (w: number, h: number) => {
       const { cam } = rig(w, h);
-      return { width: cam.width / cam.ppm, height: cam.height / cam.ppm };
+      const { halfW, halfH } = cam.halfExtents;
+      return { width: 2 * halfW, height: 2 * halfH };
     };
     expect(visible(1920, 1080).width).toBeCloseTo(BASE_VIEW_WIDTH, 9);
     expect(visible(1024, 768)).toEqual({ width: BASE_VIEW_WIDTH, height: BASE_VIEW_WIDTH * VIEW_MAX_ASPECT });
@@ -63,14 +69,15 @@ describe('PlaneCamera + planePose', () => {
       [720, 900],
       [600, 1200],
       [1000, 1000],
+      [390, 844],
     ]) {
       const v = visible(w!, h!);
       expect(v.height).toBeCloseTo(BASE_VIEW_WIDTH * VIEW_MAX_ASPECT, 9);
-      expect(v.width).toBeLessThan(BASE_VIEW_WIDTH);
+      expect(v.width).toBeCloseTo(BASE_VIEW_WIDTH, 9); // not cropped
     }
   });
 
-  it('crops tall screens once: the 3D view shows exactly what the 2D camera (and the AOI) shows', () => {
+  it('letterboxes tall screens once: the 3D view shows exactly what the 2D camera (and the AOI) shows', () => {
     for (const [w, h] of [
       [960, 1080],
       [1280, 1024],
@@ -86,7 +93,10 @@ describe('PlaneCamera + planePose', () => {
       const { cam3 } = rig(w, h);
       const pose = planePose(cam);
       const visibleH = 2 * pose.z * Math.tan(((cam3.fov / 2) * Math.PI) / 180);
-      expect(visibleH).toBeCloseTo(h / flat.ppm, 6);
+      expect(visibleH).toBeCloseTo(2 * flat.halfExtents.halfH, 6);
+      expect(visibleH).toBeLessThanOrEqual(BASE_VIEW_WIDTH * VIEW_MAX_ASPECT + 1e-9);
+      const { top, bottom } = flat.band;
+      expect(pose.aspect).toBeCloseTo(w / (bottom - top), 9);
     }
   });
 

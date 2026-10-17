@@ -200,12 +200,16 @@ export class Renderer3D {
     this.lastFrameAt = now;
 
     applyPlanePose(this.camera3, planePose(this.camera, FOV_DEG, undefined, this.pose));
+    // a screen taller than 4:3 is letterboxed: draw into the band only (the 2D overlay paints the bars)
+    const { top, bottom } = this.camera.band;
+    this.renderer.setViewport(0, top, this.camera.width, bottom - top);
+    this.renderer.setScissor(0, top, this.camera.width, bottom - top);
+    this.renderer.setScissorTest(top > 0);
     if (this.sun.castShadow) {
       // the High shadow map covers the visible gameplay plane only (docs/11 §2)
-      const halfW = this.camera.width / this.camera.ppm / 2 + 2;
-      const halfH = this.camera.height / this.camera.ppm / 2 + 2;
+      const extents = this.camera.halfExtents;
       const cam = this.sun.shadow.camera;
-      const r = Math.max(halfW, halfH);
+      const r = Math.max(extents.halfW, extents.halfH) + 2;
       Object.assign(cam, { left: -r, right: r, top: r, bottom: -r, near: 1, far: 120 });
       cam.updateProjectionMatrix();
       this.sun.target.position.set(this.camera.x, this.camera.y, 0);

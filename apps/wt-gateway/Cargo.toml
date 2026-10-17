@@ -1,0 +1,21 @@
+[package]
+name = "wt-gateway"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "WebTransport (QUIC/UDP) front for the game server: terminates sessions and forwards messages over a Unix socket (docs/05 §2)"
+
+[dependencies]
+anyhow = "1"
+quinn = { version = "0.11", default-features = false, features = ["runtime-tokio", "rustls-ring"] }
+rcgen = "0.14"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+sha2 = "0.11"
+time = "0.3"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "io-std", "time", "sync", "signal"] }
+url = "2"
+web-transport-quinn = { version = "0.13", default-features = false, features = ["ring"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"

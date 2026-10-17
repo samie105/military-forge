@@ -102,8 +102,8 @@ describe('messages', () => {
     expect(decodeMessage(encodePong(1234.5, 77))).toEqual({ type: MsgType.Pong, clientTime: 1234.5, serverTick: 77 });
     expect(decodeMessage(encodeCmd(1, '{"a":1}'))).toEqual({ type: MsgType.Cmd, kind: 1, payload: '{"a":1}' });
     const entries = [
-      { id: 0, name: 'Strafer', isBot: true },
-      { id: 4, name: 'Kemi', isBot: false },
+      { id: 0, name: 'Strafer', isBot: true, since: 1 },
+      { id: 4, name: 'Kemi', isBot: false, since: 4_000_000_000 },
     ];
     expect(decodeMessage(encodeRoster(entries))).toEqual({ type: MsgType.Roster, entries });
     expect(decodeMessage(encodeTuning('{"walkMax":6}'))).toEqual({ type: MsgType.Tuning, tuningJson: '{"walkMax":6}' });
@@ -130,16 +130,29 @@ describe('messages', () => {
     expect(isUnreliableMessage(encodeTuning('{}'))).toBe(false);
   });
 
-  it('input packets carry up to 4 redundant inputs in ~25 bytes', () => {
+  it('input packets carry up to 4 redundant inputs in 13–31 bytes, each with its render lag', () => {
     const inputs = [0, 1, 2, 3].map((i) => ({ ...createInput(), buttons: Btn.Right | (i % 2 ? Btn.Fire : 0), aim: 1000 * i }));
-    const renderLags = [0, 0.0625, 1.5, 3.9375];
+    const renderLags = [0, 0.0625, 4.5, 15.9375];
+    const sizes = [1, 2, 3, 4].map((n) => encodeInput({ newestTick: 1, ackSnapshotSeq: 0, renderTick: 0, renderFrac: 0, inputs: inputs.slice(0, n) }).length);
+    expect(sizes).toEqual([13, 19, 25, 31]);
     const bytes = encodeInput({ newestTick: 65535, ackSnapshotSeq: 12, renderTick: 400, renderFrac: 128, inputs, renderLags });
-    expect(bytes.length).toBeLessThanOrEqual(31);
     const m = decodeMessage(bytes);
     expect(m).toEqual({ type: MsgType.Input, newestTick: 65535, ackSnapshotSeq: 12, renderTick: 400, renderFrac: 128, inputs, renderLags });
-    // without explicit lags each older input is assumed one frame (tick) older; lags saturate at 3.94
+    // without explicit lags each older input is assumed one frame (tick) older; lags saturate at 15.94
     expect((decodeMessage(encodeInput({ newestTick: 1, ackSnapshotSeq: 0, renderTick: 0, renderFrac: 0, inputs })) as { renderLags: number[] }).renderLags).toEqual([0, 1, 2, 3]);
-    expect((decodeMessage(encodeInput({ newestTick: 1, ackSnapshotSeq: 0, renderTick: 0, renderFrac: 0, inputs: inputs.slice(0, 1), renderLags: [9] })) as { renderLags: number[] }).renderLags).toEqual([3.9375]);
+    const saturated = encodeInput({ newestTick: 1, ackSnapshotSeq: 0, renderTick: 0, renderFrac: 0, inputs: inputs.slice(0, 2), renderLags: [5, 40] });
+    expect((decodeMessage(saturated) as { renderLags: number[] }).renderLags).toEqual([0, 15.9375]); // [0] is never sent
+  });
+
+  it('INPUT with trailing bytes after the last input is refused', () => {
+    const packet = createInputPacket();
+    const bytes = encodeInput({ newestTick: 1, ackSnapshotSeq: 0, renderTick: 0, renderFrac: 0, inputs: [createInput()] });
+    const padded = new Uint8Array(bytes.length + 1);
+    padded.set(bytes);
+    expect(() => decodeMessage(bytes)).not.toThrow();
+    expect(() => decodeInputInto(bytes, packet)).not.toThrow();
+    expect(() => decodeMessage(padded)).toThrow(DecodeError);
+    expect(() => decodeInputInto(padded, packet)).toThrow(DecodeError);
   });
 
   it('pooled INPUT decode matches decodeMessage and reuses the same objects', () => {
@@ -325,15 +338,19 @@ describe('messages', () => {
     expect(gone.players.some((p) => p.id === far.id)).toBe(false);
   });
 
-  it('AOI: a tracer from or into the dark is clipped to the view and names no culled player', () => {
+  it('AOI: no tracer, tracer end or HIT locates or names a culled player', () => {
     const game = new Game({ seed: 2, dummies: false });
     const obs = game.addPlayer('obs');
     const a = game.addPlayer('a');
     const b = game.addPlayer('b');
+    const c = game.addPlayer('c');
+    const d = game.addPlayer('d');
     obs.x = 10;
     a.x = 20;
-    b.x = 66; // outside the view
-    obs.y = a.y = b.y = 15;
+    b.x = 66; // well outside the view
+    c.x = 60.3; // feet just outside: culled, though its muzzle reaches into the rect
+    d.x = 60.25; // feet just outside, body inside the rect
+    obs.y = a.y = b.y = c.y = d.y = 15;
     const view: ViewRect = { minX: -20, minY: 0, maxX: 60, maxY: 40 };
     const weapon = a.weapons[a.active]!.def;
     const shot = (shooter: number, ox: number, ex: number, hit: 0 | 1 | 2, target: number): SimEvent => ({
@@ -346,29 +363,39 @@ describe('messages', () => {
       ey: 15.5,
       hit,
       target,
-      zone: target >= 0 ? 1 : 0,
+      zone: target >= 0 ? 2 : 0,
     });
+    const hit = (attacker: number, target: number): SimEvent => ({ type: 'hit', attacker, target, damage: 20, zone: 2, source: weapon });
     const enc = new SnapshotEncoder();
-    enc.begin(game, 1, [shot(b.id, 65.5, 20.2, 2, a.id), shot(a.id, 20.5, 65.8, 2, b.id), shot(a.id, 20.5, 40, 1, -1)]);
-    const snap = new SnapshotDecoder().decode(
-      enc.encodeFor({ baselines: null, ackInputTick: 0, inputBufferHealth: 0, local: obs, view }),
-    );
+    enc.begin(game, 1, [
+      shot(b.id, 65.5, 20.2, 2, a.id), // from a culled shooter
+      shot(c.id, 59.83, 20.2, 2, a.id), // from a culled shooter whose muzzle is in the rect
+      shot(a.id, 20.5, 65.8, 2, b.id), // into a culled target beyond the view
+      shot(a.id, 20.5, 59.95, 2, d.id), // into a culled target's body inside the rect
+      shot(a.id, 20.5, 40, 1, -1), // all in view
+      hit(b.id, a.id), // a culled attacker, seen by obs through its visible victim
+      hit(b.id, obs.id), // obs is the victim: it learns who
+    ]);
+    const snap = new SnapshotDecoder().decode(enc.encodeFor({ baselines: null, ackInputTick: 0, inputBufferHealth: 0, local: obs, view }));
+    expect(snap.players.map((p) => p.id).sort()).toEqual([obs.id, a.id].sort());
+    // culled shooters: only the coarse SOUND, however close to the edge they stand
+    const sounds = snap.events.filter((e) => e.type === 'sound');
+    expect(sounds).toHaveLength(2);
     const shots = snap.events.filter((e) => e.type === 'shot');
+    expect(shots.every((e) => e.shooter === a.id)).toBe(true);
     expect(shots).toHaveLength(3);
-    const [fromDark, intoDark, inside] = shots;
-    // the hidden shooter: no id, and the tracer starts at the view's edge
-    expect(fromDark).toMatchObject({ shooter: -1, hit: 2, target: a.id });
-    expect(fromDark!.ox).toBeCloseTo(60, 2);
-    expect(fromDark!.ex).toBeCloseTo(20.2, 2);
-    // the hidden target: no id, the tracer stops at the edge, and reads as a miss
-    expect(intoDark).toMatchObject({ shooter: a.id, hit: 0, target: -1, zone: 0 });
-    expect(intoDark!.ox).toBeCloseTo(20.5, 2);
-    expect(intoDark!.ex).toBeCloseTo(60, 2);
-    // fully inside: untouched
-    expect(inside).toMatchObject({ shooter: a.id, hit: 1, target: -1 });
+    const [intoDark, intoSliver, inside] = shots;
+    // into a culled target: no id, stopped a body's reach short of the edge, and read as a miss
+    for (const e of [intoDark!, intoSliver!]) {
+      expect(e).toMatchObject({ hit: 0, target: -1, zone: 0 });
+      expect(e.ox).toBeCloseTo(20.5, 2);
+      expect(e.ex).toBeLessThan(60 - 1.48); // the top of a standing head
+      expect(e.ex).toBeGreaterThan(55);
+    }
+    expect(inside).toMatchObject({ hit: 1, target: -1 });
     expect(inside!.ex).toBeCloseTo(40, 2);
-    // no event carries a coordinate outside the view
-    for (const e of shots) for (const x of [e.ox, e.ex]) expect(x).toBeLessThanOrEqual(60 + 1e-3);
+    const hits = snap.events.filter((e) => e.type === 'hit');
+    expect(hits).toEqual([expect.objectContaining({ attacker: -1, target: a.id }), expect.objectContaining({ attacker: b.id, target: obs.id })]);
   });
 
   it('CONTENT_HASH covers tuning, weapons, grenades, hitboxes and maps, not key order', () => {
@@ -393,6 +420,57 @@ describe('messages', () => {
     expect(changed((c) => (Object.values(c.maps)[0]!.solids[0]!.points[0]! += 0.5))).not.toBe(CONTENT_HASH);
     // key order and undefined fields don't matter
     expect(contentHashOf({ a: 1, b: [2, { c: 3, d: undefined }] })).toBe(contentHashOf({ b: [2, { c: 3 }], a: 1 }));
+    // what JSON would silently flatten is refused, not hashed as null or {}
+    for (const bad of [{ a: Number.NaN }, { a: Infinity }, { m: new Map([[1, 2]]) }, { s: new Set([1]) }, { f: () => 1 }, [undefined], { t: new Float32Array(2) }]) {
+      expect(() => contentHashOf(bad)).toThrow(/content hash/);
+    }
+    expect(contentHashOf({ a: null })).not.toBe(contentHashOf({ a: 0 }));
+  });
+
+  it('AOI: a hidden attacker\'s damage is whole HP, hidden throwers go unnamed, and a shot into the dark always reads as a miss', () => {
+    const game = new Game({ seed: 2, dummies: false });
+    const obs = game.addPlayer('obs');
+    const a = game.addPlayer('a');
+    const b = game.addPlayer('b');
+    const c = game.addPlayer('c');
+    obs.x = 10;
+    a.x = 20;
+    b.x = 66; // culled
+    c.x = 59.5; // visible, in the off-screen margin near the edge
+    obs.y = a.y = b.y = c.y = 15;
+    const view: ViewRect = { minX: -20, minY: 0, maxX: 60, maxY: 40 };
+    // b's grenade in view, and a blast of b's in view
+    const g = game.grenades[0]!;
+    Object.assign(g, { alive: true, owner: b.id, x: 30, y: 16, vx: -3, vy: 2, fuse: 40 });
+    const mine = game.grenades[1]!;
+    Object.assign(mine, { alive: true, owner: obs.id, x: 12, y: 16, vx: 0, vy: 0, fuse: 40 });
+    const weapon = a.weapons[a.active]!.def;
+    const events: SimEvent[] = [
+      { type: 'hit', attacker: b.id, target: a.id, damage: 20.4375, zone: 2, source: weapon },
+      { type: 'hit', attacker: c.id, target: a.id, damage: 20.4375, zone: 2, source: weapon }, // c is seen: exact
+      { type: 'explosion', x: 25, y: 15, radius: 4, owner: b.id },
+      // c, in the margin, hits b just past the edge: nothing of the tracer is inside the shrunk view
+      { type: 'shot', shooter: c.id, weapon, ox: 59.8, oy: 15.5, ex: 65.8, ey: 15.5, hit: 2, target: b.id, zone: 2 },
+      // a hits b's old (rewound) pose deep inside the view: still a miss with no target
+      { type: 'shot', shooter: a.id, weapon, ox: 20.5, oy: 15.5, ex: 40, ey: 15.5, hit: 2, target: b.id, zone: 2 },
+    ];
+    const enc = new SnapshotEncoder();
+    enc.begin(game, 1, events);
+    const snap = new SnapshotDecoder().decode(enc.encodeFor({ baselines: null, ackInputTick: 0, inputBufferHealth: 0, local: obs, view }));
+    const hits = snap.events.filter((e) => e.type === 'hit');
+    expect(hits).toEqual([
+      expect.objectContaining({ attacker: -1, damage: 20 }),
+      expect.objectContaining({ attacker: c.id, damage: 20.4375 }),
+    ]);
+    expect(snap.events.find((e) => e.type === 'explosion')).toMatchObject({ owner: -1 });
+    expect(snap.grenades.find((x) => x.id === g.id)?.owner).toBe(-1);
+    expect(snap.grenades.find((x) => x.id === mine.id)?.owner).toBe(obs.id);
+    const shots = snap.events.filter((e) => e.type === 'shot');
+    expect(shots).toHaveLength(2);
+    expect(shots[0]).toMatchObject({ shooter: c.id, hit: 0, target: -1, zone: 0 });
+    expect(shots[0]!.ex).toBeCloseTo(shots[0]!.ox, 6); // zero length, at the visible muzzle
+    expect(shots[1]).toMatchObject({ shooter: a.id, hit: 0, target: -1, zone: 0 });
+    expect(shots[1]!.ex).toBeCloseTo(40, 2);
   });
 
   it('never throws anything but DecodeError on garbage (fuzz)', () => {

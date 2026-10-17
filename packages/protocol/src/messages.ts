@@ -17,9 +17,10 @@ export { MsgType } from './wire';
  * v4: session tokens: WELCOME carries one, HELLO may present it to resume after a disconnect.
  * v5: INPUT carries each input's render-tick lag (lag compensation for batched inputs).
  * v6: the local-player block ends with a melee group: meleeTicks (arsenal: melee lunge + swing timer).
- *     W6's PR #18 also takes v6 (INPUT render lag as u8); whichever merges second renumbers to v7.
+ * v7: INPUT's render lag is u8 (to 15.9 ticks: redundant copies at low frame rates) and inputs[0] has none;
+ *     ROSTER entries carry `since`, the first server tick whose snapshots show that player (ids are reused).
  */
-export const PROTOCOL_VERSION = 6;
+export const PROTOCOL_VERSION = 7;
 
 /**
  * Everything the sim reads from packages/content: a client and server that disagree on any of it
@@ -34,9 +35,14 @@ export const HASHED_CONTENT = {
   maps,
 } as const;
 
-/** FNV-1a over a canonical JSON form (object keys sorted, undefined skipped): equal content, equal hash. */
+/**
+ * FNV-1a over a canonical JSON form (object keys sorted, undefined fields skipped): equal content,
+ * equal hash. Throws on anything JSON can't carry faithfully (NaN, ±Infinity, Map/Set/class
+ * instances, functions), so such content fails at load and in CI instead of hashing as null or {}.
+ * -0 hashes as 0.
+ */
 export function contentHashOf(value: unknown): number {
-  const text = canonicalJson(value);
+  const text = canonicalJson(value, '$');
   let h = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) {
     h ^= text.charCodeAt(i);
@@ -45,16 +51,23 @@ export function contentHashOf(value: unknown): number {
   return h >>> 0;
 }
 
-function canonicalJson(v: unknown): string {
-  if (Array.isArray(v)) return `[${v.map(canonicalJson).join(',')}]`;
-  if (v !== null && typeof v === 'object') {
+function canonicalJson(v: unknown, path: string): string {
+  if (v === null || typeof v === 'string' || typeof v === 'boolean') return JSON.stringify(v);
+  if (typeof v === 'number') {
+    if (!Number.isFinite(v)) throw new Error(`content hash: ${path} is ${v}`);
+    return JSON.stringify(v);
+  }
+  if (Array.isArray(v)) return `[${v.map((x, i) => canonicalJson(x, `${path}[${i}]`)).join(',')}]`;
+  if (typeof v === 'object') {
+    const proto: unknown = Object.getPrototypeOf(v);
+    if (proto !== Object.prototype && proto !== null) throw new Error(`content hash: ${path} is not plain data`);
     const o = v as Record<string, unknown>;
     const keys = Object.keys(o)
-      .filter((k) => o[k] !== undefined && typeof o[k] !== 'function')
+      .filter((k) => o[k] !== undefined)
       .sort();
-    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalJson(o[k])}`).join(',')}}`;
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalJson(o[k], `${path}.${k}`)}`).join(',')}}`;
   }
-  return JSON.stringify(v) ?? 'null';
+  throw new Error(`content hash: ${path} is ${typeof v}`);
 }
 
 export const CONTENT_HASH = contentHashOf(HASHED_CONTENT);
@@ -147,14 +160,16 @@ export interface InputMsg {
   inputs: Input[];
   /**
    * per input: how many ticks earlier than renderTick the frame that sampled it was drawn
-   * (1/16 tick resolution, 0–3.94; [0] is 0). Encoding defaults to i (one tick per input).
+   * (1/16 tick resolution, 0–15.94; [0] is 0 by definition and not sent). Encoding defaults to i
+   * (one tick per input).
    */
   renderLags?: number[];
 }
 
-/** Render lags travel as u6 in 1/16 tick. */
+/** Render lags travel as u8 in 1/16 tick, for inputs[1..] (inputs[0]'s is 0). */
 const RENDER_LAG_STEPS = 16;
-const MAX_RENDER_LAG = 63;
+const RENDER_LAG_BITS = 8;
+const MAX_RENDER_LAG = (1 << RENDER_LAG_BITS) - 1;
 
 export interface CmdMsg {
   type: typeof MsgType.Cmd;
@@ -162,9 +177,20 @@ export interface CmdMsg {
   payload: string;
 }
 
+export interface RosterEntry {
+  id: number;
+  name: string;
+  isBot: boolean;
+  /**
+   * The first server tick whose snapshots show this player. Ids are reused: snapshots older than
+   * this show whoever had the id before (clients don't draw them as this player).
+   */
+  since: number;
+}
+
 export interface RosterMsg {
   type: typeof MsgType.Roster;
-  entries: { id: number; name: string; isBot: boolean }[];
+  entries: RosterEntry[];
 }
 
 export interface KickMsg {
@@ -251,13 +277,8 @@ export function encodeInputInto(writer: BitWriter, m: Omit<InputMsg, 'type'>, co
   writer.reset().u8(MsgType.Input).u16(m.newestTick).u16(m.ackSnapshotSeq).u16(m.renderTick).u8(m.renderFrac).bits(n - 1, 2);
   for (let i = 0; i < n; i++) {
     const input = m.inputs[i]!;
-    const lag = m.renderLags?.[i] ?? i;
-    writer
-      .u16(input.buttons)
-      .u16(input.aim)
-      .unsigned(input.weaponSelect, 3)
-      .unsigned(input.throwStrength, 3)
-      .unsigned(Math.min(MAX_RENDER_LAG, Math.round(lag * RENDER_LAG_STEPS)), 6);
+    writer.u16(input.buttons).u16(input.aim).unsigned(input.weaponSelect, 3).unsigned(input.throwStrength, 3);
+    if (i > 0) writer.unsigned(Math.min(MAX_RENDER_LAG, Math.round((m.renderLags?.[i] ?? i) * RENDER_LAG_STEPS)), RENDER_LAG_BITS);
   }
   return writer.finish();
 }
@@ -270,9 +291,9 @@ export function encodeCmd(kind: number, payload: string): Uint8Array {
   return w.reset().u8(MsgType.Cmd).u8(kind).string(payload, 16).finish().slice();
 }
 
-export function encodeRoster(entries: RosterMsg['entries']): Uint8Array {
+export function encodeRoster(entries: readonly RosterEntry[]): Uint8Array {
   w.reset().u8(MsgType.Roster).unsigned(entries.length, 6);
-  for (const e of entries) w.unsigned(e.id, 5).bool(e.isBot).string(e.name);
+  for (const e of entries) w.unsigned(e.id, 5).bool(e.isBot).u32(e.since).string(e.name);
   return w.finish().slice();
 }
 
@@ -353,9 +374,10 @@ export function decodeMessage(bytes: Uint8Array): Message {
         const aim = r.u16();
         const weaponSelect = r.bits(3);
         const throwStrength = r.bits(3);
-        renderLags.push(r.bits(6) / RENDER_LAG_STEPS);
+        renderLags.push(i > 0 ? r.bits(RENDER_LAG_BITS) / RENDER_LAG_STEPS : 0);
         inputs.push({ buttons, aim, weaponSelect, throwStrength });
       }
+      endOfInput(r);
       return { type, newestTick, ackSnapshotSeq, renderTick, renderFrac, inputs, renderLags };
     }
     case MsgType.Cmd:
@@ -366,7 +388,7 @@ export function decodeMessage(bytes: Uint8Array): Message {
     case MsgType.Roster: {
       const n = r.bits(6);
       const entries: RosterMsg['entries'] = [];
-      for (let i = 0; i < n; i++) entries.push({ id: r.bits(5), isBot: r.bool(), name: r.string() });
+      for (let i = 0; i < n; i++) entries.push({ id: r.bits(5), isBot: r.bool(), since: r.u32(), name: r.string() });
       return { type, entries };
     }
     case MsgType.Kick:
@@ -441,7 +463,13 @@ export function decodeInputInto(bytes: Uint8Array, out: InputPacket): InputPacke
     input.aim = r.u16();
     input.weaponSelect = r.bits(3);
     input.throwStrength = r.bits(3);
-    out.renderLags[i] = r.bits(6) / RENDER_LAG_STEPS;
+    out.renderLags[i] = i > 0 ? r.bits(RENDER_LAG_BITS) / RENDER_LAG_STEPS : 0;
   }
+  endOfInput(r);
   return out;
+}
+
+/** Nothing may follow the last input but the final byte's padding (docs/05 §14: length checks). */
+function endOfInput(r: BitReader): void {
+  if (r.remainingBits >= 8) throw new DecodeError('trailing bytes after INPUT');
 }

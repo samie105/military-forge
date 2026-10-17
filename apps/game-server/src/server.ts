@@ -3,7 +3,7 @@ import type { Scheduler } from '@military-forge/netcode';
 import { TICK_RATE } from '@military-forge/sim';
 import { startTickLoop } from './loop';
 import { Room, type RoomOptions } from './room';
-import { loadUws, startUws, startWs, type TransportKind } from './transports';
+import { loadUws, startGatewayBridge, startUws, startWs, type GatewayBridge, type TransportKind } from './transports';
 
 /** Real timers for the server-side network conditioner. */
 export const nodeScheduler: Scheduler = {
@@ -24,11 +24,23 @@ export async function createServer(
   roomOptions: RoomOptions = {},
   log: (msg: string) => void = console.log,
   prefer: TransportKind = 'uws',
+  /** Unix socket the WebTransport gateway (apps/wt-gateway) connects to; none = WebSocket only */
+  gatewaySocket?: string,
 ): Promise<RunningServer> {
   const room = new Room(roomOptions);
   const uws = prefer === 'uws' ? loadUws() : null;
   if (prefer === 'uws' && !uws) log('[game-server] uWebSockets.js not found, using the `ws` fallback (run `pnpm uws:fetch` to enable uWS)');
-  const transport = uws ? await startUws(uws.mod, port, room) : await startWs(port, room);
+  // the WebTransport bridge is optional: if its socket can't be made, WebSocket still works
+  let gateway: GatewayBridge | null = null;
+  if (gatewaySocket) {
+    try {
+      gateway = await startGatewayBridge(gatewaySocket, room, log);
+    } catch (e) {
+      log(`[game-server] no WebTransport (WebSocket only): ${(e as Error).message}`);
+    }
+  }
+  const webTransport = () => gateway?.info() ?? null;
+  const transport = uws ? await startUws(uws.mod, port, room, webTransport) : await startWs(port, room, webTransport);
 
   const loop = startTickLoop(TICK_RATE, () => room.tick());
   const rateTimer = setInterval(() => room.resetRateLimits(), 1000);
@@ -54,6 +66,7 @@ export async function createServer(
       clearInterval(rateTimer);
       clearInterval(reportTimer);
       transport.close();
+      gateway?.close();
     },
   };
 }

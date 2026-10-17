@@ -63,3 +63,16 @@ for (const [name, settings] of profiles.filter(([n]) => n.startsWith('Target') |
     );
   }
 }
+
+console.log('\nWebSocket (TCP) vs WebTransport (UDP datagrams), docs/05 §2: same loss, but on TCP a lost segment is resent ~1 RTT later and everything behind it waits\n');
+console.log('| profile | transport | snapshot age p50 / p99 | frames with interpolation stalled | inputs missed/min | corrections/min | resyncs |');
+console.log('|---|---|---|---|---|---|---|');
+for (const [name, settings] of profiles.filter(([n]) => !n.startsWith('LAN') && !n.includes('reordering'))) {
+  for (const transport of ['ws', 'wt'] as const) {
+    const r = simulate(settings, seconds, { transport });
+    const c = r.clients[0]!;
+    console.log(
+      `| ${name} | ${transport === 'ws' ? 'WebSocket' : 'WebTransport'} | ${c.snapshotAgeP50.toFixed(0)} / ${c.snapshotAgeP99.toFixed(0)} ms | ${c.interpStallPct.toFixed(1)}% | ${(c.missedInputs / r.minutes).toFixed(0)} | ${(c.corrections / r.minutes).toFixed(1)} | ${c.resyncs} |`,
+    );
+  }
+}

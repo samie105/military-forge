@@ -21,7 +21,7 @@ import {
   type SnapshotMsg,
   type SnapshotPlayer,
 } from '@military-forge/protocol';
-import { DT, Game, createInput, type Input, type PlayerState, type SimEvent } from '@military-forge/sim';
+import { DT, Game, MAX_PLAYERS, createInput, type Input, type PlayerState, type SimEvent } from '@military-forge/sim';
 import { InputPacer, RttEstimator, type PacerOptions } from './clock';
 import { bracketSnapshots, lerpPosition, quantizeRenderTick, type SnapshotBracket } from './interpolation';
 import { Predictor, type ReconcileKind } from './predictor';
@@ -106,6 +106,12 @@ export class NetClient {
   deltaMisses = 0;
   private readonly snapshotDecoder = new SnapshotDecoder();
   readonly names = new Map<number, string>();
+  /**
+   * Per id: the first server tick whose snapshots show its current holder (ROSTER `since`). Older
+   * snapshots show whoever had the id before, so a joiner is never drawn at a leaver's old poses
+   * (lag comp tests its current pose), whatever order ROSTER and snapshots arrive in.
+   */
+  private readonly heldSince = new Float64Array(MAX_PLAYERS).fill(-Infinity);
   /** predicted local events since the last drainEvents() (own shots: instant tracers) */
   private readonly predictedEvents: SimEvent[] = [];
   /** lag-compensation rewinds of our recent shots (dev rooms), newest last */
@@ -135,6 +141,8 @@ export class NetClient {
   private readonly baseInterpDelayMs: number;
   /** low-bandwidth mode (docs/05 §2.2): one INPUT per 2 ticks, 15 Hz snapshots */
   private lowBw = false;
+  /** until then snapshots may still arrive at either rate (a mode switch is on its way): lenient loss */
+  private rateChangeUntil = 0;
   private unsentTicks = 0;
   private heavyLossSince = 0;
   private firstStatAt = 0;
@@ -187,6 +195,11 @@ export class NetClient {
    * the server's side; prediction keeps your own movement instant.
    */
   setLowBandwidth(on: boolean): void {
+    if (on !== this.lowBw) {
+      // the server keeps its old rate until the CMD lands: about half an RTT, plus a 15 Hz interval
+      const rtt = this.rtt.count > 0 ? this.rtt.median : 300;
+      this.rateChangeUntil = this.options.now() + rtt + 4 * TICK_MS + 50;
+    }
     this.lowBw = on;
     this.interpDelayMs = on ? Math.max(this.baseInterpDelayMs, LOW_BANDWIDTH_INTERP_DELAY_MS) : this.baseInterpDelayMs;
     this.unsentTicks = 0;
@@ -230,7 +243,11 @@ export class NetClient {
           if (msg.resumed) this.reconnects++;
           // a fresh join (e.g. the server restarted) is a new timeline: old snapshots would skew the
           // render tick and the lag-comp view for their whole buffer
-          if (!resumingSame) this.snapshots.length = 0;
+          if (!resumingSame) {
+            this.snapshots.length = 0;
+            this.names.clear();
+            this.heldSince.fill(-Infinity);
+          }
         }
         this.connected = true;
         if (this.lowBw) this.options.send(encodeCmd(CmdKind.SetLowBandwidth, '1')); // a new connection starts at full rate
@@ -258,10 +275,13 @@ export class NetClient {
       case MsgType.Pong:
         this.rtt.add(now - msg.clientTime);
         break;
-      case MsgType.Roster:
+      case MsgType.Roster: {
+        // ids are reused: snapshots from before a player's `since` show whoever had the id before
+        for (const e of msg.entries) if (e.id >= 0 && e.id < MAX_PLAYERS) this.heldSince[e.id] = e.since;
         this.names.clear();
         for (const e of msg.entries) this.names.set(e.id, e.id === this.myId ? 'You' : e.name);
         break;
+      }
       case MsgType.Tuning:
         this.tuning = parseTuning(msg.tuningJson, this.tuning);
         if (this.predictor) this.predictor.game.tuning = this.tuning;
@@ -285,8 +305,9 @@ export class NetClient {
       // seqs run 1..65535 (0 means "nothing acked"), so they wrap mod 65535
       const gap = (msg.seq - this.lastSeq + 0xffff) % 0xffff;
       if (gap === 0 || gap >= 0x8000) return; // duplicate or older than what we have
-      // low-bandwidth clients get every other snapshot of the room's sequence
-      const per = this.lowBw ? 2 : 1;
+      // low-bandwidth clients get every other snapshot of the room's sequence (and just after a
+      // switch either rate is fine)
+      const per = this.lowBw || now < this.rateChangeUntil ? 2 : 1;
       this.seqWindow.push({ at: now, lost: Math.max(0, Math.round(gap / per) - 1) });
     }
     this.lastSeq = msg.seq;
@@ -398,10 +419,13 @@ export class NetClient {
     const br = bracketSnapshots(this.snapshots, renderTick, this.bracket);
     if (!br) return null;
     const newest = this.snapshots[this.snapshots.length - 1]!.msg;
+    const since = id >= 0 && id < MAX_PLAYERS ? this.heldSince[id]! : -Infinity;
+    if (newest.serverTick < since) return null;
     const pb = newest.players.find((p) => p.id === id);
     if (!pb) return null;
-    const p0 = br.a.players.find((p) => p.id === id) ?? pb;
-    const p1 = br.b.players.find((p) => p.id === id) ?? pb;
+    // a snapshot from before this id's holder got it shows someone else: hold the newest pose instead
+    const p0 = (br.a.serverTick >= since ? br.a.players.find((p) => p.id === id) : undefined) ?? pb;
+    const p1 = (br.b.serverTick >= since ? br.b.players.find((p) => p.id === id) : undefined) ?? pb;
     lerpPosition(p0.x, p0.y, p1.x, p1.y, br.alpha, this.lerped);
     out.x = this.lerped.x;
     out.y = this.lerped.y;

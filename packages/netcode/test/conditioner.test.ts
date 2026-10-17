@@ -68,6 +68,25 @@ describe('network conditioner', () => {
     expect(all.got.filter((g) => !g.reliable)).toEqual([]);
   });
 
+  it('stream mode (TCP): nothing is lost, but a loss stalls everything behind it by a retransmit', () => {
+    const settings = symmetric(100, 10).up;
+    settings.stream = true;
+    const { clock, got, l } = link(settings, 5);
+    for (let i = 0; i < 200; i++) {
+      l.send(unreliable(i));
+      clock.advance(16);
+    }
+    clock.advance(1000);
+    expect(got.map((g) => g.id)).toEqual(Array.from({ length: 200 }, (_, i) => i)); // all, in order
+    expect(l.stats.retransmitted).toBeGreaterThan(10);
+    const delays = got.map((g, i) => g.at - i * 16);
+    expect(Math.min(...delays)).toBe(50);
+    expect(Math.max(...delays)).toBeGreaterThanOrEqual(150); // a retransmit (+100 ms) …
+    // … and the messages queued behind it waited too (head-of-line blocking)
+    const stalled = delays.filter((d) => d > 50).length;
+    expect(stalled).toBeGreaterThan(l.stats.retransmitted * 2);
+  });
+
   it('duplicates unreliable messages', () => {
     const { clock, got, l } = link(symmetric(50, 0, 10, 10).up);
     for (let i = 0; i < 2000; i++) l.send(unreliable(i));

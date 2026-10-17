@@ -17,6 +17,7 @@
  * and off-screen ESP get nothing. Shots and explosions outside it arrive as SOUND events with 4 m
  * positions (enough for direction, useless for aiming).
  */
+import { CROUCHED_HITBOXES, STANDING_HITBOXES } from '@military-forge/content';
 import { POS_INV, VEL_INV } from '@military-forge/shared';
 import { MAX_PLAYERS, type Game, type PlayerState, type SimEvent } from '@military-forge/sim';
 import { BitReader, BitWriter, DecodeError } from './bitstream';
@@ -274,6 +275,12 @@ const EVENT_SOUND = 5;
 /** SOUND positions: 4 m grid */
 const SOUND_CELL = 4;
 const GRENADE_SOURCE = 62;
+/**
+ * How far a player's hitboxes reach from its feet, any direction. Culling tests the feet, so a
+ * culled player's body can poke this far into the AOI rect.
+ */
+const BODY_REACH =
+  Math.max(...[STANDING_HITBOXES, CROUCHED_HITBOXES].flatMap((h) => [h.head.y + h.head.r, h.torso.y1 + h.torso.r, h.legs.r - h.legs.y0])) + 0.05;
 
 function inRect(v: ViewRect, x: number, y: number): boolean {
   return x >= v.minX && x <= v.maxX && y >= v.minY && y <= v.maxY;
@@ -336,24 +343,32 @@ function writeShot(
     .unsigned(zone, 2);
 }
 
+function writeHit(w: BitWriter, attacker: number, target: number, damage: number, zone: number, source: number): void {
+  w.bits(EVENT_HIT, 3)
+    .unsigned(pid(attacker), 5)
+    .unsigned(pid(target), 5)
+    .unsigned(damage * 16, 12)
+    .unsigned(zone, 2)
+    .unsigned(source, 6);
+}
+
+function writeExplosion(w: BitWriter, x: number, y: number, radius: number, owner: number): void {
+  w.bits(EVENT_EXPLOSION, 3).signed(pos(x), 24).signed(pos(y), 24).unsigned(radius * 16, 8).unsigned(pid(owner), 5);
+}
+
 function writeEvent(w: BitWriter, e: SimEvent): void {
   switch (e.type) {
     case 'shot':
       writeShot(w, e.shooter, e.weapon, e.ox, e.oy, e.ex, e.ey, e.hit, e.target, e.zone);
       break;
     case 'explosion':
-      w.bits(EVENT_EXPLOSION, 3).signed(pos(e.x), 24).signed(pos(e.y), 24).unsigned(e.radius * 16, 8).unsigned(pid(e.owner), 5);
+      writeExplosion(w, e.x, e.y, e.radius, e.owner);
       break;
     case 'death':
       w.bits(EVENT_DEATH, 3).unsigned(pid(e.victim), 5).unsigned(pid(e.killer), 5).unsigned(e.source, 6);
       break;
     case 'hit':
-      w.bits(EVENT_HIT, 3)
-        .unsigned(pid(e.attacker), 5)
-        .unsigned(pid(e.target), 5)
-        .unsigned(e.damage * 16, 12)
-        .unsigned(e.zone, 2)
-        .unsigned(e.source, 6);
+      writeHit(w, e.attacker, e.target, e.damage, e.zone, e.source);
       break;
     case 'spawn':
       w.bits(EVENT_SPAWN, 3).unsigned(pid(e.player), 5);
@@ -456,6 +471,8 @@ export class SnapshotEncoder {
   private readonly ys = new Float64Array(MAX_PLAYERS);
   private readonly inView = new Uint8Array(MAX_PLAYERS);
   private readonly masks = new Uint8Array(MAX_PLAYERS);
+  /** the view shrunk by BODY_REACH (clipping tracers that end on a culled player) */
+  private readonly inset: ViewRect = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
   private readonly local = createLocalState();
   private game: Game | null = null;
   private events: readonly SimEvent[] = [];
@@ -527,8 +544,9 @@ export class SnapshotEncoder {
     let written = 0;
     for (const g of game.grenades) {
       if (!g.alive || (view !== null && !inRect(view, g.x, g.y)) || written++ >= 127) continue;
+      // the thrower, only if this client can see it: an exact arc and fuse work back to its hand
       w.unsigned(g.id, 6)
-        .unsigned(pid(g.owner), 5)
+        .unsigned(pid(view === null || g.owner === viewer || this.seen(g.owner) ? g.owner : -1), 5)
         .signed(pos(g.x), 24)
         .signed(pos(g.y), 24)
         .signed(Math.round(g.vx * VEL_INV), 20)
@@ -547,7 +565,10 @@ export class SnapshotEncoder {
       for (const e of pass === 0 ? extra : this.events) {
         const k = this.eventKind(e, view, viewer);
         if (k === 0 || written++ >= 255) continue;
-        if (k === 1 && e.type === 'shot' && view !== null) this.writeClippedShot(w, e);
+        if (k === 3 && e.type === 'shot') this.writeClippedShot(w, e);
+        // a hidden attacker: no id, and whole HP (1/16 HP plus the weapon's falloff gave its range to centimetres)
+        else if (k === 1 && e.type === 'hit' && view !== null && !this.showsAttacker(e, viewer)) writeHit(w, -1, e.target, Math.round(e.damage), e.zone, e.source);
+        else if (k === 1 && e.type === 'explosion' && view !== null && e.owner !== viewer && !this.seen(e.owner)) writeExplosion(w, e.x, e.y, e.radius, -1);
         else if (k === 1) writeEvent(w, e);
         else if (e.type === 'shot') writeSound(w, 'shot', e.weapon, e.ox, e.oy);
         else if (e.type === 'explosion') writeSound(w, 'explosion', GRENADE_SOURCE, e.x, e.y);
@@ -573,26 +594,28 @@ export class SnapshotEncoder {
   }
 
   /**
-   * A shot crossing the view: only the part inside it, and the ids only of players in view, so a
-   * tracer from (or into) the dark doesn't give away where a culled player stands. `lb` still
-   * holds this segment's clip from the eventKind call just before. A tracer cut short of its real
-   * end is sent as a miss (hit 0).
+   * A visible player's shot that leaves the view, or ends on a culled player: only the part inside
+   * the view (stopped BODY_REACH short of its edge when it ends on a culled body, so a hitbox poking
+   * into the rect isn't marked), with a culled target's id blanked. A tracer cut short of its real
+   * end, or aimed at a culled player (lag comp hits a pose up to 300 ms old), is sent as a miss.
+   * `lb` still holds this segment's clip from the eventKind call just before.
    */
   private writeClippedShot(w: BitWriter, e: Extract<SimEvent, { type: 'shot' }>): void {
     const dx = e.ex - e.ox;
     const dy = e.ey - e.oy;
     const { t0, t1 } = lb;
+    const cut = t1 < 1 || (e.target >= 0 && !this.seen(e.target));
     writeShot(
       w,
-      this.seen(e.shooter) ? e.shooter : -1,
+      e.shooter,
       e.weapon,
       e.ox + t0 * dx,
       e.oy + t0 * dy,
       t1 < 1 ? e.ox + t1 * dx : e.ex,
       t1 < 1 ? e.oy + t1 * dy : e.ey,
-      t1 < 1 ? 0 : e.hit,
+      cut ? 0 : e.hit,
       this.seen(e.target) ? e.target : -1,
-      t1 < 1 ? 0 : e.zone,
+      cut ? 0 : e.zone,
     );
   }
 
@@ -600,14 +623,36 @@ export class SnapshotEncoder {
     return id >= 0 && id < MAX_PLAYERS && this.inView[id] === 1;
   }
 
-  /** 0 = not sent to this client, 1 = in full, 2 = as a SOUND event */
+  /** A HIT names its attacker to the attacker, the victim, and clients that can see the attacker. */
+  private showsAttacker(e: Extract<SimEvent, { type: 'hit' }>, viewer: number): boolean {
+    return e.attacker < 0 || e.attacker === viewer || e.target === viewer || this.seen(e.attacker);
+  }
+
+  /** 0 = not sent to this client, 1 = in full, 2 = as a SOUND event, 3 = clipped (writeClippedShot) */
   private eventKind(e: SimEvent, view: ViewRect | null, viewer: number): number {
     switch (e.type) {
       case 'throw':
         return 0;
-      case 'shot':
+      case 'shot': {
         if (viewer >= 0 && e.shooter === viewer) return 0;
-        return view === null || segmentInRect(view, e.ox, e.oy, e.ex, e.ey) ? 1 : 2;
+        if (view === null) return 1;
+        // a culled shooter's tracer would locate it: its line (two of them cross at the muzzle) and,
+        // with the weapon's range, its end. Only the coarse SOUND
+        if (e.shooter >= 0 && !this.seen(e.shooter)) return 2;
+        if (e.hit === 2 && e.target >= 0 && !this.seen(e.target)) {
+          const v = this.inset;
+          v.minX = view.minX + BODY_REACH;
+          v.minY = view.minY + BODY_REACH;
+          v.maxX = view.maxX - BODY_REACH;
+          v.maxY = view.maxY - BODY_REACH;
+          // nothing of it inside the shrunk view (all in the off-screen margin): a zero-length miss at
+          // the visible shooter's muzzle, so whether anything arrives doesn't tell a hit from a miss
+          if (!segmentInRect(v, e.ox, e.oy, e.ex, e.ey)) lb.t0 = lb.t1 = 0;
+          return 3;
+        }
+        if (!segmentInRect(view, e.ox, e.oy, e.ex, e.ey)) return 2;
+        return lb.t0 > 0 || lb.t1 < 1 ? 3 : 1;
+      }
       case 'explosion':
         return view === null || inRect(view, e.x, e.y) ? 1 : 2;
       case 'hit':

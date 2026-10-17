@@ -16,7 +16,7 @@ This folder is the full pre-production plan, researched on **16 Oct 2026**, down
 | Budget | **Indie, scale later**: ~$50–110/mo in dev, ~$350–800/mo at soft launch; the architecture grows to 50k+ concurrent players |
 | Language | TypeScript everywhere; one shared simulation for client + server |
 | Client | Three.js r186 (`WebGLRenderer`), custom 2D kinematic physics, bitECS, Vite 8 |
-| Netcode | authoritative server, 60 Hz sim, 30 Hz snapshots (20 Hz BR), prediction + reconciliation, interpolation, 200 ms lag-comp cap |
+| Netcode | authoritative server, 60 Hz sim, 30 Hz snapshots (20 Hz BR), prediction + reconciliation, interpolation, 300 ms lag-comp cap (200 ms latency + 100 ms interpolation) |
 | Transport | WebSocket (uWebSockets.js) now; WebTransport datagrams in Phase 2 (all browsers since Safari 26.4) |
 | Backend | Hono API + Postgres (Neon) + Redis/Valkey + own matchmaker + social WebSocket gateway |
 | Hosting | Cloudflare (CDN/R2) + own allocator on flat-bandwidth VMs: FRA + Mumbai + Johannesburg first |
@@ -51,7 +51,7 @@ This folder is the full pre-production plan, researched on **16 Oct 2026**, down
 | | Value |
 |---|---|
 | Sim / snapshots / inputs | 60 Hz / 30 Hz (BR 20) / 60 Hz × 3–4 redundancy |
-| Interp delay · lag-comp cap | ~70–100 ms adaptive · 200 ms |
+| Interp delay · lag-comp cap | ~70–100 ms adaptive · 300 ms (200 ms latency + 100 ms interpolation) |
 | Bandwidth per player | rooms 8–12 KB/s down, BR 12–20 KB/s; 2–4 KB/s up |
 | Gravity · jet thrust · fuel | 20 m/s² · 38 m/s² · ~2.6 s burn, ~2.9 s ground refill |
 | Health · headshot · regen | 100 · ×1.5 (none while crouched) · 6 HP/s after 4 s |

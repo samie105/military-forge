@@ -278,14 +278,38 @@ describe('Room', () => {
     expect(clampedAt20()).toBe(true); // off: at once
   });
 
-  it('more than 20 CMDs a second are strikes', () => {
-    const room = new Room({ dummies: false, dev: false });
+  it('CMDs beyond 20/s (bursts of 20) are dropped, never strikes; SetLowBandwidth is never dropped', () => {
+    const room = new Room({ dummies: false, dev: true, snapshotEvery: 2 });
     const a = join(room, 'A');
-    for (let i = 0; i < 20; i++) room.receive(a.client, encodeCmd(CmdKind.SetLowBandwidth, i % 2 ? '1' : '0'));
+    const tuning = (walkMax: number) => encodeCmd(CmdKind.SetTuning, JSON.stringify({ walkMax }));
+    for (let round = 0; round < 5; round++) {
+      // a burst of 20 is fine; the 21st is dropped
+      for (let i = 0; i < 20; i++) room.receive(a.client, tuning(5));
+      room.receive(a.client, tuning(7));
+      expect(room.game.tuning.walkMax).toBe(5);
+      // the mode switch still lands: client and server agree on it
+      room.receive(a.client, encodeCmd(CmdKind.SetLowBandwidth, round % 2 ? '0' : '1'));
+      expect(a.client.snapshotEvery).toBe(round % 2 ? 2 : 4);
+      for (let i = 0; i < 60; i++) room.tick(); // a second refills the bucket
+    }
     expect(a.conn.closed).toBeNull();
-    room.resetRateLimits();
-    for (let i = 0; i < 23; i++) room.receive(a.client, encodeCmd(CmdKind.SetLowBandwidth, '1'));
-    expect(a.conn.closed?.code).toBe(CloseCode.BadMessage);
+    expect(a.client.strikes).toBe(0);
+    room.receive(a.client, tuning(7));
+    expect(room.game.tuning.walkMax).toBe(7);
+  });
+
+  it('ROSTER since is the first snapshot tick that shows the player (ids are reused)', () => {
+    const room = new Room({ dummies: false, aoi: false });
+    const a = join(room, 'A');
+    for (let i = 0; i < 7; i++) room.tick();
+    const b = join(room, 'B');
+    const since = a.conn.last(MsgType.Roster)!.entries.find((e) => e.id === b.welcome.playerId)!.since;
+    for (let i = 0; i < 4; i++) room.tick();
+    const dec = new SnapshotDecoder();
+    const snaps = a.conn.sent.filter((bytes) => bytes[0] === MsgType.Snapshot).map((bytes) => dec.decode(bytes));
+    const first = snaps.find((m) => m.players.some((p) => p.id === b.welcome.playerId))!;
+    expect(first.serverTick).toBe(snaps.find((m) => m.serverTick >= since)!.serverTick); // the first snapshot from `since` on
+    expect(snaps.filter((m) => m.serverTick < since).every((m) => !m.players.some((p) => p.id === b.welcome.playerId))).toBe(true);
   });
 
   describe('sessions (reconnect, docs/05 §13)', () => {

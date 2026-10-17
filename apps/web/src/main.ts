@@ -7,6 +7,7 @@
  *   /?server=ws://host:port&name=Ade   explicit server and name
  *   /?online&rtt=150&loss=2&jitter=5    network conditioner (or ?netsim=up.lat=20,down.lat=120,…)
  *   /?online&lowbw                      low-bandwidth mode (30 Hz inputs, 15 Hz snapshots)
+ *   /?online&transport=ws|wt            force WebSocket / WebTransport (default: WT when the server has a gateway)
  */
 import { getMap } from '@military-forge/content';
 import { createConditionerSettings, parseNetSim } from '@military-forge/netcode';
@@ -65,7 +66,8 @@ const view3d = planeCamera
 void view3d?.load(map.spawns[0]!);
 
 if (online) {
-  mode = new OnlineMode(serverUrl, name, sampler, camera, renderer, showToast, netSim);
+  const prefer = params.get('transport');
+  mode = new OnlineMode(serverUrl, name, sampler, camera, renderer, showToast, netSim, prefer === 'ws' || prefer === 'wt' ? prefer : 'auto');
 } else {
   mode = new LocalMode(sampler, camera, renderer, name, localMatchRules(params));
 }

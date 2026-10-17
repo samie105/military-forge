@@ -87,5 +87,16 @@ describe('netcode end to end (simulated network)', () => {
     expect(slim!.net.stats().snapshotLossPct).toBeLessThan(6); // the halved rate isn't counted as loss
     expect(r.healths.filter((h) => h >= 0 && h <= 4).length / r.healths.length).toBeGreaterThan(0.95);
   });
+
+  it('UDP datagrams vs a TCP stream at 150 ms / 2 %: no head-of-line stalls, no corrections', () => {
+    const tcp = simulate(symmetric(150, 2, 5), 50, { transport: 'ws' }).clients[0]!;
+    const udp = simulate(symmetric(150, 2, 5), 50, { transport: 'wt' }).clients[0]!;
+    // every TCP loss holds everything behind it for ~1 RTT; datagrams lose only themselves
+    expect(tcp.snapshotAgeP99).toBeGreaterThan(udp.snapshotAgeP99 + 80);
+    expect(udp.interpStallPct).toBeLessThan(0.5);
+    expect(tcp.interpStallPct).toBeGreaterThan(2);
+    expect(udp.corrections).toBe(0);
+    expect(tcp.corrections).toBeGreaterThan(5); // inputs stuck behind a retransmit arrive too late
+  });
 });
 
