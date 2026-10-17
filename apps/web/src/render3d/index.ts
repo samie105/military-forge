@@ -63,6 +63,8 @@ export class Renderer3D {
   /** set once the map, the base character and the shader warm-up are done */
   ready = false;
   private preset: GraphicsPreset;
+  /** overrides the preset's DPR cap (phones: sharp text on a small, dense screen; dynamic resolution still scales down) */
+  private dprCapOverride: number | null = null;
   private readonly dynres: DynamicResolution;
   private readonly frameMs = new SampleWindow(240);
   private readonly cpuMs = new SampleWindow(240);
@@ -258,9 +260,15 @@ export class Renderer3D {
     return this.preset.name;
   }
 
+  /** A device-pixel-ratio cap that holds whatever the preset (null: the preset's own again). */
+  setDprCap(cap: number | null): void {
+    this.dprCapOverride = cap;
+    this.resize();
+  }
+
   resize(): void {
     const canvas = this.renderer.domElement;
-    const dpr = Math.min(window.devicePixelRatio || 1, this.preset.dprCap) * this.dynres.scale;
+    const dpr = Math.min(window.devicePixelRatio || 1, this.dprCapOverride ?? this.preset.dprCap) * this.dynres.scale;
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
   }

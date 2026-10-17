@@ -1,0 +1,139 @@
+/* Touch controls (apps/web/src/touch): over the canvases and the HUD (5), under the shell's screens (10). */
+.mf-touch {
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+  font: 800 14px/1 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: #fff;
+}
+.mf-touch[hidden] { display: none; }
+/* the notch and the home indicator: controls stay inside (needs viewport-fit=cover, set while active) */
+.mf-touch-safe {
+  position: absolute;
+  top: env(safe-area-inset-top, 0px);
+  right: env(safe-area-inset-right, 0px);
+  bottom: env(safe-area-inset-bottom, 0px);
+  left: env(safe-area-inset-left, 0px);
+}
+.mf-touch-menus .mf-touch-safe, .mf-touch-menus .mf-touch-rotate { visibility: hidden; }
+
+.mf-ctl {
+  position: absolute;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  pointer-events: auto;
+  touch-action: none;
+  background: rgba(13, 18, 26, 0.5);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  letter-spacing: 0.04em;
+  transition: transform 60ms ease-out, background-color 60ms ease-out;
+}
+.mf-ctl.mf-down { background: rgba(255, 255, 255, 0.32); transform: scale(0.93); }
+.mf-ctl-dash, .mf-ctl-melee { font-size: 12px; }
+
+/* sticks: grabbed through their half of the screen; the circle shows where they rest */
+.mf-stick {
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0 40%, rgba(255, 255, 255, 0.03) 70%);
+  border-color: rgba(255, 255, 255, 0.4);
+  transition: none;
+}
+.mf-stick.mf-down { transform: none; background: radial-gradient(circle, rgba(255, 255, 255, 0.16) 0 40%, rgba(255, 255, 255, 0.05) 70%); }
+.mf-knob {
+  position: absolute;
+  left: 29%;
+  top: 29%;
+  width: 42%;
+  height: 42%;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  border: 2px solid rgba(255, 255, 255, 0.75);
+  box-sizing: border-box;
+}
+.mf-ctl-aim.mf-fire { border-color: rgba(255, 110, 90, 0.9); }
+.mf-ctl-aim.mf-fire .mf-knob { background: rgba(255, 96, 74, 0.75); border-color: rgba(255, 196, 186, 0.95); }
+
+.mf-touch-edit { width: 36px; height: 36px; left: calc(17.5% - 18px); top: 4px; font-size: 16px; }
+
+/* portrait: ask for landscape */
+.mf-touch-rotate {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  text-align: center;
+  background: rgba(8, 11, 16, 0.94);
+  pointer-events: auto;
+  font: 600 15px/1.4 system-ui, -apple-system, sans-serif;
+}
+.mf-touch-rotate[hidden] { display: none; }
+.mf-touch-rotate b { display: block; font-size: 20px; margin-bottom: 6px; }
+.mf-touch-rotate p { margin: 0 0 18px; color: #9aa7b4; }
+.mf-touch-rotate-icon { font-size: 64px; line-height: 1; margin-bottom: 14px; display: inline-block; animation: mf-turn 1.8s ease-in-out infinite; }
+@keyframes mf-turn { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(90deg); } }
+
+.mf-touch-btn {
+  font: 700 14px/1 system-ui, -apple-system, sans-serif;
+  color: #e6edf3;
+  background: #1c2430;
+  border: 1px solid #3a4656;
+  border-radius: 8px;
+  padding: 10px 14px;
+  min-width: 44px;
+  min-height: 40px;
+}
+.mf-touch-btn-primary { background: #1f6feb; border-color: #1f6feb; }
+
+/* the editor */
+.mf-touch-editing .mf-ctl, .mf-touch-editing .mf-stick { pointer-events: auto; outline: 2px dashed rgba(255, 255, 255, 0.55); outline-offset: 3px; }
+.mf-touch-editing .mf-ctl.mf-selected { outline-color: #58a6ff; outline-style: solid; }
+.mf-touch-editing .mf-touch-edit { display: none; }
+.mf-touch-editor {
+  position: absolute;
+  left: 50%;
+  top: max(8px, env(safe-area-inset-top, 0px));
+  transform: translateX(-50%);
+  z-index: 2;
+  width: min(720px, calc(100vw - 24px));
+  display: grid;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(10, 14, 20, 0.92);
+  border: 1px solid #30363d;
+  pointer-events: auto;
+  font: 600 13px/1.3 system-ui, -apple-system, sans-serif;
+}
+.mf-touch-editor[hidden], .mf-touch-editor-row[hidden] { display: none; }
+.mf-touch-editor-bottom { top: auto; bottom: max(8px, env(safe-area-inset-bottom, 0px)); }
+.mf-touch-editor-dragging { opacity: 0.15; pointer-events: none; }
+.mf-touch-editor-row { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; justify-content: center; }
+.mf-touch-editor-title { flex: 1 1 160px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.mf-touch-editor .mf-touch-btn { min-height: 36px; padding: 8px 12px; }
+.mf-touch-editor label { display: inline-flex; gap: 6px; align-items: center; }
+.mf-touch-editor input[type='checkbox'] { width: 20px; height: 20px; }
+.mf-touch-disabled { opacity: 0.35; pointer-events: none; }
+
+/* while playing with touch: the page never scrolls, zooms or selects, and the dev panel steps aside */
+html[data-touch-playing], html[data-touch-playing] body {
+  touch-action: none;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+/* the dev client's bar and tuning panel don't fit a phone next to the controls (app mode has neither) */
+html[data-touch-controls] #panel, html[data-touch-controls] #bar { display: none !important; }
+html[data-touch-controls] #game, html[data-touch-controls] #view3d { touch-action: none; }

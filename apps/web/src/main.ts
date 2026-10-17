@@ -21,6 +21,7 @@ import { OnlineMode } from './onlineMode';
 import { Renderer, type RenderOptions } from './render';
 import { localMatchRules, mountShell } from './shell';
 import { PlaneCamera, Renderer3D, parsePreset } from './render3d';
+import { mountTouch } from './touch';
 import { createTuningPanel } from './tuningPanel';
 
 const params = new URLSearchParams(location.search);
@@ -81,6 +82,7 @@ const view3d = planeCamera
   : null;
 void view3d?.load(map.spawns[0]!);
 if (view3d) renderer.forwardEvents = view3d.onEvents; // sim events → 3D effects (render3d)
+mountTouch({ sampler, camera, renderer, view3d }); // phones and tablets: twin sticks + buttons (apps/web/src/touch)
 
 if (online) {
   const prefer = params.get('transport');

@@ -19,7 +19,7 @@
 | Audio | **Thin in-house Web Audio wrapper** | Howler is stagnant (last release 2023) and has iOS quirks |
 | UI shell | React 19 + Zustand | Menus/store/social. HUD in a separate lightweight layer |
 | Build | **Vite 8** (Rolldown), pnpm, Turborepo | |
-| Touch (later) | custom Pointer Events twin-stick (or nipplejs 1.0) | |
+| Touch | custom Pointer Events twin-stick (`apps/web/src/touch`, lazy-loaded on touch devices: ~8 kB gzip) | |
 
 **Rejected for this project:**
 - **Unity:** 8 MB+ empty builds, and CrazyGames disables Unity games on iOS by default.
@@ -70,7 +70,7 @@ z =  +1 … +6    FOREGROUND       grass tufts, railings, pipes. Dither-fades wh
 | Triangles per character | ≤ 4K (LOD0), 1.8K (LOD1) | same |
 | GPU texture memory | ≤ 64 MB | ≤ 160 MB |
 | Live particles | ≤ 1.5K | ≤ 5K |
-| Device pixel ratio cap | 1.0 | 1.5 (2.0 opt-in) |
+| Device pixel ratio cap | 1.0 (phones: 1.5, since 1.0 is blurry on a small dense screen; dynamic resolution still drops to 0.6) | 1.5 (2.0 opt-in) |
 | Main-thread frame budget | sim ≤ 1 ms, net ≤ 0.5 ms, render submit ≤ 6 ms, HUD ≤ 1 ms | |
 
 - **Auto quality:** measure the first 300 frames, then pick a preset. **Dynamic resolution** steps the render scale (0.6–1.0) when the p90 frame time exceeds budget.

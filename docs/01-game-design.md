@@ -80,7 +80,7 @@ We keep the first list and design against the second.
 | Chat / team chat / quick chat | `Enter` / `Y` / `C` (wheel) | Menu |
 | Emote wheel | `B` | — |
 
-Everything is **rebindable** and has hold/toggle options. Mouse uses raw input with the pointer **not** locked (the reticle is a world-space cursor, like a mobile aim stick). There's a "confine cursor" option for multi-monitor setups. **Touch (later):** twin sticks + a custom HUD editor (drag/resize/opacity per button, saved layouts).
+Everything is **rebindable** and has hold/toggle options. Mouse uses raw input with the pointer **not** locked (the reticle is a world-space cursor, like a mobile aim stick). There's a "confine cursor" option for multi-monitor setups. **Touch:** floating twin sticks (left: move, push up to jet, down to crouch, swipe and lift to dash; right: aim, firing past half-way or on release, a setting) plus buttons for grenade (hold and drag to aim the arc), next grenade, swap, reload, dash, melee, zoom and shield, a left-handed mirror, and a HUD editor (drag/resize/opacity per button, saved on the device). Optional light aim assist (a slowdown while the aim is on an enemy, never a pull), on by default for touch only. The controls produce the same input as the keyboard (`apps/web/src/touch`).
 
 ---
 

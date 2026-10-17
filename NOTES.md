@@ -584,3 +584,29 @@ The carrier stands with a Hammer. The shooter, grounded, re-aims at the carrier'
 - **No dashing behind a raised shield:** `dashBlocked()` refuses a dash while the shield is up or coming up; lower it (X) to dash. A slung shield doesn't stop a dash.
 - **Maps:** `MapDef.spawners` is in the map JSON format and its schema (`parseMapJson`, `map.schema.json`).
 - **CONTENT_HASH** carries both the zone/event defaults and the pickups.
+
+## 21. Touch controls for phones (18 Oct 2026, owner request)
+
+> `apps/web/src/touch/**`, one mount line in main.ts. No protocol change: the controls produce the same `Input` as the keyboard. Golden hashes unchanged.
+
+**Why.** People open the shared link on a phone, and most players in Nigeria and India are on phones. Without touch input they couldn't play at all.
+
+**What a phone gets.**
+- **Left stick (floating):** a thumb anywhere on the left half of the game grabs it there. Past 30 % sideways walks; half-way up jets; 60 % down crouches or drops. A quick stroke and lift (≤ 220 ms, ≥ 75 %) dashes that way (a slow stroke is just a step).
+- **Right stick (floating):** aims. Hold mode (default) fires while it's pushed past half-way and only aims nearer the centre; release mode aims, then fires once on lift (sliding back to the centre first cancels).
+- **Buttons:** grenade (hold = cook, drag = aim the arc and set the strength, release = throw; a tap throws at full strength, like G), next grenade, swap, reload, dash (the way the left stick points), melee, zoom (cycles, wraps back to none), shield (appears once `Btn.Shield` exists), menu (Escape) and scoreboard (held Tab).
+- **Aim assist (touch only, on by default, a setting):** friction, never magnetism. While the aim lies on an enemy (±0.9 m, ≤ 40 m) the stick turns it at 45 % per tick, so a sweeping thumb lingers on the target. It always ends up where the stick points and never turns toward anyone.
+- **Look and fit:** semi-transparent, left- or right-handed, inside the safe areas (notches, home indicator; viewport-fit=cover while up). No page scroll, pinch zoom, double-tap zoom, long-press menu or text selection while playing. A "turn your phone sideways" prompt in portrait (with "Play full screen" where the browser allows it). Optional vibration when you're hit.
+- **The HUD editor** (✎ on the controls, or `openTouchEditor()` from Settings): drag any control, ± size, opacity per control and overall, reset. It's one compact row (dockable top or bottom) that fades while you drag. Saved on the device (`mf.touch.layout.v1`, settings `mf.touch.settings.v1`).
+
+**Device detection.** On automatically when the primary pointer is a finger (`pointer: coarse`), or the first time the screen is touched; a setting forces it on or off. Mouse and keyboard keep working alongside (a tablet with a keyboard): a mouse on the game aims and fires as usual and takes the aim back from the stick; touches never turn into mouse clicks. While the shell's menus are open the controls hide and leave taps to the menus.
+
+**Phones get** the Low preset (already the default) with the DPR cap raised to 1.5 (`Renderer3D.setDprCap`; 1.0 is blurry on a dense 6" screen) and dynamic resolution on. **First load:** the eager part (detection, settings, API) adds 1.7 kB gzip to the main chunk; the HUD (controller 5.3 + layout 1.2 + CSS 1.4 kB gzip) is a separate chunk only touch devices fetch.
+
+**Checked** (`apps/web/scripts/touch-check.mjs`: headless Chrome as an 812×375 phone at DPR 3, real CDP multi-touch): 19/19.
+- walk, jet, hold-fire (and a light push only aims), release-fire, two thumbs at once, grenade tap and drag-throw, swap, swipe dash (and a slow stroke doesn't dash), the dash button
+- no scroll, zoom or selection afterwards
+- the editor (a drag survives a reload), left-handed, the portrait prompt
+- Low preset at DPR 1.5
+
+Screenshots are in docs/screenshots/touch. With the CPU throttled ×4 on 3D Low, frames ran at p50 16.7–33 ms and p90 17–50 ms depending on the machine's load, with render CPU 1.9–4 ms; dynamic resolution settled at 0.6. That's software WebGL in headless Chrome (CPU-rasterised), so it's a worst case for the GPU side, not a phone measurement. **Not yet done:** a real phone (iOS Safari especially: fullscreen and orientation lock aren't available there, and its compatibility mouse events are guarded by timing), and tuning the thresholds with players.
