@@ -131,6 +131,13 @@ export class Avatar {
   private readonly right: Arm | null;
   private readonly left: Arm | null;
   private readonly spine: Object3D[];
+  /**
+   * Bones the procedural aim rotates, with the pose the animation gave them this frame. The mixer
+   * skips writing a property whose mixed value didn't change, so a clip that holds a bone still
+   * (the run clip's spine) would otherwise leave last frame's aim in place and the aim would pile
+   * up every frame: the head and spine spun while running.
+   */
+  private readonly posed: { bone: Object3D; anim: Quaternion }[];
   private readonly flame = new Group();
   private flameScale = 0;
   private time = 0;
@@ -147,6 +154,8 @@ export class Avatar {
     this.spine = ['spine1', 'spine2', 'head'].map((n) => inst.bone(n)).filter((b): b is NonNullable<typeof b> => !!b);
     this.right = this.arm('R');
     this.left = this.arm('L');
+    const armBones = [this.right, this.left].flatMap((a) => (a ? [a.upper, a.lower, a.hand, a.socket] : []));
+    this.posed = [...this.spine, ...armBones].map((bone) => ({ bone, anim: bone.quaternion.clone() }));
 
     const outer = new Mesh(kit.flameOuterGeo, kit.flameOuter);
     const inner = new Mesh(kit.flameInnerGeo, kit.flameInner);
@@ -184,7 +193,9 @@ export class Avatar {
     const state = this.loco.update(p, dt);
     this.play(prev, state, speed);
     if (state === 'run' && this.current) this.current.timeScale = runTimeScale(speed);
+    for (const b of this.posed) b.bone.quaternion.copy(b.anim); // undo last frame's aim
     this.mixer.update(dt);
+    for (const b of this.posed) b.anim.copy(b.bone.quaternion);
 
     const facing = facingOf(p.aim);
     const target = facingYaw(facing);

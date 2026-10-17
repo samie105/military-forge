@@ -1,6 +1,6 @@
 import { movementTestMap } from '@military-forge/content';
 import { CollisionWorld } from '@military-forge/sim';
-import { AnimationClip, Bone, Group, NumberKeyframeTrack, Quaternion, Vector3, type Object3D } from 'three';
+import { AnimationClip, Bone, Group, NumberKeyframeTrack, Quaternion, QuaternionKeyframeTrack, Vector3, type Object3D } from 'three';
 import { describe, expect, it } from 'vitest';
 import { Avatar, AvatarKit } from '../avatar';
 import { toonRamp, type CharacterInstance } from '../character';
@@ -34,7 +34,14 @@ function syntheticRookie(): CharacterInstance {
     bone(`socket_weapon_${side}`, hand, 0, -0.052);
   }
   const idle = new AnimationClip('idle', 1, [new NumberKeyframeTrack('pelvis.position[y]', [0, 1], [0.47, 0.46])]);
-  const run = new AnimationClip('run', 0.6, [new NumberKeyframeTrack('pelvis.position[y]', [0, 0.6], [0.47, 0.5])]);
+  // like the real run clip: the spine and head are keyed but held still
+  const still = (bone: string) => new QuaternionKeyframeTrack(`${bone}.quaternion`, [0, 0.6], [0, 0, 0, 1, 0, 0, 0, 1]);
+  const run = new AnimationClip('run', 0.6, [
+    new NumberKeyframeTrack('pelvis.position[y]', [0, 0.6], [0.47, 0.5]),
+    still('spine1'),
+    still('spine2'),
+    still('head'),
+  ]);
   return { root, meshes: [], clips: [idle, run], bone: (n) => bones.get(n) ?? null, dispose: () => root.removeFromParent() };
 }
 
@@ -104,5 +111,19 @@ describe('Avatar', () => {
     expect(running().sort()).toEqual(['idle', 'run']); // mid cross-fade
     for (let i = 0; i < 30; i++) a.update(playerView({ vx: 5 }), 1 / 60, world, true);
     expect(running()).toEqual(['run']);
+  });
+
+  it('aims the spine and head without the turn piling up when the clip holds them still (regression: head spun while running)', () => {
+    const { a, inst } = avatar();
+    const head = inst.bone('head')!;
+    const pose = () => head.getWorldQuaternion(new Quaternion());
+    for (let i = 0; i < 40; i++) a.update(playerView({ vx: 5, aim: 0.8 }), 1 / 60, world, true); // into the run clip
+    const settled = pose();
+    for (let i = 0; i < 60; i++) a.update(playerView({ vx: 5, aim: 0.8 }), 1 / 60, world, true);
+    expect(pose().angleTo(settled)).toBeLessThan(1e-6);
+    // and it still looks up: the head is pitched by the aim, not left at the bind pose
+    const level = avatar();
+    for (let i = 0; i < 40; i++) level.a.update(playerView({ vx: 5, aim: 0 }), 1 / 60, world, true);
+    expect(level.inst.bone('head')!.getWorldQuaternion(new Quaternion()).angleTo(settled)).toBeGreaterThan(0.1);
   });
 });
