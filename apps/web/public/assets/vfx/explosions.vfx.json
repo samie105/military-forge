@@ -1,0 +1,260 @@
+{
+ "version": 1,
+ "atlas": "explosion_atlas.webp",
+ "atlasSize": [
+  2048,
+  1024
+ ],
+ "cell": [
+  256,
+  256
+ ],
+ "blend": "normal",
+ "flipbooks": {
+  "frag": {
+   "cellM": 4.035,
+   "anchorUV": [
+    0.5,
+    0.5
+   ],
+   "fps": 18,
+   "frames": 16,
+   "anchor": "centre",
+   "firstCell": [
+    0,
+    0
+   ]
+  },
+  "rocket": {
+   "cellM": 5.785,
+   "anchorUV": [
+    0.5,
+    0.9141
+   ],
+   "fps": 16,
+   "frames": 16,
+   "anchor": "base",
+   "firstCell": [
+    4,
+    0
+   ]
+  }
+ },
+ "shockwave": {
+  "texture": "shockwave.webp",
+  "blend": "additive"
+ },
+ "particles": {
+  "texture": "particles.webp",
+  "from": "impacts.vfx.json"
+ },
+ "decals": {
+  "from": "impacts.vfx.json"
+ },
+ "styles": {
+  "frag": {
+   "flipbook": "frag",
+   "scale": 1.0,
+   "radiusM": 4.0,
+   "shockwave": {
+    "fromM": 0.3,
+    "toM": 4.0,
+    "ms": 220,
+    "tint": "#fff6e0",
+    "opacity": 0.85,
+    "notes": "a camera-facing ring growing to the blast radius: where the launch and damage reach"
+   },
+   "light": {
+    "color": "#ffcf80",
+    "intensity": 8.0,
+    "rangeM": 8.8,
+    "ms": 160
+   },
+   "debris": {
+    "kind": "chip",
+    "count": [
+     10,
+     14
+    ],
+    "tint": "#4a4743",
+    "sizeM": 0.07,
+    "speedMps": [
+     6,
+     12
+    ],
+    "coneDeg": 80,
+    "gravity": 1,
+    "lifeMs": 900
+   },
+   "dust": {
+    "kind": "dust",
+    "count": [
+     5,
+     7
+    ],
+    "tint": "#cfc6b4",
+    "sizeM": 0.72,
+    "speedMps": [
+     1.5,
+     3
+    ],
+    "alongGround": true,
+    "gravity": -0.05,
+    "lifeMs": 1100
+   },
+   "scorch": {
+    "decal": "scorch",
+    "sizeM": 2.4,
+    "onGroundOnly": false
+   },
+   "cameraShake": {
+    "amplitudeM": 0.35,
+    "freqHz": 14,
+    "decayMs": 420,
+    "fullWithinM": 4.0,
+    "zeroAtM": 14.0,
+    "verticalBias": 0.6
+   }
+  },
+  "grenade_launcher": {
+   "flipbook": "frag",
+   "scale": 0.8,
+   "radiusM": 3.2,
+   "provisional": "no content entry yet: radius scaled from the frag",
+   "shockwave": {
+    "fromM": 0.3,
+    "toM": 3.2,
+    "ms": 220,
+    "tint": "#fff6e0",
+    "opacity": 0.85,
+    "notes": "a camera-facing ring growing to the blast radius: where the launch and damage reach"
+   },
+   "light": {
+    "color": "#ffcf80",
+    "intensity": 7.6,
+    "rangeM": 7.0,
+    "ms": 160
+   },
+   "debris": {
+    "kind": "chip",
+    "count": [
+     10,
+     14
+    ],
+    "tint": "#4a4743",
+    "sizeM": 0.07,
+    "speedMps": [
+     6,
+     12
+    ],
+    "coneDeg": 80,
+    "gravity": 1,
+    "lifeMs": 900
+   },
+   "dust": {
+    "kind": "dust",
+    "count": [
+     5,
+     7
+    ],
+    "tint": "#cfc6b4",
+    "sizeM": 0.58,
+    "speedMps": [
+     1.5,
+     3
+    ],
+    "alongGround": true,
+    "gravity": -0.05,
+    "lifeMs": 1100
+   },
+   "scorch": {
+    "decal": "scorch",
+    "sizeM": 1.92,
+    "onGroundOnly": false
+   },
+   "cameraShake": {
+    "amplitudeM": 0.28,
+    "freqHz": 14,
+    "decayMs": 420,
+    "fullWithinM": 3.2,
+    "zeroAtM": 11.2,
+    "verticalBias": 0.6
+   }
+  },
+  "rocket": {
+   "flipbook": "rocket",
+   "scale": 1.0,
+   "radiusM": 5.0,
+   "provisional": "no content entry yet: radius scaled from the frag",
+   "shockwave": {
+    "fromM": 0.3,
+    "toM": 5.0,
+    "ms": 220,
+    "tint": "#fff6e0",
+    "opacity": 0.85,
+    "notes": "a camera-facing ring growing to the blast radius: where the launch and damage reach"
+   },
+   "light": {
+    "color": "#ffcf80",
+    "intensity": 8.5,
+    "rangeM": 11.0,
+    "ms": 160
+   },
+   "debris": {
+    "kind": "chip",
+    "count": [
+     10,
+     14
+    ],
+    "tint": "#4a4743",
+    "sizeM": 0.07,
+    "speedMps": [
+     6,
+     12
+    ],
+    "coneDeg": 80,
+    "gravity": 1,
+    "lifeMs": 900
+   },
+   "dust": {
+    "kind": "dust",
+    "count": [
+     5,
+     7
+    ],
+    "tint": "#cfc6b4",
+    "sizeM": 0.9,
+    "speedMps": [
+     1.5,
+     3
+    ],
+    "alongGround": true,
+    "gravity": -0.05,
+    "lifeMs": 1100
+   },
+   "scorch": {
+    "decal": "scorch",
+    "sizeM": 3.0,
+    "onGroundOnly": false
+   },
+   "cameraShake": {
+    "amplitudeM": 0.44,
+    "freqHz": 14,
+    "decayMs": 420,
+    "fullWithinM": 5.0,
+    "zeroAtM": 17.5,
+    "verticalBias": 0.6
+   }
+  }
+ },
+ "launchTrail": {
+  "minSpeedMps": 12,
+  "everyMs": 45,
+  "kind": "dust",
+  "tint": "#f4f1ea",
+  "sizeM": 0.35,
+  "lifeMs": 380,
+  "notes": "puffs behind a player while a blast throws them faster than launchSpeedX (NOTES \u00a717), so a 16 m flight reads as a launch, not a teleport; stops when they land"
+ },
+ "notes": "play the flipbook at fps on a camera-facing quad of cellM \u00d7 scale with anchorUV on the blast point (rocket: the base of its smoke ring, on the surface it hit); the first frames are bright: draw them above the shockwave; camera shake is a suggestion for W1 (falls off from fullWithinM to zeroAtM)"
+}

@@ -1,16 +1,23 @@
 asset-check: art/weapons/k47.glb  [weapon]
--------------------------------------------------------------------------------------------------
-INFO  file size                              36 KB
-PASS  triangles                              492 of 1000
-PASS  one mesh, one material                 1 draw call(s)
-INFO  GPU texture memory (KTX2 est.)         0.00 MB, 0 image(s)
-PASS  extras weaponId/family/aimPose/hands   ok
-PASS  weaponId in packages/content           k47
-INFO  nodes                                  eject, mag, muzzle, offhand
-PASS  origin on the weapon (the grip)        bbox (-0.03, -0.1, -0.34)..(0.03, 0.17, 0.57)
-PASS  family is a docs/04 §4.2 family        'rifle'
-PASS  aimPose has clips                      'rifle'
-PASS  muzzle node ahead of the grip (+Y)     muzzle at glTF y +0.58 m
-PASS  offhand node within 0.1 m of the grip  0.091 m
--------------------------------------------------------------------------------------------------
-RESULT: PASS  (9 pass, 0 warn, 0 fail)
+----------------------------------------------------------------------------------------------------
+INFO  file size                                 40 KB
+PASS  triangles                                 492 of 1000
+PASS  one mesh, one material                    1 draw call(s)
+INFO  GPU texture memory (KTX2 est.)            0.00 MB, 0 image(s)
+PASS  extras weaponId/family/aimPose/hands      ok
+PASS  weaponId in packages/content              k47
+INFO  nodes                                     eject, grip, mag, muzzle, offhand, rail_bottom, rail_top
+PASS  origin on the weapon (the grip)           bbox (-0.03, -0.1, -0.34)..(0.03, 0.17, 0.57)
+PASS  family is a docs/04 §4.2 family           'rifle'
+PASS  aimPose has clips                         'rifle'
+PASS  muzzle node ahead of the grip (+Y)        muzzle at glTF y +0.58 m
+PASS  offhand node within 0.1 m of the grip     0.091 m
+PASS  sockets for the family                    grip, muzzle, mag, rail_top, eject
+PASS  socket directions (unit `dir`)            ok
+PASS  sockets on the weapon (within 3 cm)       ok
+PASS  muzzle fires along +Y with a bore radius  dir (0.0, 1.0, 0.0), bore 0.013 m
+PASS  casings eject to the right (+X)           at x +0.030, dir x +0.80
+PASS  rail_top above the bore, facing up        z +0.082 vs bore +0.060, length 0.14 m
+PASS  rail_bottom below the bore, facing down   z +0.020 vs bore +0.060, length 0.12 m
+----------------------------------------------------------------------------------------------------
+RESULT: PASS  (16 pass, 0 warn, 0 fail)

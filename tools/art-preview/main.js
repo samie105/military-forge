@@ -91,6 +91,31 @@ const [rookie, arsenal, catalogue, kit, body0, body1, anims] = await Promise.all
 const UPPER = new Set(rookie.upperBodyBones);
 const weaponGltf = Object.fromEntries(await Promise.all(Object.keys(arsenal.weapons).map(
   async (id) => [id, await load(`${ASSETS}weapons/${id}.glb`)])));
+// ?fire=1 freezes one shot on every held weapon (assets/vfx/weapons.vfx.json): flash, light pop,
+// tracer and casings in flight, all placed from the weapon's sockets.
+const FIRE = params.get('fire') === '1';
+const vfx = FIRE ? await fetch(`${ASSETS}vfx/weapons.vfx.json`).then((r) => r.json()) : null;
+const [flashTex, tracerTex, casingsGltf] = FIRE ? await Promise.all([
+  loadTex(`${ASSETS}vfx/${vfx.flash.atlas}`), loadTex(`${ASSETS}vfx/${vfx.tracer.texture}`),
+  load(`${ASSETS}vfx/${vfx.casings.file}`),
+]) : [];
+// ?impacts=1 lays out one block per sim surface with its impact burst, particles and decals
+// frozen (assets/vfx/impacts.vfx.json), and the non-gory hit marker on the hero.
+const IMPACTS = params.get('impacts') === '1';
+const imp = IMPACTS ? await fetch(`${ASSETS}vfx/impacts.vfx.json`).then((r) => r.json()) : null;
+const [impactTex, decalTex, particleTex] = IMPACTS ? await Promise.all([
+  loadTex(`${ASSETS}vfx/${imp.impact.atlas}`), loadTex(`${ASSETS}vfx/${imp.decals.atlas}`),
+  loadTex(`${ASSETS}vfx/${imp.particles.texture}`),
+]) : [];
+// ?boom=1 freezes explosions mid-blast (assets/vfx/explosions.vfx.json): a frag at its peak with its
+// shockwave and debris, a rocket mushroom, scorch decals, and the trail of a blast-launched player.
+const BOOM = params.get('boom') === '1';
+const boom = BOOM ? await fetch(`${ASSETS}vfx/explosions.vfx.json`).then((r) => r.json()) : null;
+const boomImp = BOOM ? await fetch(`${ASSETS}vfx/impacts.vfx.json`).then((r) => r.json()) : null;
+const [boomTex, ringTex, boomPartTex, boomDecalTex] = BOOM ? await Promise.all([
+  loadTex(`${ASSETS}vfx/${boom.atlas}`), loadTex(`${ASSETS}vfx/${boom.shockwave.texture}`),
+  loadTex(`${ASSETS}vfx/particles.webp`), loadTex(`${ASSETS}vfx/${boomImp.decals.atlas}`),
+]) : [];
 // Aim-pose set per held item (weapons.json `aimPose`; docs/04 §9.5).
 const aimFamily = (id) => arsenal.weapons[id].aimPose ?? 'pistol';
 const clips = Object.fromEntries(anims.animations.map((c) => [c.name, c]));
@@ -327,7 +352,197 @@ if (mapDef) {
 function weapon(id) {
   const w = weaponGltf[id].scene.clone();
   w.traverse((o) => { if (o.isMesh) o.userData.variants = shadeVariants(o, null); });
+  if (FIRE) fireFx(id, w);
   return w;
+}
+
+// Two crossed quads: the flash/tracer plane holds the muzzle axis (weapon +Y) and faces the side
+// camera (normal = weapon ±X); the second one is turned 90° about the axis for volume.
+const CROSSED = [
+  new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(1, 0, 0)),
+  new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 1, 0), new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, -1)),
+];
+function crossedQuads(geometry, material) {
+  const g = new THREE.Group();
+  for (const basis of CROSSED) {
+    const m = new THREE.Mesh(geometry, material);
+    m.quaternion.setFromRotationMatrix(basis);
+    m.renderOrder = 5;
+    g.add(m);
+  }
+  return g;
+}
+const fxMaterial = (map, color = 0xffffff) => new THREE.MeshBasicMaterial({
+  map, color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+  toneMapped: false, userData: NO_OUTLINE,
+});
+function fireFx(id, gun) {
+  const hook = vfx.weapons[id];
+  const muzzle = gun.getObjectByName('muzzle');
+  const eject = gun.getObjectByName('eject');
+  if (hook?.flash && muzzle) {
+    const style = vfx.flash.styles[hook.flash];
+    const [cw, ch] = vfx.flash.cell;
+    const [aw, ah] = vfx.flash.atlasSize;
+    const cell = style.frames[[...id].reduce((h, c) => h + c.charCodeAt(0), 0) % style.frames.length];
+    const cx = (cell % (aw / cw)) * cw;
+    const cy = Math.floor(cell / (aw / cw)) * ch;
+    const s = hook.flashScale ?? 1;
+    const geo = new THREE.PlaneGeometry(style.quad.widthM * s, style.quad.heightM * s)
+      .translate(style.quad.widthM * s * (0.5 - style.quad.originU), 0, 0);
+    const uv = geo.attributes.uv;
+    for (let i = 0; i < uv.count; i++) {
+      uv.setXY(i, (cx + uv.getX(i) * cw) / aw, (cy + (1 - uv.getY(i)) * ch) / ah); // flipY false: v down from the top
+    }
+    muzzle.add(crossedQuads(geo, fxMaterial(flashTex)));
+    const l = style.light;
+    const light = new THREE.PointLight(new THREE.Color(l.color), l.intensity, l.rangeM, 2);
+    muzzle.add(light);
+  }
+  const tracer = hook?.tracer && vfx.tracer.styles[hook.tracer];
+  if (tracer && muzzle) {
+    const len = tracer.lengthM;
+    const geo = new THREE.PlaneGeometry(len, tracer.widthM).translate(0.6 + len / 2, 0, 0);
+    muzzle.add(crossedQuads(geo, fxMaterial(tracerTex, new THREE.Color(tracer.tint))));
+  }
+  const casing = hook?.casing && hook.eject === 'shot' && casingsGltf.scene.getObjectByName(`casing_${hook.casing}`);
+  if (casing && eject) {
+    const type = vfx.casings.types[hook.casing];
+    const dir = new THREE.Vector3(...(eject.userData.dir ?? [1, 0, 0])).normalize();
+    // a frozen arc: three casings at 30 / 70 / 120 ms, gravity along the weapon's −Z
+    for (const [i, t] of [0.03, 0.07, 0.12].entries()) {
+      const c = casing.clone();
+      c.position.copy(dir).multiplyScalar(type.speedMps * t).add(new THREE.Vector3(0, 0, -4.9 * t * t));
+      c.rotation.set(1.1 * i + 0.4, 2.3 * i, 0.7 * i);
+      c.traverse((o) => { if (o.isMesh) o.userData.variants = shadeVariants(o, null); });
+      eject.add(c);
+    }
+  }
+}
+
+// A quad showing one atlas cell: `size` m square (or w × h), with `anchor` (u, v of the cell) on the origin.
+function cellQuad(tex, cell, [cw, ch], [aw, ah], w, h = w, anchor = [0.5, 0.5]) {
+  const geo = new THREE.PlaneGeometry(w, h).translate(w * (0.5 - anchor[0]), h * (anchor[1] - 0.5), 0);
+  const cols = aw / cw;
+  const cx = (cell % cols) * cw;
+  const cy = Math.floor(cell / cols) * ch;
+  const uv = geo.attributes.uv;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, (cx + uv.getX(i) * cw) / aw, (cy + (1 - uv.getY(i)) * ch) / ah);
+  return geo;
+}
+function boomScene() {
+  const plain = (map, color = 0xffffff, opacity = 1) => new THREE.MeshBasicMaterial({
+    map, color, transparent: true, opacity, depthWrite: false, toneMapped: false, userData: NO_OUTLINE,
+  });
+  let seed = 11;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const blast = (styleName, frame, x, y, ringT) => {
+    const st = boom.styles[styleName];
+    const fb = boom.flipbooks[st.flipbook];
+    const size = fb.cellM * st.scale;
+    const cell = fb.firstCell[0] + (frame % 4) + Math.floor(frame / 4) * 8;
+    const q = new THREE.Mesh(cellQuad(boomTex, cell, boom.cell, boom.atlasSize, size, size, fb.anchorUV), plain(boomTex));
+    q.position.set(x, y, 0.8);
+    q.renderOrder = 9;
+    scene.add(q);
+    // the shockwave at ringT of its growth, showing the blast radius
+    const r = st.shockwave.fromM + (st.shockwave.toM - st.shockwave.fromM) * ringT;
+    const ring = new THREE.Mesh(new THREE.PlaneGeometry(2 * r, 2 * r),
+      fxMaterial(ringTex, new THREE.Color(st.shockwave.tint)));
+    ring.material.opacity = st.shockwave.opacity * (1 - ringT * 0.5);
+    ring.position.set(x, y + (fb.anchor === 'base' ? 0.6 : 0), 0.7);
+    ring.renderOrder = 8;
+    scene.add(ring);
+    const light = new THREE.PointLight(new THREE.Color(st.light.color), st.light.intensity, st.light.rangeM, 2);
+    light.position.set(x, y + 0.8, 1.2);
+    scene.add(light);
+    // debris chips flying out, dust rolling along the ground
+    for (const p of [st.debris, st.dust]) {
+      for (let k = 0; k < p.count[1]; k++) {
+        const ang = p.alongGround ? (k % 2 ? 0.15 : Math.PI - 0.15) : THREE.MathUtils.degToRad(90 + (rnd() * 2 - 1) * p.coneDeg);
+        const d = (p.alongGround ? 0.8 : 0.8) + rnd() * (p.alongGround ? 2.2 : 2.6);
+        const geo = cellQuad(boomPartTex, boomImp.particles.cells[p.kind], [64, 64], [256, 64], p.sizeM);
+        const m = new THREE.Mesh(geo, plain(boomPartTex, new THREE.Color(p.tint), p.alongGround ? 0.8 : 1));
+        m.position.set(x + Math.cos(ang) * d, y + 0.1 + Math.sin(ang) * d * (p.alongGround ? 0.2 : 1), 0.75);
+        m.rotation.z = rnd() * Math.PI;
+        scene.add(m);
+      }
+    }
+    // scorch on the ground slab's front face, at the blast
+    const dec = boomImp.decals.styles[st.scorch.decal];
+    const sc = new THREE.Mesh(cellQuad(boomDecalTex, dec.cell, boomImp.decals.cell, boomImp.decals.atlasSize, st.scorch.sizeM, st.scorch.sizeM * 0.5),
+      plain(boomDecalTex));
+    sc.position.set(x, -0.25, 1.01);
+    scene.add(sc);
+  };
+  blast('frag', 4, -12.5, 0.6, 0.65);
+  blast('rocket', 6, -4.6, 0.0, 0.85);
+  // a blast-launched player's trail: puffs along the arc behind Blue 2 (NOTES §17)
+  const lt = boom.launchTrail;
+  const to = ROSTER.find((r) => r.name === 'Blue 2');
+  for (let k = 1; k <= 8; k++) {
+    const t = k / 9;
+    const m = new THREE.Mesh(cellQuad(boomPartTex, boomImp.particles.cells[lt.kind], [64, 64], [256, 64], lt.sizeM * (0.5 + t * 0.6)),
+      plain(boomPartTex, new THREE.Color(lt.tint), 0.35 + 0.6 * t));
+    m.position.set(to.x - (1 - t) * 7, to.y + 0.6 - (1 - t) ** 2 * 4.2, 0.5);
+    scene.add(m);
+  }
+}
+function impactBoard() {
+  const surfaces = [['concrete', 0x9a9a96], ['metal', 0x6f7680], ['wood', 0xa3743f], ['dirt', 0xb89466], ['glass', 0xcfe6f2]];
+  const toonish = (color, glass) => new THREE.MeshToonMaterial({ color, gradientMap: ramp, transparent: glass, opacity: glass ? 0.55 : 1 });
+  const normal = (map, color = 0xffffff) => new THREE.MeshBasicMaterial({
+    map, color, transparent: true, depthWrite: false, toneMapped: false, userData: NO_OUTLINE,
+  });
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  surfaces.forEach(([name, color], i) => {
+    const x = -16.2 + i * 1.7;
+    const block = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), toonish(color, name === 'glass'));
+    block.position.set(x, 0.5, 0);
+    scene.add(block);
+    const style = imp.impact.styles[name];
+    const [aw, ah] = imp.impact.atlasSize;
+    // a burst on the top (normal +Y) and one on the left face (normal −X)
+    for (const [fi, pos, rot] of [[0, [x + 0.15, 1.0, 0.55], 0], [2, [x - 0.5, 0.45, 0.55], Math.PI / 2]]) {
+      const q = new THREE.Mesh(cellQuad(impactTex, style.frames[fi], imp.impact.cell, [aw, ah], style.quadM, style.quadM, style.hitUV),
+        normal(impactTex));
+      q.position.set(...pos);
+      q.rotation.z = rot;
+      q.renderOrder = 6;
+      scene.add(q);
+    }
+    // frozen particles above the top burst
+    for (const p of style.particles) {
+      const [cw] = imp.particles.cell;
+      for (let k = 0; k < p.count[1]; k++) {
+        const a = THREE.MathUtils.degToRad((rnd() * 2 - 1) * p.coneDeg);
+        const d = 0.15 + rnd() * 0.45;
+        const geo = cellQuad(particleTex, imp.particles.cells[p.kind], imp.particles.cell, [cw * 4, cw], p.sizeM * (p.kind === 'spark' ? 2.5 : 1), p.sizeM);
+        const m = new THREE.Mesh(geo, p.blend === 'additive' ? fxMaterial(particleTex, new THREE.Color(p.tint)) : normal(particleTex, new THREE.Color(p.tint)));
+        m.position.set(x + 0.15 + Math.sin(a) * d, 1.0 + Math.cos(a) * d, 0.6);
+        m.rotation.z = p.kind === 'spark' ? Math.PI / 2 - a : rnd() * Math.PI;
+        m.renderOrder = 7;
+        scene.add(m);
+      }
+    }
+    // decals on the front face
+    const dec = imp.decals.styles[style.decal];
+    const [dw, dh] = imp.decals.atlasSize;
+    for (const [dx, dy] of [[-0.25, 0.7], [0.2, 0.35], [-0.1, 0.15]]) {
+      const m = new THREE.Mesh(cellQuad(decalTex, dec.cell, imp.decals.cell, [dw, dh], dec.sizeM * 1.6), normal(decalTex));
+      m.position.set(x + dx, dy, 0.503);
+      m.rotation.z = rnd() * Math.PI * 2;
+      scene.add(m);
+    }
+  });
+  // the hit marker on the hero's chest
+  const hero = ROSTER.find((r) => r.hero);
+  const ps = imp.impact.styles.player;
+  const marker = new THREE.Mesh(cellQuad(impactTex, ps.frames[1], imp.impact.cell, imp.impact.atlasSize, ps.quadM), normal(impactTex));
+  marker.position.set(hero.x + 0.05, hero.y + 0.95, 0.45);
+  marker.renderOrder = 8;
+  scene.add(marker);
 }
 // One flame per nozzle: `points` are the nozzle exits in socket_jetpack's frame (from the part's
 // `nozzles` extra); without them, the twin-tank pair.
@@ -709,6 +924,8 @@ for (const el of [ui.clip, ui.lod, ui.family]) el.addEventListener('change', spa
 ui.save.addEventListener('click', () => saveShot(`view-${Date.now()}`));
 window.addEventListener('resize', frameCamera);
 
+if (IMPACTS) impactBoard();
+if (BOOM) boomScene();
 spawnAll();
 frameCamera();
 ui.status.textContent = '';

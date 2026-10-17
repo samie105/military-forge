@@ -1,0 +1,23 @@
+asset-check: art/weapons/trident.glb  [weapon]
+----------------------------------------------------------------------------------------------------
+INFO  file size                                 58 KB
+PASS  triangles                                 704 of 1000
+PASS  one mesh, one material                    1 draw call(s)
+INFO  GPU texture memory (KTX2 est.)            0.00 MB, 0 image(s)
+PASS  extras weaponId/family/aimPose/hands      ok
+WARN  weaponId in packages/content              trident is not in packages/content/src/{weapons,grenades}.ts yet
+INFO  nodes                                     eject, grip, mag, muzzle, offhand, rail_bottom, rail_top
+PASS  origin on the weapon (the grip)           bbox (-0.03, -0.12, -0.33)..(0.03, 0.17, 0.57)
+PASS  family is a docs/04 §4.2 family           'rifle'
+PASS  aimPose has clips                         'rifle'
+PASS  muzzle node ahead of the grip (+Y)        muzzle at glTF y +0.58 m
+PASS  offhand node within 0.1 m of the grip     0.091 m
+PASS  sockets for the family                    grip, muzzle, mag, rail_top, eject
+PASS  socket directions (unit `dir`)            ok
+PASS  sockets on the weapon (within 3 cm)       ok
+PASS  muzzle fires along +Y with a bore radius  dir (0.0, 1.0, 0.0), bore 0.012 m
+PASS  casings eject to the right (+X)           at x +0.030, dir x +0.80
+PASS  rail_top above the bore, facing up        z +0.119 vs bore +0.055, length 0.12 m
+PASS  rail_bottom below the bore, facing down   z +0.007 vs bore +0.055, length 0.12 m
+----------------------------------------------------------------------------------------------------
+RESULT: PASS  (15 pass, 1 warn, 0 fail)

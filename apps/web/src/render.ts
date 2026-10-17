@@ -54,9 +54,10 @@ export interface RenderOptions {
   showGrid: boolean;
   showNet: boolean;
   /**
-   * 3D mode (render3d): this canvas is a transparent layer over the WebGL view. HUD, reticle and 2D
-   * effects always; the world layers (map outline, capsules, hitboxes) are the debug overlay, drawn
-   * while hitboxes (H) or the grid (B) are on.
+   * 3D mode (render3d): this canvas is a transparent layer over the WebGL view. HUD, reticle, tracers
+   * and damage numbers always; the world layers (map outline, capsules, hitboxes, grenades, blasts)
+   * are the debug overlay, drawn while hitboxes (H) or the grid (B) are on. render3d draws the
+   * grenades and blasts itself.
    */
   overlay?: boolean;
 }
@@ -83,6 +84,8 @@ export class Renderer {
   private hitMarker = { age: 1, head: false, kill: false };
   private names = new Map<number, string>();
   private fps = 60;
+  /** Also handed every event batch when set: main.ts points it at the 3D view's effects. */
+  forwardEvents: ((events: readonly SimEvent[], localId: number) => void) | null = null;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -111,6 +114,7 @@ export class Renderer {
 
   /** Turns sim events into short-lived visual effects. */
   onEvents(events: readonly SimEvent[], localId: number): void {
+    this.forwardEvents?.(events, localId);
     for (const e of events) {
       switch (e.type) {
         case 'shot':
@@ -169,7 +173,7 @@ export class Renderer {
     for (const p of frame.players) this.drawPlayer(p, opts.showHitboxes);
     if (opts.showHitboxes && frame.rewinds) for (const r of frame.rewinds) this.drawRewind(r);
     for (const g of frame.grenades) this.drawGrenade(g.x, g.y, g.fuse);
-    this.drawEffects(dt, byId);
+    this.drawEffects(dt, byId, true);
     ctx.globalAlpha = 1;
     this.drawLetterbox();
 
@@ -178,10 +182,10 @@ export class Renderer {
     this.drawReticle();
   }
 
-  /** Overlay without the debug world layers: 2D effects (until render3d's VFX), HUD and reticle. */
+  /** Overlay without the debug world layers: tracers and damage numbers, HUD and reticle (render3d draws grenades and blasts). */
   private drawOverlayHud(frame: Frame, dt: number, opts: RenderOptions, help: string): void {
     const byId = new Map(frame.players.map((p) => [p.id, p]));
-    this.drawEffects(dt, byId);
+    this.drawEffects(dt, byId, false);
     this.drawLetterbox();
     const local = byId.get(frame.localId);
     if (local) this.drawHud(local, frame, opts, help);
@@ -442,7 +446,8 @@ export class Renderer {
     ctx.stroke();
   }
 
-  private drawEffects(dt: number, byId: Map<number, PlayerView>): void {
+  /** `blasts`: draw the blast rings (2D view and debug overlay; render3d draws its own otherwise). They age either way. */
+  private drawEffects(dt: number, byId: Map<number, PlayerView>, blasts: boolean): void {
     const ctx = this.ctx;
     const cam = this.camera;
     for (let i = this.tracers.length - 1; i >= 0; i--) {
@@ -473,6 +478,7 @@ export class Renderer {
         this.bursts.splice(i, 1);
         continue;
       }
+      if (!blasts) continue;
       const k = b.age / 0.45;
       ctx.fillStyle = `rgba(255,166,87,${0.5 * (1 - k)})`;
       ctx.beginPath();

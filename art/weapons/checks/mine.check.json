@@ -6,7 +6,7 @@
     {
       "status": "INFO",
       "check": "file size",
-      "detail": "34 KB"
+      "detail": "38 KB"
     },
     {
       "status": "PASS",
@@ -36,7 +36,7 @@
     {
       "status": "INFO",
       "check": "nodes",
-      "detail": "ground, light"
+      "detail": "grip, ground, light"
     },
     {
       "status": "PASS",
@@ -56,6 +56,21 @@
     {
       "status": "PASS",
       "check": "ground node (rest frame)",
+      "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "sockets for the family",
+      "detail": "grip"
+    },
+    {
+      "status": "PASS",
+      "check": "socket directions (unit `dir`)",
+      "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "sockets on the weapon (within 3 cm)",
       "detail": "ok"
     }
   ]

@@ -1,0 +1,83 @@
+{
+ "patterns": "camo_patterns.png",
+ "atlasSize": [
+  1024,
+  512
+ ],
+ "cell": [
+  256,
+  256
+ ],
+ "encoding": "R = round(255 \u00b7 level / (levels \u2212 1)); sample with nearest filtering and no mipmaps",
+ "applies": "vertices whose _CAMO attribute is 1 (body panels); project triplanar in the weapon frame, one tile per tileM metres; the toon lighting shades it",
+ "camos": {
+  "forest_patch": {
+   "name": "Forest Patch",
+   "cell": 0,
+   "palette": [
+    "#23241f",
+    "#3d4a2a",
+    "#6b5034",
+    "#5f6b3a"
+   ],
+   "levels": 4,
+   "tileM": 0.3
+  },
+  "dune": {
+   "name": "Dune",
+   "cell": 1,
+   "palette": [
+    "#9c7f52",
+    "#b59d6e",
+    "#cbb78c"
+   ],
+   "levels": 3,
+   "tileM": 0.3
+  },
+  "concrete": {
+   "name": "Concrete",
+   "cell": 2,
+   "palette": [
+    "#5c6064",
+    "#8a8d90",
+    "#b9bcbe"
+   ],
+   "levels": 3,
+   "tileM": 0.3
+  },
+  "snowline": {
+   "name": "Snowline",
+   "cell": 3,
+   "palette": [
+    "#7f8a93",
+    "#b8bfc6",
+    "#e6e9ec"
+   ],
+   "levels": 3,
+   "tileM": 0.3
+  },
+  "stripe": {
+   "name": "Stripe",
+   "cell": 4,
+   "palette": [
+    "#1f201c",
+    "#5a4430",
+    "#4b5a33"
+   ],
+   "levels": 3,
+   "tileM": 0.3
+  },
+  "pixel": {
+   "name": "Pixel",
+   "cell": 5,
+   "palette": [
+    "#2f352c",
+    "#4e5a48",
+    "#6f7a5d",
+    "#93987c"
+   ],
+   "levels": 4,
+   "tileM": 0.3
+  }
+ }
+}

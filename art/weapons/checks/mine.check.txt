@@ -1,15 +1,18 @@
 asset-check: art/weapons/mine.glb  [weapon]
 ------------------------------------------------------------------------------------------------
-INFO  file size                             34 KB
+INFO  file size                             38 KB
 PASS  triangles                             472 of 1000
 PASS  one mesh, one material                1 draw call(s)
 INFO  GPU texture memory (KTX2 est.)        0.00 MB, 0 image(s)
 PASS  extras weaponId/family/aimPose/hands  ok
 WARN  weaponId in packages/content          mine is not in packages/content/src/{weapons,grenades}.ts yet
-INFO  nodes                                 ground, light
+INFO  nodes                                 grip, ground, light
 PASS  origin on the weapon (the grip)       bbox (-0.1, -0.04, -0.1)..(0.1, 0.02, 0.1)
 PASS  family is a docs/04 §4.2 family       'thrown'
 PASS  aimPose has clips                     'pistol'
 PASS  ground node (rest frame)              ok
+PASS  sockets for the family                grip
+PASS  socket directions (unit `dir`)        ok
+PASS  sockets on the weapon (within 3 cm)   ok
 ------------------------------------------------------------------------------------------------
-RESULT: PASS  (7 pass, 1 warn, 0 fail)
+RESULT: PASS  (10 pass, 1 warn, 0 fail)

@@ -6,7 +6,7 @@
     {
       "status": "INFO",
       "check": "file size",
-      "detail": "51 KB"
+      "detail": "57 KB"
     },
     {
       "status": "PASS",
@@ -36,7 +36,7 @@
     {
       "status": "INFO",
       "check": "nodes",
-      "detail": "eject, muzzle, offhand"
+      "detail": "eject, grip, mag, muzzle, offhand, rail_top"
     },
     {
       "status": "PASS",
@@ -62,6 +62,36 @@
       "status": "PASS",
       "check": "offhand node within 0.1 m of the grip",
       "detail": "0.099 m"
+    },
+    {
+      "status": "PASS",
+      "check": "sockets for the family",
+      "detail": "grip, muzzle, mag, rail_top, eject"
+    },
+    {
+      "status": "PASS",
+      "check": "socket directions (unit `dir`)",
+      "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "sockets on the weapon (within 3 cm)",
+      "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "muzzle fires along +Y with a bore radius",
+      "detail": "dir (0.0, 1.0, 0.0), bore 0.052 m"
+    },
+    {
+      "status": "PASS",
+      "check": "casings eject to the right (+X)",
+      "detail": "at x +0.070, dir x +0.69"
+    },
+    {
+      "status": "PASS",
+      "check": "rail_top above the bore, facing up",
+      "detail": "z +0.162 vs bore +0.070, length 0.10 m"
     }
   ]
 }

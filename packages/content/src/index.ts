@@ -1,6 +1,7 @@
 import { movementTestMap } from './maps/movementTest';
 import type { MapDef } from './maps/types';
 
+export * from './attachments';
 export * from './cosmetics';
 export * from './grenades';
 export * from './hitboxes';

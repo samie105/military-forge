@@ -1,0 +1,332 @@
+{
+ "version": 1,
+ "materials": {
+  "0": "concrete",
+  "1": "metal",
+  "2": "wood",
+  "3": "dirt",
+  "4": "glass"
+ },
+ "impact": {
+  "atlas": "impact_atlas.webp",
+  "atlasSize": [
+   1024,
+   1536
+  ],
+  "cell": [
+   256,
+   256
+  ],
+  "blend": "normal",
+  "styles": {
+   "concrete": {
+    "frames": [
+     0,
+     1,
+     2,
+     3
+    ],
+    "quadM": 0.4683,
+    "hitUV": [
+     0.5,
+     0.9766
+    ],
+    "ms": 260,
+    "anchor": "bottom",
+    "particles": [
+     {
+      "kind": "chip",
+      "count": [
+       3,
+       5
+      ],
+      "tint": "#9a9a96",
+      "sizeM": 0.035,
+      "speedMps": [
+       2,
+       4
+      ],
+      "coneDeg": 50,
+      "gravity": 1,
+      "lifeMs": 500
+     },
+     {
+      "kind": "dust",
+      "count": [
+       1,
+       2
+      ],
+      "tint": "#c9c6bf",
+      "sizeM": 0.25,
+      "speedMps": [
+       0.3,
+       0.6
+      ],
+      "coneDeg": 30,
+      "gravity": -0.1,
+      "lifeMs": 700
+     }
+    ],
+    "decal": "concrete"
+   },
+   "metal": {
+    "frames": [
+     4,
+     5,
+     6,
+     7
+    ],
+    "quadM": 0.4163,
+    "hitUV": [
+     0.5,
+     0.9766
+    ],
+    "ms": 160,
+    "anchor": "bottom",
+    "particles": [
+     {
+      "kind": "spark",
+      "count": [
+       5,
+       8
+      ],
+      "tint": "#fff2a0",
+      "sizeM": 0.08,
+      "speedMps": [
+       4,
+       8
+      ],
+      "coneDeg": 70,
+      "gravity": 1,
+      "lifeMs": 300,
+      "blend": "additive"
+     }
+    ],
+    "decal": "metal"
+   },
+   "wood": {
+    "frames": [
+     8,
+     9,
+     10,
+     11
+    ],
+    "quadM": 0.4683,
+    "hitUV": [
+     0.5,
+     0.9766
+    ],
+    "ms": 240,
+    "anchor": "bottom",
+    "particles": [
+     {
+      "kind": "chip",
+      "count": [
+       3,
+       6
+      ],
+      "tint": "#c49a62",
+      "sizeM": 0.04,
+      "speedMps": [
+       2,
+       4
+      ],
+      "coneDeg": 55,
+      "gravity": 1,
+      "lifeMs": 600
+     },
+     {
+      "kind": "dust",
+      "count": [
+       1,
+       1
+      ],
+      "tint": "#d8bf98",
+      "sizeM": 0.2,
+      "speedMps": [
+       0.3,
+       0.5
+      ],
+      "coneDeg": 30,
+      "gravity": -0.1,
+      "lifeMs": 600
+     }
+    ],
+    "decal": "wood"
+   },
+   "dirt": {
+    "frames": [
+     12,
+     13,
+     14,
+     15
+    ],
+    "quadM": 0.6244,
+    "hitUV": [
+     0.5,
+     0.9766
+    ],
+    "ms": 320,
+    "anchor": "bottom",
+    "particles": [
+     {
+      "kind": "chip",
+      "count": [
+       3,
+       5
+      ],
+      "tint": "#7a5a3a",
+      "sizeM": 0.035,
+      "speedMps": [
+       2,
+       5
+      ],
+      "coneDeg": 25,
+      "gravity": 1,
+      "lifeMs": 700
+     },
+     {
+      "kind": "dust",
+      "count": [
+       2,
+       3
+      ],
+      "tint": "#cdb48a",
+      "sizeM": 0.3,
+      "speedMps": [
+       0.4,
+       0.8
+      ],
+      "coneDeg": 25,
+      "gravity": -0.1,
+      "lifeMs": 900
+     }
+    ],
+    "decal": "dirt"
+   },
+   "glass": {
+    "frames": [
+     16,
+     17,
+     18,
+     19
+    ],
+    "quadM": 0.4683,
+    "hitUV": [
+     0.5,
+     0.9766
+    ],
+    "ms": 220,
+    "anchor": "bottom",
+    "particles": [
+     {
+      "kind": "chip",
+      "count": [
+       5,
+       8
+      ],
+      "tint": "#e6f4ff",
+      "sizeM": 0.03,
+      "speedMps": [
+       2,
+       5
+      ],
+      "coneDeg": 70,
+      "gravity": 1,
+      "lifeMs": 600
+     },
+     {
+      "kind": "spark",
+      "count": [
+       2,
+       3
+      ],
+      "tint": "#ffffff",
+      "sizeM": 0.05,
+      "speedMps": [
+       3,
+       5
+      ],
+      "coneDeg": 60,
+      "gravity": 0.5,
+      "lifeMs": 200,
+      "blend": "additive"
+     }
+    ],
+    "decal": "glass"
+   },
+   "player": {
+    "frames": [
+     20,
+     21,
+     22,
+     23
+    ],
+    "quadM": 0.5246,
+    "hitUV": [
+     0.5,
+     0.5
+    ],
+    "ms": 180,
+    "anchor": "centre",
+    "particles": [],
+    "decal": null
+   }
+  },
+  "notes": "draw a random frame on a camera-facing quad of quadM \u00d7 quadM with hitUV on the hit point and +V along the surface normal (centre anchor: no rotation); scale 0.6 \u2192 1.0 over the first 25% of ms and fade over the last 50%; `player` is the hit marker on a character"
+ },
+ "particles": {
+  "texture": "particles.webp",
+  "cells": {
+   "spark": 0,
+   "dust": 1,
+   "chip": 2
+  },
+  "cell": [
+   64,
+   64
+  ],
+  "notes": "per impact: count in [min, max]; velocity speedMps along the normal within coneDeg; gravity in g (negative floats up); sparks stretch along their velocity"
+ },
+ "decals": {
+  "atlas": "decal_atlas.webp",
+  "atlasSize": [
+   512,
+   256
+  ],
+  "cell": [
+   128,
+   128
+  ],
+  "styles": {
+   "concrete": {
+    "cell": 0,
+    "sizeM": 0.14
+   },
+   "metal": {
+    "cell": 1,
+    "sizeM": 0.12
+   },
+   "wood": {
+    "cell": 2,
+    "sizeM": 0.15
+   },
+   "dirt": {
+    "cell": 3,
+    "sizeM": 0.14
+   },
+   "glass": {
+    "cell": 4,
+    "sizeM": 0.18
+   },
+   "scorch": {
+    "cell": 5,
+    "sizeM": 0.5
+   }
+  },
+  "lifeMs": 8000,
+  "fadeMs": 1000,
+  "maxLive": 64,
+  "notes": "on map surfaces only (never on characters): in the side view, on the camera-facing front face of the hit geometry at the hit (x, y); a random roll; the oldest goes first when maxLive is reached; `scorch` is for explosions"
+ }
+}

@@ -339,7 +339,7 @@ Projectile caps per room: 256 live projectiles. Flamethrower particles are aggre
 | Throw speed | 14 m/s + 40% player vel | 11 m/s, **no gravity** (flies straight, short range: 0.9 s flight) | 13 m/s | 13 m/s |
 | Gravity scale | 1.0 | 0 | 1.0 | 1.0 |
 | Restitution `e` | 0.45 (bouncy, longest throw) | 0 (**sticks** to any surface) | 0.35 | 0.4 |
-| Fuse | **1.6 s** from throw (original ≈ 1.5 s); optional cook mode in custom rooms | arms after 2.0 s. State colours: green = flying, yellow = stuck/arming, flashing red = armed. Triggers on an enemy within 1.6 m (0.25 s beep). A direct hit on a player in flight detonates it. **Can be shot (10 HP), set off by explosions, disarmed by EMP.** Despawns after 180 s | 1.4 s, then a **15 s cloud** | 1.2 s |
+| Fuse | **1.6 s** from throw; optional cook mode in custom rooms | arms after 2.0 s. State colours: green = flying, yellow = stuck/arming, flashing red = armed. Triggers on an enemy within 1.6 m (0.25 s beep). A direct hit on a player in flight detonates it. **Can be shot (10 HP), set off by explosions, disarmed by EMP.** Despawns after 180 s | 1.4 s, then a **15 s cloud** | 1.2 s |
 | Effect | 110 dmg max, R = 4.0 m, full-damage core 0.8 m, impulse 14 m/s. A crouched victim at full HP survives unless it's directly underneath (crouch → torso-only exposure + 25% blast reduction) | 120 dmg, R = 3.2 m | DoT strongest at the centre: 14 dmg/s core → 4 dmg/s edge, R = 3.5 m. **Flamethrower fire clears the cloud** | **Disables jetpacks for 3 s** in R = 4 m (affects the thrower too). Disarms mines. 0 dmg |
 | Self/team damage | yes (team damage per mode rules) | yes | yes | n/a |
 | Carry (default) | 3 (spawn loadout), max 5 | 2 | 2 | 2 |

@@ -5,7 +5,7 @@ export default defineConfig({
   build: {
     target: 'es2022',
     sourcemap: false,
-    // Two pages: the game (index.html) and the Locker (locker.html) until W4's shell routes them.
-    rolldownOptions: { input: { main: 'index.html', locker: 'locker.html' } },
+    // Pages: the game (index.html), the Locker (locker.html) and the Armory (armory.html) until W4's shell routes them.
+    rolldownOptions: { input: { main: 'index.html', locker: 'locker.html', armory: 'armory.html' } },
   },
 });

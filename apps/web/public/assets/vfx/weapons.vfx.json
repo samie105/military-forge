@@ -1,0 +1,405 @@
+{
+ "version": 1,
+ "frame": "weapon sockets (weapons/sockets.json): flashes leave `muzzle` along its dir, casings leave `eject` along its dir; quads lie in the plane of the muzzle dir and the camera (or as two crossed quads)",
+ "flash": {
+  "atlas": "flash_atlas.webp",
+  "atlasSize": [
+   1024,
+   1024
+  ],
+  "cell": [
+   256,
+   128
+  ],
+  "blend": "additive",
+  "styles": {
+   "pistol": {
+    "frames": [
+     0,
+     1,
+     2,
+     3
+    ],
+    "quad": {
+     "widthM": 0.4352,
+     "heightM": 0.2176,
+     "originU": 0.0234
+    },
+    "ms": 40,
+    "light": {
+     "color": "#ffd890",
+     "intensity": 2.0,
+     "rangeM": 3.0
+    },
+    "jitter": {
+     "scale": [
+      0.85,
+      1.15
+     ],
+     "rollDeg": 6,
+     "flipV": true
+    }
+   },
+   "smg": {
+    "frames": [
+     4,
+     5,
+     6,
+     7
+    ],
+    "quad": {
+     "widthM": 0.4661,
+     "heightM": 0.233,
+     "originU": 0.0234
+    },
+    "ms": 33,
+    "light": {
+     "color": "#ffd890",
+     "intensity": 1.8,
+     "rangeM": 3.0
+    },
+    "jitter": {
+     "scale": [
+      0.85,
+      1.15
+     ],
+     "rollDeg": 6,
+     "flipV": true
+    }
+   },
+   "rifle": {
+    "frames": [
+     8,
+     9,
+     10,
+     11
+    ],
+    "quad": {
+     "widthM": 0.6539,
+     "heightM": 0.327,
+     "originU": 0.0234
+    },
+    "ms": 45,
+    "light": {
+     "color": "#ffd890",
+     "intensity": 2.5,
+     "rangeM": 4.0
+    },
+    "jitter": {
+     "scale": [
+      0.85,
+      1.15
+     ],
+     "rollDeg": 6,
+     "flipV": true
+    }
+   },
+   "shotgun": {
+    "frames": [
+     12,
+     13,
+     14,
+     15
+    ],
+    "quad": {
+     "widthM": 0.8069,
+     "heightM": 0.4034,
+     "originU": 0.0234
+    },
+    "ms": 60,
+    "light": {
+     "color": "#ffd080",
+     "intensity": 3.5,
+     "rangeM": 5.0
+    },
+    "jitter": {
+     "scale": [
+      0.85,
+      1.15
+     ],
+     "rollDeg": 6,
+     "flipV": true
+    }
+   },
+   "sniper": {
+    "frames": [
+     16,
+     17,
+     18,
+     19
+    ],
+    "quad": {
+     "widthM": 0.9366,
+     "heightM": 0.4683,
+     "originU": 0.0234
+    },
+    "ms": 70,
+    "light": {
+     "color": "#fff0c0",
+     "intensity": 3.0,
+     "rangeM": 5.0
+    },
+    "jitter": {
+     "scale": [
+      0.85,
+      1.15
+     ],
+     "rollDeg": 6,
+     "flipV": true
+    }
+   },
+   "launcher": {
+    "frames": [
+     20,
+     21,
+     22,
+     23
+    ],
+    "quad": {
+     "widthM": 0.9689,
+     "heightM": 0.4845,
+     "originU": 0.0234
+    },
+    "ms": 120,
+    "light": {
+     "color": "#ffc870",
+     "intensity": 5.0,
+     "rangeM": 7.0
+    },
+    "jitter": {
+     "scale": [
+      0.85,
+      1.15
+     ],
+     "rollDeg": 6,
+     "flipV": true
+    }
+   },
+   "heavy": {
+    "frames": [
+     24,
+     25,
+     26,
+     27
+    ],
+    "quad": {
+     "widthM": 0.7705,
+     "heightM": 0.3852,
+     "originU": 0.0234
+    },
+    "ms": 33,
+    "light": {
+     "color": "#ffd890",
+     "intensity": 2.5,
+     "rangeM": 4.0
+    },
+    "jitter": {
+     "scale": [
+      0.85,
+      1.15
+     ],
+     "rollDeg": 6,
+     "flipV": true
+    }
+   }
+  },
+  "notes": "pick a random frame per shot; scale and roll from `jitter`; flipV mirrors it across the muzzle axis; the point light pops for `ms`"
+ },
+ "tracer": {
+  "texture": "tracer.webp",
+  "blend": "additive",
+  "styles": {
+   "pistol": {
+    "tint": "#fff1b8",
+    "widthM": 0.035,
+    "lengthM": 1.2,
+    "speedMps": 90,
+    "every": 1
+   },
+   "smg": {
+    "tint": "#fff1b8",
+    "widthM": 0.03,
+    "lengthM": 1.0,
+    "speedMps": 100,
+    "every": 2
+   },
+   "rifle": {
+    "tint": "#ffe9a0",
+    "widthM": 0.04,
+    "lengthM": 1.8,
+    "speedMps": 140,
+    "every": 1
+   },
+   "shotgun": {
+    "tint": "#fff6d0",
+    "widthM": 0.02,
+    "lengthM": 0.6,
+    "speedMps": 80,
+    "every": 1,
+    "perPellet": true
+   },
+   "sniper": {
+    "tint": "#ffffff",
+    "widthM": 0.06,
+    "lengthM": 4.0,
+    "speedMps": 260,
+    "every": 1,
+    "trail": {
+     "tint": "#d8d8d0",
+     "widthM": 0.05,
+     "fadeMs": 450
+    }
+   },
+   "heavy": {
+    "tint": "#ffdf8a",
+    "widthM": 0.04,
+    "lengthM": 1.6,
+    "speedMps": 150,
+    "every": 2
+   }
+  },
+  "notes": "the texture's head is +U; stretch it from the muzzle toward the hit; perPellet = one per shotgun pellet; trail = a smoke line left behind that fades over fadeMs"
+ },
+ "casings": {
+  "file": "casings.glb",
+  "maxLive": 32,
+  "types": {
+   "pistol": {
+    "node": "casing_pistol",
+    "lengthM": 0.048,
+    "tris": 72,
+    "speedMps": 2.2,
+    "coneDeg": 18,
+    "spinRps": 18,
+    "lifeMs": 1400
+   },
+   "rifle": {
+    "node": "casing_rifle",
+    "lengthM": 0.093,
+    "tris": 144,
+    "speedMps": 2.8,
+    "coneDeg": 15,
+    "spinRps": 22,
+    "lifeMs": 1500
+   },
+   "shotgun": {
+    "node": "casing_shotgun",
+    "lengthM": 0.102,
+    "tris": 72,
+    "speedMps": 1.8,
+    "coneDeg": 20,
+    "spinRps": 10,
+    "lifeMs": 1800
+   }
+  },
+  "notes": "spawn at `eject`, velocity speedMps along its dir within coneDeg, spin spinRps about a random axis, gravity 9.8 m/s\u00b2, fade out over the last 300 ms of lifeMs"
+ },
+ "weapons": {
+  "hawk50": {
+   "flash": "pistol",
+   "tracer": "pistol",
+   "casing": "pistol",
+   "eject": "shot"
+  },
+  "hammer44": {
+   "flash": "pistol",
+   "flashScale": 1.25,
+   "tracer": "pistol",
+   "casing": "pistol",
+   "eject": "reload",
+   "ejectCount": 6
+  },
+  "buzz": {
+   "flash": "smg",
+   "tracer": "smg",
+   "casing": "pistol",
+   "eject": "shot"
+  },
+  "k47": {
+   "flash": "rifle",
+   "tracer": "rifle",
+   "casing": "rifle",
+   "eject": "shot"
+  },
+  "breacher": {
+   "flash": "shotgun",
+   "tracer": "shotgun",
+   "casing": "shotgun",
+   "eject": "pump",
+   "ejectDelayMs": 250
+  },
+  "widow": {
+   "flash": "sniper",
+   "tracer": "sniper",
+   "casing": "rifle",
+   "eject": "bolt",
+   "ejectDelayMs": 350
+  },
+  "thumper": {
+   "flash": "launcher",
+   "tracer": null,
+   "casing": null,
+   "eject": null
+  },
+  "shredder": {
+   "flash": "heavy",
+   "tracer": "heavy",
+   "casing": "rifle",
+   "eject": "shot",
+   "ejectEvery": 2
+  },
+  "rattler": {
+   "flash": "smg",
+   "flashScale": 0.9,
+   "tracer": "smg",
+   "casing": "pistol",
+   "eject": "shot"
+  },
+  "hornet": {
+   "flash": "smg",
+   "tracer": "smg",
+   "casing": "pistol",
+   "eject": "shot",
+   "ejectEvery": 2
+  },
+  "trident": {
+   "flash": "rifle",
+   "tracer": "rifle",
+   "casing": "rifle",
+   "eject": "shot",
+   "burst": 3
+  },
+  "bullpup": {
+   "flash": "rifle",
+   "flashScale": 0.9,
+   "tracer": "rifle",
+   "casing": "rifle",
+   "eject": "shot"
+  },
+  "longbow": {
+   "flash": "sniper",
+   "flashScale": 0.8,
+   "tracer": "rifle",
+   "casing": "rifle",
+   "eject": "shot"
+  },
+  "machete": {
+   "flash": null,
+   "tracer": null,
+   "casing": null,
+   "eject": null
+  },
+  "frag": {
+   "flash": null,
+   "tracer": null,
+   "casing": null,
+   "eject": null
+  },
+  "mine": {
+   "flash": null,
+   "tracer": null,
+   "casing": null,
+   "eject": null
+  }
+ }
+}

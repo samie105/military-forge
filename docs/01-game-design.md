@@ -79,7 +79,7 @@ We keep the first list and design against the second.
 | Chat / team chat / quick chat | `Enter` / `Y` / `C` (wheel) | Menu |
 | Emote wheel | `B` | — |
 
-Everything is **rebindable** and has hold/toggle options. Mouse uses raw input with the pointer **not** locked (the reticle is a world-space cursor, like a mobile aim stick). There's a "confine cursor" option for multi-monitor setups. **Touch (later):** twin sticks + the original's custom HUD editor (drag/resize/opacity per button, saved layouts).
+Everything is **rebindable** and has hold/toggle options. Mouse uses raw input with the pointer **not** locked (the reticle is a world-space cursor, like a mobile aim stick). There's a "confine cursor" option for multi-monitor setups. **Touch (later):** twin sticks + a custom HUD editor (drag/resize/opacity per button, saved layouts).
 
 ---
 

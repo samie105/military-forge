@@ -710,6 +710,49 @@ def check_weapon(r: Report, objs, args):
         o = nodes.get("offhand")
         r.ok(o is not None and o.length <= OFFHAND_REACH, f"offhand node within {OFFHAND_REACH} m of the grip",
              f"{o.length:.3f} m" if o is not None else "no offhand node (two-handed)")
+    check_sockets(r, objs, family, lo, hi)
+
+
+def _gltf(v):
+    """Blender (after the glTF import) → the weapon's glTF frame: +Y muzzle, +Z up, +X right."""
+    return Vector((v.x, v.z, -v.y))
+
+
+def check_sockets(r: Report, objs, family, lo, hi):
+    """Socket layout the renderer and VFX read (art/pipeline/build_weapons.py, weapons/sockets.json):
+    required sockets per family, directions, the ejection side, rails above/below the bore, and
+    every socket on the weapon."""
+    empties = {o.name.split(".")[0]: o for o in objs if o.type == "EMPTY"}
+    pos = {k: _gltf(o.matrix_world.translation) for k, o in empties.items()}
+    dirs = {k: Vector([float(c) for c in o["dir"]]) for k, o in empties.items() if "dir" in o}
+    if family in FIREARMS:
+        need = ["grip", "muzzle", "mag", "rail_top"] + ([] if family == "launcher" else ["eject"])
+    else:
+        need = ["grip"] + (["tip"] if family == "melee" else [])
+    missing = [k for k in need if k not in empties]
+    r.ok(not missing, "sockets for the family", ", ".join(need) + ("" if not missing else f"; missing {', '.join(missing)}"))
+    undirected = [k for k in empties if k != "offhand" and (k not in dirs or abs(dirs[k].length - 1) > 0.01)]
+    r.ok(not undirected, "socket directions (unit `dir`)", "ok" if not undirected else "no or bad dir: " + ", ".join(undirected))
+    blo, bhi = _gltf(lo), _gltf(hi)
+    blo, bhi = Vector(map(min, blo, bhi)), Vector(map(max, blo, bhi))
+    off = [k for k, p in pos.items() if any(p[i] < blo[i] - 0.03 or p[i] > bhi[i] + 0.03 for i in range(3))]
+    r.ok(not off, "sockets on the weapon (within 3 cm)", "ok" if not off else "off the mesh: " + ", ".join(off))
+    if family not in FIREARMS:
+        return
+    m, d = pos.get("muzzle"), dirs.get("muzzle")
+    if m is not None and d is not None:
+        bore = empties["muzzle"].get("boreRadius", 0)
+        r.ok(d.y > 0.99 and bore > 0, "muzzle fires along +Y with a bore radius", f"dir {tuple(round(c, 2) for c in d)}, bore {bore:.3f} m")
+    if "eject" in pos and "eject" in dirs:
+        e, ed = pos["eject"], dirs["eject"]
+        r.ok(e.x >= 0 and ed.x >= 0.3, "casings eject to the right (+X)", f"at x {e.x:+.3f}, dir x {ed.x:+.2f}")
+    for rail, sign in (("rail_top", 1), ("rail_bottom", -1)):
+        if rail not in pos or m is None:
+            continue
+        p, rd, ln = pos[rail], dirs.get(rail, Vector()), empties[rail].get("lengthM", 0)
+        ok = sign * (p.z - m.z) >= -0.005 and sign * rd.z > 0.99 and ln >= 0.04
+        r.ok(ok, f"{rail} {'above' if sign > 0 else 'below'} the bore, facing {'up' if sign > 0 else 'down'}",
+             f"z {p.z:+.3f} vs bore {m.z:+.3f}, length {ln:.2f} m")
 
 
 def _lab(lin):

@@ -81,6 +81,26 @@ def weapon_family(path, family):
                               export_vertex_color="ACTIVE")
 
 
+def k47_edit(path, edit):
+    """The K-47 with `edit(objects by name)` applied to its sockets, re-exported."""
+    bpy.ops.wm.read_homefile(use_empty=True)
+    bpy.ops.import_scene.gltf(filepath=str(REPO / "art/weapons/k47.glb"))
+    edit({o.name.split(".")[0]: o for o in bpy.data.objects})
+    bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB", use_selection=False, export_extras=True,
+                              export_vertex_color="ACTIVE")
+
+
+def eject_left(objs):
+    """Casings thrown across the player: the eject socket mirrored to the left."""
+    e = objs["eject"]
+    e.location.x = -e.location.x
+    e["dir"] = [-e["dir"][0], e["dir"][1], e["dir"][2]]
+
+
+def no_rail(objs):
+    bpy.data.objects.remove(objs["rail_top"], do_unlink=True)
+
+
 def deep_jetpack(path, back):
     """The default jetpack, moved `back` metres further behind (Blender +Y)."""
     bpy.ops.wm.read_homefile(use_empty=True)
@@ -194,6 +214,8 @@ jet_dark = dye_fixture(tmp / "dark", darken=0.6)
 from_item(tmp / "field_cap_wide.glb", COS / "headgear/headgear_field_cap.glb", widen)
 from_item(tmp / "aviators_panel.glb", COS / "eyewear/eyewear_aviators.glb", add_panel)
 jet_nodye = dye_fixture(tmp / "nodye", with_textures=False)
+k47_edit(tmp / "k47_eject_left.glb", eject_left)
+k47_edit(tmp / "k47_no_rail.glb", no_rail)
 market_edit(tmp / "kit_sack.glb", sack_on_plane)
 market_edit(tmp / "kit_orange.glb", team_orange)
 
@@ -228,6 +250,8 @@ cases = [
     ("part with its dye files missing fails", "fail", jet_nodye, "--kind", "part", "--base", OUTFIT),
     ("Field Cap 1.9x wide fails (locality)", "fail", tmp / "field_cap_wide.glb", "--kind", "part", "--base", OUTFIT),
     ("Aviators with a panel down to the shins fail (locality)", "fail", tmp / "aviators_panel.glb", "--kind", "part", "--base", OUTFIT),
+    ("K-47 casings ejecting to the left fail", "fail", tmp / "k47_eject_left.glb", "--kind", "weapon"),
+    ("K-47 without its top rail fails", "fail", tmp / "k47_no_rail.glb", "--kind", "weapon"),
     ("Street Market kit passes", "pass", MARKET, "--kind", "kit"),
     ("kit prop on the gameplay plane with no collision fails", "fail", tmp / "kit_sack.glb", "--kind", "kit"),
     ("kit piece in team orange fails", "fail", tmp / "kit_orange.glb", "--kind", "kit"),

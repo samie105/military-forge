@@ -1,0 +1,32 @@
+{
+ "file": "casings.glb",
+ "types": {
+  "pistol": {
+   "node": "casing_pistol",
+   "lengthM": 0.048,
+   "tris": 72,
+   "speedMps": 2.2,
+   "coneDeg": 18,
+   "spinRps": 18,
+   "lifeMs": 1400
+  },
+  "rifle": {
+   "node": "casing_rifle",
+   "lengthM": 0.093,
+   "tris": 144,
+   "speedMps": 2.8,
+   "coneDeg": 15,
+   "spinRps": 22,
+   "lifeMs": 1500
+  },
+  "shotgun": {
+   "node": "casing_shotgun",
+   "lengthM": 0.102,
+   "tris": 72,
+   "speedMps": 1.8,
+   "coneDeg": 20,
+   "spinRps": 10,
+   "lifeMs": 1800
+  }
+ }
+}

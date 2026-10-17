@@ -1,15 +1,18 @@
 asset-check: art/weapons/frag.glb  [weapon]
 ------------------------------------------------------------------------------------------------
-INFO  file size                             32 KB
+INFO  file size                             36 KB
 PASS  triangles                             448 of 1000
 PASS  one mesh, one material                1 draw call(s)
 INFO  GPU texture memory (KTX2 est.)        0.00 MB, 0 image(s)
 PASS  extras weaponId/family/aimPose/hands  ok
 PASS  weaponId in packages/content          frag
-INFO  nodes                                 ground
+INFO  nodes                                 grip, ground, pin
 PASS  origin on the weapon (the grip)       bbox (-0.04, -0.09, -0.05)..(0.04, 0.05, 0.05)
 PASS  family is a docs/04 §4.2 family       'thrown'
 PASS  aimPose has clips                     'pistol'
 PASS  ground node (rest frame)              ok
+PASS  sockets for the family                grip
+PASS  socket directions (unit `dir`)        ok
+PASS  sockets on the weapon (within 3 cm)   ok
 ------------------------------------------------------------------------------------------------
-RESULT: PASS  (8 pass, 0 warn, 0 fail)
+RESULT: PASS  (11 pass, 0 warn, 0 fail)

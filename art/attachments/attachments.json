@@ -1,0 +1,159 @@
+{
+ "frame": "mount frame = the weapon frame (glTF: +Y muzzle, +Z up, +X right) moved to the socket; see art/pipeline/build_attachments.py",
+ "fairness": "stat-changing attachments are in-match pickups only, never sold (packages/content/src/attachments.ts)",
+ "attachments": {
+  "sight_dot": {
+   "mount": "rail_top",
+   "file": "sight_dot.glb",
+   "tris": 112,
+   "railFootprintM": 0.05,
+   "nodes": {},
+   "fits": [
+    "hawk50",
+    "hammer44",
+    "buzz",
+    "k47",
+    "breacher",
+    "thumper",
+    "shredder",
+    "rattler",
+    "hornet",
+    "trident",
+    "bullpup"
+   ]
+  },
+  "sight_long": {
+   "mount": "rail_top",
+   "file": "sight_long.glb",
+   "tris": 572,
+   "railFootprintM": 0.1,
+   "nodes": {},
+   "fits": [
+    "hammer44",
+    "k47",
+    "breacher",
+    "thumper",
+    "shredder",
+    "hornet",
+    "trident",
+    "bullpup"
+   ]
+  },
+  "suppressor": {
+   "mount": "muzzle",
+   "file": "suppressor.glb",
+   "tris": 316,
+   "railFootprintM": 0.0,
+   "nodes": {
+    "muzzle": {
+     "pos": [
+      0.0,
+      0.142,
+      0.0
+     ],
+     "dir": [
+      0,
+      1,
+      0
+     ]
+    }
+   },
+   "fits": [
+    "hawk50",
+    "hammer44",
+    "buzz",
+    "k47",
+    "breacher",
+    "widow",
+    "rattler",
+    "hornet",
+    "trident",
+    "bullpup",
+    "longbow"
+   ],
+   "modelBoreM": 0.016,
+   "flashScale": 0.4,
+   "notes": "scale by the weapon's muzzle.boreRadius / modelBoreM; the flash moves to its `muzzle` node"
+  },
+  "foregrip": {
+   "mount": "rail_bottom",
+   "file": "foregrip.glb",
+   "tris": 152,
+   "railFootprintM": 0.04,
+   "nodes": {},
+   "fits": [
+    "k47",
+    "widow",
+    "hornet",
+    "trident",
+    "bullpup",
+    "longbow"
+   ],
+   "notes": "with both foregrip and laser on one rail: foregrip at \u2212\u00bc, laser at +\u00bc of the rail length"
+  },
+  "laser": {
+   "mount": "rail_bottom",
+   "file": "laser.glb",
+   "tris": 140,
+   "railFootprintM": 0.05,
+   "nodes": {
+    "beam": {
+     "pos": [
+      0.0,
+      0.033,
+      -0.024
+     ],
+     "dir": [
+      0,
+      1,
+      0
+     ]
+    }
+   },
+   "fits": [
+    "hawk50",
+    "hammer44",
+    "buzz",
+    "k47",
+    "widow",
+    "rattler",
+    "hornet",
+    "trident",
+    "bullpup",
+    "longbow"
+   ],
+   "notes": "with both foregrip and laser on one rail: foregrip at \u2212\u00bc, laser at +\u00bc of the rail length"
+  },
+  "mag_ext": {
+   "mount": "mag",
+   "file": "mag_ext.glb",
+   "tris": 88,
+   "railFootprintM": 0.0,
+   "nodes": {},
+   "fits": [
+    "hawk50",
+    "buzz",
+    "k47",
+    "widow",
+    "rattler",
+    "hornet",
+    "trident",
+    "bullpup",
+    "longbow"
+   ],
+   "notes": "turn the part's \u2212Z onto the weapon's mag socket dir"
+  },
+  "mag_drum": {
+   "mount": "mag",
+   "file": "mag_drum.glb",
+   "tris": 236,
+   "railFootprintM": 0.0,
+   "nodes": {},
+   "fits": [
+    "buzz",
+    "k47"
+   ],
+   "notes": "turn the part's \u2212Z onto the weapon's mag socket dir"
+  }
+ }
+}

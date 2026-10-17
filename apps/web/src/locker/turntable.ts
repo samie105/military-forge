@@ -36,6 +36,9 @@ const LIGHTS: Record<LightPreset, { background: string; sky: string; ground: str
   desert: { background: '#c99a64', sky: '#fff1d6', ground: '#8a6238', ambient: 1.3, key: '#ffe2b8', keyIntensity: 2.8, rim: '#ffd29a', floor: '#a97b4a' },
 };
 
+/** the Locker's lighting presets, shared with the Armory */
+export { LIGHTS as LOCKER_LIGHTS };
+
 export class Turntable {
   private readonly renderer: WebGLRenderer;
   private readonly scene = new Scene();

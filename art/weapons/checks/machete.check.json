@@ -6,7 +6,7 @@
     {
       "status": "INFO",
       "check": "file size",
-      "detail": "22 KB"
+      "detail": "25 KB"
     },
     {
       "status": "PASS",
@@ -36,7 +36,7 @@
     {
       "status": "INFO",
       "check": "nodes",
-      "detail": "tip"
+      "detail": "grip, tip"
     },
     {
       "status": "PASS",
@@ -52,6 +52,21 @@
       "status": "PASS",
       "check": "aimPose has clips",
       "detail": "'pistol'"
+    },
+    {
+      "status": "PASS",
+      "check": "sockets for the family",
+      "detail": "grip, tip"
+    },
+    {
+      "status": "PASS",
+      "check": "socket directions (unit `dir`)",
+      "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "sockets on the weapon (within 3 cm)",
+      "detail": "ok"
     }
   ]
 }

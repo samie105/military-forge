@@ -18,12 +18,18 @@ export interface GraphicsPreset {
   minScale: number;
   /** remote players use the LOD1 mesh */
   remoteLod1: boolean;
+  /** live particle budget (docs/11 §3: ≤ 1.5K Low, ≤ 5K High) */
+  particles: number;
+  /** effect density: particles per blast */
+  vfxDetail: number;
+  /** real point lights for blasts; Low/Medium tint the ambient light instead (docs/11 §2) */
+  vfxLights: boolean;
 }
 
 export const PRESETS: Readonly<Record<PresetName, GraphicsPreset>> = {
-  low: { name: 'low', dprCap: 1, antialias: false, shadows: 'blob', minScale: 0.6, remoteLod1: true },
-  medium: { name: 'medium', dprCap: 1.25, antialias: true, shadows: 'blob', minScale: 0.7, remoteLod1: false },
-  high: { name: 'high', dprCap: 1.5, antialias: true, shadows: 'map', minScale: 0.8, remoteLod1: false },
+  low: { name: 'low', dprCap: 1, antialias: false, shadows: 'blob', minScale: 0.6, remoteLod1: true, particles: 1500, vfxDetail: 0.6, vfxLights: false },
+  medium: { name: 'medium', dprCap: 1.25, antialias: true, shadows: 'blob', minScale: 0.7, remoteLod1: false, particles: 3000, vfxDetail: 0.8, vfxLights: false },
+  high: { name: 'high', dprCap: 1.5, antialias: true, shadows: 'map', minScale: 0.8, remoteLod1: false, particles: 5000, vfxDetail: 1, vfxLights: true },
 };
 
 /** `?gfx=` value → preset (Low until auto quality exists: the min-spec target is an iGPU laptop). */

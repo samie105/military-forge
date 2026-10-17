@@ -1,0 +1,22 @@
+asset-check: art/weapons/rattler.glb  [weapon]
+----------------------------------------------------------------------------------------------------
+INFO  file size                                 29 KB
+PASS  triangles                                 348 of 1000
+PASS  one mesh, one material                    1 draw call(s)
+INFO  GPU texture memory (KTX2 est.)            0.00 MB, 0 image(s)
+PASS  extras weaponId/family/aimPose/hands      ok
+WARN  weaponId in packages/content              rattler is not in packages/content/src/{weapons,grenades}.ts yet
+INFO  nodes                                     eject, grip, mag, muzzle, rail_bottom, rail_top
+PASS  origin on the weapon (the grip)           bbox (-0.02, -0.08, -0.06)..(0.02, 0.19, 0.25)
+PASS  family is a docs/04 §4.2 family           'pistol'
+PASS  aimPose has clips                         'pistol'
+PASS  muzzle node ahead of the grip (+Y)        muzzle at glTF y +0.25 m
+PASS  sockets for the family                    grip, muzzle, mag, rail_top, eject
+PASS  socket directions (unit `dir`)            ok
+PASS  sockets on the weapon (within 3 cm)       ok
+PASS  muzzle fires along +Y with a bore radius  dir (0.0, 1.0, 0.0), bore 0.015 m
+PASS  casings eject to the right (+X)           at x +0.020, dir x +0.80
+PASS  rail_top above the bore, facing up        z +0.081 vs bore +0.058, length 0.06 m
+PASS  rail_bottom below the bore, facing down   z +0.006 vs bore +0.058, length 0.05 m
+----------------------------------------------------------------------------------------------------
+RESULT: PASS  (14 pass, 1 warn, 0 fail)

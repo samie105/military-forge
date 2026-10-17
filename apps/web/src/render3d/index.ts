@@ -1,10 +1,11 @@
 /**
  * Three.js renderer behind the `Frame` view model (docs/06 §4 layer L3, docs/11). It draws the
- * gameplay plane, depth layers and players; the 2D canvas renderer stays on top as the HUD and the
- * toggleable debug overlay (RenderOptions.overlay). Milestone A: local mode, movement-test map.
+ * gameplay plane, depth layers, players, grenades and effects (vfx/); the 2D canvas renderer stays
+ * on top as the HUD and the toggleable debug overlay (RenderOptions.overlay). Sim events reach the
+ * effects through `onEvents` (main.ts forwards the 2D renderer's events here).
  */
 import type { MapDef } from '@military-forge/content';
-import { CollisionWorld } from '@military-forge/sim';
+import { CollisionWorld, type SimEvent } from '@military-forge/sim';
 import {
   DirectionalLight,
   Fog,
@@ -25,6 +26,7 @@ import { lightingFor } from './lighting';
 import { buildMapGeometry } from './mapGeometry';
 import { FOV_DEG, PlaneCamera, applyPlanePose, planePose } from './planeCamera';
 import { DynamicResolution, PRESETS, SampleWindow, parsePreset, type GraphicsPreset, type PresetName } from './presets';
+import { Vfx } from './vfx';
 
 export { PlaneCamera, parsePreset, type PresetName };
 
@@ -45,6 +47,8 @@ export interface RenderStats {
   calls: number;
   triangles: number;
   avatars: number;
+  /** live VFX particles (docs/11 §3: ≤ 1.5K Low, ≤ 5K High) */
+  particles: number;
 }
 
 export class Renderer3D {
@@ -62,7 +66,10 @@ export class Renderer3D {
   private readonly layers: DepthLayers;
   private readonly kit: AvatarKit;
   private readonly sun: DirectionalLight;
+  private readonly hemi: HemisphereLight;
   private readonly sunDir = new Vector3();
+  /** grenades, explosions, the blast light and camera shake */
+  readonly vfx: Vfx;
   private readonly assembler: CharacterAssembler;
   private readonly avatars = new Map<number, Avatar>();
   private readonly pending = new Set<number>();
@@ -107,7 +114,8 @@ export class Renderer3D {
     const light = lightingFor(map.id);
     this.scene.background = null; // the sky card covers the view
     this.scene.fog = new Fog(light.fog.color, light.fog.near, light.fog.far);
-    this.scene.add(new HemisphereLight(light.hemi.sky, light.hemi.ground, light.hemi.intensity));
+    this.hemi = new HemisphereLight(light.hemi.sky, light.hemi.ground, light.hemi.intensity);
+    this.scene.add(this.hemi);
     this.sun = new DirectionalLight(light.sun.color, light.sun.intensity);
     this.sun.shadow.mapSize.set(1024, 1024); // docs/11 §2: one 1024² map over the gameplay plane
     this.sun.shadow.bias = -0.0005;
@@ -119,11 +127,25 @@ export class Renderer3D {
     plane.receiveShadow = plane.castShadow = true;
     this.layers = buildDepthLayers(map, light);
     this.scene.add(plane, this.layers.background, this.layers.foregroundGroup);
+    this.vfx = new Vfx(this.scene, this.world, camera, { hemi: this.hemi, sun: this.sun }, ramp, preset);
+    // reduced motion (docs/11 §5): the OS setting until the settings screen calls setReducedMotion
+    this.setReducedMotion(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
     this.setPreset(preset.name);
   }
 
-  /** Loads the base character and compiles every material variant (docs/11 §3 shader warm-up). */
+  /** Sim events (shots, explosions) for the effects. An arrow function: main.ts hands it to the 2D renderer. */
+  readonly onEvents = (events: readonly SimEvent[]): void => {
+    if (this.ready) this.vfx.onEvents(events);
+  };
+
+  /** No camera shake, a third of the blast light, fuse lights blinking ≤ 3 times a second. */
+  setReducedMotion(on: boolean): void {
+    this.vfx.setReducedMotion(on);
+  }
+
+  /** Loads the base character and effect assets, then compiles every material variant (docs/11 §3 shader warm-up). */
   async load(spawn: { x: number; y: number }): Promise<void> {
+    await this.vfx.load(import.meta.env.BASE_URL);
     try {
       await this.warmUp(spawn);
     } catch (err) {
@@ -158,6 +180,7 @@ export class Renderer3D {
     this.dynres.minScale = this.preset.minScale;
     this.dynres.scale = Math.max(this.dynres.scale, this.preset.minScale);
     this.sun.castShadow = this.preset.shadows === 'map';
+    this.vfx.setPreset(this.preset);
     if (lodChanged) {
       for (const a of this.avatars.values()) a.dispose();
       this.avatars.clear();
@@ -199,7 +222,12 @@ export class Renderer3D {
     }
     this.lastFrameAt = now;
 
-    applyPlanePose(this.camera3, planePose(this.camera, FOV_DEG, undefined, this.pose));
+    // effects first: their camera shake moves the 3D camera only (never the 2D Camera: aim, AOI, HUD)
+    const shake = this.vfx.update(frame, dt);
+    const pose = planePose(this.camera, FOV_DEG, undefined, this.pose);
+    pose.x += shake.x;
+    pose.y += shake.y;
+    applyPlanePose(this.camera3, pose);
     // a screen taller than 4:3 is letterboxed: draw into the band only (the 2D overlay paints the bars)
     const { top, bottom } = this.camera.band;
     this.renderer.setViewport(0, top, this.camera.width, bottom - top);
@@ -281,6 +309,7 @@ export class Renderer3D {
       calls: info.calls,
       triangles: info.triangles,
       avatars: this.avatars.size,
+      particles: this.vfx.particles,
     };
   }
 }
@@ -290,6 +319,6 @@ export function formatStats(s: RenderStats): string {
   return (
     `3D ${s.preset} · ${s.width}×${s.height} (dpr ${s.pixelRatio.toFixed(2)}, scale ${s.scale.toFixed(2)})\n` +
     `frame p50 ${f(s.frameP50)} · p90 ${f(s.frameP90)} · p99 ${f(s.frameP99)} ms · render cpu ${f(s.cpuMean)} ms (p90 ${f(s.cpuP90)})\n` +
-    `${s.calls} draw calls · ${(s.triangles / 1000).toFixed(1)}k tris · ${s.avatars} characters`
+    `${s.calls} draw calls · ${(s.triangles / 1000).toFixed(1)}k tris · ${s.avatars} characters · ${s.particles} particles`
   );
 }

@@ -48,6 +48,7 @@ bar.innerHTML = `
   <a href="/?online" class="${online ? 'active' : ''}">Online (${serverUrl.replace(/^wss?:\/\//, '')})</a>
   <a href="/?online" target="_blank">+ 2nd tab</a>
   <a href="/locker.html">Locker</a>
+  <a href="/armory.html">Armory</a>
 `;
 
 // 3D draws the world under the 2D canvas, which becomes the HUD + debug overlay (H/B)
@@ -64,6 +65,7 @@ const view3d = planeCamera
   ? new Renderer3D(document.getElementById('view3d') as HTMLCanvasElement, planeCamera, map, parsePreset(params.get('gfx')), import.meta.env.DEV || params.has('perf'))
   : null;
 void view3d?.load(map.spawns[0]!);
+if (view3d) renderer.forwardEvents = view3d.onEvents; // sim events → 3D effects (render3d)
 
 if (online) {
   const prefer = params.get('transport');

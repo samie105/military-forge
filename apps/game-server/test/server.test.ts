@@ -67,14 +67,19 @@ describe.each(transports)('game server over WebSockets (%s)', (transport) => {
     const firstSeen = (await b.waitFor(MsgType.Snapshot, (s) => s.players.some((p) => p.id === wa.playerId))) as SnapshotMsg;
     const x0 = firstSeen.players.find((p) => p.id === wa.playerId)!.x;
 
-    // A holds "right" for ~0.5 s at 60 Hz, tagging inputs with server ticks a little ahead of now
+    // A holds "right", tagging each input a little ahead of the newest server tick it has seen (as a
+    // real client paces itself), until B sees it move. A fixed schedule fell behind the server on a
+    // loaded machine (the sleeps stretch, the server keeps ticking) and inputs for ticks already
+    // simulated are dropped, so A never moved.
     const input = { ...createInput(), buttons: Btn.Right };
-    const base = firstSeen.serverTick + 6;
-    for (let t = 0; t < 30; t++) {
-      a.send(encodeInput({ newestTick: (base + t) & 0xffff, ackSnapshotSeq: 0, renderTick: 0, renderFrac: 0, inputs: [input] }));
+    const newestTick = () => (a.messages.filter((m): m is SnapshotMsg => m.type === MsgType.Snapshot).at(-1)?.serverTick ?? firstSeen.serverTick);
+    const isMoved = (s: SnapshotMsg) => (s.players.find((p) => p.id === wa.playerId)?.x ?? 0) > x0 + 1;
+    const deadline = Date.now() + 10_000;
+    while (!b.messages.some((m) => m.type === MsgType.Snapshot && isMoved(m)) && Date.now() < deadline) {
+      a.send(encodeInput({ newestTick: (newestTick() + 8) & 0xffff, ackSnapshotSeq: 0, renderTick: 0, renderFrac: 0, inputs: [input] }));
       await new Promise((r) => setTimeout(r, 16));
     }
-    const moved = (await b.waitFor(MsgType.Snapshot, (s) => (s.players.find((p) => p.id === wa.playerId)?.x ?? 0) > x0 + 1)) as SnapshotMsg;
+    const moved = (await b.waitFor(MsgType.Snapshot, isMoved, 0)) as SnapshotMsg;
     expect(moved.players.find((p) => p.id === wa.playerId)!.x).toBeGreaterThan(x0 + 1);
 
     a.ws.close();

@@ -281,6 +281,173 @@ Gaps:
 - **Tops** (shirts/jackets) aren't in this batch: the shirt is part of the body and there's no torso underneath. They need either a body-region hide mask or overlay shells; that's W2's call.
 - The procedural items are **cleaner and flatter than the painted Rookie**. Five of them are now rebuilt from Higgsfield models (see "Hero cosmetics from Higgsfield" above).
 
+## Weapon fire VFX: muzzle flashes, tracers, casings (Weapons Forge 2)
+
+![Fire VFX](screenshots/weapons-fire-fx.png)
+*Each weapon frozen mid-shot in the viewer (`?fire=1`): its flash style at `muzzle`, the light pop, the tracer, and casings in flight from `eject`.*
+
+![Gameplay](screenshots/fx-gameplay-1x.png)
+*The same at 1× (the gameplay zoom).*
+
+Everything ships in `apps/web/public/assets/vfx/` and is described by **`weapons.vfx.json`**:
+
+| | What | Built by |
+|---|---|---|
+| `flash_atlas.webp` | 1024², 28 frames in cells of 256 × 128. Each frame's muzzle point sits at the same spot in its cell, so one quad shape fits all. Additive, 188 KB | `art/pipeline/build_vfx.py` from the Higgsfield sheets in `art/vfx/source/` |
+| flash styles | `pistol`, `smg`, `rifle`, `shotgun`, `sniper`, `launcher`, `heavy`: 4 frames each, a quad size in metres, a light pop (colour, intensity, range) and a duration. Per shot: a random frame, scale 0.85–1.15, roll ±6°, a vertical flip | `build_vfx.py` |
+| `tracer.webp` + tracer styles | white streak, head at +U, tinted per style: width, length, on-screen speed, one per N shots, per-pellet (shotgun), a fading smoke trail (sniper) | `build_vfx.py` |
+| `casings.glb` + casing types | `casing_pistol` / `_rifle` / `_shotgun` (72–144 tris, about 4× real so they read at 1×): ejection speed, cone, spin, lifetime; 32 live at most | `art/pipeline/build_casings.py` (Blender) |
+| `weapons` | per weapon: flash style (+ scale), tracer style, casing type and when it ejects (`shot`, `reload` ×6 for the revolver, `pump` / `bolt` after a delay, every 2nd shot for the minigun) | `build_vfx.py`; it fails if a weapon in `sockets.json` has no entry or an entry needs a socket the weapon lacks |
+
+Colours are white to lemon-yellow (the launcher bloom has a golden rim), so a flash never reads as a team colour. Tracer and flash colours are the hook for cosmetic tracer and flash tints later; those are store-safe cosmetics.
+
+```bash
+B=/Applications/Blender.app/Contents/MacOS/Blender
+$B -b --factory-startup --python-exit-code 1 --python art/pipeline/build_casings.py -- art/vfx --runtime apps/web/public/assets
+python3 art/pipeline/build_vfx.py --runtime apps/web/public/assets
+```
+
+**Flash sources (Higgsfield, GPT Image 2.5, medium, 1k, transparent background; 0.5 credits each):** one 2×2 sheet per style. The prompt pattern was "Sprite sheet for a side-view cartoon shooter game: four variations of a <STYLE> muzzle flash: <shape>. Arranged in a 2x2 grid … Each flash starts at one point at the left-middle of its quarter and blasts to the RIGHT: every flame petal fans forward to the right like a cone, none point back to the left. Hot white core fading to bright lemon yellow … Flat-shaded toon style … No gun, no smoke, no sparks, no text. Transparent background." Job ids:
+- pistol `82b12661…`
+- smg `3b78a8a3…`
+- rifle `8785f752…` (a first rifle test `e83ddef1…` swept its petals backward and was not used)
+- shotgun `dac431db…`
+- sniper `72059270…`
+- launcher `5617a462…`
+- heavy `2b345da1…`
+
+## Impact VFX and decals (Weapons Forge 3)
+
+![Impacts](screenshots/impacts-sheet.png)
+*Viewer `?impacts=1`: one block per sim surface, each with a burst on its top and its side face, frozen particles and bullet-hole decals; the non-gory hit marker on a character.*
+
+`art/pipeline/build_impacts.py` ships to `apps/web/public/assets/vfx/`, described by **`impacts.vfx.json`**:
+- **`impact_atlas.webp`** (1024 × 1536, 24 cells of 256²): `concrete`, `metal`, `wood`, `dirt`, `glass`, plus `player`, 4 variants each.
+  - A surface burst's hit point sits at the bottom-middle of its cell, and +V is the surface normal. The renderer rotates the quad to the normal.
+  - `player` is a centred comic pop: white star, pale yellow ring, no blood (age rating). Its soft glow is faded radially so it never ends in a square.
+  - Keyed by the sim's `Material` ids (`packages/content` maps: 0 concrete, 1 metal, 2 wood, 3 dirt, 4 glass).
+- **Per style:** quad size, life (pop in over the first 25 %, fade over the last 50 %), and **particles**.
+  - Particle kinds are chips, dust or sparks, each with count, tint, size, speed, cone, gravity and life. Sparks are additive and stretch along their velocity.
+  - The particle sprites are in `particles.webp` (256 × 64: spark, dust, chip; white, tinted per use).
+- **Decals:** `decal_atlas.webp` (512 × 256, cells of 128²). Concrete chip, metal dent, wood hole, dirt pock, glass crack, plus `scorch` for explosions.
+  - Each decal lives 8 s and fades over the last 1 s. At most 64 live (oldest first).
+  - Decals go on map surfaces only, never on characters.
+
+```bash
+python3 art/pipeline/build_impacts.py --runtime apps/web/public/assets
+```
+
+**Sources (Higgsfield, GPT Image 2.5, medium, 1k, transparent; 0.5 credits each):**
+- Six 2×2 impact sheets: "… four variations of a bullet impact on <SURFACE> … each burst starts at one point at the BOTTOM-middle of its quarter and sprays UPWARD … Flat-shaded toon style … No wall, no ground, no bullet, no text".
+- The player sheet: "… a non-gory HIT MARKER … a white star-shaped pop with a thin pale yellow ring … No blood, no wound".
+- One 3×2 decal sheet.
+
+Job ids:
+- concrete `f888893e…`
+- metal `0cf3fd38…`
+- wood `a92dc810…`
+- dirt `9b09ad7f…`
+- glass `fc9e21cd…`
+- player `73499fc6…`
+- decals `5a0efc56…`
+
+## Explosion VFX for blast launches (Weapons Forge 4)
+
+![Explosions](screenshots/explosions-sheet.png)
+*Viewer `?boom=1`: a frag at its peak (shockwave growing to the 4 m blast radius, debris, dust, scorch), a rocket mushroom, and the puff trail of a blast-launched player; below, both flipbooks.*
+
+Blasts now throw players up to 16 m (NOTES §17), so an explosion has to show its reach and make the flight read as a launch. `art/pipeline/build_explosions.py` ships **`explosions.vfx.json`** with:
+- **Flipbooks** in `explosion_atlas.webp` (2048 × 1024, 16 frames of 256² each):
+  - `frag` (flash → fireball → smoke, 18 fps): anchored on the fireball centre;
+  - `rocket` (a mushroom with a base ring, 16 fps): anchored on the base, on the surface it hit.
+  
+  A flipbook keeps its frames' positions relative to each other (one crop and scale per sheet), so the anchor holds still through the animation.
+- **Styles sized from `packages/content`:** `frag` reads the 4 m radius from `grenades.ts`. `rocket` (1.25 ×) and `grenade_launcher` (0.8 ×, frag flipbook) are marked `provisional` until their content entries exist. Each style has:
+  - a **shockwave ring** (`shockwave.webp`) growing to the blast radius in 220 ms;
+  - a light flash;
+  - debris chips and ground dust (from `particles.webp`);
+  - a `scorch` decal;
+  - a **camera-shake suggestion** (amplitude, 14 Hz, 420 ms decay, full within the radius, zero at 3.5 × it).
+- **`launchTrail`:** puffs behind a player while a blast throws them faster than `launchSpeedX` (12 m/s), so a 16 m flight reads as a launch, not a teleport.
+
+```bash
+python3 art/pipeline/build_explosions.py --runtime apps/web/public/assets
+```
+
+**Sources (Higgsfield, GPT Image 2.5, high, 2k, transparent; 2.75 credits each):**
+- frag `a0ca5559…`: "a 16-frame animation of a GRENADE EXPLOSION laid out in a 4x4 grid … white-hot star flash … round puffy fireball … turning into dark grey smoke … faint wisps";
+- rocket `984b39d4…`: "a big ROCKET EXPLOSION … a large mushrooming fireball … a ring of smoke puffs around its base".
+
+The fireballs are yellow to amber and last under a second, so they don't compete with the team-orange outline the way a static prop would.
+
+## Armory: the 3D weapon viewer (Weapons Forge 5)
+
+![Armory](screenshots/armory-sheet.png)
+*`/armory.html`: K-47 with its sockets (Lobby); the Widow at Night (scope marked built-in); the Thumper firing in the Desert (art only, no stats yet); the Breacher zoomed to its muzzle, firing.*
+
+`apps/web/src/armory/` (linked from the debug bar, next to the Locker) shows every model in `assets/weapons/`:
+- **Turntable:** drag to rotate and tilt, scroll to zoom.
+- **Focus:** Whole or Muzzle; click a socket in the list to zoom to it.
+- **Sockets toggle:** gizmos in the sheet's colours, rails drawn along their usable length.
+- **Fire:** pops the weapon's muzzle flash and light (`vfx/weapons.vfx.json`).
+- **Lighting:** the Locker's Lobby / Night / Desert presets.
+- **Stats card from `packages/content`:** damage (per pellet for the shotgun), fire rate, range and falloff, time to kill 100 HP, move speed, magazine, reload, zoom. Grenades show blast radius, launch, fuse and carry count. Models with no content entry yet say so.
+
+It mounts like the Locker (`mountArmory(el)` / `mountArmoryRoute(el)` for W4's shell). The standalone page takes deep-link params: `?weapon=k47&focus=muzzle&light=night&fire&hold=<ms>`.
+
+## Attachments: "things you can add" (Weapons Forge 6)
+
+![Attachments](screenshots/attachments-sheet.png)
+*Armory with attachments mounted:*
+- *K-47: long scope, foregrip and laser sharing the bottom rail, suppressor (the flash leaves its tip), drum;*
+- *Widow at night: suppressor, foregrip, long mag;*
+- *Hawk: dot sight, suppressor, laser, long mag;*
+- *Buzz in the desert: dot sight, drum.*
+
+`art/pipeline/build_attachments.py` (Blender, the arsenal's toy style, 0 credits) builds 7 parts. They ship in `apps/web/public/assets/attachments/<id>.glb` and `attachments.json`:
+
+| id (content) | Name | Mount | Tris | Fits |
+|---|---|---|---|---|
+| `sight_dot` | Dot Sight | rail_top | 112 | any unoccupied top rail: Hawk, Hammer, Buzz, K-47, Breacher, Thumper, Shredder |
+| `sight_long` | Long Scope | rail_top | 572 | top rails ≥ 0.10 m: Hammer, K-47, Breacher, Thumper, Shredder (the Widow's scope is built in) |
+| `suppressor` | Hush Can | muzzle | 316 | bores ≤ 0.02 m, not the launcher or heavy: Hawk, Hammer, Buzz, K-47, Breacher, Widow. Scaled to the bore; the flash moves to its tip at 0.4 × size |
+| `foregrip` | Grip Stub | rail_bottom | 152 | two-handed with a bottom rail: K-47, Widow |
+| `laser` | Laser Pointer | rail_bottom | 140 | any bottom rail: Hawk, Hammer, Buzz, K-47, Widow. A `beam` node; the beam is green, never a team colour |
+| `mag_ext` | Long Mag | mag | 88 | box mags pointing down: Hawk, Buzz, K-47, Widow |
+| `mag_drum` | Drum Mag | mag | 236 | K-47, Buzz |
+
+- **Mounting:** each part is modelled in its mount frame, which is the weapon frame moved to the socket.
+  - Rail parts sit above or below the rail centre. A foregrip and a laser share a bottom rail at −¼ / +¼ of its length.
+  - Mag parts turn their −Z onto the mag socket's `dir`.
+  - The fits are computed from `weapons/sockets.json`.
+- **Data model:** `packages/content/src/attachments.ts` holds identity and fit only (id, name, kind, mount, sight level); the arsenal stream adds stats. The builder fails if its ids or mounts drift from content.
+- **Fairness default** (pending the owner's confirmation): every attachment is `acquisition: 'pickup'`, `sellable: false`, an in-match pickup that is never sold, and a content test pins that. Cosmetic skins, charms and flash/tracer colours can be store items.
+- **Armory:** the side panel lists the attachments that fit the selected weapon. Mount one per socket (the bottom rail takes two), see the whole kit framed, and Fire from the suppressor. Deep link: `?weapon=k47&attach=sight_long,foregrip,laser,suppressor,mag_drum`.
+
+## Weapon camos (Weapons Forge 7)
+
+![Camos](screenshots/camos-sheet.png)
+*Armory: K-47 in Forest Patch, Thumper in Dune, Widow in Snowline, Shredder in Pixel. Grips, barrels, the scope and the orange toy tips keep their colours.*
+
+The weapons have no UVs (vertex colours on one material), so a camo works like the characters' dye mask, but in object space:
+- **Mask:** `build_weapons.py` writes a `_CAMO` vertex attribute: 1 on body panels (gunmetal, olive polymer, wood, sand), 0 on grips, steel, the toy muzzle tip and blades. A camo therefore never hides a weapon's role, its silhouette or where it points.
+- **Patterns:** `art/pipeline/build_camos.py` makes 6 tileable patterns as periodic noise, built in the frequency domain so they tile exactly. They are quantised into 3–4 levels and stored as indices in `weapons/camo_patterns.png` (1024 × 512, 31 KB).
+- **`weapons/camos.json`:** a palette per camo, one tile per 0.30 m. The build fails if a palette colour is within 25 ΔE of a team colour.
+
+| id | Name | Palette |
+|---|---|---|
+| `forest_patch` | Forest Patch | black, olive, brown, moss |
+| `dune` | Dune | tan, sand, pale sand |
+| `concrete` | Concrete | three greys |
+| `snowline` | Snowline | grey-blue to white |
+| `stripe` | Stripe | black, brown, olive: horizontal stripes |
+| `pixel` | Pixel | four greens in 1.9 cm blocks |
+
+- **Shader:** `apps/web/src/armory/camo.ts` is the reference. It projects the pattern triplanar in the weapon's frame, picks the dominant face for crisp edges, uses nearest sampling without mipmaps, and sets the palette colour on `_CAMO` panels; the toon lighting shades it.
+- **Armory:** a camo picker (Factory plus the 6). The choice stays when you switch weapons. Deep link `?camo=forest_patch`.
+
+Camos are cosmetic (no gameplay effect), so they are store-safe. W2's cosmetics catalogue can list them as weapon skins.
+
 ## Milestone B (part 1): the arsenal
 
 ![Weapons](screenshots/weapons-sheet.png)
@@ -302,15 +469,41 @@ Gaps:
 | machete | Machete | melee | pistol | 1 | 312 | 0.58 m |
 | frag | Frag grenade | thrown | pistol | 1 | 448 | 0.09 m |
 | mine | Proximity mine | thrown | pistol | 1 | 472 | 0.20 m |
+| rattler | Rattler | pistol | pistol | 1 | 348 | 0.31 m |
+| hornet | Hornet | rifle | rifle | 2 | 616 | 0.58 m |
+| trident | Trident | rifle | rifle | 2 | 704 | 0.91 m |
+| bullpup | Bullpup | rifle | rifle | 2 | 472 | 0.63 m |
+| longbow | Longbow | sniper | rifle | 2 | 892 | 1.04 m |
 
-- **Frame (docs/04 §9.4):** origin at the grip, +Y toward the muzzle, +Z up, so a weapon attaches to `socket_weapon_R` with an identity transform. Child nodes: `muzzle`, `offhand` (two-handed, ≤ 0.10 m from the grip), `eject`, `mag`; `tip` on the machete; `light` on the mine; `ground` on the frag and mine. `ground` is their frame at rest in the world (local +Y up, origin on the floor): place one with `world = floorPoint × inverse(ground.local)`.
-- **Ships to** `apps/web/public/assets/weapons/<id>.glb` (meshopt), with `weapons.json` listing name, family, aimPose, hands, tris, length and node positions.
-- **Checks:** `tools/asset-check/check.py --kind weapon` verifies the triangle budget (1,000), one material, the extras, the muzzle direction for every firearm family, the offhand reach and the `ground` node on throwables. All 11 pass ([checks](weapons/checks/)). It also WARNs when a `weaponId` isn't in `packages/content` yet. 8 of the 11 aren't (only `hammer44`, `buzz` and `frag` exist on main), and the ids need W5's confirmation.
+- **Frame (docs/04 §9.4):** origin at the grip, +Y toward the muzzle, +Z up, +X to the weapon's right, so a weapon attaches to `socket_weapon_R` with an identity transform.
+- **Sockets** (child nodes; all in [`weapons/sockets.json`](weapons/sockets.json), which the renderer reads). Each socket has `pos`, and a unit `dir` in the weapon frame (all but `offhand`):
+
+  ![Sockets](screenshots/weapons-sockets.png)
+
+  | Socket | What it's for | dir | On |
+  |---|---|---|---|
+  | `grip` | the main hand (the origin) | +Y | every weapon |
+  | `muzzle` | flash and tracer origin, suppressor mount; `boreRadius` sizes both | +Y | every firearm |
+  | `offhand` | left-hand IK target, ≤ 0.10 m from the grip (chibi arms) | — | two-handed |
+  | `eject` | casings leave here | right, up, a little back (Shredder: down-right) | every firearm but the Thumper (Hammer: spent cases on reload) |
+  | `mag` | magazine / loading point for reload VFX | the way the mag drops or a round goes in | every firearm: the cylinder (Hammer), the loading port (Breacher), the breech (Thumper), the ammo box (Shredder) |
+  | `rail_top` | scope / sight mount; `lengthM` of usable rail; `occupied: "scope"` on the Widow (built-in scope) | +Z | every firearm |
+  | `rail_bottom` | foregrip / laser mount, `lengthM` | −Z | Hawk, Hammer, Buzz, K-47, Widow |
+  | `backblast` | launcher exhaust | −Y | Thumper |
+  | `tip` / `pin` / `light` / `ground` | machete tip; frag pin ring; mine light; frag and mine rest frame in the world (`world = floorPoint × inverse(ground.local)`) | | machete / frag / mine |
+
+- **Ships to** `apps/web/public/assets/weapons/<id>.glb` (meshopt), with `weapons.json` (name, family, aimPose, hands, tris, length, node positions) and `sockets.json`.
+- **Checks:** `tools/asset-check/check.py --kind weapon` verifies the triangle budget (1,000), one material, the extras, the muzzle direction, the offhand reach, the `ground` node on throwables, and the sockets: the set each family needs, unit directions, every socket within 3 cm of the mesh, the muzzle firing along +Y with a bore radius, casings ejecting to the right, and the rails above / below the bore facing up / down. All 11 pass ([checks](weapons/checks/)); the selftest has two socket probes (casings ejecting to the left, a missing top rail). It also WARNs when a `weaponId` isn't in `packages/content` yet: `hawk50`, `thumper`, `shredder` and `mine` still aren't.
 - **Dual wield** in the viewer is the classic Hammer + Buzz pair on `socket_weapon_R` / `socket_weapon_L`.
 
 Known gaps:
 - The Thumper and Shredder use the rifle hold (`aimPose: rifle`). A shoulder-launcher pose and a hip-held heavy pose would read better; tell W1 if wanted.
-- Still to build from docs/03: Rattler, Hornet, Trident, Bullpup, Longbow, Dragon, Arc, Popper, Ripper, Pulse, Riot Shield. Each is ~20 lines in `build_weapons.py`.
+- **Weapons Forge 8, batch 1** added the Rattler (machine pistol), Hornet (high-rate SMG), Trident (burst rifle), Bullpup and Longbow (marksman rifle).
+  - Each follows concept → model → sockets → VFX hook-up. The concept sheet (Higgsfield GPT Image 2.5 medium 2k, job `bb746034…`, 1.0 credit) was removed from the repo at merge: it echoed real-world rifles (a carry-handle sight, a bullpup stock), which breaks the clean-room rule. The shipped models are original; new concept prompts must ask for invented silhouettes.
+  - The models are blocky toy reads, not copies of the concept's real-world-looking details.
+  - All pass asset-check, carry sockets and `_CAMO`, have VFX hook-ups, and fit attachments.
+  - They WARN until `packages/content` has their ids.
+- Still to build from docs/03: Dragon (flamethrower), Arc (beam), Popper (grenade launcher), Ripper (saw-blade launcher), Pulse (EMP orb), Riot Shield. These need their own VFX (flame, beam, orb, blade), so they come as batch 2.
 
 ---
 
@@ -431,7 +624,11 @@ What it checks:
 | Milestone B part 2: cosmetics (Blender only) | **0** |
 | Street Market kit + map (Blender only) | **0** |
 | Hero cosmetics: 9 concept images + 5 multiview 3D models | **69.75** |
-| **Total so far** | **87.00** |
+| Weapons Forge 2: 8 muzzle-flash sheets (7 used + 1 test), GPT Image 2.5 medium | **4.00** |
+| Weapons Forge 3: 6 impact sheets + 1 decal sheet, GPT Image 2.5 medium | **3.50** |
+| Weapons Forge 4: 2 explosion flipbooks, GPT Image 2.5 high 2k | **5.50** |
+| Weapons Forge 8: concept sheet for 5 new weapons, GPT Image 2.5 medium 2k | **1.00** |
+| **Total so far** | **101.00** |
 
 Phase 0 Higgsfield job IDs: concepts A `160eb90e-41ab-4ecc-a917-1e76c0563b40`, B `b40714aa-ec2f-4d2a-a522-ff5a4ebe57cc`, C `3e234313-6c57-4cd7-9946-22e6cd62b4b3`; 3D `75fc7390-163d-4c95-869c-58e8544bd654`.
 
@@ -439,7 +636,7 @@ Phase 0 Higgsfield job IDs: concepts A `160eb90e-41ab-4ecc-a917-1e76c0563b40`, B
 
 ```
 art/
-  pipeline/        build_character.py, clips.py, dye.py, build_cosmetics.py, build_weapons.py, build_kit.py, build_market_kit.py, compile_map.py, render_views.py, render_weapons.py, split_sheet.py
+  pipeline/        build_character.py, clips.py, dye.py, build_cosmetics.py, build_weapons.py, build_vfx.py, build_casings.py, build_impacts.py, build_explosions.py, build_attachments.py, build_camos.py, build_kit.py, build_market_kit.py, compile_map.py, render_views.py, render_weapons.py, split_sheet.py
   concepts/        A/B/C sheets + A-views/ (the 3D inputs)
   character/       rookie_body[_lod1].glb, rookie_anims.glb, rookie_preview.glb, rookie_rig.json, *.check.txt|json
     parts/         default parts: headgear_brim_helmet, boots_combat, jetpack_twin_tank [_lod1].glb
