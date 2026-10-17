@@ -7,11 +7,14 @@
 import type { MapDef } from '@military-forge/content';
 import { CollisionWorld, type SimEvent } from '@military-forge/sim';
 import {
+  BufferGeometry,
   DirectionalLight,
   Fog,
+  Group,
   HemisphereLight,
   Mesh,
   MeshToonMaterial,
+  Object3D,
   PerspectiveCamera,
   Scene,
   Vector2,
@@ -25,6 +28,7 @@ import { buildDepthLayers, updateForeground, type DepthLayers } from './layers';
 import { lightingFor } from './lighting';
 import { buildMapGeometry } from './mapGeometry';
 import { FOV_DEG, PlaneCamera, applyPlanePose, planePose } from './planeCamera';
+import { ZoneVolumes } from './zones';
 import { DynamicResolution, PRESETS, SampleWindow, parsePreset, type GraphicsPreset, type PresetName } from './presets';
 import { Vfx } from './vfx';
 
@@ -62,8 +66,16 @@ export class Renderer3D {
   private readonly frameMs = new SampleWindow(240);
   private readonly cpuMs = new SampleWindow(240);
   private readonly pose = planePose(new PlaneCamera());
-  private readonly world: CollisionWorld;
-  private readonly layers: DepthLayers;
+  /** the map on screen (setMap swaps it: online play follows the server's map) */
+  private map: MapDef;
+  private world: CollisionWorld;
+  private plane: Mesh<BufferGeometry, MeshToonMaterial>;
+  private layers: DepthLayers;
+  /** map zones (docs/02 §20): tinted volumes and particles */
+  private zones: ZoneVolumes;
+  /** the lighting preset's fog, and how far a fog event has thickened it (0 → 1) */
+  private readonly fogBase = { near: 45, far: 150 };
+  private fogMix = 0;
   private readonly kit: AvatarKit;
   private readonly sun: DirectionalLight;
   private readonly hemi: HemisphereLight;
@@ -109,24 +121,26 @@ export class Renderer3D {
     const ramp = toonRamp();
     this.assembler = assembler ?? new RookieAssembler(import.meta.env.BASE_URL, ramp);
     this.kit = new AvatarKit(ramp);
-    this.world = new CollisionWorld(map);
 
-    const light = lightingFor(map.id);
     this.scene.background = null; // the sky card covers the view
-    this.scene.fog = new Fog(light.fog.color, light.fog.near, light.fog.far);
-    this.hemi = new HemisphereLight(light.hemi.sky, light.hemi.ground, light.hemi.intensity);
-    this.scene.add(this.hemi);
-    this.sun = new DirectionalLight(light.sun.color, light.sun.intensity);
+    // colours and intensities come from the map (buildMap)
+    this.scene.fog = new Fog(0, 1, 2);
+    this.hemi = new HemisphereLight();
+    this.sun = new DirectionalLight();
     this.sun.shadow.mapSize.set(1024, 1024); // docs/11 §2: one 1024² map over the gameplay plane
     this.sun.shadow.bias = -0.0005;
-    this.scene.add(this.sun, this.sun.target);
-    this.sunDir.fromArray(light.sun.dir).normalize();
+    this.scene.add(this.hemi, this.sun, this.sun.target);
 
-    const plane = new Mesh(buildMapGeometry(map, light), new MeshToonMaterial({ vertexColors: true, gradientMap: ramp }));
-    plane.name = 'gameplay-plane';
-    plane.receiveShadow = plane.castShadow = true;
-    this.layers = buildDepthLayers(map, light);
-    this.scene.add(plane, this.layers.background, this.layers.foregroundGroup);
+    this.map = map;
+    this.world = new CollisionWorld(map);
+    this.plane = new Mesh(new BufferGeometry(), new MeshToonMaterial({ vertexColors: true, gradientMap: ramp }));
+    this.plane.name = 'gameplay-plane';
+    this.plane.receiveShadow = this.plane.castShadow = true;
+    this.layers = { background: new Group(), foreground: [], foregroundGroup: new Group(), materials: [] };
+    this.zones = new ZoneVolumes(map);
+    this.buildMap(map);
+    this.scene.add(this.plane, this.zones.group);
+    // after buildMap: the blast light flashes from the map's light levels
     this.vfx = new Vfx(this.scene, this.world, camera, { hemi: this.hemi, sun: this.sun }, ramp, preset);
     // reduced motion (docs/11 §5): the OS setting until the settings screen calls setReducedMotion
     this.setReducedMotion(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -141,6 +155,42 @@ export class Renderer3D {
   /** No camera shake, a third of the blast light, fuse lights blinking ≤ 3 times a second. */
   setReducedMotion(on: boolean): void {
     this.vfx.setReducedMotion(on);
+  }
+
+  /** Swaps the map on screen (online play follows the server's map from WELCOME). */
+  setMap(map: MapDef): void {
+    if (map === this.map) return;
+    this.map = map;
+    this.world = new CollisionWorld(map);
+    this.plane.geometry.dispose();
+    this.scene.remove(this.layers.background, this.layers.foregroundGroup, this.zones.group);
+    disposeTree(this.layers.background);
+    disposeTree(this.layers.foregroundGroup);
+    this.zones.dispose();
+    this.zones = new ZoneVolumes(map);
+    this.scene.add(this.zones.group);
+    this.buildMap(map);
+  }
+
+  /** Everything that comes from the map: lighting preset, the gameplay plane, the depth layers and the effects' world. */
+  private buildMap(map: MapDef): void {
+    const light = lightingFor(map.id);
+    const fog = this.scene.fog as Fog;
+    fog.color.setHex(light.fog.color);
+    fog.near = this.fogBase.near = light.fog.near;
+    fog.far = this.fogBase.far = light.fog.far;
+    this.fogMix = 0;
+    this.hemi.color.setHex(light.hemi.sky);
+    this.hemi.groundColor.setHex(light.hemi.ground);
+    this.hemi.intensity = light.hemi.intensity;
+    this.sun.color.setHex(light.sun.color);
+    this.sun.intensity = light.sun.intensity;
+    this.sunDir.fromArray(light.sun.dir).normalize();
+    this.plane.geometry = buildMapGeometry(map, light);
+    this.layers = buildDepthLayers(map, light);
+    this.scene.add(this.layers.background, this.layers.foregroundGroup);
+    // the effects take the new world and the relit scene (the constructor's first build runs before Vfx exists)
+    this.vfx?.setMap(this.world);
   }
 
   /** Loads the base character and effect assets, then compiles every material variant (docs/11 §3 shader warm-up). */
@@ -249,9 +299,25 @@ export class Renderer3D {
 
     this.syncAvatars(frame, dt);
     updateForeground(this.layers.foreground, frame.players, this.pose, dt);
+    this.zones.update(frame, dt, now / 1000);
+    this.applyEventAtmosphere(frame, dt);
     this.renderer.render(this.scene, this.camera3);
     this.cpuMs.push(performance.now() - now);
     if (this.statsEl && this.frames++ % 30 === 0) this.statsEl.textContent = formatStats(this.stats());
+  }
+
+  /**
+   * A fog event (any map event that cuts bullet range, docs/02 §20.7) thickens the air while it
+   * runs: the gameplay plane hazes over and the background all but disappears.
+   */
+  private applyEventAtmosphere(frame: Frame, dt: number): void {
+    const ev = frame.mapEvent;
+    const target = ev && ev.phase === 'active' && ev.bulletRangeMul < 1 ? 1 : 0;
+    if (target === 0 && this.fogMix < 1e-3) return;
+    this.fogMix += (target - this.fogMix) * (1 - Math.exp(-Math.min(dt, 0.1) * 2));
+    const fog = this.scene.fog as Fog;
+    fog.near = this.fogBase.near + (10 - this.fogBase.near) * this.fogMix;
+    fog.far = this.fogBase.far + (70 - this.fogBase.far) * this.fogMix;
   }
 
   private syncAvatars(frame: Frame, dt: number): void {
@@ -312,6 +378,16 @@ export class Renderer3D {
       particles: this.vfx.particles,
     };
   }
+}
+
+/** Frees the geometries and materials under `root` (textures shared with other meshes stay). */
+function disposeTree(root: Object3D): void {
+  root.traverse((o) => {
+    const mesh = o as Mesh;
+    if (!mesh.isMesh) return;
+    mesh.geometry.dispose();
+    for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) m.dispose();
+  });
 }
 
 export function formatStats(s: RenderStats): string {

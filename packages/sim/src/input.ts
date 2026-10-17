@@ -13,6 +13,8 @@ export const Btn = {
   Interact: 1 << 10,
   Dual: 1 << 11,
   CycleGrenade: 1 << 12,
+  /** dash (docs/02 §21): direction from Left/Right and Jet (up) / Down; none = along the facing */
+  Dash: 1 << 13,
   Repeat: 1 << 15,
 } as const;
 

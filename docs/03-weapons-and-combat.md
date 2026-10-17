@@ -145,6 +145,9 @@ Defaults: `moveMul 1.25 · airMul 1.5 · crouchMul 0.6 · dualMul 1.4 · bloomPe
 dmg = base × falloff(dist) × zoneMul × rarityMul(BR) × modeMul
 falloff: 1.0 until falloffStart (= 50% range), linear to minMul (0.5) at range. Beyond range: no hit.
          "Classic" custom-room rule: no falloff for anything. The beam laser never falls off.
+dist:    the range used up, not the metres flown, on maps with mechanics (02-physics §20.4): a map-wide
+         bulletRangeMul scales every range ("bullets don't go far": 0.5 halves them); damping zones
+         (fog, water) use it up 1/m times faster per metre inside. Same metres on plain maps.
 zoneMul: head 1.5 (not available while crouched), body/legs 1.0
 armour (BR only): vest absorbs X% of body damage into armour HP; helmet reduces the head multiplier (08 §6)
 ```

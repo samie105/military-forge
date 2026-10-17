@@ -65,6 +65,18 @@ export interface Tuning {
   // One-way platforms
   dropThroughHold: number;
   dropThroughTime: number;
+
+  // Dash (docs/02 §21): a brief 8-way jetpack burst
+  /** m/s along the dash direction during the burst (× weapon weight × map speed) */
+  dashSpeed: number;
+  /** burst length in ticks */
+  dashBurstTicks: number;
+  /** seconds between dashes */
+  dashCooldown: number;
+  /** fuel per dash (0 = free) */
+  dashFuelCost: number;
+  /** the most upward speed a dash leaves you with (m/s): an up-dash can't become a jet launch */
+  dashExitUp: number;
 }
 
 export const defaultTuning: Readonly<Tuning> = Object.freeze({
@@ -119,6 +131,12 @@ export const defaultTuning: Readonly<Tuning> = Object.freeze({
 
   dropThroughHold: 0.15,
   dropThroughTime: 0.25,
+
+  dashSpeed: 14,
+  dashBurstTicks: 8,
+  dashCooldown: 1.0,
+  dashFuelCost: 8,
+  dashExitUp: 2,
 });
 
 export function createTuning(overrides: Partial<Tuning> = {}): Tuning {

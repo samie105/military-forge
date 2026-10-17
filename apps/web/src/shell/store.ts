@@ -3,6 +3,7 @@
  * registry other workstreams plug their screens into (W2's Locker: one line in main.ts).
  */
 import { createStore, type StoreApi } from 'zustand/vanilla';
+import type { MapEventBanner } from './mapEventBanner';
 import type { MatchView } from './matchView';
 
 export interface ShellActions {
@@ -39,6 +40,8 @@ export interface ShellState {
   match: MatchView | null;
   route: ShellRoute | null;
   actions: ShellActions;
+  /** the map event being announced or running (docs/02 §20.7), null when none */
+  mapEvent: MapEventBanner | null;
 }
 
 export type ShellStore = StoreApi<ShellState>;
@@ -46,7 +49,7 @@ export type ShellStore = StoreApi<ShellState>;
 const noop = (): void => {};
 
 export function createShellStore(): ShellStore {
-  return createStore<ShellState>(() => ({ match: null, route: null, actions: { playAgain: noop, backToLobby: noop, ready: noop } }));
+  return createStore<ShellState>(() => ({ match: null, route: null, actions: { playAgain: noop, backToLobby: noop, ready: noop }, mapEvent: null }));
 }
 
 const routes: ShellRoute[] = [];

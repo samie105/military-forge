@@ -10,6 +10,7 @@ import { MAX_GRENADES, MAX_PLAYERS, ticks } from './constants';
 import { DamageSource, type SimEvent } from './events';
 import { GrenadeState, stepGrenade } from './grenades';
 import { copyInput, type Input } from './input';
+import { MapMechanics, createBodyEnv } from './mechanics';
 import { depenetrate, quantizeMovement, stepMovement } from './movement';
 import { PlayerState, giveLoadout } from './player';
 import type { TargetRewind } from './rewind';
@@ -27,6 +28,9 @@ export interface GameOptions {
 /** Seconds within which a hazard death is credited to the last attacker (docs/03 §8). */
 const ENVIRONMENT_CREDIT_TICKS = ticks(5);
 
+/** Scratch for the player being moved (the sim is single-threaded). */
+const bodyEnv = createBodyEnv();
+
 export class Game {
   readonly map: MapDef;
   readonly world: CollisionWorld;
@@ -39,11 +43,14 @@ export class Game {
   readonly events: SimEvent[] = [];
   /** lag compensation for hitscan (server only; null = test targets where they are now) */
   rewind: TargetRewind | null = null;
+  /** the map's rules, zones and events (docs/02 §20); null when it has none */
+  readonly mech: MapMechanics | null;
   private readonly ids = new IdAllocator(MAX_PLAYERS);
 
   constructor(options: GameOptions = {}) {
     this.map = options.map ?? getMap(options.mapId ?? 'movement-test');
     this.world = new CollisionWorld(this.map);
+    this.mech = MapMechanics.compile(this.map);
     this.tuning = createTuning(options.tuning);
     this.seed = (options.seed ?? 1) >>> 0;
     if (options.dummies) for (const d of this.map.dummies) this.addDummy(d);
@@ -157,6 +164,9 @@ export class Game {
   step(inputs: ReadonlyArray<Readonly<Input> | undefined>): void {
     this.events.length = 0;
     const t = this.tuning;
+    const mech = this.mech;
+    // the map event schedule for this tick (and its warning/start/end events)
+    if (mech) mech.beginTick(this.seed, this.tick, this.events);
 
     for (const p of this.players) {
       if (!p) continue;
@@ -168,7 +178,12 @@ export class Game {
       }
     }
 
-    for (const p of this.players) if (p?.alive) stepMovement(this.world, p, t);
+    for (const p of this.players) {
+      if (!p?.alive) continue;
+      const x0 = p.x;
+      const y0 = p.y;
+      if (stepMovement(this.world, p, t, mech ? mech.bodyEnv(p, t, bodyEnv) : null)) this.events.push({ type: 'dash', player: p.id, x: x0, y: y0, dir: p.dashDir });
+    }
     for (const p of this.players) if (p?.alive) stepWeapons(this, p);
     for (const g of this.grenades) if (g.alive) stepGrenade(this, g, FRAG);
 

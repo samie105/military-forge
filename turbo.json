@@ -12,7 +12,10 @@
     },
     "dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      // turbo's strict env mode drops unlisted variables: these reach `pnpm dev`'s game server
+      // (MAP=flux-lab pnpm dev picks the room's map; SEED its seed)
+      "passThroughEnv": ["MAP", "SEED"]
     },
     // No package has a `transit` script, so it runs nothing. It only chains each package to its
     // workspace dependencies, so that a change in packages/shared also changes the cache key of

@@ -34,6 +34,45 @@ export const BLAST_TARGETS: { distance: number; flewMin: number; flewMax: number
   { distance: 3, flewMin: 4, flewMax: 10, peakMin: 1.5, why: 'still a real launch at the edge of the damage radius' },
 ];
 
+/** Map zones at their kinds' defaults (docs/02 §20, packages/content ZONE_KINDS); keys are ZoneMetrics fields. */
+export const ZONE_TARGETS: Target[] = [
+  { key: 'lowGTapHop', label: 'Low-g: 0.2 s tap hop (m)', min: 3, max: 5, why: 'a tap clears a storey: low gravity reads at once' },
+  { key: 'lowGClimb', label: 'Low-g: full-tank climb (m)', min: 15, max: 20, why: 'higher than the 13 m tank on normal ground, still inside the 20 m view' },
+  { key: 'zeroGDrift', label: 'Zero-g: drift 1 s after a tap (m/s)', min: 3, max: 6, why: 'a tap sends you drifting at about walking speed, and you keep it' },
+  { key: 'zeroGDiveTurn', label: 'Zero-g: Down turns the drift around (s)', min: 0.15, max: 0.6, why: 'diving is quick: zero-g never traps you at the ceiling' },
+  { key: 'longFlightBurn', label: 'Long flight: full-tank burn (s)', min: 5, max: 6.5, why: '2.5× the 2.25 s tank: noticeably longer flights' },
+  { key: 'longFlightRun', label: 'Long flight: jet + run on one tank (m)', min: 40, max: 70, why: 'one tank crosses more than a screen (36 m)' },
+  { key: 'reverseSettle', label: 'Reversed pocket: bob settles (s)', min: 2, max: 5, why: 'you hover at the edge after a few seconds: floaty, not nauseating' },
+  { key: 'windDrift', label: 'Wind: drift in a 1 s fall (m)', min: 3, max: 7, why: 'felt in every flight and grenade arc, never a teleport' },
+  { key: 'mudSpeed', label: 'Mud: walk speed (m/s)', min: 2, max: 2.6, why: 'about crouch-walk speed (2.2 m/s)' },
+  { key: 'waterSink', label: 'Deep water: sink speed after 1 s (m/s)', min: 3.5, max: 6, why: 'slower than a fall (16 m/s terminal), not a hover' },
+  { key: 'jumpPadApex', label: 'Jump pad: apex from standing (m)', min: 5.5, max: 8, why: 'reaches a second storey (~6 m) without fuel' },
+  { key: 'boostPadFlight', label: 'Boost pad: flight from a run (m)', min: 9, max: 16, why: 'a third of a screen in one throw' },
+];
+
+/** Bullet fog at its default (0.35): 10 m of it starting 5 m out. */
+export const FOG_TARGETS: { weapon: string; min: number; max: number; why: string }[] = [
+  { weapon: 'Hammer .44', min: 10, max: 14, why: 'fog halves a pistol\'s 26 m: bullets don\'t go far' },
+  { weapon: 'Widow', min: 35, max: 45, why: 'the sniper still reaches through, at two thirds of its 60 m' },
+];
+
+/** Map events at their kinds' defaults (docs/02 §20.7, packages/content EVENT_KINDS); keys are EventMetrics fields. */
+export const EVENT_TARGETS: Target[] = [
+  { key: 'surgeClimb', label: 'Gravity surge: full-tank climb (m)', min: 4, max: 9, why: 'high ground gets hard to reach for 15 s: fights drop to the floor' },
+  { key: 'lowGravityTapHop', label: 'Low gravity: 0.2 s tap hop (m)', min: 3, max: 5, why: 'the same float as a low-g zone, map-wide' },
+  { key: 'fogHammerReach', label: 'Fog bank: Hammer reach (m)', min: 9, max: 12, why: 'pistols become close-range guns: bullets don\'t go far' },
+  { key: 'gustDrift', label: 'Wind gusts: drift of a 1 s fall at a peak (m)', min: 4, max: 9, why: 'a gust visibly throws fliers sideways, then dies down' },
+];
+
+/** Dash (docs/02 §21, owner request: "brief, like a fighting game's, but up and down too"); keys are DashMetrics fields. */
+export const DASH_TARGETS: Target[] = [
+  { key: 'flat', label: 'Dash: ground covered from standing (m)', min: 2, max: 2.5, why: 'a quick hop between spaces, not a teleport' },
+  { key: 'up', label: 'Dash: up from standing (m)', min: 1.5, max: 2, why: 'onto a crate or half a storey: the jetpack still owns real height' },
+  { key: 'slamTime', label: 'Dash: down from a 6 m hover, to the ground (s)', min: 0.3, max: 0.5, why: 'a real drop: falling takes ~0.8 s' },
+  { key: 'wallStop', label: 'Dash: at a wall 1 m away, distance covered (m)', min: 0.95, max: 1, why: 'move-and-slide stops it at the wall: no tunnelling' },
+  { key: 'burst', label: 'Dash: burst length (s)', min: 0.1, max: 0.17, why: 'brief: the animation is a blink, not a run' },
+];
+
 export interface WeaponTarget {
   label: string;
   /** weapon id (packages/content weapons.ts) */

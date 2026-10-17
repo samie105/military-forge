@@ -4,6 +4,7 @@ import {
   FRAG,
   NO_WEAPON,
   STANDING_HITBOXES,
+  weapons,
   type DummyScript,
   type HitboxLayout,
   type Tuning,
@@ -84,6 +85,14 @@ export class PlayerState {
   shotCounter = 0;
   /** 0 = not swinging; else ticks since the melee swing started (lunge, windup, cooldown) */
   meleeTicks = 0;
+  /** dash (docs/02 §21): burst ticks left, 0 = not dashing */
+  dashTicks = 0;
+  /** 8-way direction of the current (or last) dash: 0 = right, counter-clockwise in 45° steps */
+  dashDir = 0;
+  /** ticks until the next dash is allowed */
+  dashCooldown = 0;
+  /** this airborne period's one air dash is spent (landing resets it) */
+  airDashUsed = false;
   /** weapons given on respawn: [slot 0, slot 1] weapon indices */
   loadout: [number, number] = [DEFAULT_LOADOUT[0], DEFAULT_LOADOUT[1]];
 
@@ -137,6 +146,10 @@ export class PlayerState {
     this.frags = FRAG.spawnCount;
     this.throwCooldown = 0;
     this.meleeTicks = 0;
+    this.dashTicks = 0;
+    this.dashDir = 0;
+    this.dashCooldown = 0;
+    this.airDashUsed = false;
     this.lastAttacker = -1;
     this.lastAttackTick = -1;
     this.prevButtons = 0;
@@ -161,4 +174,34 @@ export function giveLoadout(p: PlayerState, defs: readonly { mag: number; reserv
 
 export function hitboxLayout(p: PlayerState): HitboxLayout {
   return p.crouched ? CROUCHED_HITBOXES : STANDING_HITBOXES;
+}
+
+const slotSpeedMul = (slot: WeaponSlot) => weapons[slot.def]?.moveSpeedMul ?? 1;
+
+/** Weight (docs/03 §9): the held weapon's moveSpeedMul, the heaviest of a dual pair. */
+export function heldSpeedMul(p: PlayerState): number {
+  return p.dual ? Math.min(slotSpeedMul(p.weapons[0]), slotSpeedMul(p.weapons[1])) : slotSpeedMul(p.weapons[p.active]!);
+}
+
+/**
+ * A dash's exit (docs/02 §21): sideways speed back within the walk or air cap (× `speedMul`, the
+ * weapon weight × the map's speed, and never above launchSpeedX, so a dash never turns into a
+ * slow-bleeding launch), and at most dashExitUp upward. For a burst that ends and one cut short.
+ */
+export function capDashExit(p: PlayerState, t: Tuning, speedMul: number): void {
+  const cap = Math.min(t.launchSpeedX, (p.grounded ? (p.crouched ? t.crouchMax : t.walkMax) : t.airMaxX) * speedMul);
+  if (p.vx > cap) p.vx = cap;
+  else if (p.vx < -cap) p.vx = -cap;
+  if (p.vy > t.dashExitUp) p.vy = t.dashExitUp;
+}
+
+/**
+ * A push (a bullet's hit impulse, melee, a blast) ends a dash on the spot: no invulnerability
+ * frames. The burst's speed first drops to the exit caps, so the push starts from there instead of
+ * from 14 m/s. `mapSpeedMul` is the map's moveSpeedMul where the player is (1 without mechanics).
+ */
+export function knockOutOfDash(p: PlayerState, t: Tuning, mapSpeedMul = 1): void {
+  if (p.dashTicks === 0) return;
+  p.dashTicks = 0;
+  capDashExit(p, t, heldSpeedMul(p) * mapSpeedMul);
 }

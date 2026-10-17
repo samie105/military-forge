@@ -18,6 +18,7 @@ import { u16ToAngle } from '@military-forge/shared';
 import type { PlayerState, SimEvent } from '@military-forge/sim';
 import type { Camera } from './camera';
 import type { InputSampler } from './input';
+import { mapEventView } from './mapEvent';
 import type { Renderer } from './render';
 import { connectGame, type GameTransport } from './transport';
 import type { Frame, PlayerView, RewindView } from './view';
@@ -238,7 +239,8 @@ export class OnlineMode {
       const sy = me ? me.shoulderY(t) : 0;
       this.sampler.sample(this.camera, sx, sy, out);
     });
-    const own: SimEvent[] = this.net.drainEvents().filter((e) => e.type === 'shot');
+    // own shots and dashes are drawn from prediction the moment they happen
+    const own: SimEvent[] = this.net.drainEvents().filter((e) => e.type === 'shot' || e.type === 'dash');
     if (own.length) this.renderer.onEvents(own, this.net.myId);
 
     // rates for the net graph
@@ -298,6 +300,8 @@ export class OnlineMode {
       grenades: newest.msg.grenades.map((g) => ({ x: g.x, y: g.y, fuse: g.fuse })),
       net,
       rewinds: this.rewindViews(now),
+      // the predicted game runs the map's event schedule on our own timeline: the banner matches the physics
+      mapEvent: pred?.started ? mapEventView(pred.game) : null,
     };
   }
 
@@ -338,6 +342,7 @@ export class OnlineMode {
       dual: p.dual,
       weapons: p.weapons.map((w) => ({ def: w.def, mag: w.mag, reserve: w.reserve, reloadTicks: w.reloadTicks })),
       meleeTicks: p.meleeTicks,
+      dashing: p.dashTicks > 0,
       respawnTicks: server.respawnTicks,
       kills: server.kills,
       deaths: server.deaths,
@@ -365,6 +370,7 @@ export class OnlineMode {
       frags: 0,
       active: src.active,
       dual: src.dual,
+      dashing: src.dashing,
       // other players' ammo isn't sent (only the local block has it)
       weapons: src.weapons.map((w) => ({ def: w.def, mag: 0, reserve: 0, reloadTicks: 0 })),
       respawnTicks: src.respawnTicks,

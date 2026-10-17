@@ -36,6 +36,8 @@ export interface PlayerView {
   weapons: WeaponView[];
   /** melee swing progress (sim PlayerState.meleeTicks): 0 idle, 1 = swing started. Absent for remote players online */
   meleeTicks?: number;
+  /** in a dash burst (docs/02 §21): pose and streak. The 'dash' event carries its start and direction */
+  dashing?: boolean;
   respawnTicks: number;
   kills: number;
   deaths: number;
@@ -91,11 +93,39 @@ export interface RewindView {
   targets: { x: number; y: number; crouched: boolean; nowX: number; nowY: number; hit: boolean }[];
 }
 
+/**
+ * The map event under way (docs/02 §20.7), from the local game or, online, the predicted one: the
+ * same schedule the sim runs, so the banner flips on exactly the tick the physics do.
+ */
+export interface MapEventView {
+  id: string;
+  /** MapEventKind: picks the look */
+  kind: string;
+  name: string;
+  description: string;
+  /** the warning ("incoming") or the event itself */
+  phase: 'warning' | 'active';
+  /** seconds left in that phase */
+  secondsLeft: number;
+  /** 0 → 1 through that phase */
+  progress: number;
+  /** 0xRRGGBB (EVENT_KINDS) */
+  color: number;
+  /** its event zones that are (or, in the warning, will be) on: indices into map.zones */
+  zones: number[];
+  /** counts occurrences: a new one is a new banner */
+  occurrence: number;
+  /** the event's map-wide bullet range multiplier (fog: below 1) */
+  bulletRangeMul: number;
+}
+
 export interface Frame {
   tick: number;
   localId: number;
   players: PlayerView[];
   grenades: GrenadeView[];
+  /** the map event being announced or running (maps with events only) */
+  mapEvent?: MapEventView | null;
   net?: NetStats;
   recording?: number;
   /** online + hitboxes on: recent server rewinds of our shots (docs/05 §15.3) */

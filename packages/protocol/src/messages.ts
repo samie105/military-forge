@@ -2,7 +2,7 @@
  * Wire messages (docs/05 §5–6) except snapshots, which live in snapshot.ts (delta-compressed,
  * per client). The input format matches the final design (redundant inputs, acks, render tick).
  */
-import { CROUCHED_HITBOXES, FRAG, STANDING_HITBOXES, defaultTuning, maps, weapons } from '@military-forge/content';
+import { CROUCHED_HITBOXES, EVENT_KINDS, FRAG, STANDING_HITBOXES, ZONE_KINDS, defaultTuning, maps, weapons } from '@military-forge/content';
 import { POS_INV } from '@military-forge/shared';
 import { createInput, type Input } from '@military-forge/sim';
 import { BitReader, BitWriter, DecodeError } from './bitstream';
@@ -19,8 +19,13 @@ export { MsgType } from './wire';
  * v6: the local-player block ends with a melee group: meleeTicks (arsenal: melee lunge + swing timer).
  * v7: INPUT's render lag is u8 (to 15.9 ticks: redundant copies at low frame rates) and inputs[0] has none;
  *     ROSTER entries carry `since`, the first server tick whose snapshots show that player (ids are reused).
+ * v8 (mechanics + dash): event tag 6 MAP_EVENT · tag 7 = extended escape (u4 kind): 0 DASH · INPUT bit 13 Dash ·
+ *     remote flag 128 DASHING (flags 8 bits) · local block 41–44 (dash group).
+ *     Map events announce a map event's warning, start and end (docs/02 §20.7); map rules, zones and the schedule add
+ *     nothing else (they come from the map and the seed). The dash group holds dashTicks, dashDir, dashCooldown and
+ *     airDashUsed (docs/02 §21). Extended events carry no length, so each new ext kind is a version bump too.
  */
-export const PROTOCOL_VERSION = 7;
+export const PROTOCOL_VERSION = 8;
 
 /**
  * Everything the sim reads from packages/content: a client and server that disagree on any of it
@@ -33,6 +38,9 @@ export const HASHED_CONTENT = {
   grenades: [FRAG],
   hitboxes: { standing: STANDING_HITBOXES, crouched: CROUCHED_HITBOXES },
   maps,
+  /** the effects a map zone or event gets from its kind when it leaves them out (docs/02 §20) */
+  zoneDefaults: Object.fromEntries(Object.entries(ZONE_KINDS).map(([kind, info]) => [kind, info.defaults])),
+  eventDefaults: Object.fromEntries(Object.entries(EVENT_KINDS).map(([kind, info]) => [kind, info.defaults])),
 } as const;
 
 /**

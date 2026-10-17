@@ -8,7 +8,8 @@ import { DT, ticks } from './constants';
 import { DamageSource } from './events';
 import type { Game } from './game';
 import { closestPointOnSegment, rayCapsule } from './geometry';
-import { hitboxLayout, type PlayerState } from './player';
+import { createBodyEnv, type BodyEnv } from './mechanics';
+import { hitboxLayout, knockOutOfDash, type PlayerState } from './player';
 import { SegFlag, createRayHit, type CollisionWorld } from './world';
 
 export class GrenadeState {
@@ -105,13 +106,40 @@ export function throwGrenade(game: Game, p: PlayerState, def: GrenadeDef): boole
   return true;
 }
 
+/** Fastest a grenade falls (m/s), and rises under reversed gravity. */
+const GRENADE_TERMINAL = 30;
+const grenadeEnv = createBodyEnv();
+
+/** Map mechanics on a grenade (docs/02 §20): pads, wind and drag, then gravity scaled by the map. */
+function grenadeForces(game: Game, g: GrenadeState, def: GrenadeDef, env: BodyEnv): void {
+  for (let i = 0; i < env.padCount; i++) {
+    const ux = env.padUx[i]!;
+    const uy = env.padUy[i]!;
+    const short = env.padSpeed[i]! - (g.vx * ux + g.vy * uy);
+    if (short <= 0) continue;
+    g.vx += short * ux;
+    g.vy += short * uy;
+  }
+  if (env.windX !== 0 || env.windY !== 0) {
+    g.vx += env.windX * DT;
+    g.vy += env.windY * DT;
+  }
+  if (env.dragKeep !== 1) {
+    g.vx *= env.dragKeep;
+    g.vy *= env.dragKeep;
+  }
+  const gravity = game.tuning.gravity * def.gravityScale * env.gravityMul;
+  g.vy = gravity >= 0 ? Math.max(-GRENADE_TERMINAL, g.vy - gravity * DT) : Math.min(GRENADE_TERMINAL, g.vy - gravity * DT);
+}
+
 export function stepGrenade(game: Game, g: GrenadeState, def: GrenadeDef): void {
   if (--g.fuse <= 0) {
     explode(game, g.x, g.y, g.owner, def.explosion);
     g.alive = false;
     return;
   }
-  g.vy = Math.max(-30, g.vy - game.tuning.gravity * def.gravityScale * DT);
+  if (game.mech) grenadeForces(game, g, def, game.mech.envAt(g.x, g.y, grenadeEnv));
+  else g.vy = Math.max(-GRENADE_TERMINAL, g.vy - game.tuning.gravity * def.gravityScale * DT);
 
   let remaining = 1;
   for (let iter = 0; iter < 3 && remaining > 1e-6; iter++) {
@@ -192,7 +220,9 @@ export function explode(game: Game, x: number, y: number, owner: number, def: Ex
     const cy = q.y + (box.torso.y0 + box.torso.y1) / 2 - y + def.upBias;
     const cl = Math.sqrt(cx * cx + cy * cy);
     if (cl > 1e-6 && k > 0) {
-      const mag = def.impulse * k * (covered ? def.coveredImpulseMul : 1) * (q.id === owner ? def.selfImpulseMul : 1);
+      knockOutOfDash(q, game.tuning, game.mech ? game.mech.moveSpeedMul(q, game.tuning) : 1); // blasts end a dash (docs/02 §21)
+      let mag = def.impulse * k * (covered ? def.coveredImpulseMul : 1) * (q.id === owner ? def.selfImpulseMul : 1);
+      if (game.mech) mag *= game.mech.knockbackMul(q, game.tuning);
       let ux = cx / cl;
       let uy = cy / cl;
       // level or low blasts launch in an arc (minLift); blasts from above keep pushing down

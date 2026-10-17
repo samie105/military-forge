@@ -7,7 +7,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BREACHER, K47, MACHETE, WIDOW } from '@military-forge/content';
+import { BREACHER, HAMMER, K47, MACHETE, WIDOW } from '@military-forge/content';
 import { angleToU16 } from '@military-forge/shared';
 import {
   Btn,
@@ -234,6 +234,165 @@ function matchScenario(): ReplayFile {
   return { ...meta, ticks: tick, players: streams.map(encodeRuns), commands };
 }
 scenarios.push(matchScenario());
+
+/**
+ * Records a closed-loop scenario on one map: `control` picks each tick's input for the one human
+ * from the live game (positions, timers), and the inputs become the replay.
+ */
+function recorded(
+  name: string,
+  meta: Pick<ReplayFile, 'map' | 'seed' | 'dummies' | 'starts' | 'loadouts'>,
+  ticks: number,
+  control: (game: ReturnType<typeof createReplayGame>, me: ReturnType<typeof createReplayGame>['players'][number] & object, tick: number) => Input,
+): ReplayFile {
+  const replay: ReplayFile = { version: 1, name, ...meta, ticks: 0, players: [[]] };
+  const game = createReplayGame(replay);
+  const me = game.players.find((p) => p && !p.isBot)!;
+  const inputs: Input[] = [];
+  const byId: (Input | undefined)[] = [];
+  for (let t = 0; t < ticks; t++) {
+    const input = control(game, me, t);
+    inputs.push(input);
+    byId[me.id] = input;
+    game.step(byId);
+  }
+  return { ...replay, ticks, players: [encodeRuns(inputs)] };
+}
+
+const deg = (d: number) => angleToU16((d * Math.PI) / 180);
+const act = (buttons: number, aimDeg = 0, throwStrength = 7): Input => ({ buttons, aim: deg(aimDeg), weaponSelect: 0, throwStrength });
+
+/**
+ * Dash (docs/02 §21) on the movement-test map, driven by the player's state so every case happens:
+ * a ground dash, an up-dash, a drop-through dash on a one-way platform, the one air dash (and a
+ * refused second one), a refused straight-down dash on solid floor, a wall stop at the 12 m tower,
+ * a slam, a down-left dash along the floor, and a press inside the cooldown.
+ */
+{
+  let phase = 0;
+  let since = 0;
+  const next = (to = phase + 1) => {
+    phase = to;
+    since = 0;
+  };
+  scenarios.push(
+    recorded('dash', { map: 'movement-test', seed: 1234, dummies: true, starts: [{ x: 127, y: 0 }] }, 60 * 22, (_g, me) => {
+      since++;
+      const ready = me.dashCooldown === 0 && me.dashTicks === 0;
+      const settled = me.grounded && since > 10;
+      switch (phase) {
+        case 0: // ground dash along the facing
+          if (since < 10) return act(0);
+          next();
+          return act(Btn.Dash);
+        case 1: // up from the floor
+          if (!ready || !settled) return act(0);
+          next();
+          return act(Btn.Dash | J);
+        case 2: // back down
+          if (!settled) return act(0);
+          next();
+          return act(J);
+        case 3: // jet up past the 2.5 m one-way platform
+          if (me.y < 2.9) return act(J);
+          next();
+          return act(0);
+        case 4: // land on it, then dash straight down through it
+          if (!settled || !ready) return act(0);
+          next();
+          return act(Btn.Dash | D);
+        case 5: // on the floor again
+          if (!(me.grounded && me.y < 0.1) || since < 10) return act(0);
+          next();
+          return act(J);
+        case 6: // fly up, then the air dash
+          if (me.y < 4 || !ready) return act(J);
+          next();
+          return act(Btn.Dash | R);
+        case 7: // a second air dash: refused
+          if (since < 12) return act(J);
+          next();
+          return act(Btn.Dash | Btn.Left);
+        case 8: // land, walk to the tower, then straight down on solid floor: refused
+          if (!settled) return act(0);
+          if (me.x < 140.5) return act(R);
+          if (!ready || since < 20) return act(0);
+          next();
+          return act(Btn.Dash | D);
+        case 9: // into the tower's wall
+          if (since < 3) return act(0);
+          next();
+          return act(Btn.Dash | R);
+        case 10: // up the wall, then a slam
+          if (!ready) return act(0);
+          if (me.y < 4) return act(J);
+          next();
+          return act(Btn.Dash | D);
+        case 11: // down-left on the floor: along it; then a press inside the cooldown
+          if (!settled || !ready) return act(0);
+          next();
+          return act(Btn.Dash | D | Btn.Left);
+        case 12:
+          if (since < 4) return act(0);
+          next();
+          return act(Btn.Dash | Btn.Left);
+        default:
+          return act(0);
+      }
+    }),
+  );
+}
+
+// Map mechanics (docs/02 §20) on the mechanics-test map: every zone and every event.
+const MECH = { map: 'mechanics-test', seed: 1234, dummies: true } as const;
+
+// A walk across the whole strip: hops every 1.5 s, dives now and then, a grenade forward every 4 s.
+scenarios.push(
+  recorded('mech-zones', { ...MECH, starts: [{ x: 2, y: 0 }] }, 60 * 46, (_g, me, t) => {
+    const k = t % 90;
+    let b = me.x < 168 ? R : 0;
+    if (k < 18) b |= J;
+    if (k > 60 && k < 75) b |= D;
+    if (t % 240 === 120) b |= Btn.Grenade;
+    return act(b, t % 240 === 120 ? 40 : 0);
+  }),
+);
+
+/**
+ * Bullets: from the gallery spawn (x 172) at the dummy behind the fog (x 194). The Hammer's 26 m
+ * run out inside the fog; the Widow gets through, except while the fog event runs (21 s).
+ */
+scenarios.push(
+  recorded('mech-bullets', { ...MECH, starts: [{ x: 172, y: 0 }], loadouts: [[HAMMER.index, WIDOW.index]] }, 60 * 34, (g, me, t) => {
+    const target = g.players.find((p) => p?.name === 'Behind fog')!;
+    const aim = Math.atan2(target.y + 0.8 - me.shoulderY(g.tuning), target.x - me.shoulderX(g.tuning)) * (180 / Math.PI);
+    if (t < 600) return act(t % 40 === 0 ? F : 0, aim); // Hammer: never reaches
+    if (t === 600) return act(Q, aim); // swap to the Widow
+    if (t < 2400 && t > 640) return act(t % 75 === 0 ? F : 0, aim); // through the fog, then the fog event
+    return act(0, aim);
+  }),
+);
+
+/**
+ * A whole event loop next to the knockback ×2 pit: hops (surge, low gravity, EMP, gusts, molasses),
+ * Hammer shots at the Heavy dummy (the fog event's falloff), frags into the pit, and a stand in
+ * pocket site A (picked for this seed).
+ */
+scenarios.push(
+  recorded('mech-events', { ...MECH, starts: [{ x: 216, y: 0 }] }, 60 * 52, (g, me, t) => {
+    const heavy = g.players.find((p) => p?.name === 'Heavy')!;
+    const aim = Math.atan2(heavy.y + 0.8 - me.shoulderY(g.tuning), heavy.x - me.shoulderX(g.tuning)) * (180 / Math.PI);
+    const inPocketWindow = t > 60 * 37 && t < 60 * 44;
+    let b = 0;
+    if (inPocketWindow && me.x < 222) b |= R;
+    else if (!inPocketWindow && me.x > 216.5) b |= Btn.Left;
+    if (t % 120 < 20) b |= J;
+    if (t % 60 === 30) b |= F;
+    // a soft lob into the pit (~8 m) during the surge, the gusts and the molasses (3 frags, no pickups)
+    if (t === 300 || t === 2000 || t === 2750) return act(b | Btn.Grenade, 135, 3);
+    return act(b, aim);
+  }),
+);
 
 mkdirSync(OUT, { recursive: true });
 for (const s of scenarios) {

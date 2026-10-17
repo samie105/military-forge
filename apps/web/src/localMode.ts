@@ -2,6 +2,7 @@
  * Local mode: the shared sim runs in the browser with the map's dummy targets. Fixed 60 Hz steps,
  * input sampled once per tick, render interpolated between ticks (docs/02 §3). With match rules it
  * plays a deathmatch through the Match lifecycle (results, Play again); without, it's a sandbox.
+ * Any registered map (?map=), including the map-mechanics demos (docs/02 §20).
  */
 import { DEFAULT_LOADOUT, getMap, weapons, NO_WEAPON, type MapDef, type Tuning } from '@military-forge/content';
 import {
@@ -18,6 +19,7 @@ import {
 } from '@military-forge/sim';
 import type { Camera } from './camera';
 import type { InputSampler } from './input';
+import { mapEventView } from './mapEvent';
 import type { Renderer } from './render';
 import type { Frame, PlayerView } from './view';
 
@@ -44,8 +46,10 @@ export class LocalMode {
     private readonly renderer: Renderer,
     private readonly name: string,
     private readonly matchRules: Partial<MatchRules> | null = null,
+    /** ?map= (docs/02 §20 demo maps: lunar-outpost, storm-front, flux-lab, mechanics-test) */
+    mapId = 'movement-test',
   ) {
-    this.map = getMap('movement-test');
+    this.map = getMap(mapId);
     this.game = new Game({ map: this.map, seed: SEED, dummies: true });
     this.me = this.game.addPlayer(name);
     this.reset();
@@ -198,6 +202,7 @@ export class LocalMode {
         dual: p.dual,
         weapons: p.weapons.map((w) => ({ def: w.def, mag: w.mag, reserve: w.reserve, reloadTicks: w.reloadTicks })),
         meleeTicks: p.meleeTicks,
+        dashing: p.dashTicks > 0,
         respawnTicks: p.respawnTicks,
         kills: p.kills,
         deaths: p.deaths,
@@ -208,6 +213,7 @@ export class LocalMode {
       localId: this.me.id,
       players,
       grenades: this.game.grenades.filter((g) => g.alive).map((g) => ({ x: g.x, y: g.y, fuse: g.fuse })),
+      mapEvent: mapEventView(this.game),
       ...(this.recorder ? { recording: this.recorder.length } : {}),
     };
   }

@@ -1,0 +1,58 @@
+{
+  "$schema": "../../schema/map.schema.json",
+  "id": "storm-front",
+  "name": "Storm Front",
+  "bounds": { "minX": -2, "minY": -10, "maxX": 122, "maxY": 42 },
+  "solids": [
+    { "points": [0, -10, 120, -10, 120, 4, 80, 4, 76, -4, 44, -4, 40, 4, 0, 4], "material": 0 },
+    { "points": [-2, -10, 0, -10, 0, 40, -2, 40], "material": 0 },
+    { "points": [120, -10, 122, -10, 122, 40, 120, 40], "material": 0 },
+    { "points": [-2, 40, 122, 40, 122, 42, -2, 42], "material": 0 },
+    { "points": [8, 4, 14, 4, 14, 20, 8, 20], "material": 0 },
+    { "points": [100, 4, 102, 4, 102, 24, 100, 24], "material": 1 },
+    { "points": [86, 24, 108, 24, 108, 25, 86, 25], "material": 1 },
+    { "points": [24, 4, 26, 4, 26, 6, 24, 6], "material": 2 },
+    { "points": [92, 4, 95, 4, 95, 5.5, 92, 5.5], "material": 2 }
+  ],
+  "oneWays": [
+    { "ax": 46, "ay": 4, "bx": 56, "by": 4 },
+    { "ax": 64, "ay": 4, "bx": 74, "by": 4 },
+    { "ax": 14, "ay": 12, "bx": 18, "by": 12 }
+  ],
+  "spawns": [
+    { "x": 4, "y": 4 },
+    { "x": 20, "y": 4 },
+    { "x": 32, "y": 4 },
+    { "x": 88, "y": 4 },
+    { "x": 106, "y": 4 },
+    { "x": 116, "y": 4 },
+    { "x": 11, "y": 20 },
+    { "x": 95, "y": 25 },
+    { "x": 51, "y": 4 },
+    { "x": 69, "y": 4 }
+  ],
+  "dummies": [
+    { "name": "Dockhand", "x": 30, "y": 4, "script": { "kind": "strafe", "minX": 28, "maxX": 36 } },
+    { "name": "Swimmer", "x": 60, "y": -4, "script": { "kind": "idle" } },
+    { "name": "Kite flyer", "x": 110, "y": 4, "script": { "kind": "jet", "periodTicks": 180, "burstTicks": 40 } }
+  ],
+  "labels": [
+    { "x": 60, "y": 0, "text": "harbour: deep water" },
+    { "x": 60, "y": 9, "text": "sea fog" },
+    { "x": 60, "y": 31, "text": "gale →" },
+    { "x": 11, "y": 21.5, "text": "lighthouse" }
+  ],
+  "zones": [
+    { "id": "harbour", "kind": "water", "rect": [40, -4, 80, 2], "label": "harbour" },
+    { "id": "sea-fog", "kind": "damping", "points": [38, 2, 82, 2, 82, 12, 60, 15, 38, 12], "bulletRangeMul": 0.4, "label": "sea fog" },
+    { "id": "gale", "kind": "wind", "rect": [0, 26, 120, 40], "wind": [10, 0], "label": "gale" }
+  ],
+  "events": {
+    "defs": [
+      { "id": "squall", "kind": "gust", "name": "SQUALL", "description": "Gusts across the harbour", "wind": [18, 0], "gustPeriod": 2.5 },
+      { "id": "fog-rolls-in", "kind": "fog", "name": "FOG ROLLS IN", "description": "Bullets fall short" },
+      { "id": "lightning", "kind": "emp", "name": "LIGHTNING STORM", "description": "Jetpacks fried", "duration": 6 }
+    ],
+    "schedule": { "kind": "random", "start": 15, "cycle": 40, "chance": 0.9, "weights": { "squall": 2, "fog-rolls-in": 2, "lightning": 1 } }
+  }
+}

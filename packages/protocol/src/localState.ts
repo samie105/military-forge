@@ -57,13 +57,18 @@ export const LS = {
   // melee (arsenal, v6): appended after the slots in its own group, so nothing above moved.
   // The swing timer drives the lunge and gates firing, so prediction needs it.
   meleeTicks: 40,
+  // dash (v8, docs/02 §21): its own group after melee
+  dashTicks: 41,
+  dashDir: 42,
+  dashCooldown: 43,
+  airDashUsed: 44,
 } as const;
 
 /** Offsets inside a weapon slot. */
 export const LS_SLOT = { def: 0, mag: 1, reserve: 2, cooldown: 3, reloadTicks: 4, bloom: 5, ticksSinceShot: 6 } as const;
 const SLOT_FIELDS = 7;
 
-export const LOCAL_STATE_FIELDS = LS.meleeTicks + 1;
+export const LOCAL_STATE_FIELDS = LS.airDashUsed + 1;
 
 /** [start, end) field ranges sent as a unit in delta snapshots. */
 const GROUPS: readonly (readonly [number, number])[] = [
@@ -74,7 +79,8 @@ const GROUPS: readonly (readonly [number, number])[] = [
   [LS.active, LS.slot0],
   [LS.slot0, LS.slot1],
   [LS.slot1, LS.meleeTicks],
-  [LS.meleeTicks, LOCAL_STATE_FIELDS],
+  [LS.meleeTicks, LS.dashTicks],
+  [LS.dashTicks, LOCAL_STATE_FIELDS],
 ];
 
 /** Ground normals are quantised to 1/65536 by the sim (quantizeMovement). */
@@ -93,6 +99,7 @@ const BITS: readonly number[] = [
   ...SLOT_BITS,
   ...SLOT_BITS,
   6, // meleeTicks (a swing lasts ≤ 0.6 s = 36 ticks)
+  6, 3, 8, 1, // dashTicks (≤ 63), dashDir (8-way), dashCooldown (≤ 255 ticks), airDashUsed
 ];
 
 if (BITS.length !== LOCAL_STATE_FIELDS) throw new Error('local state layout out of sync');
@@ -161,6 +168,11 @@ export function captureLocalState(p: PlayerState, out: LocalState): LocalState {
   captureSlot(p.weapons[0], out, LS.slot0);
   captureSlot(p.weapons[1], out, LS.slot1);
   out[LS.meleeTicks] = p.meleeTicks;
+  out[LS.dashTicks] = p.dashTicks;
+  // the direction only matters during a burst: normalised to 0 otherwise, like the ground normal
+  out[LS.dashDir] = p.dashTicks > 0 ? p.dashDir : 0;
+  out[LS.dashCooldown] = p.dashCooldown;
+  out[LS.airDashUsed] = p.airDashUsed ? 1 : 0;
   for (let i = 0; i < LOCAL_STATE_FIELDS; i++) out[i] = fit(out[i]!, BITS[i]!);
   return out;
 }
@@ -207,6 +219,10 @@ export function applyLocalState(s: LocalState, p: PlayerState): void {
   applySlot(s, LS.slot0, p.weapons[0]);
   applySlot(s, LS.slot1, p.weapons[1]);
   p.meleeTicks = s[LS.meleeTicks]!;
+  p.dashTicks = s[LS.dashTicks]!;
+  p.dashDir = s[LS.dashDir]!;
+  p.dashCooldown = s[LS.dashCooldown]!;
+  p.airDashUsed = s[LS.airDashUsed] === 1;
 }
 
 export function localStatesEqual(a: LocalState, b: LocalState): boolean {

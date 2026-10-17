@@ -21,8 +21,8 @@ export class SceneFlash {
   private sinceSpike = Infinity;
   /** how fast the flash dies away (time constant, s) */
   private tau = 0.09;
-  private readonly baseIntensity: number;
-  private readonly sunIntensity: number;
+  private baseIntensity: number;
+  private sunIntensity: number;
   private readonly baseColor = new Color();
   private readonly warm = new Color(0xffc480);
 
@@ -33,6 +33,18 @@ export class SceneFlash {
     this.baseIntensity = hemi.intensity;
     this.sunIntensity = sun.intensity;
     this.baseColor.copy(hemi.color);
+  }
+
+  /**
+   * Re-reads the map's own light values (a map change relights the scene): the flash brightens
+   * from these and restores them. Call it after the lights change outside a flash.
+   */
+  rebase(): void {
+    this.level = 0;
+    this.point.intensity = 0;
+    this.baseIntensity = this.hemi.intensity;
+    this.sunIntensity = this.sun.intensity;
+    this.baseColor.copy(this.hemi.color);
   }
 
   /** The Forge's light style: colour, and how long it lasts. */

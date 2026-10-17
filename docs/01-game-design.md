@@ -63,6 +63,7 @@ We keep the first list and design against the second.
 | Move | `A` / `D` | left stick X |
 | Jetpack (thrust) | `W` or `Space` (hold) | left stick up / `A` |
 | Crouch / drop through platforms | `S` (hold) | left stick down |
+| Dash (8-way with `A`/`D`/`W`/`S`; none = facing) | `Shift` (tap), or double-tap a direction (setting) | RS click (+ left stick) |
 | Aim | mouse cursor (world-space reticle) | right stick (with optional light aim assist, casual only) |
 | Fire | LMB (hold) | RT |
 | Zoom cycle / secondary fire | RMB / wheel | LT / D-pad up |
@@ -125,10 +126,20 @@ Standard maps are about **120 × 60 m** (fit for 6–12 players); BR uses the 48
 | 4 | **Lagos Market** | original | dense rooftops, danfo buses, stalls | breakable awnings (one-way platforms) | Launch |
 | 5 | **Mumbai Local** | original | train yard + moving train (kinematic platform) | the train passes every 45 s and pushes players | Launch |
 | 6 | **Snowblind** | snow map | open slopes, ice caves | slippery ice (lower ground friction) | Launch |
-| 7 | **Lunar** | moon base | low gravity everywhere | jet fuel lasts longer | Launch |
+| 7 | **Lunar** | moon base | low gravity everywhere | jet fuel lasts longer (built as map rules, 02-physics §20; the Lunar Outpost demo below) | Launch |
 | 8 | **Pyramid** | desert ruins | central pyramid, tunnels | sand traps (slow zones) | Post |
 | 9 | **Bottleneck** | chokepoint map | two bases + middle bridge | breakable glass bridge | Post |
 | 10 | **Crossfire** | CTF symmetric | mirrored | built for CTF | Launch (CTF) |
+
+**Map mechanics** (02-physics §20): any map can change the rules. **Rules** apply map-wide (low gravity, longer flights, shorter bullet range, slower movement, harder knockback). **Zones** are areas that do it locally: zero-g, low-g, reversed gravity, long flight, bullet fog, wind, mud, deep water, jump pads, boost pads, EMP fields. **Events** just happen, on a seeded schedule: a gravity surge, low gravity, an EMP storm, fog rolling in, wind gusts, a reversed-gravity pocket. Every event is announced with a banner a few seconds ahead. Three small demo maps show them off; play them locally with `/?map=<id>`, online with `MAP=<id> pnpm dev` (or the server's `--map=<id>`):
+
+| Demo map | Rules | Zones | Events (seeded, about every 35–45 s) |
+|---|---|---|---|
+| **Lunar Outpost** (`lunar-outpost`) | gravity ×0.45, fuel burn ×0.75 | a zero-g hab dome, jump pads in two craters | solar flare (EMP), gravity generator (Earth gravity) |
+| **Storm Front** (`storm-front`), authored as map JSON | — | a gale over the rooftops, sea fog that eats bullets, deep water in the harbour | squalls (gusts that turn around), fog rolling in, lightning (EMP) |
+| **Flux Lab** (`flux-lab`) | — | jump and boost pads, an updraft shaft (long flight + wind up), an EMP field over a deck | gravity pockets over a catwalk, gravity surge, containment failure (low gravity) |
+
+The `mechanics-test` map lines up every zone and event kind for golden replays and playtests.
 
 **Map design rules** (enforced by the editor lint and playtests):
 - 3 vertical layers minimum; no dead ends without a jetpack escape; sightlines ≤ the Widow's range.
@@ -136,7 +147,7 @@ Standard maps are about **120 × 60 m** (fit for 6–12 players); BR uses the 48
 - Pits and void edges are clearly telegraphed (hazard stripes + fog).
 - Each map has a **readability palette**: background desaturated, gameplay plane mid, players highest contrast.
 
-**Map editor** (in-browser, ships for modders post-launch): polygon collision tool, prop placement in 3D depth layers, spawner nodes, zones, one-way platforms, a lighting preset picker, a "playtest now" button (local bot room), export to the compiled map format. Genre communities have always made mod maps. Ours targets that creativity, with published community maps in custom rooms.
+**Map editor** (in-browser, ships for modders post-launch): polygon collision tool, prop placement in 3D depth layers, spawner nodes, zones, one-way platforms, a lighting preset picker, a "playtest now" button (local bot room), export to the compiled map format. Zones and events already have their editor data: `ZONE_KINDS`, `EVENT_KINDS` and `MODIFIER_FIELDS` (labels, defaults, colours, value ranges) in packages/content, and the map JSON Schema generated from them (`packages/content/schema/map.schema.json`, 02-physics §20.6). Genre communities have always made mod maps. Ours targets that creativity, with published community maps in custom rooms.
 
 ---
 

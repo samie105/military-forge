@@ -88,7 +88,7 @@ export class Vfx {
 
   constructor(
     private readonly scene: Scene,
-    private readonly world: CollisionWorld,
+    private world: CollisionWorld,
     private readonly camera: Camera,
     lights: { hemi: HemisphereLight; sun: DirectionalLight },
     ramp: Texture,
@@ -111,6 +111,20 @@ export class Vfx {
 
   get context(): VfxContext {
     return this.ctx;
+  }
+
+  /**
+   * A new map (Renderer3D's buildMap, after it relit the scene): its collision for grenades and
+   * blasts, and a clean slate: no particles, marks, grenades or shake carried over. Then the relit
+   * scene's light values become the flash's base.
+   */
+  setMap(world: CollisionWorld): void {
+    this.world = world;
+    this.ctx.world = world;
+    this.grenades.setWorld(world);
+    for (const p of [this.glowPool, this.smokePool, this.decalPool, ...this.books.map((b) => b.pool)]) p.clear();
+    this.shake.trauma = 0;
+    this.flash.rebase();
   }
 
   /** Plugs in an effect module (one line in Renderer3D's constructor). */

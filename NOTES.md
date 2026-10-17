@@ -397,3 +397,94 @@ Caveat: real TCP loss needs kernel-level impairment (dummynet, root), so WebSock
 - **Targets:** in `feel-targets.ts` as BLAST_TARGETS (2 m: 12–22 m flight, peak ≥ 4; 3 m: 4–10 m), and in the `feel` report.
 - **Goldens:** match-dm and range-combat re-recorded. The match-dm script now throws P2's second frag after his first frag's grenade jump lands, otherwise he'd be thrown clear of it.
 - **Prediction:** knockback is still not predicted (§9.4). Launches arrive as server corrections, smoothed like other knockback. The protocol and encodings are unchanged: the local block carries ±512 m/s and remote velocity carries ±32 m/s, both above the 26 m/s cap.
+
+## 18. Map mechanics: rules, zones and events (17 Oct 2026, owner request)
+
+> "We'll build maps where some things are thwarted, some there's no gravity, some flights are longer, some bullets don't go far, some things just happen that messes with the mechanics." Three data-driven layers in the MapDef. Spec: docs/02 §20; bullets: docs/03 §8; protocol: docs/05 §6.2, §8.
+
+- **Rules** (`MapDef.rules`, map-wide) and **zones** (`MapDef.zones`, rect or polygon) share one set of modifiers: `gravityMul`, `fuelBurnMul`, `fuelRegenMul`, `bulletRangeMul`, `moveSpeedMul`, `knockbackMul`, `drag`, `wind`, `dive`, `jetDisabled`. Zones add `launch` (pads). Multipliers multiply, wind and drag add.
+- **Zone kinds** (packages/content `ZONE_KINDS`): zeroG, lowG, reverseG, longFlight, damping (bullet fog), wind, slow (mud), water, jumpPad, boostPad, emp, custom. A kind fills in every effect a zone leaves out, so a JSON zone can be just `{ "id": "pad", "kind": "jumpPad", "rect": [...] }`. The defaults are in CONTENT_HASH.
+- **What each applies to:** players by body centre (movement, jetpack, fuel, gravity, knockback), grenades by centre (gravity, wind, drag, pads), bullets by the stretch of ray inside (range and falloff), blasts and hits by where the target stands (knockback).
+- **Bullets** spend their weapon range as a budget: 1 per metre in clear air, 1/m per metre in a damping zone, scaled by the map-wide multiplier. Falloff reads the budget used, so fog both shortens and weakens a shot.
+- **Pads** are level-triggered ("speed along the launch direction rises to at least its length"), so standing on one bounces you without stacking, with no per-player cooldown state.
+- **Down dives** in the air where a zone gives `dive` (zero-g, reversed gravity): the only new use of an existing input. Reversed-gravity pockets got drag 1.5 after a trace: at 0.6 the bob at the pocket's top edge took ~10 s to settle; 1.5 settles in 3.9 s.
+
+| Feel at the kinds' defaults | Measured | Normal |
+|---|---|---|
+| low-g 0.2 s tap / full-tank climb | 3.5 m / 17.7 m | 1.2 m / 13.0 m |
+| zero-g drift 1 s after a tap; Down turns it around in | 4.3 m/s; 0.3 s | — |
+| long flight: tank / jet + run | 5.7 s / 55 m | 2.25 s / 23 m |
+| fog (10 m of it, 5 m out): Hammer / Widow reach | 12.4 / 41.4 m | 26 / 60 m |
+| wind: drift in a 1 s fall | 4.9 m | 0 |
+| mud walk / water sink after 1 s | 2.25 m/s / 4.7 m/s | 5 m/s / 16 m/s terminal |
+| jump pad apex / boost pad flight from a run | 6.5 m / 11.3 m | — |
+
+- **Targets:** `ZONE_TARGETS` and `FOG_TARGETS` in feel-targets.ts, in the `feel` report.
+- **Goldens:** unchanged. A map with no rules or zones compiles to no mechanics (`Game.mech === null`) and runs the old code path; `mechanics.test.ts` replays range-combat, arsenal-guns and oneway under a neutral zone over the whole map and under a zone nobody enters, and gets identical hashes.
+- **Prediction:** effects are pure functions of map data and position, so the client's predicted player gets them bit-identical with no protocol change.
+
+### Events ("some things just happen")
+
+- `MapDef.events = { defs, schedule }`. Kinds (`EVENT_KINDS`): gravitySurge, lowGravity, emp, fog, gust (gusting, sometimes the other way), flip (a reversed-gravity pocket at one of several sites), custom. An event applies its modifiers map-wide; zones with `event: "<id>"` switch on only while it runs.
+- **The schedule is stateless:** `random` (seeded cycles, weights, chance) or `timeline` (fixed times, optional loop). The occurrence covering a tick is computed from the map, the room seed and the tick alone, so prediction needs nothing new: the client's predictor already has the map (CONTENT_HASH), the seed (WELCOME) and the server's tick numbering.
+- **Announcements:** a `mapEvent` sim event on a warning, a start and an end. **Protocol v8** sends it as MAP_EVENT, snapshot event tag 6 (51 bits, never AOI-culled). Tag 7 is the last free one: use it as an escape to a longer tag. Event and zone kinds' defaults are in CONTENT_HASH.
+- **Gravity surge tuned to ×1.8** (was 1.7 in the draft): a full tank climbs 8.2 m instead of 13. The climb collapses between ×1.8 and ×2.0 (thrust 38 m/s² against gravity 36–40): ×1.85 gives 5.6 m, ×1.9 3.0 m, ×2.0 0.4 m.
+
+| Feel at the event kinds' defaults | Measured | Normal |
+|---|---|---|
+| gravity surge: full-tank climb | 8.2 m | 13.0 m |
+| low gravity: 0.2 s tap | 3.5 m | 1.2 m |
+| fog bank: Hammer reach | 10.4 m | 26 m |
+| wind gusts: 1 s fall at a peak | 5.6 m drift | 0 |
+
+- **Test map + goldens:** `mechanics-test` has every zone kind, every event kind on a 49 s loop, map rules, and dummies. New goldens `mech-zones`, `mech-bullets`, `mech-events` (8,000 ticks); the 10 existing goldens are unchanged.
+- **Online:** `apps/game-server/test/mapMechanics.test.ts` runs two NetClients against a Room on the mechanics-test map: 0 mispredictions on a clean LAN through every zone and a whole event loop, < 1 correction/min at 150 ms / 2 %. Control (not committed): a client with the mechanics stripped from its predictor mispredicts > 10 times in 30 s.
+
+### Demo maps and the map JSON format
+
+- **Lunar Outpost** (`lunar-outpost`): map rules gravity ×0.45 and fuel burn ×0.75 (docs/01's "Lunar"), a zero-g hab dome, crater jump pads; events: solar flare (EMP), gravity generator (×2.2 on top of the rules: Earth gravity for 15 s).
+- **Storm Front** (`storm-front`), authored as **map JSON** through `parseMapJson`: a gale above the rooftops, sea fog over the harbour (bullets ×0.4), deep water; events: squalls, fog rolling in, lightning (EMP).
+- **Flux Lab** (`flux-lab`): pads, an updraft shaft (long flight + wind up), an EMP deck, two gravity-pocket sites; events: gravity pocket, surge, low gravity.
+- **Playing them:** `/?map=<id>` in local mode (links in the debug bar); online `MAP=<id> pnpm dev` (turbo passes `MAP` and `SEED` through now) or `--map=<id>` on the game server. The web client redraws for the server's map from WELCOME (2D and 3D `setMap`).
+- **Map lint in tests:** every registered map compiles (collision, rules, zones, events) and every spawn stands clear where it's put (`packages/sim/test/maps.test.ts`); zones lie inside the bounds (content tests).
+- **JSON Schema** for editors: `packages/content/schema/map.schema.json`, generated from the catalogue (`pnpm --filter @military-forge/content schema`; a test fails on drift). Each zone and event kind shows its description and defaults in autocomplete.
+
+### On screen
+
+- **HUD banner hook:** frames carry `mapEvent` from the local or predicted game; `shell.setMapEvent` → store → `MapEventBanner` (under the match clock, kind colour; "in N" during the warning, then the line and time left). `useMapEventBanner(store)` for other HUD code. The kill feed logs warnings, starts and ends.
+- **2D overlay (H/B over 3D, always in 2D):** zone tints, outlines, labels and flow chevrons; event zones dotted while off, pulsing while opening.
+- **3D:** tinted zone volumes with rims and particles per kind; event zones fade with their event; fog events thicken the scene fog.
+- **Checked in the browser pane** (this branch's own servers): Flux Lab in 2D (updraft arrow, EMP field, dotted pocket sites); mechanics-test in 3D (low-g and zero-g volumes, the WIND GUSTS banner, then GRAVITY POCKET: banner "in 1", the picked site opening, the player lifted to hover at its top edge).
+
+## 19. Dash (17 Oct 2026, owner request)
+
+> Owner request (paraphrased): dash physics for fast movement between spaces, brief like a fighting-game dash, but up and down too. Spec: docs/02 §21.
+
+- **An 8-way jetpack burst** on `Shift` (`Btn.Dash`, bit 13): 14 m/s for 8 ticks along what you hold (A/D, W = up, S = down; nothing = facing), no gravity during it, then back within the walk/air caps and at most 2 m/s up. Normal move-and-slide: walls stop it.
+- **Limits:** 1.0 s cooldown, one air dash per flight (reset on landing; a ground dash, even through a platform, isn't the air one), 8 fuel, blocked by EMP (it's a jetpack burst). Straight down on a one-way platform drops through it; straight down on solid ground does nothing and costs nothing.
+- **No i-frames:** any knockback ends a dash on the spot.
+- **Bug caught by the golden's trace:** a drop-through dash first counted as the air dash, because dropping clears `grounded` before the air-dash check. `startDash` now uses where the dash started; a test pins it.
+
+| Feel (defaults) | Measured | Target |
+|---|---|---|
+| Ground covered from standing | 2.05 m | 2–2.5 |
+| Up from standing | 1.95 m | 1.5–2 |
+| Down from a 6 m hover to the ground | 0.40 s (falling: 0.77 s) | 0.3–0.5 |
+| At a wall 1 m away | stops at 1.00 m | ≤ 1 |
+| Burst | 0.13 s | 0.10–0.17 |
+
+- **Protocol v8 (folded into the map-events bump, as asked):** local block dash group (18 bits), remote `dashing` flag (flags now 8 bits), and snapshot tag 7 is now the escape to extended events, the first of which is DASH. Tuning gained `dashSpeed`, `dashBurstTicks`, `dashCooldown`, `dashFuelCost`, `dashExitUp` (in CONTENT_HASH via the default tuning; the dev panel has a Dash folder).
+- **Goldens:** a new closed-loop `dash` replay (ground, up, drop-through, the air dash and a refused second, a refused straight-down on solid floor, a wall stop at the 12 m tower, a slam, down-left along the floor, a press in the cooldown). All earlier goldens unchanged: dash state is hashed only away from rest.
+- **Online:** `apps/game-server/test/dash.test.ts`: no mispredictions on a clean LAN over 42 dashes in 30 s (7 directions, 16 in the air); < 1 correction/min at 150 ms / 2 %.
+- **Hooks:** the `dash` sim event (player, start, direction) and `PlayerView.dashing` for the animation and render3d streaks; the 2D debug view draws a fading streak. The riot shield plugs into `dashBlocked()` (see the notes folder: mechanics-dash.md).
+
+### Review fixes (17 Oct 2026)
+
+- **H1 bullets:** walls are tested only within the map's reach (fog: a wall past the shortened reach isn't reached; range ×2: walls past the nominal range still stop bullets). Before, the raycast used the nominal range.
+- **M1/M5 dash caps:** a push ends a dash from the exit caps, not from 14 m/s (Breacher pellets mid-dash used to leave ~13 m/s and a slow launch-drag glide); the exit never exceeds `launchSpeedX`, even on a ×3 speed map.
+- **M3 reversed gravity:** no ceiling bonk while gravity points up (it fired every tick: a 0.7 m/s crawl along the ceiling); the lint refuses reversed gravity without dive.
+- **M4 speed limit:** a raised knockback cap stops at 36 m/s. At ×4 (104 m/s) move-and-slide's 4 substeps were 0.43 m, and a 100 m/s sideways launch went through a 0.15 m wall.
+- **Dash while flying:** a held jet (burning > 6 ticks) no longer tilts dashes up; a fresh W press still does. `?dashtap` ignores W (jet feathering).
+- **Flux Lab pads** launch at 17.5 m/s (7.8 m apex) so they reach the 7 m catwalks (the default 16 peaks at 6.6 m); a test pins it.
+- **Kinds** validate with `Object.hasOwn` ("toString" and "constructor" were accepted); no brand string in the map schema; clean-room wording for the dash request.
+- No golden changed. Each fix has a test that fails on the old code.

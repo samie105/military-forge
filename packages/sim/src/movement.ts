@@ -6,16 +6,23 @@
  */
 import type { Tuning } from '@military-forge/content';
 import { DEG2RAD, approach, quantize, simCos, simExp, simSin, u16ToAngle, POS_INV, VEL_INV, SCALAR_INV } from '@military-forge/shared';
-import { heldSpeedMul, lungeSpeed } from './combat';
+import { lungeSpeed } from './combat';
 import { DT, SKIN, ticks } from './constants';
 import { closestSegSeg, createClosestPair, rayCapsule, closestPointOnSegment } from './geometry';
-import { Btn, isDown } from './input';
-import type { PlayerState } from './player';
+import { Btn, isDown, wasPressed } from './input';
+import type { BodyEnv } from './mechanics';
+import { capDashExit, heldSpeedMul, type PlayerState } from './player';
 import { CollisionWorld, SegFlag } from './world';
 
 const pair = createClosestPair();
 /** m/s: below this an upward vertical speed is numerical noise, not take-off. */
 const UP_EPSILON = 1e-4;
+/**
+ * The fastest a player may move (m/s) when a map raises the knockback cap (§20): move-and-slide
+ * takes at most 4 substeps, and each must stay under half the capsule radius (0.16 m) or a launch
+ * tunnels through thin walls. 4 × 0.16 m × 60 = 38.4 m/s; 36 leaves a margin.
+ */
+export const SPEED_LIMIT = 36;
 const pt = { x: 0, y: 0 };
 
 /** Result of the deepest-contact query. Module scratch: the sim is single-threaded. */
@@ -220,7 +227,7 @@ interface MoveResult {
 
 const moveResult: MoveResult = { hitGround: false, hitWall: false, hitCeiling: false, bonked: false, wallPx: 0, wallPy: 0 };
 
-function resolve(world: CollisionWorld, p: PlayerState, t: Tuning, h: number, cosMax: number, groundedMode: boolean, res: MoveResult): void {
+function resolve(world: CollisionWorld, p: PlayerState, t: Tuning, h: number, cosMax: number, groundedMode: boolean, res: MoveResult, bonk: boolean): void {
   const r = t.capsuleRadius;
   oneWay.vy = groundedMode ? 0 : p.vy;
   for (let iter = 0; iter < 4; iter++) {
@@ -262,7 +269,7 @@ function resolve(world: CollisionWorld, p: PlayerState, t: Tuning, h: number, co
       p.groundFlags = contact.flags;
     } else if (ny <= -0.7) {
       res.hitCeiling = true;
-      if (p.vy > 0 && !res.bonked) {
+      if (bonk && p.vy > 0 && !res.bonked) {
         p.vx *= t.ceilingBonkVxMul;
         res.bonked = true;
       }
@@ -285,8 +292,11 @@ function resolve(world: CollisionWorld, p: PlayerState, t: Tuning, h: number, co
   }
 }
 
-/** Moves the player by its velocity for one tick with collision (§10). */
-function moveAndSlide(world: CollisionWorld, p: PlayerState, t: Tuning, cosMax: number, res: MoveResult): void {
+/**
+ * Moves the player by its velocity for one tick with collision (§10). `bonk` = flying into a ceiling
+ * costs sideways speed; off under reversed gravity (§20), where you rest against the ceiling every tick.
+ */
+function moveAndSlide(world: CollisionWorld, p: PlayerState, t: Tuning, cosMax: number, res: MoveResult, bonk: boolean): void {
   const r = t.capsuleRadius;
   const h = p.height(t);
   const groundedMode = p.grounded;
@@ -304,7 +314,7 @@ function moveAndSlide(world: CollisionWorld, p: PlayerState, t: Tuning, cosMax: 
       p.x += p.vx * hstep;
       p.y += p.vy * hstep;
     }
-    resolve(world, p, t, h, cosMax, groundedMode, res);
+    resolve(world, p, t, h, cosMax, groundedMode, res, bonk);
   }
 }
 
@@ -377,9 +387,112 @@ function tryStepUp(
 }
 
 /**
- * One tick of movement for one player. `input` is this tick's input; `prevButtons` last tick's.
+ * Map mechanics on a player this tick (docs/02 §20), after its intent and before the jetpack:
+ * pads raise its speed along their launch direction to at least their launch speed (touching a pad
+ * every tick never stacks), Down dives where the map allows it, and wind and drag act in the air.
  */
-export function stepMovement(world: CollisionWorld, p: PlayerState, t: Tuning): void {
+function applyEnvironment(p: PlayerState, t: Tuning, env: BodyEnv, buttons: number): void {
+  for (let i = 0; i < env.padCount; i++) {
+    const ux = env.padUx[i]!;
+    const uy = env.padUy[i]!;
+    const short = env.padSpeed[i]! - (p.vx * ux + p.vy * uy);
+    if (short <= 0) continue;
+    p.vx += short * ux;
+    p.vy += short * uy;
+    if (uy > 0.2) p.grounded = false;
+  }
+  if (p.grounded) return;
+  if (env.dive > 0 && isDown(buttons, Btn.Down) && p.vy > -t.jetMaxVy) p.vy = Math.max(-t.jetMaxVy, p.vy - env.dive * DT);
+  if (env.windX !== 0 || env.windY !== 0) {
+    p.vx += env.windX * DT;
+    p.vy += env.windY * DT;
+  }
+  if (env.dragKeep !== 1) {
+    p.vx *= env.dragKeep;
+    p.vy *= env.dragKeep;
+  }
+}
+
+/** Gravity scaled by the map (docs/02 §20): negative pulls up, and lifts a grounded player off the floor. */
+function applyGravity(p: PlayerState, t: Tuning, mul: number): void {
+  if (mul < 0) p.grounded = false;
+  if (p.grounded) {
+    p.vy = 0;
+    return;
+  }
+  const g = t.gravity * mul;
+  p.vy = g >= 0 ? Math.max(t.terminalVy, p.vy - g * DT) : Math.min(-t.terminalVy, p.vy - g * DT);
+}
+
+// ---------- dash (docs/02 §21) ----------
+
+const SQRT1_2 = 0.7071067811865476;
+/** 8-way unit directions by dash index: 0 = right, counter-clockwise in 45° steps (exact literals). */
+export const DASH_DX: readonly number[] = [1, SQRT1_2, 0, -SQRT1_2, -1, -SQRT1_2, 0, SQRT1_2];
+export const DASH_DY: readonly number[] = [0, SQRT1_2, 1, SQRT1_2, 0, -SQRT1_2, -1, -SQRT1_2];
+/** [iy + 1][ix + 1] → dash index (the centre, no direction, is resolved by the facing) */
+const DASH_INDEX = [
+  [5, 6, 7],
+  [4, -1, 0],
+  [3, 2, 1],
+];
+
+/**
+ * A dash is a jetpack burst, so whatever cuts the jetpack (an EMP field or storm) blocks it too.
+ * The riot shield (in progress) adds its rule here: no dash while it is raised.
+ */
+export function dashBlocked(_p: PlayerState, env: BodyEnv | null): boolean {
+  return env !== null && env.jetDisabled;
+}
+
+/**
+ * Jet (W) means "up" for a dash only when it is fresh: pressed with the dash, or burning for at
+ * most this many ticks (~0.1 s). A jet that has been carrying you longer is ignored, so a flying
+ * player can dash flat (jetTicks is in the local block: predicted exactly).
+ */
+export const DASH_UP_FRESH_TICKS = 6;
+
+/**
+ * Starts a dash on the Dash press if one is allowed; returns whether it did. Direction: Left/Right
+ * and a fresh Jet (up) / Down, 8-way; none = along the facing. On the ground, down only means
+ * "along the ground" (with a sideways direction) or "through this one-way platform" (straight
+ * down); straight down into solid ground does nothing and costs nothing.
+ */
+function startDash(p: PlayerState, t: Tuning, env: BodyEnv | null, buttons: number): boolean {
+  if (p.dashTicks > 0 || p.dashCooldown > 0 || dashBlocked(p, env)) return false;
+  const fromGround = p.grounded;
+  if ((!fromGround && p.airDashUsed) || p.fuel < t.dashFuelCost) return false;
+  const ix = (isDown(buttons, Btn.Right) ? 1 : 0) - (isDown(buttons, Btn.Left) ? 1 : 0);
+  const up = isDown(buttons, Btn.Jet) && p.jetTicks <= DASH_UP_FRESH_TICKS;
+  let iy = up ? 1 : isDown(buttons, Btn.Down) ? -1 : 0;
+  if (p.grounded && iy < 0) {
+    if (ix !== 0) iy = 0;
+    else if (p.groundFlags & SegFlag.OneWay) {
+      p.dropTicks = ticks(t.dropThroughTime);
+      p.downHeldTicks = 0;
+      p.grounded = false;
+    } else return false;
+  }
+  const dir = DASH_INDEX[iy + 1]![ix + 1]!;
+  p.dashDir = dir >= 0 ? dir : p.facing > 0 ? 0 : 4;
+  p.dashTicks = t.dashBurstTicks;
+  p.dashCooldown = ticks(t.dashCooldown);
+  if (t.dashFuelCost > 0) {
+    p.fuel = Math.max(0, p.fuel - t.dashFuelCost);
+    p.fuelRegenDelay = ticks(t.fuelRegenDelayAir);
+  }
+  if (!fromGround) p.airDashUsed = true; // a dash from the ground (even through a platform) isn't the air dash
+  if (iy > 0) p.grounded = false;
+  return true;
+}
+
+
+/**
+ * One tick of movement for one player. `input` is this tick's input; `prevButtons` last tick's.
+ * `env` is what the map does to it here (mechanics.ts), null on maps without mechanics. Returns
+ * true when a dash started this tick (Game.step announces it).
+ */
+export function stepMovement(world: CollisionWorld, p: PlayerState, t: Tuning, env: BodyEnv | null = null): boolean {
   const input = p.input;
   const buttons = input.buttons;
   const cosMax = simCos(t.maxWalkSlopeDeg * DEG2RAD);
@@ -405,10 +518,23 @@ export function stepMovement(world: CollisionWorld, p: PlayerState, t: Tuning): 
     }
   } else p.downHeldTicks = 0;
 
-  // --- 1. horizontal intent (speed caps scale with the held weapon's weight, docs/03 §9) ---
+  // speed caps (and dash speed) scale with the held weapon's weight (docs/03 §9) and the map
+  const speedMul = env ? heldSpeedMul(p) * env.moveSpeedMul : heldSpeedMul(p);
+
+  // --- 0. dash (docs/02 §21): the burst overrides intent, jetpack and gravity below ---
+  if (p.dashCooldown > 0) p.dashCooldown--;
+  if (p.grounded) p.airDashUsed = false;
+  if (p.dashTicks > 0 && p.grounded && DASH_DY[p.dashDir]! < 0) {
+    // a down-dash that lands is a slam: it ends here
+    p.dashTicks = 0;
+    capDashExit(p, t, speedMul);
+  }
+  const dashStarted = wasPressed(buttons, p.prevButtons, Btn.Dash) && startDash(p, t, env, buttons);
+  const dashing = p.dashTicks > 0;
+
+  // --- 1. horizontal intent ---
   const ix = (isDown(buttons, Btn.Right) ? 1 : 0) - (isDown(buttons, Btn.Left) ? 1 : 0);
   const vxBefore = p.vx;
-  const speedMul = heldSpeedMul(p);
   let cap: number;
   if (p.grounded) {
     cap = (p.crouched ? t.crouchMax : t.walkMax) * speedMul;
@@ -436,9 +562,11 @@ export function stepMovement(world: CollisionWorld, p: PlayerState, t: Tuning): 
     if (along < ceiling) p.vx = p.facing * Math.max(along, Math.min(ceiling, held));
   }
 
-  // --- 2. jetpack + fuel ---
+  if (env && !dashing) applyEnvironment(p, t, env, buttons);
+
+  // --- 2. jetpack + fuel (off during a dash burst) ---
   const canIgnite = p.fuel >= t.fuelMinIgnite || p.jetting;
-  p.jetting = isDown(buttons, Btn.Jet) && canIgnite && p.fuel > 0;
+  p.jetting = isDown(buttons, Btn.Jet) && canIgnite && p.fuel > 0 && !env?.jetDisabled && !dashing;
   if (p.jetting) {
     p.jetTicks++;
     // The ignition kick burns fuel at the same multiplier as its thrust, so lift per unit of fuel
@@ -448,7 +576,7 @@ export function stepMovement(world: CollisionWorld, p: PlayerState, t: Tuning): 
     const headroom = t.jetMaxVy - p.vy;
     if (headroom < t.jetTaperBand) thrust *= Math.max(0, headroom / t.jetTaperBand);
     p.vy += thrust * DT;
-    p.fuel = Math.max(0, p.fuel - t.fuelBurn * kick * DT);
+    p.fuel = Math.max(0, p.fuel - (env ? t.fuelBurn * env.fuelBurnMul : t.fuelBurn) * kick * DT);
     p.fuelRegenDelay = ticks(t.fuelRegenDelayAir);
     if (p.grounded) {
       p.grounded = false;
@@ -460,17 +588,31 @@ export function stepMovement(world: CollisionWorld, p: PlayerState, t: Tuning): 
     p.jetTicks = 0;
     if (p.grounded) p.fuelRegenDelay = Math.min(p.fuelRegenDelay, ticks(t.fuelRegenDelayGround));
     if (p.fuelRegenDelay > 0) p.fuelRegenDelay--;
-    else p.fuel = Math.min(t.fuelMax, p.fuel + (p.grounded ? t.fuelRegenGround : t.fuelRegenAir) * DT);
+    else {
+      const regen = p.grounded ? t.fuelRegenGround : t.fuelRegenAir;
+      p.fuel = Math.min(t.fuelMax, p.fuel + (env ? regen * env.fuelRegenMul : regen) * DT);
+    }
   }
 
   // --- 3. gravity (not while grounded on walkable ground) ---
-  if (!p.grounded) p.vy = Math.max(t.terminalVy, p.vy - t.gravity * DT);
+  if (env) applyGravity(p, t, env.gravityMul);
+  else if (!p.grounded) p.vy = Math.max(t.terminalVy, p.vy - t.gravity * DT);
   else p.vy = 0;
 
-  // --- 4. knockback cap ---
+  // --- 3b. dash burst: a fixed velocity along the dash, no gravity, so up and down dashes are crisp ---
+  if (dashing) {
+    const speed = t.dashSpeed * speedMul;
+    const dy = DASH_DY[p.dashDir]!;
+    p.vx = DASH_DX[p.dashDir]! * speed;
+    p.vy = p.grounded && dy <= 0 ? 0 : dy * speed; // along the ground: the move follows its slope
+    p.dashTicks--;
+  }
+
+  // --- 4. knockback cap (raised where the map multiplies knockback) ---
+  const kbCap = env !== null && env.knockbackMul > 1 ? Math.min(SPEED_LIMIT, t.knockbackCap * env.knockbackMul) : t.knockbackCap;
   const speed2 = p.vx * p.vx + p.vy * p.vy;
-  if (speed2 > t.knockbackCap * t.knockbackCap) {
-    const k = t.knockbackCap / Math.sqrt(speed2);
+  if (speed2 > kbCap * kbCap) {
+    const k = kbCap / Math.sqrt(speed2);
     p.vx *= k;
     p.vy *= k;
   }
@@ -488,11 +630,12 @@ export function stepMovement(world: CollisionWorld, p: PlayerState, t: Tuning): 
   res.hitWall = false;
   res.hitCeiling = false;
   res.bonked = false;
-  moveAndSlide(world, p, t, cosMax, res);
+  moveAndSlide(world, p, t, cosMax, res, env === null || env.gravityMul >= 0);
 
   if (wasGrounded && res.hitWall && Math.abs(intendedVx) > 0.01) {
     tryStepUp(world, p, t, startX, startY, intendedVx, cosMax);
   }
+  if (dashing && p.dashTicks === 0) capDashExit(p, t, speedMul);
 
   // --- 6. ground detection / snap (§10.4) ---
   oneWay.prevFeetY = p.prevY;
@@ -512,6 +655,7 @@ export function stepMovement(world: CollisionWorld, p: PlayerState, t: Tuning): 
 
   // airborne crouch → stand when there is room (crouch-walking off a ledge)
   if (!p.grounded && p.crouched && !overlaps(world, p.x, p.y, t.standHeight, r, p.y)) p.crouched = false;
+  return dashStarted;
 }
 
 /** Quantise movement state at tick end (§15). */

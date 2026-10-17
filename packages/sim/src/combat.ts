@@ -10,7 +10,7 @@ import { DamageSource } from './events';
 import type { Game } from './game';
 import { rayCapsule, rayCircle } from './geometry';
 import { Btn, isDown, wasPressed } from './input';
-import { hitboxLayout, type PlayerState, type WeaponSlot } from './player';
+import { hitboxLayout, knockOutOfDash, type PlayerState, type WeaponSlot } from './player';
 import { throwGrenade } from './grenades';
 import { createHitPose } from './rewind';
 import { SegFlag, createRayHit } from './world';
@@ -45,13 +45,6 @@ const FIST_DAMAGE = 15;
 /** Lunge speed (m/s): sidearms are nimble, heavy weapons sluggish. */
 function lungeFor(cls: WeaponClass | undefined): number {
   return cls === 'sidearm' ? 4 : cls === 'heavy' ? 2 : 3;
-}
-
-const slotSpeedMul = (slot: WeaponSlot) => weapons[slot.def]?.moveSpeedMul ?? 1;
-
-/** Weight (docs/03 §9): the held weapon's moveSpeedMul, the heaviest of a dual pair. */
-export function heldSpeedMul(p: PlayerState): number {
-  return p.dual ? Math.min(slotSpeedMul(p.weapons[0]), slotSpeedMul(p.weapons[1])) : slotSpeedMul(p.weapons[p.active]!);
 }
 
 /**
@@ -209,12 +202,24 @@ function fireShot(game: Game, p: PlayerState, slot: WeaponSlot, def: WeaponDef):
   }
 }
 
-/** One bullet or pellet along `dir`: world, then players; the first hit wins. Returns the player hit, or -1. */
+/**
+ * One bullet or pellet along `dir`: world, then players; the first hit wins. Returns the player hit,
+ * or -1. On maps with mechanics (docs/02 §20) its range is what the map leaves of the weapon's: a
+ * map-wide multiplier, and damping zones it crosses use the range up faster; damage falls off over
+ * that used-up range, not the metres flown.
+ */
 function traceBullet(game: Game, p: PlayerState, def: WeaponDef, sx: number, sy: number, visX: number, visY: number, maxT: number, blocked: boolean, struck: number): number {
+  const mech = blocked ? null : game.mech;
   let endT = maxT;
+  if (mech) {
+    mech.castBullet(sx, sy, dir.x, dir.y);
+    endT = mech.bulletReach(def.range);
+  }
   let hitKind: 0 | 1 | 2 = 0;
   if (blocked) hitKind = 1;
-  else if (game.world.raycast(sx, sy, dir.x, dir.y, maxT, SegFlag.BulletPass, hit)) {
+  // walls only count within the bullet's reach: the weapon's range, or what the map leaves of it
+  // (shorter in fog, longer under a map-wide multiplier above 1)
+  else if (game.world.raycast(sx, sy, dir.x, dir.y, endT, SegFlag.BulletPass, hit)) {
     endT = hit.t;
     hitKind = 1;
   }
@@ -244,16 +249,21 @@ function traceBullet(game: Game, p: PlayerState, def: WeaponDef, sx: number, sy:
   if (victimId >= 0) {
     const victim = game.players[victimId]!;
     const mul = zone === HitZone.Head ? def.headMul : 1;
-    if (def.hitImpulse > 0 && victim.alive) push(victim, dir.x, dir.y, def.hitImpulse); // a corpse blocks but is not shoved
-    game.damage(victim, def.damage * falloff(def, endT) * mul, p.id, def.index, zone);
+    if (def.hitImpulse > 0 && victim.alive) push(game, victim, dir.x, dir.y, def.hitImpulse); // a corpse blocks but is not shoved
+    game.damage(victim, def.damage * falloff(def, mech ? mech.bulletCost(endT) : endT) * mul, p.id, def.index, zone);
   }
   return victimId;
 }
 
-/** Velocity change along a unit direction; a push with enough lift unsticks grounded players. */
-function push(q: PlayerState, dx: number, dy: number, speed: number): void {
-  q.vx += dx * speed;
-  q.vy += dy * speed;
+/**
+ * Velocity change along a unit direction; a push with enough lift unsticks grounded players and
+ * any push ends a dash. The map can scale it where the target stands (docs/02 §20).
+ */
+function push(game: Game, q: PlayerState, dx: number, dy: number, speed: number): void {
+  knockOutOfDash(q, game.tuning, game.mech ? game.mech.moveSpeedMul(q, game.tuning) : 1);
+  const kick = game.mech ? speed * game.mech.knockbackMul(q, game.tuning) : speed;
+  q.vx += dx * kick;
+  q.vy += dy * kick;
   if (dy > 0.2) q.grounded = false;
 }
 
@@ -277,7 +287,7 @@ function landMelee(game: Game, p: PlayerState): void {
   simCosSin(p.aim, aimDir);
   for (const q of game.players) {
     if (!q || (struck & (1 << q.id)) === 0) continue;
-    push(q, aimDir.x, aimDir.y, MELEE_KNOCKBACK);
+    push(game, q, aimDir.x, aimDir.y, MELEE_KNOCKBACK);
     game.damage(q, def ? def.meleeDamage : FIST_DAMAGE, p.id, DamageSource.Melee, HitZone.Torso);
   }
 }

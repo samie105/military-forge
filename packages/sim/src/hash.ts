@@ -71,6 +71,14 @@ export function hashGame(game: Game): number {
     // Fields added after the first golden replays are hashed only when they differ from their
     // resting value, so the existing goldens (none of which swing a melee weapon) keep their hashes.
     if (p.meleeTicks !== 0) f.int(p.meleeTicks);
+    // dash (docs/02 §21): likewise only away from rest (tagged), so replays that never dash keep their hashes
+    if (p.dashTicks !== 0 || p.dashCooldown !== 0 || p.airDashUsed) {
+      f.int(0xda54);
+      f.int(p.dashTicks);
+      f.int(p.dashTicks > 0 ? p.dashDir : 0); // the direction only matters during a burst
+      f.int(p.dashCooldown);
+      f.bool(p.airDashUsed);
+    }
   }
   for (const g of game.grenades) {
     if (!g.alive) continue;

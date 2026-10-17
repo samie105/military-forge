@@ -209,7 +209,16 @@ Repeated in the next 3 snapshots (dedupe by projId+kind) so loss doesn't drop a 
 
 ── Unreliable cosmetic events (redundant ×3, deduped by u10 eventId) ──
   IMPACT (pos, normal, material), TRACER (shooterEnt, endPos), SOUND (type, coarsePos 4 m grid), HIT_CONFIRM(local only: dmg, zone)
+
+── Map events (protocol v8; tag 6 of the 3-bit event tag, sent to every client, never culled) ──
+  MAP_EVENT : u5 event (index into the map's event defs), u2 phase (0 warning, 1 start, 2 end),
+              u16 occurrence (low bits), u8 zone (the picked event zone, 255 = all), u1 flip (wind),
+              u16 ticks left in the phase that began  // 51 bits; tag 7 is the last free tag: make it an escape
 ```
+
+As built (Phase 0, `packages/protocol/src/snapshot.ts`), the event tags are 0 shot, 1 explosion, 2 death, 3 hit, 4 spawn, 5 sound, **6 map event (v8)**, **7 extended (v8)**: a u4 kind follows, then its fields, so the 3-bit tag never runs out. Extended kind 0 is **DASH** (u5 player, i24 x, i24 y, u3 direction; 02-physics §21), sent to clients that can see the dasher, never to the dasher (it draws its own from prediction). **Extended events carry no length prefix:** a client can't skip a kind it doesn't know, so every new ext kind still needs a PROTOCOL_VERSION bump, and its number is claimed in the protocol registry before use. A MAP_EVENT announces; it doesn't carry state anyone needs to stay in sync, so a lost snapshot only loses a banner cue: the HUD reads the same event from the client's own copy of the schedule (§8).
+
+v8 also appends a **dash group** to the local-player block (dashTicks u6, dashDir u3, normalised to 0 outside a burst, dashCooldown u8, airDashUsed u1: 18 bits, sent only when it changes) and widens the remote-player flags to 8 bits with `dashing`.
 
 ### 6.3 Reliable EVENT_R examples (msgpackr-encoded, rare)
 
@@ -273,7 +282,8 @@ onSnapshot(s) {
 }
 ```
 
-**What is predicted:** own movement, jetpack, fuel, crouch, own weapon fire timing/ammo/reload, own projectiles' flight, muzzle flash, recoil, own grenade arc and throw.
+**What is predicted:** own movement, jetpack, fuel, crouch, dash (its burst, cooldown and air dash are in the local block), own weapon fire timing/ammo/reload, own projectiles' flight, muzzle flash, recoil, own grenade arc and throw.
+**Map mechanics (02-physics §20) are predicted with nothing on the wire.** Map rules and zones come from the `MapDef` (CONTENT_HASH refuses mismatched builds, and covers the zone and event kinds' defaults), and the map-event schedule is a pure function of the map, the room seed (WELCOME) and the tick. The predictor's Game has all three and steps the same tick numbers as the server, so a gravity surge, an EMP storm or a jump pad hits the predicted player on exactly the tick it hits the server's, also when reconciliation re-simulates old ticks. `apps/game-server/test/mapMechanics.test.ts` walks a client through every zone and a whole event loop of the mechanics-test map: no mispredictions on a clean LAN, and < 1 correction/min at 150 ms / 2 % loss. A client stripped of the map's mechanics mispredicts dozens of times in 30 s, so the test has teeth. **If a mechanic ever needs per-match state** (an event a host triggers, a schedule that restarts at GO), that state must reach clients before the ticks it affects: a reliable message, or the local block.
 **What is NOT predicted:** damage to others, deaths, pickups (shown optimistically with a 150 ms "pending" state, then confirmed or reverted), score.
 **Collisions with other players:** players don't body-block each other (a genre convention), which removes the biggest source of mispredictions in shooters.
 

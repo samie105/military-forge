@@ -180,6 +180,9 @@ BR squads: hp ≤ 0 with alive teammate ──▶ KNOCKED (crawl 1.2 m/s, bleed-
 | `RESPAWN_DELAY` | 3.0 s (mode setting 0–10 s) | spawn point chosen away from enemies and armed mines (§17) |
 | `KNOCKBACK_CAP` | 18 m/s | applied velocity magnitude cap |
 | `RECOIL_PUSH_AIR` | per weapon (e.g. shotgun 3.5 m/s) | airborne only, opposite the aim direction. Enables "shotgun jumps" as a skill expression |
+| `DASH_SPEED` / `DASH_BURST_TICKS` | 14 m/s for 8 ticks (0.13 s) | an 8-way jetpack burst (§21): 2.05 m along the ground, 1.95 m up |
+| `DASH_COOLDOWN` / `DASH_FUEL_COST` | 1.0 s / 8 fuel | one air dash per flight; EMP blocks it |
+| `DASH_EXIT_UP` | 2 m/s | the most upward speed a dash leaves you with; sideways it leaves you within the walk/air caps |
 
 ---
 
@@ -193,7 +196,10 @@ function stepPlayer(p: Player, input: Input, w: CollisionWorld, t: Tuning) {
   p.facing = simCos(p.aim) >= 0 ? 1 : -1;                 // sim trig, never Math.cos (§15)
   wantCrouch(p, input.down && p.grounded, w);                 // includes stand-up clearance check
 
-  // 1. Horizontal intent
+  // env = what the map does here (§20): rules × zones at the body centre; null on plain maps
+  // 0. Dash (§21): a press starts an 8-way burst if allowed; during it, step 3b sets the velocity
+  if (pressed(DASH) && canDash(p, env)) startDash(p, input);
+  // 1. Horizontal intent (every cap × weapon weight × env.moveSpeedMul)
   const ix = (input.right ? 1 : 0) - (input.left ? 1 : 0);
   if (p.grounded) {
     const max = p.crouched ? t.CROUCH_MAX : t.WALK_MAX;
@@ -210,7 +216,10 @@ function stepPlayer(p: Player, input: Input, w: CollisionWorld, t: Tuning) {
     if (Math.abs(p.vx) > cap) p.vx *= Math.exp(-t.AIR_DRAG_X * DT);   // bleed impulse excess
   }
 
-  // 2. Jetpack
+  // 1b. Map mechanics (§20): pads, then (airborne) dive, wind and drag
+  if (env) applyEnvironment(p, env, input);
+
+  // 2. Jetpack (off under env.jetDisabled; burn × env.fuelBurnMul, refill × env.fuelRegenMul)
   const canIgnite = p.fuel >= t.FUEL_MIN_IGNITE || p.jetting;
   p.jetting = input.jet && canIgnite && p.fuel > 0;
   if (p.jetting) {
@@ -229,10 +238,13 @@ function stepPlayer(p: Player, input: Input, w: CollisionWorld, t: Tuning) {
     else p.fuel = Math.min(t.FUEL_MAX, p.fuel + (p.grounded ? t.FUEL_REGEN_GROUND : t.FUEL_REGEN_AIR) * DT);
   }
 
-  // 3. Gravity (not while grounded on walkable ground: prevents slope creep)
+  // 3. Gravity (not while grounded on walkable ground: prevents slope creep); × env.gravityMul (§20)
   if (!p.grounded) p.vy = Math.max(t.TERMINAL_VY, p.vy - t.GRAVITY * DT);
+  // 3b. Dash burst (§21): velocity = direction × DASH_SPEED, no gravity; the jetpack is off meanwhile
+  if (p.dashTicks > 0) dashVelocity(p);
 
   // 4. External impulses queued this tick (explosions, melee, recoil): already added to vx/vy, capped
+  //    (the cap × env.knockbackMul where that is above 1)
   clampVelocity(p, t.KNOCKBACK_CAP);
 
   // 5. Integrate with collision
@@ -312,7 +324,7 @@ Two classes, chosen by weapon data (03-weapons):
 - Origin: the **shoulder pivot**, not the muzzle. Then:
   - **Muzzle-in-wall guard:** cast shoulder → muzzle. If it hits solid, the shot starts at that hit point. This stops players shooting through walls they are pressed against.
 - Ray vs world (grid DDA), then ray vs **lag-compensated** hitboxes (05-netcode §7). The first hit wins.
-- Max range per weapon. Damage falloff curve from `falloffStart` to `falloffEnd` (lerp to `minDamageMul`).
+- Max range per weapon. Damage falloff curve from `falloffStart` to `falloffEnd` (lerp to `minDamageMul`). On maps with mechanics (§20.4), a bullet's range is what the map leaves of it: a map-wide multiplier, and damping zones it crosses use the range up faster.
 - **Penetration (optional per weapon):** each material has a `penetrationCost` (e.g. wood 0.3, metal 1.0, concrete ∞). The weapon has a `penetrationPower`. The ray continues after a wall with damage scaled by `1 − cost/power`.
 - **Tracers:** a client cosmetic, drawn from the visual muzzle to the hit point.
 
@@ -393,10 +405,10 @@ We do **not** need lockstep determinism (the server corrects clients), but we wa
 |---|---|
 | Explosive barrel | static body with HP 40; explodes R = 3.5 m, 90 dmg; respawns after 30 s |
 | Breakable glass | `GLASS` segments with HP; removal event; rebuilds after round end |
-| Jump pad | trigger zone; sets `vy = 14` and keeps vx; 0.3 s cooldown per player |
+| Jump pad | **built (§20.2):** a zone with a `launch`; raises your speed along it to at least its length, keeps the rest of your velocity; no cooldown needed (touching it again never stacks) |
 | Moving platform / elevator | kinematic segments whose position is a pure function `f(tick)`, so they're deterministic with no network sync; players on top inherit velocity |
 | Teleporter pair | zone → set position, keep velocity rotated by exit orientation; 1 s cooldown |
-| Water | zone: gravity ×0.35, drag 3/s, jetpack disabled, guns can't fire below the surface (optional) |
+| Water | **built (§20.2)** as the `water` zone: speed caps ×0.6, gravity ×0.45, drag 1.5/s, bullets ×0.4 range. (Jetpack off and no firing below the surface remain options: `jetDisabled` exists; a no-fire zone doesn't yet) |
 | Storm (BR) | damage zone with time-varying bounds (08-battle-royale) |
 
 ---
@@ -420,3 +432,151 @@ Implementation hints: store components as Structure-of-Arrays (`Float64Array` pe
 2. Dev builds have an **in-game tuning panel** (Tweakpane/lil-gui) bound to the live sim, plus "copy JSON" and "replay last 30 s with new values".
 3. **Movement test map** with labelled ledges (0.2/0.5/1/2/4 m), slope ramps (30/45/50/55°), corridors, ceilings and one-way platforms. Every PR that touches the sim runs a **golden replay** suite: recorded inputs go in, final states must match the hashes or the PR must update them intentionally.
 4. Playtest rule: change one variable at a time, and blind A/B test feel changes with 4+ players.
+
+---
+
+## 20. Map mechanics: rules, zones and events
+
+> Owner request: "we'll build maps where some things are thwarted, some there's no gravity, some flights are longer, some bullets don't go far, some things just happen that messes with the mechanics." Built as data in the `MapDef` (packages/content `maps/types.ts`), run by the shared 60 Hz sim (`packages/sim/src/mechanics.ts`, `mapEvents.ts`):
+> 1. **Rules** (`MapDef.rules`): map-wide modifiers, e.g. low gravity everywhere on a moon base.
+> 2. **Zones** (`MapDef.zones`): areas that change the rules for whatever is inside them.
+> 3. **Events** (`MapDef.events`): things that just happen to the whole map for a while, on a seeded schedule (§20.7).
+
+### 20.1 Modifiers
+
+One set of optional fields, used by rules, zones and events alike. Absent = neutral. The map compiler refuses values outside the limits (packages/content `MODIFIER_FIELDS`, which the map editor also reads).
+
+| Field | Effect | Applies to | Limits |
+|---|---|---|---|
+| `gravityMul` | gravity × this: `0` zero-g, `0.35` low-g, negative pulls **up** (a grounded player lifts off; terminal speed applies in the direction of the pull; resting against a ceiling costs no sideways speed). Reversed gravity needs `dive` > 0, or players are pinned to the ceiling: the map lint refuses it | players, grenades | −2…3 |
+| `fuelBurnMul` | jet fuel burned per second: below 1, flights last longer | players | 0…4 |
+| `fuelRegenMul` | fuel refill speed, ground and air | players | 0…5 |
+| `bulletRangeMul` | map-wide: every hitscan range (and falloff) × this. In a zone: each metre a bullet flies inside it uses up 1/m metres of its range (§20.4) | bullets, pellets | 0.05…4 |
+| `moveSpeedMul` | walk, crouch, air and jet speed caps (on top of weapon weight, docs/03 §9) | players | 0.1…3 |
+| `knockbackMul` | pushes from blasts, bullets and melee, measured where the target stands; above 1 it also raises the 26 m/s knockback cap, up to the 36 m/s speed limit (§20.3) | players | 0…4 |
+| `drag` (1/s) | airborne velocity decays at e^(−drag·t) (water, mud, thick air) | airborne players, grenades | 0…10 |
+| `wind` (m/s², [x, y]) | a steady acceleration; walkers keep their footing | airborne players, grenades | ±40 |
+| `dive` (m/s²) | holding Down in the air pushes you down, to at most −6.5 m/s: how you get down in zero-g or against reversed gravity | airborne players | 0…60 |
+| `jetDisabled` | jetpacks cut out (EMP) | players | true/false |
+
+**Combining.** Multipliers multiply (rules × the running event × every zone the body is in, in map order), drag and wind add, `dive` takes the strongest, `jetDisabled` wins if anything sets it.
+
+### 20.2 Zones
+
+A zone is `{ id, kind, rect: [minX, minY, maxX, maxY] }` or `{ id, kind, points: [x0, y0, …] }` (either winding), plus any modifier fields and, for pads, `launch: [x, y]` (m/s). **`kind` fills in every effect the zone leaves out** from `ZONE_KINDS` (packages/content `maps/mechanics.ts`, part of CONTENT_HASH), and picks its colour. Fields you give override the kind's.
+
+**Who is inside:** a player when its body centre (feet + half its current height) is inside the outline; a grenade by its centre; a bullet for the part of its ray inside (§20.4). Rects are inclusive; polygons use the even-odd rule.
+
+| Kind | Defaults | Feel (`pnpm --filter @military-forge/sim feel`) |
+|---|---|---|
+| `zeroG` | gravity 0, drag 0.4, dive 14 | a 0.2 s tap drifts on at 4.3 m/s; Down turns it around in 0.3 s |
+| `lowG` | gravity 0.35 | a 0.2 s tap hops 3.5 m (1.2 m normally); a full tank climbs 17.7 m (13.0) |
+| `reverseG` | gravity −0.6, dive 30, drag 1.5 | you rise and hover at the pocket's top edge (settles in 3.9 s); Down pulls you out |
+| `longFlight` | fuel burn 0.4 | a tank lasts 5.7 s (2.25 s); jet + run 55 m on one tank (23 m) |
+| `damping` (bullet fog) | bullet range 0.35 | Hammer reach 12.4 m through 10 m of fog (26 m clear); Widow 41 m (60) |
+| `wind` | wind [12, 0] | a 1 s fall drifts 4.9 m; grenade arcs bend |
+| `slow` (mud) | speed 0.45, drag 3 | walk 2.25 m/s |
+| `water` | speed 0.6, gravity 0.45, drag 1.5, bullet range 0.4 | sinks at 4.7 m/s after 1 s; bullets die in it |
+| `jumpPad` | launch [0, 16] | 6.5 m apex from standing, no fuel |
+| `boostPad` | launch [16, 9] | an 11 m throw from a run |
+| `emp` | jetDisabled | no jetpack inside; it cuts out as you fly in |
+| `custom` | nothing | only the fields you set |
+
+**Pads** are level-triggered: each tick a body touches one, its speed along the launch direction rises to at least the launch speed, and its velocity across that direction is kept (run onto a jump pad and you keep running). Standing on one bounces you; it can never stack speed, so pads need no per-player cooldown state. A launch with an upward part over 0.2 unsticks a grounded player; grenades get launched too. Up to 4 pads count at once.
+
+### 20.3 In the tick
+
+- **Players** (`stepMovement`, §9): the body's environment is read once, at the body centre, before it moves. Speed caps × `moveSpeedMul` → pads, then, airborne only, dive, wind and drag → jetpack (`jetDisabled`, `fuelBurnMul`, `fuelRegenMul`) → gravity × `gravityMul` → knockback cap (raised by `knockbackMul` > 1, but never past the **36 m/s speed limit**: move-and-slide takes at most 4 substeps, each under half the capsule radius, or launches tunnel through thin walls) → move-and-slide (no ceiling bonk while gravity is reversed).
+- **Grenades** (`stepGrenade`): pads, wind, drag, then gravity × `gravityMul` (terminal ±30 m/s), then the swept move.
+- **Knockback** (`push` for bullets and melee, `explode` for blasts): the impulse × `knockbackMul` where the target is.
+- **Bullets:** §20.4.
+
+### 20.4 Bullets through rules and zones
+
+Each bullet (and pellet) has its weapon's range as a budget of "range metres". Flying a metre in clear air costs 1; inside a damping zone it costs `1 / bulletRangeMul` (overlapping zones multiply); a map-wide `bulletRangeMul` scales the budget. The bullet stops where the budget runs out, and walls count only up to there: one inside the shortened reach stops it, one past it is never reached, and under a multiplier above 1 walls past the weapon's nominal range still stop it. **Damage falloff reads the range used up, not the metres flown**, so fog both shortens a shot and weakens what gets through. The maths is a sweep over the ray's crossings with the zone outlines (`MapMechanics.castBullet` / `bulletReach` / `bulletCost`): exact piecewise-linear, no stepping, a few multiplications per pellet. Tracers end where the bullet died, so fog visibly eats them.
+
+### 20.5 Determinism and prediction
+
+- A map with no rules, zones or events compiles to **no** mechanics (`Game.mech === null`): the sim runs exactly the code it ran before, so every existing golden replay keeps its hashes. Where a map does have mechanics, neutral values multiply by 1 and add nothing (exact in IEEE arithmetic), and zero wind, drag and dive are skipped; tests replay three goldens under a neutral zone over the whole map, and under a zone nobody enters, and get identical hashes.
+- Effects are pure functions of map data and position: no new player state, nothing hashed, nothing quantised beyond what was. Everything they change is quantised at tick end as before.
+- **Prediction stays exact for free.** A client predicts its player with a Game built from the same `MapDef` (CONTENT_HASH, which also covers the zone and event kinds' defaults, refuses mismatched builds), so zone and rule effects come out bit-identical. Events too (§20.7). The protocol only gained the MAP_EVENT announcement (v8, 05-netcode §6.2).
+- Only + − × ÷, comparisons and `simExp` (drag) in the sim: the lint rule against `Math.sin/exp/random` holds.
+
+### 20.6 Authoring
+
+The compiled map format (the `MapDef` JSON, like `art/maps/street_market/street_market.map.json`) carries rules and zones as plain data:
+
+```json
+"rules": { "gravityMul": 0.45, "fuelBurnMul": 0.7 },
+"zones": [
+  { "id": "dome", "kind": "zeroG", "rect": [-6, 4, 6, 16], "label": "zero-g dome" },
+  { "id": "fog-bank", "kind": "damping", "points": [20, 0, 34, 0, 34, 9, 27, 12, 20, 9] },
+  { "id": "pad-west", "kind": "jumpPad", "rect": [-30, 0, -28, 1.2], "launch": [3, 17] }
+]
+```
+
+Zone ids are unique per map. The compiler (`checkMechanics`) lists every problem at once (unknown kind, both or neither shape, out-of-range values, a zero launch) and the Game refuses to build the map until they're fixed, like a self-intersecting solid.
+
+**Editor support.** `packages/content/schema/map.schema.json` is the map JSON format as JSON Schema, generated from `ZONE_KINDS`, `EVENT_KINDS` and `MODIFIER_FIELDS` (`pnpm --filter @military-forge/content schema`; a test fails if the committed file drifts). Add `"$schema": "<path>/map.schema.json"` to a `.map.json` and an editor offers every zone and event kind with its description and defaults, and flags values out of range. `parseMapJson` loads such a file: it refuses unknown keys in rules, zones and events (a misspelt `"gravitymul"` must not silently do nothing) and lists every problem with its JSON path. The Storm Front demo map is authored this way (`packages/content/src/maps/stormFront.map.json`). The art pipeline's `compile_map.py` can pass `rules`, `zones` and `events` from a layout straight through to its `.map.json`.
+
+**Trying maps.** Local mode: `/?map=lunar-outpost` (or `storm-front`, `flux-lab`, `mechanics-test`); the debug bar links them. Online: `MAP=flux-lab pnpm dev`, or `--map=flux-lab` on the game server; clients take the map from WELCOME and redraw for it.
+
+### 20.7 Events: "some things just happen"
+
+`MapDef.events = { defs, schedule }`. An event def has an `id`, a `kind` that fills in everything it leaves out (`EVENT_KINDS`), a banner `name` and `description`, `duration` and `warning` (s), any modifiers (applied **map-wide** while it runs), and for wind `gustPeriod` (the wind swells from nothing to full and back: 0.5 − 0.5·cos(2πt/T)) and `windFlip` (some occurrences blow the other way). Zones with `event: "<id>"` are **event zones**: off until that event runs; `pickOneZone` switches on one of them per occurrence instead of all (a reversed-gravity pocket that appears at one of several sites).
+
+| Kind | Defaults | Feel |
+|---|---|---|
+| `gravitySurge` | gravity ×1.8, 15 s, 3 s warning | a full tank climbs 8.2 m (13.0): fights drop to the floor. Above ×1.85 the jet stops lifting at all (thrust 38 vs gravity 37) |
+| `lowGravity` | gravity ×0.35, 15 s | a 0.2 s tap hops 3.5 m, map-wide |
+| `emp` | jetDisabled, 8 s, 4 s warning | no jetpacks anywhere |
+| `fog` | bullet range ×0.4, 20 s | Hammer reach 10.4 m (26) |
+| `gust` | wind [16, 0], gusting every 3 s, windFlip, 15 s | a 1 s fall at a peak drifts 5.6 m |
+| `flip` | pickOneZone, 15 s, 4 s warning | one of its event zones (reverseG) switches on |
+| `custom` | 10 s, 3 s warning | only what you set (e.g. the test map's MOLASSES: drag 2, knockback ×0.5, speed ×0.8) |
+
+**Schedule.** Two kinds, both pure functions of the map, the room seed and the tick:
+- `random`: `{ start, cycle, chance?, weights? }`. From `start` (s), time splits into cycles of `cycle` s. Each cycle holds at most one event: with probability `chance` (default 1), one picked by weight (default 1 each, 0 leaves one out), its warning starting at a seeded moment chosen so warning + duration fit inside the cycle. Hashes: `hash4(seed, cycle, salt, n)`; nothing is stored.
+- `timeline`: `{ start?, loop?, entries: [{ at, event }] }`. Each entry's event starts `at` s after `start`, its warning before that; with `loop` the whole timeline repeats. Entries (warnings included) may not overlap.
+
+Because only one occurrence can cover a tick and it is found from the tick alone, the server, a predicting client (same seed from WELCOME, same tick numbering), a client that joined late, a re-simulation of old ticks and a replay all agree. Each tick `MapMechanics.beginTick` finds the occurrence, sets the map-wide modifiers (rules × the event while it is past its warning) and switches event zones, and pushes a `mapEvent` sim event (`event, phase: 0 warning | 1 start | 2 end, occurrence, zone, flip, ticks`) on the ticks a warning starts, an event starts and an event ends. Those reach every client as MAP_EVENT (05-netcode §6.2); the HUD banner reads the client's own copy of the schedule, so a lost snapshot never loses a banner.
+
+**Limits.** At most 32 events and 255 zones per map (the wire sizes). Duration 1 tick–600 s, warning 0–30 s, gust period 0–60 s. A random schedule refuses an event whose warning + duration don't fit its cycle; a timeline refuses overlapping entries and a loop shorter than its entries.
+
+**Test map.** `mechanics-test` (packages/content `maps/mechanicsTest.ts`): a 240 m strip with every zone kind and a 49 s timeline of every event kind, map rules (fuel refill ×1.25), dummies behind the fog and in a knockback ×2 pit, and two pocket sites. Golden replays `mech-zones` (a walk across every zone with hops, dives and frags), `mech-bullets` (Hammer shots that die in the fog, Widow shots that get through except during the fog event) and `mech-events` (a whole loop of events, frags into the pit, a stand in the picked pocket).
+
+### 20.8 On screen
+
+- **Banner (HUD hook).** Each frame carries `mapEvent` (apps/web `mapEventView`), read from the game's own copy of the schedule: the local game, or online the predictor's, so the banner flips on exactly the tick the physics do and a lost snapshot can't lose it. `shell.setMapEvent(view)` feeds the shell store (it changes at most once a second); React shows `MapEventBanner` under the match clock in the event kind's colour: "EMP STORM in 3 · Jetpacks offline" during the warning, then "EMP STORM · Jetpacks offline · 6 s". Other HUDs read it with `useMapEventBanner(store)`. The canvas HUD adds a debug line, and the kill feed logs each warning, start and end (from the `mapEvent` sim events, or MAP_EVENT online).
+- **2D (debug view, and the overlay on 3D with H or B):** zones tinted by kind with a dashed outline and a label; wind and pads show a drifting chevron along their push. Event zones are a faint dotted outline while off ("(off)"), pulse during their event's warning ("(opening)": the client knows which pocket site will open), then fill.
+- **3D (render3d `zones.ts`):** each zone is a tinted volume through the gameplay band (z −1…+1, no depth writes) with a rim on the front face, plus particles that show what it does: dust drifting in zero-g and low-g, streaks along wind and pad launches, bubbles rising in water and up the long-flight shaft, sparks in EMP fields. Event zones fade in and out with their event; their rim pulses during the warning. A fog event (any event that cuts bullet range) thickens the scene fog while it runs.
+
+---
+
+## 21. Dash
+
+> Owner request (paraphrased): dash physics for fast movement between spaces, brief like a fighting-game dash, but up and down too, with nice controls.
+
+A dash is a **brief 8-way jetpack burst**: for `dashBurstTicks` (8 ticks, 0.13 s) your velocity is `dashSpeed` (14 m/s, × weapon weight × the map's `moveSpeedMul`) along the dash direction, with no gravity, so up and down dashes are crisp. Then it lets go: sideways speed drops back within the walk cap (on the ground) or the air cap (in the air), × weapon weight and the map's speed but never above `launchSpeedX`, so a dash never flings like a blast (NOTES §17), and upward speed is capped at `dashExitUp` (2 m/s) so an up-dash can't become a free jet launch. The burst moves with the normal move-and-slide: walls stop it (no tunnelling, even through a 0.15 m wall), small steps are climbed, slopes are followed.
+
+**Controls.** `Btn.Dash` (bit 13, `Shift`). The direction is what you hold: `A`/`D` sideways, `W` (jet) up, `S` (down) down, so 8 ways; none held = along your facing. A tap shorter than a tick still dashes (the client latches the press with the direction held at that moment). Double-tapping `A`, `D` or `S` is an optional binding for the same input (`InputSampler.doubleTapDash`; `?dashtap` until the settings screen offers it). Not `W`: tapping the jet key is how you feather the jetpack, so a double-tap there would fire dashes mid-hover; dash up with `Shift` + `W`.
+
+**Dashing while flying.** `W` counts as "up" for a dash only when it is fresh: pressed with the dash, or burning for at most 6 ticks (~0.1 s, `DASH_UP_FRESH_TICKS`). A jet that has been carrying you longer is ignored, so a flying player dashes flat. The sim decides it from `jetTicks`, which is already in the local block, so prediction stays exact.
+
+**Where you are matters.**
+- On the ground, down only means something with a direction: down-left/right dash along the floor (crouched, it's a slide under things). Straight down on a **one-way platform** drops through it, dashing down; straight down on solid ground does nothing and costs nothing.
+- In the air, down is a quick drop: from a 6 m hover you land in 0.40 s (0.77 s falling). Landing ends a down-dash on the spot (a slam).
+
+**Limits.** A 1.0 s cooldown (a press during it does nothing; refused presses never restart it). One air dash per airborne period, given back on landing; a dash that starts on the ground (an up-dash, a drop through a platform) isn't the air dash. Each dash costs `dashFuelCost` (8) fuel and needs that much, and restarts the air fuel-regen delay.
+
+**Interactions.**
+- **No invulnerability frames.** Any knockback (a bullet's hit impulse, melee, a blast) ends the dash on the spot: the burst's speed first drops to the exit caps, then the push adds, so a pellet's small push never leaves you flying on at dash speed.
+- **EMP:** a dash is a jetpack burst, so anything that cuts the jetpack blocks it: EMP zones and storms (`jetDisabled`, §20), and the EMP grenade's 3 s jetpack lockout (§14) when it lands. The check is one function, `dashBlocked()` in movement.ts.
+- **Riot shield** (in progress): no dash while the shield is raised; lower it to dash. It hooks into `dashBlocked()` too.
+- **Map mechanics (§20):** the burst ignores pads, wind and gravity while it lasts; zones act on what's left after it. A dash in zero-g keeps drifting at its exit speed; mud slows the burst through `moveSpeedMul`.
+
+**State and prediction.** `PlayerState.dashTicks`, `dashDir` (0 = right, counter-clockwise in 45° steps), `dashCooldown`, `airDashUsed` are in the local-player block (protocol v8), so your dashes predict exactly (`apps/game-server/test/dash.test.ts`: no mispredictions on a clean LAN while dashing 8 ways). They are hashed only away from rest, so replays that never dash keep their hashes.
+
+**Events.** A `dash` sim event (player, start position, direction) on the tick it starts: the animation poses the body from it, render3d draws the streak. Other clients get it as the extended event DASH (snapshot tag 7, 05-netcode §6.2) when they can see the dasher; your own is drawn from prediction. Remote players also carry a `dashing` flag.
+
+**Feel** (`pnpm --filter @military-forge/sim feel`, all on target): 2.05 m along the ground from standing (target 2–2.5), 1.95 m up (1.5–2), up-right 1.41 m high at 1.82 m out, the slam above, a wall 1 m away stops it at 1.00 m.

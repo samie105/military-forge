@@ -1,6 +1,8 @@
 /**
  * Phase 0 debug client entry point.
  *   /            local mode: a deathmatch against the dummy targets (results, Play again) + live tuning, rendered in 3D
+ *   /?map=flux-lab   local mode on another map: lunar-outpost, storm-front, flux-lab (map mechanics demos,
+ *                    docs/02 §20), mechanics-test, movement-test (default). Online, the server picks (--map=).
  *   /?time=60&kills=5&countdown=3       local match rules (0 = no limit); /?sandbox: free play, no match
  *   /?render=2d  the canvas-2D view instead (?render=3d opts online mode into 3D); ?gfx=low|medium|high
  *   /?online     joins the dev room on ws://<host>:9001 (open in two tabs to play each other)
@@ -9,7 +11,7 @@
  *   /?online&lowbw                      low-bandwidth mode (30 Hz inputs, 15 Hz snapshots)
  *   /?online&transport=ws|wt            force WebSocket / WebTransport (default: WT when the server has a gateway)
  */
-import { getMap } from '@military-forge/content';
+import { DEMO_MAPS, getMap, maps, type MapDef } from '@military-forge/content';
 import { createConditionerSettings, parseNetSim } from '@military-forge/netcode';
 import { GAME_NAME } from '@military-forge/shared';
 import { Camera } from './camera';
@@ -41,24 +43,37 @@ function showToast(message: string): void {
   toast.style.display = 'block';
 }
 
+const requestedMap = params.get('map');
+const localMapId = requestedMap && maps[requestedMap] ? requestedMap : 'movement-test';
+
 document.title = `${GAME_NAME} · Phase 0 prototype`;
 bar.innerHTML = `
   <strong>${GAME_NAME.toUpperCase()} · Phase 0</strong>
-  <a href="/" class="${online ? '' : 'active'}">Local + dummies</a>
+  <a href="/" class="${online || requestedMap ? '' : 'active'}">Local + dummies</a>
   <a href="/?online" class="${online ? 'active' : ''}">Online (${serverUrl.replace(/^wss?:\/\//, '')})</a>
   <a href="/?online" target="_blank">+ 2nd tab</a>
   <a href="/locker.html">Locker</a>
   <a href="/armory.html">Armory</a>
+  <span class="maps">maps: ${[...DEMO_MAPS, 'mechanics-test']
+    .map((id) => `<a href="/?map=${id}" class="${!online && localMapId === id ? 'active' : ''}">${maps[id]!.name}</a>`)
+    .join(' ')}</span>
 `;
+if (requestedMap && !maps[requestedMap]) {
+  showToast(`Unknown map "${requestedMap}". Maps: ${Object.keys(maps).join(', ')}`);
+  setTimeout(() => (toast.style.display = 'none'), 4000);
+}
 
 // 3D draws the world under the 2D canvas, which becomes the HUD + debug overlay (H/B)
 const use3d = (params.get('render') ?? (online ? '2d' : '3d')) === '3d' && Renderer3D.supported();
 const planeCamera = use3d ? new PlaneCamera() : null;
 const camera = planeCamera ?? new Camera();
 const sampler = new InputSampler(canvas);
+// double-tap a direction to dash (docs/02 §21): ?dashtap until the settings screen offers it
+sampler.doubleTapDash = params.has('dashtap');
 const options: RenderOptions = { showHitboxes: false, showGrid: !use3d, showNet: online, overlay: use3d };
 
-const map = getMap('movement-test');
+// local mode: the ?map= map; online mode: the server's, from WELCOME (followed in frame())
+let map: MapDef = getMap(online ? 'movement-test' : localMapId);
 let mode: LocalMode | OnlineMode;
 const renderer = new Renderer(canvas, camera, map, () => mode.tuning());
 const view3d = planeCamera
@@ -71,7 +86,7 @@ if (online) {
   const prefer = params.get('transport');
   mode = new OnlineMode(serverUrl, name, sampler, camera, renderer, showToast, netSim, prefer === 'ws' || prefer === 'wt' ? prefer : 'auto');
 } else {
-  mode = new LocalMode(sampler, camera, renderer, name, localMatchRules(params));
+  mode = new LocalMode(sampler, camera, renderer, name, localMatchRules(params), localMapId);
 }
 
 // App shell (W4): screens over the canvas. Other workstreams plug in with one line each, e.g.
@@ -129,7 +144,7 @@ if (mode instanceof OnlineMode) {
 }
 
 const HELP =
-  'A/D move · W/Space jet · S crouch (hold on a platform to drop) · LMB fire · V melee · R reload · Q swap · F dual · G frag · wheel zoom · H hitboxes · B grid · N net · ` panel' +
+  'A/D move · W/Space jet · S crouch (hold on a platform to drop) · Shift dash (+ WASD: 8-way) · LMB fire · V melee · R reload · Q swap · F dual · G frag · wheel zoom · H hitboxes · B grid · N net · ` panel' +
   (online ? '' : ' · P record · O download replay');
 
 function resize(): void {
@@ -170,6 +185,11 @@ function frame(now: number): void {
   else camera.setZoom(camera.zoom, mode.zoomMax());
 
   const f = mode.update(dt);
+  if (mode.map !== map) {
+    map = mode.map;
+    renderer.setMap(map);
+    view3d?.setMap(map);
+  }
   const me = f.players.find((p) => p.id === f.localId);
   const mouse = sampler.mouseWorld(camera);
   if (me) camera.follow(me.x, me.y, mouse.x, mouse.y, dt, map);
@@ -177,6 +197,7 @@ function frame(now: number): void {
   renderer.mouse.y = sampler.mouseY;
   renderer.render(f, dt, options, HELP);
   shell.update(mode instanceof LocalMode ? mode : null);
+  shell.setMapEvent(f.mapEvent);
   view3d?.render(f, dt);
 }
 

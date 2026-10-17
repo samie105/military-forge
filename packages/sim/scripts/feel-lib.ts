@@ -2,7 +2,7 @@
  * Shared feel measurements (docs/02 §19): run the real sim with scripted inputs and return
  * objective numbers. Used by `feel` (report) and `tune` (target-driven parameter sweep).
  */
-import { BUZZ, DEFAULT_LOADOUT, HAMMER, weapons, type MapDef, type Tuning, type WeaponDef } from '@military-forge/content';
+import { BUZZ, DEFAULT_LOADOUT, HAMMER, defaultTuning, weapons, type MapDef, type MapEventKind, type MapZone, type Tuning, type WeaponDef, type ZoneKind } from '@military-forge/content';
 import { angleToU16 } from '@military-forge/shared';
 import { Btn, Game, createInput, type Input, type PlayerState } from '../src';
 
@@ -20,8 +20,8 @@ function flat(width = 400, ceiling = 60): MapDef {
   };
 }
 
-function setup(tuning: Partial<Tuning>, seed = 1): { game: Game; p: PlayerState; step: (buttons: number, aimRad?: number) => void } {
-  const game = new Game({ map: flat(), seed, tuning });
+function setup(tuning: Partial<Tuning>, seed = 1, map: MapDef = flat()): { game: Game; p: PlayerState; step: (buttons: number, aimRad?: number) => void } {
+  const game = new Game({ map, seed, tuning });
   const p = game.addPlayer('probe');
   const input: Input = createInput();
   const inputs: (Input | undefined)[] = [];
@@ -265,4 +265,286 @@ export function measureGrenade(tuning: Partial<Tuning> = {}): GrenadeMetrics {
     if (ex && ex.type === 'explosion') detonation = ex.x;
   }
   return { firstBounce: firstLandX - p.x, detonation: detonation - p.x };
+}
+
+// ---------- map zones (docs/02 §20) ----------
+
+/** The feel map with one zone of `kind` (its defaults, plus `extra`) over `rect` (default: all of it). */
+function zoned(kind: ZoneKind, rect: [number, number, number, number] = [-2, -6, 402, 62], extra: Partial<MapZone> = {}): MapDef {
+  return { ...flat(), zones: [{ id: kind, kind, rect, ...extra }] };
+}
+
+export interface ZoneMetrics {
+  /** low-g zone: full-tank climb from the ground (m) */
+  lowGClimb: number;
+  /** low-g zone: apex of a 0.2 s jet tap (m) */
+  lowGTapHop: number;
+  /** zero-g zone: speed 1 s after a 0.2 s jet tap from the ground (m/s) */
+  zeroGDrift: number;
+  /** zero-g zone: seconds of holding Down to turn that drift around */
+  zeroGDiveTurn: number;
+  /** long-flight zone: seconds until a held jet empties the tank */
+  longFlightBurn: number;
+  /** long-flight zone: jet + run distance on one tank (m) */
+  longFlightRun: number;
+  /** reversed-gravity pocket (8 m tall): seconds until the bob at its top edge stays within ±0.5 m */
+  reverseSettle: number;
+  /** wind zone: sideways drift during a 1 s fall from rest (m) */
+  windDrift: number;
+  /** mud: walk speed (m/s) */
+  mudSpeed: number;
+  /** deep water: sink speed after 1 s from rest (m/s) */
+  waterSink: number;
+  /** jump pad: feet apex from standing on it (m) */
+  jumpPadApex: number;
+  /** boost pad: flight from a running start, take-off to landing (m) */
+  boostPadFlight: number;
+  /** bullet fog: how far each weapon's bullets carry with 10 m of fog starting 5 m out (m) */
+  fogReach: Record<string, number>;
+}
+
+export function measureZones(tuning: Partial<Tuning> = {}): ZoneMetrics {
+  const m: ZoneMetrics = {
+    lowGClimb: 0,
+    lowGTapHop: 0,
+    zeroGDrift: 0,
+    zeroGDiveTurn: 0,
+    longFlightBurn: 0,
+    longFlightRun: 0,
+    reverseSettle: 0,
+    windDrift: 0,
+    mudSpeed: 0,
+    waterSink: 0,
+    jumpPadApex: 0,
+    boostPadFlight: 0,
+    fogReach: {},
+  };
+  {
+    const { p, step } = setup(tuning, 1, zoned('lowG'));
+    for (let t = 0; t < 1200 && !(t > 30 && p.grounded); t++) {
+      step(p.fuel > 0 ? Btn.Jet : 0);
+      m.lowGClimb = Math.max(m.lowGClimb, p.y);
+    }
+  }
+  {
+    const { p, step } = setup(tuning, 1, zoned('lowG'));
+    for (let t = 0; t < 600 && (t < 12 || !p.grounded); t++) {
+      step(t < 12 ? Btn.Jet : 0);
+      m.lowGTapHop = Math.max(m.lowGTapHop, p.y);
+    }
+  }
+  {
+    const { p, step } = setup(tuning, 1, zoned('zeroG'));
+    for (let t = 0; t < 12; t++) step(Btn.Jet);
+    for (let t = 0; t < 60; t++) step(0);
+    m.zeroGDrift = Math.hypot(p.vx, p.vy);
+    let t = 0;
+    while (p.vy > 0 && t < 600) {
+      step(Btn.Down);
+      t++;
+    }
+    m.zeroGDiveTurn = t / 60;
+  }
+  {
+    const { p, step } = setup(tuning, 1, zoned('longFlight'));
+    let t = 0;
+    while (p.fuel > 0 && t < 1800) {
+      step(Btn.Jet);
+      t++;
+    }
+    m.longFlightBurn = t / 60;
+  }
+  {
+    const { p, step } = setup(tuning, 1, zoned('longFlight'));
+    const x0 = p.x;
+    for (let t = 0; t < 2400 && !(t > 30 && p.grounded); t++) step(p.fuel > 0 ? Btn.Jet | Btn.Right : Btn.Right);
+    m.longFlightRun = p.x - x0;
+  }
+  {
+    const { p, step } = setup(tuning, 1, zoned('reverseG', [-2, -6, 402, 8]));
+    let calmSince = -1;
+    for (let t = 0; t < 1800; t++) {
+      step(0);
+      const off = Math.abs(p.y + 0.75 - 8);
+      if (off > 0.5) calmSince = -1;
+      else if (calmSince < 0) calmSince = t;
+    }
+    m.reverseSettle = calmSince < 0 ? Infinity : calmSince / 60;
+  }
+  {
+    const { p, step } = setup(tuning, 1, zoned('wind'));
+    p.y = 30;
+    p.grounded = false;
+    const x0 = p.x;
+    for (let t = 0; t < 60; t++) step(0);
+    m.windDrift = p.x - x0;
+  }
+  {
+    const { p, step } = setup(tuning, 1, zoned('slow', [-2, -6, 402, 2]));
+    for (let t = 0; t < 60; t++) step(Btn.Right);
+    m.mudSpeed = p.vx;
+  }
+  {
+    const { p, step } = setup(tuning, 1, zoned('water', [-2, -6, 402, 40]));
+    p.y = 30;
+    p.grounded = false;
+    for (let t = 0; t < 60; t++) step(0);
+    m.waterSink = -p.vy;
+  }
+  {
+    const { p, step } = setup(tuning, 1, zoned('jumpPad', [8, 0, 12, 1.2]));
+    for (let t = 0; t < 120; t++) {
+      step(0);
+      m.jumpPadApex = Math.max(m.jumpPadApex, p.y);
+    }
+  }
+  {
+    const { p, step } = setup(tuning, 1, zoned('boostPad', [20, 0, 22, 1.2]));
+    while (p.grounded) step(Btn.Right);
+    const x0 = p.x;
+    for (let t = 0; t < 600 && !p.grounded; t++) step(0);
+    m.boostPadFlight = p.x - x0;
+  }
+  for (const w of weapons) {
+    if (w.fireMode === 'melee') continue;
+    const { game, p, step } = setup(tuning, 1, zoned('damping', [p0x(5), -6, p0x(15), 62]));
+    if (DEFAULT_LOADOUT.indexOf(w.index) !== 0) game.setLoadout(p, [w.index, DEFAULT_LOADOUT[1]]);
+    step(Btn.Fire, 0);
+    const shot = game.events.find((e) => e.type === 'shot');
+    m.fogReach[w.name] = shot && shot.type === 'shot' ? Math.hypot(shot.ex - p.shoulderX(game.tuning), shot.ey - p.shoulderY(game.tuning)) : NaN;
+  }
+  return m;
+}
+
+/** x of a point `d` metres in front of the probe's shoulder (setup() leaves it at x 10, facing right). */
+function p0x(d: number): number {
+  return 10.08 + d;
+}
+
+// ---------- map events (docs/02 §20.7) ----------
+
+/** The feel map with one event of `kind` (its defaults) running from the first tick for 20 s. */
+function during(kind: MapEventKind): MapDef {
+  return { ...flat(), events: { defs: [{ id: kind, kind, warning: 0, duration: 20 }], schedule: { kind: 'timeline', entries: [{ at: 0, event: kind }] } } };
+}
+
+export interface EventMetrics {
+  /** gravity surge: full-tank climb (m) */
+  surgeClimb: number;
+  /** low gravity: apex of a 0.2 s jet tap (m) */
+  lowGravityTapHop: number;
+  /** fog bank: Hammer reach in the open (m) */
+  fogHammerReach: number;
+  /** wind gusts: sideways drift of a 1 s fall timed around a gust's peak (m) */
+  gustDrift: number;
+}
+
+export function measureEvents(tuning: Partial<Tuning> = {}): EventMetrics {
+  const m: EventMetrics = { surgeClimb: 0, lowGravityTapHop: 0, fogHammerReach: 0, gustDrift: 0 };
+  {
+    const { p, step } = setup(tuning, 1, during('gravitySurge'));
+    for (let t = 0; t < 900 && !(t > 30 && p.grounded); t++) {
+      step(p.fuel > 0 ? Btn.Jet : 0);
+      m.surgeClimb = Math.max(m.surgeClimb, p.y);
+    }
+  }
+  {
+    const { p, step } = setup(tuning, 1, during('lowGravity'));
+    for (let t = 0; t < 600 && (t < 12 || !p.grounded); t++) {
+      step(t < 12 ? Btn.Jet : 0);
+      m.lowGravityTapHop = Math.max(m.lowGravityTapHop, p.y);
+    }
+  }
+  {
+    const { game, p, step } = setup(tuning, 1, during('fog'));
+    step(Btn.Fire, 0);
+    const shot = game.events.find((e) => e.type === 'shot');
+    m.fogHammerReach = shot && shot.type === 'shot' ? Math.hypot(shot.ex - p.shoulderX(game.tuning), shot.ey - p.shoulderY(game.tuning)) : NaN;
+  }
+  {
+    // setup() spends 10 ticks settling; the 3 s gust peaks 1.5 s in: fall from 1 s to 2 s
+    const { p, step } = setup(tuning, 1, during('gust'));
+    for (let t = 10; t < 60; t++) step(0);
+    p.y = 30;
+    p.grounded = false;
+    const x0 = p.x;
+    for (let t = 0; t < 60; t++) step(0);
+    m.gustDrift = Math.abs(p.x - x0);
+  }
+  return m;
+}
+
+// ---------- dash (docs/02 §21) ----------
+
+export interface DashMetrics {
+  /** standing, a dash with no direction (along the facing): ground covered until stopped (m) */
+  flat: number;
+  /** standing, an up-dash (Jet held on the press only): height reached (m) */
+  up: number;
+  /** standing, an up-right dash: height and distance at the apex (m) */
+  diagUp: number;
+  diagRun: number;
+  /** from a 6 m hover, ticks to land with a down-dash vs falling (s) */
+  slamTime: number;
+  fallTime: number;
+  /** a dash at a wall 1 m away: distance covered (m), ≤ 1 m minus the capsule radius */
+  wallStop: number;
+  /** seconds the burst lasts, for the animation */
+  burst: number;
+}
+
+export function measureDash(tuning: Partial<Tuning> = {}): DashMetrics {
+  const m: DashMetrics = { flat: 0, up: 0, diagUp: 0, diagRun: 0, slamTime: 0, fallTime: 0, wallStop: 0, burst: 0 };
+  {
+    const { p, step } = setup(tuning);
+    const x0 = p.x;
+    step(Btn.Dash);
+    for (let t = 0; t < 120 && (p.vx !== 0 || !p.grounded); t++) step(0);
+    m.flat = p.x - x0;
+  }
+  {
+    const { p, step } = setup(tuning);
+    step(Btn.Dash | Btn.Jet);
+    for (let t = 0; t < 120 && !(t > 5 && p.grounded); t++) {
+      step(0);
+      m.up = Math.max(m.up, p.y);
+    }
+  }
+  {
+    const { p, step } = setup(tuning);
+    const x0 = p.x;
+    step(Btn.Dash | Btn.Jet | Btn.Right);
+    for (let t = 0; t < 120 && !(t > 5 && p.grounded); t++) {
+      step(0);
+      if (p.y > m.diagUp) {
+        m.diagUp = p.y;
+        m.diagRun = p.x - x0;
+      }
+    }
+  }
+  for (const slam of [true, false]) {
+    const { p, step } = setup(tuning);
+    p.y = 6;
+    p.vy = 0;
+    p.grounded = false;
+    let t = 0;
+    step(slam ? Btn.Dash | Btn.Down : 0);
+    while (!p.grounded && t < 300) {
+      step(0);
+      t++;
+    }
+    if (slam) m.slamTime = (t + 1) / 60;
+    else m.fallTime = (t + 1) / 60;
+  }
+  {
+    const map = flat();
+    map.solids.push({ points: [11.32, 0, 12, 0, 12, 4, 11.32, 4] }); // a wall face 1 m right of the probe's capsule
+    const { p, step } = setup(tuning, 1, map);
+    const x0 = p.x;
+    step(Btn.Dash);
+    for (let t = 0; t < 30; t++) step(0);
+    m.wallStop = p.x - x0;
+  }
+  m.burst = (tuning.dashBurstTicks ?? defaultTuning.dashBurstTicks) / 60;
+  return m;
 }

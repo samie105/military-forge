@@ -8,12 +8,17 @@ import {
   HitZone,
   NO_WEAPON,
   STANDING_HITBOXES,
+  ZONE_KINDS,
   defaultTuning,
+  resolveEvent,
+  resolveZone,
   weapons,
+  zonePoints,
   type MapDef,
+  type MapZone,
   type Tuning,
 } from '@military-forge/content';
-import { DamageSource, MELEE_ARC_DEG, MELEE_REACH, MELEE_WINDUP_TICKS, type SimEvent } from '@military-forge/sim';
+import { DamageSource, MELEE_ARC_DEG, MELEE_REACH, MELEE_WINDUP_TICKS, TICK_RATE, type SimEvent } from '@military-forge/sim';
 import type { Camera } from './camera';
 import type { Frame, PlayerView, RewindView } from './view';
 
@@ -33,6 +38,18 @@ interface Burst {
   r: number;
   age: number;
 }
+
+/** A dash's trail (docs/02 §21): from where it started, along its direction. */
+interface DashStreak {
+  x: number;
+  y: number;
+  dir: number;
+  age: number;
+  local: boolean;
+}
+
+/** 8-way dash directions (0 = right, counter-clockwise), as the sim's DASH_DX/DASH_DY. */
+const DASH_UNIT = Array.from({ length: 8 }, (_, i) => [Math.cos((i * Math.PI) / 4), Math.sin((i * Math.PI) / 4)] as const);
 
 interface FloatText {
   /** player the number floats above */
@@ -62,6 +79,57 @@ export interface RenderOptions {
   overlay?: boolean;
 }
 
+/** A zone ready to draw (docs/02 §20): outline, label spot and flow direction (wind or launch). */
+interface ZoneDraw {
+  zone: MapZone;
+  points: number[];
+  color: number;
+  label: string;
+  /** centre and top of the bounding box (m) */
+  cx: number;
+  cy: number;
+  top: number;
+  /** unit flow direction, 0,0 for none */
+  fx: number;
+  fy: number;
+}
+
+function zoneDraws(map: MapDef): ZoneDraw[] {
+  return (map.zones ?? []).map((zone) => {
+    const points = zonePoints(zone);
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (let i = 0; i < points.length; i += 2) {
+      minX = Math.min(minX, points[i]!);
+      maxX = Math.max(maxX, points[i]!);
+      minY = Math.min(minY, points[i + 1]!);
+      maxY = Math.max(maxY, points[i + 1]!);
+    }
+    const r = resolveZone(zone);
+    const fx = r.launch ? r.launch[0] : r.windX;
+    const fy = r.launch ? r.launch[1] : r.windY;
+    const len = Math.hypot(fx, fy);
+    return {
+      zone,
+      points,
+      color: ZONE_KINDS[zone.kind]?.color ?? 0x8b949e,
+      label: zone.label ?? ZONE_KINDS[zone.kind]?.label ?? zone.kind,
+      cx: (minX + maxX) / 2,
+      cy: (minY + maxY) / 2,
+      top: maxY,
+      fx: len > 0 ? fx / len : 0,
+      fy: len > 0 ? fy / len : 0,
+    };
+  });
+}
+
+/** 0xRRGGBB → rgba() */
+function rgba(c: number, a: number): string {
+  return `rgba(${(c >> 16) & 255},${(c >> 8) & 255},${c & 255},${a})`;
+}
+
 const COLORS = {
   bg: '#0d1117',
   letterbox: '#05070a',
@@ -79,27 +147,36 @@ export class Renderer {
   private readonly ctx: CanvasRenderingContext2D;
   private readonly tracers: Tracer[] = [];
   private readonly bursts: Burst[] = [];
+  private readonly dashes: DashStreak[] = [];
   private readonly floats: FloatText[] = [];
   private readonly feed: FeedLine[] = [];
   private hitMarker = { age: 1, head: false, kill: false };
   private names = new Map<number, string>();
   private fps = 60;
+  private zones: ZoneDraw[];
   /** Also handed every event batch when set: main.ts points it at the 3D view's effects. */
   forwardEvents: ((events: readonly SimEvent[], localId: number) => void) | null = null;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private readonly camera: Camera,
-    private readonly map: MapDef,
+    private map: MapDef,
     private readonly tuningRef: () => Tuning,
   ) {
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('2D canvas not supported');
     this.ctx = ctx;
+    this.zones = zoneDraws(map);
   }
 
   setNames(names: Map<number, string>): void {
     this.names = names;
+  }
+
+  /** Online play follows the server's map (WELCOME). */
+  setMap(map: MapDef): void {
+    this.map = map;
+    this.zones = zoneDraws(map);
   }
 
   resize(): void {
@@ -146,6 +223,19 @@ export class Renderer {
           if (e.killer === localId && e.victim !== localId) this.hitMarker = { age: 0, head: false, kill: true };
           break;
         }
+        case 'dash':
+          this.dashes.push({ x: e.x, y: e.y, dir: e.dir, age: 0, local: e.player === localId });
+          break;
+        case 'mapEvent': {
+          // map events (docs/02 §20.7): the banner is the shell's; the feed keeps a short history
+          const def = this.map.events?.defs[e.event];
+          if (!def) break;
+          const ev = resolveEvent(def);
+          const text = e.phase === 0 ? `⚠ ${ev.name} in ${Math.ceil(e.ticks / TICK_RATE)} s` : e.phase === 1 ? `⚡ ${ev.name}: ${ev.description}` : `${ev.name} is over`;
+          this.feed.push({ text, age: 0 });
+          if (this.feed.length > 6) this.feed.shift();
+          break;
+        }
         default:
           break;
       }
@@ -167,6 +257,7 @@ export class Renderer {
 
     if (opts.showGrid) this.drawGrid();
     this.drawMap();
+    this.drawZones(frame);
 
     // floating damage numbers follow their target
     const byId = new Map(frame.players.map((p) => [p.id, p]));
@@ -262,6 +353,74 @@ export class Renderer {
     ctx.font = '12px ui-monospace, monospace';
     ctx.textAlign = 'center';
     for (const l of this.map.labels) ctx.fillText(l.text, cam.toScreenX(l.x), cam.toScreenY(l.y));
+  }
+
+  /**
+   * Map zones (docs/02 §20): tinted by kind with a dashed outline and a label; wind and pads get a
+   * drifting arrow. Event zones are a faint dotted outline until their event runs, pulse during its
+   * warning (the client knows which site will open), then fill.
+   */
+  private drawZones(frame: Frame): void {
+    if (this.zones.length === 0) return;
+    const ctx = this.ctx;
+    const cam = this.camera;
+    const ev = frame.mapEvent;
+    const now = performance.now() / 1000;
+    const pulse = 0.5 + 0.5 * Math.abs(Math.sin(now * 5));
+    this.zones.forEach((d, i) => {
+      let state: 'on' | 'pending' | 'off' = 'on';
+      if (d.zone.event !== undefined) state = ev && ev.id === d.zone.event && ev.zones.includes(i) ? (ev.phase === 'active' ? 'on' : 'pending') : 'off';
+      ctx.beginPath();
+      for (let k = 0; k < d.points.length; k += 2) {
+        const sx = cam.toScreenX(d.points[k]!);
+        const sy = cam.toScreenY(d.points[k + 1]!);
+        if (k === 0) ctx.moveTo(sx, sy);
+        else ctx.lineTo(sx, sy);
+      }
+      ctx.closePath();
+      if (state === 'on') {
+        ctx.fillStyle = rgba(d.color, 0.13);
+        ctx.fill();
+      } else if (state === 'pending') {
+        ctx.fillStyle = rgba(d.color, 0.1 * pulse);
+        ctx.fill();
+      }
+      ctx.setLineDash(state === 'off' ? [2, 7] : [8, 5]);
+      ctx.lineWidth = state === 'pending' ? 2.5 : 1.5;
+      ctx.strokeStyle = rgba(d.color, state === 'off' ? 0.3 : state === 'pending' ? 0.4 + 0.6 * pulse : 0.75);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      if (state === 'on' && (d.fx !== 0 || d.fy !== 0)) this.drawFlowArrow(d, now);
+      ctx.fillStyle = rgba(d.color, state === 'off' ? 0.45 : 0.95);
+      ctx.font = '11px ui-monospace, monospace';
+      ctx.textAlign = 'center';
+      const tag = state === 'off' ? ' (off)' : state === 'pending' ? ' (opening)' : '';
+      ctx.fillText(`${d.label}${tag}`, cam.toScreenX(d.cx), cam.toScreenY(d.top) + 13);
+    });
+  }
+
+  /** A chevron drifting along the zone's wind or launch direction. */
+  private drawFlowArrow(d: ZoneDraw, now: number): void {
+    const ctx = this.ctx;
+    const cam = this.camera;
+    const travel = ((now * 1.5) % 1) - 0.5; // −0.5 … 0.5 m along the flow
+    const x = d.cx + d.fx * travel;
+    const y = d.cy + d.fy * travel;
+    const size = 0.45;
+    // a "›" whose tip points along (fx, fy); screen y points down
+    const tx = cam.toScreenX(x + d.fx * size);
+    const ty = cam.toScreenY(y + d.fy * size);
+    const bx = x - d.fx * size;
+    const by = y - d.fy * size;
+    const px = -d.fy * size;
+    const py = d.fx * size;
+    ctx.strokeStyle = rgba(d.color, 0.9);
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(cam.toScreenX(bx + px), cam.toScreenY(by + py));
+    ctx.lineTo(tx, ty);
+    ctx.lineTo(cam.toScreenX(bx - px), cam.toScreenY(by - py));
+    ctx.stroke();
   }
 
   private capsulePath(x: number, y0: number, y1: number, r: number): void {
@@ -471,6 +630,26 @@ export class Renderer {
         ctx.fill();
       }
     }
+    // dash trails: a fading band from the start along the dash, ~ its length (14 m/s × 8 ticks ≈ 1.9 m)
+    for (let i = this.dashes.length - 1; i >= 0; i--) {
+      const d = this.dashes[i]!;
+      d.age += dt;
+      if (d.age > 0.3) {
+        this.dashes.splice(i, 1);
+        continue;
+      }
+      const a = 1 - d.age / 0.3;
+      const [ux, uy] = DASH_UNIT[d.dir] ?? DASH_UNIT[0]!;
+      const len = 1.9 * Math.min(1, d.age / 0.13);
+      ctx.strokeStyle = d.local ? `rgba(88,166,255,${0.6 * a})` : `rgba(240,136,62,${0.6 * a})`;
+      ctx.lineWidth = 0.5 * cam.ppm;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(cam.toScreenX(d.x), cam.toScreenY(d.y + 0.75));
+      ctx.lineTo(cam.toScreenX(d.x + ux * len), cam.toScreenY(d.y + 0.75 + uy * len));
+      ctx.stroke();
+      ctx.lineCap = 'butt';
+    }
     for (let i = this.bursts.length - 1; i >= 0; i--) {
       const b = this.bursts[i]!;
       b.age += dt;
@@ -616,6 +795,10 @@ export class Renderer {
       `${p.grounded ? 'grounded' : 'airborne'}${p.crouched ? ' · crouched' : ''}${p.jetting ? ' · jetting' : ''}`,
     ];
     if (frame.recording !== undefined) lines.push(`● REC ${(frame.recording / 60).toFixed(1)} s`);
+    if (frame.mapEvent) {
+      const e = frame.mapEvent;
+      lines.push(`map event: ${e.name} · ${e.phase === 'warning' ? 'starts in' : 'ends in'} ${e.secondsLeft.toFixed(1)} s`);
+    }
     if (opts.showNet && frame.net) {
       const n = frame.net;
       lines.push(`net: ${n.status}`, `rtt ${n.rttMs.toFixed(0)} ms · snaps ${n.snapshotsPerSec.toFixed(0)}/s · interp ${n.interpDelayMs} ms`, `in ${n.kbInPerSec.toFixed(1)} KB/s · out ${n.kbOutPerSec.toFixed(1)} KB/s`);

@@ -3,8 +3,9 @@
  * score, results + Play again. Home, rooms, settings and the production HUD (hud/) come next.
  */
 import { MatchPhase, TICK_RATE, type MatchResults } from '@military-forge/sim';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type CSSProperties } from 'react';
 import { useStore } from 'zustand';
+import type { MapEventBanner as MapEventBannerView } from './mapEventBanner';
 import { END_REASON, formatClock, kdRatio, ordinal, placeholderXp, type MatchView } from './matchView';
 import { closeRoute, runCleanup, type ShellActions, type ShellRoute, type ShellStore } from './store';
 
@@ -12,8 +13,17 @@ export function App({ store }: { store: ShellStore }) {
   const match = useStore(store, (s) => s.match);
   const route = useStore(store, (s) => s.route);
   const actions = useStore(store, (s) => s.actions);
+  const banner = useMapEventBanner(store);
   if (route) return <RouteView route={route} />;
-  if (!match) return null;
+  return (
+    <>
+      {banner && <MapEventBanner key={banner.key} banner={banner} />}
+      {match && <MatchScreen match={match} actions={actions} />}
+    </>
+  );
+}
+
+function MatchScreen({ match, actions }: { match: MatchView; actions: ShellActions }) {
   switch (match.phase) {
     case MatchPhase.Waiting:
       return <Lobby view={match} actions={actions} />;
@@ -24,6 +34,28 @@ export function App({ store }: { store: ShellStore }) {
     default:
       return match.results ? <Results view={match} results={match.results} actions={actions} /> : null;
   }
+}
+
+/** The HUD banner hook (docs/02 §20.7): the map event to announce, null when none. */
+export function useMapEventBanner(store: ShellStore): MapEventBannerView | null {
+  return useStore(store, (s) => s.mapEvent);
+}
+
+/** "EMP STORM in 3 · Jetpacks offline", then "EMP STORM · Jetpacks offline · 6 s". */
+export function MapEventBanner({ banner }: { banner: MapEventBannerView }) {
+  const warning = banner.phase === 'warning';
+  return (
+    <div className={`mm-event${warning ? ' mm-event-warning' : ''}`} style={{ '--mm-event': banner.color } as CSSProperties} role="status" aria-live="polite">
+      <div className="mm-event-title">
+        {banner.title}
+        {warning && <span className="mm-event-in"> in {banner.seconds}</span>}
+      </div>
+      <div className="mm-event-line">
+        {banner.line}
+        {!warning && <span className="mm-dim"> · {banner.seconds} s</span>}
+      </div>
+    </div>
+  );
 }
 
 function RouteView({ route }: { route: ShellRoute }) {

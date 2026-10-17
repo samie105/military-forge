@@ -22,7 +22,28 @@ const KEY_BINDINGS: Record<string, number> = {
   KeyG: Btn.Grenade,
   KeyE: Btn.Interact,
   KeyV: Btn.Melee,
+  ShiftLeft: Btn.Dash,
+  ShiftRight: Btn.Dash,
 };
+
+/**
+ * Direction keys a double-tap dash listens to. Not W/up: tapping the jet key is how you feather
+ * the jetpack, so a double-tap there would fire dashes mid-hover; dash up with Shift + W.
+ */
+const DIRECTION_KEYS: Record<string, string> = {
+  KeyA: 'left',
+  ArrowLeft: 'left',
+  KeyD: 'right',
+  ArrowRight: 'right',
+  KeyS: 'down',
+  ArrowDown: 'down',
+};
+
+/** Two presses of the same direction within this many ms dash (when double-tap dash is on). */
+export const DOUBLE_TAP_MS = 250;
+
+/** The buttons that give a dash its direction (docs/02 §21). */
+const DASH_DIRECTION_BITS = Btn.Left | Btn.Right | Btn.Jet | Btn.Down;
 
 /** Keys whose browser default (scrolling, focus moves) must not fire during play. */
 const PREVENT_DEFAULT = new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab']);
@@ -35,12 +56,36 @@ export class InputSampler {
   mouseY = 0;
   private wheelSteps = 0;
   private readonly pressedOnce = new Set<string>();
+  /**
+   * Dash (docs/02 §21) as an alternative binding: double-tap a direction (the held direction gives
+   * the dash its way, as with Shift). Off by default; the settings screen turns it on.
+   */
+  doubleTapDash = false;
+  /** a dash press seen since the last sample: a tap shorter than a tick still dashes */
+  private dashLatched = false;
+  /** the direction buttons held (or double-tapped) at that press, kept for its sample */
+  private dashLatchedDir = 0;
+  private lastDirection = '';
+  private lastDirectionAt = -Infinity;
 
   constructor(private readonly target: HTMLElement) {
     window.addEventListener('keydown', (e) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (PREVENT_DEFAULT.has(e.code)) e.preventDefault();
-      if (!e.repeat) this.pressedOnce.add(e.code);
+      if (!e.repeat) {
+        this.pressedOnce.add(e.code);
+        if (KEY_BINDINGS[e.code] === Btn.Dash) this.latchDash(0);
+        const dir = DIRECTION_KEYS[e.code];
+        if (dir) {
+          if (this.doubleTapDash && dir === this.lastDirection && e.timeStamp - this.lastDirectionAt <= DOUBLE_TAP_MS) {
+            this.latchDash(KEY_BINDINGS[e.code] ?? 0);
+            this.lastDirection = '';
+          } else {
+            this.lastDirection = dir;
+            this.lastDirectionAt = e.timeStamp;
+          }
+        }
+      }
       this.keys.add(e.code);
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
@@ -66,6 +111,14 @@ export class InputSampler {
       },
       { passive: false },
     );
+  }
+
+  /** Remembers a dash press and the direction held with it until the next sample. */
+  private latchDash(extraDirection: number): void {
+    let dir = extraDirection;
+    for (const code of this.keys) dir |= (KEY_BINDINGS[code] ?? 0) & DASH_DIRECTION_BITS;
+    this.dashLatched = true;
+    this.dashLatchedDir = dir;
   }
 
   releaseAll(): void {
@@ -98,6 +151,12 @@ export class InputSampler {
   sample(camera: Camera, sx: number, sy: number, out: Input = createInput()): Input {
     let buttons = 0;
     for (const code of this.keys) buttons |= KEY_BINDINGS[code] ?? 0;
+    if (this.dashLatched) {
+      // held for at least one sample (with the direction it was pressed with), so the sim sees the
+      // press even for a tap shorter than a tick
+      buttons |= Btn.Dash | this.dashLatchedDir;
+      this.dashLatched = false;
+    }
     if (this.mouseButtons & 1) buttons |= Btn.Fire;
     if (this.mouseButtons & 4) buttons |= Btn.Fire2;
     const m = this.mouseWorld(camera);

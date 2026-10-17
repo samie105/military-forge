@@ -130,7 +130,15 @@ export class GrenadeTracker {
   private readonly spare: GrenadeTrack[] = [];
   private nextSeed = 1;
 
-  constructor(private readonly world: CollisionWorld) {}
+  /** the map's collision (ground contact); `setWorld` on a map change */
+  constructor(private world: CollisionWorld) {}
+
+  /** A new map: its collision, and no grenades carried over. */
+  setWorld(world: CollisionWorld): void {
+    this.world = world;
+    for (const t of this.tracks) this.spare.push(t);
+    this.tracks.length = 0;
+  }
 
   /**
    * Matches this frame's samples to tracks, then advances each track's motion state by `dt`.

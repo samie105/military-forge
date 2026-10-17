@@ -1,5 +1,5 @@
-import { movementTestMap } from '@military-forge/content';
-import { CollisionWorld, type SimEvent } from '@military-forge/sim';
+import { fluxLabMap, movementTestMap } from '@military-forge/content';
+import { CollisionWorld, createRayHit, type SimEvent } from '@military-forge/sim';
 import { DataTexture, DirectionalLight, HemisphereLight, Scene } from 'three';
 import { describe, expect, it } from 'vitest';
 import { Camera } from '../../camera';
@@ -15,8 +15,9 @@ function system(preset = PRESETS.low) {
   camera.resize(1280, 720);
   camera.x = 150;
   camera.y = 3;
-  const vfx = new Vfx(scene, new CollisionWorld(movementTestMap), camera, { hemi: new HemisphereLight(), sun: new DirectionalLight() }, new DataTexture(new Uint8Array([128]), 1, 1), preset);
-  return { vfx, scene };
+  const lights = { hemi: new HemisphereLight(), sun: new DirectionalLight() };
+  const vfx = new Vfx(scene, new CollisionWorld(movementTestMap), camera, lights, new DataTexture(new Uint8Array([128]), 1, 1), preset);
+  return { vfx, scene, lights };
 }
 
 const frame = (over: Partial<Frame> = {}): Frame => ({ tick: 1, localId: 0, players: [], grenades: [], ...over });
@@ -78,6 +79,32 @@ describe('Vfx', () => {
       if (o.name.startsWith('vfx') || o.name === 'grenades') if (o.visible) shown.push(o.name);
     });
     expect(shown).toEqual([]);
+  });
+
+  it('a new map (setMap): the old map’s effects go, blasts hit its world, the blast light flashes from its levels', () => {
+    const { vfx, lights } = system();
+    vfx.onEvents([blast]);
+    vfx.update(frame({ grenades: [{ x: 150, y: 4, fuse: 120 }] }), 1 / 60);
+    expect(vfx.decals.count).toBe(2);
+    expect(vfx.grenades.tracker.tracks.length).toBe(1);
+    // Renderer3D.setMap sets the new map's lighting, then hands over its world
+    lights.hemi.intensity = 0.4;
+    lights.sun.intensity = 0.7;
+    const world = new CollisionWorld(fluxLabMap);
+    expect(world.raycast(blast.x, blast.y + 0.05, 0, -1, 2, 0, createRayHit())).toBe(false); // nothing under the blast there
+    vfx.setMap(world);
+    expect(vfx.context.world).toBe(world);
+    expect(vfx.particles).toBe(0);
+    expect(vfx.grenades.tracker.tracks.length).toBe(0);
+    expect(vfx.shake.trauma).toBe(0);
+    // half a second: past the flash rate limit, which a map swap doesn't reset
+    for (let i = 0; i < 30; i++) vfx.update(frame(), 1 / 60);
+    expect(lights.hemi.intensity).toBeCloseTo(0.4);
+    expect(lights.sun.intensity).toBeCloseTo(0.7);
+    vfx.onEvents([blast]);
+    vfx.update(frame(), 1 / 60);
+    expect(vfx.decals.count).toBe(0); // a blast in the air: no scorch
+    expect(lights.hemi.intensity).toBeGreaterThan(0.4 * 1.5);
   });
 
   it('High gets the pooled blast light; Low and Medium never add a light to the scene', () => {

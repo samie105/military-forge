@@ -170,6 +170,11 @@ export class GrenadeRenderer {
     }
   }
 
+  /** A new map (Vfx.setMap). */
+  setWorld(world: CollisionWorld): void {
+    this.tracker.setWorld(world);
+  }
+
   setModel(model: ThrowableModel): void {
     const old = this.model.geometry;
     this.model = model;

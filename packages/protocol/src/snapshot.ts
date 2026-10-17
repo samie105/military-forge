@@ -6,7 +6,8 @@
  *   u5 changed · { u5 id · u8 groupMask · groups }   players new or changed since the baseline
  *   u5 removed · { u5 id }                           in the baseline, now gone or out of view
  *   u7 grenades · { … }                              in view, full
- *   u8 events · { u3 tag · … }                       in view; gunfire/blasts outside it → SOUND
+ *   u8 events · { u3 tag · … }                       in view; gunfire/blasts outside it → SOUND;
+ *                                                    map events (v8) always
  *
  * The baseline is the newest snapshot the client acked (INPUT.ackSnapshotSeq). The server keeps
  * the last 32 it sent to each client (SnapshotBaselines), the client the last 64 it decoded
@@ -44,6 +45,8 @@ export interface SnapshotPlayer {
   jetting: boolean;
   dual: boolean;
   reloading: boolean;
+  /** in a dash burst (v8, docs/02 §21): the animation and the streak */
+  dashing: boolean;
   /** metres, exact (1/1024) */
   x: number;
   y: number;
@@ -137,6 +140,9 @@ const FLAG_CROUCHED = 8;
 const FLAG_JETTING = 16;
 const FLAG_DUAL = 32;
 const FLAG_RELOADING = 64;
+const FLAG_DASHING = 128;
+/** remote flags on the wire (v8: 8, with dashing) */
+const FLAG_BITS = 8;
 
 const G_POS = 1;
 const G_VEL = 2;
@@ -164,7 +170,8 @@ function captureRemote(p: PlayerState, out: Int32Array, o: number): void {
     (p.crouched ? FLAG_CROUCHED : 0) |
     (p.jetting ? FLAG_JETTING : 0) |
     (p.dual ? FLAG_DUAL : 0) |
-    (p.weapons[0].reloadTicks > 0 || p.weapons[1].reloadTicks > 0 ? FLAG_RELOADING : 0);
+    (p.weapons[0].reloadTicks > 0 || p.weapons[1].reloadTicks > 0 ? FLAG_RELOADING : 0) |
+    (p.dashTicks > 0 ? FLAG_DASHING : 0);
   out[o + F_X] = clamp(pos(p.x), -(1 << 23), (1 << 23) - 1);
   out[o + F_Y] = clamp(pos(p.y), -(1 << 23), (1 << 23) - 1);
   out[o + F_VX] = clamp(Math.round(p.vx * REMOTE_VEL_INV), -2048, 2047);
@@ -202,7 +209,7 @@ function writeRemote(w: BitWriter, cur: Int32Array, c: number, mask: number, bas
   }
   if (mask & G_VEL) w.signed(cur[c + F_VX]!, 12).signed(cur[c + F_VY]!, 12);
   if (mask & G_AIM) w.bits(cur[c + F_AIM]!, 10);
-  if (mask & G_STATE) w.bits(cur[c + F_FLAGS]!, 7);
+  if (mask & G_STATE) w.bits(cur[c + F_FLAGS]!, FLAG_BITS);
   if (mask & G_HP) w.bits(cur[c + F_HP]!, 8);
   if (mask & G_WEAPON) w.bits(cur[c + F_ACTIVE]!, 1).bits(cur[c + F_W0]!, 6).bits(cur[c + F_W1]!, 6);
   if (mask & G_SCORE) w.signed(cur[c + F_KILLS]!, 16).bits(cur[c + F_DEATHS]!, 16);
@@ -225,7 +232,7 @@ function readRemote(r: BitReader, out: Int32Array, o: number, mask: number): voi
     out[o + F_VY] = r.signed(12);
   }
   if (mask & G_AIM) out[o + F_AIM] = r.bits(10);
-  if (mask & G_STATE) out[o + F_FLAGS] = r.bits(7);
+  if (mask & G_STATE) out[o + F_FLAGS] = r.bits(FLAG_BITS);
   if (mask & G_HP) out[o + F_HP] = r.bits(8);
   if (mask & G_WEAPON) {
     out[o + F_ACTIVE] = r.bits(1);
@@ -250,6 +257,7 @@ function toSnapshotPlayer(id: number, s: Int32Array, o: number): SnapshotPlayer 
     jetting: (flags & FLAG_JETTING) !== 0,
     dual: (flags & FLAG_DUAL) !== 0,
     reloading: (flags & FLAG_RELOADING) !== 0,
+    dashing: (flags & FLAG_DASHING) !== 0,
     x: s[o + F_X]! / POS_INV,
     y: s[o + F_Y]! / POS_INV,
     vx: s[o + F_VX]! / REMOTE_VEL_INV,
@@ -272,6 +280,22 @@ const EVENT_DEATH = 2;
 const EVENT_HIT = 3;
 const EVENT_SPAWN = 4;
 const EVENT_SOUND = 5;
+/**
+ * A map event's warning, start or end (v8, docs/02 §20.7): u5 event · u2 phase · u16 occurrence
+ * (low bits) · u8 zone (255 = all) · u1 flip · u16 ticks left.
+ */
+const EVENT_MAP = 6;
+const NO_ZONE = 255;
+/**
+ * Tag 7 (v8) is the escape to extended events, so the 3-bit tag never runs out: u4 kind, then the
+ * kind's fields. New event kinds take the next ext kind. There is no length prefix: a client can't
+ * skip a kind it doesn't know, so every new ext kind is a PROTOCOL_VERSION bump (claim it in the
+ * protocol registry first).
+ */
+const EVENT_EXT = 7;
+const EXT_BITS = 4;
+/** a dash started (docs/02 §21): u5 player · i24 x · i24 y · u3 direction (8-way, 0 = right, CCW) */
+const EXT_DASH = 0;
 /** SOUND positions: 4 m grid */
 const SOUND_CELL = 4;
 const GRENADE_SOURCE = 62;
@@ -373,6 +397,18 @@ function writeEvent(w: BitWriter, e: SimEvent): void {
     case 'spawn':
       w.bits(EVENT_SPAWN, 3).unsigned(pid(e.player), 5);
       break;
+    case 'dash':
+      w.bits(EVENT_EXT, 3).bits(EXT_DASH, EXT_BITS).unsigned(pid(e.player), 5).signed(pos(e.x), 24).signed(pos(e.y), 24).unsigned(e.dir, 3);
+      break;
+    case 'mapEvent':
+      w.bits(EVENT_MAP, 3)
+        .unsigned(e.event, 5)
+        .unsigned(e.phase, 2)
+        .bits(e.occurrence & 0xffff, 16)
+        .unsigned(e.zone < 0 ? NO_ZONE : e.zone, 8)
+        .bool(e.flip)
+        .unsigned(e.ticks, 16);
+      break;
     case 'throw':
       break;
   }
@@ -403,6 +439,19 @@ function readEvent(r: BitReader): SnapshotEvent {
       return { type: 'spawn', player: unPid(r.bits(5)) };
     case EVENT_SOUND:
       return { type: 'sound', kind: r.bits(1) === 0 ? 'shot' : 'explosion', source: r.bits(6), x: r.signed(8) * SOUND_CELL, y: r.signed(8) * SOUND_CELL };
+    case EVENT_EXT: {
+      const ext = r.bits(EXT_BITS);
+      if (ext !== EXT_DASH) throw new DecodeError(`unknown extended event kind ${ext}`);
+      return { type: 'dash', player: unPid(r.bits(5)), x: r.signed(24) / POS_INV, y: r.signed(24) / POS_INV, dir: r.bits(3) };
+    }
+    case EVENT_MAP: {
+      const event = r.bits(5);
+      const phase = r.bits(2);
+      if (phase > 2) throw new DecodeError(`map event phase ${phase}`);
+      const occurrence = r.bits(16);
+      const zone = r.bits(8);
+      return { type: 'mapEvent', event, phase: phase as 0 | 1 | 2, occurrence, zone: zone === NO_ZONE ? -1 : zone, flip: r.bool(), ticks: r.bits(16) };
+    }
     default:
       throw new DecodeError(`unknown event kind ${kind}`);
   }
@@ -661,7 +710,12 @@ export class SnapshotEncoder {
         return e.target >= 0 && e.target < MAX_PLAYERS && this.present[e.target] && inRect(view, this.xs[e.target]!, this.ys[e.target]!) ? 1 : 0;
       case 'death':
       case 'spawn':
+      case 'mapEvent':
         return 1;
+      case 'dash':
+        // your own dash is drawn from prediction; others' only when you can see them
+        if (viewer >= 0 && e.player === viewer) return 0;
+        return view === null || this.seen(e.player) ? 1 : 0;
     }
   }
 }

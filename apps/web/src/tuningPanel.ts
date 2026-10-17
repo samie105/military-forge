@@ -51,6 +51,16 @@ const GROUPS: { title: string; fields: Field[] }[] = [
     ],
   },
   {
+    title: 'Dash',
+    fields: [
+      { key: 'dashSpeed', min: 4, max: 30, step: 0.5 },
+      { key: 'dashBurstTicks', min: 1, max: 30, step: 1 },
+      { key: 'dashCooldown', min: 0, max: 4, step: 0.05 },
+      { key: 'dashFuelCost', min: 0, max: 50, step: 1 },
+      { key: 'dashExitUp', min: 0, max: 10, step: 0.1 },
+    ],
+  },
+  {
     title: 'Fuel',
     fields: [
       { key: 'fuelMax', min: 10, max: 300, step: 1 },

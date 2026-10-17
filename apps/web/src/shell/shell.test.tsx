@@ -1,7 +1,8 @@
 import { Game, MatchEndReason, MatchPhase, Match, ticks, type MatchResults } from '@military-forge/sim';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { Countdown, Lobby, MatchStatus, Results } from './App';
+import { Countdown, Lobby, MapEventBanner, MatchStatus, Results } from './App';
+import { bannerOf, sameBanner } from './mapEventBanner';
 import { runCleanup } from './store';
 import { localMatchRules } from './localMatch';
 import { formatClock, matchView, ordinal, placeholderXp, sameView, type MatchView } from './matchView';
@@ -194,5 +195,42 @@ describe('routes', () => {
     runCleanup(undefined);
     expect(fn).toHaveBeenCalledOnce();
     expect(handle.unmount).toHaveBeenCalledOnce();
+  });
+});
+
+describe('map-event banner (docs/02 §20.7)', () => {
+  const view = (over: Partial<Parameters<typeof bannerOf>[0] & object> = {}) => ({
+    id: 'emp',
+    kind: 'emp',
+    name: 'EMP STORM',
+    description: 'Jetpacks offline',
+    phase: 'warning' as const,
+    secondsLeft: 2.4,
+    progress: 0.4,
+    color: 0xd2a8ff,
+    zones: [],
+    occurrence: 3,
+    bulletRangeMul: 1,
+    ...over,
+  });
+
+  it('counts whole seconds and changes only when its text does', () => {
+    const a = bannerOf(view())!;
+    expect(a).toMatchObject({ key: '3:warning', title: 'EMP STORM', seconds: 3, color: '#d2a8ff' });
+    expect(sameBanner(a, bannerOf(view({ secondsLeft: 2.1, progress: 0.7 })))).toBe(true);
+    expect(sameBanner(a, bannerOf(view({ secondsLeft: 1.9 })))).toBe(false);
+    expect(sameBanner(a, bannerOf(view({ phase: 'active' })))).toBe(false);
+    expect(bannerOf(null)).toBeNull();
+    expect(sameBanner(null, null)).toBe(true);
+  });
+
+  it('warns "in N", then shows the line and the time left', () => {
+    const warning = renderToStaticMarkup(<MapEventBanner banner={bannerOf(view())!} />);
+    expect(warning).toMatch(/class="mm-event mm-event-warning"/);
+    expect(warning).toMatch(/EMP STORM.* in 3/);
+    expect(warning).toContain('--mm-event:#d2a8ff');
+    const active = renderToStaticMarkup(<MapEventBanner banner={bannerOf(view({ phase: 'active', secondsLeft: 6 }))!} />);
+    expect(active).toMatch(/Jetpacks offline.* · 6 s/);
+    expect(active).not.toContain('mm-event-warning');
   });
 });

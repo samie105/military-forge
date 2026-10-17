@@ -124,3 +124,32 @@
   .mm-countdown-n { animation: mm-pop 0.6s ease-out; }
   @keyframes mm-pop { from { transform: scale(1.25); opacity: 0.6; } 30% { transform: scale(1); opacity: 1; } }
 }
+
+/* Map-event banner (docs/02 §20.7): under the match clock, in the event kind's colour. */
+.mm-event {
+  position: absolute;
+  top: 104px;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 260px;
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 8px 18px 9px;
+  text-align: center;
+  background: var(--mm-bg);
+  border: 1px solid var(--mm-event, var(--mm-line));
+  border-radius: 10px;
+  box-shadow: 0 0 24px color-mix(in srgb, var(--mm-event, #000) 35%, transparent);
+  animation: mm-event-in 0.35s ease-out;
+}
+.mm-event-title { font: 800 18px/1.2 system-ui, sans-serif; letter-spacing: 0.08em; color: var(--mm-event, var(--mm-text)); }
+.mm-event-in { color: var(--mm-text); font-weight: 600; letter-spacing: normal; }
+.mm-event-line { font-size: 13px; }
+.mm-event-warning .mm-event-title { animation: mm-event-pulse 1s ease-in-out infinite; }
+@keyframes mm-event-in {
+  from { opacity: 0; transform: translate(-50%, -8px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+@keyframes mm-event-pulse { 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) {
+  .mm-event, .mm-event-warning .mm-event-title { animation: none; }
+}

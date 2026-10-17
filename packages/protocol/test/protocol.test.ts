@@ -31,6 +31,7 @@ import {
   encodeSnapshot,
   encodeTuning,
   encodeWelcome,
+  decodeFullSnapshot,
   isUnreliableMessage,
   localStatesEqual,
   type SnapshotMsg,
@@ -398,7 +399,25 @@ describe('messages', () => {
     expect(hits).toEqual([expect.objectContaining({ attacker: -1, target: a.id }), expect.objectContaining({ attacker: b.id, target: obs.id })]);
   });
 
-  it('CONTENT_HASH covers tuning, weapons, grenades, hitboxes and maps, not key order', () => {
+  it('map events (v8) reach every client in full, whatever its view', () => {
+    const game = new Game({ mapId: 'mechanics-test', seed: 4 });
+    const me = game.addPlayer('me');
+    const events: SimEvent[] = [];
+    while (game.tick < 60 * 40) {
+      game.step([]);
+      events.push(...game.events);
+    }
+    const sent = events.filter((e) => e.type === 'mapEvent');
+    expect(sent.length).toBeGreaterThan(12); // the timeline's warnings, starts and ends so far
+    const far: ViewRect = { minX: 1000, minY: 1000, maxX: 1010, maxY: 1010 };
+    const snap = decodeMessage(encodeSnapshot(game, 3, events, { local: me, view: far })) as SnapshotMsg;
+    expect(snap.events.filter((e) => e.type === 'mapEvent')).toEqual(sent);
+    const pocket = sent.find((e) => e.type === 'mapEvent' && e.zone >= 0);
+    expect(pocket).toBeDefined(); // the pocket's picked zone survives the trip, and -1 (all) does too
+    expect(PROTOCOL_VERSION).toBe(8);
+  });
+
+  it('CONTENT_HASH covers tuning, weapons, grenades, hitboxes, maps and zone/event defaults, not key order', () => {
     expect(CONTENT_HASH).toBe(contentHashOf(HASHED_CONTENT));
     const changed = (edit: (c: Mutable) => void) => {
       const copy = JSON.parse(JSON.stringify(HASHED_CONTENT)) as Mutable;
@@ -411,6 +430,8 @@ describe('messages', () => {
       grenades: { fuse: number }[];
       hitboxes: { standing: { head: { r: number } } };
       maps: Record<string, { solids: { points: number[] }[] }>;
+      zoneDefaults: Record<string, { gravityMul?: number }>;
+      eventDefaults: Record<string, { duration?: number }>;
     };
     expect(changed(() => {})).toBe(CONTENT_HASH);
     expect(changed((c) => (c.tuning.walkMax! += 0.5))).not.toBe(CONTENT_HASH);
@@ -418,6 +439,8 @@ describe('messages', () => {
     expect(changed((c) => (c.grenades[0]!.fuse += 0.1))).not.toBe(CONTENT_HASH);
     expect(changed((c) => (c.hitboxes.standing.head.r += 0.01))).not.toBe(CONTENT_HASH);
     expect(changed((c) => (Object.values(c.maps)[0]!.solids[0]!.points[0]! += 0.5))).not.toBe(CONTENT_HASH);
+    expect(changed((c) => (c.zoneDefaults.lowG!.gravityMul! += 0.05))).not.toBe(CONTENT_HASH);
+    expect(changed((c) => (c.eventDefaults.emp!.duration! += 1))).not.toBe(CONTENT_HASH);
     // key order and undefined fields don't matter
     expect(contentHashOf({ a: 1, b: [2, { c: 3, d: undefined }] })).toBe(contentHashOf({ b: [2, { c: 3 }], a: 1 }));
     // what JSON would silently flatten is refused, not hashed as null or {}
@@ -548,6 +571,63 @@ describe('local-player block', () => {
     }
     expect(swingTicks).toBeGreaterThan(60);
     expect(deltas).toBeGreaterThan(500);
+  });
+
+  it('round-trips dash state (burst, direction, cooldown, the air dash), full and delta, on every tick', () => {
+    const game = new Game({ seed: 7 });
+    const me = game.addPlayer('me');
+    const inputs: ReturnType<typeof createInput>[] = [];
+    const enc = new SnapshotEncoder();
+    const baselines = new SnapshotBaselines();
+    const decoder = new SnapshotDecoder();
+    const ghost = new PlayerState(me.id);
+    // dash right, up-left, then jet and dash again in the air, down-dash, and presses during the cooldown
+    const script = [Btn.Dash | Btn.Right, Btn.Right, Btn.Dash | Btn.Jet | Btn.Left, Btn.Jet, Btn.Jet, Btn.Dash | Btn.Right, Btn.Dash | Btn.Down, 0, Btn.Dash, 0];
+    let burstTicks = 0;
+    let airDashes = 0;
+    for (let t = 0; t < 900; t++) {
+      inputs[me.id] = { ...createInput(), buttons: script[Math.floor(t / 23) % script.length]! & (t % 23 < 2 ? ~0 : ~Btn.Dash) };
+      game.step(inputs);
+      if (me.dashTicks > 0) burstTicks++;
+      if (me.airDashUsed && game.events.some((e) => e.type === 'dash')) airDashes++;
+      enc.begin(game, t + 1, game.events);
+      const server = captureLocalState(me, createLocalState());
+      const snap = decodeMessage(enc.encodeFor({ baselines: null, ackInputTick: t & 0xffff, inputBufferHealth: 1, local: me, view: null })) as SnapshotMsg;
+      expect(describeLocalDiff(snap.local!, server)).toBe('');
+      applyLocalState(snap.local!, ghost);
+      expect(describeLocalDiff(captureLocalState(ghost, createLocalState()), server)).toBe('');
+      const got = decoder.decode(enc.encodeFor({ baselines, ackInputTick: t & 0xffff, inputBufferHealth: 1, local: me, view: null }));
+      baselines.ack(got.seq);
+      expect(describeLocalDiff(got.local!, server)).toBe('');
+    }
+    expect(burstTicks).toBeGreaterThan(60);
+    expect(airDashes).toBeGreaterThan(2);
+  });
+
+  it('dashes reach other clients that can see the dasher, never the dasher itself; remotes carry a dashing flag', () => {
+    const game = new Game({ seed: 8 });
+    const a = game.addPlayer('a');
+    const b = game.addPlayer('b');
+    a.spawn(20, 0, game.tuning);
+    b.spawn(30, 0, game.tuning);
+    const inputs: ReturnType<typeof createInput>[] = [];
+    for (let t = 0; t < 5; t++) game.step(inputs);
+    inputs[a.id] = { ...createInput(), buttons: Btn.Dash | Btn.Jet | Btn.Right };
+    game.step(inputs);
+    const dash = game.events.find((e) => e.type === 'dash')!;
+    expect(dash).toMatchObject({ player: a.id, dir: 1 });
+    const near: ViewRect = { minX: 0, minY: -10, maxX: 50, maxY: 20 };
+    const far: ViewRect = { minX: 500, minY: -10, maxX: 550, maxY: 20 };
+    const enc = new SnapshotEncoder();
+    enc.begin(game, 1, game.events);
+    const forB = decodeFullSnapshot(enc.encodeFor({ baselines: null, ackInputTick: 0, inputBufferHealth: 1, local: b, view: near }));
+    expect(forB.events.filter((e) => e.type === 'dash')).toEqual([dash]);
+    expect(forB.players.find((p) => p.id === a.id)!.dashing).toBe(true);
+    expect(forB.players.find((p) => p.id === b.id)!.dashing).toBe(false);
+    const forA = decodeFullSnapshot(enc.encodeFor({ baselines: null, ackInputTick: 0, inputBufferHealth: 1, local: a, view: near }));
+    expect(forA.events.some((e) => e.type === 'dash')).toBe(false); // drawn from its own prediction
+    const blind = decodeFullSnapshot(enc.encodeFor({ baselines: null, ackInputTick: 0, inputBufferHealth: 1, local: b, view: far }));
+    expect(blind.events.some((e) => e.type === 'dash')).toBe(false);
   });
 
   it('CONTENT_HASH covers the arsenal weapons', () => {
