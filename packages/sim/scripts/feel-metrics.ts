@@ -4,8 +4,8 @@
  * Run: pnpm --filter @military-forge/sim feel        (sweep for better values: pnpm --filter @military-forge/sim tune)
  */
 import { weapons } from '@military-forge/content';
-import { measureGrenade, measureMovement, measureWeapon, type MovementMetrics } from './feel-lib';
-import { MOVEMENT_TARGETS, WEAPON_TARGETS } from './feel-targets';
+import { measureBlast, measureGrenade, measureMovement, measureWeapon, type MovementMetrics } from './feel-lib';
+import { BLAST_TARGETS, MOVEMENT_TARGETS, WEAPON_TARGETS } from './feel-targets';
 
 const rows: [string, string, string][] = [];
 const mark = (ok: boolean) => (ok ? '✓' : '✗ off target');
@@ -33,6 +33,11 @@ for (const w of weapons) {
   }
 }
 
+for (const t of BLAST_TARGETS) {
+  const b = measureBlast(t.distance);
+  const ok = b.flew >= t.flewMin && b.flew <= t.flewMax && b.peak >= t.peakMin;
+  rows.push([`Frag ${t.distance} m away: flight / peak (m)`, `${b.flew.toFixed(1)} / ${b.peak.toFixed(1)} · ${b.hpLeft.toFixed(0)} HP left`, `${mark(ok)}  (target ${t.flewMin}–${t.flewMax} m, peak ≥ ${t.peakMin}: ${t.why})`]);
+}
 const g = measureGrenade();
 rows.push(['Frag @45°: first bounce / detonation (m)', `${g.firstBounce.toFixed(1)} / ${g.detonation.toFixed(1)}`, '']);
 

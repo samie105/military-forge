@@ -35,6 +35,8 @@ const GROUPS: { title: string; fields: Field[] }[] = [
       { key: 'airAccel', min: 0, max: 80, step: 1 },
       { key: 'airMaxX', min: 1, max: 15, step: 0.1 },
       { key: 'airDragX', min: 0, max: 10, step: 0.1 },
+      { key: 'launchSpeedX', min: 6, max: 30, step: 0.5 },
+      { key: 'launchDragX', min: 0, max: 10, step: 0.1 },
     ],
   },
   {

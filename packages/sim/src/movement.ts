@@ -421,7 +421,8 @@ export function stepMovement(world: CollisionWorld, p: PlayerState, t: Tuning): 
     const underCap = Math.abs(p.vx) < cap;
     const steeringAgainst = ix !== 0 && Math.sign(p.vx) !== ix;
     if (ix !== 0 && (underCap || steeringAgainst)) p.vx = approach(p.vx, ix * cap, t.airAccel * DT);
-    if (Math.abs(p.vx) > cap) p.vx *= simExp(-t.airDragX * DT); // bleed impulse excess
+    // bleed impulse excess; blast launches (beyond any lunge or jet speed) bleed slowly so they fly far
+    if (Math.abs(p.vx) > cap) p.vx *= simExp(-(Math.abs(p.vx) > t.launchSpeedX ? t.launchDragX : t.airDragX) * DT);
   }
   // melee lunge (docs/02 §12): a 0.12 s burst of +lunge m/s along the facing. The first tick adds
   // it, up to a ceiling of the lunge speed (on top of the cap when running that way), so repeated

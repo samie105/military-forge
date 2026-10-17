@@ -18,6 +18,10 @@ export interface Tuning {
   airAccel: number;
   airMaxX: number;
   airDragX: number;
+  /** above this horizontal speed (m/s) a player is being launched by a blast and bleeds speed at launchDragX instead */
+  launchSpeedX: number;
+  /** horizontal drag (1/s) on a launch: low, so blasts throw players far; melee lunges never get this fast */
+  launchDragX: number;
 
   // Jetpack
   jetThrust: number;
@@ -76,6 +80,8 @@ export const defaultTuning: Readonly<Tuning> = Object.freeze({
   airAccel: 20,
   airMaxX: 6.0,
   airDragX: 1.5,
+  launchSpeedX: 12,
+  launchDragX: 0.3,
 
   jetThrust: 38,
   jetKick: 1.35,
@@ -97,7 +103,7 @@ export const defaultTuning: Readonly<Tuning> = Object.freeze({
   groundSnap: 0.12,
   ceilingBonkVxMul: 0.7,
   cornerCorrection: 0.12,
-  knockbackCap: 18,
+  knockbackCap: 26,
 
   healthMax: 100,
   healthRegen: 6,

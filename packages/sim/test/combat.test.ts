@@ -208,6 +208,54 @@ describe('frag grenade', () => {
     expect(p.alive).toBe(true);
     expect(100 - p.hp).toBeCloseTo(110 * FRAG.explosion.selfDamageMul, 0);
   });
+
+  /** Sets off a frag at (x, y) owned by the shooter, then follows `target` until it lands. */
+  function blastAndFollow(target: { x: number; y: number; grounded: boolean; alive: boolean; vx: number }, game: Game, owner: number, x: number, y: number) {
+    const g = game.allocGrenade()!;
+    Object.assign(g, { alive: true, owner, x, y, vx: 0, vy: 0, fuse: 1 / 60 });
+    const x0 = target.x;
+    let peak = target.y;
+    let t = 0;
+    for (; t < 300; t++) {
+      game.step([]);
+      peak = Math.max(peak, target.y);
+      if (t > 3 && target.grounded && Math.abs(target.vx) < 0.05) break;
+    }
+    return { flew: target.x - x0, peak, seconds: t / 60, alive: target.alive };
+  }
+
+  it('a ground-level blast launches a survivor in an arc, far from it (regression: 3.6 m shove along the floor)', () => {
+    const { game, p } = makeGame(flatMap([], [], 200));
+    placeOnGround(game, p, 5);
+    const target = dummyAt(game, 60);
+    hold(game, p, 0, 5);
+    const r = blastAndFollow(target, game, p.id, 58, 0.15); // 2 m to its left, on the floor
+    expect(r.alive).toBe(true);
+    expect(r.flew).toBeGreaterThan(12);
+    expect(r.peak).toBeGreaterThan(4);
+  });
+
+  it('a blast from above still pushes down, never up', () => {
+    const { game, p } = makeGame(flatMap([], [], 200));
+    placeOnGround(game, p, 5);
+    const target = dummyAt(game, 60);
+    hold(game, p, 0, 5);
+    const g = game.allocGrenade()!;
+    Object.assign(g, { alive: true, owner: p.id, x: 60.5, y: 3.6, vx: 0, vy: 0, fuse: 1 / 60 });
+    game.step([]);
+    expect(target.vy).toBeLessThanOrEqual(0);
+  });
+
+  it('melee lunges never reach blast-launch speed, so they keep the normal air drag', () => {
+    const { game, p } = makeGame(flatMap([], [], 400));
+    placeOnGround(game, p, 5);
+    let maxVx = 0;
+    for (let i = 0; i < 180; i++) {
+      hold(game, p, Btn.Right | (p.fuel > 0 ? Btn.Jet : 0) | (i % 2 === 0 ? Btn.Melee : 0), 1);
+      maxVx = Math.max(maxVx, Math.abs(p.vx));
+    }
+    expect(maxVx).toBeLessThan(T.launchSpeedX);
+  });
 });
 
 describe('determinism', () => {

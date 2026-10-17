@@ -192,10 +192,17 @@ export function explode(game: Game, x: number, y: number, owner: number, def: Ex
     const cy = q.y + (box.torso.y0 + box.torso.y1) / 2 - y + def.upBias;
     const cl = Math.sqrt(cx * cx + cy * cy);
     if (cl > 1e-6 && k > 0) {
-      const mag = def.impulse * k * (covered ? def.coveredImpulseMul : 1);
-      q.vx += (cx / cl) * mag;
-      q.vy += (cy / cl) * mag;
-      if (cy / cl > 0.2) q.grounded = false;
+      const mag = def.impulse * k * (covered ? def.coveredImpulseMul : 1) * (q.id === owner ? def.selfImpulseMul : 1);
+      let ux = cx / cl;
+      let uy = cy / cl;
+      // level or low blasts launch in an arc (minLift); blasts from above keep pushing down
+      if (uy > -0.2 && uy < def.minLift) {
+        uy = def.minLift;
+        ux = (ux < 0 ? -1 : 1) * Math.sqrt(1 - uy * uy);
+      }
+      q.vx += ux * mag;
+      q.vy += uy * mag;
+      if (uy > 0.2) q.grounded = false;
     }
     if (damage > 0) game.damage(q, damage, owner, DamageSource.Grenade, 2);
   }

@@ -29,6 +29,11 @@ export const MOVEMENT_TARGETS: Target[] = [
   { key: 'stop', label: 'Stop distance (m)', min: 0.1, max: 0.3, why: 'crisp stops' },
 ];
 
+export const BLAST_TARGETS: { distance: number; flewMin: number; flewMax: number; peakMin: number; why: string }[] = [
+  { distance: 2, flewMin: 12, flewMax: 22, peakMin: 4, why: 'a near miss throws you half a screen: blasts move fights (owner request)' },
+  { distance: 3, flewMin: 4, flewMax: 10, peakMin: 1.5, why: 'still a real launch at the edge of the damage radius' },
+];
+
 export interface WeaponTarget {
   label: string;
   /** weapon id (packages/content weapons.ts) */

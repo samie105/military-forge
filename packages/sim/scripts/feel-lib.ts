@@ -219,6 +219,31 @@ export function withSpread<T>(overrides: { hammer?: SpreadOverride; buzz?: Sprea
   }
 }
 
+export interface BlastMetrics {
+  /** horizontal flight of a standing survivor, take-off to landing (m) */
+  flew: number;
+  /** highest point of that flight (m) */
+  peak: number;
+  hpLeft: number;
+}
+
+/** A frag going off on the floor `distance` metres from a standing player (docs/02 §14 knockback). */
+export function measureBlast(distance: number, tuning: Partial<Tuning> = {}): BlastMetrics {
+  const { game, p } = setup(tuning);
+  const thrower = game.addPlayer('thrower');
+  thrower.x = p.x + 150;
+  const x0 = p.x;
+  const g = game.allocGrenade()!;
+  Object.assign(g, { alive: true, owner: thrower.id, x: x0 - distance, y: 0.15, vx: 0, vy: 0, fuse: 1 / 60 });
+  let peak = 0;
+  for (let t = 0; t < 600; t++) {
+    game.step([]);
+    peak = Math.max(peak, p.y);
+    if (t > 3 && p.grounded && Math.abs(p.vx) < 0.05) break;
+  }
+  return { flew: p.x - x0, peak, hpLeft: p.hp };
+}
+
 export interface GrenadeMetrics {
   firstBounce: number;
   detonation: number;

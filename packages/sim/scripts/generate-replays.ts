@@ -187,7 +187,7 @@ const scenarios: ReplayFile[] = [
 
 /**
  * A whole deathmatch through the Match lifecycle (match.ts), recorded by playing it: 4 humans and the
- * range dummies. P4 hunts the Strafer, P2 kills himself with two frags at his feet (−1), P1 and P3
+ * range dummies. P4 hunts the Strafer, P2 kills himself with two frags at his feet, the second after the first's grenade jump (−1), P1 and P3
  * stand still. Match 1 ends on the kill limit; P1–P3 vote for a rematch and P4 readies up late in
  * the lobby; in match 2 P4 stops after one kill, so it ends on the time limit; nobody votes, so the
  * room closes.
@@ -218,7 +218,8 @@ function matchScenario(): ReplayFile {
     const p4Hunting = match.number === 1 || (match.players[humans[3]!.id]?.score ?? 0) < 1;
     const inputs = [
       input(0, 0),
-      input(playing && match.number === 1 && (t === 30 || t === 150) ? Btn.Grenade : 0, -90),
+      // the first frag grenade-jumps P2 (~6 m up); the second, thrown after he lands, finishes him
+      input(playing && match.number === 1 && (t === 30 || t === 230) ? Btn.Grenade : 0, -90),
       input(0, 0),
       input(!playing ? 0 : t < 20 ? R : t % 40 === 10 && p4Hunting ? F : 0, 3),
     ];

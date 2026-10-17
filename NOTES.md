@@ -374,3 +374,26 @@ Caveat: real TCP loss needs kernel-level impairment (dummynet, root), so WebSock
 - **Ops (docs/09 §8):** one gateway per node routes by path (`WT_ROUTES=/wt/1=…/gs1.sock,…`); SIGTERM drains (sessions close with 1001 and resume); SIGHUP or a changed file reloads `WT_CERT`/`WT_KEY`; a self-signed certificate renews a day before its 13 days run out and the servers advertise the new hash. Bad settings (a certificate without a key, a non-https or query-carrying public URL) stop it at startup.
 - **Bridge hygiene:** the socket is 0600 in a private 0700 directory (dev default: `$XDG_RUNTIME_DIR` or the temp dir, `military-forge/wt-<port>.sock`, the same path in both programs); only a stale socket is ever removed; INFO is escaped on one side and validated on the other; one gateway at a time; a bridge that can't listen leaves the server WebSocket-only instead of failing to start.
 - **Tests:** `apps/wt-gateway/tests/gateway.rs` (real QUIC clients against the gateway code and a fake game server: oversized message, withheld credit, backlog, caps, routes, datagrams, lost server, drain) and `apps/game-server/test/gateway.e2e.test.ts`, the Rust↔TypeScript contract (the release binaries against the real bridge, with `wt-probe` as the browser; CI's wt-gateway job runs it). Against the pre-fix gateway that test fails: the oversized message closes the other player with 1001.
+
+## 17. Blast launches (17 Oct 2026, owner request)
+
+> "If a bomb explodes it throws the player beyond." Before this, a frag 2 m away did 93 damage but only shoved the survivor 3.6 m along the floor: the push was nearly horizontal, so ground friction stopped it within a few frames, and the air drag on extra speed (1.5/s) bled the rest.
+
+| Change | Before | After |
+|---|---|---|
+| Frag `impulse` (m/s at the centre) | 14 | **26** |
+| `minLift` (new): minimum upward share of a level or low blast's push | — | **0.7** (~45° arc; blasts from above still push down) |
+| `selfImpulseMul` (new): the thrower's own blast | — | **0.6** (a grenade jump, not a ledge skip) |
+| `knockbackCap` | 18 | **26** |
+| `launchSpeedX` / `launchDragX` (new) | — | **12 m/s / 0.3 per s**: above 12 m/s horizontal (only blasts get there) the flight bleeds slowly |
+
+| Frag on the floor, standing survivor | Before | After |
+|---|---|---|
+| 2 m away (93 damage) | 3.6 m shove, 0.5 m high | **16.0 m flight, 5.4 m high** |
+| 3 m away (59 damage) | 1.4 m | **6.6 m, 2.3 m high** |
+| at your own feet (~49 damage) | — | **5.9 m grenade jump** (straight up; full impulse would be 17 m, more than a full tank) |
+
+- **Lunges are unchanged.** Melee-lunge spam in the air already reaches 10.5 m/s (23.1 m in 3 s vs 18.3 m plain). That is below `launchSpeedX`, so it keeps the normal 1.5/s drag. A global drag cut would have pushed it to 26.3 m. A test pins this.
+- **Targets:** in `feel-targets.ts` as BLAST_TARGETS (2 m: 12–22 m flight, peak ≥ 4; 3 m: 4–10 m), and in the `feel` report.
+- **Goldens:** match-dm and range-combat re-recorded. The match-dm script now throws P2's second frag after his first frag's grenade jump lands, otherwise he'd be thrown clear of it.
+- **Prediction:** knockback is still not predicted (§9.4). Launches arrive as server corrections, smoothed like other knockback. The protocol and encodings are unchanged: the local block carries ±512 m/s and remote velocity carries ±32 m/s, both above the 26 m/s cap.
