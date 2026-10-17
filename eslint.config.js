@@ -16,7 +16,7 @@ const PURE_PACKAGES = [
 const nonDeterministicMath = ['random', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'atan2', 'exp', 'expm1', 'pow', 'log', 'log2', 'log10', 'cbrt', 'hypot'];
 
 export default defineConfig(
-  { ignores: ['**/dist/**', '**/node_modules/**', '**/.turbo/**', '**/vendor/**', 'docs/**'] },
+  { ignores: ['**/dist/**', '**/node_modules/**', '**/.turbo/**', '**/vendor/**', 'docs/**', '.worktrees/**'] },
   js.configs.recommended,
   tseslint.configs.recommended,
   {

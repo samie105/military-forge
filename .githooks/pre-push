@@ -1,0 +1,27 @@
+#!/bin/sh
+# Local stand-in for CI while GitHub Actions cannot run: lint + typecheck of the checkout you push
+# from (its working tree, so commit first).
+# Turned on per clone with `git config core.hooksPath .githooks` (shared by every worktree).
+# The full test suite still runs before each merge. Skip once with `git push --no-verify`.
+
+# Pushes that only delete branches have nothing to check.
+has_update=0
+while read -r _local_ref local_sha _remote_ref _remote_sha; do
+  case "$local_sha" in
+    0000000000000000000000000000000000000000) ;;
+    *) has_update=1 ;;
+  esac
+done
+[ "$has_update" = 0 ] && exit 0
+
+echo "pre-push: lint + typecheck (git push --no-verify to skip)"
+# --force: turbo's cache is shared across worktrees and can replay a stale result
+if ! pnpm lint >/dev/null 2>&1; then
+  echo "pre-push: lint failed. Run 'pnpm lint' to see why." >&2
+  exit 1
+fi
+if ! pnpm typecheck --force >/dev/null 2>&1; then
+  echo "pre-push: typecheck failed. Run 'pnpm typecheck --force' to see why." >&2
+  exit 1
+fi
+echo "pre-push: ok"

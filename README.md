@@ -77,3 +77,13 @@ docs/              the pre-production plan
 ```
 
 The same `packages/sim` runs in the browser, on the server and in tests. It is deterministic: identical inputs give bit-identical state on every JS engine (no `Math.sin`/`Math.random` in the sim, quantised state at tick end).
+
+## Local checks before pushing
+
+GitHub Actions can't run right now (an account billing lock), so this repo checks locally instead. Turn the hook on once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Then every `git push` first runs lint and typecheck (about 25 s) and stops on a failure. Use `git push --no-verify` to skip it once. The full suite (`pnpm check`) still runs before every merge.
