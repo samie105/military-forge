@@ -1,0 +1,31 @@
+{
+  "name": "military-forge",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.22.0",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "lint": "eslint .",
+    "check": "pnpm lint && pnpm typecheck && pnpm test",
+    "golden:update": "pnpm --filter @military-forge/sim golden:update",
+    "replays:generate": "pnpm --filter @military-forge/sim replays:generate",
+    "uws:fetch": "node scripts/fetch-uws.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.18.0",
+    "eslint": "^10.13.0",
+    "globals": "^17.13.0",
+    "tsx": "^4.23.15",
+    "turbo": "^2.11.8",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.71.2",
+    "vitest": "^5.0.5"
+  }
+}

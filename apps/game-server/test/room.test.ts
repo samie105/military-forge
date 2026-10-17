@@ -1,0 +1,408 @@
+import {
+  CloseCode,
+  CmdKind,
+  MsgType,
+  HEALTH_UNKNOWN,
+  LS,
+  SnapshotDecoder,
+  decodeMessage,
+  encodeCmd,
+  encodeHello,
+  encodePing,
+  encodeInput,
+  type Message,
+  type SnapshotMsg,
+  type TuningMsg,
+  type WelcomeMsg,
+} from '@military-forge/protocol';
+import { Btn, createHitPose, createInput } from '@military-forge/sim';
+import { describe, expect, it } from 'vitest';
+import { Room, type ClientConn } from '../src/room';
+
+class FakeConn implements ClientConn {
+  readonly sent: Uint8Array[] = [];
+  closed: { code: number; reason: string } | null = null;
+  /** like uWS: the socket's close handler runs synchronously inside close() */
+  onClose: (() => void) | null = null;
+  send(bytes: Uint8Array) {
+    this.sent.push(bytes);
+  }
+  close(code: number, reason: string) {
+    this.closed = { code, reason };
+    this.onClose?.();
+  }
+  bufferedAmount() {
+    return 0;
+  }
+  messages(): Message[] {
+    return this.sent.map((b) => decodeMessage(b));
+  }
+  last<T extends Message['type']>(type: T): Extract<Message, { type: T }> | undefined {
+    return this.messages()
+      .filter((m): m is Extract<Message, { type: T }> => m.type === type)
+      .at(-1);
+  }
+}
+
+function join(room: Room, name: string, resumeToken = '') {
+  const conn = new FakeConn();
+  const client = room.connect(conn);
+  room.receive(client, encodeHello(name, resumeToken));
+  const welcome = conn.last(MsgType.Welcome) as WelcomeMsg;
+  return { conn, client, welcome };
+}
+
+/**
+ * Sends like a real client: the input for server tick `tick` (newest first), plus up to 2 earlier
+ * ones it actually sampled (redundancy).
+ */
+const histories = new WeakMap<object, ReturnType<typeof createInput>[]>();
+function sendInput(room: Room, client: ReturnType<typeof join>['client'], tick: number, buttons: number) {
+  const history = histories.get(client) ?? [];
+  history.unshift({ ...createInput(), buttons });
+  if (history.length > 3) history.pop();
+  histories.set(client, history);
+  room.receive(client, encodeInput({ newestTick: tick, ackSnapshotSeq: 0, renderTick: 0, renderFrac: 0, inputs: history }));
+}
+
+describe('Room', () => {
+  it('welcomes two players with distinct ids and a roster including the dummies', () => {
+    const room = new Room({ dummies: true });
+    const a = join(room, 'Ade');
+    const b = join(room, 'Kemi');
+    expect(a.welcome.playerId).not.toBe(b.welcome.playerId);
+    expect(a.welcome.mapId).toBe('movement-test');
+    const roster = a.conn.last(MsgType.Roster)!;
+    expect(roster.entries.map((e) => e.name)).toEqual(expect.arrayContaining(['Ade', 'Kemi', 'Strafer', 'Jetter']));
+  });
+
+  it('inputs move the player; both clients see it in 30 Hz snapshots', () => {
+    const room = new Room({ dummies: false, aoi: false }); // they spawn at opposite ends of the map
+    const a = join(room, 'A');
+    const b = join(room, 'B');
+    const start = room.game.players[a.welcome.playerId]!.x;
+    for (let t = 1; t <= 60; t++) {
+      sendInput(room, a.client, t, Btn.Right); // one tick early: health 1
+      room.tick();
+    }
+    const snapA = a.conn.last(MsgType.Snapshot) as SnapshotMsg;
+    const snapB = b.conn.last(MsgType.Snapshot) as SnapshotMsg;
+    const seenByB = snapB.players.find((p) => p.id === a.welcome.playerId)!;
+    expect(seenByB.x).toBeGreaterThan(start + 4);
+    expect(snapA.serverTick).toBe(60);
+    expect(snapA.ackInputTick).toBe(59); // the local block is the state after tick 59
+    expect(snapA.inputBufferHealth).toBe(1);
+    expect(snapA.local![LS.x]).toBe(Math.round(room.game.players[a.welcome.playerId]!.x * 1024));
+    expect(snapB.inputBufferHealth).toBe(HEALTH_UNKNOWN); // B never sent anything
+    expect(snapB.local![LS.x]).not.toBe(snapA.local![LS.x]);
+    expect(a.conn.messages().filter((m) => m.type === MsgType.Snapshot).length).toBe(30);
+  });
+
+  it('AOI: a far player is not sent until it walks into view; then deltas against acked baselines', () => {
+    const room = new Room({ dummies: false });
+    const a = join(room, 'A');
+    const b = join(room, 'B');
+    const pa = room.game.players[a.welcome.playerId]!;
+    const pb = room.game.players[b.welcome.playerId]!;
+    pa.x = 8.5; // flat ground between the 0.2 m and 0.5 m ledges
+    pb.x = 150;
+    const decoder = new SnapshotDecoder();
+    const seen = () => {
+      const bytes = a.conn.sent.at(-1)!;
+      const snap = decoder.decode(bytes);
+      room.receive(a.client, encodeInput({ newestTick: room.game.tick, ackSnapshotSeq: snap.seq, renderTick: 0, renderFrac: 0, inputs: [createInput()] }));
+      return snap;
+    };
+    for (let i = 0; i < 4; i++) room.tick();
+    const far = seen();
+    expect(far.players.map((p) => p.id)).toEqual([pa.id]);
+    pb.x = 20.5; // flat ground, 12 m away: in view
+    for (let i = 0; i < 30; i++) room.tick(); // land and settle
+    seen();
+    for (let i = 0; i < 2; i++) room.tick();
+    const near = seen();
+    expect(near.baselineSeq).not.toBe(0);
+    expect(near.players.find((p) => p.id === pb.id)?.x).toBe(pb.x);
+    for (let i = 0; i < 2; i++) room.tick();
+    const still = seen(); // nothing moved: a few bytes
+    expect(still.players).toEqual(near.players);
+    expect(a.conn.sent.at(-1)!.length).toBeLessThan(40);
+  });
+
+  it('uses each input on its own tick, ignores redundant copies, repeats the last input when one is missing', () => {
+    const room = new Room({ dummies: false });
+    const a = join(room, 'A');
+    const id = a.welcome.playerId;
+    sendInput(room, a.client, 1, Btn.Right);
+    sendInput(room, a.client, 2, Btn.Right); // carries ticks 2 and 1
+    expect([a.client.inputs.has(0), a.client.inputs.has(1), a.client.inputs.has(2)]).toEqual([false, true, true]);
+    room.tick(); // tick 0: nothing for it yet → repeat (idle)
+    expect(room.game.players[id]!.vx).toBe(0);
+    room.tick(); // tick 1
+    room.tick(); // tick 2
+    expect(a.client.inputs.used).toBe(2);
+    for (let i = 0; i < 30; i++) room.tick(); // no new inputs: keeps walking right
+    expect(room.game.players[id]!.vx).toBeGreaterThan(4);
+    expect(a.client.inputs.missed).toBe(31);
+  });
+
+  it('reports how early inputs arrive (min over the snapshot interval) and drops late ones', () => {
+    const room = new Room({ dummies: false });
+    const a = join(room, 'A');
+    const health = () => (a.conn.last(MsgType.Snapshot) as SnapshotMsg).inputBufferHealth;
+    for (let i = 0; i < 20; i++) {
+      sendInput(room, a.client, room.game.tick + 3, Btn.Right); // 3 spare ticks queued
+      room.tick();
+    }
+    expect(health()).toBe(3);
+    for (let i = 0; i < 20; i++) {
+      sendInput(room, a.client, room.game.tick - 2, Btn.Left); // late: already simulated
+      room.tick();
+    }
+    expect(health()).toBe(-2);
+    expect(room.game.players[a.welcome.playerId]!.vx).toBeGreaterThan(0); // the late "left" inputs never ran
+  });
+
+  it('INPUT decode is pooled: oversized or truncated packets are strikes', () => {
+    const room = new Room({ dummies: false });
+    const a = join(room, 'A');
+    room.receive(a.client, new Uint8Array(65).fill(MsgType.Input));
+    room.receive(a.client, Uint8Array.of(MsgType.Input, 1));
+    expect(a.client.strikes).toBe(2);
+  });
+
+  it('refuses mismatched protocol versions', () => {
+    const room = new Room();
+    const conn = new FakeConn();
+    const client = room.connect(conn);
+    const hello = encodeHello('old');
+    hello[1] = 99; // corrupt the protocol version
+    room.receive(client, hello);
+    expect(conn.closed?.code).toBe(CloseCode.VersionMismatch);
+  });
+
+  it('kicks clients that keep sending garbage', () => {
+    const room = new Room();
+    const a = join(room, 'A');
+    for (let i = 0; i < 3; i++) room.receive(a.client, Uint8Array.from([0x77, 1, 2]));
+    expect(a.conn.closed?.code).toBe(CloseCode.BadMessage);
+    expect(room.game.players[a.welcome.playerId]).toBeNull();
+  });
+
+  it('enforces the room size', () => {
+    const room = new Room({ maxHumans: 2, dummies: false });
+    join(room, 'A');
+    join(room, 'B');
+    const c = join(room, 'C');
+    expect(c.conn.closed?.code).toBe(CloseCode.RoomFull);
+  });
+
+  it('dev command: live tuning changes the simulation', () => {
+    const room = new Room({ dummies: false, dev: true });
+    const a = join(room, 'A');
+    const b = join(room, 'B');
+    room.receive(a.client, encodeCmd(CmdKind.SetTuning, JSON.stringify({ walkMax: 9, notATuningKey: 1 })));
+    expect(room.game.tuning.walkMax).toBe(9);
+    // the other clients predict with the room's tuning, so they hear about it
+    expect(JSON.parse((b.conn.last(MsgType.Tuning) as TuningMsg).tuningJson)).toMatchObject({ walkMax: 9 });
+    let peak = 0;
+    for (let t = 1; t <= 40; t++) {
+      sendInput(room, a.client, t, Btn.Right);
+      room.tick();
+      peak = Math.max(peak, room.game.players[a.welcome.playerId]!.vx);
+    }
+    expect(peak).toBeCloseTo(9, 2);
+  });
+
+  it('low-bandwidth mode: 15 Hz snapshots that still carry the skipped interval\'s events', () => {
+    const room = new Room({ dummies: false });
+    const a = join(room, 'A');
+    const b = join(room, 'B');
+    room.receive(a.client, encodeCmd(CmdKind.SetLowBandwidth, '1'));
+    const before = a.conn.sent.length;
+    for (let i = 0; i < 4; i++) room.tick(); // ticks 1–4: snapshots at 2 and 4 for B, only 4 for A
+    expect(a.conn.sent.length - before).toBe(1);
+    // B dies in an interval A skips: A still hears about it
+    while (room.game.tick % 4 !== 1) room.tick();
+    room.game.players[b.welcome.playerId]!.y = room.game.map.bounds.minY; // fell out of the map
+    room.tick(); // the hazard kills B here; B's snapshot (next tick) carries the death, A's doesn't
+    room.tick();
+    room.tick();
+    room.tick();
+    const deaths = a.conn.messages().filter((m): m is SnapshotMsg => m.type === MsgType.Snapshot).flatMap((m) => m.events.filter((e) => e.type === 'death'));
+    expect(deaths).toHaveLength(1);
+    room.receive(a.client, encodeCmd(CmdKind.SetLowBandwidth, '0'));
+    const n = a.conn.sent.length;
+    for (let i = 0; i < 4; i++) room.tick();
+    expect(a.conn.sent.length - n).toBe(2);
+  });
+
+  it('clients get the room\'s snapshot rate, and half of it in low-bandwidth mode', () => {
+    const room = new Room({ dummies: false, snapshotEvery: 3 });
+    const a = join(room, 'A');
+    const snapshots = () => a.conn.messages().filter((m) => m.type === MsgType.Snapshot).length;
+    while (room.game.tick % 6 !== 0) room.tick();
+    let n = snapshots();
+    for (let i = 0; i < 60; i++) room.tick();
+    expect(snapshots() - n).toBe(20);
+    room.receive(a.client, encodeCmd(CmdKind.SetLowBandwidth, '1'));
+    n = snapshots();
+    for (let i = 0; i < 60; i++) room.tick();
+    expect(snapshots() - n).toBe(10);
+  });
+
+  it('low-bandwidth mode earns its wider rewind cap only after a second in it, and loses it at once', () => {
+    const room = new Room({ dummies: false, dev: false });
+    const a = join(room, 'A');
+    const b = join(room, 'B');
+    for (let i = 0; i < 40; i++) room.tick(); // pose history
+    const lc = room.lagComp!;
+    const shooter = room.game.players[a.welcome.playerId]!;
+    const target = room.game.players[b.welcome.playerId]!;
+    const out = createHitPose();
+    /** One tick whose input reports a view 20 ticks (333 ms) old: was it clamped? */
+    const clampedAt20 = () => {
+      const t = room.game.tick;
+      room.receive(a.client, encodeInput({ newestTick: t, ackSnapshotSeq: 0, renderTick: t - 20, renderFrac: 0, inputs: [createInput()] }));
+      room.tick();
+      const before = lc.clamped;
+      lc.pose(target, shooter, out);
+      return lc.clamped > before;
+    };
+    expect(clampedAt20()).toBe(true); // 300 ms cap
+    room.receive(a.client, encodeCmd(CmdKind.SetLowBandwidth, '1'));
+    expect(clampedAt20()).toBe(true); // just switched on: not yet
+    for (let i = 0; i < 60; i++) room.tick();
+    expect(clampedAt20()).toBe(false); // a second later: 150 ms interpolation + 1 tick + 200 ms
+    room.receive(a.client, encodeCmd(CmdKind.SetLowBandwidth, '0'));
+    expect(clampedAt20()).toBe(true); // off: at once
+  });
+
+  it('more than 20 CMDs a second are strikes', () => {
+    const room = new Room({ dummies: false, dev: false });
+    const a = join(room, 'A');
+    for (let i = 0; i < 20; i++) room.receive(a.client, encodeCmd(CmdKind.SetLowBandwidth, i % 2 ? '1' : '0'));
+    expect(a.conn.closed).toBeNull();
+    room.resetRateLimits();
+    for (let i = 0; i < 23; i++) room.receive(a.client, encodeCmd(CmdKind.SetLowBandwidth, '1'));
+    expect(a.conn.closed?.code).toBe(CloseCode.BadMessage);
+  });
+
+  describe('sessions (reconnect, docs/05 §13)', () => {
+    it('a dropped player stands idle for the grace, then the token brings it back with a full resync', () => {
+      const room = new Room({ dummies: false, reconnectGraceMs: 20_000 });
+      const a = join(room, 'Ade');
+      const b = join(room, 'Kemi');
+      const id = a.welcome.playerId;
+      expect(a.welcome.resumed).toBe(false);
+      expect(a.welcome.sessionToken.length).toBeGreaterThan(16);
+      for (let t = 1; t <= 30; t++) {
+        sendInput(room, a.client, room.game.tick + 1, Btn.Right);
+        room.tick();
+      }
+      room.disconnect(a.client); // the socket closed
+      expect(room.game.players[id]).not.toBeNull();
+      expect(room.humanCount).toBe(2); // keeps its slot
+      for (let i = 0; i < 120; i++) room.tick(); // 2 s: it stops walking (idle input), still there
+      expect(room.game.players[id]!.vx).toBe(0);
+      expect(b.conn.last(MsgType.Roster)!.entries.some((e) => e.id === id)).toBe(true);
+
+      const again = join(room, 'Ade', a.welcome.sessionToken);
+      expect(again.welcome).toMatchObject({ playerId: id, resumed: true });
+      expect(again.welcome.sessionToken).not.toBe(a.welcome.sessionToken); // rotated
+      expect(again.conn.last(MsgType.Roster)).toBeDefined();
+      room.tick();
+      room.tick();
+      const snap = again.conn.last(MsgType.Snapshot) as SnapshotMsg;
+      expect(snap.baselineSeq).toBe(0); // full: the new connection has no baselines
+      expect(snap.local![LS.x]).toBe(Math.round(room.game.players[id]!.x * 1024));
+      // once the new connection shows it has the new token (any PING/INPUT), the old one is spent
+      room.receive(again.client, encodePing(0));
+      const thief = join(room, 'Ade', a.welcome.sessionToken);
+      expect(thief.welcome.playerId).not.toBe(id);
+      expect(thief.welcome.resumed).toBe(false);
+    });
+
+    it('gives up after the grace: the player leaves and everyone gets the roster', () => {
+      const room = new Room({ dummies: false, reconnectGraceMs: 1000 });
+      const a = join(room, 'Ade');
+      const b = join(room, 'Kemi');
+      room.disconnect(a.client);
+      for (let i = 0; i < 59; i++) room.tick();
+      expect(room.game.players[a.welcome.playerId]).not.toBeNull();
+      room.tick();
+      room.tick();
+      expect(room.game.players[a.welcome.playerId]).toBeNull();
+      expect(room.humanCount).toBe(1);
+      expect(b.conn.last(MsgType.Roster)!.entries.some((e) => e.id === a.welcome.playerId)).toBe(false);
+      expect(join(room, 'Ade', a.welcome.sessionToken).welcome.resumed).toBe(false);
+    });
+
+    it('a reconnect replaces a stale connection the server still thinks is alive', () => {
+      const room = new Room({ dummies: false });
+      const a = join(room, 'Ade');
+      const again = join(room, 'Ade', a.welcome.sessionToken); // the old socket never closed
+      expect(again.welcome).toMatchObject({ playerId: a.welcome.playerId, resumed: true });
+      expect(a.conn.closed?.code).toBe(CloseCode.DuplicateSession);
+      room.disconnect(a.client); // its close event arrives later: must not detach the new one
+      sendInput(room, again.client, room.game.tick + 1, Btn.Right);
+      for (let i = 0; i < 20; i++) room.tick();
+      expect(room.game.players[a.welcome.playerId]!.vx).toBeGreaterThan(0);
+      expect(room.humanCount).toBe(1);
+    });
+
+    it('a resume whose WELCOME was lost can retry with the same token, even in a full room', () => {
+      const room = new Room({ dummies: false, maxHumans: 2 });
+      const a = join(room, 'Ade');
+      join(room, 'Kemi');
+      room.disconnect(a.client);
+      const lost = join(room, 'Ade', a.welcome.sessionToken); // WELCOME sent, but the link died before it arrived
+      room.disconnect(lost.client);
+      const retry = join(room, 'Ade', a.welcome.sessionToken);
+      expect(retry.conn.closed).toBeNull(); // not RoomFull
+      expect(retry.welcome).toMatchObject({ playerId: a.welcome.playerId, resumed: true });
+      expect(room.humanCount).toBe(2);
+      // the token from the lost WELCOME (never seen by the client) is retired; the latest one works
+      room.disconnect(retry.client);
+      expect(join(room, 'Ade', lost.welcome.sessionToken).conn.closed?.code).toBe(CloseCode.RoomFull);
+      const viaLatest = join(room, 'Ade', retry.welcome.sessionToken);
+      expect(viaLatest.welcome).toMatchObject({ playerId: a.welcome.playerId, resumed: true });
+    });
+
+    it('a kick ends the session even when the socket closes re-entrantly (uWS)', () => {
+      const room = new Room({ dummies: false });
+      const conn = new FakeConn();
+      const client = room.connect(conn);
+      conn.onClose = () => room.disconnect(client); // what the uWS close handler does
+      room.receive(client, encodeHello('Cheater'));
+      const welcome = conn.last(MsgType.Welcome) as WelcomeMsg;
+      for (let i = 0; i < 3; i++) room.receive(client, Uint8Array.from([0x77, 1, 2]));
+      expect(conn.closed?.code).toBe(CloseCode.BadMessage);
+      expect(room.game.players[welcome.playerId]).toBeNull();
+      expect(room.humanCount).toBe(0);
+      expect(join(room, 'Cheater', welcome.sessionToken).welcome.resumed).toBe(false);
+    });
+
+    it('kicked players leave at once; with no grace a drop leaves at once too', () => {
+      const room = new Room({ dummies: false });
+      const a = join(room, 'A');
+      for (let i = 0; i < 3; i++) room.receive(a.client, Uint8Array.from([0x77, 1, 2]));
+      expect(room.game.players[a.welcome.playerId]).toBeNull();
+      expect(join(room, 'A', a.welcome.sessionToken).welcome.resumed).toBe(false);
+      const noGrace = new Room({ dummies: false, reconnectGraceMs: 0 });
+      const b = join(noGrace, 'B');
+      noGrace.disconnect(b.client);
+      expect(noGrace.game.players[b.welcome.playerId]).toBeNull();
+    });
+
+    it('waiting players keep their slot: the room stays full', () => {
+      const room = new Room({ dummies: false, maxHumans: 2 });
+      const a = join(room, 'A');
+      join(room, 'B');
+      room.disconnect(a.client);
+      expect(join(room, 'C').conn.closed?.code).toBe(CloseCode.RoomFull);
+      expect(join(room, 'A', a.welcome.sessionToken).welcome.resumed).toBe(true);
+    });
+  });
+});
+

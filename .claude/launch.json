@@ -1,0 +1,22 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "military-forge-dev",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev"
+      ],
+      "port": 5173
+    },
+    {
+      "name": "art-preview",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "tools/art-preview/serve.py",
+        "8123"
+      ],
+      "port": 8123
+    }
+  ]
+}

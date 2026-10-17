@@ -1,0 +1,21 @@
+{
+  "name": "@military-forge/sim",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json && tsc -p test/tsconfig.json",
+    "golden:update": "UPDATE_GOLDEN=1 vitest run test/golden.test.ts",
+    "replays:generate": "tsx scripts/generate-replays.ts",
+    "feel": "tsx scripts/feel-metrics.ts",
+    "tune": "tsx scripts/tune.ts"
+  },
+  "dependencies": {
+    "@military-forge/content": "workspace:*",
+    "@military-forge/shared": "workspace:*"
+  }
+}

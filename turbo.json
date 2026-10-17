@@ -1,0 +1,33 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "ui": "stream",
+  // Every package tsconfig extends this file, which lives outside all packages, so turbo would not
+  // hash it: a compiler-option change would replay cached typecheck/test passes. Listing it here puts
+  // it in every task's cache key. .github/scripts/turbo-inputs.test.mjs keeps this list complete.
+  "globalDependencies": ["tsconfig.base.json"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    // No package has a `transit` script, so it runs nothing. It only chains each package to its
+    // workspace dependencies, so that a change in packages/shared also changes the cache key of
+    // sim's, server's and web's typecheck/test (our packages export raw .ts, with no build step to
+    // carry that dependency). Tasks still run in parallel.
+    "transit": {
+      "dependsOn": ["^transit"]
+    },
+    "test": {
+      "dependsOn": ["transit"],
+      "outputs": []
+    },
+    "typecheck": {
+      "dependsOn": ["transit"],
+      "outputs": []
+    }
+  }
+}

@@ -1,0 +1,32 @@
+asset-check: art/character/rookie.glb  [character]
+------------------------------------------------------------------------------------------------------
+INFO  file size                                   713 KB
+PASS  triangles (LOD0)                            3900 of 4000
+PASS  draw calls (mesh x material)                1 of 3
+PASS  texture size: rookie_albedo                 1024x1024 (max 1024)
+PASS  texture POT: rookie_albedo                  power of two
+PASS  GPU texture memory (KTX2 est.)              1.33 MB of 1.50 MB, 1 image(s)
+PASS  armature                                    1 armature(s)
+PASS  deform bones (docs/04 §4.1)                 all 25 present
+PASS  sockets (docs/04 §4.1)                      all 7 present
+PASS  no unexpected bones                         none
+PASS  meshes skinned to the armature              1/1
+PASS  every vertex weighted                       0 unweighted of 6509
+PASS  ≤ 4 influences per vertex                   0 vertices over
+PASS  weights normalised                          0 vertices off by > 2%
+PASS  sockets are non-deform (no weights)         none weighted
+PASS  weights only on skeleton bones              ok
+INFO  bounds (m)                                  x -0.47..+0.47  depth(y) -0.34..+0.40  z -0.00..+1.50
+PASS  feet on the ground (min z = 0)              min z -0.003 m
+PASS  height vs hitbox top                        1.502 m, hitbox top 1.48 m (allowed 1.41-1.63)
+PASS  faces glTF +Z (toes ahead of ankles)        ok
+PASS  head centre vs head hitbox                  1.239 m vs 1.24 m (±0.08); head height 0.53 m vs 0.48 m
+PASS  chibi head ≈ ⅓ of height                    head 35% of height
+INFO  hitbox source                               packages/content/src/hitboxes.ts
+PASS  silhouette covers hitboxes (no tiny skins)  68% of the hitbox area is drawn (min 60%)
+PASS  silhouette within hitbox envelope           6% of the silhouette is outside hitboxes x1.10 (max 25%; jetpack/arms)
+INFO  base bbox (cosmetics may grow it ≤ x1.10)   {"min": [-0.471, -0.341, -0.003], "max": [0.471, 0.401, 1.502]}
+INFO  animation clips                             6: crouch_idle, fall, idle, jet_ascend, jet_hover, run
+PASS  custom properties (docs/04 §8)              bodyTypes, envelopeOk, slot
+------------------------------------------------------------------------------------------------------
+RESULT: PASS  (23 pass, 0 warn, 0 fail)

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Art preview</title>
+  <style>
+    :root {
+      --panel: rgba(18, 22, 28, 0.82);
+      --text: #e8ecf1;
+      --muted: #9aa5b1;
+      --accent: #f2b632;
+    }
+    html, body { margin: 0; height: 100%; background: #9fb0bf; overflow: hidden; }
+    body { font: 13px/1.4 system-ui, -apple-system, Segoe UI, sans-serif; color: var(--text); }
+    canvas { display: block; }
+    #panel {
+      position: fixed; top: 12px; right: 12px; width: 236px; padding: 12px 14px;
+      background: var(--panel); border-radius: 10px; backdrop-filter: blur(6px);
+    }
+    #panel h1 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
+    #panel label { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 6px 0; }
+    #panel select, #panel input[type="range"] { width: 120px; }
+    #panel button {
+      width: 100%; margin-top: 8px; padding: 6px 8px; border: 0; border-radius: 6px;
+      background: var(--accent); color: #1b1b1b; font-weight: 600; cursor: pointer;
+    }
+    #stats { margin-top: 8px; color: var(--muted); font: 11px/1.5 ui-monospace, Menlo, monospace; white-space: pre; }
+    #status { position: fixed; left: 12px; bottom: 12px; color: #1b2733; font-weight: 600; }
+    body.shot #panel, body.shot #status { display: none; }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="panel">
+    <h1>Art test: Rookie + yard kit</h1>
+    <label>Zoom
+      <select id="zoom">
+        <option value="0.4">close-up</option>
+        <option value="1" selected>1× (36 m)</option>
+        <option value="1.2">2×</option>
+        <option value="1.4">3×</option>
+        <option value="1.6">4×</option>
+        <option value="2.3">7×</option>
+      </select>
+    </label>
+    <label>Hero clip <select id="clip"></select></label>
+    <label>Shading
+      <select id="shading">
+        <option value="toon" selected>toon ramp</option>
+        <option value="flat">flat (unlit)</option>
+        <option value="lit">PBR lit</option>
+      </select>
+    </label>
+    <label>Character LOD
+      <select id="lod"><option value="0" selected>LOD0 (≤4k)</option><option value="1">LOD1 (≤1.8k)</option></select>
+    </label>
+    <label>Face camera <input id="yaw" type="range" min="0" max="60" value="30" /></label>
+    <label>Team outline
+      <select id="outline">
+        <option value="silhouette" selected>silhouette</option>
+        <option value="hull">inverted hull</option>
+        <option value="none">none</option>
+      </select>
+    </label>
+    <label>Hitboxes <input id="hitboxes" type="checkbox" /></label>
+    <button id="save">Save screenshot</button>
+    <div id="stats"></div>
+  </div>
+  <div id="status">loading…</div>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

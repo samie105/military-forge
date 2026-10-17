@@ -1,0 +1,25 @@
+{
+  "name": "@military-forge/game-server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false src/index.ts",
+    "start": "tsx src/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json",
+    "bench": "tsx scripts/bench-room.ts",
+    "netsim": "tsx scripts/netsim-report.ts"
+  },
+  "dependencies": {
+    "@military-forge/content": "workspace:*",
+    "@military-forge/netcode": "workspace:*",
+    "@military-forge/protocol": "workspace:*",
+    "@military-forge/shared": "workspace:*",
+    "@military-forge/sim": "workspace:*",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.2"
+  }
+}

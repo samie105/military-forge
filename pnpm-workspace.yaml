@@ -1,0 +1,6 @@
+packages:
+  - apps/*
+  - packages/*
+  - tools/asset-pipeline
+minimumReleaseAgeExclude:
+  - eslint@10.13.0

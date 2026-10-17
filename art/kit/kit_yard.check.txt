@@ -1,0 +1,17 @@
+asset-check: art/kit/kit_yard.glb  [kit]
+------------------------------------------------------------------------------------------
+INFO  file size                       84 KB
+PASS  triangles: crate_1m             484 of 3000
+PASS  pivot: crate_1m                 y +0.00..+1.00 m: top or bottom on the origin
+PASS  0.25 m grid: crate_1m           1.00 x 1.00 m (w x h), depth 1.04 m
+PASS  triangles: ground_4m            432 of 3000
+PASS  pivot: ground_4m                y -1.50..+0.00 m: top or bottom on the origin
+PASS  0.25 m grid: ground_4m          4.00 x 1.50 m (w x h), depth 2.08 m
+PASS  triangles: platform_2m          228 of 3000
+PASS  pivot: platform_2m              y -0.50..+0.00 m: top or bottom on the origin
+PASS  0.25 m grid: platform_2m        2.00 x 0.50 m (w x h), depth 1.24 m
+INFO  kit total triangles             1144
+PASS  materials per piece             3 draw calls total
+INFO  GPU texture memory (KTX2 est.)  0.00 MB, 0 image(s)
+------------------------------------------------------------------------------------------
+RESULT: PASS  (10 pass, 0 warn, 0 fail)

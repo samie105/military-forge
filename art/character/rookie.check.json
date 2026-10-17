@@ -1,0 +1,147 @@
+{
+  "file": "art/character/rookie.glb",
+  "kind": "character",
+  "pass": true,
+  "rows": [
+    {
+      "status": "INFO",
+      "check": "file size",
+      "detail": "713 KB"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles (LOD0)",
+      "detail": "3900 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "draw calls (mesh x material)",
+      "detail": "1 of 3"
+    },
+    {
+      "status": "PASS",
+      "check": "texture size: rookie_albedo",
+      "detail": "1024x1024 (max 1024)"
+    },
+    {
+      "status": "PASS",
+      "check": "texture POT: rookie_albedo",
+      "detail": "power of two"
+    },
+    {
+      "status": "PASS",
+      "check": "GPU texture memory (KTX2 est.)",
+      "detail": "1.33 MB of 1.50 MB, 1 image(s)"
+    },
+    {
+      "status": "PASS",
+      "check": "armature",
+      "detail": "1 armature(s)"
+    },
+    {
+      "status": "PASS",
+      "check": "deform bones (docs/04 \u00a74.1)",
+      "detail": "all 25 present"
+    },
+    {
+      "status": "PASS",
+      "check": "sockets (docs/04 \u00a74.1)",
+      "detail": "all 7 present"
+    },
+    {
+      "status": "PASS",
+      "check": "no unexpected bones",
+      "detail": "none"
+    },
+    {
+      "status": "PASS",
+      "check": "meshes skinned to the armature",
+      "detail": "1/1"
+    },
+    {
+      "status": "PASS",
+      "check": "every vertex weighted",
+      "detail": "0 unweighted of 6509"
+    },
+    {
+      "status": "PASS",
+      "check": "\u2264 4 influences per vertex",
+      "detail": "0 vertices over"
+    },
+    {
+      "status": "PASS",
+      "check": "weights normalised",
+      "detail": "0 vertices off by > 2%"
+    },
+    {
+      "status": "PASS",
+      "check": "sockets are non-deform (no weights)",
+      "detail": "none weighted"
+    },
+    {
+      "status": "PASS",
+      "check": "weights only on skeleton bones",
+      "detail": "ok"
+    },
+    {
+      "status": "INFO",
+      "check": "bounds (m)",
+      "detail": "x -0.47..+0.47  depth(y) -0.34..+0.40  z -0.00..+1.50"
+    },
+    {
+      "status": "PASS",
+      "check": "feet on the ground (min z = 0)",
+      "detail": "min z -0.003 m"
+    },
+    {
+      "status": "PASS",
+      "check": "height vs hitbox top",
+      "detail": "1.502 m, hitbox top 1.48 m (allowed 1.41-1.63)"
+    },
+    {
+      "status": "PASS",
+      "check": "faces glTF +Z (toes ahead of ankles)",
+      "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "head centre vs head hitbox",
+      "detail": "1.239 m vs 1.24 m (\u00b10.08); head height 0.53 m vs 0.48 m"
+    },
+    {
+      "status": "PASS",
+      "check": "chibi head \u2248 \u2153 of height",
+      "detail": "head 35% of height"
+    },
+    {
+      "status": "INFO",
+      "check": "hitbox source",
+      "detail": "packages/content/src/hitboxes.ts"
+    },
+    {
+      "status": "PASS",
+      "check": "silhouette covers hitboxes (no tiny skins)",
+      "detail": "68% of the hitbox area is drawn (min 60%)"
+    },
+    {
+      "status": "PASS",
+      "check": "silhouette within hitbox envelope",
+      "detail": "6% of the silhouette is outside hitboxes x1.10 (max 25%; jetpack/arms)"
+    },
+    {
+      "status": "INFO",
+      "check": "base bbox (cosmetics may grow it \u2264 x1.10)",
+      "detail": "{\"min\": [-0.471, -0.341, -0.003], \"max\": [0.471, 0.401, 1.502]}"
+    },
+    {
+      "status": "INFO",
+      "check": "animation clips",
+      "detail": "6: crouch_idle, fall, idle, jet_ascend, jet_hover, run"
+    },
+    {
+      "status": "PASS",
+      "check": "custom properties (docs/04 \u00a78)",
+      "detail": "bodyTypes, envelopeOk, slot"
+    }
+  ]
+}

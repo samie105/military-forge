@@ -1,0 +1,50 @@
+# Production-like backend services for apps/api (docs/06 §11): Postgres + Valkey (Redis-compatible).
+#
+# `pnpm dev` does NOT need this: without DATABASE_URL / REDIS_URL the API runs on embedded
+# Postgres (PGlite) and an in-memory KV. Use it to run against the real thing:
+#
+#   docker compose up -d
+#   cp apps/api/.env.example apps/api/.env    # then uncomment DATABASE_URL and REDIS_URL
+#   pnpm dev                                  # or just the API: pnpm --filter @military-forge/api dev
+#
+# Put the URLs in apps/api/.env rather than on the command line: root `pnpm dev` runs turbo, whose
+# strict env mode drops variables that turbo.json doesn't list, so the API would silently fall back
+# to PGlite. (`pnpm --filter @military-forge/api dev` with inline variables works too.)
+#
+# Host ports are non-default (55432, 56379) so they don't clash with a Postgres or Redis already
+# running on the machine, and are bound to 127.0.0.1 only. Dev credentials; never reuse them.
+# Postgres 18 matches the PGlite build the API uses without Docker.
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: game
+      POSTGRES_PASSWORD: game
+      POSTGRES_DB: game
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U game -d game"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    # rate-limit counters and (Milestone B) the room registry must not be evicted silently
+    command: ["valkey-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "127.0.0.1:56379:6379"
+    volumes:
+      - valkey-data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres-data:
+  valkey-data:

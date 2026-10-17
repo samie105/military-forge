@@ -1,0 +1,94 @@
+# Builds and tests the Rust WebTransport gateway (apps/wt-gateway, docs/05 §2). It is not part of
+# pnpm or turbo. The workflow runs only when the gateway or this file changes, and it does nothing
+# while the gateway is not in the tree. Because of the path filter, never make it a required check
+# (.github/CI.md).
+name: wt-gateway
+
+on:
+  pull_request:
+    paths: ['apps/wt-gateway/**', '.github/workflows/wt-gateway.yml']
+  push:
+    branches: [main]
+    paths: ['apps/wt-gateway/**', '.github/workflows/wt-gateway.yml']
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+# bash with -eo pipefail (an unspecified shell gets plain `bash -e`).
+defaults:
+  run:
+    shell: bash
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0 # CI builds from scratch or from the cache; incremental data only bloats it
+
+jobs:
+  cargo:
+    name: cargo build + test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Look for the gateway
+        id: gateway
+        run: |
+          if [ -f apps/wt-gateway/Cargo.toml ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::apps/wt-gateway is not in this tree; nothing to build."
+          fi
+
+      # The toolchain is pinned in apps/wt-gateway/rust-toolchain.toml. rustup ≥ 1.28 installs it
+      # with `rustup toolchain install`; older versions install it on `rustup show`.
+      - name: Install the Rust toolchain
+        if: steps.gateway.outputs.present == 'true'
+        working-directory: apps/wt-gateway
+        run: |
+          rustup toolchain install || rustup show
+          rustc --version
+          cargo --version
+
+      - name: Cache cargo registry and target/
+        if: steps.gateway.outputs.present == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            apps/wt-gateway/target
+          key: cargo-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/wt-gateway/rust-toolchain.toml', 'apps/wt-gateway/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Build (release)
+        if: steps.gateway.outputs.present == 'true'
+        working-directory: apps/wt-gateway
+        run: cargo build --locked --release
+
+      # --release: the tests reuse the dependency artifacts of the release build above, rather than
+      # compiling quinn, rustls and tokio a second time under the dev profile. Debug assertions and
+      # overflow checks are therefore off in CI; run plain `cargo test` locally for those.
+      # The summary is written whatever the outcome; the step then exits with cargo test's status.
+      - name: Test
+        if: steps.gateway.outputs.present == 'true'
+        working-directory: apps/wt-gateway
+        run: |
+          set +e
+          cargo test --locked --release 2>&1 | tee "$RUNNER_TEMP/cargo-test.log"
+          status=${PIPESTATUS[0]}
+          set -e
+          # one "test result: ok. 3 passed; 0 failed; 0 ignored; …" line per test binary
+          awk -v status="$status" '/^test result:/ { p += $4; f += $6; i += $8 } END {
+            printf "## wt-gateway: %d passed, %d failed, %d ignored%s\n\n", p, f, i, (status == 0 ? "" : " (cargo test exited " status ")")
+            print "`cargo build --locked --release` and `cargo test --locked --release` in apps/wt-gateway."
+          }' "$RUNNER_TEMP/cargo-test.log" >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"

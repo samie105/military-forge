@@ -1,0 +1,126 @@
+/* Shell screens over the game canvas. The root passes clicks through to the game except on panels. */
+#shell {
+  --mm-bg: rgba(13, 17, 23, 0.88);
+  --mm-line: #30363d;
+  --mm-text: #e6edf3;
+  --mm-dim: #8b949e;
+  --mm-accent: #1f6feb;
+  --mm-gold: #e3b341;
+  --mm-me: rgba(31, 111, 235, 0.18);
+  position: fixed;
+  inset: 0;
+  z-index: 10; /* over the debug bar and tuning panel */
+  pointer-events: none;
+  color: var(--mm-text);
+  font: 14px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+#shell .mm-panel,
+#shell .mm-backdrop,
+#shell .mm-route {
+  pointer-events: auto;
+  cursor: default;
+}
+.mm-panel {
+  background: var(--mm-bg);
+  border: 1px solid var(--mm-line);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+}
+.mm-dim { color: var(--mm-dim); }
+.mm-kicker { color: var(--mm-dim); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
+
+.mm-btn {
+  font: 600 14px/1 system-ui, sans-serif;
+  color: var(--mm-text);
+  background: #21262d;
+  border: 1px solid var(--mm-line);
+  border-radius: 8px;
+  padding: 10px 18px;
+  cursor: pointer;
+}
+.mm-btn:hover:not(:disabled) { border-color: var(--mm-dim); }
+.mm-btn:focus-visible { outline: 2px solid var(--mm-accent); outline-offset: 2px; }
+.mm-btn:disabled { opacity: 0.55; cursor: default; }
+.mm-primary { background: var(--mm-accent); border-color: var(--mm-accent); }
+
+.mm-status {
+  position: absolute;
+  top: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 16px;
+  text-align: center;
+  pointer-events: none !important;
+}
+.mm-clock { font: 700 22px/1.1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.mm-scoreline { font-size: 13px; }
+
+.mm-countdown {
+  position: absolute;
+  top: 30%;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8);
+}
+.mm-countdown-n { font: 800 96px/1 system-ui, sans-serif; }
+
+.mm-lobby {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 10px 12px 10px 18px;
+  white-space: nowrap;
+}
+
+.mm-backdrop {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(1, 4, 9, 0.55);
+  overflow-y: auto;
+}
+.mm-results { width: min(720px, 100%); padding: 22px 24px 18px; }
+.mm-results h1 { margin: 4px 0 10px; font-size: 34px; }
+.mm-results h1.mm-win { color: var(--mm-gold); }
+.mm-mine { display: flex; flex-wrap: wrap; gap: 8px 28px; margin: 0 0 16px; }
+.mm-mine dt { color: var(--mm-dim); font-size: 12px; }
+.mm-mine dd { margin: 0; font: 700 18px/1.3 ui-monospace, monospace; }
+.mm-mine small { color: var(--mm-dim); font: 11px system-ui, sans-serif; }
+
+.mm-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.mm-table th { color: var(--mm-dim); font-weight: 500; font-size: 12px; }
+.mm-table th, .mm-table td { padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--mm-line); }
+.mm-table .mm-name { text-align: left; width: 40%; }
+.mm-table tr.mm-me td { background: var(--mm-me); }
+.mm-table tr.mm-left td { color: var(--mm-dim); }
+.mm-badge {
+  margin-left: 6px;
+  padding: 1px 5px;
+  border: 1px solid var(--mm-line);
+  border-radius: 4px;
+  color: var(--mm-dim);
+  font-size: 10px;
+  font-weight: 700;
+}
+.mm-badge.mm-mvp { color: #0d1117; background: var(--mm-gold); border-color: var(--mm-gold); }
+.mm-results footer { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 18px; }
+
+.mm-route { position: absolute; inset: 0; background: #0d1117; }
+.mm-route-body { position: absolute; inset: 0; }
+.mm-route-back { position: absolute; top: 12px; left: 12px; }
+
+@media (max-width: 560px) {
+  .mm-table th:nth-child(6), .mm-table td:nth-child(6), .mm-table th:nth-child(7), .mm-table td:nth-child(7) { display: none; }
+  .mm-lobby { white-space: normal; width: calc(100% - 32px); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .mm-countdown-n { animation: mm-pop 0.6s ease-out; }
+  @keyframes mm-pop { from { transform: scale(1.25); opacity: 0.6; } 30% { transform: scale(1); opacity: 1; } }
+}

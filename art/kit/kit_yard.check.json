@@ -1,0 +1,72 @@
+{
+  "file": "art/kit/kit_yard.glb",
+  "kind": "kit",
+  "pass": true,
+  "rows": [
+    {
+      "status": "INFO",
+      "check": "file size",
+      "detail": "84 KB"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: crate_1m",
+      "detail": "484 of 3000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: crate_1m",
+      "detail": "y +0.00..+1.00 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "0.25 m grid: crate_1m",
+      "detail": "1.00 x 1.00 m (w x h), depth 1.04 m"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: ground_4m",
+      "detail": "432 of 3000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: ground_4m",
+      "detail": "y -1.50..+0.00 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "0.25 m grid: ground_4m",
+      "detail": "4.00 x 1.50 m (w x h), depth 2.08 m"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: platform_2m",
+      "detail": "228 of 3000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: platform_2m",
+      "detail": "y -0.50..+0.00 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "0.25 m grid: platform_2m",
+      "detail": "2.00 x 0.50 m (w x h), depth 1.24 m"
+    },
+    {
+      "status": "INFO",
+      "check": "kit total triangles",
+      "detail": "1144"
+    },
+    {
+      "status": "PASS",
+      "check": "materials per piece",
+      "detail": "3 draw calls total"
+    },
+    {
+      "status": "INFO",
+      "check": "GPU texture memory (KTX2 est.)",
+      "detail": "0.00 MB, 0 image(s)"
+    }
+  ]
+}

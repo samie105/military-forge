@@ -1,0 +1,196 @@
+# 11 — Rendering, Art Pipeline, VFX, Audio & Client Tech
+
+> Client stack for the **2.5D** variant (3D rendering, 2D gameplay plane), **desktop browser first**, touch later.
+> Versions were checked on 16 Oct 2026 (npm registry). Re-check before pinning.
+
+---
+
+## 1. Engine & library picks
+
+| Concern | Pick | Why / notes |
+|---|---|---|
+| Renderer | **Three.js r186, `WebGLRenderer`** as the shipping baseline | Largest ecosystem/hiring pool (~21M weekly npm downloads). ~155 KB brotli core. The leading web-native .io shooters (Krunker, Deadshot, Kirka, ev.io) are Three.js + custom netcode |
+| WebGPU | `WebGPURenderer` + TSL behind a flag, **later** | It auto-falls back to WebGL2, but there are no public low-end benchmarks yet. Custom shaders written with `onBeforeCompile` would need TSL rewrites, so **use stock/node-friendly materials** to keep the switch cheap |
+| Gameplay physics | **Custom 2D kinematic sim** (02-physics) | Jetpack feel is design-driven, not rigid-body. Tiny, exact, shared with the server |
+| Cosmetic physics | none at first (Verlet ragdolls in-house). If needed later: **Box2D v3 WASM** (~122 KB brotli) or Rapier2D (~657 KB), lazy-loaded, client-only | Never on the gameplay path. Rapier is f32 inside WASM vs JS f64, so don't mix authoritative state across that boundary |
+| ECS | **bitECS 0.4** (SoA typed arrays + serialization module) | Zero-GC, snapshot-friendly, works headless on the server |
+| Assets | glTF/GLB → **gltf-transform 4.5** → **meshopt** (decoder ~6 KB) + **KTX2/Basis** (transcoder ~210 KB, worth it for GPU memory) | Prefer meshopt over Draco (faster decode, better for skinned meshes) |
+| Particles | **three.quarks 0.17** (batched) or a small in-house instanced particle system | |
+| Audio | **Thin in-house Web Audio wrapper** | Howler is stagnant (last release 2023) and has iOS quirks |
+| UI shell | React 19 + Zustand | Menus/store/social. HUD in a separate lightweight layer |
+| Build | **Vite 8** (Rolldown), pnpm, Turborepo | |
+| Touch (later) | custom Pointer Events twin-stick (or nipplejs 1.0) | |
+
+**Rejected for this project:**
+- **Unity:** 8 MB+ empty builds, and CrazyGames disables Unity games on iOS by default.
+- **Godot:** no WebGPU, and C# can't export to the web.
+- **Babylon:** a fine runner-up with everything built in (Shell Shockers uses it), but it's heavier and we don't need its physics.
+- **PlayCanvas:** choose it only if a collaborative visual editor matters more than code-first control (Venge.io uses it).
+
+---
+
+## 2. Scene structure (2.5D)
+
+```
+z = −40 … −10   FAR BACKGROUND   skybox/gradient, distant skyline cards (unlit, atlas), parallax for free via perspective
+z = −10 … −1    MID DEPTH        3D level dressing behind the play plane (buildings, cliffs), instanced kit pieces
+z =  −1 … +1    GAMEPLAY PLANE   collision-matching level meshes (extruded polygons + trims), players, pickups, projectiles, VFX
+z =  +1 … +6    FOREGROUND       grass tufts, railings, pipes. Dither-fades when a player is behind (never hides gameplay)
+```
+
+- **Level geometry generation:** the map editor extrudes collision polygons into front faces (earcut triangulation) + side walls + bevelled trims. Artists then dress them with kit meshes. This guarantees **render = collision** at the play plane, which is critical for fairness.
+- **Batching:** `InstancedMesh` / `BatchedMesh` for kit pieces, pickups, decals, shell casings. Target **≤ 80 draw calls** in a busy 12-player fight.
+- **Lighting:**
+  - Baked AO/light in textures + vertex colours.
+  - One hemisphere light + one directional light.
+  - **Low:** blob/contact shadows under players only.
+  - **High:** one 1024² directional shadow map limited to the gameplay plane frustum.
+  - Muzzle flashes are emissive cards + a brief light-probe tint, never real-time point lights on Low/Medium.
+- **Post (High only):** bloom, colour-grading LUT, subtle vignette. On Medium only the LUT is baked into materials.
+- **Billboard ad slots** (city maps only; details in [14 §4.5](14-in-world-advertising.md#45-rendering)):
+  - **Layer:** `AdSlot` surfaces sit only in the mid-depth band (z −9…−4), never on or in front of the gameplay plane. They are graded into the map's background palette.
+  - **Material:** unlit and non-emissive, on a layer excluded from bloom.
+  - **Budget:** one `InstancedMesh` and one KTX2 (ETC1S) `CompressedArrayTexture` per format, so ≤ 2 draw calls. The fixed layer pools take ≈ 5.1 MB of GPU memory per map. A 5 Hz measurement mask adds ≤ 8 draws, and both count against the budgets in §3.
+  - **Fallback:** each map ships a shared pool of house ads (fictional local businesses, notices). It's what shows when nothing is sold, before a creative arrives, on Save-Data or slow connections, and in every `portal` build.
+  - **Loading:** creatives download after first spawn, never inside the loading budget, and are uploaded only while the player is dead, in the warm-up yard or on the plane.
+
+---
+
+## 3. Performance budgets
+
+**Desktop first: reference machines.**
+- **Min:** an Intel UHD 620-class iGPU laptop with 8 GB RAM at 1080p, Low preset, steady **60 fps**.
+- **Recommended:** a GTX 1650 / M1 class machine, High preset, 120+ fps.
+- **Portal requirement:** a 4 GB Chromebook must run it (CrazyGames tests this).
+
+| Budget | Low | High |
+|---|---|---|
+| Draw calls | ≤ 80 | ≤ 150 |
+| Visible triangles | ≤ 150K | ≤ 400K |
+| Triangles per character | ≤ 4K (LOD0), 1.8K (LOD1) | same |
+| GPU texture memory | ≤ 64 MB | ≤ 160 MB |
+| Live particles | ≤ 1.5K | ≤ 5K |
+| Device pixel ratio cap | 1.0 | 1.5 (2.0 opt-in) |
+| Main-thread frame budget | sim ≤ 1 ms, net ≤ 0.5 ms, render submit ≤ 6 ms, HUD ≤ 1 ms | |
+
+- **Auto quality:** measure the first 300 frames, then pick a preset. **Dynamic resolution** steps the render scale (0.6–1.0) when the p90 frame time exceeds budget.
+- **Shader warm-up:** `renderer.compileAsync(scene, camera)` during the loading screen for every material variant on the map, so there are no first-shot hitches.
+- **Download budgets:**
+
+| | Target |
+|---|---|
+| Boot chunk (menu + engine) | ≤ 2 MB brotli |
+| First playable (menu + 1 map + base character + MVP weapons) | ≤ 8 MB |
+| Per additional map | ≤ 4 MB |
+| CrazyGames mobile-homepage eligibility (later) | ≤ 20 MB initial |
+| CrazyGames desktop hard cap | ≤ 50 MB initial, ≤ 250 MB total, ≤ 1,500 files |
+| Time to gameplay | ≤ 10 s on broadband (portals require < 20 s) |
+
+- **Threads:** **design single-threaded.**
+  - `SharedArrayBuffer` needs COOP/COEP headers, which **portal iframes generally don't provide**.
+  - Chrome's `Document-Isolation-Policy` is desktop-only so far.
+  - Decoders (meshopt/KTX2) already use workers.
+  - OffscreenCanvas rendering isn't worth it by default.
+
+---
+
+## 4. Art direction
+
+- **Style:** stylised "toy-soldier" 3D. Chunky chibi characters, bold shapes, hand-painted-looking textures with a light toon ramp, saturated players over a desaturated background. Readable at a glance, cheap to render, and it ages well.
+- **Palette discipline per map** (04 §8): the background is low-saturation and low-contrast; the gameplay plane is mid; players, pickups and projectiles are the highest contrast. Teams are blue/orange with an outline, plus shape cues for colour-blind players.
+- **Original IP only** (01 §12): no traced or copied assets, sprites or sounds.
+- **Kitbash:** a modular kit per biome (urban/market, industrial, desert, snow, moon, tombs) → 7 launch maps from ~6 kits.
+
+### Asset pipeline (`tools/asset-pipeline`)
+
+1. Blender (or Maya) → glTF with custom properties (slot, LOD, collision tag for editor use).
+2. `gltf-transform`: dedup → prune → weld → resample animations → quantize → **meshopt** → textures to **KTX2** (ETC1S for albedo/masks, UASTC for normals).
+3. Budget checks: tris, texture size, file size, bone count, envelope (cosmetics). CI fails over budget.
+4. Thumbnails (headless render) + manifest entry with content hash.
+5. Upload to R2 under content-hashed paths. The client loads by manifest.
+
+### Animation tech
+
+- `AnimationMixer` per character, with a small blend-tree layer of our own (1D locomotion blend by speed; state machine for air/jet/crouch).
+- **Aim:** the additive aim-offset pose by angle **or** procedural spine/chest/upper-arm rotation after the mixer update. Prototype both and keep the one that reads best.
+- **Two-bone analytic IK** for the off-hand (cheaper than `CCDIKSolver`).
+- Retarget placeholder clips with `SkeletonUtils.retargetClip` (Mixamo) until the animator's clips land.
+
+---
+
+## 5. VFX catalogue (MVP → Launch)
+
+| Effect | Technique | Notes |
+|---|---|---|
+| Muzzle flash | 2–3 emissive cards, random rotation, 2 frames | per weapon family |
+| Tracers | stretched billboard quad, fades in 60 ms | skip on Low for SMGs (every 3rd) |
+| Bullet impacts | pooled instanced decals + material particle burst | concrete/metal/wood/dirt/glass |
+| Shell casings | instanced meshes with simple bounce | capped at 300 |
+| Jetpack flame | animated cone mesh + flipbook + heat shimmer (High) | ignite/sustain/sputter states |
+| Explosions | flipbook fireball + debris + smoke puffs + shockwave ring + shake | sized by radius |
+| Gas cloud | soft sprites with noise scroll, tinted green | the cloud volume matches the sim radius |
+| Flames | additive flipbooks along flame projectiles | |
+| Beam laser | a ribbon with scrolling noise + impact glow | |
+| Storm wall (BR) | full-height plane with a distortion/noise shader | |
+| Spawn/teleport | rising ring + particles | cosmetic variants |
+| Pickups | idle bob + rim glow by type/rarity | rarity shape icon |
+| Hit flash | a white additive flash on the hit character (60 ms) | server-confirmed only |
+| Blood/gore | sprite puffs (Low = sparks/"stuffing" mode) | gore setting |
+
+All VFX respect the presets and **reduced motion**: no flashes > 3 per second (photosensitivity).
+
+---
+
+## 6. Audio
+
+**Graph:**
+```
+sources → [per-voice gain + StereoPanner] → category bus (weapons, impacts, movement, UI, announcer, music, voice)
+        → master compressor/limiter → destination
+```
+
+- **Unlock:** create/resume the `AudioContext` on the first `pointerup`/`keydown`, and resume again after interruptions (portals require this; iOS later).
+- **Mute** when the tab is hidden, and during portal ad breaks.
+- **2.5D spatialisation:**
+  - pan by screen-space x (−1..1);
+  - gain by distance from the camera focus;
+  - a low-pass filter when a solid segment lies between (approximate occlusion, one ray per sound start).
+- **Voice management:** 24 voices max with priority stealing (own gun > enemy gun near > explosions > footsteps > ambience). Each weapon has a "same-sound cooldown" so SMG spam stays clean.
+- **Formats:** Opus/WebM with an AAC/M4A fallback for older Safari. Sprite packs per category to reduce requests.
+- **Off-screen awareness:** coarse server SOUND events (05 §9) are played as directional cues at the edge.
+- **Accessibility:** visual sound indicators (edge pips for gunfire/footsteps/explosions) + captions for the announcer and key cues.
+
+---
+
+## 7. Client boot sequence
+
+```
+1. index.html (tiny) → inline critical CSS + splash
+2. boot chunk: React shell + Three core + netcode + sim (≤ 2 MB)
+3. parallel: /version check · guest auth · region beacons · asset manifest
+4. menu interactive (≤ 3 s broadband)        ← user can queue NOW
+5. while queued: prefetch the likely map + MVP weapons + equipped cosmetics
+6. match found → finish loading the map → compileAsync shaders → LOADED → first snapshot → spawn
+```
+
+A Service Worker (web build only) caches hashed assets. Return visits boot from cache.
+
+---
+
+## 8. Build targets
+
+| Target | Differences |
+|---|---|
+| `web` (our site) | PWA (service worker, install prompt), our auth, our payments, Web Push |
+| `portal` (CrazyGames, Poki, GameDistribution) | no service worker, relative paths, portal SDK adapter (ads/user/purchases), portal identity, **no external requests unless allowed** (Poki), chat-disable respected, `gameplayStart/Stop` hooks |
+| `app` (later) | Capacitor 8 wrapper (or a Trusted Web Activity for Play), native IAP plugin, haptics. Watch Apple's 4.2 "minimum functionality" rule |
+| `dev` | tuning panel, net graph, debug overlays, cheats (god mode, give weapon, spawn bots) |
+
+---
+
+## 9. Destructible terrain (post-launch option)
+
+It's a great 3D-era differentiator for some maps and LTMs:
+- An integer occupancy bitmap per chunk (e.g. 0.125 m cells) → **marching squares** → contour polygons → collision segments + extruded meshes.
+- Explosions broadcast reliable crater events `{x, y, r, seq}`. Integer carving keeps every client and the server bit-identical.
+- Restricted to designated "soft" regions of specific maps, to protect competitive layouts.

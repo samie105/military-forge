@@ -1,0 +1,96 @@
+/**
+ * Match → shell view model (docs/06 §4, layer L4). The game loop calls `matchView` every frame;
+ * the shell store only changes (and React only re-renders) when `sameView` says something visible did.
+ */
+import { MatchEndReason, MatchPhase, TICK_RATE, type Match, type MatchResults, type MatchStanding } from '@military-forge/sim';
+
+export interface MatchView {
+  phase: MatchPhase;
+  /** the match counting down, being played or last finished: 1 for the room's first */
+  number: number;
+  /** whole seconds left in the current timed phase, 0 when untimed */
+  secondsLeft: number;
+  /** IN_PROGRESS with no time limit: the clock shows elapsed time instead */
+  untimed: boolean;
+  /** whole seconds played, only while `untimed` (0 otherwise, so timed matches don't re-render twice a second) */
+  secondsElapsed: number;
+  killLimit: number;
+  localId: number;
+  myScore: number;
+  leaderScore: number;
+  /** WAITING: you are ready */
+  ready: boolean;
+  /** ENDING/POSTGAME: rematch votes so far, humans who can vote, and whether you voted */
+  votes: number;
+  humans: number;
+  voted: boolean;
+  /** final results of the last match (ENDING onwards, and in the lobby after it) */
+  results: MatchResults | null;
+}
+
+export function matchView(match: Match, localId: number): MatchView {
+  let leaderScore = 0;
+  let votes = 0;
+  let any = false;
+  for (const m of match.players) {
+    if (!m) continue;
+    if (!any || m.score > leaderScore) leaderScore = m.score;
+    any = true;
+    if (m.rematch) votes++;
+  }
+  const me = match.players[localId];
+  const untimed = match.phase === MatchPhase.InProgress && match.phaseLength() === 0;
+  return {
+    phase: match.phase,
+    // Match.number counts from GO; the countdown already announces the next one
+    number: match.phase === MatchPhase.Countdown ? match.number + 1 : match.number,
+    secondsLeft: Math.ceil(match.ticksLeft / TICK_RATE),
+    untimed,
+    secondsElapsed: untimed ? Math.floor(match.phaseTick / TICK_RATE) : 0,
+    killLimit: match.rules.killLimit,
+    localId,
+    myScore: me?.score ?? 0,
+    leaderScore,
+    ready: me?.ready ?? false,
+    votes,
+    humans: match.humanCount(),
+    voted: me?.rematch ?? false,
+    results: match.results,
+  };
+}
+
+export function sameView(a: MatchView | null, b: MatchView | null): boolean {
+  if (!a || !b) return a === b;
+  for (const k of Object.keys(a) as (keyof MatchView)[]) if (a[k] !== b[k]) return false;
+  return true;
+}
+
+/** 0:05, 4:32, 12:00 */
+export function formatClock(seconds: number): string {
+  const s = Math.max(0, seconds);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+export function ordinal(n: number): string {
+  const tens = n % 100;
+  const suffix = tens >= 11 && tens <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th');
+  return `${n}${suffix}`;
+}
+
+export const END_REASON: Record<MatchEndReason, string> = {
+  [MatchEndReason.None]: 'Match over',
+  [MatchEndReason.KillLimit]: 'Kill limit reached',
+  [MatchEndReason.TimeLimit]: "Time's up",
+};
+
+export function kdRatio(s: Pick<MatchStanding, 'kills' | 'deaths'>): string {
+  return (s.kills / Math.max(1, s.deaths)).toFixed(2);
+}
+
+/**
+ * XP placeholder until progression lands (docs/13 §R; the API's results worker will award the
+ * real XP): 100 for finishing, 10 per kill, 5 per assist, 50 for 1st place.
+ */
+export function placeholderXp(s: MatchStanding): number {
+  return 100 + 10 * s.kills + 5 * s.assists + (s.placement === 1 ? 50 : 0);
+}

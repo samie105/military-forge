@@ -1,0 +1,126 @@
+# Lint, typecheck, the full test suite and the production build on every pull request and every
+# push to main (docs/06 §10). The suite covers unit tests, golden replays, protocol fuzzing, and the game-server
+# pipe over uWebSockets.js and ws. The job summary has the test counts. See .github/CI.md.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A new push to a pull request cancels that PR's run in progress. Runs on main always finish,
+# so every merge commit gets a result.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+# bash with -eo pipefail (an unspecified shell gets plain `bash -e`).
+defaults:
+  run:
+    shell: bash
+
+env:
+  TURBO_TELEMETRY_DISABLED: 1
+  # Where each package's `vitest run` writes its JSON results, relative to the package (gitignored).
+  VITEST_REPORT: .turbo/vitest-report.json
+
+jobs:
+  check:
+    # Branch protection should require this check by this name (.github/CI.md).
+    name: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # pnpm version comes from package.json "packageManager".
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - id: node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: pnpm # the pnpm store, keyed on pnpm-lock.yaml
+
+      - name: Install
+        id: install
+        run: pnpm install --frozen-lockfile
+
+      # Typecheck and test run even when an earlier check fails, and --continue keeps turbo going
+      # past a failing package, so one run reports every failure.
+      - name: Lint
+        id: lint
+        run: pnpm lint
+
+      - name: Typecheck
+        id: typecheck
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm typecheck --continue
+
+      # The binary matches the OS, CPU and Node ABI (process.versions.modules, the same for every
+      # Node 22 patch release); scripts/fetch-uws.mjs pins the uWS release. Keying on the ABI rather
+      # than the full Node version keeps the cache across runner image updates.
+      - name: Node ABI
+        id: abi
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: echo "abi=$(node -p process.versions.modules)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache uWebSockets.js
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/game-server/vendor/uWebSockets.js
+          key: uws-${{ runner.os }}-${{ runner.arch }}-abi${{ steps.abi.outputs.abi }}-${{ hashFiles('scripts/fetch-uws.mjs') }}
+
+      # server.test.ts runs the pipe on every transport that loads. Fail here, rather than let the
+      # suite pass on ws alone.
+      - name: Fetch uWebSockets.js
+        id: uws
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: |
+          pnpm uws:fetch
+          cd apps/game-server
+          pnpm exec tsx -e "import('./src/transports.ts').then(({ loadUws }) => {
+            const uws = loadUws();
+            if (!uws) { console.log('::error::uWebSockets.js was fetched but does not load'); process.exit(1); }
+            console.log('uWebSockets.js loads from ' + uws.from);
+          })"
+
+      # --force: a turbo cache hit would replay the log without writing a fresh report. Vitest
+      # writes an untitled summary per package when GITHUB_STEP_SUMMARY is set; it is blanked here
+      # so that the job summary is the single combined table from the last step.
+      - name: Test
+        id: test
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: >-
+          GITHUB_STEP_SUMMARY= pnpm test --force --continue --
+          --reporter=default --reporter=github-actions --reporter=json --outputFile.json="$VITEST_REPORT"
+
+      - name: Test CI scripts
+        id: ci-scripts
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: node --test ".github/scripts/*.test.mjs"
+
+      # The production build (docs/06 §10: … → golden replays → build). Typecheck and vitest both
+      # accept an import of a missing asset (vite/client types `*?url` as string, and vitest resolves
+      # it to a /@fs/ path), so only `vite build` catches a dangling asset import.
+      - name: Build
+        id: build
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm build --continue
+
+      - name: Job summary
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: >-
+          node .github/scripts/test-summary.mjs --report "$VITEST_REPORT"
+          --check "lint=${{ steps.lint.outcome }}"
+          --check "typecheck=${{ steps.typecheck.outcome }}"
+          --check "uWS=${{ steps.uws.outcome }}"
+          --check "test=${{ steps.test.outcome }}"
+          --check "CI scripts=${{ steps.ci-scripts.outcome }}"
+          --check "build=${{ steps.build.outcome }}"

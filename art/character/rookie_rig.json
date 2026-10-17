@@ -1,0 +1,79 @@
+{
+  "name": "rookie",
+  "height_m": 1.5,
+  "source": "rookie_tripo_raw.glb",
+  "tris": {
+    "raw": 29860,
+    "lod0": 3900,
+    "lod1": 1750
+  },
+  "albedo": {
+    "lod0": 1024,
+    "lod1": 512
+  },
+  "landmarks_blender_zup": {
+    "neck_z": 0.96,
+    "crotch_z": 0.42,
+    "hip_half": 0.2221,
+    "chest_half": 0.1988,
+    "armpit_z": 0.76,
+    "spine_y": 0.0157,
+    "back_y": 0.1721,
+    "shoulder_L": [
+      0.2227,
+      0.0493,
+      0.8
+    ],
+    "elbow_L": [
+      0.3137,
+      0.0339,
+      0.6668
+    ],
+    "wrist_L": [
+      0.3744,
+      0.0236,
+      0.578
+    ],
+    "hand_end_L": [
+      0.4394,
+      0.0125,
+      0.4829
+    ],
+    "hip_L": [
+      0.1436,
+      0.0157,
+      0.46
+    ],
+    "knee_L": [
+      0.1648,
+      0.018,
+      0.29
+    ],
+    "ankle_L": [
+      0.186,
+      0.0603,
+      0.12
+    ],
+    "ball_L": [
+      0.186,
+      -0.1189,
+      0.03
+    ],
+    "toe_L": [
+      0.186,
+      -0.1989,
+      0.03
+    ],
+    "face_y": -0.2446,
+    "jetpack_back_y": 0.1723,
+    "jetpack_mid_z": 0.726
+  },
+  "clips": [
+    "crouch_idle",
+    "fall",
+    "idle",
+    "jet_ascend",
+    "jet_hover",
+    "run"
+  ]
+}
