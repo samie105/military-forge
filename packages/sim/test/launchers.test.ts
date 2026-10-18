@@ -12,6 +12,7 @@ import {
   POPPER,
   PROJECTILE_TYPE_BASE,
   PULSE,
+  RIOT_SHIELD,
   RIPPER,
   ROCKET,
   SHELL,
@@ -20,7 +21,8 @@ import {
   type MapPolygon,
 } from '@military-forge/content';
 import { describe, expect, it } from 'vitest';
-import { BOUNCED, Btn, Game, MAX_GRENADES, spawnCloud, type GrenadeState, type SimEvent } from '../src';
+import { angleToU16 } from '@military-forge/shared';
+import { BOUNCED, Btn, Game, MAX_GRENADES, giveShield, shieldRaised, spawnCloud, type GrenadeState, type SimEvent } from '../src';
 import { dummyAt, flatMap, hold, makeGame, placeOnGround, rect } from './helpers';
 
 const live = (game: Game, type: number): GrenadeState[] => game.grenades.filter((g) => g.alive && g.type === type);
@@ -220,6 +222,64 @@ describe('slabs (#107 review)', () => {
         expect(dmg > 0, `${weapon} through a ${blocksBullets ? 'slab' : 'plain one-way'}`).toBe(!blocksBullets);
       }
     }
+  });
+});
+
+describe('riot shields against launchers (#107 review follow-up)', () => {
+  /** A shooter at x 10 with `weapon`; a player at x 20 with a riot shield up, facing it (or away). */
+  function standoff(weapon: number, facingShooter = true, at = 20) {
+    const { game, p } = armed(weapon);
+    const q = game.addPlayer('carrier');
+    game.setLoadout(q, [HAMMER.index, HAMMER.index]);
+    placeOnGround(game, q, at);
+    giveShield(q, RIOT_SHIELD.hp);
+    q.input.aim = angleToU16(facingShooter ? Math.PI : 0);
+    hold(game, p, 0, 30); // its shield comes up
+    expect(shieldRaised(q)).toBe(true);
+    return { game, p, q };
+  }
+
+  it('a rocket at a raised shield goes off at its face: the shield takes the hit, its carrier is covered', () => {
+    const { game, p, q } = standoff(THUMPER.index);
+    hold(game, p, Btn.Fire, 1);
+    const events = run(game, p, 60, () => live(game, rocketType).length === 0);
+    const blast = events.find((e) => e.type === 'explosion') as Extract<SimEvent, { type: 'explosion' }>;
+    expect(blast.x).toBeCloseTo(q.x - RIOT_SHIELD.forward - ROCKET.radius, 1);
+    expect(q.alive).toBe(true);
+    expect(q.hp).toBe(T.healthMax);
+    expect(q.shieldHp).toBeCloseTo(RIOT_SHIELD.hp - ROCKET.damage, 6);
+    // from behind, the same rocket kills
+    const back = standoff(THUMPER.index, false);
+    hold(back.game, back.p, Btn.Fire, 1);
+    run(back.game, back.p, 60);
+    expect(back.q.alive).toBe(false);
+  });
+
+  it('a shell and a blade stop at the shield too; a flame is spent on it; an EMP orb passes it', () => {
+    const shell = standoff(POPPER.index, true, 15); // 5 m: the lob still at shield height (it rolls under a shield)
+    hold(shell.game, shell.p, Btn.Fire, 1, 0);
+    run(shell.game, shell.p, 90);
+    expect([shell.q.hp, shell.q.shieldHp]).toEqual([T.healthMax, RIOT_SHIELD.hp - SHELL.explosion!.maxDamage]);
+
+    const blade = standoff(RIPPER.index);
+    hold(blade.game, blade.p, Btn.Fire, Math.round(RIPPER.charge! * 60));
+    run(blade.game, blade.p, 60);
+    expect([blade.q.alive, blade.q.shieldHp]).toEqual([true, RIOT_SHIELD.hp - BLADE.damage]);
+
+    const flames = standoff(DRAGON.index);
+    flames.p.x = 16.5; // in reach
+    hold(flames.game, flames.p, Btn.Fire, 60);
+    run(flames.game, flames.p, 30);
+    expect([flames.q.hp, flames.q.burnTicks, flames.q.shieldHp]).toEqual([T.healthMax, 0, RIOT_SHIELD.hp]);
+    const behind = standoff(DRAGON.index, false);
+    behind.p.x = 16.5;
+    hold(behind.game, behind.p, Btn.Fire, 30);
+    expect(behind.q.hp).toBeLessThan(T.healthMax); // from behind they burn
+
+    const orb = standoff(PULSE.index);
+    hold(orb.game, orb.p, Btn.Fire, Math.round(PULSE.charge! * 60));
+    run(orb.game, orb.p, 120, () => orb.q.jetDisabledTicks > 0);
+    expect(orb.q.jetDisabledTicks).toBeGreaterThan(0);
   });
 });
 

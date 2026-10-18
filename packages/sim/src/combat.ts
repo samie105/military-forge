@@ -549,13 +549,14 @@ export function stepWeapons(game: Game, p: PlayerState): void {
     const def = weapons[slot.def]!;
     const inHand = p.dual || s === p.active;
     // a minigun spins while either fire button is held in hand, and winds down otherwise. Spun up
-    // on the second button alone it winds down after PRE_SPIN_HOLD s without a shot (review M1); a
-    // fresh press of it starts that clock again
+    // on the second button alone it winds down after PRE_SPIN_HOLD s without a shot (review M1): the
+    // clock (ticksSinceShot) starts when a spin-up starts from rest (a press, or firing), and only a
+    // shot restarts it, so pressing the second button again keeps nothing spinning (#107 review)
     if (def.spin) {
       const rate = spinRates(def);
-      if (wasPressed(buttons, prev, Btn.Fire2)) slot.ticksSinceShot = 0;
-      const preSpin = isDown(buttons, Btn.Fire2) && slot.ticksSinceShot < ticks(PRE_SPIN_HOLD);
-      const spinning = inHand && ready && slot.reloadTicks === 0 && (firing || preSpin);
+      const wants = inHand && ready && slot.reloadTicks === 0 && (firing || isDown(buttons, Btn.Fire2));
+      if (wants && slot.spin === 0 && (firing || wasPressed(buttons, prev, Btn.Fire2))) slot.ticksSinceShot = 0;
+      const spinning = wants && (firing || slot.ticksSinceShot < ticks(PRE_SPIN_HOLD));
       slot.spin = spinning ? Math.min(SPIN_FULL, slot.spin + rate.up) : Math.max(0, slot.spin - rate.down);
     }
     // a charge weapon (`spin` counts the ticks charged): a press starts it, holding fills it, letting

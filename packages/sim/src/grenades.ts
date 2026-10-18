@@ -370,8 +370,12 @@ export function flash(game: Game, x: number, y: number, owner: number, def: Flas
   }
 }
 
-/** Radial damage with line-of-sight and knockback (docs/02 §12, §14). */
-export function explode(game: Game, x: number, y: number, owner: number, def: ExplosionDef, source: number = DamageSource.Grenade, grenade = 0): void {
+/**
+ * Radial damage with line-of-sight and knockback (docs/02 §12, §14). `shielded`: the player whose
+ * riot shield the blast went off against (a launcher's projectile stopped at its face): covered,
+ * as behind a wall.
+ */
+export function explode(game: Game, x: number, y: number, owner: number, def: ExplosionDef, source: number = DamageSource.Grenade, grenade = 0, shielded = -1): void {
   game.events.push({ type: 'explosion', x, y, radius: def.radius, owner, grenade });
   const world = game.world;
   for (const q of game.players) {
@@ -395,6 +399,7 @@ export function explode(game: Game, x: number, y: number, owner: number, def: Ex
       const hd = Math.sqrt(hx * hx + hy * hy);
       covered = hd > 1e-6 && world.raycast(x, y, hx / hd, hy / hd, hd, SegFlag.BulletPass, ray);
     }
+    if (q.id === shielded) covered = true; // the shield it went off against is between them
 
     let damage = 0;
     if (!covered) {

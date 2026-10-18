@@ -116,7 +116,7 @@ Equip times: 0.25 s for one-handed guns, 0.3–0.35 s for rifles and SMGs, 0.5 s
 | Pulse | orb 0.25 m, 3 s life (24 m); damage 0 | the table gives no life |
 | Dragon | a tank of **40 flames** (6 s), refilling 8 a second after 0.5 s off the trigger (5 s from empty); no reload; spread ±8° | "125 fuel" had no unit; 40 flames at 0.15 s keeps "auto-refill 5 s" |
 
-Projectiles ignore riot shields for now (flames go round them as specified; rockets, shells and blades should hit one: a follow-up). They are never lag-compensated (§11).
+**Riot shields** stop projectiles as they stop bullets (the coordinator's call after #107's review, 18 Oct): a rocket, shell or blade that comes at a raised shield's face (or a slung one's, from behind) within its block arc goes off there; the shield takes the projectile's hit (a rocket 100, a shell 70, a blade 100), and its blast counts the carrier as covered (no damage, a third of the push), as a wall would for a frag. A flame is spent on the shield, which shelters the whole body, head included, from flames in front (the table's "passes around riot shields" is overruled). An EMP orb passes it, as it passes walls. Projectiles are never lag-compensated (§11).
 
 ---
 
@@ -264,7 +264,7 @@ Zoom makes the camera pull **out** so you see more of the map (1×–7×). In 2.
 | Weapon | Mechanic |
 |---|---|
 | Breacher | 5 pellets; each pellet hit applies 0.6 m/s of knockback (point-blank = a big shove); pellets don't penetrate |
-| Dragon | spawns a flame projectile every 0.15 s (sim projectile: 7 m/s initial speed, gravity −0.2, life 0.8 s, radius grows 0.15 → 0.6 m). Hits apply 20 dmg + a **burn** of 4 dmg/s for 2 s. Flames reflect weakly off walls → user damage when close. **Clears gas clouds** it touches. Passes around riot shields. **Built:** a flame that touches a player is spent (one hit each); after a bounce it can hit its owner for half; burning is `PlayerState.burnTicks` (1 HP every 0.25 s, credited to the Dragon), in the local block, and a remote flag |
+| Dragon | spawns a flame projectile every 0.15 s (sim projectile: 7 m/s initial speed, gravity −0.2, life 0.8 s, radius grows 0.15 → 0.6 m). Hits apply 20 dmg + a **burn** of 4 dmg/s for 2 s. Flames reflect weakly off walls → user damage when close. **Clears gas clouds** it touches. ~~Passes around riot shields~~ (built: a raised shield stops them from the front, see §5). **Built:** a flame that touches a player is spent (one hit each); after a bounce it can hit its owner for half; burning is `PlayerState.burnTicks` (1 HP every 0.25 s, credited to the Dragon), in the local block, and a remote flag |
 | Arc | a continuous beam: one ray per 0.15 s tick from the shoulder; hitscan with lag comp; perfectly accurate; draws a persistent beam VFX; cell regenerates when not firing. **Built:** `fireMode: 'beam'`, a 40-tick cell that refills at 10 a second after 0.5 s off the trigger, no falloff, never reloads (the beam VFX is still the tracer) |
 | Thumper | sim projectile 20 m/s, no gravity, smoke trail; explodes on contact or at 60 m; splash per 02-physics §14; huge knockback (rocket jumps possible: self-damage 50%). **Built:** a direct hit is 100, then the blast; fired into a wall or the floor at point-blank it goes off there |
 | Popper | arcing grenades (gravity 1.0, e = 0.3); explodes on player contact or after 1.2 s. **Built** as specified (not on its shooter) |

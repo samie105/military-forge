@@ -77,9 +77,20 @@ describe('burst, spin-up and beam (more guns)', () => {
     expect(heldSpeedMul(p)).toBeCloseTo(SHREDDER.moveSpeedMul * SPINNING_SPEED_MUL, 9);
     hold(game, p, Btn.Fire2, PRE_SPIN_HOLD * 60 - 60 + 70); // past the hold, plus the 1 s wind-down
     expect(p.weapons[0].spin).toBe(0);
+    hold(game, p, Btn.Fire2, 60); // still held: it stays down
+    expect(p.weapons[0].spin).toBe(0);
     hold(game, p, 0, 1);
-    hold(game, p, Btn.Fire2, 50); // a fresh press: spins up again
+    hold(game, p, Btn.Fire2, 50); // from rest: spins up again
     expect(p.weapons[0].spin).toBe(SPIN_FULL);
+    // pressing the second button again and again doesn't keep it spun: only firing does (#107 review)
+    let lowest = SPIN_FULL;
+    for (let t = 0; t < 360; t++) {
+      hold(game, p, t % 114 === 0 ? 0 : Btn.Fire2, 1);
+      lowest = Math.min(lowest, p.weapons[0].spin);
+    }
+    expect(lowest).toBeLessThan(SPIN_FULL / 2);
+    hold(game, p, 0, 70);
+    hold(game, p, Btn.Fire2, 50);
     expect(fireTicks(game, p, Btn.Fire | Btn.Fire2, 1)).toEqual([0]);
     // firing keeps it spinning however long
     hold(game, p, Btn.Fire | Btn.Fire2, 180);

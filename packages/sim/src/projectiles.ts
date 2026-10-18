@@ -18,7 +18,8 @@ import type { Game } from './game';
 import { closestPointOnSegment, rayCapsule } from './geometry';
 import { emp, explode, grenadeForces, sweepCircle, sweepHit, type GrenadeState } from './grenades';
 import { createBodyEnv } from './mechanics';
-import type { PlayerState } from './player';
+import { hitboxLayout, type PlayerState } from './player';
+import { damageShield, shieldFace, type ShieldFace } from './shield';
 import { SegFlag, createRayHit } from './world';
 
 /** GrenadeState.state of a projectile: it has bounced (a blade or flame can now hit its shooter) */
@@ -74,11 +75,38 @@ function sourceOf(g: GrenadeState): number {
   return g.weapon >= 0 ? g.weapon : DamageSource.Grenade;
 }
 
-/** Its blast (an explosion or an EMP burst) where it is, and it's gone. */
-function blowUp(game: Game, g: GrenadeState, def: ProjectileDef): void {
+/** Its blast (an explosion or an EMP burst) where it is, and it's gone. `shielded`: against that player's riot shield. */
+function blowUp(game: Game, g: GrenadeState, def: ProjectileDef, shielded = -1): void {
   g.alive = false;
-  if (def.explosion) explode(game, g.x, g.y, g.owner, def.explosion, sourceOf(g), g.type);
+  if (def.explosion) explode(game, g.x, g.y, g.owner, def.explosion, sourceOf(g), g.type, shielded);
   else if (def.emp) emp(game, g.x, g.y, g.owner, def.emp, EMP.index);
+}
+
+const face: ShieldFace = { x: 0, y0: 0, y1: 0 };
+/** shieldInTheWay's result: the fraction of the move at which it touches the shield */
+let shieldT = 1;
+
+/**
+ * The first riot shield `g` touches on its move (mx, my) before `limit` (a fraction of it): a face
+ * it comes at from within the block arc (raised in front, slung behind), its own shooter's too
+ * (a blade coming back). The touch is in `shieldT`. `overHead`: flames, which would otherwise curl
+ * over the shield's top onto the head; the shield shelters the whole body from them.
+ */
+function shieldInTheWay(game: Game, g: GrenadeState, mx: number, my: number, r: number, limit: number, overHead: boolean): PlayerState | null {
+  const len = Math.sqrt(mx * mx + my * my);
+  if (len < 1e-9) return null;
+  let best: PlayerState | null = null;
+  shieldT = limit;
+  for (const q of game.players) {
+    if (!q?.alive || q.shieldHp <= 0 || !shieldFace(q, mx / len, face)) continue;
+    if (overHead) face.y1 = Math.max(face.y1, q.y + hitboxLayout(q).head.y + hitboxLayout(q).head.r);
+    const t = rayCapsule(g.x, g.y, mx, my, face.x, face.y0, face.x, face.y1, r);
+    if (t < shieldT) {
+      shieldT = t;
+      best = q;
+    }
+  }
+  return best;
 }
 
 /** Can `q` be hit by `g` (its shooter only once it has bounced, and only if the def says so)? */
@@ -148,20 +176,23 @@ export function stepProjectile(game: Game, g: GrenadeState, def: ProjectileDef):
     const tWall = wall ? sweepHit.t : 1;
     const nx = sweepHit.nx;
     const ny = sweepHit.ny;
+    // a riot shield facing it, before the wall (an orb passes shields as it passes walls)
+    const shield = def.walls === 'pass' ? null : shieldInTheWay(game, g, mx, my, r, tWall, def.players === 'consume');
+    const tBlock = shield ? shieldT : tWall;
 
-    // players along this leg, before the wall
+    // players along this leg, before the wall or the shield
     if (def.players === 'pierce') {
       // through everyone in the way, once each between bounces
       for (const q of game.players) {
         if (!q || !hittable(g, def, q) || (g.hits & (1 << q.id)) !== 0) continue;
         const t = bodyT(q, g.x, g.y, mx, my, r);
-        if (t > tWall || !reaches(game, g.x + mx * t, g.y + my * t, q)) continue;
+        if (t > tBlock || !reaches(game, g.x + mx * t, g.y + my * t, q)) continue;
         g.hits |= 1 << q.id;
         strike(game, g, def, q);
       }
     } else {
       let first: PlayerState | null = null;
-      let tFirst = tWall;
+      let tFirst = tBlock;
       for (const q of game.players) {
         if (!q || !hittable(g, def, q)) continue;
         const t = bodyT(q, g.x, g.y, mx, my, r);
@@ -182,6 +213,20 @@ export function stepProjectile(game: Game, g: GrenadeState, def: ProjectileDef):
         }
         break;
       }
+    }
+
+    if (shield) {
+      // stopped at the shield's face: a rocket, shell or blade goes off there (the shield takes its
+      // hit, its carrier is covered from the blast); a flame is spent
+      g.x += mx * shieldT;
+      g.y += my * shieldT;
+      if (def.players === 'consume') g.alive = false;
+      else {
+        const hit = def.damage > 0 ? def.damage : (def.explosion?.maxDamage ?? 0);
+        damageShield(game, shield, hit, g.owner, g.x, g.y);
+        blowUp(game, g, def, shield.id);
+      }
+      break;
     }
 
     if (!wall) {

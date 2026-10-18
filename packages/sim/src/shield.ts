@@ -12,7 +12,9 @@
  * up, in front of the torso, struck from within ±arcDeg of the facing; slung, behind it, struck
  * from within ±arcDeg of the back (owner's call, 17 Oct 2026). On its way up it blocks neither
  * way. Bullets that strike it wear it down (one HP pool; it breaks at 0) and bounce off
- * (combat.ts). Melee, flames and explosions ignore it.
+ * (combat.ts). Launcher projectiles stop at its face the same way (projectiles.ts: a rocket, shell
+ * or blade goes off there, a flame is spent, and the blast counts its carrier as covered; an EMP
+ * orb passes it, as it passes walls). Melee and grenades ignore it.
  */
 import { RIOT_SHIELD, weapons } from '@military-forge/content';
 import { DEG2RAD, SCALAR_INV, quantize, simCos } from '@military-forge/shared';
@@ -112,6 +114,30 @@ export function shieldHitT(
   const fx = x + side * offset;
   const y0 = y + shieldBottom(crouched);
   return raySegment(sx, sy, dx, dy, fx, y0, fx, y0 + RIOT_SHIELD.height);
+}
+
+/** A shield's blocking face (shieldFace): its x and its bottom and top. */
+export interface ShieldFace {
+  x: number;
+  y0: number;
+  y1: number;
+}
+
+/**
+ * `q`'s shield facing something travelling along a unit vector whose x is `dx`: raised, in front;
+ * slung, behind; struck from within the block arc, as bullets (shieldHitT). Fills `out` (a vertical
+ * segment) and returns true, or false when nothing of it faces that way.
+ */
+export function shieldFace(q: PlayerState, dx: number, out: ShieldFace): boolean {
+  if (q.shieldHp <= 0) return false;
+  const front = shieldRaised(q);
+  if (!front && !shieldSlung(q)) return false; // on its way up it guards neither side
+  const side = front ? q.facing : -q.facing;
+  if (side * dx > -COS_ARC) return false;
+  out.x = q.x + side * (front ? RIOT_SHIELD.forward : RIOT_SHIELD.backOffset);
+  out.y0 = q.y + shieldBottom(q.crouched);
+  out.y1 = out.y0 + RIOT_SHIELD.height;
+  return true;
 }
 
 /**

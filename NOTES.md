@@ -856,7 +856,9 @@ Every gun with a W8 model that fires bullets now has stats (`packages/content/sr
 - **Charge** (`fireMode: 'charge'`): a press starts it, holding fills it (`WeaponSlot.spin` counts the ticks), let go early and it's lost; full, it fires and waits for the next press. Bots press and hold, then let go.
 - **The Dragon's tank** is a regenerating magazine like the Arc's: 40 flames (6 s), 8 a second after 0.5 s off the trigger. **Flames put out toxic gas** they touch (not smoke).
 - **Bots** never fire a rocket or shell at a body inside its own blast, lob shells only within 10 m (they aim straight), and value straight projectiles less with range (they have to lead). The Pulse is worth nothing to them (no damage).
-- **Known gaps (follow-ups):** projectiles ignore riot shields (flames should go round them, and do; rockets, shells and blades should hit a shield); the Ripper's and Pulse's charge has no slowdown; the orb's burst uses the EMP grenade's ring on clients.
+- **Riot shields** (the follow-up PR after #107's review): a rocket, shell or blade coming at a shield's face (raised in front, slung behind, within the block arc as for bullets: `shieldFace` in shield.ts) goes off there; the shield takes its hit (rocket 100, shell 70, blade 100: three rockets break one) and the blast counts the carrier as covered (`explode(…, shielded)`: no damage, the covered push). A flame is spent on it, and a raised shield shelters the head from flames too (they'd curl over its top). An EMP orb passes it. A shell lobbed under it, at the feet, still gets through.
+- **Shredder pre-spin (#107 review Low):** the hold clock starts only when a spin-up starts from rest (a press of the second button, or firing) and only a shot restarts it: pressing the second button again no longer keeps it spun, and once it winds down while held it stays down until pressed again.
+- **Known gaps (follow-ups):** the Ripper's and Pulse's charge has no slowdown; the orb's burst uses the EMP grenade's ring on clients.
 
 | Feel (sim `pnpm feel`, a standing target) | TTK | Hits |
 |---|---|---|
