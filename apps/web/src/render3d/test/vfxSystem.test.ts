@@ -1,4 +1,4 @@
-import { PROJECTILE_TYPE_BASE, RIOT_SHIELD, ROCKET, fluxLabMap, movementTestMap } from '@military-forge/content';
+import { EMP, FLASHBANG, FRAG, GAS, MINE, PROJECTILE_TYPE_BASE, RIOT_SHIELD, ROCKET, SMOKE, fluxLabMap, movementTestMap } from '@military-forge/content';
 import { CollisionWorld, createRayHit, type SimEvent } from '@military-forge/sim';
 import { DataTexture, DirectionalLight, HemisphereLight, Scene } from 'three';
 import { describe, expect, it } from 'vitest';
@@ -119,6 +119,13 @@ describe('Vfx', () => {
 });
 
 describe('Vfx and arsenal-b grenade types', () => {
+  it("draws each thrown grenade with its own type's model (#91), once: the smoke's renderer, not the frag's", () => {
+    const { vfx } = system();
+    vfx.update(frame({ grenades: [{ x: 150, y: 4, fuse: 60, type: SMOKE.index }, { x: 152, y: 4, fuse: 60, type: EMP.index }] }), 1 / 60);
+    expect(vfx.throwables.map((g) => g.body.count)).toEqual([0, 1, 0, 0, 0, 1]); // frag, smoke, gas, flash, mine, emp
+    expect(vfx.throwables.map((g) => g.type)).toEqual([FRAG.index, SMOKE.index, GAS.index, FLASHBANG.index, MINE.index, EMP.index]);
+  });
+
   it('a flashbang or EMP going off is not a fireball (their own effects draw it); a mine blast is', () => {
     for (const [grenade, fireball] of [
       [3, false],

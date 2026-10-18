@@ -1,0 +1,53 @@
+/*
+ * The phone HUD's look in the app (templatePhone.ts): the kit's m-hud classes (.pt-*, ui/kit.css) for
+ * what you look at; the thumb dials are the touch controls (touch/touch.css). Calm by rule: feedback
+ * only when something happens (docs/design/ui-motion-spec.md §1.7, §4.2). Tokens only.
+ */
+/* the phone's distances: the motion spec's × 0.7 */
+.mf-hud-phone { --m-rise: 10px; }
+html.reduce-motion .mf-hud-phone { --m-rise: 0px; }
+
+/* the kill line: the newest kill only, in from the right inside the safe area, gone after its time */
+.ph .pt-feed { position: absolute; display: block; left: var(--safe-l); top: var(--safe-t); max-width: 236px; }
+.ph .pt-feed .kf { display: flex; align-items: center; gap: 6px; padding: 4px 10px; font-size: var(--fs-14); white-space: nowrap; }
+.pt-feed .kf:not(:first-child) { display: none; }
+.pt-feed .kf .ic { width: 18px; height: 18px; }
+.pt-feed .kf .ic--wpn, .pt-feed .kf [href^='#icon-wpn-'] { width: 40px; height: 15px; }
+.pt-feed .kf .kf__name { overflow: hidden; text-overflow: ellipsis; min-width: 0; max-width: 6.5em; }
+/* one line, no room for the bot badge: a bot's name says it */
+.pt-feed .kf .badge { display: none; }
+#hud .pt-feed .kf { animation: pt-kill-in var(--m-fast) var(--ease-arrive) both, mf-hud-out var(--m-base) var(--ease-leave) calc(var(--feed-ms, 6000ms) - var(--m-base)) forwards; }
+@keyframes pt-kill-in { from { opacity: 0; transform: translateX(var(--m-rise)); } to { opacity: 1; transform: none; } }
+
+/* the low-health cue takes the kill line's place while it lasts */
+.pt-cue { gap: 6px; }
+.pt-cue span:empty { display: none; }
+
+/* the clock: one line, or the score under the time when large text needs the room; a long leader name ends in … */
+.ph .pt-clock { flex-wrap: wrap; justify-content: center; column-gap: 10px; row-gap: 0; max-width: 244px; }
+.ph .pt-clock > span { display: inline-flex; align-items: baseline; gap: 4px; white-space: nowrap; }
+.ph .pt-clock [data-bind='match.leaderShort'] { display: inline-block; max-width: 6.5em; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+.ph .pt-clock i { align-self: center; }
+
+/* ping under the kill line: the bars and the number in the ping's colour (good, mid, bad) */
+.pt-ping > span { display: inline-flex; align-items: center; gap: 4px; }
+.pt-ping .ping--mid .sig i:nth-child(4), .pt-ping .ping--bad .sig i:nth-child(n + 3) { opacity: 0.25; }
+
+/* the owner's admin page changed this server's numbers: a brass tag under the ping, clear of the clock */
+.ph .phud-admin { position: absolute; left: calc(var(--safe-l) + 4px); top: calc(var(--safe-t) + 48px + 20px * var(--text-scale, 1)); color: var(--c-brass); text-shadow: var(--ts-hud); white-space: nowrap; }
+
+/* the pickup line, for what has no button (a shield, grenades); a crate's gun has the take button */
+.ph .pt-pickup { position: absolute; left: 50%; top: calc(var(--safe-t) + 52px); bottom: auto; translate: -50% 0; transform: none; display: flex; align-items: center; gap: 6px; max-width: 360px; padding: 4px 12px; font-size: var(--fs-14); }
+html[data-touch-crate] .ph .pt-pickup { display: none; }
+
+/* the arc warning: under the clock while an aimed throw bends through a map event */
+.ph .mf-arcwarn { left: 50%; top: calc(var(--safe-t) + 52px); translate: -50% 0; z-index: var(--z-local-2); }
+
+/* the respawn card: under the clock, clear of the dials */
+.ph .respawn { top: calc(var(--safe-t) + 52px); bottom: auto; width: auto; min-width: 0; gap: 2px; padding: 8px 18px; }
+.ph .respawn__by { font-size: var(--fs-16); }
+.ph .respawn__timer { font-size: var(--fs-20); }
+.ph .respawn__timer b { font-size: var(--fs-28); }
+
+/* the reticle: the kit's phone cross, a little smaller than the desktop's */
+.mf-hud-phone .reticle .reticle__x { left: -20px; top: -20px; width: 40px; height: 40px; }

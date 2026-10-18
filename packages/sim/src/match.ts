@@ -8,7 +8,7 @@
  * scores the Game's events. Otherwise it only observes the Game, so rooms and replays without a
  * Match are unchanged. Everything is driven by ticks, inputs and commands: deterministic.
  */
-import { HitZone } from '@military-forge/content';
+import { HitZone, NO_WEAPON } from '@military-forge/content';
 import { MAX_PLAYERS, ticks } from './constants';
 import type { Game } from './game';
 import { Fnv32 } from './hash';
@@ -515,6 +515,7 @@ export class Match {
     for (const p of game.players) if (p) p.alive = false;
     for (const p of game.players) {
       if (!p) continue;
+      p.keptGuns = [NO_WEAPON, NO_WEAPON]; // a new match starts everyone on their own loadout, not the warm-up's crate guns
       game.respawn(p);
       p.kills = 0;
       p.deaths = 0;

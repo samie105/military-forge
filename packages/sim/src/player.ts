@@ -117,6 +117,12 @@ export class PlayerState {
   shieldTicks = 0;
   /** weapons given on respawn: [slot 0, slot 1] weapon indices */
   loadout: [number, number] = [DEFAULT_LOADOUT[0], DEFAULT_LOADOUT[1]];
+  /**
+   * The guns held at the last death (people, not bots; the owner's playtest: "remember gun choice
+   * in case of respawn"): the next respawn gives these, with full ammo, instead of `loadout`.
+   * NO_WEAPON = that slot comes from `loadout`. setLoadout and a new match clear it.
+   */
+  keptGuns: [number, number] = [NO_WEAPON, NO_WEAPON];
 
   // Status effects from grenades (grenades.ts, clouds.ts): ticks left, 0 = none. The local block
   // carries them (prediction counts them down exactly); the HUD and the bots read them.
@@ -226,6 +232,18 @@ export function cancelReloads(p: PlayerState): void {
   p.weapons[1].reloadTicks = 0;
   p.weapons[0].burst = 0;
   p.weapons[1].burst = 0;
+}
+
+/** At a death: remember the guns in hand for the next respawn (people only: bots keep their own loadouts). */
+export function keepGuns(p: PlayerState): void {
+  if (p.isBot) return;
+  for (let i = 0; i < 2; i++) p.keptGuns[i] = p.weapons[i]!.def;
+}
+
+/** What a respawn gives: the guns kept at the last death, slot by slot, else the loadout. */
+export function respawnGuns(p: PlayerState): [number, number] {
+  const k = p.keptGuns;
+  return [k[0] !== NO_WEAPON ? k[0] : p.loadout[0], k[1] !== NO_WEAPON ? k[1] : p.loadout[1]];
 }
 
 /** Fills both slots with full ammo; NO_WEAPON (or an unknown index) leaves a slot empty. */

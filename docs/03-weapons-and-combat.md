@@ -88,7 +88,7 @@ The schema is zod-validated and lint-checked (e.g. a `dps` sanity range per clas
 | **Machete** | melee pickup | melee | 1 | **100** (one-hit) | 0.55 swing | — | — | 1.2 | — | 1× | 100 | 1.05 | L |
 | **Riot Shield** | off-hand pickup | special | off-hand | blocks frontal bullets (±60°), 300 HP | — | — | — | — | — | — | 25 (bash) | 0.75 | L |
 
-**Default spawn loadout** (core modes; host-configurable): Hammer .44 + Hawk .50 + 3 frags. Everything else is picked up from map spawners.
+**Default spawn loadout** (core modes; host-configurable): Hammer .44 + Hawk .50 + 3 frags. Everything else is picked up from map spawners. **Respawns keep your guns** (owner's playtest: "remember gun choice in case of respawn"): a player comes back with the two guns they died holding, crate and armory picks included, with full ammo; grenades come back as the default belt. A new match starts everyone on their loadout again, and bots keep their own (NOTES §27).
 
 **Cosmetic variants, not stat upgrades:** genre classics sold golden guns with extra power. Ours is a **gold skin** for the Hawk with no stat change.
 

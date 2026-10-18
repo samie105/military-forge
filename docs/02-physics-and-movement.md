@@ -165,10 +165,10 @@ BR squads: hp ≤ 0 with alive teammate ──▶ KNOCKED (crawl 1.2 m/s, bleed-
 | `JET_KICK` | ×1.35 thrust for first 6 ticks | responsive ignition |
 | `JET_MAX_VY` | 6.5 m/s | thrust tapers linearly over the last 1.5 m/s before the cap |
 | `JET_AIR_MAX_X` | 6.5 m/s | slightly faster sideways while flying |
-| `FUEL_MAX` | 140 | the "nitro" bar (100 until the owner's playtest, "the fuel finishes quick": a 40% bigger tank, NOTES §24) |
-| `FUEL_BURN` | 44 /s | ≈ 3.2 s of continuous flight, a full-tank climb of ~18 m (the burn and air regen stayed: feathering keeps its rhythm) |
+| `FUEL_MAX` | 196 | the "nitro" bar (100, then 140 after the owner's playtest "the fuel finishes quick" (NOTES §24), then 196 after "I want the fuel longer" (NOTES §27): 40% bigger twice) |
+| `FUEL_BURN` | 44 /s | ≈ 4.45 s of continuous flight, a full-tank climb of ~25 m (the burn and air regen stayed: feathering keeps its rhythm) |
 | `FUEL_MIN_IGNITE` | 10 | stops micro-tap hover exploits |
-| `FUEL_REGEN_GROUND` / `FUEL_REGEN_DELAY_GROUND` | 49 /s after 0.20 s | full refill in ~3.1 s (the genre feels like ~3–4 s) |
+| `FUEL_REGEN_GROUND` / `FUEL_REGEN_DELAY_GROUND` | 69 /s after 0.20 s | full refill in ~3.05 s (the genre feels like ~3–4 s) |
 | `FUEL_REGEN_AIR` / `FUEL_REGEN_DELAY_AIR` | 12 /s after 0.45 s | rewards gliding/falling, keeps air fights going |
 | `MAX_WALK_SLOPE` | 50° | steeper: slide, no ground accel |
 | `STEP_HEIGHT` | 0.20 m | auto step-up for small ledges |
@@ -180,7 +180,7 @@ BR squads: hp ≤ 0 with alive teammate ──▶ KNOCKED (crawl 1.2 m/s, bleed-
 | `RESPAWN_DELAY` | 3.0 s (mode setting 0–10 s) | spawn point chosen away from enemies and armed mines (§17) |
 | `KNOCKBACK_CAP` | 18 m/s | applied velocity magnitude cap |
 | `RECOIL_PUSH_AIR` | per weapon (e.g. shotgun 3.5 m/s) | airborne only, opposite the aim direction. Enables "shotgun jumps" as a skill expression |
-| `DASH_SPEED` / `DASH_BURST_TICKS` | 14 m/s for 8 ticks (0.13 s) | an 8-way jetpack burst (§21): 2.05 m along the ground, 1.95 m up |
+| `DASH_SPEED` / `DASH_BURST_TICKS` | 20 m/s for 8 ticks (0.13 s) | an 8-way jetpack burst (§21): 2.85 m along the ground, 2.75 m up (14 m/s, 2.05 m until the owner's "the dash to go farther", NOTES §27) |
 | `DASH_COOLDOWN` / `DASH_FUEL_COST` | 1.0 s / 8 fuel | one air dash per flight; EMP blocks it |
 | `DASH_EXIT_UP` | 2 m/s | the most upward speed a dash leaves you with; sideways it leaves you within the walk/air caps |
 
@@ -477,9 +477,9 @@ A zone is `{ id, kind, rect: [minX, minY, maxX, maxY] }` or `{ id, kind, points:
 | Kind | Defaults | Feel (`pnpm --filter @military-forge/sim feel`) |
 |---|---|---|
 | `zeroG` | gravity 0, drag 0.4, dive 14 | a 0.2 s tap drifts on at 4.3 m/s; Down turns it around in 0.3 s |
-| `lowG` | gravity 0.35 | a 0.2 s tap hops 3.5 m (1.2 m normally); a full tank climbs 17.7 m (13.0) |
+| `lowG` | gravity 0.35 | a 0.2 s tap hops 3.5 m (1.2 m normally); a full tank climbs 31.2 m (25.4) |
 | `reverseG` | gravity −0.6, dive 30, drag 1.5 | you rise and hover at the pocket's top edge (settles in 3.9 s); Down pulls you out |
-| `longFlight` | fuel burn 0.4 | a tank lasts 5.7 s (2.25 s); jet + run 55 m on one tank (23 m) |
+| `longFlight` | fuel burn 0.4 | a tank lasts 11.1 s (4.4 s); jet + run 97 m on one tank (42 m) |
 | `damping` (bullet fog) | bullet range 0.35 | Hammer reach 12.4 m through 10 m of fog (26 m clear); Widow 41 m (60) |
 | `wind` | wind [12, 0] | a 1 s fall drifts 4.9 m; grenade arcs bend |
 | `slow` (mud) | speed 0.45, drag 3 | walk 2.25 m/s |
@@ -534,7 +534,7 @@ Zone ids are unique per map. The compiler (`checkMechanics`) lists every problem
 
 | Kind | Defaults | Feel |
 |---|---|---|
-| `gravitySurge` | gravity ×1.8, 15 s, 3 s warning | a full tank climbs 8.2 m (13.0): fights drop to the floor. Above ×1.85 the jet stops lifting at all (thrust 38 vs gravity 37) |
+| `gravitySurge` | gravity ×1.8, 15 s, 3 s warning | a full tank climbs 19.3 m (25.4): fights drop toward the floor. Above ×1.85 the jet stops lifting at all (thrust 38 vs gravity 37) |
 | `lowGravity` | gravity ×0.35, 15 s | a 0.2 s tap hops 3.5 m, map-wide |
 | `emp` | jetDisabled, 8 s, 4 s warning | no jetpacks anywhere |
 | `fog` | bullet range ×0.4, 20 s | Hammer reach 10.4 m (26) |
@@ -564,7 +564,7 @@ Because only one occurrence can cover a tick and it is found from the tick alone
 
 > Owner request (paraphrased): dash physics for fast movement between spaces, brief like a fighting-game dash, but up and down too, with nice controls.
 
-A dash is a **brief 8-way jetpack burst**: for `dashBurstTicks` (8 ticks, 0.13 s) your velocity is `dashSpeed` (14 m/s, × weapon weight × the map's `moveSpeedMul`) along the dash direction, with no gravity, so up and down dashes are crisp. Then it lets go: sideways speed drops back within the walk cap (on the ground) or the air cap (in the air), × weapon weight and the map's speed but never above `launchSpeedX`, so a dash never flings like a blast (NOTES §17), and upward speed is capped at `dashExitUp` (2 m/s) so an up-dash can't become a free jet launch. The burst moves with the normal move-and-slide: walls stop it (no tunnelling, even through a 2 cm wall), small steps are climbed, slopes are followed.
+A dash is a **brief 8-way jetpack burst**: for `dashBurstTicks` (8 ticks, 0.13 s) your velocity is `dashSpeed` (20 m/s, × weapon weight × the map's `moveSpeedMul`) along the dash direction, with no gravity, so up and down dashes are crisp. Then it lets go: sideways speed drops back within the walk cap (on the ground) or the air cap (in the air), × weapon weight and the map's speed but never above `launchSpeedX`, so a dash never flings like a blast (NOTES §17), and upward speed is capped at `dashExitUp` (2 m/s) so an up-dash can't become a free jet launch. The burst moves with the normal move-and-slide: walls stop it (no tunnelling, even through a 2 cm wall), small steps are climbed, slopes are followed.
 
 **Controls.** `Btn.Dash` (bit 13, `Shift`). The direction is what you hold: `A`/`D` sideways, `W` (jet) up, `S` (down) down, so 8 ways; none held = along your facing. A tap shorter than a tick still dashes (the client latches the press with the direction held at that moment). Double-tapping `A`, `D` or `S` is an optional binding for the same input (`InputSampler.doubleTapDash`; `?dashtap` until the settings screen offers it). Not `W`: tapping the jet key is how you feather the jetpack, so a double-tap there would fire dashes mid-hover; dash up with `Shift` + `W`.
 
@@ -572,7 +572,7 @@ A dash is a **brief 8-way jetpack burst**: for `dashBurstTicks` (8 ticks, 0.13 s
 
 **Where you are matters.**
 - On the ground, down only means something with a direction: down-left/right dash along the floor (crouched, it's a slide under things). Straight down on a **one-way platform** drops through it, dashing down; straight down on solid ground does nothing and costs nothing.
-- In the air, down is a quick drop: from a 6 m hover you land in 0.40 s (0.77 s falling). Landing ends a down-dash on the spot (a slam).
+- In the air, down is a quick drop: from a 6 m hover you land in 0.35 s (0.77 s falling). Landing ends a down-dash on the spot (a slam).
 
 **Limits.** A 1.0 s cooldown (a press during it does nothing; refused presses never restart it). One air dash per airborne period, given back on landing; a dash that starts on the ground (an up-dash, a drop through a platform) isn't the air dash. Each dash costs `dashFuelCost` (8) fuel and needs that much, and restarts the air fuel-regen delay.
 
@@ -586,4 +586,4 @@ A dash is a **brief 8-way jetpack burst**: for `dashBurstTicks` (8 ticks, 0.13 s
 
 **Events.** A `dash` sim event (player, start position, direction) on the tick it starts: the animation poses the body from it, render3d draws the streak. Other clients get it as the extended event DASH (snapshot tag 7, 05-netcode §6.2) when they can see the dasher; your own is drawn from prediction. Remote players also carry a `dashing` flag.
 
-**Feel** (`pnpm --filter @military-forge/sim feel`, all on target): 2.05 m along the ground from standing (target 2–2.5), 1.95 m up (1.5–2), up-right 1.41 m high at 1.82 m out, the slam above, a wall 1 m away stops it at 1.00 m.
+**Feel** (`pnpm --filter @military-forge/sim feel`, all on target): 2.85 m along the ground from standing (target 2.6–3.1), 2.75 m up (2.4–3), up-right 1.97 m high at 2.38 m out, the slam above, a wall 1 m away stops it at 1.00 m.

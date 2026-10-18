@@ -1,11 +1,16 @@
 /*
- * How the app hosts the kit's HUD. The look is the kit's (ui/kit.css: .hud-*, .bar, .killfeed,
- * .belt, .weapon-slot, .phud-*…); this file only places it over the game. Tokens only.
+ * How the app hosts the kit's HUD, and the HUD's motion. The look is the kit's (ui/kit.css: round
+ * two's .hud-*, .plate, .killfeed, .belt, .slot, .sb, .evb on the desktop; the first kit's .phud-*
+ * on the phone); this file places it over the game and moves it (docs/design/ui-motion-spec.md §4.1).
+ * Tokens only.
  *   - #hud holds two fitted screens: the desktop HUD (1920×1080, zoomed by --hud-fit, kept readable
  *     in small windows) and the phone HUD (812×375, --phone-fit), shown while the touch controls
  *     are up (html[data-touch-controls], apps/web/src/touch).
  *   - Layers: over the game canvases and the flashbang layer, under the touch controls (6) and the
  *     shell's screens.
+ *   - Motion: only discrete changes move; what is written every frame (fuel, --throw, the equip
+ *     ring, the dash ring refilling, the reticle) is raw. Reduce motion: the kit stops every
+ *     animation and transition under .kit-v2, and the script half (ui/motion.ts) checks reduced().
  */
 #hud { position: fixed; inset: 0; z-index: 5; pointer-events: none; }
 #hud * { pointer-events: none; }
@@ -14,46 +19,93 @@
 html:not([data-touch-controls]) #hud .mf-hud-fit--phone,
 html[data-touch-controls] #hud .mf-hud-fit:not(.mf-hud-fit--phone) { display: none; }
 
-/* top left: the frame counter over the net plate */
-.mf-hud-corner { position: absolute; top: max(24px, var(--safe-t)); left: max(32px, var(--safe-l)); display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2); }
-.mf-hud-corner .hud-net { position: static; }
-/* the owner's admin page changed gameplay numbers on this server */
-.mf-hud-admin .hud-label { color: var(--c-brass); }
-.phud-admin { position: absolute; top: max(10px, var(--safe-t)); left: 50%; transform: translateX(-50%); color: var(--c-brass); text-shadow: var(--ts-hud); }
+/* ---- the desktop (round two) ---- */
 
-/* announcements (showBanner) under the map event; they and the kill feed fade at the end of their time */
-.mf-hud-banners { display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); }
-.mf-hud-banner { animation: drop var(--dur) var(--ease-out), mf-hud-out var(--dur-slow) ease-in calc(var(--banner-ms, 3200ms) - var(--dur-slow)) forwards; }
-#hud .kf { animation: drop var(--dur) var(--ease-out), mf-hud-out var(--dur-slow) ease-in calc(var(--feed-ms, 6000ms) - var(--dur-slow)) forwards; }
-#hud .dmg-arc { animation: mf-hud-out 1.2s ease-in forwards; }
+/* the held gun in the game's own colour: the kit's gold is a finish, and the match has none yet */
+#hud .mf-hud-desktop .slot--held .ic--wpn-lg { color: var(--c-text); }
+/* three-digit vitals (100 HP, 100 fuel) at the HUD's number size */
+#hud .mf-hud-desktop .vital { grid-template-columns: 24px 80px minmax(0, 1fr); }
+/* the crate's gun names stay on one line */
+#hud .pickup__gun { white-space: nowrap; }
+/* the net plate's signal in the ping's colour */
+#hud .hud-net[data-tone="warn"] { color: var(--c-warn); }
+#hud .hud-net[data-tone="bad"] { color: var(--c-hp); }
+/* the burning cue (the flamethrower), in the kit's cue look */
+#hud .cue--burn { border-color: var(--c-hp); }
+#hud .cue--burn > .ic { color: var(--c-hp); }
+#hud .slot__cue--windup { color: var(--c-volt); }
+/* the game has no aim stagger: a heavy hit edges the screen and the vitals, never the reticle */
+#hud[data-active-state~="heavy-hit"] .reticle__x { transform: none; }
+/* the dash hint's arrow points the way the last dash went */
+#hud .dash__hint .ic { transform: rotate(var(--hint-rot, 0deg)); }
+/* the owner's admin page changed gameplay numbers on this server: the tag in brass */
+#hud .mf-hud-admin { border-color: var(--c-brass); color: var(--c-brass); }
+
+/* announcements (showBanner) under the map event's place */
+.mf-hud-banners { position: absolute; top: 330px; left: 50%; translate: -50% 0; display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); }
+.mf-hud-banner { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2) var(--sp-5) var(--sp-2) var(--sp-3); border-color: var(--ev); }
+.mf-hud-banner__ic { display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--r-xs); background: var(--ev); color: var(--c-ink-950); }
+.mf-hud-banner__text { display: flex; flex-direction: column; }
+.mf-hud-banner__title { font-size: var(--fs-20); font-weight: var(--fw-black); text-transform: uppercase; letter-spacing: .04em; }
+.mf-hud-banner__desc { font-size: var(--fs-16); color: var(--c-muted); }
+
 /* the reticle and the damage arcs follow the pointer and the player by transform (hud.ts place()) */
 #hud :is(.reticle, .dmg-arcs) { left: 0; top: 0; will-change: transform; }
-@keyframes mf-hud-out { to { opacity: 0; } }
+#hud .mf-hud-desktop .dmg { left: -400px; top: -400px; will-change: transform; }
 
 /* three-digit vitals (100 HP, 100 fuel) at the HUD's number size: the kit's 3ch column fits two */
 #hud .vital { grid-template-columns: 24px 3.6em minmax(0, 1fr); }
-#hud .phud-vital { grid-template-columns: 18px 2.2em minmax(0, 1fr); }
 
 /* the air dash's pip goes hollow once this flight's air dash is used */
 #hud .hud-dash__air.is-used { color: var(--c-muted); }
 #hud .hud-dash__air.is-used::before { background: transparent; }
 
+/* the belt's selection: a volt base under the selected type that slides when you cycle (P5) */
+#hud .mf-belt { position: relative; padding-bottom: 6px; }
+#hud .mf-belt__sel { bottom: 0; height: 4px; background: var(--c-volt); border-radius: var(--r-xxs); }
+
 /* Reduce flashes: the tag over the dark-out (the fx module draws the dark-out itself) */
-.mf-hud-flashed { position: absolute; top: 220px; left: 50%; transform: translateX(-50%); }
+.mf-hud-flashed { position: absolute; top: 220px; left: 50%; transform: translateX(-50%); z-index: var(--z-flash); }
 
 /* the scoreboard (hold Tab): the world dims behind it */
 .mf-board { position: absolute; inset: 0; z-index: var(--z-panel); }
 .mf-board__dim { position: absolute; inset: 0; background: var(--c-scrim); }
 
-/* the phone HUD: the pickup and respawn cards stay clear of the sticks */
-.phud .pickup { bottom: auto; top: calc(max(24px, var(--safe-t)) + 100px); gap: var(--sp-2); padding: 4px 12px; font-size: var(--fs-16); }
-.phud .respawn { bottom: auto; top: calc(max(24px, var(--safe-t)) + 64px); min-width: 0; gap: 2px; padding: 8px 18px; }
-.phud .respawn__by { font-size: var(--fs-16); }
-.phud .respawn__timer { font-size: var(--fs-20); }
-.phud .respawn__timer b { font-size: var(--fs-28); }
+/* ---- the desktop's motion (ui-motion-spec.md §4.1) ---- */
 
-/* the touch controls (apps/web/src/touch) in the kit's look; touchSkin.ts adds the kit's icons */
-html[data-touch-controls] .mf-touch .mf-ctl { background: var(--c-touch); border: 1.5px solid var(--c-plate-line); box-shadow: none; color: var(--c-text); font-family: var(--f-ui); text-shadow: var(--ts-hud); }
-html[data-touch-controls] .mf-touch .mf-ctl.mf-down { background: var(--c-volt-soft); border-color: var(--c-volt); }
-html[data-touch-controls] .mf-touch .mf-stick { background: var(--c-touch); border-color: var(--c-plate-line); }
-html[data-touch-controls] .mf-touch .mf-knob { background: var(--c-touch-knob); border-color: var(--c-plate-line); }
+/* HP and fuel (P10): --hp (registered in kit.css) eases only for a moment after a hit; regen, fuel and every ring stay raw */
+#hud[data-active-state~="hp-ease"] { transition: --hp var(--m-fast) var(--ease-arrive); }
+html.reduce-motion #hud { transition: none; }
+/* low HP: the vitals plate's edge pulses slowly (1.4 s); static under Reduce motion */
+#hud .mf-hud-desktop .vitals { position: relative; }
+#hud .mf-hud-desktop .vitals::after { content: ""; position: absolute; inset: -5px; border: 2px solid var(--c-hp); border-radius: inherit; opacity: 0; }
+#hud[data-active-state~="low-hp"] .mf-hud-desktop .vitals::after { animation: mf-edge 1.4s ease-in-out infinite; }
+@keyframes mf-edge { 50% { opacity: .9; } }
+
+/* the kill feed: rows slide in from the right edge at --m-fast (P9, hud.ts feedRow), leave accelerating */
+#hud .mf-hud-desktop .kf.m-p9 { animation-duration: var(--m-fast); }
+#hud .mf-hud-desktop .kf__badge { width: 22px; height: 22px; }
+
+/* damage arcs: in over --m-instant, held, out over 600 ms (1300 ms in all: hud.ts ARC_MS); never a flash */
+#hud .dmg__arc { --o: calc(.45 + var(--amt, .5) * .55); animation: mf-arc 1300ms linear both; }
+#hud .dmg__arc--old { --o: .35; }
+#hud .dmg__arc--heavy { stroke-width: calc(10px + var(--amt, .5) * 26px); }
+@keyframes mf-arc { from { opacity: 0; } 7% { opacity: var(--o); } 54% { opacity: var(--o); } to { opacity: 0; } }
+
+/* ammo: empty turns the count red with a stamp (P7) */
+#hud[data-active-state~="empty"] .mf-hud-desktop .slot--held .ammo__mag { animation: m-stamp var(--m-fast) var(--ease-settle) both; }
+/* the dash: ready again is a single tick (P7) */
+#hud[data-active-state~="dash-ready"] .mf-hud-desktop .dash__icon { animation: m-stamp var(--m-fast) var(--ease-settle) both; }
+
+/* the throw meter arrives by P1 at small scale; the quick throw's stamp is 120 ms */
+#hud .mf-hud-desktop .throw.m-p1 { --m-pull-scale: 1.12; animation-duration: var(--m-fast); }
+#hud .mf-hud-desktop .quick.m-p7 { animation-duration: 120ms; }
+
+/* the scoreboard is a peek: the panel focus-pulls at --m-fast */
+#hud .mf-hud-desktop .sb.m-p1 { animation-duration: var(--m-fast); }
+
+/* edge banners leave accelerating (hud.ts Linger keeps them up for the exit) */
+#hud[data-active-state~="event-leaving"] .evb,
+#hud[data-active-state~="pickup-crate-leaving"] .mf-hud-desktop .pickup:not(.mf-pickup-item),
+#hud[data-active-state~="pickup-item-leaving"] .mf-hud-desktop .mf-pickup-item { animation: m-edge-out var(--m-fast) var(--ease-leave) both; }
+

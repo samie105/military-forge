@@ -337,12 +337,12 @@ export const ADMIN_PRESETS: Readonly<Record<'classic' | 'floaty' | 'chaos', Admi
   floaty: clampAdmin({
     'tuning.gravity': 9,
     'tuning.terminalVy': -12,
-    'tuning.fuelMax': 220,
+    'tuning.fuelMax': 300, // the most the range allows: ~1.5× the 196 default, as 220 was over 140
     'tuning.fuelBurn': 35,
     'tuning.jetThrust': 26,
     'tuning.airMaxX': 7.5,
     'tuning.airDragX': 0.6,
-    'tuning.dashSpeed': 16,
+    'tuning.dashSpeed': 23, // ~15% over the 20 m/s default, as 16 was over 14
     'tuning.grenadeThrowScale': 1.3,
     [`grenade.${FRAG.id}.fuse`]: 2.6,
     [`grenade.${SMOKE.id}.duration`]: 16,

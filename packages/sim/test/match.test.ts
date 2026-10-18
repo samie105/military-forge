@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { HitZone, defaultTuning as T, type MapDef } from '@military-forge/content';
+import { HitZone, WIDOW, defaultTuning as T, type MapDef } from '@military-forge/content';
 import { describe, expect, it } from 'vitest';
 import {
   ASSIST_WINDOW_TICKS,
@@ -115,6 +115,19 @@ describe('match lifecycle', () => {
     expect(match.phase).toBe(MatchPhase.InProgress);
     expect(match.number).toBe(1);
     expect(match.ticksLeft).toBe(ticks(30));
+  });
+
+  it('a new match starts everyone on their loadout, not on guns kept from a warm-up death', () => {
+    const { game, match, players } = setup(2);
+    const [a] = players as [PlayerState, PlayerState];
+    const held = a.weapons.map((w) => w.def);
+    a.weapons[0]!.def = WIDOW.index; // a warm-up crate pick
+    a.weapons[0]!.mag = 0;
+    kill(match, a, a);
+    run(match, ticks(T.respawnDelay) + 2);
+    expect([a.alive, a.weapons[0]!.def, a.weapons[0]!.mag]).toEqual([true, WIDOW.index, WIDOW.mag]); // kept in the warm-up, full
+    startMatch(match);
+    expect(game.players[a.id]!.weapons.map((w) => w.def)).toEqual(held);
   });
 
   it('freezes human inputs outside the warm-up and the match, keeping the aim', () => {

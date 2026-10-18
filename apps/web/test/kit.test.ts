@@ -9,7 +9,6 @@ import { fileURLToPath } from 'node:url';
 import { EVENT_KINDS, grenades, weapons } from '@military-forge/content';
 import { describe, expect, it } from 'vitest';
 import { eventLook } from '../src/hud/model';
-import { TOUCH_ICONS } from '../src/hud/touchSkin';
 import { iconHref, weaponIcon } from '../src/ui/icons';
 import { SPRITE_IDS } from '../src/ui/sprite';
 
@@ -42,11 +41,10 @@ describe('icons', () => {
     expect(missing).toEqual([]);
   });
 
-  it('weapons, grenades, map events and the touch buttons all have their icon', () => {
+  it('weapons, grenades and map events all have their icon (the touch controls name theirs as ic() literals, checked above)', () => {
     for (const w of weapons) expect(weaponIcon(w.id), w.id).not.toBeNull();
     for (const g of grenades) expect(inSprite(iconHref(`g-${g.id}`)), g.id).toBe(true);
     for (const kind of Object.keys(EVENT_KINDS)) expect(inSprite(iconHref(eventLook(kind).icon)), kind).toBe(true);
-    for (const [control, id] of Object.entries(TOUCH_ICONS)) expect(inSprite(id), control).toBe(true);
     expect(iconHref('wpn-k47')).toBe('#icon-wpn-k47');
     expect(weaponIcon('hammer44')).toBe('wpn-hammer');
     expect(weaponIcon('not-a-gun')).toBeNull();

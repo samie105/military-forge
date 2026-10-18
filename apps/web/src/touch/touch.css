@@ -1,5 +1,22 @@
-/* Touch controls (apps/web/src/touch): over the canvases and the HUD (5), under the shell's screens (10). */
+/*
+ * Touch controls (apps/web/src/touch): the owner's round-two kit's thumb dials (ui/kit.css: .dial,
+ * .dial-btn, .tb, .pt-swap, .pt-pick, drawn by skin.ts) hosted over the game, moving by the shared
+ * motion system (docs/design/ui-motion-spec.md §4.2: the --m-* and --ease-* tokens). Tokens only.
+ * Layers: over the canvases and the HUD (5), under the shell's screens (10).
+ */
+/* the dials' arcs draw in from 0 at the start of a match (fx.ts drawIn animates it) */
+@property --dial-in { syntax: '<number>'; inherits: true; initial-value: 1; }
+/* the HP arc moves on a hit (P10); fuel, the throw ring and the equip ring are written raw */
+@property --hp { syntax: '<number>'; inherits: true; initial-value: 0; }
+
 .mf-touch {
+  /* the meters before the HUD's first values (the debug client has no HUD): empty, the dash ready */
+  --fuel: 0;
+  --dash: 1;
+  --reload: 0;
+  --equip: 1;
+  --throw: 0;
+  --m-rise: 10px; /* the phone's distances: the spec's × 0.7 */
   position: fixed;
   inset: 0;
   z-index: 6;
@@ -9,63 +26,78 @@
   -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
   touch-action: none;
-  font: 800 14px/1 system-ui, -apple-system, 'Segoe UI', sans-serif;
-  color: #fff;
+  font-size: var(--fs-14);
+  transition: --hp var(--m-fast) var(--ease-arrive);
 }
 .mf-touch[hidden] { display: none; }
-/* the notch and the home indicator: controls stay inside (needs viewport-fit=cover, set while active) */
+/* the kit's phone safe box: clear of the notch and the home indicator (needs viewport-fit=cover, set while active) */
 .mf-touch-safe {
   position: absolute;
-  top: env(safe-area-inset-top, 0px);
-  right: env(safe-area-inset-right, 0px);
-  bottom: env(safe-area-inset-bottom, 0px);
-  left: env(safe-area-inset-left, 0px);
+  top: max(10px, env(safe-area-inset-top, 0px));
+  right: max(var(--phone-notch), env(safe-area-inset-right, 0px));
+  bottom: max(21px, env(safe-area-inset-bottom, 0px));
+  left: max(var(--phone-notch), env(safe-area-inset-left, 0px));
 }
 .mf-touch-menus .mf-touch-safe, .mf-touch-menus .mf-touch-rotate { visibility: hidden; }
 
+/* ---- a control: centred on its place, its skin zoomed to its size (--k), never under 48 px ---- */
 .mf-ctl {
   position: absolute;
-  box-sizing: border-box;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
   pointer-events: auto;
   touch-action: none;
-  background: rgba(13, 18, 26, 0.5);
-  border: 2px solid rgba(255, 255, 255, 0.6);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
-  letter-spacing: 0.04em;
-  transition: transform 60ms ease-out, background-color 60ms ease-out;
+  transform-origin: 0 0;
+  transform: translate(-50%, -50%);
+  transition: scale var(--m-fast) var(--ease-settle);
 }
-.mf-ctl.mf-down { background: rgba(255, 255, 255, 0.32); transform: scale(0.93); }
-.mf-ctl-dash, .mf-ctl-melee { font-size: 12px; }
+.mf-ctl.mf-off { visibility: hidden; pointer-events: none; }
+.mf-ctl[data-anchor='top'] { transform: translate(-50%, 0); }
+.mf-ctl[data-anchor='bottom'] { transform: translate(-50%, -100%); }
+.mf-ctl .mf-skin { position: relative; inset: auto; margin: 0; transform: none; zoom: var(--k, 1); pointer-events: none; }
+/* P8: pressed within a frame, back on the settle; no hover on touch */
+.mf-ctl.mf-down:not(.mf-stick) { scale: var(--m-press); transition-duration: var(--m-instant); }
+.mf-ctl.mf-down :is(.dial-btn, .tb) { border-color: var(--c-volt); }
 
-/* sticks: grabbed through their half of the screen; the circle shows where they rest */
-.mf-stick {
-  pointer-events: none;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0 40%, rgba(255, 255, 255, 0.03) 70%);
-  border-color: rgba(255, 255, 255, 0.4);
-  transition: none;
-}
-.mf-stick.mf-down { transform: none; background: radial-gradient(circle, rgba(255, 255, 255, 0.16) 0 40%, rgba(255, 255, 255, 0.05) 70%); }
-.mf-knob {
-  position: absolute;
-  left: 29%;
-  top: 29%;
-  width: 42%;
-  height: 42%;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.5);
-  border: 2px solid rgba(255, 255, 255, 0.75);
-  box-sizing: border-box;
-}
-.mf-ctl-aim.mf-fire { border-color: rgba(255, 110, 90, 0.9); }
-.mf-ctl-aim.mf-fire .mf-knob { background: rgba(255, 96, 74, 0.75); border-color: rgba(255, 196, 186, 0.95); }
+/* the opacity setting fades the controls' plates, never the vitals they carry (HP, fuel, the ammo ring) */
+.mf-ctl :is(.dial__base, .dial__groove, .dial__track, .dial__hint, .dial__knob),
+.mf-ctl .mf-skin:is(.dial-btn, .tb) { opacity: var(--o, 1); transition: opacity var(--m-fast) var(--ease-arrive); }
+.mf-ctl .pt-swap { opacity: max(var(--o, 1), 0.8); transition: opacity var(--m-fast) var(--ease-arrive); }
+/* a thumb down on a control: its plates fade to full */
+.mf-ctl.mf-down { --o: 1 !important; }
 
-.mf-touch-edit { width: 36px; height: 36px; left: calc(17.5% - 18px); top: 4px; font-size: 16px; }
+/* ---- the thumb dials (sticks): grabbed through their half of the screen; the knob follows the thumb raw ---- */
+.mf-stick { pointer-events: none; }
+.mf-stick .dial__knob { transition: transform var(--m-fast) var(--ease-settle); }
+.mf-stick.mf-down .dial__knob { transition: none; }
+.mf-touch .dial__hp { stroke-dasharray: calc(var(--hp) * var(--dial-in) * 46) 100; }
+.mf-touch .dial__fuel { stroke-dasharray: calc(var(--fuel) * var(--dial-in) * 46) 100; }
+.mf-touch .mf-rounds { opacity: var(--dial-in); }
+.mf-touch .mf-rounds__fill { stroke: var(--c-paper); }
+.mf-ctl-aim.mf-fire .dial__base { border-color: var(--c-hp); }
+.mf-touch [data-active-state~='no-grenades'] .dial-btn--grenade > .ic { opacity: 0.45; }
 
-/* portrait: ask for landscape */
+/* ---- buttons the kit draws without these parts ---- */
+.dial-btn--sm { width: 48px; height: 48px; }
+.dial-btn--sm .ic { width: 20px; height: 20px; }
+.dial-btn--reload .tb__ring { position: absolute; inset: -5px; width: calc(100% + 10px); height: calc(100% + 10px); transform: rotate(-90deg); }
+.dial-btn--reload .tb__ring circle { fill: none; stroke: var(--c-paper); stroke-width: 4; stroke-dasharray: 100; stroke-dashoffset: calc(100 - var(--reload) * 100); }
+.mf-touch .pt-swap { white-space: nowrap; }
+.mf-touch .pt-pick { white-space: nowrap; }
+/* long gun names end in an ellipsis, so the pills keep clear of their neighbours at any text size */
+.mf-touch :is(.pt-swap__held, .pt-pick) b { max-width: 7em; overflow: hidden; text-overflow: ellipsis; }
+.mf-touch .pt-swap__held b { display: block; }
+/* large text: the take button says it with its icons, the swap pill without the backpack */
+.mf-text-lg .pt-pick > span, .mf-text-lg .pt-swap__back > .ic { display: none; }
+.mf-text-lg :is(.pt-swap__held, .pt-pick) b { max-width: 5.5em; }
+.mf-touch .pt-swap__eq { pointer-events: none; }
+.mf-touch .pt-swap .mf-gun { transform-origin: 50% 50%; }
+/* a tap on the grenade: the kit's quick-throw stamp, for a moment */
+.mf-quick { position: absolute; left: 50%; bottom: calc(100% + 6px); translate: -50% 0; padding: 2px 8px; border-radius: var(--r-xs); background: var(--c-volt); color: var(--c-volt-ink); font-size: var(--fs-14); font-weight: var(--fw-black); text-transform: uppercase; text-shadow: none; white-space: nowrap; visibility: hidden; }
+.mf-quick.is-on { visibility: visible; }
+
+/* the dev client's ✎ (app mode edits from Settings) */
+.mf-touch-edit { left: 50%; top: 28px; }
+
+/* ---- portrait: ask for landscape ---- */
 .mf-touch-rotate {
   position: fixed;
   inset: 0;
@@ -74,57 +106,57 @@
   place-items: center;
   padding: 24px;
   text-align: center;
-  background: rgba(8, 11, 16, 0.94);
+  background: var(--c-scrim-strong);
   pointer-events: auto;
-  font: 600 15px/1.4 system-ui, -apple-system, sans-serif;
 }
 .mf-touch-rotate[hidden] { display: none; }
-.mf-touch-rotate b { display: block; font-size: 20px; margin-bottom: 6px; }
-.mf-touch-rotate p { margin: 0 0 18px; color: #9aa7b4; }
-.mf-touch-rotate-icon { font-size: 64px; line-height: 1; margin-bottom: 14px; display: inline-block; animation: mf-turn 1.8s ease-in-out infinite; }
-@keyframes mf-turn { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(90deg); } }
+.mf-touch-rotate__card { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 24px 28px; max-width: 320px; }
+.mf-touch-rotate__card .display { font-size: var(--fs-28); }
+.mf-touch-rotate__card p { color: var(--c-muted); }
+.mf-touch-rotate__icon { animation: mf-turn 1.8s var(--ease-travel) infinite; }
+@keyframes mf-turn { 0%, 30% { rotate: 0deg; } 60%, 100% { rotate: 90deg; } }
 
-.mf-touch-btn {
-  font: 700 14px/1 system-ui, -apple-system, sans-serif;
-  color: #e6edf3;
-  background: #1c2430;
-  border: 1px solid #3a4656;
-  border-radius: 8px;
-  padding: 10px 14px;
-  min-width: 44px;
-  min-height: 40px;
-}
-.mf-touch-btn-primary { background: #1f6feb; border-color: #1f6feb; }
-
-/* the editor */
-.mf-touch-editing .mf-ctl, .mf-touch-editing .mf-stick { pointer-events: auto; outline: 2px dashed rgba(255, 255, 255, 0.55); outline-offset: 3px; }
-.mf-touch-editing .mf-ctl.mf-selected { outline-color: #58a6ff; outline-style: solid; }
+/* ---- the editor: every control shows, dashed; the picked one in volt; the one under the finger lifts ---- */
+.mf-touch-editing .mf-ctl { pointer-events: auto; transition: scale var(--m-base) var(--ease-settle), filter var(--m-base) var(--ease-settle); }
+.mf-touch-editing .mf-ctl::after { content: ''; position: absolute; inset: -6px; border: 2px dashed var(--c-paper); border-radius: 50%; pointer-events: none; }
+.mf-touch-editing .mf-pill::after { border-radius: var(--r-md); }
+.mf-touch-editing .mf-stick::after { inset: calc(16px * var(--k, 1) - 6px); }
+.mf-touch-editing .mf-ctl.mf-selected::after { border-style: solid; border-color: var(--c-volt); box-shadow: var(--sh-ring) var(--c-volt-soft); }
+.mf-touch-editing .mf-ctl.mf-lifted { scale: 1.06; filter: drop-shadow(6px 6px 0 var(--c-ink-950)); transition: scale var(--m-fast) var(--ease-arrive); }
 .mf-touch-editing .mf-touch-edit { display: none; }
+/* snapping guides: a line across the safe box where the dragged control lines up */
+.mf-guide { position: absolute; background: var(--c-volt); opacity: 0; pointer-events: none; transition: opacity var(--m-fast) var(--ease-arrive); }
+.mf-guide--x { top: 0; bottom: 0; width: 2px; left: var(--at, 50%); translate: -1px 0; }
+.mf-guide--y { left: 0; right: 0; height: 2px; top: var(--at, 50%); translate: 0 -1px; }
+.mf-guide.is-on { opacity: 0.7; }
 .mf-touch-editor {
   position: absolute;
   left: 50%;
-  top: max(8px, env(safe-area-inset-top, 0px));
-  transform: translateX(-50%);
+  top: calc(max(10px, env(safe-area-inset-top, 0px)) + 56px);
+  translate: calc(-50% - 44px) 0;
   z-index: 2;
-  width: min(720px, calc(100vw - 24px));
+  width: 296px;
   display: grid;
   gap: 6px;
-  padding: 6px 10px;
-  border-radius: 10px;
-  background: rgba(10, 14, 20, 0.92);
-  border: 1px solid #30363d;
+  padding: 6px;
   pointer-events: auto;
-  font: 600 13px/1.3 system-ui, -apple-system, sans-serif;
+  font-size: var(--fs-14);
+  font-weight: var(--fw-bold);
+  transition: opacity var(--m-fast) var(--ease-arrive);
 }
-.mf-touch-editor[hidden], .mf-touch-editor-row[hidden] { display: none; }
+.mf-touch-editor[hidden], .mf-touch-editor-row[hidden], .mf-touch-editor [hidden] { display: none; }
 .mf-touch-editor-bottom { top: auto; bottom: max(8px, env(safe-area-inset-bottom, 0px)); }
 .mf-touch-editor-dragging { opacity: 0.15; pointer-events: none; }
-.mf-touch-editor-row { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; justify-content: center; }
-.mf-touch-editor-title { flex: 1 1 160px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
-.mf-touch-editor .mf-touch-btn { min-height: 36px; padding: 8px 12px; }
-.mf-touch-editor label { display: inline-flex; gap: 6px; align-items: center; }
-.mf-touch-editor input[type='checkbox'] { width: 20px; height: 20px; }
-.mf-touch-disabled { opacity: 0.35; pointer-events: none; }
+.mf-touch-editor-row { display: flex; flex-wrap: nowrap; gap: 6px; align-items: center; }
+.mf-touch-editor-more { flex-wrap: wrap; gap: 0 12px; padding: 0 4px 2px; }
+.mf-touch-editor-sel { display: inline-flex; gap: 6px; }
+.mf-touch-editor-title { flex: 1; min-width: 0; display: inline-flex; align-items: center; gap: 6px; padding-left: 6px; color: var(--c-muted); }
+.mf-touch-editor-title b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--c-text); }
+.mf-touch-editor .btn--sm { min-height: var(--touch-min); box-shadow: none; }
+.mf-touch-editor .btn--sm:not(.btn--icon) { padding: 0 14px; }
+.mf-touch-editor label { display: inline-flex; gap: 6px; align-items: center; min-height: var(--touch-min); }
+.mf-touch-editor input[type='checkbox'] { width: 20px; height: 20px; accent-color: var(--c-volt); }
+.mf-touch-editor input[type='range'] { width: 110px; accent-color: var(--c-volt); }
 
 /* while playing with touch: the page never scrolls, zooms or selects, and the dev panel steps aside */
 html[data-touch-playing], html[data-touch-playing] body {
@@ -137,3 +169,6 @@ html[data-touch-playing], html[data-touch-playing] body {
 /* the dev client's bar and tuning panel don't fit a phone next to the controls (app mode has neither) */
 html[data-touch-controls] #panel, html[data-touch-controls] #bar { display: none !important; }
 html[data-touch-controls] #game, html[data-touch-controls] #view3d { touch-action: none; }
+
+/* Reduce motion: the kit stops every animation and transition inside .kit-v2 (kit.css); the HP arc jumps too */
+html.reduce-motion .mf-touch { transition: none; --m-rise: 0px; }

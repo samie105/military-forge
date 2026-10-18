@@ -1,25 +1,58 @@
 /**
- * The in-match HUD (docs/11): the owner's design kit's "7 · In-match HUD" and, while the touch
- * controls are up, its "14 · Phone HUD". Plain DOM driven once per frame, in three parts:
+ * The in-match HUD (docs/11): round two's "In-match HUD" on the desktop
+ * (docs/design/military-forge-ui-v2.html) and, while the touch controls are up, the first kit's
+ * "14 · Phone HUD". Plain DOM driven once per frame, in three parts:
  *   - template.ts: the kit's markup, values bound by attribute (bind.ts) and shown by state token
  *     (state.ts: data-active-state on the root, data-state on what comes and goes);
- *   - the kit's stylesheet (ui/kit.css) and hud.css (how the app hosts it);
+ *   - the kit's stylesheet (ui/kit.css) and hud.css (how the app hosts it, and the HUD's motion);
  *   - this file and model.ts: the values and tokens (hudFrame, pure) and the parts that come and
  *     go (kill feed, banners, damage arcs, the belt, the scoreboard).
  * An element is written only when its value changes, so a 60 fps frame costs a few dozen string
  * compares. Bars are one CSS number each; short-lived effects are CSS animations started once.
+ *
+ * Motion (docs/design/ui-motion-spec.md §4.1): calm, and only when something happens. Values
+ * written every frame (fuel, --throw, the reticle, the dash ring refilling, the equip ring) are
+ * raw; discrete changes get the patterns: rolls (P4) on counts and clocks, stamps (P7), edge
+ * banners (P9) that leave accelerating (Linger), the HP bar's ease (P10) on a hit only.
  */
-import { GAS, weapons, type Tuning } from '@military-forge/content';
-import { MatchPhase, type SimEvent } from '@military-forge/sim';
+import { DamageSource, MatchPhase, type SimEvent } from '@military-forge/sim';
+import { DRAGON, GAS, HitZone, weapons, type Tuning } from '@military-forge/content';
 import type { MatchView } from '../shell/matchView';
 import { formatClock, playerName } from '../shell/matchView';
 import { capText, iconHref, weaponIcon } from '../ui/icons';
+import { flipTransform, moveIndicator, reduced, rollText, stagger, token } from '../ui/motion';
 import type { Frame, NetStats, PlayerView } from '../view';
+import { weaponUnderfoot } from '../weaponItems';
 import { Binder } from './bind';
-import { conditions, dashStatus, eventLook, feedFromEvents, fuelView, grenadeBelt, healthView, pickupIcon, pickupNear, pickupPrompt, screenAngle, shieldStatus, weaponCards, type FeedEntry, type HudPlayer, type ScoreRow } from './model';
+import {
+  conditions,
+  crateCompare,
+  damageArc as arcLook,
+  dashHint,
+  dashStatus,
+  eventLook,
+  feedFromEvents,
+  fuelView,
+  grenadeBelt,
+  healthView,
+  isBlastSource,
+  isBurnTick,
+  pickupIcon,
+  pickupNear,
+  pickupPrompt,
+  screenAngle,
+  shieldStatus,
+  tunedSummary,
+  weaponCards,
+  weaponFamily,
+  type ArcKind,
+  type FeedEntry,
+  type HudPlayer,
+  type ScoreRow,
+} from './model';
 import { StateTokens } from './state';
 import { HUD_VARS, hudTemplate } from './template';
-import { touchGrenade } from './touchSkin';
+import { feedTouchHud } from '../touch';
 import './hud.css';
 
 export type BannerKind = 'info' | 'event' | 'success' | 'warning' | 'danger';
@@ -55,10 +88,16 @@ export interface HudInput {
   scoreRows(): ScoreRow[] | null;
   /** the owner changed gameplay numbers on this server (the admin page): a small tag */
   adminTuned?: boolean;
+  /** while a grenade throw is aimed (held past a tap): the strength it would go with, 0..7; −1 otherwise */
+  throwAim?: number;
+  /** when the last quick throw (a tap) was let go, ms (performance.now) */
+  quickThrowAt?: number;
+  /** Settings → Graphics → Blood: the HUD's blood decals with the low-health and heavy-hit cues */
+  blood?: boolean;
 }
 
 /** Keycap text for the actions the HUD names, from Settings → Controls. */
-export type HudKeys = Partial<Record<'dash' | 'grenade' | 'cycleGrenade' | 'shield' | 'swap' | 'reload' | 'scoreboard', string>>;
+export type HudKeys = Partial<Record<'dash' | 'grenade' | 'cycleGrenade' | 'shield' | 'swap' | 'reload' | 'scoreboard' | 'interact' | 'fire', string>>;
 
 /** How the local player last died, for the respawn card. */
 export interface DeathInfo {
@@ -78,9 +117,26 @@ export interface HudMemory {
   netDetail: string;
   /** the health bar's ghost: where health was before the last hits (0..1) */
   hpGhost: number;
+  /** a shot of ours just landed (the reticle's marker), and how: in the head, off a shield, a blast */
   hitMarker: boolean;
+  headshot?: boolean;
+  ricochet?: boolean;
+  launchMark?: boolean;
   killMarker: boolean;
   boardOpen: boolean;
+  /** we were just hurt (blood decals), and by a heavy hit or a blast (the stagger vignette) */
+  hurt?: boolean;
+  heavyHit?: boolean;
+  /** the HP bar eases to its new value (P10) for a moment after a hit; raw otherwise (regen) */
+  hpEase?: boolean;
+  /** the blast that may have launched us, "Kemi's Thumper", while it can still be why we fly; null otherwise */
+  launchedBy?: string | null;
+  /** the last dash's direction (sim 'dash' event), while its hint shows; null otherwise */
+  dashDir?: number | null;
+  /** the draw under way (swap or dual toggle): its whole length, ticks */
+  swapTotal?: number;
+  /** a quick throw (a tap) was just let go: its stamp */
+  quickThrow?: boolean;
 }
 
 export interface HudFrame {
@@ -90,13 +146,24 @@ export interface HudFrame {
 
 const FEED_LINES = 6;
 const PHONE_FEED_LINES = 2;
-const FEED_MS = 6000;
+/** the desktop's kill-feed rows leave after 5 s (motion spec §4.1), the phone's fade at 6 */
+const FEED_MS = 5000;
+const PHONE_FEED_MS = 6000;
 const HIT_MARKER_MS = 180;
 const KILL_MARKER_MS = 450;
+/** a damage arc: in over --m-instant, held, out over 600 ms (hud.css mf-arc) */
 const ARC_MS = 1300;
+/** what leaves with an exit keeps showing this long (--m-fast and a frame) */
+const LEAVE_MS = 170;
+const HURT_MS = 450;
+const HEAVY_MS = 500;
+const HP_EASE_MS = 300;
+const LAUNCH_MS = 2500;
+const DASH_HINT_MS = 600;
+const QUICK_MS = 450;
 const SHIELD_WORDS = {
-  up: { state: 'Up', covers: 'Front covered', action: 'sling it to dash' },
-  raising: { state: 'Raising', covers: 'Coming up', action: 'sling it to dash' },
+  up: { state: 'Up', covers: 'Front covered', action: 'sling to dash' },
+  raising: { state: 'Raising', covers: 'Coming up', action: 'sling to dash' },
   slung: { state: 'Slung', covers: 'Back covered', action: 'raise it' },
 } as const;
 const BANNER_LOOK: Record<BannerKind, { color: string; icon: string }> = {
@@ -106,16 +173,29 @@ const BANNER_LOOK: Record<BannerKind, { color: string; icon: string }> = {
   warning: { color: 'var(--c-warn)', icon: 'warn' },
   danger: { color: 'var(--c-hp)', icon: 'bad' },
 };
+/** map events that bend a grenade's arc while they run (the throw meter's warning) */
+const ARC_EVENTS = new Set(['lowGravity', 'gravitySurge', 'flip', 'gust']);
 
 const fixed = (v: number, digits = 3) => (Math.round(v * 10 ** digits) / 10 ** digits).toString();
 const href = (name: string | null) => (name ? iconHref(name) : '');
 
 /** Ping quality the kit's way: green up to 100 ms, amber to 200, red beyond; 4…1 signal bars. */
-export function pingLook(ms: number): { cls: string; bars: number } {
-  if (ms <= 50) return { cls: 'ping--good', bars: 4 };
-  if (ms <= 100) return { cls: 'ping--good', bars: 3 };
-  if (ms <= 200) return { cls: 'ping--mid', bars: 2 };
-  return { cls: 'ping--bad', bars: 1 };
+export function pingLook(ms: number): { cls: string; bars: number; sig: string; tone: 'ok' | 'warn' | 'bad' } {
+  if (ms <= 50) return { cls: 'ping--good', bars: 4, sig: 'sig sig--ok', tone: 'ok' };
+  if (ms <= 100) return { cls: 'ping--good', bars: 3, sig: 'sig sig--warn', tone: 'ok' };
+  if (ms <= 200) return { cls: 'ping--mid', bars: 2, sig: 'sig sig--bad', tone: 'warn' };
+  return { cls: 'ping--bad', bars: 1, sig: 'sig sig--bad', tone: 'bad' };
+}
+
+let tunedFor: Tuning | null = null;
+let tunedText = '';
+/** tunedSummary, once per tuning object (the mode hands the same one every frame) */
+function tunedOnce(t: Tuning): string {
+  if (t !== tunedFor) {
+    tunedFor = t;
+    tunedText = tunedSummary(t);
+  }
+  return tunedText;
 }
 
 /**
@@ -133,7 +213,7 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
 
   for (const [k, text] of Object.entries(mem.keys) as [keyof HudKeys, string][]) v[`bind.${k}.0`] = text;
 
-  // match clock and score
+  // match clock and score, and what the room's host tuned
   const m = input.match;
   const playing = !!m && m.phase === MatchPhase.InProgress;
   on('match', playing);
@@ -141,24 +221,27 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
   v['match.timeLeft'] = m && playing ? formatClock(m.untimed ? m.secondsElapsed : m.secondsLeft) : '';
   v['match.limit'] = m ? (m.killLimit > 0 ? `First to ${m.killLimit}` : m.untimed ? 'No time limit' : 'No kill limit') : '';
   v['match.myScore'] = String(m?.myScore ?? 0);
-  v['match.leaderLabel'] = m?.leaderName ? `Leader · ${m.leaderName}` : 'Leader';
   v['match.leaderShort'] = m?.leaderName || 'Leader';
   v['match.leaderScore'] = String(m?.leaderScore ?? 0);
+  const tuned = tunedOnce(t);
+  on('tuned', tuned !== '');
+  v['match.tunedSummary'] = tuned;
 
-  // the map event (docs/02 §20.7) under the clock
+  // the map event (docs/02 §20.7): its banner under the clock, warning then running
   const e = frame.mapEvent ?? null;
   on('event', !!e);
   on('event-active', e?.phase === 'active');
+  on('event-warning', e?.phase === 'warning');
   if (e) {
     const look = eventLook(e.kind);
     const warning = e.phase === 'warning';
-    const seconds = Math.max(1, Math.ceil(e.secondsLeft - 1e-9));
-    v['event.class'] = warning ? 'event-banner event-banner--warn' : 'event-banner';
+    const seconds = String(Math.max(1, Math.ceil(e.secondsLeft - 1e-9)));
     v['event.color'] = look.color;
-    v['event.icon'] = iconHref(warning ? 'warn' : look.icon);
+    v['event.icon'] = iconHref(look.icon);
     v['event.name'] = e.name;
-    v['event.time'] = warning ? `in ${seconds} s` : `${seconds} s`;
     v['event.description'] = e.description;
+    v['event.startsIn'] = warning ? seconds : '';
+    v['event.timeLeft'] = warning ? '' : seconds;
     v['v.event'] = warning ? '0' : fixed(1 - e.progress, 2);
   } else v['v.event'] = '0';
 
@@ -168,9 +251,9 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
   if (net) {
     const ping = Math.round(net.rttMs);
     const look = pingLook(ping);
-    v['net.class'] = `ping ${look.cls}`;
+    v['net.sig'] = look.sig;
+    v['net.tone'] = look.tone;
     v['net.phoneClass'] = `phud-ping num ${look.cls}`;
-    v['net.bars'] = String(look.bars);
     v['net.ping'] = `${ping} ms`;
     v['net.loss'] = `${(net.prediction?.snapshotLossPct ?? 0).toFixed(1)}%`;
     v['net.detail'] = mem.netDetail;
@@ -180,21 +263,25 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
   v['fps.value'] = String(Math.round(input.fps));
 
   on('board', mem.boardOpen);
+  on('blood-on', !!input.blood);
 
   const me = (frame.players.find((p) => p.id === frame.localId) ?? null) as HudPlayer | null;
   if (!me) {
-    for (const k of ['v.hp', 'v.hpGhost', 'v.fuel', 'v.fuelDelay', 'v.shield', 'v.dash', 'v.reload', 'v.respawn']) v[k] = '0';
+    for (const k of ['v.hp', 'v.hpGhost', 'v.fuel', 'v.fuelDelay', 'v.shield', 'v.dash', 'v.reload', 'v.respawn', 'v.equip', 'v.throw']) v[k] = '0';
     return { values: v, tokens };
   }
   on('alive', me.alive);
   on('spectating', !me.alive);
+  on('hurt', me.alive && mem.hurt);
+  on('heavy-hit', me.alive && mem.heavyHit);
 
-  // health, with the ghost of recent damage and the regen delay
+  // health, with the ghost of recent damage and the regen delay; it eases only on a hit (P10)
   const hv = healthView(me.hp, t, mem.sinceHitS);
   v['player.hp'] = String(hv.hp);
   v['v.hp'] = fixed(hv.fill);
   v['v.hpGhost'] = fixed(Math.max(hv.fill, mem.hpGhost));
   on('low-hp', me.alive && hv.low);
+  on('hp-ease', mem.hpEase);
   v['player.hpCue'] = hv.regenIn > 0 ? ` · regen starts in ${Math.ceil(hv.regenIn)} s` : hv.regenerating ? ' · regenerating' : '';
 
   // jet fuel and its regen delay; the jetpack's conditions
@@ -207,8 +294,13 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
   v['player.empCause'] = c.empSeconds > 0 ? 'EMP grenade' : 'EMP field';
   v['player.jetDisabled'] = c.empSeconds > 0 ? `${c.empSeconds.toFixed(1)} s` : '';
   on('gas', c.inGas);
-  v['player.gasCue'] = `${GAS.cloud.dpsEdge}–${GAS.cloud.dpsCore} HP a second, get out`;
+  v['player.gasCue'] = GAS_CUE;
+  on('burning', me.alive && !!me.burning);
+  v['player.burnCue'] = BURN_CUE;
   on('flash-reduced', input.reduceFlashes && c.blind > 0.05);
+  const flying = me.alive && !me.grounded && Math.hypot(me.vx, me.vy) > t.launchSpeedX;
+  on('launched', flying && !!mem.launchedBy);
+  v['hit.by'] = mem.launchedBy ?? '';
 
   // the riot shield (up blocks the dash: the kit's shield-up)
   const sh = shieldStatus(me);
@@ -224,63 +316,130 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
   }
   v['v.shield'] = fixed(sh.fill);
 
-  // dash: the ring refills (1 = ready), the seconds in the middle, the air dash's pip
+  // dash: the ring empties at once and refills raw (1 = ready), the seconds in the middle, the air
+  // dash's pip, and the last dash's direction on the rose for a moment
   const d = dashStatus(me, t);
+  on('dash-ready', d.state === 'ready');
   on('dash-cooldown', d.state === 'cooldown');
-  v['player.dashCooldown'] = d.state === 'cooldown' ? d.seconds.toFixed(1) : '';
+  on('air-used', d.state === 'spent' || (!!me.airDashUsed && !me.grounded));
+  v['dash.cooldown'] = d.state === 'cooldown' ? d.seconds.toFixed(1) : '';
   v['v.dash'] = fixed(1 - d.fill);
-  v['player.airClass'] = d.state === 'spent' || (me.airDashUsed && !me.grounded) ? 'hud-dash__air is-used' : 'hud-dash__air';
+  const hint = mem.dashDir === null || mem.dashDir === undefined ? null : dashHint(mem.dashDir);
+  on('dash-hint', me.alive && !!hint);
+  if (hint) {
+    v['dash.hintDir'] = hint.words;
+    v['dash.hintRotate'] = `rotate(${hint.rose} 50 50)`;
+    v['dash.hintArrow'] = `${hint.arrow}deg`;
+  } else Object.assign(v, { 'dash.hintDir': '', 'dash.hintRotate': 'rotate(0 50 50)', 'dash.hintArrow': '0deg' });
 
-  // weapons: the one in hand (the big slot) and the other
+  // weapons: the one in hand (the big slot; both while dual-wielding) and the one on your back
   const cards = weaponCards(me);
-  const active = cards.find((w) => w.slot === me.active) ?? cards[0];
-  const other = cards.find((w) => w !== active);
-  on('weapon', !!active);
-  if (active) {
-    const reloading = active.reload >= 0;
-    const icon = href(weaponIcon(weapons[active.def]?.id));
-    on('gun', !active.melee);
+  const held = cards.find((w) => w.slot === me.active) ?? cards[0];
+  const other = cards.find((w) => w !== held);
+  const swap = Math.max(0, me.swapTicks ?? 0);
+  on('weapon', !!held);
+  on('switching', !!held && swap > 0);
+  v['v.equip'] = swap > 0 && (mem.swapTotal ?? 0) > 0 ? fixed(1 - Math.min(1, swap / mem.swapTotal!), 2) : '0';
+  v['player.slot.0.equipLeft'] = swap > 0 ? `${(swap / 60).toFixed(1)} s` : '';
+  if (held) {
+    const def = weapons[held.def];
+    const hand = me.dual ? cards : [held];
+    const reload = hand.find((w) => w.reload >= 0);
+    const icon = href(weaponIcon(def?.id));
+    const empty = !held.melee && !reload && hand.every((w) => w.mag === 0);
+    on('gun', !held.melee);
+    on('melee', held.melee);
+    on('melee-only', held.melee && cards.every((w) => w.melee));
     on('weapon-icon', icon !== '');
-    on('reloading', reloading);
-    on('low-ammo', active.lowAmmo && !reloading);
-    v['weapon.0.slot'] = String(active.slot + 1);
-    v['weapon.0.name'] = active.name;
+    on('reloading', !!reload);
+    on('empty', empty);
+    on('low-ammo', !empty && !reload && hand.some((w) => w.lowAmmo));
+    on('windup', !!me.windup && !held.melee);
+    v['player.slot.0.windup'] = def?.charge ? 'Charging' : 'Spinning up';
+    // the phone's keys (round one)
     v['weapon.0.icon'] = icon;
-    v['weapon.0.mag'] = active.melee ? '—' : String(active.mag);
-    v['weapon.0.magSize'] = String(weapons[active.def]?.mag ?? 0);
-    v['weapon.0.reserve'] = String(active.reserve);
-    v['weapon.0.tail'] = active.melee ? '' : `/${weapons[active.def]?.mag ?? 0} · ${active.reserve}`;
-    v['v.reload'] = reloading ? fixed(active.reload) : '0';
+    v['weapon.0.mag'] = held.melee ? '—' : String(held.mag);
+    v['weapon.0.tail'] = held.melee ? '' : `/${def?.mag ?? 0} · ${held.reserve}`;
+    // round two's held slot
+    const second = me.dual ? cards.find((w) => w !== held) : undefined;
+    v['player.slot.0.idx'] = String(held.slot + 1);
+    v['player.slot.0.name'] = second && second.name !== held.name ? `${held.name} & ${second.name}` : held.name;
+    v['player.slot.0.family'] = weaponFamily(def);
+    v['player.slot.0.icon'] = icon;
+    v['player.dual.icon'] = second ? href(weaponIcon(weapons[second.def]?.id)) : icon;
+    v['player.slot.0.mag'] = String(held.mag);
+    v['player.slot.0.magSize'] = String(def?.mag ?? 0);
+    v['player.slot.0.reserve'] = me.dual ? cards.map((w) => w.reserve).join(' · ') : String(held.reserve);
+    v['player.slot.0.magL'] = String(cards[0]?.mag ?? 0);
+    v['player.slot.0.magR'] = String(cards[1]?.mag ?? 0);
+    v['v.reload'] = reload ? fixed(reload.reload) : '0';
   } else v['v.reload'] = '0';
   on('dual', me.dual);
-  on('second-weapon', !!other);
-  if (other) {
-    const icon = href(weaponIcon(weapons[other.def]?.id));
-    on('second-icon', icon !== '');
-    v['weapon.1.slot'] = String(other.slot + 1);
-    v['weapon.1.name'] = other.name;
-    v['weapon.1.icon'] = icon;
-    v['weapon.1.ammo'] = other.melee ? 'melee' : `${other.mag} / ${other.reserve}`;
-  }
+  const slung = !me.dual && held ? other : undefined;
+  on('slung', !me.dual && !!held);
+  on('slung-item', !!slung);
+  on('slung-empty', !me.dual && !!held && !slung);
+  on('slung-gun', !!slung && !slung.melee);
+  if (slung) {
+    v['player.slot.1.icon'] = href(weaponIcon(weapons[slung.def]?.id));
+    v['player.slot.1.name'] = slung.name;
+    v['player.slot.1.mag'] = String(slung.mag);
+    v['player.slot.1.reserve'] = String(slung.reserve);
+  } else if (held) v['player.slot.1.name'] = '';
   v['weapon.zoom'] = `${input.zoom ?? 1}×`;
 
-  // the grenade belt's head (its items are drawn by the Hud when they change)
+  // the grenade belt's head (its items are drawn by the Hud when they change), the throw meter
   const belt = grenadeBelt(me).filter((g) => g.present);
   const selected = belt.find((g) => g.selected) ?? belt[0];
   on('belt', belt.length > 0);
   on('belt-many', belt.filter((g) => g.count > 0).length > 1);
-  v['belt.selected'] = selected?.name ?? '';
-  v['belt.count'] = String(selected?.count ?? 0);
+  v['grenades.selected'] = selected?.name ?? '';
+  v['grenades.count'] = String(selected?.count ?? 0);
+  v['grenades.max'] = String(selected?.max ?? 0);
+  v['grenades.icon'] = iconHref(`g-${selected?.id ?? 'frag'}`);
+  const aim = input.throwAim ?? -1;
+  const aiming = me.alive && aim >= 0;
+  const strength = aiming ? 0.7 + (0.3 * Math.min(7, aim)) / 7 : 0;
+  on('aiming', aiming);
+  v['v.throw'] = fixed(strength, 3);
+  v['grenades.throwPercent'] = aiming ? `${Math.round(strength * 100)}%` : '';
+  on('arc-warning', aiming && e?.phase === 'active' && ARC_EVENTS.has(e.kind));
+  v['grenades.arcCause'] = e && ARC_EVENTS.has(e.kind) ? e.name : '';
+  on('quick-throw', me.alive && mem.quickThrow);
 
-  // the item underfoot or close by: pickupPrompt's whole line ("[E] take Widow (swaps your Hammer .44)"
-  // for a weapon crate, "Riot Shield: walk over to take" for the rest)
+  // the item underfoot or close by: a weapon crate you stand on gets the quick compare; the rest,
+  // pickupPrompt's line ("Riot Shield: walk over to take")
   const item = pickupNear(me, frame.pickups);
   const prompt = pickupPrompt(me, frame.pickups);
+  const under = me.alive ? weaponUnderfoot(frame.pickups, me) : null;
+  const crate = under && !under.held ? under : null;
   on('pickup', !!prompt);
+  on('pickup-crate', !!crate);
+  on('pickup-item', !!prompt && !crate);
   if (prompt) {
-    v['pickup.name'] = item?.name ?? '';
     v['pickup.text'] = prompt;
-    v['pickup.icon'] = item ? pickupIcon(item) : '';
+    v['pickup.icon'] = item ? pickupIcon(item) : crate ? href(weaponIcon(crate.weapon.id)) : '';
+  }
+  if (crate) {
+    const inHand = held ? weapons[held.def] : undefined;
+    on('pickup-swaps', !!inHand);
+    on('pickup-cmp', !!inHand && inHand.fireMode !== 'melee');
+    v['pickup.verb'] = inHand ? 'Swap' : 'Take';
+    v['pickup.weapon.name'] = crate.weapon.name;
+    v['pickup.weapon.icon'] = href(weaponIcon(crate.weapon.id));
+    v['pickup.held.name'] = inHand?.name ?? '';
+    v['pickup.held.icon'] = href(weaponIcon(inHand?.id));
+    if (inHand && inHand.fireMode !== 'melee') {
+      for (const r of crateCompare(inHand, crate.weapon)) {
+        v[`pickup.held.stats.${r.key}`] = r.held;
+        v[`pickup.weapon.stats.${r.key}`] = r.floor;
+        v[`pickup.bar.${r.key}.a`] = fixed(r.a, 2);
+        v[`pickup.bar.${r.key}.b`] = fixed(r.b, 2);
+        v[`pickup.delta.${r.key}.class`] = `cmp__d cmp__d--${r.dir}`;
+        v[`pickup.delta.${r.key}.icon`] = r.dir === 'up' ? iconHref('chev-up') : r.dir === 'down' ? iconHref('chev-down') : '';
+        v[`pickup.delta.${r.key}.text`] = r.delta;
+      }
+    }
   }
 
   // dead: who did it, and the respawn
@@ -300,9 +459,58 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
 
   // the reticle and its markers
   on('reticle', !!input.pointer && me.alive);
-  on('hit-marker', mem.hitMarker);
-  on('kill-marker', mem.killMarker);
+  on('hit', mem.hitMarker);
+  on('headshot', mem.hitMarker && mem.headshot);
+  on('ricochet', mem.hitMarker && mem.ricochet);
+  on('launch-mark', mem.hitMarker && mem.launchMark);
+  on('kill', mem.killMarker);
   return { values: v, tokens };
+}
+
+/** The gas and burn cues: how much they hurt (content). */
+const GAS_CUE = `${GAS.cloud.dpsEdge}–${GAS.cloud.dpsCore} HP a second, get out`;
+const BURN_CUE = DRAGON.projectile?.burn ? `${DRAGON.projectile.burn.dps} HP a second until it burns out` : 'it burns out';
+
+/**
+ * Tokens that leave with an exit instead of vanishing (the edge banners' accelerate-out, P9): when a
+ * group's main token goes off, it and the members it had stay on LEAVE_MS longer with `<main>-leaving`
+ * added, so hud.css can play the exit before the element hides. Coming back cancels the exit.
+ */
+export class Linger {
+  private last = new Set<string>();
+  private readonly leaving = new Map<string, { until: number; tokens: string[] }>();
+
+  constructor(
+    private readonly groups: readonly { main: string; members: readonly string[] }[],
+    private readonly ms = LEAVE_MS,
+  ) {}
+
+  apply(tokens: readonly string[], now: number): string[] {
+    const set = new Set(tokens);
+    const out = [...tokens];
+    for (const g of this.groups) {
+      if (set.has(g.main)) {
+        this.leaving.delete(g.main);
+        continue;
+      }
+      let l = this.leaving.get(g.main);
+      if (!l && this.last.has(g.main)) {
+        l = { until: now + this.ms, tokens: [g.main, ...g.members.filter((t) => this.last.has(t))] };
+        this.leaving.set(g.main, l);
+      }
+      if (!l) continue;
+      if (now < l.until) out.push(...l.tokens, `${g.main}-leaving`);
+      else this.leaving.delete(g.main);
+    }
+    this.last = set;
+    return out;
+  }
+}
+
+/** "Kemi's Thumper", "your own frag": what a blast that hit us was, for the Launched cue. */
+export function blastName(attacker: string | null, source: number): string {
+  const what = source === DamageSource.Grenade ? 'frag' : source === DamageSource.Mine ? 'mine' : (weapons[source]?.name ?? 'blast');
+  return attacker === null ? `your own ${what}` : `${attacker}'s ${what}`;
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, parent?: Element): HTMLElementTagNameMap[K] {
@@ -336,7 +544,7 @@ const BADGE_WORDS: Record<NonNullable<FeedEntry['badge']>, [icon: string, label:
   suicide: ['b-self', 'own goal'],
 };
 
-/** One kill-feed line in the kit's markup (.kf): names, what did it, and its badge. */
+/** One kill-feed line in the first kit's markup (.kf): the phone's, until the phone HUD is ported. */
 export function feedLine(entry: FeedEntry): HTMLLIElement {
   const li = el('li', entry.mine ? 'kf kf--me hud-plate' : 'kf hud-plate');
   const name = (text: string, bot: boolean) => {
@@ -369,25 +577,89 @@ export function feedLine(entry: FeedEntry): HTMLLIElement {
   return li;
 }
 
+/**
+ * One kill-feed row in round two's markup (the kit's .kf plate): names, what did it (a weapon's
+ * glyph, a grenade's, or words) and its badge. It slides in from the right edge (P9) and its badge
+ * stamps (P7); Hud.addFeed sends it off after FEED_MS.
+ */
+export function feedRow(entry: FeedEntry): HTMLLIElement {
+  const li = el('li', `kf plate m-p9 m-p9--right${entry.mine ? ' kf--me' : ''}`);
+  const name = (text: string, bot: boolean) => {
+    el('span', 'kf__name', li).textContent = playerName(text, bot);
+    if (bot) el('span', 'tag tag--bot', li).textContent = 'Bot';
+  };
+  const what = () => {
+    if (entry.icon.startsWith('#icon-wpn-')) li.appendChild(svgIcon('ic--kf', entry.icon, entry.how));
+    else if (entry.icon) li.appendChild(svgIcon(entry.icon.startsWith('#icon-g-') ? 'ic ic--fill kf__g' : 'ic kf__g', entry.icon, entry.how));
+    else el('span', 'kf__how', li).textContent = entry.how;
+  };
+  const badge = () => {
+    if (!entry.badge || entry.badge === 'fall') return;
+    const [icon, label] = BADGE_WORDS[entry.badge];
+    li.appendChild(svgIcon(`ic kf__badge kf__badge--${entry.badge === 'suicide' ? 'self' : entry.badge} m-p7`, iconHref(icon), label));
+  };
+  if (entry.fell) {
+    li.appendChild(svgIcon('ic kf__g', iconHref('b-fall'), 'fell'));
+    name(entry.victim, entry.victimBot);
+  } else if (entry.suicide) {
+    what();
+    name(entry.victim, entry.victimBot);
+    badge();
+  } else {
+    name(entry.killer, entry.killerBot);
+    what();
+    name(entry.victim, entry.victimBot);
+    badge();
+  }
+  return li;
+}
+
+/** The kit's damage arc: a 30° slice of the r=400 ring at the top, scaled into the HUD's 800-unit box. */
+const ARC_D = 'M -103.5 -386.4 A 400 400 0 0 1 103.5 -386.4';
+
+interface Belt {
+  set: string;
+  state: string;
+  items: Map<string, { li: HTMLElement; count: HTMLElement }>;
+}
+
 export class Hud {
   readonly root: HTMLElement;
   private readonly binder: Binder;
   private readonly states: StateTokens;
+  private readonly linger = new Linger([
+    { main: 'event', members: ['event-active', 'event-warning'] },
+    { main: 'pickup-crate', members: ['pickup-swaps', 'pickup-cmp'] },
+    { main: 'pickup-item', members: [] },
+  ]);
   private readonly banners: HTMLElement;
-  private readonly feeds: { list: HTMLElement; max: number }[];
-  private readonly arcs: SVGSVGElement[];
+  private readonly feeds: { list: HTMLElement; max: number; row: (e: FeedEntry) => HTMLLIElement; ms: number }[];
+  /** the desktop's damage arcs (round two) and the phone's (round one) */
+  private readonly arcs: SVGSVGElement;
+  private readonly phoneArcs: SVGSVGElement;
   private readonly reticles: HTMLElement[];
+  private readonly markers: HTMLElement[];
   private readonly beltList: HTMLElement;
+  private readonly beltSel: HTMLElement;
   private readonly board: HTMLElement;
+  private readonly slots: { held: HTMLElement; slung: HTMLElement };
   private names: ReadonlyMap<number, string> = new Map();
-  /** the touch controls' grenade button, once they're up */
-  private touchNade: HTMLElement | null = null;
   /** the roster's bots (every one, not only those the snapshot shows: it leaves out who's out of view) */
   private rosterBots: ReadonlySet<number> = new Set();
   private feedKey = 0;
   private lastHitAt = -Infinity;
   private hitMarkerUntil = 0;
   private killMarkerUntil = 0;
+  private hitHow = { head: false, rico: false, blast: false };
+  private pulseMarker = false;
+  private hurtUntil = 0;
+  private heavyUntil = 0;
+  private hpEaseUntil = 0;
+  private launched: { by: string; until: number } | null = null;
+  private dash: { dir: number; until: number } | null = null;
+  private swapTotal = 0;
+  private lastSwap = 0;
+  private lastActive = -1;
   private death: DeathInfo | null = null;
   private keys: HudKeys = {};
   private netDetail = '';
@@ -397,11 +669,14 @@ export class Hud {
   private others: readonly PlayerView[] = [];
   private scoreboardOpen = false;
   private scoreboardAt = 0;
+  private boardKey = '';
+  private boardCells: HTMLElement[][] = [];
+  private boardClock: HTMLElement | null = null;
   private scoreboardCodes: readonly string[] = ['Tab'];
   private blocked = false;
   private visible: boolean | null = null;
   private opacity = '';
-  private beltKey = '';
+  private belt: Belt = { set: '', state: '', items: new Map() };
   private reticleAt = '';
   private arcsAt = '';
   private readonly onKey = (e: KeyboardEvent) => {
@@ -421,16 +696,21 @@ export class Hud {
     this.binder = new Binder(this.root);
     // the tokens on #hud (hud.css) and on each screen, inside its kit's wrapper (the kits' scoped state rules)
     this.states = new StateTokens(this.root, [...this.root.querySelectorAll<HTMLElement>('.mf-hud-fit > .screen')]);
-    const all = <T extends Element>(sel: string) => [...this.root.querySelectorAll<T>(sel)];
-    this.banners = this.root.querySelector<HTMLElement>('.mf-hud-banners')!;
+    const one = <T extends Element>(sel: string) => this.root.querySelector<T>(sel)!;
+    const desk = '.mf-hud-desktop';
+    this.banners = one<HTMLElement>('.mf-hud-banners');
     this.feeds = [
-      { list: this.root.querySelector<HTMLElement>('.killfeed')!, max: FEED_LINES },
-      { list: this.root.querySelector<HTMLElement>('.phud-feed')!, max: PHONE_FEED_LINES },
+      { list: one<HTMLElement>(`${desk} .killfeed`), max: FEED_LINES, row: feedRow, ms: FEED_MS },
+      { list: one<HTMLElement>('.phud-feed'), max: PHONE_FEED_LINES, row: feedLine, ms: PHONE_FEED_MS },
     ];
-    this.arcs = all<SVGSVGElement>('.dmg-arcs');
-    this.reticles = all<HTMLElement>('.reticle');
-    this.beltList = this.root.querySelector<HTMLElement>('.belt__list')!;
-    this.board = this.root.querySelector<HTMLElement>('.scoreboard')!;
+    this.arcs = one<SVGSVGElement>(`${desk} .dmg`);
+    this.phoneArcs = one<SVGSVGElement>('.mf-hud-phone .dmg-arcs');
+    this.reticles = [one<HTMLElement>(`${desk} .reticle`), one<HTMLElement>('.mf-hud-phone .reticle')];
+    this.markers = [...this.root.querySelectorAll<HTMLElement>(`${desk} .mf-mk`)];
+    this.beltList = one<HTMLElement>(`${desk} .belt__list`);
+    this.beltSel = one<HTMLElement>(`${desk} .mf-belt__sel`);
+    this.board = one<HTMLElement>(`${desk} .sb`);
+    this.slots = { held: one<HTMLElement>(`${desk} .slot--held`), slung: one<HTMLElement>(`${desk} .slot--slung`) };
     window.addEventListener('keydown', this.onKey);
     window.addEventListener('keyup', this.onKey);
     window.addEventListener('blur', this.onBlur);
@@ -468,16 +748,39 @@ export class Hud {
     this.rosterBots = bots;
   }
 
-  /** Sim events (local mode's, or the server's plus our own predicted shots): feed, arcs, markers. */
+  /** Sim events (local mode's, or the server's plus our own predicted shots): feed, arcs, markers, cues. */
   onEvents(events: readonly SimEvent[], localId: number): void {
     const now = performance.now();
+    const how = { hit: false, head: false, rico: false, blast: false };
     for (const e of events) {
       if (e.type === 'hit' && e.target === localId) {
         this.lastHitAt = now;
-        if (e.attacker !== localId) this.damageArc(e.attacker);
+        this.hpEaseUntil = now + HP_EASE_MS;
+        const burn = isBurnTick(e.source, e.damage) || e.source === DamageSource.Gas;
+        if (e.damage > 0) this.hurtUntil = now + HURT_MS;
+        if (!burn) {
+          const look = arcLook(e.source, e.damage);
+          if (look.kind !== 'bullet') this.heavyUntil = now + HEAVY_MS;
+          if (e.attacker !== localId) this.damageArc(e.attacker, look.kind, look.amount);
+        }
+        if (isBlastSource(e.source)) {
+          const by = e.attacker === localId || e.attacker < 0 ? null : playerName(this.names.get(e.attacker) ?? `Player ${e.attacker + 1}`, this.isBot(e.attacker));
+          this.launched = { by: blastName(by, e.source), until: now + LAUNCH_MS };
+        }
       }
-      if (e.type === 'hit' && e.attacker === localId && e.target !== localId) this.hitMarkerUntil = now + HIT_MARKER_MS;
+      if (e.type === 'hit' && e.attacker === localId && e.target !== localId) {
+        how.hit = true;
+        if (e.zone === HitZone.Head) how.head = true;
+        if (isBlastSource(e.source)) how.blast = true;
+      }
+      if (e.type === 'ricochet' && e.shooter === localId && e.hit === 2 && e.target !== localId) how.rico = true;
       if (e.type === 'death' && e.killer === localId && e.victim !== localId) this.killMarkerUntil = now + KILL_MARKER_MS;
+      if (e.type === 'dash' && e.player === localId) this.dash = { dir: e.dir, until: now + DASH_HINT_MS };
+    }
+    if (how.hit) {
+      this.hitMarkerUntil = now + HIT_MARKER_MS;
+      this.hitHow = { head: how.head, rico: how.rico, blast: how.blast };
+      this.pulseMarker = true;
     }
     const bots = new Set(this.rosterBots);
     for (const p of this.others) if (p.isBot) bots.add(p.id);
@@ -503,21 +806,40 @@ export class Hud {
       this.netDetail = netGraph(frame.net);
     }
     const hpFill = this.me ? Math.max(0, Math.min(1, this.me.hp / input.tuning.healthMax)) : 1;
+    const swap = Math.max(0, this.me?.swapTicks ?? 0);
+    if (swap > this.lastSwap) this.swapTotal = swap;
+    this.lastSwap = swap;
+    const hitting = now < this.hitMarkerUntil;
     const { values, tokens } = hudFrame(input, {
       sinceHitS: (now - this.lastHitAt) / 1000,
       death: this.death,
       keys: this.keys,
       netDetail: this.netDetail,
       hpGhost: this.ghostAt(hpFill, now),
-      hitMarker: now < this.hitMarkerUntil,
+      hitMarker: hitting,
+      headshot: hitting && this.hitHow.head,
+      ricochet: hitting && this.hitHow.rico,
+      launchMark: hitting && this.hitHow.blast,
       killMarker: now < this.killMarkerUntil,
       boardOpen: this.scoreboardOpen,
+      hurt: now < this.hurtUntil,
+      heavyHit: now < this.heavyUntil,
+      hpEase: now < this.hpEaseUntil,
+      launchedBy: this.launched && now < this.launched.until ? this.launched.by : null,
+      dashDir: this.dash && now < this.dash.until ? this.dash.dir : null,
+      swapTotal: this.swapTotal,
+      quickThrow: now - (input.quickThrowAt ?? -Infinity) < QUICK_MS,
     });
     this.binder.update(values);
-    this.states.set(tokens);
+    this.states.set(this.linger.apply(tokens, now));
     if (this.me?.alive) this.death = null;
+    this.crossSlots(swap);
+    if (this.pulseMarker) {
+      this.pulseMarker = false;
+      this.pulse();
+    }
     this.drawBelt();
-    this.dressTouchGrenade();
+    feedTouchHud(values, tokens); // the phone's thumb dials wear these too (touch/skin.ts)
     this.place(input);
     // the white-out takes the HUD with the world; Reduce flashes keeps it readable over the dark-out
     const opacity = input.reduceFlashes ? '' : fixed(1 - Math.min(1, input.flash), 2);
@@ -526,8 +848,9 @@ export class Hud {
       this.root.style.opacity = opacity === '1' ? '' : opacity;
     }
     if (this.scoreboardOpen && now - this.scoreboardAt > 250) {
+      const fresh = this.scoreboardAt === 0;
       this.scoreboardAt = now;
-      this.drawScoreboard(input.scoreRows(), input.match);
+      this.drawScoreboard(input.scoreRows(), input.match, fresh);
     }
   }
 
@@ -535,19 +858,18 @@ export class Hud {
 
   showBanner(text: string, kind: BannerKind = 'info', options: BannerOptions = {}): void {
     const look = BANNER_LOOK[kind];
-    const b = el('div', 'event-banner mf-hud-banner');
+    const b = el('div', 'plate mf-hud-banner m-p9');
     b.style.setProperty('--ev', look.color);
     const ms = options.durationMs ?? 3200;
-    b.style.setProperty('--banner-ms', `${ms}ms`);
     b.setAttribute('role', 'status');
-    el('span', 'event-banner__icon', b).appendChild(svgIcon('ic ic--lg', iconHref(look.icon)));
-    const body = el('div', 'event-banner__text', b);
-    el('b', 'event-banner__title', el('p', '', body)).textContent = text;
-    if (options.detail) el('p', 'event-banner__desc', body).textContent = options.detail;
+    el('span', 'mf-hud-banner__ic', b).appendChild(svgIcon('ic', iconHref(look.icon)));
+    const body = el('div', 'mf-hud-banner__text', b);
+    el('b', 'mf-hud-banner__title', body).textContent = text;
+    if (options.detail) el('span', 'mf-hud-banner__desc', body).textContent = options.detail;
     this.banners.appendChild(b);
     // at most three: the oldest goes
     while (this.banners.children.length > 3) this.banners.firstElementChild?.remove();
-    window.setTimeout(() => b.remove(), ms + 400);
+    window.setTimeout(() => leave(b), ms);
   }
 
   dispose(): void {
@@ -559,12 +881,16 @@ export class Hud {
 
   // ---- internals ----
 
-  /** The health bar's ghost: holds where health was for half a second after a hit, then slides down. */
+  private isBot(id: number): boolean {
+    return this.rosterBots.has(id) || this.others.some((p) => p.id === id && p.isBot);
+  }
+
+  /** The health bar's ghost: holds where health was for 300 ms after a hit (motion spec §4.1), then slides down. */
   private ghostAt(hp: number, now: number): number {
     const g = this.ghost;
     const dt = Math.min(0.1, (now - g.at) / 1000);
     g.at = now;
-    if (hp < g.lastHp) g.heldUntil = now + 500;
+    if (hp < g.lastHp) g.heldUntil = now + 300;
     g.lastHp = hp;
     if (hp >= g.value) g.value = hp;
     else if (now > g.heldUntil) g.value = Math.max(hp, g.value - 0.6 * dt);
@@ -602,148 +928,209 @@ export class Hud {
         this.arcsAt = at;
         const hud = fit('--hud-fit');
         const phone = fit('--phone-fit');
-        this.arcs.forEach((a, i) => {
-          const f = i === 0 ? hud : phone;
-          a.style.transform = `translate(${(s.x / f).toFixed(1)}px, ${(s.y / f).toFixed(1)}px)`;
-        });
+        this.arcs.style.transform = `translate(${(s.x / hud).toFixed(1)}px, ${(s.y / hud).toFixed(1)}px)`;
+        this.phoneArcs.style.transform = `translate(${(s.x / phone).toFixed(1)}px, ${(s.y / phone).toFixed(1)}px)`;
       }
     }
   }
 
   private addFeed(entry: FeedEntry): void {
     for (const feed of this.feeds) {
-      const li = feedLine(entry);
-      li.style.setProperty('--feed-ms', `${FEED_MS}ms`);
+      const li = feed.row(entry);
+      li.style.setProperty('--feed-ms', `${feed.ms}ms`);
       feed.list.prepend(li);
       while (feed.list.children.length > feed.max) feed.list.lastElementChild?.remove();
-      window.setTimeout(() => li.remove(), FEED_MS + 300);
+      window.setTimeout(() => leave(li), feed.ms);
     }
   }
 
-  private damageArc(attacker: number): void {
+  /**
+   * A damage arc toward who hit us (an unseen attacker: a ring), in the kit's kinds: bullet, heavy,
+   * blast; its weight in --amt. It fades in over --m-instant, holds and fades over 600 ms (hud.css);
+   * the arcs before it dim (old).
+   */
+  private damageArc(attacker: number, kind: ArcKind, amount: number): void {
     const me = this.me;
     const from = attacker >= 0 ? this.others.find((p) => p.id === attacker) : undefined;
-    for (const svg of this.arcs) {
-      for (const old of svg.querySelectorAll('.dmg-arc')) old.classList.add('dmg-arc--old');
-      let arc: SVGElement;
-      if (me && from) {
-        // the arc points up at rest; screen angles are 0 = right, clockwise
-        arc = document.createElementNS(SVG, 'path');
-        arc.setAttribute('d', 'M -51.3 -141 A 150 150 0 0 1 51.3 -141');
-        arc.setAttribute('transform', `rotate(${((screenAngle(me, from) * 180) / Math.PI + 90).toFixed(1)})`);
-      } else {
-        // unseen attacker: a ring, no direction
-        arc = document.createElementNS(SVG, 'circle');
-        arc.setAttribute('r', '150');
-      }
-      arc.setAttribute('class', 'dmg-arc');
-      svg.appendChild(arc);
-      while (svg.children.length > 4) svg.firstElementChild?.remove();
-      window.setTimeout(() => arc.remove(), ARC_MS);
+    const angle = me && from ? (screenAngle(me, from) * 180) / Math.PI + 90 : null;
+    // round two (desktop)
+    for (const old of this.arcs.querySelectorAll('.dmg__arc')) old.classList.add('dmg__arc--old');
+    const arc = document.createElementNS(SVG, angle === null ? 'circle' : 'path');
+    if (angle === null) arc.setAttribute('r', '400');
+    else arc.setAttribute('d', ARC_D);
+    arc.setAttribute('transform', 'scale(.7)');
+    arc.setAttribute('class', `dmg__arc dmg__arc--${kind}`);
+    (arc as SVGElement).style.setProperty('--amt', fixed(amount, 2));
+    (arc as SVGElement).style.setProperty('--rot', `${(angle ?? 0).toFixed(1)}deg`);
+    this.arcs.appendChild(arc);
+    while (this.arcs.children.length > 4) this.arcs.firstElementChild?.remove();
+    window.setTimeout(() => arc.remove(), ARC_MS);
+    // round one (phone)
+    for (const old of this.phoneArcs.querySelectorAll('.dmg-arc')) old.classList.add('dmg-arc--old');
+    let p: SVGElement;
+    if (angle !== null) {
+      p = document.createElementNS(SVG, 'path');
+      p.setAttribute('d', 'M -51.3 -141 A 150 150 0 0 1 51.3 -141');
+      p.setAttribute('transform', `rotate(${angle.toFixed(1)})`);
+    } else {
+      p = document.createElementNS(SVG, 'circle');
+      p.setAttribute('r', '150');
+    }
+    p.setAttribute('class', 'dmg-arc');
+    this.phoneArcs.appendChild(p);
+    while (this.phoneArcs.children.length > 4) this.phoneArcs.firstElementChild?.remove();
+    window.setTimeout(() => p.remove(), ARC_MS);
+  }
+
+  /** A hit marker: scale 1.3 → 1 in --m-instant, then it fades (motion spec §4.1); each hit restarts it. */
+  private pulse(): void {
+    if (reduced()) return;
+    const shown = this.markers.find((m) => !m.hasAttribute('hidden'));
+    if (!shown || typeof shown.animate !== 'function') return;
+    for (const a of shown.getAnimations()) a.cancel();
+    shown.animate([{ scale: '1.3', opacity: 1 }, { scale: '1', opacity: 1, offset: 0.5 }, { scale: '1', opacity: 0 }], { duration: HIT_MARKER_MS, easing: 'ease-out' });
+  }
+
+  /**
+   * A swap: the two slot cards cross (motion spec §4.1). The held card grows out of where the slung
+   * one is and the slung card shrinks out of the held one's place, on --ease-travel over the gun's
+   * real equip time (0.25–0.6 s); the equip ring fills at the same pace from the sim.
+   */
+  private crossSlots(swap: number): void {
+    const me = this.me;
+    const active = me && me.alive && !me.dual ? me.active : -1;
+    const changed = this.lastActive >= 0 && active >= 0 && active !== this.lastActive;
+    this.lastActive = active;
+    if (!changed || swap <= 0 || reduced()) return;
+    const { held, slung } = this.slots;
+    if (held.hasAttribute('hidden') || slung.hasAttribute('hidden') || typeof held.animate !== 'function') return;
+    const a = held.getBoundingClientRect();
+    const b = slung.getBoundingClientRect();
+    if (a.width === 0 || b.width === 0) return;
+    const zoom = Number(getComputedStyleValue('--hud-fit')) || 1;
+    const local = (r: DOMRect) => ({ left: r.left / zoom, top: r.top / zoom, width: r.width / zoom, height: r.height / zoom });
+    const duration = Math.max(250, Math.min(600, (swap / 60) * 1000));
+    const easing = token('--ease-travel', 'cubic-bezier(0.7, 0, 0.16, 1)');
+    for (const [card, from, to] of [
+      [held, b, a],
+      [slung, a, b],
+    ] as const) {
+      for (const old of card.getAnimations()) old.cancel();
+      card.animate([{ transformOrigin: '0 0', transform: flipTransform(local(from), local(to)) }, { transformOrigin: '0 0', transform: 'none' }], { duration, easing });
     }
   }
 
-  /** The touch grenade button (touch controls up): the selected type's icon and its count (touchSkin.ts). */
-  private dressTouchGrenade(): void {
-    if (!document.documentElement.hasAttribute('data-touch-controls')) return;
-    if (!this.touchNade?.isConnected) this.touchNade = document.querySelector<HTMLElement>('.mf-touch .mf-ctl-grenade');
-    const btn = this.touchNade;
-    if (!btn) return;
-    const me = this.me as HudPlayer | null;
-    const g = touchGrenade(me ? grenadeBelt(me).filter((s) => s.present) : []);
-    const count = String(g.count);
-    if (btn.dataset.grenade !== g.id) btn.dataset.grenade = g.id;
-    if (btn.dataset.count !== count) btn.dataset.count = count;
-  }
-
-  /** The belt's items, redrawn only when a count or the selection changes. */
+  /**
+   * The belt: its items are built when the types carried change; counts roll (P4) and the selection
+   * slides (P5) when they change, nothing otherwise.
+   */
   private drawBelt(): void {
     const me = this.me as HudPlayer | null;
     const belt = me ? grenadeBelt(me).filter((g) => g.present) : [];
-    const key = belt.map((g) => `${g.id}:${g.count}:${g.selected ? 1 : 0}`).join(' ');
-    if (key === this.beltKey) return;
-    this.beltKey = key;
-    const items = belt.map((g) => {
-      const li = el('li', `belt__item${g.selected ? ' is-selected' : ''}${g.count === 0 ? ' is-empty' : ''}`);
-      li.setAttribute('aria-label', `${g.name}, ${g.count} of ${g.max}${g.selected ? ', selected' : ''}`);
-      li.appendChild(svgIcon('ic ic--lg', iconHref(`g-${g.id}`)));
-      const pips = el('span', 'pips', li);
-      pips.setAttribute('aria-hidden', 'true');
-      for (let i = 0; i < g.max; i++) el('i', i < g.count ? 'on' : '', pips);
-      return li;
-    });
-    this.beltList.replaceChildren(...items);
+    const set = belt.map((g) => g.id).join(' ');
+    const b = this.belt;
+    if (set !== b.set) {
+      b.set = set;
+      b.state = '';
+      b.items.clear();
+      const items = belt.map((g) => {
+        const li = el('li', 'belt__item');
+        li.appendChild(svgIcon('ic ic--fill ic--lg', iconHref(`g-${g.id}`)));
+        const count = el('b', 'belt__count num', li);
+        b.items.set(g.id, { li, count });
+        return li;
+      });
+      this.beltList.replaceChildren(...items);
+    }
+    const state = belt.map((g) => `${g.count}:${g.selected ? 1 : 0}`).join(' ');
+    if (state === b.state) return;
+    const first = b.state === '';
+    b.state = state;
+    for (const g of belt) {
+      const item = b.items.get(g.id)!;
+      item.li.classList.toggle('is-selected', g.selected);
+      item.li.classList.toggle('is-empty', g.count === 0);
+      item.li.setAttribute('aria-label', `${g.name}, ${g.count} of ${g.max}${g.selected ? ', selected' : ''}`);
+      rollText(item.count, String(g.count));
+      if (g.selected) {
+        moveIndicator(this.beltSel, item.li.offsetLeft, item.li.offsetWidth);
+        // the first placement is where it starts, not a move
+        if (first) this.beltSel.style.transition = 'none';
+      }
+    }
   }
 
-  private drawScoreboard(rows: ScoreRow[] | null, match: MatchView | null): void {
-    const head = el('div', 'scoreboard__head');
-    const title = el('div', '', head);
-    const limit = match ? (match.killLimit > 0 ? `first to ${match.killLimit}` : 'no kill limit') : '';
-    el('p', 'eyebrow', title).textContent = ['Deathmatch', limit, match?.mapName ?? ''].filter(Boolean).join(' · ');
-    el('h2', 'display h2', title).textContent = 'Scoreboard';
-    el('span', 'topbar__spacer', head);
-    if (match?.phase === MatchPhase.InProgress) {
-      const clock = el('div', 'scoreboard__clock', head);
-      clock.appendChild(svgIcon('ic', iconHref('clock')));
-      el('b', 'num', clock).textContent = formatClock(match.untimed ? match.secondsElapsed : match.secondsLeft);
-      el('span', 'muted', clock).textContent = match.untimed ? 'played' : 'left';
+  /**
+   * The Tab scoreboard (the kit's .sb): built when it opens (the panel focus-pulls in at --m-fast,
+   * the rows rise 20 ms apart), then its cells are rewritten in place four times a second; a new
+   * order or player rebuilds the rows without the entrance.
+   */
+  private drawScoreboard(rows: ScoreRow[] | null, match: MatchView | null, fresh: boolean): void {
+    const list = rows ?? [];
+    const key = list.map((r) => `${r.key}:${r.bot ? 1 : 0}:${r.you ? 1 : 0}:${r.host ? 1 : 0}:${r.left ? 1 : 0}:${r.name}`).join('|');
+    const clock = match?.phase === MatchPhase.InProgress ? formatClock(match.untimed ? match.secondsElapsed : match.secondsLeft) : '';
+    if (fresh || key !== this.boardKey) {
+      const head = el('header', 'sb__head');
+      el('h1', 'display', head).textContent = 'Scoreboard';
+      const limit = match ? (match.killLimit > 0 ? `first to ${match.killLimit}` : 'no kill limit') : '';
+      el('span', 'sb__meta', head).textContent = ['Deathmatch', match?.mapName ?? '', limit].filter(Boolean).join(' · ');
+      this.boardClock = el('b', 'sb__clock num', head);
+      const table = el('table', 'sb__table');
+      const tr = el('tr', '', el('thead', '', table));
+      for (const text of ['#', 'Player', 'Kills', 'Deaths', 'Ping']) {
+        const th = el('th', '', tr);
+        th.scope = 'col';
+        th.textContent = text;
+      }
+      const body = el('tbody', '', table);
+      const lead = list.length > 1 && list[0]!.score > list[1]!.score;
+      this.boardCells = list.map((r, i) => {
+        const row = el('tr', [fresh ? 'm-p3 m-p3--tight' : '', r.you ? 'is-you' : ''].filter(Boolean).join(' '), body);
+        if (fresh) stagger(row, i);
+        const rank = el('td', 'sb__rank num', row);
+        const who = el('td', 'sb__name', row);
+        if (r.bot) el('span', 'avatar avatar--bot', who).appendChild(svgIcon('ic', iconHref('bot')));
+        else el('span', 'avatar', who).textContent = ([...r.name.trim()][0] ?? '?').toUpperCase();
+        el('b', '', who).textContent = playerName(r.name, r.bot);
+        if (i === 0 && lead) {
+          const crown = el('span', 'stamp stamp--volt sb__crown', who);
+          crown.append(svgIcon('ic ic--sm', iconHref('crown')), 'Lead');
+        }
+        if (r.you) el('span', 'tag tag--you', who).textContent = 'You';
+        if (r.host) el('span', 'tag tag--host', who).textContent = 'Host';
+        if (r.bot) el('span', 'tag tag--bot', who).textContent = 'Bot';
+        if (r.left) el('span', 'tag tag--ghost', who).textContent = 'Left';
+        return [rank, el('td', 'num sb__k', row), el('td', 'num', row), el('td', 'num sb__ping', row)];
+      });
+      if (!list.length) {
+        const empty = el('td', 'sb__ping', el('tr', '', body));
+        empty.colSpan = 5;
+        empty.textContent = 'Scores show while a match runs.';
+      }
+      const foot = el('footer', 'sb__foot');
+      foot.append('Hold ');
+      el('kbd', 'kbd', foot).textContent = this.keys.scoreboard || 'Tab';
+      foot.append(' to keep this open · ranked by score: kills minus self-kills · bots show no ping');
+      this.board.replaceChildren(head, table, foot);
+      this.boardKey = key;
     }
-
-    const table = el('table', 'table');
-    const tr = el('tr', '', el('thead', '', table));
-    for (const [text, cls] of [
-      ['#', 't-rank'],
-      ['Player', ''],
-      ['Kills', 't-num'],
-      ['Deaths', 't-num'],
-      ['Score', 't-num'],
-      ['Ping', 't-num'],
-    ] as const) {
-      const th = el('th', cls, tr);
-      th.scope = 'col';
-      th.textContent = text;
-    }
-    const body = el('tbody', '', table);
-    (rows ?? []).forEach((r, i) => {
-      const row = el('tr', [r.you ? 'is-you' : '', r.bot ? 'is-bot' : ''].filter(Boolean).join(' '), body);
-      el('td', 't-rank', row).textContent = String(i + 1);
-      const who = el('span', 't-player', el('td', '', row));
-      if (r.bot) el('span', 'avatar avatar--sm avatar--bot', who).appendChild(svgIcon('ic ic--sm', iconHref('bot')));
-      else el('span', 'avatar avatar--sm', who).textContent = ([...r.name.trim()][0] ?? '?').toUpperCase();
-      who.append(playerName(r.name, r.bot));
-      if (r.host) {
-        const b = el('span', 'badge badge--host', who);
-        b.append(svgIcon('ic', iconHref('star')), 'Host');
-      }
-      if (r.you) el('span', 'badge badge--you', who).textContent = 'You';
-      if (r.bot) {
-        const b = el('span', 'badge badge--bot', who);
-        b.append(svgIcon('ic', iconHref('bot')), 'Bot');
-      }
-      if (r.left) el('span', 'badge badge--bot', who).textContent = 'Left';
-      el('td', 't-num', row).textContent = String(r.kills);
-      el('td', 't-num', row).textContent = String(r.deaths);
-      el('td', 't-num t-score', row).textContent = String(r.score);
-      const ping = el('td', 't-num', row);
-      if (r.ping >= 0) el('span', `ping ${pingLook(r.ping).cls}`, ping).textContent = String(r.ping);
-      else {
-        ping.classList.add('muted');
-        ping.textContent = '–';
-      }
+    if (this.boardClock && this.boardClock.textContent !== clock) this.boardClock.textContent = clock;
+    list.forEach((r, i) => {
+      const cells = this.boardCells[i];
+      if (!cells) return;
+      const text = [String(i + 1), String(r.kills), String(r.deaths), r.ping >= 0 ? `${r.ping} ms` : '·'];
+      cells.forEach((c, j) => {
+        if (c.textContent !== text[j]) c.textContent = text[j]!;
+      });
     });
-    if (!rows?.length) {
-      const empty = el('td', 'muted', el('tr', '', body));
-      empty.colSpan = 6;
-      empty.textContent = 'Scores show while a match runs.';
-    }
-
-    const foot = el('div', 'scoreboard__foot');
-    const hold = el('span', 'keys', foot);
-    el('span', 'muted', hold).textContent = 'Hold';
-    el('kbd', 'kbd', hold).textContent = this.keys.scoreboard || 'Tab';
-    el('span', 'muted', foot).textContent = 'Score = kills minus self-kills. Ping in ms.';
-    this.board.replaceChildren(head, table, foot);
   }
+}
+
+/** An edge banner or feed row leaves: accelerating out (P9's .is-leaving), then it's gone. */
+function leave(node: HTMLElement): void {
+  if (!node.isConnected) return;
+  node.classList.add('is-leaving');
+  window.setTimeout(() => node.remove(), reduced() ? 0 : LEAVE_MS);
 }
 
 /** A CSS variable on <html> (fit.ts writes the HUD's zoom there). */

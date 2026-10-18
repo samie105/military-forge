@@ -188,7 +188,7 @@ const host: GameHost = {
     netGraphKeys = uiCodes(next.bindings, 'netGraph');
     hud?.setScoreboardKeys(uiCodes(next.bindings, 'scoreboard'));
     const key = (action: keyof typeof next.bindings) => next.bindings[action][0];
-    hud?.setKeys({ dash: key('dash'), grenade: key('grenade'), cycleGrenade: key('cycleGrenade'), shield: key('shield'), swap: key('swap'), reload: key('reload'), scoreboard: key('scoreboard') });
+    hud?.setKeys({ dash: key('dash'), grenade: key('grenade'), cycleGrenade: key('cycleGrenade'), shield: key('shield'), swap: key('swap'), reload: key('reload'), scoreboard: key('scoreboard'), interact: key('interact'), fire: key('fire') });
     // Reduce flashes: the flashbang effect (fx, which remembers it) and the UI (the kit's html.reduce-flashes)
     setReduceFlashes(next.reduceFlashes);
     const html = document.documentElement;
@@ -494,6 +494,9 @@ function frame(now: number): void {
       flash: fxState().flash,
       scoreRows,
       adminTuned: mode instanceof OnlineMode && mode.net.adminTuned,
+      throwAim: sampler.throwAim,
+      quickThrowAt: sampler.quickThrowAt,
+      blood: settings?.blood ?? false,
     });
   }
   if (options.overlay) view3d?.render(f, dt);

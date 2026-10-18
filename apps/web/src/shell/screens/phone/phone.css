@@ -1,0 +1,135 @@
+/*
+ * The phone menus (m-home, m-lobby, m-pause, m-results) in the app: the kit's .pm-* screens
+ * (ui/kit.css) at 812×375 design pixels, zoomed by fit.ts's --phone-fit, plus what the app adds
+ * (real buttons for the kit's tickets, the bottom sheet, the share chip, the warm-up strip). The motion
+ * is the shared system at phone distances (docs/design/ui-motion-spec.md §4.2). Tokens only.
+ */
+.mf-fit.mf-fit--phone > .screen { width: var(--phone-w, 812px); height: var(--phone-h, 375px); zoom: var(--phone-fit, 1); }
+.mf-fit--phone { --m-rise: 10px; }
+html.reduce-motion .mf-fit--phone { --m-rise: 0px; }
+
+/*
+ * The patterns compose with the kit's own transforms here (a stamp's tilt, a button's press-down): the
+ * same keyframes on the individual translate/scale properties, so a risen button still presses.
+ */
+.mf-fit--phone .m-p1 { animation-name: pm-pull; }
+.mf-fit--phone .m-p3 { animation-name: pm-rise; }
+.mf-fit--phone .m-p7 { animation-name: pm-stamp; }
+.mf-fit--phone .m-p9 { animation-name: pm-edge-in; }
+.mf-fit--phone .m-p9--left { --pm-from: calc(var(--m-edge) * -1) 0; }
+.mf-fit--phone .m-p9--right { --pm-from: var(--m-edge) 0; }
+@keyframes pm-pull { from { opacity: 0; filter: blur(var(--m-pull-blur)); scale: var(--m-pull-scale); } to { opacity: 1; filter: blur(0); scale: 1; } }
+@keyframes pm-rise { from { opacity: 0; translate: 0 var(--m-rise); } to { opacity: 1; translate: 0 0; } }
+@keyframes pm-stamp { from { opacity: 0; scale: var(--m-stamp-scale); } 40% { opacity: 1; } to { opacity: 1; scale: 1; } }
+@keyframes pm-edge-in { from { opacity: 0; translate: var(--pm-from, 0 calc(var(--m-edge) * -1)); } to { opacity: 1; translate: 0 0; } }
+/* P8 on a finger: down within a frame, back on the settle (no hover on touch) */
+.mf-fit--phone :is(.btn, .ticket, .pm-nav__i, .pm-av, .pm-rules, .tag, .seg__opt) { transition: scale var(--m-fast) var(--ease-settle); }
+.mf-fit--phone :is(.btn, .ticket, .pm-nav__i, .pm-av, .pm-rules, .tag, .seg__opt):active:not(:disabled) { scale: var(--m-press); transition-duration: var(--m-instant); }
+
+/*
+ * Large text (Settings → Text size): body text, labels and buttons grow the full 150 %; the poster
+ * headlines, already 28–88 px, grow at most 15 % so the screens keep their shape. Anything that still
+ * doesn't fit scrolls rather than overlaps; .is-text-lg (125 % up) reflows each screen below.
+ */
+.mf-fit--phone { --pm-head: min(var(--text-scale, 1), 1.15); }
+.mf-fit--phone .pm { overflow-y: auto; overscroll-behavior: contain; }
+.mf-fit--phone :is(.pm-poster__t, .pm-share__t, .pm-pause__t) { font-size: calc(48px * var(--pm-head)); }
+.mf-fit--phone :is(.pm-h, .pm-tk .display, .pm-roster__h .display, .pm-result .display, .pm-sheet__head .display) { font-size: calc(28px * var(--pm-head)); }
+.mf-fit--phone .pm-score__row .display { font-size: calc(36px * var(--pm-head)); }
+.mf-fit--phone .pm-mvp .mvp__big { font-size: calc(88px * var(--pm-head)); }
+.mf-fit--phone .pm-mvp .mvp__name { font-size: calc(48px * var(--pm-head)); }
+.mf-fit--phone .pm-name { font-size: calc(36px * var(--pm-head)); }
+.mf-fit--phone .pm-brand .display { font-size: calc(24px * var(--pm-head)); }
+
+/* every target at least 48 px: the kit's 40 px avatar reaches further than it draws */
+.mf-fit--phone .pm-av { position: relative; cursor: pointer; }
+.mf-fit--phone .pm-av::after { content: ''; position: absolute; inset: -4px; }
+.mf-fit--phone .seg__opt { min-height: var(--touch-min); }
+
+/* ---- home ---- */
+.pm-tk { text-align: left; align-items: flex-start; cursor: pointer; }
+.pm-tk:disabled, .pm-create:disabled { opacity: 0.55; cursor: default; }
+.pm-stage__mark { position: absolute; inset: 28px 30px 52px; display: grid; place-items: center; color: var(--c-olive-500); }
+.pm-stage__mark .ic { width: 120px; height: 120px; stroke-width: 1.4; }
+.pm-name { max-width: calc(100% - 16px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-nav__i { cursor: pointer; }
+.net-pill.is-unknown .dot { background: var(--c-muted); }
+
+/* ---- lobby ---- */
+.pm-code { white-space: nowrap; }
+.pm-warm { min-height: var(--touch-min); padding: 0 12px; cursor: pointer; }
+.pm-share { position: relative; }
+.pm-qr--wide { grid-column: 1 / -1; }
+.pm-qr--wide > span:last-child b { font-size: var(--fs-16); }
+.pm-roster { min-height: 0; }
+.pm-roster ol { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.pm-row__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-row.is-you { box-shadow: inset 3px 0 0 var(--c-volt); }
+.mf-fit--phone .pm-roster { padding: 8px 12px; gap: 5px; }
+.mf-fit--phone .pm-roster ol { gap: 2px; }
+.mf-fit--phone .pm-row { min-height: 32px; }
+.pm-rules { display: inline-flex; align-items: center; gap: 4px; min-height: var(--touch-min); margin: -10px 0; padding: 0 6px; border-radius: var(--r-xs); color: var(--c-text); font-size: var(--fs-14); font-weight: var(--fw-bold); cursor: pointer; }
+.pm-bar .is-ready { color: var(--c-ok); border-color: var(--c-ok); }
+/* the folded lobby: where the match clock goes (empty in warm-up), clear of the swap pill and the menu */
+.pm-strip { position: absolute; left: 0; right: 0; top: var(--safe-t); width: max-content; max-width: 240px; margin: 0 auto; display: flex; align-items: center; gap: 8px; padding: 2px 2px 2px 12px; pointer-events: auto; font-size: var(--fs-14); font-weight: var(--fw-bold); white-space: nowrap; }
+.pm-strip__ready { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---- pause ---- */
+.pm-dim { position: absolute; inset: 0; background: var(--c-scrim); animation: pm-fade var(--m-fast) var(--ease-arrive) both; }
+@keyframes pm-fade { from { opacity: 0; } to { opacity: 1; } }
+.pm-pause .btn { min-height: var(--touch-min); }
+.pm-score .hud-label { white-space: nowrap; }
+
+/* ---- results ---- */
+.pm-mvp { rotate: 1.5deg; transform: none; }
+.pm-result { display: flex; flex-direction: column; gap: 2px; padding: 8px 14px; -webkit-mask: none; mask: none; border: 2px solid var(--c-ink-950); }
+.pm-result .label { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-14); letter-spacing: 0.04em; }
+.pm-result .display { font-size: var(--fs-28); color: var(--c-paper-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-voted { font-size: var(--fs-16); margin-left: auto; }
+.pm-res__more { display: flex; gap: 8px; }
+.pm-res__more .btn { flex: 1; }
+.pm-vote .pips i.on { background: var(--c-volt); }
+
+/* ---- shared: the share chip, the bottom sheet ---- */
+.pm-chip { position: absolute; right: 14px; top: 10px; z-index: var(--z-local-2); background: var(--c-ink-900); font-size: var(--fs-16); pointer-events: none; }
+.pm-share .pm-chip { top: auto; bottom: 30px; }
+.pm-pause .pm-chip { top: auto; bottom: 12px; }
+.pm-scrim { position: absolute; inset: 0; z-index: var(--z-panel); background: var(--c-scrim); animation: pm-fade var(--m-fast) var(--ease-arrive) both; }
+.pm-scrim.is-leaving { animation: pm-fade-out var(--m-fast) var(--ease-leave) both; }
+@keyframes pm-fade-out { to { opacity: 0; } }
+.pm-sheet { position: absolute; z-index: var(--z-panel); left: 50%; bottom: 0; width: min(560px, calc(100% - 2 * var(--safe-l))); translate: -50% 0; display: flex; flex-direction: column; gap: 10px; padding: 14px 16px calc(var(--safe-b) + 6px); border-bottom: 0; border-radius: var(--r-md) var(--r-md) 0 0; animation: pm-sheet-in var(--m-base) var(--ease-arrive) both; }
+.pm-sheet.is-leaving { animation: pm-sheet-out var(--m-fast) var(--ease-leave) both; }
+@keyframes pm-sheet-in { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes pm-sheet-out { to { transform: translateY(100%); } }
+html.reduce-motion .pm-sheet { animation-name: pm-fade; }
+html.reduce-motion .pm-sheet.is-leaving { animation-name: pm-fade-out; }
+.pm-sheet__head { display: flex; align-items: center; gap: 10px; }
+.pm-sheet__head .display { font-size: var(--fs-28); }
+.pm-sheet__icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; color: var(--c-hp); box-shadow: inset 0 0 0 2px var(--c-hp); }
+.pm-sheet__row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.pm-sheet__row .label { font-size: var(--fs-14); font-weight: var(--fw-bold); color: var(--c-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.pm-sheet__note { color: var(--c-muted); font-size: var(--fs-16); }
+.pm-seg .seg__opt { min-width: 48px; padding: 0 8px; }
+.pm-stepper .stepper__val { min-width: 64px; font-size: var(--fs-28); }
+
+/* ---- large text: each screen reflows (the decorative parts step aside) ---- */
+.is-text-lg .pm-home { grid-template-columns: 1fr 200px; }
+.is-text-lg .pm-stage { display: none; }
+.is-text-lg .pm-poster .serial, .is-text-lg .pm-tk .label { display: none; }
+.is-text-lg .pm-nav__i span { font-size: var(--fs-14); }
+.is-text-lg .pm-nav { height: auto; min-height: 52px; }
+.is-text-lg .pm-lobby { grid-template-columns: 300px 1fr; }
+.is-text-lg .pm-qr { flex-direction: column; align-items: flex-start; }
+.is-text-lg .pm-row .tag { display: none; }
+.is-text-lg .pm-row .prow__ready { min-width: 0; }
+.is-text-lg .pm-mvp { width: 220px; height: auto; align-self: stretch; }
+.is-text-lg .pm-mvp .mvp__big { display: none; }
+.is-text-lg .pm-res__more .btn, .is-text-lg .pm-bar .btn { padding-inline: 8px; }
+.is-text-lg .pm-pause { width: 380px; overflow-y: auto; }
+.is-text-lg .pm-pause__row { flex-wrap: wrap; }
+.is-text-lg .pm-score { width: 300px; }
+.is-text-lg .pm-score__row { flex-wrap: wrap; gap: 6px 14px; }
+.is-text-lg .pm > * { flex-shrink: 0; }
+.is-text-lg :is(.pm-home, .pm-lobby) { flex: none; min-height: 0; }
+.is-text-lg .pm--res { align-items: flex-start; }
+.is-text-lg .pm-roster ol { overflow: visible; }

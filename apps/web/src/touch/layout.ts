@@ -12,6 +12,7 @@ export interface ControlDef {
   id: ControlId;
   /** stick: a floating thumb-stick zone; drag: a button that is also a small stick; tap: a button */
   kind: 'stick' | 'drag' | 'tap';
+  /** its name in the editor */
   label: string;
   /** what it means to the sim (0: handled by the controller: zoom, pause, scoreboard) */
   bit: number;
@@ -32,19 +33,19 @@ export interface Placement {
 export const SHIELD_BIT: number = (Btn as Record<string, number>).Shield ?? 0;
 
 export const CONTROLS: readonly ControlDef[] = [
-  { id: 'move', kind: 'stick', label: '', bit: 0, title: 'Move: push up to jet, down to crouch; swipe and lift to dash' },
-  { id: 'aim', kind: 'stick', label: '', bit: 0, title: 'Aim (and fire)' },
-  { id: 'grenade', kind: 'drag', label: 'G', bit: Btn.Grenade, title: 'Grenade: tap to throw; hold to aim the arc (with the right stick or a drag), release to throw' },
-  { id: 'cycleGrenade', kind: 'tap', label: 'G↻', bit: Btn.CycleGrenade, title: 'Next grenade type' },
-  { id: 'dash', kind: 'tap', label: 'DASH', bit: Btn.Dash, title: 'Dash the way the move stick points (left alone: the way you face)' },
-  { id: 'melee', kind: 'tap', label: 'MELEE', bit: Btn.Melee, title: 'Melee' },
-  { id: 'reload', kind: 'tap', label: 'R', bit: Btn.Reload, title: 'Reload' },
-  { id: 'swap', kind: 'tap', label: '⇄', bit: Btn.Swap, title: 'Swap weapon' },
-  { id: 'zoom', kind: 'tap', label: '⌕', bit: 0, title: 'Zoom (scoped weapons)' },
-  { id: 'shield', kind: 'tap', label: '⛨', bit: SHIELD_BIT, title: 'Raise or sling the shield' },
-  { id: 'take', kind: 'tap', label: 'E', bit: Btn.Interact, title: 'Take the weapon you stand on (it swaps the gun in hand)' },
-  { id: 'pause', kind: 'tap', label: '❚❚', bit: 0, key: 'Escape', title: 'Menu' },
-  { id: 'scores', kind: 'tap', label: '☰', bit: 0, key: 'Tab', title: 'Scoreboard (hold)' },
+  { id: 'move', kind: 'stick', label: 'Move', bit: 0, title: 'Move: push up to jet, down to crouch; swipe and lift to dash' },
+  { id: 'aim', kind: 'stick', label: 'Aim and fire', bit: 0, title: 'Aim (and fire)' },
+  { id: 'grenade', kind: 'drag', label: 'Grenade', bit: Btn.Grenade, title: 'Grenade: tap to throw; hold to aim the arc (with the right stick or a drag), release to throw' },
+  { id: 'cycleGrenade', kind: 'tap', label: 'Next grenade', bit: Btn.CycleGrenade, title: 'Next grenade type' },
+  { id: 'dash', kind: 'tap', label: 'Dash', bit: Btn.Dash, title: 'Dash the way the move stick points (left alone: the way you face)' },
+  { id: 'melee', kind: 'tap', label: 'Melee', bit: Btn.Melee, title: 'Melee' },
+  { id: 'reload', kind: 'tap', label: 'Reload', bit: Btn.Reload, title: 'Reload' },
+  { id: 'swap', kind: 'tap', label: 'Swap guns', bit: Btn.Swap, title: 'Swap weapon' },
+  { id: 'zoom', kind: 'tap', label: 'Zoom', bit: 0, title: 'Zoom (scoped weapons)' },
+  { id: 'shield', kind: 'tap', label: 'Shield', bit: SHIELD_BIT, title: 'Raise or sling the shield' },
+  { id: 'take', kind: 'tap', label: 'Take a gun', bit: Btn.Interact, title: 'Take the weapon you stand on (it swaps the gun in hand)' },
+  { id: 'pause', kind: 'tap', label: 'Menu', bit: 0, key: 'Escape', title: 'Menu' },
+  { id: 'scores', kind: 'tap', label: 'Scores', bit: 0, key: 'Tab', title: 'Scoreboard (hold)' },
 ];
 
 export const CONTROL_IDS: readonly ControlId[] = CONTROLS.map((c) => c.id);
@@ -55,30 +56,49 @@ export function availableControls(): readonly ControlDef[] {
 }
 
 /**
- * Right-handed defaults: the owner's design kit's phone HUD (docs/design/military-forge-ui.html,
- * "14 · Phone HUD", 812×375 with 44 px side margins): 132 px sticks in the bottom corners; the
- * action buttons in an arc around the aim stick (its centre 80 px in from the right edge, 84 px up
- * from the bottom): grenade, dash, reload and swap 106 px out at 180°, 145°, 110° and 75°, then
- * next grenade, melee and shield 172 px out at 165°, 132° and 100°; the menu top right. Zoom (68°)
- * and the scoreboard (top, between the match and ammo plates) aren't in the kit and sit where they
+ * Right-handed defaults: the owner's round-two kit's phone HUD (docs/design/military-forge-ui-v2.html,
+ * "M1 Phone HUD · thumb dials", 812×375). Its safe box is the frame less 44 px at each side (the
+ * notch), 10 px at the top and 21 px at the bottom (724×344: SAFE_INSETS); the thumb dials' 136 px
+ * bases sit at (128, 266) and (684, 266); shield, reload, dash, grenade and melee fan round the aim
+ * dial as drawn; the swap pill and the menu top right; the take button (only near a crate) at the
+ * bottom centre (22 px left of the kit's, so a long gun name stays clear of the melee button). Shield,
+ * reload and dash sit a few px further apart than drawn: their rings (the dash's cooldown, a reload's
+ * progress) reach 5 px past the button, and the kit's places let them touch. The scoreboard sits under
+ * the ping (and the "Tuned by admin" tag) on the left. Cycle-grenade, zoom and the scoreboard aren't drawn in the kit and sit where they
  * clear it. A player's saved places (TouchLayout) still win over these.
  */
 export const DEFAULT_PLACEMENTS: Readonly<Record<ControlId, Placement>> = {
-  move: { x: 0.153, y: 0.72, size: 0.352, opacity: 1 },
-  aim: { x: 0.847, y: 0.72, size: 0.352, opacity: 1 },
-  grenade: { x: 0.717, y: 0.72, size: 0.155, opacity: 1 },
-  dash: { x: 0.74, y: 0.558, size: 0.155, opacity: 1 },
-  reload: { x: 0.803, y: 0.454, size: 0.155, opacity: 1 },
-  swap: { x: 0.881, y: 0.447, size: 0.155, opacity: 1 },
-  cycleGrenade: { x: 0.643, y: 0.601, size: 0.128, opacity: 1 },
-  melee: { x: 0.706, y: 0.379, size: 0.128, opacity: 1 },
-  shield: { x: 0.811, y: 0.268, size: 0.128, opacity: 1 },
-  zoom: { x: 0.925, y: 0.305, size: 0.128, opacity: 1 },
-  pause: { x: 0.916, y: 0.091, size: 0.128, opacity: 1 },
-  scores: { x: 0.639, y: 0.091, size: 0.128, opacity: 1 },
-  take: { x: 0.62, y: 0.4, size: 0.128, opacity: 1 },
+  move: { x: 0.116, y: 0.744, size: 0.395, opacity: 1 },
+  aim: { x: 0.884, y: 0.744, size: 0.395, opacity: 1 },
+  shield: { x: 0.888, y: 0.331, size: 0.151, opacity: 1 },
+  reload: { x: 0.8025, y: 0.387, size: 0.151, opacity: 1 },
+  dash: { x: 0.7265, y: 0.517, size: 0.151, opacity: 1 },
+  grenade: { x: 0.7, y: 0.698, size: 0.169, opacity: 1 },
+  melee: { x: 0.71, y: 0.878, size: 0.151, opacity: 1 },
+  cycleGrenade: { x: 0.619, y: 0.68, size: 0.14, opacity: 1 },
+  zoom: { x: 0.967, y: 0.32, size: 0.14, opacity: 1 },
+  pause: { x: 0.967, y: 0.07, size: 0.14, opacity: 1 },
+  swap: { x: 0.791, y: 0.084, size: 0.151, opacity: 1 },
+  take: { x: 0.47, y: 0.907, size: 0.151, opacity: 1 },
+  scores: { x: 0.033, y: 0.36, size: 0.14, opacity: 1 },
 };
 
+/**
+ * The kit's phone safe box (its --safe-* on .screen--phone): at least these insets, more where the
+ * device reports a bigger notch or home indicator (env(safe-area-inset-*), touch.css).
+ */
+export const SAFE_INSETS = { left: 44, right: 44, top: 10, bottom: 21 } as const;
+
+/** No touch target smaller than this (CSS px), whatever the layout says (the kit's --touch-min). */
+export const MIN_TARGET_PX = 48;
+
+/** Controls that are wide pills (their size is the height; the width follows the content). */
+export const PILLS: ReadonlySet<ControlId> = new Set(['swap', 'take']);
+
+/** A control's size on screen (px): its fraction of the safe box's shorter side, never under MIN_TARGET_PX. */
+export function sizePx(p: Pick<Placement, 'size'>, unit: number): number {
+  return Math.max(MIN_TARGET_PX, Math.round(p.size * unit));
+}
 
 export interface TouchLayout {
   /** the player's changes (right-handed coordinates); the rest are defaults */
@@ -94,6 +114,41 @@ export function placementFor(layout: TouchLayout, id: ControlId, handed: Handed)
 export function withPlacement(layout: TouchLayout, id: ControlId, screen: Placement, handed: Handed): TouchLayout {
   const p = clampPlacement(handed === 'left' ? { ...screen, x: 1 - screen.x } : screen);
   return { placements: { ...layout.placements, [id]: p } };
+}
+
+/** A guide line the editor shows while a dragged control snaps to it (a fraction of the safe box). */
+export interface SnapGuide {
+  axis: 'x' | 'y';
+  at: number;
+}
+
+/** How close (px) a dragged control's centre comes to a guide before it snaps there. */
+export const SNAP_PX = 8;
+
+/**
+ * The editor's snapping: a dragged control's centre (fractions of a w×h box) lines up with the box's
+ * centre lines and with the other controls' centres when it comes within SNAP_PX of one. Returns the
+ * snapped centre and the guides it sits on (pure, unit-tested).
+ */
+export function snapPlacement(at: { x: number; y: number }, others: readonly { x: number; y: number }[], w: number, h: number, tol = SNAP_PX): { x: number; y: number; guides: SnapGuide[] } {
+  const best = (v: number, lines: readonly number[], size: number): number | null => {
+    let pick: number | null = null;
+    let d = tol / Math.max(1, size);
+    for (const line of lines) {
+      const dd = Math.abs(line - v);
+      if (dd <= d) {
+        d = dd;
+        pick = line;
+      }
+    }
+    return pick;
+  };
+  const x = best(at.x, [0.5, ...others.map((o) => o.x)], w);
+  const y = best(at.y, [0.5, ...others.map((o) => o.y)], h);
+  const guides: SnapGuide[] = [];
+  if (x !== null) guides.push({ axis: 'x', at: x });
+  if (y !== null) guides.push({ axis: 'y', at: y });
+  return { x: x ?? at.x, y: y ?? at.y, guides };
 }
 
 export function clampPlacement(p: Placement): Placement {

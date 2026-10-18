@@ -33,7 +33,7 @@ export function tokenMs(name: string, fallback: number, el: Element | undefined 
 }
 
 /** A token's value as text (an easing), with a fallback. */
-function token(name: string, fallback: string, el: Element | undefined = globalThis.document?.documentElement): string {
+export function token(name: string, fallback: string, el: Element | undefined = globalThis.document?.documentElement): string {
   if (!el || typeof getComputedStyle !== 'function') return fallback;
   return getComputedStyle(el).getPropertyValue(name).trim() || fallback;
 }

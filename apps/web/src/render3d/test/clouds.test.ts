@@ -1,6 +1,6 @@
 import { EMP, FLASHBANG, FRAG, GAS, MINE, SMOKE, pickups, type MapDef } from '@military-forge/content';
 import { CollisionWorld, MineState, type SimEvent } from '@military-forge/sim';
-import { DataTexture, Mesh, Scene, Sprite, SpriteMaterial, Vector3 } from 'three';
+import { DataTexture, Mesh, Scene, Sprite, SpriteMaterial } from 'three';
 import { describe, expect, it } from 'vitest';
 import { setReduceFlashes } from '../../fx';
 import { cloudView } from '../../grenadeViews';
@@ -69,29 +69,20 @@ describe('cloud layer (smoke, gas, non-frag grenades)', () => {
     expect(sprites(layer).length).not.toBe(before);
   });
 
-  it('draws grenades other than frags (render3d-b draws those), in their own colours', () => {
+  it('draws no thrown grenade but the mine: every other type is grenades.ts\'s own model (#91), never drawn twice', () => {
     const layer = new CloudLayer(new Scene());
     layer.update(
       frame(
         [],
-        [
-          { x: 1, y: 2, fuse: 30, type: FRAG.index },
-          { x: 3, y: 4, fuse: 30, type: SMOKE.index },
-          { x: 5, y: 6, fuse: 30, type: GAS.index },
-        ],
+        [FRAG, SMOKE, GAS, FLASHBANG, EMP].map((g, i) => ({ x: 1 + i, y: 2, fuse: 30, type: g.index })),
       ),
       1 / 60,
     );
-    const balls: Mesh[] = [];
+    const drawn: Mesh[] = [];
     layer.group.traverse((o) => {
-      if (o instanceof Mesh && o.visible) balls.push(o);
+      if (o instanceof Mesh && o.visible && o.parent?.visible !== false) drawn.push(o);
     });
-    expect(balls.map((b) => [b.position.x, b.position.y])).toEqual([
-      [3, 4],
-      [5, 6],
-    ]);
-    layer.update(frame([], []), 1 / 60);
-    expect(layer.group.children.filter((o) => o instanceof Mesh && o.visible)).toHaveLength(0);
+    expect(drawn).toHaveLength(0);
     layer.dispose();
   });
 
@@ -120,7 +111,7 @@ describe('cloud layer (smoke, gas, non-frag grenades)', () => {
     layer.group.traverse((o) => {
       if (o instanceof Mesh && o.visible && o.parent?.visible !== false) visible.push(o);
     });
-    expect(visible.length).toBe(3); // the puck, its light (and its glow sprite), the EMP ball
+    expect(visible.length).toBe(2); // the puck and its light (and its glow sprite); the EMP is grenades.ts's
     layer.update(frame([], []), 1 / 60);
     const left: Mesh[] = [];
     layer.group.traverse((o) => {
@@ -213,22 +204,15 @@ describe('cloud layer: walls, and the flashbang and EMP bursts (review)', () => 
 });
 
 describe('grenade pairs on the map (pickups)', () => {
-  it('a grenade pair is two canisters in its type\'s colour; the shield meshes leave it alone', () => {
+  it("are grenades.ts's now (two of the type's model): this layer draws none", () => {
     const layer = new CloudLayer(new Scene());
     const pair = pickups.find((p) => p.kind === 'grenades' && p.grenade === SMOKE.index)!;
-    const f = { ...frame([]), pickups: [{ id: 7, def: pair.index, x: 10, y: 0 }, { id: 8, def: 0, x: 20, y: 0 }] };
-    layer.update(f, 1 / 60);
-    const canisters: Mesh[] = [];
+    layer.update({ ...frame([]), pickups: [{ id: 7, def: pair.index, x: 10, y: 0 }] }, 1 / 60);
+    const drawn: Mesh[] = [];
     layer.group.traverse((o) => {
-      if (o instanceof Mesh && o.visible && Math.abs(o.getWorldPosition(new Vector3()).x - 10) < 0.5) canisters.push(o);
+      if (o instanceof Mesh && o.visible) drawn.push(o);
     });
-    expect(canisters).toHaveLength(2);
-    layer.update({ ...f, pickups: [] }, 1 / 60);
-    const left: Mesh[] = [];
-    layer.group.traverse((o) => {
-      if (o instanceof Mesh && o.visible) left.push(o);
-    });
-    expect(left).toHaveLength(0);
+    expect(drawn).toHaveLength(0);
     layer.dispose();
   });
 });

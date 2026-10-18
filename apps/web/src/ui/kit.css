@@ -1665,23 +1665,29 @@ html.canvas .ticker__run{ animation:none; }
 
 /* =========================================================================
    MOTION · the named patterns (docs/design/ui-motion-spec.md §3). Transform, opacity and filter
-   only. Script-driven halves (P2 shared element, P4 roll, P5 indicator, P6 flood) are ui/motion.ts.
+   only, and the moves on the individual scale and translate properties, so a pattern composes with
+   an element's own transform (the centred HUD plates: translateX(-50%)) instead of replacing it.
+   Script-driven halves (P2 shared element, P4 roll, P5 indicator, P6 flood) are ui/motion.ts.
    Reduce motion: the distances and amounts go to zero and the durations to ≤ 120 ms, so every
    pattern is an opacity change at most (the kit's own rule then stops animations outright).
    ========================================================================= */
 @property --m5-l{ syntax:'<number>'; inherits:false; initial-value:0; }
 @property --m5-r{ syntax:'<number>'; inherits:false; initial-value:0; }
+/* P10: the player-visible meters, registered so a transition can ease them (inherited: the HUD roots set them) */
+@property --hp{ syntax:'<number>'; inherits:true; initial-value:0; }
+@property --fuel{ syntax:'<number>'; inherits:true; initial-value:0; }
+@property --equip{ syntax:'<number>'; inherits:true; initial-value:0; }
 
 /* P1 focus pull: titles, map names, MATCH 1, the winner */
 .m-p1{ animation:m-pull var(--m-slow) var(--ease-arrive) both; }
-@keyframes m-pull{ from{ opacity:0; filter:blur(var(--m-pull-blur)); transform:scale(var(--m-pull-scale)); } to{ opacity:1; filter:blur(0); transform:none; } }
+@keyframes m-pull{ from{ opacity:0; filter:blur(var(--m-pull-blur)); scale:var(--m-pull-scale); } to{ opacity:1; filter:none; scale:1; } }
 /* P3 stagger rows: set --i on each (motion.ts stagger), capped at 10 steps */
 .m-p3{ animation:m-rise var(--m-base) var(--ease-arrive) both; animation-delay:calc(min(var(--i, 0), 10) * var(--m-stagger)); }
 .m-p3--tight{ --m-stagger:20ms; }
-@keyframes m-rise{ from{ opacity:0; transform:translateY(var(--m-rise)); } to{ opacity:1; transform:none; } }
+@keyframes m-rise{ from{ opacity:0; translate:0 var(--m-rise); } to{ opacity:1; translate:0 0; } }
 /* exits: what leaves goes first, accelerating away */
 .m-leave{ animation:m-leave var(--m-fast) var(--ease-leave) both; pointer-events:none; }
-@keyframes m-leave{ to{ opacity:0; transform:translateY(calc(var(--m-rise) * -0.5)); } }
+@keyframes m-leave{ to{ opacity:0; translate:0 calc(var(--m-rise) * -0.5); } }
 /* P4 roll counter: motion.ts rollText builds .m-roll > .m-roll__c per character */
 .m-roll{ display:inline-flex; font-variant-numeric:tabular-nums; }
 .m-roll__c{ position:relative; display:inline-block; overflow:hidden; }
@@ -1693,19 +1699,19 @@ html.canvas .ticker__run{ animation:none; }
 .m-p6{ position:fixed; z-index:var(--z-modal); border-radius:50%; pointer-events:none; background:var(--m-flood, var(--c-volt)); }
 /* P7 stamp: READY, MVP, HOST, "Fits the body", the new-gun label */
 .m-p7{ animation:m-stamp var(--m-fast) var(--ease-settle) both; }
-@keyframes m-stamp{ from{ transform:scale(var(--m-stamp-scale)); opacity:0; } 40%{ opacity:1; } to{ transform:none; opacity:1; } }
+@keyframes m-stamp{ from{ scale:var(--m-stamp-scale); opacity:0; } 40%{ opacity:1; } to{ scale:1; opacity:1; } }
 /* P8 press: down in --m-instant, back on --ease-settle; desktop hover lifts 1 px (no hover on touch) */
-.m-p8{ transition:transform var(--m-fast) var(--ease-settle), filter var(--m-fast) var(--ease-arrive); }
-.m-p8:active{ transform:scale(var(--m-press)); transition-duration:var(--m-instant); }
-@media (hover:hover) and (pointer:fine){ .m-p8:hover:not(:active){ transform:translateY(-1px); filter:brightness(1.06); } }
+.m-p8{ transition:scale var(--m-fast) var(--ease-settle), translate var(--m-fast) var(--ease-settle), filter var(--m-fast) var(--ease-arrive); }
+.m-p8:active{ scale:var(--m-press); transition-duration:var(--m-instant); }
+@media (hover:hover) and (pointer:fine){ .m-p8:hover:not(:active){ translate:0 -1px; filter:brightness(1.06); } }
 /* P9 edge banner: in from its edge, out accelerating (add .is-leaving) */
-.m-p9{ animation:m-edge-in var(--m-base) var(--ease-arrive) both; --m-from:translateY(calc(var(--m-edge) * -1)); }
-.m-p9--bottom{ --m-from:translateY(var(--m-edge)); }
-.m-p9--right{ --m-from:translateX(var(--m-edge)); }
-.m-p9--left{ --m-from:translateX(calc(var(--m-edge) * -1)); }
+.m-p9{ animation:m-edge-in var(--m-base) var(--ease-arrive) both; --m-from:0 calc(var(--m-edge) * -1); }
+.m-p9--bottom{ --m-from:0 var(--m-edge); }
+.m-p9--right{ --m-from:var(--m-edge) 0; }
+.m-p9--left{ --m-from:calc(var(--m-edge) * -1) 0; }
 .m-p9.is-leaving{ animation:m-edge-out var(--m-fast) var(--ease-leave) both; }
-@keyframes m-edge-in{ from{ opacity:0; transform:var(--m-from); } to{ opacity:1; transform:none; } }
-@keyframes m-edge-out{ from{ opacity:1; transform:none; } to{ opacity:0; transform:var(--m-from); } }
+@keyframes m-edge-in{ from{ opacity:0; translate:var(--m-from); } to{ opacity:1; translate:0 0; } }
+@keyframes m-edge-out{ from{ opacity:1; translate:0 0; } to{ opacity:0; translate:var(--m-from); } }
 /* P10 meter fill: list the player-visible variables in --m-p10 (never one written every frame) */
 .m-p10{ transition-property:var(--m-p10, none); transition-duration:var(--m-fast); transition-timing-function:var(--ease-arrive); }
 

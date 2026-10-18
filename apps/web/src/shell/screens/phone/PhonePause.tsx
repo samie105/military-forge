@@ -1,0 +1,128 @@
+/**
+ * M4 · Phone pause (the kit's data-screen="m-pause"): the match keeps running, dimmed behind. The menu
+ * plate on the left (Resume, Invite friends in a room, Tune the game for the host where the page offers
+ * it, Settings, Leave) and the sitrep on the right (the clock, your score, the leader's). Leaving asks
+ * once more in a bottom sheet. Same actions as the desktop Pause.
+ *
+ * Motion: the game dims over --m-fast; the plate comes in from the left edge (P9), "Paused" focus-pulls
+ * (P1), its buttons rise in a stagger (P3) and press P8; the sitrep arrives from the right.
+ */
+import { MatchPhase } from '@military-forge/sim';
+import { useState } from 'react';
+import { useStore } from 'zustand';
+import { Icon } from '../../../ui/Icon';
+import { blurAfter } from '../../../ui/Screen';
+import { useCtl } from '../../context';
+import { formatClock } from '../../matchView';
+import type { ShellStore } from '../../store';
+import { leaveCost } from '../Pause';
+import { PhoneScreen, rise } from './layout';
+import { Roll, ShareChip, Sheet, shareRoom, useShareChip } from './parts';
+
+export function PhonePause({ store }: { store: ShellStore }) {
+  const ctl = useCtl();
+  const screen = useStore(store, (s) => s.screen);
+  const match = useStore(store, (s) => s.match);
+  const lobby = useStore(store, (s) => s.lobby);
+  const [confirm, setConfirm] = useState(false);
+  const [chip, showChip] = useShareChip();
+  const room = screen.name === 'room' ? screen.code : null;
+  const playing = match?.phase === MatchPhase.InProgress;
+  const what = room ? (playing ? 'match' : 'room') : 'training';
+  const tune = ctl.canTune();
+  const host = lobby?.isHost ?? !room;
+  const leaveWord = what === 'training' ? 'Quit training' : what === 'match' ? 'Leave match' : 'Leave room';
+
+  return (
+    <PhoneScreen name="m-pause" kind="game" modal label="Menu" states={[host ? 'host' : 'guest', confirm ? 'confirm-leave' : 'menu']}>
+      <div className="pause__dim pm-dim" aria-hidden="true"></div>
+      <nav className="pm-pause plate m-p9 m-p9--left" aria-label="Menu">
+        <span className="eyebrow">{room ? 'Match still running' : 'Training still running'}</span>
+        <b className="display pm-pause__t m-p1">Paused</b>
+        <button type="button" className="btn btn--paper btn--sm btn--block m-p3 m-p8" style={rise(0)} autoFocus onClick={blurAfter(() => ctl.closeOverlay())}>
+          <Icon name="play" />
+          Resume
+        </button>
+        {room && (
+          <button
+            type="button"
+            className="btn btn--volt btn--sm btn--block m-p3 m-p8"
+            style={rise(1)}
+            onClick={blurAfter(() => {
+              void shareRoom(room).then(showChip);
+            })}
+          >
+            <Icon name="users-plus" />
+            Invite friends
+          </button>
+        )}
+        {tune && (
+          <button type="button" className="btn btn--ink btn--sm btn--block m-p3 m-p8" style={rise(2)} onClick={blurAfter(() => ctl.openTuning())}>
+            <Icon name="sliders" />
+            Tune the game
+            {room && (
+              <span className="tag tag--host pm-pause__tag">
+                <Icon name="crown" />
+                Host
+              </span>
+            )}
+          </button>
+        )}
+        <div className="pm-pause__row m-p3" style={rise(3)}>
+          <button type="button" className="btn btn--ink btn--sm m-p8" onClick={blurAfter(() => ctl.openSettings())}>
+            <Icon name="gear" />
+            Settings
+          </button>
+          <button type="button" className="btn btn--ghost btn--sm m-p8" onClick={blurAfter(() => setConfirm(true))}>
+            <Icon name="door-out" />
+            Leave
+          </button>
+        </div>
+        <ShareChip outcome={chip} />
+      </nav>
+
+      <aside className="pm-score plate m-p9 m-p9--right" aria-label="Match status">
+        <span className="serial">Sitrep · {match?.mapName ?? lobby?.mapName ?? ''}</span>
+        <div className="pm-score__row">
+          <span>
+            <span className="hud-label">{match?.untimed ? 'Played' : 'Clock'}</span>
+            <b className="num display" data-bind="match.timeLeft">
+              {playing && match ? formatClock(match.untimed ? match.secondsElapsed : match.secondsLeft) : '–'}
+            </b>
+          </span>
+          <span>
+            <span className="hud-label">You</span>
+            <b className="display" data-bind="match.myScore">
+              <Roll value={match?.myScore ?? 0} />
+            </b>
+          </span>
+          <span>
+            <span className="hud-label">Lead{match?.leaderName ? ` · ${match.leaderName}` : ''}</span>
+            <b className="display" data-bind="match.leaderScore">
+              <Roll value={match?.leaderScore ?? 0} />
+            </b>
+          </span>
+        </div>
+      </aside>
+
+      <Sheet open={confirm} onClose={() => setConfirm(false)} label={what === 'training' ? 'Quit training?' : `Leave this ${what}?`}>
+        <div className="pm-sheet__head">
+          <span className="pm-sheet__icon" aria-hidden="true">
+            <Icon name="door-out" />
+          </span>
+          <b className="display">{what === 'training' ? 'Quit training?' : `Leave this ${what}?`}</b>
+        </div>
+        <p className="pm-sheet__note">{leaveCost(match, !!room)}</p>
+        <div className="pm-bar">
+          <button type="button" className="btn btn--danger btn--sm m-p8" onClick={blurAfter(() => ctl.leave())}>
+            <Icon name="door-out" />
+            {leaveWord}
+          </button>
+          <button type="button" className="btn btn--paper btn--sm m-p8" autoFocus onClick={blurAfter(() => setConfirm(false))}>
+            Stay
+          </button>
+        </div>
+      </Sheet>
+    </PhoneScreen>
+  );
+}

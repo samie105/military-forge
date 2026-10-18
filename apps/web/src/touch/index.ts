@@ -13,7 +13,7 @@
 import type { Input, SimEvent } from '@military-forge/sim';
 import type { Camera } from '../camera';
 import type { ThrowLatch } from '../input';
-import type { TouchController } from './controller';
+import type { TouchController, TouchFrame } from './controller';
 import { clearLayout, loadSettings, saveSettings, sanitizeSettings, type KeyValueStore, type TouchSettings } from './settings';
 
 export type { FireMode, Handed, TouchMode, TouchSettings } from './settings';
@@ -35,7 +35,7 @@ export interface TouchDeps {
   };
   camera: Camera;
   renderer: {
-    render(frame: { localId: number; players: readonly { id: number; alive: boolean; x: number; y: number }[] }, ...rest: never[]): void;
+    render(frame: TouchFrame, ...rest: never[]): void;
     onEvents(events: readonly SimEvent[], localId: number): void;
   };
   view3d?: { setDprCap?(cap: number | null): void } | null;
@@ -126,7 +126,7 @@ export function mountTouch(d: TouchDeps): void {
   d.sampler.consumeWheel = () => wheel() + (controller?.takeZoom() ?? 0);
   const render = d.renderer.render.bind(d.renderer) as (...args: unknown[]) => void;
   d.renderer.render = ((frame: Parameters<TouchDeps['renderer']['render']>[0], ...rest: unknown[]) => {
-    controller?.onFrame(frame.players, frame.localId);
+    controller?.onFrame(frame);
     render(frame, ...rest);
   }) as TouchDeps['renderer']['render'];
   const onEvents = d.renderer.onEvents.bind(d.renderer);
@@ -183,6 +183,15 @@ export function openTouchEditor(): void {
 export function resetTouchLayout(): void {
   clearLayout(storage());
   controller?.applySettings(settings, { placements: {} });
+}
+
+/**
+ * The HUD's values and state tokens for this frame (hud.ts calls it once per update): the controls
+ * wear them (the HP and fuel arcs, the ammo ring, the counts; skin.ts). A no-op until the controls
+ * are up, so the desktop pays one function call.
+ */
+export function feedTouchHud(values: Readonly<Record<string, string>>, tokens: readonly string[]): void {
+  if (controller?.isActive) controller.feed(values, tokens);
 }
 
 /** Called when the settings or the controls' visibility change. Returns an unsubscribe. */

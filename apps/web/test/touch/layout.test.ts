@@ -1,6 +1,6 @@
 import { Btn } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PLACEMENTS, availableControls, loadLayout, placementFor, saveLayout, withPlacement } from '../../src/touch/layout';
+import { DEFAULT_PLACEMENTS, MIN_TARGET_PX, PILLS, SAFE_INSETS, availableControls, loadLayout, placementFor, saveLayout, sizePx, snapPlacement, withPlacement } from '../../src/touch/layout';
 import { DEFAULT_TOUCH_SETTINGS, LAYOUT_KEY, LIMITS, SETTINGS_KEY, clearLayout, loadSettings, saveSettings, type KeyValueStore } from '../../src/touch/settings';
 
 function memoryStore(init: Record<string, string> = {}): KeyValueStore & { data: Record<string, string> } {
@@ -21,18 +21,60 @@ describe('touch HUD layout', () => {
     expect(placementFor(layout, 'aim', 'left').y).toBe(DEFAULT_PLACEMENTS.aim.y);
   });
 
-  it("defaults follow the design kit's phone HUD: menu top right, actions in an arc round the aim stick, nothing overlapping", () => {
-    const [w, h] = [812, 375]; // the kit's phone frame
-    const px = (id: keyof typeof DEFAULT_PLACEMENTS) => ({ x: DEFAULT_PLACEMENTS[id].x * w, y: DEFAULT_PLACEMENTS[id].y * h, r: (DEFAULT_PLACEMENTS[id].size * h) / 2 });
-    expect(px('pause').x).toBeGreaterThan(w * 0.85);
-    expect(px('pause').y).toBeLessThan(h * 0.15);
-    const aim = px('aim');
-    const out = (id: keyof typeof DEFAULT_PLACEMENTS) => Math.hypot(px(id).x - aim.x, px(id).y - aim.y);
-    for (const id of ['grenade', 'dash', 'reload', 'swap'] as const) expect(out(id)).toBeCloseTo(106, -1);
-    for (const id of ['cycleGrenade', 'melee', 'shield'] as const) expect(out(id)).toBeCloseTo(172, -1);
-    const buttons = Object.keys(DEFAULT_PLACEMENTS).filter((id) => id !== 'move' && id !== 'aim') as (keyof typeof DEFAULT_PLACEMENTS)[];
-    for (const a of buttons) for (const b of buttons) if (a < b) expect(Math.hypot(px(a).x - px(b).x, px(a).y - px(b).y), `${a}/${b}`).toBeGreaterThan(px(a).r + px(b).r);
-    for (const id of buttons) expect(Math.hypot(px(id).x - aim.x, px(id).y - aim.y), id).toBeGreaterThan(aim.r + px(id).r);
+  it("defaults follow the round-two kit's phone HUD (m-hud): the thumb dials and the buttons where it draws them", () => {
+    // the kit's 812×375 frame and its safe box (44 px each side, 10 top, 21 bottom): 724×344
+    const box = { left: SAFE_INSETS.left, top: SAFE_INSETS.top, w: 812 - SAFE_INSETS.left - SAFE_INSETS.right, h: 375 - SAFE_INSETS.top - SAFE_INSETS.bottom };
+    expect(box).toEqual({ left: 44, top: 10, w: 724, h: 344 });
+    const unit = Math.min(box.w, box.h);
+    const at = (id: keyof typeof DEFAULT_PLACEMENTS) => ({ x: box.left + DEFAULT_PLACEMENTS[id].x * box.w, y: box.top + DEFAULT_PLACEMENTS[id].y * box.h, d: sizePx(DEFAULT_PLACEMENTS[id], unit) });
+    // the kit's centres and diameters (its left/top + half the size): dials' bases 136 px
+    const kit: [keyof typeof DEFAULT_PLACEMENTS, number, number, number][] = [
+      ['move', 128, 266, 136],
+      ['aim', 684, 266, 136],
+      ['shield', 679, 132, 52],
+      ['reload', 619, 149, 52],
+      ['dash', 573, 191, 52],
+      ['grenade', 551, 250, 58],
+      ['melee', 558, 312, 52],
+      ['pause', 744, 34, 48],
+    ];
+    // shield, reload and dash are spread a few px from where the kit draws them (their rings touched)
+    const nudged = new Set(['shield', 'reload', 'dash']);
+    for (const [id, x, y, d] of kit) {
+      const p = at(id);
+      const tol = nudged.has(id) ? 10 : 2;
+      expect(Math.abs(p.x - x), `${id} x`).toBeLessThanOrEqual(tol);
+      expect(Math.abs(p.y - y), `${id} y`).toBeLessThanOrEqual(tol);
+      expect(Math.abs(p.d - d), `${id} size`).toBeLessThanOrEqual(2);
+    }
+    // the dial buttons' rings (the dash cooldown, a reload's progress: 5 px past the button) keep 4 px apart
+    const ring: Record<string, number> = { shield: 0, reload: 5, dash: 5, grenade: 0, melee: 0 };
+    for (const a of Object.keys(ring)) for (const b of Object.keys(ring)) if (a < b) expect(Math.hypot(at(a as 'dash').x - at(b as 'dash').x, at(a as 'dash').y - at(b as 'dash').y) - (at(a as 'dash').d + at(b as 'dash').d) / 2 - ring[a]! - ring[b]!, `${a}/${b} gap`).toBeGreaterThanOrEqual(4);
+    // round controls never overlap (pills are checked by their height: their width follows the gun's name)
+    const round = (Object.keys(DEFAULT_PLACEMENTS) as (keyof typeof DEFAULT_PLACEMENTS)[]).filter((id) => !PILLS.has(id));
+    for (const a of round) for (const b of round) if (a < b) expect(Math.hypot(at(a).x - at(b).x, at(a).y - at(b).y), `${a}/${b}`).toBeGreaterThan((at(a).d + at(b).d) / 2);
+    // every target is at least 48 px, and inside the safe box
+    for (const id of Object.keys(DEFAULT_PLACEMENTS) as (keyof typeof DEFAULT_PLACEMENTS)[]) {
+      expect(at(id).d, id).toBeGreaterThanOrEqual(MIN_TARGET_PX);
+      expect(DEFAULT_PLACEMENTS[id].x, id).toBeGreaterThanOrEqual(LIMITS.min);
+      expect(DEFAULT_PLACEMENTS[id].x, id).toBeLessThanOrEqual(LIMITS.max);
+    }
+  });
+
+  it('no target is ever drawn under 48 px, however small the layout says', () => {
+    expect(sizePx({ size: LIMITS.sizeMin }, 344)).toBe(MIN_TARGET_PX);
+    expect(sizePx({ size: 0.395 }, 344)).toBe(136);
+    expect(sizePx({ size: 0.151 }, 1000)).toBe(151);
+  });
+
+  it('the editor snaps a dragged control to the centre lines and to the other controls, within a few px', () => {
+    const others = [{ x: 0.2, y: 0.7 }];
+    expect(snapPlacement({ x: 0.505, y: 0.3 }, others, 700, 340)).toEqual({ x: 0.5, y: 0.3, guides: [{ axis: 'x', at: 0.5 }] });
+    expect(snapPlacement({ x: 0.3, y: 0.71 }, others, 700, 340)).toEqual({ x: 0.3, y: 0.7, guides: [{ axis: 'y', at: 0.7 }] });
+    expect(snapPlacement({ x: 0.3, y: 0.3 }, others, 700, 340)).toEqual({ x: 0.3, y: 0.3, guides: [] });
+    const both = snapPlacement({ x: 0.201, y: 0.499 }, others, 700, 340);
+    expect([both.x, both.y]).toEqual([0.2, 0.5]);
+    expect(both.guides).toHaveLength(2);
   });
 
   it("a player's saved places outlast new defaults", () => {
@@ -96,6 +138,17 @@ describe('touch HUD layout', () => {
     expect(loadSettings(store)).toEqual({ ...DEFAULT_TOUCH_SETTINGS, fire: 'release', handed: 'left', aimAssist: false, opacity: 0.8 });
     store.setItem(SETTINGS_KEY, JSON.stringify({ mode: 'always', fire: 'spray', opacity: 9, vibrate: 'yes' }));
     expect(loadSettings(store)).toEqual({ ...DEFAULT_TOUCH_SETTINGS, opacity: LIMITS.opacityMax });
+  });
+
+  it("a save from round one keeps its choices, but its default opacity becomes the kit's look", () => {
+    const old = memoryStore({ [SETTINGS_KEY]: JSON.stringify({ mode: 'on', fire: 'release', opacity: 0.55 }) });
+    expect(loadSettings(old)).toMatchObject({ mode: 'on', fire: 'release', opacity: 1 });
+    const chosen = memoryStore({ [SETTINGS_KEY]: JSON.stringify({ opacity: 0.4 }) });
+    expect(loadSettings(chosen).opacity).toBe(0.4);
+    // saved again (rev 2), 0.55 is a choice like any other
+    const store = memoryStore();
+    saveSettings(store, { ...DEFAULT_TOUCH_SETTINGS, opacity: 0.55 });
+    expect(loadSettings(store).opacity).toBe(0.55);
   });
 
   it('aim assist defaults on (touch only); the shield button is there once the sim has its bit', () => {

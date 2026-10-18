@@ -66,6 +66,8 @@ export interface PlayerView {
   airDashUsed?: boolean;
   /** the local player: the jetpack (and so the dash) is dead here, an EMP zone or storm (map mechanics) */
   jetDisabled?: boolean;
+  /** the local player: ticks left drawing the gun swapped to, or going in or out of dual (sim swapTicks; 0 = ready) */
+  swapTicks?: number;
   respawnTicks: number;
   kills: number;
   deaths: number;
@@ -209,10 +211,11 @@ export type FrameEventSink = (events: readonly SimEvent[]) => void;
 const statusEnv = createBodyEnv();
 
 /** The local player's movement state for the HUD: the dash cooldown, the air dash, the map's EMP. */
-export function mobilityView(game: Pick<Game, 'mech' | 'tuning'>, p: PlayerState): Pick<PlayerView, 'dashCooldown' | 'airDashUsed' | 'jetDisabled'> {
+export function mobilityView(game: Pick<Game, 'mech' | 'tuning'>, p: PlayerState): Pick<PlayerView, 'dashCooldown' | 'airDashUsed' | 'jetDisabled' | 'swapTicks'> {
   return {
     dashCooldown: p.dashCooldown,
     airDashUsed: p.airDashUsed,
+    swapTicks: p.swapTicks,
     jetDisabled: game.mech ? game.mech.bodyEnv(p, game.tuning, statusEnv).jetDisabled : false,
   };
 }

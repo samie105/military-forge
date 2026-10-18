@@ -2,7 +2,7 @@
  * The authoritative simulation of one room (docs/06 §5.3). The same class runs headless on the
  * game server, in the browser for local play/prediction, and in golden-replay tests.
  */
-import { createTuning, getMap, weapons, type DummySpawn, type MapDef, type Tuning } from '@military-forge/content';
+import { NO_WEAPON, createTuning, getMap, weapons, type DummySpawn, type MapDef, type Tuning } from '@military-forge/content';
 import { IdAllocator } from '@military-forge/shared';
 import { botInput } from './bots';
 import { CloudState, stepClouds } from './clouds';
@@ -15,7 +15,7 @@ import { copyInput, type Input } from './input';
 import { MapMechanics, createBodyEnv } from './mechanics';
 import { depenetrate, quantizeMovement, stepMovement } from './movement';
 import { PickupState, createSpawners, dropCarried, resetPickups, stepPickups, type SpawnerState } from './pickups';
-import { PlayerState, giveLoadout } from './player';
+import { PlayerState, giveLoadout, keepGuns, respawnGuns } from './player';
 import type { TargetRewind } from './rewind';
 import { stepShield } from './shield';
 import { CollisionWorld } from './world';
@@ -158,17 +158,19 @@ export class Game {
       }
     }
     p.spawn(sx, sy, this.tuning);
-    giveLoadout(p, weapons, p.loadout);
+    giveLoadout(p, weapons, respawnGuns(p));
     depenetrate(this.world, p, this.tuning);
     this.events.push({ type: 'spawn', player: p.id });
   }
 
   /**
    * Sets the weapons a player respawns with and equips them now, with full ammo (dev give-weapon
-   * and replays; map spawners and pickups come with the full arsenal).
+   * and replays; map spawners and pickups come with the full arsenal). It forgets the guns kept
+   * from the last death: a chosen loadout wins.
    */
   setLoadout(p: PlayerState, loadout: readonly [number, number]): void {
     p.loadout = [loadout[0], loadout[1]];
+    p.keptGuns = [NO_WEAPON, NO_WEAPON];
     giveLoadout(p, weapons, p.loadout);
     p.active = 0;
     p.dual = false;
@@ -201,6 +203,7 @@ export class Game {
     victim.hp = 0;
     victim.alive = false;
     victim.jetting = false;
+    keepGuns(victim); // a person respawns with the guns they died holding, crate and armory picks included
     dropCarried(this, victim);
     victim.respawnTicks = ticks(this.tuning.respawnDelay);
     victim.deaths++;

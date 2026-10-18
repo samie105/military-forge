@@ -1,6 +1,6 @@
-import { movementTestMap } from '@military-forge/content';
+import { EMP, FLASHBANG, FRAG, GAS, MINE, SMOKE, movementTestMap, pickups } from '@military-forge/content';
 import { CollisionWorld, DT } from '@military-forge/sim';
-import { BufferAttribute, BufferGeometry, DataTexture, Group, Matrix4, Mesh, Vector3 } from 'three';
+import { BufferAttribute, BufferGeometry, Color, DataTexture, Group, Matrix4, Mesh, Vector3 } from 'three';
 import type { GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { describe, expect, it } from 'vitest';
 import {
@@ -17,7 +17,7 @@ import {
   fuseBlinkPhase,
   fuseLight,
 } from '../grenadeTracker';
-import { GRENADE_MIN_PX, GRENADE_WIDTH_M, GrenadeRenderer, fallbackFrag, grenadeScale, throwableFromGltf } from '../grenades';
+import { GRENADE_MIN_PX, GRENADE_WIDTH_M, GrenadeRenderer, fallbackFrag, fallbackThrowable, grenadeScale, isFlat, throwableFromGltf } from '../grenades';
 import { ParticleLayer } from '../vfx/particles';
 import { ParticlePool } from '../vfx/pool';
 
@@ -159,14 +159,20 @@ describe('GrenadeRenderer', () => {
     f.glow.begin();
     r.update(1, [{ x: 20, y: 5, fuse: 60 }, { x: 25, y: 6, fuse: 30 }], DT, 35, f);
     expect(r.body.count).toBe(2);
-    expect(r.inner.count).toBe(2);
-    expect(r.outer.count).toBe(2);
+    expect(r.hulls.count).toBe(4); // an inner and an outer hull each, in one draw
+    expect(r.meshes).toHaveLength(2);
     const m = new Matrix4();
-    const scale = (mesh: typeof r.body) => new Vector3().setFromMatrixScale((mesh.getMatrixAt(0, m), m)).x;
+    const scale = (mesh: typeof r.body, i = 0) => new Vector3().setFromMatrixScale((mesh.getMatrixAt(i, m), m)).x;
     const body = scale(r.body);
     expect(body).toBeCloseTo(grenadeScale(fallbackFrag()), 5);
-    expect(scale(r.inner)).toBeGreaterThan(body);
-    expect(scale(r.outer)).toBeGreaterThan(scale(r.inner));
+    expect(scale(r.hulls, 0)).toBeGreaterThan(body);
+    expect(scale(r.hulls, 1)).toBeGreaterThan(scale(r.hulls, 0));
+    // dark inside, light outside
+    const c = new Color();
+    r.hulls.getColorAt(0, c);
+    expect(c.r).toBeLessThan(0.05);
+    r.hulls.getColorAt(1, c);
+    expect(c.r).toBeGreaterThan(0.9);
     // two fuse-light sprites at most per grenade went into the glow layer
     expect(f.glow.count).toBeGreaterThanOrEqual(2);
     r.update(2, [], DT, 35, f);
@@ -237,11 +243,79 @@ describe('GrenadeRenderer', () => {
   });
 });
 
-describe('grenade types (arsenal-b)', () => {
-  it('tracks frags only: smoke, gas, flashbang, mine and EMP grenades are drawn by clouds.ts', () => {
-    const tr = new GrenadeTracker(world);
-    tr.update(1, [{ x: 20, y: 5, fuse: 60 }, { x: 22, y: 5, fuse: 60, type: 0 }, ...[1, 2, 3, 4, 5].map((type) => ({ x: 24 + type, y: 5, fuse: 60, type }))], DT);
-    expect(tr.tracks.length).toBe(2);
+describe('grenade types (#91: one model per type)', () => {
+  const ramp = new DataTexture(new Uint8Array([128]), 1, 1);
+  const fx = () => ({ smoke: new ParticlePool(256), glow: new ParticleLayer(64, { texture: ramp, grid: [4, 4], blend: 'additive', depthTest: false, renderOrder: 0 }) });
+  const all = [{ x: 20, y: 5, fuse: 60 }, ...[1, 2, 3, 4, 5].map((type) => ({ x: 24 + type, y: 5, fuse: 60, type }))];
+
+  it('a tracker follows one type (the frag by default), on its own fuse', () => {
+    const frag = new GrenadeTracker(world);
+    frag.update(1, [...all, { x: 22, y: 5, fuse: 60, type: 0 }], DT);
+    expect(frag.tracks.length).toBe(2);
+    const smoke = new GrenadeTracker(world, SMOKE.index);
+    smoke.update(1, all, DT);
+    expect(smoke.tracks.map((t) => t.x)).toEqual([25]);
+    expect(smoke.tracks[0]!.fuseSeconds).toBeCloseTo(SMOKE.fuse, 1);
+    expect(new GrenadeTracker(world, EMP.index).type).toBe(EMP.index);
+  });
+
+  it('each renderer draws its own type in flight, with its fuse light; a thrown mine is left to clouds.ts', () => {
+    for (const type of [FRAG.index, SMOKE.index, GAS.index, FLASHBANG.index, EMP.index]) {
+      const r = new GrenadeRenderer(world, ramp, type);
+      const f = fx();
+      f.glow.begin();
+      r.update(1, all, DT, 35, f);
+      expect(r.body.count, `type ${type}`).toBe(1);
+      expect(f.glow.count).toBeGreaterThanOrEqual(1);
+    }
+    const mine = new GrenadeRenderer(world, ramp, MINE.index);
+    mine.update(1, all, DT, 35, fx());
+    expect(mine.body.count).toBe(0);
+  });
+
+  it('the stand-ins: canisters stand upright, the EMP disc and the mine are flat', () => {
+    expect([SMOKE, GAS, FLASHBANG].map((g) => isFlat(fallbackThrowable(g.index)))).toEqual([false, false, false]);
+    expect([EMP, MINE].map((g) => isFlat(fallbackThrowable(g.index)))).toEqual([true, true]);
+    expect(isFlat(fallbackFrag())).toBe(false);
+    // the Forge's EMP disc (0.21 × 0.088 m) is flat; its frag (0.197 × 0.254) isn't
+    expect(isFlat({ radius: 0.105, height: 0.088 })).toBe(true);
+    expect(isFlat({ radius: 0.0985, height: 0.254 })).toBe(false);
+  });
+
+  it('the EMP disc: GRENADE_WIDTH_M across, face-on to the camera, not blown up to make its thickness MIN_PX', () => {
+    const r = new GrenadeRenderer(world, ramp, EMP.index);
+    r.setModel({ ...fallbackThrowable(EMP.index), radius: 0.105, height: 0.088 });
+    expect(r.scaleFor(80) * 0.21).toBeCloseTo(GRENADE_WIDTH_M, 6);
+    // at 1× its 0.088 m thickness would want 3× to be 12 px tall; face-on, its diameter is what shows
+    expect(r.scaleFor(45)).toBeLessThan(GRENADE_MIN_PX / (45 * 0.088));
+    expect(r.scaleFor(45) * 0.21 * 45).toBeGreaterThanOrEqual(GRENADE_MIN_PX - 1e-9);
+    r.update(1, [{ x: 20, y: 5, fuse: 60, type: EMP.index }], DT, 80, fx());
+    const m = new Matrix4();
+    r.body.getMatrixAt(0, m);
+    const axis = new Vector3(0, 0, 1).transformDirection(m);
+    expect(axis.z).toBeGreaterThan(0.8); // the disc's face toward the camera
+  });
+
+  it("a grenade pair on the map is two of its type's model, side by side, in that type's renderer only", () => {
+    const pair = pickups.find((p) => p.kind === 'grenades' && p.grenade === SMOKE.index)!;
+    const items = [{ id: 7, def: pair.index, x: 10, y: 0 }, { id: 8, def: 0, x: 20, y: 0 }];
+    const smoke = new GrenadeRenderer(world, ramp, SMOKE.index);
+    smoke.update(1, [], DT, 35, fx(), items);
+    expect(smoke.body.count).toBe(2);
+    const m = new Matrix4();
+    const xs = [0, 1].map((i) => (smoke.body.getMatrixAt(i, m), new Vector3().setFromMatrixPosition(m).x));
+    expect(xs[0]).toBeCloseTo(9.85, 5);
+    expect(xs[1]).toBeCloseTo(10.15, 5);
+    const frag = new GrenadeRenderer(world, ramp);
+    frag.update(1, [], DT, 35, fx(), items);
+    expect(frag.body.count).toBe(0);
+    // the mine's pairs are drawn here too, though a thrown mine isn't
+    const minePair = pickups.find((p) => p.kind === 'grenades' && p.grenade === MINE.index)!;
+    const mine = new GrenadeRenderer(world, ramp, MINE.index);
+    mine.update(1, [], DT, 35, fx(), [{ id: 9, def: minePair.index, x: 5, y: 0 }]);
+    expect(mine.body.count).toBe(2);
+    smoke.update(2, [], DT, 35, fx(), []);
+    expect(smoke.body.visible).toBe(false);
   });
 });
 

@@ -10,7 +10,7 @@ import { Btn, DASH_DX, DASH_DY, DASH_UP_FRESH_TICKS, createInput, type Game, typ
 import { flatMap, hold, makeGame, placeOnGround, rect } from './helpers';
 
 const BURST = defaultTuning.dashBurstTicks;
-const BURST_M = (defaultTuning.dashSpeed * BURST) / 60; // 1.87 m
+const BURST_M = (defaultTuning.dashSpeed * BURST) / 60; // 2.67 m
 
 /** One tick with `buttons` (the dash needs a press: the tick before must not hold Dash). */
 function tap(game: Game, p: PlayerState, buttons: number): SimEvent[] {

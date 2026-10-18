@@ -332,6 +332,54 @@ describe('loadouts', () => {
     expect(p.alive).toBe(true);
     expect(p.weapons.map((w) => w.def)).toEqual([BREACHER.index, WIDOW.index]);
   });
+
+  /** As if a crate or the armory had put `def` in slot `i`, half used. */
+  function picked(p: PlayerState, i: number, def: number): void {
+    p.weapons[i]!.def = def;
+    p.weapons[i]!.mag = 1;
+    p.weapons[i]!.reserve = 0;
+  }
+
+  const dieAndRespawn = (game: Game, p: PlayerState) => {
+    game.damage(p, 1000, -1, DamageSource.World, 2);
+    hold(game, p, 0, Math.round(T.respawnDelay * 60) + 1);
+    expect(p.alive).toBe(true);
+  };
+
+  it('a person respawns with the two guns they died holding, full, and the default grenades (the owner\'s playtest)', () => {
+    const { game, p } = armed([HAMMER.index, BUZZ.index]);
+    picked(p, 0, WIDOW.index);
+    picked(p, 1, BREACHER.index);
+    p.active = 1;
+    p.grenadeCounts.fill(0);
+    dieAndRespawn(game, p);
+    expect(p.weapons.map((w) => [w.def, w.mag, w.reserve])).toEqual([
+      [WIDOW.index, WIDOW.mag, WIDOW.reserve],
+      [BREACHER.index, BREACHER.mag, BREACHER.reserve],
+    ]);
+    expect(p.active).toBe(0);
+    expect(p.grenadeCounts).toEqual(p.grenadeLoadout);
+    expect(p.loadout).toEqual([HAMMER.index, BUZZ.index]); // the chosen loadout is untouched
+    // and again: the guns of the latest death
+    picked(p, 1, K47.index);
+    dieAndRespawn(game, p);
+    expect(p.weapons.map((w) => w.def)).toEqual([WIDOW.index, K47.index]);
+  });
+
+  it('bots keep their own loadout; setLoadout forgets the kept guns', () => {
+    const bot = armed([HAMMER.index, BUZZ.index]);
+    bot.p.isBot = true;
+    picked(bot.p, 0, WIDOW.index);
+    dieAndRespawn(bot.game, bot.p);
+    expect(bot.p.weapons.map((w) => w.def)).toEqual([HAMMER.index, BUZZ.index]);
+
+    const { game, p } = armed([HAMMER.index, BUZZ.index]);
+    picked(p, 0, WIDOW.index);
+    game.damage(p, 1000, -1, DamageSource.World, 2);
+    game.setLoadout(p, [K47.index, MACHETE.index]); // a dev give-weapon while dead
+    hold(game, p, 0, Math.round(T.respawnDelay * 60) + 1);
+    expect(p.weapons.map((w) => w.def)).toEqual([K47.index, MACHETE.index]);
+  });
 });
 
 describe('arsenal determinism', () => {

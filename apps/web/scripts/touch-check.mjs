@@ -263,7 +263,7 @@ try {
     await sleep(200);
     await ready(page, `${base}/?sandbox&render=2d`);
     const after = await centre(page, '.mf-ctl-reload');
-    check('an edited layout survives a reload', Math.abs(after.x - (before.x - 150)) < 3 && Math.abs(after.y - (before.y + 90)) < 3, `(${before.x.toFixed(0)},${before.y.toFixed(0)}) → (${after.x.toFixed(0)},${after.y.toFixed(0)})`);
+    check("an edited layout survives a reload (snapping may pull it a few px onto a guide)", Math.abs(after.x - (before.x - 150)) <= 9 && Math.abs(after.y - (before.y + 90)) <= 9, `(${before.x.toFixed(0)},${before.y.toFixed(0)}) → (${after.x.toFixed(0)},${after.y.toFixed(0)})`);
     await page.evaluate(() => window.__touch.resetTouchLayout());
 
     await page.evaluate(() => window.__touch.setTouchSettings({ handed: 'left' }));

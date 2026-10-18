@@ -17,7 +17,7 @@ import {
   weapons,
 } from '@military-forge/content';
 import { describe, expect, it } from 'vitest';
-import { ARMORY_RESPAWN, Btn, Game, PRE_SPIN_HOLD, SPINNING_SPEED_MUL, SPIN_FULL, SegFlag, createRayHit, heldSpeedMul, type SimEvent } from '../src';
+import { ARMORY_RESPAWN, Btn, DamageSource, Game, PRE_SPIN_HOLD, SPINNING_SPEED_MUL, SPIN_FULL, SegFlag, createRayHit, heldSpeedMul, type SimEvent } from '../src';
 import { dummyAt, flatMap, hold, makeGame, placeOnGround } from './helpers';
 
 function shots(game: Game): Extract<SimEvent, { type: 'shot' }>[] {
@@ -167,6 +167,22 @@ describe('weapon crates (more guns)', () => {
     hold(game, p, Btn.Interact, 1);
     expect([p.weapons[0].def, p.weapons[0].mag]).toEqual([HAMMER.index, 2]);
     expect(item().map((k) => k.def)).toEqual([weaponPickup(WIDOW.index)!.index]);
+  });
+
+  it('a gun taken from a crate comes back, full, after a death', () => {
+    const { game, p } = crate(WIDOW.index);
+    p.x = 20;
+    hold(game, p, 0, 1);
+    hold(game, p, Btn.Interact, 1);
+    expect(p.weapons[0].def).toBe(WIDOW.index);
+    p.weapons[0].mag = 0;
+    game.damage(p, 1000, -1, DamageSource.World, 2);
+    hold(game, p, 0, Math.round(T.respawnDelay * 60) + 1);
+    expect(p.alive).toBe(true);
+    expect(p.weapons.map((w) => [w.def, w.mag, w.reserve])).toEqual([
+      [WIDOW.index, WIDOW.mag, WIDOW.reserve],
+      [BUZZ.index, BUZZ.mag, BUZZ.reserve],
+    ]);
   });
 
   it('on a one-way platform, the gun swapped out lands on the platform', () => {

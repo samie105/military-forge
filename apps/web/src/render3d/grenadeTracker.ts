@@ -1,5 +1,5 @@
 /**
- * Per-grenade visual state behind the 3D frags (grenades.ts): which sample is which grenade from
+ * Per-grenade visual state behind the 3D grenades (grenades.ts), one tracker per grenade type: which sample is which grenade from
  * frame to frame, its velocity, the tumble while it flies, rolling and settling on the ground, and
  * the fuse light's blink. Pure logic on the Frame's grenade samples and the collision world.
  *
@@ -7,14 +7,16 @@
  * on (tick + fuse ticks left) is constant for a grenade's whole life, which tells grenades apart
  * exactly in local mode; the nearest position settles ties (two thrown on the same tick).
  */
-import { FRAG } from '@military-forge/content';
+import { FRAG, grenades } from '@military-forge/content';
 import { DT, SegFlag, createRayHit, type CollisionWorld } from '@military-forge/sim';
 
 /** the sim's collision radius (m) */
 export const SIM_RADIUS = FRAG.radius;
-/** the full fuse, in ticks and seconds */
+/** the frag's full fuse, in ticks and seconds */
 export const FUSE_TICKS = Math.round(FRAG.fuse / DT);
 export const FUSE_SECONDS = FUSE_TICKS * DT;
+/** grenade type `type`'s full fuse in ticks (its content `fuse`) */
+export const fuseTicksOf = (type: number): number => Math.round((grenades[type]?.fuse ?? FRAG.fuse) / DT);
 
 // ---------- the fuse light ----------
 
@@ -72,14 +74,15 @@ export interface GrenadeSample {
   /** ticks left */
   fuse: number;
   /**
-   * The grenade type (arsenal-b: 0 frag, 1 smoke, 2 gas, 3 flashbang, 4 mine, 5 EMP). This tracker
-   * and grenades.ts draw frags only (type absent or 0); render3d/clouds.ts draws the others.
+   * The grenade type (0 frag, 1 smoke, 2 gas, 3 flashbang, 4 mine, 5 EMP; absent = frag). Each
+   * tracker follows one type; a thrown mine is clouds.ts's (its state light), the launchers'
+   * projectiles (8+) vfx/projectiles.ts's.
    */
   type?: number;
 }
 
-/** Frags are this module's; every other grenade type is drawn by arsenal-b's clouds.ts. */
-export const isFrag = (s: GrenadeSample): boolean => !s.type;
+/** A sample's grenade type (absent: a frag). */
+export const typeOf = (s: GrenadeSample): number => s.type ?? FRAG.index;
 
 export class GrenadeTrack {
   /** detonation tick (tick + fuse) when matched without ids */
@@ -94,6 +97,8 @@ export class GrenadeTrack {
   fuse = 0;
   /** seconds since the last position change (the fuse light runs smoothly between ticks) */
   sinceTick = 0;
+  /** its type's full fuse (ticks) */
+  fuseTicks = FUSE_TICKS;
   /** tumble angle about the view axis, and its rate */
   angle = 0;
   omega = 0;
@@ -114,9 +119,14 @@ export class GrenadeTrack {
   seed = 0;
   seen = false;
 
+  /** its type's full fuse (s) */
+  get fuseSeconds(): number {
+    return this.fuseTicks * DT;
+  }
+
   /** seconds of fuse burnt */
   get fuseT(): number {
-    return Math.min(FUSE_SECONDS, (FUSE_TICKS - this.fuse) * DT + Math.min(this.sinceTick, DT));
+    return Math.min(this.fuseSeconds, (this.fuseTicks - this.fuse) * DT + Math.min(this.sinceTick, DT));
   }
 
   get speed(): number {
@@ -138,8 +148,11 @@ export class GrenadeTracker {
   private readonly spare: GrenadeTrack[] = [];
   private nextSeed = 1;
 
-  /** the map's collision (ground contact); `setWorld` on a map change */
-  constructor(private world: CollisionWorld) {}
+  /** the map's collision (ground contact), `setWorld` on a map change; the grenade `type` it follows */
+  constructor(
+    private world: CollisionWorld,
+    readonly type: number = FRAG.index,
+  ) {}
 
   /** A new map: its collision, and no grenades carried over. */
   setWorld(world: CollisionWorld): void {
@@ -148,7 +161,7 @@ export class GrenadeTracker {
     this.tracks.length = 0;
   }
 
-  /** the frag model's body radius (m, before the readability scale): the roll keeps pace with it (GrenadeRenderer.setModel) */
+  /** the model's body radius (m, before the readability scale): the roll keeps pace with it (GrenadeRenderer.setModel) */
   rollRadius = ROLL_RADIUS;
 
   /**
@@ -158,7 +171,7 @@ export class GrenadeTracker {
   update(tick: number, samples: readonly GrenadeSample[], dt: number, scale = 1): void {
     for (const t of this.tracks) t.seen = false;
     for (const s of samples) {
-      if (!isFrag(s)) continue;
+      if (typeOf(s) !== this.type) continue;
       let t = this.match(tick, s);
       if (!t) {
         t = this.spare.pop() ?? new GrenadeTrack();
@@ -207,6 +220,7 @@ export class GrenadeTracker {
     t.vy = s.vy ?? 0;
     t.tick = tick;
     t.fuse = s.fuse;
+    t.fuseTicks = fuseTicksOf(this.type); // read at the throw: the admin page can change a fuse live (#119)
     t.sinceTick = 0;
     t.seed = this.nextSeed++;
     t.angle = (t.seed * 2.399) % (Math.PI * 2); // golden-angle spread: two frags never tumble in step

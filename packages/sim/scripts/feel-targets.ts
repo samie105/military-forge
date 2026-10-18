@@ -12,17 +12,18 @@ export interface Target {
 }
 
 export const MOVEMENT_TARGETS: Target[] = [
-  // the owner's playtest: "the fuel finishes quick". The tank is 40% bigger (fuelMax 140 at the same burn)
-  { key: 'burn', label: 'Full-tank burn (s)', min: 3.0, max: 3.4, why: '~40% past the genre\'s 2–3 s of thrust (owner: "the fuel finishes quick")' },
+  // the owner's playtests: "the fuel finishes quick", then "I want the fuel longer". The tank grew 40%
+  // twice (fuelMax 100 → 140 → 196) at the same burn and air regen
+  { key: 'burn', label: 'Full-tank burn (s)', min: 4.2, max: 4.7, why: 'twice 40% longer than the 2.25 s tank (owner: "I want the fuel longer")' },
   {
     key: 'climb',
     label: 'Full-tank climb (m)',
-    min: 16.5,
-    max: 19.5,
-    why: 'clears the tallest tower (12 m, map lint) with room to spare; still under the 20 m view',
+    min: 23.5,
+    max: 27.5,
+    why: 'clears the tallest tower (12 m, map lint) twice over; past the 20 m view, so the camera follows you up (as in low-g)',
   },
-  { key: 'jetRun', label: 'Jet + run distance (m)', min: 15, max: 36, why: 'one tank ≲ one screen width (36 m), fights stay on screen' },
-  { key: 'hover', label: 'Best hover above 3 m (s)', min: 3.0, max: 6.5, why: 'feathering buys time (the burn and air regen are unchanged: the same rhythm, a bigger tank)' },
+  { key: 'jetRun', label: 'Jet + run distance (m)', min: 30, max: 46, why: 'one tank crosses a little more than one screen width (36 m): longer flights, by the owner\'s ask' },
+  { key: 'hover', label: 'Best hover above 3 m (s)', min: 6, max: 9.5, why: 'feathering buys time (the burn and air regen are unchanged: the same rhythm, a bigger tank)' },
   { key: 'refill', label: 'Ground refill from empty (s)', min: 2.8, max: 3.6, why: 'genre feel: ~3–4 s' },
   { key: 'tapHop', label: '0.2 s tap hop (m)', min: 1.0, max: 3.0, why: 'a quick tap must clear crates and low cover' },
   { key: 'to2m', label: 'Time to 2 m from standing (s)', min: 0, max: 0.5, why: 'take-off feels instant: dodging upward is a reaction' },
@@ -38,11 +39,11 @@ export const BLAST_TARGETS: { distance: number; flewMin: number; flewMax: number
 /** Map zones at their kinds' defaults (docs/02 §20, packages/content ZONE_KINDS); keys are ZoneMetrics fields. */
 export const ZONE_TARGETS: Target[] = [
   { key: 'lowGTapHop', label: 'Low-g: 0.2 s tap hop (m)', min: 3, max: 5, why: 'a tap clears a storey: low gravity reads at once' },
-  { key: 'lowGClimb', label: 'Low-g: full-tank climb (m)', min: 20, max: 26, why: 'well past the 18 m tank on normal ground: low gravity reads (the camera follows you up)' },
+  { key: 'lowGClimb', label: 'Low-g: full-tank climb (m)', min: 28, max: 34, why: 'well past the 25 m tank on normal ground: low gravity reads (the camera follows you up)' },
   { key: 'zeroGDrift', label: 'Zero-g: drift 1 s after a tap (m/s)', min: 3, max: 6, why: 'a tap sends you drifting at about walking speed, and you keep it' },
   { key: 'zeroGDiveTurn', label: 'Zero-g: Down turns the drift around (s)', min: 0.15, max: 0.6, why: 'diving is quick: zero-g never traps you at the ceiling' },
-  { key: 'longFlightBurn', label: 'Long flight: full-tank burn (s)', min: 7, max: 9, why: '2.5× the 3.2 s tank: noticeably longer flights' },
-  { key: 'longFlightRun', label: 'Long flight: jet + run on one tank (m)', min: 55, max: 95, why: 'one tank crosses well over a screen (36 m)' },
+  { key: 'longFlightBurn', label: 'Long flight: full-tank burn (s)', min: 10, max: 12.5, why: '2.5× the 4.45 s tank: noticeably longer flights' },
+  { key: 'longFlightRun', label: 'Long flight: jet + run on one tank (m)', min: 75, max: 120, why: 'one tank crosses two to three screens (36 m)' },
   { key: 'reverseSettle', label: 'Reversed pocket: bob settles (s)', min: 2, max: 5, why: 'you hover at the edge after a few seconds: floaty, not nauseating' },
   { key: 'windDrift', label: 'Wind: drift in a 1 s fall (m)', min: 3, max: 7, why: 'felt in every flight and grenade arc, never a teleport' },
   { key: 'mudSpeed', label: 'Mud: walk speed (m/s)', min: 2, max: 2.6, why: 'about crouch-walk speed (2.2 m/s)' },
@@ -59,7 +60,7 @@ export const FOG_TARGETS: { weapon: string; min: number; max: number; why: strin
 
 /** Map events at their kinds' defaults (docs/02 §20.7, packages/content EVENT_KINDS); keys are EventMetrics fields. */
 export const EVENT_TARGETS: Target[] = [
-  { key: 'surgeClimb', label: 'Gravity surge: full-tank climb (m)', min: 8, max: 14, why: 'high ground gets hard to reach for 15 s: about two thirds of a normal climb' },
+  { key: 'surgeClimb', label: 'Gravity surge: full-tank climb (m)', min: 16, max: 21, why: 'high ground gets harder to reach for 15 s: about three quarters of a normal (25 m) climb' },
   { key: 'lowGravityTapHop', label: 'Low gravity: 0.2 s tap hop (m)', min: 3, max: 5, why: 'the same float as a low-g zone, map-wide' },
   { key: 'fogHammerReach', label: 'Fog bank: Hammer reach (m)', min: 9, max: 12, why: 'pistols become close-range guns: bullets don\'t go far' },
   { key: 'gustDrift', label: 'Wind gusts: drift of a 1 s fall at a peak (m)', min: 4, max: 9, why: 'a gust visibly throws fliers sideways, then dies down' },
@@ -67,8 +68,8 @@ export const EVENT_TARGETS: Target[] = [
 
 /** Dash (docs/02 §21, owner request: "brief, like a fighting game's, but up and down too"); keys are DashMetrics fields. */
 export const DASH_TARGETS: Target[] = [
-  { key: 'flat', label: 'Dash: ground covered from standing (m)', min: 2, max: 2.5, why: 'a quick hop between spaces, not a teleport' },
-  { key: 'up', label: 'Dash: up from standing (m)', min: 1.5, max: 2, why: 'onto a crate or half a storey: the jetpack still owns real height' },
+  { key: 'flat', label: 'Dash: ground covered from standing (m)', min: 2.6, max: 3.1, why: '40% farther than the first 2.05 m (owner: "the dash to go farther"), still a hop, not a teleport' },
+  { key: 'up', label: 'Dash: up from standing (m)', min: 2.4, max: 3, why: 'onto a crate and then some, under half a second storey (~6 m): the jetpack still owns real height' },
   { key: 'slamTime', label: 'Dash: down from a 6 m hover, to the ground (s)', min: 0.3, max: 0.5, why: 'a real drop: falling takes ~0.8 s' },
   { key: 'wallStop', label: 'Dash: at a wall 1 m away, distance covered (m)', min: 0.95, max: 1, why: 'move-and-slide stops it at the wall: no tunnelling' },
   { key: 'burst', label: 'Dash: burst length (s)', min: 0.1, max: 0.17, why: 'brief: the animation is a blink, not a run' },

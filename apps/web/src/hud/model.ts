@@ -2,7 +2,7 @@
  * The HUD's numbers, as pure functions of the frame, the tuning and recent events, so they're
  * testable without a DOM. hud.ts turns them into elements.
  */
-import { HitZone, NO_WEAPON, RIOT_SHIELD, grenades, pickups as pickupDefs, weapons, type PickupDef, type Tuning } from '@military-forge/content';
+import { DRAGON, HitZone, NO_WEAPON, RIOT_SHIELD, TUNING_GROUPS, defaultTuning, grenades, pickups as pickupDefs, weapons, type PickupDef, type Tuning, type WeaponDef } from '@military-forge/content';
 import { DamageSource, type SimEvent } from '@military-forge/sim';
 import { iconHref, weaponIcon } from '../ui/icons';
 import type { PickupView, PlayerView, WeaponView } from '../view';
@@ -356,4 +356,112 @@ export function eventLook(kind: string): { color: string; icon: string } {
     default:
       return { color: 'var(--c-ev-gravity)', icon: 'warn' };
   }
+}
+
+// ---- round two's desktop HUD (docs/design/military-forge-ui-v2.html, data-screen="hud") ----
+
+/** The held slot's family line, by the gun's class. */
+const FAMILY: Readonly<Record<string, string>> = { sidearm: 'Pistol', smg: 'SMG', rifle: 'Rifle', dmr: 'Marksman', sniper: 'Sniper', shotgun: 'Shotgun', heavy: 'Heavy', special: 'Special', melee: 'Blade' };
+
+export function weaponFamily(def: Pick<WeaponDef, 'class'> | undefined): string {
+  return def ? (FAMILY[def.class] ?? def.class) : '';
+}
+
+/** A blast (a grenade, a mine, a launcher's explosive round): it launches who it hits. */
+export function isBlastSource(source: number): boolean {
+  return source === DamageSource.Grenade || source === DamageSource.Mine || !!weapons[source]?.projectile?.explosion;
+}
+
+/** The flamethrower's burn ticking (not a new hit): the "On fire" cue says it, no damage arc. */
+export function isBurnTick(source: number, damage: number): boolean {
+  const burn = DRAGON.projectile?.burn;
+  return source === DRAGON.index && !!burn && damage <= burn.dps * burn.pulse + 1e-6;
+}
+
+/** What one damage arc looks like: the kit's arc kinds and --amt (0..1, the hit's weight). */
+export type ArcKind = 'bullet' | 'heavy' | 'blast';
+
+export function damageArc(source: number, damage: number): { kind: ArcKind; amount: number } {
+  const amount = Math.max(0.2, Math.min(1, damage / 60));
+  if (isBlastSource(source)) return { kind: 'blast', amount };
+  return { kind: damage >= 45 ? 'heavy' : 'bullet', amount };
+}
+
+/** The 8 dash directions (the sim's 'dash' event: 0 = right, counter-clockwise), as words. */
+const DASH_WORDS = ['Right', 'Up-right', 'Up', 'Up-left', 'Left', 'Down-left', 'Down', 'Down-right'] as const;
+
+/** The dash ring's direction tick and hint: the rose's 0 is up, clockwise; the arrow icon points right. */
+export function dashHint(dir: number): { words: string; rose: number; arrow: number } {
+  const k = ((Math.round(dir) % 8) + 8) % 8;
+  return { words: DASH_WORDS[k]!, rose: 90 - 45 * k, arrow: -45 * k };
+}
+
+/** The "Tuned by host" tag: what the room's host changed, the first two by name (2 → "Gravity 0.6× · Dash speed 1.4×"). */
+export function tunedSummary(t: Tuning): string {
+  const parts: string[] = [];
+  for (const group of TUNING_GROUPS) {
+    for (const f of group.fields) {
+      const now = t[f.key];
+      const was = defaultTuning[f.key];
+      if (now === was) continue;
+      const label = f.label.replace(/\s*\(.*\)\s*$/, '');
+      const first = label.split(' ')[0]!.toLowerCase();
+      const name = group.title.toLowerCase().includes(first) ? label : `${group.title} ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
+      const ratio = was > 0 && now > 0 ? `${Math.round((now / was) * 100) / 100}×` : String(Math.round(now * 100) / 100);
+      parts.push(`${name} ${ratio}`);
+    }
+  }
+  if (parts.length <= 2) return parts.join(' · ');
+  return `${parts.slice(0, 2).join(' · ')} · ${parts.length - 2} more`;
+}
+
+export interface CompareRow {
+  key: 'damage' | 'rate' | 'range' | 'weight' | 'mag';
+  held: string;
+  floor: string;
+  /** bars, 0..1 of the arsenal's most */
+  a: number;
+  b: number;
+  /** better (up), worse (down) or the same, for the player: lighter is better */
+  dir: 'up' | 'down' | 'same';
+  delta: string;
+}
+
+const guns = weapons.filter((w) => w.fireMode !== 'melee');
+const perShot = (w: WeaponDef) => w.damage * w.pellets;
+const perMinute = (w: WeaponDef) => Math.round(60 / Math.max(1e-6, w.interval));
+const MOST = {
+  damage: Math.max(...guns.map(perShot)),
+  rate: Math.max(...guns.map(perMinute)),
+  range: Math.max(...guns.map((w) => w.range)),
+  mag: Math.max(...guns.map((w) => w.mag)),
+};
+
+/** A gun's weight in words, by how much it slows you (moveSpeedMul). */
+export function weightWords(mul: number): string {
+  return mul >= 0.98 ? 'Light' : mul >= 0.9 ? 'Medium' : 'Heavy';
+}
+
+const signed = (n: number, unit = '') => (n > 0 ? `+${n}${unit}` : n < 0 ? `−${-n}${unit}` : 'same');
+
+/** The crate's quick compare (the kit's .cmp): the gun in hand against the one on the floor. */
+export function crateCompare(held: WeaponDef, floor: WeaponDef): CompareRow[] {
+  const row = (key: CompareRow['key'], a: number, b: number, most: number, show: (n: number) => string, unit = ''): CompareRow => ({
+    key,
+    held: show(a),
+    floor: show(b),
+    a: Math.min(1, a / most),
+    b: Math.min(1, b / most),
+    dir: b > a ? 'up' : b < a ? 'down' : 'same',
+    delta: signed(Math.round(b - a), unit),
+  });
+  const heavy = (w: WeaponDef) => Math.max(0, Math.min(1, (1.02 - w.moveSpeedMul) / 0.4));
+  const weightDir: CompareRow['dir'] = floor.moveSpeedMul > held.moveSpeedMul ? 'up' : floor.moveSpeedMul < held.moveSpeedMul ? 'down' : 'same';
+  return [
+    row('damage', perShot(held), perShot(floor), MOST.damage, String),
+    row('rate', perMinute(held), perMinute(floor), MOST.rate, String),
+    row('range', held.range, floor.range, MOST.range, (n) => `${n} m`, ' m'),
+    { key: 'weight', held: weightWords(held.moveSpeedMul), floor: weightWords(floor.moveSpeedMul), a: Math.max(0.08, heavy(held)), b: Math.max(0.08, heavy(floor)), dir: weightDir, delta: weightDir === 'up' ? 'faster' : weightDir === 'down' ? 'slower' : 'same' },
+    row('mag', held.mag, floor.mag, MOST.mag, String),
+  ];
 }

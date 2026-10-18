@@ -27,6 +27,7 @@ import { Results } from './screens/Results';
 import { SettingsScreen } from './screens/Settings';
 import { TipsCard } from './screens/Tips';
 import { releaseShellFocus } from './focus';
+import { PhoneHome, PhoneLobby, PhonePause, PhoneResults, usePhoneLayout } from './screens/phone';
 import { closeRoute, runCleanup, type ShellActions, type ShellRoute, type ShellStore } from './store';
 
 export { ControllerContext };
@@ -53,6 +54,7 @@ function AppScreens({ store }: { store: ShellStore }) {
   const tips = useStore(store, (s) => s.tips);
   const settings = useStore(store, (s) => s.settings);
   const match = useStore(store, (s) => s.match);
+  const phone = usePhoneLayout();
 
   // the countdown and the match are play: the shell's buttons (Start now, Ready, the controls card)
   // let go of the keyboard, so Space and the arrows are the game's from the first frame
@@ -81,7 +83,7 @@ function AppScreens({ store }: { store: ShellStore }) {
       body = <NameEntry store={store} first />;
       break;
     case 'home':
-      body = <Home store={store} />;
+      body = phone ? <PhoneHome store={store} /> : <Home store={store} />;
       break;
     case 'finding':
       body = <Connecting code={screen.code} step={0} creating={screen.creating} onCancel={() => ctl.go({ to: 'home' })} />;
@@ -103,7 +105,7 @@ function AppScreens({ store }: { store: ShellStore }) {
     <>
       {body}
       {tips && playing && !overlay && !inLobby && <TipsCard bindings={settings.bindings} doubleTapDash={settings.doubleTapDash} />}
-      {overlay === 'menu' && <Pause store={store} />}
+      {overlay === 'menu' && (phone ? <PhonePause store={store} /> : <Pause store={store} />)}
       {overlay === 'settings' && <SettingsScreen store={store} />}
       {overlay === 'join' && <Join />}
       {overlay === 'name' && <NameEntry store={store} first={false} />}
@@ -132,6 +134,7 @@ function RoomScreen({ store, code }: { store: ShellStore; code: string }) {
   const doubleTapDash = useStore(store, (s) => s.settings.doubleTapDash);
   const overlay = useStore(store, (s) => s.overlay);
   const countdown = useCountdown(match);
+  const phone = usePhoneLayout();
 
   if (!connection || connection.state === 'connecting' || connection.state === 'joining' || (connection.state === 'connected' && !match)) {
     return <Connecting code={code} step={connectStep(connection, !!match)} onCancel={() => ctl.leave()} />;
@@ -140,11 +143,16 @@ function RoomScreen({ store, code }: { store: ShellStore; code: string }) {
   const host = lobby?.players.find((p) => p.host);
   return (
     <>
-      {match?.phase === MatchPhase.Waiting && lobby && <Lobby lobby={lobby} tips={tips && !overlay ? bindings : null} doubleTapDash={doubleTapDash} />}
+      {match?.phase === MatchPhase.Waiting && lobby && (phone ? <PhoneLobby lobby={lobby} tips={tips && !overlay ? bindings : null} doubleTapDash={doubleTapDash} /> : <Lobby lobby={lobby} tips={tips && !overlay ? bindings : null} doubleTapDash={doubleTapDash} />)}
       {countdown && <Countdown view={countdown.view} state={countdown.state} />}
-      {match && ENDED.has(match.phase) && match.results && (
-        <Results view={match} results={match.results} actions={actions} room={{ isHost: lobby?.isHost ?? false, hostId: host?.id ?? -1, leave: () => ctl.leave() }} />
-      )}
+      {match &&
+        ENDED.has(match.phase) &&
+        match.results &&
+        (phone ? (
+          <PhoneResults view={match} results={match.results} actions={actions} room={{ isHost: lobby?.isHost ?? false, hostId: host?.id ?? -1, leave: () => ctl.leave() }} code={code} />
+        ) : (
+          <Results view={match} results={match.results} actions={actions} room={{ isHost: lobby?.isHost ?? false, hostId: host?.id ?? -1, leave: () => ctl.leave() }} />
+        ))}
       {connection.state === 'reconnecting' && <ReconnectBanner connection={connection} />}
     </>
   );
@@ -155,11 +163,15 @@ function TrainingScreen({ store }: { store: ShellStore }) {
   const match = useStore(store, (s) => s.match);
   const actions = useStore(store, (s) => s.actions);
   const countdown = useCountdown(match);
+  const phone = usePhoneLayout();
   return (
     <>
       {match?.phase === MatchPhase.Waiting && <WarmupBar view={match} actions={actions} />}
       {countdown && <Countdown view={countdown.view} state={countdown.state} />}
-      {match && ENDED.has(match.phase) && match.results && <Results view={match} results={match.results} actions={actions} training={{ leave: () => ctl.leave() }} />}
+      {match &&
+        ENDED.has(match.phase) &&
+        match.results &&
+        (phone ? <PhoneResults view={match} results={match.results} actions={actions} training={{ leave: () => ctl.leave() }} /> : <Results view={match} results={match.results} actions={actions} training={{ leave: () => ctl.leave() }} />)}
     </>
   );
 }

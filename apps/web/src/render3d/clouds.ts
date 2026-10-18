@@ -12,13 +12,13 @@
  * so every puff is masked to the part of the cloud its centre reaches (cloudReach): thin walls
  * included, nothing shows on their far side.
  *
- * Frags are render3d-b's (explosions, smoke trails): this layer draws every other grenade type,
- * each a small ball in its own colour, and mines as a dark puck with a state light (green flying,
+ * Thrown grenades and the grenade pairs on the map are render3d-b's grenades.ts, one Forge model
+ * per type (#91). This layer draws a thrown mine: a dark puck with a state light (green flying,
  * yellow arming, flashing red armed, a fast red/white beep when triggered). It is an effect module
  * (Vfx.register): a flashbang going off is a quick pop and a ring, never a screen-sized flash (the
  * white-out is the fx overlay's), and an EMP is a blue ring out to its radius.
  */
-import { EMP, FLASHBANG, FRAG, GAS, MINE, PROJECTILE_TYPE_BASE, SMOKE, grenades, pickups as pickupDefs } from '@military-forge/content';
+import { EMP, FLASHBANG, GAS, MINE, SMOKE } from '@military-forge/content';
 import { MineState, cloudDef, type CollisionWorld, type SimEvent } from '@military-forge/sim';
 import {
   AdditiveBlending,
@@ -39,7 +39,7 @@ import {
 } from 'three';
 import { reduceFlashes } from '../fx';
 import { REACH_RAYS, cloudReach, reachToward } from '../grenadeViews';
-import type { CloudView, Frame, GrenadeView, PickupView } from '../view';
+import type { CloudView, Frame, GrenadeView } from '../view';
 import type { VfxContext, VfxModule } from './vfx';
 import { Cell } from './vfx/atlas';
 import { particleSpec, type ParticleSpec } from './vfx/pool';
@@ -73,16 +73,6 @@ const SPREAD = 0.55;
  */
 const Z_BACK = -0.8;
 const Z_FRONT = 0.9;
-
-/** Grenade colours by type (frags in flight are render3d-b's; a frag pair on the floor is ours). */
-const GRENADE_COLORS: Record<number, number> = {
-  [FRAG.index]: 0x3fb950,
-  [MINE.index]: 0xd29922,
-  [SMOKE.index]: 0xd0d5db,
-  [GAS.index]: 0xc3d22b,
-  [FLASHBANG.index]: 0xa5d6ff,
-  [EMP.index]: 0x58a6ff,
-};
 
 const MINE_LIGHTS = { green: 0x3fb950, yellow: 0xd29922, red: 0xf85149, dark: 0x3a1210, white: 0xffffff };
 
@@ -368,15 +358,10 @@ export class CloudLayer implements VfxModule {
   /** the map's walls (from the effects' context; none in tests without one: no masks) */
   private world: CollisionWorld | null = null;
   private readonly clouds = new Map<number, CloudPuffs>();
-  private readonly ballGeo = new SphereGeometry(1, 12, 8);
-  private readonly ballMaterials = new Map<number, MeshLambertMaterial>();
-  private readonly balls: Mesh[] = [];
   private readonly puckGeo = new CylinderGeometry(MINE.radius * 1.3, MINE.radius * 1.3, 0.07, 16);
   private readonly bulbGeo = new SphereGeometry(MINE.radius * 0.6, 10, 6);
   private readonly mineBody = new MeshLambertMaterial({ color: 0x2b3036 });
   private readonly mines: MineMesh[] = [];
-  /** grenade pairs lying on the map (pickups): two canisters each, by item id */
-  private readonly pairs = new Map<number, Group>();
   private time = 0;
   /** an invisible puff the renderer's shader warm-up compiles, so the first smoke doesn't hitch */
   private warm: Sprite | null;
@@ -407,8 +392,7 @@ export class CloudLayer implements VfxModule {
     }
     this.time += dt;
     this.syncClouds(frame.clouds ?? [], dt);
-    this.syncGrenades(frame.grenades, (fx?.reducedMotion ?? false) || reduceFlashes());
-    this.syncPairs(frame.pickups);
+    this.syncMines(frame.grenades, (fx?.reducedMotion ?? false) || reduceFlashes());
   }
 
   private syncClouds(views: readonly CloudView[], dt: number): void {
@@ -437,80 +421,23 @@ export class CloudLayer implements VfxModule {
     }
   }
 
-  private ballMaterial(type: number): MeshLambertMaterial {
-    let m = this.ballMaterials.get(type);
-    if (!m) {
-      m = new MeshLambertMaterial({ color: GRENADE_COLORS[type] ?? 0xffffff, emissive: GRENADE_COLORS[type] ?? 0xffffff, emissiveIntensity: 0.35 });
-      this.ballMaterials.set(type, m);
-    }
-    return m;
-  }
-
-  /** `calm`: Reduce motion or Reduce flashes (the mine lights blink no faster than MINE_CALM_HZ). */
-  private syncGrenades(views: readonly GrenadeView[], calm: boolean): void {
-    let n = 0;
+  /** Thrown mines (`calm`: Reduce motion or Reduce flashes: the lights blink no faster than MINE_CALM_HZ). */
+  private syncMines(views: readonly GrenadeView[], calm: boolean): void {
     let mines = 0;
     for (const g of views) {
-      const type = g.type ?? FRAG.index;
-      if (type === FRAG.index || type >= PROJECTILE_TYPE_BASE) continue; // render3d-b draws frags and the launchers' projectiles (vfx/projectiles.ts)
-      if (type === MINE.index) {
-        let mine = this.mines[mines];
-        if (!mine) {
-          mine = new MineMesh(this.puckGeo, this.mineBody, this.bulbGeo, this.texture);
-          this.mines.push(mine);
-          this.group.add(mine.group);
-        }
-        mine.group.visible = true;
-        mine.group.position.set(g.x, g.y, 0);
-        mine.setLight(mineLight(g.state ?? 0, this.time, calm ? MINE_CALM_HZ : Infinity));
-        mines++;
-        continue;
+      if (g.type !== MINE.index) continue; // every other type is grenades.ts's (one model each) or vfx/projectiles.ts's
+      let mine = this.mines[mines];
+      if (!mine) {
+        mine = new MineMesh(this.puckGeo, this.mineBody, this.bulbGeo, this.texture);
+        this.mines.push(mine);
+        this.group.add(mine.group);
       }
-      let ball = this.balls[n];
-      if (!ball) {
-        ball = new Mesh(this.ballGeo, this.ballMaterial(type));
-        this.balls.push(ball);
-        this.group.add(ball);
-      }
-      ball.material = this.ballMaterial(type);
-      ball.visible = true;
-      ball.position.set(g.x, g.y, 0);
-      // drawn a little larger than the sim's 0.1 m so it reads at gameplay zoom
-      ball.scale.setScalar(Math.max(0.12, (grenades[type]?.radius ?? 0.1) * 1.4));
-      n++;
+      mine.group.visible = true;
+      mine.group.position.set(g.x, g.y, 0);
+      mine.setLight(mineLight(g.state ?? 0, this.time, calm ? MINE_CALM_HZ : Infinity));
+      mines++;
     }
-    for (let i = n; i < this.balls.length; i++) this.balls[i]!.visible = false;
     for (let i = mines; i < this.mines.length; i++) this.mines[i]!.group.visible = false;
-  }
-
-  /** Grenade pairs on the floor (map pickups): two canisters in the type's colour, bobbing a little. */
-  private syncPairs(items: readonly PickupView[] | undefined): void {
-    const seen = new Set<number>();
-    for (const k of items ?? []) {
-      const def = pickupDefs[k.def];
-      if (def?.kind !== 'grenades') continue;
-      seen.add(k.id);
-      let pair = this.pairs.get(k.id);
-      if (!pair) {
-        pair = new Group();
-        const r = 0.13;
-        for (const dx of [-0.17, 0.17]) {
-          const ball = new Mesh(this.ballGeo, this.ballMaterial(def.grenade ?? FRAG.index));
-          ball.scale.setScalar(r);
-          ball.position.set(dx, r, 0);
-          pair.add(ball);
-        }
-        this.pairs.set(k.id, pair);
-        this.group.add(pair);
-      }
-      pair.position.set(k.x, k.y + 0.04 + 0.04 * Math.sin(this.time * 3 + k.id), 0.2);
-      pair.rotation.y = 0.6 * Math.sin(this.time * 1.4 + k.id);
-    }
-    for (const [id, pair] of this.pairs) {
-      if (seen.has(id)) continue;
-      pair.removeFromParent();
-      this.pairs.delete(id);
-    }
   }
 
   dispose(): void {
@@ -519,8 +446,6 @@ export class CloudLayer implements VfxModule {
     this.texture.dispose();
     this.coreTexture.dispose();
     this.open.dispose();
-    this.ballGeo.dispose();
-    for (const m of this.ballMaterials.values()) m.dispose();
     for (const m of this.mines) m.dispose();
     this.puckGeo.dispose();
     this.bulbGeo.dispose();

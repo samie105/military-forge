@@ -109,13 +109,13 @@ export const defaultTuning: Readonly<Tuning> = Object.freeze({
   jetTaperBand: 1.5,
   jetAirMaxX: 6.5,
 
-  // the owner's playtest ("the fuel finishes quick"): a 40% bigger tank at the same burn and air
-  // regen, so feathering and hovering keep their rhythm; ground regen grows with it, so a refill
-  // from empty still takes ~3 s
-  fuelMax: 140,
-  fuelBurn: 44, // 3.2 s of thrust (was 2.25 s on a 100 tank), ~18 m full-tank climb
+  // the owner's playtests ("the fuel finishes quick", then "I want the fuel longer"): two 40%
+  // bigger tanks (100 → 140 → 196) at the same burn and air regen, so feathering and hovering keep
+  // their rhythm; ground regen grows with it, so a refill from empty still takes ~3 s
+  fuelMax: 196,
+  fuelBurn: 44, // 4.45 s of thrust (3.2 s on a 140 tank, 2.25 s on 100), ~25 m full-tank climb
   fuelMinIgnite: 10,
-  fuelRegenGround: 49,
+  fuelRegenGround: 69,
   fuelRegenDelayGround: 0.2,
   fuelRegenAir: 12,
   fuelRegenDelayAir: 0.45,
@@ -142,7 +142,9 @@ export const defaultTuning: Readonly<Tuning> = Object.freeze({
   dropThroughHold: 0.15,
   dropThroughTime: 0.25,
 
-  dashSpeed: 14,
+  // the owner's playtest ("the dash to go farther"): 14 → 20 m/s for the same 8 ticks, 40% more
+  // ground (2.05 → 2.85 m) in the same 0.13 s blink, with the same cooldown
+  dashSpeed: 20,
   dashBurstTicks: 8,
   dashCooldown: 1.0,
   dashFuelCost: 8,

@@ -69,6 +69,8 @@ export const QUICK_THROW = 0;
 export class ThrowLatch {
   /** while a hold aims (past a tap): the strength (0..7) the throw would go with; −1 otherwise */
   aim = -1;
+  /** when the last quick throw (a tap) was let go, ms (performance.now); −Infinity before any (the HUD's "Quick throw" stamp) */
+  lastQuickAt = -Infinity;
   private downAt = -1;
   private strength = QUICK_THROW;
   private pending = -1;
@@ -81,7 +83,9 @@ export class ThrowLatch {
   /** It came up at `at`: the throw goes in the next sample (a quick one after a tap). */
   release(at: number): void {
     if (this.downAt < 0) return;
-    this.pending = at - this.downAt < TAP_MS ? QUICK_THROW : this.strength;
+    const tap = at - this.downAt < TAP_MS;
+    this.pending = tap ? QUICK_THROW : this.strength;
+    if (tap) this.lastQuickAt = at;
     this.downAt = -1;
     this.aim = -1;
   }
@@ -206,6 +210,11 @@ export class InputSampler {
   /** while a throw is being aimed: the strength it would go with, 0..7 (the arc); −1 otherwise */
   get throwAim(): number {
     return this.throwLatch.aim;
+  }
+
+  /** when the last quick throw (a tap of the grenade key or button) was let go, ms (performance.now) */
+  get quickThrowAt(): number {
+    return this.throwLatch.lastQuickAt;
   }
 
   constructor(private readonly target: HTMLElement) {

@@ -7,7 +7,7 @@
  * (1.5K live on Low, 5K on High); the steady-state frame allocates nothing; each layer is one draw
  * call and is hidden while empty, so a quiet scene costs no extra draws.
  */
-import { PROJECTILE_TYPE_BASE, ROCKET, SHELL } from '@military-forge/content';
+import { FRAG, PROJECTILE_TYPE_BASE, ROCKET, SHELL, grenades as grenadeDefs } from '@military-forge/content';
 import type { CollisionWorld, SimEvent } from '@military-forge/sim';
 import { SRGBColorSpace, TextureLoader, Vector3, type BufferGeometry, type DirectionalLight, type HemisphereLight, type Mesh, type Scene, type Texture } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -97,6 +97,9 @@ export class Vfx {
   readonly glow: ParticleLayer;
   readonly smoke: ParticleLayer;
   readonly decals: ParticleLayer;
+  /** every grenade type's models in flight and pairs on the map (#91), by type */
+  readonly throwables: readonly GrenadeRenderer[];
+  /** the frag's */
   readonly grenades: GrenadeRenderer;
   readonly flash: SceneFlash;
   readonly shake = new CameraShake();
@@ -146,7 +149,8 @@ export class Vfx {
     this.decals = new ParticleLayer(DECALS_MAX, { texture: atlas, grid, blend: 'alpha', depthTest: true, renderOrder: 10, polygonOffset: true });
     this.smoke = new ParticleLayer(SMOKE_MAX, { texture: atlas, grid, blend: 'alpha', depthTest: true, renderOrder: 11 });
     this.glow = new ParticleLayer(GLOW_MAX + SPRITES_MAX, { texture: atlas, grid, blend: 'additive', depthTest: false, renderOrder: 12 });
-    this.grenades = new GrenadeRenderer(world, ramp);
+    this.throwables = grenadeDefs.map((g) => new GrenadeRenderer(world, ramp, g.index));
+    this.grenades = this.throwables[FRAG.index]!;
     this.flash = new SceneFlash(lights.hemi, lights.sun);
     this.gunfire = new Gunfire(world);
     this.casings = new Casings(scene, ramp, world, ejects);
@@ -156,7 +160,7 @@ export class Vfx {
     this.trail = new DashTrail(scene);
     this.dash = new DashFx(this.ghosts, bodies);
     for (const l of [this.decals, this.smoke, this.glow]) l.mesh.name = 'vfx';
-    scene.add(this.decals.mesh, this.smoke.mesh, this.glow.mesh, this.arc.layer.mesh, ...this.grenades.meshes);
+    scene.add(this.decals.mesh, this.smoke.mesh, this.glow.mesh, this.arc.layer.mesh, ...this.throwables.flatMap((g) => g.meshes));
     this.targets = { glow: this.glowPool, smoke: this.smokePool, decals: this.decalPool, book: null, art: null };
     this.grenadeFx = { smoke: this.smokePool, glow: this.glow };
     this.ctx = { smoke: this.smokePool, glow: this.glowPool, decals: this.decalPool, glowLayer: this.glow, world, scene, camera, detail: 1, reducedMotion: false };
@@ -175,7 +179,7 @@ export class Vfx {
   setMap(world: CollisionWorld): void {
     this.world = world;
     this.ctx.world = world;
-    this.grenades.setWorld(world);
+    for (const g of this.throwables) g.setWorld(world);
     this.gunfire.world = world;
     this.gunfire.clear();
     this.casings.world = world;
@@ -193,16 +197,22 @@ export class Vfx {
     this.modules.push(module);
   }
 
-  /** The frag model and any Forge flipbooks. Failures keep the stand-ins (procedural effects, a modelled frag). */
+  /** The grenade models and any Forge flipbooks. Failures keep the stand-ins (procedural effects, modelled grenades). */
   async load(baseUrl: string): Promise<void> {
-    const frag = new GLTFLoader()
-      .setMeshoptDecoder(MeshoptDecoder)
-      .loadAsync(`${baseUrl}assets/weapons/frag.glb`)
-      .then((gltf) => {
-        const model = throwableFromGltf(gltf);
-        if (model) this.grenades.setModel(model);
-      })
-      .catch((err: unknown) => console.warn('render3d: frag.glb failed to load, drawing the stand-in frag', err));
+    const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+    // one model per grenade type (#91): frag, smoke, gas, flash, mine and emp.glb, by content id
+    const models = Promise.all(
+      this.throwables.map((g) => {
+        const id = grenadeDefs[g.type]!.id;
+        return loader
+          .loadAsync(`${baseUrl}assets/weapons/${id}.glb`)
+          .then((gltf) => {
+            const model = throwableFromGltf(gltf);
+            if (model) g.setModel(model);
+          })
+          .catch((err: unknown) => console.warn(`render3d: ${id}.glb failed to load, drawing the stand-in`, err));
+      }),
+    );
     const books = loadExplosionArt(baseUrl, BLAST_STYLES).then((loaded) => {
       if (!loaded) return;
       const { arts, texture } = loaded;
@@ -234,7 +244,7 @@ export class Vfx {
       this.casings.setArt(art?.art.casings ?? null);
       await this.loadCasings(baseUrl, art?.art.casings ?? null);
     });
-    await Promise.all([frag, books, guns, this.loadProjectiles(baseUrl)]);
+    await Promise.all([models, books, guns, this.loadProjectiles(baseUrl)]);
   }
 
   /** projectiles.glb's models and the flame and specials atlases; anything missing keeps the stand-ins. */
@@ -339,7 +349,7 @@ export class Vfx {
     this.casings.setLimits(this.low, on);
     this.shake.enabled = !on;
     this.flash.reduced = on;
-    this.grenades.reduced = on;
+    for (const g of this.throwables) g.reduced = on;
   }
 
   /** Sim events → effects: blasts now, shots once the avatars are posed (update). */
@@ -398,7 +408,7 @@ export class Vfx {
     this.glow.begin();
     this.glow.addPool(this.glowPool);
     // grenades: their trail puffs join the smoke pool, their fuse lights this glow frame
-    this.grenades.update(frame.tick, frame.grenades, dt, this.camera.ppm, this.grenadeFx);
+    for (const g of this.throwables) g.update(frame.tick, frame.grenades, dt, this.camera.ppm, this.grenadeFx, frame.pickups);
     for (const m of this.modules) m.update?.(frame, dt, this.ctx);
     this.glow.end();
     this.smoke.begin();
@@ -434,7 +444,7 @@ export class Vfx {
 
   dispose(): void {
     for (const l of [this.decals, this.smoke, this.glow, this.arc.layer, ...this.books.map((b) => b.layer)]) l.dispose();
-    this.grenades.dispose();
+    for (const g of this.throwables) g.dispose();
     this.gunfire.dispose();
     this.casings.dispose();
     this.projectiles.dispose();

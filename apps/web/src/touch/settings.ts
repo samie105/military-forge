@@ -7,6 +7,8 @@ export type KeyValueStore = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 export const LAYOUT_KEY = 'mf.touch.layout.v1';
 export const SETTINGS_KEY = 'mf.touch.settings.v1';
+/** Saved with the settings: 2 = the round-two kit's controls (opacity 1 is its look). */
+export const SETTINGS_REV = 2;
 
 export const LIMITS = { min: 0.03, max: 0.97, sizeMin: 0.08, sizeMax: 0.7, opacityMin: 0.15, opacityMax: 1 };
 
@@ -40,7 +42,10 @@ export interface TouchSettings {
   vibrate: boolean;
   /** swipe and lift the move stick to dash */
   swipeDash: boolean;
-  /** overall opacity of the controls (each control's own opacity multiplies it) */
+  /**
+   * overall opacity of the controls' plates (each control's own opacity multiplies it); the vitals they
+   * carry (HP, fuel, the ammo ring) stay readable whatever it is. 1 = the kit's look, already translucent
+   */
   opacity: number;
 }
 
@@ -51,8 +56,14 @@ export const DEFAULT_TOUCH_SETTINGS: Readonly<TouchSettings> = {
   handed: 'right',
   vibrate: true,
   swipeDash: true,
-  opacity: 0.55,
+  opacity: 1,
 };
+
+/**
+ * Round one's default opacity (its flat controls were opaque): a save carrying it, from before the
+ * kit's translucent thumb dials, means "the default", so it loads as the new one.
+ */
+const ROUND_ONE_OPACITY = 0.55;
 
 export function sanitizeSettings(raw: unknown): TouchSettings {
   const s = { ...DEFAULT_TOUCH_SETTINGS };
@@ -68,7 +79,10 @@ export function sanitizeSettings(raw: unknown): TouchSettings {
 
 export function loadSettings(store: KeyValueStore | null): TouchSettings {
   try {
-    return sanitizeSettings(JSON.parse(store?.getItem(SETTINGS_KEY) ?? 'null'));
+    const raw = JSON.parse(store?.getItem(SETTINGS_KEY) ?? 'null') as Record<string, unknown> | null;
+    const s = sanitizeSettings(raw);
+    if (raw && raw.rev === undefined && raw.opacity === ROUND_ONE_OPACITY) s.opacity = DEFAULT_TOUCH_SETTINGS.opacity;
+    return s;
   } catch {
     return { ...DEFAULT_TOUCH_SETTINGS };
   }
@@ -76,7 +90,7 @@ export function loadSettings(store: KeyValueStore | null): TouchSettings {
 
 export function saveSettings(store: KeyValueStore | null, settings: TouchSettings): void {
   try {
-    store?.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    store?.setItem(SETTINGS_KEY, JSON.stringify({ ...settings, rev: SETTINGS_REV }));
   } catch {
     /* as for the layout */
   }
