@@ -78,6 +78,9 @@ importers:
 
   apps/game-server:
     dependencies:
+      '@military-forge/bots':
+        specifier: workspace:*
+        version: link:../../packages/bots
       '@military-forge/content':
         specifier: workspace:*
         version: link:../../packages/content

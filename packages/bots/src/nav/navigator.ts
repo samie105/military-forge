@@ -23,6 +23,8 @@ const LOOKAHEAD = 6;
 const FUEL_MARGIN = 8;
 /** longest wait on the ground for fuel before trying anyway (ticks) */
 const FUEL_WAIT = 240;
+/** off the graph with no node within 8 m, it heads for one this far off (m) */
+const APPROACH_FAR = 20;
 
 export class Navigator {
   readonly finder: PathFinder;
@@ -76,6 +78,20 @@ export class Navigator {
     this.motor.reset();
   }
 
+  /** Stands still for now (a countdown): the link in progress starts its clock again afterwards. */
+  hold(): void {
+    this.linkTicks = 0;
+    this.best = Infinity;
+    this.stall = 0;
+  }
+
+  /** How many times links have given up on it this life (tests, debug). */
+  get failures(): number {
+    let n = 0;
+    for (const f of this.fails.values()) n += f;
+    return n;
+  }
+
   /** Forget which links failed (a new life). */
   forget(): void {
     this.fails.clear();
@@ -98,14 +114,17 @@ export class Navigator {
 
   /**
    * Plans from where the body is to node `goal`. In the air or off the graph (floating in zero-g,
-   * knocked onto a crate), it plans from the nearest node within 8 m (or `via`) and goes there
-   * first. False when there's no way.
+   * knocked onto a crate), it plans from the nearest node within 8 m (else APPROACH_FAR, or `via`)
+   * and goes there first. False when there's no way.
    */
   plan(self: PlayerState, goal: number, via = -1): boolean {
+    const following = this.leg();
     let start = via >= 0 ? -1 : this.locate(self);
     if (start >= 0 && this.blocked(start)) start = -1;
     const approach = start < 0;
     if (approach) start = via >= 0 ? via : this.graph.nearestUsable(self.x, self.y, 8, this.blocked);
+    // nothing near (the middle of a wide zero-g dome, which has no nodes): farther afield
+    if (approach && start < 0 && via < 0) start = this.graph.nearestUsable(self.x, self.y, APPROACH_FAR, this.blocked);
     this.failed = false;
     this.approach = -1;
     if (start < 0 || !this.finder.find(start, goal, this.linkCost, this.path)) {
@@ -116,8 +135,16 @@ export class Navigator {
     if (approach) this.approach = start;
     this.at = 0;
     this.goal = goal;
-    this.resetLink();
+    // a new plan that goes on along the leg it was on keeps that leg's clock: replanning every
+    // second toward the next spot over mustn't hide a body that isn't getting anywhere
+    if (this.leg() !== following) this.resetLink();
     return true;
+  }
+
+  /** What it's following now, as a key: the link id, −2 − node for an approach leg, −1 for nothing. */
+  private leg(): number {
+    if (this.approach >= 0) return -2 - this.approach;
+    return this.at < this.path.length ? this.path[this.at]! : -1;
   }
 
   /** The plan's estimated cost from here (s), or Infinity. */

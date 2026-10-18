@@ -10,14 +10,21 @@
  *   earshot, never who. A hit names who hurt it, but not where they are (only what it saw or heard
  *   of them).
  * - **Gas:** clouds it has seen (the server sends them by the view rect and their radius).
- * What it knew about players fades after a few seconds; it remembers where it saw items.
+ * - **Items and mines:** where it saw them (a client gets an item's kind and place, not a dropped
+ *   shield's HP; a grenade record for a mine in view and out of smoke). Forgotten once it sees the
+ *   spot without them.
+ * What it knew about players fades after a few seconds, and a player who left is forgotten at once.
  */
+import { MINE, grenades } from '@military-forge/content';
 import {
   MAX_CLOUDS,
+  MAX_GRENADES,
   MAX_PICKUPS,
   MAX_PLAYERS,
+  MineState,
   SegFlag,
   SmokeSight,
+  closestPointOnSegment,
   TICK_RATE,
   blindIntensity,
   cloudDef,
@@ -54,7 +61,15 @@ export interface ItemSighting {
   def: number;
   x: number;
   y: number;
-  hp: number;
+  /** it stood on this one and it wasn't taken (a shield worse than its own): leave it be */
+  refused: boolean;
+}
+
+/** A mine it saw stuck somewhere (arming or armed), by grenade slot. */
+interface MineSighting {
+  known: boolean;
+  x: number;
+  y: number;
 }
 
 /** Gunfire from someone it couldn't see: roughly where, and when (−1: nothing to go on). */
@@ -82,6 +97,7 @@ const MEMORY = 6;
 export const SOUND_CELL = 4;
 
 const ray = createRayHit();
+const pt = { x: 0, y: 0 };
 
 /** One smoke sight per game, gathered once a tick for all its bots: brains run before anything moves. */
 const sights = new WeakMap<Game, { tick: number; sight: SmokeSight }>();
@@ -115,7 +131,11 @@ export class Perception {
     hurtTick: -1,
   }));
   /** items by pickup slot: where and what it last saw */
-  readonly items: ItemSighting[] = Array.from({ length: MAX_PICKUPS }, () => ({ tick: -1, def: 0, x: 0, y: 0, hp: 0 }));
+  readonly items: ItemSighting[] = Array.from({ length: MAX_PICKUPS }, () => ({ tick: -1, def: 0, x: 0, y: 0, refused: false }));
+  /** mines it has seen, by grenade slot (anyone's but its own) */
+  readonly mines: MineSighting[] = Array.from({ length: MAX_GRENADES }, () => ({ known: false, x: 0, y: 0 }));
+  /** some mine it has seen is still where it saw it, as far as it knows */
+  knowsMines = false;
   /** the nearest gunfire it heard last from someone it couldn't see */
   readonly noise: Noise = { tick: -1, x: 0, y: 0 };
   /** gas clouds it has seen, by cloud slot */
@@ -151,6 +171,14 @@ export class Perception {
   hear(game: Game, self: PlayerState): void {
     this.frame(self);
     if (this.blind >= 1) this.whiteOut();
+    // a player who left is gone at once (its id may come back as someone else)
+    for (let id = 0; id < MAX_PLAYERS; id++) {
+      const c = this.contacts[id]!;
+      if (game.players[id] || (!c.known && c.hurtTick < 0)) continue;
+      c.known = false;
+      c.visible = false;
+      c.hurtTick = -1;
+    }
     const sight = smokeSight(game);
     const tick = game.tick;
     let heard = Infinity;
@@ -214,9 +242,30 @@ export class Perception {
     if (this.noise.tick >= 0 && tick - this.noise.tick > MEMORY * 60) this.noise.tick = -1;
     for (const k of game.pickups) {
       const seen = this.items[k.id]!;
-      if (k.alive && this.inView(k.x, k.y)) Object.assign(seen, { tick, def: k.def, x: k.x, y: k.y, hp: k.hp });
+      if (k.alive && this.inView(k.x, k.y)) {
+        // a client is sent its kind and place, nothing more (not a dropped shield's HP)
+        if (seen.tick < 0 || seen.def !== k.def || seen.x !== k.x || seen.y !== k.y) seen.refused = false;
+        seen.tick = tick;
+        seen.def = k.def;
+        seen.x = k.x;
+        seen.y = k.y;
+      }
       // the spot it remembers is on screen now and the item isn't there: gone
       else if (seen.tick >= 0 && this.inView(seen.x, seen.y) && !(k.alive && k.x === seen.x && k.y === seen.y)) seen.tick = -1;
+    }
+    this.knowsMines = false;
+    for (const g of game.grenades) {
+      const seen = this.mines[g.id]!;
+      // a mine stuck somewhere (arming, armed, beeping), someone else's
+      const mine = g.alive && g.owner !== self.id && grenades[g.type]?.effect === 'mine' && g.state !== MineState.Flying;
+      if (mine && this.inView(g.x, g.y) && !sight.pointHidden(self.id, g.x, g.y)) {
+        seen.known = true;
+        seen.x = g.x;
+        seen.y = g.y;
+      } else if (seen.known && this.inView(seen.x, seen.y) && !sight.pointHidden(self.id, seen.x, seen.y) && !(mine && g.x === seen.x && g.y === seen.y)) {
+        seen.known = false;
+      }
+      if (seen.known) this.knowsMines = true;
     }
     for (const c of game.clouds) {
       const k = this.gas[c.id]!;
@@ -273,6 +322,28 @@ export class Perception {
       }
     }
     return worst;
+  }
+
+  /**
+   * A body standing at (x, y) would set off a mine it has seen: within its trigger radius (grown by
+   * `margin`) of the body, with nothing solid between (mines.ts's rule).
+   */
+  mineAt(game: Game, x: number, y: number, margin: number): boolean {
+    if (!this.knowsMines) return false;
+    const t = game.tuning;
+    const r = t.capsuleRadius;
+    const reach = MINE.mine.triggerRadius + margin;
+    for (const k of this.mines) {
+      if (!k.known) continue;
+      closestPointOnSegment(k.x, k.y, x, y + r, x, y + t.standHeight - r, pt);
+      const dx = pt.x - k.x;
+      const dy = pt.y - k.y;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d - r > reach) continue;
+      if (d > 1e-6 && game.world.raycast(k.x, k.y, dx / d, dy / d, d, SegFlag.BulletPass, ray)) continue;
+      return true;
+    }
+    return false;
   }
 
   /** The human camera this tick: centred above the feet, pushed toward the aim; and the white-out. */

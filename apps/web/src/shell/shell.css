@@ -355,6 +355,7 @@
 }
 .sh-players .sh-badge { color: var(--sh-accent); border-color: rgba(63, 182, 168, 0.5); }
 .sh-badge.sh-mvp { color: #0d1117; background: var(--sh-gold); border-color: var(--sh-gold); }
+.sh-players .sh-badge.sh-bot { color: var(--sh-muted); border-color: rgba(141, 153, 168, 0.5); }
 .sh-results footer { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 18px; }
 
 /* ---- routes (the Locker) ---- */

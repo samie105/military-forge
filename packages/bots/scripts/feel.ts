@@ -13,6 +13,7 @@ const cases = [
   ['k47', 12],
   ['hammer44', 12],
   ['k47', 20],
+  ['widow', 30],
 ] as const;
 const human = new Map(cases.map(([w, d]) => [`${w}@${d}`, measureWeapon(weapons.find((x) => x.id === w)!.index, d, false, {}, samples)]));
 const rows: string[][] = [['level', 'weapon', 'dist', 'human hits', 'human TTK', 'pinned hits', 'pinned TTK', '× human', 'moving hits', 'moving TTK', 'kills']];

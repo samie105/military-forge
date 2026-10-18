@@ -55,6 +55,12 @@ export default defineConfig(
         'error',
         'window', 'document', 'navigator', 'location', 'localStorage', 'performance',
         'requestAnimationFrame', 'setTimeout', 'setInterval', 'process', 'Buffer',
+        { name: 'crypto', message: 'Non-deterministic: use the seeded PRNG in @military-forge/shared.' },
+      ],
+      'no-restricted-syntax': [
+        'error',
+        { selector: "NewExpression[callee.name='Date']", message: 'No wall-clock time in pure packages.' },
+        { selector: "CallExpression[callee.name='Date']", message: 'No wall-clock time in pure packages.' },
       ],
       'no-restricted-properties': [
         'error',
@@ -64,6 +70,11 @@ export default defineConfig(
           message: 'Non-deterministic across JS engines. Use the seeded PRNG / sim maths in @military-forge/shared.',
         })),
         { object: 'Date', property: 'now', message: 'No wall-clock time in pure packages.' },
+        // the same globals reached through globalThis
+        { object: 'globalThis', property: 'performance', message: 'No wall-clock time in pure packages.' },
+        { object: 'globalThis', property: 'Date', message: 'No wall-clock time in pure packages.' },
+        { object: 'globalThis', property: 'crypto', message: 'Non-deterministic: use the seeded PRNG in @military-forge/shared.' },
+        { object: 'globalThis', property: 'Math', message: 'Use Math directly (its non-deterministic functions are banned) or the sim maths.' },
       ],
     },
   },

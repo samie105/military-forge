@@ -84,4 +84,24 @@ describe('gunner: same buttons and rules as a human', () => {
     expect(events.some((e) => e.type === 'hit' && e.attacker === b2.id && e.target === t.id && e.source === DamageSource.Melee)).toBe(true);
     expect(brainOf(b2).mode).toBe('fight');
   });
+
+  it('picks no gun (−1) when none reaches the target or both are dry; a gun past its reach is worth nothing', () => {
+    expect(weaponValue(K47, 20, 33)).toBe(0); // 20 m, but fog makes it 33 m of the K-47's 32
+    expect(weaponValue(K47, 20, 30)).toBeGreaterThan(0);
+    const game = new Game({ map: flatMap() });
+    const p = game.addPlayer('p') as PlayerState;
+    game.setLoadout(p, [HAMMER.index, BUZZ.index]);
+    const g = new Gunner(BOT_LEVELS.normal, new Xoshiro128(1));
+    expect(g.bestSlot(p, 10)).toBeGreaterThanOrEqual(0);
+    expect(g.bestSlot(p, 30)).toBe(-1); // past both ranges (26 m, 20 m)
+    expect(g.bestSlot(p, 10, 27)).toBe(-1); // 10 m through fog that eats 27 m of range
+    for (const w of p.weapons) {
+      w.mag = 0;
+      w.reserve = 0;
+    }
+    expect(g.bestSlot(p, 10)).toBe(-1);
+    p.weapons[1]!.reserve = 40; // something to reload: still a gun
+    expect(g.bestSlot(p, 10)).toBe(1);
+  });
 });
+

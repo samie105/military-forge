@@ -333,11 +333,13 @@ export class CollisionWorld {
 
   /**
    * Grid DDA raycast (Amanatides–Woo, docs/02 §5). `dx, dy` should be a unit vector so `t` is
-   * in metres. Segments whose flags intersect `ignoreFlags` are skipped.
+   * in metres. Segments whose flags intersect `ignoreFlags` are skipped. A NaN origin or direction
+   * hits nothing: every comparison with NaN is false, so the walk would never leave the grid.
    */
   raycast(ox: number, oy: number, dx: number, dy: number, maxT: number, ignoreFlags: number, out: RayHit): boolean {
     out.t = Infinity;
     out.seg = -1;
+    if (Number.isNaN(ox + oy + dx + dy)) return false;
     const stamp = this.nextStamp();
     let cx = this.col(ox);
     let cy = this.row(oy);

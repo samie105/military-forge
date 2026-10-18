@@ -721,6 +721,8 @@ function RoomLobby({ lobby }: { lobby: LobbyView }) {
   const online = ctl.host.online;
   const link = roomLink(lobby.code);
   const enough = lobby.players.length >= lobby.minPlayers;
+  // bots never ready up (the match doesn't wait for them): "ready" counts the people
+  const people = lobby.players.filter((p) => !p.isBot);
   const [collapsed, setCollapsed] = useState(false);
   if (collapsed) {
     return (
@@ -728,7 +730,7 @@ function RoomLobby({ lobby }: { lobby: LobbyView }) {
         <span className="sh-kicker">Room</span>
         <b className="sh-code-mini">{lobby.code}</b>
         <span className="sh-dim">
-          {lobby.players.filter((p) => p.ready).length}/{lobby.players.length} ready
+          {people.filter((p) => p.ready).length}/{people.length} ready
         </span>
         <button className={lobby.ready ? 'sh-btn sh-small-btn sh-ready-on' : 'sh-btn sh-small-btn sh-primary'} onClick={blurAfter(() => online?.setReady(!lobby.ready))}>
           {lobby.ready ? '✓ Ready' : 'Ready'}
@@ -784,7 +786,7 @@ function RoomLobby({ lobby }: { lobby: LobbyView }) {
         <ul className="sh-players">
           {lobby.players.map((p) => (
             <li key={p.id} className={p.you ? 'sh-you' : ''}>
-              <span className={p.ready ? 'sh-dot sh-dot-on' : 'sh-dot'} title={p.ready ? 'Ready' : 'Not ready'} />
+              {p.isBot ? <span className="sh-badge sh-bot">BOT</span> : <span className={p.ready ? 'sh-dot sh-dot-on' : 'sh-dot'} title={p.ready ? 'Ready' : 'Not ready'} />}
               <span className="sh-pname">
                 {p.name}
                 {p.you && <small className="sh-dim"> (you)</small>}

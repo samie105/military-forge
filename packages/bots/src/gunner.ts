@@ -2,7 +2,8 @@
  * The bot's hands: which gun suits the range, when to pull the trigger, reloading, swapping and
  * melee. Same buttons as a human, same rules: a semi-automatic needs a fresh press per shot (and a
  * human's finger isn't a metronome), automatics fire while held, in bursts at range so the bloom
- * settles, and a gun only fires once the aim is on the body.
+ * settles, and a gun only fires once the aim is on the body. Never at a body its bullets can't
+ * reach (its range, or what a map's fog leaves of it), and never with nothing in it.
  */
 import { NO_WEAPON, weapons, type WeaponDef } from '@military-forge/content';
 import { Btn, type PlayerState } from '@military-forge/sim';
@@ -16,6 +17,9 @@ export function falloffAt(def: WeaponDef, dist: number): number {
   const k = (dist - def.falloffStart) / (def.range - def.falloffStart);
   return 1 - (1 - def.minDamageMul) * (k > 1 ? 1 : k);
 }
+
+/** the bash reaches a body this close (m) */
+export const BASH_REACH = 1.15;
 
 /** a bot's typical aim error at the target (m), for judging guns */
 const TYPICAL_AIM = 0.6;
@@ -39,24 +43,40 @@ function classFit(def: WeaponDef, dist: number): number {
 /**
  * What a gun is worth against a body at `dist`: damage per second × the share that lands with a
  * bot's aim (a pellet fan forgives aim, a single bullet doesn't) × how its class suits the range.
- * 0 = useless (out of range, or a blade out of reach).
+ * `used` is the weapon range a bullet uses up getting there: the metres, or on a map with damping
+ * zones what they make of them (combat.ts bulletCost); falloff reads it, as combat.ts does.
+ * 0 = useless (out of its reach, or a blade out of reach).
  */
-export function weaponValue(def: WeaponDef, dist: number): number {
+export function weaponValue(def: WeaponDef, dist: number, used = dist): number {
   if (def.fireMode === 'melee') return dist <= def.range + 0.3 ? (def.meleeDamage / def.interval) * 2 : 0;
-  if (dist > def.range) return 0;
+  if (used > def.range) return 0;
   const fan = Math.max(0.5, dist) * Math.max(0.05, def.spread.base * def.spread.moveMul) * DEG2RAD;
   let hit: number;
   if (def.pellets > 1) {
     // pellets on the body when the fan's centred, × the chance the fan reaches it at all
     hit = Math.min(1, BODY_HALF_WIDTH / Math.max(BODY_HALF_WIDTH, fan)) * Math.min(1, (fan + BODY_HALF_WIDTH) / (1.5 * TYPICAL_AIM));
   } else hit = Math.min(1, BODY_HALF_WIDTH / Math.sqrt(TYPICAL_AIM * TYPICAL_AIM + fan * fan));
-  return ((def.damage * def.pellets * falloffAt(def, dist)) / def.interval) * hit * classFit(def, dist);
+  return ((def.damage * def.pellets * falloffAt(def, used)) / def.interval) * hit * classFit(def, dist);
+}
+
+/** Something to fire in slot `s`: a blade, or a gun with rounds in it or to reload. */
+export function loaded(self: PlayerState, s: number): boolean {
+  const slot = self.weapons[s]!;
+  if (slot.def === NO_WEAPON) return false;
+  return weapons[slot.def]!.fireMode === 'melee' || slot.mag + slot.reserve > 0;
+}
+
+/** Both hands empty of rounds: all that's left is the bash. */
+export function dry(self: PlayerState): boolean {
+  return !loaded(self, 0) && !loaded(self, 1);
 }
 
 export interface Trigger {
-  /** the fight: who to shoot and whether the aim is on them */
+  /** the fight: who to shoot, how far, and whether the aim is on them */
   target: PlayerState | null;
   dist: number;
+  /** weapon range a bullet uses up getting there (weaponValue) */
+  used: number;
   onTarget: boolean;
   /** a fight is on (keep the gun loaded rather than topping it up) */
   fighting: boolean;
@@ -74,16 +94,16 @@ export class Gunner {
     private readonly rng: Xoshiro128,
   ) {}
 
-  /** The slot (0/1) whose gun does most at this distance, sticking to the one in hand unless it's clearly worse. */
-  bestSlot(self: PlayerState, dist: number): number {
-    let best = self.active;
+  /**
+   * The slot (0/1) whose gun does most at this distance (`used`: see weaponValue), sticking to the
+   * one in hand unless it's clearly worse; −1 when neither does anything (dry, or out of reach).
+   */
+  bestSlot(self: PlayerState, dist: number, used = dist): number {
+    let best = -1;
     let bestValue = 0;
     for (let s = 0; s < 2; s++) {
-      const slot = self.weapons[s]!;
-      if (slot.def === NO_WEAPON) continue;
-      const def = weapons[slot.def]!;
-      const loaded = def.fireMode === 'melee' || slot.mag + slot.reserve > 0;
-      let v = loaded ? weaponValue(def, dist) : 0;
+      if (!loaded(self, s)) continue;
+      let v = weaponValue(weapons[self.weapons[s]!.def]!, dist, used);
       if (s === self.active) v *= 1.25; // a swap costs time: switch only for a clear gain
       if (v > bestValue) {
         bestValue = v;
@@ -102,10 +122,10 @@ export class Gunner {
 
     // the right gun for the range (and out of a dry one if the other is loaded)
     if (trig.target && !busy && this.asked === 0) {
-      let want = this.bestSlot(self, trig.dist);
+      let want = this.bestSlot(self, trig.dist, trig.used);
       const other = self.weapons[self.active ^ 1]!;
       if (def && def.fireMode !== 'melee' && slot.mag === 0 && this.level.quickSwap && other.def !== NO_WEAPON && other.mag > 0) want = self.active ^ 1;
-      if (want !== self.active) {
+      if (want >= 0 && want !== self.active) {
         out.weaponSelect = want + 1;
         this.asked = 20;
         return;
@@ -113,7 +133,7 @@ export class Gunner {
     }
 
     // melee: a body within reach gets the bash (or the Machete in hand)
-    if (trig.target && trig.dist < 1.15 && self.meleeTicks === 0 && (self.prevButtons & Btn.Melee) === 0 && (!def || def.fireMode !== 'melee')) {
+    if (trig.target && trig.dist < BASH_REACH && self.meleeTicks === 0 && (self.prevButtons & Btn.Melee) === 0 && (!def || def.fireMode !== 'melee')) {
       out.buttons |= Btn.Melee;
       return;
     }
@@ -136,6 +156,11 @@ export class Gunner {
     }
     if (def.fireMode === 'melee') {
       if (trig.dist <= def.range + 0.2 && self.meleeTicks === 0 && (self.prevButtons & Btn.Fire) === 0) out.buttons |= Btn.Fire;
+      return;
+    }
+    // a gun fires at a body its bullets reach, with something in it: never Fire held for nothing
+    if (trig.used > def.range || slot.mag + slot.reserve === 0) {
+      this.burstLeft = 0;
       return;
     }
     if (def.fireMode === 'auto') {

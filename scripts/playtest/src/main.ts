@@ -19,7 +19,9 @@
  * Flags: --no-build (reuse apps/web/dist) · --local (no tunnel: http://127.0.0.1:<port>) ·
  *        --port <n> (the local proxy port) · --api-port <n> · --game-port <n> (default: any free ones) ·
  *        --tunnel-protocol quic|http2 (default quic, falling back to http2 when UDP is blocked) ·
- *        --map <id> (the rooms' map: movement-test by default; lunar-outpost, storm-front, flux-lab, …)
+ *        --map <id> (the rooms' map: movement-test by default; lunar-outpost, storm-front, flux-lab, …) ·
+ *        --bots <n> (bots keep each room at n players: 4 by default, so two people get a real match;
+ *        0 = no bots) · --bot-level easy|normal|hard (default normal)
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { generateKeyPairSync } from 'node:crypto';
@@ -442,6 +444,8 @@ async function main(): Promise<void> {
   const accessKey = generateKeyPairSync('ed25519');
   const ticketKey = generateKeyPairSync('ed25519');
   const map = option('map');
+  const bots = option('bots') ?? '4';
+  const botLevel = option('bot-level') ?? 'normal';
 
   // the game server: rooms by code only, admitted by the API's tickets, no dev commands or DEBUG
   // messages (NODE_ENV=production); client addresses (the door's per-IP caps) come from the proxy
@@ -458,6 +462,8 @@ async function main(): Promise<void> {
       JOIN_TICKET_PUBLIC_KEY: ticketKey.publicKey.export({ type: 'spki', format: 'pem' }).toString(),
       TRUST_PROXY: '1',
       ...(map ? { MAP: map } : {}),
+      BOTS: bots,
+      BOT_LEVEL: botLevel,
     },
     // start-up, rooms opened/closed and refused joins; the 10 s tick reports are for development
     (line) => (/^\[game-server\]|^\[rooms\] (opened|closed|refused)|crash|rror/.test(line) ? dim(`  [game] ${line}`) : null),

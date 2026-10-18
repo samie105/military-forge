@@ -22,6 +22,7 @@ for (const map of Object.values(maps)) {
   console.log(
     `${map.id.padEnd(15)} stuck ${(100 * r.stuckFraction).toFixed(2)}% (worst bot ${r.worstStuckSeconds.toFixed(0)} s) · ` +
       `${r.deaths} deaths · ${r.kills} kills · moved ${r.metresPerBotMinute.toFixed(0)} m/bot/min · ` +
+      `beyond reach ${r.beyondReach}/${r.targetShots} shots · dry ${(100 * r.dryFraction).toFixed(1)}% (Fire held dry ${r.dryFireTicks}) · ` +
       `${(ms / (minutes * 60 * 60)).toFixed(3)} ms/tick${r.stuckAt.length ? ' · stuck at ' + r.stuckAt.slice(0, 5).join(' ') : ''}`,
   );
 }

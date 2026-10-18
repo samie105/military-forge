@@ -1,5 +1,5 @@
-import { GAS, SMOKE } from '@military-forge/content';
-import { Btn, createInput, Game, spawnCloud, type Input } from '@military-forge/sim';
+import { GAS, MINE, SMOKE } from '@military-forge/content';
+import { Btn, createInput, Game, MineState, spawnCloud, type Input } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
 import { Perception, SOUND_CELL } from '../src/perception';
 import { dummyAt, flatMap, rect, run } from './helpers';
@@ -224,4 +224,48 @@ describe('perception: only what a human in its place could know', () => {
     per.look(game, me);
     expect(per.items[k.id]!.tick).toBe(-1);
   });
+
+  it('forgets a player who left at once (its id may come back as someone else)', () => {
+    const game = new Game({ map: flatMap() });
+    const { me, per } = observer(game, 10);
+    const other = game.addPlayer('other');
+    other.spawn(20, 0.01, game.tuning);
+    run(game, 2);
+    per.look(game, me);
+    expect(per.contacts[other.id]!.visible).toBe(true);
+    game.removePlayer(other.id);
+    per.hear(game, me);
+    expect(per.contacts[other.id]!.known).toBe(false);
+    expect(per.contacts[other.id]!.visible).toBe(false);
+  });
+
+  it('sees someone else’s mine stuck in view and out of smoke, knows where it would go off, forgets it once it sees it gone', () => {
+    const game = new Game({ map: flatMap([rect(30, 0, 30.4, 6)]) });
+    const { me, per } = observer(game, 10);
+    const owner = dummyAt(game, 70);
+    const mine = (slot: number, x: number) =>
+      Object.assign(game.grenades[slot]!, { alive: true, type: MINE.index, state: MineState.Armed, x, y: 0.12, vx: 0, vy: 0, fuse: 1e6, owner: owner.id });
+    const g = mine(0, 24);
+    // one in a smoke cloud it can't see into: not sent to a client, not known to a bot
+    mine(1, 46);
+    spawnCloud(game, SMOKE.index, 46, 0, -1);
+    run(game, 60);
+    per.look(game, me);
+    expect(per.knowsMines).toBe(true);
+    expect(per.mines[0]!.known).toBe(true);
+    expect(per.mines[1]!.known).toBe(false);
+    // a body standing on it, or within the trigger radius, sets it off; farther, or past a wall, doesn't
+    expect(per.mineAt(game, 24, 0, 0)).toBe(true);
+    expect(per.mineAt(game, 25.8, 0, 0)).toBe(true);
+    expect(per.mineAt(game, 26.8, 0, 0)).toBe(false);
+    expect(per.mineAt(game, 26.8, 0, 1)).toBe(true); // with a margin
+    const walled = mine(2, 29.5);
+    per.look(game, me);
+    expect(per.mineAt(game, 31, 0, 0)).toBe(false); // the wall at 30 is between
+    walled.alive = false;
+    g.alive = false;
+    per.look(game, me);
+    expect(per.knowsMines).toBe(false);
+  });
 });
+

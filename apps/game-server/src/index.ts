@@ -1,3 +1,4 @@
+import { BOT_LEVELS, warmNavGraphs, type BotLevelId } from '@military-forge/bots';
 import { maps } from '@military-forge/content';
 import { describeNetSim, parseNetSim } from '@military-forge/netcode';
 import { createServer, nodeScheduler } from './server';
@@ -48,12 +49,25 @@ if (!maps[mapId]) {
   console.error(`[game-server] unknown map "${mapId}" (maps: ${Object.keys(maps).join(', ')})`);
   process.exit(1);
 }
+// Bots (docs/08 §9): --bots=4 or BOTS=4 keeps every room with a human in it at 4 players, topping
+// it up with bots ([BOT] names); --bot-level= or BOT_LEVEL= easy|normal|hard (default normal).
+const botTarget = Number(arg('bots') ?? process.env.BOTS ?? 0);
+const botLevel = (arg('bot-level') ?? process.env.BOT_LEVEL ?? 'normal') as BotLevelId;
+if (!Number.isInteger(botTarget) || botTarget < 0 || !Object.hasOwn(BOT_LEVELS, botLevel)) {
+  console.error(`[game-server] bots: --bots= takes a whole number of players, --bot-level= one of ${Object.keys(BOT_LEVELS).join(', ')}`);
+  process.exit(1);
+}
+const fillBots = botTarget > 0 ? { target: botTarget, level: botLevel } : undefined;
+// a nav graph takes 90–270 ms to build: build the rooms' map before anyone joins, not on the first bot
+if (fillBots) warmNavGraphs([maps[mapId]!]);
 
 const server = await createServer(
   port,
   {
     dev,
-    dummies: true,
+    // bots take the dummies' place in the default room
+    dummies: !fillBots,
+    ...(fillBots ? { fillBots } : {}),
     mapId,
     seed: Number(process.env.SEED ?? 1),
     ...(netSim ? { netSim: { settings: netSim, scheduler: nodeScheduler } } : {}),
@@ -66,7 +80,7 @@ const server = await createServer(
     defaultRoom,
     ...(maxRooms !== undefined && Number.isInteger(maxRooms) && maxRooms >= 0 ? { maxRooms } : {}),
     // rooms by code play the same map (one map per room until rooms can switch)
-    roomOptions: { mapId },
+    roomOptions: { mapId, ...(fillBots ? { fillBots } : {}) },
     tickets,
     trustProxy,
   },
@@ -74,6 +88,7 @@ const server = await createServer(
 console.log(
   `[game-server] ${server.room ? `room "${server.room.game.map.id}"` : 'no default room'} + rooms by code on ws://${host ?? 'localhost'}:${server.port} · transport ${server.transport === 'uws' ? 'uWebSockets.js' : 'ws (fallback)'} · dev commands ${dev ? 'on' : 'off'}` +
     ` · join tickets ${tickets ? 'required' : 'off (dev)'}` +
+    (fillBots ? ` · bots fill rooms to ${fillBots.target} (${fillBots.level})` : '') +
     (netSim ? ` · NET_SIM ${describeNetSim(netSim)}` : '') +
     (wtSocket ? ` · WebTransport gateway socket ${wtSocket}` : ''),
 );

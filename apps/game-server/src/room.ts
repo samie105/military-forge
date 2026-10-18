@@ -17,8 +17,14 @@
  * match → results → rematch lifecycle (docs/06 §5.2), the longest-present player is the host
  * (settings, start, back to lobby; docs/07 §5.3), and MATCH_STATE (0x23) keeps every client's
  * screens and input freeze in step.
+ *
+ * Bots (`RoomOptions.fillBots`, packages/bots, docs/08 §9) keep a room with humans in it at a
+ * number of players: a human coming in takes the lowest-scoring bot's place (not its stats), one
+ * leaving for good brings a bot in, and the last human out takes them all. They're players like any
+ * other (roster, snapshots, standings, the `[BOT]` tag on their names), running in the room's sim.
  */
 import { randomBytes } from 'node:crypto';
+import { addBot, removeBot, type BotLevelId } from '@military-forge/bots';
 import { createTuning, defaultTuning, maps, type Tuning } from '@military-forge/content';
 import {
   CONTENT_HASH,
@@ -59,7 +65,18 @@ import {
   type ConditionerSettings,
   type Scheduler,
 } from '@military-forge/netcode';
-import { Game, Match, MatchPhase, createInput, type Input, type MatchRules, type MatchStanding, type PlayerState, type SimEvent } from '@military-forge/sim';
+import {
+  Game,
+  MAX_PLAYERS,
+  Match,
+  MatchPhase,
+  createInput,
+  type Input,
+  type MatchRules,
+  type MatchStanding,
+  type PlayerState,
+  type SimEvent,
+} from '@military-forge/sim';
 
 export interface ClientConn {
   send(bytes: Uint8Array): void;
@@ -89,6 +106,11 @@ export interface RoomOptions {
   reconnectGraceMs?: number;
   /** run a match (lobby, countdown, scoring, results, rematch) with these rules; absent = free play */
   match?: Partial<MatchRules>;
+  /**
+   * Bots keep the room at `target` players (humans + bots) while a human is in it, at `level`:
+   * absent (or a target of 0) = no bots.
+   */
+  fillBots?: { target: number; level: BotLevelId };
   /** where a message handler's unexpected error goes (the client is kicked, the room keeps running) */
   log?: (msg: string) => void;
 }
@@ -191,12 +213,15 @@ const MAX_NAME_GRAPHEMES = 16;
 const MAX_NAME_BYTES = 48;
 const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
+/** The bots' tag (packages/bots BOT_TAG, "[BOT] "): a human's name doesn't start with it. */
+const BOT_TAG_PREFIX = /^\s*\[\s*bot\s*\]\s*/i;
+
 export function sanitizeName(raw: string, fallback: string): string {
   // eslint-disable-next-line no-control-regex
   const clean = raw.replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2064\ufeff]/g, '').trim();
   let name = '';
   let count = 0;
-  for (const { segment } of graphemes.segment(clean)) {
+  for (const { segment } of graphemes.segment(clean.replace(BOT_TAG_PREFIX, ''))) {
     if (count === MAX_NAME_GRAPHEMES || Buffer.byteLength(name + segment) > MAX_NAME_BYTES) break;
     name += segment;
     count++;
@@ -286,6 +311,10 @@ export class Room {
   private matchUrgent = false;
   private matchSentAt = -Infinity;
   private readonly log: (msg: string) => void;
+  /** RoomOptions.fillBots, null = no bots */
+  private readonly fill: { target: number; level: BotLevelId } | null;
+  /** the bots this room put in, oldest first */
+  readonly bots: PlayerState[] = [];
 
   constructor(options: RoomOptions = {}) {
     this.log = options.log ?? ((msg) => console.error(msg));
@@ -301,6 +330,8 @@ export class Room {
     this.game.rewind = this.lagComp;
     this.lagComp?.record(this.game.tick, this.game.players);
     this.match = options.match ? new Match(this.game, options.match) : null;
+    const fill = options.fillBots;
+    this.fill = fill && fill.target > 0 ? { target: Math.min(fill.target, MAX_PLAYERS), level: fill.level } : null;
   }
 
   /** player id of the host, -1 = none (or not a match room) */
@@ -738,6 +769,40 @@ export class Room {
     for (const c of this.clients) if (c.joined) c.conn.send(bytes);
   }
 
+  /**
+   * Bots keep the room at fillBots.target players while a human is in it (those waiting to
+   * reconnect included): one goes when a human comes in, the lowest scorer (a joiner takes a bot's
+   * place, not its stats; a leaver keeps its standing), one comes in when a human leaves for good,
+   * and they all go with the last human. Before the tick's step, as a replay puts them back
+   * (packages/bots botReplaySetup).
+   */
+  private fillWithBots(): void {
+    const fill = this.fill;
+    if (!fill) return;
+    const humans = this.humanCount;
+    const want = humans > 0 ? Math.max(0, fill.target - humans) : 0;
+    let changed = false;
+    while (this.bots.length > want) {
+      removeBot(this.game, this.botToDrop());
+      changed = true;
+    }
+    while (this.bots.length < want && this.game.players.some((p) => !p)) {
+      this.bots.push(addBot(this.game, { level: fill.level }));
+      changed = true;
+    }
+    if (!changed) return;
+    this.broadcastRoster();
+    this.matchDirty = true;
+  }
+
+  /** The bot to make room with: the lowest score in the match, the newest on a tie (out of `bots`). */
+  private botToDrop(): PlayerState {
+    let pick = this.bots.length - 1;
+    const score = (p: PlayerState) => this.match?.players[p.id]?.score ?? 0;
+    for (let i = this.bots.length - 2; i >= 0; i--) if (score(this.bots[i]!) < score(this.bots[pick]!)) pick = i;
+    return this.bots.splice(pick, 1)[0]!;
+  }
+
   /** Advances the room by one 60 Hz tick. */
   tick(): void {
     const current = this.game.tick;
@@ -763,6 +828,7 @@ export class Room {
       if (current >= s.expiresAt) this.endSession(s);
       else this.inputs[s.playerId] = s.idle;
     }
+    this.fillWithBots();
     if (this.match) {
       this.match.step(this.inputs);
       for (const e of this.match.events) {

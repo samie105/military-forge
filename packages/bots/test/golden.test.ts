@@ -35,9 +35,27 @@ describe('bot golden replays', () => {
   for (const file of files) {
     it(file, () => {
       const replay = load(file);
-      const { hashes, game } = runReplay(replay, undefined, botReplaySetup(replay));
-      // the bots played: they moved and fired (a golden of idle bots would prove little)
-      expect(game.players.filter((p) => p?.isBot).length).toBe(replay.bots!.length);
+      // the bots played: each moved and fired (a golden of idle bots would prove little)
+      const start = new Map<number, number>();
+      const moved = new Set<number>();
+      const fired = new Set<number>();
+      const { hashes, game } = runReplay(
+        replay,
+        (g) => {
+          for (const p of g.players) {
+            if (!p?.brain || !p.alive) continue;
+            const x0 = start.get(p.id);
+            if (x0 === undefined) start.set(p.id, p.x);
+            else if (Math.abs(p.x - x0) > 5) moved.add(p.id);
+          }
+          for (const e of g.events) if (e.type === 'shot' && g.players[e.shooter]?.brain) fired.add(e.shooter);
+        },
+        botReplaySetup(replay),
+      );
+      const bots = game.players.filter((p) => p?.brain).map((p) => p!.id);
+      expect(bots.length).toBe(replay.bots!.length);
+      expect(bots.filter((id) => moved.has(id)), 'moved').toEqual(bots);
+      expect(bots.filter((id) => fired.has(id)), 'fired').toEqual(bots);
       const actual = hashes.map(hex);
       const goldenPath = join(GOLDEN, file.replace('.replay.json', '.hashes.json'));
       if (UPDATE || !existsSync(goldenPath)) {

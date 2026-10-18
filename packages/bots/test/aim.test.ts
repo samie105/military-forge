@@ -1,7 +1,8 @@
 import { DT, Game } from '@military-forge/sim';
 import { Xoshiro128, wrapAngle } from '@military-forge/shared';
 import { describe, expect, it } from 'vitest';
-import { Aim, gauss } from '../src/aim';
+import { BUZZ, WIDOW } from '@military-forge/content';
+import { Aim, gauss, viewScale } from '../src/aim';
 import { BOT_LEVELS, type BotLevelId } from '../src/levels';
 import { flatMap } from './helpers';
 
@@ -94,4 +95,18 @@ describe('aim: a hand on a mouse, not a turret', () => {
       expect(white, level).toBeGreaterThan(half * 1.4);
     }
   });
+
+  it('far off, aims in the wider view a human zooms out to (the loadout allows): errors and the fire window grow with it', () => {
+    const game = new Game({ map: flatMap() });
+    const p = game.addPlayer('p');
+    game.setLoadout(p, [WIDOW.index, WIDOW.index]);
+    expect(viewScale(p, 12, 0)).toBe(1); // the closest view shows it
+    expect(viewScale(p, 20, 0)).toBe(1);
+    expect(viewScale(p, 30, 0)).toBeCloseTo(1.4, 5);
+    expect(viewScale(p, 40, 0)).toBeCloseTo(1.8, 5);
+    expect(viewScale(p, 0, 22)).toBeGreaterThan(1); // high above: the view is 3:4 as tall
+    game.setLoadout(p, [BUZZ.index, BUZZ.index]);
+    expect(viewScale(p, 40, 0)).toBeCloseTo(1.4, 5); // as far as the Buzz's zoom goes
+  });
 });
+

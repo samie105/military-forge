@@ -8,8 +8,11 @@
  * - It leads a moving target by part of its velocity (BotLevel.lead).
  * - A new target starts with a flick that overshoots, and the first shot waits out BotLevel.reaction.
  * - A flashbang's fade (`impair`, the white-out left) multiplies the error, up to BLIND_ERROR times.
+ * - Far away, the error grows with the view a human widens to (the mouse wheel) to keep the target on
+ *   screen: a hand's error is on the screen, and a pixel covers more ground zoomed out (viewScale).
  * It fires only while the aim is on the target's body (BotLevel.fireCone × its half-width).
  */
+import { VIEW_BASE_WIDTH, VIEW_LOOKAHEAD, VIEW_MAX_ASPECT, maxZoomLevels, viewWidth } from '@military-forge/netcode';
 import { DT, type PlayerState } from '@military-forge/sim';
 import { PI, simAtan2, simExp, wrapAngle, type Xoshiro128 } from '@military-forge/shared';
 import type { BotLevel } from './levels';
@@ -26,6 +29,23 @@ export const BODY_HALF_WIDTH = 0.36;
 /** torso centre above the feet (m), standing / crouched */
 const TORSO = 0.85;
 const TORSO_CROUCHED = 0.6;
+
+/** the target sits at least this far (m) inside the edge of the view a human picks for it */
+const ZOOM_MARGIN = 2;
+
+/**
+ * How many times the closest view (VIEW_BASE_WIDTH) the human's screen is when it keeps a target
+ * (dx, dy) away in view: the closest zoom level the loadout allows that shows it, with the camera's
+ * look-ahead toward the aim. 1 out to about 22 m; the Widow's widest is 2.3.
+ */
+export function viewScale(self: PlayerState, dx: number, dy: number): number {
+  const levels = maxZoomLevels(self);
+  const need = Math.max(Math.abs(dx), Math.abs(dy) / VIEW_MAX_ASPECT) + ZOOM_MARGIN;
+  for (let z = 0; z < levels - 1; z++) {
+    if ((viewWidth(z) / 2) * (1 + VIEW_LOOKAHEAD) >= need) return viewWidth(z) / VIEW_BASE_WIDTH;
+  }
+  return viewWidth(levels - 1) / VIEW_BASE_WIDTH;
+}
 
 /** A standard normal from four uniforms (Irwin–Hall): deterministic, no logarithms. */
 export function gauss(rng: Xoshiro128): number {
@@ -48,6 +68,8 @@ export class Aim {
   wait = 0;
   /** how whited out the bot still is (0…1; the brain sets it every tick): a fading flashbang */
   impair = 0;
+  /** the view it aims in at the last track (viewScale): errors and the fire window are on the screen */
+  private view = 1;
   private readonly follow: number;
   private readonly maxTurn: number;
 
@@ -95,7 +117,8 @@ export class Aim {
     // motion across the line of fire makes aiming harder (both ends)
     const across = (vx: number, vy: number) => Math.abs((vx * dy - vy * dx) / dist);
     const motion = Math.min(1, across(self.vx, self.vy) / 6) + Math.min(1, across(q.vx, q.vy) / 6);
-    const worse = (1 + (L.moveError - 1) * motion) * (1 + (BLIND_ERROR - 1) * this.impair);
+    this.view = viewScale(self, dx, dy);
+    const worse = (1 + (L.moveError - 1) * motion) * (1 + (BLIND_ERROR - 1) * this.impair) * this.view;
     // Ornstein–Uhlenbeck: pulls back to 0 over its time, kicked by noise of the right size
     const k = DT / DRIFT_TIME;
     const kick = L.aimError * worse * Math.sqrt(2 * k);
@@ -118,11 +141,11 @@ export class Aim {
     return simAtan2(dy, dx);
   }
 
-  /** On the body: within fireCone × the half-width at this distance (and no reaction wait left). */
+  /** On the body: within fireCone × the half-width at this distance, on the screen it aims in (and no reaction wait left). */
   onTarget(centre: number, dist: number): boolean {
     if (this.wait > 0) return false;
     const err = Math.abs(wrapAngle(this.angle - centre));
-    const allowed = Math.min(PI / 4, (BODY_HALF_WIDTH * this.level.fireCone) / Math.max(1, dist));
+    const allowed = Math.min(PI / 4, (BODY_HALF_WIDTH * this.level.fireCone * this.view) / Math.max(1, dist));
     return err <= allowed;
   }
 }

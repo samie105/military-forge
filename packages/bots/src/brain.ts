@@ -16,11 +16,12 @@
  *
  * Randomness comes from the bot's own seeded generator, never the sim's spread hashes.
  */
-import { BREACHER, BUZZ, FRAG, HAMMER, K47, NO_WEAPON, WIDOW, pickups as pickupDefs, weapons } from '@military-forge/content';
+import { BREACHER, BUZZ, FRAG, HAMMER, K47, RIOT_SHIELD, WIDOW, pickups as pickupDefs, weapons } from '@military-forge/content';
 import { DEG2RAD, angleToU16, hash4, simAtan2, wrapAngle, Xoshiro128 } from '@military-forge/shared';
 import {
   Btn,
   DamageSource,
+  MAX_PLAYERS,
   SegFlag,
   createBodyEnv,
   createRayHit,
@@ -35,7 +36,7 @@ import {
 import { Aim } from './aim';
 import { Action, Condition, Selector, Sequence, Status, type BtNode } from './bt';
 import { solveThrow, type Throw } from './grenadier';
-import { Gunner, type Trigger } from './gunner';
+import { BASH_REACH, Gunner, loaded, type Trigger } from './gunner';
 import type { BotLevel } from './levels';
 import type { MotorGoal } from './motor';
 import { navGraphFor } from './nav/cache';
@@ -61,8 +62,11 @@ export const BOT_LOADOUTS: readonly (readonly [number, number])[] = [
 
 export type BotMode = 'roam' | 'hunt' | 'fight' | 'grab' | 'retreat' | 'escape' | 'blind';
 
-/** a shield on the ground is worth a detour when it beats the bot's own by this much HP */
-const SHIELD_GAIN = 40;
+/**
+ * a shield on the ground is worth a detour with none of its own or its own down to this much HP (a
+ * client isn't sent a dropped shield's HP: a spawned one is fresh, a dropped one anything)
+ */
+const SHIELD_WORN = RIOT_SHIELD.hp / 2;
 /** items further than this aren't worth a detour (m) */
 const ITEM_REACH = 40;
 /** going into a node in gas it has seen costs this many seconds, up to 3× at the cloud's centre */
@@ -71,6 +75,17 @@ const GAS_COST = 4;
 const GAS_MARGIN = 0.5;
 /** a way out of gas ends at least this far (m) past a cloud's edge */
 const GAS_CLEAR = 1.2;
+/** stepping near a mine it has seen (its trigger radius plus MINE_MARGIN m) costs this many seconds */
+const MINE_COST = 10;
+const MINE_MARGIN = 0.7;
+/** a spot it couldn't get to, or got to and still had no shot from, is left out of its picks this long (ticks) */
+const FAILED_SPOT_TICKS = 6 * 60;
+/** this many of those in a row against one target and it gives the target up... */
+const GIVE_UP_STRIKES = 3;
+/** ...for this long (ticks), unless it gets a shot at it meanwhile */
+const GIVE_UP_TICKS = 8 * 60;
+/** dry, it closes in to stand this close to the target (m): in bashing reach from a node */
+const BASH_SPOT = 1.6;
 
 const ray = createRayHit();
 
@@ -88,6 +103,11 @@ export class BotBrain implements Brain {
   readonly trace: string[] = [];
   /** the player it's fighting or hunting (−1: none) */
   target = -1;
+  /**
+   * This tick: its target is in its line of fire and something it holds reaches it (a loaded gun
+   * whose bullets carry that far, or the bash up close). In a fight without it, it should be moving.
+   */
+  inReach = false;
 
   private readonly tree: BtNode<BotBrain>;
   private readonly env = createBodyEnv();
@@ -96,11 +116,11 @@ export class BotBrain implements Brain {
   /** per-node "blocked by a map event" cache for the current tick */
   private readonly blockTick: Int32Array;
   private readonly blockValue: Uint8Array;
-  /** per-node and per-link gas cost caches for the current tick */
-  private readonly gasTick: Int32Array;
-  private readonly gasValue: Float64Array;
-  private readonly gasLinkTick: Int32Array;
-  private readonly gasLinkValue: Float64Array;
+  /** per-node and per-link hazard cost caches for the current tick (gas, mines) */
+  private readonly hazardTick: Int32Array;
+  private readonly hazardValue: Float64Array;
+  private readonly linkHazardTick: Int32Array;
+  private readonly linkHazardValue: Float64Array;
   private readonly bodyMid: number;
   /** the tick of the last think: a gap means the bot died and came back */
   private lastTick = -2;
@@ -116,6 +136,8 @@ export class BotBrain implements Brain {
   /** the node it's leaving gas for (−1: none), and the cloud it's in (inGas) */
   private exitNode = -1;
   private readonly cloud = { x: 0, y: 0, r: 0 };
+  /** scratch for wander */
+  private readonly near: number[] = [];
   /** what it's hunting: a contact's last known place, or a SOUND's (target −1) */
   private huntX = 0;
   private huntY = 0;
@@ -137,7 +159,15 @@ export class BotBrain implements Brain {
   /** the item slot it's going for (−1: none) */
   private item = -1;
   private readonly hands = { buttons: 0, weaponSelect: 0 };
-  private readonly trig: Trigger = { target: null, dist: 0, onTarget: false, fighting: false };
+  private readonly trig: Trigger = { target: null, dist: 0, used: 0, onTarget: false, fighting: false };
+  // fight stand-offs: the spot it's moving to, spots that got it nowhere, strikes, targets given up
+  private fightGoal = -1;
+  private strikes = 0;
+  private readonly failedSpots = new Map<number, number>();
+  private readonly giveUpUntil = new Int32Array(MAX_PLAYERS);
+  /** from fightPlan: the range it wants to fight q from, and its gun's range (−1: dry, it bashes) */
+  private wantRange = 3;
+  private gunRange = -1;
   // set for the duration of a think, for the tree's actions
   private game!: Game;
   private self!: PlayerState;
@@ -159,13 +189,13 @@ export class BotBrain implements Brain {
     this.mech = game.mech;
     this.blockTick = new Int32Array(this.graph.nodes.length).fill(-1);
     this.blockValue = new Uint8Array(this.graph.nodes.length);
-    this.gasTick = new Int32Array(this.graph.nodes.length).fill(-1);
-    this.gasValue = new Float64Array(this.graph.nodes.length);
-    this.gasLinkTick = new Int32Array(this.graph.links.length).fill(-1);
-    this.gasLinkValue = new Float64Array(this.graph.links.length);
+    this.hazardTick = new Int32Array(this.graph.nodes.length).fill(-1);
+    this.hazardValue = new Float64Array(this.graph.nodes.length);
+    this.linkHazardTick = new Int32Array(this.graph.links.length).fill(-1);
+    this.linkHazardValue = new Float64Array(this.graph.links.length);
     this.bodyMid = game.tuning.standHeight / 2;
     if (this.mech) this.nav.blocked = this.nodeBlocked;
-    this.nav.penalty = this.linkGas;
+    this.nav.penalty = this.linkHazard;
     this.tree = new Selector<BotBrain>('root', [
       new Sequence('gas', [new Condition('in gas', (b) => b.inGas()), new Action('leave the gas', (b) => b.leaveGas())]),
       new Sequence('blind', [new Condition('whited out', (b) => b.perception.blind >= 1), new Action('wait it out', (b) => b.waitOut())]),
@@ -213,9 +243,12 @@ export class BotBrain implements Brain {
       }
     }
 
-    // movement
+    // movement (none before GO: holding still through a countdown isn't a link that failed)
     let buttons: number;
-    if (!Number.isNaN(this.escapeX)) {
+    if (game.inputsFrozen) {
+      this.nav.hold();
+      buttons = 0;
+    } else if (!Number.isNaN(this.escapeX)) {
       const g = this.escapeGoal;
       g.x = this.escapeX;
       g.y = self.y;
@@ -242,21 +275,29 @@ export class BotBrain implements Brain {
     // fights back on the way out of a hazard too, if it can see its target
     trig.fighting = this.mode === 'fight' || this.mode === 'retreat' || (this.mode === 'escape' && inSight);
     const t = game.tuning;
-    if (q && inSight && trig.fighting && !this.planned) {
+    this.inReach = false;
+    if (q && inSight && trig.fighting) {
       const sx = self.shoulderX(t);
       const sy = self.shoulderY(t);
-      const centre = this.aim.track(self, q, sx, sy);
       const dx = q.x - sx;
       const dy = q.y + 0.85 - sy;
-      // in view isn't in reach: no shots into a wall
-      if (this.lineOfFire(self.x, self.y, q)) {
-        trig.target = q;
-        trig.dist = Math.sqrt(dx * dx + dy * dy);
-        trig.onTarget = this.aim.onTarget(centre, trig.dist);
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      // in view isn't in reach: no shots into a wall, and the gunner fires only what carries that far
+      const line = this.lineOfFire(self.x, self.y, q);
+      const used = line ? this.rangeUsed(sx, sy, q.x, q.y + 0.85) : 0;
+      if (line) this.inReach = dist < BASH_REACH || this.gunner.bestSlot(self, dist, used) >= 0;
+      if (!this.planned) {
+        const centre = this.aim.track(self, q, sx, sy);
+        if (line) {
+          trig.target = q;
+          trig.dist = dist;
+          trig.used = used;
+          trig.onTarget = this.aim.onTarget(centre, dist);
+        }
       }
-    } else if (this.planned) {
-      this.aim.turnTo(this.planned.angle);
-    } else {
+    }
+    if (this.planned) this.aim.turnTo(this.planned.angle);
+    else if (!(inSight && trig.fighting)) {
       this.aim.drop();
       this.aim.turnTo(this.lookAngle(self, contact));
     }
@@ -317,7 +358,11 @@ export class BotBrain implements Brain {
     return Status.Running;
   }
 
-  /** Someone in sight: picks who to fight (the nearest, or whoever's hurting it), keeping its target unless another is much closer. */
+  /**
+   * Someone in sight: picks who to fight (the nearest, or whoever's hurting it), keeping its target
+   * unless another is much closer, and one it can hit from here first. A target it gave up on (no
+   * spot to shoot it from) is left alone for a while, unless it can hit it from where it stands.
+   */
   private spot(): boolean {
     const self = this.self;
     let best = -1;
@@ -326,48 +371,110 @@ export class BotBrain implements Brain {
       if (!q || q === self || !q.alive) continue;
       const c = this.perception.contacts[q.id]!;
       if (!c.visible) continue;
+      const canHit = this.canHit(self, q);
+      if (this.giveUpUntil[q.id]! > this.now && !canHit) continue;
       const dx = q.x - self.x;
       const dy = q.y - self.y;
       let score = Math.sqrt(dx * dx + dy * dy);
       if (q.id === this.target) score *= 0.6;
       if (c.hurtTick >= 0 && this.now - c.hurtTick < 120) score *= 0.7;
-      if (!this.lineOfFire(self.x, self.y, q)) score += 8; // one it can shoot at first
+      if (!canHit) score += 8;
       if (score < bestScore) {
         bestScore = score;
         best = q.id;
       }
     }
     if (best < 0) return false;
+    if (best !== this.target) this.strikes = 0;
     this.target = best;
     this.aim.acquire(best);
     return true;
   }
 
   /**
-   * Holds a spot at the gun's range with a line of fire and moves on to another every second or
-   * so (strafing, 2–5 m), sooner if it loses the line; never replans mid-flight. With no spot nearby
-   * that has a line (the target's behind a wall, on another level), it goes after the target
-   * instead, around the obstacle. A grenade now and then.
+   * Holds a spot at the gun's range from which it can hit the target (a line of fire, inside what
+   * its bullets reach) and moves on to another every second or so (strafing, 2–5 m), sooner if it
+   * loses the shot; never replans mid-flight. With no such spot nearby (the target's behind a wall,
+   * on another level, across fog), it goes after the target instead, around the obstacle. Dry, it
+   * closes in to bash. A spot it can't get to, or gets to and still has no shot from, is left out
+   * for a while; GIVE_UP_STRIKES of those in a row and it gives the target up. A grenade now and then.
    */
   private engage(): Status {
     this.mode = 'fight';
     const q = this.game.players[this.target]!;
     const self = this.self;
-    const flying = !self.grounded && this.nav.busy;
-    if (!flying && (this.now >= this.repositionAt || !this.lineOfFire(self.x, self.y, q))) {
+    const nav = this.nav;
+    const flying = !self.grounded && nav.busy;
+    if (this.inReach) this.strikes = 0;
+    // how the last move went, once it stopped: nowhere (a link gave up) or somewhere it still can't
+    // hit the target from is a strike (another branch replanning elsewhere isn't)
+    if (this.fightGoal >= 0 && nav.goal !== this.fightGoal) this.fightGoal = -1;
+    if (this.fightGoal >= 0 && !nav.busy) {
+      if ((nav.failed || !this.inReach) && this.strike(this.fightGoal, q)) return Status.Failure;
+      this.fightGoal = -1;
+    }
+    // a new spot every second or so (strafing), or now when it stopped; on its way, it gets there first
+    if (!flying && (this.now >= this.repositionAt || !nav.busy)) {
       const strafe = this.level.strafe;
       this.repositionAt = this.now + Math.round((0.6 + (1 - strafe) * 1.6 + 0.8 * this.rng.nextFloat()) * 60);
       if (this.rng.nextFloat() < strafe) this.strafeSide = -this.strafeSide;
-      const spot = this.pickSpot(q, this.preferredRange(self, q));
+      this.fightPlan(self, q);
+      const spot = this.pickSpot(q);
       let goal = spot.id;
       if (!spot.los) {
-        goal = this.graph.nearestUsable(q.x, q.y, 4, this.avoid);
+        goal = this.graph.nearestUsable(q.x, q.y, 4, this.avoidSpot);
         this.repositionAt = this.now + 60; // closing in: look again in a second
       }
-      if (goal >= 0 && goal !== this.nav.goal) this.nav.plan(self, goal);
+      // nowhere to go, or no way there: a strike
+      if (goal < 0 || ((goal !== nav.goal || !nav.busy) && !nav.plan(self, goal))) {
+        if (!this.inReach && this.strike(goal, q)) return Status.Failure;
+      } else if (goal !== this.fightGoal) this.fightGoal = goal;
     }
     this.considerGrenade(this.perception.contacts[q.id]!);
     return Status.Running;
+  }
+
+  /**
+   * A spot that got it nowhere against q: left out of its picks for a while. True when that's
+   * GIVE_UP_STRIKES in a row: it gives q up (for GIVE_UP_TICKS, unless it can hit it) and the fight
+   * is over.
+   */
+  private strike(spot: number, q: PlayerState): boolean {
+    if (spot >= 0) this.failedSpots.set(spot, this.now + FAILED_SPOT_TICKS);
+    this.fightGoal = -1;
+    if (++this.strikes < GIVE_UP_STRIKES) return false;
+    this.strikes = 0;
+    this.giveUpUntil[q.id] = this.now + GIVE_UP_TICKS;
+    this.target = -1;
+    this.nav.stop();
+    return true;
+  }
+
+  /** It can hit q from where it stands: a line of fire, and something it holds reaches (a gun's bullets, or the bash). */
+  private canHit(self: PlayerState, q: PlayerState): boolean {
+    if (!this.lineOfFire(self.x, self.y, q)) return false;
+    const t = this.game.tuning;
+    const sx = self.shoulderX(t);
+    const sy = self.shoulderY(t);
+    const dx = q.x - sx;
+    const dy = q.y + 0.85 - sy;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    return dist < BASH_REACH || this.gunner.bestSlot(self, dist, this.rangeUsed(sx, sy, q.x, q.y + 0.85)) >= 0;
+  }
+
+  /**
+   * The weapon range a bullet from (sx, sy) uses up getting to (tx, ty): the metres, or on a map
+   * with damping zones (fog) and a range multiplier what they make of them, as combat.ts charges a
+   * shot (castBullet, then bulletCost). Only the map's scratch ray is touched, which every shot sets
+   * up afresh.
+   */
+  private rangeUsed(sx: number, sy: number, tx: number, ty: number): number {
+    const dx = tx - sx;
+    const dy = ty - sy;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (!this.mech || d < 1e-6) return d;
+    this.mech.castBullet(sx, sy, dx / d, dy / d);
+    return this.mech.bulletCost(d);
   }
 
   /** A clear line of fire from a body at (x, y) to q's torso. */
@@ -428,17 +535,19 @@ export class BotBrain implements Brain {
   }
 
   /**
-   * An item it has seen that's worth the detour: a shield better than its own by SHIELD_GAIN HP,
-   * within ITEM_REACH m. The nearest such one.
+   * An item it has seen that's worth the detour, within ITEM_REACH m: a shield, with none of its own
+   * or its own worn down to SHIELD_WORN (it can't know a dropped one's HP), unless it stood on that
+   * one already and it wasn't taken. The nearest such one.
    */
   private wantItem(): boolean {
     const self = this.self;
+    if (self.shieldHp > SHIELD_WORN) return false;
     let best = -1;
     let bestD = ITEM_REACH * ITEM_REACH;
     this.perception.items.forEach((it, slot) => {
-      if (it.tick < 0) return;
+      if (it.tick < 0 || it.refused) return;
       const def = pickupDefs[it.def];
-      if (def?.kind !== 'shield' || it.hp < self.shieldHp + SHIELD_GAIN) return;
+      if (def?.kind !== 'shield') return;
       const d = (it.x - self.x) * (it.x - self.x) + (it.y - self.y) * (it.y - self.y);
       if (d < bestD) {
         bestD = d;
@@ -461,8 +570,14 @@ export class BotBrain implements Brain {
     }
     if (goal !== this.nav.goal || !this.nav.busy) {
       const there = Math.abs(this.self.x - it.x) < 1 && Math.abs(this.self.y - it.y) < 1.5;
-      if (there || !this.nav.plan(this.self, goal)) {
-        it.tick = -1; // there and it's gone (or no way to it)
+      if (!there && !this.nav.plan(this.self, goal)) {
+        it.tick = -1; // no way to it
+        return Status.Failure;
+      }
+      // there, or as close as it can get, and it's still lying there (a look tells if it's gone): not
+      // taken (its own shield is better) or out of reach. It leaves that one be.
+      if (there || !this.nav.busy) {
+        it.refused = true;
         return Status.Failure;
       }
     }
@@ -522,40 +637,68 @@ export class BotBrain implements Brain {
     return best;
   }
 
-  /** Where it fights from, by the gun in hand: a bit inside the falloff start (3 to 20 m). */
-  private preferredRange(self: PlayerState, q: PlayerState): number {
-    const dx = q.x - self.x;
-    const dy = q.y - self.y;
-    const slot = self.weapons[this.gunner.bestSlot(self, Math.sqrt(dx * dx + dy * dy))]!;
-    const def = slot.def === NO_WEAPON ? undefined : weapons[slot.def];
-    if (!def) return 3;
-    if (def.fireMode === 'melee') return 1;
-    return Math.max(3, Math.min(20, def.falloffStart * 0.8));
+  /**
+   * The gun it'd fight q with and from how far (wantRange, gunRange): the loaded gun that does most
+   * from here (or, with none reaching, the one that reaches farthest), a bit inside its falloff
+   * start (3 to 20 m) and inside what its bullets carry toward q (a map's fog cuts it short). Dry
+   * (only the bash left), it closes in.
+   */
+  private fightPlan(self: PlayerState, q: PlayerState): void {
+    const t = this.game.tuning;
+    const sx = self.shoulderX(t);
+    const sy = self.shoulderY(t);
+    const dx = q.x - sx;
+    const dy = q.y + 0.85 - sy;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    let s = this.gunner.bestSlot(self, dist, this.rangeUsed(sx, sy, q.x, q.y + 0.85));
+    if (s < 0) {
+      for (let k = 0; k < 2; k++) {
+        if (loaded(self, k) && (s < 0 || weapons[self.weapons[k]!.def]!.range > weapons[self.weapons[s]!.def]!.range)) s = k;
+      }
+    }
+    const def = s < 0 ? undefined : weapons[self.weapons[s]!.def];
+    if (!def || def.fireMode === 'melee') {
+      this.wantRange = 1;
+      this.gunRange = def ? def.range : -1;
+      return;
+    }
+    this.gunRange = def.range;
+    let reach = def.range;
+    if (this.mech && dist > 1e-6) {
+      this.mech.castBullet(sx, sy, dx / dist, dy / dist);
+      reach = this.mech.bulletReach(def.range);
+    }
+    this.wantRange = Math.max(1, Math.min(Math.max(3, Math.min(20, def.falloffStart * 0.8)), 0.85 * reach));
   }
 
   /**
-   * A node nearby (8 m either side, 6 m down to 4 m up) at about `range` from `q` with a line of
-   * fire to it: a strafe of 2–5 m to the strafe side scores best, staying put worst.
+   * A node nearby (8 m either side, 6 m down to 4 m up) at about wantRange from `q` from which it
+   * can hit it (a line of fire, and inside its gun's reach from there; dry, in bashing reach): a
+   * strafe of 2–5 m to the strafe side scores best, staying put worst. Spots that got it nowhere
+   * lately are left out. `los`: the pick can hit q.
    */
-  private pickSpot(q: PlayerState, range: number): { id: number; los: boolean } {
+  private pickSpot(q: PlayerState): { id: number; los: boolean } {
     const self = this.self;
     let best = -1;
     let bestLos = false;
     let bestScore = -Infinity;
+    const tx = q.x;
+    const ty = q.y + 0.85;
     this.graph.forNear(self.x, self.y - 1, 8, 5, (id) => {
       const n = this.graph.nodes[id]!;
-      if (!n.usable || this.avoid(id)) return;
-      const dx = q.x - n.x;
-      const dy = q.y + 0.85 - (n.y + EYE);
+      if (!n.usable || this.avoidSpot(id)) return;
+      const dx = tx - n.x;
+      const dy = ty - (n.y + EYE);
       const d = Math.sqrt(dx * dx + dy * dy);
-      const los = d < 1e-6 || !this.game.world.raycast(n.x, n.y + EYE, dx / d, dy / d, d, SegFlag.BulletPass, ray);
+      let hits = d < 1e-6 || !this.game.world.raycast(n.x, n.y + EYE, dx / d, dy / d, d, SegFlag.BulletPass, ray);
+      if (hits) hits = this.gunRange < 0 ? d <= BASH_SPOT : this.rangeUsed(n.x, n.y + EYE, tx, ty) <= this.gunRange;
       const move = Math.abs(n.x - self.x) + Math.abs(n.y - self.y);
       const strafe = move < 1 ? -1.5 : move <= 5 ? (Math.sign(n.x - self.x) === this.strafeSide ? 2 : 0.5) : -0.2 * (move - 5);
-      const score = -0.6 * Math.abs(d - range) + (los ? 4 : -6) + strafe - 3 * n.hazard + 1.5 * this.rng.nextFloat();
+      const score = -0.6 * Math.abs(d - this.wantRange) + (hits ? 4 : -6) + strafe - 3 * n.hazard + 1.5 * this.rng.nextFloat();
       if (score > bestScore) {
         bestScore = score;
         best = id;
-        bestLos = los;
+        bestLos = hits;
       }
     });
     return { id: best, los: bestLos };
@@ -672,40 +815,52 @@ export class BotBrain implements Brain {
     return blocked;
   };
 
-  /** Extra seconds for going into a node in gas it has seen, more toward the centre (the navigator's penalty). */
-  private readonly gasCost = (id: number): number => {
-    if (!this.perception.knowsGas) return 0;
-    if (this.gasTick[id] === this.now) return this.gasValue[id]!;
+  /**
+   * Extra seconds for a body standing at (x, y) (feet): in gas it has seen, more toward the
+   * centre; near a mine it has seen.
+   */
+  private hazardAt(x: number, y: number): number {
+    const depth = this.perception.gasAt(this.game, x, y + this.bodyMid, GAS_MARGIN);
+    let cost = depth > 0 ? GAS_COST * (1 + 2 * depth) : 0;
+    if (this.perception.mineAt(this.game, x, y, MINE_MARGIN)) cost += MINE_COST;
+    return cost;
+  }
+
+  /** hazardAt for a node, cached for the tick. */
+  private readonly hazardCost = (id: number): number => {
+    if (!this.perception.knowsGas && !this.perception.knowsMines) return 0;
+    if (this.hazardTick[id] === this.now) return this.hazardValue[id]!;
     const n = this.graph.nodes[id]!;
-    const depth = this.perception.gasAt(this.game, n.x, n.y + this.bodyMid, GAS_MARGIN);
-    const cost = depth > 0 ? GAS_COST * (1 + 2 * depth) : 0;
-    this.gasTick[id] = this.now;
-    this.gasValue[id] = cost;
+    const cost = this.hazardAt(n.x, n.y);
+    this.hazardTick[id] = this.now;
+    this.hazardValue[id] = cost;
     return cost;
   };
 
   /**
-   * Extra seconds for a link through gas it has seen: into a node in it, or a flight (a jet, a
-   * drop) whose middle is in it.
+   * Extra seconds for a link through a hazard it has seen (the navigator's penalty): into a node in
+   * gas or by a mine, or a flight (a jet, a drop) whose middle is.
    */
-  private readonly linkGas = (l: NavLink): number => {
-    if (!this.perception.knowsGas) return 0;
-    let c = this.gasCost(l.to);
+  private readonly linkHazard = (l: NavLink): number => {
+    if (!this.perception.knowsGas && !this.perception.knowsMines) return 0;
+    let c = this.hazardCost(l.to);
     if (l.kind !== LinkKind.Walk) {
-      if (this.gasLinkTick[l.id] !== this.now) {
+      if (this.linkHazardTick[l.id] !== this.now) {
         const a = this.graph.nodes[l.from]!;
         const b = this.graph.nodes[l.to]!;
-        const depth = this.perception.gasAt(this.game, (a.x + b.x) / 2, (a.y + b.y) / 2 + this.bodyMid, GAS_MARGIN);
-        this.gasLinkTick[l.id] = this.now;
-        this.gasLinkValue[l.id] = depth > 0 ? GAS_COST * (1 + 2 * depth) : 0;
+        this.linkHazardTick[l.id] = this.now;
+        this.linkHazardValue[l.id] = this.hazardAt((a.x + b.x) / 2, (a.y + b.y) / 2);
       }
-      c += this.gasLinkValue[l.id]!;
+      c += this.linkHazardValue[l.id]!;
     }
     return c;
   };
 
-  /** Nowhere to head for right now: a map event's hazard, or in gas it has seen. */
-  private readonly avoid = (id: number): boolean => this.nodeBlocked(id) || this.gasCost(id) > 0;
+  /** Nowhere to head for right now: a map event's hazard, in gas or by a mine it has seen. */
+  private readonly avoid = (id: number): boolean => this.nodeBlocked(id) || this.hazardCost(id) > 0;
+
+  /** Nowhere to fight from: somewhere to avoid, or a spot that got it nowhere lately. */
+  private readonly avoidSpot = (id: number): boolean => this.avoid(id) || (this.failedSpots.get(id) ?? -1) > this.now;
 
   /**
    * Its body is in gas it has seen (it always sees the cloud it's in, unless whited out). Once on
@@ -789,12 +944,16 @@ export class BotBrain implements Brain {
     this.planned = null;
     this.walkOutX = NaN;
     this.exitNode = -1;
+    this.fightGoal = -1;
+    this.strikes = 0;
+    this.failedSpots.clear();
+    this.giveUpUntil.fill(0);
     this.mode = 'roam';
   }
 
   /**
-   * Somewhere new to go: a usable node at least 12 m away (a few tries), else anywhere on the
-   * surface it stands on (always walkable, e.g. inside an EMP field with no jetpack).
+   * Somewhere new to go: a usable node at least 12 m away (a few tries), else somewhere within 12 m
+   * on the surface it stands on (always walkable, e.g. inside an EMP field with no jetpack).
    */
   private wander(self: PlayerState): void {
     const nodes = this.graph.nodes;
@@ -808,10 +967,14 @@ export class BotBrain implements Brain {
     }
     const here = this.nav.locate(self);
     if (here < 0) return;
+    // nowhere far it can get to (a pocket whose way out is a jet, while the jetpack's down): a
+    // walk somewhere on the surface it stands on
     const surface = nodes[here]!.surface;
-    for (let tries = 0; tries < 6; tries++) {
-      const n = nodes[this.rng.int(nodes.length)]!;
-      if (n.surface === surface && n.id !== here && this.nav.plan(self, n.id)) return;
-    }
+    const near = this.near;
+    near.length = 0;
+    this.graph.forNear(self.x, self.y, 12, 3, (id) => {
+      if (id !== here && nodes[id]!.surface === surface && nodes[id]!.usable) near.push(id);
+    });
+    if (near.length > 0) this.nav.plan(self, near[this.rng.int(near.length)]!);
   }
 }

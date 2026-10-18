@@ -18,6 +18,8 @@ export interface OnlineSource {
 export interface LobbyPlayer {
   id: number;
   name: string;
+  /** a bot filling the room ([BOT] name): never ready, never needs to be */
+  isBot: boolean;
   ready: boolean;
   host: boolean;
   you: boolean;
@@ -118,7 +120,7 @@ export function lobbyView(src: OnlineSource): LobbyView | null {
   const me = src.localId;
   const players = s.lobby.map((p): LobbyPlayer => {
     const row = s.standings.find((r) => r.id === p.id && !r.left);
-    return { id: p.id, name: row?.name ?? `Player ${p.id + 1}`, ready: p.ready, host: p.id === s.hostId, you: p.id === me, pingMs: p.pingMs };
+    return { id: p.id, name: row?.name ?? `Player ${p.id + 1}`, isBot: row?.isBot ?? false, ready: p.ready, host: p.id === s.hostId, you: p.id === me, pingMs: p.pingMs };
   });
   // host first, then join order (ids are slots, roughly join order)
   players.sort((a, b) => Number(b.host) - Number(a.host) || a.id - b.id);
@@ -141,6 +143,6 @@ export function sameLobby(a: LobbyView | null, b: LobbyView | null): boolean {
   for (const k of ['code', 'isHost', 'ready', 'minPlayers', 'timeLimit', 'killLimit', 'mapId'] as const) if (a[k] !== b[k]) return false;
   return a.players.every((p, i) => {
     const q = b.players[i]!;
-    return p.id === q.id && p.name === q.name && p.ready === q.ready && p.host === q.host && p.you === q.you && p.pingMs === q.pingMs;
+    return p.id === q.id && p.name === q.name && p.isBot === q.isBot && p.ready === q.ready && p.host === q.host && p.you === q.you && p.pingMs === q.pingMs;
   });
 }

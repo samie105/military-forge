@@ -1,6 +1,6 @@
-import { GAS, HAMMER, SMOKE } from '@military-forge/content';
+import { GAS, HAMMER, MINE, SMOKE } from '@military-forge/content';
 import { angleToU16 } from '@military-forge/shared';
-import { Btn, DamageSource, Game, Match, MatchPhase, createInput, spawnCloud, type Input } from '@military-forge/sim';
+import { Btn, DamageSource, Game, Match, MatchPhase, MineState, createInput, giveShield, spawnCloud, type Input } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
 import { addBot, addBots } from '../src';
 import { smokeSight } from '../src/perception';
@@ -290,4 +290,78 @@ describe('arsenal B (v10): smoke, flashbangs, gas and EMP', () => {
     expect(brain.nav.jetBlocked).toBe(false);
     expect(brain.nav.plan(bot, up)).toBe(true);
   });
+
+  it('goes around a mine it has seen: over the top on a platform rather than past it', () => {
+    const map = flatMap();
+    map.oneWays = [{ ax: 33, ay: 5, bx: 47, by: 5 }];
+    const game = new Game({ map, seed: 14 });
+    const bot = botAt(game, 20);
+    Object.assign(game.grenades[0]!, { alive: true, type: MINE.index, state: MineState.Armed, x: 40, y: 0.12, vx: 0, vy: 0, fuse: 1e6, owner: -1 });
+    run(game, 12); // it has looked around and seen it
+    const brain = brainOf(bot);
+    expect(brain.perception.knowsMines).toBe(true);
+    expect(brain.nav.plan(bot, brain.graph.nearest(60, 0, 1.5))).toBe(true);
+    let arrived = false;
+    let boom = false;
+    let topY = 0;
+    for (let i = 0; i < 10 * 60 && !arrived; i++) {
+      game.step([]);
+      boom ||= game.events.some((e) => e.type === 'explosion');
+      if (bot.x > 37 && bot.x < 43) topY = Math.max(topY, bot.y);
+      arrived = bot.x > 58;
+    }
+    expect(arrived).toBe(true);
+    expect(boom).toBe(false);
+    expect(game.grenades[0]!.state).toBe(MineState.Armed);
+    expect(topY).toBeGreaterThan(4.5);
+  });
 });
+
+describe('the rest of the #70 review', () => {
+  it('a shield on the floor: wanted with none or a worn one of its own (a dropped one’s HP isn’t sent); one it stood on and couldn’t take is left be', () => {
+    const game = new Game({ map: flatMap(), seed: 9, pickups: true });
+    const bot = botAt(game, 20);
+    game.setLoadout(bot, [HAMMER.index, HAMMER.index]);
+    giveShield(bot, 120); // worn: worth a look
+    Object.assign(game.pickups[0]!, { alive: true, def: 0, x: 30, y: 0, hp: 60 }); // worse: touching it does nothing
+    let stoodAt = -1;
+    let grabsAfter = 0;
+    for (let i = 0; i < 12 * 60; i++) {
+      game.step([]);
+      if (stoodAt < 0 && Math.abs(bot.x - 30) < 1) stoodAt = i;
+      if (stoodAt >= 0 && i > stoodAt + 30 && brainOf(bot).mode === 'grab') grabsAfter++;
+    }
+    expect(stoodAt).toBeGreaterThanOrEqual(0); // it went for it once
+    expect(grabsAfter).toBe(0); // and then left it be
+    expect(bot.shieldHp).toBe(120);
+    expect(game.pickups[0]!.alive).toBe(true);
+
+    // with a shield in good shape, one on the floor isn't worth the detour
+    const fresh = new Game({ map: flatMap(), seed: 9, pickups: true });
+    const b2 = botAt(fresh, 20);
+    fresh.setLoadout(b2, [HAMMER.index, HAMMER.index]);
+    giveShield(b2, 300);
+    Object.assign(fresh.pickups[0]!, { alive: true, def: 0, x: 30, y: 0, hp: 300 });
+    const modes = new Set<string>();
+    for (let i = 0; i < 4 * 60; i++) {
+      fresh.step([]);
+      modes.add(brainOf(b2).mode);
+    }
+    expect(modes.has('grab')).toBe(false);
+  });
+
+  it('a countdown freeze isn’t a link that failed: after GO it carries on along the same way', () => {
+    const game = new Game({ map: flatMap(), seed: 3 });
+    const bot = botAt(game, 10);
+    const brain = brainOf(bot);
+    run(game, 12);
+    expect(brain.nav.plan(bot, brain.graph.nearest(60, 0, 1.5))).toBe(true);
+    run(game, 20); // on its way
+    game.inputsFrozen = true; // as Match.step sets it outside the match
+    run(game, 4 * 60);
+    game.inputsFrozen = false;
+    run(game, 60);
+    expect(brain.nav.failures).toBe(0);
+  });
+});
+

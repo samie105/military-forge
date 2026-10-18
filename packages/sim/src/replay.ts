@@ -20,7 +20,19 @@ export interface ReplayBot {
   name: string;
   /** 'easy' | 'normal' | 'hard' (packages/bots) */
   level: string;
+  /** its seed serial: the order bots were added to the game, from 0 (default: its place in `bots`) */
+  serial?: number;
+  /** the tick it joined, before that tick was simulated (default 0: with the humans) */
+  joinTick?: number;
+  /** the tick it left, before that tick was simulated (absent: it stayed): rooms swap bots for humans */
+  leaveTick?: number;
 }
+
+/**
+ * A replay's setup hook (packages/bots botReplaySetup): puts its bots in at the start, and may
+ * return a function to call before every tick (bots joining and leaving part-way through).
+ */
+export type ReplaySetup = (game: Game) => ((game: Game) => void) | void;
 
 export interface ReplayFile {
   version: 1;
@@ -72,7 +84,12 @@ export function decodeRuns(runs: readonly InputRun[], ticks: number): Input[] {
  * The replay's starting game: map, dummies, then the humans in order. `setup` runs last: replays
  * with `bots` need packages/bots `botReplaySetup(replay)` there (the sim can't build brains).
  */
-export function createReplayGame(replay: ReplayFile, setup?: (game: Game) => void): Game {
+export function createReplayGame(replay: ReplayFile, setup?: ReplaySetup): Game {
+  return startReplay(replay, setup).game;
+}
+
+/** createReplayGame, and the setup's per-tick hook (null: none). */
+function startReplay(replay: ReplayFile, setup?: ReplaySetup): { game: Game; beforeTick: ((game: Game) => void) | null } {
   if (replay.bots?.length && !setup) throw new Error(`replay "${replay.name}" has bots: run it with @military-forge/bots botReplaySetup`);
   const game = new Game({ mapId: replay.map, seed: replay.seed, dummies: replay.dummies, tuning: replay.tuning ?? {}, pickups: replay.pickups ?? false });
   replay.players.forEach((_, i) => {
@@ -84,8 +101,8 @@ export function createReplayGame(replay: ReplayFile, setup?: (game: Game) => voi
     const belt = replay.grenadeLoadouts?.[i];
     if (belt) game.setGrenadeLoadout(p, belt);
   });
-  setup?.(game);
-  return game;
+  const hook = setup ? setup(game) : undefined;
+  return { game, beforeTick: typeof hook === 'function' ? hook : null };
 }
 
 export function applyMatchCommand(match: Match, playerId: number, kind: MatchCommandKind): void {
@@ -99,9 +116,9 @@ export function applyMatchCommand(match: Match, playerId: number, kind: MatchCom
 export function runReplay(
   replay: ReplayFile,
   onTick?: (game: Game, match: Match | null) => void,
-  setup?: (game: Game) => void,
+  setup?: ReplaySetup,
 ): { hashes: number[]; game: Game; match: Match | null } {
-  const game = createReplayGame(replay, setup);
+  const { game, beforeTick } = startReplay(replay, setup);
   const match = replay.match ? new Match(game, replay.match) : null;
   const humans = game.players.filter((p) => p && !p.isBot).map((p) => p!.id);
   const streams = replay.players.map((runs) => decodeRuns(runs, replay.ticks));
@@ -110,10 +127,11 @@ export function runReplay(
   const hashes: number[] = [];
   for (let tick = 0; tick < replay.ticks; tick++) {
     humans.forEach((id, i) => (inputs[id] = streams[i]![tick]));
-    if (match) {
-      for (const [at, player, kind] of commands) if (at === tick) applyMatchCommand(match, humans[player]!, kind);
-      match.step(inputs);
-    } else game.step(inputs);
+    if (match) for (const [at, player, kind] of commands) if (at === tick) applyMatchCommand(match, humans[player]!, kind);
+    // bots joining or leaving now (a room fills itself up between commands and the step)
+    beforeTick?.(game);
+    if (match) match.step(inputs);
+    else game.step(inputs);
     onTick?.(game, match);
     hashes.push(match ? hashMatch(match, hashGame(game)) : hashGame(game));
   }

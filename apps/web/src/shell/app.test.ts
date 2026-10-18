@@ -138,6 +138,24 @@ describe('online match and lobby views', () => {
     expect(sameLobby(view, lobbyView(source(state())))).toBe(true);
     expect(sameLobby(view, lobbyView(source(state({ hostId: 5 }))))).toBe(false);
   });
+
+  it('the lobby: bots filling the room are marked as bots (they never ready up, and needn’t)', () => {
+    const withBot = state({
+      lobby: [...state().lobby, { id: 7, ready: false, rematch: false, pingMs: -1 }],
+      standings: [
+        ...state().standings,
+        { id: 7, key: 2, name: '[BOT] Badger', isBot: true, left: false, mvp: false, score: 0, kills: 0, deaths: 0, suicides: 0, assists: 0, damageDealt: 0, damageTaken: 0, headshots: 0, bestStreak: 0 },
+      ],
+    });
+    const view = lobbyView(source(withBot))!;
+    expect(view.players.map((p) => [p.name, p.isBot])).toEqual([
+      ['Ade', false],
+      ['Kemi', false],
+      ['[BOT] Badger', true],
+    ]);
+    expect(sameLobby(view, lobbyView(source(state())))).toBe(false);
+    expect(onlineMatchView(source(withBot))!.humans).toBe(2);
+  });
 });
 
 describe('API client', () => {

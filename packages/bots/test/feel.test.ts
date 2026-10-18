@@ -29,4 +29,13 @@ describe('feel: hit rate and time-to-kill against a standing target', () => {
     expect(easy!.ttk).toBeGreaterThan(normal!.ttk);
     expect(normal!.ttk).toBeGreaterThan(hard!.ttk);
   }, 60_000);
+
+  it('Hard with the Widow far off (30 m) is good, not perfect: a human zooms out there, and so does its error', () => {
+    const hard = measureDuel('hard', 'widow', 30, true, 30);
+    const normal = measureDuel('normal', 'widow', 30, true, 30);
+    expect(hard.hitRate).toBeLessThan(0.9);
+    expect(hard.hitRate).toBeGreaterThan(0.6);
+    expect(normal.hitRate).toBeLessThan(hard.hitRate);
+  }, 60_000);
 });
+

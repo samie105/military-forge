@@ -169,9 +169,9 @@ Rarity changes **damage, mag size and reload slightly**. It never changes fire r
 - Names come from a curated list. Server-side `isBot` is never sent to clients in normal modes (it's hidden in the kill feed); results screens do reveal them.
 
 **As built (Phase 0, deathmatch; NOTES §23).** `packages/bots`: a bot is a player with a `Brain` the sim calls at the start of `Game.step`. It acts through the same Input as a human, decides at 10 Hz (staggered by id), and uses its own seeded randomness, so replays and goldens include bots.
-- **Navigation:** a graph per map built from the collision world. Nodes are where a probe body comes to rest. Each walk, jet, drop and pad link is first flown through the real movement code, so map mechanics are part of every link. At runtime the bot avoids jet links while its jetpack is dead (EMP fields, storms, EMP grenades), event hazards (gravity pockets), and gas it has seen (a cost on links into or through a cloud).
-- **Perception:** what the server sends a client: the view rect (a side view, so walls don't hide players) minus whoever smoke hides (the sim's `SmokeSight`, as the AOI uses), nothing in a flashbang's full white, gunfire from anyone it can't see only as a SOUND (4 m grid, no name, within 35 m), and who hit it. It shoots only with a line of fire and goes around obstacles to get one.
-- **Aim:** in metres at the target, with a drift and a tremor plus reaction time, tracking lag and lead. A flashbang's fade makes it up to 5× worse.
+- **Navigation:** a graph per map built from the collision world. Nodes are where a probe body comes to rest. Each walk, jet, drop and pad link is first flown through the real movement code, so map mechanics are part of every link. At runtime the bot avoids jet links while its jetpack is dead (EMP fields, storms, EMP grenades), event hazards (gravity pockets), and gas and mines it has seen (a cost on links into or through them).
+- **Perception:** what the server sends a client: the view rect (a side view, so walls don't hide players) minus whoever smoke hides (the sim's `SmokeSight`, as the AOI uses), nothing in a flashbang's full white, gunfire from anyone it can't see only as a SOUND (4 m grid, no name, within 35 m), and who hit it. Items by kind and place (not a dropped shield's HP). It shoots only with a line of fire, at a body its bullets reach (the gun's range, or what a map's fog leaves of it), and goes around obstacles to get a shot; a target it can't get one at is given up for a while.
+- **Aim:** in metres at the target, with a drift and a tremor plus reaction time, tracking lag and lead. A flashbang's fade makes it up to 5× worse; far off, it grows with the zoom a human would use (×1.4 at 30 m).
 - **Tiers:**
 
   | Tier | Reaction | Aim error at 12 m | Avoids routes over |
@@ -184,13 +184,14 @@ Rarity changes **damage, mag size and reload slightly**. It never changes fire r
   - get out of gas it's in;
   - wait out a flashbang's white;
   - fall back to regenerate when hurt;
-  - fight what it sees from a spot at its gun's range;
+  - fight what it sees from a spot at its gun's range and reach (dry, it closes in to bash);
   - throw frags now and then (frags only, for now);
   - dash away from hits;
   - grab a better shield it has seen (raised in a fight, slung otherwise);
   - hunt what it heard;
   - roam.
 - **Names:** for Phase 0 playtests, names carry `[BOT] `; the hidden-`isBot` rule above applies when BR ships.
+- **Rooms by code (Phase 0):** the game server keeps a room with a human in it at a number of players (`RoomOptions.fillBots`, `--bots=`); a joiner takes the lowest-scoring bot's place, and bots leave with the last human. `pnpm playtest` fills rooms to 4.
 
 ---
 
