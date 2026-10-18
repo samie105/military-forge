@@ -1,21 +1,24 @@
 asset-check: art/weapons/thumper.glb  [weapon]
 ----------------------------------------------------------------------------------------------------
-INFO  file size                                 48 KB
-PASS  triangles                                 616 of 1000
+INFO  file size                                 104 KB
+PASS  triangles                                 872 of 1000
 PASS  one mesh, one material                    1 draw call(s)
-INFO  GPU texture memory (KTX2 est.)            0.00 MB, 0 image(s)
+PASS  texture size: thumper_albedo              256x256 (max 256)
+PASS  texture POT: thumper_albedo               power of two
+INFO  GPU texture memory (KTX2 est.)            0.04 MB, 1 image(s)
 PASS  extras weaponId/family/aimPose/hands      ok
 WARN  weaponId in packages/content              thumper is not in packages/content/src/{weapons,grenades}.ts yet
 INFO  nodes                                     backblast, grip, mag, muzzle, offhand, rail_top
-PASS  origin on the weapon (the grip)           bbox (-0.08, -0.18, -0.47)..(0.09, 0.06, 0.62)
+PASS  origin on the weapon (the grip)           bbox (-0.15, -0.1, -0.36)..(0.15, 0.32, 0.72)
 PASS  family is a docs/04 §4.2 family           'launcher'
 PASS  aimPose has clips                         'rifle'
-PASS  muzzle node ahead of the grip (+Y)        muzzle at glTF y +0.62 m
+PASS  muzzle node ahead of the grip (+Y)        muzzle at glTF y +0.72 m
 PASS  offhand node within 0.1 m of the grip     0.099 m
 PASS  sockets for the family                    grip, muzzle, mag, rail_top
 PASS  socket directions (unit `dir`)            ok
 PASS  sockets on the weapon (within 3 cm)       ok
-PASS  muzzle fires along +Y with a bore radius  dir (0.0, 1.0, 0.0), bore 0.060 m
-PASS  rail_top above the bore, facing up        z +0.163 vs bore +0.095, length 0.12 m
+PASS  muzzle fires along +Y with a bore radius  dir (0.0, 1.0, 0.0), bore 0.061 m
+PASS  rail_top above the bore, facing up        z +0.051 vs bore +0.001, length 0.12 m
 ----------------------------------------------------------------------------------------------------
-RESULT: PASS  (13 pass, 1 warn, 0 fail)
+RESULT: PASS  (15 pass, 1 warn, 0 fail)
+

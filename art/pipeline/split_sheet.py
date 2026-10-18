@@ -44,7 +44,7 @@ def main() -> None:
                 start, gap = None, 0
     if start is not None:
         runs.append((start, w))
-    runs = [r for r in runs if r[1] - r[0] > w * 0.05]  # drop specks
+    runs = [r for r in runs if r[1] - r[0] > w * 0.02]  # drop specks (a slim rifle's muzzle view is ~4 % wide)
     # A pair (boots, gloves) shows as two runs per view: merge across the narrowest gaps.
     while len(runs) > len(names):
         i = min(range(len(runs) - 1), key=lambda k: runs[k + 1][0] - runs[k][1])

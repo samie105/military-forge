@@ -4,7 +4,7 @@
   "pistol": {
    "node": "casing_pistol",
    "lengthM": 0.048,
-   "tris": 72,
+   "tris": 20,
    "speedMps": 2.2,
    "coneDeg": 18,
    "spinRps": 18,
@@ -13,16 +13,25 @@
   "rifle": {
    "node": "casing_rifle",
    "lengthM": 0.093,
-   "tris": 144,
+   "tris": 44,
    "speedMps": 2.8,
    "coneDeg": 15,
    "spinRps": 22,
    "lifeMs": 1500
   },
+  "sniper": {
+   "node": "casing_sniper",
+   "lengthM": 0.129,
+   "tris": 44,
+   "speedMps": 3.0,
+   "coneDeg": 12,
+   "spinRps": 16,
+   "lifeMs": 1700
+  },
   "shotgun": {
-   "node": "casing_shotgun",
+   "node": "shell_shotgun",
    "lengthM": 0.102,
-   "tris": 72,
+   "tris": 32,
    "speedMps": 1.8,
    "coneDeg": 20,
    "spinRps": 10,

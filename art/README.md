@@ -615,13 +615,137 @@ More store-safe cosmetics (no gameplay effect), on top of the camos:
 - **Armory:** a Finish group under Camo, and a Fire colour picker on weapons that flash. Deep links: `?weapon=hawk50&camo=gold`, `?weapon=k47&tint=violet&fire&hold=60000`.
 
 
+## Weapons from generated images (Weapons Forge 12)
+
+### Batch 1: the core 6
+
+![Before and after](screenshots/guns-scan-before-after.png)
+*Armory, Lobby light: scripted (left) and rebuilt from generated images (right), same camera. Top to bottom: K-47, Hammer .44, Buzz, Breacher, Widow, Machete.*
+
+![Camo masks](screenshots/guns-scan-camo.png)
+*The same six in Forest Patch: body panels take the camo; dark grips and mags, barrels, steel, the scope, the whole machete and the yellow toy tips keep their colours.*
+
+The owner asked for guns made from generated images rather than scripted primitives. Batch 1 rebuilds the core 6 in place, with the same ids, socket names, frame and lengths, so holds, attachments, camos, finishes and the VFX hooks carry over. The owner judged this batch and approved the other 13 (18 Oct): batch 2 below (plan: the shared note `forge-gun-rebuild-plan.md`).
+
+**Pipeline** (`art/pipeline/build_gun_scan.py`, Blender; inputs in `weapons/scan/source/<id>_tripo_raw.glb` and `weapons/scan_specs.json`):
+1. **Concept:** GPT Image 2.5, medium, 2k (1 credit). One turnaround sheet per gun (right side, muzzle view, left side) with an invented silhouette; the prompts are below. `split_sheet.py` cuts the three views.
+2. **Image → 3D:** Tripo H3.1 multiview (9 credits), face limit 3,000, textured, no PBR.
+3. **Cleanup:**
+   - orient by the spec's forward/up axes and scale to today's `lengthM`;
+   - weld, then one symmetric collapse to the spec's budget (all ≤ 1,000 tris);
+   - fresh UVs, and a Cycles bake of the Tripo texture at 512²;
+   - flatten it for the toon look: k-means colour clusters, saturation × 1.4 (Tripo's textures come out greyer than the concepts), 35 % of the painted detail and the dark edge lines kept;
+   - cap the team hues: texels in the team orange's hue band (12–40°) or the team blue's (195–235°) are capped at 0.44 saturation, and the warm ones darken by up to 15 %. The generated wood now reads brown, not orange (review M3: the Breacher's wood was 45 % orange-hued, ΔE76 27.5 from team orange at its nearest);
+   - box-filter it to the 256² weapon budget (`weapons/scan/<id>_albedo.png` is the record copy). The asset check now caps a weapon's texture at 256²;
+   - smooth by angle (35°): flat panels hide the triangulation, hard edges stay.
+4. **Masks:** `_CAMO` per vertex from the colour clusters. Dark grips and mags, steel greys and the yellow tip never take a camo. The spec's `plain` boxes take it off barrels and blades that share the body's colour.
+5. **Team colours:**
+   - the build fails if any colour cluster is within 25 ΔE of either team colour;
+   - it also measures the baked albedo itself: it fails if over 2 % of the covered texels sit in a team's hue band (saturation ≥ 0.45, value ≥ 0.35) or within ΔE76 40 of a team colour. All six are at 0–0.5 %;
+   - the toy tip is yellow on the scanned guns (the scripted ones are team orange).
+6. **Fit in the hand (review M4):** at the ±45° aims the Rookie's chin sits about 0.11 m above the hand, so the taller scans went through the head (the K-47's receiver 13 cm deep). Spec `drop` lowers each gun in the hand, with its sockets; the off hand keeps its place relative to the grip, so the reach margins don't change. Spec `squash` reshapes a part before the bake: the Widow's scope is 20 % shorter and 15 % lower. `tools/asset-check/head_clearance.py` checks it: it poses the rig's aim clips, mounts each gun at `socket_weapon_R`, and fails a scanned gun with any vertex over 2 cm inside the head at a level or ±45° aim. All six pass, with none inside; ±90° is reported only, since the scripted guns clipped there too.
+7. **Moving parts (the owner's request, 18 Oct):** spec `parts` cuts a gun's moving piece off into its own child mesh: `part_slide`, `part_pump`, `part_bolt`, `part_cylinder` or `part_mag`. The faces whose centre falls in a side-view box move to the part, which keeps the UVs, the albedo and `_CAMO`, so camos and finishes cover it too.
+   - The part's node sits at its centre (the pivot), with its motion in extras: a unit `axis` in the weapon frame, and a `travel` in metres or an `angle` in degrees.
+   - `sockets.json` gets a `parts` block per weapon (`{name: {pos, axis, travel | angle}}`), and `weapons.json` a `parts` list. The renderer animates them when the gun fires or reloads.
+   - Batch 1: the K-47's mag (75 tris), the Hammer's cylinder (200, 60° per shot), the Buzz's mag (53), the Breacher's pump (245, 0.06 m), and the Widow's bolt and mag (46 each). The tris are part of each gun's budget.
+   - The asset check counts `part_*` meshes with the body (one material), and checks each: a known kind, triangles, a unit axis, a travel or angle, inside the gun.
+8. **Sockets:** from the spec, in normalised side-view coordinates (u from the butt to the muzzle, v from the bottom to the top), written as GLB child nodes and merged into `sockets.json` in the same schema. The muzzle's `boreRadius` is measured from the mesh. The offhand keeps its old offset from the grip, so the rifle reach margins in `build_character.py` don't change.
+9. `build_weapons.py` skips every id that has a scan source, so a full scripted rebuild keeps the scans.
+10. **Casings** (`build_casings.py`): `casing_pistol`, `casing_rifle`, `casing_sniper` (brass) and `shell_shotgun` (a red hull on a brass base). They're six-sided lathes of 20–44 tris, at least 40 ΔE from both team colours, in `weapons/casings.glb` next to the guns (and still `vfx/casings.glb`). A gun's `eject` socket is where its casing leaves, along `dir`; `weapons.vfx.json` maps each gun to a type (the Widow and Longbow now `sniper`).
+
+```
+B=/Applications/Blender.app/Contents/MacOS/Blender
+$B -b --factory-startup --python-exit-code 1 --python art/pipeline/build_gun_scan.py -- \
+    k47 hammer44 buzz breacher widow machete --runtime apps/web/public/assets
+$B -b --factory-startup --python-exit-code 1 --python art/pipeline/build_attachments.py -- art/attachments --runtime apps/web/public/assets
+python3 tools/asset-check/head_clearance.py
+```
+
+The concept sheets stay on Higgsfield under the job ids below; they aren't kept in the repo. The raw Tripo models are, because they're the build inputs. All six pass the asset check ([checks](weapons/checks/)).
+
+| id | Tris (scripted → scan) | Camo share (vertices) | Bore radius (m) | Concept job | 3D job |
+|---|---|---|---|---|---|
+| k47 (K-47) | 492 → 920 | 83% | 0.0276 | `ae7264dd-ac9f-4fe6-81c5-8d7fe95c68df` | `1f6070e3-b441-4879-92f1-f4912930b428` |
+| hammer44 (Hammer .44) | 520 → 824 | 62% | 0.0266 | `827a7646-59c8-4fb9-bb20-1675c06bfa65` | `415f62fd-3762-4b4e-9029-d0106c7a2b2f` |
+| buzz (Buzz) | 404 → 823 | 39% | 0.021 | `3e1cb8d8-bc09-4adb-9361-43973d72647a` | `054cc599-1042-42e4-b036-ab1f949fa178` |
+| breacher (Breacher) | 496 → 921 | 78% | 0.0334 | `b10e86de-4d07-409e-bdc0-4d96fffde08a` | `dfa87ada-fc53-4a5b-9c6a-e4dfe1d4c2f3` |
+| widow (Widow) | 880 → 950 | 33% | 0.0217 | `4ed23ce9-cec8-4b88-bd6c-314c5697d41e` | `9daf4604-a20d-40e3-aa51-0c4525ebc266` |
+| machete (Machete) | 312 → 582 | 0% | — | `4bd92a47-8c05-4421-a89b-7c1f10e32826` | `012bab35-8c3d-4af5-82c8-565c325b0cf0` |
+
+**What changed for other code:**
+- **Texture, not vertex colours:** the scans carry their colour in a 256² albedo (`TEXCOORD_0` and `baseColorTexture`; no `COLOR_0`). Every scripted gun is vertex-coloured. Renderers keep each scanned gun's map and UVs (a textured toon material per gun) and keep reading `_CAMO`; these three ship on every scan.
+- **The Armory frees textures:** `disposeTree` now disposes material maps (not the room's env map), so switching to a scanned gun no longer leaks one texture per switch (review M2; a textured case is in viewer.test.ts).
+- **Bore radii** are now the toy tip's half-height (0.021–0.034 m; the scripted guns had 0.013–0.020). The flash and the suppressor scale with it. The suppressor's fit rule in `build_attachments.py` moved from ≤ 0.02 to ≤ 0.035 so it keeps fitting the same guns; every attachment fits the same weapons as before.
+- **Rail lengths** follow the real rails: the K-47's top rail is 0.24 m (was 0.14) and its bottom rail 0.14 m (was 0.12). The others keep their old lengths. The Buzz stays at 0.06 m, so it still takes only the dot sight.
+- **Muzzle heights:** after the drop, the muzzles sit 0.011 (K-47), 0.061 (Hammer), 0.049 (Buzz), 0.026 (Breacher) and −0.038 m (Widow) from the grip; the scripted guns had 0.055–0.068. The trade-off: the hand holds the K-47 and Breacher at the receiver's base, and the Widow near its scope mount, with the pistol grip below the fist. A lower hold at the ±45° aims (an animation-stream change) would let them sit naturally.
+
+**Spend, batch 1: 60.00 credits.**
+- 6 concept sheets × 1.0 = 6.00. The machete was resent after a rate-limit refusal, which wasn't charged.
+- 6 Tripo multiview models × 9 = 54.00.
+- The pilot's SAM 3 3D comparison failed and was refunded (0).
+- The Higgsfield balance went from 649.44 to 570.19. The other 19.25 of that drop came from another session's images, not from this batch.
+
+<details><summary>Concept prompts (GPT Image 2.5, medium, 2k, 16:9, opaque)</summary>
+
+- **K-47:** "Orthographic turnaround sheet of ONE chunky toy assault rifle for a stylised cartoon video game, three views in a single row on a flat plain light grey background, each view separated by wide empty gaps, all at the same scale and the same height, perfectly aligned: (1) left: the right side of the gun, muzzle pointing to the right; (2) middle: the end view looking straight at the muzzle; (3) right: the left side of the gun, muzzle pointing to the left. Invented design, not based on any real-world firearm: a thick angular slab-sided receiver in dark gunmetal, a chunky sand-tan polymer handguard with three big vent slots, a solid olive-green stock with a rubber butt pad, a straight forward-raked box magazine, a pistol grip, a short thick barrel ending in a bright yellow toy safety tip, and a flat rail on top. Bevelled boxy toy shapes, clean flat colours with soft cel shading, no text, no logos, no letters, no hands, no background objects."
+- **Hammer .44:** "Orthographic turnaround sheet of ONE chunky toy six-shot revolver for a stylised cartoon video game, three views in a single row on a flat plain light grey background, each view separated by wide empty gaps, all at the same scale and the same height, perfectly aligned: (1) left: the right side of the gun, muzzle pointing to the right; (2) middle: the end view looking straight at the muzzle; (3) right: the left side of the gun, muzzle pointing to the left. Invented design, not based on any real-world firearm: a squared-off dark gunmetal frame, a thick hexagonal steel cylinder, a short heavy barrel with a flat top strap and a bright yellow toy safety tip, a chunky warm-wood grip with a rounded butt, a big hammer spur and a round trigger guard. Bevelled boxy toy shapes, clean flat colours with soft cel shading, no text, no logos, no letters, no hands, no background objects."
+- **Buzz:** "Orthographic turnaround sheet of ONE chunky toy compact submachine gun held in one hand, for a stylised cartoon video game, three views in a single row on a flat plain light grey background, each view separated by wide empty gaps, all at the same scale and the same height, perfectly aligned: (1) left: the right side of the gun, muzzle pointing to the right; (2) middle: the end view looking straight at the muzzle; (3) right: the left side of the gun, muzzle pointing to the left. Invented design, not based on any real-world firearm: a short boxy black receiver, a straight magazine in front of the trigger guard (not inside the grip), an olive-green pistol grip, a stubby barrel shroud with round holes, a small folded sand-tan wire stock at the back, a bright yellow toy safety tip on the muzzle. Bevelled boxy toy shapes, clean flat colours with soft cel shading, no text, no logos, no letters, no hands, no background objects."
+- **Breacher:** "Orthographic turnaround sheet of ONE chunky toy pump-action shotgun for a stylised cartoon video game, three views in a single row on a flat plain light grey background, each view separated by wide empty gaps, all at the same scale and the same height, perfectly aligned: (1) left: the right side of the gun, muzzle pointing to the right; (2) middle: the end view looking straight at the muzzle; (3) right: the left side of the gun, muzzle pointing to the left. Invented design, not based on any real-world firearm: a fat dark gunmetal receiver, a thick ribbed sand-tan pump forend, a tube magazine under a wide barrel, a solid warm-wood stock with a black rubber butt pad, a pistol-style grip, a big bright yellow toy safety tip on the muzzle. Bevelled boxy toy shapes, clean flat colours with soft cel shading, no text, no logos, no letters, no hands, no background objects."
+- **Widow:** "Orthographic turnaround sheet of ONE chunky toy bolt-action sniper rifle for a stylised cartoon video game, three views in a single row on a flat plain light grey background, each view separated by wide empty gaps, all at the same scale and the same height, perfectly aligned: (1) left: the right side of the gun, muzzle pointing to the right; (2) middle: the end view looking straight at the muzzle; (3) right: the left side of the gun, muzzle pointing to the left. Invented design, not based on any real-world firearm: a long olive-green polymer stock with a raised cheek rest, a dark gunmetal receiver with a round bolt knob on the right side, a big black scope with chunky end caps on top, a small box magazine, a long thin black barrel ending in a bright yellow toy safety tip. Bevelled boxy toy shapes, clean flat colours with soft cel shading, no text, no logos, no letters, no hands, no background objects."
+- **Machete:** "Orthographic turnaround sheet of ONE chunky toy machete for a stylised cartoon video game, three views in a single row on a flat plain light grey background, each view separated by wide empty gaps, all at the same scale and the same height, perfectly aligned: (1) left: the right side, blade pointing to the right with the cutting edge at the bottom; (2) middle: the end view looking straight at the blade tip; (3) right: the left side, blade pointing to the left. Invented design: a broad, slightly curved light steel blade with a raked tip and a darker spine, a short square guard, a chunky black rubber handle with three bright yellow grip rings and a lanyard hole. Bevelled toy shapes, clean flat colours with soft cel shading, no text, no logos, no letters, no hands, no background objects."
+</details>
+
+### Batch 2: the other 8 originals
+
+![Before and after, batch 2](screenshots/guns-scan-b-before-after.png)
+*Armory, Lobby light: scripted (left) and rebuilt from generated images (right), same camera.*
+
+![Camo masks, batch 2](screenshots/guns-scan-b-camo.png)
+*Forest Patch on the eight: dark grips and mags, barrels, steel, scopes and the yellow tips keep their colours.*
+
+The Hawk .50, Rattler, Hornet, Bullpup, Trident, Longbow, Thumper and Shredder go through the same pipeline, with the same ids, socket names and lengths. Socket directions and the rail lengths come from today's `sockets.json`, so the attachments fit as before; the one exception is the Thumper below.
+
+| id | Tris (scripted → scan) | Camo share (vertices) | Bore radius (m) | Drop (m) | Concept job | 3D job |
+|---|---|---|---|---|---|---|
+| hawk50 (Hawk .50) | 268 → 776 | 73% | 0.025 | 0.02 | `22ad6829-8665-4d00-996c-26532e26dfe1` | `9ec7c637-ca41-4075-8fa9-7571b2dd912f` |
+| rattler (Rattler) | 348 → 775 | 78% | 0.0178 | 0.055 | `bf11cae6-c51d-4cd2-80a4-a847fd66ef4e` | `0354627c-85d4-417e-8c74-2d81d25e01fa` |
+| hornet (Hornet) | 616 → 872 | 68% | 0.0191 | 0.06 | `d071cde2-c0e2-47a7-a231-a1e837235a9c` | `ab67757e-c6c1-495d-95eb-1a8a2f905b38` |
+| bullpup (Bullpup) | 472 → 872 | 89% | 0.0267 | 0.15 | `e2f979ba-5746-4d00-8db4-47b362a5cb13` | `da475499-9553-4882-94f3-f3c20de8ad28` |
+| trident (Trident) | 704 → 920 | 50% | 0.0197 | 0.13 | `a099f248-3f36-4143-8644-36d697b65332` | `22d971a0-e6e3-43a0-968a-0d1455b23290` |
+| longbow (Longbow) | 892 → 950 | 39% | 0.0144 | 0.13 | `b3e04c43-8ace-46db-ad67-ab3b4984e8f4` | `5b2152e8-7b0c-49d3-b6c2-c35d964c1f4f` |
+| thumper (Thumper) | 616 → 872 | 34% | 0.0613 | 0.15 | `94fab403-9972-413a-837b-f070b1f6b5bc` | `53cb9645-e6b6-442d-a7e4-c268d2661bab` |
+| shredder (Shredder) | 740 → 950 | 28% | 0.0584 | 0.065 | `44ce859b-8459-4001-85e5-b4f4fea1e240` | `00148ca5-0298-4455-a9a1-6dc1ece4ec60` |
+
+- **The Thumper's sight is built in.** The generated launcher has a fixed box sight on its top rail, so `rail_top` is marked `occupied: "sight"` (the Armory shows "sight built in"). Add-on sights no longer fit it, the same rule as the Widow's and Longbow's scopes. Every other attachment fits the same weapons as before.
+- **The Shredder's ammo box** (the `mag` socket) sits on the left side, so `build_gun_scan.py` now takes `side: "left"` as well as `"right"`.
+- **Mags stay plain:** the mid-grey magazines of the Rattler, Hornet, Trident and Longbow would otherwise read as body panels, so each has a `plain` box (with the barrels and the Trident's fork).
+- **Fit in the hand:** built with batch 1's review fixes from the start: team hues capped, and each gun lowered (`drop`) until `head_clearance.py` finds no vertex in the head at level and ±45°. The generated Thumper's tube was about 0.30 m across (the scripted one 0.13 m, firing a 0.06 m bore), and the Shredder's body and carry handle stood 0.34 m tall. Both are `squash`ed to 40 % and 50 % of their height above the grips, then dropped 0.15 and 0.065 m. `squash` now moves the sockets inside a squashed part with it.
+- **Moving parts:** the Hawk's `part_slide` (271 tris, 0.03 m back), and `part_mag` on the Rattler (57), Hornet (83), Bullpup (58), Trident (56) and Longbow (32). Three are skipped: the Hawk's mag sits inside its grip, the Thumper has no matching mechanism, and the Shredder's ammo boxes are on both sides (and spinning barrels aren't one of the listed part kinds).
+- **Side sockets** fall back to a ray cast onto the surface when the vertices within 2 cm sit on the far side; the Hawk's flat slide put its eject point inside the gun.
+- **`split_sheet.py`** keeps views down to 2 % of the sheet's width (was 5 %), since a slim rifle's muzzle view is about 4 % wide.
+
+**Spend, batch 2a: 80.00 credits:** 8 concept sheets × 1.0 and 8 Tripo multiview models × 9. Rate-limited submissions (429) weren't charged.
+
+<details><summary>Concept prompts, batch 2a (GPT Image 2.5, medium, 2k, 16:9, opaque)</summary>
+
+- **Hawk .50:** "Orthographic turnaround sheet of ONE chunky toy heavy semi-automatic hand-cannon pistol for a stylised cartoon video game, three views in a single row on a flat plain light grey background, each view separated by wide empty gaps, all at the same scale and the same height, perfectly aligned: (1) left: the right side of the gun, muzzle pointing to the right; (2) middle: the end view looking straight at the muzzle; (3) right: the left side of the gun, muzzle pointing to the left. Invented design, not based on any real-world firearm: a long rectangular dark gunmetal slide with a rounded top and a row of four round vent holes along each side, a thick sand-tan polymer frame with a squared trigger guard, a chunky dark-grey grip with a wide flared base and a short magazine base plate, a small square rear sight, a short flat accessory rail under the front of the frame, and a bright yellow toy safety tip on the muzzle. Bevelled boxy toy shapes, clean flat colours with soft cel shading, no text, no logos, no letters, no hands, no background objects."
+- **Rattler:** "Orthographic turnaround sheet of ONE chunky toy compact machine pistol for a stylised cartoon video game, three views in a single row on a flat plain light grey background, each view separated by wide empty gaps, all at the same scale and the same height, perfectly aligned: (1) left: the right side of the gun, muzzle pointing to the right; (2) middle: the end view looking straight at the muzzle; (3) right: the left side of the gun, muzzle pointing to the left. Invented design, not based on any real-world firearm: a short fat dark gunmetal receiver with a ribbed top rail, an olive-green pistol grip with a long straight magazine sticking far out of its bottom, a short flat accessory rail under the barrel, a round trigger guard, a stubby barrel with a bright yellow toy safety tip. Bevelled boxy toy shapes, clean flat colours with soft cel shading, no text, no logos, no letters, no hands, no background objects."
+- **Hornet:** "Orthographic turnaround sheet of ONE chunky toy rapid-fire submachine gun for a stylised cartoon video game, three views in a single row on a flat plain light grey background, each view separated by wide empty gaps, all at the same scale and the same height, perfectly aligned: (1) left: the right side of the gun, muzzle pointing to the right; (2) middle: the end view looking straight at the muzzle; (3) right: the left side of the gun, muzzle pointing to the left. Invented design, not based on any real-world firearm: a long slim dark gunmetal box receiver with a row of square cooling slots along the barrel shroud, a gently curved magazine in front of the trigger guard, a sand-tan pistol grip, a skeletal shoulder stock made of two thin parallel bars with a small butt plate, a flat rail on top, a short accessory rail under the shroud, a short barrel ending in a bright yellow toy safety tip. Bevelled boxy toy shapes, clean flat colours with soft cel shading, no text, no logos, no letters, no hands, no background objects."
+- **Bullpup:** "Orthographic turnaround sheet of ONE chunky toy compact rifle with the magazine behind the pistol grip for a stylised cartoon video game, three views in a single row on a flat plain light grey background, each view separated by wide empty gaps, all at the same scale and the same height, perfectly aligned: (1) left: the right side of the gun, muzzle pointing to the right; (2) middle: the end view looking straight at the muzzle; (3) right: the left side of the gun, muzzle pointing to the left. Invented design, not based on any real-world firearm: a short one-piece sand-tan shell body with rounded corners, the box magazine set into the body BEHIND the pistol grip, a flat-topped rail along the whole top, a plain round trigger guard, a dark gunmetal ejection cover near the back, a short accessory rail under the front, a short dark barrel ending in a bright yellow toy safety tip; no carry handle and no built-in scope. Bevelled boxy toy shapes, clean flat colours with soft cel shading, no text, no logos, no letters, no hands, no background objects."
+- **Trident:** "Orthographic turnaround sheet of ONE chunky toy burst-fire rifle for a stylised cartoon video game, three views in a single row on a flat plain light grey background, each view separated by wide empty gaps, all at the same scale and the same height, perfectly aligned: (1) left: the right side of the gun, muzzle pointing to the right; (2) middle: the end view looking straight at the muzzle; (3) right: the left side of the gun, muzzle pointing to the left. Invented design, not based on any real-world firearm: a long boxy olive-green receiver with a flat-topped rail, a three-pronged muzzle device around the barrel like a small fork, a straight box magazine, a dark pistol grip, a slim dark gunmetal handguard with an accessory rail underneath, a solid squared olive stock with a dark rubber pad, and a bright yellow toy safety tip on the barrel between the prongs. Bevelled boxy toy shapes, clean flat colours with soft cel shading, no text, no logos, no letters, no hands, no background objects."
+- **Longbow:** "Orthographic turnaround sheet of ONE chunky toy marksman rifle with a fixed scope for a stylised cartoon video game, three views in a single row on a flat plain light grey background, each view separated by wide empty gaps, all at the same scale and the same height, perfectly aligned: (1) left: the right side of the gun, muzzle pointing to the right; (2) middle: the end view looking straight at the muzzle; (3) right: the left side of the gun, muzzle pointing to the left. Invented design, not based on any real-world firearm: a long slim warm-wood stock and forend made as one piece, a dark gunmetal receiver, a medium dark scope with square end caps fixed on top, a short straight box magazine, a dark pistol grip, a short accessory rail under the forend, a long dark barrel with a small square muzzle brake and a bright yellow toy safety tip. Bevelled boxy toy shapes, clean flat colours with soft cel shading, no text, no logos, no letters, no hands, no background objects."
+- **Thumper:** "Orthographic turnaround sheet of ONE chunky toy shoulder-fired tube launcher for a stylised cartoon video game, three views in a single row on a flat plain light grey background, each view separated by wide empty gaps, all at the same scale and the same height, perfectly aligned: (1) left: the right side of the gun, muzzle pointing to the right; (2) middle: the end view looking straight at the muzzle; (3) right: the left side of the gun, muzzle pointing to the left. Invented design, not based on any real-world firearm: a fat round olive-green launch tube with flared ends, a dark gunmetal rear cap, two chunky dark grips under the tube (a pistol grip and a front grip), a small box sight on a short rail on top, a sand-tan shoulder pad, and a bright yellow toy safety band around the front opening. Bevelled boxy toy shapes, clean flat colours with soft cel shading, no text, no logos, no letters, no hands, no background objects."
+- **Shredder:** "Orthographic turnaround sheet of ONE chunky toy heavy rotary-barrel gun for a stylised cartoon video game, three views in a single row on a flat plain light grey background, each view separated by wide empty gaps, all at the same scale and the same height, perfectly aligned: (1) left: the right side of the gun, muzzle pointing to the right; (2) middle: the end view looking straight at the muzzle; (3) right: the left side of the gun, muzzle pointing to the left. Invented design, not based on any real-world firearm: a big square dark gunmetal body with a curved carry handle on top, a cluster of six short barrels held by two round rings at the front, a sand-tan ammunition box hanging off the left side, a dark pistol grip and a front grip under the body, and bright yellow toy safety caps on the barrel ring. Bevelled boxy toy shapes, clean flat colours with soft cel shading, no text, no logos, no letters, no hands, no background objects."
+</details>
+
 ## Milestone B (part 1): the arsenal
 
 ![Weapons](screenshots/weapons-sheet.png)
 ![In hand](screenshots/weapons-in-hand.png)
 *Every weapon in the Rookie's hand through the aim layer (machete mid-swing, frag at the throw wind-up).*
+*These two show the scripted versions. 14 guns now come from generated images (see Weapons from generated images); the socket sheet below is current.*
 
-`art/pipeline/build_weapons.py` builds 22 original weapons (docs/03 §5 names) as chunky toy guns. They use vertex colours on one material, no textures, and an **orange toy muzzle tip** that reads at gameplay size:
+`art/pipeline/build_weapons.py` builds 22 original weapons (docs/03 §5 names) as chunky toy guns. They use vertex colours on one material, no textures, and an **orange toy muzzle tip** that reads at gameplay size. The 14 originals (everything but the five specials, the grenades and the shield) are now rebuilt from generated images by `build_gun_scan.py`, with a 256² texture and a yellow tip; see Weapons from generated images. The tris below are the scripted ones:
 
 | id | Name | Family (docs/04 §4.2) | Aim pose | Hands | Tris | Length |
 |---|---|---|---|---|---|---|
@@ -663,6 +787,7 @@ More store-safe cosmetics (no gameplay effect), on top of the camos:
   | `rail_top` | scope / sight mount; `lengthM` of usable rail; `occupied: "scope"` on the Widow (built-in scope) | +Z | every firearm |
   | `rail_bottom` | foregrip / laser mount, `lengthM` | −Z | Hawk, Hammer, Buzz, K-47, Widow |
   | `backblast` | launcher exhaust | −Y | Thumper |
+  | `part_*` (mesh nodes) | moving parts the renderer animates: `part_slide`, `part_pump`, `part_bolt`, `part_cylinder`, `part_mag`; extras `axis` with `travel` (m) or `angle` (°); `sockets.json` → `parts` | `axis` | scanned guns (see Weapons from generated images) |
   | `tip` / `pin` / `light` / `ground` | machete tip; frag pin ring; frag fuse light and mine state light (render3d blinks `light`); frag and mine rest frame in the world (`world = floorPoint × inverse(ground.local)`) | | machete / frag / mine |
   | `pilot` | the flamethrower's pilot light | +Y | Dragon |
   | `charge` | where a charge weapon's wind-up shows: the blade hub, the orb | +Y | Ripper, Pulse |
@@ -820,7 +945,9 @@ What it checks:
 | Environments: billboard house art batch 3, 8 Screens (4:3) + 4 Hoardings (21:9 → 6:1), GPT Image 2.5 high 1k (12 × 1.5; 8 resubmitted after a rate limit, not charged twice) | **18.00** |
 | Environments: backdrops batch 4 for Lunar Outpost (sky, ridges, moon base), Storm Front (storm sky, far port, dockside) and Flux Lab (hall wall, machinery), GPT Image 2.5 high 2k (8 × 2.75; 2 resubmitted after a rate limit, not charged twice) | **22.00** |
 | Weapons Forge 10: riot shield concept, GPT Image 2.5 medium 2k | **1.00** |
-| **Total so far** | **163.25** |
+| Weapons Forge 12, batch 1: the core 6 guns from generated images: 6 concept sheets (GPT Image 2.5 medium 2k, 1.0 each) + 6 Tripo H3.1 multiview models (9 each) | **60.00** |
+| Weapons Forge 12, batch 2a: the other 8 originals from generated images: 8 concept sheets (1.0 each) + 8 Tripo H3.1 multiview models (9 each) | **80.00** |
+| **Total so far** | **303.25** |
 
 Phase 0 Higgsfield job IDs: concepts A `160eb90e-41ab-4ecc-a917-1e76c0563b40`, B `b40714aa-ec2f-4d2a-a522-ff5a4ebe57cc`, C `3e234313-6c57-4cd7-9946-22e6cd62b4b3`; 3D `75fc7390-163d-4c95-869c-58e8544bd654`.
 
@@ -830,13 +957,14 @@ Environments job IDs, with each image's exact prompt and settings, are in `apps/
 
 ```
 art/
-  pipeline/        build_character.py, clips.py, dye.py, build_cosmetics.py, build_weapons.py, build_vfx.py, build_casings.py, build_impacts.py, build_explosions.py, build_projectiles.py, build_specials.py, build_grenade_fx.py, build_attachments.py, build_camos.py, build_kit.py, build_market_kit.py, compile_map.py, render_views.py, render_weapons.py, split_sheet.py
+  pipeline/        build_character.py, clips.py, dye.py, build_cosmetics.py, build_weapons.py, build_vfx.py, build_casings.py, build_impacts.py, build_explosions.py, build_projectiles.py, build_specials.py, build_grenade_fx.py, build_attachments.py, build_camos.py, build_gun_scan.py, build_kit.py, build_market_kit.py, compile_map.py, render_views.py, render_weapons.py, split_sheet.py
   concepts/        A/B/C sheets + A-views/ (the 3D inputs)
   character/       rookie_body[_lod1].glb, rookie_anims.glb, rookie_preview.glb, rookie_rig.json, *.check.txt|json
     parts/         default parts: headgear_brim_helmet, boots_combat, jetpack_twin_tank [_lod1].glb
     textures/      baked albedo, dye mask and dye albedo per part and LOD
     source/        rookie_tripo_raw.glb (Higgsfield output), rookie.blend
-  weapons/         <id>.glb ×11, weapons.json, checks/
+  weapons/         <id>.glb, weapons.json, sockets.json, camos.json, checks/, scan_specs.json
+    scan/          <id>_albedo.png (the baked 256² albedo); source/<id>_tripo_raw.glb (Higgsfield output, the scan inputs)
   cosmetics/       <slot>/<id>[_lod1].glb ×11 items, textures, cosmetics.json, checks/
   kit/             kit_yard.glb (+ check)
   kits/            street_market/kit_street_market.glb (+ check)

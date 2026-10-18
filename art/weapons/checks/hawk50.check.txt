@@ -1,22 +1,26 @@
 asset-check: art/weapons/hawk50.glb  [weapon]
 ----------------------------------------------------------------------------------------------------
-INFO  file size                                 23 KB
-PASS  triangles                                 268 of 1000
-PASS  one mesh, one material                    1 draw call(s)
-INFO  GPU texture memory (KTX2 est.)            0.00 MB, 0 image(s)
+INFO  file size                                 114 KB
+PASS  triangles                                 776 of 1000 (body and 1 parts)
+PASS  one mesh, one material                    1 body + 1 moving part(s), 1 material(s): 2 draw call(s)
+PASS  texture size: hawk50_albedo               256x256 (max 256)
+PASS  texture POT: hawk50_albedo                power of two
+INFO  GPU texture memory (KTX2 est.)            0.04 MB, 1 image(s)
 PASS  extras weaponId/family/aimPose/hands      ok
 WARN  weaponId in packages/content              hawk50 is not in packages/content/src/{weapons,grenades}.ts yet
 INFO  nodes                                     eject, grip, mag, muzzle, rail_bottom, rail_top
-PASS  origin on the weapon (the grip)           bbox (-0.02, -0.08, -0.05)..(0.02, 0.11, 0.23)
+PASS  origin on the weapon (the grip)           bbox (-0.04, -0.1, -0.06)..(0.04, 0.12, 0.22)
 PASS  family is a docs/04 §4.2 family           'pistol'
 PASS  aimPose has clips                         'pistol'
-PASS  muzzle node ahead of the grip (+Y)        muzzle at glTF y +0.23 m
+PASS  muzzle node ahead of the grip (+Y)        muzzle at glTF y +0.22 m
 PASS  sockets for the family                    grip, muzzle, mag, rail_top, eject
 PASS  socket directions (unit `dir`)            ok
 PASS  sockets on the weapon (within 3 cm)       ok
-PASS  muzzle fires along +Y with a bore radius  dir (0.0, 1.0, 0.0), bore 0.016 m
-PASS  casings eject to the right (+X)           at x +0.020, dir x +0.80
-PASS  rail_top above the bore, facing up        z +0.083 vs bore +0.058, length 0.08 m
-PASS  rail_bottom below the bore, facing down   z +0.003 vs bore +0.058, length 0.06 m
+PASS  muzzle fires along +Y with a bore radius  dir (0.0, 1.0, 0.0), bore 0.023 m
+PASS  casings eject to the right (+X)           at x +0.025, dir x +0.80
+PASS  rail_top above the bore, facing up        z +0.093 vs bore +0.063, length 0.08 m
+PASS  rail_bottom below the bore, facing down   z +0.018 vs bore +0.063, length 0.06 m
+PASS  moving part part_slide                    271 tris, axis (0.0, -1.0, 0.0), travel 0.03 m
 ----------------------------------------------------------------------------------------------------
-RESULT: PASS  (14 pass, 1 warn, 0 fail)
+RESULT: PASS  (17 pass, 1 warn, 0 fail)
+

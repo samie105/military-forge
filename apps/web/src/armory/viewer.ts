@@ -564,8 +564,12 @@ export class ArmoryViewer {
   };
 }
 
-/** Free a model's geometry and materials (plus `extra` materials it no longer wears, e.g. the ones a camo replaced). */
-function disposeTree(root: Object3D, extra: Iterable<Material | Material[]> = []): void {
+/**
+ * Free a model's geometry, materials and their textures (plus `extra` materials it no longer wears, e.g. the
+ * ones a camo replaced). The scanned guns carry a baked albedo `map`, so a switch must free it too. The room's
+ * shared `envMap` stays (the viewer owns it), and the camo pattern is a shader uniform, not a material texture.
+ */
+export function disposeTree(root: Object3D, extra: Iterable<Material | Material[]> = []): void {
   const materials = new Set<Material>();
   for (const m of extra) for (const x of Array.isArray(m) ? m : [m]) materials.add(x);
   root.traverse((o) => {
@@ -573,5 +577,10 @@ function disposeTree(root: Object3D, extra: Iterable<Material | Material[]> = []
     o.geometry.dispose();
     for (const x of Array.isArray(o.material) ? o.material : [o.material]) materials.add(x as Material);
   });
-  for (const m of materials) m.dispose();
+  const textures = new Set<Texture>();
+  for (const m of materials) {
+    for (const [key, value] of Object.entries(m)) if (value instanceof Texture && key !== 'envMap') textures.add(value);
+    m.dispose();
+  }
+  for (const t of textures) t.dispose();
 }

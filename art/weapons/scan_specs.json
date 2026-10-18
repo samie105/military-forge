@@ -1,0 +1,248 @@
+{
+ "notes": "Per scanned weapon: how the raw Tripo model is oriented (Blender axes after import), the length it is scaled to (today's lengthM, so holds, sockets and attachments stay valid), the triangle budget, and sockets in normalised side-view coordinates of the final mesh: at = [u, v], u from the butt (0) to the muzzle (1), v from the bottom (0) to the top (1); side 'right' = on the gun's right surface; offset = metres added in the modelling frame (+X right, +Y forward, +Z up); other keys are copied as node extras (dir, lengthM, occupied, boreRadius). plain = [u0, v0, u1, v1] boxes in the same coordinates where the mesh never takes a camo (a barrel or blade that shares the body's colour). drop = metres the gun sits lower in the hand (sockets move with it, the off hand doesn't), so it clears the head at the ±45° aims (tools/asset-check/head_clearance.py). squash = [{box, scale: [along, height]}] reshapes a part before the bake (the Widow's shorter scope). parts = {part_slide | part_pump | part_bolt | part_cylinder | part_mag: {box, side?, axis, travel (m) | angle (deg)}} cuts a moving part off into its own child mesh (the renderer animates it). build_gun_scan.py reads this; prompts and job ids are recorded in art/README.md.",
+ "weapons": {
+  "k47": {
+   "concept_job": "ae7264dd-ac9f-4fe6-81c5-8d7fe95c68df",
+   "model_job": "1f6070e3-b441-4879-92f1-f4912930b428",
+   "forward": "+y", "up": "+z", "lengthM": 0.92, "tris": 950,
+   "plain": [[0.47, 0.0, 0.66, 0.53], [0.905, 0.0, 1.0, 1.0]],
+   "drop": 0.115,
+   "parts": {
+    "part_mag": {"box": [0.47, 0.0, 0.66, 0.53], "axis": [0, 0.243, -0.97], "travel": 0.12}
+   },
+   "sockets": {
+    "grip": {"at": [0.31, 0.48], "dir": [0, 1, 0]},
+    "muzzle": {"at": [1.0, 0.79], "dir": [0, 1, 0]},
+    "offhand": {"at": [0.31, 0.48], "offset": [-0.05, 0.07, -0.03]},
+    "eject": {"at": [0.53, 0.8], "side": "right", "dir": [0.8, -0.25, 0.55]},
+    "mag": {"at": [0.56, 0.06], "dir": [0, 0.25, -1]},
+    "rail_top": {"at": [0.5, 1.0], "dir": [0, 0, 1], "lengthM": 0.24},
+    "rail_bottom": {"at": [0.77, 0.62], "dir": [0, 0, -1], "lengthM": 0.14}
+   }
+  },
+  "hammer44": {
+   "concept_job": "827a7646-59c8-4fb9-bb20-1675c06bfa65",
+   "model_job": "415f62fd-3762-4b4e-9029-d0106c7a2b2f",
+   "forward": "+y", "up": "+z", "lengthM": 0.362, "tris": 850,
+   "plain": [[0.715, 0.735, 1.0, 1.0]],
+   "drop": 0.04,
+   "parts": {
+    "part_cylinder": {"box": [0.455, 0.6, 0.67, 0.92], "axis": [0, 1, 0], "angle": 60}
+   },
+   "sockets": {
+    "grip": {"at": [0.2, 0.5], "dir": [0, 1, 0]},
+    "muzzle": {"at": [1.0, 0.85], "dir": [0, 1, 0]},
+    "eject": {"at": [0.56, 0.77], "side": "right", "dir": [0.609, -0.609, 0.508]},
+    "mag": {"at": [0.56, 0.77], "dir": [-1, 0, 0]},
+    "rail_top": {"at": [0.55, 0.965], "dir": [0, 0, 1], "lengthM": 0.1},
+    "rail_bottom": {"at": [0.86, 0.76], "dir": [0, 0, -1], "lengthM": 0.06}
+   }
+  },
+  "buzz": {
+   "concept_job": "3e1cb8d8-bc09-4adb-9361-43973d72647a",
+   "model_job": "054cc599-1042-42e4-b036-ab1f949fa178",
+   "forward": "+y", "up": "+z", "lengthM": 0.424, "tris": 850,
+   "drop": 0.04,
+   "parts": {
+    "part_mag": {"box": [0.62, 0.0, 0.76, 0.6], "axis": [0, 0, -1], "travel": 0.12}
+   },
+   "sockets": {
+    "grip": {"at": [0.4, 0.48], "dir": [0, 1, 0]},
+    "muzzle": {"at": [1.0, 0.8], "dir": [0, 1, 0]},
+    "eject": {"at": [0.5, 0.82], "side": "right", "dir": [0.8, -0.25, 0.55]},
+    "mag": {"at": [0.69, 0.03], "dir": [0, 0, -1]},
+    "rail_top": {"at": [0.5, 0.93], "dir": [0, 0, 1], "lengthM": 0.06},
+    "rail_bottom": {"at": [0.88, 0.69], "dir": [0, 0, -1], "lengthM": 0.05}
+   }
+  },
+  "breacher": {
+   "concept_job": "b10e86de-4d07-409e-bdc0-4d96fffde08a",
+   "model_job": "dfa87ada-fc53-4a5b-9c6a-e4dfe1d4c2f3",
+   "forward": "+y", "up": "+z", "lengthM": 0.946, "tris": 950,
+   "plain": [[0.565, 0.76, 1.0, 1.0], [0.835, 0.45, 1.0, 0.76]],
+   "drop": 0.145,
+   "parts": {
+    "part_pump": {"box": [0.585, 0.44, 0.835, 0.77], "axis": [0, -1, 0], "travel": 0.06}
+   },
+   "sockets": {
+    "grip": {"at": [0.32, 0.32], "dir": [0, 1, 0]},
+    "muzzle": {"at": [1.0, 0.81], "dir": [0, 1, 0]},
+    "offhand": {"at": [0.32, 0.32], "offset": [-0.05, 0.08, -0.02]},
+    "eject": {"at": [0.45, 0.78], "side": "right", "dir": [0.8, -0.25, 0.55]},
+    "mag": {"at": [0.5, 0.5], "dir": [0, 0, -1]},
+    "rail_top": {"at": [0.46, 1.0], "dir": [0, 0, 1], "lengthM": 0.12}
+   }
+  },
+  "widow": {
+   "concept_job": "4ed23ce9-cec8-4b88-bd6c-314c5697d41e",
+   "model_job": "9daf4604-a20d-40e3-aa51-0c4525ebc266",
+   "forward": "+y", "up": "+z", "lengthM": 1.147, "tris": 980,
+   "drop": 0.14,
+   "squash": [{"box": [0.22, 0.66, 0.69, 1.0], "scale": [0.8, 0.85]}],
+   "parts": {
+    "part_bolt": {"box": [0.35, 0.36, 0.43, 0.56], "side": "right", "axis": [0, -1, 0], "travel": 0.05},
+    "part_mag": {"box": [0.41, 0.1, 0.52, 0.34], "axis": [0, 0.243, -0.97], "travel": 0.1}
+   },
+   "sockets": {
+    "grip": {"at": [0.29, 0.3], "dir": [0, 1, 0]},
+    "muzzle": {"at": [1.0, 0.55], "dir": [0, 1, 0]},
+    "offhand": {"at": [0.29, 0.3], "offset": [-0.05, 0.07, -0.03]},
+    "eject": {"at": [0.42, 0.55], "side": "right", "dir": [0.8, -0.25, 0.55]},
+    "mag": {"at": [0.45, 0.14], "dir": [0, 0.25, -1]},
+    "rail_top": {"at": [0.47, 0.64], "dir": [0, 0, 1], "lengthM": 0.16, "occupied": "scope"},
+    "rail_bottom": {"at": [0.62, 0.39], "dir": [0, 0, -1], "lengthM": 0.06}
+   }
+  },
+  "machete": {
+   "concept_job": "4bd92a47-8c05-4421-a89b-7c1f10e32826",
+   "model_job": "012bab35-8c3d-4af5-82c8-565c325b0cf0",
+   "forward": "+y", "up": "+z", "lengthM": 0.585, "tris": 600,
+   "plain": [[0.0, 0.0, 1.0, 1.0]],
+   "sockets": {
+    "grip": {"at": [0.2, 0.47], "dir": [0, 1, 0]},
+    "tip": {"at": [0.99, 0.97], "dir": [0, 1, 0]}
+   }
+  },
+  "hawk50": {
+   "concept_job": "22ad6829-8665-4d00-996c-26532e26dfe1",
+   "model_job": "9ec7c637-ca41-4075-8fa9-7571b2dd912f",
+   "forward": "+y", "up": "+z", "lengthM": 0.281, "tris": 800,
+   "drop": 0.02,
+   "parts": {
+    "part_slide": {"box": [0.03, 0.75, 0.95, 1.0], "axis": [0, -1, 0], "travel": 0.03}
+   },
+   "sockets": {
+    "grip": {"at": [0.22, 0.45], "dir": [0.0, 1.0, 0.0]},
+    "muzzle": {"at": [1.0, 0.825], "dir": [0.0, 1.0, 0.0]},
+    "eject": {"at": [0.35, 0.86], "side": "right", "dir": [0.798, -0.249, 0.549]},
+    "mag": {"at": [0.21, 0.02], "dir": [0.0, -0.243, -0.97]},
+    "rail_top": {"at": [0.55, 0.96], "lengthM": 0.08, "dir": [0.0, 0.0, 1.0]},
+    "rail_bottom": {"at": [0.82, 0.62], "lengthM": 0.06, "dir": [0.0, 0.0, -1.0]}
+   }
+  },
+  "rattler": {
+   "concept_job": "bf11cae6-c51d-4cd2-80a4-a847fd66ef4e",
+   "model_job": "0354627c-85d4-417e-8c74-2d81d25e01fa",
+   "forward": "+y", "up": "+z", "lengthM": 0.311, "tris": 800,
+   "plain": [[0.05, 0.0, 0.28, 0.39]],
+   "drop": 0.055,
+   "parts": {
+    "part_mag": {"box": [0.05, 0.0, 0.28, 0.39], "axis": [0, -0.243, -0.97], "travel": 0.12}
+   },
+   "sockets": {
+    "grip": {"at": [0.22, 0.6], "dir": [0.0, 1.0, 0.0]},
+    "muzzle": {"at": [1.0, 0.855], "dir": [0.0, 1.0, 0.0]},
+    "eject": {"at": [0.45, 0.88], "side": "right", "dir": [0.798, -0.249, 0.549]},
+    "mag": {"at": [0.18, 0.02], "dir": [0.0, -0.243, -0.97]},
+    "rail_top": {"at": [0.55, 0.97], "lengthM": 0.06, "dir": [0.0, 0.0, 1.0]},
+    "rail_bottom": {"at": [0.71, 0.74], "lengthM": 0.05, "dir": [0.0, 0.0, -1.0]}
+   }
+  },
+  "hornet": {
+   "concept_job": "d071cde2-c0e2-47a7-a231-a1e837235a9c",
+   "model_job": "ab67757e-c6c1-495d-95eb-1a8a2f905b38",
+   "forward": "+y", "up": "+z", "lengthM": 0.579, "tris": 900,
+   "plain": [[0.53, 0.0, 0.71, 0.6]],
+   "drop": 0.06,
+   "parts": {
+    "part_mag": {"box": [0.53, 0.0, 0.71, 0.6], "axis": [0, 0, -1], "travel": 0.12}
+   },
+   "sockets": {
+    "grip": {"at": [0.35, 0.42], "dir": [0.0, 1.0, 0.0]},
+    "muzzle": {"at": [1.0, 0.81], "dir": [0.0, 1.0, 0.0]},
+    "eject": {"at": [0.47, 0.82], "side": "right", "dir": [0.798, -0.249, 0.549]},
+    "mag": {"at": [0.67, 0.03], "dir": [0.0, 0.0, -1.0]},
+    "rail_top": {"at": [0.6, 0.98], "lengthM": 0.1, "dir": [0.0, 0.0, 1.0]},
+    "rail_bottom": {"at": [0.78, 0.64], "lengthM": 0.08, "dir": [0.0, 0.0, -1.0]},
+    "offhand": {"at": [0.35, 0.42], "offset": [-0.05, 0.07, -0.03]}
+   }
+  },
+  "bullpup": {
+   "concept_job": "e2f979ba-5746-4d00-8db4-47b362a5cb13",
+   "model_job": "da475499-9553-4882-94f3-f3c20de8ad28",
+   "forward": "+y", "up": "+z", "lengthM": 0.629, "tris": 900,
+   "drop": 0.15,
+   "parts": {
+    "part_mag": {"box": [0.1, 0.2, 0.25, 0.62], "axis": [0, -0.196, -0.981], "travel": 0.1}
+   },
+   "sockets": {
+    "grip": {"at": [0.38, 0.28], "dir": [0.0, 1.0, 0.0]},
+    "muzzle": {"at": [1.0, 0.775], "dir": [0.0, 1.0, 0.0]},
+    "eject": {"at": [0.23, 0.83], "side": "right", "dir": [0.798, -0.249, 0.549]},
+    "mag": {"at": [0.2, 0.22], "dir": [0.0, -0.196, -0.981]},
+    "rail_top": {"at": [0.5, 0.99], "lengthM": 0.16, "dir": [0.0, 0.0, 1.0]},
+    "rail_bottom": {"at": [0.75, 0.53], "lengthM": 0.08, "dir": [0.0, 0.0, -1.0]},
+    "offhand": {"at": [0.38, 0.28], "offset": [-0.05, 0.07, -0.03]}
+   }
+  },
+  "trident": {
+   "concept_job": "a099f248-3f36-4143-8644-36d697b65332",
+   "model_job": "22d971a0-e6e3-43a0-968a-0d1455b23290",
+   "forward": "+y", "up": "+z", "lengthM": 0.906, "tris": 950,
+   "plain": [[0.9, 0.0, 1.0, 1.0], [0.46, 0.0, 0.6, 0.43]],
+   "drop": 0.13,
+   "parts": {
+    "part_mag": {"box": [0.46, 0.0, 0.6, 0.43], "axis": [0, 0.371, -0.928], "travel": 0.12}
+   },
+   "sockets": {
+    "grip": {"at": [0.31, 0.4], "dir": [0.0, 1.0, 0.0]},
+    "muzzle": {"at": [1.0, 0.79], "dir": [0.0, 1.0, 0.0]},
+    "eject": {"at": [0.47, 0.78], "side": "right", "dir": [0.798, -0.249, 0.549]},
+    "mag": {"at": [0.52, 0.04], "dir": [0.0, 0.371, -0.928]},
+    "rail_top": {"at": [0.45, 0.99], "lengthM": 0.12, "dir": [0.0, 0.0, 1.0]},
+    "rail_bottom": {"at": [0.8, 0.66], "lengthM": 0.12, "dir": [0.0, 0.0, -1.0]},
+    "offhand": {"at": [0.31, 0.4], "offset": [-0.05, 0.07, -0.03]}
+   }
+  },
+  "longbow": {
+   "concept_job": "b3e04c43-8ace-46db-ad67-ab3b4984e8f4",
+   "model_job": "5b2152e8-7b0c-49d3-b6c2-c35d964c1f4f",
+   "forward": "+y", "up": "+z", "lengthM": 1.037, "tris": 980,
+   "plain": [[0.835, 0.0, 1.0, 1.0], [0.42, 0.15, 0.53, 0.4], [0.25, 0.74, 0.64, 1.0]],
+   "drop": 0.13,
+   "parts": {
+    "part_mag": {"box": [0.42, 0.15, 0.53, 0.4], "axis": [0, 0, -1], "travel": 0.1}
+   },
+   "sockets": {
+    "grip": {"at": [0.31, 0.28], "dir": [0.0, 1.0, 0.0]},
+    "muzzle": {"at": [1.0, 0.585], "dir": [0.0, 1.0, 0.0]},
+    "eject": {"at": [0.42, 0.62], "side": "right", "dir": [0.798, -0.249, 0.549]},
+    "mag": {"at": [0.44, 0.17], "dir": [0.0, 0.0, -1.0]},
+    "rail_top": {"at": [0.43, 0.72], "lengthM": 0.14, "occupied": "scope", "dir": [0.0, 0.0, 1.0]},
+    "rail_bottom": {"at": [0.71, 0.45], "lengthM": 0.08, "dir": [0.0, 0.0, -1.0]},
+    "offhand": {"at": [0.31, 0.28], "offset": [-0.05, 0.07, -0.03]}
+   }
+  },
+  "thumper": {
+   "concept_job": "94fab403-9972-413a-837b-f070b1f6b5bc",
+   "model_job": "53cb9645-e6b6-442d-a7e4-c268d2661bab",
+   "forward": "+y", "up": "+z", "lengthM": 1.08, "tris": 900,
+   "drop": 0.15,
+   "squash": [{"box": [0.0, 0.38, 1.0, 1.0], "scale": [1, 0.4]}],
+   "sockets": {
+    "grip": {"at": [0.33, 0.25], "dir": [0.0, 1.0, 0.0]},
+    "muzzle": {"at": [1.0, 0.615], "dir": [0.0, 1.0, 0.0]},
+    "backblast": {"at": [0.0, 0.615], "dir": [0.0, -1.0, 0.0]},
+    "mag": {"at": [0.02, 0.615], "dir": [0.0, -1.0, 0.0]},
+    "rail_top": {"at": [0.55, 0.8], "lengthM": 0.12, "dir": [0.0, 0.0, 1.0], "occupied": "sight"},
+    "offhand": {"at": [0.33, 0.25], "offset": [-0.05, 0.08, -0.03]}
+   }
+  },
+  "shredder": {
+   "concept_job": "44ce859b-8459-4001-85e5-b4f4fea1e240",
+   "model_job": "00148ca5-0298-4455-a9a1-6dc1ece4ec60",
+   "forward": "+y", "up": "+z", "lengthM": 0.734, "tris": 980,
+   "plain": [[0.66, 0.0, 1.0, 1.0]],
+   "drop": 0.065,
+   "squash": [{"box": [0.0, 0.4, 1.0, 1.0], "scale": [1, 0.5]}],
+   "sockets": {
+    "grip": {"at": [0.14, 0.38], "dir": [0.0, 1.0, 0.0]},
+    "muzzle": {"at": [1.0, 0.6], "dir": [0.0, 1.0, 0.0]},
+    "eject": {"at": [0.6, 0.45], "side": "right", "dir": [0.693, -0.198, -0.693]},
+    "mag": {"at": [0.36, 0.5], "side": "left", "dir": [-1.0, 0.0, 0.0]},
+    "rail_top": {"at": [0.45, 1.0], "lengthM": 0.1, "dir": [0.0, 0.0, 1.0]},
+    "offhand": {"at": [0.14, 0.38], "offset": [-0.05, 0.08, -0.03]}
+   }
+  }
+ }
+}

@@ -688,6 +688,7 @@ def check_part(r: Report, objs, args):
 
 
 WEAPON_TRIS = 1000
+WEAPON_TEX = 256  # docs/04 §9.4: ≤ 256² texture per weapon
 SHIELD_SIZE = (0.55, 0.90)  # width, height: the sim's blocking segment (shield-sockets.md)
 OFFHAND_REACH = 0.10  # chibi arms: the left hand can't get further from the grip (docs/04 §9.4)
 
@@ -695,14 +696,21 @@ OFFHAND_REACH = 0.10  # chibi arms: the left hand can't get further from the gri
 def check_weapon(r: Report, objs, args):
     """docs/04 §9.4: origin at the grip, +Y muzzle (Blender +Z after import), +Z up; nodes."""
     meshes = [o for o in objs if o.type == "MESH"]
+    parts = [o for o in meshes if o.name.startswith("part_")]  # moving parts: child meshes on the body's material
+    body = [o for o in meshes if o not in parts]
     tris = world_tris(meshes)
     budget = args["max_tris"] or WEAPON_TRIS
-    r.ok(len(tris) <= budget, "triangles", f"{len(tris)} of {budget}")
-    dc = draw_calls(meshes)
-    r.ok(dc == 1, "one mesh, one material", f"{dc} draw call(s)")
-    image_report(r, args["max_tex"])
+    r.ok(len(tris) <= budget, "triangles", f"{len(tris)} of {budget}" + (f" (body and {len(parts)} parts)" if parts else ""))
+    mats = {m for o in meshes for m in o.data.materials if m is not None}
+    if parts:
+        r.ok(len(body) == 1 and len(mats) == 1, "one mesh, one material",
+             f"1 body + {len(parts)} moving part(s), {len(mats)} material(s): {draw_calls(meshes)} draw call(s)")
+    else:
+        dc = draw_calls(meshes)
+        r.ok(dc == 1, "one mesh, one material", f"{dc} draw call(s)")
+    image_report(r, min(args["max_tex"], WEAPON_TEX))
     props = {}
-    for o in meshes:
+    for o in body:
         props.update({k: o[k] for k in o.keys() if not k.startswith("_")})
     missing = [k for k in ("weaponId", "family", "aimPose", "hands") if k not in props]
     r.ok(not missing, "extras weaponId/family/aimPose/hands", "ok" if not missing else "missing: " + ", ".join(missing))
@@ -745,6 +753,39 @@ def check_weapon(r: Report, objs, args):
         r.ok(o is not None and o.length <= OFFHAND_REACH, f"offhand node within {OFFHAND_REACH} m of the grip",
              f"{o.length:.3f} m" if o is not None else "no offhand node (two-handed)")
     check_sockets(r, objs, family, lo, hi, props.get("casings", True))
+    if parts:
+        check_parts(r, parts, lo, hi)
+
+
+PART_KINDS = {"part_slide", "part_pump", "part_bolt", "part_cylinder", "part_mag"}
+
+
+def check_parts(r: Report, parts, lo, hi):
+    """Moving parts (the owner's request, 18 Oct): `part_*` child meshes the renderer animates when the gun
+    fires or reloads. Each must be a known kind, have triangles, sit on the weapon, and carry its motion in
+    extras: a unit `axis` in the weapon frame and a `travel` in metres (slide, pump, bolt, mag) or an
+    `angle` in degrees (cylinder)."""
+    for o in sorted(parts, key=lambda o: o.name):
+        name = o.name.split(".")[0]
+        problems = []
+        if name not in PART_KINDS:
+            problems.append(f"unknown kind (not {sorted(PART_KINDS)})")
+        n = len(world_tris([o]))
+        if not n:
+            problems.append("no triangles")
+        axis = o.get("axis")
+        a = Vector(tuple(axis)) if axis is not None and len(axis) == 3 else None
+        if a is None or abs(a.length - 1) > 0.01:
+            problems.append("`axis` missing or not unit")
+        travel, angle = o.get("travel"), o.get("angle")
+        if not ((travel is not None and 0 < travel <= 0.3) or (angle is not None and 0 < angle <= 360)):
+            problems.append("needs `travel` (0–0.3 m) or `angle` (0–360°)")
+        plo, phi = bbox([p for t in world_tris([o]) for p in t]) if n else (lo, hi)
+        if any(plo[i] < lo[i] - 0.02 or phi[i] > hi[i] + 0.02 for i in range(3)):
+            problems.append("outside the weapon's bounds")
+        motion = f"travel {travel} m" if travel is not None else f"angle {angle}°"
+        r.ok(not problems, f"moving part {name}",
+             "; ".join(problems) if problems else f"{n} tris, axis {tuple(round(float(c), 2) for c in a)}, {motion}")
 
 
 def _gltf(v):

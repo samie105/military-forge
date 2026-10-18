@@ -1,22 +1,25 @@
 asset-check: art/weapons/shredder.glb  [weapon]
 ----------------------------------------------------------------------------------------------------
-INFO  file size                                 57 KB
-PASS  triangles                                 740 of 1000
+INFO  file size                                 140 KB
+PASS  triangles                                 950 of 1000
 PASS  one mesh, one material                    1 draw call(s)
-INFO  GPU texture memory (KTX2 est.)            0.00 MB, 0 image(s)
+PASS  texture size: shredder_albedo             256x256 (max 256)
+PASS  texture POT: shredder_albedo              power of two
+INFO  GPU texture memory (KTX2 est.)            0.04 MB, 1 image(s)
 PASS  extras weaponId/family/aimPose/hands      ok
 WARN  weaponId in packages/content              shredder is not in packages/content/src/{weapons,grenades}.ts yet
 INFO  nodes                                     eject, grip, mag, muzzle, offhand, rail_top
-PASS  origin on the weapon (the grip)           bbox (-0.14, -0.16, -0.13)..(0.06, 0.1, 0.6)
+PASS  origin on the weapon (the grip)           bbox (-0.13, -0.11, -0.1)..(0.13, 0.27, 0.63)
 PASS  family is a docs/04 §4.2 family           'heavy'
 PASS  aimPose has clips                         'rifle'
-PASS  muzzle node ahead of the grip (+Y)        muzzle at glTF y +0.61 m
+PASS  muzzle node ahead of the grip (+Y)        muzzle at glTF y +0.63 m
 PASS  offhand node within 0.1 m of the grip     0.099 m
 PASS  sockets for the family                    grip, muzzle, mag, rail_top, eject
 PASS  socket directions (unit `dir`)            ok
 PASS  sockets on the weapon (within 3 cm)       ok
-PASS  muzzle fires along +Y with a bore radius  dir (0.0, 1.0, 0.0), bore 0.052 m
-PASS  casings eject to the right (+X)           at x +0.070, dir x +0.69
-PASS  rail_top above the bore, facing up        z +0.162 vs bore +0.070, length 0.10 m
+PASS  muzzle fires along +Y with a bore radius  dir (0.0, 1.0, 0.0), bore 0.058 m
+PASS  casings eject to the right (+X)           at x +0.094, dir x +0.69
+PASS  rail_top above the bore, facing up        z +0.110 vs bore +0.001, length 0.10 m
 ----------------------------------------------------------------------------------------------------
-RESULT: PASS  (14 pass, 1 warn, 0 fail)
+RESULT: PASS  (16 pass, 1 warn, 0 fail)
+

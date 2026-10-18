@@ -125,3 +125,24 @@ describe('ArmoryViewer', () => {
     });
   });
 });
+
+describe('disposeTree', () => {
+  it("frees a scanned gun's albedo map once, but not the room's env map", async () => {
+    const { Mesh, BoxGeometry, MeshStandardMaterial, Texture, Group } = await import('three');
+    const { disposeTree } = await import('../../src/armory/viewer');
+    const map = new Texture();
+    const env = new Texture();
+    const factory = new MeshStandardMaterial({ map });
+    const camo = factory.clone(); // a camo copy shares the factory's map
+    camo.envMap = env;
+    const root = new Group();
+    root.add(new Mesh(new BoxGeometry(), camo));
+    const freed: string[] = [];
+    map.addEventListener('dispose', () => freed.push('map'));
+    env.addEventListener('dispose', () => freed.push('env'));
+    factory.addEventListener('dispose', () => freed.push('factory'));
+    camo.addEventListener('dispose', () => freed.push('camo'));
+    disposeTree(root, [factory]);
+    expect(freed.sort()).toEqual(['camo', 'factory', 'map']);
+  });
+});

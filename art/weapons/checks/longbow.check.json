@@ -6,22 +6,32 @@
     {
       "status": "INFO",
       "check": "file size",
-      "detail": "70 KB"
+      "detail": "122 KB"
     },
     {
       "status": "PASS",
       "check": "triangles",
-      "detail": "892 of 1000"
+      "detail": "950 of 1000 (body and 1 parts)"
     },
     {
       "status": "PASS",
       "check": "one mesh, one material",
-      "detail": "1 draw call(s)"
+      "detail": "1 body + 1 moving part(s), 1 material(s): 2 draw call(s)"
+    },
+    {
+      "status": "PASS",
+      "check": "texture size: longbow_albedo",
+      "detail": "256x256 (max 256)"
+    },
+    {
+      "status": "PASS",
+      "check": "texture POT: longbow_albedo",
+      "detail": "power of two"
     },
     {
       "status": "INFO",
       "check": "GPU texture memory (KTX2 est.)",
-      "detail": "0.00 MB, 0 image(s)"
+      "detail": "0.04 MB, 1 image(s)"
     },
     {
       "status": "PASS",
@@ -41,7 +51,7 @@
     {
       "status": "PASS",
       "check": "origin on the weapon (the grip)",
-      "detail": "bbox (-0.03, -0.14, -0.33)..(0.07, 0.1, 0.7)"
+      "detail": "bbox (-0.05, -0.11, -0.32)..(0.04, 0.23, 0.72)"
     },
     {
       "status": "PASS",
@@ -56,7 +66,7 @@
     {
       "status": "PASS",
       "check": "muzzle node ahead of the grip (+Y)",
-      "detail": "muzzle at glTF y +0.71 m"
+      "detail": "muzzle at glTF y +0.72 m"
     },
     {
       "status": "PASS",
@@ -81,22 +91,27 @@
     {
       "status": "PASS",
       "check": "muzzle fires along +Y with a bore radius",
-      "detail": "dir (0.0, 1.0, 0.0), bore 0.012 m"
+      "detail": "dir (0.0, 1.0, 0.0), bore 0.014 m"
     },
     {
       "status": "PASS",
       "check": "casings eject to the right (+X)",
-      "detail": "at x +0.035, dir x +0.80"
+      "detail": "at x +0.037, dir x +0.80"
     },
     {
       "status": "PASS",
       "check": "rail_top above the bore, facing up",
-      "detail": "z +0.085 vs bore +0.060, length 0.14 m"
+      "detail": "z +0.017 vs bore -0.028, length 0.14 m"
     },
     {
       "status": "PASS",
       "check": "rail_bottom below the bore, facing down",
-      "detail": "z +0.005 vs bore +0.060, length 0.08 m"
+      "detail": "z -0.073 vs bore -0.028, length 0.08 m"
+    },
+    {
+      "status": "PASS",
+      "check": "moving part part_mag",
+      "detail": "32 tris, axis (0.0, 0.0, -1.0), travel 0.1 m"
     }
   ]
 }

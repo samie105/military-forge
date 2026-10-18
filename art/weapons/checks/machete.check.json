@@ -6,12 +6,12 @@
     {
       "status": "INFO",
       "check": "file size",
-      "detail": "25 KB"
+      "detail": "84 KB"
     },
     {
       "status": "PASS",
       "check": "triangles",
-      "detail": "312 of 1000"
+      "detail": "582 of 1000"
     },
     {
       "status": "PASS",
@@ -19,9 +19,19 @@
       "detail": "1 draw call(s)"
     },
     {
+      "status": "PASS",
+      "check": "texture size: machete_albedo",
+      "detail": "256x256 (max 256)"
+    },
+    {
+      "status": "PASS",
+      "check": "texture POT: machete_albedo",
+      "detail": "power of two"
+    },
+    {
       "status": "INFO",
       "check": "GPU texture memory (KTX2 est.)",
-      "detail": "0.00 MB, 0 image(s)"
+      "detail": "0.04 MB, 1 image(s)"
     },
     {
       "status": "PASS",
@@ -41,7 +51,7 @@
     {
       "status": "PASS",
       "check": "origin on the weapon (the grip)",
-      "detail": "bbox (-0.02, -0.05, -0.06)..(0.02, 0.03, 0.52)"
+      "detail": "bbox (-0.04, -0.08, -0.12)..(0.04, 0.07, 0.47)"
     },
     {
       "status": "PASS",

@@ -1,22 +1,26 @@
 asset-check: art/weapons/breacher.glb  [weapon]
 ----------------------------------------------------------------------------------------------------
-INFO  file size                                 40 KB
-PASS  triangles                                 496 of 1000
-PASS  one mesh, one material                    1 draw call(s)
-INFO  GPU texture memory (KTX2 est.)            0.00 MB, 0 image(s)
+INFO  file size                                 116 KB
+PASS  triangles                                 921 of 1000 (body and 1 parts)
+PASS  one mesh, one material                    1 body + 1 moving part(s), 1 material(s): 2 draw call(s)
+PASS  texture size: breacher_albedo             256x256 (max 256)
+PASS  texture POT: breacher_albedo              power of two
+INFO  GPU texture memory (KTX2 est.)            0.04 MB, 1 image(s)
 PASS  extras weaponId/family/aimPose/hands      ok
 PASS  weaponId in packages/content              breacher
 INFO  nodes                                     eject, grip, mag, muzzle, offhand, rail_top
-PASS  origin on the weapon (the grip)           bbox (-0.03, -0.1, -0.34)..(0.03, 0.09, 0.6)
+PASS  origin on the weapon (the grip)           bbox (-0.06, -0.09, -0.3)..(0.06, 0.26, 0.64)
 PASS  family is a docs/04 §4.2 family           'shotgun'
 PASS  aimPose has clips                         'rifle'
-PASS  muzzle node ahead of the grip (+Y)        muzzle at glTF y +0.61 m
+PASS  muzzle node ahead of the grip (+Y)        muzzle at glTF y +0.64 m
 PASS  offhand node within 0.1 m of the grip     0.096 m
 PASS  sockets for the family                    grip, muzzle, mag, rail_top, eject
 PASS  socket directions (unit `dir`)            ok
 PASS  sockets on the weapon (within 3 cm)       ok
-PASS  muzzle fires along +Y with a bore radius  dir (0.0, 1.0, 0.0), bore 0.020 m
-PASS  casings eject to the right (+X)           at x +0.035, dir x +0.80
-PASS  rail_top above the bore, facing up        z +0.085 vs bore +0.068, length 0.12 m
+PASS  muzzle fires along +Y with a bore radius  dir (0.0, 1.0, 0.0), bore 0.033 m
+PASS  casings eject to the right (+X)           at x +0.063, dir x +0.80
+PASS  rail_top above the bore, facing up        z +0.092 vs bore +0.026, length 0.12 m
+PASS  moving part part_pump                     245 tris, axis (0.0, -1.0, 0.0), travel 0.06 m
 ----------------------------------------------------------------------------------------------------
-RESULT: PASS  (15 pass, 0 warn, 0 fail)
+RESULT: PASS  (18 pass, 0 warn, 0 fail)
+

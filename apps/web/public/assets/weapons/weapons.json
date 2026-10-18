@@ -11,12 +11,12 @@
       "family": "pistol",
       "aimPose": "pistol",
       "hands": 1,
-      "tris": 268,
+      "tris": 776,
       "nodes": {
         "eject": [
-          0.02,
-          0.06,
-          0.07
+          0.025,
+          0.037,
+          0.071
         ],
         "grip": [
           0.0,
@@ -25,27 +25,37 @@
         ],
         "mag": [
           0.0,
-          -0.015,
-          -0.105
+          -0.003,
+          -0.116
         ],
         "muzzle": [
           0.0,
-          0.231,
-          0.058
+          0.219,
+          0.063
+        ],
+        "part_slide": [
+          0.0,
+          0.082,
+          0.073
         ],
         "rail_bottom": [
           0.0,
-          0.12,
-          0.003
+          0.169,
+          0.018
         ],
         "rail_top": [
           0.0,
-          0.11,
-          0.083
+          0.093,
+          0.093
         ]
       },
       "lengthM": 0.281,
-      "file": "hawk50.glb"
+      "file": "hawk50.glb",
+      "source": "scan",
+      "texture": 256,
+      "parts": [
+        "part_slide"
+      ]
     },
     "hammer44": {
       "name": "Hammer .44",
@@ -53,12 +63,12 @@
       "family": "pistol",
       "aimPose": "pistol",
       "hands": 1,
-      "tris": 520,
+      "tris": 824,
       "nodes": {
         "eject": [
-          0.03,
           0.045,
-          0.055
+          0.13,
+          0.038
         ],
         "grip": [
           0.0,
@@ -67,27 +77,37 @@
         ],
         "mag": [
           0.0,
-          0.045,
-          0.055
+          0.13,
+          0.038
         ],
         "muzzle": [
           0.0,
-          0.296,
-          0.062
+          0.29,
+          0.061
+        ],
+        "part_cylinder": [
+          0.0,
+          0.129,
+          0.035
         ],
         "rail_bottom": [
           0.0,
-          0.2,
-          0.045
+          0.239,
+          0.035
         ],
         "rail_top": [
           0.0,
-          0.17,
-          0.089
+          0.127,
+          0.094
         ]
       },
-      "lengthM": 0.362,
-      "file": "hammer44.glb"
+      "lengthM": 0.363,
+      "file": "hammer44.glb",
+      "source": "scan",
+      "texture": 256,
+      "parts": [
+        "part_cylinder"
+      ]
     },
     "buzz": {
       "name": "Buzz",
@@ -95,12 +115,12 @@
       "family": "pistol",
       "aimPose": "pistol",
       "hands": 1,
-      "tris": 404,
+      "tris": 823,
       "nodes": {
         "eject": [
-          0.03,
-          0.08,
-          0.07
+          0.032,
+          0.042,
+          0.055
         ],
         "grip": [
           0.0,
@@ -109,27 +129,37 @@
         ],
         "mag": [
           0.0,
-          0.11,
-          -0.14
+          0.123,
+          -0.166
         ],
         "muzzle": [
           0.0,
-          0.306,
-          0.062
+          0.254,
+          0.049
+        ],
+        "part_mag": [
+          0.0,
+          0.117,
+          -0.09
         ],
         "rail_bottom": [
           0.0,
-          0.2,
-          0.012
+          0.204,
+          0.019
         ],
         "rail_top": [
           0.0,
-          0.09,
-          0.102
+          0.042,
+          0.086
         ]
       },
-      "lengthM": 0.424,
-      "file": "buzz.glb"
+      "lengthM": 0.423,
+      "file": "buzz.glb",
+      "source": "scan",
+      "texture": 256,
+      "parts": [
+        "part_mag"
+      ]
     },
     "k47": {
       "name": "K-47",
@@ -137,12 +167,12 @@
       "family": "rifle",
       "aimPose": "rifle",
       "hands": 2,
-      "tris": 492,
+      "tris": 920,
       "nodes": {
         "eject": [
-          0.03,
-          0.08,
-          0.07
+          0.062,
+          0.202,
+          0.015
         ],
         "grip": [
           0.0,
@@ -151,32 +181,42 @@
         ],
         "mag": [
           0.0,
-          0.12,
-          -0.17
+          0.23,
+          -0.286
         ],
         "muzzle": [
           0.0,
-          0.576,
-          0.06
+          0.635,
+          0.011
         ],
         "offhand": [
           -0.05,
           0.07,
           -0.03
         ],
+        "part_mag": [
+          0.001,
+          0.211,
+          -0.192
+        ],
         "rail_bottom": [
           0.0,
-          0.28,
-          0.02
+          0.423,
+          -0.058
         ],
         "rail_top": [
           0.0,
-          0.05,
-          0.082
+          0.175,
+          0.097
         ]
       },
-      "lengthM": 0.917,
-      "file": "k47.glb"
+      "lengthM": 0.918,
+      "file": "k47.glb",
+      "source": "scan",
+      "texture": 256,
+      "parts": [
+        "part_mag"
+      ]
     },
     "breacher": {
       "name": "Breacher",
@@ -184,12 +224,12 @@
       "family": "shotgun",
       "aimPose": "rifle",
       "hands": 2,
-      "tris": 496,
+      "tris": 921,
       "nodes": {
         "eject": [
-          0.035,
-          0.06,
-          0.06
+          0.063,
+          0.123,
+          0.016
         ],
         "grip": [
           0.0,
@@ -198,27 +238,37 @@
         ],
         "mag": [
           0.0,
-          0.03,
-          0.005
+          0.17,
+          -0.082
         ],
         "muzzle": [
           0.0,
-          0.606,
-          0.068
+          0.643,
+          0.026
         ],
         "offhand": [
           -0.05,
           0.08,
           -0.02
         ],
+        "part_pump": [
+          0.0,
+          0.403,
+          -0.045
+        ],
         "rail_top": [
           0.0,
-          0.05,
-          0.085
+          0.132,
+          0.092
         ]
       },
       "lengthM": 0.946,
-      "file": "breacher.glb"
+      "file": "breacher.glb",
+      "source": "scan",
+      "texture": 256,
+      "parts": [
+        "part_pump"
+      ]
     },
     "widow": {
       "name": "Widow",
@@ -226,12 +276,12 @@
       "family": "sniper",
       "aimPose": "rifle",
       "hands": 2,
-      "tris": 880,
+      "tris": 950,
       "nodes": {
         "eject": [
-          0.035,
-          0.05,
-          0.07
+          0.038,
+          0.149,
+          -0.038
         ],
         "grip": [
           0.0,
@@ -240,32 +290,48 @@
         ],
         "mag": [
           0.0,
-          0.085,
-          -0.085
+          0.184,
+          -0.205
         ],
         "muzzle": [
           0.0,
-          0.776,
-          0.055
+          0.814,
+          -0.038
         ],
         "offhand": [
           -0.05,
           0.07,
           -0.03
         ],
+        "part_bolt": [
+          0.038,
+          0.103,
+          -0.07
+        ],
+        "part_mag": [
+          -0.004,
+          0.206,
+          -0.162
+        ],
         "rail_bottom": [
           0.0,
-          0.16,
-          0.002
+          0.379,
+          -0.103
         ],
         "rail_top": [
           0.0,
-          0.07,
-          0.077
+          0.206,
+          -0.002
         ]
       },
       "lengthM": 1.147,
-      "file": "widow.glb"
+      "file": "widow.glb",
+      "source": "scan",
+      "texture": 256,
+      "parts": [
+        "part_bolt",
+        "part_mag"
+      ]
     },
     "thumper": {
       "name": "Thumper",
@@ -273,12 +339,12 @@
       "family": "launcher",
       "aimPose": "rifle",
       "hands": 2,
-      "tris": 616,
+      "tris": 872,
       "nodes": {
         "backblast": [
           0.0,
-          -0.47,
-          0.095
+          -0.356,
+          0.001
         ],
         "grip": [
           0.0,
@@ -287,13 +353,13 @@
         ],
         "mag": [
           0.0,
-          -0.465,
-          0.095
+          -0.335,
+          0.001
         ],
         "muzzle": [
           0.0,
-          0.62,
-          0.095
+          0.724,
+          0.001
         ],
         "offhand": [
           -0.05,
@@ -302,12 +368,14 @@
         ],
         "rail_top": [
           0.0,
-          -0.05,
-          0.163
+          0.238,
+          0.051
         ]
       },
-      "lengthM": 1.08,
-      "file": "thumper.glb"
+      "lengthM": 1.078,
+      "file": "thumper.glb",
+      "source": "scan",
+      "texture": 256
     },
     "shredder": {
       "name": "Shredder",
@@ -315,12 +383,12 @@
       "family": "heavy",
       "aimPose": "rifle",
       "hands": 2,
-      "tris": 740,
+      "tris": 950,
       "nodes": {
         "eject": [
-          0.07,
-          0.05,
-          0.05
+          0.094,
+          0.338,
+          -0.04
         ],
         "grip": [
           0.0,
@@ -328,14 +396,14 @@
           0.0
         ],
         "mag": [
-          -0.14,
-          0.0,
-          0.02
+          -0.136,
+          0.161,
+          -0.027
         ],
         "muzzle": [
           0.0,
-          0.606,
-          0.07
+          0.631,
+          0.001
         ],
         "offhand": [
           -0.05,
@@ -344,12 +412,14 @@
         ],
         "rail_top": [
           0.0,
-          0.03,
-          0.162
+          0.228,
+          0.11
         ]
       },
-      "lengthM": 0.734,
-      "file": "shredder.glb"
+      "lengthM": 0.728,
+      "file": "shredder.glb",
+      "source": "scan",
+      "texture": 256
     },
     "rattler": {
       "name": "Rattler",
@@ -357,12 +427,12 @@
       "family": "pistol",
       "aimPose": "pistol",
       "hands": 1,
-      "tris": 348,
+      "tris": 775,
       "nodes": {
         "eject": [
-          0.02,
-          0.07,
-          0.07
+          0.034,
+          0.072,
+          0.053
         ],
         "grip": [
           0.0,
@@ -371,27 +441,37 @@
         ],
         "mag": [
           0.0,
-          -0.055,
-          -0.19
+          -0.012,
+          -0.278
         ],
         "muzzle": [
           0.0,
-          0.251,
-          0.058
+          0.243,
+          0.043
+        ],
+        "part_mag": [
+          0.0,
+          -0.018,
+          -0.206
         ],
         "rail_bottom": [
           0.0,
-          0.13,
-          0.006
+          0.152,
+          -0.001
         ],
         "rail_top": [
           0.0,
-          0.11,
-          0.081
+          0.103,
+          0.087
         ]
       },
       "lengthM": 0.311,
-      "file": "rattler.glb"
+      "file": "rattler.glb",
+      "source": "scan",
+      "texture": 256,
+      "parts": [
+        "part_mag"
+      ]
     },
     "hornet": {
       "name": "Hornet",
@@ -399,12 +479,12 @@
       "family": "rifle",
       "aimPose": "rifle",
       "hands": 2,
-      "tris": 616,
+      "tris": 872,
       "nodes": {
         "eject": [
-          0.03,
-          0.06,
-          0.07
+          0.028,
+          0.069,
+          0.046
         ],
         "grip": [
           0.0,
@@ -413,32 +493,42 @@
         ],
         "mag": [
           0.0,
-          0.1,
-          -0.14
+          0.185,
+          -0.163
         ],
         "muzzle": [
           0.0,
-          0.371,
-          0.055
+          0.376,
+          0.043
         ],
         "offhand": [
           -0.05,
           0.07,
           -0.03
         ],
+        "part_mag": [
+          0.0,
+          0.151,
+          -0.084
+        ],
         "rail_bottom": [
           0.0,
-          0.24,
-          0.025
+          0.249,
+          -0.002
         ],
         "rail_top": [
           0.0,
-          0.06,
-          0.087
+          0.145,
+          0.088
         ]
       },
-      "lengthM": 0.579,
-      "file": "hornet.glb"
+      "lengthM": 0.578,
+      "file": "hornet.glb",
+      "source": "scan",
+      "texture": 256,
+      "parts": [
+        "part_mag"
+      ]
     },
     "trident": {
       "name": "Trident",
@@ -446,12 +536,12 @@
       "family": "rifle",
       "aimPose": "rifle",
       "hands": 2,
-      "tris": 704,
+      "tris": 920,
       "nodes": {
         "eject": [
-          0.03,
-          0.08,
-          0.07
+          0.046,
+          0.145,
+          0.012
         ],
         "grip": [
           0.0,
@@ -460,32 +550,42 @@
         ],
         "mag": [
           0.0,
-          0.12,
-          -0.165
+          0.19,
+          -0.264
         ],
         "muzzle": [
           0.0,
-          0.576,
-          0.055
+          0.625,
+          0.016
         ],
         "offhand": [
           -0.05,
           0.07,
           -0.03
         ],
+        "part_mag": [
+          0.0,
+          0.189,
+          -0.167
+        ],
         "rail_bottom": [
           0.0,
-          0.3,
-          0.007
+          0.444,
+          -0.033
         ],
         "rail_top": [
           0.0,
-          0.06,
-          0.119
+          0.127,
+          0.09
         ]
       },
-      "lengthM": 0.906,
-      "file": "trident.glb"
+      "lengthM": 0.907,
+      "file": "trident.glb",
+      "source": "scan",
+      "texture": 256,
+      "parts": [
+        "part_mag"
+      ]
     },
     "bullpup": {
       "name": "Bullpup",
@@ -493,12 +593,12 @@
       "family": "rifle",
       "aimPose": "rifle",
       "hands": 2,
-      "tris": 472,
+      "tris": 872,
       "nodes": {
         "eject": [
-          0.03,
-          -0.1,
-          0.06
+          0.04,
+          -0.094,
+          0.034
         ],
         "grip": [
           0.0,
@@ -507,32 +607,42 @@
         ],
         "mag": [
           0.0,
-          -0.095,
-          -0.13
+          -0.113,
+          -0.17
         ],
         "muzzle": [
           0.0,
-          0.341,
-          0.05
+          0.39,
+          0.016
         ],
         "offhand": [
           -0.05,
           0.07,
           -0.03
         ],
+        "part_mag": [
+          0.0,
+          -0.128,
+          -0.118
+        ],
         "rail_bottom": [
           0.0,
-          0.17,
-          0.0
+          0.233,
+          -0.066
         ],
         "rail_top": [
           0.0,
-          0.16,
-          0.111
+          0.075,
+          0.088
         ]
       },
-      "lengthM": 0.629,
-      "file": "bullpup.glb"
+      "lengthM": 0.628,
+      "file": "bullpup.glb",
+      "source": "scan",
+      "texture": 256,
+      "parts": [
+        "part_mag"
+      ]
     },
     "longbow": {
       "name": "Longbow",
@@ -540,12 +650,12 @@
       "family": "sniper",
       "aimPose": "rifle",
       "hands": 2,
-      "tris": 892,
+      "tris": 950,
       "nodes": {
         "eject": [
-          0.035,
-          0.05,
-          0.08
+          0.037,
+          0.114,
+          -0.016
         ],
         "grip": [
           0.0,
@@ -554,32 +664,42 @@
         ],
         "mag": [
           0.0,
-          0.08,
-          -0.06
+          0.135,
+          -0.167
         ],
         "muzzle": [
           0.0,
-          0.706,
-          0.06
+          0.716,
+          -0.028
         ],
         "offhand": [
           -0.05,
           0.07,
           -0.03
         ],
+        "part_mag": [
+          0.0,
+          0.159,
+          -0.126
+        ],
         "rail_bottom": [
           0.0,
-          0.16,
-          0.005
+          0.415,
+          -0.073
         ],
         "rail_top": [
           0.0,
-          0.05,
-          0.085
+          0.124,
+          0.017
         ]
       },
-      "lengthM": 1.037,
-      "file": "longbow.glb"
+      "lengthM": 1.035,
+      "file": "longbow.glb",
+      "source": "scan",
+      "texture": 256,
+      "parts": [
+        "part_mag"
+      ]
     },
     "dragon": {
       "name": "Dragon",
@@ -832,7 +952,7 @@
       "family": "melee",
       "aimPose": "pistol",
       "hands": 1,
-      "tris": 312,
+      "tris": 582,
       "nodes": {
         "grip": [
           0.0,
@@ -841,12 +961,14 @@
         ],
         "tip": [
           0.0,
-          0.52,
-          0.0
+          0.462,
+          0.071
         ]
       },
       "lengthM": 0.585,
-      "file": "machete.glb"
+      "file": "machete.glb",
+      "source": "scan",
+      "texture": 256
     },
     "frag": {
       "name": "Frag grenade",

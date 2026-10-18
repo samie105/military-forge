@@ -127,7 +127,7 @@ describe('sockets.json (the Forge)', () => {
     expect(k47.family).toBe('rifle');
     expect(k47.aimPose).toBe('rifle');
     expect(k47.hands).toBe(2);
-    expect(k47.muzzle!.pos.toArray()).toEqual([0, 0.576, 0.06]);
+    expect(k47.muzzle!.pos.toArray()).toEqual([0, 0.635, 0.011]); // the K-47 from generated images (#73), lowered in the hand
     expect(k47.muzzle!.dir.toArray()).toEqual([0, 1, 0]);
     expect(k47.offhand!.toArray()).toEqual([-0.05, 0.07, -0.03]);
     expect(sockets.get('machete')!.muzzle).toBeNull();

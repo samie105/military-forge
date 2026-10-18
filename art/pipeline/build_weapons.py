@@ -732,8 +732,18 @@ def export(path, obj, runtime):
     )
 
 
+# Weapons rebuilt from generated models (build_gun_scan.py) keep their GLB and entries: the scripted
+# builder above stays as the fallback for when the scan is removed.
+SCANNED = {p.name.removesuffix("_tripo_raw.glb") for p in (OUT / "scan" / "source").glob("*_tripo_raw.glb")}
+OLD_MANIFEST = json.loads((OUT / "weapons.json").read_text()) if (OUT / "weapons.json").exists() else {}
+OLD_SOCKETS = json.loads((OUT / "sockets.json").read_text())["weapons"] if (OUT / "sockets.json").exists() else {}
+
 manifest, sockets = {}, {}
 for wid, build, name, archetype, family, aim_pose, hands in ARSENAL:
+    if wid in SCANNED and wid in OLD_MANIFEST and wid in OLD_SOCKETS:
+        manifest[wid], sockets[wid] = OLD_MANIFEST[wid], OLD_SOCKETS[wid]
+        print(f"[build_weapons] {wid:9s} scanned: kept (build_gun_scan.py)")
+        continue
     mat = reset()
     g = Gun(wid)
     build(g)

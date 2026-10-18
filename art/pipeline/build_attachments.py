@@ -14,8 +14,9 @@ the weapon frame (docs/04 §9.4: +Y toward the muzzle, +Z up, +X right) moved to
 The laser has a `beam` node (the beam leaves along +Y). attachments.json lists each part's mount,
 size, mounting hints and the weapons it fits, computed from art/weapons/sockets.json:
   sights: an unoccupied rail_top (the long scope needs ≥ 0.10 m of rail)
-  suppressor: a muzzle with boreRadius ≤ 0.02 on anything but a launcher or heavy that fires rounds
-              (not `casings: false`: no suppressor on a beam)
+  suppressor: a muzzle with boreRadius ≤ 0.035 on anything but a launcher or heavy that fires rounds
+              (not `casings: false`: no suppressor on a beam). The scanned guns measure their chunky
+              toy tip (0.021–0.034), so the old 0.02 would have dropped them; the fits are unchanged
   foregrip: a rail_bottom on a two-handed weapon; laser: any rail_bottom
   long mag: a mag socket pointing down (box mags), not a shotgun, launcher, heavy or casing-less weapon
   drum: the K-47 and the Buzz (the drum's look fits them)
@@ -148,7 +149,7 @@ def fits(aid, footprint):
         if aid.startswith("sight"):
             ok = "rail_top" in s and not s["rail_top"].get("occupied") and s["rail_top"]["lengthM"] >= footprint
         elif aid == "suppressor":
-            ok = ("muzzle" in s and s["muzzle"].get("boreRadius", 1) <= 0.02 and fam not in ("launcher", "heavy")
+            ok = ("muzzle" in s and s["muzzle"].get("boreRadius", 1) <= 0.035 and fam not in ("launcher", "heavy")
                   and w.get("casings", True))
         elif aid == "foregrip":
             ok = "rail_bottom" in s and w["hands"] == 2
