@@ -36,6 +36,7 @@ import { orientSocket, rotateWorld, solveTwoBone } from './ik';
 import { FootPlanter, LocoLayer, aimElevation, facingOf, facingYaw, stepYaw } from './locomotion';
 import { MotionLayer } from './motion';
 import { ShieldKit, ShieldRig } from './shield';
+import { SlingRig, slingPointFor, switchPhase, switchSeconds, type SlingPoint, type SwitchPose } from './sling';
 
 /** GPU resources shared by every avatar. */
 export class AvatarKit {
@@ -189,6 +190,10 @@ const JOLT_SHARE = [0.4, 0.6, 0] as const;
 /** a gun without an `eject` socket throws its casings from beside the receiver, out to its right and up */
 const EJECT_POS = new Vector3(0.03, 0.06, 0.06);
 const _pose: PartPose = { back: 0, turn: 0 };
+const _sw: SwitchPose = { holdingOld: false, holdingNew: false, away: 0, across: 0 };
+const _c = new Vector3();
+const _qa = new Quaternion();
+const _qb = new Quaternion();
 const _held = new Matrix4();
 const _inv = new Matrix4();
 const _h = new Vector3();
@@ -225,6 +230,8 @@ export class Avatar {
   private flameScale = 0;
   private time = 0;
   private readonly shield: ShieldRig;
+  /** render3d-b: the guns on the body and the switch (sling.ts) */
+  private readonly sling: SlingRig;
 
   constructor(
     readonly inst: CharacterInstance,
@@ -257,6 +264,7 @@ export class Avatar {
     this.blob = new Mesh(kit.blobGeo, new MeshBasicMaterial({ color: 0x000000, alphaMap: kit.blobTexture, transparent: true, depthWrite: false }));
     this.blob.renderOrder = -1;
     this.shield = new ShieldRig((name) => inst.bone(name), kit.shield);
+    this.sling = new SlingRig((name) => inst.bone(name), kit.gunMaterial, kit.weapon(0).geometry); // in the rest pose, before any animation
   }
 
   private arm(side: 'L' | 'R'): Arm | null {
@@ -303,7 +311,9 @@ export class Avatar {
     this.motion.update(p, dt, this.yaw, this.loco, this.holdOf(active, p.dual).lean, held);
     this.feet.update(p, this.yaw, this.loco, dt, world, this.motion.drop);
     // --- end animation ---
+    this.watchSwitch(p, dt);
     this.aim(p, facing);
+    this.hangGuns(p);
     this.shield.update(p.shield, this.pivot);
     this.settleRecoil(dt);
     this.updateFlame(p, dt);
@@ -366,13 +376,19 @@ export class Avatar {
 
     _dir.set(Math.cos(p.aim), Math.sin(p.aim), 0);
     _gunUp.set(-Math.sin(p.aim) * facing, Math.cos(p.aim) * facing, 0);
-    if (this.right) this.aimArm(this.right, active, 1, hold, posed);
+    // mid-switch the gun hand holds the old gun, then nothing, then the new one (sling.ts)
+    const switching = this.switching ? switchPhase(this.swT / this.swDur, _sw) : null;
+    const inHand = switching ? (switching.holdingOld ? this.swFrom : switching.holdingNew ? this.swTo : NO_WEAPON) : active;
+    if (this.right) {
+      this.aimArm(this.right, inHand, 1, switching ? this.holdOf(inHand, false) : hold, posed);
+      if (switching) this.carry(this.right, switching, p.shield === 'back');
+    }
     if (this.left) {
       this.left.gun.visible = false;
       this.left.def = NO_WEAPON;
       if (leftDef !== NO_WEAPON) this.aimArm(this.left, leftDef, -1, HOLDS.pistol, posed);
       else if (p.shield === 'front' || p.shield === 'raising') this.holdShield(this.left);
-      else if (active !== NO_WEAPON && weapons[active]?.hands === 2 && this.right) {
+      else if (!switching && active !== NO_WEAPON && weapons[active]?.hands === 2 && this.right) {
         // two-handed: the support hand on the weapon's offhand socket (sockets.json), else where its
         // family holds it; a shotgun's slides forward to the pump
         const model = this.kit.weapon(active);
@@ -473,6 +489,100 @@ export class Avatar {
     arm.gun.updateMatrixWorld(true);
   }
   // --- end render3d-b: holds ---
+
+  // --- render3d-b: guns on the body and the switch (sling.ts) ---
+  /** the slot in hand and both slots' weapons last frame (a switch starts when the slot changes) */
+  private swSlot = -1;
+  private readonly swDefs: [number, number] = [NO_WEAPON, NO_WEAPON];
+  private swFrom = NO_WEAPON;
+  private swTo = NO_WEAPON;
+  private swT = 0;
+  /** the switch's length (s; 0: none under way) */
+  private swDur = 0;
+
+  private get switching(): boolean {
+    return this.swDur > 0;
+  }
+
+  /**
+   * A switch starts on the frame the slot in hand changes with both weapons as they were (a pickup
+   * or a dual toggle isn't one), and lasts the sim's equip time for the gun coming up.
+   */
+  private watchSwitch(p: PlayerView, dt: number): void {
+    const d0 = p.weapons[0]?.def ?? NO_WEAPON;
+    const d1 = p.weapons[1]?.def ?? NO_WEAPON;
+    if (this.swSlot >= 0 && p.active !== this.swSlot && !p.dual && d0 === this.swDefs[0] && d1 === this.swDefs[1]) {
+      this.swFrom = this.swDefs[this.swSlot]!;
+      this.swTo = p.weapons[p.active]?.def ?? NO_WEAPON;
+      this.swT = 0;
+      this.swDur = this.swFrom === NO_WEAPON && this.swTo === NO_WEAPON ? 0 : switchSeconds(this.swTo);
+    } else if (this.switching) {
+      this.swT += dt;
+      if (this.swT >= this.swDur || p.dual) this.swDur = 0;
+    }
+    this.swSlot = p.active;
+    this.swDefs[0] = d0;
+    this.swDefs[1] = d1;
+  }
+
+  /** Where weapon `def` hangs on this body now. */
+  private pointOf(def: number, shieldOnBack: boolean): SlingPoint | null {
+    return def === NO_WEAPON ? null : slingPointFor(weapons[def], this.kit.weapon(def).sockets?.family, shieldOnBack);
+  }
+
+  /**
+   * Every gun not in a hand hangs on the body; dual guns are both in hand. Low draws remote
+   * soldiers at LOD1 and keeps its draw calls down: they carry no slung gun (+1 draw each).
+   */
+  private hangGuns(p: PlayerView): void {
+    if (this.lod === 1) {
+      this.sling.hide(0);
+      this.sling.hide(1);
+      return;
+    }
+    const pose = this.switching ? switchPhase(this.swT / this.swDur, _sw) : null;
+    for (const slot of [0, 1] as const) {
+      const def = p.weapons[slot]?.def ?? NO_WEAPON;
+      let inHand = p.dual || slot === p.active;
+      if (pose && def === this.swFrom && slot !== p.active) inHand = pose.holdingOld; // on its way to the body
+      if (pose && slot === p.active) inHand = pose.holdingNew; // still on the body until the hand takes it
+      if (def === NO_WEAPON || inHand) {
+        this.sling.hide(slot);
+        continue;
+      }
+      const model = this.kit.weapon(def);
+      this.sling.hang(slot, this.pointOf(def, p.shield === 'back'), model.solid ?? model.geometry, model.material);
+    }
+  }
+
+  /**
+   * Mid-switch: the hand takes the gun it holds toward that gun's point on the body (or, empty,
+   * crosses from the old gun's point to the new one's), turning it to lie as it will hang.
+   */
+  private carry(arm: Arm, pose: SwitchPose, shieldOnBack: boolean): void {
+    const from = this.sling.points[this.pointOf(this.swFrom, shieldOnBack) ?? 'back'];
+    const to = this.sling.points[this.pointOf(this.swTo, shieldOnBack) ?? 'back'];
+    const point = pose.holdingNew ? to : from;
+    if (!point || !to) return;
+    point.updateWorldMatrix(true, false);
+    _c.setFromMatrixPosition(point.matrixWorld);
+    if (!pose.holdingOld && !pose.holdingNew) _c.lerp(_t.setFromMatrixPosition(to.matrixWorld), pose.across);
+    // the wrist goes where it puts the grip (the socket) on the point
+    arm.hand.getWorldPosition(_s);
+    arm.socket.getWorldPosition(_t);
+    _c.sub(_t).add(_s);
+    _t.copy(_s).lerp(_c, pose.away);
+    arm.upper.getWorldPosition(_s);
+    _p.copy(_s).addScaledVector(UP, -0.5).addScaledVector(_dir, -0.2);
+    solveTwoBone(arm.upper, arm.lower, arm.hand, _t, _p);
+    if (!arm.gun.visible) return;
+    // the gun turns from the aim toward how it hangs
+    arm.socket.getWorldQuaternion(_qa);
+    point.getWorldQuaternion(_qb);
+    _qa.slerp(_qb, pose.away);
+    orientSocket(arm.hand, arm.socket, _gunDir.set(0, 1, 0).applyQuaternion(_qa), _gunUp.set(0, 0, 1).applyQuaternion(_qa));
+  }
+  // --- end render3d-b: guns on the body and the switch ---
 
   // --- render3d-b: recoil (recoil.ts): the gun kicks, the arm gives, big guns jolt the torso ---
   /** shots' worth of torso jolt on show, landing next frame, and its size and settle rate */

@@ -8,6 +8,9 @@
  *   parts-breacher    the pump's cycle after a shot, close up (needs guns with part_* nodes)
  *   parts-widow       the bolt's cycle
  *   parts-hammer      the cylinder's turn
+ *   sling             the gun not in hand on the body, facing right and left: a K-47 in hand with the
+ *                     Hammer holstered, then the Hammer in hand with the K-47 across the back
+ *   switch            frames through a switch from the K-47 to the Hammer (the sim's equip time)
  * Each frame is saved as <out>/mech-<scene>-<n>.png (a crop around the shooter at 2×), to lay side
  * by side. `--art <dir>` serves weapon GLBs, sockets.json, casings.glb and weapons.vfx.json from
  * <dir> instead of the build (art from a Forge branch that isn't on main yet).
@@ -26,7 +29,7 @@ const arg = (name, fallback) => {
 const base = arg('base', 'http://localhost:5192');
 const out = resolve(arg('out', 'docs/screenshots/render3d-b'));
 const hw = process.argv.includes('--hw');
-const only = arg('only', 'casings-buzz,casings-breacher,casings-widow,casings-hammer,parts-breacher,parts-widow,parts-hammer').split(',');
+const only = arg('only', 'casings-buzz,casings-breacher,casings-widow,casings-hammer,parts-breacher,parts-widow,parts-hammer,sling,switch').split(',');
 const art = arg('art', null);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -211,6 +214,39 @@ for (const [scene, loadout, frames] of [
     await s.step(Math.max(0, f - at));
     at = Math.max(at, f);
     await s.shot(`mech-${scene}-${i + 1}`, { dx: 0.45, dy: 1.05, w: 120, h: 80 });
+  }
+  await s.page.close();
+}
+
+// the gun not in hand on the body, from both sides
+if (only.includes('sling')) {
+  const s = await shooter([2, 0]);
+  let i = 0;
+  for (const slot of ['Digit1', 'Digit2']) {
+    await s.page.keyboard.down(slot);
+    await s.step(2);
+    await s.page.keyboard.up(slot);
+    await s.step(40);
+    for (const side of [1, -1]) {
+      await s.cursorAt(6 * side, 1.4);
+      await s.shot(`mech-sling-${++i}`, { dx: 0, dy: 0.95, w: 130, h: 90 });
+    }
+  }
+  await s.page.close();
+}
+
+// a switch, frame by frame: the K-47 goes onto the back, the Hammer comes off the thigh
+if (only.includes('switch')) {
+  const s = await shooter([2, 0]);
+  await s.cursorAt(6, 1.4);
+  await s.page.keyboard.down('Digit2');
+  await s.step(1);
+  await s.page.keyboard.up('Digit2');
+  let at = 1;
+  for (const [i, f] of [1, 5, 8, 11, 14, 17, 22].entries()) {
+    await s.step(f - at);
+    at = f;
+    await s.shot(`mech-switch-${i + 1}`, { dx: 0, dy: 0.95, w: 130, h: 90 });
   }
   await s.page.close();
 }
