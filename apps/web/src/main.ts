@@ -27,7 +27,9 @@ import { createConditionerSettings, parseNetSim } from '@military-forge/netcode'
 import { GAME_NAME } from '@military-forge/shared';
 import type { Input, SimEvent } from '@military-forge/sim';
 import { Camera } from './camera';
-import { fxFrame, setReduceFlashes } from './fx';
+import { fxFrame, fxState, setReduceFlashes } from './fx';
+import { autoPreset, gpuRenderer } from './gfxAuto';
+import { createHostTuning, tuningOffered } from './hostTuning';
 import { InputSampler } from './input';
 import { localBots } from './localBots';
 import { LocalMode } from './localMode';
@@ -35,9 +37,12 @@ import { OnlineMode } from './onlineMode';
 import { mountHud, type ScoreRow } from './hud';
 import { Renderer, type RenderOptions } from './render';
 import { localMatchRules, mountShell, registerRoute, type GameHost, type Settings } from './shell';
-import { keyLabel, toKeyBindings, uiCodes } from './shell/controls';
-import { PlaneCamera, create3d, online3d, parsePreset, softwareGl } from './render3d';
-import { mountTouch } from './touch';
+import { loadSettings } from './shell/controller';
+import type { GraphicsSetting } from './shell/store';
+import { toKeyBindings, uiCodes } from './shell/controls';
+import { PlaneCamera, create3d, online3d, parsePreset, softwareGl, type PresetName } from './render3d';
+import { countFrame, framesPerSecond, recordNet } from './stats';
+import { isTouchDevice, mountTouch } from './touch';
 import type { Frame } from './view';
 
 const params = new URLSearchParams(location.search);
@@ -65,7 +70,6 @@ function showToast(message: string): void {
 
 /** Gameplay input that menus can switch off (aim still follows the mouse). */
 class GameInput extends InputSampler {
-  blocked = false;
   override sample(camera: Camera, sx: number, sy: number, out?: Input): Input {
     const input = super.sample(camera, sx, sy, out);
     if (this.blocked) {
@@ -84,21 +88,31 @@ const localMapId = requestedMap && maps[requestedMap] ? requestedMap : 'movement
 let map: MapDef = getMap(online ? 'movement-test' : localMapId);
 let mode: LocalMode | OnlineMode | null = null;
 
+// Graphics quality (Settings → Graphics): a preset, or Auto, which follows the device (gfxAuto.ts:
+// High on a desktop with a real GPU, Low on phones); worked out once, when first needed
+let autoGraphicsPick: PresetName | null = null;
+const autoGraphics = (): PresetName => (autoGraphicsPick ??= autoPreset({ touch: isTouchDevice(), gpu: gpuRenderer() }));
+const graphicsPreset = (setting: GraphicsSetting): PresetName => (setting === 'auto' ? autoGraphics() : setting);
+
 // 3D draws the world under the 2D canvas, which becomes the HUD + debug overlay (H/B). Online games
 // too (the owner's decision, 18 Oct): 3D unless ?render=2d, and the 2D view where WebGL can't start
-// (create3d gives null) or, in frame(), while its context is lost
+// (create3d gives null) or, in frame(), while its context is lost. It starts on the saved quality
+// (?gfx= overrides): antialiasing is fixed when the WebGL context is made.
 const planeCamera = online3d(params) ? new PlaneCamera() : null;
+const firstPreset = parsePreset(params.get('gfx') ?? graphicsPreset(appMode ? loadSettings().graphics : 'auto'));
 const view3d = planeCamera
-  ? create3d(view3dCanvas, planeCamera, map, parsePreset(params.get('gfx')), (import.meta.env.DEV && !appMode) || params.has('perf'), undefined, softwareGl(params))
+  ? create3d(view3dCanvas, planeCamera, map, firstPreset, (import.meta.env.DEV && !appMode) || params.has('perf'), undefined, softwareGl(params))
   : null;
 const use3d = view3d !== null;
 const camera = view3d ? planeCamera! : new Camera();
 const sampler = new GameInput(canvas);
-// double-tap a direction to dash (docs/02 §21): ?dashtap in the debug client; the app's Controls settings set it
-sampler.doubleTapDash = params.has('dashtap');
+// double-tap a direction to dash (docs/02 §21), on by default: ?dashtap=0 turns it off in the debug
+// client; the app's Controls settings set it
+sampler.doubleTapDash = params.get('dashtap') !== '0';
 const options: RenderOptions = { showHitboxes: false, showGrid: !use3d, showNet: online, overlay: use3d };
-// the app's HUD is DOM (hud/): the canvas keeps the world effects, the reticle and hit markers
-if (appMode) Object.assign(options, { showGrid: false, hud: 'none' });
+// the app's HUD is DOM (hud/), reticle and hit markers included: the canvas keeps the world effects.
+// The canvas HUD, its reticle and the help line stay in the debug client (dev `/`) only.
+if (appMode) Object.assign(options, { showGrid: false, hud: 'none', reticle: false });
 const hud = appMode ? mountHud() : null;
 
 /** The 2D renderer, also feeding the HUD the events and names every mode already reports. */
@@ -107,22 +121,30 @@ class GameRenderer extends Renderer {
     super.onEvents(events, localId);
     hud?.onEvents(events, localId);
   }
-  override setNames(names: Map<number, string>): void {
-    super.setNames(names);
-    hud?.setNames(names);
+  override setNames(names: Map<number, string>, bots: ReadonlySet<number> = new Set()): void {
+    super.setNames(names, bots);
+    hud?.setNames(names, bots);
   }
 }
 
 const renderer = new GameRenderer(canvas, camera, map, () => mode?.tuning() ?? defaultTuning);
 void view3d?.load(map.spawns[0]!);
 view3d?.attach(renderer, () => (mode instanceof OnlineMode ? mode.net : null)); // sim events → 3D effects; online: remotePose (render3d)
-mountTouch({ sampler, camera, renderer, view3d }); // phones and tablets: twin sticks + buttons (apps/web/src/touch)
+// phones and tablets: twin sticks + buttons (apps/web/src/touch); the app's Settings → Touch has "Edit layout"
+mountTouch({ sampler, camera, renderer, view3d, editButton: !appMode });
+
+// the room host's live tuning panel (the in-match menu's "Tune the game"), where the page offers it:
+// pnpm playtest --tune flags the page; the game server then lets the host (only) tune the room
+const hostTuning = appMode && tuningOffered() ? createHostTuning(() => mode) : null;
 
 let settings: Settings | null = null;
+/** the game server's host while online (Settings → Network) */
+let serverHost = '';
 /** page-level keys from the Controls settings (the debug client keeps N) */
 let netGraphKeys: readonly string[] = ['KeyN'];
 
 function setMode(next: LocalMode | OnlineMode | null): void {
+  hostTuning?.close(); // it tunes the mode it was opened for
   if (mode instanceof OnlineMode) mode.dispose();
   mode = next;
   camera.setZoom(0, 1);
@@ -143,6 +165,11 @@ const host: GameHost = {
     setMode(new LocalMode(sampler, camera, renderer, nickname, rules, localMapId, localBots(params, rules !== null)));
   },
   startOnline(url, nickname, room, ticket, refreshTicket) {
+    try {
+      serverHost = new URL(url).host;
+    } catch {
+      serverHost = '';
+    }
     // WebTransport where the server routes it by room (/health webtransport.rooms), else WebSocket
     setMode(new OnlineMode(url, nickname, sampler, camera, renderer, () => {}, createConditionerSettings(false), 'auto', { room, ...(ticket ? { ticket } : {}), ...(refreshTicket ? { refreshTicket } : {}) }));
   },
@@ -152,22 +179,35 @@ const host: GameHost = {
   applySettings(next) {
     settings = next;
     options.showNet = next.netGraph;
-    view3d?.setPreset(parsePreset(next.graphics).name);
+    view3d?.setPreset(graphicsPreset(next.graphics));
+    // blood when soldiers are hit (Settings → Graphics, off by default): render3d's setBlood (#96)
+    view3d?.setBlood(next.blood);
     if (mode instanceof OnlineMode && mode.net.lowBandwidth !== next.lowBandwidth) mode.net.setLowBandwidth(next.lowBandwidth);
     sampler.bindings = toKeyBindings(next.bindings);
     sampler.doubleTapDash = next.doubleTapDash;
     netGraphKeys = uiCodes(next.bindings, 'netGraph');
     hud?.setScoreboardKeys(uiCodes(next.bindings, 'scoreboard'));
-    const glyph = (action: keyof typeof next.bindings) => (next.bindings[action][0] ? keyLabel(next.bindings[action][0]) : '');
-    hud?.setGlyphs({ dash: glyph('dash'), grenade: glyph('grenade'), cycle: glyph('cycleGrenade'), shield: glyph('shield') });
-    // Reduce flashes: the flashbang effect (fx, which remembers it) and the HUD (the attribute)
+    const key = (action: keyof typeof next.bindings) => next.bindings[action][0];
+    hud?.setKeys({ dash: key('dash'), grenade: key('grenade'), cycleGrenade: key('cycleGrenade'), shield: key('shield'), swap: key('swap'), reload: key('reload'), scoreboard: key('scoreboard') });
+    // Reduce flashes: the flashbang effect (fx, which remembers it) and the UI (the kit's html.reduce-flashes)
     setReduceFlashes(next.reduceFlashes);
-    document.documentElement.toggleAttribute('data-reduce-flashes', next.reduceFlashes);
+    const html = document.documentElement;
+    html.toggleAttribute('data-reduce-flashes', next.reduceFlashes);
+    html.classList.toggle('reduce-flashes', next.reduceFlashes);
+    // the kit's Reduce motion and Text size (every font-size token multiplies --text-scale)
+    html.classList.toggle('reduce-motion', next.reduceMotion);
+    // …and the 3D view's: no camera shake or kick, a softer gun kick, a dimmer blast light (render3d)
+    view3d?.setReducedMotion(next.reduceMotion);
+    html.style.setProperty('--text-scale', String(next.textScale));
   },
   setInputBlocked(blocked) {
     sampler.blocked = blocked;
     if (blocked) sampler.releaseAll();
     hud?.setBlocked(blocked);
+  },
+  tuning: hostTuning,
+  get autoGraphics() {
+    return autoGraphics();
   },
 };
 
@@ -224,11 +264,22 @@ registerRoute({
 // registerRoute({ id: 'locker', title: 'Locker', mount }) from './shell' (opens at #/locker).
 const shell = mountShell(document.body, appMode ? { host } : {});
 
-// the HTML loading screen hands over to the shell's own
+// the HTML loading screen (index.html) stays until the shell has its first real screen (the API
+// answered or gave up), so nothing flashes in between
 const splash = document.getElementById('boot-splash');
 if (splash) {
-  splash.classList.add('gone');
-  setTimeout(() => splash.remove(), 400);
+  const hide = () => {
+    splash.classList.add('gone');
+    setTimeout(() => splash.remove(), 400);
+  };
+  if (!appMode || shell.store.getState().screen.name !== 'boot') hide();
+  else {
+    const stop = shell.store.subscribe((s) => {
+      if (s.screen.name === 'boot') return;
+      stop();
+      hide();
+    });
+  }
 }
 
 // Dev-only debug hook for automated playtests and console poking (stripped from production builds).
@@ -289,7 +340,7 @@ if (!appMode && import.meta.env.DEV) {
 }
 
 const HELP =
-  'A/D move · W/Space jet · S crouch (hold on a platform to drop) · Shift dash (+ WASD: 8-way) · LMB fire · V melee · R reload · Q swap · F dual · G grenade · T next grenade · wheel zoom · H hitboxes · B grid · N net · ` panel' +
+  'A/D move · W/Space jet · S crouch (hold on a platform to drop) · Shift dash (alone: the way you face; + WASD: 8-way; or double-tap A/D/S) · LMB fire · V melee · R reload · Q swap · F dual · G grenade · T next grenade · wheel zoom · H hitboxes · B grid · N net · ` panel' +
   (online ? '' : ' · P record · O download replay');
 
 function resize(): void {
@@ -348,10 +399,15 @@ function drawMenuBackdrop(now: number, dt: number): void {
   view3d?.render(EMPTY_FRAME, dt);
 }
 
+const pointer = { x: 0, y: 0 };
+
 let last = performance.now();
 function frame(now: number): void {
   const dt = Math.min(0.25, Math.max(0, (now - last) / 1000));
   last = now;
+  countFrame(now);
+  pointer.x = sampler.mouseX;
+  pointer.y = sampler.mouseY;
 
   // UI toggles (not gameplay inputs); the app keeps only the net graph, on its bound keys
   let toggled = false;
@@ -417,12 +473,27 @@ function frame(now: number): void {
   shell.update(mode instanceof LocalMode ? mode : null);
   shell.setMapEvent(f.mapEvent);
   if (covered) return; // the mode keeps running (online: inputs and heartbeats), nothing is drawn
-  renderer.render(f, dt, options, HELP);
+  renderer.render(f, dt, options, appMode ? '' : HELP);
   fxFrame(f, dt); // flashbang white-out / gas edge over the view (arsenal B, apps/web/src/fx)
+  if (f.net && mode instanceof OnlineMode) recordNet(now, f.net.rttMs, f.net.prediction?.snapshotLossPct ?? 0, serverHost);
   if (hud) {
     hud.setVisible(true);
     const state = shell.store.getState();
-    hud.update({ frame: f, tuning: mode.tuning(), match: state.match, mapEvent: state.mapEvent, zoom: camera.zoom + 1, toScreen, showNet: options.showNet, scoreRows });
+    hud.update({
+      frame: f,
+      tuning: mode.tuning(),
+      match: state.match,
+      zoom: camera.zoom + 1,
+      toScreen,
+      // no reticle until the pointer (or the touch aim) has been somewhere
+      pointer: sampler.blocked || (pointer.x === 0 && pointer.y === 0) ? null : pointer,
+      showNet: options.showNet,
+      showFps: settings?.showFps ?? false,
+      fps: framesPerSecond(),
+      reduceFlashes: settings?.reduceFlashes ?? false,
+      flash: fxState().flash,
+      scoreRows,
+    });
   }
   if (options.overlay) view3d?.render(f, dt);
 }

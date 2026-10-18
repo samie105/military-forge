@@ -164,7 +164,7 @@ export function throwGrenade(game: Game, p: PlayerState, def: GrenadeDef): boole
   const sy = p.shoulderY(t);
   simCosSin(p.aim, aim);
   const strength = 0.7 + (0.3 * Math.max(0, Math.min(7, p.input.throwStrength))) / 7;
-  const speed = def.throwSpeed * strength;
+  const speed = def.throwSpeed * strength * t.grenadeThrowScale;
   // spawn just in front of the shoulder, unless a wall is in the way
   let spawnDist = 0.35;
   if (game.world.raycast(sx, sy, aim.x, aim.y, spawnDist + def.radius, SegFlag.BulletPass, ray)) {
@@ -404,7 +404,7 @@ export function explode(game: Game, x: number, y: number, owner: number, def: Ex
     const cl = Math.sqrt(cx * cx + cy * cy);
     if (cl > 1e-6 && k > 0) {
       knockOutOfDash(q, game.tuning, game.mech ? game.mech.moveSpeedMul(q, game.tuning) : 1); // blasts end a dash (docs/02 §21)
-      let mag = def.impulse * k * (covered ? def.coveredImpulseMul : 1) * (q.id === owner ? def.selfImpulseMul : 1);
+      let mag = def.impulse * game.tuning.blastImpulseScale * k * (covered ? def.coveredImpulseMul : 1) * (q.id === owner ? def.selfImpulseMul : 1);
       if (game.mech) mag *= game.mech.knockbackMul(q, game.tuning);
       let ux = cx / cl;
       let uy = cy / cl;

@@ -1,103 +1,20 @@
 /**
  * Live tuning panel (docs/02 §19.2). In local mode it edits the running sim's tuning object
- * directly; online it sends a dev SetTuning command to the room.
+ * directly; online it sends a SetTuning command to the room (dev rooms, or a playtest room's host:
+ * hostTuning.ts). The values and their ranges are content's TUNING_GROUPS, which the game server
+ * holds a host to.
  */
-import { defaultTuning, weapons, type Tuning } from '@military-forge/content';
+import { TUNING_GROUPS, changedTuning, defaultTuning, weapons, type Tuning } from '@military-forge/content';
 import { NET_PRESETS, copySettings, type ConditionerSettings, type LinkSettings } from '@military-forge/netcode';
 import { Pane, type FolderApi } from 'tweakpane';
 import type { RenderOptions } from './render';
-
-type NumericKey = { [K in keyof Tuning]: Tuning[K] extends number ? K : never }[keyof Tuning];
-
-interface Field {
-  key: NumericKey;
-  min: number;
-  max: number;
-  step: number;
-}
-
-const GROUPS: { title: string; fields: Field[] }[] = [
-  {
-    title: 'Ground',
-    fields: [
-      { key: 'walkMax', min: 1, max: 12, step: 0.1 },
-      { key: 'crouchMax', min: 0.5, max: 6, step: 0.1 },
-      { key: 'groundAccel', min: 5, max: 150, step: 1 },
-      { key: 'groundDecel', min: 5, max: 150, step: 1 },
-      { key: 'groundReverse', min: 5, max: 200, step: 1 },
-    ],
-  },
-  {
-    title: 'Air & gravity',
-    fields: [
-      { key: 'gravity', min: 2, max: 40, step: 0.5 },
-      { key: 'terminalVy', min: -40, max: -4, step: 0.5 },
-      { key: 'airAccel', min: 0, max: 80, step: 1 },
-      { key: 'airMaxX', min: 1, max: 15, step: 0.1 },
-      { key: 'airDragX', min: 0, max: 10, step: 0.1 },
-      { key: 'launchSpeedX', min: 6, max: 30, step: 0.5 },
-      { key: 'launchDragX', min: 0, max: 10, step: 0.1 },
-    ],
-  },
-  {
-    title: 'Jetpack',
-    fields: [
-      { key: 'jetThrust', min: 10, max: 80, step: 0.5 },
-      { key: 'jetKick', min: 1, max: 3, step: 0.05 },
-      { key: 'jetKickTicks', min: 0, max: 30, step: 1 },
-      { key: 'jetMaxVy', min: 2, max: 15, step: 0.1 },
-      { key: 'jetTaperBand', min: 0.1, max: 5, step: 0.1 },
-      { key: 'jetAirMaxX', min: 1, max: 15, step: 0.1 },
-    ],
-  },
-  {
-    title: 'Dash',
-    fields: [
-      { key: 'dashSpeed', min: 4, max: 30, step: 0.5 },
-      { key: 'dashBurstTicks', min: 1, max: 30, step: 1 },
-      { key: 'dashCooldown', min: 0, max: 4, step: 0.05 },
-      { key: 'dashFuelCost', min: 0, max: 50, step: 1 },
-      { key: 'dashExitUp', min: 0, max: 10, step: 0.1 },
-    ],
-  },
-  {
-    title: 'Fuel',
-    fields: [
-      { key: 'fuelMax', min: 10, max: 300, step: 1 },
-      { key: 'fuelBurn', min: 5, max: 120, step: 1 },
-      { key: 'fuelMinIgnite', min: 0, max: 50, step: 1 },
-      { key: 'fuelRegenGround', min: 0, max: 150, step: 1 },
-      { key: 'fuelRegenDelayGround', min: 0, max: 2, step: 0.05 },
-      { key: 'fuelRegenAir', min: 0, max: 80, step: 1 },
-      { key: 'fuelRegenDelayAir', min: 0, max: 3, step: 0.05 },
-    ],
-  },
-  {
-    title: 'Collision feel',
-    fields: [
-      { key: 'maxWalkSlopeDeg', min: 20, max: 70, step: 1 },
-      { key: 'stepHeight', min: 0, max: 0.5, step: 0.01 },
-      { key: 'groundSnap', min: 0, max: 0.4, step: 0.01 },
-      { key: 'ceilingBonkVxMul', min: 0, max: 1, step: 0.05 },
-      { key: 'cornerCorrection', min: 0, max: 0.3, step: 0.01 },
-      { key: 'knockbackCap', min: 2, max: 40, step: 0.5 },
-    ],
-  },
-  {
-    title: 'Health',
-    fields: [
-      { key: 'healthRegen', min: 0, max: 30, step: 0.5 },
-      { key: 'healthRegenDelay', min: 0, max: 10, step: 0.1 },
-      { key: 'respawnDelay', min: 0, max: 10, step: 0.1 },
-    ],
-  },
-];
 
 export interface PanelActions {
   getTuning(): Tuning;
   /** called after any edit (online mode forwards it to the server) */
   onTuningChanged(t: Tuning): void;
-  respawn(): void;
+  /** dev: respawn in place (the host's panel has none) */
+  respawn?(): void;
   toggleRecording?(): boolean;
   downloadReplay?(): void;
   /** online mode: the network conditioner's live settings (docs/05 §15.2) */
@@ -120,8 +37,23 @@ function addLinkBindings(folder: FolderApi, link: LinkSettings, label: string): 
   folder.addBinding(link as Required<LinkSettings>, 'stream', { label: `${label} TCP stalls` });
 }
 
-export function createTuningPanel(container: HTMLElement, options: RenderOptions, actions: PanelActions): { pane: Pane; refresh(): void } {
-  const pane = new Pane({ container, title: 'Live tuning (docs/02 §8)' });
+/** The tuning as JSON: only what differs from the defaults ("Copy values"). */
+export function tuningValuesJson(t: Tuning): string {
+  return JSON.stringify(changedTuning(t), null, 2);
+}
+
+/**
+ * The panel in `container`. `options` adds the dev client's debug view toggles (null: the host's
+ * panel, tuning only); `expanded` names the groups that start open; `labels` shows each value's
+ * words (the host's panel) instead of its tuning key (the dev panel); `title` null: no title bar.
+ */
+export function createTuningPanel(
+  container: HTMLElement,
+  options: RenderOptions | null,
+  actions: PanelActions,
+  { title = 'Live tuning (docs/02 §8)', expanded = ['Jetpack', 'Ground'], labels = false }: { title?: string | null; expanded?: readonly string[]; labels?: boolean } = {},
+): { pane: Pane; refresh(): void; values(): Tuning } {
+  const pane = new Pane(title ? { container, title } : { container });
   // Bind to a working copy, then write through, so online mode can forward changes.
   const working: Tuning = { ...actions.getTuning() };
   let debounce = 0;
@@ -132,9 +64,9 @@ export function createTuningPanel(container: HTMLElement, options: RenderOptions
     debounce = window.setTimeout(() => actions.onTuningChanged({ ...working }), 120);
   };
 
-  for (const group of GROUPS) {
-    const folder = pane.addFolder({ title: group.title, expanded: group.title === 'Jetpack' || group.title === 'Ground' });
-    for (const f of group.fields) folder.addBinding(working, f.key, { min: f.min, max: f.max, step: f.step }).on('change', commit);
+  for (const group of TUNING_GROUPS) {
+    const folder = pane.addFolder({ title: group.title, expanded: expanded.includes(group.title) });
+    for (const f of group.fields) folder.addBinding(working, f.key, { ...(labels ? { label: f.label } : {}), min: f.min, max: f.max, step: f.step }).on('change', commit);
   }
 
   if (actions.lowBandwidth) {
@@ -174,10 +106,12 @@ export function createTuningPanel(container: HTMLElement, options: RenderOptions
     give.addBinding(state, 'slot2', { label: 'slot 2', options }).on('change', apply);
   }
 
-  const view = pane.addFolder({ title: 'Debug view' });
-  view.addBinding(options, 'showHitboxes', { label: 'hitboxes (H)' });
-  view.addBinding(options, 'showGrid', { label: 'grid (B)' });
-  view.addBinding(options, 'showNet', { label: 'net graph (N)' });
+  if (options) {
+    const view = pane.addFolder({ title: 'Debug view' });
+    view.addBinding(options, 'showHitboxes', { label: 'hitboxes (H)' });
+    view.addBinding(options, 'showGrid', { label: 'grid (B)' });
+    view.addBinding(options, 'showNet', { label: 'net graph (N)' });
+  }
 
   const tools = pane.addFolder({ title: 'Tools' });
   tools.addButton({ title: 'Reset tuning to defaults' }).on('click', () => {
@@ -185,12 +119,8 @@ export function createTuningPanel(container: HTMLElement, options: RenderOptions
     pane.refresh();
     commit();
   });
-  tools.addButton({ title: 'Copy tuning JSON' }).on('click', () => {
-    const diff: Partial<Tuning> = {};
-    for (const k of Object.keys(defaultTuning) as (keyof Tuning)[]) if (working[k] !== defaultTuning[k]) diff[k] = working[k];
-    void navigator.clipboard.writeText(JSON.stringify(diff, null, 2));
-  });
-  tools.addButton({ title: 'Respawn me (K)' }).on('click', () => actions.respawn());
+  if (options) tools.addButton({ title: 'Copy values (JSON)' }).on('click', () => void navigator.clipboard.writeText(tuningValuesJson(working)));
+  if (actions.respawn) tools.addButton({ title: 'Respawn me (K)' }).on('click', () => actions.respawn!());
   if (actions.toggleRecording) {
     const rec = tools.addButton({ title: 'Start recording replay (P)' });
     rec.on('click', () => {
@@ -206,5 +136,6 @@ export function createTuningPanel(container: HTMLElement, options: RenderOptions
       Object.assign(working, actions.getTuning());
       pane.refresh();
     },
+    values: () => ({ ...working }),
   };
 }

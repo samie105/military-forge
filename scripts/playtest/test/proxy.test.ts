@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import type { Duplex } from 'node:stream';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
-import { clientIp, createProxy, isHashedAsset, pageForOrigin, pickEncoding, securityHeaders, staticPath } from '../src/proxy';
+import { TUNE_META, clientIp, createProxy, isHashedAsset, pageForOrigin, pageWithFlags, pickEncoding, securityHeaders, staticPath } from '../src/proxy';
 import { parseTunnelUrl } from '../src/tunnel';
 
 // the build in a temp dir of its own, with a secret beside it (all removed afterwards)
@@ -189,6 +189,13 @@ describe('static files and app routes', () => {
     expect(pageForOrigin(page, 'localhost:5191', [])).toBe('<meta content="http://localhost:5191/og-image.jpg">');
     expect(pageForOrigin(page, 'evil.com"><script>', [])).toBe('<meta content="/og-image.jpg">');
     expect(securityHeaders('evil.com; script-src *')['Content-Security-Policy']).not.toContain('evil');
+  });
+
+  it('--tune flags the page for the tuning panel (the head gets the meta); without it the page is as built', () => {
+    const page = '<html><head><title>app</title></head><body></body></html>';
+    expect(pageWithFlags(page, { tune: true })).toBe(`<html><head><title>app</title>  ${TUNE_META}\n  </head><body></body></html>`);
+    expect(pageWithFlags(page, { tune: false })).toBe(page);
+    expect(pageWithFlags(page, {})).toBe(page);
   });
 });
 

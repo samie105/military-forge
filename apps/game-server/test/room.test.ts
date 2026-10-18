@@ -200,6 +200,35 @@ describe('Room', () => {
     expect(c.conn.closed?.code).toBe(CloseCode.RoomFull);
   });
 
+  it("host tuning (pnpm playtest --tune): the host's edits reach everyone, within the panel's ranges; nobody else's", () => {
+    const room = new Room({ dummies: false, dev: false, match: { countdown: 1 }, hostTuning: true });
+    const a = join(room, 'A');
+    const b = join(room, 'B');
+    expect(room.hostId).toBe(a.welcome.playerId);
+    const tuningSeen = (c: FakeConn) => c.sent.filter((m) => decodeMessage(m).type === MsgType.Tuning).length;
+    room.receive(a.client, encodeCmd(CmdKind.SetTuning, JSON.stringify({ gravity: 25, fuelMax: 1e9, capsuleRadius: 0.01, grenadeThrowScale: 1.3 })));
+    expect(room.game.tuning).toMatchObject({ gravity: 25, fuelMax: 300, capsuleRadius: 0.32, grenadeThrowScale: 1.3 });
+    expect(JSON.parse((b.conn.last(MsgType.Tuning) as TuningMsg).tuningJson)).toMatchObject({ gravity: 25, fuelMax: 300 });
+    expect(tuningSeen(a.conn)).toBe(0); // the host predicts with its own edit already
+    // a guest can't: the room keeps its tuning, and the guest's prediction is put back to it
+    const before = tuningSeen(b.conn);
+    room.receive(b.client, encodeCmd(CmdKind.SetTuning, JSON.stringify({ gravity: 5 })));
+    expect(room.game.tuning.gravity).toBe(25);
+    expect(tuningSeen(b.conn)).toBe(before + 1);
+    expect(JSON.parse((b.conn.last(MsgType.Tuning) as TuningMsg).tuningJson)).toMatchObject({ gravity: 25 });
+    expect(b.conn.closed).toBeNull();
+  });
+
+  it('a room without host tuning (normal production) takes no tuning from anyone, the host included', () => {
+    const room = new Room({ dummies: false, dev: false, match: { countdown: 1 } });
+    const a = join(room, 'A');
+    const b = join(room, 'B');
+    expect(room.hostId).toBe(a.welcome.playerId);
+    room.receive(a.client, encodeCmd(CmdKind.SetTuning, JSON.stringify({ gravity: 25 })));
+    expect(room.game.tuning.gravity).toBe(20);
+    for (const c of [a.conn, b.conn]) expect(c.sent.some((m) => decodeMessage(m).type === MsgType.Tuning)).toBe(false);
+  });
+
   it('dev command: live tuning changes the simulation', () => {
     const room = new Room({ dummies: false, dev: true });
     const a = join(room, 'A');

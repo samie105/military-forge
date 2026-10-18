@@ -1,6 +1,7 @@
 /**
  * InputSampler: rebindable keys and mouse buttons, the dash latch (a tap shorter than a tick still
- * dashes, with the direction held) and double-tap dash (left, right, down; never the jet key).
+ * dashes, with the direction held; alone, no direction: the sim dashes the way the soldier faces)
+ * and double-tap dash (on by default; left, right, down; never the jet key).
  * A tiny DOM stand-in: the sampler only listens on window, document and its target.
  */
 import { Btn } from '@military-forge/sim';
@@ -54,8 +55,10 @@ describe('InputSampler', () => {
     expect(buttons()).toBe(Btn.Dash); // nothing held: along the facing
   });
 
-  it('double-tap dash is off until the setting turns it on', () => {
+  it('double-tap dash is on by default (the owner\'s call); the setting turns it off', () => {
     const { s, buttons } = setup();
+    expect(s.doubleTapDash).toBe(true);
+    s.doubleTapDash = false;
     tap('KeyD', 0);
     tap('KeyD', 100);
     expect(buttons()).toBe(0);
@@ -104,6 +107,47 @@ describe('InputSampler', () => {
     expect(buttons()).toBe(Btn.Dash);
     down('KeyU', 3000);
     expect(s.sample(camera, 0, 0).weaponSelect).toBe(2);
+  });
+
+  it("Tab, Space and the arrows are the game's during play, the menus' while menus are up (keyboard navigation)", () => {
+    // a window of its own: the other tests' samplers (never removed) listen on the shared one
+    const shared = globalThis.window;
+    const own = new EventTarget();
+    Object.assign(globalThis, { window: own });
+    const s = new InputSampler(new EventTarget() as HTMLElement);
+    Object.assign(globalThis, { window: shared });
+    const press = (code: string, extra: Record<string, unknown> = {}) => {
+      const e = new Event('keydown', { cancelable: true });
+      for (const [k, v] of Object.entries({ code, repeat: false, timeStamp: 0, ...extra })) Object.defineProperty(e, k, { value: v });
+      own.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    // playing: no focus moves, no scrolling
+    expect(['Tab', 'Space', 'ArrowDown'].map((c) => press(c))).toEqual([true, true, true]);
+    // an overlay (Settings, the in-match menu) is up
+    s.blocked = true;
+    expect(['Tab', 'Space', 'ArrowDown'].map((c) => press(c))).toEqual([false, false, false]);
+    s.blocked = false;
+    // focus on one of the shell's controls, or a menu screen showing (Home, the lobby, results)
+    class FakeElement {
+      constructor(readonly inShell: boolean) {}
+      closest(sel: string) {
+        return sel === '#shell' && this.inShell ? this : null;
+      }
+    }
+    const doc = globalThis.document as unknown as { querySelector?: (q: string) => unknown };
+    Object.assign(globalThis, { Element: FakeElement });
+    try {
+      expect(press('Tab', { target: new FakeElement(true) })).toBe(false);
+      expect(press('Tab', { target: new FakeElement(false) })).toBe(true);
+      doc.querySelector = (q: string) => (q.includes('.screen--menu') ? {} : null);
+      expect(press('Tab')).toBe(false);
+      expect(press('Space')).toBe(false);
+    } finally {
+      delete doc.querySelector;
+      delete (globalThis as { Element?: unknown }).Element;
+    }
+    expect(press('Tab')).toBe(true);
   });
 
   it('dropping input (menus, blur) drops a latched dash too', () => {

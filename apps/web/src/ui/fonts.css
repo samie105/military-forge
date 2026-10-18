@@ -1,0 +1,11 @@
+/*
+ * The design kit's two families, served from this site (no third-party requests: the CSP's
+ * font-src 'self' stays): Barlow Semi Condensed 500/600/700 and Saira Stencil One, the weights the
+ * kit uses, Latin subset, font-display: swap (text shows at once in the fallback, then swaps). Both
+ * are SIL Open Font License 1.1, from the @fontsource packages; the licences are served at
+ * /licenses/. The kit's tokens keep their fallbacks (--font-ui, --font-stencil in kit.css).
+ */
+@import '@fontsource/barlow-semi-condensed/latin-500.css';
+@import '@fontsource/barlow-semi-condensed/latin-600.css';
+@import '@fontsource/barlow-semi-condensed/latin-700.css';
+@import '@fontsource/saira-stencil-one/latin-400.css';

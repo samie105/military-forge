@@ -6,6 +6,7 @@
  * embedded Postgres (PGlite), an in-memory KV and a dev signing key, so `pnpm dev` and `pnpm test`
  * work without Docker. The full list with examples is in `.env.example`.
  */
+import { normalizeRoomCode } from '@military-forge/shared';
 import { z } from 'zod';
 
 export type NodeEnv = 'development' | 'test' | 'production';
@@ -46,6 +47,11 @@ export interface Config {
    * server's rooms are open then); production requires it.
    */
   joinTicket: { privateKeyPem: string | null; ttlSeconds: number };
+  /**
+   * Room codes to hold open from start-up (KEEP_ROOMS): a restarted API with an in-memory KV keeps
+   * the links it handed out (pnpm playtest passes the rooms in play when it restarts the API).
+   */
+  keepRooms: string[];
 }
 
 export class ConfigError extends Error {
@@ -86,6 +92,7 @@ const EnvSchema = z.object({
   GAME_SERVER_URL: z.url({ protocol: /^wss?$/, error: 'must be a ws:// or wss:// URL' }).optional(),
   JOIN_TICKET_PRIVATE_KEY: z.string().min(1).optional(),
   JOIN_TICKET_TTL_SECONDS: z.coerce.number().int().min(5).max(120).default(30),
+  KEEP_ROOMS: list.default([]),
 });
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
@@ -106,6 +113,12 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     }
   }
   if (e.COOKIE_SAMESITE === 'None' && !secure) issues.push('COOKIE_SAMESITE: None requires COOKIE_SECURE=true');
+  const keepRooms: string[] = [];
+  for (const raw of e.KEEP_ROOMS) {
+    const code = normalizeRoomCode(raw);
+    if (code) keepRooms.push(code);
+    else issues.push(`KEEP_ROOMS: "${raw}" is not a room code`);
+  }
   if (issues.length) throw new ConfigError(issues);
 
   return {
@@ -129,5 +142,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     client: { minVersion: e.MIN_CLIENT_VERSION ?? null, latestVersion: e.LATEST_CLIENT_VERSION ?? null },
     gameServerUrl: e.GAME_SERVER_URL?.replace(/\/+$/, '') ?? null,
     joinTicket: { privateKeyPem: e.JOIN_TICKET_PRIVATE_KEY?.replaceAll('\\n', '\n') ?? null, ttlSeconds: e.JOIN_TICKET_TTL_SECONDS },
+    keepRooms: [...new Set(keepRooms)],
   };
 }

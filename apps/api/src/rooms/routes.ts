@@ -32,6 +32,22 @@ interface RoomRecord {
   createdAt: string;
 }
 
+/**
+ * Holds room codes open (config.keepRooms, at start-up): a code already known stays as it is; a new
+ * one is recorded as if just made, with the usual sliding TTL. pnpm playtest restarts its API with
+ * the rooms in play, so their links keep working after the in-memory KV starts over.
+ */
+export async function keepRooms(kv: Kv, codes: readonly string[], now: () => number = Date.now): Promise<number> {
+  let added = 0;
+  for (const raw of codes) {
+    const code = normalizeRoomCode(raw);
+    if (!code) continue;
+    const record: RoomRecord = { host: 'kept', createdAt: new Date(now()).toISOString() };
+    if (await kv.set(`room:${code}`, JSON.stringify(record), { ttlMs: ROOM_TTL_MS, onlyIfAbsent: true })) added++;
+  }
+  return added;
+}
+
 /** What a client needs to connect: the code, where the game server is, and its join ticket. */
 export interface RoomJoin {
   code: string;

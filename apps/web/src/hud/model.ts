@@ -2,8 +2,9 @@
  * The HUD's numbers, as pure functions of the frame, the tuning and recent events, so they're
  * testable without a DOM. hud.ts turns them into elements.
  */
-import { FRAG, HitZone, NO_WEAPON, RIOT_SHIELD, pickups as pickupDefs, weapons, type Tuning } from '@military-forge/content';
+import { HitZone, NO_WEAPON, RIOT_SHIELD, grenades, pickups as pickupDefs, weapons, type PickupDef, type Tuning } from '@military-forge/content';
 import { DamageSource, type SimEvent } from '@military-forge/sim';
+import { iconHref, weaponIcon } from '../ui/icons';
 import type { PickupView, PlayerView, WeaponView } from '../view';
 import { nearbyWeaponPrompt, takePrompt, weaponUnderfoot } from '../weaponItems';
 
@@ -26,14 +27,24 @@ export interface ArsenalFields {
 
 export type HudPlayer = PlayerView & Partial<ArsenalFields>;
 
+/** The small badge after a kill-feed line (the kit's .kf__badge). */
+export type FeedBadge = 'headshot' | 'ricochet' | 'blast' | 'fall' | 'suicide' | null;
+
 export interface FeedEntry {
   key: number;
   killer: string;
   victim: string;
-  /** what did it: a weapon name, "melee", "frag", "fell" */
+  /** what did it, in words: a weapon name, "melee", "frag", "mine", "gas", "fell" */
   how: string;
+  /** what did it, as a sprite href ('#wpn-widow', '#icon-g-frag', '#icon-melee'); '' = say `how` */
+  icon: string;
+  badge: FeedBadge;
   headshot: boolean;
   suicide: boolean;
+  /** a fall (or the world): "Vikram fell" */
+  fell: boolean;
+  killerBot: boolean;
+  victimBot: boolean;
   /** this player was in it */
   mine: 'killer' | 'victim' | null;
 }
@@ -42,32 +53,59 @@ export function damageSourceName(source: number): string {
   if (source === DamageSource.Grenade) return 'frag';
   if (source === DamageSource.World) return 'fell';
   if (source === DamageSource.Melee) return 'melee';
+  if (source === DamageSource.Mine) return 'mine';
+  if (source === DamageSource.Gas) return 'gas';
   return weapons[source]?.name ?? '?';
 }
 
+/** The sprite href for what did it ('' when the kit has no glyph: the feed says it in words). */
+export function damageSourceIcon(source: number): string {
+  if (source === DamageSource.Grenade) return iconHref('g-frag');
+  if (source === DamageSource.Mine) return iconHref('g-mine');
+  if (source === DamageSource.Gas) return iconHref('g-gas');
+  if (source === DamageSource.Melee) return iconHref('melee');
+  if (source === DamageSource.World) return '';
+  const icon = weaponIcon(weapons[source]?.id);
+  return icon ? iconHref(icon) : '';
+}
+
 /**
- * Kill-feed lines from one batch of sim events (deaths, with the headshot from a head hit on the
- * same victim earlier in the batch). `nextKey` numbers them for the DOM.
+ * Kill-feed lines from one batch of sim events: deaths, with a headshot from a head hit on the same
+ * victim earlier in the batch and a ricochet from a bullet that bounced off a shield into them.
+ * `nextKey` numbers them for the DOM; `bots` marks bot players.
  */
-export function feedFromEvents(events: readonly SimEvent[], localId: number, names: ReadonlyMap<number, string>, nextKey: () => number): FeedEntry[] {
+export function feedFromEvents(events: readonly SimEvent[], localId: number, names: ReadonlyMap<number, string>, nextKey: () => number, bots: ReadonlySet<number> = new Set()): FeedEntry[] {
   const headHit = new Set<number>();
+  const ricochet = new Set<number>();
   const out: FeedEntry[] = [];
   const name = (id: number) => (id < 0 ? 'world' : (names.get(id) ?? `Player ${id + 1}`));
   for (const e of events) {
     if (e.type === 'hit') {
       if (e.zone === HitZone.Head) headHit.add(e.target);
       else headHit.delete(e.target);
+    } else if (e.type === 'ricochet') {
+      if (e.hit === 2) ricochet.add(e.target);
     } else if (e.type === 'death') {
       const suicide = e.killer === e.victim || e.killer < 0;
+      const fell = e.source === DamageSource.World;
+      const headshot = headHit.has(e.victim) && !suicide;
+      const blast = e.source === DamageSource.Grenade || e.source === DamageSource.Mine;
+      const badge: FeedBadge = fell ? 'fall' : suicide ? 'suicide' : headshot ? 'headshot' : ricochet.has(e.victim) ? 'ricochet' : blast ? 'blast' : null;
       out.push({
         key: nextKey(),
         killer: suicide ? name(e.victim) : name(e.killer),
         victim: name(e.victim),
         how: damageSourceName(e.source),
-        headshot: headHit.has(e.victim) && !suicide,
+        icon: damageSourceIcon(e.source),
+        badge,
+        headshot,
         suicide,
+        fell,
+        killerBot: !suicide && bots.has(e.killer),
+        victimBot: bots.has(e.victim),
         mine: e.killer === localId && !suicide ? 'killer' : e.victim === localId ? 'victim' : null,
       });
+      ricochet.delete(e.victim);
     }
   }
   return out;
@@ -111,6 +149,8 @@ export interface FuelView {
   ignite: number;
   /** below the ignite threshold: the jetpack won't start */
   empty: boolean;
+  /** 0..1: how much of the regen delay is still to run (the kit's thin strip under the fuel bar) */
+  delayLeft: number;
 }
 
 /**
@@ -121,10 +161,13 @@ export function fuelView(p: Pick<PlayerView, 'fuel' | 'fuelRegenDelay' | 'ground
   const fill = Math.max(0, Math.min(1, p.fuel / t.fuelMax));
   const full = (p.grounded ? t.fuelRegenDelayGround : t.fuelRegenDelayAir) * 60;
   const delay = p.fuelRegenDelay > 0 && full > 0 && fill < 1 ? Math.min(1 - fill, 0.25 * Math.min(1, p.fuelRegenDelay / full)) : 0;
-  return { fill, delay, ignite: Math.min(1, t.fuelMinIgnite / t.fuelMax), empty: p.fuel < t.fuelMinIgnite };
+  const delayLeft = p.fuelRegenDelay > 0 && full > 0 && fill < 1 ? Math.min(1, p.fuelRegenDelay / full) : 0;
+  return { fill, delay, ignite: Math.min(1, t.fuelMinIgnite / t.fuelMax), empty: p.fuel < t.fuelMinIgnite, delayLeft };
 }
 
 export interface WeaponCard {
+  /** which of the two slots (0, 1) */
+  slot: number;
   def: number;
   name: string;
   melee: boolean;
@@ -148,6 +191,7 @@ export function weaponCards(p: Pick<PlayerView, 'weapons' | 'active' | 'dual'>):
     const total = def.reload * 60;
     return [
       {
+        slot: i,
         def: w.def,
         name: def.name,
         melee,
@@ -233,15 +277,8 @@ export function conditions(p: HudPlayer): Conditions {
   };
 }
 
-/** The grenade belt's types (arsenal-b's content `grenades`, by type id); frags only until #40 lands. */
-export const BELT: readonly { id: string; name: string; max: number }[] = [
-  { id: 'frag', name: 'Frag', max: FRAG.maxCount },
-  { id: 'smoke', name: 'Smoke', max: 2 },
-  { id: 'gas', name: 'Gas', max: 2 },
-  { id: 'flash', name: 'Flash', max: 2 },
-  { id: 'mine', name: 'Mine', max: 2 },
-  { id: 'emp', name: 'EMP', max: 2 },
-];
+/** The grenade belt's types, in the sim's type order (content `grenades`): frag, smoke, gas, flashbang, mine, EMP. */
+export const BELT: readonly { id: string; name: string; max: number }[] = grenades.map((g) => ({ id: g.id, name: g.name, max: g.maxCount }));
 
 export interface BeltSlot {
   id: string;
@@ -266,6 +303,21 @@ export function grenadeBelt(p: HudPlayer): BeltSlot[] {
 /** Within this far (m) of an item you're told how to take it. */
 export const PICKUP_PROMPT_RANGE = 3;
 
+/** The nearest item within reach of the prompt, null when none. */
+export function pickupNear(me: Pick<PlayerView, 'x' | 'y' | 'alive'>, items: readonly PickupView[] | undefined): PickupDef | null {
+  if (!me.alive || !items?.length) return null;
+  let best: PickupView | null = null;
+  let bestD = PICKUP_PROMPT_RANGE;
+  for (const k of items) {
+    const d = Math.hypot(k.x - me.x, (k.y - me.y) * 0.75);
+    if (d <= bestD) {
+      best = k;
+      bestD = d;
+    }
+  }
+  return (best && pickupDefs[best.def]) ?? null;
+}
+
 /**
  * "Riot Shield: walk over to take" when an item lies close by, the nearest first; '' when none.
  * Weapon crates (more guns): standing on a gun you don't hold, `[E] take Widow (swaps your
@@ -276,16 +328,32 @@ export function pickupPrompt(me: Pick<PlayerView, 'x' | 'y' | 'alive'> & Partial
   const held = { weapons: me.weapons ?? [], active: me.active ?? 0 };
   const under = weaponUnderfoot(items, { x: me.x, y: me.y, weapons: held.weapons });
   if (under && !under.held) return takePrompt(under, held);
-  let best: PickupView | null = null;
-  let bestD = PICKUP_PROMPT_RANGE;
-  for (const k of items) {
-    const d = Math.hypot(k.x - me.x, (k.y - me.y) * 0.75);
-    if (d <= bestD) {
-      best = k;
-      bestD = d;
-    }
-  }
-  const def = best ? pickupDefs[best.def] : undefined;
+  const def = pickupNear(me, items);
   if (def?.kind === 'weapon') return nearbyWeaponPrompt(def, held);
   return def ? `${def.name}: walk over to take` : '';
+}
+
+/** An item's glyph: the shield, or the grenade type of a pair. */
+export function pickupIcon(def: PickupDef): string {
+  if (def.kind === 'grenades' && def.grenade !== undefined) return iconHref(`g-${grenades[def.grenade]?.id ?? 'frag'}`);
+  if (def.kind === 'weapon' && def.weapon !== undefined) return iconHref(weaponIcon(weapons[def.weapon]?.id) ?? 'armory');
+  return iconHref('shield');
+}
+
+/** A map event's look in the kit: its colour token and icon, by MapEventKind. */
+export function eventLook(kind: string): { color: string; icon: string } {
+  switch (kind) {
+    case 'emp':
+      return { color: 'var(--c-ev-emp)', icon: 'emp' };
+    case 'gust':
+      return { color: 'var(--c-ev-wind)', icon: 'arrow-right' };
+    case 'fog':
+      return { color: 'var(--c-muted-strong)', icon: 'eye' };
+    case 'gravitySurge':
+    case 'lowGravity':
+    case 'flip':
+      return { color: 'var(--c-ev-gravity)', icon: 'gravity' };
+    default:
+      return { color: 'var(--c-ev-gravity)', icon: 'warn' };
+  }
 }

@@ -52,13 +52,14 @@ async function enter(p, url, name) {
   await p.page.goto(url, { waitUntil: 'load', timeout: 180_000 });
   await p.page.waitForSelector('input[aria-label="Your name"]', { timeout: 180_000 });
   await p.page.type('input[aria-label="Your name"]', name);
-  await sleep(700); // the live nickname check
+  // the live nickname check: Continue turns on once the API says the name is free
+  await p.page.waitForSelector('button[type=submit]:not([disabled])', { timeout: 60_000 });
   await p.page.click('button[type=submit]');
 }
 
-/** One net-graph reading: "ping 42 ms ±3 · loss 0.4% · 30 snap/s", "↓ 8.1 KB/s · ↑ 4.0 KB/s · …", "buffer … corrections …" */
+/** One net-graph reading (the HUD's net plate carries the full graph): "ping 42 ms ±3 · loss 0.4% · 30 snap/s", "↓ 8.1 KB/s · ↑ 4.0 KB/s · …", "buffer … corrections …" */
 async function netSample(p) {
-  const text = await p.page.$eval('.hud-net', (e) => e.textContent ?? '').catch(() => '');
+  const text = await p.page.$eval('.hud-net[data-detail]', (e) => e.getAttribute('data-detail') ?? '').catch(() => '');
   const num = (re) => Number(re.exec(text)?.[1] ?? NaN);
   return {
     ping: num(/ping (\d+) ms/),
@@ -96,26 +97,31 @@ const net = { A: [], B: [] };
 try {
   await enter(a, link, `Ade${suffix()}`);
   if (!/\/r\/[A-Z]{6}/.test(link)) await (await byText(a.page, 'button', 'Play with friends')).click();
-  await a.page.waitForSelector('.sh-lobby', { timeout: 60_000 });
-  const roomLink = await a.page.$eval('.sh-link-text', (e) => e.textContent);
+  const lobby = '[data-screen="lobby"]';
+  await a.page.waitForSelector(lobby, { timeout: 60_000 });
+  const roomLink = a.page.url();
   log('room', roomLink);
   await enter(b, roomLink, `Kemi${suffix()}`);
-  await b.page.waitForSelector('.sh-lobby', { timeout: 60_000 });
-  // rooms can fill with bots: wait for the two people
-  await a.page.waitForFunction(() => [...document.querySelectorAll('.sh-players li')].filter((li) => !li.querySelector('.sh-bot')).length === 2, { timeout: 30_000 });
+  await b.page.waitForSelector(lobby, { timeout: 60_000 });
+  await a.page.waitForFunction(() => document.querySelectorAll('.player-list .player-row:not(.player-row--open) .avatar:not(.avatar--bot)').length === 2, { timeout: 30_000 });
   log('both in the lobby');
-  const [time, kills] = await a.page.$$('.sh-settings-grid select');
-  await time.select('60');
-  await kills.select('5');
-  await b.page.waitForFunction(() => document.querySelector('.sh-settings-grid select')?.value === '60', { timeout: 15_000 });
+  // the host's settings: a 1-minute match, first to 5 (the kill limit steps by 5)
+  await (await a.page.waitForSelector('xpath/.//*[@aria-labelledby="tl-label"]/button[normalize-space(.)="1"]')).click();
+  for (let i = 0; i < 6 && (await a.page.$eval('[data-bind="room.killLimit"]', (e) => e.textContent)) !== '5'; i++) await (await a.page.waitForSelector('button[aria-label="Fewer kills"]')).click();
+  await b.page.waitForFunction(() => document.querySelector('[data-bind="room.timeLimit"]')?.textContent === '1 min', { timeout: 15_000 });
   await shot(a, '01-lobby');
   await shot(b, '01-lobby');
-  for (const p of [a, b]) await (await byText(p.page, 'button', 'Ready')).click();
-  await a.page.waitForSelector('.sh-countdown', { timeout: 30_000 });
+  for (const p of [a, b]) await (await p.page.waitForSelector('xpath/.//footer//button[normalize-space(.)="Ready"]')).click();
+  await a.page.waitForSelector('[data-screen="countdown"]', { timeout: 30_000 });
   log('countdown');
   await shot(a, '02-countdown');
-  await a.page.waitForSelector('.hud-top:not([hidden])', { timeout: 30_000 });
+  await a.page.waitForSelector('#hud[data-active-state~="match"]', { timeout: 30_000 });
   log('match on');
+  // the first-run controls card: read, then away
+  for (const p of [a, b]) {
+    const got = await p.page.$('xpath/.//button[contains(normalize-space(.), "Got it")]');
+    if (got) await got.click();
+  }
   for (const p of [a, b]) await p.page.keyboard.press('KeyN'); // the net graph
 
   // a minute of play: A heads right, B left, both jetting in bursts and firing toward each other
@@ -127,7 +133,7 @@ try {
   await move(b, 'KeyA', 180);
   let shots = 0;
   const firing = new Map();
-  while (!(await a.page.$('.sh-results'))) {
+  while (!(await a.page.$('[data-screen="results"]'))) {
     const s = Math.floor((Date.now() - t0) / 1000);
     for (const p of [a, b]) {
       if (s % 3 === 0) await p.page.keyboard.down('KeyW');
@@ -155,14 +161,15 @@ try {
     for (const k of ['KeyA', 'KeyD', 'KeyW']) await p.page.keyboard.up(k);
     if (firing.get(p)) await p.page.mouse.up();
   }
-  await b.page.waitForSelector('.sh-results', { timeout: 30_000 });
+  await b.page.waitForSelector('[data-screen="results"]', { timeout: 30_000 });
   log('results');
-  await sleep(1000);
+  // vote at once (the vote window is short; screenshots of a 3D page are slow in headless Chrome)
+  for (const p of [a, b]) await (await byText(p.page, 'button', 'Play again')).click();
+  log('both voted');
   await shot(a, '04-results');
   await shot(b, '04-results');
-  for (const p of [a, b]) await (await byText(p.page, 'button', 'Play again')).click();
-  await a.page.waitForSelector('.sh-countdown', { timeout: 30_000 });
-  log('play again: the next countdown');
+  await a.page.waitForSelector('[data-screen="countdown"], #hud[data-active-state~="match"]', { timeout: 30_000 });
+  log('play again: the next match');
   await shot(a, '05-rematch');
   const report = { link: roomLink, A: summary(net.A), B: summary(net.B), errors: { A: a.errors, B: b.errors } };
   writeFileSync(join(out, 'net-graph.json'), `${JSON.stringify(report, null, 2)}\n`);

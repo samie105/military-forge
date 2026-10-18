@@ -76,5 +76,9 @@ describe('loadConfig', () => {
 
   it('parses the reserved nickname list', () => {
     expect(loadConfig({ RESERVED_NICKNAMES: 'Richie, Ade ,,' }).reservedNicknames).toEqual(['Richie', 'Ade']);
+    // KEEP_ROOMS (pnpm playtest's API restarts): room codes, normalised, each once; anything else is refused
+    expect(loadConfig({ KEEP_ROOMS: 'kqx-mzp, BGAKSS,KQXMZP' }).keepRooms).toEqual(['KQXMZP', 'BGAKSS']);
+    expect(loadConfig({}).keepRooms).toEqual([]);
+    expect(() => loadConfig({ KEEP_ROOMS: 'NOPE0' })).toThrow(/KEEP_ROOMS: "NOPE0" is not a room code/);
   });
 });

@@ -106,6 +106,12 @@ importers:
 
   apps/web:
     dependencies:
+      '@fontsource/barlow-semi-condensed':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/saira-stencil-one':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@military-forge/bots':
         specifier: workspace:*
         version: link:../../packages/bots
@@ -741,6 +747,12 @@ packages:
   '@eslint/plugin-kit@0.7.3':
     resolution: {integrity: sha512-IkO+/KEUvwbVpiURZg+P7zF74z5Jxe0UgJxVni+RtoHQ6IZieXaO02kmadomap/q+l6bc/jdPGGqTjhuZnuz1Q==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
+
+  '@fontsource/barlow-semi-condensed@5.3.0':
+    resolution: {integrity: sha512-EdpQ1GlLMofGqDsQhEw+g6DonNKmzt21p8y/oNbTl4BFzEkqYkFyE2fj25YGxmZBL/LZZGAxe74FlvEWcgc31w==}
+
+  '@fontsource/saira-stencil-one@5.3.0':
+    resolution: {integrity: sha512-b7ILM7KrAWTIUSWKuzV29lTQZV5QOGhlmXXEt3Dsg/rJ4lo1kjUjuo6dBG9Iq+pR7wRZCVXftinVHDof+i9nSA==}
 
   '@gltf-transform/core@4.5.1':
     resolution: {integrity: sha512-OWgBYssKHKoXMIrMb2N20jXqWRnMP9HdtcTFQBEAJtz4P+OOxx5fozl5eAeK7nktIs5uDE/lu4NbkE5VCZaR9g==}
@@ -2469,6 +2481,10 @@ snapshots:
     dependencies:
       '@eslint/core': 1.2.1
       levn: 0.4.1
+
+  '@fontsource/barlow-semi-condensed@5.3.0': {}
+
+  '@fontsource/saira-stencil-one@5.3.0': {}
 
   '@gltf-transform/core@4.5.1':
     dependencies:

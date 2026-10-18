@@ -15,9 +15,17 @@ export interface MatchView {
   /** whole seconds played, only while `untimed` (0 otherwise, so timed matches don't re-render twice a second) */
   secondsElapsed: number;
   killLimit: number;
+  /** the time limit in seconds (0 = none) */
+  timeLimit: number;
+  /** the countdown's length in seconds (the countdown ring) */
+  countdownTotal: number;
+  /** the map's name ("Lunar Outpost") */
+  mapName: string;
   localId: number;
   myScore: number;
   leaderScore: number;
+  /** who leads (ties: the first in the standings); '' when nobody plays */
+  leaderName: string;
   /** WAITING: you are ready */
   ready: boolean;
   /** ENDING/POSTGAME: rematch votes so far, humans who can vote, and whether you voted */
@@ -30,11 +38,15 @@ export interface MatchView {
 
 export function matchView(match: Match, localId: number): MatchView {
   let leaderScore = 0;
+  let leaderName = '';
   let votes = 0;
   let any = false;
   for (const m of match.players) {
     if (!m) continue;
-    if (!any || m.score > leaderScore) leaderScore = m.score;
+    if (!any || m.score > leaderScore) {
+      leaderScore = m.score;
+      leaderName = playerName(m.name, m.isBot);
+    }
     any = true;
     if (m.rematch) votes++;
   }
@@ -48,9 +60,13 @@ export function matchView(match: Match, localId: number): MatchView {
     untimed,
     secondsElapsed: untimed ? Math.floor(match.phaseTick / TICK_RATE) : 0,
     killLimit: match.rules.killLimit,
+    timeLimit: match.rules.timeLimit,
+    countdownTotal: match.rules.countdown,
+    mapName: match.game.map.name,
     localId,
     myScore: me?.score ?? 0,
     leaderScore,
+    leaderName,
     ready: me?.ready ?? false,
     votes,
     humans: match.humanCount(),
@@ -105,4 +121,9 @@ export function kdRatio(s: Pick<MatchStanding, 'kills' | 'deaths'>): string {
  */
 export function placeholderXp(s: MatchStanding, won = s.placement === 1): number {
   return 100 + 10 * s.kills + 5 * s.assists + (won ? 50 : 0);
+}
+
+/** A name next to a Bot badge: the bots' own "[BOT] " tag (packages/bots) is left to the badge. */
+export function playerName(name: string, bot: boolean): string {
+  return bot ? name.replace(/^\[BOT\]\s*/, '') : name;
 }

@@ -1,4 +1,4 @@
-import { BUZZ, FRAG, HAMMER, defaultTuning as T } from '@military-forge/content';
+import { BUZZ, FRAG, HAMMER, createTuning, defaultTuning as T } from '@military-forge/content';
 import { describe, expect, it } from 'vitest';
 import { Btn, DamageSource, Game, hashGame, type SimEvent } from '../src';
 import { dummyAt, flatMap, hold, makeGame, placeOnGround, rect } from './helpers';
@@ -244,6 +244,29 @@ describe('frag grenade', () => {
     Object.assign(g, { alive: true, owner: p.id, x: 60.5, y: 3.6, vx: 0, vy: 0, fuse: 1 / 60 });
     game.step([]);
     expect(target.vy).toBeLessThanOrEqual(0);
+  });
+
+  it("the tuning's grenade scales: throw speed and a blast's push (the host's tuning panel)", () => {
+    const thrown = (grenadeThrowScale: number) => {
+      const { game, p } = makeGame(flatMap());
+      game.tuning = createTuning({ grenadeThrowScale });
+      placeOnGround(game, p, 5);
+      hold(game, p, Btn.Grenade, 1, Math.PI / 4);
+      return game.grenades.find((x) => x.alive)!.vx;
+    };
+    expect(thrown(1.3) / thrown(1)).toBeCloseTo(1.3, 2);
+    const pushed = (blastImpulseScale: number) => {
+      const { game, p } = makeGame(flatMap([], [], 200));
+      game.tuning = createTuning({ blastImpulseScale });
+      placeOnGround(game, p, 5);
+      const target = dummyAt(game, 60);
+      hold(game, p, 0, 5);
+      const g = game.allocGrenade()!;
+      Object.assign(g, { alive: true, owner: p.id, x: 58, y: 0.15, vx: 0, vy: 0, fuse: 1 / 60 });
+      game.step([]);
+      return Math.hypot(target.vx, target.vy);
+    };
+    expect(pushed(0.5) / pushed(1)).toBeCloseTo(0.5, 1);
   });
 
   it('melee lunges never reach blast-launch speed, so they keep the normal air drag', () => {

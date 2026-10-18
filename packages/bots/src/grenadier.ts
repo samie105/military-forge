@@ -47,7 +47,7 @@ export function solveThrow(game: Game, self: PlayerState, tx: number, ty: number
     let spawnDist = 0.35;
     if (game.world.raycast(sx, sy, dir.x, dir.y, spawnDist + FRAG.radius, SegFlag.BulletPass, ray)) spawnDist = Math.max(0, ray.t - FRAG.radius - 0.02);
     for (const strength of STRENGTHS) {
-      const speed = FRAG.throwSpeed * (0.7 + (0.3 * strength) / 7);
+      const speed = FRAG.throwSpeed * t.grenadeThrowScale * (0.7 + (0.3 * strength) / 7);
       const g = scratch;
       g.alive = true;
       g.owner = self.id;

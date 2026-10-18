@@ -34,6 +34,8 @@ export interface ProxyOptions {
    * follow the tunnel's address; anything else is refused here with the API's 403.
    */
   apiOrigin?: string;
+  /** pnpm playtest --tune: the app offers a room's host the tuning panel (the game server lets the host tune) */
+  tune?: boolean;
   log?: (line: string) => void;
 }
 
@@ -192,7 +194,16 @@ export function pageForOrigin(html: string, host: string | undefined, allowed: r
   return html.replaceAll('%ORIGIN%', origin);
 }
 
-function servePage(req: IncomingMessage, res: ServerResponse, file: string, allowed: readonly string[]): void {
+/** The flag the app reads to offer the room's host the tuning panel (main.ts: `meta[name="mf-tune"]`). */
+export const TUNE_META = '<meta name="mf-tune" content="host" />';
+
+/** The page with the playtest's own flags: `tune` adds TUNE_META to its head. */
+export function pageWithFlags(html: string, flags: { tune?: boolean }): string {
+  if (!flags.tune) return html;
+  return html.includes('</head>') ? html.replace('</head>', `  ${TUNE_META}\n  </head>`) : `${TUNE_META}${html}`;
+}
+
+function servePage(req: IncomingMessage, res: ServerResponse, file: string, allowed: readonly string[], tune: boolean): void {
   let html: string;
   try {
     html = readFileSync(file, 'utf8');
@@ -200,7 +211,7 @@ function servePage(req: IncomingMessage, res: ServerResponse, file: string, allo
     send(res, 404, 'Not found');
     return;
   }
-  const body = Buffer.from(pageForOrigin(html, req.headers.host, allowed));
+  const body = Buffer.from(pageWithFlags(pageForOrigin(html, req.headers.host, allowed), { tune }));
   res.writeHead(200, { ...securityHeaders(req.headers.host), 'Content-Type': MIME['.html']!, 'Cache-Control': 'no-cache', 'Content-Length': String(body.length) });
   res.end(req.method === 'HEAD' ? undefined : body);
 }
@@ -386,7 +397,7 @@ export function createProxy(options: ProxyOptions): Server {
       send(res, 404, 'Not found', securityHeaders(req.headers.host));
       return;
     }
-    if (target.kind === 'app') servePage(req, res, file, options.allowedOrigins());
+    if (target.kind === 'app') servePage(req, res, file, options.allowedOrigins(), options.tune ?? false);
     else serveFile(req, res, file, stats, isHashedAsset(pathname));
   });
 

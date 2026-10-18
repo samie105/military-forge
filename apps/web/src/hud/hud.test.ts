@@ -1,10 +1,12 @@
 /** The HUD's numbers: kill feed, damage arcs, vitals, weapons, the brief's shield/dash/EMP/blind/gas/belt/pickup fields, the bound values, the net graph. */
 import { HAMMER, HitZone, NO_WEAPON, WIDOW, createTuning, weaponPickup } from '@military-forge/content';
-import { DamageSource } from '@military-forge/sim';
+import { DamageSource, MatchPhase } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
-import { hudValues, netGraph, type HudInput, type HudMemory } from './hud';
-import { conditions, dashStatus, feedFromEvents, fuelView, grenadeBelt, healthView, pickupPrompt, screenAngle, shieldStatus, weaponCards, type HudPlayer } from './model';
-import { hudTemplate } from './template';
+import { hudFrame, netGraph, pingLook, type HudInput, type HudMemory } from './hud';
+import { conditions, dashStatus, eventLook, feedFromEvents, fuelView, grenadeBelt, healthView, pickupIcon, pickupNear, pickupPrompt, screenAngle, shieldStatus, weaponCards, type HudPlayer } from './model';
+import { stateMatches } from './state';
+import { HUD_VARS, hudTemplate } from './template';
+import { iconMask, touchGrenade, touchSkinCss } from './touchSkin';
 
 const t = createTuning();
 const names = new Map([
@@ -38,6 +40,22 @@ describe('kill feed', () => {
       ['Kemi', 'frag', 'Player 8', false, false, null],
     ]);
     expect(lines.map((l) => l.key)).toEqual([1, 2, 3, 4, 5]);
+    // the kit's glyphs and badges: weapon art, the grenade, melee; headshot, own goal, fall, blast
+    expect(lines.map((l) => [l.icon, l.badge, l.fell])).toEqual([
+      ['#wpn-hammer', 'headshot', false],
+      ['#icon-melee', null, false],
+      ['#icon-g-frag', 'suicide', false],
+      ['', 'fall', true],
+      ['#icon-g-frag', 'blast', false],
+    ]);
+  });
+
+  it('a bullet off a shield into the victim is a ricochet; bots are marked', () => {
+    const ricochet = { type: 'ricochet' as const, shooter: 1, owner: 2, weapon: 0, x: 0, y: 0, nx: 1, ny: 0, ex: 0, ey: 0, hit: 2 as const, target: 0, zone: HitZone.Torso };
+    const [line] = feedFromEvents([ricochet, { type: 'death', victim: 0, killer: 1, source: 0 }], 0, names, () => 1, new Set([1]));
+    expect(line).toMatchObject({ badge: 'ricochet', killerBot: true, victimBot: false, mine: 'victim' });
+    expect(feedFromEvents([{ type: 'death', victim: 2, killer: 1, source: DamageSource.Mine }], 0, names, () => 1)[0]).toMatchObject({ how: 'mine', icon: '#icon-g-mine', badge: 'blast' });
+    expect(feedFromEvents([{ type: 'death', victim: 2, killer: 1, source: DamageSource.Gas }], 0, names, () => 1)[0]).toMatchObject({ how: 'gas', icon: '#icon-g-gas', badge: null });
   });
 });
 
@@ -71,6 +89,10 @@ describe('vitals', () => {
     expect(fuelView({ fuel: tank(0.9), fuelRegenDelay: full, grounded: true }, t).delay).toBeCloseTo(0.1); // never past the end
     expect(fuelView({ fuel: 5, fuelRegenDelay: -1, grounded: false }, t)).toMatchObject({ empty: true, delay: 0 });
     expect(fuelView({ fuel: tank(0.5), fuelRegenDelay: 0, grounded: true }, t).ignite).toBeCloseTo(t.fuelMinIgnite / t.fuelMax);
+    // the kit's own strip under the bar: how much of the delay is left
+    expect(waiting.delayLeft).toBeCloseTo(1);
+    expect(fuelView({ fuel: tank(0.4), fuelRegenDelay: full / 2, grounded: true }, t).delayLeft).toBeCloseTo(0.5, 1);
+    expect(fuelView({ fuel: tank(1), fuelRegenDelay: full, grounded: true }, t).delayLeft).toBe(0);
   });
 });
 
@@ -173,6 +195,15 @@ describe('riot shield, dash, conditions, grenade belt, pickups (UI brief fields)
     expect(pickupPrompt({ x: 20, y: 2, alive: true }, [shield])).toBe('');
     expect(pickupPrompt({ x: 10, y: 2, alive: false }, [shield])).toBe('');
     expect(pickupPrompt({ x: 10, y: 2, alive: true }, undefined)).toBe('');
+    const near = pickupNear({ x: 10, y: 2, alive: true }, [shield])!;
+    expect([near.name, pickupIcon(near)]).toEqual(['Riot Shield', '#icon-shield']);
+  });
+
+  it('map events wear their kind: colour token and icon', () => {
+    expect(eventLook('emp')).toEqual({ color: 'var(--c-ev-emp)', icon: 'emp' });
+    expect(eventLook('flip').icon).toBe('gravity');
+    expect(eventLook('gust').color).toBe('var(--c-ev-wind)');
+    expect(eventLook('custom')).toEqual({ color: 'var(--c-ev-gravity)', icon: 'warn' });
   });
 
   it('a weapon crate: E to take it (naming the gun it swaps), or ammo for a gun you hold', () => {
@@ -185,56 +216,135 @@ describe('riot shield, dash, conditions, grenade belt, pickups (UI brief fields)
   });
 });
 
-describe('hudValues', () => {
-  const me = player({ hp: 25, shield: 'front', shieldHp: 240, dashCooldown: 30, jetDisabled: true, weapons: [{ def: 0, mag: 2, reserve: 24, reloadTicks: 20 }], frags: 2 });
+describe('the kit wiring', () => {
+  it('data-state shows on one token, or on every token joined by +', () => {
+    const on = new Set(['host', 'ready']);
+    expect(stateMatches('host', on)).toBe(true);
+    expect(stateMatches('guest host+ready', on)).toBe(true);
+    expect(stateMatches('host+not-ready', on)).toBe(false);
+    expect(stateMatches('guest', on)).toBe(false);
+  });
+
+  it('ping looks: green up to 100 ms, amber to 200, red beyond', () => {
+    expect([30, 80, 150, 450].map((ms) => pingLook(ms))).toEqual([
+      { cls: 'ping--good', bars: 4 },
+      { cls: 'ping--good', bars: 3 },
+      { cls: 'ping--mid', bars: 2 },
+      { cls: 'ping--bad', bars: 1 },
+    ]);
+  });
+
+  it('the touch buttons get the kit icons as masks', () => {
+    expect(iconMask('icon-reload')).toMatch(/^url\("data:image\/svg\+xml,/);
+    expect(iconMask('icon-nope')).toBeNull();
+    const css = touchSkinCss();
+    for (const control of ['grenade', 'dash', 'reload', 'swap', 'shield', 'pause']) expect(css).toContain(`.mf-ctl-${control}::before`);
+  });
+
+  it('the touch grenade button shows the selected type and how many you carry', () => {
+    const css = touchSkinCss();
+    for (const id of ['frag', 'smoke', 'gas', 'flash', 'mine', 'emp']) expect(css).toContain(`.mf-ctl-grenade[data-grenade="${id}"]::before`);
+    expect(css).toContain('.mf-ctl-grenade[data-count]::after { content: attr(data-count)');
+    const slot = (id: string, count: number, selected = false) => ({ id, count, selected });
+    expect(touchGrenade([slot('frag', 3), slot('smoke', 2, true)])).toEqual({ id: 'smoke', count: 2 });
+    expect(touchGrenade([slot('frag', 0)])).toEqual({ id: 'frag', count: 0 });
+    expect(touchGrenade([])).toEqual({ id: 'frag', count: 0 });
+  });
+});
+
+describe('hudFrame', () => {
+  const me = player({ hp: 25, shield: 'front', shieldHp: 240, dashCooldown: 30, jetDisabled: true, weapons: [{ def: 0, mag: 2, reserve: 24, reloadTicks: 20 }, { def: 1, mag: 40, reserve: 250, reloadTicks: 0 }], frags: 2 });
+  const event = { id: 'storm', kind: 'emp', name: 'EMP STORM', description: 'Jetpacks offline', phase: 'warning' as const, secondsLeft: 2.4, progress: 0.4, color: 0xf4d84a, zones: [], occurrence: 1, bulletRangeMul: 1 };
   const input = (over: Partial<HudInput> = {}): HudInput => ({
-    frame: { tick: 1, localId: 0, players: [me], grenades: [], pickups: [{ id: 3, def: 0, x: 12, y: 2 }] },
+    frame: { tick: 1, localId: 0, players: [me], grenades: [], pickups: [{ id: 3, def: 0, x: 12, y: 2 }], mapEvent: event },
     tuning: t,
     match: null,
-    mapEvent: { key: '1:warning', title: 'EMP STORM', line: 'Jetpacks offline', phase: 'warning', seconds: 3, color: '#d2a8ff' },
     zoom: 2,
     toScreen: (x, y) => ({ x: x * 10, y: y * 10 }),
+    pointer: { x: 400, y: 300 },
     showNet: false,
+    showFps: true,
+    fps: 59.6,
+    reduceFlashes: false,
+    flash: 0,
     scoreRows: () => null,
     ...over,
   });
-  const memory: HudMemory = { sinceHitS: 1, killedBy: '', glyphs: { dash: 'Shift', grenade: 'G', cycle: 'T', shield: 'X' }, netText: '' };
+  const memory: HudMemory = { sinceHitS: 1, death: null, keys: { dash: 'Shift', grenade: 'G', cycleGrenade: 'T', shield: 'X', swap: 'Q', reload: 'R', scoreboard: 'Tab' }, netDetail: '', hpGhost: 0.5, hitMarker: true, killMarker: false, boardOpen: false };
 
-  it('gives every key the template binds a value', () => {
-    const v = hudValues(input(), memory);
-    const keys = new Set<string>();
-    for (const m of hudTemplate().matchAll(/data-bind(?:-state|-show)?="([^"]+)"/g)) keys.add(m[1]!.trim());
-    for (const m of hudTemplate().matchAll(/data-bind-var="([^"]+)"/g)) for (const pair of m[1]!.split(';')) keys.add(pair.split(':')[1]!.trim());
-    expect([...keys].filter((k) => v[k] === undefined)).toEqual([]);
+  it('gives every key the template binds a value, in play and in death', () => {
+    const bound = new Set<string>();
+    const html = hudTemplate();
+    for (const m of html.matchAll(/data-bind="([^"]+)"/g)) bound.add(m[1]!.trim());
+    for (const m of html.matchAll(/data-bind-(?:attr|var)="([^"]+)"/g)) for (const pair of m[1]!.split(';')) bound.add(pair.split(':')[1]!.trim());
+    for (const pair of HUD_VARS.split(';')) bound.add(pair.split(':')[1]!.trim());
+    const playing = { phase: MatchPhase.InProgress, number: 1, secondsLeft: 222, untimed: false, secondsElapsed: 0, killLimit: 10, timeLimit: 300, countdownTotal: 3, mapName: 'Lunar Outpost', localId: 0, myScore: 6, leaderScore: 8, leaderName: 'Kemi', ready: true, votes: 0, humans: 2, voted: false, results: null };
+    const net = { rttMs: 38, snapshotsPerSec: 30, kbInPerSec: 8, kbOutPerSec: 4, interpDelayMs: 100, status: 'connected' };
+    const alive = hudFrame(input({ match: playing, frame: { ...input().frame, net } }), memory).values;
+    const dead = hudFrame(input({ frame: { tick: 1, localId: 0, players: [{ ...me, alive: false, respawnTicks: 90 }], grenades: [] } }), { ...memory, death: { label: 'Taken out by', killer: 'Kemi', icon: '#wpn-widow' } }).values;
+    expect([...bound].filter((k) => alive[k] === undefined && dead[k] === undefined)).toEqual([]);
   });
 
-  it('carries the brief fields: low health, shield up, dash recharging, EMP, reloading, belt, event, prompt, glyphs', () => {
-    const v = hudValues(input(), memory);
+  it("the brief's fields as the kit's values and state tokens", () => {
+    const { values: v, tokens } = hudFrame(input(), memory);
     expect(v).toMatchObject({
       'player.hp': '25',
-      'player.hpState': 'low',
-      'player.shield.state': 'up',
+      'v.hp': '0.25',
+      'v.hpGhost': '0.5',
+      'player.hpCue': ` · regen starts in ${Math.ceil(t.healthRegenDelay - 1)} s`,
+      'player.shield.state': 'Up',
       'player.shield.hp': '240',
-      'player.shield.fill': '0.800',
-      'player.dashState': 'blocked', // the EMP blocks the dash too
-      'player.jetDisabled': 'EMP · jetpack offline',
-      'player.fuelState': 'emp',
-      'weapons.0.state': 'active reloading',
-      'weapons.0.mag': '2',
-      'weapons.zoom': '2×',
-      'grenades.0.count': '2',
-      'grenades.0.state': 'selected',
-      'grenades.1.present': '',
-      'event.title': 'EMP STORM',
-      'event.in': ' in 3',
-      'event.color': '#d2a8ff',
-      'pickup.prompt': 'Riot Shield: walk over to take',
-      'keys.dash': 'Shift',
-      'arcs.x': '100',
+      'player.shield.max': '300',
+      'player.shield.covers': 'Front covered',
+      'v.shield': '0.8',
+      'player.empCause': 'EMP field',
+      'weapon.0.name': 'Hammer .44',
+      'weapon.0.icon': '#wpn-hammer',
+      'weapon.0.mag': '2',
+      'weapon.1.name': 'Buzz',
+      'weapon.1.ammo': '40 / 250',
+      'weapon.zoom': '2×',
+      'belt.selected': 'Frag',
+      'belt.count': '2',
+      'event.class': 'event-banner event-banner--warn',
+      'event.color': 'var(--c-ev-emp)',
+      'event.icon': '#icon-warn',
+      'event.time': 'in 3 s',
+      'pickup.name': 'Riot Shield',
+      'pickup.icon': '#icon-shield',
+      'pickup.text': 'Riot Shield: walk over to take',
+      'bind.dash.0': 'Shift',
+      'fps.value': '60',
     });
-    expect(Number(v['weapons.0.reload'])).toBeGreaterThan(0);
-    expect(Number(v['vignette'])).toBeGreaterThan(0.35);
-    expect(hudValues(input({ frame: { tick: 1, localId: 0, players: [{ ...me, jetDisabled: false }], grenades: [] } }), memory)).toMatchObject({ 'player.dashState': 'cooldown', 'player.dashNote': '0.5 s', 'player.jetDisabled': '' });
+    expect(Number(v['v.reload'])).toBeGreaterThan(0);
+    expect(tokens).toEqual(expect.arrayContaining(['alive', 'low-hp', 'shield', 'shield-up', 'emp', 'dash-cooldown', 'reloading', 'weapon', 'gun', 'second-weapon', 'belt', 'event', 'pickup', 'reticle', 'hit-marker', 'fps']));
+    expect(tokens).not.toContain('match');
+    expect(tokens).not.toContain('spectating');
+  });
+
+  it('a weapon crate underfoot shows its whole take line and the gun icon, not "walk over to take"', () => {
+    const crate = { id: 4, def: weaponPickup(WIDOW.index)!.index, x: me.x, y: me.y };
+    const { values: v, tokens } = hudFrame(input({ frame: { tick: 1, localId: 0, players: [me], grenades: [], pickups: [crate], mapEvent: null } }), memory);
+    expect(tokens).toContain('pickup');
+    expect(v['pickup.text']).toBe('[E] take Widow (swaps your Hammer .44)');
+    expect(v['pickup.icon']).not.toBe('#icon-shield');
+  });
+
+  it('dead: who did it, the respawn countdown and its bar', () => {
+    const dead = { ...me, alive: false, respawnTicks: 90 };
+    const { values: v, tokens } = hudFrame(input({ frame: { tick: 1, localId: 0, players: [dead], grenades: [] } }), { ...memory, death: { label: 'Taken out by', killer: 'Kemi', icon: '#wpn-widow' } });
+    expect(v).toMatchObject({ 'death.killer': 'Kemi', 'death.lead': 'Respawn in', 'player.respawnIn': '2', 'death.unit': 's', 'v.respawn': '0.5' });
+    expect(tokens).toEqual(expect.arrayContaining(['spectating', 'death-weapon']));
+    expect(tokens).not.toContain('reticle');
+  });
+
+  it('Reduce flashes shows the Flashed tag; a slung shield covers the back and leaves the dash alone', () => {
+    const blinded = player({ blind: 0.8, shield: 'back', shieldHp: 300 });
+    const reduced = hudFrame(input({ frame: { tick: 1, localId: 0, players: [blinded], grenades: [] }, reduceFlashes: true }), memory);
+    expect(reduced.tokens).toEqual(expect.arrayContaining(['flash-reduced', 'shield']));
+    expect(reduced.tokens).not.toContain('shield-up');
+    expect(reduced.values['player.shield.covers']).toBe('Back covered');
+    expect(hudFrame(input({ frame: { tick: 1, localId: 0, players: [blinded], grenades: [] } }), memory).tokens).not.toContain('flash-reduced');
   });
 });
 

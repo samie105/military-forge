@@ -90,8 +90,13 @@ export class LocalMode {
     this.prev.clear();
     this.acc = 0;
     const names = new Map<number, string>();
-    for (const p of this.game.players) if (p) names.set(p.id, p === this.me ? 'You' : p.name);
-    this.renderer.setNames(names);
+    const bots = new Set<number>();
+    for (const p of this.game.players) {
+      if (!p) continue;
+      names.set(p.id, p === this.me ? 'You' : p.name);
+      if (p.isBot) bots.add(p.id);
+    }
+    this.renderer.setNames(names, bots);
   }
 
   tuning(): Tuning {

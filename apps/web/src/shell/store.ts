@@ -48,13 +48,31 @@ export type Screen =
   /** choose a name, then carry on to `then` */
   | { name: 'name'; then: Intent }
   | { name: 'home' }
-  /** creating or looking up a room (API), before the game connects */
-  | { name: 'finding'; label: string }
+  /** creating (code null) or looking up a room (API), before the game connects */
+  | { name: 'finding'; code: string | null; creating: boolean }
   | { name: 'room'; code: string }
   | { name: 'training' }
-  | { name: 'error'; title: string; message: string; retry: Intent | null };
+  | { name: 'error'; alert: AlertInfo; retry: Intent | null };
 
 export type Overlay = 'menu' | 'settings' | 'join' | 'name' | null;
+
+/** Settings sections (the kit's five tabs, and Touch for the phone controls). */
+export type SettingsTab = 'graphics' | 'audio' | 'controls' | 'accessibility' | 'network' | 'touch';
+
+/**
+ * Why the player can't get into (or stay in) a room, as the kit's connection screen shows it: the
+ * kind picks the icon and tone, `code` is the line under the message ("ROOM_FULL · room KMTXRA").
+ */
+export type AlertKind = 'room-full' | 'room-not-found' | 'new-version' | 'server-full' | 'connection-lost' | 'offline' | 'slow-down' | 'replaced' | 'refused' | 'error';
+
+export interface AlertInfo {
+  kind: AlertKind;
+  title: string;
+  message: string;
+  code: string;
+  /** the main button: rejoin the room, reload the page, or none (Home only) */
+  action: 'rejoin' | 'reload' | null;
+}
 
 export interface Profile {
   nickname: string;
@@ -65,27 +83,59 @@ export interface Profile {
 }
 
 export type GraphicsPreset = 'low' | 'medium' | 'high';
+/** The Quality setting: a preset, or 'auto' (main.ts picks one for this device: gfxAuto.ts). */
+export type GraphicsSetting = 'auto' | GraphicsPreset;
+export type ColorBlindMode = 'standard' | 'deutan' | 'tritan';
+
+/** Volumes 0..1 and mutes (Settings → Audio; saved for when the game has sound). */
+export interface AudioSettings {
+  master: number;
+  effects: number;
+  music: number;
+  masterMuted: boolean;
+  effectsMuted: boolean;
+  musicMuted: boolean;
+}
 
 export interface Settings {
-  graphics: GraphicsPreset;
+  graphics: GraphicsSetting;
+  /** a frame counter in the HUD's top-left corner */
+  showFps: boolean;
+  audio: AudioSettings;
   /** the net graph (N) */
   netGraph: boolean;
   /** 15 Hz snapshots, 30 Hz inputs (docs/05 §2.2) for poor connections */
   lowBandwidth: boolean;
   /** accessibility: soften full-screen flashes (flashbangs, explosions) */
   reduceFlashes: boolean;
-  /** double-tap a direction key to dash that way */
+  /** accessibility: no shake, no zooming numbers, no pulsing warnings (html.reduce-motion) */
+  reduceMotion: boolean;
+  /** team colours for colour-blind players (teams aren't in the game yet: saved) */
+  colorBlind: ColorBlindMode;
+  /** menus and HUD text, 1..1.5 (the kit's --text-scale) */
+  textScale: number;
+  /** double-tap a direction key to dash that way (on by default: the owner's call, 18 Oct) */
   doubleTapDash: boolean;
+  /** blood when soldiers are hit (the 3D view's setBlood); off by default */
+  blood: boolean;
   /** every action's keys and mouse buttons (controls.ts) */
   bindings: Bindings;
 }
 
+export const DEFAULT_AUDIO: AudioSettings = { master: 0.8, effects: 0.9, music: 0.35, masterMuted: false, effectsMuted: false, musicMuted: false };
+
 export const DEFAULT_SETTINGS: Settings = {
-  graphics: 'low',
+  graphics: 'auto',
+  showFps: false,
+  audio: DEFAULT_AUDIO,
   netGraph: false,
   lowBandwidth: false,
   reduceFlashes: false,
-  doubleTapDash: false,
+  reduceMotion: false,
+  colorBlind: 'standard',
+  textScale: 1,
+  doubleTapDash: true,
+  blood: false,
   bindings: defaultBindings(),
 };
 
@@ -94,6 +144,14 @@ export interface ConnectionView {
   state: 'connecting' | 'joining' | 'connected' | 'reconnecting' | 'failed';
   detail: string;
   code: number;
+  /** reconnecting: when the outage began, and when the tries stop (performance.now) */
+  since: number;
+  until: number;
+  /** reconnecting: the try under way; failed: the tries made */
+  attempt: number;
+  /** failed: the last round trip heard (-1 = none) and the snapshot loss then */
+  lastPingMs: number;
+  lossPct: number;
 }
 
 export interface ShellState {
@@ -114,8 +172,8 @@ export interface ShellState {
   mapEvent: MapEventBanner | null;
   /** the controls card and tips (first match, or Menu → Controls & tips) */
   tips: boolean;
-  /** a phone or tablet: the "best on a computer" card */
-  touchWarning: boolean;
+  /** the Settings section open (Home's "Change keys" opens Controls) */
+  settingsTab: SettingsTab;
 }
 
 export type ShellStore = StoreApi<ShellState>;
@@ -136,7 +194,7 @@ export function createShellStore(initial: Partial<ShellState> = {}): ShellStore 
     notice: null,
     mapEvent: null,
     tips: false,
-    touchWarning: false,
+    settingsTab: 'graphics',
     ...initial,
   }));
 }

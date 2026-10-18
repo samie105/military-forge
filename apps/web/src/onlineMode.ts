@@ -64,7 +64,16 @@ export interface ConnectionInfo {
   code: number;
   /** reconnecting: when this outage started (performance.now), 0 otherwise */
   since: number;
+  /** reconnecting: when the tries stop (performance.now), 0 otherwise */
+  until: number;
+  /** reconnecting: the try under way (1, 2, …); failed: the tries made after the drop */
+  attempt: number;
+  /** failed: the last round trip and snapshot loss heard before the end (-1: never connected) */
+  lastPingMs: number;
+  lossPct: number;
 }
+
+const FRESH: Pick<ConnectionInfo, 'since' | 'until' | 'attempt' | 'lastPingMs' | 'lossPct'> = { since: 0, until: 0, attempt: 0, lastPingMs: -1, lossPct: 0 };
 
 export interface OnlineOptions {
   /** a room by code: its MATCH_STATE drives the shell, and the session survives a page reload */
@@ -125,7 +134,7 @@ export class OnlineMode {
   private readonly up: ConditionedLink;
   private readonly down: ConditionedLink;
   private status = 'connecting…';
-  private conn: ConnectionInfo = { state: 'connecting', detail: '', code: 0, since: 0 };
+  private conn: ConnectionInfo = { state: 'connecting', detail: '', code: 0, ...FRESH };
   /** the room's match (rooms by code), newest first received */
   matchState: MatchStateMsg | null = null;
   private nextPingReportAt = 0;
@@ -276,7 +285,7 @@ export class OnlineMode {
         this.netSim.up.stream = this.netSim.down.stream = transport.kind === 'ws';
         this.transportNote = transport.kind === 'wt' ? 'WebTransport (UDP)' : `WebSocket${fallbackReason ? ` (${fallbackReason})` : ''}`;
         this.status = this.droppedAt ? 'resuming…' : 'joining…';
-        if (!this.droppedAt) this.conn = { state: 'joining', detail: '', code: 0, since: 0 };
+        if (!this.droppedAt) this.conn = { ...FRESH, state: 'joining', detail: '', code: 0 };
         this.net.onOpen();
       },
       (e: Error) => {
@@ -307,20 +316,31 @@ export class OnlineMode {
     this.net.onClose();
     const delay = Math.min(2000, 250 * 2 ** this.reconnectAttempt++);
     this.status = `reconnecting… (${why}; retry in ${(delay / 1000).toFixed(2)} s)`;
-    this.conn = { state: 'reconnecting', detail: why, code, since: this.droppedAt };
+    this.conn = { ...FRESH, state: 'reconnecting', detail: why, code, since: this.droppedAt, until: this.droppedAt + RECONNECT_WINDOW_MS, attempt: this.reconnectAttempt };
     this.reconnectTimer = window.setTimeout(() => this.open(), delay);
   }
 
   private giveUp(code: number, reason: string): void {
     this.status = `disconnected (${code}${reason ? `: ${reason}` : ''})`;
-    this.conn = { state: 'failed', detail: reason || (code === 1006 ? 'connection lost' : `closed (${code})`), code, since: 0 };
+    const stats = this.net.stats();
+    const heard = this.net.sessionToken !== '';
+    this.conn = {
+      state: 'failed',
+      detail: reason || (code === 1006 ? 'connection lost' : `closed (${code})`),
+      code,
+      since: 0,
+      until: 0,
+      attempt: this.reconnectAttempt,
+      lastPingMs: heard && Number.isFinite(stats.rttMs) ? Math.round(stats.rttMs) : -1,
+      lossPct: heard ? stats.snapshotLossPct : 0,
+    };
     if (code === CloseCode.DuplicateSession || code === 1000) saveToken(this.options.room, null);
     this.onFatal(`${this.status} — is the game server running? (pnpm dev)`);
   }
 
   private rejoinWithFreshTicket(why: string): void {
     this.net.onClose();
-    this.conn = { state: 'reconnecting', detail: why, code: CloseCode.TicketInvalid, since: this.droppedAt };
+    this.conn = { ...FRESH, state: 'reconnecting', detail: why, code: CloseCode.TicketInvalid, since: this.droppedAt, until: this.droppedAt + RECONNECT_WINDOW_MS, attempt: Math.max(1, this.reconnectAttempt) };
     this.status = `rejoining… (${why})`;
     const retry = () => {
       if (this.disposed) return;
@@ -361,7 +381,7 @@ export class OnlineMode {
     switch (msg.type) {
       case MsgType.Welcome:
         this.status = msg.resumed ? `connected (resumed after ${((performance.now() - this.droppedAt) / 1000).toFixed(1)} s)` : 'connected';
-        this.conn = { state: 'connected', detail: '', code: 0, since: 0 };
+        this.conn = { ...FRESH, state: 'connected', detail: '', code: 0 };
         this.droppedAt = 0;
         this.reconnectAttempt = 0;
         saveToken(this.options.room, msg.sessionToken);
@@ -370,7 +390,8 @@ export class OnlineMode {
         this.matchState = msg;
         break;
       case MsgType.Roster:
-        this.renderer.setNames(this.net.names);
+        // the roster knows every bot; the snapshots only those in view
+        this.renderer.setNames(this.net.names, new Set(msg.entries.filter((e) => e.isBot).map((e) => e.id)));
         break;
       case MsgType.Tuning:
         this.onTuningFromServer();
@@ -389,7 +410,7 @@ export class OnlineMode {
       case MsgType.Kick:
         this.kicked = true;
         this.status = `kicked: ${msg.reason}`;
-        this.conn = { state: 'failed', detail: msg.reason, code: msg.code, since: 0 };
+        this.conn = { ...FRESH, state: 'failed', detail: msg.reason, code: msg.code };
         this.onFatal(this.status);
         break;
       default:

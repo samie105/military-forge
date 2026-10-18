@@ -13,7 +13,9 @@ export interface MapEventBanner {
   phase: 'warning' | 'active';
   /** whole seconds left in the phase */
   seconds: number;
-  /** CSS colour of the event kind */
+  /** the event's kind (MapEventKind): its colour token and icon (hud/model.ts eventLook) */
+  kind: string;
+  /** the event def's own colour (EVENT_KINDS), for anything drawn in the world */
   color: string;
 }
 
@@ -25,11 +27,12 @@ export function bannerOf(v: MapEventView | null | undefined): MapEventBanner | n
     line: v.description,
     phase: v.phase,
     seconds: Math.max(1, Math.ceil(v.secondsLeft - 1e-9)),
+    kind: v.kind,
     color: `#${v.color.toString(16).padStart(6, '0')}`,
   };
 }
 
 export function sameBanner(a: MapEventBanner | null, b: MapEventBanner | null): boolean {
   if (!a || !b) return a === b;
-  return a.key === b.key && a.seconds === b.seconds && a.title === b.title && a.line === b.line && a.color === b.color;
+  return a.key === b.key && a.seconds === b.seconds && a.title === b.title && a.line === b.line && a.kind === b.kind && a.color === b.color;
 }

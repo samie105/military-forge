@@ -8,6 +8,7 @@ import { openDatabase } from './db/client';
 import { MemoryKv, type Kv } from './kv/kv';
 import { RedisKv } from './kv/redis';
 import { createLogger } from './log';
+import { keepRooms } from './rooms/routes';
 
 /** apps/api: relative paths (PGlite data, dev keys) resolve from here, whatever the cwd */
 const PACKAGE_DIR = fileURLToPath(new URL('..', import.meta.url));
@@ -24,6 +25,8 @@ try {
 const log = createLogger(config);
 const database = await openDatabase(config, { baseDir: PACKAGE_DIR });
 const kv: Kv = config.redisUrl ? await new RedisKv(config.redisUrl).connect() : new MemoryKv();
+// KEEP_ROOMS: the codes a previous run handed out stay joinable (pnpm playtest's restarts)
+if (config.keepRooms.length) log.info({ rooms: config.keepRooms, added: await keepRooms(kv, config.keepRooms) }, 'holding room codes from KEEP_ROOMS');
 const signingKey = config.accessToken.privateKeyPem
   ? signingKeyFromPem(config.accessToken.privateKeyPem)
   : loadOrCreateDevKey(fileURLToPath(new URL('../.data/dev-keys.json', import.meta.url)));

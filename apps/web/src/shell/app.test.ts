@@ -7,7 +7,8 @@ import { Btn, MatchPhase } from '@military-forge/sim';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Api, ApiError } from './api';
 import { ACTIONS, defaultBindings, keyLabel, rebind, sanitizeBindings, toKeyBindings, uiCodes, unbind } from './controls';
-import { intentFromLocation, roomSocketUrl, sanitizeSettings } from './controller';
+import { SETTINGS_REV, intentFromLocation, roomSocketUrl, sanitizeSettings } from './controller';
+import { DEFAULT_SETTINGS } from './store';
 import { lobbyView, onlineMatchView, sameLobby, type OnlineSource } from './onlineView';
 import { encodeQr, qrSvgPath } from './qr';
 
@@ -30,12 +31,21 @@ describe('links', () => {
 describe('settings and controls', () => {
   it('saved settings are checked field by field', () => {
     const s = sanitizeSettings({ graphics: 'ultra', netGraph: true, lowBandwidth: 'yes', reduceFlashes: true, bindings: { fire: ['Mouse2'], fire2: ['Mouse2'] } });
-    expect(s).toMatchObject({ graphics: 'low', netGraph: true, lowBandwidth: false, reduceFlashes: true, doubleTapDash: false });
+    expect(s).toMatchObject({ graphics: 'auto', netGraph: true, lowBandwidth: false, reduceFlashes: true, doubleTapDash: true, blood: false });
     // a code is used once: the first action (in list order) keeps it
     expect(s.bindings.fire).toEqual(['Mouse2']);
     expect(s.bindings.fire2).toEqual([]);
     expect(sanitizeSettings(null)).toEqual(sanitizeSettings({}));
     expect(sanitizeBindings({ jet: ['Escape', 'KeyW', '<script>', 42, 'KeyW'] }).jet).toEqual(['KeyW']);
+  });
+
+  it('new defaults: Auto graphics, double-tap dash on, no blood; settings saved before them take them once', () => {
+    expect(DEFAULT_SETTINGS).toMatchObject({ graphics: 'auto', doubleTapDash: true, blood: false });
+    // saved before rev 2: Low and double-tap off were the old defaults, not choices
+    expect(sanitizeSettings({ graphics: 'low', doubleTapDash: false, showFps: true })).toMatchObject({ graphics: 'auto', doubleTapDash: true, showFps: true });
+    expect(sanitizeSettings({ graphics: 'high' })).toMatchObject({ graphics: 'high' });
+    // saved since: every choice stays
+    expect(sanitizeSettings({ rev: SETTINGS_REV, graphics: 'low', doubleTapDash: false, blood: true })).toMatchObject({ graphics: 'low', doubleTapDash: false, blood: true });
   });
 
   it('defaults cover every action, each key once', () => {
@@ -47,7 +57,7 @@ describe('settings and controls', () => {
     expect(d.dash).toEqual(['ShiftLeft', 'ShiftRight']);
   });
 
-  it('rebinding takes the key off its old action and keeps three at most', () => {
+  it("rebinding takes the key off its old action and keeps two at most (the kit's Key 1 and Key 2)", () => {
     let b = defaultBindings();
     const { bindings, took } = rebind(b, 'reload', 'KeyQ', 0);
     expect(took).toBe('swap');
@@ -56,10 +66,11 @@ describe('settings and controls', () => {
     const mouse = rebind(bindings, 'reload', 'Mouse4', 1);
     expect([mouse.took, mouse.bindings.cycleGrenade]).toEqual(['cycleGrenade', ['KeyT']]);
     b = rebind(mouse.bindings, 'reload', 'KeyY', 2).bindings;
-    b = rebind(b, 'reload', 'KeyZ', 3).bindings;
-    expect(b.reload).toEqual(['KeyQ', 'Mouse4', 'KeyY']);
+    expect(b.reload).toEqual(['KeyQ', 'Mouse4']);
+    b = rebind(b, 'reload', 'KeyZ', 1).bindings;
+    expect(b.reload).toEqual(['KeyQ', 'KeyZ']);
     expect(rebind(b, 'reload', 'Escape', 0).bindings).toBe(b);
-    expect(unbind(b, 'reload', 1).reload).toEqual(['KeyQ', 'KeyY']);
+    expect(unbind(b, 'reload', 1).reload).toEqual(['KeyQ']);
   });
 
   it('turns bindings into the sampler’s keys, mouse buttons and weapon slots', () => {
@@ -155,6 +166,9 @@ describe('online match and lobby views', () => {
     ]);
     expect(sameLobby(view, lobbyView(source(state())))).toBe(false);
     expect(onlineMatchView(source(withBot))!.humans).toBe(2);
+    // a bot leading: the HUD's leader line names it without the "[BOT]" tag (review M3)
+    const botLeads = state({ standings: [{ ...withBot.standings[2]!, score: 9 }, ...state().standings] });
+    expect(onlineMatchView(source(botLeads))!.leaderName).toBe('Badger');
   });
 });
 

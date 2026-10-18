@@ -13,11 +13,14 @@ import {
   RIOT_SHIELD,
   SPAWN_POOLS,
   STANDING_HITBOXES,
+  TUNING_GROUPS,
   ZONE_KINDS,
   grenades,
   spawnGrenades,
+  changedTuning,
   createTuning,
   defaultTuning,
+  limitTuning,
   mapJsonSchema,
   maps,
   movementTestMap,
@@ -136,6 +139,38 @@ describe('tuning', () => {
   it('hash is stable and sensitive to values', () => {
     expect(tuningHash(createTuning())).toBe(tuningHash(defaultTuning));
     expect(tuningHash(createTuning({ gravity: 21 }))).not.toBe(tuningHash(defaultTuning));
+  });
+
+  it("the panel's fields are real tuning keys whose defaults sit inside their ranges, each once", () => {
+    const seen = new Set<string>();
+    for (const g of TUNING_GROUPS) {
+      for (const f of g.fields) {
+        expect(seen.has(f.key), f.key).toBe(false);
+        seen.add(f.key);
+        expect(typeof defaultTuning[f.key], f.key).toBe('number');
+        expect(f.label.length, f.key).toBeGreaterThan(2);
+        expect(defaultTuning[f.key], f.key).toBeGreaterThanOrEqual(f.min);
+        expect(defaultTuning[f.key], f.key).toBeLessThanOrEqual(f.max);
+      }
+    }
+    // the owner's asks: fuel, jet, gravity, the dash, blast launch and grenade throw speed
+    for (const k of ['fuelMax', 'fuelBurn', 'jetThrust', 'gravity', 'dashSpeed', 'blastImpulseScale', 'grenadeThrowScale']) expect(seen.has(k), k).toBe(true);
+  });
+
+  it("limitTuning keeps a host's edit to the panel's keys and ranges", () => {
+    expect(limitTuning({ gravity: 25, fuelMax: 1e9, jetKickTicks: 6.6, grenadeThrowScale: 1.3, capsuleRadius: 0.01, walkMax: Number.NaN, airAccel: '30' })).toEqual({
+      gravity: 25,
+      fuelMax: 300, // clamped to the range
+      jetKickTicks: 7, // whole ticks
+      grenadeThrowScale: 1.3,
+    });
+    expect(limitTuning(null)).toEqual({});
+    expect(limitTuning('{"gravity":1}')).toEqual({});
+  });
+
+  it('changedTuning lists only what differs from the defaults (Copy values)', () => {
+    expect(changedTuning(createTuning())).toEqual({});
+    expect(changedTuning(createTuning({ fuelBurn: 30, grenadeThrowScale: 1.3 }))).toEqual({ fuelBurn: 30, grenadeThrowScale: 1.3 });
   });
 
   it('body fits the hitboxes', () => {

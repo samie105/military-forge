@@ -116,6 +116,16 @@ export class ThrowLatch {
 /** Keys whose browser default (scrolling, focus moves) must not fire during play. */
 const PREVENT_DEFAULT = new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab']);
 
+/**
+ * The menus have the keyboard: a key pressed on one of their controls (#shell), or any key while a
+ * menu screen shows (Home, the lobby, results: the shell's .screen--menu, or a modal over the game).
+ * Tab then moves focus and Space presses buttons, as on any page.
+ */
+function menusHaveKeys(target: EventTarget | null): boolean {
+  if (typeof Element !== 'undefined' && target instanceof Element && target.closest('#shell') !== null) return true;
+  return typeof document !== 'undefined' && typeof document.querySelector === 'function' && document.querySelector('#shell .screen--menu, #shell .mf-fit--modal') !== null;
+}
+
 /** What every key and mouse button does. */
 export interface KeyBindings {
   /** KeyboardEvent.code → button bits */
@@ -135,6 +145,12 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
 export class InputSampler {
   private readonly keys = new Set<string>();
   private mouseButtons = 0;
+  /**
+   * Menus are up (the shell's overlays, routes): their keys are theirs, so Tab, Space and the
+   * arrows keep the browser's meaning (keyboard navigation). main.ts's GameInput also zeroes the
+   * gameplay buttons while it's set.
+   */
+  blocked = false;
   /** screen-space mouse position (CSS pixels) */
   mouseX = 0;
   mouseY = 0;
@@ -144,9 +160,10 @@ export class InputSampler {
   bindings: KeyBindings = DEFAULT_KEY_BINDINGS;
   /**
    * Dash (docs/02 §21) as an alternative binding: double-tap a direction (the held direction gives
-   * the dash its way, as with Shift). Off by default; the settings screen turns it on.
+   * the dash its way, as with Shift). On by default (the owner's call, 18 Oct); Settings → Controls
+   * turns it off. The dash key with no direction held dashes the way the soldier faces (the sim).
    */
-  doubleTapDash = false;
+  doubleTapDash = true;
   /** a dash press seen since the last sample: a tap shorter than a tick still dashes */
   private dashLatched = false;
   /** the direction buttons held (or double-tapped) at that press, kept for its sample */
@@ -180,7 +197,8 @@ export class InputSampler {
   constructor(private readonly target: HTMLElement) {
     window.addEventListener('keydown', (e) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
-      if (PREVENT_DEFAULT.has(e.code)) e.preventDefault();
+      // during play these keys are the game's (no scrolling, no focus moves); in the menus they're the menus'
+      if (PREVENT_DEFAULT.has(e.code) && !this.blocked && !menusHaveKeys(e.target)) e.preventDefault();
       if (!e.repeat) {
         this.pressedOnce.add(e.code);
         this.notePress(this.bindings.keys[e.code] ?? 0, e.timeStamp);

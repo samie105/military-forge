@@ -2,7 +2,7 @@
  * Controls: every action a player can rebind (Settings → Controls), their defaults, and the
  * conversion to the InputSampler's bindings (input.ts). A binding is a KeyboardEvent.code
  * ('KeyA', 'Space', 'ShiftLeft', …) or a mouse button ('Mouse0' left … 'Mouse4' forward).
- * One key or button does one action; up to three per action. Escape always opens the menu.
+ * One key or button does one action; up to two per action. Escape always opens the menu.
  */
 import { Btn } from '@military-forge/sim';
 import type { KeyBindings } from '../input';
@@ -47,26 +47,27 @@ export interface ActionDef {
 export const ACTIONS: readonly ActionDef[] = [
   { id: 'left', label: 'Move left', group: 'Move', bit: Btn.Left, defaults: ['KeyA', 'ArrowLeft'] },
   { id: 'right', label: 'Move right', group: 'Move', bit: Btn.Right, defaults: ['KeyD', 'ArrowRight'] },
-  { id: 'jet', label: 'Jetpack / up', group: 'Move', bit: Btn.Jet, defaults: ['KeyW', 'Space', 'ArrowUp'] },
-  { id: 'down', label: 'Crouch / drop down', group: 'Move', bit: Btn.Down, defaults: ['KeyS', 'ArrowDown'] },
-  { id: 'dash', label: 'Dash', group: 'Move', bit: Btn.Dash, defaults: ['ShiftLeft', 'ShiftRight'], hint: 'With a direction held: 8 ways, up (jet) and down included' },
+  { id: 'jet', label: 'Jet (hold)', group: 'Move', bit: Btn.Jet, defaults: ['KeyW', 'Space'] },
+  { id: 'down', label: 'Crouch / drop', group: 'Move', bit: Btn.Down, defaults: ['KeyS', 'ArrowDown'] },
+  { id: 'dash', label: 'Dash', group: 'Move', bit: Btn.Dash, defaults: ['ShiftLeft', 'ShiftRight'], hint: 'Alone: the way you face. With a direction held: 8 ways, up (jet) and down included' },
   { id: 'fire', label: 'Fire', group: 'Combat', bit: Btn.Fire, defaults: ['Mouse0'] },
   { id: 'fire2', label: 'Alt fire / scope', group: 'Combat', bit: Btn.Fire2, defaults: ['Mouse2'] },
   { id: 'reload', label: 'Reload', group: 'Combat', bit: Btn.Reload, defaults: ['KeyR'] },
   { id: 'melee', label: 'Melee', group: 'Combat', bit: Btn.Melee, defaults: ['KeyV', 'Mouse3'] },
-  { id: 'grenade', label: 'Throw grenade', group: 'Combat', bit: Btn.Grenade, defaults: ['KeyG'] },
-  { id: 'cycleGrenade', label: 'Next grenade type', group: 'Combat', bit: Btn.CycleGrenade, defaults: ['KeyT', 'Mouse4'] },
+  { id: 'grenade', label: 'Throw grenade', group: 'Combat', bit: Btn.Grenade, defaults: ['KeyG'], hint: 'Tap: quick throw · hold: aim the arc, release to throw' },
+  { id: 'cycleGrenade', label: 'Next grenade', group: 'Combat', bit: Btn.CycleGrenade, defaults: ['KeyT', 'Mouse4'] },
   { id: 'swap', label: 'Swap weapon', group: 'Weapons', bit: Btn.Swap, defaults: ['KeyQ'] },
   { id: 'slot1', label: 'Weapon 1', group: 'Weapons', slot: 1, defaults: ['Digit1'] },
   { id: 'slot2', label: 'Weapon 2', group: 'Weapons', slot: 2, defaults: ['Digit2'] },
   { id: 'dual', label: 'Dual wield', group: 'Weapons', bit: Btn.Dual, defaults: ['KeyF'] },
   { id: 'interact', label: 'Pick up / use', group: 'Weapons', bit: Btn.Interact, defaults: ['KeyE'] },
-  { id: 'shield', label: 'Shield: raise / sling', group: 'Weapons', bit: Btn.Shield, defaults: ['KeyX'] },
+  { id: 'shield', label: 'Shield up / sling', group: 'Weapons', bit: Btn.Shield, defaults: ['KeyX'] },
   { id: 'scoreboard', label: 'Scoreboard (hold)', group: 'Interface', ui: true, defaults: ['Tab'] },
   { id: 'netGraph', label: 'Net graph', group: 'Interface', ui: true, defaults: ['KeyN'] },
 ];
 
-export const MAX_BINDINGS = 3;
+/** two keys per action (Settings → Controls has two columns, as in the design) */
+export const MAX_BINDINGS = 2;
 /** never rebindable: always the menu */
 export const RESERVED_CODES = new Set(['Escape']);
 

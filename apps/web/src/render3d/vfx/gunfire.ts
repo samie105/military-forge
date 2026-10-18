@@ -8,7 +8,7 @@
  * notes); the tracer runs from it to the sim's end point, which is what was hit. A Forge flash
  * then rides its gun while it lasts, so the recoil (recoil.ts) carries it along.
  */
-import { HitZone, weapons, type WeaponClass } from '@military-forge/content';
+import { HitZone, heldTrigger, weapons, type WeaponClass } from '@military-forge/content';
 import { SegFlag, createRayHit, type CollisionWorld, type SimEvent } from '@military-forge/sim';
 import { PointLight, Vector3, type Scene, type Texture } from 'three';
 import { Cell } from './atlas';
@@ -85,14 +85,6 @@ const MIN_SPEED = 220;
 /** the light pop's peak (×style intensity) and fade */
 const LIGHT_PEAK = 22;
 const QUEUE_MAX = 256;
-
-/**
- * A gun that keeps firing while the trigger is held: auto, and #99's burst, spin-up and beam guns
- * (the Shredder too). The same test as #99's `heldTrigger(def)`; use that once #99 is on main.
- */
-export function firesWhileHeld(def: { fireMode: string }): boolean {
-  return def.fireMode !== 'semi' && def.fireMode !== 'melee';
-}
 
 const spec: ParticleSpec = particleSpec();
 const base = particleSpec();
@@ -235,7 +227,7 @@ export class Gunfire {
     if (!def) return 1;
     const style = this.art?.tracers[this.art.weapons[def.id]?.tracer ?? ''];
     const n = style?.every ?? CLASS_FX[def.class]?.every ?? 1;
-    return this.low && firesWhileHeld(def) ? Math.max(n, 3) : n;
+    return this.low && heldTrigger(def) ? Math.max(n, 3) : n;
   }
 
   private shot(e: ShotEvent, fx: GunfireTargets, muzzle: MuzzleLookup, first: boolean, tracer: boolean): void {

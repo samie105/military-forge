@@ -136,7 +136,7 @@ function fly(game: Game, mech: MapMechanics | null, p: PlayerState, def: Grenade
   const sx = next.shoulderX(t);
   const sy = next.shoulderY(t);
   simCosSin(next.aim, aim);
-  const speed = def.throwSpeed * (0.7 + (0.3 * Math.max(0, Math.min(7, strength))) / 7);
+  const speed = def.throwSpeed * t.grenadeThrowScale * (0.7 + (0.3 * Math.max(0, Math.min(7, strength))) / 7);
   let spawnDist = 0.35;
   if (game.world.raycast(sx, sy, aim.x, aim.y, spawnDist + def.radius, SegFlag.BulletPass, ray)) {
     spawnDist = Math.max(0, ray.t - def.radius - 0.02);

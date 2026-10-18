@@ -25,7 +25,7 @@
  */
 import { randomBytes } from 'node:crypto';
 import { addBot, removeBot, type BotLevelId } from '@military-forge/bots';
-import { createTuning, defaultTuning, maps, type Tuning } from '@military-forge/content';
+import { createTuning, defaultTuning, limitTuning, maps, type Tuning } from '@military-forge/content';
 import {
   CONTENT_HASH,
   CloseCode,
@@ -98,6 +98,11 @@ export interface RoomOptions {
   snapshotEvery?: number;
   /** allow dev commands (live tuning, respawn) */
   dev?: boolean;
+  /**
+   * The room's host may tune the game live (SetTuning, within the tuning panel's keys and ranges),
+   * everyone else not: pnpm playtest --tune (HOST_TUNING=1). Off by default; dev rooms let anyone.
+   */
+  hostTuning?: boolean;
   /** server-side network conditioner on every connection (docs/05 §15.2; dev/testing only) */
   netSim?: { settings: ConditionerSettings; scheduler: Scheduler };
   /** lag compensation for hitscan (default on); `maxRewindMs` overrides the cap */
@@ -313,6 +318,7 @@ export class Room {
   private readonly maxHumans: number;
   private readonly snapshotEvery: number;
   private readonly dev: boolean;
+  private readonly hostTuning: boolean;
   private readonly aoi: boolean;
   private readonly graceTicks: number;
   /** every player's session by token, connected or waiting for a reconnect */
@@ -345,6 +351,7 @@ export class Room {
     this.maxHumans = options.maxHumans ?? 8;
     this.snapshotEvery = options.snapshotEvery ?? 2;
     this.dev = options.dev ?? true;
+    this.hostTuning = options.hostTuning ?? false;
     this.aoi = options.aoi ?? true;
     this.graceTicks = Math.round(((options.reconnectGraceMs ?? 20_000) / 1000) * 60);
     this.netSim = options.netSim;
@@ -633,23 +640,17 @@ export class Room {
       this.onMatchCmd(client, kind, payload);
       return;
     }
-    if (!this.dev && kind !== CmdKind.SetLowBandwidth) return;
     if (kind === CmdKind.SetTuning) {
-      try {
-        const parsed = JSON.parse(payload) as Record<string, unknown>;
-        const next: Partial<Tuning> = {};
-        for (const key of Object.keys(defaultTuning) as (keyof Tuning)[]) {
-          const v = parsed[key];
-          if (typeof v === 'number' && Number.isFinite(v)) next[key] = v;
-        }
-        this.game.tuning = createTuning({ ...this.game.tuning, ...next });
-        // every client predicts with the room's tuning: keep them in step
-        const bytes = encodeTuning(JSON.stringify(this.game.tuning));
-        for (const c of this.clients) if (c.joined && c !== client) c.conn.send(bytes);
-      } catch {
-        client.strikes++;
-      }
-    } else if (kind === CmdKind.SetLowBandwidth) {
+      // dev rooms: anyone, any tuning value; a host-tuning room (pnpm playtest --tune): its host
+      // only, within the tuning panel's keys and ranges; anywhere else: nobody
+      if (this.dev) this.setTuning(client, payload, false);
+      else if (this.hostTuning && this.host !== null && client.session === this.host) this.setTuning(client, payload, true);
+      // not (or no longer) the host: its prediction goes back to the room's tuning
+      else if (this.hostTuning) client.conn.send(encodeTuning(JSON.stringify(this.game.tuning)));
+      return;
+    }
+    if (!this.dev && kind !== CmdKind.SetLowBandwidth) return;
+    if (kind === CmdKind.SetLowBandwidth) {
       // half the snapshot rate for this client (docs/05 §2.2); allowed outside dev rooms too
       const on = payload === '1';
       client.snapshotEvery = on ? this.snapshotEvery * 2 : this.snapshotEvery;
@@ -658,6 +659,27 @@ export class Room {
     } else if (kind === CmdKind.Respawn) {
       const p = this.game.players[client.playerId];
       if (p?.alive) p.spawn(p.x, p.y + 0.5, this.game.tuning);
+    }
+  }
+
+  /** A live tuning edit (JSON): `limited` keeps it to the tuning panel's keys and ranges (a host's). */
+  private setTuning(client: Client, payload: string, limited: boolean): void {
+    try {
+      const parsed = JSON.parse(payload) as Record<string, unknown>;
+      let next: Partial<Tuning> = {};
+      if (limited) next = limitTuning(parsed);
+      else {
+        for (const key of Object.keys(defaultTuning) as (keyof Tuning)[]) {
+          const v = parsed[key];
+          if (typeof v === 'number' && Number.isFinite(v)) next[key] = v;
+        }
+      }
+      this.game.tuning = createTuning({ ...this.game.tuning, ...next });
+      // every client predicts with the room's tuning: keep them in step
+      const bytes = encodeTuning(JSON.stringify(this.game.tuning));
+      for (const c of this.clients) if (c.joined && c !== client) c.conn.send(bytes);
+    } catch {
+      client.strikes++;
     }
   }
 

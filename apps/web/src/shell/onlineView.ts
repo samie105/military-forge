@@ -5,7 +5,7 @@
 import { maps } from '@military-forge/content';
 import type { MatchStateMsg } from '@military-forge/protocol';
 import { MatchPhase, TICK_RATE, type MatchResults } from '@military-forge/sim';
-import type { MatchView } from './matchView';
+import { playerName, type MatchView } from './matchView';
 
 /** What the shell reads from an online mode (onlineMode.ts implements it). */
 export interface OnlineSource {
@@ -88,9 +88,13 @@ export function onlineMatchView(src: OnlineSource, now = performance.now()): Mat
   const length = phaseLength(s);
   const untimed = s.phase === MatchPhase.InProgress && length === 0;
   let leaderScore = 0;
+  let leaderName = '';
   let myScore = 0;
   s.standings.forEach((r, i) => {
-    if (i === 0 || r.score > leaderScore) leaderScore = r.score;
+    if (i === 0 || r.score > leaderScore) {
+      leaderScore = r.score;
+      leaderName = playerName(r.name, r.isBot);
+    }
     if (r.id === me && !r.left) myScore = r.score;
   });
   const mine = s.lobby.find((p) => p.id === me);
@@ -102,9 +106,13 @@ export function onlineMatchView(src: OnlineSource, now = performance.now()): Mat
     untimed,
     secondsElapsed: untimed ? Math.floor(elapsed / TICK_RATE) : 0,
     killLimit: s.rules.killLimit,
+    timeLimit: s.rules.timeLimit,
+    countdownTotal: s.rules.countdown,
+    mapName: maps[s.mapId]?.name ?? s.mapId,
     localId: me,
     myScore,
     leaderScore,
+    leaderName,
     ready: mine?.ready ?? false,
     votes: s.lobby.filter((p) => p.rematch).length,
     humans,

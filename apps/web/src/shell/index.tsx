@@ -16,8 +16,12 @@ import { ShellController, type GameHost } from './controller';
 import { bannerOf, sameBanner } from './mapEventBanner';
 import { matchView, sameView } from './matchView';
 import { lobbyView, onlineMatchView, sameLobby } from './onlineView';
+import { startFitting } from '../ui/fit';
+import { mountSprite } from '../ui/sprite';
 import { createShellStore, findRoute, onRoutesChanged, type ConnectionView, type ShellActions, type ShellStore } from './store';
-import './shell.css';
+// the kit's stylesheet (tokens, components) is linked from index.html so the loading screen has it
+// before any script runs; app.css is how the app hosts the kit's screens
+import '../ui/app.css';
 
 export { useMapEventBanner } from './App';
 export { localMatchRules } from './localMatch';
@@ -51,12 +55,15 @@ export interface ShellOptions {
 }
 
 const sameConnection = (a: ConnectionView | null, b: ConnectionView | null) =>
-  a === b || (!!a && !!b && a.state === b.state && a.code === b.code && a.detail === b.detail);
+  a === b || (!!a && !!b && a.state === b.state && a.code === b.code && a.detail === b.detail && a.attempt === b.attempt && a.since === b.since && a.until === b.until && a.lastPingMs === b.lastPingMs);
 
 export function mountShell(parent: HTMLElement = document.body, options: ShellOptions = {}): Shell {
   const el = document.createElement('div');
   el.id = 'shell';
+  el.className = 'mf';
   parent.appendChild(el);
+  mountSprite();
+  startFitting();
 
   const store = createShellStore();
   const host = options.host ?? null;
@@ -98,7 +105,7 @@ export function mountShell(parent: HTMLElement = document.body, options: ShellOp
       const lobby = online ? lobbyView(online) : null;
       const connection = online ? online.connection : null;
       if (!sameView(state.match, view) || !sameLobby(state.lobby, lobby) || !sameConnection(state.connection, connection)) {
-        store.setState({ match: view, lobby, connection: connection && { state: connection.state, detail: connection.detail, code: connection.code } });
+        store.setState({ match: view, lobby, connection: connection && { ...connection } });
       }
     },
     setMapEvent(view) {

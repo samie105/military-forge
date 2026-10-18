@@ -42,6 +42,13 @@ describe('touch → Input mapping', () => {
     expect(touchButtons(s, 'hold')).toBe(Btn.Dash | Btn.Left | Btn.Jet);
   });
 
+  it('Dash tapped with the move stick idle sends no direction: the sim dashes the way the soldier faces', () => {
+    const s = createTouchState();
+    s.pulses = Btn.Dash;
+    s.dashDir = 0; // the controller's pick when the move stick isn't held
+    expect(touchButtons(s, 'hold')).toBe(Btn.Dash);
+  });
+
   it('the grenade button never holds the grenade bit (the throw latch throws on release); its drag aims and sets the strength', () => {
     const s = createTouchState();
     s.grenadeActive = true;

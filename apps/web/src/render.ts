@@ -319,7 +319,9 @@ export class Renderer {
     this.zones = zoneDraws(map);
   }
 
-  setNames(names: Map<number, string>): void {
+  /** The roster's names by player id; `bots`: which are bots (the DOM HUD's badges; the canvas draws names only). */
+  setNames(names: Map<number, string>, bots: ReadonlySet<number> = new Set()): void {
+    void bots;
     this.names = names;
   }
 

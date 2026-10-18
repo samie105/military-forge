@@ -4,12 +4,13 @@
  * API (api.ts) and starts and stops game modes through the GameHost that main.ts provides; the
  * React screens only read the store and call these methods.
  */
-import { normalizeRoomCode } from '@military-forge/shared';
+import { GAME_NAME, normalizeRoomCode } from '@military-forge/shared';
 import type { OnlineMode } from '../onlineMode';
 import type { LocalMode } from '../localMode';
+import { alertFromApiError } from './alerts';
 import { Api, ApiError, NICKNAME_REASONS, type Me, type NicknameCheck, type RoomJoin } from './api';
 import { sanitizeBindings } from './controls';
-import { DEFAULT_SETTINGS, type Intent, type Overlay, type Profile, type Settings, type ShellState, type ShellStore } from './store';
+import { DEFAULT_SETTINGS, type AudioSettings, type GraphicsPreset, type Intent, type Overlay, type Profile, type Settings, type SettingsTab, type ShellState, type ShellStore } from './store';
 
 /** What main.ts gives the shell: the running game mode and how to swap it. */
 export interface GameHost {
@@ -27,6 +28,13 @@ export interface GameHost {
   applySettings(settings: Settings): void;
   /** menus over the game: no gameplay buttons reach the sim (aim still follows the mouse) */
   setInputBlocked(blocked: boolean): void;
+  /**
+   * The live tuning panel (hostTuning.ts), where this page offers it (pnpm playtest --tune, dev
+   * builds): the in-match menu offers it to the room's host, and in training.
+   */
+  readonly tuning?: { open(): void; close(): void; readonly isOpen: boolean; setCovered?(covered: boolean): void } | null;
+  /** the preset Settings → Graphics → Auto picks on this device (gfxAuto.ts) */
+  readonly autoGraphics?: GraphicsPreset;
 }
 
 export interface NameResult {
@@ -36,19 +44,17 @@ export interface NameResult {
   suggestions?: string[];
 }
 
+/** What Join with code says back (the screen stays up and shows it). */
+export type JoinResult = 'ok' | 'not_found' | 'rate_limited' | 'error';
+
 const SETTINGS_KEY = 'settings.v1';
+/**
+ * Saved settings carry this. Before it (none): Low graphics and double-tap dash off were the
+ * defaults, not choices, so those two values load as the new defaults (Auto, on) once.
+ */
+export const SETTINGS_REV = 2;
 const OFFLINE_NAME_KEY = 'profile.offlineName.v1';
 const TIPS_SEEN_KEY = 'tips.seen.v1';
-const TOUCH_OK_KEY = 'touch.ok.v1';
-
-/** A phone or tablet: no mouse, no keyboard to speak of (touch controls come later). */
-export function touchOnly(): boolean {
-  try {
-    return window.matchMedia('(hover: none) and (pointer: coarse)').matches && !window.matchMedia('(any-pointer: fine)').matches;
-  } catch {
-    return false;
-  }
-}
 
 function flagged(key: string, storage: () => Storage): boolean {
   try {
@@ -68,14 +74,36 @@ function flag(key: string, storage: () => Storage): void {
 
 /** Saved settings → valid settings (anything unknown or malformed falls back to `defaults`). */
 export function sanitizeSettings(raw: unknown, defaults: Settings = DEFAULT_SETTINGS): Settings {
-  const s = (typeof raw === 'object' && raw !== null ? raw : {}) as Partial<Record<keyof Settings, unknown>>;
+  const s = { ...(typeof raw === 'object' && raw !== null ? raw : {}) } as Partial<Record<keyof Settings | 'rev', unknown>>;
+  if (raw !== null && typeof raw === 'object' && !(typeof s.rev === 'number' && s.rev >= SETTINGS_REV)) {
+    // saved before the defaults changed (rev 2): the old defaults weren't choices
+    if (s.graphics === 'low') delete s.graphics;
+    if (s.doubleTapDash === false) delete s.doubleTapDash;
+  }
   const flag = (v: unknown, fallback: boolean) => (typeof v === 'boolean' ? v : fallback);
+  const unit = (v: unknown, fallback: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : fallback);
+  const a = (typeof s.audio === 'object' && s.audio !== null ? s.audio : {}) as Partial<Record<keyof AudioSettings, unknown>>;
+  const da = defaults.audio;
+  const scale = typeof s.textScale === 'number' && Number.isFinite(s.textScale) ? Math.round(Math.min(1.5, Math.max(1, s.textScale)) * 10) / 10 : defaults.textScale;
   return {
-    graphics: s.graphics === 'low' || s.graphics === 'medium' || s.graphics === 'high' ? s.graphics : defaults.graphics,
+    graphics: s.graphics === 'auto' || s.graphics === 'low' || s.graphics === 'medium' || s.graphics === 'high' ? s.graphics : defaults.graphics,
+    showFps: flag(s.showFps, defaults.showFps),
+    audio: {
+      master: unit(a.master, da.master),
+      effects: unit(a.effects, da.effects),
+      music: unit(a.music, da.music),
+      masterMuted: flag(a.masterMuted, da.masterMuted),
+      effectsMuted: flag(a.effectsMuted, da.effectsMuted),
+      musicMuted: flag(a.musicMuted, da.musicMuted),
+    },
     netGraph: flag(s.netGraph, defaults.netGraph),
     lowBandwidth: flag(s.lowBandwidth, defaults.lowBandwidth),
     reduceFlashes: flag(s.reduceFlashes, defaults.reduceFlashes),
+    reduceMotion: flag(s.reduceMotion, defaults.reduceMotion),
+    colorBlind: s.colorBlind === 'deutan' || s.colorBlind === 'tritan' || s.colorBlind === 'standard' ? s.colorBlind : defaults.colorBlind,
+    textScale: scale,
     doubleTapDash: flag(s.doubleTapDash, defaults.doubleTapDash),
+    blood: flag(s.blood, defaults.blood),
     bindings: sanitizeBindings(s.bindings),
   };
 }
@@ -89,8 +117,10 @@ function prefersReducedMotion(): boolean {
   }
 }
 
-function loadSettings(): Settings {
-  const defaults = { ...DEFAULT_SETTINGS, reduceFlashes: prefersReducedMotion() };
+/** The settings saved on this device (main.ts reads them before the shell starts: the 3D view's first preset). */
+export function loadSettings(): Settings {
+  const reduced = prefersReducedMotion();
+  const defaults = { ...DEFAULT_SETTINGS, reduceFlashes: reduced, reduceMotion: reduced };
   try {
     return sanitizeSettings(JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? 'null'), defaults);
   } catch {
@@ -100,7 +130,7 @@ function loadSettings(): Settings {
 
 function saveSettings(s: Settings): void {
   try {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...s, rev: SETTINGS_REV }));
   } catch {
     /* fine: this session only */
   }
@@ -120,22 +150,21 @@ export function roomLink(code: string, origin = location.origin): string {
   return `${origin}/r/${code}`;
 }
 
+/** The invitation that goes with the link. */
+export function inviteText(): string {
+  return `Join my ${GAME_NAME} room:`;
+}
+
+/** WhatsApp's "send to a chat" page with the invitation and the room's link. */
+export function whatsAppLink(code: string, origin = location.origin): string {
+  return `https://wa.me/?text=${encodeURIComponent(`${inviteText()} ${roomLink(code, origin)}`)}`;
+}
+
 /** Where a room's game server is: the API's gsUrl, or this site's own /ws/<code>. */
 export function roomSocketUrl(room: Pick<RoomJoin, 'code' | 'gsUrl'>, loc?: Pick<Location, 'protocol' | 'host'>): string {
   if (room.gsUrl) return room.gsUrl;
   const page = loc ?? location;
   return `${page.protocol === 'https:' ? 'wss' : 'ws'}://${page.host}/ws/${room.code}`;
-}
-
-function describeApiError(e: unknown): { title: string; message: string } {
-  if (e instanceof ApiError) {
-    if (e.code === 'room_not_found') return { title: 'Room not found', message: 'That room code does not exist or has expired. Check the link, or ask your friend for a new one.' };
-    if (e.code === 'invalid_room_code') return { title: 'Not a room code', message: 'Room codes are 6 letters, like KQXMZP.' };
-    if (e.code === 'rate_limited') return { title: 'Slow down', message: `Too many tries. Wait ${String(e.extra.retryAfter ?? 60)} s and try again.` };
-    if (e.offline) return { title: "Can't reach the server", message: 'The game server is not answering. It may have stopped: ask whoever sent you the link.' };
-    return { title: 'Something went wrong', message: e.message };
-  }
-  return { title: 'Something went wrong', message: (e as Error).message };
 }
 
 function profileOf(me: Me): Profile {
@@ -144,6 +173,8 @@ function profileOf(me: Me): Profile {
 
 export class ShellController {
   private noticeTimer = 0;
+  /** Settings was opened from the in-match menu: Back returns there */
+  private settingsFrom: 'menu' | null = null;
 
   constructor(
     readonly store: ShellStore,
@@ -154,6 +185,13 @@ export class ShellController {
     store.setState({ settings });
     host.applySettings(settings);
     window.addEventListener('popstate', () => this.onPopState());
+    // the tuning panel goes away with host rights (another player became host, or we left), and
+    // steps aside while a menu is open
+    store.subscribe((s) => {
+      if (!host.tuning) return;
+      if (host.tuning.isOpen && !this.canTune()) host.tuning.close();
+      host.tuning.setCovered?.(s.overlay !== null);
+    });
   }
 
   private set(partial: Partial<ShellState>): void {
@@ -166,7 +204,7 @@ export class ShellController {
 
   /** First screen: restore the session, then follow the link (a room) or show home. */
   async boot(): Promise<void> {
-    this.set({ screen: { name: 'boot' }, touchWarning: touchOnly() && !flagged(TOUCH_OK_KEY, () => sessionStorage) });
+    this.set({ screen: { name: 'boot' } });
     const intent = intentFromLocation(location);
     let me: Me | null;
     try {
@@ -214,7 +252,7 @@ export class ShellController {
           return;
         }
         if (this.profile.offline) {
-          this.set({ screen: { name: 'error', ...describeApiError(new ApiError(0, 'network', 'offline')), retry: intent } });
+          this.set({ screen: { name: 'error', alert: alertFromApiError(new ApiError(0, 'network', 'offline'), intent.to === 'join' ? intent.code : undefined), retry: intent } });
           return;
         }
         void this.findRoom(intent);
@@ -224,7 +262,7 @@ export class ShellController {
 
   private async findRoom(intent: Extract<Intent, { to: 'create' | 'join' }>): Promise<void> {
     this.host.stop();
-    this.set({ screen: { name: 'finding', label: intent.to === 'create' ? 'Creating a room…' : `Looking for room ${intent.code}…` }, match: null, lobby: null });
+    this.set({ screen: { name: 'finding', code: intent.to === 'join' ? intent.code : null, creating: intent.to === 'create' }, match: null, lobby: null });
     try {
       const room = intent.to === 'create' ? await this.api.createRoom() : await this.api.joinRoom(intent.code);
       this.enterRoom(room);
@@ -234,8 +272,41 @@ export class ShellController {
         this.set({ profile: null, screen: { name: 'name', then: intent } });
         return;
       }
-      this.set({ screen: { name: 'error', ...describeApiError(e), retry: e instanceof ApiError && e.offline ? intent : null } });
+      const alert = alertFromApiError(e, intent.to === 'join' ? intent.code : undefined);
+      this.set({ screen: { name: 'error', alert, retry: alert.action ? intent : null } });
     }
+  }
+
+  /**
+   * Join with code: asks the API first and stays on the Join screen when the room isn't there
+   * ("No room with that code"); a room that exists is entered at once.
+   */
+  async joinByCode(code: string): Promise<JoinResult> {
+    if (!this.profile || this.profile.offline) {
+      this.go({ to: 'join', code });
+      return 'error';
+    }
+    let room: RoomJoin;
+    try {
+      room = await this.api.joinRoom(code);
+    } catch (e) {
+      if (e instanceof ApiError && (e.code === 'room_not_found' || e.code === 'invalid_room_code')) return 'not_found';
+      if (e instanceof ApiError && e.code === 'rate_limited') return 'rate_limited';
+      if (e instanceof ApiError && (e.code === 'no_session' || e.status === 401)) {
+        this.closeOverlay();
+        this.set({ profile: null, screen: { name: 'name', then: { to: 'join', code } } });
+        return 'error';
+      }
+      this.closeOverlay();
+      const alert = alertFromApiError(e, code);
+      this.set({ screen: { name: 'error', alert, retry: alert.action ? { to: 'join', code } : null } });
+      return 'error';
+    }
+    this.closeOverlay();
+    this.host.stop();
+    this.set({ match: null, lobby: null });
+    this.enterRoom(room);
+    return 'ok';
   }
 
   private enterRoom(room: RoomJoin): void {
@@ -266,16 +337,24 @@ export class ShellController {
     this.set({ tips: false });
   }
 
-  /** "Continue anyway" on a phone: not asked again this session. */
-  dismissTouchWarning(): void {
-    flag(TOUCH_OK_KEY, () => sessionStorage);
-    this.set({ touchWarning: false });
-  }
-
   /** Reconnect to the same room after a failure (the session may still resume within its grace). */
   rejoin(): void {
     const screen = this.store.getState().screen;
     if (screen.name === 'room') this.go({ to: 'join', code: screen.code });
+  }
+
+  /** "Tune the game" in the menu: this page offers the panel, and you're the room's host (or in training). */
+  canTune(): boolean {
+    if (!this.host.tuning) return false;
+    const { screen, lobby } = this.store.getState();
+    return screen.name === 'training' || (screen.name === 'room' && lobby?.isHost === true);
+  }
+
+  /** Back to the game with the tuning panel open beside it. */
+  openTuning(): void {
+    if (!this.canTune()) return;
+    this.closeOverlay();
+    this.host.tuning!.open();
   }
 
   /** Leave the room or the training match for the home screen. */
@@ -310,7 +389,7 @@ export class ShellController {
       } else if (e.code === 'nickname_taken') return { ok: false, error: NICKNAME_REASONS.taken, suggestions: (e.extra.suggestions as string[] | undefined) ?? [] };
       else if (e.code === 'invalid_nickname') return { ok: false, error: NICKNAME_REASONS[String(e.extra.reason)] ?? e.message };
       else if (e.code === 'nickname_cooldown') return { ok: false, error: `You can change your name again on ${new Date(String(e.extra.nicknameChangeableAt)).toLocaleDateString()}` };
-      else return { ok: false, error: describeApiError(e).message };
+      else return { ok: false, error: alertFromApiError(e).message };
     }
     const screen = this.store.getState().screen;
     if (screen.name === 'name') this.go(screen.then);
@@ -327,14 +406,36 @@ export class ShellController {
 
   closeOverlay(): void {
     if (this.store.getState().overlay === null) return;
+    this.settingsFrom = null;
     this.set({ overlay: null });
     this.host.setInputBlocked(false);
   }
 
-  /** Esc during play: the in-game menu (or close whatever is open). */
+  /** Back from an overlay: Settings opened from the in-match menu goes back to it, anything else closes. */
+  back(): void {
+    const { overlay } = this.store.getState();
+    if (overlay === 'settings' && this.settingsFrom === 'menu') {
+      this.settingsFrom = null;
+      this.set({ overlay: 'menu' });
+    } else this.closeOverlay();
+  }
+
+  /** Settings at a section (Home's "Change keys" opens Controls); the last one used otherwise. */
+  openSettings(tab?: SettingsTab): void {
+    const from = this.store.getState().overlay;
+    if (tab) this.set({ settingsTab: tab });
+    this.openOverlay('settings');
+    this.settingsFrom = from === 'menu' ? 'menu' : null;
+  }
+
+  setSettingsTab(tab: SettingsTab): void {
+    this.set({ settingsTab: tab });
+  }
+
+  /** Esc: back out of whatever is open, or the in-match menu during play. */
   toggleMenu(): void {
     const { overlay, screen } = this.store.getState();
-    if (overlay) this.closeOverlay();
+    if (overlay) this.back();
     else if (screen.name === 'room' || screen.name === 'training') this.openOverlay('menu');
   }
 
@@ -351,14 +452,37 @@ export class ShellController {
     this.noticeTimer = window.setTimeout(() => this.set({ notice: null }), 2200);
   }
 
-  async copyLink(code: string): Promise<void> {
+  /** Copies the room's link; `quiet` when the screen shows it itself (the lobby's button turns green). */
+  async copyLink(code: string, quiet = false): Promise<boolean> {
     const link = roomLink(code);
     try {
       await navigator.clipboard.writeText(link);
-      this.notify('Link copied: send it to a friend');
+      if (!quiet) this.notify('Link copied: send it to a friend');
+      return true;
     } catch {
       window.prompt('Copy this link and send it to a friend:', link);
+      return false;
     }
+  }
+
+  /** WhatsApp's share page with the room's link (a new tab; the player picks the chat there). */
+  shareOnWhatsApp(code: string): void {
+    window.open(whatsAppLink(code), '_blank', 'noopener,noreferrer');
+  }
+
+  /** The system share sheet where the browser has one (phones); otherwise the link is copied. */
+  async shareLink(code: string): Promise<void> {
+    const url = roomLink(code);
+    const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
+    if (nav.share) {
+      try {
+        await nav.share({ title: GAME_NAME, text: inviteText(), url });
+        return;
+      } catch (e) {
+        if ((e as Error).name === 'AbortError') return;
+      }
+    }
+    await this.copyLink(code);
   }
 
   // ---- browser history ----

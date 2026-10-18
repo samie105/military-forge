@@ -21,6 +21,27 @@ describe('touch HUD layout', () => {
     expect(placementFor(layout, 'aim', 'left').y).toBe(DEFAULT_PLACEMENTS.aim.y);
   });
 
+  it("defaults follow the design kit's phone HUD: menu top right, actions in an arc round the aim stick, nothing overlapping", () => {
+    const [w, h] = [812, 375]; // the kit's phone frame
+    const px = (id: keyof typeof DEFAULT_PLACEMENTS) => ({ x: DEFAULT_PLACEMENTS[id].x * w, y: DEFAULT_PLACEMENTS[id].y * h, r: (DEFAULT_PLACEMENTS[id].size * h) / 2 });
+    expect(px('pause').x).toBeGreaterThan(w * 0.85);
+    expect(px('pause').y).toBeLessThan(h * 0.15);
+    const aim = px('aim');
+    const out = (id: keyof typeof DEFAULT_PLACEMENTS) => Math.hypot(px(id).x - aim.x, px(id).y - aim.y);
+    for (const id of ['grenade', 'dash', 'reload', 'swap'] as const) expect(out(id)).toBeCloseTo(106, -1);
+    for (const id of ['cycleGrenade', 'melee', 'shield'] as const) expect(out(id)).toBeCloseTo(172, -1);
+    const buttons = Object.keys(DEFAULT_PLACEMENTS).filter((id) => id !== 'move' && id !== 'aim') as (keyof typeof DEFAULT_PLACEMENTS)[];
+    for (const a of buttons) for (const b of buttons) if (a < b) expect(Math.hypot(px(a).x - px(b).x, px(a).y - px(b).y), `${a}/${b}`).toBeGreaterThan(px(a).r + px(b).r);
+    for (const id of buttons) expect(Math.hypot(px(id).x - aim.x, px(id).y - aim.y), id).toBeGreaterThan(aim.r + px(id).r);
+  });
+
+  it("a player's saved places outlast new defaults", () => {
+    const store = memoryStore({ [LAYOUT_KEY]: JSON.stringify({ placements: { pause: { x: 0.035, y: 0.08, size: 0.1, opacity: 1 } } }) });
+    const layout = loadLayout(store);
+    expect(placementFor(layout, 'pause', 'right')).toEqual({ x: 0.035, y: 0.08, size: 0.1, opacity: 1 });
+    expect(placementFor(layout, 'reload', 'right')).toEqual(DEFAULT_PLACEMENTS.reload);
+  });
+
   it('edits persist, in either handedness, and come back the same', () => {
     const store = memoryStore();
     let layout = loadLayout(store);

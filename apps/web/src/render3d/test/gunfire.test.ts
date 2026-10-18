@@ -1,7 +1,7 @@
-import { BREACHER, BUZZ, HAMMER, WIDOW, movementTestMap } from '@military-forge/content';
+import { BREACHER, BUZZ, HAMMER, SHREDDER, WIDOW, movementTestMap } from '@military-forge/content';
 import { CollisionWorld, type SimEvent } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
-import { Gunfire, firesWhileHeld, type MuzzleLookup } from '../vfx/gunfire';
+import { Gunfire, type MuzzleLookup } from '../vfx/gunfire';
 import { parseWeaponVfx } from '../vfx/manifest';
 import { F, ParticlePool, STRIDE } from '../vfx/pool';
 import { Ramp } from '../vfx/ramps';
@@ -220,12 +220,11 @@ describe('weapons.vfx.json (the Forge flash atlas)', () => {
 });
 
 describe("Low's thinner tracers (every 3rd at most) for every gun that fires while held", () => {
-  it('auto, burst, spin-up and beam guns (the arsenal\'s Shredder too), not semi or melee', () => {
-    expect(['auto', 'burst', 'spinup', 'beam'].map((fireMode) => firesWhileHeld({ fireMode }))).toEqual([true, true, true, true]);
-    expect(['semi', 'melee'].map((fireMode) => firesWhileHeld({ fireMode }))).toEqual([false, false]);
+  it('auto, burst, spin-up and beam guns (content heldTrigger: the Shredder too), not semi or melee', () => {
     const g = new Gunfire(new CollisionWorld(movementTestMap));
     g.low = true;
     expect(g.every(BUZZ.index)).toBeGreaterThanOrEqual(3);
+    expect(g.every(SHREDDER.index)).toBeGreaterThanOrEqual(3); // spin-up
     expect(g.every(HAMMER.index)).toBe(1);
     g.low = false;
     expect(g.every(BUZZ.index)).toBeLessThan(3);

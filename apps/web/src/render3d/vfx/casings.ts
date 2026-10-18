@@ -12,11 +12,10 @@
  * live casing of a kind is an instance of one InstancedMesh: a draw call per kind while any are
  * out, none otherwise. The steady state allocates nothing.
  */
-import { NO_WEAPON, weapons, type WeaponDef } from '@military-forge/content';
+import { NO_WEAPON, heldTrigger, weapons, type WeaponDef } from '@military-forge/content';
 import { SegFlag, createRayHit, type CollisionWorld, type SimEvent } from '@military-forge/sim';
 import { BufferAttribute, CylinderGeometry, DynamicDrawUsage, InstancedMesh, Matrix4, MeshToonMaterial, Quaternion, Vector3, type BufferGeometry, type Scene, type Texture } from 'three';
 import type { Frame } from '../../view';
-import { firesWhileHeld } from './gunfire';
 
 /** what a gun drops; each is drawn by its own InstancedMesh */
 export type CasingKind = 'pistol' | 'rifle' | 'shotgun' | 'sniper';
@@ -116,7 +115,7 @@ export function gunEject(def: WeaponDef | undefined, art: CasingArt | null): Gun
   if (listed !== undefined) e = listed && { ...listed };
   else if (def.class === 'sidearm' || def.class === 'smg') e = { kind: 'pistol', mode: 'shot', delay: 0, count: 1 };
   else if (def.class === 'rifle' || def.class === 'dmr' || def.class === 'heavy') e = { kind: 'rifle', mode: 'shot', delay: 0, count: 1 };
-  else if (def.class === 'shotgun') e = firesWhileHeld(def) ? { kind: 'shotgun', mode: 'shot', delay: 0, count: 1 } : { kind: 'shotgun', mode: 'pump', delay: 0.25, count: 1 };
+  else if (def.class === 'shotgun') e = heldTrigger(def) ? { kind: 'shotgun', mode: 'shot', delay: 0, count: 1 } : { kind: 'shotgun', mode: 'pump', delay: 0.25, count: 1 };
   else if (def.class === 'sniper') e = { kind: 'sniper', mode: 'bolt', delay: 0.35, count: 1 };
   else e = null; // melee, specials (launchers…)
   if (e && def.class === 'sniper' && e.kind === 'rifle') e.kind = 'sniper';

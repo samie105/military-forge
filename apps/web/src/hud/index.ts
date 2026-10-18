@@ -9,8 +9,9 @@
  * it does. Kinds: 'info' | 'event' | 'success' | 'warning' | 'danger'.
  */
 import { Hud, type BannerKind, type BannerOptions } from './hud';
+import { mountTouchSkin } from './touchSkin';
 
-export { Hud, netGraph, type BannerKind, type BannerOptions, type HudInput } from './hud';
+export { Hud, netGraph, type BannerKind, type BannerOptions, type HudInput, type HudKeys } from './hud';
 export type { ScoreRow } from './model';
 
 let active: Hud | null = null;
@@ -20,6 +21,7 @@ const waiting: [string, BannerKind, BannerOptions][] = [];
 export function mountHud(parent: HTMLElement = document.body): Hud {
   active?.dispose();
   active = new Hud(parent);
+  mountTouchSkin();
   for (const [text, kind, options] of waiting.splice(0)) active.showBanner(text, kind, options);
   return active;
 }

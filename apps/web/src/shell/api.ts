@@ -175,6 +175,13 @@ export class Api {
   joinRoom(code: string): Promise<RoomJoin> {
     return this.request<RoomJoin>('POST', `/rooms/${encodeURIComponent(code)}/join`, {}, true);
   }
+
+  /** The server's round trip (GET /version: no database work), ms: the ping the menus show before a game connects. */
+  async ping(): Promise<number> {
+    const t0 = performance.now();
+    await this.request<unknown>('GET', '/version');
+    return performance.now() - t0;
+  }
 }
 
 /** Human words for the API's nickname `reason` codes (docs/07 §3, W3 notes). */

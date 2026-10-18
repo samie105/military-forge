@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { generateSigningKey } from '../src/auth/keys';
 import { verifyJwt } from '../src/auth/tokens';
 import { LIMITS } from '../src/http/rateLimit';
-import { ROOM_TTL_MS, TICKET_AUDIENCE, TICKET_ISSUER, type JoinTicketClaims, type RoomJoin } from '../src/rooms/routes';
+import { ROOM_TTL_MS, TICKET_AUDIENCE, TICKET_ISSUER, keepRooms, type JoinTicketClaims, type RoomJoin } from '../src/rooms/routes';
 import { bearer, createGuest, createTestApi, json, type TestApi } from './helpers';
 
 let api: TestApi;
@@ -116,5 +116,19 @@ describe('join tickets (docs/06 §6)', () => {
     } finally {
       await signed.close();
     }
+  });
+});
+
+describe('KEEP_ROOMS', () => {
+  it('a restarted API holds the codes it is given: joinable at once, a code in use left as it is', async () => {
+    const guest = await createGuest(api);
+    expect((await joinRoom(guest.accessToken, 'KQXMZP')).status).toBe(404);
+    const host = await createGuest(api);
+    const made = (await (await create(host.accessToken)).json()) as RoomJoin;
+    expect(await keepRooms(api.kv, ['kqx-mzp', made.code, 'NOPE0'], api.clock.now)).toBe(1); // only the new one
+    const joined = await joinRoom(guest.accessToken, 'KQXMZP');
+    expect(joined.status).toBe(200);
+    expect(((await joined.json()) as RoomJoin).code).toBe('KQXMZP');
+    expect(JSON.parse((await api.kv.get(`room:${made.code}`))!)).toMatchObject({ host: expect.not.stringMatching(/^kept$/) });
   });
 });

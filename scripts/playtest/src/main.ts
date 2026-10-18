@@ -1,16 +1,21 @@
 /**
  * pnpm playtest: the game on a public https link, for playing with a friend from this Mac.
  *
- *   1. builds the web app (production: no dev hooks, no tuning panel),
+ *   1. builds the web app (production: no dev hooks),
  *   2. starts the API (guest accounts, nicknames, room codes) and the game server (rooms by code,
- *      NODE_ENV=production: no dev commands, no DEBUG messages) on 127.0.0.1 only,
+ *      NODE_ENV=production: no dev commands, no DEBUG messages; with --tune, the default, a room's
+ *      host may tune the game live from the in-match menu: "Tune the game") on 127.0.0.1 only,
  *   3. puts the build, /api and /ws behind one local port (proxy.ts),
  *   4. opens a Cloudflare quick tunnel to it and prints the link, with a room ready to join.
  *
  * It rides out a flaky connection: the services and the proxy keep running whatever the tunnel
  * does, cloudflared reconnects by itself, and if it gives up it is started again (with backoff).
  * A new tunnel means a new address: the new link is printed in a box again and written to
- * `.playtest-link` (repo root). A service that crashes is restarted too. Only Ctrl-C stops it all.
+ * `.playtest-link` (repo root). A service that crashes (or is killed) is restarted too, and keeps
+ * the link: a restarted API gets the rooms in play back and keeps its database (accounts, sessions),
+ * a restarted game server reopens rooms under the same codes as players rejoin. Only Ctrl-C stops it
+ * all. The services run as `node --title=military-forge-playtest-<name> … <absolute entry>`
+ * (services.ts): stop them by their PIDs, never by a pattern.
  * The Mac must stay awake and online while people play (this keeps it from idle-sleeping).
  *
  * Players get into rooms with the API's join tickets (docs/06 §6): a key pair is made per run, the
@@ -24,11 +29,12 @@
  *        0 = no bots) · --bot-level easy|normal|hard (default normal) ·
  *        --no-armory (no test armory: by default every room has a rack of one of every gun by the spawns) ·
  *        --lan (also open it to this Wi-Fi at http://<this Mac's address>:<port>, for friends in the
- *        same place; pair it with --port for an address that stays the same between runs)
+ *        same place; pair it with --port for an address that stays the same between runs) ·
+ *        --tune (the default: each room's host gets the tuning panel; nobody else) · --no-tune
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { generateKeyPairSync } from 'node:crypto';
-import { existsSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer as createNetServer } from 'node:net';
 import { networkInterfaces, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -37,6 +43,7 @@ import { fileURLToPath } from 'node:url';
 import { GAME_NAME } from '../../../packages/shared/src/brand';
 import { Backoff } from './backoff';
 import { createProxy } from './proxy';
+import { RoomBook, serviceArgs, serviceMarker } from './services';
 import { findCloudflared, startQuickTunnel, type Tunnel } from './tunnel';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -44,6 +51,8 @@ const DIST = join(ROOT, 'apps', 'web', 'dist');
 /** the current link, for whoever relays it (one line; removed on exit) */
 export const LINK_FILE = join(ROOT, '.playtest-link');
 const PID_FILE = join(tmpdir(), `military-forge-playtest-${process.pid}.pids`);
+/** this run's own files (the API's database, so an API restart keeps accounts and sessions); removed on exit */
+const RUN_DIR = mkdtempSync(join(tmpdir(), `military-forge-playtest-${process.pid}-`));
 const args = process.argv.slice(2);
 const flag = (name: string) => args.includes(`--${name}`);
 const option = (name: string) => {
@@ -127,7 +136,8 @@ class Supervised {
     readonly name: string,
     private readonly cwd: string,
     private readonly entry: string,
-    private readonly env: Record<string, string>,
+    /** read at every start: a restart can be told what changed (the API: the rooms to keep) */
+    private readonly env: () => Record<string, string>,
     private readonly show: (line: string) => string | null,
   ) {
     stoppers.push(() => stopChild(this.child));
@@ -139,8 +149,11 @@ class Supervised {
 
   start(): void {
     if (this.starts++ > 0) this.onRestart();
-    // node --import tsx: one process per service (no wrapper), so signals reach it directly
-    const child = spawn(process.execPath, ['--import', 'tsx', this.entry], { cwd: this.cwd, env: cleanEnv(this.env), stdio: ['ignore', 'pipe', 'pipe'] });
+    // node --import tsx: one process per service (no wrapper), so signals reach it directly. The entry
+    // by absolute path, with a title and an env marker: recognisably the playtest's, and never caught
+    // by a cleanup pattern like "tsx src/index.ts" (services.ts)
+    const args = serviceArgs(this.name, resolve(this.cwd, this.entry));
+    const child = spawn(process.execPath, args, { cwd: this.cwd, env: cleanEnv({ ...this.env(), ...serviceMarker(this.name, process.pid) }), stdio: ['ignore', 'pipe', 'pipe'] });
     this.child = child;
     this.backoff.started();
     pipeLines(child, this.show);
@@ -298,6 +311,7 @@ setInterval(() => { try { process.kill(Number(parent), 0); } catch {
   try { for (const p of fs.readFileSync(file, 'utf8').split(' ').map(Number).filter(Boolean)) { try { process.kill(p, 'SIGTERM'); } catch {} } } catch {}
   try { fs.rmSync(file, { force: true }); } catch {}
   try { fs.rmSync(${JSON.stringify(LINK_FILE)}, { force: true }); } catch {}
+  try { fs.rmSync(${JSON.stringify(RUN_DIR)}, { recursive: true, force: true }); } catch {}
   process.exit(0);
 } }, 1000);`;
   watchdog = spawn(process.execPath, ['-e', code, String(process.pid), PID_FILE], { detached: true, stdio: 'ignore' });
@@ -312,6 +326,7 @@ async function shutdown(exitCode: number): Promise<void> {
   rmSync(LINK_FILE, { force: true });
   rmSync(PID_FILE, { force: true });
   await Promise.all(stoppers.map((stop) => stop()));
+  rmSync(RUN_DIR, { recursive: true, force: true });
   say(dim('Stopped.'));
   process.exit(exitCode);
 }
@@ -401,6 +416,8 @@ async function main(): Promise<void> {
   const lanSite = lanIp ? `http://${lanIp}:${proxyPort}` : null;
   if (lanSite) localOrigins.push(lanSite);
   let roomCode = '';
+  /** the announced room and the rooms in play: a restarted API keeps them (KEEP_ROOMS) */
+  const rooms = new RoomBook();
   let servicesUp = false;
   let announced: string | null = null;
 
@@ -439,6 +456,7 @@ async function main(): Promise<void> {
       say(dim('  • Plays in a desktop browser (Chrome, Edge, Firefox, Safari) with a keyboard and mouse, or on a phone held sideways (touch controls).'));
     } else say(dim(lanSite ? '  • --local --lan: only this machine and this Wi-Fi can open it.' : '  • --local: only this machine can open it.'));
     if (lanSite) say(dim('  • Same Wi-Fi: friends here open the Wi-Fi link; if macOS asks whether node may accept incoming connections, allow it.'));
+    if (tune) say(dim("  • Tuning: the room's host opens the menu (Esc) and picks Tune the game; Copy values copies the changes. --no-tune turns it off."));
     say('');
   };
 
@@ -468,14 +486,18 @@ async function main(): Promise<void> {
   const map = option('map');
   const bots = option('bots') ?? '4';
   const botLevel = option('bot-level') ?? 'normal';
+  // the room's host may tune the game live (fuel, jet, gravity, dash, blasts, grenades…) and copy
+  // the values out: on unless --no-tune
+  const tune = !flag('no-tune');
 
   // the game server: rooms by code only, admitted by the API's tickets, no dev commands or DEBUG
-  // messages (NODE_ENV=production); client addresses (the door's per-IP caps) come from the proxy
+  // messages (NODE_ENV=production) but the host's live tuning with --tune; client addresses (the
+  // door's per-IP caps) come from the proxy
   const game = new Supervised(
     'game server',
     join(ROOT, 'apps', 'game-server'),
     'src/index.ts',
-    {
+    () => ({
       NODE_ENV: 'production',
       HOST: '127.0.0.1',
       PORT: String(gamePort),
@@ -486,16 +508,26 @@ async function main(): Promise<void> {
       ...(map ? { MAP: map } : {}),
       BOTS: bots,
       BOT_LEVEL: botLevel,
+      HOST_TUNING: tune ? '1' : '0',
       // the test armory: one of every gun near the spawns, so friends can try them all (owner's playtest)
       ARMORY: flag('no-armory') ? '0' : '1',
-    },
+    }),
     // start-up, rooms opened/closed and refused joins; the 10 s tick reports are for development
-    (line) => (/^\[game-server\]|^\[rooms\] (opened|closed|refused)|crash|rror/.test(line) ? dim(`  [game] ${line}`) : null),
+    (line) => {
+      rooms.noteGameLine(line);
+      return /^\[game-server\]|^\[rooms\] (opened|closed|refused)|crash|rror/.test(line) ? dim(`  [game] ${line}`) : null;
+    },
   );
+  // a restarted game server has no rooms: they open again under the same codes as players rejoin
+  // (each client rejoins by itself with a fresh ticket, the API still knows the codes)
+  game.onRestart = () => {
+    rooms.gameRestarted();
+    say(dim(`  ${clock()}  Rooms keep their codes and the link; players rejoin by themselves.`));
+  };
   pidSources.push(game);
   game.start();
 
-  // the production build (no dev hooks, no tuning panel)
+  // the production build (no dev hooks; the host's tuning panel loads only when it's opened)
   if (!flag('no-build') || !existsSync(join(DIST, 'index.html'))) {
     say(dim('  Building the web app…'));
     await build();
@@ -505,12 +537,15 @@ async function main(): Promise<void> {
     'API',
     join(ROOT, 'apps', 'api'),
     'src/index.ts',
-    {
-      // development = embedded Postgres (PGlite) + in-memory KV; production would need real ones
+    () => ({
+      // development = embedded Postgres (PGlite) + in-memory KV; production would need real ones.
+      // The database lives in this run's directory (removed on exit), so a restarted API still knows
+      // everyone's account and session; the rooms in play are handed back with KEEP_ROOMS.
       NODE_ENV: 'development',
       API_HOST: '127.0.0.1',
       API_PORT: String(apiPort),
-      PGLITE_DIR: 'memory://',
+      PGLITE_DIR: join(RUN_DIR, 'pglite'),
+      KEEP_ROOMS: rooms.keepList().join(','),
       ACCESS_TOKEN_PRIVATE_KEY: accessKey.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
       JOIN_TICKET_PRIVATE_KEY: ticketKey.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
       // the API trusts only this local origin; the proxy vouches for the tunnel's current one (CSRF)
@@ -519,7 +554,7 @@ async function main(): Promise<void> {
       // rate limits per player IP: Cloudflare's CF-Connecting-IP (anything not from the tunnel is this Mac)
       TRUST_PROXY: local ? 'none' : 'cloudflare',
       LOG_LEVEL: 'warn',
-    },
+    }),
     (line) => (line.trim() ? dim(`  [api] ${line}`) : null),
   );
   pidSources.push(api);
@@ -532,6 +567,7 @@ async function main(): Promise<void> {
     game: { host: '127.0.0.1', port: gamePort },
     allowedOrigins,
     apiOrigin: base,
+    tune,
     log: (l) => say(dim(`  ${l}`)),
   });
   await new Promise<void>((done, fail) => {
@@ -554,21 +590,41 @@ async function main(): Promise<void> {
   }
 
   // a room ready to share: minted through the API like any player's (it outlives tunnel changes)
+  const guestToken = async () =>
+    ((await (await fetch(`${base}/api/auth/guest`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).json()) as { accessToken: string }).accessToken;
   const mintRoom = async () => {
     try {
-      const guest = (await (await fetch(`${base}/api/auth/guest`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).json()) as { accessToken: string };
-      const room = (await (await fetch(`${base}/api/rooms`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${guest.accessToken}` }, body: '{}' })).json()) as { code: string };
+      const token = await guestToken();
+      const room = (await (await fetch(`${base}/api/rooms`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: '{}' })).json()) as { code: string };
       roomCode = room.code;
+      rooms.announced = room.code;
     } catch {
       /* the home page still works: Play with friends makes one */
     }
   };
+  /** The announced room still takes players (after an API restart: KEEP_ROOMS brought it back). */
+  const roomAlive = async () => {
+    try {
+      const token = await guestToken();
+      return (await fetch(`${base}/api/rooms/${roomCode}/join`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: '{}' })).ok;
+    } catch {
+      return false;
+    }
+  };
   await mintRoom();
-  // a restarted API has forgotten the room codes: mint a new one and say so
+  // a restarted API is handed the announced room and the rooms in play (KEEP_ROOMS) and keeps its
+  // database, so the link people were sent still works; only if the room is gone after all is a new
+  // one made and announced
   api.onRestart = () =>
     void waitForService('API', async () => (await fetch(`http://127.0.0.1:${apiPort}/health`)).ok)
-      .then(mintRoom)
-      .then(() => announce(tunnel?.url ?? base, 'the API restarted: new room'))
+      .then(async () => {
+        if (roomCode && (await roomAlive())) {
+          say(green(`  ${clock()}  The API is back; room ${roomCode} and the link still work.`));
+          return;
+        }
+        await mintRoom();
+        announce(tunnel?.url ?? base, 'the API restarted and lost the room: new room');
+      })
       .catch(() => {});
 
   servicesUp = true;
