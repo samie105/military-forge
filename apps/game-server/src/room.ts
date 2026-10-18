@@ -12,9 +12,14 @@
  * Sessions (docs/05 §13): a dropped connection leaves its player standing idle in the world for
  * `reconnectGraceMs`; a new connection presenting the WELCOME session token takes it back over
  * (full resync: fresh baselines), and also replaces a stale connection that hasn't noticed the drop.
+ *
+ * Match rooms (`RoomOptions.match`, the rooms by code): the sim's Match runs the lobby → countdown →
+ * match → results → rematch lifecycle (docs/06 §5.2), the longest-present player is the host
+ * (settings, start, back to lobby; docs/07 §5.3), and MATCH_STATE (0x23) keeps every client's
+ * screens and input freeze in step.
  */
 import { randomBytes } from 'node:crypto';
-import { createTuning, defaultTuning, type Tuning } from '@military-forge/content';
+import { createTuning, defaultTuning, maps, type Tuning } from '@military-forge/content';
 import {
   CONTENT_HASH,
   CloseCode,
@@ -32,10 +37,13 @@ import {
   encodeRewindDebug,
   encodeRoster,
   type RosterEntry,
+  encodeMatchState,
   encodeTuning,
   encodeWelcome,
   isUnreliableMessage,
+  ROOM_SETTING_LIMITS,
   type ClientMessage,
+  type MatchStandingWire,
   type RewindTarget,
   type ViewRect,
 } from '@military-forge/protocol';
@@ -51,7 +59,7 @@ import {
   type ConditionerSettings,
   type Scheduler,
 } from '@military-forge/netcode';
-import { Game, createInput, type Input, type PlayerState, type SimEvent } from '@military-forge/sim';
+import { Game, Match, MatchPhase, createInput, type Input, type MatchRules, type MatchStanding, type PlayerState, type SimEvent } from '@military-forge/sim';
 
 export interface ClientConn {
   send(bytes: Uint8Array): void;
@@ -79,6 +87,10 @@ export interface RoomOptions {
   aoi?: boolean;
   /** how long a dropped player waits for its session to reconnect (rooms 20 s, BR 60 s; 0 = never) */
   reconnectGraceMs?: number;
+  /** run a match (lobby, countdown, scoring, results, rematch) with these rules; absent = free play */
+  match?: Partial<MatchRules>;
+  /** where a message handler's unexpected error goes (the client is kicked, the room keeps running) */
+  log?: (msg: string) => void;
 }
 
 /** A player's claim on the room; outlives its connection for the reconnect grace. */
@@ -96,12 +108,22 @@ export interface Session {
    * new token (its first PING or INPUT): if the resumed WELCOME is lost, the retry still works.
    */
   prevToken: string | null;
+  /** join order in this room (the host is the longest-present player) */
+  readonly joinSeq: number;
+  /** round-trip time its client last reported (CmdKind.ReportPing), ms; -1 = not yet */
+  pingMs: number;
 }
 
 const newToken = () => randomBytes(18).toString('base64url');
 
 const MAX_STRIKES = 3;
 const MAX_MESSAGES_PER_SECOND = 200;
+/**
+ * A stalled TCP stream (a proxy or tunnel hiccup) or a starved server process hands over seconds of
+ * an honest client's messages at once (~61/s), so unused allowance carries over, up to 3 s of it.
+ * A flood still runs dry within seconds: the steady-state limit is unchanged.
+ */
+const MESSAGE_BURST = 3 * MAX_MESSAGES_PER_SECOND;
 /**
  * docs/05 §14: a token bucket of CMDs per connection (20/s, bursts of 20). Over the limit they're
  * dropped, not strikes: a TCP stall can bunch up honest ones. A real flood still hits
@@ -138,7 +160,8 @@ export class Client {
   /** server tick of the last snapshot sent to it */
   lastSnapshotTick = -1;
   strikes = 0;
-  messagesThisSecond = 0;
+  /** messages it may still send before the next refill (rate limit with carry-over, MESSAGE_BURST) */
+  messageTokens = MESSAGE_BURST;
   /** CMD token bucket: tokens left, as of server tick `cmdTokensAt` */
   cmdTokens = CMD_BURST;
   cmdTokensAt = 0;
@@ -163,10 +186,70 @@ export class Client {
   }
 }
 
-function sanitizeName(raw: string, fallback: string): string {
+/** docs/07 §3: 16 characters (grapheme clusters), 48 UTF-8 bytes. Never cuts a character in half. */
+const MAX_NAME_GRAPHEMES = 16;
+const MAX_NAME_BYTES = 48;
+const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
+export function sanitizeName(raw: string, fallback: string): string {
   // eslint-disable-next-line no-control-regex
-  const name = raw.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 16);
-  return name || fallback;
+  const clean = raw.replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2064\ufeff]/g, '').trim();
+  let name = '';
+  let count = 0;
+  for (const { segment } of graphemes.segment(clean)) {
+    if (count === MAX_NAME_GRAPHEMES || Buffer.byteLength(name + segment) > MAX_NAME_BYTES) break;
+    name += segment;
+    count++;
+  }
+  return name.trim() || fallback;
+}
+
+/** How often MATCH_STATE is re-sent with nothing else changed (damage and ping columns). */
+const MATCH_STATE_REFRESH_TICKS = 120;
+/** Lobby commands and kills batch into at most one MATCH_STATE per this many ticks; phase changes go at once. */
+const MATCH_STATE_MIN_TICKS = 6;
+
+/** Host settings from a MatchSettings CMD: whole values inside ROOM_SETTING_LIMITS (0 = off), at least one limit on. */
+export function parseMatchSettings(payload: string, current: Pick<MatchRules, 'timeLimit' | 'killLimit'>, mapId: string): { timeLimit: number; killLimit: number; mapId: string } | null {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(payload);
+  } catch {
+    return null;
+  }
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const limit = (v: unknown, fallback: number, { min, max }: { min: number; max: number }): number | null => {
+    if (v === undefined) return fallback;
+    if (typeof v !== 'number' || !Number.isInteger(v)) return null;
+    return v === 0 || (v >= min && v <= max) ? v : null;
+  };
+  const timeLimit = limit(o.timeLimit, current.timeLimit, ROOM_SETTING_LIMITS.timeLimit);
+  const killLimit = limit(o.killLimit, current.killLimit, ROOM_SETTING_LIMITS.killLimit);
+  const map = o.mapId === undefined ? mapId : o.mapId;
+  if (timeLimit === null || killLimit === null || (timeLimit === 0 && killLimit === 0)) return null;
+  if (typeof map !== 'string' || !Object.hasOwn(maps, map)) return null;
+  return { timeLimit, killLimit, mapId: map };
+}
+
+function standingWire(s: MatchStanding): MatchStandingWire {
+  return {
+    id: s.id,
+    key: s.key,
+    name: s.name,
+    isBot: s.isBot,
+    left: s.left,
+    mvp: s.mvp,
+    score: s.score,
+    kills: s.kills,
+    deaths: s.deaths,
+    suicides: s.suicides,
+    assists: s.assists,
+    damageDealt: s.damageDealt,
+    damageTaken: s.damageTaken,
+    headshots: s.headshots,
+    bestStreak: s.bestStreak,
+  };
 }
 
 export class Room {
@@ -192,8 +275,20 @@ export class Room {
   private linkSeed = 1;
   /** null when lag compensation is off */
   readonly lagComp: LagCompensator | null;
+  /** the match lifecycle (match rooms), null = free play */
+  readonly match: Match | null;
+  /** the player who holds host rights (match rooms): settings, start, back to lobby */
+  private host: Session | null = null;
+  private joins = 0;
+  /** something visible changed: MATCH_STATE goes out within MATCH_STATE_MIN_TICKS */
+  private matchDirty = false;
+  /** the phase changed: MATCH_STATE goes out this tick */
+  private matchUrgent = false;
+  private matchSentAt = -Infinity;
+  private readonly log: (msg: string) => void;
 
   constructor(options: RoomOptions = {}) {
+    this.log = options.log ?? ((msg) => console.error(msg));
     this.game = new Game({ seed: options.seed ?? 1, mapId: options.mapId ?? 'movement-test', dummies: options.dummies ?? true, pickups: options.pickups ?? true });
     this.maxHumans = options.maxHumans ?? 8;
     this.snapshotEvery = options.snapshotEvery ?? 2;
@@ -205,11 +300,27 @@ export class Room {
     this.lagComp = lc === false ? null : new LagCompensator({ snapshotEvery: this.snapshotEvery, log: this.dev, ...(lc === true ? {} : lc) });
     this.game.rewind = this.lagComp;
     this.lagComp?.record(this.game.tick, this.game.players);
+    this.match = options.match ? new Match(this.game, options.match) : null;
+  }
+
+  /** player id of the host, -1 = none (or not a match room) */
+  get hostId(): number {
+    return this.host?.playerId ?? -1;
+  }
+
+  /** nobody connected and no session waiting for a reconnect: the registry may close it */
+  get empty(): boolean {
+    return this.clients.size === 0 && this.sessions.size === 0;
   }
 
   /** humans in the room, including those waiting to reconnect (they keep their slot) */
   get humanCount(): number {
     return this.sessions.size;
+  }
+
+  /** a HELLO presenting `token` would resume a player here (rooms.ts admits those without a ticket) */
+  hasSession(token: string): boolean {
+    return this.sessions.has(token) || this.unconfirmed.has(token);
   }
 
   connect(conn: ClientConn): Client {
@@ -227,7 +338,7 @@ export class Room {
       this.snapshotEvery,
     );
     client.down = down;
-    client.up = new ConditionedLink(sim.settings.up, enabled, sim.scheduler, (b) => this.handle(client, b), isUnreliableMessage, this.linkSeed++);
+    client.up = new ConditionedLink(sim.settings.up, enabled, sim.scheduler, (b) => this.handleSafely(client, b), isUnreliableMessage, this.linkSeed++);
     this.clients.add(client);
     return client;
   }
@@ -258,23 +369,49 @@ export class Room {
     this.sessions.delete(s.token);
     if (s.prevToken) this.unconfirmed.delete(s.prevToken);
     this.game.removePlayer(s.playerId);
+    if (this.host === s) this.host = this.longestPresent();
+    this.matchDirty = true;
     this.broadcastRoster();
   }
 
-  /** Called once per second to reset rate-limit windows. */
+  /** docs/07 §5.3 host migration: the session that joined first among those left. */
+  private longestPresent(): Session | null {
+    let best: Session | null = null;
+    for (const s of this.sessions.values()) if (!best || s.joinSeq < best.joinSeq) best = s;
+    return best;
+  }
+
+  /** Called once per second: refills every client's message allowance. */
   resetRateLimits(): void {
-    for (const c of this.clients) c.messagesThisSecond = 0;
+    for (const c of this.clients) c.messageTokens = Math.min(MESSAGE_BURST, c.messageTokens + MAX_MESSAGES_PER_SECOND);
   }
 
   /** Bytes from the transport. Must not be retained by the caller's buffer pool when netSim is on (they are queued). */
   receive(client: Client, bytes: Uint8Array): void {
     if (client.up) client.up.send(bytes);
-    else this.handle(client, bytes);
+    else this.handleSafely(client, bytes);
+  }
+
+  /**
+   * One message, isolated: a malformed one is a strike (DecodeError), anything else that throws is
+   * a bug, logged, and costs only the client that sent it (kicked, 1011); the room and server go on.
+   */
+  private handleSafely(client: Client, bytes: Uint8Array): void {
+    try {
+      this.handle(client, bytes);
+    } catch (e) {
+      this.log(`[room] a message from player ${client.playerId} (${bytes.length} B, type 0x${(bytes[0] ?? 0).toString(16)}) threw; kicking that client: ${(e as Error).stack ?? e}`);
+      try {
+        this.kick(client, 1011, 'server error');
+      } catch (again) {
+        this.log(`[room] …and kicking it threw too: ${(again as Error).stack ?? again}`);
+      }
+    }
   }
 
   private handle(client: Client, bytes: Uint8Array): void {
     if (client.closed) return;
-    if (++client.messagesThisSecond > MAX_MESSAGES_PER_SECOND) {
+    if (--client.messageTokens < 0) {
       this.kick(client, CloseCode.RateLimited, 'rate limited');
       return;
     }
@@ -328,6 +465,7 @@ export class Room {
     return true;
   }
 
+  /** A malformed message counts against the client; anything else is a bug for handleSafely (it kicks). */
   private strike(client: Client, e: unknown): void {
     if (!(e instanceof DecodeError)) throw e;
     if (++client.strikes >= MAX_STRIKES) this.kick(client, CloseCode.BadMessage, 'malformed messages');
@@ -364,10 +502,12 @@ export class Room {
       return;
     }
     const p = this.game.addPlayer(sanitizeName(rawName, `Player ${this.humanCount + 1}`));
-    const session: Session = { token: newToken(), playerId: p.id, client: null, expiresAt: Infinity, idle: createInput(), prevToken: null };
+    const session: Session = { token: newToken(), playerId: p.id, client: null, expiresAt: Infinity, idle: createInput(), prevToken: null, joinSeq: this.joins++, pingMs: -1 };
     this.sessions.set(session.token, session);
+    if (this.match && !this.host) this.host = session;
     this.attach(client, session, false);
     this.broadcastRoster();
+    this.matchDirty = true;
   }
 
   /** Reconnect: this connection takes the session's player over (replacing a stale connection). */
@@ -389,8 +529,9 @@ export class Room {
     s.token = newToken();
     this.sessions.set(s.token, s);
     this.attach(client, s, true);
-    // only this client missed anything: it gets a full snapshot (fresh baselines) and the roster
+    // only this client missed anything: it gets a full snapshot (fresh baselines), the roster and the match
     client.conn.send(encodeRoster(this.rosterEntries()));
+    if (this.match) client.conn.send(this.encodeMatchState());
   }
 
   private attach(client: Client, s: Session, resumed: boolean): void {
@@ -416,6 +557,10 @@ export class Room {
 
   private onCmd(client: Client, kind: number, payload: string): void {
     if (!client.joined) return;
+    if (kind >= CmdKind.Ready && kind <= CmdKind.Leave) {
+      this.onMatchCmd(client, kind, payload);
+      return;
+    }
     if (!this.dev && kind !== CmdKind.SetLowBandwidth) return;
     if (kind === CmdKind.SetTuning) {
       try {
@@ -442,6 +587,77 @@ export class Room {
       const p = this.game.players[client.playerId];
       if (p?.alive) p.spawn(p.x, p.y + 0.5, this.game.tuning);
     }
+  }
+
+  /** Lobby and results commands (any room for Leave and ReportPing; the rest need a match). */
+  private onMatchCmd(client: Client, kind: number, payload: string): void {
+    const s = client.session!;
+    if (kind === CmdKind.Leave) {
+      this.kick(client, 1000, 'left the room');
+      return;
+    }
+    if (kind === CmdKind.ReportPing) {
+      const ms = Number(payload);
+      if (Number.isInteger(ms) && ms >= 0) s.pingMs = Math.min(ms, 9999);
+      return;
+    }
+    const m = this.match;
+    if (!m) return;
+    const isHost = this.host === s;
+    switch (kind) {
+      case CmdKind.Ready:
+        m.setReady(s.playerId, payload === '1');
+        break;
+      case CmdKind.StartMatch:
+        if (isHost) m.start();
+        break;
+      case CmdKind.Rematch:
+        m.voteRematch(s.playerId);
+        break;
+      case CmdKind.ReturnToLobby:
+        if (isHost) m.returnToLobby();
+        break;
+      case CmdKind.MatchSettings: {
+        if (!isHost || m.phase !== MatchPhase.Waiting) break;
+        const next = parseMatchSettings(payload, m.rules, this.game.map.id);
+        if (!next) break;
+        m.rules.timeLimit = next.timeLimit;
+        m.rules.killLimit = next.killLimit;
+        // other maps: the room would need a new Game; until then only the current map is accepted
+        break;
+      }
+      default:
+        return;
+    }
+    this.matchDirty = true;
+  }
+
+  /** The room's match as MATCH_STATE (match rooms only). */
+  encodeMatchState(): Uint8Array {
+    const m = this.match!;
+    const ended = m.phase === MatchPhase.Ending || m.phase === MatchPhase.Postgame || m.phase === MatchPhase.Closed;
+    const pings = new Map<number, number>();
+    for (const s of this.sessions.values()) pings.set(s.playerId, s.pingMs);
+    const r = m.results;
+    return encodeMatchState({
+      phase: m.phase,
+      phaseStartTick: this.game.tick - m.phaseTick,
+      number: m.number,
+      endReason: m.endReason,
+      rules: m.rules,
+      mapId: this.game.map.id,
+      hostId: this.hostId,
+      lobby: m.players.flatMap((p) => (p ? [{ id: p.id, ready: p.ready, rematch: p.rematch, pingMs: pings.get(p.id) ?? -1 }] : [])),
+      standings: (ended && r ? r.standings : m.standings()).map(standingWire),
+      results: r ? { number: r.number, reason: r.reason, durationTicks: r.durationTicks, winnerKey: r.winnerKey, mvpKey: r.mvpKey } : null,
+    });
+  }
+
+  private sendMatchState(): void {
+    this.matchDirty = this.matchUrgent = false;
+    this.matchSentAt = this.game.tick;
+    const bytes = this.encodeMatchState();
+    for (const c of this.clients) if (c.joined) c.conn.send(bytes);
   }
 
   /** Dev rooms: show each shooter the poses its shots were tested against (rewind visualiser). */
@@ -479,6 +695,12 @@ export class Room {
     if (!s?.prevToken) return;
     this.unconfirmed.delete(s.prevToken);
     s.prevToken = null;
+  }
+
+  /** Everyone out, sessions ended (the registry closing the room). */
+  closeAll(code: number, reason: string): void {
+    for (const c of [...this.clients]) this.kick(c, code, reason);
+    for (const s of [...this.sessions.values()]) this.endSession(s);
   }
 
   /** Kicked players leave at once (no reconnect grace). */
@@ -541,7 +763,13 @@ export class Room {
       if (current >= s.expiresAt) this.endSession(s);
       else this.inputs[s.playerId] = s.idle;
     }
-    this.game.step(this.inputs);
+    if (this.match) {
+      this.match.step(this.inputs);
+      for (const e of this.match.events) {
+        this.matchDirty = true;
+        if (e.type === 'phase') this.matchUrgent = true;
+      }
+    } else this.game.step(this.inputs);
     lagComp?.record(this.game.tick, this.game.players);
     if (lagComp && lagComp.log.length > 0) this.sendRewindDebug(lagComp, current);
     for (const e of this.game.events) this.pendingEvents.push(e);
@@ -578,6 +806,10 @@ export class Room {
       this.previousEvents = this.pendingEvents;
       this.pendingEvents = spent;
       this.pendingEvents.length = 0;
+    }
+    if (this.match) {
+      const since = this.game.tick - this.matchSentAt;
+      if (this.matchUrgent || (this.matchDirty && since >= MATCH_STATE_MIN_TICKS) || since >= MATCH_STATE_REFRESH_TICKS) this.sendMatchState();
     }
   }
 }

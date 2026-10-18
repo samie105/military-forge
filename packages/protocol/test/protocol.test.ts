@@ -95,8 +95,11 @@ describe('bitstream', () => {
 
 describe('messages', () => {
   it('hello / welcome / ping / pong / cmd / roster round-trip', () => {
-    expect(decodeMessage(encodeHello('Ade'))).toEqual({ type: MsgType.Hello, protocolVersion: PROTOCOL_VERSION, contentHash: CONTENT_HASH, name: 'Ade', resumeToken: '' });
-    expect(decodeMessage(encodeHello('Ade', 'tok-123'))).toMatchObject({ name: 'Ade', resumeToken: 'tok-123' });
+    expect(decodeMessage(encodeHello('Ade'))).toEqual({ type: MsgType.Hello, protocolVersion: PROTOCOL_VERSION, contentHash: CONTENT_HASH, name: 'Ade', resumeToken: '', ticket: '' });
+    expect(decodeMessage(encodeHello('Ade', 'tok-123'))).toMatchObject({ name: 'Ade', resumeToken: 'tok-123', ticket: '' });
+    // a join ticket (a JWT: longer than a u8-length string) follows the token
+    const ticket = `eyJhbGciOiJFZERTQSJ9.${'x'.repeat(400)}.sig`;
+    expect(decodeMessage(encodeHello('Ade', '', ticket))).toMatchObject({ name: 'Ade', resumeToken: '', ticket });
     // a HELLO without the trailing token (older client / minimal tools) still decodes
     const bare = encodeHello('Kemi');
     expect(decodeMessage(bare.subarray(0, bare.length - 1))).toMatchObject({ name: 'Kemi', resumeToken: '' });

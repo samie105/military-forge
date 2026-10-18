@@ -1,6 +1,14 @@
 /**
- * Phase 0 debug client entry point.
- *   /            local mode: a deathmatch against the dummy targets (results, Play again) + live tuning, rendered in 3D
+ * Web client entry point. Two faces:
+ *
+ * The app (production builds; in dev at /r/CODE, ?room=CODE or ?app): the shell's home screen,
+ * names, rooms by code with friends, training, settings. The shell starts and stops game modes
+ * through the GameHost below; the map turns slowly behind the menus. Everything, online games
+ * included, is drawn in 3D where WebGL runs; ?render=2d keeps the 2D view.
+ *
+ * The Phase 0 debug client (dev builds at /):
+ *   /            local mode: a deathmatch against three Normal bots (results, Play again) + live tuning, rendered in 3D;
+ *                ?bots=<0-12>&botlevel=easy|normal|hard (?bots=0: the dummy targets)
  *   /?map=flux-lab   local mode on another map: lunar-outpost, storm-front, flux-lab (map mechanics demos,
  *                    docs/02 §20), mechanics-test, movement-test (default). Online, the server picks (--map=).
  *   /?time=60&kills=5&countdown=3       local match rules (0 = no limit); /?sandbox: free play, no match
@@ -11,23 +19,27 @@
  *   /?online&lowbw                      low-bandwidth mode (30 Hz inputs, 15 Hz snapshots)
  *   /?online&transport=ws|wt            force WebSocket / WebTransport (default: WT when the server has a gateway)
  */
-import { DEMO_MAPS, getMap, maps, type MapDef } from '@military-forge/content';
+import { DEMO_MAPS, defaultTuning, getMap, maps, type MapDef } from '@military-forge/content';
 import { createConditionerSettings, parseNetSim } from '@military-forge/netcode';
 import { GAME_NAME } from '@military-forge/shared';
+import type { Input } from '@military-forge/sim';
 import { Camera } from './camera';
-import { fxFrame } from './fx';
+import { fxFrame, setReduceFlashes } from './fx';
 import { InputSampler } from './input';
 import { localBots } from './localBots';
 import { LocalMode } from './localMode';
 import { OnlineMode } from './onlineMode';
 import { Renderer, type RenderOptions } from './render';
-import { localMatchRules, mountShell } from './shell';
+import { localMatchRules, mountShell, registerRoute, type GameHost, type Settings } from './shell';
+import { toKeyBindings, uiCodes } from './shell/controls';
 import { PlaneCamera, Renderer3D, parsePreset } from './render3d';
 import { mountTouch } from './touch';
-import { createTuningPanel } from './tuningPanel';
+import type { Frame } from './view';
 
 const params = new URLSearchParams(location.search);
-const online = params.has('online') || params.has('server');
+/** the player-facing app, or (dev builds at `/`) the Phase 0 debug client */
+const appMode = !import.meta.env.DEV || params.has('app') || params.has('room') || location.pathname.startsWith('/r/');
+const online = !appMode && (params.has('online') || params.has('server'));
 const serverUrl = params.get('server') ?? `ws://${location.hostname || 'localhost'}:9001`;
 const name = (params.get('name') ?? `Pilot-${Math.floor(Math.random() * 9000 + 1000)}`).slice(0, 16);
 const shorthand = ['rtt', 'loss', 'jitter', 'dup']
@@ -37,6 +49,7 @@ const shorthand = ['rtt', 'loss', 'jitter', 'dup']
 const netSim = parseNetSim(params.get('netsim') ?? shorthand) ?? createConditionerSettings(false);
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
+const view3dCanvas = document.getElementById('view3d') as HTMLCanvasElement;
 const bar = document.getElementById('bar')!;
 const panelEl = document.getElementById('panel')!;
 const toast = document.getElementById('toast')!;
@@ -46,57 +59,153 @@ function showToast(message: string): void {
   toast.style.display = 'block';
 }
 
+/** Gameplay input that menus can switch off (aim still follows the mouse). */
+class GameInput extends InputSampler {
+  blocked = false;
+  override sample(camera: Camera, sx: number, sy: number, out?: Input): Input {
+    const input = super.sample(camera, sx, sy, out);
+    if (this.blocked) {
+      input.buttons = 0;
+      input.weaponSelect = 0;
+    }
+    return input;
+  }
+}
+
+/**
+ * Online games open in 3D (the owner's decision, 18 Oct); `?render=2d` keeps the 2D view. When
+ * render3d-b's consolidated PR (ws/render3d-b-v10) lands, this becomes its `online3d(params)`, which
+ * also falls back to 2D where 3D can't run.
+ */
+const ONLINE_3D = params.get('render') !== '2d';
+
+/** local mode's map (the debug client's map links, or `?map=` for training); online, the server's */
 const requestedMap = params.get('map');
 const localMapId = requestedMap && maps[requestedMap] ? requestedMap : 'movement-test';
 
-document.title = `${GAME_NAME} · Phase 0 prototype`;
-bar.innerHTML = `
-  <strong>${GAME_NAME.toUpperCase()} · Phase 0</strong>
-  <a href="/" class="${online || requestedMap ? '' : 'active'}">Local + dummies</a>
-  <a href="/?online" class="${online ? 'active' : ''}">Online (${serverUrl.replace(/^wss?:\/\//, '')})</a>
-  <a href="/?online" target="_blank">+ 2nd tab</a>
-  <a href="/locker.html">Locker</a>
-  <a href="/armory.html">Armory</a>
-  <span class="maps">maps: ${[...DEMO_MAPS, 'mechanics-test']
-    .map((id) => `<a href="/?map=${id}" class="${!online && localMapId === id ? 'active' : ''}">${maps[id]!.name}</a>`)
-    .join(' ')}</span>
-`;
-if (requestedMap && !maps[requestedMap]) {
-  showToast(`Unknown map "${requestedMap}". Maps: ${Object.keys(maps).join(', ')}`);
-  setTimeout(() => (toast.style.display = 'none'), 4000);
-}
-
 // 3D draws the world under the 2D canvas, which becomes the HUD + debug overlay (H/B)
-const use3d = (params.get('render') ?? (online ? '2d' : '3d')) === '3d' && Renderer3D.supported();
+const use3d = appMode
+  ? params.get('render') !== '2d' && Renderer3D.supported()
+  : (params.get('render') ?? (online ? '2d' : '3d')) === '3d' && Renderer3D.supported();
 const planeCamera = use3d ? new PlaneCamera() : null;
 const camera = planeCamera ?? new Camera();
-const sampler = new InputSampler(canvas);
-// double-tap a direction to dash (docs/02 §21): ?dashtap until the settings screen offers it
+const sampler = new GameInput(canvas);
+// double-tap a direction to dash (docs/02 §21): ?dashtap in the debug client; the app's Controls settings set it
 sampler.doubleTapDash = params.has('dashtap');
 const options: RenderOptions = { showHitboxes: false, showGrid: !use3d, showNet: online, overlay: use3d };
+if (appMode) Object.assign(options, { showGrid: false, hud: 'basic' });
 
 // local mode: the ?map= map; online mode: the server's, from WELCOME (followed in frame())
 let map: MapDef = getMap(online ? 'movement-test' : localMapId);
-let mode: LocalMode | OnlineMode;
-const renderer = new Renderer(canvas, camera, map, () => mode.tuning());
+let mode: LocalMode | OnlineMode | null = null;
+const renderer = new Renderer(canvas, camera, map, () => mode?.tuning() ?? defaultTuning);
 const view3d = planeCamera
-  ? new Renderer3D(document.getElementById('view3d') as HTMLCanvasElement, planeCamera, map, parsePreset(params.get('gfx')), import.meta.env.DEV || params.has('perf'))
+  ? new Renderer3D(view3dCanvas, planeCamera, map, parsePreset(params.get('gfx')), (import.meta.env.DEV && !appMode) || params.has('perf'))
   : null;
 void view3d?.load(map.spawns[0]!);
 if (view3d) renderer.forwardEvents = view3d.onEvents; // sim events → 3D effects (render3d)
 mountTouch({ sampler, camera, renderer, view3d }); // phones and tablets: twin sticks + buttons (apps/web/src/touch)
 
-if (online) {
-  const prefer = params.get('transport');
-  mode = new OnlineMode(serverUrl, name, sampler, camera, renderer, showToast, netSim, prefer === 'ws' || prefer === 'wt' ? prefer : 'auto');
-} else {
-  const rules = localMatchRules(params);
-  mode = new LocalMode(sampler, camera, renderer, name, rules, localMapId, localBots(params, rules !== null));
+let settings: Settings | null = null;
+/** page-level keys from the Controls settings (the debug client keeps N) */
+let netGraphKeys: readonly string[] = ['KeyN'];
+
+function setMode(next: LocalMode | OnlineMode | null): void {
+  if (mode instanceof OnlineMode) mode.dispose();
+  mode = next;
+  camera.setZoom(0, 1);
+  if (next instanceof OnlineMode && settings?.lowBandwidth) next.net.setLowBandwidth(true);
 }
+
+/** The app's game modes, driven by the shell (shell/controller.ts). */
+const host: GameHost = {
+  get local() {
+    return mode instanceof LocalMode ? mode : null;
+  },
+  get online() {
+    return mode instanceof OnlineMode ? mode : null;
+  },
+  startTraining(nickname) {
+    // training: a deathmatch against three Normal bots (?bots= / ?botlevel=, ?sandbox for the range dummies)
+    const rules = localMatchRules(params);
+    setMode(new LocalMode(sampler, camera, renderer, nickname, rules, localMapId, localBots(params, rules !== null)));
+  },
+  startOnline(url, nickname, room, ticket, refreshTicket) {
+    // rooms by code are on WebSocket: the WebTransport gateway only serves the default room
+    setMode(new OnlineMode(url, nickname, sampler, camera, renderer, () => {}, createConditionerSettings(false), 'ws', { room, ...(ticket ? { ticket } : {}), ...(refreshTicket ? { refreshTicket } : {}) }));
+  },
+  stop() {
+    setMode(null);
+  },
+  applySettings(next) {
+    settings = next;
+    options.showNet = next.netGraph;
+    view3d?.setPreset(parsePreset(next.graphics).name);
+    if (mode instanceof OnlineMode && mode.net.lowBandwidth !== next.lowBandwidth) mode.net.setLowBandwidth(next.lowBandwidth);
+    sampler.bindings = toKeyBindings(next.bindings);
+    sampler.doubleTapDash = next.doubleTapDash;
+    netGraphKeys = uiCodes(next.bindings, 'netGraph');
+    // Reduce flashes: the flashbang effect (fx, which remembers it) and the HUD (the attribute)
+    setReduceFlashes(next.reduceFlashes);
+    document.documentElement.toggleAttribute('data-reduce-flashes', next.reduceFlashes);
+  },
+  setInputBlocked(blocked) {
+    sampler.blocked = blocked;
+    if (blocked) sampler.releaseAll();
+  },
+};
+
+if (appMode) {
+  document.title = GAME_NAME;
+  bar.remove();
+  panelEl.remove();
+} else {
+  document.title = `${GAME_NAME} · Phase 0 prototype`;
+  bar.innerHTML = `
+    <strong>${GAME_NAME.toUpperCase()} · Phase 0</strong>
+    <a href="/" class="${online || requestedMap ? '' : 'active'}">Local + dummies</a>
+    <a href="/?online" class="${online ? 'active' : ''}">Online (${serverUrl.replace(/^wss?:\/\//, '')})</a>
+    <a href="/?online" target="_blank">+ 2nd tab</a>
+    <a href="/locker.html">Locker</a>
+    <a href="/armory.html">Armory</a>
+    <a href="/?app">App</a>
+    <span class="maps">maps: ${[...DEMO_MAPS, 'mechanics-test']
+      .map((id) => `<a href="/?map=${id}" class="${!online && localMapId === id ? 'active' : ''}">${maps[id]!.name}</a>`)
+      .join(' ')}</span>
+  `;
+  if (requestedMap && !maps[requestedMap]) {
+    showToast(`Unknown map "${requestedMap}". Maps: ${Object.keys(maps).join(', ')}`);
+    setTimeout(() => (toast.style.display = 'none'), 4000);
+  }
+  if (online) {
+    const prefer = params.get('transport');
+    mode = new OnlineMode(serverUrl, name, sampler, camera, renderer, showToast, netSim, prefer === 'ws' || prefer === 'wt' ? prefer : 'auto');
+  } else {
+    const rules = localMatchRules(params);
+    mode = new LocalMode(sampler, camera, renderer, name, rules, localMapId, localBots(params, rules !== null));
+  }
+}
+
+// The Locker as a shell route (#/locker); loaded on first use.
+registerRoute({
+  id: 'locker',
+  title: 'Locker',
+  mount: (el, close) => {
+    let cleanup: (() => void) | null = null;
+    let closed = false;
+    void import('./locker').then(({ mountLockerRoute }) => {
+      if (!closed) cleanup = mountLockerRoute(el, { onExit: close });
+    });
+    return () => {
+      closed = true;
+      cleanup?.();
+    };
+  },
+});
 
 // App shell (W4): screens over the canvas. Other workstreams plug in with one line each, e.g.
 // registerRoute({ id: 'locker', title: 'Locker', mount }) from './shell' (opens at #/locker).
-const shell = mountShell();
+const shell = mountShell(document.body, appMode ? { host } : {});
 
 // Dev-only debug hook for automated playtests and console poking (stripped from production builds).
 if (import.meta.env.DEV) {
@@ -108,6 +217,7 @@ if (import.meta.env.DEV) {
       camera,
       options,
       view3d,
+      shell,
     },
   });
 }
@@ -129,23 +239,28 @@ function downloadReplay(): void {
 // before the panel reads it, so its checkbox starts right; applied on WELCOME if not yet connected
 if (mode instanceof OnlineMode && params.has('lowbw')) mode.net.setLowBandwidth(true);
 
-const panel = createTuningPanel(panelEl, options, {
-  getTuning: () => mode.tuning(),
-  onTuningChanged: (t) => {
-    if (mode instanceof OnlineMode) mode.setTuning(t);
-  },
-  respawn: () => mode.respawn(),
-  ...(mode instanceof LocalMode
-    ? {
-        toggleRecording: () => (mode as LocalMode).toggleRecording(),
-        downloadReplay,
-        loadout: mode.loadout,
-        setLoadout: (l: [number, number]) => (mode as LocalMode).setLoadout(l),
-      }
-    : { netSim, lowBandwidth: { get: () => (mode as OnlineMode).net.lowBandwidth, set: (on: boolean) => (mode as OnlineMode).net.setLowBandwidth(on) } }),
-});
-if (mode instanceof OnlineMode) {
-  mode.onTuningFromServer = () => panel.refresh();
+// the live tuning panel is a dev tool: the debug client only (and not in the production bundle)
+let panel: { pane: { refresh(): void }; refresh(): void } | null = null;
+if (!appMode && import.meta.env.DEV) {
+  const debugMode = mode!;
+  void import('./tuningPanel').then(({ createTuningPanel }) => {
+    panel = createTuningPanel(panelEl, options, {
+      getTuning: () => debugMode.tuning(),
+      onTuningChanged: (t) => {
+        if (debugMode instanceof OnlineMode) debugMode.setTuning(t);
+      },
+      respawn: () => debugMode.respawn(),
+      ...(debugMode instanceof LocalMode
+        ? {
+            toggleRecording: () => debugMode.toggleRecording(),
+            downloadReplay,
+            loadout: debugMode.loadout,
+            setLoadout: (l: [number, number]) => debugMode.setLoadout(l),
+          }
+        : { netSim, lowBandwidth: { get: () => debugMode.net.lowBandwidth, set: (on: boolean) => debugMode.net.setLowBandwidth(on) } }),
+    });
+    if (debugMode instanceof OnlineMode) debugMode.onTuningFromServer = () => panel?.refresh();
+  });
 }
 
 const HELP =
@@ -159,31 +274,69 @@ function resize(): void {
 window.addEventListener('resize', resize);
 resize();
 
+const EMPTY_FRAME: Frame = { tick: 0, localId: -1, players: [], grenades: [] };
+
+/** The menus' backdrop: the camera drifts along the map. */
+function drawMenuBackdrop(now: number, dt: number): void {
+  const b = map.bounds;
+  const mid = (b.minX + b.maxX) / 2;
+  const x = mid + (b.maxX - b.minX) * 0.3 * Math.sin(now / 1000 / 24);
+  const y = map.spawns[0]!.y + 2;
+  camera.follow(x, y, x, y, dt, map);
+  options.overlay = !!view3d;
+  view3dCanvas.style.visibility = view3d ? 'visible' : 'hidden';
+  renderer.render(EMPTY_FRAME, dt, { ...options, hud: 'none', reticle: false }, '');
+  view3d?.render(EMPTY_FRAME, dt);
+}
+
 let last = performance.now();
 function frame(now: number): void {
   const dt = Math.min(0.25, Math.max(0, (now - last) / 1000));
   last = now;
 
-  // UI toggles (not gameplay inputs)
+  // UI toggles (not gameplay inputs); the app keeps only the net graph, on its bound keys
   let toggled = false;
-  for (const [code, key] of [
-    ['KeyH', 'showHitboxes'],
-    ['KeyB', 'showGrid'],
-    ['KeyN', 'showNet'],
-  ] as const) {
-    if (sampler.consumePress(code)) {
-      options[key] = !options[key];
+  if (appMode) {
+    if (!sampler.blocked && netGraphKeys.some((code) => sampler.consumePress(code))) {
+      options.showNet = !options.showNet;
       toggled = true;
     }
+  } else {
+    for (const [code, key] of [
+      ['KeyH', 'showHitboxes'],
+      ['KeyB', 'showGrid'],
+      ['KeyN', 'showNet'],
+    ] as const) {
+      if (sampler.consumePress(code)) {
+        options[key] = !options[key];
+        toggled = true;
+      }
+    }
   }
-  if (sampler.consumePress('KeyK')) mode.respawn();
-  if (sampler.consumePress('Backquote')) panelEl.style.display = panelEl.style.display === 'none' ? '' : 'none';
-  if (mode instanceof LocalMode) {
-    if (sampler.consumePress('KeyP')) mode.toggleRecording();
-    if (sampler.consumePress('KeyO')) downloadReplay();
+  if (!appMode) {
+    if (sampler.consumePress('KeyK')) mode?.respawn();
+    if (sampler.consumePress('Backquote')) panelEl.style.display = panelEl.style.display === 'none' ? '' : 'none';
+    if (mode instanceof LocalMode) {
+      if (sampler.consumePress('KeyP')) mode.toggleRecording();
+      if (sampler.consumePress('KeyO')) downloadReplay();
+    }
   }
   sampler.clearPresses();
-  if (toggled) panel.pane.refresh();
+  if (toggled) panel?.pane.refresh();
+
+  if (!mode) {
+    drawMenuBackdrop(now, dt);
+    shell.update();
+    shell.setMapEvent(null);
+    return;
+  }
+
+  // online play in 3D unless ?render=2d (ONLINE_3D); training and the menus always where 3D runs
+  if (appMode && view3d) {
+    const in3d = !(mode instanceof OnlineMode) || ONLINE_3D;
+    options.overlay = in3d;
+    view3dCanvas.style.visibility = in3d ? 'visible' : 'hidden';
+  }
 
   const wheel = sampler.consumeWheel();
   if (wheel !== 0) camera.setZoom(camera.zoom + wheel, mode.zoomMax());
@@ -204,7 +357,7 @@ function frame(now: number): void {
   fxFrame(f, dt); // flashbang white-out / gas edge over the view (arsenal B, apps/web/src/fx)
   shell.update(mode instanceof LocalMode ? mode : null);
   shell.setMapEvent(f.mapEvent);
-  view3d?.render(f, dt);
+  if (options.overlay) view3d?.render(f, dt);
 }
 
 let lastRaf = performance.now();

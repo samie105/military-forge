@@ -26,12 +26,15 @@ import { ProfileService } from './me/profiles';
 import { meRoutes } from './me/routes';
 import { NicknamePolicy } from './nickname/rules';
 import { nicknameRoutes } from './nickname/routes';
+import { roomRoutes } from './rooms/routes';
 
 export interface AppDeps {
   config: Config;
   database: Database;
   kv: Kv;
   signingKey: SigningKey;
+  /** signs join tickets for the game server (docs/06 §6); null = none (dev) */
+  ticketKey?: SigningKey | null;
   log: Logger;
   /** injectable clock (ms) for tests */
   now?: () => number;
@@ -114,6 +117,7 @@ export function createApp(deps: AppDeps) {
   app.route('/auth', authRoutes({ config, db, kv, auth, profiles, now }));
   app.route('/me', meRoutes({ config, db, kv, auth, profiles }));
   app.route('/nicknames', nicknameRoutes({ config, kv, auth, profiles }));
+  app.route('/rooms', roomRoutes({ config, kv, auth, profiles, ticketKey: deps.ticketKey ?? null, now }));
 
   app.notFound((c) => errorResponse(c, 404, 'not_found', `No route for ${c.req.method} ${c.req.path}`));
   app.onError((err, c) => {

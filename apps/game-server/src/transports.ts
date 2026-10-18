@@ -15,7 +15,8 @@ import { CloseCode, isUnreliableMessage } from '@military-forge/protocol';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, WebSocket as WsSocket } from 'ws';
-import type { Client, Room } from './room';
+import type { Client, ClientConn, Room } from './room';
+import type { Connection } from './rooms';
 
 export type TransportKind = 'uws' | 'ws';
 
@@ -50,23 +51,118 @@ export interface WebTransportStatus extends WebTransportInfo {
 export type WebTransportSource = () => WebTransportStatus | null;
 const noWebTransport: WebTransportSource = () => null;
 
+/**
+ * Where connections go (rooms.ts: the door, then the room named in the URL) and the /health
+ * numbers. A plain Room takes every connection directly (tests, tools).
+ */
+export interface RoomTarget {
+  /**
+   * A new connection to `url` (path + query) from `ip` (null = unknown): how to feed it, or null
+   * when it was refused (`conn` is closed already, e.g. CloseCode.NoRoom).
+   */
+  open(url: string, conn: ClientConn, ip: string | null): Connection | null;
+  readonly humanCount: number;
+  /** open rooms (1 for a plain Room) */
+  readonly roomCount: number;
+  /** the default room's tick, 0 without one */
+  readonly tick: number;
+}
+
+/** A connection straight into `room` (no door: tests, tools and the WebTransport bridge's dev room). */
+export function roomConnection(room: Room, conn: ClientConn): Connection {
+  const client = room.connect(conn);
+  return { receive: (bytes) => room.receive(client, bytes), closed: (resumable = true) => room.disconnect(client, resumable) };
+}
+
+function roomTarget(target: Room | RoomTarget): RoomTarget {
+  if (!('open' in target)) {
+    const room = target;
+    return {
+      open: (_url, conn) => roomConnection(room, conn),
+      get humanCount() {
+        return room.humanCount;
+      },
+      roomCount: 1,
+      get tick() {
+        return room.game.tick;
+      },
+    };
+  }
+  return target;
+}
+
+export interface TransportOptions {
+  /** what /health advertises about WebTransport */
+  webTransport?: WebTransportSource;
+  /** interface to listen on: all of them by default; '127.0.0.1' keeps the server behind a local proxy (the public playtest) */
+  host?: string;
+  /**
+   * The client address comes from X-Forwarded-For (its last entry): only behind a proxy of ours that
+   * sets it (the playtest proxy), never on an open port, or anyone could claim any address.
+   */
+  trustProxy?: boolean;
+  log?: (msg: string) => void;
+}
+
+/** The address a forwarding header names (its last entry: the one our own proxy wrote), or null. */
+export function forwardedFor(header: string | string[] | undefined): string | null {
+  const value = Array.isArray(header) ? header.at(-1) : header;
+  const last = value?.split(',').at(-1)?.trim();
+  return last && /^[0-9a-fA-F.:]{2,45}$/.test(last) ? last : null;
+}
+
+/**
+ * Runs a transport callback so that nothing it throws reaches the event loop (uWS would abort the
+ * process): the error is logged and that one socket is closed (1011).
+ */
+function guard(log: (msg: string) => void, what: string, close: () => void, fn: () => void): void {
+  try {
+    fn();
+  } catch (e) {
+    log(`[game-server] ${what} threw; closing that connection: ${(e as Error).stack ?? e}`);
+    try {
+      close();
+    } catch {
+      /* already gone */
+    }
+  }
+}
+
 /** The /health body. Clients read `webtransport` to try the UDP path (docs/05 §2.1). */
-function health(room: Room, kind: TransportKind, webTransport: WebTransportSource): string {
-  return JSON.stringify({ ok: true, transport: kind, players: room.humanCount, tick: room.game.tick, webtransport: webTransport() });
+function health(rooms: RoomTarget, kind: TransportKind, webTransport: WebTransportSource): string {
+  return JSON.stringify({ ok: true, transport: kind, players: rooms.humanCount, rooms: rooms.roomCount, tick: rooms.tick, webtransport: webTransport() });
 }
 
 // ---------- uWebSockets.js (minimal structural types: no compile-time dependency) ----------
 
+interface UwsUserData {
+  connection?: Connection | null;
+  /** the socket closed (the connection's own close calls are then no-ops) */
+  gone?: boolean;
+  /** request path + query, captured at the upgrade (the room code is in it) */
+  url: string;
+  /** the client's address, captured at the upgrade */
+  ip: string | null;
+}
+
 interface UwsSocket {
-  getUserData(): { client?: Client };
+  getUserData(): UwsUserData;
   send(message: Uint8Array, isBinary: boolean): number;
   end(code?: number, reason?: string): void;
   getBufferedAmount(): number;
 }
 
 interface UwsResponse {
+  getRemoteAddressAsText(): ArrayBuffer;
   writeHeader(key: string, value: string): UwsResponse;
   end(body?: string): UwsResponse;
+  upgrade(userData: UwsUserData, key: string, protocol: string, extensions: string, context: unknown): void;
+}
+
+interface UwsRequest {
+  getUrl(): string;
+  getQuery(): string | undefined;
+  getHeader(lowerCaseKey: string): string;
 }
 
 interface UwsApp {
@@ -78,13 +174,14 @@ interface UwsApp {
       idleTimeout: number;
       maxBackpressure: number;
       sendPingsAutomatically: boolean;
+      upgrade: (res: UwsResponse, req: UwsRequest, context: unknown) => void;
       open: (ws: UwsSocket) => void;
       message: (ws: UwsSocket, message: ArrayBuffer, isBinary: boolean) => void;
       close: (ws: UwsSocket) => void;
     },
   ): UwsApp;
   get(pattern: string, handler: (res: UwsResponse) => void): UwsApp;
-  listen(port: number, cb: (token: unknown) => void): UwsApp;
+  listen(host: string, port: number, cb: (token: unknown) => void): UwsApp;
   close(): void;
 }
 
@@ -112,7 +209,9 @@ export function loadUws(): { mod: UwsModule; from: string } | null {
   return null;
 }
 
-export function startUws(mod: UwsModule, port: number, room: Room, webTransport = noWebTransport): Promise<StartedTransport> {
+export function startUws(mod: UwsModule, port: number, rooms: Room | RoomTarget, options: TransportOptions = {}): Promise<StartedTransport> {
+  const target = roomTarget(rooms);
+  const { webTransport = noWebTransport, host = '0.0.0.0', trustProxy = false, log = console.error } = options;
   const app = mod
     .App()
     .ws('/*', {
@@ -121,34 +220,56 @@ export function startUws(mod: UwsModule, port: number, room: Room, webTransport 
       idleTimeout: 30,
       maxBackpressure: 256 * 1024,
       sendPingsAutomatically: true,
+      upgrade: (res, req, context) => {
+        // the request is only valid inside this callback: read what open() needs now
+        const query = req.getQuery();
+        const ip = (trustProxy ? forwardedFor(req.getHeader('x-forwarded-for')) : null) ?? (Buffer.from(res.getRemoteAddressAsText()).toString() || null);
+        res.upgrade(
+          { url: query ? `${req.getUrl()}?${query}` : req.getUrl(), ip },
+          req.getHeader('sec-websocket-key'),
+          req.getHeader('sec-websocket-protocol'),
+          req.getHeader('sec-websocket-extensions'),
+          context,
+        );
+      },
       open: (ws) => {
         const data = ws.getUserData();
-        data.client = room.connect({
-          send: (bytes) => {
-            if (!data.client?.closed) ws.send(bytes, true);
-          },
-          close: (code, reason) => {
-            if (!data.client?.closed) ws.end(code, reason);
-          },
-          bufferedAmount: () => (data.client?.closed ? 0 : ws.getBufferedAmount()),
+        guard(log, 'opening a connection', () => ws.end(1011, 'server error'), () => {
+          data.connection = target.open(
+            data.url,
+            {
+              send: (bytes) => {
+                if (!data.gone) ws.send(bytes, true);
+              },
+              close: (code, reason) => {
+                if (!data.gone) ws.end(code, reason);
+              },
+              bufferedAmount: () => (data.gone ? 0 : ws.getBufferedAmount()),
+            },
+            data.ip,
+          );
         });
       },
       message: (ws, message, isBinary) => {
-        const client = ws.getUserData().client;
+        const data = ws.getUserData();
+        const connection = data.connection;
         // uWS reuses `message` after this callback returns: copy it
-        if (client && isBinary) room.receive(client, new Uint8Array(message.slice(0)));
+        if (connection && isBinary && !data.gone) guard(log, 'a message handler', () => ws.end(1011, 'server error'), () => connection.receive(new Uint8Array(message.slice(0))));
       },
       close: (ws) => {
-        const client = ws.getUserData().client;
-        if (client) room.disconnect(client);
+        const data = ws.getUserData();
+        data.gone = true;
+        const connection = data.connection;
+        data.connection = null;
+        if (connection) guard(log, 'closing a connection', () => {}, () => connection.closed());
       },
     })
     .get('/health', (res) => {
-      res.writeHeader('Content-Type', 'application/json').writeHeader('Access-Control-Allow-Origin', '*').end(health(room, 'uws', webTransport));
+      res.writeHeader('Content-Type', 'application/json').writeHeader('Access-Control-Allow-Origin', '*').end(health(target, 'uws', webTransport));
     });
 
   return new Promise((resolve, reject) => {
-    app.listen(port, (token) => {
+    app.listen(host, port, (token) => {
       if (!token) return reject(new Error(`could not listen on port ${port}`));
       resolve({
         kind: 'uws',
@@ -164,40 +285,51 @@ export function startUws(mod: UwsModule, port: number, room: Room, webTransport 
 
 // ---------- ws (fallback) ----------
 
-export function startWs(port: number, room: Room, webTransport = noWebTransport): Promise<StartedTransport> {
+export function startWs(port: number, rooms: Room | RoomTarget, options: TransportOptions = {}): Promise<StartedTransport> {
+  const target = roomTarget(rooms);
+  const { webTransport = noWebTransport, host, trustProxy = false, log = console.error } = options;
   const http = createHttpServer({ maxHeaderSize: MAX_HEADER_BYTES }, (req, res) => {
     if (req.url === '/health') {
       res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-      res.end(health(room, 'ws', webTransport));
+      res.end(health(target, 'ws', webTransport));
     } else {
       res.writeHead(404);
       res.end();
     }
   });
   const wss = new WebSocketServer({ server: http, perMessageDeflate: false, maxPayload: MAX_PAYLOAD });
-  wss.on('connection', (socket) => {
-    let client: Client | null = null;
-    client = room.connect({
-      send: (bytes) => {
-        if (socket.readyState === WsSocket.OPEN) socket.send(bytes, { binary: true });
-      },
-      close: (code, reason) => socket.close(code, reason),
-      bufferedAmount: () => socket.bufferedAmount,
+  wss.on('connection', (socket, req) => {
+    const ip = (trustProxy ? forwardedFor(req.headers['x-forwarded-for']) : null) ?? req.socket.remoteAddress ?? null;
+    let connection: Connection | null = null;
+    guard(log, 'opening a connection', () => socket.close(1011, 'server error'), () => {
+      connection = target.open(
+        req.url ?? '/',
+        {
+          send: (bytes) => {
+            if (socket.readyState === WsSocket.OPEN) socket.send(bytes, { binary: true });
+          },
+          close: (code, reason) => socket.close(code, reason),
+          bufferedAmount: () => socket.bufferedAmount,
+        },
+        ip,
+      );
     });
     socket.on('message', (data, isBinary) => {
-      if (!client || !isBinary || !Buffer.isBuffer(data)) return;
-      room.receive(client, new Uint8Array(data.buffer, data.byteOffset, data.byteLength).slice());
+      const c = connection;
+      if (!c || !isBinary || !Buffer.isBuffer(data)) return;
+      guard(log, 'a message handler', () => socket.close(1011, 'server error'), () => c.receive(new Uint8Array(data.buffer, data.byteOffset, data.byteLength).slice()));
     });
     socket.on('close', () => {
-      if (client) room.disconnect(client);
-      client = null;
+      const c = connection;
+      connection = null;
+      if (c) guard(log, 'closing a connection', () => {}, () => c.closed());
     });
     socket.on('error', () => socket.terminate());
   });
 
   return new Promise((resolve, reject) => {
     http.once('error', reject);
-    http.listen(port, () => {
+    http.listen(port, host, () => {
       resolve({
         kind: 'ws',
         port: (http.address() as AddressInfo).port,
@@ -432,7 +564,12 @@ export function startGatewayBridge(path: string, room: Room, log: (msg: string) 
             room.disconnect(client, false);
             break;
           }
-          room.receive(client, payload);
+          // one session's bad message costs that session, never the gateway's other players
+          guard(log, 'a gateway message handler', () => {
+            clients.delete(session);
+            closeSession(session, 1011, 'server error');
+            room.disconnect(client, false);
+          }, () => room.receive(client, payload));
           break;
         }
         case GatewayFrame.Close: {

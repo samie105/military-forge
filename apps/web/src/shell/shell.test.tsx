@@ -137,10 +137,10 @@ describe('screens', () => {
     expect(html).toContain('5.00'); // K/D 10/2
     expect(html).toContain('+255'); // placeholder XP: 100 + 10·10 + 5·1 + 50
     expect(html.match(/<tr/g)).toHaveLength(4);
-    expect(html).toMatch(/class="mm-me".*Ade.*MVP/);
+    expect(html).toMatch(/class="sh-me".*Ade.*MVP/);
     expect(html).toMatch(/Strafer.*BOT/);
-    expect(html).toMatch(/class="mm-left".*Kemi.*LEFT/);
-    expect(html).toMatch(/<button class="mm-btn mm-primary">Play again<\/button>/);
+    expect(html).toMatch(/class="sh-left".*Kemi.*LEFT/);
+    expect(html).toMatch(/<button class="sh-btn sh-primary">Play again<\/button>/);
     expect(html).toContain('Rematch 0/2');
   });
 
@@ -157,14 +157,26 @@ describe('screens', () => {
     const html = renderToStaticMarkup(<Results view={view()} results={reused} actions={actions} />);
     expect(html).toContain('3rd place');
     expect(html).not.toContain('Victory');
-    expect(html).toMatch(/class="mm-left".*Kemi.*class="mm-me".*You/);
+    expect(html).toMatch(/class="sh-left".*Kemi.*class="sh-me".*You/);
+  });
+
+  it('results: a shared top score is a draw (a 0–0 time-out too), not a victory or a 2nd place', () => {
+    const tie = (scores: number[]): MatchResults => ({ ...results, standings: scores.map((score, i) => standing(i === 0 ? 4 : i, `P${i}`, i + 1, { key: i, score, kills: score })) });
+    const headline = (r: MatchResults, localId = 4) => /<h1[^>]*>([^<]*)<\/h1>/.exec(renderToStaticMarkup(<Results view={view({ localId })} results={r} actions={actions} />))![1];
+    expect(headline(tie([0, 0]))).toBe('Draw');
+    expect(renderToStaticMarkup(<Results view={view()} results={tie([0, 0])} actions={actions} />)).toContain('+100'); // no winner's bonus in a draw
+    expect(headline(tie([0, 0]), 1)).toBe('Draw');
+    expect(headline(tie([3, 3, 1]))).toBe('Draw');
+    expect(headline(tie([3, 3, 1]), 2)).toBe('3rd place');
+    expect(headline(tie([3, 2]))).toBe('Victory');
+    expect(headline(tie([3, 2]), 1)).toBe('2nd place');
   });
 
   it('results: other placements, a cast vote, the vote timer and a closed room', () => {
     const third = { ...results, standings: results.standings.map((s) => (s.id === 4 ? { ...s, placement: 3 } : s)) };
     let html = renderToStaticMarkup(<Results view={view({ phase: MatchPhase.Postgame, voted: true, votes: 1 })} results={third} actions={actions} />);
     expect(html).toContain('3rd place');
-    expect(html).toMatch(/<button class="mm-btn mm-primary" disabled="">Waiting for others…<\/button>/);
+    expect(html).toMatch(/<button class="sh-btn sh-primary" disabled="">Waiting for others…<\/button>/);
     expect(html).toContain('Rematch 1/2 · 7 s');
     html = renderToStaticMarkup(<Results view={view({ phase: MatchPhase.Closed })} results={results} actions={actions} />);
     expect(html).toContain('Room closed');

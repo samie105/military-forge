@@ -1,0 +1,13 @@
+{
+  "name": "@military-forge/playtest",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "pnpm playtest: the game on a public link through a Cloudflare quick tunnel",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "ping": "tsx src/ping.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}

@@ -3,8 +3,10 @@
  * registry other workstreams plug their screens into (W2's Locker: one line in main.ts).
  */
 import { createStore, type StoreApi } from 'zustand/vanilla';
+import { defaultBindings, type Bindings } from './controls';
 import type { MapEventBanner } from './mapEventBanner';
 import type { MatchView } from './matchView';
+import type { LobbyView } from './onlineView';
 
 export interface ShellActions {
   playAgain(): void;
@@ -36,10 +38,76 @@ export function runCleanup(cleanup: RouteCleanup): void {
   else cleanup?.unmount();
 }
 
+/** Where the player wants to go next (the app shell's navigation). */
+export type Intent = { to: 'home' } | { to: 'create' } | { to: 'join'; code: string } | { to: 'training' };
+
+export type Screen =
+  | { name: 'boot' }
+  /** choose a name, then carry on to `then` */
+  | { name: 'name'; then: Intent }
+  | { name: 'home' }
+  /** creating or looking up a room (API), before the game connects */
+  | { name: 'finding'; label: string }
+  | { name: 'room'; code: string }
+  | { name: 'training' }
+  | { name: 'error'; title: string; message: string; retry: Intent | null };
+
+export type Overlay = 'menu' | 'settings' | 'join' | 'name' | null;
+
+export interface Profile {
+  nickname: string;
+  /** ISO date of the next allowed change, null = now */
+  changeableAt: string | null;
+  /** the API can't be reached: training only, with a local name */
+  offline: boolean;
+}
+
+export type GraphicsPreset = 'low' | 'medium' | 'high';
+
+export interface Settings {
+  graphics: GraphicsPreset;
+  /** the net graph (N) */
+  netGraph: boolean;
+  /** 15 Hz snapshots, 30 Hz inputs (docs/05 §2.2) for poor connections */
+  lowBandwidth: boolean;
+  /** accessibility: soften full-screen flashes (flashbangs, explosions) */
+  reduceFlashes: boolean;
+  /** double-tap a direction key to dash that way */
+  doubleTapDash: boolean;
+  /** every action's keys and mouse buttons (controls.ts) */
+  bindings: Bindings;
+}
+
+export const DEFAULT_SETTINGS: Settings = {
+  graphics: 'low',
+  netGraph: false,
+  lowBandwidth: false,
+  reduceFlashes: false,
+  doubleTapDash: false,
+  bindings: defaultBindings(),
+};
+
+/** Online connection, as the shell shows it (onlineMode.ts ConnectionInfo). */
+export interface ConnectionView {
+  state: 'connecting' | 'joining' | 'connected' | 'reconnecting' | 'failed';
+  detail: string;
+  code: number;
+}
+
 export interface ShellState {
+  /** the app shell's screen; the debug client (dev `/`) stays on 'training' and shows match overlays only */
+  screen: Screen;
+  overlay: Overlay;
+  profile: Profile | null;
   match: MatchView | null;
+  /** online rooms: the lobby (players, host, settings) */
+  lobby: LobbyView | null;
+  connection: ConnectionView | null;
   route: ShellRoute | null;
   actions: ShellActions;
+  settings: Settings;
+  /** a short-lived message ("Link copied") */
+  notice: string | null;
   /** the map event being announced or running (docs/02 §20.7), null when none */
   mapEvent: MapEventBanner | null;
 }
@@ -48,8 +116,21 @@ export type ShellStore = StoreApi<ShellState>;
 
 const noop = (): void => {};
 
-export function createShellStore(): ShellStore {
-  return createStore<ShellState>(() => ({ match: null, route: null, actions: { playAgain: noop, backToLobby: noop, ready: noop }, mapEvent: null }));
+export function createShellStore(initial: Partial<ShellState> = {}): ShellStore {
+  return createStore<ShellState>(() => ({
+    screen: { name: 'training' },
+    overlay: null,
+    profile: null,
+    match: null,
+    lobby: null,
+    connection: null,
+    route: null,
+    actions: { playAgain: noop, backToLobby: noop, ready: noop },
+    settings: DEFAULT_SETTINGS,
+    notice: null,
+    mapEvent: null,
+    ...initial,
+  }));
 }
 
 const routes: ShellRoute[] = [];

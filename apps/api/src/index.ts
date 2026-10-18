@@ -27,8 +27,10 @@ const kv: Kv = config.redisUrl ? await new RedisKv(config.redisUrl).connect() : 
 const signingKey = config.accessToken.privateKeyPem
   ? signingKeyFromPem(config.accessToken.privateKeyPem)
   : loadOrCreateDevKey(fileURLToPath(new URL('../.data/dev-keys.json', import.meta.url)));
+// join tickets for the game server (docs/06 §6): none without a key (dev: its rooms are open)
+const ticketKey = config.joinTicket.privateKeyPem ? signingKeyFromPem(config.joinTicket.privateKeyPem) : null;
 
-const app = createApp({ config, database, kv, signingKey, log });
+const app = createApp({ config, database, kv, signingKey, ticketKey, log });
 const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
   log.info(
     { port: info.port, db: database.kind, kv: kv.kind, env: config.env },

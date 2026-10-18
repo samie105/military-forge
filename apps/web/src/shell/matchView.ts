@@ -83,14 +83,26 @@ export const END_REASON: Record<MatchEndReason, string> = {
   [MatchEndReason.TimeLimit]: "Time's up",
 };
 
+/**
+ * The results headline for one player: "Draw" when the top score is shared and theirs is it (a 0–0
+ * time-out, or a tie on points: the order underneath is only the tie-break), else "Victory" for
+ * first and "2nd place"… for the rest.
+ */
+export function resultHeadline(me: Pick<MatchStanding, 'placement' | 'score'>, standings: readonly Pick<MatchStanding, 'score'>[]): { text: string; win: boolean } {
+  const top = standings.length ? Math.max(...standings.map((s) => s.score)) : me.score;
+  const tied = standings.filter((s) => s.score === top).length > 1;
+  if (tied && me.score === top) return { text: 'Draw', win: false };
+  return me.placement === 1 ? { text: 'Victory', win: true } : { text: `${ordinal(me.placement)} place`, win: false };
+}
+
 export function kdRatio(s: Pick<MatchStanding, 'kills' | 'deaths'>): string {
   return (s.kills / Math.max(1, s.deaths)).toFixed(2);
 }
 
 /**
  * XP placeholder until progression lands (docs/13 §R; the API's results worker will award the
- * real XP): 100 for finishing, 10 per kill, 5 per assist, 50 for 1st place.
+ * real XP): 100 for finishing, 10 per kill, 5 per assist, 50 for winning outright (not a draw).
  */
-export function placeholderXp(s: MatchStanding): number {
-  return 100 + 10 * s.kills + 5 * s.assists + (s.placement === 1 ? 50 : 0);
+export function placeholderXp(s: MatchStanding, won = s.placement === 1): number {
+  return 100 + 10 * s.kills + 5 * s.assists + (won ? 50 : 0);
 }

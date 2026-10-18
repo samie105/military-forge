@@ -5,7 +5,7 @@
  */
 import { sql } from 'drizzle-orm';
 import { createApp } from '../src/app';
-import { generateSigningKey } from '../src/auth/keys';
+import { generateSigningKey, type SigningKey } from '../src/auth/keys';
 import { loadConfig } from '../src/config';
 import { openDatabase } from '../src/db/client';
 import { MemoryKv, type Kv } from '../src/kv/kv';
@@ -14,7 +14,7 @@ import { createLogger } from '../src/log';
 
 export const START = Date.parse('2026-10-17T12:00:00Z');
 
-export async function createTestApi(env: Record<string, string> = {}) {
+export async function createTestApi(env: Record<string, string> = {}, options: { ticketKey?: SigningKey } = {}) {
   const clock = {
     t: START,
     now: () => clock.t,
@@ -32,7 +32,7 @@ export async function createTestApi(env: Record<string, string> = {}) {
   const database = await openDatabase(config);
   if (database.kind === 'postgres') await database.db.execute(sql`truncate table users cascade`);
   const kv: Kv = process.env.TEST_REDIS_URL ? await new RedisKv(process.env.TEST_REDIS_URL).connect() : new MemoryKv(clock.now);
-  const app = createApp({ config, database, kv, signingKey: generateSigningKey(), log: createLogger(config), now: clock.now });
+  const app = createApp({ config, database, kv, signingKey: generateSigningKey(), ticketKey: options.ticketKey ?? null, log: createLogger(config), now: clock.now });
   let ipCounter = 0;
 
   return {

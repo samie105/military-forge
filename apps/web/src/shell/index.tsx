@@ -1,22 +1,31 @@
 /**
  * App shell entry (docs/06 §4, L5 + L4): mounts the React screens over the game and bridges the
  * running mode into the shell store once per frame. Only visible changes reach React.
+ *
+ * Two ways to mount it:
+ * - with a GameHost (the app: production builds, /r/CODE links, ?app): home, names, rooms,
+ *   training, settings; the shell starts and stops game modes itself;
+ * - without (the dev debug client at `/`): match overlays for the local mode main.ts runs.
  */
 import type { Match } from '@military-forge/sim';
 import { createRoot } from 'react-dom/client';
 import type { MapEventView } from '../view';
+import { Api } from './api';
 import { App } from './App';
+import { ShellController, type GameHost } from './controller';
 import { bannerOf, sameBanner } from './mapEventBanner';
 import { matchView, sameView } from './matchView';
-import { createShellStore, findRoute, onRoutesChanged, type ShellActions, type ShellStore } from './store';
+import { lobbyView, onlineMatchView, sameLobby } from './onlineView';
+import { createShellStore, findRoute, onRoutesChanged, type ConnectionView, type ShellActions, type ShellStore } from './store';
 import './shell.css';
 
 export { useMapEventBanner } from './App';
 export { localMatchRules } from './localMatch';
 export { bannerOf, type MapEventBanner } from './mapEventBanner';
-export { registerRoute, type ShellRoute } from './store';
+export { registerRoute, type ShellRoute, type Settings } from './store';
+export type { GameHost } from './controller';
 
-/** What the shell needs from a game mode: local mode now, online mode in Milestone B. */
+/** What the shell needs from a local game mode. */
 export interface MatchSource extends ShellActions {
   readonly match: Match | null;
   readonly localId: number;
@@ -24,8 +33,10 @@ export interface MatchSource extends ShellActions {
 
 export interface Shell {
   readonly store: ShellStore;
-  /** once per frame with the running mode (null: no match, e.g. sandbox or online for now) */
-  update(source: MatchSource | null): void;
+  /** the app's controller (null for the debug client) */
+  readonly controller: ShellController | null;
+  /** once per frame; the debug client passes its local mode (null: no match, e.g. sandbox or online) */
+  update(source?: MatchSource | null): void;
   /**
    * The map-event banner hook (docs/02 §20.7): once per frame with the frame's map event (local or
    * online, any match state). The store changes only when the banner's text does.
@@ -33,33 +44,62 @@ export interface Shell {
   setMapEvent(view: MapEventView | null | undefined): void;
 }
 
-export function mountShell(parent: HTMLElement = document.body): Shell {
+export interface ShellOptions {
+  /** the app: the shell drives navigation and game modes */
+  host?: GameHost;
+  api?: Api;
+}
+
+const sameConnection = (a: ConnectionView | null, b: ConnectionView | null) =>
+  a === b || (!!a && !!b && a.state === b.state && a.code === b.code && a.detail === b.detail);
+
+export function mountShell(parent: HTMLElement = document.body, options: ShellOptions = {}): Shell {
   const el = document.createElement('div');
   el.id = 'shell';
   parent.appendChild(el);
 
-  let source: MatchSource | null = null;
   const store = createShellStore();
+  const host = options.host ?? null;
+  const controller = host ? new ShellController(store, host, options.api) : null;
+  let local: MatchSource | null = null;
   store.setState({
     actions: {
-      playAgain: () => source?.playAgain(),
-      backToLobby: () => source?.backToLobby(),
-      ready: () => source?.ready(),
+      playAgain: () => (host?.online ? host.online.voteRematch() : local?.playAgain()),
+      backToLobby: () => (host?.online ? host.online.returnToLobby() : local?.backToLobby()),
+      ready: () => {
+        const online = host?.online;
+        if (online) online.setReady(!(store.getState().lobby?.ready ?? false));
+        else local?.ready();
+      },
     },
   });
-  const syncRoute = () => store.setState({ route: findRoute(location.hash.replace(/^#\/?/, '')) });
+  const syncRoute = () => {
+    const route = findRoute(location.hash.replace(/^#\/?/, ''));
+    store.setState({ route });
+    host?.setInputBlocked(route !== null || store.getState().overlay !== null);
+  };
   window.addEventListener('hashchange', syncRoute);
   onRoutesChanged(syncRoute);
   syncRoute();
 
-  createRoot(el).render(<App store={store} />);
+  createRoot(el).render(<App store={store} controller={controller} />);
+  if (controller) void controller.boot();
 
   return {
     store,
-    update(next) {
-      source = next;
-      const view = next?.match ? matchView(next.match, next.localId) : null;
-      if (!sameView(store.getState().match, view)) store.setState({ match: view });
+    controller,
+    update(source) {
+      const state = store.getState();
+      const online = host?.online ?? null;
+      local = host ? host.local : (source ?? null);
+      let view = null;
+      if (online) view = onlineMatchView(online);
+      else if (local?.match) view = matchView(local.match, local.localId);
+      const lobby = online ? lobbyView(online) : null;
+      const connection = online ? online.connection : null;
+      if (!sameView(state.match, view) || !sameLobby(state.lobby, lobby) || !sameConnection(state.connection, connection)) {
+        store.setState({ match: view, lobby, connection: connection && { state: connection.state, detail: connection.detail, code: connection.code } });
+      }
     },
     setMapEvent(view) {
       const banner = bannerOf(view);

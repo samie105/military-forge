@@ -3,5 +3,6 @@ export * from './math';
 export * from './pool';
 export * from './prng';
 export * from './quantize';
+export * from './roomCode';
 export * from './simMath';
 export * from './utf8';

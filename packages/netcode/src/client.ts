@@ -29,6 +29,11 @@ import { TICK_MS, unwrapTick } from './ticks';
 
 export interface NetClientOptions {
   name: string;
+  /**
+   * The API's join ticket for this room (docs/06 §6), sent in every HELLO. The server spends it on a
+   * new player only: a resume is admitted by the session token, so a used or expired ticket is fine then.
+   */
+  ticket?: string;
   /** hands bytes to the transport (through the conditioner, if any) */
   send(bytes: Uint8Array): void;
   /** monotonic milliseconds */
@@ -87,6 +92,8 @@ export class NetClient {
   status = 'connecting…';
   /** from WELCOME: presented in HELLO to get our player back after a drop (docs/05 §13) */
   sessionToken = '';
+  /** the join ticket every HELLO carries (NetClientOptions.ticket; replace it with a fresh one to rejoin) */
+  ticket: string;
   /** times a dropped connection got its player back */
   reconnects = 0;
   /** a transport is open and the server welcomed us on it */
@@ -155,6 +162,7 @@ export class NetClient {
     this.redundancy = Math.max(1, Math.min(4, options.redundancy ?? 4));
     this.interpDelayMs = this.baseInterpDelayMs = options.interpDelayMs ?? 100;
     this.pacer = new InputPacer(options.pacer);
+    this.ticket = options.ticket ?? '';
   }
 
   get joined(): boolean {
@@ -168,7 +176,7 @@ export class NetClient {
   onOpen(): void {
     this.status = this.sessionToken ? 'resuming…' : 'joining…';
     this.helloAt = this.options.now();
-    this.options.send(encodeHello(this.options.name, this.sessionToken));
+    this.options.send(encodeHello(this.options.name, this.sessionToken, this.ticket));
   }
 
   /** The transport dropped (not a kick): freeze until a new one is open (call onOpen again). */

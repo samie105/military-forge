@@ -38,6 +38,14 @@ export interface Config {
   reservedNicknames: string[];
   /** GET /version: the oldest web client build that may still play (older ones must reload), and the newest; null = not set */
   client: { minVersion: string | null; latestVersion: string | null };
+  /** public WebSocket base of the game server (rooms join at `<it>/ws/<code>`); null = the site's own origin */
+  gameServerUrl: string | null;
+  /**
+   * Join tickets (docs/06 §6): an Ed25519 key of their own (PKCS#8 PEM) that signs a short-lived
+   * ticket per room join; the game server holds the public half. null = no tickets (dev: the game
+   * server's rooms are open then); production requires it.
+   */
+  joinTicket: { privateKeyPem: string | null; ttlSeconds: number };
 }
 
 export class ConfigError extends Error {
@@ -75,6 +83,9 @@ const EnvSchema = z.object({
   RESERVED_NICKNAMES: list.default([]),
   MIN_CLIENT_VERSION: z.string().max(64).optional(),
   LATEST_CLIENT_VERSION: z.string().max(64).optional(),
+  GAME_SERVER_URL: z.url({ protocol: /^wss?$/, error: 'must be a ws:// or wss:// URL' }).optional(),
+  JOIN_TICKET_PRIVATE_KEY: z.string().min(1).optional(),
+  JOIN_TICKET_TTL_SECONDS: z.coerce.number().int().min(5).max(120).default(30),
 });
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
@@ -90,7 +101,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
 
   const issues: string[] = [];
   if (production) {
-    for (const key of ['DATABASE_URL', 'REDIS_URL', 'ACCESS_TOKEN_PRIVATE_KEY', 'CORS_ORIGINS'] as const) {
+    for (const key of ['DATABASE_URL', 'REDIS_URL', 'ACCESS_TOKEN_PRIVATE_KEY', 'JOIN_TICKET_PRIVATE_KEY', 'CORS_ORIGINS'] as const) {
       if (!e[key]) issues.push(`${key}: required in production`);
     }
   }
@@ -116,5 +127,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     logLevel: e.LOG_LEVEL ?? (e.NODE_ENV === 'test' ? 'silent' : 'info'),
     reservedNicknames: e.RESERVED_NICKNAMES,
     client: { minVersion: e.MIN_CLIENT_VERSION ?? null, latestVersion: e.LATEST_CLIENT_VERSION ?? null },
+    gameServerUrl: e.GAME_SERVER_URL?.replace(/\/+$/, '') ?? null,
+    joinTicket: { privateKeyPem: e.JOIN_TICKET_PRIVATE_KEY?.replaceAll('\\n', '\n') ?? null, ttlSeconds: e.JOIN_TICKET_TTL_SECONDS },
   };
 }

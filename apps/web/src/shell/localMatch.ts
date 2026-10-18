@@ -1,11 +1,12 @@
 /**
- * Local-mode match rules: a deathmatch against the range dummies, then results and Play again.
+ * Local-mode match rules: a deathmatch against the bots (three Normal ones by default; localBots.ts),
+ * then results and Play again.
  * URL overrides for playtests and screenshots: ?time=<s>&kills=<n>&countdown=<s> (0 turns a limit
  * off); ?sandbox is free play with no match.
  */
 import { DEATHMATCH_RULES, type MatchRules } from '@military-forge/sim';
 
-/** The dummies never shoot back, so the local match is shorter than a real one; nobody else votes, so no close. */
+/** Shorter than a room's match (a warm-up); nobody else votes, so a missed rematch returns to the warm-up, not a close. */
 export const LOCAL_MATCH_RULES: Partial<MatchRules> = { timeLimit: 300, killLimit: 10, onNoRematch: 'lobby' };
 
 const LIMITS: Record<'time' | 'kills' | 'countdown', [keyof MatchRules, number]> = {

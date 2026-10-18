@@ -101,6 +101,14 @@ export interface RenderOptions {
    * grenades and blasts itself.
    */
   overlay?: boolean;
+  /**
+   * What the 2D layer draws besides the world and effects (the app shell): 'debug' (default) the HUD,
+   * debug text and help line; 'basic' the HUD and the net graph (N) only; 'none' no HUD at all
+   * (menus, or the DOM HUD in hud/ draws it).
+   */
+  hud?: 'debug' | 'basic' | 'none';
+  /** the aiming reticle and hit markers (default on; off in menus) */
+  reticle?: boolean;
 }
 
 /** A zone ready to draw (docs/02 §20): outline, label spot and flow direction (wind or launch). */
@@ -401,8 +409,8 @@ export class Renderer {
     this.drawLetterbox();
 
     const local = byId.get(frame.localId);
-    if (local) this.drawHud(local, frame, opts, help);
-    this.drawReticle();
+    if (local && opts.hud !== 'none') this.drawHud(local, frame, opts, help);
+    if (opts.reticle !== false) this.drawReticle();
   }
 
   /** Overlay without the debug world layers: tracers and damage numbers, HUD and reticle (render3d draws grenades and blasts). */
@@ -411,8 +419,8 @@ export class Renderer {
     this.drawEffects(dt, byId, false);
     this.drawLetterbox();
     const local = byId.get(frame.localId);
-    if (local) this.drawHud(local, frame, opts, help);
-    this.drawReticle();
+    if (local && opts.hud !== 'none') this.drawHud(local, frame, opts, help);
+    if (opts.reticle !== false) this.drawReticle();
   }
 
   /**
@@ -1094,14 +1102,17 @@ export class Renderer {
       ctx.fillText(line.text, cam.width - 310, 64 + i * 16);
     });
 
-    // top-left debug block
+    // top-left debug block ('basic': the net graph only)
     ctx.textAlign = 'left';
     ctx.fillStyle = 'rgba(230,237,243,0.75)';
-    const lines = [
-      `fps ${this.fps.toFixed(0)}  tick ${frame.tick}`,
-      `pos ${p.x.toFixed(2)}, ${p.y.toFixed(2)}  vel ${p.vx.toFixed(2)}, ${p.vy.toFixed(2)}`,
-      `${p.grounded ? 'grounded' : 'airborne'}${p.crouched ? ' · crouched' : ''}${p.jetting ? ' · jetting' : ''}`,
-    ];
+    const basic = opts.hud === 'basic';
+    const lines = basic
+      ? []
+      : [
+          `fps ${this.fps.toFixed(0)}  tick ${frame.tick}`,
+          `pos ${p.x.toFixed(2)}, ${p.y.toFixed(2)}  vel ${p.vx.toFixed(2)}, ${p.vy.toFixed(2)}`,
+          `${p.grounded ? 'grounded' : 'airborne'}${p.crouched ? ' · crouched' : ''}${p.jetting ? ' · jetting' : ''}`,
+        ];
     if (frame.recording !== undefined) lines.push(`● REC ${(frame.recording / 60).toFixed(1)} s`);
     if (frame.mapEvent) {
       const e = frame.mapEvent;
@@ -1122,8 +1133,9 @@ export class Renderer {
         if (p.suggestLowBandwidth) lines.push('⚠ heavy packet loss: try low-bandwidth mode (panel → Network)');
       }
     }
-    lines.forEach((l, i) => ctx.fillText(l, 12, 22 + i * 16));
+    lines.forEach((l, i) => ctx.fillText(l, 12, (basic ? 70 : 22) + i * 16));
 
+    if (basic) return;
     ctx.fillStyle = 'rgba(230,237,243,0.45)';
     ctx.fillText(help, 12, cam.height - 128);
   }

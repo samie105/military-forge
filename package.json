@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "turbo run dev",
+    "playtest": "tsx scripts/playtest/src/main.ts",
     "build": "turbo run build",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",

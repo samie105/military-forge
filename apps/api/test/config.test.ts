@@ -6,6 +6,7 @@ const PROD = {
   DATABASE_URL: 'postgres://game:game@db:5432/game',
   REDIS_URL: 'redis://cache:6379',
   ACCESS_TOKEN_PRIVATE_KEY: '-----BEGIN PRIVATE KEY-----\\nabc\\n-----END PRIVATE KEY-----',
+  JOIN_TICKET_PRIVATE_KEY: '-----BEGIN PRIVATE KEY-----\\nxyz\\n-----END PRIVATE KEY-----',
   CORS_ORIGINS: 'https://play.example.com, https://portal.example.net',
 };
 
@@ -27,6 +28,7 @@ describe('loadConfig', () => {
     expect(c.db).toEqual({ kind: 'pglite', dataDir: '.data/pglite' });
     expect(c.redisUrl).toBeNull();
     expect(c.accessToken).toEqual({ privateKeyPem: null, ttlSeconds: 900 });
+    expect(c.joinTicket).toEqual({ privateKeyPem: null, ttlSeconds: 30 });
     expect(c.corsOrigins).toBe('localhost');
     expect(c.cookie).toEqual({ secure: false, sameSite: 'Lax', domain: null });
     expect(c.trustProxy).toBe('none');
@@ -49,6 +51,7 @@ describe('loadConfig', () => {
     expect(c.cookie.secure).toBe(true);
     expect(c.corsOrigins).toEqual(['https://play.example.com', 'https://portal.example.net']);
     expect(c.accessToken.privateKeyPem).toBe('-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----');
+    expect(c.joinTicket.privateKeyPem).toBe('-----BEGIN PRIVATE KEY-----\nxyz\n-----END PRIVATE KEY-----');
   });
 
   it('production refuses to start without its real dependencies', () => {
@@ -56,6 +59,7 @@ describe('loadConfig', () => {
       'DATABASE_URL: required in production',
       'REDIS_URL: required in production',
       'ACCESS_TOKEN_PRIVATE_KEY: required in production',
+      'JOIN_TICKET_PRIVATE_KEY: required in production',
       'CORS_ORIGINS: required in production',
     ]);
   });

@@ -10,12 +10,17 @@
  *
  * The transport is WebTransport (UDP datagrams) when the server has a gateway and the browser
  * supports it, else WebSocket (transport.ts, §2.1). `?transport=ws|wt` forces one.
+ *
+ * Rooms by code (the app shell): MATCH_STATE (0x23) drives the lobby, countdown and results
+ * screens; lobby commands go out as CMDs; the predicted player gets the server's input freeze
+ * (docs/06 §5.2) so the countdown doesn't mispredict; the session token is kept in sessionStorage
+ * so a page reload resumes the same player within the room's reconnect grace.
  */
 import { weapons, NO_WEAPON, type MapDef, type Tuning } from '@military-forge/content';
 import { ConditionedLink, NetClient, TICK_MS, describeNetSim, type ConditionerSettings, type RemotePose, type Scheduler } from '@military-forge/netcode';
-import { CloseCode, MsgType, isUnreliableMessage, type SnapshotPlayer } from '@military-forge/protocol';
+import { CloseCode, CmdKind, MsgType, encodeCmd, isUnreliableMessage, type MatchStateMsg, type SnapshotPlayer } from '@military-forge/protocol';
 import { u16ToAngle } from '@military-forge/shared';
-import { blindIntensity, type PlayerState, type SimEvent } from '@military-forge/sim';
+import { MatchPhase, TICK_RATE, blindIntensity, type PlayerState, type SimEvent } from '@military-forge/sim';
 import type { Camera } from './camera';
 import { cloudView, statusView } from './grenadeViews';
 import type { InputSampler } from './input';
@@ -24,11 +29,74 @@ import type { Renderer } from './render';
 import { connectGame, type GameTransport } from './transport';
 import { shieldView, type CloudView, type Frame, type PlayerView, type RewindView } from './view';
 
-/** how long to keep trying after a drop: the room keeps our player this long */
-const RECONNECT_WINDOW_MS = 20_000;
-/** close codes that mean "don't come back" */
+/**
+ * How long to keep trying after a drop. The room keeps our player 20 s; after that a rejoin is a new
+ * player, which needs a fresh join ticket (OnlineOptions.refreshTicket), so a flaky connection can
+ * be out for up to a minute and still come back on its own.
+ */
+const RECONNECT_WINDOW_MS = 60_000;
 const WT_SILENCE_MS = 1500;
-const FATAL_CLOSE = new Set<number>([CloseCode.VersionMismatch, CloseCode.RoomFull, CloseCode.BadMessage, CloseCode.RateLimited, CloseCode.DuplicateSession]);
+/** close codes that mean "don't come back" */
+const FATAL_CLOSE = new Set<number>([
+  CloseCode.VersionMismatch,
+  CloseCode.RoomFull,
+  CloseCode.BadMessage,
+  CloseCode.RateLimited,
+  CloseCode.DuplicateSession,
+  CloseCode.NoRoom,
+  CloseCode.TicketInvalid,
+  1000,
+  1008,
+  1011,
+]);
+/** how often the scoreboard's ping column hears from us */
+const PING_REPORT_MS = 3000;
+
+export type ConnectionState = 'connecting' | 'joining' | 'connected' | 'reconnecting' | 'failed';
+
+/** What the shell shows about the connection. */
+export interface ConnectionInfo {
+  state: ConnectionState;
+  /** reconnecting: the last drop; failed: why it ended (close reason, or the error) */
+  detail: string;
+  /** the close code that ended it (failed), 0 otherwise */
+  code: number;
+  /** reconnecting: when this outage started (performance.now), 0 otherwise */
+  since: number;
+}
+
+export interface OnlineOptions {
+  /** a room by code: its MATCH_STATE drives the shell, and the session survives a page reload */
+  room?: string;
+  /** the API's join ticket for that room (docs/06 §6); a retry after a failure asks the API for a new one */
+  ticket?: string;
+  /**
+   * A fresh ticket for the same room (the API's join): when a reconnect comes back after the room let
+   * our player go, the old ticket is spent or expired and the server says so (4007).
+   */
+  refreshTicket?: () => Promise<string | null>;
+}
+
+const sessionKey = (room: string) => `room.session.${room}`;
+
+function loadToken(room: string | undefined): string {
+  if (!room) return '';
+  try {
+    return sessionStorage.getItem(sessionKey(room)) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function saveToken(room: string | undefined, token: string | null): void {
+  if (!room) return;
+  try {
+    if (token) sessionStorage.setItem(sessionKey(room), token);
+    else sessionStorage.removeItem(sessionKey(room));
+  } catch {
+    /* no storage: a reload joins as a new player */
+  }
+}
 
 const browserScheduler: Scheduler = {
   now: () => performance.now(),
@@ -54,6 +122,10 @@ export class OnlineMode {
   private readonly up: ConditionedLink;
   private readonly down: ConditionedLink;
   private status = 'connecting…';
+  private conn: ConnectionInfo = { state: 'connecting', detail: '', code: 0, since: 0 };
+  /** the room's match (rooms by code), newest first received */
+  matchState: MatchStateMsg | null = null;
+  private nextPingReportAt = 0;
   private bytesIn = 0;
   private bytesOut = 0;
   private snapCount = 0;
@@ -76,20 +148,102 @@ export class OnlineMode {
     readonly netSim: ConditionerSettings,
     /** 'auto': WebTransport when available, else WebSocket */
     private readonly preferTransport: 'auto' | 'wt' | 'ws' = 'auto',
+    private readonly options: OnlineOptions = {},
   ) {
     const seed = (Math.random() * 0xffffffff) >>> 0;
     this.up = new ConditionedLink(netSim.up, () => netSim.enabled, browserScheduler, (b) => this.rawSend(b), isUnreliableMessage, seed);
     this.down = new ConditionedLink(netSim.down, () => netSim.enabled, browserScheduler, (b) => this.onMessage(b), isUnreliableMessage, seed ^ 0x9e3779b9);
     this.net = new NetClient({
       name,
+      ...(options.ticket ? { ticket: options.ticket } : {}),
       now: () => performance.now(),
       send: (bytes) => {
         this.bytesOut += bytes.length;
         this.up.send(bytes);
       },
     });
+    // a reload resumes the same player while the room still holds it
+    this.net.sessionToken = loadToken(options.room);
 
     this.open();
+  }
+
+  /** The room code this mode plays in ('' = the dev room). */
+  get room(): string {
+    return this.options.room ?? '';
+  }
+
+  get connection(): ConnectionInfo {
+    return this.conn;
+  }
+
+  get localId(): number {
+    return this.net.myId;
+  }
+
+  /**
+   * Best guess of the server's tick right now: the newest snapshot's tick plus the time since it
+   * arrived (timers on the lobby, countdown and results screens).
+   */
+  serverTickNow(now = performance.now()): number {
+    const snaps = this.net.snapshots;
+    const newest = snaps[snaps.length - 1];
+    if (!newest) return this.matchState?.phaseStartTick ?? 0;
+    return newest.msg.serverTick + (now - newest.recvMs) / TICK_MS;
+  }
+
+  // ---- lobby and results commands (match rooms) ----
+
+  private sendCmd(kind: number, payload = ''): void {
+    if (!this.net.isConnected) return;
+    const bytes = encodeCmd(kind, payload);
+    this.bytesOut += bytes.length;
+    this.up.send(bytes);
+  }
+
+  setReady(on: boolean): void {
+    this.sendCmd(CmdKind.Ready, on ? '1' : '0');
+  }
+
+  startMatch(): void {
+    this.sendCmd(CmdKind.StartMatch);
+  }
+
+  voteRematch(): void {
+    this.sendCmd(CmdKind.Rematch);
+  }
+
+  returnToLobby(): void {
+    this.sendCmd(CmdKind.ReturnToLobby);
+  }
+
+  setMatchSettings(settings: { timeLimit?: number; killLimit?: number; mapId?: string }): void {
+    this.sendCmd(CmdKind.MatchSettings, JSON.stringify(settings));
+  }
+
+  /** Leaves for good: the server drops the player now (no reconnect grace), then the socket closes. */
+  leave(): void {
+    this.sendCmd(CmdKind.Leave);
+    saveToken(this.options.room, null);
+    this.dispose();
+  }
+
+  /**
+   * The server freezes buttons outside WAITING and IN_PROGRESS (docs/06 §5.2); the prediction must
+   * too, or the countdown would mispredict. GO is at a known tick, so it unfreezes on time.
+   */
+  private frozenAt(tick: number): boolean {
+    const s = this.matchState;
+    if (!s) return false;
+    switch (s.phase) {
+      case MatchPhase.Waiting:
+      case MatchPhase.InProgress:
+        return false;
+      case MatchPhase.Countdown:
+        return tick < s.phaseStartTick + s.rules.countdown * TICK_RATE;
+      default:
+        return true;
+    }
   }
 
   private open(): void {
@@ -116,6 +270,7 @@ export class OnlineMode {
         this.netSim.up.stream = this.netSim.down.stream = transport.kind === 'ws';
         this.transportNote = transport.kind === 'wt' ? 'WebTransport (UDP)' : `WebSocket${fallbackReason ? ` (${fallbackReason})` : ''}`;
         this.status = this.droppedAt ? 'resuming…' : 'joining…';
+        if (!this.droppedAt) this.conn = { state: 'joining', detail: '', code: 0, since: 0 };
         this.net.onOpen();
       },
       (e: Error) => {
@@ -132,17 +287,57 @@ export class OnlineMode {
     const why = `${code}${reason ? `: ${reason}` : ''}`;
     const now = performance.now();
     if (!this.droppedAt) this.droppedAt = now;
+    // back after the room let our player go: rejoin as a new player with a fresh ticket
+    if (code === CloseCode.TicketInvalid && this.net.sessionToken !== '' && this.options.refreshTicket && now - this.droppedAt < RECONNECT_WINDOW_MS) {
+      this.rejoinWithFreshTicket(why);
+      return;
+    }
     // never welcomed, kicked, refused, or out of time: give up
     const canRetry = this.net.sessionToken !== '' && !this.kicked && !FATAL_CLOSE.has(code) && now - this.droppedAt < RECONNECT_WINDOW_MS;
     if (!canRetry) {
-      this.status = `disconnected (${why})`;
-      this.onFatal(`${this.status} — is the game server running? (pnpm dev)`);
+      this.giveUp(code, reason);
       return;
     }
     this.net.onClose();
     const delay = Math.min(2000, 250 * 2 ** this.reconnectAttempt++);
     this.status = `reconnecting… (${why}; retry in ${(delay / 1000).toFixed(2)} s)`;
+    this.conn = { state: 'reconnecting', detail: why, code, since: this.droppedAt };
     this.reconnectTimer = window.setTimeout(() => this.open(), delay);
+  }
+
+  private giveUp(code: number, reason: string): void {
+    this.status = `disconnected (${code}${reason ? `: ${reason}` : ''})`;
+    this.conn = { state: 'failed', detail: reason || (code === 1006 ? 'connection lost' : `closed (${code})`), code, since: 0 };
+    if (code === CloseCode.DuplicateSession || code === 1000) saveToken(this.options.room, null);
+    this.onFatal(`${this.status} — is the game server running? (pnpm dev)`);
+  }
+
+  private rejoinWithFreshTicket(why: string): void {
+    this.net.onClose();
+    this.conn = { state: 'reconnecting', detail: why, code: CloseCode.TicketInvalid, since: this.droppedAt };
+    this.status = `rejoining… (${why})`;
+    const retry = () => {
+      if (this.disposed) return;
+      if (performance.now() - this.droppedAt >= RECONNECT_WINDOW_MS) {
+        this.giveUp(CloseCode.TicketInvalid, 'could not rejoin the room');
+        return;
+      }
+      this.options.refreshTicket!().then(
+        (ticket) => {
+          if (this.disposed) return;
+          if (ticket === null) {
+            this.giveUp(CloseCode.TicketInvalid, 'the room has closed');
+            return;
+          }
+          // the old session token is dead: the server takes the fresh ticket and adds us as a new player
+          this.net.ticket = ticket;
+          this.open();
+        },
+        // the API is out too (the same outage): try again shortly
+        () => (this.reconnectTimer = window.setTimeout(retry, 2000)),
+      );
+    };
+    retry();
   }
 
   get map(): MapDef {
@@ -160,8 +355,13 @@ export class OnlineMode {
     switch (msg.type) {
       case MsgType.Welcome:
         this.status = msg.resumed ? `connected (resumed after ${((performance.now() - this.droppedAt) / 1000).toFixed(1)} s)` : 'connected';
+        this.conn = { state: 'connected', detail: '', code: 0, since: 0 };
         this.droppedAt = 0;
         this.reconnectAttempt = 0;
+        saveToken(this.options.room, msg.sessionToken);
+        break;
+      case MsgType.MatchState:
+        this.matchState = msg;
         break;
       case MsgType.Roster:
         this.renderer.setNames(this.net.names);
@@ -183,6 +383,7 @@ export class OnlineMode {
       case MsgType.Kick:
         this.kicked = true;
         this.status = `kicked: ${msg.reason}`;
+        this.conn = { state: 'failed', detail: msg.reason, code: msg.code, since: 0 };
         this.onFatal(this.status);
         break;
       default:
@@ -242,7 +443,16 @@ export class OnlineMode {
       const sy = me ? me.shoulderY(t) : 0;
       if (me?.alive) this.peakBlind = Math.max(this.peakBlind, blindIntensity(me));
       this.sampler.sample(this.camera, sx, sy, out);
+      const tick = this.net.predictor?.tick;
+      if (tick !== undefined && this.frozenAt(tick)) {
+        out.buttons = 0;
+        out.weaponSelect = 0;
+      }
     });
+    if (this.net.isConnected && now >= this.nextPingReportAt && this.net.rtt.count > 0) {
+      this.nextPingReportAt = now + PING_REPORT_MS;
+      this.sendCmd(CmdKind.ReportPing, String(Math.round(this.net.rtt.median)));
+    }
     // own shots and dashes are drawn from prediction the moment they happen
     const own: SimEvent[] = this.net.drainEvents().filter((e) => e.type === 'shot' || e.type === 'dash');
     if (own.length) this.renderer.onEvents(own, this.net.myId);

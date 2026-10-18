@@ -9,6 +9,8 @@ export const MsgType = {
   Input: 0x10,
   Cmd: 0x11,
   Snapshot: 0x21,
+  /** a room's match lifecycle: phase, timers, host settings, lobby flags, scoreboard (matchState.ts) */
+  MatchState: 0x23,
   Roster: 0x25,
   /** the room's tuning changed (dev live tuning): keeps every client's prediction in step */
   Tuning: 0x26,

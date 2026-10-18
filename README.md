@@ -46,6 +46,22 @@ In dev the game server listens for the gateway on `military-forge/wt-<port>.sock
 
 `pnpm --filter @military-forge/game-server exec tsx scripts/udp-impair.ts --listen 4434 --target 4433 --rtt 150 --loss 2` puts real packet loss between the browser and the gateway (start the gateway with `WT_PUBLIC_URL=https://127.0.0.1:4434/wt`).
 
+## Play with a friend over the internet
+
+```bash
+brew install cloudflared   # once (no Cloudflare account needed)
+pnpm playtest
+```
+
+`pnpm playtest` builds the web app for production, starts the API and the game server on this machine, puts them behind one local port, and opens a [Cloudflare quick tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) to it. It prints a link like `https://some-random-words.trycloudflare.com/r/KQXMZP`: open it yourself and send it to a friend. You both pick a name, land in the same room's lobby, ready up and play; the results screen has **Play again**. The lobby's **Copy link** (and QR code) invites more people, up to 8 per room.
+
+- **The link changes every run** and dies when you press **Ctrl-C**: quick tunnels are throwaway addresses. It **survives short internet outages** (the tunnel reconnects to Cloudflare by itself, and the game reconnects players). If the tunnel has to be recreated (a long outage, cloudflared giving up), it comes back on a **new address**: the script prints the new link in a box again and writes it to `.playtest-link`, so send that one. The API, the game server and the rooms keep running throughout; only Ctrl-C stops them.
+- **This Mac is the server:** keep it awake and online while you play. The script stops it from idle-sleeping, but closing the lid on battery still sleeps it.
+- Production settings: no Vite dev server, no dev commands or debug messages, no tuning panel; the API's rate limits stay on, its keys are generated fresh per run and never leave the server, and everything listens on `127.0.0.1` only (the tunnel reaches it locally). Players get into a room with a **join ticket** from the API (signed, good for one join within 30 s, carrying their checked nickname), so only people who came through the site can open or join rooms; a connection that doesn't say hello within 5 s is dropped.
+- `pnpm playtest --local` skips the tunnel (this machine only); `--no-build` reuses `apps/web/dist`; `--port`, `--api-port`, `--game-port` pin the local ports; `--map flux-lab` (or `lunar-outpost`, `storm-front`, …) picks the rooms' map; the tunnel uses QUIC (UDP; lower and steadier latency) and switches to HTTP/2 by itself on networks that block UDP (`--tunnel-protocol http2|quic` forces one). `pnpm --filter @military-forge/playtest run ping <link>` measures the round trip to the game server through the link, the way the game's ping does.
+
+In the dev setup (`pnpm dev`), the same app is at http://localhost:5173/?app (Vite forwards `/api` and `/ws` to the API and the game server; without ticket keys the dev game server's rooms are open); `/` stays the Phase 0 debug client.
+
 ## Test it
 
 ```bash

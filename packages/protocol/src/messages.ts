@@ -18,6 +18,7 @@ import {
 import { POS_INV } from '@military-forge/shared';
 import { createInput, type Input } from '@military-forge/sim';
 import { BitReader, BitWriter, DecodeError } from './bitstream';
+import { decodeMatchStateBody, type MatchStateMsg } from './matchState';
 import { decodeFullSnapshot, type SnapshotMsg } from './snapshot';
 import { MsgType, pid, pos, unPid } from './wire';
 
@@ -45,6 +46,8 @@ export { MsgType } from './wire';
  *     jetDisabledTicks) · grenade records + u3 type · u2 mine state · a clouds section after the pickups section
  *     (u5 n · u5 id · u3 type · x · y · u10 age) · EXPLOSION + u3 grenade type. No new event tags, ext kinds,
  *     remote flags or INPUT bits.
+ * No bump (rooms by code, ui-playtest): MATCH_STATE 0x23, CMD kinds 4–10, close codes 4006 NoRoom and 4007
+ *     TicketInvalid, and HELLO's optional trailing join ticket (old HELLOs decode with ticket '').
  */
 export const PROTOCOL_VERSION = 10;
 
@@ -111,6 +114,10 @@ export const CloseCode = {
   RateLimited: 4004,
   /** the same session was resumed from another connection */
   DuplicateSession: 4005,
+  /** no room for this connection: a malformed room code, or the server can't open another room */
+  NoRoom: 4006,
+  /** a room by code needs a valid join ticket from the API (docs/06 §6): missing, forged, expired, used or for another room */
+  TicketInvalid: 4007,
 } as const;
 
 export const CmdKind = {
@@ -120,6 +127,21 @@ export const CmdKind = {
   Respawn: 2,
   /** payload '1'/'0': low-bandwidth mode (15 Hz snapshots for this client; docs/05 §2.2) */
   SetLowBandwidth: 3,
+  // ---- match rooms (MATCH_STATE 0x23): allowed in every room that runs a match ----
+  /** lobby: payload '1' ready / '0' not ready */
+  Ready: 4,
+  /** host, lobby: start the countdown without waiting for everyone to be ready */
+  StartMatch: 5,
+  /** results screen: vote for a rematch */
+  Rematch: 6,
+  /** host: everyone back to the lobby (abandons a running match) */
+  ReturnToLobby: 7,
+  /** host, lobby only: JSON `{ timeLimit?, killLimit?, mapId? }` (ROOM_SETTING_LIMITS; 0 = off) */
+  MatchSettings: 8,
+  /** the client's round-trip time in whole ms, for everyone's scoreboard (every few seconds) */
+  ReportPing: 9,
+  /** leaving for good: the player goes now instead of waiting out the reconnect grace */
+  Leave: 10,
 } as const;
 
 export const MAX_INPUTS_PER_PACKET = 4;
@@ -150,6 +172,11 @@ export interface HelloMsg {
   name: string;
   /** WELCOME.sessionToken from an earlier connection: resume that player ('' = new) */
   resumeToken: string;
+  /**
+   * The API's join ticket for the room (docs/06 §6: a signed JWT, ~30 s): a new player in a room by
+   * code needs one when the server checks tickets. '' = none (dev rooms, resumes).
+   */
+  ticket: string;
 }
 
 export interface WelcomeMsg {
@@ -263,7 +290,7 @@ export interface RewindDebugMsg {
   targets: RewindTarget[];
 }
 
-export type ServerMessage = WelcomeMsg | PongMsg | SnapshotMsg | RosterMsg | KickMsg | TuningMsg | RewindDebugMsg;
+export type ServerMessage = WelcomeMsg | PongMsg | SnapshotMsg | RosterMsg | KickMsg | TuningMsg | RewindDebugMsg | MatchStateMsg;
 export type ClientMessage = HelloMsg | PingMsg | InputMsg | CmdMsg;
 export type Message = ServerMessage | ClientMessage;
 
@@ -271,9 +298,11 @@ export type Message = ServerMessage | ClientMessage;
 
 const w = new BitWriter(4096);
 
-/** Trailing fields are optional on decode, so later additions (join tickets) can follow. */
-export function encodeHello(name: string, resumeToken = ''): Uint8Array {
-  return w.reset().u8(MsgType.Hello).u16(PROTOCOL_VERSION).u32(CONTENT_HASH).string(name).string(resumeToken).finish().slice();
+/** Trailing fields are optional on decode: the join ticket (u16-length string) is sent only when there is one. */
+export function encodeHello(name: string, resumeToken = '', ticket = ''): Uint8Array {
+  w.reset().u8(MsgType.Hello).u16(PROTOCOL_VERSION).u32(CONTENT_HASH).string(name).string(resumeToken);
+  if (ticket) w.string(ticket, 16);
+  return w.finish().slice();
 }
 
 export function encodeWelcome(m: Omit<WelcomeMsg, 'type'>): Uint8Array {
@@ -375,7 +404,8 @@ export function decodeMessage(bytes: Uint8Array): Message {
       const contentHash = r.u32();
       const name = r.string();
       const resumeToken = r.remainingBits >= 8 ? r.string() : '';
-      return { type, protocolVersion, contentHash, name, resumeToken };
+      const ticket = r.remainingBits >= 16 ? r.string(16) : '';
+      return { type, protocolVersion, contentHash, name, resumeToken, ticket };
     }
     case MsgType.Welcome:
       return {
@@ -424,6 +454,8 @@ export function decodeMessage(bytes: Uint8Array): Message {
     }
     case MsgType.Kick:
       return { type, code: r.u16(), reason: r.string() };
+    case MsgType.MatchState:
+      return decodeMatchStateBody(r);
     case MsgType.Tuning:
       return { type, tuningJson: r.string(16) };
     case MsgType.Debug: {

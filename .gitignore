@@ -11,3 +11,4 @@ apps/game-server/vendor/
 *.blend1
 .claude/settings.local.json
 .worktrees/
+.playtest-link
