@@ -15,13 +15,14 @@ import { weapons, NO_WEAPON, type MapDef, type Tuning } from '@military-forge/co
 import { ConditionedLink, NetClient, TICK_MS, describeNetSim, type ConditionerSettings, type RemotePose, type Scheduler } from '@military-forge/netcode';
 import { CloseCode, MsgType, isUnreliableMessage, type SnapshotPlayer } from '@military-forge/protocol';
 import { u16ToAngle } from '@military-forge/shared';
-import type { PlayerState, SimEvent } from '@military-forge/sim';
+import { blindIntensity, type PlayerState, type SimEvent } from '@military-forge/sim';
 import type { Camera } from './camera';
+import { cloudView, statusView } from './grenadeViews';
 import type { InputSampler } from './input';
 import { mapEventView } from './mapEvent';
 import type { Renderer } from './render';
 import { connectGame, type GameTransport } from './transport';
-import { shieldView, type Frame, type PlayerView, type RewindView } from './view';
+import { shieldView, type CloudView, type Frame, type PlayerView, type RewindView } from './view';
 
 /** how long to keep trying after a drop: the room keeps our player this long */
 const RECONNECT_WINDOW_MS = 20_000;
@@ -58,6 +59,8 @@ export class OnlineMode {
   private snapCount = 0;
   private rate = { kbIn: 0, kbOut: 0, snaps: 0, windowStart: performance.now() };
   private readonly renderPos = { x: 0, y: 0 };
+  /** the most blinded the predicted local player was over this frame's ticks (a flashbang inside a hitch still shows) */
+  private peakBlind = 0;
   private readonly remotePos: RemotePose = { x: 0, y: 0, src: null! };
   /** called when the room's tuning changed under us (another client's live edit) */
   onTuningFromServer: () => void = () => {};
@@ -237,6 +240,7 @@ export class OnlineMode {
     this.net.update(dt, (me: PlayerState | null, out) => {
       const sx = me ? me.shoulderX(t) : 0;
       const sy = me ? me.shoulderY(t) : 0;
+      if (me?.alive) this.peakBlind = Math.max(this.peakBlind, blindIntensity(me));
       this.sampler.sample(this.camera, sx, sy, out);
     });
     // own shots and dashes are drawn from prediction the moment they happen
@@ -293,12 +297,18 @@ export class OnlineMode {
       const pose = this.net.remotePose(pb.id, renderTick, this.remotePos);
       if (pose) players.push(this.remoteView(pose.src, isLocal, pose.x, pose.y));
     }
+    const clouds: CloudView[] = [];
+    for (const c of newest.msg.clouds) {
+      const view = cloudView(c.id, c.type, c.x, c.y, c.age);
+      if (view) clouds.push(view);
+    }
     return {
       tick: pred?.started ? pred.tick : newest.msg.serverTick,
       localId: this.net.myId,
       players,
-      grenades: newest.msg.grenades.map((g) => ({ x: g.x, y: g.y, fuse: g.fuse })),
+      grenades: newest.msg.grenades.map((g) => ({ x: g.x, y: g.y, fuse: g.fuse, type: g.type, state: g.state, id: g.id })),
       pickups: newest.msg.pickups,
+      clouds,
       net,
       rewinds: this.rewindViews(now),
       // the predicted game runs the map's event schedule on our own timeline: the banner matches the physics
@@ -314,6 +324,12 @@ export class OnlineMode {
       if (age < 1) out.push({ age, rewindMs: msg.rewindTicks * TICK_MS, clamped: msg.clamped, targets: msg.targets });
     }
     return out;
+  }
+
+  private takePeakBlind(): number {
+    const peak = this.peakBlind;
+    this.peakBlind = 0;
+    return peak;
   }
 
   /** The predicted local player (server-only counters from the newest snapshot). */
@@ -339,6 +355,7 @@ export class OnlineMode {
       fuel: p.fuel,
       fuelRegenDelay: p.fuelRegenDelay,
       frags: p.frags,
+      ...statusView(p, this.takePeakBlind()),
       active: p.active,
       dual: p.dual,
       weapons: p.weapons.map((w) => ({ def: w.def, mag: w.mag, reserve: w.reserve, reloadTicks: w.reloadTicks })),

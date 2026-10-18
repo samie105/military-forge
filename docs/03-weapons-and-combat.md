@@ -50,7 +50,7 @@ interface WeaponDef {
   spread: { base: number; moveMul: number; airMul: number; crouchMul: number;
             bloomPerShot: number; bloomMax: number; recoverPerSec: number; dualMul: number; minAir?: number };
   ammo: { mag: number; reserve: number; reload: number; autoReloadWhenEmpty: boolean; regen?: number };
-  handling: { equip: number; moveSpeedMul: number; recoilPushAir: number; meleeDamage: number };
+  handling: { equip: number; moveSpeedMul: number; recoilPushAir: number; recoilPushGround: number; meleeDamage: number };
   zoomMax: 1|2|3|4|5|6|7;
   spawn: { tier: 'common'|'power'; respawn: number; mapsOnly?: string[] };
   presentation: { model: string; muzzle: string; sfx: { fire: string; reload: string; tail: string }; tracer?: string; kickCam: number; shake: number };
@@ -134,7 +134,22 @@ shotAngle = aim + spread × (2·rand(seed) − 1)  // seeded: hash(roomSeed, tic
 Defaults: `moveMul 1.25 · airMul 1.5 · crouchMul 0.6 · dualMul 1.4 · bloomPerShot 0.5° · bloomMax 4° · recoverPerSec 10°/s`.
 
 - **Pellets:** for the Breacher, the 5 pellets are evenly distributed across the cone, with a small seeded jitter. That's more consistent than pure random and feels fairer.
-- **Recoil:** visual only (camera kick + weapon kick). There's no aim displacement, since a 2D mouse aim plus aim displacement feels like input lag. Recoil gameplay comes from bloom and the airborne `recoilPushAir` (shotgun 3.5 m/s, Thumper 4.5 m/s, Widow 2.0 m/s).
+- **Recoil:** visual only on the aim (camera kick + weapon kick). There's no aim displacement, since a 2D mouse aim plus aim displacement feels like input lag. Recoil gameplay comes from bloom and the **recoil push** (02 §12): `recoilPushAir` along −aim in the air, `recoilPushGround` as a horizontal slide on the ground (heavy guns only). Light guns don't push.
+
+| Weapon | Air push (m/s) | Ground slide (m/s) | Feel |
+|---|---|---|---|
+| Hawk, Hammer, Buzz, Rattler, Hornet, Machete | 0 | 0 | light guns never push |
+| K-47, Bullpup, Trident | 0.3 per round | 0 | spraying in the air drifts you back ~1.6 m a second |
+| Longbow (DMR) | 1.5 | 3 | a nudge |
+| **Widow** | **2** | **8.5** | standing: kicked back ~0.6 m (crouched ~0.1 m); in the air ~0.7 m |
+| **Breacher** | **10** | **6** | fired down at the top of a hop: a ~2.2 m shotgun jump; fired level in the air: a ~2.8 m dash; standing: a 0.3 m slide |
+| Thumper (rocket launcher) | 6 | 4 | a launcher kicks hard (rocket jumps come from its blast) |
+| Popper (grenade launcher) | 2.5 | 1.5 | |
+| Ripper (saw launcher) | 3 | 2 | |
+| Shredder (minigun) | 0.35 per round | 0.15 per round | a long burst pushes you back steadily |
+| Dragon, Arc, Pulse | 0 | 0 | streams and orbs don't kick |
+
+  (Bold rows are in the game; the rest are the starting values for when those weapons land.)
 - **Aim aids:** a reticle at the cursor + a faint **aim line** (accessibility option, available to everyone). Other games sell a laser sight; for us it's a free setting. **No aim assist on desktop.** Touch (later) gets an optional light slowdown-near-target assist, only in casual queues.
 
 ---
@@ -156,7 +171,8 @@ armour (BR only): vest absorbs X% of body damage into armour HP; helmet reduces 
 |---|---|
 | Friendly fire (team modes) | **bullets: no** · explosives / flames / melee / saw: **yes** (a genre convention). Host can set it to all/none |
 | Teamkill | −1 score; 3 teamkills in public matches → auto-kick and a short matchmaking cooldown |
-| Self-damage | explosives 50%, flames 50%, saw 100% (it's famous for killing its owner), EMP self-stun yes |
+| Self-damage | explosives 50%, toxic gas 50%, flames 50%, saw 100% (it's famous for killing its owner), EMP self-stun yes, a flashbang blinds its thrower too (look away) |
+| Mines | a mine's blast is credited to its thrower, unless someone shot it empty: then to the shooter |
 | Kill credit for environmental deaths | if a player dies to a pit/hazard within **5 s** of being damaged, the last damager gets the kill ("knocked into the void"). Knockback weapons make this a skill |
 | Assists | ≥ 25 damage within 10 s before the death |
 | Scoring (DM/TDM) | +1 kill, −1 suicide/teamkill. K/D tracked separately |
@@ -226,7 +242,7 @@ Zoom makes the camera pull **out** so you see more of the map (1×–7×). In 2.
 | Pulse | slow orb (8 m/s) passes through walls; on a player hit or at end of life → EMP burst R 2.5 m: jetpacks disabled for 3 s, mines disarmed, no damage |
 | Shredder | 0.8 s spin-up (audible to nearby enemies, a fair warning), spin-down 1 s; can pre-spin with the secondary button; −30% move speed |
 | Machete | one-hit melee; replaces the default knife while held; the dual pair only swings one |
-| Grenades | 02-physics §14 (frag, proximity mine, gas, EMP) |
+| Grenades | 02-physics §14 (frag, smoke, toxic gas, flashbang, proximity mine, EMP): one key throws the selected type, `T` cycles. Smoke is cover (bots and the AOI can't see through it); gas is area denial (stay in the middle and you die); a flashbang whites out everyone looking at it for up to 2.5 s (a "Reduce flashes" setting swaps the white for a dark blur) |
 
 ---
 
@@ -236,6 +252,7 @@ Zoom makes the camera pull **out** so you see more of the map (1×–7×). In 2.
 - **Built** (`MapDef.spawners`, `packages/sim/src/pickups.ts`): a spawner owns one or more **spots** and one timer. When the timer fires, the game's seeded PRNG picks a free spot and an item from the spawner's pool (weighted), so items appear at random places and times. Timers are random too: `first` (seconds before the first item) and `respawn` (seconds after an item is taken), each a [min, max] range. `maxActive` caps how many of its items are out at once. A spawner with one spot is a classic fixed spawn. Spawners start over when a match starts. Players take items by touching them. Dropped items stay 30 s. The riot shield is the first item (pool `shield`); the movement-test map has a shield spawner with three spots in front of the shooting range. Map JSON (02-physics §20.6) carries spawners too: `spawners: [{ id, pool, spots: [{x, y}], first: [min, max], respawn: [min, max], maxActive? }]`, in `map.schema.json`.
 - Placement guidelines (map editor lint): power weapons in **contested, exposed** spots (the top of a tower, the middle of a bridge), never next to a spawn point. Health packs away from weapon spawns. No spawner reachable without leaving cover for at least 1.5 s.
 - **Pickups:** **Health pack** (instant full heal, only if hurt), **Power Boost** (unlimited jetpack fuel for 20 s; can't crouch; you *can* fly off the top of the map), **Riot Shield**, **Grenade pair**, **Ammo box** (refills both slots).
+- **Grenade pairs (built, arsenal B):** six items, a pair of one type each (frag, smoke, gas, flashbang, mine, EMP), in the `grenades` pool: frag 3, smoke 2, flashbang 2, gas 1, mine 1, EMP 1 (weights). The seeded pool draw picks the type each time, so a spot gives a random pair. Touching one puts the pair on your belt up to the type's carry limit (docs/02 §14); with that type full it stays on the floor. On Lunar Outpost, Storm Front, Flux Lab and the movement-test range (up on its platforms and tower), 18–24 s respawns (8–14 s on the range).
 - Some weapons are map-specific (rare guns only on certain maps), which gives maps identity.
 
 ---

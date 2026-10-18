@@ -183,6 +183,9 @@ u8  fuel  u8 fuelRegenDelayTicks  u8 jetTicks
 u8  hp    u8 armor    u4 moveState  u8 flags(grounded,crouched,jetting,dual,zoom,reloading,spawnProt,onOneWay)
 per weapon slot (2 + melee): u6 weaponId  u8 mag  u10 reserve  u8 cooldownTicks  u8 reloadTicks  u4 bloomQ
 u3 fragCount u3 proxCount u3 gasCount  u2 selectedGrenade  u8 grenadeCookTicks
+(as built, v10: u3 frags in the combat group; after the shield group, a grenade group (48–53) u3 selected ·
+ u3 count × 5 other types and a status group (54–57) u8 blindTicks · u7 blindFade · u6 gasTicks · u8 jetDisabledTicks;
+ packages/protocol localState.ts. ~67 bytes in full (join, after loss); deltas send the groups that changed)
 ≈ 32 bytes
 
 ── Entities (delta vs baseline) ──
@@ -199,6 +202,11 @@ repeat:
     b6 SPAWN/DESPAWN : u2 kind (spawn-full-record | despawn | out-of-AOI)
     b7 SMALLPOS flag
 A changed remote player costs ~4–8 bytes; an unchanged one costs 0.
+
+── Clouds (as built, v10: after the pickups section) ──
+u5 count · { u5 id · u3 grenade type · i24 x · i24 y · u10 age ticks }   smoke and gas in view, full every snapshot;
+radius and density follow from type + age (sim cloudRadius / cloudDensity). Grenade records carry u3 type · u2 mine
+state (v10) and EXPLOSION a trailing u3 grenade type (what went off: a blast, a flashbang, an EMP).
 
 ── Projectiles ──
 Projectiles are simulated client-side from their spawn parameters, using the same sim code. The server only sends:
@@ -232,6 +240,8 @@ v8 also appends a **dash group** to the local-player block (dashTicks u6, dashDi
   - A ricochet from a culled shooter is the spark only: point and normal, with no line, and with what it hit blanked unless it hit you. Un-reflected, two lines would cross at the hidden shooter. The shooter is named only to the shooter, the shield's owner, the target, and clients that can see the shooter.
   - A shield break is sent when its owner is in view (or is you), with a hidden attacker blanked as in HIT; a pickup when the item is in view or the taker is you.
   - A shot into a culled player's shield (hit 3) is treated like a hit on its body: clipped, sent as a miss, no target.
+
+**Grenade variety (built, protocol v10, arsenal B):** the two local-block groups and the clouds section above; grenade records + u3 type · u2 state; EXPLOSION + u3 grenade type. No new event tags, ext kinds, remote flags or INPUT bits (CycleGrenade is bit 12). Map pickups gain six grenade-pair items (u4 defs 1–6) with no wire change.
 
 ### 6.3 Reliable EVENT_R examples (msgpackr-encoded, rare)
 
@@ -310,6 +320,15 @@ Rooms (≤ 16 players) send all players every snapshot, but still apply **visibi
 - Entities outside the view rect are **not sent** (`out-of-AOI` despawn). This kills zoom hacks and off-screen ESP, the real "wallhack" of a 2D shooter.
 - Gunfire/explosions outside the view rect are sent as `SOUND` events with **4 m-coarse positions** (enough for directional audio, useless for aimbots).
 - A culled player's shots are **only** a `SOUND`, even when the tracer crosses the view: a clipped tracer still locates its shooter to centimetres (two cross at the muzzle). Tracers from visible shooters are clipped to the view; one ending on a culled player stops a body's reach (1.5 m) short of the edge and names no target. A shot at a culled player always reads as a miss with no target. A HIT names a culled attacker only to the attacker and the victim, and to others carries whole-HP damage: with linear falloff that still gives the shooter's distance to ~1 m (the victim's whole-HP health does too). A grenade or blast names its thrower only to clients that can see it.
+- **Smoke** (arsenal B; sim `SmokeSight`, once per snapshot: usually 0–3 opaque cores, a few circle–segment tests per pair, a raycast only for a core a wall cuts through). A player smoke hides from a client is culled for it, so a wallhack can't see into or through smoke:
+  - **inside:** all of it is in an opaque core the client's eyes are outside of;
+  - **behind, or across a cloud:** every sight line from the client's eyes to it (top of the head, chest, feet) runs through ≥ 1 m of an opaque core, or ≥ 1.5 m of a core both are in: inside a cloud you see who's next to you, not across it, and from deep inside one you can't see out. Smoke a wall separates from the sight line doesn't count.
+  - **One-way at the rim:** eyes within about a metre of a core's edge see out, while a body all inside the core is hidden from everyone outside it. Accepted: the edge is where you look out from.
+  - Everything keyed on "can this client see that player" follows: its gunfire is only a `SOUND`; others' hits on it aren't sent; a HIT where either side is hidden from the client (a hidden attacker, or a target in smoke) goes in whole HP; a grenade it throws comes without its owner; a ricochet off its shield isn't sent; an item it takes comes without its name.
+  - **Tracers** (and ricochet legs) vanish where they first enter an opaque core the client is outside of (however little they cross), or in its own cloud where they leave its near sight; they read as a miss with no target, whatever they hit in there, so a cut tracer doesn't tell a hit from a miss. A shot into a player smoke hides that never touches the smoke (behind it, fired from the far side) goes on past the body to the first wall in the weapon's range, so its end doesn't mark the body.
+  - **Grenades** in smoke the client can't see into (in a core it's outside of, behind smoke, across its own cloud) aren't sent; its own always are. Residue: once one comes out of the smoke, its exact arc and fuse still work back to where it was thrown, as for a thrower off the view.
+  - Local mode applies the same to the players, tracers and grenades it draws, so offline play looks like online.
+- **Flashbang** (arsenal B): while a client is in a flashbang's full white (sim blindIntensity 1), it is sent no other player, their gunfire only as `SOUND`, and no grenade but its own, so dropping the white-out client-side shows nothing. The fade is the client's to draw.
 - The camera never shows more than the view rect: it is at most 4:3 tall, and taller screens are **letterboxed** (the full view width, bars above and below), never cropped at the sides.
 
 BR (≤ 40–50 players, big map):

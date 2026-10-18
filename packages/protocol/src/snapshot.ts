@@ -7,6 +7,7 @@
  *   u5 removed · { u5 id }                           in the baseline, now gone or out of view
  *   u7 grenades · { … }                              in view, full
  *   u1 pickups changed · [u6 n · { u5 id · u4 def · i24 x · i24 y }]   items in view, when changed (v9)
+ *   u5 clouds · { u5 id · u3 type · x · y · u10 age } in view, full (smoke and gas, v10)
  *   u8 events · { u3 tag · … }                       in view; gunfire/blasts outside it → SOUND;
  *                                                    map events (v8) always; tag 7 = extended, u4 kind
  *                                                    (v8 dash; v9 ricochet, shield break, pickup)
@@ -18,11 +19,14 @@
  *
  * AOI (docs/05 §9): players and grenades outside the client's view rect aren't sent, so zoom hacks
  * and off-screen ESP get nothing. Shots and explosions outside it arrive as SOUND events with 4 m
- * positions (enough for direction, useless for aiming).
+ * positions (enough for direction, useless for aiming). Players and grenades smoke hides from a
+ * client (inside a cloud the client's eyes are outside of, behind smoke from its eyes, or across
+ * the cloud it's in: sim SmokeSight) aren't sent to it either, and tracers vanish where they enter
+ * smoke, so a wallhack can't see into or through it.
  */
 import { CROUCHED_HITBOXES, STANDING_HITBOXES } from '@military-forge/content';
 import { POS_INV, TAU, VEL_INV, simAtan2, simCosSin } from '@military-forge/shared';
-import { MAX_PICKUPS, MAX_PLAYERS, shieldRaised, type Game, type PlayerState, type SimEvent } from '@military-forge/sim';
+import { MAX_PICKUPS, MAX_PLAYERS, SmokeSight, blindIntensity, cloudDef, shieldRaised, type Game, type PlayerState, type SimEvent } from '@military-forge/sim';
 import { BitReader, BitWriter, DecodeError } from './bitstream';
 import {
   captureLocalState,
@@ -91,6 +95,23 @@ export interface SnapshotGrenade {
   vx: number;
   vy: number;
   fuse: number;
+  /** grenade type (packages/content grenades), v10 */
+  type: number;
+  /** a mine's state (sim MineState), 0 for the other types, v10 */
+  state: number;
+}
+
+/**
+ * A smoke or gas cloud (v10). Its radius and density follow from type and age through the sim's
+ * own functions (cloudRadius, cloudDensity), so they aren't sent.
+ */
+export interface SnapshotCloud {
+  id: number;
+  type: number;
+  x: number;
+  y: number;
+  /** ticks since it popped, at the snapshot's server tick */
+  age: number;
 }
 
 /** Gunfire or a blast outside the view rect: kind and a 4 m-coarse position (docs/05 §9). */
@@ -125,6 +146,7 @@ export interface SnapshotMsg {
   grenades: SnapshotGrenade[];
   /** every item on the map (not culled: items are static and give nobody away) */
   pickups: SnapshotPickup[];
+  clouds: SnapshotCloud[];
   events: SnapshotEvent[];
 }
 
@@ -402,8 +424,21 @@ function inRect(v: ViewRect, x: number, y: number): boolean {
   return x >= v.minX && x <= v.maxX && y >= v.minY && y <= v.maxY;
 }
 
+/** Any part of a cloud (at its full radius) inside the view. */
+function cloudInView(v: ViewRect | null, type: number, x: number, y: number): boolean {
+  if (v === null) return true;
+  const r = cloudDef(type)?.radius ?? 0;
+  return x + r >= v.minX && x - r <= v.maxX && y + r >= v.minY && y - r <= v.maxY;
+}
+
 /** Liang–Barsky clip state (module scratch: no closure per call). */
 const lb = { t0: 0, t1: 1 };
+/**
+ * The line a client gets for the shot or ricochet being encoded (module scratch, set by eventKind):
+ * its end, and `hit` when it was carried on past a player smoke hides from that client (a miss's
+ * 0 or 1 then).
+ */
+const tracer = { ex: 0, ey: 0, carried: false, hit: 0 };
 
 function clipEdge(p: number, q: number): boolean {
   if (p === 0) return q >= 0;
@@ -468,8 +503,9 @@ function writeHit(w: BitWriter, attacker: number, target: number, damage: number
     .unsigned(source, 6);
 }
 
-function writeExplosion(w: BitWriter, x: number, y: number, radius: number, owner: number): void {
-  w.bits(EVENT_EXPLOSION, 3).signed(pos(x), 24).signed(pos(y), 24).unsigned(radius * 16, 8).unsigned(pid(owner), 5);
+/** v10: `grenade` (u3) says what went off: a blast, a flashbang, an EMP… */
+function writeExplosion(w: BitWriter, x: number, y: number, radius: number, owner: number, grenade: number): void {
+  w.bits(EVENT_EXPLOSION, 3).signed(pos(x), 24).signed(pos(y), 24).unsigned(radius * 16, 8).unsigned(pid(owner), 5).unsigned(grenade, 3);
 }
 
 function writeRicochet(w: BitWriter, e: Extract<SimEvent, { type: 'ricochet' }>, shooter: number, ex: number, ey: number, hit: number, target: number, zone: number): void {
@@ -532,7 +568,7 @@ function writeEvent(w: BitWriter, e: SimEvent): void {
       writeShot(w, e.shooter, e.weapon, e.ox, e.oy, e.ex, e.ey, e.hit, e.target, e.zone);
       break;
     case 'explosion':
-      writeExplosion(w, e.x, e.y, e.radius, e.owner);
+      writeExplosion(w, e.x, e.y, e.radius, e.owner, e.grenade ?? 0);
       break;
     case 'death':
       w.bits(EVENT_DEATH, 3).unsigned(pid(e.victim), 5).unsigned(pid(e.killer), 5).unsigned(e.source, 6);
@@ -585,7 +621,7 @@ function readEvent(r: BitReader): SnapshotEvent {
       return { type: 'shot', shooter, weapon, ox, oy, ex, ey, hit, target, zone };
     }
     case EVENT_EXPLOSION:
-      return { type: 'explosion', x: r.signed(24) / POS_INV, y: r.signed(24) / POS_INV, radius: r.u8() / 16, owner: unPid(r.bits(5)) };
+      return { type: 'explosion', x: r.signed(24) / POS_INV, y: r.signed(24) / POS_INV, radius: r.u8() / 16, owner: unPid(r.bits(5)), grenade: r.bits(3) };
     case EVENT_DEATH:
       return { type: 'death', victim: unPid(r.bits(5)), killer: unPid(r.bits(5)), source: r.bits(6) };
     case EVENT_HIT:
@@ -673,6 +709,10 @@ export class SnapshotEncoder {
   private readonly xs = new Float64Array(MAX_PLAYERS);
   private readonly ys = new Float64Array(MAX_PLAYERS);
   private readonly inView = new Uint8Array(MAX_PLAYERS);
+  /** this client is in a flashbang's full white (encodeFor): it's sent no one else */
+  private blind = false;
+  /** who smoke hides from whom this snapshot (sim clouds.ts) */
+  private readonly sight = new SmokeSight();
   private readonly masks = new Uint8Array(MAX_PLAYERS);
   /** the view shrunk by BODY_REACH (clipping tracers that end on a culled player) */
   private readonly inset: ViewRect = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
@@ -697,6 +737,7 @@ export class SnapshotEncoder {
       this.ys[id] = p.y;
     }
     capturePickups(game, this.pickups);
+    this.sight.gather(game);
   }
 
   encodeFor(t: SnapshotTarget): Uint8Array {
@@ -706,6 +747,9 @@ export class SnapshotEncoder {
     const bslot = bl ? bl.slotOf(bl.acked) : -1;
     const viewer = t.local ? t.local.id : -1;
     const view = t.view;
+    // a flashbang's full white is the server's word too: while it lasts the client gets nobody else,
+    // so a client that hides the white-out still sees nothing (the fade is the client's to draw)
+    this.blind = view !== null && t.local !== null && t.local.alive && blindIntensity(t.local) >= 1;
     w.u8(MsgType.Snapshot)
       .u16(this.seq)
       .u32(game.tick)
@@ -724,7 +768,8 @@ export class SnapshotEncoder {
     let removed = 0;
     const bp = bslot * MAX_PLAYERS;
     for (let id = 0; id < MAX_PLAYERS; id++) {
-      const visible = this.present[id] === 1 && (view === null || id === viewer || inRect(view, this.xs[id]!, this.ys[id]!));
+      const visible =
+        this.present[id] === 1 && (view === null || id === viewer || (!this.blind && inRect(view, this.xs[id]!, this.ys[id]!) && !this.sight.hides(viewer, id)));
       this.inView[id] = visible ? 1 : 0;
       const inBase = bslot >= 0 && bl!.present[bp + id] === 1;
       if (visible) {
@@ -744,13 +789,13 @@ export class SnapshotEncoder {
     w.bits(removed, 5);
     for (let id = 0; id < MAX_PLAYERS; id++) if (!this.inView[id] && bslot >= 0 && bl!.present[bp + id] === 1) w.bits(id, 5);
 
-    // grenades in view (few, short-lived: always full)
+    // grenades in view (few, short-lived: always full), but not in smoke the client can't see into
     let grenades = 0;
-    for (const g of game.grenades) if (g.alive && (view === null || inRect(view, g.x, g.y))) grenades++;
+    for (const g of game.grenades) if (this.sendsGrenade(g, view, viewer)) grenades++;
     w.bits(Math.min(grenades, 127), 7);
     let written = 0;
     for (const g of game.grenades) {
-      if (!g.alive || (view !== null && !inRect(view, g.x, g.y)) || written++ >= 127) continue;
+      if (!this.sendsGrenade(g, view, viewer) || written++ >= 127) continue;
       // the thrower, only if this client can see it: an exact arc and fuse work back to its hand
       w.unsigned(g.id, 6)
         .unsigned(pid(view === null || g.owner === viewer || this.seen(g.owner) ? g.owner : -1), 5)
@@ -758,7 +803,9 @@ export class SnapshotEncoder {
         .signed(pos(g.y), 24)
         .signed(Math.round(g.vx * VEL_INV), 20)
         .signed(Math.round(g.vy * VEL_INV), 20)
-        .unsigned(g.fuse, 8);
+        .unsigned(g.fuse, 8)
+        .unsigned(g.type, 3)
+        .unsigned(g.state, 2);
     }
 
     // items on the map in view, only when they changed: one that vanished or appeared out of view
@@ -773,6 +820,16 @@ export class SnapshotEncoder {
         const o = 1 + i * PICKUP_FIELDS;
         w.bits(items[o]!, 5).bits(items[o + 1]!, 4).signed(items[o + 2]!, 24).signed(items[o + 3]!, 24);
       }
+    }
+
+    // clouds in view (few, long-lived but tiny: always full)
+    let clouds = 0;
+    for (const c of game.clouds) if (c.alive && cloudInView(view, c.type, c.x, c.y)) clouds++;
+    w.bits(Math.min(clouds, 31), 5);
+    written = 0;
+    for (const c of game.clouds) {
+      if (!c.alive || !cloudInView(view, c.type, c.x, c.y) || written++ >= 31) continue;
+      w.unsigned(c.id, 5).unsigned(c.type, 3).signed(pos(c.x), 24).signed(pos(c.y), 24).unsigned(c.age, 10);
     }
 
     // events: in view in full, gunfire/blasts outside as SOUND; own shots are drawn from prediction
@@ -790,9 +847,13 @@ export class SnapshotEncoder {
         else if (e.type === 'ricochet') this.writeRicochetFor(w, e, k, view, viewer);
         // a hidden attacker stays unnamed (as in HIT)
         else if (e.type === 'shieldBreak') writeShieldBreak(w, e.owner, view === null || this.showsAttacker(e, viewer) ? e.attacker : -1, e.x, e.y);
-        // a hidden attacker: no id, and whole HP (1/16 HP plus the weapon's falloff gave its range to centimetres)
-        else if (k === 1 && e.type === 'hit' && view !== null && !this.showsAttacker(e, viewer)) writeHit(w, -1, e.target, Math.round(e.damage), e.zone, e.source);
-        else if (k === 1 && e.type === 'explosion' && view !== null && e.owner !== viewer && !this.seen(e.owner)) writeExplosion(w, e.x, e.y, e.radius, -1);
+        // either side hidden from this client (off its view or in smoke): whole HP, since 1/16 HP and the
+        // weapon's falloff give the range to centimetres; a hidden attacker also goes without its id
+        else if (k === 1 && e.type === 'hit' && view !== null && !(this.sees(e.attacker, viewer) && this.sees(e.target, viewer)))
+          writeHit(w, this.showsAttacker(e, viewer) ? e.attacker : -1, e.target, Math.round(e.damage), e.zone, e.source);
+        // an item taken by a player this client can't see: no name (the item's still gone)
+        else if (k === 1 && e.type === 'pickup' && view !== null && !this.sees(e.player, viewer)) writeEvent(w, { ...e, player: -1 });
+        else if (k === 1 && e.type === 'explosion' && view !== null && e.owner !== viewer && !this.seen(e.owner)) writeExplosion(w, e.x, e.y, e.radius, -1, e.grenade ?? 0);
         else if (k === 1) writeEvent(w, e);
         else if (e.type === 'shot') writeSound(w, 'shot', e.weapon, e.ox, e.oy);
         else if (e.type === 'explosion') writeSound(w, 'explosion', GRENADE_SOURCE, e.x, e.y);
@@ -819,29 +880,45 @@ export class SnapshotEncoder {
   }
 
   /**
-   * A visible player's shot that leaves the view, or ends on a culled player: only the part inside
-   * the view (stopped BODY_REACH short of its edge when it ends on a culled body, so a hitbox poking
-   * into the rect isn't marked), with a culled target's id blanked. A tracer cut short of its real
-   * end, or aimed at a culled player (lag comp hits a pose up to 300 ms old), is sent as a miss.
-   * `lb` still holds this segment's clip from the eventKind call just before.
+   * A visible player's shot that leaves the view, ends on a culled player or runs into smoke: only
+   * the part inside the view (stopped BODY_REACH short of its edge when it ends on a player off the
+   * view, so a hitbox poking into the rect isn't marked) and short of the smoke, with a culled
+   * target's id blanked. A tracer cut short of its real end, or aimed at a culled player (lag comp
+   * hits a pose up to 300 ms old), is sent as a miss with no target; one that hit a player smoke
+   * hides goes on as if it had missed (`tracer`, carryOn). `lb` still holds this segment's clip
+   * from the eventKind call just before.
    */
   private writeClippedShot(w: BitWriter, e: Extract<SimEvent, { type: 'shot' }>): void {
-    const dx = e.ex - e.ox;
-    const dy = e.ey - e.oy;
+    const dx = tracer.ex - e.ox;
+    const dy = tracer.ey - e.oy;
     const { t0, t1 } = lb;
-    const cut = t1 < 1 || (e.target >= 0 && !this.seen(e.target));
+    const cut = t1 < 1 || tracer.carried || (e.target >= 0 && !this.seen(e.target)); // cut short (the view's edge, smoke) or into the unseen: a miss
     writeShot(
       w,
       e.shooter,
       e.weapon,
       e.ox + t0 * dx,
       e.oy + t0 * dy,
-      t1 < 1 ? e.ox + t1 * dx : e.ex,
-      t1 < 1 ? e.oy + t1 * dy : e.ey,
-      cut ? 0 : e.hit,
-      this.seen(e.target) ? e.target : -1,
+      t1 < 1 ? e.ox + t1 * dx : tracer.ex,
+      t1 < 1 ? e.oy + t1 * dy : tracer.ey,
+      t1 < 1 ? 0 : tracer.carried ? tracer.hit : cut ? 0 : e.hit,
+      cut ? -1 : e.target,
       cut ? 0 : e.zone,
     );
+  }
+
+  /** A shot or ricochet into a player smoke hides from this client: on as if it had missed (SmokeSight.carryOn). */
+  private carryOn(ox: number, oy: number, ex: number, ey: number, weapon: number): void {
+    this.sight.carryOn(ox, oy, ex, ey, weapon);
+    tracer.ex = this.sight.missed.x;
+    tracer.ey = this.sight.missed.y;
+    tracer.hit = this.sight.missed.hit;
+    tracer.carried = true;
+  }
+
+  /** Is `id` a player in view that smoke hides from this client (as opposed to one off its view)? */
+  private smokeHidden(id: number, view: ViewRect): boolean {
+    return id >= 0 && id < MAX_PLAYERS && this.present[id] === 1 && this.inView[id] === 0 && inRect(view, this.xs[id]!, this.ys[id]!);
   }
 
   /**
@@ -863,15 +940,15 @@ export class SnapshotEncoder {
       return;
     }
     const t1 = lb.t1;
-    const cut = t1 < 1 || (e.target >= 0 && !this.seen(e.target));
+    const cut = t1 < 1 || tracer.carried || (e.target >= 0 && !this.seen(e.target));
     writeRicochet(
       w,
       e,
       shooter,
-      t1 < 1 ? e.x + t1 * (e.ex - e.x) : e.ex,
-      t1 < 1 ? e.y + t1 * (e.ey - e.y) : e.ey,
-      cut ? 0 : e.hit,
-      this.seen(e.target) ? e.target : -1,
+      t1 < 1 ? e.x + t1 * (tracer.ex - e.x) : tracer.ex,
+      t1 < 1 ? e.y + t1 * (tracer.ey - e.y) : tracer.ey,
+      t1 < 1 ? 0 : tracer.carried ? tracer.hit : cut ? 0 : e.hit,
+      cut ? -1 : e.target,
       cut ? 0 : e.zone,
     );
   }
@@ -880,9 +957,38 @@ export class SnapshotEncoder {
     return id >= 0 && id < MAX_PLAYERS && this.inView[id] === 1;
   }
 
+  /** Nobody (the world), the client itself, or a player it's sent. */
+  private sees(id: number, viewer: number): boolean {
+    return id < 0 || id === viewer || this.seen(id);
+  }
+
+  /**
+   * A grenade goes to a client when it's in view and not in smoke the client can't see into: a
+   * grenade thrown from inside a cloud would give its thrower away from the first tick (its exact
+   * position, velocity and fuse work back to the hand). The client's own always go.
+   */
+  private sendsGrenade(g: Game['grenades'][number], view: ViewRect | null, viewer: number): boolean {
+    if (!g.alive) return false;
+    if (view === null) return true;
+    if (!inRect(view, g.x, g.y) || (this.blind && g.owner !== viewer)) return false;
+    return (viewer >= 0 && g.owner === viewer) || !this.sight.pointHidden(viewer, g.x, g.y);
+  }
+
   /** A HIT names its attacker to the attacker, the victim, and clients that can see the attacker. */
   private showsAttacker(e: { attacker: number; target?: number; owner?: number }, viewer: number): boolean {
     return e.attacker < 0 || e.attacker === viewer || (e.target ?? e.owner) === viewer || this.seen(e.attacker);
+  }
+
+  /**
+   * Smoke (anti-wallhack): a line from (ox, oy) to `tracer`'s end vanishes where it enters smoke the
+   * viewer can't see into, as a miss with no target, whatever it hit in there (`lb` holds its clip;
+   * cut it shorter). The cut doesn't tell a hit from a miss: both stop at the same place.
+   */
+  private smokeCut(ox: number, oy: number, viewer: number, kind: number): number {
+    const t = this.sight.tracerCut(viewer, ox, oy, tracer.ex, tracer.ey);
+    if (t >= lb.t1) return kind;
+    lb.t1 = Math.max(lb.t0, t);
+    return 3;
   }
 
   /** 0 = not sent to this client, 1 = in full, 2 = as a SOUND event, 3 = clipped (writeClippedShot) */
@@ -900,6 +1006,17 @@ export class SnapshotEncoder {
         // leaving the view, is clipped like a shot (3)
         if (view === null) return 1;
         if (!inRect(view, e.x, e.y)) return 0;
+        // off the shield of a player smoke hides: the spark would mark it
+        if (e.owner !== viewer && this.smokeHidden(e.owner, view)) return 0;
+        tracer.ex = e.ex;
+        tracer.ey = e.ey;
+        tracer.carried = false;
+        if ((e.hit === 2 || e.hit === 3) && this.smokeHidden(e.target, view)) {
+          // into a player smoke hides: on past it as a miss, then cut like any other line
+          this.carryOn(e.x, e.y, e.ex, e.ey, e.weapon);
+          segmentInRect(view, e.x, e.y, tracer.ex, tracer.ey);
+          return this.smokeCut(e.x, e.y, viewer, 3);
+        }
         if ((e.hit === 2 || e.hit === 3) && e.target >= 0 && !this.seen(e.target)) {
           const v = this.inset;
           v.minX = view.minX + BODY_REACH;
@@ -907,10 +1024,10 @@ export class SnapshotEncoder {
           v.maxX = view.maxX - BODY_REACH;
           v.maxY = view.maxY - BODY_REACH;
           if (!segmentInRect(v, e.x, e.y, e.ex, e.ey)) lb.t0 = lb.t1 = 0;
-          return 3;
+          return this.smokeCut(e.x, e.y, viewer, 3);
         }
         segmentInRect(view, e.x, e.y, e.ex, e.ey);
-        return lb.t1 < 1 ? 3 : 1;
+        return this.smokeCut(e.x, e.y, viewer, lb.t1 < 1 ? 3 : 1);
       }
       case 'shot': {
         if (viewer >= 0 && e.shooter === viewer) return 0;
@@ -918,6 +1035,15 @@ export class SnapshotEncoder {
         // a culled shooter's tracer would locate it: its line (two of them cross at the muzzle) and,
         // with the weapon's range, its end. Only the coarse SOUND
         if (e.shooter >= 0 && !this.seen(e.shooter)) return 2;
+        tracer.ex = e.ex;
+        tracer.ey = e.ey;
+        tracer.carried = false;
+        if ((e.hit === 2 || e.hit === 3) && this.smokeHidden(e.target, view)) {
+          // into a player (or its shield) smoke hides: on past it as a miss, then cut like any other tracer
+          this.carryOn(e.ox, e.oy, e.ex, e.ey, e.weapon);
+          if (!segmentInRect(view, e.ox, e.oy, tracer.ex, tracer.ey)) return 2;
+          return this.smokeCut(e.ox, e.oy, viewer, 3);
+        }
         // a tracer ending on a culled player's body or shield (hit 3) stops short of it
         if ((e.hit === 2 || e.hit === 3) && e.target >= 0 && !this.seen(e.target)) {
           const v = this.inset;
@@ -928,17 +1054,17 @@ export class SnapshotEncoder {
           // nothing of it inside the shrunk view (all in the off-screen margin): a zero-length miss at
           // the visible shooter's muzzle, so whether anything arrives doesn't tell a hit from a miss
           if (!segmentInRect(v, e.ox, e.oy, e.ex, e.ey)) lb.t0 = lb.t1 = 0;
-          return 3;
+          return this.smokeCut(e.ox, e.oy, viewer, 3);
         }
         if (!segmentInRect(view, e.ox, e.oy, e.ex, e.ey)) return 2;
-        return lb.t0 > 0 || lb.t1 < 1 ? 3 : 1;
+        return this.smokeCut(e.ox, e.oy, viewer, lb.t0 > 0 || lb.t1 < 1 ? 3 : 1);
       }
       case 'explosion':
         return view === null || inRect(view, e.x, e.y) ? 1 : 2;
       case 'hit':
-        // hit markers for the attacker, damage numbers over targets in view
+        // hit markers for the attacker, damage numbers over targets in view (and not hidden in smoke)
         if (view === null || e.attacker === viewer || e.target === viewer) return 1;
-        return e.target >= 0 && e.target < MAX_PLAYERS && this.present[e.target] && inRect(view, this.xs[e.target]!, this.ys[e.target]!) ? 1 : 0;
+        return this.seen(e.target) ? 1 : 0;
       case 'death':
       case 'spawn':
       case 'mapEvent':
@@ -1052,6 +1178,8 @@ export class SnapshotDecoder {
         vx: r.signed(20) / VEL_INV,
         vy: r.signed(20) / VEL_INV,
         fuse: r.bits(8),
+        type: r.bits(3),
+        state: r.bits(2),
       });
     }
     let pickups: SnapshotPickup[];
@@ -1070,6 +1198,11 @@ export class SnapshotDecoder {
       pickups = toPickups(list);
     } else if (bslot >= 0) pickups = this.pickups[bslot]!;
     else throw new DecodeError('a full snapshot must carry its pickups');
+    const clouds: SnapshotCloud[] = [];
+    const cloudCount = r.bits(5);
+    for (let i = 0; i < cloudCount; i++) {
+      clouds.push({ id: r.bits(5), type: r.bits(3), x: r.signed(24) / POS_INV, y: r.signed(24) / POS_INV, age: r.bits(10) });
+    }
 
     const events: SnapshotEvent[] = [];
     const eventCount = r.u8();
@@ -1085,7 +1218,7 @@ export class SnapshotDecoder {
 
     const players: SnapshotPlayer[] = [];
     for (let id = 0; id < MAX_PLAYERS; id++) if (this.nowPresent[id]) players.push(toSnapshotPlayer(id, now, id * FIELDS));
-    return { type: MsgType.Snapshot, seq, serverTick, ackInputTick, inputBufferHealth, baselineSeq, local, players, grenades, pickups, events };
+    return { type: MsgType.Snapshot, seq, serverTick, ackInputTick, inputBufferHealth, baselineSeq, local, players, grenades, pickups, clouds, events };
   }
 }
 

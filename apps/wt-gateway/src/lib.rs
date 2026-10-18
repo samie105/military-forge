@@ -9,7 +9,8 @@
 //! (`/wt/1` → gs@1's socket, `/wt/2` → gs@2's, …; `WT_ROUTES`).
 //!
 //! Unix socket frames, both ways: `u32 len (LE, of the rest) · u8 kind · u32 session (LE) · payload`
-//!   1 OPEN (→ server, payload: remote address) · 2 CLOSE (both, payload: u16 code LE + reason)
+//!   1 OPEN (→ server, payload: remote address, a newline, the session's request target: path and
+//!     query, e.g. `/wt/1?room=ABCDEF` for a room by code) · 2 CLOSE (both, payload: u16 code LE + reason)
 //!   3 RELIABLE · 4 DATAGRAM · 5 INFO (→ server, session 0, JSON {url, certHashes})
 //!   6 PING (server →, session 0) · 7 PONG (→ server, the PING's payload): the server drops a
 //!     gateway that stops answering, and stops advertising it
@@ -70,6 +71,8 @@ pub const MAX_BACKLOG: usize = 256 * 1024;
 const BRIDGE_QUEUE: usize = 8192;
 /// QUIC connections waiting for the handshake.
 const MAX_INCOMING: usize = 1024;
+/// The longest request target (path + query) passed on: a room code needs a few bytes.
+const MAX_TARGET: usize = 512;
 const RECONNECT_DELAY: Duration = Duration::from_millis(500);
 /// A self-signed certificate is replaced this long before it expires (browsers pin ≤ 14 days).
 const RENEW_BEFORE: Duration = Duration::from_secs(24 * 3600);
@@ -580,12 +583,13 @@ fn enqueue(tx: &mpsc::Sender<Vec<u8>>, backlog: &AtomicUsize, max: usize, msg: V
 }
 
 /// One browser session: forwards both ways until either side closes or a limit is hit.
-async fn run_session(session: Session, remote: SocketAddr, bridge: Bridge, max_backlog: usize, _slot: Admitted) {
+async fn run_session(session: Session, remote: SocketAddr, target: String, bridge: Bridge, max_backlog: usize, _slot: Admitted) {
     let id = bridge.next_id.fetch_add(1, Ordering::SeqCst);
     let (tx, mut from_server) = mpsc::channel(SESSION_QUEUE);
     let ctl = Arc::new(SessionCtl::default());
     bridge.sessions.lock().unwrap().insert(id, SessionHandle { tx, ctl: ctl.clone() });
-    bridge.send(OPEN, id, remote.to_string().as_bytes()).await;
+    // the game server routes by the target (a room code in the query) as it does a WebSocket URL
+    bridge.send(OPEN, id, format!("{remote}\n{target}").as_bytes()).await;
 
     // datagrams from the browser (may arrive before the stream opens); dropped if the room is behind
     let mut datagrams = {
@@ -795,9 +799,18 @@ impl Gateway {
                     let _ = request.reject(web_transport_quinn::http::StatusCode::SERVICE_UNAVAILABLE).await;
                     return;
                 }
+                let url = &request.connect().url;
+                let target = match url.query() {
+                    Some(q) => format!("{}?{q}", url.path()),
+                    None => url.path().to_string(),
+                };
+                if target.len() > MAX_TARGET || target.contains('\n') {
+                    let _ = request.reject(web_transport_quinn::http::StatusCode::BAD_REQUEST).await;
+                    return;
+                }
                 let remote = request.conn().remote_address();
                 match request.ok().await {
-                    Ok(session) => run_session(session, remote, bridge, gw.cfg.max_backlog, slot).await,
+                    Ok(session) => run_session(session, remote, target, bridge, gw.cfg.max_backlog, slot).await,
                     Err(e) => eprintln!("[wt-gateway] handshake with {remote} failed: {e}"),
                 }
             });

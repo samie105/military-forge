@@ -9,6 +9,8 @@ export const MAX_PLAYERS = 16;
 export const MAX_GRENADES = 64;
 /** items lying on the map at once: spawner items and drops (pickups.ts) */
 export const MAX_PICKUPS = 32;
+/** smoke and gas clouds alive at once (the wire count is u5); a new one replaces the oldest */
+export const MAX_CLOUDS = 24;
 
 /** Broadphase cell size in metres (docs/02 §5). */
 export const GRID_CELL = 4;

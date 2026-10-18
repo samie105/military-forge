@@ -7,7 +7,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BREACHER, BUZZ, HAMMER, K47, MACHETE, RIOT_SHIELD, WIDOW } from '@military-forge/content';
+import { BREACHER, BUZZ, EMP, FLASHBANG, FRAG, GAS, GRENADE_TYPES, HAMMER, K47, MACHETE, MINE, RIOT_SHIELD, SMOKE, WIDOW } from '@military-forge/content';
 import { angleToU16 } from '@military-forge/shared';
 import {
   Btn,
@@ -37,6 +37,8 @@ const D = Btn.Down;
 const F = Btn.Fire;
 const M = Btn.Melee;
 const Q = Btn.Swap;
+const G = Btn.Grenade;
+const T = Btn.CycleGrenade;
 
 function script(steps: Step[]): Input[] {
   const out: Input[] = [];
@@ -46,7 +48,7 @@ function script(steps: Step[]): Input[] {
   return out;
 }
 
-function scenario(name: string, start: { x: number; y: number }, steps: Step[], loadout?: [number, number]): ReplayFile {
+function scenario(name: string, start: { x: number; y: number }, steps: Step[], loadout?: [number, number], grenades?: number[]): ReplayFile {
   const inputs = script(steps);
   return {
     version: 1,
@@ -57,8 +59,16 @@ function scenario(name: string, start: { x: number; y: number }, steps: Step[], 
     ticks: inputs.length,
     starts: [start],
     ...(loadout ? { loadouts: [loadout] } : {}),
+    ...(grenades ? { grenadeLoadouts: [grenades] } : {}),
     players: [encodeRuns(inputs)],
   };
+}
+
+/** A grenade belt: counts by grenade type. */
+function belt(...pairs: [number, number][]): number[] {
+  const out = new Array<number>(GRENADE_TYPES).fill(0);
+  for (const [type, n] of pairs) out[type] = n;
+  return out;
 }
 
 const scenarios: ReplayFile[] = [
@@ -174,10 +184,99 @@ const scenarios: ReplayFile[] = [
       [40, J],
       [1, J | F, -6], // air shot (minimum air spread)
       [90, 0],
-      [60, Btn.Left], // weight: sniper speed caps
+      [60, R], // weight: sniper speed caps (rightwards: the shots' kicks left us by the thin wall)
       [60, 0],
     ],
     [MACHETE.index, WIDOW.index],
+  ),
+  // Grenade variety, from behind the range's cover, with one of everything (cycling with T, and the
+  // next type coming up when one runs out): a smoke that bounces back off the cover, gas against the
+  // thin wall where the Strafer paces (pulses, a kill), a flashbang we look at, a mine stuck to the
+  // thin wall for the Strafer, a frag into the gas, our own smoke, a walk into our own gas (half
+  // damage) and past our mine, a flashbang at our feet while we look away, then an EMP at our feet:
+  // our own jetpack dies for 3 s. The clouds age out.
+  scenario(
+    'grenades-variety',
+    { x: 150, y: 0 },
+    [
+      [10, 0],
+      [1, T], // frag → smoke
+      [5, 0],
+      [1, G, 14], // smoke: bounces back off the cover
+      [60, 0, 14],
+      [1, T], // smoke → gas
+      [5, 0],
+      [1, G, 24], // gas by the thin wall, on the Strafer
+      [240, 0, 24],
+      [1, G, 31], // the last gas: the flashbang comes up
+      [60, 0, 31],
+      [1, G, 25], // a flashbang at the Strafer: it's blinded, and so are we (we look at it)
+      [150, 0, 25],
+      [1, T], // flashbang → mine
+      [5, 0],
+      [1, G, 5], // over the cover, straight: it sticks to the thin wall where the Strafer paces
+      [60, 0, 5],
+      [1, T], // (the EMP came up) → frag, round the end of the belt
+      [5, 0],
+      [1, G, 20], // a frag into the gas
+      [120, 0],
+      [1, T], // frag → smoke
+      [5, 0],
+      [1, G, -30], // our last smoke, at our own feet: the flashbang comes up
+      [100, 0],
+      [40, R | J], // over the cover, out of our smoke
+      [60, R], // into our own gas, by the thin wall and our mine (ours: it doesn't go off for us)
+      [1, G, -80], // the last flashbang at our feet…
+      [120, 0, 90], // …while we look up and away (the EMP comes up)
+      [20, J], // a hop…
+      [1, J | G, -90], // …an EMP at our feet…
+      [80, 0], // …we land beside it as it goes off: our own jetpack is dead
+      [200, J], // holding jet does nothing for 3 s; the clouds age out
+    ],
+    undefined,
+    belt([FRAG.index, 2], [SMOKE.index, 2], [GAS.index, 2], [FLASHBANG.index, 2], [MINE.index, 1], [EMP.index, 1]),
+  ),
+  // Recoil push ("rebounds after shots", docs/02 §12), on the open floor past the overhang: a Breacher
+  // shotgun jump at the top of a hop, the next shell as soon as it's pumped (falling by then: it
+  // catches the fall, a hover), a level air shot (a shotgun dash), a standing shot (a short slide),
+  // a flat-out flight with shots the other way (the kick stops short of launch speed), then the
+  // Widow standing (kicked back), crouched (braced) and at the top of a hop.
+  scenario(
+    'recoil',
+    { x: 119.5, y: 0 },
+    [
+      [10, 0],
+      [12, J], // a hop
+      [15, 0, -90],
+      [1, F, -90], // Breacher straight down at its top: a shotgun jump
+      [44, 0, -90],
+      [1, F, -90], // the next shell as soon as it's pumped: it catches the fall
+      [90, 0, -90],
+      [12, J], // a hop
+      [15, 0, 180],
+      [1, F, 180], // fired level to the left at its top: knocked right
+      [90, 0, 180],
+      [1, F, 180], // standing: a short slide right
+      [60, 0, 180],
+      [30, J | Btn.Left, 180], // flying left flat out…
+      [1, J | Btn.Left | F, 0], // …and firing right: kicked left, but never to launch speed
+      [45, J | Btn.Left, 0],
+      [1, J | Btn.Left | F, 0],
+      [90, 0, 0],
+      [1, Q], // the Widow
+      [25, 0],
+      [1, F, 0], // standing: kicked back ~0.7 m
+      [60, 0],
+      [10, D],
+      [1, D | F, 0], // crouched: braced
+      [60, D],
+      [10, 0],
+      [12, J], // a hop
+      [6, 0],
+      [1, F, 0], // near its top: knocked back
+      [90, 0],
+    ],
+    [BREACHER.index, WIDOW.index],
   ),
   scenario('muzzle-guard', { x: 158, y: 0 }, [
     [60, R], // walk into the thin wall
@@ -363,7 +462,8 @@ scenarios.push(
 
 /**
  * Bullets: from the gallery spawn (x 172) at the dummy behind the fog (x 194). The Hammer's 26 m
- * run out inside the fog; the Widow gets through, except while the fog event runs (21 s).
+ * run out inside the fog; the Widow gets through, except while the fog event runs (21 s). Between
+ * Widow shots we walk back to the spot its recoil slides us off.
  */
 scenarios.push(
   recorded('mech-bullets', { ...MECH, starts: [{ x: 172, y: 0 }], loadouts: [[HAMMER.index, WIDOW.index]] }, 60 * 34, (g, me, t) => {
@@ -371,8 +471,10 @@ scenarios.push(
     const aim = Math.atan2(target.y + 0.8 - me.shoulderY(g.tuning), target.x - me.shoulderX(g.tuning)) * (180 / Math.PI);
     if (t < 600) return act(t % 40 === 0 ? F : 0, aim); // Hammer: never reaches
     if (t === 600) return act(Q, aim); // swap to the Widow
-    if (t < 2400 && t > 640) return act(t % 75 === 0 ? F : 0, aim); // through the fog, then the fog event
-    return act(0, aim);
+    // the Widow's kick slides us back ~0.6 m a shot (docs/02 §12): walk back to the spot between shots
+    const back = me.x < 171.85 ? R : 0;
+    if (t < 2400 && t > 640) return act(t % 75 === 0 ? F : back, aim); // through the fog, then the fog event
+    return act(back, aim);
   }),
 );
 

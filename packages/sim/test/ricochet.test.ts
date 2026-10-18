@@ -1,10 +1,11 @@
-import { BREACHER, BUZZ, FRAG, HAMMER, HitZone, K47, RIOT_SHIELD, WIDOW, defaultTuning as T, type MapZone } from '@military-forge/content';
+import { BREACHER, BUZZ, FRAG, HAMMER, HitZone, K47, MINE, RIOT_SHIELD, WIDOW, defaultTuning as T, type MapZone } from '@military-forge/content';
 import { angleToU16 } from '@military-forge/shared';
 import { describe, expect, it } from 'vitest';
 import {
   Btn,
   DamageSource,
   Game,
+  MineState,
   SHIELD_RAISE_TICKS,
   createInput,
   explode,
@@ -292,6 +293,9 @@ describe('riot shield: damage, break, ricochet', () => {
     step(game, plan, SHIELD_RAISE_TICKS + 2);
     let death: Ev<'death'> | undefined;
     for (let t = 0; t < 1500 && !death; t++) {
+      // the Breacher's kick slides A back a little each pump (recoil push): keep it on its spot, so
+      // the pellets keep meeting the shield and only B's shove is in play
+      if (t % 50 === 0) placeOnGround(game, a, 17.6);
       const s = shoulder(a);
       plan.get(a)!.aim = Math.atan2(b.y + 0.8 - s.y, b.x - RIOT_SHIELD.forward - s.x);
       // shove it while it stands; once it tips off the ledge, hold fire (a body hit would credit A anyway).
@@ -488,9 +492,10 @@ describe('riot shield in the map\'s air, and with the dash (rebased onto map mec
     expect(r0.ex).toBeCloseTo(0, 6);
     // fog: the range left after the way in and the clear stretch back to x = 4 runs out inside it
     const fogged = duel([WIDOW.index, HAMMER.index], { zones: [fogBehindA] });
-    const r = events(fireAt(fogged.game, fogged.plan, fogged.a, SHIELD_X, shoulder(fogged.a).y), 'ricochet')[0]!;
+    const from = shoulder(fogged.a); // before the shot: the Widow's kick slides A back afterwards (recoil push)
+    const r = events(fireAt(fogged.game, fogged.plan, fogged.a, SHIELD_X, from.y), 'ricochet')[0]!;
     expect(r.hit).toBe(0);
-    const used = r.x - shoulder(fogged.a).x + (r.x - 4); // level: in, then out to the fog's edge
+    const used = r.x - from.x + (r.x - 4); // level: in, then out to the fog's edge
     expect(r.ex).toBeCloseTo(4 - (WIDOW.range - used) * 0.05, 2);
   });
 
@@ -526,5 +531,23 @@ describe('riot shield in the map\'s air, and with the dash (rebased onto map mec
     const { b, ev } = run(true);
     expect(events(ev, 'ricochet').length).toBeGreaterThan(0);
     expect(b.dashTicks).toBe(0);
+  });
+});
+
+describe('riot shield and proximity mines (arsenal B)', () => {
+  it('a ricochet that meets a mine stops at it and hurts it, as a bullet would', () => {
+    // A shoots level at B's raised shield: the ricochet comes straight back, past A (never its own
+    // shooter), into a mine stuck on the wall behind it
+    const { game, a, plan } = duel([WIDOW.index, HAMMER.index]);
+    const y = shoulder(a).y;
+    const mine = game.allocGrenade()!;
+    Object.assign(mine, { alive: true, owner: a.id, x: 1.5, y, vx: 0, vy: 0, type: MINE.index, state: MineState.Armed, fuse: 10800 });
+    const ev = fireAt(game, plan, a, SHIELD_X, y);
+    const r = events(ev, 'ricochet')[0]!;
+    expect(r).toMatchObject({ hit: 1, target: -1 });
+    expect(r.ex).toBeCloseTo(1.5 + MINE.mine.hitRadius, 2); // stopped at the mine, not the wall at x 0
+    // the Widow's 60% ricochet empties its 10 HP: set off, credited to the shooter
+    expect(mine.alive).toBe(false);
+    expect(events(ev, 'explosion')).toEqual([expect.objectContaining({ grenade: MINE.index, owner: a.id })]);
   });
 });

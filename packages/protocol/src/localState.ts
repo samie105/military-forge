@@ -10,7 +10,7 @@
  *
  * Fields are grouped; a snapshot with a baseline sends only the groups that changed since it.
  */
-import { NO_WEAPON } from '@military-forge/content';
+import { GRENADE_TYPES, NO_WEAPON } from '@military-forge/content';
 import { POS_INV, SCALAR_INV, VEL_INV } from '@military-forge/shared';
 import type { PlayerState, WeaponSlot } from '@military-forge/sim';
 import type { BitReader, BitWriter } from './bitstream';
@@ -68,13 +68,27 @@ export const LS = {
   shieldHp: 45,
   shieldStowed: 46,
   shieldTicks: 47,
+  // grenade belt (arsenal B, v10): the selected type and the counts of types 1…5 (frags stay in
+  // `frags` above). Cycling and throwing are predicted.
+  grenadeType: 48,
+  grenades: 49,
+  // status effects (arsenal B, v10): flashbang blindness, the gas cough, a dead jetpack (EMP).
+  // They count down every tick, so prediction stays exact after the server's first word on them.
+  blindTicks: 54,
+  blindFade: 55,
+  gasTicks: 56,
+  jetDisabledTicks: 57,
 } as const;
 
 /** Offsets inside a weapon slot. */
 export const LS_SLOT = { def: 0, mag: 1, reserve: 2, cooldown: 3, reloadTicks: 4, bloom: 5, ticksSinceShot: 6 } as const;
 const SLOT_FIELDS = 7;
 
-export const LOCAL_STATE_FIELDS = LS.shieldTicks + 1;
+export const LOCAL_STATE_FIELDS = LS.jetDisabledTicks + 1;
+
+/** grenade types whose counts travel in the grenade group (type 0, the frag, is `frags`) */
+const OTHER_GRENADES = GRENADE_TYPES - 1;
+if (LS.grenades + OTHER_GRENADES !== LS.blindTicks) throw new Error('local state: the grenade group must hold every type');
 
 /** [start, end) field ranges sent as a unit in delta snapshots. */
 const GROUPS: readonly (readonly [number, number])[] = [
@@ -87,7 +101,9 @@ const GROUPS: readonly (readonly [number, number])[] = [
   [LS.slot1, LS.meleeTicks],
   [LS.meleeTicks, LS.dashTicks],
   [LS.dashTicks, LS.shieldHp],
-  [LS.shieldHp, LOCAL_STATE_FIELDS],
+  [LS.shieldHp, LS.grenadeType],
+  [LS.grenadeType, LS.blindTicks],
+  [LS.blindTicks, LOCAL_STATE_FIELDS],
 ];
 
 /** Ground normals are quantised to 1/65536 by the sim (quantizeMovement). */
@@ -108,6 +124,8 @@ const BITS: readonly number[] = [
   6, // meleeTicks (a swing lasts ≤ 0.6 s = 36 ticks)
   6, 3, 8, 1, // dashTicks (≤ 63), dashDir (8-way), dashCooldown (≤ 255 ticks), airDashUsed
   19, 1, 5, // shieldHp (1/1024, ≤ 300), shieldStowed, shieldTicks (≤ raise time, 15)
+  3, ...new Array<number>(OTHER_GRENADES).fill(3), // grenadeType, counts (≤ 7)
+  8, 7, 6, 8, // blindTicks (≤ 4.25 s), blindFade (≤ 2.1 s), gasTicks (≤ 1 s), jetDisabledTicks (≤ 4.25 s)
 ];
 
 if (BITS.length !== LOCAL_STATE_FIELDS) throw new Error('local state layout out of sync');
@@ -184,6 +202,12 @@ export function captureLocalState(p: PlayerState, out: LocalState): LocalState {
   out[LS.shieldHp] = fx(p.shieldHp, SCALAR_INV);
   out[LS.shieldStowed] = p.shieldStowed ? 1 : 0;
   out[LS.shieldTicks] = p.shieldTicks;
+  out[LS.grenadeType] = p.grenadeType;
+  for (let i = 0; i < OTHER_GRENADES; i++) out[LS.grenades + i] = p.grenadeCounts[i + 1]!;
+  out[LS.blindTicks] = p.blindTicks;
+  out[LS.blindFade] = p.blindFade;
+  out[LS.gasTicks] = p.gasTicks;
+  out[LS.jetDisabledTicks] = p.jetDisabledTicks;
   for (let i = 0; i < LOCAL_STATE_FIELDS; i++) out[i] = fit(out[i]!, BITS[i]!);
   return out;
 }
@@ -237,6 +261,12 @@ export function applyLocalState(s: LocalState, p: PlayerState): void {
   p.shieldHp = s[LS.shieldHp]! / SCALAR_INV;
   p.shieldStowed = s[LS.shieldStowed] === 1;
   p.shieldTicks = s[LS.shieldTicks]!;
+  p.grenadeType = s[LS.grenadeType]!;
+  for (let i = 0; i < OTHER_GRENADES; i++) p.grenadeCounts[i + 1] = s[LS.grenades + i]!;
+  p.blindTicks = s[LS.blindTicks]!;
+  p.blindFade = s[LS.blindFade]!;
+  p.gasTicks = s[LS.gasTicks]!;
+  p.jetDisabledTicks = s[LS.jetDisabledTicks]!;
 }
 
 export function localStatesEqual(a: LocalState, b: LocalState): boolean {
@@ -246,6 +276,7 @@ export function localStatesEqual(a: LocalState, b: LocalState): boolean {
 
 const NAMES: string[] = [];
 for (const [k, v] of Object.entries(LS)) if (!k.startsWith('slot')) NAMES[v] = k;
+for (let i = 0; i < OTHER_GRENADES; i++) NAMES[LS.grenades + i] = `grenades[${i + 1}]`;
 for (const [k, v] of Object.entries(LS_SLOT)) {
   NAMES[LS.slot0 + v] = `w0.${k}`;
   NAMES[LS.slot1 + v] = `w1.${k}`;

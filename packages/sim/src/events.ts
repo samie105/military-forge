@@ -1,7 +1,11 @@
 /** Things that happened during a tick, for rendering, HUD, audio and the network. */
 
-/** Damage sources beyond the weapon indices (0..59 are weapons from @military-forge/content). */
+/** Damage sources beyond the weapon indices (0..57 are weapons from @military-forge/content). */
 export const DamageSource = {
+  /** a proximity mine (mines.ts) */
+  Mine: 58,
+  /** a toxic gas cloud (clouds.ts) */
+  Gas: 59,
   /** a melee swing, whatever it was made with (its own kill-feed icon, docs/02 §12) */
   Melee: 60,
   World: 61,
@@ -27,7 +31,11 @@ export type SimEvent =
   | { type: 'death'; victim: number; killer: number; source: number }
   | { type: 'spawn'; player: number }
   | { type: 'throw'; owner: number; grenade: number }
-  | { type: 'explosion'; x: number; y: number; radius: number; owner: number }
+  /**
+   * A grenade went off: `grenade` is its type (packages/content grenades, absent = frag), so
+   * clients draw a blast, a flash or an EMP ring; smoke and gas show up as clouds instead.
+   */
+  | { type: 'explosion'; x: number; y: number; radius: number; owner: number; grenade?: number }
   /** a dash started (docs/02 §21): feet position at the start, 8-way direction (0 = right, CCW) */
   | { type: 'dash'; player: number; x: number; y: number; dir: number }
   /**

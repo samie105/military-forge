@@ -4,25 +4,33 @@
  */
 import {
   CROUCHED_HITBOXES,
+  EMP,
+  FLASHBANG,
   FRAG,
+  GAS,
+  MINE,
   HitZone,
   NO_WEAPON,
   RIOT_SHIELD,
+  SMOKE,
   STANDING_HITBOXES,
   ZONE_KINDS,
   defaultTuning,
   pickups as pickupDefs,
   resolveEvent,
   resolveZone,
+  grenades,
   weapons,
   zonePoints,
   type MapDef,
   type MapZone,
   type Tuning,
 } from '@military-forge/content';
-import { DamageSource, MELEE_ARC_DEG, MELEE_REACH, MELEE_WINDUP_TICKS, TICK_RATE, shieldBottom, type SimEvent } from '@military-forge/sim';
+import { CollisionWorld, DamageSource, MELEE_ARC_DEG, MELEE_REACH, MELEE_WINDUP_TICKS, MineState, TICK_RATE, cloudDef, shieldBottom, type SimEvent } from '@military-forge/sim';
 import type { Camera } from './camera';
-import type { Frame, PickupView, PlayerView, RewindView } from './view';
+import { reduceFlashes } from './fx';
+import { REACH_RAYS, cloudReach, inSmoke } from './grenadeViews';
+import type { CloudView, Frame, GrenadeView, PickupView, PlayerView, RewindView } from './view';
 
 interface Tracer {
   ox: number;
@@ -51,6 +59,8 @@ interface Burst {
   y: number;
   r: number;
   age: number;
+  /** grenade type that went off */
+  grenade: number;
 }
 
 /** A dash's trail (docs/02 §21): from where it started, along its direction. */
@@ -166,6 +176,71 @@ function shieldColor(hp: number | undefined): string {
   return k > 0.5 ? COLORS.shield : k > 0.25 ? '#d29922' : '#f85149';
 }
 
+/** Grenades by type: frag green, smoke pale grey, gas sickly yellow-green (cover vs deadly at a glance). */
+const GRENADE_COLORS: Record<number, string> = {
+  [FRAG.index]: '#3fb950',
+  [SMOKE.index]: '#c9d1d9',
+  [GAS.index]: '#c3d22b',
+  [FLASHBANG.index]: '#a5d6ff',
+  [MINE.index]: '#d29922',
+  [EMP.index]: '#58a6ff',
+};
+
+/** A mine's light by state: green flying, yellow arming, flashing red armed, a fast red/white beep. */
+function mineLight(state: number, nowMs: number): string {
+  if (state === MineState.Flying) return '#3fb950';
+  if (state === MineState.Arming) return '#d29922';
+  if (state === MineState.Armed) return Math.floor(nowMs / 250) % 2 === 0 ? '#f85149' : '#5c1d1b';
+  return Math.floor(nowMs / 60) % 2 === 0 ? '#f85149' : '#ffffff';
+}
+
+/** Cloud tints (r, g, b): smoke a neutral grey, gas a sickly green-yellow. */
+const CLOUD_RGB: Record<number, [number, number, number]> = {
+  [SMOKE.index]: [176, 182, 190],
+  [GAS.index]: [160, 190, 40],
+};
+
+const KILL_ICONS: Record<number, string> = {
+  [DamageSource.Grenade]: 'frag',
+  [DamageSource.Gas]: 'gas',
+  [DamageSource.Mine]: 'mine',
+  [DamageSource.World]: 'fell',
+  [DamageSource.Melee]: 'melee',
+};
+
+/** Grenade types whose explosion event isn't a blast: render3d leaves their bursts to this overlay. */
+const NOT_A_BLAST = new Set<number>([FLASHBANG.index, EMP.index]);
+
+/** A flashbang's pop in the 2D view (m): the burst stays this small, its ring marks the full-white radius. */
+const FLASH_POP_M = 1;
+
+/** Burst tints by grenade type (r, g, b). */
+const BURST_RGB: Record<number, [number, number, number]> = {
+  [FRAG.index]: [255, 166, 87],
+  [FLASHBANG.index]: [255, 255, 255],
+  [MINE.index]: [255, 120, 70],
+  [EMP.index]: [88, 166, 255],
+};
+
+/** "G Smoke ×2 · frag 3 · gas 1": the selected grenade first (T cycles), then the rest of the belt. */
+function grenadeLine(p: PlayerView): string {
+  const counts = p.grenadeCounts;
+  if (!counts) return `frags ${p.frags}`;
+  const selected = grenades[p.grenadeType ?? 0];
+  const others = grenades.filter((g) => g !== selected && (counts[g.index] ?? 0) > 0).map((g) => `${g.id} ${counts[g.index]}`);
+  return `G ${selected?.name ?? '?'} ×${counts[p.grenadeType ?? 0] ?? 0}${others.length ? ` · ${others.join(' · ')}` : ''}`;
+}
+
+/** Status effects as short tags; `long` adds the seconds left (HUD). */
+function statusTags(p: PlayerView, long = false): string {
+  const tags: string[] = [];
+  const secs = (ticks: number) => (long ? ` ${(ticks / 60).toFixed(1)} s` : '');
+  if (p.blindTicks) tags.push(`BLIND${secs(p.blindTicks)}`);
+  if (p.jetDisabledTicks) tags.push(`${long ? 'JETPACK OFFLINE' : 'EMP'}${secs(p.jetDisabledTicks)}`);
+  if (p.gasTicks) tags.push(long ? 'GAS: get out!' : 'GAS');
+  return tags.join(' · ');
+}
+
 export class Renderer {
   private readonly ctx: CanvasRenderingContext2D;
   private readonly tracers: Tracer[] = [];
@@ -178,6 +253,10 @@ export class Renderer {
   private names = new Map<number, string>();
   private fps = 60;
   private zones: ZoneDraw[];
+  /** the map's walls, for clouds a wall cuts through (built on the first such cloud) */
+  private world: CollisionWorld | null = null;
+  /** per cloud slot: where it popped and how far it reaches past the walls (null: the whole disc) */
+  private readonly reach = new Map<number, { x: number; y: number; type: number; rays: Float32Array | null }>();
   /** Also handed every event batch when set: main.ts points it at the 3D view's effects. */
   forwardEvents: ((events: readonly SimEvent[], localId: number) => void) | null = null;
 
@@ -201,6 +280,21 @@ export class Renderer {
   setMap(map: MapDef): void {
     this.map = map;
     this.zones = zoneDraws(map);
+    this.world = null;
+    this.reach.clear();
+  }
+
+  /** How far a cloud reaches past the walls (cloudReach), worked out once per cloud: clouds don't move. */
+  private cloudRays(c: CloudView): Float32Array | null {
+    let r = this.reach.get(c.id);
+    if (!r || r.x !== c.x || r.y !== c.y || r.type !== c.type) {
+      const rays = new Float32Array(REACH_RAYS);
+      this.world ??= new CollisionWorld(this.map);
+      const walled = cloudReach(this.world, c.x, c.y, cloudDef(c.type)?.radius ?? c.radius, rays);
+      r = { x: c.x, y: c.y, type: c.type, rays: walled ? rays : null };
+      this.reach.set(c.id, r);
+    }
+    return r.rays;
   }
 
   resize(): void {
@@ -222,17 +316,18 @@ export class Renderer {
           this.tracers.push({ ox: e.ox, oy: e.oy, ex: e.ex, ey: e.ey, hit: e.hit, age: 0, local: e.shooter === localId });
           break;
         case 'explosion':
-          this.bursts.push({ x: e.x, y: e.y, r: e.radius, age: 0 });
+          this.bursts.push({ x: e.x, y: e.y, r: e.radius, age: 0, grenade: e.grenade ?? FRAG.index });
           break;
         case 'ricochet':
           this.tracers.push({ ox: e.x, oy: e.y, ex: e.ex, ey: e.ey, hit: e.hit, age: 0, local: e.shooter === localId, ricochet: true });
           this.sparks.push({ x: e.x, y: e.y, nx: e.nx, ny: e.ny, age: 0 });
           break;
         case 'shieldBreak':
-          this.bursts.push({ x: e.x, y: e.y, r: 0.6, age: 0 });
+          this.bursts.push({ x: e.x, y: e.y, r: 0.6, age: 0, grenade: FRAG.index }); // drawn like a small blast
           this.floats.push({ target: e.owner, x: Number.NaN, y: Number.NaN, text: 'shield broken', color: COLORS.shield, age: 0 });
           break;
         case 'pickup':
+          if (e.player < 0) break; // taken by someone this client can't see (snapshot AOI)
           this.floats.push({ target: e.player, x: Number.NaN, y: Number.NaN, text: `+ ${pickupDefs[e.item]?.name ?? 'item'}`, color: COLORS.shield, age: 0 });
           break;
         case 'hit':
@@ -251,8 +346,7 @@ export class Renderer {
         case 'death': {
           const killer = e.killer >= 0 ? (this.names.get(e.killer) ?? `#${e.killer}`) : 'world';
           const victim = this.names.get(e.victim) ?? `#${e.victim}`;
-          const how =
-            e.source === DamageSource.Grenade ? 'frag' : e.source === DamageSource.World ? 'fell' : e.source === DamageSource.Melee ? 'melee' : (weapons[e.source]?.name ?? '?');
+          const how = KILL_ICONS[e.source] ?? weapons[e.source]?.name ?? '?';
           this.feed.push({ text: e.killer === e.victim ? `${victim} ✝ (${how})` : `${killer} ▸ ${victim} (${how})`, age: 0 });
           if (this.feed.length > 6) this.feed.shift();
           if (e.killer === localId && e.victim !== localId) this.hitMarker = { age: 0, head: false, kill: true };
@@ -297,9 +391,11 @@ export class Renderer {
     // floating damage numbers follow their target
     const byId = new Map(frame.players.map((p) => [p.id, p]));
     if (frame.pickups) for (const k of frame.pickups) this.drawPickup(k);
-    for (const p of frame.players) this.drawPlayer(p, opts.showHitboxes);
+    for (const p of frame.players) this.drawPlayer(p, opts.showHitboxes, frame.clouds);
     if (opts.showHitboxes && frame.rewinds) for (const r of frame.rewinds) this.drawRewind(r);
-    for (const g of frame.grenades) this.drawGrenade(g.x, g.y, g.fuse);
+    for (const g of frame.grenades) this.drawGrenade(g);
+    // clouds over the players: smoke hides whoever is inside it
+    if (frame.clouds) for (const c of frame.clouds) this.drawCloud(c);
     this.drawEffects(dt, byId, true);
     ctx.globalAlpha = 1;
     this.drawLetterbox();
@@ -473,7 +569,7 @@ export class Renderer {
     ctx.closePath();
   }
 
-  private drawPlayer(p: PlayerView, showHitboxes: boolean): void {
+  private drawPlayer(p: PlayerView, showHitboxes: boolean, clouds?: readonly CloudView[]): void {
     const ctx = this.ctx;
     const cam = this.camera;
     const t = this.tuningRef();
@@ -555,7 +651,8 @@ export class Renderer {
       ctx.stroke();
     }
 
-    // name + HP bar
+    // name + HP bar (none over a head in smoke: the tag would give the player away)
+    if (!p.isLocal && inSmoke(clouds, p.x, p.y + h - r)) return;
     const sx = cam.toScreenX(p.x);
     const sy = cam.toScreenY(p.y + h + 0.25);
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
@@ -566,6 +663,13 @@ export class Renderer {
     ctx.textAlign = 'center';
     ctx.font = '11px ui-monospace, monospace';
     ctx.fillText(name, sx, sy - 4);
+    // status effects (players whose state we hold: everyone locally, ourselves online)
+    const status = statusTags(p);
+    if (status) {
+      ctx.fillStyle = '#ffa657';
+      ctx.font = 'bold 10px ui-monospace, monospace';
+      ctx.fillText(status, sx, sy - 16);
+    }
   }
 
   /**
@@ -597,6 +701,26 @@ export class Renderer {
   private drawPickup(k: PickupView): void {
     const ctx = this.ctx;
     const cam = this.camera;
+    const item = pickupDefs[k.def];
+    if (item?.kind === 'grenades') {
+      // a grenade pair: two canisters in the type's colour
+      const r = 0.13 * cam.ppm;
+      const sy = cam.toScreenY(k.y + 0.13);
+      ctx.fillStyle = GRENADE_COLORS[item.grenade ?? FRAG.index] ?? '#e6edf3';
+      ctx.strokeStyle = '#e6edf3';
+      ctx.lineWidth = 1.5;
+      for (const dx of [-0.17, 0.17]) {
+        ctx.beginPath();
+        ctx.arc(cam.toScreenX(k.x + dx), sy, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#e6edf3';
+      ctx.font = '11px ui-monospace, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(item.name, cam.toScreenX(k.x), sy - r - 8);
+      return;
+    }
     const w = 0.34 * cam.ppm;
     const h = 0.6 * cam.ppm;
     const sx = cam.toScreenX(k.x);
@@ -670,22 +794,86 @@ export class Renderer {
     ctx.restore();
   }
 
-  private drawGrenade(x: number, y: number, fuse: number): void {
+  private drawGrenade(g: GrenadeView): void {
     const ctx = this.ctx;
     const cam = this.camera;
-    const sx = cam.toScreenX(x);
-    const sy = cam.toScreenY(y);
-    const r = Math.max(3, FRAG.radius * cam.ppm);
-    ctx.fillStyle = '#3fb950';
+    const def = grenades[g.type ?? FRAG.index] ?? FRAG;
+    const sx = cam.toScreenX(g.x);
+    const sy = cam.toScreenY(g.y);
+    if (def.effect === 'mine') {
+      // a dark puck with its state light; armed, its trigger radius
+      const r = Math.max(4, def.radius * cam.ppm);
+      ctx.fillStyle = '#30363d';
+      ctx.fillRect(sx - r, sy - r * 0.6, 2 * r, 1.2 * r);
+      ctx.fillStyle = mineLight(g.state ?? 0, performance.now());
+      ctx.beginPath();
+      ctx.arc(sx, sy, Math.max(2, r * 0.45), 0, Math.PI * 2);
+      ctx.fill();
+      if (g.state === MineState.Armed || g.state === MineState.Triggered) {
+        ctx.setLineDash([3, 5]);
+        ctx.strokeStyle = 'rgba(248,81,73,0.45)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(sx, sy, def.mine.triggerRadius * cam.ppm, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      return;
+    }
+    const r = Math.max(3, def.radius * cam.ppm);
+    ctx.fillStyle = GRENADE_COLORS[def.index] ?? '#3fb950';
     ctx.beginPath();
     ctx.arc(sx, sy, r, 0, Math.PI * 2);
     ctx.fill();
-    const total = FRAG.fuse * 60;
+    const total = def.fuse * 60;
     ctx.strokeStyle = '#f85149';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(sx, sy, r + 4, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * fuse) / total);
+    ctx.arc(sx, sy, r + 4, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * g.fuse) / total);
     ctx.stroke();
+  }
+
+  /** A soft disc: dense in the middle, feathered to nothing at its radius. Smoke grey, gas green-yellow. */
+  private drawCloud(c: CloudView): void {
+    const ctx = this.ctx;
+    const cam = this.camera;
+    const [r, g, b] = CLOUD_RGB[c.type] ?? [180, 180, 180];
+    const sx = cam.toScreenX(c.x);
+    const sy = cam.toScreenY(c.y);
+    const rad = c.radius * cam.ppm;
+    // smoke is nearly opaque inside its opaque radius; gas stays see-through (it's a hazard, not cover)
+    const core = c.opaque > 0 ? 0.92 : 0.45;
+    // the sim stops a cloud at walls: clip it to what its centre reaches (thin walls included)
+    const rays = this.cloudRays(c);
+    if (rays) {
+      ctx.save();
+      ctx.beginPath();
+      for (let i = 0; i < REACH_RAYS; i++) {
+        const a = (i / REACH_RAYS) * Math.PI * 2;
+        const d = Math.min(rays[i]!, c.radius) * cam.ppm;
+        if (i === 0) ctx.moveTo(sx + Math.cos(a) * d, sy - Math.sin(a) * d);
+        else ctx.lineTo(sx + Math.cos(a) * d, sy - Math.sin(a) * d);
+      }
+      ctx.closePath();
+      ctx.clip();
+    }
+    const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, rad);
+    grad.addColorStop(0, `rgba(${r},${g},${b},${core * c.density})`);
+    grad.addColorStop(c.opaque > 0 ? Math.min(0.95, c.opaque / c.radius) : 0.6, `rgba(${r},${g},${b},${core * 0.85 * c.density})`);
+    grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(sx, sy, rad, 0, Math.PI * 2);
+    ctx.fill();
+    if (c.type === GAS.index) {
+      // a dashed hazard rim, so gas reads as "deadly" and not as cover
+      ctx.setLineDash([5, 5]);
+      ctx.strokeStyle = `rgba(214,236,60,${0.7 * c.density})`;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    if (rays) ctx.restore();
   }
 
   /** `blasts`: draw the blast rings (2D view and debug overlay; render3d draws its own otherwise). They age either way. */
@@ -763,11 +951,17 @@ export class Renderer {
         this.bursts.splice(i, 1);
         continue;
       }
-      if (!blasts) continue;
+      // render3d draws real blasts in 3D, but not a flashbang's (or an EMP's) burst: those stay ours
+      if (!blasts && !NOT_A_BLAST.has(b.grenade)) continue;
       const k = b.age / 0.45;
-      ctx.fillStyle = `rgba(255,166,87,${0.5 * (1 - k)})`;
+      const [br, bg, bb] = BURST_RGB[b.grenade] ?? BURST_RGB[FRAG.index]!;
+      // a flashbang is a small pop and its ring, never a white disc: full-screen white is the fx
+      // overlay's (its limiter), and "Reduce flashes" greys the pop
+      const flashbang = b.grenade === FLASHBANG.index;
+      const grey = flashbang && reduceFlashes();
+      ctx.fillStyle = grey ? `rgba(120,124,130,${0.45 * (1 - k)})` : `rgba(${br},${bg},${bb},${(flashbang ? 0.7 : 0.5) * (1 - k)})`;
       ctx.beginPath();
-      ctx.arc(cam.toScreenX(b.x), cam.toScreenY(b.y), b.r * cam.ppm * (0.3 + 0.7 * k), 0, Math.PI * 2);
+      ctx.arc(cam.toScreenX(b.x), cam.toScreenY(b.y), (flashbang ? Math.min(b.r, FLASH_POP_M) : b.r) * cam.ppm * (0.3 + 0.7 * k), 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = `rgba(255,255,255,${0.6 * (1 - k)})`;
       ctx.lineWidth = 2;
@@ -884,7 +1078,14 @@ export class Renderer {
     y += 34;
     ctx.fillStyle = '#e6edf3';
     const shield = p.shield ? `   shield ${Math.ceil(p.shieldHp ?? 0)} ${p.shield === 'front' ? 'up' : p.shield === 'back' ? 'slung' : 'raising'}` : '';
-    ctx.fillText(`${p.dual ? 'DUAL  ' : ''}frags ${p.frags}   K ${p.kills}  D ${p.deaths}   zoom ${cam.zoom + 1}x${shield}`, x, y);
+    ctx.fillText(`${p.dual ? 'DUAL  ' : ''}${grenadeLine(p)}   K ${p.kills}  D ${p.deaths}   zoom ${cam.zoom + 1}x${shield}`, x, y);
+    const status = statusTags(p, true);
+    if (status) {
+      ctx.fillStyle = '#ffa657';
+      ctx.font = 'bold 13px ui-monospace, monospace';
+      ctx.fillText(status, x, cam.height - 148);
+      ctx.font = '12px ui-monospace, monospace';
+    }
 
     // kill feed
     ctx.textAlign = 'right';

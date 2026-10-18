@@ -2,6 +2,7 @@
  * State hash over every simulated field, as fixed-point integers. Used by golden replays and,
  * later, by the client/server desync telemetry (docs/02 §15.6).
  */
+import { MINE } from '@military-forge/content';
 import type { Game } from './game';
 
 export class Fnv32 {
@@ -21,6 +22,13 @@ export class Fnv32 {
 
   bool(v: boolean): void {
     this.int(v ? 1 : 0);
+  }
+
+  /** A field added after the first goldens: hashed (with a tag) only when it isn't 0, so old hashes hold. */
+  opt(tag: number, v: number): void {
+    if (v === 0) return;
+    this.int(tag);
+    this.int(v);
   }
 }
 
@@ -62,7 +70,7 @@ export function hashGame(game: Game): number {
     f.int(p.active);
     f.bool(p.dual);
     f.int(p.swapTicks);
-    f.int(p.frags);
+    f.int(p.grenadeCounts[0]!); // the frag count (the only type before grenade variety)
     f.int(p.throwCooldown);
     f.int(p.shotCounter);
     f.int(p.kills);
@@ -86,6 +94,13 @@ export function hashGame(game: Game): number {
       f.bool(p.shieldStowed);
       f.int(p.shieldTicks);
     }
+    // grenade variety: other types carried, the selection, status effects (tagged: they're optional)
+    for (let i = 1; i < p.grenadeCounts.length; i++) f.opt(0x100 + i, p.grenadeCounts[i]!);
+    f.opt(0x110, p.grenadeType);
+    f.opt(0x111, p.blindTicks);
+    f.opt(0x112, p.blindFade);
+    f.opt(0x113, p.gasTicks);
+    f.opt(0x114, p.jetDisabledTicks);
   }
   for (const g of game.grenades) {
     if (!g.alive) continue;
@@ -96,6 +111,20 @@ export function hashGame(game: Game): number {
     f.fx(g.vx);
     f.fx(g.vy);
     f.int(g.fuse);
+    f.opt(0x120, g.type);
+    f.opt(0x121, g.state);
+    f.opt(0x122, Math.round(g.hp * 1024));
+    if (g.type === MINE.index) f.opt(0x123, g.born); // mines only (a new one retires the oldest): frags hash as before
+  }
+  // clouds: nothing hashed when there are none (every golden before grenade variety)
+  for (const c of game.clouds) {
+    if (!c.alive) continue;
+    f.int(0x130 + c.id);
+    f.int(c.type);
+    f.int(c.owner);
+    f.fx(c.x);
+    f.fx(c.y);
+    f.int(c.age);
   }
   // pickups: nothing at all without spawners or drops (pickups off, or a map without spawners)
   for (const k of game.pickups) {

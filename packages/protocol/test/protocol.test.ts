@@ -1,5 +1,6 @@
-import { BREACHER, MACHETE, WIDOW } from '@military-forge/content';
-import { Btn, Game, PlayerState, createInput, type SimEvent } from '@military-forge/sim';
+import { BREACHER, FRAG, GAS, GRENADE_TYPES, MACHETE, SMOKE, WIDOW } from '@military-forge/content';
+import { Btn, Game, PlayerState, createInput, spawnCloud, type SimEvent } from '@military-forge/sim';
+import type { MapDef } from '@military-forge/content';
 import { describe, expect, it } from 'vitest';
 import {
   BitReader,
@@ -8,7 +9,9 @@ import {
   HASHED_CONTENT,
   contentHashOf,
   DecodeError,
+  LOCAL_STATE_FIELDS,
   LOCAL_STATE_MAX_BITS,
+  LS,
   MsgType,
   PROTOCOL_VERSION,
   SnapshotBaselines,
@@ -645,6 +648,326 @@ describe('local-player block', () => {
   });
 
   it('fits in the docs/05 §6.2 budget order of magnitude', () => {
-    expect(LOCAL_STATE_MAX_BITS / 8).toBeLessThan(64);
+    // ~67 bytes in full since v10 (the grenade belt and status groups after the shield's); a full
+    // block only goes out on joining or after loss, deltas carry the groups that changed
+    expect(LOCAL_STATE_MAX_BITS / 8).toBeLessThan(72);
+  });
+});
+
+describe('grenade variety (v10)', () => {
+  it('takes the v10 slots from the protocol registry: after the shield, nothing before it moved', () => {
+    expect(PROTOCOL_VERSION).toBe(10);
+    expect([LS.shieldTicks, LS.grenadeType, LS.grenades, LS.blindTicks, LS.blindFade, LS.gasTicks, LS.jetDisabledTicks, LOCAL_STATE_FIELDS]).toEqual([47, 48, 49, 54, 55, 56, 57, 58]);
+    // the clouds section after the pickups section: an item and a cloud in the same snapshot
+    const game = new Game({ seed: 2, dummies: false, pickups: true });
+    const me = game.addPlayer('me');
+    Object.assign(me, { x: 150, y: 0 });
+    const k = game.pickups[0]!;
+    Object.assign(k, { alive: true, def: 3, x: 152, y: 0, spawner: -1, spot: -1 });
+    const c = spawnCloud(game, GAS.index, 155, 0, me.id)!;
+    c.age = 77;
+    const events: SimEvent[] = [{ type: 'explosion', x: 151, y: 1, radius: 4, owner: me.id, grenade: GAS.index }];
+    const snap = decodeMessage(encodeSnapshot(game, 1, events, { local: me })) as SnapshotMsg;
+    expect(snap.pickups).toEqual([{ id: k.id, def: 3, x: 152, y: 0 }]);
+    expect(snap.clouds).toEqual([{ id: c.id, type: GAS.index, x: c.x, y: c.y, age: 77 }]);
+    expect(snap.events).toEqual(events);
+  });
+
+  it('grenade types, mine state, clouds and what went off round-trip; clouds out of view stay home', () => {
+    const game = new Game({ seed: 4, dummies: false });
+    const me = game.addPlayer('me');
+    me.x = 10;
+    me.y = 0;
+    const g = game.allocGrenade()!;
+    Object.assign(g, { alive: true, owner: me.id, x: 12, y: 1, vx: 3, vy: 2, fuse: 50, type: GAS.index, state: 3 });
+    const near = spawnCloud(game, SMOKE.index, 20, 0, me.id)!;
+    const far = spawnCloud(game, GAS.index, 140, 0, me.id)!;
+    near.age = 37;
+    far.age = 899;
+    const events: SimEvent[] = [{ type: 'explosion', x: 12, y: 1, radius: 4, owner: me.id, grenade: GAS.index }];
+    const snap = decodeMessage(encodeSnapshot(game, 1, events, { local: me })) as SnapshotMsg;
+    expect(snap.grenades).toEqual([expect.objectContaining({ id: g.id, type: GAS.index, state: 3, fuse: 50, x: 12, y: 1 })]);
+    expect(snap.clouds).toEqual([
+      { id: near.id, type: SMOKE.index, x: near.x, y: near.y, age: 37 },
+      { id: far.id, type: GAS.index, x: far.x, y: far.y, age: 899 },
+    ]);
+    expect(snap.events).toEqual([{ type: 'explosion', x: 12, y: 1, radius: 4, owner: me.id, grenade: GAS.index }]);
+
+    const view: ViewRect = { minX: -10, minY: -5, maxX: 60, maxY: 30 };
+    const enc = new SnapshotEncoder();
+    const culled = () => {
+      enc.begin(game, 2, []);
+      return new SnapshotDecoder().decode(enc.encodeFor({ baselines: null, ackInputTick: 0, inputBufferHealth: 0, local: me, view })).clouds.map((c) => c.id);
+    };
+    expect(culled()).toEqual([near.id]);
+    far.x = 63; // its edge pokes into the view
+    expect(culled()).toEqual([near.id, far.id]);
+  });
+
+  describe('AOI anti-wallhack: smoke', () => {
+    /** obs on the floor at x 10 looking right; a smoke cloud popped at (30, 0): its core is 3.4 m around (30, 1) */
+    function scene(extra: { name: string; x: number; y?: number }[] = [], solids: number[][] = []) {
+      // a flat floor at y = 0 from x −2 to 80
+      const map: MapDef = {
+        id: 'smoke-aoi',
+        name: 'smoke',
+        bounds: { minX: -2, minY: -6, maxX: 80, maxY: 40 },
+        solids: [{ points: [-2, -6, 80, -6, 80, 0, -2, 0] }, ...solids.map((points) => ({ points }))],
+        oneWays: [],
+        spawns: [{ x: 5, y: 0 }, { x: 60, y: 0 }],
+        dummies: [],
+        labels: [],
+      };
+      const game = new Game({ map, seed: 9, dummies: false });
+      const obs = game.addPlayer('obs');
+      Object.assign(obs, { x: 10, y: 0 });
+      const others = Object.fromEntries(
+        extra.map((e) => {
+          const p = game.addPlayer(e.name);
+          Object.assign(p, { x: e.x, y: e.y ?? 0 });
+          return [e.name, p];
+        }),
+      );
+      const cloud = spawnCloud(game, SMOKE.index, 30, 0, obs.id)!;
+      cloud.age = 120;
+      const view: ViewRect = { minX: -20, minY: -10, maxX: 70, maxY: 40 };
+      const enc = new SnapshotEncoder();
+      const sees = (viewer: PlayerState, events: SimEvent[] = []) => {
+        enc.begin(game, 1, events);
+        return new SnapshotDecoder().decode(enc.encodeFor({ baselines: null, ackInputTick: 0, inputBufferHealth: 0, local: viewer, view }));
+      };
+      const ids = (viewer: PlayerState) => sees(viewer).players.map((p) => p.id);
+      return { game, obs, others, cloud, sees, ids };
+    }
+
+    it('hides players inside it and behind it, not beside or above it', () => {
+      const { obs, others, ids } = scene([
+        { name: 'inside', x: 30 },
+        { name: 'behind', x: 37 }, // past the cloud: every sight line runs through it
+        { name: 'front', x: 26.2 }, // just short of it
+        { name: 'above', x: 37, y: 8 }, // the sight line passes over it
+      ]);
+      expect(ids(obs)).toEqual([obs.id, others.front!.id, others.above!.id]);
+    });
+
+    it('inside a cloud you see who is next to you, not across it; from deep inside you can\'t see out, from its edge you can', () => {
+      const { obs, others, ids } = scene([
+        { name: 'deep', x: 30 },
+        { name: 'deep2', x: 31.2 }, // 1.2 m away in the same smoke
+        { name: 'rim', x: 27.1 }, // eyes 0.5 m inside the core's edge, 2.9 m from deep
+      ]);
+      // obs is out there behind 3 m of smoke; rim is in the same cloud but across 2.9 m of it
+      expect(ids(others.deep!)).toEqual([others.deep!.id, others.deep2!.id]);
+      // head in the rim, body half out: it sees out, but not into the cloud (review M1)
+      expect(ids(others.rim!)).toContain(obs.id);
+      expect(ids(others.rim!)).not.toContain(others.deep!.id);
+      // one-way at the rim: obs can't see rim back (all of it is in the core)
+      expect(ids(obs)).not.toContain(others.rim!.id);
+    });
+
+    it('a wall between the smoke and the sight line: the smoke there does not count', () => {
+      const slab = [23, 2, 37, 2, 37, 2.2, 23, 2.2]; // a slab through the cloud, above its centre
+      const over = scene([{ name: 'right', x: 36.5, y: 2.2 }], [slab]);
+      Object.assign(over.obs, { x: 23.5, y: 2.2 }); // both stand on it: every sight line is above the slab
+      expect(over.ids(over.obs)).toContain(over.others.right!.id);
+      // the same sight lines with no slab run through the smoke
+      const open = scene([{ name: 'right', x: 36.5, y: 2.2 }]);
+      Object.assign(open.obs, { x: 23.5, y: 2.2 });
+      expect(open.ids(open.obs)).not.toContain(open.others.right!.id);
+    });
+
+    it('a thinning cloud stops hiding', () => {
+      const { obs, others, cloud, ids } = scene([{ name: 'behind', x: 37 }]);
+      expect(ids(obs)).not.toContain(others.behind!.id);
+      cloud.age = 60 * SMOKE.cloud.duration - 20;
+      expect(ids(obs)).toContain(others.behind!.id);
+    });
+
+    it('events don\'t give a hidden player away (the rules for culled players)', () => {
+      const { game, obs, others, sees } = scene([
+        { name: 'hidden', x: 37 },
+        { name: 'third', x: 12 },
+      ]);
+      const weapon = obs.weapons[0]!.def;
+      const h = others.hidden!;
+      const third = others.third!;
+      // a grenade it threw, now flying in plain view
+      const g = game.allocGrenade()!;
+      Object.assign(g, { alive: true, owner: h.id, x: 20, y: 2, vx: -8, vy: 3, fuse: 40 });
+      const snap = sees(obs, [
+        // the hidden player fires out of the smoke at obs: only a sound
+        { type: 'shot', shooter: h.id, weapon, ox: 36.5, oy: 1.1, ex: 10, ey: 1.1, hit: 2, target: obs.id, zone: 2 },
+        // a visible player's shot into the smoke that hit the hidden one: cut where it enters, a miss
+        { type: 'shot', shooter: third.id, weapon, ox: 12.5, oy: 1.1, ex: 37, ey: 1.1, hit: 2, target: h.id, zone: 2 },
+        // a visible player's shot into the smoke that hit nothing: cut the same way (no hit/miss tell)
+        { type: 'shot', shooter: third.id, weapon, ox: 12.5, oy: 1.1, ex: 45, ey: 1.1, hit: 0, target: -1, zone: 0 },
+        { type: 'hit', attacker: third.id, target: h.id, damage: 30, zone: 2, source: weapon }, // a damage number would place it
+        { type: 'hit', attacker: h.id, target: obs.id, damage: 20.4375, zone: 2, source: weapon }, // the victim learns who
+      ]);
+      const shots = snap.events.filter((e) => e.type === 'shot');
+      expect(snap.events.filter((e) => e.type === 'sound')).toHaveLength(1);
+      expect(shots).toHaveLength(2);
+      for (const shot of shots) {
+        expect(shot).toMatchObject({ shooter: third.id, hit: 0, target: -1 });
+        expect((shot as { ex: number }).ex).toBeCloseTo(30 - 3.4, 0); // where it enters the core
+      }
+      // the victim learns who, but in whole HP: 1/16 HP and the falloff would give the range (review M3)
+      expect(snap.events.filter((e) => e.type === 'hit')).toEqual([expect.objectContaining({ attacker: h.id, target: obs.id, damage: 20 })]);
+      expect(snap.grenades.find((x) => x.id === g.id)?.owner).toBe(-1); // without its thrower's name
+    });
+
+    it('a hit on a player hidden behind smoke goes on as a miss, so the tracer doesn\'t mark the body (review H2)', () => {
+      // `sky` floats over the far side and fires straight down at `behind`: obs sees sky (the sight line
+      // passes over the cloud), not behind; the tracer never touches the smoke
+      const { obs, others, sees } = scene([
+        { name: 'behind', x: 37 },
+        { name: 'sky', x: 37, y: 10 },
+      ]);
+      const weapon = obs.weapons[0]!.def;
+      const snap = sees(obs, [{ type: 'shot', shooter: others.sky!.id, weapon, ox: 37, oy: 10.8, ex: 37, ey: 1.2, hit: 2, target: others.behind!.id, zone: 1 }]);
+      expect(snap.players.map((p) => p.id)).toEqual([obs.id, others.sky!.id]);
+      const shot = snap.events.find((e) => e.type === 'shot') as { ex: number; ey: number; hit: number; target: number };
+      // on to the floor under it, a bullet into the ground like any miss
+      expect(shot).toMatchObject({ hit: 1, target: -1 });
+      expect(shot.ex).toBeCloseTo(37, 3);
+      expect(shot.ey).toBeCloseTo(0, 3);
+    });
+
+    it('the shooter gets whole HP for a hit on a player smoke hides from it (review M3)', () => {
+      const { obs, others, sees } = scene([{ name: 'inside', x: 30 }]);
+      const weapon = obs.weapons[0]!.def;
+      const snap = sees(obs, [{ type: 'hit', attacker: obs.id, target: others.inside!.id, damage: 30.4375, zone: 2, source: weapon }]);
+      expect(snap.events).toEqual([expect.objectContaining({ type: 'hit', attacker: obs.id, target: others.inside!.id, damage: 30 })]);
+      // and exact when both sides are in plain sight
+      const plain = scene([{ name: 'front', x: 20 }]);
+      const exact = plain.sees(plain.obs, [{ type: 'hit', attacker: plain.obs.id, target: plain.others.front!.id, damage: 30.4375, zone: 2, source: weapon }]);
+      expect(exact.events).toEqual([expect.objectContaining({ damage: 30.4375 })]);
+    });
+
+    it('grenades in smoke the client can\'t see into, or behind it, aren\'t sent; its own always are (review M2)', () => {
+      const { game, obs, others, sees } = scene([
+        { name: 'inside', x: 30 },
+        { name: 'other', x: 20 },
+      ]);
+      const at = (owner: number, x: number, y: number) => {
+        const g = game.allocGrenade()!;
+        Object.assign(g, { alive: true, owner, x, y, vx: 0, vy: 0, fuse: 60, type: FRAG.index });
+        return g.id;
+      };
+      const ids = (viewer: PlayerState) => sees(viewer).grenades.map((g) => g.id).sort((a, b) => a - b);
+      const inside = others.inside!;
+      const fromSmoke = at(inside.id, 30.4, 1.4); // just thrown in the core: it would point at its thrower
+      const behind = at(inside.id, 40, 1); // past the cloud
+      const above = at(inside.id, 30, 8); // over it
+      const mine = at(obs.id, 31, 1); // ours, in the smoke
+      expect(ids(obs)).toEqual([above, mine]);
+      // in the cloud: the one by your hand, not one across the smoke (others' grenades)
+      const near = at(others.other!.id, 30.8, 1.2);
+      const across = at(others.other!.id, 32.8, 1);
+      expect(ids(inside)).toEqual(expect.arrayContaining([fromSmoke, behind, near]));
+      expect(ids(inside)).not.toContain(across);
+    });
+
+    it('ricochets off a hidden player\'s shield aren\'t sent; one into the smoke stops at it; a hidden taker isn\'t named', () => {
+      const { obs, others, sees } = scene([
+        { name: 'inside', x: 30 },
+        { name: 'front', x: 20 },
+      ]);
+      const weapon = obs.weapons[0]!.def;
+      const snap = sees(obs, [
+        // off the shield of the player in the smoke: the spark would mark it
+        { type: 'ricochet', shooter: others.front!.id, owner: others.inside!.id, weapon, x: 29.6, y: 1, nx: -1, ny: 0, ex: 21, ey: 1, hit: 2, target: others.front!.id, zone: 1 },
+        // off a visible shield (front's), back into the smoke and the player in it: cut where it enters
+        { type: 'ricochet', shooter: obs.id, owner: others.front!.id, weapon, x: 20.4, y: 1, nx: 1, ny: 0, ex: 29.8, ey: 1, hit: 2, target: others.inside!.id, zone: 1 },
+        // the player in the smoke takes an item lying there: the item goes, the name doesn't
+        { type: 'pickup', player: others.inside!.id, item: 0, x: 30, y: 0 },
+      ]);
+      const r = snap.events.filter((e) => e.type === 'ricochet') as { owner: number; ex: number; hit: number; target: number }[];
+      expect(r).toHaveLength(1);
+      expect(r[0]).toMatchObject({ owner: others.front!.id, hit: 0, target: -1 });
+      expect(r[0]!.ex).toBeCloseTo(30 - 3.4, 0);
+      expect(snap.events.find((e) => e.type === 'pickup')).toMatchObject({ player: -1, item: 0 });
+    });
+  });
+
+  it('a client in a flashbang\'s full white is sent nobody else, their gunfire only as sounds, no grenades but its own', () => {
+    const game = new Game({ seed: 5, dummies: false });
+    const obs = game.addPlayer('obs');
+    const other = game.addPlayer('other');
+    Object.assign(obs, { x: 150, y: 0 });
+    Object.assign(other, { x: 156, y: 0 });
+    const g = game.allocGrenade()!;
+    Object.assign(g, { alive: true, owner: other.id, x: 153, y: 2, vx: 0, vy: 0, fuse: 60 });
+    const own = game.allocGrenade()!;
+    Object.assign(own, { alive: true, owner: obs.id, x: 152, y: 2, vx: 0, vy: 0, fuse: 60 });
+    const view: ViewRect = { minX: 120, minY: -10, maxX: 190, maxY: 40 };
+    const weapon = other.weapons[0]!.def;
+    const shot: SimEvent = { type: 'shot', shooter: other.id, weapon, ox: 155.5, oy: 1.2, ex: 150, ey: 1.2, hit: 2, target: obs.id, zone: 2 };
+    const sees = () => {
+      const enc = new SnapshotEncoder();
+      enc.begin(game, 1, [shot]);
+      return new SnapshotDecoder().decode(enc.encodeFor({ baselines: null, ackInputTick: 0, inputBufferHealth: 0, local: obs, view }));
+    };
+    obs.blindTicks = 200; // full white (blindFade 90): blindIntensity 1
+    obs.blindFade = 90;
+    let snap = sees();
+    expect(snap.players.map((p) => p.id)).toEqual([obs.id]);
+    expect(snap.events.map((e) => e.type)).toEqual(['sound']);
+    expect(snap.grenades.map((x) => x.id)).toEqual([own.id]);
+    obs.blindTicks = 45; // fading out: the screen clears by itself, the server sends everything again
+    snap = sees();
+    expect(snap.players.map((p) => p.id).sort()).toEqual([obs.id, other.id].sort());
+    expect(snap.events.map((e) => e.type)).toEqual(['shot']);
+    expect(snap.grenades).toHaveLength(2);
+  });
+
+  it('round-trips the grenade belt and status timers, full and delta, on every tick', () => {
+    const game = new Game({ seed: 8, dummies: true });
+    const me = game.addPlayer('me');
+    const belt = new Array<number>(GRENADE_TYPES).fill(0);
+    belt[FRAG.index] = 1;
+    belt[SMOKE.index] = 2;
+    belt[GAS.index] = 2;
+    game.setGrenadeLoadout(me, belt);
+    const inputs: ReturnType<typeof createInput>[] = [];
+    const enc = new SnapshotEncoder();
+    const baselines = new SnapshotBaselines();
+    const decoder = new SnapshotDecoder();
+    const ghost = new PlayerState(me.id);
+    // cycle, throw at our own feet (gas: we cough), walk, repeat
+    const script = [Btn.CycleGrenade, 0, Btn.Grenade, 0, Btn.Right, Btn.CycleGrenade, Btn.Grenade, Btn.Left, 0];
+    let types = 0;
+    let gassed = 0;
+    for (let t = 0; t < 720; t++) {
+      inputs[me.id] = { ...createInput(), buttons: script[Math.floor(t / 17) % script.length]!, aim: 49152 };
+      if (t === 300) {
+        // a flashbang and an EMP land on us (their timers are in the status group)
+        me.blindTicks = 200;
+        me.blindFade = 90;
+        me.jetDisabledTicks = 180;
+      }
+      game.step(inputs);
+      types |= 1 << me.grenadeType;
+      if (me.gasTicks > 0) gassed++;
+      enc.begin(game, t + 1, game.events);
+      const server = captureLocalState(me, createLocalState());
+      const snap = decodeMessage(enc.encodeFor({ baselines: null, ackInputTick: t & 0xffff, inputBufferHealth: 1, local: me, view: null })) as SnapshotMsg;
+      expect(describeLocalDiff(snap.local!, server)).toBe('');
+      applyLocalState(snap.local!, ghost);
+      expect(describeLocalDiff(captureLocalState(ghost, createLocalState()), server)).toBe('');
+      expect([ghost.grenadeType, ...ghost.grenadeCounts, ghost.blindTicks, ghost.blindFade, ghost.gasTicks, ghost.jetDisabledTicks]).toEqual([
+        me.grenadeType,
+        ...me.grenadeCounts,
+        me.blindTicks,
+        me.blindFade,
+        me.gasTicks,
+        me.jetDisabledTicks,
+      ]);
+      const got = decoder.decode(enc.encodeFor({ baselines, ackInputTick: t & 0xffff, inputBufferHealth: 1, local: me, view: null }));
+      baselines.ack(got.seq);
+      expect(describeLocalDiff(got.local!, server)).toBe('');
+    }
+    expect(types).toBe((1 << FRAG.index) | (1 << SMOKE.index) | (1 << GAS.index));
+    expect(gassed).toBeGreaterThan(30);
   });
 });

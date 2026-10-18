@@ -28,9 +28,10 @@ function rng(seed: number) {
 
 describe('riot shield on the wire (protocol v9)', () => {
   it('takes the v9 slots from the protocol registry, next to the dash (v8) without overlapping it', () => {
-    expect(PROTOCOL_VERSION).toBe(9);
+    expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(9); // v10 (arsenal B) appends after the shield's slots
     expect([Btn.Dash, Btn.Shield]).toEqual([1 << 13, 1 << 14]);
-    expect([LS.dashTicks, LS.airDashUsed, LS.shieldHp, LS.shieldStowed, LS.shieldTicks, LOCAL_STATE_FIELDS]).toEqual([41, 44, 45, 46, 47, 48]);
+    expect([LS.dashTicks, LS.airDashUsed, LS.shieldHp, LS.shieldStowed, LS.shieldTicks]).toEqual([41, 44, 45, 46, 47]);
+    expect(LOCAL_STATE_FIELDS).toBeGreaterThanOrEqual(48);
     // a carrier dashing with its shield slung: the dashing flag (128) and the shield state (256/512) both arrive
     const game = new Game({ seed: 4, dummies: false });
     const obs = game.addPlayer('obs');

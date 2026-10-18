@@ -2,10 +2,12 @@ import {
   CROUCHED_HITBOXES,
   DEFAULT_LOADOUT,
   FRAG,
+  GRENADE_TYPES,
   NO_WEAPON,
   RIOT_SHIELD,
   STANDING_HITBOXES,
   weapons,
+  spawnGrenades,
   type DummyScript,
   type HitboxLayout,
   type Tuning,
@@ -81,7 +83,12 @@ export class PlayerState {
   active = 0;
   dual = false;
   swapTicks = 0;
-  frags = 0;
+  /** grenades carried, by type (packages/content grenades); [FRAG.index] is the frag count */
+  readonly grenadeCounts: number[] = new Array<number>(GRENADE_TYPES).fill(0);
+  /** the type the grenade key throws (the cycle key moves it between types held) */
+  grenadeType = 0;
+  /** grenades given on respawn, by type (default: frag ×3) */
+  grenadeLoadout: number[] = spawnGrenades();
   throwCooldown = 0;
   shotCounter = 0;
   /** 0 = not swinging; else ticks since the melee swing started (lunge, windup, cooldown) */
@@ -103,6 +110,16 @@ export class PlayerState {
   /** weapons given on respawn: [slot 0, slot 1] weapon indices */
   loadout: [number, number] = [DEFAULT_LOADOUT[0], DEFAULT_LOADOUT[1]];
 
+  // Status effects from grenades (grenades.ts, clouds.ts): ticks left, 0 = none. The local block
+  // carries them (prediction counts them down exactly); the HUD and the bots read them.
+  /** flashbang: ticks of blindness left; the last `blindFade` of them fade out (white before that) */
+  blindTicks = 0;
+  blindFade = 0;
+  /** toxic gas: ticks left of the last gas pulse's after-effect (coughing, the green screen edge) */
+  gasTicks = 0;
+  /** EMP: ticks the jetpack stays dead */
+  jetDisabledTicks = 0;
+
   kills = 0;
   deaths = 0;
   lastAttacker = -1;
@@ -112,6 +129,15 @@ export class PlayerState {
   prevButtons = 0;
 
   constructor(readonly id: number) {}
+
+  /** frag count (grenadeCounts[FRAG.index]), for the HUD and older code */
+  get frags(): number {
+    return this.grenadeCounts[FRAG.index]!;
+  }
+
+  set frags(n: number) {
+    this.grenadeCounts[FRAG.index] = n;
+  }
 
   height(t: Tuning): number {
     return this.crouched ? t.crouchHeight : t.standHeight;
@@ -123,6 +149,14 @@ export class PlayerState {
 
   shoulderX(t: Tuning): number {
     return this.x + this.facing * t.shoulderForward;
+  }
+
+  /** Fills the belt from grenadeLoadout and selects the first type held (frag with the default loadout). */
+  refillGrenades(): void {
+    for (let i = 0; i < GRENADE_TYPES; i++) this.grenadeCounts[i] = this.grenadeLoadout[i] ?? 0;
+    this.grenadeType = 0;
+    while (this.grenadeType < GRENADE_TYPES - 1 && this.grenadeCounts[this.grenadeType] === 0) this.grenadeType++;
+    if (this.grenadeCounts[this.grenadeType] === 0) this.grenadeType = 0;
   }
 
   /** Reset to a freshly spawned state at (x, y). */
@@ -150,7 +184,7 @@ export class PlayerState {
     this.active = 0;
     this.dual = false;
     this.swapTicks = 0;
-    this.frags = FRAG.spawnCount;
+    this.refillGrenades();
     this.throwCooldown = 0;
     this.meleeTicks = 0;
     this.dashTicks = 0;
@@ -160,6 +194,10 @@ export class PlayerState {
     this.shieldHp = 0;
     this.shieldStowed = false;
     this.shieldTicks = 0;
+    this.blindTicks = 0;
+    this.blindFade = 0;
+    this.gasTicks = 0;
+    this.jetDisabledTicks = 0;
     this.lastAttacker = -1;
     this.lastAttackTick = -1;
     this.prevButtons = 0;

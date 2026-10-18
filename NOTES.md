@@ -367,6 +367,8 @@ Caveat: real TCP loss needs kernel-level impairment (dummynet, root), so WebSock
 - Safari (docs/05 §2.3): the library sends WT_MAX_SESSIONS and accepts the legacy `:protocol = webtransport` that Chrome and Safari send. The client refuses a session without datagrams (Safari's HTTP/2 fallback) and falls back to WebSocket. Reliable messages use one long-lived stream. Not yet tested on a real Safari. The library doesn't accept `webtransport-h3` yet (no browser sends it today; upstream follow-up).
 - Tooling: Rust 1.99.1 installed user-level with rustup (`--profile minimal --no-modify-path`, `~/.rustup` + `~/.cargo`, no shell profile edits) plus its clippy and rustfmt components (rust-toolchain.toml); `rustup self uninstall` removes it all. `Cargo.lock` is committed.
 
+**Rooms by code over WebTransport (18 Oct, in two steps).** The gateway's OPEN frame now carries the session's request target after the remote address (`127.0.0.1:50000\n/wt?room=KQMZPT`), so the game server can route a WebTransport session the way it routes a WebSocket URL (`/ws/CODE`). The client puts the room in the query (`?room=CODE`), but only when `/health` advertises `webtransport.rooms: true`. Otherwise a session would land in the default room, so a room by code stays on WebSocket. No server advertises it yet: the bridge starts routing by the target (through the room registry's door, with the client's IP for its per-IP limits) once the playtest PR's `rooms.ts` is on main.
+
 **Hardening (17 Oct, PR #9 review).** The first version let one browser hurt everyone: a single 65,532-byte reliable message dropped the whole bridge (every WebTransport player), unbounded per-session queues let a client that withheld stream credit stall its session (and its CLOSE), quinn's default limits allowed 100+100 streams per connection (one reached ~162 MB), and a hung gateway stayed advertised for ~9 s of dead air. Now:
 - **Per session:** browser messages are capped at 4 KB (the WebSocket limit; more closes that session with 4003), datagrams drop when its queue is full, a reliable backlog over 256 KB or a write not taken within 5 s closes it (1013, it may resume), and the game server's CLOSE never waits behind its writes.
 - **Per connection:** 4 bidi + 4 uni streams, 64 KB stream / 256 KB connection windows, 64 KB datagram buffers, 15 s idle timeout. **Per node:** 1000 sessions, 8 per IP (`WT_MAX_SESSIONS`, `WT_MAX_SESSIONS_PER_IP`).
@@ -610,3 +612,89 @@ The carrier stands with a Hammer. The shooter, grounded, re-aims at the carrier'
 - Low preset at DPR 1.5
 
 Screenshots are in docs/screenshots/touch. With the CPU throttled ×4 on 3D Low, frames ran at p50 16.7–33 ms and p90 17–50 ms depending on the machine's load, with render CPU 1.9–4 ms; dynamic resolution settled at 0.6. That's software WebGL in headless Chrome (CPU-rasterised), so it's a worst case for the GPU side, not a phone measurement. **Not yet done:** a real phone (iOS Safari especially: fullscreen and orientation lock aren't available there, and its compatibility mouse events are guarded by timing), and tuning the thresholds with players.
+
+## 22. Grenade variety and recoil push (arsenal B, 17 Oct 2026)
+
+> Owner: "some bombs are smokes and entering kills, some are flashbangs that make you not see anything, only white for some time ... and the rebounds physics after shots."
+> Numbered after the map mechanics (§18), the dash (§19), the riot shield (§20) and touch controls (§21).
+
+### 22.1 Carrying and cycling; smoke and toxic gas
+
+- **Belt:** grenades by type (`PlayerState.grenadeCounts`, the selected `grenadeType`). `G` throws the selected type, `T` (or mouse 5) cycles to the next type held; throwing your last one of a type brings up the next. Spawn loadout: frag ×3. `addGrenades(player, type, 2)` caps at the type's limit (frag 5, others 2), returns how many it took (0 = leave the pickup lying there) and selects the type if your selection is empty.
+- **Grenade pairs on the map** (owner: "a random pair of one type from each spot's pool"): the riot shield's spawners (§20), no second system. Six pair items (`frag_pair` … `emp_pair`, wire ids 1–6) in a `grenades` pool weighted frag 3, smoke 2, flashbang 2, gas 1, mine 1, EMP 1; the seeded pool draw picks the type, touching it is `addGrenades(player, type, 2)`, and with that type full it stays on the floor. Spawners on Lunar Outpost, Storm Front, Flux Lab and the movement-test range (up on the solid platform, the top one-way and the tower).
+- **Clouds** sit 1 m above where they popped and never move. Size and density are functions of type and age, so the snapshot only carries id, type, position and age. Walls bound them.
+- **Smoke:** R 4 m, 12 s, opaque inside 85% of the radius until it thins out (its last 1.25 s are see-through). Bots don't track players hidden by it; `canSee`/`lineOfSight` are there for aim assist. The server's AOI doesn't send what the smoke hides from a client (§22.5, 05 §9). Walls bound a cloud in the sim and on screen: the 2D view clips it to what its centre reaches, the 3D puffs sample a reach mask, so nothing shows past a thin wall.
+- **Gas:** R 3.5 m, 15 s, damage in 0.25 s pulses (4 hit events a second, not 60), 14 dmg/s inside a 1 m core falling linearly to 4 at the edge; the thrower takes half (like flames). Doesn't block vision: it's a hazard, not cover. 2D and 3D tint it a sickly green-yellow with a hazard rim, against smoke's grey.
+
+| Feel (`pnpm --filter @military-forge/sim feel`) | Measured | Target |
+|---|---|---|
+| Gas, standing at the pop | 14.0 dmg/s, dead in 7.25 s | TTK ≤ 8 s: get out or die |
+| Gas, 2 m from the pop | 11.2 dmg/s, dead in 9.25 s | 8–12 dmg/s |
+| Gas, 3.5 m (the edge) | 5.2 dmg/s, survives the cloud (69 dmg) | 3–6 dmg/s: crossing it costs a few HP |
+| Throw at 45°: first bounce / goes off | frag 11.1 / 14.8 m · smoke, gas 9.7 / 12.1 m | (smoke and gas are a little slower and shorter-fused) |
+
+- **Prediction:** throwing and cycling are predicted (the belt is in the local block). Gas damage isn't, like any damage: it arrives as an HP correction (no position change); the cough timer then counts down exactly.
+- **Dev:** `/?grenades` in local mode gives every type at its limit (recorded in replays as `grenadeLoadouts`). `?sandbox&grenades` for free play. Screenshots: `node apps/web/scripts/grenade-screenshots.mjs` against a dev server (docs/screenshots/arsenal-b/).
+- **Goldens:** every existing golden is bit-identical (new state is hashed only when it isn't at rest). New: `grenades-variety`.
+
+### 22.2 Flashbang
+
+- **Blind time** = strength × (2.5 s of full white + 1.5 s of fade; the fade is at least 0.3 s). Strength = distance (1 inside 4 m, linear to 0 at 16 m) × facing (1 looking at it, 0.25 looking straight away; linear in the cosine between the aim and the flash) × cover (a wall in the way 0.15, smoke 0.5). Under 0.08: nothing. The thrower is a player like any other: throw it and look away. A longer blindness already running is kept.
+- It's sim state (`blindTicks`, `blindFade`), hashed and in the local block: bots aim off target while blind (a deterministic stray of up to ±1.2 rad × intensity, changing every 8 ticks). It arrives online as a server correction (no position change) and then counts down exactly.
+- **What the server enforces:** the full white. While a client's blindIntensity is 1 it is sent no other player, their gunfire only as SOUND events, and no grenade but its own, so a client that drops the white-out still sees nothing. The fade (intensity below 1) is drawn by the client and could be skipped by a modified one; that residue is accepted.
+- **Screen** (`apps/web/src/fx`, mounted with one line in main.ts): white-out with the photosensitivity limiter (one full-screen onset a second, at most, and no rise of an onset's size in a single long frame; clears no faster than 0.5 s). The frame carries the most blinded the player was over its ticks, so a flash inside a hitch still lands. "Reduce flashes" (localStorage `mf.reduceFlashes`, default from prefers-reduced-motion) swaps it for a dark-out as opaque as the white (≥ 0.96 everywhere at full strength) with a 10 px blur: the setting is no advantage. The 2D burst is a 1 m pop and a ring (grey with the setting on); 3D draws a small star, a glow and a ring (clouds.ts). `onMuffle(listener)` gets 0…1 for the audio system. The UI agent owns the settings toggle: see the shared note arsenal-fx.md.
+
+| Flashbang at eye height (feel report) | White + fade | Target (white) |
+|---|---|---|
+| 3 m, looking at it | 2.50 + 1.50 s | 2–2.5 s |
+| 3 m, looking away | 0.63 + 0.38 s | 0.3–0.9 s |
+| 3 m, looking at it, behind a wall | 0.37 + 0.30 s | ≤ 0.5 s |
+| 10 m, looking at it | 1.25 + 0.75 s | 0.9–1.6 s |
+| 17 m | nothing | nothing |
+
+### 22.3 Proximity mine and EMP
+
+- **Mine** (`packages/sim/src/mines.ts`): a grenade whose `state` walks Flying → Arming → Armed → Triggered, with `fuse` as the ticks left in that state. It flies straight (no gravity) for 0.9 s, then drops, and sticks to the first surface it touches (walls and ceilings too). The map's pads, wind, drag and zone gravity act on it in flight like on any grenade. A thrower keeps 3 out at most (`MineDef.maxLive`): a 4th retires its oldest (`GrenadeState.born`); when every grenade slot is taken, a throw retires the oldest mine of all instead of failing. A player who leaves takes its mines with it (its grenades in flight and its clouds become nobody's). Armed, it beeps for 0.25 s when an enemy's body is within 1.6 m in line of sight; the thrower never sets off their own. Bullets stop at it (hit radius 0.25 m) and empty its 10 HP (whoever empties it gets the kill); blasts set it off 4 ticks later (a chain staggers by 3–4 ticks per mine: grenade slots step in order); a direct hit on a player in flight detonates it. 120 dmg in 3.2 m. Gone 180 s after arming. `DamageSource.Mine = 58`.
+- **EMP:** jetpacks dead for 3 s within 4 m of the burst (to the torso, through walls), the thrower's too; a jet in use cuts out at once. Mines in it vanish. No damage. 3D draws a blue ring out to the 4 m (clouds.ts). The state is `PlayerState.jetDisabledTicks`, hashed and in the local block (prediction counts it down exactly). It works alongside the map's EMP fields and storms (`env.jetDisabled`): the jet needs both clear, and so does the dash (`dashBlocked()`), since a dash is a jetpack burst.
+
+| Feel (`feel` report) | Measured | Target |
+|---|---|---|
+| Mine thrown level: sticks at / after | 13.7 m / 1.20 s | 9–14 m: short range |
+| Mine, an enemy 1 m away: blast after / damage | 0.27 s / 100 (dead) | 0.2–0.35 s beep, ≥ 100 dmg |
+| EMP beside a player hovering 3 m up | jet off 3.00 s, drops 3.1 m | 3 s, falls out of the sky |
+
+### 22.4 Recoil push ("the rebounds physics after shots")
+
+- Before: only the Breacher (3.5 m/s) and the Widow (2.0 m/s) pushed, and only in the air: a downward Breacher shot gave ~0.3 m of lift, so nobody noticed it.
+- Now (combat.ts `recoilPush`): in the air the whole push along −aim; on the ground a horizontal slide for heavy guns (`recoilPushGround`), halved while crouched. Caps: recoil never takes |vx| past 0.9 × launchSpeedX (10.8 m/s), so it never gets the blast-launch drag (§17); a shot fired down never takes the rise past 10 m/s, so chained shells hover instead of rocketing. Speeds already past a cap (a blast launch) are kept.
+- Values: Breacher 10 air / 6 ground, Widow 2 / 8.5, K-47 0.3 / 0, everything else 0 (docs/03 §7 has the table, with starting values for the launchers and heavies still to come).
+- **Like any push:** the map's knockback multiplier scales it where you stand (docs/02 §20), and it ends a dash (docs/02 §21: the push wins).
+- **Goldens:** `arsenal-guns`, `arsenal-melee-sniper` and `mech-bullets` change on purpose (their Breacher and Widow shots now kick). The sniper scenario's last walk goes right instead of left: the shots' kicks leave the player against the thin wall, so walking left could no longer reach the weight-capped speed it checks. The fog-gallery shooter in `mech-bullets` walks back to its spot between Widow shots (the same hits through the fog as before). Every other golden is bit-identical. New: `recoil`.
+
+| Feel (`feel` report) | Measured | Target |
+|---|---|---|
+| Breacher fired down at the top of a hop: lift | 2.22 m | 2–3 m |
+| Breacher fired level at the top of a hop: knocked back | 2.79 m | 2–5 m (a dash, not a launch) |
+| Breacher fired level standing: slide | 0.28 m | 0.15–0.5 m |
+| Widow fired level standing: slide | 0.59 m | 0.5–1 m |
+| Widow fired level crouched: slide | 0.13 m | 0.05–0.4 m |
+| Widow fired level at the top of a hop: knocked back | 0.65 m | 0.5–2 m |
+| K-47 sprayed level for 1 s in the air: drift | 1.60 m | 0.5–2.5 m |
+| Buzz sprayed for 1 s in the air | 0 | 0 |
+| Fastest recoil alone carries you sideways | 10.80 m/s | < launchSpeedX (12) |
+
+### 22.5 Smoke hides what's in it and behind it (owner's answer, 17 Oct; review, 18 Oct)
+
+- The owner: "hide players behind smoke too". `SmokeSight` (packages/sim/src/clouds.ts) answers "does smoke hide T from V": all of T in a core V's eyes are outside of, or every sight line from V's eyes to T's head top, chest and feet runs through ≥ 1 m of a core (`SMOKE_BLOCK_CHORD`), or through ≥ 1.5 m of a core both are in (`SMOKE_NEAR_SIGHT`: in a cloud you see who's next to you, not across it). A core a wall cuts through only counts where the sight line is on its centre's side of the wall. Built once per snapshot: with 0–3 clouds it's a few circle–segment tests per pair.
+- **One-way at the rim:** eyes within about a metre of a core's edge see out, while a body that is all inside the core is hidden from everyone outside it. Accepted: stepping to the edge to look out is the counterplay smoke is for.
+- Used by the AOI (the snapshot encoder) and by local mode (players, tracers and grenades), so offline matches online. The scripted dummies still use the simpler `smokeBlocks` for their aim.
+- **What follows from "can this client see that player"** (W6's rules for culled players, review-pr18.md): its gunfire is a SOUND; others' hits on it aren't sent; a HIT where either side is hidden from the client goes in whole HP (the victim of a hidden shooter, a shooter firing into smoke); a grenade it throws comes without its name; a ricochet off its shield isn't sent; an item it takes comes without its name.
+- **Tracers** (and ricochet legs) stop where they first enter a core the client is outside of, however little of it they cross, or in the client's own cloud where they get past its near sight; they read as a miss with no target whatever they hit in there. A shot into a hidden player that never touches the smoke (behind it, fired from the far side) goes on past the body to the first wall in the weapon's range (`SmokeSight.carryOn`): a tracer stopping in the open would mark the body.
+- **Grenades** in smoke the client can't see into (in a core it's outside of, behind smoke, across its own cloud) aren't sent; its own always are (`SmokeSight.pointHidden`). Residue, as W6 accepted for throwers off the view: once a grenade comes out of the smoke, its exact arc and fuse still work back to where it was thrown.
+
+### 22.6 Protocol v10 and the review (18 Oct)
+
+- Rebased onto the riot shield (v9) as one PR. **v10:** local block 48–57, two groups after the shield group (the belt: u3 selected · u3 × 5 counts; status: u8 blindTicks · u7 blindFade · u6 gasTicks · u8 jetDisabledTicks; 12 delta groups now); grenade records + u3 type · u2 state; a clouds section after the pickups section; EXPLOSION + u3 grenade type. No new tags, ext kinds, remote flags or INPUT bits. The full local block is ~67 bytes; deltas carry what changed.
+- **With the shield:** `dashBlocked()` checks the EMP lockout next to the raise rule; a bullet or a ricochet leg that meets a mine stops at it and hurts it (with the falloff over the range used); the ledge-shove and fog-ricochet shield tests account for the Breacher's and the Widow's kick.
+- **Goldens:** `shield` is re-recorded twice over: first for the recoil (with the old recoil numbers put back, all 15 of main's goldens are bit-identical), then for the range's grenade spawner (hashed from tick 0; the scenario's inputs and events are unchanged). `grenades-variety` is re-recorded because mines hash the tick they were thrown (`born`); with that left out every golden is unchanged.
+- Review items, as fixed: H1 (the Armory reads `explosion` only on blast grenades), H2 and M1–M3 (§22.5), M4–M5 (§22.3), M6 and the flashbang lows (§22.2), M7 (3D pop and EMP ring), M8 (the jet line, `dashBlocked`, `grenadeForces` for mines, `mech.bulletCost` for mine damage, v10), clouds through thin walls (§22.1), one-way smoke (§22.5), mouse 5's release no longer navigates, the feel report's mine row.

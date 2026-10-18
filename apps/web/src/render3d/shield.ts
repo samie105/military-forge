@@ -15,6 +15,7 @@
  * face; the inner face 5 cm in front of the origin, the strike face 9 cm; 0.55 m wide, 0.90 m tall,
  * centred on the origin.
  */
+import { pickups as pickupDefs } from '@military-forge/content';
 import type { SimEvent } from '@military-forge/sim';
 import type { Frame, PickupView } from '../view';
 import {
@@ -167,6 +168,7 @@ export class PickupMeshes {
     this.time += dt;
     this.seen.clear();
     for (const k of items ?? []) {
+      if (pickupDefs[k.def]?.kind !== 'shield') continue; // grenade pairs are clouds.ts's
       this.seen.add(k.id);
       let m = this.meshes.get(k.id);
       if (!m) {

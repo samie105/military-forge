@@ -107,6 +107,7 @@ describe('LagCompensator', () => {
       inputs[target.id] = { ...createInput(), buttons: Btn.Right };
       shooter.prevButtons = 0;
       shooter.weapons[shooter.active]!.cooldown = 0;
+      shooter.vx = 0; // the previous shot's recoil slide (docs/02 §12) would move the shooter off this aim
       game.rewind = rewind ? lc : null;
       lc.begin(game.tick);
       lc.setView(shooter.id, view);
@@ -218,6 +219,7 @@ describe('LagCompensator', () => {
       inputs[target.id] = createInput();
       shooter.prevButtons = 0;
       shooter.weapons[shooter.active]!.cooldown = 0;
+      shooter.vx = 0; // the previous shot's recoil slide (docs/02 §12) would move the shooter off this aim
       game.rewind = rewind ? lc : null;
       lc.begin(game.tick);
       lc.setView(shooter.id, view);

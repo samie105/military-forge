@@ -80,6 +80,21 @@ export const lunarOutpostMap: MapDef = {
     { name: 'Dome drifter', x: 60, y: 0, script: { kind: 'jet', periodTicks: 300, burstTicks: 12 } },
     { name: 'Deck sentry', x: 64, y: 22.6, script: { kind: 'idle' } },
   ],
+  // grenade pairs in the craters by the pads and on the deck's west end (contested, away from spawns)
+  spawners: [
+    {
+      id: 'grenades',
+      pool: 'grenades',
+      spots: [
+        { x: 24.2, y: -3 },
+        { x: 88.4, y: -3.5 },
+        { x: 53.5, y: 22.6 },
+      ],
+      first: [6, 10],
+      respawn: [18, 24],
+      maxActive: 2,
+    },
+  ],
   labels: [
     { x: 60, y: 15, text: 'hab dome: zero-g' },
     { x: 22, y: -1.4, text: 'jump pad' },

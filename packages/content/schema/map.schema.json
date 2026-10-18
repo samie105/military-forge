@@ -184,7 +184,8 @@
         },
         "pool": {
           "enum": [
-            "shield"
+            "shield",
+            "grenades"
           ],
           "description": "What can appear (SPAWN_POOLS in packages/content pickups.ts)."
         },

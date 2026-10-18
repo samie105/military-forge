@@ -3,7 +3,7 @@
  * seeded spread, muzzle-in-wall guard, reload/swap/dual-wield, falloff and hit zones, airborne
  * recoil push, weight, and melee (lunge, arc hit test, knockback, the one-hit Machete).
  */
-import { CROUCHED_HITBOXES, FRAG, HitZone, NO_WEAPON, RIOT_SHIELD, STANDING_HITBOXES, weapons, type WeaponClass, type WeaponDef } from '@military-forge/content';
+import { CROUCHED_HITBOXES, HitZone, NO_WEAPON, RIOT_SHIELD, STANDING_HITBOXES, weapons, type WeaponClass, type WeaponDef } from '@military-forge/content';
 import { DEG2RAD, hash4, hashToUnit, quantize, simCosSin, SCALAR_INV } from '@military-forge/shared';
 import { DT, TICK_RATE, ticks } from './constants';
 import { DamageSource } from './events';
@@ -11,7 +11,8 @@ import type { Game } from './game';
 import { rayCapsule, rayCircle } from './geometry';
 import { Btn, isDown, wasPressed } from './input';
 import { DUAL_TOGGLE_TIME, cancelReloads, knockOutOfDash, type PlayerState, type WeaponSlot } from './player';
-import { throwGrenade } from './grenades';
+import { stepGrenadeBelt } from './grenades';
+import { damageMine, mineHit, shootableMine } from './mines';
 import { createHitPose } from './rewind';
 import { damageShield, shieldHitT, shieldInFront, shieldRaised, shieldSlung } from './shield';
 import { SegFlag, createRayHit } from './world';
@@ -223,12 +224,41 @@ function fireShot(game: Game, p: PlayerState, slot: WeaponSlot, def: WeaponDef):
     if (victim >= 0) struck |= 1 << victim;
   }
   slot.bloom = Math.min(def.spread.bloomMax, slot.bloom + def.spread.bloomPerShot);
+  recoilPush(game, p, def);
+}
 
-  // recoil push, airborne only (docs/02 §12)
-  if (!p.grounded && def.recoilPushAir > 0) {
-    p.vx -= aimDir.x * def.recoilPushAir;
-    p.vy -= aimDir.y * def.recoilPushAir;
+// Recoil push (docs/02 §12, the owner's "rebounds physics after shots").
+/** Recoil alone never takes the horizontal speed past this share of launchSpeedX: launches get the low launch drag (NOTES §17), shots don't. */
+export const RECOIL_MAX_VX_SHARE = 0.9;
+/** A shot fired down never takes the rise past this (m/s): one Breacher jump is ~2.5 m, more shots hover instead of rocketing. */
+export const RECOIL_MAX_RISE = 10;
+/** Crouching braces against the grounded slide. */
+export const RECOIL_CROUCH_BRACE = 0.5;
+
+/**
+ * The kick of one shot, against the aim: in the air the whole push (a shotgun fired down lifts
+ * you), on the ground a horizontal slide for the heavy guns. Speeds already past the caps (a blast
+ * launch) are never cut, only not raised.
+ */
+function recoilPush(game: Game, p: PlayerState, def: WeaponDef): void {
+  let push: number;
+  if (p.grounded) {
+    if (def.recoilPushGround <= 0) return;
+    push = def.recoilPushGround * (p.crouched ? RECOIL_CROUCH_BRACE : 1);
+  } else {
+    if (def.recoilPushAir <= 0) return;
+    push = def.recoilPushAir;
   }
+  // like any push: the map scales it where you stand (docs/02 §20), and it ends a dash (docs/02 §21)
+  const mech = game.mech;
+  if (mech) push *= mech.knockbackMul(p, game.tuning);
+  knockOutOfDash(p, game.tuning, mech ? mech.moveSpeedMul(p, game.tuning) : 1);
+  const kx = -aimDir.x * push;
+  const ky = p.grounded ? 0 : -aimDir.y * push;
+  const capX = Math.max(Math.abs(p.vx), game.tuning.launchSpeedX * RECOIL_MAX_VX_SHARE);
+  const vx = p.vx + kx;
+  p.vx = vx > capX ? capX : vx < -capX ? -capX : vx;
+  p.vy = ky > 0 ? Math.max(p.vy, Math.min(p.vy + ky, RECOIL_MAX_RISE)) : p.vy + ky;
 }
 
 /**
@@ -251,6 +281,12 @@ function traceBullet(game: Game, p: PlayerState, def: WeaponDef, sx: number, sy:
   // (shorter in fog, longer under a map-wide multiplier above 1)
   else if (game.world.raycast(sx, sy, dir.x, dir.y, endT, SegFlag.BulletPass, hit)) {
     endT = hit.t;
+    hitKind = 1;
+  }
+  // mines are shootable (mines.ts): the nearest one before the wall stops the bullet
+  const mine = !blocked && shootableMine(game, sx, sy, dir.x, dir.y, endT) ? mineHit.grenade : -1;
+  if (mine >= 0) {
+    endT = mineHit.t;
     hitKind = 1;
   }
 
@@ -284,7 +320,7 @@ function traceBullet(game: Game, p: PlayerState, def: WeaponDef, sx: number, sy:
     const mul = zone === HitZone.Head ? def.headMul : 1;
     if (def.hitImpulse > 0 && victim.alive) push(game, victim, dir.x, dir.y, def.hitImpulse); // a corpse blocks but is not shoved
     game.damage(victim, def.damage * falloff(def, used) * mul, p.id, def.index, zone);
-  }
+  } else if (mine >= 0) damageMine(game.grenades[mine]!, def.damage * falloff(def, used), p.id);
   return victimId;
 }
 
@@ -340,6 +376,12 @@ function strikeShield(
     endT = hit.t;
     hitKind = 1;
   }
+  // a mine in the way stops the ricochet as it would the bullet (mines.ts)
+  const mine = shootableMine(game, bx, by, dir.x, dir.y, endT) ? mineHit.grenade : -1;
+  if (mine >= 0) {
+    endT = mineHit.t;
+    hitKind = 1;
+  }
   let victimId = -1;
   let zone: number = HitZone.None;
   if (traceTargets(game, p, bx, by, dir.x, dir.y, endT, skip, struck, true)) {
@@ -359,7 +401,7 @@ function strikeShield(
     const zoneMul = zone === HitZone.Head ? def.headMul : 1;
     if (def.hitImpulse > 0 && victim.alive) push(game, victim, dir.x, dir.y, def.hitImpulse);
     game.damage(victim, def.damage * mul * falloff(def, usedNow) * zoneMul, p.id, def.index, zone);
-  }
+  } else if (mine >= 0) damageMine(game.grenades[mine]!, def.damage * mul * falloff(def, usedNow), p.id);
   return victimId;
 }
 
@@ -490,13 +532,8 @@ export function stepWeapons(game: Game, p: PlayerState): void {
     }
   }
 
-  // grenade
-  if (wasPressed(buttons, prev, Btn.Grenade) && p.frags > 0 && p.throwCooldown === 0) {
-    if (throwGrenade(game, p, FRAG)) {
-      p.frags--;
-      p.throwCooldown = ticks(FRAG.throwCooldown);
-    }
-  }
+  // grenades: the cycle key, then the grenade key throws the selected type
+  stepGrenadeBelt(game, p);
 }
 
 /** Passive health regeneration (docs/02 §8). */

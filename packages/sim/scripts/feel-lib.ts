@@ -5,7 +5,13 @@
 import {
   BUZZ,
   DEFAULT_LOADOUT,
+  EMP,
+  FLASHBANG,
+  FRAG,
+  GAS,
+  GRENADE_TYPES,
   HAMMER,
+  MINE,
   RIOT_SHIELD,
   defaultTuning,
   weapons,
@@ -17,15 +23,16 @@ import {
   type ZoneKind,
 } from '@military-forge/content';
 import { angleToU16 } from '@military-forge/shared';
-import { Btn, Game, SHIELD_RAISE_TICKS, createInput, giveShield, type Input, type PlayerState } from '../src';
+import { Btn, Game, MineState, SHIELD_RAISE_TICKS, createInput, giveShield, spawnCloud, type Input, type PlayerState } from '../src';
 
-function flat(width = 400, ceiling = 60): MapDef {
-  const rect = (x0: number, y0: number, x1: number, y1: number) => ({ points: [x0, y0, x1, y0, x1, y1, x0, y1] });
+const rect = (x0: number, y0: number, x1: number, y1: number) => ({ points: [x0, y0, x1, y0, x1, y1, x0, y1] });
+
+function flat(width = 400, ceiling = 60, extra: { points: number[] }[] = []): MapDef {
   return {
     id: 'feel-flat',
     name: 'feel',
     bounds: { minX: -2, minY: -6, maxX: width + 2, maxY: ceiling + 2 },
-    solids: [rect(-2, -6, width + 2, 0), rect(-2, 0, 0, ceiling), rect(width, 0, width + 2, ceiling), rect(-2, ceiling, width + 2, ceiling + 2)],
+    solids: [rect(-2, -6, width + 2, 0), rect(-2, 0, 0, ceiling), rect(width, 0, width + 2, ceiling), rect(-2, ceiling, width + 2, ceiling + 2), ...extra],
     oneWays: [],
     spawns: [{ x: 10, y: 0 }],
     dummies: [],
@@ -262,8 +269,12 @@ export interface GrenadeMetrics {
   detonation: number;
 }
 
-export function measureGrenade(tuning: Partial<Tuning> = {}): GrenadeMetrics {
+/** One grenade of `type` thrown at 45° from standing: where it first lands and where it goes off (m). */
+export function measureGrenade(tuning: Partial<Tuning> = {}, type = FRAG.index): GrenadeMetrics {
   const { game, p, step } = setup(tuning);
+  const belt = new Array<number>(GRENADE_TYPES).fill(0);
+  belt[type] = 1;
+  game.setGrenadeLoadout(p, belt);
   step(Btn.Grenade, Math.PI / 4);
   const g = game.grenades.find((x) => x.alive)!;
   let firstLandX = NaN;
@@ -274,8 +285,7 @@ export function measureGrenade(tuning: Partial<Tuning> = {}): GrenadeMetrics {
     step(0);
     if (Number.isNaN(firstLandX) && prevVy < 0 && g.vy > prevVy + 1) firstLandX = x;
     prevVy = g.vy;
-    const ex = game.events.find((e) => e.type === 'explosion');
-    if (ex && ex.type === 'explosion') detonation = ex.x;
+    if (!g.alive) detonation = x; // it goes off where the last tick left it
   }
   return { firstBounce: firstLandX - p.x, detonation: detonation - p.x };
 }
@@ -637,4 +647,205 @@ export function measureShield(weapon: number, distance: number, stance: ShieldSt
     rateSum += shots ? onShield / shots : 0;
   }
   return { ttk: ttkSum / samples, breakAt: breaks ? breakSum / breaks : Number.NaN, breakRate: breaks / samples, shieldRate: rateSum / samples, killRate: killed / samples };
+}
+
+export interface GasMetrics {
+  /** seconds a player standing still there lives (NaN: survives the cloud) */
+  ttk: number;
+  /** damage per second once the cloud has grown (its second second) */
+  dps: number;
+  /** total damage taken */
+  taken: number;
+}
+
+/** A player standing still `distance` m (horizontally) from where a gas cloud pops on the floor. */
+export function measureGas(distance: number, tuning: Partial<Tuning> = {}): GasMetrics {
+  const { game, p } = setup(tuning);
+  const thrower = game.addPlayer('thrower');
+  thrower.x = p.x + 150;
+  spawnCloud(game, GAS.index, p.x - distance, 0, thrower.id);
+  let ttk = NaN;
+  let atOne = p.hp;
+  let atTwo = p.hp;
+  for (let t = 1; t <= 60 * GAS.cloud.duration; t++) {
+    game.step([]);
+    if (t === 60) atOne = p.hp;
+    if (t === 120) atTwo = p.hp;
+    if (!p.alive) {
+      ttk = t / 60;
+      break;
+    }
+  }
+  return { ttk, dps: atOne - atTwo, taken: game.tuning.healthMax - (p.alive ? p.hp : 0) };
+}
+
+export interface FlashMetrics {
+  /** seconds of full white */
+  white: number;
+  /** seconds of fading out after it */
+  fade: number;
+}
+
+/**
+ * A flashbang going off at eye height `distance` m in front of a standing player who looks at it
+ * (or away from it), optionally with a wall in between (docs/02 §14).
+ */
+export function measureFlash(distance: number, lookAway = false, wall = false, tuning: Partial<Tuning> = {}): FlashMetrics {
+  const { game, p, step } = setup(tuning, 1, wall ? flat(400, 60, [rect(10 + distance / 2 - 0.1, 0, 10 + distance / 2 + 0.1, 6)]) : flat());
+  const aim = lookAway ? Math.PI : 0;
+  step(0, aim);
+  const g = game.allocGrenade()!;
+  Object.assign(g, { alive: true, owner: p.id, x: p.x + distance, y: p.y + 1.24, vx: 0, vy: 0, fuse: 1, type: FLASHBANG.index });
+  step(0, aim);
+  const total = p.blindTicks + (p.blindTicks > 0 ? 1 : 0); // + the tick it already counted down
+  return { white: (total - p.blindFade) / 60, fade: p.blindFade / 60 };
+}
+
+export interface MineMetrics {
+  /** a level throw from standing: where it sticks (m from the thrower) and when (s) */
+  sticksAt: number;
+  sticksAfter: number;
+  /** an enemy standing `distance` m from an armed mine on the floor: seconds from stepping in to the blast, and damage */
+  blastAfter: number;
+  damage: number;
+}
+
+export function measureMine(distance: number, tuning: Partial<Tuning> = {}): MineMetrics {
+  const m: MineMetrics = { sticksAt: NaN, sticksAfter: NaN, blastAfter: NaN, damage: 0 };
+  {
+    const { game, p, step } = setup(tuning);
+    const belt = new Array<number>(GRENADE_TYPES).fill(0);
+    belt[MINE.index] = 1;
+    game.setGrenadeLoadout(p, belt);
+    step(Btn.Grenade, 0);
+    const g = game.grenades.find((x) => x.alive)!;
+    for (let t = 1; t < 300 && g.state === MineState.Flying; t++) {
+      step(0);
+      m.sticksAfter = t / 60;
+    }
+    m.sticksAt = g.x - p.x;
+  }
+  {
+    const { game, p, step } = setup(tuning);
+    const owner = game.addPlayer('owner');
+    owner.x = p.x + 150;
+    const g = game.allocGrenade()!;
+    Object.assign(g, { alive: true, owner: owner.id, x: p.x - distance, y: MINE.radius, vx: 0, vy: 0, type: MINE.index, state: MineState.Armed, fuse: 9999 });
+    for (let t = 1; t < 120; t++) {
+      step(0);
+      if (!g.alive) {
+        m.blastAfter = t / 60;
+        break;
+      }
+    }
+    m.damage = game.tuning.healthMax - (p.alive ? p.hp : 0);
+  }
+  return m;
+}
+
+export interface EmpMetrics {
+  /** seconds the jetpack stayed dead while holding jet */
+  jetOff: number;
+  /** height lost meanwhile by a player hovering 3 m up (m) */
+  dropped: number;
+}
+
+/** An EMP going off next to a player who keeps holding jet a few metres up. */
+export function measureEmp(tuning: Partial<Tuning> = {}): EmpMetrics {
+  const { game, p, step } = setup(tuning);
+  while (p.y < 3) step(Btn.Jet);
+  const y0 = p.y;
+  const g = game.allocGrenade()!;
+  Object.assign(g, { alive: true, owner: p.id, x: p.x + 1, y: p.y, vx: 0, vy: 0, fuse: 1, type: EMP.index });
+  step(Btn.Jet);
+  let off = 0;
+  let low = p.y;
+  for (let t = 0; t < 600 && !p.jetting; t++) {
+    step(Btn.Jet);
+    if (!p.jetting) off++;
+    low = Math.min(low, p.y);
+  }
+  return { jetOff: (off + 1) / 60, dropped: y0 - low };
+}
+
+export interface RecoilMetrics {
+  /** fired straight down at the top of a hop: height gained above the firing point (m) */
+  lift: number;
+  /** fired level at the top of a hop: how far back it carried you by the time you stopped (m) */
+  airKnock: number;
+  /** fired level standing still, and crouched: the slide back (m) */
+  slide: number;
+  crouchSlide: number;
+}
+
+/** Recoil push of one shot of `weapon` (docs/02 §12): a shotgun jump, an air knockback, a grounded slide. */
+export function measureRecoil(weapon: number, tuning: Partial<Tuning> = {}): RecoilMetrics {
+  const armed = () => {
+    const s = setup(tuning);
+    s.game.setLoadout(s.p, [weapon, DEFAULT_LOADOUT[1]]);
+    for (let i = 0; i < 30; i++) s.step(0);
+    return s;
+  };
+  /** hop, then wait for the top of it */
+  const hop = (s: ReturnType<typeof setup>) => {
+    for (let i = 0; i < 12; i++) s.step(Btn.Jet);
+    while (s.p.vy > 0) s.step(0);
+  };
+  const settle = (s: ReturnType<typeof setup>) => {
+    for (let t = 0; t < 600 && !(s.p.grounded && Math.abs(s.p.vx) < 0.01); t++) s.step(0);
+  };
+  const m: RecoilMetrics = { lift: 0, airKnock: 0, slide: 0, crouchSlide: 0 };
+  {
+    const s = armed();
+    hop(s);
+    const y0 = s.p.y;
+    s.step(Btn.Fire, -Math.PI / 2);
+    let peak = y0;
+    for (let t = 0; t < 300 && !s.p.grounded; t++) {
+      s.step(0, -Math.PI / 2);
+      peak = Math.max(peak, s.p.y);
+    }
+    m.lift = peak - y0;
+  }
+  {
+    const s = armed();
+    hop(s);
+    const x0 = s.p.x;
+    s.step(Btn.Fire, 0);
+    settle(s);
+    m.airKnock = x0 - s.p.x;
+  }
+  for (const crouch of [false, true]) {
+    const s = armed();
+    if (crouch) for (let i = 0; i < 10; i++) s.step(Btn.Down);
+    const x0 = s.p.x;
+    s.step(Btn.Fire | (crouch ? Btn.Down : 0), 0);
+    for (let t = 0; t < 120; t++) s.step(crouch ? Btn.Down : 0);
+    if (crouch) m.crouchSlide = x0 - s.p.x;
+    else m.slide = x0 - s.p.x;
+  }
+  return m;
+}
+
+/** Holding fire with an automatic `weapon` for a second, level, in the air: how far it drifts you back (m). */
+export function measureSprayDrift(weapon: number, tuning: Partial<Tuning> = {}): number {
+  const s = setup(tuning);
+  s.game.setLoadout(s.p, [weapon, DEFAULT_LOADOUT[1]]);
+  for (let i = 0; i < 30; i++) s.step(Btn.Jet);
+  const x0 = s.p.x;
+  for (let i = 0; i < 60; i++) s.step(Btn.Fire | Btn.Jet, 0);
+  return x0 - s.p.x;
+}
+
+/** The fastest a weapon's recoil carries you sideways: flying flat out one way, firing the other, a magazine's worth. */
+export function measureRecoilTopSpeed(weapon: number, tuning: Partial<Tuning> = {}): number {
+  const s = setup(tuning);
+  s.game.setLoadout(s.p, [weapon, DEFAULT_LOADOUT[1]]);
+  for (let i = 0; i < 40; i++) s.step(Btn.Jet | Btn.Left, Math.PI);
+  let top = 0;
+  for (let i = 0; i < 150; i++) {
+    s.step(Btn.Jet | Btn.Left | (i % 2 === 0 ? Btn.Fire : 0), 0);
+    top = Math.max(top, Math.abs(s.p.vx));
+  }
+  return top;
 }

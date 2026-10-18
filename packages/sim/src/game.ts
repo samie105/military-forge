@@ -2,13 +2,14 @@
  * The authoritative simulation of one room (docs/06 §5.3). The same class runs headless on the
  * game server, in the browser for local play/prediction, and in golden-replay tests.
  */
-import { FRAG, createTuning, getMap, weapons, type DummySpawn, type MapDef, type Tuning } from '@military-forge/content';
+import { createTuning, getMap, weapons, type DummySpawn, type MapDef, type Tuning } from '@military-forge/content';
 import { IdAllocator } from '@military-forge/shared';
 import { botInput } from './bots';
+import { CloudState, stepClouds } from './clouds';
 import { stepRegen, stepWeapons } from './combat';
-import { MAX_GRENADES, MAX_PICKUPS, MAX_PLAYERS, ticks } from './constants';
+import { MAX_CLOUDS, MAX_GRENADES, MAX_PICKUPS, MAX_PLAYERS, ticks } from './constants';
 import { DamageSource, type SimEvent } from './events';
-import { GrenadeState, stepGrenade } from './grenades';
+import { GrenadeState, forgetOwner, stepGrenade, stepStatus } from './grenades';
 import { copyInput, type Input } from './input';
 import { MapMechanics, createBodyEnv } from './mechanics';
 import { depenetrate, quantizeMovement, stepMovement } from './movement';
@@ -53,6 +54,8 @@ export class Game {
   readonly pickups: PickupState[] = Array.from({ length: MAX_PICKUPS }, (_, i) => new PickupState(i));
   /** the map's spawners; empty with pickups off */
   readonly spawners: SpawnerState[];
+  /** smoke and gas clouds (clouds.ts) */
+  readonly clouds: CloudState[] = Array.from({ length: MAX_CLOUDS }, (_, i) => new CloudState(i));
   /** events produced by the most recent step() */
   readonly events: SimEvent[] = [];
   /** lag compensation for hitscan (server only; null = test targets where they are now) */
@@ -98,6 +101,8 @@ export class Game {
     if (!p) return;
     // a leaving carrier lets go of its shield as a death would: it stays on the floor for others
     if (p.alive) dropCarried(this, p);
+    // its mines go and its grenades and clouds become nobody's: the next player given this id doesn't inherit them
+    forgetOwner(this, id);
     this.players[id] = null;
     this.ids.free(id);
   }
@@ -108,8 +113,16 @@ export class Game {
     return n;
   }
 
+  /** A free grenade slot, reset to a frag (callers set the rest). */
   allocGrenade(): GrenadeState | null {
-    for (const g of this.grenades) if (!g.alive) return g;
+    for (const g of this.grenades) {
+      if (g.alive) continue;
+      g.type = 0;
+      g.state = 0;
+      g.hp = 0;
+      g.born = this.tick;
+      return g;
+    }
     return null;
   }
 
@@ -151,6 +164,15 @@ export class Game {
     p.dual = false;
     p.swapTicks = 0;
     p.meleeTicks = 0;
+  }
+
+  /**
+   * Sets the grenades a player respawns with, by type (packages/content grenades), and fills the
+   * belt now (dev give-grenades and replays; map pickups give pairs through addGrenades).
+   */
+  setGrenadeLoadout(p: PlayerState, counts: readonly number[]): void {
+    p.grenadeLoadout = counts.slice();
+    p.refillGrenades();
   }
 
   damage(target: PlayerState, amount: number, attacker: number, source: number, zone: number): void {
@@ -208,7 +230,8 @@ export class Game {
     // the shield key and carry modes, before anyone fires: every shot this tick meets the same shields
     for (const p of this.players) if (p?.alive) stepShield(p);
     for (const p of this.players) if (p?.alive) stepWeapons(this, p);
-    for (const g of this.grenades) if (g.alive) stepGrenade(this, g, FRAG);
+    for (const g of this.grenades) if (g.alive) stepGrenade(this, g);
+    stepClouds(this);
 
     // hazards: falling out of the map (KILL zone below the bounds)
     for (const p of this.players) {
@@ -222,6 +245,7 @@ export class Game {
       if (!p) continue;
       if (p.alive) {
         stepRegen(this, p);
+        stepStatus(p);
         quantizeMovement(p);
       } else if (--p.respawnTicks <= 0) {
         this.respawn(p);

@@ -152,10 +152,10 @@ describe('new guns', () => {
     expect(d.vx).toBeGreaterThan(0.5 * hits * BREACHER.hitImpulse);
     expect(p.vx).toBeLessThan(vx0 - 0.9 * BREACHER.recoilPushAir);
 
-    // grounded: no recoil push
+    // grounded: a short slide back (heavy guns only, NOTES §22.4)
     const g = armed([BREACHER.index, HAMMER.index]);
     hold(g.game, g.p, Btn.Fire, 1, 0);
-    expect(g.p.vx).toBe(0);
+    expect(g.p.vx).toBe(-BREACHER.recoilPushGround);
   });
 
   it('Widow: a headshot kills outright, a body shot does not, crouching denies the one-shot', () => {
@@ -374,16 +374,22 @@ describe('arsenal golden replays', () => {
     const kills: Record<number, number> = {};
     let minVx = 0;
     let maxVx = 0;
+    /** walking right on the ground, a second after the last shot (its recoil slide is over) */
+    let maxWalkVx = 0;
+    let sinceShot = 999;
     runReplay(replay, (game) => {
       const me = game.players.find((q) => q && !q.isBot)!;
       minVx = Math.min(minVx, me.vx);
       maxVx = Math.max(maxVx, me.vx);
+      sinceShot++;
       for (const e of game.events) {
         if (e.type === 'hit' && e.attacker === me.id) hits[e.source] = (hits[e.source] ?? 0) + 1;
         if (e.type === 'death' && e.killer === me.id) kills[e.source] = (kills[e.source] ?? 0) + 1;
+        if (e.type === 'shot' && e.shooter === me.id) sinceShot = 0;
       }
+      if (me.grounded && me.input.buttons & Btn.Right && sinceShot > 60) maxWalkVx = Math.max(maxWalkVx, me.vx);
     });
-    return { hits, kills, minVx, maxVx };
+    return { hits, kills, minVx, maxVx, maxWalkVx };
   };
 
   it('arsenal-guns: a bash, shotgun kills, K-47 hits, airborne recoil and rifle weight', () => {
@@ -399,6 +405,7 @@ describe('arsenal golden replays', () => {
     const r = run('arsenal-melee-sniper');
     expect(r.kills[DamageSource.Melee]).toBe(2);
     expect(r.hits[WIDOW.index]).toBe(1);
-    expect(r.minVx).toBeCloseTo(-T.walkMax * WIDOW.moveSpeedMul, 9);
+    expect(r.maxWalkVx).toBeCloseTo(T.walkMax * WIDOW.moveSpeedMul, 9);
+    expect(r.minVx).toBeCloseTo(-WIDOW.recoilPushGround, 1); // the grounded shot's kick
   });
 });

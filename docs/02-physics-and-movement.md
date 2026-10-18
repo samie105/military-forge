@@ -313,7 +313,7 @@ explosionImpulse(p, center, R, maxImpulse):
 
 - **Melee** (dedicated key): a 0.15 s windup, an arc hit test (sector 70°, radius 1.1 m), and 6 m/s knockback. **Damage depends on the weapon held**: pistols 15–25, rifles 30, heavy weapons/sniper 35, shotgun/flamer/laser/saw 40, EMP 50, **machete 100 (one-hit)** (see 03-weapons). Melee bypasses riot shields. Melee kills get their own kill-feed icon.
 - **Melee lunge:** each swing adds a short 0.12 s burst of +3.0 m/s in the facing direction (+4.0 with sidearms, +2.0 with heavy weapons), with a 0.6 s cooldown. In older games this was an exploit ("melee to go faster"). Players loved it, so we make it an intentional, bounded movement tech.
-- **Recoil push:** applied only when airborne, along `−aimDir × weapon.recoilPushAir`.
+- **Recoil push** (the "rebound" after a shot): in the air, `v −= aimDir × weapon.recoilPushAir` (so a shotgun fired down is a jump, ~2.5 m from the top of a hop); on the ground, a horizontal slide `vx −= aimDir.x × weapon.recoilPushGround` for the heavy guns only (crouching braces: ×0.5). Two caps keep it a movement trick, not a launcher: recoil never takes |vx| past 0.9 × `launchSpeedX` (so the low launch drag of NOTES §17 stays the blasts'), and a shot fired down never takes the rise past 10 m/s (shells chained downward hover, they don't rocket). Speeds already past either cap (a blast launch) are kept, not cut. Values per weapon: 03 §7; feel targets: NOTES §22.4. Like any push it ends a dash (§21) and the map's knockback multiplier scales it (§20).
 
 ---
 
@@ -347,17 +347,21 @@ Projectile caps per room: 256 live projectiles. Flamethrower particles are aggre
 
 ## 14. Grenades & explosions
 
-| | Frag | Proximity mine | Gas | EMP grenade |
-|---|---|---|---|---|
-| Throw speed | 14 m/s + 40% player vel | 11 m/s, **no gravity** (flies straight, short range: 0.9 s flight) | 13 m/s | 13 m/s |
-| Gravity scale | 1.0 | 0 | 1.0 | 1.0 |
-| Restitution `e` | 0.45 (bouncy, longest throw) | 0 (**sticks** to any surface) | 0.35 | 0.4 |
-| Fuse | **1.6 s** from throw; optional cook mode in custom rooms | arms after 2.0 s. State colours: green = flying, yellow = stuck/arming, flashing red = armed. Triggers on an enemy within 1.6 m (0.25 s beep). A direct hit on a player in flight detonates it. **Can be shot (10 HP), set off by explosions, disarmed by EMP.** Despawns after 180 s | 1.4 s, then a **15 s cloud** | 1.2 s |
-| Effect | 110 dmg max, R = 4.0 m, full-damage core 0.8 m, impulse 14 m/s. A crouched victim at full HP survives unless it's directly underneath (crouch → torso-only exposure + 25% blast reduction) | 120 dmg, R = 3.2 m | DoT strongest at the centre: 14 dmg/s core → 4 dmg/s edge, R = 3.5 m. **Flamethrower fire clears the cloud** | **Disables jetpacks for 3 s** in R = 4 m (affects the thrower too). Disarms mines. 0 dmg |
-| Self/team damage | yes (team damage per mode rules) | yes | yes | n/a |
-| Carry (default) | 3 (spawn loadout), max 5 | 2 | 2 | 2 |
+| | Frag | Smoke | Gas | Flashbang | Proximity mine | EMP grenade |
+|---|---|---|---|---|---|---|
+| Throw speed | 14 m/s + 40% player vel | 13 m/s | 13 m/s | 13 m/s | 11 m/s, **no gravity** for its 0.9 s fuse (flies straight, ~10 m), then it drops; the map's wind, pads and drag act on it like on any grenade | 13 m/s |
+| Gravity scale | 1.0 | 1.0 | 1.0 | 1.0 | 0 | 1.0 |
+| Restitution `e` | 0.45 (bouncy, longest throw) | 0.35 | 0.35 | 0.4 | 0 (**sticks** to any surface) | 0.4 |
+| Fuse | **1.6 s** from throw; optional cook mode in custom rooms | 1.4 s, then a **12 s cloud** | 1.4 s, then a **15 s cloud** | 1.5 s | arms 2.0 s after it **sticks** to the first surface it touches. State colours: green = flying, yellow = arming, flashing red = armed. An enemy body within 1.6 m **in line of sight** starts a 0.25 s beep (the thrower never sets off their own). A direct hit on a player in flight detonates it. **Can be shot (10 HP; whoever empties it gets the kill; a shield's ricochet too), set off by explosions (after 4 ticks: chains stagger), disarmed by EMP.** Despawns 180 s after arming. **3 live per thrower:** a 4th retires its oldest; a player who leaves takes its mines with it | 1.2 s |
+| Effect | 110 dmg max, R = 4.0 m, full-damage core 0.8 m, impulse **26 m/s** with a minimum lift of 0.7 (blasts launch in an arc, NOTES §17), the thrower's own blast at 0.6 of it. A crouched victim at full HP survives unless it's directly underneath (crouch → torso-only exposure + 25% blast reduction) | **Blocks vision**, no damage: R = 4 m, opaque inside 85% of it. Grows in from 30% over 1.2 s, thins out and shrinks to 60% over its last 2.5 s (see-through for the last 1.25 s). Bots and aim assist can't see through it. The server doesn't send a player or grenade inside it, behind it or across it to clients that can't see it (inside a cloud you see 1.5 m), and tracers stop at it (05 §9); local mode does the same | DoT strongest at the centre: 14 dmg/s inside a 1 m core → 4 dmg/s at the edge (linear), R = 3.5 m, in 0.25 s pulses. Standing in the middle kills in ~7 s. Grows in from 35% over 1 s, shrinks to 70% over its last 1.5 s. Doesn't block vision. **Flamethrower fire clears the cloud** | **Blinds**, no damage. Per player, strength = distance (full inside 4 m, linear to 0 at 16 m) × facing (1 looking at it, 0.25 looking straight away, by the cosine) × cover (a wall 0.15, smoke 0.5); under 0.08 nothing. Then 2.5 s × strength of **full white** and 1.5 s × strength (at least 0.3 s) of fading out. A longer blindness already running is kept. The blind state is sim state (bots aim off target); during the full white the server sends the victim no other player (05 §9) | 120 dmg, R = 3.2 m (core 0.6 m, impulse 24 m/s, otherwise like the frag) | **Disables jetpacks for 3 s** in R = 4 m to the torso, **through walls** (affects the thrower too; a jet in use cuts out at once; the dash is a jetpack burst, so it is blocked too). Disarms mines (they vanish). 0 dmg |
+| Self/team damage | yes (team damage per mode rules) | n/a | yes (the thrower takes 50%) | blinds the thrower too | yes (the thrower takes 50%) | n/a |
+| Carry (default) | 3 (spawn loadout), max 5 | max 2 | max 2 | max 2 | max 2 | max 2 |
 
-**Carrying & cycling:** one grenade key throws the selected type; a cycle key switches between types you hold. Map pickups give grenades in pairs (a genre convention).
+**Carrying & cycling:** one grenade key (`G`) throws the selected type; a cycle key (`T` / mouse 5) switches to the next type you hold, skipping empty ones and wrapping round. Throwing your last grenade of a type brings up the next type you hold. You spawn with frag ×3 (selected). Map pickups give grenades in pairs (a genre convention): a spawner on the `grenades` pool puts out a pair of one type, picked by the seeded pool draw (frags most often, docs/03 §12), and touching it is `addGrenades(player, type, 2)`: it tops the type up to its carry limit (a full type leaves the pair on the floor) and selects it if your selection is empty.
+
+**Clouds** (smoke, gas): a cloud sits 1 m above where its grenade popped (below any ceiling) and doesn't move. Its radius and density are pure functions of its type and age, so clients draw it from the snapshot (id, type, position, age) exactly as the server sees it. Walls bound every cloud: a point on the far side of a wall from the cloud's centre is not inside it, and the 2D and 3D views stop drawing it there too.
+
+**Flashbang on screen** (client, `apps/web/src/fx`): the local player's blindness (sim state, in the local block) drives a full-screen white-out over the 3D and 2D views, and a muffled-audio hook. Photosensitivity: never more than one full-screen flash per second (other rises ramp in over a second, never by a flash's worth in one frame, and it never clears faster than in half a second), and a **"Reduce flashes"** setting replaces the white with a dark-out just as opaque (≥ 0.96), blurred, so the setting is no advantage. The flashbang's own burst is a small pop and a ring in both views, never a screen-sized flash.
 
 **Throw strength:** desktop is quick-throw (tap = 70% strength) or hold-to-aim (an arc preview shows the predicted path, simulated client-side with the same sim code for 1.5 s ahead). Mobile later: a dedicated grenade button with drag-to-aim.
 
@@ -367,7 +371,7 @@ Projectile caps per room: 256 live projectiles. Flamethrower particles are aggre
 3. LOS: raycast centre → damage point. If blocked, try the head point. If both are blocked, deal 0 damage (walls protect fully; impulse still applies at 35%).
 4. `damage = max × (d ≤ core ? 1 : 1 − ((d − core)/(R − core))^1.5)`.
 5. Apply impulses (§12), chain-react barrels after 4 ticks (staggered for drama and for CPU).
-6. Emit an `Explosion` event (pos, radius, type) so clients play VFX and screen shake by distance.
+6. Emit an `Explosion` event (pos, radius, owner, grenade type) so clients play VFX and screen shake by distance. Smoke and gas don't explode: their cloud appears in the snapshot instead.
 
 ---
 

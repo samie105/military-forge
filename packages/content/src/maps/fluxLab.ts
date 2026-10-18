@@ -64,6 +64,22 @@ export const fluxLabMap: MapDef = {
     { name: 'Deck guard', x: 72, y: 16.6, script: { kind: 'strafe', minX: 66, maxX: 78 } },
     { name: 'Runner', x: 40, y: 0, script: { kind: 'strafe', minX: 34, maxX: 46 } },
   ],
+  // grenade pairs on the crates by the jump pads and at the gantries' shaft ends
+  spawners: [
+    {
+      id: 'grenades',
+      pool: 'grenades',
+      spots: [
+        { x: 23, y: 1.2 },
+        { x: 87, y: 1.2 },
+        { x: 46.4, y: 26.6 },
+        { x: 63.6, y: 26.6 },
+      ],
+      first: [5, 9],
+      respawn: [18, 24],
+      maxActive: 2,
+    },
+  ],
   labels: [
     { x: 55, y: 23, text: 'updraft shaft' },
     { x: 72, y: 21, text: 'EMP field' },

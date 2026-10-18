@@ -24,6 +24,7 @@ import {
 import type { Frame } from '../view';
 import { Avatar, AvatarKit } from './avatar';
 import { RookieAssembler, toonRamp, type CharacterAssembler, type CharacterLod } from './character';
+import { CloudLayer } from './clouds';
 import { buildDepthLayers, updateForeground, type DepthLayers } from './layers';
 import { lightingFor } from './lighting';
 import { buildMapGeometry } from './mapGeometry';
@@ -90,6 +91,7 @@ export class Renderer3D {
   /** riot shields lying on the map, and ricochet sparks (shield.ts) */
   private readonly pickupMeshes: PickupMeshes;
   private readonly sparks: RicochetSparks;
+  private readonly clouds = new CloudLayer(this.scene); // smoke, gas, non-frag grenades (arsenal B)
   private readonly pending = new Set<number>();
   /** after a failed character load, wait this long before trying again (doubles, ≤ 30 s) */
   private retryMs = 1000;
@@ -155,6 +157,8 @@ export class Renderer3D {
     this.sparks = new RicochetSparks(this.kit.shield);
     this.scene.add(this.pickupMeshes.group, this.sparks.group);
     this.vfx.register(this.sparks);
+    // smoke, gas and the other grenades, the flashbang's pop and the EMP's ring (arsenal B)
+    this.vfx.register(this.clouds);
     this.setPreset(preset.name);
   }
 

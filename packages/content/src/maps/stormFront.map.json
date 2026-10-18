@@ -54,5 +54,8 @@
       { "id": "lightning", "kind": "emp", "name": "LIGHTNING STORM", "description": "Jetpacks fried", "duration": 6 }
     ],
     "schedule": { "kind": "random", "start": 15, "cycle": 40, "chance": 0.9, "weights": { "squall": 2, "fog-rolls-in": 2, "lightning": 1 } }
-  }
+  },
+  "spawners": [
+    { "id": "grenades", "pool": "grenades", "spots": [{ "x": 25, "y": 6 }, { "x": 93.5, "y": 5.5 }, { "x": 88, "y": 25 }], "first": [6, 10], "respawn": [18, 24], "maxActive": 2 }
+  ]
 }

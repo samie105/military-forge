@@ -143,5 +143,19 @@ export const movementTestMap: MapDef = {
       first: [2, 4],
       respawn: [10, 16],
     },
+    // grenade pairs up where you jet to (E): the solid platform, the top one-way and the tower
+    {
+      id: 'range-grenades',
+      pool: 'grenades',
+      spots: [
+        { x: 135.5, y: 4.5 },
+        { x: 138.5, y: 4.5 },
+        { x: 127, y: 7.5 },
+        { x: 143, y: 12 },
+      ],
+      first: [3, 6],
+      respawn: [8, 14],
+      maxActive: 2,
+    },
   ],
 };

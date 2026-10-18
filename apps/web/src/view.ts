@@ -31,6 +31,16 @@ export interface PlayerView {
   /** ticks until fuel starts regenerating (local mode only; online shows −1) */
   fuelRegenDelay: number;
   frags: number;
+  /** the selected grenade type and the belt, by type (local player; absent for remote players online) */
+  grenadeType?: number;
+  grenadeCounts?: readonly number[];
+  /** flashbang white-out 0…1 (sim blindIntensity) and the ticks left of it */
+  blind?: number;
+  blindTicks?: number;
+  /** ticks left of the gas cough (sim gasTicks) */
+  gasTicks?: number;
+  /** ticks the jetpack stays dead after an EMP */
+  jetDisabledTicks?: number;
   active: number;
   dual: boolean;
   weapons: WeaponView[];
@@ -54,6 +64,27 @@ export interface GrenadeView {
   x: number;
   y: number;
   fuse: number;
+  /** grenade type (packages/content grenades); absent = frag */
+  type?: number;
+  /** a mine's state (sim MineState) */
+  state?: number;
+  id?: number;
+}
+
+/** A smoke or gas cloud (sim clouds.ts), sized by the sim's own functions. */
+export interface CloudView {
+  id: number;
+  /** grenade type that made it (packages/content grenades) */
+  type: number;
+  x: number;
+  y: number;
+  /** current radius (m) and opacity 0…1 */
+  radius: number;
+  density: number;
+  /** radius inside which it hides things (0 = see-through: gas, or thinned-out smoke) */
+  opaque: number;
+  /** seconds since it popped */
+  age: number;
 }
 
 /** An item lying on the map: `def` is its PickupDef.index (@military-forge/content pickups). */
@@ -144,6 +175,8 @@ export interface Frame {
   mapEvent?: MapEventView | null;
   /** items on the map (riot shields…) */
   pickups?: PickupView[];
+  /** smoke and gas clouds (absent: none) */
+  clouds?: CloudView[];
   net?: NetStats;
   recording?: number;
   /** online + hitboxes on: recent server rewinds of our shots (docs/05 §15.3) */

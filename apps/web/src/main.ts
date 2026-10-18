@@ -15,6 +15,7 @@ import { DEMO_MAPS, getMap, maps, type MapDef } from '@military-forge/content';
 import { createConditionerSettings, parseNetSim } from '@military-forge/netcode';
 import { GAME_NAME } from '@military-forge/shared';
 import { Camera } from './camera';
+import { fxFrame } from './fx';
 import { InputSampler } from './input';
 import { LocalMode } from './localMode';
 import { OnlineMode } from './onlineMode';
@@ -146,7 +147,7 @@ if (mode instanceof OnlineMode) {
 }
 
 const HELP =
-  'A/D move · W/Space jet · S crouch (hold on a platform to drop) · Shift dash (+ WASD: 8-way) · LMB fire · V melee · R reload · Q swap · F dual · G frag · wheel zoom · H hitboxes · B grid · N net · ` panel' +
+  'A/D move · W/Space jet · S crouch (hold on a platform to drop) · Shift dash (+ WASD: 8-way) · LMB fire · V melee · R reload · Q swap · F dual · G grenade · T next grenade · wheel zoom · H hitboxes · B grid · N net · ` panel' +
   (online ? '' : ' · P record · O download replay');
 
 function resize(): void {
@@ -198,6 +199,7 @@ function frame(now: number): void {
   renderer.mouse.x = sampler.mouseX;
   renderer.mouse.y = sampler.mouseY;
   renderer.render(f, dt, options, HELP);
+  fxFrame(f, dt); // flashbang white-out / gas edge over the view (arsenal B, apps/web/src/fx)
   shell.update(mode instanceof LocalMode ? mode : null);
   shell.setMapEvent(f.mapEvent);
   view3d?.render(f, dt);

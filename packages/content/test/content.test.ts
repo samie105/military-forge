@@ -7,11 +7,14 @@ import {
   DEMO_MAPS,
   EVENT_KINDS,
   FRAG,
+  GRENADE_TYPES,
   MODIFIER_FIELDS,
   RIOT_SHIELD,
   SPAWN_POOLS,
   STANDING_HITBOXES,
   ZONE_KINDS,
+  grenades,
+  spawnGrenades,
   createTuning,
   defaultTuning,
   mapJsonSchema,
@@ -130,6 +133,66 @@ describe('tuning', () => {
   it('frag explosion is self-consistent', () => {
     expect(FRAG.explosion.core).toBeLessThan(FRAG.explosion.radius);
     expect(FRAG.spawnCount).toBeLessThanOrEqual(FRAG.maxCount);
+  });
+});
+
+describe('grenades', () => {
+  it('indices match their position (u3 on the wire) and every type fits the belt', () => {
+    grenades.forEach((g, i) => expect(g.index, g.id).toBe(i));
+    expect(grenades.length).toBeLessThanOrEqual(GRENADE_TYPES);
+    expect(GRENADE_TYPES).toBeLessThanOrEqual(8);
+    expect(new Set(grenades.map((g) => g.id)).size).toBe(grenades.length);
+  });
+
+  it('carry limits fit the local block (u3) and the spawn loadout is frag ×3', () => {
+    for (const g of grenades) {
+      expect(g.spawnCount, g.id).toBeLessThanOrEqual(g.maxCount);
+      expect(g.maxCount, g.id).toBeLessThanOrEqual(7);
+      expect(g.fuse, g.id).toBeGreaterThan(0);
+    }
+    const belt = spawnGrenades();
+    expect(belt).toHaveLength(GRENADE_TYPES);
+    expect(belt[FRAG.index]).toBe(3);
+    expect(belt.reduce((a, b) => a + b, 0)).toBe(3);
+  });
+
+  it('clouds grow, hold and fade inside their life, and gas is worst at the core', () => {
+    for (const g of grenades) {
+      if (g.effect !== 'cloud') continue;
+      const c = g.cloud;
+      expect(c.grow + c.fade, g.id).toBeLessThan(c.duration);
+      expect(c.startFraction, g.id).toBeGreaterThan(0);
+      expect(c.endFraction, g.id).toBeLessThanOrEqual(1);
+      expect(c.dpsCore, g.id).toBeGreaterThanOrEqual(c.dpsEdge);
+      expect(c.core, g.id).toBeLessThan(c.radius);
+      expect(c.duration * 60, g.id).toBeLessThan(1024); // age is u10 on the wire
+    }
+  });
+
+  it('mines and EMPs fit their wire fields (fuse u8, jetDisabledTicks u8)', () => {
+    for (const g of grenades) {
+      if (g.effect === 'mine') {
+        expect(g.mine.explosion.core, g.id).toBeLessThan(g.mine.explosion.radius);
+        expect(g.mine.triggerRadius, g.id).toBeLessThan(g.mine.explosion.radius);
+        expect(Math.round(g.fuse * 60), g.id).toBeLessThanOrEqual(255);
+        expect(Math.round(g.mine.chainDelay * 60), g.id).toBeGreaterThanOrEqual(1);
+      }
+      if (g.effect === 'emp') expect(Math.round(g.emp.jetDisable * 60), g.id).toBeLessThanOrEqual(255);
+    }
+  });
+
+  it('a flashbang blinds within the local block\'s ranges (blindTicks u8, blindFade u7)', () => {
+    for (const g of grenades) {
+      if (g.effect !== 'flash') continue;
+      const f = g.flash;
+      expect(Math.round((f.white + Math.max(f.fade, f.minFade)) * 60), g.id).toBeLessThanOrEqual(255);
+      expect(Math.round(Math.max(f.fade, f.minFade) * 60), g.id).toBeLessThanOrEqual(127);
+      expect(f.fullRadius, g.id).toBeLessThan(f.radius);
+      for (const mul of [f.awayMul, f.coverMul, f.smokeMul, f.minStrength]) {
+        expect(mul, g.id).toBeGreaterThan(0);
+        expect(mul, g.id).toBeLessThanOrEqual(1);
+      }
+    }
   });
 });
 

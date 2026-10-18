@@ -1,10 +1,14 @@
 /**
  * Map pickups (docs/03 §12; definitions in @military-forge/content pickups.ts). Spawners
  * (MapDef.spawners) put items on the map at random spots and times; players take them by touching
- * them and drop what they carry when they die. The riot shield is the first item:
+ * them and drop what they carry when they die.
+ * - The riot shield:
  *   - touching one gives you the shield with the HP the item has (a spawned one is fresh);
  *   - touching one while you carry a shield with less HP left tops yours up to the item's;
  *   - dying drops your shield on the floor below you with the HP it had left, for 30 s.
+ * - A grenade pair (arsenal B): two of its type onto your belt, up to the type's carry limit
+ *   (addGrenades); with that type full it stays on the floor. Which type a spawner puts out is the
+ *   seeded pool draw, like any item.
  *
  * Determinism: every random draw is a stateless hash of (seed, tick, spawner, draw), so a replay or
  * a re-simulation draws the same numbers. A game with pickups off (GameOptions.pickups: the client's
@@ -13,6 +17,7 @@
  */
 import {
   DROPPED_PICKUP_SECONDS,
+  GRENADE_PICKUP_COUNT,
   RIOT_SHIELD,
   RIOT_SHIELD_PICKUP,
   SPAWN_POOLS,
@@ -25,6 +30,7 @@ import {
 import { POS_INV, hash4, hashToUnit, quantize } from '@military-forge/shared';
 import { ticks } from './constants';
 import type { Game } from './game';
+import { addGrenades } from './grenades';
 import type { PlayerState } from './player';
 import { clearShield, giveShield } from './shield';
 import { createRayHit } from './world';
@@ -177,6 +183,8 @@ function take(p: PlayerState, k: PickupState, def: PickupDef): boolean {
         p.shieldHp = k.hp; // tops up the one you carry; how you carry it doesn't change
       } else giveShield(p, k.hp);
       return true;
+    case 'grenades':
+      return def.grenade !== undefined && addGrenades(p, def.grenade, GRENADE_PICKUP_COUNT) > 0;
   }
 }
 

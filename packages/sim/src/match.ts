@@ -509,6 +509,7 @@ export class Match {
     const game = this.game;
     for (const g of game.grenades) g.alive = false;
     resetPickups(game); // warm-up items gone, spawners start over
+    for (const c of game.clouds) c.alive = false;
     // Everyone dead first, then respawned in id order: each spawn is the farthest from those placed before it.
     for (const p of game.players) if (p) p.alive = false;
     for (const p of game.players) {

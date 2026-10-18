@@ -18,7 +18,9 @@ export interface StatsCard {
   rows: StatRow[];
 }
 
-const grenades: readonly GrenadeDef[] = [FRAG];
+/** grenades with a blast (GrenadeDef is a union by effect since grenade variety: smoke, gas, … have no explosion) */
+type BlastGrenade = GrenadeDef & { effect: 'explode' };
+const grenades: readonly BlastGrenade[] = [FRAG];
 
 const round = (v: number, digits = 1) => Number(v.toFixed(digits)).toString();
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
@@ -58,7 +60,7 @@ function weaponCard(def: WeaponDef): StatsCard {
   return { title: def.name, subtitle: `${def.class} · ${def.hands === 2 ? 'two-handed' : 'one-handed'}`, rows };
 }
 
-function grenadeCard(def: GrenadeDef): StatsCard {
+function grenadeCard(def: BlastGrenade): StatsCard {
   const e = def.explosion;
   return {
     title: def.id === 'frag' ? 'Frag grenade' : def.id,

@@ -5,12 +5,12 @@
 import {
   CROUCHED_HITBOXES,
   EVENT_KINDS,
-  FRAG,
   RIOT_SHIELD,
   SPAWN_POOLS,
   STANDING_HITBOXES,
   ZONE_KINDS,
   defaultTuning,
+  grenades,
   maps,
   pickups,
   weapons,
@@ -40,8 +40,13 @@ export { MsgType } from './wire';
  *     remote flags 256/512 = a 2-bit shield state (0 none, 1 slung, 2 raising, 3 up; flags 10 bits) ·
  *     local block 45–47 (shield group: shieldHp, shieldStowed, shieldTicks) · a pickups section after the grenades
  *     (items in view, only when changed) · a shot's `hit` may be 3 (a shield; docs/03 §9).
+ * v10 (arsenal-b, grenade variety): local block 48–57, two groups after the shield group: the grenade belt (u3
+ *     selected type · u3 count × 5 other types) and status (u8 blindTicks · u7 blindFade · u6 gasTicks · u8
+ *     jetDisabledTicks) · grenade records + u3 type · u2 mine state · a clouds section after the pickups section
+ *     (u5 n · u5 id · u3 type · x · y · u10 age) · EXPLOSION + u3 grenade type. No new event tags, ext kinds,
+ *     remote flags or INPUT bits.
  */
-export const PROTOCOL_VERSION = 9;
+export const PROTOCOL_VERSION = 10;
 
 /**
  * Everything the sim reads from packages/content: a client and server that disagree on any of it
@@ -51,7 +56,7 @@ export const PROTOCOL_VERSION = 9;
 export const HASHED_CONTENT = {
   tuning: defaultTuning,
   weapons,
-  grenades: [FRAG],
+  grenades,
   hitboxes: { standing: STANDING_HITBOXES, crouched: CROUCHED_HITBOXES },
   maps,
   /** the effects a map zone or event gets from its kind when it leaves them out (docs/02 §20) */

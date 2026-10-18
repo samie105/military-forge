@@ -1,4 +1,17 @@
-import { DROPPED_PICKUP_SECONDS, RIOT_SHIELD, RIOT_SHIELD_PICKUP, movementTestMap, type MapDef, type MapSpawner } from '@military-forge/content';
+import {
+  DROPPED_PICKUP_SECONDS,
+  GRENADE_PICKUP_COUNT,
+  RIOT_SHIELD,
+  RIOT_SHIELD_PICKUP,
+  fluxLabMap,
+  grenades,
+  lunarOutpostMap,
+  movementTestMap,
+  pickups,
+  stormFrontMap,
+  type MapDef,
+  type MapSpawner,
+} from '@military-forge/content';
 import { describe, expect, it } from 'vitest';
 import { Btn, DamageSource, Game, Match, MatchPhase, createInput, giveShield, hashGame, type Input, type PlayerState, type SimEvent } from '../src';
 import { flatMap, hold, placeOnGround, rect } from './helpers';
@@ -212,6 +225,60 @@ describe('taking and dropping', () => {
     expect(match.phase).toBe(MatchPhase.Countdown);
     expect(alive(game).length).toBe(0);
     expect(game.spawners[0]!.timer).toBe(60);
+  });
+});
+
+describe('grenade pairs (arsenal B; owner: a random pair of one type from each spot\'s pool)', () => {
+  it('a spawner on the grenades pool puts out pairs of one type each, drawn by the seeded PRNG', () => {
+    const seen = new Set<number>();
+    for (let seed = 1; seed <= 40; seed++) {
+      const { game, p } = withPickups(spawnerMap({ pool: 'grenades', spots: [{ x: 10, y: 0 }] }), seed);
+      p.x = 50;
+      hold(game, p, 0, 61); // first: [1, 1] s
+      const k = alive(game)[0]!;
+      const def = pickups[k.def]!;
+      expect(def.kind).toBe('grenades');
+      seen.add(def.grenade!);
+    }
+    // all six types turn up across seeds (frags most often: SPAWN_POOLS.grenades weights)
+    expect([...seen].sort()).toEqual(grenades.map((g) => g.index));
+  });
+
+  it('touching one adds the pair to the belt, up to the carry limit; a full type leaves it on the floor', () => {
+    const { game, p } = withPickups(spawnerMap({ pool: 'grenades', spots: [{ x: 10, y: 0 }], respawn: [600, 600] }), 3);
+    p.x = 50;
+    hold(game, p, 0, 61); // first: [1, 1] s
+    const k = alive(game)[0]!;
+    const type = pickups[k.def]!.grenade!;
+    const def = grenades[type]!;
+    // full of that type: it stays
+    game.setGrenadeLoadout(p, grenades.map((g) => (g.index === type ? g.maxCount : 0)));
+    placeOnGround(game, p, 10);
+    hold(game, p, 0, 1);
+    expect(k.alive).toBe(true);
+    expect(events(game, 'pickup')).toHaveLength(0);
+    // room for it: a pair (or what fits), and the event names the item
+    game.setGrenadeLoadout(p, grenades.map((g) => (g.index === type ? def.maxCount - 1 : 0)));
+    hold(game, p, 0, 1);
+    expect(k.alive).toBe(false);
+    expect(p.grenadeCounts[type]).toBe(def.maxCount);
+    expect(events(game, 'pickup')).toEqual([expect.objectContaining({ player: p.id, item: k.def })]);
+    // empty-handed: two of it, and it's selected
+    const q = withPickups(spawnerMap({ pool: 'grenades', spots: [{ x: 10, y: 0 }] }), 3);
+    q.game.setGrenadeLoadout(q.p, grenades.map(() => 0));
+    q.p.x = 50;
+    hold(q.game, q.p, 0, 61);
+    placeOnGround(q.game, q.p, 10);
+    hold(q.game, q.p, 0, 1);
+    expect(q.p.grenadeCounts[type]).toBe(Math.min(GRENADE_PICKUP_COUNT, def.maxCount));
+    expect(q.p.grenadeType).toBe(type);
+  });
+
+  it('every demo map and the test range have a grenades spawner', () => {
+    for (const map of [movementTestMap, lunarOutpostMap, stormFrontMap, fluxLabMap]) {
+      expect(map.spawners?.some((s) => s.pool === 'grenades'), map.id).toBe(true);
+      new Game({ map, pickups: true }); // valid spots, pools and timers
+    }
   });
 });
 

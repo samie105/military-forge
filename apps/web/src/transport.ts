@@ -36,6 +36,33 @@ export interface WebTransportEndpoint {
   url: string;
   /** hex SHA-256 of a short-lived self-signed certificate (dev); empty with a real certificate */
   certHashes: string[];
+  /**
+   * The server routes WebTransport sessions by room code (`?room=`), as it does WebSocket URLs.
+   * Without it a session lands in the default room, so a room by code stays on WebSocket.
+   */
+  rooms?: boolean;
+}
+
+/**
+ * The room a WebSocket URL names, as the game server reads it (`/ws/CODE`, `/CODE` or `?room=CODE`),
+ * or '' for the default room. The server validates it; this only carries it across.
+ */
+export function roomOfUrl(wsUrl: string): string {
+  let u: URL;
+  try {
+    u = new URL(wsUrl);
+  } catch {
+    return '';
+  }
+  return u.searchParams.get('room') ?? u.pathname.replace(/^\/ws(?=\/|$)/, '').replace(/^\/+|\/+$/g, '');
+}
+
+/** The WebTransport URL for a room: the endpoint's, with `?room=` when there is one. */
+export function webTransportUrl(endpoint: WebTransportEndpoint, room: string): string {
+  if (!room) return endpoint.url;
+  const u = new URL(endpoint.url);
+  u.searchParams.set('room', room);
+  return u.toString();
 }
 
 /** Datagram budget (§2.3): never fragment; bigger unreliable messages use the stream. */
@@ -262,12 +289,14 @@ export async function connectGame(wsUrl: string, prefer: 'auto' | 'wt' | 'ws', h
   let fallbackReason: string | null = null;
   if (prefer !== 'ws') {
     const endpoint = await discoverWebTransport(wsUrl);
+    const room = roomOfUrl(wsUrl);
     if (!endpoint) fallbackReason = 'no WebTransport gateway on this server';
     else if (!('WebTransport' in window)) fallbackReason = 'browser has no WebTransport';
+    else if (room && !endpoint.rooms) fallbackReason = "this server's WebTransport serves its default room only";
     else if (prefer === 'auto' && rememberedFailure(endpoint)) fallbackReason = 'this network blocked WebTransport recently';
     else {
       try {
-        const transport = await openWebTransport(endpoint, handlers);
+        const transport = await openWebTransport({ ...endpoint, url: webTransportUrl(endpoint, room) }, handlers);
         rememberFailure(endpoint, false);
         return { transport, fallbackReason: null };
       } catch (e) {

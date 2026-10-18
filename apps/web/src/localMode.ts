@@ -10,18 +10,22 @@ import {
   Game,
   Match,
   ReplayRecorder,
+  SmokeSight,
+  blindIntensity,
   createInput,
   type Input,
   type MatchCommandKind,
   type MatchRules,
   type PlayerState,
   type ReplayFile,
+  type SimEvent,
 } from '@military-forge/sim';
 import type { Camera } from './camera';
+import { cloudView, fullBelt, statusView } from './grenadeViews';
 import type { InputSampler } from './input';
 import { mapEventView } from './mapEvent';
 import type { Renderer } from './render';
-import { shieldView, type Frame, type PlayerView } from './view';
+import { shieldView, type CloudView, type Frame, type PlayerView } from './view';
 
 const MAX_CATCHUP = 5;
 const SEED = 1234;
@@ -36,9 +40,15 @@ export class LocalMode {
   private readonly input: Input = createInput();
   private readonly inputs: (Input | undefined)[] = [];
   private recorder: ReplayRecorder | null = null;
+  /** who smoke hides from us: the same rule as the server's AOI, so offline play looks like online */
+  private readonly sight = new SmokeSight();
+  /** the most blinded we were over this frame's ticks (a flashbang inside a hitch still shows) */
+  private peakBlind = 0;
   lastReplay: ReplayFile | null = null;
   /** dev give-weapon: the local player's [slot 1, slot 2] weapons, kept across resets and recorded in replays */
   loadout: [number, number] = [DEFAULT_LOADOUT[0], DEFAULT_LOADOUT[1]];
+  /** dev: `?grenades` gives the local player every grenade type (until map pickups hand them out); in replays too */
+  private readonly grenadeLoadout: number[] | null = typeof location !== 'undefined' && new URLSearchParams(location.search).has('grenades') ? fullBelt() : null;
 
   constructor(
     private readonly sampler: InputSampler,
@@ -62,6 +72,7 @@ export class LocalMode {
     this.me = this.game.addPlayer(this.name);
     // loadout before the Match: its countdown respawns everyone through Game.respawn → giveLoadout(p.loadout)
     this.game.setLoadout(this.me, this.loadout);
+    if (this.grenadeLoadout) this.game.setGrenadeLoadout(this.me, this.grenadeLoadout);
     this.match = this.matchRules ? new Match(this.game, this.matchRules) : null;
     this.match?.setReady(this.me.id); // straight into the countdown (docs/01 §2: instant in)
     this.prev.clear();
@@ -138,12 +149,37 @@ export class LocalMode {
         pickups: true,
         tuning: { ...this.game.tuning },
         loadouts: [[...this.loadout]],
+        ...(this.grenadeLoadout ? { grenadeLoadouts: [this.grenadeLoadout.slice()] } : {}),
         ...(this.matchRules ? { match: this.matchRules } : {}),
       },
       `playtest-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}`,
     );
     if (this.match) this.recorder.command('ready');
     return true;
+  }
+
+  /**
+   * Gunfire as the server would send it to us through smoke (docs/05 §9): no tracer from a shooter
+   * smoke hides, tracers stop where they go into smoke, and one into a player it hides goes on as a
+   * miss. Offline play looks like online.
+   */
+  private smokeEvents(events: readonly SimEvent[]): readonly SimEvent[] {
+    this.sight.gather(this.game);
+    if (this.sight.count === 0) return events;
+    const me = this.me.id;
+    return events.flatMap((e): SimEvent[] => {
+      if (e.type !== 'shot' || e.shooter === me) return [e];
+      if (e.shooter >= 0 && this.sight.hides(me, e.shooter)) return [];
+      let shot = e;
+      if ((e.hit === 2 || e.hit === 3) && e.target >= 0 && this.sight.hides(me, e.target)) {
+        const missed = this.sight.missed;
+        this.sight.carryOn(e.ox, e.oy, e.ex, e.ey, e.weapon);
+        shot = { ...e, ex: missed.x, ey: missed.y, hit: missed.hit === 1 ? 1 : 0, target: -1, zone: 0 };
+      }
+      const t = this.sight.tracerCut(me, shot.ox, shot.oy, shot.ex, shot.ey);
+      if (t < 1) shot = { ...shot, ex: shot.ox + (shot.ex - shot.ox) * t, ey: shot.oy + (shot.ey - shot.oy) * t, hit: 0, target: -1, zone: 0 };
+      return [shot];
+    });
   }
 
   update(dt: number): Frame {
@@ -164,7 +200,8 @@ export class LocalMode {
       if (this.match) this.match.step(this.inputs);
       else this.game.step(this.inputs);
       this.recorder?.record(this.input);
-      this.renderer.onEvents(this.game.events, this.me.id);
+      this.renderer.onEvents(this.smokeEvents(this.game.events), this.me.id);
+      if (this.me.alive) this.peakBlind = Math.max(this.peakBlind, blindIntensity(this.me));
       this.acc -= DT;
       steps++;
     }
@@ -172,8 +209,10 @@ export class LocalMode {
     const alpha = this.acc / DT;
 
     const players: PlayerView[] = [];
+    this.sight.gather(this.game);
     for (const p of this.game.players) {
       if (!p) continue;
+      if (this.sight.hides(this.me.id, p.id)) continue; // inside or behind smoke: not drawn (the server wouldn't send it)
       const prev = this.prev.get(p.id);
       let x = p.x;
       let y = p.y;
@@ -199,6 +238,7 @@ export class LocalMode {
         fuel: p.fuel,
         fuelRegenDelay: p.fuelRegenDelay,
         frags: p.frags,
+        ...statusView(p, p === this.me ? this.peakBlind : 0),
         active: p.active,
         dual: p.dual,
         weapons: p.weapons.map((w) => ({ def: w.def, mag: w.mag, reserve: w.reserve, reloadTicks: w.reloadTicks })),
@@ -211,11 +251,21 @@ export class LocalMode {
         deaths: p.deaths,
       });
     }
+    this.peakBlind = 0;
+    const clouds: CloudView[] = [];
+    for (const c of this.game.clouds) {
+      const view = c.alive ? cloudView(c.id, c.type, c.x, c.y, c.age) : null;
+      if (view) clouds.push(view);
+    }
     return {
       tick: this.game.tick,
       localId: this.me.id,
       players,
-      grenades: this.game.grenades.filter((g) => g.alive).map((g) => ({ x: g.x, y: g.y, fuse: g.fuse })),
+      // grenades in smoke we can't see into stay hidden too (ours always show), as the server does
+      grenades: this.game.grenades
+        .filter((g) => g.alive && (g.owner === this.me.id || !this.sight.pointHidden(this.me.id, g.x, g.y)))
+        .map((g) => ({ x: g.x, y: g.y, fuse: g.fuse, type: g.type, state: g.state, id: g.id })),
+      clouds,
       mapEvent: mapEventView(this.game),
       pickups: this.game.pickups.filter((k) => k.alive).map((k) => ({ id: k.id, def: k.def, x: k.x, y: k.y })),
       ...(this.recorder ? { recording: this.recorder.length } : {}),

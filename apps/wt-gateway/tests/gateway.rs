@@ -306,3 +306,24 @@ async fn draining_closes_sessions_so_players_resume_and_refuses_new_ones() {
     timeout(WAIT, drain).await.unwrap().unwrap();
     assert!(connect(&gw, "/wt").await.is_err());
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_session_url_reaches_the_game_server_so_it_can_route_rooms_by_code() {
+    let path = socket("target");
+    let listener = UnixListener::bind(&path).unwrap();
+    let gw = start(&[("/wt", &path)], |_| {}).await;
+    let mut server = FakeServer::accept(&listener).await;
+    let session = connect(&gw, "/wt?room=ABCDEF").await.expect("the query doesn't change the route");
+    let open = server.next("OPEN", |f| f.kind == OPEN).await;
+    let text = String::from_utf8(open.payload).unwrap();
+    let (remote, target) = text.split_once('\n').expect("address, newline, target");
+    assert!(remote.starts_with("127.0.0.1:"), "{remote}");
+    assert_eq!(target, "/wt?room=ABCDEF");
+    drop(session);
+    let plain = connect(&gw, "/wt").await.unwrap();
+    let open = server.next("OPEN", |f| f.kind == OPEN).await;
+    assert!(String::from_utf8(open.payload).unwrap().ends_with("\n/wt"));
+    drop(plain);
+    let long = format!("/wt?room={}", "A".repeat(600));
+    assert!(connect(&gw, &long).await.is_err()); // 400: nothing that long is a room code
+}

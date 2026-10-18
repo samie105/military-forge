@@ -3,14 +3,21 @@
  * playtest impressions can be compared against measurements (docs/02 §19).
  * Run: pnpm --filter @military-forge/sim feel        (sweep for better values: pnpm --filter @military-forge/sim tune)
  */
-import { BREACHER, BUZZ, HAMMER, K47, WIDOW, weapons } from '@military-forge/content';
+import { BREACHER, BUZZ, HAMMER, K47, SMOKE, WIDOW, defaultTuning, grenades, weapons } from '@military-forge/content';
 import {
   measureBlast,
   measureDash,
+  measureEmp,
   measureEvents,
+  measureFlash,
+  measureGas,
   measureGrenade,
+  measureMine,
   measureMovement,
+  measureRecoil,
+  measureRecoilTopSpeed,
   measureShield,
+  measureSprayDrift,
   measureWeapon,
   measureZones,
   type DashMetrics,
@@ -18,7 +25,21 @@ import {
   type MovementMetrics,
   type ZoneMetrics,
 } from './feel-lib';
-import { BLAST_TARGETS, DASH_TARGETS, EVENT_TARGETS, FOG_TARGETS, MOVEMENT_TARGETS, WEAPON_TARGETS, ZONE_TARGETS } from './feel-targets';
+import {
+  BLAST_TARGETS,
+  DASH_TARGETS,
+  EMP_TARGETS,
+  EVENT_TARGETS,
+  FLASH_TARGETS,
+  FOG_TARGETS,
+  GAS_TARGETS,
+  MINE_TARGETS,
+  MOVEMENT_TARGETS,
+  RECOIL_TARGETS,
+  SPRAY_TARGETS,
+  WEAPON_TARGETS,
+  ZONE_TARGETS,
+} from './feel-targets';
 
 const rows: [string, string, string][] = [];
 const mark = (ok: boolean) => (ok ? '✓' : '✗ off target');
@@ -60,8 +81,20 @@ for (const t of BLAST_TARGETS) {
   const ok = b.flew >= t.flewMin && b.flew <= t.flewMax && b.peak >= t.peakMin;
   rows.push([`Frag ${t.distance} m away: flight / peak (m)`, `${b.flew.toFixed(1)} / ${b.peak.toFixed(1)} · ${b.hpLeft.toFixed(0)} HP left`, `${mark(ok)}  (target ${t.flewMin}–${t.flewMax} m, peak ≥ ${t.peakMin}: ${t.why})`]);
 }
-const g = measureGrenade();
-rows.push(['Frag @45°: first bounce / detonation (m)', `${g.firstBounce.toFixed(1)} / ${g.detonation.toFixed(1)}`, '']);
+for (const def of grenades) {
+  if (def.effect === 'mine') continue; // it doesn't bounce or go off on a fuse: it sticks (the mine rows below)
+  const g = measureGrenade({}, def.index);
+  rows.push([`${def.name} @45°: first bounce / goes off (m)`, `${g.firstBounce.toFixed(1)} / ${g.detonation.toFixed(1)}`, '']);
+}
+const smoke = SMOKE.cloud;
+rows.push(['Smoke cloud: radius / opaque / life', `${smoke.radius} m / ${(smoke.radius * 0.85).toFixed(1)} m / ${smoke.duration} s`, 'hides anyone fully inside from bots and from the AOI']);
+for (const t of GAS_TARGETS) {
+  const m = measureGas(t.distance);
+  const ok = (t.ttkMax === undefined || m.ttk <= t.ttkMax) && (t.dpsMin === undefined || m.dps >= t.dpsMin) && (t.dpsMax === undefined || m.dps <= t.dpsMax);
+  const life = Number.isNaN(m.ttk) ? `survives (${m.taken.toFixed(0)} dmg)` : `dead in ${m.ttk.toFixed(2)} s`;
+  const range = [t.ttkMax !== undefined ? `TTK ≤ ${t.ttkMax} s` : '', t.dpsMin !== undefined ? `${t.dpsMin}–${t.dpsMax} dmg/s` : ''].filter(Boolean).join(', ');
+  rows.push([`Gas, standing ${t.distance} m from the pop`, `${m.dps.toFixed(1)} dmg/s · ${life}`, `${mark(ok)}  (target ${range}: ${t.why})`]);
+}
 
 // map zones at their kinds' defaults (docs/02 §20)
 const z = measureZones();
@@ -97,6 +130,38 @@ for (const w of [HAMMER, BUZZ, K47, BREACHER, WIDOW]) {
       f.killRate > 0 && fl.killRate > 0 && b.killRate > 0 ? `front ×${(f.ttk / fl.ttk).toFixed(1)}, back ×${(b.ttk / fl.ttk).toFixed(1)}` : '',
     ]);
   }
+}
+
+for (const t of FLASH_TARGETS) {
+  const f = measureFlash(t.distance, t.lookAway, t.wall);
+  const ok = f.white >= t.whiteMin && f.white <= t.whiteMax;
+  const how = `${t.distance} m, ${t.lookAway ? 'looking away' : 'looking at it'}${t.wall ? ', behind a wall' : ''}`;
+  rows.push([`Flashbang ${how}: white + fade (s)`, `${f.white.toFixed(2)} + ${f.fade.toFixed(2)}`, `${mark(ok)}  (white ${t.whiteMin}–${t.whiteMax} s: ${t.why})`]);
+}
+
+const mine = measureMine(1);
+const mt = MINE_TARGETS;
+rows.push(['Mine thrown level: sticks at (m) / after (s)', `${mine.sticksAt.toFixed(1)} / ${mine.sticksAfter.toFixed(2)}`, `${mark(mine.sticksAt >= mt.sticksAt.min && mine.sticksAt <= mt.sticksAt.max)}  (${mt.sticksAt.min}–${mt.sticksAt.max} m: ${mt.sticksAt.why})`]);
+rows.push(['Mine, an enemy 1 m away: blast after (s) / damage', `${mine.blastAfter.toFixed(2)} / ${mine.damage.toFixed(0)}`, `${mark(mine.damage >= mt.damage.min && mine.blastAfter >= mt.blastAfter.min && mine.blastAfter <= mt.blastAfter.max)}  (${mt.blastAfter.min}–${mt.blastAfter.max} s, ≥ ${mt.damage.min} dmg: ${mt.damage.why}; ${mt.blastAfter.why})`]);
+const emp = measureEmp();
+rows.push(['EMP next to a player hovering 3 m up: jet off (s) / dropped (m)', `${emp.jetOff.toFixed(2)} / ${emp.dropped.toFixed(1)}`, `${mark(emp.jetOff >= EMP_TARGETS.jetOff.min && emp.jetOff <= EMP_TARGETS.jetOff.max && emp.dropped >= EMP_TARGETS.dropped.min)}  (${EMP_TARGETS.jetOff.why}; ${EMP_TARGETS.dropped.why})`]);
+
+const recoil = new Map<string, ReturnType<typeof measureRecoil>>();
+for (const t of RECOIL_TARGETS) {
+  const w = weapons.find((x) => x.id === t.weapon)!;
+  if (!recoil.has(t.weapon)) recoil.set(t.weapon, measureRecoil(w.index));
+  const v = recoil.get(t.weapon)![t.key];
+  rows.push([`${t.label} (m)`, v.toFixed(2), `${mark(v >= t.min && v <= t.max)}  (target ${t.min}–${t.max}: ${t.why})`]);
+}
+for (const t of SPRAY_TARGETS) {
+  const w = weapons.find((x) => x.id === t.weapon)!;
+  const v = measureSprayDrift(w.index);
+  rows.push([`${w.name} sprayed level for 1 s in the air: drift back (m)`, v.toFixed(2), `${mark(v >= t.min - 1e-9 && v <= t.max + 1e-9)}  (target ${t.min}–${t.max}: ${t.why})`]);
+}
+{
+  const top = Math.max(...weapons.map((w) => measureRecoilTopSpeed(w.index)));
+  const cap = defaultTuning.launchSpeedX;
+  rows.push(['Fastest recoil alone carries you sideways (m/s)', top.toFixed(2), `${mark(top < cap)}  (below launchSpeedX ${cap}: recoil never gets the blast-launch drag)`]);
 }
 
 const w0 = Math.max(...rows.map(([k]) => k.length));

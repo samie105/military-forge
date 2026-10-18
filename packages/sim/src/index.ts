@@ -1,4 +1,5 @@
 export * from './bots';
+export * from './clouds';
 export * from './combat';
 export * from './constants';
 export * from './events';
@@ -10,6 +11,7 @@ export * from './input';
 export * from './mapEvents';
 export * from './match';
 export * from './mechanics';
+export * from './mines';
 export * from './movement';
 export * from './pickups';
 export * from './player';

@@ -51,8 +51,13 @@ export interface WeaponDef {
   equip: number;
   zoomMax: number;
   meleeDamage: number;
-  /** m/s push along −aim per shot, airborne only (docs/02 §12) */
+  /**
+   * Recoil push (docs/02 §12, "rebounds after shots"): m/s along −aim per shot while airborne, so a
+   * shotgun fired down is a jump and a sniper shot knocks you back. Light guns don't push (0).
+   */
   recoilPushAir: number;
+  /** m/s of horizontal slide against the aim per shot while grounded: heavy guns only (0 = none) */
+  recoilPushGround: number;
   /** weight: multiplies walk and air speed caps while held (docs/03 §9) */
   moveSpeedMul: number;
   /** visual muzzle distance from the shoulder, also the muzzle-in-wall guard length */
@@ -95,6 +100,7 @@ export const HAMMER: WeaponDef = {
   zoomMax: 3,
   meleeDamage: 25,
   recoilPushAir: 0,
+  recoilPushGround: 0,
   moveSpeedMul: 1.0,
   muzzleLength: 0.55,
 };
@@ -123,6 +129,7 @@ export const BUZZ: WeaponDef = {
   zoomMax: 3,
   meleeDamage: 20,
   recoilPushAir: 0,
+  recoilPushGround: 0,
   moveSpeedMul: 1.0,
   muzzleLength: 0.5,
 };
@@ -152,7 +159,8 @@ export const K47: WeaponDef = {
   equip: 0.35,
   zoomMax: 4,
   meleeDamage: 30,
-  recoilPushAir: 0,
+  recoilPushAir: 0.3, // spraying in the air drifts you back gently (~3 m/s per second of fire)
+  recoilPushGround: 0,
   moveSpeedMul: 0.97,
   muzzleLength: 0.75,
 };
@@ -180,7 +188,8 @@ export const BREACHER: WeaponDef = {
   equip: 0.35,
   zoomMax: 2,
   meleeDamage: 40,
-  recoilPushAir: 3.5,
+  recoilPushAir: 10, // fired down at the top of a hop: a ~2.5 m shotgun jump (NOTES §22.4)
+  recoilPushGround: 6, // a short slide back (~0.3 m)
   moveSpeedMul: 0.97,
   muzzleLength: 0.75,
 };
@@ -209,7 +218,8 @@ export const WIDOW: WeaponDef = {
   equip: 0.35,
   zoomMax: 7,
   meleeDamage: 35,
-  recoilPushAir: 2.0,
+  recoilPushAir: 2,
+  recoilPushGround: 8.5, // each shot kicks you back ~0.7 m standing (crouching braces against it)
   moveSpeedMul: 0.9,
   muzzleLength: 0.9,
 };
@@ -241,6 +251,7 @@ export const MACHETE: WeaponDef = {
   zoomMax: 1,
   meleeDamage: 100,
   recoilPushAir: 0,
+  recoilPushGround: 0,
   moveSpeedMul: 1.05,
   muzzleLength: 0.5,
 };

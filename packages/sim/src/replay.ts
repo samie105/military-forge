@@ -27,6 +27,8 @@ export interface ReplayFile {
   starts?: { x: number; y: number }[];
   /** optional weapon loadouts per human player ([slot 0, slot 1] weapon indices), also used on respawn */
   loadouts?: [number, number][];
+  /** optional grenades per human player, counts by grenade type (default: frag ×3), also given on respawn */
+  grenadeLoadouts?: number[][];
   /** one run-length encoded input stream per human player, joined in order */
   players: InputRun[][];
   /** run the replay through a Match with these rules (match.ts); absent = plain Game, as before */
@@ -65,6 +67,8 @@ export function createReplayGame(replay: ReplayFile): Game {
     if (start) p.spawn(start.x, start.y, game.tuning);
     const loadout = replay.loadouts?.[i];
     if (loadout) game.setLoadout(p, loadout);
+    const belt = replay.grenadeLoadouts?.[i];
+    if (belt) game.setGrenadeLoadout(p, belt);
   });
   return game;
 }
@@ -106,7 +110,7 @@ export class ReplayRecorder {
   private readonly commands: MatchCommand[] = [];
 
   constructor(
-    private readonly meta: Pick<ReplayFile, 'map' | 'seed' | 'dummies' | 'tuning' | 'starts' | 'loadouts' | 'match' | 'pickups'>,
+    private readonly meta: Pick<ReplayFile, 'map' | 'seed' | 'dummies' | 'tuning' | 'starts' | 'loadouts' | 'grenadeLoadouts' | 'match' | 'pickups'>,
     private readonly name = 'recorded',
   ) {}
 

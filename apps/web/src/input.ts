@@ -20,6 +20,7 @@ const KEY_BINDINGS: Record<string, number> = {
   KeyQ: Btn.Swap,
   KeyF: Btn.Dual,
   KeyG: Btn.Grenade,
+  KeyT: Btn.CycleGrenade,
   KeyE: Btn.Interact,
   KeyV: Btn.Melee,
   ShiftLeft: Btn.Dash,
@@ -102,7 +103,12 @@ export class InputSampler {
       this.mouseButtons |= 1 << e.button;
       e.preventDefault();
     });
-    window.addEventListener('mouseup', (e) => (this.mouseButtons &= ~(1 << e.button)));
+    window.addEventListener('mouseup', (e) => {
+      // the back/forward side buttons (mouse 4 and 5: 5 cycles grenades) navigate on release in
+      // Chrome: not when the press was ours
+      if ((e.button === 3 || e.button === 4) && this.mouseButtons & (1 << e.button)) e.preventDefault();
+      this.mouseButtons &= ~(1 << e.button);
+    });
     target.addEventListener('contextmenu', (e) => e.preventDefault());
     target.addEventListener(
       'wheel',
@@ -160,6 +166,7 @@ export class InputSampler {
     }
     if (this.mouseButtons & 1) buttons |= Btn.Fire;
     if (this.mouseButtons & 4) buttons |= Btn.Fire2;
+    if (this.mouseButtons & 16) buttons |= Btn.CycleGrenade; // mouse 5 (docs/01 §4)
     const m = this.mouseWorld(camera);
     out.buttons = buttons;
     out.aim = angleToU16(Math.atan2(m.y - sy, m.x - sx));

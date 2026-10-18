@@ -3,17 +3,19 @@
  * attempt leaves behind decides whether the next connect even tries.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { connectGame, healthUrl } from '../src/transport';
+import { connectGame, healthUrl, roomOfUrl, webTransportUrl } from '../src/transport';
 
 class FakeWebTransport {
   static mode: 'ok' | 'refuse' | 'hang' = 'ok';
   static created = 0;
+  static lastUrl = '';
   readonly ready: Promise<void>;
   readonly closed = new Promise<never>(() => {});
   readonly reliability = 'supports-unreliable';
   readonly datagrams = { readable: new ReadableStream(), writable: new WritableStream(), maxDatagramSize: 1200 };
-  constructor() {
+  constructor(url: string) {
     FakeWebTransport.created++;
+    FakeWebTransport.lastUrl = url;
     const mode = FakeWebTransport.mode;
     this.ready = mode === 'ok' ? Promise.resolve() : mode === 'refuse' ? Promise.reject(new Error('503')) : new Promise(() => {});
     this.ready.catch(() => {});
@@ -39,9 +41,10 @@ class FakeWebSocket {
 }
 
 const handlers = { onMessage: () => {}, onClose: () => {} };
+let serverRoutesRooms = false;
 
-async function connect(reconnect = false) {
-  const pending = connectGame('ws://gs.example.com:9001', 'auto', handlers, reconnect);
+async function connect(reconnect = false, wsUrl = 'ws://gs.example.com:9001') {
+  const pending = connectGame(wsUrl, 'auto', handlers, reconnect);
   await vi.advanceTimersByTimeAsync(2100);
   return pending;
 }
@@ -53,7 +56,7 @@ beforeEach(() => {
   vi.stubGlobal('WebTransport', FakeWebTransport);
   vi.stubGlobal('WebSocket', FakeWebSocket);
   vi.stubGlobal('localStorage', { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v), removeItem: (k: string) => store.delete(k) });
-  vi.stubGlobal('fetch', async () => ({ json: async () => ({ webtransport: { url: 'https://gs.example.com:4433/wt', certHashes: [] } }) }));
+  vi.stubGlobal('fetch', async () => ({ json: async () => ({ webtransport: { url: 'https://gs.example.com:4433/wt', certHashes: [], rooms: serverRoutesRooms } }) }));
   FakeWebTransport.created = 0;
 });
 
@@ -93,5 +96,27 @@ describe('transport selection', () => {
     expect((await connect(true)).transport.kind).toBe('ws');
     await connect();
     expect(FakeWebTransport.created).toBe(2);
+  });
+
+  it('a room by code: its code rides in the WebTransport URL, only on servers that route by it', async () => {
+    expect(roomOfUrl('wss://gs.example.com/ws/KQMZPT')).toBe('KQMZPT');
+    expect(roomOfUrl('ws://localhost:9001/?room=KQMZPT')).toBe('KQMZPT');
+    expect(roomOfUrl('ws://localhost:9001')).toBe('');
+    expect(roomOfUrl('wss://gs.example.com/ws')).toBe('');
+    expect(webTransportUrl({ url: 'https://n.example.com/wt/2', certHashes: [] }, 'KQMZPT')).toBe('https://n.example.com/wt/2?room=KQMZPT');
+
+    FakeWebTransport.mode = 'ok';
+    serverRoutesRooms = false; // a gateway that puts every session in the default room
+    const old = await connect(false, 'wss://gs.example.com/ws/KQMZPT');
+    expect(old.transport.kind).toBe('ws');
+    expect(old.fallbackReason).toMatch(/default room only/);
+    expect(FakeWebTransport.created).toBe(0);
+
+    serverRoutesRooms = true;
+    const coded = await connect(false, 'wss://gs.example.com/ws/KQMZPT');
+    expect(coded.transport.kind).toBe('wt');
+    expect(FakeWebTransport.lastUrl).toBe('https://gs.example.com:4433/wt?room=KQMZPT');
+    await connect(); // the default room: the plain URL
+    expect(FakeWebTransport.lastUrl).toBe('https://gs.example.com:4433/wt');
   });
 });

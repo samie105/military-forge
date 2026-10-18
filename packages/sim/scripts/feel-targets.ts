@@ -99,3 +99,45 @@ export const WEAPON_TARGETS: WeaponTarget[] = [
   { label: 'Widow @18 m grounded', weapon: 'widow', distance: 18, airborne: false, hitMin: 0.95, ttkMax: 0.85, why: 'docs/03 §6: 2 body shots, 0.8 s' },
   { label: 'Machete @1 m grounded', weapon: 'machete', distance: 1, airborne: false, hitMin: 0.95, ttkMax: 0.2, why: 'one swing after the 0.15 s windup' },
 ];
+
+/** Toxic gas (docs/02 §14): a player standing still at `distance` m from where the cloud popped. */
+export const GAS_TARGETS: { distance: number; ttkMax?: number; dpsMin?: number; dpsMax?: number; why: string }[] = [
+  { distance: 0, ttkMax: 8, why: 'staying in the middle kills: get out or die' },
+  { distance: 2, dpsMin: 8, dpsMax: 12, why: 'still deadly halfway out' },
+  { distance: 3.5, dpsMin: 3, dpsMax: 6, why: 'crossing the edge costs a few HP, it is not a wall' },
+];
+
+/** Flashbang blindness (docs/02 §14): seconds of full white, by distance, where you look and cover. */
+export const FLASH_TARGETS: { distance: number; lookAway: boolean; wall: boolean; whiteMin: number; whiteMax: number; why: string }[] = [
+  { distance: 3, lookAway: false, wall: false, whiteMin: 2.0, whiteMax: 2.5, why: 'up to ~2.5 s of white, then a ~1.5 s fade (owner: "only white for some time")' },
+  { distance: 3, lookAway: true, wall: false, whiteMin: 0.3, whiteMax: 0.9, why: 'turning away is the counterplay' },
+  { distance: 3, lookAway: false, wall: true, whiteMin: 0, whiteMax: 0.5, why: 'cover protects' },
+  { distance: 10, lookAway: false, wall: false, whiteMin: 0.9, whiteMax: 1.6, why: 'still a real flash across a room' },
+  { distance: 17, lookAway: false, wall: false, whiteMin: 0, whiteMax: 0, why: 'off-screen flashes do nothing' },
+];
+
+/** Proximity mine and EMP (docs/02 §14). */
+export const MINE_TARGETS = {
+  sticksAt: { min: 9, max: 14, why: 'short range: 0.9 s of straight flight, then it drops' },
+  /** an enemy 1 m from a mine */
+  damage: { min: 100, why: 'stepping on one kills' },
+  blastAfter: { min: 0.2, max: 0.35, why: 'the 0.25 s beep: a warning, not an escape' },
+};
+export const EMP_TARGETS = {
+  jetOff: { min: 2.9, max: 3.1, why: 'jetpacks dead for 3 s' },
+  dropped: { min: 2.5, why: 'a hovering player falls out of the sky' },
+};
+
+/** Recoil push (docs/02 §12; the owner's "rebounds physics after shots"). Distances in metres. */
+export const RECOIL_TARGETS: { weapon: string; key: 'lift' | 'airKnock' | 'slide' | 'crouchSlide'; label: string; min: number; max: number; why: string }[] = [
+  { weapon: 'breacher', key: 'lift', label: 'Breacher fired down at the top of a hop: lift', min: 2, max: 3, why: 'shotgun-jumping is a movement trick' },
+  { weapon: 'breacher', key: 'airKnock', label: 'Breacher fired level at the top of a hop: knocked back', min: 2, max: 5, why: 'a shotgun dash, not a launch' },
+  { weapon: 'breacher', key: 'slide', label: 'Breacher fired level standing: slide back', min: 0.15, max: 0.5, why: 'a small grounded slide' },
+  { weapon: 'widow', key: 'slide', label: 'Widow fired level standing: slide back', min: 0.5, max: 1, why: 'a sniper shot knocks you back' },
+  { weapon: 'widow', key: 'crouchSlide', label: 'Widow fired level crouched: slide back', min: 0.05, max: 0.4, why: 'crouching braces against the kick' },
+  { weapon: 'widow', key: 'airKnock', label: 'Widow fired level at the top of a hop: knocked back', min: 0.5, max: 2, why: 'noticeable, not a dash' },
+];
+export const SPRAY_TARGETS: { weapon: string; min: number; max: number; why: string }[] = [
+  { weapon: 'k47', min: 0.5, max: 2.5, why: 'spraying in the air drifts you back gently' },
+  { weapon: 'buzz', min: 0, max: 0, why: 'light guns never push' },
+];

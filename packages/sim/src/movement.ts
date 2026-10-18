@@ -450,13 +450,13 @@ const DASH_INDEX = [
 ];
 
 /**
- * A dash is a jetpack burst, so whatever cuts the jetpack (an EMP field or storm) blocks it too.
- * A riot shield up or coming up blocks it as well: lower the shield to dash. A blocked press costs
- * nothing (no cooldown, no fuel).
+ * A dash is a jetpack burst, so whatever cuts the jetpack (an EMP field or storm, an EMP grenade's
+ * lockout) blocks it too. A riot shield up or coming up blocks it as well: lower the shield to dash.
+ * A blocked press costs nothing (no cooldown, no fuel).
  */
 export function dashBlocked(p: PlayerState, env: BodyEnv | null): boolean {
   // a riot shield up (or coming up) holds you back: lower it to dash (mechanics-dash.md)
-  return (env !== null && env.jetDisabled) || shieldInFront(p);
+  return (env !== null && env.jetDisabled) || p.jetDisabledTicks > 0 || shieldInFront(p);
 }
 
 /**
@@ -580,7 +580,8 @@ export function stepMovement(world: CollisionWorld, p: PlayerState, t: Tuning, e
 
   // --- 2. jetpack + fuel (off during a dash burst) ---
   const canIgnite = p.fuel >= t.fuelMinIgnite || p.jetting;
-  p.jetting = isDown(buttons, Btn.Jet) && canIgnite && p.fuel > 0 && !env?.jetDisabled && !dashing;
+  // an EMP grenade leaves the jetpack dead for a while (grenades.ts emp); the map's EMP fields and storms are env.jetDisabled
+  p.jetting = isDown(buttons, Btn.Jet) && canIgnite && p.fuel > 0 && !env?.jetDisabled && p.jetDisabledTicks === 0 && !dashing;
   if (p.jetting) {
     p.jetTicks++;
     // The ignition kick burns fuel at the same multiplier as its thrust, so lift per unit of fuel
