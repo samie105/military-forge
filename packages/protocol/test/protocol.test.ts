@@ -32,6 +32,7 @@ import {
   encodeRewindDebug,
   encodeRoster,
   encodeSnapshot,
+  encodeOverrides,
   encodeTuning,
   encodeWelcome,
   decodeFullSnapshot,
@@ -103,7 +104,7 @@ describe('messages', () => {
     // a HELLO without the trailing token (older client / minimal tools) still decodes
     const bare = encodeHello('Kemi');
     expect(decodeMessage(bare.subarray(0, bare.length - 1))).toMatchObject({ name: 'Kemi', resumeToken: '' });
-    const welcome = { playerId: 4, seed: 123456789, serverTick: 99, mapId: 'movement-test', tuningJson: '{"gravity":20}', sessionToken: 'abc_DEF-123', resumed: true };
+    const welcome = { playerId: 4, seed: 123456789, serverTick: 99, mapId: 'movement-test', tuningJson: '{"gravity":20}', sessionToken: 'abc_DEF-123', resumed: true, overridesJson: '{"weapon.k47.damage":14}' };
     expect(decodeMessage(encodeWelcome(welcome))).toEqual({ type: MsgType.Welcome, ...welcome });
     expect(decodeMessage(encodePing(1234.5))).toEqual({ type: MsgType.Ping, clientTime: 1234.5 });
     expect(decodeMessage(encodePong(1234.5, 77))).toEqual({ type: MsgType.Pong, clientTime: 1234.5, serverTick: 77 });
@@ -1037,7 +1038,7 @@ describe('more guns (v11)', () => {
 
 describe('launchers and the flamethrower (v12)', () => {
   it('takes the v12 slots from the protocol registry: a burn group after the fire-mode group', () => {
-    expect(PROTOCOL_VERSION).toBe(12);
+    expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(12);
     expect([LS.burnTicks, LOCAL_STATE_FIELDS]).toEqual([62, 63]);
   });
 
@@ -1140,5 +1141,17 @@ describe('items in smoke (review M2)', () => {
     // the smoke clears: the truth
     cloud.alive = false;
     expect(seen()).toEqual([`${dropped.def}@30.5`]);
+  });
+});
+
+describe('the admin page\'s overrides (v13)', () => {
+  it('OVERRIDES (0x28) and WELCOME\'s overridesJson carry the admin values whole, however many', () => {
+    expect(PROTOCOL_VERSION).toBe(13);
+    expect(MsgType.Overrides).toBe(0x28);
+    const many = JSON.stringify(Object.fromEntries(Array.from({ length: 400 }, (_, i) => [`weapon.gun${i}.damage`, i + 0.25])));
+    expect(many.length).toBeGreaterThan(4096);
+    expect(decodeMessage(encodeOverrides(many))).toEqual({ type: MsgType.Overrides, overridesJson: many });
+    const welcome = { playerId: 2, seed: 9, serverTick: 120, mapId: 'movement-test', tuningJson: '{}', sessionToken: 'tok', resumed: false, overridesJson: many };
+    expect(decodeMessage(encodeWelcome(welcome))).toEqual({ type: MsgType.Welcome, ...welcome });
   });
 });

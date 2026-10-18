@@ -1,0 +1,229 @@
+/*
+ * The owner's admin page (admin.html): the kit's round-two tokens and fonts (kit.css, fonts.css), plain
+ * markup, one column on a phone, two on a laptop. Tokens only, no raw colours.
+ */
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--c-ink-900);
+}
+.admin {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: var(--sp-4) var(--sp-4) var(--sp-10);
+  font-size: var(--fs-16);
+}
+.admin__bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  gap: var(--sp-3);
+  padding: var(--sp-3) 0 var(--sp-4);
+  background: var(--c-ink-900);
+  border-bottom: var(--bw) solid var(--c-line);
+}
+.admin__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+.admin__title {
+  margin: 0;
+  font-family: var(--f-display);
+  font-weight: 400;
+  font-size: var(--fs-28);
+  letter-spacing: var(--ls-display);
+}
+.admin__title small {
+  font-family: var(--f-ui);
+  font-size: var(--fs-14);
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  color: var(--c-brass);
+  margin-left: var(--sp-2);
+}
+.admin__status {
+  color: var(--c-muted-2);
+  font-size: var(--fs-14);
+}
+.admin__status.is-error {
+  color: var(--c-danger-text);
+}
+.admin__tools {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  align-items: center;
+}
+.admin__search {
+  flex: 1 1 220px;
+  min-width: 0;
+  height: 40px;
+  padding: 0 var(--sp-3);
+  background: var(--c-ink-950);
+  border: var(--bw) solid var(--c-line-strong);
+  border-radius: var(--r-sm);
+  color: var(--c-text);
+  font: inherit;
+}
+.admin__btn {
+  height: 40px;
+  padding: 0 var(--sp-4);
+  border-radius: var(--r-sm);
+  border: var(--bw) solid var(--c-line-strong);
+  background: var(--c-ink-700);
+  color: var(--c-text);
+  font: inherit;
+  font-weight: var(--fw-bold);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.admin__btn:hover {
+  background: var(--c-ink-600);
+}
+.admin__btn--primary {
+  background: var(--c-volt);
+  border-color: var(--c-volt);
+  color: var(--c-volt-ink);
+}
+.admin__btn--primary:hover {
+  background: var(--c-volt-hi);
+}
+.admin__btn--danger {
+  background: transparent;
+  border-color: var(--c-hp);
+  color: var(--c-danger-text);
+}
+.admin__presets {
+  display: inline-flex;
+  gap: var(--sp-1);
+}
+.admin__group {
+  margin-top: var(--sp-4);
+  background: var(--c-ink-800);
+  border: var(--bw) solid var(--c-line);
+  border-radius: var(--r-md);
+}
+.admin__group > summary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  cursor: pointer;
+  font-weight: var(--fw-bold);
+  font-size: var(--fs-18);
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+}
+.admin__count {
+  color: var(--c-brass);
+  font-size: var(--fs-14);
+  font-weight: var(--fw-semi);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.admin__sections {
+  display: grid;
+  gap: var(--sp-4);
+  padding: 0 var(--sp-4) var(--sp-4);
+}
+@media (min-width: 900px) {
+  .admin__sections {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.admin__section h3 {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-14);
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  color: var(--c-muted);
+}
+.admin__row {
+  display: grid;
+  grid-template-columns: 1fr 88px 32px;
+  grid-template-areas: 'label label label' 'slider number reset';
+  align-items: center;
+  column-gap: var(--sp-2);
+  padding: var(--sp-2) 0;
+  border-top: var(--bw) solid var(--c-line);
+}
+.admin__row label {
+  grid-area: label;
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  color: var(--c-text);
+}
+.admin__row label small {
+  color: var(--c-muted-2);
+  white-space: nowrap;
+}
+.admin__row.is-changed label {
+  color: var(--c-brass);
+}
+.admin__row input[type='range'] {
+  grid-area: slider;
+  width: 100%;
+  accent-color: var(--c-volt);
+}
+.admin__row input[type='number'] {
+  grid-area: number;
+  width: 100%;
+  height: 32px;
+  box-sizing: border-box;
+  padding: 0 var(--sp-2);
+  background: var(--c-ink-950);
+  border: var(--bw) solid var(--c-line-strong);
+  border-radius: var(--r-xs);
+  color: var(--c-text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.admin__reset {
+  grid-area: reset;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-xs);
+  border: var(--bw) solid var(--c-line-strong);
+  background: var(--c-ink-700);
+  color: var(--c-text);
+  cursor: pointer;
+}
+.admin__reset:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+[hidden] {
+  display: none !important;
+}
+.admin__gate {
+  max-width: 520px;
+  margin: 15vh auto 0;
+  padding: var(--sp-6);
+  background: var(--c-ink-800);
+  border: var(--bw) solid var(--c-line);
+  border-radius: var(--r-md);
+}
+.admin__gate h1 {
+  margin: 0 0 var(--sp-3);
+  font-family: var(--f-display);
+  font-weight: 400;
+}
+.admin__gate p {
+  color: var(--c-muted);
+}
+/* a phone: the bar scrolls away (it wraps to several rows), the rows stay one column */
+@media (max-width: 640px) {
+  .admin__bar {
+    position: static;
+  }
+  .admin__btn {
+    height: 36px;
+    padding: 0 var(--sp-3);
+  }
+}

@@ -56,8 +56,11 @@ export { MsgType } from './wire';
  *     widens u3 → u4 (8–12: rocket, shell, blade, orb, flame) and fuse u8 → u9; EXPLOSION's grenade
  *     type u3 → u4; local block 62 burnTicks u7 (14 delta groups); remote flags 12 bits (1024 burning,
  *     2048 winding up: a minigun spinning or a charge weapon charging).
+ * v13 (arsenal, the owner's admin page): OVERRIDES (0x28, a u16-length JSON of the admin's changed
+ *     gameplay values) and WELCOME's trailing overridesJson (u16-length; `{}` when none), so every
+ *     client's weapons and grenades match the server's. The admin page itself talks HTTP.
  */
-export const PROTOCOL_VERSION = 12;
+export const PROTOCOL_VERSION = 13;
 
 /**
  * Everything the sim reads from packages/content: a client and server that disagree on any of it
@@ -198,6 +201,12 @@ export interface WelcomeMsg {
   sessionToken: string;
   /** this connection took over an existing player (reconnect) */
   resumed: boolean;
+  /**
+   * v13: the admin page's changed values on this server (JSON `{ key: number }`, content
+   * `applyContentOverrides`), `{}` when nothing is changed: a late joiner or a reconnect predicts
+   * with the same weapons and grenades as everyone else
+   */
+  overridesJson: string;
 }
 
 export interface PingMsg {
@@ -270,6 +279,12 @@ export interface TuningMsg {
   tuningJson: string;
 }
 
+/** v13: the admin page changed gameplay numbers (JSON `{ key: number }`, the whole set, not a diff). */
+export interface OverridesMsg {
+  type: typeof MsgType.Overrides;
+  overridesJson: string;
+}
+
 export interface RewindTarget {
   id: number;
   /** the pose the hit test used (what the shooter saw) */
@@ -298,7 +313,7 @@ export interface RewindDebugMsg {
   targets: RewindTarget[];
 }
 
-export type ServerMessage = WelcomeMsg | PongMsg | SnapshotMsg | RosterMsg | KickMsg | TuningMsg | RewindDebugMsg | MatchStateMsg;
+export type ServerMessage = WelcomeMsg | PongMsg | SnapshotMsg | RosterMsg | KickMsg | TuningMsg | OverridesMsg | RewindDebugMsg | MatchStateMsg;
 export type ClientMessage = HelloMsg | PingMsg | InputMsg | CmdMsg;
 export type Message = ServerMessage | ClientMessage;
 
@@ -324,6 +339,7 @@ export function encodeWelcome(m: Omit<WelcomeMsg, 'type'>): Uint8Array {
     .string(m.tuningJson, 16)
     .string(m.sessionToken)
     .bool(m.resumed)
+    .string(m.overridesJson, 16)
     .finish()
     .slice();
 }
@@ -371,6 +387,11 @@ export function encodeKick(code: number, reason: string): Uint8Array {
 
 export function encodeTuning(tuningJson: string): Uint8Array {
   return w.reset().u8(MsgType.Tuning).string(tuningJson, 16).finish().slice();
+}
+
+/** v13: the admin page's gameplay overrides, the whole set (JSON `{ key: number }`). */
+export function encodeOverrides(overridesJson: string): Uint8Array {
+  return w.reset().u8(MsgType.Overrides).string(overridesJson, 16).finish().slice();
 }
 
 const MAX_REWIND_TARGETS = 31;
@@ -425,6 +446,7 @@ export function decodeMessage(bytes: Uint8Array): Message {
         tuningJson: r.string(16),
         sessionToken: r.string(),
         resumed: r.bool(),
+        overridesJson: r.string(16),
       };
     case MsgType.Ping:
       return { type, clientTime: r.f64() };
@@ -466,6 +488,8 @@ export function decodeMessage(bytes: Uint8Array): Message {
       return decodeMatchStateBody(r);
     case MsgType.Tuning:
       return { type, tuningJson: r.string(16) };
+    case MsgType.Overrides:
+      return { type, overridesJson: r.string(16) };
     case MsgType.Debug: {
       const kind = r.u8();
       if (kind !== DebugKind.Rewind) throw new DecodeError(`unknown debug kind ${kind}`);

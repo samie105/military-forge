@@ -3,6 +3,8 @@
  *   /api/*        → the API (prefix stripped), any method
  *   /ws/<code>    → the game server's WebSocket (upgraded; wss:// through the tunnel)
  *   /r/<code>, /  → the app (index.html: it reads the room from the path)
+ *   /admin        → the owner's admin page (admin.html); /admin/api/* → the game server's admin
+ *                   API, which answers only the run's token (Authorization: Bearer, never in a URL)
  *   anything else → a file from the production build, or 404
  *
  * Only the built files are served (never the Vite dev server), every response carries security
@@ -36,6 +38,8 @@ export interface ProxyOptions {
   apiOrigin?: string;
   /** pnpm playtest --tune: the app offers a room's host the tuning panel (the game server lets the host tune) */
   tune?: boolean;
+  /** the game server's admin API (127.0.0.1): /admin/api/* goes there; none: the admin page is off */
+  admin?: Upstream;
   log?: (line: string) => void;
 }
 
@@ -283,6 +287,30 @@ function proxyApi(req: IncomingMessage, res: ServerResponse, api: Upstream, path
   req.pipe(upstream);
 }
 
+/** Only these reach the admin API: its token, and what the body is. */
+const ADMIN_HEADERS = ['authorization', 'content-type', 'content-length', 'accept'];
+
+/**
+ * An admin API call, to the game server's admin port: the method, the path and a few headers go
+ * up as they are; the answer comes back as it is (the API checks the token itself).
+ */
+function proxyAdmin(req: IncomingMessage, res: ServerResponse, admin: Upstream, path: string): void {
+  const headers: OutgoingHttpHeaders = {};
+  for (const name of ADMIN_HEADERS) if (req.headers[name] !== undefined) headers[name] = req.headers[name];
+  const upstream = request({ host: admin.host, port: admin.port, method: req.method, path, headers }, (answer) => {
+    res.writeHead(answer.statusCode ?? 502, { ...endToEnd(answer.headers), 'Cache-Control': 'no-store' });
+    answer.pipe(res);
+  });
+  res.on('close', () => {
+    if (!res.writableFinished) upstream.destroy();
+  });
+  upstream.on('error', () => {
+    if (!res.headersSent) send(res, 502, JSON.stringify({ error: 'the game server is not answering' }), { 'Content-Type': 'application/json' });
+    else res.destroy();
+  });
+  req.pipe(upstream);
+}
+
 function refuseUpgrade(socket: Duplex, status: number, text: string): void {
   socket.end(`HTTP/1.1 ${status} ${text}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
 }
@@ -375,8 +403,20 @@ export function createProxy(options: ProxyOptions): Server {
       proxyApi(req, res, options.api, `${url.pathname.slice('/api'.length) || '/'}${url.search}`, log, options.allowedOrigins(), options.apiOrigin);
       return;
     }
+    if (url.pathname.startsWith('/admin/api/')) {
+      if (!options.admin) send(res, 404, 'Not found', securityHeaders(req.headers.host));
+      else proxyAdmin(req, res, options.admin, url.pathname);
+      return;
+    }
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       send(res, 405, 'Method not allowed', { Allow: 'GET, HEAD' });
+      return;
+    }
+    // the owner's admin page: its own page (it reads the token from the #fragment, which never comes here)
+    if (pathname === '/admin' || pathname === '/admin/') {
+      const page = resolve(root, 'admin.html');
+      if (!options.admin) send(res, 404, 'Not found', securityHeaders(req.headers.host));
+      else servePage(req, res, page, options.allowedOrigins(), false);
       return;
     }
     // the game client asks the game server's /health (same origin as /ws) for a WebTransport gateway;

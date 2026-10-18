@@ -338,6 +338,9 @@ describe('hudFrame', () => {
     expect(tokens).toEqual(expect.arrayContaining(['alive', 'low-hp', 'shield', 'shield-up', 'emp', 'dash-cooldown', 'reloading', 'weapon', 'gun', 'second-weapon', 'belt', 'event', 'pickup', 'reticle', 'hit-marker', 'fps']));
     expect(tokens).not.toContain('match');
     expect(tokens).not.toContain('spectating');
+    // the owner's admin page changed gameplay numbers on this server: the small tag
+    expect(tokens).not.toContain('admin');
+    expect(hudFrame(input({ adminTuned: true }), memory).tokens).toContain('admin');
   });
 
   it('a weapon crate underfoot shows its whole take line and the gun icon, not "walk over to take"', () => {

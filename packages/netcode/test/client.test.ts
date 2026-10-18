@@ -1,5 +1,5 @@
-import { createTuning } from '@military-forge/content';
-import { MsgType, encodePong, encodeRoster, encodeSnapshot, encodeWelcome } from '@military-forge/protocol';
+import { FRAG, K47, adminField, createTuning } from '@military-forge/content';
+import { MsgType, encodeOverrides, encodePong, encodeRoster, encodeSnapshot, encodeWelcome } from '@military-forge/protocol';
 import { Game } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
 import { NetClient } from '../src';
@@ -19,6 +19,7 @@ function welcomed(resumed = false, client?: NetClient) {
       tuningJson: JSON.stringify(createTuning()),
       sessionToken: 'tok',
       resumed,
+      overridesJson: '{}',
     }),
   );
   return { net, game, me, advance: (ms: number) => (now += ms) };
@@ -90,6 +91,7 @@ describe('NetClient', () => {
         tuningJson: JSON.stringify(createTuning()),
         sessionToken: 'new',
         resumed: false,
+        overridesJson: '{}',
       }),
     );
     expect(net.snapshots).toHaveLength(0);
@@ -131,5 +133,63 @@ describe('NetClient', () => {
     expect(net.remotePose(id, before - 2, pose)?.x).toBeCloseTo(joiner.x, 3);
     // other players are unaffected
     expect(net.remotePose(me.id, before - 2, pose)).not.toBeNull();
+  });
+});
+
+describe('NetClient: the admin page\'s overrides (v13)', () => {
+  it('a WELCOME\'s and an OVERRIDES\' values go into this page\'s content; leaving puts the shipped ones back', () => {
+    let now = 0;
+    const net = new NetClient({ name: 't', send: () => {}, now: () => now });
+    const game = new Game({ seed: 1, dummies: false });
+    const me = game.addPlayer('t');
+    net.onOpen();
+    net.receive(
+      encodeWelcome({
+        playerId: me.id,
+        seed: 1,
+        serverTick: game.tick,
+        mapId: game.map.id,
+        tuningJson: JSON.stringify(createTuning()),
+        sessionToken: 'tok',
+        resumed: false,
+        overridesJson: JSON.stringify({ 'weapon.k47.damage': 33, 'tuning.gravity': 10, 'pickups.armoryRespawn': 9 }),
+      }),
+    );
+    expect(K47.damage).toBe(33);
+    expect(net.adminTuned).toBe(true);
+    now += 100;
+    net.receive(encodeOverrides(JSON.stringify({ [`grenade.${FRAG.id}.fuse`]: 2.5 })));
+    expect([K47.damage, FRAG.fuse]).toEqual([adminField('weapon.k47.damage')!.def, 2.5]);
+    net.receive(encodeOverrides('not json'));
+    expect(net.adminTuned).toBe(false);
+    expect(FRAG.fuse).toBe(adminField(`grenade.${FRAG.id}.fuse`)!.def);
+    net.receive(encodeOverrides('{"weapon.k47.damage": 40}'));
+    net.clearOverrides();
+    expect([K47.damage, net.adminTuned]).toEqual([adminField('weapon.k47.damage')!.def, false]);
+  });
+});
+
+describe('NetClient: content shared with the server (one process)', () => {
+  it('ownContent false: the values are recorded, the shared content is left to the server', () => {
+    const net = new NetClient({ name: 't', send: () => {}, now: () => 0, ownContent: false });
+    const game = new Game({ seed: 1, dummies: false });
+    const me = game.addPlayer('t');
+    net.onOpen();
+    net.receive(
+      encodeWelcome({
+        playerId: me.id,
+        seed: 1,
+        serverTick: 0,
+        mapId: game.map.id,
+        tuningJson: JSON.stringify(createTuning()),
+        sessionToken: 'tok',
+        resumed: false,
+        overridesJson: '{"weapon.k47.damage": 33}',
+      }),
+    );
+    expect(net.adminTuned).toBe(true);
+    expect(K47.damage).toBe(adminField('weapon.k47.damage')!.def);
+    net.clearOverrides();
+    expect(K47.damage).toBe(adminField('weapon.k47.damage')!.def);
   });
 });

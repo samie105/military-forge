@@ -66,6 +66,12 @@ export function weaponPickup(index: number): PickupDef | undefined {
  * Weapon crates on the maps (owner's playtest: "more guns I can test"): any gun, the everyday ones
  * three times as often as the power weapons (docs/03 §12's common and power tiers in one pool).
  */
+/**
+ * The test armory's respawn time (s), one range shared by every rack spot (sim pickups.ts
+ * armorySpawners): the admin page changes it in place, so racks already standing follow at once.
+ */
+export const ARMORY_RESPAWN_RANGE: [number, number] = [2, 2];
+
 export const POWER_WEAPONS: ReadonlySet<string> = new Set(['breacher', 'widow', 'longbow', 'shredder', 'arc', 'machete', 'thumper', 'popper', 'ripper', 'pulse', 'dragon']);
 
 /** What a spawner can produce: pickups (PickupDef.id) with relative weights. */

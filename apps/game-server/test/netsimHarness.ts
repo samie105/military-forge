@@ -196,6 +196,11 @@ export function simulate(settings: ConditionerSettings, seconds: number, options
       },
       stream: () => options.transport === 'ws',
       backlog: () => options.backlog?.(k, clock.now()) ?? 0,
+      // The admin page's values are process-wide (game-server admin.ts): these clients share their
+      // content module with the server, so the server's numbers are already theirs. Applying a
+      // delayed OVERRIDES (or clearing them) would change the server's weapons mid-run; production
+      // clients, in their own pages, apply them.
+      ownContent: false,
     });
     if (options.lowBandwidth?.includes(k)) net.setLowBandwidth(true);
     nets.push(net);

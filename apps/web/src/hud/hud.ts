@@ -53,6 +53,8 @@ export interface HudInput {
   flash: number;
   /** the Tab scoreboard's rows (asked for only while it is open) */
   scoreRows(): ScoreRow[] | null;
+  /** the owner changed gameplay numbers on this server (the admin page): a small tag */
+  adminTuned?: boolean;
 }
 
 /** Keycap text for the actions the HUD names, from Settings → Controls. */
@@ -174,6 +176,7 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
     v['net.detail'] = mem.netDetail;
   }
   on('fps', input.showFps && input.fps > 0);
+  on('admin', input.adminTuned === true);
   v['fps.value'] = String(Math.round(input.fps));
 
   on('board', mem.boardOpen);

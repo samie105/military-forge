@@ -6,6 +6,7 @@ import { stormFrontMap } from './maps/stormFront';
 import { streetMarketMap } from './maps/streetMarket';
 import type { MapDef } from './maps/types';
 
+export * from './admin';
 export * from './attachments';
 export * from './cosmetics';
 export * from './grenades';

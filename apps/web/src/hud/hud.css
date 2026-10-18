@@ -17,6 +17,9 @@ html[data-touch-controls] #hud .mf-hud-fit:not(.mf-hud-fit--phone) { display: no
 /* top left: the frame counter over the net plate */
 .mf-hud-corner { position: absolute; top: max(24px, var(--safe-t)); left: max(32px, var(--safe-l)); display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2); }
 .mf-hud-corner .hud-net { position: static; }
+/* the owner's admin page changed gameplay numbers on this server */
+.mf-hud-admin .hud-label { color: var(--c-brass); }
+.phud-admin { position: absolute; top: max(10px, var(--safe-t)); left: 50%; transform: translateX(-50%); color: var(--c-brass); text-shadow: var(--ts-hud); }
 
 /* announcements (showBanner) under the map event; they and the kill feed fade at the end of their time */
 .mf-hud-banners { display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); }

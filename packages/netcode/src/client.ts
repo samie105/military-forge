@@ -4,7 +4,7 @@
  * The web client wraps it with a WebSocket, input sampling and rendering; tests drive it against a
  * real Room through the network conditioner with a fake clock.
  */
-import { createTuning, getMap, type MapDef, type Tuning } from '@military-forge/content';
+import { applyContentOverrides, clampAdmin, createTuning, getMap, type AdminValues, type MapDef, type Tuning } from '@military-forge/content';
 import {
   BitWriter,
   CmdKind,
@@ -53,6 +53,13 @@ export interface NetClientOptions {
   /** remote players are drawn this far in the past (docs/05 §10) */
   interpDelayMs?: number;
   pacer?: Partial<PacerOptions>;
+  /**
+   * The admin page's content numbers are this client's own to set (the default: a browser). false
+   * when the client shares its content module with the server, in one process (netsim, tests): the
+   * admin values are process-wide, so a client applying a delayed OVERRIDES, or clearing them,
+   * would change the server's weapons mid-run. It still records them (adminValues, adminTuned).
+   */
+  ownContent?: boolean;
 }
 
 export interface ReceivedSnapshot {
@@ -119,6 +126,11 @@ export class NetClient {
   myId = -1;
   map: MapDef = getMap('movement-test');
   tuning: Tuning = createTuning();
+  /**
+   * The server's admin values (v13: WELCOME, OVERRIDES): their weapon, grenade and projectile
+   * numbers are put in this page's content, so prediction runs on the server's. `{}`: none.
+   */
+  adminValues: AdminValues = {};
   seed = 1;
   predictor: Predictor | null = null;
   readonly rtt = new RttEstimator();
@@ -211,6 +223,30 @@ export class NetClient {
     return this.connected;
   }
 
+  /** The server's admin values: into this page's content (prediction), kept for the HUD's tag. */
+  private applyOverrides(json: string): void {
+    let values: AdminValues;
+    try {
+      values = clampAdmin(JSON.parse(json || '{}'));
+    } catch {
+      values = {}; // not JSON: nothing changed, as far as this client can tell
+    }
+    this.adminValues = values;
+    if (this.options.ownContent !== false) applyContentOverrides(values);
+  }
+
+  /** Leaving the server: the shipped numbers again (local play after an admin-tuned room plays as shipped). */
+  clearOverrides(): void {
+    this.adminValues = {};
+    if (this.options.ownContent !== false) applyContentOverrides({});
+  }
+
+  /** The owner changed gameplay numbers on this server (the HUD's "Tuned by admin"). */
+  get adminTuned(): boolean {
+    for (const _ in this.adminValues) return true;
+    return false;
+  }
+
   setTuning(t: Tuning): void {
     this.tuning = { ...t };
     if (this.predictor) this.predictor.game.tuning = this.tuning;
@@ -287,6 +323,7 @@ export class NetClient {
         this.seed = msg.seed;
         this.map = getMap(msg.mapId);
         this.tuning = parseTuning(msg.tuningJson, this.tuning);
+        this.applyOverrides(msg.overridesJson);
         const rtt = now - this.helloAt;
         this.rtt.add(rtt);
         // Inputs sent now arrive ~1 RTT after the server sent this; land them mid-band early.
@@ -315,6 +352,9 @@ export class NetClient {
       case MsgType.Tuning:
         this.tuning = parseTuning(msg.tuningJson, this.tuning);
         if (this.predictor) this.predictor.game.tuning = this.tuning;
+        break;
+      case MsgType.Overrides:
+        this.applyOverrides(msg.overridesJson);
         break;
       case MsgType.Snapshot:
         this.onSnapshot(msg, now);

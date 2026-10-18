@@ -9,9 +9,12 @@ import { GAME_NAME } from '../../packages/shared/src/brand';
  */
 const api = process.env.DEV_API ?? 'http://localhost:8787';
 const gameServer = process.env.DEV_GAME_SERVER ?? 'http://localhost:9001';
+// the admin page's API: a game server run with ADMIN_TOKEN and ADMIN_PORT (default 9002 here)
+const adminApi = process.env.DEV_ADMIN ?? 'http://localhost:9002';
 const proxy: Record<string, ProxyOptions> = {
   '/api': { target: api, rewrite: (path) => path.replace(/^\/api/, '') },
   '/ws': { target: gameServer, ws: true },
+  '/admin/api': { target: adminApi },
 };
 
 /**
@@ -34,7 +37,8 @@ export default defineConfig({
   build: {
     target: 'es2022',
     sourcemap: false,
-    // Pages: the game (index.html), the Locker (locker.html, also a route inside the game) and the Armory (armory.html).
-    rolldownOptions: { input: { main: 'index.html', locker: 'locker.html', armory: 'armory.html' } },
+    // Pages: the game (index.html), the Locker (locker.html, also a route inside the game), the Armory (armory.html)
+    // and the owner's admin page (admin.html: /admin on pnpm playtest).
+    rolldownOptions: { input: { main: 'index.html', locker: 'locker.html', armory: 'armory.html', admin: 'admin.html' } },
   },
 });

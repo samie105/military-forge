@@ -564,7 +564,7 @@ export const THUMPER: WeaponDef = {
   range: 60,
   falloffStart: 60,
   minDamageMul: 1,
-  spread: NO_SPREAD,
+  spread: { ...NO_SPREAD }, // its own: the admin page tunes each gun apart
   mag: 3,
   reserve: 6,
   reload: 4.0,
@@ -629,7 +629,7 @@ export const RIPPER: WeaponDef = {
   range: 90,
   falloffStart: 90,
   minDamageMul: 1,
-  spread: NO_SPREAD,
+  spread: { ...NO_SPREAD }, // its own: the admin page tunes each gun apart
   mag: 1,
   reserve: 8,
   reload: 2.5,
@@ -663,7 +663,7 @@ export const PULSE: WeaponDef = {
   range: 24,
   falloffStart: 24,
   minDamageMul: 1,
-  spread: NO_SPREAD,
+  spread: { ...NO_SPREAD }, // its own: the admin page tunes each gun apart
   mag: 1,
   reserve: 12,
   reload: 2.5,

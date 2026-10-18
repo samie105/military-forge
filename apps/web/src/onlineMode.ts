@@ -439,6 +439,7 @@ export class OnlineMode {
 
   dispose(): void {
     this.disposed = true;
+    this.net.clearOverrides();
     window.clearTimeout(this.reconnectTimer);
     this.currentAttempt = null;
     this.up.dispose();

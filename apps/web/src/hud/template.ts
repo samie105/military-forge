@@ -25,6 +25,7 @@ function desktop(): string {
   <div class="hud" role="group" aria-label="Match HUD">
 
     <div class="mf-hud-corner">
+      <div class="hud-net hud-plate mf-hud-admin" data-state="admin" title="The owner changed gameplay numbers on this server (the admin page)"><span class="hud-label">Tuned by admin</span></div>
       <div class="hud-net hud-plate" data-state="fps"><span class="num" data-bind="fps.value"></span><span class="hud-net__loss">fps</span></div>
       <div class="hud-net hud-plate" data-state="net" data-bind-attr="title: net.detail; data-detail: net.detail">
         <span data-bind-attr="class: net.class"><span class="sig" data-bind-attr="data-bars: net.bars"><i></i><i></i><i></i><i></i></span><span class="num" data-bind="net.ping"></span></span>
@@ -173,6 +174,7 @@ function phone(): string {
     <div class="phud-match hud-plate" data-state="match"><b class="num" data-bind="match.timeLeft"></b><span class="num">You <b data-bind="match.myScore"></b> · <span data-bind="match.leaderShort"></span> <b data-bind="match.leaderScore"></b></span></div>
     <div class="phud-ammo hud-plate" data-state="weapon"><svg class="ic ic--wpn" aria-hidden="true" data-state="weapon-icon"><use data-bind-attr="href: weapon.0.icon"/></svg><b class="num" data-bind="weapon.0.mag"></b><span class="num" data-bind="weapon.0.tail"></span></div>
     <span data-state="net" data-bind-attr="class: net.phoneClass" data-bind="net.ping"></span>
+    <span class="phud-admin hud-label" data-state="admin">Tuned by admin</span>
     <div class="pickup hud-plate" data-state="pickup" role="status"><svg class="ic" aria-hidden="true"><use data-bind-attr="href: pickup.icon"/></svg><span data-bind="pickup.text"></span></div>
     <div class="respawn hud-plate" data-state="spectating" role="status">
       <p class="respawn__by"><span class="hud-label" data-bind="death.label"></span> <b data-bind="death.killer"></b></p>

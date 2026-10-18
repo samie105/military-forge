@@ -30,10 +30,13 @@
  *        --no-armory (no test armory: by default every room has a rack of one of every gun by the spawns) ·
  *        --lan (also open it to this Wi-Fi at http://<this Mac's address>:<port>, for friends in the
  *        same place; pair it with --port for an address that stays the same between runs) ·
- *        --tune (the default: each room's host gets the tuning panel; nobody else) · --no-tune
+ *        --tune (the default: each room's host gets the tuning panel; nobody else) · --no-tune ·
+ *        --no-admin (no admin page: by default the owner's /admin link, with this run's secret token,
+ *        is printed here only; its "Save as defaults" goes to ~/.military-forge/admin-defaults.json,
+ *        which the next run loads) · --admin-port <n>
  */
 import { spawn, type ChildProcess } from 'node:child_process';
-import { generateKeyPairSync } from 'node:crypto';
+import { generateKeyPairSync, randomBytes } from 'node:crypto';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer as createNetServer } from 'node:net';
 import { networkInterfaces, tmpdir } from 'node:os';
@@ -408,6 +411,8 @@ async function main(): Promise<void> {
   const proxyPort = Number(option('port') ?? (await freePort()));
   const apiPort = Number(option('api-port') ?? (await freePort()));
   const gamePort = Number(option('game-port') ?? (await freePort()));
+  // the owner's admin page: a secret per run, printed in this terminal only (never in a file or a URL that reaches a server)
+  const admin = flag('no-admin') ? null : { token: randomBytes(24).toString('base64url'), port: Number(option('admin-port') ?? (await freePort())) };
   const base = `http://127.0.0.1:${proxyPort}`;
   const localOrigins = [base, `http://localhost:${proxyPort}`];
   // --lan: the proxy also listens on this Mac's network address, so people on the same Wi-Fi can play
@@ -448,6 +453,11 @@ async function main(): Promise<void> {
     ]))
       say(l);
     say(dim(`  (also in ${LINK_FILE})`));
+    if (admin) {
+      say('');
+      say(`  ${bold('Admin page')} ${dim("(yours only: anyone with it can change the game; it's not in the file)")}`);
+      say(`  ${cyan(`${site}/admin#t=${admin.token}`)}`);
+    }
     say('');
     if (again) return;
     if (site !== base) {
@@ -511,6 +521,8 @@ async function main(): Promise<void> {
       HOST_TUNING: tune ? '1' : '0',
       // the test armory: one of every gun near the spawns, so friends can try them all (owner's playtest)
       ARMORY: flag('no-armory') ? '0' : '1',
+      // the owner's admin page (game-server admin.ts): its API on 127.0.0.1, behind the proxy
+      ...(admin ? { ADMIN_TOKEN: admin.token, ADMIN_PORT: String(admin.port) } : {}),
     }),
     // start-up, rooms opened/closed and refused joins; the 10 s tick reports are for development
     (line) => {
@@ -568,6 +580,7 @@ async function main(): Promise<void> {
     allowedOrigins,
     apiOrigin: base,
     tune,
+    ...(admin ? { admin: { host: '127.0.0.1', port: admin.port } } : {}),
     log: (l) => say(dim(`  ${l}`)),
   });
   await new Promise<void>((done, fail) => {

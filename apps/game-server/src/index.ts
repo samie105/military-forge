@@ -1,5 +1,8 @@
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { BOT_LEVELS, warmNavGraphs, type BotLevelId } from '@military-forge/bots';
-import { maps } from '@military-forge/content';
+import { ADMIN_BOT_LEVELS, maps, setAdminDefault } from '@military-forge/content';
+import { loadAdminDefaults, setAdminValues, startAdminServer } from './admin';
 import { describeNetSim, parseNetSim } from '@military-forge/netcode';
 import { createServer, nodeScheduler } from './server';
 import { TicketVerifier, ticketPublicKey } from './tickets';
@@ -66,6 +69,22 @@ const armory = process.argv.includes('--armory') || process.env.ARMORY === '1' |
 // a nav graph takes 90–270 ms to build: build the rooms' map before anyone joins, not on the first bot
 if (fillBots) warmNavGraphs([maps[mapId]!]);
 
+// The owner's admin page (pnpm playtest → /admin): ADMIN_TOKEN (the run's secret, 16+ characters)
+// and ADMIN_PORT turn its API on (127.0.0.1, behind the playtest proxy). The values saved with
+// "Save as defaults" (ADMIN_DEFAULTS, default ~/.military-forge/admin-defaults.json) apply from the start.
+const adminToken = process.env.ADMIN_TOKEN ?? '';
+const adminPort = Number(process.env.ADMIN_PORT ?? 0);
+const adminDefaults = process.env.ADMIN_DEFAULTS || join(homedir(), '.military-forge', 'admin-defaults.json');
+setAdminDefault('bots.count', botTarget);
+setAdminDefault('bots.level', ADMIN_BOT_LEVELS.indexOf(botLevel as (typeof ADMIN_BOT_LEVELS)[number]));
+if (adminToken) {
+  const saved = loadAdminDefaults(adminDefaults, console.log);
+  if (Object.keys(saved).length) {
+    setAdminValues(saved);
+    console.log(`[admin] ${Object.keys(saved).length} saved values from ${adminDefaults}`);
+  }
+}
+
 const server = await createServer(
   port,
   {
@@ -101,8 +120,18 @@ console.log(
     (wtSocket ? ` · WebTransport gateway socket ${wtSocket}` : ''),
 );
 
+const admin =
+  adminToken && adminPort > 0
+    ? await startAdminServer({ token: adminToken, port: adminPort, defaultsFile: adminDefaults, log: console.log }).catch((e: Error) => {
+        console.error(`[admin] no admin page: ${e.message}`);
+        return null;
+      })
+    : null;
+if (admin) console.log(`[admin] admin API on 127.0.0.1:${admin.port} (the playtest's /admin; defaults save to ${adminDefaults})`);
+
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
+    admin?.close();
     server.close();
     process.exit(0);
   });

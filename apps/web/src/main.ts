@@ -493,6 +493,7 @@ function frame(now: number): void {
       reduceFlashes: settings?.reduceFlashes ?? false,
       flash: fxState().flash,
       scoreRows,
+      adminTuned: mode instanceof OnlineMode && mode.net.adminTuned,
     });
   }
   if (options.overlay) view3d?.render(f, dt);

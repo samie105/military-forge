@@ -23,6 +23,7 @@
  * changes nothing and hashes nothing extra: it plays bit-identically to before.
  */
 import {
+  ARMORY_RESPAWN_RANGE,
   DROPPED_PICKUP_SECONDS,
   GRENADE_PICKUP_COUNT,
   NO_WEAPON,
@@ -79,9 +80,9 @@ export class SpawnerState {
   /** its items on the map */
   active = 0;
   readonly maxActive: number;
-  /** the pool, resolved: PickupDef indices with weights */
-  readonly items: readonly { def: number; weight: number }[];
-  readonly totalWeight: number;
+  /** the pool, resolved: PickupDef indices with weights (refreshWeights: the admin page's) */
+  items: readonly { def: number; weight: number }[];
+  totalWeight: number;
 
   constructor(
     readonly index: number,
@@ -102,11 +103,28 @@ export class SpawnerState {
     if (!(this.maxActive >= 1 && this.maxActive <= def.spots.length)) throw new Error(`spawner "${def.id}": maxActive must be 1…${def.spots.length}`);
     for (const [a, b] of [def.first, def.respawn]) if (!(a >= 0 && b >= a)) throw new Error(`spawner "${def.id}": bad time range [${a}, ${b}]`);
   }
+
+  /**
+   * The pool's weights again, as SPAWN_POOLS has them now (the admin page changes them on a live
+   * server): an item at weight 0 is left out; a pool left with nothing keeps what it had.
+   */
+  refreshWeights(): void {
+    const pool = SPAWN_POOLS[this.def.pool];
+    if (!pool) return;
+    const items: { def: number; weight: number }[] = [];
+    for (const it of pool.items) {
+      const pickup = pickupById(it.pickup);
+      if (pickup && it.weight > 0) items.push({ def: pickup.index, weight: it.weight });
+    }
+    if (items.length === 0) return;
+    this.items = items;
+    this.totalWeight = items.reduce((sum, it) => sum + it.weight, 0);
+  }
 }
 
 /** The test armory's spots: this far apart along the rack, each a gun again this many seconds after it's taken. */
 export const ARMORY_SPACING = 0.8;
-export const ARMORY_RESPAWN = 2;
+export const ARMORY_RESPAWN = ARMORY_RESPAWN_RANGE[0];
 /** a rack spot drops onto the floor within this far below the rack's height */
 const ARMORY_DROP = 4;
 
@@ -147,7 +165,8 @@ export function armorySpawners(map: MapDef, world: CollisionWorld): MapSpawner[]
   }
   return spots.map((spot, i) => {
     const item = weaponPickup(weapons[i]!.index)!;
-    return { id: `armory-${weapons[i]!.id}`, pool: item.id, spots: [spot], first: [0, 0], respawn: [ARMORY_RESPAWN, ARMORY_RESPAWN], maxActive: 1 };
+    // the shared range: the admin page's armory respawn reaches every rack at once
+    return { id: `armory-${weapons[i]!.id}`, pool: item.id, spots: [spot], first: [0, 0], respawn: ARMORY_RESPAWN_RANGE, maxActive: 1 };
   });
 }
 

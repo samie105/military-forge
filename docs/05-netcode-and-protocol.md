@@ -250,6 +250,8 @@ v8 also appends a **dash group** to the local-player block (dashTicks u6, dashDi
 - **INPUT:** taking a gun is `Btn.Interact` (bit 10, already there; the web client binds it to **E**, and a touch button).
 - **The test armory** is a server option (`--armory` / `ARMORY=1`, `GameOptions.armory`): nothing on the wire beyond the items it puts out.
 
+**The admin page's overrides (built, protocol v13; NOTES §26):** OVERRIDES (0x28, S→C): a u16-length JSON of the admin's changed values (`{ key: number }`, content `admin.ts`), the whole set, sent to every client of every room when the owner changes them; WELCOME carries the same as a trailing u16-length `overridesJson` (`{}` when none) for late joiners and reconnects. Each client puts the content numbers (weapons, grenades, projectiles) into its own copy, so prediction runs on the server's; tuning keys still ride TUNING. Changes apply between ticks on the server and on receipt on a client: prediction may correct once around the change, then not at all (game-server `admin.test.ts`, netsim).
+
 **Launchers and the flamethrower (built, protocol v12; docs/03 §11):**
 - **Projectiles ride the grenade records:** `type` u3 → **u4** (0–5 grenades, 6–7 free, 8–12 rocket, shell, blade, orb, flame), `fuse` u8 → **u9** (a blade lives 300 ticks). Culled like grenades (view rect, smoke). The shooter's own aren't predicted: the predictor drops the ones its shots launch (the `launch` sim event, not on the wire), as it does throws.
 - **EXPLOSION:** the grenade type u3 → **u4** (a launcher's blast names its projectile; the Pulse's burst is an EMP).

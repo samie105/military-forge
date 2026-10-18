@@ -24,8 +24,9 @@
  * other (roster, snapshots, standings, the `[BOT]` tag on their names), running in the room's sim.
  */
 import { randomBytes } from 'node:crypto';
+import { adminJson, adminValues, onAdminValues } from './admin';
 import { addBot, removeBot, type BotLevelId } from '@military-forge/bots';
-import { createTuning, defaultTuning, limitTuning, maps, type Tuning } from '@military-forge/content';
+import { ADMIN_BOT_LEVELS, adminTuning, adminValue, createTuning, defaultTuning, limitTuning, maps, type AdminValues, type Tuning } from '@military-forge/content';
 import {
   CONTENT_HASH,
   CloseCode,
@@ -44,6 +45,7 @@ import {
   encodeRoster,
   type RosterEntry,
   encodeMatchState,
+  encodeOverrides,
   encodeTuning,
   encodeWelcome,
   isUnreliableMessage,
@@ -340,8 +342,12 @@ export class Room {
   private matchUrgent = false;
   private matchSentAt = -Infinity;
   private readonly log: (msg: string) => void;
-  /** RoomOptions.fillBots, null = no bots */
-  private readonly fill: { target: number; level: BotLevelId } | null;
+  /** the bots this room keeps: the admin page's, else RoomOptions.fillBots; null = no bots */
+  private fill: { target: number; level: BotLevelId } | null;
+  /** RoomOptions.fillBots, and the match limits it was made with: what the admin page's reset goes back to */
+  private readonly baseFill: { target: number; level: BotLevelId } | null;
+  private readonly baseLimits: { timeLimit: number; killLimit: number } | null;
+  private readonly offAdmin: () => void;
   /** the bots this room put in, oldest first */
   readonly bots: PlayerState[] = [];
 
@@ -361,7 +367,39 @@ export class Room {
     this.lagComp?.record(this.game.tick, this.game.players);
     this.match = options.match ? new Match(this.game, options.match) : null;
     const fill = options.fillBots;
-    this.fill = fill && fill.target > 0 ? { target: Math.min(fill.target, MAX_PLAYERS), level: fill.level } : null;
+    this.fill = this.baseFill = fill && fill.target > 0 ? { target: Math.min(fill.target, MAX_PLAYERS), level: fill.level } : null;
+    this.baseLimits = this.match ? { timeLimit: this.match.rules.timeLimit, killLimit: this.match.rules.killLimit } : null;
+    // the owner's admin page (admin.ts): its values now, and whenever they change
+    this.applyAdmin(adminValues(), false);
+    this.offAdmin = onAdminValues((values) => this.applyAdmin(values, true));
+  }
+
+  /**
+   * The admin page's values (admin.ts): the room's tuning is the defaults with the admin's tuning
+   * keys (a host's own edits give way), the crates draw with the admin's weights, the bots and the
+   * match limits are the admin's where set (else the room's own). `broadcast`: tell the clients
+   * (TUNING, then OVERRIDES: the content numbers their prediction needs, and the HUD's tag).
+   */
+  private applyAdmin(values: AdminValues, broadcast: boolean): void {
+    this.game.tuning = createTuning({ ...defaultTuning, ...adminTuning(values) });
+    for (const s of this.game.spawners) s.refreshWeights();
+    if ('bots.count' in values || 'bots.level' in values) {
+      const target = Math.min(adminValue(values, 'bots.count'), MAX_PLAYERS);
+      this.fill = target > 0 ? { target, level: ADMIN_BOT_LEVELS[adminValue(values, 'bots.level')] ?? 'normal' } : null;
+    } else this.fill = this.baseFill;
+    if (this.match && this.baseLimits) {
+      this.match.rules.timeLimit = values['match.timeLimit'] ?? this.baseLimits.timeLimit;
+      this.match.rules.killLimit = values['match.killLimit'] ?? this.baseLimits.killLimit;
+      this.matchDirty = true;
+    }
+    if (!broadcast) return;
+    const tuning = encodeTuning(JSON.stringify(this.game.tuning));
+    const overrides = encodeOverrides(adminJson());
+    for (const c of this.clients) {
+      if (!c.joined) continue;
+      c.conn.send(tuning);
+      c.conn.send(overrides);
+    }
   }
 
   /** player id of the host, -1 = none (or not a match room) */
@@ -630,6 +668,7 @@ export class Room {
         tuningJson: JSON.stringify(this.game.tuning),
         sessionToken: s.token,
         resumed,
+        overridesJson: adminJson(),
       }),
     );
   }
@@ -795,6 +834,7 @@ export class Room {
   closeAll(code: number, reason: string): void {
     for (const c of [...this.clients]) this.kick(c, code, reason);
     for (const s of [...this.sessions.values()]) this.endSession(s);
+    this.offAdmin();
   }
 
   /** Kicked players leave at once (no reconnect grace). */
@@ -841,15 +881,16 @@ export class Room {
    */
   private fillWithBots(): void {
     const fill = this.fill;
-    if (!fill) return;
+    // no bots wanted (the admin page turned them off too): the ones in go
+    if (!fill && this.bots.length === 0) return;
     const humans = this.humanCount;
-    const want = humans > 0 ? Math.max(0, fill.target - humans) : 0;
+    const want = fill && humans > 0 ? Math.max(0, fill.target - humans) : 0;
     let changed = false;
     while (this.bots.length > want) {
       removeBot(this.game, this.botToDrop());
       changed = true;
     }
-    while (this.bots.length < want && this.game.players.some((p) => !p)) {
+    while (fill && this.bots.length < want && this.game.players.some((p) => !p)) {
       this.bots.push(addBot(this.game, { level: fill.level }));
       changed = true;
     }

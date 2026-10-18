@@ -14,6 +14,8 @@ export const MsgType = {
   Roster: 0x25,
   /** the room's tuning changed (dev live tuning): keeps every client's prediction in step */
   Tuning: 0x26,
+  /** v13: the admin page's gameplay overrides (weapons, grenades…), applied to every client's content */
+  Overrides: 0x28,
   /** dev only: server-side debug views (lag-compensation rewinds) */
   Debug: 0x30,
   Kick: 0x3f,
