@@ -103,6 +103,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@military-forge/bots':
+        specifier: workspace:*
+        version: link:../../packages/bots
       '@military-forge/content':
         specifier: workspace:*
         version: link:../../packages/content
@@ -152,6 +155,21 @@ importers:
       vite:
         specifier: ^8.3.4
         version: 8.3.4(@types/node@22.20.5)(esbuild@0.28.2)(tsx@4.23.15)
+
+  packages/bots:
+    dependencies:
+      '@military-forge/content':
+        specifier: workspace:*
+        version: link:../content
+      '@military-forge/netcode':
+        specifier: workspace:*
+        version: link:../netcode
+      '@military-forge/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@military-forge/sim':
+        specifier: workspace:*
+        version: link:../sim
 
   packages/content: {}
 

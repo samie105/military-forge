@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "name": "bots: four on Flux Lab (pads, updraft, EMP deck, gravity pockets, map events)",
+  "map": "flux-lab",
+  "seed": 202,
+  "dummies": false,
+  "ticks": 3600,
+  "players": [],
+  "bots": [
+    {
+      "name": "[BOT] Badger",
+      "level": "hard"
+    },
+    {
+      "name": "[BOT] Kestrel",
+      "level": "normal"
+    },
+    {
+      "name": "[BOT] Mantis",
+      "level": "easy"
+    },
+    {
+      "name": "[BOT] Jackal",
+      "level": "hard"
+    }
+  ]
+}

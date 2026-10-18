@@ -1,0 +1,26 @@
+{
+  "name": "@military-forge/bots",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json && tsc -p test/tsconfig.json",
+    "golden:update": "UPDATE_GOLDEN=1 vitest run test/golden.test.ts",
+    "feel": "tsx scripts/feel.ts",
+    "soak": "tsx scripts/soak.ts",
+    "calibrate": "tsx scripts/calibrate.ts",
+    "nav": "tsx scripts/navstats.ts",
+    "nav:dump": "tsx scripts/navdump.ts",
+    "trace": "tsx scripts/tracebot.ts"
+  },
+  "dependencies": {
+    "@military-forge/content": "workspace:*",
+    "@military-forge/netcode": "workspace:*",
+    "@military-forge/shared": "workspace:*",
+    "@military-forge/sim": "workspace:*"
+  }
+}

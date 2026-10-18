@@ -1,9 +1,11 @@
 /**
- * Local mode: the shared sim runs in the browser with the map's dummy targets. Fixed 60 Hz steps,
- * input sampled once per tick, render interpolated between ticks (docs/02 §3). With match rules it
- * plays a deathmatch through the Match lifecycle (results, Play again); without, it's a sandbox.
- * Any registered map (?map=), including the map-mechanics demos (docs/02 §20).
+ * Local mode: the shared sim runs in the browser with bots (packages/bots, `?bots=`) or the map's
+ * dummy targets. Fixed 60 Hz steps, input sampled once per tick, render interpolated between ticks
+ * (docs/02 §3). With match rules it plays a deathmatch through the Match lifecycle (results, Play
+ * again); without, it's a sandbox. Any registered map (?map=), including the map-mechanics demos
+ * (docs/02 §20).
  */
+import { addBots, botSpecs } from '@military-forge/bots';
 import { DEFAULT_LOADOUT, getMap, weapons, NO_WEAPON, type MapDef, type Tuning } from '@military-forge/content';
 import {
   DT,
@@ -23,6 +25,7 @@ import {
 import type { Camera } from './camera';
 import { cloudView, fullBelt, statusView } from './grenadeViews';
 import type { InputSampler } from './input';
+import type { LocalBots } from './localBots';
 import { mapEventView } from './mapEvent';
 import type { Renderer } from './render';
 import { shieldView, type CloudView, type Frame, type PlayerView } from './view';
@@ -58,9 +61,11 @@ export class LocalMode {
     private readonly matchRules: Partial<MatchRules> | null = null,
     /** ?map= (docs/02 §20 demo maps: lunar-outpost, storm-front, flux-lab, mechanics-test) */
     mapId = 'movement-test',
+    /** ?bots= / ?botlevel= (localBots.ts); null = the map's dummies */
+    private readonly bots: LocalBots | null = null,
   ) {
     this.map = getMap(mapId);
-    this.game = new Game({ map: this.map, seed: SEED, dummies: true, pickups: true });
+    this.game = new Game({ map: this.map, seed: SEED, dummies: !bots, pickups: true });
     this.me = this.game.addPlayer(name);
     this.reset();
   }
@@ -68,8 +73,10 @@ export class LocalMode {
   /** Fresh world (keeps the current live tuning). Recordings start from here so they replay exactly. */
   reset(): void {
     const tuning = { ...this.game.tuning };
-    this.game = new Game({ map: this.map, seed: SEED, dummies: true, pickups: true, tuning });
+    this.game = new Game({ map: this.map, seed: SEED, dummies: !this.bots, pickups: true, tuning });
     this.me = this.game.addPlayer(this.name);
+    // bots join after the human, as replays put them back (botReplaySetup)
+    if (this.bots) addBots(this.game, this.bots.count, this.bots.level);
     // loadout before the Match: its countdown respawns everyone through Game.respawn → giveLoadout(p.loadout)
     this.game.setLoadout(this.me, this.loadout);
     if (this.grenadeLoadout) this.game.setGrenadeLoadout(this.me, this.grenadeLoadout);
@@ -145,12 +152,13 @@ export class LocalMode {
       {
         map: this.map.id,
         seed: SEED,
-        dummies: true,
+        dummies: !this.bots,
         pickups: true,
         tuning: { ...this.game.tuning },
         loadouts: [[...this.loadout]],
         ...(this.grenadeLoadout ? { grenadeLoadouts: [this.grenadeLoadout.slice()] } : {}),
         ...(this.matchRules ? { match: this.matchRules } : {}),
+        ...(this.bots ? { bots: botSpecs(this.game) } : {}),
       },
       `playtest-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}`,
     );

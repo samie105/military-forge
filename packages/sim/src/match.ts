@@ -280,6 +280,7 @@ export class Match {
   step(inputs: ReadonlyArray<Readonly<Input> | undefined>): void {
     this.events.length = 0;
     this.sync();
+    this.game.inputsFrozen = !this.live;
     this.game.step(this.live ? inputs : this.freeze(inputs));
     if (this.phase === MatchPhase.InProgress) this.score();
     this.tick++;

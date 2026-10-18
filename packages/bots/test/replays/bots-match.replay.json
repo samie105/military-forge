@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "name": "bots: a human and three bots through a Match with shield pickups (countdown freeze, GO, a short deathmatch)",
+  "map": "movement-test",
+  "seed": 303,
+  "dummies": false,
+  "pickups": true,
+  "ticks": 2700,
+  "players": [
+    [
+      [
+        400,
+        0,
+        0,
+        0,
+        7
+      ],
+      [
+        90,
+        2,
+        0,
+        0,
+        7
+      ],
+      [
+        30,
+        6,
+        0,
+        0,
+        7
+      ],
+      [
+        60,
+        2,
+        0,
+        0,
+        7
+      ],
+      [
+        1,
+        128,
+        0,
+        0,
+        7
+      ],
+      [
+        60,
+        0,
+        0,
+        0,
+        7
+      ],
+      [
+        240,
+        16,
+        0,
+        0,
+        7
+      ],
+      [
+        120,
+        1,
+        16384,
+        0,
+        7
+      ],
+      [
+        1699,
+        0,
+        0,
+        0,
+        7
+      ]
+    ]
+  ],
+  "match": {
+    "countdown": 3,
+    "timeLimit": 40,
+    "killLimit": 0,
+    "minPlayers": 2
+  },
+  "commands": [
+    [
+      0,
+      0,
+      "ready"
+    ]
+  ],
+  "bots": [
+    {
+      "name": "[BOT] Badger",
+      "level": "normal"
+    },
+    {
+      "name": "[BOT] Kestrel",
+      "level": "easy"
+    },
+    {
+      "name": "[BOT] Mantis",
+      "level": "hard"
+    }
+  ]
+}

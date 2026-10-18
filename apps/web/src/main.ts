@@ -17,6 +17,7 @@ import { GAME_NAME } from '@military-forge/shared';
 import { Camera } from './camera';
 import { fxFrame } from './fx';
 import { InputSampler } from './input';
+import { localBots } from './localBots';
 import { LocalMode } from './localMode';
 import { OnlineMode } from './onlineMode';
 import { Renderer, type RenderOptions } from './render';
@@ -89,7 +90,8 @@ if (online) {
   const prefer = params.get('transport');
   mode = new OnlineMode(serverUrl, name, sampler, camera, renderer, showToast, netSim, prefer === 'ws' || prefer === 'wt' ? prefer : 'auto');
 } else {
-  mode = new LocalMode(sampler, camera, renderer, name, localMatchRules(params), localMapId);
+  const rules = localMatchRules(params);
+  mode = new LocalMode(sampler, camera, renderer, name, rules, localMapId, localBots(params, rules !== null));
 }
 
 // App shell (W4): screens over the canvas. Other workstreams plug in with one line each, e.g.

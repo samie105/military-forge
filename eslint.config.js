@@ -11,6 +11,7 @@ const PURE_PACKAGES = [
   'packages/content/src/**',
   'packages/protocol/src/**',
   'packages/netcode/src/**',
+  'packages/bots/src/**',
 ];
 
 const nonDeterministicMath = ['random', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'atan2', 'exp', 'expm1', 'pow', 'log', 'log2', 'log10', 'cbrt', 'hypot'];

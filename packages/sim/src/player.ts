@@ -12,6 +12,7 @@ import {
   type HitboxLayout,
   type Tuning,
 } from '@military-forge/content';
+import type { Brain } from './bots';
 import { createInput, type Input } from './input';
 
 export const MoveState = {
@@ -46,7 +47,10 @@ export function createWeaponSlot(): WeaponSlot {
 export class PlayerState {
   name = '';
   isBot = false;
+  /** scripted dummy (no brain) */
   script: DummyScript | null = null;
+  /** a real bot's brain (packages/bots); null for humans and dummies */
+  brain: Brain | null = null;
   botDir = 1;
   homeX = 0;
   homeY = 0;

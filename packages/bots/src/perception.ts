@@ -1,0 +1,330 @@
+/**
+ * What a bot knows about the others: only what a human's client in its place is sent (the server's
+ * snapshot rules, docs/05 §9 and NOTES §22.5).
+ * - **Sight:** players and items inside the human's view rect (netcode's camera model: width by
+ *   zoom, 4:3, the look-ahead toward the aim). It's a side view, so a wall between two players
+ *   hides neither (shooting needs a line of fire, which the brain checks). Smoke does hide them:
+ *   the sim's `SmokeSight`, as the server's AOI uses it. A flashbang's full white hides everyone
+ *   and wipes what it knew; its fade is the aim's business (Aim.impair).
+ * - **Hearing:** gunfire from someone it can't see is a SOUND: where on a 4 m grid, within
+ *   earshot, never who. A hit names who hurt it, but not where they are (only what it saw or heard
+ *   of them).
+ * - **Gas:** clouds it has seen (the server sends them by the view rect and their radius).
+ * What it knew about players fades after a few seconds; it remembers where it saw items.
+ */
+import {
+  MAX_CLOUDS,
+  MAX_PICKUPS,
+  MAX_PLAYERS,
+  SegFlag,
+  SmokeSight,
+  TICK_RATE,
+  blindIntensity,
+  cloudDef,
+  cloudRadius,
+  createRayHit,
+  type Game,
+  type PlayerState,
+} from '@military-forge/sim';
+import { VIEW_LOOKAHEAD, VIEW_MAX_ASPECT, maxZoomLevels, viewWidth } from '@military-forge/netcode';
+import { simCos, simSin } from '@military-forge/shared';
+
+export interface Contact {
+  /** we know something about this player */
+  known: boolean;
+  /** seen at the last look (the brain re-checks its target every tick) */
+  visible: boolean;
+  /** last known feet position and velocity (a heard position is the 4 m grid's, with no velocity) */
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  /** tick it was last seen or heard */
+  tick: number;
+  /** tick the current unbroken sighting began (reaction time counts from here) */
+  since: number;
+  /** it hurt us recently: the tick of its last hit on us (−1: never) */
+  hurtTick: number;
+}
+
+/** An item it saw lying somewhere (the slot may have been reused since: compare the position). */
+export interface ItemSighting {
+  /** tick it was last seen (−1: never, or gone) */
+  tick: number;
+  def: number;
+  x: number;
+  y: number;
+  hp: number;
+}
+
+/** Gunfire from someone it couldn't see: roughly where, and when (−1: nothing to go on). */
+export interface Noise {
+  tick: number;
+  x: number;
+  y: number;
+}
+
+/** A gas cloud it has seen, by cloud slot: where it was (a slot that moved is another cloud). */
+interface GasSighting {
+  known: boolean;
+  x: number;
+  y: number;
+}
+
+/** gunfire is heard this far away (m) */
+const EARSHOT = 35;
+/** contacts fade after this long without news (s) */
+const MEMORY = 6;
+/**
+ * Gunfire off screen arrives on this grid (m): the SOUND event's (packages/protocol snapshot.ts),
+ * so a bot gets the same rounding a client does.
+ */
+export const SOUND_CELL = 4;
+
+const ray = createRayHit();
+
+/** One smoke sight per game, gathered once a tick for all its bots: brains run before anything moves. */
+const sights = new WeakMap<Game, { tick: number; sight: SmokeSight }>();
+export function smokeSight(game: Game): SmokeSight {
+  let s = sights.get(game);
+  if (!s) {
+    s = { tick: -1, sight: new SmokeSight() };
+    sights.set(game, s);
+  }
+  if (s.tick !== game.tick) {
+    s.sight.gather(game);
+    s.tick = game.tick;
+  }
+  return s.sight;
+}
+
+function onSoundGrid(v: number): number {
+  return Math.round(v / SOUND_CELL) * SOUND_CELL;
+}
+
+export class Perception {
+  readonly contacts: Contact[] = Array.from({ length: MAX_PLAYERS }, () => ({
+    known: false,
+    visible: false,
+    x: 0,
+    y: 0,
+    vx: 0,
+    vy: 0,
+    tick: -1,
+    since: -1,
+    hurtTick: -1,
+  }));
+  /** items by pickup slot: where and what it last saw */
+  readonly items: ItemSighting[] = Array.from({ length: MAX_PICKUPS }, () => ({ tick: -1, def: 0, x: 0, y: 0, hp: 0 }));
+  /** the nearest gunfire it heard last from someone it couldn't see */
+  readonly noise: Noise = { tick: -1, x: 0, y: 0 };
+  /** gas clouds it has seen, by cloud slot */
+  readonly gas: GasSighting[] = Array.from({ length: MAX_CLOUDS }, () => ({ known: false, x: 0, y: 0 }));
+  /** fraction of the human view the bot gets (BotLevel.view) */
+  viewScale = 1;
+  /** how whited out it is now (blindIntensity: 1 = full white, then the fade) */
+  blind = 0;
+  private halfW = 0;
+  private halfH = 0;
+  private cx = 0;
+  private cy = 0;
+
+  forgetAll(): void {
+    for (const c of this.contacts) {
+      c.known = false;
+      c.visible = false;
+      c.hurtTick = -1;
+    }
+    this.noise.tick = -1;
+  }
+
+  /** Some gas cloud it has seen is still about. */
+  get knowsGas(): boolean {
+    for (const k of this.gas) if (k.known) return true;
+    return false;
+  }
+
+  /**
+   * Last tick's events (still in game.events when the brain runs), every tick: gunfire (seen, or a
+   * SOUND), who hit us, who died or respawned. A full white wipes the contacts first.
+   */
+  hear(game: Game, self: PlayerState): void {
+    this.frame(self);
+    if (this.blind >= 1) this.whiteOut();
+    const sight = smokeSight(game);
+    const tick = game.tick;
+    let heard = Infinity;
+    for (const e of game.events) {
+      if (e.type === 'shot') {
+        if (e.shooter === self.id) continue;
+        const q = game.players[e.shooter];
+        // a shooter on its screen: the tracer shows who and where (it's in sight anyway)
+        if (q?.alive && this.sees(sight, self, q)) {
+          this.note(q, tick);
+          continue;
+        }
+        // anyone else is a SOUND: roughly where, not who; the nearest one this tick
+        const x = onSoundGrid(e.ox);
+        const y = onSoundGrid(e.oy);
+        const d2 = (x - self.x) * (x - self.x) + (y - self.y) * (y - self.y);
+        if (d2 > EARSHOT * EARSHOT || d2 >= heard) continue;
+        heard = d2;
+        this.noise.tick = tick;
+        this.noise.x = x;
+        this.noise.y = y;
+      } else if (e.type === 'hit') {
+        if (e.target !== self.id || e.attacker < 0 || e.attacker === self.id) continue;
+        const q = game.players[e.attacker];
+        if (!q?.alive) continue;
+        const c = this.contacts[q.id]!;
+        c.hurtTick = tick;
+        // the HIT names who hurt it; where they are is only what it sees, or the SOUND of that shot
+        if (this.sees(sight, self, q)) this.note(q, tick);
+        else if (this.blind < 1) this.heardAt(game, c, q.id, tick);
+      } else if (e.type === 'death' || e.type === 'spawn') {
+        const id = e.type === 'death' ? e.victim : e.player;
+        const c = this.contacts[id];
+        if (c) {
+          c.known = false;
+          c.visible = false;
+        }
+      }
+    }
+  }
+
+  /** A look around (10 Hz): who and what is on its screen and out of smoke; old news fades. */
+  look(game: Game, self: PlayerState): void {
+    const tick = game.tick;
+    this.frame(self);
+    // full white: nothing to see (hear() has already wiped the contacts)
+    if (this.blind >= 1) return;
+    const sight = smokeSight(game);
+    for (const q of game.players) {
+      if (!q || q === self) continue;
+      const c = this.contacts[q.id]!;
+      if (q.alive && this.sees(sight, self, q)) {
+        if (!c.visible) c.since = tick;
+        this.note(q, tick);
+        c.visible = true;
+      } else {
+        c.visible = false;
+        if (c.known && (!q.alive || tick - c.tick > MEMORY * 60)) c.known = false;
+      }
+    }
+    if (this.noise.tick >= 0 && tick - this.noise.tick > MEMORY * 60) this.noise.tick = -1;
+    for (const k of game.pickups) {
+      const seen = this.items[k.id]!;
+      if (k.alive && this.inView(k.x, k.y)) Object.assign(seen, { tick, def: k.def, x: k.x, y: k.y, hp: k.hp });
+      // the spot it remembers is on screen now and the item isn't there: gone
+      else if (seen.tick >= 0 && this.inView(seen.x, seen.y) && !(k.alive && k.x === seen.x && k.y === seen.y)) seen.tick = -1;
+    }
+    for (const c of game.clouds) {
+      const k = this.gas[c.id]!;
+      const def = c.alive ? cloudDef(c.type) : null;
+      if (!def || def.dpsCore <= 0) k.known = false;
+      else if (this.cloudInView(c.x, c.y, def.radius)) {
+        k.known = true;
+        k.x = c.x;
+        k.y = c.y;
+      } else if (k.known && (k.x !== c.x || k.y !== c.y)) k.known = false;
+    }
+  }
+
+  /** Can it see `q` right now: on its screen, not hidden by smoke, not whited out (the brain's target, every tick). */
+  canSee(game: Game, self: PlayerState, q: PlayerState): boolean {
+    return q.alive && this.sees(smokeSight(game), self, q);
+  }
+
+  /** Keeps a player in sight up to date between looks (the brain's target). */
+  refresh(q: PlayerState, tick: number): void {
+    this.note(q, tick);
+  }
+
+  /** On its screen (the view rect as of this tick). */
+  inView(x: number, y: number): boolean {
+    return Math.abs(x - this.cx) <= this.halfW && Math.abs(y - this.cy) <= this.halfH;
+  }
+
+  /**
+   * How deep (0…1; 0 = not in it) the point (x, y) is inside a gas cloud it has seen, the cloud's
+   * radius grown by `margin`. A cloud still growing in counts at its full size (it's there within
+   * the second). A wall bounds a cloud: its far side from the centre isn't in it. `out` gets the
+   * centre and (grown) radius of the cloud it's deepest in.
+   */
+  gasAt(game: Game, x: number, y: number, margin: number, out?: { x: number; y: number; r: number }): number {
+    let worst = 0;
+    for (const c of game.clouds) {
+      if (!c.alive || !this.gas[c.id]!.known) continue;
+      const def = cloudDef(c.type);
+      if (!def) continue;
+      const r = (c.age < def.grow * TICK_RATE ? def.radius : cloudRadius(def, c.age)) + margin;
+      const dx = x - c.x;
+      const dy = y - c.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 >= r * r) continue;
+      const d = Math.sqrt(d2);
+      if (d > 1e-6 && game.world.raycast(c.x, c.y, dx / d, dy / d, d, SegFlag.BulletPass, ray)) continue;
+      if (1 - d / r <= worst) continue;
+      worst = 1 - d / r;
+      if (out) {
+        out.x = c.x;
+        out.y = c.y;
+        out.r = r;
+      }
+    }
+    return worst;
+  }
+
+  /** The human camera this tick: centred above the feet, pushed toward the aim; and the white-out. */
+  private frame(self: PlayerState): void {
+    this.blind = blindIntensity(self);
+    this.halfW = (viewWidth(maxZoomLevels(self) - 1) / 2) * this.viewScale;
+    this.halfH = this.halfW * VIEW_MAX_ASPECT;
+    this.cx = self.x + simCos(self.aim) * this.halfW * VIEW_LOOKAHEAD;
+    this.cy = self.y + 0.9 + simSin(self.aim) * this.halfH * VIEW_LOOKAHEAD;
+  }
+
+  /** What a client is sent of a player: in its view, not hidden by smoke, and it isn't whited out. */
+  private sees(sight: SmokeSight, self: PlayerState, q: PlayerState): boolean {
+    return this.blind < 1 && this.inView(q.x, q.y + 0.75) && !sight.hides(self.id, q.id);
+  }
+
+  /** A cloud is sent while any of it (its full radius) is in the view rect. */
+  private cloudInView(x: number, y: number, r: number): boolean {
+    return Math.abs(x - this.cx) <= this.halfW + r && Math.abs(y - this.cy) <= this.halfH + r;
+  }
+
+  /** Full white: everyone it knew of is lost (it still knows who hurt it, for when it sees again). */
+  private whiteOut(): void {
+    for (const c of this.contacts) {
+      c.known = false;
+      c.visible = false;
+    }
+  }
+
+  /** Who hit it, placed where that shot's SOUND came from (none: a grenade, gas, a mine, a blow it can't place). */
+  private heardAt(game: Game, c: Contact, id: number, tick: number): void {
+    for (const e of game.events) {
+      if (e.type !== 'shot' || e.shooter !== id) continue;
+      if (!c.known) c.since = tick;
+      c.known = true;
+      c.x = onSoundGrid(e.ox);
+      c.y = onSoundGrid(e.oy);
+      c.vx = 0;
+      c.vy = 0;
+      c.tick = tick;
+      return;
+    }
+  }
+
+  private note(q: PlayerState, tick: number): void {
+    const c = this.contacts[q.id]!;
+    if (!c.known) c.since = tick;
+    c.known = true;
+    c.x = q.x;
+    c.y = q.y;
+    c.vx = q.vx;
+    c.vy = q.vy;
+    c.tick = tick;
+  }
+}

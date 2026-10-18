@@ -13,7 +13,7 @@
     "typecheck": "turbo run typecheck",
     "lint": "eslint .",
     "check": "pnpm lint && pnpm typecheck && pnpm test",
-    "golden:update": "pnpm --filter @military-forge/sim golden:update",
+    "golden:update": "pnpm --filter @military-forge/sim golden:update && pnpm --filter @military-forge/bots golden:update",
     "replays:generate": "pnpm --filter @military-forge/sim replays:generate",
     "uws:fetch": "node scripts/fetch-uws.mjs"
   },

@@ -22,6 +22,8 @@ export const DEFAULT_REPORT = '.turbo/vitest-report.json';
 /** Tests worth a line of their own: `file` is repo-relative; `name` filters by full test name. */
 export const HIGHLIGHTS = [
   { label: 'Golden replays', file: 'packages/sim/test/golden.test.ts' },
+  { label: 'Bot golden matches', file: 'packages/bots/test/golden.test.ts' },
+  { label: 'Bot no-stuck soak', file: 'packages/bots/test/soak.test.ts' },
   { label: 'Server pipe over uWebSockets.js', file: 'apps/game-server/test/server.test.ts', name: '(uws)' },
   { label: 'Server pipe over ws', file: 'apps/game-server/test/server.test.ts', name: '(ws)' },
 ];

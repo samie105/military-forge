@@ -698,3 +698,45 @@ Screenshots are in docs/screenshots/touch. With the CPU throttled ×4 on 3D Low,
 - **With the shield:** `dashBlocked()` checks the EMP lockout next to the raise rule; a bullet or a ricochet leg that meets a mine stops at it and hurts it (with the falloff over the range used); the ledge-shove and fog-ricochet shield tests account for the Breacher's and the Widow's kick.
 - **Goldens:** `shield` is re-recorded twice over: first for the recoil (with the old recoil numbers put back, all 15 of main's goldens are bit-identical), then for the range's grenade spawner (hashed from tick 0; the scenario's inputs and events are unchanged). `grenades-variety` is re-recorded because mines hash the tick they were thrown (`born`); with that left out every golden is unchanged.
 - Review items, as fixed: H1 (the Armory reads `explosion` only on blast grenades), H2 and M1–M3 (§22.5), M4–M5 (§22.3), M6 and the flashbang lows (§22.2), M7 (3D pop and EMP ring), M8 (the jet line, `dashBlocked`, `grenadeForces` for mines, `mech.bulletCost` for mine damage, v10), clouds through thin walls (§22.1), one-way smoke (§22.5), mouse 5's release no longer navigates, the feel report's mine row.
+
+## 23. Bots that fill rooms (18 Oct 2026, owner request)
+
+> Owner request (paraphrased): bots, so two-player playtests feel like real matches. Spec: docs/08 §9, built in `packages/bots`.
+
+- **Inside the sim:** a bot is a player with `isBot` and a `brain` (`Brain` in packages/sim/src/bots.ts). `Game.step` calls brains first, while last tick's events are still there, so a bot reacts to the last tick as a human reacts to the last frame. Decisions run at 10 Hz, staggered by id. Movement, aim and trigger run every tick and produce an ordinary Input. Each bot draws from its own seeded `Xoshiro128`, never the sim's spread hashes. A Match freezes bots before GO like humans; bots respawn at spawn points. Dummies are unchanged, and **no golden on main changed**.
+- **Replays:** `ReplayFile.bots` lists them; `runReplay(replay, onTick, botReplaySetup(replay))` puts them back after the humans. Their inputs aren't recorded: they come back from the seed. A replay with bots refuses to run without the setup.
+- **Navigation:** a graph per map and tuning (88–260 ms to build, cached), described in docs/08 §9. Every link is flown first through the real `stepMovement`, so jets, drops, drop-throughs, pads, wind and low gravity all count. At runtime, bots skip jet links while the jetpack is down (an EMP field or storm, or an EMP grenade's `jetDisabledTicks`), treat zones an event turned into reversed gravity as blocked, fly out of a gravity pocket sideways, and plan from the air when knocked off the graph. Before a jet link they refill on the ground to what its check burned plus a margin, but never to more than a full tank (a Hard bot used to wait for 108 of 100 fuel, and a replan restarted its 4 s wait cap).
+- **Combat:** a bot sees what a client is sent (the server's snapshot rules, §22.5 and docs/05 §9): the view rect (a side view, so a wall between two players hides neither), minus whoever smoke hides from it (the sim's `SmokeSight`, which the server's AOI uses), and nobody at all in a flashbang's full white. Its target is re-checked every tick, so it can't track someone into smoke between looks. Gunfire from someone it can't see is a SOUND: on the client's 4 m grid, within 35 m, with no name, so a shooter hidden in smoke isn't given away by its tracers. A hit names who hurt it but places them only by that shot's SOUND. It only fires with a line of fire; with none nearby, it closes in around the obstacle. Aim is in metres at the target (a fixed-scale side view): a slow drift plus a tremor, a reaction time, a tracking lag and lead. The gunner picks the gun for the range, gives semi-autos a fresh press per shot, fires automatics in bursts, reloads between fights and bashes in reach. Grenades are solved with the sim's own grenade physics and never land in the bot's own blast. Below the retreat HP it falls back out of sight to regenerate; Normal and Hard bots dash away from hits.
+- **Shield (v9):** bots remember items they've seen and go for a shield that beats theirs by 40 HP. They raise it for a fight (with a one-handed gun) and sling it on the back otherwise, where it guards their back, weighs nothing and doesn't block the dash.
+- **Arsenal B (v10):**
+  - **Smoke** hides players from bots as above.
+  - **Flashbang:** while fully white, a bot loses every contact and starts nothing new ('blind'). As the white fades its aim error grows by up to 5× (`Aim.impair`), and it re-acquires with its reaction time.
+  - **Gas** it has seen (clouds are sent by the view rect and their radius) adds 4–12 s to any link into or through it, so paths go around (over the top on a platform, say). A bot inside one walks to the nearest node 1.2 m clear of it, fighting back on the way, and doesn't hang about at the rim. A growing cloud counts at full size.
+  - **EMP:** it closes the jet links, and no hops or dash dodges are tried while the jetpack is dead (`dashBlocked`).
+  - **Grenades:** bots throw frags only for now. The belt goes back to frags (the cycle key) when a pair pickup left it on another type, and the other types are never thrown.
+- **Bug the nav graph found:** two Storm Front pockets (spawns 0, 4, 5) were traps. A full tank climbs 13 m and the walls were 16 m and 21 m. Five one-way ledges fix it: one in the left pocket, two in the right, two beside the roof. Every spawn on every map now reaches every other.
+
+| Feel vs a standing target (pinned bot, 30 duels; v10) | Easy | Normal | Hard | Human (perfect torso aim) |
+|---|---|---|---|---|
+| Buzz @ 12 m: hits, TTK | 29%, 2.3× | **42%, 1.85×** | 59%, 1.25× | 58%, 2.54 s |
+| K-47 @ 12 m: hits, TTK | 29%, 2.5× | **41%, 2.2×** | 58%, 1.35× | 55%, 1.69 s |
+| Hammer @ 12 m: hits, TTK | 45%, 2.5× | 52%, 1.9× | 93%, 1.15× | 100%, 1.82 s |
+| Reaction / aim drift + tremor (1σ) | 0.6 s / 1.3 + 1.8 m | 0.4 s / 0.8 + 1.0 m | 0.25 s / 0.35 + 0.4 m | |
+
+Targets: Normal at 12 m lands 35–45% and takes about 2× a human to kill (`test/feel.test.ts` pins both). The combined aim error at 12 m is about 10° (Easy), 6° (Normal) and 2.5° (Hard), within docs/08's 2–9° cone apart from Easy at the wide end. `pnpm --filter @military-forge/bots feel` prints the table.
+
+| No-stuck soak, 5 min, 6 Normal bots, pickups on (`pnpm --filter @military-forge/bots soak 5 6`; v10) | stuck | kills | moved | sim + bots |
+|---|---|---|---|---|
+| movement-test | 0.00% | 83 | 228 m/bot/min | 0.029 ms/tick |
+| mechanics-test | 0.00% | 93 | 183 | 0.021 |
+| lunar-outpost | 0.00% | 94 | 213 | 0.017 |
+| storm-front | 0.00% | 43 | 201 | 0.019 |
+| flux-lab | 0.00% | 108 | 230 | 0.019 |
+
+"Stuck" means trying to get somewhere (a plan, or roaming or hunting) and moving under 0.5 m in 3 s; holding a firing spot or cover doesn't count. `test/soak.test.ts` runs two bots of each level per map and requires under 1% stuck, nobody stuck over 5 s, and kills. A second soak sets arsenal B off around them for 3 minutes (a smoke or gas cloud by a bot every 3 s, a flashbang every 5 s, an EMP lockout every 7 s): 0.00% stuck on every map, nobody stuck at all, 0–3 gas deaths per map (it requires at most 5). It found the fuel wait above and a bot going back and forth at a gas cloud's rim.
+
+- **Tests (65):** per behaviour (perception, aim, gunner, grenades, the tree's modes, no shots into walls, shield grab and carry, retreat, dodge, the countdown freeze, spawns, gravity pockets; for v10: smoke in and behind, a shooter in smoke heard but not seen, the full white and its fade, gas seen and remembered, never a shot at someone smoke hides, walking out of gas mid-fight, going around it, EMP, frags only), nav (every spawn pair on every map, deterministic builds, a body crossing each map), both soaks, feel, and three bot goldens: a bot-vs-bot match on movement-test, one on Flux Lab, and a human plus three bots through a Match with pickups (a bot takes a shield and raises it, then a flashbang pair it never throws).
+- **Goldens, v10:** the three bot goldens are re-recorded; every golden on main is unchanged. With the bot code as it was (only the grenade solver moved to v10's typed grenades) they diverge first where v10's sim changed: `bots-match` at tick 0 (the range's new grenade spawner, hashed from tick 0, as main's `shield` golden), `bots-movement-test` at tick 143 (a bot's Widow shot now kicks, §22.4), `bots-flux-lab` at tick 418 (a K-47 shot in the air kicks). The v10 rules then move Flux Lab's to tick 235 (a bot whose target leaves its sight now looks where it was last seen).
+- **Local play:** `?bots=3&botlevel=normal`. The local match plays three Normal bots by default; `?sandbox` keeps the dummies; `?bots=0` gives the dummies back. Recordings carry the bots.
+- **Next (ws/bots-rooms, after #37):** the server fills rooms with `[BOT]` bots and removes one when a human joins (bots-interfaces.md). Later: bots throwing smoke, flashbangs, gas, mines and EMP, and seeing mines (a path cost like gas).
+

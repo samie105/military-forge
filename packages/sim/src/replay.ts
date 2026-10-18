@@ -15,6 +15,13 @@ export type MatchCommandKind = 'ready' | 'unready' | 'start' | 'rematch' | 'lobb
 /** [tick, human player index, command]: applied before that tick is simulated */
 export type MatchCommand = [number, number, MatchCommandKind];
 
+/** A bot in a replay: packages/bots re-creates it from this and the seed (its inputs aren't recorded). */
+export interface ReplayBot {
+  name: string;
+  /** 'easy' | 'normal' | 'hard' (packages/bots) */
+  level: string;
+}
+
 export interface ReplayFile {
   version: 1;
   name: string;
@@ -37,6 +44,8 @@ export interface ReplayFile {
   pickups?: boolean;
   /** lobby commands for the Match (ready-up, rematch votes…) */
   commands?: MatchCommand[];
+  /** bots, joined after the humans in this order; replay with packages/bots `botReplaySetup` */
+  bots?: ReplayBot[];
 }
 
 export function encodeRuns(inputs: readonly Input[]): InputRun[] {
@@ -59,7 +68,12 @@ export function decodeRuns(runs: readonly InputRun[], ticks: number): Input[] {
   return out;
 }
 
-export function createReplayGame(replay: ReplayFile): Game {
+/**
+ * The replay's starting game: map, dummies, then the humans in order. `setup` runs last: replays
+ * with `bots` need packages/bots `botReplaySetup(replay)` there (the sim can't build brains).
+ */
+export function createReplayGame(replay: ReplayFile, setup?: (game: Game) => void): Game {
+  if (replay.bots?.length && !setup) throw new Error(`replay "${replay.name}" has bots: run it with @military-forge/bots botReplaySetup`);
   const game = new Game({ mapId: replay.map, seed: replay.seed, dummies: replay.dummies, tuning: replay.tuning ?? {}, pickups: replay.pickups ?? false });
   replay.players.forEach((_, i) => {
     const p = game.addPlayer(`P${i + 1}`);
@@ -70,6 +84,7 @@ export function createReplayGame(replay: ReplayFile): Game {
     const belt = replay.grenadeLoadouts?.[i];
     if (belt) game.setGrenadeLoadout(p, belt);
   });
+  setup?.(game);
   return game;
 }
 
@@ -84,8 +99,9 @@ export function applyMatchCommand(match: Match, playerId: number, kind: MatchCom
 export function runReplay(
   replay: ReplayFile,
   onTick?: (game: Game, match: Match | null) => void,
+  setup?: (game: Game) => void,
 ): { hashes: number[]; game: Game; match: Match | null } {
-  const game = createReplayGame(replay);
+  const game = createReplayGame(replay, setup);
   const match = replay.match ? new Match(game, replay.match) : null;
   const humans = game.players.filter((p) => p && !p.isBot).map((p) => p!.id);
   const streams = replay.players.map((runs) => decodeRuns(runs, replay.ticks));
@@ -110,7 +126,7 @@ export class ReplayRecorder {
   private readonly commands: MatchCommand[] = [];
 
   constructor(
-    private readonly meta: Pick<ReplayFile, 'map' | 'seed' | 'dummies' | 'tuning' | 'starts' | 'loadouts' | 'grenadeLoadouts' | 'match' | 'pickups'>,
+    private readonly meta: Pick<ReplayFile, 'map' | 'seed' | 'dummies' | 'tuning' | 'starts' | 'loadouts' | 'grenadeLoadouts' | 'match' | 'pickups' | 'bots'>,
     private readonly name = 'recorded',
   ) {}
 

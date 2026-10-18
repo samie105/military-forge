@@ -1,6 +1,6 @@
 /**
- * Scripted dummy targets (docs/12 §5 week 2). They produce Inputs exactly like a human would,
- * so the sim can't tell them apart.
+ * Bots: scripted dummy targets (docs/12 §5 week 2), and the hook for real bots (packages/bots).
+ * Both produce Inputs exactly like a human would, so the sim can't tell them apart.
  */
 import { PI, angleToU16, hash4, hashToUnit, simAtan2 } from '@military-forge/shared';
 import { smokeBlocks } from './clouds';
@@ -11,6 +11,17 @@ import { hitboxLayout, type PlayerState } from './player';
 
 /** How far (radians, either way) a fully blinded bot's gaze strays from its target. */
 const BLIND_AIM_ERROR = 1.2;
+
+/**
+ * A real bot's brain (packages/bots, docs/08 §9). Game.step calls it first each tick, before
+ * anything moves and while the previous tick's events are still in `game.events`, so a bot reacts
+ * to what the last tick showed, like a human to the last frame. It writes the bot's input for the
+ * tick into `out`; inside a Match's freeze the buttons are dropped afterwards (aim kept), as for
+ * humans. A brain must be deterministic: it reads the game and its own seeded randomness only.
+ */
+export interface Brain {
+  think(game: Game, self: PlayerState, out: Input): void;
+}
 
 export function botInput(game: Game, p: PlayerState, out: Input): void {
   out.buttons = 0;

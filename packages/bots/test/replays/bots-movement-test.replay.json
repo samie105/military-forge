@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "name": "bots: four of them on the movement test map (Easy, Normal \u00d72, Hard)",
+  "map": "movement-test",
+  "seed": 101,
+  "dummies": false,
+  "ticks": 3600,
+  "players": [],
+  "bots": [
+    {
+      "name": "[BOT] Badger",
+      "level": "easy"
+    },
+    {
+      "name": "[BOT] Kestrel",
+      "level": "normal"
+    },
+    {
+      "name": "[BOT] Mantis",
+      "level": "hard"
+    },
+    {
+      "name": "[BOT] Jackal",
+      "level": "normal"
+    }
+  ]
+}

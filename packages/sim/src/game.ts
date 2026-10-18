@@ -62,6 +62,8 @@ export class Game {
   rewind: TargetRewind | null = null;
   /** the map's rules, zones and events (docs/02 §20); null when it has none */
   readonly mech: MapMechanics | null;
+  /** set by Match.step outside the warm-up and the match: bots keep their aim, press nothing */
+  inputsFrozen = false;
   private readonly ids = new IdAllocator(MAX_PLAYERS);
 
   constructor(options: GameOptions = {}) {
@@ -130,7 +132,7 @@ export class Game {
   respawn(p: PlayerState): void {
     let sx = p.homeX;
     let sy = p.homeY;
-    if (!p.isBot) {
+    if (!p.isBot || p.brain) {
       let bestScore = -1;
       for (const s of this.map.spawns) {
         let nearest = Infinity;
@@ -202,9 +204,18 @@ export class Game {
 
   /**
    * Advances one tick. `inputs[id]` is that player's input for this tick; a missing entry repeats
-   * the last one (docs/05 §13). Dummies generate their own.
+   * the last one (docs/05 §13). Bots and dummies generate their own.
    */
   step(inputs: ReadonlyArray<Readonly<Input> | undefined>): void {
+    // bots decide first, on what the last tick showed (its events are still here)
+    for (const p of this.players) {
+      if (!p?.brain || !p.alive) continue;
+      p.brain.think(this, p, p.input);
+      if (this.inputsFrozen) {
+        p.input.buttons = 0;
+        p.input.weaponSelect = 0;
+      }
+    }
     this.events.length = 0;
     const t = this.tuning;
     const mech = this.mech;
@@ -214,7 +225,7 @@ export class Game {
     for (const p of this.players) {
       if (!p) continue;
       if (p.isBot) {
-        if (p.alive) botInput(this, p, p.input);
+        if (p.alive && !p.brain) botInput(this, p, p.input);
       } else {
         const input = inputs[p.id];
         if (input) copyInput(p.input, input);

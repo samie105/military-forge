@@ -242,7 +242,7 @@ client bundle      game server         (both refuse to start on hash mismatch wi
 | Layer | How |
 |---|---|
 | Sim unit tests | Vitest. Movement edge cases (02-physics §10), weapon cooldown math, explosion falloff, quantization round-trips |
-| **Golden replays** | recorded input logs → re-simulate → compare per-tick state hashes. Run on every PR touching `sim/` |
+| **Golden replays** | recorded input logs → re-simulate → compare per-tick state hashes. Run on every PR touching `sim/`. Bots aren't recorded: `ReplayFile.bots` lists them and `botReplaySetup` puts them back from the seed (packages/bots goldens: bot-vs-bot matches and a human with bots through a Match) |
 | Protocol | fuzzing of decoders (random bytes must never crash, only reject), round-trip encode/decode property tests (fast-check) |
 | Netcode | **network conditioner** in dev: artificial latency/jitter/loss/duplication per direction (both in the client transport and as a server flag). Test matrix: 50/150/300 ms × 0/2/10% loss |
 | Bots | headless bot clients from `packages/bots` play full matches in CI (8 bots × 2 min) |

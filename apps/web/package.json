@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@military-forge/bots": "workspace:*",
     "@military-forge/content": "workspace:*",
     "@military-forge/netcode": "workspace:*",
     "@military-forge/protocol": "workspace:*",
