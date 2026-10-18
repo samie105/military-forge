@@ -339,7 +339,8 @@
    "flash": "launcher",
    "tracer": null,
    "casing": null,
-   "eject": null
+   "eject": null,
+   "special": "thumper"
   },
   "shredder": {
    "flash": "heavy",
@@ -382,6 +383,49 @@
    "tracer": "rifle",
    "casing": "rifle",
    "eject": "shot"
+  },
+  "dragon": {
+   "flash": null,
+   "tracer": null,
+   "casing": null,
+   "eject": null,
+   "special": "dragon"
+  },
+  "arc": {
+   "flash": null,
+   "tracer": null,
+   "casing": null,
+   "eject": null,
+   "special": "arc"
+  },
+  "popper": {
+   "flash": "shotgun",
+   "flashScale": 1.1,
+   "tracer": null,
+   "casing": null,
+   "eject": null,
+   "special": "popper"
+  },
+  "ripper": {
+   "flash": null,
+   "tracer": null,
+   "casing": null,
+   "eject": null,
+   "special": "ripper"
+  },
+  "pulse": {
+   "flash": null,
+   "tracer": null,
+   "casing": null,
+   "eject": null,
+   "special": "pulse"
+  },
+  "riot_shield": {
+   "flash": null,
+   "tracer": null,
+   "casing": null,
+   "eject": null,
+   "special": "riot_shield"
   },
   "machete": {
    "flash": null,

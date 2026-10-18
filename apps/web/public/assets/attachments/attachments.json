@@ -19,7 +19,12 @@
     "rattler",
     "hornet",
     "trident",
-    "bullpup"
+    "bullpup",
+    "dragon",
+    "arc",
+    "popper",
+    "ripper",
+    "pulse"
    ]
   },
   "sight_long": {
@@ -36,7 +41,12 @@
     "shredder",
     "hornet",
     "trident",
-    "bullpup"
+    "bullpup",
+    "dragon",
+    "arc",
+    "popper",
+    "ripper",
+    "pulse"
    ]
   },
   "suppressor": {
@@ -87,7 +97,8 @@
     "hornet",
     "trident",
     "bullpup",
-    "longbow"
+    "longbow",
+    "arc"
    ],
    "notes": "with both foregrip and laser on one rail: foregrip at \u2212\u00bc, laser at +\u00bc of the rail length"
   },
@@ -120,7 +131,8 @@
     "hornet",
     "trident",
     "bullpup",
-    "longbow"
+    "longbow",
+    "arc"
    ],
    "notes": "with both foregrip and laser on one rail: foregrip at \u2212\u00bc, laser at +\u00bc of the rail length"
   },

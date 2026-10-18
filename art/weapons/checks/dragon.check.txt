@@ -1,0 +1,21 @@
+asset-check: art/weapons/dragon.glb  [weapon]
+----------------------------------------------------------------------------------------------------
+INFO  file size                                 85 KB
+PASS  triangles                                 968 of 1000
+PASS  one mesh, one material                    1 draw call(s)
+INFO  GPU texture memory (KTX2 est.)            0.00 MB, 0 image(s)
+PASS  extras weaponId/family/aimPose/hands      ok
+WARN  weaponId in packages/content              dragon is not in packages/content/src/{weapons,grenades}.ts yet
+INFO  nodes                                     grip, mag, muzzle, offhand, pilot, rail_top
+PASS  origin on the weapon (the grip)           bbox (-0.05, -0.14, -0.18)..(0.05, 0.11, 0.72)
+PASS  family is a docs/04 §4.2 family           'heavy'
+PASS  aimPose has clips                         'rifle'
+PASS  muzzle node ahead of the grip (+Y)        muzzle at glTF y +0.73 m
+PASS  offhand node within 0.1 m of the grip     0.091 m
+PASS  sockets for the family                    grip, muzzle, mag, rail_top
+PASS  socket directions (unit `dir`)            ok
+PASS  sockets on the weapon (within 3 cm)       ok
+PASS  muzzle fires along +Y with a bore radius  dir (0.0, 1.0, 0.0), bore 0.036 m
+PASS  rail_top above the bore, facing up        z +0.142 vs bore +0.060, length 0.12 m
+----------------------------------------------------------------------------------------------------
+RESULT: PASS  (13 pass, 1 warn, 0 fail)

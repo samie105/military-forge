@@ -118,12 +118,12 @@
   },
   "grenade_launcher": {
    "flipbook": "frag",
-   "scale": 0.8,
-   "radiusM": 3.2,
-   "provisional": "no content entry yet: radius scaled from the frag",
+   "scale": 0.75,
+   "radiusM": 3.0,
+   "provisional": "no content entry yet: the docs/03 \u00a75 splash radius",
    "shockwave": {
     "fromM": 0.3,
-    "toM": 3.2,
+    "toM": 3.0,
     "ms": 220,
     "tint": "#fff6e0",
     "opacity": 0.85,
@@ -131,8 +131,8 @@
    },
    "light": {
     "color": "#ffcf80",
-    "intensity": 7.6,
-    "rangeM": 7.0,
+    "intensity": 7.5,
+    "rangeM": 6.6,
     "ms": 160
    },
    "debris": {
@@ -158,7 +158,7 @@
      7
     ],
     "tint": "#cfc6b4",
-    "sizeM": 0.58,
+    "sizeM": 0.54,
     "speedMps": [
      1.5,
      3
@@ -169,26 +169,26 @@
    },
    "scorch": {
     "decal": "scorch",
-    "sizeM": 1.92,
+    "sizeM": 1.8,
     "onGroundOnly": false
    },
    "cameraShake": {
-    "amplitudeM": 0.28,
+    "amplitudeM": 0.26,
     "freqHz": 14,
     "decayMs": 420,
-    "fullWithinM": 3.2,
-    "zeroAtM": 11.2,
+    "fullWithinM": 3.0,
+    "zeroAtM": 10.5,
     "verticalBias": 0.6
    }
   },
   "rocket": {
    "flipbook": "rocket",
-   "scale": 1.0,
-   "radiusM": 5.0,
-   "provisional": "no content entry yet: radius scaled from the frag",
+   "scale": 0.7,
+   "radiusM": 3.5,
+   "provisional": "no content entry yet: the docs/03 \u00a75 splash radius",
    "shockwave": {
     "fromM": 0.3,
-    "toM": 5.0,
+    "toM": 3.5,
     "ms": 220,
     "tint": "#fff6e0",
     "opacity": 0.85,
@@ -196,8 +196,8 @@
    },
    "light": {
     "color": "#ffcf80",
-    "intensity": 8.5,
-    "rangeM": 11.0,
+    "intensity": 7.8,
+    "rangeM": 7.7,
     "ms": 160
    },
    "debris": {
@@ -223,7 +223,7 @@
      7
     ],
     "tint": "#cfc6b4",
-    "sizeM": 0.9,
+    "sizeM": 0.63,
     "speedMps": [
      1.5,
      3
@@ -234,15 +234,15 @@
    },
    "scorch": {
     "decal": "scorch",
-    "sizeM": 3.0,
+    "sizeM": 2.1,
     "onGroundOnly": false
    },
    "cameraShake": {
-    "amplitudeM": 0.44,
+    "amplitudeM": 0.31,
     "freqHz": 14,
     "decayMs": 420,
-    "fullWithinM": 5.0,
-    "zeroAtM": 17.5,
+    "fullWithinM": 3.5,
+    "zeroAtM": 12.2,
     "verticalBias": 0.6
    }
   }

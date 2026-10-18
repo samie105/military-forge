@@ -1,0 +1,92 @@
+{
+  "file": "art/weapons/popper.glb",
+  "kind": "weapon",
+  "pass": true,
+  "rows": [
+    {
+      "status": "INFO",
+      "check": "file size",
+      "detail": "62 KB"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles",
+      "detail": "756 of 1000"
+    },
+    {
+      "status": "PASS",
+      "check": "one mesh, one material",
+      "detail": "1 draw call(s)"
+    },
+    {
+      "status": "INFO",
+      "check": "GPU texture memory (KTX2 est.)",
+      "detail": "0.00 MB, 0 image(s)"
+    },
+    {
+      "status": "PASS",
+      "check": "extras weaponId/family/aimPose/hands",
+      "detail": "ok"
+    },
+    {
+      "status": "WARN",
+      "check": "weaponId in packages/content",
+      "detail": "popper is not in packages/content/src/{weapons,grenades}.ts yet"
+    },
+    {
+      "status": "INFO",
+      "check": "nodes",
+      "detail": "grip, mag, muzzle, offhand, rail_top"
+    },
+    {
+      "status": "PASS",
+      "check": "origin on the weapon (the grip)",
+      "detail": "bbox (-0.08, -0.13, -0.34)..(0.08, 0.1, 0.45)"
+    },
+    {
+      "status": "PASS",
+      "check": "family is a docs/04 \u00a74.2 family",
+      "detail": "'launcher'"
+    },
+    {
+      "status": "PASS",
+      "check": "aimPose has clips",
+      "detail": "'rifle'"
+    },
+    {
+      "status": "PASS",
+      "check": "muzzle node ahead of the grip (+Y)",
+      "detail": "muzzle at glTF y +0.46 m"
+    },
+    {
+      "status": "PASS",
+      "check": "offhand node within 0.1 m of the grip",
+      "detail": "0.091 m"
+    },
+    {
+      "status": "PASS",
+      "check": "sockets for the family",
+      "detail": "grip, muzzle, mag, rail_top"
+    },
+    {
+      "status": "PASS",
+      "check": "socket directions (unit `dir`)",
+      "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "sockets on the weapon (within 3 cm)",
+      "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "muzzle fires along +Y with a bore radius",
+      "detail": "dir (0.0, 1.0, 0.0), bore 0.032 m"
+    },
+    {
+      "status": "PASS",
+      "check": "rail_top above the bore, facing up",
+      "detail": "z +0.129 vs bore +0.060, length 0.14 m"
+    }
+  ]
+}

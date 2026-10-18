@@ -61,6 +61,7 @@ const SOCKET_NOTES: Record<string, string> = {
   grip: 'main hand', muzzle: 'flash, tracer, suppressor', offhand: 'left-hand IK', eject: 'casings',
   mag: 'reload', rail_top: 'scope / sight', rail_bottom: 'foregrip / laser', backblast: 'exhaust',
   tip: 'blade tip', pin: 'pin ring', light: 'status light', ground: 'rest frame',
+  pilot: 'pilot light', charge: 'charge wind-up', face: 'blocks bullets',
 };
 
 function escapeHtml(text: string): string {
@@ -110,7 +111,8 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
   let alive = true;
   let current = '';
   let weapons: Record<string, WeaponEntry> = {};
-  let sockets: Record<string, { sockets: Record<string, Socket> }> = {};
+  /** `attach`: the rig socket when it isn't the main hand (the riot shield: socket_weapon_L) */
+  let sockets: Record<string, { attach?: string; sockets: Record<string, Socket> }> = {};
   let vfx: VfxManifest | null = null;
   let socketsOn = true;
   let camoSheet: CamoSheet | null = null;
@@ -169,8 +171,9 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
       ? head + `<dl>${c.rows.map((r) => `<div><dt>${escapeHtml(r.label)}</dt><dd>${escapeHtml(r.value)}</dd>${r.bar === undefined ? '' : `<span class="mf-bar" style="--fill:${(r.bar * 100).toFixed(0)}%"></span>`}</div>`).join('')}</dl>`
       : head + '<p class="mf-note">Not in packages/content yet: the model is ready, the stats come with the arsenal stream.</p>';
     const ss = sockets[id]?.sockets ?? {};
+    const offHand = sockets[id]?.attach === 'socket_weapon_L';
     socketPanel.innerHTML = `<h3>Sockets</h3><ul>${Object.keys(ss).map((name) =>
-      `<li><button type="button" data-socket="${name}"><span class="mf-dot" style="background:${SOCKET_COLOURS[name] ?? '#fff'}"></span>${name}<small>${SOCKET_NOTES[name] ?? ''}${ss[name]!.occupied ? ` · ${escapeHtml(ss[name]!.occupied!)} built in` : ''}</small></button></li>`).join('')}</ul>`;
+      `<li><button type="button" data-socket="${name}"><span class="mf-dot" style="background:${SOCKET_COLOURS[name] ?? '#fff'}"></span>${name}<small>${name === 'grip' && offHand ? 'off hand' : (SOCKET_NOTES[name] ?? '')}${ss[name]!.occupied ? ` · ${escapeHtml(ss[name]!.occupied!)} built in` : ''}</small></button></li>`).join('')}</ul>`;
   };
 
   const select = async (id: string) => {

@@ -14,6 +14,8 @@ Outputs (under <runtime>/vfx/, default apps/web/public/assets/vfx/):
                      muzzle) sits at the same point of its cell, so one quad shape fits all frames
   tracer.webp        128×16 streak, head on the right, white core; tinted per style
   weapons.vfx.json   flash styles (frames, quad size, light pop), tracer styles, casing ejection
+                     and per weapon `special`: a specials.vfx.json style (build_specials.py) for
+                     flames, beams, orbs, blades, rounds in flight and the shield
                      and the per-weapon hook-up (which flash, tracer and casing each weapon uses)
 
 Exits 1 if a weapon in sockets.json has no entry or an entry names a missing style.
@@ -68,13 +70,20 @@ WEAPONS = {
     "k47":      {"flash": "rifle", "tracer": "rifle", "casing": "rifle", "eject": "shot"},
     "breacher": {"flash": "shotgun", "tracer": "shotgun", "casing": "shotgun", "eject": "pump", "ejectDelayMs": 250},
     "widow":    {"flash": "sniper", "tracer": "sniper", "casing": "rifle", "eject": "bolt", "ejectDelayMs": 350},
-    "thumper":  {"flash": "launcher", "tracer": None, "casing": None, "eject": None},
+    "thumper":  {"flash": "launcher", "tracer": None, "casing": None, "eject": None, "special": "thumper"},
     "shredder": {"flash": "heavy", "tracer": "heavy", "casing": "rifle", "eject": "shot", "ejectEvery": 2},
     "rattler":  {"flash": "smg", "flashScale": 0.9, "tracer": "smg", "casing": "pistol", "eject": "shot"},
     "hornet":   {"flash": "smg", "tracer": "smg", "casing": "pistol", "eject": "shot", "ejectEvery": 2},
     "trident":  {"flash": "rifle", "tracer": "rifle", "casing": "rifle", "eject": "shot", "burst": 3},
     "bullpup":  {"flash": "rifle", "flashScale": 0.9, "tracer": "rifle", "casing": "rifle", "eject": "shot"},
     "longbow":  {"flash": "sniper", "flashScale": 0.8, "tracer": "rifle", "casing": "rifle", "eject": "shot"},
+    # `special`: a specials.vfx.json style (build_specials.py) for what isn't a flash and a bullet
+    "dragon":   {"flash": None, "tracer": None, "casing": None, "eject": None, "special": "dragon"},
+    "arc":      {"flash": None, "tracer": None, "casing": None, "eject": None, "special": "arc"},
+    "popper":   {"flash": "shotgun", "flashScale": 1.1, "tracer": None, "casing": None, "eject": None, "special": "popper"},
+    "ripper":   {"flash": None, "tracer": None, "casing": None, "eject": None, "special": "ripper"},
+    "pulse":    {"flash": None, "tracer": None, "casing": None, "eject": None, "special": "pulse"},
+    "riot_shield": {"flash": None, "tracer": None, "casing": None, "eject": None, "special": "riot_shield"},
     "machete":  {"flash": None, "tracer": None, "casing": None, "eject": None},
     "frag":     {"flash": None, "tracer": None, "casing": None, "eject": None},
     "mine":     {"flash": None, "tracer": None, "casing": None, "eject": None},

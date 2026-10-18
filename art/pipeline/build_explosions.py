@@ -48,11 +48,13 @@ FLIPBOOKS = {
     "frag": {"sheet": "explosion_frag", "anchor": "centre", "fps": 18, "fireballM": 0.8 * FRAG_RADIUS, "peak": 4},
     "rocket": {"sheet": "explosion_rocket", "anchor": "base", "fps": 16, "fireballM": 1.0 * FRAG_RADIUS, "peak": 3},
 }
-# Explosives → style. Radii come from content where it exists; the launcher has no content entry yet.
+# Explosives → style. Radii come from content where it exists, else docs/03 §5 (Popper R 3.0, Thumper
+# R 3.5); the fireball scales with the radius (the frag flipbook is sized for the frag's, the rocket's
+# for 1.25 × it).
 STYLES = {
     "frag": {"flipbook": "frag", "scale": 1.0, "radiusM": FRAG_RADIUS},
-    "grenade_launcher": {"flipbook": "frag", "scale": 0.8, "radiusM": 0.8 * FRAG_RADIUS, "provisional": True},
-    "rocket": {"flipbook": "rocket", "scale": 1.0, "radiusM": 1.25 * FRAG_RADIUS, "provisional": True},
+    "grenade_launcher": {"flipbook": "frag", "scale": 3.0 / FRAG_RADIUS, "radiusM": 3.0, "provisional": True},
+    "rocket": {"flipbook": "rocket", "scale": 3.5 / (1.25 * FRAG_RADIUS), "radiusM": 3.5, "provisional": True},
 }
 
 
@@ -136,8 +138,8 @@ def main():
     for name, st in STYLES.items():
         r = st["radiusM"]
         styles[name] = {
-            "flipbook": st["flipbook"], "scale": st["scale"], "radiusM": round(r, 2),
-            **({"provisional": "no content entry yet: radius scaled from the frag"} if st.get("provisional") else {}),
+            "flipbook": st["flipbook"], "scale": round(st["scale"], 3), "radiusM": round(r, 2),
+            **({"provisional": "no content entry yet: the docs/03 §5 splash radius"} if st.get("provisional") else {}),
             "shockwave": {"fromM": 0.3, "toM": round(r, 2), "ms": 220, "tint": "#fff6e0", "opacity": 0.85,
                           "notes": "a camera-facing ring growing to the blast radius: where the launch and damage reach"},
             "light": {"color": "#ffcf80", "intensity": round(6 + 2 * r / FRAG_RADIUS, 1), "rangeM": round(2.2 * r, 1), "ms": 160},

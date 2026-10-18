@@ -12,19 +12,23 @@
       "mask": "textures/rookie_body_dye_mask.png",
       "albedo": "textures/rookie_body_dye_albedo.webp",
       "defaults": {
-        "primary": "#b99664",
+        "primary": "#b29161",
         "secondary": "#665b2c",
         "accent": "#239090"
-      }
+      },
+      "skin": "alpha",
+      "skinNeutral": "#da9f75"
     },
     "lod1": {
       "mask": "textures/rookie_body_lod1_dye_mask.png",
       "albedo": "textures/rookie_body_lod1_dye_albedo.webp",
       "defaults": {
-        "primary": "#bf9b67",
-        "secondary": "#6e6230",
-        "accent": "#239090"
-      }
+        "primary": "#b29160",
+        "secondary": "#6d602f",
+        "accent": "#229091"
+      },
+      "skin": "alpha",
+      "skinNeutral": "#da9f75"
     }
   },
   "defaultParts": {
@@ -35,9 +39,6 @@
   "clips": [
     "idle",
     "walk",
-    "run",
-    "crouch_idle",
-    "crouch_walk",
     "slide",
     "jet_ascend",
     "jet_hover",
@@ -62,7 +63,17 @@
     "reload_pistol",
     "swap",
     "throw",
-    "melee"
+    "melee",
+    "crouch_idle",
+    "walk_slow",
+    "run",
+    "crouch_walk",
+    "flail",
+    "dash_side",
+    "dash_up",
+    "dash_down",
+    "land_hard",
+    "brake"
   ],
   "upperBodyBones": [
     "spine1",

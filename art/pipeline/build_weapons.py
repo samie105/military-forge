@@ -16,14 +16,20 @@ transform. Child nodes (sockets), with extras `dir` (a unit vector in the weapon
                built in (Widow)
   rail_bottom  foregrip / laser mount, dir −Z, `lengthM`
 The mesh carries a `_CAMO` vertex attribute (1 on body panels that take a weapon camo, 0 on grips,
-steel, the toy tip and blades).
+steel, the toy tip and blades), and energy weapons a `_GLOW` one (1 on lenses, cells, coils and pilot
+rings: the renderer adds their vertex colour as emission, so they read lit in any lighting).
   backblast    launcher exhaust (Thumper), dir −Y
+  pilot        the flamethrower's pilot light (Dragon), dir +Y
+  charge       where a charge weapon's wind-up shows (Ripper's blade hub, Pulse's orb), dir +Y
+  face         the riot shield's front face centre, dir +Y (what it blocks), `halfSize` [w/2, h/2] m
   tip, pin, light, ground  the machete's tip, the frag's pin ring, the mine's light, and the frag
                and mine rest frame in the world (local +Y up, origin on the floor:
                world = floorPoint × inverse(ground.local))
 All sockets also go to weapons/sockets.json for the renderer. Weapon extras: weaponId, name,
 archetype, hands, family (the docs/04 §4.2 weapon family, plus `thrown`) and aimPose (the clip set
-it uses today: pistol or rifle; see clips.AIM_POSE_FALLBACK).
+it uses today: pistol or rifle; see clips.AIM_POSE_FALLBACK). Optional extras: `casings` false (no
+casing per shot: fuel, cells, orbs, blades, drum rounds), `attach` (the rig socket when it is not
+socket_weapon_R: the riot shield goes on socket_weapon_L, the off-hand).
 
 Style: bevelled toy shapes, vertex colours (one shared material, no textures), and an orange
 toy muzzle tip on every gun: it reads at gameplay size and keeps the toy-soldier theme.
@@ -56,6 +62,11 @@ ORANGE = (0.98, 0.45, 0.10)  # toy muzzle tip
 CAMO_COLOURS = {(0.20, 0.22, 0.25), (0.30, 0.33, 0.22), (0.55, 0.34, 0.18), (0.66, 0.58, 0.42)}
 RED = (0.90, 0.12, 0.10)
 BLADE = (0.70, 0.73, 0.76)
+GLASS = (0.62, 0.74, 0.80)   # the shield's viewing window
+CYAN = (0.35, 0.95, 1.00)    # Arc lens and cell
+BLUE = (0.30, 0.62, 1.00)    # Pulse coils and orb
+EMBER = (1.00, 0.42, 0.12)   # Dragon pilot ring
+GLOW_COLOURS = {CYAN, BLUE, EMBER}  # `_GLOW` 1: emissive, no baked shading
 
 
 def srgb_to_linear(c):
@@ -118,10 +129,10 @@ class Gun:
         o.scale = scale
         return self._finish(o, color, 0)
 
-    def torus(self, center, major, minor, color, axis="X"):
+    def torus(self, center, major, minor, color, axis="X", segs=(10, 5)):
         r = {"X": (0, math.pi / 2, 0), "Y": (math.pi / 2, 0, 0), "Z": (0, 0, 0)}[axis]
-        bpy.ops.mesh.primitive_torus_add(major_radius=major, minor_radius=minor, major_segments=10,
-                                         minor_segments=5, location=center, rotation=r)
+        bpy.ops.mesh.primitive_torus_add(major_radius=major, minor_radius=minor, major_segments=segs[0],
+                                         minor_segments=segs[1], location=center, rotation=r)
         return self._finish(bpy.context.active_object, color, 0)
 
     def tip(self, y, z, radius):
@@ -153,10 +164,14 @@ class Gun:
 def paint_and_join(gun, mat):
     zs = [(o.matrix_world @ v.co).z for o, _ in gun.parts for v in o.data.vertices]
     zmin, zmax = min(zs), max(zs)
+    glows = any(tuple(color) in GLOW_COLOURS for _, color in gun.parts)
     for o, color in gun.parts:
         me = o.data
         camo = me.attributes.new("_CAMO", "FLOAT", "POINT")  # glTF _CAMO: 1 = this vertex takes a camo
         camo.data.foreach_set("value", [1.0 if tuple(color) in CAMO_COLOURS else 0.0] * len(me.vertices))
+        glow = tuple(color) in GLOW_COLOURS
+        if glows:  # glTF _GLOW: 1 = emissive (only on weapons that have any)
+            me.attributes.new("_GLOW", "FLOAT", "POINT").data.foreach_set("value", [float(glow)] * len(me.vertices))
         col = me.color_attributes.new("Col", "BYTE_COLOR", "CORNER")
         for poly in me.polygons:
             up = 1.08 if poly.normal.z > 0.6 else (0.86 if poly.normal.z < -0.6 else 1.0)
@@ -164,7 +179,7 @@ def paint_and_join(gun, mat):
                 z = me.vertices[me.loops[li].vertex_index].co.z
                 t = (z - zmin) / max(1e-6, zmax - zmin)
                 ao = 0.82 + 0.18 * t
-                c = [min(1.0, ch * up * ao) for ch in color]
+                c = list(color) if glow else [min(1.0, ch * up * ao) for ch in color]
                 col.data[li].color = (*[srgb_to_linear(ch) for ch in c], 1.0)
         me.materials.clear()
         me.materials.append(mat)
@@ -453,6 +468,160 @@ def longbow(g):  # marksman rifle: wood stock, long thin barrel, medium scope, s
     g.rails(top=(0.05, 0.085, 0.14), bottom=(0.16, 0.005, 0.08), occupied="scope")
 
 
+def dragon(g):  # flamethrower: fuel tank slung under, hose loop, vented nozzle, pilot light
+    g.box((0, 0.12, 0.06), (0.07, 0.5, 0.075), POLY)
+    g.box((0, 0.02, 0.06), (0.074, 0.18, 0.06), SAND)
+    g.box((0, -0.15, 0.06), (0.08, 0.05, 0.085), DARK)                          # rear cap
+    g.cyl((0, 0.45, 0.06), 0.024, 0.2, DARK, verts=8)
+    g.cyl((0, 0.555, 0.06), 0.031, 0.016, EMBER, verts=10, bevel=0)                    # glowing pilot ring
+    g.cyl((0, 0.63, 0.06), 0.04, 0.14, DARK, verts=10)                           # nozzle shroud
+    for y in (0.6, 0.65):
+        g.box((0.038, y, 0.068), (0.008, 0.032, 0.014), GUNMETAL, bevel=0)
+    g.box((0, 0.69, 0.016), (0.014, 0.03, 0.014), STEEL, bevel=0)               # pilot nub
+    g.box((0, 0.08, 0.135), (0.016, 0.2, 0.014), DARK, bevel=0.003)              # carry handle
+    for y in (-0.01, 0.17):
+        g.box((0, y, 0.11), (0.016, 0.016, 0.04), DARK, bevel=0)
+    g.cyl((0, 0.15, -0.06), 0.05, 0.22, POLY, verts=10)                          # fuel tank
+    for y in (0.07, 0.23):
+        g.cyl((0, y, -0.06), 0.052, 0.02, SAND, verts=10, bevel=0)
+    g.box((0, 0.15, 0.01), (0.02, 0.1, 0.03), DARK, bevel=0)
+    g.torus((0, 0.0, -0.035), 0.035, 0.008, DARK, axis="X", segs=(8, 4))         # hose loop
+    g.box((0, 0.3, -0.025), (0.03, 0.035, 0.09), DARK)                           # front handle
+    g.box((0, -0.03, -0.035), (0.036, 0.05, 0.1), POLY, rot=(-12, 0, 0))
+    g.box((0, 0.025, 0.0), (0.012, 0.045, 0.025), DARK, bevel=0.002)
+    g.tip(0.70, 0.06, 0.036)
+    g.node("pilot", (0, 0.705, 0.016), dir=(0, 1, 0))
+    g.node("offhand", (-0.05, 0.07, -0.03))
+    g.node("mag", (0, 0.15, -0.11), dir=(0, 0, -1))  # the tank refills in place
+    g.rails(top=(0.08, 0.142, 0.12))
+
+
+def arc(g):  # continuous beam laser: cell window, cooling fins, crystal lens between two prongs
+    g.box((0, -0.2, 0.035), (0.045, 0.2, 0.08), POLY, rot=(5, 0, 0))             # stock
+    g.box((0, -0.31, 0.025), (0.05, 0.03, 0.1), DARK)
+    g.box((0, 0.1, 0.05), (0.06, 0.4, 0.09), POLY)
+    g.box((0, 0.06, 0.105), (0.05, 0.22, 0.03), POLY)
+    g.box((0, 0.1, 0.04), (0.064, 0.24, 0.05), SAND)
+    g.box((0, 0.12, 0.045), (0.07, 0.16, 0.04), DARK, bevel=0.003)                # cell frame
+    g.box((0, 0.12, 0.045), (0.076, 0.13, 0.024), CYAN, bevel=0.002)             # glowing cell
+    for y in (0.32, 0.35, 0.38, 0.41):
+        g.cyl((0, y, 0.055), 0.046, 0.016, DARK, verts=10, bevel=0)              # cooling fins
+    g.cyl((0, 0.365, 0.055), 0.03, 0.13, GUNMETAL, verts=8, bevel=0)
+    g.cyl((0, 0.445, 0.055), 0.035, 0.03, GUNMETAL, verts=10, bevel=0)
+    for z in (0.098, 0.012):
+        g.box((0, 0.475, z), (0.014, 0.05, 0.012), DARK, bevel=0.002)            # prongs
+    g.cone((0, 0.49, 0.055), 0.03, 0.011, 0.07, CYAN, verts=8)                    # crystal lens
+    g.box((0, -0.03, -0.045), (0.036, 0.05, 0.1), POLY, rot=(-12, 0, 0))
+    g.box((0, 0.025, -0.01), (0.012, 0.045, 0.025), DARK, bevel=0.002)
+    g.tip(0.525, 0.055, 0.012)
+    g.node("offhand", (-0.05, 0.07, -0.03))
+    g.node("mag", (0.038, 0.12, 0.045), dir=(1, 0, 0))  # the cell swaps out to the right
+    g.rails(top=(0.06, 0.12, 0.12), bottom=(0.22, 0.005, 0.08))
+
+
+def popper(g):  # grenade launcher: six-shot hex drum in a frame, short wide barrel
+    g.box((0, -0.22, 0.03), (0.045, 0.22, 0.075), POLY, rot=(4, 0, 0))           # stock
+    g.box((0, -0.33, 0.02), (0.05, 0.03, 0.095), DARK)
+    g.box((0, 0.0, 0.05), (0.055, 0.22, 0.085), POLY)                             # receiver
+    g.box((0, -0.06, 0.055), (0.059, 0.08, 0.05), SAND)
+    g.cyl((0, 0.19, 0.03), 0.085, 0.16, POLY, verts=6, bevel=0.006)               # the drum
+    for y in (0.105, 0.275):
+        g.cyl((0, y, 0.03), 0.088, 0.012, DARK, verts=6, bevel=0.002)
+    for z in (0.122, -0.062):
+        g.box((0, 0.19, z), (0.03, 0.2, 0.014), DARK, bevel=0.003)                # frame bars
+    g.cyl((0, 0.35, 0.06), 0.032, 0.16, DARK, verts=12)
+    g.box((0, -0.03, -0.045), (0.036, 0.05, 0.1), POLY, rot=(-12, 0, 0))
+    g.box((0, 0.025, -0.01), (0.012, 0.045, 0.025), DARK, bevel=0.002)
+    g.tip(0.43, 0.06, 0.032)
+    g.node("offhand", (-0.05, 0.07, -0.03))
+    g.node("mag", (-0.085, 0.19, 0.03), dir=(-1, 0, 0))  # the drum swings out to the left
+    g.rails(top=(0.19, 0.129, 0.14))
+
+
+def ripper(g):  # saw-blade launcher: half-disc housing over a toothed blade, carry handle
+    g.box((0, -0.22, 0.04), (0.045, 0.18, 0.075), POLY, rot=(4, 0, 0))           # stock
+    g.box((0, -0.32, 0.03), (0.05, 0.03, 0.095), DARK)
+    g.box((0, -0.2, 0.045), (0.049, 0.1, 0.05), SAND)
+    g.box((0, 0.08, 0.06), (0.06, 0.42, 0.08), POLY)
+    g.box((0, 0.04, 0.06), (0.064, 0.14, 0.04), SAND)
+    g.box((0, 0.05, 0.13), (0.016, 0.16, 0.014), DARK, bevel=0.003)              # carry handle
+    for y in (-0.02, 0.12):
+        g.box((0, y, 0.11), (0.016, 0.016, 0.03), DARK, bevel=0.002)
+    hub = (0, 0.37, 0.04)
+    g.cyl(hub, 0.1, 0.006, BLADE, axis="X", verts=16, bevel=0)                    # the loaded blade
+    for i in range(9):                                                            # teeth, lower half
+        a = math.radians(180 + 22.5 * i)
+        g.box((0, hub[1] + 0.104 * math.cos(a), hub[2] + 0.104 * math.sin(a)), (0.006, 0.018, 0.018), BLADE,
+              bevel=0, rot=(math.degrees(a) + 45, 0, 0))
+    housing = g.cyl(hub, 0.115, 0.03, POLY, axis="X", verts=16, bevel=0.004)
+    for v in housing.data.vertices:  # keep the top half: the blade shows below
+        v.co.z = max(v.co.z, hub[2] - 0.004)
+    g.cyl(hub, 0.026, 0.044, GUNMETAL, axis="X", verts=8)                          # hub bolt
+    g.box((0, 0.5, 0.07), (0.05, 0.06, 0.06), POLY)                               # nose
+    g.box((0, -0.03, -0.045), (0.036, 0.05, 0.1), POLY, rot=(-12, 0, 0))
+    g.box((0, 0.025, -0.01), (0.012, 0.045, 0.025), DARK, bevel=0.002)
+    g.tip(0.53, 0.07, 0.024)
+    g.node("charge", (0.025, hub[1], hub[2]), dir=(0, 1, 0))
+    g.node("offhand", (-0.05, 0.07, -0.03))
+    g.node("mag", (0, hub[1], hub[2] + 0.115), dir=(0, 0, 1))  # blades load from the top of the housing
+    g.rails(top=(0.05, 0.137, 0.12))
+
+
+def pulse(g):  # EMP orb gun: glowing coil rings, a three-prong claw holding the orb
+    g.box((0, -0.21, 0.035), (0.045, 0.2, 0.075), POLY, rot=(5, 0, 0))           # stock
+    g.box((0, -0.31, 0.025), (0.05, 0.03, 0.095), DARK)
+    g.box((0, 0.02, 0.06), (0.065, 0.24, 0.1), POLY)
+    g.box((0, 0.0, 0.12), (0.04, 0.12, 0.025), POLY)
+    g.box((0, 0.0, 0.055), (0.069, 0.14, 0.06), SAND)
+    for z in (0.04, 0.055, 0.07):
+        g.box((0.035, 0.0, z), (0.004, 0.09, 0.007), DARK, bevel=0)              # vents
+    g.box((0, 0.08, -0.01), (0.03, 0.05, 0.05), DARK)                             # power cell
+    g.cyl((0, 0.24, 0.06), 0.045, 0.2, DARK, verts=10, bevel=0)
+    for y in (0.2, 0.235, 0.27):
+        g.cyl((0, y, 0.06), 0.05, 0.012, BLUE, verts=10, bevel=0)                # glowing coils
+    for y in (0.16, 0.31):
+        g.cyl((0, y, 0.06), 0.053, 0.02, GUNMETAL, verts=10, bevel=0)
+    g.cyl((0, 0.35, 0.06), 0.042, 0.04, POLY, verts=10, bevel=0)                 # claw base
+    for i in range(3):
+        a = math.radians(90 + 120 * i)
+        cx, cz = math.cos(a), math.sin(a)
+        g.box((0.052 * cx, 0.395, 0.06 + 0.052 * cz), (0.016, 0.07, 0.016), DARK, bevel=0.003)
+        g.box((0.04 * cx, 0.44, 0.06 + 0.04 * cz), (0.014, 0.03, 0.014), ORANGE, bevel=0)  # toy tips
+    g.sphere((0, 0.42, 0.06), 0.03, BLUE, segs=8, rings=6)                        # the orb
+    g.box((0, -0.03, -0.045), (0.036, 0.05, 0.1), POLY, rot=(-12, 0, 0))
+    g.box((0, 0.025, -0.01), (0.012, 0.045, 0.025), DARK, bevel=0.002)
+    g.node("muzzle", (0, 0.465, 0.06), dir=(0, 1, 0), boreRadius=0.03)
+    g.node("charge", (0, 0.42, 0.06), dir=(0, 1, 0))
+    g.node("offhand", (-0.05, 0.07, -0.03))
+    g.node("mag", (0, 0.08, -0.035), dir=(0, 0, -1))
+    g.rails(top=(0.0, 0.1325, 0.1))
+
+
+def riot_shield(g):  # off-hand riot shield: curved plate facing +Y, viewing window, handle at the origin
+    # chibi scale: torso and legs below the 1.5 m soldier's big head; thick, so it reads as a slab
+    # from the side-view camera
+    strips, w, depth = 5, 0.08, 0.06
+    for i in range(strips):
+        x = (i - (strips - 1) / 2) * w
+        y = 0.09 - 0.45 * x * x                                                   # curves back at the edges
+        tilt = -math.degrees(math.atan(0.9 * x))
+        colour = SAND if i in (0, strips - 1) else POLY
+        g.box((x, y, 0.02), (w + 0.002, depth, 0.54), colour, bevel=0.004, rot=(0, 0, tilt))
+        for z in (0.3, -0.26):
+            g.box((x, y, z), (w + 0.002, depth + 0.008, 0.03), DARK, bevel=0, rot=(0, 0, tilt))
+    face_y = 0.09 + depth / 2
+    g.box((0, face_y, 0.19), (0.21, 0.008, 0.085), DARK, bevel=0.002)             # window frame
+    g.box((0, face_y + 0.003, 0.19), (0.18, 0.008, 0.06), GLASS, bevel=0.001)
+    for x in (-0.13, 0.13):
+        for z in (0.24, -0.2):
+            g.box((x, face_y - 0.45 * x * x, z), (0.016, 0.01, 0.016), DARK, bevel=0)  # bolts
+    g.box((0, 0.0, 0.0), (0.024, 0.024, 0.11), DARK, bevel=0.004)                 # handle
+    for z in (-0.045, 0.045):
+        g.box((0, 0.035, z), (0.02, 0.07, 0.02), DARK, bevel=0.002)
+    g.box((0, 0.055, -0.14), (0.07, 0.02, 0.03), DARK, bevel=0.003)                # forearm strap
+    g.node("face", (0, face_y, 0.02), dir=(0, 1, 0), halfSize=[0.2, 0.295])
+
+
 ARSENAL = [
     # id, builder, name (docs/03 §5), archetype, family (docs/04 §4.2), aim-pose set, hands
     ("hawk50", hawk50, "Hawk .50", "heavy pistol", "pistol", "pistol", 1),
@@ -468,10 +637,22 @@ ARSENAL = [
     ("trident", trident, "Trident", "burst rifle", "rifle", "rifle", 2),
     ("bullpup", bullpup, "Bullpup", "bullpup rifle", "rifle", "rifle", 2),
     ("longbow", longbow, "Longbow", "marksman rifle", "sniper", "rifle", 2),
+    ("dragon", dragon, "Dragon", "flamethrower", "heavy", "rifle", 2),
+    ("arc", arc, "Arc", "beam laser", "rifle", "rifle", 2),
+    ("popper", popper, "Popper", "grenade launcher", "launcher", "rifle", 2),
+    ("ripper", ripper, "Ripper", "saw-blade launcher", "launcher", "rifle", 2),
+    ("pulse", pulse, "Pulse", "EMP orb gun", "launcher", "rifle", 2),
+    ("riot_shield", riot_shield, "Riot Shield", "off-hand shield", "shield", "pistol", 1),
     ("machete", machete, "Machete", "melee", "melee", "pistol", 1),
     ("frag", frag, "Frag grenade", "grenade", "thrown", "pistol", 1),
     ("mine", mine, "Proximity mine", "mine", "thrown", "pistol", 1),
 ]
+# optional weapon extras (see the module docstring)
+EXTRAS = {
+    "dragon": {"casings": False}, "arc": {"casings": False}, "popper": {"casings": False},
+    "ripper": {"casings": False}, "pulse": {"casings": False},
+    "riot_shield": {"casings": False, "attach": "socket_weapon_L"},
+}
 
 
 def export(path, obj, runtime):
@@ -501,6 +682,8 @@ for wid, build, name, archetype, family, aim_pose, hands in ARSENAL:
     obj["family"] = family
     obj["aimPose"] = aim_pose
     obj["hands"] = hands
+    for k, v in EXTRAS.get(wid, {}).items():
+        obj[k] = v
     me = obj.data
     me.calc_loop_triangles()
     pts = [v.co for v in me.vertices]
@@ -509,11 +692,12 @@ for wid, build, name, archetype, family, aim_pose, hands in ARSENAL:
     # glTF frame: (x, y, z)_gltf = (x, z, -y)_blender
     to_gltf = lambda v: [round(v.x, 3) + 0.0, round(v.z, 3) + 0.0, round(-v.y, 3) + 0.0]  # noqa: E731 (+0.0: no -0.0)
     nodes = {c.name.split(".")[0]: to_gltf(c.location) for c in obj.children}
-    sockets[wid] = {"family": family, "aimPose": aim_pose, "hands": hands, "lengthM": round(hi.z - lo.z, 3),
+    sockets[wid] = {"family": family, "aimPose": aim_pose, "hands": hands, **EXTRAS.get(wid, {}), "lengthM": round(hi.z - lo.z, 3),
                     "sockets": {c.name.split(".")[0]: {"pos": to_gltf(c.location),
-                                                       **{k: (list(c[k]) if k == "dir" else c[k]) for k in c.keys()}}
+                                                       **{k: (c[k].to_list() if hasattr(c[k], "to_list") else c[k]) for k in c.keys()}}
                                 for c in sorted(obj.children, key=lambda c: c.name)}}
     manifest[wid] = {"name": name, "archetype": archetype, "family": family, "aimPose": aim_pose, "hands": hands,
+                     **EXTRAS.get(wid, {}),
                      "tris": len(me.loop_triangles), "nodes": nodes,
                      "lengthM": round(hi.z - lo.z, 3), "file": f"{wid}.glb"}
     export(OUT / f"{wid}.glb", obj, runtime=False)
@@ -525,7 +709,9 @@ SOCKETS_DOC = {
     "frame": "weapon frame = glTF: origin at the main grip, +Y muzzle, +Z up, +X right; attach to socket_weapon_R "
              "with an identity transform (docs/04 §9.4)",
     "fields": "pos [x, y, z] m; dir unit vector; muzzle.boreRadius m; rail_*.lengthM m; rail_top.occupied = a built-in "
-              "sight; frag/mine `ground` = rest frame in the world (world = floorPoint × inverse(ground.local))",
+              "sight; frag/mine `ground` = rest frame in the world (world = floorPoint × inverse(ground.local)); "
+              "face.halfSize [w/2, h/2] m (riot shield); weapon `casings` false = no casing per shot; `attach` = the "
+              "rig socket when not socket_weapon_R",
     "weapons": sockets,
 }
 (OUT / "weapons.json").write_text(json.dumps(manifest, indent=2))

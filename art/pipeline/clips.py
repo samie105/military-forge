@@ -2,14 +2,18 @@
 
 Imported by build_character.py (Blender). Three kinds of clip:
 
-* locomotion: full-body loops keyed by hand (idle, walk, run, crouch_idle, crouch_walk, slide,
-  jet_ascend, jet_hover, fall) plus the one-shot `land`;
+* locomotion: full-body loops (idle, walk, slide, jet_ascend, jet_hover, fall keyed by hand;
+  crouch_idle, walk_slow, run and crouch_walk solved with planted feet by leg IK, see gait() and
+  crouch_hold()) plus the
+  one-shots `land` and `land_hard`;
+* action poses: `flail` (blast-launch loop), `dash_side` / `dash_up` / `dash_down`, `brake`;
 * aim poses: single-frame, upper-body-only poses `aim_<family>_<angle>` for the pistol, dual
   and rifle families at down90/down45/level/up45/up90. The renderer blends the two poses around
   the current aim angle over the upper body;
 * upper-body actions: one-shots `reload_pistol`, `reload_rifle`, `swap`, `throw`, `melee`.
 
-Aim poses and actions are solved, not keyed by hand: each key names where the weapon grip
+Every clip is resampled to LINEAR keys at each frame when it is finished (bake_linear), so the
+glTF has LINEAR samplers (no cubic tangents to get wrong). Aim poses and actions are solved, not keyed by hand: each key names where the weapon grip
 should be and which way the gun points, and two-bone IK places the arms (chibi arms are short,
 so hand-keyed angles miss the gun). Every upper-body clip carries tracks for UPPER_BODY only.
 """
@@ -78,12 +82,54 @@ class ClipWriter:
 
     def end(self, name):
         act = self.arm.animation_data.action
+        bake_linear(act)
         track = self.arm.animation_data.nla_tracks.new()
         track.name = name
         track.strips.new(name, 0, act)
         self.arm.animation_data.action = None
         self.reset()
         return act
+
+
+def _fcurves(act):
+    """An action's F-curves (Blender 4.4+ keeps them in layered channel bags)."""
+    if hasattr(act, "fcurves"):
+        return list(act.fcurves)
+    return [fc for layer in act.layers for strip in layer.strips for bag in strip.channelbags for fc in bag.fcurves]
+
+
+def bake_linear(act):
+    """Resample every channel at each frame (Blender's own curves, quaternions renormalised) as LINEAR
+    keys, so the glTF exporter writes LINEAR samplers. Unsampled Bezier keys came out as CUBICSPLINE
+    with identity-quaternion tangents, and bones wobbled between keys (animation-clip-asks.md §1).
+    Each clip still carries only the bones it keys, so upper-body clips keep layering. A constant
+    channel keeps just its two end keys."""
+    fcs = _fcurves(act)
+    if not fcs:
+        return
+    lo = int(round(min(fc.range()[0] for fc in fcs)))
+    hi = int(round(max(fc.range()[1] for fc in fcs)))
+    frames = list(range(lo, hi + 1))
+    groups = {}
+    for fc in fcs:
+        groups.setdefault(fc.data_path, {})[fc.array_index] = fc
+    for path, chans in groups.items():
+        vals = {i: [fc.evaluate(f) for f in frames] for i, fc in chans.items()}
+        if path.endswith("rotation_quaternion") and len(chans) == 4:
+            for k in range(len(frames)):
+                qv = Quaternion([vals[i][k] for i in range(4)]).normalized()
+                for i in range(4):
+                    vals[i][k] = qv[i]
+        constant = all(max(v) - min(v) < 1e-6 for v in vals.values())
+        keep = [0, len(frames) - 1] if constant and len(frames) > 1 else list(range(len(frames)))
+        for i, fc in chans.items():
+            fc.keyframe_points.clear()
+            fc.keyframe_points.add(len(keep))
+            for j, k in enumerate(keep):
+                kp = fc.keyframe_points[j]
+                kp.co = (frames[k], vals[i][k])
+                kp.interpolation = "LINEAR"
+            fc.update()
 
 
 def keyed(w, name, length, keys, loop=True):
@@ -186,6 +232,143 @@ class UpperBodySolver:
         return {n: self.pb[n].rotation_quaternion.copy() for n in UPPER_BODY}
 
 
+# ------------------------------------------------------------------ legs: planted feet by IK
+
+ANKLE_REST_Z = 0.12  # the ankle's height standing (the planted foot keeps it)
+
+
+class LegSolver:
+    """Places the ankles by two-bone IK (thigh, calf) and sets the foot's pitch. Armature space is
+    Blender's: the character faces -Y, +Z is up."""
+
+    def __init__(self, arm):
+        self.arm = arm
+        self.pb = arm.pose.bones
+        self.bones = arm.data.bones
+        self.rest_foot = {s: self.bones[f"foot_{s}"].matrix_local.to_quaternion() for s in "LR"}
+
+    def _update(self):
+        bpy.context.view_layer.update()
+
+    def _aim(self, name, head, direction):
+        pb = self.pb[name]
+        pb.rotation_quaternion = Quaternion()
+        self._update()
+        cur = pb.matrix.to_3x3()
+        y = cur.col[1].normalized()
+        rot = y.rotation_difference(direction.normalized()).to_matrix() @ cur
+        pb.matrix = Matrix.LocRotScale(head, rot.to_quaternion(), None)
+        self._update()
+
+    def leg(self, side, ankle, pitch=0.0):
+        """Thigh and calf so the ankle (the foot's head) lands on `ankle`; the knee bends forward.
+        pitch: degrees about +X, positive drops the toe (heel up), 0 is the rest (flat) foot."""
+        th, ca, ft = f"thigh_{side}", f"calf_{side}", f"foot_{side}"
+        for n in (th, ca, ft):
+            self.pb[n].rotation_quaternion = Quaternion()
+        self._update()
+        hip = self.pb[th].head.copy()
+        a, b = self.bones[th].length, self.bones[ca].length
+        to = Vector(ankle) - hip
+        d = min(max(to.length, abs(a - b) + 1e-4), a + b - 1e-4)
+        axis = to.normalized()
+        pole = Vector((0.12 if side == "L" else -0.12, -1.0, 0.0))  # knees forward, a little out
+        cos_a = (a * a + d * d - b * b) / (2 * a * d)
+        sin_a = math.sqrt(max(0.0, 1 - cos_a * cos_a))
+        p = (pole - axis * pole.dot(axis)).normalized()
+        knee = hip + axis * (a * cos_a) + p * (a * sin_a)
+        self._aim(th, hip, knee - hip)
+        self._aim(ca, knee, (hip + axis * d) - knee)
+        rot = Quaternion((1, 0, 0), math.radians(pitch)) @ self.rest_foot[side]
+        self.pb[ft].matrix = Matrix.LocRotScale(self.pb[ft].head.copy(), rot, None)
+        self._update()
+        return {n: self.pb[n].rotation_quaternion.copy() for n in (th, ca, ft)}
+
+
+def crouch_hold(w, legs, frames=60):
+    """`crouch_idle`: the squat (the crouched head hitbox centre is 0.84 m, standing 1.24) with both
+    feet planted flat at the ankle's rest height by leg IK, a slow weight shift from foot to foot and
+    breathing in the back. Two seconds, looped."""
+    w.begin("crouch_idle")
+    for f in range(frames + 1):
+        t = (f % frames) / frames
+        breathe = math.sin(2 * math.pi * t)
+        shift = math.sin(2 * math.pi * t + 0.6)
+        loc = Vector((0.012 * shift, -0.23 - 0.006 * (1 + breathe) / 2, -0.06))
+        pb = w.arm.pose.bones["pelvis"]
+        pb.location = loc
+        pb.rotation_quaternion = q(0, 0, 2 * shift)
+        legs._update()
+        pose = {"pelvis": (q(0, 0, 2 * shift), loc)}
+        for side, sgn in (("L", 1), ("R", -1)):
+            rest = w.arm.data.bones[f"foot_{side}"].head_local
+            # feet a little wider and the lead foot (L) a little forward: a ready squat, not a sit
+            pose.update(legs.leg(side, Vector((rest.x + sgn * 0.03, (-0.05 if side == "L" else 0.04), ANKLE_REST_Z))))
+        pose["spine1"] = q(22 + 2 * breathe, 0, 0)
+        pose["spine2"] = q(12 + 1 * breathe, 0, 0)
+        pose["head"] = q(-12 - 1.5 * breathe, 0, 0)
+        pose["upperarm_L"] = q(25, 0, -10)
+        pose["upperarm_R"] = q(25, 0, 10)
+        w.key(f, pose)
+    return w.end("crouch_idle")
+
+
+def smooth(t):
+    return t * t * (3 - 2 * t)
+
+
+def gait(w, legs, name, frames, speed, stance, lift, drop, bob, lean, arm_swing, forearm=0.0,
+         crouch=None, width=0.0, centre=0.03, toe_off=25.0):
+    """A locomotion loop with planted feet (animation-clip-asks.md §2), in place, phase 0 = the left
+    foot touches down. Over `frames` (one cycle at 30 fps) each foot spends `stance` of the cycle on
+    the ground at the ankle's rest height, sliding back at exactly `speed` m/s; in the swing it lifts
+    by `lift` and eases forward. The pelvis sits `drop` m lower so the leg reaches the stride, and
+    bobs by `bob` (lowest mid-stance when `bob` > 0, as a run; highest mid-stance when < 0, as a walk).
+    crouch: (pelvis loc, extra keys) for the crouched pose. Arms swing against the legs."""
+    period = frames / FPS
+    span = speed * stance * period  # how far a planted foot slides back
+    w.begin(name)
+    base_loc = Vector(crouch[0]) if crouch else Vector((0, 0, 0))
+    for f in range(frames + 1):
+        t = (f % frames) / frames
+        pose = {}
+        # pelvis: lower, and bob once per step (twice per cycle)
+        step = (t % 0.5) / 0.5  # 0 at each touchdown
+        mid_stance = math.cos(2 * math.pi * (step - stance))  # +1 mid-stance of either foot
+        z = -drop + (-bob * 0.5 * (1 + mid_stance) if bob > 0 else abs(bob) * 0.5 * (1 + mid_stance))
+        loc = base_loc + Vector((0, z, 0))
+        pose["pelvis"] = (q(0, 0, 0), loc)
+        w.arm.pose.bones["pelvis"].location = loc
+        w.arm.pose.bones["pelvis"].rotation_quaternion = Quaternion()
+        legs._update()
+        for side, offset, sgn in (("L", 0.0, 1), ("R", 0.5, -1)):
+            p = (t - offset) % 1.0
+            rest_ank = w.arm.data.bones[f"foot_{side}"].head_local
+            if p < stance:
+                s = span / 2 - span * (p / stance)
+                h, pitch = 0.0, 0.0
+            else:
+                u = (p - stance) / (1 - stance)
+                s = -span / 2 + span * smooth(u)
+                h = lift * math.sin(math.pi * u) ** 0.8
+                pitch = toe_off * (1 - u) ** 3 - 8 * math.sin(math.pi * u)  # heel up off the ground, toe up mid-swing
+            ankle = Vector((rest_ank.x + sgn * width, centre - s, ANKLE_REST_Z + h))
+            pose.update(legs.leg(side, ankle, pitch))
+        # upper body: lean, counter-swing of the arms (the left arm swings with the right leg)
+        swing = math.sin(2 * math.pi * (t + 0.25))
+        pose["spine1"] = q(lean, 0, 0)
+        pose["upperarm_L"] = q(arm_swing * swing, 0, -6)
+        pose["upperarm_R"] = q(-arm_swing * swing, 0, 6)
+        if forearm:
+            pose["forearm_L"] = q(forearm, 0, 0)
+            pose["forearm_R"] = q(forearm, 0, 0)
+        if crouch:
+            for bname, rot in crouch[1].items():
+                pose[bname] = q(*rot)
+        w.key(f, pose)
+    return w.end(name)
+
+
 # ------------------------------------------------------------------ the clip set
 
 def aim_dirs(deg):
@@ -279,44 +462,6 @@ def build_all(arm):
         "foot_R": [(0, (12, 0, 0)), (15, (-10, 0, 0))],
         "upperarm_L": [(0, (-18, 0, -6)), (15, (18, 0, -6))],
         "upperarm_R": [(0, (18, 0, 6)), (15, (-18, 0, 6))],
-    }))
-    add(keyed(w, "run", 18, {
-        "pelvis": [(0, (0, 0, 0), (0, 0, 0)), (4, (0, 0, 0), (0, 0.035, 0)), (9, (0, 0, 0), (0, 0, 0)), (13, (0, 0, 0), (0, 0.035, 0))],
-        "spine1": [(0, (10, 0, 0))],
-        "thigh_L": [(0, (40, 0, 0)), (9, (-35, 0, 0))],
-        "thigh_R": [(0, (-35, 0, 0)), (9, (40, 0, 0))],
-        "calf_L": [(0, (-15, 0, 0)), (5, (-10, 0, 0)), (9, (-20, 0, 0)), (13, (-70, 0, 0))],
-        "calf_R": [(0, (-20, 0, 0)), (4, (-70, 0, 0)), (9, (-15, 0, 0)), (14, (-10, 0, 0))],
-        "upperarm_L": [(0, (-35, 0, -10)), (9, (40, 0, -10))],
-        "upperarm_R": [(0, (40, 0, 10)), (9, (-35, 0, 10))],
-        "forearm_L": [(0, (30, 0, 0))],
-        "forearm_R": [(0, (30, 0, 0))],
-    }))
-    # Crouch: the crouched head hitbox centre is 0.84 m (standing 1.24): squat deep, tuck the head.
-    crouch = {
-        "pelvis": [(0, (0, 0, 0), (0, -0.23, -0.06)), (30, (0, 0, 0), (0, -0.235, -0.06))],
-        "thigh_L": [(0, (95, 0, -10))],
-        "thigh_R": [(0, (95, 0, 10))],
-        "calf_L": [(0, (-140, 0, 0))],
-        "calf_R": [(0, (-140, 0, 0))],
-        "foot_L": [(0, (45, 0, 0))],
-        "foot_R": [(0, (45, 0, 0))],
-        "spine1": [(0, (22, 0, 0)), (30, (24, 0, 0))],
-        "spine2": [(0, (12, 0, 0))],
-        "head": [(0, (-12, 0, 0))],
-        "upperarm_L": [(0, (25, 0, -10))],
-        "upperarm_R": [(0, (25, 0, 10))],
-    }
-    add(keyed(w, "crouch_idle", 60, crouch))
-    add(keyed(w, "crouch_walk", 30, {
-        **crouch,
-        "pelvis": [(0, (0, 0, 0), (0, -0.23, -0.06)), (8, (0, 0, 0), (0, -0.215, -0.06)), (15, (0, 0, 0), (0, -0.23, -0.06)), (23, (0, 0, 0), (0, -0.215, -0.06))],
-        "thigh_L": [(0, (105, 0, -10)), (15, (82, 0, -10))],
-        "thigh_R": [(0, (82, 0, 10)), (15, (105, 0, 10))],
-        "calf_L": [(0, (-138, 0, 0)), (8, (-150, 0, 0)), (15, (-132, 0, 0))],
-        "calf_R": [(0, (-132, 0, 0)), (15, (-138, 0, 0)), (23, (-150, 0, 0))],
-        "foot_L": [(0, (33, 0, 0)), (15, (50, 0, 0))],
-        "foot_R": [(0, (50, 0, 0)), (15, (33, 0, 0))],
     }))
     # Slide: feet-first on the hip, lead leg out, trailing knee tucked, leaning back (held loop).
     add(keyed(w, "slide", 12, {
@@ -449,4 +594,84 @@ def build_all(arm):
             "L": ("wrist", Vector((0.30, 0.04, 0.62)))},
         14: {"spine": (0, 0, 0, 0), "R": ("wrist", Vector((-0.30, -0.06, 0.66))), "L": ("wrist", Vector((0.30, 0.0, 0.58)))},
     }))
+    # ---- the clips added for the animation stream (animation-clip-asks.md) come last. Each finished clip
+    # goes onto an NLA track, and the IK solves above see that stack: authoring these after them keeps
+    # every earlier clip, and every shipped hold, byte for byte what it was.
+    # ---- locomotion with planted feet (animation-clip-asks.md §2): solved by leg IK, keyed every frame
+    legs = LegSolver(arm)
+    add(crouch_hold(w, legs))
+    add(gait(w, legs, "walk_slow", 21, speed=0.5, stance=0.6, lift=0.035, drop=0.03, bob=-0.01, lean=4,
+             arm_swing=10))
+    add(gait(w, legs, "run", 10, speed=5.0, stance=0.22, lift=0.12, drop=0.07, bob=0.03, lean=14, arm_swing=45,
+             forearm=70, toe_off=35))
+    add(gait(w, legs, "crouch_walk", 12, speed=2.2, stance=0.5, lift=0.05, drop=0.0, bob=0.012, lean=22,
+             arm_swing=16, centre=0.0, crouch=((0, -0.23, -0.06), {"spine2": (12, 0, 0), "head": (-12, 0, 0)})))
+    # ---- action poses the motion layer used to fake (animation-clip-asks.md §3)
+    # Flail: a blast launch, ~0.6 s loop: arms windmilling out of phase, legs kicking.
+    add(keyed(w, "flail", 18, {
+        "spine1": [(0, (-10, 0, 0)), (9, (-4, 0, 0))],
+        "spine2": [(0, (-6, 0, 0)), (9, (-2, 0, 0))],
+        "head": [(0, (12, 0, 0)), (9, (6, 0, 0))],
+        "upperarm_L": [(0, (-150, 0, 40)), (6, (-20, 0, 85)), (12, (60, 0, 30))],
+        "upperarm_R": [(0, (60, 0, -30)), (6, (-150, 0, -40)), (12, (-20, 0, -85))],
+        "forearm_L": [(0, (30, 0, 0)), (9, (70, 0, 0))],
+        "forearm_R": [(0, (70, 0, 0)), (9, (30, 0, 0))],
+        "thigh_L": [(0, (55, 0, 12)), (9, (-15, 0, 14))],
+        "thigh_R": [(0, (-15, 0, -14)), (9, (55, 0, -12))],
+        "calf_L": [(0, (-35, 0, 0)), (5, (-95, 0, 0)), (9, (-20, 0, 0)), (14, (-60, 0, 0))],
+        "calf_R": [(0, (-20, 0, 0)), (5, (-60, 0, 0)), (9, (-35, 0, 0)), (14, (-95, 0, 0))],
+        "foot_L": [(0, (-20, 0, 0)), (9, (15, 0, 0))],
+        "foot_R": [(0, (15, 0, 0)), (9, (-20, 0, 0))],
+    }))
+
+    def pose(name, keys):
+        """A single-frame pose held over two identical keys (a zero-length clip confuses players)."""
+        return keyed(w, name, 1, {b: [(0, *v)] if isinstance(v[0], tuple) else [(0, v)] for b, v in keys.items()})
+
+    # Dash poses (the 8-way dash lasts 0.13 s): stretched along the dash, reaching up, a slam down.
+    # Upper arms: +X raises them forward and up (§9.2), -X swings them back.
+    add(pose("dash_side", {
+        "pelvis": ((0, 0, 0), (0, -0.02, 0)),
+        "spine1": (32, 0, 0), "spine2": (14, 0, 0), "head": (-30, 0, 0),
+        "upperarm_L": (-55, 0, 10), "upperarm_R": (-55, 0, -10), "forearm_L": (10, 0, 0), "forearm_R": (10, 0, 0),
+        "thigh_L": (-20, 0, 4), "thigh_R": (-45, 0, -4), "calf_L": (-30, 0, 0), "calf_R": (-15, 0, 0),
+        "foot_L": (35, 0, 0), "foot_R": (45, 0, 0),
+    }))
+    add(pose("dash_up", {
+        "spine1": (-8, 0, 0), "spine2": (-6, 0, 0), "head": (-14, 0, 0),
+        "upperarm_L": (125, 0, 18), "upperarm_R": (125, 0, -18), "forearm_L": (8, 0, 0), "forearm_R": (8, 0, 0),  # straight up hides behind the helmet
+        "thigh_L": (10, 0, 2), "thigh_R": (-4, 0, -2), "calf_L": (-25, 0, 0), "calf_R": (-10, 0, 0),
+        "foot_L": (40, 0, 0), "foot_R": (45, 0, 0),
+    }))
+    add(pose("dash_down", {
+        "pelvis": ((0, 0, 0), (0, 0.03, 0)),
+        "spine1": (26, 0, 0), "spine2": (18, 0, 0), "head": (-26, 0, 0),
+        "upperarm_L": (135, 0, 25), "upperarm_R": (135, 0, -25), "forearm_L": (50, 0, 0), "forearm_R": (50, 0, 0),
+        "thigh_L": (80, 0, 10), "thigh_R": (80, 0, -10), "calf_L": (-120, 0, 0), "calf_R": (-120, 0, 0),
+        "foot_L": (30, 0, 0), "foot_R": (30, 0, 0),
+    }))
+    # Land hard: a fall over ~10 m/s, 0.5 s: a deep squat, a hand down, then up.
+    add(keyed(w, "land_hard", 15, {
+        "pelvis": [(0, (0, 0, 0), (0, -0.03, 0)), (3, (0, 0, 0), (0, -0.17, -0.03)), (8, (0, 0, 0), (0, -0.15, -0.03)), (15, (0, 0, 0), (0, 0, 0))],
+        "thigh_L": [(0, (12, 0, -4)), (3, (78, 0, -10)), (8, (72, 0, -10)), (15, (0, 0, 0))],
+        "thigh_R": [(0, (12, 0, 4)), (3, (78, 0, 10)), (8, (72, 0, 10)), (15, (0, 0, 0))],
+        "calf_L": [(0, (-22, 0, 0)), (3, (-120, 0, 0)), (8, (-112, 0, 0)), (15, (0, 0, 0))],
+        "calf_R": [(0, (-22, 0, 0)), (3, (-120, 0, 0)), (8, (-112, 0, 0)), (15, (0, 0, 0))],
+        "foot_L": [(0, (10, 0, 0)), (3, (42, 0, 0)), (8, (40, 0, 0)), (15, (0, 0, 0))],
+        "foot_R": [(0, (10, 0, 0)), (3, (42, 0, 0)), (8, (40, 0, 0)), (15, (0, 0, 0))],
+        "spine1": [(0, (6, 0, 0)), (3, (30, 0, 0)), (8, (26, 0, 0)), (15, (0, 0, 0))],
+        "spine2": [(0, (2, 0, 0)), (3, (14, 0, 0)), (8, (12, 0, 0)), (15, (0, 0, 0))],
+        "head": [(0, (0, 0, 0)), (3, (-24, 0, 0)), (8, (-20, 0, 0)), (15, (0, 0, 0))],
+        "upperarm_L": [(0, (0, 0, 10)), (3, (40, 0, 30)), (8, (35, 0, 28)), (15, (0, 0, 0))],
+        "upperarm_R": [(0, (0, 0, -10)), (3, (55, 0, -10)), (8, (50, 0, -10)), (15, (0, 0, 0))],
+    }, loop=False))
+    # Brake: a skid, leaning back with the front foot planted ahead, the back knee bent.
+    add(pose("brake", {
+        "pelvis": ((0, 0, 0), (0, -0.06, 0.02)),
+        "spine1": (-16, 0, 0), "spine2": (-8, 0, 0), "head": (10, 0, 0),
+        "thigh_L": (48, 0, -4), "calf_L": (-14, 0, 0), "foot_L": (-24, 0, 0),
+        "thigh_R": (-12, 0, 4), "calf_R": (-70, 0, 0), "foot_R": (20, 0, 0),
+        "upperarm_L": (50, 0, 35), "upperarm_R": (40, 0, -40), "forearm_L": (20, 0, 0), "forearm_R": (25, 0, 0),
+    }))
+
     return names

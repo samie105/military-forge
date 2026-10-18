@@ -81,10 +81,10 @@ def weapon_family(path, family):
                               export_vertex_color="ACTIVE")
 
 
-def k47_edit(path, edit):
-    """The K-47 with `edit(objects by name)` applied to its sockets, re-exported."""
+def k47_edit(path, edit, weapon="k47"):
+    """The K-47 (or `weapon`) with `edit(objects by name)` applied to its sockets, re-exported."""
     bpy.ops.wm.read_homefile(use_empty=True)
-    bpy.ops.import_scene.gltf(filepath=str(REPO / "art/weapons/k47.glb"))
+    bpy.ops.import_scene.gltf(filepath=str(REPO / f"art/weapons/{weapon}.glb"))
     edit({o.name.split(".")[0]: o for o in bpy.data.objects})
     bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB", use_selection=False, export_extras=True,
                               export_vertex_color="ACTIVE")
@@ -99,6 +99,15 @@ def eject_left(objs):
 
 def no_rail(objs):
     bpy.data.objects.remove(objs["rail_top"], do_unlink=True)
+
+
+def no_face(objs):
+    bpy.data.objects.remove(objs["face"], do_unlink=True)
+
+
+def claims_casings(objs):
+    """The Dragon marked as throwing casings, which it has no `eject` socket for."""
+    objs["dragon"]["casings"] = True
 
 
 def deep_jetpack(path, back):
@@ -216,6 +225,8 @@ from_item(tmp / "aviators_panel.glb", COS / "eyewear/eyewear_aviators.glb", add_
 jet_nodye = dye_fixture(tmp / "nodye", with_textures=False)
 k47_edit(tmp / "k47_eject_left.glb", eject_left)
 k47_edit(tmp / "k47_no_rail.glb", no_rail)
+k47_edit(tmp / "shield_no_face.glb", no_face, "riot_shield")
+k47_edit(tmp / "dragon_casings.glb", claims_casings, "dragon")
 market_edit(tmp / "kit_sack.glb", sack_on_plane)
 market_edit(tmp / "kit_orange.glb", team_orange)
 
@@ -252,6 +263,10 @@ cases = [
     ("Aviators with a panel down to the shins fail (locality)", "fail", tmp / "aviators_panel.glb", "--kind", "part", "--base", OUTFIT),
     ("K-47 casings ejecting to the left fail", "fail", tmp / "k47_eject_left.glb", "--kind", "weapon"),
     ("K-47 without its top rail fails", "fail", tmp / "k47_no_rail.glb", "--kind", "weapon"),
+    ("Dragon (no casings, no eject socket) passes", "pass", REPO / "art/weapons/dragon.glb", "--kind", "weapon"),
+    ("Dragon marked as throwing casings, with no eject socket, fails", "fail", tmp / "dragon_casings.glb", "--kind", "weapon"),
+    ("Riot Shield (off-hand, face socket) passes", "pass", REPO / "art/weapons/riot_shield.glb", "--kind", "weapon"),
+    ("Riot Shield without its face socket fails", "fail", tmp / "shield_no_face.glb", "--kind", "weapon"),
     ("Street Market kit passes", "pass", MARKET, "--kind", "kit"),
     ("kit prop on the gameplay plane with no collision fails", "fail", tmp / "kit_sack.glb", "--kind", "kit"),
     ("kit piece in team orange fails", "fail", tmp / "kit_orange.glb", "--kind", "kit"),

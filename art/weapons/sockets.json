@@ -1,6 +1,6 @@
 {
  "frame": "weapon frame = glTF: origin at the main grip, +Y muzzle, +Z up, +X right; attach to socket_weapon_R with an identity transform (docs/04 \u00a79.4)",
- "fields": "pos [x, y, z] m; dir unit vector; muzzle.boreRadius m; rail_*.lengthM m; rail_top.occupied = a built-in sight; frag/mine `ground` = rest frame in the world (world = floorPoint \u00d7 inverse(ground.local))",
+ "fields": "pos [x, y, z] m; dir unit vector; muzzle.boreRadius m; rail_*.lengthM m; rail_top.occupied = a built-in sight; frag/mine `ground` = rest frame in the world (world = floorPoint \u00d7 inverse(ground.local)); face.halfSize [w/2, h/2] m (riot shield); weapon `casings` false = no casing per shot; `attach` = the rig socket when not socket_weapon_R",
  "weapons": {
   "hawk50": {
    "family": "pistol",
@@ -1103,6 +1103,423 @@
       0.0,
       0.0,
       1.0
+     ]
+    }
+   }
+  },
+  "dragon": {
+   "family": "heavy",
+   "aimPose": "rifle",
+   "hands": 2,
+   "casings": false,
+   "lengthM": 0.899,
+   "sockets": {
+    "grip": {
+     "pos": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "dir": [
+      0.0,
+      1.0,
+      0.0
+     ]
+    },
+    "mag": {
+     "pos": [
+      0.0,
+      0.15,
+      -0.11
+     ],
+     "dir": [
+      0.0,
+      0.0,
+      -1.0
+     ]
+    },
+    "muzzle": {
+     "pos": [
+      0.0,
+      0.726,
+      0.06
+     ],
+     "boreRadius": 0.036,
+     "dir": [
+      0.0,
+      1.0,
+      0.0
+     ]
+    },
+    "offhand": {
+     "pos": [
+      -0.05,
+      0.07,
+      -0.03
+     ]
+    },
+    "pilot": {
+     "pos": [
+      0.0,
+      0.705,
+      0.016
+     ],
+     "dir": [
+      0.0,
+      1.0,
+      0.0
+     ]
+    },
+    "rail_top": {
+     "pos": [
+      0.0,
+      0.08,
+      0.142
+     ],
+     "lengthM": 0.12,
+     "dir": [
+      0.0,
+      0.0,
+      1.0
+     ]
+    }
+   }
+  },
+  "arc": {
+   "family": "rifle",
+   "aimPose": "rifle",
+   "hands": 2,
+   "casings": false,
+   "lengthM": 0.874,
+   "sockets": {
+    "grip": {
+     "pos": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "dir": [
+      0.0,
+      1.0,
+      0.0
+     ]
+    },
+    "mag": {
+     "pos": [
+      0.038,
+      0.12,
+      0.045
+     ],
+     "dir": [
+      1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "muzzle": {
+     "pos": [
+      0.0,
+      0.551,
+      0.055
+     ],
+     "boreRadius": 0.012,
+     "dir": [
+      0.0,
+      1.0,
+      0.0
+     ]
+    },
+    "offhand": {
+     "pos": [
+      -0.05,
+      0.07,
+      -0.03
+     ]
+    },
+    "rail_bottom": {
+     "pos": [
+      0.0,
+      0.22,
+      0.005
+     ],
+     "lengthM": 0.08,
+     "dir": [
+      0.0,
+      0.0,
+      -1.0
+     ]
+    },
+    "rail_top": {
+     "pos": [
+      0.0,
+      0.06,
+      0.12
+     ],
+     "lengthM": 0.12,
+     "dir": [
+      0.0,
+      0.0,
+      1.0
+     ]
+    }
+   }
+  },
+  "popper": {
+   "family": "launcher",
+   "aimPose": "rifle",
+   "hands": 2,
+   "casings": false,
+   "lengthM": 0.799,
+   "sockets": {
+    "grip": {
+     "pos": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "dir": [
+      0.0,
+      1.0,
+      0.0
+     ]
+    },
+    "mag": {
+     "pos": [
+      -0.085,
+      0.19,
+      0.03
+     ],
+     "dir": [
+      -1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "muzzle": {
+     "pos": [
+      0.0,
+      0.456,
+      0.06
+     ],
+     "boreRadius": 0.032,
+     "dir": [
+      0.0,
+      1.0,
+      0.0
+     ]
+    },
+    "offhand": {
+     "pos": [
+      -0.05,
+      0.07,
+      -0.03
+     ]
+    },
+    "rail_top": {
+     "pos": [
+      0.0,
+      0.19,
+      0.129
+     ],
+     "lengthM": 0.14,
+     "dir": [
+      0.0,
+      0.0,
+      1.0
+     ]
+    }
+   }
+  },
+  "ripper": {
+   "family": "launcher",
+   "aimPose": "rifle",
+   "hands": 2,
+   "casings": false,
+   "lengthM": 0.889,
+   "sockets": {
+    "charge": {
+     "pos": [
+      0.025,
+      0.37,
+      0.04
+     ],
+     "dir": [
+      0.0,
+      1.0,
+      0.0
+     ]
+    },
+    "grip": {
+     "pos": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "dir": [
+      0.0,
+      1.0,
+      0.0
+     ]
+    },
+    "mag": {
+     "pos": [
+      0.0,
+      0.37,
+      0.155
+     ],
+     "dir": [
+      0.0,
+      0.0,
+      1.0
+     ]
+    },
+    "muzzle": {
+     "pos": [
+      0.0,
+      0.556,
+      0.07
+     ],
+     "boreRadius": 0.024,
+     "dir": [
+      0.0,
+      1.0,
+      0.0
+     ]
+    },
+    "offhand": {
+     "pos": [
+      -0.05,
+      0.07,
+      -0.03
+     ]
+    },
+    "rail_top": {
+     "pos": [
+      0.0,
+      0.05,
+      0.137
+     ],
+     "lengthM": 0.12,
+     "dir": [
+      0.0,
+      0.0,
+      1.0
+     ]
+    }
+   }
+  },
+  "pulse": {
+   "family": "launcher",
+   "aimPose": "rifle",
+   "hands": 2,
+   "casings": false,
+   "lengthM": 0.78,
+   "sockets": {
+    "charge": {
+     "pos": [
+      0.0,
+      0.42,
+      0.06
+     ],
+     "dir": [
+      0.0,
+      1.0,
+      0.0
+     ]
+    },
+    "grip": {
+     "pos": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "dir": [
+      0.0,
+      1.0,
+      0.0
+     ]
+    },
+    "mag": {
+     "pos": [
+      0.0,
+      0.08,
+      -0.035
+     ],
+     "dir": [
+      0.0,
+      0.0,
+      -1.0
+     ]
+    },
+    "muzzle": {
+     "pos": [
+      0.0,
+      0.465,
+      0.06
+     ],
+     "boreRadius": 0.03,
+     "dir": [
+      0.0,
+      1.0,
+      0.0
+     ]
+    },
+    "offhand": {
+     "pos": [
+      -0.05,
+      0.07,
+      -0.03
+     ]
+    },
+    "rail_top": {
+     "pos": [
+      0.0,
+      0.0,
+      0.132
+     ],
+     "lengthM": 0.1,
+     "dir": [
+      0.0,
+      0.0,
+      1.0
+     ]
+    }
+   }
+  },
+  "riot_shield": {
+   "family": "shield",
+   "aimPose": "pistol",
+   "hands": 1,
+   "casings": false,
+   "attach": "socket_weapon_L",
+   "lengthM": 0.139,
+   "sockets": {
+    "face": {
+     "pos": [
+      0.0,
+      0.12,
+      0.02
+     ],
+     "halfSize": [
+      0.2,
+      0.295
+     ],
+     "dir": [
+      0.0,
+      1.0,
+      0.0
+     ]
+    },
+    "grip": {
+     "pos": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "dir": [
+      0.0,
+      1.0,
+      0.0
      ]
     }
    }

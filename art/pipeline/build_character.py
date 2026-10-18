@@ -20,6 +20,7 @@ import colorsys
 import json
 import math
 import shutil
+import struct
 import sys
 from pathlib import Path
 
@@ -714,6 +715,7 @@ TEXDIR = OUT / "textures"
 TEXDIR.mkdir(parents=True, exist_ok=True)
 RULES = {"body": dye.rookie_body_rules(marks), "headgear": dye.helmet_rules, "boots": dye.no_rules,
          "jetpack": dye.jetpack_rules}
+SKIN = {"body": dye.rookie_body_skin(marks)}  # parts whose dye albedo carries a skin weight in alpha
 
 
 def envelope_ok(obj, part):
@@ -729,7 +731,7 @@ for (part, suffix), (obj, tris, img) in parts.items():
     img.filepath_raw = str(TEXDIR / f"{tex_name}_albedo.png")
     img.file_format = "PNG"
     img.save()
-    defaults, cover = dye.make_masks(obj, img, TEXDIR, tex_name, rules)
+    defaults, cover = dye.make_masks(obj, img, TEXDIR, tex_name, rules, skin_rule=SKIN.get(part))
     dyes[(part, suffix)] = (defaults, cover)
     obj["slot"] = slot
     obj["bodyTypes"] = ["standard"]
@@ -743,6 +745,9 @@ for (part, suffix), (obj, tris, img) in parts.items():
     obj["dyeDefaults"] = defaults
     obj["dyeMask"] = f"{tex_name}_dye_mask.png"
     obj["dyeAlbedo"] = f"{tex_name}_dye_albedo"  # .png in art/, .webp in the web build
+    if part in SKIN:  # skin weight in the dye albedo's alpha, neutralised against skin_04
+        obj["dyeSkin"] = "alpha"
+        obj["skinNeutral"] = dye.SKIN_NEUTRAL
     socket, bone = PART_SLOTS.get(part, (None, None))
     if socket:
         obj["socket"] = socket
@@ -751,6 +756,37 @@ for (part, suffix), (obj, tris, img) in parts.items():
     log(f"{tex_name}: dye defaults {defaults}, coverage {cover}")
 
 # ------------------------------------------------------------------ 7. export
+
+
+def sign_continuous_rotations(path):
+    """Negate every rotation key whose quaternion has a negative dot with the previous key's, so each
+    track stays sign-continuous (the M4 review found flipped pairs in six clips). The exporter derives each bone's
+    quaternion from a matrix per key, so its sign comes out arbitrary; an engine that blends or
+    interpolates component-wise would turn those bones the long way round. Rewrites the GLB's binary
+    chunk in place (same layout); the poses don't change, since q and -q are the same rotation."""
+    b = bytearray(path.read_bytes())
+    jl = struct.unpack_from("<I", b, 12)[0]
+    g = json.loads(b[20:20 + jl])
+    base = 20 + jl + 8
+    flipped = 0
+    for an in g.get("animations", []):
+        for ch in an["channels"]:
+            if ch["target"]["path"] != "rotation":
+                continue
+            s = an["samplers"][ch["sampler"]]
+            a = g["accessors"][s["output"]]
+            bv = g["bufferViews"][a["bufferView"]]
+            assert a["componentType"] == 5126 and a["type"] == "VEC4" and bv.get("byteStride", 16) == 16
+            assert s.get("interpolation", "LINEAR") != "CUBICSPLINE" and "min" not in a
+            off = base + bv.get("byteOffset", 0) + a.get("byteOffset", 0)
+            q = np.frombuffer(bytes(b[off:off + a["count"] * 16]), np.float32).reshape(-1, 4).copy()
+            for k in range(1, len(q)):
+                if float(q[k] @ q[k - 1]) < 0:
+                    q[k] = -q[k]
+                    flipped += 1
+            b[off:off + q.nbytes] = q.tobytes()
+    path.write_bytes(bytes(b))
+    log(f"{path.name}: {flipped} rotation key(s) negated for sign continuity")
 
 
 def export(path, objs, animations=False, runtime=False):
@@ -768,10 +804,14 @@ def export(path, objs, animations=False, runtime=False):
         export_force_sampling=False, export_optimize_animation_size=False,
         export_reset_pose_bones=True, export_anim_slide_to_zero=True,
         export_image_format="WEBP" if runtime else "JPEG", export_image_quality=90, export_jpeg_quality=90,
-        export_meshopt_compression_enable=runtime,
+        # the clips stay uncompressed: meshopt made them larger (218 vs 179 KB), and the sign pass
+        # below rewrites their keys in place
+        export_meshopt_compression_enable=runtime and not animations,
         export_materials="EXPORT", export_normals=True, export_texcoords=True,
         export_tangents=False, export_morph=False, export_cameras=False, export_lights=False,
     )
+    if animations:
+        sign_continuous_rotations(path)
     log("wrote", path, f"{path.stat().st_size / 1024:.0f} KB")
 
 
@@ -787,8 +827,9 @@ def write_set(char_dir, part_dir, runtime):
     export(char_dir / f"{NAME}_anims.glb", [arm], animations=True, runtime=runtime)
 
 
-def runtime_textures(src_names, dest):
-    """Dye masks stay lossless PNG (they are data); dye albedos go to WebP for download size."""
+def runtime_textures(src_names, dest, alpha=False):
+    """Dye masks stay lossless PNG (they are data); dye albedos go to WebP for download size, with
+    their alpha when it holds a skin weight (the body)."""
     dest.mkdir(parents=True, exist_ok=True)
     for stem in src_names:
         shutil.copy(TEXDIR / f"{stem}_dye_mask.png", dest / f"{stem}_dye_mask.png")
@@ -801,7 +842,7 @@ def runtime_textures(src_names, dest):
         scene.view_settings.gamma = 1.0
         settings = scene.render.image_settings
         settings.file_format = "WEBP"
-        settings.color_mode = "RGB"
+        settings.color_mode = "RGBA" if alpha else "RGB"
         settings.quality = 90
         img.save_render(str(dest / f"{stem}_dye_albedo.webp"), scene=scene)
         bpy.data.images.remove(img)
@@ -830,14 +871,15 @@ if RUNTIME:
     char_dir = RUNTIME / "characters" / NAME
     slot_dir = lambda part: RUNTIME / "cosmetics" / part  # noqa: E731
     write_set(char_dir, slot_dir, runtime=True)
-    runtime_textures([f"{NAME}_body{s}" for s in LODS], char_dir / "textures")
+    runtime_textures([f"{NAME}_body{s}" for s in LODS], char_dir / "textures", alpha="body" in SKIN)
     for part in SLOT_PARTS:
         runtime_textures([f"{PART_IDS[part]}{s}" for s in LODS], slot_dir(part) / "textures")
 
     def dye_entry(part, suffix):
         stem = f"{PART_IDS[part]}{suffix}"
         return {"mask": f"textures/{stem}_dye_mask.png", "albedo": f"textures/{stem}_dye_albedo.webp",
-                "defaults": dyes[(part, suffix)][0]}
+                "defaults": dyes[(part, suffix)][0],
+                **({"skin": "alpha", "skinNeutral": dye.SKIN_NEUTRAL} if part in SKIN else {})}
 
     (char_dir / f"{NAME}.json").write_text(json.dumps({
         "id": NAME, "skeleton": "shared-v1", "heightM": HEIGHT,

@@ -6,6 +6,7 @@
  * The reference for the in-match renderer; the Armory uses it as is.
  */
 import { Color, NearestFilter, type Material, type MeshStandardMaterial, type Texture, Vector2 } from 'three';
+import { patchGlow } from './glow';
 
 export interface CamoDef {
   name: string;
@@ -42,7 +43,9 @@ export function camoMaterial(material: MeshStandardMaterial, patterns: Texture, 
   // flipY is false for this texture (see the viewer), so v runs down from the top like the image
   const cellOrigin = new Vector2((camo.cell % cols) * cellSize.x, Math.floor(camo.cell / cols) * cellSize.y);
   const palette = [0, 1, 2, 3].map((i) => new Color(camo.palette[Math.min(i, camo.palette.length - 1)]));
+  const glow = material.userData.glow === true;
   m.onBeforeCompile = (shader) => {
+    if (glow) patchGlow(shader);
     Object.assign(shader.uniforms, {
       camoMap: { value: patterns },
       camoCellOrigin: { value: cellOrigin },
@@ -88,6 +91,6 @@ if (vCamo > 0.5) {
 }`,
       );
   };
-  m.customProgramCacheKey = () => `camo:${camo.cell}`;
+  m.customProgramCacheKey = () => `camo:${camo.cell}:${glow}`;
   return m;
 }

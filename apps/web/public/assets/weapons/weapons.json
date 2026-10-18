@@ -581,6 +581,240 @@
       "lengthM": 1.037,
       "file": "longbow.glb"
     },
+    "dragon": {
+      "name": "Dragon",
+      "archetype": "flamethrower",
+      "family": "heavy",
+      "aimPose": "rifle",
+      "hands": 2,
+      "casings": false,
+      "tris": 968,
+      "nodes": {
+        "grip": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "mag": [
+          0.0,
+          0.15,
+          -0.11
+        ],
+        "muzzle": [
+          0.0,
+          0.726,
+          0.06
+        ],
+        "offhand": [
+          -0.05,
+          0.07,
+          -0.03
+        ],
+        "pilot": [
+          0.0,
+          0.705,
+          0.016
+        ],
+        "rail_top": [
+          0.0,
+          0.08,
+          0.142
+        ]
+      },
+      "lengthM": 0.899,
+      "file": "dragon.glb"
+    },
+    "arc": {
+      "name": "Arc",
+      "archetype": "beam laser",
+      "family": "rifle",
+      "aimPose": "rifle",
+      "hands": 2,
+      "casings": false,
+      "tris": 876,
+      "nodes": {
+        "grip": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "mag": [
+          0.038,
+          0.12,
+          0.045
+        ],
+        "muzzle": [
+          0.0,
+          0.551,
+          0.055
+        ],
+        "offhand": [
+          -0.05,
+          0.07,
+          -0.03
+        ],
+        "rail_bottom": [
+          0.0,
+          0.22,
+          0.005
+        ],
+        "rail_top": [
+          0.0,
+          0.06,
+          0.12
+        ]
+      },
+      "lengthM": 0.874,
+      "file": "arc.glb"
+    },
+    "popper": {
+      "name": "Popper",
+      "archetype": "grenade launcher",
+      "family": "launcher",
+      "aimPose": "rifle",
+      "hands": 2,
+      "casings": false,
+      "tris": 756,
+      "nodes": {
+        "grip": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "mag": [
+          -0.085,
+          0.19,
+          0.03
+        ],
+        "muzzle": [
+          0.0,
+          0.456,
+          0.06
+        ],
+        "offhand": [
+          -0.05,
+          0.07,
+          -0.03
+        ],
+        "rail_top": [
+          0.0,
+          0.19,
+          0.129
+        ]
+      },
+      "lengthM": 0.799,
+      "file": "popper.glb"
+    },
+    "ripper": {
+      "name": "Ripper",
+      "archetype": "saw-blade launcher",
+      "family": "launcher",
+      "aimPose": "rifle",
+      "hands": 2,
+      "casings": false,
+      "tris": 960,
+      "nodes": {
+        "charge": [
+          0.025,
+          0.37,
+          0.04
+        ],
+        "grip": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "mag": [
+          0.0,
+          0.37,
+          0.155
+        ],
+        "muzzle": [
+          0.0,
+          0.556,
+          0.07
+        ],
+        "offhand": [
+          -0.05,
+          0.07,
+          -0.03
+        ],
+        "rail_top": [
+          0.0,
+          0.05,
+          0.137
+        ]
+      },
+      "lengthM": 0.889,
+      "file": "ripper.glb"
+    },
+    "pulse": {
+      "name": "Pulse",
+      "archetype": "EMP orb gun",
+      "family": "launcher",
+      "aimPose": "rifle",
+      "hands": 2,
+      "casings": false,
+      "tris": 888,
+      "nodes": {
+        "charge": [
+          0.0,
+          0.42,
+          0.06
+        ],
+        "grip": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "mag": [
+          0.0,
+          0.08,
+          -0.035
+        ],
+        "muzzle": [
+          0.0,
+          0.465,
+          0.06
+        ],
+        "offhand": [
+          -0.05,
+          0.07,
+          -0.03
+        ],
+        "rail_top": [
+          0.0,
+          0.0,
+          0.132
+        ]
+      },
+      "lengthM": 0.78,
+      "file": "pulse.glb"
+    },
+    "riot_shield": {
+      "name": "Riot Shield",
+      "archetype": "off-hand shield",
+      "family": "shield",
+      "aimPose": "pistol",
+      "hands": 1,
+      "casings": false,
+      "attach": "socket_weapon_L",
+      "tris": 652,
+      "nodes": {
+        "face": [
+          0.0,
+          0.12,
+          0.02
+        ],
+        "grip": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "lengthM": 0.139,
+      "file": "riot_shield.glb"
+    },
     "machete": {
       "name": "Machete",
       "archetype": "melee",

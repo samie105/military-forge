@@ -1,0 +1,423 @@
+{
+ "version": 1,
+ "frame": "positions name weapon sockets (weapons/sockets.json); `dir` is the muzzle's; sizes in metres",
+ "atlases": {
+  "flame": {
+   "texture": "flame_atlas.webp",
+   "size": [
+    1024,
+    1024
+   ],
+   "cell": [
+    256,
+    256
+   ]
+  },
+  "specials": {
+   "texture": "specials_atlas.webp",
+   "size": [
+    512,
+    512
+   ],
+   "cell": [
+    128,
+    128
+   ],
+   "cells": {
+    "orb0": 0,
+    "orb1": 1,
+    "orb2": 2,
+    "orb3": 3,
+    "pilot": 4,
+    "flare": 5,
+    "glow": 6,
+    "ring": 7,
+    "crack1": 8,
+    "crack2": 9,
+    "crack3": 10
+   }
+  }
+ },
+ "flipbooks": {
+  "flame": {
+   "atlas": "flame",
+   "firstCell": 0,
+   "cellM": 1.544,
+   "anchorUV": [
+    0.5,
+    0.5
+   ],
+   "fps": 20,
+   "frames": 16,
+   "anchor": "centre",
+   "notes": "one puff over its 0.8 s life: frame = 16 \u00d7 age / life; it grows 0.15 \u2192 0.6 m in radius like the sim projectile; the late frames are smoke (normal blend)"
+  },
+  "orb": {
+   "atlas": "specials",
+   "cells": [
+    "orb0",
+    "orb1",
+    "orb2",
+    "orb3"
+   ],
+   "fps": 16,
+   "loop": true,
+   "blend": "additive"
+  }
+ },
+ "sprites": {
+  "pilot": {
+   "atlas": "specials",
+   "cell": "pilot",
+   "blend": "additive",
+   "originU": 0.09375
+  },
+  "flare": {
+   "atlas": "specials",
+   "cell": "flare",
+   "blend": "additive"
+  },
+  "glow": {
+   "atlas": "specials",
+   "cell": "glow",
+   "blend": "additive"
+  },
+  "ring": {
+   "atlas": "specials",
+   "cell": "ring",
+   "blend": "additive"
+  },
+  "crack1": {
+   "atlas": "specials",
+   "cell": "crack1",
+   "blend": "normal"
+  },
+  "crack2": {
+   "atlas": "specials",
+   "cell": "crack2",
+   "blend": "normal"
+  },
+  "crack3": {
+   "atlas": "specials",
+   "cell": "crack3",
+   "blend": "normal"
+  }
+ },
+ "beam": {
+  "texture": "beam.webp",
+  "size": [
+   256,
+   64
+  ],
+  "blend": "additive",
+  "wrapU": true,
+  "notes": "a camera-facing strip from the muzzle to the hit point; U repeats along it"
+ },
+ "projectiles": {
+  "from": "projectiles.json",
+  "glb": "projectiles.glb"
+ },
+ "particles": {
+  "texture": "particles.webp",
+  "from": "impacts.vfx.json"
+ },
+ "styles": {
+  "dragon": {
+   "kind": "flame",
+   "from": "muzzle",
+   "flipbook": "flame",
+   "blend": "normal",
+   "spawnEveryS": 0.15,
+   "puffsPerSpawn": 3,
+   "lifeS": 0.8,
+   "speedMps": 7,
+   "gravity": -0.2,
+   "spreadDeg": 8,
+   "jitter": {
+    "rollDeg": 180,
+    "scale": [
+     0.9,
+     1.1
+    ],
+    "flipU": true
+   },
+   "pilot": {
+    "socket": "pilot",
+    "sprite": "pilot",
+    "sizeM": 0.07,
+    "flickerHz": 14,
+    "always": true
+   },
+   "light": {
+    "color": "#ff9a40",
+    "intensity": 3.0,
+    "rangeM": 3.5,
+    "flickerHz": 9
+   },
+   "burn": {
+    "flipbook": "flame",
+    "frames": [
+     1,
+     7
+    ],
+    "sizeM": 0.35,
+    "durationS": 2.0,
+    "notes": "on a burning player, at the chest, for the 2 s burn"
+   },
+   "wallHit": {
+    "decal": "scorch",
+    "sizeM": 0.35
+   },
+   "provisional": "docs/03 \u00a77 until packages/content has this weapon",
+   "notes": "each 0.15 s sim projectile draws puffsPerSpawn puffs spread along its first metre so the stream reads continuous; puffs stop at walls (they reflect weakly in the sim)"
+  },
+  "arc": {
+   "kind": "beam",
+   "from": "muzzle",
+   "rangeM": 52,
+   "tickS": 0.15,
+   "widthM": 0.07,
+   "uvPerM": 2.5,
+   "scrollMps": 9,
+   "flicker": {
+    "widthJitter": 0.15,
+    "hz": 20
+   },
+   "startGlow": {
+    "sprite": "glow",
+    "sizeM": 0.14,
+    "tint": "#5ff2ff"
+   },
+   "endFlare": {
+    "sprite": "flare",
+    "sizeM": 0.38,
+    "spinDegPerS": 120
+   },
+   "hitSparks": {
+    "particle": "spark",
+    "count": [
+     1,
+     2
+    ],
+    "tint": "#bff8ff",
+    "speedMps": [
+     2,
+     4
+    ],
+    "coneDeg": 70,
+    "lifeMs": 220,
+    "notes": "per tick on whatever the beam hits"
+   },
+   "wallHit": {
+    "decal": "scorch",
+    "sizeM": 0.1
+   },
+   "light": {
+    "color": "#5ff2ff",
+    "intensity": 2.5,
+    "rangeM": 2.5
+   },
+   "provisional": "docs/03 \u00a77 until packages/content has this weapon"
+  },
+  "pulse": {
+   "kind": "orb",
+   "from": "muzzle",
+   "flipbook": "orb",
+   "sizeM": 0.24,
+   "speedMps": 8,
+   "passesWalls": true,
+   "charge": {
+    "socket": "charge",
+    "chargeS": 0.7,
+    "sprite": "glow",
+    "tint": "#6fb6ff",
+    "sizeM": [
+     0.03,
+     0.14
+    ],
+    "ring": {
+     "sprite": "ring",
+     "tint": "#9fd2ff",
+     "fromM": 0.3,
+     "toM": 0.06
+    }
+   },
+   "trail": {
+    "sprite": "glow",
+    "tint": "#6fb6ff",
+    "everyMs": 40,
+    "sizeM": 0.14,
+    "lifeMs": 240
+   },
+   "burst": {
+    "radiusM": 2.5,
+    "shockwave": {
+     "texture": "shockwave.webp",
+     "fromM": 0.2,
+     "toM": 2.5,
+     "ms": 280,
+     "tint": "#7fc4ff",
+     "opacity": 0.9
+    },
+    "flash": {
+     "flipbook": "orb",
+     "sizeM": 1.1,
+     "ms": 180
+    },
+    "light": {
+     "color": "#7fc4ff",
+     "intensity": 5.0,
+     "rangeM": 5.0,
+     "ms": 200
+    }
+   },
+   "stunned": {
+    "particle": "spark",
+    "tint": "#9fd2ff",
+    "everyMs": 120,
+    "durationS": 3.0,
+    "notes": "crackle at the jetpack while it's disabled"
+   },
+   "light": {
+    "color": "#6fb6ff",
+    "intensity": 2.0,
+    "rangeM": 2.0
+   },
+   "provisional": "docs/03 \u00a77 until packages/content has this weapon"
+  },
+  "ripper": {
+   "kind": "blade",
+   "from": "muzzle",
+   "projectile": "blade",
+   "speedMps": 18,
+   "lifeS": 5,
+   "charge": {
+    "socket": "charge",
+    "chargeS": 0.4,
+    "spinUpRps": 14,
+    "sparks": {
+     "particle": "spark",
+     "everyMs": 50,
+     "tint": "#ffe6a0",
+     "speedMps": [
+      1,
+      2.5
+     ]
+    }
+   },
+   "trail": {
+    "sprite": "glow",
+    "tint": "#d8e2ea",
+    "everyMs": 30,
+    "sizeM": 0.2,
+    "lifeMs": 120
+   },
+   "bounce": {
+    "particle": "spark",
+    "count": [
+     8,
+     12
+    ],
+    "tint": "#ffe08a",
+    "speedMps": [
+     3,
+     6
+    ],
+    "coneDeg": 70,
+    "lifeMs": 300,
+    "decal": "metal"
+   },
+   "expire": {
+    "explosion": "frag",
+    "scale": 0.5,
+    "notes": "it explodes after 5 s"
+   },
+   "provisional": "docs/03 \u00a77 until packages/content has this weapon"
+  },
+  "popper": {
+   "kind": "grenade",
+   "from": "muzzle",
+   "projectile": "grenade",
+   "gravity": 1.0,
+   "trail": {
+    "particle": "dust",
+    "tint": "#d9d4c8",
+    "everyMs": 50,
+    "sizeM": 0.08,
+    "lifeMs": 350
+   },
+   "explosion": "grenade_launcher",
+   "provisional": "docs/03 \u00a77 until packages/content has this weapon"
+  },
+  "thumper": {
+   "kind": "rocket",
+   "from": "muzzle",
+   "projectile": "rocket",
+   "trail": {
+    "flame": {
+     "flipbook": "flame",
+     "frames": [
+      0,
+      4
+     ],
+     "sizeM": 0.22,
+     "at": "trail"
+    },
+    "smoke": {
+     "particle": "dust",
+     "tint": "#cfcac0",
+     "everyMs": 25,
+     "sizeM": 0.2,
+     "lifeMs": 600
+    }
+   },
+   "explosion": "rocket"
+  },
+  "riot_shield": {
+   "kind": "shield",
+   "at": "face",
+   "maxHp": 300,
+   "hit": {
+    "impact": "metal",
+    "ripple": {
+     "sprite": "ring",
+     "tint": "#cfe8ff",
+     "fromM": 0.04,
+     "toM": 0.22,
+     "ms": 160
+    }
+   },
+   "cracks": [
+    {
+     "belowHpFraction": 0.66,
+     "sprite": "crack1"
+    },
+    {
+     "belowHpFraction": 0.33,
+     "sprite": "crack2"
+    },
+    {
+     "belowHpFraction": 0.12,
+     "sprite": "crack3"
+    }
+   ],
+   "break": {
+    "particle": "chip",
+    "count": [
+     14,
+     18
+    ],
+    "tint": "#5a5f48",
+    "speedMps": [
+     2,
+     5
+    ],
+    "coneDeg": 90,
+    "gravity": 1,
+    "lifeMs": 900
+   },
+   "notes": "cracks are a decal on the face socket, 2 \u00d7 halfSize; bullets within \u00b160\u00b0 hit the shield (docs/03 \u00a77); flames, explosions, melee and saws go round it",
+   "provisional": "docs/03 \u00a75 (300 HP) until packages/content has the shield"
+  }
+ }
+}

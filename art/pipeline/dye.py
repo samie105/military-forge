@@ -6,7 +6,10 @@ Imported by build_character.py (Blender + numpy). For one baked part this writes
   (linear, non-colour data, same UVs as the albedo);
 * `<name>_dye_albedo.png`: the albedo with every dyeable texel turned into a neutral grey whose
   brightness is relative to that channel's default dye, so `grey × default` gives back the
-  original look and any other dye keeps the painted shading;
+  original look and any other dye keeps the painted shading. With a skin rule (the body), skin
+  texels are divided by SKIN_NEUTRAL instead (per channel, linear) and the **alpha holds the skin
+  weight**, so `dyeAlbedo × lerp(1, skinTone, alpha)` gives back the painted skin with skin_04 and
+  keeps the lips' and cheeks' warmth with any other tone (rookie.json `dye.lodN.skin: "alpha"`);
 * the default dye colours (sRGB hex), returned so they can go into the part's glTF extras.
 
 Texels are classified by colour (HSV of the baked albedo) and by where they are on the body,
@@ -18,6 +21,7 @@ import bpy
 import numpy as np
 
 OFFSET = 10.0  # m, added to baked positions (see _bake_positions)
+SKIN_NEUTRAL = "#da9f75"  # skin_04 "Apricot" (packages/content cosmetics.ts): the painted Rookie's tone
 
 
 def _bake_positions(obj, size):
@@ -91,6 +95,18 @@ def _close(m, covered):
     return shift_min(shift_max(m)) * covered
 
 
+def _into_gutters(m, covered, px):
+    """Extend a mask `px` texels into the uncovered atlas gutter next to it (covered texels keep their
+    value). Filtering samples the gutter at UV seams; without this, the seams round the face (the
+    hairline, the ear rims) kept the painted colour and showed as pale outlines under a dark tone."""
+    out = m.copy()
+    for _ in range(px):
+        p = np.pad(out, 1, mode="edge")
+        grown = np.max([p[1 + dy:1 + dy + m.shape[0], 1 + dx:1 + dx + m.shape[1]] for dy in (-1, 0, 1) for dx in (-1, 0, 1)], axis=0)
+        out = np.where(covered, m, np.maximum(out, grown))
+    return out
+
+
 def _soften(m):
     """3x3 box blur: anti-aliases the mask edges."""
     p = np.pad(m, 1, mode="edge")
@@ -113,21 +129,33 @@ def _save(name, px, path, data):
     bpy.data.images.remove(img)
 
 
-def make_masks(obj, albedo, out_dir, name, rules):
-    """rules(h, s, v, pos) -> (primary, secondary, accent, emissive) boolean arrays.
-    `albedo` is the part's baked Blender image (sRGB bytes). Returns the default dyes."""
+def make_masks(obj, albedo, out_dir, name, rules, skin_rule=None):
+    """rules(h, s, v, pos) -> (primary, secondary, accent, emissive) boolean arrays; skin_rule(h, s,
+    v, pos) -> the skin texels (their weight goes in the dye albedo's alpha, and they stay out of
+    every dye channel). `albedo` is the part's baked Blender image (sRGB bytes). Returns the
+    default dyes and the coverage per channel."""
     size = albedo.size[0]
     pos = _bake_positions(obj, size)
     col = np.array(albedo.pixels[:], dtype=np.float32).reshape(size, size, 4)[..., :3]
     covered = pos[..., 3] > 0.5
     h, s, v = _hsv(col)
+    skin = None
+    if skin_rule is not None:
+        hard = _close(np.logical_and(skin_rule(h, s, v, pos[..., :3]), covered).astype(np.float32), covered)
+        # soften outward only: a skin texel at partial weight keeps a bright neutral colour but only
+        # part of the tone, which read as a pale outline round the face under a dark tone
+        skin = _into_gutters(np.maximum(hard, _soften(hard)), covered, 3)
     channels = [np.logical_and(m, covered).astype(np.float32) for m in rules(h, s, v, pos[..., :3])]
     channels = [_soften(_close(m, covered)) for m in channels]
+    if skin is not None:
+        channels = [c * (1 - skin) for c in channels]  # skin never takes a dye
     mask = np.stack(channels, axis=-1)
 
-    defaults = finish(col, mask, covered, out_dir, name)
+    defaults = finish(col, mask, covered, out_dir, name, skin=skin)
     cover = {k: round(float((mask[..., i] > 0.5).sum() / max(1, covered.sum())), 3)
              for i, k in enumerate(("primary", "secondary", "accent", "emissive"))}
+    if skin is not None:
+        cover["skin"] = round(float((skin > 0.5).sum() / max(1, covered.sum())), 3)
     return defaults, cover
 
 
@@ -143,7 +171,7 @@ def _to_srgb(c):
     return np.where(c <= 0.0031308, c * 12.92, 1.055 * c ** (1 / 2.4) - 0.055)
 
 
-def finish(col, mask, covered, out_dir, name):
+def finish(col, mask, covered, out_dir, name, skin=None):
     """Write <name>_dye_albedo.png and <name>_dye_mask.png from an sRGB albedo `col` (H×W×3) and a
     mask (H×W×4). Returns the default dyes (sRGB hex) per channel present.
 
@@ -194,7 +222,19 @@ def finish(col, mask, covered, out_dir, name):
                 tint *= 1 + (mask[..., i] * covered)[..., None] * (dl - 1)
     edge = _to_srgb(lin / np.maximum(tint, 1e-4))
     dye_albedo = np.where(weight >= 0.99, core, np.where(weight > 0, edge, col))
-    rgba = np.concatenate([dye_albedo, np.ones(col.shape[:2] + (1,), dtype=np.float32)], axis=-1)
+    alpha = np.ones(col.shape[:2] + (1,), dtype=np.float32)
+    if skin is not None:
+        # skin: the painted colour over skin_04 per channel (linear), weight in alpha. Texels brighter
+        # than skin_04 in a channel clip at 1 (an 8-bit texture can't hold more): the default tone
+        # then renders them at skin_04, a hair darker than painted.
+        ws = skin[..., None]  # covered texels plus the gutter next to them (_into_gutters)
+        sk = _to_linear(np.array([int(SKIN_NEUTRAL[j:j + 2], 16) / 255 for j in (1, 3, 5)], dtype=np.float32))
+        neutral_skin = _to_srgb(lin / (1 + ws * (sk - 1)))
+        dye_albedo = np.where(ws > 0, neutral_skin, dye_albedo)
+        # floored at 1/255: lossy WebP rewrites the colour under fully transparent texels (libwebp's
+        # transparent-area cleanup), and 1/255 tints a non-skin texel by under 0.4 % at the darkest tone
+        alpha = np.maximum(ws, 1 / 255).astype(np.float32)
+    rgba = np.concatenate([dye_albedo, alpha], axis=-1)
     _save(f"{name}_dye_albedo", rgba, out_dir / f"{name}_dye_albedo.png", data=False)
     _save(f"{name}_dye_mask", mask, out_dir / f"{name}_dye_mask.png", data=True)
     return defaults
@@ -202,22 +242,45 @@ def finish(col, mask, covered, out_dir, name):
 
 def rookie_body_rules(marks):
     """Rookie: R = sand cloth + helmet, G = olive webbing/pouches, B = teal armband + lenses,
-    A = the armband (team glow, docs/04 §1.4). Skin, boots, straps and hair stay as painted."""
+    A = the armband (team glow, docs/04 §1.4). Skin, boots, straps and hair stay as painted, and
+    nothing above the collar is dyed: face texels (cheek highlights, around the mouth and eyes) have
+    the sand hue and used to land in R, which showed as pale specks with dark skin tones."""
     shoulder_x = marks["shoulder_L"][0]
     elbow_z, shoulder_z = marks["elbow_L"][2], marks["shoulder_L"][2]
 
     def rules(h, s, v, pos):
         x, z = pos[..., 0], pos[..., 2]
+        head = z > marks["neck_z"] + 0.005
         hands = (np.abs(x) > marks["wrist_L"][0] - 0.02) & (z < marks["wrist_L"][2] + 0.04)
         teal = (h >= 150) & (h <= 215) & (s >= 0.28) & (v >= 0.18)
         olive = (h >= 46) & (h < 100) & (s >= 0.16) & (v >= 0.10) & ~teal
         # shaded folds of the uniform are darker but keep the hue; brown boots/straps are
         # darker *and* more saturated
-        sand = (h >= 26) & (h < 47) & (s >= 0.08) & (s <= 0.66) & (v >= 0.26) & ~((s > 0.48) & (v < 0.5)) & ~hands
+        sand = (h >= 26) & (h < 47) & (s >= 0.08) & (s <= 0.66) & (v >= 0.26) & ~((s > 0.48) & (v < 0.5)) & ~hands & ~head
+        olive &= ~head
         armband = teal & (x > shoulder_x - 0.06) & (z > elbow_z - 0.02) & (z < shoulder_z + 0.02)
         return sand, olive, teal, armband
 
     return rules
+
+
+def rookie_body_skin(marks):
+    """The Rookie's skin. On the head (above the collar) every warm, light texel: skin, the lips, and
+    the pale sand the source baked along the hairline and round the ears (helmet colour on the head;
+    left as painted it showed as pale outlines under a dark tone). Hair, brows and pupils are dark,
+    the eyes' whites unsaturated, the lenses teal: they stay as painted. On the hands only skin
+    hues, so the sleeve cuffs stay cloth."""
+
+    def skin(h, s, v, pos):
+        x, z = pos[..., 0], pos[..., 2]
+        head = z > marks["neck_z"] + 0.005
+        hands = (np.abs(x) > marks["wrist_L"][0] - 0.02) & (z < marks["wrist_L"][2] + 0.04)
+        warm = (h <= 60) | (h >= 345)
+        on_head = head & warm & (s >= 0.06) & (v >= 0.40)
+        on_hands = hands & (((h >= 4) & (h <= 42)) | (h >= 345)) & (s >= 0.15) & (s <= 0.68) & (v >= 0.42)
+        return on_head | on_hands
+
+    return skin
 
 
 def jetpack_rules(h, s, v, pos):

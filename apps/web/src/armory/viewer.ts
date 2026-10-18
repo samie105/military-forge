@@ -38,6 +38,7 @@ import {
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { characterToonRamp } from '../character';
+import { glowMaterial } from './glow';
 import { LOCKER_LIGHTS, type LightPreset } from '../locker/turntable';
 
 /** weapons/sockets.json: one socket in the weapon frame (origin at the grip, +Y muzzle, +Z up, +X right) */
@@ -67,9 +68,13 @@ export interface FlashSheet {
 export const SOCKET_COLOURS: Record<string, string> = {
   muzzle: '#ffd91a', grip: '#ffffff', offhand: '#33e64d', eject: '#f259e6', mag: '#33bfff', rail_top: '#ff4d40',
   rail_bottom: '#ff8c33', backblast: '#999999', tip: '#ffd91a', pin: '#f259e6', light: '#ff3333', ground: '#999999',
+  pilot: '#ff8019', charge: '#6699ff', face: '#33e6e6',
 };
 
 export type Focus = 'whole' | string;
+
+/** stage aspect the whole-weapon framing was tuned at (1920×1080 beside the list and panel) */
+const WIDE_ASPECT = 1.35;
 
 /** one entry of attachments/attachments.json */
 export interface AttachmentEntry {
@@ -118,6 +123,8 @@ export class ArmoryViewer {
   private distance = 2;
   private readonly target = new Vector3();
   private readonly targetGoal = new Vector3();
+  /** framing the whole weapon (not a socket): refits and resizes keep it framed */
+  private wholeView = true;
   private distanceGoal = 2;
   private drag: { x: number; y: number } | null = null;
   private frame = 0;
@@ -154,6 +161,12 @@ export class ArmoryViewer {
     const w = new Group();
     w.add(gltf.scene);
     this.weaponFrame = gltf.scene;
+    gltf.scene.traverse((o) => {
+      if (!(o instanceof Mesh) || !o.geometry.getAttribute('_glow')) return;
+      const plain = o.material as MeshStandardMaterial;
+      o.material = glowMaterial(plain);
+      plain.dispose();
+    });
     this.factory.clear();
     this.attachments = [];
     this.flashOverride = null;
@@ -237,7 +250,13 @@ export class ArmoryViewer {
     this.size = Math.max(0.1, box.getSize(new Vector3()).length());
     this.floor.position.y = box.min.y + this.holder.position.y - 0.03;
     this.floor.scale.setScalar(Math.max(0.08, this.size * 0.45));
-    if (this.targetGoal.lengthSq() === 0) this.distanceGoal = Math.max(0.3, this.size * 1.9);
+    if (this.wholeView) this.distanceGoal = this.wholeDistance();
+  }
+
+  /** camera distance that frames the whole weapon: 1.9× its size on a wide stage, further back on a
+   * narrow one (a 0.9 m launcher must still fit a 1280 px window beside the panels) */
+  private wholeDistance(): number {
+    return Math.max(0.3, this.size * 1.9 * Math.max(1, WIDE_ASPECT / this.camera.aspect));
   }
 
   /** Repaint the weapon's camo panels (meshes with a `_camo` attribute) with `make`, or restore them (null). */
@@ -254,9 +273,11 @@ export class ArmoryViewer {
   /** 'whole' frames the weapon; a socket name zooms to that socket. */
   setFocus(focus: Focus): void {
     this.zoom = 1;
-    const whole = Math.max(0.3, this.size * 1.9);
-    if (focus === 'whole' || !this.sockets[focus]) {
-      this.targetGoal.set(0, 0, 0);
+    const whole = this.wholeDistance();
+    this.wholeView = focus === 'whole' || !this.sockets[focus];
+    if (this.wholeView) {
+      // the weapon's centre (the turntable pivot), not its grip: long guns stay centred
+      this.targetGoal.copy(this.holder.position).negate();
       this.distanceGoal = whole;
       return;
     }
@@ -387,6 +408,7 @@ export class ArmoryViewer {
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    if (this.wholeView) this.distanceGoal = this.wholeDistance();
   }
 
   private readonly tick = (): void => {
@@ -406,7 +428,7 @@ export class ArmoryViewer {
     this.camera.position.set(focus.x, focus.y + this.distance * 0.12, focus.z + this.distance);
     this.camera.lookAt(focus);
     // socket balls keep about the same size on screen when zooming in on a socket
-    const k = Math.min(1, Math.max(0.2, this.distance / Math.max(0.3, this.size * 1.9)));
+    const k = Math.min(1, Math.max(0.2, this.distance / this.wholeDistance()));
     for (const g of this.gizmos.children) if (g instanceof Mesh) g.scale.setScalar(k);
     if (this.flash && performance.now() > this.flash.until) this.clearFlash();
     this.renderer.render(this.scene, this.camera);

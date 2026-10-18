@@ -1,0 +1,22 @@
+asset-check: art/weapons/arc.glb  [weapon]
+----------------------------------------------------------------------------------------------------
+INFO  file size                                 76 KB
+PASS  triangles                                 876 of 1000
+PASS  one mesh, one material                    1 draw call(s)
+INFO  GPU texture memory (KTX2 est.)            0.00 MB, 0 image(s)
+PASS  extras weaponId/family/aimPose/hands      ok
+WARN  weaponId in packages/content              arc is not in packages/content/src/{weapons,grenades}.ts yet
+INFO  nodes                                     grip, mag, muzzle, offhand, rail_bottom, rail_top
+PASS  origin on the weapon (the grip)           bbox (-0.04, -0.12, -0.32)..(0.04, 0.1, 0.55)
+PASS  family is a docs/04 §4.2 family           'rifle'
+PASS  aimPose has clips                         'rifle'
+PASS  muzzle node ahead of the grip (+Y)        muzzle at glTF y +0.55 m
+PASS  offhand node within 0.1 m of the grip     0.091 m
+PASS  sockets for the family                    grip, muzzle, mag, rail_top
+PASS  socket directions (unit `dir`)            ok
+PASS  sockets on the weapon (within 3 cm)       ok
+PASS  muzzle fires along +Y with a bore radius  dir (0.0, 1.0, 0.0), bore 0.012 m
+PASS  rail_top above the bore, facing up        z +0.120 vs bore +0.055, length 0.12 m
+PASS  rail_bottom below the bore, facing down   z +0.005 vs bore +0.055, length 0.08 m
+----------------------------------------------------------------------------------------------------
+RESULT: PASS  (14 pass, 1 warn, 0 fail)

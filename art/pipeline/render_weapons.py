@@ -4,7 +4,7 @@
         <weapons_dir> <out_dir> [--size 320] [--sockets]
 
 Renders <out_dir>/<id>.png per weapon from its right side, muzzle to the right, at one shared
-scale (metres per pixel) so sizes compare. Stitch with any image tool. --sockets draws every
+scale (metres per pixel) so sizes compare; the riot shield from three-quarter front (its side is all edge). Stitch with any image tool. --sockets draws every
 socket (weapons/sockets.json) as a coloured ball with a stick along its `dir`.
 """
 import math
@@ -25,7 +25,8 @@ SOCKETS = "--sockets" in argv
 SOCKET_COLOURS = {"muzzle": (1.0, 0.85, 0.1), "grip": (1.0, 1.0, 1.0), "offhand": (0.2, 0.9, 0.3),
                   "eject": (0.95, 0.35, 0.9), "mag": (0.2, 0.75, 1.0), "rail_top": (1.0, 0.3, 0.25),
                   "rail_bottom": (1.0, 0.55, 0.2), "backblast": (0.6, 0.6, 0.6), "tip": (1.0, 0.85, 0.1),
-                  "pin": (0.95, 0.35, 0.9), "light": (1.0, 0.2, 0.2), "ground": (0.6, 0.6, 0.6)}
+                  "pin": (0.95, 0.35, 0.9), "light": (1.0, 0.2, 0.2), "ground": (0.6, 0.6, 0.6),
+                  "pilot": (1.0, 0.5, 0.1), "charge": (0.4, 0.6, 1.0), "face": (0.2, 0.9, 0.9)}
 
 
 def marker(empty):
@@ -93,9 +94,12 @@ for glb in sorted(src.glob("*.glb")):
     cam.data.ortho_scale = SPAN
     scene.collection.objects.link(cam)
     scene.camera = cam
-    # camera on the gun's right side (+X), looking at -X; screen right = +Y (muzzle)
-    cam.location = centre + Vector((3, 0, 0))
-    cam.rotation_euler = (math.radians(90), 0, math.radians(90))
+    # camera on the gun's right side (+X), looking at -X; screen right = +Y (muzzle). A shield is
+    # all edge from there, so it is shown three-quarter front instead.
+    shield = any(o.get("family") == "shield" for o in scene.objects)
+    yaw = math.radians(50 if shield else 0)
+    cam.location = centre + 3 * Vector((math.cos(yaw), math.sin(yaw), 0))
+    cam.rotation_euler = (math.radians(90), 0, math.radians(90) + yaw)
     scene.render.filepath = str(out / f"{glb.stem}.png")
     bpy.ops.render.render(write_still=True)
     print("rendered", glb.stem)

@@ -1,0 +1,66 @@
+{
+ "file": "projectiles.glb",
+ "frame": "muzzle frame: origin at the centre, +Y travel, +Z up, +X the weapon's right; spawn at the weapon's `muzzle` socket with the weapon's rotation",
+ "types": {
+  "rocket": {
+   "node": "proj_rocket",
+   "lengthM": 0.315,
+   "radiusM": 0.065,
+   "tris": 148,
+   "trail": [
+    0.0,
+    -0.14,
+    0.0
+   ],
+   "spin": {
+    "axis": [
+     0,
+     1,
+     0
+    ],
+    "rps": 2.0
+   },
+   "from": "thumper"
+  },
+  "grenade": {
+   "node": "proj_grenade",
+   "lengthM": 0.082,
+   "radiusM": 0.03,
+   "tris": 144,
+   "trail": [
+    0.0,
+    -0.04,
+    0.0
+   ],
+   "spin": {
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "rps": 1.5
+   },
+   "from": "popper"
+  },
+  "blade": {
+   "node": "proj_blade",
+   "lengthM": 0.233,
+   "radiusM": 0.117,
+   "tris": 280,
+   "trail": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "spin": {
+    "axis": [
+     1,
+     0,
+     0
+    ],
+    "rps": 14.0
+   },
+   "from": "ripper"
+  }
+ }
+}

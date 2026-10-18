@@ -1,0 +1,77 @@
+{
+  "file": "art/weapons/riot_shield.glb",
+  "kind": "weapon",
+  "pass": true,
+  "rows": [
+    {
+      "status": "INFO",
+      "check": "file size",
+      "detail": "54 KB"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles",
+      "detail": "652 of 1000"
+    },
+    {
+      "status": "PASS",
+      "check": "one mesh, one material",
+      "detail": "1 draw call(s)"
+    },
+    {
+      "status": "INFO",
+      "check": "GPU texture memory (KTX2 est.)",
+      "detail": "0.00 MB, 0 image(s)"
+    },
+    {
+      "status": "PASS",
+      "check": "extras weaponId/family/aimPose/hands",
+      "detail": "ok"
+    },
+    {
+      "status": "WARN",
+      "check": "weaponId in packages/content",
+      "detail": "riot_shield is not in packages/content/src/{weapons,grenades}.ts yet"
+    },
+    {
+      "status": "INFO",
+      "check": "nodes",
+      "detail": "face, grip"
+    },
+    {
+      "status": "PASS",
+      "check": "origin on the weapon (the grip)",
+      "detail": "bbox (-0.21, -0.31, -0.01)..(0.21, 0.27, 0.13)"
+    },
+    {
+      "status": "PASS",
+      "check": "family is a docs/04 \u00a74.2 family",
+      "detail": "'shield'"
+    },
+    {
+      "status": "PASS",
+      "check": "aimPose has clips",
+      "detail": "'pistol'"
+    },
+    {
+      "status": "PASS",
+      "check": "sockets for the family",
+      "detail": "grip, face"
+    },
+    {
+      "status": "PASS",
+      "check": "socket directions (unit `dir`)",
+      "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "sockets on the weapon (within 3 cm)",
+      "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "shield face ahead of the hand, facing +Y",
+      "detail": "at y +0.120, dir (0.0, 1.0, 0.0), half size (0.2, 0.29)"
+    }
+  ]
+}

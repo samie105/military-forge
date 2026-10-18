@@ -159,8 +159,10 @@ cosmetics/jetpack/
 
 | Kind | Clips | Tracks |
 |---|---|---|
-| Locomotion (loops) | idle 2 s, walk 1 s, run 0.6 s, crouch_idle 2 s, crouch_walk 1 s, slide 0.4 s (held), jet_ascend 0.8 s, jet_hover 1.2 s, fall 0.67 s | the bones each clip keys |
-| One-shot | land 0.3 s (dip; play over locomotion) | legs, pelvis, spine1, head |
+| Locomotion (loops) | idle 2 s, walk 1 s, slide 0.4 s (held), jet_ascend 0.8 s, jet_hover 1.2 s, fall 0.67 s | the bones each clip keys |
+| Locomotion with planted feet (loops) | crouch_idle 2 s, walk_slow 0.7 s (0.5 m/s), run 0.33 s (5 m/s), crouch_walk 0.4 s (2.2 m/s) | pelvis, legs, spine, arms |
+| One-shots | land 0.3 s (dip; play over locomotion), land_hard 0.5 s (falls over ~10 m/s) | legs, pelvis, spine, head (land_hard: arms too) |
+| Action poses | flail 0.6 s (blast-launch loop), dash_side, dash_up, dash_down, brake (single-frame poses) | full body |
 | Aim poses | `aim_<pistol|dual|rifle>_<down90|down45|level|up45|up90>` | upper body only: spine1/2, neck, head, clavicle/upperarm/forearm/hand _L/_R |
 | Upper-body actions | reload_rifle 1.6 s, reload_pistol 1.0 s, swap 0.5 s (swap the mesh at 50%), throw 0.6 s (release ≈55%), melee 0.47 s (hit ≈45%) | upper body only |
 
@@ -174,6 +176,55 @@ Aim poses and actions are **solved, not hand-keyed**: each key says where the gr
   - `build_character.py` asserts the reach in every rifle pose and fails the build if it breaks. Worst margins today: 1.2 cm to `socket_offhand_IK`, and 2.7–3.4 cm to the offhand nodes of the K-47, Breacher, Widow, Thumper and Shredder.
   - The review measured the old poses 3.4–7.5 cm out of reach, with the left arm locked straight.
 - **W1:** the guns sit at ~0.76 m (chest) while the sim's aim pivot is 1.08 m (docs/02 §6). Draw tracers from the weapon's `muzzle` node to the hit point.
+
+### Clips for the animation stream (18 Oct 2026, animation-clip-asks.md)
+
+![Clips](screenshots/clips-sheet.png)
+
+- **The wobble fix:** the old export wrote CUBICSPLINE samplers whose quaternion tangents were identity quaternions (1,789 of 1,874), so bones wobbled between keys; the idle's pelvis bowed ±11°.
+  - `clips.bake_linear` now resamples every clip at each frame (Blender's own curves, quaternions renormalised) as LINEAR keys, and the exporter writes LINEAR samplers. All 444 samplers in the 37 clips are LINEAR, and the client's `clipRepair.ts` becomes a no-op.
+  - Each clip still carries only the bones it keys, so upper-body clips keep layering. Constant channels keep two keys. The runtime file grows from 183 KB to 218 KB, mostly from the seven new clips.
+  - Every pre-existing clip is unchanged at its key times, checked against a rebuild of the previous code. That includes all aim holds and actions, and the reach margins above.
+- **Sign continuity (M4 review):** the exporter derives each bone's quaternion from a matrix per key, so its sign came out arbitrary: 12 consecutive key pairs had a negative dot, in crouch_walk, flail, land_hard, melee and throw. `build_character.sign_continuous_rotations` negates those keys in the exported GLB, so no track turns the long way when an engine blends or lerps component-wise. Every key keeps the same rotation (all 431 tracks match up to sign). The clips are no longer meshopt-compressed, because meshopt made them larger (218 → 179 KB).
+- **Planted feet** (`clips.gait`, leg IK in `clips.LegSolver`): `walk_slow`, `run` and `crouch_walk` are solved, not hand-keyed, and keyed at every frame.
+  - `crouch_idle` (`clips.crouch_hold`) holds both feet flat at 0.12 m for the whole loop (measured: zero slide), with a slow weight shift from foot to foot and breathing in the back.
+  - The phase starts with the left foot touching down.
+  - During the stance the ankle stays at its rest height (0.12 m) and slides back at exactly the sim speed. In the swing it lifts and eases forward.
+  - The pelvis drops so the short legs (hip 0.46 m, leg 0.35 m) reach the stride.
+
+  | Clip | Speed | Cycle | Stance per foot | Planted slide (measured) | Stride |
+  |---|---|---|---|---|---|
+  | walk_slow | 0.5 m/s | 21 frames (1.43/s) | 60 % | 0.48–0.51 m/s, 13 frames at 0.120 m | 0.21 m |
+  | run | 5 m/s | 10 frames (3/s) | 22 %, with a flight phase | 4.98–5.01 m/s | 0.36 m |
+  | crouch_walk | 2.2 m/s | 12 frames (2.5/s) | 50 % | 2.19–2.22 m/s | 0.44 m (was ~5 cm) |
+
+  At 5 m/s a chibi stance lasts only about 2 frames at 30 fps; the client's foot IK keeps it planted between samples.
+- **Action poses:**
+  - `flail`: arms windmilling out of phase, legs kicking;
+  - `dash_side`: stretched along the dash, arms back;
+  - `dash_up`: reaching forward and up (straight up hides behind the helmet);
+  - `dash_down`: knees tucked, fists up for the slam;
+  - `land_hard`: a deep squat;
+  - `brake`: leaning back, front foot planted, arms out for balance.
+- **Authoring order matters:** each finished clip goes onto an NLA track, and the IK-solved upper-body clips are solved against that stack. The new clips are authored after them, so every shipped hold stays identical. Moving them earlier changed the holds by up to 24°.
+
+### Skin weight in the dye albedo (18 Oct 2026, animation-clip-asks.md §4)
+
+![Skin](screenshots/skin-weight.png)
+
+- **The face is out of the dye mask.** Nothing above the collar takes a dye any more.
+  - Before, face texels (cheek highlights, around the mouth and eyes) shared the sand hue and landed in primary (R). They showed as pale specks under dark skin tones.
+  - Skin texels that fell in a dye channel went from 7,869 to 348; the rest are soft borders at the cuffs.
+- **Skin weight in `rookie_body*_dye_albedo` alpha** (`dye.rookie_body_skin`):
+  - Which texels count: on the head, every warm light texel (skin, lips, and the sand the source baked along the hairline and ears); on the hands, only skin hues, so the sleeve cuffs stay cloth.
+  - Skin texels store the painted colour divided by **skin_04 `#da9f75`**, per channel and in linear space. `dyeAlbedo × lerp(1, skinTone, alpha)` gives back the painted skin with skin_04, and any other tone keeps the lips' and cheeks' warmth.
+  - The weight softens outward only, so a skin texel at partial weight can't keep a bright neutral colour and show as a pale outline. It also extends 3 texels into the atlas gutter, so UV seams don't fringe.
+- **Alpha is floored at 1/255:** lossy WebP rewrites the colour under fully transparent texels. At the darkest tone the floor tints a non-skin texel by under 0.4 %. The runtime WebP keeps its alpha (minimum 1).
+- **Flags:**
+  - `rookie.json`: `dye.lod0/lod1.skin: "alpha"` and `skinNeutral: "#da9f75"`;
+  - glTF extras on the body: `dyeSkin: "alpha"` and `skinNeutral`.
+  - The asset check's dye round trip counts the skin weight like a dye channel; both LODs pass (dyed mean 0.003, undyed exact).
+- **Defaults shift:** with the face gone, the primary's median moves slightly: `#b99664` → `#b29161` (LOD0).
 
 ### Budgets (assembled outfit: body + default jetpack)
 
@@ -362,7 +413,7 @@ Blasts now throw players up to 16 m (NOTES §17), so an explosion has to show it
   - `rocket` (a mushroom with a base ring, 16 fps): anchored on the base, on the surface it hit.
   
   A flipbook keeps its frames' positions relative to each other (one crop and scale per sheet), so the anchor holds still through the animation.
-- **Styles sized from `packages/content`:** `frag` reads the 4 m radius from `grenades.ts`. `rocket` (1.25 ×) and `grenade_launcher` (0.8 ×, frag flipbook) are marked `provisional` until their content entries exist. Each style has:
+- **Styles sized from `packages/content`:** `frag` reads the 4 m radius from `grenades.ts`. `rocket` (3.5 m) and `grenade_launcher` (3.0 m, frag flipbook) take docs/03 §5's splash radii and are marked `provisional` until their content entries exist; their fireballs scale with the radius. Each style has:
   - a **shockwave ring** (`shockwave.webp`) growing to the blast radius in 220 ms;
   - a light flash;
   - debris chips and ground dust (from `particles.webp`);
@@ -379,6 +430,37 @@ python3 art/pipeline/build_explosions.py --runtime apps/web/public/assets
 - rocket `984b39d4…`: "a big ROCKET EXPLOSION … a large mushrooming fireball … a ring of smoke puffs around its base".
 
 The fireballs are yellow to amber and last under a second, so they don't compete with the team-orange outline the way a static prop would.
+
+## Special-weapon VFX and projectiles (Weapons Forge 8c)
+
+![Specials](screenshots/specials-sheet.png)
+
+`art/pipeline/build_specials.py` ships **`specials.vfx.json`**: what the six non-bullet weapons fire, how it moves and what it leaves. `weapons.vfx.json` points to it with a per-weapon `special` key.
+
+| Style | Kind | What it draws |
+|---|---|---|
+| `dragon` | flame | flame puffs from the muzzle every 0.15 s (3 per spawn, so the stream reads continuous). They play the flame flipbook over their 0.8 s life and grow 0.15 → 0.6 m like the sim. Also a pilot flame on `pilot`, a flickering light, a burn on the victim and a wall scorch |
+| `arc` | beam | a camera-facing strip from the muzzle to the hit (`beam.webp`, tileable, scrolling), a glow at the muzzle, a spinning flare and sparks at the hit |
+| `pulse` | orb | a charge glow and shrinking ring on `charge` (0.7 s), the orb flicker flipbook flying at 8 m/s through walls with a glow trail, and the EMP burst: a blue shockwave to R 2.5, a flash, a light, and crackle at a stunned jetpack |
+| `ripper` | blade | charge sparks at the blade hub (0.4 s), the blade spinning at 14 turns/s with a faint trail, sparks on every bounce, and a half-size frag explosion after 5 s |
+| `popper` | grenade | the grenade round with a dust trail, arcing under 1 g, then the `grenade_launcher` explosion (R 3.0) |
+| `thumper` | rocket | the rocket with a flame flipbook at its nozzle and a smoke trail, then the `rocket` explosion (R 3.5) |
+| `riot_shield` | shield | a metal impact and a ring ripple per hit, three cumulative crack decals by HP, and chips when it breaks |
+
+- **Textures:**
+  - `flame_atlas.webp`: the Higgsfield flame puff, cropped once per sheet so it stays centred;
+  - `specials_atlas.webp`: the orb flicker ×4, pilot flame, beam flare, glow, ring and shield cracks, drawn procedurally so they size and tile exactly;
+  - `beam.webp`.
+- **Projectiles** (`art/pipeline/build_projectiles.py` → `vfx/projectiles.glb` + `projectiles.json`): the rocket (148 tris), the grenade round (144) and the saw blade (280), in the muzzle frame, so a renderer spawns one at the weapon's `muzzle` with the weapon's rotation. Each has a trail point and a spin axis.
+- **`vfx/manifest.json`:** the index of every VFX file, written by the last builder from the files actually present. It lists the builder, what each file holds, and texture sizes. The format note for the renderer is in the shared notes (forge-vfx-manifest.md).
+- Speeds, ranges and timings are docs/03 §7's and marked `provisional` until packages/content has these weapons. The Armory doesn't preview these effects yet; that's next on the Forge list.
+
+```bash
+blender -b --factory-startup --python-exit-code 1 --python art/pipeline/build_projectiles.py -- art/vfx --runtime apps/web/public/assets
+python3 art/pipeline/build_specials.py --runtime apps/web/public/assets
+```
+
+**Source (Higgsfield, GPT Image 2.5, medium, 2k, transparent; 1.0 credit):** flame `b30b0079…`, prompt: "Sprite sheet for a side-view cartoon shooter game: a 16-frame animation of ONE FLAMETHROWER FIRE PUFF laid out in a 4x4 grid, read left to right, top to bottom. Frame 1 is a small, tight, bright ball of flame; it quickly swells into a big rolling, billowing cloud of fire with curling tongues of flame (frames 4 to 9), then breaks up and darkens into puffy dark grey smoke (frames 10 to 14) and fades to faint wisps (frames 15 and 16). Every frame is centred in its own cell with clear empty space around it, and no frame touches another. Flat-shaded toon style with crisp cel shading: hot white-yellow core, bright orange body, deep red-orange edges, then charcoal grey smoke. No gun, no sparks, no ground, no text, no numbers, no borders. Transparent background."
 
 ## Armory: the 3D weapon viewer (Weapons Forge 5)
 
@@ -454,7 +536,7 @@ Camos are cosmetic (no gameplay effect), so they are store-safe. W2's cosmetics 
 ![In hand](screenshots/weapons-in-hand.png)
 *Every weapon in the Rookie's hand through the aim layer (machete mid-swing, frag at the throw wind-up).*
 
-`art/pipeline/build_weapons.py` builds 11 original weapons (docs/03 §5 names) as chunky toy guns. They use vertex colours on one material, no textures, and an **orange toy muzzle tip** that reads at gameplay size:
+`art/pipeline/build_weapons.py` builds 22 original weapons (docs/03 §5 names) as chunky toy guns. They use vertex colours on one material, no textures, and an **orange toy muzzle tip** that reads at gameplay size:
 
 | id | Name | Family (docs/04 §4.2) | Aim pose | Hands | Tris | Length |
 |---|---|---|---|---|---|---|
@@ -474,6 +556,12 @@ Camos are cosmetic (no gameplay effect), so they are store-safe. W2's cosmetics 
 | trident | Trident | rifle | rifle | 2 | 704 | 0.91 m |
 | bullpup | Bullpup | rifle | rifle | 2 | 472 | 0.63 m |
 | longbow | Longbow | sniper | rifle | 2 | 892 | 1.04 m |
+| dragon | Dragon | heavy | rifle | 2 | 968 | 0.90 m |
+| arc | Arc | rifle | rifle | 2 | 876 | 0.87 m |
+| popper | Popper | launcher | rifle | 2 | 756 | 0.80 m |
+| ripper | Ripper | launcher | rifle | 2 | 960 | 0.89 m |
+| pulse | Pulse | launcher | rifle | 2 | 888 | 0.78 m |
+| riot_shield | Riot Shield | shield (off-hand) | pistol | 1 | 652 | 0.59 m tall |
 
 - **Frame (docs/04 §9.4):** origin at the grip, +Y toward the muzzle, +Z up, +X to the weapon's right, so a weapon attaches to `socket_weapon_R` with an identity transform.
 - **Sockets** (child nodes; all in [`weapons/sockets.json`](weapons/sockets.json), which the renderer reads). Each socket has `pos`, and a unit `dir` in the weapon frame (all but `offhand`):
@@ -491,9 +579,14 @@ Camos are cosmetic (no gameplay effect), so they are store-safe. W2's cosmetics 
   | `rail_bottom` | foregrip / laser mount, `lengthM` | −Z | Hawk, Hammer, Buzz, K-47, Widow |
   | `backblast` | launcher exhaust | −Y | Thumper |
   | `tip` / `pin` / `light` / `ground` | machete tip; frag pin ring; mine light; frag and mine rest frame in the world (`world = floorPoint × inverse(ground.local)`) | | machete / frag / mine |
+  | `pilot` | the flamethrower's pilot light | +Y | Dragon |
+  | `charge` | where a charge weapon's wind-up shows: the blade hub, the orb | +Y | Ripper, Pulse |
+  | `face` | the shield's front face centre (what it blocks); `halfSize` [w/2, h/2] | +Y | Riot Shield |
 
 - **Ships to** `apps/web/public/assets/weapons/<id>.glb` (meshopt), with `weapons.json` (name, family, aimPose, hands, tris, length, node positions) and `sockets.json`.
-- **Checks:** `tools/asset-check/check.py --kind weapon` verifies the triangle budget (1,000), one material, the extras, the muzzle direction, the offhand reach, the `ground` node on throwables, and the sockets: the set each family needs, unit directions, every socket within 3 cm of the mesh, the muzzle firing along +Y with a bore radius, casings ejecting to the right, and the rails above / below the bore facing up / down. All 11 pass ([checks](weapons/checks/)); the selftest has two socket probes (casings ejecting to the left, a missing top rail). It also WARNs when a `weaponId` isn't in `packages/content` yet: `hawk50`, `thumper`, `shredder` and `mine` still aren't.
+- **Weapon extras:** `casings: false` on weapons that throw no casing per shot (Dragon fuel, Arc cell, Popper drum, Ripper blade, Pulse orb): they need no `eject` socket and take no suppressor or long mag. `attach: "socket_weapon_L"` on the Riot Shield, which goes in the off hand next to a one-handed weapon. `shield` is a new family beside docs/04's list (plus `thrown`).
+- **Glow:** energy parts (the Arc's lens and cell, the Pulse's coils and orb, the Dragon's pilot ring) carry a `_GLOW` vertex attribute. `apps/web/src/armory/glow.ts` adds their vertex colour as emission, so they read lit in any lighting, and a camo keeps the glow.
+- **Checks:** `tools/asset-check/check.py --kind weapon` verifies the triangle budget (1,000), one material, the extras, the muzzle direction, the offhand reach, the `ground` node on throwables, and the sockets: the set each family needs, unit directions, every socket within 3 cm of the mesh, the muzzle firing along +Y with a bore radius, casings ejecting to the right, and the rails above / below the bore facing up / down. All 22 pass ([checks](weapons/checks/)). The shield's `face` must sit ahead of the hand facing +Y, and `casings: false` drops the `eject` requirement. The selftest has six socket probes: casings ejecting to the left, a missing top rail, the Dragon passing without `eject`, the Dragon failing when marked as throwing casings, the Riot Shield passing, and the shield failing without its `face`. It also WARNs when a `weaponId` isn't in `packages/content` yet: `hawk50`, `thumper`, `shredder` and `mine` still aren't.
 - **Dual wield** in the viewer is the classic Hammer + Buzz pair on `socket_weapon_R` / `socket_weapon_L`.
 
 Known gaps:
@@ -503,7 +596,15 @@ Known gaps:
   - The models are blocky toy reads, not copies of the concept's real-world-looking details.
   - All pass asset-check, carry sockets and `_CAMO`, have VFX hook-ups, and fit attachments.
   - They WARN until `packages/content` has their ids.
-- Still to build from docs/03: Dragon (flamethrower), Arc (beam), Popper (grenade launcher), Ripper (saw-blade launcher), Pulse (EMP orb), Riot Shield. These need their own VFX (flame, beam, orb, blade), so they come as batch 2.
+- **Weapons Forge 8, batch 2** added the Dragon (flamethrower), Arc (beam laser), Popper (grenade launcher), Ripper (saw-blade launcher), Pulse (EMP orb gun) and the Riot Shield.
+  - Concept sheet (Higgsfield GPT Image 2.5 medium 2k, job `61403d16…`, 1.0 credit): not kept in the repo. Its six-shot drum grenade launcher echoed a real-world design, which breaks the clean-room rule, like batch 1. The shipped models are original toy reads; the Popper is a generic hex drum in a frame.
+  - Prompt, for the record (future prompts add "invented silhouettes, not based on any real-world firearm"): "Concept sheet for a stylised toy-soldier video game arsenal: six chunky, low-poly, blocky toy weapons, each in a flat side view facing right … No text, no labels, no logos. … 1) a chunky flamethrower: a fat nozzle with a small pilot-light ring, a rounded fuel tank slung under the body, a short hose loop, a side handle; 2) a sci-fi continuous beam laser rifle: a long box body with a glowing cyan crystal lens at the front, cooling fins, a glowing power cell slot on the side; 3) a stubby grenade launcher with a fat revolving drum cylinder and a wide short barrel; 4) a saw-blade launcher …; 5) a bulky EMP orb gun: … three claw prongs holding a glowing blue energy sphere, coils around the barrel; 6) a rectangular riot shield seen from the front …"
+  - In the Armory ([screenshot](screenshots/weapons-c-armory.png)): the Arc at Night, the Pulse in Dune, the Dragon in Forest Patch, and the Ripper.
+  - All pass asset-check, carry sockets, `_CAMO` and (energy weapons) `_GLOW`, and fit the attachments that make sense: sights on all five guns, the foregrip and laser on the Arc's bottom rail, no suppressor on a beam or launcher.
+  - **Their fire VFX is the next step:** flame stream, beam, EMP orb and burst, blade sparks, shield hits, and projectile models (rocket, grenade round, blade). Until then the Armory's Fire button stays off for them.
+  - The Riot Shield is all edge from the side-view camera, so it's 6 cm thick to read as a slab. Turning it ~30° toward the camera when held would show its face; that's a renderer call.
+  - They WARN until `packages/content` has their ids.
+- **Armory framing:** the whole-weapon view now aims at the weapon's centre rather than its grip, and backs off on narrow stages. Long guns used to run under the side panel at 1280 px.
 
 ---
 
@@ -628,7 +729,9 @@ What it checks:
 | Weapons Forge 3: 6 impact sheets + 1 decal sheet, GPT Image 2.5 medium | **3.50** |
 | Weapons Forge 4: 2 explosion flipbooks, GPT Image 2.5 high 2k | **5.50** |
 | Weapons Forge 8: concept sheet for 5 new weapons, GPT Image 2.5 medium 2k | **1.00** |
-| **Total so far** | **101.00** |
+| Weapons Forge 8, batch 2: concept sheet for 6 new weapons, GPT Image 2.5 medium 2k | **1.00** |
+| Weapons Forge 8c: flame puff flipbook, GPT Image 2.5 medium 2k | **1.00** |
+| **Total so far** | **103.00** |
 
 Phase 0 Higgsfield job IDs: concepts A `160eb90e-41ab-4ecc-a917-1e76c0563b40`, B `b40714aa-ec2f-4d2a-a522-ff5a4ebe57cc`, C `3e234313-6c57-4cd7-9946-22e6cd62b4b3`; 3D `75fc7390-163d-4c95-869c-58e8544bd654`.
 
@@ -636,7 +739,7 @@ Phase 0 Higgsfield job IDs: concepts A `160eb90e-41ab-4ecc-a917-1e76c0563b40`, B
 
 ```
 art/
-  pipeline/        build_character.py, clips.py, dye.py, build_cosmetics.py, build_weapons.py, build_vfx.py, build_casings.py, build_impacts.py, build_explosions.py, build_attachments.py, build_camos.py, build_kit.py, build_market_kit.py, compile_map.py, render_views.py, render_weapons.py, split_sheet.py
+  pipeline/        build_character.py, clips.py, dye.py, build_cosmetics.py, build_weapons.py, build_vfx.py, build_casings.py, build_impacts.py, build_explosions.py, build_projectiles.py, build_specials.py, build_attachments.py, build_camos.py, build_kit.py, build_market_kit.py, compile_map.py, render_views.py, render_weapons.py, split_sheet.py
   concepts/        A/B/C sheets + A-views/ (the 3D inputs)
   character/       rookie_body[_lod1].glb, rookie_anims.glb, rookie_preview.glb, rookie_rig.json, *.check.txt|json
     parts/         default parts: headgear_brim_helmet, boots_combat, jetpack_twin_tank [_lod1].glb

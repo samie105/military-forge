@@ -14,9 +14,10 @@ the weapon frame (docs/04 §9.4: +Y toward the muzzle, +Z up, +X right) moved to
 The laser has a `beam` node (the beam leaves along +Y). attachments.json lists each part's mount,
 size, mounting hints and the weapons it fits, computed from art/weapons/sockets.json:
   sights: an unoccupied rail_top (the long scope needs ≥ 0.10 m of rail)
-  suppressor: a muzzle with boreRadius ≤ 0.02 on anything but a launcher or heavy
+  suppressor: a muzzle with boreRadius ≤ 0.02 on anything but a launcher or heavy that fires rounds
+              (not `casings: false`: no suppressor on a beam)
   foregrip: a rail_bottom on a two-handed weapon; laser: any rail_bottom
-  long mag: a mag socket pointing down (box mags), not a shotgun, launcher or heavy
+  long mag: a mag socket pointing down (box mags), not a shotgun, launcher, heavy or casing-less weapon
   drum: the K-47 and the Buzz (the drum's look fits them)
 """
 import json
@@ -147,13 +148,15 @@ def fits(aid, footprint):
         if aid.startswith("sight"):
             ok = "rail_top" in s and not s["rail_top"].get("occupied") and s["rail_top"]["lengthM"] >= footprint
         elif aid == "suppressor":
-            ok = "muzzle" in s and s["muzzle"].get("boreRadius", 1) <= 0.02 and fam not in ("launcher", "heavy")
+            ok = ("muzzle" in s and s["muzzle"].get("boreRadius", 1) <= 0.02 and fam not in ("launcher", "heavy")
+                  and w.get("casings", True))
         elif aid == "foregrip":
             ok = "rail_bottom" in s and w["hands"] == 2
         elif aid == "laser":
             ok = "rail_bottom" in s
         elif aid == "mag_ext":
-            ok = "mag" in s and s["mag"]["dir"][2] < -0.7 and fam not in ("shotgun", "launcher", "heavy")
+            ok = ("mag" in s and s["mag"]["dir"][2] < -0.7 and fam not in ("shotgun", "launcher", "heavy")
+                  and w.get("casings", True))
         else:  # mag_drum
             ok = wid in ("k47", "buzz")
         if ok:

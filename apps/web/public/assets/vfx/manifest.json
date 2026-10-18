@@ -1,0 +1,83 @@
+{
+ "version": 1,
+ "base": "assets/vfx/",
+ "files": {
+  "weapons": {
+   "file": "weapons.vfx.json",
+   "builder": "art/pipeline/build_vfx.py",
+   "has": "per weapon id: flash style + scale, tracer, casing and ejection, `special` (a specials style); flash atlas, tracer styles, casing feel"
+  },
+  "impacts": {
+   "file": "impacts.vfx.json",
+   "builder": "art/pipeline/build_impacts.py",
+   "has": "per surface material: impact flipbook, particles (spark, dust, chip), decals"
+  },
+  "explosions": {
+   "file": "explosions.vfx.json",
+   "builder": "art/pipeline/build_explosions.py",
+   "has": "flipbooks (frag, rocket) and styles per explosive: radius, shockwave, light, debris, dust, scorch, camera shake; launchTrail"
+  },
+  "specials": {
+   "file": "specials.vfx.json",
+   "builder": "art/pipeline/build_specials.py",
+   "has": "flame stream, beam, EMP orb and burst, saw blade, rounds in flight, riot-shield hits and cracks"
+  },
+  "projectiles": {
+   "file": "projectiles.json",
+   "builder": "art/pipeline/build_projectiles.py",
+   "has": "rocket, grenade round and saw blade meshes in projectiles.glb (muzzle frame), trail point, spin"
+  }
+ },
+ "textures": {
+  "beam.webp": [
+   256,
+   64
+  ],
+  "decal_atlas.webp": [
+   512,
+   256
+  ],
+  "explosion_atlas.webp": [
+   2048,
+   1024
+  ],
+  "flame_atlas.webp": [
+   1024,
+   1024
+  ],
+  "flash_atlas.webp": [
+   1024,
+   1024
+  ],
+  "impact_atlas.webp": [
+   1024,
+   1536
+  ],
+  "particles.webp": [
+   256,
+   64
+  ],
+  "shockwave.webp": [
+   256,
+   256
+  ],
+  "specials_atlas.webp": [
+   512,
+   512
+  ],
+  "tracer.webp": [
+   128,
+   16
+  ]
+ },
+ "models": [
+  "casings.glb",
+  "projectiles.glb"
+ ],
+ "conventions": {
+  "units": "metres and milliseconds unless a key says otherwise (S = seconds, Mps = m/s, Rps = turns/s)",
+  "atlases": "cells are numbered row-major from the top left; `anchorUV` / `originU` have v from the top",
+  "tints": "sRGB hex; white textures are meant to be tinted",
+  "provisional": "a `provisional` key marks numbers taken from docs/03 until packages/content has them"
+ }
+}

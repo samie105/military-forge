@@ -67,7 +67,7 @@ DYE_DYED = (0.012, 0.04)                # dyed: (mean, p95) |linear luminance of
 DYE_UNDYED = (5 / 255, 16 / 255)        # undyed: (mean, p95) |dyeAlbedo − albedo| per channel (sRGB)
 DYE_SMALL = (0.015, 0.06, 8 / 255, 32 / 255)  # the same for ≤ 128² textures, where WebP loss is heavier
 FIREARMS = {"pistol", "dual", "rifle", "shotgun", "sniper", "launcher", "heavy"}  # docs/04 §4.2
-FAMILIES = FIREARMS | {"melee", "thrown"}  # docs/04 §9.5
+FAMILIES = FIREARMS | {"melee", "thrown", "shield"}  # docs/04 §9.5 (+ shield: the off-hand riot shield)
 AIM_POSES = {"pistol", "dual", "rifle"}  # the aim sets the clips provide (rookie.json aimPoseFallback)
 PART_SLOTS = {"headgear", "eyewear", "top", "gloves", "legs", "boots", "jetpack"}  # docs/04 §3
 PART_TEX = {0: 256, 1: 128}             # max texture edge per part LOD (albedo and dye mask)
@@ -354,7 +354,8 @@ def dye_roundtrip(r: Report, objs, files):
         # sources embed JPEG); otherwise the embedded albedo (the web build's WebP)
         png = tex / o["dyeMask"].replace("_dye_mask.png", "_albedo.png")
         a = _px(bpy.data.images.load(str(png), check_existing=True) if png.exists() else albedo)[..., :3]
-        d = _px(bpy.data.images.load(str(dalb), check_existing=True))[..., :3]
+        d4 = _px(bpy.data.images.load(str(dalb), check_existing=True))
+        d = d4[..., :3]
         m = _px(bpy.data.images.load(str(tex / o["dyeMask"]), check_existing=True))
         if a.shape != d.shape or a.shape[:2] != m.shape[:2]:
             r.add("FAIL", check, f"sizes differ: albedo {a.shape[:2]}, dye albedo {d.shape[:2]}, mask {m.shape[:2]}")
@@ -374,6 +375,13 @@ def dye_roundtrip(r: Report, objs, files):
                 dye = np.array([int(hexc[j:j + 2], 16) / 255 for j in (0, 2, 4)], dtype=np.float32)
                 tint *= 1 + m[..., i:i + 1] * (_to_linear(dye) - 1)
         mm = m[..., :3].max(axis=-1)
+        if o.get("dyeSkin") == "alpha" and d4.shape[-1] == 4:
+            # the skin weight is the dye albedo's alpha, neutralised against `skinNeutral`: skin
+            # texels go back to the albedo through lerp(1, skinNeutral, alpha), like a dye channel
+            hexc = str(o.get("skinNeutral", "#da9f75")).lstrip("#")
+            sk = np.array([int(hexc[j:j + 2], 16) / 255 for j in (0, 2, 4)], dtype=np.float32)
+            tint *= 1 + d4[..., 3:4] * (_to_linear(sk) - 1)
+            mm = np.maximum(mm, d4[..., 3])
         dyed, undyed = cov & (mm > 0.02), cov & (mm <= 0.02)
         parts = []
         ok = True
@@ -710,7 +718,7 @@ def check_weapon(r: Report, objs, args):
         o = nodes.get("offhand")
         r.ok(o is not None and o.length <= OFFHAND_REACH, f"offhand node within {OFFHAND_REACH} m of the grip",
              f"{o.length:.3f} m" if o is not None else "no offhand node (two-handed)")
-    check_sockets(r, objs, family, lo, hi)
+    check_sockets(r, objs, family, lo, hi, props.get("casings", True))
 
 
 def _gltf(v):
@@ -718,17 +726,18 @@ def _gltf(v):
     return Vector((v.x, v.z, -v.y))
 
 
-def check_sockets(r: Report, objs, family, lo, hi):
+def check_sockets(r: Report, objs, family, lo, hi, casings=True):
     """Socket layout the renderer and VFX read (art/pipeline/build_weapons.py, weapons/sockets.json):
-    required sockets per family, directions, the ejection side, rails above/below the bore, and
-    every socket on the weapon."""
+    required sockets per family, directions, the ejection side, rails above/below the bore, the
+    shield's face, and every socket on the weapon. `casings` false (fuel, cells, orbs, blades, drum
+    rounds) drops the `eject` requirement."""
     empties = {o.name.split(".")[0]: o for o in objs if o.type == "EMPTY"}
     pos = {k: _gltf(o.matrix_world.translation) for k, o in empties.items()}
     dirs = {k: Vector([float(c) for c in o["dir"]]) for k, o in empties.items() if "dir" in o}
     if family in FIREARMS:
-        need = ["grip", "muzzle", "mag", "rail_top"] + ([] if family == "launcher" else ["eject"])
+        need = ["grip", "muzzle", "mag", "rail_top"] + (["eject"] if family != "launcher" and casings else [])
     else:
-        need = ["grip"] + (["tip"] if family == "melee" else [])
+        need = ["grip"] + {"melee": ["tip"], "shield": ["face"]}.get(family, [])
     missing = [k for k in need if k not in empties]
     r.ok(not missing, "sockets for the family", ", ".join(need) + ("" if not missing else f"; missing {', '.join(missing)}"))
     undirected = [k for k in empties if k != "offhand" and (k not in dirs or abs(dirs[k].length - 1) > 0.01)]
@@ -737,6 +746,10 @@ def check_sockets(r: Report, objs, family, lo, hi):
     blo, bhi = Vector(map(min, blo, bhi)), Vector(map(max, blo, bhi))
     off = [k for k, p in pos.items() if any(p[i] < blo[i] - 0.03 or p[i] > bhi[i] + 0.03 for i in range(3))]
     r.ok(not off, "sockets on the weapon (within 3 cm)", "ok" if not off else "off the mesh: " + ", ".join(off))
+    if family == "shield" and "face" in pos and "face" in dirs:
+        f, fd, half = pos["face"], dirs["face"], empties["face"].get("halfSize", [0, 0])
+        r.ok(fd.y > 0.99 and f.y > 0 and min(half) >= 0.1, "shield face ahead of the hand, facing +Y",
+             f"at y {f.y:+.3f}, dir {tuple(round(c, 2) for c in fd)}, half size {tuple(round(float(h), 2) for h in half)}")
     if family not in FIREARMS:
         return
     m, d = pos.get("muzzle"), dirs.get("muzzle")

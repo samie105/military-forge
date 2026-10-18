@@ -32,7 +32,7 @@
   },
   "dyeDefaults": {
     "body_lod0": {
-      "primary": "#b99664",
+      "primary": "#b29161",
       "secondary": "#665b2c",
       "accent": "#239090"
     },
@@ -45,9 +45,9 @@
     },
     "boots_lod0": {},
     "body_lod1": {
-      "primary": "#bf9b67",
-      "secondary": "#6e6230",
-      "accent": "#239090"
+      "primary": "#b29160",
+      "secondary": "#6d602f",
+      "accent": "#229091"
     },
     "jetpack_lod1": {
       "secondary": "#70623c"
@@ -60,10 +60,11 @@
   },
   "dyeCoverage": {
     "body_lod0": {
-      "primary": 0.372,
-      "secondary": 0.129,
-      "accent": 0.014,
-      "emissive": 0.007
+      "primary": 0.34,
+      "secondary": 0.128,
+      "accent": 0.013,
+      "emissive": 0.007,
+      "skin": 0.331
     },
     "jetpack_lod0": {
       "primary": 0.0,
@@ -84,10 +85,11 @@
       "emissive": 0.0
     },
     "body_lod1": {
-      "primary": 0.401,
-      "secondary": 0.111,
+      "primary": 0.353,
+      "secondary": 0.108,
       "accent": 0.015,
-      "emissive": 0.007
+      "emissive": 0.007,
+      "skin": 0.261
     },
     "jetpack_lod1": {
       "primary": 0.0,
@@ -111,9 +113,6 @@
   "clips": [
     "idle",
     "walk",
-    "run",
-    "crouch_idle",
-    "crouch_walk",
     "slide",
     "jet_ascend",
     "jet_hover",
@@ -138,7 +137,17 @@
     "reload_pistol",
     "swap",
     "throw",
-    "melee"
+    "melee",
+    "crouch_idle",
+    "walk_slow",
+    "run",
+    "crouch_walk",
+    "flail",
+    "dash_side",
+    "dash_up",
+    "dash_down",
+    "land_hard",
+    "brake"
   ],
   "upperBodyBones": [
     "spine1",
