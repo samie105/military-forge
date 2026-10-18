@@ -37,6 +37,7 @@ import {
   MOVEMENT_TARGETS,
   RECOIL_TARGETS,
   SPRAY_TARGETS,
+  THROW_TARGETS,
   WEAPON_TARGETS,
   ZONE_TARGETS,
 } from './feel-targets';
@@ -84,7 +85,9 @@ for (const t of BLAST_TARGETS) {
 for (const def of grenades) {
   if (def.effect === 'mine') continue; // it doesn't bounce or go off on a fuse: it sticks (the mine rows below)
   const g = measureGrenade({}, def.index);
-  rows.push([`${def.name} @45°: first bounce / goes off (m)`, `${g.firstBounce.toFixed(1)} / ${g.detonation.toFixed(1)}`, '']);
+  const t = THROW_TARGETS.find((x) => x.grenade === def.id);
+  const ok = !!t && g.firstBounce >= t.bounceMin && g.firstBounce <= t.bounceMax && g.detonation >= t.offMin && g.detonation <= t.offMax;
+  rows.push([`${def.name} @45°: first bounce / goes off (m)`, `${g.firstBounce.toFixed(1)} / ${g.detonation.toFixed(1)}`, t ? `${mark(ok)}  (target ${t.bounceMin}–${t.bounceMax} / ${t.offMin}–${t.offMax}: ~30% farther, owner: "the bombs should go far")` : '']);
 }
 const smoke = SMOKE.cloud;
 rows.push(['Smoke cloud: radius / opaque / life', `${smoke.radius} m / ${(smoke.radius * 0.85).toFixed(1)} m / ${smoke.duration} s`, 'hides anyone fully inside from bots and from the AOI']);

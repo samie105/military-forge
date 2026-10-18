@@ -786,3 +786,51 @@ Of the 190, 143 were under 40 HP when the cloud popped and 14 were whited out by
   - Checked end to end with `pnpm playtest --local`: a room opened with 3 `[BOT]` players in the lobby (BOT badges), the host started at once, bots fought the warm-up and the match and came for the idle human, with no console errors.
 - **Next:** bots throwing smoke, flashbangs, gas, mines and EMP; the host choosing the number of bots and their level in the lobby (a MatchSettings field).
 
+
+## 24. More guns, weapon crates, longer throws, a bigger tank (18 Oct 2026, owner's playtest)
+
+> Owner, after a playtest with friends: "add more guns I can test and be killing my friends while you build", "the bombs should go far" and "the fuel finishes quick".
+
+### 24.1 Eight more guns
+
+Every gun with a W8 model that fires bullets now has stats (`packages/content/src/weapons.ts`, docs/03 §5 as built): **Hawk .50, Rattler, Hornet, Trident, Bullpup, Longbow, Shredder, Arc** (indices 6–13, after the first six). Their numbers are docs/03's, inside its TTK sheet, except where the feel report showed a gun leaving its role (docs/03 §5 lists each change and why: the Hawk's damage, four spreads, the Trident's and Shredder's tick-exact intervals, the Arc's cell).
+
+- **Fire modes:** `burst` (Trident: 3 rounds 1/15 s apart, bursts 0.5 s apart start to start; a started burst finishes by itself), `spinup` (Shredder: 0.8 s up, 1 s down, Fire2 pre-spins, fires only at full spin) and `beam` (Arc: a 40-tick cell refilling 10 a second after 0.5 s off the trigger, never reloading, no falloff). `heldTrigger(def)` says which modes fire while the trigger is held. Spin and burst are per-slot sim state, hashed only when non-zero, so goldens without these guns don't move.
+- **Ticks:** the sim's weapon cooldown counts whole ticks and drops the remainder, so an interval of 4.2 ticks fires every 5. The Trident's rounds and the Shredder are set to exactly 1/15 s (4 ticks); the Hornet's 0.06 s fires every 4 ticks (0.067 s). The feel report's TTKs are the real ones.
+- **Recoil push:** pistols, SMGs and the Arc push nothing (the owner's rule); Trident and Bullpup 0.3 m/s per round in the air like the K-47; Longbow 1.5 / 3; Shredder 0.35 / 0.15 per round.
+
+| Feel (`pnpm --filter @military-forge/sim feel`, a standing target, all aimed at the torso) | TTK | Hits |
+|---|---|---|
+| Hawk .50 @ 12 m | 3.02 s | 100% |
+| Rattler @ 12 m | 1.80 s | 74% |
+| Hornet @ 5 m / 18 m | 0.89 s / 3.87 s | 100% / 32% |
+| Trident @ 12 m / 18 m | 1.03 s / 1.61 s | 96% / 67% |
+| Bullpup @ 12 m | 1.58 s | 84% |
+| Longbow @ 18 m | 1.15 s | 100% |
+| Shredder @ 5 m / 12 m (with its 0.8 s spin-up) | 1.52 s / 1.92 s | 100% / 64% |
+| Arc @ any range | 2.42 s | 100% |
+| (for scale: K-47 @ 12 m, Buzz @ 12 m) | 1.69 s, 2.54 s | 55%, 58% |
+
+**Not built yet:** the launchers (Thumper, Popper, Ripper, Pulse) and the Dragon need sim projectiles (docs/03 §11), the protocol to carry them and their 3D. They are the next piece of this work.
+
+### 24.2 Weapon crates and `E`
+
+- **Items:** one per gun, `weapon:<id>`, pickup index 7 + weapon index (kind `weapon`, reach 0.35 m). Pools: `weapons` (every gun; Breacher, Widow, Longbow, Shredder, Arc and Machete weight 1, the rest 3) and a one-item pool per gun (`weapon:<id>`), for fixed spawns and the armory.
+- **Taking:** walking over a gun you hold puts the item's rounds (magazine and reserve) into your reserve, up to the gun's reserve, and spends the item; one with nothing to give (an empty dropped gun, or your reserve is full) stays. Any other gun waits for **`E`** (`Btn.Interact`, a press edge): into the slot in hand with the item's ammo, the swap time of its equip, dual-wielding ended, reloads cancelled. The gun you held drops at your feet with its ammo for 30 s (`PickupState.mag/reserve`, hashed only when non-zero), so a friend can pick it up again. **Cooldowns carry over (review H1):** the gun dropped keeps the rest of its interval (`PickupState.readyTick`), and the gun taken can't fire before the gun in hand could have, so fire, E, E (or a rack gun after a shot) never skips an interval: the Breacher stays at 10 pulls in 10 s, not 24. The HUD (the production HUD's pickup prompt, and the debug canvas HUD) says `[E] take Widow (swaps your Hammer .44)` on a gun you don't hold, and close by `Widow: stand on it, E to take` or `Widow: walk over for ammo`; the first-run tips card lists the key (Settings' `interact` binding, E by default); on touch screens an `E` button sits above the grenade cycle button, left of the aim stick.
+- **On the maps:** a `weapons` spawner on every map, 3–5 spots on floors and platforms, 2 out at once (3 on Street Market), the first in 3–6 s, the next 12–18 s after one is taken. Its spawner comes **after** each map's existing ones: spawner draws hash the spawner's index, so the shield and grenade spawners' draws don't change. Street Market's spawners and armory are an overlay in `streetMarket.ts` (its JSON is the art pipeline's compiled output). A test checks every spawner spot on every map stands on a floor and isn't in a wall.
+- **Views:** 2D draws a crate (gold for power weapons, steel blue otherwise) with the gun's name; 3D (`render3d/weaponItems.ts`) stands the gun's own model upright, its side to the camera (like a rack: the armory's are 0.8 m apart, too close for long guns lying flat), bobbing and turning a little over a disc in the same colour; a rack's 2D names take two rows. Screenshots: `docs/screenshots/more-guns/` (`node apps/web/scripts/weapon-crate-shots.mjs` against a dev server).
+
+### 24.3 The test armory
+
+`GameOptions.armory` (with pickups on): a rack of one of every gun, 0.8 m apart, from the map's `armory: { x, y, dir? }` (by the first spawn without one), each spot back 2 s after it's taken; a gun swapped out at the rack isn't dropped, so it doesn't litter. Its spawners come after the map's. On the game server it's `--armory` or `ARMORY=1` (default room and every room), logged at startup; **`pnpm playtest` turns it on** (`--no-armory` turns it off). Local mode has it on unless `?armory=0`; replays record it.
+
+### 24.4 Longer throws, a bigger tank
+
+- **Grenades** (docs/02 §14): throw speed ×1.15, fuse ×1.12 (the mine's straight flight too), so landing and detonation points are ~30% farther at both strengths; tap is still 70%. Full strength at 45°: frag first bounce 11.1 → 14.3 m, goes off 14.8 → 19.2 m; smoke, gas, flashbang and EMP bounce 9.7 → 12.5 m; a mine thrown level sticks at 17.7 m. The throw preview now runs 2 s ahead (past every fuse), so its arc ends where the grenade goes off. Feel targets: `THROW_TARGETS`, `MINE_TARGETS.sticksAt`.
+- **Fuel** (docs/02 §8): `fuelMax` 100 → **140** at the same burn (44/s) and air regen (12/s), so feathering and hovering keep their rhythm and a tank simply lasts 40% longer: burn 2.25 → 3.15 s, full-tank climb 13 → 18.1 m, best hover over 3 m 5.4 s. Ground regen 35 → 49/s, so a refill from empty still takes ~3.1 s. Zone and event targets moved with it (low-g climb 23 m, long-flight burn 7.9 s, a gravity surge's climb 12.8 m). The tallest tower is 12 m, so the tank clears it easily; the 20 m view still shows a full climb. The owner's in-game tuning panel can move both from here.
+- **Bots:** with farther throws the bots' gas tests still pass on main's #87 gas handling (an earlier margin tweak on this branch was dropped in the rebase).
+
+### 24.5 Protocol v11 and goldens
+
+- **Wire** (docs/05 §6.2, claimed in the protocol registry): local block 58–61 `spin0 u8 · burst0 u2 · spin1 u8 · burst1 u2` (13 delta groups); pickups `u6 id · u6 def` (were u5 · u4; up to 48 items, defs 0–63, 21 used); PICKUP's item u6. `E` is the existing `Btn.Interact`. The armory is a server option, nothing on the wire.
+- **Goldens:** every sim golden (17) and bot golden (3) is re-recorded, all from tick 0: a player spawns with a full tank, and the tank is hashed. **Proof:** main's replays and goldens run through this branch with the old fuel (100, ground regen 35), the old throw speeds and fuses, and every map's weapon crates taken off are bit-identical, all 20. Only `mech-events`' replay file changed (a closed-loop scenario re-generated with the bigger tank).

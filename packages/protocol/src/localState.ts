@@ -78,13 +78,19 @@ export const LS = {
   blindFade: 55,
   gasTicks: 56,
   jetDisabledTicks: 57,
+  // weapon handling (v11, the owner's more guns): a minigun's spin and a burst rifle's rounds left,
+  // per slot. Prediction fires on them, so they travel; they rest at 0 for every other gun.
+  spin0: 58,
+  burst0: 59,
+  spin1: 60,
+  burst1: 61,
 } as const;
 
 /** Offsets inside a weapon slot. */
 export const LS_SLOT = { def: 0, mag: 1, reserve: 2, cooldown: 3, reloadTicks: 4, bloom: 5, ticksSinceShot: 6 } as const;
 const SLOT_FIELDS = 7;
 
-export const LOCAL_STATE_FIELDS = LS.jetDisabledTicks + 1;
+export const LOCAL_STATE_FIELDS = LS.burst1 + 1;
 
 /** grenade types whose counts travel in the grenade group (type 0, the frag, is `frags`) */
 const OTHER_GRENADES = GRENADE_TYPES - 1;
@@ -103,7 +109,8 @@ const GROUPS: readonly (readonly [number, number])[] = [
   [LS.dashTicks, LS.shieldHp],
   [LS.shieldHp, LS.grenadeType],
   [LS.grenadeType, LS.blindTicks],
-  [LS.blindTicks, LOCAL_STATE_FIELDS],
+  [LS.blindTicks, LS.spin0],
+  [LS.spin0, LOCAL_STATE_FIELDS],
 ];
 
 /** Ground normals are quantised to 1/65536 by the sim (quantizeMovement). */
@@ -126,6 +133,7 @@ const BITS: readonly number[] = [
   19, 1, 5, // shieldHp (1/1024, ≤ 300), shieldStowed, shieldTicks (≤ raise time, 15)
   3, ...new Array<number>(OTHER_GRENADES).fill(3), // grenadeType, counts (≤ 7)
   8, 7, 6, 8, // blindTicks (≤ 4.25 s), blindFade (≤ 2.1 s), gasTicks (≤ 1 s), jetDisabledTicks (≤ 4.25 s)
+  8, 2, 8, 2, // spin0 (≤ SPIN_FULL 240), burst0 (≤ 3), spin1, burst1
 ];
 
 if (BITS.length !== LOCAL_STATE_FIELDS) throw new Error('local state layout out of sync');
@@ -208,6 +216,10 @@ export function captureLocalState(p: PlayerState, out: LocalState): LocalState {
   out[LS.blindFade] = p.blindFade;
   out[LS.gasTicks] = p.gasTicks;
   out[LS.jetDisabledTicks] = p.jetDisabledTicks;
+  out[LS.spin0] = p.weapons[0].spin;
+  out[LS.burst0] = p.weapons[0].burst;
+  out[LS.spin1] = p.weapons[1].spin;
+  out[LS.burst1] = p.weapons[1].burst;
   for (let i = 0; i < LOCAL_STATE_FIELDS; i++) out[i] = fit(out[i]!, BITS[i]!);
   return out;
 }
@@ -267,6 +279,10 @@ export function applyLocalState(s: LocalState, p: PlayerState): void {
   p.blindFade = s[LS.blindFade]!;
   p.gasTicks = s[LS.gasTicks]!;
   p.jetDisabledTicks = s[LS.jetDisabledTicks]!;
+  p.weapons[0].spin = s[LS.spin0]!;
+  p.weapons[0].burst = s[LS.burst0]!;
+  p.weapons[1].spin = s[LS.spin1]!;
+  p.weapons[1].burst = s[LS.burst1]!;
 }
 
 export function localStatesEqual(a: LocalState, b: LocalState): boolean {

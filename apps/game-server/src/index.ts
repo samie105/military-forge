@@ -58,6 +58,8 @@ if (!Number.isInteger(botTarget) || botTarget < 0 || !Object.hasOwn(BOT_LEVELS, 
   process.exit(1);
 }
 const fillBots = botTarget > 0 ? { target: botTarget, level: botLevel } : undefined;
+// The test armory (one of every gun on a rack near the spawns): --armory or ARMORY=1 (the playtest's default)
+const armory = process.argv.includes('--armory') || process.env.ARMORY === '1' || process.env.ARMORY === 'true';
 // a nav graph takes 90–270 ms to build: build the rooms' map before anyone joins, not on the first bot
 if (fillBots) warmNavGraphs([maps[mapId]!]);
 
@@ -68,6 +70,7 @@ const server = await createServer(
     // bots take the dummies' place in the default room
     dummies: !fillBots,
     ...(fillBots ? { fillBots } : {}),
+    ...(armory ? { armory } : {}),
     mapId,
     seed: Number(process.env.SEED ?? 1),
     ...(netSim ? { netSim: { settings: netSim, scheduler: nodeScheduler } } : {}),
@@ -80,7 +83,7 @@ const server = await createServer(
     defaultRoom,
     ...(maxRooms !== undefined && Number.isInteger(maxRooms) && maxRooms >= 0 ? { maxRooms } : {}),
     // rooms by code play the same map (one map per room until rooms can switch)
-    roomOptions: { mapId, ...(fillBots ? { fillBots } : {}) },
+    roomOptions: { mapId, ...(fillBots ? { fillBots } : {}), ...(armory ? { armory } : {}) },
     tickets,
     trustProxy,
   },
@@ -89,6 +92,7 @@ console.log(
   `[game-server] ${server.room ? `room "${server.room.game.map.id}"` : 'no default room'} + rooms by code on ws://${host ?? 'localhost'}:${server.port} · transport ${server.transport === 'uws' ? 'uWebSockets.js' : 'ws (fallback)'} · dev commands ${dev ? 'on' : 'off'}` +
     ` · join tickets ${tickets ? 'required' : 'off (dev)'}` +
     (fillBots ? ` · bots fill rooms to ${fillBots.target} (${fillBots.level})` : '') +
+    (armory ? ' · test armory on (one of every gun by the spawns)' : '') +
     (netSim ? ` · NET_SIM ${describeNetSim(netSim)}` : '') +
     (wtSocket ? ` · WebTransport gateway socket ${wtSocket}` : ''),
 );

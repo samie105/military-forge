@@ -15,11 +15,16 @@ Per image (SPECS below):
   the map's mid-depth palette (docs/11 §4: low saturation, low contrast, pulled toward the haze),
   the left/right edges fade out so neighbouring panels cross-fade, and the colour under transparent
   pixels is bled outward so bilinear filtering never pulls in a dark fringe;
-- everything is written as lossy WebP (RGBA where needed). KTX2/ETC1S would be ~4× smaller on the
-  GPU but needs `toktx`, a user install (docs: art/README.md open question 4); WebP is the fallback.
+- each is written as lossy WebP (RGBA where needed), and also as an ETC1S KTX2 copy (basisu, at the
+  WebP's size rounded to block-aligned, with the block-aligned mips) when that copy costs at most
+  1.2× the WebP's bytes: it stays compressed on the GPU (4–8 bits per pixel instead of 32), and
+  the runtime loads it instead of the WebP where it can transcode. index.json gives each image's
+  display size and its KTX2 copy, if any. `--ktx2-only` keeps the shipped WebPs.
 """
 import json
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -49,6 +54,10 @@ SPECS = {
     "flux_lab/mid": ("lab_mid.png", "layer", 1536, {"alpha": (200, 250), "sat": 0.5, "haze": 0.4, "contrast": 0.62, "hazeRGB": LAB}),
 }
 
+# KTX2 copies (ETC1S) ship only where they cost at most 1.2× the WebP download, at the best basisu
+# quality that fits (players on mobile data: owner, 18 Oct); elsewhere the WebP is all there is.
+KTX2_MAX_RATIO = 1.2
+KTX2_QUALITIES = (95, 80, 65, 50)
 EDGE_FADE = 0.006  # of the width, each side: just enough to antialias the cut
 TOP_MARGIN = 6  # px kept above the highest roof
 
@@ -63,7 +72,7 @@ def blur(channel, radius):
     return np.asarray(img.filter(ImageFilter.GaussianBlur(radius)), dtype=np.float64)
 
 
-def process_layer(im, width, s):
+def process_layer(im, s):
     """Haze cut from the alpha, empty sky cropped, graded, edge-faded, colour bled under transparency."""
     arr = np.asarray(im.convert("RGBA"), dtype=np.float64)
     rgb, a = arr[..., :3], arr[..., 3]
@@ -99,11 +108,10 @@ def process_layer(im, width, s):
     rgb = np.where(wa[..., None] >= 1, rgb * t + bled * (1 - t), rgb)
     out = np.dstack([np.clip(rgb, 0, 255), np.clip(a, 0, 255)]).round().astype(np.uint8)
     img = Image.fromarray(out, "RGBA")
-    height = round(h * width / w)
-    return img.resize((width, height), Image.LANCZOS), top / (top + h)
+    return img, top / (top + h)
 
 
-def process_wall(im, width, s):
+def process_wall(im, s):
     """An opaque panel: graded like a layer, no alpha."""
     rgb = np.asarray(im.convert("RGB"), dtype=np.float64)
     haze = np.array(s["hazeRGB"], dtype=np.float64)
@@ -112,12 +120,69 @@ def process_wall(im, width, s):
     rgb = haze + (rgb - haze) * s["contrast"]
     rgb = rgb + (haze - rgb) * s["haze"]
     img = Image.fromarray(np.clip(rgb, 0, 255).round().astype(np.uint8), "RGB")
-    return img.resize((width, round(img.size[1] * width / img.size[0])), Image.LANCZOS)
+    return img
+
+
+def fit(im, width):
+    """`im` scaled to `width`, keeping its aspect."""
+    return im.resize((width, round(im.size[1] * width / im.size[0])), Image.LANCZOS)
+
+
+def ktx2_size(width, height, align=32):
+    """KTX2 size: the WebP's, rounded to a multiple of 32 (≤ 3% squash: the mesh keeps the display
+    aspect from index.json), so the first mip levels are block-aligned (ktx2_levels)."""
+    return max(align, round(width / align) * align), max(align, round(height / align) * align)
+
+
+def ktx2_levels(width, height):
+    """Mip levels with every level block-aligned (a multiple of 4, or ≤ 2): what WebGL takes for a
+    compressed texture's levels. Non-power-of-two sizes stop early; that's enough for backdrops
+    and billboards, which are never minified more than ~4×."""
+    n = 0
+    while True:
+        w, h = max(1, width >> n), max(1, height >> n)
+        if not all(d % 4 == 0 or d <= 2 for d in (w, h)):
+            return n
+        n += 1
+        if w == 1 and h == 1:
+            return n
+
+
+def write_ktx2(im, size, dest, quality, y_flip=True, alpha=True):
+    """ETC1S KTX2 (docs/11 §4: ETC1S for albedo) via basisu, with the block-aligned part of the mip
+    chain. Returns its size in bytes."""
+    levels = ktx2_levels(*size)
+    last = max(max(1, size[0] >> (levels - 1)), max(1, size[1] >> (levels - 1)))
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "in.png"
+        im.resize(size, Image.LANCZOS).save(src)
+        # basisu adds a level while the last one's longer side is above -mip_smallest
+        cmd = ["basisu", "-ktx2", "-etc1s", "-quality", str(quality), "-effort", "4", "-mipmap", "-mip_srgb", "-mip_smallest", str(last), "-output_file", str(dest), str(src)]
+        if y_flip:
+            cmd.insert(1, "-y_flip")
+        if not alpha:
+            cmd.insert(1, "-no_alpha")
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return dest.stat().st_size
+
+
+def best_ktx2(im, size, dest, budget, **kw):
+    """The best ETC1S quality whose file fits `budget` bytes; None (and no file) if none does."""
+    for q in KTX2_QUALITIES:
+        n = write_ktx2(im, size, dest, q, **kw)
+        if n <= budget:
+            return q, n
+    dest.unlink(missing_ok=True)
+    return None
 
 
 def main():
-    out, raws = Path(sys.argv[1]), [Path(p) for p in sys.argv[2:]]
+    """`--ktx2-only`: keep the shipped WebPs (their bytes decide the KTX2 budget), write the copies."""
+    args = [a for a in sys.argv[1:] if a != "--ktx2-only"]
+    ktx2_only = len(args) != len(sys.argv) - 1
+    out, raws = Path(args[0]), [Path(p) for p in args[1:]]
     report = {}
+    index = {}
     for name, (src, kind, width, s) in SPECS.items():
         path = next((r / src for r in raws if (r / src).exists()), None)
         if path is None:
@@ -126,21 +191,39 @@ def main():
         im = Image.open(path)
         dest = out / f"{name}.webp"
         dest.parent.mkdir(parents=True, exist_ok=True)
+        cropped = None
         if kind == "wall":
-            im = process_wall(im, width, s)
-            im.save(dest, "WEBP", quality=82, method=6)
-            report[name] = {"size": list(im.size), "bytes": dest.stat().st_size}
+            full = process_wall(im, s)
+            quality = 82
         elif kind == "sky":
-            im = im.convert("RGB")
-            im = im.resize((width, round(im.size[1] * width / im.size[0])), Image.LANCZOS)
-            im.save(dest, "WEBP", quality=80, method=6)
-            report[name] = {"size": list(im.size), "bytes": dest.stat().st_size}
+            full = im.convert("RGB")
+            quality = 80
         else:
-            im, cropped = process_layer(im, width, s)
-            im.save(dest, "WEBP", quality=82, method=6, exact=False)
-            report[name] = {"size": list(im.size), "bytes": dest.stat().st_size, "croppedTop": round(cropped, 3)}
+            full, cropped = process_layer(im, s)
+            quality = 82
+        if ktx2_only:
+            small_size = Image.open(dest).size
+        else:
+            small = fit(full, width)
+            small.save(dest, "WEBP", quality=quality, method=6, exact=False)
+            small_size = small.size
+        webp_bytes = dest.stat().st_size
+        size = ktx2_size(*small_size)
+        ktx2 = dest.with_suffix(".ktx2")
+        got = best_ktx2(full, size, ktx2, webp_bytes * KTX2_MAX_RATIO, alpha=full.mode == "RGBA")
+        report[name] = {"size": list(small_size), "bytes": webp_bytes}
+        if got:
+            report[name].update({"ktx2": list(size), "ktx2Quality": got[0], "ktx2Bytes": got[1]})
+        if cropped is not None:
+            report[name]["croppedTop"] = round(cropped, 3)
+        folder, file = name.split("/")
+        index.setdefault(folder, {})[f"{file}.webp"] = {"size": list(small_size), **({"ktx2": f"{file}.ktx2"} if got else {})}
         print(f"{name}: {report[name]}")
-    print(json.dumps({"total_bytes": sum(r["bytes"] for r in report.values())}))
+    # the display size of every image (a KTX2 copy is rounded to block-aligned sizes), and which have one
+    for folder, files in index.items():
+        (out / folder / "index.json").write_text(json.dumps({"version": 1, "files": files}, indent=1) + "\n")
+    shipped = [r for r in report.values() if "ktx2Bytes" in r]
+    print(json.dumps({"webp_bytes": sum(r["bytes"] for r in report.values()), "ktx2_files": len(shipped), "ktx2_bytes": sum(r["ktx2Bytes"] for r in shipped), "their_webp_bytes": sum(r["bytes"] for r in shipped)}))
 
 
 if __name__ == "__main__":

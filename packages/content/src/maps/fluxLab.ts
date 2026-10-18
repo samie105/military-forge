@@ -64,7 +64,9 @@ export const fluxLabMap: MapDef = {
     { name: 'Deck guard', x: 72, y: 16.6, script: { kind: 'strafe', minX: 66, maxX: 78 } },
     { name: 'Runner', x: 40, y: 0, script: { kind: 'strafe', minX: 34, maxX: 46 } },
   ],
-  // grenade pairs on the crates by the jump pads and at the gantries' shaft ends
+  // the test armory's rack (GameOptions.armory): one of every gun, by the spawn at x 74
+  armory: { x: 63, y: 1.5, dir: 1 },
+  // grenade pairs (then weapon crates) on the crates by the jump pads and at the gantries' shaft ends
   spawners: [
     {
       id: 'grenades',
@@ -77,6 +79,20 @@ export const fluxLabMap: MapDef = {
       ],
       first: [5, 9],
       respawn: [18, 24],
+      maxActive: 2,
+    },
+    // weapon crates: a random gun (owner: "more guns"), on the catwalks, by the west boost pad and on the west deck
+    {
+      id: 'weapons',
+      pool: 'weapons',
+      spots: [
+        { x: 20, y: 7 },
+        { x: 90, y: 7 },
+        { x: 26.5, y: 0 },
+        { x: 42, y: 16.6 },
+      ],
+      first: [3, 6],
+      respawn: [12, 18],
       maxActive: 2,
     },
   ],

@@ -17,21 +17,33 @@ high 1k; job ids in art/README.md's cost table); they are not committed. Per ima
   10% until the encoded file passes;
 - records each creative's mean relative luminance (linear), for the per-look brightness test
   (render3d/ads: a board never outshines the kit around it, docs/14 §3.4);
-- resized to about its drawn size at 1080p and 1× (§2.1: a Screen ≈ 360 × 270 px, a Hoarding
-  ≈ 810 × 135 px) and written as WebP. KTX2/ETC1S would let the full 32 + 8 layer pool fit in
-  ≈ 5.1 MB of GPU memory (§4.9) but needs `toktx`/`basisu`, a user install; this fallback uploads
-  only the house pool as RGBA8 (≈ 8.6 MB with mips).
-Writes <out>/<map>/house.json: the pool the renderer loads.
+- written twice, both at about its drawn size at 1080p and 1× (§2.1: a Screen ≈ 360 × 270 px, a
+  Hoarding ≈ 810 × 135 px): WebP, the fallback where the runtime can't transcode, and an ETC1S
+  KTX2 layer (basisu, with the block-aligned mips) that stays compressed on the GPU (§4.5's ETC1S
+  layer pool), at the best quality within 1.2× the WebP's bytes (players on mobile data), or the
+  lowest if none fits: a format's layers are one array, so every creative needs its copy.
+Writes <out>/<map>/house.json: the pool the renderer loads. `--ktx2-only` keeps the shipped WebPs
+and saturations and only rewrites the KTX2 layers.
 """
 import json
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import numpy as np
 from PIL import Image
 
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).parent))
+import backdrops  # noqa: E402  (ktx2 helpers)
+
 SCREEN = (384, 288)
 HOARDING = (864, 144)
+# KTX2 layers: the WebP's size (block-aligned for the first mip levels: backdrops.py ktx2_levels)
+KTX2_SIZE = {"4:3": SCREEN, "6:1": HOARDING}
+KTX2_MAX_RATIO = 1.2
+KTX2_QUALITIES = (95, 80, 65, 50)
 # gameplay signal hues (docs/14 §3.5): team blue #2f7dff, team orange #ff7a1a, damage/low-HP red #f85149
 SIGNAL_HUES = {"teamBlue": 216.0, "teamOrange": 25.0, "damageRed": 3.0}
 SIGNAL_LIMIT = 0.10
@@ -139,6 +151,16 @@ def mean_luminance(rgb):
     return float((lin @ np.array([0.2126, 0.7152, 0.0722])).mean())
 
 
+def write_ktx2(graded, size, path, budget):
+    """ETC1S KTX2 layer (docs/14 §3.1/§4.5) at the best quality within `budget` bytes (else the
+    lowest), not y-flipped (the board shader reads layers top row first). Returns the quality."""
+    img = Image.fromarray(graded.round().astype(np.uint8))
+    for q in KTX2_QUALITIES:
+        if backdrops.write_ktx2(img, size, path, q, y_flip=False, alpha=False) <= budget:
+            return q
+    return KTX2_QUALITIES[-1]
+
+
 def encode(graded, size, path):
     """Writes the WebP and returns the pixels exactly as shipped (decoded back)."""
     Image.fromarray(graded.round().astype(np.uint8)).resize(size, Image.LANCZOS).save(path, "WEBP", quality=88, method=6)
@@ -146,10 +168,13 @@ def encode(graded, size, path):
 
 
 def main():
-    key, raw, out = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3])
+    args = [a for a in sys.argv[1:] if a != "--ktx2-only"]
+    ktx2_only = len(args) != len(sys.argv) - 1
+    key, raw, out = args[0], Path(args[1]), Path(args[2])
     map_id, entries = POOLS[key]
     dest = out / key
     dest.mkdir(parents=True, exist_ok=True)
+    shipped_pool = json.loads((dest / "house.json").read_text()) if ktx2_only else None
     pool = {"screens": [], "hoardings": []}
     for cid, src, fmt, title in entries:
         im = Image.open(raw / src).convert("RGB")
@@ -157,26 +182,35 @@ def main():
         arr = np.asarray(im)
         size = SCREEN if fmt == "4:3" else HOARDING
         name = cid.split(":")[1] + ".webp"
-        sat = GRADE["sat"]
-        shipped = encode(grade(arr, GRADE, sat), size, dest / name)
-        share = signal_share(shipped)
-        while max(share.values()) >= SIGNAL_LIMIT and sat > 0.3:
-            sat = round(sat - 0.1, 2)
+        if shipped_pool:
+            entry = next(e for e in shipped_pool["screens"] + shipped_pool["hoardings"] if e["id"] == cid)
+            sat = entry["saturation"]
+        else:
+            sat = GRADE["sat"]
             shipped = encode(grade(arr, GRADE, sat), size, dest / name)
             share = signal_share(shipped)
-        entry = {
-            "id": cid,
-            "file": name,
-            "title": title,
-            "signalHues": {k: round(v, 3) for k, v in share.items()},
-            "saturation": sat,
-            "luminance": round(mean_luminance(shipped), 4),
-        }
+            while max(share.values()) >= SIGNAL_LIMIT and sat > 0.3:
+                sat = round(sat - 0.1, 2)
+                shipped = encode(grade(arr, GRADE, sat), size, dest / name)
+                share = signal_share(shipped)
+            entry = {
+                "id": cid,
+                "file": name,
+                "title": title,
+                "signalHues": {k: round(v, 3) for k, v in share.items()},
+                "saturation": sat,
+                "luminance": round(mean_luminance(shipped), 4),
+            }
+        ktx2 = name.replace(".webp", ".ktx2")
+        q = write_ktx2(grade(arr, GRADE, sat), KTX2_SIZE[fmt], dest / ktx2, (dest / name).stat().st_size * KTX2_MAX_RATIO)
+        entry = {k: v for k, v in entry.items() if k != "ktx2"}
+        entry = {**{k: entry[k] for k in ("id", "file")}, "ktx2": ktx2, **{k: v for k, v in entry.items() if k not in ("id", "file")}}
         (pool["screens"] if fmt == "4:3" else pool["hoardings"]).append(entry)
-        print(f"{cid}: {size[0]}x{size[1]} {(dest / name).stat().st_size} B, signal hues {entry['signalHues']}, sat {sat:.2f}, lum {entry['luminance']}")
-    (dest / "house.json").write_text(json.dumps({"version": 1, "map": map_id, **pool}, indent=1) + "\n")
-    total = sum((dest / e["file"]).stat().st_size for e in pool["screens"] + pool["hoardings"])
-    print(json.dumps({"total_bytes": total}))
+        print(f"{cid}: {size[0]}x{size[1]} {(dest / name).stat().st_size} B, KTX2 q{q} {(dest / ktx2).stat().st_size} B, signal hues {entry['signalHues']}, sat {sat:.2f}, lum {entry['luminance']}")
+    ktx2 = {fmt: list(size) for fmt, size in KTX2_SIZE.items()}
+    (dest / "house.json").write_text(json.dumps({"version": 1, "map": map_id, "ktx2Size": ktx2, **pool}, indent=1) + "\n")
+    entries_all = pool["screens"] + pool["hoardings"]
+    print(json.dumps({"total_bytes": sum((dest / e["file"]).stat().st_size for e in entries_all), "ktx2_bytes": sum((dest / e["ktx2"]).stat().st_size for e in entries_all)}))
 
 
 if __name__ == "__main__":

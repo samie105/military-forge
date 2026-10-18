@@ -50,7 +50,10 @@ export interface AdManifest {
 
 export interface HouseEntry {
   id: string;
+  /** WebP (the fallback where the runtime can't transcode) */
   file: string;
+  /** ETC1S KTX2 layer at the format's size (house-ads.py ktx2Size) */
+  ktx2?: string;
   title: string;
 }
 

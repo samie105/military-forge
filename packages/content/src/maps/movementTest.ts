@@ -130,6 +130,8 @@ export const movementTestMap: MapDef = {
     { name: 'Croucher', x: 168, y: 0, script: { kind: 'crouch', periodTicks: 120 } },
   ],
   labels,
+  // the test armory's rack (GameOptions.armory): one of every gun, by the spawn at x 120
+  armory: { x: 117, y: 1.5, dir: 1 },
   // F. a riot shield turns up at one of three spots in front of the range, out of the dummies' reach
   spawners: [
     {
@@ -155,6 +157,19 @@ export const movementTestMap: MapDef = {
       ],
       first: [3, 6],
       respawn: [8, 14],
+      maxActive: 2,
+    },
+    // weapon crates: a random gun, everyday ones three times as often as power weapons (owner: "more guns")
+    {
+      id: 'weapons',
+      pool: 'weapons',
+      spots: [
+        { x: 85.5, y: 0 },
+        { x: 104, y: 0 },
+        { x: 130, y: 5 },
+      ],
+      first: [3, 6],
+      respawn: [12, 18],
       maxActive: 2,
     },
   ],

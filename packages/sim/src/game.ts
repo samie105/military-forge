@@ -32,6 +32,11 @@ export interface GameOptions {
    * pickups existed must play as they did.
    */
   pickups?: boolean;
+  /**
+   * The test armory (with pickups on): a rack of one of every gun near the spawns, each back 2 s
+   * after it's taken (pickups.ts). A server flag; the playtest turns it on.
+   */
+  armory?: boolean;
 }
 
 /** Seconds within which a hazard death is credited to the last attacker (docs/03 §8). */
@@ -73,7 +78,7 @@ export class Game {
     this.tuning = createTuning(options.tuning);
     this.seed = (options.seed ?? 1) >>> 0;
     this.pickupsEnabled = options.pickups ?? false;
-    this.spawners = this.pickupsEnabled ? createSpawners(this.map) : [];
+    this.spawners = this.pickupsEnabled ? createSpawners(this.map, this.world, options.armory ?? false) : [];
     resetPickups(this);
     if (options.dummies) for (const d of this.map.dummies) this.addDummy(d);
   }

@@ -279,6 +279,7 @@ export function TipsCard({ bindings }: { bindings: Settings['bindings'] }) {
     ['Grenade', keys('grenade').slice(0, 1)],
     ['Next grenade', keys('cycleGrenade').slice(0, 1)],
     ['Swap', keys('swap').slice(0, 1)],
+    ['Take a gun', keys('interact').slice(0, 1)],
     ['Shield', keys('shield').slice(0, 1)],
     ['Dual', keys('dual').slice(0, 1)],
     ['Scores', keys('scoreboard').slice(0, 1)],
@@ -301,6 +302,7 @@ export function TipsCard({ bindings }: { bindings: Settings['bindings'] }) {
         <li>Hold the jetpack to fly. Fuel refills on the ground, faster than in the air.</li>
         <li>Hold crouch on a yellow platform to drop through it.</li>
         <li>Two one-handed guns? Dual wield them and both fire.</li>
+        <li>Guns lie around the map: stand on one and press {keys('interact')[0] ?? 'E'} to swap it for the one in your hand.</li>
         <li>Change any key in Settings → Controls.</li>
       </ul>
       <button className="sh-btn sh-primary sh-tips-ok" onClick={blurAfter(() => ctl.closeTips())}>

@@ -31,8 +31,8 @@ import {
   type SimEvent,
 } from '@military-forge/sim';
 
-/** how far ahead the preview runs (docs/02 §14) */
-export const ARC_SECONDS = 1.5;
+/** how far ahead the preview runs (docs/02 §14): past every fuse, so the arc ends where it goes off (frag 1.8 s since the owner's longer throws) */
+export const ARC_SECONDS = 2;
 export const ARC_POINTS = Math.round(ARC_SECONDS * TICK_RATE) + 1;
 /** a velocity change beyond gravity's this big in one tick is a touchdown (m/s) */
 const TOUCH_DV = 1.5;

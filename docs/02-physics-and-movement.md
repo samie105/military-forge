@@ -165,10 +165,10 @@ BR squads: hp ≤ 0 with alive teammate ──▶ KNOCKED (crawl 1.2 m/s, bleed-
 | `JET_KICK` | ×1.35 thrust for first 6 ticks | responsive ignition |
 | `JET_MAX_VY` | 6.5 m/s | thrust tapers linearly over the last 1.5 m/s before the cap |
 | `JET_AIR_MAX_X` | 6.5 m/s | slightly faster sideways while flying |
-| `FUEL_MAX` | 100 | the "nitro" bar |
-| `FUEL_BURN` | 38 /s | ≈ 2.6 s of continuous flight |
+| `FUEL_MAX` | 140 | the "nitro" bar (100 until the owner's playtest, "the fuel finishes quick": a 40% bigger tank, NOTES §24) |
+| `FUEL_BURN` | 44 /s | ≈ 3.2 s of continuous flight, a full-tank climb of ~18 m (the burn and air regen stayed: feathering keeps its rhythm) |
 | `FUEL_MIN_IGNITE` | 10 | stops micro-tap hover exploits |
-| `FUEL_REGEN_GROUND` / `FUEL_REGEN_DELAY_GROUND` | 35 /s after 0.20 s | full refill in ~2.9 s (the genre feels like ~3–4 s) |
+| `FUEL_REGEN_GROUND` / `FUEL_REGEN_DELAY_GROUND` | 49 /s after 0.20 s | full refill in ~3.1 s (the genre feels like ~3–4 s) |
 | `FUEL_REGEN_AIR` / `FUEL_REGEN_DELAY_AIR` | 12 /s after 0.45 s | rewards gliding/falling, keeps air fights going |
 | `MAX_WALK_SLOPE` | 50° | steeper: slide, no ground accel |
 | `STEP_HEIGHT` | 0.20 m | auto step-up for small ledges |
@@ -349,10 +349,10 @@ Projectile caps per room: 256 live projectiles. Flamethrower particles are aggre
 
 | | Frag | Smoke | Gas | Flashbang | Proximity mine | EMP grenade |
 |---|---|---|---|---|---|---|
-| Throw speed | 14 m/s + 40% player vel | 13 m/s | 13 m/s | 13 m/s | 11 m/s, **no gravity** for its 0.9 s fuse (flies straight, ~10 m), then it drops; the map's wind, pads and drag act on it like on any grenade | 13 m/s |
+| Throw speed | 16.2 m/s + 40% player vel | 15 m/s | 15 m/s | 15 m/s | 13.3 m/s, **no gravity** for its 1.0 s fuse (flies straight, ~13 m), then it drops; the map's wind, pads and drag act on it like on any grenade | 13 m/s |
 | Gravity scale | 1.0 | 1.0 | 1.0 | 1.0 | 0 | 1.0 |
 | Restitution `e` | 0.45 (bouncy, longest throw) | 0.35 | 0.35 | 0.4 | 0 (**sticks** to any surface) | 0.4 |
-| Fuse | **1.6 s** from throw; optional cook mode in custom rooms | 1.4 s, then a **12 s cloud** | 1.4 s, then a **15 s cloud** | 1.5 s | arms 2.0 s after it **sticks** to the first surface it touches. State colours: green = flying, yellow = arming, flashing red = armed. An enemy body within 1.6 m **in line of sight** starts a 0.25 s beep (the thrower never sets off their own). A direct hit on a player in flight detonates it. **Can be shot (10 HP; whoever empties it gets the kill; a shield's ricochet too), set off by explosions (after 4 ticks: chains stagger), disarmed by EMP.** Despawns 180 s after arming. **3 live per thrower:** a 4th retires its oldest; a player who leaves takes its mines with it | 1.2 s |
+| Fuse | **1.8 s** from throw; optional cook mode in custom rooms | 1.6 s, then a **12 s cloud** | 1.6 s, then a **15 s cloud** | 1.7 s | arms 2.0 s after it **sticks** to the first surface it touches. State colours: green = flying, yellow = arming, flashing red = armed. An enemy body within 1.6 m **in line of sight** starts a 0.25 s beep (the thrower never sets off their own). A direct hit on a player in flight detonates it. **Can be shot (10 HP; whoever empties it gets the kill; a shield's ricochet too), set off by explosions (after 4 ticks: chains stagger), disarmed by EMP.** Despawns 180 s after arming. **3 live per thrower:** a 4th retires its oldest; a player who leaves takes its mines with it | 1.35 s |
 | Effect | 110 dmg max, R = 4.0 m, full-damage core 0.8 m, impulse **26 m/s** with a minimum lift of 0.7 (blasts launch in an arc, NOTES §17), the thrower's own blast at 0.6 of it. A crouched victim at full HP survives unless it's directly underneath (crouch → torso-only exposure + 25% blast reduction) | **Blocks vision**, no damage: R = 4 m, opaque inside 85% of it. Grows in from 30% over 1.2 s, thins out and shrinks to 60% over its last 2.5 s (see-through for the last 1.25 s). Bots and aim assist can't see through it. The server doesn't send a player or grenade inside it, behind it or across it to clients that can't see it (inside a cloud you see 1.5 m), and tracers stop at it (05 §9); local mode does the same | DoT strongest at the centre: 14 dmg/s inside a 1 m core → 4 dmg/s at the edge (linear), R = 3.5 m, in 0.25 s pulses. Standing in the middle kills in ~7 s. Grows in from 35% over 1 s, shrinks to 70% over its last 1.5 s. Doesn't block vision. **Flamethrower fire clears the cloud** | **Blinds**, no damage. Per player, strength = distance (full inside 4 m, linear to 0 at 16 m) × facing (1 looking at it, 0.25 looking straight away, by the cosine) × cover (a wall 0.15, smoke 0.5); under 0.08 nothing. Then 2.5 s × strength of **full white** and 1.5 s × strength (at least 0.3 s) of fading out. A longer blindness already running is kept. The blind state is sim state (bots aim off target); during the full white the server sends the victim no other player (05 §9) | 120 dmg, R = 3.2 m (core 0.6 m, impulse 24 m/s, otherwise like the frag) | **Disables jetpacks for 3 s** in R = 4 m to the torso, **through walls** (affects the thrower too; a jet in use cuts out at once; the dash is a jetpack burst, so it is blocked too). Disarms mines (they vanish). 0 dmg |
 | Self/team damage | yes (team damage per mode rules) | n/a | yes (the thrower takes 50%) | blinds the thrower too | yes (the thrower takes 50%) | n/a |
 | Carry (default) | 3 (spawn loadout), max 5 | max 2 | max 2 | max 2 | max 2 | max 2 |
@@ -363,7 +363,9 @@ Projectile caps per room: 256 live projectiles. Flamethrower particles are aggre
 
 **Flashbang on screen** (client, `apps/web/src/fx`): the local player's blindness (sim state, in the local block) drives a full-screen white-out over the 3D and 2D views, and a muffled-audio hook. Photosensitivity: never more than one full-screen flash per second (other rises ramp in over a second, never by a flash's worth in one frame, and it never clears faster than in half a second), and a **"Reduce flashes"** setting replaces the white with a dark-out just as opaque (≥ 0.96), blurred, so the setting is no advantage. The flashbang's own burst is a small pop and a ring in both views, never a screen-sized flash.
 
-**Throw strength:** desktop is quick-throw (tap = 70% strength) or hold-to-aim (an arc preview shows the predicted path, simulated client-side with the same sim code for 1.5 s ahead). Mobile later: a dedicated grenade button with drag-to-aim.
+**Throw range** (owner's playtest, 18 Oct 2026: "the bombs should go far"): throw speeds ×1.15 and fuses ×1.12 (the mine's straight flight too), so every type lands and goes off about 30% farther at either strength. Full strength at 45°: a frag first bounces at ~14.3 m (was 11.1) and goes off at ~19.2 m (was 14.8); smoke, gas, flashbang and EMP bounce at ~12.5 m (was 9.7); a mine thrown level sticks at ~17.7 m. The sim feel report checks these (`THROW_TARGETS`, `MINE_TARGETS`).
+
+**Throw strength:** desktop is quick-throw (tap = 70% strength) or hold-to-aim (an arc preview shows the predicted path, simulated client-side with the same sim code for 2 s ahead, past every fuse, so the arc ends where the grenade goes off). Mobile later: a dedicated grenade button with drag-to-aim.
 
 **Explosion resolution** (server, one tick):
 1. Gather players and destructibles within R from the dynamic hash.

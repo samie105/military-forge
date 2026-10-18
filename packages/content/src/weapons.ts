@@ -2,7 +2,9 @@
  * Weapon data (docs/03-weapons-and-combat.md §4–5). Phase 0 shipped two one-handed guns, Hammer .44
  * (magnum revolver, default primary) and Buzz (compact SMG), which dual-wield together (the classic
  * Buzz + Hammer combo). Arsenal milestone A adds the K-47 rifle, the Breacher pump shotgun, the
- * Widow bolt sniper and the Machete. Ids match the weapon models (art/weapons/weapons.json).
+ * Widow bolt sniper and the Machete. The owner's playtest ("add more guns") adds every other
+ * modelled bullet gun: Hawk .50, Rattler, Hornet, Trident (burst), Bullpup, Longbow (DMR), Shredder
+ * (minigun, spin-up) and Arc (beam). Ids match the weapon models (art/weapons/weapons.json).
  */
 export interface SpreadDef {
   /** ± degrees */
@@ -21,6 +23,13 @@ export interface SpreadDef {
 
 export type WeaponClass = 'sidearm' | 'smg' | 'rifle' | 'dmr' | 'sniper' | 'shotgun' | 'heavy' | 'special' | 'melee';
 
+export type FireMode = 'semi' | 'auto' | 'burst' | 'spinup' | 'beam' | 'melee';
+
+/** Fire modes that keep firing while the button is held (bots and touch hold the trigger for these). */
+export function heldTrigger(def: Pick<WeaponDef, 'fireMode'>): boolean {
+  return def.fireMode === 'auto' || def.fireMode === 'burst' || def.fireMode === 'spinup' || def.fireMode === 'beam';
+}
+
 export interface WeaponDef {
   /** wire id (u6, append-only): never reorder */
   index: number;
@@ -28,10 +37,21 @@ export interface WeaponDef {
   name: string;
   class: WeaponClass;
   hands: 1 | 2;
-  /** 'melee': the fire button swings the weapon (no ammo) */
-  fireMode: 'semi' | 'auto' | 'melee';
-  /** seconds between shots (melee: between swings) */
+  /**
+   * 'semi': one shot per press · 'auto': fires while held · 'burst': each press (or held) fires a
+   * burst of `burst.count` rounds `burst.interval` apart · 'spinup': fires while held once spun up
+   * (`spin`; the second fire button spins it without firing) · 'beam': fires while held, its cell
+   * refills by itself (`regen`) · 'melee': the fire button swings the weapon (no ammo)
+   */
+  fireMode: FireMode;
+  /** seconds between shots (burst: from one burst's first round to the next's; melee: between swings) */
   interval: number;
+  /** 'burst' weapons: rounds per burst and seconds between them */
+  burst?: { count: number; interval: number };
+  /** 'spinup' weapons: seconds to spin up from rest, and to spin down from full */
+  spin?: { up: number; down: number };
+  /** the magazine refills by itself (a beam's cell): rounds per second, after `delay` s without firing */
+  regen?: { perSec: number; delay: number };
   /** per bullet / pellet */
   damage: number;
   /** bullets per shot: 1, or a shotgun's evenly spread pellets (docs/03 §7) */
@@ -256,7 +276,257 @@ export const MACHETE: WeaponDef = {
   muzzleLength: 0.5,
 };
 
-export const weapons: readonly WeaponDef[] = [HAMMER, BUZZ, K47, BREACHER, WIDOW, MACHETE];
+// ---------- the owner's "more guns" (docs/03 §5 roles; numbers sit inside today's TTK bands) ----------
+
+/** Heavy pistol: the weakest gun per shot, quick and accurate enough to finish fights. */
+export const HAWK50: WeaponDef = {
+  index: 6,
+  id: 'hawk50',
+  name: 'Hawk .50',
+  class: 'sidearm',
+  hands: 1,
+  fireMode: 'semi',
+  interval: 0.25,
+  // docs/03 says 8 (13 shots, 3.0 s): 9 is 12 shots, 2.75 s, a sidearm you can still win with
+  damage: 9,
+  pellets: 1,
+  hitImpulse: 0,
+  headMul: 1.5,
+  range: 20,
+  falloffStart: 10,
+  minDamageMul: 0.5,
+  spread: { ...defaultSpread, base: 2.5, airMul: 2 },
+  mag: 15,
+  reserve: 60,
+  reload: 1.25,
+  equip: 0.25,
+  zoomMax: 2,
+  meleeDamage: 15,
+  recoilPushAir: 0,
+  recoilPushGround: 0,
+  moveSpeedMul: 1.0,
+  muzzleLength: 0.45,
+};
+
+/** Machine pistol: a one-handed spray between the Buzz and the K-47 (10 shots, 1.35 s). */
+export const RATTLER: WeaponDef = {
+  index: 7,
+  id: 'rattler',
+  name: 'Rattler',
+  class: 'smg',
+  hands: 1,
+  fireMode: 'auto',
+  interval: 0.15,
+  damage: 10,
+  pellets: 1,
+  hitImpulse: 0,
+  headMul: 1.5,
+  range: 24,
+  falloffStart: 12,
+  minDamageMul: 0.5,
+  // docs/03 says ±4°; at 0.15 s a shot its bloom never builds (the Buzz's does), so ±5° keeps it a
+  // close-to-mid gun (~70% hits at 12 m); dual-wielded it goes wild
+  spread: { ...defaultSpread, base: 5, dualMul: 2 },
+  mag: 40,
+  reserve: 250,
+  reload: 1.5,
+  equip: 0.25,
+  zoomMax: 3,
+  meleeDamage: 25,
+  recoilPushAir: 0,
+  recoilPushGround: 0,
+  moveSpeedMul: 1.0,
+  muzzleLength: 0.45,
+};
+
+/** High-rate SMG: the fastest-firing gun (15 shots, 0.84 s), wild past close range. */
+export const HORNET: WeaponDef = {
+  index: 8,
+  id: 'hornet',
+  name: 'Hornet',
+  class: 'smg',
+  hands: 2,
+  fireMode: 'auto',
+  interval: 0.06,
+  damage: 7,
+  pellets: 1,
+  hitImpulse: 0,
+  headMul: 1.5,
+  range: 28,
+  falloffStart: 14,
+  minDamageMul: 0.5,
+  spread: { ...defaultSpread, base: 4.5, bloomPerShot: 0.3 },
+  mag: 50,
+  reserve: 250,
+  reload: 1.75,
+  equip: 0.3,
+  zoomMax: 3,
+  meleeDamage: 30,
+  recoilPushAir: 0, // SMGs don't kick (owner's call: pistols and SMGs push nothing)
+  recoilPushGround: 0,
+  moveSpeedMul: 1.0,
+  muzzleLength: 0.6,
+};
+
+/** Three-round burst rifle: precise at range, 8 rounds (3 bursts, ~1.07 s) to kill. */
+export const TRIDENT: WeaponDef = {
+  index: 9,
+  id: 'trident',
+  name: 'Trident',
+  class: 'rifle',
+  hands: 2,
+  fireMode: 'burst',
+  interval: 0.5,
+  burst: { count: 3, interval: 1 / 15 }, // 4 ticks: rounds 0.067 s apart, bursts exactly 0.5 s apart
+  damage: 14,
+  pellets: 1,
+  hitImpulse: 0,
+  headMul: 1.5,
+  range: 40,
+  falloffStart: 20,
+  minDamageMul: 0.5,
+  // docs/03 says ±1.5°: its bloom resets between bursts, so 3.5° keeps it precise at mid range
+  // without out-ranging the Widow and the Hammer at 18 m
+  spread: { ...defaultSpread, base: 3.5, bloomPerShot: 0.4 },
+  mag: 24,
+  reserve: 240,
+  reload: 2.0,
+  equip: 0.35,
+  zoomMax: 5,
+  meleeDamage: 30,
+  recoilPushAir: 0.3,
+  recoilPushGround: 0,
+  moveSpeedMul: 0.97,
+  muzzleLength: 0.75,
+};
+
+/** Bullpup rifle: a steadier, lighter K-47 (12 shots, 1.32 s). */
+export const BULLPUP: WeaponDef = {
+  index: 10,
+  id: 'bullpup',
+  name: 'Bullpup',
+  class: 'rifle',
+  hands: 2,
+  fireMode: 'auto',
+  interval: 0.12,
+  damage: 9,
+  pellets: 1,
+  hitImpulse: 0,
+  headMul: 1.5,
+  range: 30,
+  falloffStart: 15,
+  minDamageMul: 0.5,
+  // docs/03 says ±3°; its slower rate barely blooms, so 3.5° keeps it a mid-range rifle
+  spread: { ...defaultSpread, base: 3.5 },
+  mag: 35,
+  reserve: 175,
+  reload: 1.5,
+  equip: 0.3,
+  zoomMax: 4,
+  meleeDamage: 30,
+  recoilPushAir: 0.3,
+  recoilPushGround: 0,
+  moveSpeedMul: 1.0,
+  muzzleLength: 0.6,
+};
+
+/** Marksman rifle: 3 body shots (1.1 s), 2 to the head; air shots pay a small spread. */
+export const LONGBOW: WeaponDef = {
+  index: 11,
+  id: 'longbow',
+  name: 'Longbow',
+  class: 'dmr',
+  hands: 2,
+  fireMode: 'semi',
+  interval: 0.55,
+  damage: 36,
+  pellets: 1,
+  hitImpulse: 0,
+  headMul: 1.5,
+  range: 48,
+  falloffStart: 24,
+  minDamageMul: 0.5,
+  spread: { ...defaultSpread, base: 0, minAir: 1.5 },
+  mag: 6,
+  reserve: 30,
+  reload: 2.25,
+  equip: 0.35,
+  zoomMax: 6,
+  meleeDamage: 35,
+  recoilPushAir: 1.5, // a nudge (docs/03 §7)
+  recoilPushGround: 3,
+  moveSpeedMul: 0.95,
+  muzzleLength: 0.85,
+};
+
+/** Minigun: spins up for 0.8 s (audible, a fair warning), then shreds; heavy (×0.7 speed). */
+export const SHREDDER: WeaponDef = {
+  index: 12,
+  id: 'shredder',
+  name: 'Shredder',
+  class: 'heavy',
+  hands: 2,
+  fireMode: 'spinup',
+  // docs/03 says 0.07 s; the sim's cooldown counts whole ticks, so 0.07 (4.2 ticks) would fire every
+  // 5 (12/s): 1/15 s is exactly 4 ticks, 15 rounds a second
+  interval: 1 / 15,
+  spin: { up: 0.8, down: 1.0 },
+  damage: 9,
+  pellets: 1,
+  hitImpulse: 0,
+  headMul: 1.5,
+  range: 26,
+  falloffStart: 13,
+  minDamageMul: 0.5,
+  // docs/03 says ±6°: 4.5° and a slow bloom keep it deadly at mid range once it's spinning
+  spread: { ...defaultSpread, base: 4.5, bloomPerShot: 0.2, bloomMax: 3 },
+  mag: 120,
+  reserve: 240,
+  reload: 4.25,
+  equip: 0.5,
+  zoomMax: 3,
+  meleeDamage: 35,
+  recoilPushAir: 0.35, // a long burst pushes you back steadily
+  recoilPushGround: 0.15,
+  moveSpeedMul: 0.7,
+  muzzleLength: 0.7,
+};
+
+/**
+ * Beam laser: one perfectly accurate ray every 0.15 s, no falloff over its 52 m (a zoning tool,
+ * 17 ticks to kill). Its cell holds 40 ticks (6 s of beam) and refills at 10 a second after half a
+ * second off the trigger; it never reloads.
+ */
+export const ARC: WeaponDef = {
+  index: 13,
+  id: 'arc',
+  name: 'Arc',
+  class: 'special',
+  hands: 2,
+  fireMode: 'beam',
+  interval: 0.15,
+  regen: { perSec: 10, delay: 0.5 },
+  damage: 6,
+  pellets: 1,
+  hitImpulse: 0,
+  headMul: 1.5,
+  range: 52,
+  falloffStart: 52,
+  minDamageMul: 1,
+  spread: { ...defaultSpread, base: 0, airMul: 1, crouchMul: 1, moveMul: 1, bloomPerShot: 0, bloomMax: 0 },
+  mag: 40,
+  reserve: 0,
+  reload: 0,
+  equip: 0.35,
+  zoomMax: 5,
+  meleeDamage: 40,
+  recoilPushAir: 0, // streams don't kick
+  recoilPushGround: 0,
+  moveSpeedMul: 0.95,
+  muzzleLength: 0.75,
+};
+
+export const weapons: readonly WeaponDef[] = [HAMMER, BUZZ, K47, BREACHER, WIDOW, MACHETE, HAWK50, RATTLER, HORNET, TRIDENT, BULLPUP, LONGBOW, SHREDDER, ARC];
 
 export const NO_WEAPON = 63;
 
@@ -272,5 +542,9 @@ export function shotDamage(def: WeaponDef): number {
 export function timeToKill(def: WeaponDef, hp: number, headshots = false): { shots: number; seconds: number } {
   const perShot = shotDamage(def) * (headshots && def.fireMode !== 'melee' ? def.headMul : 1);
   const shots = Math.ceil(hp / perShot - 1e-9);
-  return { shots, seconds: (shots - 1) * def.interval };
+  // a burst gun fires its rounds burst.interval apart, bursts `interval` apart; a minigun spins up first
+  const seconds = def.burst
+    ? Math.floor((shots - 1) / def.burst.count) * def.interval + ((shots - 1) % def.burst.count) * def.burst.interval
+    : (shots - 1) * def.interval;
+  return { shots, seconds: seconds + (def.spin ? def.spin.up : 0) };
 }

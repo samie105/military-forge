@@ -92,6 +92,8 @@ export interface RoomOptions {
   dummies?: boolean;
   /** the map's pickup spawners (riot shields…) and drops on death (default on) */
   pickups?: boolean;
+  /** the test armory: a rack of one of every gun near the spawns, back 2 s after it's taken (default off; the playtest turns it on) */
+  armory?: boolean;
   /** send a snapshot every N ticks (2 → 30 Hz) */
   snapshotEvery?: number;
   /** allow dev commands (live tuning, respawn) */
@@ -339,7 +341,7 @@ export class Room {
 
   constructor(options: RoomOptions = {}) {
     this.log = options.log ?? ((msg) => console.error(msg));
-    this.game = new Game({ seed: options.seed ?? 1, mapId: options.mapId ?? 'movement-test', dummies: options.dummies ?? true, pickups: options.pickups ?? true });
+    this.game = new Game({ seed: options.seed ?? 1, mapId: options.mapId ?? 'movement-test', dummies: options.dummies ?? true, pickups: options.pickups ?? true, armory: options.armory ?? false });
     this.maxHumans = options.maxHumans ?? 8;
     this.snapshotEvery = options.snapshotEvery ?? 2;
     this.dev = options.dev ?? true;

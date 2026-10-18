@@ -5,6 +5,7 @@
 import { FRAG, HitZone, NO_WEAPON, RIOT_SHIELD, pickups as pickupDefs, weapons, type Tuning } from '@military-forge/content';
 import { DamageSource, type SimEvent } from '@military-forge/sim';
 import type { PickupView, PlayerView, WeaponView } from '../view';
+import { nearbyWeaponPrompt, takePrompt, weaponUnderfoot } from '../weaponItems';
 
 /**
  * What arsenal-b's PlayerView adds (#40 grenade belt, #44 flashbang, #47 EMP grenade; see
@@ -265,9 +266,16 @@ export function grenadeBelt(p: HudPlayer): BeltSlot[] {
 /** Within this far (m) of an item you're told how to take it. */
 export const PICKUP_PROMPT_RANGE = 3;
 
-/** "Riot Shield: walk over to take" when an item lies close by, the nearest first; '' when none. */
-export function pickupPrompt(me: Pick<PlayerView, 'x' | 'y' | 'alive'>, items: readonly PickupView[] | undefined): string {
+/**
+ * "Riot Shield: walk over to take" when an item lies close by, the nearest first; '' when none.
+ * Weapon crates (more guns): standing on a gun you don't hold, `[E] take Widow (swaps your
+ * Hammer .44)`; close by, how to take it, or that walking over it is ammo for one you hold.
+ */
+export function pickupPrompt(me: Pick<PlayerView, 'x' | 'y' | 'alive'> & Partial<Pick<PlayerView, 'weapons' | 'active'>>, items: readonly PickupView[] | undefined): string {
   if (!me.alive || !items?.length) return '';
+  const held = { weapons: me.weapons ?? [], active: me.active ?? 0 };
+  const under = weaponUnderfoot(items, { x: me.x, y: me.y, weapons: held.weapons });
+  if (under && !under.held) return takePrompt(under, held);
   let best: PickupView | null = null;
   let bestD = PICKUP_PROMPT_RANGE;
   for (const k of items) {
@@ -278,5 +286,6 @@ export function pickupPrompt(me: Pick<PlayerView, 'x' | 'y' | 'alive'>, items: r
     }
   }
   const def = best ? pickupDefs[best.def] : undefined;
+  if (def?.kind === 'weapon') return nearbyWeaponPrompt(def, held);
   return def ? `${def.name}: walk over to take` : '';
 }

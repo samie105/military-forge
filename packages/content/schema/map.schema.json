@@ -169,6 +169,29 @@
         "$ref": "#/$defs/spawner"
       },
       "description": "Pickup spawners: items at random spots and times (docs/03 §12)."
+    },
+    "armory": {
+      "type": "object",
+      "required": [
+        "x",
+        "y"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "dir": {
+          "enum": [
+            1,
+            -1
+          ]
+        }
+      },
+      "description": "Where the test armory's rack starts (one of every gun, GameOptions.armory): the first gun's x, a height above its floor, and the way the rack runs."
     }
   },
   "$defs": {
@@ -190,6 +213,21 @@
         "pool": {
           "enum": [
             "shield",
+            "weapons",
+            "weapon:hammer44",
+            "weapon:buzz",
+            "weapon:k47",
+            "weapon:breacher",
+            "weapon:widow",
+            "weapon:machete",
+            "weapon:hawk50",
+            "weapon:rattler",
+            "weapon:hornet",
+            "weapon:trident",
+            "weapon:bullpup",
+            "weapon:longbow",
+            "weapon:shredder",
+            "weapon:arc",
             "grenades"
           ],
           "description": "What can appear (SPAWN_POOLS in packages/content pickups.ts)."

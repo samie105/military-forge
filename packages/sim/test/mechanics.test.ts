@@ -147,7 +147,7 @@ describe('map rules', () => {
       const { game, p } = makeGame(map);
       placeOnGround(game, p, 20);
       hold(game, p, Btn.Jet, 30);
-      return 100 - p.fuel;
+      return defaultTuning.fuelMax - p.fuel;
     };
     expect(burned(withMech([], { fuelBurnMul: 0.5 })) / burned(flatMap())).toBeCloseTo(0.5, 2);
     const refilled = (map: MapDef) => {
@@ -264,7 +264,7 @@ describe('zones: players', () => {
     const plain = makeGame(flatMap());
     placeOnGround(plain.game, plain.p, 20);
     hold(plain.game, plain.p, Btn.Jet, 30);
-    expect((100 - p.fuel) / (100 - plain.p.fuel)).toBeCloseTo(0.4, 2);
+    expect((defaultTuning.fuelMax - p.fuel) / (defaultTuning.fuelMax - plain.p.fuel)).toBeCloseTo(0.4, 2);
   });
 
   it('wind pushes fliers, not walkers', () => {
@@ -290,7 +290,7 @@ describe('zones: players', () => {
     placeOnGround(game, p, 20);
     hold(game, p, Btn.Jet, 30);
     expect(p.y).toBeLessThan(0.01);
-    expect(p.fuel).toBe(100);
+    expect(p.fuel).toBe(defaultTuning.fuelMax);
     p.x = 8;
     hold(game, p, Btn.Jet | Btn.Right, 60);
     expect(p.x).toBeGreaterThan(10);

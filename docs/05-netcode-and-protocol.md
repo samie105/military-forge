@@ -232,7 +232,7 @@ v8 also appends a **dash group** to the local-player block (dashTicks u6, dashDi
 - **INPUT:** `buttons` bit 14 = `Btn.Shield` (raise / sling, edge-triggered in the sim). The web client binds it to **X**.
 - **Local block:** a shield group after the dash group, at 45–47: `shieldHp` u19 (1/1024), `shieldStowed` u1, `shieldTicks` u5 (25 bits). The last two are skipped without a shield. With it the block has 10 delta groups, so the group mask is 10 bits.
 - **Remote flags:** 10 bits. Bits 8–9 (256 and 512) are a 2-bit shield state: 0 none, 1 slung (guarding the back), 2 raising (guarding neither side, 0.25 s), 3 up (guarding the front).
-- **Items on the map:** after the grenades, `u1 changed · [u6 n · { u5 id · u4 def · i24 x · i24 y }]`. It's sent only when the list differs from the acked baseline. Items are culled by view like grenades: one that vanished or appeared out of view would give away a hidden player taking it or dying with it.
+- **Items on the map:** after the grenades, `u1 changed · [u6 n · { u5 id · u4 def · i24 x · i24 y }]` (v11: `u6 id · u6 def`, below). It's sent only when the list differs from the acked baseline. Items are culled by view like grenades: one that vanished or appeared out of view would give away a hidden player taking it or dying with it.
 - **Events:** extended kinds **1 RICOCHET** (shooter, owner, weapon, bounce point, u8 normal angle, end point, what it hit), **2 SHIELD_BREAK** (owner, attacker, point), **3 PICKUP** (player, item, point).
 - **Shots:** a SHOT's `hit` may be 3 = struck a riot shield (`target` = its owner).
 - **AOI:**
@@ -242,6 +242,13 @@ v8 also appends a **dash group** to the local-player block (dashTicks u6, dashDi
   - A shot into a culled player's shield (hit 3) is treated like a hit on its body: clipped, sent as a miss, no target.
 
 **Grenade variety (built, protocol v10, arsenal B):** the two local-block groups and the clouds section above; grenade records + u3 type · u2 state; EXPLOSION + u3 grenade type. No new event tags, ext kinds, remote flags or INPUT bits (CycleGrenade is bit 12). Map pickups gain six grenade-pair items (u4 defs 1–6) with no wire change.
+
+**More guns, weapon crates, test armory (built, protocol v11; owner's playtest, docs/03 §5, §12):**
+- **Local block:** a fire-mode group after the status group, at 58–61: `spin0` u8 · `burst0` u2 · `spin1` u8 · `burst1` u2 (the Shredder's spin-up, 0–240, and the rounds left in a Trident burst, per slot). The block has 13 delta groups. Weapon ids are already u6 (14 guns, 0–13).
+- **Items on the map:** `u6 id · u6 def` (were u5 · u4): up to 48 items (`MAX_PICKUPS`, the test armory's rack of 14 plus the map's), defs 0–63 (21 used: the shield, six grenade pairs, 14 guns at 7 + weapon index). A dropped or crate gun's ammo isn't sent: the taker's own local block carries it after the swap.
+- **Events:** PICKUP's item u6.
+- **INPUT:** taking a gun is `Btn.Interact` (bit 10, already there; the web client binds it to **E**, and a touch button).
+- **The test armory** is a server option (`--armory` / `ARMORY=1`, `GameOptions.armory`): nothing on the wire beyond the items it puts out.
 
 ### 6.3 Reliable EVENT_R examples (msgpackr-encoded, rare)
 

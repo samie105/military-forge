@@ -34,10 +34,14 @@ export interface WeaponSlot {
   /** extra spread in degrees from sustained fire */
   bloom: number;
   ticksSinceShot: number;
+  /** a minigun's spin, 0…SPIN_FULL (combat.ts); 0 for every other weapon */
+  spin: number;
+  /** rounds left in the burst being fired (a burst rifle); 0 between bursts */
+  burst: number;
 }
 
 export function createWeaponSlot(): WeaponSlot {
-  return { def: NO_WEAPON, mag: 0, reserve: 0, cooldown: 0, reloadTicks: 0, bloom: 0, ticksSinceShot: 0 };
+  return { def: NO_WEAPON, mag: 0, reserve: 0, cooldown: 0, reloadTicks: 0, bloom: 0, ticksSinceShot: 0, spin: 0, burst: 0 };
 }
 
 /**
@@ -211,10 +215,12 @@ export class PlayerState {
 /** Seconds to go from one gun to two (or back): also the cost of putting a dual pair away for the shield. */
 export const DUAL_TOGGLE_TIME = 0.45;
 
-/** Swapping weapons, or going in or out of dual, cancels reloads (docs/03 §9). */
+/** Swapping weapons, or going in or out of dual, cancels reloads (docs/03 §9), and a burst in progress. */
 export function cancelReloads(p: PlayerState): void {
   p.weapons[0].reloadTicks = 0;
   p.weapons[1].reloadTicks = 0;
+  p.weapons[0].burst = 0;
+  p.weapons[1].burst = 0;
 }
 
 /** Fills both slots with full ammo; NO_WEAPON (or an unknown index) leaves a slot empty. */
@@ -230,6 +236,8 @@ export function giveLoadout(p: PlayerState, defs: readonly { mag: number; reserv
     slot.reloadTicks = 0;
     slot.bloom = 0;
     slot.ticksSinceShot = 999;
+    slot.spin = 0;
+    slot.burst = 0;
   }
 }
 

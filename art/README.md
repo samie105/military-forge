@@ -112,7 +112,7 @@ Checks:
 - **In the sim** (W6's code on main, run locally, not committed): the review's fuzz harness, 8 players × 15 sim-minutes of random input: **0 deaths by falling out of the map** (61 per hour before the walls), 0 player-ticks out of bounds, 0 ticks with solid penetration. Every one-way lands and drops through; the umbrella slopes hold a standing player at 2.86 m.
 - **Viewer:** `?map=street_market&zoom=1&cx=-46&cy=9&hitboxes=1` draws the kit from the layout with the collision on top. The map path is the reference for W1: one `InstancedMesh` per (piece, flip), mirrored pieces get their own geometry with the winding reversed (no DoubleSide).
 
-To ship it in the game, the content owner imports `street_market.map.json` into `packages/content/src/maps/` and the AdSlot list wherever the map schema gets `adSlots` (this branch stays out of `packages/`); the renderer instances `kits/street_market/kit_street_market.glb` nodes from the same layout. docs/01 §7 and docs/14 §2.3/§2.4 still call this map "Lagos Market" and its slots `LM-*`; they need the rename.
+In the game: `packages/content/src/maps/streetMarket.map.json` is a copy of `street_market.map.json` (content.test.ts checks they match, apart from the slab one-ways marked `blocksBullets` there until the kit marks them), and the web build draws `kits/street_market/kit_street_market.glb` from the same layout (apps/web/src/render3d/environment). docs/01 §7 and docs/14 §2.3/§2.4 call the map the Street Market and its slots `street-market/S1`…`S4`, `H1`, `H2`.
 
 Gaps:
 - **Breakable awnings** (docs/01 §7) need a sim feature; the awning one-ways are separate segments, so they can be removed individually once there is one.

@@ -7,8 +7,8 @@ export const SKIN = 0.002;
 
 export const MAX_PLAYERS = 16;
 export const MAX_GRENADES = 64;
-/** items lying on the map at once: spawner items and drops (pickups.ts) */
-export const MAX_PICKUPS = 32;
+/** items lying on the map at once: spawner items, the test armory's rack and drops (pickups.ts; u6 ids on the wire since v11) */
+export const MAX_PICKUPS = 48;
 /** smoke and gas clouds alive at once (the wire count is u5); a new one replaces the oldest */
 export const MAX_CLOUDS = 24;
 

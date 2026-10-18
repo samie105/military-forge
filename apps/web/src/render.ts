@@ -30,6 +30,7 @@ import { CollisionWorld, DamageSource, MELEE_ARC_DEG, MELEE_REACH, MELEE_WINDUP_
 import type { Camera } from './camera';
 import { reduceFlashes } from './fx';
 import { REACH_RAYS, cloudReach, inSmoke } from './grenadeViews';
+import { crateColor, takePrompt, weaponUnderfoot } from './weaponItems';
 import { arcDots, type ThrowArcView } from './throwPreview';
 import type { CloudView, Frame, GrenadeView, PickupView, PlayerView, RewindView } from './view';
 
@@ -466,6 +467,7 @@ export class Renderer {
 
     // floating damage numbers follow their target
     const byId = new Map(frame.players.map((p) => [p.id, p]));
+    this.crateLabels.length = 0;
     if (frame.pickups) for (const k of frame.pickups) this.drawPickup(k);
     for (const p of frame.players) this.drawPlayer(p, opts.showHitboxes, frame.clouds);
     if (opts.showHitboxes && frame.rewinds) for (const r of frame.rewinds) this.drawRewind(r);
@@ -591,10 +593,11 @@ export class Renderer {
       ctx.lineWidth = 1;
       ctx.stroke();
     }
-    ctx.setLineDash([6, 4]);
     ctx.strokeStyle = COLORS.oneWay;
-    ctx.lineWidth = 3;
     for (const ow of this.map.oneWays) {
+      // a slab that stops bullets (blocksBullets) draws as an unbroken, thicker line
+      ctx.setLineDash(ow.blocksBullets ? [] : [6, 4]);
+      ctx.lineWidth = ow.blocksBullets ? 6 : 3;
       ctx.beginPath();
       ctx.moveTo(cam.toScreenX(ow.ax), cam.toScreenY(ow.ay));
       ctx.lineTo(cam.toScreenX(ow.bx), cam.toScreenY(ow.by));
@@ -817,6 +820,9 @@ export class Renderer {
     ctx.restore();
   }
 
+  /** Weapon crate names drawn this frame (screen x span and row), so a rack's names don't overlap. */
+  private readonly crateLabels: { l: number; r: number; row: number; y: number }[] = [];
+
   /** An item on the map: a riot shield standing on its edge, with its name. */
   private drawPickup(k: PickupView): void {
     const ctx = this.ctx;
@@ -839,6 +845,34 @@ export class Renderer {
       ctx.font = '11px ui-monospace, monospace';
       ctx.textAlign = 'center';
       ctx.fillText(item.name, cam.toScreenX(k.x), sy - r - 8);
+      return;
+    }
+    if (item?.kind === 'weapon' && item.weapon !== undefined) {
+      // a weapon crate: a low box in its tier's colour (power weapons gold), the gun's name over it
+      const gun = weapons[item.weapon]!;
+      const color = crateColor(gun);
+      const cw = 0.7 * cam.ppm;
+      const ch = 0.28 * cam.ppm;
+      const sx = cam.toScreenX(k.x);
+      const sy = cam.toScreenY(k.y);
+      ctx.fillStyle = color + '55';
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.rect(sx - cw / 2, sy - ch, cw, ch);
+      ctx.fill();
+      ctx.stroke();
+      // the name over it, on a second row when the first is taken (a rack); left out when both are
+      ctx.fillStyle = color;
+      ctx.font = '11px ui-monospace, monospace';
+      ctx.textAlign = 'center';
+      const half = ctx.measureText(gun.name).width / 2 + 3;
+      const free = (row: number) => !this.crateLabels.some((o) => o.row === row && Math.abs(o.y - sy) < 1 && o.l < sx + half && o.r > sx - half);
+      const row = free(0) ? 0 : free(1) ? 1 : -1;
+      if (row >= 0) {
+        this.crateLabels.push({ l: sx - half, r: sx + half, row, y: sy });
+        ctx.fillText(gun.name, sx, sy - ch - 5 - row * 13);
+      }
       return;
     }
     const w = 0.34 * cam.ppm;
@@ -1221,6 +1255,16 @@ export class Renderer {
     ctx.fillStyle = '#e6edf3';
     const shield = p.shield ? `   shield ${Math.ceil(p.shieldHp ?? 0)} ${p.shield === 'front' ? 'up' : p.shield === 'back' ? 'slung' : 'raising'}` : '';
     ctx.fillText(`${p.dual ? 'DUAL  ' : ''}${grenadeLine(p)}   K ${p.kills}  D ${p.deaths}   zoom ${cam.zoom + 1}x${shield}`, x, y);
+    // standing on a gun: E takes it (it swaps the one in hand); one you hold is a top-up, no prompt
+    const under = p.alive ? weaponUnderfoot(frame.pickups, p) : null;
+    if (under && !under.held) {
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 14px ui-monospace, monospace';
+      ctx.fillStyle = crateColor(under.weapon);
+      ctx.fillText(takePrompt(under, p), cam.width / 2, cam.height - 170);
+      ctx.restore();
+    }
     const status = statusTags(p, true);
     if (status) {
       ctx.fillStyle = '#ffa657';

@@ -90,7 +90,7 @@ describe('dash', () => {
     tap(solid.game, solid.p, Btn.Dash | Btn.Down);
     expect(solid.p.dashTicks).toBe(0);
     expect(solid.p.dashCooldown).toBe(0);
-    expect(solid.p.fuel).toBe(100);
+    expect(solid.p.fuel).toBe(defaultTuning.fuelMax);
   });
 
   it('a straight-down dash on a one-way platform goes through it', () => {
@@ -156,7 +156,7 @@ describe('dash', () => {
   it('costs fuel, needs it, and an EMP blocks it (it is a jetpack burst)', () => {
     const { game, p } = standing();
     tap(game, p, Btn.Dash);
-    expect(p.fuel).toBeCloseTo(100 - defaultTuning.dashFuelCost, 6);
+    expect(p.fuel).toBeCloseTo(defaultTuning.fuelMax - defaultTuning.dashFuelCost, 6);
     const dry = standing();
     dry.p.fuel = defaultTuning.dashFuelCost - 1;
     tap(dry.game, dry.p, Btn.Dash);

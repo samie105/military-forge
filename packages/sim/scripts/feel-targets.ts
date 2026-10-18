@@ -12,16 +12,17 @@ export interface Target {
 }
 
 export const MOVEMENT_TARGETS: Target[] = [
-  { key: 'burn', label: 'Full-tank burn (s)', min: 2.2, max: 2.6, why: 'genre feel: 2–3 s of thrust' },
+  // the owner's playtest: "the fuel finishes quick". The tank is 40% bigger (fuelMax 140 at the same burn)
+  { key: 'burn', label: 'Full-tank burn (s)', min: 3.0, max: 3.4, why: '~40% past the genre\'s 2–3 s of thrust (owner: "the fuel finishes quick")' },
   {
     key: 'climb',
     label: 'Full-tank climb (m)',
-    min: 12.2,
-    max: 13.3,
-    why: 'clears the tallest tower (12 m, map lint) with a little margin; well under the 20 m view so high ground is never out of reach',
+    min: 16.5,
+    max: 19.5,
+    why: 'clears the tallest tower (12 m, map lint) with room to spare; still under the 20 m view',
   },
-  { key: 'jetRun', label: 'Jet + run distance (m)', min: 15, max: 32, why: 'one tank < one screen width (36 m), fights stay on screen' },
-  { key: 'hover', label: 'Best hover above 3 m (s)', min: 2.0, max: 4.5, why: 'feathering buys time but cannot camp the air (best of several tap rhythms)' },
+  { key: 'jetRun', label: 'Jet + run distance (m)', min: 15, max: 36, why: 'one tank ≲ one screen width (36 m), fights stay on screen' },
+  { key: 'hover', label: 'Best hover above 3 m (s)', min: 3.0, max: 6.5, why: 'feathering buys time (the burn and air regen are unchanged: the same rhythm, a bigger tank)' },
   { key: 'refill', label: 'Ground refill from empty (s)', min: 2.8, max: 3.6, why: 'genre feel: ~3–4 s' },
   { key: 'tapHop', label: '0.2 s tap hop (m)', min: 1.0, max: 3.0, why: 'a quick tap must clear crates and low cover' },
   { key: 'to2m', label: 'Time to 2 m from standing (s)', min: 0, max: 0.5, why: 'take-off feels instant: dodging upward is a reaction' },
@@ -37,11 +38,11 @@ export const BLAST_TARGETS: { distance: number; flewMin: number; flewMax: number
 /** Map zones at their kinds' defaults (docs/02 §20, packages/content ZONE_KINDS); keys are ZoneMetrics fields. */
 export const ZONE_TARGETS: Target[] = [
   { key: 'lowGTapHop', label: 'Low-g: 0.2 s tap hop (m)', min: 3, max: 5, why: 'a tap clears a storey: low gravity reads at once' },
-  { key: 'lowGClimb', label: 'Low-g: full-tank climb (m)', min: 15, max: 20, why: 'higher than the 13 m tank on normal ground, still inside the 20 m view' },
+  { key: 'lowGClimb', label: 'Low-g: full-tank climb (m)', min: 20, max: 26, why: 'well past the 18 m tank on normal ground: low gravity reads (the camera follows you up)' },
   { key: 'zeroGDrift', label: 'Zero-g: drift 1 s after a tap (m/s)', min: 3, max: 6, why: 'a tap sends you drifting at about walking speed, and you keep it' },
   { key: 'zeroGDiveTurn', label: 'Zero-g: Down turns the drift around (s)', min: 0.15, max: 0.6, why: 'diving is quick: zero-g never traps you at the ceiling' },
-  { key: 'longFlightBurn', label: 'Long flight: full-tank burn (s)', min: 5, max: 6.5, why: '2.5× the 2.25 s tank: noticeably longer flights' },
-  { key: 'longFlightRun', label: 'Long flight: jet + run on one tank (m)', min: 40, max: 70, why: 'one tank crosses more than a screen (36 m)' },
+  { key: 'longFlightBurn', label: 'Long flight: full-tank burn (s)', min: 7, max: 9, why: '2.5× the 3.2 s tank: noticeably longer flights' },
+  { key: 'longFlightRun', label: 'Long flight: jet + run on one tank (m)', min: 55, max: 95, why: 'one tank crosses well over a screen (36 m)' },
   { key: 'reverseSettle', label: 'Reversed pocket: bob settles (s)', min: 2, max: 5, why: 'you hover at the edge after a few seconds: floaty, not nauseating' },
   { key: 'windDrift', label: 'Wind: drift in a 1 s fall (m)', min: 3, max: 7, why: 'felt in every flight and grenade arc, never a teleport' },
   { key: 'mudSpeed', label: 'Mud: walk speed (m/s)', min: 2, max: 2.6, why: 'about crouch-walk speed (2.2 m/s)' },
@@ -58,7 +59,7 @@ export const FOG_TARGETS: { weapon: string; min: number; max: number; why: strin
 
 /** Map events at their kinds' defaults (docs/02 §20.7, packages/content EVENT_KINDS); keys are EventMetrics fields. */
 export const EVENT_TARGETS: Target[] = [
-  { key: 'surgeClimb', label: 'Gravity surge: full-tank climb (m)', min: 4, max: 9, why: 'high ground gets hard to reach for 15 s: fights drop to the floor' },
+  { key: 'surgeClimb', label: 'Gravity surge: full-tank climb (m)', min: 8, max: 14, why: 'high ground gets hard to reach for 15 s: about two thirds of a normal climb' },
   { key: 'lowGravityTapHop', label: 'Low gravity: 0.2 s tap hop (m)', min: 3, max: 5, why: 'the same float as a low-g zone, map-wide' },
   { key: 'fogHammerReach', label: 'Fog bank: Hammer reach (m)', min: 9, max: 12, why: 'pistols become close-range guns: bullets don\'t go far' },
   { key: 'gustDrift', label: 'Wind gusts: drift of a 1 s fall at a peak (m)', min: 4, max: 9, why: 'a gust visibly throws fliers sideways, then dies down' },
@@ -98,6 +99,27 @@ export const WEAPON_TARGETS: WeaponTarget[] = [
   { label: 'Breacher @12 m grounded', weapon: 'breacher', distance: 12, airborne: false, hitMax: 0.35, why: 'a shotgun is no mid-range gun' },
   { label: 'Widow @18 m grounded', weapon: 'widow', distance: 18, airborne: false, hitMin: 0.95, ttkMax: 0.85, why: 'docs/03 §6: 2 body shots, 0.8 s' },
   { label: 'Machete @1 m grounded', weapon: 'machete', distance: 1, airborne: false, hitMin: 0.95, ttkMax: 0.2, why: 'one swing after the 0.15 s windup' },
+  // the owner's "more guns" (docs/03 §5–6 roles)
+  { label: 'Hawk @12 m grounded', weapon: 'hawk50', distance: 12, airborne: false, hitMin: 0.9, ttkMax: 3.5, why: 'the weakest gun per shot, but it lands' },
+  { label: 'Rattler @5 m grounded', weapon: 'rattler', distance: 5, airborne: false, hitMin: 0.95, ttkMax: 1.5, why: 'docs/03 §6: 10 shots, 1.35 s' },
+  { label: 'Rattler @12 m grounded', weapon: 'rattler', distance: 12, airborne: false, hitMin: 0.6, hitMax: 0.85, why: 'a machine pistol: close to mid range' },
+  { label: 'Hornet @5 m grounded', weapon: 'hornet', distance: 5, airborne: false, hitMin: 0.95, ttkMax: 1.0, why: 'the fastest-firing gun owns close range' },
+  { label: 'Hornet @18 m grounded', weapon: 'hornet', distance: 18, airborne: false, hitMax: 0.45, why: 'and loses at long range' },
+  { label: 'Trident @12 m grounded', weapon: 'trident', distance: 12, airborne: false, hitMin: 0.9, ttkMax: 1.2, why: 'three bursts: the precise mid-range rifle' },
+  { label: 'Trident @18 m grounded', weapon: 'trident', distance: 18, airborne: false, hitMax: 0.8, ttkMax: 2.0, why: 'never out-ranges the Widow' },
+  { label: 'Bullpup @12 m grounded', weapon: 'bullpup', distance: 12, airborne: false, hitMin: 0.7, ttkMax: 1.8, why: 'a steadier, lighter K-47' },
+  { label: 'Longbow @18 m grounded', weapon: 'longbow', distance: 18, airborne: false, hitMin: 0.95, ttkMax: 1.2, why: 'docs/03 §6: 3 body shots, 1.1 s' },
+  { label: 'Shredder @5 m grounded', weapon: 'shredder', distance: 5, airborne: false, hitMin: 0.95, ttkMax: 1.9, why: 'deadly once spun up (0.8 s of it in this TTK)' },
+  { label: 'Arc @18 m grounded', weapon: 'arc', distance: 18, airborne: false, hitMin: 0.95, ttkMax: 2.6, why: 'docs/03 §6: 17 ticks, 2.4 s, at any range' },
+];
+
+/** Grenades at 45°, full strength (the owner: "the bombs should go far"): about 30% farther than before. */
+export const THROW_TARGETS: { grenade: string; bounceMin: number; bounceMax: number; offMin: number; offMax: number }[] = [
+  { grenade: 'frag', bounceMin: 13.5, bounceMax: 15.5, offMin: 18, offMax: 20.5 }, // was 11.1 / 14.8
+  { grenade: 'smoke', bounceMin: 11.8, bounceMax: 13.5, offMin: 14.8, offMax: 16.8 }, // was 9.7 / 12.1
+  { grenade: 'gas', bounceMin: 11.8, bounceMax: 13.5, offMin: 14.8, offMax: 16.8 },
+  { grenade: 'flash', bounceMin: 11.8, bounceMax: 13.5, offMin: 15.5, offMax: 17.5 }, // was 9.7 / 12.7
+  { grenade: 'emp', bounceMin: 11.8, bounceMax: 13.5, offMin: 13, offMax: 15 }, // was 9.7 / 10.8
 ];
 
 /** Toxic gas (docs/02 §14): a player standing still at `distance` m from where the cloud popped. */
@@ -118,7 +140,7 @@ export const FLASH_TARGETS: { distance: number; lookAway: boolean; wall: boolean
 
 /** Proximity mine and EMP (docs/02 §14). */
 export const MINE_TARGETS = {
-  sticksAt: { min: 9, max: 14, why: 'short range: 0.9 s of straight flight, then it drops' },
+  sticksAt: { min: 15, max: 20, why: 'a mid-range throw: 1 s of straight flight, then it drops (30% farther, owner: "the bombs should go far")' },
   /** an enemy 1 m from a mine */
   damage: { min: 100, why: 'stepping on one kills' },
   blastAfter: { min: 0.2, max: 0.35, why: 'the 0.25 s beep: a warning, not an escape' },

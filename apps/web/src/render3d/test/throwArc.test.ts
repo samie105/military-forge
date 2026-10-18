@@ -40,6 +40,7 @@ describe('ThrowArc (3D)', () => {
   it('a burst where it goes off, when its fuse ends inside the preview', () => {
     const a = new ThrowArc(tex, [4, 4]);
     const view = arc();
+    view.detonates = false; // a fuse that runs past the preview's end (since the 2 s preview, a frag's goes off inside it)
     a.update(view, 1 / 60, 40, false);
     expect(cells(a)).not.toContain(Cell.Star);
     view.detonates = true;

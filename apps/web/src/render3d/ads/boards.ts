@@ -9,13 +9,15 @@
  * - rotation on the shared 10 s beat with a 0.5 s crossfade (rotation.ts), at most two surfaces lit
  *   on screen (visibility.ts), and an "AD" chip on paid frames only.
  *
- * GPU memory: each format's array holds only the creatives the current manifest shows. With house
- * art that's the match's 6 Screen creatives and 2 Hoarding creatives, RGBA8 at about their drawn
- * size (384 × 288, 864 × 144) with mips: ≈ 4.9 MB, inside docs/14 §4.9's 5.1 MB plan. A new match
+ * GPU memory: each format's array holds only the creatives the current manifest shows: with house
+ * art the match's 6 Screen creatives and 2 Hoarding creatives, at about their drawn size (384 × 288,
+ * 864 × 144). Where the runtime transcodes KTX2 they're ETC1S layers, compressed on the GPU
+ * (≈ 0.6 MB as BC1; the copies cost ≤ 1.2× the WebPs' download); otherwise the WebPs decoded to
+ * RGBA8 with mips: ≈ 4.9 MB. Both fit docs/14 §4.9's 5.1 MB plan. A new match
  * (Frame.matchSeed) picks the next house set and uploads it then, a safe moment (§4.5), so over
  * matches every pool creative gets airtime. The "AD" chip is a small texture made only once a
- * frame is paid. The paid flow will need KTX2/ETC1S: at RGBA8, docs/14 §4.5's 32 + 8 layer pool
- * would be ≈ 24 MB, and the encoder (`toktx`/`basisu`) is a user install.
+ * frame is paid. Paid creatives will be ETC1S layers too (docs/14 §3.1: ads/{id}.etc1s.ktx2): at
+ * RGBA8, docs/14 §4.5's 32 + 8 layer pool would be ≈ 24 MB.
  */
 import {
   CanvasTexture,
@@ -31,7 +33,10 @@ import {
   SRGBColorSpace,
   ShaderMaterial,
   UnsignedByteType,
+  type CompressedTexture,
+  type Texture,
 } from 'three';
+import { arrayFromLayers, textureBytes, type Ktx2Source } from '../environment/ktx2';
 import type { PlanePose } from '../planeCamera';
 import { houseManifest, type AdManifest, type AdSlot, type HouseEntry, type HousePool } from './manifest';
 import { crossfade, frameIndex, previousFrame } from './rotation';
@@ -239,6 +244,9 @@ export class AdBoards {
   private readonly limiter: LitLimiter;
   private readonly images = new Map<string, Promise<HTMLImageElement | null>>();
   private readonly files: Map<string, string>;
+  private readonly ktx2Files: Map<string, string>;
+  /** GPU bytes of what is uploaded now, per format (null: nothing yet) */
+  private readonly uploaded = new Map<string, number>();
   /** what the boards show now */
   manifest: AdManifest;
   /** the house set's match seed (null: not chosen yet, or a manifest was set from outside) */
@@ -256,9 +264,12 @@ export class AdBoards {
     private readonly pool: HousePool,
     private readonly base: string,
     tint = 0xffffff,
+    /** KTX2 transcoding (null: the WebP creatives, decoded to RGBA8 layers) */
+    private readonly ktx2: Ktx2Source = null,
   ) {
     this.limiter = new LitLimiter(slots);
     this.files = new Map([...pool.screens, ...pool.hoardings].map((e) => [e.id, e.file]));
+    this.ktx2Files = new Map([...pool.screens, ...pool.hoardings].filter((e) => e.ktx2).map((e) => [e.id, e.ktx2!]));
     this.manifest = houseManifest(mapId, slots, pool, 0);
     const m = new Matrix4();
     for (const spec of Object.values(FORMATS)) {
@@ -323,13 +334,32 @@ export class AdBoards {
     if (typeof document === 'undefined') return; // tests: no images, no GPU
     for (const f of this.formats) {
       const ids = referencedCreatives(manifest, f.slots, f.spec.format);
-      void Promise.all(ids.map((id) => (this.files.has(id) ? loadImage(this.images, this.base + this.files.get(id)!) : Promise.resolve(null)))).then((images) => {
-        if (this.disposed || generation !== this.generation) return;
-        const old = f.mesh.material.uniforms.uMap!.value as DataArrayTexture | null;
-        f.mesh.material.uniforms.uMap!.value = arrayTexture(images, f.spec);
+      const install = (tex: Texture) => {
+        if (this.disposed || generation !== this.generation) return tex.dispose();
+        const old = f.mesh.material.uniforms.uMap!.value as Texture | null;
+        f.mesh.material.uniforms.uMap!.value = tex;
         f.layers = layerTable(ids);
+        this.uploaded.set(f.spec.format, textureBytes(tex));
         old?.dispose();
-      });
+      };
+      const decoded = () =>
+        Promise.all(ids.map((id) => (this.files.has(id) ? loadImage(this.images, this.base + this.files.get(id)!) : Promise.resolve(null)))).then((images) =>
+          install(arrayTexture(images, f.spec)),
+        );
+      // KTX2 layers stay compressed on the GPU (docs/14 §4.5's ETC1S pool); any failure: the WebPs
+      const ktx2 = this.ktx2;
+      if (ktx2 && ids.length && ids.every((id) => this.ktx2Files.has(id))) {
+        void Promise.all(ids.map((id) => ktx2.loadAsync(this.base + this.ktx2Files.get(id)!) as Promise<CompressedTexture>))
+          .then((layers) => {
+            const tex = arrayFromLayers(layers);
+            for (const l of layers) l.dispose();
+            install(tex);
+          })
+          .catch((err: unknown) => {
+            console.warn('ads: KTX2 layers not transcoded, loading the WebPs', err);
+            return decoded();
+          });
+      } else void decoded();
     }
     const paid = manifest.slots.some((s) => s.frames.some((f) => f.paid));
     if (paid && !this.chip) this.chip = chipTexture();
@@ -364,16 +394,22 @@ export class AdBoards {
     return this.limiter.litOnScreen(pose);
   }
 
-  /** GPU memory the current content takes (planned: uploads finish a moment later). */
+  /**
+   * GPU memory the boards' textures take: what is uploaded (compressed or decoded), or, before the
+   * first upload, the decoded (RGBA8) plan for the current manifest.
+   */
   gpuBytes(): number {
-    return plannedGpuBytes(this.manifest, this.slots);
+    if (!this.uploaded.size) return plannedGpuBytes(this.manifest, this.slots);
+    let bytes = 0;
+    for (const b of this.uploaded.values()) bytes += b;
+    return bytes + textureBytes(this.chip);
   }
 
   dispose(): void {
     this.disposed = true;
     this.chip?.dispose();
     for (const f of this.formats) {
-      (f.mesh.material.uniforms.uMap!.value as DataArrayTexture | null)?.dispose();
+      (f.mesh.material.uniforms.uMap!.value as Texture | null)?.dispose();
       f.mesh.material.dispose();
       f.mesh.geometry.dispose();
       f.mesh.removeFromParent();

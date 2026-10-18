@@ -211,6 +211,7 @@ describe('first-run tips and routes', () => {
     expect(html).toContain('How to play');
     expect(html).toMatch(/Reload<\/dt><dd><kbd>K<\/kbd>/);
     expect(html).toMatch(/Jetpack<\/dt><dd><kbd>W<\/kbd><kbd>Space<\/kbd>/);
+    expect(html).toMatch(/Take a gun<\/dt><dd><kbd>E<\/kbd>/);
     expect(html).toContain('Got it');
   });
 

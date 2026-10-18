@@ -80,7 +80,9 @@ export const lunarOutpostMap: MapDef = {
     { name: 'Dome drifter', x: 60, y: 0, script: { kind: 'jet', periodTicks: 300, burstTicks: 12 } },
     { name: 'Deck sentry', x: 64, y: 22.6, script: { kind: 'idle' } },
   ],
-  // grenade pairs in the craters by the pads and on the deck's west end (contested, away from spawns)
+  // the test armory's rack (GameOptions.armory): one of every gun, by the spawn at x 98
+  armory: { x: 92.6, y: 1.5, dir: 1 },
+  // grenade pairs (then weapon crates) in the craters by the pads and on the deck's west end (contested, away from spawns)
   spawners: [
     {
       id: 'grenades',
@@ -92,6 +94,20 @@ export const lunarOutpostMap: MapDef = {
       ],
       first: [6, 10],
       respawn: [18, 24],
+      maxActive: 2,
+    },
+    // weapon crates: a random gun (owner: "more guns"), on the floor by the west tower, short of the ridge, on the east pad and the deck
+    {
+      id: 'weapons',
+      pool: 'weapons',
+      spots: [
+        { x: 14.5, y: 0 },
+        { x: 37.5, y: 0 },
+        { x: 83, y: 12.6 },
+        { x: 57, y: 22.6 },
+      ],
+      first: [3, 6],
+      respawn: [12, 18],
       maxActive: 2,
     },
   ],

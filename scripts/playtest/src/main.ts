@@ -22,6 +22,7 @@
  *        --map <id> (the rooms' map: movement-test by default; lunar-outpost, storm-front, flux-lab, …) ·
  *        --bots <n> (bots keep each room at n players: 4 by default, so two people get a real match;
  *        0 = no bots) · --bot-level easy|normal|hard (default normal) ·
+ *        --no-armory (no test armory: by default every room has a rack of one of every gun by the spawns) ·
  *        --lan (also open it to this Wi-Fi at http://<this Mac's address>:<port>, for friends in the
  *        same place; pair it with --port for an address that stays the same between runs)
  */
@@ -485,6 +486,8 @@ async function main(): Promise<void> {
       ...(map ? { MAP: map } : {}),
       BOTS: bots,
       BOT_LEVEL: botLevel,
+      // the test armory: one of every gun near the spawns, so friends can try them all (owner's playtest)
+      ARMORY: flag('no-armory') ? '0' : '1',
     },
     // start-up, rooms opened/closed and refused joins; the 10 s tick reports are for development
     (line) => (/^\[game-server\]|^\[rooms\] (opened|closed|refused)|crash|rror/.test(line) ? dim(`  [game] ${line}`) : null),

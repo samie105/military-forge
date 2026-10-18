@@ -54,6 +54,8 @@ export interface ReplayFile {
   match?: Partial<MatchRules>;
   /** map pickups on (GameOptions.pickups); absent = off, as in replays recorded before pickups existed */
   pickups?: boolean;
+  /** the test armory on (GameOptions.armory); absent = off */
+  armory?: boolean;
   /** lobby commands for the Match (ready-up, rematch votes…) */
   commands?: MatchCommand[];
   /** bots, joined after the humans in this order; replay with packages/bots `botReplaySetup` */
@@ -91,7 +93,7 @@ export function createReplayGame(replay: ReplayFile, setup?: ReplaySetup): Game 
 /** createReplayGame, and the setup's per-tick hook (null: none). */
 function startReplay(replay: ReplayFile, setup?: ReplaySetup): { game: Game; beforeTick: ((game: Game) => void) | null } {
   if (replay.bots?.length && !setup) throw new Error(`replay "${replay.name}" has bots: run it with @military-forge/bots botReplaySetup`);
-  const game = new Game({ mapId: replay.map, seed: replay.seed, dummies: replay.dummies, tuning: replay.tuning ?? {}, pickups: replay.pickups ?? false });
+  const game = new Game({ mapId: replay.map, seed: replay.seed, dummies: replay.dummies, tuning: replay.tuning ?? {}, pickups: replay.pickups ?? false, armory: replay.armory ?? false });
   replay.players.forEach((_, i) => {
     const p = game.addPlayer(`P${i + 1}`);
     const start = replay.starts?.[i];
@@ -144,7 +146,7 @@ export class ReplayRecorder {
   private readonly commands: MatchCommand[] = [];
 
   constructor(
-    private readonly meta: Pick<ReplayFile, 'map' | 'seed' | 'dummies' | 'tuning' | 'starts' | 'loadouts' | 'grenadeLoadouts' | 'match' | 'pickups' | 'bots'>,
+    private readonly meta: Pick<ReplayFile, 'map' | 'seed' | 'dummies' | 'tuning' | 'starts' | 'loadouts' | 'grenadeLoadouts' | 'match' | 'pickups' | 'armory' | 'bots'>,
     private readonly name = 'recorded',
   ) {}
 

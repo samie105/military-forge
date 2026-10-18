@@ -9,6 +9,13 @@
  * - A grenade pair (arsenal B): two of its type onto your belt, up to the type's carry limit
  *   (addGrenades); with that type full it stays on the floor. Which type a spawner puts out is the
  *   seeded pool draw, like any item.
+ * - A weapon (owner's playtest, "more guns"): a crate holding one gun with its ammo.
+ *   - Walking over a gun you already hold tops its reserve up (and spends the crate).
+ *   - Any other gun is a choice: `E` (Btn.Interact) swaps it into the slot in hand, and the gun that
+ *     was there drops where you stand with its ammo, for 30 s (none from the test armory's rack).
+ * - The test armory (GameOptions.armory, a server flag the playtest turns on): a rack of one of
+ *   every gun near the spawns (MapDef.armory), each spot respawning ARMORY_RESPAWN s after it's
+ *   taken. Its spawners come after the map's, so the map's own draws don't change.
  *
  * Determinism: every random draw is a stateless hash of (seed, tick, spawner, draw), so a replay or
  * a re-simulation draws the same numbers. A game with pickups off (GameOptions.pickups: the client's
@@ -18,11 +25,14 @@
 import {
   DROPPED_PICKUP_SECONDS,
   GRENADE_PICKUP_COUNT,
+  NO_WEAPON,
   RIOT_SHIELD,
   RIOT_SHIELD_PICKUP,
   SPAWN_POOLS,
   pickupById,
   pickups as pickupDefs,
+  weaponPickup,
+  weapons,
   type MapDef,
   type MapSpawner,
   type PickupDef,
@@ -31,9 +41,10 @@ import { POS_INV, hash4, hashToUnit, quantize } from '@military-forge/shared';
 import { ticks } from './constants';
 import type { Game } from './game';
 import { addGrenades } from './grenades';
-import type { PlayerState } from './player';
+import { Btn, wasPressed } from './input';
+import { cancelReloads, type PlayerState } from './player';
 import { clearShield, giveShield } from './shield';
-import { createRayHit } from './world';
+import { SegFlag, createRayHit, type CollisionWorld } from './world';
 
 /** One item on the map (a fixed pool in Game.pickups, like grenades). */
 export class PickupState {
@@ -45,6 +56,14 @@ export class PickupState {
   y = 0;
   /** riot shields: the HP it carries */
   hp = 0;
+  /** weapons: the ammo it carries (full in a crate, what was left in a dropped gun) */
+  mag = 0;
+  reserve = 0;
+  /**
+   * weapons: the tick (fractional, like WeaponSlot.cooldown) the gun is ready to fire again: a gun
+   * swapped out just after a shot keeps the rest of its interval (0: ready, a crate's)
+   */
+  readyTick = 0;
   /** ticks until a dropped item vanishes; 0 = it stays until taken (spawner items) */
   ttl = 0;
   /** the spawner (index into Game.spawners) and spot it sits on; −1 for an item a player dropped */
@@ -85,8 +104,51 @@ export class SpawnerState {
   }
 }
 
-export function createSpawners(map: MapDef): SpawnerState[] {
-  return (map.spawners ?? []).map((def, i) => new SpawnerState(i, def));
+/** The test armory's spots: this far apart along the rack, each a gun again this many seconds after it's taken. */
+export const ARMORY_SPACING = 0.8;
+export const ARMORY_RESPAWN = 2;
+/** a rack spot drops onto the floor within this far below the rack's height */
+const ARMORY_DROP = 4;
+
+/** The map's spawners, then (with `armory`) one per gun along the test armory's rack. */
+export function createSpawners(map: MapDef, world: CollisionWorld, armory = false): SpawnerState[] {
+  const defs = [...(map.spawners ?? []), ...(armory ? armorySpawners(map, world) : [])];
+  return defs.map((def, i) => new SpawnerState(i, def));
+}
+
+/**
+ * One spawner per gun, in weapon order, along the rack: from MapDef.armory (else just past the first
+ * spawn) every ARMORY_SPACING m, each dropped onto the floor below. A wall in the way turns the rack
+ * back the other way from its start; a spot with no floor under it is skipped.
+ */
+export function armorySpawners(map: MapDef, world: CollisionWorld): MapSpawner[] {
+  const start = map.armory ?? { x: (map.spawns[0]?.x ?? 0) + 1.5, y: (map.spawns[0]?.y ?? 0) + 1.5, dir: 1 as const };
+  const ignore = SegFlag.OneWay | SegFlag.BulletPass;
+  const spots: { x: number; y: number }[] = [];
+  let dir: number = start.dir ?? 1;
+  let step = 0;
+  let last: { x: number; y: number } | null = null;
+  for (let tries = 0; spots.length < weapons.length && tries < weapons.length * 3; tries++) {
+    const x = start.x + dir * (dir === (start.dir ?? 1) ? step : step + 1) * ARMORY_SPACING;
+    step++;
+    if (!world.raycast(x, start.y, 0, -1, ARMORY_DROP, ignore, ray)) continue;
+    const spot = { x, y: quantize(ray.y, POS_INV) };
+    const from = last ?? spot;
+    const dx = spot.x - from.x;
+    if (Math.abs(dx) > 1e-6 && world.raycast(from.x, Math.max(from.y, spot.y) + 0.4, Math.sign(dx), 0, Math.abs(dx), ignore, ray)) {
+      if (dir !== (start.dir ?? 1)) break; // walled in both ways
+      dir = -dir; // back the other way from the start
+      step = 0;
+      last = null;
+      continue;
+    }
+    spots.push(spot);
+    last = spot;
+  }
+  return spots.map((spot, i) => {
+    const item = weaponPickup(weapons[i]!.index)!;
+    return { id: `armory-${weapons[i]!.id}`, pool: item.id, spots: [spot], first: [0, 0], respawn: [ARMORY_RESPAWN, ARMORY_RESPAWN], maxActive: 1 };
+  });
 }
 
 /** Random draws per spawner and tick. */
@@ -128,6 +190,11 @@ function allocPickup(game: Game): PickupState | null {
 function place(k: PickupState, def: PickupDef, x: number, y: number, hp: number, ttl: number, spawner: number, spot: number): void {
   k.alive = true;
   k.def = def.index;
+  // a crate's gun comes with full ammo (a dropped one is given its own after)
+  const gun = def.kind === 'weapon' ? weapons[def.weapon!] : undefined;
+  k.mag = gun ? gun.mag : 0;
+  k.reserve = gun ? gun.reserve : 0;
+  k.readyTick = 0;
   k.x = x;
   k.y = y;
   k.hp = hp;
@@ -174,8 +241,49 @@ function touches(game: Game, p: PlayerState, k: PickupState, def: PickupDef): bo
   return Math.abs(p.x - k.x) <= def.reach && p.y <= k.y + TOUCH_ABOVE && p.y + p.height(game.tuning) >= k.y;
 }
 
+/** A gun swapped out for one taken from the floor: placed after the pass over the items (it isn't taken back the same tick). */
+const swappedOut: { x: number; y: number; def: number; mag: number; reserve: number; readyTick: number }[] = [];
+
+/**
+ * A weapon crate or dropped gun. One you hold: its reserve topped up (false when it's full already,
+ * or the gun has no reserve). Any other: only with `E` pressed this tick, into the slot in hand; the
+ * gun that was there goes into `swappedOut` (not from the armory's rack: its guns don't litter).
+ */
+function takeWeapon(game: Game, p: PlayerState, k: PickupState, w: number): boolean {
+  const gun = weapons[w];
+  if (!gun) return false;
+  for (const slot of p.weapons) {
+    if (slot.def !== w) continue;
+    // its rounds into the reserve (an empty gun on the floor is no ammo box); taken when it gives some
+    const give = Math.min(gun.reserve - slot.reserve, k.mag + k.reserve);
+    if (give <= 0) return false;
+    slot.reserve += give;
+    return true;
+  }
+  if (!wasPressed(p.input.buttons, p.prevButtons, Btn.Interact)) return false;
+  const slot = p.weapons[p.active]!;
+  const fromRack = k.spawner >= 0 && game.spawners[k.spawner]!.def.id.startsWith('armory-');
+  // what the gun in hand still had to wait: the gun dropped keeps it, and the one taken can't fire
+  // before it either (fire, E, E would otherwise skip the interval: review H1)
+  const wait = slot.def !== NO_WEAPON ? slot.cooldown : 0;
+  if (slot.def !== NO_WEAPON && !fromRack && weaponPickup(slot.def)) {
+    swappedOut.push({ x: p.x, y: p.y, def: slot.def, mag: slot.mag, reserve: slot.reserve, readyTick: wait > 0 ? game.tick + wait : 0 });
+  }
+  slot.def = w;
+  slot.mag = k.mag;
+  slot.reserve = k.reserve;
+  slot.cooldown = Math.max(wait, k.readyTick - game.tick, 0);
+  slot.bloom = 0;
+  slot.ticksSinceShot = 999;
+  slot.spin = 0;
+  p.dual = false; // the new gun may be two-handed: one in hand
+  cancelReloads(p);
+  p.swapTicks = ticks(gun.equip);
+  return true;
+}
+
 /** What touching the item does. False: `p` leaves it where it is. */
-function take(p: PlayerState, k: PickupState, def: PickupDef): boolean {
+function take(game: Game, p: PlayerState, k: PickupState, def: PickupDef): boolean {
   switch (def.kind) {
     case 'shield':
       if (p.shieldHp > 0) {
@@ -185,6 +293,8 @@ function take(p: PlayerState, k: PickupState, def: PickupDef): boolean {
       return true;
     case 'grenades':
       return def.grenade !== undefined && addGrenades(p, def.grenade, GRENADE_PICKUP_COUNT) > 0;
+    case 'weapon':
+      return def.weapon !== undefined && takeWeapon(game, p, k, def.weapon);
   }
 }
 
@@ -206,7 +316,7 @@ export function stepPickups(game: Game): void {
     if (!k.alive) continue;
     const def = pickupDefs[k.def]!;
     for (const p of game.players) {
-      if (!p?.alive || !touches(game, p, k, def) || !take(p, k, def)) continue;
+      if (!p?.alive || !touches(game, p, k, def) || !take(game, p, k, def)) continue;
       k.alive = false;
       if (k.spawner >= 0) {
         const s = game.spawners[k.spawner]!;
@@ -217,6 +327,18 @@ export function stepPickups(game: Game): void {
       break;
     }
   }
+
+  // guns swapped out by `E` land where the taker stands (a one-way platform too, like a death drop) with their ammo, for 30 s
+  for (const s of swappedOut) {
+    const item = weaponPickup(s.def);
+    const n = item && game.world.raycast(s.x, s.y + 0.5, 0, -1, DROP_FALL_MAX, 0, ray) ? allocPickup(game) : null;
+    if (!n) continue;
+    place(n, item!, s.x, quantize(ray.y, POS_INV), 0, ticks(DROPPED_PICKUP_SECONDS), -1, -1);
+    n.mag = s.mag;
+    n.reserve = s.reserve;
+    n.readyTick = s.readyTick;
+  }
+  swappedOut.length = 0;
 }
 
 /**

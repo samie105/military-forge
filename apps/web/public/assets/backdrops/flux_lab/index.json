@@ -1,0 +1,18 @@
+{
+ "version": 1,
+ "files": {
+  "wall.webp": {
+   "size": [
+    2048,
+    878
+   ]
+  },
+  "mid.webp": {
+   "size": [
+    1536,
+    357
+   ],
+   "ktx2": "mid.ktx2"
+  }
+ }
+}

@@ -212,4 +212,17 @@ export interface MapDef {
   events?: MapEvents;
   /** pickup spawners (docs/03 §12); a map without them plays exactly as before */
   spawners?: MapSpawner[];
+  /**
+   * Where the test armory's rack starts (GameOptions.armory: one of every gun, near the spawns,
+   * respawning fast): the first gun's x, a height above the floor it drops onto, and which way the
+   * rack runs. Without it the rack starts by the first spawn point.
+   */
+  armory?: MapArmory;
+}
+
+export interface MapArmory {
+  x: number;
+  y: number;
+  /** +1 the rack runs right, −1 left (default +1) */
+  dir?: 1 | -1;
 }

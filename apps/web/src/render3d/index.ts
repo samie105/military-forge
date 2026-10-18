@@ -29,7 +29,7 @@ import { HIT, hitReactions } from './motion';
 import { CharacterAssembler, OutlineMaterial, characterToonRamp, type CharacterInstance, type CharacterLod } from '../character';
 import { LoadoutDirectory } from './character';
 import { CloudLayer } from './clouds';
-import { KIT_WAIT_MS, MapEnvironment, environmentFor, withTimeout } from './environment';
+import { KIT_WAIT_MS, MapEnvironment, createKtx2, environmentFor, ktx2Gate, withTimeout, type Ktx2Source } from './environment';
 import { buildDepthLayers, updateForeground, type DepthLayers } from './layers';
 import { lightingFor, type LightingPreset } from './lighting';
 import { buildMapGeometry } from './mapGeometry';
@@ -39,7 +39,9 @@ import { ZoneVolumes } from './zones';
 import { DynamicResolution, PRESETS, SampleWindow, parsePreset, type GraphicsPreset, type PresetName } from './presets';
 import { eachKick, recoilOf } from './recoil';
 import { PickupMeshes, RicochetSparks } from './shield';
+import { WeaponItems } from './weaponItems';
 import { Vfx } from './vfx';
+import { isTouchDevice } from '../touch';
 import type { EjectLookup } from './vfx/casings';
 import type { BodyLookup } from './vfx/dash';
 import type { MuzzleLookup } from './vfx/gunfire';
@@ -132,6 +134,8 @@ export class Renderer3D {
   private zones: ZoneVolumes;
   /** the map's kit, lighting look and dressing, for maps that have one (environment/) */
   private env: MapEnvironment | null = null;
+  /** KTX2 transcoding for a map's art, where it's wanted (phones, touch, Low); null: WebP only */
+  private readonly ktx2For: (preset: PresetName, touch: boolean) => Ktx2Source;
   /** the lighting preset's fog, and how far a fog event has thickened it (0 → 1) */
   private readonly fogBase = { near: 45, far: 150 };
   private fogMix = 0;
@@ -149,6 +153,8 @@ export class Renderer3D {
   private readonly looks = new Map<number, CharacterInstance>();
   /** riot shields lying on the map, and ricochet sparks (shield.ts) */
   private readonly pickupMeshes: PickupMeshes;
+  /** weapon crates on the map: the gun itself, side-on (the owner's "more guns") */
+  private readonly weaponItems: WeaponItems;
   private readonly sparks: RicochetSparks;
   private readonly clouds = new CloudLayer(this.scene); // smoke, gas, non-frag grenades (arsenal B)
   /** one outline material for every soldier (docs/04 §5.5) */
@@ -202,6 +208,8 @@ export class Renderer3D {
     this.dynres = new DynamicResolution(preset.minScale);
     // throws when no context can be had (create3d falls back to 2D)
     this.renderer = new WebGLRenderer({ canvas, antialias: preset.antialias, powerPreference: 'high-performance', failIfMajorPerformanceCaveat: !allowSoftware });
+    // map art (backdrops, billboards) as KTX2 only where GPU memory matters: phones, touch, Low (environment/ktx2.ts)
+    this.ktx2For = ktx2Gate(() => createKtx2(this.renderer, import.meta.env.BASE_URL));
     canvas.addEventListener('webglcontextlost', (e) => {
       e.preventDefault(); // ask for it back
       this.lost = true;
@@ -251,7 +259,8 @@ export class Renderer3D {
     // riot shields lying on the map, and the ricochet spark (an effect module: it gets the sim events)
     this.pickupMeshes = new PickupMeshes(this.kit.shield);
     this.sparks = new RicochetSparks(this.kit.shield);
-    this.scene.add(this.pickupMeshes.group, this.sparks.group);
+    this.weaponItems = new WeaponItems(this.kit);
+    this.scene.add(this.pickupMeshes.group, this.sparks.group, this.weaponItems.group);
     this.vfx.register(this.sparks);
     // smoke, gas and the other grenades, the flashbang's pop and the EMP's ring (arsenal B)
     this.vfx.register(this.clouds);
@@ -364,7 +373,7 @@ export class Renderer3D {
   /** Everything that comes from the map: lighting preset, the gameplay plane, the depth layers and the effects' world. */
   private buildMap(map: MapDef): void {
     const envDef = environmentFor(map.id);
-    this.env = envDef ? new MapEnvironment(envDef, map, import.meta.env.BASE_URL) : null;
+    this.env = envDef ? new MapEnvironment(envDef, map, import.meta.env.BASE_URL, undefined, undefined, undefined, this.ktx2For(this.preset.name, isTouchDevice())) : null;
     this.env?.setShadowMap(this.preset.shadows === 'map');
     // a map swapped in after load (online: the room's map) gets its art's shaders compiled as it arrives
     if (this.ready) this.warmEnvironment();
@@ -555,6 +564,7 @@ export class Renderer3D {
     this.plane.visible = !this.env?.drawsPlane; // the kit draws the plane once it's in
     this.env?.update(this.pose, frame, dt); // painted sky, lamp glows over players, billboard rotation
     this.pickupMeshes.sync(frame.pickups, dt);
+    this.weaponItems.sync(frame.pickups, dt);
     updateForeground(this.layers.foreground, frame.players, this.pose, dt);
     this.zones.update(frame, dt, now / 1000);
     this.applyEventAtmosphere(frame, dt);

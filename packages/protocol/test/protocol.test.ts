@@ -1,4 +1,4 @@
-import { BREACHER, FRAG, GAS, GRENADE_TYPES, MACHETE, SMOKE, WIDOW } from '@military-forge/content';
+import { BREACHER, FRAG, GAS, GRENADE_TYPES, MACHETE, SHREDDER, SMOKE, TRIDENT, WIDOW } from '@military-forge/content';
 import { Btn, Game, PlayerState, createInput, spawnCloud, type SimEvent } from '@military-forge/sim';
 import type { MapDef } from '@military-forge/content';
 import { describe, expect, it } from 'vitest';
@@ -659,8 +659,8 @@ describe('local-player block', () => {
 
 describe('grenade variety (v10)', () => {
   it('takes the v10 slots from the protocol registry: after the shield, nothing before it moved', () => {
-    expect(PROTOCOL_VERSION).toBe(10);
-    expect([LS.shieldTicks, LS.grenadeType, LS.grenades, LS.blindTicks, LS.blindFade, LS.gasTicks, LS.jetDisabledTicks, LOCAL_STATE_FIELDS]).toEqual([47, 48, 49, 54, 55, 56, 57, 58]);
+    expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(10); // v11 (more guns) appends after these
+    expect([LS.shieldTicks, LS.grenadeType, LS.grenades, LS.blindTicks, LS.blindFade, LS.gasTicks, LS.jetDisabledTicks]).toEqual([47, 48, 49, 54, 55, 56, 57]);
     // the clouds section after the pickups section: an item and a cloud in the same snapshot
     const game = new Game({ seed: 2, dummies: false, pickups: true });
     const me = game.addPlayer('me');
@@ -972,5 +972,50 @@ describe('grenade variety (v10)', () => {
     }
     expect(types).toBe((1 << FRAG.index) | (1 << SMOKE.index) | (1 << GAS.index));
     expect(gassed).toBeGreaterThan(30);
+  });
+});
+
+describe('more guns (v11)', () => {
+  it('takes the v11 slots from the protocol registry: a weapon-handling group after the status group', () => {
+    expect(PROTOCOL_VERSION).toBe(11);
+    expect([LS.spin0, LS.burst0, LS.spin1, LS.burst1, LOCAL_STATE_FIELDS]).toEqual([58, 59, 60, 61, 62]);
+  });
+
+  it('a spinning minigun and a burst under way round-trip, full and delta, so prediction fires exactly', () => {
+    const game = new Game({ seed: 3, dummies: false });
+    const me = game.addPlayer('me');
+    game.setLoadout(me, [SHREDDER.index, TRIDENT.index]);
+    const inputs: ReturnType<typeof createInput>[] = [];
+    const enc = new SnapshotEncoder();
+    const baselines = new SnapshotBaselines();
+    const decoder = new SnapshotDecoder();
+    let spun = 0;
+    let bursting = 0;
+    for (let t = 0; t < 240; t++) {
+      // spin and fire the minigun, swap to the burst rifle, fire a burst
+      const buttons = t < 100 ? Btn.Fire : t === 100 ? Btn.Swap : t > 140 && t < 150 ? Btn.Fire : 0;
+      inputs[me.id] = { ...createInput(), buttons, aim: 0 };
+      game.step(inputs);
+      if (me.weapons[0].spin > 0) spun++;
+      if (me.weapons[1].burst > 0) bursting++;
+      enc.begin(game, t + 1, game.events);
+      const bytes = enc.encodeFor({ baselines, ackInputTick: t & 0xffff, inputBufferHealth: 1, local: me, view: null });
+      baselines.acked = t + 1;
+      const snap = decoder.decode(bytes);
+      expect(describeLocalDiff(snap.local!, captureLocalState(me, createLocalState()))).toBe('');
+    }
+    expect(spun).toBeGreaterThan(30);
+    expect(bursting).toBeGreaterThan(0);
+  });
+
+  it('48 items, weapon items past def 15, and a PICKUP naming one, round-trip (u6 since v11)', () => {
+    const game = new Game({ seed: 3, dummies: false, pickups: true });
+    const me = game.addPlayer('me');
+    for (const k of game.pickups) Object.assign(k, { alive: true, def: 7 + (k.id % 14), x: 100 + k.id * 0.5, y: 0, spawner: -1, spot: -1 });
+    const events: SimEvent[] = [{ type: 'pickup', player: me.id, item: 20, x: 101, y: 0 }];
+    const snap = decodeMessage(encodeSnapshot(game, 1, events, { local: me })) as SnapshotMsg;
+    expect(snap.pickups).toHaveLength(game.pickups.length);
+    expect(snap.pickups.at(-1)).toEqual({ id: 47, def: 7 + (47 % 14), x: 100 + 47 * 0.5, y: 0 });
+    expect(snap.events).toEqual(events);
   });
 });

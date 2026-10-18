@@ -1,0 +1,24 @@
+{
+ "version": 1,
+ "files": {
+  "sky.webp": {
+   "size": [
+    1024,
+    439
+   ]
+  },
+  "far.webp": {
+   "size": [
+    1024,
+    198
+   ]
+  },
+  "mid.webp": {
+   "size": [
+    1536,
+    505
+   ],
+   "ktx2": "mid.ktx2"
+  }
+ }
+}

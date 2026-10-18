@@ -143,17 +143,20 @@ describe('one-way slabs that stop bullets (blocksBullets)', () => {
       const g = game.grenades.find((x) => x.alive)!;
       expect(g.type).toBe(FRAG.index);
       let top = -Infinity;
+      let lowAfterTop = Infinity; // the lowest it gets once it is coming down
       for (let i = 0; i < FRAG.fuse * 60 - 10; i++) {
         hold(game, p, 0, 1);
         top = Math.max(top, g.y);
+        if (g.y < top - 0.5) lowAfterTop = Math.min(lowAfterTop, g.y);
       }
       if (blocks) {
         expect(top).toBeLessThan(4);
         expect(g.y).toBeLessThan(0.5); // back on the floor
       } else {
         expect(top).toBeGreaterThan(5);
-        expect(g.y).toBeGreaterThan(4); // resting on the platform
-        expect(g.y).toBeLessThan(4.5);
+        // it came down onto the platform and stays on it (still bouncing there: frags fly 30% farther since the owner's playtest)
+        expect(lowAfterTop).toBeGreaterThan(4);
+        expect(g.y).toBeGreaterThan(4);
       }
     }
   });

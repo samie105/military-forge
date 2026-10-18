@@ -92,6 +92,20 @@ The schema is zod-validated and lint-checked (e.g. a `dps` sanity range per clas
 
 **Cosmetic variants, not stat upgrades:** genre classics sold golden guns with extra power. Ours is a **gold skin** for the Hawk with no stat change.
 
+**As built** (`packages/content/src/weapons.ts`; owner's playtest, 18 Oct 2026: "add more guns I can test"). Every gun in the table with a W8 model and no projectile is in the game: Hammer, Buzz, K-47, Breacher, Widow and Machete (indices 0–5), then **Hawk .50, Rattler, Hornet, Trident, Bullpup, Longbow, Shredder and Arc** (6–13). They are on the maps in weapon crates and on the playtest's test armory rack (§12), not in the spawn loadout. The numbers are this table's, except where the feel report (packages/sim `pnpm feel`, WEAPON_TARGETS) showed a gun leaving its role:
+
+| Gun | Changed | Why |
+|---|---|---|
+| Hawk .50 | damage 8 → **9** (12 shots, 2.75 s) | a sidearm you can still win a fight with; still the weakest gun per shot |
+| Rattler | spread ±4° → **±5°** | at 0.15 s a shot its bloom never builds, so ±4° hit 100% at 12 m; ±5° is ~74% |
+| Hornet | spread ±5° → **±4.5°** (bloom 0.3°/shot) | its 0.06 s rate blooms fast; this keeps it the close-range king and weak at 18 m (~32%) |
+| Trident | spread ±1.5° → **±3.5°**; rounds **1/15 s** apart (4 ticks) | ±1.5° out-ranged the Widow at 18 m; bloom resets between bursts. 8 rounds kill in 1.07 s |
+| Bullpup | spread ±3° → **±3.5°** | the slower rate barely blooms; ~84% at 12 m |
+| Shredder | spread ±6° → **±4.5°** (bloom 0.2°/shot, max 3°); interval 0.07 → **1/15 s** | at ±6° the spun-up stream missed most of a body at 12 m. The sim's cooldown counts whole ticks: 0.07 s would fire every 5 ticks (12/s), 1/15 s is exactly 4 (15/s) |
+| Arc | cell 200 → **40 ticks** (6 s of beam), regen 10/s after **0.5 s** off the trigger, no reload | 200 ticks was 30 s of beam: it never had to stop. Regen waits for the trigger to be released |
+
+Equip times: 0.25 s for one-handed guns, 0.3–0.35 s for rifles and SMGs, 0.5 s for the Shredder. **Not built yet:** the Thumper, Popper, Ripper, Pulse and Dragon need sim projectiles (§11); they come in a follow-up.
+
 ---
 
 ## 6. Time-to-kill sheet (100 HP, all shots hit, no regen during the fight)
@@ -104,13 +118,14 @@ The schema is zod-validated and lint-checked (e.g. a `dps` sanity range per clas
 | Rattler | 10 → 1.35 s | 7 → 0.9 s | dual 0.68 s |
 | Hornet | 15 → 0.84 s | 10 → 0.54 s | the fastest-firing gun |
 | K-47 | 10 → 0.90 s | 7 → 0.60 s | |
-| Trident | 8 rounds → ~1.0 s (3 bursts) | 5 → 0.5 s (2 bursts) | headshot burst + 1 shot |
+| Trident | 8 rounds → 1.07 s (3 bursts) | 5 → 0.57 s (2 bursts) | headshot burst + 1 shot |
 | Bullpup | 12 → 1.32 s | 8 → 0.84 s | |
 | Longbow | 3 → 1.1 s | 2 → 0.55 s | |
 | Widow | 2 → 0.8 s | **1 → instant** | crouching victims deny the one-shot |
 | Breacher | 1 (all 5 pellets) → instant | — | inside ~4 m |
 | Dragon | 5 ticks → 0.6 s | — | area; hurts the user near walls |
 | Arc | 17 ticks → 2.4 s | — | perfect accuracy, huge range: a zoning tool |
+| Shredder | 12 → 1.53 s (0.8 s spin-up + 0.73 s) | 8 → 1.27 s | pre-spin (secondary fire) to skip the spin-up |
 | Thumper | 1 direct hit | — | splash kills crouched victims too |
 | Machete | 1 hit | — | |
 
@@ -149,7 +164,7 @@ Defaults: `moveMul 1.25 · airMul 1.5 · crouchMul 0.6 · dualMul 1.4 · bloomPe
 | Shredder (minigun) | 0.35 per round | 0.15 per round | a long burst pushes you back steadily |
 | Dragon, Arc, Pulse | 0 | 0 | streams and orbs don't kick |
 
-  (Bold rows are in the game; the rest are the starting values for when those weapons land.)
+  (Every row is in the game except the Thumper, Popper, Ripper, Dragon and Pulse: those are the starting values for when they land.)
 - **Aim aids:** a reticle at the cursor + a faint **aim line** (accessibility option, available to everyone). Other games sell a laser sight; for us it's a free setting. **No aim assist on desktop.** Touch (later) gets an optional light slowdown-near-target assist, only in casual queues.
 
 ---
@@ -235,12 +250,13 @@ Zoom makes the camera pull **out** so you see more of the map (1×–7×). In 2.
 |---|---|
 | Breacher | 5 pellets; each pellet hit applies 0.6 m/s of knockback (point-blank = a big shove); pellets don't penetrate |
 | Dragon | spawns a flame projectile every 0.15 s (sim projectile: 7 m/s initial speed, gravity −0.2, life 0.8 s, radius grows 0.15 → 0.6 m). Hits apply 20 dmg + a **burn** of 4 dmg/s for 2 s. Flames reflect weakly off walls → user damage when close. **Clears gas clouds** it touches. Passes around riot shields |
-| Arc | a continuous beam: one ray per 0.15 s tick from the shoulder; hitscan with lag comp; perfectly accurate; draws a persistent beam VFX; cell regenerates when not firing |
+| Arc | a continuous beam: one ray per 0.15 s tick from the shoulder; hitscan with lag comp; perfectly accurate; draws a persistent beam VFX; cell regenerates when not firing. **Built:** `fireMode: 'beam'`, a 40-tick cell that refills at 10 a second after 0.5 s off the trigger, no falloff, never reloads (the beam VFX is still the tracer) |
 | Thumper | sim projectile 20 m/s, no gravity, smoke trail; explodes on contact or at 60 m; splash per 02-physics §14; huge knockback (rocket jumps possible: self-damage 50%) |
 | Popper | arcing grenades (gravity 1.0, e = 0.3); explodes on player contact or after 1.2 s |
 | Ripper | needs a 0.4 s charge; the blade travels 18 m/s, **bounces off walls** (e = 1.0, no friction), **passes through players** (damaging each once per bounce segment), explodes after 5 s; deadly to its owner |
 | Pulse | slow orb (8 m/s) passes through walls; on a player hit or at end of life → EMP burst R 2.5 m: jetpacks disabled for 3 s, mines disarmed, no damage |
-| Shredder | 0.8 s spin-up (audible to nearby enemies, a fair warning), spin-down 1 s; can pre-spin with the secondary button; −30% move speed |
+| Shredder | 0.8 s spin-up (audible to nearby enemies, a fair warning), spin-down 1 s; can pre-spin with the secondary button; −30% move speed. **Built:** the spin is per-slot sim state (0–240, `SPIN_FULL`), up while either fire button is held, down otherwise; it fires only at full spin |
+| Trident (built) | `fireMode: 'burst'`: a press (or holding the trigger) fires 3 rounds 1/15 s apart, and the next burst starts 0.5 s after the last one started. A started burst finishes by itself; a reload, a swap or an empty mag ends it |
 | Machete | one-hit melee; replaces the default knife while held; the dual pair only swings one |
 | Grenades | 02-physics §14 (frag, smoke, toxic gas, flashbang, proximity mine, EMP): one key throws the selected type, `T` cycles. Smoke is cover (bots and the AOI can't see through it); gas is area denial (stay in the middle and you die); a flashbang whites out everyone looking at it for up to 2.5 s (a "Reduce flashes" setting swaps the white for a dark blur) |
 
@@ -254,6 +270,8 @@ Zoom makes the camera pull **out** so you see more of the map (1×–7×). In 2.
 - **Pickups:** **Health pack** (instant full heal, only if hurt), **Power Boost** (unlimited jetpack fuel for 20 s; can't crouch; you *can* fly off the top of the map), **Riot Shield**, **Grenade pair**, **Ammo box** (refills both slots).
 - **Grenade pairs (built, arsenal B):** six items, a pair of one type each (frag, smoke, gas, flashbang, mine, EMP), in the `grenades` pool: frag 3, smoke 2, flashbang 2, gas 1, mine 1, EMP 1 (weights). The seeded pool draw picks the type each time, so a spot gives a random pair. Touching one puts the pair on your belt up to the type's carry limit (docs/02 §14); with that type full it stays on the floor. On Lunar Outpost, Storm Front, Flux Lab and the movement-test range (up on its platforms and tower), 18–24 s respawns (8–14 s on the range).
 - Some weapons are map-specific (rare guns only on certain maps), which gives maps identity.
+- **Weapon crates (built, owner's playtest):** one item per gun (`weapon:<id>`, pickup index 7 + the weapon's index; kind `weapon`). The `weapons` pool holds every gun, the everyday ones three times as often as the power weapons (Breacher, Widow, Longbow, Shredder, Arc, Machete, gold crates); each gun also has a one-item pool of its own id. Every map has a `weapons` spawner with 3–5 spots (2 out at once, 3 on Street Market), first in 3–6 s, back 12–18 s after one is taken. Walking over a gun you hold adds the item's rounds to your reserve and spends it (an empty one stays). Any other gun waits for **`E`** (`Btn.Interact`; a touch button too): it goes into the slot in hand with the item's ammo, ends dual-wielding, and the gun you held drops where you stand with its ammo and the rest of its interval, for 30 s; the gun taken can't fire before the one in hand could have. The HUD prompts `[E] take <gun> (swaps your <gun>)`.
+- **Test armory (built, playtest only):** `GameOptions.armory` (server flag `--armory` / `ARMORY=1`; local mode `?armory=0` turns it off) adds a rack of one of every gun near the spawns, 0.8 m apart from the map's `armory: { x, y, dir? }` (by the first spawn without one), each back 2 s after it's taken. Rack guns swapped out aren't dropped. The playtest script turns it on (`--no-armory` turns it off). Its spawners come after the map's own, so the seeded draws of the map's spawners don't change.
 
 ---
 

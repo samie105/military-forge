@@ -75,6 +75,23 @@ export const mechanicsTestMap: MapDef = {
     { name: 'Bouncer', x: 132.5, y: 0, script: { kind: 'idle' } },
   ],
   labels,
+  // weapon crates (owner: "more guns") and the test armory's rack; both need pickups on (rooms, local mode)
+  spawners: [
+    // a random gun, everyday ones three times as often as power weapons
+    {
+      id: 'weapons',
+      pool: 'weapons',
+      spots: [
+        { x: 145, y: 0 },
+        { x: 175, y: 0 },
+        { x: 188, y: 0 },
+      ],
+      first: [3, 6],
+      respawn: [12, 18],
+      maxActive: 2,
+    },
+  ],
+  armory: { x: 141.2, y: 1.5, dir: 1 },
   rules: { fuelRegenMul: 1.25 },
   zones,
   events: {

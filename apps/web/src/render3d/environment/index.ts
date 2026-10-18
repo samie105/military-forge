@@ -53,6 +53,7 @@ import { KERB_Z, buildBackGround, buildStreet, streetHeight } from './street';
 import { QuadBuilder } from './shapes';
 import { SHOP_SIGNS, signAtlas, signGeometry, type SignPlacement } from './signs';
 import { FLUX_LAB, LUNAR_OUTPOST, STORM_FRONT } from './places';
+import { textureBytes, type Ktx2Source } from './ktx2';
 import { STREET_MARKET } from './streetMarket';
 import { disposeTextures, glowTexture, grimeTexture, softBoxTexture } from './textures';
 
@@ -123,6 +124,9 @@ export function requestedLook(): string | null {
   }
 }
 
+export { createKtx2, ktx2Gate, ktx2Wanted, type Ktx2Source } from './ktx2';
+
+
 /** a decor piece's world bounds (m) */
 export interface DecorBox {
   piece: string;
@@ -176,6 +180,8 @@ export class MapEnvironment {
    * background (streetMarket.test.ts).
    */
   readonly decorBoxes: DecorBox[] = [];
+  /** the shop-sign atlas (a canvas: no download) */
+  private signsTexture: Texture | null = null;
   private readonly roam: Roam;
 
   constructor(
@@ -185,6 +191,8 @@ export class MapEnvironment {
     loader: KitSource = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder),
     fetchJson: (url: string) => Promise<unknown> = (url) => fetch(url).then((r) => (r.ok ? r.json() : Promise.reject(new Error(`${url}: ${r.status}`)))),
     look: string | null = requestedLook(),
+    /** KTX2 transcoding (Renderer3D's loader); null: WebP and canvas textures only */
+    private readonly ktx2: Ktx2Source = null,
   ) {
     this.lookName = look && def.looks[look] ? look : def.defaultLook;
     this.look = def.looks[this.lookName]!;
@@ -193,7 +201,7 @@ export class MapEnvironment {
     this.background.name = `environment:${def.mapId}:${this.lookName}`;
     this.foregroundGroup.name = 'environment-foreground';
     this.grime = this.texture(grimeTexture());
-    this.buildStatic(baseUrl);
+    this.buildStatic(baseUrl, fetchJson);
     this.kit.name = 'kit';
     this.background.add(this.kit);
     const kitUrl = def.kitUrl;
@@ -219,7 +227,7 @@ export class MapEnvironment {
       const [slots, pool] = (await Promise.all([fetchJson(baseUrl + ads.slots), fetchJson(baseUrl + ads.pool)])) as [AdSlot[], HousePool];
       if (this.disposed) return;
       // the house set follows the match (Frame.matchSeed, in update): the paid flow will send a signed manifest
-      this.boards = new AdBoards(this.def.mapId, slots, pool, baseUrl + ads.base, this.look.adTint);
+      this.boards = new AdBoards(this.def.mapId, slots, pool, baseUrl + ads.base, this.look.adTint, this.ktx2);
       for (const m of this.boards.meshes) this.background.add(m);
     } catch (err) {
       console.warn(`environment ${this.def.mapId}: no billboards`, err);
@@ -242,7 +250,7 @@ export class MapEnvironment {
   }
 
   /** Sky, backdrops, street, yard and foreground: everything that doesn't wait for the kit. */
-  private buildStatic(baseUrl: string): void {
+  private buildStatic(baseUrl: string, fetchJson: (url: string) => Promise<unknown>): void {
     const b = this.map.bounds;
     const cx = (b.minX + b.maxX) / 2;
     const x0 = b.minX - 110;
@@ -252,7 +260,7 @@ export class MapEnvironment {
     const painted = this.def.backdrop;
     const hasSkyArt = !!painted?.skies[this.lookName];
     if (painted) {
-      this.backdrop = buildBackdrop(painted, this.lookName, look.backdropTint, baseUrl, undefined, look.backdropHaze);
+      this.backdrop = buildBackdrop(painted, this.lookName, look.backdropTint, baseUrl, undefined, this.ktx2, fetchJson, look.backdropHaze);
       for (const m of [this.backdrop.sky, ...this.backdrop.panels]) {
         if (!m) continue;
         this.material(m.material);
@@ -443,11 +451,23 @@ export class MapEnvironment {
     if (!placements.length) return;
     const atlas = signAtlas(SHOP_SIGNS);
     if (!atlas) return;
-    this.texture(atlas);
+    this.signsTexture = this.texture(atlas);
     const mesh = new Mesh(signGeometry(placements), this.material(new MeshLambertMaterial({ map: atlas })));
     mesh.name = 'shop-signs';
     mesh.receiveShadow = true;
     this.kit.add(mesh);
+  }
+
+  /**
+   * GPU memory the environment's textures take, bytes (compressed: as uploaded; decoded: 4 bytes a
+   * texel with mips): the painted backdrops, the billboards, the shop signs and the rest.
+   */
+  gpuTextureBytes(): { backdrops: number; ads: number; signs: number; other: number; total: number } {
+    const backdrops = (this.backdrop?.textures ?? []).reduce((s, t) => s + textureBytes(t), 0);
+    const ads = this.boards?.gpuBytes() ?? 0;
+    const signs = textureBytes(this.signsTexture);
+    const other = this.textures.filter((t) => t !== this.signsTexture).reduce((s, t) => s + textureBytes(t), 0);
+    return { backdrops, ads, signs, other, total: backdrops + ads + signs + other };
   }
 
   /** Power lines, bunting, trees, palms and the mid-depth city: one merged mesh. */

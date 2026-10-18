@@ -26,7 +26,7 @@ const ZONE_KEYS = ['id', 'kind', 'rect', 'points', 'launch', 'event', 'label', .
 const EVENT_KEYS = ['id', 'kind', 'name', 'description', 'duration', 'warning', 'gustPeriod', 'windFlip', 'pickOneZone', ...MODIFIER_KEYS];
 const SPAWNER_KEYS = ['id', 'pool', 'spots', 'first', 'respawn', 'maxActive'];
 const ONE_WAY_KEYS = ['ax', 'ay', 'bx', 'by', 'blocksBullets'];
-const TOP_KEYS = ['$schema', 'id', 'name', 'bounds', 'solids', 'oneWays', 'spawns', 'dummies', 'labels', 'rules', 'zones', 'events', 'spawners'];
+const TOP_KEYS = ['$schema', 'id', 'name', 'bounds', 'solids', 'oneWays', 'spawns', 'dummies', 'labels', 'rules', 'zones', 'events', 'spawners', 'armory'];
 
 class Problems {
   readonly list: string[] = [];
@@ -173,6 +173,14 @@ export function parseMapJson(json: unknown, source = 'map'): MapDef {
         }),
       );
     }
+    if (m.armory !== undefined) {
+      p.object('$.armory', m.armory, (o) => {
+        p.keys('$.armory', o, ['x', 'y', 'dir']);
+        p.num('$.armory.x', o.x);
+        p.num('$.armory.y', o.y);
+        if (o.dir !== undefined && o.dir !== 1 && o.dir !== -1) p.add('$.armory.dir', 'must be 1 or -1');
+      });
+    }
   });
   if (p.list.length) throw new Error(`${source}: ${p.list.join('; ')}`);
   const { $schema: _schema, ...map } = json as Json;
@@ -249,6 +257,13 @@ export function mapJsonSchema(): object {
       zones: { type: 'array', items: { $ref: '#/$defs/zone' }, description: 'Areas that change the rules inside them (docs/02 §20.2).' },
       events: { $ref: '#/$defs/events' },
       spawners: { type: 'array', items: { $ref: '#/$defs/spawner' }, description: 'Pickup spawners: items at random spots and times (docs/03 §12).' },
+      armory: {
+        type: 'object',
+        required: ['x', 'y'],
+        additionalProperties: false,
+        properties: { x: { type: 'number' }, y: { type: 'number' }, dir: { enum: [1, -1] } },
+        description: "Where the test armory's rack starts (one of every gun, GameOptions.armory): the first gun's x, a height above its floor, and the way the rack runs.",
+      },
     },
     $defs: {
       spawner: {

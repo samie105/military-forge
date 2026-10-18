@@ -6,7 +6,7 @@
  *   u5 changed · { u5 id · u8 groupMask · groups }   players new or changed since the baseline
  *   u5 removed · { u5 id }                           in the baseline, now gone or out of view
  *   u7 grenades · { … }                              in view, full
- *   u1 pickups changed · [u6 n · { u5 id · u4 def · i24 x · i24 y }]   items in view, when changed (v9)
+ *   u1 pickups changed · [u6 n · { u6 id · u6 def · i24 x · i24 y }]   items in view, when changed (v9; u6 id/def v11)
  *   u5 clouds · { u5 id · u3 type · x · y · u10 age } in view, full (smoke and gas, v10)
  *   u8 events · { u3 tag · … }                       in view; gunfire/blasts outside it → SOUND;
  *                                                    map events (v8) always; tag 7 = extended, u4 kind
@@ -556,7 +556,7 @@ function readExtEvent(r: BitReader): SnapshotEvent {
     case EXT_SHIELD_BREAK:
       return { type: 'shieldBreak', owner: unPid(r.bits(5)), attacker: unPid(r.bits(5)), x: r.signed(24) / POS_INV, y: r.signed(24) / POS_INV };
     case EXT_PICKUP:
-      return { type: 'pickup', player: unPid(r.bits(5)), item: r.bits(4), x: r.signed(24) / POS_INV, y: r.signed(24) / POS_INV };
+      return { type: 'pickup', player: unPid(r.bits(5)), item: r.bits(6), x: r.signed(24) / POS_INV, y: r.signed(24) / POS_INV };
     default:
       throw new DecodeError(`unknown extended event kind ${kind}`);
   }
@@ -598,7 +598,7 @@ function writeEvent(w: BitWriter, e: SimEvent): void {
       writeShieldBreak(w, e.owner, e.attacker, e.x, e.y);
       break;
     case 'pickup':
-      w.bits(EVENT_EXT, 3).bits(EXT_PICKUP, EXT_BITS).unsigned(pid(e.player), 5).unsigned(e.item, 4).signed(pos(e.x), 24).signed(pos(e.y), 24);
+      w.bits(EVENT_EXT, 3).bits(EXT_PICKUP, EXT_BITS).unsigned(pid(e.player), 5).unsigned(e.item, 6).signed(pos(e.x), 24).signed(pos(e.y), 24);
       break;
     case 'throw':
       break;
@@ -818,7 +818,7 @@ export class SnapshotEncoder {
       w.bits(n, 6);
       for (let i = 0; i < n; i++) {
         const o = 1 + i * PICKUP_FIELDS;
-        w.bits(items[o]!, 5).bits(items[o + 1]!, 4).signed(items[o + 2]!, 24).signed(items[o + 3]!, 24);
+        w.bits(items[o]!, 6).bits(items[o + 1]!, 6).signed(items[o + 2]!, 24).signed(items[o + 3]!, 24);
       }
     }
 
@@ -1190,8 +1190,8 @@ export class SnapshotDecoder {
       list[0] = n;
       for (let i = 0; i < n; i++) {
         const o = 1 + i * PICKUP_FIELDS;
-        list[o] = r.bits(5);
-        list[o + 1] = r.bits(4);
+        list[o] = r.bits(6);
+        list[o + 1] = r.bits(6);
         list[o + 2] = r.signed(24);
         list[o + 3] = r.signed(24);
       }

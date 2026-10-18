@@ -6,7 +6,7 @@
 import { Btn } from '@military-forge/sim';
 import { LAYOUT_KEY, LIMITS, clamp, type Handed, type KeyValueStore } from './settings';
 
-export type ControlId = 'move' | 'aim' | 'grenade' | 'cycleGrenade' | 'dash' | 'melee' | 'reload' | 'swap' | 'zoom' | 'shield' | 'pause' | 'scores';
+export type ControlId = 'move' | 'aim' | 'grenade' | 'cycleGrenade' | 'dash' | 'melee' | 'reload' | 'swap' | 'zoom' | 'shield' | 'take' | 'pause' | 'scores';
 
 export interface ControlDef {
   id: ControlId;
@@ -42,6 +42,7 @@ export const CONTROLS: readonly ControlDef[] = [
   { id: 'swap', kind: 'tap', label: '⇄', bit: Btn.Swap, title: 'Swap weapon' },
   { id: 'zoom', kind: 'tap', label: '⌕', bit: 0, title: 'Zoom (scoped weapons)' },
   { id: 'shield', kind: 'tap', label: '⛨', bit: SHIELD_BIT, title: 'Raise or sling the shield' },
+  { id: 'take', kind: 'tap', label: 'E', bit: Btn.Interact, title: 'Take the weapon you stand on (it swaps the gun in hand)' },
   { id: 'pause', kind: 'tap', label: '❚❚', bit: 0, key: 'Escape', title: 'Menu' },
   { id: 'scores', kind: 'tap', label: '☰', bit: 0, key: 'Tab', title: 'Scoreboard (hold)' },
 ];
@@ -65,6 +66,7 @@ export const DEFAULT_PLACEMENTS: Readonly<Record<ControlId, Placement>> = {
   swap: { x: 0.83, y: 0.27, size: 0.14, opacity: 1 },
   zoom: { x: 0.955, y: 0.5, size: 0.11, opacity: 1 },
   shield: { x: 0.7, y: 0.22, size: 0.13, opacity: 1 },
+  take: { x: 0.585, y: 0.52, size: 0.12, opacity: 1 },
   pause: { x: 0.035, y: 0.08, size: 0.1, opacity: 1 },
   scores: { x: 0.105, y: 0.08, size: 0.1, opacity: 1 },
 };

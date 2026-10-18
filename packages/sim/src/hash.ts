@@ -101,6 +101,11 @@ export function hashGame(game: Game): number {
     f.opt(0x112, p.blindFade);
     f.opt(0x113, p.gasTicks);
     f.opt(0x114, p.jetDisabledTicks);
+    // a minigun's spin and a burst in progress (the owner's more guns): hashed only when set
+    for (let i = 0; i < 2; i++) {
+      f.opt(0x130 + 2 * i, p.weapons[i]!.spin);
+      f.opt(0x131 + 2 * i, p.weapons[i]!.burst);
+    }
   }
   for (const g of game.grenades) {
     if (!g.alive) continue;
@@ -137,6 +142,10 @@ export function hashGame(game: Game): number {
     f.int(k.ttl);
     f.int(k.spawner);
     f.int(k.spot);
+    // a weapon's ammo (more guns): hashed only on weapon items
+    f.opt(0x140, k.mag);
+    f.opt(0x141, k.reserve);
+    f.opt(0x142, Math.round(k.readyTick * 1024));
   }
   for (const s of game.spawners) {
     f.int(s.timer);

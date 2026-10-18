@@ -11,6 +11,10 @@
  * replaced once the 3D view is ready) so every run gives the same frames, however slow software GL
  * is. `--hw` takes them on the GPU (High's MSAA and shadow map are slow on SwiftShader).
  *
+ * --only memory (only when asked for): the map art's GPU memory once loaded (MapEnvironment
+ * .gpuTextureBytes) and whether KTX2 copies and the transcoder were fetched: KTX2 on --gfx low
+ * (the default here) or a touch device, the WebPs with --gfx high; --query '&ktx2=0|1' forces it.
+ *
  * --only audit (only when asked for): a 7x overview and two gameplay-zoom views, with the camera,
  * the collision and the decor boxes dumped next to each shot for scripts/bullet-audit.py (what
  * stops bullets vs what only looks solid).
@@ -202,6 +206,30 @@ if (!gpu) {
     });
     writeFileSync(join(out, `${prefix}adlum.json`), JSON.stringify({ rects, gpuBytes: await page.evaluate(() => window.__game.view3d.env?.boards?.gpuBytes() ?? 0) }));
     await zoom(page, 0);
+  }
+
+  if (only.includes('memory')) {
+    // GPU memory the map's art takes once everything is in (KTX2, or the WebPs with --query '&ktx2=0')
+    await step(page, 120);
+    await steady(page);
+    const mem = await page.evaluate(async () => {
+      const env = window.__game.view3d.env;
+      if (!env) return null;
+      await env.ready;
+      const kinds = (t) => (t?.isCompressedTexture ? 'ktx2' : t ? 'decoded' : 'none');
+      return {
+        ...env.gpuTextureBytes(),
+        backdropTextures: env.backdrop?.textures.length ?? 0,
+        backdropKtx2: env.backdrop?.compressed ?? 0,
+        signsKind: kinds(env.signsTexture),
+        // what this page fetched: KTX2 copies and the transcoder (none on a desktop on Medium/High)
+        ktx2Requests: performance.getEntriesByType('resource').filter((e) => e.name.endsWith('.ktx2')).length,
+        transcoderRequests: performance.getEntriesByType('resource').filter((e) => e.name.includes('basis_transcoder')).length,
+        adsKind: (env.boards?.meshes ?? []).map((m) => kinds(m.material.uniforms.uMap.value)),
+      };
+    });
+    console.log(`  ${prefix}memory ${JSON.stringify(mem)}`);
+    writeFileSync(join(out, `${prefix}memory.json`), JSON.stringify(mem, null, 1));
   }
 
   if (only.includes('audit')) {

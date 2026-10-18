@@ -48,8 +48,12 @@ export { MsgType } from './wire';
  *     remote flags or INPUT bits.
  * No bump (rooms by code, ui-playtest): MATCH_STATE 0x23, CMD kinds 4–10, close codes 4006 NoRoom and 4007
  *     TicketInvalid, and HELLO's optional trailing join ticket (old HELLOs decode with ticket '').
+ * v11 (arsenal, the owner's "more guns"): local block 58–61, one group after the status group (spin0 u8 ·
+ *     burst0 u2 · spin1 u8 · burst1 u2: a minigun's spin-up and a burst rifle's rounds left) · the pickups
+ *     section's id and def u6 (48 items; weapon items are defs 7+) · the PICKUP ext event's item u6. Weapon
+ *     pickups use Btn.Interact (bit 10, already there); the test armory is a server option, not on the wire.
  */
-export const PROTOCOL_VERSION = 10;
+export const PROTOCOL_VERSION = 11;
 
 /**
  * Everything the sim reads from packages/content: a client and server that disagree on any of it

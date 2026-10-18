@@ -102,10 +102,13 @@ export const defaultTuning: Readonly<Tuning> = Object.freeze({
   jetTaperBand: 1.5,
   jetAirMaxX: 6.5,
 
-  fuelMax: 100,
-  fuelBurn: 44, // 2.25 s of thrust, ~13 m full-tank climb (playtest tuning pass, NOTES.md)
+  // the owner's playtest ("the fuel finishes quick"): a 40% bigger tank at the same burn and air
+  // regen, so feathering and hovering keep their rhythm; ground regen grows with it, so a refill
+  // from empty still takes ~3 s
+  fuelMax: 140,
+  fuelBurn: 44, // 3.2 s of thrust (was 2.25 s on a 100 tank), ~18 m full-tank climb
   fuelMinIgnite: 10,
-  fuelRegenGround: 35,
+  fuelRegenGround: 49,
   fuelRegenDelayGround: 0.2,
   fuelRegenAir: 12,
   fuelRegenDelayAir: 0.45,

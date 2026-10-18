@@ -53,6 +53,8 @@ export class LocalMode {
   lastReplay: ReplayFile | null = null;
   /** dev give-weapon: the local player's [slot 1, slot 2] weapons, kept across resets and recorded in replays */
   loadout: [number, number] = [DEFAULT_LOADOUT[0], DEFAULT_LOADOUT[1]];
+  /** the test armory (a rack of one of every gun near the spawns): on in local play, off with ?armory=0 */
+  private readonly armory = typeof location === 'undefined' || new URLSearchParams(location.search).get('armory') !== '0';
   /** dev: `?grenades` gives the local player every grenade type (until map pickups hand them out); in replays too */
   private readonly grenadeLoadout: number[] | null = typeof location !== 'undefined' && new URLSearchParams(location.search).has('grenades') ? fullBelt() : null;
 
@@ -68,7 +70,7 @@ export class LocalMode {
     private readonly bots: LocalBots | null = null,
   ) {
     this.map = getMap(mapId);
-    this.game = new Game({ map: this.map, seed: SEED, dummies: !bots, pickups: true });
+    this.game = new Game({ map: this.map, seed: SEED, dummies: !bots, pickups: true, armory: this.armory });
     this.me = this.game.addPlayer(name);
     this.reset();
   }
@@ -76,7 +78,7 @@ export class LocalMode {
   /** Fresh world (keeps the current live tuning). Recordings start from here so they replay exactly. */
   reset(): void {
     const tuning = { ...this.game.tuning };
-    this.game = new Game({ map: this.map, seed: SEED, dummies: !this.bots, pickups: true, tuning });
+    this.game = new Game({ map: this.map, seed: SEED, dummies: !this.bots, pickups: true, armory: this.armory, tuning });
     this.me = this.game.addPlayer(this.name);
     // bots join after the human, as replays put them back (botReplaySetup)
     if (this.bots) addBots(this.game, this.bots.count, this.bots.level);
@@ -157,6 +159,7 @@ export class LocalMode {
         seed: SEED,
         dummies: !this.bots,
         pickups: true,
+        ...(this.armory ? { armory: true } : {}),
         tuning: { ...this.game.tuning },
         loadouts: [[...this.loadout]],
         ...(this.grenadeLoadout ? { grenadeLoadouts: [this.grenadeLoadout.slice()] } : {}),

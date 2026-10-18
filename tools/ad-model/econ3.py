@@ -84,7 +84,7 @@ for c in (10000,50000):
 def share(A,z,m):
     return A/((36*m)*(20.25*m)*((32.1*m+abs(z))/(32.1*m))**2)
 ms=[1.0,1.2,1.4,1.6,1.8,2.0,2.3]
-for name,A,z in [('Screen',48,6),('Hoarding',54,6),('Airship 21x3.5@-8',73.5,8),('LM-H1 21x3.5@-8',73.5,8),('Wrap 20x3.3@-9',66,9)]:
+for name,A,z in [('Screen',48,6),('Hoarding',54,6),('Airship 21x3.5@-8',73.5,8),('street-market/H1 21x3.5@-8',73.5,8),('Wrap 20x3.3@-9',66,9)]:
     print(name, [f"{100*share(A,z,m):.1f}" for m in ms])
 # memory
 for name,w,h in [('screen',512,384),('6:1',1152,192)]:

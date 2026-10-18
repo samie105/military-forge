@@ -50,8 +50,8 @@ describe('predictThrow: the path the sim then throws', () => {
     ] as const) {
       const t = thrower(deg);
       const { view, compared } = throwsAsPreviewed(t, FRAG, strength);
-      expect(view.count).toBe(ARC_POINTS);
-      expect(compared).toBe(ARC_POINTS - 1);
+      expect(view.count).toBe(Math.min(ARC_POINTS, ticks(FRAG.fuse))); // to where it goes off
+      expect(compared).toBe(view.count - 1);
     }
   });
 
@@ -117,7 +117,7 @@ describe('predictThrow: the path the sim then throws', () => {
   });
 });
 
-describe('predictThrow on the map event schedule (mechanics-test: 1 s warnings, a 1.5 s preview)', () => {
+describe('predictThrow on the map event schedule (mechanics-test: 1 s warnings, a frag\'s 1.8 s flight in the 2 s preview)', () => {
   // its "surge" (gravity ×1.8) warns from tick 120, starts at 180 and ends at 480; its gusts blow
   // from 1800 to 2160, swelling and dropping every 2 s
   const SURGE_START = 180;
@@ -148,7 +148,7 @@ describe('predictThrow on the map event schedule (mechanics-test: 1 s warnings, 
     const t = onSchedule(SURGE_START - 75);
     expect(t.game.mech!.activeEvent).toBeNull(); // no banner yet: the warning is 1 s, the flight longer
     const { view, compared } = throwsAsPreviewed(t, FRAG, 7);
-    expect(compared).toBe(ARC_POINTS - 1);
+    expect(compared).toBe(view.count - 1); // every tick to where it goes off
     expect(view.changes).toBe(true);
     expect(view.points).not.toEqual(calmPath(SURGE_START - 75));
   });
@@ -157,14 +157,14 @@ describe('predictThrow on the map event schedule (mechanics-test: 1 s warnings, 
     const t = onSchedule(SURGE_END - 40);
     expect(t.game.mech!.activeEvent?.startTick).toBe(SURGE_START);
     const { view, compared } = throwsAsPreviewed(t, FRAG, 7);
-    expect(compared).toBe(ARC_POINTS - 1);
+    expect(compared).toBe(view.count - 1); // every tick to where it goes off
     expect(view.changes).toBe(true);
   });
 
   it('gusting wind, tick by tick: exact; no start or end in the flight, so not amber', () => {
     const t = onSchedule(GUSTS);
     const { view, compared } = throwsAsPreviewed(t, FRAG, 7);
-    expect(compared).toBe(ARC_POINTS - 1);
+    expect(compared).toBe(view.count - 1); // every tick to where it goes off
     expect(view.changes).toBe(false);
     expect(view.points).not.toEqual(calmPath(GUSTS));
   });

@@ -5,7 +5,7 @@
  * settles, and a gun only fires once the aim is on the body. Never at a body its bullets can't
  * reach (its range, or what a map's fog leaves of it), and never with nothing in it.
  */
-import { NO_WEAPON, weapons, type WeaponDef } from '@military-forge/content';
+import { NO_WEAPON, heldTrigger, weapons, type WeaponDef } from '@military-forge/content';
 import { Btn, type PlayerState } from '@military-forge/sim';
 import { DEG2RAD, type Xoshiro128 } from '@military-forge/shared';
 import { BODY_HALF_WIDTH } from './aim';
@@ -34,7 +34,10 @@ function classFit(def: WeaponDef, dist: number): number {
     case 'smg':
       return dist < 12 ? 1 : Math.max(0.5, 1 - (dist - 12) / 16);
     case 'rifle':
+    case 'dmr':
       return dist < 6 ? 0.8 : 1;
+    case 'heavy':
+      return dist < 14 ? 1 : 0.7;
     default:
       return 0.8;
   }
@@ -56,7 +59,8 @@ export function weaponValue(def: WeaponDef, dist: number, used = dist): number {
     // pellets on the body when the fan's centred, × the chance the fan reaches it at all
     hit = Math.min(1, BODY_HALF_WIDTH / Math.max(BODY_HALF_WIDTH, fan)) * Math.min(1, (fan + BODY_HALF_WIDTH) / (1.5 * TYPICAL_AIM));
   } else hit = Math.min(1, BODY_HALF_WIDTH / Math.sqrt(TYPICAL_AIM * TYPICAL_AIM + fan * fan));
-  return ((def.damage * def.pellets * falloffAt(def, used)) / def.interval) * hit * classFit(def, dist);
+  // a burst rifle fires burst.count rounds per interval
+  return ((def.damage * def.pellets * (def.burst?.count ?? 1) * falloffAt(def, used)) / def.interval) * hit * classFit(def, dist);
 }
 
 /** Something to fire in slot `s`: a blade, or a gun with rounds in it or to reload. */
@@ -163,8 +167,9 @@ export class Gunner {
       this.burstLeft = 0;
       return;
     }
-    if (def.fireMode === 'auto') {
-      // keep a burst going while the aim is close; start one only on target
+    if (heldTrigger(def)) {
+      // keep a burst going while the aim is close; start one only on target (a minigun spins up
+      // while held, a beam fires while held, a burst rifle bursts while held)
       if (this.burstLeft <= 0 && !trig.onTarget) return;
       if (this.burstLeft <= 0) this.burstLeft = this.level.burst > 0 && trig.dist > 8 ? Math.round(this.level.burst * def.interval * 60) : 1 << 20;
       out.buttons |= Btn.Fire;

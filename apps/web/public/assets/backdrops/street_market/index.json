@@ -1,0 +1,49 @@
+{
+ "version": 1,
+ "files": {
+  "sky_day.webp": {
+   "size": [
+    1024,
+    439
+   ]
+  },
+  "sky_dusk.webp": {
+   "size": [
+    1024,
+    439
+   ]
+  },
+  "sky_night.webp": {
+   "size": [
+    1024,
+    439
+   ]
+  },
+  "far_a.webp": {
+   "size": [
+    1024,
+    211
+   ]
+  },
+  "far_b.webp": {
+   "size": [
+    1024,
+    215
+   ]
+  },
+  "mid_a.webp": {
+   "size": [
+    1536,
+    513
+   ],
+   "ktx2": "mid_a.ktx2"
+  },
+  "mid_b.webp": {
+   "size": [
+    1536,
+    555
+   ],
+   "ktx2": "mid_b.ktx2"
+  }
+ }
+}

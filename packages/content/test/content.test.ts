@@ -42,6 +42,15 @@ const TTK_SHEET: Record<string, [number, number, number | null, number | null]> 
   widow: [2, 0.8, 1, 0],
   breacher: [1, 0, null, null], // all 5 pellets, inside ~4 m
   machete: [1, 0, null, null],
+  // the owner's "more guns" (docs/03 §5–6 roles; see weapons.ts for where a number moved)
+  hawk50: [12, 2.75, 8, 1.75],
+  rattler: [10, 1.35, 7, 0.9],
+  hornet: [15, 0.84, 10, 0.54],
+  trident: [8, 1 + 1 / 15, 5, 0.5 + 1 / 15], // 3-round bursts 0.5 s apart, rounds 1/15 s (4 ticks) apart
+  bullpup: [12, 1.32, 8, 0.84],
+  longbow: [3, 1.1, 2, 0.55],
+  shredder: [12, 0.8 + 11 / 15, 8, 0.8 + 7 / 15], // includes the 0.8 s spin-up
+  arc: [17, 2.4, 12, 1.65],
 };
 
 /** Body-shot DPS sanity range per class (docs/03 §4 lint). */
@@ -52,10 +61,13 @@ const DPS_RANGE: Partial<Record<WeaponClass, [number, number]>> = {
   sniper: [60, 130],
   shotgun: [90, 180],
   melee: [100, 250],
+  dmr: [50, 100],
+  heavy: [80, 160],
+  special: [30, 60],
 };
 
 /** Weapon model ids from W8's art/weapons/weapons.json (the art and content must match). */
-const ART_IDS = ['hawk50', 'hammer44', 'buzz', 'k47', 'breacher', 'widow', 'thumper', 'shredder', 'machete'];
+const ART_IDS = ['hawk50', 'hammer44', 'buzz', 'k47', 'breacher', 'widow', 'thumper', 'shredder', 'rattler', 'hornet', 'trident', 'bullpup', 'longbow', 'dragon', 'arc', 'popper', 'ripper', 'pulse', 'machete'];
 
 describe('weapons', () => {
   it('indices match their position, and stats are sane', () => {
@@ -74,8 +86,8 @@ describe('weapons', () => {
         expect(w.range, w.id).toBeLessThanOrEqual(1.5);
       } else {
         expect(w.mag, w.id).toBeGreaterThan(0);
-        // falloff starts at 50% of range (docs/03 §8)
-        expect(w.falloffStart, w.id).toBeCloseTo(w.range / 2, 9);
+        // falloff starts at 50% of range (docs/03 §8); the beam never falls off
+        if (w.minDamageMul < 1) expect(w.falloffStart, w.id).toBeCloseTo(w.range / 2, 9);
       }
       // two-handed classes can't be dual-wielded
       if (['rifle', 'dmr', 'sniper', 'shotgun', 'heavy'].includes(w.class)) expect(w.hands, w.id).toBe(2);
@@ -87,7 +99,7 @@ describe('weapons', () => {
     for (const w of weapons) {
       const range = DPS_RANGE[w.class];
       expect(range, `${w.class} has a DPS range`).toBeDefined();
-      const dps = shotDamage(w) / w.interval;
+      const dps = (shotDamage(w) * (w.burst?.count ?? 1)) / w.interval;
       expect(dps, `${w.id} dps`).toBeGreaterThanOrEqual(range![0]);
       expect(dps, `${w.id} dps`).toBeLessThanOrEqual(range![1]);
     }
@@ -210,8 +222,9 @@ describe('maps', () => {
 
   it('registers the Street Market exactly as the art pipeline compiled it (re-copy street_market.map.json after a recompile)', () => {
     expect(maps['street-market']).toBe(streetMarketMap);
-    // the pipeline doesn't mark slabs yet (streetMarket.ts): blocksBullets is the copy's only change
-    const { oneWays, ...rest } = streetMarketMap;
+    // the pipeline doesn't mark slabs yet (streetMarket.ts): blocksBullets is the copy's only change;
+    // the weapon crates and the armory rack are gameplay on top
+    const { oneWays, spawners: _crates, armory: _rack, ...rest } = streetMarketMap;
     const { oneWays: compiledOneWays, ...compiledRest } = compiledStreetMarket;
     expect(rest).toEqual(compiledRest);
     expect(oneWays.map(({ blocksBullets: _, ...o }) => o)).toEqual(compiledOneWays);
@@ -272,7 +285,7 @@ describe('maps', () => {
 describe('pickups and the riot shield', () => {
   it('pickup indices match their position; pools list real pickups with positive weights', () => {
     pickups.forEach((p, i) => expect(p.index, p.id).toBe(i));
-    expect(pickups.length).toBeLessThanOrEqual(16); // u4 on the wire
+    expect(pickups.length).toBeLessThanOrEqual(64); // u6 on the wire (v11)
     expect(new Set(pickups.map((p) => p.id)).size).toBe(pickups.length);
     for (const pool of Object.values(SPAWN_POOLS)) {
       expect(pool.items.length, pool.id).toBeGreaterThan(0);

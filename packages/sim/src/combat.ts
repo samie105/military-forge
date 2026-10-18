@@ -3,7 +3,7 @@
  * seeded spread, muzzle-in-wall guard, reload/swap/dual-wield, falloff and hit zones, airborne
  * recoil push, weight, and melee (lunge, arc hit test, knockback, the one-hit Machete).
  */
-import { CROUCHED_HITBOXES, HitZone, NO_WEAPON, RIOT_SHIELD, STANDING_HITBOXES, weapons, type WeaponClass, type WeaponDef } from '@military-forge/content';
+import { CROUCHED_HITBOXES, HitZone, NO_WEAPON, RIOT_SHIELD, STANDING_HITBOXES, heldTrigger, weapons, type WeaponClass, type WeaponDef } from '@military-forge/content';
 import { DEG2RAD, hash4, hashToUnit, quantize, simCosSin, SCALAR_INV } from '@military-forge/shared';
 import { DT, TICK_RATE, ticks } from './constants';
 import { DamageSource } from './events';
@@ -69,6 +69,15 @@ export function meleeBusy(p: PlayerState): boolean {
 function meleeSwingTicks(p: PlayerState): number {
   const def = meleeWeapon(p);
   return ticks(def?.fireMode === 'melee' ? def.interval : MELEE_COOLDOWN);
+}
+
+/** A minigun is spun up at this (WeaponSlot.spin): spin-up and spin-down rates are whole steps per tick. */
+export const SPIN_FULL = 240;
+
+/** Spin gained per tick while spinning up (`up` s from rest) and lost per tick spinning down (`down` s from full). */
+function spinRates(def: WeaponDef): { up: number; down: number } {
+  const s = def.spin!;
+  return { up: Math.max(1, Math.round(SPIN_FULL / ticks(s.up))), down: Math.max(1, Math.round(SPIN_FULL / ticks(s.down))) };
 }
 
 /** Current spread in degrees for a slot (docs/03 §7). Does not mutate. */
@@ -464,6 +473,9 @@ export function stepWeapons(game: Game, p: PlayerState): void {
       slot.mag += take;
       slot.reserve -= take;
     }
+    // a beam's cell refills by itself once off the trigger for a moment (held on an empty cell, it waits)
+    const triggerHeld = isDown(buttons, Btn.Fire) && (p.dual || slot === p.weapons[p.active]);
+    if (def.regen && slot.mag < def.mag && !triggerHeld && slot.ticksSinceShot >= ticks(def.regen.delay) && game.tick % Math.max(1, Math.round(TICK_RATE / def.regen.perSec)) === 0) slot.mag++;
   }
   if (p.swapTicks > 0) p.swapTicks--;
   if (p.throwCooldown > 0) p.throwCooldown--;
@@ -509,26 +521,42 @@ export function stepWeapons(game: Game, p: PlayerState): void {
   if (p.meleeTicks === 0 && (swingFire || wasPressed(buttons, prev, Btn.Melee))) p.meleeTicks = 1;
 
   // fire
-  if (p.swapTicks === 0 && !meleeBusy(p)) {
-    const firing = isDown(buttons, Btn.Fire);
-    const pressed = wasPressed(buttons, prev, Btn.Fire);
-    for (let s = 0; s < 2; s++) {
-      if (!p.dual && s !== p.active) continue;
-      const slot = p.weapons[s]!;
-      if (slot.def === NO_WEAPON) continue;
-      const def = weapons[slot.def]!;
-      if (def.fireMode === 'melee') continue;
-      const trigger = def.fireMode === 'auto' ? firing : pressed;
-      if (!trigger || slot.reloadTicks > 0 || slot.cooldown > 1e-6) continue;
-      if (slot.mag <= 0) {
-        if (!p.dual) startReload(slot, def);
-        continue;
-      }
-      fireShot(game, p, slot, def);
-      slot.mag--;
-      slot.cooldown += def.interval * TICK_RATE;
-      slot.ticksSinceShot = 0;
-      if (slot.mag === 0 && !p.dual) startReload(slot, def); // auto-reload when empty
+  const ready = p.swapTicks === 0 && !meleeBusy(p);
+  const firing = isDown(buttons, Btn.Fire);
+  const pressed = wasPressed(buttons, prev, Btn.Fire);
+  for (let s = 0; s < 2; s++) {
+    const slot = p.weapons[s]!;
+    if (slot.def === NO_WEAPON) continue;
+    const def = weapons[slot.def]!;
+    const inHand = p.dual || s === p.active;
+    // a minigun spins while either fire button is held in hand, and winds down otherwise
+    if (def.spin) {
+      const rate = spinRates(def);
+      const spinning = inHand && ready && slot.reloadTicks === 0 && (firing || isDown(buttons, Btn.Fire2));
+      slot.spin = spinning ? Math.min(SPIN_FULL, slot.spin + rate.up) : Math.max(0, slot.spin - rate.down);
+    }
+    if (!inHand || !ready || def.fireMode === 'melee') continue;
+    // a burst under way carries on by itself; otherwise held modes fire while held, semi on a press
+    const trigger = slot.burst > 0 || (heldTrigger(def) ? firing : pressed);
+    if (!trigger || slot.reloadTicks > 0 || slot.cooldown > 1e-6) continue;
+    if (def.spin && slot.spin < SPIN_FULL) continue;
+    if (slot.mag <= 0) {
+      slot.burst = 0;
+      if (!p.dual) startReload(slot, def);
+      continue;
+    }
+    fireShot(game, p, slot, def);
+    slot.mag--;
+    slot.ticksSinceShot = 0;
+    if (def.burst) {
+      // the burst's rounds come burst.interval apart; the next burst starts `interval` after this one did
+      if (slot.burst === 0) slot.burst = def.burst.count;
+      slot.burst--;
+      slot.cooldown += (slot.burst > 0 ? def.burst.interval : def.interval - (def.burst.count - 1) * def.burst.interval) * TICK_RATE;
+    } else slot.cooldown += def.interval * TICK_RATE;
+    if (slot.mag === 0) {
+      slot.burst = 0;
+      if (!p.dual) startReload(slot, def); // auto-reload when empty
     }
   }
 

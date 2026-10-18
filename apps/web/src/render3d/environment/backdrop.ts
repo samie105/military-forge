@@ -7,7 +7,8 @@
  * Art: Higgsfield (GPT Image 2.5) originals, processed into WebP; see art/README.md's cost table
  * for the jobs and credits.
  */
-import { Color, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColorSpace, TextureLoader, type Texture } from 'three';
+import { Color, Mesh, MeshBasicMaterial, PlaneGeometry, TextureLoader, type Texture } from 'three';
+import { loadTexture, type Ktx2Source } from './ktx2';
 import type { PlanePose } from '../planeCamera';
 import { FOV_DEG, TILT_DEG } from '../planeCamera';
 
@@ -116,37 +117,69 @@ export interface BackdropMeshes {
   skyAspect: number;
   panels: Mesh<PlaneGeometry, MeshBasicMaterial>[];
   textures: Texture[];
+  /** how many of them came from KTX2 copies */
+  compressed: number;
   ready: Promise<void>;
 }
 
+/** The art index a backdrop folder carries (apps/web/scripts/backdrops.py): each image's display size and KTX2 copy. */
+export interface BackdropIndex {
+  version: number;
+  files: Record<string, { size: [number, number]; ktx2?: string }>;
+}
+
 /**
- * Builds the backdrop meshes for a look. Textures stream in; `ready` resolves when all are in (a
- * missing image only leaves its panel out).
+ * Builds the backdrop meshes for a look. Textures stream in, the KTX2 copy when the runtime can
+ * transcode (ktx2.ts), else the WebP; `ready` resolves when all are in (a missing image only leaves
+ * its panel out). Each image's display aspect comes from the folder's index.json (a KTX2 copy is
+ * rounded to block-aligned sizes), or from the image itself without one.
  */
 export function buildBackdrop(
   def: BackdropDef,
   look: string,
   tints: Record<string, number>,
   baseUrl: string,
-  loader = new TextureLoader(),
+  loader: Pick<TextureLoader, 'loadAsync'> = new TextureLoader(),
+  ktx2: Ktx2Source = null,
+  fetchJson: (url: string) => Promise<unknown> = (url) => fetch(url).then((r) => (r.ok ? r.json() : Promise.reject(new Error(`${url}: ${r.status}`)))),
   haze?: { color: number; amount: Record<string, number> },
 ): BackdropMeshes {
-  const out: BackdropMeshes = { sky: null, skyAspect: 21 / 9, panels: [], textures: [], ready: Promise.resolve() };
+  const out: BackdropMeshes = { sky: null, skyAspect: 21 / 9, panels: [], textures: [], compressed: 0, ready: Promise.resolve() };
   const loads: Promise<void>[] = [];
   // images need a DOM: in tests and workers the meshes exist but never show
   const canLoad = typeof document !== 'undefined';
-  const load = (file: string, onLoad: (t: Texture) => void) =>
+  const index = canLoad ? (fetchJson(baseUrl + def.base + 'index.json') as Promise<BackdropIndex>).catch(() => null) : Promise.resolve(null);
+  // one texture per file: a mirrored second panel flips its UVs, not a second copy on the GPU
+  const files = new Map<string, Promise<{ texture: Texture; aspect: number } | null>>();
+  const fetchFile = (file: string) => {
+    let p = files.get(file);
+    if (!p) {
+      p = index
+        .then((idx) => {
+          const entry = idx?.files[file];
+          return loadTexture(ktx2, entry?.ktx2 && baseUrl + def.base + entry.ktx2, baseUrl + def.base + file, loader).then(({ texture, compressed }) => {
+            const img = texture.image as { width: number; height: number };
+            const [w, h] = entry?.size ?? [img.width, img.height];
+            texture.anisotropy = 4;
+            out.textures.push(texture);
+            if (compressed) out.compressed++;
+            return { texture, aspect: w / h };
+          });
+        })
+        .catch((err: unknown) => {
+          console.warn(`backdrop: ${file} not loaded`, err);
+          return null;
+        });
+      files.set(file, p);
+    }
+    return p;
+  };
+  const load = (file: string, onLoad: (t: Texture, aspect: number) => void) =>
     canLoad &&
     loads.push(
-      loader.loadAsync(baseUrl + def.base + file).then(
-        (t) => {
-          t.colorSpace = SRGBColorSpace;
-          t.anisotropy = 4;
-          out.textures.push(t);
-          onLoad(t);
-        },
-        (err: unknown) => console.warn(`backdrop: ${file} not loaded`, err),
-      ),
+      fetchFile(file).then((got) => {
+        if (got) onLoad(got.texture, got.aspect);
+      }),
     );
   const skyFile = def.skies[look];
   if (skyFile) {
@@ -157,11 +190,10 @@ export function buildBackdrop(
     sky.frustumCulled = false;
     sky.visible = false;
     out.sky = sky;
-    load(skyFile, (t) => {
+    load(skyFile, (t, aspect) => {
       sky.material.map = t;
       sky.material.needsUpdate = true;
-      const img = t.image as { width: number; height: number };
-      out.skyAspect = img.width / img.height;
+      out.skyAspect = aspect;
       sky.visible = true;
     });
   }
@@ -183,9 +215,8 @@ export function buildBackdrop(
       mesh.renderOrder = -16 + li;
       mesh.visible = false;
       out.panels.push(mesh);
-      load(p.file, (t) => {
-        const img = t.image as { width: number; height: number };
-        mesh.scale.set(p.width, (p.width * img.height) / img.width, 1);
+      load(p.file, (t, aspect) => {
+        mesh.scale.set(p.width, p.width / aspect, 1);
         mesh.material.map = t;
         mesh.material.needsUpdate = true;
         mesh.visible = true;

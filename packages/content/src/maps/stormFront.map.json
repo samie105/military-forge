@@ -60,7 +60,9 @@
     ],
     "schedule": { "kind": "random", "start": 15, "cycle": 40, "chance": 0.9, "weights": { "squall": 2, "fog-rolls-in": 2, "lightning": 1 } }
   },
+  "armory": { "x": 15, "y": 6.5, "dir": 1 },
   "spawners": [
-    { "id": "grenades", "pool": "grenades", "spots": [{ "x": 25, "y": 6 }, { "x": 93.5, "y": 5.5 }, { "x": 88, "y": 25 }], "first": [6, 10], "respawn": [18, 24], "maxActive": 2 }
+    { "id": "grenades", "pool": "grenades", "spots": [{ "x": 25, "y": 6 }, { "x": 93.5, "y": 5.5 }, { "x": 88, "y": 25 }], "first": [6, 10], "respawn": [18, 24], "maxActive": 2 },
+    { "id": "weapons", "pool": "weapons", "spots": [{ "x": 47, "y": 4 }, { "x": 104, "y": 4 }, { "x": 113, "y": 4 }, { "x": 13, "y": 20 }], "first": [3, 6], "respawn": [12, 18], "maxActive": 2 }
   ]
 }

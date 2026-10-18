@@ -14,6 +14,7 @@ import {
   MINE,
   RIOT_SHIELD,
   defaultTuning,
+  heldTrigger,
   weapons,
   type MapDef,
   type MapEventKind,
@@ -23,7 +24,7 @@ import {
   type ZoneKind,
 } from '@military-forge/content';
 import { angleToU16 } from '@military-forge/shared';
-import { Btn, Game, MineState, SHIELD_RAISE_TICKS, createInput, giveShield, spawnCloud, type Input, type PlayerState } from '../src';
+import { Btn, Game, MineState, SHIELD_RAISE_TICKS, createInput, giveShield, spawnCloud, type Input, type PlayerState, type SimEvent } from '../src';
 
 const rect = (x0: number, y0: number, x1: number, y1: number) => ({ points: [x0, y0, x1, y0, x1, y1, x0, y1] });
 
@@ -185,7 +186,7 @@ export interface FireResult {
 export function measureWeapon(weapon: number, distance: number, airborne: boolean, tuning: Partial<Tuning> = {}, samples = 20): FireResult {
   const def = weapons[weapon]!;
   const slot = DEFAULT_LOADOUT.indexOf(weapon);
-  const semi = def.fireMode !== 'auto';
+  const semi = !heldTrigger(def); // burst, spin-up and beam guns fire while held, like autos
   let ttkSum = 0;
   let rateSum = 0;
   let killed = 0;
@@ -432,8 +433,12 @@ export function measureZones(tuning: Partial<Tuning> = {}): ZoneMetrics {
     if (w.fireMode === 'melee') continue;
     const { game, p, step } = setup(tuning, 1, zoned('damping', [p0x(5), -6, p0x(15), 62]));
     if (DEFAULT_LOADOUT.indexOf(w.index) !== 0) game.setLoadout(p, [w.index, DEFAULT_LOADOUT[1]]);
-    step(Btn.Fire, 0);
-    const shot = game.events.find((e) => e.type === 'shot');
+    // a minigun fires once it's spun up: hold the trigger until the first round
+    let shot: SimEvent | undefined;
+    for (let t = 0; t < 120 && !shot; t++) {
+      step(Btn.Fire, 0);
+      shot = game.events.find((e) => e.type === 'shot');
+    }
     m.fogReach[w.name] = shot && shot.type === 'shot' ? Math.hypot(shot.ex - p.shoulderX(game.tuning), shot.ey - p.shoulderY(game.tuning)) : NaN;
   }
   return m;

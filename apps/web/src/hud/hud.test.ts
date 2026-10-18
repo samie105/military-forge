@@ -1,5 +1,5 @@
 /** The HUD's numbers: kill feed, damage arcs, vitals, weapons, the brief's shield/dash/EMP/blind/gas/belt/pickup fields, the bound values, the net graph. */
-import { HitZone, NO_WEAPON, createTuning } from '@military-forge/content';
+import { HAMMER, HitZone, NO_WEAPON, WIDOW, createTuning, weaponPickup } from '@military-forge/content';
 import { DamageSource } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
 import { hudValues, netGraph, type HudInput, type HudMemory } from './hud';
@@ -62,14 +62,15 @@ describe('vitals', () => {
 
   it('fuel shows the regen-delay segment after the fill, and the ignite mark', () => {
     const full = (t.fuelRegenDelayGround * 60) | 0;
-    const waiting = fuelView({ fuel: 40, fuelRegenDelay: full, grounded: true }, t);
+    const tank = (share: number) => share * t.fuelMax;
+    const waiting = fuelView({ fuel: tank(0.4), fuelRegenDelay: full, grounded: true }, t);
     expect(waiting.fill).toBeCloseTo(0.4);
     expect(waiting.delay).toBeCloseTo(0.25);
-    expect(fuelView({ fuel: 40, fuelRegenDelay: full / 2, grounded: true }, t).delay).toBeCloseTo(0.125, 1);
-    expect(fuelView({ fuel: 40, fuelRegenDelay: 0, grounded: true }, t).delay).toBe(0);
-    expect(fuelView({ fuel: 90, fuelRegenDelay: full, grounded: true }, t).delay).toBeCloseTo(0.1); // never past the end
+    expect(fuelView({ fuel: tank(0.4), fuelRegenDelay: full / 2, grounded: true }, t).delay).toBeCloseTo(0.125, 1);
+    expect(fuelView({ fuel: tank(0.4), fuelRegenDelay: 0, grounded: true }, t).delay).toBe(0);
+    expect(fuelView({ fuel: tank(0.9), fuelRegenDelay: full, grounded: true }, t).delay).toBeCloseTo(0.1); // never past the end
     expect(fuelView({ fuel: 5, fuelRegenDelay: -1, grounded: false }, t)).toMatchObject({ empty: true, delay: 0 });
-    expect(fuelView({ fuel: 50, fuelRegenDelay: 0, grounded: true }, t).ignite).toBeCloseTo(t.fuelMinIgnite / t.fuelMax);
+    expect(fuelView({ fuel: tank(0.5), fuelRegenDelay: 0, grounded: true }, t).ignite).toBeCloseTo(t.fuelMinIgnite / t.fuelMax);
   });
 });
 
@@ -172,6 +173,15 @@ describe('riot shield, dash, conditions, grenade belt, pickups (UI brief fields)
     expect(pickupPrompt({ x: 20, y: 2, alive: true }, [shield])).toBe('');
     expect(pickupPrompt({ x: 10, y: 2, alive: false }, [shield])).toBe('');
     expect(pickupPrompt({ x: 10, y: 2, alive: true }, undefined)).toBe('');
+  });
+
+  it('a weapon crate: E to take it (naming the gun it swaps), or ammo for a gun you hold', () => {
+    const widow = { id: 2, def: weaponPickup(WIDOW.index)!.index, x: 10, y: 2 };
+    const holding = (def: number) => ({ x: 10, y: 2, alive: true, active: 0, weapons: [{ def, mag: 6, reserve: 30, reloadTicks: 0 }] });
+    expect(pickupPrompt(holding(HAMMER.index), [widow])).toBe('[E] take Widow (swaps your Hammer .44)');
+    expect(pickupPrompt({ ...holding(HAMMER.index), x: 12 }, [widow])).toBe('Widow: stand on it, E to take');
+    expect(pickupPrompt({ ...holding(WIDOW.index), x: 12 }, [widow])).toBe('Widow: walk over for ammo');
+    expect(pickupPrompt(holding(WIDOW.index), [widow])).toBe('Widow: walk over for ammo');
   });
 });
 
