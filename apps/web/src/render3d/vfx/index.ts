@@ -7,6 +7,7 @@
  * (1.5K live on Low, 5K on High); the steady-state frame allocates nothing; each layer is one draw
  * call and is hidden while empty, so a quiet scene costs no extra draws.
  */
+import { PROJECTILE_TYPE_BASE, ROCKET, SHELL } from '@military-forge/content';
 import type { CollisionWorld, SimEvent } from '@military-forge/sim';
 import { SRGBColorSpace, TextureLoader, Vector3, type BufferGeometry, type DirectionalLight, type HemisphereLight, type Mesh, type Scene, type Texture } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -25,7 +26,7 @@ import { DashTrail } from './dashTrail';
 import { spawnExplosion, type ExplosionTargets } from './explosion';
 import { SceneFlash } from './flash';
 import { Gunfire, type MuzzleLookup } from './gunfire';
-import { loadExplosionArt, loadWeaponVfx, type FlipbookArt } from './manifest';
+import { loadExplosionArt, loadWeaponVfx, type ExplosionArt, type FlipbookArt } from './manifest';
 import { ParticleLayer } from './particles';
 import { ParticlePool } from './pool';
 import { ProjectileFx, type GunPointLookup } from './projectiles';
@@ -34,6 +35,14 @@ import { ThrowArc } from './throwArc';
 
 /** arsenal-b grenade types whose `explosion` event is not a blast (arsenal-b-interfaces.md) */
 const NOT_A_BLAST = { flashbang: 3, emp: 5 } as const;
+
+/** the Forge's explosion styles (explosions.vfx.json), and the one each blast's `grenade` takes */
+const BLAST_STYLES = ['frag', 'grenade_launcher', 'rocket'] as const;
+type BlastStyle = (typeof BLAST_STYLES)[number];
+/** the Thumper's rocket (8) and the Popper's shell (9) in their own styles; any other blast, the frag's */
+export function blastStyle(grenade: number | undefined): BlastStyle {
+  return grenade === PROJECTILE_TYPE_BASE + ROCKET.index ? 'rocket' : grenade === PROJECTILE_TYPE_BASE + SHELL.index ? 'grenade_launcher' : 'frag';
+}
 
 const _warm = new Vector3();
 
@@ -104,6 +113,8 @@ export class Vfx {
   /** the Forge's explosion flipbook, when published */
   private readonly books: Book[] = [];
   private readonly targets: ExplosionTargets;
+  /** each style's targets (the frag's until the art loads): its flipbook and its numbers */
+  private readonly styles: Partial<Record<BlastStyle, ExplosionTargets>> = {};
   private readonly grenadeFx: GrenadeFx;
   private readonly modules: VfxModule[] = [];
   /** the Low preset (fewer casings) */
@@ -189,13 +200,31 @@ export class Vfx {
         if (model) this.grenades.setModel(model);
       })
       .catch((err: unknown) => console.warn('render3d: frag.glb failed to load, drawing the stand-in frag', err));
-    const books = loadExplosionArt(baseUrl).then((loaded) => {
+    const books = loadExplosionArt(baseUrl, BLAST_STYLES).then((loaded) => {
       if (!loaded) return;
-      const { art, texture } = loaded;
-      this.targets.art = art;
-      // the flipbook's bright first frames draw over the additive shockwave (Forge notes)
-      if (art.book && texture) this.targets.book = this.book(art.book, texture, 13);
-      if (art.light) this.flash.style(art.light.color, art.light.seconds);
+      const { arts, texture } = loaded;
+      // one flipbook layer per distinct flipbook (the frag's serves the grenade launcher too); the
+      // bright first frames draw over the additive shockwave (Forge notes)
+      const books = new Map<string, Book>();
+      for (const style of BLAST_STYLES) {
+        const art: ExplosionArt | undefined = arts[style];
+        if (!art) continue;
+        let book: ExplosionTargets['book'] = null;
+        if (art.book && texture) {
+          const key = art.book.frames.join(',');
+          const shared = books.get(key) ?? this.book(art.book, texture, 13);
+          books.set(key, shared);
+          // a style's own size and anchor, on the layer its flipbook shares
+          book = shared.art === art.book ? shared : { pool: shared.pool, art: art.book };
+        }
+        this.styles[style] = { ...this.targets, art, book };
+      }
+      const frag = this.styles.frag;
+      if (frag) {
+        this.targets.art = frag.art;
+        this.targets.book = frag.book;
+      }
+      if (frag?.art?.light) this.flash.style(frag.art.light.color, frag.art.light.seconds);
     });
     const guns = loadWeaponVfx(baseUrl).then(async (art) => {
       if (art) this.gunfire.setArt(art.art, art.texture, this.scene);
@@ -321,14 +350,16 @@ export class Vfx {
       // arsenal-b: a flashbang (3) or EMP (5) going off isn't a fireball; its own effects draw it
       const kind = (e as { grenade?: number }).grenade ?? 0;
       if (e.type !== 'explosion' || kind === NOT_A_BLAST.flashbang || kind === NOT_A_BLAST.emp) continue;
-      spawnExplosion(this.targets, this.world, e.x, e.y, e.radius, this.ctx.detail);
+      // the Thumper's and Popper's blasts in their own styles (explosions.vfx.json), else the frag's
+      const t = this.styles[blastStyle(kind)] ?? this.targets;
+      spawnExplosion(t, this.world, e.x, e.y, e.radius, this.ctx.detail);
       // light and shake by distance from the view centre (the Forge's shake falloff when published)
       const cx = e.x - this.camera.x;
       const cy = e.y - this.camera.y;
       const d = Math.sqrt(cx * cx + cy * cy);
       this.flash.trigger(e.x, e.y, Math.max(0.15, Math.min(1, 1 - Math.max(0, d - e.radius) / 25)));
-      const shake = this.targets.art?.shake;
-      const k = e.radius / (this.targets.art?.radiusM ?? e.radius);
+      const shake = t.art?.shake;
+      const k = e.radius / (t.art?.radiusM ?? e.radius);
       this.shake.add(shake ? blastTrauma(d, shake.fullWithinM * k, shake.zeroAtM * k) : blastTrauma(d, e.radius));
     }
   }

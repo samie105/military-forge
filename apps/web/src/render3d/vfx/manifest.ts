@@ -123,24 +123,30 @@ export function parseExplosionManifest(json: unknown, style = 'frag'): Explosion
  * Fetches explosions.vfx.json and its atlas. Any failure (no file yet, a bad entry, a missing
  * image) resolves to null, or to the art without its flipbook: the procedural effects stay.
  */
-export async function loadExplosionArt(baseUrl: string): Promise<{ art: ExplosionArt; texture: Texture | null } | null> {
+export async function loadExplosionArt<S extends string>(baseUrl: string, styles: readonly S[]): Promise<{ arts: Partial<Record<S, ExplosionArt>>; texture: Texture | null } | null> {
   try {
     const res = await fetch(`${baseUrl}assets/vfx/explosions.vfx.json`);
     // a dev server answers unknown paths with index.html: only JSON counts
     if (!res.ok || !(res.headers.get('content-type') ?? '').includes('json')) return null;
-    const art = parseExplosionManifest(await res.json());
-    if (!art) return null;
+    const json: unknown = await res.json();
+    const arts: Partial<Record<S, ExplosionArt>> = {};
+    for (const style of styles) {
+      const art = parseExplosionManifest(json, style);
+      if (art) arts[style] = art;
+    }
+    // the styles share one atlas
+    const atlas = Object.values<ExplosionArt | undefined>(arts).find((a) => a?.book)?.book?.atlas;
     let texture: Texture | null = null;
-    if (art.book) {
+    if (atlas) {
       try {
-        texture = await new TextureLoader().loadAsync(`${baseUrl}assets/vfx/${art.book.atlas}`);
+        texture = await new TextureLoader().loadAsync(`${baseUrl}assets/vfx/${atlas}`);
         texture.colorSpace = SRGBColorSpace;
       } catch (err) {
-        console.warn(`render3d: ${art.book.atlas} failed to load, keeping the procedural fireball`, err);
-        art.book = null;
+        console.warn(`render3d: ${atlas} failed to load, keeping the procedural fireball`, err);
+        for (const a of Object.values<ExplosionArt | undefined>(arts)) if (a) a.book = null;
       }
     }
-    return { art, texture };
+    return Object.keys(arts).length ? { arts, texture } : null;
   } catch {
     return null;
   }

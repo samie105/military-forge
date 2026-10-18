@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
-import { movementTestMap } from '@military-forge/content';
+import { BLADE, PROJECTILE_TYPE_BASE, ROCKET, SHELL, movementTestMap } from '@military-forge/content';
 import { CollisionWorld } from '@military-forge/sim';
 import { DirectionalLight, HemisphereLight } from 'three';
 import { describe, expect, it } from 'vitest';
+import { blastStyle } from '../vfx';
 import { spawnExplosion, type ExplosionTargets } from '../vfx/explosion';
 import { FLASH_MIN_INTERVAL, SceneFlash } from '../vfx/flash';
 import { parseExplosionManifest } from '../vfx/manifest';
@@ -240,5 +241,31 @@ describe('review follow-ups', () => {
     expect(art.shockwave!.toM).toBeCloseTo(art.radiusM);
     const wide = parseExplosionManifest({ ...shipped, flipbooks: { ...shipped.flipbooks, frag: { ...shipped.flipbooks.frag, frames: 8, cols: 8 } } })!;
     expect(wide.book!.frames).toEqual([0, 1, 2, 3, 4, 5, 6, 7]); // one row of 8
+  });
+});
+
+describe("the launchers' blasts in their own styles (explosions.vfx.json)", () => {
+  const shipped = JSON.parse(readFileSync(new URL('../../../public/assets/vfx/explosions.vfx.json', import.meta.url), 'utf8'));
+
+  it("the Thumper's rocket takes `rocket` (its own flipbook, anchored at its base), the Popper's shell `grenade_launcher`, the rest the frag's", () => {
+    const P = PROJECTILE_TYPE_BASE;
+    expect([blastStyle(P + ROCKET.index), blastStyle(P + SHELL.index), blastStyle(P + BLADE.index), blastStyle(0), blastStyle(undefined)]).toEqual(['rocket', 'grenade_launcher', 'frag', 'frag', 'frag']);
+    const frag = parseExplosionManifest(shipped, 'frag')!;
+    const rocket = parseExplosionManifest(shipped, 'rocket')!;
+    const launcher = parseExplosionManifest(shipped, 'grenade_launcher')!;
+    expect(rocket.book!.frames).not.toEqual(frag.book!.frames);
+    expect(rocket.book!.anchorV).toBeGreaterThan(0.85); // a column rising off the impact
+    expect(rocket.radiusM).toBe(ROCKET.explosion?.radius); // the Forge's numbers at the sim's radius: drawn at k = 1
+    expect(launcher.book!.frames).toEqual(frag.book!.frames); // the frag's flipbook…
+    expect(launcher.book!.sizeM).toBeCloseTo(frag.book!.sizeM * 0.75); // …at the launcher's scale
+    expect(launcher.radiusM).toBe(SHELL.explosion?.radius);
+  });
+
+  it("a rocket's blast through its style: the rocket flipbook's pool, sized for its 3.5 m", () => {
+    const rocket = parseExplosionManifest(shipped, 'rocket')!;
+    const t: ExplosionTargets = { glow: new ParticlePool(512), smoke: new ParticlePool(512), decals: new ParticlePool(32), book: { pool: new ParticlePool(16), art: rocket.book! }, art: rocket };
+    spawnExplosion(t, new CollisionWorld(movementTestMap), 118, 0.1, ROCKET.explosion!.radius, 1);
+    expect(t.book!.pool.count).toBe(1);
+    expect(t.book!.pool.data[F.size0]).toBeCloseTo(rocket.book!.sizeM, 3); // k = 1 at its own radius
   });
 });

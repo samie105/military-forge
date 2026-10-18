@@ -22,7 +22,7 @@ import {
 } from '@military-forge/content';
 import { describe, expect, it } from 'vitest';
 import { angleToU16 } from '@military-forge/shared';
-import { BOUNCED, Btn, Game, MAX_GRENADES, giveShield, shieldRaised, spawnCloud, type GrenadeState, type SimEvent } from '../src';
+import { BOUNCED, Btn, Game, MAX_GRENADES, SPINNING_SPEED_MUL, giveShield, heldSpeedMul, shieldRaised, spawnCloud, type GrenadeState, type SimEvent } from '../src';
 import { dummyAt, flatMap, hold, makeGame, placeOnGround, rect } from './helpers';
 
 const live = (game: Game, type: number): GrenadeState[] => game.grenades.filter((g) => g.alive && g.type === type);
@@ -121,6 +121,27 @@ describe('Popper: shells', () => {
 });
 
 describe('charge weapons: Ripper and Pulse', () => {
+  it('charging slows you like a spinning minigun (×0.85), and only while it charges', () => {
+    for (const weapon of [RIPPER, PULSE]) {
+      const { game, p } = armed(weapon.index);
+      expect(heldSpeedMul(p)).toBeCloseTo(weapon.moveSpeedMul, 9);
+      hold(game, p, Btn.Fire, 10);
+      expect(heldSpeedMul(p)).toBeCloseTo(weapon.moveSpeedMul * SPINNING_SPEED_MUL, 9);
+      // walking while charging: slower than walking with it idle
+      const walk = (buttons: number) => {
+        const x0 = p.x;
+        hold(game, p, buttons, 12);
+        return p.x - x0;
+      };
+      const charging = walk(Btn.Fire | Btn.Right);
+      hold(game, p, 0, 200); // let go before it fired: no charge, at rest again
+      const idle = walk(Btn.Right);
+      expect(charging).toBeLessThan(idle);
+      hold(game, p, 0, 1);
+      expect(heldSpeedMul(p)).toBeCloseTo(weapon.moveSpeedMul, 9);
+    }
+  });
+
   it('Ripper: nothing until 0.4 s held; let go early and it is lost', () => {
     const { game, p } = armed(RIPPER.index);
     const type = PROJECTILE_TYPE_BASE + BLADE.index;

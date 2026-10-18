@@ -858,7 +858,8 @@ Every gun with a W8 model that fires bullets now has stats (`packages/content/sr
 - **Bots** never fire a rocket or shell at a body inside its own blast, lob shells only within 10 m (they aim straight), and value straight projectiles less with range (they have to lead). The Pulse is worth nothing to them (no damage).
 - **Riot shields** (the follow-up PR after #107's review): a rocket, shell or blade coming at a shield's face (raised in front, slung behind, within the block arc as for bullets: `shieldFace` in shield.ts) goes off there; the shield takes its hit (rocket 100, shell 70, blade 100: three rockets break one) and the blast counts the carrier as covered (`explode(…, shielded)`: no damage, the covered push). A flame is spent on it, and a raised shield shelters the head from flames too (they'd curl over its top). An EMP orb passes it. A shell lobbed under it, at the feet, still gets through.
 - **Shredder pre-spin (#107 review Low):** the hold clock starts only when a spin-up starts from rest (a press of the second button, or firing) and only a shot restarts it: pressing the second button again no longer keeps it spun, and once it winds down while held it stays down until pressed again.
-- **Known gaps (follow-ups):** the Ripper's and Pulse's charge has no slowdown; the orb's burst uses the EMP grenade's ring on clients.
+- **Charging slows you** like a spinning minigun (`SPINNING_SPEED_MUL` ×0.85 on the weapon's weight, while `spin` > 0), so a charged shot has a cost as well as a tell.
+- **Known gaps (follow-ups):** the orb's burst uses the EMP grenade's ring on clients; the wind-up sound waits for the audio system.
 
 | Feel (sim `pnpm feel`, a standing target) | TTK | Hits |
 |---|---|---|

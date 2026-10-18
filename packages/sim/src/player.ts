@@ -250,13 +250,14 @@ export function hitboxLayout(p: PlayerState): HitboxLayout {
   return p.crouched ? CROUCHED_HITBOXES : STANDING_HITBOXES;
 }
 
-/** a spinning minigun (spin > 0: spinning up, spun, or firing) weighs this much more (review M1: pre-spinning has a cost) */
+/** a spinning minigun (spin > 0: spinning up, spun, or firing) or a charging Ripper or Pulse weighs this much more (review M1: winding up has a cost) */
 export const SPINNING_SPEED_MUL = 0.85;
 
 const slotSpeedMul = (slot: WeaponSlot) => {
   const def = weapons[slot.def];
   if (!def) return 1;
-  return def.spin && slot.spin > 0 ? def.moveSpeedMul * SPINNING_SPEED_MUL : def.moveSpeedMul;
+  // winding up: a minigun spinning, or a Ripper or Pulse charging (`spin` counts its charge)
+  return (def.spin || def.charge) && slot.spin > 0 ? def.moveSpeedMul * SPINNING_SPEED_MUL : def.moveSpeedMul;
 };
 
 /**
