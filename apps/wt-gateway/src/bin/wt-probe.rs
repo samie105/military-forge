@@ -31,7 +31,15 @@ async fn main() -> Result<()> {
     };
     let client = ClientBuilder::new().with_server_certificate_hashes(vec![unhex(hash)?])?;
     let session = client.connect(url::Url::parse(url)?).await?;
-    let (mut send, mut recv) = session.open_bi().await?;
+    // a session the server refuses at once (no such room) can close before its stream opens
+    let (mut send, mut recv) = match session.open_bi().await {
+        Ok(stream) => stream,
+        Err(_) => {
+            let (code, reason) = close_info(session.closed().await);
+            println!("CLOSED {code} {reason}");
+            return Ok(());
+        }
+    };
     println!("READY");
 
     let reliable = tokio::spawn(async move {
@@ -90,10 +98,7 @@ async fn main() -> Result<()> {
         })
     };
 
-    let (code, reason) = match session.closed().await {
-        SessionError::WebTransportError(WebTransportError::Closed(code, reason)) => (code, reason),
-        e => (0, e.to_string()),
-    };
+    let (code, reason) = close_info(session.closed().await);
     commands.abort();
     let _ = tokio::time::timeout(std::time::Duration::from_millis(100), async {
         let _ = reliable.await;
@@ -102,4 +107,11 @@ async fn main() -> Result<()> {
     .await;
     println!("CLOSED {code} {reason}");
     Ok(())
+}
+
+fn close_info(e: SessionError) -> (u32, String) {
+    match e {
+        SessionError::WebTransportError(WebTransportError::Closed(code, reason)) => (code, reason),
+        e => (0, e.to_string()),
+    }
 }

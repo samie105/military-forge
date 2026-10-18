@@ -81,9 +81,10 @@ export async function createServer(
   if (prefer === 'uws' && !uws) log('[game-server] uWebSockets.js not found, using the `ws` fallback (run `pnpm uws:fetch` to enable uWS)');
   // the WebTransport bridge is optional: if its socket can't be made, WebSocket still works
   let gateway: GatewayBridge | null = null;
-  if (gatewaySocket && room) {
+  if (gatewaySocket) {
     try {
-      gateway = await startGatewayBridge(gatewaySocket, room, log);
+      // through the registry's door, like WebSocket connections: rooms by code, tickets, limits
+      gateway = await startGatewayBridge(gatewaySocket, target, log);
     } catch (e) {
       log(`[game-server] no WebTransport (WebSocket only): ${(e as Error).message}`);
     }

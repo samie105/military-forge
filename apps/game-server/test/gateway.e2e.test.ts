@@ -10,10 +10,11 @@ import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { MsgType, encodeHello, encodeInput } from '@military-forge/protocol';
+import { CloseCode, MsgType, encodeHello, encodeInput } from '@military-forge/protocol';
 import { createInput } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
 import { Room } from '../src/room';
+import { RoomRegistry } from '../src/rooms';
 import { startGatewayBridge } from '../src/transports';
 
 const binDir = process.env.WT_GATEWAY_BIN_DIR ?? join(dirname(fileURLToPath(import.meta.url)), '../../wt-gateway/target/release');
@@ -121,4 +122,38 @@ describe.skipIf(!built)('WebTransport gateway contract (real binaries)', () => {
       bridge.close();
     }
   }, 30_000);
+
+  it('a room by code over QUIC: ?room= lands in that room; no code (and no default room) is refused', async () => {
+    const rooms = new RoomRegistry({ defaultRoom: null, roomOptions: { dummies: false, aoi: false } });
+    const target = { open: rooms.open.bind(rooms), humanCount: 0, roomCount: 0, tick: 0 };
+    const sock = join(tmpdir(), `mm-gwe2e-rooms-${process.pid}.sock`);
+    const bridge = await startGatewayBridge(sock, target);
+    const port = await freeUdpPort();
+    const env = { ...process.env, WT_ADDR: `127.0.0.1:${port}`, WT_PUBLIC_URL: `https://127.0.0.1:${port}/wt`, WT_SOCKET: sock };
+    const gateway = spawn(gatewayBin, [], { env, stdio: ['ignore', 'ignore', 'inherit'] });
+    const ticker = setInterval(() => rooms.tick(), 16);
+    const probes: Probe[] = [];
+    try {
+      await until(() => bridge.info() !== null, 'the gateway');
+      const { url, certHashes, rooms: routes } = bridge.info()!;
+      expect(routes).toBe(true);
+      const coded = new Probe(`${url}?room=KQMZPT`, certHashes[0]!);
+      const plain = new Probe(url, certHashes[0]!);
+      probes.push(coded, plain);
+      // the code-less one is refused at the door as soon as the gateway announces it, maybe before
+      // its stream even opens; the coded one is admitted to the door and waits for its HELLO
+      await until(() => coded.lines.includes('READY'), 'the coded session to connect');
+      coded.send(`R ${hex(encodeHello('Ade'))}`);
+      await until(() => coded.messages('R').some((m) => m[0] === MsgType.Welcome), 'the coded room\'s WELCOME');
+      expect(rooms.rooms.get('KQMZPT')?.humanCount).toBe(1);
+      await until(() => plain.closeCode !== null, 'the code-less session to be refused');
+      expect(plain.closeCode).toBe(CloseCode.NoRoom);
+    } finally {
+      clearInterval(ticker);
+      for (const p of probes) p.kill();
+      gateway.kill();
+      bridge.close();
+    }
+  }, 30_000);
 });
+

@@ -15,7 +15,7 @@ import { CloseCode, isUnreliableMessage } from '@military-forge/protocol';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, WebSocket as WsSocket } from 'ws';
-import type { Client, ClientConn, Room } from './room';
+import type { ClientConn, Room } from './room';
 import type { Connection } from './rooms';
 
 export type TransportKind = 'uws' | 'ws';
@@ -45,6 +45,8 @@ export interface WebTransportInfo {
 
 export interface WebTransportStatus extends WebTransportInfo {
   sessions: number;
+  /** sessions go where their `?room=` says, like WebSocket URLs (clients use WT for rooms by code) */
+  rooms: boolean;
 }
 
 /** Where /health finds the attached gateway, if any (GatewayBridge.info). */
@@ -467,6 +469,32 @@ function parseInfo(payload: Uint8Array): WebTransportInfo | null {
   }
 }
 
+/**
+ * A gateway OPEN payload: `<remote address>\n<request target>` (the target since the gateway's
+ * rooms step; an older gateway sends the address alone). → the client's IP (null if unreadable)
+ * and the URL the room registry reads: `/?room=CODE` for a room by code, `/` for the default room.
+ * The gateway's own path (`/wt/N`, which game server) means nothing to the rooms.
+ */
+export function parseOpen(payload: Uint8Array): { ip: string | null; url: string } {
+  const text = fromUtf8.decode(payload);
+  const nl = text.indexOf('\n');
+  const remote = nl < 0 ? text : text.slice(0, nl);
+  const target = nl < 0 ? '' : text.slice(nl + 1);
+  const host = remote.startsWith('[') ? remote.slice(1, remote.indexOf(']')) : remote.slice(0, remote.lastIndexOf(':') >= 0 ? remote.lastIndexOf(':') : undefined);
+  const ip = /^[0-9a-fA-F.:]{2,45}$/.test(host) ? host : null;
+  const room = roomParam(target);
+  return { ip, url: room !== null ? `/?room=${encodeURIComponent(room)}` : '/' };
+}
+
+function roomParam(target: string): string | null {
+  if (!target) return null;
+  try {
+    return new URL(target, 'http://gateway').searchParams.get('room');
+  } catch {
+    return null;
+  }
+}
+
 function closePayload(code: number, reason: string): Uint8Array {
   const r = utf8.encode(reason);
   const p = new Uint8Array(2 + r.length);
@@ -477,8 +505,11 @@ function closePayload(code: number, reason: string): Uint8Array {
 
 /**
  * Listens on a Unix socket (0600) for the WebTransport gateway, one at a time. Each gateway session
- * becomes a Room client: messages the protocol marks unreliable (snapshots, pongs) go back as
- * datagrams when they fit the 1000-byte budget, everything else on the session's reliable stream.
+ * is a connection like a WebSocket one: it goes through the room registry's door (`rooms.open`,
+ * with the room its `?room=` names and the client's IP: HELLO deadline, join tickets, per-IP and
+ * per-room limits, NoRoom), then into its room. Messages the protocol marks unreliable (snapshots,
+ * pongs) go back as datagrams when they fit the 1000-byte budget, everything else on the session's
+ * reliable stream.
  *
  * One session's misbehaviour costs only that session; a gateway that stops answering pings is
  * dropped (its players resume, over WebSocket if need be) and /health stops advertising it.
@@ -486,7 +517,13 @@ function closePayload(code: number, reason: string): Uint8Array {
  * behind); `bufferedAmount` here is the shared socket's, which only grows if the gateway itself
  * stalls, and then no snapshot should be queued for any of its players.
  */
-export function startGatewayBridge(path: string, room: Room, log: (msg: string) => void = () => {}, options: GatewayBridgeOptions = {}): Promise<GatewayBridge> {
+export function startGatewayBridge(
+  path: string,
+  rooms: Room | RoomTarget,
+  log: (msg: string) => void = () => {},
+  options: GatewayBridgeOptions = {},
+): Promise<GatewayBridge> {
+  const target = roomTarget(rooms);
   if (Buffer.byteLength(path) > MAX_SOCKET_PATH) {
     return Promise.reject(new Error(`WebTransport gateway socket path is ${Buffer.byteLength(path)} bytes; Unix sockets allow ${MAX_SOCKET_PATH}: ${path}`));
   }
@@ -498,7 +535,7 @@ export function startGatewayBridge(path: string, room: Room, log: (msg: string) 
   const pingMs = options.pingMs ?? GATEWAY_PING_MS;
   const timeoutMs = options.timeoutMs ?? GATEWAY_TIMEOUT_MS;
   /** the connected gateway's sessions, by its session id */
-  const clients = new Map<number, Client>();
+  const clients = new Map<number, Connection>();
   let gateway: Socket | null = null;
   let info: WebTransportInfo | null = null;
 
@@ -539,45 +576,54 @@ export function startGatewayBridge(path: string, room: Room, log: (msg: string) 
         }
         case GatewayFrame.Open: {
           if (clients.has(session)) break;
-          const client = room.connect({
-            send: (bytes) => {
-              const datagram = isUnreliableMessage(bytes) && bytes.length <= MAX_DATAGRAM_BYTES;
-              write(encodeGatewayFrame(datagram ? GatewayFrame.Datagram : GatewayFrame.Reliable, session, bytes));
-            },
-            close: (code, reason) => {
-              closeSession(session, code, reason);
-              clients.delete(session);
-            },
-            bufferedAmount: () => socket.writableLength,
+          const { ip, url } = parseOpen(payload);
+          let connection: Connection | null = null;
+          guard(log, 'opening a gateway session', () => closeSession(session, 1011, 'server error'), () => {
+            // refused at the door (bad code, server full, …): the registry closes it, which sends CLOSE
+            connection = target.open(
+              url,
+              {
+                send: (bytes) => {
+                  const datagram = isUnreliableMessage(bytes) && bytes.length <= MAX_DATAGRAM_BYTES;
+                  write(encodeGatewayFrame(datagram ? GatewayFrame.Datagram : GatewayFrame.Reliable, session, bytes));
+                },
+                close: (code, reason) => {
+                  closeSession(session, code, reason);
+                  clients.delete(session);
+                },
+                bufferedAmount: () => socket.writableLength,
+              },
+              ip,
+            );
           });
-          clients.set(session, client);
+          if (connection) clients.set(session, connection);
           break;
         }
         case GatewayFrame.Reliable:
         case GatewayFrame.Datagram: {
-          const client = clients.get(session);
-          if (!client) break;
+          const connection = clients.get(session);
+          if (!connection) break;
           if (payload.length > MAX_PAYLOAD) {
             // the WebSocket limit (the gateway enforces it as well): only this session pays
             clients.delete(session);
             closeSession(session, CloseCode.BadMessage, 'message too large');
-            room.disconnect(client, false);
+            connection.closed(false);
             break;
           }
           // one session's bad message costs that session, never the gateway's other players
           guard(log, 'a gateway message handler', () => {
             clients.delete(session);
             closeSession(session, 1011, 'server error');
-            room.disconnect(client, false);
-          }, () => room.receive(client, payload));
+            connection.closed(false);
+          }, () => connection.receive(payload));
           break;
         }
         case GatewayFrame.Close: {
-          const client = clients.get(session);
+          const connection = clients.get(session);
           clients.delete(session);
           // the gateway's own 4003 (oversized message) ends the player like a kick; anything else may resume
           const code = payload.length >= 2 ? new DataView(payload.buffer, payload.byteOffset).getUint16(0, true) : 1000;
-          if (client) room.disconnect(client, code !== CloseCode.BadMessage);
+          connection?.closed(code !== CloseCode.BadMessage);
           break;
         }
         default:
@@ -602,9 +648,9 @@ export function startGatewayBridge(path: string, room: Room, log: (msg: string) 
         info = null;
       }
       // its players wait for a reconnect (they'll come back over WS or WT)
-      for (const [session, client] of clients) {
+      for (const [session, connection] of clients) {
         clients.delete(session);
-        room.disconnect(client);
+        connection.closed();
       }
     });
     socket.on('error', () => socket.destroy());
@@ -617,11 +663,11 @@ export function startGatewayBridge(path: string, room: Room, log: (msg: string) 
       resolve({
         path,
         sessions: () => clients.size,
-        info: () => (info ? { ...info, sessions: clients.size } : null),
+        info: () => (info ? { ...info, sessions: clients.size, rooms: true } : null),
         close() {
           server.close();
           gateway?.destroy();
-          for (const client of clients.values()) room.disconnect(client);
+          for (const connection of clients.values()) connection.closed();
           clients.clear();
           info = null;
           try {

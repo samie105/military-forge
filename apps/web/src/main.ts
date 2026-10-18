@@ -131,8 +131,8 @@ const host: GameHost = {
     setMode(new LocalMode(sampler, camera, renderer, nickname, rules, localMapId, localBots(params, rules !== null)));
   },
   startOnline(url, nickname, room, ticket, refreshTicket) {
-    // rooms by code are on WebSocket: the WebTransport gateway only serves the default room
-    setMode(new OnlineMode(url, nickname, sampler, camera, renderer, () => {}, createConditionerSettings(false), 'ws', { room, ...(ticket ? { ticket } : {}), ...(refreshTicket ? { refreshTicket } : {}) }));
+    // WebTransport where the server routes it by room (/health webtransport.rooms), else WebSocket
+    setMode(new OnlineMode(url, nickname, sampler, camera, renderer, () => {}, createConditionerSettings(false), 'auto', { room, ...(ticket ? { ticket } : {}), ...(refreshTicket ? { refreshTicket } : {}) }));
   },
   stop() {
     setMode(null);
