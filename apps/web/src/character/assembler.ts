@@ -1,42 +1,57 @@
 /**
- * Character assembler (docs/04 §5): loadout → one SkinnedMesh on the shared skeleton.
- * Parts are merged into the body's geometry (one draw call), dyes are material uniforms, and
- * merged geometries are cached by body type + parts + LOD, so equal outfits share one build.
- * Interface notes for W1: w2-character-interface.md in the shared notes folder.
+ * Character assembler (docs/04 §5): loadout → one SkinnedMesh on the shared skeleton, from W8's runtime
+ * art (w8-art-assets.md): the split body `characters/rookie/rookie_body*.glb`, one GLB per cosmetic part
+ * (`cosmetics/<slot>/<id>*.glb`, skinned in character space on a copy of the shared skeleton), baked dye
+ * masks + dye albedos per body/part, and the clip library `rookie_anims.glb`.
+ * Parts are merged into the body's geometry (one draw call; each vertex keeps its part's texture layer),
+ * dyes are material uniforms, and merged geometries are cached by body type + parts + LOD, so equal outfits
+ * share one build. The Locker and the in-game renderer both draw soldiers through this.
+ * Interface notes: w2-character-interface.md (and animation-avatar-split.md) in the shared notes folder.
  */
 import {
   BufferAttribute,
   BufferGeometry,
   Color,
   Float32BufferAttribute,
+  Matrix4,
   SkinnedMesh,
   Uint16BufferAttribute,
+  Vector3,
   type AnimationClip,
   type Bone,
   type ColorRepresentation,
+  type InterleavedBufferAttribute,
+  type Material,
   type MeshStandardMaterial,
   type Object3D,
   type Texture,
-  Vector3,
 } from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import type { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import {
   DEFAULT_COSMETIC_LOADOUT,
-  PART_SLOTS,
+  DYE_CHANNELS,
   cosmeticLoadoutHash,
   getCosmetic,
   sanitizeCosmeticLoadout,
   type CosmeticLoadout,
+  type DyeChannel,
+  type PartSlot,
 } from '@military-forge/content';
-import rookieLod0Url from '../../../../art/character/rookie.glb?url';
-import rookieLod1Url from '../../../../art/character/rookie_lod1.glb?url';
-import { DyeMaterial } from './dyeMaterial';
-import { createDyeTextures, hexToLinear } from './dyeTextures';
-import { BUILT_IN, PLACEHOLDERS, Region, classifyRegion } from './rookiePhase0';
+import { assetSource, type CharacterSource, type LoadedGltf } from './assets';
+import { repairClips } from './clipRepair';
+import { DYE_LAYERS, DyeMaterial } from './dyeMaterial';
+import { bodyAlbedoWithSkin } from './skinMask';
 
 export type CharacterLod = 0 | 1;
+
+/** Part slots W8 makes art for, in texture-layer order (layer 0 is the body). Top and legs are body textures. */
+export const ART_SLOTS = ['headgear', 'eyewear', 'gloves', 'boots', 'jetpack'] as const satisfies readonly PartSlot[];
+export type ArtSlot = (typeof ART_SLOTS)[number];
+
+/** The base character's manifest (W8: `rookie.json`). */
+export const ROOKIE_MANIFEST = 'characters/rookie/rookie.json';
 
 /** Below this many pixels tall a character switches to LOD1; above LOD0_ABOVE_PX it switches back. */
 export const LOD1_BELOW_PX = 40;
@@ -59,9 +74,9 @@ export function widenPoint(p: Vector3, widthMul: number): Vector3 {
 }
 
 /**
- * Fits a rigid part piece to a body type: it moves with the body surface under it (its bounding-box
- * centre follows widenPoint) but keeps its own size, so the body's widening never stacks on top of
- * the part's own bulk and pushes it out of the cosmetic envelope (docs/04 §1.2).
+ * Fits a rigid part (headgear, eyewear, jetpack) to a body type: it moves with the body surface under it (its
+ * bounding-box centre follows widenPoint) but keeps its own size, so the widening never stacks on the part's
+ * own bulk and pushes it out of the cosmetic envelope (docs/04 §1.2).
  */
 export function fitPieceToBody(geometry: BufferGeometry, widthMul: number): BufferGeometry {
   if (widthMul === 1) return geometry;
@@ -71,15 +86,65 @@ export function fitPieceToBody(geometry: BufferGeometry, widthMul: number): Buff
   return geometry.translate(offset.x, offset.y, offset.z);
 }
 
-/** Geometry key: what changes the mesh. Dyes, skin tone, exhaust and trail don't. */
-export function partsKey(loadout: CosmeticLoadout, lod: CharacterLod): string {
-  return [lod, loadout.items.bodyType, ...PART_SLOTS.map((s) => loadout.items[s])].join('|');
+type LodKey = 'lod0' | 'lod1';
+const LOD_KEYS: readonly LodKey[] = ['lod0', 'lod1'];
+
+interface DyeEntry {
+  mask: string;
+  albedo: string;
+  defaults?: Partial<Record<DyeChannel, string>>;
+  /** proposal for W8: the albedo's alpha already holds the skin weight */
+  skin?: 'alpha';
+}
+
+/** The fields of W8's manifests the assembler reads (rookie.json and cosmetics/<slot>/<id>.json). */
+interface Manifest {
+  lods: Record<LodKey, string>;
+  dye: Record<LodKey, DyeEntry>;
+  anims?: string;
+  defaultParts?: Partial<Record<string, string>>;
+  upperBodyBones?: string[];
+  attachBone?: string;
+  nozzles?: [number, number, number][];
+}
+
+/** One textured piece of the soldier at one LOD: geometry in the canonical joint order + its dye textures. */
+interface Layer {
+  /** position, normal, uv, skinIndex (LOD0 joint order), skinWeight, texLayer */
+  geometry: BufferGeometry;
+  albedo: Texture;
+  mask: Texture;
+  /** default dye per channel (primary, secondary, accent); null = the player's dye */
+  defaults: (Color | null)[];
+}
+
+interface BaseRig {
+  /** LOD0 template scene: cloned per instance for its own bones, never rendered */
+  scene: Object3D;
+  lods: [Layer, Layer];
+  clips: AnimationClip[];
+  defaultParts: Partial<Record<ArtSlot, string>>;
+  upperBodyBones: readonly string[];
+  /** bind-pose position of every bone, for fitting skinned parts to body types */
+  bonePositions: Map<string, Vector3>;
+}
+
+interface Part {
+  id: string;
+  slot: ArtSlot;
+  /** weighted 100% to one bone (W8 `attachBone`): moves as one piece on body types */
+  rigid: boolean;
+  lods: [Layer, Layer];
+  /** jetpack nozzle exits, glTF character space (W8 `nozzles`) */
+  nozzles: readonly (readonly [number, number, number])[];
 }
 
 export interface CharacterAssemblerOptions {
-  /** base rig GLB per LOD; defaults to the Phase 0 Rookie in art/character */
-  baseUrls?: Readonly<Record<CharacterLod, string>>;
-  /** share a configured loader (meshopt decoder, KTX2) */
+  /** where the assets come from (tests); default: `assetBase` over fetch + a meshopt GLTFLoader */
+  source?: CharacterSource;
+  /** URL prefix of apps/web/public/assets; default `import.meta.env.BASE_URL + 'assets/'` */
+  assetBase?: string;
+  /** share a configured GLTFLoader (must have the meshopt decoder) */
   loader?: GLTFLoader;
 }
 
@@ -88,6 +153,7 @@ export interface CharacterInstance {
   readonly root: Object3D;
   /** exactly one: body + parts merged, one material */
   readonly meshes: readonly SkinnedMesh[];
+  /** W8's shared clip library (locomotion, aim poses, actions) */
   readonly clips: readonly AnimationClip[];
   readonly material: DyeMaterial;
   readonly loadout: CosmeticLoadout;
@@ -95,25 +161,19 @@ export interface CharacterInstance {
   readonly lod: CharacterLod;
   /** colour of the equipped exhaust, for the jet flame */
   readonly exhaustColour: Color;
+  /** nozzle exits of the equipped jetpack, glTF character space (empty: no jetpack art) */
+  readonly nozzles: readonly (readonly [number, number, number])[];
   bone(name: string): Bone | null;
-  setLoadout(loadout: CosmeticLoadout): void;
+  /** Dyes, skin and exhaust apply at once; new parts once they have loaded (the promise). A newer call wins. */
+  setLoadout(loadout: CosmeticLoadout): Promise<void>;
   setLod(lod: CharacterLod): void;
-  /** Team colour for the dye mask's A channel (armband glow, docs/04 §1.4); null = off. No visible
-   *  effect yet: the Phase 0 bake and the placeholder parts have nothing in A until W8's mask lands. */
+  /** Team colour for the dye mask's A channel (armband glow, docs/04 §1.4); null = off. */
   setTeamColour(colour: ColorRepresentation | null): void;
+  /** Draws an outline (outline.ts) with this material, following every part swap and LOD change; null = none. */
+  setOutline(material: Material | null): void;
+  /** the outline hull, while there is one */
+  readonly outline: SkinnedMesh | null;
   dispose(): void;
-}
-
-interface BaseRig {
-  /** template scene: cloned per instance for its own bones, never rendered */
-  scene: Object3D;
-  /** position, normal, uv, skinIndex (LOD0 joint order), skinWeight, color, dyeMask, texLayer */
-  geometry: BufferGeometry;
-  /** Region per triangle */
-  regions: Uint8Array;
-  albedo: Texture;
-  mask: Texture;
-  clips: AnimationClip[];
 }
 
 interface CacheEntry {
@@ -133,79 +193,140 @@ function findSkinnedMesh(root: Object3D): SkinnedMesh {
   return found;
 }
 
-/** Float32 copy of any attribute (handles normalised integer storage). */
-function float32(attr: BufferAttribute, itemSize = attr.itemSize): Float32BufferAttribute {
-  const out = new Float32Array(attr.count * itemSize);
-  for (let i = 0; i < attr.count; i++) for (let c = 0; c < itemSize; c++) out[i * itemSize + c] = attr.getComponent(i, c);
-  return new Float32BufferAttribute(out, itemSize);
+type AnyAttribute = BufferAttribute | InterleavedBufferAttribute;
+
+/** Float32 copy of any attribute (handles normalised integer and interleaved storage). */
+function float32(attr: AnyAttribute): Float32BufferAttribute {
+  const n = attr.itemSize;
+  const out = new Float32Array(attr.count * n);
+  for (let i = 0; i < attr.count; i++) for (let c = 0; c < n; c++) out[i * n + c] = attr.getComponent(i, c);
+  return new Float32BufferAttribute(out, n);
 }
 
-function constant(count: number, values: readonly number[]): Float32BufferAttribute {
-  const out = new Float32Array(count * values.length);
-  for (let i = 0; i < count; i++) out.set(values, i * values.length);
-  return new Float32BufferAttribute(out, values.length);
+/** Frees what GLTFLoader decoded that the assembler doesn't draw: the GLB's own (undyed) albedo and geometry. */
+function dropSourceMesh(mesh: SkinnedMesh): void {
+  const material = mesh.material as MeshStandardMaterial;
+  material.map?.dispose();
+  (material.map?.image as ImageBitmap | undefined)?.close?.();
+  material.dispose();
+  mesh.geometry.dispose();
+  mesh.geometry = new BufferGeometry();
+}
+
+/** A GLB's skinned mesh → canonical geometry (joints remapped by name to `joints`, every vertex on `layer`). */
+function canonicalGeometry(mesh: SkinnedMesh, joints: readonly string[], layer: number): BufferGeometry {
+  const src = mesh.geometry;
+  const names = mesh.skeleton.bones.map((b) => b.name);
+  const remap = names.map((n) => Math.max(0, joints.indexOf(n)));
+  const count = src.getAttribute('position').count;
+  const index = src.getAttribute('skinIndex') as AnyAttribute;
+  const skinIndex = new Uint16Array(count * 4);
+  for (let i = 0; i < count; i++) for (let c = 0; c < 4; c++) skinIndex[i * 4 + c] = remap[index.getComponent(i, c)] ?? 0;
+  const g = new BufferGeometry();
+  for (const name of ['position', 'normal', 'uv', 'skinWeight']) g.setAttribute(name, float32(src.getAttribute(name) as AnyAttribute));
+  g.setAttribute('skinIndex', new Uint16BufferAttribute(skinIndex, 4));
+  g.setAttribute('texLayer', new Float32BufferAttribute(new Float32Array(count).fill(layer), 1));
+  const srcIndex = src.getIndex();
+  g.setIndex(srcIndex ? Array.from(srcIndex.array) : Array.from({ length: count }, (_, i) => i));
+  dropSourceMesh(mesh);
+  return g;
+}
+
+const dirOf = (path: string) => path.slice(0, path.lastIndexOf('/') + 1);
+
+function dyeDefaults(entry: DyeEntry): (Color | null)[] {
+  return DYE_CHANNELS.map((ch) => (entry.defaults?.[ch] ? new Color(entry.defaults[ch]) : null));
+}
+
+/** Geometry key: what changes the mesh. Dyes, skin tone, exhaust and trail don't. */
+export function partsKey(bodyType: string, parts: readonly (Part | null)[], lod: CharacterLod): string {
+  return [lod, bodyType, ...parts.map((p) => p?.id ?? '-')].join('|');
 }
 
 export class CharacterAssembler {
   readonly stats = { builds: 0, hits: 0 };
-  private readonly loader: GLTFLoader;
-  private readonly urls: Readonly<Record<CharacterLod, string>>;
-  private loading: Promise<void> | null = null;
-  private bases: BaseRig[] = [];
+  private readonly source: CharacterSource;
+  private loading: Promise<BaseRig> | null = null;
+  private base: BaseRig | null = null;
   /** LOD0 joint names: the canonical skinIndex order */
   private joints: string[] = [];
+  private readonly parts = new Map<string, Promise<Part>>();
   private readonly cache = new Map<string, CacheEntry>();
   private readonly idle = new Set<string>();
 
   constructor(options: CharacterAssemblerOptions = {}) {
-    this.loader = options.loader ?? new GLTFLoader();
-    this.urls = options.baseUrls ?? { 0: rookieLod0Url, 1: rookieLod1Url };
+    this.source = options.source ?? assetSource(options.assetBase ?? `${import.meta.env.BASE_URL}assets/`, options.loader);
   }
 
+  /** Loads the body (both LODs), its dye textures and the clip library once; create() calls it for you. */
   preload(): Promise<void> {
-    this.loading ??= Promise.all([this.loader.loadAsync(this.urls[0]), this.loader.loadAsync(this.urls[1])]).then(
-      ([lod0, lod1]) => {
-        const base0 = this.makeBase(lod0.scene, lod0.animations, null);
-        this.bases = [base0, this.makeBase(lod1.scene, lod1.animations, this.joints)];
-      },
+    this.loading ??= this.loadBase().then(
+      (base) => (this.base = base),
       (error: unknown) => {
         this.loading = null; // let a later create() retry
         throw error;
       },
     );
-    return this.loading;
+    return this.loading.then(() => undefined);
   }
 
+  /** `rookie.json` upperBodyBones: the bones the aim poses and upper-body actions own. */
+  get upperBodyBones(): readonly string[] {
+    return this.base?.upperBodyBones ?? [];
+  }
+
+  /** loadout null = the default Rookie. Never rejects for a missing part (uses the slot default); only for the body. */
   async create(loadout: CosmeticLoadout | null, lod: CharacterLod = 0): Promise<CharacterInstance> {
     await this.preload();
-    return new Instance(this, sanitizeCosmeticLoadout(loadout ?? DEFAULT_COSMETIC_LOADOUT), lod);
+    const clean = sanitizeCosmeticLoadout(loadout ?? DEFAULT_COSMETIC_LOADOUT);
+    return new Instance(this, clean, await this.resolveParts(clean), lod);
   }
 
   dispose(): void {
     for (const { geometry } of this.cache.values()) geometry.dispose();
     this.cache.clear();
     this.idle.clear();
-    for (const b of this.bases) {
-      b.geometry.dispose();
-      b.albedo.dispose();
-      b.mask.dispose();
-    }
-    this.bases = [];
+    const layers = [...(this.base?.lods ?? [])];
+    for (const p of this.parts.values()) void p.then((part) => part.lods.forEach((l) => disposeLayer(l)), () => {});
+    for (const l of layers) disposeLayer(l);
+    this.parts.clear();
+    this.base = null;
     this.loading = null;
   }
 
   /** @internal */
-  base(lod: CharacterLod): BaseRig {
-    return this.bases[lod]!;
+  rig(): BaseRig {
+    return this.base!;
   }
 
-  /** @internal merged geometry for a loadout, from the cache when possible; pair with release() */
-  acquire(loadout: CosmeticLoadout, lod: CharacterLod): BufferGeometry {
-    const key = partsKey(loadout, lod);
+  /** @internal the part per art slot for a loadout: its item, else the slot default, else none */
+  async resolveParts(loadout: CosmeticLoadout): Promise<(Part | null)[]> {
+    const base = this.rig();
+    return Promise.all(
+      ART_SLOTS.map(async (slot) => {
+        const id = loadout.items[slot];
+        const fallback = base.defaultParts[slot] ?? null;
+        // an item without art keeps the slot default ("none" items have no default to keep)
+        const wanted = getCosmetic(id)?.assets.manifest ? id : fallback;
+        for (const candidate of new Set([wanted, fallback])) {
+          if (!candidate) continue;
+          try {
+            return await this.part(candidate, slot);
+          } catch (error) {
+            console.warn(`character: no art for ${candidate}, using the ${slot} default`, error);
+          }
+        }
+        return null;
+      }),
+    );
+  }
+
+  /** @internal merged geometry for a parts key, from the cache when possible; pair with release() */
+  acquire(key: string, build: () => BufferGeometry): BufferGeometry {
     let entry = this.cache.get(key);
     if (entry) this.stats.hits++;
     else {
-      entry = { geometry: this.build(loadout, lod), refs: 0 };
+      entry = { geometry: build(), refs: 0 };
       this.cache.set(key, entry);
       this.stats.builds++;
     }
@@ -215,8 +336,7 @@ export class CharacterAssembler {
   }
 
   /** @internal */
-  release(loadout: CosmeticLoadout, lod: CharacterLod): void {
-    const key = partsKey(loadout, lod);
+  release(key: string): void {
     const entry = this.cache.get(key);
     if (!entry || --entry.refs > 0) return;
     this.idle.add(key);
@@ -228,74 +348,20 @@ export class CharacterAssembler {
     }
   }
 
-  /** Base rig from a loaded GLB; `canonical` = LOD0's joint names (null for LOD0 itself). */
-  private makeBase(scene: Object3D, clips: AnimationClip[], canonical: string[] | null): BaseRig {
-    const mesh = findSkinnedMesh(scene);
-    const names = mesh.skeleton.bones.map((b) => b.name);
-    if (!canonical) this.joints = names;
-    const src = mesh.geometry;
-    const count = src.getAttribute('position').count;
-    const joints = src.getAttribute('skinIndex') as BufferAttribute;
-    const weights = src.getAttribute('skinWeight') as BufferAttribute;
-    const remap = names.map((n) => Math.max(0, (canonical ?? names).indexOf(n)));
-    const skinIndex = new Uint16Array(count * 4);
-    for (let i = 0; i < count; i++) for (let c = 0; c < 4; c++) skinIndex[i * 4 + c] = remap[joints.getComponent(i, c)]!;
-
-    const geometry = new BufferGeometry();
-    geometry.setAttribute('position', float32(src.getAttribute('position') as BufferAttribute));
-    geometry.setAttribute('normal', float32(src.getAttribute('normal') as BufferAttribute));
-    geometry.setAttribute('uv', float32(src.getAttribute('uv') as BufferAttribute));
-    geometry.setAttribute('skinIndex', new Uint16BufferAttribute(skinIndex, 4));
-    geometry.setAttribute('skinWeight', float32(weights));
-    geometry.setAttribute('color', constant(count, [1, 1, 1]));
-    geometry.setAttribute('dyeMask', constant(count, [0, 0, 0, 0]));
-    geometry.setAttribute('texLayer', constant(count, [0]));
-    geometry.setIndex(src.getIndex()!.clone());
-
-    const source = (mesh.material as MeshStandardMaterial).map;
-    if (!source) throw new Error('Character GLB has no albedo texture');
-    const d = DEFAULT_COSMETIC_LOADOUT;
-    const defaults = [d.dyes.primary, d.dyes.secondary, d.dyes.accent, d.items.skinTone].map((id) => hexToLinear(getCosmetic(id)!.colour!));
-    const { albedo, mask, skinAt } = createDyeTextures(source, defaults);
-    const regions = classifyTriangles(
-      geometry,
-      (v) => {
-        let best = 0;
-        for (let c = 1; c < 4; c++) if (weights.getComponent(v, c) > weights.getComponent(v, best)) best = c;
-        return names[joints.getComponent(v, best)] ?? '';
-      },
-      skinAt,
-    );
-    source.dispose();
-    (source.image as ImageBitmap | undefined)?.close?.();
-    return { scene, geometry, regions, albedo, mask, clips };
-  }
-
-  private build(loadout: CosmeticLoadout, lod: CharacterLod): BufferGeometry {
-    const base = this.bases[lod]!;
-    const widthMul = getCosmetic(loadout.items.bodyType)?.widthMul ?? 1;
-    const hidden = new Set<Region>();
-    const parts: BufferGeometry[] = [];
-    for (const slot of PART_SLOTS) {
-      const id = loadout.items[slot];
-      const builtIn = BUILT_IN[slot];
-      const recipe = PLACEHOLDERS[id];
-      // An item without art (or "none") keeps the built-in default, so a part never goes missing.
-      if (builtIn?.item === id || !recipe) continue;
-      if (builtIn) hidden.add(builtIn.region);
-      for (const p of recipe()) parts.push(this.pieceGeometry(fitPieceToBody(p.geometry, widthMul), p.bone, p.colour, p.mask));
+  /** @internal body + parts → one geometry (body vertices first), fitted to the body type */
+  build(parts: readonly (Part | null)[], widthMul: number, lod: CharacterLod): BufferGeometry {
+    const body = this.rig().lods[lod].geometry;
+    const fitted: BufferGeometry[] = [];
+    for (const part of parts) {
+      if (!part) continue;
+      const g = part.lods[lod].geometry;
+      fitted.push(widthMul === 1 ? g : part.rigid ? fitPieceToBody(g.clone(), widthMul) : this.fitSkinnedPart(g.clone(), widthMul));
     }
-    const body = new BufferGeometry();
-    for (const [name, attr] of Object.entries(base.geometry.attributes)) body.setAttribute(name, attr);
-    const index = base.geometry.getIndex()!;
-    const kept: number[] = [];
-    for (let t = 0; t < base.regions.length; t++) if (!hidden.has(base.regions[t] as Region)) kept.push(index.getX(t * 3), index.getX(t * 3 + 1), index.getX(t * 3 + 2));
-    body.setIndex(kept);
-    const merged = mergeGeometries([body, ...parts]);
-    for (const p of parts) p.dispose();
+    const merged = mergeGeometries([body, ...fitted]);
+    if (widthMul !== 1) for (const g of fitted) g.dispose(); // the clones; the parts' own geometry stays cached
     if (!merged) throw new Error('Character part attributes do not match the body');
     if (widthMul !== 1) {
-      // Only the body's own vertices (merged first, all of them) scale; parts were fitted above.
+      // only the body's own vertices (merged first) scale; parts were fitted above
       const pos = merged.getAttribute('position') as BufferAttribute;
       const p = new Vector3();
       for (let i = 0; i < body.getAttribute('position').count; i++) {
@@ -308,91 +374,155 @@ export class CharacterAssembler {
     return merged;
   }
 
-  private pieceGeometry(source: BufferGeometry, bone: string, colour: string, mask: readonly number[]): BufferGeometry {
-    const joint = Math.max(0, this.joints.indexOf(bone));
-    const count = source.getAttribute('position').count;
-    const g = new BufferGeometry();
-    g.setAttribute('position', source.getAttribute('position'));
-    g.setAttribute('normal', source.getAttribute('normal'));
-    g.setAttribute('uv', source.getAttribute('uv'));
-    g.setAttribute('skinIndex', new Uint16BufferAttribute(new Uint16Array(count * 4).map((_, i) => (i % 4 === 0 ? joint : 0)), 4));
-    g.setAttribute('skinWeight', constant(count, [1, 0, 0, 0]));
-    g.setAttribute('color', constant(count, hexToLinear(colour)));
-    g.setAttribute('dyeMask', constant(count, mask));
-    g.setAttribute('texLayer', constant(count, [-1]));
-    g.setIndex(source.getIndex());
-    return g;
+  /** Boots and gloves move with the bone each vertex mostly follows (a foot, a hand) without scaling. */
+  private fitSkinnedPart(geometry: BufferGeometry, widthMul: number): BufferGeometry {
+    const positions = this.rig().bonePositions;
+    const pos = geometry.getAttribute('position') as BufferAttribute;
+    const joint = geometry.getAttribute('skinIndex') as BufferAttribute;
+    const weight = geometry.getAttribute('skinWeight') as BufferAttribute;
+    const offsets = this.joints.map((name) => {
+      const at = positions.get(name);
+      return at ? widenPoint(at.clone(), widthMul).sub(at) : new Vector3();
+    });
+    for (let v = 0; v < pos.count; v++) {
+      let best = 0;
+      for (let c = 1; c < 4; c++) if (weight.getComponent(v, c) > weight.getComponent(v, best)) best = c;
+      const o = offsets[joint.getComponent(v, best)]!;
+      pos.setXYZ(v, pos.getX(v) + o.x, pos.getY(v) + o.y, pos.getZ(v) + o.z);
+    }
+    return geometry;
+  }
+
+  private async loadBase(): Promise<BaseRig> {
+    const s = this.source;
+    const manifest = (await s.json(ROOKIE_MANIFEST)) as Manifest;
+    const dir = dirOf(ROOKIE_MANIFEST);
+    const [lod0, lod1, anims] = await Promise.all([s.gltf(dir + manifest.lods.lod0), s.gltf(dir + manifest.lods.lod1), s.gltf(dir + (manifest.anims ?? 'rookie_anims.glb'))]);
+    const mesh0 = findSkinnedMesh(lod0.scene);
+    this.joints = mesh0.skeleton.bones.map((b) => b.name);
+    const skin = getCosmetic(DEFAULT_COSMETIC_LOADOUT.items.skinTone)?.colour ?? '#da9f75';
+    const layer = async (gltf: LoadedGltf, key: LodKey): Promise<Layer> => {
+      const entry = manifest.dye[key];
+      const [albedo, mask] = await Promise.all([s.texture(dir + entry.albedo, true), s.texture(dir + entry.mask, false)]);
+      return {
+        geometry: canonicalGeometry(findSkinnedMesh(gltf.scene), this.joints, 0),
+        albedo: entry.skin === 'alpha' ? albedo : bodyAlbedoWithSkin(albedo, skin),
+        mask,
+        defaults: dyeDefaults(entry),
+      };
+    };
+    const lods = (await Promise.all([layer(lod0, 'lod0'), layer(lod1, 'lod1')])) as [Layer, Layer];
+    const bonePositions = new Map<string, Vector3>();
+    const m = new Matrix4();
+    mesh0.skeleton.bones.forEach((b, i) => bonePositions.set(b.name, new Vector3().setFromMatrixPosition(m.copy(mesh0.skeleton.boneInverses[i]!).invert())));
+    const defaultParts: Partial<Record<ArtSlot, string>> = {};
+    for (const slot of ART_SLOTS) if (manifest.defaultParts?.[slot]) defaultParts[slot] = manifest.defaultParts[slot];
+    // W8's export garbles quaternion tangents: rebuild them (clipRepair.ts) so every clip plays as authored
+    return { scene: lod0.scene, lods, clips: repairClips(anims.animations), defaultParts, upperBodyBones: manifest.upperBodyBones ?? [], bonePositions };
+  }
+
+  /** One cosmetic part, both LODs (cached; a failed load is not, so a later look tries again). */
+  private part(id: string, slot: ArtSlot): Promise<Part> {
+    let p = this.parts.get(id);
+    if (!p) {
+      p = this.loadPart(id, slot);
+      this.parts.set(id, p);
+      const failed = p;
+      p.catch(() => {
+        if (this.parts.get(id) === failed) this.parts.delete(id);
+      });
+    }
+    return p;
+  }
+
+  private async loadPart(id: string, slot: ArtSlot): Promise<Part> {
+    const s = this.source;
+    const path = getCosmetic(id)?.assets.manifest ?? `cosmetics/${slot}/${id}.json`;
+    const manifest = (await s.json(path)) as Manifest;
+    const dir = dirOf(path);
+    const layerIndex = 1 + ART_SLOTS.indexOf(slot);
+    const lods = (await Promise.all(
+      LOD_KEYS.map(async (key): Promise<Layer> => {
+        const entry = manifest.dye[key];
+        const [gltf, albedo, mask] = await Promise.all([s.gltf(dir + manifest.lods[key]), s.texture(dir + entry.albedo, true), s.texture(dir + entry.mask, false)]);
+        return { geometry: canonicalGeometry(findSkinnedMesh(gltf.scene), this.joints, layerIndex), albedo, mask, defaults: dyeDefaults(entry) };
+      }),
+    )) as [Layer, Layer];
+    return { id, slot, rigid: !!manifest.attachBone, lods, nozzles: manifest.nozzles ?? [] };
   }
 }
 
-/** Region of every triangle of an indexed geometry, from its centroid, its first vertex's dominant bone
- *  and the skin weight at its UV centroid. */
-export function classifyTriangles(geometry: BufferGeometry, dominantBone: (vertex: number) => string, skinAt: (u: number, v: number) => number): Uint8Array {
-  const index = geometry.getIndex()!;
-  const pos = geometry.getAttribute('position');
-  const uv = geometry.getAttribute('uv');
-  const regions = new Uint8Array(index.count / 3);
-  for (let t = 0; t < regions.length; t++) {
-    const [a, b, c] = [index.getX(t * 3), index.getX(t * 3 + 1), index.getX(t * 3 + 2)];
-    const x = (pos.getX(a) + pos.getX(b) + pos.getX(c)) / 3;
-    const y = (pos.getY(a) + pos.getY(b) + pos.getY(c)) / 3;
-    const z = (pos.getZ(a) + pos.getZ(b) + pos.getZ(c)) / 3;
-    const skin = skinAt((uv.getX(a) + uv.getX(b) + uv.getX(c)) / 3, (uv.getY(a) + uv.getY(b) + uv.getY(c)) / 3);
-    regions[t] = classifyRegion(dominantBone(a), x, y, z, skin);
-  }
-  return regions;
+function disposeLayer(l: Layer): void {
+  l.geometry.dispose();
+  l.albedo.dispose();
+  l.mask.dispose();
 }
 
 class Instance implements CharacterInstance {
   readonly root: Object3D;
   readonly meshes: readonly SkinnedMesh[];
-  readonly material: DyeMaterial;
+  readonly material = new DyeMaterial();
   readonly clips: readonly AnimationClip[];
   readonly exhaustColour = new Color();
   loadout: CosmeticLoadout;
   loadoutHash = 0;
   lod: CharacterLod;
+  private parts: (Part | null)[];
+  private key: string;
+  outline: SkinnedMesh | null = null;
   private readonly mesh: SkinnedMesh;
   private readonly bones = new Map<string, Bone>();
+  /** bumped by every setLoadout(): only the newest may swap parts in */
+  private pending = 0;
   private disposed = false;
 
   constructor(
     private readonly assembler: CharacterAssembler,
     loadout: CosmeticLoadout,
+    parts: (Part | null)[],
     lod: CharacterLod,
   ) {
-    const lod0 = assembler.base(0);
-    this.root = cloneSkinned(lod0.scene);
+    const rig = assembler.rig();
+    this.root = cloneSkinned(rig.scene);
     this.mesh = findSkinnedMesh(this.root);
     for (const b of this.mesh.skeleton.bones) this.bones.set(b.name, b);
+    this.mesh.material = this.material;
+    // bind-pose bounds don't follow the animated skeleton (jet poses, flailing): never cull a soldier
+    this.mesh.frustumCulled = false;
     this.meshes = [this.mesh];
-    this.clips = lod0.clips;
+    this.clips = rig.clips;
     this.loadout = loadout;
     this.lod = lod;
-    const base = assembler.base(lod);
-    this.material = new DyeMaterial(base.albedo, base.mask);
-    this.mesh.material = this.material;
-    this.mesh.geometry = assembler.acquire(loadout, lod);
+    this.parts = parts;
+    this.key = this.keyFor(parts, lod);
+    this.mesh.geometry = this.acquire(this.key, parts, lod);
+    this.applyTextures();
     this.applyColours();
+  }
+
+  get nozzles(): readonly (readonly [number, number, number])[] {
+    return this.parts[ART_SLOTS.indexOf('jetpack')]?.nozzles ?? [];
   }
 
   bone(name: string): Bone | null {
     return this.bones.get(name) ?? null;
   }
 
-  setLoadout(loadout: CosmeticLoadout): void {
+  async setLoadout(loadout: CosmeticLoadout): Promise<void> {
     const next = sanitizeCosmeticLoadout(loadout);
-    if (partsKey(next, this.lod) !== partsKey(this.loadout, this.lod)) this.swapGeometry(next, this.lod);
+    const seq = ++this.pending;
     this.loadout = next;
+    this.applyColours();
+    const parts = await this.assembler.resolveParts(next);
+    if (seq !== this.pending || this.disposed) return;
+    this.swap(parts, this.lod);
     this.applyColours();
   }
 
   setLod(lod: CharacterLod): void {
-    if (lod === this.lod) return;
-    this.swapGeometry(this.loadout, lod);
-    const base = this.assembler.base(lod);
-    this.material.setMaps(base.albedo, base.mask);
-    this.lod = lod;
+    if (lod === this.lod || this.disposed) return;
+    this.swap(this.parts, lod);
+    this.applyColours();
   }
 
   setTeamColour(colour: ColorRepresentation | null): void {
@@ -400,22 +530,69 @@ class Instance implements CharacterInstance {
     else this.material.dye.team.set(colour);
   }
 
+  setOutline(material: Material | null): void {
+    if (!material) {
+      this.outline?.removeFromParent();
+      this.outline = null;
+      return;
+    }
+    if (this.outline) {
+      this.outline.material = material;
+      return;
+    }
+    // the same geometry and skeleton drawn again (the skeleton updates once a frame for both)
+    const hull = new SkinnedMesh(this.mesh.geometry, material);
+    hull.name = 'outline';
+    hull.bind(this.mesh.skeleton, this.mesh.bindMatrix);
+    hull.frustumCulled = false;
+    hull.castShadow = false;
+    this.mesh.add(hull);
+    this.outline = hull;
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.assembler.release(this.loadout, this.lod);
+    this.assembler.release(this.key);
     this.material.dispose();
+    // each instance owns its skeleton's bone texture on the GPU once drawn
+    this.mesh.skeleton.dispose();
     this.root.removeFromParent();
   }
 
-  private swapGeometry(loadout: CosmeticLoadout, lod: CharacterLod): void {
-    const geometry = this.assembler.acquire(loadout, lod);
-    this.assembler.release(this.loadout, this.lod);
-    this.mesh.geometry = geometry;
-    this.mesh.computeBoundingBox();
-    this.mesh.computeBoundingSphere();
+  private keyFor(parts: readonly (Part | null)[], lod: CharacterLod): string {
+    return partsKey(this.loadout.items.bodyType, parts, lod);
   }
 
+  private acquire(key: string, parts: readonly (Part | null)[], lod: CharacterLod): BufferGeometry {
+    const widthMul = getCosmetic(this.loadout.items.bodyType)?.widthMul ?? 1;
+    return this.assembler.acquire(key, () => this.assembler.build(parts, widthMul, lod));
+  }
+
+  private swap(parts: (Part | null)[], lod: CharacterLod): void {
+    const key = this.keyFor(parts, lod);
+    this.parts = parts;
+    this.lod = lod;
+    if (key !== this.key) {
+      const geometry = this.acquire(key, parts, lod);
+      this.assembler.release(this.key);
+      this.key = key;
+      this.mesh.geometry = geometry;
+      if (this.outline) this.outline.geometry = geometry;
+    }
+    this.applyTextures();
+  }
+
+  private applyTextures(): void {
+    const base = this.assembler.rig().lods[this.lod];
+    this.material.setLayer(0, base.albedo, base.mask);
+    ART_SLOTS.forEach((_, i) => {
+      const layer = this.parts[i]?.lods[this.lod];
+      this.material.setLayer(i + 1, layer?.albedo ?? null, layer?.mask ?? null);
+    });
+  }
+
+  /** The player's dye per channel, or each part's own default while the channel holds the default dye (docs/04 §5.4). */
   private applyColours(): void {
     const { dyes, items } = this.loadout;
     const colour = (id: string) => getCosmetic(id)?.colour ?? '#ffffff';
@@ -424,6 +601,17 @@ class Instance implements CharacterInstance {
     d.secondary.set(colour(dyes.secondary));
     d.accent.set(colour(dyes.accent));
     d.skin.set(colour(items.skinTone));
+    const chosen = [d.primary, d.secondary, d.accent];
+    const body = this.assembler.rig().lods[this.lod];
+    body.defaults.forEach((own, c) => this.material.bodyDefaults[c]!.copy(own ?? chosen[c]!));
+    const layers = [body, ...this.parts.map((p) => p?.lods[this.lod])];
+    for (let layer = 0; layer < DYE_LAYERS; layer++) {
+      DYE_CHANNELS.forEach((ch, c) => {
+        const own = layers[layer]?.defaults[c];
+        const useDefault = dyes[ch] === DEFAULT_COSMETIC_LOADOUT.dyes[ch] && own;
+        this.material.layerColours[layer * 3 + c]!.copy(useDefault ? own : chosen[c]!);
+      });
+    }
     this.exhaustColour.set(colour(items.exhaust));
     this.loadoutHash = cosmeticLoadoutHash(this.loadout);
   }

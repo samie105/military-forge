@@ -25,11 +25,13 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import type { Frame } from '../view';
 import { Avatar, AvatarKit } from './avatar';
-import { RookieAssembler, toonRamp, type CharacterAssembler, type CharacterLod } from './character';
+import { HIT, hitReactions } from './motion';
+import { CharacterAssembler, OutlineMaterial, characterToonRamp, type CharacterInstance, type CharacterLod } from '../character';
+import { LoadoutDirectory } from './character';
 import { CloudLayer } from './clouds';
 import { KIT_WAIT_MS, MapEnvironment, environmentFor, withTimeout } from './environment';
 import { buildDepthLayers, updateForeground, type DepthLayers } from './layers';
-import { lightingFor } from './lighting';
+import { lightingFor, type LightingPreset } from './lighting';
 import { buildMapGeometry } from './mapGeometry';
 import { OnlineView, type RemoteView } from './online';
 import { FOV_DEG, PlaneCamera, applyPlanePose, planePose } from './planeCamera';
@@ -138,11 +140,21 @@ export class Renderer3D {
   /** grenades, explosions, the blast light and camera shake */
   readonly vfx: Vfx;
   private readonly assembler: CharacterAssembler;
+  /** who wears what: the Locker's saved look for the local player, placeholders for the rest */
+  private readonly loadouts: LoadoutDirectory;
   private readonly avatars = new Map<number, Avatar>();
+  /** each avatar's character, for look changes (Avatar only sees the skeleton side) */
+  private readonly looks = new Map<number, CharacterInstance>();
   /** riot shields lying on the map, and ricochet sparks (shield.ts) */
   private readonly pickupMeshes: PickupMeshes;
   private readonly sparks: RicochetSparks;
   private readonly clouds = new CloudLayer(this.scene); // smoke, gas, non-frag grenades (arsenal B)
+  /** one outline material for every soldier (docs/04 §5.5) */
+  private readonly outline = new OutlineMaterial();
+  /** the map's rim light on soldiers (lighting.ts), set by buildMap */
+  private rim: LightingPreset['rim'] = { color: 0x7fb8ff, strength: 0 };
+  /** the shader warm-up's soldiers, kept off the scene and never disposed so their programs stay linked */
+  readonly warmedUp: Avatar[] = [];
   private readonly pending = new Set<number>();
   /** after a failed character load, wait this long before trying again (doubles, ≤ 30 s) */
   private retryMs = 1000;
@@ -179,6 +191,8 @@ export class Renderer3D {
     assembler?: CharacterAssembler,
     /** accept software WebGL (softwareGl: automated browsers, ?softgl); otherwise a major performance caveat fails */
     allowSoftware = false,
+    /** who wears what (default: the Locker's saved look for the local player, placeholders for the rest) */
+    loadouts?: LoadoutDirectory,
   ) {
     this.preset = preset;
     this.dynres = new DynamicResolution(preset.minScale);
@@ -198,8 +212,13 @@ export class Renderer3D {
       this.statsEl.id = 'perf3d';
     }
     this.renderer.shadowMap.enabled = true; // only the High preset's sun casts (setPreset)
-    const ramp = toonRamp();
-    this.assembler = assembler ?? new RookieAssembler(import.meta.env.BASE_URL, ramp);
+    // one toon ramp for soldiers, guns and the gameplay plane, the same as the Locker's
+    const ramp = characterToonRamp();
+    this.assembler = assembler ?? new CharacterAssembler();
+    this.loadouts = loadouts ?? new LoadoutDirectory();
+    this.loadouts.onChange = () => {
+      for (const [id, look] of this.looks) if (id === this.localId) void look.setLoadout(this.loadouts.for({ id, isLocal: true }));
+    };
     this.kit = new AvatarKit(ramp);
 
     this.scene.background = null; // the sky card covers the view
@@ -273,7 +292,18 @@ export class Renderer3D {
   private readonly toVfx = (events: readonly SimEvent[]): void => {
     this.vfx.onEvents(events);
     eachKick(events, this.onKick);
+    // animation: hit reactions (motion.ts), for every drawn player, the remote ones included
+    for (const r of hitReactions(events, this.chestOf)) this.avatars.get(r.target)?.hit(r.dirX, r.dirY, r.size, r.zone, this.reducedMotion ? HIT.reduced : 1);
   };
+
+  /** a drawn player's chest (hit directions), or null */
+  private readonly chestOf = (id: number): { x: number; y: number } | null => {
+    const a = this.avatars.get(id);
+    return a ? { x: a.pivot.position.x, y: a.pivot.position.y + 0.9 } : null;
+  };
+
+  /** Reduce motion is on: hit reactions play smaller (setReducedMotion; until it's called, the OS preference) */
+  private reducedMotion = osPrefersReducedMotion();
 
   /** Visual recoil (recoil.ts): the shooter's gun, arm and torso, and the local player's camera. */
   private readonly onKick = (shooter: number, weapon: number, dirX: number, dirY: number): void => {
@@ -288,9 +318,10 @@ export class Renderer3D {
 
   /**
    * No camera shake or camera kick, half the gun kick, a third of the blast light, fuse lights
-   * blinking ≤ 3 times a second.
+   * blinking ≤ 3 times a second, hit reactions at HIT.reduced of their size.
    */
   setReducedMotion(on: boolean): void {
+    this.reducedMotion = on;
     this.vfx.setReducedMotion(on);
     this.kit.recoilScale = on ? 0.5 : 1;
   }
@@ -330,6 +361,8 @@ export class Renderer3D {
     this.sun.color.setHex(light.sun.color);
     this.sun.intensity = light.sun.intensity;
     this.sunDir.fromArray(light.sun.dir).normalize();
+    this.rim = light.rim;
+    for (const look of this.looks.values()) this.dress(look);
     this.plane.geometry = buildMapGeometry(map, light);
     this.layers = this.env?.layers ?? buildDepthLayers(map, light);
     this.scene.add(this.layers.background, this.layers.foregroundGroup);
@@ -364,11 +397,13 @@ export class Renderer3D {
 
   private async warmUp(spawn: { x: number; y: number }): Promise<void> {
     const lods: CharacterLod[] = [0, 1];
-    const warm = await Promise.all(lods.map((lod, i) => this.assembler.create(null, lod).then((inst) => new Avatar(inst, lod, this.kit, i))));
+    const insts = await Promise.all(lods.map((lod) => this.assembler.create(null, lod)));
+    const warm = insts.map((inst, i) => new Avatar(inst, lods[i]!, this.kit, i));
     for (const [i, a] of warm.entries()) {
       a.pivot.position.set(spawn.x, spawn.y, 0);
       a.showAllForWarmUp(i);
       a.pivot.traverse((o) => (o.castShadow = true)); // as the real ones (syncAvatars): the shadow pass below
+      this.dress(insts[i]!); // after the shadow flags, as the real ones: the outline casts none
       this.scene.add(a.pivot, a.blob);
     }
     // a scratch camera at the spawn: the game camera (follow, mouse aim) is read-only here
@@ -385,9 +420,21 @@ export class Renderer3D {
       this.sun.position.copy(this.sun.target.position).addScaledVector(this.sunDir, 50);
       this.renderer.render(this.scene, this.camera3);
     }
-    // keep the warm-up blob materials: disposing them would release the blob shader program (no
-    // other material uses it yet) and the first real avatar would link it again mid-game
-    for (const a of warm) a.dispose({ keepBlobMaterial: true });
+    // keep the warm-up soldiers, off the scene: disposing them would release the dye, blob and shadow programs (no
+    // other material uses them yet), and the first real soldiers would link them again mid-game (review L1)
+    for (const a of warm) {
+      a.pivot.removeFromParent();
+      a.blob.removeFromParent();
+    }
+    this.warmedUp.push(...warm);
+  }
+
+  /** The in-game finish on a soldier: the outline, and the rim light of the Locker preset this map matches. */
+  private dress(inst: CharacterInstance): CharacterInstance {
+    inst.setOutline(this.outline);
+    inst.material.rim.colour.set(this.rim.color);
+    inst.material.rim.strength.value = this.rim.strength;
+    return inst;
   }
 
   setPreset(name: PresetName): void {
@@ -401,6 +448,7 @@ export class Renderer3D {
     if (lodChanged) {
       for (const a of this.avatars.values()) a.dispose();
       this.avatars.clear();
+      this.looks.clear();
     }
     this.resize();
   }
@@ -427,6 +475,8 @@ export class Renderer3D {
     const dpr = pixelRatio(window.devicePixelRatio || 1, this.preset.dprCap, this.dprCapOverride, this.dynres.scale);
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+    // 2 CSS px at full resolution, whatever the render scale
+    this.outline.setWidth(2 * dpr);
   }
 
   render(frame: Frame, dt: number): void {
@@ -463,6 +513,7 @@ export class Renderer3D {
     // a screen taller than 4:3 is letterboxed: draw into the band only (the 2D overlay paints the bars)
     const { top, bottom } = this.camera.band;
     this.renderer.setViewport(0, top, this.camera.width, bottom - top);
+    this.outline.setViewport(this.camera.width * this.renderer.getPixelRatio(), (bottom - top) * this.renderer.getPixelRatio());
     this.renderer.setScissor(0, top, this.camera.width, bottom - top);
     this.renderer.setScissorTest(top > 0);
     if (this.sun.castShadow) {
@@ -520,13 +571,15 @@ export class Renderer3D {
       // characters stream in without blocking the frame (docs/04 §5.2)
       const lod: CharacterLod = !p.isLocal && this.preset.remoteLod1 ? 1 : 0;
       this.pending.add(p.id);
-      this.assembler.create(null, lod).then(
+      this.assembler.create(this.loadouts.for(p), lod).then(
         (inst) => {
           this.pending.delete(p.id);
           this.retryMs = 1000;
           const a = new Avatar(inst, lod, this.kit, p.id);
           a.pivot.traverse((o) => (o.castShadow = true));
+          this.dress(inst); // after the shadow flags: the outline casts none
           this.avatars.set(p.id, a);
+          this.looks.set(p.id, inst);
           this.scene.add(a.pivot, a.blob);
         },
         // retried with backoff (the assembler doesn't cache a failed load); the 2D overlay (H) shows the player meanwhile
@@ -541,6 +594,7 @@ export class Renderer3D {
       if (this.seen.has(id)) continue;
       a.dispose();
       this.avatars.delete(id);
+      this.looks.delete(id);
     }
   }
 
@@ -567,6 +621,15 @@ export class Renderer3D {
 }
 
 /** Frees the geometries and materials under `root` (textures shared with other meshes stay). */
+/** The OS asks for less motion (prefers-reduced-motion). */
+function osPrefersReducedMotion(): boolean {
+  try {
+    return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch {
+    return false;
+  }
+}
+
 function disposeTree(root: Object3D): void {
   root.traverse((o) => {
     const mesh = o as Mesh;

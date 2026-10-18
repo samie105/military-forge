@@ -1,20 +1,20 @@
 /**
- * Character assembly stand-in. W2 owns the real assembler (`apps/web/src/character/**`: parts,
- * dyes, one merged SkinnedMesh, docs/04 §5). W2 published its v1 interface (notes folder,
- * w2-character-interface.md) on the shape proposed in w1-render3d-interfaces.md §1; its code is
- * on the unmerged ws/locker branch. Until that merges, render3d loads the Phase 0 Rookie through
- * this adapter. Swap plan when ws/locker lands: construct W2's `CharacterAssembler` with
- * `baseUrls` pointing at assets/characters/rookie_phase0/ and this file's loader, take the jet
- * flame colour from `instance.exhaustColour`, and apply presets by setting properties on
- * `instance.material` instead of replacing it (that would lose the dyes).
+ * The in-game side of character assembly. Soldiers are built by the same CharacterAssembler as the Locker
+ * (apps/web/src/character: W8's rig, parts, dye masks and clip library, one toon ramp), so the player in
+ * game looks exactly like the Locker preview. This file decides which look each player wears:
+ * - the local player: the look saved in the Locker (LocalLoadoutStore, owned items only);
+ * - everyone else: PLACEHOLDER until loadouts travel over the wire (W6 reserves 0x27 LOADOUTS, w6 notes):
+ *   the default Rookie with dyes picked by player id, so a room isn't a row of clones.
  */
-import { DataTexture, MeshToonMaterial, NearestFilter, RedFormat, type AnimationClip, type Bone, type Material, type Object3D, type SkinnedMesh } from 'three';
-import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
-import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
+import { DEFAULT_COSMETIC_LOADOUT, type CosmeticLoadout } from '@military-forge/content';
+import type { AnimationClip, Bone, Object3D, SkinnedMesh } from 'three';
+import { LocalLoadoutStore, ownedOnly, starterInventory, type LoadoutStore } from '../locker/loadouts';
 
-export type CharacterLod = 0 | 1;
+export type { CharacterLod } from '../character';
+/** the shared toon ramp (one for soldiers, guns and the map); old name kept for existing callers */
+export { characterToonRamp as toonRamp } from '../character';
 
+/** What an Avatar needs from a character (the assembler's CharacterInstance has all of this and more). */
 export interface CharacterInstance {
   /** glTF +Z forward, +Y up, feet at y = 0, 1.5 m tall */
   readonly root: Object3D;
@@ -25,88 +25,44 @@ export interface CharacterInstance {
   dispose(): void;
 }
 
-export interface CharacterAssembler {
-  /** loadout null = the default Rookie */
-  create(loadout: unknown | null, lod: CharacterLod): Promise<CharacterInstance>;
+/**
+ * PLACEHOLDER dyes for players whose look we don't know yet (no loadout on the wire): starter dyes only, team
+ * colours (blue, orange) left out so nobody reads as a team, and never the default look (that's yours).
+ */
+export const PLACEHOLDER_DYES: readonly (readonly [string, string, string])[] = [
+  ['dye_charcoal', 'dye_olive', 'dye_red'],
+  ['dye_forest', 'dye_brown', 'dye_yellow'],
+  ['dye_white', 'dye_charcoal', 'dye_red'],
+  ['dye_brown', 'dye_sand', 'dye_lime'],
+  ['dye_olive', 'dye_charcoal', 'dye_pink'],
+  ['dye_purple', 'dye_white', 'dye_yellow'],
+  ['dye_red', 'dye_charcoal', 'dye_white'],
+  ['dye_sand', 'dye_forest', 'dye_white'],
+];
+
+/** PLACEHOLDER: the default Rookie dyed by player id, until W2's 0x27 LOADOUTS reaches the renderer. */
+export function placeholderLoadout(playerId: number): CosmeticLoadout {
+  const [primary, secondary, accent] = PLACEHOLDER_DYES[((playerId % PLACEHOLDER_DYES.length) + PLACEHOLDER_DYES.length) % PLACEHOLDER_DYES.length]!;
+  return { items: DEFAULT_COSMETIC_LOADOUT.items, dyes: { primary, secondary, accent } };
 }
 
-/** The toon ramp from the art-style test (art/README.md): three bands, nearest-filtered. */
-export function toonRamp(): DataTexture {
-  const ramp = new DataTexture(new Uint8Array([110, 185, 255]), 3, 1, RedFormat);
-  ramp.minFilter = ramp.magFilter = NearestFilter;
-  ramp.needsUpdate = true;
-  return ramp;
-}
+/** Which look each player wears; `onChange` fires when the local player's saved look has loaded. */
+export class LoadoutDirectory {
+  private local: CosmeticLoadout = DEFAULT_COSMETIC_LOADOUT;
+  onChange: (() => void) | null = null;
 
-const PHASE0_URLS: Record<CharacterLod, string> = {
-  0: 'assets/characters/rookie_phase0/rookie.glb',
-  1: 'assets/characters/rookie_phase0/rookie_lod1.glb',
-};
-
-/** the part of GLTFLoader the assembler uses (tests pass a stub) */
-export interface GltfSource {
-  loadAsync(url: string): Promise<GLTF>;
-}
-
-export class RookieAssembler implements CharacterAssembler {
-  private readonly sources = new Map<CharacterLod, Promise<GLTF>>();
-  /** one toon material per source material, shared by every instance */
-  private readonly materials = new Map<Material, MeshToonMaterial>();
-
-  constructor(
-    private readonly baseUrl: string,
-    private readonly ramp = toonRamp(),
-    private readonly loader: GltfSource = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder),
-  ) {}
-
-  private source(lod: CharacterLod): Promise<GLTF> {
-    let p = this.sources.get(lod);
-    if (!p) {
-      p = this.loader.loadAsync(this.baseUrl + PHASE0_URLS[lod]);
-      this.sources.set(lod, p);
-      // a failed load (network blip, a deploy mid-load) is not cached: the next create() tries again
-      const failed = p;
-      p.catch(() => {
-        if (this.sources.get(lod) === failed) this.sources.delete(lod);
-      });
-    }
-    return p;
+  constructor(store: LoadoutStore | null = new LocalLoadoutStore()) {
+    store
+      ?.load()
+      .then((saved) => {
+        if (!saved) return;
+        this.local = ownedOnly(saved, starterInventory);
+        this.onChange?.();
+      })
+      .catch(() => {}); // the default look; the Locker reports storage problems itself
   }
 
-  async create(_loadout: unknown | null, lod: CharacterLod): Promise<CharacterInstance> {
-    const gltf = await this.source(lod);
-    const root = cloneSkinned(gltf.scene);
-    const meshes: SkinnedMesh[] = [];
-    const bones = new Map<string, Bone>();
-    root.traverse((o) => {
-      if ((o as SkinnedMesh).isSkinnedMesh) {
-        const mesh = o as SkinnedMesh;
-        mesh.material = this.toon(mesh.material as Material);
-        mesh.frustumCulled = false; // the bind-pose bounds don't follow the animated skeleton
-        meshes.push(mesh);
-      } else if ((o as Bone).isBone) bones.set(o.name, o as Bone);
-    });
-    return {
-      root,
-      meshes,
-      clips: gltf.animations,
-      bone: (name) => bones.get(name) ?? null,
-      dispose: () => {
-        // geometry, textures and materials are shared with the cached source; the cloned
-        // skeletons are per instance, and each one owns a bone texture on the GPU once drawn
-        for (const m of meshes) m.skeleton.dispose();
-        root.removeFromParent();
-      },
-    };
-  }
-
-  private toon(src: Material): MeshToonMaterial {
-    let m = this.materials.get(src);
-    if (!m) {
-      const s = src as Material & { map?: MeshToonMaterial['map'] };
-      m = new MeshToonMaterial({ map: s.map ?? null, gradientMap: this.ramp });
-      this.materials.set(src, m);
-    }
-    return m;
+  for(p: { id: number; isLocal: boolean }): CosmeticLoadout {
+    return p.isLocal ? this.local : placeholderLoadout(p.id);
   }
 }

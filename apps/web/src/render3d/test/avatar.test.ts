@@ -101,23 +101,25 @@ describe('Avatar', () => {
     expect(a.blob.visible).toBe(false);
   });
 
-  it('plays the locomotion clip for the state, cross-fading between them', () => {
+  it('blends locomotion by speed: idle at rest, the stepping cycle fading in as the player runs (locomotion.ts)', () => {
     const { a } = avatar();
-    const mixer = (a as unknown as { mixer: { _actions: { getClip(): AnimationClip; isRunning(): boolean }[] } }).mixer;
-    const running = () => mixer._actions.filter((x) => x.isRunning()).map((x) => x.getClip().name);
     a.update(playerView(), 1 / 60, world, true);
-    expect(running()).toEqual(['idle']);
+    expect(a.loco.weights().idle).toBeCloseTo(1, 6);
+    expect(a.loco.weights().run).toBe(0);
     a.update(playerView({ vx: 5 }), 1 / 60, world, true);
-    expect(running().sort()).toEqual(['idle', 'run']); // mid cross-fade
+    const starting = a.loco.weights().run!;
+    expect(starting).toBeGreaterThan(0); // fading in, not snapping
     for (let i = 0; i < 30; i++) a.update(playerView({ vx: 5 }), 1 / 60, world, true);
-    expect(running()).toEqual(['run']);
+    expect(a.loco.weights().run).toBeGreaterThan(starting);
+    expect(a.loco.state).toBe('run');
   });
 
   it('aims the spine and head without the turn piling up when the clip holds them still (regression: head spun while running)', () => {
     const { a, inst } = avatar();
     const head = inst.bone('head')!;
     const pose = () => head.getWorldQuaternion(new Quaternion());
-    for (let i = 0; i < 40; i++) a.update(playerView({ vx: 5, aim: 0.8 }), 1 / 60, world, true); // into the run clip
+    // into the run clip, and long enough for the gait springs to settle
+    for (let i = 0; i < 150; i++) a.update(playerView({ vx: 5, aim: 0.8 }), 1 / 60, world, true);
     const settled = pose();
     for (let i = 0; i < 60; i++) a.update(playerView({ vx: 5, aim: 0.8 }), 1 / 60, world, true);
     expect(pose().angleTo(settled)).toBeLessThan(1e-6);

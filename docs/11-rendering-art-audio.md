@@ -97,6 +97,7 @@ z =  +1 … +6    FOREGROUND       grass tufts, railings, pipes. Dither-fades wh
 ## 4. Art direction
 
 - **Style:** stylised "toy-soldier" 3D. Chunky chibi characters, bold shapes, hand-painted-looking textures with a light toon ramp, saturated players over a desaturated background. Readable at a glance, cheap to render, and it ages well.
+  - **One look everywhere** (as built): soldiers, guns and the gameplay plane share one three-step toon ramp (`characterToonRamp`). Soldiers use the same assembler and dye material in game and in the Locker, with a 2 px ink outline (docs/04 §5.5). In game they also get a toon rim light in the colour of the Locker preset their map matches (`render3d/lighting.ts` `rim`; the yard uses the lobby's #7fb8ff), so they pop like the Locker preview. The Locker uses a real rim light instead.
 - **Palette discipline per map** (04 §8): the background is low-saturation and low-contrast; the gameplay plane is mid; players, pickups and projectiles are the highest contrast. Teams are blue/orange with an outline, plus shape cues for colour-blind players.
 - **Original IP only** (01 §12): no traced or copied assets, sprites or sounds.
 - **Kitbash:** a modular kit per biome (urban/market, industrial, desert, snow, moon, tombs) → 7 launch maps from ~6 kits.
@@ -111,7 +112,40 @@ z =  +1 … +6    FOREGROUND       grass tufts, railings, pipes. Dither-fades wh
 
 ### Animation tech
 
-- `AnimationMixer` per character, with a small blend-tree layer of our own (1D locomotion blend by speed; state machine for air/jet/crouch).
+- `AnimationMixer` per character, with a small blend-tree layer of our own (1D locomotion blend by speed; state machine for air/jet/crouch). As built (`apps/web/src/render3d/locomotion.ts`):
+  - **Ground:** a base pose (idle, or crouch_idle) with the gait cycle on top as an additive layer, every cycle phase-locked to one gait phase:
+    - the Forge's careful steps (walk_slow) up to 0.5–0.9 m/s, then W8's walk, then the run from 1.4–2.8 m/s;
+    - crouched, crouch_walk over crouch_idle.
+  - **Gait:** amplitude and cadence come from the ground speed and each clip's measured stance (how far a planted foot travels per cycle, and for how long it's down).
+    - Tiny speeds take small steps at ≥ 1.25 cycles/s instead of a slow-motion walk.
+    - The run never steps slower than 2.4 cycles/s; below its stride's speed it shortens its stride. At 5 m/s it plays at its authored cadence.
+    - The blend follows an eased speed, so a wall stopping a run fades it out.
+    - Backpedalling runs the cycle backwards.
+  - **Upper body:** while W8's aim poses show (render3d-b's `AimClips`, holds.ts), they own the upper body and the locomotion drops its upper-body tracks (`setUpperBody(false)`).
+  - **Air:** jet_ascend, jet_hover and fall, blended by vertical speed. `land` plays as an additive dip scaled by the impact.
+  - **Planted feet:** while the gait says a foot is down, two-bone IK holds it where it stopped moving with the body.
+    - The hold fades in and out over ≥ 70 ms (4 frames).
+    - A held foot stands at the clip's own height over the floor under it (raycast per plant; on a step's edge, the highest floor under the sole), turned onto its slope, and never inside the ground.
+    - The hips dip (≤ 8 cm) as far as the most demanding held leg needs. A target still out of reach is pulled in, so no knee snaps straight.
+    - Swinging feet are only lifted out of the ground.
+    - On a slope the body comes down onto the ground the capsule stands over.
+    - Holds let go when stopping, dashing, turning round, after a teleport, or when the body climbs away from a foot.
+    - Tests: `render3d/test/feet.test.ts`. Held feet slide 1–11 % of the ground speed, depending on the cycle (the clips alone slide 3–34 %). The planted knee turns no more sharply than the clip's.
+  - **Clip repair** (`apps/web/src/character/clipRepair.ts`): rebuilds tangents and resamples cubic-spline clips, and keeps quaternion keys in one hemisphere. The Forge now exports linear, sign-continuous tracks (#61, #75), so this is a safety net for older files.
+  - **Body motion** (`render3d/motion.ts`), after the mixer and before the aim layer:
+    - *Lean:* the body tilts in the gameplay plane with speed and acceleration through critically damped springs. It's ~13° forward at a 5 m/s run, upright at a stroll, back about 10° for a moment when braking or reversing, and banked into a facing turn. In the air it leans with the velocity, a little more into the jet's horizontal direction. The spine's share gives way to a hold's own lean into the gun, so the two don't add up.
+    - *Landing squash* scaled by the impact speed (none under 2.5 m/s; at 16 m/s the head drops 14 % of its height). The hips drop and the knees take it, with the feet on the ground. Nothing is scaled, so the aim stays exact.
+    - *Launch flail* above `launchSpeedX` in the air (a blast launch, not a dash): arms out and flapping, legs kicking, a slow tumble with the velocity. It recovers on landing and resets on respawn.
+    - *Dash pose* for the sim's 8-way dash: stretched along a sideways dash, tucked for an up-dash, a slam for a down-dash, mixed on diagonals. The streak and afterimages are render3d-b's (`vfx/dash.ts`).
+    - *Hit reactions* from the sim's hit events, for every drawn player, remote ones included (`hitReactions`, wired in `Renderer3D`'s event path, so online they play on the remote timeline):
+      - the torso flinches along the shot, sized by the damage and what dealt it: a Hammer twitches about 5°, a Breacher or a Widow staggers up to 22°;
+      - a headshot snaps the head, a hit from behind twists the torso, the knees give on a hard hit;
+      - in the air the whole body takes it, 1.6× bigger.
+      - Each reaction peaks in ~35 ms and is gone in ~0.25 s. It's render only, so control is never taken.
+      - Arms holding a gun keep their aim.
+      - Under Reduce motion (`setReducedMotion`, or the OS preference until it's called) reactions play at 30 %.
+    - *Held arms:* arms the aim layer holds a gun or the shield with keep the world direction the aim pose gave them through every lean, flail, dash and reaction, so the gun and its muzzle stay on the stand.
+  - **Look at it frame by frame:** `/animlab.html` (dev only) runs the real renderer with a scripted player moving along the movement-test map's flat floor. `node apps/web/scripts/animation-shots.mjs --set strips` saves the frame strips.
 - **Aim:** the additive aim-offset pose by angle **or** procedural spine/chest/upper-arm rotation after the mixer update. Prototype both and keep the one that reads best.
 - **Two-bone analytic IK** for the off-hand (cheaper than `CCDIKSolver`).
 - Retarget placeholder clips with `SkeletonUtils.retargetClip` (Mixamo) until the animator's clips land.

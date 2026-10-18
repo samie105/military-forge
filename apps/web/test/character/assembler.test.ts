@@ -1,117 +1,219 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { Box3, Color, Vector3, type BufferAttribute } from 'three';
+import { Color, Vector3, type BufferAttribute, type BufferGeometry } from 'three';
 import { describe, expect, it } from 'vitest';
-import { COSMETIC_ENVELOPE_MUL, DEFAULT_COSMETIC_LOADOUT, cosmeticsForSlot, getCosmetic, type CosmeticLoadout } from '@military-forge/content';
-import { CharacterAssembler, DyeMaterial, selectLod } from '../../src/character';
-import { widenPoint } from '../../src/character/assembler';
-import { BUILT_IN, PLACEHOLDERS, Region, classifyRegion } from '../../src/character/rookiePhase0';
-import { FAKE_URLS, JOINTS, TRIANGLES, fakeLoader } from './fakeRig';
+import { DEFAULT_COSMETIC_LOADOUT, cosmetics, getCosmetic, type CosmeticLoadout } from '@military-forge/content';
+import { ART_SLOTS, CharacterAssembler, DyeMaterial, OutlineMaterial, ROOKIE_MANIFEST, selectLod } from '../../src/character';
+import { BODY, BODY_DEFAULTS, JOINTS, PARTS, fakeSource, type FakeSource } from './fakeRig';
 
-const assembler = () => new CharacterAssembler({ loader: fakeLoader(), baseUrls: FAKE_URLS });
+const assembler = (source: FakeSource = fakeSource()) => new CharacterAssembler({ source });
 const wearing = (items: Partial<CosmeticLoadout['items']>, dyes: Partial<CosmeticLoadout['dyes']> = {}): CosmeticLoadout => ({
   items: { ...DEFAULT_COSMETIC_LOADOUT.items, ...items },
   dyes: { ...DEFAULT_COSMETIC_LOADOUT.dyes, ...dyes },
 });
-const triangles = (i: { meshes: readonly { geometry: { getIndex(): BufferAttribute | null } }[] }) => i.meshes[0]!.geometry.getIndex()!.count / 3;
+const geometryOf = (i: { meshes: readonly { geometry: BufferGeometry }[] }) => i.meshes[0]!.geometry;
+const triangles = (i: { meshes: readonly { geometry: BufferGeometry }[] }) => geometryOf(i).getIndex()!.count / 3;
+/** texture layer → the bones its vertices are skinned to */
+function layerBones(g: BufferGeometry): Map<number, Set<string>> {
+  const layer = g.getAttribute('texLayer');
+  const joint = g.getAttribute('skinIndex');
+  const out = new Map<number, Set<string>>();
+  for (let v = 0; v < layer.count; v++) {
+    const l = layer.getX(v);
+    if (!out.has(l)) out.set(l, new Set());
+    out.get(l)!.add(JOINTS[joint.getX(v)]!);
+  }
+  return out;
+}
+const layerOf = (slot: (typeof ART_SLOTS)[number]) => 1 + ART_SLOTS.indexOf(slot);
+const colourAt = (m: DyeMaterial, layer: number, channel: number) => m.layerColours[layer * 3 + channel]!;
 
-describe('CharacterAssembler', () => {
-  it('builds one skinned mesh with the dye material, its own bones and the shared clips', async () => {
-    const a = assembler();
-    const c = await a.create(null);
+describe('CharacterAssembler (W8 rig)', () => {
+  it('builds one skinned mesh: the body plus the default parts, each on its own texture layer and bone', async () => {
+    const c = await assembler().create(null);
     expect(c.meshes).toHaveLength(1);
     expect(c.meshes[0]!.material).toBeInstanceOf(DyeMaterial);
     expect(c.bone('socket_jetpack')?.name).toBe('socket_jetpack');
     expect(c.bone('nope')).toBeNull();
-    expect(c.clips.map((clip) => clip.name)).toEqual(['idle']);
-    expect(triangles(c)).toBe(TRIANGLES.length); // default parts are built in: nothing hidden, nothing added
-    const other = await a.create(null);
-    expect(other.bone('head')).not.toBe(c.bone('head'));
+    expect(c.clips.map((clip) => clip.name)).toEqual(['idle', 'walk']); // the shared clip library, not the body GLB's
+    expect(triangles(c)).toBe(BODY.length + 3); // helmet, boots, jetpack
+    const layers = layerBones(geometryOf(c));
+    expect(layers.get(0)).toEqual(new Set(['spine2', 'head', 'hand_L']));
+    expect(layers.get(layerOf('headgear'))).toEqual(new Set(['head']));
+    expect(layers.get(layerOf('boots'))).toEqual(new Set(['foot_L']));
+    expect(layers.get(layerOf('jetpack'))).toEqual(new Set(['spine2']));
+    expect(layers.has(layerOf('eyewear'))).toBe(false);
+    expect(c.material.layerAlbedo(layerOf('eyewear'))).toBeNull();
+    expect(c.material.layerAlbedo(layerOf('headgear'))).not.toBeNull();
+    expect(c.nozzles).toHaveLength(2);
   });
 
-  it('merges placeholder parts, rigidly skinned to their bone, and hides the built-in part they replace', async () => {
-    const c = await (assembler()).create(wearing({ eyewear: 'eyewear_aviators', boots: 'boots_jungle' }));
-    const g = c.meshes[0]!.geometry;
-    expect(triangles(c)).toBeGreaterThan(TRIANGLES.length);
-    const layer = g.getAttribute('texLayer');
-    const joint = g.getAttribute('skinIndex');
-    const weight = g.getAttribute('skinWeight');
-    const bones = new Set<string>();
-    for (let v = 0; v < layer.count; v++) {
-      if (layer.getX(v) >= 0) continue;
-      bones.add(JOINTS[joint.getX(v)]!);
-      expect(weight.getX(v)).toBe(1);
-    }
-    expect(bones).toEqual(new Set(['head', 'foot_L', 'foot_R']));
-    // the baked boot triangle is gone from the index
-    const index = g.getIndex()!;
-    const pos = g.getAttribute('position');
-    for (let i = 0; i < index.count; i++) if (layer.getX(index.getX(i)) >= 0) expect(pos.getY(index.getX(i))).toBeGreaterThan(0.1);
-  });
-
-  it('items without art keep the built-in default (a part never goes missing)', async () => {
-    const c = await assembler().create(wearing({ headgear: 'headgear_crown', top: 'top_track_jacket' }));
-    expect(triangles(c)).toBe(TRIANGLES.length);
-  });
-
-  it('caches merged geometry by parts; dyes and skin are uniforms', async () => {
+  it('gives every instance its own skeleton, and frees its bone texture on dispose', async () => {
     const a = assembler();
-    const one = await a.create(wearing({ headgear: 'headgear_beret' }));
-    const two = await a.create(wearing({ headgear: 'headgear_beret', skinTone: 'skin_11' }, { primary: 'dye_red' }));
-    expect(two.meshes[0]!.geometry).toBe(one.meshes[0]!.geometry);
-    expect(a.stats).toEqual({ builds: 1, hits: 1 });
-    expect(two.material.dye.primary.equals(new Color(getCosmetic('dye_red')!.colour!))).toBe(true);
-    expect(two.material.dye.skin.equals(new Color(getCosmetic('skin_11')!.colour!))).toBe(true);
-    expect(two.loadoutHash).not.toBe(one.loadoutHash);
-
-    const geometry = two.meshes[0]!.geometry;
-    two.setLoadout(wearing({ headgear: 'headgear_beret' }, { accent: 'dye_gold' }));
-    expect(two.meshes[0]!.geometry).toBe(geometry);
-    two.setLoadout(wearing({ jetpack: 'jetpack_drum', exhaust: 'exhaust_plasma' }));
-    expect(two.meshes[0]!.geometry).not.toBe(geometry);
-    expect(two.exhaustColour.equals(new Color(getCosmetic('exhaust_plasma')!.colour!))).toBe(true);
-    expect(a.stats.builds).toBe(2);
+    const one = await a.create(null);
+    const two = await a.create(null);
+    expect(one.bone('head')).not.toBe(two.bone('head'));
+    const skeleton = one.meshes[0]!.skeleton;
+    skeleton.computeBoneTexture();
+    let freed = false;
+    skeleton.boneTexture!.addEventListener('dispose', () => (freed = true));
+    one.dispose();
+    expect(freed).toBe(true);
   });
 
-  it('body types change width below the neck only', async () => {
+  it('swaps parts by slot; "none" leaves the slot empty; an item without art keeps the slot default', async () => {
     const a = assembler();
-    const extent = async (bodyType: string) => {
-      const g = (await a.create(wearing({ bodyType }))).meshes[0]!.geometry;
-      const pos = g.getAttribute('position');
-      const xs = (pred: (y: number) => boolean) => Math.max(...Array.from({ length: pos.count }, (_, i) => (pred(pos.getY(i)) ? Math.abs(pos.getX(i)) : 0)));
-      return { body: xs((y) => y < 0.9), head: xs((y) => y > 1) };
-    };
-    const standard = await extent('body_standard');
-    const stocky = await extent('body_stocky');
-    expect(stocky.body).toBeCloseTo(standard.body * 1.08, 5);
-    expect(stocky.head).toBe(standard.head);
+    const c = await a.create(wearing({ eyewear: 'eyewear_aviators', gloves: 'gloves_tactical', boots: 'boots_jungle', jetpack: 'jetpack_drum' }));
+    const layers = layerBones(geometryOf(c));
+    expect(layers.get(layerOf('eyewear'))).toEqual(new Set(['head']));
+    expect(layers.get(layerOf('gloves'))).toEqual(new Set(['hand_L']));
+    expect(c.nozzles).toHaveLength(1); // the drum pack has one nozzle, the twin tank two
+    const crown = await a.create(wearing({ headgear: 'headgear_crown' })); // no art yet
+    expect(geometryOf(crown)).toBe(geometryOf(await a.create(null)));
   });
 
-  it('switches LOD on the same skeleton, remapping joints to LOD0 order', async () => {
+  it('falls back to the slot default when a part fails to load, and tries it again next time', async () => {
+    const source = fakeSource();
+    source.broken.add('headgear_field_cap');
+    const a = assembler(source);
+    const c = await a.create(wearing({ headgear: 'headgear_field_cap' }));
+    expect(geometryOf(c)).toBe(geometryOf(await a.create(null)));
+    source.broken.clear();
+    const retried = await a.create(wearing({ headgear: 'headgear_field_cap' }));
+    expect(geometryOf(retried)).not.toBe(geometryOf(c));
+  });
+
+  it('remaps LOD1 joints (listed in another order) to the LOD0 skeleton, keeping the bones on a LOD switch', async () => {
     const c = await assembler().create(wearing({ eyewear: 'eyewear_aviators' }));
     const bones = c.meshes[0]!.skeleton.bones;
+    const lod0 = layerBones(geometryOf(c));
     c.setLod(1);
     expect(c.lod).toBe(1);
     expect(c.meshes[0]!.skeleton.bones).toBe(bones);
-    const g = c.meshes[0]!.geometry;
-    const joint = g.getAttribute('skinIndex');
-    const pos = g.getAttribute('position');
-    for (let v = 0; v < joint.count; v++) if (pos.getY(v) > 1.3 && g.getAttribute('texLayer').getX(v) >= 0) expect(JOINTS[joint.getX(v)]).toBe('head');
+    expect(layerBones(geometryOf(c))).toEqual(lod0);
+    expect(c.material.layerAlbedo(0)).not.toBeNull();
+  });
+
+  it('dyes: each part keeps its own default dye until the player picks one, then every part takes it', async () => {
+    const a = assembler();
+    const c = await a.create(null);
+    const m = c.material;
+    const helmet = layerOf('headgear');
+    expect(colourAt(m, 0, 0).equals(new Color(BODY_DEFAULTS.primary))).toBe(true);
+    expect(colourAt(m, helmet, 0).equals(new Color(PARTS.headgear_brim_helmet!.defaults.primary))).toBe(true);
+    // a channel the part has no default for takes the player's dye
+    expect(colourAt(m, helmet, 1).equals(new Color(getCosmetic(DEFAULT_COSMETIC_LOADOUT.dyes.secondary)!.colour!))).toBe(true);
+    const red = new Color(getCosmetic('dye_red')!.colour!);
+    await c.setLoadout(wearing({}, { primary: 'dye_red' }));
+    for (let layer = 0; layer <= ART_SLOTS.length; layer++) expect(colourAt(m, layer, 0).equals(red)).toBe(true);
+    expect(colourAt(m, 0, 1).equals(new Color(BODY_DEFAULTS.secondary))).toBe(true); // untouched channel keeps defaults
+  });
+
+  it('caches merged geometry by parts; dyes, skin and exhaust are uniforms', async () => {
+    const a = assembler();
+    const one = await a.create(wearing({ headgear: 'headgear_field_cap' }));
+    const two = await a.create(wearing({ headgear: 'headgear_field_cap', skinTone: 'skin_11', exhaust: 'exhaust_plasma' }, { primary: 'dye_red' }));
+    expect(geometryOf(two)).toBe(geometryOf(one));
+    expect(a.stats).toEqual({ builds: 1, hits: 1 });
+    expect(two.material.dye.skin.equals(new Color(getCosmetic('skin_11')!.colour!))).toBe(true);
+    expect(two.exhaustColour.equals(new Color(getCosmetic('exhaust_plasma')!.colour!))).toBe(true);
+    expect(two.loadoutHash).not.toBe(one.loadoutHash);
+    const before = geometryOf(two);
+    await two.setLoadout(wearing({ headgear: 'headgear_field_cap', skinTone: 'skin_02' }));
+    expect(geometryOf(two)).toBe(before);
+    await two.setLoadout(wearing({ jetpack: 'jetpack_drum' }));
+    expect(geometryOf(two)).not.toBe(before);
+    expect(a.stats.builds).toBe(2);
+  });
+
+  it('applies dyes at once and new parts once loaded; the newest setLoadout wins a race', async () => {
+    const a = assembler();
+    const c = await a.create(null);
+    const base = geometryOf(c);
+    const slow = c.setLoadout(wearing({ headgear: 'headgear_field_cap' }, { accent: 'dye_yellow' }));
+    expect(c.material.dye.accent.equals(new Color(getCosmetic('dye_yellow')!.colour!))).toBe(true);
+    const fast = c.setLoadout(wearing({}));
+    await Promise.all([slow, fast]);
+    expect(geometryOf(c)).toBe(base);
+    expect(c.loadout.items.headgear).toBe('headgear_brim_helmet');
+  });
+
+  it('body types widen the body below the neck; parts move with it but keep their size', async () => {
+    const a = assembler();
+    const parts = { gloves: 'gloves_tactical' };
+    const stocky = getCosmetic('body_stocky')!.widthMul!;
+    const extents = async (bodyType: string) => {
+      const g = geometryOf(await a.create(wearing({ ...parts, bodyType })));
+      const pos = g.getAttribute('position') as BufferAttribute;
+      const layer = g.getAttribute('texLayer');
+      const of = (l: number) => {
+        const pts: Vector3[] = [];
+        for (let v = 0; v < pos.count; v++) if (layer.getX(v) === l) pts.push(new Vector3().fromBufferAttribute(pos, v));
+        return pts;
+      };
+      return { body: of(0), gloves: of(layerOf('gloves')), jetpack: of(layerOf('jetpack')), helmet: of(layerOf('headgear')) };
+    };
+    const standard = await extents('body_standard');
+    const wide = await extents('body_stocky');
+    const width = (pts: Vector3[]) => Math.max(...pts.map((p) => p.x)) - Math.min(...pts.map((p) => p.x));
+    // body vertices below the neck scale; the face doesn't
+    const body = (pts: Vector3[]) => pts.filter((p) => p.y < 0.9);
+    expect(Math.max(...body(wide.body).map((p) => Math.abs(p.x)))).toBeCloseTo(Math.max(...body(standard.body).map((p) => Math.abs(p.x))) * stocky, 5);
+    expect(wide.helmet).toEqual(standard.helmet);
+    // the glove follows the widened hand without growing; the jetpack moves back without growing
+    expect(width(wide.gloves)).toBeCloseTo(width(standard.gloves), 6);
+    expect(wide.gloves[0]!.x).toBeCloseTo(standard.gloves[0]!.x + 0.374 * (stocky - 1), 6);
+    expect(width(wide.jetpack)).toBeCloseTo(width(standard.jetpack), 6);
+    expect(wide.jetpack[0]!.z).toBeLessThan(standard.jetpack[0]!.z);
   });
 
   it('keeps unused builds for re-use and frees them past the idle limit', async () => {
     const a = assembler();
     const c = await a.create(null);
-    const first = c.meshes[0]!.geometry;
+    const first = geometryOf(c);
     c.dispose();
-    expect((await a.create(null)).meshes[0]!.geometry).toBe(first);
-    const skins = ['skin_01', 'skin_02', 'skin_03'];
-    for (const [i, headgear] of ['headgear_field_cap', 'headgear_bandana', 'headgear_beret', 'headgear_combat_helmet'].entries()) {
-      for (const eyewear of ['eyewear_aviators', 'eyewear_gas_mask', 'eyewear_none']) (await a.create(wearing({ headgear, eyewear, skinTone: skins[i % 3]! }))).dispose();
+    const again = await a.create(null);
+    expect(geometryOf(again)).toBe(first);
+    again.dispose();
+    for (const gloves of ['gloves_none', 'gloves_tactical']) {
+      for (const eyewear of ['eyewear_aviators', 'eyewear_none']) {
+        for (const boots of ['boots_combat', 'boots_jungle']) {
+          for (const jetpack of ['jetpack_twin_tank', 'jetpack_drum']) (await a.create(wearing({ headgear: 'headgear_field_cap', gloves, eyewear, boots, jetpack }))).dispose();
+        }
+      }
     }
-    expect(a.stats.builds).toBe(13);
-    (await a.create(wearing({ headgear: 'headgear_field_cap', eyewear: 'eyewear_aviators' }))).dispose();
-    expect(a.stats.builds).toBe(14); // the oldest idle build was evicted
+    expect(a.stats.builds).toBe(17);
+    // the default look was the oldest idle build, so it was evicted and builds again
+    (await a.create(null)).dispose();
+    expect(a.stats.builds).toBe(18);
+  });
+
+  it('draws an outline hull on the same skeleton that follows every part swap and LOD change', async () => {
+    const outline = new OutlineMaterial();
+    const c = await assembler().create(null);
+    c.setOutline(outline);
+    const hull = c.outline!;
+    expect(hull.material).toBe(outline);
+    expect(hull.skeleton).toBe(c.meshes[0]!.skeleton);
+    expect(hull.geometry).toBe(geometryOf(c));
+    expect(hull.castShadow).toBe(false);
+    await c.setLoadout(wearing({ headgear: 'headgear_field_cap' }));
+    expect(hull.geometry).toBe(geometryOf(c));
+    c.setLod(1);
+    expect(hull.geometry).toBe(geometryOf(c));
+    c.setOutline(null);
+    expect(c.outline).toBeNull();
+    expect(hull.parent).toBeNull();
+  });
+
+  it('does not cache a failed base load: the next create() tries again', async () => {
+    const source = fakeSource();
+    source.failBase = 1;
+    const a = assembler(source);
+    await expect(a.create(null)).rejects.toThrow('network blip');
+    const c = await a.create(null);
+    expect(c.meshes).toHaveLength(1);
+    expect(a.upperBodyBones).toContain('spine2');
   });
 });
 
@@ -124,58 +226,44 @@ describe('selectLod', () => {
   });
 });
 
-describe('Phase 0 Rookie parts', () => {
-  // asset-check base bbox (art/character/rookie.check.txt), converted to glTF axes
-  const base = new Box3().set({ x: -0.471, y: -0.003, z: -0.401 } as never, { x: 0.471, y: 1.502, z: 0.341 } as never);
-  const envelope = base.clone().expandByVector(base.getSize(base.min.clone()).multiplyScalar((COSMETIC_ENVELOPE_MUL - 1) / 2));
+describe('the shipped W8 character art (apps/web/public/assets)', () => {
+  const assets = (path: string) => fileURLToPath(new URL(`../../public/assets/${path}`, import.meta.url));
+  const glbJoints = (path: string) => {
+    const buf = readFileSync(assets(path));
+    const json = JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString()) as { nodes: { name: string }[]; skins: { joints: number[] }[] };
+    return json.skins[0]!.joints.map((j) => json.nodes[j]!.name);
+  };
+  const manifest = JSON.parse(readFileSync(assets(ROOKIE_MANIFEST), 'utf8')) as {
+    lods: Record<string, string>;
+    anims: string;
+    defaultParts: Record<string, string>;
+    dye: Record<string, { mask: string; albedo: string }>;
+  };
+  const joints = glbJoints(`characters/rookie/${manifest.lods.lod0}`);
 
-  const bodyTypes = cosmeticsForSlot('bodyType').map((c) => c.id);
-
-  it('every body type keeps the base body inside the envelope and never narrows it (docs/04 §1.2)', () => {
-    for (const id of bodyTypes) {
-      const widthMul = getCosmetic(id)!.widthMul!;
-      expect(widthMul, id).toBeGreaterThanOrEqual(1);
-      const corners = [base.min, base.max].flatMap((a) => [base.min, base.max].flatMap((b) => [base.min, base.max].map((c) => new Vector3(a.x, b.y, c.z))));
-      for (const corner of corners) expect(envelope.containsPoint(widenPoint(corner.clone(), widthMul)), `${id} ${corner.toArray()}`).toBe(true);
+  it('has every file the manifest names, and the default parts are content items', () => {
+    for (const file of [...Object.values(manifest.lods), manifest.anims, ...Object.values(manifest.dye).flatMap((d) => [d.mask, d.albedo])]) {
+      expect(existsSync(assets(`characters/rookie/${file}`)), file).toBe(true);
+    }
+    for (const [slot, id] of Object.entries(manifest.defaultParts)) {
+      expect(getCosmetic(id)?.slot, id).toBe(slot);
+      expect(DEFAULT_COSMETIC_LOADOUT.items[slot as keyof CosmeticLoadout['items']]).toBe(id);
     }
   });
 
-  for (const [id, recipe] of Object.entries(PLACEHOLDERS)) {
-    it(`${id}: real item, known bones, inside the cosmetic envelope on every body type (docs/04 §1.2)`, async () => {
-      const item = getCosmetic(id)!;
-      expect(BUILT_IN[item.slot as keyof typeof BUILT_IN]?.item).not.toBe(id);
-      for (const p of recipe()) expect(JOINTS).toContain(p.bone);
-      const a = assembler();
-      for (const bodyType of bodyTypes) {
-        // assembled, so the body type's fitting is included (a part's vertices have texLayer -1)
-        const g = (await a.create(wearing({ bodyType, [item.slot]: id }))).meshes[0]!.geometry;
-        const layer = g.getAttribute('texLayer');
-        const pos = g.getAttribute('position');
-        const bounds = new Box3();
-        for (let v = 0; v < pos.count; v++) if (layer.getX(v) < 0) bounds.expandByPoint(new Vector3().fromBufferAttribute(pos, v));
-        expect(bounds.isEmpty(), `${id} on ${bodyType}`).toBe(false);
-        expect(envelope.containsBox(bounds), `${id} on ${bodyType}: ${bounds.min.toArray()} ${bounds.max.toArray()}`).toBe(true);
+  it('every content item with art has its manifest, both LODs and dye textures, on the body skeleton', () => {
+    const withArt = cosmetics.filter((c) => c.assets.manifest);
+    expect(withArt.length).toBeGreaterThanOrEqual(14);
+    for (const item of withArt) {
+      expect((ART_SLOTS as readonly string[]).includes(item.slot), item.id).toBe(true);
+      const path = item.assets.manifest!;
+      const dir = path.slice(0, path.lastIndexOf('/') + 1);
+      const m = JSON.parse(readFileSync(assets(path), 'utf8')) as { lods: Record<string, string>; dye: Record<string, { mask: string; albedo: string }> };
+      for (const lod of ['lod0', 'lod1']) {
+        expect(glbJoints(dir + m.lods[lod]), `${item.id} ${lod}`).toEqual(joints);
+        for (const file of [m.dye[lod]!.mask, m.dye[lod]!.albedo]) expect(existsSync(assets(dir + file)), file).toBe(true);
       }
-    });
-  }
-
-  it('classifies baked regions', () => {
-    expect(classifyRegion('head', 0, 1.4, 0, 0)).toBe(Region.Helmet);
-    expect(classifyRegion('head', 0, 1.1, 0.2, 1)).toBe(Region.None); // face
-    expect(classifyRegion('head', 0.27, 1.1, -0.07, 1)).toBe(Region.None); // ear
-    expect(classifyRegion('head', 0.3, 1.12, 0, 0)).toBe(Region.Helmet); // brim
-    expect(classifyRegion('foot_R', 0, 0.05, 0, 0)).toBe(Region.Boots);
-    expect(classifyRegion('spine2', 0, 0.75, -0.3, 0)).toBe(Region.Jetpack);
-    expect(classifyRegion('spine2', 0, 0.75, 0.1, 0)).toBe(Region.None);
-  });
-
-  it('both shipped LODs share the shared-v1 skeleton in one joint order', () => {
-    const joints = (file: string) => {
-      const buf = readFileSync(fileURLToPath(new URL(`../../../../art/character/${file}`, import.meta.url)));
-      const json = JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString()) as { nodes: { name: string }[]; skins: { joints: number[] }[] };
-      return json.skins[0]!.joints.map((j) => json.nodes[j]!.name);
-    };
-    expect(joints('rookie.glb')).toEqual(JOINTS);
-    expect(joints('rookie_lod1.glb')).toEqual(JOINTS);
+    }
+    expect(glbJoints(`characters/rookie/${manifest.lods.lod1}`)).toEqual(joints);
   });
 });

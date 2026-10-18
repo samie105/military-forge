@@ -1,6 +1,6 @@
 /**
- * One player's 3D body: the assembled character, its AnimationMixer and locomotion state machine,
- * the facing turn, procedural aim (spine/head pitch + IK arms that point the gun along the sim's
+ * One player's 3D body: the assembled character, its AnimationMixer and locomotion (locomotion.ts: the clip blend
+ * and planted feet; motion.ts: lean, squash, flail, dash pose), the facing turn, procedural aim (spine/head pitch + IK arms that point the gun along the sim's
  * aim), weapons on the hand sockets, the jet flame and a blob shadow (docs/04 §4, docs/11 §2/§4).
  */
 import { NO_WEAPON, weapons, type WeaponDef } from '@military-forge/content';
@@ -20,7 +20,6 @@ import {
   Quaternion,
   SRGBColorSpace,
   Vector3,
-  type AnimationAction,
   type BufferGeometry,
   type Material,
   type Texture,
@@ -32,7 +31,8 @@ import { AimClips, HOLDS, holdFamily, type AimPose, type HoldProfile } from './h
 import { KICK_MAX, recoilOf } from './recoil';
 import { DEFAULT_OFFHAND, loadWeaponModels, type GltfSource, type GunMaterials, type WeaponModel } from './weaponModels';
 import { orientSocket, rotateWorld, solveTwoBone } from './ik';
-import { Locomotion, aimElevation, clipCandidates, facingOf, facingYaw, fadeTime, runTimeScale, stepYaw, type LocoState } from './locomotion';
+import { FootPlanter, LocoLayer, aimElevation, facingOf, facingYaw, stepYaw } from './locomotion';
+import { MotionLayer } from './motion';
 import { ShieldKit, ShieldRig } from './shield';
 
 /** GPU resources shared by every avatar. */
@@ -177,9 +177,11 @@ export class Avatar {
   readonly pivot = new Group();
   readonly blob: Mesh;
   private readonly mixer: AnimationMixer;
-  private readonly actions = new Map<string, AnimationAction>();
-  private current: AnimationAction | null = null;
-  private readonly loco = new Locomotion();
+  // --- animation (locomotion.ts / motion.ts): the clip blend and the procedural body motion ---
+  readonly loco: LocoLayer;
+  readonly motion: MotionLayer;
+  readonly feet: FootPlanter;
+  // --- end animation ---
   private yaw: number | null = null;
   private readonly right: Arm | null;
   private readonly left: Arm | null;
@@ -200,17 +202,21 @@ export class Avatar {
     readonly inst: CharacterInstance,
     readonly lod: CharacterLod,
     private readonly kit: AvatarKit,
-    private readonly seed: number,
+    seed: number,
   ) {
     this.pivot.add(inst.root);
     this.mixer = new AnimationMixer(inst.root);
-    for (const clip of inst.clips) this.actions.set(clip.name, this.mixer.clipAction(clip));
+    // --- animation ---
+    this.loco = new LocoLayer(this.mixer, inst, seed);
+    this.motion = new MotionLayer(inst, seed);
+    this.feet = new FootPlanter(inst);
+    // --- end animation ---
     this.spine = ['spine1', 'spine2', 'head'].map((n) => inst.bone(n)).filter((b): b is NonNullable<typeof b> => !!b);
     this.aimClips = new AimClips(this.mixer, inst.clips);
     this.right = this.arm('R');
     this.left = this.arm('L');
     const armBones = [this.right, this.left].flatMap((a) => (a ? [a.upper, a.lower, a.hand, a.socket] : []));
-    this.posed = [...this.spine, ...armBones].map((bone) => ({ bone, anim: bone.quaternion.clone() }));
+    this.posed = [...new Set([...this.spine, ...armBones, ...this.motion.bones, ...this.feet.bones])].map((bone) => ({ bone, anim: bone.quaternion.clone() }));
 
     const outer = new Mesh(kit.flameOuterGeo, kit.flameOuter);
     const inner = new Mesh(kit.flameInnerGeo, kit.flameInner);
@@ -244,13 +250,13 @@ export class Avatar {
     this.blob.visible = p.alive && blobShadows;
     if (!p.alive) return;
     this.time += dt;
-    const speed = Math.abs(p.vx);
-    const prev = this.loco.state;
-    const state = this.loco.update(p, dt);
-    this.play(prev, state, speed);
-    if (state === 'run' && this.current) this.current.timeScale = runTimeScale(speed);
-    for (const b of this.posed) b.bone.quaternion.copy(b.anim); // undo last frame's aim
+    for (const b of this.posed) b.bone.quaternion.copy(b.anim); // undo last frame's aim, lean and planted legs
     this.blendAimPose(p);
+    // --- animation: clip weights and gait phase for this frame; W8's aim poses own the upper body while shown ---
+    this.loco.facing = facingOf(p.aim);
+    this.loco.setUpperBody(this.aimClips.pose === null);
+    this.loco.update(p, dt);
+    // --- end animation ---
     this.mixer.update(dt);
     for (const b of this.posed) b.anim.copy(b.bone.quaternion);
 
@@ -261,6 +267,14 @@ export class Avatar {
     this.pivot.rotation.set(0, this.yaw, 0);
     this.pivot.updateMatrixWorld(true);
 
+    // --- animation: lean, landing squash, launch flail, dash pose, then planted feet (before the aim layer) ---
+    const active = p.weapons[p.active]?.def ?? NO_WEAPON;
+    // the arms the aim layer holds (aim()): the gun arm, and the left one for a second gun, a two-handed grip or the shield
+    const leftHeld = p.dual || (active !== NO_WEAPON && weapons[active]?.hands === 2) || p.shield === 'front' || p.shield === 'raising';
+    const held: ('L' | 'R')[] = [...(active !== NO_WEAPON || p.dual ? (['R'] as const) : []), ...(leftHeld ? (['L'] as const) : [])];
+    this.motion.update(p, dt, this.yaw, this.loco, this.holdOf(active, p.dual).lean, held);
+    this.feet.update(p, this.yaw, this.loco, dt, world, this.motion.drop);
+    // --- end animation ---
     this.aim(p, facing);
     this.shield.update(p.shield, this.pivot);
     this.settleRecoil(dt);
@@ -268,15 +282,9 @@ export class Avatar {
     if (blobShadows) this.updateBlob(p, world);
   }
 
-  private play(prev: LocoState, state: LocoState, speed: number): void {
-    let next: AnimationAction | undefined;
-    for (const name of clipCandidates(state, speed)) if ((next = this.actions.get(name))) break;
-    if (!next || next === this.current) return;
-    next.reset().setEffectiveTimeScale(1).setEffectiveWeight(1).play();
-    if (this.current) next.crossFadeFrom(this.current, fadeTime(prev, state), false);
-    // dummies standing side by side shouldn't breathe in sync
-    else next.time = (this.seed * 0.37) % next.getClip().duration;
-    this.current = next;
+  /** animation: a hit landed (motion.ts hit reactions); `scale` is 1, or less under Reduce motion */
+  hit(dirX: number, dirY: number, size: number, zone: number, scale = 1): void {
+    if (this.pivot.visible) this.motion.hit(dirX, dirY, size * scale, zone);
   }
 
   /** Everything visible once, so compileAsync sees every material variant (docs/11 §3). */

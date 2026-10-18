@@ -8,6 +8,9 @@ export interface LightingPreset {
   fog: { color: number; near: number; far: number };
   hemi: { sky: number; ground: number; intensity: number };
   sun: { color: number; intensity: number; dir: [number, number, number] };
+  /** rim light on the soldiers (DyeMaterial.rim), taken from the Locker preset this map matches, so a soldier
+   *  in game is lit like the Locker preview of the same look (locker/turntable.ts LIGHTS) */
+  rim: { color: number; strength: number };
   palette: {
     /** front faces by sim material: concrete, metal, wood, dirt, glass */
     front: number[];
@@ -31,6 +34,8 @@ const YARD: LightingPreset = {
   fog: { color: 0x8796a1, near: 45, far: 150 },
   hemi: { sky: 0xdfe8f0, ground: 0x5d5546, intensity: 1.6 },
   sun: { color: 0xfff0d8, intensity: 2.0, dir: [-0.45, 0.8, 0.4] },
+  // the Locker's "lobby" rim (#7fb8ff)
+  rim: { color: 0x7fb8ff, strength: 0.6 },
   palette: {
     front: [0x6f6a62, 0x5e6a74, 0x7a5a3e, 0x6b543c, 0x6f8a99],
     cap: [0x9a958a, 0x8a98a3, 0xa47c55, 0x6f8a3e, 0x9cc0d0],

@@ -100,11 +100,13 @@ These are **original IPs**. Design them for the core audience (India, Nigeria, S
    - textures packed in a **texture array** (WebGL2) or an atlas;
    - each vertex carries a `partIndex` attribute → the shader samples the right layer.
    - Result: **1 draw call per character** (+ weapon + jetpack flame).
+   - As built (`apps/web/src/character`): W8's body (512²) and parts (256²) differ in size, so instead of an array texture each art slot has its own sampler pair (albedo + mask, 6 layers incl. the body) and the per-vertex `texLayer` picks one. Every soldier shares one shader program and one draw call; part textures are loaded once and shared by everyone wearing the part.
 4. **Dye system:** each part has `albedo` + `mask` (R = primary, G = secondary, B = accent, A = emissive). The shader computes `color = albedo × lerp(1, dye[channel], mask)`. Dyes are unlockable cosmetics with zero texture cost.
    - The **default dyes are per part** (each part's `dyeDefaults`), because every part is painted differently.
    - The **player's dye is one colour per channel**, shared by every part: picking a primary colour replaces each part's default primary.
    - The shipped `albedo` (the dye albedo) is neutral grey in the mask core and the exact inverse of the shader on soft mask edges, so the default dyes give back the painted look everywhere.
 5. **Outline:** inverted-hull or screen-space outline pass in team colour, toggleable and colour-configurable (accessibility).
+   - As built (`apps/web/src/character/outline.ts`): an inverted hull, the soldier's own skinned mesh drawn again from the back and pushed out a fixed 2 CSS px in screen space, so it reads the same at 1× gameplay zoom (~80 px soldiers) and in the Locker. It costs one extra draw call per soldier and follows part swaps and LOD changes. Today it's warm near-black; team colours are a uniform away.
 6. **LOD:** LOD0 ≤ 4k tris, LOD1 ≤ 1.8k tris (when zoomed out with a sniper scope or in BR spectate), shared clip set.
 7. **Cache** assembled characters by `loadoutHash` (same skin twice = one build).
 

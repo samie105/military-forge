@@ -19,7 +19,7 @@ import {
   Vector3,
   WebGLRenderer,
 } from 'three';
-import { characterToonRamp, type CharacterInstance } from '../character';
+import { OutlineMaterial, characterToonRamp, type CharacterInstance } from '../character';
 
 export type FocusPreset = 'full' | 'face' | 'jetpack';
 export type LightPreset = 'lobby' | 'night' | 'desert';
@@ -49,6 +49,8 @@ export class Turntable {
   private readonly rim = new DirectionalLight();
   private readonly floor: Mesh<CylinderGeometry, MeshToonMaterial>;
   private readonly flame: Mesh<ConeGeometry, MeshBasicMaterial>;
+  /** the same outline as in game (character/outline.ts), so the Locker shows the soldier you'll play */
+  private readonly outline = new OutlineMaterial();
   private readonly clock = new Clock();
   private readonly observer: ResizeObserver;
   private character: CharacterInstance | null = null;
@@ -93,6 +95,7 @@ export class Turntable {
     if (this.character) this.pivot.remove(this.character.root);
     this.mixer?.stopAllAction();
     this.character = character;
+    character.setOutline(this.outline);
     this.pivot.add(character.root);
     character.root.add(this.flame);
     this.mixer = new AnimationMixer(character.root);
@@ -129,6 +132,7 @@ export class Turntable {
     this.canvas.removeEventListener('wheel', this.onWheel);
     this.mixer?.stopAllAction();
     this.flame.removeFromParent();
+    this.outline.dispose();
     for (const m of [this.floor, this.flame]) {
       m.geometry.dispose();
       m.material.dispose();
@@ -143,6 +147,9 @@ export class Turntable {
     const w = Math.max(1, this.canvas.clientWidth);
     const h = Math.max(1, this.canvas.clientHeight);
     this.renderer.setSize(w, h, false);
+    const dpr = Math.min(2, window.devicePixelRatio || 1); // the pixel ratio set in the constructor
+    this.outline.setViewport(w * dpr, h * dpr);
+    this.outline.setWidth(2 * dpr);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
   }

@@ -1,65 +1,41 @@
-import { Bone, BufferGeometry, Float32BufferAttribute, Group, MeshStandardMaterial, Skeleton, SkinnedMesh, Uint16BufferAttribute } from 'three';
-import type { GLTF } from 'three/addons/loaders/GLTFLoader.js';
+import { DEFAULT_COSMETIC_LOADOUT, getCosmetic, sanitizeCosmeticLoadout, type CosmeticLoadout } from '@military-forge/content';
 import { describe, expect, it } from 'vitest';
-import { RookieAssembler, toonRamp, type GltfSource } from '../character';
+import type { LoadoutStore } from '../../locker/loadouts';
+import { LoadoutDirectory, PLACEHOLDER_DYES, placeholderLoadout } from '../character';
 
-/** A one-bone skinned scene, the shape GLTFLoader returns for the Rookie. */
-function fakeGltf(): GLTF {
-  const bone = new Bone();
-  bone.name = 'pelvis';
-  const geometry = new BufferGeometry();
-  geometry.setAttribute('position', new Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
-  geometry.setAttribute('skinIndex', new Uint16BufferAttribute([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 4));
-  geometry.setAttribute('skinWeight', new Float32BufferAttribute([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0], 4));
-  const mesh = new SkinnedMesh(geometry, new MeshStandardMaterial());
-  mesh.add(bone);
-  mesh.bind(new Skeleton([bone]));
-  const scene = new Group();
-  scene.add(mesh);
-  return { scene, scenes: [scene], animations: [], cameras: [], asset: {}, parser: null, userData: {} } as unknown as GLTF;
+class MemoryStore implements LoadoutStore {
+  readonly label = 'memory';
+  constructor(private readonly saved: CosmeticLoadout | null) {}
+  load = async () => this.saved;
+  save = async () => {};
 }
 
-class StubLoader implements GltfSource {
-  calls = 0;
-  constructor(private failures: number) {}
-  loadAsync(): Promise<GLTF> {
-    this.calls++;
-    return this.failures-- > 0 ? Promise.reject(new Error('network blip')) : Promise.resolve(fakeGltf());
-  }
-}
-
-describe('RookieAssembler', () => {
-  it('frees each instance skeleton bone texture on dispose (no GPU texture leak per avatar)', async () => {
-    const assembler = new RookieAssembler('/', toonRamp(), new StubLoader(0));
-    const inst = await assembler.create(null, 0);
-    const skeleton = inst.meshes[0]!.skeleton;
-    skeleton.computeBoneTexture(); // what WebGLRenderer does on the first skinned draw
-    const texture = skeleton.boneTexture!;
-    let disposed = false;
-    texture.addEventListener('dispose', () => (disposed = true));
-    inst.dispose();
-    expect(disposed).toBe(true);
-    expect(skeleton.boneTexture).toBeNull();
+describe('in-game looks', () => {
+  it('PLACEHOLDER: remote players wear the default Rookie, dyed by player id with starter dyes (never the default dyes)', () => {
+    const seen = new Set<string>([JSON.stringify(DEFAULT_COSMETIC_LOADOUT.dyes)]);
+    for (let id = 0; id < PLACEHOLDER_DYES.length; id++) {
+      const l = placeholderLoadout(id);
+      expect(sanitizeCosmeticLoadout(l)).toEqual(l); // every id is a real dye
+      expect(l.items).toEqual(DEFAULT_COSMETIC_LOADOUT.items);
+      for (const id of Object.values(l.dyes)) expect(getCosmetic(id)!.source.kind).toBe('starter');
+      seen.add(JSON.stringify(l.dyes));
+    }
+    expect(seen.size).toBe(PLACEHOLDER_DYES.length + 1);
+    expect(placeholderLoadout(PLACEHOLDER_DYES.length + 3)).toEqual(placeholderLoadout(3));
   });
 
-  it('gives every instance its own skeleton, so disposing one leaves the others drawable', async () => {
-    const assembler = new RookieAssembler('/', toonRamp(), new StubLoader(0));
-    const a = await assembler.create(null, 0);
-    const b = await assembler.create(null, 0);
-    expect(a.meshes[0]!.skeleton).not.toBe(b.meshes[0]!.skeleton);
-    b.meshes[0]!.skeleton.computeBoneTexture();
-    a.dispose();
-    expect(b.meshes[0]!.skeleton.boneTexture).not.toBeNull();
-  });
-
-  it('does not cache a failed base-rig load: the next create() tries again', async () => {
-    const loader = new StubLoader(1);
-    const assembler = new RookieAssembler('/', toonRamp(), loader);
-    await expect(assembler.create(null, 0)).rejects.toThrow('network blip');
-    const inst = await assembler.create(null, 0);
-    expect(inst.meshes).toHaveLength(1);
-    expect(loader.calls).toBe(2);
-    await assembler.create(null, 0);
-    expect(loader.calls).toBe(2); // a successful load is cached
+  it("the local player wears the Locker's saved look (owned items only) once it has loaded", async () => {
+    const saved = sanitizeCosmeticLoadout({ items: { headgear: 'headgear_field_cap', eyewear: 'eyewear_gas_mask' }, dyes: { primary: 'dye_red' } });
+    const looks = new LoadoutDirectory(new MemoryStore(saved));
+    expect(looks.for({ id: 4, isLocal: true })).toEqual(DEFAULT_COSMETIC_LOADOUT);
+    let changed = 0;
+    looks.onChange = () => changed++;
+    await new Promise((r) => setTimeout(r, 0));
+    expect(changed).toBe(1);
+    const mine = looks.for({ id: 4, isLocal: true });
+    expect(mine.items.headgear).toBe('headgear_field_cap');
+    expect(mine.items.eyewear).toBe('eyewear_none'); // the gas mask isn't a starter item
+    expect(mine.dyes.primary).toBe('dye_red');
+    expect(looks.for({ id: 4, isLocal: false })).toEqual(placeholderLoadout(4));
   });
 });

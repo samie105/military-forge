@@ -54,6 +54,8 @@ export interface EnvironmentLook extends LightingPreset {
  */
 export const MARKET_DAY: EnvironmentLook = {
   name: 'day',
+  // the Locker's warm 'desert' rim (#ffd29a): late-morning sun
+  rim: { color: 0xffd29a, strength: 0.6 },
   sky: [0x7fa6c9, 0xdfe3df],
   skyStops: [0xc4cfd3, 0xdfe4e0, 0x7ea5c8],
   skyHeights: [-10, 8, 72],
@@ -103,6 +105,8 @@ export const MARKET_DAY: EnvironmentLook = {
 export const MARKET_DUSK: EnvironmentLook = {
   ...MARKET_DAY,
   name: 'dusk',
+  // the Locker's warm 'desert' rim (#ffd29a): low sun
+  rim: { color: 0xffd29a, strength: 0.6 },
   sky: [0x5c5f9e, 0xe89a70],
   skyStops: [0xe2a27a, 0xe99b74, 0x5c5f9e],
   sunGlow: { ...MARKET_DAY.sunGlow, strength: 0 },
@@ -137,6 +141,8 @@ export const MARKET_DUSK: EnvironmentLook = {
 export const MARKET_NIGHT: EnvironmentLook = {
   ...MARKET_DAY,
   name: 'night',
+  // the Locker's 'night' rim (#3fd0c0)
+  rim: { color: 0x3fd0c0, strength: 0.6 },
   sky: [0x0f1b3b, 0x2c4560],
   skyStops: [0x34485a, 0x2a3f58, 0x0f1b3b],
   sunGlow: { ...MARKET_DAY.sunGlow, strength: 0 },
