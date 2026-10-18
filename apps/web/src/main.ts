@@ -25,16 +25,17 @@
 import { DEMO_MAPS, defaultTuning, getMap, maps, type MapDef } from '@military-forge/content';
 import { createConditionerSettings, parseNetSim } from '@military-forge/netcode';
 import { GAME_NAME } from '@military-forge/shared';
-import type { Input } from '@military-forge/sim';
+import type { Input, SimEvent } from '@military-forge/sim';
 import { Camera } from './camera';
 import { fxFrame, setReduceFlashes } from './fx';
 import { InputSampler } from './input';
 import { localBots } from './localBots';
 import { LocalMode } from './localMode';
 import { OnlineMode } from './onlineMode';
+import { mountHud, type ScoreRow } from './hud';
 import { Renderer, type RenderOptions } from './render';
 import { localMatchRules, mountShell, registerRoute, type GameHost, type Settings } from './shell';
-import { toKeyBindings, uiCodes } from './shell/controls';
+import { keyLabel, toKeyBindings, uiCodes } from './shell/controls';
 import { PlaneCamera, create3d, online3d, parsePreset, softwareGl } from './render3d';
 import { mountTouch } from './touch';
 import type { Frame } from './view';
@@ -96,9 +97,23 @@ const sampler = new GameInput(canvas);
 // double-tap a direction to dash (docs/02 §21): ?dashtap in the debug client; the app's Controls settings set it
 sampler.doubleTapDash = params.has('dashtap');
 const options: RenderOptions = { showHitboxes: false, showGrid: !use3d, showNet: online, overlay: use3d };
-if (appMode) Object.assign(options, { showGrid: false, hud: 'basic' });
+// the app's HUD is DOM (hud/): the canvas keeps the world effects, the reticle and hit markers
+if (appMode) Object.assign(options, { showGrid: false, hud: 'none' });
+const hud = appMode ? mountHud() : null;
 
-const renderer = new Renderer(canvas, camera, map, () => mode?.tuning() ?? defaultTuning);
+/** The 2D renderer, also feeding the HUD the events and names every mode already reports. */
+class GameRenderer extends Renderer {
+  override onEvents(events: readonly SimEvent[], localId: number): void {
+    super.onEvents(events, localId);
+    hud?.onEvents(events, localId);
+  }
+  override setNames(names: Map<number, string>): void {
+    super.setNames(names);
+    hud?.setNames(names);
+  }
+}
+
+const renderer = new GameRenderer(canvas, camera, map, () => mode?.tuning() ?? defaultTuning);
 void view3d?.load(map.spawns[0]!);
 view3d?.attach(renderer, () => (mode instanceof OnlineMode ? mode.net : null)); // sim events → 3D effects; online: remotePose (render3d)
 mountTouch({ sampler, camera, renderer, view3d }); // phones and tablets: twin sticks + buttons (apps/web/src/touch)
@@ -142,6 +157,9 @@ const host: GameHost = {
     sampler.bindings = toKeyBindings(next.bindings);
     sampler.doubleTapDash = next.doubleTapDash;
     netGraphKeys = uiCodes(next.bindings, 'netGraph');
+    hud?.setScoreboardKeys(uiCodes(next.bindings, 'scoreboard'));
+    const glyph = (action: keyof typeof next.bindings) => (next.bindings[action][0] ? keyLabel(next.bindings[action][0]) : '');
+    hud?.setGlyphs({ dash: glyph('dash'), grenade: glyph('grenade'), cycle: glyph('cycleGrenade'), shield: glyph('shield') });
     // Reduce flashes: the flashbang effect (fx, which remembers it) and the HUD (the attribute)
     setReduceFlashes(next.reduceFlashes);
     document.documentElement.toggleAttribute('data-reduce-flashes', next.reduceFlashes);
@@ -149,6 +167,7 @@ const host: GameHost = {
   setInputBlocked(blocked) {
     sampler.blocked = blocked;
     if (blocked) sampler.releaseAll();
+    hud?.setBlocked(blocked);
   },
 };
 
@@ -187,6 +206,7 @@ if (appMode) {
 registerRoute({
   id: 'locker',
   title: 'Locker',
+  ownExit: true, // the Locker has its own Back button
   mount: (el, close) => {
     let cleanup: (() => void) | null = null;
     let closed = false;
@@ -204,6 +224,13 @@ registerRoute({
 // registerRoute({ id: 'locker', title: 'Locker', mount }) from './shell' (opens at #/locker).
 const shell = mountShell(document.body, appMode ? { host } : {});
 
+// the HTML loading screen hands over to the shell's own
+const splash = document.getElementById('boot-splash');
+if (splash) {
+  splash.classList.add('gone');
+  setTimeout(() => splash.remove(), 400);
+}
+
 // Dev-only debug hook for automated playtests and console poking (stripped from production builds).
 if (import.meta.env.DEV) {
   Object.assign(window, {
@@ -215,6 +242,7 @@ if (import.meta.env.DEV) {
       options,
       view3d,
       shell,
+      hud,
     },
   });
 }
@@ -273,6 +301,40 @@ resize();
 
 const EMPTY_FRAME: Frame = { tick: 0, localId: -1, players: [], grenades: [] };
 
+/** The Tab scoreboard: the local match's standings, or the room's from MATCH_STATE (with pings). */
+function scoreRows(): ScoreRow[] | null {
+  if (mode instanceof LocalMode) {
+    const me = mode.localId;
+    return (
+      mode.match?.standings().map((s) => ({ key: s.key, name: s.name, score: s.score, kills: s.kills, deaths: s.deaths, assists: s.assists, ping: -1, you: s.id === me && !s.left, host: false, bot: s.isBot, left: s.left })) ?? null
+    );
+  }
+  const st = mode?.matchState;
+  if (!st || !mode) return null;
+  const me = mode.localId;
+  const pings = new Map(st.lobby.map((p) => [p.id, p.pingMs]));
+  return st.standings.map((s) => ({
+    key: s.key,
+    name: s.name,
+    score: s.score,
+    kills: s.kills,
+    deaths: s.deaths,
+    assists: s.assists,
+    ping: s.left ? -1 : (pings.get(s.id) ?? -1),
+    you: s.id === me && !s.left,
+    host: s.id === st.hostId && !s.left,
+    bot: s.isBot,
+    left: s.left,
+  }));
+}
+
+const screenPoint = { x: 0, y: 0 };
+const toScreen = (x: number, y: number) => {
+  screenPoint.x = camera.toScreenX(x);
+  screenPoint.y = camera.toScreenY(y);
+  return screenPoint;
+};
+
 /** The menus' backdrop: the camera drifts along the map. */
 function drawMenuBackdrop(now: number, dt: number): void {
   const b = map.bounds;
@@ -321,8 +383,11 @@ function frame(now: number): void {
   sampler.clearPresses();
   if (toggled) panel?.pane.refresh();
 
+  // a full-screen route (the Locker) covers the game: no drawing behind it
+  const covered = shell.store.getState().route !== null;
   if (!mode) {
-    drawMenuBackdrop(now, dt);
+    hud?.setVisible(false);
+    if (!covered) drawMenuBackdrop(now, dt);
     shell.update();
     shell.setMapEvent(null);
     return;
@@ -349,10 +414,16 @@ function frame(now: number): void {
   if (me) camera.follow(me.x, me.y, mouse.x, mouse.y, dt, map);
   renderer.mouse.x = sampler.mouseX;
   renderer.mouse.y = sampler.mouseY;
-  renderer.render(f, dt, options, HELP);
-  fxFrame(f, dt); // flashbang white-out / gas edge over the view (arsenal B, apps/web/src/fx)
   shell.update(mode instanceof LocalMode ? mode : null);
   shell.setMapEvent(f.mapEvent);
+  if (covered) return; // the mode keeps running (online: inputs and heartbeats), nothing is drawn
+  renderer.render(f, dt, options, HELP);
+  fxFrame(f, dt); // flashbang white-out / gas edge over the view (arsenal B, apps/web/src/fx)
+  if (hud) {
+    hud.setVisible(true);
+    const state = shell.store.getState();
+    hud.update({ frame: f, tuning: mode.tuning(), match: state.match, mapEvent: state.mapEvent, zoom: camera.zoom + 1, toScreen, showNet: options.showNet, scoreRows });
+  }
   if (options.overlay) view3d?.render(f, dt);
 }
 

@@ -28,7 +28,7 @@ import { mapEventView } from './mapEvent';
 import { ThrowPreview } from './throwPreview';
 import type { Renderer } from './render';
 import { connectGame, type GameTransport } from './transport';
-import { shieldView, type CloudView, type Frame, type PlayerView, type RewindView } from './view';
+import { mobilityView, shieldView, type CloudView, type Frame, type PlayerView, type RewindView } from './view';
 
 /**
  * How long to keep trying after a drop. The room keeps our player 20 s; after that a rejoin is a new
@@ -579,6 +579,7 @@ export class OnlineMode {
       dashing: p.dashTicks > 0,
       shield: shieldView(p),
       shieldHp: p.shieldHp,
+      ...mobilityView(pred.game, p),
       respawnTicks: server.respawnTicks,
       kills: server.kills,
       deaths: server.deaths,

@@ -4,22 +4,55 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>%GAME_NAME%</title>
-    <meta name="description" content="%GAME_NAME%: a 2.5D jetpack shooter in your browser. Make a room, send the link, play." />
+    <meta name="description" content="%GAME_NAME%: a 2.5D jetpack shooter in your browser. Open the link, pick a name, you're in the room." />
     <meta name="theme-color" content="#0f141c" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <!-- link previews (chat apps, social): %ORIGIN% is this site's public address, filled in when served -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="%GAME_NAME%" />
+    <meta property="og:title" content="%GAME_NAME%: jump in and play" />
+    <meta property="og:description" content="A 2.5D jetpack shooter in your browser. Open the link, pick a name, and you're in the room with your friends." />
+    <meta property="og:image" content="%ORIGIN%/og-image.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="%GAME_NAME%: soldiers with jetpacks on a city rooftop map" />
+    <meta name="twitter:card" content="summary_large_image" />
     <style>
       html, body { margin: 0; height: 100%; background: #0d1117; color: #e6edf3; font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; }
       #game, #view3d { display: block; position: fixed; inset: 0; width: 100vw; height: 100vh; cursor: none; }
       #perf3d { position: fixed; right: 8px; bottom: 8px; margin: 0; padding: 4px 8px; background: rgba(13,17,23,.7); border-radius: 4px; font-size: 11px; pointer-events: none; white-space: pre; }
       #bar { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; align-items: center; background: rgba(13,17,23,.8); padding: 4px 8px; border-radius: 6px; border: 1px solid #30363d; }
+      #bar:empty { display: none; }
       #bar a, #bar button { color: #e6edf3; background: #21262d; border: 1px solid #30363d; border-radius: 4px; padding: 3px 8px; text-decoration: none; font: inherit; cursor: pointer; }
       #bar a.active { background: #1f6feb; border-color: #1f6feb; }
       #bar .maps { display: flex; gap: 4px; align-items: center; color: #8b949e; margin-left: 6px; }
       #panel { position: fixed; top: 8px; right: 8px; width: 290px; max-height: calc(100vh - 16px); overflow-y: auto; }
       #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: #da3633; padding: 6px 12px; border-radius: 6px; display: none; }
+      /* the loading screen: plain HTML, so it shows before any script arrives (a slow link) */
+      #boot-splash { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: #0f141c; color: #e8edf3; font: 14px/1.4 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; transition: opacity 0.35s; }
+      #boot-splash.gone { opacity: 0; pointer-events: none; }
+      .bs-box { display: grid; justify-items: center; gap: 18px; }
+      .bs-name { display: flex; align-items: center; gap: 14px; font: 800 30px/1 system-ui, sans-serif; letter-spacing: 0.06em; text-transform: uppercase; }
+      .bs-mark { width: 26px; height: 26px; border-radius: 4px; background: linear-gradient(135deg, #3fb6a8, #2a7f75); transform: rotate(45deg); box-shadow: 0 0 22px rgba(63, 182, 168, 0.55); }
+      .bs-bar { width: 220px; height: 4px; border-radius: 2px; background: #1c2532; overflow: hidden; }
+      .bs-bar i { display: block; width: 40%; height: 100%; border-radius: 2px; background: #3fb6a8; animation: bs-slide 1.1s ease-in-out infinite; }
+      .bs-note { color: #8d99a8; font-size: 12px; }
+      .bs-slow { opacity: 0; animation: bs-show 0.4s 20s forwards; }
+      @keyframes bs-slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+      @keyframes bs-show { to { opacity: 1; } }
+      @media (prefers-reduced-motion: reduce) { .bs-bar i { animation: none; width: 100%; opacity: 0.6; } }
     </style>
   </head>
   <body>
+    <div id="boot-splash" role="status" aria-label="Loading">
+      <div class="bs-box">
+        <div class="bs-name"><span class="bs-mark"></span><span>%GAME_NAME%</span></div>
+        <div class="bs-bar"><i></i></div>
+        <div class="bs-note">Loading the game…</div>
+        <div class="bs-note bs-slow">Still loading: a slow connection? Keep this tab open, or reload.</div>
+        <noscript><div class="bs-note">This game needs JavaScript turned on.</div></noscript>
+      </div>
+    </div>
     <canvas id="view3d"></canvas>
     <canvas id="game"></canvas>
     <div id="bar"></div>

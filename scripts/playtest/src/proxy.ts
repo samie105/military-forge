@@ -182,6 +182,29 @@ function compressedFile(file: string, etag: string, encoding: Encoding): Buffer 
   return body;
 }
 
+/**
+ * The app's page with `%ORIGIN%` (link previews need absolute URLs) filled in for the address it
+ * was asked for: https for the public origin, http for a local one. Hosts are checked first.
+ */
+export function pageForOrigin(html: string, host: string | undefined, allowed: readonly string[]): string {
+  const safe = host && /^[a-z0-9.-]+(:\d+)?$/i.test(host) ? host : '';
+  const origin = !safe ? '' : allowed.includes(`https://${safe}`) ? `https://${safe}` : `http://${safe}`;
+  return html.replaceAll('%ORIGIN%', origin);
+}
+
+function servePage(req: IncomingMessage, res: ServerResponse, file: string, allowed: readonly string[]): void {
+  let html: string;
+  try {
+    html = readFileSync(file, 'utf8');
+  } catch {
+    send(res, 404, 'Not found');
+    return;
+  }
+  const body = Buffer.from(pageForOrigin(html, req.headers.host, allowed));
+  res.writeHead(200, { ...securityHeaders(req.headers.host), 'Content-Type': MIME['.html']!, 'Cache-Control': 'no-cache', 'Content-Length': String(body.length) });
+  res.end(req.method === 'HEAD' ? undefined : body);
+}
+
 function serveFile(req: IncomingMessage, res: ServerResponse, file: string, stats: Stats, immutable: boolean): void {
   const etag = `W/"${stats.size.toString(16)}-${Math.floor(stats.mtimeMs).toString(16)}"`;
   const encoding = pickEncoding(req.headers['accept-encoding'], file, stats.size);
@@ -363,7 +386,8 @@ export function createProxy(options: ProxyOptions): Server {
       send(res, 404, 'Not found', securityHeaders(req.headers.host));
       return;
     }
-    serveFile(req, res, file, stats, target.kind === 'file' && isHashedAsset(pathname));
+    if (target.kind === 'app') servePage(req, res, file, options.allowedOrigins());
+    else serveFile(req, res, file, stats, isHashedAsset(pathname));
   });
 
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {

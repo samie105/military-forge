@@ -11,14 +11,14 @@ import { join } from 'node:path';
 import type { Duplex } from 'node:stream';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
-import { clientIp, createProxy, isHashedAsset, pickEncoding, securityHeaders, staticPath } from '../src/proxy';
+import { clientIp, createProxy, isHashedAsset, pageForOrigin, pickEncoding, securityHeaders, staticPath } from '../src/proxy';
 import { parseTunnelUrl } from '../src/tunnel';
 
 // the build in a temp dir of its own, with a secret beside it (all removed afterwards)
 const outer = mkdtempSync(join(tmpdir(), 'playtest-proxy-'));
 const root = join(outer, 'dist');
 mkdirSync(join(root, 'assets'), { recursive: true });
-writeFileSync(join(root, 'index.html'), '<!doctype html><title>app</title>');
+writeFileSync(join(root, 'index.html'), '<!doctype html><title>app</title><meta property="og:image" content="%ORIGIN%/og-image.jpg">');
 writeFileSync(join(root, 'assets', 'index-abC12_34.js'), 'console.log(1)');
 writeFileSync(join(root, 'locker.html'), '<!doctype html><title>locker</title>');
 const BIG_JS = `export const data = ${JSON.stringify(Array.from({ length: 400 }, (_, i) => ({ i, name: 'player', ok: true })))};`;
@@ -143,7 +143,9 @@ describe('static files and app routes', () => {
     for (const path of ['/', '/r/KQXMZP', '/r/KQXMZP/', '/index.html']) {
       const res = await fetch(base + path);
       expect(res.status, path).toBe(200);
-      expect(await res.text()).toContain('<title>app</title>');
+      const html = await res.text();
+      expect(html).toContain('<title>app</title>');
+      expect(html).toContain(`content="http://127.0.0.1:${port(proxy)}/og-image.jpg"`); // link previews: absolute
       expect(res.headers.get('cache-control')).toBe('no-cache');
       expect(res.headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
       expect(res.headers.get('x-content-type-options')).toBe('nosniff');
@@ -182,6 +184,10 @@ describe('static files and app routes', () => {
     expect(staticPath('/srv/dist', '/.env')).toEqual({ kind: 'none' });
     expect(securityHeaders('abc.trycloudflare.com')['Content-Security-Policy']).toContain('wss://abc.trycloudflare.com');
     expect([isHashedAsset('/assets/main-fCXJHfDR.js'), isHashedAsset('/assets/characters/rookie/rookie.glb'), isHashedAsset('/favicon.svg')]).toEqual([true, false, false]);
+    const page = '<meta content="%ORIGIN%/og-image.jpg">';
+    expect(pageForOrigin(page, 'abc-def.trycloudflare.com', ['https://abc-def.trycloudflare.com'])).toBe('<meta content="https://abc-def.trycloudflare.com/og-image.jpg">');
+    expect(pageForOrigin(page, 'localhost:5191', [])).toBe('<meta content="http://localhost:5191/og-image.jpg">');
+    expect(pageForOrigin(page, 'evil.com"><script>', [])).toBe('<meta content="/og-image.jpg">');
     expect(securityHeaders('evil.com; script-src *')['Content-Security-Policy']).not.toContain('evil');
   });
 });

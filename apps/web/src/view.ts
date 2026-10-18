@@ -2,7 +2,7 @@
  * Render-side view model. Both local mode (in-browser sim) and online mode (server snapshots)
  * produce a Frame; the renderer never touches sim state directly (docs/06 §4, layer L3).
  */
-import { shieldRaised, type PlayerState, type SimEvent } from '@military-forge/sim';
+import { createBodyEnv, shieldRaised, type Game, type PlayerState, type SimEvent } from '@military-forge/sim';
 import type { ThrowArcView } from './throwPreview';
 
 export interface WeaponView {
@@ -56,6 +56,12 @@ export interface PlayerView {
   shield?: 'front' | 'back' | 'raising';
   /** the riot shield's HP left (local player, and every player in local mode) */
   shieldHp?: number;
+  /** the local player: dash cooldown left, ticks (0 = ready; docs/02 §21) */
+  dashCooldown?: number;
+  /** the local player: this flight's one air dash is spent (back on landing) */
+  airDashUsed?: boolean;
+  /** the local player: the jetpack (and so the dash) is dead here, an EMP zone or storm (map mechanics) */
+  jetDisabled?: boolean;
   respawnTicks: number;
   kills: number;
   deaths: number;
@@ -192,6 +198,17 @@ export interface Frame {
 }
 
 export type FrameEventSink = (events: readonly SimEvent[]) => void;
+
+const statusEnv = createBodyEnv();
+
+/** The local player's movement state for the HUD: the dash cooldown, the air dash, the map's EMP. */
+export function mobilityView(game: Pick<Game, 'mech' | 'tuning'>, p: PlayerState): Pick<PlayerView, 'dashCooldown' | 'airDashUsed' | 'jetDisabled'> {
+  return {
+    dashCooldown: p.dashCooldown,
+    airDashUsed: p.airDashUsed,
+    jetDisabled: game.mech ? game.mech.bodyEnv(p, game.tuning, statusEnv).jetDisabled : false,
+  };
+}
 
 /** How a player carries its riot shield (PlayerView.shield). */
 export function shieldView(p: PlayerState): PlayerView['shield'] {

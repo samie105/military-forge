@@ -20,6 +20,8 @@ import { encodeQr, qrSvgPath } from './qr';
 import { closeRoute, runCleanup, type ConnectionView, type Settings, type ShellActions, type ShellRoute, type ShellStore } from './store';
 
 const Ctl = createContext<ShellController | null>(null);
+/** for tests: screens that call the controller */
+export const ControllerContext = Ctl;
 const useCtl = (): ShellController => {
   const c = useContext(Ctl);
   if (!c) throw new Error('no shell controller');
@@ -49,9 +51,9 @@ export function App({ store, controller = null }: { store: ShellStore; controlle
         {match && <MatchScreens view={match} actions={actions} />}
       </>
     );
+  // the app's HUD (hud/) shows the map event under its clock; the debug client has no HUD
   return (
     <Ctl.Provider value={controller}>
-      {event}
       <AppScreens store={store} />
     </Ctl.Provider>
   );
@@ -62,6 +64,9 @@ function AppScreens({ store }: { store: ShellStore }) {
   const screen = useStore(store, (s) => s.screen);
   const overlay = useStore(store, (s) => s.overlay);
   const notice = useStore(store, (s) => s.notice);
+  const tips = useStore(store, (s) => s.tips);
+  const touchWarning = useStore(store, (s) => s.touchWarning);
+  const settings = useStore(store, (s) => s.settings);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -131,7 +136,9 @@ function AppScreens({ store }: { store: ShellStore }) {
   return (
     <>
       {body}
+      {tips && (screen.name === 'room' || screen.name === 'training') && !overlay && <TipsCard bindings={settings.bindings} />}
       {overlay && <OverlayView store={store} />}
+      {touchWarning && <TouchWarning />}
       {notice && (
         <div className="sh-notice" role="status">
           {notice}
@@ -253,6 +260,76 @@ export function Controls({ bindings }: { bindings: Settings['bindings'] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** The first-run card: every main control (from the player's bindings) and a few tips. */
+export function TipsCard({ bindings }: { bindings: Settings['bindings'] }) {
+  const ctl = useCtl();
+  const keys = (id: ActionId) => bindings[id].slice(0, 2).map((c) => keyLabel(c));
+  const rows: [string, string[]][] = [
+    ['Move', [...keys('left').slice(0, 1), ...keys('right').slice(0, 1)]],
+    ['Jetpack', keys('jet').slice(0, 2)],
+    ['Crouch, drop', keys('down').slice(0, 1)],
+    ['Dash + direction', keys('dash').slice(0, 1)],
+    ['Aim', ['Mouse']],
+    ['Fire', keys('fire').slice(0, 1)],
+    ['Reload', keys('reload').slice(0, 1)],
+    ['Melee', keys('melee').slice(0, 1)],
+    ['Grenade', keys('grenade').slice(0, 1)],
+    ['Next grenade', keys('cycleGrenade').slice(0, 1)],
+    ['Swap', keys('swap').slice(0, 1)],
+    ['Shield', keys('shield').slice(0, 1)],
+    ['Dual', keys('dual').slice(0, 1)],
+    ['Scores', keys('scoreboard').slice(0, 1)],
+    ['Menu', ['Esc']],
+  ];
+  return (
+    <aside className="sh-tips sh-panel" aria-label="How to play">
+      <div className="sh-kicker">How to play</div>
+      <dl className="sh-tips-keys">
+        {rows.map(([what, ks]) => (
+          <div key={what}>
+            <dt>{what}</dt>
+            <dd>
+              {ks.length ? ks.map((k) => <kbd key={k}>{k}</kbd>) : <span className="sh-dim">unbound</span>}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      <ul className="sh-tips-list">
+        <li>Hold the jetpack to fly. Fuel refills on the ground, faster than in the air.</li>
+        <li>Hold crouch on a yellow platform to drop through it.</li>
+        <li>Two one-handed guns? Dual wield them and both fire.</li>
+        <li>Change any key in Settings → Controls.</li>
+      </ul>
+      <button className="sh-btn sh-primary sh-tips-ok" onClick={blurAfter(() => ctl.closeTips())}>
+        Got it
+      </button>
+    </aside>
+  );
+}
+
+/** Phones and tablets: the game needs a keyboard and mouse (touch controls come later). */
+function TouchWarning() {
+  const ctl = useCtl();
+  return (
+    <div className="sh-fill sh-modal sh-touch">
+      <section className="sh-card sh-center" aria-label="Best on a computer">
+        <Brand small />
+        <h2>Best on a computer</h2>
+        <p className="sh-dim">This game is played with a keyboard and mouse. On this device you can look around, but you can't play yet: touch controls are coming.</p>
+        <p className="sh-dim sh-small">Send yourself this link and open it on a laptop or desktop.</p>
+        <div className="sh-row sh-row-center">
+          <button className="sh-btn sh-primary" onClick={() => void navigator.clipboard?.writeText(location.href).then(() => ctl.notify('Link copied'), () => {})}>
+            Copy link
+          </button>
+          <button className="sh-btn sh-ghost" onClick={() => ctl.dismissTouchWarning()}>
+            Continue anyway
+          </button>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -380,6 +457,9 @@ function OverlayView({ store }: { store: ShellStore }) {
               Copy invite link
             </button>
           )}
+          <button className="sh-btn" onClick={() => ctl.showTips()}>
+            Controls &amp; tips
+          </button>
           <button className="sh-btn" onClick={() => ctl.openOverlay('settings')}>
             Settings
           </button>
@@ -875,7 +955,8 @@ function MatchScreens({ view, actions, online, training }: { view: MatchView; ac
     case MatchPhase.Countdown:
       return <Countdown view={view} />;
     case MatchPhase.InProgress:
-      return <MatchStatus view={view} />;
+      // the app's HUD (hud/) shows the clock and score; the debug client keeps this panel
+      return online || training ? null : <MatchStatus view={view} />;
     default:
       return view.results ? <Results view={view} results={view.results} actions={actions} online={online} training={training} /> : null;
   }
@@ -919,9 +1000,11 @@ function RouteView({ route }: { route: ShellRoute }) {
   return (
     <div className="sh-route" aria-label={route.title}>
       <div ref={el} className="sh-route-body" />
-      <button className="sh-btn sh-route-back" onClick={closeRoute}>
-        ← Back
-      </button>
+      {!route.ownExit && (
+        <button className="sh-btn sh-route-back" onClick={closeRoute}>
+          ← Back
+        </button>
+      )}
     </div>
   );
 }

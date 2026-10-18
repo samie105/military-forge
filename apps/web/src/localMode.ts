@@ -29,7 +29,7 @@ import type { LocalBots } from './localBots';
 import { mapEventView } from './mapEvent';
 import { ThrowPreview } from './throwPreview';
 import type { Renderer } from './render';
-import { shieldView, type CloudView, type Frame, type PlayerView } from './view';
+import { mobilityView, shieldView, type CloudView, type Frame, type PlayerView } from './view';
 
 const MAX_CATCHUP = 5;
 const SEED = 1234;
@@ -257,6 +257,7 @@ export class LocalMode {
         dashing: p.dashTicks > 0,
         shield: shieldView(p),
         shieldHp: p.shieldHp,
+        ...(p === this.me ? mobilityView(this.game, p) : {}),
         respawnTicks: p.respawnTicks,
         kills: p.kills,
         deaths: p.deaths,

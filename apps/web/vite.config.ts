@@ -14,10 +14,17 @@ const proxy: Record<string, ProxyOptions> = {
   '/ws': { target: gameServer, ws: true },
 };
 
-/** `%GAME_NAME%` in the HTML pages (title, link previews) → the game's name. */
+/**
+ * `%GAME_NAME%` in the HTML pages (title, link previews) → the game's name. `%ORIGIN%` (link
+ * previews need absolute image URLs) is the site's public address: the playtest proxy fills it in
+ * per request, so the build keeps it; in dev the URLs stay relative.
+ */
 const brand: Plugin = {
   name: 'brand',
-  transformIndexHtml: (html) => html.replaceAll('%GAME_NAME%', GAME_NAME),
+  transformIndexHtml: (html, ctx) => {
+    const named = html.replaceAll('%GAME_NAME%', GAME_NAME);
+    return ctx.server ? named.replaceAll('%ORIGIN%', '') : named;
+  },
 };
 
 export default defineConfig({

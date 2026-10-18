@@ -21,6 +21,8 @@ export interface ShellRoute {
   /** opened at #/<id> */
   id: string;
   title: string;
+  /** the route draws its own Back/Exit control (the shell's back button is left out) */
+  ownExit?: boolean;
   /**
    * Render into an empty full-screen element. `close()` leaves the route (wire it to your own
    * Back/Exit button); Escape and the shell's back button also close it, then the cleanup runs.
@@ -110,6 +112,10 @@ export interface ShellState {
   notice: string | null;
   /** the map event being announced or running (docs/02 §20.7), null when none */
   mapEvent: MapEventBanner | null;
+  /** the controls card and tips (first match, or Menu → Controls & tips) */
+  tips: boolean;
+  /** a phone or tablet: the "best on a computer" card */
+  touchWarning: boolean;
 }
 
 export type ShellStore = StoreApi<ShellState>;
@@ -129,6 +135,8 @@ export function createShellStore(initial: Partial<ShellState> = {}): ShellStore 
     settings: DEFAULT_SETTINGS,
     notice: null,
     mapEvent: null,
+    tips: false,
+    touchWarning: false,
     ...initial,
   }));
 }

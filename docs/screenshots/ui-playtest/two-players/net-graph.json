@@ -1,0 +1,31 @@
+{
+  "link": "https://scripts-divisions-firms-premiere.trycloudflare.com/r/CQRQBP",
+  "A": {
+    "samples": 57,
+    "pingMedianMs": 1533,
+    "pingMaxMs": 3174,
+    "jitterMedianMs": 946,
+    "lossMaxPct": 0,
+    "snapshotsPerSec": 25,
+    "kbInPerSec": 2,
+    "kbOutPerSec": 1.8,
+    "correctionsPerMinMax": 221,
+    "transport": "WebSocket"
+  },
+  "B": {
+    "samples": 57,
+    "pingMedianMs": 1833,
+    "pingMaxMs": 3011,
+    "jitterMedianMs": 963,
+    "lossMaxPct": 0,
+    "snapshotsPerSec": 24,
+    "kbInPerSec": 1.9,
+    "kbOutPerSec": 1.8,
+    "correctionsPerMinMax": 205.4,
+    "transport": "WebSocket"
+  },
+  "errors": {
+    "A": [],
+    "B": []
+  }
+}

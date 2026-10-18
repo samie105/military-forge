@@ -10,7 +10,8 @@
  * scan keeps its texture on a toon material of its own; both keep the `_CAMO` panel attribute.
  */
 import { weapons } from '@military-forge/content';
-import { BufferAttribute, BufferGeometry, Mesh, Vector3, type Material, type MeshStandardMaterial, type Object3D, type Texture } from 'three';
+import { BufferAttribute, BufferGeometry, Mesh, Vector3, type Material, type Matrix4, type MeshStandardMaterial, type Object3D, type Texture } from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { GLTF } from 'three/addons/loaders/GLTFLoader.js';
 
 /** The materials a weapon GLB is drawn with: by vertex colour, by its own texture, or plain (neither). */
@@ -82,10 +83,6 @@ export async function loadSockets(baseUrl: string): Promise<Map<string, WeaponSo
 /** the default support-hand target: docs/04 §4.1 socket_offhand_IK, 0.07 m along +Y and 0.02 m up */
 export const DEFAULT_OFFHAND = new Vector3(0, 0.07, 0.02);
 
-/**
- * The GLB's first mesh baked into the file's root frame, with plain float position, normal and
- * colour attributes (meshopt and quantisation store normalised integers). Null without a mesh.
- */
 /** The GLB's first mesh, with world matrices up to date. */
 function firstMesh(gltf: GLTF): Mesh | null {
   gltf.scene.updateMatrixWorld(true);
@@ -99,9 +96,11 @@ function firstMesh(gltf: GLTF): Mesh | null {
 /** Attributes kept from a GLB mesh: colours (scripted guns), UVs (scans' albedo), `_camo` (camo panels). */
 const KEPT = ['position', 'normal', 'color', 'uv', '_camo'] as const;
 
-export function bakeGltfMesh(gltf: GLTF): BufferGeometry | null {
-  const mesh = firstMesh(gltf);
-  if (!mesh) return null;
+/**
+ * A mesh's KEPT attributes as plain floats (meshopt and quantisation store normalised integers),
+ * moved by `frame` (its world matrix: the GLB root frame).
+ */
+export function bakeMesh(mesh: Mesh, frame: Matrix4 = mesh.matrixWorld): BufferGeometry {
   const src = mesh.geometry;
   const geometry = new BufferGeometry();
   for (const name of KEPT) {
@@ -113,7 +112,36 @@ export function bakeGltfMesh(gltf: GLTF): BufferGeometry | null {
     geometry.setAttribute(name, new BufferAttribute(out, size));
   }
   if (src.index) geometry.setIndex(Array.from(src.index.array as ArrayLike<number>));
-  geometry.applyMatrix4(mesh.matrixWorld);
+  geometry.applyMatrix4(frame);
+  return geometry;
+}
+
+/**
+ * Baked pieces as one geometry: those whose attributes match the first one's (others are left out),
+ * all indexed or none. Null when there are none.
+ */
+export function mergeBaked(pieces: readonly BufferGeometry[]): BufferGeometry | null {
+  if (pieces.length <= 1) return pieces[0] ?? null;
+  const names = (g: BufferGeometry) => Object.keys(g.attributes).sort().join(',');
+  const key = names(pieces[0]!);
+  let same = pieces.filter((g) => names(g) === key);
+  if (same.some((g) => !g.index)) same = same.map((g) => (g.index ? g.toNonIndexed() : g));
+  return mergeGeometries(same) ?? pieces[0]!;
+}
+
+/**
+ * The GLB baked into the file's root frame: every mesh, merged. A gun's moving parts (the Forge's
+ * `part_slide`, `part_pump`, `part_bolt`, `part_cylinder` and `part_mag` child meshes) stay on it,
+ * where they rest, drawn with the gun's material. Null without a mesh.
+ */
+export function bakeGltfMesh(gltf: GLTF): BufferGeometry | null {
+  gltf.scene.updateMatrixWorld(true);
+  const pieces: BufferGeometry[] = [];
+  gltf.scene.traverse((o) => {
+    if ((o as Mesh).isMesh) pieces.push(bakeMesh(o as Mesh));
+  });
+  const geometry = mergeBaked(pieces);
+  if (!geometry) return null;
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
   return geometry;

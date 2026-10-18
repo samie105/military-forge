@@ -38,6 +38,33 @@ export interface NameResult {
 
 const SETTINGS_KEY = 'settings.v1';
 const OFFLINE_NAME_KEY = 'profile.offlineName.v1';
+const TIPS_SEEN_KEY = 'tips.seen.v1';
+const TOUCH_OK_KEY = 'touch.ok.v1';
+
+/** A phone or tablet: no mouse, no keyboard to speak of (touch controls come later). */
+export function touchOnly(): boolean {
+  try {
+    return window.matchMedia('(hover: none) and (pointer: coarse)').matches && !window.matchMedia('(any-pointer: fine)').matches;
+  } catch {
+    return false;
+  }
+}
+
+function flagged(key: string, storage: () => Storage): boolean {
+  try {
+    return storage().getItem(key) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function flag(key: string, storage: () => Storage): void {
+  try {
+    storage().setItem(key, '1');
+  } catch {
+    /* this session only */
+  }
+}
 
 /** Saved settings → valid settings (anything unknown or malformed falls back to `defaults`). */
 export function sanitizeSettings(raw: unknown, defaults: Settings = DEFAULT_SETTINGS): Settings {
@@ -139,7 +166,7 @@ export class ShellController {
 
   /** First screen: restore the session, then follow the link (a room) or show home. */
   async boot(): Promise<void> {
-    this.set({ screen: { name: 'boot' } });
+    this.set({ screen: { name: 'boot' }, touchWarning: touchOnly() && !flagged(TOUCH_OK_KEY, () => sessionStorage) });
     const intent = intentFromLocation(location);
     let me: Me | null;
     try {
@@ -171,13 +198,14 @@ export class ShellController {
       case 'home':
         this.host.stop();
         this.setUrl('/');
-        this.set({ screen: { name: 'home' }, match: null, lobby: null, connection: null });
+        this.set({ screen: { name: 'home' }, match: null, lobby: null, connection: null, tips: false });
         return;
       case 'training':
         this.host.stop();
         this.setUrl('/');
         this.host.startTraining(this.profile?.nickname ?? 'You');
         this.set({ screen: { name: 'training' }, lobby: null, connection: null });
+        this.firstTips();
         return;
       case 'create':
       case 'join':
@@ -220,6 +248,28 @@ export class ShellController {
       );
     this.host.startOnline(roomSocketUrl(room), this.profile!.nickname, code, room.ticket, refreshTicket);
     this.set({ screen: { name: 'room', code: room.code } });
+    this.firstTips();
+  }
+
+  /** The controls card and tips the first time a player gets into a game. */
+  private firstTips(): void {
+    if (!flagged(TIPS_SEEN_KEY, () => localStorage)) this.set({ tips: true });
+  }
+
+  showTips(): void {
+    this.closeOverlay();
+    this.set({ tips: true });
+  }
+
+  closeTips(): void {
+    flag(TIPS_SEEN_KEY, () => localStorage);
+    this.set({ tips: false });
+  }
+
+  /** "Continue anyway" on a phone: not asked again this session. */
+  dismissTouchWarning(): void {
+    flag(TOUCH_OK_KEY, () => sessionStorage);
+    this.set({ touchWarning: false });
   }
 
   /** Reconnect to the same room after a failure (the session may still resume within its grace). */

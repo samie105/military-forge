@@ -70,6 +70,55 @@ describe('scanned guns and scripted guns (art review H2)', () => {
   });
 });
 
+describe('moving-part child meshes stay on the gun (#73, #82)', () => {
+  /** A scanned gun as the Forge ships it: the body mesh with `part_*` meshes as its children, at their pivots. */
+  function partGun() {
+    const map = new DataTexture(new Uint8Array(4), 1, 1);
+    const material = new MeshStandardMaterial({ map });
+    const tri = (y: number) => {
+      const g = new BufferGeometry();
+      g.setAttribute('position', new BufferAttribute(new Float32Array([0, y, 0, 0.05, y + 0.1, 0, 0, y + 0.05, 0.05]), 3));
+      g.setAttribute('normal', new BufferAttribute(new Float32Array([1, 0, 0, 1, 0, 0, 1, 0, 0]), 3));
+      g.setAttribute('uv', new BufferAttribute(new Float32Array([0, 0, 1, 0, 0, 1]), 2));
+      return g;
+    };
+    const body = new Mesh(tri(0), material);
+    body.name = 'breacher';
+    const pump = new Mesh(tri(0), material);
+    pump.name = 'part_pump';
+    pump.position.set(0, 0.4, -0.045);
+    pump.userData = { axis: [0, -1, 0], travel: 0.06 };
+    const mag = new Mesh(tri(0), material);
+    mag.name = 'part_mag';
+    mag.position.set(0, 0.2, -0.16);
+    body.add(pump, mag);
+    const root = new Group();
+    root.add(body);
+    return { gltf: { scene: root } as unknown as GLTF, map };
+  }
+
+  it('the body and every part, each where it rests, with the gun’s textured material', () => {
+    const { gltf, map } = partGun();
+    const made: Texture[] = [];
+    const model = weaponFromGltf(gltf, { vertexColors: new MeshBasicMaterial(), plain: new MeshBasicMaterial(), textured: (m) => (made.push(m), new MeshBasicMaterial({ map: m })) })!;
+    const pos = model.geometry.getAttribute('position');
+    expect(pos.count).toBe(9); // body, pump and mag
+    const ys = Array.from({ length: pos.count }, (_, i) => pos.getY(i));
+    expect(Math.max(...ys)).toBeCloseTo(0.5); // the pump, 0.4 up the gun
+    expect(Math.min(...Array.from({ length: pos.count }, (_, i) => pos.getZ(i)))).toBeCloseTo(-0.16); // the mag below
+    expect(model.geometry.getAttribute('uv').count).toBe(9);
+    expect(made).toEqual([map]);
+  });
+
+  it('a mesh whose attributes do not match the body’s is left out, not fatal', () => {
+    const { gltf } = partGun();
+    const odd = new BufferGeometry();
+    odd.setAttribute('position', new BufferAttribute(new Float32Array(9), 3));
+    gltf.scene.add(new Mesh(odd));
+    expect(weaponFromGltf(gltf, new MeshBasicMaterial())!.geometry.getAttribute('position').count).toBe(9);
+  });
+});
+
 describe('sockets.json (the Forge)', () => {
   it('parses the shipped file: muzzle, off hand, eject, family and aim pose by weapon id', () => {
     const shipped = JSON.parse(readFileSync(new URL('../../../public/assets/weapons/sockets.json', import.meta.url), 'utf8'));

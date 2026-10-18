@@ -1,9 +1,11 @@
 import { Game, MatchEndReason, MatchPhase, Match, ticks, type MatchResults } from '@military-forge/sim';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { Countdown, Lobby, MapEventBanner, MatchStatus, Results } from './App';
+import { App, ControllerContext, Countdown, Lobby, MapEventBanner, MatchStatus, Results, TipsCard } from './App';
+import { defaultBindings, rebind } from './controls';
+import type { ShellController } from './controller';
 import { bannerOf, sameBanner } from './mapEventBanner';
-import { runCleanup } from './store';
+import { createShellStore, runCleanup } from './store';
 import { localMatchRules } from './localMatch';
 import { formatClock, matchView, ordinal, placeholderXp, sameView, type MatchView } from './matchView';
 
@@ -195,6 +197,27 @@ describe('screens', () => {
     expect(status).toMatch(/You <b>3<\/b> · Leader <b>5<\/b>/);
     expect(renderToStaticMarkup(<Lobby view={view({ phase: MatchPhase.Waiting })} actions={actions} />)).toMatch(/<button[^>]*>Ready<\/button>/);
     expect(renderToStaticMarkup(<Lobby view={view({ phase: MatchPhase.Waiting, ready: true })} actions={actions} />)).toContain('disabled');
+  });
+});
+
+describe('first-run tips and routes', () => {
+  it('the tips card lists the player\'s own keys', () => {
+    const bindings = rebind(defaultBindings(), 'reload', 'KeyK', 0).bindings;
+    const html = renderToStaticMarkup(
+      <ControllerContext.Provider value={{ closeTips: vi.fn() } as unknown as ShellController}>
+        <TipsCard bindings={bindings} />
+      </ControllerContext.Provider>,
+    );
+    expect(html).toContain('How to play');
+    expect(html).toMatch(/Reload<\/dt><dd><kbd>K<\/kbd>/);
+    expect(html).toMatch(/Jetpack<\/dt><dd><kbd>W<\/kbd><kbd>Space<\/kbd>/);
+    expect(html).toContain('Got it');
+  });
+
+  it('a route with its own exit gets no second Back button', () => {
+    const route = (ownExit: boolean) => createShellStore({ route: { id: 'locker', title: 'Locker', ownExit, mount: () => {} } });
+    expect(renderToStaticMarkup(<App store={route(true)} />)).not.toContain('← Back');
+    expect(renderToStaticMarkup(<App store={route(false)} />)).toContain('← Back');
   });
 });
 

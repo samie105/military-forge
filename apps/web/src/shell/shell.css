@@ -143,7 +143,7 @@
   color: var(--sh-gold);
   font-weight: 600;
 }
-.sh-corner-hint { position: absolute; right: 14px; bottom: 10px; color: var(--sh-muted); font-size: 12px; opacity: 0.8; }
+.sh-corner-hint { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); color: var(--sh-muted); font-size: 11px; opacity: 0.75; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
 
 /* ---- home ---- */
 .sh-home {
@@ -358,12 +358,44 @@
 .sh-players .sh-badge.sh-bot { color: var(--sh-muted); border-color: rgba(141, 153, 168, 0.5); }
 .sh-results footer { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 18px; }
 
+/* ---- first-run tips ---- */
+.sh-tips {
+  position: absolute;
+  top: 72px;
+  right: 16px;
+  width: min(420px, calc(100% - 32px));
+  max-height: calc(100% - 250px);
+  overflow-y: auto;
+  padding: 16px 18px;
+  box-sizing: border-box;
+}
+.sh-tips-keys { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; margin: 10px 0 12px; }
+.sh-tips-keys div { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.sh-tips-keys dt { color: var(--sh-text); font-size: 13px; }
+.sh-tips-keys dd { display: flex; gap: 4px; margin: 0; }
+.sh-tips-keys kbd {
+  min-width: 1.4em;
+  padding: 2px 7px;
+  border: 1px solid var(--sh-line);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: #121821;
+  color: var(--sh-text);
+  font: 600 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-align: center;
+}
+.sh-tips-list { margin: 0 0 14px; padding-left: 18px; color: var(--sh-muted); font-size: 12px; display: grid; gap: 4px; }
+.sh-tips-ok { width: 100%; }
+.sh-touch { z-index: 15; }
+
 /* ---- routes (the Locker) ---- */
 .sh-route { position: absolute; inset: 0; background: var(--sh-bg); }
 .sh-route-body { position: absolute; inset: 0; }
 .sh-route-back { position: absolute; top: 10px; right: 12px; }
 
 @media (max-width: 720px) {
+  .sh-tips { top: auto; bottom: 16px; max-height: calc(100% - 32px); }
+  .sh-tips-keys { grid-template-columns: 1fr; }
   .sh-table th:nth-child(6), .sh-table td:nth-child(6), .sh-table th:nth-child(7), .sh-table td:nth-child(7) { display: none; }
   .sh-lobby-bar { white-space: normal; width: calc(100% - 32px); }
   .sh-warmup { display: none; }
