@@ -87,6 +87,18 @@ describe('settings and controls', () => {
     expect(kb.mouse[4]).toBe(Btn.CycleGrenade); // mouse 5 (forward)
   });
 
+  it('↑ jets as it always did (the Controls table has two keys a row: W and Space), unless it is given another action', () => {
+    expect(toKeyBindings(defaultBindings()).keys.ArrowUp).toBe(Btn.Jet);
+    // saved before: only W and Space for jet
+    expect(toKeyBindings(sanitizeBindings({ jet: ['KeyW', 'Space'] })).keys.ArrowUp).toBe(Btn.Jet);
+    // ↑ bound to something else: that, and no jet
+    expect(toKeyBindings(rebind(defaultBindings(), 'dash', 'ArrowUp', 1).bindings).keys.ArrowUp).toBe(Btn.Dash);
+    expect(toKeyBindings(rebind(defaultBindings(), 'scoreboard', 'ArrowUp', 1).bindings).keys.ArrowUp).toBeUndefined();
+    // jet moved off W and Space: ↑ still jets
+    const moved = rebind(rebind(defaultBindings(), 'jet', 'KeyK', 0).bindings, 'jet', 'KeyL', 1).bindings;
+    expect([toKeyBindings(moved).keys.ArrowUp, toKeyBindings(moved).keys.Space]).toEqual([Btn.Jet, undefined]);
+  });
+
   it('labels keys, with the keyboard layout when the browser has it', () => {
     expect([keyLabel('KeyA'), keyLabel('Digit1'), keyLabel('Space'), keyLabel('Mouse0'), keyLabel('ArrowUp'), keyLabel('Numpad5')]).toEqual(['A', '1', 'Space', 'Left click', '↑', 'Num 5']);
     expect(keyLabel('KeyQ', new Map([['KeyQ', 'a']]))).toBe('A');

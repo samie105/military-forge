@@ -416,7 +416,8 @@ export class Hud {
     this.root.setAttribute('data-bind-var', HUD_VARS);
     parent.appendChild(this.root);
     this.binder = new Binder(this.root);
-    this.states = new StateTokens(this.root);
+    // the tokens on #hud (hud.css) and on each screen, inside its kit's wrapper (the kits' scoped state rules)
+    this.states = new StateTokens(this.root, [...this.root.querySelectorAll<HTMLElement>('.mf-hud-fit > .screen')]);
     const all = <T extends Element>(sel: string) => [...this.root.querySelectorAll<T>(sel)];
     this.banners = this.root.querySelector<HTMLElement>('.mf-hud-banners')!;
     this.feeds = [

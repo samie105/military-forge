@@ -4,6 +4,9 @@
  * is active, or tokens b and c both are, and "!a" while a is not (round two: "!switching+!dual" =
  * neither). CSS reads the tokens too ([data-active-state~="low-hp"]). Elements are touched only
  * when the token set changes.
+ *
+ * The kits scope their state rules (`:where(.kit-v2) [data-active-state~="spectating"] …`), so the
+ * attribute must sit inside the kit's wrapper too: `mirrors` (each fitted screen) carry the same tokens.
  */
 export function stateMatches(spec: string, tokens: ReadonlySet<string>): boolean {
   return spec
@@ -23,7 +26,10 @@ export class StateTokens {
   private readonly items: StateItem[] = [];
   private last: string | null = null;
 
-  constructor(private readonly root: HTMLElement) {
+  constructor(
+    private readonly root: HTMLElement,
+    private readonly mirrors: readonly HTMLElement[] = [],
+  ) {
     for (const el of root.querySelectorAll('[data-state]')) this.items.push({ el, spec: el.getAttribute('data-state')!, shown: null });
   }
 
@@ -34,6 +40,7 @@ export class StateTokens {
     if (key === this.last) return;
     this.last = key;
     this.root.dataset.activeState = key || 'default';
+    for (const m of this.mirrors) m.dataset.activeState = key || 'default';
     const set = new Set(sorted);
     for (const item of this.items) {
       const shown = stateMatches(item.spec, set);

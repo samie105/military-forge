@@ -86,7 +86,8 @@ export function TipsCard({ bindings, doubleTapDash = true }: { bindings: Setting
           <li>Guns lie around the map: stand on one and press {bindings.interact[0] ? capText(bindings.interact[0], layout) : 'E'} to swap it for the one in your hand.</li>
         </ul>
         <div className="mf-tips__actions">
-          <button className="btn btn--primary btn--xl" autoFocus onClick={blurAfter(() => ctl.closeTips())}>
+          {/* no autoFocus: the card sits over live play, where Space and the arrows are the game's */}
+          <button className="btn btn--primary btn--xl" onClick={blurAfter(() => ctl.closeTips())}>
             Got it
           </button>
           <button

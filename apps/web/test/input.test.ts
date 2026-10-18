@@ -10,6 +10,7 @@ import type { Camera } from '../src/camera';
 import type { InputSampler as Sampler } from '../src/input';
 
 let InputSampler: typeof Sampler;
+let typingInto: (target: EventTarget | null) => boolean;
 let DOUBLE_TAP_MS: number;
 let DEFAULT_KEY_BINDINGS: Sampler['bindings'];
 const camera = { toWorldX: (x: number) => x, toWorldY: (y: number) => y } as unknown as Camera;
@@ -22,7 +23,7 @@ beforeAll(async () => {
     HTMLTextAreaElement: class {},
     HTMLSelectElement: class {},
   });
-  ({ InputSampler, DOUBLE_TAP_MS, DEFAULT_KEY_BINDINGS } = await import('../src/input'));
+  ({ InputSampler, DOUBLE_TAP_MS, DEFAULT_KEY_BINDINGS, typingInto } = await import('../src/input'));
 });
 
 function fire(target: EventTarget, type: string, fields: Record<string, unknown>): void {
@@ -148,6 +149,30 @@ describe('InputSampler', () => {
       delete (globalThis as { Element?: unknown }).Element;
     }
     expect(press('Tab')).toBe(true);
+  });
+
+  it('a field being typed in keeps its keys; a read-only box, a checkbox or a slider leaves them to the game', () => {
+    const make = (cls: new () => object, fields: Record<string, unknown>) => Object.assign(new cls(), fields) as unknown as EventTarget;
+    const Input = globalThis.HTMLInputElement as unknown as new () => object;
+    const TextArea = globalThis.HTMLTextAreaElement as unknown as new () => object;
+    const Select = globalThis.HTMLSelectElement as unknown as new () => object;
+    expect(typingInto(make(Input, { type: 'text', readOnly: false }))).toBe(true);
+    expect(typingInto(make(Input, { type: 'number', readOnly: false }))).toBe(true);
+    expect(typingInto(make(Input, { type: 'checkbox', readOnly: false }))).toBe(false);
+    expect(typingInto(make(Input, { type: 'range', readOnly: false }))).toBe(false);
+    expect(typingInto(make(TextArea, { readOnly: false }))).toBe(true);
+    expect(typingInto(make(TextArea, { readOnly: true }))).toBe(false);
+    expect(typingInto(make(Select, {}))).toBe(true);
+    expect(typingInto(null)).toBe(false);
+    // the tuning panel's Copy values box (read-only, focused for Ctrl+C): W still jets
+    const { s, buttons } = setup();
+    fire(window, 'keydown', { code: 'KeyW', repeat: false, timeStamp: 0, target: make(TextArea, { readOnly: true }) });
+    expect(buttons() & Btn.Jet).toBe(Btn.Jet);
+    fire(window, 'keyup', { code: 'KeyW', repeat: false, timeStamp: 10 });
+    // typing a value: not the game's
+    fire(window, 'keydown', { code: 'KeyW', repeat: false, timeStamp: 20, target: make(Input, { type: 'text', readOnly: false }) });
+    expect(buttons() & Btn.Jet).toBe(0);
+    s.releaseAll();
   });
 
   it('dropping input (menus, blur) drops a latched dash too', () => {

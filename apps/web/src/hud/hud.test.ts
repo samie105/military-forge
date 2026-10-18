@@ -4,7 +4,7 @@ import { DamageSource, MatchPhase } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
 import { hudFrame, netGraph, pingLook, type HudInput, type HudMemory } from './hud';
 import { conditions, dashStatus, eventLook, feedFromEvents, fuelView, grenadeBelt, healthView, pickupIcon, pickupNear, pickupPrompt, screenAngle, shieldStatus, weaponCards, type HudPlayer } from './model';
-import { stateMatches } from './state';
+import { StateTokens, stateMatches } from './state';
 import { HUD_VARS, hudTemplate } from './template';
 import { iconMask, touchGrenade, touchSkinCss } from './touchSkin';
 
@@ -231,6 +231,16 @@ describe('the kit wiring', () => {
     expect(stateMatches('host+!ready', on)).toBe(false);
     expect(stateMatches('guest !ready', on)).toBe(false);
     expect(stateMatches('guest !copied', on)).toBe(true);
+  });
+
+  it('the tokens reach inside the kits: every fitted screen carries them too (their scoped state rules)', () => {
+    const el = () => ({ dataset: {} as Record<string, string>, querySelectorAll: () => [] });
+    const root = el();
+    const screens = [el(), el()];
+    const states = new StateTokens(root as unknown as HTMLElement, screens as unknown as HTMLElement[]);
+    states.set(['spectating', 'low-hp']);
+    expect(root.dataset.activeState).toBe('low-hp spectating');
+    expect(screens.map((s) => s.dataset.activeState)).toEqual(['low-hp spectating', 'low-hp spectating']);
   });
 
   it('ping looks: green up to 100 ms, amber to 200, red beyond', () => {

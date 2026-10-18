@@ -495,7 +495,7 @@
 
 /* reduce motion: menus stop idling */
 html.reduce-motion :where(.kit-v2) *,html.reduce-motion :where(.kit-v2) *::before,html.reduce-motion :where(.kit-v2) *::after{ animation:none !important; transition:none !important; }
-@media (prefers-reduced-motion:reduce){ *,*::before,*::after{ animation:none !important; transition:none !important; } }
+@media (prefers-reduced-motion:reduce){ :where(.kit-v2) *,:where(.kit-v2) *::before,:where(.kit-v2) *::after{ animation:none !important; transition:none !important; } }
 /* =========================================================================
    NAME ENTRY
    ========================================================================= */

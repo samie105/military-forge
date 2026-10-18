@@ -47,7 +47,7 @@ export interface ActionDef {
 export const ACTIONS: readonly ActionDef[] = [
   { id: 'left', label: 'Move left', group: 'Move', bit: Btn.Left, defaults: ['KeyA', 'ArrowLeft'] },
   { id: 'right', label: 'Move right', group: 'Move', bit: Btn.Right, defaults: ['KeyD', 'ArrowRight'] },
-  { id: 'jet', label: 'Jet (hold)', group: 'Move', bit: Btn.Jet, defaults: ['KeyW', 'Space'] },
+  { id: 'jet', label: 'Jet (hold)', group: 'Move', bit: Btn.Jet, defaults: ['KeyW', 'Space'], hint: 'The ↑ arrow jets too, unless you bind it to something else' },
   { id: 'down', label: 'Crouch / drop', group: 'Move', bit: Btn.Down, defaults: ['KeyS', 'ArrowDown'] },
   { id: 'dash', label: 'Dash', group: 'Move', bit: Btn.Dash, defaults: ['ShiftLeft', 'ShiftRight'], hint: 'Alone: the way you face. With a direction held: 8 ways, up (jet) and down included' },
   { id: 'fire', label: 'Fire', group: 'Combat', bit: Btn.Fire, defaults: ['Mouse0'] },
@@ -126,6 +126,9 @@ export function unbind(bindings: Bindings, action: ActionId, index: number): Bin
   return { ...bindings, [action]: bindings[action].filter((_, i) => i !== index) };
 }
 
+/** The ↑ arrow: always a jet key unless bound to another action (the Controls table has two keys per action). */
+export const ARROW_UP_JET = 'ArrowUp';
+
 /** The InputSampler's view: key → bits, mouse button → bits, key → weapon slot. */
 export function toKeyBindings(bindings: Bindings): KeyBindings {
   const keys: Record<string, number> = {};
@@ -142,6 +145,8 @@ export function toKeyBindings(bindings: Bindings): KeyBindings {
       }
     }
   }
+  // the arrows steer as WASD does (← → ↓ are their actions' second keys): ↑ jets, unless the player gave it another action
+  if (!ACTIONS.some((a) => bindings[a.id].includes(ARROW_UP_JET))) keys[ARROW_UP_JET] = Btn.Jet;
   return { keys, mouse, slots };
 }
 

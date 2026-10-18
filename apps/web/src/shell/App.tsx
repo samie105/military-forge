@@ -26,6 +26,7 @@ import { Pause } from './screens/Pause';
 import { Results } from './screens/Results';
 import { SettingsScreen } from './screens/Settings';
 import { TipsCard } from './screens/Tips';
+import { releaseShellFocus } from './focus';
 import { closeRoute, runCleanup, type ShellActions, type ShellRoute, type ShellStore } from './store';
 
 export { ControllerContext };
@@ -52,6 +53,13 @@ function AppScreens({ store }: { store: ShellStore }) {
   const tips = useStore(store, (s) => s.tips);
   const settings = useStore(store, (s) => s.settings);
   const match = useStore(store, (s) => s.match);
+
+  // the countdown and the match are play: the shell's buttons (Start now, Ready, the controls card)
+  // let go of the keyboard, so Space and the arrows are the game's from the first frame
+  const phase = match?.phase;
+  useEffect(() => {
+    if (phase === MatchPhase.Countdown || phase === MatchPhase.InProgress) releaseShellFocus();
+  }, [phase]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

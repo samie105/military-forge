@@ -153,6 +153,8 @@ html.reduce-motion :where(.kit-v1) .spinner{ animation:none; border-color:var(--
 :where(.kit-v1) .brand{ display:flex; align-items:center; gap:14px; }
 :where(.kit-v1) .brand__mark{ width:44px; height:44px; color:var(--c-volt); stroke-width:1.8; }
 .brand__name{ font-family:var(--f-display); font-size:var(--fs-36); letter-spacing:.06em; text-transform:uppercase; line-height:1; }
+/* Home renders round two's brand (.brand b) while the screen is still round one's: the name in display type */
+:where(.kit-v1) .brand b{ font-family:var(--f-display); font-weight:var(--fw-display); font-size:var(--fs-48); letter-spacing:.06em; text-transform:uppercase; line-height:1; }
 :where(.kit-v1) .home{ display:grid; grid-template-columns:minmax(0,940px) minmax(0,1fr); gap:72px; padding:40px 80px 32px; }
 .home__main{ display:flex; flex-direction:column; gap:16px; min-width:0; }
 .home__id{ margin-bottom:12px; }

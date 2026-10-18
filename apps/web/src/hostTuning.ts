@@ -7,6 +7,7 @@
  * the defaults as JSON, ready to become the new defaults. The panel (tweakpane) loads on first use.
  */
 import type { Tuning } from '@military-forge/content';
+import { typingInto } from './input';
 import type { LocalMode } from './localMode';
 import { OnlineMode } from './onlineMode';
 
@@ -85,6 +86,17 @@ export function createHostTuning(getMode: () => LocalMode | OnlineMode | null, p
       parent.appendChild(root);
       const status = root.querySelector<HTMLElement>('.mf-tune__status')!;
       const out = root.querySelector<HTMLTextAreaElement>('.mf-tune__out')!;
+      // the panel never keeps the game's keys: after a slider or a button it lets go of the keyboard
+      // (a focused slider steps with the arrows: playing on with ← → would retune the room), and a
+      // value typed into a field lets go on Enter
+      const letGo = () => {
+        const el = document.activeElement;
+        if (el instanceof HTMLElement && root?.contains(el) && !typingInto(el)) el.blur();
+      };
+      root.addEventListener('pointerup', () => window.setTimeout(letGo, 0));
+      root.addEventListener('keydown', (e) => {
+        if ((e.key === 'Enter' || e.key === 'Escape') && e.target instanceof HTMLElement && typingInto(e.target)) e.target.blur();
+      });
       root.querySelector('[data-act="close"]')!.addEventListener('click', () => {
         close();
         api.onClose();

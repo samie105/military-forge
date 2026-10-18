@@ -113,6 +113,20 @@ export class ThrowLatch {
   }
 }
 
+/** Input types that take typing (their keys are the field's); a checkbox, a range or a button doesn't. */
+const TEXT_INPUTS = new Set(['', 'text', 'search', 'email', 'password', 'url', 'tel', 'number']);
+
+/**
+ * The key goes into a field being typed in: an editable text input or text area, or a select. A
+ * read-only one (the tuning panel's "Copy values" box, focused for Ctrl+C) or a checkbox, slider or
+ * button doesn't keep the game's keys from the game.
+ */
+export function typingInto(target: EventTarget | null): boolean {
+  if (typeof HTMLTextAreaElement !== 'undefined' && target instanceof HTMLTextAreaElement) return !target.readOnly;
+  if (typeof HTMLInputElement !== 'undefined' && target instanceof HTMLInputElement) return !target.readOnly && TEXT_INPUTS.has((target.type ?? '').toLowerCase());
+  return typeof HTMLSelectElement !== 'undefined' && target instanceof HTMLSelectElement;
+}
+
 /** Keys whose browser default (scrolling, focus moves) must not fire during play. */
 const PREVENT_DEFAULT = new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab']);
 
@@ -196,7 +210,7 @@ export class InputSampler {
 
   constructor(private readonly target: HTMLElement) {
     window.addEventListener('keydown', (e) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
+      if (typingInto(e.target)) return;
       // during play these keys are the game's (no scrolling, no focus moves); in the menus they're the menus'
       if (PREVENT_DEFAULT.has(e.code) && !this.blocked && !menusHaveKeys(e.target)) e.preventDefault();
       if (!e.repeat) {
