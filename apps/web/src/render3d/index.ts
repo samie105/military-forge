@@ -40,10 +40,12 @@ import { DynamicResolution, PRESETS, SampleWindow, parsePreset, type GraphicsPre
 import { eachKick, recoilOf } from './recoil';
 import { PickupMeshes, RicochetSparks } from './shield';
 import { Vfx } from './vfx';
+import type { EjectLookup } from './vfx/casings';
 import type { BodyLookup } from './vfx/dash';
 import type { MuzzleLookup } from './vfx/gunfire';
 
 export { PlaneCamera, parsePreset, type PresetName, type RemoteView };
+
 
 /**
  * Software WebGL is accepted for automated browsers (headless tests and screenshot scripts, which
@@ -243,7 +245,7 @@ export class Renderer3D {
     this.buildMap(map);
     this.scene.add(this.plane, this.zones.group);
     // after buildMap: the blast light flashes from the map's light levels
-    this.vfx = new Vfx(this.scene, this.world, camera, { hemi: this.hemi, sun: this.sun }, ramp, preset, this.muzzleOf, this.bodyOf);
+    this.vfx = new Vfx(this.scene, this.world, camera, { hemi: this.hemi, sun: this.sun }, ramp, preset, this.muzzleOf, this.bodyOf, this.ejectOf);
     // reduced motion (docs/11 §5): the OS setting until the settings screen calls setReducedMotion
     this.setReducedMotion(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
     // riot shields lying on the map, and the ricochet spark (an effect module: it gets the sim events)
@@ -260,6 +262,8 @@ export class Renderer3D {
   private readonly muzzleOf: MuzzleLookup = (id, weapon, out, dir, peek) => this.avatars.get(id)?.muzzle(weapon, out, dir, peek) ?? false;
   /** a player's drawn character (dash afterimages) */
   private readonly bodyOf: BodyLookup = (id) => this.avatars.get(id)?.inst ?? null;
+  /** where a shooter's drawn gun throws its casings (vfx/casings.ts) */
+  private readonly ejectOf: EjectLookup = (id, weapon, out, dir, bore) => this.avatars.get(id)?.eject(weapon, out, dir, bore) ?? false;
 
   /** the online timeline while online play is attached (attach) */
   private online: OnlineView | null = null;
@@ -427,7 +431,7 @@ export class Renderer3D {
     cam.x = spawn.x;
     cam.y = spawn.y;
     applyPlanePose(this.camera3, planePose(cam, FOV_DEG, undefined, this.pose));
-    this.vfx.showForWarmUp(spawn.x, spawn.y + 1); // effects with meshes of their own (the dash trail)
+    this.vfx.showForWarmUp(spawn.x, spawn.y + 1); // effects with meshes of their own (the dash trail, casings)
     await this.renderer.compileAsync(this.scene, this.camera3);
     this.vfx.endWarmUp();
     // compileAsync skips the shadow pass: where the sun casts shadows (High), one draw links its
@@ -462,6 +466,7 @@ export class Renderer3D {
     this.sun.castShadow = this.preset.shadows === 'map';
     this.env?.setShadowMap(this.sun.castShadow);
     this.vfx.setPreset(this.preset);
+    this.kit.animateParts = this.preset.name !== 'low'; // Low: guns' parts stand still, merged in (no draws)
     if (lodChanged) {
       for (const a of this.avatars.values()) a.dispose();
       this.avatars.clear();

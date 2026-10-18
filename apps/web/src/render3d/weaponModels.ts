@@ -2,8 +2,10 @@
  * W8's weapon models in the hands (assets/weapons/<id>.glb, docs/04 §9.4: origin at the grip,
  * +Y toward the muzzle, +Z up, attached to socket_weapon_R/L with an identity transform). Their
  * sockets come from the Forge's `weapons/sockets.json` (`muzzle`: flashes and tracers leave it;
- * `offhand`: the support hand's IK target; `eject`, family and aim pose for later), else from the
- * GLB's own nodes. Until a weapon's GLB loads, or if it fails, the avatar keeps its placeholder box.
+ * `offhand`: the support hand's IK target; `eject`: casings fly from it; family and aim pose: the
+ * hold), else from the GLB's own nodes. Its `part_*` nodes are the moving parts (gunParts.ts); every
+ * other mesh is the gun's body. Until a weapon's GLB loads, or if it fails, the avatar keeps its
+ * placeholder box.
  *
  * Two kinds of gun come in: the scripted ones carry their colours as vertex colours (COLOR_0); the
  * scans (the Forge's build_gun_scan) carry a 256² albedo texture on TEXCOORD_0 and no colours. A
@@ -11,8 +13,8 @@
  */
 import { weapons } from '@military-forge/content';
 import { BufferAttribute, BufferGeometry, Mesh, Vector3, type Material, type Matrix4, type MeshStandardMaterial, type Object3D, type Texture } from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { GLTF } from 'three/addons/loaders/GLTFLoader.js';
+import { gunCycleFromGltf, gunPartsFromGltf, mergeBaked, withPartsAtRest, type GunCycle, type GunPart } from './gunParts';
 
 /** The materials a weapon GLB is drawn with: by vertex colour, by its own texture, or plain (neither). */
 export interface GunMaterials {
@@ -31,6 +33,12 @@ export interface WeaponModel {
   material: Material;
   /** the rest of sockets.json's entry, when there is one (hold poses, casings, attachments) */
   sockets?: WeaponSockets;
+  /** moving parts (gunParts.ts), drawn and posed apart from `geometry`; absent: none */
+  parts?: readonly GunPart[];
+  /** `geometry` with the parts still, merged in (Low: no draws beyond the gun's) */
+  solid?: BufferGeometry;
+  /** the pump or bolt the hands work, cut clean or not (absent: by class, gunParts.ts cycleByClass) */
+  cycle?: GunCycle;
 }
 
 /** One weapon's entry in sockets.json (weapon frame, metres). */
@@ -117,28 +125,18 @@ export function bakeMesh(mesh: Mesh, frame: Matrix4 = mesh.matrixWorld): BufferG
 }
 
 /**
- * Baked pieces as one geometry: those whose attributes match the first one's (others are left out),
- * all indexed or none. Null when there are none.
+ * The GLB baked into the file's root frame: every mesh, merged, except those under the nodes in
+ * `leaveOut` (a gun's moving parts). Null without a mesh.
  */
-export function mergeBaked(pieces: readonly BufferGeometry[]): BufferGeometry | null {
-  if (pieces.length <= 1) return pieces[0] ?? null;
-  const names = (g: BufferGeometry) => Object.keys(g.attributes).sort().join(',');
-  const key = names(pieces[0]!);
-  let same = pieces.filter((g) => names(g) === key);
-  if (same.some((g) => !g.index)) same = same.map((g) => (g.index ? g.toNonIndexed() : g));
-  return mergeGeometries(same) ?? pieces[0]!;
-}
-
-/**
- * The GLB baked into the file's root frame: every mesh, merged. A gun's moving parts (the Forge's
- * `part_slide`, `part_pump`, `part_bolt`, `part_cylinder` and `part_mag` child meshes) stay on it,
- * where they rest, drawn with the gun's material. Null without a mesh.
- */
-export function bakeGltfMesh(gltf: GLTF): BufferGeometry | null {
+export function bakeGltfMesh(gltf: GLTF, leaveOut: ReadonlySet<Object3D> = new Set()): BufferGeometry | null {
   gltf.scene.updateMatrixWorld(true);
   const pieces: BufferGeometry[] = [];
+  const skip = (o: Object3D) => {
+    for (let n: Object3D | null = o; n; n = n.parent) if (leaveOut.has(n)) return true;
+    return false;
+  };
   gltf.scene.traverse((o) => {
-    if ((o as Mesh).isMesh) pieces.push(bakeMesh(o as Mesh));
+    if ((o as Mesh).isMesh && !skip(o)) pieces.push(bakeMesh(o as Mesh));
   });
   const geometry = mergeBaked(pieces);
   if (!geometry) return null;
@@ -165,10 +163,13 @@ function gunMaterial(gltf: GLTF, geometry: BufferGeometry, materials: GunMateria
 
 /**
  * A hand weapon from its GLB, its sockets from sockets.json when given, else from the GLB's nodes
- * (the muzzle falls back to the barrel's tip, the off hand to socket_offhand_IK's spot).
+ * (the muzzle falls back to the barrel's tip, the off hand to socket_offhand_IK's spot). Its
+ * moving parts (gunParts.ts) come apart from the body.
  */
 export function weaponFromGltf(gltf: GLTF, materials: GunMaterials | Material, sockets?: WeaponSockets): WeaponModel | null {
-  const geometry = bakeGltfMesh(gltf);
+  const { parts, nodes } = gunPartsFromGltf(gltf, bakeMesh);
+  const cycle = gunCycleFromGltf(gltf);
+  const geometry = bakeGltfMesh(gltf, nodes);
   if (!geometry) return null;
   const box = geometry.boundingBox!;
   return {
@@ -177,6 +178,8 @@ export function weaponFromGltf(gltf: GLTF, materials: GunMaterials | Material, s
     offhand: sockets?.offhand?.clone() ?? nodePosition(gltf.scene, 'offhand') ?? DEFAULT_OFFHAND.clone(),
     material: 'isMaterial' in materials ? materials : gunMaterial(gltf, geometry, materials),
     ...(sockets ? { sockets } : {}),
+    ...(parts.length ? { parts, solid: withPartsAtRest(geometry, parts) } : {}),
+    ...(cycle ? { cycle } : {}),
   };
 }
 

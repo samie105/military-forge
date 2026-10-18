@@ -58,4 +58,18 @@ describe('Avatar muzzles (gunfire VFX)', () => {
     a.update(playerView({ alive: false }), 1 / 60, world, true);
     expect(a.muzzle(HAMMER.index, new Vector3(), new Vector3())).toBe(false);
   });
+
+  it('the eject port of the gun in the hand (casings), its throw and its bore', () => {
+    const inst = rig();
+    const a = new Avatar(inst, 0, kit, 1);
+    a.update(playerView({ x: 20, aim: 0 }), 1 / 60, world, true);
+    const out = new Vector3();
+    const dir = new Vector3();
+    const bore = new Vector3();
+    expect(a.eject(HAMMER.index, out, dir, bore)).toBe(true);
+    expect(out.distanceTo(inst.bone('socket_weapon_R')!.getWorldPosition(new Vector3()))).toBeLessThan(0.15);
+    expect(dir.length()).toBeCloseTo(1, 5);
+    expect(bore.x).toBeCloseTo(1, 1); // aiming right
+    expect(a.eject(BUZZ.index, out, dir, bore)).toBe(false); // not in a hand
+  });
 });

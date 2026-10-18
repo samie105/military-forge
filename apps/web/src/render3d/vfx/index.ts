@@ -1,22 +1,24 @@
 /**
  * render3d's effects (docs/11 §5): grenades with their trails and fuse lights, explosions, the
- * blast's light and trauma camera shake, gunfire (tracers, muzzle flashes, impacts). Fed by sim
- * events (Renderer3D.onEvents) and each Frame.
+ * blast's light and trauma camera shake, gunfire (tracers, muzzle flashes, impacts) and spent
+ * casings. Fed by sim events (Renderer3D.onEvents) and each Frame.
  *
  * Budgets (docs/11 §3): every particle lives in a fixed pool sized for High and capped per preset
  * (1.5K live on Low, 5K on High); the steady-state frame allocates nothing; each layer is one draw
  * call and is hidden while empty, so a quiet scene costs no extra draws.
  */
 import type { CollisionWorld, SimEvent } from '@military-forge/sim';
-import type { DirectionalLight, HemisphereLight, Scene, Texture } from 'three';
+import { Vector3, type BufferGeometry, type DirectionalLight, type HemisphereLight, type Mesh, type Scene, type Texture } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import type { Camera } from '../../camera';
+import { reduceFlashes } from '../../fx';
 import type { Frame } from '../../view';
 import { GrenadeRenderer, throwableFromGltf, type GrenadeFx } from '../grenades';
 import type { GraphicsPreset } from '../presets';
+import { bakeMesh } from '../weaponModels';
 import { ATLAS_GRID, vfxAtlas } from './atlas';
-import { reduceFlashes } from '../../fx';
+import { CASING_KINDS, Casings, DEFAULT_NODES, type CasingArt, type CasingKind, type EjectLookup } from './casings';
 import { DashFx, type BodyLookup } from './dash';
 import { DashGhosts } from './dashGhosts';
 import { DashTrail } from './dashTrail';
@@ -31,6 +33,8 @@ import { ThrowArc } from './throwArc';
 
 /** arsenal-b grenade types whose `explosion` event is not a blast (arsenal-b-interfaces.md) */
 const NOT_A_BLAST = { flashbang: 3, emp: 5 } as const;
+
+const _warm = new Vector3();
 
 /** pool sizes for the High budget (5K live); lower presets cap them (`limit`) */
 const GLOW_MAX = 2300;
@@ -86,6 +90,8 @@ export class Vfx {
   readonly flash: SceneFlash;
   readonly shake = new CameraShake();
   readonly gunfire: Gunfire;
+  /** spent casings out of the guns' eject ports */
+  readonly casings: Casings;
   /** the throw arc (Frame.throwArc) */
   readonly arc: ThrowArc;
   /** dashes: the jet kick, speed lines and afterimages, and the green trail with its sparkles */
@@ -97,6 +103,8 @@ export class Vfx {
   private readonly targets: ExplosionTargets;
   private readonly grenadeFx: GrenadeFx;
   private readonly modules: VfxModule[] = [];
+  /** the Low preset (fewer casings) */
+  private low = false;
   /** handed to modules (read-only there); detail and reduced motion change with the settings */
   private readonly ctx: { -readonly [K in keyof VfxContext]: VfxContext[K] };
 
@@ -111,6 +119,8 @@ export class Vfx {
     private readonly muzzles: MuzzleLookup = () => false,
     /** a player's drawn character, for dash afterimages (Renderer3D: from the avatars) */
     bodies: BodyLookup = () => null,
+    /** where a shooter's drawn gun ejects its casings (Renderer3D: from the avatars) */
+    ejects: EjectLookup = () => false,
   ) {
     const atlas = vfxAtlas();
     const grid = [ATLAS_GRID, ATLAS_GRID] as const;
@@ -120,6 +130,7 @@ export class Vfx {
     this.grenades = new GrenadeRenderer(world, ramp);
     this.flash = new SceneFlash(lights.hemi, lights.sun);
     this.gunfire = new Gunfire(world);
+    this.casings = new Casings(scene, ramp, world, ejects);
     this.arc = new ThrowArc(atlas, grid);
     this.ghosts = new DashGhosts(scene);
     this.trail = new DashTrail(scene);
@@ -147,6 +158,8 @@ export class Vfx {
     this.grenades.setWorld(world);
     this.gunfire.world = world;
     this.gunfire.clear();
+    this.casings.world = world;
+    this.casings.clear();
     for (const p of [this.glowPool, this.smokePool, this.decalPool, ...this.books.map((b) => b.pool)]) p.clear();
     this.shake.trauma = 0;
     this.ghosts.clear();
@@ -177,8 +190,39 @@ export class Vfx {
       if (art.book && texture) this.targets.book = this.book(art.book, texture, 13);
       if (art.light) this.flash.style(art.light.color, art.light.seconds);
     });
-    const guns = loadWeaponVfx(baseUrl).then((art) => art && this.gunfire.setArt(art.art, art.texture, this.scene));
+    const guns = loadWeaponVfx(baseUrl).then(async (art) => {
+      if (art) this.gunfire.setArt(art.art, art.texture, this.scene);
+      this.casings.setArt(art?.art.casings ?? null);
+      await this.loadCasings(baseUrl, art?.art.casings ?? null);
+    });
     await Promise.all([frag, books, guns]);
+  }
+
+  /** casings.glb's shapes (weapons.vfx.json names the file and nodes); a failure keeps the stand-ins. */
+  private async loadCasings(baseUrl: string, art: CasingArt | null): Promise<void> {
+    try {
+      const gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(`${baseUrl}assets/vfx/${art?.file ?? 'casings.glb'}`);
+      gltf.scene.updateMatrixWorld(true);
+      const models: Partial<Record<CasingKind, BufferGeometry>> = {};
+      for (const kind of CASING_KINDS) {
+        const named = art?.types[kind]?.node;
+        for (const name of named ? [named] : DEFAULT_NODES[kind]) {
+          let mesh: Mesh | null = null;
+          gltf.scene.getObjectByName(name)?.traverse((o) => {
+            if (!mesh && (o as Mesh).isMesh) mesh = o as Mesh;
+          });
+          if (!mesh) continue;
+          // in the node's own frame: the casing's long axis along Y, centred
+          const g = bakeMesh(mesh, (mesh as Mesh).matrix);
+          g.center();
+          models[kind] = g;
+          break;
+        }
+      }
+      this.casings.setModels(models);
+    } catch (err) {
+      console.warn('render3d: casings.glb failed to load, keeping the stand-in casings', err);
+    }
   }
 
   private book(art: FlipbookArt, texture: Texture, renderOrder: number): Book {
@@ -207,6 +251,8 @@ export class Vfx {
     this.gunfire.low = preset.name === 'low';
     // dash afterimages cost a draw call per character mesh each: a few on High, two on Medium, none on Low
     this.ghosts.max = preset.name === 'high' ? 4 : preset.name === 'medium' ? 2 : 0;
+    this.low = preset.name === 'low';
+    this.casings.setLimits(this.low, this.ctx.reducedMotion);
     if (this.ghosts.max === 0) this.ghosts.clear();
     if (preset.vfxLights) this.scene.add(this.flash.point, this.gunfire.light);
     else {
@@ -222,6 +268,7 @@ export class Vfx {
 
   setReducedMotion(on: boolean): void {
     this.ctx.reducedMotion = on;
+    this.casings.setLimits(this.low, on);
     this.shake.enabled = !on;
     this.flash.reduced = on;
     this.grenades.reduced = on;
@@ -231,6 +278,7 @@ export class Vfx {
   onEvents(events: readonly SimEvent[]): void {
     for (const m of this.modules) m.onEvents?.(events, this.ctx);
     this.gunfire.onEvents(events);
+    this.casings.onEvents(events);
     this.dash.onEvents(events, this.ctx);
     for (const e of events) {
       // arsenal-b: a flashbang (3) or EMP (5) going off isn't a fireball; its own effects draw it
@@ -258,6 +306,7 @@ export class Vfx {
     this.smokePool.update(dt);
     this.decalPool.update(dt);
     this.gunfire.update(dt, this.ctx, this.muzzles);
+    this.casings.update(frame, dt);
     this.dash.localId = frame.localId;
     this.dash.update(frame, dt, this.ctx);
     this.trail.steady = reduceFlashes();
@@ -289,10 +338,12 @@ export class Vfx {
   /** Effects drawn by meshes of their own, on show at (x, y) so the shader warm-up compiles them; `endWarmUp()` after. */
   showForWarmUp(x: number, y: number): void {
     this.trail.showForWarmUp(x, y);
+    this.casings.showForWarmUp(_warm.set(x, y, 0));
   }
 
   endWarmUp(): void {
     this.trail.clear();
+    this.casings.clear(); // they cast no shadows: nothing more to compile
   }
 
   /** live particles (the docs/11 §3 budget counts these) */
@@ -306,6 +357,7 @@ export class Vfx {
     for (const l of [this.decals, this.smoke, this.glow, this.arc.layer, ...this.books.map((b) => b.layer)]) l.dispose();
     this.grenades.dispose();
     this.gunfire.dispose();
+    this.casings.dispose();
     this.ghosts.dispose();
     this.trail.dispose();
     for (const m of this.modules) m.dispose?.();

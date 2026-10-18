@@ -12,6 +12,7 @@ import {
   CylinderGeometry,
   DataTexture,
   Group,
+  Matrix4,
   Mesh,
   MeshBasicMaterial,
   MeshToonMaterial,
@@ -27,6 +28,7 @@ import {
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { PlayerView } from '../view';
 import type { CharacterInstance, CharacterLod } from './character';
+import { GunParts, cycleByClass, ease, partPose, type GunCycle, type PartPose } from './gunParts';
 import { AimClips, HOLDS, holdFamily, type AimPose, type HoldProfile } from './holds';
 import { KICK_MAX, recoilOf } from './recoil';
 import { DEFAULT_OFFHAND, loadWeaponModels, type GltfSource, type GunMaterials, type WeaponModel } from './weaponModels';
@@ -117,6 +119,21 @@ export class AvatarKit {
   recoilScale = 1;
   // --- end render3d-b: recoil ---
 
+  // --- render3d-b: gun mechanisms (gunParts.ts) ---
+  /** guns' moving parts move (Medium, High); on Low they stay merged into the gun, still */
+  animateParts = true;
+  private readonly classCycles = new Map<number, GunCycle | null>();
+
+  /** The pump or bolt the hands work on weapon `def` (its GLB's, else by class), or null. */
+  cycleOf(def: number): GunCycle | null {
+    const own = this.weapon(def).cycle;
+    if (own) return own;
+    let c = this.classCycles.get(def);
+    if (c === undefined) this.classCycles.set(def, (c = cycleByClass(weapons[def])));
+    return c;
+  }
+  // --- end render3d-b: gun mechanisms ---
+
   materials(): Material[] {
     return [this.gunMaterial, this.gunMaterialVC, this.gunMaterialMapped, ...this.gunMaterialsMapped.values(), this.flameOuter, this.flameInner];
   }
@@ -150,6 +167,10 @@ interface Arm {
   /** recoil (recoil.ts): shots' worth of kick on show, and kicks landing next frame */
   kick: number;
   kickNext: number;
+  /** the gun's moving parts (gunParts.ts) */
+  parts: GunParts;
+  /** seconds since this hand's gun last fired (the hands work its pump or bolt) */
+  shotAge: number;
 }
 
 const UP = new Vector3(0, 1, 0);
@@ -165,6 +186,13 @@ const _gunDir = new Vector3();
 /** how much of the aim's pitch each spine bone takes (spine1, spine2, head), and of a recoil jolt */
 const AIM_SHARE = [0.1, 0.15, 0.15] as const;
 const JOLT_SHARE = [0.4, 0.6, 0] as const;
+/** a gun without an `eject` socket throws its casings from beside the receiver, out to its right and up */
+const EJECT_POS = new Vector3(0.03, 0.06, 0.06);
+const _pose: PartPose = { back: 0, turn: 0 };
+const _held = new Matrix4();
+const _inv = new Matrix4();
+const _h = new Vector3();
+const EJECT_DIR = new Vector3(0.8, -0.25, 0.55).normalize();
 
 /** recoil.ts: an arm's kick settles at its weapon's rate, then takes the shots that just landed. */
 function settleArm(arm: Arm, dt: number): void {
@@ -242,7 +270,7 @@ export class Avatar {
     gun.visible = false;
     socket.add(gun);
     const length = lower.position.length() + hand.position.length();
-    return { upper, lower, hand, socket, gun, def: NO_WEAPON, length, kick: 0, kickNext: 0 };
+    return { upper, lower, hand, socket, gun, def: NO_WEAPON, length, kick: 0, kickNext: 0, parts: new GunParts(gun), shotAge: Infinity };
   }
 
   update(p: PlayerView, dt: number, world: CollisionWorld, blobShadows: boolean): void {
@@ -349,7 +377,11 @@ export class Avatar {
         // family holds it; a shotgun's slides forward to the pump
         const model = this.kit.weapon(active);
         const at = model.sockets?.offhand ?? (hold.offhand ? _t.fromArray(hold.offhand) : model.offhand);
-        const grip = this.right.gun.localToWorld(_t.copy(at).setY(at.y + hold.offhandForward));
+        _t.copy(at).setY(at.y + hold.offhandForward);
+        // a pump gun: the support hand rides the pump back and forward after each shot (gunParts.ts)
+        const cycle = this.kit.cycleOf(active);
+        if (cycle?.kind === 'pump') _t.addScaledVector(cycle.axis, cycle.travel * partPose('pump', this.right.shotAge, weapons[active]?.interval ?? 1, _pose).back);
+        const grip = this.right.gun.localToWorld(_t);
         this.left.upper.getWorldPosition(_s);
         _p.copy(_s).addScaledVector(UP, -0.5).addScaledVector(_lat, 0.3);
         solveTwoBone(this.left.upper, this.left.lower, this.left.hand, grip, _p);
@@ -375,8 +407,12 @@ export class Avatar {
     arm.def = def;
     if (def === NO_WEAPON) return;
     const model = this.kit.weapon(def);
-    arm.gun.geometry = model.geometry;
+    arm.gun.position.set(0, 0, 0); // held in the hand (workBolt moves it off the hand while that works the bolt)
+    arm.gun.quaternion.identity();
+    const moving = this.kit.animateParts && model.parts !== undefined;
+    arm.gun.geometry = moving || !model.solid ? model.geometry : model.solid;
     arm.gun.material = model.material;
+    arm.parts.set(moving ? model.parts : undefined, model.material, weapons[def]?.interval ?? 1);
     const recoil = recoilOf(def);
     const kick = recoil.kick * arm.kick;
     if (!posed) {
@@ -396,6 +432,45 @@ export class Avatar {
     const pitch = hold.pitch + recoil.rise * arm.kick;
     _gunDir.copy(_dir).multiplyScalar(Math.cos(pitch)).addScaledVector(_gunUp, Math.sin(pitch));
     orientSocket(arm.hand, arm.socket, _gunDir, _gunUp);
+    // a bolt gun: after each shot the trigger hand leaves the grip and works the bolt (gunParts.ts)
+    if (side === 1) {
+      const cycle = this.kit.cycleOf(def);
+      if (cycle?.kind === 'bolt') this.workBolt(arm, cycle, weapons[def]?.interval ?? 1);
+    }
+  }
+
+  /**
+   * The trigger hand on the bolt's handle: up, back, forward, down with the bolt (partPose), then
+   * back to the grip, inside the gun's interval. The gun stays where the hand held it: it comes off
+   * the hand's socket for the stroke (its local transform undoes the hand's move).
+   */
+  private workBolt(arm: Arm, cycle: GunCycle, interval: number): void {
+    const t = arm.shotAge;
+    const k = Math.min(1, interval / 0.7);
+    const reach = ease(t, 0.04 * k, 0.14 * k) * (1 - ease(t, 0.56 * k, 0.68 * k));
+    if (reach <= 0) return;
+    partPose('bolt', t, interval, _pose);
+    arm.gun.updateWorldMatrix(true, false);
+    _held.copy(arm.gun.matrixWorld);
+    // the handle: the bolt's root, back by the stroke, turned up and out to the gun's right
+    _h.copy(cycle.axis).multiplyScalar(cycle.travel * _pose.back).add(cycle.position);
+    _h.x += 0.03 * _pose.turn;
+    _h.z += 0.03 * _pose.turn;
+    _h.applyMatrix4(_held);
+    // the wrist goes where it puts the grip (the socket, in the palm) on the handle
+    arm.hand.getWorldPosition(_s);
+    arm.socket.getWorldPosition(_t);
+    _h.sub(_t).add(_s);
+    _t.copy(_s).lerp(_h, reach);
+    arm.upper.getWorldPosition(_s);
+    _p.copy(_s).addScaledVector(UP, -0.5).addScaledVector(_dir, -0.25);
+    solveTwoBone(arm.upper, arm.lower, arm.hand, _t, _p);
+    arm.hand.updateMatrixWorld(true);
+    // the gun where it was held, whatever the hand does
+    _inv.copy(arm.socket.matrixWorld).invert();
+    _held.premultiply(_inv);
+    _held.decompose(arm.gun.position, arm.gun.quaternion, _s);
+    arm.gun.updateMatrixWorld(true);
   }
   // --- end render3d-b: holds ---
 
@@ -418,6 +493,8 @@ export class Avatar {
     const l = this.left?.gun.visible && this.left.def === weapon ? this.left : null;
     const arm = r && l ? (this.lastKicked = this.lastKicked === r ? l : r) : (r ?? l);
     if (!arm) return;
+    arm.parts.fire(); // the slide, pump, bolt or cylinder cycles (gunParts.ts)
+    arm.shotAge = 0; // and the hands work the pump or bolt
     const scale = this.kit.recoilScale;
     const recoil = recoilOf(weapon);
     arm.kickNext += scale;
@@ -432,6 +509,10 @@ export class Avatar {
   private settleRecoil(dt: number): void {
     if (this.right) settleArm(this.right, dt);
     if (this.left) settleArm(this.left, dt);
+    this.right?.parts.update(dt);
+    this.left?.parts.update(dt);
+    if (this.right) this.right.shotAge += dt;
+    if (this.left) this.left.shotAge += dt;
     this.jolt = Math.min(KICK_MAX, this.jolt * Math.exp(-this.joltRecover * dt) + this.joltNext);
     this.joltNext = 0;
   }
@@ -446,15 +527,36 @@ export class Avatar {
    * no such gun is drawn (dead, not loaded, swapped).
    */
   muzzle(weapon: number, out: Vector3, dir: Vector3, peek = false): boolean {
-    if (!this.pivot.visible) return false;
-    const r = this.right?.gun.visible && this.right.def === weapon ? this.right : null;
-    const l = this.left?.gun.visible && this.left.def === weapon ? this.left : null;
-    const arm = r && l ? (peek ? (this.lastHand ?? r) : (this.lastHand = this.lastHand === r ? l : r)) : (r ?? l);
+    const arm = this.drawnGun(weapon, peek);
     if (!arm) return false;
-    arm.gun.updateWorldMatrix(true, false);
     out.copy(this.kit.weapon(weapon).muzzle).applyMatrix4(arm.gun.matrixWorld);
     dir.set(0, 1, 0).transformDirection(arm.gun.matrixWorld);
     return true;
+  }
+
+  /**
+   * Where the gun that last fired `weapon` throws its casings (sockets.json `eject`, else beside its
+   * receiver), in world space, which way, and its bore (`bore`, toward the muzzle) (vfx/casings.ts).
+   * False when no such gun is drawn.
+   */
+  eject(weapon: number, out: Vector3, dir: Vector3, bore?: Vector3): boolean {
+    const arm = this.drawnGun(weapon, true);
+    if (!arm) return false;
+    const e = this.kit.weapon(weapon).sockets?.eject;
+    out.copy(e?.pos ?? EJECT_POS).applyMatrix4(arm.gun.matrixWorld);
+    dir.copy(e?.dir ?? EJECT_DIR).transformDirection(arm.gun.matrixWorld);
+    bore?.set(0, 1, 0).transformDirection(arm.gun.matrixWorld);
+    return true;
+  }
+
+  /** The arm drawing `weapon` (dual guns of one kind take turns; `peek`: the one that fired last), its matrices current. */
+  private drawnGun(weapon: number, peek: boolean): Arm | null {
+    if (!this.pivot.visible) return null;
+    const r = this.right?.gun.visible && this.right.def === weapon ? this.right : null;
+    const l = this.left?.gun.visible && this.left.def === weapon ? this.left : null;
+    const arm = r && l ? (peek ? (this.lastHand ?? r) : (this.lastHand = this.lastHand === r ? l : r)) : (r ?? l);
+    arm?.gun.updateWorldMatrix(true, false);
+    return arm;
   }
   // --- end render3d-b: gun muzzles ---
 

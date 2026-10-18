@@ -15,6 +15,7 @@
  * malformed keeps the procedural effect.
  */
 import { Color, SRGBColorSpace, TextureLoader, type Texture } from 'three';
+import { CASING_KINDS, EJECT_MODES, type CasingArt, type CasingKind, type EjectMode, type GunEject } from './casings';
 
 export interface FlipbookArt {
   atlas: string;
@@ -186,6 +187,41 @@ export interface WeaponVfxArt {
   tracers: Record<string, TracerStyle>;
   /** by weapon id (packages/content `WeaponDef.id`) */
   weapons: Record<string, WeaponFxEntry>;
+  /** spent casings (vfx/casings.ts) */
+  casings: CasingArt;
+}
+
+/**
+ * weapons.vfx.json's casings: `casings.types[kind]` {node, speedMps, coneDeg, spinRps, lifeMs} and,
+ * per weapon, `casing` (a kind or null), `eject` (shot, pump, bolt, reload or null), `ejectDelayMs`
+ * and `ejectCount`. A weapon with no `casing` key isn't listed (vfx/casings.ts goes by its class).
+ */
+export function parseCasings(raw: unknown, weapons: Record<string, unknown>): CasingArt {
+  const c = rec(raw);
+  const types: CasingArt['types'] = {};
+  for (const kind of CASING_KINDS) {
+    const t = rec(rec(c?.types)?.[kind]);
+    if (!t || !num(t.speedMps) || !num(t.lifeMs) || t.lifeMs <= 0) continue;
+    types[kind] = {
+      node: typeof t.node === 'string' ? t.node : null,
+      speed: t.speedMps,
+      cone: ((num(t.coneDeg) ? t.coneDeg : 15) * Math.PI) / 180,
+      spin: num(t.spinRps) ? t.spinRps : 15,
+      life: t.lifeMs / 1000,
+    };
+  }
+  const byWeapon: Record<string, GunEject | null> = {};
+  for (const [id, entry] of Object.entries(weapons)) {
+    const w = rec(entry);
+    if (!w || !('casing' in w)) continue;
+    const kind = w.casing as CasingKind;
+    const mode = w.eject as EjectMode;
+    byWeapon[id] =
+      CASING_KINDS.includes(kind) && EJECT_MODES.includes(mode)
+        ? { kind, mode, delay: num(w.ejectDelayMs) ? Math.max(0, w.ejectDelayMs) / 1000 : 0, count: num(w.ejectCount) ? Math.max(1, Math.round(w.ejectCount)) : 1 }
+        : null;
+  }
+  return { file: typeof c?.file === 'string' ? c.file : 'casings.glb', types, weapons: byWeapon };
 }
 
 /** Validates weapons.vfx.json; null (or a style left out) keeps the procedural effect. */
@@ -244,7 +280,7 @@ export function parseWeaponVfx(json: unknown): WeaponVfxArt | null {
       tracer: typeof w.tracer === 'string' && tracers[w.tracer] ? w.tracer : null,
     };
   }
-  return { atlas: sheet.atlas, grid: sheet.grid, flashes, tracers, weapons: byWeapon };
+  return { atlas: sheet.atlas, grid: sheet.grid, flashes, tracers, weapons: byWeapon, casings: parseCasings(root.casings, weapons) };
 }
 
 /** Fetches weapons.vfx.json and its flash atlas; null keeps the procedural flashes and tracers. */
