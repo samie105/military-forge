@@ -71,7 +71,7 @@ function PlayerRow({ p, hostView }: { p: LobbyPlayer; hostView: boolean }) {
     <li className={`player-row${you}`}>
       {p.isBot ? (
         <span className="avatar avatar--bot">
-          <Icon name="chip" />
+          <Icon name="bot" />
         </span>
       ) : (
         <span className="avatar">{initial(p.name)}</span>
@@ -86,7 +86,7 @@ function PlayerRow({ p, hostView }: { p: LobbyPlayer; hostView: boolean }) {
         )}
         {p.isBot && (
           <span className="badge badge--bot">
-            <Icon name="chip" />
+            <Icon name="bot" />
             Bot
           </span>
         )}
@@ -95,12 +95,12 @@ function PlayerRow({ p, hostView }: { p: LobbyPlayer; hostView: boolean }) {
       {p.isBot ? <span className="ping muted">no ping</span> : <Ping ms={p.pingMs} />}
       {p.ready || p.isBot ? (
         <span className="ready">
-          <Icon name="check-circle" />
+          <Icon name="ok" />
           Ready
         </span>
       ) : (
         <span className="ready ready--no">
-          <Icon name="circle" />
+          <Icon name="clock" />
           Not ready
         </span>
       )}
@@ -126,22 +126,22 @@ function LobbyStrip({ lobby, onOpen }: { lobby: LobbyView; onOpen: () => void })
           Room <span className="roomcode-inline num">{lobby.code}</span>
         </span>
         <span className="status status--ok">
-          <Icon name="check-circle" />
+          <Icon name="ok" />
           {ready} of {people.length} ready
         </span>
         {lobby.ready ? (
           <button className="btn btn--secondary lobby__ready-on" aria-pressed="true" onClick={blurAfter(() => ctl.host.online?.setReady(false))}>
-            <Icon name="check-circle" />
+            <Icon name="ok" />
             You're ready
           </button>
         ) : (
           <button className="btn btn--primary" onClick={blurAfter(() => ctl.host.online?.setReady(true))}>
-            <Icon name="circle" />
+            <Icon name="clock" />
             Ready
           </button>
         )}
         <button className="btn btn--ghost" onClick={blurAfter(onOpen)}>
-          <Icon name="users" />
+          <Icon name="user" />
           Lobby
         </button>
       </div>
@@ -241,13 +241,13 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
             <span data-bind="room.link">{shownLink}</span>
           </p>
           <button className="btn btn--whatsapp btn--xl btn--block" onClick={blurAfter(() => ctl.shareOnWhatsApp(lobby.code))}>
-            <Icon name="chat-send" size="lg" />
+            <Icon name="share" size="lg" />
             Share on WhatsApp
           </button>
           <div className="invite__qr">
             <div className="qr" role="img" aria-label="QR code for the room link">
               <svg viewBox={qr.viewBox} shapeRendering="crispEdges" aria-hidden="true">
-                <path fill="var(--c-qr-ink)" d={qr.path} />
+                <path fill="var(--c-qr-dark)" d={qr.path} />
               </svg>
             </div>
             <div className="invite__qrtext">
@@ -271,7 +271,7 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
             </span>
             <span className="topbar__spacer"></span>
             <span className={readyCount === people.length ? 'status status--ok' : 'status status--info'}>
-              <Icon name={readyCount === people.length ? 'check-circle' : 'circle'} />
+              <Icon name={readyCount === people.length ? 'ok' : 'clock'} />
               <span data-bind="room.readyCount">
                 {readyCount} of {people.length} ready
               </span>
@@ -434,12 +434,12 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
         <span className="topbar__spacer"></span>
         {lobby.ready ? (
           <button className="btn btn--secondary btn--xl lobby__ready-on" aria-pressed="true" onClick={blurAfter(() => online?.setReady(false))}>
-            <Icon name="check-circle" />
+            <Icon name="ok" />
             You're ready
           </button>
         ) : (
           <button className="btn btn--secondary btn--xl" onClick={blurAfter(() => online?.setReady(true))}>
-            <Icon name="circle" />
+            <Icon name="clock" />
             Ready
           </button>
         )}

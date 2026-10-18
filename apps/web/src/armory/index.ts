@@ -135,10 +135,12 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
     const all = Object.entries(camoSheet.camos);
     const finishes = all.filter(([, c]) => c.kind === 'finish');
     const tints = vfx?.fireTints?.tints;
-    camoPanel.innerHTML = `<h3>Camo <small>body panels only</small></h3><div class="mf-camos">
+    // no camo panels (the riot shield, the grenades): no camo or finish to offer (review L12)
+    const paintable = viewer.hasCamoPanels();
+    camoPanel.innerHTML = `${paintable ? `<h3>Camo <small>body panels only</small></h3><div class="mf-camos">
       <button type="button" data-camo="" aria-pressed="${camo === ''}">Factory</button>
       ${all.filter(([, c]) => c.kind !== 'finish').map(button).join('')}
-    </div>${finishes.length ? `<h3>Finish <small>cosmetic</small></h3><div class="mf-camos">${finishes.map(button).join('')}</div>` : ''}${
+    </div>${finishes.length ? `<h3>Finish <small>cosmetic</small></h3><div class="mf-camos">${finishes.map(button).join('')}</div>` : ''}` : ''}${
       tints && vfx?.weapons[current]?.flash
         ? `<h3>Fire colour <small>cosmetic</small></h3><div class="mf-camos">${Object.entries(tints).map(([id, t]) =>
           `<button type="button" data-tint="${id}" aria-pressed="${fireTint === id}">${t.flash ? chips([t.flash, t.tracer ?? t.flash]) : ''}${escapeHtml(t.name)}</button>`).join('')}</div>`

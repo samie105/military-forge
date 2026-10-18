@@ -1,0 +1,92 @@
+{
+  "file": "art/weapons/emp.glb",
+  "kind": "weapon",
+  "pass": true,
+  "rows": [
+    {
+      "status": "INFO",
+      "check": "file size",
+      "detail": "52 KB"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles",
+      "detail": "616 of 1000"
+    },
+    {
+      "status": "PASS",
+      "check": "one mesh, one material",
+      "detail": "1 draw call(s)"
+    },
+    {
+      "status": "INFO",
+      "check": "GPU texture memory (KTX2 est.)",
+      "detail": "0.00 MB, 0 image(s)"
+    },
+    {
+      "status": "PASS",
+      "check": "extras weaponId/family/aimPose/hands",
+      "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "weaponId in packages/content",
+      "detail": "emp"
+    },
+    {
+      "status": "INFO",
+      "check": "nodes",
+      "detail": "grip, ground, light"
+    },
+    {
+      "status": "PASS",
+      "check": "origin on the weapon (the grip)",
+      "detail": "bbox (-0.11, -0.06, -0.11)..(0.11, 0.03, 0.11)"
+    },
+    {
+      "status": "PASS",
+      "check": "family is a docs/04 \u00a74.2 family",
+      "detail": "'thrown'"
+    },
+    {
+      "status": "PASS",
+      "check": "aimPose has clips",
+      "detail": "'pistol'"
+    },
+    {
+      "status": "PASS",
+      "check": "ground node (rest frame)",
+      "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "light node (fuse / state light the renderer blinks)",
+      "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "as big as its sim ball (\u2265 80 % of the content radius)",
+      "detail": "half-width 0.105 m vs radius 0.100 m"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast",
+      "detail": "blue \u0394E 67, orange \u0394E 81 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "sockets for the family",
+      "detail": "grip"
+    },
+    {
+      "status": "PASS",
+      "check": "socket directions (unit `dir`)",
+      "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "sockets on the weapon (within 3 cm)",
+      "detail": "ok"
+    }
+  ]
+}

@@ -57,11 +57,11 @@ function desktop(): string {
 
     <div class="hud-vitals">
       <div class="hud-cue hud-cue--hp hud-plate" data-state="low-hp">${ic('hp')}<span><b>Low health</b><span data-bind="player.hpCue"></span></span></div>
-      <div class="hud-cue hud-cue--gas hud-plate" data-state="gas">${ic('gas')}<span><b>Toxic gas</b> · <span data-bind="player.gasCue"></span></span></div>
-      <div class="hud-cue hud-cue--emp hud-plate" data-state="emp">${ic('emp')}<span><b>Jetpack offline</b> · <span data-bind="player.empCause"></span></span><b class="num" data-bind="player.jetDisabled"></b></div>
+      <div class="hud-cue hud-cue--gas hud-plate" data-state="gas">${ic('g-gas')}<span><b>Toxic gas</b> · <span data-bind="player.gasCue"></span></span></div>
+      <div class="hud-cue hud-cue--emp hud-plate" data-state="emp">${ic('ev-emp')}<span><b>Jetpack offline</b> · <span data-bind="player.empCause"></span></span><b class="num" data-bind="player.jetDisabled"></b></div>
 
       <div class="hud-shield hud-plate" data-state="shield">
-        ${ic('shield-fill', 'ic--lg')}
+        ${ic('shield', 'ic--lg')}
         <div class="hud-shield__body">
           <div class="hud-shield__top"><span class="hud-label">Riot shield</span><span class="hud-shield__state" data-bind="player.shield.state"></span><span class="hud-shield__hp num"><b data-bind="player.shield.hp"></b> / <span data-bind="player.shield.max"></span></span></div>
           <div class="bar bar--shield" aria-hidden="true"><i></i></div>
@@ -143,7 +143,7 @@ function desktop(): string {
       <div class="bar bar--respawn"><i></i></div>
     </div>
 
-    <div class="flash-reduced__tag hud-plate mf-hud-flashed" data-state="flash-reduced">${ic('flashbang')}Flashed</div>
+    <div class="flash-reduced__tag hud-plate mf-hud-flashed" data-state="flash-reduced">${ic('g-flash')}Flashed</div>
   </div>
 
   <div class="feedback" aria-hidden="true">
@@ -191,5 +191,5 @@ function phone(): string {
 export const HUD_VARS = '--hp: v.hp; --hp-ghost: v.hpGhost; --fuel: v.fuel; --fuel-delay: v.fuelDelay; --shield-hp: v.shield; --dash: v.dash; --reload: v.reload; --respawn: v.respawn; --event: v.event';
 
 export function hudTemplate(): string {
-  return `<div class="mf-fit mf-hud-fit">${desktop()}</div><div class="mf-fit mf-hud-fit mf-hud-fit--phone">${phone()}</div>`;
+  return `<div class="mf-fit mf-hud-fit kit-v1">${desktop()}</div><div class="mf-fit mf-hud-fit mf-hud-fit--phone kit-v1">${phone()}</div>`;
 }

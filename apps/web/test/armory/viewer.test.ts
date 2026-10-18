@@ -72,7 +72,7 @@ describe('ArmoryViewer', () => {
     const entry = { mount: 'rail_top' as const, file: 'x.glb', nodes: {} };
     const sockets = { rail_top: { pos: [0, 0.1, 0.08] as [number, number, number] } };
 
-    it('frees the previous weapon, its factory material and its camo copy when switching', async () => {
+    it('frees the previous weapon, its factory material and its camo copy when switching, after one frame', async () => {
       const { viewer, loader, model } = await setup();
       const a = model();
       const b = model();
@@ -83,8 +83,25 @@ describe('ArmoryViewer', () => {
       expect(copy).not.toBe(a.mat);
       const spies = [vi.spyOn(a.geo, 'dispose'), vi.spyOn(a.mat, 'dispose'), vi.spyOn(copy, 'dispose')];
       await viewer.setWeapon('b.glb', sockets);
+      // kept until the new weapon has drawn a frame, so the shader programs they share carry over (review L11)
+      for (const s of spies) expect(s).not.toHaveBeenCalled();
+      (viewer as unknown as { tick: () => void }).tick();
       for (const s of spies) expect(s).toHaveBeenCalled();
       viewer.dispose();
+    });
+
+    it('frees a replaced camo copy after the next frame, and anything still waiting on dispose', async () => {
+      const { viewer, loader, model } = await setup();
+      const a = model();
+      loader.loadAsync = vi.fn().mockResolvedValueOnce({ scene: a.scene });
+      await viewer.setWeapon('a.glb', sockets);
+      viewer.setCamo((m) => m.clone());
+      const first = a.mesh.material as import('three').Material;
+      const spy = vi.spyOn(first, 'dispose');
+      viewer.setCamo((m) => m.clone());
+      expect(spy).not.toHaveBeenCalled();
+      viewer.dispose();
+      expect(spy).toHaveBeenCalled();
     });
 
     it('keeps the latest attachment set when an older toggle resolves later', async () => {

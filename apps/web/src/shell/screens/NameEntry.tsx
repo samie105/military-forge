@@ -176,14 +176,14 @@ export function NameEntry({ store, first }: { store: ShellStore; first: boolean 
           <div id="ne-check" className="ne__check" aria-live="polite">
             {state === 'available' && (
               <p className="status status--ok">
-                <Icon name="check-circle" />
+                <Icon name="ok" />
                 Available
               </p>
             )}
             {(state === 'taken' || (state === 'invalid' && shown.length > 0)) && (
               <div className="ne__taken">
                 <p className="status status--bad">
-                  <Icon name="x-octagon" />
+                  <Icon name="bad" />
                   {error ?? NICKNAME_REASONS.taken}
                 </p>
                 {shown.length > 0 && (
@@ -202,7 +202,7 @@ export function NameEntry({ store, first }: { store: ShellStore; first: boolean 
             )}
             {state === 'invalid' && shown.length === 0 && (
               <p className="status status--bad">
-                <Icon name="x-octagon" />
+                <Icon name="bad" />
                 {error ?? NICKNAME_REASONS[check?.reason ?? ''] ?? 'Not allowed'}
               </p>
             )}

@@ -63,7 +63,7 @@ export function alertFromConnection(c: Pick<ConnectionView, 'code' | 'detail' | 
 
 /** The kit's icon and tone for each kind of alert. */
 export const ALERT_LOOK: Readonly<Record<AlertInfo['kind'], { icon: string; tone: 'warn' | 'bad' | 'info' }>> = {
-  'room-full': { icon: 'users', tone: 'warn' },
+  'room-full': { icon: 'user', tone: 'warn' },
   'room-not-found': { icon: 'search-x', tone: 'bad' },
   'new-version': { icon: 'download', tone: 'info' },
   'server-full': { icon: 'server', tone: 'warn' },
@@ -72,5 +72,5 @@ export const ALERT_LOOK: Readonly<Record<AlertInfo['kind'], { icon: string; tone
   'slow-down': { icon: 'clock', tone: 'warn' },
   replaced: { icon: 'monitor', tone: 'info' },
   refused: { icon: 'lock', tone: 'bad' },
-  error: { icon: 'x-octagon', tone: 'bad' },
+  error: { icon: 'bad', tone: 'bad' },
 };

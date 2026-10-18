@@ -127,6 +127,11 @@ def claims_casings(objs):
     objs["dragon"]["casings"] = True
 
 
+def suffixed_grip(objs):
+    """The shield's LOD1 with Blender's clash suffix on its grip node (review L4)."""
+    objs["grip"].name = "grip.001"
+
+
 def deep_jetpack(path, back):
     """The default jetpack, moved `back` metres further behind (Blender +Y)."""
     bpy.ops.wm.read_homefile(use_empty=True)
@@ -270,6 +275,7 @@ k47_edit(tmp / "dragon_casings.glb", claims_casings, "dragon")
 k47_edit(tmp / "frag_small.glb", shrink_frag, "frag")
 k47_edit(tmp / "shield_short.glb", short_shield, "riot_shield")
 k47_edit(tmp / "frag_orange.glb", team_orange_frag, "frag")
+k47_edit(tmp / "shield_lod1_suffix.glb", suffixed_grip, "riot_shield_lod1")
 market_edit(tmp / "kit_sack.glb", sack_on_plane)
 market_edit(tmp / "kit_orange.glb", team_orange)
 clips_edit(CHAR / "rookie_anims.glb", tmp / "clips_flipped.glb", flip=True)
@@ -314,6 +320,7 @@ cases = [
     ("Riot Shield without its face socket fails", "fail", tmp / "shield_no_face.glb", "--kind", "weapon"),
     ("Riot Shield shorter than the 0.9 m the sim blocks fails", "fail", tmp / "shield_short.glb", "--kind", "weapon"),
     ("Riot Shield LOD1 passes", "pass", REPO / "art/weapons/riot_shield_lod1.glb", "--kind", "weapon"),
+    ("Riot Shield LOD1 with a `grip.001` node fails", "fail", tmp / "shield_lod1_suffix.glb", "--kind", "weapon"),
     ("frag at under half its sim radius fails", "fail", tmp / "frag_small.glb", "--kind", "weapon"),
     ("frag in the orange team's colour fails", "fail", tmp / "frag_orange.glb", "--kind", "weapon"),
     ("frag (sim-sized, fuse light) passes", "pass", REPO / "art/weapons/frag.glb", "--kind", "weapon"),

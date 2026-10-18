@@ -60,7 +60,7 @@ export function Pause({ store }: { store: ShellStore }) {
             </button>
             {tune && (
               <button className="pause__item" onClick={blurAfter(() => ctl.openTuning())}>
-                <Icon name="gravity" size="lg" />
+                <Icon name="ev-gravity" size="lg" />
                 <span>Tune the game</span>
               </button>
             )}
@@ -112,7 +112,7 @@ export function Pause({ store }: { store: ShellStore }) {
                   Copy link
                 </button>
                 <button className="btn btn--whatsapp" onClick={blurAfter(() => ctl.shareOnWhatsApp(room))}>
-                  <Icon name="chat-send" />
+                  <Icon name="share" />
                   WhatsApp
                 </button>
               </div>

@@ -1,5 +1,5 @@
 {
- "notes": "Per scanned weapon: how the raw Tripo model is oriented (Blender axes after import), the length it is scaled to (today's lengthM, so holds, sockets and attachments stay valid), the triangle budget, and sockets in normalised side-view coordinates of the final mesh: at = [u, v], u from the butt (0) to the muzzle (1), v from the bottom (0) to the top (1); side 'right' = on the gun's right surface; offset = metres added in the modelling frame (+X right, +Y forward, +Z up); other keys are copied as node extras (dir, lengthM, occupied, boreRadius). plain = [u0, v0, u1, v1] boxes in the same coordinates where the mesh never takes a camo (a barrel or blade that shares the body's colour). drop = metres the gun sits lower in the hand (sockets move with it, the off hand doesn't), so it clears the head at the ±45° aims (tools/asset-check/head_clearance.py). squash = [{box, scale: [along, height]}] reshapes a part before the bake (the Widow's shorter scope). parts = {part_slide | part_pump | part_bolt | part_cylinder | part_mag: {box, side?, axis, travel (m) | angle (deg)}} cuts a moving part off into its own child mesh (the renderer animates it). build_gun_scan.py reads this; prompts and job ids are recorded in art/README.md.",
+ "notes": "Per scanned weapon: how the raw Tripo model is oriented (Blender axes after import), the length it is scaled to (today's lengthM, so holds, sockets and attachments stay valid), the triangle budget, and sockets in normalised side-view coordinates of the final mesh: at = [u, v], u from the butt (0) to the muzzle (1), v from the bottom (0) to the top (1); side 'right' = on the gun's right surface; offset = metres added in the modelling frame (+X right, +Y forward, +Z up); other keys are copied as node extras (dir, lengthM, occupied, boreRadius). plain = [u0, v0, u1, v1] boxes in the same coordinates where the mesh never takes a camo (a barrel or blade that shares the body's colour). drop = metres the gun sits lower in the hand (sockets move with it, the off hand doesn't), so it clears the head at the ±45° aims (tools/asset-check/head_clearance.py). squash = [{box, scale: [along, height] or [along, height, width]}] reshapes a part before the bake (the Widow's shorter scope; the specials flattened whole). glow = hex colours whose clusters glow (lenses, cells, coils); glow_boxes = boxes whose vertices glow (the Dragon's pilot tab). clusters = colour clusters for the flatten (default 7). parts = {part_slide | part_pump | part_bolt | part_cylinder | part_mag: {box, side?, axis, travel (m) | angle (deg)}} cuts a moving part off into its own child mesh (the renderer animates it). build_gun_scan.py reads this; prompts and job ids are recorded in art/README.md.",
  "weapons": {
   "k47": {
    "concept_job": "ae7264dd-ac9f-4fe6-81c5-8d7fe95c68df",
@@ -242,6 +242,97 @@
     "mag": {"at": [0.36, 0.5], "side": "left", "dir": [-1.0, 0.0, 0.0]},
     "rail_top": {"at": [0.45, 1.0], "lengthM": 0.1, "dir": [0.0, 0.0, 1.0]},
     "offhand": {"at": [0.14, 0.38], "offset": [-0.05, 0.08, -0.03]}
+   }
+  },
+  "dragon": {
+   "concept_job": "7515ad04-d7c6-43d1-8933-c386f341e8e3",
+   "model_job": "1863140b-536a-483c-9b54-99ac2fe30ea6",
+   "forward": "+y", "up": "+z", "lengthM": 0.899, "tris": 980,
+   "clusters": 9,
+   "glow_boxes": [[0.9, 0.44, 1.0, 0.6]],
+   "plain": [[0.0, 0.0, 0.22, 0.52], [0.6, 0.55, 0.83, 0.95]],
+   "drop": 0.07,
+   "squash": [{"box": [0.0, 0.0, 1.0, 1.0], "scale": [1, 0.52, 0.52]}],
+   "parts": {
+    "part_mag": {"box": [0.27, 0.0, 0.7, 0.53], "axis": [0, 0, -1], "travel": 0.08}
+   },
+   "sockets": {
+    "grip": {"at": [0.12, 0.35], "dir": [0.0, 1.0, 0.0]},
+    "muzzle": {"at": [1.0, 0.775], "dir": [0.0, 1.0, 0.0]},
+    "pilot": {"at": [0.955, 0.535], "dir": [0.0, 1.0, 0.0]},
+    "mag": {"at": [0.5, 0.05], "dir": [0.0, 0.0, -1.0]},
+    "rail_top": {"at": [0.4, 1.0], "lengthM": 0.12, "dir": [0.0, 0.0, 1.0]},
+    "offhand": {"at": [0.12, 0.35], "offset": [-0.05, 0.07, -0.03]}
+   }
+  },
+  "arc": {
+   "concept_job": "906706cd-0fe0-48f3-a9c0-4e17905ff0ca",
+   "model_job": "812c1f5f-5e66-48ec-8b1e-7697597f46bc",
+   "forward": "+y", "up": "+z", "lengthM": 0.874, "tris": 950,
+   "glow": ["#86d8f2"],
+   "clusters": 8,
+   "plain": [[0.68, 0.45, 0.87, 0.82], [0.94, 0.5, 1.0, 0.95]],
+   "drop": 0.07,
+   "squash": [{"box": [0.0, 0.0, 1.0, 1.0], "scale": [1, 0.57, 0.57]}],
+   "parts": {
+    "part_mag": {"box": [0.33, 0.66, 0.555, 0.78], "side": "right", "axis": [1, 0, 0], "travel": 0.05}
+   },
+   "sockets": {
+    "grip": {"at": [0.3, 0.25], "dir": [0.0, 1.0, 0.0]},
+    "muzzle": {"at": [1.0, 0.7], "dir": [0.0, 1.0, 0.0]},
+    "mag": {"at": [0.45, 0.72], "side": "right", "dir": [1.0, 0.0, 0.0]},
+    "rail_top": {"at": [0.55, 0.99], "lengthM": 0.12, "dir": [0.0, 0.0, 1.0]},
+    "rail_bottom": {"at": [0.8, 0.42], "lengthM": 0.08, "dir": [0.0, 0.0, -1.0]},
+    "offhand": {"at": [0.3, 0.25], "offset": [-0.05, 0.07, -0.03]}
+   }
+  },
+  "popper": {
+   "concept_job": "321e5169-e50c-41c6-b613-73023d263ad2",
+   "model_job": "27dd9315-f90f-4797-8e8a-de5178531b15",
+   "forward": "+y", "up": "+z", "lengthM": 0.799, "tris": 950,
+   "dark": 0.31,
+   "drop": 0.07,
+   "squash": [{"box": [0.0, 0.0, 1.0, 1.0], "scale": [1, 0.57, 0.57]}],
+   "sockets": {
+    "grip": {"at": [0.38, 0.27], "dir": [0.0, 1.0, 0.0]},
+    "muzzle": {"at": [1.0, 0.76], "dir": [0.0, 1.0, 0.0]},
+    "mag": {"at": [0.59, 0.55], "side": "left", "dir": [-1.0, 0.0, 0.0]},
+    "rail_top": {"at": [0.6, 0.99], "lengthM": 0.14, "dir": [0.0, 0.0, 1.0]},
+    "offhand": {"at": [0.38, 0.27], "offset": [-0.05, 0.07, -0.03]}
+   }
+  },
+  "ripper": {
+   "concept_job": "f93b8f8f-2418-4734-80ed-1d357f360146",
+   "model_job": "000942ed-8194-47aa-8884-5a2f3992f26b",
+   "forward": "+y", "up": "+z", "lengthM": 0.889, "tris": 980,
+   "clusters": 8,
+   "plain": [[0.28, 0.0, 0.5, 0.45]],
+   "drop": 0.07,
+   "squash": [{"box": [0.0, 0.0, 1.0, 1.0], "scale": [1, 0.55, 0.55]}],
+   "sockets": {
+    "grip": {"at": [0.38, 0.3], "dir": [0.0, 1.0, 0.0]},
+    "muzzle": {"at": [1.0, 0.63], "dir": [0.0, 1.0, 0.0]},
+    "charge": {"at": [0.86, 0.63], "side": "right", "dir": [0.0, 1.0, 0.0]},
+    "mag": {"at": [0.83, 1.0], "dir": [0.0, 0.0, 1.0]},
+    "rail_top": {"at": [0.4, 0.93], "lengthM": 0.12, "dir": [0.0, 0.0, 1.0]},
+    "offhand": {"at": [0.38, 0.3], "offset": [-0.05, 0.07, -0.03]}
+   }
+  },
+  "pulse": {
+   "concept_job": "8225dde6-d016-4b8b-b83c-5494d98a8271",
+   "model_job": "087d85d8-4b88-4d13-8370-2118fe159f1a",
+   "forward": "+y", "up": "+z", "lengthM": 0.78, "tris": 950,
+   "glow": ["#7bf3fb", "#45c8f1"],
+   "plain": [[0.17, 0.0, 0.42, 0.47], [0.86, 0.48, 1.0, 0.95]],
+   "drop": 0.07,
+   "squash": [{"box": [0.0, 0.0, 1.0, 1.0], "scale": [1, 0.45, 0.45]}],
+   "sockets": {
+    "grip": {"at": [0.36, 0.3], "dir": [0.0, 1.0, 0.0]},
+    "muzzle": {"at": [1.0, 0.71], "dir": [0.0, 1.0, 0.0]},
+    "charge": {"at": [0.95, 0.71], "dir": [0.0, 1.0, 0.0]},
+    "mag": {"at": [0.45, 0.52], "dir": [0.0, 0.0, -1.0]},
+    "rail_top": {"at": [0.55, 0.98], "lengthM": 0.1, "dir": [0.0, 0.0, 1.0]},
+    "offhand": {"at": [0.36, 0.3], "offset": [-0.05, 0.07, -0.03]}
    }
   }
  }

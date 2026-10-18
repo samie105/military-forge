@@ -15,13 +15,13 @@ html:not([data-touch-controls]) #hud .mf-hud-fit--phone,
 html[data-touch-controls] #hud .mf-hud-fit:not(.mf-hud-fit--phone) { display: none; }
 
 /* top left: the frame counter over the net plate */
-.mf-hud-corner { position: absolute; top: var(--safe-top); left: var(--safe-left); display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2); }
+.mf-hud-corner { position: absolute; top: max(24px, var(--safe-t)); left: max(32px, var(--safe-l)); display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2); }
 .mf-hud-corner .hud-net { position: static; }
 
 /* announcements (showBanner) under the map event; they and the kill feed fade at the end of their time */
 .mf-hud-banners { display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); }
-.mf-hud-banner { animation: drop var(--dur-med) var(--ease-out), mf-hud-out var(--dur-slow) ease-in calc(var(--banner-ms, 3200ms) - var(--dur-slow)) forwards; }
-#hud .kf { animation: drop var(--dur-med) var(--ease-out), mf-hud-out var(--dur-slow) ease-in calc(var(--feed-ms, 6000ms) - var(--dur-slow)) forwards; }
+.mf-hud-banner { animation: drop var(--dur) var(--ease-out), mf-hud-out var(--dur-slow) ease-in calc(var(--banner-ms, 3200ms) - var(--dur-slow)) forwards; }
+#hud .kf { animation: drop var(--dur) var(--ease-out), mf-hud-out var(--dur-slow) ease-in calc(var(--feed-ms, 6000ms) - var(--dur-slow)) forwards; }
 #hud .dmg-arc { animation: mf-hud-out 1.2s ease-in forwards; }
 /* the reticle and the damage arcs follow the pointer and the player by transform (hud.ts place()) */
 #hud :is(.reticle, .dmg-arcs) { left: 0; top: 0; will-change: transform; }
@@ -32,25 +32,25 @@ html[data-touch-controls] #hud .mf-hud-fit:not(.mf-hud-fit--phone) { display: no
 #hud .phud-vital { grid-template-columns: 18px 2.2em minmax(0, 1fr); }
 
 /* the air dash's pip goes hollow once this flight's air dash is used */
-#hud .hud-dash__air.is-used { color: var(--c-muted-strong); }
+#hud .hud-dash__air.is-used { color: var(--c-muted); }
 #hud .hud-dash__air.is-used::before { background: transparent; }
 
 /* Reduce flashes: the tag over the dark-out (the fx module draws the dark-out itself) */
 .mf-hud-flashed { position: absolute; top: 220px; left: 50%; transform: translateX(-50%); }
 
 /* the scoreboard (hold Tab): the world dims behind it */
-.mf-board { position: absolute; inset: 0; z-index: var(--z-overlay); }
+.mf-board { position: absolute; inset: 0; z-index: var(--z-panel); }
 .mf-board__dim { position: absolute; inset: 0; background: var(--c-scrim); }
 
 /* the phone HUD: the pickup and respawn cards stay clear of the sticks */
-.phud .pickup { bottom: auto; top: calc(var(--safe-top) + 100px); gap: var(--sp-2); padding: 4px 12px; font-size: var(--fs-sm); }
-.phud .respawn { bottom: auto; top: calc(var(--safe-top) + 64px); min-width: 0; gap: 2px; padding: 8px 18px; }
-.phud .respawn__by { font-size: var(--fs-sm); }
-.phud .respawn__timer { font-size: var(--fs-lg); }
-.phud .respawn__timer b { font-size: var(--fs-xl); }
+.phud .pickup { bottom: auto; top: calc(max(24px, var(--safe-t)) + 100px); gap: var(--sp-2); padding: 4px 12px; font-size: var(--fs-16); }
+.phud .respawn { bottom: auto; top: calc(max(24px, var(--safe-t)) + 64px); min-width: 0; gap: 2px; padding: 8px 18px; }
+.phud .respawn__by { font-size: var(--fs-16); }
+.phud .respawn__timer { font-size: var(--fs-20); }
+.phud .respawn__timer b { font-size: var(--fs-28); }
 
 /* the touch controls (apps/web/src/touch) in the kit's look; touchSkin.ts adds the kit's icons */
-html[data-touch-controls] .mf-touch .mf-ctl { background: var(--touch-plate); border: 1.5px solid var(--touch-line); box-shadow: none; color: var(--c-text); font-family: var(--font-ui); text-shadow: var(--hud-text-shadow); }
-html[data-touch-controls] .mf-touch .mf-ctl.mf-down { background: var(--c-accent-soft); border-color: var(--c-accent); }
-html[data-touch-controls] .mf-touch .mf-stick { background: var(--touch-plate); border-color: var(--touch-line); }
-html[data-touch-controls] .mf-touch .mf-knob { background: var(--c-knob); border-color: var(--touch-line); }
+html[data-touch-controls] .mf-touch .mf-ctl { background: var(--c-touch); border: 1.5px solid var(--c-plate-line); box-shadow: none; color: var(--c-text); font-family: var(--f-ui); text-shadow: var(--ts-hud); }
+html[data-touch-controls] .mf-touch .mf-ctl.mf-down { background: var(--c-volt-soft); border-color: var(--c-volt); }
+html[data-touch-controls] .mf-touch .mf-stick { background: var(--c-touch); border-color: var(--c-plate-line); }
+html[data-touch-controls] .mf-touch .mf-knob { background: var(--c-touch-knob); border-color: var(--c-plate-line); }

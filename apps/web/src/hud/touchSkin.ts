@@ -11,23 +11,28 @@ import { spriteSymbol } from '../ui/sprite';
 /** Touch control id (touch/layout.ts) → the kit's icon (the phone HUD screen's buttons). */
 export const TOUCH_ICONS: Readonly<Record<string, string>> = {
   grenade: 'icon-g-frag',
-  cycleGrenade: 'icon-cycle',
+  cycleGrenade: 'icon-refresh',
   dash: 'icon-dash',
   melee: 'icon-melee',
   reload: 'icon-reload',
   swap: 'icon-swap',
   zoom: 'icon-zoom',
   shield: 'icon-shield',
-  take: 'icon-armory',
+  take: 'icon-crate',
   pause: 'icon-pause',
-  scores: 'icon-list',
+  scores: 'icon-trophy',
 };
 
-/** A sprite symbol as a data URI for mask-image (black on transparent: only its shape counts). */
+/**
+ * A sprite symbol as a data URI for mask-image (black on transparent: only its shape counts). A
+ * standalone image has no page CSS: the glyphs' cut details (var(--c-cut)) are left out, so the mask
+ * keeps the silhouette, and their bright tips (var(--c-tip)) are part of it.
+ */
 export function iconMask(id: string): string | null {
   const s = spriteSymbol(id);
   if (!s) return null;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${s.viewBox}" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" color="black">${s.body}</svg>`;
+  const body = s.body.replace(/<path[^>]*fill="var\(--c-cut\)"[^>]*\/>/g, '').replaceAll('var(--c-tip)', 'black');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${s.viewBox}" fill="none" stroke="black" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" color="black">${body}</svg>`;
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }
 
@@ -49,7 +54,7 @@ export function touchSkinCss(): string {
     if (mask) rules.push(`${nade}[data-grenade="${g.id}"]::before { -webkit-mask-image: ${mask}; mask-image: ${mask}; }`);
   }
   rules.push(
-    `${nade}[data-count]::after { content: attr(data-count); position: absolute; top: -4px; right: -4px; min-width: 24px; height: 24px; padding: 0 6px; box-sizing: border-box; border-radius: 12px; display: grid; place-items: center; background: var(--hud-plate-strong); border: var(--bw) solid var(--c-line-strong); color: var(--c-text); font: var(--fw-bold) 14px/1 var(--font-ui); font-variant-numeric: tabular-nums; }`,
+    `${nade}[data-count]::after { content: attr(data-count); position: absolute; top: -4px; right: -4px; min-width: 24px; height: 24px; padding: 0 6px; box-sizing: border-box; border-radius: 12px; display: grid; place-items: center; background: var(--c-plate-strong); border: var(--bw) solid var(--c-line-strong); color: var(--c-text); font: var(--fw-bold) 14px/1 var(--f-ui); font-variant-numeric: tabular-nums; }`,
     `${nade}[data-count="0"] { opacity: 0.55; }`,
   );
   return rules.join('\n');

@@ -171,7 +171,10 @@ for (const [key, input, dflt] of [['dyeP', ui.dyeP, defaults.primary], ['dyeS', 
 // ------------------------------------------------------------------ materials
 
 // docs/04 §5.4: color = albedo × lerp(1, dye[channel], mask); A = team glow (docs/04 §1.4).
-function dyeMaterial(dye, team, partDefaults) {
+// The body's dye albedo carries the skin weight in its alpha (#66, dye.py): × lerp(1, 2 × skin tone, a), as
+// apps/web/src/character/dyeMaterial.ts does, with the default tone (skin_04). Without it faces render pale (review L13).
+const SKIN_TONE = new THREE.Color('#da9f75');
+function dyeMaterial(dye, team, partDefaults, skin = false) {
   const m = new THREE.MeshToonMaterial({ map: dye.albedo, gradientMap: ramp });
   const glow = { value: team ? TEAM[team].clone() : new THREE.Color(0) };
   const uniforms = {
@@ -182,14 +185,16 @@ function dyeMaterial(dye, team, partDefaults) {
   dyeMaterials.push(uniforms);
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, uniforms, { dyeMask: { value: dye.mask }, teamGlow: glow });
-    sh.fragmentShader = 'uniform sampler2D dyeMask;\nuniform vec3 dyeP, dyeS, dyeA, teamGlow;\n' + sh.fragmentShader
+    Object.assign(sh.uniforms, { skinTone: { value: SKIN_TONE } });
+    sh.fragmentShader = 'uniform sampler2D dyeMask;\nuniform vec3 dyeP, dyeS, dyeA, teamGlow, skinTone;\n' + sh.fragmentShader
       .replace('#include <map_fragment>', `#include <map_fragment>
         vec4 dyeM = texture2D(dyeMask, vMapUv);
+        ${skin ? 'diffuseColor.rgb *= mix(vec3(1.0), 2.0 * skinTone, diffuseColor.a); diffuseColor.a = 1.0;' : ''}
         diffuseColor.rgb *= mix(vec3(1.0), dyeP, dyeM.r) * mix(vec3(1.0), dyeS, dyeM.g) * mix(vec3(1.0), dyeA, dyeM.b);`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         totalEmissiveRadiance += teamGlow * dyeM.a * 0.9;`);
   };
-  m.customProgramCacheKey = () => 'dye-toon';
+  m.customProgramCacheKey = () => (skin ? 'dye-toon-skin' : 'dye-toon');
   return m;
 }
 
@@ -203,7 +208,7 @@ function shadeVariants(mesh, team) {
     const dye = mesh.userData.dyeAlbedo ? dyeTex[mesh.userData.dyeAlbedo.replace(/_dye_albedo$/, '')] : null;
     const toon = new THREE.MeshToonMaterial({ ...base, gradientMap: ramp });
     const v = {
-      dye: dye ? dyeMaterial(dye, team, mesh.userData.dyeDefaults ?? {}) : toon,
+      dye: dye ? dyeMaterial(dye, team, mesh.userData.dyeDefaults ?? {}, mesh.userData.dyeAlbedo.startsWith('rookie_body')) : toon,
       toon,
       flat: new THREE.MeshBasicMaterial(base),
       lit: src.clone(),

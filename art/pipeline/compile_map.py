@@ -3,13 +3,16 @@
     python3 art/pipeline/compile_map.py art/maps/street_market/layout.json
 
 Reads the layout (pieces + flips + spawns + decor) and the kit GLB's per-piece extras (terrain /
-solids / oneWays / noFlip / adSlot, written by build_market_kit.py), then writes next to the layout:
+solids / oneWays / blocksBullets / noFlip / adSlot, written by build_market_kit.py), then writes next to
+the layout:
 
 * <folder>.map.json: the MapDef the sim loads (packages/content/src/maps/types.ts):
   - terrain pieces (ground blocks, houses, the edge blocks) merge into ONE terrain polygon whose
     top is the skyline, like the movement-test map, so there are no internal edges to snag on;
   - free-standing solids (stall counters, buses, tanks, the billboard panel) stay separate polygons;
-  - one-way platforms (awnings, balconies, catwalks, the umbrella slopes) become oneWays;
+  - one-way platforms (awnings, balconies, catwalks, the umbrella slopes) become oneWays; those of a
+    piece marked `blocksBullets` (floor slabs: balconies, the tank deck, the catwalk) carry
+    `blocksBullets: true`, so they stop bullets, blasts, gas and sight (docs/11 §2);
   - bounds.maxY is a ceiling: a 2 m solid along the top, like movementTest's.
 * <folder>.adslots.json: the docs/14 §4.2 AdSlot list, one per decor bezel with a `slotId`.
 
@@ -20,7 +23,7 @@ It checks the docs/01 §7 and docs/14 §2.6 rules it can and exits 1 on any erro
 - no overlapping solids, no solid sunk into terrain or reaching the ceiling, no one-way inside a solid;
 - ≥ 3 walkable layers; bounds ~120 × 60 m (a note);
 - sightlines: no clear eye-to-eye line ≥ 60 m (the Widow's range, docs/03) between standing spots
-  (one-ways are bullet-pass in the sim, so only terrain and solids block);
+  (terrain, solids and slab one-ways block; other one-ways are bullet-pass in the sim);
 - no mirrored lettering: a layout item may not flip a `noFlip` piece;
 - AdSlots (docs/14 §2.6): z ∈ [−9, −4], not a gameplay piece, no collision, never flipped, unique
   `<map id>/<slot>` ids (lint 1); 2.5–8% of the screen at 1× and ≥ 1.5% at 4× (lint 2); from every
@@ -135,7 +138,7 @@ def main():
         if item.get("flip") and kit.get(item["piece"], {}).get("noFlip"):
             errors.append(f"{item['piece']} at x {item['x']} is flipped, but it carries lettering (noFlip)")
 
-    intervals, solids, one_ways = [], [], []
+    intervals, solids, one_ways, slabs = [], [], [], []
     for item in layout["pieces"]:
         pc = kit.get(item["piece"])
         if pc is None:
@@ -155,6 +158,7 @@ def main():
         for ax, ay, bx, by in pc.get("oneWays", []):
             pa, pb = (x + (-ax if flip else ax), y + ay), (x + (-bx if flip else bx), y + by)
             one_ways.append(tuple(pa + pb) if pa[0] <= pb[0] else tuple(pb + pa))
+            slabs.append(pc.get("blocksBullets") is True)
 
     # ---- terrain skyline (ground, houses, edge blocks) → one polygon
     xs = sorted({b["minX"], b["maxX"], *[i[0] for i in intervals], *[i[1] for i in intervals]})
@@ -256,6 +260,7 @@ def main():
     edges = []
     for poly in [terrain] + [s[0] for s in solids]:
         edges += [(poly[i], poly[(i + 1) % len(poly)]) for i in range(len(poly))]
+    edges += [((ax, ay), (bx, by)) for (ax, ay, bx, by), slab in zip(one_ways, slabs) if slab]  # slabs stop sight
     clear_long = []
     for i in range(len(spots)):
         for j in range(i + 1, len(spots)):
@@ -350,14 +355,15 @@ def main():
         "solids": [{"points": [c for p in terrain for c in p], "material": layout.get("terrainMaterial", 0)},
                    {"points": [c for p in ceiling for c in p], "material": layout.get("terrainMaterial", 0)}]
         + [{"points": [c for p in pts for c in p], "material": m} for pts, m, _, _ in solids],
-        "oneWays": [{"ax": ax, "ay": ay, "bx": bx, "by": by} for ax, ay, bx, by in one_ways],
+        "oneWays": [{"ax": ax, "ay": ay, "bx": bx, "by": by, **({"blocksBullets": True} if slab else {})}
+                    for (ax, ay, bx, by), slab in zip(one_ways, slabs)],
         "spawns": [{"x": s["x"], "y": s["y"]} for s in layout["spawns"]],
         "dummies": [],
         "labels": [],
     }
     print(f"compile_map: {layout['name']} ({map_id})  {w_:.0f} × {h_:.0f} m")
     print(f"  pieces {len(layout['pieces'])} gameplay + {len(layout.get('decor', []))} decor; ad slots {len(ad_slots)}")
-    print(f"  terrain polygon {len(terrain)} points; solids {len(solids)} + ceiling; one-ways {len(one_ways)}; "
+    print(f"  terrain polygon {len(terrain)} points; solids {len(solids)} + ceiling; one-ways {len(one_ways)} ({sum(slabs)} slabs); "
           f"spawns {len(layout['spawns'])}")
     print(f"  walkable heights (m): {walk}")
     print(f"  standing spots {len(spots)}; clear sightlines ≥ {WIDOW_RANGE:.0f} m: {len(clear_long)}")

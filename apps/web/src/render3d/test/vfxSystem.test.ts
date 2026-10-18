@@ -1,13 +1,14 @@
-import { fluxLabMap, movementTestMap } from '@military-forge/content';
+import { PROJECTILE_TYPE_BASE, RIOT_SHIELD, ROCKET, fluxLabMap, movementTestMap } from '@military-forge/content';
 import { CollisionWorld, createRayHit, type SimEvent } from '@military-forge/sim';
 import { DataTexture, DirectionalLight, HemisphereLight, Scene } from 'three';
 import { describe, expect, it } from 'vitest';
 import { Camera } from '../../camera';
-import type { Frame } from '../../view';
+import type { Frame, PlayerView } from '../../view';
 import { PRESETS } from '../presets';
 import { Vfx, type VfxContext, type VfxModule } from '../vfx';
-import { particleSpec } from '../vfx/pool';
+import { F, STRIDE, particleSpec } from '../vfx/pool';
 import { Ramp } from '../vfx/ramps';
+import { playerView } from './helpers';
 
 function system(preset = PRESETS.low) {
   const scene = new Scene();
@@ -172,5 +173,22 @@ describe('Vfx.setMap (a map change)', () => {
     for (let i = 0; i < 120; i++) vfx.update(frame(), 1 / 60);
     expect(hemi.intensity).toBeCloseTo(0.7, 5); // back to the new map's value after the flash
     expect(sun.intensity).toBeCloseTo(1.1, 5);
+  });
+});
+
+describe('Vfx: a launcher blast at a riot shield (#111)', () => {
+  it("a rocket gone off at a raised shield's face flares the plate (the shields of the last drawn frame); in the open it doesn't", () => {
+    const flares = (shield: PlayerView['shield']) => {
+      const { vfx } = system();
+      vfx.update(frame({ players: [playerView({ x: 150, y: 0, aim: Math.PI, shield })] }), 1 / 60);
+      // facing left: the face at 150 − 0.42, the rocket stopped just short of it
+      vfx.onEvents([{ type: 'explosion', x: 150 - RIOT_SHIELD.forward - ROCKET.radius, y: 0.8, radius: 3.5, owner: 1, grenade: PROJECTILE_TYPE_BASE + ROCKET.index }]);
+      const pool = vfx.glowPool;
+      let n = 0;
+      for (let i = 0; i < pool.count; i++) if (pool.data[i * STRIDE + F.ramp] === Ramp.Flash && pool.data[i * STRIDE + F.rot] === Math.fround(Math.PI / 2)) n++;
+      return n;
+    };
+    expect(flares('front')).toBe(1);
+    expect(flares(undefined)).toBe(0);
   });
 });

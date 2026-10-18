@@ -35,7 +35,7 @@ export function winnerOf(standings: readonly Pick<MatchStanding, 'name' | 'score
 export function reasonChip(results: Pick<MatchResults, 'reason' | 'durationTicks'>, killLimit: number): { icon: string; text: string; state: 'kill-limit' | 'time-up' | 'over' } {
   if (results.reason === MatchEndReason.KillLimit) return { icon: 'target', text: `Kill limit reached · ${killLimit} kills`, state: 'kill-limit' };
   if (results.reason === MatchEndReason.TimeLimit) return { icon: 'clock', text: `Time's up · ${formatClock(Math.round(results.durationTicks / TICK_RATE))}`, state: 'time-up' };
-  return { icon: 'flag', text: `Match over · ${formatClock(Math.round(results.durationTicks / TICK_RATE))}`, state: 'over' };
+  return { icon: 'ok', text: `Match over · ${formatClock(Math.round(results.durationTicks / TICK_RATE))}`, state: 'over' };
 }
 
 const thousands = (n: number) => n.toLocaleString('en-US');
@@ -163,7 +163,7 @@ export function Results({ view, results, actions, room, training }: { view: Matc
                       <span className="t-player">
                         {s.isBot ? (
                           <span className="avatar avatar--sm avatar--bot">
-                            <Icon name="chip" size="sm" />
+                            <Icon name="bot" size="sm" />
                           </span>
                         ) : (
                           <span className="avatar avatar--sm">{initial(s.name)}</span>
@@ -184,7 +184,7 @@ export function Results({ view, results, actions, room, training }: { view: Matc
                         )}
                         {s.isBot && (
                           <span className="badge badge--bot">
-                            <Icon name="chip" />
+                            <Icon name="bot" />
                             Bot
                           </span>
                         )}
@@ -206,7 +206,7 @@ export function Results({ view, results, actions, room, training }: { view: Matc
       <footer className="results__bar">
         {view.voted ? (
           <button className="btn btn--secondary btn--xl results__voted" aria-pressed="true" disabled>
-            <Icon name="check-circle" size="lg" />
+            <Icon name="ok" size="lg" />
             You voted to play again
           </button>
         ) : (
@@ -237,13 +237,13 @@ export function Results({ view, results, actions, room, training }: { view: Matc
         <span className="topbar__spacer"></span>
         {host && (
           <button className="btn btn--secondary btn--xl" disabled={closed} onClick={blurAfter(actions.backToLobby)}>
-            <Icon name="users" />
+            <Icon name="user" />
             Back to lobby
           </button>
         )}
         {(room ?? training) && (
           <button className="btn btn--ghost btn--xl" onClick={blurAfter(() => (room ?? training)!.leave())}>
-            <Icon name={room ? 'door-out' : 'home'} />
+            <Icon name={room ? 'door-out' : 'back'} />
             {room ? 'Leave room' : 'Home'}
           </button>
         )}

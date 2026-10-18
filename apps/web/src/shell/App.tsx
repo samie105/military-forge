@@ -100,9 +100,9 @@ function AppScreens({ store }: { store: ShellStore }) {
       {overlay === 'join' && <Join />}
       {overlay === 'name' && <NameEntry store={store} first={false} />}
       {notice && (
-        <div className="mf-fit mf-toast">
+        <div className="mf-fit mf-toast kit-v1">
           <div className="mf-notice" role="status">
-            <Icon name="check-circle" />
+            <Icon name="ok" />
             {notice}
           </div>
         </div>
@@ -165,12 +165,12 @@ export function WarmupBar({ view, actions }: { view: MatchView; actions: ShellAc
         <span>Nothing counts until the match starts</span>
         {view.ready ? (
           <button className="btn btn--secondary lobby__ready-on" aria-pressed="true" disabled>
-            <Icon name="check-circle" />
+            <Icon name="ok" />
             Ready: waiting for players
           </button>
         ) : (
           <button className="btn btn--primary" onClick={blurAfter(actions.ready)}>
-            <Icon name="circle" />
+            <Icon name="clock" />
             Ready
           </button>
         )}
@@ -195,7 +195,7 @@ function RouteView({ route }: { route: ShellRoute }) {
     };
   }, [route]);
   return (
-    <div className="mf-route" aria-label={route.title}>
+    <div className="mf-route kit-v1" aria-label={route.title}>
       <div ref={el} className="mf-route__body" />
       {!route.ownExit && (
         <button className="btn btn--secondary mf-route__back" onClick={closeRoute}>

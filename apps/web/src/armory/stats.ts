@@ -3,7 +3,7 @@
  * Pure functions, so the card is testable without a renderer. Weapons that only exist as art
  * so far get `null` and the card says so.
  */
-import { FRAG, defaultTuning, shotDamage, timeToKill, weapons, type GrenadeDef, type WeaponDef } from '@military-forge/content';
+import { FRAG, RIOT_SHIELD, defaultTuning, shotDamage, timeToKill, weapons, type GrenadeDef, type ShieldDef, type WeaponDef } from '@military-forge/content';
 
 export interface StatRow {
   label: string;
@@ -75,10 +75,26 @@ function grenadeCard(def: BlastGrenade): StatsCard {
   };
 }
 
+function shieldCard(def: ShieldDef): StatsCard {
+  return {
+    title: def.name,
+    subtitle: 'off-hand shield',
+    rows: [
+      { label: 'Shield HP', value: `${def.hp}`, bar: clamp01(def.hp / (2 * defaultTuning.healthMax)) },
+      { label: 'Blocks', value: `bullets within ±${def.arcDeg}° of its face` },
+      { label: 'Raise', value: `${round(def.raiseTime, 2)} s` },
+      { label: 'Move speed', value: `${Math.round(def.moveSpeedMul * 100)} % raised · ${Math.round(def.slungSpeedMul * 100)} % slung`, bar: clamp01((def.moveSpeedMul - 0.6) / 0.45) },
+      { label: 'Bash', value: `${def.bashDamage}` },
+      { label: 'Ricochet', value: `keeps ${Math.round(def.ricochetDamageMul * 100)} % of the damage` },
+    ],
+  };
+}
+
 /** The card for an art weapon id, or null when packages/content has no entry for it yet. */
 export function statsCard(id: string): StatsCard | null {
   const w = weaponDef(id);
   if (w) return weaponCard(w);
+  if (id === RIOT_SHIELD.id) return shieldCard(RIOT_SHIELD);
   const g = grenades.find((d) => d.id === id);
   return g ? grenadeCard(g) : null;
 }

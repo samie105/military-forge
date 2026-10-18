@@ -25,7 +25,7 @@ import {
   PerspectiveCamera,
   PMREMGenerator,
   PlaneGeometry,
-  PointLight,
+  type PointLight,
   Quaternion,
   Scene,
   SphereGeometry,
@@ -41,6 +41,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { characterToonRamp } from '../character';
 import { glowMaterial } from './glow';
+import { LightPool } from './lights';
 import { previewReach, type SpecialAnchors, type SpecialsManifest, SpecialsPreview } from './specials';
 import { LOCKER_LIGHTS, type LightPreset } from '../locker/turntable';
 
@@ -125,7 +126,14 @@ export class ArmoryViewer {
   private toView = WEAPON_TO_VIEW;
   /** the weapon's own materials, to restore after a camo */
   private readonly factory = new Map<Mesh, Material | Material[]>();
-  private flash: { mesh: Mesh; light: PointLight; until: number } | null = null;
+  private flash: { mesh: Mesh; light: PointLight | null; until: number } | null = null;
+  /** point lights for flashes and specials: a fixed set, so firing never changes the light count (L11) */
+  private readonly lights: LightPool;
+  /** one flash material per flash sheet, kept: a fresh one per shot deleted and recompiled its program (L11) */
+  private readonly flashMaterials = new Map<Texture, MeshBasicMaterial>();
+  /** the old weapon's and camo's materials, freed once the next frame has drawn their replacements: the
+   * shader programs they share carry over instead of being deleted and compiled again (review L11) */
+  private retired: (() => void)[] = [];
   private readonly flashTextures = new Map<string, Texture>();
   /** a reflection map for metal finishes, made on first use */
   private env: Texture | null = null;
@@ -157,6 +165,7 @@ export class ArmoryViewer {
     this.floor = new Mesh(new CylinderGeometry(1, 1.03, 0.03, 48), new MeshToonMaterial({ gradientMap: characterToonRamp() }));
     this.pivot.add(this.holder);
     this.holder.add(this.gizmos);
+    this.lights = new LightPool(this.holder);
     this.scene.add(this.hemi, this.key, this.rim, this.floor, this.pivot);
     this.setLighting('lobby');
     canvas.addEventListener('pointerdown', this.onPointerDown);
@@ -180,8 +189,10 @@ export class ArmoryViewer {
     }
     if (this.weapon) {
       this.holder.remove(this.weapon);
-      // the old model, its attachments, and both its factory and camo materials
-      disposeTree(this.weapon, this.factory.values());
+      // the old model, its attachments, and both its factory and camo materials, after the next frame
+      const old = this.weapon;
+      const materials = [...this.factory.values()];
+      this.retired.push(() => disposeTree(old, materials));
     }
     this.clearFlash();
     this.specials?.clear();
@@ -313,13 +324,26 @@ export class ArmoryViewer {
     return this.env;
   }
 
+  /** Whether the shown model has any camo panel (`_camo` set): the riot shield and the grenades have none. */
+  hasCamoPanels(): boolean {
+    let any = false;
+    this.weaponFrame?.traverse((o) => {
+      const a = o instanceof Mesh ? o.geometry.getAttribute('_camo') : undefined;
+      if (!any && a) for (let i = 0; i < a.count && !any; i++) any = a.getX(i) > 0.5;
+    });
+    return any;
+  }
+
   /** Repaint the weapon's camo panels (meshes with a `_camo` attribute) with `make`, or restore them (null). */
   setCamo(make: ((original: MeshStandardMaterial) => Material) | null): void {
     this.weaponFrame?.traverse((o) => {
       if (!(o instanceof Mesh) || !o.geometry.getAttribute('_camo')) return;
       if (!this.factory.has(o)) this.factory.set(o, o.material);
       const original = this.factory.get(o) as MeshStandardMaterial;
-      if (o.material !== original) (o.material as Material).dispose();
+      if (o.material !== original) {
+        const camo = o.material as Material;
+        this.retired.push(() => camo.dispose());
+      }
       o.material = make ? make(original) : original;
     });
   }
@@ -383,18 +407,20 @@ export class ArmoryViewer {
     const uv = geo.attributes.uv!;
     // TextureLoader flips Y: v runs up from the bottom of the atlas
     for (let i = 0; i < uv.count; i++) uv.setXY(i, (cx + uv.getX(i) * cw) / aw, 1 - (cy + (1 - uv.getY(i)) * ch) / ah);
-    const mesh = new Mesh(geo, new MeshBasicMaterial({
-      map: texture, transparent: true, depthWrite: false, blending: AdditiveBlending, side: DoubleSide, toneMapped: false,
-      color: new Color(tint ?? '#ffffff'),
-    }));
+    let material = this.flashMaterials.get(texture);
+    if (!material) {
+      material = new MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false, blending: AdditiveBlending, side: DoubleSide, toneMapped: false });
+      this.flashMaterials.set(texture, material);
+    }
+    material.color.set(tint ?? '#ffffff');
+    const mesh = new Mesh(geo, material);
     // two crossed planes along the muzzle axis (view +X): one faces the camera, one is turned 90°
     mesh.position.copy(this.flashOverride ? this.flashOverride.pos.clone().applyMatrix4(this.toView) : this.socketView('muzzle'));
     const cross = new Mesh(geo, mesh.material);
     cross.rotation.x = Math.PI / 2;
     mesh.add(cross);
-    const light = new PointLight(new Color(tint ?? st.light.color), st.light.intensity, st.light.rangeM, 2);
-    light.position.copy(mesh.position);
-    this.holder.add(mesh, light);
+    const light = this.lights.take({ color: tint ?? st.light.color, intensity: st.light.intensity, rangeM: st.light.rangeM }, mesh.position);
+    this.holder.add(mesh);
     this.flash = { mesh, light, until: performance.now() + Math.max(80, st.ms * 2, holdMs) };
   }
 
@@ -403,7 +429,7 @@ export class ArmoryViewer {
    * `freezeS` runs it to that moment and holds it there (QA screenshots).
    */
   async fireSpecial(base: string, manifest: SpecialsManifest, style: string, holdMs = 0, freezeS?: number): Promise<void> {
-    this.specials ??= new SpecialsPreview(this.holder, base, this.loader);
+    this.specials ??= new SpecialsPreview(this.holder, base, this.loader, this.lights);
     const at = this.specialAnchors();
     const st = manifest.styles[style];
     const reach = st ? previewReach(manifest, st) : 0;
@@ -444,6 +470,8 @@ export class ArmoryViewer {
     this.canvas.removeEventListener('pointercancel', this.onPointerUp);
     this.canvas.removeEventListener('wheel', this.onWheel);
     this.clearFlash();
+    for (const free of this.retired.splice(0)) free();
+    for (const m of this.flashMaterials.values()) m.dispose();
     for (const t of this.flashTextures.values()) t.dispose();
     this.env?.dispose();
     this.specials?.dispose();
@@ -494,9 +522,9 @@ export class ArmoryViewer {
 
   private clearFlash(): void {
     if (!this.flash) return;
-    this.holder.remove(this.flash.mesh, this.flash.light);
+    this.holder.remove(this.flash.mesh);
+    this.lights.give(this.flash.light);
     this.flash.mesh.geometry.dispose();
-    (this.flash.mesh.material as MeshBasicMaterial).dispose();
     this.flash = null;
   }
 
@@ -535,6 +563,7 @@ export class ArmoryViewer {
       if (this.wholeView) this.setFocus('whole');
     }
     this.renderer.render(this.scene, this.camera);
+    for (const free of this.retired.splice(0)) free();
   };
 
   private readonly onPointerDown = (e: PointerEvent): void => {

@@ -1,0 +1,22 @@
+asset-check: art/weapons/flash.glb  [weapon]
+-----------------------------------------------------------------------------------------------------------------
+INFO  file size                                              47 KB
+PASS  triangles                                              608 of 1000
+PASS  one mesh, one material                                 1 draw call(s)
+INFO  GPU texture memory (KTX2 est.)                         0.00 MB, 0 image(s)
+PASS  extras weaponId/family/aimPose/hands                   ok
+PASS  weaponId in packages/content                           flash
+INFO  nodes                                                  grip, ground, light, pin
+PASS  origin on the weapon (the grip)                        bbox (-0.09, -0.14, -0.08)..(0.09, 0.1, 0.08)
+PASS  family is a docs/04 §4.2 family                        'thrown'
+PASS  aimPose has clips                                      'pistol'
+PASS  ground node (rest frame)                               ok
+PASS  light node (fuse / state light the renderer blinks)    ok
+PASS  as big as its sim ball (≥ 80 % of the content radius)  half-width 0.086 m vs radius 0.100 m
+PASS  team-colour contrast                                   blue ΔE 67, orange ΔE 33 (min 25)
+PASS  sockets for the family                                 grip
+PASS  socket directions (unit `dir`)                         ok
+PASS  sockets on the weapon (within 3 cm)                    ok
+-----------------------------------------------------------------------------------------------------------------
+RESULT: PASS  (14 pass, 0 warn, 0 fail)
+

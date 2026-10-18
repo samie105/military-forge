@@ -14,14 +14,19 @@ import { useCtl, useServerPing } from '../context';
 import type { Bindings } from '../controls';
 import type { ShellStore } from '../store';
 
+/** The brand: the emblem and the name, once in the whole UI (round two's .brand on Home). */
 export function Brand() {
   return (
-    <div className="brand">
-      <Icon name="emblem" className="brand__mark" />
-      <span className="brand__name" data-bind="brand.name">
-        {GAME_NAME}
+    <span className="brand">
+      <svg className="brand__emblem" aria-hidden="true">
+        <use href="#icon-emblem" />
+      </svg>
+      <span className="brand__words">
+        <b className="display" data-bind="brand.name">
+          {GAME_NAME}
+        </b>
       </span>
-    </div>
+    </span>
   );
 }
 
@@ -142,7 +147,7 @@ export function Home({ store }: { store: ShellStore }) {
 
           <div className="home__grid">
             <button className="tile" disabled={offline} onClick={() => ctl.openOverlay('join')}>
-              <Icon name="door-in" size="lg" />
+              <Icon name="link" size="lg" />
               <span className="tile__title">Join with code</span>
               <span className="tile__sub">Type 6 letters or paste a link</span>
             </button>
@@ -168,7 +173,7 @@ export function Home({ store }: { store: ShellStore }) {
               </span>
             </button>
             <button className="navtile" onClick={() => location.assign('/armory.html')}>
-              <Icon name="armory" size="lg" />
+              <Icon name="rack" size="lg" />
               <span>
                 <span className="navtile__title">Armory</span>
                 <span className="navtile__sub">Look at the guns</span>

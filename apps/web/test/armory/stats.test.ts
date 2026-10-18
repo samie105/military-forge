@@ -1,4 +1,4 @@
-import { BREACHER, FRAG, K47, MACHETE, defaultTuning, weapons } from '@military-forge/content';
+import { BREACHER, FRAG, K47, MACHETE, RIOT_SHIELD, defaultTuning, weapons } from '@military-forge/content';
 import { describe, expect, it } from 'vitest';
 import { statsCard } from '../../src/armory/stats';
 
@@ -29,8 +29,14 @@ describe('Armory stats card', () => {
     expect(row('frag', 'Blast radius')!.value).toContain(`${FRAG.explosion.radius} m`);
   });
 
+  it('reads the riot shield from content (review L12: it was labelled "not in content yet")', () => {
+    expect(statsCard('riot_shield')!.title).toBe(RIOT_SHIELD.name);
+    expect(row('riot_shield', 'Shield HP')!.value).toBe(`${RIOT_SHIELD.hp}`);
+    expect(row('riot_shield', 'Move speed')!.value).toBe(`${Math.round(RIOT_SHIELD.moveSpeedMul * 100)} % raised · 100 % slung`);
+  });
+
   it('keeps bars in 0..1', () => {
-    for (const id of [...weapons.map((w) => w.id), 'frag']) {
+    for (const id of [...weapons.map((w) => w.id), 'frag', 'riot_shield']) {
       for (const r of statsCard(id)!.rows) {
         if (r.bar === undefined) continue;
         expect(r.bar).toBeGreaterThanOrEqual(0);

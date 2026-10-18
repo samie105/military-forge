@@ -68,14 +68,14 @@ A generic market street (no real place: invented, region-neutral signage, a plai
 | `noFlip` | the piece has lettering | the layout may not mirror it |
 | `adSlot` | on Screen / Hoarding bezels: `kind`, `format`, `size`, `frames`, `centre` of the creative | one AdSlot per bezel placed with a `slotId` |
 
-**Kit** (`art/pipeline/build_market_kit.py` → [kits/street_market/kit_street_market.glb](kits/street_market/)): one node per piece, one shared vertex-colour material, single-sided (`doubleSided: false`). Within 0.35 m of the gameplay plane (the capsule radius) nothing is drawn outside the collision: luggage, produce and sacks sit behind the plane, balconies have a front handrail instead of end plates across the walkway, parapet lips are at the back.
+**Kit** (`art/pipeline/build_market_kit.py` → [kits/street_market/kit_street_market.glb](kits/street_market/)): one node per piece, one shared vertex-colour material, single-sided (`doubleSided: false`). Within 0.35 m of the gameplay plane (the capsule radius) nothing is drawn outside the collision: produce and sacks sit behind the plane, the minibus carries nothing on its roof rack, balconies have a front handrail instead of end plates across the walkway, parapet lips are at the back.
 
 | Piece | Layer | Tris | Collision |
 |---|---|---|---|
 | `sm_ground_4m` | gameplay | 336 | terrain 4 m at y 0 |
 | `sm_stall_4m` | gameplay | 1,544 | counter solid 1.0 m, awning one-way 3.05 m |
 | `sm_umbrella_stall` | gameplay | 360 | counter solid 0.8 m, canopy one-ways 2.65 → 3.05 → 2.65 m (it follows the cone) |
-| `sm_minibus` | gameplay | 884 | body solid from 0.35 m with the sloped front drawn to match, roof 2.3 m |
+| `sm_minibus` | gameplay | 752 | body solid from 0.35 m with the sloped front drawn to match, roof 2.3 m; the rack lies flush on it (the luggage that stood 0.5 m above the walkable roof is gone: environments review L15) |
 | `sm_crates` | gameplay | 260 | one stepped solid, 1.0 / 1.6 m |
 | `sm_tank_tower` | gameplay | 332 | deck one-ways at 4 m either side of the tank solid (top 5.4 m) |
 | `sm_billboard` | gameplay | 550 | catwalk one-way at 10 m; panel solid 12–15.2 m with a 51° gable to 20.2 m (too steep to stand on). House-only (never sold) |
@@ -86,7 +86,7 @@ A generic market street (no real place: invented, region-neutral signage, a plai
 | `sm_signboard` (noFlip), `sm_power_pole` | mid | 215 / 156 | none |
 | `sm_far_block_a` / `_b` | far | 216 / 168 | none |
 
-**Map** ([maps/street_market/layout.json](maps/street_market/layout.json) → [street_market.map.json](maps/street_market/street_market.map.json) + [street_market.adslots.json](maps/street_market/street_market.adslots.json)): id `street-market`, bounds 128 × 62 m: 120 m of play between the edge walls, and the top 2 m of the bounds is a ceiling slab. Mirrored halves: houses at the edges, then stalls, the blue 3-storey, crates and minibuses toward the middle, with the tank tower and billboard in the centre. 50 gameplay pieces + 31 decor (81 placements, 35,876 tris; 30 piece/flip pairs, so 30 instanced draws), 14 spawns, walkable heights 0 → 12 m. Palette: sky `#c9c1b0`, fog `#cbbfa8`.
+**Map** ([maps/street_market/layout.json](maps/street_market/layout.json) → [street_market.map.json](maps/street_market/street_market.map.json) + [street_market.adslots.json](maps/street_market/street_market.adslots.json)): id `street-market`, bounds 128 × 62 m: 120 m of play between the edge walls, and the top 2 m of the bounds is a ceiling slab. Mirrored halves: houses at the edges, then stalls, the blue 3-storey, crates and minibuses toward the middle, with the tank tower and billboard in the centre. 50 gameplay pieces + 31 decor (81 placements, 35,612 tris; 30 piece/flip pairs, so 30 instanced draws), 14 spawns, walkable heights 0 → 12 m. Palette: sky `#c9c1b0`, fog `#cbbfa8`.
 
 **Ad surfaces** (docs/14 §2.3 placements, z per the table there): S1 junction Screen (x −57, z −6), H1 flyover Hoarding 21 × 3.5 (x −47, z −8), S3 mast Screen over the west minibus (x −12, z −5), S2 tower Screen (x 14, z −7), H2 rooftop Hoarding across two buildings (x 47, z −6) and S4 gantry Screen next to it (x 58, z −6). Positions were searched against compile_map's view lints, below; screens get phase offsets 0–3.
 
@@ -112,7 +112,7 @@ Checks:
 - **In the sim** (W6's code on main, run locally, not committed): the review's fuzz harness, 8 players × 15 sim-minutes of random input: **0 deaths by falling out of the map** (61 per hour before the walls), 0 player-ticks out of bounds, 0 ticks with solid penetration. Every one-way lands and drops through; the umbrella slopes hold a standing player at 2.86 m.
 - **Viewer:** `?map=street_market&zoom=1&cx=-46&cy=9&hitboxes=1` draws the kit from the layout with the collision on top. The map path is the reference for W1: one `InstancedMesh` per (piece, flip), mirrored pieces get their own geometry with the winding reversed (no DoubleSide).
 
-In the game: `packages/content/src/maps/streetMarket.map.json` is a copy of `street_market.map.json` (content.test.ts checks they match, apart from the slab one-ways marked `blocksBullets` there until the kit marks them), and the web build draws `kits/street_market/kit_street_market.glb` from the same layout (apps/web/src/render3d/environment). docs/01 §7 and docs/14 §2.3/§2.4 call the map the Street Market and its slots `street-market/S1`…`S4`, `H1`, `H2`.
+In the game: `packages/content/src/maps/streetMarket.map.json` is a copy of `street_market.map.json` (content.test.ts checks they match; the kit marks the floor slabs, the balconies, the tank deck and the catwalk, `blocksBullets`, and compile_map.py writes it onto their one-ways), and the web build draws `kits/street_market/kit_street_market.glb` from the same layout (apps/web/src/render3d/environment). docs/01 §7 and docs/14 §2.3/§2.4 call the map the Street Market and its slots `street-market/S1`…`S4`, `H1`, `H2`.
 
 Gaps:
 - **Breakable awnings** (docs/01 §7) need a sim feature; the awning one-ways are separate segments, so they can be removed individually once there is one.
@@ -502,6 +502,27 @@ Playtest feedback: frags were hard to see, and their throw trails were faint whi
 python3 art/pipeline/build_grenade_fx.py --runtime apps/web/public/assets
 ```
 
+
+### One model per grenade type (the owner, 18 Oct)
+
+![Grenade types](screenshots/grenade-types.png)
+*The six throwables at one scale, and below at about gameplay size on dark ground.*
+
+Each grenade reads by its shape, not only its colour. They're built by `build_weapons.py` (`--only smoke,gas,flash,emp` rebuilds just these and merges them into weapons.json and sockets.json):
+
+| id (content) | Model | Tris | Nodes |
+|---|---|---|---|
+| `frag` | the ball with its sand band (unchanged) | 624 | grip, pin, light, ground |
+| `smoke` | a tall pale canister (0.17 × 0.25 m) with a ring of dark vent holes and dark bands | 632 | grip, pin, light, ground |
+| `gas` | a squat yellow-green canister (0.18 × 0.21 m) with a yellow/black hazard band and a valve with a red handwheel | 576 | grip, light, ground |
+| `flash` | a slotted cylinder (0.16 × 0.20 m): mid steel with six light slots and dark end caps | 608 | grip, pin, light, ground |
+| `emp` | a disc (0.20 × 0.06 m) with two glowing pale-cyan coils round its rim (`_GLOW`) and an emitter on top | 616 | grip, light, ground |
+| `mine` | the hazard-striped disc (unchanged) | 616 | grip, light, ground |
+
+- **Rules:** all are sim-sized (half-width 0.086–0.105 m for a 0.10 m sim ball), at least 25 ΔE from both team colours (orange ≥ 33, blue 67), and pass asset-check 14/14.
+- **Fuse lights:** each keeps the red `light` the renderer blinks, and a `pin` where it has a pin.
+- **Which file reads them:** `render3d/grenades.ts` draws the frag (`frag.glb`). `render3d/clouds.ts` draws the other types today, as coloured balls (`GRENADE_COLORS` on `ballGeo`). It should load `smoke.glb`, `gas.glb`, `flash.glb` and `emp.glb` (in `assets/weapons/`, with their `ground` rest frame) in their place. The mine stays clouds.ts's puck, or `mine.glb`.
+
 ## Riot shield (Weapons Forge 10)
 
 ![Riot shield](screenshots/riot-shield-sheet.png)
@@ -743,6 +764,61 @@ The Hawk .50, Rattler, Hornet, Bullpup, Trident, Longbow, Thumper and Shredder g
 - **Shredder:** "Orthographic turnaround sheet of ONE chunky toy heavy rotary-barrel gun for a stylised cartoon video game, three views in a single row on a flat plain light grey background, each view separated by wide empty gaps, all at the same scale and the same height, perfectly aligned: (1) left: the right side of the gun, muzzle pointing to the right; (2) middle: the end view looking straight at the muzzle; (3) right: the left side of the gun, muzzle pointing to the left. Invented design, not based on any real-world firearm: a big square dark gunmetal body with a curved carry handle on top, a cluster of six short barrels held by two round rings at the front, a sand-tan ammunition box hanging off the left side, a dark pistol grip and a front grip under the body, and bright yellow toy safety caps on the barrel ring. Bevelled boxy toy shapes, clean flat colours with soft cel shading, no text, no logos, no letters, no hands, no background objects."
 </details>
 
+### Batch 2b: the 5 specials
+
+![Before and after, the specials](screenshots/guns-scan-c-before-after.png)
+*Armory, Lobby light: scripted (left) and rebuilt from generated images (right), same camera.*
+
+![Camo masks, the specials](screenshots/guns-scan-c-camo.png)
+*Forest Patch on the five: grips, barrels, fins, prongs, the saw blade, the yellow tips and the glowing cells and coils keep their colours.*
+
+![Sockets, the specials](screenshots/guns-scan-c-sockets.png)
+*The VFX hook-ups from Weapons Forge 8c stay: the Dragon's `pilot`, the Ripper's and Pulse's `charge`, every `muzzle`.*
+
+The Dragon, Arc, Popper, Ripper and Pulse go through the same pipeline, with the same ids, socket names (including the `pilot` and `charge` hook-ups that `specials.vfx.json` uses) and lengths. Socket directions and rail lengths come from today's `sockets.json`.
+
+| id | Tris (scripted → scan) | Camo share (vertices) | Glow share | Bore radius (m) | Squash (height and width) | Drop (m) | Concept job | 3D job |
+|---|---|---|---|---|---|---|---|---|
+| dragon (Dragon) | 968 → 950 | 62% | 1% | 0.0576 | 52 % | 0.07 | `7515ad04-d7c6-43d1-8933-c386f341e8e3` | `1863140b-536a-483c-9b54-99ac2fe30ea6` |
+| arc (Arc) | 876 → 921 | 74% | 5% | 0.0368 | 57 % | 0.07 | `906706cd-0fe0-48f3-a9c0-4e17905ff0ca` | `812c1f5f-5e66-48ec-8b1e-7697597f46bc` |
+| popper (Popper) | 756 → 920 | 32% | 0% | 0.0306 | 57 % | 0.07 | `321e5169-e50c-41c6-b613-73023d263ad2` | `27dd9315-f90f-4797-8e8a-de5178531b15` |
+| ripper (Ripper) | 960 → 950 | 66% | 0% | 0.0226 | 55 % | 0.07 | `f93b8f8f-2418-4734-80ed-1d357f360146` | `000942ed-8194-47aa-8884-5a2f3992f26b` |
+| pulse (Pulse) | 888 → 921 | 62% | 18% | 0.0343 | 45 % | 0.07 | `8225dde6-d016-4b8b-b83c-5494d98a8271` | `087d85d8-4b88-4d13-8370-2118fe159f1a` |
+
+- **Fit in the hand:** the generated specials came out about twice as tall as the scripted ones (0.39–0.51 m against 0.22–0.25 m; 0.28–0.36 m above the grip), so no `drop` alone cleared the head: the hand would have ended up inside the body. Each is `squash`ed whole, in height and width about its bottom and centreline (`scale` takes an optional third, width, value now), to 45–57 %, which brings them back to 0.22–0.28 m tall, then dropped 0.07 m. `head_clearance.py`: all five have no vertex in the head at level and ±45°.
+- **Team colours:** prompts asked for pale cyan and pale sky-blue glows and no orange. The nearest albedo texel to team blue is ΔE76 62.0 (the Pulse; the scripted Pulse's coils were 25.0, review N3) and to team orange 47.9 (the Popper). 0 % of texels are orange-hued; at most 0.2 % sit in the blue hue band, and none within ΔE 40.
+- **Glow:** `glow` takes the Arc's cell and lens (`#84daf4`) and the Pulse's coils and orb (`#4bbee1`, `#7bf3fb`). The Dragon's yellow pilot tab is too small for a colour cluster of its own, so the new spec key `glow_boxes` marks it (12 vertices; the scripted Dragon glowed 3 %). Popper and Ripper don't glow, as before.
+- **Clusters:** the squash changes the bake, so the Arc's cyan cell and the Ripper's tan stock merged into neighbouring clusters at the default 7. They use 8, and the Dragon 9 (spec `clusters`).
+- **Camo:** `plain` boxes keep the grips, the Arc's fins and prongs, the Pulse's prongs and the Dragon's bellows plain. The Popper raises `dark` to 0.31, so its grey grip, stock, barrel and drum stay steel. `plain` boxes are now read in the unsquashed coordinates, like sockets; that changes nothing on the Shredder, the one squashed gun that had them.
+- **Moving parts:** the Dragon's fuel tank as `part_mag` (361 tris, 0.08 m down) and the Arc's power cell (36 tris, `side: right`, 0.05 m out to the right). Three are skipped. The Popper's drum shows on both sides with the receiver between, so a side-view cut would take the receiver with it. The Ripper's blade sits inside its guard housing (and it's the round, not a mechanism). The Pulse has no separate mechanism, and its coils are rings.
+- **Side sockets:** when no vertex lies within 2 cm (the middle of the Arc's long cell), `socket_points` now ray-casts onto the surface instead of using the bounding box, which the squash had made stale.
+- **Attachments:** rebuilt; every fit is unchanged. Sights fit all five, and the foregrip and laser fit the Arc.
+
+**Spend, batch 2b: 50.00 credits:** 5 concept sheets × 1.0 and 5 Tripo multiview models × 9. Rate-limited submissions (429) weren't charged. **Weapons Forge 12 total: 190.00** (batch 1 60, 2a 80, 2b 50). With Weapons Forge 2–10's 17.00, the Forge backlog stands at **207.00 of its 400 cap**.
+
+<details><summary>Concept prompts, batch 2b (GPT Image 2.5, medium, 2k, 16:9, opaque)</summary>
+
+- **Dragon:** "Orthographic turnaround sheet of ONE chunky toy flame projector for a stylised cartoon video game, three views in a single row on a flat plain light grey background, each view separated by wide empty gaps, all at the same scale and the same height, perfectly aligned: (1) left: the right side of the gun, muzzle pointing to the right; (2) middle: the end view looking straight at the muzzle; (3) right: the left side of the gun, muzzle pointing to the left. Invented design, not based on any real-world firearm: a wide flared nozzle with a small bright yellow pilot-light ring under its tip, a short dark barrel tube with cooling fins, a round sand-tan fuel tank with dark straps slung under the body on a bracket, a short looping dark hose, a dark olive boxy body with a flat rail on top, a dark pistol grip and a side handle. No orange, no red. Bevelled boxy toy shapes, clean flat colours with soft cel shading, no text, no logos, no letters, no hands, no background objects."
+- **Arc:** "Orthographic turnaround sheet of ONE chunky toy sci-fi beam laser rifle for a stylised cartoon video game, three views in a single row on a flat plain light grey background, each view separated by wide empty gaps, all at the same scale and the same height, perfectly aligned: (1) left: the right side of the gun, muzzle pointing to the right; (2) middle: the end view looking straight at the muzzle; (3) right: the left side of the gun, muzzle pointing to the left. Invented design, not based on any real-world firearm: a long boxy off-white and olive body, a glowing pale cyan crystal lens at the front inside a ring of short dark prongs, a glowing pale cyan power cell visible in a window on the right side, dark cooling fins along the barrel, a dark pistol grip, a flat rail on top and a short accessory rail underneath, a solid olive stock. Bevelled boxy toy shapes, clean flat colours with soft cel shading, no text, no logos, no letters, no hands, no background objects."
+- **Popper:** "Orthographic turnaround sheet of ONE chunky toy stubby grenade launcher for a stylised cartoon video game, three views in a single row on a flat plain light grey background, each view separated by wide empty gaps, all at the same scale and the same height, perfectly aligned: (1) left: the right side of the gun, muzzle pointing to the right; (2) middle: the end view looking straight at the muzzle; (3) right: the left side of the gun, muzzle pointing to the left. Invented design, not based on any real-world firearm: a short wide dark barrel with a bright yellow toy safety tip, a sand-tan boxy body, a closed round flat drum magazine like a big tin can mounted on the left side, a dark folding stock, a dark pistol grip, a flat rail on top. Bevelled boxy toy shapes, clean flat colours with soft cel shading, no text, no logos, no letters, no hands, no background objects."
+- **Ripper:** "Orthographic turnaround sheet of ONE chunky toy saw-blade launcher for a stylised cartoon video game, three views in a single row on a flat plain light grey background, each view separated by wide empty gaps, all at the same scale and the same height, perfectly aligned: (1) left: the right side of the gun, muzzle pointing to the right; (2) middle: the end view looking straight at the muzzle; (3) right: the left side of the gun, muzzle pointing to the left. Invented design, not based on any real-world firearm: a big round light-steel toothed saw blade half-hidden inside a rounded olive-green guard housing at the front of the gun, a boxy dark gunmetal body, a sand-tan stock, a dark pistol grip, a flat rail on top, and a bright yellow toy safety lip on the front of the guard. Bevelled boxy toy shapes, clean flat colours with soft cel shading, no text, no logos, no letters, no hands, no background objects."
+- **Pulse:** "Orthographic turnaround sheet of ONE chunky toy energy orb gun for a stylised cartoon video game, three views in a single row on a flat plain light grey background, each view separated by wide empty gaps, all at the same scale and the same height, perfectly aligned: (1) left: the right side of the gun, muzzle pointing to the right; (2) middle: the end view looking straight at the muzzle; (3) right: the left side of the gun, muzzle pointing to the left. Invented design, not based on any real-world firearm: three short dark claw prongs at the front holding a glowing pale sky-blue energy sphere, three glowing pale sky-blue ring coils around a thick barrel, an off-white and sand-tan bulky body, a dark pistol grip, a flat rail on top, a short olive stock. No dark blue. Bevelled boxy toy shapes, clean flat colours with soft cel shading, no text, no logos, no letters, no hands, no background objects."
+</details>
+
+## Review lows (18 Oct 2026, review-art-stacks.md and the environments review)
+
+- **L4, the shield's LOD1 node names:** `riot_shield_lod1.glb` named its nodes `face.001`, `grip.001` and `ground.001` (LOD0's still held the names in the build scene), which three.js reads as `grip001`. `build_weapons.py` now frees LOD0's names once it's written, and the LOD1 nodes are `face`, `grip` and `ground`. asset-check reads node names straight from the GLB and fails a Blender clash suffix (new selftest case).
+- **L5, the shield grip:** the hand grip and its `grip` node sit 0.09 m above the arm strap (were 0.12): where the Rookie's fist closes with the strap on the forearm (forearm 0.108 m, strap at 0.07 m, `socket_weapon_L` 0.052 m past the wrist).
+- **L11, Armory hitches:** a muzzle flash or special added and removed a PointLight, which changed the light count and recompiled the weapon's shaders on every Fire; switching weapons freed the old materials before the new ones drew, so their shared programs were deleted and compiled again. Now a fixed pool of three point lights stays in the scene (dark when free, `apps/web/src/armory/lights.ts`), the old weapon's and camo's materials are freed after the next frame, and each flash sheet keeps one material. Measured with a `linkProgram` counter in the browser, over two laps of Hawk / K-47 / Breacher / Widow and the specials: **3 programs per switch and 3 per Fire before, 0 after.**
+- **L12, the Armory's shield panel:** the card reads the Riot Shield from `RIOT_SHIELD` in packages/content (HP 300, ±60°, raise 0.25 s, 75 % speed raised, bash 25, ricochet 60 %) instead of "not in content yet", and models without camo panels (the shield, the grenades) offer no camo or finish.
+
+  ![Shield panel](screenshots/armory-shield-panel.png)
+- **L13, skin in the art preview:** `tools/art-preview` applies the body albedo's skin weight (its alpha) as the game does, `× lerp(1, 2 × skin tone, alpha)` with the default skin_04, so faces and hands no longer render pale. Only the body layer carries skin; cosmetics are untouched.
+
+  ![Preview skin](screenshots/preview-skin-before-after.png)
+- **L14, docs/04 §9.4–9.5:** now documents the `pilot` and `charge` anchors, the `part_*` moving parts and `cutClean`, the `shield` family and shield space with its `grip`, `face` and `ground`, the shield's LOD1, exact node names, and the extras `casings`, `attach`, `slungAttach`, `frame` and `source`.
+- **Environments L15, the minibus:** its luggage stood up to 2.8 m over the 2.3 m walkable roof with no collision, so it read as a step that isn't there; it's gone, and the rack lies flush on the roof. The map's collision is unchanged (street_market.map.json is byte-identical); kit asset-check 83/83. The tank-tower legs, the mast foot and the stall posts stay see-through: they are thin poles, which docs/11 §2 allows.
+
 ## Milestone B (part 1): the arsenal
 
 ![Weapons](screenshots/weapons-sheet.png)
@@ -952,7 +1028,8 @@ What it checks:
 | Weapons Forge 10: riot shield concept, GPT Image 2.5 medium 2k | **1.00** |
 | Weapons Forge 12, batch 1: the core 6 guns from generated images: 6 concept sheets (GPT Image 2.5 medium 2k, 1.0 each) + 6 Tripo H3.1 multiview models (9 each) | **60.00** |
 | Weapons Forge 12, batch 2a: the other 8 originals from generated images: 8 concept sheets (1.0 each) + 8 Tripo H3.1 multiview models (9 each) | **80.00** |
-| **Total so far** | **303.25** |
+| Weapons Forge 12, batch 2b: the 5 specials from generated images: 5 concept sheets (1.0 each) + 5 Tripo H3.1 multiview models (9 each) | **50.00** |
+| **Total so far** | **353.25** |
 
 Phase 0 Higgsfield job IDs: concepts A `160eb90e-41ab-4ecc-a917-1e76c0563b40`, B `b40714aa-ec2f-4d2a-a522-ff5a4ebe57cc`, C `3e234313-6c57-4cd7-9946-22e6cd62b4b3`; 3D `75fc7390-163d-4c95-869c-58e8544bd654`.
 

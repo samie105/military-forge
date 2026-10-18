@@ -1,0 +1,22 @@
+asset-check: art/weapons/gas.glb  [weapon]
+-----------------------------------------------------------------------------------------------------------------
+INFO  file size                                              46 KB
+PASS  triangles                                              576 of 1000
+PASS  one mesh, one material                                 1 draw call(s)
+INFO  GPU texture memory (KTX2 est.)                         0.00 MB, 0 image(s)
+PASS  extras weaponId/family/aimPose/hands                   ok
+PASS  weaponId in packages/content                           gas
+INFO  nodes                                                  grip, ground, light
+PASS  origin on the weapon (the grip)                        bbox (-0.09, -0.17, -0.09)..(0.09, 0.11, 0.09)
+PASS  family is a docs/04 §4.2 family                        'thrown'
+PASS  aimPose has clips                                      'pistol'
+PASS  ground node (rest frame)                               ok
+PASS  light node (fuse / state light the renderer blinks)    ok
+PASS  as big as its sim ball (≥ 80 % of the content radius)  half-width 0.093 m vs radius 0.100 m
+PASS  team-colour contrast                                   blue ΔE 67, orange ΔE 33 (min 25)
+PASS  sockets for the family                                 grip
+PASS  socket directions (unit `dir`)                         ok
+PASS  sockets on the weapon (within 3 cm)                    ok
+-----------------------------------------------------------------------------------------------------------------
+RESULT: PASS  (14 pass, 0 warn, 0 fail)
+

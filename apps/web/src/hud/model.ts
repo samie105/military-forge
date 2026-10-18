@@ -36,7 +36,7 @@ export interface FeedEntry {
   victim: string;
   /** what did it, in words: a weapon name, "melee", "frag", "mine", "gas", "fell" */
   how: string;
-  /** what did it, as a sprite href ('#wpn-widow', '#icon-g-frag', '#icon-melee'); '' = say `how` */
+  /** what did it, as a sprite href ('#icon-wpn-widow', '#icon-g-frag', '#icon-melee'); '' = say `how` */
   icon: string;
   badge: FeedBadge;
   headshot: boolean;
@@ -344,15 +344,15 @@ export function pickupIcon(def: PickupDef): string {
 export function eventLook(kind: string): { color: string; icon: string } {
   switch (kind) {
     case 'emp':
-      return { color: 'var(--c-ev-emp)', icon: 'emp' };
+      return { color: 'var(--c-ev-emp)', icon: 'ev-emp' };
     case 'gust':
-      return { color: 'var(--c-ev-wind)', icon: 'arrow-right' };
+      return { color: 'var(--c-ev-squall)', icon: 'ev-squall' };
     case 'fog':
-      return { color: 'var(--c-muted-strong)', icon: 'eye' };
+      return { color: 'var(--c-ev-fog)', icon: 'ev-fog' };
     case 'gravitySurge':
     case 'lowGravity':
     case 'flip':
-      return { color: 'var(--c-ev-gravity)', icon: 'gravity' };
+      return { color: 'var(--c-ev-gravity)', icon: 'ev-gravity' };
     default:
       return { color: 'var(--c-ev-gravity)', icon: 'warn' };
   }

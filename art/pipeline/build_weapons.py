@@ -52,6 +52,8 @@ from mathutils import Matrix, Vector
 argv = sys.argv[sys.argv.index("--") + 1:]
 OUT = Path(argv[0])
 RUNTIME = Path(argv[argv.index("--runtime") + 1]) if "--runtime" in argv else None
+# --only id,id: build just these and merge them into the existing weapons.json and sockets.json
+ONLY = set(argv[argv.index("--only") + 1].split(",")) if "--only" in argv else None
 
 GUNMETAL = (0.20, 0.22, 0.25)
 STEEL = (0.47, 0.50, 0.55)
@@ -74,7 +76,9 @@ FRAG_OLIVE = (0.40, 0.46, 0.26)  # lighter than POLY: a thrown frag must read on
 SAND_LIGHT = (0.86, 0.78, 0.52)
 YELLOW = (0.95, 0.80, 0.15)  # hazard yellow: grenade levers, mine stripes (never the team orange)
 LED = (0.92, 0.92, 0.88)     # the mine's state light: near-white, the renderer tints it
-CYAN = (0.35, 0.95, 1.00)    # Arc lens and cell
+CYAN = (0.35, 0.95, 1.00)    # Arc lens and cell; the EMP grenade's coils
+SMOKE_GREY = (0.80, 0.82, 0.85)  # the smoke canister: pale like its cloud (clouds.ts #d0d5db)
+GAS_GREEN = (0.62, 0.72, 0.18)   # the gas canister: the toxic yellow-green of its cloud
 BLUE = (0.30, 0.62, 1.00)    # Pulse coils and orb
 EMBER = (1.00, 0.42, 0.12)   # Dragon pilot ring
 GLOW_COLOURS = {CYAN, BLUE, EMBER}  # `_GLOW` 1: emissive, no baked shading
@@ -382,6 +386,72 @@ def frag(g):  # frag grenade: the size of the sim's ball (FRAG.radius 0.1 m), he
     g.ground(-r * k)  # stands on its base at rest
 
 
+def _fuse(g, top):
+    """A fuse cap, yellow lever and pin ring on top of a canister at z `top`, the red fuse light the renderer
+    blinks (`light`) and the `pin` node, as on the frag."""
+    g.cyl((0, 0, top + 0.012), 0.028, 0.024, STEEL, axis="Z", verts=10)
+    g.box((0.03, 0, top - 0.03), (0.014, 0.03, 0.085), YELLOW, rot=(0, 12, 0), bevel=0.003)    # the lever
+    g.torus((-0.032, 0, top + 0.02), 0.019, 0.005, YELLOW, axis="X")                             # the pin ring
+    g.sphere((0, 0, top + 0.03), 0.013, RED, segs=8, rings=5)                                    # fuse light
+    g.node("pin", (-0.032, 0, top + 0.02), dir=(-1, 0, 0))
+    g.node("light", (0, 0, top + 0.04), dir=(0, 0, 1))
+
+
+def smoke(g):  # smoke grenade: a tall pale canister with a ring of vent holes (docs/02 §14)
+    # Each grenade reads by its shape, not just its colour (the owner, 18 Oct): the tallest of the four,
+    # pale like its cloud, dark vents round the top and dark bands that frame it on light skies.
+    h, r = 0.25, 0.085
+    g.cyl((0, 0, 0), r, h, SMOKE_GREY, axis="Z", verts=14, bevel=0.006)
+    for z in (-0.085, 0.085):
+        g.cyl((0, 0, z), r * 1.025, 0.014, DARK, axis="Z", verts=14, bevel=0)
+    for i in range(8):                                                                   # the vent holes
+        a = i * math.pi / 4
+        g.box((r * math.cos(a), r * math.sin(a), 0.035), (0.012, 0.022, 0.03), DARK, rot=(0, 0, math.degrees(a)), bevel=0)
+    _fuse(g, h / 2)
+    g.ground(-h / 2)
+
+
+def gas(g):  # toxic gas grenade: a squat canister with a hazard band and a valve on top
+    h, r = 0.21, 0.088
+    g.cyl((0, 0, 0), r, h, GAS_GREEN, axis="Z", verts=14, bevel=0.006)
+    for i in range(12):                                                                  # the hazard band
+        a = i * math.pi / 6
+        g.box((r * 1.01 * math.cos(a), r * 1.01 * math.sin(a), 0.0), (0.008, 0.047, 0.05), YELLOW if i % 2 else DARK,
+              rot=(0, 0, math.degrees(a)), bevel=0)
+    top = h / 2
+    g.cyl((0, 0, top + 0.02), 0.02, 0.04, STEEL, axis="Z", verts=10)                     # the valve stem
+    g.torus((0, 0, top + 0.045), 0.034, 0.007, RED, axis="Z", segs=(12, 5))              # the handwheel
+    g.box((0, 0, top + 0.045), (0.068, 0.008, 0.008), RED, bevel=0)
+    g.box((0, 0, top + 0.045), (0.008, 0.068, 0.008), RED, bevel=0)
+    g.sphere((0, 0, top + 0.058), 0.011, RED, segs=8, rings=5)                           # fuse light
+    g.node("light", (0, 0, top + 0.066), dir=(0, 0, 1))
+    g.ground(-top)
+
+
+def flash(g):  # flashbang: a slotted steel cylinder
+    h, r = 0.20, 0.08
+    # mid steel with light slots, so it reads darker than the pale smoke canister beside it
+    g.cyl((0, 0, 0), r, h, STEEL, axis="Z", verts=14, bevel=0.005)
+    for z in (-h / 2 + 0.01, h / 2 - 0.01):
+        g.cyl((0, 0, z), r * 1.03, 0.02, DARK, axis="Z", verts=14, bevel=0)              # end caps
+    for i in range(6):                                                                   # the slots
+        a = i * math.pi / 3
+        g.box((r * math.cos(a), r * math.sin(a), 0.0), (0.012, 0.018, 0.12), WHITE, rot=(0, 0, math.degrees(a)), bevel=0)
+    _fuse(g, h / 2)
+    g.ground(-h / 2)
+
+
+def emp(g):  # EMP grenade: a disc with glowing coils round its rim and an emitter on top
+    h, r = 0.06, 0.1
+    g.cyl((0, 0, 0), r * 0.95, h, STEEL, axis="Z", verts=16, bevel=0.006)  # steel, not a camo panel
+    for z in (-0.014, 0.014):
+        g.torus((0, 0, z), r * 0.96, 0.009, CYAN, axis="Z", segs=(16, 5))                 # the coils (glow)
+    g.cyl((0, 0, h / 2 + 0.004), 0.06, 0.01, DARK, axis="Z", verts=14, bevel=0.002)
+    g.sphere((0, 0, h / 2 + 0.014), 0.018, LED, segs=8, rings=5, scale=(1, 1, 0.8))     # the emitter
+    g.node("light", (0, 0, h / 2 + 0.03), dir=(0, 0, 1))
+    g.ground(-h / 2)
+
+
 def mine(g):  # proximity mine: origin at its centre, +Z up is its top
     # A hazard-striped rim and a pale top so it reads from the side view (it is a 0.2 m disc seen
     # edge-on); the light is near-white so the renderer can tint it by state (docs/02 §14: green
@@ -653,6 +723,11 @@ def _shield_plate(g, strips, rows, rim_depth, bolts, chevron_bevel):
         g.box((sx * 0.055, -0.115, 0.09), (0.19, 0.055, 0.009), WHITE, bevel=chevron_bevel, rot=(0, 0, -sx * 45))  # ^
 
 
+# the hand grip's height above the arm strap: the Rookie's fist closes 0.090 m along the forearm from the strap
+# (forearm 0.108 m, strap at 0.07 m, socket_weapon_L 0.052 m past the wrist; review L5). It was 0.12, out of reach.
+GRIP_Y = 0.09
+
+
 def riot_shield(g):  # off-hand riot shield, LOD0 (≤ 1,000 tris)
     # Readable by role at ~25 px: a light plate against dark ground, a dark rim against light sky, a
     # pale window band near the top and a white chevron on the strike face. No team colours.
@@ -662,9 +737,9 @@ def riot_shield(g):  # off-hand riot shield, LOD0 (≤ 1,000 tris)
     g.box((0, 0, -0.028), (0.14, 0.05, 0.014), DARK, bevel=0.003)
     for sx in (-1, 1):
         g.box((sx * 0.064, 0, 0.012), (0.014, 0.05, 0.08), DARK, bevel=0)
-    g.box((0, 0.12, 0.022), (0.12, 0.022, 0.022), DARK, bevel=0.003)
+    g.box((0, GRIP_Y, 0.022), (0.12, 0.022, 0.022), DARK, bevel=0.003)
     for sx in (-1, 1):
-        g.box((sx * 0.05, 0.12, 0.04), (0.018, 0.018, 0.03), DARK, bevel=0)
+        g.box((sx * 0.05, GRIP_Y, 0.04), (0.018, 0.018, 0.03), DARK, bevel=0)
     _shield_nodes(g)
 
 
@@ -672,12 +747,12 @@ def riot_shield_lod1(g):  # the same shield at ~25 % of the triangles
     _shield_plate(g, strips=3, rows=[(-0.42, 0.24, SHIELD_PLATE, 0.04), (0.24, 0.33, SHIELD_GLASS, 0.032),
                                      (0.33, 0.42, SHIELD_PLATE, 0.04)], rim_depth=0.056, bolts=False, chevron_bevel=0)
     g.box((0, 0, -0.028), (0.14, 0.05, 0.014), DARK, bevel=0)
-    g.box((0, 0.12, 0.022), (0.12, 0.022, 0.022), DARK, bevel=0)
+    g.box((0, GRIP_Y, 0.022), (0.12, 0.022, 0.022), DARK, bevel=0)
     _shield_nodes(g)
 
 
 def _shield_nodes(g):
-    g.node("grip", (0, 0.12, 0.022), dir=(1, 0, 0))            # the left hand's hold (IK), along the bar
+    g.node("grip", (0, GRIP_Y, 0.022), dir=(1, 0, 0))          # the left hand's hold (IK), along the bar
     g.node("face", (0, 0, 0.09), dir=(0, 0, 1), halfSize=[0.275, 0.45])
     g.node("ground", (0, -0.45, 0.07), dir=(0, -1, 0))         # standing on its bottom edge: local +Y is up
 
@@ -706,6 +781,10 @@ ARSENAL = [
     ("machete", machete, "Machete", "melee", "melee", "pistol", 1),
     ("frag", frag, "Frag grenade", "grenade", "thrown", "pistol", 1),
     ("mine", mine, "Proximity mine", "mine", "thrown", "pistol", 1),
+    ("smoke", smoke, "Smoke", "grenade", "thrown", "pistol", 1),
+    ("gas", gas, "Toxic gas", "grenade", "thrown", "pistol", 1),
+    ("flash", flash, "Flashbang", "grenade", "thrown", "pistol", 1),
+    ("emp", emp, "EMP", "grenade", "thrown", "pistol", 1),
 ]
 # optional weapon extras (see the module docstring)
 EXTRAS = {
@@ -740,6 +819,8 @@ OLD_SOCKETS = json.loads((OUT / "sockets.json").read_text())["weapons"] if (OUT 
 
 manifest, sockets = {}, {}
 for wid, build, name, archetype, family, aim_pose, hands in ARSENAL:
+    if ONLY is not None and wid not in ONLY:
+        continue
     if wid in SCANNED and wid in OLD_MANIFEST and wid in OLD_SOCKETS:
         manifest[wid], sockets[wid] = OLD_MANIFEST[wid], OLD_SOCKETS[wid]
         print(f"[build_weapons] {wid:9s} scanned: kept (build_gun_scan.py)")
@@ -777,9 +858,13 @@ for wid, build, name, archetype, family, aim_pose, hands in ARSENAL:
         export(RUNTIME / "weapons" / f"{wid}.glb", obj, runtime=True)
     print(f"[build_weapons] {wid:9s} {len(me.loop_triangles):4d} tris  length {hi.z - lo.z:.2f} m  nodes {sorted(nodes)}")
     if wid in LODS:  # the LOD1 mesh: same extras and nodes, <id>_lod1.glb
+        for c in obj.children:  # LOD0 is written; free its node names, or LOD1's become `face.001` (review L4)
+            c.name = f"{wid}_lod0_{c.name}"
         g1 = Gun(f"{wid}_lod1")
         LODS[wid](g1)
         lod = paint_and_join(g1, mat)
+        for c in lod.children:
+            c.name = c.name.split(".")[0]
         for k in obj.keys():
             lod[k] = obj[k]
         lod.data.calc_loop_triangles()
@@ -800,6 +885,9 @@ SOCKETS_DOC = {
               "rig socket when not socket_weapon_R",
     "weapons": sockets,
 }
+if ONLY is not None:  # merge into what's there, so the other weapons keep their entries
+    manifest = {**json.loads((OUT / "weapons.json").read_text()), **manifest}
+    SOCKETS_DOC["weapons"] = {**json.loads((OUT / "sockets.json").read_text())["weapons"], **sockets}
 (OUT / "weapons.json").write_text(json.dumps(manifest, indent=2))
 (OUT / "sockets.json").write_text(json.dumps(SOCKETS_DOC, indent=1))
 if RUNTIME:

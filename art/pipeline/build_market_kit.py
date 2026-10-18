@@ -12,6 +12,9 @@ glTF extras carry its gameplay collision in piece-local metres (x right, y up):
                                        them with the ground into ONE terrain skyline polygon
   solids     [[x0, y0, x1, y1, ...]]   free-standing solid polygons, CCW (bus body, stall counter)
   oneWays    [[ax, ay, bx, by], ...]   one-way platforms (awnings, balconies, catwalks), may slope
+  blocksBullets  true on pieces whose one-ways are floor slabs (balconies, the tank deck, the catwalk):
+             they stop bullets, blasts, gas and sight and stay one-way for bodies (docs/11 §2);
+             absent on sheet and cloth (awnings, umbrellas), which bullets pass
   material   sim material id (packages/content Material: 0 concrete, 1 metal, 2 wood, 3 dirt)
   noFlip     true on pieces with lettering: the layout must not mirror them
   adSlot     on Screen / Hoarding bezels (docs/14 §2.1, §4.2): kind, format, size [w, h] m,
@@ -256,6 +259,8 @@ def building(pid, height, color, balconies):
             p.box((px - 0.03, -0.93, z), (px + 0.03, -0.87, z + 0.88), STEEL, 0.0)
         p.box((x0, -0.92, z + 0.85), (x1, -0.88, z + 0.9), STEEL, 0.0)
         p.one_ways.append((x0, z, x1, z))
+    if balconies:
+        p.extras["blocksBullets"] = True  # 0.15 m concrete slabs under thin railings
     p.terrain = [(-3, 3, height)]
     return p
 
@@ -316,7 +321,8 @@ def umbrella_stall():
 
 
 def minibus():
-    """Two-tone minibus: solid cover with a walkable roof rack; the luggage rides at the back."""
+    """Two-tone minibus: solid cover with a walkable roof rack. Nothing rides on the rack: luggage drawn up to
+    2.8 m over the 2.3 m collision top read as a step that isn't there (environments review L15)."""
     p = Piece("sm_minibus", material=1)
     p.box((-2.6, -0.95, 0.35), (2.2, 0.95, 2.3), BUS, 0.08)
     p.box((2.2, -0.95, 0.35), (2.6, 0.95, 1.6), BUS, 0.06)
@@ -332,9 +338,7 @@ def minibus():
     for x in (-1.7, 1.7):
         for y in (-0.85, 0.85):
             p.cyl((x, y, 0.33), 0.33, 0.24, BLACK, axis="Y", verts=12)  # wheels touch y = 0
-    p.box((-2.3, -0.8, 2.3), (1.9, 0.8, 2.36), STEEL, 0.0)  # roof rack
-    for x, c in ((-1.6, (0.30, 0.42, 0.66)), (-0.6, (0.62, 0.30, 0.22)), (0.6, (0.40, 0.52, 0.30))):
-        p.box((x - 0.4, 0.38, 2.36), (x + 0.4, 0.78, 2.8), c, 0.06)  # luggage, behind the plane
+    p.box((-2.3, -0.8, 2.3), (1.9, 0.8, 2.36), STEEL, 0.0)  # roof rack, flush on the walkable roof
     p.solids = [(-2.6, 0.35, 2.6, 0.35, 2.6, 1.6, 2.2, 2.3, -2.6, 2.3)]
     return p
 
@@ -352,6 +356,7 @@ def tank_tower():
     p.cyl((0, 0, 4.72), 0.8, 1.4, BLACK, verts=16, bevel=0.05)
     p.cyl((0, 0, 5.42), 0.25, 0.06, BLACK, verts=12)
     p.one_ways = [(-1.6, 4.0, -0.8, 4.0), (0.8, 4.0, 1.6, 4.0)]
+    p.extras["blocksBullets"] = True  # a steel deck plate
     p.solids = [(-0.8, 4.0, 0.8, 4.0, 0.8, 5.4, -0.8, 5.4)]
     return p
 
@@ -385,6 +390,7 @@ def billboard():
     p.text("FRESH MARKET", (0, 0.17, 13.9), 0.9, INK)
     p.text("FRUIT   BREAD   TOOLS", (0, 0.17, 12.8), 0.42, (0.30, 0.20, 0.12))
     p.one_ways = [(-4.0, 10.0, 4.0, 10.0)]
+    p.extras["blocksBullets"] = True  # the catwalk's box beam
     p.solids = [(-4.0, 12.0, 4.0, 12.0, 4.0, 15.2, 0.0, 20.2, -4.0, 15.2)]
     return p
 

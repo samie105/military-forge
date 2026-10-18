@@ -201,8 +201,12 @@ Rest positions are for the Rookie (glTF metres, character at the origin facing +
   - `offhand`: left-hand IK target, on two-handed weapons. It must be **within 0.10 m of the grip** (the weapon check enforces this). The rifle aim poses are solved so the left hand reaches it, and `socket_offhand_IK`, in every pose (the character build asserts this);
   - `eject`: casing spawn;
   - optional: `mag` (reload), `tip` (melee hit point, e.g. the machete), `light` (blinking LED, e.g. the mine);
+  - the special weapons' effect anchors (`specials.vfx.json`): `pilot` (the Dragon's pilot flame) and `charge` (where the Ripper's blade and the Pulse's orb build up);
   - `ground` on throwables and deployables (frag, mine): the frame of the item **at rest in the world**. Its local +Y (glTF) is world up and its origin is the point that touches the floor. To place it, set `world = floorPoint × inverse(ground.local)`. The GLB itself stays in the hand frame.
-- Budget: **≤ 1,000 tris**, one mesh, one material, ≤ 256² texture per weapon (LOD0; weapons have no LOD1).
+- Moving parts: child mesh nodes `part_slide`, `part_pump`, `part_bolt`, `part_cylinder` and `part_mag`, each with its pivot at the node and its motion in extras (§9.5). The renderer animates one only when it carries `cutClean: true` (its cut is capped and its shell closed); any other is baked into the gun, standing still.
+- **The riot shield** (family `shield`) is modelled in **shield space**, not the weapon frame: origin on the arm strap, +Y up the long edge, +Z out of the strike face (`frame: "shield"`). Its nodes are `grip` (the left hand's hold, 0.09 m above the strap, where the Rookie's fist closes), `face` (the strike face's centre, `halfSize` [w/2, h/2]) and `ground`.
+- Budget: **≤ 1,000 tris**, one mesh, one material (moving parts share it), ≤ 256² texture per weapon. Weapons have no LOD1, except the riot shield: it is big on screen and on the back, so `riot_shield_lod1.glb` carries the same nodes and extras at about a quarter of the triangles.
+- Node names are exact: the renderer looks them up by name, so a Blender clash suffix (`grip.001`, which three.js reads as `grip001`) fails the weapon check.
 
 ### 9.5 Node extras
 Blender custom properties export as glTF `extras` (`export_extras`):
@@ -217,13 +221,18 @@ Blender custom properties export as glTF `extras` (`export_extras`):
   - the Locker manifest also carries `name` and `cosmeticId`.
 - **Weapons:**
   - `weaponId`, matching `packages/content`;
-  - `family`: the §4.2 weapon family (pistol, dual, rifle, shotgun, sniper, launcher, heavy, melee, plus `thrown` for grenades and deployables);
+  - `family`: the §4.2 weapon family (pistol, dual, rifle, shotgun, sniper, launcher, heavy, melee, plus `thrown` for grenades and deployables and `shield` for the riot shield);
   - `aimPose`: the aim-pose set the clips provide for it today (`pistol` or `rifle`; dual wield uses `dual`). Families without their own poses map to the nearest set until those clips exist. The character manifest's `aimPoseFallback` holds the same mapping per family;
-  - `hands` (1 or 2), `name` and `archetype` (the docs/03 role).
+  - `hands` (1 or 2), `name` and `archetype` (the docs/03 role);
+  - `casings`: false on weapons that throw no casing per shot (fuel, cells, orbs, blades, drum rounds); they have no `eject` node;
+  - `attach`: the rig socket it mounts on when not `socket_weapon_R` (the riot shield: `socket_shield`), and `slungAttach` where it hangs when carried (`socket_shield_back`);
+  - `frame`: `shield` for shield space (above); absent means the weapon frame;
+  - `source`: `scan` on weapons rebuilt from generated models (`build_gun_scan.py`), which the head-clearance check gates;
+  - on moving parts: `axis` (unit, weapon frame), `travel` (m: slide, pump, bolt, mag) or `angle` (degrees a shot: cylinder), `lift` (degrees a bolt handle turns up first, default 60) and `cutClean`.
 - **Kit pieces:** `kitPiece` and `layer` (gameplay, mid or far, docs/11 §2). Gameplay pieces also carry collision in piece-local metres, which the map compiler turns into a MapDef:
   - `terrain` [[x0, x1, h]];
   - `solids` [[x, y, …]];
-  - `oneWays` [[ax, ay, bx, by]];
+  - `oneWays` [[ax, ay, bx, by]], with `blocksBullets: true` on a piece whose one-ways are floor slabs (balconies, decks, catwalks: they stop bullets, docs/11 §2); the compiler writes it onto those one-ways;
   - `material` (the sim material id).
 
 ### 9.6 Map kit pieces

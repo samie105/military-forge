@@ -42,7 +42,7 @@ describe('kill feed', () => {
     expect(lines.map((l) => l.key)).toEqual([1, 2, 3, 4, 5]);
     // the kit's glyphs and badges: weapon art, the grenade, melee; headshot, own goal, fall, blast
     expect(lines.map((l) => [l.icon, l.badge, l.fell])).toEqual([
-      ['#wpn-hammer', 'headshot', false],
+      ['#icon-wpn-hammer', 'headshot', false],
       ['#icon-melee', null, false],
       ['#icon-g-frag', 'suicide', false],
       ['', 'fall', true],
@@ -200,9 +200,10 @@ describe('riot shield, dash, conditions, grenade belt, pickups (UI brief fields)
   });
 
   it('map events wear their kind: colour token and icon', () => {
-    expect(eventLook('emp')).toEqual({ color: 'var(--c-ev-emp)', icon: 'emp' });
-    expect(eventLook('flip').icon).toBe('gravity');
-    expect(eventLook('gust').color).toBe('var(--c-ev-wind)');
+    expect(eventLook('emp')).toEqual({ color: 'var(--c-ev-emp)', icon: 'ev-emp' });
+    expect(eventLook('flip').icon).toBe('ev-gravity');
+    expect(eventLook('fog')).toEqual({ color: 'var(--c-ev-fog)', icon: 'ev-fog' });
+    expect(eventLook('gust').color).toBe('var(--c-ev-squall)');
     expect(eventLook('custom')).toEqual({ color: 'var(--c-ev-gravity)', icon: 'warn' });
   });
 
@@ -223,6 +224,13 @@ describe('the kit wiring', () => {
     expect(stateMatches('guest host+ready', on)).toBe(true);
     expect(stateMatches('host+not-ready', on)).toBe(false);
     expect(stateMatches('guest', on)).toBe(false);
+    // round two's negation: "!a" while a is not active, combinable with + and alternatives
+    expect(stateMatches('!guest', on)).toBe(true);
+    expect(stateMatches('!host', on)).toBe(false);
+    expect(stateMatches('!switching+!dual', on)).toBe(true);
+    expect(stateMatches('host+!ready', on)).toBe(false);
+    expect(stateMatches('guest !ready', on)).toBe(false);
+    expect(stateMatches('guest !copied', on)).toBe(true);
   });
 
   it('ping looks: green up to 100 ms, amber to 200, red beyond', () => {
@@ -281,7 +289,7 @@ describe('hudFrame', () => {
     const playing = { phase: MatchPhase.InProgress, number: 1, secondsLeft: 222, untimed: false, secondsElapsed: 0, killLimit: 10, timeLimit: 300, countdownTotal: 3, mapName: 'Lunar Outpost', localId: 0, myScore: 6, leaderScore: 8, leaderName: 'Kemi', ready: true, votes: 0, humans: 2, voted: false, results: null };
     const net = { rttMs: 38, snapshotsPerSec: 30, kbInPerSec: 8, kbOutPerSec: 4, interpDelayMs: 100, status: 'connected' };
     const alive = hudFrame(input({ match: playing, frame: { ...input().frame, net } }), memory).values;
-    const dead = hudFrame(input({ frame: { tick: 1, localId: 0, players: [{ ...me, alive: false, respawnTicks: 90 }], grenades: [] } }), { ...memory, death: { label: 'Taken out by', killer: 'Kemi', icon: '#wpn-widow' } }).values;
+    const dead = hudFrame(input({ frame: { tick: 1, localId: 0, players: [{ ...me, alive: false, respawnTicks: 90 }], grenades: [] } }), { ...memory, death: { label: 'Taken out by', killer: 'Kemi', icon: '#icon-wpn-widow' } }).values;
     expect([...bound].filter((k) => alive[k] === undefined && dead[k] === undefined)).toEqual([]);
   });
 
@@ -299,7 +307,7 @@ describe('hudFrame', () => {
       'v.shield': '0.8',
       'player.empCause': 'EMP field',
       'weapon.0.name': 'Hammer .44',
-      'weapon.0.icon': '#wpn-hammer',
+      'weapon.0.icon': '#icon-wpn-hammer',
       'weapon.0.mag': '2',
       'weapon.1.name': 'Buzz',
       'weapon.1.ammo': '40 / 250',
@@ -332,7 +340,7 @@ describe('hudFrame', () => {
 
   it('dead: who did it, the respawn countdown and its bar', () => {
     const dead = { ...me, alive: false, respawnTicks: 90 };
-    const { values: v, tokens } = hudFrame(input({ frame: { tick: 1, localId: 0, players: [dead], grenades: [] } }), { ...memory, death: { label: 'Taken out by', killer: 'Kemi', icon: '#wpn-widow' } });
+    const { values: v, tokens } = hudFrame(input({ frame: { tick: 1, localId: 0, players: [dead], grenades: [] } }), { ...memory, death: { label: 'Taken out by', killer: 'Kemi', icon: '#icon-wpn-widow' } });
     expect(v).toMatchObject({ 'death.killer': 'Kemi', 'death.lead': 'Respawn in', 'player.respawnIn': '2', 'death.unit': 's', 'v.respawn': '0.5' });
     expect(tokens).toEqual(expect.arrayContaining(['spectating', 'death-weapon']));
     expect(tokens).not.toContain('reticle');

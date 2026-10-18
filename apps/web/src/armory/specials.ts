@@ -17,7 +17,7 @@ import {
   NormalBlending,
   type Object3D,
   PlaneGeometry,
-  PointLight,
+  type PointLight,
   type Quaternion,
   RepeatWrapping,
   Sprite,
@@ -28,6 +28,7 @@ import {
   Vector3,
 } from 'three';
 import type { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import type { LightPool } from './lights';
 
 /** preview speed scale: a 7 m/s flame or an 8 m/s orb would leave the stage in a blink */
 export const SPEED = 0.15;
@@ -157,6 +158,8 @@ export class SpecialsPreview {
     private readonly parent: Object3D,
     private readonly base: string,
     private readonly loader: GLTFLoader,
+    /** the viewer's fixed point lights, in `parent`'s space (lights.ts) */
+    private readonly lights: LightPool,
   ) {}
 
   /** Play `styleId`; with `freezeS`, run to that moment and hold it (QA screenshots). */
@@ -264,11 +267,7 @@ export class SpecialsPreview {
   }
 
   private light(def: { color: string; intensity: number; rangeM: number } | undefined, at: Vector3): PointLight | null {
-    if (!def) return null;
-    const l = new PointLight(new Color(def.color), def.intensity, def.rangeM, 2);
-    l.position.copy(at);
-    this.add(l);
-    return l;
+    return this.lights.take(def, at);
   }
 
   /** short-lived sprites (trails, sparks, shards) owned by one effect */
@@ -371,7 +370,7 @@ export class SpecialsPreview {
       dispose: () => {
         for (const p of puffs) this.drop(p.s);
         if (pilot) this.drop(pilot);
-        if (light) this.parent.remove(light);
+        this.lights.give(light);
       },
     };
   }
@@ -416,7 +415,7 @@ export class SpecialsPreview {
         mat.dispose();
         if (glow) this.drop(glow);
         if (flare) this.drop(flare);
-        if (light) this.parent.remove(light);
+        this.lights.give(light);
       },
     };
   }
@@ -484,7 +483,7 @@ export class SpecialsPreview {
         this.drop(orb.s);
         trail.dispose();
         if (ring) this.drop(ring);
-        if (light) this.parent.remove(light);
+        this.lights.give(light);
       },
     };
   }

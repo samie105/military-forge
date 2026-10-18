@@ -147,20 +147,20 @@ export function Join() {
             )}
             {state === 'pasted' && (
               <p className="status status--ok">
-                <Icon name="check-circle" />
+                <Icon name="ok" />
                 Link pasted. Found code {code}
               </p>
             )}
             {state === 'ready' && (
               <p className="status status--ok">
-                <Icon name="check-circle" />
+                <Icon name="ok" />
                 Code {code}: press Enter to join
               </p>
             )}
             {state === 'error' && (
               <div>
                 <p className="status status--bad">
-                  <Icon name="x-octagon" />
+                  <Icon name="bad" />
                   {error}
                 </p>
                 <p className="join__hint muted">Check the letters with your friend, or ask them to send the link again. A room closes when everyone leaves.</p>

@@ -98,11 +98,11 @@ const SHIELD_WORDS = {
   slung: { state: 'Slung', covers: 'Back covered', action: 'raise it' },
 } as const;
 const BANNER_LOOK: Record<BannerKind, { color: string; icon: string }> = {
-  info: { color: 'var(--c-accent)', icon: 'info' },
+  info: { color: 'var(--c-volt)', icon: 'info' },
   event: { color: 'var(--c-ev-gravity)', icon: 'bolt' },
-  success: { color: 'var(--c-ok)', icon: 'check-circle' },
+  success: { color: 'var(--c-ok)', icon: 'ok' },
   warning: { color: 'var(--c-warn)', icon: 'warn' },
-  danger: { color: 'var(--c-hp)', icon: 'x-octagon' },
+  danger: { color: 'var(--c-hp)', icon: 'bad' },
 };
 
 const fixed = (v: number, digits = 3) => (Math.round(v * 10 ** digits) / 10 ** digits).toString();
@@ -326,11 +326,11 @@ function svgIcon(className: string, ref: string, label?: string): SVGSVGElement 
 }
 
 const BADGE_WORDS: Record<NonNullable<FeedEntry['badge']>, [icon: string, label: string]> = {
-  headshot: ['headshot', 'headshot'],
-  ricochet: ['ricochet', 'ricochet off a shield'],
-  blast: ['blast', 'blast'],
-  fall: ['fall', 'fall'],
-  suicide: ['suicide', 'own goal'],
+  headshot: ['b-headshot', 'headshot'],
+  ricochet: ['b-ricochet', 'ricochet off a shield'],
+  blast: ['b-blast', 'blast'],
+  fall: ['b-fall', 'fall'],
+  suicide: ['b-self', 'own goal'],
 };
 
 /** One kill-feed line in the kit's markup (.kf): names, what did it, and its badge. */
@@ -341,7 +341,7 @@ export function feedLine(entry: FeedEntry): HTMLLIElement {
     if (bot) el('span', 'badge badge--bot', li).textContent = 'Bot';
   };
   const what = () => {
-    if (entry.icon) li.appendChild(svgIcon(entry.icon.startsWith('#wpn-') ? 'ic ic--wpn' : 'ic', entry.icon, entry.how));
+    if (entry.icon) li.appendChild(svgIcon(entry.icon.startsWith('#icon-wpn-') ? 'ic ic--wpn' : 'ic', entry.icon, entry.how));
     else el('span', 'kf__how', li).textContent = entry.how;
   };
   const badge = () => {
@@ -350,7 +350,7 @@ export function feedLine(entry: FeedEntry): HTMLLIElement {
     li.appendChild(svgIcon('ic kf__badge', iconHref(icon), label));
   };
   if (entry.fell) {
-    li.appendChild(svgIcon('ic kf__badge kf__badge--fall', iconHref('fall'), 'fall'));
+    li.appendChild(svgIcon('ic kf__badge kf__badge--fall', iconHref('b-fall'), 'fall'));
     name(entry.victim, entry.victimBot);
     el('span', 'kf__how', li).textContent = 'fell';
   } else if (entry.suicide) {
@@ -704,7 +704,7 @@ export class Hud {
       const row = el('tr', [r.you ? 'is-you' : '', r.bot ? 'is-bot' : ''].filter(Boolean).join(' '), body);
       el('td', 't-rank', row).textContent = String(i + 1);
       const who = el('span', 't-player', el('td', '', row));
-      if (r.bot) el('span', 'avatar avatar--sm avatar--bot', who).appendChild(svgIcon('ic ic--sm', iconHref('chip')));
+      if (r.bot) el('span', 'avatar avatar--sm avatar--bot', who).appendChild(svgIcon('ic ic--sm', iconHref('bot')));
       else el('span', 'avatar avatar--sm', who).textContent = ([...r.name.trim()][0] ?? '?').toUpperCase();
       who.append(playerName(r.name, r.bot));
       if (r.host) {
@@ -714,7 +714,7 @@ export class Hud {
       if (r.you) el('span', 'badge badge--you', who).textContent = 'You';
       if (r.bot) {
         const b = el('span', 'badge badge--bot', who);
-        b.append(svgIcon('ic', iconHref('chip')), 'Bot');
+        b.append(svgIcon('ic', iconHref('bot')), 'Bot');
       }
       if (r.left) el('span', 'badge badge--bot', who).textContent = 'Left';
       el('td', 't-num', row).textContent = String(r.kills);

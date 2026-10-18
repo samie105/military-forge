@@ -724,6 +724,10 @@ def check_weapon(r: Report, objs, args):
         r.ok(wid in known, "weaponId in packages/content", wid if wid in known else
              f"{wid} is not in packages/content/src/{{weapons,grenades}}.ts yet", warn_only=True)
     nodes = {o.name.split(".")[0]: o.matrix_world.translation.copy() for o in objs if o.type == "EMPTY"}
+    # the renderer looks nodes up by exact name (three.js turns `grip.001` into `grip001`); Blender's import
+    # renames clashes, so read the names from the file itself (review L4: the shield's LOD1 had `grip.001`)
+    suffixed = sorted(n for n in glb_node_names(args["files"]) if re.search(r"\.\d{3}$", n))
+    r.ok(not suffixed, "node names exact (no Blender .001 suffix)", ", ".join(suffixed) if suffixed else "ok")
     lo, hi = bbox([p for t in tris for p in t])
     r.info("nodes", ", ".join(sorted(nodes)) or "none")
     r.ok(lo.x - 0.02 <= 0 <= hi.x + 0.02 and lo.y - 0.02 <= 0 <= hi.y + 0.02 and lo.z - 0.02 <= 0 <= hi.z + 0.02,
@@ -952,6 +956,16 @@ def uncovered_blobs(o):
         if h >= 3 and (w >= 3 or deep):
             blobs.append(((min(xs) * RVC_CELL, (max(xs) + 1) * RVC_CELL), (min(zs) * RVC_CELL, (max(zs) + 1) * RVC_CELL)))
     return blobs
+
+
+def glb_node_names(files):
+    """Every node name as written in the GLB files (not as Blender's import renamed them)."""
+    names = []
+    for f in files:
+        b = Path(f).read_bytes()
+        jl = struct.unpack_from("<I", b, 12)[0]
+        names += [n.get("name", "") for n in json.loads(b[20:20 + jl]).get("nodes", [])]
+    return names
 
 
 def check_clips(r: Report, args):

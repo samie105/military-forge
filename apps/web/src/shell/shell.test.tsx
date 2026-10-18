@@ -239,7 +239,7 @@ describe('lobby (screen 4)', () => {
     expect(html).toContain('Copy link');
     expect(html).toContain('abc.trycloudflare.com/r/KMTXRA');
     expect(html).toContain('Share on WhatsApp');
-    expect(html).toMatch(/<svg viewBox="0 0 \d+ \d+"[^>]*><path fill="var\(--c-qr-ink\)"/);
+    expect(html).toMatch(/<svg viewBox="0 0 \d+ \d+"[^>]*><path fill="var\(--c-qr-dark\)"/);
     expect(html).toContain('2 / 8');
     expect(html).toContain('1 of 2 ready');
     expect(html.match(/player-row--open/g)).toHaveLength(6);

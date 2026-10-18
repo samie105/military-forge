@@ -65,7 +65,7 @@ export function TipsCard({ bindings, doubleTapDash = true }: { bindings: Setting
             <dt>Aim</dt>
             <dd>
               <span className="kbd">
-                <Icon name="reticle" />
+                <Icon name="target" />
                 Mouse
               </span>
             </dd>

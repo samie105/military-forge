@@ -22,7 +22,7 @@ export const TABS: readonly { id: SettingsTab; label: string; icon: string }[] =
   { id: 'controls', label: 'Controls', icon: 'keyboard' },
   { id: 'accessibility', label: 'Accessibility', icon: 'access' },
   { id: 'network', label: 'Network', icon: 'globe' },
-  { id: 'touch', label: 'Touch', icon: 'reticle' },
+  { id: 'touch', label: 'Touch', icon: 'target' },
 ];
 
 /** What each preset changes (render3d/presets.ts), in words. */
@@ -110,7 +110,7 @@ function Volume({ audio, k, label, desc }: { audio: AudioSettings; k: 'master' |
       </div>
       <div className="volrow">
         <button className={muted ? 'iconbtn is-on' : 'iconbtn'} aria-label={muted ? `Unmute ${label.toLowerCase()}` : `Mute ${label.toLowerCase()}`} aria-pressed={muted} onClick={() => set({ [`${k}Muted`]: !muted })}>
-          <Icon name={muted ? 'mute' : 'speaker'} />
+          <Icon name="speaker" />
         </button>
         <Slider value={audio[k]} onChange={(v) => set({ [k]: v })} label={`${label} volume`} valueText={pct(audio[k])} />
         <output className="volrow__val num" data-bind={`settings.audio.${k}`}>
@@ -273,9 +273,9 @@ function Controls({ settings }: { settings: Settings }) {
 // ------------------------------------------------------------------ accessibility
 
 const CB: readonly { id: Settings['colorBlind']; name: string; a: string; b: string }[] = [
-  { id: 'standard', name: 'Standard', a: 'var(--c-team-blue)', b: 'var(--c-team-orange)' },
-  { id: 'deutan', name: 'Red-green safe', a: 'var(--c-team-blue-deutan)', b: 'var(--c-team-orange-deutan)' },
-  { id: 'tritan', name: 'Blue-yellow safe', a: 'var(--c-team-blue-tritan)', b: 'var(--c-team-orange-tritan)' },
+  { id: 'standard', name: 'Standard', a: 'var(--c-team-a)', b: 'var(--c-team-b)' },
+  { id: 'deutan', name: 'Red-green safe', a: 'var(--c-team-a)', b: 'var(--c-team-b)' },
+  { id: 'tritan', name: 'Blue-yellow safe', a: 'var(--c-team-a)', b: 'var(--c-team-b)' },
 ];
 
 function Accessibility({ settings }: { settings: Settings }) {
@@ -401,12 +401,12 @@ function Network({ settings, inRoom }: { settings: Settings; inRoom: boolean }) 
             <dt>Status</dt>
             {connected ? (
               <dd className="status status--ok">
-                <Icon name="check-circle" size="sm" />
+                <Icon name="ok" size="sm" />
                 Connected
               </dd>
             ) : (
               <dd className="status status--info">
-                <Icon name="circle" size="sm" />
+                <Icon name="clock" size="sm" />
                 {inRoom ? 'Not connected' : 'Not in a room'}
               </dd>
             )}

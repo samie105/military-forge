@@ -3,32 +3,31 @@
  * and the DOM HUD (hud/): weapons by content id, keycap text for key codes and mouse buttons.
  */
 import { keyLabel } from '../shell/controls';
+import { SPRITE_IDS } from './sprite';
 
-/** A weapon's glyph in the sprite, by its content id (hammer44 → wpn-hammer). */
-const WEAPON_ICONS: Readonly<Record<string, string>> = {
-  hammer44: 'wpn-hammer',
-  buzz: 'wpn-buzz',
-  k47: 'wpn-k47',
-  breacher: 'wpn-breacher',
-  widow: 'wpn-widow',
-  machete: 'wpn-machete',
-};
+/**
+ * A weapon's glyph in the sprite (icon-wpn-*), by its content id: the same name, but for the two
+ * whose ids carry a calibre (hammer44 → wpn-hammer, hawk50 → wpn-hawk).
+ */
+const WEAPON_ICON_NAMES: Readonly<Record<string, string>> = { hammer44: 'hammer', hawk50: 'hawk' };
 
-/** The sprite id of a weapon's glyph, null when the kit has none for it. */
+/** The sprite id of a weapon's glyph ('wpn-k47'), null when the kit has none for it. */
 export function weaponIcon(id: string | undefined): string | null {
-  return id ? (WEAPON_ICONS[id] ?? null) : null;
+  if (!id) return null;
+  const name = `wpn-${WEAPON_ICON_NAMES[id] ?? id}`;
+  return SPRITE_IDS.includes(`icon-${name}`) ? name : null;
 }
 
-/** `<use href>` for a sprite id: 'shield' → '#icon-shield', 'wpn-hammer' → '#wpn-hammer'. */
+/** `<use href>` for a sprite id: 'shield' → '#icon-shield', 'wpn-hammer' → '#icon-wpn-hammer'. */
 export function iconHref(name: string): string {
-  return name.startsWith('wpn-') || name.startsWith('icon-') ? `#${name}` : `#icon-${name}`;
+  return name.startsWith('icon-') ? `#${name}` : `#icon-${name}`;
 }
 
-/** Mouse buttons: the kit's glyph (if any) and the words on the keycap. */
+/** Mouse buttons: the kit's glyph (round two draws none: words only) and the words on the keycap. */
 export const MOUSE_CAPS: Readonly<Record<string, readonly [icon: string | null, text: string]>> = {
-  Mouse0: ['mouse-l', 'Left'],
-  Mouse2: ['mouse-r', 'Right'],
-  Mouse1: ['wheel', 'Middle'],
+  Mouse0: [null, 'Left'],
+  Mouse2: [null, 'Right'],
+  Mouse1: [null, 'Middle'],
   Mouse3: [null, 'Mouse 4'],
   Mouse4: [null, 'Mouse 5'],
 };

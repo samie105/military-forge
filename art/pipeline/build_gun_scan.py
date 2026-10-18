@@ -119,9 +119,10 @@ def mesh_bounds(obj):
 
 
 def squash(obj, spec, bounds):
-    """Spec `squash`: [{"box": [u0, v0, u1, v1], "scale": [sy, sz]}], side-view coordinates as for sockets.
-    Vertices in the box scale along the gun (y) about the box's middle and in height (z) about its bottom:
-    the Widow's scope is shortened this way (review M4)."""
+    """Spec `squash`: [{"box": [u0, v0, u1, v1], "scale": [sy, sz] or [sy, sz, sx]}], side-view coordinates as
+    for sockets. Vertices in the box scale along the gun (y) about the box's middle, in height (z) about its
+    bottom and, given sx, in width (x) about the centreline: the Widow's scope is shortened this way (review
+    M4), and the chunky specials are flattened whole, keeping their cross-section."""
     me = obj.data
     co = np.empty(len(me.vertices) * 3)
     me.vertices.foreach_get("co", co)
@@ -135,11 +136,12 @@ def squash_points(co, spec, bounds):
     co = np.array(co, dtype=float)
     for sq in spec.get("squash", []):
         u0, v0, u1, v1 = sq["box"]
-        sy, sz = sq["scale"]
+        sy, sz, sx = (*sq["scale"], 1.0)[:3]
         y0, y1 = lo[1] + u0 * (hi[1] - lo[1]), lo[1] + u1 * (hi[1] - lo[1])
         z0, z1 = lo[2] + v0 * (hi[2] - lo[2]), lo[2] + v1 * (hi[2] - lo[2])
         m = (co[:, 1] >= y0) & (co[:, 1] <= y1) & (co[:, 2] >= z0) & (co[:, 2] <= z1)
         mid = (y0 + y1) / 2
+        co[m, 0] *= sx
         co[m, 1] = mid + (co[m, 1] - mid) * sy
         co[m, 2] = z0 + (co[m, 2] - z0) * sz
     return co
@@ -325,8 +327,9 @@ def classify(cent_rgb, spec):
 
 def vertex_masks(obj, ids, cls, spec, bounds):
     """`_CAMO` / `_GLOW` per vertex: the cluster under each loop's UV, by majority per vertex. Vertices in
-    a spec `plain` box ([u0, v0, u1, v1], side-view coordinates as for sockets) never take a camo: a barrel
-    in the receiver's gunmetal stays steel, as on the scripted guns."""
+    a spec `plain` box ([u0, v0, u1, v1], side-view coordinates of the unsquashed gun, as for sockets) never
+    take a camo: a barrel in the receiver's gunmetal stays steel, as on the scripted guns. Vertices in a
+    `glow_boxes` box glow and take no camo: a pilot tab too small for a colour cluster of its own."""
     me = obj.data
     uv = me.uv_layers.active.data
     h, w = ids.shape
@@ -342,13 +345,17 @@ def vertex_masks(obj, ids, cls, spec, bounds):
         votes_g[loop.vertex_index] += glow
         count[loop.vertex_index] += 1
     camo = (votes_c / np.maximum(count, 1)) > 0.5
-    pts = np.array([v.co[:] for v in me.vertices])
+    pts = unsquash_points(np.array([v.co[:] for v in me.vertices]), spec, bounds)
     lo, hi = bounds
     u = (pts[:, 1] - lo[1]) / (hi[1] - lo[1])
     v = (pts[:, 2] - lo[2]) / (hi[2] - lo[2])
-    for u0, v0, u1, v1 in spec.get("plain", []):
-        camo &= ~((u >= u0) & (u <= u1) & (v >= v0) & (v <= v1))
+    inside = lambda b: (u >= b[0]) & (u <= b[2]) & (v >= b[1]) & (v <= b[3])  # noqa: E731
+    for box in spec.get("plain", []):
+        camo &= ~inside(box)
     glow = (votes_g / np.maximum(count, 1)) > 0.5
+    for box in spec.get("glow_boxes", []):
+        glow |= inside(box)
+        camo &= ~inside(box)
     me.attributes.new("_CAMO", "FLOAT", "POINT").data.foreach_set("value", camo.astype(np.float32))
     if glow.any():
         me.attributes.new("_GLOW", "FLOAT", "POINT").data.foreach_set("value", glow.astype(np.float32))
@@ -361,8 +368,8 @@ def socket_points(obj, spec, bounds):
     """Spec sockets (u along butt→muzzle, v bottom→top of the side silhouette) → modelling-frame points.
     x: 0 (the centreline) unless the spec gives `side`: then the gun's right (+X) or left surface at that point,
     from the vertices within 2 cm in the side view (a bolt knob or scope elsewhere doesn't count). A big flat
-    panel can leave only the far side's vertices that close, so a result on the wrong side of the centreline
-    falls back to a ray cast onto the surface."""
+    panel can leave only the far side's vertices that close (and a long cell none at all), so a result on the
+    wrong side of the centreline, or none, falls back to a ray cast onto the surface."""
     pts = np.array([v.co[:] for v in obj.data.vertices])
     lo, hi = bounds
     tree = BVHTree.FromPolygons([v.co.copy() for v in obj.data.vertices], [p.vertices[:] for p in obj.data.polygons])
@@ -376,10 +383,7 @@ def socket_points(obj, spec, bounds):
         if s.get("side") in ("right", "left"):
             near = pts[np.hypot(pts[:, 1] - y, pts[:, 2] - z) < 0.02]
             right = s["side"] == "right"
-            if len(near):
-                x = float(near[:, 0].max() if right else near[:, 0].min())
-            else:
-                x = float(hi[0] if right else lo[0])
+            x = float(near[:, 0].max() if right else near[:, 0].min()) if len(near) else 0.0
             if (x <= 0) if right else (x >= 0):
                 sign = 1 if right else -1
                 hit, *_ = tree.ray_cast(Vector((sign * (abs(hi[0]) + abs(lo[0]) + 1), y, z)), Vector((-sign, 0, 0)))
@@ -407,12 +411,13 @@ def unsquash_points(co, spec, bounds):
     co = np.array(co, dtype=float)
     for sq in reversed(spec.get("squash", [])):
         u0, v0, u1, v1 = sq["box"]
-        sy, sz = sq["scale"]
+        sy, sz, sx = (*sq["scale"], 1.0)[:3]
         y0, y1 = lo[1] + u0 * (hi[1] - lo[1]), lo[1] + u1 * (hi[1] - lo[1])
         z0, z1 = lo[2] + v0 * (hi[2] - lo[2]), lo[2] + v1 * (hi[2] - lo[2])
         mid = (y0 + y1) / 2
         m = ((co[:, 1] >= mid + (y0 - mid) * sy) & (co[:, 1] <= mid + (y1 - mid) * sy)
              & (co[:, 2] >= z0) & (co[:, 2] <= z0 + (z1 - z0) * sz))
+        co[m, 0] /= sx
         co[m, 1] = mid + (co[m, 1] - mid) / sy
         co[m, 2] = z0 + (co[m, 2] - z0) / sz
     return co

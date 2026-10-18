@@ -30,6 +30,7 @@ import { loadExplosionArt, loadWeaponVfx, type ExplosionArt, type FlipbookArt } 
 import { ParticleLayer } from './particles';
 import { ParticlePool } from './pool';
 import { ProjectileFx, type GunPointLookup } from './projectiles';
+import { ShieldBlasts } from './shieldBlast';
 import { CameraShake, blastTrauma } from './shake';
 import { ThrowArc } from './throwArc';
 
@@ -116,6 +117,8 @@ export class Vfx {
   /** each style's targets (the frag's until the art loads): its flipbook and its numbers */
   private readonly styles: Partial<Record<BlastStyle, ExplosionTargets>> = {};
   private readonly grenadeFx: GrenadeFx;
+  /** a launcher's blast at a riot shield's face: the plate's flare and sparks */
+  private readonly shieldBlasts = new ShieldBlasts();
   private readonly modules: VfxModule[] = [];
   /** the Low preset (fewer casings) */
   private low = false;
@@ -353,6 +356,8 @@ export class Vfx {
       // the Thumper's and Popper's blasts in their own styles (explosions.vfx.json), else the frag's
       const t = this.styles[blastStyle(kind)] ?? this.targets;
       spawnExplosion(t, this.world, e.x, e.y, e.radius, this.ctx.detail);
+      // a rocket, shell or blade stopped by a riot shield (#111) went off at its face: the plate flares and sparks
+      this.shieldBlasts.blast(e.x, e.y, kind, this.glowPool, this.ctx.detail, this.ctx.reducedMotion, reduceFlashes());
       // light and shake by distance from the view centre (the Forge's shake falloff when published)
       const cx = e.x - this.camera.x;
       const cy = e.y - this.camera.y;
@@ -402,6 +407,8 @@ export class Vfx {
     this.decals.begin();
     this.decals.addPool(this.decalPool);
     this.decals.end();
+    // the shields as this frame drew them, for the blasts of the next batch of events
+    this.shieldBlasts.players = frame.players;
     return this.shake.update(dt);
   }
 

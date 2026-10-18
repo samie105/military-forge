@@ -10,14 +10,24 @@ import { aimRig, playerView } from './helpers';
 
 const world = new CollisionWorld(movementTestMap);
 
-/** The test rig with a right thigh (the holster's bone) under the pelvis. */
-function rig() {
+/** The test rig with a right thigh under the pelvis and, unless `sockets` is false, #95's sling sockets. */
+function rig(sockets = true) {
   const inst = aimRig();
-  const thigh = new Bone();
-  thigh.name = 'thigh_R';
-  thigh.position.set(-0.1, -0.05, 0);
-  inst.bone('pelvis')!.add(thigh);
-  return { ...inst, bone: (n: string) => (n === 'thigh_R' ? thigh : inst.bone(n)) };
+  const added = new Map<string, Bone>();
+  const add = (name: string, parent: Object3D, x: number, y: number, z: number) => {
+    const b = new Bone();
+    b.name = name;
+    b.position.set(x, y, z);
+    parent.add(b);
+    added.set(name, b);
+    return b;
+  };
+  const thigh = add('thigh_R', inst.bone('pelvis')!, -0.1, -0.05, 0);
+  if (sockets) {
+    add('sling_back', inst.bone('spine2')!, 0, 0.08, -0.42);
+    add('holster_thigh', thigh, -0.21, -0.1, -0.02);
+  }
+  return { ...inst, bone: (n: string) => added.get(n) ?? inst.bone(n) };
 }
 
 /** the slung guns on show, by the point they hang from */
@@ -62,21 +72,21 @@ describe('Avatar: guns on the body and the switch', () => {
       for (let t = 0; t < seconds - 1e-9; t += 1 / 60) a.update(view, 1 / 60, world, true);
     };
     step(loadout(0), 0.1);
-    expect(slung(inst)).toEqual({ 'thigh-sling': 1 }); // the Hammer, holstered
+    expect(slung(inst)).toEqual({ holster_thigh: 1 }); // the Hammer, holstered
     const handGun = () => inst.bone('socket_weapon_R')!.children.find((c) => (c as Mesh).isMesh && c.name !== 'gun-part') as Mesh;
     const dur = switchSeconds(HAMMER.index);
     // the switch to the Hammer: the K-47 goes to the back first, still in hand
     step(loadout(1), dur * 0.2);
     expect(handGun().visible).toBe(true);
-    expect(slung(inst)).toEqual({ 'thigh-sling': 1 });
+    expect(slung(inst)).toEqual({ holster_thigh: 1 });
     // halfway: both on the body, the hand empty between them
     step(loadout(1), dur * 0.3);
     expect(handGun().visible).toBe(false);
-    expect(slung(inst)).toEqual({ 'back-sling': 1, 'thigh-sling': 1 });
+    expect(slung(inst)).toEqual({ sling_back: 1, holster_thigh: 1 });
     // the Hammer comes up; the K-47 stays on the back
     step(loadout(1), dur * 0.6);
     expect(handGun().visible).toBe(true);
-    expect(slung(inst)).toEqual({ 'back-sling': 1 });
+    expect(slung(inst)).toEqual({ sling_back: 1 });
   });
 
   it('dual guns: both in hand, nothing hangs; a pickup into a slot is no switch; the shield moves a long gun to the side', () => {
@@ -91,7 +101,7 @@ describe('Avatar: guns on the body and the switch', () => {
     expect(slung(b)).toEqual({ 'side-sling': 1 }); // the K-47 at the side: the shield has the back
     // a new weapon in the other slot (a pickup) shows at once, without a switch
     av.update(loadout(1, { weapons: [{ def: WIDOW.index, mag: 5, reserve: 20, reloadTicks: 0 }, { def: HAMMER.index, mag: 6, reserve: 30, reloadTicks: 0 }] }), 1 / 60, world, true);
-    expect(slung(b)).toEqual({ 'back-sling': 1 });
+    expect(slung(b)).toEqual({ sling_back: 1 });
     const hand = b.bone('hand_R')!.getWorldPosition(new Vector3());
     av.update(loadout(1, { weapons: [{ def: WIDOW.index, mag: 5, reserve: 20, reloadTicks: 0 }, { def: HAMMER.index, mag: 6, reserve: 30, reloadTicks: 0 }] }), 1 / 60, world, true);
     expect(b.bone('hand_R')!.getWorldPosition(new Vector3()).distanceTo(hand)).toBeLessThan(0.01); // no carry
@@ -104,5 +114,21 @@ describe('Low', () => {
     const a = new Avatar(inst as never, 1, new AvatarKit(toonRamp()), 1);
     a.update(loadout(0), 1 / 60, world, true);
     expect(slung(inst)).toEqual({});
+  });
+});
+
+describe('a rig without the sling sockets (#95)', () => {
+  it('hangs nothing on the back or the thigh; the hip and side points are its own', () => {
+    const holster = rig(false);
+    new Avatar(holster as never, 0, new AvatarKit(toonRamp()), 1).update(loadout(0), 1 / 60, world, true);
+    expect(slung(holster)).toEqual({}); // the Hammer: no holster to hang in
+    const inst = rig(false);
+    const a = new Avatar(inst as never, 0, new AvatarKit(toonRamp()), 1);
+    a.update(loadout(1), 1 / 60, world, true);
+    expect(slung(inst)).toEqual({}); // the K-47: nothing on the back
+    a.update(loadout(1, { shield: 'back' }), 1 / 60, world, true);
+    expect(slung(inst)).toEqual({ 'side-sling': 1 }); // the K-47 at the side
+    a.update(loadout(1, { weapons: [{ def: MACHETE.index, mag: 0, reserve: 0, reloadTicks: 0 }, { def: HAMMER.index, mag: 6, reserve: 30, reloadTicks: 0 }] }), 1 / 60, world, true);
+    expect(slung(inst)).toEqual({ 'hip-sling': 1 });
   });
 });

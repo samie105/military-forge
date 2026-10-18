@@ -49,7 +49,7 @@ export function Connecting({ code, step, creating = false, onCancel }: { code: s
           {STEPS.map(([now, done], i) =>
             i < step ? (
               <li key={i} className="is-done">
-                <Icon name="check-circle" />
+                <Icon name="ok" />
                 {done}
               </li>
             ) : i === step ? (
@@ -59,7 +59,7 @@ export function Connecting({ code, step, creating = false, onCancel }: { code: s
               </li>
             ) : (
               <li key={i}>
-                <Icon name="circle" />
+                <Icon name="clock" />
                 {now}
               </li>
             ),
@@ -125,7 +125,7 @@ export function Alert({ alert, onRejoin }: { alert: AlertInfo; onRejoin: (() => 
             </button>
           ) : null}
           <button className="btn btn--secondary btn--xl" onClick={blurAfter(() => ctl.go({ to: 'home' }))}>
-            <Icon name="home" />
+            <Icon name="back" />
             Home
           </button>
         </div>

@@ -13,7 +13,7 @@
 #shell {
   position: fixed;
   inset: 0;
-  z-index: var(--z-overlay);
+  z-index: var(--z-panel);
   pointer-events: none;
 }
 .mf-fit { position: fixed; inset: 0; overflow: hidden; pointer-events: none; }
@@ -37,58 +37,58 @@
   align-items: center;
   gap: var(--sp-3);
   padding: var(--sp-3) var(--sp-6);
-  background: var(--hud-plate-strong);
-  border: var(--bw) solid var(--c-accent-line);
+  background: var(--c-plate-strong);
+  border: var(--bw) solid var(--c-volt-line);
   border-radius: var(--r-sm);
   color: var(--c-text);
-  font-size: var(--fs-lg);
+  font-size: var(--fs-20);
   font-weight: var(--fw-semi);
   white-space: nowrap;
-  animation: drop var(--dur-med) var(--ease-out);
+  animation: drop var(--dur) var(--ease-out);
 }
 .mf-notice .ic { color: var(--c-ok); }
 
 /* a full-screen route from another workstream (the Locker) */
-.mf-route { position: fixed; inset: 0; pointer-events: auto; background: var(--c-bg); }
+.mf-route { position: fixed; inset: 0; pointer-events: auto; background: var(--c-ink-900); }
 .mf-route__body { position: absolute; inset: 0; }
 .mf-route__back { position: absolute; top: var(--sp-4); left: var(--sp-4); z-index: 2; }
 
 /* the room lobby folded away for warm-up, and the local warm-up: a strip at the top centre */
 .mf-lobby-strip {
   position: absolute;
-  top: calc(var(--safe-top) + 152px);
+  top: calc(max(24px, var(--safe-t)) + 152px);
   left: 50%;
   display: flex;
   align-items: center;
   gap: var(--sp-4);
   padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-5);
   transform: translateX(-50%);
-  font-size: var(--fs-md);
+  font-size: var(--fs-18);
   white-space: nowrap;
 }
-.mf-lobby-strip .btn { min-height: 44px; padding-inline: var(--sp-5); font-size: var(--fs-md); }
+.mf-lobby-strip .btn { min-height: 44px; padding-inline: var(--sp-5); font-size: var(--fs-18); }
 .mf-lobby-strip .roomcode-inline { font-weight: var(--fw-bold); letter-spacing: 0.12em; }
 
 /* the controls card the first time you play (kit panel and keycaps) */
-.mf-tips { position: absolute; top: 50%; left: 50%; width: 1120px; display: flex; flex-direction: column; gap: var(--sp-5); padding: var(--sp-8); transform: translate(-50%, -50%); box-shadow: var(--sh-2); }
+.mf-tips { position: absolute; top: 50%; left: 50%; width: 1120px; display: flex; flex-direction: column; gap: var(--sp-5); padding: var(--sp-8); transform: translate(-50%, -50%); box-shadow: var(--sh-card-sm); }
 .mf-tips__keys { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2) var(--sp-7); margin: 0; }
 .mf-tips__keys div { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); min-height: 48px; border-bottom: var(--bw) solid var(--c-line); }
-.mf-tips__keys dt { font-size: var(--fs-md); font-weight: var(--fw-semi); color: var(--c-muted-strong); }
+.mf-tips__keys dt { font-size: var(--fs-18); font-weight: var(--fw-semi); color: var(--c-muted); }
 .mf-tips__keys dd { display: flex; gap: var(--sp-1); margin: 0; }
-.mf-tips__list { display: flex; flex-direction: column; gap: var(--sp-2); font-size: var(--fs-md); color: var(--c-muted-strong); }
+.mf-tips__list { display: flex; flex-direction: column; gap: var(--sp-2); font-size: var(--fs-18); color: var(--c-muted); }
 .mf-tips__list li { display: flex; gap: var(--sp-2); }
-.mf-tips__list li::before { content: "▸"; color: var(--c-sand); }
+.mf-tips__list li::before { content: "▸"; color: var(--c-brass); }
 .mf-tips__actions { display: flex; align-items: center; gap: var(--sp-4); }
 
 /* the home stage and the ID card: the kit's art there is preview-only; the soldier's emblem stands in */
 .home__stage--emblem { background-image: repeating-linear-gradient(0deg, transparent 0 47px, var(--c-line) 47px 48px); }
-.home__soldier { position: absolute; left: 50%; bottom: 210px; z-index: 3; width: 260px; height: 260px; margin-left: -130px; display: grid; place-items: center; color: color-mix(in srgb, var(--c-sand) 80%, transparent); }
+.home__soldier { position: absolute; left: 50%; bottom: 210px; z-index: 3; width: 260px; height: 260px; margin-left: -130px; display: grid; place-items: center; color: color-mix(in srgb, var(--c-brass) 80%, transparent); }
 .home__soldier .ic { width: 220px; height: 220px; stroke-width: 0.9; }
-.idcard__photo .ic { position: absolute; left: 50%; top: 50%; width: 220px; height: 220px; margin: -110px 0 0 -110px; color: var(--c-sand-ink); stroke-width: 0.9; opacity: 0.7; }
+.idcard__photo .ic { position: absolute; left: 50%; top: 50%; width: 220px; height: 220px; margin: -110px 0 0 -110px; color: var(--c-brass-ink); stroke-width: 0.9; opacity: 0.7; }
 
 /* Settings: a long section scrolls inside its panel (Touch, or text at 150%) */
 .settings__panel { overflow-y: auto; }
-.bindtable__hint { display: block; margin-top: 2px; font-weight: var(--fw-medium); }
+.bindtable__hint { display: block; margin-top: 2px; font-weight: var(--fw-reg); }
 
 /* the countdown ring empties over each second, from --count-from to --count */
 .countdown__ring circle { animation: mf-count 1s linear forwards; }
@@ -99,14 +99,14 @@
 html.reduce-motion .countdown__ring circle { animation: none; }
 
 /* the reconnect banner goes under the HUD's clock and score row (the kit's sits under the clock alone) */
-.conn__hud .net-banner { top: calc(var(--safe-top) + 152px); }
+.conn__hud .net-banner { top: calc(max(24px, var(--safe-t)) + 152px); }
 
 /* the lobby's other maps: listed, not pickable yet (rooms play one map) */
 .map-card[disabled] { opacity: 0.55; cursor: not-allowed; }
 
 /* the You badge sits on your own teal-tinted row: the kit's teal text measured 4.22:1 there, so it
    takes a little of the text colour (5.3:1 on a panel row, 4.8:1 on a raised one; AA is 4.5) */
-.badge--you { color: color-mix(in srgb, var(--c-accent) 70%, var(--c-text)); }
+.badge--you { color: color-mix(in srgb, var(--c-volt) 70%, var(--c-text)); }
 
 /*
  * Smaller menu boxes (ui/fit.ts: a 1280×720 or 1366×768 laptop keeps a 0.8 zoom, so the screens get
@@ -127,21 +127,21 @@ html.mf-short .lobby .roomcode span { height: 80px; }
  * lobby (above #shell's screens), hidden while a menu is open, in window pixels (not fitted).
  * Tweakpane draws the values in the kit's colours.
  */
-.mf-tune-root { position: fixed; inset: 0; z-index: calc(var(--z-overlay) + 5); pointer-events: none; }
+.mf-tune-root { position: fixed; inset: 0; z-index: calc(var(--z-panel) + 5); pointer-events: none; }
 .mf-tune {
   position: absolute;
-  top: calc(var(--safe-top) + var(--sp-4));
-  right: calc(var(--safe-right) + var(--sp-4));
+  top: calc(max(24px, var(--safe-t)) + var(--sp-4));
+  right: calc(max(32px, var(--safe-r)) + var(--sp-4));
   /* clear of the lobby's Ready / Start and the HUD's bottom corner */
-  max-height: calc(100vh - var(--safe-top) - var(--safe-bottom) - 120px);
+  max-height: calc(100vh - max(24px, var(--safe-t)) - max(24px, var(--safe-b)) - 120px);
   width: min(380px, calc(100vw - 2 * var(--sp-4)));
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
   padding: var(--sp-3) var(--sp-4);
-  background: color-mix(in srgb, var(--c-panel) 94%, transparent);
-  box-shadow: var(--sh-2);
-  font-family: var(--font-ui);
+  background: color-mix(in srgb, var(--c-ink-800) 94%, transparent);
+  box-shadow: var(--sh-card-sm);
+  font-family: var(--f-ui);
   font-size: 15px;
   pointer-events: auto;
 }
@@ -151,18 +151,18 @@ html.mf-short .lobby .roomcode span { height: 80px; }
 .mf-tune__pane { flex: 1; min-height: 0; overflow-y: auto; }
 .mf-tune__foot { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
 .mf-tune__foot .btn { min-height: 40px; padding: var(--sp-1) var(--sp-5); font-size: 16px; }
-.mf-tune__status { color: var(--c-muted-strong); }
-.mf-tune__out { width: 100%; height: 120px; resize: vertical; font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--c-text); background: var(--c-bg-deep); border: var(--bw) solid var(--c-line); border-radius: var(--r-sm); padding: var(--sp-2); }
+.mf-tune__status { color: var(--c-muted); }
+.mf-tune__out { width: 100%; height: 120px; resize: vertical; font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--c-text); background: var(--c-ink-950); border: var(--bw) solid var(--c-line); border-radius: var(--r-sm); padding: var(--sp-2); }
 .mf-tune__pane .tp-rotv {
-  --tp-base-background-color: var(--c-panel);
+  --tp-base-background-color: var(--c-ink-800);
   --tp-base-shadow-color: transparent;
-  --tp-container-background-color: var(--c-panel-3);
-  --tp-input-background-color: var(--c-bg-deep);
-  --tp-label-foreground-color: var(--c-muted-strong);
+  --tp-container-background-color: var(--c-ink-600);
+  --tp-input-background-color: var(--c-ink-950);
+  --tp-label-foreground-color: var(--c-muted);
   --tp-input-foreground-color: var(--c-text);
-  --tp-button-background-color: var(--c-panel-3);
+  --tp-button-background-color: var(--c-ink-600);
   --tp-button-foreground-color: var(--c-text);
   --tp-groove-foreground-color: var(--c-line);
-  font-family: var(--font-ui);
+  font-family: var(--f-ui);
   font-size: 13px;
 }

@@ -285,12 +285,9 @@ describe('maps', () => {
 
   it('registers the Street Market exactly as the art pipeline compiled it (re-copy street_market.map.json after a recompile)', () => {
     expect(maps['street-market']).toBe(streetMarketMap);
-    // the pipeline doesn't mark slabs yet (streetMarket.ts): blocksBullets is the copy's only change;
-    // the weapon crates and the armory rack are gameplay on top
-    const { oneWays, spawners: _crates, armory: _rack, ...rest } = streetMarketMap;
-    const { oneWays: compiledOneWays, ...compiledRest } = compiledStreetMarket;
-    expect(rest).toEqual(compiledRest);
-    expect(oneWays.map(({ blocksBullets: _, ...o }) => o)).toEqual(compiledOneWays);
+    // the weapon crates and the armory rack are gameplay on top; the slabs' blocksBullets comes from the kit
+    const { spawners: _crates, armory: _rack, ...rest } = streetMarketMap;
+    expect(rest).toEqual(compiledStreetMarket);
     expect(streetMarketMap.spawns.length).toBeGreaterThanOrEqual(12);
   });
 

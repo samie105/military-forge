@@ -63,12 +63,12 @@ export function createHostTuning(getMode: () => LocalMode | OnlineMode | null, p
       mode = target;
       const online = target instanceof OnlineMode;
       root = document.createElement('div');
-      root.className = 'mf mf-tune-root';
+      root.className = 'mf mf-tune-root kit-v1';
       root.innerHTML = `
         <aside class="mf-tune panel" aria-label="Tune the game">
           <header class="mf-tune__head">
             <div>
-              <p class="eyebrow">${icon('gravity')} Host · live</p>
+              <p class="eyebrow">${icon('ev-gravity')} Host · live</p>
               <h2 class="h3">Tune the game</h2>
             </div>
             <button type="button" class="iconbtn" data-act="close" aria-label="Close the tuning panel">${icon('close')}</button>

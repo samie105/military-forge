@@ -106,10 +106,10 @@ importers:
 
   apps/web:
     dependencies:
-      '@fontsource/barlow-semi-condensed':
+      '@fontsource-variable/archivo':
         specifier: ^5.3.0
         version: 5.3.0
-      '@fontsource/saira-stencil-one':
+      '@fontsource/big-shoulders-stencil-display':
         specifier: ^5.3.0
         version: 5.3.0
       '@military-forge/bots':
@@ -748,11 +748,11 @@ packages:
     resolution: {integrity: sha512-IkO+/KEUvwbVpiURZg+P7zF74z5Jxe0UgJxVni+RtoHQ6IZieXaO02kmadomap/q+l6bc/jdPGGqTjhuZnuz1Q==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
 
-  '@fontsource/barlow-semi-condensed@5.3.0':
-    resolution: {integrity: sha512-EdpQ1GlLMofGqDsQhEw+g6DonNKmzt21p8y/oNbTl4BFzEkqYkFyE2fj25YGxmZBL/LZZGAxe74FlvEWcgc31w==}
+  '@fontsource-variable/archivo@5.3.0':
+    resolution: {integrity: sha512-HogK8FJelrD1o7TlZlkIVtHgc20bO5PZRWE7mUeUTdMN055alznQV6/00J00IBeu8FQAH4s3zW9UJNvKExXf+g==}
 
-  '@fontsource/saira-stencil-one@5.3.0':
-    resolution: {integrity: sha512-b7ILM7KrAWTIUSWKuzV29lTQZV5QOGhlmXXEt3Dsg/rJ4lo1kjUjuo6dBG9Iq+pR7wRZCVXftinVHDof+i9nSA==}
+  '@fontsource/big-shoulders-stencil-display@5.3.0':
+    resolution: {integrity: sha512-xZfOmq5/66j90rw2SipYr1skJUDrDBCcCZZY8aNU3oDpvqzHjcA1KADdl/4AMZNs7aPc61KbV5P696ggmF81Tw==}
 
   '@gltf-transform/core@4.5.1':
     resolution: {integrity: sha512-OWgBYssKHKoXMIrMb2N20jXqWRnMP9HdtcTFQBEAJtz4P+OOxx5fozl5eAeK7nktIs5uDE/lu4NbkE5VCZaR9g==}
@@ -2482,9 +2482,9 @@ snapshots:
       '@eslint/core': 1.2.1
       levn: 0.4.1
 
-  '@fontsource/barlow-semi-condensed@5.3.0': {}
+  '@fontsource-variable/archivo@5.3.0': {}
 
-  '@fontsource/saira-stencil-one@5.3.0': {}
+  '@fontsource/big-shoulders-stencil-display@5.3.0': {}
 
   '@gltf-transform/core@4.5.1':
     dependencies:

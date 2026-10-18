@@ -708,7 +708,7 @@
       "aimPose": "rifle",
       "hands": 2,
       "casings": false,
-      "tris": 968,
+      "tris": 950,
       "nodes": {
         "grip": [
           0.0,
@@ -717,32 +717,42 @@
         ],
         "mag": [
           0.0,
-          0.15,
-          -0.11
+          0.342,
+          -0.145
         ],
         "muzzle": [
           0.0,
-          0.726,
-          0.06
+          0.791,
+          0.037
         ],
         "offhand": [
           -0.05,
           0.07,
           -0.03
         ],
+        "part_mag": [
+          -0.001,
+          0.331,
+          -0.086
+        ],
         "pilot": [
           0.0,
-          0.705,
-          0.016
+          0.751,
+          -0.023
         ],
         "rail_top": [
           0.0,
-          0.08,
-          0.142
+          0.252,
+          0.094
         ]
       },
-      "lengthM": 0.899,
-      "file": "dragon.glb"
+      "lengthM": 0.901,
+      "file": "dragon.glb",
+      "source": "scan",
+      "texture": 256,
+      "parts": [
+        "part_mag"
+      ]
     },
     "arc": {
       "name": "Arc",
@@ -751,7 +761,7 @@
       "aimPose": "rifle",
       "hands": 2,
       "casings": false,
-      "tris": 876,
+      "tris": 921,
       "nodes": {
         "grip": [
           0.0,
@@ -759,33 +769,43 @@
           0.0
         ],
         "mag": [
-          0.038,
-          0.12,
-          0.045
+          0.04,
+          0.131,
+          0.037
         ],
         "muzzle": [
           0.0,
-          0.551,
-          0.055
+          0.612,
+          0.033
         ],
         "offhand": [
           -0.05,
           0.07,
           -0.03
         ],
+        "part_mag": [
+          0.031,
+          0.127,
+          0.036
+        ],
         "rail_bottom": [
           0.0,
-          0.22,
-          0.005
+          0.437,
+          -0.031
         ],
         "rail_top": [
           0.0,
-          0.06,
-          0.12
+          0.219,
+          0.099
         ]
       },
-      "lengthM": 0.874,
-      "file": "arc.glb"
+      "lengthM": 0.873,
+      "file": "arc.glb",
+      "source": "scan",
+      "texture": 256,
+      "parts": [
+        "part_mag"
+      ]
     },
     "popper": {
       "name": "Popper",
@@ -794,7 +814,7 @@
       "aimPose": "rifle",
       "hands": 2,
       "casings": false,
-      "tris": 756,
+      "tris": 920,
       "nodes": {
         "grip": [
           0.0,
@@ -802,14 +822,14 @@
           0.0
         ],
         "mag": [
-          -0.085,
-          0.19,
-          0.03
+          -0.049,
+          0.168,
+          -0.008
         ],
         "muzzle": [
           0.0,
-          0.456,
-          0.06
+          0.495,
+          0.038
         ],
         "offhand": [
           -0.05,
@@ -818,12 +838,14 @@
         ],
         "rail_top": [
           0.0,
-          0.19,
-          0.129
+          0.176,
+          0.089
         ]
       },
       "lengthM": 0.799,
-      "file": "popper.glb"
+      "file": "popper.glb",
+      "source": "scan",
+      "texture": 256
     },
     "ripper": {
       "name": "Ripper",
@@ -832,12 +854,12 @@
       "aimPose": "rifle",
       "hands": 2,
       "casings": false,
-      "tris": 960,
+      "tris": 950,
       "nodes": {
         "charge": [
-          0.025,
-          0.37,
-          0.04
+          0.059,
+          0.427,
+          0.018
         ],
         "grip": [
           0.0,
@@ -846,13 +868,13 @@
         ],
         "mag": [
           0.0,
-          0.37,
-          0.155
+          0.4,
+          0.116
         ],
         "muzzle": [
           0.0,
-          0.556,
-          0.07
+          0.551,
+          0.018
         ],
         "offhand": [
           -0.05,
@@ -861,12 +883,14 @@
         ],
         "rail_top": [
           0.0,
-          0.05,
-          0.137
+          0.018,
+          0.098
         ]
       },
-      "lengthM": 0.889,
-      "file": "ripper.glb"
+      "lengthM": 0.89,
+      "file": "ripper.glb",
+      "source": "scan",
+      "texture": 256
     },
     "pulse": {
       "name": "Pulse",
@@ -875,12 +899,12 @@
       "aimPose": "rifle",
       "hands": 2,
       "casings": false,
-      "tris": 888,
+      "tris": 921,
       "nodes": {
         "charge": [
           0.0,
-          0.42,
-          0.06
+          0.46,
+          0.025
         ],
         "grip": [
           0.0,
@@ -889,13 +913,13 @@
         ],
         "mag": [
           0.0,
-          0.08,
-          -0.035
+          0.07,
+          -0.019
         ],
         "muzzle": [
           0.0,
-          0.465,
-          0.06
+          0.499,
+          0.025
         ],
         "offhand": [
           -0.05,
@@ -904,12 +928,14 @@
         ],
         "rail_top": [
           0.0,
-          0.0,
-          0.132
+          0.148,
+          0.087
         ]
       },
       "lengthM": 0.78,
-      "file": "pulse.glb"
+      "file": "pulse.glb",
+      "source": "scan",
+      "texture": 256
     },
     "riot_shield": {
       "name": "Riot Shield",
@@ -930,7 +956,7 @@
         ],
         "grip": [
           0.0,
-          0.12,
+          0.09,
           0.022
         ],
         "ground": [
@@ -1028,6 +1054,124 @@
       },
       "lengthM": 0.208,
       "file": "mine.glb"
+    },
+    "smoke": {
+      "name": "Smoke",
+      "archetype": "grenade",
+      "family": "thrown",
+      "aimPose": "pistol",
+      "hands": 1,
+      "tris": 632,
+      "nodes": {
+        "grip": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ground": [
+          0.0,
+          0.0,
+          -0.125
+        ],
+        "light": [
+          0.0,
+          0.0,
+          0.165
+        ],
+        "pin": [
+          -0.032,
+          0.0,
+          0.145
+        ]
+      },
+      "lengthM": 0.182,
+      "file": "smoke.glb"
+    },
+    "gas": {
+      "name": "Toxic gas",
+      "archetype": "grenade",
+      "family": "thrown",
+      "aimPose": "pistol",
+      "hands": 1,
+      "tris": 576,
+      "nodes": {
+        "grip": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ground": [
+          0.0,
+          0.0,
+          -0.105
+        ],
+        "light": [
+          0.0,
+          0.0,
+          0.171
+        ]
+      },
+      "lengthM": 0.186,
+      "file": "gas.glb"
+    },
+    "flash": {
+      "name": "Flashbang",
+      "archetype": "grenade",
+      "family": "thrown",
+      "aimPose": "pistol",
+      "hands": 1,
+      "tris": 608,
+      "nodes": {
+        "grip": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ground": [
+          0.0,
+          0.0,
+          -0.1
+        ],
+        "light": [
+          0.0,
+          0.0,
+          0.14
+        ],
+        "pin": [
+          -0.032,
+          0.0,
+          0.12
+        ]
+      },
+      "lengthM": 0.165,
+      "file": "flash.glb"
+    },
+    "emp": {
+      "name": "EMP",
+      "archetype": "grenade",
+      "family": "thrown",
+      "aimPose": "pistol",
+      "hands": 1,
+      "tris": 616,
+      "nodes": {
+        "grip": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "ground": [
+          0.0,
+          0.0,
+          -0.03
+        ],
+        "light": [
+          0.0,
+          0.0,
+          0.06
+        ]
+      },
+      "lengthM": 0.21,
+      "file": "emp.glb"
     }
   }
 }

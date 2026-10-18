@@ -9,11 +9,11 @@
  *   (`sling_side`), so nothing clips.
  * Dual pistols are both in the hands: nothing hangs.
  *
- * The points are the Forge's rig sockets when the rig has them (#95: `sling_back` and
- * `holster_thigh`). Until then, and always for the hip and side points, they're fixed points on
- * spine2, thigh_R and the pelvis, placed from the Forge's rest-pose numbers
- * (forge-sling-sockets.md). Every point mounts a gun as `socket_weapon_R` does: the grip at the
- * point, +Y toward the muzzle, +Z the gun's top, +X its right side.
+ * The back and thigh points are the Forge's rig sockets (#95: `sling_back` on spine2,
+ * `holster_thigh` on thigh_R); a rig without them hangs nothing there. The hip and side points are
+ * fixed points on the pelvis, placed from the Forge's rest-pose numbers (forge-sling-sockets.md).
+ * Every point mounts a gun as `socket_weapon_R` does: the grip at the point, +Y toward the muzzle,
+ * +Z the gun's top, +X its right side.
  *
  * The switch (`switchPhase`) runs for the sim's own equip time from the frame `PlayerView.active`
  * changes, local or remote, and the hand carries the guns between hand and body.
@@ -23,27 +23,28 @@ import { Matrix4, Mesh, Object3D, Vector3, type BufferGeometry, type Material } 
 
 export type SlingPoint = 'back' | 'thigh' | 'hip' | 'side';
 
-interface PointDef {
-  /** the bone it hangs from */
-  bone: string;
-  /** the rig's own socket for it, when the rig has one */
-  socket: string | null;
-  /** rest pose, rig model space (+Y up, the character faces +Z, its right is −X) */
-  pos: readonly [number, number, number];
-  /** the gun's +X (its right side) and +Y (toward the muzzle) there */
-  x: readonly [number, number, number];
-  y: readonly [number, number, number];
-}
+type PointDef =
+  /** the rig's own socket: the gun mounts on it as it is */
+  | { socket: string }
+  | {
+      /** the bone it hangs from */
+      bone: string;
+      /** rest pose, rig model space (+Y up, the character faces +Z, its right is −X) */
+      pos: readonly [number, number, number];
+      /** the gun's +X (its right side) and +Y (toward the muzzle) there */
+      x: readonly [number, number, number];
+      y: readonly [number, number, number];
+    };
 
 export const SLING_POINTS: Readonly<Record<SlingPoint, PointDef>> = {
-  // on its side across the back, muzzle up over the left shoulder (the Forge's #95 numbers)
-  back: { bone: 'spine2', socket: 'sling_back', pos: [0, 0.8, -0.42], x: [0, 0, 1], y: [0.57, 0.82, 0] },
+  // on its side across the back, muzzle up over the left shoulder
+  back: { socket: 'sling_back' },
   // on the outer right thigh, muzzle down, slide forward
-  thigh: { bone: 'thigh_R', socket: 'holster_thigh', pos: [-0.31, 0.42, -0.02], x: [-1, 0, 0], y: [0, -1, 0] },
+  thigh: { socket: 'holster_thigh' },
   // a blade at the left hip, down and back
-  hip: { bone: 'pelvis', socket: null, pos: [0.21, 0.62, -0.06], x: [1, 0, 0], y: [0, -0.87, -0.5] },
+  hip: { bone: 'pelvis', pos: [0.21, 0.62, -0.06], x: [1, 0, 0], y: [0, -0.87, -0.5] },
   // a long gun at the right side, muzzle down and a little back (the shield has the back)
-  side: { bone: 'pelvis', socket: null, pos: [-0.27, 0.95, -0.1], x: [-1, 0, 0], y: [0, -0.94, -0.34] },
+  side: { bone: 'pelvis', pos: [-0.27, 0.95, -0.1], x: [-1, 0, 0], y: [0, -0.94, -0.34] },
 };
 
 /** Where weapon `def` hangs (`family`: sockets.json's, when known), with the shield `onBack` or not. */
@@ -117,9 +118,9 @@ export class SlingRig {
   /** `bone`: the character's bone by name; built in the rig's rest pose (before any animation). */
   constructor(bone: (name: string) => Object3D | undefined | null, material: Material, geometry: BufferGeometry) {
     for (const [name, def] of Object.entries(SLING_POINTS) as [SlingPoint, PointDef][]) {
-      const own = def.socket ? bone(def.socket) : null;
-      if (own) {
-        this.points[name] = own;
+      if ('socket' in def) {
+        const own = bone(def.socket);
+        if (own) this.points[name] = own;
         continue;
       }
       const parent = bone(def.bone);

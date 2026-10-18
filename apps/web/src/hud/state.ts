@@ -1,14 +1,15 @@
 /**
- * The kit's state wiring (docs/design/military-forge-ui.html, "WIRING MARKERS"): the HUD root carries
- * data-active-state="token token…"; an element with data-state="a b+c" shows while token a is
- * active, or tokens b and c both are. CSS reads the tokens too ([data-active-state~="low-hp"]).
- * Elements are touched only when the token set changes.
+ * The kit's state wiring (docs/design/military-forge-ui-v2.html, "WIRING MARKERS"): the HUD root
+ * carries data-active-state="token token…"; an element with data-state="a b+c" shows while token a
+ * is active, or tokens b and c both are, and "!a" while a is not (round two: "!switching+!dual" =
+ * neither). CSS reads the tokens too ([data-active-state~="low-hp"]). Elements are touched only
+ * when the token set changes.
  */
 export function stateMatches(spec: string, tokens: ReadonlySet<string>): boolean {
   return spec
     .split(/\s+/)
     .filter(Boolean)
-    .some((alt) => alt.split('+').every((t) => tokens.has(t)));
+    .some((alt) => alt.split('+').every((t) => (t.startsWith('!') ? !tokens.has(t.slice(1)) : tokens.has(t))));
 }
 
 interface StateItem {
