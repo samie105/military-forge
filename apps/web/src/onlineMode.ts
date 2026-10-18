@@ -611,8 +611,9 @@ export class OnlineMode {
       active: src.active,
       dual: src.dual,
       dashing: src.dashing,
-      // other players' ammo isn't sent (only the local block has it)
-      weapons: src.weapons.map((w) => ({ def: w.def, mag: 0, reserve: 0, reloadTicks: 0 })),
+      // other players' ammo isn't sent (only the local block has it); the snapshot's reloading flag
+      // marks the gun in hand as reloading (render3d drops a revolver's casings as a reload starts)
+      weapons: src.weapons.map((w, i) => ({ def: w.def, mag: 0, reserve: 0, reloadTicks: src.reloading && i === src.active ? 1 : 0 })),
       shield: src.shield === 'up' ? 'front' : src.shield === 'slung' ? 'back' : src.shield === 'raising' ? 'raising' : undefined,
       respawnTicks: src.respawnTicks,
       kills: src.kills,

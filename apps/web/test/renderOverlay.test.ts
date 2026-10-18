@@ -33,7 +33,7 @@ const isBlast = (fill: string) => fill.startsWith('rgba(255,166,87');
 /** our own tracer's colour */
 const isTracer = (stroke: string) => stroke.startsWith('rgba(255,236,150');
 /** our own dash band's colour */
-const isDash = (stroke: string) => stroke.startsWith('rgba(88,166,255');
+const isDash = (stroke: string) => stroke.startsWith('rgba(120,240,160');
 /** a ricochet's tracer and its spark fan */
 const isRicochet = (stroke: string) => stroke.startsWith('rgba(165,243,252') || stroke.startsWith('rgba(255,244,200');
 

@@ -29,7 +29,10 @@ export interface GraphicsPreset {
 export const PRESETS: Readonly<Record<PresetName, GraphicsPreset>> = {
   low: { name: 'low', dprCap: 1, antialias: false, shadows: 'blob', minScale: 0.6, remoteLod1: true, particles: 1500, vfxDetail: 0.6, vfxLights: false },
   medium: { name: 'medium', dprCap: 1.25, antialias: true, shadows: 'blob', minScale: 0.7, remoteLod1: false, particles: 3000, vfxDetail: 0.8, vfxLights: false },
-  high: { name: 'high', dprCap: 1.5, antialias: true, shadows: 'map', minScale: 0.8, remoteLod1: false, particles: 5000, vfxDetail: 1, vfxLights: true },
+  // High renders a Retina desktop at its full 2× while the frame budget holds; dynamic resolution
+  // steps it down from there (to 1.2×, High's old floor) when it doesn't. Touch devices stay capped
+  // at MOBILE_DPR_CAP (touch/index.ts).
+  high: { name: 'high', dprCap: 2, antialias: true, shadows: 'map', minScale: 0.6, remoteLod1: false, particles: 5000, vfxDetail: 1, vfxLights: true },
 };
 
 /** `?gfx=` value → preset (Low until auto quality exists: the min-spec target is an iGPU laptop). */

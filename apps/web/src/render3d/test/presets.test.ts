@@ -9,8 +9,10 @@ describe('graphics presets', () => {
     expect(parsePreset(null).name).toBe('low');
   });
 
-  it('follows docs/11 §3: DPR caps 1.0 → 1.5, blob shadows below High, one shadow map on High', () => {
-    expect([PRESETS.low.dprCap, PRESETS.medium.dprCap, PRESETS.high.dprCap]).toEqual([1, 1.25, 1.5]);
+  it('follows docs/11 §3: DPR caps 1.0 → 2.0 (High: a Retina desktop at full sharpness), blob shadows below High, one shadow map on High', () => {
+    expect([PRESETS.low.dprCap, PRESETS.medium.dprCap, PRESETS.high.dprCap]).toEqual([1, 1.25, 2]);
+    // dynamic resolution never takes High below its old floor of 1.2× on a 2× screen
+    expect(PRESETS.high.dprCap * PRESETS.high.minScale).toBeCloseTo(1.2);
     expect([PRESETS.low.shadows, PRESETS.medium.shadows, PRESETS.high.shadows]).toEqual(['blob', 'blob', 'map']);
     expect(PRESETS.low.minScale).toBe(0.6);
   });

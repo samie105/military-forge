@@ -74,7 +74,7 @@ z =  +1 … +6    FOREGROUND       grass tufts, railings, pipes. Dither-fades wh
 | Triangles per character | ≤ 4K (LOD0), 1.8K (LOD1) | same |
 | GPU texture memory | ≤ 64 MB | ≤ 160 MB |
 | Live particles | ≤ 1.5K | ≤ 5K |
-| Device pixel ratio cap | 1.0 (phones: 1.5, since 1.0 is blurry on a small dense screen; dynamic resolution still drops to 0.6) | 1.5 (2.0 opt-in) |
+| Device pixel ratio cap | 1.0 (phones: 1.5, since 1.0 is blurry on a small dense screen; dynamic resolution still drops to 0.6) | 2.0 on a desktop (a Retina screen at full sharpness while the frame budget holds; dynamic resolution steps it down to 1.2), 1.5 on touch devices |
 | Main-thread frame budget | sim ≤ 1 ms, net ≤ 0.5 ms, render submit ≤ 6 ms, HUD ≤ 1 ms | |
 
 - **Auto quality:** measure the first 300 frames, then pick a preset. **Dynamic resolution** steps the render scale (0.6–1.0) when the p90 frame time exceeds budget.

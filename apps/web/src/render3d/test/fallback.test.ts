@@ -1,6 +1,7 @@
 import { movementTestMap } from '@military-forge/content';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PRESETS } from '../presets';
+import { MOBILE_DPR_CAP } from '../../touch';
 import { PlaneCamera, create3d, pixelRatio, softwareGl } from '../index';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -29,5 +30,9 @@ describe('pixel ratio (review L7)', () => {
     expect(pixelRatio(3, 1.5, 1.5, 1)).toBe(1.5); // High on a phone: the phone cap
     expect(pixelRatio(2, 1.25, null, 0.8)).toBeCloseTo(1); // no override: the preset, then the dynamic scale
     expect(pixelRatio(1, 1.5, 1.5, 1)).toBe(1); // never above the device
+    // High on a Retina desktop: the full 2×; on a phone the touch cap still wins; on a 1× screen, 1×
+    expect(pixelRatio(2, PRESETS.high.dprCap, null, 1)).toBe(2);
+    expect(pixelRatio(3, PRESETS.high.dprCap, MOBILE_DPR_CAP, 1)).toBe(1.5);
+    expect(pixelRatio(1, PRESETS.high.dprCap, null, 1)).toBe(1);
   });
 });

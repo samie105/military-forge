@@ -86,6 +86,14 @@ const MIN_SPEED = 220;
 const LIGHT_PEAK = 22;
 const QUEUE_MAX = 256;
 
+/**
+ * A gun that keeps firing while the trigger is held: auto, and #99's burst, spin-up and beam guns
+ * (the Shredder too). The same test as #99's `heldTrigger(def)`; use that once #99 is on main.
+ */
+export function firesWhileHeld(def: { fireMode: string }): boolean {
+  return def.fireMode !== 'semi' && def.fireMode !== 'melee';
+}
+
 const spec: ParticleSpec = particleSpec();
 const base = particleSpec();
 const reset = (): ParticleSpec => Object.assign(spec, base);
@@ -221,13 +229,13 @@ export class Gunfire {
     }
   }
 
-  /** a tracer every N shots of this weapon */
+  /** a tracer every N shots of this weapon (Low: every 3rd at most for a gun that fires while held) */
   every(weapon: number): number {
     const def = weapons[weapon];
     if (!def) return 1;
     const style = this.art?.tracers[this.art.weapons[def.id]?.tracer ?? ''];
     const n = style?.every ?? CLASS_FX[def.class]?.every ?? 1;
-    return this.low && def.fireMode === 'auto' ? Math.max(n, 3) : n;
+    return this.low && firesWhileHeld(def) ? Math.max(n, 3) : n;
   }
 
   private shot(e: ShotEvent, fx: GunfireTargets, muzzle: MuzzleLookup, first: boolean, tracer: boolean): void {

@@ -79,7 +79,6 @@ interface DashStreak {
   y: number;
   dir: number;
   age: number;
-  local: boolean;
 }
 
 /** 8-way dash directions (0 = right, counter-clockwise), as the sim's DASH_DX/DASH_DY. */
@@ -430,7 +429,7 @@ export class Renderer {
           break;
         }
         case 'dash':
-          this.dashes.push({ x: e.x, y: e.y, dir: e.dir, age: 0, local: e.player === localId });
+          this.dashes.push({ x: e.x, y: e.y, dir: e.dir, age: 0 });
           break;
         case 'mapEvent': {
           // map events (docs/02 §20.7): the banner is the shell's; the feed keeps a short history
@@ -1035,7 +1034,8 @@ export class Renderer {
       const a = 1 - d.age / 0.3;
       const [ux, uy] = DASH_UNIT[d.dir] ?? DASH_UNIT[0]!;
       const len = 1.9 * Math.min(1, d.age / 0.13);
-      ctx.strokeStyle = d.local ? `rgba(88,166,255,${0.6 * a})` : `rgba(240,136,62,${0.6 * a})`;
+      // the 3D trail's mint green (render3d/vfx/dashTrail.ts), nobody's team colour, for everyone
+      ctx.strokeStyle = `rgba(120,240,160,${0.6 * a})`;
       ctx.lineWidth = 0.5 * cam.ppm;
       ctx.lineCap = 'round';
       ctx.beginPath();
