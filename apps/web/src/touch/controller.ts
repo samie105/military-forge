@@ -22,7 +22,8 @@ import {
   type TouchLayout,
 } from './layout';
 import type { KeyValueStore as Store, TouchSettings } from './settings';
-import { FIRE_AT, assistAim, createTouchState, desiredAim, throwStrength, touchButtons, type AimTarget } from './mapping';
+import type { ThrowLatch } from '../input';
+import { FIRE_AT, assistAim, createTouchState, desiredAim, grenadeStrength, touchButtons, type AimTarget } from './mapping';
 import { AIM_STICK, GRENADE_STICK, MOVE_STICK, isSwipe, knobOffset, moveButtons, shapeStick, zeroStick, type StickVector } from './stick';
 import './touch.css';
 
@@ -43,6 +44,8 @@ export interface TouchHost {
   mouseX: number;
   mouseY: number;
   readonly camera: Camera;
+  /** the sampler's grenade throw latch (input.ts), shared with the G key; null on a sampler without one */
+  readonly throwLatch: ThrowLatch | null;
   /** menus are open (the shell blocks input): the controls hide and leave touches to the menus */
   blocked(): boolean;
 }
@@ -180,7 +183,8 @@ export class TouchController {
       this.host.mouseX = cam.toScreenX(sx + Math.cos(this.aimAngle) * RETICLE_M);
       this.host.mouseY = cam.toScreenY(sy + Math.sin(this.aimAngle) * RETICLE_M);
     }
-    if (s.grenadeActive) out.throwStrength = throwStrength(s.grenade);
+    // a held grenade button aims with the right stick (or its own drag): its push is the strength
+    if (s.grenadeActive) this.host.throwLatch?.aimWith(grenadeStrength(s), performance.now());
     s.pulses = 0;
     s.dashDir = 0;
   }
@@ -276,7 +280,9 @@ export class TouchController {
     if (def.kind === 'drag') {
       const r = el.getBoundingClientRect();
       s.grenadeActive = true;
-      s.pulses |= def.bit;
+      // tap: a quick throw on release; hold: the arc, thrown on release (the throw latch)
+      if (this.host.throwLatch) this.host.throwLatch.press(performance.now());
+      else s.pulses |= def.bit;
       Object.assign(s.grenade, zeroStick());
       this.grabs.set(e.pointerId, { kind: 'grenade', cx: r.left + r.width / 2, cy: r.top + r.height / 2, radius: (r.width / 2) * GRENADE_REACH });
       return;
@@ -328,14 +334,18 @@ export class TouchController {
         s.moveActive = false;
         Object.assign(s.move, zeroStick());
       } else {
-        // release-to-fire: lifting a pushed stick fires once (back to the centre first = no shot)
-        if (lifted && this.settings.fire === 'release' && s.aim.mag > 0) s.pulses |= Btn.Fire;
+        // release-to-fire: lifting a pushed stick fires once (back to the centre first = no shot),
+        // unless it was aiming a grenade
+        if (lifted && this.settings.fire === 'release' && s.aim.mag > 0 && !s.grenadeActive) s.pulses |= Btn.Fire;
         s.aimActive = false;
         Object.assign(s.aim, zeroStick());
       }
       this.place(); // home again
     } else if (g.kind === 'grenade') {
-      s.grenadeActive = false; // the sim sees the button go up: throw
+      // lifted: it throws (a tap: a quick throw); dragged off or cancelled: no throw
+      if (lifted) this.host.throwLatch?.release(performance.now());
+      else this.host.throwLatch?.cancel();
+      s.grenadeActive = false;
       this.els.get('grenade')?.classList.remove('mf-down');
     } else if (g.kind === 'button') {
       if (g.def.bit) s.held &= ~g.def.bit;
@@ -363,7 +373,7 @@ export class TouchController {
       }
     } else {
       s.aimActive = true;
-      el.classList.toggle('mf-fire', this.settings.fire === 'hold' && v.mag >= FIRE_AT);
+      el.classList.toggle('mf-fire', this.settings.fire === 'hold' && v.mag >= FIRE_AT && !s.grenadeActive); // aiming a throw: no fire
     }
   }
 

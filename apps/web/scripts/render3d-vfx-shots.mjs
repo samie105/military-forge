@@ -35,6 +35,8 @@ const browser = await puppeteer.launch({
   headless: 'new',
   userDataDir: mkdtempSync(join(tmpdir(), 'render3d-vfx-')),
   args: hw ? ['--enable-gpu', '--ignore-gpu-blocklist'] : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
+  // stepping 90 software-rendered frames in one call can take minutes on a busy machine
+  protocolTimeout: 900_000,
 });
 
 /** Installed before the page's scripts: a clock the script can stop and step (window.__clock). */
@@ -183,15 +185,40 @@ if (!gpu) {
   await page.evaluate(() => window.__game.camera.setZoom(0, 7));
   await step(page, 120);
 
-  // gunfire: the Buzz at the dummies (automatic), mid-burst
+  // gunfire: the Buzz at the dummies (automatic), on its third shot
   await place(page, 151, 0);
-  await aimAt(page, 9, 0.2);
-  await step(page, 10);
+  await aimAt(page, 9, 0.4);
   await page.mouse.down();
-  await step(page, 9);
+  await step(page, 13);
   await shot(page, 'tracers');
   await page.mouse.up();
   await step(page, 30);
+  // into the thin wall: sparks and dust off it
+  await aimAt(page, 9, 3);
+  await page.mouse.down();
+  await step(page, 8);
+  await shot(page, 'tracers-wall');
+  await page.mouse.up();
+  await step(page, 30);
+  // the Breacher: five pellets, one flash
+  await page.evaluate(() => window.__game.mode.setLoadout([3, 1]));
+  await step(page, 60);
+  await aimAt(page, 9, 0.4);
+  await page.mouse.down();
+  await step(page, 2);
+  await shot(page, 'tracers-shotgun');
+  await page.mouse.up();
+  await step(page, 60);
+  // the Widow: a heavy tracer and a smoke line that hangs
+  await page.evaluate(() => window.__game.mode.setLoadout([4, 1]));
+  await step(page, 60);
+  await aimAt(page, 9, 2.4);
+  await page.mouse.down();
+  await step(page, 3);
+  await shot(page, 'tracers-sniper');
+  await page.mouse.up();
+  await step(page, 30);
+  await page.evaluate(() => window.__game.mode.setLoadout([1, 0]));
 
   // the debug overlay (H) still draws the 2D grenade, blast and tracers over the 3D view
   await page.keyboard.press('KeyH');

@@ -21,6 +21,8 @@ export const Cell = {
   /** soot on a front face: dark along the top edge, ragged fade downward */
   Soot: 10,
   Star: 11,
+  /** an even line, soft across: tracer paths, smoke trails */
+  Line: 12,
 } as const;
 
 export const ATLAS_GRID = 4;
@@ -96,6 +98,7 @@ const SHAPES: Record<number, Shape> = {
     const n = fbm(u * 4 + 1, v * 2, 8) - 0.5;
     return [1, smooth(-0.85 + n * 0.6, 0.85, v) * smooth(1, 0.9, v) * smooth(1, 0.55, Math.abs(u) + n * 0.2)];
   },
+  [Cell.Line]: (u, v) => [1, Math.exp(-(v * v) / 0.06) * smooth(1, 0.94, Math.abs(u))],
   [Cell.Star]: (u, v) => {
     const d = Math.hypot(u, v);
     const rays = Math.exp(-Math.abs(u * v) * 40) * smooth(1, 0, d);

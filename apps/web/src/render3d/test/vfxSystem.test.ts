@@ -132,3 +132,45 @@ describe('Vfx and arsenal-b grenade types', () => {
     }
   });
 });
+describe('Vfx.setMap (a map change)', () => {
+  it('takes the new collision world, clears every effect, and rebases the blast light on the relit scene', () => {
+    const { vfx } = system();
+    vfx.onEvents([blast]);
+    vfx.update(frame(), 1 / 60);
+    expect(vfx.particles).toBeGreaterThan(0);
+    const world = new CollisionWorld(movementTestMap);
+    vfx.setMap(world);
+    expect(vfx.particles).toBe(0);
+    expect(vfx.context.world).toBe(world);
+    expect(vfx.gunfire.world).toBe(world);
+    expect(vfx.shake.trauma).toBe(0);
+  });
+
+  it('drops shots queued before the change: none fires on the new map’s first frame (review L5)', () => {
+    const { vfx } = system();
+    const shot: SimEvent = { type: 'shot', shooter: 0, weapon: 0, ox: 150, oy: 1.2, ex: 159.8, ey: 1.4, hit: 1, target: -1, zone: 0 };
+    for (let i = 0; i < 20; i++) vfx.onEvents([shot]); // queued while 3D wasn't drawing
+    vfx.setMap(new CollisionWorld(movementTestMap));
+    vfx.update(frame(), 1 / 60);
+    expect(vfx.particles).toBe(0);
+  });
+
+  it('leaves the map’s lights alone between blasts, so a relight sticks', () => {
+    const hemi = new HemisphereLight(0xffffff, 0x000000, 1.6);
+    const sun = new DirectionalLight(0xffffff, 2);
+    const scene = new Scene();
+    const camera = new Camera();
+    camera.resize(1280, 720);
+    const vfx = new Vfx(scene, new CollisionWorld(movementTestMap), camera, { hemi, sun }, new DataTexture(new Uint8Array([128]), 1, 1), PRESETS.low);
+    vfx.update(frame(), 1 / 60);
+    hemi.intensity = 0.7; // a darker map was built
+    sun.intensity = 1.1;
+    vfx.update(frame(), 1 / 60);
+    expect([hemi.intensity, sun.intensity]).toEqual([0.7, 1.1]);
+    vfx.setMap(new CollisionWorld(movementTestMap)); // buildMap → rebase
+    vfx.onEvents([blast]);
+    for (let i = 0; i < 120; i++) vfx.update(frame(), 1 / 60);
+    expect(hemi.intensity).toBeCloseTo(0.7, 5); // back to the new map's value after the flash
+    expect(sun.intensity).toBeCloseTo(1.1, 5);
+  });
+});

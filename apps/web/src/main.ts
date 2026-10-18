@@ -4,7 +4,8 @@
  * The app (production builds; in dev at /r/CODE, ?room=CODE or ?app): the shell's home screen,
  * names, rooms by code with friends, training, settings. The shell starts and stops game modes
  * through the GameHost below; the map turns slowly behind the menus. Everything, online games
- * included, is drawn in 3D where WebGL runs; ?render=2d keeps the 2D view.
+ * included, is drawn in 3D where WebGL runs; ?render=2d keeps the 2D view, and so do machines
+ * whose WebGL can't start or only runs in software, and any while its context is lost.
  *
  * The Phase 0 debug client (dev builds at /):
  *   /            local mode: a deathmatch against three Normal bots (results, Play again) + live tuning, rendered in 3D;
@@ -12,7 +13,8 @@
  *   /?map=flux-lab   local mode on another map: lunar-outpost, storm-front, flux-lab (map mechanics demos,
  *                    docs/02 §20), mechanics-test, movement-test (default). Online, the server picks (--map=).
  *   /?time=60&kills=5&countdown=3       local match rules (0 = no limit); /?sandbox: free play, no match
- *   /?render=2d  the canvas-2D view instead (?render=3d opts online mode into 3D); ?gfx=low|medium|high
+ *   /?render=2d  the canvas-2D view instead (3D is the default, online too); ?gfx=low|medium|high;
+ *                ?softgl accepts software WebGL for 3D (automated browsers always do; players on it get 2D)
  *   /?online     joins the dev room on ws://<host>:9001 (open in two tabs to play each other)
  *   /?server=ws://host:port&name=Ade   explicit server and name
  *   /?online&rtt=150&loss=2&jitter=5    network conditioner (or ?netsim=up.lat=20,down.lat=120,…)
@@ -32,7 +34,7 @@ import { OnlineMode } from './onlineMode';
 import { Renderer, type RenderOptions } from './render';
 import { localMatchRules, mountShell, registerRoute, type GameHost, type Settings } from './shell';
 import { toKeyBindings, uiCodes } from './shell/controls';
-import { PlaneCamera, Renderer3D, parsePreset } from './render3d';
+import { PlaneCamera, create3d, online3d, parsePreset, softwareGl } from './render3d';
 import { mountTouch } from './touch';
 import type { Frame } from './view';
 
@@ -72,38 +74,32 @@ class GameInput extends InputSampler {
   }
 }
 
-/**
- * Online games open in 3D (the owner's decision, 18 Oct); `?render=2d` keeps the 2D view. When
- * render3d-b's consolidated PR (ws/render3d-b-v10) lands, this becomes its `online3d(params)`, which
- * also falls back to 2D where 3D can't run.
- */
-const ONLINE_3D = params.get('render') !== '2d';
-
 /** local mode's map (the debug client's map links, or `?map=` for training); online, the server's */
 const requestedMap = params.get('map');
 const localMapId = requestedMap && maps[requestedMap] ? requestedMap : 'movement-test';
 
-// 3D draws the world under the 2D canvas, which becomes the HUD + debug overlay (H/B)
-const use3d = appMode
-  ? params.get('render') !== '2d' && Renderer3D.supported()
-  : (params.get('render') ?? (online ? '2d' : '3d')) === '3d' && Renderer3D.supported();
-const planeCamera = use3d ? new PlaneCamera() : null;
-const camera = planeCamera ?? new Camera();
+// local mode: the ?map= map; online mode: the server's, from WELCOME (followed in frame())
+let map: MapDef = getMap(online ? 'movement-test' : localMapId);
+let mode: LocalMode | OnlineMode | null = null;
+
+// 3D draws the world under the 2D canvas, which becomes the HUD + debug overlay (H/B). Online games
+// too (the owner's decision, 18 Oct): 3D unless ?render=2d, and the 2D view where WebGL can't start
+// (create3d gives null) or, in frame(), while its context is lost
+const planeCamera = online3d(params) ? new PlaneCamera() : null;
+const view3d = planeCamera
+  ? create3d(view3dCanvas, planeCamera, map, parsePreset(params.get('gfx')), (import.meta.env.DEV && !appMode) || params.has('perf'), undefined, softwareGl(params))
+  : null;
+const use3d = view3d !== null;
+const camera = view3d ? planeCamera! : new Camera();
 const sampler = new GameInput(canvas);
 // double-tap a direction to dash (docs/02 §21): ?dashtap in the debug client; the app's Controls settings set it
 sampler.doubleTapDash = params.has('dashtap');
 const options: RenderOptions = { showHitboxes: false, showGrid: !use3d, showNet: online, overlay: use3d };
 if (appMode) Object.assign(options, { showGrid: false, hud: 'basic' });
 
-// local mode: the ?map= map; online mode: the server's, from WELCOME (followed in frame())
-let map: MapDef = getMap(online ? 'movement-test' : localMapId);
-let mode: LocalMode | OnlineMode | null = null;
 const renderer = new Renderer(canvas, camera, map, () => mode?.tuning() ?? defaultTuning);
-const view3d = planeCamera
-  ? new Renderer3D(view3dCanvas, planeCamera, map, parsePreset(params.get('gfx')), (import.meta.env.DEV && !appMode) || params.has('perf'))
-  : null;
 void view3d?.load(map.spawns[0]!);
-if (view3d) renderer.forwardEvents = view3d.onEvents; // sim events → 3D effects (render3d)
+view3d?.attach(renderer, () => (mode instanceof OnlineMode ? mode.net : null)); // sim events → 3D effects; online: remotePose (render3d)
 mountTouch({ sampler, camera, renderer, view3d }); // phones and tablets: twin sticks + buttons (apps/web/src/touch)
 
 let settings: Settings | null = null;
@@ -283,8 +279,8 @@ function drawMenuBackdrop(now: number, dt: number): void {
   const x = mid + (b.maxX - b.minX) * 0.3 * Math.sin(now / 1000 / 24);
   const y = map.spawns[0]!.y + 2;
   camera.follow(x, y, x, y, dt, map);
-  options.overlay = !!view3d;
-  view3dCanvas.style.visibility = view3d ? 'visible' : 'hidden';
+  options.overlay = view3d?.drawing ?? false;
+  view3dCanvas.style.visibility = options.overlay ? 'visible' : 'hidden';
   renderer.render(EMPTY_FRAME, dt, { ...options, hud: 'none', reticle: false }, '');
   view3d?.render(EMPTY_FRAME, dt);
 }
@@ -331,11 +327,10 @@ function frame(now: number): void {
     return;
   }
 
-  // online play in 3D unless ?render=2d (ONLINE_3D); training and the menus always where 3D runs
-  if (appMode && view3d) {
-    const in3d = !(mode instanceof OnlineMode) || ONLINE_3D;
-    options.overlay = in3d;
-    view3dCanvas.style.visibility = in3d ? 'visible' : 'hidden';
+  // 3D draws the world, online games too, unless its WebGL context is lost: the 2D view meanwhile
+  if (view3d) {
+    options.overlay = view3d.drawing;
+    view3dCanvas.style.visibility = options.overlay ? 'visible' : 'hidden';
   }
 
   const wheel = sampler.consumeWheel();

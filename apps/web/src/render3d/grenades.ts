@@ -1,6 +1,7 @@
 /**
- * 3D grenades (docs/11 §5). W8's frag.glb, drawn 3.5 times life size (and never under MIN_PX
- * tall) so a 14 cm grenade reads at gameplay zoom, with:
+ * 3D grenades (docs/11 §5). The frag model drawn GRENADE_WIDTH_M wide whatever its own size (W8's
+ * 9 cm frag 3.5× life size; the Forge's sim-sized 20 cm one ~1.7×), and never under MIN_PX tall,
+ * so it reads at gameplay zoom, with:
  * - a two-tone outline: a dark inner hull and a light outer one, so one of them contrasts with
  *   whatever is behind (bright sky, dark walls), at a constant width in screen pixels;
  * - a fuse light that blinks faster toward the blast (grenadeTracker.ts fuseLight);
@@ -17,7 +18,6 @@ import {
   CylinderGeometry,
   InstancedMesh,
   Matrix4,
-  Mesh,
   MeshBasicMaterial,
   MeshToonMaterial,
   Quaternion,
@@ -28,14 +28,16 @@ import {
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import type { CollisionWorld } from '@military-forge/sim';
+import { reduceFlashes } from '../fx';
 import { FUSE_MAX_HZ, FUSE_REDUCED_HZ, FUSE_SECONDS, GrenadeTracker, SIM_RADIUS, fuseLight, type GrenadeSample, type GrenadeTrack } from './grenadeTracker';
 import { Cell } from './vfx/atlas';
+import { bakeGltfMesh, nodePosition } from './weaponModels';
 import type { ParticleLayer } from './vfx/particles';
 import { particleSpec, type ParticlePool } from './vfx/pool';
 import { Ramp } from './vfx/ramps';
 
-/** drawn size over real size */
-export const GRENADE_SCALE = 3.5;
+/** how wide a frag is drawn (m): the owner wants frags you can clearly see, about today's size */
+export const GRENADE_WIDTH_M = 0.33;
 /** never drawn shorter than this on screen (CSS px), at any zoom */
 export const GRENADE_MIN_PX = 12;
 /** outline widths (CSS px): dark inner, light outer */
@@ -80,42 +82,26 @@ export function fallbackFrag(): ThrowableModel {
 }
 
 /**
- * Reads a throwable GLB (W8: one mesh, vertex colours, a `ground` node, maybe a `light` node). The
- * mesh is baked into the weapon frame with plain float attributes.
+ * Reads a throwable GLB (W8: one mesh, vertex colours, a `ground` node, maybe a `light` node), baked
+ * into the weapon frame.
  */
 export function throwableFromGltf(gltf: GLTF, defaultLight: Vector3 = FRAG_LIGHT): ThrowableModel | null {
-  const scene = gltf.scene;
-  scene.updateMatrixWorld(true);
-  let mesh: Mesh | null = null;
-  scene.traverse((o) => {
-    if (!mesh && (o as Mesh).isMesh) mesh = o as Mesh;
-  });
-  if (!mesh) return null;
-  const src = (mesh as Mesh).geometry;
-  const geometry = new BufferGeometry();
-  for (const name of ['position', 'normal', 'color'] as const) {
-    const a = src.getAttribute(name);
-    if (!a) continue;
-    // meshopt/quantised attributes are normalised integers: read them back as floats
-    const size = name === 'color' ? 3 : a.itemSize;
-    const out = new Float32Array(a.count * size);
-    for (let i = 0; i < a.count; i++) for (let c = 0; c < size; c++) out[i * size + c] = a.getComponent(i, c);
-    geometry.setAttribute(name, new BufferAttribute(out, size));
-  }
-  if (src.index) geometry.setIndex(Array.from(src.index.array as ArrayLike<number>));
-  geometry.applyMatrix4((mesh as Mesh).matrixWorld);
-  geometry.computeBoundingBox();
+  const geometry = bakeGltfMesh(gltf);
+  if (!geometry) return null;
   const box = geometry.boundingBox!;
-  const ground = scene.getObjectByName('ground');
-  const light = scene.getObjectByName('light');
-  const groundDepth = ground ? -ground.getWorldPosition(new Vector3()).z : -box.min.z;
+  const ground = nodePosition(gltf.scene, 'ground');
   return {
     geometry,
-    groundDepth,
-    light: light ? light.getWorldPosition(new Vector3()) : defaultLight.clone(),
+    groundDepth: ground ? -ground.z : -box.min.z,
+    light: nodePosition(gltf.scene, 'light') ?? defaultLight.clone(),
     radius: Math.max(box.max.x - box.min.x, box.max.y - box.min.y) / 2,
     height: box.max.z - box.min.z,
   };
+}
+
+/** Drawn size over model size for `model`: GRENADE_WIDTH_M across its body. */
+export function grenadeScale(model: Pick<ThrowableModel, 'radius'>): number {
+  return GRENADE_WIDTH_M / (2 * model.radius);
 }
 
 /** upright: the weapon frame's +Z is world up; then a 3/4 turn toward the camera */
@@ -151,11 +137,14 @@ export class GrenadeRenderer {
   readonly outer: InstancedMesh;
   readonly meshes: readonly InstancedMesh[];
   private model: ThrowableModel = fallbackFrag();
+  /** drawn size over model size (grenadeScale), before MIN_PX */
+  private baseScale = grenadeScale(this.model);
   /** reduced motion: the fuse light blinks at most 3 times a second */
   reduced = false;
 
   constructor(world: CollisionWorld, ramp: Texture) {
     this.tracker = new GrenadeTracker(world);
+    this.tracker.rollRadius = this.model.radius;
     const g = this.model.geometry;
     // fog off: projectiles are the highest-contrast thing on screen at every zoom (docs/11 §4)
     this.body = new InstancedMesh(g, new MeshToonMaterial({ vertexColors: true, gradientMap: ramp, fog: false }), MAX_GRENADES_DRAWN);
@@ -178,24 +167,27 @@ export class GrenadeRenderer {
   setModel(model: ThrowableModel): void {
     const old = this.model.geometry;
     this.model = model;
+    this.baseScale = grenadeScale(model);
+    this.tracker.rollRadius = model.radius; // the roll keeps pace with this model's body
     for (const m of this.meshes) m.geometry = model.geometry;
     old.dispose();
   }
 
-  /** Drawn size over model size at `ppm` CSS px per metre: GRENADE_SCALE, or more to stay MIN_PX tall. */
+  /** Drawn size over model size at `ppm` CSS px per metre: GRENADE_WIDTH_M wide, or more to stay MIN_PX tall. */
   scaleFor(ppm: number): number {
-    return Math.max(GRENADE_SCALE, GRENADE_MIN_PX / (Math.max(ppm, 1e-3) * this.model.height));
+    return Math.max(this.baseScale, GRENADE_MIN_PX / (Math.max(ppm, 1e-3) * this.model.height));
   }
 
   update(tick: number, samples: readonly GrenadeSample[], dt: number, ppm: number, fx: GrenadeFx): void {
     const S = this.scaleFor(ppm);
-    const r = S / GRENADE_SCALE; // readability factor for the trail and the light
+    const r = S / this.baseScale; // readability factor for the trail and the light
     this.tracker.update(tick, samples, dt, S);
     const model = this.model;
     const bodyPx = model.radius * S * ppm;
     const kIn = 1 + INNER_PX / bodyPx;
     const kOut = kIn + OUTER_PX / bodyPx;
-    const maxHz = this.reduced ? FUSE_REDUCED_HZ : FUSE_MAX_HZ;
+    // Reduce motion or Reduce flashes: the fuse light blinks no faster than 3 Hz (the Forge's spec)
+    const maxHz = this.reduced || reduceFlashes() ? FUSE_REDUCED_HZ : FUSE_MAX_HZ;
     let n = 0;
     for (const t of this.tracker.tracks) {
       if (n >= MAX_GRENADES_DRAWN) break;
@@ -234,7 +226,7 @@ export class GrenadeRenderer {
     if (flying) {
       const dx = t.x - t.trailX;
       const dy = t.y - t.trailY;
-      const d = Math.hypot(dx, dy);
+      const d = Math.sqrt(dx * dx + dy * dy);
       const spacing = TRAIL_SPACING * r;
       if (d > 4) {
         // a jump (respawned id, a snapshot gap): restart the trail here

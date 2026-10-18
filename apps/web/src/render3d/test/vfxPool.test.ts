@@ -60,6 +60,18 @@ describe('ParticlePool', () => {
     expect([0, 1].map((i) => field(pool, i, F.x)).sort()).toEqual([2, 3]);
   });
 
+  it('a tagged pool keeps each particle’s tag through swap-removes', () => {
+    const pool = new ParticlePool(8, true);
+    pool.emit(Object.assign(particleSpec(), { life: 0.1, x: 1 }), 7);
+    pool.emit(Object.assign(particleSpec(), { life: 1, x: 2 }), 9);
+    pool.emit(Object.assign(particleSpec(), { life: 1, x: 3 }));
+    pool.update(0.2); // the first expires: the last moves into its slot, tag and all
+    expect(pool.count).toBe(2);
+    expect([field(pool, 0, F.x), pool.tags![0]]).toEqual([3, 0]);
+    expect([field(pool, 1, F.x), pool.tags![1]]).toEqual([2, 9]);
+    expect(new ParticlePool(4).tags).toBeNull();
+  });
+
   it('integrates velocity, gravity, drag and spin', () => {
     const pool = new ParticlePool(1);
     spawn(pool, { vx: 2, vy: 0, grav: 10, drag: 0, spin: 1, life: 5 });
@@ -131,5 +143,17 @@ describe('ParticleLayer', () => {
     expect(RAMPS[rampIndex(Ramp.Fire, 0) + 3]).toBe(1);
     expect(RAMPS[rampIndex(Ramp.Fire, 1) + 3]).toBe(0);
     expect(RAMPS[rampIndex(Ramp.Scorch, 0.7) + 3]).toBeCloseTo(0.85);
+  });
+});
+
+describe('ParticlePool field layout', () => {
+  it('stores every spec field at its F offset (write() spells them out)', () => {
+    const pool = new ParticlePool(1);
+    const spec = particleSpec();
+    const keys = Object.keys(F) as (keyof typeof F)[];
+    keys.forEach((k, i) => (spec[k] = 100 + i));
+    pool.emit(spec);
+    expect(keys.length).toBe(STRIDE);
+    for (const k of keys) expect(pool.data[F[k]]).toBe(spec[k]);
   });
 });

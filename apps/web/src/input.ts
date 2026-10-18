@@ -43,6 +43,76 @@ const DOUBLE_TAP_BITS = Btn.Left | Btn.Right | Btn.Down;
 /** The buttons that give a dash its direction (docs/02 §21). */
 const DASH_DIRECTION_BITS = Btn.Left | Btn.Right | Btn.Jet | Btn.Down;
 
+/** Hold-to-aim (docs/02 §14): the cursor this far from the shoulder (m) throws at 70 %, this far at 100 %. */
+export const THROW_NEAR = 2;
+export const THROW_FAR = 10;
+
+/** The throw strength (0..7, the input's 3 bits) for the cursor `distance` m from the shoulder. */
+export function throwStrengthAt(distance: number): number {
+  return Math.round(Math.min(1, Math.max(0, (distance - THROW_NEAR) / (THROW_FAR - THROW_NEAR))) * 7);
+}
+
+/** A grenade key or button let go this soon after the press is a tap: a quick throw (ms). */
+export const TAP_MS = 150;
+/** A quick throw's strength: input 0 = 70 % (docs/02 §14). */
+export const QUICK_THROW = 0;
+
+/**
+ * Grenade throws, the keyboard's (or a mouse button bound to it) and the touch button's alike
+ * (docs/02 §14; the owner's decision of 18 Oct):
+ * - a tap (let go within TAP_MS) is a quick throw at 70 % when it's released, with no arc;
+ * - a hold shows the arc (`aim`: the strength the throw would go with) and throws on release, as
+ *   strong as its aimer says: the cursor's distance, or the touch stick's push.
+ * The throw goes in the first sample after the release, so a tap shorter than a tick still throws;
+ * the sim never sees the key held, so nothing throws on the press.
+ */
+export class ThrowLatch {
+  /** while a hold aims (past a tap): the strength (0..7) the throw would go with; −1 otherwise */
+  aim = -1;
+  private downAt = -1;
+  private strength = QUICK_THROW;
+  private pending = -1;
+
+  /** The key or button went down at `at` (ms, performance.now: the clock samples pass to aimWith). */
+  press(at: number): void {
+    if (this.downAt < 0) this.downAt = at;
+  }
+
+  /** It came up at `at`: the throw goes in the next sample (a quick one after a tap). */
+  release(at: number): void {
+    if (this.downAt < 0) return;
+    this.pending = at - this.downAt < TAP_MS ? QUICK_THROW : this.strength;
+    this.downAt = -1;
+    this.aim = -1;
+  }
+
+  /** No throw and no arc: focus lost, the setting turned off, a finger dragged off the screen. */
+  cancel(): void {
+    this.downAt = -1;
+    this.pending = -1;
+    this.aim = -1;
+  }
+
+  /** a throw is being held (tap or aim) */
+  get holding(): boolean {
+    return this.downAt >= 0;
+  }
+
+  /** The strength a release now would throw with, at `now` (ms): the arc shows once past a tap. */
+  aimWith(strength: number, now: number): void {
+    this.strength = strength;
+    this.aim = this.downAt >= 0 && now - this.downAt >= TAP_MS ? strength : -1;
+  }
+
+  /** Once per sample: a release since the last one throws now. */
+  take(out: Input): void {
+    if (this.pending < 0) return;
+    out.buttons |= Btn.Grenade;
+    out.throwStrength = this.pending;
+    this.pending = -1;
+  }
+}
+
 /** Keys whose browser default (scrolling, focus moves) must not fire during play. */
 const PREVENT_DEFAULT = new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab']);
 
@@ -84,6 +154,28 @@ export class InputSampler {
   /** the direction bit of the last direction press (double taps) */
   private lastDirection = 0;
   private lastDirectionAt = -Infinity;
+  /** grenade throws: tap for a quick throw, hold to aim with the arc (the touch button shares it) */
+  readonly throwLatch = new ThrowLatch();
+  private hold = true;
+
+  /**
+   * Hold-to-aim grenades, the default (docs/02 §14; the owner's decision of 18 Oct): a tap of the
+   * grenade key is a quick throw at 70 %, a hold aims with the arc and throws on release. Off (a
+   * setting): every press is a quick throw at once.
+   */
+  get holdToAim(): boolean {
+    return this.hold;
+  }
+
+  set holdToAim(on: boolean) {
+    this.hold = on;
+    if (!on) this.throwLatch.cancel(); // no arc left behind
+  }
+
+  /** while a throw is being aimed: the strength it would go with, 0..7 (the arc); −1 otherwise */
+  get throwAim(): number {
+    return this.throwLatch.aim;
+  }
 
   constructor(private readonly target: HTMLElement) {
     window.addEventListener('keydown', (e) => {
@@ -95,7 +187,11 @@ export class InputSampler {
       }
       this.keys.add(e.code);
     });
-    window.addEventListener('keyup', (e) => this.keys.delete(e.code));
+    window.addEventListener('keyup', (e) => {
+      // letting go of the grenade key throws (the latch: a tap is a quick throw)
+      if ((this.bindings.keys[e.code] ?? 0) & Btn.Grenade && this.keys.has(e.code)) this.throwLatch.release(performance.now());
+      this.keys.delete(e.code);
+    });
     window.addEventListener('blur', () => this.releaseAll());
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) this.releaseAll();
@@ -113,6 +209,7 @@ export class InputSampler {
       // the back/forward side buttons (mouse 4 and 5: bindable, 5 cycles grenades by default)
       // navigate on release in Chrome: not when the press was ours
       if ((e.button === 3 || e.button === 4) && this.mouseButtons & (1 << e.button)) e.preventDefault();
+      if ((this.bindings.mouse[e.button] ?? 0) & Btn.Grenade && this.mouseButtons & (1 << e.button)) this.throwLatch.release(performance.now());
       this.mouseButtons &= ~(1 << e.button);
     });
     target.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -129,6 +226,12 @@ export class InputSampler {
   /** A fresh press of a key or mouse button doing `bits`: the dash latch and double-tap directions. */
   private notePress(bits: number, at: number): void {
     if (bits & Btn.Dash) this.latchDash(0);
+    if (bits & Btn.Grenade) {
+      // timed on the sample clock (performance.now), not the event's: the two always agree
+      const now = performance.now();
+      this.throwLatch.press(now);
+      if (!this.hold) this.throwLatch.release(now); // quick throw on the press
+    }
     const dir = bits & DOUBLE_TAP_BITS;
     if (!dir) return;
     if (this.doubleTapDash && dir === this.lastDirection && at - this.lastDirectionAt <= DOUBLE_TAP_MS) {
@@ -156,6 +259,7 @@ export class InputSampler {
     this.keys.clear();
     this.mouseButtons = 0;
     this.dashLatched = false;
+    this.throwLatch.cancel(); // focus lost while aiming: no throw
   }
 
   /** One-shot key press since the last call (for UI toggles, not gameplay). */
@@ -180,7 +284,8 @@ export class InputSampler {
   }
 
   /** Samples one tick of input; aims from the shoulder at (sx, sy) toward the mouse. */
-  sample(camera: Camera, sx: number, sy: number, out: Input = createInput()): Input {
+  /** `now`: ms on the event clock (performance.now), for the throw latch's tap time. */
+  sample(camera: Camera, sx: number, sy: number, out: Input = createInput(), now = performance.now()): Input {
     const b = this.bindings;
     let buttons = 0;
     let slot = 0;
@@ -196,12 +301,18 @@ export class InputSampler {
       this.dashLatched = false;
     }
     const m = this.mouseWorld(camera);
-    // the quick throw's strength; render3d-b's hold-to-aim sets the aimed one after this line, so
-    // nothing below may write it again
+    // the grenade key never reaches the sim held: the latch throws on its release (a tap: quick)
+    buttons &= ~Btn.Grenade;
+    const dx = m.x - sx;
+    const dy = m.y - sy;
+    this.throwLatch.aimWith(throwStrengthAt(Math.sqrt(dx * dx + dy * dy)), now);
+    // the default throw strength; the latch writes a throw's own after this line, so nothing below
+    // may write it again
     out.throwStrength = 7;
     out.buttons = buttons;
-    out.aim = angleToU16(Math.atan2(m.y - sy, m.x - sx));
+    out.aim = angleToU16(Math.atan2(dy, dx));
     out.weaponSelect = slot;
+    this.throwLatch.take(out);
     return out;
   }
 

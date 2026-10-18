@@ -201,7 +201,8 @@ export class ParticleLayer {
       if (stretch > 0) {
         const vx = d[o + F.vx]!;
         const vy = d[o + F.vy]!;
-        const speed = Math.hypot(vx, vy);
+        // sqrt, not Math.hypot: hypot allocates in optimised V8 (a GC every few frames with 500 streaks)
+        const speed = Math.sqrt(vx * vx + vy * vy);
         if (speed > 1e-3) {
           const ux = vx / speed;
           const uy = vy / speed;

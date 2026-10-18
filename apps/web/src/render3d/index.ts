@@ -21,6 +21,8 @@ import {
   Vector3,
   WebGLRenderer,
 } from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import type { Frame } from '../view';
 import { Avatar, AvatarKit } from './avatar';
 import { RookieAssembler, toonRamp, type CharacterAssembler, type CharacterLod } from './character';
@@ -28,13 +30,59 @@ import { CloudLayer } from './clouds';
 import { buildDepthLayers, updateForeground, type DepthLayers } from './layers';
 import { lightingFor } from './lighting';
 import { buildMapGeometry } from './mapGeometry';
+import { OnlineView, type RemoteView } from './online';
 import { FOV_DEG, PlaneCamera, applyPlanePose, planePose } from './planeCamera';
 import { ZoneVolumes } from './zones';
 import { DynamicResolution, PRESETS, SampleWindow, parsePreset, type GraphicsPreset, type PresetName } from './presets';
+import { eachKick, recoilOf } from './recoil';
 import { PickupMeshes, RicochetSparks } from './shield';
 import { Vfx } from './vfx';
+import type { BodyLookup } from './vfx/dash';
+import type { MuzzleLookup } from './vfx/gunfire';
 
-export { PlaneCamera, parsePreset, type PresetName };
+export { PlaneCamera, parsePreset, type PresetName, type RemoteView };
+
+/**
+ * Software WebGL is accepted for automated browsers (headless tests and screenshot scripts, which
+ * run on SwiftShader) and with `?softgl`; a player on a software rasteriser gets the 2D view.
+ */
+export function softwareGl(params: URLSearchParams): boolean {
+  return params.has('softgl') || (typeof navigator !== 'undefined' && navigator.webdriver === true);
+}
+
+/**
+ * Whether play renders in 3D, online included (the owner's default, 18 Oct): yes, unless
+ * `?render=2d`, or WebGL 2 can't start on a real GPU (softwareGl).
+ */
+export function online3d(params: URLSearchParams): boolean {
+  return params.get('render') !== '2d' && Renderer3D.supported(softwareGl(params));
+}
+
+/**
+ * The render pixel ratio: the device's, capped by the preset and by an override (touch devices:
+ * MOBILE_DPR_CAP), the lower cap winning, so a phone on Low stays at 1; then the dynamic scale.
+ */
+export function pixelRatio(device: number, presetCap: number, override: number | null, scale: number): number {
+  return Math.min(device, presetCap, override ?? Infinity) * scale;
+}
+
+/**
+ * The 3D view, or null when WebGL fails to start after all (main.ts then draws in 2D). Same
+ * arguments as the constructor; pass `softwareGl(params)` for `allowSoftware`.
+ */
+export function create3d(...args: ConstructorParameters<typeof Renderer3D>): Renderer3D | null {
+  try {
+    return new Renderer3D(...args);
+  } catch (err) {
+    console.warn('render3d: WebGL did not start; drawing in 2D', err);
+    return null;
+  }
+}
+
+/** The part of the 2D renderer the 3D view hooks into (its event forwarding). */
+export interface EventSource2D {
+  forwardEvents: ((events: readonly SimEvent[], localId: number) => void) | null;
+}
 
 export interface RenderStats {
   preset: PresetName;
@@ -101,12 +149,21 @@ export class Renderer3D {
   private frames = 0;
 
   /** WebGL2 is the baseline (docs/11 §1); without it the page keeps the 2D renderer. */
-  static supported(): boolean {
+  /** WebGL 2 starts, on a GPU unless `allowSoftware` (a software rasteriser is too slow to play on). */
+  static supported(allowSoftware = false): boolean {
     try {
-      return !!document.createElement('canvas').getContext('webgl2');
+      return !!document.createElement('canvas').getContext('webgl2', { failIfMajorPerformanceCaveat: !allowSoftware });
     } catch {
       return false;
     }
+  }
+
+  /** The context was lost (GPU reset, driver update, too many contexts): main.ts draws in 2D until it's back. */
+  private lost = false;
+
+  /** Drawing the world: not while the WebGL context is lost. */
+  get drawing(): boolean {
+    return !this.lost;
   }
 
   constructor(
@@ -117,14 +174,26 @@ export class Renderer3D {
     /** show the frame-time panel (dev builds, or ?perf) */
     showStats = false,
     assembler?: CharacterAssembler,
+    /** accept software WebGL (softwareGl: automated browsers, ?softgl); otherwise a major performance caveat fails */
+    allowSoftware = false,
   ) {
+    this.preset = preset;
+    this.dynres = new DynamicResolution(preset.minScale);
+    // throws when no context can be had (create3d falls back to 2D)
+    this.renderer = new WebGLRenderer({ canvas, antialias: preset.antialias, powerPreference: 'high-performance', failIfMajorPerformanceCaveat: !allowSoftware });
+    canvas.addEventListener('webglcontextlost', (e) => {
+      e.preventDefault(); // ask for it back
+      this.lost = true;
+    });
+    canvas.addEventListener('webglcontextrestored', () => {
+      this.lost = false;
+      this.lastFrameAt = 0;
+      this.resize();
+    });
     if (showStats) {
       this.statsEl = document.body.appendChild(document.createElement('pre'));
       this.statsEl.id = 'perf3d';
     }
-    this.preset = preset;
-    this.dynres = new DynamicResolution(preset.minScale);
-    this.renderer = new WebGLRenderer({ canvas, antialias: preset.antialias, powerPreference: 'high-performance' });
     this.renderer.shadowMap.enabled = true; // only the High preset's sun casts (setPreset)
     const ramp = toonRamp();
     this.assembler = assembler ?? new RookieAssembler(import.meta.env.BASE_URL, ramp);
@@ -149,7 +218,7 @@ export class Renderer3D {
     this.buildMap(map);
     this.scene.add(this.plane, this.zones.group);
     // after buildMap: the blast light flashes from the map's light levels
-    this.vfx = new Vfx(this.scene, this.world, camera, { hemi: this.hemi, sun: this.sun }, ramp, preset);
+    this.vfx = new Vfx(this.scene, this.world, camera, { hemi: this.hemi, sun: this.sun }, ramp, preset, this.muzzleOf, this.bodyOf);
     // reduced motion (docs/11 §5): the OS setting until the settings screen calls setReducedMotion
     this.setReducedMotion(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
     // riot shields lying on the map, and the ricochet spark (an effect module: it gets the sim events)
@@ -162,14 +231,65 @@ export class Renderer3D {
     this.setPreset(preset.name);
   }
 
-  /** Sim events (shots, explosions) for the effects. An arrow function: main.ts hands it to the 2D renderer. */
-  readonly onEvents = (events: readonly SimEvent[]): void => {
-    if (this.ready) this.vfx.onEvents(events);
+  /** A shooter's drawn muzzle, for tracers and flashes (false while its character isn't drawn). */
+  private readonly muzzleOf: MuzzleLookup = (id, weapon, out, dir, peek) => this.avatars.get(id)?.muzzle(weapon, out, dir, peek) ?? false;
+  /** a player's drawn character (dash afterimages) */
+  private readonly bodyOf: BodyLookup = (id) => this.avatars.get(id)?.inst ?? null;
+
+  /** the online timeline while online play is attached (attach) */
+  private online: OnlineView | null = null;
+  private netOf: () => RemoteView | null = () => null;
+
+  /**
+   * Hooks the 3D view into the page (main.ts, one line): the 2D renderer forwards its sim events
+   * here, and `net` gives the current online mode's NetClient (null in local play). Online, remote
+   * players are drawn only through net.remoteRenderTick/remotePose (online.ts).
+   */
+  attach(renderer2d: EventSource2D, net: () => RemoteView | null = () => null): void {
+    renderer2d.forwardEvents = this.onEvents;
+    this.netOf = net;
+  }
+
+  /** The online timeline for the attached NetClient (a fresh one per connection), or null offline. */
+  private onlineView(): OnlineView | null {
+    const net = this.netOf();
+    if (!net) return (this.online = null);
+    if (this.online?.net !== net) this.online = new OnlineView(net);
+    return this.online;
+  }
+
+  /** Sim events (shots, explosions) for the effects; online, remote ones wait for the render tick. */
+  readonly onEvents = (events: readonly SimEvent[], localId = -1): void => {
+    if (!this.ready) return;
+    const online = this.onlineView();
+    if (online) online.hold(events, localId, this.toVfx);
+    else this.toVfx(events);
   };
 
-  /** No camera shake, a third of the blast light, fuse lights blinking ≤ 3 times a second. */
+  /** Events reach the effects and the shooters' recoil together (online: on the remote timeline). */
+  private readonly toVfx = (events: readonly SimEvent[]): void => {
+    this.vfx.onEvents(events);
+    eachKick(events, this.onKick);
+  };
+
+  /** Visual recoil (recoil.ts): the shooter's gun, arm and torso, and the local player's camera. */
+  private readonly onKick = (shooter: number, weapon: number, dirX: number, dirY: number): void => {
+    this.avatars.get(shooter)?.kick(weapon);
+    if (shooter !== this.localId) return;
+    const camera = recoilOf(weapon).camera;
+    this.vfx.shake.kick(-dirX * camera, -dirY * camera);
+  };
+
+  /** the local player's id, from the last drawn frame (−1: none) */
+  private localId = -1;
+
+  /**
+   * No camera shake or camera kick, half the gun kick, a third of the blast light, fuse lights
+   * blinking ≤ 3 times a second.
+   */
   setReducedMotion(on: boolean): void {
     this.vfx.setReducedMotion(on);
+    this.kit.recoilScale = on ? 0.5 : 1;
   }
 
   /** Swaps the map on screen (online play follows the server's map from WELCOME). */
@@ -210,7 +330,8 @@ export class Renderer3D {
 
   /** Loads the base character and effect assets, then compiles every material variant (docs/11 §3 shader warm-up). */
   async load(spawn: { x: number; y: number }): Promise<void> {
-    await this.vfx.load(import.meta.env.BASE_URL);
+    const base = import.meta.env.BASE_URL;
+    await Promise.all([this.vfx.load(base), this.kit.loadWeapons(base, new GLTFLoader().setMeshoptDecoder(MeshoptDecoder))]);
     try {
       await this.warmUp(spawn);
     } catch (err) {
@@ -222,9 +343,10 @@ export class Renderer3D {
   private async warmUp(spawn: { x: number; y: number }): Promise<void> {
     const lods: CharacterLod[] = [0, 1];
     const warm = await Promise.all(lods.map((lod, i) => this.assembler.create(null, lod).then((inst) => new Avatar(inst, lod, this.kit, i))));
-    for (const a of warm) {
+    for (const [i, a] of warm.entries()) {
       a.pivot.position.set(spawn.x, spawn.y, 0);
-      a.showAllForWarmUp();
+      a.showAllForWarmUp(i);
+      a.pivot.traverse((o) => (o.castShadow = true)); // as the real ones (syncAvatars): the shadow pass below
       this.scene.add(a.pivot, a.blob);
     }
     // a scratch camera at the spawn: the game camera (follow, mouse aim) is read-only here
@@ -234,6 +356,13 @@ export class Renderer3D {
     cam.y = spawn.y;
     applyPlanePose(this.camera3, planePose(cam, FOV_DEG, undefined, this.pose));
     await this.renderer.compileAsync(this.scene, this.camera3);
+    // compileAsync skips the shadow pass: where the sun casts shadows (High), one draw links its
+    // depth programs (the skinned soldiers' included) now, not when the first soldiers spawn
+    if (this.sun.castShadow) {
+      this.sun.target.position.set(spawn.x, spawn.y, 0);
+      this.sun.position.copy(this.sun.target.position).addScaledVector(this.sunDir, 50);
+      this.renderer.render(this.scene, this.camera3);
+    }
     // keep the warm-up blob materials: disposing them would release the blob shader program (no
     // other material uses it yet) and the first real avatar would link it again mid-game
     for (const a of warm) a.dispose({ keepBlobMaterial: true });
@@ -264,7 +393,7 @@ export class Renderer3D {
     return this.preset.name;
   }
 
-  /** A device-pixel-ratio cap that holds whatever the preset (null: the preset's own again). */
+  /** A device-pixel-ratio cap on top of the preset's: the lower one wins (null: the preset's alone). */
   setDprCap(cap: number | null): void {
     this.dprCapOverride = cap;
     this.resize();
@@ -272,13 +401,13 @@ export class Renderer3D {
 
   resize(): void {
     const canvas = this.renderer.domElement;
-    const dpr = Math.min(window.devicePixelRatio || 1, this.dprCapOverride ?? this.preset.dprCap) * this.dynres.scale;
+    const dpr = pixelRatio(window.devicePixelRatio || 1, this.preset.dprCap, this.dprCapOverride, this.dynres.scale);
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
   }
 
   render(frame: Frame, dt: number): void {
-    if (!this.ready) return; // loading frames would skew the meter and dynamic resolution
+    if (!this.ready || this.lost) return; // loading frames would skew the meter and dynamic resolution; no context, nothing to draw
     if (document.hidden) {
       // main.ts's watchdog still ticks (≈1 Hz) while rAF is paused: draw nothing, measure nothing
       this.lastFrameAt = 0;
@@ -293,7 +422,16 @@ export class Renderer3D {
     }
     this.lastFrameAt = now;
 
-    // effects first: their camera shake moves the 3D camera only (never the 2D Camera: aim, AOI, HUD)
+    // online: remote players at net.remotePose on this frame's render tick, and the snapshot world
+    // (grenades, remote shots, dashes and blasts) on the same timeline
+    const online = this.onlineView();
+    if (online) {
+      frame = online.frame(frame, now);
+      online.release(this.toVfx);
+    }
+    // characters first (tracers leave their drawn muzzles), then effects; the effects' camera
+    // shake moves the 3D camera only (never the 2D Camera: aim, AOI, HUD)
+    this.syncAvatars(frame, dt);
     const shake = this.vfx.update(frame, dt);
     const pose = planePose(this.camera, FOV_DEG, undefined, this.pose);
     pose.x += shake.x;
@@ -318,7 +456,6 @@ export class Renderer3D {
       this.sun.target.position.set(0, 0, 0);
     }
 
-    this.syncAvatars(frame, dt);
     this.pickupMeshes.sync(frame.pickups, dt);
     updateForeground(this.layers.foreground, frame.players, this.pose, dt);
     this.zones.update(frame, dt, now / 1000);
@@ -345,8 +482,10 @@ export class Renderer3D {
   private syncAvatars(frame: Frame, dt: number): void {
     const blob = this.preset.shadows === 'blob';
     this.seen.clear();
+    this.localId = -1;
     for (const p of frame.players) {
       this.seen.add(p.id);
+      if (p.isLocal) this.localId = p.id;
       const avatar = this.avatars.get(p.id);
       if (avatar) {
         avatar.update(p, dt, this.world, blob);

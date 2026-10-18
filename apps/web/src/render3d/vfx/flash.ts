@@ -21,18 +21,18 @@ export class SceneFlash {
   private sinceSpike = Infinity;
   /** how fast the flash dies away (time constant, s) */
   private tau = 0.09;
-  private baseIntensity: number;
-  private sunIntensity: number;
+  private baseIntensity = 0;
+  private sunIntensity = 0;
   private readonly baseColor = new Color();
   private readonly warm = new Color(0xffc480);
+  /** the lights carry a flash right now: restore them when it ends, leave them alone otherwise */
+  private lit = false;
 
   constructor(
     private readonly hemi: HemisphereLight,
     private readonly sun: DirectionalLight,
   ) {
-    this.baseIntensity = hemi.intensity;
-    this.sunIntensity = sun.intensity;
-    this.baseColor.copy(hemi.color);
+    this.rebase();
   }
 
   /**
@@ -41,6 +41,7 @@ export class SceneFlash {
    */
   rebase(): void {
     this.level = 0;
+    this.lit = false;
     this.point.intensity = 0;
     this.baseIntensity = this.hemi.intensity;
     this.sunIntensity = this.sun.intensity;
@@ -68,6 +69,7 @@ export class SceneFlash {
 
   update(dt: number): void {
     this.sinceSpike += dt;
+    if (!this.lit && this.level === 0) return; // no flash: the map's lights are untouched
     this.level *= Math.exp(-dt / this.tau);
     if (this.level < 0.002) this.level = 0;
     // the toon ramp bands direct light, so the flash lifts the sun as well as the sky light
@@ -75,5 +77,6 @@ export class SceneFlash {
     this.hemi.color.copy(this.baseColor).lerp(this.warm, 0.6 * this.level);
     this.sun.intensity = this.sunIntensity * (1 + 1.2 * this.level);
     this.point.intensity = POINT_PEAK * this.level;
+    this.lit = this.level > 0; // the frame it reaches 0 has just written the base values back
   }
 }

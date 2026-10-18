@@ -5,6 +5,8 @@
  * appends, and an expired particle is replaced by the last live one (swap-remove), so updating and
  * uploading walk one dense range. A full pool refuses new particles (`dropped` counts them): the
  * capacity is the live-particle budget. Long-lived marks (decals) recycle the oldest instead.
+ * A tagged pool keeps an integer per particle that moves with it (gunfire: which gun a muzzle
+ * flash rides).
  */
 
 /** Field offsets inside a particle's STRIDE floats. */
@@ -45,7 +47,7 @@ export const F = {
   ease: 23,
   /** 1: drawn after the rest of its layer (solid debris in front of smoke) */
   front: 24,
-  /** colour multiplier on the ramp (Forge style tints, cosmetic tints) */
+  /** colour multiplier on the ramp (Forge style tints, tracer and flash styles, cosmetic tints) */
   tr: 25,
   tg: 26,
   tb: 27,
@@ -63,27 +65,32 @@ export function particleSpec(): ParticleSpec {
   };
 }
 
-const KEYS = Object.keys(F) as (keyof typeof F)[];
-
 export class ParticlePool {
   readonly data: Float32Array;
+  /** per-particle tags, kept with their particles through swap-removes (null: an untagged pool) */
+  readonly tags: Int32Array | null;
   count = 0;
   /** spawns refused because the pool was full */
   dropped = 0;
   /** live-particle budget (graphics preset), at most `capacity` */
   limit: number;
 
-  constructor(readonly capacity: number) {
+  constructor(
+    readonly capacity: number,
+    tagged = false,
+  ) {
     this.data = new Float32Array(capacity * STRIDE);
+    this.tags = tagged ? new Int32Array(capacity) : null;
     this.limit = capacity;
   }
 
-  /** Adds a particle; false when the budget is used up. */
-  emit(spec: ParticleSpec): boolean {
+  /** Adds a particle (with `tag`, in a tagged pool); false when the budget is used up. */
+  emit(spec: ParticleSpec, tag = 0): boolean {
     if (this.count >= Math.min(this.limit, this.capacity)) {
       this.dropped++;
       return false;
     }
+    if (this.tags) this.tags[this.count] = tag;
     this.write(this.count++ * STRIDE, spec);
     return true;
   }
@@ -91,6 +98,7 @@ export class ParticlePool {
   /** Adds a particle, overwriting the one nearest the end of its life when full (decals). */
   emitRecycling(spec: ParticleSpec): void {
     if (this.count < Math.min(this.limit, this.capacity)) {
+      if (this.tags) this.tags[this.count] = 0;
       this.write(this.count++ * STRIDE, spec);
       return;
     }
@@ -105,12 +113,41 @@ export class ParticlePool {
         oldest = i;
       }
     }
+    if (this.tags) this.tags[oldest] = 0;
     this.write(oldest * STRIDE, spec);
   }
 
-  private write(o: number, spec: ParticleSpec): void {
+  /** Explicit stores, not a loop over the keys: this runs for every particle spawned. */
+  private write(o: number, s: ParticleSpec): void {
     const d = this.data;
-    for (const k of KEYS) d[o + F[k]] = spec[k];
+    d[o] = s.x;
+    d[o + 1] = s.y;
+    d[o + 2] = s.z;
+    d[o + 3] = s.vx;
+    d[o + 4] = s.vy;
+    d[o + 5] = s.vz;
+    d[o + 6] = s.age;
+    d[o + 7] = s.life;
+    d[o + 8] = s.size0;
+    d[o + 9] = s.size1;
+    d[o + 10] = s.rot;
+    d[o + 11] = s.spin;
+    d[o + 12] = s.drag;
+    d[o + 13] = s.grav;
+    d[o + 14] = s.ramp;
+    d[o + 15] = s.alpha;
+    d[o + 16] = s.stretch;
+    d[o + 17] = s.cell;
+    d[o + 18] = s.orient;
+    d[o + 19] = s.nx;
+    d[o + 20] = s.ny;
+    d[o + 21] = s.aspect;
+    d[o + 22] = s.fadeIn;
+    d[o + 23] = s.ease;
+    d[o + 24] = s.front;
+    d[o + 25] = s.tr;
+    d[o + 26] = s.tg;
+    d[o + 27] = s.tb;
   }
 
   /** Ages, moves and expires particles. */
@@ -143,7 +180,9 @@ export class ParticlePool {
   /** Swap-remove: the last live particle takes slot i. */
   remove(i: number): void {
     const last = --this.count;
-    if (i !== last) this.data.copyWithin(i * STRIDE, last * STRIDE, last * STRIDE + STRIDE);
+    if (i === last) return;
+    this.data.copyWithin(i * STRIDE, last * STRIDE, last * STRIDE + STRIDE);
+    if (this.tags) this.tags[i] = this.tags[last]!;
   }
 
   clear(): void {

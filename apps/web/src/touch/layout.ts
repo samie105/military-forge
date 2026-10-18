@@ -34,7 +34,7 @@ export const SHIELD_BIT: number = (Btn as Record<string, number>).Shield ?? 0;
 export const CONTROLS: readonly ControlDef[] = [
   { id: 'move', kind: 'stick', label: '', bit: 0, title: 'Move: push up to jet, down to crouch; swipe and lift to dash' },
   { id: 'aim', kind: 'stick', label: '', bit: 0, title: 'Aim (and fire)' },
-  { id: 'grenade', kind: 'drag', label: 'G', bit: Btn.Grenade, title: 'Grenade: hold and drag to aim the arc, release to throw' },
+  { id: 'grenade', kind: 'drag', label: 'G', bit: Btn.Grenade, title: 'Grenade: tap to throw; hold to aim the arc (with the right stick or a drag), release to throw' },
   { id: 'cycleGrenade', kind: 'tap', label: 'G↻', bit: Btn.CycleGrenade, title: 'Next grenade type' },
   { id: 'dash', kind: 'tap', label: 'DASH', bit: Btn.Dash, title: 'Dash the way the move stick points' },
   { id: 'melee', kind: 'tap', label: 'MELEE', bit: Btn.Melee, title: 'Melee' },

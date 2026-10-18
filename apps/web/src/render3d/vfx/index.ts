@@ -1,6 +1,7 @@
 /**
  * render3d's effects (docs/11 §5): grenades with their trails and fuse lights, explosions, the
- * blast's light and trauma camera shake. Fed by sim events (Renderer3D.onEvents) and each Frame.
+ * blast's light and trauma camera shake, gunfire (tracers, muzzle flashes, impacts). Fed by sim
+ * events (Renderer3D.onEvents) and each Frame.
  *
  * Budgets (docs/11 §3): every particle lives in a fixed pool sized for High and capped per preset
  * (1.5K live on Low, 5K on High); the steady-state frame allocates nothing; each layer is one draw
@@ -15,12 +16,16 @@ import type { Frame } from '../../view';
 import { GrenadeRenderer, throwableFromGltf, type GrenadeFx } from '../grenades';
 import type { GraphicsPreset } from '../presets';
 import { ATLAS_GRID, vfxAtlas } from './atlas';
+import { DashFx, type BodyLookup } from './dash';
+import { DashGhosts } from './dashGhosts';
 import { spawnExplosion, type ExplosionTargets } from './explosion';
 import { SceneFlash } from './flash';
-import { loadExplosionArt, type FlipbookArt } from './manifest';
+import { Gunfire, type MuzzleLookup } from './gunfire';
+import { loadExplosionArt, loadWeaponVfx, type FlipbookArt } from './manifest';
 import { ParticleLayer } from './particles';
 import { ParticlePool } from './pool';
 import { CameraShake, blastTrauma } from './shake';
+import { ThrowArc } from './throwArc';
 
 /** arsenal-b grenade types whose `explosion` event is not a blast (arsenal-b-interfaces.md) */
 const NOT_A_BLAST = { flashbang: 3, emp: 5 } as const;
@@ -78,6 +83,12 @@ export class Vfx {
   readonly grenades: GrenadeRenderer;
   readonly flash: SceneFlash;
   readonly shake = new CameraShake();
+  readonly gunfire: Gunfire;
+  /** the throw arc (Frame.throwArc) */
+  readonly arc: ThrowArc;
+  /** dashes: the jet kick, speed lines and afterimages */
+  readonly dash: DashFx;
+  readonly ghosts: DashGhosts;
   /** the Forge's explosion flipbook, when published */
   private readonly books: Book[] = [];
   private readonly targets: ExplosionTargets;
@@ -93,6 +104,10 @@ export class Vfx {
     lights: { hemi: HemisphereLight; sun: DirectionalLight },
     ramp: Texture,
     preset: GraphicsPreset,
+    /** where a shooter's drawn gun has its muzzle (Renderer3D: from the avatars) */
+    private readonly muzzles: MuzzleLookup = () => false,
+    /** a player's drawn character, for dash afterimages (Renderer3D: from the avatars) */
+    bodies: BodyLookup = () => null,
   ) {
     const atlas = vfxAtlas();
     const grid = [ATLAS_GRID, ATLAS_GRID] as const;
@@ -101,8 +116,12 @@ export class Vfx {
     this.glow = new ParticleLayer(GLOW_MAX + SPRITES_MAX, { texture: atlas, grid, blend: 'additive', depthTest: false, renderOrder: 12 });
     this.grenades = new GrenadeRenderer(world, ramp);
     this.flash = new SceneFlash(lights.hemi, lights.sun);
+    this.gunfire = new Gunfire(world);
+    this.arc = new ThrowArc(atlas, grid);
+    this.ghosts = new DashGhosts(scene);
+    this.dash = new DashFx(this.ghosts, bodies);
     for (const l of [this.decals, this.smoke, this.glow]) l.mesh.name = 'vfx';
-    scene.add(this.decals.mesh, this.smoke.mesh, this.glow.mesh, ...this.grenades.meshes);
+    scene.add(this.decals.mesh, this.smoke.mesh, this.glow.mesh, this.arc.layer.mesh, ...this.grenades.meshes);
     this.targets = { glow: this.glowPool, smoke: this.smokePool, decals: this.decalPool, book: null, art: null };
     this.grenadeFx = { smoke: this.smokePool, glow: this.glow };
     this.ctx = { smoke: this.smokePool, glow: this.glowPool, decals: this.decalPool, glowLayer: this.glow, world, scene, camera, detail: 1, reducedMotion: false };
@@ -114,16 +133,19 @@ export class Vfx {
   }
 
   /**
-   * A new map (Renderer3D's buildMap, after it relit the scene): its collision for grenades and
-   * blasts, and a clean slate: no particles, marks, grenades or shake carried over. Then the relit
-   * scene's light values become the flash's base.
+   * A new map (Renderer3D's buildMap, when the map changes): its collision for grenades, blasts and
+   * impacts, and a clean slate: no particles, marks, grenades or shake carried over. Then the
+   * relit scene's light values become the flash's base. Safe to call any time after construction.
    */
   setMap(world: CollisionWorld): void {
     this.world = world;
     this.ctx.world = world;
     this.grenades.setWorld(world);
+    this.gunfire.world = world;
+    this.gunfire.clear();
     for (const p of [this.glowPool, this.smokePool, this.decalPool, ...this.books.map((b) => b.pool)]) p.clear();
     this.shake.trauma = 0;
+    this.ghosts.clear();
     this.flash.rebase();
   }
 
@@ -150,15 +172,18 @@ export class Vfx {
       if (art.book && texture) this.targets.book = this.book(art.book, texture, 13);
       if (art.light) this.flash.style(art.light.color, art.light.seconds);
     });
-    await Promise.all([frag, books]);
+    const guns = loadWeaponVfx(baseUrl).then((art) => art && this.gunfire.setArt(art.art, art.texture, this.scene));
+    await Promise.all([frag, books, guns]);
   }
 
   private book(art: FlipbookArt, texture: Texture, renderOrder: number): Book {
+    // depth-tested: a fireball on the floor goes behind the ground's front face (it sits at z 0.6,
+    // in front of the players and the band, behind the face at z +1) instead of painting over it
     const layer = new ParticleLayer(16, {
       texture,
       grid: art.grid,
       blend: art.blend,
-      depthTest: false,
+      depthTest: true,
       renderOrder,
       flipbook: { fps: art.fps, frames: art.frames },
     });
@@ -173,8 +198,16 @@ export class Vfx {
     this.ctx.detail = preset.vfxDetail;
     this.glowPool.limit = Math.round(preset.particles * 0.45);
     this.smokePool.limit = Math.round(preset.particles * 0.5);
-    if (preset.vfxLights) this.scene.add(this.flash.point);
-    else this.flash.point.removeFromParent();
+    this.gunfire.detail = preset.vfxDetail;
+    this.gunfire.low = preset.name === 'low';
+    // dash afterimages cost a draw call per character mesh each: a few on High, two on Medium, none on Low
+    this.ghosts.max = preset.name === 'high' ? 4 : preset.name === 'medium' ? 2 : 0;
+    if (this.ghosts.max === 0) this.ghosts.clear();
+    if (preset.vfxLights) this.scene.add(this.flash.point, this.gunfire.light);
+    else {
+      this.flash.point.removeFromParent();
+      this.gunfire.light.removeFromParent();
+    }
   }
 
   setReducedMotion(on: boolean): void {
@@ -184,16 +217,20 @@ export class Vfx {
     this.grenades.reduced = on;
   }
 
-  /** Sim events → effects (explosions; gunfire comes with the tracers). */
+  /** Sim events → effects: blasts now, shots once the avatars are posed (update). */
   onEvents(events: readonly SimEvent[]): void {
     for (const m of this.modules) m.onEvents?.(events, this.ctx);
+    this.gunfire.onEvents(events);
+    this.dash.onEvents(events, this.ctx);
     for (const e of events) {
       // arsenal-b: a flashbang (3) or EMP (5) going off isn't a fireball; its own effects draw it
       const kind = (e as { grenade?: number }).grenade ?? 0;
       if (e.type !== 'explosion' || kind === NOT_A_BLAST.flashbang || kind === NOT_A_BLAST.emp) continue;
       spawnExplosion(this.targets, this.world, e.x, e.y, e.radius, this.ctx.detail);
       // light and shake by distance from the view centre (the Forge's shake falloff when published)
-      const d = Math.hypot(e.x - this.camera.x, e.y - this.camera.y);
+      const cx = e.x - this.camera.x;
+      const cy = e.y - this.camera.y;
+      const d = Math.sqrt(cx * cx + cy * cy);
       this.flash.trigger(e.x, e.y, Math.max(0.15, Math.min(1, 1 - Math.max(0, d - e.radius) / 25)));
       const shake = this.targets.art?.shake;
       const k = e.radius / (this.targets.art?.radiusM ?? e.radius);
@@ -201,12 +238,20 @@ export class Vfx {
     }
   }
 
-  /** Steps every effect and uploads this frame's particles. Returns the camera shake offset (m). */
+  /**
+   * Steps every effect and uploads this frame's particles; call it after the avatars are posed
+   * (tracers leave the drawn muzzles). Returns the camera shake offset (m).
+   */
   update(frame: Frame, dt: number): { x: number; y: number } {
     this.flash.update(dt);
     this.glowPool.update(dt);
     this.smokePool.update(dt);
     this.decalPool.update(dt);
+    this.gunfire.update(dt, this.ctx, this.muzzles);
+    this.dash.localId = frame.localId;
+    this.dash.update(frame, dt, this.ctx);
+    // the throw arc while one is aimed (amber while a map event may change the path)
+    this.arc.update(frame.throwArc, frame.mapEvent?.phase === 'warning', dt, this.camera.ppm, this.ctx.reducedMotion);
     for (const b of this.books) {
       b.pool.update(dt);
       b.layer.begin();
@@ -237,8 +282,10 @@ export class Vfx {
   }
 
   dispose(): void {
-    for (const l of [this.decals, this.smoke, this.glow, ...this.books.map((b) => b.layer)]) l.dispose();
+    for (const l of [this.decals, this.smoke, this.glow, this.arc.layer, ...this.books.map((b) => b.layer)]) l.dispose();
     this.grenades.dispose();
+    this.gunfire.dispose();
+    this.ghosts.dispose();
     for (const m of this.modules) m.dispose?.();
     this.flash.point.removeFromParent();
   }

@@ -17,7 +17,7 @@ import {
   fuseBlinkPhase,
   fuseLight,
 } from '../grenadeTracker';
-import { GRENADE_MIN_PX, GRENADE_SCALE, GrenadeRenderer, throwableFromGltf } from '../grenades';
+import { GRENADE_MIN_PX, GRENADE_WIDTH_M, GrenadeRenderer, fallbackFrag, grenadeScale, throwableFromGltf } from '../grenades';
 import { ParticleLayer } from '../vfx/particles';
 import { ParticlePool } from '../vfx/pool';
 
@@ -164,7 +164,7 @@ describe('GrenadeRenderer', () => {
     const m = new Matrix4();
     const scale = (mesh: typeof r.body) => new Vector3().setFromMatrixScale((mesh.getMatrixAt(0, m), m)).x;
     const body = scale(r.body);
-    expect(body).toBeCloseTo(GRENADE_SCALE, 5);
+    expect(body).toBeCloseTo(grenadeScale(fallbackFrag()), 5);
     expect(scale(r.inner)).toBeGreaterThan(body);
     expect(scale(r.outer)).toBeGreaterThan(scale(r.inner));
     // two fuse-light sprites at most per grenade went into the glow layer
@@ -173,11 +173,25 @@ describe('GrenadeRenderer', () => {
     expect(r.body.visible).toBe(false);
   });
 
+  it('draws a frag GRENADE_WIDTH_M wide whatever its model’s size, and rolls it at that body’s rim (art review H3)', () => {
+    for (const [w, h] of [
+      [0.093, 0.143], // W8's frag
+      [0.197, 0.254], // the Forge's sim-sized frag (#46)
+    ] as const) {
+      const r = new GrenadeRenderer(world, ramp);
+      const model = { ...fallbackFrag(), radius: w / 2, height: h };
+      r.setModel(model);
+      expect(r.scaleFor(35) * w).toBeCloseTo(GRENADE_WIDTH_M, 6);
+      expect(r.tracker.rollRadius).toBe(w / 2);
+    }
+    expect(grenadeScale({ radius: 0.093 / 2 })).toBeCloseTo(3.55, 2); // today's look kept
+  });
+
   it('never draws a grenade under GRENADE_MIN_PX tall, however far the camera pulls back', () => {
     const r = new GrenadeRenderer(world, ramp);
     for (const ppm of [80, 35, 15, 8]) {
       const s = r.scaleFor(ppm);
-      expect(s).toBeGreaterThanOrEqual(GRENADE_SCALE);
+      expect(s).toBeGreaterThanOrEqual(grenadeScale(fallbackFrag()));
       expect(s * 0.135 * ppm).toBeGreaterThanOrEqual(GRENADE_MIN_PX - 1e-9); // the stand-in frag is 13.5 cm
     }
   });
@@ -228,5 +242,17 @@ describe('grenade types (arsenal-b)', () => {
     const tr = new GrenadeTracker(world);
     tr.update(1, [{ x: 20, y: 5, fuse: 60 }, { x: 22, y: 5, fuse: 60, type: 0 }, ...[1, 2, 3, 4, 5].map((type) => ({ x: 24 + type, y: 5, fuse: 60, type }))], DT);
     expect(tr.tracks.length).toBe(2);
+  });
+});
+
+describe('reversed gravity (review L6)', () => {
+  it('a frag stuck under a ceiling settles against it, hanging from its normal', () => {
+    const tr = new GrenadeTracker(world);
+    // under the crouch corridor's ceiling (its underside at y 1.25, x 88…96)
+    for (let k = 0; k < 40; k++) tr.update(k, [{ x: 92, y: 1.25 - SIM_RADIUS, fuse: 90 - k }], DT);
+    const t = tr.tracks[0]!;
+    expect(t.grounded).toBe(true);
+    expect(t.ny).toBeLessThan(-0.9);
+    expect(t.rest).toBeGreaterThan(0.9);
   });
 });

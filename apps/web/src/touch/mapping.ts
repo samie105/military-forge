@@ -23,7 +23,11 @@ export interface TouchState {
   pulses: number;
   /** direction buttons a pulsed dash goes with (the move stick when it was pressed or swiped) */
   dashDir: number;
-  /** the grenade button is held: aim (and the arc) follow its drag, release throws */
+  /**
+   * the grenade button is held (the throw latch, input.ts): a tap is a quick throw at 70 %; a hold
+   * shows the arc, aimed with the right stick (or the button's own drag), whose push sets the
+   * strength; lifting throws
+   */
   grenadeActive: boolean;
   grenade: StickVector;
 }
@@ -36,17 +40,22 @@ export function createTouchState(): TouchState {
 export function touchButtons(s: TouchState, fire: FireMode): number {
   let b = s.held | s.pulses;
   if (s.moveActive) b |= moveButtons(s.move);
-  if (fire === 'hold' && s.aimActive && s.aim.mag >= FIRE_AT) b |= Btn.Fire;
-  if (s.grenadeActive) b |= Btn.Grenade;
+  // aiming a throw with the right stick doesn't fire the gun; the grenade itself goes through the
+  // throw latch on release, never held (the sim would throw on the finger going down)
+  if (fire === 'hold' && s.aimActive && s.aim.mag >= FIRE_AT && !s.grenadeActive) b |= Btn.Fire;
   // a dash goes the way the stick pointed when it was asked for, even if the thumb has moved on
   if (s.pulses & Btn.Dash) b = (b & ~(Btn.Left | Btn.Right | Btn.Jet | Btn.Down)) | s.dashDir;
   return b;
 }
 
-/** Throw strength 1–7 from the grenade drag; a plain tap throws at full strength, like the G key. */
+/** Throw strength 0–7 (70–100 %) from a stick's push. */
 export function throwStrength(v: StickVector): number {
-  if (v.mag === 0) return 7;
-  return Math.max(1, Math.min(7, Math.round(1 + v.mag * 6)));
+  return Math.round(Math.min(1, v.mag) * 7);
+}
+
+/** The strength a held grenade button throws with: the right stick's push when it's pushed, else the button's own drag. */
+export function grenadeStrength(s: TouchState): number {
+  return throwStrength(s.aimActive && s.aim.mag > 0 ? s.aim : s.grenade);
 }
 
 /** The aim the touch controls ask for this sample (radians), or null to keep the last one. */

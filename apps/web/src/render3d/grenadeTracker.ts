@@ -8,7 +8,7 @@
  * exactly in local mode; the nearest position settles ties (two thrown on the same tick).
  */
 import { FRAG } from '@military-forge/content';
-import { DT, createRayHit, type CollisionWorld } from '@military-forge/sim';
+import { DT, SegFlag, createRayHit, type CollisionWorld } from '@military-forge/sim';
 
 /** the sim's collision radius (m) */
 export const SIM_RADIUS = FRAG.radius;
@@ -18,11 +18,17 @@ export const FUSE_SECONDS = FUSE_TICKS * DT;
 
 // ---------- the fuse light ----------
 
-/** blink rate at the throw, Hz */
-export const FUSE_MIN_HZ = 1.5;
-/** blink rate at detonation, Hz; reduced motion caps it at 3 (docs/11 §5: no flashes > 3 per second) */
-export const FUSE_MAX_HZ = 9;
+/** blink rate at the throw, Hz (the Forge's fuseLight: 2 → 10 Hz) */
+export const FUSE_MIN_HZ = 2;
+/**
+ * blink rate at detonation, Hz; Reduce motion and Reduce flashes cap it at 3 (docs/11 §5: no
+ * flashes > 3 per second), starting from half that so no second ever holds a fourth
+ */
+export const FUSE_MAX_HZ = 10;
 export const FUSE_REDUCED_HZ = 3;
+
+/** the rate at the throw for a `maxHz` cap */
+const startHz = (maxHz: number): number => Math.min(FUSE_MIN_HZ, maxHz / 2);
 /** the light stays solid for the last moment before the blast */
 export const FUSE_SOLID = 0.12;
 
@@ -31,13 +37,15 @@ const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 /** Blink rate after `t` s of a `fuse` s fuse: rises with the square of the burnt share. */
 export function fuseBlinkHz(t: number, fuse: number, maxHz: number): number {
   const u = clamp01(t / fuse);
-  return FUSE_MIN_HZ + (maxHz - FUSE_MIN_HZ) * u * u;
+  const min = startHz(maxHz);
+  return min + (maxHz - min) * u * u;
 }
 
 /** Blinks completed after `t` s: the integral of fuseBlinkHz, so the phase never jumps as the rate rises. */
 export function fuseBlinkPhase(t: number, fuse: number, maxHz: number): number {
   const c = Math.min(Math.max(t, 0), fuse);
-  return FUSE_MIN_HZ * c + ((maxHz - FUSE_MIN_HZ) * c * c * c) / (3 * fuse * fuse) + Math.max(0, t - fuse) * maxHz;
+  const min = startHz(maxHz);
+  return min * c + ((maxHz - min) * c * c * c) / (3 * fuse * fuse) + Math.max(0, t - fuse) * maxHz;
 }
 
 /**
@@ -89,7 +97,7 @@ export class GrenadeTrack {
   /** tumble angle about the view axis, and its rate */
   angle = 0;
   omega = 0;
-  /** touching a walkable surface, and that surface's normal */
+  /** touching a floor (or a ceiling, in reversed gravity), and that surface's normal (pointing at the grenade) */
   grounded = false;
   nx = 0;
   ny = 1;
@@ -112,7 +120,7 @@ export class GrenadeTrack {
   }
 
   get speed(): number {
-    return Math.hypot(this.vx, this.vy);
+    return Math.sqrt(this.vx * this.vx + this.vy * this.vy);
   }
 }
 
@@ -120,7 +128,7 @@ export class GrenadeTrack {
 const REST_SPEED = 0.35;
 /** contact probe below the centre: the radius plus slack for slopes and the 1/1024 m quantisation */
 const PROBE = SIM_RADIUS + 0.07;
-/** visual roll radius (m, before the readability scale): the frag's body */
+/** visual roll radius (m, before the readability scale): the frag model's body (W8's old frag, until a model says) */
 export const ROLL_RADIUS = 0.046;
 
 const hit = createRayHit();
@@ -144,6 +152,9 @@ export class GrenadeTracker {
    * Matches this frame's samples to tracks, then advances each track's motion state by `dt`.
    * `scale` is the drawn size over the model size (the roll rate follows the drawn radius).
    */
+  /** the frag model's body radius (m, before the readability scale): the roll keeps pace with it (GrenadeRenderer.setModel) */
+  rollRadius = ROLL_RADIUS;
+
   update(tick: number, samples: readonly GrenadeSample[], dt: number, scale = 1): void {
     for (const t of this.tracks) t.seen = false;
     for (const s of samples) {
@@ -217,8 +228,8 @@ export class GrenadeTracker {
       vy = (s.y - t.y) / span;
     }
     // a bounce flips the tumble and loses some of it (with a little per-grenade variety)
-    const before = Math.hypot(t.vx, t.vy);
-    const after = Math.hypot(vx, vy);
+    const before = Math.sqrt(t.vx * t.vx + t.vy * t.vy);
+    const after = Math.sqrt(vx * vx + vy * vy);
     if (before > 1.5 && after > 0.5 && (t.vx * vx + t.vy * vy) / (before * after) < 0.85) {
       t.omega = -t.omega * (0.45 + 0.2 * ((t.seed * 0.618) % 1));
     }
@@ -235,7 +246,9 @@ export class GrenadeTracker {
   private animate(t: GrenadeTrack, dt: number, scale: number): void {
     t.sinceTick += dt;
     const w = this.world;
-    t.grounded = w.raycast(t.x, t.y, 0, -1, PROBE, 0, hit) && w.ny[hit.seg]! > 0.6;
+    // a floor below, or a ceiling above (a frag that came to rest under one in reversed gravity;
+    // one-way platforms only catch from above)
+    t.grounded = (w.raycast(t.x, t.y, 0, -1, PROBE, 0, hit) && w.ny[hit.seg]! > 0.6) || (w.raycast(t.x, t.y, 0, 1, PROBE, SegFlag.OneWay, hit) && w.ny[hit.seg]! < -0.6);
     if (t.grounded) {
       t.nx = w.nx[hit.seg]!;
       t.ny = w.ny[hit.seg]!;
@@ -248,7 +261,7 @@ export class GrenadeTracker {
     } else if (!resting) {
       // rolling: the drawn body's rim keeps pace with the ground
       const along = t.vx * t.ny - t.vy * t.nx;
-      const target = -along / (ROLL_RADIUS * scale);
+      const target = -along / (this.rollRadius * scale);
       t.omega += (target - t.omega) * (1 - Math.exp(-12 * dt));
     } else t.omega *= Math.exp(-8 * dt);
     t.angle = (t.angle + t.omega * dt) % (Math.PI * 2);

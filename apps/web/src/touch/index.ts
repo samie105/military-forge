@@ -12,6 +12,7 @@
  */
 import type { Input, SimEvent } from '@military-forge/sim';
 import type { Camera } from '../camera';
+import type { ThrowLatch } from '../input';
 import type { TouchController } from './controller';
 import { clearLayout, loadSettings, saveSettings, sanitizeSettings, type KeyValueStore, type TouchSettings } from './settings';
 
@@ -29,6 +30,8 @@ export interface TouchDeps {
     mouseY: number;
     /** set by the app shell while menus are open (GameInput in main.ts) */
     blocked?: boolean;
+    /** the grenade throw latch (input.ts): the touch button taps and holds through it like the G key */
+    throwLatch?: ThrowLatch;
   };
   camera: Camera;
   renderer: {
@@ -92,6 +95,7 @@ function sync(): void {
         },
         camera: d.camera,
         blocked: () => d.sampler.blocked === true,
+        throwLatch: d.sampler.throwLatch ?? null,
       };
       controller = new TouchController(host, settings, loadLayout(storage()), storage(), setTouchSettings, d.editButton ?? true);
       controller.setActive(wanted());

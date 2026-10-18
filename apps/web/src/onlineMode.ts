@@ -25,6 +25,7 @@ import type { Camera } from './camera';
 import { cloudView, statusView } from './grenadeViews';
 import type { InputSampler } from './input';
 import { mapEventView } from './mapEvent';
+import { ThrowPreview } from './throwPreview';
 import type { Renderer } from './render';
 import { connectGame, type GameTransport } from './transport';
 import { shieldView, type CloudView, type Frame, type PlayerView, type RewindView } from './view';
@@ -105,6 +106,8 @@ const browserScheduler: Scheduler = {
 };
 
 export class OnlineMode {
+  /** the throw arc while a grenade throw is aimed (both views draw it) */
+  private readonly throwPreview = new ThrowPreview();
   private transport: GameTransport | null = null;
   /** how the current/last connection was made, for the net graph */
   private transportNote = '';
@@ -523,6 +526,8 @@ export class OnlineMode {
       rewinds: this.rewindViews(now),
       // the predicted game runs the map's event schedule on our own timeline: the banner matches the physics
       mapEvent: pred?.started ? mapEventView(pred.game) : null,
+      // the throw arc runs on the predicted game too, from our predicted state
+      throwArc: pred?.started ? this.throwPreview.update(pred.game, pred.player, this.sampler.throwAim) : null,
     };
   }
 

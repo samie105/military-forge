@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { setReduceFlashes } from '../../fx';
 import { cloudView } from '../../grenadeViews';
 import type { CloudView, Frame } from '../../view';
-import { CloudLayer, flashPop, mineLight, puffTexture, reachMask } from '../clouds';
+import { CloudLayer, flashPop, MINE_CALM_HZ, mineLight, puffTexture, reachMask } from '../clouds';
 import type { VfxContext } from '../vfx';
 import { F, ParticlePool, STRIDE } from '../vfx/pool';
 
@@ -98,8 +98,13 @@ describe('cloud layer (smoke, gas, non-frag grenades)', () => {
   it('mines are pucks whose light shows their state; armed ones blink', () => {
     expect(mineLight(MineState.Flying, 0)).toBe(0x3fb950);
     expect(mineLight(MineState.Arming, 0)).toBe(0xd29922);
-    expect(mineLight(MineState.Armed, 0)).not.toBe(mineLight(MineState.Armed, 0.25));
-    expect(mineLight(MineState.Triggered, 0)).not.toBe(mineLight(MineState.Triggered, 1 / 16));
+    // the Forge's spec: armed blinks 4 Hz, a triggered mine beeps 8 Hz; 3 Hz at most when calm
+    expect(mineLight(MineState.Armed, 0)).not.toBe(mineLight(MineState.Armed, 0.13));
+    expect(mineLight(MineState.Armed, 0)).toBe(mineLight(MineState.Armed, 0.12));
+    expect(mineLight(MineState.Triggered, 0)).not.toBe(mineLight(MineState.Triggered, 1 / 16 + 0.001));
+    expect(mineLight(MineState.Armed, 0, MINE_CALM_HZ)).toBe(mineLight(MineState.Armed, 0.16, MINE_CALM_HZ));
+    expect(mineLight(MineState.Armed, 0, MINE_CALM_HZ)).not.toBe(mineLight(MineState.Armed, 0.17, MINE_CALM_HZ));
+    expect(mineLight(MineState.Triggered, 0, MINE_CALM_HZ)).toBe(mineLight(MineState.Triggered, 0.16, MINE_CALM_HZ));
     const layer = new CloudLayer(new Scene());
     layer.update(
       frame(

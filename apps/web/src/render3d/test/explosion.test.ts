@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { movementTestMap } from '@military-forge/content';
 import { CollisionWorld } from '@military-forge/sim';
 import { DirectionalLight, HemisphereLight } from 'three';
@@ -95,7 +96,8 @@ describe('explosion', () => {
     expect(ramps(t.glow)).not.toContain(Ramp.Fire);
     expect(t.book.pool.data[F.life]).toBeCloseTo(16 / 18);
     expect(t.book.pool.data[F.x]).toBeCloseTo(151);
-    expect(t.book.pool.data[F.y]).toBeCloseTo(0.1);
+    // on the floor it rises a fifth of its height, so most of it shows above the ground's front face
+    expect(t.book.pool.data[F.y]).toBeCloseTo(0.1 + 0.2 * 4.035);
     // its shockwave timing: from 0.3 m to the 4 m radius in 220 ms
     const ring = ramps(t.glow).indexOf(Ramp.Ring);
     expect(t.glow.data[ring * STRIDE + F.life]).toBeCloseTo(0.22);
@@ -208,5 +210,35 @@ describe('blast light', () => {
     f.reduced = true;
     f.trigger(0, 0, 1);
     expect(f.level).toBeCloseTo(0.33);
+  });
+});
+
+describe('review follow-ups', () => {
+  it('L2: a blast past the flipbook pool’s 16 still gets a fireball (the procedural one)', () => {
+    const t = targets();
+    t.art = parseExplosionManifest(FORGE)!;
+    t.book = { pool: new ParticlePool(16), art: t.art.book! };
+    for (let i = 0; i < 16; i++) spawnExplosion(t, world, 140 + i, 0.1, 4, 1);
+    expect(ramps(t.glow)).not.toContain(Ramp.Fire);
+    spawnExplosion(t, world, 160, 0.1, 4, 1);
+    expect(ramps(t.glow)).toContain(Ramp.Fire);
+  });
+
+  it('L6: a blast under a ceiling with no floor near scorches the ceiling', () => {
+    const t = targets();
+    spawnExplosion(t, world, 114, 3.9, 4, 1); // under the overhang (its underside at y 4), 3.9 m over the floor
+    expect(t.decals.count).toBeGreaterThanOrEqual(1);
+    expect(t.decals.data[F.ny]).toBeCloseTo(-1); // lying on the underside
+    expect(ramps(t.smoke)).not.toContain(Ramp.Dust); // no floor dust up there
+  });
+
+  it('L4: the shipped explosions.vfx.json parses, frame by frame, with the block layout from the manifest when given', () => {
+    const shipped = JSON.parse(readFileSync(new URL('../../../public/assets/vfx/explosions.vfx.json', import.meta.url), 'utf8'));
+    const art = parseExplosionManifest(shipped)!;
+    expect(art.book!.frames).toEqual([0, 1, 2, 3, 8, 9, 10, 11, 16, 17, 18, 19, 24, 25, 26, 27]);
+    expect(art.book!.fps).toBeGreaterThan(0);
+    expect(art.shockwave!.toM).toBeCloseTo(art.radiusM);
+    const wide = parseExplosionManifest({ ...shipped, flipbooks: { ...shipped.flipbooks, frag: { ...shipped.flipbooks.frag, frames: 8, cols: 8 } } })!;
+    expect(wide.book!.frames).toEqual([0, 1, 2, 3, 4, 5, 6, 7]); // one row of 8
   });
 });

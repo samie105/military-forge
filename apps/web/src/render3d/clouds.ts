@@ -86,12 +86,21 @@ const GRENADE_COLORS: Record<number, number> = {
 
 const MINE_LIGHTS = { green: 0x3fb950, yellow: 0xd29922, red: 0xf85149, dark: 0x3a1210, white: 0xffffff };
 
-/** A mine's light colour by state, blinking by the client clock (seconds). */
-export function mineLight(state: number, time: number): number {
+/** The Forge's state light (grenades.vfx.json): armed blinks 4 Hz, a triggered mine beeps fast red/white. */
+export const MINE_ARMED_HZ = 4;
+export const MINE_BEEP_HZ = 8;
+/** Reduce motion or Reduce flashes: no light blinks faster than this (the spec's reducedMotionMaxHz) */
+export const MINE_CALM_HZ = 3;
+
+/** On in the first half of each `hz` cycle at `time` (s). */
+const blinkOn = (time: number, hz: number): boolean => Math.floor(time * hz * 2) % 2 === 0;
+
+/** A mine's light colour by state, blinking by the client clock (seconds), never faster than `maxHz`. */
+export function mineLight(state: number, time: number, maxHz = Infinity): number {
   if (state === MineState.Flying) return MINE_LIGHTS.green;
   if (state === MineState.Arming) return MINE_LIGHTS.yellow;
-  if (state === MineState.Armed) return Math.floor(time * 4) % 2 === 0 ? MINE_LIGHTS.red : MINE_LIGHTS.dark;
-  return Math.floor(time * 16) % 2 === 0 ? MINE_LIGHTS.red : MINE_LIGHTS.white;
+  if (state === MineState.Armed) return blinkOn(time, Math.min(MINE_ARMED_HZ, maxHz)) ? MINE_LIGHTS.red : MINE_LIGHTS.dark;
+  return blinkOn(time, Math.min(MINE_BEEP_HZ, maxHz)) ? MINE_LIGHTS.red : MINE_LIGHTS.white;
 }
 
 /** A mine: a dark puck facing the camera, an unlit light on its face and a glow around it (one per mine). */
@@ -398,7 +407,7 @@ export class CloudLayer implements VfxModule {
     }
     this.time += dt;
     this.syncClouds(frame.clouds ?? [], dt);
-    this.syncGrenades(frame.grenades);
+    this.syncGrenades(frame.grenades, (fx?.reducedMotion ?? false) || reduceFlashes());
     this.syncPairs(frame.pickups);
   }
 
@@ -437,7 +446,8 @@ export class CloudLayer implements VfxModule {
     return m;
   }
 
-  private syncGrenades(views: readonly GrenadeView[]): void {
+  /** `calm`: Reduce motion or Reduce flashes (the mine lights blink no faster than MINE_CALM_HZ). */
+  private syncGrenades(views: readonly GrenadeView[], calm: boolean): void {
     let n = 0;
     let mines = 0;
     for (const g of views) {
@@ -452,7 +462,7 @@ export class CloudLayer implements VfxModule {
         }
         mine.group.visible = true;
         mine.group.position.set(g.x, g.y, 0);
-        mine.setLight(mineLight(g.state ?? 0, this.time));
+        mine.setLight(mineLight(g.state ?? 0, this.time, calm ? MINE_CALM_HZ : Infinity));
         mines++;
         continue;
       }

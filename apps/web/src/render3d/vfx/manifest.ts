@@ -8,7 +8,8 @@
  *       "shockwave": { "fromM": 0.3, "toM": 4, "ms": 220, "tint": "#fff6e0", "opacity": 0.85 },
  *       "light": { "color": "#ffcf80", "ms": 160, … }, "cameraShake": { "amplitudeM": 0.35, "fullWithinM": 4, "zeroAtM": 14, … } } } }
  *
- * A flipbook's frames fill a square block of cells from `firstCell` (4 × 4 for 16), row by row;
+ * A flipbook's frames fill a block of cells from `firstCell`, row by row: `cols` per row when the
+ * entry gives it (or `grid: [cols, rows]`), else a square block (4 × 4 for 16);
  * cells count from the atlas's top-left. `anchorUV` is the blast point in the cell (u from the left,
  * v from the top). Sizes are for the style's `radiusM` and scale with the blast. Anything missing or
  * malformed keeps the procedural effect.
@@ -71,7 +72,10 @@ export function parseExplosionManifest(json: unknown, style = 'frag'): Explosion
   const fb = rec(rec(root.flipbooks)?.[typeof s.flipbook === 'string' ? s.flipbook : '']);
   if (sheet && fb && num(fb.cellM) && fb.cellM > 0 && num(fb.fps) && fb.fps > 0 && num(fb.frames) && fb.frames >= 1 && pair(fb.firstCell)) {
     const count = Math.floor(fb.frames);
-    const block = Math.max(1, Math.round(Math.sqrt(count)));
+    // frames per row of the block: the manifest's `cols` (or `grid: [cols, rows]`) when it gives
+    // one, else a square block (the published 16-frame sheets are 4 × 4)
+    const given = num(fb.cols) ? fb.cols : pair(fb.grid) ? fb.grid[0] : 0;
+    const block = given >= 1 ? Math.floor(given) : Math.max(1, Math.round(Math.sqrt(count)));
     const [c0, r0] = fb.firstCell;
     const frames: number[] = [];
     for (let k = 0; k < count; k++) {
@@ -137,6 +141,124 @@ export async function loadExplosionArt(baseUrl: string): Promise<{ art: Explosio
     }
     return { art, texture };
   } catch {
+    return null;
+  }
+}
+
+// ---------- weapon fire: the Forge's weapons.vfx.json ----------
+
+export interface FlashStyle {
+  /** atlas cells, one picked per shot */
+  frames: number[];
+  widthM: number;
+  heightM: number;
+  /** where the muzzle sits along the quad's width (0 left … 1 right; the flash blasts toward +U) */
+  originU: number;
+  seconds: number;
+  light: { color: Color; intensity: number; rangeM: number } | null;
+  scale: [number, number];
+  rollRad: number;
+  flipV: boolean;
+}
+
+export interface TracerStyle {
+  /** linear RGB */
+  tint: [number, number, number];
+  widthM: number;
+  lengthM: number;
+  speedMps: number;
+  /** one tracer every N shots */
+  every: number;
+  /** a smoke line left behind (snipers) */
+  trail: { tint: [number, number, number]; widthM: number; seconds: number } | null;
+}
+
+export interface WeaponFxEntry {
+  flash: string | null;
+  flashScale: number;
+  tracer: string | null;
+}
+
+export interface WeaponVfxArt {
+  atlas: string;
+  grid: [number, number];
+  flashes: Record<string, FlashStyle>;
+  tracers: Record<string, TracerStyle>;
+  /** by weapon id (packages/content `WeaponDef.id`) */
+  weapons: Record<string, WeaponFxEntry>;
+}
+
+/** Validates weapons.vfx.json; null (or a style left out) keeps the procedural effect. */
+export function parseWeaponVfx(json: unknown): WeaponVfxArt | null {
+  const root = rec(json);
+  const flash = rec(root?.flash);
+  const tracer = rec(root?.tracer);
+  const weapons = rec(root?.weapons);
+  if (!root || !flash || !weapons) return null;
+  const sheet = parseAtlas(flash.atlas, flash.atlasSize, flash.cell);
+  if (!sheet) return null;
+  const cells = sheet.grid[0] * sheet.grid[1];
+  const flashes: Record<string, FlashStyle> = {};
+  for (const [name, raw] of Object.entries(rec(flash.styles) ?? {})) {
+    const s = rec(raw);
+    const quad = rec(s?.quad);
+    const frames = s?.frames;
+    if (!s || !quad || !Array.isArray(frames) || !frames.length || !frames.every((f) => num(f) && Number.isInteger(f) && f >= 0 && f < cells)) continue;
+    if (!num(quad.widthM) || !num(quad.heightM) || quad.widthM <= 0 || quad.heightM <= 0) continue;
+    const light = rec(s.light);
+    const jitter = rec(s.jitter);
+    const scale = jitter?.scale;
+    flashes[name] = {
+      frames: frames as number[],
+      widthM: quad.widthM,
+      heightM: quad.heightM,
+      originU: num(quad.originU) ? Math.min(1, Math.max(0, quad.originU)) : 0,
+      seconds: num(s.ms) && s.ms > 0 ? s.ms / 1000 : 0.05,
+      light: light && num(light.intensity) && num(light.rangeM) ? { color: new Color(typeof light.color === 'string' ? light.color : '#ffd890'), intensity: light.intensity, rangeM: light.rangeM } : null,
+      scale: Array.isArray(scale) && scale.length === 2 && scale.every(num) ? [scale[0], scale[1]] : [1, 1],
+      rollRad: num(jitter?.rollDeg) ? (jitter.rollDeg * Math.PI) / 180 : 0,
+      flipV: jitter?.flipV === true,
+    };
+  }
+  const tracers: Record<string, TracerStyle> = {};
+  for (const [name, raw] of Object.entries(rec(tracer?.styles) ?? {})) {
+    const s = rec(raw);
+    if (!s || !num(s.widthM) || !num(s.lengthM) || !num(s.speedMps) || s.widthM <= 0 || s.lengthM <= 0 || s.speedMps <= 0) continue;
+    const trail = rec(s.trail);
+    tracers[name] = {
+      tint: linear(s.tint, [1, 0.95, 0.75]),
+      widthM: s.widthM,
+      lengthM: s.lengthM,
+      speedMps: s.speedMps,
+      every: num(s.every) && s.every >= 1 ? Math.round(s.every) : 1,
+      trail: trail && num(trail.widthM) && num(trail.fadeMs) ? { tint: linear(trail.tint, [0.7, 0.7, 0.68]), widthM: trail.widthM, seconds: trail.fadeMs / 1000 } : null,
+    };
+  }
+  const byWeapon: Record<string, WeaponFxEntry> = {};
+  for (const [id, raw] of Object.entries(weapons)) {
+    const w = rec(raw);
+    if (!w) continue;
+    byWeapon[id] = {
+      flash: typeof w.flash === 'string' && flashes[w.flash] ? w.flash : null,
+      flashScale: num(w.flashScale) && w.flashScale > 0 ? w.flashScale : 1,
+      tracer: typeof w.tracer === 'string' && tracers[w.tracer] ? w.tracer : null,
+    };
+  }
+  return { atlas: sheet.atlas, grid: sheet.grid, flashes, tracers, weapons: byWeapon };
+}
+
+/** Fetches weapons.vfx.json and its flash atlas; null keeps the procedural flashes and tracers. */
+export async function loadWeaponVfx(baseUrl: string): Promise<{ art: WeaponVfxArt; texture: Texture } | null> {
+  try {
+    const res = await fetch(`${baseUrl}assets/vfx/weapons.vfx.json`);
+    if (!res.ok || !(res.headers.get('content-type') ?? '').includes('json')) return null;
+    const art = parseWeaponVfx(await res.json());
+    if (!art) return null;
+    const texture = await new TextureLoader().loadAsync(`${baseUrl}assets/vfx/${art.atlas}`);
+    texture.colorSpace = SRGBColorSpace;
+    return { art, texture };
+  } catch (err) {
+    console.warn('render3d: weapons.vfx.json is unusable, keeping the procedural muzzle flashes', err);
     return null;
   }
 }

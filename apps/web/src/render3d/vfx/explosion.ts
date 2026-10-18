@@ -19,7 +19,7 @@ import { Ramp } from './ramps';
 
 /** the frag's radius: sizes below are for this and scale with the blast */
 const REF_RADIUS = 4;
-/** a blast this close above a surface scorches it and kicks up dust along it */
+/** a blast this close to a floor (or, with nothing below, a ceiling) scorches it */
 const GROUND_PROBE = 1.6;
 
 export interface ExplosionTargets {
@@ -82,8 +82,27 @@ export function spawnExplosion(t: ExplosionTargets, world: CollisionWorld, x: nu
   const range = (a: number, b: number) => a + (b - a) * rand();
   let p: ParticleSpec;
 
+  // what the blast sits on (one-way platforms count: grenades rest on them), or, with no floor
+  // below, the ceiling above it (a grenade stuck under one in reversed gravity)
+  const floor = world.raycast(x, y + 0.05, 0, -1, GROUND_PROBE + 0.05, 0, hit) && world.ny[hit.seg]! > 0.5;
+  const ground = floor || (world.raycast(x, y - 0.05, 0, 1, GROUND_PROBE + 0.05, SegFlag.OneWay, hit) && world.ny[hit.seg]! < -0.5);
+  const nx = ground ? world.nx[hit.seg]! : 0;
+  const ny = ground ? world.ny[hit.seg]! : 1;
+  const platform = ground && (world.flags[hit.seg]! & SegFlag.OneWay) !== 0;
+  const gx = hit.x;
+  const gy = hit.y;
+
+  // the fireball: the flipbook while its pool has room (a 17th blast in under a second falls back
+  // to the procedural fireball below), else a hot core with fire puffs thrown outward. The
+  // flipbook is depth-tested, so a centre-anchored one (the frag's) rises a fifth of its height on
+  // a floor: most of it shows above the ground's front face instead of half of it going behind. A
+  // base-anchored one (a rocket's) already stands on the surface.
+  const centred = t.book !== null && t.book.art.anchorV < 0.7;
+  const lift = t.book && centred && floor && y - gy < 0.6 ? t.book.art.sizeM * t.book.art.aspect * k * 0.2 : 0;
+  const booked = t.book !== null && flipbook(t.book, x, y + lift, 0.6, k);
+
   // the flash: a star card (the flipbook opens with its own) and a wide soft glow, gone in a few frames
-  if (!t.book) {
+  if (!booked) {
     p = from(FLASH_STAR);
     p.x = x;
     p.y = y;
@@ -99,9 +118,7 @@ export function spawnExplosion(t: ExplosionTargets, world: CollisionWorld, x: nu
   p.size1 *= s;
   t.glow.emit(p);
 
-  // fireball: the flipbook, or a hot core with fire puffs thrown outward
-  if (t.book) flipbook(t.book, x, y, 0.6, k);
-  else {
+  if (!booked) {
     p = from(CORE);
     p.x = x;
     p.y = y;
@@ -159,14 +176,6 @@ export function spawnExplosion(t: ExplosionTargets, world: CollisionWorld, x: nu
     t.glow.emit(p);
   }
 
-  // what the blast sits on (one-way platforms count: grenades rest on them)
-  const ground = world.raycast(x, y + 0.05, 0, -1, GROUND_PROBE + 0.05, 0, hit) && world.ny[hit.seg]! > 0.5;
-  const nx = ground ? world.nx[hit.seg]! : 0;
-  const ny = ground ? world.ny[hit.seg]! : 1;
-  const platform = ground && (world.flags[hit.seg]! & SegFlag.OneWay) !== 0;
-  const gx = hit.x;
-  const gy = hit.y;
-
   // debris: dark chunks thrown up and away from the surface (everywhere, in the air)
   const up = Math.atan2(ny, nx);
   for (let i = 0, count = n(10); i < count; i++) {
@@ -195,8 +204,8 @@ export function spawnExplosion(t: ExplosionTargets, world: CollisionWorld, x: nu
     p.nx = nx;
     p.ny = ny;
     t.glow.emit(p);
-    // dust rolling out along the surface both ways
-    for (let i = 0, count = n(12); i < count; i++) {
+    // dust rolling out along a floor both ways
+    for (let i = 0, count = floor ? n(12) : 0; i < count; i++) {
       const dir = i % 2 === 0 ? 1 : -1;
       const v = range(5, 10) * s;
       p = from(DUST);
@@ -212,11 +221,11 @@ export function spawnExplosion(t: ExplosionTargets, world: CollisionWorld, x: nu
       p.spin = range(-1, 1);
       t.smoke.emit(p);
     }
-    // scorch on the walkable top, through the band's depth (z −1…+1)
+    // scorch on the surface, through the band's depth (z −1…+1)
     const w = 2.6 * s;
     p = from(SCORCH);
     p.x = gx;
-    p.y = gy + 0.012;
+    p.y = gy + ny * 0.012;
     p.size0 = p.size1 = w;
     p.aspect = 2 / w;
     p.nx = nx;
@@ -252,8 +261,8 @@ export function spawnExplosion(t: ExplosionTargets, world: CollisionWorld, x: nu
   }
 }
 
-/** One flipbook quad, its anchor on the blast point; its layer picks the frame by age. */
-function flipbook(book: { pool: ParticlePool; art: FlipbookArt }, x: number, y: number, z: number, k: number): void {
+/** One flipbook quad, its anchor on the blast point; its layer picks the frame by age. False when its pool is full. */
+function flipbook(book: { pool: ParticlePool; art: FlipbookArt }, x: number, y: number, z: number, k: number): boolean {
   const art = book.art;
   const p = from(BOOK);
   const w = art.sizeM * k;
@@ -265,7 +274,7 @@ function flipbook(book: { pool: ParticlePool; art: FlipbookArt }, x: number, y: 
   p.size0 = p.size1 = w;
   p.aspect = art.aspect;
   p.cell = art.frames[0]!;
-  book.pool.emit(p);
+  return book.pool.emit(p);
 }
 
 /** True when the solid under a surface point is at least `depth` thick there and `halfW` to each side. */

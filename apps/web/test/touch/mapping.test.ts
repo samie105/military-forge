@@ -1,6 +1,6 @@
 import { Btn } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
-import { ASSIST, FIRE_AT, aimOnTarget, assistAim, createTouchState, desiredAim, throwStrength, touchButtons } from '../../src/touch/mapping';
+import { ASSIST, FIRE_AT, aimOnTarget, assistAim, createTouchState, desiredAim, grenadeStrength, throwStrength, touchButtons } from '../../src/touch/mapping';
 import { AIM_STICK, GRENADE_STICK, MOVE_STICK, shapeStick } from '../../src/touch/stick';
 
 describe('touch → Input mapping', () => {
@@ -42,17 +42,31 @@ describe('touch → Input mapping', () => {
     expect(touchButtons(s, 'hold')).toBe(Btn.Dash | Btn.Left | Btn.Jet);
   });
 
-  it('the grenade button: held = cook/aim, its drag sets the aim and the throw strength', () => {
+  it('the grenade button never holds the grenade bit (the throw latch throws on release); its drag aims and sets the strength', () => {
     const s = createTouchState();
     s.grenadeActive = true;
-    expect(touchButtons(s, 'hold') & Btn.Grenade).toBe(Btn.Grenade);
-    expect(throwStrength(s.grenade)).toBe(7); // a tap throws at full strength, like G
+    expect(touchButtons(s, 'hold') & Btn.Grenade).toBe(0); // finger down: no throw
+    expect(throwStrength(s.grenade)).toBe(0); // no push: 70 %
     shapeStick(0, -40, 100, GRENADE_STICK, s.grenade);
     expect(throwStrength(s.grenade)).toBeGreaterThanOrEqual(1);
     expect(throwStrength(s.grenade)).toBeLessThan(7);
     expect(desiredAim(s)).toBeCloseTo(Math.PI / 2, 12); // straight up
     shapeStick(200, 0, 100, GRENADE_STICK, s.grenade);
     expect(throwStrength(s.grenade)).toBe(7);
+  });
+
+  it('holding the grenade button, the right stick aims the throw and its push sets the strength, without firing', () => {
+    const s = createTouchState();
+    s.grenadeActive = true;
+    s.aimActive = true;
+    shapeStick(-60, -60, 100, AIM_STICK, s.aim); // up-left, pushed most of the way
+    expect(desiredAim(s)).toBeCloseTo((3 * Math.PI) / 4, 6);
+    expect(grenadeStrength(s)).toBe(throwStrength(s.aim));
+    expect(grenadeStrength(s)).toBeGreaterThan(3);
+    expect(s.aim.mag).toBeGreaterThanOrEqual(FIRE_AT);
+    expect(touchButtons(s, 'hold') & Btn.Fire).toBe(0); // aiming a throw, not shooting
+    s.grenadeActive = false;
+    expect(touchButtons(s, 'hold') & Btn.Fire).toBe(Btn.Fire);
   });
 
   it('the aim stick sets the aim; let go and the last aim stays', () => {

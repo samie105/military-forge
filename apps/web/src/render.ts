@@ -30,6 +30,7 @@ import { CollisionWorld, DamageSource, MELEE_ARC_DEG, MELEE_REACH, MELEE_WINDUP_
 import type { Camera } from './camera';
 import { reduceFlashes } from './fx';
 import { REACH_RAYS, cloudReach, inSmoke } from './grenadeViews';
+import { arcDots, type ThrowArcView } from './throwPreview';
 import type { CloudView, Frame, GrenadeView, PickupView, PlayerView, RewindView } from './view';
 
 interface Tracer {
@@ -95,10 +96,10 @@ export interface RenderOptions {
   showGrid: boolean;
   showNet: boolean;
   /**
-   * 3D mode (render3d): this canvas is a transparent layer over the WebGL view. HUD, reticle, tracers
-   * and damage numbers always; the world layers (map outline, capsules, hitboxes, grenades, blasts)
-   * are the debug overlay, drawn while hitboxes (H) or the grid (B) are on. render3d draws the
-   * grenades and blasts itself.
+   * 3D mode (render3d): this canvas is a transparent layer over the WebGL view. HUD, reticle and
+   * damage numbers always; the world layers (map outline, capsules, hitboxes, grenades, tracers,
+   * blasts) are the debug overlay, drawn while hitboxes (H) or the grid (B) are on. render3d draws
+   * the grenades, tracers and blasts itself.
    */
   overlay?: boolean;
   /**
@@ -194,12 +195,18 @@ const GRENADE_COLORS: Record<number, string> = {
   [EMP.index]: '#58a6ff',
 };
 
-/** A mine's light by state: green flying, yellow arming, flashing red armed, a fast red/white beep. */
+/**
+ * A mine's light by state: green flying, yellow arming, red blinking 4 Hz armed, a red/white beep
+ * at 8 Hz when triggered (the Forge's grenades.vfx.json, as render3d's clouds.ts); "Reduce flashes"
+ * keeps both at 3 Hz at most.
+ */
 function mineLight(state: number, nowMs: number): string {
   if (state === MineState.Flying) return '#3fb950';
   if (state === MineState.Arming) return '#d29922';
-  if (state === MineState.Armed) return Math.floor(nowMs / 250) % 2 === 0 ? '#f85149' : '#5c1d1b';
-  return Math.floor(nowMs / 60) % 2 === 0 ? '#f85149' : '#ffffff';
+  const hz = Math.min(state === MineState.Armed ? 4 : 8, reduceFlashes() ? 3 : Infinity);
+  const on = Math.floor((nowMs / 1000) * hz * 2) % 2 === 0;
+  if (state === MineState.Armed) return on ? '#f85149' : '#5c1d1b';
+  return on ? '#f85149' : '#ffffff';
 }
 
 /** Cloud tints (r, g, b): smoke a neutral grey, gas a sickly green-yellow. */
@@ -215,9 +222,6 @@ const KILL_ICONS: Record<number, string> = {
   [DamageSource.World]: 'fell',
   [DamageSource.Melee]: 'melee',
 };
-
-/** Grenade types whose explosion event isn't a blast: render3d leaves their bursts to this overlay. */
-const NOT_A_BLAST = new Set<number>([FLASHBANG.index, EMP.index]);
 
 /** A flashbang's pop in the 2D view (m): the burst stays this small, its ring marks the full-white radius. */
 const FLASH_POP_M = 1;
@@ -255,6 +259,23 @@ export class Renderer {
   private readonly sparks: Spark[] = [];
   private readonly bursts: Burst[] = [];
   private readonly dashes: DashStreak[] = [];
+  /** the throw arc's core colour this frame ("r,g,b"): warm white, amber during a map event's warning */
+  private arcCore = '';
+  /** one dot of the throw arc (arcDots): a dark rim under a bright core, fainter past the landing */
+  private readonly arcDot = (x: number, y: number, after: boolean, fade: number): void => {
+    const ctx = this.ctx;
+    const sx = this.camera.toScreenX(x);
+    const sy = this.camera.toScreenY(y);
+    const r = after ? 2.1 : 3;
+    ctx.fillStyle = `rgba(0,0,0,${(after ? 0.35 : 0.7) * fade})`;
+    ctx.beginPath();
+    ctx.arc(sx, sy, r * 1.75, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `rgba(${this.arcCore},${(after ? 0.5 : 1) * fade})`;
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    ctx.fill();
+  };
   private readonly floats: FloatText[] = [];
   private readonly feed: FeedLine[] = [];
   private hitMarker = { age: 1, head: false, kill: false };
@@ -404,6 +425,7 @@ export class Renderer {
     for (const g of frame.grenades) this.drawGrenade(g);
     // clouds over the players: smoke hides whoever is inside it
     if (frame.clouds) for (const c of frame.clouds) this.drawCloud(c);
+    if (frame.throwArc) this.drawThrowArc(frame.throwArc, frame.mapEvent?.phase === 'warning');
     this.drawEffects(dt, byId, true);
     ctx.globalAlpha = 1;
     this.drawLetterbox();
@@ -413,7 +435,49 @@ export class Renderer {
     if (opts.reticle !== false) this.drawReticle();
   }
 
-  /** Overlay without the debug world layers: tracers and damage numbers, HUD and reticle (render3d draws grenades and blasts). */
+  /**
+   * The throw arc while a grenade throw is aimed (throwPreview.ts; render3d draws its own): dots
+   * along the path, a ring where it first comes down and a cross where it goes off. Amber while
+   * a map event may still change the path.
+   */
+  private drawThrowArc(view: ThrowArcView, uncertain: boolean): void {
+    if (view.count < 2) return;
+    const ctx = this.ctx;
+    const cam = this.camera;
+    this.arcCore = uncertain ? '255,168,51' : '255,247,209';
+    const pts = view.points;
+    if (view.land >= 0) {
+      const sx = cam.toScreenX(pts[view.land * 2]!);
+      const sy = cam.toScreenY(pts[view.land * 2 + 1]!);
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+      ctx.beginPath();
+      ctx.arc(sx, sy, 14, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = uncertain ? 'rgba(255,168,51,1)' : 'rgba(255,224,120,1)';
+      ctx.stroke();
+    }
+    if (view.detonates) {
+      const end = view.count - 1;
+      const sx = cam.toScreenX(pts[end * 2]!);
+      const sy = cam.toScreenY(pts[end * 2 + 1]!);
+      ctx.beginPath();
+      ctx.moveTo(sx - 7, sy - 7);
+      ctx.lineTo(sx + 7, sy + 7);
+      ctx.moveTo(sx + 7, sy - 7);
+      ctx.lineTo(sx - 7, sy + 7);
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+      ctx.stroke();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = 'rgba(255,140,51,1)';
+      ctx.stroke();
+    }
+    arcDots(view, 0, this.arcDot);
+  }
+
+  /** Overlay without the debug world layers: damage numbers, HUD and reticle (render3d draws grenades, tracers and blasts). */
   private drawOverlayHud(frame: Frame, dt: number, opts: RenderOptions, help: string): void {
     const byId = new Map(frame.players.map((p) => [p.id, p]));
     this.drawEffects(dt, byId, false);
@@ -884,8 +948,8 @@ export class Renderer {
     if (rays) ctx.restore();
   }
 
-  /** `blasts`: draw the blast rings (2D view and debug overlay; render3d draws its own otherwise). They age either way. */
-  private drawEffects(dt: number, byId: Map<number, PlayerView>, blasts: boolean): void {
+  /** `world`: draw tracers, dash bands and blast rings (2D view and debug overlay; render3d draws its own otherwise). They age either way. */
+  private drawEffects(dt: number, byId: Map<number, PlayerView>, world: boolean): void {
     const ctx = this.ctx;
     const cam = this.camera;
     for (let i = this.tracers.length - 1; i >= 0; i--) {
@@ -895,6 +959,7 @@ export class Renderer {
         this.tracers.splice(i, 1);
         continue;
       }
+      if (!world) continue;
       const a = 1 - tr.age / 0.12;
       ctx.strokeStyle = tr.ricochet ? `rgba(165,243,252,${a})` : tr.local ? `rgba(255,236,150,${a})` : `rgba(255,180,120,${a})`;
       ctx.lineWidth = 2;
@@ -917,6 +982,7 @@ export class Renderer {
         this.dashes.splice(i, 1);
         continue;
       }
+      if (!world) continue; // render3d draws dashes (the debug overlay and ?render=2d keep the band)
       const a = 1 - d.age / 0.3;
       const [ux, uy] = DASH_UNIT[d.dir] ?? DASH_UNIT[0]!;
       const len = 1.9 * Math.min(1, d.age / 0.13);
@@ -929,7 +995,7 @@ export class Renderer {
       ctx.stroke();
       ctx.lineCap = 'butt';
     }
-    // ricochet sparks: a short fan along the shield's normal
+    // ricochet sparks: a short fan along the shield's normal (render3d sparks its own)
     for (let i = this.sparks.length - 1; i >= 0; i--) {
       const sp = this.sparks[i]!;
       sp.age += dt;
@@ -937,6 +1003,7 @@ export class Renderer {
         this.sparks.splice(i, 1);
         continue;
       }
+      if (!world) continue;
       const k = sp.age / 0.18;
       const len = (0.15 + 0.35 * k) * cam.ppm;
       ctx.strokeStyle = `rgba(255,244,200,${1 - k})`;
@@ -959,8 +1026,9 @@ export class Renderer {
         this.bursts.splice(i, 1);
         continue;
       }
-      // render3d draws real blasts in 3D, but not a flashbang's (or an EMP's) burst: those stay ours
-      if (!blasts && !NOT_A_BLAST.has(b.grenade)) continue;
+      // render3d draws every burst over the 3D view: blasts (vfx), the flashbang's pop and the EMP's
+      // ring (clouds.ts); the 2D view and the debug overlay draw them here
+      if (!world) continue;
       const k = b.age / 0.45;
       const [br, bg, bb] = BURST_RGB[b.grenade] ?? BURST_RGB[FRAG.index]!;
       // a flashbang is a small pop and its ring, never a white disc: full-screen white is the fx

@@ -3,6 +3,7 @@
  * produce a Frame; the renderer never touches sim state directly (docs/06 §4, layer L3).
  */
 import { shieldRaised, type PlayerState, type SimEvent } from '@military-forge/sim';
+import type { ThrowArcView } from './throwPreview';
 
 export interface WeaponView {
   def: number;
@@ -177,6 +178,8 @@ export interface Frame {
   pickups?: PickupView[];
   /** smoke and gas clouds (absent: none) */
   clouds?: CloudView[];
+  /** the local player's throw arc while a grenade throw is aimed (throwPreview.ts; absent: none) */
+  throwArc?: ThrowArcView | null;
   net?: NetStats;
   recording?: number;
   /** online + hitboxes on: recent server rewinds of our shots (docs/05 §15.3) */
