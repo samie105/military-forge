@@ -22,6 +22,7 @@ import numpy as np
 
 OFFSET = 10.0  # m, added to baked positions (see _bake_positions)
 SKIN_NEUTRAL = "#da9f75"  # skin_04 "Apricot" (packages/content cosmetics.ts): the painted Rookie's tone
+SKIN_HEADROOM = 2  # the shader renders skin texels × lerp(1, SKIN_HEADROOM × skinTone, alpha) (dyeMaterial.ts)
 
 
 def _bake_positions(obj, size):
@@ -224,12 +225,13 @@ def finish(col, mask, covered, out_dir, name, skin=None):
     dye_albedo = np.where(weight >= 0.99, core, np.where(weight > 0, edge, col))
     alpha = np.ones(col.shape[:2] + (1,), dtype=np.float32)
     if skin is not None:
-        # skin: the painted colour over skin_04 per channel (linear), weight in alpha. Texels brighter
-        # than skin_04 in a channel clip at 1 (an 8-bit texture can't hold more): the default tone
-        # then renders them at skin_04, a hair darker than painted.
+        # skin: the painted colour over SKIN_HEADROOM × skin_04 per channel (linear), weight in alpha, so
+        # `dyeAlbedo × lerp(1, SKIN_HEADROOM × skinTone, alpha)` gives back the painted skin with skin_04
+        # (the animation stack's shader multiplies by 2 × the tone). The 2× headroom also keeps the
+        # highlights: a texel up to twice skin_04 in a channel fits an 8-bit texture.
         ws = skin[..., None]  # covered texels plus the gutter next to them (_into_gutters)
         sk = _to_linear(np.array([int(SKIN_NEUTRAL[j:j + 2], 16) / 255 for j in (1, 3, 5)], dtype=np.float32))
-        neutral_skin = _to_srgb(lin / (1 + ws * (sk - 1)))
+        neutral_skin = _to_srgb(lin / (1 + ws * (SKIN_HEADROOM * sk - 1)))
         dye_albedo = np.where(ws > 0, neutral_skin, dye_albedo)
         # floored at 1/255: lossy WebP rewrites the colour under fully transparent texels (libwebp's
         # transparent-area cleanup), and 1/255 tints a non-skin texel by under 0.4 % at the darkest tone

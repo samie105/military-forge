@@ -352,6 +352,11 @@ def gait(w, legs, name, frames, speed, stance, lift, drop, bob, lean, arm_swing,
                 s = -span / 2 + span * smooth(u)
                 h = lift * math.sin(math.pi * u) ** 0.8
                 pitch = toe_off * (1 - u) ** 3 - 8 * math.sin(math.pi * u)  # heel up off the ground, toe up mid-swing
+                # roll about the toe: pitching the foot about the ankle drops the toe, so the ankle rises
+                # until the toe is back at its flat height (review L6: the toe sank 5–7 cm on toe-off)
+                toe = w.arm.data.bones[f"toe_{side}"].head_local - w.arm.data.bones[f"foot_{side}"].head_local
+                rolled = Quaternion((1, 0, 0), math.radians(pitch)) @ toe
+                h = max(h, toe.z - rolled.z)
             ankle = Vector((rest_ank.x + sgn * width, centre - s, ANKLE_REST_Z + h))
             pose.update(legs.leg(side, ankle, pitch))
         # upper body: lean, counter-swing of the arms (the left arm swings with the right leg)

@@ -60,7 +60,7 @@ export const BOT_LOADOUTS: readonly (readonly [number, number])[] = [
   [K47.index, BREACHER.index],
 ];
 
-export type BotMode = 'roam' | 'hunt' | 'fight' | 'grab' | 'retreat' | 'escape' | 'blind';
+export type BotMode = 'roam' | 'hunt' | 'fight' | 'grab' | 'retreat' | 'escape' | 'blind' | 'wait';
 
 /**
  * a shield on the ground is worth a detour with none of its own or its own down to this much HP (a
@@ -75,6 +75,8 @@ const GAS_COST = 4;
 const GAS_MARGIN = 0.5;
 /** a way out of gas ends at least this far (m) past a cloud's edge */
 const GAS_CLEAR = 1.2;
+/** ways out of gas are looked for this far (s of path, its gas included) */
+const GAS_EXIT_COST = 90;
 /** stepping near a mine it has seen (its trigger radius plus MINE_MARGIN m) costs this many seconds */
 const MINE_COST = 10;
 const MINE_MARGIN = 0.7;
@@ -116,11 +118,18 @@ export class BotBrain implements Brain {
   /** per-node "blocked by a map event" cache for the current tick */
   private readonly blockTick: Int32Array;
   private readonly blockValue: Uint8Array;
-  /** per-node and per-link hazard cost caches for the current tick (gas, mines) */
+  /** per-node and per-link hazard caches for the current tick: the gas part and the mine part (s) */
   private readonly hazardTick: Int32Array;
-  private readonly hazardValue: Float64Array;
+  private readonly gasValue: Float64Array;
+  private readonly mineValue: Float64Array;
   private readonly linkHazardTick: Int32Array;
-  private readonly linkHazardValue: Float64Array;
+  private readonly linkGasValue: Float64Array;
+  private readonly linkMineValue: Float64Array;
+  /** its body is in gas it has seen (inGas, at this think): only then may a path go through gas */
+  private inGasNow = false;
+  /** gasBound's what-if: gas links cost time instead of closing */
+  private gasOpen = false;
+  private readonly scratchPath: number[] = [];
   private readonly bodyMid: number;
   /** the tick of the last think: a gap means the bot died and came back */
   private lastTick = -2;
@@ -165,6 +174,8 @@ export class BotBrain implements Brain {
   private strikes = 0;
   private readonly failedSpots = new Map<number, number>();
   private readonly giveUpUntil = new Int32Array(MAX_PLAYERS);
+  /** covers it found no way to (gas between, say): left out of its picks until the tick given */
+  private readonly noWayCovers = new Map<number, number>();
   /** from fightPlan: the range it wants to fight q from, and its gun's range (−1: dry, it bashes) */
   private wantRange = 3;
   private gunRange = -1;
@@ -190,9 +201,11 @@ export class BotBrain implements Brain {
     this.blockTick = new Int32Array(this.graph.nodes.length).fill(-1);
     this.blockValue = new Uint8Array(this.graph.nodes.length);
     this.hazardTick = new Int32Array(this.graph.nodes.length).fill(-1);
-    this.hazardValue = new Float64Array(this.graph.nodes.length);
+    this.gasValue = new Float64Array(this.graph.nodes.length);
+    this.mineValue = new Float64Array(this.graph.nodes.length);
     this.linkHazardTick = new Int32Array(this.graph.links.length).fill(-1);
-    this.linkHazardValue = new Float64Array(this.graph.links.length);
+    this.linkGasValue = new Float64Array(this.graph.links.length);
+    this.linkMineValue = new Float64Array(this.graph.links.length);
     this.bodyMid = game.tuning.standHeight / 2;
     if (this.mech) this.nav.blocked = this.nodeBlocked;
     this.nav.penalty = this.linkHazard;
@@ -225,9 +238,12 @@ export class BotBrain implements Brain {
 
     if ((tick + self.id) % THINK_EVERY === 0 && !game.inputsFrozen) {
       this.perception.look(game, self);
-      // caught in a hazard a map event switched on (a gravity pocket): fly out the side, level
-      // (straight down is a one-way catwalk it can't drop through while the pocket lifts it)
-      this.escapeX = env !== null && env.gravityMul < 0 ? this.pocketExit(self) : NaN;
+      // caught in reversed gravity (a pocket a map event switched on): fly out the side, level
+      // (straight down is a one-way catwalk it can't drop through while the pocket lifts it). Not
+      // while flying an air link across a zone like that (its check flew it): if the flight fails,
+      // the link gives up and this takes over
+      const crossing = this.nav.link?.kind === LinkKind.Air;
+      this.escapeX = env !== null && env.gravityMul < 0 && !crossing ? this.pocketExit(self) : NaN;
       this.walkOutX = NaN;
       this.trace.length = 0;
       if (Number.isNaN(this.escapeX)) {
@@ -353,7 +369,8 @@ export class BotBrain implements Brain {
     if (this.now >= this.coverAt || !this.nav.busy) {
       this.coverAt = this.now + 90;
       const cover = this.pickCover(c);
-      if (cover >= 0 && cover !== this.nav.goal) this.nav.plan(this.self, cover);
+      // no way there (gas between, say): another cover next time
+      if (cover >= 0 && cover !== this.nav.goal && !this.nav.plan(this.self, cover)) this.noWayCovers.set(cover, this.now + FAILED_SPOT_TICKS);
     }
     return Status.Running;
   }
@@ -612,7 +629,29 @@ export class BotBrain implements Brain {
     }
     this.retries = 0;
     this.wander(this.self);
+    // every way on from here goes through gas (a pocket behind a cloud): wait it out
+    if (!nav.busy && this.gasBound()) this.mode = 'wait';
     return Status.Running;
+  }
+
+  /**
+   * Gas it has seen closes every way on from where it stands: with gas open, it could get 6 m or
+   * more away (gas lasts 15 s; a bot that got out doesn't walk back in).
+   */
+  private gasBound(): boolean {
+    if (!this.perception.knowsGas) return false;
+    const self = this.self;
+    const start = this.nav.locate(self);
+    if (start < 0) return false;
+    const nodes = this.graph.nodes;
+    const far = (id: number) => {
+      const n = nodes[id]!;
+      return n.usable && Math.abs(n.x - self.x) + Math.abs(n.y - self.y) >= 6;
+    };
+    this.gasOpen = true;
+    const way = this.nav.finder.nearest(start, far, this.nav.linkCost, GAS_EXIT_COST, this.scratchPath);
+    this.gasOpen = false;
+    return way >= 0;
   }
 
   // ── helpers ──
@@ -711,7 +750,7 @@ export class BotBrain implements Brain {
     let bestScore = -Infinity;
     this.graph.forNear(self.x, self.y + 1, 20, 8, (id) => {
       const n = this.graph.nodes[id]!;
-      if (!n.usable || this.avoid(id)) return;
+      if (!n.usable || this.avoid(id) || (this.noWayCovers.get(id) ?? -1) > this.now) return;
       const tx = n.x - c.x;
       const ty = n.y + 0.9 - (c.y + EYE);
       const far = Math.sqrt(tx * tx + ty * ty);
@@ -760,8 +799,8 @@ export class BotBrain implements Brain {
 
   /**
    * Hit this tick: maybe dash away from the attacker (cooldown, fuel and the jetpack permitting),
-   * into open space. Away from where it knows the attacker is; a random side if it can't place it.
-   * Gas isn't dodged: the tree walks it out.
+   * into open space and not into gas. Away from where it knows the attacker is; a random side if it
+   * can't place it. Gas isn't dodged: the tree walks it out.
    */
   private maybeDodge(game: Game, self: PlayerState, env: BodyEnv | null): void {
     if (self.dashCooldown > 0 || self.fuel < game.tuning.dashFuelCost + 5 || game.inputsFrozen || dashBlocked(self, env)) return;
@@ -784,6 +823,8 @@ export class BotBrain implements Brain {
     for (const [buttons, dx, dy] of options) {
       if (game.world.raycast(self.x, cy, dx, dy, 2.6, SegFlag.OneWay, ray)) continue;
       if (dy === 0 && !game.world.raycast(self.x + dx * 2.4, cy, 0, -1, 3, 0, ray)) continue;
+      // not into gas it has seen
+      if (this.perception.gasAt(game, self.x + dx * 2.4, self.y + dy * 2.4, GAS_MARGIN) > 0) continue;
       this.dodge = buttons;
       return;
     }
@@ -815,49 +856,63 @@ export class BotBrain implements Brain {
     return blocked;
   };
 
-  /**
-   * Extra seconds for a body standing at (x, y) (feet): in gas it has seen, more toward the
-   * centre; near a mine it has seen.
-   */
-  private hazardAt(x: number, y: number): number {
-    const depth = this.perception.gasAt(this.game, x, y + this.bodyMid, GAS_MARGIN);
-    let cost = depth > 0 ? GAS_COST * (1 + 2 * depth) : 0;
-    if (this.perception.mineAt(this.game, x, y, MINE_MARGIN)) cost += MINE_COST;
-    return cost;
+  /** Seconds for a body standing at (x, y) (its feet) in gas it has seen, more toward the centre (0: none). */
+  private gasAt(x: number, y: number): number {
+    const depth = this.perception.gasAt(this.game, x, y, GAS_MARGIN);
+    return depth > 0 ? GAS_COST * (1 + 2 * depth) : 0;
   }
 
-  /** hazardAt for a node, cached for the tick. */
-  private readonly hazardCost = (id: number): number => {
-    if (!this.perception.knowsGas && !this.perception.knowsMines) return 0;
-    if (this.hazardTick[id] === this.now) return this.hazardValue[id]!;
+  /** Seconds for a body standing at (x, y) (feet) by a mine it has seen (0: none). */
+  private mineAt(x: number, y: number): number {
+    return this.perception.mineAt(this.game, x, y, MINE_MARGIN) ? MINE_COST : 0;
+  }
+
+  /** Fills a node's gas and mine parts for this tick. */
+  private nodeHazards(id: number): void {
+    if (this.hazardTick[id] === this.now) return;
     const n = this.graph.nodes[id]!;
-    const cost = this.hazardAt(n.x, n.y);
     this.hazardTick[id] = this.now;
-    this.hazardValue[id] = cost;
-    return cost;
+    this.gasValue[id] = this.gasAt(n.x, n.y);
+    this.mineValue[id] = this.mineAt(n.x, n.y);
+  }
+
+  /** In gas or by a mine it has seen (goal picks avoid such nodes; paths pay for them, or can't use them). */
+  private readonly hazardous = (id: number): boolean => {
+    if (!this.perception.knowsGas && !this.perception.knowsMines) return false;
+    this.nodeHazards(id);
+    return this.gasValue[id]! > 0 || this.mineValue[id]! > 0;
   };
 
   /**
    * Extra seconds for a link through a hazard it has seen (the navigator's penalty): into a node in
-   * gas or by a mine, or a flight (a jet, a drop) whose middle is.
+   * gas or by a mine, or a flight (a jet, a drop) whose middle is. Gas costs time on the way out of
+   * the cloud the bot is in; anywhere else it closes the link (Infinity) while it lasts: a bot that
+   * got out doesn't plan back through it, however much shorter that is.
    */
   private readonly linkHazard = (l: NavLink): number => {
     if (!this.perception.knowsGas && !this.perception.knowsMines) return 0;
-    let c = this.hazardCost(l.to);
+    this.nodeHazards(l.to);
+    let gas = this.gasValue[l.to]!;
+    let mine = this.mineValue[l.to]!;
     if (l.kind !== LinkKind.Walk) {
       if (this.linkHazardTick[l.id] !== this.now) {
         const a = this.graph.nodes[l.from]!;
         const b = this.graph.nodes[l.to]!;
+        const x = (a.x + b.x) / 2;
+        const y = (a.y + b.y) / 2;
         this.linkHazardTick[l.id] = this.now;
-        this.linkHazardValue[l.id] = this.hazardAt((a.x + b.x) / 2, (a.y + b.y) / 2);
+        this.linkGasValue[l.id] = this.gasAt(x, y);
+        this.linkMineValue[l.id] = this.mineAt(x, y);
       }
-      c += this.linkHazardValue[l.id]!;
+      gas += this.linkGasValue[l.id]!;
+      mine += this.linkMineValue[l.id]!;
     }
-    return c;
+    if (gas > 0 && !this.inGasNow && !this.gasOpen) return Infinity;
+    return gas + mine;
   };
 
   /** Nowhere to head for right now: a map event's hazard, in gas or by a mine it has seen. */
-  private readonly avoid = (id: number): boolean => this.nodeBlocked(id) || this.hazardCost(id) > 0;
+  private readonly avoid = (id: number): boolean => this.nodeBlocked(id) || this.hazardous(id);
 
   /** Nowhere to fight from: somewhere to avoid, or a spot that got it nowhere lately. */
   private readonly avoidSpot = (id: number): boolean => this.avoid(id) || (this.failedSpots.get(id) ?? -1) > this.now;
@@ -869,28 +924,44 @@ export class BotBrain implements Brain {
    */
   private inGas(): boolean {
     const margin = this.exitNode >= 0 ? GAS_CLEAR : GAS_MARGIN;
-    if (this.perception.gasAt(this.game, this.self.x, this.self.y + this.bodyMid, margin, this.cloud) > 0) return true;
-    this.exitNode = -1;
-    return false;
+    this.inGasNow = this.perception.gasAt(this.game, this.self.x, this.self.y, margin, this.cloud) > 0;
+    if (!this.inGasNow) this.exitNode = -1;
+    return this.inGasNow;
   }
 
   /**
-   * Out of the gas: the nearest node clear of it, by a path its gas cost keeps short; it fights back
-   * on the way if someone's in sight. With no path out, it walks straight away from the centre.
+   * Out of the gas, fighting back on the way if someone's in sight: the node clear of it that's
+   * cheapest to get to by path, so a drop off a balcony beats a climb to the roof, first with the
+   * fuel in the tank, then waiting on the ground for the fuel a jet out needs. With no way out at
+   * all, it walks straight away from the centre (often off an edge: out).
    */
   private leaveGas(): Status {
     this.mode = 'escape';
     if (!this.spot()) this.target = -1;
     const nav = this.nav;
     if (nav.busy && nav.goal === this.exitNode) return Status.Running;
-    this.exitNode = this.gasExit();
-    if (this.exitNode >= 0 && nav.plan(this.self, this.exitNode)) return Status.Running;
-    this.exitNode = -1;
+    // there and still in it: not a way out after all (the cloud reached it round an edge)
+    if (this.exitNode >= 0 && !nav.busy && !nav.failed) this.failedSpots.set(this.exitNode, this.now + FAILED_SPOT_TICKS);
+    nav.fuelCap = this.self.fuel;
+    this.exitNode = nav.planToNearest(this.self, this.clearOfGas, GAS_EXIT_COST);
+    nav.fuelCap = Infinity;
+    if (this.exitNode < 0) this.exitNode = nav.planToNearest(this.self, this.clearOfGas, GAS_EXIT_COST);
+    if (this.exitNode >= 0) return Status.Running;
     nav.stop();
     const c = this.cloud;
     this.walkOutX = this.self.x >= c.x ? c.x + c.r + GAS_CLEAR : c.x - c.r - GAS_CLEAR;
     return Status.Running;
   }
+
+  /**
+   * A node to get out of gas to: usable, and GAS_CLEAR past the edge of any gas it has seen by
+   * distance alone (walls aside: an edge between the node and a cloud's centre can let the pulses
+   * through a step away), and not one it got to and was still in.
+   */
+  private readonly clearOfGas = (id: number): boolean => {
+    const n = this.graph.nodes[id]!;
+    return n.usable && !this.nodeBlocked(id) && (this.failedSpots.get(id) ?? -1) <= this.now && this.perception.gasAt(this.game, n.x, n.y, GAS_CLEAR, undefined, false) === 0;
+  };
 
   /**
    * A flashbang's full white: it sees nothing and knows no one (Perception), so it starts nothing
@@ -900,25 +971,6 @@ export class BotBrain implements Brain {
     this.mode = 'blind';
     this.target = -1;
     return Status.Running;
-  }
-
-  /** The nearest usable node clear of gas by GAS_CLEAR, preferring ones it needn't climb to (−1: none near). */
-  private gasExit(): number {
-    const self = this.self;
-    let best = -1;
-    let bestScore = Infinity;
-    this.graph.forNear(self.x, self.y, 12, 6, (id) => {
-      const n = this.graph.nodes[id]!;
-      if (!n.usable || this.nodeBlocked(id) || this.perception.gasAt(this.game, n.x, n.y + this.bodyMid, GAS_CLEAR) > 0) return;
-      const dx = n.x - self.x;
-      const dy = n.y - self.y;
-      const score = Math.sqrt(dx * dx + dy * dy) + (dy > 1 ? 3 : 0);
-      if (score < bestScore) {
-        bestScore = score;
-        best = id;
-      }
-    });
-    return best;
   }
 
   /** The x just past the nearer side of the reversed-gravity zone the bot is in (NaN if none). */
@@ -947,6 +999,7 @@ export class BotBrain implements Brain {
     this.fightGoal = -1;
     this.strikes = 0;
     this.failedSpots.clear();
+    this.noWayCovers.clear();
     this.giveUpUntil.fill(0);
     this.mode = 'roam';
   }

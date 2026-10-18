@@ -15,7 +15,7 @@
  *   spot without them.
  * What it knew about players fades after a few seconds, and a player who left is forgotten at once.
  */
-import { MINE, grenades } from '@military-forge/content';
+import { MINE, STANDING_HITBOXES, grenades } from '@military-forge/content';
 import {
   MAX_CLOUDS,
   MAX_GRENADES,
@@ -224,7 +224,10 @@ export class Perception {
   look(game: Game, self: PlayerState): void {
     const tick = game.tick;
     this.frame(self);
-    // full white: nothing to see (hear() has already wiped the contacts)
+    // gas clouds even in a full white: a client is sent them by the view rect whatever, and the
+    // cough says you're in one
+    this.lookForGas(game);
+    // full white: nothing else to see (hear() has already wiped the contacts)
     if (this.blind >= 1) return;
     const sight = smokeSight(game);
     for (const q of game.players) {
@@ -267,6 +270,10 @@ export class Perception {
       }
       if (seen.known) this.knowsMines = true;
     }
+  }
+
+  /** Gas clouds in view (the server sends them by the view rect and their radius); one gone is forgotten. */
+  private lookForGas(game: Game): void {
     for (const c of game.clouds) {
       const k = this.gas[c.id]!;
       const def = c.alive ? cloudDef(c.type) : null;
@@ -295,24 +302,29 @@ export class Perception {
   }
 
   /**
-   * How deep (0…1; 0 = not in it) the point (x, y) is inside a gas cloud it has seen, the cloud's
-   * radius grown by `margin`. A cloud still growing in counts at its full size (it's there within
-   * the second). A wall bounds a cloud: its far side from the centre isn't in it. `out` gets the
-   * centre and (grown) radius of the cloud it's deepest in.
+   * How deep (0…1; 0 = not in it) a body standing at (x, y) (its feet) is in a gas cloud it has
+   * seen, the cloud's radius grown by `margin`. The sim's own test (clouds.ts gasPulse): the
+   * torso's nearest point to the centre, less the torso's radius, and a wall between that point and
+   * the centre keeps it out. Beside a ledge a test from the body's middle can say "out" while the
+   * pulses still land. A cloud still growing in counts at its full size (it's there within the
+   * second). `out` gets the centre and (grown) radius of the cloud it's deepest in. `walls` false:
+   * by distance alone (a way out: a wall's edge can't make one, as a step or two over the pulses land).
    */
-  gasAt(game: Game, x: number, y: number, margin: number, out?: { x: number; y: number; r: number }): number {
+  gasAt(game: Game, x: number, y: number, margin: number, out?: { x: number; y: number; r: number }, walls = true): number {
+    const torso = STANDING_HITBOXES.torso;
     let worst = 0;
     for (const c of game.clouds) {
       if (!c.alive || !this.gas[c.id]!.known) continue;
       const def = cloudDef(c.type);
       if (!def) continue;
       const r = (c.age < def.grow * TICK_RATE ? def.radius : cloudRadius(def, c.age)) + margin;
-      const dx = x - c.x;
-      const dy = y - c.y;
-      const d2 = dx * dx + dy * dy;
-      if (d2 >= r * r) continue;
-      const d = Math.sqrt(d2);
-      if (d > 1e-6 && game.world.raycast(c.x, c.y, dx / d, dy / d, d, SegFlag.BulletPass, ray)) continue;
+      closestPointOnSegment(c.x, c.y, x, y + torso.y0, x, y + torso.y1, pt);
+      const dx = pt.x - c.x;
+      const dy = pt.y - c.y;
+      const reach = Math.sqrt(dx * dx + dy * dy);
+      const d = Math.max(0, reach - torso.r);
+      if (d >= r) continue;
+      if (walls && reach > 1e-6 && game.world.raycast(c.x, c.y, dx / reach, dy / reach, reach, SegFlag.BulletPass, ray)) continue;
       if (1 - d / r <= worst) continue;
       worst = 1 - d / r;
       if (out) {

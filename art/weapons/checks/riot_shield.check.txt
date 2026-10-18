@@ -1,18 +1,20 @@
 asset-check: art/weapons/riot_shield.glb  [weapon]
-----------------------------------------------------------------------------------------------------
-INFO  file size                                 54 KB
-PASS  triangles                                 652 of 1000
-PASS  one mesh, one material                    1 draw call(s)
-INFO  GPU texture memory (KTX2 est.)            0.00 MB, 0 image(s)
-PASS  extras weaponId/family/aimPose/hands      ok
-WARN  weaponId in packages/content              riot_shield is not in packages/content/src/{weapons,grenades}.ts yet
-INFO  nodes                                     face, grip
-PASS  origin on the weapon (the grip)           bbox (-0.21, -0.31, -0.01)..(0.21, 0.27, 0.13)
-PASS  family is a docs/04 §4.2 family           'shield'
-PASS  aimPose has clips                         'pistol'
-PASS  sockets for the family                    grip, face
-PASS  socket directions (unit `dir`)            ok
-PASS  sockets on the weapon (within 3 cm)       ok
-PASS  shield face ahead of the hand, facing +Y  at y +0.120, dir (0.0, 1.0, 0.0), half size (0.2, 0.29)
-----------------------------------------------------------------------------------------------------
-RESULT: PASS  (10 pass, 1 warn, 0 fail)
+-----------------------------------------------------------------------------------------------------------------
+INFO  file size                                              63 KB
+PASS  triangles                                              780 of 1000
+PASS  one mesh, one material                                 1 draw call(s)
+INFO  GPU texture memory (KTX2 est.)                         0.00 MB, 0 image(s)
+PASS  extras weaponId/family/aimPose/hands                   ok
+WARN  weaponId in packages/content                           riot_shield is not in packages/content/src/{weapons,grenades}.ts yet
+INFO  nodes                                                  face, grip, ground
+PASS  origin on the weapon (the grip)                        bbox (-0.28, -0.1, -0.45)..(0.28, 0.04, 0.45)
+PASS  family is a docs/04 §4.2 family                        'shield'
+PASS  aimPose has clips                                      'pistol'
+PASS  team-colour contrast                                   blue ΔE 73, orange ΔE 83 (min 25)
+PASS  sockets for the family                                 grip, face, ground
+PASS  socket directions (unit `dir`)                         ok
+PASS  sockets on the weapon (within 3 cm)                    ok
+PASS  shield face: strike face +Z, in front of the strap     at z +0.090, dir (0.0, 0.0, 1.0), half size (0.28, 0.45)
+PASS  shield 0.55 × 0.90 m (what players see = what blocks)  0.56 × 0.90 m
+-----------------------------------------------------------------------------------------------------------------
+RESULT: PASS  (12 pass, 1 warn, 0 fail)

@@ -6,12 +6,12 @@
     {
       "status": "INFO",
       "check": "file size",
-      "detail": "54 KB"
+      "detail": "63 KB"
     },
     {
       "status": "PASS",
       "check": "triangles",
-      "detail": "652 of 1000"
+      "detail": "780 of 1000"
     },
     {
       "status": "PASS",
@@ -36,12 +36,12 @@
     {
       "status": "INFO",
       "check": "nodes",
-      "detail": "face, grip"
+      "detail": "face, grip, ground"
     },
     {
       "status": "PASS",
       "check": "origin on the weapon (the grip)",
-      "detail": "bbox (-0.21, -0.31, -0.01)..(0.21, 0.27, 0.13)"
+      "detail": "bbox (-0.28, -0.1, -0.45)..(0.28, 0.04, 0.45)"
     },
     {
       "status": "PASS",
@@ -55,8 +55,13 @@
     },
     {
       "status": "PASS",
+      "check": "team-colour contrast",
+      "detail": "blue \u0394E 73, orange \u0394E 83 (min 25)"
+    },
+    {
+      "status": "PASS",
       "check": "sockets for the family",
-      "detail": "grip, face"
+      "detail": "grip, face, ground"
     },
     {
       "status": "PASS",
@@ -70,8 +75,13 @@
     },
     {
       "status": "PASS",
-      "check": "shield face ahead of the hand, facing +Y",
-      "detail": "at y +0.120, dir (0.0, 1.0, 0.0), half size (0.2, 0.29)"
+      "check": "shield face: strike face +Z, in front of the strap",
+      "detail": "at z +0.090, dir (0.0, 0.0, 1.0), half size (0.28, 0.45)"
+    },
+    {
+      "status": "PASS",
+      "check": "shield 0.55 \u00d7 0.90 m (what players see = what blocks)",
+      "detail": "0.56 \u00d7 0.90 m"
     }
   ]
 }

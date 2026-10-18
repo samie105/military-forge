@@ -9,10 +9,11 @@
   256
  ],
  "encoding": "R = round(255 \u00b7 level / (levels \u2212 1)); sample with nearest filtering and no mipmaps",
- "applies": "vertices whose _CAMO attribute is 1 (body panels); project triplanar in the weapon frame, one tile per tileM metres; the toon lighting shades it",
+ "applies": "vertices whose _CAMO attribute is 1 (body panels); project triplanar in the weapon frame, one tile per tileM metres; the toon lighting shades it. A finish also sets metalness and roughness on those panels and reflects an environment map; `weapons` limits it to those weapon ids",
  "camos": {
   "forest_patch": {
    "name": "Forest Patch",
+   "kind": "camo",
    "cell": 0,
    "palette": [
     "#23241f",
@@ -25,6 +26,7 @@
   },
   "dune": {
    "name": "Dune",
+   "kind": "camo",
    "cell": 1,
    "palette": [
     "#9c7f52",
@@ -36,6 +38,7 @@
   },
   "concrete": {
    "name": "Concrete",
+   "kind": "camo",
    "cell": 2,
    "palette": [
     "#5c6064",
@@ -47,6 +50,7 @@
   },
   "snowline": {
    "name": "Snowline",
+   "kind": "camo",
    "cell": 3,
    "palette": [
     "#7f8a93",
@@ -58,6 +62,7 @@
   },
   "stripe": {
    "name": "Stripe",
+   "kind": "camo",
    "cell": 4,
    "palette": [
     "#1f201c",
@@ -69,6 +74,7 @@
   },
   "pixel": {
    "name": "Pixel",
+   "kind": "camo",
    "cell": 5,
    "palette": [
     "#2f352c",
@@ -78,6 +84,50 @@
    ],
    "levels": 4,
    "tileM": 0.3
+  },
+  "gold": {
+   "name": "Gold",
+   "kind": "finish",
+   "cell": 6,
+   "palette": [
+    "#bf8f2e",
+    "#d3a63e",
+    "#e6bd55"
+   ],
+   "levels": 3,
+   "tileM": 0.3,
+   "metalness": 0.6,
+   "roughness": 0.32,
+   "weapons": [
+    "hawk50"
+   ]
+  },
+  "chrome": {
+   "name": "Chrome",
+   "kind": "finish",
+   "cell": 6,
+   "palette": [
+    "#686f76",
+    "#80878e",
+    "#9aa1a7"
+   ],
+   "levels": 3,
+   "tileM": 0.3,
+   "metalness": 0.55,
+   "roughness": 0.3
+  },
+  "carbon": {
+   "name": "Carbon",
+   "kind": "finish",
+   "cell": 7,
+   "palette": [
+    "#1c1e21",
+    "#3b4046"
+   ],
+   "levels": 2,
+   "tileM": 0.06,
+   "metalness": 0.15,
+   "roughness": 0.5
   }
  }
 }

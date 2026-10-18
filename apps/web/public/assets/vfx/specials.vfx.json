@@ -34,7 +34,11 @@
     "ring": 7,
     "crack1": 8,
     "crack2": 9,
-    "crack3": 10
+    "crack3": 10,
+    "star4": 11,
+    "streak": 12,
+    "scrape": 13,
+    "shard": 14
    }
   }
  },
@@ -100,6 +104,28 @@
   "crack3": {
    "atlas": "specials",
    "cell": "crack3",
+   "blend": "normal"
+  },
+  "star4": {
+   "atlas": "specials",
+   "cell": "star4",
+   "blend": "additive"
+  },
+  "streak": {
+   "atlas": "specials",
+   "cell": "streak",
+   "blend": "additive",
+   "originU": 1.0,
+   "notes": "the head is at the right: put it on the hit point, +U along the reflected ray"
+  },
+  "scrape": {
+   "atlas": "specials",
+   "cell": "scrape",
+   "blend": "normal"
+  },
+  "shard": {
+   "atlas": "specials",
+   "cell": "shard",
    "blend": "normal"
   }
  },
@@ -377,15 +403,69 @@
    "kind": "shield",
    "at": "face",
    "maxHp": 300,
+   "ricochet": {
+    "notes": "a bullet the shield stops (sim event `ricochet`, with the reflected end ex, ey): a spark star on the face, a streak along the reflected ray, a fan of sparks around it, a scrape on the face along the incoming ray, a light blip; audio: a metal ping",
+    "spark": {
+     "sprite": "star4",
+     "sizeM": 0.18,
+     "ms": 140,
+     "rollDeg": [
+      0,
+      45
+     ],
+     "offsetM": 0.01
+    },
+    "streak": {
+     "sprite": "streak",
+     "lengthM": 0.55,
+     "widthM": 0.06,
+     "ms": 110,
+     "along": "reflected"
+    },
+    "sparks": {
+     "particle": "spark",
+     "count": [
+      5,
+      8
+     ],
+     "tint": "#ffe9a8",
+     "speedMps": [
+      3,
+      7
+     ],
+     "coneDeg": 35,
+     "around": "reflected",
+     "gravity": 1,
+     "lifeMs": 260
+    },
+    "scrape": {
+     "sprite": "scrape",
+     "sizeM": [
+      0.14,
+      0.05
+     ],
+     "ms": 1500,
+     "fadeMs": 600,
+     "align": "incoming",
+     "max": 6,
+     "onFace": true
+    },
+    "light": {
+     "color": "#fff1c0",
+     "intensity": 1.5,
+     "rangeM": 1.2,
+     "ms": 60
+    }
+   },
    "hit": {
-    "impact": "metal",
     "ripple": {
      "sprite": "ring",
-     "tint": "#cfe8ff",
+     "tint": "#e8edf2",
      "fromM": 0.04,
      "toM": 0.22,
      "ms": 160
-    }
+    },
+    "notes": "explosions, flames and saws go round the shield; melee bypasses it (docs/03 \u00a77): no ricochet for those, just the ripple when they touch it"
    },
    "cracks": [
     {
@@ -402,21 +482,75 @@
     }
    ],
    "break": {
-    "particle": "chip",
-    "count": [
-     14,
-     18
-    ],
-    "tint": "#5a5f48",
-    "speedMps": [
-     2,
-     5
-    ],
-    "coneDeg": 90,
-    "gravity": 1,
-    "lifeMs": 900
+    "notes": "at 0 HP: the shield model disappears; shards fly off the face",
+    "shards": {
+     "sprite": "shard",
+     "count": [
+      8,
+      12
+     ],
+     "sizeM": [
+      0.08,
+      0.18
+     ],
+     "tint": "#b8bcc0",
+     "speedMps": [
+      2,
+      5
+     ],
+     "coneDeg": 70,
+     "spinRps": [
+      1,
+      3
+     ],
+     "gravity": 1,
+     "lifeMs": 1100
+    },
+    "rimBits": {
+     "sprite": "shard",
+     "count": [
+      3,
+      5
+     ],
+     "sizeM": [
+      0.05,
+      0.1
+     ],
+     "tint": "#2b2d31",
+     "speedMps": [
+      1.5,
+      4
+     ],
+     "coneDeg": 90,
+     "spinRps": [
+      2,
+      4
+     ],
+     "gravity": 1,
+     "lifeMs": 1000
+    },
+    "dust": {
+     "particle": "dust",
+     "count": [
+      4,
+      6
+     ],
+     "tint": "#d6d8da",
+     "sizeM": 0.25,
+     "speedMps": [
+      0.5,
+      1.5
+     ],
+     "lifeMs": 600
+    },
+    "flash": {
+     "sprite": "glow",
+     "sizeM": 0.7,
+     "ms": 120,
+     "tint": "#ffffff"
+    }
    },
-   "notes": "cracks are a decal on the face socket, 2 \u00d7 halfSize; bullets within \u00b160\u00b0 hit the shield (docs/03 \u00a77); flames, explosions, melee and saws go round it",
+   "decalFrame": "cracks and scrapes sit on the face socket's plane (shield space +Z), sized 2 \u00d7 halfSize",
    "provisional": "docs/03 \u00a75 (300 HP) until packages/content has the shield"
   }
  }

@@ -1,6 +1,6 @@
 {
  "frame": "weapon frame = glTF: origin at the main grip, +Y muzzle, +Z up, +X right; attach to socket_weapon_R with an identity transform (docs/04 \u00a79.4)",
- "fields": "pos [x, y, z] m; dir unit vector; muzzle.boreRadius m; rail_*.lengthM m; rail_top.occupied = a built-in sight; frag/mine `ground` = rest frame in the world (world = floorPoint \u00d7 inverse(ground.local)); face.halfSize [w/2, h/2] m (riot shield); weapon `casings` false = no casing per shot; `attach` = the rig socket when not socket_weapon_R",
+ "fields": "pos [x, y, z] m; dir unit vector; muzzle.boreRadius m; rail_*.lengthM m; rail_top.occupied = a built-in sight; frag/mine `ground` = rest frame in the world (world = floorPoint \u00d7 inverse(ground.local)); face.halfSize [w/2, h/2] m (riot shield); `frame: shield` = shield space (origin on the arm strap, +Y up, +Z out of the strike face; lengthM is its height); weapon `casings` false = no casing per shot; `attach` = the rig socket when not socket_weapon_R",
  "weapons": {
   "hawk50": {
    "family": "pistol",
@@ -1491,34 +1491,48 @@
    "aimPose": "pistol",
    "hands": 1,
    "casings": false,
-   "attach": "socket_weapon_L",
-   "lengthM": 0.139,
+   "frame": "shield",
+   "attach": "socket_shield",
+   "slungAttach": "socket_shield_back",
+   "lengthM": 0.9,
    "sockets": {
     "face": {
      "pos": [
       0.0,
-      0.12,
-      0.02
+      0.0,
+      0.09
      ],
      "halfSize": [
-      0.2,
-      0.295
+      0.275,
+      0.45
      ],
      "dir": [
       0.0,
-      1.0,
-      0.0
+      0.0,
+      1.0
      ]
     },
     "grip": {
      "pos": [
       0.0,
+      0.12,
+      0.022
+     ],
+     "dir": [
+      1.0,
       0.0,
       0.0
+     ]
+    },
+    "ground": {
+     "pos": [
+      0.0,
+      -0.45,
+      0.07
      ],
      "dir": [
       0.0,
-      1.0,
+      -1.0,
       0.0
      ]
     }
@@ -1560,7 +1574,7 @@
    "family": "thrown",
    "aimPose": "pistol",
    "hands": 1,
-   "lengthM": 0.093,
+   "lengthM": 0.197,
    "sockets": {
     "grip": {
      "pos": [
@@ -1578,7 +1592,7 @@
      "pos": [
       0.0,
       0.0,
-      -0.052
+      -0.105
      ],
      "dir": [
       0.0,
@@ -1586,11 +1600,23 @@
       -1.0
      ]
     },
+    "light": {
+     "pos": [
+      0.0,
+      0.0,
+      0.145
+     ],
+     "dir": [
+      0.0,
+      0.0,
+      1.0
+     ]
+    },
     "pin": {
      "pos": [
-      -0.02,
+      -0.034,
       0.0,
-      0.075
+      0.124
      ],
      "dir": [
       -1.0,
@@ -1604,7 +1630,7 @@
    "family": "thrown",
    "aimPose": "pistol",
    "hands": 1,
-   "lengthM": 0.2,
+   "lengthM": 0.208,
    "sockets": {
     "grip": {
      "pos": [
@@ -1622,7 +1648,7 @@
      "pos": [
       0.0,
       0.0,
-      -0.02
+      -0.035
      ],
      "dir": [
       0.0,
@@ -1634,7 +1660,7 @@
      "pos": [
       0.0,
       0.0,
-      0.04
+      0.055
      ],
      "dir": [
       0.0,

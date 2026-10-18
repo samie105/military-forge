@@ -99,6 +99,7 @@ export function soakMap(game: Game, ticks: number, before?: (game: Game, t: numb
       const brain = p.brain instanceof BotBrain ? p.brain : null;
       // a fight it can't hit its target from (no line of fire, out of reach) is a stand-off: it should be moving
       const standOff = brain !== null && brain.mode === 'fight' && !brain.inReach;
+      // waiting out a cloud of gas that closes every way on isn't trying (brain.ts gasBound checks it)
       const trying = !brain || brain.nav.busy || brain.mode === 'roam' || brain.mode === 'hunt' || brain.mode === 'grab' || standOff;
       h.push({ x: p.x, y: p.y, alive: p.alive, trying });
       if (h.length > WINDOW_TICKS / SAMPLE_EVERY + 1) h.shift();

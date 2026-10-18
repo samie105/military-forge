@@ -10,12 +10,23 @@ import { patchGlow } from './glow';
 
 export interface CamoDef {
   name: string;
+  /** a finish (gold, chrome, carbon) also sets metalness / roughness on the panels and reflects */
+  kind?: 'camo' | 'finish';
   cell: number;
   /** sRGB hex, one colour per pattern level */
   palette: string[];
   levels: number;
   /** metres of weapon per pattern tile */
   tileM: number;
+  metalness?: number;
+  roughness?: number;
+  /** weapon ids it is for (the gold finish is the Hawk's); absent = every weapon */
+  weapons?: string[];
+}
+
+/** whether `camo` can go on weapon `id` */
+export function camoFits(camo: CamoDef, id: string): boolean {
+  return !camo.weapons || camo.weapons.includes(id);
 }
 
 export interface CamoSheet {
@@ -35,9 +46,17 @@ export function prepareCamoPatterns(texture: Texture): Texture {
   return texture;
 }
 
-/** A copy of `material` that paints its `_CAMO` panels with `camo`. */
-export function camoMaterial(material: MeshStandardMaterial, patterns: Texture, sheet: CamoSheet, camo: CamoDef): Material {
+/**
+ * A copy of `material` that paints its `_CAMO` panels with `camo`. A finish also sets metalness and
+ * roughness on those panels only, and reflects `envMap` (without one, metal renders near-black).
+ */
+export function camoMaterial(material: MeshStandardMaterial, patterns: Texture, sheet: CamoSheet, camo: CamoDef, envMap?: Texture | null): Material {
   const m = material.clone();
+  const finish = camo.kind === 'finish';
+  if (finish && envMap) {
+    m.envMap = envMap;
+    m.envMapIntensity = 0.9;
+  }
   const cols = sheet.atlasSize[0] / sheet.cell[0];
   const cellSize = new Vector2(sheet.cell[0] / sheet.atlasSize[0], sheet.cell[1] / sheet.atlasSize[1]);
   // flipY is false for this texture (see the viewer), so v runs down from the top like the image
@@ -53,6 +72,8 @@ export function camoMaterial(material: MeshStandardMaterial, patterns: Texture, 
       camoTile: { value: camo.tileM },
       camoLevels: { value: camo.levels },
       camoPalette: { value: palette },
+      camoMetal: { value: finish ? (camo.metalness ?? 0) : -1 },
+      camoRough: { value: camo.roughness ?? 1 },
     });
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nattribute float _camo;\nvarying float vCamo;\nvarying vec3 vCamoPos;\nvarying vec3 vCamoNormal;')
@@ -67,6 +88,8 @@ uniform vec2 camoCellSize;
 uniform float camoTile;
 uniform float camoLevels;
 uniform vec3 camoPalette[4];
+uniform float camoMetal;
+uniform float camoRough;
 varying float vCamo;
 varying vec3 vCamoPos;
 varying vec3 vCamoNormal;
@@ -89,8 +112,17 @@ if (vCamo > 0.5) {
   else if (idx >= 3) c = camoPalette[3];
   diffuseColor.rgb = c;
 }`,
+      )
+      .replace(
+        '#include <metalnessmap_fragment>',
+        `#include <metalnessmap_fragment>
+// a finish: metal and roughness on the camo panels only (grips and steel keep the factory values)
+if (vCamo > 0.5 && camoMetal >= 0.0) {
+  metalnessFactor = camoMetal;
+  roughnessFactor = camoRough;
+}`,
       );
   };
-  m.customProgramCacheKey = () => `camo:${camo.cell}:${glow}`;
+  m.customProgramCacheKey = () => `camo:${camo.cell}:${glow}:${finish}`;
   return m;
 }

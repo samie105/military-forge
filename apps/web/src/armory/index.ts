@@ -9,8 +9,9 @@ import css from './armory.css?inline';
 import { statsCard } from './stats';
 import { getAttachment } from '@military-forge/content';
 import { TextureLoader, type Texture } from 'three';
-import { camoMaterial, prepareCamoPatterns, type CamoSheet } from './camo';
-import { ArmoryViewer, SOCKET_COLOURS, type AttachmentEntry, type FlashSheet, type Socket } from './viewer';
+import { camoFits, camoMaterial, prepareCamoPatterns, type CamoSheet } from './camo';
+import type { SpecialsManifest } from './specials';
+import { ArmoryViewer, SOCKET_COLOURS, type AttachmentEntry, type FlashSheet, type ModelFrame, type Socket } from './viewer';
 
 export { statsCard, type StatRow, type StatsCard } from './stats';
 
@@ -23,6 +24,10 @@ export interface ArmoryOptions {
   weapon?: string;
   /** keep a Fire flash on screen this long (screenshots, QA); default: the flash's own duration */
   flashHoldMs?: number;
+  /** freeze a special effect (flame, beam, orb…) this many seconds after Fire (screenshots, QA) */
+  fxFreezeS?: number;
+  /** cosmetic fire colour (weapons.vfx.json fireTints id) */
+  fireTint?: string;
   /** camo to show (weapons/camos.json id) */
   camo?: string;
   /** attachments to mount on the first weapon (ids from packages/content/src/attachments.ts) */
@@ -48,7 +53,8 @@ interface WeaponEntry {
 
 interface VfxManifest {
   flash: FlashSheet;
-  weapons: Record<string, { flash: string | null; flashScale?: number }>;
+  weapons: Record<string, { flash: string | null; flashScale?: number; special?: string }>;
+  fireTints?: { monoAtlas: string; tints: Record<string, { name: string; flash: string | null; tracer: string | null }> };
 }
 
 /** The Armory as a shell route. */
@@ -111,25 +117,38 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
   let alive = true;
   let current = '';
   let weapons: Record<string, WeaponEntry> = {};
-  /** `attach`: the rig socket when it isn't the main hand (the riot shield: socket_weapon_L) */
-  let sockets: Record<string, { attach?: string; sockets: Record<string, Socket> }> = {};
+  /** `attach`: the rig socket when it isn't the main hand; `frame`: shield space for the riot shield */
+  let sockets: Record<string, { attach?: string; frame?: ModelFrame; sockets: Record<string, Socket> }> = {};
   let vfx: VfxManifest | null = null;
+  let specials: SpecialsManifest | null = null;
   let socketsOn = true;
   let camoSheet: CamoSheet | null = null;
   let camoTex: Texture | null = null;
   let camo = '';
+  let fireTint = 'classic';
 
   const renderCamo = () => {
     if (!camoSheet) return;
     const chips = (p: string[]) => `<span class="mf-chips">${p.map((c) => `<i style="background:${c}"></i>`).join('')}</span>`;
+    const button = ([id, c]: [string, CamoSheet['camos'][string]]) =>
+      `<button type="button" data-camo="${id}" aria-pressed="${camo === id}"${camoFits(c, current) ? '' : ' disabled title="not for this weapon"'}>${chips(c.palette)}${escapeHtml(c.name)}</button>`;
+    const all = Object.entries(camoSheet.camos);
+    const finishes = all.filter(([, c]) => c.kind === 'finish');
+    const tints = vfx?.fireTints?.tints;
     camoPanel.innerHTML = `<h3>Camo <small>body panels only</small></h3><div class="mf-camos">
       <button type="button" data-camo="" aria-pressed="${camo === ''}">Factory</button>
-      ${Object.entries(camoSheet.camos).map(([id, c]) => `<button type="button" data-camo="${id}" aria-pressed="${camo === id}">${chips(c.palette)}${escapeHtml(c.name)}</button>`).join('')}
-    </div>`;
+      ${all.filter(([, c]) => c.kind !== 'finish').map(button).join('')}
+    </div>${finishes.length ? `<h3>Finish <small>cosmetic</small></h3><div class="mf-camos">${finishes.map(button).join('')}</div>` : ''}${
+      tints && vfx?.weapons[current]?.flash
+        ? `<h3>Fire colour <small>cosmetic</small></h3><div class="mf-camos">${Object.entries(tints).map(([id, t]) =>
+          `<button type="button" data-tint="${id}" aria-pressed="${fireTint === id}">${t.flash ? chips([t.flash, t.tracer ?? t.flash]) : ''}${escapeHtml(t.name)}</button>`).join('')}</div>`
+        : ''
+    }`;
   };
   const applyCamo = () => {
     const def = camoSheet?.camos[camo];
-    viewer.setCamo(def && camoTex && camoSheet ? (m) => camoMaterial(m, camoTex!, camoSheet!, def) : null);
+    const env = def?.kind === 'finish' ? viewer.environment() : null;
+    viewer.setCamo(def && camoTex && camoSheet ? (m) => camoMaterial(m, camoTex!, camoSheet!, def, env) : null);
     renderCamo();
   };
   let attachIndex: Record<string, AttachmentEntry & { fits: string[] }> = {};
@@ -146,7 +165,12 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
   };
   const applyAttach = async () => {
     renderAttach();
-    await viewer.setAttachments(mounted.map((a) => ({ id: a, url: `${assets}attachments/${attachIndex[a]!.file}`, entry: attachIndex[a]! })));
+    const failed = await viewer.setAttachments(mounted.map((a) => ({ id: a, url: `${assets}attachments/${attachIndex[a]!.file}`, entry: attachIndex[a]! })));
+    if (failed.length) {
+      // a part that didn't load isn't mounted: un-press it
+      mounted = mounted.filter((m) => !failed.includes(m));
+      renderAttach();
+    }
   };
   /** one part per mount, except the bottom rail, which takes a foregrip and a laser together */
   const toggleAttach = (a: string) => {
@@ -171,7 +195,7 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
       ? head + `<dl>${c.rows.map((r) => `<div><dt>${escapeHtml(r.label)}</dt><dd>${escapeHtml(r.value)}</dd>${r.bar === undefined ? '' : `<span class="mf-bar" style="--fill:${(r.bar * 100).toFixed(0)}%"></span>`}</div>`).join('')}</dl>`
       : head + '<p class="mf-note">Not in packages/content yet: the model is ready, the stats come with the arsenal stream.</p>';
     const ss = sockets[id]?.sockets ?? {};
-    const offHand = sockets[id]?.attach === 'socket_weapon_L';
+    const offHand = sockets[id]?.frame === 'shield';
     socketPanel.innerHTML = `<h3>Sockets</h3><ul>${Object.keys(ss).map((name) =>
       `<li><button type="button" data-socket="${name}"><span class="mf-dot" style="background:${SOCKET_COLOURS[name] ?? '#fff'}"></span>${name}<small>${name === 'grip' && offHand ? 'off hand' : (SOCKET_NOTES[name] ?? '')}${ss[name]!.occupied ? ` · ${escapeHtml(ss[name]!.occupied!)} built in` : ''}</small></button></li>`).join('')}</ul>`;
   };
@@ -182,17 +206,22 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
     for (const b of list.querySelectorAll<HTMLElement>('[data-weapon]')) b.setAttribute('aria-current', String(b.dataset.weapon === id));
     renderCard(id);
     press('focus', 'focus', 'whole');
-    $<HTMLButtonElement>('[data-action="fire"]').disabled = !vfx?.weapons[id]?.flash;
+    const hook = vfx?.weapons[id];
+    $<HTMLButtonElement>('[data-action="fire"]').disabled = !hook?.flash && !(hook?.special && specials?.styles[hook.special]);
     $<HTMLButtonElement>('[data-focus="muzzle"]').disabled = !sockets[id]?.sockets.muzzle;
     overlay.hidden = false;
     overlay.textContent = `Loading ${weapons[id]!.name}…`;
     mounted = [];
     renderAttach();
     try {
-      const shown = await viewer.setWeapon(`${assets}weapons/${id}.glb`, sockets[id]?.sockets ?? {});
+      const shown = await viewer.setWeapon(`${assets}weapons/${id}.glb`, sockets[id]?.sockets ?? {}, sockets[id]?.frame ?? 'weapon');
       if (alive && shown) {
         overlay.hidden = true;
+        // a finish made for another weapon (the Hawk's gold) goes back to factory
+        const def = camoSheet?.camos[camo];
+        if (def && !camoFits(def, id)) camo = '';
         if (camo) applyCamo();
+        else renderCamo();
       }
     } catch {
       if (alive) overlay.textContent = `Couldn't load ${weapons[id]!.name}.`;
@@ -209,6 +238,9 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
     else if (d.camo !== undefined) {
       camo = d.camo;
       applyCamo();
+    } else if (d.tint) {
+      fireTint = d.tint;
+      renderCamo();
     }
     else if (d.focus) {
       viewer.setFocus(d.focus);
@@ -225,30 +257,38 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
       t.setAttribute('aria-pressed', String(socketsOn));
     } else if (d.action === 'fire' && vfx) {
       const hook = vfx.weapons[current];
-      if (hook?.flash) void viewer.fire(vfx.flash, hook.flash, `${assets}vfx/${vfx.flash.atlas}`, hook.flashScale ?? 1, options.flashHoldMs);
+      const tint = vfx.fireTints?.tints[fireTint]?.flash ?? null;
+      const atlas = tint ? vfx.fireTints!.monoAtlas : vfx.flash.atlas;
+      if (hook?.flash) void viewer.fire(vfx.flash, hook.flash, `${assets}vfx/${atlas}`, hook.flashScale ?? 1, options.flashHoldMs, tint);
+      if (hook?.special && specials?.styles[hook.special]) {
+        void viewer.fireSpecial(`${assets}vfx/`, specials, hook.special, options.flashHoldMs, options.fxFreezeS);
+      }
     }
   });
   press('light', 'light', 'lobby');
 
   void (async () => {
     try {
-      const [w, s, v, cs, att] = await Promise.all([
+      const [w, s, v, cs, att, sp] = await Promise.all([
         fetch(`${assets}weapons/weapons.json`).then((r) => r.json() as Promise<{ weapons: Record<string, WeaponEntry> }>),
-        fetch(`${assets}weapons/sockets.json`).then((r) => r.json() as Promise<{ weapons: Record<string, { sockets: Record<string, Socket> }> }>),
+        fetch(`${assets}weapons/sockets.json`).then((r) => r.json() as Promise<{ weapons: Record<string, { frame?: ModelFrame; sockets: Record<string, Socket> }> }>),
         fetch(`${assets}vfx/weapons.vfx.json`).then((r) => (r.ok ? (r.json() as Promise<VfxManifest>) : null)).catch(() => null),
         fetch(`${assets}weapons/camos.json`).then((r) => (r.ok ? (r.json() as Promise<CamoSheet>) : null)).catch(() => null),
         fetch(`${assets}attachments/attachments.json`)
           .then((r) => (r.ok ? (r.json() as Promise<{ attachments: Record<string, AttachmentEntry & { fits: string[] }> }>) : null))
           .catch(() => null),
+        fetch(`${assets}vfx/specials.vfx.json`).then((r) => (r.ok ? (r.json() as Promise<SpecialsManifest>) : null)).catch(() => null),
       ]);
       if (!alive) return;
       weapons = w.weapons;
       sockets = s.weapons;
       vfx = v;
+      specials = sp;
       attachIndex = att?.attachments ?? {};
       camoSheet = cs;
       if (cs) camoTex = prepareCamoPatterns(await new TextureLoader().loadAsync(`${assets}weapons/${cs.patterns}`));
       if (options.camo && cs?.camos[options.camo]) camo = options.camo;
+      if (options.fireTint && v?.fireTints?.tints[options.fireTint]) fireTint = options.fireTint;
       renderCamo();
       list.innerHTML = Object.entries(weapons).map(([id, e]) =>
         `<button type="button" data-weapon="${id}"><strong>${escapeHtml(e.name)}</strong><small>${escapeHtml(e.family)}${statsCard(id) ? '' : ' · art only'}</small></button>`).join('');

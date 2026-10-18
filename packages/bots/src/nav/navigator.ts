@@ -42,11 +42,13 @@ export class Navigator {
   maxFuel = Infinity;
   /** the jetpack is down (an EMP field or storm, an EMP grenade): plans walk, and a jet link not yet started is dropped */
   jetBlocked = false;
-  /** no waiting on the ground for fuel (it's getting out of gas); set by the brain */
+  /** getting out of gas: wait on the ground only for the fuel a jet link needs, no margin; set by the brain */
   hurry = false;
+  /** links that need more fuel than this are skipped too (planning a way out of gas with what's in the tank) */
+  fuelCap = Infinity;
   /** a node nobody should go to right now (a map event made it a hazard); set by the brain */
   blocked: (node: number) => boolean = () => false;
-  /** extra seconds for taking a link right now (into or through gas the bot has seen); set by the brain */
+  /** extra seconds for taking a link right now (into or through gas the bot has seen); Infinity closes it; set by the brain */
   penalty: (link: NavLink) => number = () => 0;
   private readonly fails = new Map<number, number>();
   private linkTicks = 0;
@@ -103,10 +105,12 @@ export class Navigator {
   }
 
   readonly linkCost = (l: NavLink): number => {
-    if (l.fuel > this.maxFuel || (this.jetBlocked && l.fuel > 0) || this.blocked(l.to)) return -1;
+    if (l.fuel > Math.min(this.maxFuel, this.fuelCap) || (this.jetBlocked && l.fuel > 0) || this.blocked(l.to)) return -1;
+    const extra = this.penalty(l);
+    if (extra === Infinity) return -1; // closed for now (gas the bot isn't in)
     let c = l.time * (1 + this.graph.nodes[l.to]!.hazard);
     c += (l.fuel / 100) * 0.8; // burnt fuel is time spent refilling later
-    c += this.penalty(l);
+    c += extra;
     const f = this.fails.get(l.id);
     if (f) c *= 1 + 3 * f;
     return c;
@@ -119,12 +123,7 @@ export class Navigator {
    */
   plan(self: PlayerState, goal: number, via = -1): boolean {
     const following = this.leg();
-    let start = via >= 0 ? -1 : this.locate(self);
-    if (start >= 0 && this.blocked(start)) start = -1;
-    const approach = start < 0;
-    if (approach) start = via >= 0 ? via : this.graph.nearestUsable(self.x, self.y, 8, this.blocked);
-    // nothing near (the middle of a wide zero-g dome, which has no nodes): farther afield
-    if (approach && start < 0 && via < 0) start = this.graph.nearestUsable(self.x, self.y, APPROACH_FAR, this.blocked);
+    const { start, approach } = this.startFor(self, via);
     this.failed = false;
     this.approach = -1;
     if (start < 0 || !this.finder.find(start, goal, this.linkCost, this.path)) {
@@ -132,13 +131,48 @@ export class Navigator {
       this.at = 0;
       return false;
     }
-    if (approach) this.approach = start;
+    this.adopt(goal, approach ? start : -1, following);
+    return true;
+  }
+
+  /**
+   * Plans from where the body is to the cheapest node that passes `isGoal` (a way out of gas), at
+   * most `maxCost` seconds away. Returns that node, or −1 when there's none.
+   */
+  planToNearest(self: PlayerState, isGoal: (node: number) => boolean, maxCost: number): number {
+    const following = this.leg();
+    const { start, approach } = this.startFor(self, -1);
+    this.failed = false;
+    this.approach = -1;
+    const goal = start < 0 ? -1 : this.finder.nearest(start, isGoal, this.linkCost, maxCost, this.path);
+    if (goal < 0) {
+      this.path.length = 0;
+      this.at = 0;
+      return -1;
+    }
+    this.adopt(goal, approach ? start : -1, following);
+    return goal;
+  }
+
+  /** Where a plan starts: the node the body stands at, else (in the air, off the graph) one it heads for first. */
+  private startFor(self: PlayerState, via: number): { start: number; approach: boolean } {
+    let start = via >= 0 ? -1 : this.locate(self);
+    if (start >= 0 && this.blocked(start)) start = -1;
+    const approach = start < 0;
+    if (approach) start = via >= 0 ? via : this.graph.nearestUsable(self.x, self.y, 8, this.blocked);
+    // nothing near (the middle of a wide zero-g dome, which has no nodes): farther afield
+    if (approach && start < 0 && via < 0) start = this.graph.nearestUsable(self.x, self.y, APPROACH_FAR, this.blocked);
+    return { start, approach };
+  }
+
+  /** Takes the path just found (in `path`) to `goal`, after an approach leg to `approach` (−1: none). */
+  private adopt(goal: number, approach: number, following: number): void {
+    this.approach = approach;
     this.at = 0;
     this.goal = goal;
     // a new plan that goes on along the leg it was on keeps that leg's clock: replanning every
     // second toward the next spot over mustn't hide a body that isn't getting anywhere
     if (this.leg() !== following) this.resetLink();
-    return true;
   }
 
   /** What it's following now, as a key: the link id, −2 − node for an approach leg, −1 for nothing. */
@@ -147,10 +181,14 @@ export class Navigator {
     return this.at < this.path.length ? this.path[this.at]! : -1;
   }
 
-  /** The plan's estimated cost from here (s), or Infinity. */
+  /** The plan's estimated cost from here (s), or Infinity (nothing to follow, or a link closed since). */
   remaining(): number {
     let c = 0;
-    for (let i = this.at; i < this.path.length; i++) c += this.linkCost(this.graph.links[this.path[i]!]!);
+    for (let i = this.at; i < this.path.length; i++) {
+      const lc = this.linkCost(this.graph.links[this.path[i]!]!);
+      if (lc < 0) return Infinity;
+      c += lc;
+    }
     return this.busy ? c : Infinity;
   }
 
@@ -192,9 +230,10 @@ export class Navigator {
     const target = link.kind === LinkKind.Walk ? this.lookahead(self) : g.nodes[link.to]!;
 
     // a jet link wants the fuel its check burned (plus a margin, but never more than a full tank):
-    // refill on the ground first, unless it's in a hurry (getting out of gas)
-    const want = Math.min(link.fuel + FUEL_MARGIN, game.tuning.fuelMax - 0.5);
-    if (link.kind === LinkKind.Air && link.fuel > 0 && self.grounded && self.fuel < want && this.fuelWait < FUEL_WAIT && !this.hurry) {
+    // refill on the ground first. In a hurry (getting out of gas), just what the link burns: hopping
+    // on whatever trickles in restarts the refill delay each time, so the tank never fills
+    const want = Math.min(link.fuel + (this.hurry ? 0 : FUEL_MARGIN), game.tuning.fuelMax - 0.5);
+    if (link.kind === LinkKind.Air && link.fuel > 0 && self.grounded && self.fuel < want && this.fuelWait < FUEL_WAIT) {
       this.fuelWait++;
       return 0;
     }

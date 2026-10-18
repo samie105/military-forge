@@ -17,7 +17,8 @@
         "accent": "#239090"
       },
       "skin": "alpha",
-      "skinNeutral": "#da9f75"
+      "skinNeutral": "#da9f75",
+      "skinHeadroom": 2
     },
     "lod1": {
       "mask": "textures/rookie_body_lod1_dye_mask.png",
@@ -28,7 +29,8 @@
         "accent": "#229091"
       },
       "skin": "alpha",
-      "skinNeutral": "#da9f75"
+      "skinNeutral": "#da9f75",
+      "skinHeadroom": 2
     }
   },
   "defaultParts": {

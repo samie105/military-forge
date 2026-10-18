@@ -1,5 +1,5 @@
 import { GAS, MINE, SMOKE } from '@military-forge/content';
-import { Btn, createInput, Game, MineState, spawnCloud, type Input } from '@military-forge/sim';
+import { Btn, DamageSource, createInput, Game, MineState, spawnCloud, type Input } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
 import { Perception, SOUND_CELL } from '../src/perception';
 import { dummyAt, flatMap, rect, run } from './helpers';
@@ -185,26 +185,54 @@ describe('perception: only what a human in its place could know', () => {
     const { me, per } = observer(game, 10);
     spawnCloud(game, GAS.index, 26, 0, -1);
     run(game, 2);
-    expect(per.gasAt(game, 26, 0.9, 0)).toBe(0); // not seen yet
+    expect(per.gasAt(game, 26, 0, 0)).toBe(0); // not seen yet
     per.look(game, me);
     expect(per.knowsGas).toBe(true);
-    expect(per.gasAt(game, 26, 0.9, 0)).toBeGreaterThan(0.6);
-    expect(per.gasAt(game, 26 + GAS.cloud.radius + 0.5, 0.9, 0)).toBe(0);
+    expect(per.gasAt(game, 26, 0, 0)).toBeGreaterThan(0.6);
+    expect(per.gasAt(game, 26 + GAS.cloud.radius + 0.5, 0, 0)).toBe(0);
     // a wall bounds it: the far side isn't in it
     const walled = new Game({ map: flatMap([rect(27, 0, 27.4, 10)]) });
     const w = observer(walled, 10);
     spawnCloud(walled, GAS.index, 26, 0, -1);
     run(walled, 2);
     w.per.look(walled, w.me);
-    expect(w.per.gasAt(walled, 25.5, 0.9, 0)).toBeGreaterThan(0);
-    expect(w.per.gasAt(walled, 28.5, 0.9, 0)).toBe(0);
+    expect(w.per.gasAt(walled, 25.5, 0, 0)).toBeGreaterThan(0);
+    expect(w.per.gasAt(walled, 28.5, 0, 0)).toBe(0);
 
     me.x = 75; // off screen: still remembered
     per.look(game, me);
-    expect(per.gasAt(game, 26, 0.9, 0)).toBeGreaterThan(0);
+    expect(per.gasAt(game, 26, 0, 0)).toBeGreaterThan(0);
     run(game, GAS.cloud.duration * 60);
     per.look(game, me);
     expect(per.knowsGas).toBe(false);
+  });
+
+  it('in gas exactly where the sim’s pulses land: by the torso’s nearest point, walls too', () => {
+    // feet on the floor beside the cloud, on a platform over it, and either side of a low wall. The
+    // cloud's centre is a metre up and the torso's edge counts, so a test from the body's middle
+    // said "out" up to 0.3 m inside the pulses (and on the platform over it)
+    const spots: [number, number][] = [[23.9, 0], [22.9, 0], [26, 4.2], [26.6, 4.2], [27, 4.2], [27.2, 4.2], [27.6, 4.2]];
+    for (let i = 0; i <= 8; i++) spots.push([29.3 + i * 0.1, 0]);
+    let inside = 0;
+    for (const [x, y] of spots) {
+      const map = flatMap([rect(23.2, 0, 23.5, 2.6)]);
+      map.oneWays = [{ ax: 25, ay: 4.2, bx: 34, by: 4.2 }];
+      const game = new Game({ map });
+      const { me, per } = observer(game, 10);
+      const d = dummyAt(game, x, y);
+      spawnCloud(game, GAS.index, 26, 0, -1);
+      per.look(game, me);
+      let hit = false;
+      // a pulse at full size (the cloud grows for a second)
+      for (let t = 0; t < GAS.cloud.grow * 60 + GAS.cloud.pulse * 60; t++) {
+        game.step([]);
+        hit = game.events.some((e) => e.type === 'hit' && e.target === d.id && e.source === DamageSource.Gas);
+      }
+      expect(per.gasAt(game, d.x, d.y, 0) > 0, `feet at (${d.x.toFixed(2)}, ${d.y.toFixed(2)})`).toBe(hit);
+      if (hit) inside++;
+    }
+    expect(inside).toBeGreaterThan(4);
+    expect(inside).toBeLessThan(spots.length - 4);
   });
 
   it('remembers where it saw an item, and forgets it when it sees the spot empty', () => {

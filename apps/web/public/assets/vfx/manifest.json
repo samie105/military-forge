@@ -26,6 +26,11 @@
    "file": "projectiles.json",
    "builder": "art/pipeline/build_projectiles.py",
    "has": "rocket, grenade round and saw blade meshes in projectiles.glb (muzzle frame), trail point, spin"
+  },
+  "grenades": {
+   "file": "grenades.vfx.json",
+   "builder": "art/pipeline/build_grenade_fx.py",
+   "has": "per throwable kind: trail puffs (trail_puffs.webp), fuse / state light, outline"
   }
  },
  "textures": {
@@ -49,6 +54,10 @@
    1024,
    1024
   ],
+  "flash_atlas_mono.webp": [
+   1024,
+   1024
+  ],
   "impact_atlas.webp": [
    1024,
    1536
@@ -68,6 +77,10 @@
   "tracer.webp": [
    128,
    16
+  ],
+  "trail_puffs.webp": [
+   512,
+   256
   ]
  },
  "models": [

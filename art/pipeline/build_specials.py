@@ -14,7 +14,10 @@ Outputs (<runtime>/vfx/):
                          row 0  orb flicker ×4 (additive, baked blue)
                          row 1  pilot flame (origin at the left middle, points +U) | beam flare | soft
                                 glow (white: tint it) | thin ring (white: tint it)
-                         row 2  shield cracks, light / heavy / breaking (normal blend, cumulative)
+                         row 2  shield cracks, light / heavy / breaking (normal blend, cumulative) |
+                                ricochet star (additive)
+                         row 3  ricochet streak (head at the right, additive) | scrape mark | plate shard
+                                (normal blend)
   beam.webp            256×64, tileable along U: white core, cyan glow, two electric strands (additive)
   specials.vfx.json    per weapon: what fires, how it moves, what it leaves. Speeds, ranges and
                        timings are docs/03 §7's until packages/content has these weapons.
@@ -155,6 +158,55 @@ def cracks():
     return out
 
 
+def star4():
+    """The ricochet spark: a hot 4-point star (additive)."""
+    x, y, r = grid()
+    arms = sum(np.exp(-((r * np.sin(np.arctan2(y, x) - a)) / 0.05) ** 2) * np.clip(1 - r, 0, 1) ** 1.5
+               for a in (0, math.pi / 2, math.pi, 3 * math.pi / 2)) + 0.0
+    return compose([(np.exp(-(r / 0.12) ** 2), (1, 1, 1)), (0.9 * arms, (1.0, 0.92, 0.65)),
+                    (0.35 * np.exp(-(r / 0.4) ** 2), (1.0, 0.8, 0.4))])
+
+
+def streak():
+    """A spark streak along +U (the reflected ray): a bright head at the right, a tapering tail (additive)."""
+    u = np.linspace(0, 1, C)[None, :].repeat(C, 0)
+    v = np.linspace(-1, 1, C)[:, None].repeat(C, 1)
+    width = 0.04 + 0.1 * u ** 2
+    core = np.exp(-(v / width) ** 2) * np.clip(u / 0.85, 0, 1) ** 1.6 * np.clip((1 - u) / 0.08, 0, 1)
+    return compose([(core, (1.0, 0.95, 0.75)), (0.4 * np.exp(-(v / (2.5 * width)) ** 2) * u ** 2, (1.0, 0.75, 0.35))])
+
+
+def scrape():
+    """A bright scrape mark a deflected bullet leaves on the plate: scratch lines along +U (normal blend)."""
+    rng = np.random.default_rng(23)
+    paths = []
+    for _ in range(5):
+        y0 = rng.uniform(-0.18, 0.18)
+        paths.append([(-0.75 + 0.05 * k, y0 + rng.normal(0, 0.012) + 0.08 * (k / 30) ** 2) for k in range(31)])
+    bright = strokes(paths, 1.6)
+    dark = strokes([[(x, y + 0.035) for x, y in p] for p in paths], 1.2)
+    fade = np.clip(1 - np.abs(np.linspace(-1, 1, C))[None, :] ** 3, 0, 1)
+    a = np.clip(0.95 * bright + 0.5 * dark, 0, 1) * fade
+    rgb = (0.95 * bright[..., None] * np.array([0.97, 0.97, 0.95]) + 0.5 * dark[..., None] * np.array([0.15, 0.15, 0.16]))
+    rgb /= np.maximum(0.95 * bright + 0.5 * dark, 1e-6)[..., None]
+    return Image.fromarray((np.dstack([np.clip(rgb, 0, 1), a]) * 255).astype(np.uint8), "RGBA")
+
+
+def shard():
+    """A plate fragment for the break: a light irregular polygon with a dark edge (normal blend; tint it)."""
+    rng = np.random.default_rng(31)
+    pts = [(0.75 * (0.6 + 0.4 * rng.random()) * math.cos(a), 0.55 * (0.6 + 0.4 * rng.random()) * math.sin(a))
+           for a in np.linspace(0, 2 * math.pi, 7, endpoint=False) + 0.2]
+    big = Image.new("L", (C * 4, C * 4), 0)
+    from PIL import ImageDraw as _D
+    _D.Draw(big).polygon([((x + 1) / 2 * (C * 4 - 1), (y + 1) / 2 * (C * 4 - 1)) for x, y in pts], fill=255)
+    fill = np.asarray(big.resize((C, C), Image.LANCZOS), dtype=np.float64) / 255
+    edge = np.clip(fill - np.asarray(big.filter(ImageFilter.MinFilter(13)).resize((C, C), Image.LANCZOS), dtype=np.float64) / 255, 0, 1)
+    value = np.where(edge > 0.3, 0.25, 0.92)
+    rgb = np.dstack([value, value, value * 1.01])
+    return Image.fromarray((np.dstack([np.clip(rgb, 0, 1), fill]) * 255).astype(np.uint8), "RGBA")
+
+
 def beam():
     w, h = 256, 64
     x = np.linspace(0, 1, w, endpoint=False)[None, :]
@@ -173,7 +225,7 @@ def beam():
 
 # id → cell index in specials_atlas (4 columns)
 CELLS = {"orb0": 0, "orb1": 1, "orb2": 2, "orb3": 3, "pilot": 4, "flare": 5, "glow": 6, "ring": 7,
-         "crack1": 8, "crack2": 9, "crack3": 10}
+         "crack1": 8, "crack2": 9, "crack3": 10, "star4": 11, "streak": 12, "scrape": 13, "shard": 14}
 
 
 def main():
@@ -186,7 +238,8 @@ def main():
 
     sp = Image.new("RGBA", (4 * C, 4 * C), (0, 0, 0, 0))
     art = {**{f"orb{k}": orb_frame(k) for k in range(4)}, "pilot": pilot_flame(), "flare": flare(), "glow": glow(),
-           "ring": ring(), **{f"crack{i + 1}": c for i, c in enumerate(cracks())}}
+           "ring": ring(), **{f"crack{i + 1}": c for i, c in enumerate(cracks())},
+           "star4": star4(), "streak": streak(), "scrape": scrape(), "shard": shard()}
     ramp = np.clip(np.minimum.reduce([np.arange(C)[None, :].repeat(C, 0), np.arange(C)[:, None].repeat(C, 1),
                                       C - 1 - np.arange(C)[None, :].repeat(C, 0), C - 1 - np.arange(C)[:, None].repeat(C, 1)]) / 4, 0, 1)
     for name, img in art.items():
@@ -212,9 +265,12 @@ def main():
             "orb": {"atlas": "specials", "cells": ["orb0", "orb1", "orb2", "orb3"], "fps": 16, "loop": True, "blend": "additive"},
         },
         "sprites": {name: {"atlas": "specials", "cell": name,
-                           "blend": "normal" if name.startswith("crack") else "additive",
-                           **({"originU": 12 / C} if name == "pilot" else {})}
-                    for name in ("pilot", "flare", "glow", "ring", "crack1", "crack2", "crack3")},
+                           "blend": "normal" if name.startswith(("crack", "scrape", "shard")) else "additive",
+                           **({"originU": 12 / C} if name == "pilot" else {}),
+                           **({"originU": 1.0, "notes": "the head is at the right: put it on the hit point, +U along "
+                                                        "the reflected ray"} if name == "streak" else {})}
+                    for name in ("pilot", "flare", "glow", "ring", "crack1", "crack2", "crack3", "star4", "streak",
+                                 "scrape", "shard")},
         "beam": {"texture": "beam.webp", "size": [256, 64], "blend": "additive", "wrapU": True,
                  "notes": "a camera-facing strip from the muzzle to the hit point; U repeats along it"},
         "projectiles": {"from": "projectiles.json", "glb": "projectiles.glb"},
@@ -282,13 +338,34 @@ def main():
             },
             "riot_shield": {
                 "kind": "shield", "at": "face", "maxHp": 300,
-                "hit": {"impact": "metal", "ripple": {"sprite": "ring", "tint": "#cfe8ff", "fromM": 0.04, "toM": 0.22, "ms": 160}},
+                "ricochet": {
+                    "notes": "a bullet the shield stops (sim event `ricochet`, with the reflected end ex, ey): a spark "
+                             "star on the face, a streak along the reflected ray, a fan of sparks around it, a scrape "
+                             "on the face along the incoming ray, a light blip; audio: a metal ping",
+                    "spark": {"sprite": "star4", "sizeM": 0.18, "ms": 140, "rollDeg": [0, 45], "offsetM": 0.01},
+                    "streak": {"sprite": "streak", "lengthM": 0.55, "widthM": 0.06, "ms": 110, "along": "reflected"},
+                    "sparks": {"particle": "spark", "count": [5, 8], "tint": "#ffe9a8", "speedMps": [3, 7],
+                               "coneDeg": 35, "around": "reflected", "gravity": 1, "lifeMs": 260},
+                    "scrape": {"sprite": "scrape", "sizeM": [0.14, 0.05], "ms": 1500, "fadeMs": 600,
+                               "align": "incoming", "max": 6, "onFace": True},
+                    "light": {"color": "#fff1c0", "intensity": 1.5, "rangeM": 1.2, "ms": 60},
+                },
+                "hit": {"ripple": {"sprite": "ring", "tint": "#e8edf2", "fromM": 0.04, "toM": 0.22, "ms": 160},
+                        "notes": "explosions, flames and saws go round the shield; melee bypasses it (docs/03 §7): no "
+                                 "ricochet for those, just the ripple when they touch it"},
                 "cracks": [{"belowHpFraction": 0.66, "sprite": "crack1"}, {"belowHpFraction": 0.33, "sprite": "crack2"},
                            {"belowHpFraction": 0.12, "sprite": "crack3"}],
-                "break": {"particle": "chip", "count": [14, 18], "tint": "#5a5f48", "speedMps": [2, 5], "coneDeg": 90,
-                          "gravity": 1, "lifeMs": 900},
-                "notes": "cracks are a decal on the face socket, 2 × halfSize; bullets within ±60° hit the shield "
-                         "(docs/03 §7); flames, explosions, melee and saws go round it",
+                "break": {
+                    "notes": "at 0 HP: the shield model disappears; shards fly off the face",
+                    "shards": {"sprite": "shard", "count": [8, 12], "sizeM": [0.08, 0.18], "tint": "#b8bcc0",
+                               "speedMps": [2, 5], "coneDeg": 70, "spinRps": [1, 3], "gravity": 1, "lifeMs": 1100},
+                    "rimBits": {"sprite": "shard", "count": [3, 5], "sizeM": [0.05, 0.1], "tint": "#2b2d31",
+                                "speedMps": [1.5, 4], "coneDeg": 90, "spinRps": [2, 4], "gravity": 1, "lifeMs": 1000},
+                    "dust": {"particle": "dust", "count": [4, 6], "tint": "#d6d8da", "sizeM": 0.25, "speedMps": [0.5, 1.5],
+                             "lifeMs": 600},
+                    "flash": {"sprite": "glow", "sizeM": 0.7, "ms": 120, "tint": "#ffffff"},
+                },
+                "decalFrame": "cracks and scrapes sit on the face socket's plane (shield space +Z), sized 2 × halfSize",
                 "provisional": "docs/03 §5 (300 HP) until packages/content has the shield",
             },
         },
@@ -311,6 +388,8 @@ INDEX = {
                  "flight, riot-shield hits and cracks"),
     "projectiles": ("projectiles.json", "build_projectiles.py", "rocket, grenade round and saw blade meshes in "
                     "projectiles.glb (muzzle frame), trail point, spin"),
+    "grenades": ("grenades.vfx.json", "build_grenade_fx.py", "per throwable kind: trail puffs (trail_puffs.webp), fuse "
+                 "/ state light, outline"),
 }
 
 

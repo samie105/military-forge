@@ -748,6 +748,7 @@ for (part, suffix), (obj, tris, img) in parts.items():
     if part in SKIN:  # skin weight in the dye albedo's alpha, neutralised against skin_04
         obj["dyeSkin"] = "alpha"
         obj["skinNeutral"] = dye.SKIN_NEUTRAL
+        obj["skinHeadroom"] = dye.SKIN_HEADROOM
     socket, bone = PART_SLOTS.get(part, (None, None))
     if socket:
         obj["socket"] = socket
@@ -879,7 +880,7 @@ if RUNTIME:
         stem = f"{PART_IDS[part]}{suffix}"
         return {"mask": f"textures/{stem}_dye_mask.png", "albedo": f"textures/{stem}_dye_albedo.webp",
                 "defaults": dyes[(part, suffix)][0],
-                **({"skin": "alpha", "skinNeutral": dye.SKIN_NEUTRAL} if part in SKIN else {})}
+                **({"skin": "alpha", "skinNeutral": dye.SKIN_NEUTRAL, "skinHeadroom": dye.SKIN_HEADROOM} if part in SKIN else {})}
 
     (char_dir / f"{NAME}.json").write_text(json.dumps({
         "id": NAME, "skeleton": "shared-v1", "heightM": HEIGHT,

@@ -1,0 +1,87 @@
+{
+  "file": "art/weapons/riot_shield_lod1.glb",
+  "kind": "weapon",
+  "pass": true,
+  "rows": [
+    {
+      "status": "INFO",
+      "check": "file size",
+      "detail": "27 KB"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles",
+      "detail": "316 of 1000"
+    },
+    {
+      "status": "PASS",
+      "check": "one mesh, one material",
+      "detail": "1 draw call(s)"
+    },
+    {
+      "status": "INFO",
+      "check": "GPU texture memory (KTX2 est.)",
+      "detail": "0.00 MB, 0 image(s)"
+    },
+    {
+      "status": "PASS",
+      "check": "extras weaponId/family/aimPose/hands",
+      "detail": "ok"
+    },
+    {
+      "status": "WARN",
+      "check": "weaponId in packages/content",
+      "detail": "riot_shield is not in packages/content/src/{weapons,grenades}.ts yet"
+    },
+    {
+      "status": "INFO",
+      "check": "nodes",
+      "detail": "face, grip, ground"
+    },
+    {
+      "status": "PASS",
+      "check": "origin on the weapon (the grip)",
+      "detail": "bbox (-0.28, -0.1, -0.45)..(0.28, 0.04, 0.45)"
+    },
+    {
+      "status": "PASS",
+      "check": "family is a docs/04 \u00a74.2 family",
+      "detail": "'shield'"
+    },
+    {
+      "status": "PASS",
+      "check": "aimPose has clips",
+      "detail": "'pistol'"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast",
+      "detail": "blue \u0394E 73, orange \u0394E 83 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "sockets for the family",
+      "detail": "grip, face, ground"
+    },
+    {
+      "status": "PASS",
+      "check": "socket directions (unit `dir`)",
+      "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "sockets on the weapon (within 3 cm)",
+      "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "shield face: strike face +Z, in front of the strap",
+      "detail": "at z +0.090, dir (0.0, 0.0, 1.0), half size (0.28, 0.45)"
+    },
+    {
+      "status": "PASS",
+      "check": "shield 0.55 \u00d7 0.90 m (what players see = what blocks)",
+      "detail": "0.56 \u00d7 0.90 m"
+    }
+  ]
+}

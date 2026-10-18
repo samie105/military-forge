@@ -6,12 +6,12 @@
     {
       "status": "INFO",
       "check": "file size",
-      "detail": "38 KB"
+      "detail": "49 KB"
     },
     {
       "status": "PASS",
       "check": "triangles",
-      "detail": "472 of 1000"
+      "detail": "616 of 1000"
     },
     {
       "status": "PASS",
@@ -29,9 +29,9 @@
       "detail": "ok"
     },
     {
-      "status": "WARN",
+      "status": "PASS",
       "check": "weaponId in packages/content",
-      "detail": "mine is not in packages/content/src/{weapons,grenades}.ts yet"
+      "detail": "mine"
     },
     {
       "status": "INFO",
@@ -41,7 +41,7 @@
     {
       "status": "PASS",
       "check": "origin on the weapon (the grip)",
-      "detail": "bbox (-0.1, -0.04, -0.1)..(0.1, 0.02, 0.1)"
+      "detail": "bbox (-0.1, -0.06, -0.1)..(0.1, 0.04, 0.1)"
     },
     {
       "status": "PASS",
@@ -57,6 +57,21 @@
       "status": "PASS",
       "check": "ground node (rest frame)",
       "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "light node (fuse / state light the renderer blinks)",
+      "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "as big as its sim ball (\u2265 80 % of the content radius)",
+      "detail": "half-width 0.104 m vs radius 0.120 m"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast",
+      "detail": "blue \u0394E 67, orange \u0394E 47 (min 25)"
     },
     {
       "status": "PASS",

@@ -9,11 +9,13 @@ const armory = mountArmory(document.getElementById('armory')!, {
   onExit: () => location.assign('/'),
   weapon: params.get('weapon') ?? undefined,
   flashHoldMs: Number(params.get('hold') ?? 0),
+  fxFreezeS: params.has('freeze') ? Number(params.get('freeze')) : undefined,
   focus: params.get('focus') ?? undefined,
   light: (params.get('light') as LightPreset | null) ?? undefined,
   fire: params.has('fire'),
   attach: params.get('attach')?.split(',').filter(Boolean),
   camo: params.get('camo') ?? undefined,
+  fireTint: params.get('tint') ?? undefined,
 });
 
 // Dev-only hook for automated screenshots and console poking (stripped from production builds).

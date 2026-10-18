@@ -21,15 +21,18 @@ rings: the renderer adds their vertex colour as emission, so they read lit in an
   backblast    launcher exhaust (Thumper), dir −Y
   pilot        the flamethrower's pilot light (Dragon), dir +Y
   charge       where a charge weapon's wind-up shows (Ripper's blade hub, Pulse's orb), dir +Y
-  face         the riot shield's front face centre, dir +Y (what it blocks), `halfSize` [w/2, h/2] m
-  tip, pin, light, ground  the machete's tip, the frag's pin ring, the mine's light, and the frag
+  face         the riot shield's strike face centre, dir +Z (what it blocks), `halfSize` [w/2, h/2] m
+  tip, pin, light, ground  the machete's tip, the frag's pin ring, the frag's fuse light and the mine's
+               state light (render3d blinks `light`), and the frag
                and mine rest frame in the world (local +Y up, origin on the floor:
                world = floorPoint × inverse(ground.local))
 All sockets also go to weapons/sockets.json for the renderer. Weapon extras: weaponId, name,
 archetype, hands, family (the docs/04 §4.2 weapon family, plus `thrown`) and aimPose (the clip set
 it uses today: pistol or rifle; see clips.AIM_POSE_FALLBACK). Optional extras: `casings` false (no
 casing per shot: fuel, cells, orbs, blades, drum rounds), `attach` (the rig socket when it is not
-socket_weapon_R: the riot shield goes on socket_weapon_L, the off-hand).
+socket_weapon_R), `slungAttach`, and `frame: "shield"` on the riot shield, which is modelled in
+**shield space** instead (render3d/shield.ts and shield-sockets.md: origin on the arm strap, +Y up, +Z
+out of the strike face; raised on `socket_shield` (forearm_L), slung on `socket_shield_back` (spine2)).
 
 Style: bevelled toy shapes, vertex colours (one shared material, no textures), and an orange
 toy muzzle tip on every gun: it reads at gameplay size and keeps the toy-soldier theme.
@@ -62,7 +65,15 @@ ORANGE = (0.98, 0.45, 0.10)  # toy muzzle tip
 CAMO_COLOURS = {(0.20, 0.22, 0.25), (0.30, 0.33, 0.22), (0.55, 0.34, 0.18), (0.66, 0.58, 0.42)}
 RED = (0.90, 0.12, 0.10)
 BLADE = (0.70, 0.73, 0.76)
-GLASS = (0.62, 0.74, 0.80)   # the shield's viewing window
+GLASS = (0.62, 0.74, 0.80)   # a viewing window
+SHIELD_PLATE = (0.70, 0.72, 0.74)  # light steel: reads on dark ground (no blue: never a team)
+SHIELD_RIM = (0.17, 0.18, 0.20)    # dark rim: reads on light sky
+SHIELD_GLASS = (0.78, 0.87, 0.85)
+WHITE = (0.95, 0.95, 0.93)
+FRAG_OLIVE = (0.40, 0.46, 0.26)  # lighter than POLY: a thrown frag must read on dark ground
+SAND_LIGHT = (0.86, 0.78, 0.52)
+YELLOW = (0.95, 0.80, 0.15)  # hazard yellow: grenade levers, mine stripes (never the team orange)
+LED = (0.92, 0.92, 0.88)     # the mine's state light: near-white, the renderer tints it
 CYAN = (0.35, 0.95, 1.00)    # Arc lens and cell
 BLUE = (0.30, 0.62, 1.00)    # Pulse coils and orb
 EMBER = (1.00, 0.42, 0.12)   # Dragon pilot ring
@@ -352,26 +363,41 @@ def machete(g):
     g.node("tip", (0, 0.52, 0.0), dir=(0, 1, 0))
 
 
-def frag(g):  # frag grenade (held in the right hand like a ball)
-    g.sphere((0, 0, 0), 0.045, POLY, segs=10, rings=8, scale=(1, 1, 1.15))
-    for z in (-0.02, 0.02):
-        g.cyl((0, 0, z), 0.0465, 0.006, (0.24, 0.27, 0.17), axis="Z", verts=10, bevel=0)
-    g.cyl((0, 0, 0.06), 0.016, 0.03, STEEL, axis="Z", verts=8)
-    g.box((0.012, -0.012, 0.03), (0.01, 0.012, 0.07), STEEL, rot=(0, 18, 0), bevel=0.002)
-    g.torus((-0.02, 0, 0.075), 0.013, 0.003, ORANGE, axis="X")
-    g.node("pin", (-0.02, 0, 0.075), dir=(-1, 0, 0))
-    g.ground(-0.045 * 1.15)  # stands on its base at rest
+def frag(g):  # frag grenade: the size of the sim's ball (FRAG.radius 0.1 m), held like a ball
+    # Readable at gameplay zoom on any background: a light sand band framed by dark rings (value
+    # contrast on dark ground and light sky), a bright olive body, a yellow lever and pin (not the
+    # team orange) and a red fuse dome the renderer blinks (`light`).
+    r, k = 0.095, 1.1
+    g.sphere((0, 0, 0), r, FRAG_OLIVE, segs=12, rings=8, scale=(1, 1, k))
+    g.cyl((0, 0, 0), r * 1.02, 0.034, SAND_LIGHT, axis="Z", verts=12, bevel=0)
+    for z in (-0.021, 0.021):
+        g.cyl((0, 0, z), r * 1.035, 0.008, DARK, axis="Z", verts=12, bevel=0)
+    top = r * k
+    g.cyl((0, 0, top + 0.012), 0.03, 0.03, STEEL, axis="Z", verts=10)
+    g.box((0.026, 0, top - 0.025), (0.016, 0.03, 0.09), YELLOW, rot=(0, 20, 0), bevel=0.003)   # the lever
+    g.torus((-0.034, 0, top + 0.02), 0.02, 0.005, YELLOW, axis="X")                              # the pin ring
+    g.sphere((0, 0, top + 0.03), 0.014, RED, segs=8, rings=5)                                    # fuse light
+    g.node("pin", (-0.034, 0, top + 0.02), dir=(-1, 0, 0))
+    g.node("light", (0, 0, top + 0.04), dir=(0, 0, 1))
+    g.ground(-r * k)  # stands on its base at rest
 
 
 def mine(g):  # proximity mine: origin at its centre, +Z up is its top
-    g.cyl((0, 0, 0), 0.1, 0.035, POLY, axis="Z", verts=16, bevel=0.006)
-    g.cyl((0, 0, 0.022), 0.07, 0.012, GUNMETAL, axis="Z", verts=14, bevel=0.003)
-    g.sphere((0, 0, 0.032), 0.016, RED, segs=8, rings=5, scale=(1, 1, 0.7))
+    # A hazard-striped rim and a pale top so it reads from the side view (it is a 0.2 m disc seen
+    # edge-on); the light is near-white so the renderer can tint it by state (docs/02 §14: green
+    # flying, yellow arming, flashing red armed).
+    g.cyl((0, 0, 0), 0.1, 0.05, POLY, axis="Z", verts=16, bevel=0.006)
+    for i in range(12):
+        a = i * math.pi / 6
+        g.box((0.101 * math.cos(a), 0.101 * math.sin(a), 0.0), (0.006, 0.05, 0.026), YELLOW if i % 2 else DARK,
+              rot=(0, 0, math.degrees(a)), bevel=0)
+    g.cyl((0, 0, 0.03), 0.075, 0.014, STEEL, axis="Z", verts=14, bevel=0.003)
+    g.sphere((0, 0, 0.04), 0.02, LED, segs=8, rings=5, scale=(1, 1, 0.8))
     for i in range(4):
         a = i * math.pi / 2 + math.pi / 4
-        g.box((0.085 * math.cos(a), 0.085 * math.sin(a), 0.0), (0.03, 0.03, 0.04), DARK, bevel=0.003)
-    g.node("light", (0, 0, 0.04), dir=(0, 0, 1))
-    g.ground(-0.02)  # the feet
+        g.box((0.085 * math.cos(a), 0.085 * math.sin(a), -0.02), (0.03, 0.03, 0.03), DARK, bevel=0.003)
+    g.node("light", (0, 0, 0.055), dir=(0, 0, 1))
+    g.ground(-0.035)  # the feet
 
 
 def rattler(g):  # machine pistol (one-handed, long mag below the grip)
@@ -597,29 +623,63 @@ def pulse(g):  # EMP orb gun: glowing coil rings, a three-prong claw holding the
     g.rails(top=(0.0, 0.1325, 0.1))
 
 
-def riot_shield(g):  # off-hand riot shield: curved plate facing +Y, viewing window, handle at the origin
-    # chibi scale: torso and legs below the 1.5 m soldier's big head; thick, so it reads as a slab
-    # from the side-view camera
-    strips, w, depth = 5, 0.08, 0.06
+def _shield_plate(g, strips, rows, rim_depth, bolts, chevron_bevel):
+    """The riot shield in **shield space** (apps/web/src/render3d/shield.ts, shield-sockets.md): origin on
+    the arm strap, +Y up the long edge, +Z out of the strike face, +X across. 0.55 × 0.90 m; the plate
+    is 4 cm thick, its inner face at z 0.05 and the strike face at z 0.09, curving back at the sides.
+    This modelling frame comes out of paint_and_join and the glTF export unchanged."""
+    width, height = 0.55, 0.90
+    rim, curve = 0.025, 0.6                        # side rim width; the curve: z −= curve·x²
+    inner = width / 2 - rim
+    w = 2 * inner / strips
     for i in range(strips):
-        x = (i - (strips - 1) / 2) * w
-        y = 0.09 - 0.45 * x * x                                                   # curves back at the edges
-        tilt = -math.degrees(math.atan(0.9 * x))
-        colour = SAND if i in (0, strips - 1) else POLY
-        g.box((x, y, 0.02), (w + 0.002, depth, 0.54), colour, bevel=0.004, rot=(0, 0, tilt))
-        for z in (0.3, -0.26):
-            g.box((x, y, z), (w + 0.002, depth + 0.008, 0.03), DARK, bevel=0, rot=(0, 0, tilt))
-    face_y = 0.09 + depth / 2
-    g.box((0, face_y, 0.19), (0.21, 0.008, 0.085), DARK, bevel=0.002)             # window frame
-    g.box((0, face_y + 0.003, 0.19), (0.18, 0.008, 0.06), GLASS, bevel=0.001)
-    for x in (-0.13, 0.13):
-        for z in (0.24, -0.2):
-            g.box((x, face_y - 0.45 * x * x, z), (0.016, 0.01, 0.016), DARK, bevel=0)  # bolts
-    g.box((0, 0.0, 0.0), (0.024, 0.024, 0.11), DARK, bevel=0.004)                 # handle
-    for z in (-0.045, 0.045):
-        g.box((0, 0.035, z), (0.02, 0.07, 0.02), DARK, bevel=0.002)
-    g.box((0, 0.055, -0.14), (0.07, 0.02, 0.03), DARK, bevel=0.003)                # forearm strap
-    g.node("face", (0, face_y, 0.02), dir=(0, 1, 0), halfSize=[0.2, 0.295])
+        x = -inner + w * (i + 0.5)
+        z = 0.07 - curve * x * x
+        tilt = math.degrees(math.atan(2 * curve * x))
+        for y0, y1, colour, depth in rows:
+            g.box((x, (y0 + y1) / 2, z), (w + 0.002, y1 - y0, depth), colour, bevel=0, rot=(0, tilt, 0))
+        for y in (height / 2 - 0.015, -height / 2 + 0.015):                                  # top / bottom rim
+            g.box((x, y, z), (w + 0.002, 0.03, rim_depth), SHIELD_RIM, bevel=0, rot=(0, tilt, 0))
+    xe = inner + rim / 2
+    for sx in (-1, 1):                                                                         # side rims
+        z = 0.07 - curve * xe * xe
+        g.box((sx * xe, 0, z), (rim, height, rim_depth), SHIELD_RIM, bevel=0.004, rot=(0, sx * math.degrees(math.atan(2 * curve * xe)), 0))
+    if bolts:
+        for bx in (-0.2, 0.2):
+            for by in (0.39, -0.39):
+                g.box((bx, by, 0.09 - curve * bx * bx + 0.004), (0.022, 0.022, 0.012), SHIELD_RIM, bevel=0,
+                      rot=(0, math.degrees(math.atan(2 * curve * bx)), 0))
+    for sx in (-1, 1):                                                                         # the chevron
+        g.box((sx * 0.055, -0.115, 0.09), (0.19, 0.055, 0.009), WHITE, bevel=chevron_bevel, rot=(0, 0, -sx * 45))  # ^
+
+
+def riot_shield(g):  # off-hand riot shield, LOD0 (≤ 1,000 tris)
+    # Readable by role at ~25 px: a light plate against dark ground, a dark rim against light sky, a
+    # pale window band near the top and a white chevron on the strike face. No team colours.
+    _shield_plate(g, strips=7, rows=[(-0.42, 0.24, SHIELD_PLATE, 0.04), (0.24, 0.33, SHIELD_GLASS, 0.032),
+                                     (0.33, 0.42, SHIELD_PLATE, 0.04)], rim_depth=0.056, bolts=True, chevron_bevel=0.002)
+    # back: the arm strap round the forearm (the origin) and the hand grip above it
+    g.box((0, 0, -0.028), (0.14, 0.05, 0.014), DARK, bevel=0.003)
+    for sx in (-1, 1):
+        g.box((sx * 0.064, 0, 0.012), (0.014, 0.05, 0.08), DARK, bevel=0)
+    g.box((0, 0.12, 0.022), (0.12, 0.022, 0.022), DARK, bevel=0.003)
+    for sx in (-1, 1):
+        g.box((sx * 0.05, 0.12, 0.04), (0.018, 0.018, 0.03), DARK, bevel=0)
+    _shield_nodes(g)
+
+
+def riot_shield_lod1(g):  # the same shield at ~25 % of the triangles
+    _shield_plate(g, strips=3, rows=[(-0.42, 0.24, SHIELD_PLATE, 0.04), (0.24, 0.33, SHIELD_GLASS, 0.032),
+                                     (0.33, 0.42, SHIELD_PLATE, 0.04)], rim_depth=0.056, bolts=False, chevron_bevel=0)
+    g.box((0, 0, -0.028), (0.14, 0.05, 0.014), DARK, bevel=0)
+    g.box((0, 0.12, 0.022), (0.12, 0.022, 0.022), DARK, bevel=0)
+    _shield_nodes(g)
+
+
+def _shield_nodes(g):
+    g.node("grip", (0, 0.12, 0.022), dir=(1, 0, 0))            # the left hand's hold (IK), along the bar
+    g.node("face", (0, 0, 0.09), dir=(0, 0, 1), halfSize=[0.275, 0.45])
+    g.node("ground", (0, -0.45, 0.07), dir=(0, -1, 0))         # standing on its bottom edge: local +Y is up
 
 
 ARSENAL = [
@@ -651,8 +711,10 @@ ARSENAL = [
 EXTRAS = {
     "dragon": {"casings": False}, "arc": {"casings": False}, "popper": {"casings": False},
     "ripper": {"casings": False}, "pulse": {"casings": False},
-    "riot_shield": {"casings": False, "attach": "socket_weapon_L"},
+    "riot_shield": {"casings": False, "frame": "shield", "attach": "socket_shield", "slungAttach": "socket_shield_back"},
 }
+# LOD1 meshes, exported as <id>_lod1.glb (weapons have none; the shield is big on screen and on the back)
+LODS = {"riot_shield": riot_shield_lod1}
 
 
 def export(path, obj, runtime):
@@ -704,13 +766,27 @@ for wid, build, name, archetype, family, aim_pose, hands in ARSENAL:
     if RUNTIME:
         export(RUNTIME / "weapons" / f"{wid}.glb", obj, runtime=True)
     print(f"[build_weapons] {wid:9s} {len(me.loop_triangles):4d} tris  length {hi.z - lo.z:.2f} m  nodes {sorted(nodes)}")
+    if wid in LODS:  # the LOD1 mesh: same extras and nodes, <id>_lod1.glb
+        g1 = Gun(f"{wid}_lod1")
+        LODS[wid](g1)
+        lod = paint_and_join(g1, mat)
+        for k in obj.keys():
+            lod[k] = obj[k]
+        lod.data.calc_loop_triangles()
+        manifest[wid]["lod1"] = {"file": f"{wid}_lod1.glb", "tris": len(lod.data.loop_triangles)}
+        bpy.ops.object.select_all(action="DESELECT")
+        export(OUT / f"{wid}_lod1.glb", lod, runtime=False)
+        if RUNTIME:
+            export(RUNTIME / "weapons" / f"{wid}_lod1.glb", lod, runtime=True)
+        print(f"[build_weapons] {wid}_lod1 {len(lod.data.loop_triangles):4d} tris")
 
 SOCKETS_DOC = {
     "frame": "weapon frame = glTF: origin at the main grip, +Y muzzle, +Z up, +X right; attach to socket_weapon_R "
              "with an identity transform (docs/04 §9.4)",
     "fields": "pos [x, y, z] m; dir unit vector; muzzle.boreRadius m; rail_*.lengthM m; rail_top.occupied = a built-in "
               "sight; frag/mine `ground` = rest frame in the world (world = floorPoint × inverse(ground.local)); "
-              "face.halfSize [w/2, h/2] m (riot shield); weapon `casings` false = no casing per shot; `attach` = the "
+              "face.halfSize [w/2, h/2] m (riot shield); `frame: shield` = shield space (origin on the arm strap, +Y up, "
+              "+Z out of the strike face; lengthM is its height); weapon `casings` false = no casing per shot; `attach` = the "
               "rig socket when not socket_weapon_R",
     "weapons": sockets,
 }

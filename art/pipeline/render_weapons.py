@@ -65,9 +65,12 @@ for glb in sorted(src.glob("*.glb")):
     scene = bpy.context.scene
     roots = [o for o in scene.objects if o.parent is None]
     # The file's frame has the muzzle along glTF +Y (Blender +Z after import): lay it flat,
-    # muzzle toward +Y, top toward +Z.
+    # muzzle toward +Y, top toward +Z. A shield is in shield space (glTF +Y up, already Blender +Z;
+    # its strike face, glTF +Z, is Blender −Y): it stays upright.
+    shield = any(o.get("family") == "shield" for o in scene.objects)
     for r in roots:
-        r.matrix_world = Matrix.Rotation(math.radians(-90), 4, "X") @ r.matrix_world
+        if not shield:
+            r.matrix_world = Matrix.Rotation(math.radians(-90), 4, "X") @ r.matrix_world
     bpy.context.view_layer.update()
     if SOCKETS:
         for e in [o for o in scene.objects if o.type == "EMPTY"]:
@@ -96,8 +99,7 @@ for glb in sorted(src.glob("*.glb")):
     scene.camera = cam
     # camera on the gun's right side (+X), looking at -X; screen right = +Y (muzzle). A shield is
     # all edge from there, so it is shown three-quarter front instead.
-    shield = any(o.get("family") == "shield" for o in scene.objects)
-    yaw = math.radians(50 if shield else 0)
+    yaw = math.radians(-50 if shield else 0)  # toward −Y: the strike face
     cam.location = centre + 3 * Vector((math.cos(yaw), math.sin(yaw), 0))
     cam.rotation_euler = (math.radians(90), 0, math.radians(90) + yaw)
     scene.render.filepath = str(out / f"{glb.stem}.png")

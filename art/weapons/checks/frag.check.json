@@ -6,12 +6,12 @@
     {
       "status": "INFO",
       "check": "file size",
-      "detail": "36 KB"
+      "detail": "50 KB"
     },
     {
       "status": "PASS",
       "check": "triangles",
-      "detail": "448 of 1000"
+      "detail": "624 of 1000"
     },
     {
       "status": "PASS",
@@ -36,12 +36,12 @@
     {
       "status": "INFO",
       "check": "nodes",
-      "detail": "grip, ground, pin"
+      "detail": "grip, ground, light, pin"
     },
     {
       "status": "PASS",
       "check": "origin on the weapon (the grip)",
-      "detail": "bbox (-0.04, -0.09, -0.05)..(0.04, 0.05, 0.05)"
+      "detail": "bbox (-0.1, -0.15, -0.1)..(0.1, 0.1, 0.1)"
     },
     {
       "status": "PASS",
@@ -57,6 +57,21 @@
       "status": "PASS",
       "check": "ground node (rest frame)",
       "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "light node (fuse / state light the renderer blinks)",
+      "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "as big as its sim ball (\u2265 80 % of the content radius)",
+      "detail": "half-width 0.098 m vs radius 0.100 m"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast",
+      "detail": "blue \u0394E 67, orange \u0394E 33 (min 25)"
     },
     {
       "status": "PASS",

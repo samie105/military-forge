@@ -23,6 +23,7 @@ import {
   MeshToonMaterial,
   Object3D,
   PerspectiveCamera,
+  PMREMGenerator,
   PlaneGeometry,
   PointLight,
   Quaternion,
@@ -35,10 +36,12 @@ import {
   Vector3,
   WebGLRenderer,
 } from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { characterToonRamp } from '../character';
 import { glowMaterial } from './glow';
+import { previewReach, type SpecialAnchors, type SpecialsManifest, SpecialsPreview } from './specials';
 import { LOCKER_LIGHTS, type LightPreset } from '../locker/turntable';
 
 /** weapons/sockets.json: one socket in the weapon frame (origin at the grip, +Y muzzle, +Z up, +X right) */
@@ -48,6 +51,8 @@ export interface Socket {
   boreRadius?: number;
   lengthM?: number;
   occupied?: string;
+  /** the shield's face: [w/2, h/2] m */
+  halfSize?: [number, number];
 }
 
 /** the flash part of vfx/weapons.vfx.json the preview needs */
@@ -87,6 +92,11 @@ export interface AttachmentEntry {
 
 // Weapon frame → view: muzzle (+Y) to screen right (+X), top (+Z) up (+Y), its right side (+X) toward the camera (+Z).
 const WEAPON_TO_VIEW = new Matrix4().makeBasis(new Vector3(0, 0, 1), new Vector3(1, 0, 0), new Vector3(0, 1, 0));
+// Shield space (render3d/shield.ts) → view: the strike face (+Z) to screen right like a muzzle, up (+Y) up.
+const SHIELD_TO_VIEW = new Matrix4().makeBasis(new Vector3(0, 0, -1), new Vector3(0, 1, 0), new Vector3(1, 0, 0));
+
+/** the frame a model is authored in (weapons/sockets.json `frame`; absent = the weapon frame) */
+export type ModelFrame = 'weapon' | 'shield';
 
 export class ArmoryViewer {
   private readonly renderer: WebGLRenderer;
@@ -111,10 +121,17 @@ export class ArmoryViewer {
   /** where the flash leaves and how big it is, when a suppressor moves it */
   private flashOverride: { pos: Vector3; scale: number } | null = null;
   private sockets: Record<string, Socket> = {};
+  /** the current model's frame → view */
+  private toView = WEAPON_TO_VIEW;
   /** the weapon's own materials, to restore after a camo */
   private readonly factory = new Map<Mesh, Material | Material[]>();
   private flash: { mesh: Mesh; light: PointLight; until: number } | null = null;
-  private flashTexture: Texture | null = null;
+  private readonly flashTextures = new Map<string, Texture>();
+  /** a reflection map for metal finishes, made on first use */
+  private env: Texture | null = null;
+  private specials: SpecialsPreview | null = null;
+  /** the whole view is widened to show a special effect; it returns when the effect ends */
+  private fxFraming = false;
   private size = 1;
   private yaw = 0;
   private pitch = 0.12;
@@ -129,6 +146,8 @@ export class ArmoryViewer {
   private drag: { x: number; y: number } | null = null;
   private frame = 0;
   private request = 0;
+  /** the latest setAttachments call: an older one that resolves later is dropped */
+  private attachRequest = 0;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.renderer = new WebGLRenderer({ canvas, antialias: true });
@@ -152,12 +171,20 @@ export class ArmoryViewer {
   }
 
   /** Load and show a weapon; resolves false when a newer request superseded it. */
-  async setWeapon(url: string, sockets: Record<string, Socket>): Promise<boolean> {
+  async setWeapon(url: string, sockets: Record<string, Socket>, frame: ModelFrame = 'weapon'): Promise<boolean> {
     const request = ++this.request;
     const gltf = await this.loader.loadAsync(url);
-    if (request !== this.request) return false;
-    if (this.weapon) this.holder.remove(this.weapon);
+    if (request !== this.request) {
+      disposeTree(gltf.scene);
+      return false;
+    }
+    if (this.weapon) {
+      this.holder.remove(this.weapon);
+      // the old model, its attachments, and both its factory and camo materials
+      disposeTree(this.weapon, this.factory.values());
+    }
     this.clearFlash();
+    this.specials?.clear();
     const w = new Group();
     w.add(gltf.scene);
     this.weaponFrame = gltf.scene;
@@ -170,7 +197,13 @@ export class ArmoryViewer {
     this.factory.clear();
     this.attachments = [];
     this.flashOverride = null;
-    w.applyMatrix4(WEAPON_TO_VIEW);
+    this.toView = frame === 'shield' ? SHIELD_TO_VIEW : WEAPON_TO_VIEW;
+    if (frame === 'shield') {
+      // a shield is all edge from the side: open three-quarter on its strike face
+      this.yaw = -0.8;
+      this.yawVelocity = 0;
+    }
+    w.applyMatrix4(this.toView);
     const box = new Box3().setFromObject(w);
     const centre = box.getCenter(new Vector3());
     this.size = Math.max(0.1, box.getSize(new Vector3()).length());
@@ -190,22 +223,32 @@ export class ArmoryViewer {
 
   /**
    * Mount attachments (attachments/attachments.json entries) on the current weapon's sockets,
-   * replacing the previous set: rails at their centre (foregrip and laser share the bottom rail
+   * replacing the previous set. Resolves with the ids that failed to load (they're skipped): rails at their centre (foregrip and laser share the bottom rail
    * at −¼ / +¼), the suppressor on the muzzle scaled to the bore, mags turned onto the mag socket.
    */
-  async setAttachments(list: { id: string; url: string; entry: AttachmentEntry }[]): Promise<void> {
+  async setAttachments(list: { id: string; url: string; entry: AttachmentEntry }[]): Promise<string[]> {
     const frame = this.weaponFrame;
     const request = this.request;
-    const loaded = await Promise.all(list.map(async (a) => ({ ...a, scene: (await this.loader.loadAsync(a.url)).scene })));
-    if (request !== this.request || frame !== this.weaponFrame || !frame) return;
+    const attachRequest = ++this.attachRequest;
+    const results = await Promise.all(
+      list.map(async (a) => {
+        try {
+          return { ...a, scene: (await this.loader.loadAsync(a.url)).scene };
+        } catch {
+          return { ...a, scene: null };
+        }
+      }),
+    );
+    const failed = results.filter((r) => !r.scene).map((r) => r.id);
+    const loaded = results.flatMap((r) => (r.scene ? [{ ...r, scene: r.scene }] : []));
+    // a newer weapon or a newer toggle won: this set is stale
+    if (attachRequest !== this.attachRequest || request !== this.request || frame !== this.weaponFrame || !frame) {
+      for (const l of loaded) disposeTree(l.scene);
+      return failed;
+    }
     for (const o of this.attachments) {
       frame.remove(o);
-      o.traverse((m) => {
-        if (m instanceof Mesh) {
-          m.geometry.dispose();
-          (Array.isArray(m.material) ? m.material : [m.material]).forEach((x) => x.dispose());
-        }
-      });
+      disposeTree(o);
     }
     this.attachments = [];
     this.flashOverride = null;
@@ -229,6 +272,7 @@ export class ArmoryViewer {
       this.attachments.push(part);
     }
     this.refit();
+    return failed;
   }
 
   /** the weapon's bounds in the holder's (unrotated) frame, attachments included */
@@ -257,6 +301,16 @@ export class ArmoryViewer {
    * narrow one (a 0.9 m launcher must still fit a 1280 px window beside the panels) */
   private wholeDistance(): number {
     return Math.max(0.3, this.size * 1.9 * Math.max(1, WIDE_ASPECT / this.camera.aspect));
+  }
+
+  /** A reflection map (a soft room) for metal finishes; camo.ts uses it on the finish panels only. */
+  environment(): Texture {
+    if (!this.env) {
+      const pmrem = new PMREMGenerator(this.renderer);
+      this.env = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+      pmrem.dispose();
+    }
+    return this.env;
   }
 
   /** Repaint the weapon's camo panels (meshes with a `_camo` attribute) with `make`, or restore them (null). */
@@ -303,15 +357,20 @@ export class ArmoryViewer {
     this.floor.material.color.set(l.floor);
   }
 
-  /** Pop a muzzle flash of `style` for its duration (no-op without a muzzle). */
-  async fire(sheet: FlashSheet, style: string, atlasUrl: string, scale = 1, holdMs = 0): Promise<void> {
+  /**
+   * Pop a muzzle flash of `style` for its duration (no-op without a muzzle). With a cosmetic `tint`,
+   * `atlasUrl` is the luminance atlas and the flash and its light take the tint.
+   */
+  async fire(sheet: FlashSheet, style: string, atlasUrl: string, scale = 1, holdMs = 0, tint: string | null = null): Promise<void> {
     const st = sheet.styles[style];
     const muzzle = this.sockets.muzzle;
     if (!st || !muzzle) return;
-    this.flashTexture ??= await new TextureLoader().loadAsync(atlasUrl).then((t) => {
-      t.colorSpace = SRGBColorSpace;
-      return t;
-    });
+    let texture = this.flashTextures.get(atlasUrl);
+    if (!texture) {
+      texture = await new TextureLoader().loadAsync(atlasUrl);
+      texture.colorSpace = SRGBColorSpace;
+      this.flashTextures.set(atlasUrl, texture);
+    }
     this.clearFlash();
     const [cw, ch] = sheet.cell;
     const [aw, ah] = sheet.atlasSize;
@@ -325,17 +384,54 @@ export class ArmoryViewer {
     // TextureLoader flips Y: v runs up from the bottom of the atlas
     for (let i = 0; i < uv.count; i++) uv.setXY(i, (cx + uv.getX(i) * cw) / aw, 1 - (cy + (1 - uv.getY(i)) * ch) / ah);
     const mesh = new Mesh(geo, new MeshBasicMaterial({
-      map: this.flashTexture, transparent: true, depthWrite: false, blending: AdditiveBlending, side: DoubleSide, toneMapped: false,
+      map: texture, transparent: true, depthWrite: false, blending: AdditiveBlending, side: DoubleSide, toneMapped: false,
+      color: new Color(tint ?? '#ffffff'),
     }));
     // two crossed planes along the muzzle axis (view +X): one faces the camera, one is turned 90°
-    mesh.position.copy(this.flashOverride ? this.flashOverride.pos.clone().applyMatrix4(WEAPON_TO_VIEW) : this.socketView('muzzle'));
+    mesh.position.copy(this.flashOverride ? this.flashOverride.pos.clone().applyMatrix4(this.toView) : this.socketView('muzzle'));
     const cross = new Mesh(geo, mesh.material);
     cross.rotation.x = Math.PI / 2;
     mesh.add(cross);
-    const light = new PointLight(new Color(st.light.color), st.light.intensity, st.light.rangeM, 2);
+    const light = new PointLight(new Color(tint ?? st.light.color), st.light.intensity, st.light.rangeM, 2);
     light.position.copy(mesh.position);
     this.holder.add(mesh, light);
     this.flash = { mesh, light, until: performance.now() + Math.max(80, st.ms * 2, holdMs) };
+  }
+
+  /**
+   * Play a specials.vfx.json style on the current weapon (flame, beam, orb, blade, rounds, shield hits).
+   * `freezeS` runs it to that moment and holds it there (QA screenshots).
+   */
+  async fireSpecial(base: string, manifest: SpecialsManifest, style: string, holdMs = 0, freezeS?: number): Promise<void> {
+    this.specials ??= new SpecialsPreview(this.holder, base, this.loader);
+    const at = this.specialAnchors();
+    const st = manifest.styles[style];
+    const reach = st ? previewReach(manifest, st) : 0;
+    await this.specials.play(manifest, style, at, { holdMs, freezeS });
+    // after play(): while its textures load nothing is running, and the tick would undo the framing
+    if (this.wholeView && reach > 0 && this.specials.busy()) {
+      // back off and recentre so the effect (a flame stream, an orb's flight and burst) is on stage
+      this.targetGoal.copy(this.holder.position).negate().addScaledVector(at.dir, reach / 2);
+      this.distanceGoal = this.wholeDistance() * (1 + reach / this.size);
+      this.fxFraming = true;
+    }
+  }
+
+  private specialAnchors(): SpecialAnchors {
+    const along = (v: [number, number, number]) => new Vector3(...v).applyMatrix4(this.toView).normalize();
+    const sockets = Object.fromEntries(Object.keys(this.sockets).map((k) => [k, this.socketView(k)]));
+    const face = this.sockets.face;
+    const muzzle = this.flashOverride ? this.flashOverride.pos.clone().applyMatrix4(this.toView) : sockets.muzzle;
+    return {
+      from: muzzle ?? sockets.face ?? new Vector3(),
+      dir: along(this.sockets.muzzle?.dir ?? face?.dir ?? [0, 1, 0]),
+      up: along(face ? [0, 1, 0] : [0, 0, 1]), // shield space is +Y up, the weapon frame +Z
+      sockets,
+      face: face
+        ? { pos: sockets.face!, normal: along(face.dir ?? [0, 0, 1]), up: along([0, 1, 0]), halfSize: face.halfSize ?? [0.2, 0.3] }
+        : undefined,
+      toView: new Quaternion().setFromRotationMatrix(this.toView),
+    };
   }
 
   dispose(): void {
@@ -348,7 +444,9 @@ export class ArmoryViewer {
     this.canvas.removeEventListener('pointercancel', this.onPointerUp);
     this.canvas.removeEventListener('wheel', this.onWheel);
     this.clearFlash();
-    this.flashTexture?.dispose();
+    for (const t of this.flashTextures.values()) t.dispose();
+    this.env?.dispose();
+    this.specials?.dispose();
     this.scene.traverse((o) => {
       if (o instanceof Mesh || o instanceof Line) {
         o.geometry.dispose();
@@ -363,7 +461,7 @@ export class ArmoryViewer {
   /** a socket's position in the holder (view) frame */
   private socketView(name: string): Vector3 {
     const s = this.sockets[name]!;
-    return new Vector3(...s.pos).applyMatrix4(WEAPON_TO_VIEW);
+    return new Vector3(...s.pos).applyMatrix4(this.toView);
   }
 
   private buildGizmos(): void {
@@ -383,7 +481,7 @@ export class ArmoryViewer {
       ball.renderOrder = 10;
       this.gizmos.add(ball);
       if (!s.dir) continue;
-      const dir = new Vector3(...s.dir).applyMatrix4(WEAPON_TO_VIEW).normalize();
+      const dir = new Vector3(...s.dir).applyMatrix4(this.toView).normalize();
       const along = new Vector3(1, 0, 0); // the muzzle axis in view
       const pts = name.startsWith('rail')
         ? [at.clone().addScaledVector(along, -(s.lengthM ?? 0.05) / 2), at.clone().addScaledVector(along, (s.lengthM ?? 0.05) / 2)]
@@ -431,6 +529,11 @@ export class ArmoryViewer {
     const k = Math.min(1, Math.max(0.2, this.distance / this.wholeDistance()));
     for (const g of this.gizmos.children) if (g instanceof Mesh) g.scale.setScalar(k);
     if (this.flash && performance.now() > this.flash.until) this.clearFlash();
+    this.specials?.update(dt);
+    if (this.fxFraming && !this.specials?.busy()) {
+      this.fxFraming = false;
+      if (this.wholeView) this.setFocus('whole');
+    }
     this.renderer.render(this.scene, this.camera);
   };
 
@@ -459,4 +562,16 @@ export class ArmoryViewer {
     e.preventDefault();
     this.zoom = Math.min(2.2, Math.max(0.35, this.zoom * Math.exp(e.deltaY * 0.0015)));
   };
+}
+
+/** Free a model's geometry and materials (plus `extra` materials it no longer wears, e.g. the ones a camo replaced). */
+function disposeTree(root: Object3D, extra: Iterable<Material | Material[]> = []): void {
+  const materials = new Set<Material>();
+  for (const m of extra) for (const x of Array.isArray(m) ? m : [m]) materials.add(x);
+  root.traverse((o) => {
+    if (!(o instanceof Mesh)) return;
+    o.geometry.dispose();
+    for (const x of Array.isArray(o.material) ? o.material : [o.material]) materials.add(x as Material);
+  });
+  for (const m of materials) m.dispose();
 }

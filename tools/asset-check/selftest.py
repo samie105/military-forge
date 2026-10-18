@@ -105,6 +105,23 @@ def no_face(objs):
     bpy.data.objects.remove(objs["face"], do_unlink=True)
 
 
+def short_shield(objs):
+    """The riot shield at 70 % height: shorter than the 0.9 m the sim blocks."""
+    objs["riot_shield"].scale = (1.0, 1.0, 0.7)  # glTF +Y (up) is Blender +Z after import
+
+
+def shrink_frag(objs):
+    """The frag at its old size (0.09 m wide), under half its 0.1 m sim radius."""
+    objs["frag"].scale = (0.45, 0.45, 0.45)
+
+
+def team_orange_frag(objs):
+    """The frag painted in the orange team's colour."""
+    lin = (1.0, 0.194, 0.0103, 1.0)  # #ff7a1a in linear
+    for d in objs["frag"].data.color_attributes[0].data:
+        d.color = lin
+
+
 def claims_casings(objs):
     """The Dragon marked as throwing casings, which it has no `eject` socket for."""
     objs["dragon"]["casings"] = True
@@ -200,6 +217,29 @@ def team_orange(o):
         d.color = (1.0, 0.195, 0.0103, 1.0)  # #ff7a1a, linear
 
 
+def clips_edit(src, dst, flip=False, meshopt=False):
+    """A copy of a clips GLB with one rotation key negated (flip) or flagged as meshopt-compressed."""
+    import json, struct
+    b = bytearray(Path(src).read_bytes())
+    jl = struct.unpack_from("<I", b, 12)[0]
+    g = json.loads(b[20:20 + jl])
+    base = 20 + jl + 8
+    if flip:
+        a = g["animations"][0]
+        ch = next(c for c in a["channels"] if c["target"]["path"] == "rotation")
+        acc = g["accessors"][a["samplers"][ch["sampler"]]["output"]]
+        off = base + g["bufferViews"][acc["bufferView"]].get("byteOffset", 0) + acc.get("byteOffset", 0) + 16
+        q = struct.unpack_from("<4f", b, off)
+        struct.pack_into("<4f", b, off, *(-x for x in q))
+    if meshopt:
+        g.setdefault("extensionsUsed", []).append("EXT_meshopt_compression")
+    js = json.dumps(g).encode()
+    js += b" " * (-len(js) % 4)
+    out = bytearray(b[:12]) + struct.pack("<II", len(js), 0x4E4F534A) + js + b[20 + jl:]
+    struct.pack_into("<I", out, 8, len(out))
+    Path(dst).write_bytes(bytes(out))
+
+
 def run(path, *args):
     """'pass', 'fail' or 'crash' (check.py exits 0 / 1 / anything else)."""
     cmd = [bpy.app.binary_path, "-b", "--factory-startup", "--python-exit-code", "1",
@@ -227,8 +267,13 @@ k47_edit(tmp / "k47_eject_left.glb", eject_left)
 k47_edit(tmp / "k47_no_rail.glb", no_rail)
 k47_edit(tmp / "shield_no_face.glb", no_face, "riot_shield")
 k47_edit(tmp / "dragon_casings.glb", claims_casings, "dragon")
+k47_edit(tmp / "frag_small.glb", shrink_frag, "frag")
+k47_edit(tmp / "shield_short.glb", short_shield, "riot_shield")
+k47_edit(tmp / "frag_orange.glb", team_orange_frag, "frag")
 market_edit(tmp / "kit_sack.glb", sack_on_plane)
 market_edit(tmp / "kit_orange.glb", team_orange)
+clips_edit(CHAR / "rookie_anims.glb", tmp / "clips_flipped.glb", flip=True)
+clips_edit(CHAR / "rookie_anims.glb", tmp / "clips_meshopt.glb", meshopt=True)
 
 cases = [
     ("Rookie outfit LOD0 passes", "pass", OUTFIT),
@@ -265,11 +310,20 @@ cases = [
     ("K-47 without its top rail fails", "fail", tmp / "k47_no_rail.glb", "--kind", "weapon"),
     ("Dragon (no casings, no eject socket) passes", "pass", REPO / "art/weapons/dragon.glb", "--kind", "weapon"),
     ("Dragon marked as throwing casings, with no eject socket, fails", "fail", tmp / "dragon_casings.glb", "--kind", "weapon"),
-    ("Riot Shield (off-hand, face socket) passes", "pass", REPO / "art/weapons/riot_shield.glb", "--kind", "weapon"),
+    ("Riot Shield (shield space, face, grip, ground) passes", "pass", REPO / "art/weapons/riot_shield.glb", "--kind", "weapon"),
     ("Riot Shield without its face socket fails", "fail", tmp / "shield_no_face.glb", "--kind", "weapon"),
+    ("Riot Shield shorter than the 0.9 m the sim blocks fails", "fail", tmp / "shield_short.glb", "--kind", "weapon"),
+    ("Riot Shield LOD1 passes", "pass", REPO / "art/weapons/riot_shield_lod1.glb", "--kind", "weapon"),
+    ("frag at under half its sim radius fails", "fail", tmp / "frag_small.glb", "--kind", "weapon"),
+    ("frag in the orange team's colour fails", "fail", tmp / "frag_orange.glb", "--kind", "weapon"),
+    ("frag (sim-sized, fuse light) passes", "pass", REPO / "art/weapons/frag.glb", "--kind", "weapon"),
     ("Street Market kit passes", "pass", MARKET, "--kind", "kit"),
     ("kit prop on the gameplay plane with no collision fails", "fail", tmp / "kit_sack.glb", "--kind", "kit"),
     ("kit piece in team orange fails", "fail", tmp / "kit_orange.glb", "--kind", "kit"),
+    ("Rookie clips pass (LINEAR, sign-continuous, no meshopt)", "pass", CHAR / "rookie_anims.glb", "--kind", "clips"),
+    ("runtime clips pass", "pass", REPO / "apps/web/public/assets/characters/rookie/rookie_anims.glb", "--kind", "clips"),
+    ("clips with a sign-flipped key fail", "fail", tmp / "clips_flipped.glb", "--kind", "clips"),
+    ("clips through meshopt fail", "fail", tmp / "clips_meshopt.glb", "--kind", "clips"),
 ]
 bad = 0
 for name, expect, path, *args in cases:

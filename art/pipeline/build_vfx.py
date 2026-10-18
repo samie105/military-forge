@@ -13,7 +13,9 @@ Outputs (under <runtime>/vfx/, default apps/web/public/assets/vfx/):
   flash_atlas.webp   1024×1024, 32 cells of 256×128; every frame's origin (where it leaves the
                      muzzle) sits at the same point of its cell, so one quad shape fits all frames
   tracer.webp        128×16 streak, head on the right, white core; tinted per style
-  weapons.vfx.json   flash styles (frames, quad size, light pop), tracer styles, casing ejection
+  flash_atlas_mono.webp  the same frames as luminance, for the cosmetic fire tints
+  weapons.vfx.json   flash styles (frames, quad size, light pop), tracer styles, casing ejection,
+                     fireTints (cosmetic flash / tracer colours, ≥ 25 ΔE from the team colours)
                      and per weapon `special`: a specials.vfx.json style (build_specials.py) for
                      flames, beams, orbs, blades, rounds in flight and the shield
                      and the per-weapon hook-up (which flash, tracer and casing each weapon uses)
@@ -26,6 +28,9 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from build_camos import TEAM, lab  # noqa: E402  (ΔE against the team colours)
 
 REPO = Path(__file__).resolve().parents[2]
 SRC = REPO / "art/vfx/source"
@@ -60,6 +65,17 @@ TRACER = {
     "sniper":  {"tint": "#ffffff", "widthM": 0.060, "lengthM": 4.0, "speedMps": 260, "every": 1,
                 "trail": {"tint": "#d8d8d0", "widthM": 0.05, "fadeMs": 450}},
     "heavy":   {"tint": "#ffdf8a", "widthM": 0.040, "lengthM": 1.6, "speedMps": 150, "every": 2},
+}
+# Cosmetic fire colours (store-safe: no gameplay effect). `classic` is the default look; the others
+# multiply the flash's luminance (flash_atlas_mono.webp) and the white tracer. Each stays ≥ 25 ΔE from
+# both team colours, so a tinted shot never reads as a team.
+FIRE_TINTS = {
+    "classic": {"name": "Classic", "flash": None, "tracer": None},
+    "toxic": {"name": "Toxic", "flash": "#8dff5a", "tracer": "#a8ff7a"},
+    "violet": {"name": "Violet", "flash": "#c08cff", "tracer": "#cfa6ff"},
+    "ice": {"name": "Ice", "flash": "#bdf2ff", "tracer": "#d6f7ff"},
+    "gold": {"name": "Gold", "flash": "#ffd23a", "tracer": "#ffe07a"},
+    "rose": {"name": "Rose", "flash": "#ff8fc4", "tracer": "#ffb0d4"},
 }
 # Weapon hook-up: flash style (+ scale), tracer style, casing type and when it ejects.
 WEAPONS = {
@@ -142,6 +158,14 @@ def build_atlas():
     return atlas, styles
 
 
+def mono_atlas(atlas):
+    """The flash atlas as luminance (white-hot core, grey edges), same alpha: tints multiply it cleanly."""
+    a = np.asarray(atlas).astype(np.float64) / 255
+    lum = (0.3 * a[..., 0] + 0.59 * a[..., 1] + 0.11 * a[..., 2]) ** 0.8
+    out = np.dstack([lum, lum, lum, a[..., 3]])
+    return Image.fromarray((np.clip(out, 0, 1) * 255).astype(np.uint8), "RGBA")
+
+
 def tracer_texture():
     w, h = 128, 16
     x = np.linspace(0, 1, w)[None, :]
@@ -173,6 +197,11 @@ def main():
             errors.append(f"{wid}: has a flash but no muzzle socket")
         if e["casing"] and "eject" not in sockets[wid]["sockets"]:
             errors.append(f"{wid}: ejects casings but has no eject socket")
+    for tid, t in FIRE_TINTS.items():
+        for key in ("flash", "tracer"):
+            for team, hx in TEAM.items():
+                if t[key] and float(np.linalg.norm(lab(t[key]) - lab(hx))) < 25:
+                    errors.append(f"fire tint {tid}: {key} {t[key]} is within 25 ΔE of team {team}")
     if errors:
         for e in errors:
             print("ERROR:", e)
@@ -181,6 +210,7 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True)
     atlas, styles = build_atlas()
     atlas.save(OUT / "flash_atlas.webp", "WEBP", quality=88, alpha_quality=90, method=6)
+    mono_atlas(atlas).save(OUT / "flash_atlas_mono.webp", "WEBP", quality=88, alpha_quality=90, method=6)
     tracer_texture().save(OUT / "tracer.webp", "WEBP", lossless=True)
     manifest = {
         "version": 1,
@@ -197,6 +227,10 @@ def main():
         "casings": {"file": casings["file"], "maxLive": 32, "types": casings["types"],
                     "notes": "spawn at `eject`, velocity speedMps along its dir within coneDeg, spin spinRps "
                              "about a random axis, gravity 9.8 m/s², fade out over the last 300 ms of lifeMs"},
+        "fireTints": {"monoAtlas": "flash_atlas_mono.webp", "tints": FIRE_TINTS,
+                      "notes": "cosmetic (store-safe). A tinted flash draws flash_atlas_mono.webp × `flash` and its light "
+                               "pop takes that colour; a tinted tracer multiplies tracer.webp by `tracer` instead of the "
+                               "style tint. classic = the coloured atlas and the style tints"},
         "weapons": WEAPONS,
     }
     (OUT / "weapons.vfx.json").write_text(json.dumps(manifest, indent=1))

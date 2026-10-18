@@ -27,6 +27,7 @@ faces ±X in game, so here that is glTF Z = Blender -Y against height) and compa
 import json
 import math
 import re
+import struct
 import sys
 from pathlib import Path
 
@@ -138,8 +139,8 @@ def parse_args(argv):
         else:
             files.append(a)
             i += 1
-    if len(files) != 1 or args["kind"] not in ("character", "part", "weapon", "kit"):
-        print("usage: blender -b --python-exit-code 1 --python check.py -- <file.glb> [--kind character|part|weapon|kit] ...")
+    if len(files) != 1 or args["kind"] not in ("character", "part", "weapon", "kit", "clips"):
+        print("usage: blender -b --python-exit-code 1 --python check.py -- <file.glb> [--kind character|part|weapon|kit|clips] ...")
         sys.exit(2)
     args["file"] = files[0]
     try:
@@ -376,11 +377,12 @@ def dye_roundtrip(r: Report, objs, files):
                 tint *= 1 + m[..., i:i + 1] * (_to_linear(dye) - 1)
         mm = m[..., :3].max(axis=-1)
         if o.get("dyeSkin") == "alpha" and d4.shape[-1] == 4:
-            # the skin weight is the dye albedo's alpha, neutralised against `skinNeutral`: skin
-            # texels go back to the albedo through lerp(1, skinNeutral, alpha), like a dye channel
+            # the skin weight is the dye albedo's alpha, neutralised against `skinHeadroom` × `skinNeutral`:
+            # skin texels go back to the albedo through lerp(1, headroom × skinNeutral, alpha)
             hexc = str(o.get("skinNeutral", "#da9f75")).lstrip("#")
             sk = np.array([int(hexc[j:j + 2], 16) / 255 for j in (0, 2, 4)], dtype=np.float32)
-            tint *= 1 + d4[..., 3:4] * (_to_linear(sk) - 1)
+            head = float(o.get("skinHeadroom", 1))
+            tint *= 1 + d4[..., 3:4] * (head * _to_linear(sk) - 1)
             mm = np.maximum(mm, d4[..., 3])
         dyed, undyed = cov & (mm > 0.02), cov & (mm <= 0.02)
         parts = []
@@ -418,6 +420,15 @@ def content_weapon_ids():
         except OSError:
             pass
     return ids
+
+
+def content_grenade_radius(gid):
+    """A grenade's sim ball radius from packages/content/src/grenades.ts, or None."""
+    try:
+        m = re.search(rf"\bid:\s*'{re.escape(gid)}',[^}}]*?\bradius:\s*([\d.]+)", (REPO / "packages/content/src/grenades.ts").read_text())
+    except OSError:
+        return None
+    return float(m.group(1)) if m else None
 
 
 def image_report(r: Report, max_tex: int, budget_bytes=None, extra=()):
@@ -677,6 +688,7 @@ def check_part(r: Report, objs, args):
 
 
 WEAPON_TRIS = 1000
+SHIELD_SIZE = (0.55, 0.90)  # width, height: the sim's blocking segment (shield-sockets.md)
 OFFHAND_REACH = 0.10  # chibi arms: the left hand can't get further from the grip (docs/04 §9.4)
 
 
@@ -710,6 +722,20 @@ def check_weapon(r: Report, objs, args):
     r.ok(aim in AIM_POSES, "aimPose has clips", f"{aim!r}" + ("" if aim in AIM_POSES else f" not in {sorted(AIM_POSES)}"))
     if family == "thrown":
         r.ok("ground" in nodes, "ground node (rest frame)", "ok" if "ground" in nodes else "throwables need a `ground` node (docs/04 §9.4)")
+        r.ok("light" in nodes, "light node (fuse / state light the renderer blinks)",
+             "ok" if "light" in nodes else "throwables need a `light` node")
+        sim = content_grenade_radius(wid) if wid else None
+        if sim:
+            half = sorted(hi - lo)[1] / 2
+            r.ok(half >= 0.8 * sim, "as big as its sim ball (≥ 80 % of the content radius)",
+                 f"half-width {half:.3f} m vs radius {sim:.3f} m")
+    if family in ("thrown", "shield"):
+        # a grenade or a shield must never read as a team (the kit rule)
+        for o in meshes:
+            de = team_contrast(o)
+            if de is not None:
+                r.ok(min(de.values()) >= TEAM_DE, "team-colour contrast",
+                     ", ".join(f"{t} ΔE {v:.0f}" for t, v in de.items()) + f" (min {TEAM_DE:.0f})")
     if family in FIREARMS:
         m = nodes.get("muzzle")
         r.ok(m is not None and m.z > 0.05 and abs(m.x) < 0.05, "muzzle node ahead of the grip (+Y)",
@@ -737,7 +763,7 @@ def check_sockets(r: Report, objs, family, lo, hi, casings=True):
     if family in FIREARMS:
         need = ["grip", "muzzle", "mag", "rail_top"] + (["eject"] if family != "launcher" and casings else [])
     else:
-        need = ["grip"] + {"melee": ["tip"], "shield": ["face"]}.get(family, [])
+        need = ["grip"] + {"melee": ["tip"], "shield": ["face", "ground"]}.get(family, [])
     missing = [k for k in need if k not in empties]
     r.ok(not missing, "sockets for the family", ", ".join(need) + ("" if not missing else f"; missing {', '.join(missing)}"))
     undirected = [k for k in empties if k != "offhand" and (k not in dirs or abs(dirs[k].length - 1) > 0.01)]
@@ -747,9 +773,14 @@ def check_sockets(r: Report, objs, family, lo, hi, casings=True):
     off = [k for k, p in pos.items() if any(p[i] < blo[i] - 0.03 or p[i] > bhi[i] + 0.03 for i in range(3))]
     r.ok(not off, "sockets on the weapon (within 3 cm)", "ok" if not off else "off the mesh: " + ", ".join(off))
     if family == "shield" and "face" in pos and "face" in dirs:
+        # shield space (render3d/shield.ts): origin on the arm strap, +Y up, +Z out of the strike face
         f, fd, half = pos["face"], dirs["face"], empties["face"].get("halfSize", [0, 0])
-        r.ok(fd.y > 0.99 and f.y > 0 and min(half) >= 0.1, "shield face ahead of the hand, facing +Y",
-             f"at y {f.y:+.3f}, dir {tuple(round(c, 2) for c in fd)}, half size {tuple(round(float(h), 2) for h in half)}")
+        r.ok(fd.z > 0.99 and f.z >= 0.05 and min(half) >= 0.1, "shield face: strike face +Z, in front of the strap",
+             f"at z {f.z:+.3f}, dir {tuple(round(c, 2) for c in fd)}, half size {tuple(round(float(h), 2) for h in half)}")
+        size = bhi - blo
+        r.ok(abs(size.y - SHIELD_SIZE[1]) <= 0.03 and abs(size.x - SHIELD_SIZE[0]) <= 0.03,
+             f"shield {SHIELD_SIZE[0]:.2f} × {SHIELD_SIZE[1]:.2f} m (what players see = what blocks)",
+             f"{size.x:.2f} × {size.y:.2f} m")
     if family not in FIREARMS:
         return
     m, d = pos.get("muzzle"), dirs.get("muzzle")
@@ -878,6 +909,47 @@ def uncovered_blobs(o):
     return blobs
 
 
+def check_clips(r: Report, args):
+    """--kind clips: an animation GLB (rookie_anims.glb, art or runtime). Read straight from the file, no
+    import. The clips must stay out of meshopt: its QUATERNION filter normalises zero CUBICSPLINE tangents
+    and rewrites quaternion signs, which was the original wobble (review L7). They must sample LINEAR, and
+    every rotation track must be sign-continuous: no consecutive keys with a negative dot (#75)."""
+    b = Path(args["file"]).read_bytes()
+    jl = struct.unpack_from("<I", b, 12)[0]
+    g = json.loads(b[20:20 + jl])
+    bin_ = b[20 + jl + 8:]
+    anims = g.get("animations", [])
+    r.info("clips", f"{len(anims)} clips, {sum(len(a['channels']) for a in anims)} channels")
+    if not anims:
+        r.add("FAIL", "has clips", "no animations in the file")
+        return
+    if "EXT_meshopt_compression" in g.get("extensionsUsed", []):
+        r.add("FAIL", "clips not through meshopt", "EXT_meshopt_compression: its quaternion filter rewrites the signs and tangents")
+        return
+    r.add("PASS", "clips not through meshopt", "no EXT_meshopt_compression")
+    modes = {}
+    for a in anims:
+        for smp in a["samplers"]:
+            modes[smp.get("interpolation", "LINEAR")] = modes.get(smp.get("interpolation", "LINEAR"), 0) + 1
+    other = {k: v for k, v in modes.items() if k != "LINEAR"}
+    r.add("FAIL" if other else "PASS", "samplers LINEAR", f"{modes.get('LINEAR', 0)} LINEAR" + (f", {other}" if other else ""))
+    flips = []
+    for a in anims:
+        for ch in a["channels"]:
+            if ch["target"]["path"] != "rotation":
+                continue
+            acc = g["accessors"][a["samplers"][ch["sampler"]]["output"]]
+            bv = g["bufferViews"][acc["bufferView"]]
+            stride = bv.get("byteStride") or 16
+            q = np.ndarray((acc["count"], 4), dtype=np.float32, buffer=bin_,
+                           offset=bv.get("byteOffset", 0) + acc.get("byteOffset", 0), strides=(stride, 4))
+            n = int(((q[1:] * q[:-1]).sum(1) < 0).sum())
+            if n:
+                flips.append(f"{a['name']}/{g['nodes'][ch['target']['node']].get('name')} {n}")
+    r.add("FAIL" if flips else "PASS", "rotation tracks sign-continuous",
+          f"negative-dot key pairs: {', '.join(flips[:6])}" if flips else "0 negative-dot key pairs")
+
+
 def check_kit(r: Report, objs, args):
     meshes = [o for o in objs if o.type == "MESH"]
     budget = args["max_tris"] or KIT_TRIS
@@ -931,6 +1003,9 @@ def main():
     try:
         if not all(Path(f).exists() for f in args["file"].split(",")):
             r.add("FAIL", "file exists", str(path))
+        elif args["kind"] == "clips":
+            r.info("file size", f"{path.stat().st_size / 1024:.0f} KB")
+            check_clips(r, args)
         else:
             files = args["file"].split(",")
             args["files"] = files

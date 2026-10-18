@@ -1,4 +1,4 @@
-"""Weapon camos: six tileable patterns + palettes, applied to the `_CAMO` panels of each weapon.
+"""Weapon camos and finishes: tileable patterns + palettes, applied to the `_CAMO` panels of each weapon.
 
     python3 art/pipeline/build_camos.py [--runtime apps/web/public/assets]
 
@@ -10,9 +10,12 @@ weapon's frame) and colours its levels from a palette. apps/web/src/armory/camo.
 shader.
 
 Patterns are periodic noise (built in the frequency domain, so they tile exactly), quantised into
-3–4 levels by quantile. Output (<runtime>/weapons/):
+2–4 levels by quantile. **Finishes** (gold, chrome, carbon) are camos with a material: `metalness`
+and `roughness` on the same panels, an environment map to reflect, and an optional `weapons` list
+(docs/03 §5: the gold finish is the Hawk's). All are cosmetic, so store-safe. Output (<runtime>/weapons/):
   camo_patterns.png   1024×512, 4×2 cells of 256²; level i stored as round(255·i/(levels−1)) in R
-  camos.json          per camo: name, cell, palette (sRGB, one colour per level), tile size in metres
+  camos.json          per camo: name, kind (camo | finish), cell, palette (sRGB, one colour per level),
+                      tile size in metres; finishes add metalness, roughness and maybe weapons
 Exits 1 if a palette colour is within 25 ΔE of a team colour (camos never read as a team).
 """
 import json
@@ -38,6 +41,13 @@ CAMOS = {
     "stripe": ("Stripe", ["#1f201c", "#5a4430", "#4b5a33"], 2.8, (4, 1), 0, 13),
     "pixel": ("Pixel", ["#2f352c", "#4e5a48", "#6f7a5d", "#93987c"], 2.6, (1, 1), 16, 17),
 }
+# Finishes: id → (name, palette, pattern, tile m, metalness, roughness, weapons or None). Patterns:
+# "brushed" (fine streaks along the barrel) and "weave" (a carbon twill), cells 6 and 7.
+FINISHES = {
+    "gold": ("Gold", ["#bf8f2e", "#d3a63e", "#e6bd55"], "brushed", 0.30, 0.6, 0.32, ["hawk50"]),
+    "chrome": ("Chrome", ["#686f76", "#80878e", "#9aa1a7"], "brushed", 0.30, 0.55, 0.3, None),
+    "carbon": ("Carbon", ["#1c1e21", "#3b4046"], "weave", 0.06, 0.15, 0.5, None),
+}
 TILE_M = 0.30  # one pattern tile covers 30 cm of weapon
 
 
@@ -51,6 +61,18 @@ def periodic_noise(beta, stretch, seed):
     spec[0, 0] = 0
     field = np.real(np.fft.ifft2(spec))
     return (field - field.min()) / (field.max() - field.min())
+
+
+def brushed():
+    """Fine streaks along the weapon (its +Y is the pattern's x in the side projection): periodic, so
+    it tiles. Three levels after quantising."""
+    return periodic_noise(2.4, (14, 1), 19)  # high frequencies along x cost more: long streaks along x
+
+
+def weave():
+    """A basket weave like carbon fibre: a checker of 16 px blocks, two levels (0 and 1)."""
+    y, x = np.mgrid[0:N, 0:N] // 16
+    return ((x + y) % 2).astype(np.int64)
 
 
 def quantise(field, levels):
@@ -84,7 +106,21 @@ def main():
         cell = levels * 255 // (len(palette) - 1)
         x0, y0 = (i % 4) * N, (i // 4) * N
         atlas[y0:y0 + N, x0:x0 + N] = cell
-        camos[cid] = {"name": name, "cell": i, "palette": palette, "levels": len(palette), "tileM": TILE_M}
+        camos[cid] = {"name": name, "kind": "camo", "cell": i, "palette": palette, "levels": len(palette), "tileM": TILE_M}
+    for name, (cell, field) in {"brushed": (6, brushed()), "weave": (7, weave())}.items():
+        x0, y0 = (cell % 4) * N, (cell // 4) * N
+        for fid, (fname, palette, pattern, tile, metal, rough, weapons) in FINISHES.items():
+            if pattern != name:
+                continue
+            for col in palette:
+                for team, t in TEAM.items():
+                    d = float(np.linalg.norm(lab(col) - lab(t)))
+                    if d < 25:
+                        errors.append(f"{fid}: {col} is {d:.0f} ΔE from team {team}")
+            camos[fid] = {"name": fname, "kind": "finish", "cell": cell, "palette": palette, "levels": len(palette),
+                          "tileM": tile, "metalness": metal, "roughness": rough, **({"weapons": weapons} if weapons else {})}
+        levels = quantise(field, 3) if name == "brushed" else field
+        atlas[y0:y0 + N, x0:x0 + N] = levels * 255 // (levels.max() or 1)
     if errors:
         for e in errors:
             print("ERROR:", e)
@@ -95,7 +131,8 @@ def main():
         "patterns": "camo_patterns.png", "atlasSize": [4 * N, 2 * N], "cell": [N, N],
         "encoding": "R = round(255 · level / (levels − 1)); sample with nearest filtering and no mipmaps",
         "applies": "vertices whose _CAMO attribute is 1 (body panels); project triplanar in the weapon frame, "
-                   "one tile per tileM metres; the toon lighting shades it",
+                   "one tile per tileM metres; the toon lighting shades it. A finish also sets metalness and roughness "
+                   "on those panels and reflects an environment map; `weapons` limits it to those weapon ids",
         "camos": camos,
     }
     (OUT / "camos.json").write_text(json.dumps(doc, indent=1))

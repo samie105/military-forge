@@ -149,6 +149,24 @@ describe('behaviour tree (10 Hz): roam, fight, hunt, fall back', () => {
     expect(spawns.some((s) => Math.abs(s.x - bot.x) < 0.5)).toBe(true);
   });
 
+  it('crosses a reversed-gravity zone on the flight it planned (the way out of one doesn’t turn it back)', () => {
+    const map = flatMap([], [{ x: 10, y: 0 }]);
+    map.zones = [{ id: 'flip', kind: 'reverseG', rect: [30, 0, 44, 8] }];
+    for (const seed of [3, 4, 5]) {
+      const game = new Game({ map, seed });
+      const bot = botAt(game, 26);
+      run(game, 6);
+      const brain = brainOf(bot);
+      expect(brain.nav.plan(bot, brain.graph.nearest(52, 0, 1.5))).toBe(true);
+      let across = false;
+      for (let i = 0; i < 8 * 60 && !across; i++) {
+        game.step([]);
+        across = bot.x > 46 && bot.grounded;
+      }
+      expect(across, `seed ${seed}`).toBe(true);
+    }
+  });
+
   it('flies out of a reversed-gravity zone sideways instead of hanging in it', () => {
     const map = flatMap([], [{ x: 10, y: 0 }]);
     map.zones = [{ id: 'flip', kind: 'reverseG', rect: [30, 0, 44, 8] }];
@@ -264,6 +282,69 @@ describe('arsenal B (v10): smoke, flashbangs, gas and EMP', () => {
     expect(arrived).toBe(true);
     expect(gassed).toBe(0);
     expect(topY).toBeGreaterThan(4.5); // over the cloud, on the platform
+  });
+
+  it('leaves gas by the cheapest way, not the nearest: off a balcony with an empty tank, not hopping at the roof', () => {
+    // the review's Street Market case: a balcony 8 m up a 12 m house. The street is 8 m down (exits
+    // were looked for 6 m up and down), the roof a jet away: it hopped at the wall in the gas
+    const map = flatMap([rect(18, 0, 30, 12)]);
+    map.oneWays = [{ ax: 30, ay: 8, bx: 36, by: 8 }];
+    for (const seed of [31, 32, 33]) {
+      const game = new Game({ map, seed });
+      const bot = botAt(game, 33, {}, 8);
+      run(game, 6);
+      bot.fuel = 0;
+      spawnCloud(game, GAS.index, bot.x, bot.y, -1);
+      let down = -1;
+      for (let i = 0; i < 4 * 60 && down < 0; i++) {
+        game.step([]);
+        if (bot.y < 1) down = i;
+      }
+      expect(down, `seed ${seed}`).toBeGreaterThanOrEqual(0);
+      expect(down, `seed ${seed}`).toBeLessThan(2.5 * 60); // a walk to the end and an 8 m fall: 1.8 s
+      expect(bot.hp, `seed ${seed}`).toBeGreaterThan(75);
+    }
+  });
+
+  it('low on fuel in a pit only a jet gets out of, it waits on the ground for the fuel the jet needs (not hopping in the gas)', () => {
+    const map = flatMap([rect(20, 0, 34, 4), rect(40, 0, 54, 4)]);
+    for (const seed of [41, 42, 43]) {
+      const game = new Game({ map, seed });
+      const bot = botAt(game, 37);
+      run(game, 6);
+      bot.fuel = 5;
+      spawnCloud(game, GAS.index, bot.x, 0, -1);
+      let out = -1;
+      for (let i = 0; i < 5 * 60 && out < 0; i++) {
+        game.step([]);
+        if (bot.y > 3.9 && bot.grounded) out = i;
+      }
+      expect(out, `seed ${seed}`).toBeGreaterThanOrEqual(0);
+      expect(out, `seed ${seed}`).toBeLessThan(3 * 60);
+      expect(bot.hp, `seed ${seed}`).toBeGreaterThan(65);
+    }
+  });
+
+  it('doesn’t walk into gas it’s clear of: with every way on through a cloud it waits it out, then goes', () => {
+    const game = new Game({ map: flatMap(), seed: 16 });
+    const bot = botAt(game, 4);
+    spawnCloud(game, GAS.index, 10, 0, -1);
+    const brain = brainOf(bot);
+    let gassed = 0;
+    let waited = 0;
+    for (let i = 0; i < GAS.cloud.duration * 60; i++) {
+      game.step([]);
+      for (const e of game.events) if (e.type === 'hit' && e.target === bot.id && e.source === DamageSource.Gas) gassed++;
+      if (brain.mode === 'wait') waited++;
+    }
+    expect(gassed).toBe(0);
+    expect(waited).toBeGreaterThan(60); // between paces up and down its side of the cloud
+    let past = false;
+    for (let i = 0; i < 5 * 60 && !past; i++) {
+      game.step([]);
+      past = bot.x > 15;
+    }
+    expect(past).toBe(true);
   });
 
   it('with its jetpack dead (an EMP grenade) it keeps off jet links, and takes them again once it’s back', () => {

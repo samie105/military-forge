@@ -294,6 +294,42 @@
   },
   "notes": "spawn at `eject`, velocity speedMps along its dir within coneDeg, spin spinRps about a random axis, gravity 9.8 m/s\u00b2, fade out over the last 300 ms of lifeMs"
  },
+ "fireTints": {
+  "monoAtlas": "flash_atlas_mono.webp",
+  "tints": {
+   "classic": {
+    "name": "Classic",
+    "flash": null,
+    "tracer": null
+   },
+   "toxic": {
+    "name": "Toxic",
+    "flash": "#8dff5a",
+    "tracer": "#a8ff7a"
+   },
+   "violet": {
+    "name": "Violet",
+    "flash": "#c08cff",
+    "tracer": "#cfa6ff"
+   },
+   "ice": {
+    "name": "Ice",
+    "flash": "#bdf2ff",
+    "tracer": "#d6f7ff"
+   },
+   "gold": {
+    "name": "Gold",
+    "flash": "#ffd23a",
+    "tracer": "#ffe07a"
+   },
+   "rose": {
+    "name": "Rose",
+    "flash": "#ff8fc4",
+    "tracer": "#ffb0d4"
+   }
+  },
+  "notes": "cosmetic (store-safe). A tinted flash draws flash_atlas_mono.webp \u00d7 `flash` and its light pop takes that colour; a tinted tracer multiplies tracer.webp by `tracer` instead of the style tint. classic = the coloured atlas and the style tints"
+ },
  "weapons": {
   "hawk50": {
    "flash": "pistol",
