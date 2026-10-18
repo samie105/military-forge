@@ -57,12 +57,15 @@ function join(room: Room, name: string, resumeToken = '') {
  * ones it actually sampled (redundancy).
  */
 const histories = new WeakMap<object, ReturnType<typeof createInput>[]>();
-function sendInput(room: Room, client: ReturnType<typeof join>['client'], tick: number, buttons: number) {
+function inputPacket(client: ReturnType<typeof join>['client'], tick: number, buttons: number): Uint8Array {
   const history = histories.get(client) ?? [];
   history.unshift({ ...createInput(), buttons });
   if (history.length > 3) history.pop();
   histories.set(client, history);
-  room.receive(client, encodeInput({ newestTick: tick, ackSnapshotSeq: 0, renderTick: 0, renderFrac: 0, inputs: history }));
+  return encodeInput({ newestTick: tick, ackSnapshotSeq: 0, renderTick: 0, renderFrac: 0, inputs: history });
+}
+function sendInput(room: Room, client: ReturnType<typeof join>['client'], tick: number, buttons: number) {
+  room.receive(client, inputPacket(client, tick, buttons));
 }
 
 describe('Room', () => {
@@ -296,6 +299,63 @@ describe('Room', () => {
     expect(a.client.strikes).toBe(0);
     room.receive(a.client, tuning(7));
     expect(room.game.tuning.walkMax).toBe(7);
+  });
+
+  it('a 15 s stall\'s backlog arrives at once: excess INPUTs are dropped, the newest still lands, no kick', () => {
+    const room = new Room({ dummies: false });
+    const a = join(room, 'A');
+    // like the real server: the allowance refills once a second
+    const play = (seconds: number, buttons: number) => {
+      for (let t = 0; t < seconds * 60; t++) {
+        sendInput(room, a.client, room.game.tick + 2, buttons);
+        room.tick();
+        if (room.game.tick % 60 === 0) room.resetRateLimits();
+      }
+    };
+    play(2, Btn.Right);
+    // the connection stalls: the client keeps sending 60 INPUTs and a PING a second (no
+    // client-side thinning), the server hears nothing, then TCP hands everything over at once
+    const backlog: Uint8Array[] = [];
+    for (let t = 0; t < 15 * 60; t++) {
+      const last = t >= 15 * 60 - 2;
+      backlog.push(inputPacket(a.client, room.game.tick + 2, last ? Btn.Jet : Btn.Left));
+      if (t % 60 === 0) backlog.push(encodePing(t));
+      room.tick();
+      if (room.game.tick % 60 === 0) room.resetRateLimits();
+    }
+    for (const b of backlog) room.receive(a.client, b);
+    expect(a.conn.closed).toBeNull();
+    expect(a.client.inputsDropped).toBeGreaterThan(600);
+    expect(a.conn.last(MsgType.Pong)).toBeDefined();
+    room.tick();
+    expect(a.client.lastInput.buttons).toBe(Btn.Jet); // the newest input, not a stale one
+    // and play goes on as before: every tick's input arrives in time, nothing is held against it
+    const missed = a.client.inputs.missed;
+    play(5, Btn.Right);
+    expect(a.conn.closed).toBeNull();
+    expect(a.client.inputs.missed).toBe(missed);
+    expect(a.client.inputFloodSeconds).toBe(0);
+  });
+
+  it('a real flood is still kicked: INPUTs over the limit 10 s in a row, or a burst of other messages', () => {
+    const room = new Room({ dummies: false });
+    const a = join(room, 'A');
+    let seconds = 0;
+    while (!a.conn.closed && seconds < 30) {
+      for (let i = 0; i < 300; i++) sendInput(room, a.client, room.game.tick + 2, Btn.Right);
+      room.tick();
+      room.resetRateLimits();
+      seconds++;
+    }
+    expect(a.conn.closed?.code).toBe(CloseCode.RateLimited);
+    expect(seconds).toBe(10);
+    // INPUTs have their own allowance: they don't use up the other messages', and vice versa
+    const b = join(room, 'B');
+    for (let i = 0; i < 1000; i++) sendInput(room, b.client, room.game.tick + 2, Btn.Right);
+    for (let i = 0; i < 300; i++) room.receive(b.client, encodePing(i));
+    expect(b.conn.closed).toBeNull();
+    for (let i = 0; i < 400; i++) room.receive(b.client, encodePing(i));
+    expect(b.conn.closed?.code).toBe(CloseCode.RateLimited);
   });
 
   it('ROSTER since is the first snapshot tick that shows the player (ids are reused)', () => {

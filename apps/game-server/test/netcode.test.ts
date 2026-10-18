@@ -3,6 +3,7 @@
  * to a real Room through the network conditioner, on a manual clock so it runs in milliseconds and
  * is reproducible. This is the automated half of the "150 ms RTT / 2 % loss" acceptance check.
  */
+import { MsgType } from '@military-forge/protocol';
 import { symmetric } from '@military-forge/netcode';
 import { describe, expect, it } from 'vitest';
 import { simulate } from './netsimHarness';
@@ -86,6 +87,59 @@ describe('netcode end to end (simulated network)', () => {
     expect(slim!.resyncs).toBe(0);
     expect(slim!.net.stats().snapshotLossPct).toBeLessThan(6); // the halved rate isn't counted as loss
     expect(r.healths.filter((h) => h >= 0 && h <= 4).length / r.healths.length).toBeGreaterThan(0.95);
+  });
+
+  it('a 15 s TCP stall: the client holds its INPUTs back, nobody is kicked, and play picks up again', () => {
+    const stall = { fromMs: 10_000, toMs: 25_000 };
+    const during = { inputs: 0, other: 0 };
+    const r = simulate(symmetric(80, 0, 3), 40, {
+      transport: 'ws',
+      warmupSeconds: 32,
+      stall,
+      onSend: (k, b, now) => {
+        if (k !== 0 || now < stall.fromMs || now >= stall.toMs) return;
+        if (b[0] === MsgType.Input) during.inputs++;
+        else during.other++;
+      },
+    });
+    const me = r.clients[0]!;
+    // ½ s at the full rate before the silence counts as a stall, then 4 a second instead of 60
+    expect(during.inputs).toBeLessThan(100);
+    expect(during.other).toBeLessThanOrEqual(16); // a PING a second
+    expect(me.net.inputsHeldBack).toBeGreaterThan(800);
+    // the backlog arrives at once and fits the server's allowance: no kick, nothing even dropped
+    expect(me.server.closed).toBe(false);
+    expect(me.server.inputsDropped).toBe(0);
+    expect(me.net.isConnected).toBe(true);
+    expect(me.net.reconnects).toBe(0);
+    // the pacer resyncs on the way out, then prediction is exact again
+    expect(me.net.pacer.resyncs).toBeLessThanOrEqual(3);
+    expect(me.resyncs).toBe(0);
+    expect(me.corrections).toBe(0);
+    expect(me.missedInputs).toBe(0);
+  });
+
+  it('a WebSocket whose send buffer backs up gets 4 INPUTs a second too, and the full rate once it drains', () => {
+    const window = { fromMs: 10_000, toMs: 12_000 };
+    const inputs = { during: 0, after: 0 };
+    const r = simulate(symmetric(80, 0, 3), 20, {
+      transport: 'ws',
+      warmupSeconds: 15,
+      backlog: (k, now) => (k === 0 && now >= window.fromMs && now < window.toMs ? 4096 : 0),
+      onSend: (k, b, now) => {
+        if (k !== 0 || b[0] !== MsgType.Input) return;
+        if (now >= window.fromMs && now < window.toMs) inputs.during++;
+        else if (now >= window.toMs && now < window.toMs + 2000) inputs.after++;
+      },
+    });
+    const me = r.clients[0]!;
+    expect(inputs.during).toBeLessThanOrEqual(11); // about 4 a second, not 120 in the 2 s
+    expect(inputs.after).toBeGreaterThan(110);
+    expect(me.server.closed).toBe(false);
+    expect(me.corrections).toBe(0);
+    // WebTransport never holds them back: its datagrams don't queue
+    const udp = simulate(symmetric(80, 0, 3), 20, { warmupSeconds: 15, backlog: () => 4096 }).clients[0]!;
+    expect(udp.net.inputsHeldBack).toBe(0);
   });
 
   it('UDP datagrams vs a TCP stream at 150 ms / 2 %: no head-of-line stalls, no corrections', () => {

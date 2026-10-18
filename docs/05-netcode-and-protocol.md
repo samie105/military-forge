@@ -380,6 +380,7 @@ CI alarm: if the p95 snapshot size grows > 20% between builds, fail the perf che
 | Lost input packets | covered by 3–4× redundancy; if a tick's input is still missing, the server repeats the last input and flags it `predicted`. A late real input is discarded (never rewrite the past) |
 | Lost snapshots | next snapshot deltas from the last acked baseline; interpolation buffer absorbs ≤ 2 losses |
 | Jitter spike | interpDelay grows (smoothed) and shrinks back slowly (hysteresis) |
+| Connection stall (WebSocket) | the socket stays open and queues what it can't send, then hands it all over at once. While the server has been silent for 500 ms, or `bufferedAmount` is over 1 KB, the client sends 4 INPUTs a second instead of 60 (each carries the newest inputs; the rest would arrive too late to use). The server drops whatever is still over its INPUT allowance (§14). WebTransport datagrams don't queue, so they're never held back |
 | Loss > 10% for 5 s | HUD shows a warning icon; the client offers "low-bandwidth mode" |
 | Disconnect | entity stays in the world **20 s** (standing idle, vulnerable). Reconnect with `sessionToken` → FULL_SNAPSHOT → resume. BR: 60 s, then removed and loot drops |
 | Server crash/room error | clients get `ROOM_CLOSED(error)` → back to lobby; the match is voided for stats/MMR |
@@ -393,6 +394,8 @@ CI alarm: if the p95 snapshot size grows > 20% between builds, fail the perf che
 - Strict decoders: length checks and range checks on every field; unknown message type → +1 strike, 3 strikes → disconnect.
 - Max inbound message size: INPUT 64 B, CMD 256 B, CHAT 512 B, anything else 1 KB.
 - Token buckets per connection: INPUT ≤ 70/s (60 + slack), CMD ≤ 20/s, CHAT ≤ 1/s (burst 5), PING ≤ 5/s.
+  - INPUT: up to 3 s of unused allowance carries over. INPUTs over it are dropped, not a kick: a stalled stream's backlog arrives all at once (§13). The newest one over the limit is applied at the next tick. A client that's over the limit for 10 s in a row is flooding and is kicked (`RATE_LIMITED`).
+  - Every other message: 200/s, with 3 s carried over, then a kick (`RATE_LIMITED`). CMDs over their own bucket are dropped.
 - Inputs whose `newestTick` is too far ahead of server time (> 30 ticks) are rejected. That's speedhack by clock manipulation.
 - Rotate message-type IDs and field order per build (cheap obfuscation; deters casual packet-editing scripts).
 - See 10-security-anticheat for behavioural detection.

@@ -164,6 +164,9 @@ export class OnlineMode {
         this.bytesOut += bytes.length;
         this.up.send(bytes);
       },
+      // a stalled WebSocket queues INPUTs and delivers them all at once: NetClient thins them out
+      stream: () => this.transport?.kind !== 'wt',
+      backlog: () => this.transport?.backlog() ?? 0,
     });
     // a reload resumes the same player while the room still holds it
     this.net.sessionToken = loadToken(options.room);

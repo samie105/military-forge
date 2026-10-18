@@ -36,6 +36,16 @@ export interface NetClientOptions {
   ticket?: string;
   /** hands bytes to the transport (through the conditioner, if any) */
   send(bytes: Uint8Array): void;
+  /**
+   * The transport is a stream (WebSocket; the default): a stalled connection keeps what it couldn't
+   * send and hands it all over when it recovers, seconds of INPUTs at once that the server can't
+   * use any more. So while the server has been silent for STALL_MS, or `backlog()` is high, INPUTs
+   * go out only 4 times a second: each carries the newest inputs, all a recovering server needs.
+   * false for datagrams (WebTransport): a stall just loses them.
+   */
+  stream?: () => boolean;
+  /** bytes the transport has queued but not sent yet (WebSocket bufferedAmount) */
+  backlog?: () => number;
   /** monotonic milliseconds */
   now(): number;
   /** inputs per packet: the newest plus redundant copies (docs/05 §1: 3–4) */
@@ -87,6 +97,12 @@ const PING_BURST = 5;
 const PING_BURST_INTERVAL_MS = 50;
 const SNAPSHOT_BUFFER = 60;
 const RATE_WINDOW_MS = 60_000;
+/** no word from the server for this long (snapshots come every 33–67 ms): the connection has stalled */
+const STALL_MS = 500;
+/** more than this queued in the transport (~½ s of INPUTs) and it has stalled too */
+const BACKLOG_LIMIT = 1024;
+/** while stalled on a stream: at most one INPUT this often */
+const STALLED_INPUT_INTERVAL_MS = 250;
 
 export class NetClient {
   status = 'connecting…';
@@ -111,6 +127,8 @@ export class NetClient {
   readonly snapshots: ReceivedSnapshot[] = [];
   /** delta snapshots whose baseline we didn't have (dropped, not acked: the server falls back) */
   deltaMisses = 0;
+  /** INPUTs not sent because the connection had stalled (NetClientOptions.stream) */
+  inputsHeldBack = 0;
   private readonly snapshotDecoder = new SnapshotDecoder();
   readonly names = new Map<number, string>();
   /**
@@ -128,6 +146,9 @@ export class NetClient {
 
   private acc = 0;
   private helloAt = 0;
+  /** when the server last sent anything */
+  private lastHeardAt = 0;
+  private nextStalledInputAt = 0;
   private nextPingAt = Infinity;
   private burstLeft = 0;
   private startTick = 0;
@@ -175,7 +196,7 @@ export class NetClient {
    */
   onOpen(): void {
     this.status = this.sessionToken ? 'resuming…' : 'joining…';
-    this.helloAt = this.options.now();
+    this.helloAt = this.lastHeardAt = this.options.now();
     this.options.send(encodeHello(this.options.name, this.sessionToken, this.ticket));
   }
 
@@ -228,6 +249,7 @@ export class NetClient {
    */
   receive(bytes: Uint8Array): ServerMessage | null {
     const now = this.options.now();
+    this.lastHeardAt = now;
     let msg: ServerMessage;
     if (bytes[0] === MsgType.Snapshot) {
       try {
@@ -371,6 +393,8 @@ export class NetClient {
     if (jump !== 0) this.pacer.jumpApplied(pred.tick - 1, now);
 
     this.acc += Math.min(dtSec, 0.25) * this.pacer.update(dtSec);
+    const stalled = this.stalled(now);
+    let held = 0;
     let steps = 0;
     while (this.acc >= DT && steps < MAX_STEPS_PER_UPDATE) {
       sample(pred.player, this.input);
@@ -381,12 +405,20 @@ export class NetClient {
       for (const e of pred.events) this.predictedEvents.push(e);
       pred.events.length = 0;
       if (!this.lowBw || ++this.unsentTicks >= 2) {
-        this.sendInput();
+        if (stalled) held++;
+        else this.sendInput();
         this.unsentTicks = 0;
       }
       this.acc -= DT;
       steps++;
     }
+    if (held > 0 && now >= this.nextStalledInputAt) {
+      // the newest tick's input and its redundant copies
+      this.sendInput();
+      this.nextStalledInputAt = now + STALLED_INPUT_INTERVAL_MS;
+      held--;
+    }
+    this.inputsHeldBack += held;
     if (steps === MAX_STEPS_PER_UPDATE && this.acc > DT) this.acc = 0; // drop time; the pacer resyncs
     pred.decayOffset(dtSec);
   }
@@ -473,6 +505,12 @@ export class NetClient {
       lowBandwidth: this.lowBw,
       suggestLowBandwidth: !this.lowBw && this.heavyLossSince > 0 && now - this.heavyLossSince >= 5000,
     };
+  }
+
+  /** A stream transport that has stalled: what we send now would only pile up (NetClientOptions.stream). */
+  private stalled(now: number): boolean {
+    if (this.options.stream && !this.options.stream()) return false;
+    return now - this.lastHeardAt > STALL_MS || (this.options.backlog?.() ?? 0) > BACKLOG_LIMIT;
   }
 
   /** The render tick shown when `tick`'s input was sampled (NaN if it wasn't sampled, e.g. fast-forwarded). */

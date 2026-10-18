@@ -28,6 +28,8 @@ export interface TransportHandlers {
 export interface GameTransport {
   readonly kind: TransportKind;
   send(bytes: Uint8Array): void;
+  /** bytes queued but not sent yet: WebSocket's bufferedAmount (WebTransport: 0, a full datagram queue drops) */
+  backlog(): number;
   close(code?: number, reason?: string): void;
 }
 
@@ -98,6 +100,7 @@ export function openWebSocket(url: string, handlers: TransportHandlers): Promise
         // encoders return fresh ArrayBuffer-backed copies (never SharedArrayBuffer)
         if (ws.readyState === WebSocket.OPEN) ws.send(bytes as Uint8Array<ArrayBuffer>);
       },
+      backlog: () => ws.bufferedAmount,
       close(code = 1000, reason = '') {
         ws.close(code, reason);
       },
@@ -245,6 +248,7 @@ export async function openWebTransport(endpoint: WebTransportEndpoint, handlers:
       framed.set(bytes, 2);
       void streamWriter.write(framed).catch(() => {});
     },
+    backlog: () => 0,
     close(code = 0, reason = '') {
       if (closed) return;
       wt.close({ closeCode: code, reason });

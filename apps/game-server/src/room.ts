@@ -139,13 +139,24 @@ export interface Session {
 const newToken = () => randomBytes(18).toString('base64url');
 
 const MAX_STRIKES = 3;
+/** messages other than INPUT (PING, CMD, HELLO): an honest client sends a few a second */
 const MAX_MESSAGES_PER_SECOND = 200;
 /**
  * A stalled TCP stream (a proxy or tunnel hiccup) or a starved server process hands over seconds of
- * an honest client's messages at once (~61/s), so unused allowance carries over, up to 3 s of it.
- * A flood still runs dry within seconds: the steady-state limit is unchanged.
+ * an honest client's messages at once, so unused allowance carries over, up to 3 s of it. A flood
+ * still runs dry within seconds (a kick): the steady-state limit is unchanged.
  */
 const MESSAGE_BURST = 3 * MAX_MESSAGES_PER_SECOND;
+/**
+ * docs/05 §14: INPUTs per connection, 70/s (60 + slack: the pacer runs up to 3 % fast), with up to
+ * 3 s of unused allowance carried over. Over it they're dropped, not a kick: a stream that stalled
+ * for 15 s hands over a backlog of them at once, all but the last few too late to use. The newest
+ * one over the limit waits for the next tick, so the player still gets their latest input.
+ */
+const INPUTS_PER_SECOND = 70;
+const INPUT_BURST = 3 * INPUTS_PER_SECOND;
+/** over the INPUT limit in this many 1 s refills in a row: a flood, not a backlog (kicked) */
+const INPUT_FLOOD_SECONDS = 10;
 /**
  * docs/05 §14: a token bucket of CMDs per connection (20/s, bursts of 20). Over the limit they're
  * dropped, not strikes: a TCP stall can bunch up honest ones. A real flood still hits
@@ -184,6 +195,16 @@ export class Client {
   strikes = 0;
   /** messages it may still send before the next refill (rate limit with carry-over, MESSAGE_BURST) */
   messageTokens = MESSAGE_BURST;
+  /** INPUTs it may still send before the next refill (INPUT_BURST) */
+  inputTokens = INPUT_BURST;
+  /** INPUTs over the limit since the last refill, and how many refills in a row saw any */
+  inputsOverLimit = 0;
+  inputFloodSeconds = 0;
+  /** INPUTs dropped for the rate limit, in all */
+  inputsDropped = 0;
+  /** the newest INPUT over the limit (validated), applied at the next tick; length 0 = none */
+  readonly heldInput = new Uint8Array(MAX_INPUT_BYTES);
+  heldInputLength = 0;
   /** CMD token bucket: tokens left, as of server tick `cmdTokensAt` */
   cmdTokens = CMD_BURST;
   cmdTokensAt = 0;
@@ -412,9 +433,15 @@ export class Room {
     return best;
   }
 
-  /** Called once per second: refills every client's message allowance. */
+  /** Called once per second: refills every client's message allowance; kicks INPUT floods. */
   resetRateLimits(): void {
-    for (const c of this.clients) c.messageTokens = Math.min(MESSAGE_BURST, c.messageTokens + MAX_MESSAGES_PER_SECOND);
+    for (const c of this.clients) {
+      c.messageTokens = Math.min(MESSAGE_BURST, c.messageTokens + MAX_MESSAGES_PER_SECOND);
+      c.inputTokens = Math.min(INPUT_BURST, c.inputTokens + INPUTS_PER_SECOND);
+      c.inputFloodSeconds = c.inputsOverLimit > 0 ? c.inputFloodSeconds + 1 : 0;
+      c.inputsOverLimit = 0;
+      if (c.inputFloodSeconds >= INPUT_FLOOD_SECONDS) this.kick(c, CloseCode.RateLimited, 'rate limited');
+    }
   }
 
   /** Bytes from the transport. Must not be retained by the caller's buffer pool when netSim is on (they are queued). */
@@ -442,10 +469,6 @@ export class Room {
 
   private handle(client: Client, bytes: Uint8Array): void {
     if (client.closed) return;
-    if (--client.messageTokens < 0) {
-      this.kick(client, CloseCode.RateLimited, 'rate limited');
-      return;
-    }
     if (bytes[0] === MsgType.Input) {
       // hot path (60/s per client): pooled decode, no allocation
       try {
@@ -455,7 +478,23 @@ export class Room {
         this.strike(client, e);
         return;
       }
+      if (client.heldInputLength > 0) {
+        // older than this one, and its inputs are in this one's redundant copies
+        client.inputsDropped++;
+        client.heldInputLength = 0;
+      }
+      if (client.inputTokens <= 0) {
+        client.inputsOverLimit++;
+        client.heldInput.set(bytes);
+        client.heldInputLength = bytes.length;
+        return;
+      }
+      client.inputTokens--;
       this.onInput(client);
+      return;
+    }
+    if (--client.messageTokens < 0) {
+      this.kick(client, CloseCode.RateLimited, 'rate limited');
       return;
     }
     let msg: ClientMessage;
@@ -811,6 +850,12 @@ export class Room {
     this.inputs.length = 0;
     for (const c of this.clients) {
       if (!c.joined) continue;
+      if (c.heldInputLength > 0) {
+        // the newest INPUT that came over the rate limit (validated when it arrived)
+        decodeInputInto(c.heldInput.subarray(0, c.heldInputLength), this.packet);
+        c.heldInputLength = 0;
+        this.onInput(c);
+      }
       const health = c.inputs.health(current);
       if (health !== HEALTH_UNKNOWN && health < c.healthMin) c.healthMin = health;
       // this tick's input, or the last one repeated (docs/05 §13)

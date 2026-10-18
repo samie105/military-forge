@@ -70,6 +70,16 @@ export interface SimOptions {
    * lost) and a new one opens at toMs, presenting the session token.
    */
   drop?: { fromMs: number; toMs: number };
+  /**
+   * Client 0's connection stalls for [fromMs, toMs) and then recovers, like a TCP path that went
+   * dead for a while: the socket stays open, nothing arrives either way, and at toMs everything held
+   * is delivered at once, in order (a stream keeps what it couldn't send).
+   */
+  stall?: { fromMs: number; toMs: number };
+  /** every message a client hands its transport */
+  onSend?: (k: number, bytes: Uint8Array, nowMs: number) => void;
+  /** bytes client k's transport reports queued (WebSocket bufferedAmount; default 0) */
+  backlog?: (k: number, nowMs: number) => number;
   /** room options (default: dummies on, seed 3) */
   room?: RoomOptions;
   /** each client's input for one tick (default: the movement loop) */
@@ -133,23 +143,39 @@ export function simulate(settings: ConditionerSettings, seconds: number, options
   const downBytes = [0, 0];
   const upBytes = [0, 0];
   const upPackets = [0, 0];
+  const stall = options.stall;
+  let stalled = false;
+  const heldBack: (() => void)[] = [];
+  /** client 0's deliveries wait while its connection is stalled */
+  const deliver = (k: number, fn: () => void) => {
+    if (k === 0 && stalled) heldBack.push(fn);
+    else fn();
+  };
+  if (stall) {
+    clock.setTimeout(() => (stalled = true), stall.fromMs);
+    clock.setTimeout(() => {
+      stalled = false;
+      for (const fn of heldBack.splice(0)) fn();
+    }, stall.toMs);
+  }
   /** a connection for client k: a server Client plus a conditioned link each way */
   const wire = (k: number, seed: number) => {
     let down: ConditionedLink | null = null;
     const conn = room.connect({ send: (b) => down!.send(b), close: () => {}, bufferedAmount: () => 0 });
     const timers = k === 0 ? throttled(clock, asleep) : clock;
-    ups[k] = new ConditionedLink(settings.up, () => settings.enabled, timers, (b) => room.receive(conn, b), isUnreliableMessage, seed + 11 + k);
+    ups[k] = new ConditionedLink(settings.up, () => settings.enabled, timers, (b) => deliver(k, () => room.receive(conn, b)), isUnreliableMessage, seed + 11 + k);
     down = new ConditionedLink(
       settings.down,
       () => settings.enabled,
       timers,
-      (b) => {
-        if (clock.now() > warmupSeconds * 1000) {
-          downBytes[k]! += b.length;
-          if (b[0] === MsgType.Snapshot) snapshotAges[k]!.push(clock.now() - (b[3]! | (b[4]! << 8) | (b[5]! << 16) | (b[6]! << 24)) * TICK_MS);
-        }
-        nets[k]!.receive(b);
-      },
+      (b) =>
+        deliver(k, () => {
+          if (clock.now() > warmupSeconds * 1000) {
+            downBytes[k]! += b.length;
+            if (b[0] === MsgType.Snapshot) snapshotAges[k]!.push(clock.now() - (b[3]! | (b[4]! << 8) | (b[5]! << 16) | (b[6]! << 24)) * TICK_MS);
+          }
+          nets[k]!.receive(b);
+        }),
       isUnreliableMessage,
       seed + 21 + k,
     );
@@ -165,8 +191,11 @@ export function simulate(settings: ConditionerSettings, seconds: number, options
           upBytes[k]! += b.length;
           upPackets[k]!++;
         }
+        options.onSend?.(k, b, clock.now());
         ups[k]!.send(b);
       },
+      stream: () => options.transport === 'ws',
+      backlog: () => options.backlog?.(k, clock.now()) ?? 0,
     });
     if (options.lowBandwidth?.includes(k)) net.setLowBandwidth(true);
     nets.push(net);
