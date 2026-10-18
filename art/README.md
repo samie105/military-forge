@@ -257,7 +257,12 @@ blender -b --factory-startup --python art/pipeline/build_character.py -- \
 
 About 10 s on this machine. `blender` is `/Applications/Blender.app/Contents/MacOS/Blender` (5.2.1). Steps:
 1. **Normalise:** face glTF +Z, 1.50 m tall, feet on y = 0.
-2. **Landmarks → skeleton:** measure the full-res mesh and place the shared skeleton + 7 sockets ([rookie_rig.json](character/rookie_rig.json)).
+2. **Landmarks → skeleton:** measure the full-res mesh and place the shared skeleton, the 7 sockets, and `sling_back` and `holster_thigh` for slung and holstered weapons ([rookie_rig.json](character/rookie_rig.json); docs/04 §9.3).
+   - A weapon mounts on either with an identity transform, as on `socket_weapon_R`.
+   - `sling_back` (spine2) holds a long gun on its side across the back: muzzle up over the left shoulder, right side against the back, between the jetpack and the slung shield.
+   - `holster_thigh` (thigh_R) holds a pistol, SMG or the machete muzzle-down on the outer right thigh, slide forward.
+   - At rest the slung rifles, shotguns, snipers, the Thumper and the Shredder clear the jetpack and body. The exceptions are a knob on the Longbow's right side, just above the grip, which touches the jetpack by 4 cm, and the Buzz on the thigh, which touches the hip by 2 cm.
+   - Parts built before these sockets don't carry them. That's allowed: parts merge by their deform bones.
 3. **Split the jetpack:** generated meshes are a soup of closed shells; a shell is jetpack when ≥ 80% of it sits behind the back and it ends below the neck.
 4. **LODs:** per part, collapse-decimate, fresh UVs, then bake the original albedo (decimation wrecks generated UVs). Tripo marks the goggles metallic, so metallic is zeroed before baking.
 5. **Skin:** the body gets distance-to-bone weights gated by body region (rigid head, boots); the jetpack goes rigidly to `spine2`.

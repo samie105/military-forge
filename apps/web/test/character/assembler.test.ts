@@ -251,6 +251,9 @@ describe('the shipped W8 character art (apps/web/public/assets)', () => {
     }
   });
 
+  /** Sockets only the body carries (#95: the spare gun's sling and holster); older cosmetic parts predate them. */
+  const BODY_ONLY_SOCKETS = new Set(['sling_back', 'holster_thigh']);
+
   it('every content item with art has its manifest, both LODs and dye textures, on the body skeleton', () => {
     const withArt = cosmetics.filter((c) => c.assets.manifest);
     expect(withArt.length).toBeGreaterThanOrEqual(14);
@@ -260,7 +263,9 @@ describe('the shipped W8 character art (apps/web/public/assets)', () => {
       const dir = path.slice(0, path.lastIndexOf('/') + 1);
       const m = JSON.parse(readFileSync(assets(path), 'utf8')) as { lods: Record<string, string>; dye: Record<string, { mask: string; albedo: string }> };
       for (const lod of ['lod0', 'lod1']) {
-        expect(glbJoints(dir + m.lods[lod]), `${item.id} ${lod}`).toEqual(joints);
+        // parts built before the body's sling_back and holster_thigh sockets (#95) don't carry them;
+        // parts merge by their deform bones, so a part's skeleton is the body's without those two
+        expect(glbJoints(dir + m.lods[lod]).filter((j) => !BODY_ONLY_SOCKETS.has(j)), `${item.id} ${lod}`).toEqual(joints.filter((j) => !BODY_ONLY_SOCKETS.has(j)));
         for (const file of [m.dye[lod]!.mask, m.dye[lod]!.albedo]) expect(existsSync(assets(dir + file)), file).toBe(true);
       }
     }

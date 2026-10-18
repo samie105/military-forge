@@ -246,6 +246,16 @@ off = grip_R + Vector((0, -0.07, 0.02))
 bone("socket_offhand_IK", off, off + Vector((0, -0.05, 0)), "socket_weapon_R", deform=False)
 bone("socket_jetpack", P(0, jet_back, jet_mid_z), P(0, jet_back, jet_mid_z + 0.08), "spine2", deform=False)
 bone("socket_back", P(0, jet_far, spine_top), P(0, jet_far, spine_top + 0.08), "spine2", deform=False)
+# Slung and holstered weapons (the owner, 18 Oct: the unused gun hangs on the soldier). A weapon mounts here
+# with an identity transform, grip on the socket, like socket_weapon_R: bone +Y is the muzzle, +Z the gun's top.
+# sling_back: diagonally across the back just behind the jetpack (its back face is jet_far), in front of the
+# slung riot shield (render3d's socket_shield_back), lying on its side: the muzzle up over the left shoulder, the
+# gun's right side against the back, its top towards the right shoulder. holster_thigh: on the outer right
+# thigh, the muzzle down, the slide forward, the right side out.
+sling = P(0, jet_far + 0.021, spine_top - 0.06)
+bone("sling_back", sling, sling + Vector((0.57, 0, 0.82)) * 0.08, "spine2", deform=False, roll_ref=Vector((-0.82, 0, 0.57)))
+holster = mirror(hip_j) + Vector((-0.166, 0.0, -0.04))
+bone("holster_thigh", holster, holster + Vector((0, 0, -0.08)), "thigh_R", deform=False)
 bone("socket_hat", P(0, head_y, top_z - 0.08), P(0, head_y, top_z), "head", deform=False)
 bone("socket_nameplate", P(0, 0, H + 0.25), P(0, 0, H + 0.33), "root", deform=False)
 bpy.ops.object.mode_set(mode="OBJECT")

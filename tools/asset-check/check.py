@@ -47,6 +47,9 @@ SOCKETS = [
     "socket_weapon_R", "socket_weapon_L", "socket_offhand_IK", "socket_jetpack",
     "socket_hat", "socket_back", "socket_nameplate",
 ]
+# slung and holstered weapons (docs/04 §9.3): the body carries them; cosmetic parts built before them may not,
+# which is fine (parts merge by their deform bones, and the renderer reads sockets from the body)
+OPTIONAL_SOCKETS = ["sling_back", "holster_thigh"]
 HEAD_BONES = {"head", "jaw", "eye_L", "eye_R"}
 
 CHAR_TRIS = {0: 4000, 1: 1800}         # docs/04 §5.6
@@ -464,8 +467,9 @@ def draw_calls(meshes):
 def check_skeleton(r: Report, objs, meshes):
     """Shared skeleton, sockets and skin weights (docs/04 §4.1, §9.2). Returns (arm, bones, weights)."""
     arms = [o for o in objs if o.type == "ARMATURE"]
-    # Assembled characters: every part file carries a copy of the shared skeleton.
-    same = len({tuple(sorted(b.name for b in a.data.bones)) for a in arms}) == 1
+    # Assembled characters: every part file carries a copy of the shared skeleton (an optional socket on the
+    # body and not on an older part is fine: parts merge by their deform bones).
+    same = len({tuple(sorted(b.name for b in a.data.bones if b.name not in OPTIONAL_SOCKETS)) for a in arms}) == 1
     r.ok(len(arms) >= 1 and same, "armature",
          f"{len(arms)} armature(s)" + (" with identical bones (assembled parts)" if len(arms) > 1 and same else ""))
     if not arms:
@@ -478,7 +482,7 @@ def check_skeleton(r: Report, objs, meshes):
     missing_s = [s for s in SOCKETS if s not in bones]
     r.ok(not missing_s, "sockets (docs/04 §4.1)",
          f"all {len(SOCKETS)} present" if not missing_s else "missing: " + ", ".join(missing_s))
-    extra = sorted(bones - set(DEFORM_BONES) - set(SOCKETS))
+    extra = sorted(bones - set(DEFORM_BONES) - set(SOCKETS) - set(OPTIONAL_SOCKETS))
     r.ok(not extra, "no unexpected bones", "none" if not extra else ", ".join(extra))
     skinned = [m for m in meshes if any(md.type == "ARMATURE" for md in m.modifiers) or m.parent in arms]
     r.ok(len(skinned) == len(meshes), "meshes skinned to the armature", f"{len(skinned)}/{len(meshes)}")

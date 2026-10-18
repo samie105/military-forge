@@ -69,7 +69,7 @@ These are **original IPs**. Design them for the core audience (India, Nigeria, S
 
 ### 4.1 Skeleton (shared by everything)
 - About 24 deform bones: `root, pelvis, spine1, spine2, neck, head, clavicle_L/R, upperarm_L/R, forearm_L/R, hand_L/R, thigh_L/R, calf_L/R, foot_L/R, toe_L/R, jaw, eye_L/R`.
-- Sockets (non-deform): `socket_weapon_R`, `socket_weapon_L`, `socket_offhand_IK`, `socket_jetpack`, `socket_hat`, `socket_back`, `socket_nameplate`.
+- Sockets (non-deform): `socket_weapon_R`, `socket_weapon_L`, `socket_offhand_IK`, `socket_jetpack`, `socket_hat`, `socket_back`, `socket_nameplate`. The body also carries `sling_back` and `holster_thigh` (§9.3); cosmetic parts built before them may not, and parts merge by their deform bones.
 - Chibi proportions: head ≈ ⅓ of the height. Model to match the hitbox layout (head circle centre at 1.24 m).
 
 ### 4.2 Animation layers
@@ -184,6 +184,8 @@ Rest positions are for the Rookie (glTF metres, character at the origin facing +
 | `socket_back` | `spine2` | (0, 0.86, −0.40), behind the top of the jetpack | same | rigid props that aren't cosmetic parts (radio, flag pole, plushie) |
 | `socket_hat` | `head` | (0, 1.42, −0.01), 8 cm below the top of the helmet | same | hat-mounted VFX anchor (e.g. a lamp); not a parent for headgear parts |
 | `socket_nameplate` | `root` | (0, 1.75, 0) | same | UI anchor; parented to `root` so it doesn't bob with the head |
+| `sling_back` | `spine2` | (0, 0.80, −0.42), between the jetpack's back face (−0.35) and the slung riot shield | **+Y muzzle** up over the left shoulder (0.57, 0.82, 0), +X the gun's right side against the back (0, 0, 1), +Z the gun's top towards the right shoulder (−0.82, 0.57, 0) | a slung long gun (rifles, shotguns, snipers, launchers, heavies) mounts here with an **identity** transform, like `socket_weapon_R` |
+| `holster_thigh` | `thigh_R` | (−0.31, 0.42, −0.02), on the outer right thigh | **+Y muzzle** down, +Z the gun's top (slide) forward, +X the gun's right side out | a holstered pistol or SMG, or the machete; identity transform |
 
 **Cosmetic parts are skinned, not parented to sockets.** Every part GLB is authored in **character space** (the same origin as the body) and **carries the shared skeleton**, so the renderer can merge it into the body's single `SkinnedMesh` (§5.3):
 - rigid parts (headgear, eyewear, jetpack) are weighted **100% to one bone**, named in the `attachBone` extra (`head`, `head`, `spine2`);
