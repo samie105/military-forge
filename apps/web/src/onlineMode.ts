@@ -543,7 +543,7 @@ export class OnlineMode {
       tick: pred?.started ? pred.tick : newest.msg.serverTick,
       localId: this.net.myId,
       players,
-      grenades: newest.msg.grenades.map((g) => ({ x: g.x, y: g.y, fuse: g.fuse, type: g.type, state: g.state, id: g.id })),
+      grenades: newest.msg.grenades.map((g) => ({ x: g.x, y: g.y, fuse: g.fuse, type: g.type, state: g.state, id: g.id, vx: g.vx, vy: g.vy })),
       pickups: newest.msg.pickups,
       clouds,
       net,
@@ -632,6 +632,8 @@ export class OnlineMode {
       active: src.active,
       dual: src.dual,
       dashing: src.dashing,
+      burning: src.burning,
+      windup: src.windup,
       // other players' ammo isn't sent (only the local block has it); the snapshot's reloading flag
       // marks the gun in hand as reloading (render3d drops a revolver's casings as a reload starts)
       weapons: src.weapons.map((w, i) => ({ def: w.def, mag: 0, reserve: 0, reloadTicks: src.reloading && i === src.active ? 1 : 0 })),

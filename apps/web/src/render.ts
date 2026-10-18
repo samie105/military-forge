@@ -20,10 +20,13 @@ import {
   resolveEvent,
   resolveZone,
   grenades,
+  projectileOfType,
+  projectileRadius,
   weapons,
   zonePoints,
   type MapDef,
   type MapZone,
+  type ProjectileDef,
   type Tuning,
 } from '@military-forge/content';
 import { CollisionWorld, DamageSource, MELEE_ARC_DEG, MELEE_REACH, MELEE_WINDUP_TICKS, MineState, TICK_RATE, cloudDef, shieldBottom, type SimEvent } from '@military-forge/sim';
@@ -259,6 +262,7 @@ function statusTags(p: PlayerView, long = false): string {
   if (p.blindTicks) tags.push(`BLIND${secs(p.blindTicks)}`);
   if (p.jetDisabledTicks) tags.push(`${long ? 'JETPACK OFFLINE' : 'EMP'}${secs(p.jetDisabledTicks)}`);
   if (p.gasTicks) tags.push(long ? 'GAS: get out!' : 'GAS');
+  if (p.burning) tags.push(long ? 'ON FIRE' : 'FIRE');
   return tags.join(' · ');
 }
 
@@ -733,6 +737,27 @@ export class Renderer {
       ctx.fill();
     }
 
+    // winding up (a minigun spinning, a Ripper or Pulse charging): a pulsing ring at the muzzle, the tell
+    if (p.windup) {
+      const held = weapons[p.weapons[p.active]?.def ?? -1];
+      const reach = (held?.muzzleLength ?? 0.7) + 0.1;
+      const mx = cam.toScreenX(p.x + Math.cos(p.aim) * reach);
+      const my = cam.toScreenY(p.y + (p.crouched ? 0.75 : 1.08) + Math.sin(p.aim) * reach);
+      const pulse = this.reducedMotion ? 0.5 : 0.5 + 0.5 * Math.sin(performance.now() / 45);
+      ctx.strokeStyle = `rgba(255,214,102,${(0.45 + 0.4 * pulse).toFixed(3)})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(mx, my, (0.12 + 0.06 * pulse) * cam.ppm, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // on fire (the flamethrower's burn): an orange glow round the body
+    if (p.burning) {
+      this.capsulePath(p.x, p.y + r, p.y + h - r, r + 0.12);
+      ctx.fillStyle = `rgba(255,140,50,${this.reducedMotion ? 0.45 : (0.35 + 0.2 * Math.sin(performance.now() / 60)).toFixed(3)})`;
+      ctx.fill();
+    }
+
     this.capsulePath(p.x, p.y + r, p.y + h - r, r);
     ctx.fillStyle = color + '55';
     ctx.fill();
@@ -950,7 +975,89 @@ export class Renderer {
     ctx.restore();
   }
 
+  /**
+   * A launcher's or the flamethrower's projectile (content projectiles.ts): a rocket along its
+   * flight, a dark shell, a spinning saw blade, a glowing EMP orb, a flame that grows and fades.
+   */
+  private drawProjectile(g: GrenadeView, def: ProjectileDef): void {
+    const ctx = this.ctx;
+    const cam = this.camera;
+    const sx = cam.toScreenX(g.x);
+    const sy = cam.toScreenY(g.y);
+    const speed = Math.sqrt((g.vx ?? 0) ** 2 + (g.vy ?? 0) ** 2);
+    const ux = speed > 1e-3 ? (g.vx ?? 0) / speed : 1;
+    const uy = speed > 1e-3 ? (g.vy ?? 0) / speed : 0;
+    const age = def.life - g.fuse / 60;
+    const r = Math.max(3, projectileRadius(def, age) * cam.ppm);
+    ctx.save();
+    switch (def.id) {
+      case 'rocket': {
+        // a body along the flight, and a flame out of the back
+        const len = 0.45 * cam.ppm;
+        ctx.strokeStyle = '#8b949e';
+        ctx.lineWidth = Math.max(3, 2 * r);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(sx - ux * len * 0.5, sy + uy * len * 0.5);
+        ctx.lineTo(sx + ux * len * 0.5, sy - uy * len * 0.5);
+        ctx.stroke();
+        ctx.fillStyle = '#ffa657';
+        ctx.beginPath();
+        ctx.arc(sx - ux * len * 0.7, sy + uy * len * 0.7, Math.max(2, r * 0.8), 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+      case 'blade': {
+        // a toothed disc, spinning
+        const spin = (performance.now() / 1000) * (this.reducedMotion ? 1 : 12);
+        ctx.strokeStyle = '#e6edf3';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let i = 0; i <= 16; i++) {
+          const a = spin + (i / 16) * Math.PI * 2;
+          const rr = i % 2 ? r : r * 0.7;
+          if (i === 0) ctx.moveTo(sx + Math.cos(a) * rr, sy - Math.sin(a) * rr);
+          else ctx.lineTo(sx + Math.cos(a) * rr, sy - Math.sin(a) * rr);
+        }
+        ctx.stroke();
+        break;
+      }
+      case 'orb': {
+        const halo = ctx.createRadialGradient(sx, sy, 0, sx, sy, r * 2.2);
+        halo.addColorStop(0, 'rgba(165,214,255,0.95)');
+        halo.addColorStop(0.45, 'rgba(88,166,255,0.55)');
+        halo.addColorStop(1, 'rgba(88,166,255,0)');
+        ctx.fillStyle = halo;
+        ctx.beginPath();
+        ctx.arc(sx, sy, r * 2.2, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+      case 'flame': {
+        const k = Math.max(0, Math.min(1, age / def.life));
+        ctx.fillStyle = `rgba(${255},${Math.round(200 - 120 * k)},${Math.round(60 - 50 * k)},${(0.85 * (1 - k * 0.8)).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(sx, sy, r, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+      default: {
+        // a launcher shell
+        ctx.fillStyle = '#6e7b4a';
+        ctx.strokeStyle = '#e6edf3';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(sx, sy, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
   private drawGrenade(g: GrenadeView): void {
+    const proj = projectileOfType(g.type ?? 0);
+    if (proj) return this.drawProjectile(g, proj);
     const ctx = this.ctx;
     const cam = this.camera;
     const def = grenades[g.type ?? FRAG.index] ?? FRAG;

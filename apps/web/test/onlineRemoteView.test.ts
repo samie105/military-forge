@@ -27,6 +27,8 @@ const remote = (over: Partial<SnapshotPlayer> = {}): SnapshotPlayer => ({
   kills: 0,
   deaths: 0,
   shield: 'none',
+  burning: false,
+  windup: false,
   ...over,
 });
 

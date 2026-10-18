@@ -8,7 +8,7 @@
  * call and is hidden while empty, so a quiet scene costs no extra draws.
  */
 import type { CollisionWorld, SimEvent } from '@military-forge/sim';
-import { Vector3, type BufferGeometry, type DirectionalLight, type HemisphereLight, type Mesh, type Scene, type Texture } from 'three';
+import { SRGBColorSpace, TextureLoader, Vector3, type BufferGeometry, type DirectionalLight, type HemisphereLight, type Mesh, type Scene, type Texture } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import type { Camera } from '../../camera';
@@ -28,6 +28,7 @@ import { Gunfire, type MuzzleLookup } from './gunfire';
 import { loadExplosionArt, loadWeaponVfx, type FlipbookArt } from './manifest';
 import { ParticleLayer } from './particles';
 import { ParticlePool } from './pool';
+import { ProjectileFx, type GunPointLookup } from './projectiles';
 import { CameraShake, blastTrauma } from './shake';
 import { ThrowArc } from './throwArc';
 
@@ -92,6 +93,8 @@ export class Vfx {
   readonly gunfire: Gunfire;
   /** spent casings out of the guns' eject ports */
   readonly casings: Casings;
+  /** the launchers' and the flamethrower's projectiles, burns and wind-up tells (projectiles.ts) */
+  readonly projectiles: ProjectileFx;
   /** the throw arc (Frame.throwArc) */
   readonly arc: ThrowArc;
   /** dashes: the jet kick, speed lines and afterimages, and the green trail with its sparkles */
@@ -121,6 +124,8 @@ export class Vfx {
     bodies: BodyLookup = () => null,
     /** where a shooter's drawn gun ejects its casings (Renderer3D: from the avatars) */
     ejects: EjectLookup = () => false,
+    /** a drawn gun's named socket (`pilot`, `charge`) for the projectiles' tells (Renderer3D: from the avatars) */
+    gunPoints: GunPointLookup = () => false,
   ) {
     const atlas = vfxAtlas();
     const grid = [ATLAS_GRID, ATLAS_GRID] as const;
@@ -131,6 +136,7 @@ export class Vfx {
     this.flash = new SceneFlash(lights.hemi, lights.sun);
     this.gunfire = new Gunfire(world);
     this.casings = new Casings(scene, ramp, world, ejects);
+    this.projectiles = new ProjectileFx(scene, ramp, atlas, gunPoints);
     this.arc = new ThrowArc(atlas, grid);
     this.ghosts = new DashGhosts(scene);
     this.trail = new DashTrail(scene);
@@ -160,6 +166,7 @@ export class Vfx {
     this.gunfire.clear();
     this.casings.world = world;
     this.casings.clear();
+    this.projectiles.clear();
     for (const p of [this.glowPool, this.smokePool, this.decalPool, ...this.books.map((b) => b.pool)]) p.clear();
     this.shake.trauma = 0;
     this.ghosts.clear();
@@ -195,7 +202,34 @@ export class Vfx {
       this.casings.setArt(art?.art.casings ?? null);
       await this.loadCasings(baseUrl, art?.art.casings ?? null);
     });
-    await Promise.all([frag, books, guns]);
+    await Promise.all([frag, books, guns, this.loadProjectiles(baseUrl)]);
+  }
+
+  /** projectiles.glb's models and the flame and specials atlases; anything missing keeps the stand-ins. */
+  private async loadProjectiles(baseUrl: string): Promise<void> {
+    const texture = (file: string) =>
+      new TextureLoader()
+        .loadAsync(`${baseUrl}assets/vfx/${file}`)
+        .then((t) => ((t.colorSpace = SRGBColorSpace), t))
+        .catch((err: unknown) => (console.warn(`render3d: ${file} failed to load, keeping the stand-in`, err), null));
+    const models = new GLTFLoader()
+      .setMeshoptDecoder(MeshoptDecoder)
+      .loadAsync(`${baseUrl}assets/vfx/projectiles.glb`)
+      .then((gltf) => {
+        gltf.scene.updateMatrixWorld(true);
+        const out: Partial<Record<'rocket' | 'shell' | 'blade', BufferGeometry>> = {};
+        for (const [key, node] of [['rocket', 'proj_rocket'], ['shell', 'proj_grenade'], ['blade', 'proj_blade']] as const) {
+          let mesh: Mesh | null = null;
+          gltf.scene.getObjectByName(node)?.traverse((o) => {
+            if (!mesh && (o as Mesh).isMesh) mesh = o as Mesh;
+          });
+          if (mesh) out[key] = bakeMesh(mesh, (mesh as Mesh).matrix);
+        }
+        return out;
+      })
+      .catch((err: unknown) => (console.warn('render3d: projectiles.glb failed to load, keeping the stand-in projectiles', err), {}));
+    const [flame, specials, geos] = await Promise.all([texture('flame_atlas.webp'), texture('specials_atlas.webp'), models]);
+    this.projectiles.setArt({ models: geos, flame, specials });
   }
 
   /** casings.glb's shapes (weapons.vfx.json names the file and nodes); a failure keeps the stand-ins. */
@@ -254,10 +288,12 @@ export class Vfx {
     this.low = preset.name === 'low';
     this.casings.setLimits(this.low, this.ctx.reducedMotion);
     if (this.ghosts.max === 0) this.ghosts.clear();
-    if (preset.vfxLights) this.scene.add(this.flash.point, this.gunfire.light);
+    this.projectiles.lights = preset.vfxLights;
+    if (preset.vfxLights) this.scene.add(this.flash.point, this.gunfire.light, this.projectiles.light);
     else {
       this.flash.point.removeFromParent();
       this.gunfire.light.removeFromParent();
+      this.projectiles.light.removeFromParent();
     }
   }
 
@@ -279,6 +315,7 @@ export class Vfx {
     for (const m of this.modules) m.onEvents?.(events, this.ctx);
     this.gunfire.onEvents(events);
     this.casings.onEvents(events);
+    this.projectiles.onEvents(events);
     this.dash.onEvents(events, this.ctx);
     for (const e of events) {
       // arsenal-b: a flashbang (3) or EMP (5) going off isn't a fireball; its own effects draw it
@@ -311,6 +348,8 @@ export class Vfx {
     this.dash.update(frame, dt, this.ctx);
     this.trail.steady = reduceFlashes();
     this.trail.update(frame, dt, this.ctx);
+    this.projectiles.steady = this.trail.steady;
+    this.projectiles.update(frame, dt, this.ctx);
     // the throw arc while one is aimed (amber when a map event starts or ends mid-flight)
     this.arc.update(frame.throwArc, dt, this.camera.ppm, this.ctx.reducedMotion);
     for (const b of this.books) {
@@ -339,11 +378,13 @@ export class Vfx {
   showForWarmUp(x: number, y: number): void {
     this.trail.showForWarmUp(x, y);
     this.casings.showForWarmUp(_warm.set(x, y, 0));
+    this.projectiles.showForWarmUp(x, y);
   }
 
   endWarmUp(): void {
     this.trail.clear();
     this.casings.clear(); // they cast no shadows: nothing more to compile
+    this.projectiles.clear();
   }
 
   /** live particles (the docs/11 §3 budget counts these) */
@@ -358,6 +399,7 @@ export class Vfx {
     this.grenades.dispose();
     this.gunfire.dispose();
     this.casings.dispose();
+    this.projectiles.dispose();
     this.ghosts.dispose();
     this.trail.dispose();
     for (const m of this.modules) m.dispose?.();

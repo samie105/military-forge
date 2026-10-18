@@ -1,4 +1,4 @@
-import { BREACHER, FRAG, GAS, GRENADE_TYPES, MACHETE, SHREDDER, SMOKE, TRIDENT, WIDOW } from '@military-forge/content';
+import { BLADE, BREACHER, FRAG, GAS, GRENADE_TYPES, MACHETE, PROJECTILE_TYPE_BASE, RIPPER, ROCKET, SHREDDER, SMOKE, TRIDENT, WIDOW } from '@military-forge/content';
 import { Btn, Game, PlayerState, createInput, spawnCloud, type SimEvent } from '@military-forge/sim';
 import type { MapDef } from '@military-forge/content';
 import { describe, expect, it } from 'vitest';
@@ -847,6 +847,21 @@ describe('grenade variety (v10)', () => {
       expect(exact.events).toEqual([expect.objectContaining({ damage: 30.4375 })]);
     });
 
+    it('a blast or an item taken where smoke hides the spot: only a sound, and no pickup (#107 review)', () => {
+      const { obs, others, sees } = scene([{ name: 'inside', x: 30 }]);
+      const inside = others.inside!;
+      const rocket = { type: 'explosion' as const, x: 30, y: 1, radius: 3.5, owner: obs.id, grenade: PROJECTILE_TYPE_BASE + ROCKET.index };
+      const open = { ...rocket, x: 20 };
+      const taken = { type: 'pickup' as const, player: inside.id, item: 11, x: 30.4, y: 0 };
+      const events = sees(obs, [rocket, open, taken]).events;
+      expect(events.filter((e) => e.type === 'explosion').map((e) => (e as { x: number }).x)).toEqual([20]);
+      expect(events.filter((e) => e.type === 'sound')).toHaveLength(1);
+      expect(events.some((e) => e.type === 'pickup')).toBe(false);
+      // the one inside sees its own taking and the blast on it
+      const own = sees(inside, [rocket, taken]).events;
+      expect(own.map((e) => e.type).sort()).toEqual(['explosion', 'pickup']);
+    });
+
     it('grenades in smoke the client can\'t see into, or behind it, aren\'t sent; its own always are (review M2)', () => {
       const { game, obs, others, sees } = scene([
         { name: 'inside', x: 30 },
@@ -871,7 +886,7 @@ describe('grenade variety (v10)', () => {
       expect(ids(inside)).not.toContain(across);
     });
 
-    it('ricochets off a hidden player\'s shield aren\'t sent; one into the smoke stops at it; a hidden taker isn\'t named', () => {
+    it('ricochets off a hidden player\'s shield aren\'t sent; one into the smoke stops at it; a hidden taking isn\'t sent at all', () => {
       const { obs, others, sees } = scene([
         { name: 'inside', x: 30 },
         { name: 'front', x: 20 },
@@ -882,14 +897,14 @@ describe('grenade variety (v10)', () => {
         { type: 'ricochet', shooter: others.front!.id, owner: others.inside!.id, weapon, x: 29.6, y: 1, nx: -1, ny: 0, ex: 21, ey: 1, hit: 2, target: others.front!.id, zone: 1 },
         // off a visible shield (front's), back into the smoke and the player in it: cut where it enters
         { type: 'ricochet', shooter: obs.id, owner: others.front!.id, weapon, x: 20.4, y: 1, nx: 1, ny: 0, ex: 29.8, ey: 1, hit: 2, target: others.inside!.id, zone: 1 },
-        // the player in the smoke takes an item lying there: the item goes, the name doesn't
+        // the player in the smoke takes an item lying there: nothing (the item stays as obs last saw it, #107 review)
         { type: 'pickup', player: others.inside!.id, item: 0, x: 30, y: 0 },
       ]);
       const r = snap.events.filter((e) => e.type === 'ricochet') as { owner: number; ex: number; hit: number; target: number }[];
       expect(r).toHaveLength(1);
       expect(r[0]).toMatchObject({ owner: others.front!.id, hit: 0, target: -1 });
       expect(r[0]!.ex).toBeCloseTo(30 - 3.4, 0);
-      expect(snap.events.find((e) => e.type === 'pickup')).toMatchObject({ player: -1, item: 0 });
+      expect(snap.events.some((e) => e.type === 'pickup')).toBe(false);
     });
   });
 
@@ -977,8 +992,8 @@ describe('grenade variety (v10)', () => {
 
 describe('more guns (v11)', () => {
   it('takes the v11 slots from the protocol registry: a weapon-handling group after the status group', () => {
-    expect(PROTOCOL_VERSION).toBe(11);
-    expect([LS.spin0, LS.burst0, LS.spin1, LS.burst1, LOCAL_STATE_FIELDS]).toEqual([58, 59, 60, 61, 62]);
+    expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(11);
+    expect([LS.spin0, LS.burst0, LS.spin1, LS.burst1]).toEqual([58, 59, 60, 61]);
   });
 
   it('a spinning minigun and a burst under way round-trip, full and delta, so prediction fires exactly', () => {
@@ -1017,5 +1032,113 @@ describe('more guns (v11)', () => {
     expect(snap.pickups).toHaveLength(game.pickups.length);
     expect(snap.pickups.at(-1)).toEqual({ id: 47, def: 7 + (47 % 14), x: 100 + 47 * 0.5, y: 0 });
     expect(snap.events).toEqual(events);
+  });
+});
+
+describe('launchers and the flamethrower (v12)', () => {
+  it('takes the v12 slots from the protocol registry: a burn group after the fire-mode group', () => {
+    expect(PROTOCOL_VERSION).toBe(12);
+    expect([LS.burnTicks, LOCAL_STATE_FIELDS]).toEqual([62, 63]);
+  });
+
+  it('projectiles ride the grenade records: types past 7 (u4) and a blade\'s 300-tick fuse (u9) round-trip', () => {
+    const game = new Game({ seed: 3, dummies: false });
+    const me = game.addPlayer('me');
+    const rocket = game.allocGrenade()!;
+    Object.assign(rocket, { alive: true, owner: me.id, type: PROJECTILE_TYPE_BASE + ROCKET.index, x: 12.5, y: 3.25, vx: 20, vy: -0.5, fuse: 180, state: 0 });
+    const blade = game.allocGrenade()!;
+    Object.assign(blade, { alive: true, owner: me.id, type: PROJECTILE_TYPE_BASE + BLADE.index, x: 30, y: 2, vx: -18, vy: 0, fuse: 300, state: 1 });
+    const events: SimEvent[] = [{ type: 'explosion', x: 40, y: 1, radius: ROCKET.explosion!.radius, owner: me.id, grenade: PROJECTILE_TYPE_BASE + ROCKET.index }];
+    const snap = decodeMessage(encodeSnapshot(game, 1, events, { local: me })) as SnapshotMsg;
+    expect(snap.grenades).toEqual([
+      { id: rocket.id, owner: me.id, x: 12.5, y: 3.25, vx: 20, vy: -0.5, fuse: 180, type: PROJECTILE_TYPE_BASE + ROCKET.index, state: 0 },
+      { id: blade.id, owner: me.id, x: 30, y: 2, vx: -18, vy: 0, fuse: 300, type: PROJECTILE_TYPE_BASE + BLADE.index, state: 1 },
+    ]);
+    expect(snap.events).toEqual(events);
+  });
+
+  it('burning: its ticks in the local block (prediction burns exactly), and a flag on everyone else', () => {
+    const game = new Game({ seed: 3, dummies: false });
+    const me = game.addPlayer('me');
+    const other = game.addPlayer('other');
+    me.burnTicks = 97;
+    other.burnTicks = 5;
+    const snap = decodeMessage(encodeSnapshot(game, 1, [], { local: me })) as SnapshotMsg;
+    expect(snap.local![LS.burnTicks]).toBe(97);
+    const mirror = new PlayerState(me.id);
+    applyLocalState(snap.local!, mirror);
+    expect(mirror.burnTicks).toBe(97);
+    expect(snap.players.find((q) => q.id === other.id)?.burning).toBe(true);
+    other.burnTicks = 0;
+    const cool = decodeMessage(encodeSnapshot(game, 2, [], { local: me })) as SnapshotMsg;
+    expect(cool.players.find((q) => q.id === other.id)?.burning).toBe(false);
+  });
+
+  it('a minigun spinning or a charge weapon charging is a remote tell (review M1)', () => {
+    const game = new Game({ seed: 3, dummies: false });
+    const me = game.addPlayer('me');
+    const gunner = game.addPlayer('gunner');
+    const charger = game.addPlayer('charger');
+    game.setLoadout(gunner, [SHREDDER.index, TRIDENT.index]);
+    game.setLoadout(charger, [RIPPER.index, TRIDENT.index]);
+    const tell = () => {
+      const snap = decodeMessage(encodeSnapshot(game, 1, [], { local: me })) as SnapshotMsg;
+      return [gunner.id, charger.id].map((id) => snap.players.find((q) => q.id === id)!.windup);
+    };
+    expect(tell()).toEqual([false, false]);
+    gunner.weapons[0].spin = 12;
+    charger.weapons[0].spin = 3;
+    expect(tell()).toEqual([true, true]);
+  });
+});
+
+describe('items in smoke (review M2)', () => {
+  it('a hidden player taking a crate and dropping his gun changes nothing for a viewer outside the smoke, until it clears', () => {
+    const map: MapDef = {
+      id: 'smoke-items',
+      name: 'smoke items',
+      bounds: { minX: -2, minY: -6, maxX: 80, maxY: 40 },
+      solids: [{ points: [-2, -6, 80, -6, 80, 0, -2, 0] }],
+      oneWays: [],
+      spawns: [{ x: 5, y: 0 }],
+      dummies: [],
+      labels: [],
+    };
+    const game = new Game({ map, seed: 9, dummies: false, pickups: true });
+    const obs = game.addPlayer('obs');
+    Object.assign(obs, { x: 10, y: 0 });
+    const item = (x: number, def: number) => {
+      const k = game.pickups.find((q) => !q.alive)!;
+      Object.assign(k, { alive: true, def, x, y: 0, spawner: -1, spot: -1, ttl: 9999 });
+      return k;
+    };
+    const crate = item(30, 7 + WIDOW.index);
+    const plain = item(20, 7 + BREACHER.index);
+    const view: ViewRect = { minX: -20, minY: -10, maxX: 70, maxY: 40 };
+    const enc = new SnapshotEncoder();
+    const baselines = new SnapshotBaselines();
+    const decoder = new SnapshotDecoder();
+    let seq = 0;
+    const seen = () => {
+      enc.begin(game, ++seq, []);
+      const snap = decoder.decode(enc.encodeFor({ baselines, ackInputTick: 0, inputBufferHealth: 0, local: obs, view }));
+      baselines.acked = seq;
+      return snap.pickups.map((k) => `${k.def}@${k.x}`).sort();
+    };
+    const crateSeen = `${crate.def}@30`;
+    const plainSeen = `${plain.def}@20`;
+    expect(seen()).toEqual([crateSeen, plainSeen].sort());
+    const cloud = spawnCloud(game, SMOKE.index, 30, 0, -1)!;
+    cloud.age = 120;
+    // in the smoke: the crate taken, the taker's old gun dropped where he stands (in the crate's slot, as the sim does)
+    crate.alive = false;
+    const dropped = item(30.5, 7 + MACHETE.index);
+    expect(seen()).toEqual([crateSeen, plainSeen].sort());
+    // in plain sight, a change shows at once
+    plain.alive = false;
+    expect(seen()).toEqual([crateSeen]);
+    // the smoke clears: the truth
+    cloud.alive = false;
+    expect(seen()).toEqual([`${dropped.def}@30.5`]);
   });
 });

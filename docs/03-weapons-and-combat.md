@@ -104,7 +104,19 @@ The schema is zod-validated and lint-checked (e.g. a `dps` sanity range per clas
 | Shredder | spread ±6° → **±4.5°** (bloom 0.2°/shot, max 3°); interval 0.07 → **1/15 s** | at ±6° the spun-up stream missed most of a body at 12 m. The sim's cooldown counts whole ticks: 0.07 s would fire every 5 ticks (12/s), 1/15 s is exactly 4 (15/s) |
 | Arc | cell 200 → **40 ticks** (6 s of beam), regen 10/s after **0.5 s** off the trigger, no reload | 200 ticks was 30 s of beam: it never had to stop. Regen waits for the trigger to be released |
 
-Equip times: 0.25 s for one-handed guns, 0.3–0.35 s for rifles and SMGs, 0.5 s for the Shredder. **Not built yet:** the Thumper, Popper, Ripper, Pulse and Dragon need sim projectiles (§11); they come in a follow-up.
+Equip times: 0.25 s for one-handed guns, 0.3–0.35 s for rifles and SMGs, 0.5 s for the Shredder.
+
+**Launchers and the flamethrower (built, indices 14–18; `packages/content/src/projectiles.ts`, §11).** Thumper, Popper, Ripper, Pulse and Dragon fire projectiles instead of bullets. Their numbers are this table's; where the table says nothing or the feel report disagreed:
+
+| Weapon | As built | Why |
+|---|---|---|
+| Thumper | rocket 0.12 m, 3 s life (60 m); blast core 0.6 m; its own blast at 0.7 of the impulse (a rocket jump: ~8 m up for 40 HP) | 0.85 threw you ~12 m, past the tallest tower |
+| Popper | shell 17 m/s (+30% of your speed), friction 0.3; blast impulse **12** (a frag's is 26) | at 4 shells a second, a blast that launches the target throws it out of the next shell's way (TTK at 5 m went from 4.3 s to 1.3 s) |
+| Ripper | the blade's blast after 5 s: 60 in 2.5 m; mag 1 | the table gives none |
+| Pulse | orb 0.25 m, 3 s life (24 m); damage 0 | the table gives no life |
+| Dragon | a tank of **40 flames** (6 s), refilling 8 a second after 0.5 s off the trigger (5 s from empty); no reload; spread ±8° | "125 fuel" had no unit; 40 flames at 0.15 s keeps "auto-refill 5 s" |
+
+Projectiles ignore riot shields for now (flames go round them as specified; rockets, shells and blades should hit one: a follow-up). They are never lag-compensated (§11).
 
 ---
 
@@ -123,10 +135,13 @@ Equip times: 0.25 s for one-handed guns, 0.3–0.35 s for rifles and SMGs, 0.5 s
 | Longbow | 3 → 1.1 s | 2 → 0.55 s | |
 | Widow | 2 → 0.8 s | **1 → instant** | crouching victims deny the one-shot |
 | Breacher | 1 (all 5 pellets) → instant | — | inside ~4 m |
-| Dragon | 5 ticks → 0.6 s | — | area; hurts the user near walls |
+| Dragon | 5 flames → 0.6 s | — | area; hurts the user near walls; plus the flight (~0.3 s at 3 m) and 8 more over 2 s of burning |
 | Arc | 17 ticks → 2.4 s | — | perfect accuracy, huge range: a zoning tool |
 | Shredder | 12 → 1.53 s (0.8 s spin-up + 0.73 s) | 8 → 1.27 s | pre-spin (secondary fire) to skip the spin-up |
 | Thumper | 1 direct hit | — | splash kills crouched victims too |
+| Popper | 2 shells → 0.25 s | — | each blast 70 at its core |
+| Ripper | 1 blade → 0.4 s (its charge) | — | through everyone in a line |
+| Pulse | — | — | no damage: it kills jetpacks |
 | Machete | 1 hit | — | |
 
 **Targets for balance reviews:** auto-weapon median TTK in real matches (with misses) should be 1.2–2.0 s. If any weapon's kill share exceeds 1.5× its pick share for two consecutive weeks, it goes up for review.
@@ -164,7 +179,7 @@ Defaults: `moveMul 1.25 · airMul 1.5 · crouchMul 0.6 · dualMul 1.4 · bloomPe
 | Shredder (minigun) | 0.35 per round | 0.15 per round | a long burst pushes you back steadily |
 | Dragon, Arc, Pulse | 0 | 0 | streams and orbs don't kick |
 
-  (Every row is in the game except the Thumper, Popper, Ripper, Dragon and Pulse: those are the starting values for when they land.)
+  (Every row is in the game.)
 - **Aim aids:** a reticle at the cursor + a faint **aim line** (accessibility option, available to everyone). Other games sell a laser sight; for us it's a free setting. **No aim assist on desktop.** Touch (later) gets an optional light slowdown-near-target assist, only in casual queues.
 
 ---
@@ -249,12 +264,13 @@ Zoom makes the camera pull **out** so you see more of the map (1×–7×). In 2.
 | Weapon | Mechanic |
 |---|---|
 | Breacher | 5 pellets; each pellet hit applies 0.6 m/s of knockback (point-blank = a big shove); pellets don't penetrate |
-| Dragon | spawns a flame projectile every 0.15 s (sim projectile: 7 m/s initial speed, gravity −0.2, life 0.8 s, radius grows 0.15 → 0.6 m). Hits apply 20 dmg + a **burn** of 4 dmg/s for 2 s. Flames reflect weakly off walls → user damage when close. **Clears gas clouds** it touches. Passes around riot shields |
+| Dragon | spawns a flame projectile every 0.15 s (sim projectile: 7 m/s initial speed, gravity −0.2, life 0.8 s, radius grows 0.15 → 0.6 m). Hits apply 20 dmg + a **burn** of 4 dmg/s for 2 s. Flames reflect weakly off walls → user damage when close. **Clears gas clouds** it touches. Passes around riot shields. **Built:** a flame that touches a player is spent (one hit each); after a bounce it can hit its owner for half; burning is `PlayerState.burnTicks` (1 HP every 0.25 s, credited to the Dragon), in the local block, and a remote flag |
 | Arc | a continuous beam: one ray per 0.15 s tick from the shoulder; hitscan with lag comp; perfectly accurate; draws a persistent beam VFX; cell regenerates when not firing. **Built:** `fireMode: 'beam'`, a 40-tick cell that refills at 10 a second after 0.5 s off the trigger, no falloff, never reloads (the beam VFX is still the tracer) |
-| Thumper | sim projectile 20 m/s, no gravity, smoke trail; explodes on contact or at 60 m; splash per 02-physics §14; huge knockback (rocket jumps possible: self-damage 50%) |
-| Popper | arcing grenades (gravity 1.0, e = 0.3); explodes on player contact or after 1.2 s |
-| Ripper | needs a 0.4 s charge; the blade travels 18 m/s, **bounces off walls** (e = 1.0, no friction), **passes through players** (damaging each once per bounce segment), explodes after 5 s; deadly to its owner |
-| Pulse | slow orb (8 m/s) passes through walls; on a player hit or at end of life → EMP burst R 2.5 m: jetpacks disabled for 3 s, mines disarmed, no damage |
+| Thumper | sim projectile 20 m/s, no gravity, smoke trail; explodes on contact or at 60 m; splash per 02-physics §14; huge knockback (rocket jumps possible: self-damage 50%). **Built:** a direct hit is 100, then the blast; fired into a wall or the floor at point-blank it goes off there |
+| Popper | arcing grenades (gravity 1.0, e = 0.3); explodes on player contact or after 1.2 s. **Built** as specified (not on its shooter) |
+| Ripper | needs a 0.4 s charge; the blade travels 18 m/s, **bounces off walls** (e = 1.0, no friction), **passes through players** (damaging each once per bounce segment), explodes after 5 s; deadly to its owner. **Built:** `fireMode: 'charge'`: a press starts the charge, held it fires when full, let go early and it's lost; the blade can cut its owner once it has bounced |
+| Pulse | slow orb (8 m/s) passes through walls; on a player hit or at end of life → EMP burst R 2.5 m: jetpacks disabled for 3 s, mines disarmed, no damage. **Built** (a 0.7 s charge, like the Ripper's; the orb lives 3 s) |
+| All projectiles (built) | They fly in the grenade pool (type 8 + index; the grenade records of the snapshot carry them) and run like grenades: launched on the server's tick when the trigger is pulled, never rewound, hitting what is there on the tick they get there; each step is a swept circle against walls and players' bodies (one capsule from the shins to the head) in up to three legs. Clients draw the server's; the shooter's own aren't predicted (only its ammo, charge and cooldown are). A full pool keeps the round |
 | Shredder | 0.8 s spin-up (audible to nearby enemies, a fair warning), spin-down 1 s; can pre-spin with the secondary button; −30% move speed. **Built:** the spin is per-slot sim state (0–240, `SPIN_FULL`), up while either fire button is held, down otherwise; it fires only at full spin |
 | Trident (built) | `fireMode: 'burst'`: a press (or holding the trigger) fires 3 rounds 1/15 s apart, and the next burst starts 0.5 s after the last one started. A started burst finishes by itself; a reload, a swap or an empty mag ends it |
 | Machete | one-hit melee; replaces the default knife while held; the dual pair only swings one |

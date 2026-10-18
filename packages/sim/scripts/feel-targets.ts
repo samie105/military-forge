@@ -111,6 +111,12 @@ export const WEAPON_TARGETS: WeaponTarget[] = [
   { label: 'Longbow @18 m grounded', weapon: 'longbow', distance: 18, airborne: false, hitMin: 0.95, ttkMax: 1.2, why: 'docs/03 §6: 3 body shots, 1.1 s' },
   { label: 'Shredder @5 m grounded', weapon: 'shredder', distance: 5, airborne: false, hitMin: 0.95, ttkMax: 1.9, why: 'deadly once spun up (0.8 s of it in this TTK)' },
   { label: 'Arc @18 m grounded', weapon: 'arc', distance: 18, airborne: false, hitMin: 0.95, ttkMax: 2.6, why: 'docs/03 §6: 17 ticks, 2.4 s, at any range' },
+  // launchers and the flamethrower (docs/03 §5, §11): projectiles, so the flight is in the TTK
+  { label: 'Thumper @12 m grounded', weapon: 'thumper', distance: 12, airborne: false, hitMin: 0.95, ttkMax: 0.7, why: 'one rocket kills: 0.6 s to get there' },
+  { label: 'Popper @5 m grounded', weapon: 'popper', distance: 5, airborne: false, ttkMax: 1.6, why: 'two shells in the face (a shell knocks, so the next may miss)' },
+  { label: 'Ripper @12 m grounded', weapon: 'ripper', distance: 12, airborne: false, hitMin: 0.95, ttkMax: 1.1, why: 'a 0.4 s charge, then one blade' },
+  { label: 'Dragon @5 m grounded', weapon: 'dragon', distance: 5, airborne: false, ttkMax: 1.3, why: 'docs/03 §6: 5 flames, plus their flight' },
+  { label: 'Dragon @12 m grounded', weapon: 'dragon', distance: 12, airborne: false, hitMax: 0, why: 'flames reach ~6 m' },
 ];
 
 /** Grenades at 45°, full strength (the owner: "the bombs should go far"): about 30% farther than before. */
@@ -137,6 +143,13 @@ export const FLASH_TARGETS: { distance: number; lookAway: boolean; wall: boolean
   { distance: 10, lookAway: false, wall: false, whiteMin: 0.9, whiteMax: 1.6, why: 'still a real flash across a room' },
   { distance: 17, lookAway: false, wall: false, whiteMin: 0, whiteMax: 0, why: 'off-screen flashes do nothing' },
 ];
+
+/** Pulse (docs/03 §11): an EMP orb at a player 10 m away. */
+export const PULSE_TARGETS = {
+  reachedAfter: { min: 1.5, max: 2.3, why: 'a 0.7 s charge and a slow orb (8 m/s): you see it coming' },
+  jetOff: { min: 2.9, max: 3.1, why: 'jetpack dead for 3 s, like an EMP grenade' },
+  damage: { max: 0, why: 'no damage' },
+};
 
 /** Proximity mine and EMP (docs/02 §14). */
 export const MINE_TARGETS = {

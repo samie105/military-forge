@@ -8,6 +8,7 @@ import {
   measureBlast,
   measureDash,
   measureEmp,
+  measurePulse,
   measureEvents,
   measureFlash,
   measureGas,
@@ -29,6 +30,7 @@ import {
   BLAST_TARGETS,
   DASH_TARGETS,
   EMP_TARGETS,
+  PULSE_TARGETS,
   EVENT_TARGETS,
   FLASH_TARGETS,
   FOG_TARGETS,
@@ -62,6 +64,7 @@ rows.push(['Dash: up-right from standing, apex / run (m)', `${d.diagUp.toFixed(2
 rows.push(['Fall from a 6 m hover, no dash (s)', d.fallTime.toFixed(2), '']);
 
 for (const w of weapons) {
+  if (w.damage === 0) continue; // the Pulse kills jetpacks, not people (its own row below)
   const distances = w.fireMode === 'melee' ? [1, 5] : [5, 12, 18];
   for (const dist of distances) {
     for (const air of [false, true]) {
@@ -146,6 +149,13 @@ const mine = measureMine(1);
 const mt = MINE_TARGETS;
 rows.push(['Mine thrown level: sticks at (m) / after (s)', `${mine.sticksAt.toFixed(1)} / ${mine.sticksAfter.toFixed(2)}`, `${mark(mine.sticksAt >= mt.sticksAt.min && mine.sticksAt <= mt.sticksAt.max)}  (${mt.sticksAt.min}–${mt.sticksAt.max} m: ${mt.sticksAt.why})`]);
 rows.push(['Mine, an enemy 1 m away: blast after (s) / damage', `${mine.blastAfter.toFixed(2)} / ${mine.damage.toFixed(0)}`, `${mark(mine.damage >= mt.damage.min && mine.blastAfter >= mt.blastAfter.min && mine.blastAfter <= mt.blastAfter.max)}  (${mt.blastAfter.min}–${mt.blastAfter.max} s, ≥ ${mt.damage.min} dmg: ${mt.damage.why}; ${mt.blastAfter.why})`]);
+const pulse = measurePulse(10);
+const pt = PULSE_TARGETS;
+rows.push([
+  'Pulse at a player 10 m away: burst after (s) / jet off (s) / damage',
+  `${pulse.reachedAfter.toFixed(2)} / ${pulse.jetOff.toFixed(2)} / ${pulse.damage.toFixed(0)}`,
+  `${mark(pulse.reachedAfter >= pt.reachedAfter.min && pulse.reachedAfter <= pt.reachedAfter.max && pulse.jetOff >= pt.jetOff.min && pulse.jetOff <= pt.jetOff.max && pulse.damage <= pt.damage.max)}  (${pt.reachedAfter.why}; ${pt.jetOff.why}; ${pt.damage.why})`,
+]);
 const emp = measureEmp();
 rows.push(['EMP next to a player hovering 3 m up: jet off (s) / dropped (m)', `${emp.jetOff.toFixed(2)} / ${emp.dropped.toFixed(1)}`, `${mark(emp.jetOff >= EMP_TARGETS.jetOff.min && emp.jetOff <= EMP_TARGETS.jetOff.max && emp.dropped >= EMP_TARGETS.dropped.min)}  (${EMP_TARGETS.jetOff.why}; ${EMP_TARGETS.dropped.why})`]);
 

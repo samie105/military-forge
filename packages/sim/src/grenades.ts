@@ -6,7 +6,7 @@
  * blinds whoever sees it, an EMP kills jetpacks and disarms mines. Mines run their own state
  * machine instead (mines.ts).
  */
-import { GRENADE_TYPES, grenades, type EmpDef, type ExplosionDef, type FlashDef, type GrenadeDef } from '@military-forge/content';
+import { GRENADE_TYPES, grenades, projectileOfType, type EmpDef, type ExplosionDef, type FlashDef, type GrenadeDef } from '@military-forge/content';
 import { POS_INV, VEL_INV, quantize, simCosSin } from '@military-forge/shared';
 import { smokeBlocks, spawnCloud } from './clouds';
 import { DT, TICK_RATE, ticks } from './constants';
@@ -17,6 +17,7 @@ import { Btn, wasPressed } from './input';
 import { createBodyEnv, type BodyEnv } from './mechanics';
 import { chainMines, disarmMines, mineOf, retireMines, stepMine } from './mines';
 import { hitboxLayout, knockOutOfDash, type PlayerState } from './player';
+import { stepProjectile } from './projectiles';
 import { SegFlag, createRayHit, type CollisionWorld } from './world';
 
 export class GrenadeState {
@@ -33,8 +34,12 @@ export class GrenadeState {
   state = 0;
   /** a mine's hit points left once a bullet has hit it (0 = untouched); always 0 for the other types */
   hp = 0;
-  /** the tick it was thrown (allocGrenade): the oldest mine is the one a new one retires */
+  /** the tick it was thrown (allocGrenade): the oldest mine is the one a new one retires; a flame's age */
   born = 0;
+  /** projectiles (projectiles.ts): the weapon that fired it (damage credit), else −1 */
+  weapon = -1;
+  /** projectiles: players a saw blade has cut since its last bounce (bit per player id) */
+  hits = 0;
   constructor(readonly id: number) {}
 }
 
@@ -225,6 +230,11 @@ export function grenadeForces(game: Game, g: GrenadeState, gravityScale: number,
 }
 
 export function stepGrenade(game: Game, g: GrenadeState): void {
+  const proj = projectileOfType(g.type);
+  if (proj) {
+    stepProjectile(game, g, proj);
+    return;
+  }
   const def = grenades[g.type];
   if (!def) {
     g.alive = false;

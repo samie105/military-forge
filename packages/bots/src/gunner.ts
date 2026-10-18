@@ -60,7 +60,16 @@ export function weaponValue(def: WeaponDef, dist: number, used = dist): number {
     hit = Math.min(1, BODY_HALF_WIDTH / Math.max(BODY_HALF_WIDTH, fan)) * Math.min(1, (fan + BODY_HALF_WIDTH) / (1.5 * TYPICAL_AIM));
   } else hit = Math.min(1, BODY_HALF_WIDTH / Math.sqrt(TYPICAL_AIM * TYPICAL_AIM + fan * fan));
   // a burst rifle fires burst.count rounds per interval
-  return ((def.damage * def.pellets * (def.burst?.count ?? 1) * falloffAt(def, used)) / def.interval) * hit * classFit(def, dist);
+  let value = ((def.damage * def.pellets * (def.burst?.count ?? 1) * falloffAt(def, used)) / def.interval) * hit * classFit(def, dist);
+  const proj = def.projectile;
+  if (proj) {
+    // projectiles: never one whose blast would reach the bot itself; a lobbed shell only close in (the
+    // bot aims straight at the body); a straight one has to be led, so it's worth less the farther
+    if (proj.explosion && dist < proj.explosion.radius) return 0;
+    if (proj.gravityScale > 0 && dist > 10) return 0;
+    value *= Math.max(0.3, 1 - dist / 40);
+  }
+  return value;
 }
 
 /** Something to fire in slot `s`: a blade, or a gun with rounds in it or to reload. */
@@ -165,6 +174,14 @@ export class Gunner {
     // a gun fires at a body its bullets reach, with something in it: never Fire held for nothing
     if (trig.used > def.range || slot.mag + slot.reserve === 0) {
       this.burstLeft = 0;
+      return;
+    }
+    if (def.fireMode === 'charge') {
+      // a charge weapon: press when ready and on target, hold while it charges (it fires by itself
+      // when full), then let go so the next press starts the next charge
+      const charging = slot.spin > 0;
+      if (!charging && ((self.prevButtons & Btn.Fire) !== 0 || !trig.onTarget || slot.cooldown > 1e-6 || slot.reloadTicks > 0 || slot.mag === 0)) return;
+      out.buttons |= Btn.Fire;
       return;
     }
     if (heldTrigger(def)) {

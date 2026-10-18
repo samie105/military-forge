@@ -12,6 +12,7 @@ import {
   GRENADE_TYPES,
   HAMMER,
   MINE,
+  PULSE,
   RIOT_SHIELD,
   defaultTuning,
   heldTrigger,
@@ -430,7 +431,8 @@ export function measureZones(tuning: Partial<Tuning> = {}): ZoneMetrics {
     m.boostPadFlight = p.x - x0;
   }
   for (const w of weapons) {
-    if (w.fireMode === 'melee') continue;
+    // bullets only: fog damps bullets, not projectiles
+    if (w.fireMode === 'melee' || w.projectile) continue;
     const { game, p, step } = setup(tuning, 1, zoned('damping', [p0x(5), -6, p0x(15), 62]));
     if (DEFAULT_LOADOUT.indexOf(w.index) !== 0) game.setLoadout(p, [w.index, DEFAULT_LOADOUT[1]]);
     // a minigun fires once it's spun up: hold the trigger until the first round
@@ -771,6 +773,35 @@ export function measureEmp(tuning: Partial<Tuning> = {}): EmpMetrics {
     low = Math.min(low, p.y);
   }
   return { jetOff: (off + 1) / 60, dropped: y0 - low };
+}
+
+export interface PulseMetrics {
+  /** from the press to the orb's burst on a player `distance` m away (s): the charge and the flight */
+  reachedAfter: number;
+  /** seconds that player's jetpack stays dead, and the damage it took */
+  jetOff: number;
+  damage: number;
+}
+
+/** Pulse (docs/03 §11): a player `distance` m away, an orb fired at its body. */
+export function measurePulse(distance: number, tuning: Partial<Tuning> = {}): PulseMetrics {
+  const { game, p, step } = setup(tuning);
+  game.setLoadout(p, [PULSE.index, DEFAULT_LOADOUT[1]]);
+  const q = game.addPlayer('target');
+  q.x = p.x + distance;
+  q.y = p.y;
+  for (let i = 0; i < 30; i++) step(0);
+  const m: PulseMetrics = { reachedAfter: NaN, jetOff: 0, damage: 0 };
+  for (let t = 1; t < 600; t++) {
+    step(Btn.Fire, 0);
+    if (q.jetDisabledTicks > 0) {
+      m.reachedAfter = t / 60;
+      m.jetOff = q.jetDisabledTicks / 60;
+      break;
+    }
+  }
+  m.damage = game.tuning.healthMax - q.hp;
+  return m;
 }
 
 export interface RecoilMetrics {

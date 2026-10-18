@@ -42,6 +42,10 @@ export interface PlayerView {
   gasTicks?: number;
   /** ticks the jetpack stays dead after an EMP */
   jetDisabledTicks?: number;
+  /** on fire (the flamethrower's burn: sim burnTicks; remote players by their snapshot flag) */
+  burning?: boolean;
+  /** the gun in hand winding up: a minigun spinning, a Ripper or Pulse charging (a tell; its sound when there is audio) */
+  windup?: boolean;
   active: number;
   dual: boolean;
   weapons: WeaponView[];
@@ -73,9 +77,12 @@ export interface GrenadeView {
   fuse: number;
   /** grenade type (packages/content grenades); absent = frag */
   type?: number;
-  /** a mine's state (sim MineState) */
+  /** a mine's state (sim MineState); a projectile: 1 once it has bounced */
   state?: number;
   id?: number;
+  /** m/s (projectiles point along it: a rocket, a blade's travel) */
+  vx?: number;
+  vy?: number;
 }
 
 /** A smoke or gas cloud (sim clouds.ts), sized by the sim's own functions. */

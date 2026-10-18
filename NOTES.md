@@ -811,7 +811,7 @@ Every gun with a W8 model that fires bullets now has stats (`packages/content/sr
 | Arc @ any range | 2.42 s | 100% |
 | (for scale: K-47 @ 12 m, Buzz @ 12 m) | 1.69 s, 2.54 s | 55%, 58% |
 
-**Not built yet:** the launchers (Thumper, Popper, Ripper, Pulse) and the Dragon need sim projectiles (docs/03 §11), the protocol to carry them and their 3D. They are the next piece of this work.
+**Launchers and the Dragon:** §25.
 
 ### 24.2 Weapon crates and `E`
 
@@ -834,3 +834,47 @@ Every gun with a W8 model that fires bullets now has stats (`packages/content/sr
 
 - **Wire** (docs/05 §6.2, claimed in the protocol registry): local block 58–61 `spin0 u8 · burst0 u2 · spin1 u8 · burst1 u2` (13 delta groups); pickups `u6 id · u6 def` (were u5 · u4; up to 48 items, defs 0–63, 21 used); PICKUP's item u6. `E` is the existing `Btn.Interact`. The armory is a server option, nothing on the wire.
 - **Goldens:** every sim golden (17) and bot golden (3) is re-recorded, all from tick 0: a player spawns with a full tank, and the tank is hashed. **Proof:** main's replays and goldens run through this branch with the old fuel (100, ground regen 35), the old throw speeds and fuses, and every map's weapon crates taken off are bit-identical, all 20. Only `mech-events`' replay file changed (a closed-loop scenario re-generated with the bigger tank).
+
+## 25. Launchers and the flamethrower (18 Oct 2026, the rest of the modelled arsenal)
+
+> Coordinator, after #99: "start the second PR now (launchers: Thumper, Popper, Ripper, Pulse; plus the Dragon), with sim projectiles … deterministic and lag-compensated the same way as grenades".
+
+### 25.1 Projectiles
+
+- **One system, the grenade pool.** Rockets, launcher shells, saw blades, EMP orbs and flames are `GrenadeState`s of type `PROJECTILE_TYPE_BASE (8) + index` (content `projectiles.ts`). `stepGrenade` hands them to `stepProjectile` (sim `projectiles.ts`). So they reach clients in the grenade records with no new snapshot section, are culled by view and smoke like grenades, and run "the same way as grenades": launched on the server's tick when the trigger is pulled, never rewound, hitting what is there on the tick they get there. The client predicts the shooter's ammo, charge and cooldowns, not the projectile: the predictor drops the ones its shots launch (the `launch` event), as it does throws.
+- **A step:** forces (gravity × gravityScale, the map's pads, wind and drag), then the move as a swept circle against walls (`sweepCircle`) and players' bodies (one capsule from the shins to the head's centre) in up to three legs. What it touches decides: `walls` explode / bounce / pass, `players` explode / pierce / consume, `expire` explode / vanish. Blasts use `explode()` (credited to the weapon, so the kill feed names the Thumper, not "grenade") or `emp()`.
+- **The five:**
+
+  | Projectile | Fired by | Speed | Life | Walls | Players | End |
+  |---|---|---|---|---|---|---|
+  | rocket | Thumper | 20 m/s, straight | 3 s (60 m) | blows up | 100 direct, then 80 in 3.5 m | blows up |
+  | shell | Popper | 17 m/s, lobbed | 1.2 s | bounces (e 0.3) | blows up (70 in 3 m, a knock not a launch) | blows up |
+  | saw blade | Ripper (0.4 s charge) | 18 m/s, straight | 5 s | bounces (e 1, no friction) | 100 to each, once between bounces; its owner once it has bounced | blows up (60 in 2.5 m) |
+  | EMP orb | Pulse (0.7 s charge) | 8 m/s | 3 s | through | EMP burst 2.5 m (jetpacks 3 s, mines disarmed) | EMP burst |
+  | flame | Dragon | 7 m/s, rises (−0.2 g) | 0.8 s | glances off (e 0.3); then it can burn its owner for half | 20 and 2 s burning (4/s), spent | gone |
+
+- **Charge** (`fireMode: 'charge'`): a press starts it, holding fills it (`WeaponSlot.spin` counts the ticks), let go early and it's lost; full, it fires and waits for the next press. Bots press and hold, then let go.
+- **The Dragon's tank** is a regenerating magazine like the Arc's: 40 flames (6 s), 8 a second after 0.5 s off the trigger. **Flames put out toxic gas** they touch (not smoke).
+- **Bots** never fire a rocket or shell at a body inside its own blast, lob shells only within 10 m (they aim straight), and value straight projectiles less with range (they have to lead). The Pulse is worth nothing to them (no damage).
+- **Known gaps (follow-ups):** projectiles ignore riot shields (flames should go round them, and do; rockets, shells and blades should hit a shield); the Ripper's and Pulse's charge has no slowdown; the orb's burst uses the EMP grenade's ring on clients.
+
+| Feel (sim `pnpm feel`, a standing target) | TTK | Hits |
+|---|---|---|
+| Thumper @ 5 / 12 / 18 m | 0.18 / 0.53 / 0.83 s | 100% |
+| Popper @ 5 m | 1.29 s | 38% (a shell knocks: the next may miss) |
+| Ripper @ 5 / 12 / 18 m | 0.60 / 0.98 / 1.32 s | 100% |
+| Dragon @ 5 m (12 m: never) | 1.12 s | flames and burn |
+| Pulse at a player 10 m away | burst after 1.77 s, jetpack dead 2.98 s, 0 damage | |
+
+### 25.2 The #99 review's mediums, in this PR
+
+- **M1, the Shredder's pre-spin:** spun up on the second button alone it winds down after `PRE_SPIN_HOLD` (2 s) without a shot (a fresh press starts the clock again, using `ticksSinceShot`, which the local block carries), and while it spins it weighs more (`SPINNING_SPEED_MUL` 0.85 on its 0.7). The tell: remote flag 2048 "winding up" (a minigun spinning, a Ripper or Pulse charging), drawn in 2D as a pulsing ring at the muzzle. There's no audio yet: whoever adds it plays the spin's whine (and the charge's hum) on `PlayerView.windup`.
+- **M2, items in smoke:** the snapshot encoder holds an item a client can't see (smoke it's outside of, behind smoke, or its full white) as that client last had it, present or not, until the spot can be seen; a full snapshot leaves it out, and the PICKUP event isn't sent either. A hidden player's swap no longer shows where he stands.
+- **#107 review:** a blast at a spot smoke hides from a client (a rocket on a hidden body) reaches it only as a SOUND, like tracers into smoke; and a projectile hits a body only with nothing solid between them (walls and slabs count, fences and plain one-ways don't): a flame's 0.6 m circle used to reach the player standing on a slab from below.
+
+### 25.3 Protocol v12 and goldens
+
+- **Wire** (claimed in the registry first; docs/05 §6.2): grenade records `type` u4 and `fuse` u9; EXPLOSION's grenade type u4; local block 62 `burnTicks` u7; remote flags 12 bits (1024 burning, 2048 winding up).
+- **Online:** `apps/game-server/test/launchers.netcode.test.ts`: a rocket and a charged blade through the real Room and clients with no corrections (ammo and charge predicted to the round), the rocket in the other client's snapshots; a burn counted down on the victim's client from its local block.
+- **Goldens:** every sim golden is unchanged. New: `launchers-rockets` (rockets down the range, a rocket jump, lobbed shells), `launchers-blade-flame` (flames up close, then a blade that comes back off the wall for its owner), `launchers-pulse`. `bots-match` is re-recorded: it first differs at tick 355, the first weapon crate's draw, since the crates' pool holds the launchers now. **Proof:** main's replays through this branch with the five new guns taken back out of the pool are bit-identical, all 17 sim and 3 bot goldens.
+- **Views:** 2D draws each projectile (a rocket along its flight, a shell, a spinning blade, a glowing orb, flames that grow and fade), burning players' glow and the wind-up ring. In 3D, `render3d/clouds.ts` shapes its grenade balls into placeholders until render3d-b draws the Forge's (`projectiles.glb`, `specials.vfx.json` styles): see the shared note `arsenal-projectiles-render.md`.

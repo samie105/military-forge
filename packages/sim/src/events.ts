@@ -31,6 +31,8 @@ export type SimEvent =
   | { type: 'death'; victim: number; killer: number; source: number }
   | { type: 'spawn'; player: number }
   | { type: 'throw'; owner: number; grenade: number }
+  /** a launcher or the flamethrower sent off a projectile (grenade-pool slot `grenade`); not on the wire */
+  | { type: 'launch'; owner: number; grenade: number; weapon: number }
   /**
    * A grenade went off: `grenade` is its type (packages/content grenades, absent = frag), so
    * clients draw a blast, a flash or an EMP ring; smoke and gas show up as clouds instead.

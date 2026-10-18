@@ -17,7 +17,7 @@ import {
   weapons,
 } from '@military-forge/content';
 import { describe, expect, it } from 'vitest';
-import { ARMORY_RESPAWN, Btn, Game, SPIN_FULL, SegFlag, createRayHit, type SimEvent } from '../src';
+import { ARMORY_RESPAWN, Btn, Game, PRE_SPIN_HOLD, SPINNING_SPEED_MUL, SPIN_FULL, SegFlag, createRayHit, heldSpeedMul, type SimEvent } from '../src';
 import { dummyAt, flatMap, hold, makeGame, placeOnGround } from './helpers';
 
 function shots(game: Game): Extract<SimEvent, { type: 'shot' }>[] {
@@ -67,6 +67,23 @@ describe('burst, spin-up and beam (more guns)', () => {
     expect(fireTicks(game, p, Btn.Fire | Btn.Fire2, 1)).toEqual([0]); // fires at once
     // heavy: ×0.7 speed while held
     expect(SHREDDER.moveSpeedMul).toBe(0.7);
+  });
+
+  it('Shredder: pre-spun on the second button alone it winds down after 2 s; spinning, it weighs more (review M1)', () => {
+    const { game, p } = armed([SHREDDER.index, HAMMER.index]);
+    expect(heldSpeedMul(p)).toBeCloseTo(SHREDDER.moveSpeedMul, 9);
+    hold(game, p, Btn.Fire2, 60);
+    expect(p.weapons[0].spin).toBe(SPIN_FULL);
+    expect(heldSpeedMul(p)).toBeCloseTo(SHREDDER.moveSpeedMul * SPINNING_SPEED_MUL, 9);
+    hold(game, p, Btn.Fire2, PRE_SPIN_HOLD * 60 - 60 + 70); // past the hold, plus the 1 s wind-down
+    expect(p.weapons[0].spin).toBe(0);
+    hold(game, p, 0, 1);
+    hold(game, p, Btn.Fire2, 50); // a fresh press: spins up again
+    expect(p.weapons[0].spin).toBe(SPIN_FULL);
+    expect(fireTicks(game, p, Btn.Fire | Btn.Fire2, 1)).toEqual([0]);
+    // firing keeps it spinning however long
+    hold(game, p, Btn.Fire | Btn.Fire2, 180);
+    expect(p.weapons[0].spin).toBe(SPIN_FULL);
   });
 
   it('Arc: a ray every 0.15 s with no falloff; the cell runs dry and refills by itself, never a reload', () => {

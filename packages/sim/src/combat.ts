@@ -12,6 +12,7 @@ import { rayCapsule, rayCircle } from './geometry';
 import { Btn, isDown, wasPressed } from './input';
 import { DUAL_TOGGLE_TIME, cancelReloads, knockOutOfDash, type PlayerState, type WeaponSlot } from './player';
 import { stepGrenadeBelt } from './grenades';
+import { launchProjectile } from './projectiles';
 import { damageMine, mineHit, shootableMine } from './mines';
 import { createHitPose } from './rewind';
 import { damageShield, shieldHitT, shieldInFront, shieldRaised, shieldSlung } from './shield';
@@ -73,6 +74,8 @@ function meleeSwingTicks(p: PlayerState): number {
 
 /** A minigun is spun up at this (WeaponSlot.spin): spin-up and spin-down rates are whole steps per tick. */
 export const SPIN_FULL = 240;
+/** seconds a minigun stays spun up on the second button alone, without firing (review M1) */
+export const PRE_SPIN_HOLD = 2;
 
 /** Spin gained per tick while spinning up (`up` s from rest) and lost per tick spinning down (`down` s from full). */
 function spinRates(def: WeaponDef): { up: number; down: number } {
@@ -234,6 +237,22 @@ function fireShot(game: Game, p: PlayerState, slot: WeaponSlot, def: WeaponDef):
   }
   slot.bloom = Math.min(def.spread.bloomMax, slot.bloom + def.spread.bloomPerShot);
   recoilPush(game, p, def);
+}
+
+/**
+ * A launcher's or the flamethrower's shot (docs/03 §11): a projectile instead of a bullet
+ * (projectiles.ts), the same seeded spread, bloom and kick, and a `shot` event at the muzzle for the
+ * flash and the sound (no tracer: it starts and ends there). False when the grenade pool is full:
+ * nothing leaves and the round isn't spent.
+ */
+function fireProjectile(game: Game, p: PlayerState, slot: WeaponSlot, def: WeaponDef): boolean {
+  const g = launchProjectile(game, p, def, currentSpread(p, slot, def));
+  if (!g) return false;
+  game.events.push({ type: 'shot', shooter: p.id, weapon: def.index, ox: g.x, oy: g.y, ex: g.x, ey: g.y, hit: 0, target: -1, zone: HitZone.None });
+  slot.bloom = Math.min(def.spread.bloomMax, slot.bloom + def.spread.bloomPerShot);
+  simCosSin(p.aim, aimDir);
+  recoilPush(game, p, def);
+  return true;
 }
 
 // Recoil push (docs/02 §12, the owner's "rebounds physics after shots").
@@ -529,15 +548,25 @@ export function stepWeapons(game: Game, p: PlayerState): void {
     if (slot.def === NO_WEAPON) continue;
     const def = weapons[slot.def]!;
     const inHand = p.dual || s === p.active;
-    // a minigun spins while either fire button is held in hand, and winds down otherwise
+    // a minigun spins while either fire button is held in hand, and winds down otherwise. Spun up
+    // on the second button alone it winds down after PRE_SPIN_HOLD s without a shot (review M1); a
+    // fresh press of it starts that clock again
     if (def.spin) {
       const rate = spinRates(def);
-      const spinning = inHand && ready && slot.reloadTicks === 0 && (firing || isDown(buttons, Btn.Fire2));
+      if (wasPressed(buttons, prev, Btn.Fire2)) slot.ticksSinceShot = 0;
+      const preSpin = isDown(buttons, Btn.Fire2) && slot.ticksSinceShot < ticks(PRE_SPIN_HOLD);
+      const spinning = inHand && ready && slot.reloadTicks === 0 && (firing || preSpin);
       slot.spin = spinning ? Math.min(SPIN_FULL, slot.spin + rate.up) : Math.max(0, slot.spin - rate.down);
     }
+    // a charge weapon (`spin` counts the ticks charged): a press starts it, holding fills it, letting
+    // go (or swapping away) loses it; it fires once full, then waits for the next press
+    if (def.charge) {
+      const canCharge = inHand && ready && slot.reloadTicks === 0 && slot.cooldown <= 1e-6 && slot.mag > 0;
+      slot.spin = canCharge && firing && (slot.spin > 0 || pressed) ? Math.min(255, slot.spin + 1) : 0;
+    }
     if (!inHand || !ready || def.fireMode === 'melee') continue;
-    // a burst under way carries on by itself; otherwise held modes fire while held, semi on a press
-    const trigger = slot.burst > 0 || (heldTrigger(def) ? firing : pressed);
+    // a burst under way carries on by itself; a charge fires when full; held modes fire while held, semi on a press
+    const trigger = def.charge ? slot.spin >= ticks(def.charge) : slot.burst > 0 || (heldTrigger(def) ? firing : pressed);
     if (!trigger || slot.reloadTicks > 0 || slot.cooldown > 1e-6) continue;
     if (def.spin && slot.spin < SPIN_FULL) continue;
     if (slot.mag <= 0) {
@@ -545,7 +574,10 @@ export function stepWeapons(game: Game, p: PlayerState): void {
       if (!p.dual) startReload(slot, def);
       continue;
     }
-    fireShot(game, p, slot, def);
+    if (def.projectile) {
+      if (!fireProjectile(game, p, slot, def)) continue; // the pool is full: the round stays
+    } else fireShot(game, p, slot, def);
+    if (def.charge) slot.spin = 0;
     slot.mag--;
     slot.ticksSinceShot = 0;
     if (def.burst) {

@@ -659,6 +659,19 @@ export class Avatar {
     return true;
   }
 
+  /**
+   * Socket `name` (sockets.json: `pilot`, `charge`…) of the drawn gun that holds `weapon`, in world
+   * space (vfx/projectiles.ts); its muzzle when the gun has no such socket. False when no such gun
+   * is drawn.
+   */
+  gunPoint(weapon: number, name: string, out: Vector3): boolean {
+    const arm = this.drawnGun(weapon, true);
+    if (!arm) return false;
+    const model = this.kit.weapon(weapon);
+    out.copy(model.sockets?.points[name] ?? model.muzzle).applyMatrix4(arm.gun.matrixWorld);
+    return true;
+  }
+
   /** The arm drawing `weapon` (dual guns of one kind take turns; `peek`: the one that fired last), its matrices current. */
   private drawnGun(weapon: number, peek: boolean): Arm | null {
     if (!this.pivot.visible) return null;

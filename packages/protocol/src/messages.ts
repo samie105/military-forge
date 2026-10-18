@@ -52,8 +52,12 @@ export { MsgType } from './wire';
  *     burst0 u2 · spin1 u8 · burst1 u2: a minigun's spin-up and a burst rifle's rounds left) · the pickups
  *     section's id and def u6 (48 items; weapon items are defs 7+) · the PICKUP ext event's item u6. Weapon
  *     pickups use Btn.Interact (bit 10, already there); the test armory is a server option, not on the wire.
+ * v12 (arsenal, launchers and the flamethrower): projectiles ride the grenade records, whose type
+ *     widens u3 → u4 (8–12: rocket, shell, blade, orb, flame) and fuse u8 → u9; EXPLOSION's grenade
+ *     type u3 → u4; local block 62 burnTicks u7 (14 delta groups); remote flags 12 bits (1024 burning,
+ *     2048 winding up: a minigun spinning or a charge weapon charging).
  */
-export const PROTOCOL_VERSION = 11;
+export const PROTOCOL_VERSION = 12;
 
 /**
  * Everything the sim reads from packages/content: a client and server that disagree on any of it

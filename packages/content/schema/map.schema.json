@@ -228,6 +228,11 @@
             "weapon:longbow",
             "weapon:shredder",
             "weapon:arc",
+            "weapon:thumper",
+            "weapon:popper",
+            "weapon:ripper",
+            "weapon:pulse",
+            "weapon:dragon",
             "grenades"
           ],
           "description": "What can appear (SPAWN_POOLS in packages/content pickups.ts)."

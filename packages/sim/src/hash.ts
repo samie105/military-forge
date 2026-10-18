@@ -2,7 +2,7 @@
  * State hash over every simulated field, as fixed-point integers. Used by golden replays and,
  * later, by the client/server desync telemetry (docs/02 §15.6).
  */
-import { MINE } from '@military-forge/content';
+import { MINE, PROJECTILE_TYPE_BASE } from '@military-forge/content';
 import type { Game } from './game';
 
 export class Fnv32 {
@@ -101,6 +101,8 @@ export function hashGame(game: Game): number {
     f.opt(0x112, p.blindFade);
     f.opt(0x113, p.gasTicks);
     f.opt(0x114, p.jetDisabledTicks);
+    f.opt(0x115, p.burnTicks);
+    f.opt(0x116, p.burnBy + 1);
     // a minigun's spin and a burst in progress (the owner's more guns): hashed only when set
     for (let i = 0; i < 2; i++) {
       f.opt(0x130 + 2 * i, p.weapons[i]!.spin);
@@ -119,7 +121,9 @@ export function hashGame(game: Game): number {
     f.opt(0x120, g.type);
     f.opt(0x121, g.state);
     f.opt(0x122, Math.round(g.hp * 1024));
-    if (g.type === MINE.index) f.opt(0x123, g.born); // mines only (a new one retires the oldest): frags hash as before
+    if (g.type === MINE.index || g.type >= PROJECTILE_TYPE_BASE) f.opt(0x123, g.born); // mines (a new one retires the oldest) and projectiles (a flame grows): frags hash as before
+    f.opt(0x124, g.weapon + 1);
+    f.opt(0x125, g.hits);
   }
   // clouds: nothing hashed when there are none (every golden before grenade variety)
   for (const c of game.clouds) {

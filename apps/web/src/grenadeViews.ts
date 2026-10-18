@@ -13,7 +13,7 @@ export function cloudView(id: number, type: number, x: number, y: number, age: n
   return { id, type, x, y, radius: cloudRadius(def, age), density: cloudDensity(def, age), opaque: visionRadius(def, age), age: age / TICK_RATE };
 }
 
-type StatusView = Required<Pick<PlayerView, 'grenadeType' | 'grenadeCounts' | 'blind' | 'blindTicks' | 'gasTicks' | 'jetDisabledTicks'>>;
+type StatusView = Required<Pick<PlayerView, 'grenadeType' | 'grenadeCounts' | 'blind' | 'blindTicks' | 'gasTicks' | 'jetDisabledTicks' | 'burning' | 'windup'>>;
 
 /**
  * The belt and status effects of a player whose state we hold (local mode: everyone; online: us).
@@ -28,6 +28,8 @@ export function statusView(p: PlayerState, peakBlind = 0): StatusView {
     blindTicks: p.blindTicks,
     gasTicks: p.gasTicks,
     jetDisabledTicks: p.jetDisabledTicks,
+    burning: p.burnTicks > 0,
+    windup: (p.weapons[p.active]?.spin ?? 0) > 0,
   };
 }
 

@@ -10,6 +10,7 @@ import { stepRegen, stepWeapons } from './combat';
 import { MAX_CLOUDS, MAX_GRENADES, MAX_PICKUPS, MAX_PLAYERS, ticks } from './constants';
 import { DamageSource, type SimEvent } from './events';
 import { GrenadeState, forgetOwner, stepGrenade, stepStatus } from './grenades';
+import { stepBurn } from './projectiles';
 import { copyInput, type Input } from './input';
 import { MapMechanics, createBodyEnv } from './mechanics';
 import { depenetrate, quantizeMovement, stepMovement } from './movement';
@@ -128,6 +129,8 @@ export class Game {
       g.state = 0;
       g.hp = 0;
       g.born = this.tick;
+      g.weapon = -1;
+      g.hits = 0;
       return g;
     }
     return null;
@@ -248,6 +251,7 @@ export class Game {
     for (const p of this.players) if (p?.alive) stepWeapons(this, p);
     for (const g of this.grenades) if (g.alive) stepGrenade(this, g);
     stepClouds(this);
+    for (const p of this.players) if (p?.alive) stepBurn(this, p);
 
     // hazards: falling out of the map (KILL zone below the bounds)
     for (const p of this.players) {

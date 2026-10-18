@@ -84,13 +84,15 @@ export const LS = {
   burst0: 59,
   spin1: 60,
   burst1: 61,
+  // the flamethrower's burn (v12): prediction takes the burn's damage pulses exactly
+  burnTicks: 62,
 } as const;
 
 /** Offsets inside a weapon slot. */
 export const LS_SLOT = { def: 0, mag: 1, reserve: 2, cooldown: 3, reloadTicks: 4, bloom: 5, ticksSinceShot: 6 } as const;
 const SLOT_FIELDS = 7;
 
-export const LOCAL_STATE_FIELDS = LS.burst1 + 1;
+export const LOCAL_STATE_FIELDS = LS.burnTicks + 1;
 
 /** grenade types whose counts travel in the grenade group (type 0, the frag, is `frags`) */
 const OTHER_GRENADES = GRENADE_TYPES - 1;
@@ -110,7 +112,8 @@ const GROUPS: readonly (readonly [number, number])[] = [
   [LS.shieldHp, LS.grenadeType],
   [LS.grenadeType, LS.blindTicks],
   [LS.blindTicks, LS.spin0],
-  [LS.spin0, LOCAL_STATE_FIELDS],
+  [LS.spin0, LS.burnTicks],
+  [LS.burnTicks, LOCAL_STATE_FIELDS],
 ];
 
 /** Ground normals are quantised to 1/65536 by the sim (quantizeMovement). */
@@ -133,7 +136,8 @@ const BITS: readonly number[] = [
   19, 1, 5, // shieldHp (1/1024, ≤ 300), shieldStowed, shieldTicks (≤ raise time, 15)
   3, ...new Array<number>(OTHER_GRENADES).fill(3), // grenadeType, counts (≤ 7)
   8, 7, 6, 8, // blindTicks (≤ 4.25 s), blindFade (≤ 2.1 s), gasTicks (≤ 1 s), jetDisabledTicks (≤ 4.25 s)
-  8, 2, 8, 2, // spin0 (≤ SPIN_FULL 240), burst0 (≤ 3), spin1, burst1
+  8, 2, 8, 2, // spin0 (≤ SPIN_FULL 240, or a charge's ticks), burst0 (≤ 3), spin1, burst1
+  7, // burnTicks (≤ 2 s)
 ];
 
 if (BITS.length !== LOCAL_STATE_FIELDS) throw new Error('local state layout out of sync');
@@ -220,6 +224,7 @@ export function captureLocalState(p: PlayerState, out: LocalState): LocalState {
   out[LS.burst0] = p.weapons[0].burst;
   out[LS.spin1] = p.weapons[1].spin;
   out[LS.burst1] = p.weapons[1].burst;
+  out[LS.burnTicks] = p.burnTicks;
   for (let i = 0; i < LOCAL_STATE_FIELDS; i++) out[i] = fit(out[i]!, BITS[i]!);
   return out;
 }
@@ -283,6 +288,7 @@ export function applyLocalState(s: LocalState, p: PlayerState): void {
   p.weapons[0].burst = s[LS.burst0]!;
   p.weapons[1].spin = s[LS.spin1]!;
   p.weapons[1].burst = s[LS.burst1]!;
+  p.burnTicks = s[LS.burnTicks]!;
 }
 
 export function localStatesEqual(a: LocalState, b: LocalState): boolean {

@@ -32,6 +32,8 @@ import {
   streetMarketMap,
   timeToKill,
   tuningHash,
+  PROJECTILE_TYPE_BASE,
+  projectiles,
   weapons,
   type MapOneWay,
   type WeaponClass,
@@ -54,6 +56,12 @@ const TTK_SHEET: Record<string, [number, number, number | null, number | null]> 
   longbow: [3, 1.1, 2, 0.55],
   shredder: [12, 0.8 + 11 / 15, 8, 0.8 + 7 / 15], // includes the 0.8 s spin-up
   arc: [17, 2.4, 12, 1.65],
+  // launchers and the flamethrower: direct hits (a shell's is its blast at the core), no headshots
+  thumper: [1, 0, null, null],
+  popper: [2, 0.25, null, null],
+  ripper: [1, 0.4, null, null], // the 0.4 s charge
+  pulse: [Infinity, Infinity, null, null], // no damage: it kills jetpacks
+  dragon: [5, 0.6, null, null], // before the burn
 };
 
 /** Body-shot DPS sanity range per class (docs/03 §4 lint). */
@@ -99,13 +107,32 @@ describe('weapons', () => {
   });
 
   it('body-shot DPS is inside its class range', () => {
-    for (const w of weapons) {
+    // bullets only: a launcher's damage is a blast or a projectile's, judged by the feel report
+    for (const w of weapons.filter((x) => !x.projectile)) {
       const range = DPS_RANGE[w.class];
       expect(range, `${w.class} has a DPS range`).toBeDefined();
       const dps = (shotDamage(w) * (w.burst?.count ?? 1)) / w.interval;
       expect(dps, `${w.id} dps`).toBeGreaterThanOrEqual(range![0]);
       expect(dps, `${w.id} dps`).toBeLessThanOrEqual(range![1]);
     }
+  });
+
+  it('launchers and the flamethrower fire their projectiles: a direct hit is the projectile\'s, no falloff, no headshots', () => {
+    const fired = weapons.filter((w) => w.projectile);
+    expect(fired.map((w) => w.id)).toEqual(['thumper', 'popper', 'ripper', 'pulse', 'dragon']);
+    for (const w of fired) {
+      const proj = w.projectile!;
+      expect(projectiles[proj.index], w.id).toBe(proj);
+      expect(w.headMul, w.id).toBe(1);
+      expect(w.minDamageMul, w.id).toBe(1);
+      expect(w.damage, w.id).toBe(proj.players === 'explode' && proj.damage === 0 ? (proj.explosion?.maxDamage ?? 0) : proj.damage);
+      expect(proj.explosion !== undefined || proj.emp !== undefined || proj.expire === 'vanish', `${proj.id} does something at the end`).toBe(true);
+      expect(Math.round(proj.life * 60), `${proj.id} fits the u9 fuse`).toBeLessThan(512);
+    }
+    expect(PROJECTILE_TYPE_BASE + projectiles.length, 'projectile types fit the u4 grenade type').toBeLessThanOrEqual(16);
+    expect(PROJECTILE_TYPE_BASE).toBeGreaterThanOrEqual(GRENADE_TYPES);
+    // charge weapons say how long
+    for (const w of weapons) expect(w.fireMode === 'charge', w.id).toBe(w.charge !== undefined);
   });
 
   it('time-to-kill matches the docs/03 §6 sheet', () => {
@@ -115,7 +142,8 @@ describe('weapons', () => {
       const [bodyShots, bodyTtk, headShots, headTtk] = sheet!;
       const body = timeToKill(w, defaultTuning.healthMax);
       expect(body.shots, `${w.id} body shots`).toBe(bodyShots);
-      expect(body.seconds, `${w.id} body TTK`).toBeCloseTo(bodyTtk, 6);
+      if (bodyTtk === Infinity) expect(body.seconds, `${w.id} never kills`).toBe(Infinity);
+      else expect(body.seconds, `${w.id} body TTK`).toBeCloseTo(bodyTtk, 6);
       if (headShots !== null) {
         const head = timeToKill(w, defaultTuning.healthMax, true);
         expect(head.shots, `${w.id} head shots`).toBe(headShots);

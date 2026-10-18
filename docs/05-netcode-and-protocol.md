@@ -250,6 +250,13 @@ v8 also appends a **dash group** to the local-player block (dashTicks u6, dashDi
 - **INPUT:** taking a gun is `Btn.Interact` (bit 10, already there; the web client binds it to **E**, and a touch button).
 - **The test armory** is a server option (`--armory` / `ARMORY=1`, `GameOptions.armory`): nothing on the wire beyond the items it puts out.
 
+**Launchers and the flamethrower (built, protocol v12; docs/03 §11):**
+- **Projectiles ride the grenade records:** `type` u3 → **u4** (0–5 grenades, 6–7 free, 8–12 rocket, shell, blade, orb, flame), `fuse` u8 → **u9** (a blade lives 300 ticks). Culled like grenades (view rect, smoke). The shooter's own aren't predicted: the predictor drops the ones its shots launch (the `launch` sim event, not on the wire), as it does throws.
+- **EXPLOSION:** the grenade type u3 → **u4** (a launcher's blast names its projectile; the Pulse's burst is an EMP).
+- **Local block 62:** `burnTicks` u7 (14 delta groups): prediction takes a burn's damage pulses exactly.
+- **Remote flags 12 bits:** 1024 burning; 2048 winding up (the gun in hand spinning up or charging: a minigun, a Ripper, a Pulse; the #99 review's tell).
+- **Items in smoke (no wire change, the #99 review's M2):** an item a client can't see (inside smoke it's outside of, behind it, or in its full white: the players' mask) stays as the client last had it, present or not, until the spot can be seen; a full snapshot leaves such items out, and the PICKUP event isn't sent. **Blasts** at a spot smoke hides from the client arrive as SOUND only (a rocket blowing up on a hidden body would mark it).
+
 ### 6.3 Reliable EVENT_R examples (msgpackr-encoded, rare)
 
 ```ts

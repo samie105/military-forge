@@ -49,6 +49,8 @@ export interface WeaponSockets {
   muzzle: { pos: Vector3; dir: Vector3; boreRadius: number } | null;
   offhand: Vector3 | null;
   eject: { pos: Vector3; dir: Vector3 } | null;
+  /** every socket's position by name (`pilot`, `charge`, `backblast`…), weapon frame */
+  points: Record<string, Vector3>;
 }
 
 const vec = (v: unknown): Vector3 | null => (Array.isArray(v) && v.length === 3 && v.every((n) => typeof n === 'number' && Number.isFinite(n)) ? new Vector3(v[0], v[1], v[2]) : null);
@@ -72,6 +74,12 @@ export function parseSockets(json: unknown): Map<string, WeaponSockets> {
       muzzle: mPos ? { pos: mPos, dir: vec(muzzle?.dir) ?? new Vector3(0, 1, 0), boreRadius: typeof muzzle?.boreRadius === 'number' ? muzzle.boreRadius : 0.015 } : null,
       offhand: vec(rec(s.offhand)?.pos),
       eject: ePos ? { pos: ePos, dir: vec(eject?.dir) ?? new Vector3(1, 0, 0) } : null,
+      points: Object.fromEntries(
+        Object.entries(s).flatMap(([name, raw]) => {
+          const p = vec(rec(raw)?.pos);
+          return p ? [[name, p]] : [];
+        }),
+      ),
     });
   }
   return out;

@@ -127,6 +127,9 @@ export class PlayerState {
   gasTicks = 0;
   /** EMP: ticks the jetpack stays dead */
   jetDisabledTicks = 0;
+  /** the flamethrower: ticks left burning (projectiles.ts stepBurn), and who set it (damage credit) */
+  burnTicks = 0;
+  burnBy = -1;
 
   kills = 0;
   deaths = 0;
@@ -206,6 +209,8 @@ export class PlayerState {
     this.blindFade = 0;
     this.gasTicks = 0;
     this.jetDisabledTicks = 0;
+    this.burnTicks = 0;
+    this.burnBy = -1;
     this.lastAttacker = -1;
     this.lastAttackTick = -1;
     this.prevButtons = 0;
@@ -245,7 +250,14 @@ export function hitboxLayout(p: PlayerState): HitboxLayout {
   return p.crouched ? CROUCHED_HITBOXES : STANDING_HITBOXES;
 }
 
-const slotSpeedMul = (slot: WeaponSlot) => weapons[slot.def]?.moveSpeedMul ?? 1;
+/** a spinning minigun (spin > 0: spinning up, spun, or firing) weighs this much more (review M1: pre-spinning has a cost) */
+export const SPINNING_SPEED_MUL = 0.85;
+
+const slotSpeedMul = (slot: WeaponSlot) => {
+  const def = weapons[slot.def];
+  if (!def) return 1;
+  return def.spin && slot.spin > 0 ? def.moveSpeedMul * SPINNING_SPEED_MUL : def.moveSpeedMul;
+};
 
 /**
  * Weight (docs/03 §9): the held weapon's moveSpeedMul, the heaviest of a dual pair, or a riot

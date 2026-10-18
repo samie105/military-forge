@@ -18,7 +18,7 @@
  * (Vfx.register): a flashbang going off is a quick pop and a ring, never a screen-sized flash (the
  * white-out is the fx overlay's), and an EMP is a blue ring out to its radius.
  */
-import { EMP, FLASHBANG, FRAG, GAS, MINE, SMOKE, grenades, pickups as pickupDefs } from '@military-forge/content';
+import { EMP, FLASHBANG, FRAG, GAS, MINE, PROJECTILE_TYPE_BASE, SMOKE, grenades, pickups as pickupDefs } from '@military-forge/content';
 import { MineState, cloudDef, type CollisionWorld, type SimEvent } from '@military-forge/sim';
 import {
   AdditiveBlending,
@@ -452,7 +452,7 @@ export class CloudLayer implements VfxModule {
     let mines = 0;
     for (const g of views) {
       const type = g.type ?? FRAG.index;
-      if (type === FRAG.index) continue; // render3d-b draws frags
+      if (type === FRAG.index || type >= PROJECTILE_TYPE_BASE) continue; // render3d-b draws frags and the launchers' projectiles (vfx/projectiles.ts)
       if (type === MINE.index) {
         let mine = this.mines[mines];
         if (!mine) {

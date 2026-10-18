@@ -1,4 +1,4 @@
-import { BREACHER, BUZZ, HAMMER, K47, WIDOW, type WeaponDef } from '@military-forge/content';
+import { BREACHER, BUZZ, DRAGON, HAMMER, K47, POPPER, RIPPER, THUMPER, WIDOW, type WeaponDef } from '@military-forge/content';
 import { Btn, DamageSource, Game, type PlayerState } from '@military-forge/sim';
 import { Xoshiro128 } from '@military-forge/shared';
 import { describe, expect, it } from 'vitest';
@@ -21,6 +21,24 @@ function duel(w: WeaponDef, dist: number, ticks: number, level: 'easy' | 'normal
   }
   return { game, bot, target, buttons, events };
 }
+
+describe('gunner: launchers and the flamethrower', () => {
+  it('a charge weapon is pressed and held until it fires, then let go for the next charge', () => {
+    const { events, bot, target } = duel(RIPPER, 12, 10 * 60);
+    expect(events.filter((e) => e.type === 'launch' && e.owner === bot.id).length).toBeGreaterThanOrEqual(1);
+    expect(target.alive).toBe(false); // the blade went through it
+  });
+
+  it('never a rocket or a shell at a body inside its own blast; no lobbed shell far out; flames only in reach', () => {
+    expect(weaponValue(THUMPER, 2)).toBe(0);
+    expect(weaponValue(THUMPER, 12)).toBeGreaterThan(0);
+    expect(weaponValue(POPPER, 2)).toBe(0);
+    expect(weaponValue(POPPER, 8)).toBeGreaterThan(0);
+    expect(weaponValue(POPPER, 14)).toBe(0);
+    expect(weaponValue(DRAGON, 4)).toBeGreaterThan(0);
+    expect(weaponValue(DRAGON, 8)).toBe(0);
+  });
+});
 
 describe('gunner: same buttons and rules as a human', () => {
   it('a semi-automatic gets a fresh press per shot, never a held trigger', () => {

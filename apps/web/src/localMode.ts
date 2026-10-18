@@ -284,7 +284,7 @@ export class LocalMode {
       // grenades in smoke we can't see into stay hidden too (ours always show), as the server does
       grenades: this.game.grenades
         .filter((g) => g.alive && (g.owner === this.me.id || !this.sight.pointHidden(this.me.id, g.x, g.y)))
-        .map((g) => ({ x: g.x, y: g.y, fuse: g.fuse, type: g.type, state: g.state, id: g.id })),
+        .map((g) => ({ x: g.x, y: g.y, fuse: g.fuse, type: g.type, state: g.state, id: g.id, vx: g.vx, vy: g.vy })),
       clouds,
       mapEvent: mapEventView(this.game),
       pickups: this.game.pickups.filter((k) => k.alive).map((k) => ({ id: k.id, def: k.def, x: k.x, y: k.y })),

@@ -4,8 +4,13 @@
  * Buzz + Hammer combo). Arsenal milestone A adds the K-47 rifle, the Breacher pump shotgun, the
  * Widow bolt sniper and the Machete. The owner's playtest ("add more guns") adds every other
  * modelled bullet gun: Hawk .50, Rattler, Hornet, Trident (burst), Bullpup, Longbow (DMR), Shredder
- * (minigun, spin-up) and Arc (beam). Ids match the weapon models (art/weapons/weapons.json).
+ * (minigun, spin-up) and Arc (beam). Then the launchers and the flamethrower, which fire
+ * projectiles (projectiles.ts) instead of bullets: Thumper (rockets), Popper (grenade launcher),
+ * Ripper (saw blades, charged), Pulse (EMP orbs, charged) and Dragon (flames). Ids match the weapon
+ * models (art/weapons/weapons.json).
  */
+import { FLAME, ORB, ROCKET, SHELL, BLADE, type ProjectileDef } from './projectiles';
+
 export interface SpreadDef {
   /** ± degrees */
   base: number;
@@ -23,11 +28,14 @@ export interface SpreadDef {
 
 export type WeaponClass = 'sidearm' | 'smg' | 'rifle' | 'dmr' | 'sniper' | 'shotgun' | 'heavy' | 'special' | 'melee';
 
-export type FireMode = 'semi' | 'auto' | 'burst' | 'spinup' | 'beam' | 'melee';
+export type FireMode = 'semi' | 'auto' | 'burst' | 'spinup' | 'beam' | 'charge' | 'melee';
 
-/** Fire modes that keep firing while the button is held (bots and touch hold the trigger for these). */
+/**
+ * Fire modes the button is held for (bots and touch hold the trigger for these): they keep firing
+ * while held, or (charge) fire once the charge is full.
+ */
 export function heldTrigger(def: Pick<WeaponDef, 'fireMode'>): boolean {
-  return def.fireMode === 'auto' || def.fireMode === 'burst' || def.fireMode === 'spinup' || def.fireMode === 'beam';
+  return def.fireMode === 'auto' || def.fireMode === 'burst' || def.fireMode === 'spinup' || def.fireMode === 'beam' || def.fireMode === 'charge';
 }
 
 export interface WeaponDef {
@@ -41,7 +49,8 @@ export interface WeaponDef {
    * 'semi': one shot per press · 'auto': fires while held · 'burst': each press (or held) fires a
    * burst of `burst.count` rounds `burst.interval` apart · 'spinup': fires while held once spun up
    * (`spin`; the second fire button spins it without firing) · 'beam': fires while held, its cell
-   * refills by itself (`regen`) · 'melee': the fire button swings the weapon (no ammo)
+   * refills by itself (`regen`) · 'charge': a press starts a charge, held for `charge` s it fires
+   * (let go early and it's lost) · 'melee': the fire button swings the weapon (no ammo)
    */
   fireMode: FireMode;
   /** seconds between shots (burst: from one burst's first round to the next's; melee: between swings) */
@@ -52,6 +61,10 @@ export interface WeaponDef {
   spin?: { up: number; down: number };
   /** the magazine refills by itself (a beam's cell): rounds per second, after `delay` s without firing */
   regen?: { perSec: number; delay: number };
+  /** 'charge' weapons: seconds the button is held before the shot leaves */
+  charge?: number;
+  /** launchers and the flamethrower: each shot launches this instead of a bullet (`damage` is its direct hit) */
+  projectile?: ProjectileDef;
   /** per bullet / pellet */
   damage: number;
   /** bullets per shot: 1, or a shotgun's evenly spread pellets (docs/03 §7) */
@@ -526,7 +539,199 @@ export const ARC: WeaponDef = {
   muzzleLength: 0.75,
 };
 
-export const weapons: readonly WeaponDef[] = [HAMMER, BUZZ, K47, BREACHER, WIDOW, MACHETE, HAWK50, RATTLER, HORNET, TRIDENT, BULLPUP, LONGBOW, SHREDDER, ARC];
+// ---------- launchers and the flamethrower: projectiles, not bullets (docs/03 §5, §11) ----------
+
+/** No spread at all (the projectile flies where you aim). */
+const NO_SPREAD: SpreadDef = { ...defaultSpread, base: 0, moveMul: 1, airMul: 1, crouchMul: 1, dualMul: 1, bloomPerShot: 0, bloomMax: 0 };
+
+/**
+ * Rocket launcher: a rocket at 20 m/s that blows up on anything (100 on a direct hit, 80 splash in
+ * 3.5 m) and self-destructs at 60 m. Its own blast costs half: rocket jumps.
+ */
+export const THUMPER: WeaponDef = {
+  index: 14,
+  id: 'thumper',
+  name: 'Thumper',
+  class: 'heavy',
+  hands: 2,
+  fireMode: 'semi',
+  interval: 1.25,
+  projectile: ROCKET,
+  damage: ROCKET.damage,
+  pellets: 1,
+  hitImpulse: 0,
+  headMul: 1,
+  range: 60,
+  falloffStart: 60,
+  minDamageMul: 1,
+  spread: NO_SPREAD,
+  mag: 3,
+  reserve: 6,
+  reload: 4.0,
+  equip: 0.5,
+  zoomMax: 6,
+  meleeDamage: 35,
+  recoilPushAir: 6, // a launcher kicks hard (rocket jumps come from its blast)
+  recoilPushGround: 4,
+  moveSpeedMul: 0.85,
+  muzzleLength: 0.9,
+};
+
+/** Grenade launcher: lobbed shells (17 m/s, they bounce) that go off on a player or after 1.2 s, 70 splash in 3 m. */
+export const POPPER: WeaponDef = {
+  index: 15,
+  id: 'popper',
+  name: 'Popper',
+  class: 'heavy',
+  hands: 2,
+  fireMode: 'semi',
+  interval: 0.25,
+  projectile: SHELL,
+  damage: SHELL.explosion!.maxDamage,
+  pellets: 1,
+  hitImpulse: 0,
+  headMul: 1,
+  range: 30,
+  falloffStart: 30,
+  minDamageMul: 1,
+  spread: { ...NO_SPREAD, base: 2, airMul: 1.5 },
+  mag: 6,
+  reserve: 18,
+  reload: 3.75,
+  equip: 0.45,
+  zoomMax: 4,
+  meleeDamage: 35,
+  recoilPushAir: 2.5,
+  recoilPushGround: 1.5,
+  moveSpeedMul: 0.9,
+  muzzleLength: 0.75,
+};
+
+/**
+ * Saw-blade launcher: hold 0.4 s and a blade leaves at 18 m/s. It bounces off walls without losing
+ * speed and cuts through everyone in its way (100 each), its owner too once it has bounced; after
+ * 5 s it blows up.
+ */
+export const RIPPER: WeaponDef = {
+  index: 16,
+  id: 'ripper',
+  name: 'Ripper',
+  class: 'special',
+  hands: 2,
+  fireMode: 'charge',
+  charge: 0.4,
+  interval: 1.0,
+  projectile: BLADE,
+  damage: BLADE.damage,
+  pellets: 1,
+  hitImpulse: 0,
+  headMul: 1,
+  range: 90,
+  falloffStart: 90,
+  minDamageMul: 1,
+  spread: NO_SPREAD,
+  mag: 1,
+  reserve: 8,
+  reload: 2.5,
+  equip: 0.4,
+  zoomMax: 4,
+  meleeDamage: 40,
+  recoilPushAir: 3,
+  recoilPushGround: 2,
+  moveSpeedMul: 0.95,
+  muzzleLength: 0.7,
+};
+
+/**
+ * EMP orb gun: hold 0.7 s and a slow orb (8 m/s) floats out, through walls; on a player, or after
+ * 3 s, it bursts: jetpacks dead for 3 s within 2.5 m, mines disarmed. No damage.
+ */
+export const PULSE: WeaponDef = {
+  index: 17,
+  id: 'pulse',
+  name: 'Pulse',
+  class: 'special',
+  hands: 2,
+  fireMode: 'charge',
+  charge: 0.7,
+  interval: 0.7,
+  projectile: ORB,
+  damage: 0,
+  pellets: 1,
+  hitImpulse: 0,
+  headMul: 1,
+  range: 24,
+  falloffStart: 24,
+  minDamageMul: 1,
+  spread: NO_SPREAD,
+  mag: 1,
+  reserve: 12,
+  reload: 2.5,
+  equip: 0.4,
+  zoomMax: 4,
+  meleeDamage: 50,
+  recoilPushAir: 0, // orbs don't kick
+  recoilPushGround: 0,
+  moveSpeedMul: 0.95,
+  muzzleLength: 0.7,
+};
+
+/**
+ * Flamethrower: a flame every 0.15 s while held (7 m/s, ~6 m of reach, ±8°), 20 a hit and 2 s of
+ * burning (4 a second). Its tank (40 flames, 6 s) refills by itself in 5 s off the trigger.
+ * Flames glance off walls (and back at you), go round riot shields and burn off toxic gas.
+ */
+export const DRAGON: WeaponDef = {
+  index: 18,
+  id: 'dragon',
+  name: 'Dragon',
+  class: 'heavy',
+  hands: 2,
+  fireMode: 'auto',
+  interval: 0.15,
+  regen: { perSec: 8, delay: 0.5 },
+  projectile: FLAME,
+  damage: FLAME.damage,
+  pellets: 1,
+  hitImpulse: 0,
+  headMul: 1,
+  range: 6,
+  falloffStart: 6,
+  minDamageMul: 1,
+  spread: { ...NO_SPREAD, base: 8 },
+  mag: 40,
+  reserve: 0,
+  reload: 0,
+  equip: 0.5,
+  zoomMax: 2,
+  meleeDamage: 40,
+  recoilPushAir: 0, // streams don't kick
+  recoilPushGround: 0,
+  moveSpeedMul: 0.92,
+  muzzleLength: 0.8,
+};
+
+export const weapons: readonly WeaponDef[] = [
+  HAMMER,
+  BUZZ,
+  K47,
+  BREACHER,
+  WIDOW,
+  MACHETE,
+  HAWK50,
+  RATTLER,
+  HORNET,
+  TRIDENT,
+  BULLPUP,
+  LONGBOW,
+  SHREDDER,
+  ARC,
+  THUMPER,
+  POPPER,
+  RIPPER,
+  PULSE,
+  DRAGON,
+];
 
 export const NO_WEAPON = 63;
 
@@ -541,10 +746,12 @@ export function shotDamage(def: WeaponDef): number {
 /** Shots to kill `hp` and the time it takes when every shot hits (docs/03 §6; no regen). */
 export function timeToKill(def: WeaponDef, hp: number, headshots = false): { shots: number; seconds: number } {
   const perShot = shotDamage(def) * (headshots && def.fireMode !== 'melee' ? def.headMul : 1);
+  if (perShot <= 0) return { shots: Infinity, seconds: Infinity }; // the Pulse: it never kills
   const shots = Math.ceil(hp / perShot - 1e-9);
   // a burst gun fires its rounds burst.interval apart, bursts `interval` apart; a minigun spins up first
   const seconds = def.burst
     ? Math.floor((shots - 1) / def.burst.count) * def.interval + ((shots - 1) % def.burst.count) * def.burst.interval
     : (shots - 1) * def.interval;
-  return { shots, seconds: seconds + (def.spin ? def.spin.up : 0) };
+  // a minigun spins up first, a charge weapon charges its first shot (the later ones wait out a reload anyway)
+  return { shots, seconds: seconds + (def.spin ? def.spin.up : 0) + (def.charge ?? 0) };
 }

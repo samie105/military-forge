@@ -5,7 +5,7 @@
  *   u16 baselineSeq (0 = full) · u1 hasLocal · [local block, full or changed groups]
  *   u5 changed · { u5 id · u8 groupMask · groups }   players new or changed since the baseline
  *   u5 removed · { u5 id }                           in the baseline, now gone or out of view
- *   u7 grenades · { … }                              in view, full
+ *   u7 grenades · { … }                              in view, full (projectiles too: type u4 8–12, v12)
  *   u1 pickups changed · [u6 n · { u6 id · u6 def · i24 x · i24 y }]   items in view, when changed (v9; u6 id/def v11)
  *   u5 clouds · { u5 id · u3 type · x · y · u10 age } in view, full (smoke and gas, v10)
  *   u8 events · { u3 tag · … }                       in view; gunfire/blasts outside it → SOUND;
@@ -74,6 +74,10 @@ export interface SnapshotPlayer {
    * up (guarding neither side), or up in front (guarding it).
    */
   shield: SnapshotShield;
+  /** on fire (the flamethrower's burn, v12) */
+  burning: boolean;
+  /** the gun in hand spinning up (a minigun) or charging (Ripper, Pulse), v12: the tell (and its sound) */
+  windup: boolean;
 }
 
 export type SnapshotShield = 'none' | 'slung' | 'raising' | 'up';
@@ -94,8 +98,9 @@ export interface SnapshotGrenade {
   y: number;
   vx: number;
   vy: number;
+  /** ticks left (u9 since v12: a saw blade lives 300) */
   fuse: number;
-  /** grenade type (packages/content grenades), v10 */
+  /** grenade type (packages/content grenades), v10; projectiles PROJECTILE_TYPE_BASE + index (u4, v12) */
   type: number;
   /** a mine's state (sim MineState), 0 for the other types, v10 */
   state: number;
@@ -188,8 +193,12 @@ const FLAG_DASHING = 128;
  * SHIELD_STATES: 0 none, 1 slung (guards the back), 2 raising (guards neither side), 3 up.
  */
 const SHIELD_SHIFT = 8;
-/** remote flags on the wire (v8: 8, with dashing; v9: 10, with the shield state) */
-const FLAG_BITS = 10;
+/** on fire (v12): the flamethrower's burn */
+const FLAG_BURNING = 1024;
+/** winding up (v12): the gun in hand spinning up or spun (a minigun) or charging (Ripper, Pulse): a tell */
+const FLAG_WINDUP = 2048;
+/** remote flags on the wire (v8: 8, with dashing; v9: 10, with the shield state; v12: 12, burning and wind-up) */
+const FLAG_BITS = 12;
 
 function shieldState(p: PlayerState): number {
   if (p.shieldHp <= 0) return 0;
@@ -224,6 +233,8 @@ function captureRemote(p: PlayerState, out: Int32Array, o: number): void {
     (p.dual ? FLAG_DUAL : 0) |
     (p.weapons[0].reloadTicks > 0 || p.weapons[1].reloadTicks > 0 ? FLAG_RELOADING : 0) |
     (p.dashTicks > 0 ? FLAG_DASHING : 0) |
+    (p.burnTicks > 0 ? FLAG_BURNING : 0) |
+    ((p.weapons[p.active]?.spin ?? 0) > 0 ? FLAG_WINDUP : 0) |
     (shieldState(p) << SHIELD_SHIFT);
   out[o + F_X] = clamp(pos(p.x), -(1 << 23), (1 << 23) - 1);
   out[o + F_Y] = clamp(pos(p.y), -(1 << 23), (1 << 23) - 1);
@@ -323,6 +334,8 @@ function toSnapshotPlayer(id: number, s: Int32Array, o: number): SnapshotPlayer 
     kills: s[o + F_KILLS]!,
     deaths: s[o + F_DEATHS]!,
     shield: SHIELD_STATES[(flags >> SHIELD_SHIFT) & 3]!,
+    burning: (flags & FLAG_BURNING) !== 0,
+    windup: (flags & FLAG_WINDUP) !== 0,
   };
 }
 
@@ -503,9 +516,9 @@ function writeHit(w: BitWriter, attacker: number, target: number, damage: number
     .unsigned(source, 6);
 }
 
-/** v10: `grenade` (u3) says what went off: a blast, a flashbang, an EMP… */
+/** v10: `grenade` says what went off: a blast, a flashbang, an EMP… (u3; u4 since v12: a launcher's projectile type) */
 function writeExplosion(w: BitWriter, x: number, y: number, radius: number, owner: number, grenade: number): void {
-  w.bits(EVENT_EXPLOSION, 3).signed(pos(x), 24).signed(pos(y), 24).unsigned(radius * 16, 8).unsigned(pid(owner), 5).unsigned(grenade, 3);
+  w.bits(EVENT_EXPLOSION, 3).signed(pos(x), 24).signed(pos(y), 24).unsigned(radius * 16, 8).unsigned(pid(owner), 5).unsigned(grenade, 4);
 }
 
 function writeRicochet(w: BitWriter, e: Extract<SimEvent, { type: 'ricochet' }>, shooter: number, ex: number, ey: number, hit: number, target: number, zone: number): void {
@@ -601,6 +614,7 @@ function writeEvent(w: BitWriter, e: SimEvent): void {
       w.bits(EVENT_EXT, 3).bits(EXT_PICKUP, EXT_BITS).unsigned(pid(e.player), 5).unsigned(e.item, 6).signed(pos(e.x), 24).signed(pos(e.y), 24);
       break;
     case 'throw':
+    case 'launch':
       break;
   }
 }
@@ -621,7 +635,7 @@ function readEvent(r: BitReader): SnapshotEvent {
       return { type: 'shot', shooter, weapon, ox, oy, ex, ey, hit, target, zone };
     }
     case EVENT_EXPLOSION:
-      return { type: 'explosion', x: r.signed(24) / POS_INV, y: r.signed(24) / POS_INV, radius: r.u8() / 16, owner: unPid(r.bits(5)), grenade: r.bits(3) };
+      return { type: 'explosion', x: r.signed(24) / POS_INV, y: r.signed(24) / POS_INV, radius: r.u8() / 16, owner: unPid(r.bits(5)), grenade: r.bits(4) };
     case EVENT_DEATH:
       return { type: 'death', victim: unPid(r.bits(5)), killer: unPid(r.bits(5)), source: r.bits(6) };
     case EVENT_HIT:
@@ -720,6 +734,11 @@ export class SnapshotEncoder {
   private readonly pickups = new Int32Array(PICKUP_LIST);
   /** this client's share of `pickups` (the ones in its view) */
   private readonly viewPickups = new Int32Array(PICKUP_LIST);
+  /** what this client is sent: its share, with the ones smoke hides from it held as it last had them */
+  private readonly heldPickups = new Int32Array(PICKUP_LIST);
+  /** by item id: its row in viewPickups / in the baseline list, or −1 */
+  private readonly curRow = new Int16Array(MAX_PICKUPS);
+  private readonly baseRow = new Int16Array(MAX_PICKUPS);
   private game: Game | null = null;
   private events: readonly SimEvent[] = [];
   private seq = 0;
@@ -803,14 +822,14 @@ export class SnapshotEncoder {
         .signed(pos(g.y), 24)
         .signed(Math.round(g.vx * VEL_INV), 20)
         .signed(Math.round(g.vy * VEL_INV), 20)
-        .unsigned(g.fuse, 8)
-        .unsigned(g.type, 3)
+        .unsigned(Math.min(g.fuse, 511), 9)
+        .unsigned(g.type, 4)
         .unsigned(g.state, 2);
     }
 
     // items on the map in view, only when they changed: one that vanished or appeared out of view
     // would give away a hidden player taking it, or dying with a shield
-    const items = pickupsInView(this.pickups, view, this.viewPickups);
+    const items = this.itemsFor(view, viewer, bslot >= 0 ? bl!.pickups : null, bslot * PICKUP_LIST);
     const pickupsChanged = bslot < 0 || !samePickups(items, 0, bl!.pickups, bslot * PICKUP_LIST);
     w.bool(pickupsChanged);
     if (pickupsChanged) {
@@ -957,6 +976,54 @@ export class SnapshotEncoder {
     return id >= 0 && id < MAX_PLAYERS && this.inView[id] === 1;
   }
 
+  /**
+   * The items this client is sent: those in its view, except where smoke hides them from it (or it
+   * is fully white, as for players): there an item stays as the client last had it, the baseline's,
+   * present or not. A player hidden in a cloud who takes a crate or swaps a gun would otherwise give
+   * himself away: the crate vanishes, his old gun appears where he stands (review M2). The client
+   * catches up when the smoke clears. Without a baseline, items it can't see aren't sent.
+   */
+  private itemsFor(view: ViewRect | null, viewer: number, base: Int32Array | null, bo: number): Int32Array {
+    const items = pickupsInView(this.pickups, view, this.viewPickups);
+    if (view === null) return items;
+    const hidden = (list: Int32Array, o: number) => this.blind || this.sight.pointHidden(viewer, list[o + 2]! / POS_INV, list[o + 3]! / POS_INV);
+    this.curRow.fill(-1);
+    this.baseRow.fill(-1);
+    let anyHidden = false;
+    for (let i = 0; i < items[0]!; i++) {
+      const o = 1 + i * PICKUP_FIELDS;
+      this.curRow[items[o]!] = i;
+      if (hidden(items, o)) anyHidden = true;
+    }
+    if (base) {
+      for (let i = 0; i < base[bo]!; i++) {
+        const o = bo + 1 + i * PICKUP_FIELDS;
+        const row = base[o]!;
+        if (row < 0 || row >= MAX_PICKUPS) continue;
+        this.baseRow[row] = i;
+        if (inRect(view, base[o + 2]! / POS_INV, base[o + 3]! / POS_INV) && hidden(base, o)) anyHidden = true;
+      }
+    }
+    if (!anyHidden) return items;
+    const out = this.heldPickups;
+    let n = 0;
+    const copy = (list: Int32Array, o: number) => {
+      out.set(list.subarray(o, o + PICKUP_FIELDS), 1 + n * PICKUP_FIELDS);
+      n++;
+    };
+    for (let id = 0; id < MAX_PICKUPS; id++) {
+      const c = this.curRow[id]!;
+      const b = this.baseRow[id]!;
+      const co = 1 + c * PICKUP_FIELDS;
+      const bo2 = bo + 1 + b * PICKUP_FIELDS;
+      if (c >= 0 && !hidden(items, co)) copy(items, co);
+      // hidden now (or gone): as the client last had it, if it had it there and can't see that spot
+      else if (b >= 0 && base && inRect(view, base[bo2 + 2]! / POS_INV, base[bo2 + 3]! / POS_INV) && (c >= 0 || hidden(base, bo2))) copy(base, bo2);
+    }
+    out[0] = n;
+    return out;
+  }
+
   /** Nobody (the world), the client itself, or a player it's sent. */
   private sees(id: number, viewer: number): boolean {
     return id < 0 || id === viewer || this.seen(id);
@@ -995,9 +1062,12 @@ export class SnapshotEncoder {
   private eventKind(e: SimEvent, view: ViewRect | null, viewer: number): number {
     switch (e.type) {
       case 'throw':
+      case 'launch':
         return 0;
       case 'pickup':
-        return view === null || e.player === viewer || inRect(view, e.x, e.y) ? 1 : 0;
+        if (view === null || e.player === viewer) return 1;
+        // an item taken in smoke the client can't see into (or in its full white) changes nothing for it (items held back, review M2)
+        return inRect(view, e.x, e.y) && !this.blind && !this.sight.pointHidden(viewer, e.x, e.y) ? 1 : 0;
       case 'shieldBreak':
         return view === null || e.owner === viewer || this.seen(e.owner) ? 1 : 0;
       case 'ricochet': {
@@ -1060,7 +1130,10 @@ export class SnapshotEncoder {
         return this.smokeCut(e.ox, e.oy, viewer, lb.t0 > 0 || lb.t1 < 1 ? 3 : 1);
       }
       case 'explosion':
-        return view === null || inRect(view, e.x, e.y) ? 1 : 2;
+        if (view === null) return 1;
+        // a blast where smoke hides the spot from the client (a rocket on a hidden body) is only heard,
+        // like tracers into smoke: a fireball would mark the body
+        return inRect(view, e.x, e.y) && !this.blind && !this.sight.pointHidden(viewer, e.x, e.y) ? 1 : 2;
       case 'hit':
         // hit markers for the attacker, damage numbers over targets in view (and not hidden in smoke)
         if (view === null || e.attacker === viewer || e.target === viewer) return 1;
@@ -1177,8 +1250,8 @@ export class SnapshotDecoder {
         y: r.signed(24) / POS_INV,
         vx: r.signed(20) / VEL_INV,
         vy: r.signed(20) / VEL_INV,
-        fuse: r.bits(8),
-        type: r.bits(3),
+        fuse: r.bits(9),
+        type: r.bits(4),
         state: r.bits(2),
       });
     }

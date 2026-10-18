@@ -272,7 +272,7 @@ export class Predictor {
     this.game.tick = t;
     this.inputs[p.id] = input;
     this.game.step(this.inputs);
-    // own grenades aren't predicted yet: the server's arrive in snapshots
-    for (const e of this.game.events) if (e.type === 'throw') this.game.grenades[e.grenade]!.alive = false;
+    // own grenades and projectiles (rockets, shells, blades, orbs, flames) aren't predicted yet: the server's arrive in snapshots
+    for (const e of this.game.events) if (e.type === 'throw' || e.type === 'launch') this.game.grenades[e.grenade]!.alive = false;
   }
 }

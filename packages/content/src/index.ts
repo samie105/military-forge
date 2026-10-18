@@ -14,6 +14,7 @@ export * from './maps/mapJson';
 export * from './maps/mechanics';
 export * from './maps/types';
 export * from './pickups';
+export * from './projectiles';
 export * from './shield';
 export * from './tuning';
 export * from './weapons';

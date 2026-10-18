@@ -15,6 +15,7 @@ export * from './mines';
 export * from './movement';
 export * from './pickups';
 export * from './player';
+export * from './projectiles';
 export * from './replay';
 export * from './rewind';
 export * from './shield';

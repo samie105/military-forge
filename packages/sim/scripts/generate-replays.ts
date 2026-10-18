@@ -7,7 +7,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BREACHER, BUZZ, EMP, FLASHBANG, FRAG, GAS, GRENADE_TYPES, HAMMER, K47, MACHETE, MINE, RIOT_SHIELD, SMOKE, WIDOW } from '@military-forge/content';
+import { BREACHER, BUZZ, DRAGON, EMP, FLASHBANG, FRAG, GAS, GRENADE_TYPES, HAMMER, K47, MACHETE, MINE, POPPER, PULSE, RIOT_SHIELD, RIPPER, SMOKE, THUMPER, WIDOW } from '@military-forge/content';
 import { angleToU16 } from '@military-forge/shared';
 import {
   Btn,
@@ -285,6 +285,49 @@ const scenarios: ReplayFile[] = [
     [1, F, 10],
     [60, 0],
   ]),
+  // launchers (docs/03 §11): rockets at the range's dummies and a rocket jump, then lobbed shells
+  scenario(
+    'launchers-rockets',
+    { x: 150, y: 0 },
+    [
+      [1, F, 2], // a rocket down the range
+      [90, 0],
+      [1, F, -90], // a rocket jump
+      [80, 0],
+      [1, F, 6],
+      [120, 0],
+      [1, Q],
+      [40, 0],
+      [1, F, 12], // shells, lobbed a little high
+      [20, 0],
+      [1, F, 8],
+      [20, 0],
+      [1, F, 14],
+      [120, 0],
+    ],
+    [THUMPER.index, POPPER.index],
+  ),
+  // the flamethrower up close, then a charged saw blade down the range that comes back off the wall for its owner
+  scenario(
+    'launchers-blade-flame',
+    { x: 150, y: 0 },
+    [
+      [1, Q],
+      [20, 0],
+      [95, R], // walk up to the dummies
+      [90, F, 0], // flames
+      [150, 0], // burning
+      [1, Q],
+      [30, 0],
+      [12, F, 0], // let go early: no blade
+      [5, 0],
+      [30, F, 0], // charged: a blade
+      [240, 0],
+    ],
+    [RIPPER.index, DRAGON.index],
+  ),
+  // an EMP orb at the hopping dummy
+  scenario('launchers-pulse', { x: 155, y: 0 }, [[60, F, 3], [240, 0]], [PULSE.index, HAMMER.index]),
 ];
 
 /**

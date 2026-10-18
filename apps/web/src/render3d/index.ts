@@ -43,6 +43,7 @@ import { WeaponItems } from './weaponItems';
 import { Vfx } from './vfx';
 import { isTouchDevice } from '../touch';
 import type { EjectLookup } from './vfx/casings';
+import type { GunPointLookup } from './vfx/projectiles';
 import type { BodyLookup } from './vfx/dash';
 import type { MuzzleLookup } from './vfx/gunfire';
 
@@ -253,7 +254,7 @@ export class Renderer3D {
     this.buildMap(map);
     this.scene.add(this.plane, this.zones.group);
     // after buildMap: the blast light flashes from the map's light levels
-    this.vfx = new Vfx(this.scene, this.world, camera, { hemi: this.hemi, sun: this.sun }, ramp, preset, this.muzzleOf, this.bodyOf, this.ejectOf);
+    this.vfx = new Vfx(this.scene, this.world, camera, { hemi: this.hemi, sun: this.sun }, ramp, preset, this.muzzleOf, this.bodyOf, this.ejectOf, this.gunPointOf);
     // reduced motion (docs/11 §5): the OS setting until the settings screen calls setReducedMotion
     this.setReducedMotion(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
     // riot shields lying on the map, and the ricochet spark (an effect module: it gets the sim events)
@@ -273,6 +274,8 @@ export class Renderer3D {
   private readonly bodyOf: BodyLookup = (id) => this.avatars.get(id)?.inst ?? null;
   /** where a shooter's drawn gun throws its casings (vfx/casings.ts) */
   private readonly ejectOf: EjectLookup = (id, weapon, out, dir, bore) => this.avatars.get(id)?.eject(weapon, out, dir, bore) ?? false;
+  /** a drawn gun's named socket (the Dragon's pilot light, the Ripper's and Pulse's charge) */
+  private readonly gunPointOf: GunPointLookup = (id, weapon, name, out) => this.avatars.get(id)?.gunPoint(weapon, name, out) ?? false;
 
   /** the online timeline while online play is attached (attach) */
   private online: OnlineView | null = null;
