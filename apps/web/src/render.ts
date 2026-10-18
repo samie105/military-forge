@@ -197,13 +197,13 @@ const GRENADE_COLORS: Record<number, string> = {
 
 /**
  * A mine's light by state: green flying, yellow arming, red blinking 4 Hz armed, a red/white beep
- * at 8 Hz when triggered (the Forge's grenades.vfx.json, as render3d's clouds.ts); "Reduce flashes"
- * keeps both at 3 Hz at most.
+ * at 8 Hz when triggered (the Forge's grenades.vfx.json, as render3d's clouds.ts); `calm` (Reduce
+ * motion or Reduce flashes) keeps both at 3 Hz at most.
  */
-function mineLight(state: number, nowMs: number): string {
+export function mineLight(state: number, nowMs: number, calm: boolean): string {
   if (state === MineState.Flying) return '#3fb950';
   if (state === MineState.Arming) return '#d29922';
-  const hz = Math.min(state === MineState.Armed ? 4 : 8, reduceFlashes() ? 3 : Infinity);
+  const hz = Math.min(state === MineState.Armed ? 4 : 8, calm ? 3 : Infinity);
   const on = Math.floor((nowMs / 1000) * hz * 2) % 2 === 0;
   if (state === MineState.Armed) return on ? '#f85149' : '#5c1d1b';
   return on ? '#f85149' : '#ffffff';
@@ -259,7 +259,7 @@ export class Renderer {
   private readonly sparks: Spark[] = [];
   private readonly bursts: Burst[] = [];
   private readonly dashes: DashStreak[] = [];
-  /** the throw arc's core colour this frame ("r,g,b"): warm white, amber during a map event's warning */
+  /** the throw arc's core colour this frame ("r,g,b"): warm white, amber when a map event starts or ends mid-flight */
   private arcCore = '';
   /** one dot of the throw arc (arcDots): a dark rim under a bright core, fainter past the landing */
   private readonly arcDot = (x: number, y: number, after: boolean, fade: number): void => {
@@ -288,6 +288,11 @@ export class Renderer {
   private readonly reach = new Map<number, { x: number; y: number; type: number; rays: Float32Array | null }>();
   /** Also handed every event batch when set: main.ts points it at the 3D view's effects. */
   forwardEvents: ((events: readonly SimEvent[], localId: number) => void) | null = null;
+  /**
+   * Reduce motion (docs/11 §5), as the 3D view takes it: the OS setting unless set. Lights blink 3
+   * times a second at most then, as they do under Reduce flashes.
+   */
+  reducedMotion = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -425,7 +430,7 @@ export class Renderer {
     for (const g of frame.grenades) this.drawGrenade(g);
     // clouds over the players: smoke hides whoever is inside it
     if (frame.clouds) for (const c of frame.clouds) this.drawCloud(c);
-    if (frame.throwArc) this.drawThrowArc(frame.throwArc, frame.mapEvent?.phase === 'warning');
+    if (frame.throwArc) this.drawThrowArc(frame.throwArc);
     this.drawEffects(dt, byId, true);
     ctx.globalAlpha = 1;
     this.drawLetterbox();
@@ -437,14 +442,15 @@ export class Renderer {
 
   /**
    * The throw arc while a grenade throw is aimed (throwPreview.ts; render3d draws its own): dots
-   * along the path, a ring where it first comes down and a cross where it goes off. Amber while
-   * a map event may still change the path.
+   * along the path, a ring where it first comes down and a cross where it goes off. Amber when a
+   * map event starts or ends mid-flight: the path bends there.
    */
-  private drawThrowArc(view: ThrowArcView, uncertain: boolean): void {
+  private drawThrowArc(view: ThrowArcView): void {
     if (view.count < 2) return;
     const ctx = this.ctx;
     const cam = this.camera;
-    this.arcCore = uncertain ? '255,168,51' : '255,247,209';
+    const amber = view.changes;
+    this.arcCore = amber ? '255,168,51' : '255,247,209';
     const pts = view.points;
     if (view.land >= 0) {
       const sx = cam.toScreenX(pts[view.land * 2]!);
@@ -455,7 +461,7 @@ export class Renderer {
       ctx.arc(sx, sy, 14, 0, Math.PI * 2);
       ctx.stroke();
       ctx.lineWidth = 2.5;
-      ctx.strokeStyle = uncertain ? 'rgba(255,168,51,1)' : 'rgba(255,224,120,1)';
+      ctx.strokeStyle = amber ? 'rgba(255,168,51,1)' : 'rgba(255,224,120,1)';
       ctx.stroke();
     }
     if (view.detonates) {
@@ -877,7 +883,7 @@ export class Renderer {
       const r = Math.max(4, def.radius * cam.ppm);
       ctx.fillStyle = '#30363d';
       ctx.fillRect(sx - r, sy - r * 0.6, 2 * r, 1.2 * r);
-      ctx.fillStyle = mineLight(g.state ?? 0, performance.now());
+      ctx.fillStyle = mineLight(g.state ?? 0, performance.now(), this.reducedMotion || reduceFlashes());
       ctx.beginPath();
       ctx.arc(sx, sy, Math.max(2, r * 0.45), 0, Math.PI * 2);
       ctx.fill();

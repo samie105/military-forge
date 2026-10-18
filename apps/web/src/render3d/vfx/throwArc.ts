@@ -2,8 +2,7 @@
  * The throw arc in 3D (the path is throwPreview.ts's, from the Frame): high-contrast dots, a dark
  * rim under a bright core so it reads on sky and on walls, marching slowly along the path. A ring
  * marks where it first comes down and a small burst where it goes off; bounces after the landing
- * are fainter. During a map event's warning the arc turns amber: a zone switching on mid-flight
- * isn't foreseen.
+ * are fainter. When a map event starts or ends mid-flight the arc turns amber: the path bends there.
  */
 import type { Texture } from 'three';
 import { ARC_DOTS, ARC_MARCH, ARC_SPACING, arcDots, type ThrowArcView } from '../../throwPreview';
@@ -13,9 +12,9 @@ import { ParticleLayer } from './particles';
 /** a dot's core on screen (px) at the least, and its dark rim around it */
 const CORE_PX = 6;
 const RIM = 1.75;
-/** the dots' core: warm white, or amber while a map event may change the path */
+/** the dots' core: warm white, or amber when a map event starts or ends mid-flight */
 const CORE = [1, 0.97, 0.82] as const;
-const UNSURE = [1, 0.66, 0.2] as const;
+const AMBER = [1, 0.66, 0.2] as const;
 
 export class ThrowArc {
   readonly layer: ParticleLayer;
@@ -35,15 +34,15 @@ export class ThrowArc {
   }
 
   /**
-   * Draws `view` (nothing when null: no throw aimed). `uncertain`: a map event is in its warning.
-   * `ppm`: screen pixels per metre (the dots keep their size on screen).
+   * Draws `view` (nothing when null: no throw aimed). `ppm`: screen pixels per metre (the dots keep
+   * their size on screen).
    */
-  update(view: ThrowArcView | null | undefined, uncertain: boolean, dt: number, ppm: number, reducedMotion: boolean): void {
+  update(view: ThrowArcView | null | undefined, dt: number, ppm: number, reducedMotion: boolean): void {
     this.layer.begin();
     if (view && view.count > 1) {
       this.phase = reducedMotion ? 0 : (this.phase + ARC_MARCH * dt) % ARC_SPACING;
       this.core = Math.max(0.08, CORE_PX / Math.max(1, ppm));
-      this.tint = uncertain ? UNSURE : CORE;
+      this.tint = view.changes ? AMBER : CORE;
       this.marks(view);
       arcDots(view, this.phase, this.dot);
     }

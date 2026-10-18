@@ -6,12 +6,30 @@
  *
  * Exact for the throw that follows: the thrower is moved one tick on first (Game.step moves players
  * before they throw), the grenade spawns as the sim's throwGrenade spawns it, and stepGrenade steps
- * it. Not foreseen: map events switching zones on mid-flight (the views mark the arc during an
- * event's warning) and other players in a mine's path (the preview ignores them).
+ * it, tick by tick on the map event schedule: a private copy of the map's mechanics runs ahead with
+ * it, so the path bends where an event starts or ends mid-flight (the views draw that arc amber).
+ * Not foreseen: other players in a mine's path (the preview ignores them).
  */
 import { grenades, type GrenadeDef } from '@military-forge/content';
 import { simCosSin } from '@military-forge/shared';
-import { DT, GrenadeState, MineState, PlayerState, SegFlag, TICK_RATE, copyInput, createBodyEnv, createRayHit, stepGrenade, stepMovement, ticks, type Game } from '@military-forge/sim';
+import {
+  DT,
+  GrenadeState,
+  MapEventPhase,
+  MapMechanics,
+  MineState,
+  PlayerState,
+  SegFlag,
+  TICK_RATE,
+  copyInput,
+  createBodyEnv,
+  createRayHit,
+  stepGrenade,
+  stepMovement,
+  ticks,
+  type Game,
+  type SimEvent,
+} from '@military-forge/sim';
 
 /** how far ahead the preview runs (docs/02 §14) */
 export const ARC_SECONDS = 1.5;
@@ -30,10 +48,12 @@ export interface ThrowArcView {
   type: number;
   /** the path ends where the fuse runs out (it goes off there), not at the preview's horizon */
   detonates: boolean;
+  /** a map event starts or ends during the flight: the path bends there (the views draw it amber) */
+  changes: boolean;
 }
 
 export function throwArcView(): ThrowArcView {
-  return { points: new Float32Array(ARC_POINTS * 2), count: 0, land: -1, type: 0, detonates: false };
+  return { points: new Float32Array(ARC_POINTS * 2), count: 0, land: -1, type: 0, detonates: false, changes: false };
 }
 
 const scratch = new GrenadeState(-1);
@@ -41,17 +61,31 @@ const next = new PlayerState(-1);
 const env = createBodyEnv();
 const aim = { x: 0, y: 0 };
 const ray = createRayHit();
-/** a view of a game with nobody in it: a previewed mine runs into no one (and blows nobody up) */
-const empty = new WeakMap<Game, Game>();
+/** the event schedule's warnings, starts and ends as the preview's mechanics run ahead */
+const announced: SimEvent[] = [];
 const NOBODY: readonly null[] = [];
 
-function withoutPlayers(game: Game): Game {
-  let g = empty.get(game);
-  if (!g) {
-    g = Object.create(game, { players: { value: NOBODY } }) as Game;
-    empty.set(game, g);
+/** each game's private copy of its map mechanics, run ahead on the event schedule (none: no mechanics) */
+const ahead = new WeakMap<Game, MapMechanics | null>();
+
+function aheadOf(game: Game): MapMechanics | null {
+  let mech = ahead.get(game);
+  if (mech === undefined) {
+    mech = game.mech ? MapMechanics.compile(game.map) : null;
+    ahead.set(game, mech);
   }
-  return g;
+  return mech;
+}
+
+/** what the preview swaps on the live game while it steps (predictThrow) */
+type Swapped = { mech: MapMechanics | null; players: readonly unknown[] };
+
+/** Sets the preview's mechanics up for `tick`; true when an event starts or ends on it. */
+function eventTick(mech: MapMechanics, seed: number, tick: number): boolean {
+  announced.length = 0;
+  mech.beginTick(seed, tick, announced);
+  for (const e of announced) if (e.type === 'mapEvent' && e.phase !== MapEventPhase.Warning) return true;
+  return false;
 }
 
 /** What stepMovement reads of a player: every plain field, its input and its weapon slots. */
@@ -71,12 +105,34 @@ function copyForStep(dst: PlayerState, src: PlayerState): void {
  * thrower moves one tick first, with the input it holds now; then the grenade spawns in front of
  * its shoulder, clear of walls, at the strength's speed plus its inherited velocity, and the sim's
  * stepGrenade steps a scratch copy: until the fuse (where it goes off), a mine until it sticks, or
- * ARC_SECONDS.
+ * ARC_SECONDS. Each tick meets the map as the event schedule has it then.
+ *
+ * The sim steps the live game with the preview's mechanics (and, for a mine, nobody) swapped in,
+ * then put back: views made with Object.create(game) would make the live game a prototype, and
+ * Game.step then ran at half speed (measured).
  */
 export function predictThrow(game: Game, p: PlayerState, def: GrenadeDef, strength: number, out: ThrowArcView): void {
+  const mech = aheadOf(game);
+  const live = game as unknown as Swapped;
+  const liveMech = live.mech;
+  const livePlayers = live.players;
+  live.mech = mech;
+  if (def.effect === 'mine') live.players = NOBODY; // a previewed mine runs into no one (and blows nobody up)
+  try {
+    fly(game, mech, p, def, strength, out);
+  } finally {
+    live.mech = liveMech;
+    live.players = livePlayers;
+  }
+}
+
+function fly(game: Game, mech: MapMechanics | null, p: PlayerState, def: GrenadeDef, strength: number, out: ThrowArcView): void {
   const t = game.tuning;
+  // the throw's tick: Game.step sets the schedule up, moves the thrower, then the grenade flies
+  const tick = game.tick;
+  if (mech) eventTick(mech, game.seed, tick);
   copyForStep(next, p);
-  stepMovement(game.world, next, t, game.mech ? game.mech.bodyEnv(next, t, env) : null);
+  stepMovement(game.world, next, t, mech ? mech.bodyEnv(next, t, env) : null);
   const sx = next.shoulderX(t);
   const sy = next.shoulderY(t);
   simCosSin(next.aim, aim);
@@ -100,7 +156,6 @@ export function predictThrow(game: Game, p: PlayerState, def: GrenadeDef, streng
   const fuse = ticks(def.fuse);
   g.fuse = mine ? fuse : 0x7fffffff;
   const last = mine ? ARC_POINTS - 1 : Math.min(ARC_POINTS - 1, fuse - 1);
-  const sim = mine ? withoutPlayers(game) : game;
   const pts = out.points;
   pts[0] = g.x;
   pts[1] = g.y;
@@ -108,11 +163,14 @@ export function predictThrow(game: Game, p: PlayerState, def: GrenadeDef, streng
   out.land = -1;
   out.type = def.index;
   out.detonates = !mine && last < ARC_POINTS - 1;
+  out.changes = false;
   const fall = t.gravity * def.gravityScale * DT;
   for (let k = 0; k < last && g.alive; k++) {
+    // the grenade's first step is on the throw's own tick
+    if (mech && k > 0 && eventTick(mech, game.seed, tick + k)) out.changes = true;
     const vx = g.vx;
     const vy = g.vy - fall;
-    stepGrenade(sim, g);
+    stepGrenade(game, g);
     pts[out.count * 2] = g.x;
     pts[out.count * 2 + 1] = g.y;
     if (out.land < 0) {

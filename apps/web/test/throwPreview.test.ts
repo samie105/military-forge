@@ -1,4 +1,4 @@
-import { EMP, FLASHBANG, FRAG, GAS, MINE, SMOKE, movementTestMap, type GrenadeDef } from '@military-forge/content';
+import { EMP, FLASHBANG, FRAG, GAS, MINE, SMOKE, mechanicsTestMap, movementTestMap, type GrenadeDef, type MapDef } from '@military-forge/content';
 import { angleToU16 } from '@military-forge/shared';
 import { Btn, Game, MineState, createInput, ticks, type Input } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
@@ -98,9 +98,12 @@ describe('predictThrow: the path the sim then throws', () => {
     target.y = 0;
     holding(t.me, MINE);
     const before = { tick: t.game.tick, events: t.game.events.length, x: t.me.x, vx: t.me.vx, hp: target.hp };
+    const { mech, players } = t.game;
     predictThrow(t.game, t.me, MINE, 7, throwArcView());
     expect(t.game.grenades.some((g) => g.alive)).toBe(false);
     expect({ tick: t.game.tick, events: t.game.events.length, x: t.me.x, vx: t.me.vx, hp: target.hp }).toEqual(before);
+    expect(t.game.mech).toBe(mech); // what the preview swapped in for its flight is back
+    expect(t.game.players).toBe(players);
   });
 
   it('marks where a frag first comes down', () => {
@@ -111,6 +114,72 @@ describe('predictThrow: the path the sim then throws', () => {
     const y = view.points[view.land * 2 + 1]!;
     expect(y).toBeGreaterThan(0);
     expect(y).toBeLessThan(FRAG.radius + 0.25);
+  });
+});
+
+describe('predictThrow on the map event schedule (mechanics-test: 1 s warnings, a 1.5 s preview)', () => {
+  // its "surge" (gravity ×1.8) warns from tick 120, starts at 180 and ends at 480; its gusts blow
+  // from 1800 to 2160, swelling and dropping every 2 s
+  const SURGE_START = 180;
+  const SURGE_END = 480;
+  const GUSTS = 1900;
+  const calm: MapDef = { ...mechanicsTestMap, events: undefined, zones: mechanicsTestMap.zones!.filter((z) => z.event === undefined) };
+
+  /** A thrower at x 146 (in no zone), aiming high, stepped to `tick`. */
+  function onSchedule(tick: number, map: MapDef = mechanicsTestMap) {
+    const game = new Game({ map });
+    const me = game.addPlayer('P');
+    me.x = 146;
+    me.y = 0;
+    const input: Input = { ...createInput(), aim: angleToU16((75 * Math.PI) / 180) };
+    while (game.tick < tick) game.step([input]);
+    return { game, me, input };
+  }
+
+  /** The same throw's path on mechanics-test without its events. */
+  function calmPath(tick: number): Float32Array {
+    const t = onSchedule(tick, calm);
+    const view = throwArcView();
+    predictThrow(t.game, t.me, FRAG, 7, view);
+    return view.points;
+  }
+
+  it('an event starting mid-flight, before its warning shows: the path bends there, exact, amber', () => {
+    const t = onSchedule(SURGE_START - 75);
+    expect(t.game.mech!.activeEvent).toBeNull(); // no banner yet: the warning is 1 s, the flight longer
+    const { view, compared } = throwsAsPreviewed(t, FRAG, 7);
+    expect(compared).toBe(ARC_POINTS - 1);
+    expect(view.changes).toBe(true);
+    expect(view.points).not.toEqual(calmPath(SURGE_START - 75));
+  });
+
+  it('an event ending mid-flight: exact, amber', () => {
+    const t = onSchedule(SURGE_END - 40);
+    expect(t.game.mech!.activeEvent?.startTick).toBe(SURGE_START);
+    const { view, compared } = throwsAsPreviewed(t, FRAG, 7);
+    expect(compared).toBe(ARC_POINTS - 1);
+    expect(view.changes).toBe(true);
+  });
+
+  it('gusting wind, tick by tick: exact; no start or end in the flight, so not amber', () => {
+    const t = onSchedule(GUSTS);
+    const { view, compared } = throwsAsPreviewed(t, FRAG, 7);
+    expect(compared).toBe(ARC_POINTS - 1);
+    expect(view.changes).toBe(false);
+    expect(view.points).not.toEqual(calmPath(GUSTS));
+  });
+
+  it('an event running past the landing, or none: not amber; the live game keeps its tick', () => {
+    const t = onSchedule(300);
+    const mech = t.game.mech!;
+    const before = { tick: mech.tick, event: mech.activeEvent?.startTick, events: t.game.events.length };
+    const view = throwArcView();
+    predictThrow(t.game, t.me, FRAG, 7, view);
+    expect(view.changes).toBe(false);
+    expect(t.game.mech).toBe(mech);
+    expect({ tick: mech.tick, event: mech.activeEvent?.startTick, events: t.game.events.length }).toEqual(before);
+    predictThrow(thrower(40).game, thrower(40).me, FRAG, 7, view); // movement-test: no events at all
+    expect(view.changes).toBe(false);
   });
 });
 

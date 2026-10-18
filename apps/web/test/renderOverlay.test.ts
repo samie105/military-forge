@@ -1,8 +1,8 @@
-import { defaultTuning, movementTestMap } from '@military-forge/content';
-import type { SimEvent } from '@military-forge/sim';
-import { describe, expect, it } from 'vitest';
+import { MINE, defaultTuning, movementTestMap } from '@military-forge/content';
+import { MineState, type SimEvent } from '@military-forge/sim';
+import { describe, expect, it, vi } from 'vitest';
 import { Camera } from '../src/camera';
-import { Renderer, type RenderOptions } from '../src/render';
+import { Renderer, mineLight, type RenderOptions } from '../src/render';
 import { playerView } from '../src/render3d/test/helpers';
 import { throwArcView } from '../src/throwPreview';
 import type { Frame } from '../src/view';
@@ -137,10 +137,10 @@ describe('the throw arc in 2D (review M5)', () => {
     expect(strokes.filter(isRing)).toEqual([]);
   });
 
-  it('amber while a map event may change the path', () => {
+  it('amber when a map event starts or ends mid-flight', () => {
     const { r, fills } = setup();
     const f = arcFrame();
-    f.mapEvent = { id: 'gust', kind: 'wind', name: 'Gust', description: '', phase: 'warning', secondsLeft: 3, progress: 0.5, color: 0xffffff, zones: [], occurrence: 1, bulletRangeMul: 1 };
+    f.throwArc!.changes = true;
     r.render(f, 1 / 60, opts({ overlay: false }), '');
     expect(fills.filter(isCore)).toEqual([]);
     expect(fills.some((c) => c.startsWith('rgba(255,168,51'))).toBe(true);
@@ -165,5 +165,38 @@ describe('flashbang and EMP bursts (review L7)', () => {
     r.onEvents([pop, ring], 0);
     r.render(frame, 1 / 60, opts({ overlay: false }), '');
     expect(fills.some(isPop)).toBe(true);
+  });
+});
+
+describe('2D mine light: Reduce motion caps it as Reduce flashes does (review low)', () => {
+  /** light changes in one second, sampled every millisecond */
+  const changes = (state: number, calm: boolean) => {
+    let n = 0;
+    for (let t = 1; t < 1000; t++) if (mineLight(state, t, calm) !== mineLight(state, t - 1, calm)) n++;
+    return n;
+  };
+
+  it('armed 4 Hz and triggered 8 Hz, both 3 Hz at most when calm', () => {
+    expect(changes(MineState.Armed, false)).toBe(7); // 8 half-periods a second
+    expect(changes(MineState.Triggered, false)).toBe(15);
+    expect(changes(MineState.Armed, true)).toBeLessThanOrEqual(6);
+    expect(changes(MineState.Triggered, true)).toBeLessThanOrEqual(6);
+  });
+
+  it('the 2D view blinks calm under Reduce motion', () => {
+    const now = vi.spyOn(performance, 'now').mockReturnValue(150); // 4 Hz: dark by now; 3 Hz: still lit
+    try {
+      const lit = (reducedMotion: boolean) => {
+        const { r, fills } = setup();
+        r.reducedMotion = reducedMotion;
+        const frame: Frame = { tick: 1, localId: 0, players: [playerView({ x: 18 })], grenades: [{ x: 21, y: 0.1, fuse: 0, type: MINE.index, state: MineState.Armed }] };
+        r.render(frame, 1 / 60, { showHitboxes: false, showGrid: false, showNet: false, overlay: false }, '');
+        return fills.includes('#f85149');
+      };
+      expect(lit(false)).toBe(false);
+      expect(lit(true)).toBe(true);
+    } finally {
+      now.mockRestore();
+    }
   });
 });

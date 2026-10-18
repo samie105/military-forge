@@ -148,13 +148,13 @@ export class GrenadeTracker {
     this.tracks.length = 0;
   }
 
+  /** the frag model's body radius (m, before the readability scale): the roll keeps pace with it (GrenadeRenderer.setModel) */
+  rollRadius = ROLL_RADIUS;
+
   /**
    * Matches this frame's samples to tracks, then advances each track's motion state by `dt`.
    * `scale` is the drawn size over the model size (the roll rate follows the drawn radius).
    */
-  /** the frag model's body radius (m, before the readability scale): the roll keeps pace with it (GrenadeRenderer.setModel) */
-  rollRadius = ROLL_RADIUS;
-
   update(tick: number, samples: readonly GrenadeSample[], dt: number, scale = 1): void {
     for (const t of this.tracks) t.seen = false;
     for (const s of samples) {

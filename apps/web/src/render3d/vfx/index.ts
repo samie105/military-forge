@@ -16,8 +16,10 @@ import type { Frame } from '../../view';
 import { GrenadeRenderer, throwableFromGltf, type GrenadeFx } from '../grenades';
 import type { GraphicsPreset } from '../presets';
 import { ATLAS_GRID, vfxAtlas } from './atlas';
+import { reduceFlashes } from '../../fx';
 import { DashFx, type BodyLookup } from './dash';
 import { DashGhosts } from './dashGhosts';
+import { DashTrail } from './dashTrail';
 import { spawnExplosion, type ExplosionTargets } from './explosion';
 import { SceneFlash } from './flash';
 import { Gunfire, type MuzzleLookup } from './gunfire';
@@ -86,9 +88,10 @@ export class Vfx {
   readonly gunfire: Gunfire;
   /** the throw arc (Frame.throwArc) */
   readonly arc: ThrowArc;
-  /** dashes: the jet kick, speed lines and afterimages */
+  /** dashes: the jet kick, speed lines and afterimages, and the green trail with its sparkles */
   readonly dash: DashFx;
   readonly ghosts: DashGhosts;
+  readonly trail: DashTrail;
   /** the Forge's explosion flipbook, when published */
   private readonly books: Book[] = [];
   private readonly targets: ExplosionTargets;
@@ -119,6 +122,7 @@ export class Vfx {
     this.gunfire = new Gunfire(world);
     this.arc = new ThrowArc(atlas, grid);
     this.ghosts = new DashGhosts(scene);
+    this.trail = new DashTrail(scene);
     this.dash = new DashFx(this.ghosts, bodies);
     for (const l of [this.decals, this.smoke, this.glow]) l.mesh.name = 'vfx';
     scene.add(this.decals.mesh, this.smoke.mesh, this.glow.mesh, this.arc.layer.mesh, ...this.grenades.meshes);
@@ -146,6 +150,7 @@ export class Vfx {
     for (const p of [this.glowPool, this.smokePool, this.decalPool, ...this.books.map((b) => b.pool)]) p.clear();
     this.shake.trauma = 0;
     this.ghosts.clear();
+    this.trail.clear();
     this.flash.rebase();
   }
 
@@ -250,8 +255,10 @@ export class Vfx {
     this.gunfire.update(dt, this.ctx, this.muzzles);
     this.dash.localId = frame.localId;
     this.dash.update(frame, dt, this.ctx);
-    // the throw arc while one is aimed (amber while a map event may change the path)
-    this.arc.update(frame.throwArc, frame.mapEvent?.phase === 'warning', dt, this.camera.ppm, this.ctx.reducedMotion);
+    this.trail.steady = reduceFlashes();
+    this.trail.update(frame, dt, this.ctx);
+    // the throw arc while one is aimed (amber when a map event starts or ends mid-flight)
+    this.arc.update(frame.throwArc, dt, this.camera.ppm, this.ctx.reducedMotion);
     for (const b of this.books) {
       b.pool.update(dt);
       b.layer.begin();
@@ -274,6 +281,15 @@ export class Vfx {
     return this.shake.update(dt);
   }
 
+  /** Effects drawn by meshes of their own, on show at (x, y) so the shader warm-up compiles them; `endWarmUp()` after. */
+  showForWarmUp(x: number, y: number): void {
+    this.trail.showForWarmUp(x, y);
+  }
+
+  endWarmUp(): void {
+    this.trail.clear();
+  }
+
   /** live particles (the docs/11 §3 budget counts these) */
   get particles(): number {
     let n = this.glowPool.count + this.smokePool.count + this.decalPool.count;
@@ -286,6 +302,7 @@ export class Vfx {
     this.grenades.dispose();
     this.gunfire.dispose();
     this.ghosts.dispose();
+    this.trail.dispose();
     for (const m of this.modules) m.dispose?.();
     this.flash.point.removeFromParent();
   }

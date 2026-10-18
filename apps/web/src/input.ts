@@ -283,8 +283,10 @@ export class InputSampler {
     return { x: camera.toWorldX(this.mouseX), y: camera.toWorldY(this.mouseY) };
   }
 
-  /** Samples one tick of input; aims from the shoulder at (sx, sy) toward the mouse. */
-  /** `now`: ms on the event clock (performance.now), for the throw latch's tap time. */
+  /**
+   * Samples one tick of input; aims from the shoulder at (sx, sy) toward the mouse. `now`: ms on the
+   * event clock (performance.now), for the throw latch's tap time.
+   */
   sample(camera: Camera, sx: number, sy: number, out: Input = createInput(), now = performance.now()): Input {
     const b = this.bindings;
     let buttons = 0;

@@ -146,10 +146,9 @@ export class Gunfire {
     scene.add(this.flashLayer.mesh);
   }
 
-  /** One batch of sim events: shots wait for the frame's avatar poses. */
   /**
-   * A clean slate (a new map): queued shots go unfired (up to QUEUE_MAX can pile up while 3D isn't
-   * drawing), and no flash or light pop carries over.
+   * A clean slate (a new map, or the WebGL context back after a loss): queued shots go unfired, and
+   * no flash or light pop carries over.
    */
   clear(): void {
     this.queue.length = 0;
@@ -160,6 +159,7 @@ export class Gunfire {
     this.light.intensity = 0;
   }
 
+  /** One batch of sim events: shots wait for the frame's avatar poses. */
   onEvents(events: readonly SimEvent[]): void {
     this.batch++;
     for (const e of events) {
@@ -436,7 +436,6 @@ export class Gunfire {
     }
   }
 
-  /** Sparks off a wall (by its material), or a non-gory thud on a player (docs/03 §13). */
   /**
    * A bullet off a riot shield: metal sparks fanning out along the shield's normal where it bounced,
    * a cold tracer on along its new path, and whatever it struck at the end.
@@ -474,6 +473,7 @@ export class Gunfire {
     if (e.hit) this.impact(fx, e, ux, uy);
   }
 
+  /** Sparks off a wall (by its material), or a non-gory thud on a player (docs/03 §13). */
   private impact(fx: GunfireTargets, e: HitEnd, ux: number, uy: number): void {
     const n = (count: number) => Math.max(2, Math.round(count * this.detail));
     let nx = -ux;

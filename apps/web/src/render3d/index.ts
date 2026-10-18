@@ -163,8 +163,10 @@ export class Renderer3D {
   private lastFrameAt = 0;
   private frames = 0;
 
-  /** WebGL2 is the baseline (docs/11 §1); without it the page keeps the 2D renderer. */
-  /** WebGL 2 starts, on a GPU unless `allowSoftware` (a software rasteriser is too slow to play on). */
+  /**
+   * WebGL 2 starts, on a GPU unless `allowSoftware` (a software rasteriser is too slow to play on).
+   * It is the baseline (docs/11 §1): without it the page keeps the 2D renderer.
+   */
   static supported(allowSoftware = false): boolean {
     try {
       return !!document.createElement('canvas').getContext('webgl2', { failIfMajorPerformanceCaveat: !allowSoftware });
@@ -205,6 +207,7 @@ export class Renderer3D {
     canvas.addEventListener('webglcontextrestored', () => {
       this.lost = false;
       this.lastFrameAt = 0;
+      this.vfx.gunfire.clear(); // nothing from before the loss fires late
       this.resize();
     });
     if (showStats) {
@@ -280,9 +283,13 @@ export class Renderer3D {
     return this.online;
   }
 
-  /** Sim events (shots, explosions) for the effects; online, remote ones wait for the render tick. */
+  /**
+   * Sim events (shots, explosions) for the effects; online, remote ones wait for the render tick.
+   * None while nothing is drawn (loading, the context lost, a hidden tab whose sim the watchdog keeps
+   * stepping): queued shots and blasts would all go off, stale, on the first frame back.
+   */
   readonly onEvents = (events: readonly SimEvent[], localId = -1): void => {
-    if (!this.ready) return;
+    if (!this.ready || this.lost || document.hidden) return;
     const online = this.onlineView();
     if (online) online.hold(events, localId, this.toVfx);
     else this.toVfx(events);
@@ -412,7 +419,9 @@ export class Renderer3D {
     cam.x = spawn.x;
     cam.y = spawn.y;
     applyPlanePose(this.camera3, planePose(cam, FOV_DEG, undefined, this.pose));
+    this.vfx.showForWarmUp(spawn.x, spawn.y + 1); // effects with meshes of their own (the dash trail)
     await this.renderer.compileAsync(this.scene, this.camera3);
+    this.vfx.endWarmUp();
     // compileAsync skips the shadow pass: where the sun casts shadows (High), one draw links its
     // depth programs (the skinned soldiers' included) now, not when the first soldiers spawn
     if (this.sun.castShadow) {

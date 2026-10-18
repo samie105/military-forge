@@ -27,6 +27,8 @@ export const Ramp = {
   Chunk: 10,
   /** white haze that thins out (tint it): a sniper's smoke line */
   Haze: 11,
+  /** the dash trail's sparkles: a white flash cooling to mint green, gone (dashTrail.ts) */
+  Sparkle: 12,
 } as const;
 
 /** [t, r, g, b, a] keys in linear colour, t ascending from 0 to 1 */
@@ -43,6 +45,7 @@ const KEYS: readonly (readonly number[])[][] = [
   [[0, 1, 0.98, 0.85, 1], [0.5, 1, 0.9, 0.6, 0.7], [1, 1, 0.8, 0.45, 0]],
   [[0, 0.045, 0.035, 0.025, 1], [0.8, 0.045, 0.035, 0.025, 1], [1, 0.045, 0.035, 0.025, 0]],
   [[0, 1, 1, 1, 0.55], [0.4, 1, 1, 1, 0.35], [1, 1, 1, 1, 0]],
+  [[0, 0.85, 1, 0.85, 1], [0.15, 0.35, 1, 0.5, 1], [1, 0.1, 0.8, 0.25, 0]],
 ];
 
 export const RAMP_STEPS = 64;

@@ -154,10 +154,6 @@ export function nodePosition(root: Object3D, name: string): Vector3 | null {
 }
 
 /**
- * A hand weapon from its GLB, its sockets from sockets.json when given, else from the GLB's nodes
- * (the muzzle falls back to the barrel's tip, the off hand to socket_offhand_IK's spot).
- */
-/**
  * The material for a baked gun: its GLB texture when it has one and UVs (a scan), else vertex
  * colours (a scripted gun), else plain (never black: no colour attribute reads as 0 in WebGL).
  */
@@ -167,6 +163,10 @@ function gunMaterial(gltf: GLTF, geometry: BufferGeometry, materials: GunMateria
   return geometry.getAttribute('color') ? materials.vertexColors : materials.plain;
 }
 
+/**
+ * A hand weapon from its GLB, its sockets from sockets.json when given, else from the GLB's nodes
+ * (the muzzle falls back to the barrel's tip, the off hand to socket_offhand_IK's spot).
+ */
 export function weaponFromGltf(gltf: GLTF, materials: GunMaterials | Material, sockets?: WeaponSockets): WeaponModel | null {
   const geometry = bakeGltfMesh(gltf);
   if (!geometry) return null;
