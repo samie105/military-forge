@@ -324,6 +324,14 @@ export class Renderer3D {
   private localId = -1;
 
   /**
+   * Blood on player hits (vfx/blood.ts: a spray sized by the damage, a floor splat that fades), for
+   * the Settings toggle. **Off by default** (age ratings): off, a hit is a non-gory thud.
+   */
+  setBlood(on: boolean): void {
+    this.vfx.setBlood(on);
+  }
+
+  /**
    * No camera shake or camera kick, half the gun kick, a third of the blast light, fuse lights
    * blinking ≤ 3 times a second, hit reactions at HIT.reduced of their size.
    */

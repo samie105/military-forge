@@ -55,6 +55,15 @@ interface Spark {
   age: number;
 }
 
+/** a blood droplet (an option, off by default): falls and fades */
+interface Drop {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  age: number;
+}
+
 interface Burst {
   x: number;
   y: number;
@@ -257,6 +266,10 @@ export class Renderer {
   private readonly ctx: CanvasRenderingContext2D;
   private readonly tracers: Tracer[] = [];
   private readonly sparks: Spark[] = [];
+  private readonly drops: Drop[] = [];
+  /** blood on player hits (the Settings toggle; off by default for age ratings): see setBlood */
+  private blood = false;
+  private dropSeed = 3;
   private readonly bursts: Burst[] = [];
   private readonly dashes: DashStreak[] = [];
   /** the throw arc's core colour this frame ("r,g,b"): warm white, amber when a map event starts or ends mid-flight */
@@ -341,6 +354,34 @@ export class Renderer {
     this.camera.resize(w, h);
   }
 
+  /**
+   * Blood on player hits, for the Settings toggle; **off by default** (age ratings). On, a hit
+   * throws a few dark-red drops along the shot, more for a harder hit; render3d draws its own
+   * (`Renderer3D.setBlood`). Off, a hit stays the plain hit dot.
+   */
+  setBlood(on: boolean): void {
+    this.blood = on;
+    if (!on) this.drops.length = 0;
+  }
+
+  /** Drops out of a hit at (x, y) along (dx, dy), by the weapon's damage (a headshot more). */
+  private bleed(x: number, y: number, dx: number, dy: number, weapon: number, zone: number): void {
+    const def = weapons[weapon];
+    const head = zone === HitZone.Head;
+    const k = Math.min(2.2, Math.max(0.4, ((def?.damage ?? 20) * (head ? (def?.headMul ?? 1) : 1)) / 30));
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    const along = Math.atan2(dy / len, dx / len);
+    for (let i = 0, n = Math.round(3 + 4 * k); i < n && this.drops.length < 96; i++) {
+      this.dropSeed = (Math.imul(this.dropSeed, 1664525) + 1013904223) >>> 0;
+      const r1 = this.dropSeed / 4294967296;
+      this.dropSeed = (Math.imul(this.dropSeed, 1664525) + 1013904223) >>> 0;
+      const r2 = this.dropSeed / 4294967296;
+      const a = along + (r1 * 2 - 1) * 0.7;
+      const v = 1.5 + 3 * r2;
+      this.drops.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v + 0.6, age: 0 });
+    }
+  }
+
   /** Turns sim events into short-lived visual effects. */
   onEvents(events: readonly SimEvent[], localId: number): void {
     this.forwardEvents?.(events, localId);
@@ -348,6 +389,7 @@ export class Renderer {
       switch (e.type) {
         case 'shot':
           this.tracers.push({ ox: e.ox, oy: e.oy, ex: e.ex, ey: e.ey, hit: e.hit, age: 0, local: e.shooter === localId });
+          if (e.hit === 2 && this.blood) this.bleed(e.ex, e.ey, e.ex - e.ox, e.ey - e.oy, e.weapon, e.zone);
           break;
         case 'explosion':
           this.bursts.push({ x: e.x, y: e.y, r: e.radius, age: 0, grenade: e.grenade ?? FRAG.index });
@@ -355,6 +397,7 @@ export class Renderer {
         case 'ricochet':
           this.tracers.push({ ox: e.x, oy: e.y, ex: e.ex, ey: e.ey, hit: e.hit, age: 0, local: e.shooter === localId, ricochet: true });
           this.sparks.push({ x: e.x, y: e.y, nx: e.nx, ny: e.ny, age: 0 });
+          if (e.hit === 2 && this.blood) this.bleed(e.ex, e.ey, e.ex - e.x, e.ey - e.y, e.weapon, e.zone);
           break;
         case 'shieldBreak':
           this.bursts.push({ x: e.x, y: e.y, r: 0.6, age: 0, grenade: FRAG.index }); // drawn like a small blast
@@ -1000,6 +1043,23 @@ export class Renderer {
       ctx.lineTo(cam.toScreenX(d.x + ux * len), cam.toScreenY(d.y + 0.75 + uy * len));
       ctx.stroke();
       ctx.lineCap = 'butt';
+    }
+    // blood drops (an option): falling, fading (render3d bleeds its own)
+    for (let i = this.drops.length - 1; i >= 0; i--) {
+      const d = this.drops[i]!;
+      d.age += dt;
+      if (d.age > 0.5) {
+        this.drops.splice(i, 1);
+        continue;
+      }
+      d.vy -= 9 * dt;
+      d.x += d.vx * dt;
+      d.y += d.vy * dt;
+      if (!world) continue;
+      ctx.fillStyle = `rgba(122,8,8,${1 - d.age / 0.5})`;
+      ctx.beginPath();
+      ctx.arc(cam.toScreenX(d.x), cam.toScreenY(d.y), 2.2, 0, Math.PI * 2);
+      ctx.fill();
     }
     // ricochet sparks: a short fan along the shield's normal (render3d sparks its own)
     for (let i = this.sparks.length - 1; i >= 0; i--) {

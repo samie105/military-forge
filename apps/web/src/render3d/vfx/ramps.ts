@@ -29,6 +29,12 @@ export const Ramp = {
   Haze: 11,
   /** the dash trail's sparkles: a white flash cooling to mint green, gone (dashTrail.ts) */
   Sparkle: 12,
+  /** blood droplets (blood.ts, an option): dark red, darkening, gone */
+  Blood: 13,
+  /** a thin blood mist */
+  BloodMist: 14,
+  /** a blood splat: holds, then fades over the last fifth */
+  BloodDecal: 15,
 } as const;
 
 /** [t, r, g, b, a] keys in linear colour, t ascending from 0 to 1 */
@@ -46,6 +52,9 @@ const KEYS: readonly (readonly number[])[][] = [
   [[0, 0.045, 0.035, 0.025, 1], [0.8, 0.045, 0.035, 0.025, 1], [1, 0.045, 0.035, 0.025, 0]],
   [[0, 1, 1, 1, 0.55], [0.4, 1, 1, 1, 0.35], [1, 1, 1, 1, 0]],
   [[0, 0.85, 1, 0.85, 1], [0.15, 0.35, 1, 0.5, 1], [1, 0.1, 0.8, 0.25, 0]],
+  [[0, 0.3, 0.012, 0.01, 1], [0.6, 0.19, 0.006, 0.005, 0.95], [1, 0.11, 0.004, 0.004, 0]],
+  [[0, 0.32, 0.03, 0.025, 0.5], [1, 0.2, 0.015, 0.012, 0]],
+  [[0, 0.14, 0.005, 0.004, 0.9], [0.8, 0.11, 0.004, 0.003, 0.85], [1, 0.09, 0.003, 0.003, 0]],
 ];
 
 export const RAMP_STEPS = 64;

@@ -116,8 +116,8 @@ export function sweepCircle(world: CollisionWorld, x: number, y: number, mx: num
   for (let k = 0; k < count; k++) {
     const seg = world.queryResult[k]!;
     const flags = world.flags[seg]!;
-    if (flags & SegFlag.OneWay) {
-      // platforms only stop grenades falling onto them from above
+    if (flags & SegFlag.OneWay && flags & SegFlag.BulletPass) {
+      // platforms only stop grenades falling onto them from above (a slab that stops bullets, both ways)
       if (my >= 0 || y - radius < world.segmentYAt(seg, x) - 0.01) continue;
     }
     const ax = world.ax[seg]!;

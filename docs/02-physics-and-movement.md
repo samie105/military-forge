@@ -80,7 +80,7 @@ Segment flags:
 | Flag | Behaviour |
 |---|---|
 | `SOLID` | blocks players, projectiles, grenades, LOS |
-| `ONE_WAY` | platform you can fly up through from below; solid only when moving down onto it *and* the feet were above it last tick. Holding **down** for 0.15 s drops through |
+| `ONE_WAY` | platform you can fly up through from below; solid only when moving down onto it *and* the feet were above it last tick. Holding **down** for 0.15 s drops through. It is also `BULLET_PASS`, like a railing (bullets, blasts, gas, sight and grenades from below go through), unless the map marks it `blocksBullets`: a floor or roof slab, still one-way for bodies, that stops all of those from either side |
 | `BULLET_PASS` | chain-link fences, railings: block bodies, not bullets |
 | `GLASS` | breakable; HP pool; when destroyed it is removed from the grid (server event) |
 | `BOUNCY` | restitution override for grenades (fun maps) |
@@ -522,7 +522,7 @@ The compiled map format (the `MapDef` JSON, like `art/maps/street_market/street_
 
 Zone ids are unique per map. The compiler (`checkMechanics`) lists every problem at once (unknown kind, both or neither shape, out-of-range values, a zero launch) and the Game refuses to build the map until they're fixed, like a self-intersecting solid.
 
-**Editor support.** `packages/content/schema/map.schema.json` is the map JSON format as JSON Schema, generated from `ZONE_KINDS`, `EVENT_KINDS` and `MODIFIER_FIELDS` (`pnpm --filter @military-forge/content schema`; a test fails if the committed file drifts). Add `"$schema": "<path>/map.schema.json"` to a `.map.json` and an editor offers every zone and event kind with its description and defaults, and flags values out of range. `parseMapJson` loads such a file: it refuses unknown keys in rules, zones and events (a misspelt `"gravitymul"` must not silently do nothing) and lists every problem with its JSON path. The Storm Front demo map is authored this way (`packages/content/src/maps/stormFront.map.json`). The art pipeline's `compile_map.py` can pass `rules`, `zones` and `events` from a layout straight through to its `.map.json`.
+**Editor support.** `packages/content/schema/map.schema.json` is the map JSON format as JSON Schema, generated from `ZONE_KINDS`, `EVENT_KINDS` and `MODIFIER_FIELDS` (`pnpm --filter @military-forge/content schema`; a test fails if the committed file drifts). Add `"$schema": "<path>/map.schema.json"` to a `.map.json` and an editor offers every zone and event kind with its description and defaults, and flags values out of range. `parseMapJson` loads such a file: it refuses unknown keys in one-way platforms, rules, zones and events (a misspelt `"gravitymul"` or `"blockBullets"` must not silently do nothing) and lists every problem with its JSON path. The Storm Front demo map is authored this way (`packages/content/src/maps/stormFront.map.json`). The art pipeline's `compile_map.py` can pass `rules`, `zones` and `events` from a layout straight through to its `.map.json`.
 
 **Trying maps.** Local mode: `/?map=lunar-outpost` (or `storm-front`, `flux-lab`, `mechanics-test`); the debug bar links them. Online: `MAP=flux-lab pnpm dev`, or `--map=flux-lab` on the game server; clients take the map from WELCOME and redraw for it.
 

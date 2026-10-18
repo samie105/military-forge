@@ -2,8 +2,9 @@
  * The map JSON format (docs/02 §20.6): the compiled MapDef as plain JSON, the way the art pipeline
  * writes it (art/maps/<map>/<map>.map.json) and the map editor will.
  *
- * - `parseMapJson` checks the shape and returns a MapDef. Unknown keys in rules, zones, events and
- *   spawners are errors (a misspelt "gravitymul" must not be silently ignored). The sim checks the
+ * - `parseMapJson` checks the shape and returns a MapDef. Unknown keys in one-way platforms, rules,
+ *   zones, events and spawners are errors (a misspelt "gravitymul" or "blockBullets" must not be
+ *   silently ignored). The sim checks the
  *   meaning when it compiles the map: ranges, ids, the schedule (packages/sim checkMechanics), and
  *   the spawners' spots and timers (packages/sim pickups.ts).
  * - `mapJsonSchema` is the same format as JSON Schema, generated from the zone and event catalogue,
@@ -24,6 +25,7 @@ const MODIFIER_KEYS = MODIFIER_FIELDS.map((f) => f.key as string);
 const ZONE_KEYS = ['id', 'kind', 'rect', 'points', 'launch', 'event', 'label', ...MODIFIER_KEYS];
 const EVENT_KEYS = ['id', 'kind', 'name', 'description', 'duration', 'warning', 'gustPeriod', 'windFlip', 'pickOneZone', ...MODIFIER_KEYS];
 const SPAWNER_KEYS = ['id', 'pool', 'spots', 'first', 'respawn', 'maxActive'];
+const ONE_WAY_KEYS = ['ax', 'ay', 'bx', 'by', 'blocksBullets'];
 const TOP_KEYS = ['$schema', 'id', 'name', 'bounds', 'solids', 'oneWays', 'spawns', 'dummies', 'labels', 'rules', 'zones', 'events', 'spawners'];
 
 class Problems {
@@ -78,7 +80,13 @@ export function parseMapJson(json: unknown, source = 'map'): MapDef {
         if (o.material !== undefined && !Number.isInteger(o.material)) p.add(`${at}.material`, 'must be an integer');
       }),
     );
-    p.array('$.oneWays', m.oneWays, (s, at) => p.object(at, s, (o) => ['ax', 'ay', 'bx', 'by'].forEach((k) => p.num(`${at}.${k}`, o[k]))));
+    p.array('$.oneWays', m.oneWays, (s, at) =>
+      p.object(at, s, (o) => {
+        p.keys(at, o, ONE_WAY_KEYS);
+        ['ax', 'ay', 'bx', 'by'].forEach((k) => p.num(`${at}.${k}`, o[k]));
+        if (o.blocksBullets !== undefined && typeof o.blocksBullets !== 'boolean') p.add(`${at}.blocksBullets`, 'must be true or false');
+      }),
+    );
     p.array('$.spawns', m.spawns, (s, at) => p.object(at, s, (o) => ['x', 'y'].forEach((k) => p.num(`${at}.${k}`, o[k]))));
     p.array('$.dummies', m.dummies, (s, at) =>
       p.object(at, s, (o) => {
@@ -217,8 +225,22 @@ export function mapJsonSchema(): object {
       },
       oneWays: {
         type: 'array',
-        items: { type: 'object', required: ['ax', 'ay', 'bx', 'by'], properties: { ax: { type: 'number' }, ay: { type: 'number' }, bx: { type: 'number' }, by: { type: 'number' } } },
-        description: 'Platforms you fly up through and land on; hold Down to drop.',
+        items: {
+          type: 'object',
+          required: ['ax', 'ay', 'bx', 'by'],
+          additionalProperties: false,
+          properties: {
+            ax: { type: 'number' },
+            ay: { type: 'number' },
+            bx: { type: 'number' },
+            by: { type: 'number' },
+            blocksBullets: {
+              type: 'boolean',
+              description: 'A floor or roof slab rather than a railing: still one-way for bodies, but it stops bullets, ricochets, grenades, blasts, gas and sight like a wall. Default false.',
+            },
+          },
+        },
+        description: 'Platforms you fly up through and land on; hold Down to drop. Bullets pass them unless blocksBullets.',
       },
       spawns: { type: 'array', items: point, description: 'Feet positions for players.' },
       dummies: { type: 'array', items: { type: 'object', required: ['name', 'x', 'y', 'script'] }, description: 'Scripted targets for local play.' },

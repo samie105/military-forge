@@ -331,6 +331,30 @@ describe('map JSON format (docs/02 §20.6)', () => {
     expect(message).toMatch(/\$\.rules\.gravityMul: must be a number/);
   });
 
+  it('one-way platforms: blocksBullets (true or false) parses; a misspelt key or a non-boolean is refused', () => {
+    const slab = JSON.parse(JSON.stringify(maps['storm-front'])) as { oneWays: Record<string, unknown>[] };
+    slab.oneWays[0]!.blocksBullets = true;
+    slab.oneWays[1]!.blocksBullets = false;
+    const map = parseMapJson(slab);
+    expect(map.oneWays[0]!.blocksBullets).toBe(true);
+    expect(map.oneWays[1]!.blocksBullets).toBe(false);
+    expect(map.oneWays[2]!.blocksBullets).toBeUndefined();
+    const schema = mapJsonSchema() as { properties: { oneWays: { items: { additionalProperties: boolean; properties: Record<string, { type: string }> } } } };
+    expect(schema.properties.oneWays.items.properties.blocksBullets!.type).toBe('boolean');
+    expect(schema.properties.oneWays.items.additionalProperties).toBe(false);
+    const bad = JSON.parse(JSON.stringify(maps['storm-front'])) as { oneWays: Record<string, unknown>[] };
+    bad.oneWays[0]!.blockBullets = true;
+    bad.oneWays[1]!.blocksBullets = 'yes';
+    let message = '';
+    try {
+      parseMapJson(bad, 'bad.map.json');
+    } catch (e) {
+      message = (e as Error).message;
+    }
+    expect(message).toMatch(/\$\.oneWays\[0\]: unknown key "blockBullets"/);
+    expect(message).toMatch(/\$\.oneWays\[1\]\.blocksBullets: must be true or false/);
+  });
+
   it('carries pickup spawners: the movement-test map round-trips, and a bad spawner is refused', () => {
     expect(movementTestMap.spawners?.length).toBeGreaterThan(0);
     expect(parseMapJson(JSON.parse(JSON.stringify(movementTestMap)))).toEqual(movementTestMap);

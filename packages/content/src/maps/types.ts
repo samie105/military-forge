@@ -17,12 +17,20 @@ export interface MapPolygon {
   material?: Material;
 }
 
-/** A platform you can fly up through and land on; drop through by holding down. */
+/**
+ * A platform you can fly up through and land on; drop through by holding down. Bullets, blasts, gas
+ * and sight pass through it like a railing, and grenades from below, unless it `blocksBullets`.
+ */
 export interface MapOneWay {
   ax: number;
   ay: number;
   bx: number;
   by: number;
+  /**
+   * A floor or roof slab rather than a railing: still one-way for bodies, but it stops bullets,
+   * ricochets, grenades (from either side), blasts, gas and sight like a wall. Default false.
+   */
+  blocksBullets?: boolean;
 }
 
 export interface MapLabel {

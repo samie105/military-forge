@@ -84,6 +84,7 @@
           "bx",
           "by"
         ],
+        "additionalProperties": false,
         "properties": {
           "ax": {
             "type": "number"
@@ -96,10 +97,14 @@
           },
           "by": {
             "type": "number"
+          },
+          "blocksBullets": {
+            "type": "boolean",
+            "description": "A floor or roof slab rather than a railing: still one-way for bodies, but it stops bullets, ricochets, grenades, blasts, gas and sight like a wall. Default false."
           }
         }
       },
-      "description": "Platforms you fly up through and land on; hold Down to drop."
+      "description": "Platforms you fly up through and land on; hold Down to drop. Bullets pass them unless blocksBullets."
     },
     "spawns": {
       "type": "array",

@@ -23,6 +23,8 @@ export const Cell = {
   Star: 11,
   /** an even line, soft across: tracer paths, smoke trails */
   Line: 12,
+  /** a splat: a ragged blob with a few drops thrown off it (blood.ts) */
+  Splat: 13,
 } as const;
 
 export const ATLAS_GRID = 4;
@@ -57,6 +59,15 @@ const smooth = (e0: number, e1: number, v: number) => {
   const t = clamp01((v - e0) / (e1 - e0));
   return t * t * (3 - 2 * t);
 };
+
+/** the drops a splat throws off: centre (u, v) and radius */
+const SPLAT_DROPS: readonly (readonly [number, number, number])[] = [
+  [0.66, 0.28, 0.1],
+  [-0.58, -0.44, 0.08],
+  [0.22, -0.74, 0.07],
+  [-0.32, 0.7, 0.06],
+  [0.8, -0.38, 0.05],
+];
 
 /** texel → [luminance, alpha] for each cell; u, v in −1…1 (v up) */
 type Shape = (u: number, v: number) => readonly [number, number];
@@ -99,6 +110,12 @@ const SHAPES: Record<number, Shape> = {
     return [1, smooth(-0.85 + n * 0.6, 0.85, v) * smooth(1, 0.9, v) * smooth(1, 0.55, Math.abs(u) + n * 0.2)];
   },
   [Cell.Line]: (u, v) => [1, Math.exp(-(v * v) / 0.06) * smooth(1, 0.94, Math.abs(u))],
+  [Cell.Splat]: (u, v) => {
+    const d = Math.hypot(u * 1.15, v) + (fbm(u * 3.5 + 17, v * 3.5, 9) - 0.5) * 0.55;
+    let a = smooth(0.62, 0.48, d);
+    for (const [cx, cy, r] of SPLAT_DROPS) a = Math.max(a, smooth(r, r * 0.6, Math.hypot(u - cx, v - cy)));
+    return [1, a];
+  },
   [Cell.Star]: (u, v) => {
     const d = Math.hypot(u, v);
     const rays = Math.exp(-Math.abs(u * v) * 40) * smooth(1, 0, d);

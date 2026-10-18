@@ -12,6 +12,7 @@ import { HitZone, weapons, type WeaponClass } from '@military-forge/content';
 import { SegFlag, createRayHit, type CollisionWorld, type SimEvent } from '@military-forge/sim';
 import { PointLight, Vector3, type Scene, type Texture } from 'three';
 import { Cell } from './atlas';
+import { bloodHit } from './blood';
 import type { WeaponVfxArt } from './manifest';
 import { ParticleLayer } from './particles';
 import { F, ParticlePool, STRIDE, particleSpec, type ParticleSpec } from './pool';
@@ -21,7 +22,7 @@ type ShotEvent = Extract<SimEvent, { type: 'shot' }>;
 /** a bullet bouncing off a riot shield (main's shield): its path on from the bounce */
 type RicochetEvent = Extract<SimEvent, { type: 'ricochet' }>;
 /** where a bullet ended and what it struck (a shot, or a ricochet's second leg) */
-type HitEnd = Pick<ShotEvent, 'ex' | 'ey' | 'hit' | 'zone'>;
+type HitEnd = Pick<ShotEvent, 'ex' | 'ey' | 'hit' | 'zone' | 'weapon'>;
 
 /**
  * Where shooter `shooter`'s gun that fired `weapon` has its muzzle, and which way it points (world).
@@ -95,6 +96,8 @@ const _d = new Vector3();
 export interface GunfireTargets {
   glow: ParticlePool;
   smoke: ParticlePool;
+  /** long-lived marks (blood splats, when blood is on) */
+  decals?: ParticlePool;
 }
 
 export class Gunfire {
@@ -106,6 +109,8 @@ export class Gunfire {
   /** effect density (preset), and Low's sparser SMG tracers */
   detail = 1;
   low = false;
+  /** blood on player hits instead of the non-gory thud (blood.ts; Renderer3D.setBlood, off by default) */
+  blood = false;
   private art: WeaponVfxArt | null = null;
   private readonly queue: (ShotEvent | RicochetEvent)[] = [];
   private readonly batchOf: number[] = [];
@@ -173,6 +178,9 @@ export class Gunfire {
     this.seed = (Math.imul(this.seed, 1664525) + 1013904223) >>> 0;
     return this.seed / 4294967296;
   }
+
+  /** `rand` as a value (blood.ts takes it) */
+  private readonly random = (): number => this.rand();
 
   /** Draws the queued shots (avatars posed) and fades the light pop. */
   update(dt: number, fx: GunfireTargets, muzzle: MuzzleLookup): void {
@@ -473,7 +481,7 @@ export class Gunfire {
     if (e.hit) this.impact(fx, e, ux, uy);
   }
 
-  /** Sparks off a wall (by its material), or a non-gory thud on a player (docs/03 §13). */
+  /** Sparks off a wall (by its material), or on a player a non-gory thud (docs/03 §13), or blood when it's on. */
   private impact(fx: GunfireTargets, e: HitEnd, ux: number, uy: number): void {
     const n = (count: number) => Math.max(2, Math.round(count * this.detail));
     let nx = -ux;
@@ -490,6 +498,12 @@ export class Gunfire {
       material = this.world.material[hit.seg]!;
     }
     const player = e.hit === 2;
+    if (player && this.blood) {
+      const def = weapons[e.weapon];
+      const head = e.zone === HitZone.Head;
+      bloodHit(fx, this.world, e.ex, e.ey, ux, uy, (def?.damage ?? 20) * (head ? (def?.headMul ?? 1) : 1), head, this.detail, this.random);
+      return;
+    }
     // a riot shield (3) is a steel plate: sparks, no dust
     const metal = material === 1 || e.hit === 3;
     // a hot point where it struck

@@ -215,6 +215,11 @@ export class Vfx {
     }
   }
 
+  /** Blood on player hits (blood.ts), instead of the non-gory thud. */
+  setBlood(on: boolean): void {
+    this.gunfire.blood = on;
+  }
+
   setReducedMotion(on: boolean): void {
     this.ctx.reducedMotion = on;
     this.shake.enabled = !on;

@@ -450,6 +450,12 @@ Caveat: real TCP loss needs kernel-level impairment (dummynet, root), so WebSock
 - **Playing them:** `/?map=<id>` in local mode (links in the debug bar); online `MAP=<id> pnpm dev` (turbo passes `MAP` and `SEED` through now) or `--map=<id>` on the game server. The web client redraws for the server's map from WELCOME (2D and 3D `setMap`).
 - **Map lint in tests:** every registered map compiles (collision, rules, zones, events) and every spawn stands clear where it's put (`packages/sim/test/maps.test.ts`); zones lie inside the bounds (content tests).
 - **JSON Schema** for editors: `packages/content/schema/map.schema.json`, generated from the catalogue (`pnpm --filter @military-forge/content schema`; a test fails on drift). Each zone and event kind shows its description and defaults in autocomplete.
+- **One-way slabs (18 Oct, from the owner's playtest: "bullets go through buildings"):** every one-way platform is also `BulletPass`, like a railing, and the Street Market's roofs and floors are one-ways.
+  - `MapOneWay.blocksBullets: true` (in map JSON too; default false) compiles a one-way without `BulletPass`. It stays one-way for bodies: fly up through it, stand on it, drop through it.
+  - Bullets, ricochet legs, blasts, gas, flashes and sight lines stop at it from either side, and grenades bounce off its underside.
+  - Everything that already looked past railings through the `BulletPass` mask follows it unchanged: combat, explosions, mines, clouds, the bots' line of fire and the throw preview. Grenade flight (`sweepCircle`) is the one place that tests it.
+  - `parseMapJson` now refuses unknown keys on one-ways (a misspelt `blockBullets` must not silently leave a slab see-through).
+  - No map sets it yet, so no golden changed. Impacts on a slab still read as wood: one-ways compile as material 2.
 
 ### On screen
 

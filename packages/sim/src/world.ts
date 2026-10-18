@@ -9,7 +9,7 @@ import { raySegment } from './geometry';
 export const SegFlag = {
   Solid: 1,
   OneWay: 2,
-  /** bullets pass (fences, railings, one-way platforms) */
+  /** bullets pass (fences, railings, one-way platforms that aren't `blocksBullets` slabs) */
   BulletPass: 4,
 } as const;
 
@@ -184,9 +184,11 @@ export function compileMapSegments(map: MapDef): { segments: CompiledSegment[]; 
   });
 
   for (const ow of map.oneWays) {
-    // one-way platforms are authored left → right; their normal points up
+    // one-way platforms are authored left → right; their normal points up. Bullets pass them as they
+    // pass a railing, unless the map makes one a slab that stops them (still one-way for bodies)
     const [ax, ay, bx, by] = ow.ax <= ow.bx ? [ow.ax, ow.ay, ow.bx, ow.by] : [ow.bx, ow.by, ow.ax, ow.ay];
-    segments.push({ ax, ay, bx, by, flags: SegFlag.OneWay | SegFlag.BulletPass, material: 2 });
+    const flags = ow.blocksBullets ? SegFlag.OneWay : SegFlag.OneWay | SegFlag.BulletPass;
+    segments.push({ ax, ay, bx, by, flags, material: 2 });
   }
   return { segments, warnings };
 }

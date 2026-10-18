@@ -200,3 +200,29 @@ describe('2D mine light: Reduce motion caps it as Reduce flashes does (review lo
     }
   });
 });
+
+describe('blood in 2D: an option, off by default', () => {
+  const opts = (over: Partial<RenderOptions>): RenderOptions => ({ showHitboxes: false, showGrid: false, showNet: false, overlay: false, ...over });
+  const isBlood = (fill: string) => fill.startsWith('rgba(122,8,8');
+  const hit: SimEvent = { type: 'shot', shooter: 0, weapon: 4, ox: 15, oy: 1.2, ex: 21, ey: 1.2, hit: 2, target: 1, zone: 0 };
+
+  it('off: no blood, only the hit dot', () => {
+    const { r, fills, frame } = setup();
+    r.onEvents([hit], 0);
+    r.render(frame, 1 / 60, opts({}), '');
+    expect(fills.some(isBlood)).toBe(false);
+  });
+
+  it('on: drops along the shot in the 2D view; over the 3D view render3d bleeds its own', () => {
+    const on = setup();
+    on.r.setBlood(true);
+    on.r.onEvents([hit], 0);
+    on.r.render(on.frame, 1 / 60, opts({}), '');
+    expect(on.fills.filter(isBlood).length).toBeGreaterThan(3);
+    const over = setup();
+    over.r.setBlood(true);
+    over.r.onEvents([hit], 0);
+    over.r.render(over.frame, 1 / 60, opts({ overlay: true }), '');
+    expect(over.fills.some(isBlood)).toBe(false);
+  });
+});

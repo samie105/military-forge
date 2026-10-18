@@ -278,7 +278,7 @@ function flipbook(book: { pool: ParticlePool; art: FlipbookArt }, x: number, y: 
 }
 
 /** True when the solid under a surface point is at least `depth` thick there and `halfW` to each side. */
-function solidBelow(world: CollisionWorld, gx: number, gy: number, nx: number, ny: number, halfW: number, depth = 0.9): boolean {
+export function solidBelow(world: CollisionWorld, gx: number, gy: number, nx: number, ny: number, halfW: number, depth = 0.9): boolean {
   for (const side of SIDES) {
     let sx = gx + ny * halfW * side;
     let sy = gy - nx * halfW * side;

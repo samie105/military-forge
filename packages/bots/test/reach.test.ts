@@ -108,3 +108,31 @@ describe('H2: no fight stand-offs', () => {
     expect(worst).toBeLessThan(3 * 60);
   });
 });
+
+describe('slabs that stop bullets (one-ways with blocksBullets)', () => {
+  it('never fires from under a slab at a target standing on it (it flies up through and fights from there); through a plain one-way it fires from below', () => {
+    for (const blocks of [false, true]) {
+      const map = flatMap();
+      map.oneWays = [{ ax: 18, ay: 4, bx: 34, by: 4, ...(blocks ? { blocksBullets: true } : {}) }];
+      const game = new Game({ map, seed: 7 });
+      const target = dummyAt(game, 26, 4);
+      const bot = botAt(game, 14, { level: 'hard' });
+      let fromBelow = 0;
+      let shots = 0;
+      for (let i = 0; i < 4 * 60; i++) {
+        game.step([]);
+        for (const e of game.events) {
+          if (e.type !== 'shot' || e.shooter !== bot.id) continue;
+          shots++;
+          if (bot.y < 3.9) fromBelow++;
+        }
+      }
+      expect(shots, `blocksBullets ${blocks}`).toBeGreaterThan(0);
+      if (blocks) {
+        expect(fromBelow).toBe(0);
+        expect(bot.y).toBeGreaterThan(3.9); // up on the slab
+      } else expect(fromBelow).toBe(shots);
+      expect(target.hp).toBeLessThan(100);
+    }
+  });
+});
