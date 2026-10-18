@@ -33,6 +33,7 @@ export const LUNAR: EnvironmentLook = {
     fore: 0x24262b,
   },
   backdropTint: { sky: 0xffffff, far: 0xc9ced8, mid: 0xdde1e8 },
+  backdropHaze: { color: 0x0c111d, amount: { mid: 0.4 } },
   lampGlow: null,
 };
 
@@ -56,6 +57,7 @@ export const STORM: EnvironmentLook = {
     fore: 0x24272b,
   },
   backdropTint: { sky: 0xffffff, far: 0xdfe5ec, mid: 0xd7dee5 },
+  backdropHaze: { color: 0x5e6a76, amount: { mid: 0.35 } },
   lampGlow: null,
 };
 
@@ -79,6 +81,7 @@ export const LAB: EnvironmentLook = {
     fore: 0x2e3338,
   },
   backdropTint: { sky: 0xffffff, wall: 0xffffff, mid: 0xf2f4f6 },
+  backdropHaze: { color: 0xc4ccd3, amount: { wall: 0.35, mid: 0.35 } },
   lampGlow: null,
 };
 

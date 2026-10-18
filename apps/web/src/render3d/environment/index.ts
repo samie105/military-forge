@@ -41,7 +41,7 @@ import { buildDepthLayers, coversPlayer, projectToPlane, type DepthLayers, type 
 import { PLANE_BACK_Z } from '../mapGeometry';
 import type { PlanePose } from '../planeCamera';
 import { buildBackdrop, coverView, type BackdropDef, type BackdropMeshes, type Roam } from './backdrop';
-import { layoutItems, type KitLayout } from './layout';
+import { layoutItems, placementMatrix, type KitLayout } from './layout';
 import type { Frame, PlayerView } from '../../view';
 import { buildCity } from './city';
 import { bunting, faded, mergeBlobs, palm, tree, wire, type Fade, type Vec3 } from './dressing';
@@ -123,6 +123,13 @@ export function requestedLook(): string | null {
   }
 }
 
+/** a decor piece's world bounds (m) */
+export interface DecorBox {
+  piece: string;
+  min: [number, number, number];
+  max: [number, number, number];
+}
+
 /** the part of GLTFLoader the environment uses (tests pass a stub) */
 export interface KitSource {
   loadAsync(url: string): Promise<GLTF>;
@@ -163,6 +170,12 @@ export class MapEnvironment {
   private lampHeads: { mesh: InstancedMesh; z: number; bounds: Rect[]; fade: Float32Array } | null = null;
   /** billboard creatives (null for maps without ad slots, and until the slots load) */
   boards: AdBoards | null = null;
+  /**
+   * World boxes of the kit's mid-layer pieces once the kit is in: drawn, but with no collision. The
+   * bullet audit (scripts/bullet-audit.py) marks them; whatever looks solid here must read as
+   * background (streetMarket.test.ts).
+   */
+  readonly decorBoxes: DecorBox[] = [];
   private readonly roam: Roam;
 
   constructor(
@@ -239,7 +252,7 @@ export class MapEnvironment {
     const painted = this.def.backdrop;
     const hasSkyArt = !!painted?.skies[this.lookName];
     if (painted) {
-      this.backdrop = buildBackdrop(painted, this.lookName, look.backdropTint, baseUrl);
+      this.backdrop = buildBackdrop(painted, this.lookName, look.backdropTint, baseUrl, undefined, look.backdropHaze);
       for (const m of [this.backdrop.sky, ...this.backdrop.panels]) {
         if (!m) continue;
         this.material(m.material);
@@ -387,6 +400,14 @@ export class MapEnvironment {
       const mesh = new Mesh(far, this.material(new MeshBasicMaterial({ vertexColors: true })));
       mesh.name = 'kit-far';
       this.kit.add(mesh);
+    }
+    const m = new Matrix4();
+    for (const item of items) {
+      const piece = pieces.get(item.piece);
+      if (piece?.layer !== 'mid') continue;
+      if (!piece.geometry.boundingBox) piece.geometry.computeBoundingBox();
+      const box = piece.geometry.boundingBox!.clone().applyMatrix4(placementMatrix(item, m));
+      this.decorBoxes.push({ piece: item.piece, min: box.min.toArray(), max: box.max.toArray() });
     }
     // contact shadows wherever a piece meets the floor (kept on the kit's pavement in front)
     const footprints: ContactShadow[] = [];

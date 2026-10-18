@@ -7,7 +7,7 @@
  * Art: Higgsfield (GPT Image 2.5) originals, processed into WebP; see art/README.md's cost table
  * for the jobs and credits.
  */
-import { Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColorSpace, TextureLoader, type Texture } from 'three';
+import { Color, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColorSpace, TextureLoader, type Texture } from 'three';
 import type { PlanePose } from '../planeCamera';
 import { FOV_DEG, TILT_DEG } from '../planeCamera';
 
@@ -91,6 +91,25 @@ export function coverView(mesh: Mesh, aspect: number, pose: PlanePose, roam: Roa
   mesh.position.y = view.y - fy * my * 0.85;
 }
 
+/**
+ * Pulls a backdrop material toward a haze colour by `amount` (after the map and tint: three's
+ * MeshBasicMaterial has no term for it). One shader variant for every hazed panel.
+ */
+export function hazeMaterial(material: MeshBasicMaterial, color: number, amount: number): void {
+  if (amount <= 0) return;
+  const haze = { value: new Color(color) };
+  const k = { value: Math.min(1, amount) };
+  material.userData.haze = { color: haze.value, amount: k.value };
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.hazeColor = haze;
+    shader.uniforms.hazeAmount = k;
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 hazeColor;\nuniform float hazeAmount;')
+      .replace('#include <map_fragment>', '#include <map_fragment>\n\tdiffuseColor.rgb = mix( diffuseColor.rgb, hazeColor, hazeAmount );');
+  };
+  material.customProgramCacheKey = () => 'backdrop-haze';
+}
+
 export interface BackdropMeshes {
   sky: Mesh<PlaneGeometry, MeshBasicMaterial> | null;
   /** sky image aspect (width / height), once loaded */
@@ -104,7 +123,14 @@ export interface BackdropMeshes {
  * Builds the backdrop meshes for a look. Textures stream in; `ready` resolves when all are in (a
  * missing image only leaves its panel out).
  */
-export function buildBackdrop(def: BackdropDef, look: string, tints: Record<string, number>, baseUrl: string, loader = new TextureLoader()): BackdropMeshes {
+export function buildBackdrop(
+  def: BackdropDef,
+  look: string,
+  tints: Record<string, number>,
+  baseUrl: string,
+  loader = new TextureLoader(),
+  haze?: { color: number; amount: Record<string, number> },
+): BackdropMeshes {
   const out: BackdropMeshes = { sky: null, skyAspect: 21 / 9, panels: [], textures: [], ready: Promise.resolve() };
   const loads: Promise<void>[] = [];
   // images need a DOM: in tests and workers the meshes exist but never show
@@ -150,6 +176,7 @@ export function buildBackdrop(def: BackdropDef, look: string, tints: Record<stri
         geometry,
         new MeshBasicMaterial({ color: tints[layer.name] ?? 0xffffff, transparent: !layer.opaque, depthWrite: !!layer.opaque, fog: false }),
       );
+      if (haze) hazeMaterial(mesh.material, haze.color, haze.amount[layer.name] ?? 0);
       mesh.name = `backdrop-${layer.name}`;
       mesh.position.set(p.x, layer.y, layer.z);
       // deepest first: transparent layers blend back to front

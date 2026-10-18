@@ -10,5 +10,11 @@ import { parseMapJson } from './mapJson';
  * and the Street Market kit's collision extras, so the kit the renderer draws and the collision here
  * come from the same numbers (render = collision, docs/11 §2). Re-copy street_market.map.json after
  * a recompile; content.test.ts fails while the two differ.
+ *
+ * One exception, until the kit marks slabs: the floors among its one-ways (the house balconies, the
+ * tank tower's deck and the billboard catwalk, concrete and steel) carry `blocksBullets` here, so
+ * they stop bullets while staying one-way for bodies (owner's playtest, 18 Oct: "bullets go through
+ * buildings"). Stall awnings and umbrella canopies (sheet and cloth) still let bullets through, like
+ * railings. Keep the 13 flags when re-copying; content.test.ts lists them.
  */
 export const streetMarketMap = parseMapJson(json, 'streetMarket.map.json');

@@ -30,6 +30,7 @@ import {
   timeToKill,
   tuningHash,
   weapons,
+  type MapOneWay,
   type WeaponClass,
 } from '../src';
 
@@ -209,8 +210,21 @@ describe('maps', () => {
 
   it('registers the Street Market exactly as the art pipeline compiled it (re-copy street_market.map.json after a recompile)', () => {
     expect(maps['street-market']).toBe(streetMarketMap);
-    expect(streetMarketMap).toEqual(compiledStreetMarket);
+    // the pipeline doesn't mark slabs yet (streetMarket.ts): blocksBullets is the copy's only change
+    const { oneWays, ...rest } = streetMarketMap;
+    const { oneWays: compiledOneWays, ...compiledRest } = compiledStreetMarket;
+    expect(rest).toEqual(compiledRest);
+    expect(oneWays.map(({ blocksBullets: _, ...o }) => o)).toEqual(compiledOneWays);
     expect(streetMarketMap.spawns.length).toBeGreaterThanOrEqual(12);
+  });
+
+  it('Street Market: the floors stop bullets (balconies, the tank deck, the catwalk); awnings and umbrellas let them through', () => {
+    const slab = (o: MapOneWay) => o.blocksBullets === true;
+    const at = (o: MapOneWay) => `${Math.min(o.ax, o.bx)}..${Math.max(o.ax, o.bx)}@${Math.max(o.ay, o.by)}`;
+    const balconies = ['-54..-52@4', '-54..-52@8', '52..54@4', '52..54@8', '-52..-50@4', '50..52@4', '-25..-23@4', '-17..-15@8', '23..25@4', '15..17@8'];
+    expect(streetMarketMap.oneWays.filter(slab).map(at).sort()).toEqual([...balconies, '-1.6..-0.8@4', '0.8..1.6@4', '-4..4@10'].sort());
+    // every one-way left see-through is a stall awning or an umbrella canopy (≤ 3.05 m, over a stall)
+    for (const o of streetMarketMap.oneWays.filter((w) => !slab(w))) expect(Math.max(o.ay, o.by)).toBeLessThanOrEqual(3.05);
   });
 
   for (const map of Object.values(maps)) {

@@ -24,6 +24,16 @@ describe('map environments without a kit (the mechanics demos)', () => {
     }
   });
 
+  it('a painted layer close behind the play plane reads as background, hazed toward the air (owner’s playtest, 18 Oct: “bullets go through buildings”)', () => {
+    for (const id of ['lunar-outpost', 'storm-front', 'flux-lab']) {
+      const def = environmentFor(id)!;
+      const look = def.looks[def.defaultLook]!;
+      for (const layer of def.backdrop!.layers) {
+        if (layer.z > -16) expect(look.backdropHaze?.amount[layer.name] ?? 0, `${id} ${layer.name}`).toBeGreaterThanOrEqual(0.3);
+      }
+    }
+  });
+
   it('only the Street Market is the Lagos map: no other map uses its kit, layout, lamps, dressing, billboards or art (owner, 18 Oct)', () => {
     const marketArt = new Set(readdirSync(new URL('public/assets/backdrops/street_market/', WEB)).map((f) => digest(new URL(`public/assets/backdrops/street_market/${f}`, WEB))));
     const folders = new Set<string>();

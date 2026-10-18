@@ -39,6 +39,10 @@ z =  +1 … +6    FOREGROUND       grass tufts, railings, pipes. Dither-fades wh
 ```
 
 - **Level geometry generation:** the map editor extrudes collision polygons into front faces (earcut triangulation) + side walls + bevelled trims. Artists then dress them with kit meshes. This guarantees **render = collision** at the play plane, which is critical for fairness.
+- **What looks solid stops bullets (owner's playtest, 18 Oct: "bullets go through buildings"):**
+  - Solids stop bodies and bullets. A one-way is a railing by default: bullets, blasts, gas and sight pass it. A floor or roof slab sets `blocksBullets` ([02](02-physics-and-movement.md), map JSON) and stops them while staying one-way for bodies. Thin railings, fences, awnings and planks stay see-through.
+  - Anything drawn near the play plane without collision has to read as background: the kit's mid layer is hazed toward the map's air by the look's grade (at least 40% at its nearest building), and painted layers nearer than z −16 by the look's `backdropHaze`.
+  - Audit: `apps/web/scripts/environment-shots.mjs --only audit`, then `scripts/bullet-audit.py` marks solids, see-through one-ways, slabs and decoration on the shots.
 - **Batching:** `InstancedMesh` / `BatchedMesh` for kit pieces, pickups, decals, shell casings. Target **≤ 80 draw calls** in a busy 12-player fight.
 - **Lighting:**
   - Baked AO/light in textures + vertex colours.

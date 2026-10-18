@@ -259,37 +259,43 @@
    "ax": -54.0,
    "ay": 4.0,
    "bx": -52.0,
-   "by": 4.0
+   "by": 4.0,
+   "blocksBullets": true
   },
   {
    "ax": -54.0,
    "ay": 8.0,
    "bx": -52.0,
-   "by": 8.0
+   "by": 8.0,
+   "blocksBullets": true
   },
   {
    "ax": 52.0,
    "ay": 4.0,
    "bx": 54.0,
-   "by": 4.0
+   "by": 4.0,
+   "blocksBullets": true
   },
   {
    "ax": 52.0,
    "ay": 8.0,
    "bx": 54.0,
-   "by": 8.0
+   "by": 8.0,
+   "blocksBullets": true
   },
   {
    "ax": -52.0,
    "ay": 4.0,
    "bx": -50.0,
-   "by": 4.0
+   "by": 4.0,
+   "blocksBullets": true
   },
   {
    "ax": 50.0,
    "ay": 4.0,
    "bx": 52.0,
-   "by": 4.0
+   "by": 4.0,
+   "blocksBullets": true
   },
   {
    "ax": -40.0,
@@ -343,43 +349,50 @@
    "ax": -25.0,
    "ay": 4.0,
    "bx": -23.0,
-   "by": 4.0
+   "by": 4.0,
+   "blocksBullets": true
   },
   {
    "ax": -17.0,
    "ay": 8.0,
    "bx": -15.0,
-   "by": 8.0
+   "by": 8.0,
+   "blocksBullets": true
   },
   {
    "ax": 23.0,
    "ay": 4.0,
    "bx": 25.0,
-   "by": 4.0
+   "by": 4.0,
+   "blocksBullets": true
   },
   {
    "ax": 15.0,
    "ay": 8.0,
    "bx": 17.0,
-   "by": 8.0
+   "by": 8.0,
+   "blocksBullets": true
   },
   {
    "ax": -1.6,
    "ay": 4.0,
    "bx": -0.8,
-   "by": 4.0
+   "by": 4.0,
+   "blocksBullets": true
   },
   {
    "ax": 0.8,
    "ay": 4.0,
    "bx": 1.6,
-   "by": 4.0
+   "by": 4.0,
+   "blocksBullets": true
   },
   {
    "ax": -4.0,
    "ay": 10.0,
    "bx": 4.0,
-   "by": 10.0
+   "by": 10.0,
+   "blocksBullets": true
   }
  ],
  "spawns": [

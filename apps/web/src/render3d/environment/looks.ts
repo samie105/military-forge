@@ -42,6 +42,12 @@ export interface EnvironmentLook extends LightingPreset {
   midLift: number;
   /** multiplies the painted backdrops (backdrop.ts) by layer name: 'sky', 'far', 'mid' */
   backdropTint: Record<string, number>;
+  /**
+   * Pulls painted layers toward `color` (0 = as painted, 1 = flat colour) by layer name, after the
+   * tint: a painted layer standing close behind the play plane has to read as background, not as
+   * walls and floors that stop bullets (owner's playtest, 18 Oct).
+   */
+  backdropHaze?: { color: number; amount: Record<string, number> };
   /** street lamps lit: a glow at each head and a pool of light on the road (null: off) */
   lampGlow: { color: number; strength: number } | null;
   /** multiplies billboard creatives (ads/boards.ts): unlit, so dimmed and tinted into the light of the look */
@@ -79,7 +85,7 @@ export const MARKET_DAY: EnvironmentLook = {
     aoFloor: 0.62,
     floorSaturation: 0.72,
     gameplay: [0.9, 1.0],
-    mid: [0.62, 0.98, 0.1, 0.03],
+    mid: [0.52, 0.97, 0.24, 0.04],
     far: [0.38, 0.95, 0.32, 0.011],
   },
   street: {
@@ -118,7 +124,7 @@ export const MARKET_DUSK: EnvironmentLook = {
     haze: 0xcf9f8c,
     tint: 0xffe2cc,
     gameplay: [0.92, 0.97],
-    mid: [0.6, 0.92, 0.14, 0.03],
+    mid: [0.5, 0.9, 0.26, 0.04],
     far: [0.4, 0.88, 0.36, 0.011],
   },
   street: { ...MARKET_DAY.street, asphalt: 0x5a5250, pavement: 0x857669, backGround: 0x8a7468 },
@@ -155,7 +161,7 @@ export const MARKET_NIGHT: EnvironmentLook = {
     tint: 0xc8d2ee,
     // moonlight is weak at colour: and the blue house must not read as team blue
     gameplay: [0.6, 0.98],
-    mid: [0.5, 0.8, 0.22, 0.03],
+    mid: [0.42, 0.76, 0.32, 0.04],
     far: [0.3, 0.7, 0.45, 0.012],
   },
   street: { ...MARKET_DAY.street, asphalt: 0x4a4c55, kerb: 0x8d8c90, kerbAlt: 0x5c5c62, pavement: 0x6c6c72, backGround: 0x5a5d68 },

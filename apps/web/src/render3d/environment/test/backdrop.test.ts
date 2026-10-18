@@ -1,11 +1,11 @@
 import { maps, streetMarketMap, type MapDef } from '@military-forge/content';
 import { VIEW_BASE_WIDTH, VIEW_MAX_ASPECT, VIEW_ZOOM_MULTIPLIERS } from '@military-forge/netcode';
-import { Color, Mesh, PlaneGeometry, type InstancedMesh } from 'three';
+import { Color, Mesh, MeshBasicMaterial, PlaneGeometry, ShaderLib, type InstancedMesh } from 'three';
 import { describe, expect, it } from 'vitest';
 import { Camera } from '../../../camera';
 import { planePose } from '../../planeCamera';
 import { playerView } from '../../test/helpers';
-import { SKY_CARD_Z, coverView, viewAtDepth } from '../backdrop';
+import { SKY_CARD_Z, coverView, hazeMaterial, viewAtDepth } from '../backdrop';
 import { ENVIRONMENTS, MapEnvironment, environmentFor } from '../index';
 
 /** Camera poses across the map at every zoom, on a 16:9 and a 4:3 screen, low and high. */
@@ -90,6 +90,20 @@ describe('painted backdrops', () => {
         if (env.ads) expect(layer.z).toBeLessThan(-9);
       }
     }
+  });
+
+  it('hazes a painted layer toward the air in its shader: after the map and tint, alpha untouched, one program for all', () => {
+    const m = new MeshBasicMaterial();
+    hazeMaterial(m, 0x808080, 0.4);
+    const shader = { uniforms: {} as Record<string, { value: unknown }>, vertexShader: ShaderLib.basic.vertexShader, fragmentShader: ShaderLib.basic.fragmentShader };
+    m.onBeforeCompile(shader as never, undefined as never);
+    expect(shader.fragmentShader).toContain('uniform vec3 hazeColor;');
+    expect(shader.fragmentShader).toMatch(/#include <map_fragment>\n\tdiffuseColor\.rgb = mix\( diffuseColor\.rgb, hazeColor, hazeAmount \);/);
+    expect(shader.uniforms.hazeAmount!.value).toBeCloseTo(0.4);
+    expect(m.customProgramCacheKey()).toBe('backdrop-haze');
+    const plain = new MeshBasicMaterial();
+    hazeMaterial(plain, 0x808080, 0);
+    expect(plain.userData.haze).toBeUndefined();
   });
 
   it('every look the Street Market offers has a sky image and lights its lamps after dark', () => {

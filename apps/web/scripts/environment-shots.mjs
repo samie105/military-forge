@@ -11,6 +11,10 @@
  * replaced once the 3D view is ready) so every run gives the same frames, however slow software GL
  * is. `--hw` takes them on the GPU (High's MSAA and shadow map are slow on SwiftShader).
  *
+ * --only audit (only when asked for): a 7x overview and two gameplay-zoom views, with the camera,
+ * the collision and the decor boxes dumped next to each shot for scripts/bullet-audit.py (what
+ * stops bullets vs what only looks solid).
+ *
  * --gpu uses the machine's GPU on a real clock and only measures: five scripted players jet-strafe
  * around the local player, who fires the Buzz and throws a frag every 0.6 s for 8 s; then frame
  * interval, GPU time (timer query) and draw calls over the last 240 frames.
@@ -197,6 +201,64 @@ if (!gpu) {
         });
     });
     writeFileSync(join(out, `${prefix}adlum.json`), JSON.stringify({ rects, gpuBytes: await page.evaluate(() => window.__game.view3d.env?.boards?.gpuBytes() ?? 0) }));
+    await zoom(page, 0);
+  }
+
+  if (only.includes('audit')) {
+    // bullet audit: the 7× overview and two 1× views, each with the camera and collision dumped so
+    // scripts/bullet-audit.py can mark what stops bullets (solids), what lets them through
+    // (one-ways) and what is drawn without collision (decoration)
+    const dump = async (name) => {
+      const data = await page.evaluate(async () => {
+        const g = window.__game;
+        const v = g.view3d;
+        const cam = g.camera;
+        const map = g.mode.map;
+        const env = v.env;
+        let panels = [];
+        if (env?.def?.backdrop) {
+          const b = env.def.backdrop;
+          const idx = await fetch(b.base + 'index.json').then((r) => (r.ok ? r.json() : null)).catch(() => null);
+          panels = b.layers.flatMap((l) => l.panels.map((p) => {
+            const size = idx?.files?.[p.file]?.size ?? [21, 9];
+            return { name: `${l.name}:${p.file}`, x0: p.x - p.width / 2, x1: p.x + p.width / 2, y0: l.y, y1: l.y + (p.width * size[1]) / size[0], z: l.z };
+          }));
+        }
+        return {
+          pose: { ...v.pose },
+          cam: { x: cam.x, y: cam.y, ppm: cam.ppm, width: cam.width, height: cam.height },
+          solids: map.solids.map((s) => s.points),
+          oneWays: map.oneWays,
+          decor: env?.decorBoxes ?? [],
+          panels,
+        };
+      });
+      writeFileSync(join(out, `${prefix}${name}.json`), JSON.stringify(data));
+    };
+    const spots = await page.evaluate(() => {
+      const m = window.__game.mode.map;
+      const cx = (m.bounds.minX + m.bounds.maxX) / 2;
+      const s = [...m.spawns].sort((a, b) => Math.abs(a.x - cx) - Math.abs(b.x - cx));
+      const high = [...m.spawns].sort((a, b) => b.y - a.y);
+      return { mid: s[0], left: high.find((p) => p.x < cx) ?? s[0], right: high.find((p) => p.x > cx) ?? s[0] };
+    });
+    await place(page, spots.mid.x, spots.mid.y + 0.05, [4, 1]);
+    await zoom(page, 6);
+    await aimAt(page, 6, 2);
+    await step(page, 60);
+    await steady(page);
+    await shot(page, 'audit-overview');
+    await dump('audit-overview');
+    await zoom(page, 0);
+    for (const [k, p] of [['left', spots.left], ['right', spots.right]]) {
+      await place(page, p.x, p.y + 0.05, [4, 1]);
+      await zoom(page, 1);
+      await aimAt(page, k === 'left' ? 7 : -7, -1);
+      await step(page, 60);
+      await steady(page);
+      await shot(page, `audit-${k}`);
+      await dump(`audit-${k}`);
+    }
     await zoom(page, 0);
   }
 

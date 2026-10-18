@@ -11,6 +11,7 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { describe, expect, it } from 'vitest';
 import { MapEnvironment, environmentFor, withTimeout } from '../index';
 import { layoutItems, placePoint, type KitLayout } from '../layout';
+import { mapGrade } from '../looks';
 
 const WEB = new URL('../../../../', import.meta.url);
 const REPO = new URL('../../', WEB);
@@ -155,6 +156,21 @@ describe('Street Market: the environment', () => {
       expect(f.z).toBeLessThanOrEqual(6.5);
       const world = new Box3().setFromObject(f.mesh);
       expect(world.min.z).toBeGreaterThan(1);
+    }
+    env.dispose();
+  });
+
+  it('what is drawn behind the play plane with no collision reads as background: every look hazes the kit’s mid buildings ≥ 40% (owner’s playtest, 18 Oct)', async () => {
+    const env = await build();
+    // nothing without collision stands in the gameplay band
+    for (const b of env.decorBoxes) expect(b.max[2], b.piece).toBeLessThan(-1);
+    // the buildings, towers and screens (poles, wires and signboards are thin)
+    const solidLooking = env.decorBoxes.filter((b) => b.max[1] - b.min[1] >= 4 && b.max[0] - b.min[0] >= 3);
+    expect(new Set(solidLooking.map((b) => b.piece))).toEqual(new Set(['sm_junction_block', 'sm_east_block', 'sm_flyover', 'sm_screen_tower', 'sm_screen_mast', 'sm_screen_8x6', 'sm_hoarding_21x3_5']));
+    const nearest = Math.max(...solidLooking.map((b) => b.max[2]));
+    for (const [name, look] of Object.entries(def.looks)) {
+      const mid = mapGrade(look).layers.mid;
+      expect(Math.min(mid.hazeMax, mid.haze - mid.hazePerM * nearest), name).toBeGreaterThanOrEqual(0.4);
     }
     env.dispose();
   });
