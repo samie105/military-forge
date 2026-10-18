@@ -1,0 +1,382 @@
+/**
+ * The billboard renderer (docs/14 §4.5, docs/11 §2):
+ * - mid-depth only: creatives sit on W8's bezels at z −5…−8, never on or in front of the gameplay
+ *   plane;
+ * - one InstancedMesh per format (4:3 Screens, 6:1 Hoardings) over one texture array per format,
+ *   each instance picking its layers by attribute: every ad on the map costs ≤ 2 draw calls;
+ * - unlit and non-emissive (a plain texture times the look's tint), flagged `noBloom` for the
+ *   High post pass when it lands;
+ * - rotation on the shared 10 s beat with a 0.5 s crossfade (rotation.ts), at most two surfaces lit
+ *   on screen (visibility.ts), and an "AD" chip on paid frames only.
+ *
+ * GPU memory: each format's array holds only the creatives the current manifest shows. With house
+ * art that's the match's 6 Screen creatives and 2 Hoarding creatives, RGBA8 at about their drawn
+ * size (384 × 288, 864 × 144) with mips: ≈ 4.9 MB, inside docs/14 §4.9's 5.1 MB plan. A new match
+ * (Frame.matchSeed) picks the next house set and uploads it then, a safe moment (§4.5), so over
+ * matches every pool creative gets airtime. The "AD" chip is a small texture made only once a
+ * frame is paid. The paid flow will need KTX2/ETC1S: at RGBA8, docs/14 §4.5's 32 + 8 layer pool
+ * would be ≈ 24 MB, and the encoder (`toktx`/`basisu`) is a user install.
+ */
+import {
+  CanvasTexture,
+  Color,
+  DataArrayTexture,
+  InstancedBufferAttribute,
+  InstancedMesh,
+  LinearFilter,
+  LinearMipmapLinearFilter,
+  Matrix4,
+  PlaneGeometry,
+  RGBAFormat,
+  SRGBColorSpace,
+  ShaderMaterial,
+  UnsignedByteType,
+} from 'three';
+import type { PlanePose } from '../planeCamera';
+import { houseManifest, type AdManifest, type AdSlot, type HouseEntry, type HousePool } from './manifest';
+import { crossfade, frameIndex, previousFrame } from './rotation';
+import { LitLimiter } from './visibility';
+
+export interface FormatSpec {
+  format: AdSlot['format'];
+  /** texture layer size, px */
+  width: number;
+  height: number;
+  /** the "AD" chip, in the creative's uv (x0, y0, x1, y1): inside the bezel's 3% safe edge (§3.2, §4.4) */
+  chip: [number, number, number, number];
+}
+
+export const FORMATS: Readonly<Record<AdSlot['format'], FormatSpec>> = {
+  '4:3': { format: '4:3', width: 384, height: 288, chip: [0.865, 0.9, 0.955, 0.96] },
+  '6:1': { format: '6:1', width: 864, height: 144, chip: [0.918, 0.84, 0.958, 0.96] },
+};
+
+/** In front of the bezel's placeholder face (local z 0), behind its frame lip (z +0.10). */
+export const CREATIVE_Z = 0.005;
+/** docs/14 §4.9: the fixed per-map pool budget, bytes */
+export const AD_POOL_BUDGET = 5.1 * 1024 * 1024;
+/** the "AD" chip texture (made only once a frame is paid) */
+const CHIP_W = 128;
+const CHIP_H = 96;
+
+const VERTEX = /* glsl */ `
+attribute vec2 aLayers;
+attribute vec2 aPaid;
+attribute float aLit;
+varying vec2 vUv;
+varying vec2 vLayers;
+varying vec2 vPaid;
+varying float vLit;
+void main() {
+  vUv = uv;
+  vLayers = aLayers;
+  vPaid = aPaid;
+  vLit = aLit;
+  gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+}`;
+
+const FRAGMENT = /* glsl */ `
+precision highp sampler2DArray;
+uniform sampler2DArray uMap;
+uniform sampler2D uChip;
+uniform float uFade;
+uniform vec3 uTint;
+uniform vec3 uOff;
+uniform vec4 uChipRect;
+varying vec2 vUv;
+varying vec2 vLayers;
+varying vec2 vPaid;
+varying float vLit;
+void main() {
+  // layers were written top row first
+  vec2 uv = vec2(vUv.x, 1.0 - vUv.y);
+  vec3 c = mix(texture(uMap, vec3(uv, vLayers.x)).rgb, texture(uMap, vec3(uv, vLayers.y)).rgb, uFade);
+  // the "AD" chip on paid frames, fading with its frame (docs/14 §4.4)
+  float paid = mix(vPaid.x, vPaid.y, uFade);
+  if (paid > 0.001) {
+    vec2 q = (vUv - uChipRect.xy) / (uChipRect.zw - uChipRect.xy);
+    if (all(greaterThanEqual(q, vec2(0.0))) && all(lessThanEqual(q, vec2(1.0)))) {
+      vec4 chip = texture(uChip, q);
+      c = mix(c, chip.rgb, chip.a * paid);
+    }
+  }
+  gl_FragColor = vec4(mix(uOff, c * uTint, vLit), 1.0);
+  #include <colorspace_fragment>
+}`;
+
+/** Per-instance rotation state for one format, computed on the CPU each frame (tests use it directly). */
+export interface InstanceState {
+  layers: Float32Array; // 2 per instance: previous, current
+  paid: Float32Array; // 2 per instance
+  fade: number;
+}
+
+/** Layer per creative id, in upload order. */
+export function layerTable(ids: readonly (string | HouseEntry)[]): Map<string, number> {
+  return new Map(ids.map((e, i) => [typeof e === 'string' ? e : e.id, i]));
+}
+
+/** The creatives a manifest shows on the slots of one format, each once, in first-use order: what to upload. */
+export function referencedCreatives(manifest: AdManifest, slots: readonly AdSlot[], format: AdSlot['format']): string[] {
+  const ids = new Set(slots.filter((s) => s.format === format).map((s) => s.slotId));
+  const out = new Set<string>();
+  for (const s of manifest.slots) if (ids.has(s.slot)) for (const f of s.frames) out.add(f.c);
+  return [...out];
+}
+
+/** One RGBA8 layer with its mip chain, bytes. */
+export function layerBytes(spec: FormatSpec): number {
+  return Math.round((spec.width * spec.height * 4 * 4) / 3);
+}
+
+/** GPU memory the boards take for `manifest` (every format's array; the chip only if a frame is paid). */
+export function plannedGpuBytes(manifest: AdManifest, slots: readonly AdSlot[]): number {
+  let bytes = 0;
+  for (const spec of Object.values(FORMATS)) bytes += referencedCreatives(manifest, slots, spec.format).length * layerBytes(spec);
+  if (manifest.slots.some((s) => s.frames.some((f) => f.paid))) bytes += Math.round((CHIP_W * CHIP_H * 4 * 4) / 3);
+  return bytes;
+}
+
+/**
+ * The rotation for every slot of one format at `matchTimeMs`: which layers to fade between, and
+ * whether the frames are paid. A creative without a layer (not uploaded yet) falls back to layer 0.
+ */
+export function rotationState(slots: readonly AdSlot[], manifest: AdManifest, layers: ReadonlyMap<string, number>, matchTimeMs: number, out?: InstanceState): InstanceState {
+  const st = out ?? { layers: new Float32Array(slots.length * 2), paid: new Float32Array(slots.length * 2), fade: 1 };
+  slots.forEach((slot, i) => {
+    const frames = manifest.slots.find((s) => s.slot === slot.slotId)?.frames ?? [];
+    const prev = frames[previousFrame(slot, matchTimeMs)];
+    const cur = frames[frameIndex(slot, matchTimeMs)];
+    st.layers[i * 2] = (prev && layers.get(prev.c)) ?? 0;
+    st.layers[i * 2 + 1] = (cur && layers.get(cur.c)) ?? 0;
+    st.paid[i * 2] = prev?.paid ? 1 : 0;
+    st.paid[i * 2 + 1] = cur?.paid ? 1 : 0;
+  });
+  st.fade = slots.length ? crossfade(matchTimeMs, slots[0]!.dwellMs) : 1;
+  return st;
+}
+
+/** Decodes one image (memoised per URL; null when it fails). Browser only. */
+function loadImage(cache: Map<string, Promise<HTMLImageElement | null>>, url: string): Promise<HTMLImageElement | null> {
+  let p = cache.get(url);
+  if (!p) {
+    p = new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = url;
+    });
+    cache.set(url, p);
+  }
+  return p;
+}
+
+/** Draws images into the layers of an RGBA8 array texture, one per layer (a grey layer for a missing one). */
+function arrayTexture(images: readonly (HTMLImageElement | null)[], spec: FormatSpec): DataArrayTexture {
+  const { width, height } = spec;
+  const layers = Math.max(1, images.length);
+  const data = new Uint8Array(width * height * 4 * layers);
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+  images.forEach((img, i) => {
+    ctx.clearRect(0, 0, width, height);
+    if (img) ctx.drawImage(img, 0, 0, width, height);
+    else {
+      ctx.fillStyle = '#3a3f45';
+      ctx.fillRect(0, 0, width, height);
+    }
+    data.set(ctx.getImageData(0, 0, width, height).data, i * width * height * 4);
+  });
+  const tex = new DataArrayTexture(data, width, height, layers);
+  tex.format = RGBAFormat;
+  tex.type = UnsignedByteType;
+  tex.colorSpace = SRGBColorSpace;
+  tex.minFilter = LinearMipmapLinearFilter;
+  tex.magFilter = LinearFilter;
+  tex.generateMipmaps = true;
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/** The "AD" chip (§1.3 rule 7, paid frames only): a dark rounded tag with white letters, on transparent. */
+function chipTexture(): CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = CHIP_W;
+  canvas.height = CHIP_H;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = 'rgba(20, 22, 26, 0.92)';
+  ctx.beginPath();
+  ctx.roundRect(CHIP_W * 0.04, CHIP_H * 0.08, CHIP_W * 0.92, CHIP_H * 0.84, CHIP_H * 0.18);
+  ctx.fill();
+  ctx.fillStyle = '#f2f2f2';
+  ctx.font = `700 ${Math.round(CHIP_H * 0.62)}px "Helvetica Neue", Arial, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('AD', CHIP_W / 2, CHIP_H * 0.53);
+  const tex = new CanvasTexture(canvas);
+  tex.colorSpace = SRGBColorSpace;
+  tex.minFilter = LinearMipmapLinearFilter;
+  return tex;
+}
+
+interface FormatMesh {
+  spec: FormatSpec;
+  slots: AdSlot[];
+  /** index of each of `slots` in the full slot list (for the limiter) */
+  index: number[];
+  mesh: InstancedMesh<PlaneGeometry, ShaderMaterial>;
+  /** creative id → layer in the uploaded array */
+  layers: Map<string, number>;
+  state: InstanceState;
+}
+
+export class AdBoards {
+  readonly meshes: InstancedMesh<PlaneGeometry, ShaderMaterial>[] = [];
+  private readonly formats: FormatMesh[] = [];
+  private readonly limiter: LitLimiter;
+  private readonly images = new Map<string, Promise<HTMLImageElement | null>>();
+  private readonly files: Map<string, string>;
+  /** what the boards show now */
+  manifest: AdManifest;
+  /** the house set's match seed (null: not chosen yet, or a manifest was set from outside) */
+  private seed: number | null = null;
+  /** a manifest set from outside (the paid flow) pins the content: match seeds no longer change it */
+  private pinned = false;
+  /** bumps on every manifest change: a slower upload never overwrites a newer one */
+  private generation = 0;
+  private chip: CanvasTexture | null = null;
+  private disposed = false;
+
+  constructor(
+    readonly mapId: string,
+    readonly slots: readonly AdSlot[],
+    private readonly pool: HousePool,
+    private readonly base: string,
+    tint = 0xffffff,
+  ) {
+    this.limiter = new LitLimiter(slots);
+    this.files = new Map([...pool.screens, ...pool.hoardings].map((e) => [e.id, e.file]));
+    this.manifest = houseManifest(mapId, slots, pool, 0);
+    const m = new Matrix4();
+    for (const spec of Object.values(FORMATS)) {
+      const index = slots.map((s, i) => (s.format === spec.format ? i : -1)).filter((i) => i >= 0);
+      if (!index.length) continue;
+      const own = index.map((i) => slots[i]!);
+      const material = new ShaderMaterial({
+        vertexShader: VERTEX,
+        fragmentShader: FRAGMENT,
+        uniforms: {
+          uMap: { value: null },
+          uChip: { value: null },
+          uFade: { value: 1 },
+          uTint: { value: new Color(tint) },
+          uOff: { value: new Color(0x15181d) },
+          uChipRect: { value: spec.chip },
+        },
+        depthWrite: true,
+      });
+      material.userData.noBloom = true;
+      const geometry = new PlaneGeometry(1, 1);
+      const mesh = new InstancedMesh(geometry, material, own.length);
+      own.forEach((s, k) => mesh.setMatrixAt(k, m.makeScale(s.size[0], s.size[1], 1).setPosition(s.pos[0], s.pos[1], s.pos[2] + CREATIVE_Z)));
+      mesh.instanceMatrix.needsUpdate = true;
+      geometry.setAttribute('aLayers', new InstancedBufferAttribute(new Float32Array(own.length * 2), 2));
+      geometry.setAttribute('aPaid', new InstancedBufferAttribute(new Float32Array(own.length * 2), 2));
+      // switched off (the bezel's dark screen) until the first creatives are uploaded
+      geometry.setAttribute('aLit', new InstancedBufferAttribute(new Float32Array(own.length), 1));
+      mesh.computeBoundingSphere();
+      mesh.name = `ads-${spec.format}`;
+      this.meshes.push(mesh);
+      this.formats.push({ spec, slots: own, index, mesh, layers: new Map(), state: rotationState(own, this.manifest, new Map(), 0) });
+    }
+  }
+
+  /**
+   * The paid flow (docs/14 §4.3): a verified manifest replaces the house set until the map changes.
+   * Only the creatives it shows are uploaded. (Paid creatives come from the ads CDN, not built yet:
+   * until then only house ids resolve.)
+   */
+  setManifest(manifest: AdManifest): void {
+    this.pinned = true;
+    this.seed = null;
+    this.show(manifest);
+  }
+
+  setTint(tint: number): void {
+    for (const f of this.formats) (f.mesh.material.uniforms.uTint!.value as Color).setHex(tint);
+  }
+
+  /** The house manifest for a match: the same on every client (same seed), the next set next match. */
+  private chooseHouse(matchSeed: number): void {
+    if (this.pinned || matchSeed === this.seed) return;
+    this.seed = matchSeed;
+    this.show(houseManifest(this.mapId, this.slots, this.pool, matchSeed));
+  }
+
+  /** Switches the content: uploads the creatives `manifest` shows (and the chip if a frame is paid). */
+  private show(manifest: AdManifest): void {
+    this.manifest = manifest;
+    const generation = ++this.generation;
+    if (typeof document === 'undefined') return; // tests: no images, no GPU
+    for (const f of this.formats) {
+      const ids = referencedCreatives(manifest, f.slots, f.spec.format);
+      void Promise.all(ids.map((id) => (this.files.has(id) ? loadImage(this.images, this.base + this.files.get(id)!) : Promise.resolve(null)))).then((images) => {
+        if (this.disposed || generation !== this.generation) return;
+        const old = f.mesh.material.uniforms.uMap!.value as DataArrayTexture | null;
+        f.mesh.material.uniforms.uMap!.value = arrayTexture(images, f.spec);
+        f.layers = layerTable(ids);
+        old?.dispose();
+      });
+    }
+    const paid = manifest.slots.some((s) => s.frames.some((f) => f.paid));
+    if (paid && !this.chip) this.chip = chipTexture();
+    for (const f of this.formats) f.mesh.material.uniforms.uChip!.value = paid ? this.chip : null;
+  }
+
+  /**
+   * Per frame: the house set for this match (`matchSeed`), the beat (match clock), which surfaces
+   * are lit, and the instance attributes.
+   */
+  update(matchTimeMs: number, pose: PlanePose, dt: number, matchSeed = 0): void {
+    this.chooseHouse(matchSeed);
+    const lit = this.limiter.update(pose, dt);
+    for (const f of this.formats) {
+      rotationState(f.slots, this.manifest, f.layers, matchTimeMs, f.state);
+      const g = f.mesh.geometry;
+      const aLayers = g.getAttribute('aLayers') as InstancedBufferAttribute;
+      const aPaid = g.getAttribute('aPaid') as InstancedBufferAttribute;
+      const aLit = g.getAttribute('aLit') as InstancedBufferAttribute;
+      (aLayers.array as Float32Array).set(f.state.layers);
+      (aPaid.array as Float32Array).set(f.state.paid);
+      // nothing to show until the set's creatives are in: the screens stay switched off
+      const ready = f.layers.size > 0;
+      f.index.forEach((i, k) => ((aLit.array as Float32Array)[k] = ready ? lit[i]! : 0));
+      aLayers.needsUpdate = aPaid.needsUpdate = aLit.needsUpdate = true;
+      f.mesh.material.uniforms.uFade!.value = f.state.fade;
+    }
+  }
+
+  /** On-screen surfaces showing a creative right now (≤ 2 by construction). */
+  litOnScreen(pose: PlanePose): number {
+    return this.limiter.litOnScreen(pose);
+  }
+
+  /** GPU memory the current content takes (planned: uploads finish a moment later). */
+  gpuBytes(): number {
+    return plannedGpuBytes(this.manifest, this.slots);
+  }
+
+  dispose(): void {
+    this.disposed = true;
+    this.chip?.dispose();
+    for (const f of this.formats) {
+      (f.mesh.material.uniforms.uMap!.value as DataArrayTexture | null)?.dispose();
+      f.mesh.material.dispose();
+      f.mesh.geometry.dispose();
+      f.mesh.removeFromParent();
+    }
+  }
+}

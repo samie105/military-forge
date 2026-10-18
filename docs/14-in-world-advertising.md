@@ -81,7 +81,7 @@ Share of the screen by zoom level (03 §10; FOV 35°, 16:9):
 | Screen 8 × 6 m (z −6) | 4.7% | 3.4% | 2.6% | 2.1% | 1.7% | 1.4% ✗ | 1.1% ✗ |
 | Hoarding 18 × 3 m (z −6) | 5.3% | 3.9% | 2.9% | 2.3% | 1.9% | 1.55% | 1.2% ✗ |
 | Wrap MU-W1 20 × 3.3 m (z −9) | 5.5% | 4.1% | 3.2% | 2.6% | 2.1% | 1.7% | 1.4% ✗ |
-| Airship / LM-H1 panel 21 × 3.5 m (z −8) | 6.5% | 4.8% | 3.7% | 2.9% | 2.4% | 2.0% | 1.6% |
+| Airship / street-market/H1 panel 21 × 3.5 m (z −8) | 6.5% | 4.8% | 3.7% | 2.9% | 2.4% | 2.0% | 1.6% |
 
 ✗ = under the IAB 1.5% minimum, so not viewable. These impressions are measured and lost, not chased: sniper zoom is a minority of play time, and smaller surfaces read better. At 1080p and 1× a Screen draws ≈ 360 × 270 px and a Hoarding ≈ 810 × 135 px.
 
@@ -93,7 +93,7 @@ City maps only, where billboards belong in the fiction:
 
 | Map | Ads | Ship |
 |---|---|---|
-| Lagos Market | yes (the home map for Nigerian advertisers) | Launch (pilot map) |
+| Street Market (the Lagos map) | yes (the home map for Nigerian advertisers) | Launch (pilot map) |
 | Drop Zone Strip | yes (surface POIs, metro, warm-up yard) | Launch (pilot map) |
 | Mumbai Local | yes | Launch (after the pilot) |
 | Highrise | yes (rooftop LED towers) | Post |
@@ -105,16 +105,16 @@ Custom rooms on ad maps show ads (counted only with ≥ 2 humans, §4.8). **Rank
 
 **Premium is priced on calm dwell** (high vantage points, metro platforms, the warm-up yard), never on fight density. The most attention-grabbing content must not sit behind the most combat (pillar 5), and lint #7 enforces that.
 
-**Lagos Market** (120 × 60 m; dense rooftops, danfo park, stalls):
+**Street Market** (the Lagos map; 120 × 60 m; dense rooftops, danfo park, stalls):
 
 | Slot | Type | Where | Depth |
 |---|---|---|---|
-| LM-S1 | Screen | "junction" screen on a 5-storey building behind the west stalls, facing the high west rooftops (a calm vantage). Premium (+25%) only if it passes lint #7 | z −6 |
-| LM-S2 | Screen | tower behind the central rooftops | z −7 |
-| LM-S3 | Screen | above the danfo park; moves if lint #7 finds it behind the street-level combat hotspot | z −5 |
-| LM-S4 | Screen | east rooftop gantry | z −6 |
-| LM-H1 | Hoarding | flyover across the upper background (scaled to 21 × 3.5 m for its depth) | z −8 |
-| LM-H2 | Hoarding | rooftop sign spanning two east buildings | z −6 |
+| street-market/S1 | Screen | "junction" screen on a 5-storey building behind the west stalls, facing the high west rooftops (a calm vantage). Premium (+25%) only if it passes lint #7 | z −6 |
+| street-market/S2 | Screen | tower behind the central rooftops | z −7 |
+| street-market/S3 | Screen | above the danfo park; moves if lint #7 finds it behind the street-level combat hotspot | z −5 |
+| street-market/S4 | Screen | east rooftop gantry | z −6 |
+| street-market/H1 | Hoarding | flyover across the upper background (scaled to 21 × 3.5 m for its depth) | z −8 |
+| street-market/H2 | Hoarding | rooftop sign spanning two east buildings | z −6 |
 | house | — | danfos, stall posters, awnings (breakable one-way platforms), shop signs | play plane / near |
 
 **Mumbai Local** (train yard; the gameplay train passes every 45 s):
@@ -147,7 +147,7 @@ The deploy plane, its path, supply drops (crate, canopy, flare, minimap marker) 
 
 | Map | Screens | Units on sale at launch | Pilot (Phase 3, premium only) |
 |---|---|---|---|
-| Lagos Market | 4 | 24 frames + 2 Hoardings | 12 frames (3 per Screen; the rest show house art) + 2 Hoardings |
+| Street Market | 4 | 24 frames + 2 Hoardings | 12 frames (3 per Screen; the rest show house art) + 2 Hoardings |
 | Mumbai Local | 3 | 18 frames + 2 Hoardings + 1 Wrap | — (from launch) |
 | Strip | 16 | 6 Strip Packs (one per frame index: the same creative on all 16 Screens) + 4 Hoardings | 3 Strip Packs |
 | BR warm-up yard | 4 | Drop Sponsor | — (house art; its delivery is measured to build the forecast) |
@@ -162,7 +162,7 @@ The deploy plane, its path, supply drops (crate, canopy, flare, minimap marker) 
 - **Map Takeover (72 h):** one sponsor gets every surface of one map in one geo (all frames, Hoardings, Wrap). Paint only: no themed dressing in brand colours, and no changes to collision, lighting, audio or rules (rule 11). Bookable only on days with no paid bookings for those surfaces (§5.1). Sold from the full-stack phase (§8.1).
 - **Seasonal skins** (08 §3: snow, Halloween and monsoon skins on the same collision, which also change loot tables) can carry a "presented by" sponsor only if the skin's loot-table changes ship identically without the sponsor. The sponsor is never named in loot, rewards or event text.
 - Calendar hooks:
-  - **Nigeria:** Independence Day (1 Oct), Detty December (Lagos Market), Easter/Sallah.
+  - **Nigeria:** Independence Day (1 Oct), Detty December (Street Market), Easter/Sallah.
   - **India:** IPL (Mar–May, Mumbai Local), Diwali, Independence Day (15 Aug).
   - **Global:** school holidays, AFCON, the World Cup.
 - Takeovers never stack: one per map per geo at a time, booked ≥ 3 weeks ahead (for review).
@@ -290,7 +290,7 @@ The counsel opinion (13 #719) also checks the ARCON code's children's provisions
 
 ```ts
 interface AdSlot {
-  slotId: string;                       // stable, e.g. "lagos-market/S1"
+  slotId: string;                       // stable, e.g. "street-market/S1"
   kind: 'screen' | 'hoarding' | 'wrap' | 'airship' | 'yard';
   format: '4:3' | '6:1';
   frames: 1 | 6;                        // rotation capacity
@@ -318,16 +318,16 @@ client ─▶ CDN GET /a/m/{map}/{geo}/{week}/{version}.json      (Cloudflare, c
 ```
 
 ```json
-{ "id": "lm-NG-2027W14-v3", "map": "lagos-market", "geo": "NG",
+{ "id": "sm-NG-2027W14-v3", "map": "street-market", "geo": "NG",
   "validFrom": "2027-04-05T00:00+01:00", "validTo": "2027-04-12T00:00+01:00",
   "slots": [
-    { "slot": "lagos-market/S1", "frames": [
+    { "slot": "street-market/S1", "frames": [
       { "c": "qZ8f3kT1mV0bXw2LpR7s9A", "adv": 1042, "paid": true },
-      { "c": "house:lm-buka-02", "paid": false } ] } ],
+      { "c": "house:sm-kitchen", "paid": false } ] } ],
   "sig": "ed25519:…" }
 ```
 
-- **Compact by design.** Creative URLs are derived from the id, and advertisers are referenced by number. Their names live in a per-geo-week sponsors file (`/a/s/{geo}/{week}.json`) that the About-ads page and the website Sponsors page also read. A fully sold Lagos Market manifest is ≈ 2 KB; CI fails any manifest over 4 KB.
+- **Compact by design.** Creative URLs are derived from the id, and advertisers are referenced by number. Their names live in a per-geo-week sponsors file (`/a/s/{geo}/{week}.json`) that the About-ads page and the website Sponsors page also read. A fully sold Street Market manifest is ≈ 2 KB; CI fails any manifest over 4 KB.
 - **Geo** = country from `CF-IPCountry` at the API, which is already our only location signal (10 §7). Unknown and unsold geos get the `XX` manifest (house art; programmatic later).
 - **Why signed:** a poisoned cache or a leaked R2 key can't put unreviewed art on screen (Lagos Life's failure), and the collector can verify schedule claims without a database lookup.
 - **Revocation:** an admin kill switch (by creative, advertiser or category) bumps the manifest version and pushes `ads.revoke{creativeIds}` on the social gateway (an event to add to the 07 §11 list). As a backup for clients whose social WS is down, the game server also sends `EVENT_R {e:'sys', code:'ADS_REVOKE', ids}` to every running match on that map and geo. Clients swap to house art within 1 s; matches that start afterwards get the new manifest.
@@ -444,7 +444,7 @@ worker: verify dt + manifest + schedule ─▶ apply server bound ─▶ dedup �
 | Draw calls | ≤ 2 (shared with house art), plus ≤ 8 in the 5 Hz mask pass; both counted in the 11 §3 budget |
 | GPU texture memory | fixed pools: 32 Screen layers × 128 KB + 8 6:1 layers × 144 KB ≈ **5.1 MB per map** on every preset (ETC1S transcoded to 4 bpp, with mips). CI fails any manifest whose resident set exceeds the pool. A UASTC option for High (≈ 10 MB pool, 100–200 KB per creative) is a post-launch decision |
 | Layer uploads | ≤ 0.5 ms per upload frame, never during active combat (§4.5) |
-| Download | 0 B before first spawn, except the ≤ 200 KB Drop Sponsor prefetch while queued. After spawn, ≤ 1.6 MB per map at full sell-through (Lagos Market: 26 creatives × ≤ 60 KB), usually far less; cached by the Service Worker, so only the first match of the week pays it; 0 B on Save-Data, slow connections and low-bandwidth mode. Ad bytes per match go on the G4 dashboard |
+| Download | 0 B before first spawn, except the ≤ 200 KB Drop Sponsor prefetch while queued. After spawn, ≤ 1.6 MB per map at full sell-through (Street Market: 26 creatives × ≤ 60 KB), usually far less; cached by the Service Worker, so only the first match of the week pays it; 0 B on Save-Data, slow connections and low-bandwidth mode. Ad bytes per match go on the G4 dashboard |
 | Measurement | 5 Hz; CPU ≤ 0.05 ms per frame on average; the mask frame ≤ 0.5 ms CPU+GPU at p99 on the Low reference iGPU, measured separately from the average (a spike every 12th frame wouldn't trigger dynamic resolution, 11 §3); async readback only |
 | Rotation | per-instance index update + crossfade uniform, no uploads |
 | Network | manifest ≤ 4 KB (CI check); one delivery batch per match, ≤ 2 KB, sent only at match end or pagehide |
@@ -620,7 +620,7 @@ Volume assumptions:
 
 **Derivation:** weekly viewable impressions (IAB: one per creative per session) = billable NG CCU × (168 × 60 / 25 sessions per CCU-week) × P_session, where P_session = 1 − (1 − mode share × map share × p_match)^3.8 and p_match comes from the table below.
 
-| Per player-match | Standard map (Lagos Market layout: 4 Screens, 2 Hoardings) | Strip (§2.3 placements: 12 surface + 4 metro Screens, 4 Hoardings) |
+| Per player-match | Standard map (Street Market layout: 4 Screens, 2 Hoardings) | Strip (§2.3 placements: 12 surface + 4 metro Screens, 4 Hoardings) |
 |---|---|---|
 | Time with ≥ 1 Screen on screen | 67% | 35% |
 | Time each Screen is on screen | 19% | 3.2% |
@@ -630,7 +630,7 @@ Volume assumptions:
 | Same frame on every Screen (Pack) | 82% | 76% |
 | Warm-up yard (Drop Sponsor: 4 Screens, one creative) | — | 65% with 20% hot-joiners, 47% with 40% (planning: 60%; 8–11 viewable s) |
 
-Standard rows use the Lagos Market layout of §2.3. Prices use p_match = 64% for a standard-map frame, a blend of this layout (67%) and a generic 6-Screen layout (62%); Mumbai Local (3 Screens) isn't modelled separately. Strip rows use the §2.3 POI clusters, metro and quiet zones. The yard model is an 80 × 40 m arena where players stay 5–30 s with no deaths; hot-joiners skip it (08 §4.8). Re-run all of this with real paths once playtest telemetry exists.
+Standard rows use the Street Market layout of §2.3. Prices use p_match = 64% for a standard-map frame, a blend of this layout (67%) and a generic 6-Screen layout (62%); Mumbai Local (3 Screens) isn't modelled separately. Strip rows use the §2.3 POI clusters, metro and quiet zones. The yard model is an 80 × 40 m arena where players stay 5–30 s with no deaths; hot-joiners skip it (08 §4.8). Re-run all of this with real paths once playtest telemetry exists.
 
 IAB viewable impressions, **Nigeria only, billable**, per week:
 
@@ -644,7 +644,7 @@ IAB viewable impressions, **Nigeria only, billable**, per week:
 | Strip Pack (frame × 16 Screens) | 27.1k | 63.3k | 633k | 3.17M |
 | City Pass (frame × 23 Screens) | 32.4k | 75.6k | 756k | 3.78M |
 | Drop Sponsor (warm-up yard, p = 60%) | 23.5k | 54.8k | 548k | 2.74M |
-| Map Takeover, Lagos Market (per 72 h) | 4.2k | 9.8k | 98k | 491k |
+| Map Takeover, Street Market (per 72 h) | 4.2k | 9.8k | 98k | 491k |
 
 IAB counting is reach-like (one per session). Owning a whole Screen adds only ~18% impressions, but gives ~3× the exposures and ~6× the airtime (46 vs 8 viewable seconds per player-match). So whole-surface products are priced and guaranteed on airtime (§6.3), and reports show all three metrics.
 
@@ -707,7 +707,7 @@ Products (multiplier × the Frame index, per week unless stated):
 | Strip Pack | 4 | ₦100k | ₦980k | ₦4.9M | $75 / $736 | ≈ ₦1,550 | the same frame on all 16 Strip Screens (the only way to buy Strip Screens) |
 | Hoarding / Wrap | 3 | ₦75k | ₦735k | ₦3.68M | $56 / $552 | ≈ ₦3,350 (standard map), ≈ ₦2,300 (Strip) | static, 100% of one surface; sold on airtime |
 | Screen Owner | 3.5 | ₦87.5k | ₦857.5k | ₦4.29M | $66 / $644 | ≈ ₦4,430 | all 6 frames of one Screen (standard maps); sold on airtime: ~6× a frame's viewable seconds for 3.5× the price |
-| City Pass | 6 | ₦150k | ₦1.47M | ₦7.35M | $113 / $1,104 | ≈ ₦1,950 | the same frame on every Screen of every ad map (Lagos Market, Mumbai Local and one Strip Pack slot) |
+| City Pass | 6 | ₦150k | ₦1.47M | ₦7.35M | $113 / $1,104 | ≈ ₦1,950 | the same frame on every Screen of every ad map (Street Market, Mumbai Local and one Strip Pack slot) |
 | Drop Sponsor | 5 | ₦125k | ₦1.23M | ₦6.13M | $94 / $920 | ≈ ₦2,250 | 100% of the 4 warm-up yard Screens (plus the sky airship from Phase 5, with no forecast credit) |
 | Map Takeover (72 h) | 6 | ₦150k | ₦1.47M | ₦7.35M | $113 / $1,104 | n/a (≈ ₦15,000 on reach) | every surface on one map for 3 days, ≈ 16× a frame-week's viewable seconds; sold as an event sponsorship |
 
@@ -746,7 +746,7 @@ Revenue is modelled bottom-up as a deals funnel, because sales capacity, not inv
 |---|---|---|---|---|
 | Billable NG CCU (§6.1) | 90 | 210 | 2,100 | 10,500 |
 | Frame price / week | ₦25k (floor) | ₦25k (floor) | ₦245k | ₦1.23M |
-| NG units on sale | 12 Lagos Market frames + 3 Strip Packs + 2 Hoardings | 42 frames + 6 Strip Packs + 9 single-owner surfaces + Drop Sponsor | same | same |
+| NG units on sale | 12 Street Market frames + 3 Strip Packs + 2 Hoardings | 42 frames + 6 Strip Packs + 9 single-owner surfaces + Drop Sponsor | same | same |
 | Billable NG viewable impressions / day (all units on sale) | 26k | 194k | 1.9M | 9.7M |
 | Ceiling: value at 100% sell-through / month | ₦3.3M ($2.4k) | ₦10.6M ($8.0k) | ₦104M ($78k) | ₦522M ($392k) |
 | Active advertisers (*assumption*) | 4–8: one part-time seller closes 2–4 a month; 4-week flights; 50% renew | 5–10 | 10–20 | 15–30 brands or agencies |
@@ -896,13 +896,13 @@ So billboards show house art in every `portal` build (rule 10), including the op
 
 | Phase | Ads work | Gate to move on |
 |---|---|---|
-| **Phase 2 — Alpha** (Wave 2 builds Lagos Market + Mumbai Local) | `AdSlot` entity + lint (lint #7 once playtest heatmaps exist); billboard structures (junction tower, flyover, gantry) with `AdSlot` placeholders in the Lagos Market and Mumbai Local kits; shared house pools; the array-texture renderer on house art (late Wave 2). No measurement and no sales | ≤ 0.2 ms frame cost on the reference iGPU; in a blind A/B, testers rate readability equal (≥ 4/5) with and without boards |
-| **Phase 3 — Beta / soft launch: thin pilot** (the Wave 3 item) | **Entry gate:** a Nigerian entity and bank account (Paystack settlement) and counsel opinions under way. **Nigeria only, 2 maps, premium units only** (12 Lagos Market frames, 3 Strip Packs, 2 Hoardings); hand-sold by one part-time seller; full price + founding added value; 4-week minimum; ARCON certificate required. Signed weekly manifest + manual kill switch; review in `apps/admin` (two reviewers for first creatives, language coverage, seller ≠ approver); automatic suspension on reports; server bounds reported as **estimated viewable impressions (server-modelled, unaudited)**; Paystack payment links + invoice template; weekly PDF with privacy-mode clips; guarantee = 50% of the model, made good by extension only. **20% house-art hold-out**, pre-registered as a non-inferiority test with a 1-point D7 margin; readability survey; Ranked on house art | ≥ 5 paying advertisers; zero harmful ads reach players; ≥ 50% renew; delivery reported on 100% of flights; server estimate within ±25% of a sampled replay recount; hold-out: no statistically significant D7 drop at the achieved sample size (confidence interval reported), plus readability-survey and K/D parity; willingness to pay measured (the share of pitched businesses that buy at the index price, and their objections) |
+| **Phase 2 — Alpha** (Wave 2 builds Street Market + Mumbai Local) | `AdSlot` entity + lint (lint #7 once playtest heatmaps exist); billboard structures (junction tower, flyover, gantry) with `AdSlot` placeholders in the Street Market and Mumbai Local kits; shared house pools; the array-texture renderer on house art (late Wave 2). No measurement and no sales | ≤ 0.2 ms frame cost on the reference iGPU; in a blind A/B, testers rate readability equal (≥ 4/5) with and without boards |
+| **Phase 3 — Beta / soft launch: thin pilot** (the Wave 3 item) | **Entry gate:** a Nigerian entity and bank account (Paystack settlement) and counsel opinions under way. **Nigeria only, 2 maps, premium units only** (12 Street Market frames, 3 Strip Packs, 2 Hoardings); hand-sold by one part-time seller; full price + founding added value; 4-week minimum; ARCON certificate required. Signed weekly manifest + manual kill switch; review in `apps/admin` (two reviewers for first creatives, language coverage, seller ≠ approver); automatic suspension on reports; server bounds reported as **estimated viewable impressions (server-modelled, unaudited)**; Paystack payment links + invoice template; weekly PDF with privacy-mode clips; guarantee = 50% of the model, made good by extension only. **20% house-art hold-out**, pre-registered as a non-inferiority test with a 1-point D7 margin; readability survey; Ranked on house art | ≥ 5 paying advertisers; zero harmful ads reach players; ≥ 50% renew; delivery reported on 100% of flights; server estimate within ±25% of a sampled replay recount; hold-out: no statistically significant D7 drop at the achieved sample size (confidence interval reported), plus readability-survey and K/D parity; willingness to pay measured (the share of pitched businesses that buy at the index price, and their objections) |
 | **Phase 4 — Launch** | Hand-selling continues. Published index card (naira + USD); Mumbai Local inventory; Drop Sponsor (yard) with the ≤ 200 KB queued prefetch; Stripe for USD buyers; hold-out drops to 5%; guarantee becomes 70% of measured. **The full stack starts only after ≥ 8 paying advertisers, ≥ 50% renewal and ≥ ₦1.5M/month gross:** client mask measurement, automated privacy-mode proof of play, self-serve portal, dashboard, Map Takeovers | review SLA met 95% of the time; ≤ 1 h to automatic suspension and ≤ 24 h to a human decision; Nigerian sell-through ≥ 10% of units on sale; ads ≥ hosting net of sales cost by launch + 3 months (G1) |
 | **Phase 5+ — Seasons** | programmatic spike, then live for non-Nigerian geos (§6.6, server-side only); India direct via an agency (~10k CCU); Motion creatives and the sky airship; mobile web (S2: the touch HUD's rects feed the mask automatically); Highrise inventory | the §6.6 conditions |
 
 - **Hold-out sizing.** With D7 ≈ 8%, 80% power and α = 0.05, detecting a 1-point difference needs ≈ 7.2k hold-out users and ≈ 36k new web-build users in total at a 20% hold-out (≈ 121k at 5%). Most pilot inventory shows house art anyway, so a large hold-out costs little. If the pilot falls short of that sample, report the confidence interval and don't claim parity.
-- **Cross-plan follow-ups.** The Wave 2 queue (15 §5) should list 13 #704–707 next to the Lagos Market and Mumbai Local maps, and W8 should model the billboard structures with `AdSlot` placeholders while building the Lagos Market kit, so they aren't retrofitted.
+- **Cross-plan follow-ups.** The Wave 2 queue (15 §5) should list 13 #704–707 next to the Street Market and Mumbai Local maps, and W8 should model the billboard structures with `AdSlot` placeholders while building the Street Market kit, so they aren't retrofitted.
 
 ### 8.2 Success metrics
 

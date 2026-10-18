@@ -1,0 +1,398 @@
+{
+  "about": "Provenance for the environments stream's Higgsfield images: each job id with its exact prompt and settings (review L14). The originals are not committed; apps/web/scripts/backdrops.py and house-ads.py turn them into the runtime files listed under `output`. Spend per batch is in art/README.md's cost table.",
+  "jobs": [
+    {
+      "batch": 1,
+      "job": "5ef0226c-c5c9-40d4-82d3-0f3e803b92cd",
+      "source": "b1_sky_day.png",
+      "output": "apps/web/public/assets/backdrops/street_market/sky_day.webp",
+      "model": "gpt_image_2_5",
+      "settings": {
+        "aspect_ratio": "21:9",
+        "resolution": "2k",
+        "quality": "high",
+        "background": "opaque"
+      },
+      "credits": 2.75,
+      "prompt": "Wide panoramic sky backdrop for a stylised side-view video game, painted in soft matte gouache with simple rounded shapes. A calm late-morning sky over a warm tropical coastal city: soft powder blue at the top, fading smoothly to a pale hazy warm cream along the bottom edge. A few soft, rounded cumulus clouds and thin high wisps spread evenly across the whole width, gently lit from the upper left. Low contrast, slightly desaturated, airy and peaceful. Sky only: no ground, no buildings, no horizon line, no sun disc, no birds, no aircraft, no text, no logos."
+    },
+    {
+      "batch": 1,
+      "job": "301ce1d0-a43c-4e40-bb9c-632621e912cb",
+      "source": "b1_far_a.png",
+      "output": "apps/web/public/assets/backdrops/street_market/far_a.webp",
+      "model": "gpt_image_2_5",
+      "settings": {
+        "aspect_ratio": "21:9",
+        "resolution": "2k",
+        "quality": "high",
+        "background": "transparent"
+      },
+      "credits": 2.75,
+      "prompt": "Distant city skyline layer for a stylised side-view video game background, painted in soft flat matte gouache shapes. An original, invented West African coastal megacity inspired by Lagos (no real landmarks), seen from very far away on a hazy day: a dense band of low and mid-rise concrete blocks with flat roofs and small black rooftop water tanks, a few slender towers of different heights spaced across the width, two construction cranes, scattered palm trees, and a long low road bridge on concrete pillars across one part. Everything in soft hazy blue-grey with pale highlights, very low contrast and low saturation, strong aerial perspective. The buildings sit along the bottom edge and fill only the lower half of the image with an irregular, varied rooftop line; everything above the buildings is fully transparent. Flat orthographic side view, no ground, no water, no foreground, no people, no vehicles, no text, no signs, no logos."
+    },
+    {
+      "batch": 1,
+      "job": "b9a788a9-bb7f-474a-b52c-bcdaf3421cc8",
+      "source": "b1_mid_a.png",
+      "output": "apps/web/public/assets/backdrops/street_market/mid_a.webp",
+      "model": "gpt_image_2_5",
+      "settings": {
+        "aspect_ratio": "21:9",
+        "resolution": "2k",
+        "quality": "high",
+        "background": "transparent"
+      },
+      "credits": 2.75,
+      "prompt": "Row of city buildings as a background layer for a stylised side-view video game, painted in soft matte gouache with simple shapes, toy-like and clean. A continuous row of original three- to nine-storey concrete apartment and office blocks from an invented West African coastal city inspired by Lagos, seen straight from the side: painted plaster in faded cream, ochre, terracotta, sage green and pale blue, small balconies with hanging laundry, louvred windows, black rooftop water tanks, satellite dishes, a few palm trees between the blocks and sagging overhead power lines. Soft hazy daylight, low contrast, muted colours. The buildings stand on the bottom edge and fill the lower two thirds of the image with a varied rooftop line; the sky above them is fully transparent. Flat orthographic side view, no ground, no street, no people, no vehicles, no billboards, no text, no signs, no logos, no lettering anywhere."
+    },
+    {
+      "batch": 2,
+      "job": "277e2e91-fffc-4225-bac7-02ad0130e2b3",
+      "source": "b2_far_b.png",
+      "output": "apps/web/public/assets/backdrops/street_market/far_b.webp",
+      "model": "gpt_image_2_5",
+      "settings": {
+        "aspect_ratio": "21:9",
+        "resolution": "2k",
+        "quality": "high",
+        "background": "transparent"
+      },
+      "credits": 2.75,
+      "prompt": "Distant city skyline layer for a stylised side-view video game background, painted in soft flat matte gouache shapes. An original, invented West African coastal megacity inspired by Lagos (no real landmarks), seen from very far away on a hazy day: a dense band of low and mid-rise concrete blocks with flat roofs and small black rooftop water tanks, a cluster of three slender office towers left of centre, a tall thin radio mast, one construction crane, a wide low round roof, and scattered palm trees. Everything in soft hazy blue-grey with pale highlights, very low contrast and low saturation, strong aerial perspective. The buildings sit along the bottom edge and fill only the lower half of the image with an irregular rooftop line; everything above the buildings is fully transparent with crisp edges, no glow and no haze above the roofs. Flat orthographic side view, no ground, no water, no foreground, no people, no vehicles, no text, no signs, no logos."
+    },
+    {
+      "batch": 2,
+      "job": "83e2f8aa-2e5d-4ecd-9207-33b49c1f8839",
+      "source": "b2_mid_b.png",
+      "output": "apps/web/public/assets/backdrops/street_market/mid_b.webp",
+      "model": "gpt_image_2_5",
+      "settings": {
+        "aspect_ratio": "21:9",
+        "resolution": "2k",
+        "quality": "high",
+        "background": "transparent"
+      },
+      "credits": 2.75,
+      "prompt": "Row of city buildings as a background layer for a stylised side-view video game, painted in soft matte gouache with simple shapes, toy-like and clean. A continuous row of original two- to eight-storey concrete apartment blocks and a few shop-houses from an invented West African coastal city inspired by Lagos, seen straight from the side: painted plaster in faded cream, ochre, terracotta, sage green and dusty pink, a long four-storey block on the left, a taller slim office block right of centre, small balconies with potted plants and hanging laundry, louvred windows, black rooftop water tanks, satellite dishes, a few palm trees between the blocks and sagging overhead power lines. Soft hazy daylight, low contrast, muted colours. The buildings stand on the bottom edge and fill the lower two thirds of the image with a varied rooftop line; the sky above them is fully transparent with crisp edges, no glow and no haze. Flat orthographic side view, no ground, no street, no people, no vehicles, no billboards, no text, no signs, no logos, no lettering anywhere."
+    },
+    {
+      "batch": 2,
+      "job": "ea0f4669-60b5-406b-a8f6-7185f4394903",
+      "source": "b2_sky_dusk.png",
+      "output": "apps/web/public/assets/backdrops/street_market/sky_dusk.webp",
+      "model": "gpt_image_2_5",
+      "settings": {
+        "aspect_ratio": "21:9",
+        "resolution": "2k",
+        "quality": "high",
+        "background": "opaque"
+      },
+      "credits": 2.75,
+      "prompt": "Wide panoramic sky backdrop for a stylised side-view video game, painted in soft matte gouache with simple rounded shapes. A warm tropical dusk: dusty violet-blue at the top, easing through soft rose and coral into a glowing peach and amber haze along the bottom edge. Long soft clouds spread evenly across the whole width, their undersides lit pink and gold by the low sun below the bottom edge. Low contrast, painterly, calm and warm. Sky only: no ground, no buildings, no horizon line, no sun disc, no birds, no aircraft, no text, no logos."
+    },
+    {
+      "batch": 2,
+      "job": "2bfae633-9388-4803-bf61-5359124245f2",
+      "source": "b2_sky_night.png",
+      "output": "apps/web/public/assets/backdrops/street_market/sky_night.webp",
+      "model": "gpt_image_2_5",
+      "settings": {
+        "aspect_ratio": "21:9",
+        "resolution": "2k",
+        "quality": "high",
+        "background": "opaque"
+      },
+      "credits": 2.75,
+      "prompt": "Wide panoramic sky backdrop for a stylised side-view video game, painted in soft matte gouache with simple rounded shapes. A clear warm tropical night over a big city: deep navy blue at the top, easing to a dusty teal-grey glow of city light along the bottom edge, small soft stars scattered sparsely and evenly across the upper half, a few long thin dark clouds catching a faint warm city glow underneath. No moon. Low contrast, painterly, calm. Sky only: no ground, no buildings, no horizon line, no birds, no aircraft, no text, no logos."
+    },
+    {
+      "batch": 3,
+      "job": "b7cfdb8d-136d-41a3-b6ca-45879ef31077",
+      "source": "s0_bakery.png",
+      "output": "apps/web/public/assets/ads/street_market/sm-bakery.webp",
+      "model": "gpt_image_2_5",
+      "settings": {
+        "aspect_ratio": "4:3",
+        "resolution": "1k",
+        "quality": "high"
+      },
+      "credits": 1.5,
+      "prompt": "Flat graphic poster design filling the whole frame edge to edge, for an invented neighbourhood bakery. Big bold headline text \"SUNRISE BAKERY\" and a smaller line \"Fresh bread every morning\". A simple warm illustration of crusty loaves and rolls on a wooden board. Muted, slightly faded print colours: cream, warm brown, deep green, mustard. Clean layout, large legible type, lots of margin. Not a mock-up: no billboard frame, no wall, no perspective, no people, no logos, no QR code, no phone number, no web address, no other text."
+    },
+    {
+      "batch": 3,
+      "job": "5ac9ead8-86dd-4f2c-afba-4343d025a8ba",
+      "source": "s1_kitchen.png",
+      "output": "apps/web/public/assets/ads/street_market/sm-kitchen.webp",
+      "model": "gpt_image_2_5",
+      "settings": {
+        "aspect_ratio": "4:3",
+        "resolution": "1k",
+        "quality": "high"
+      },
+      "credits": 1.5,
+      "prompt": "Flat graphic poster design filling the whole frame edge to edge, for an invented street-food kitchen. Big bold headline text \"MARKET KITCHEN\" and a smaller line \"Hot meals all day\". A simple illustration of a steaming pot of stew and a bowl of rice. Muted, slightly faded print colours: cream, maroon, deep green, mustard. Clean layout, large legible type, lots of margin. Not a mock-up: no billboard frame, no wall, no perspective, no people, no logos, no QR code, no phone number, no web address, no other text."
+    },
+    {
+      "batch": 3,
+      "job": "7806dbab-983d-4b59-bbe4-efee89169642",
+      "source": "s2_tailors.png",
+      "output": "apps/web/public/assets/ads/street_market/sm-tailors.webp",
+      "model": "gpt_image_2_5",
+      "settings": {
+        "aspect_ratio": "4:3",
+        "resolution": "1k",
+        "quality": "high"
+      },
+      "credits": 1.5,
+      "prompt": "Flat graphic poster design filling the whole frame edge to edge, for an invented tailor's shop. Big bold headline text \"GOLDEN NEEDLE TAILORS\" and a smaller line \"Made to measure\". A simple illustration of a vintage sewing machine, a spool of thread and folded patterned fabric. Muted, slightly faded print colours: cream, deep teal-green, maroon, gold. Clean layout, large legible type, lots of margin. Not a mock-up: no billboard frame, no wall, no perspective, no people, no logos, no QR code, no phone number, no web address, no other text."
+    },
+    {
+      "batch": 3,
+      "job": "1edd4897-dfa9-461f-b044-7eaa5a5f549b",
+      "source": "s3_gutters.png",
+      "output": "apps/web/public/assets/ads/street_market/sm-gutters.webp",
+      "model": "gpt_image_2_5",
+      "settings": {
+        "aspect_ratio": "4:3",
+        "resolution": "1k",
+        "quality": "high"
+      },
+      "credits": 1.5,
+      "prompt": "Flat graphic public-notice poster filling the whole frame edge to edge, from an invented city council. Big bold headline text \"KEEP OUR GUTTERS CLEAR\" and a smaller line \"Clean streets, no floods\". A simple illustration of a broom, a rubbish bin and a clean open street drain with flowing water. Muted, slightly faded print colours: cream, deep green, charcoal, mustard. Clean civic layout, large legible type. Not a mock-up: no frame, no wall, no perspective, no people, no logos, no crest, no QR code, no phone number, no web address, no other text."
+    },
+    {
+      "batch": 3,
+      "job": "9eeb8fd6-b6ac-4f1a-aeea-17a7c777b93a",
+      "source": "s4_zebra.png",
+      "output": "apps/web/public/assets/ads/street_market/sm-zebra.webp",
+      "model": "gpt_image_2_5",
+      "settings": {
+        "aspect_ratio": "4:3",
+        "resolution": "1k",
+        "quality": "high"
+      },
+      "credits": 1.5,
+      "prompt": "Flat graphic road-safety poster filling the whole frame edge to edge, from an invented city council. Big bold headline text \"CROSS AT THE ZEBRA\" and a smaller line \"Look both ways\". A simple illustration of black and white zebra crossing stripes on a road seen from above, with a round road sign. Muted, slightly faded print colours: cream, charcoal, deep green, mustard yellow. Clean civic layout, large legible type. Not a mock-up: no frame, no wall, no perspective, no people, no figures, no logos, no QR code, no phone number, no web address, no other text."
+    },
+    {
+      "batch": 3,
+      "job": "a2d553d2-8571-4175-b2ca-71cca67ee4b7",
+      "source": "s5_water.png",
+      "output": "apps/web/public/assets/ads/street_market/sm-water.webp",
+      "model": "gpt_image_2_5",
+      "settings": {
+        "aspect_ratio": "4:3",
+        "resolution": "1k",
+        "quality": "high"
+      },
+      "credits": 1.5,
+      "prompt": "Flat graphic public-health poster filling the whole frame edge to edge, from an invented city council. Big bold headline text \"DRINK CLEAN WATER\" and a smaller line \"Stay cool in the heat\". A simple illustration of a clay water jug and two glasses of water with a sun overhead. Muted, slightly faded print colours: cream, deep teal-green, terracotta-brown, mustard. Clean civic layout, large legible type. Not a mock-up: no frame, no wall, no perspective, no people, no logos, no brand names, no QR code, no phone number, no web address, no other text."
+    },
+    {
+      "batch": 3,
+      "job": "8163076e-37ee-44fd-a9e6-89d8766a2917",
+      "source": "s6_fish.png",
+      "output": "apps/web/public/assets/ads/street_market/sm-fish.webp",
+      "model": "gpt_image_2_5",
+      "settings": {
+        "aspect_ratio": "4:3",
+        "resolution": "1k",
+        "quality": "high"
+      },
+      "credits": 1.5,
+      "prompt": "Flat graphic poster design filling the whole frame edge to edge, for an invented fish market. Big bold headline text \"HARBOUR FISH MARKET\" and a smaller line \"Fresh fish daily\". A simple illustration of three silver fish laid on ice with lemon slices. Muted, slightly faded print colours: cream, slate grey-green, maroon, mustard. Clean layout, large legible type, lots of margin. Not a mock-up: no billboard frame, no wall, no perspective, no people, no logos, no QR code, no phone number, no web address, no other text."
+    },
+    {
+      "batch": 3,
+      "job": "6200c838-e46e-46ad-bd03-09702b7d56ed",
+      "source": "s7_marketday.png",
+      "output": "apps/web/public/assets/ads/street_market/sm-market-day.webp",
+      "model": "gpt_image_2_5",
+      "settings": {
+        "aspect_ratio": "4:3",
+        "resolution": "1k",
+        "quality": "high"
+      },
+      "credits": 1.5,
+      "prompt": "Flat graphic poster design filling the whole frame edge to edge, announcing a neighbourhood market day. Big bold headline text \"MARKET DAY\" and a smaller line \"Every Saturday\". A simple illustration of a wooden crate overflowing with tomatoes, peppers, onions, plantains and greens. Muted, slightly faded print colours: cream, deep green, maroon, mustard. Clean layout, large legible type, lots of margin. Not a mock-up: no billboard frame, no wall, no perspective, no people, no logos, no QR code, no phone number, no web address, no other text."
+    },
+    {
+      "batch": 3,
+      "job": "a7b69ac3-1f19-45e5-8160-e2948245ddd5",
+      "source": "h8_citymarket.png",
+      "output": "apps/web/public/assets/ads/street_market/sm-city-market.webp",
+      "model": "gpt_image_2_5",
+      "settings": {
+        "aspect_ratio": "21:9",
+        "resolution": "1k",
+        "quality": "high"
+      },
+      "credits": 1.5,
+      "prompt": "An extremely wide, flat horizontal banner design with a 6 to 1 shape, centred in the image, filling the full width; the areas above and below the banner are plain flat dark grey. The banner is for an invented city market: bold headline text \"CITY MARKET\" on the left and \"Fresh food, fair prices\" beside it, with a simple illustrated row of fruit and vegetables along the right. Muted, slightly faded print colours: cream background, deep green, maroon, mustard. Large legible type. Not a mock-up: no billboard frame, no wall, no perspective, no people, no logos, no QR code, no phone number, no web address, no other text."
+    },
+    {
+      "batch": 3,
+      "job": "802189d6-5d66-4946-85cd-b25b65f74b6c",
+      "source": "h9_trees.png",
+      "output": "apps/web/public/assets/ads/street_market/sm-trees.webp",
+      "model": "gpt_image_2_5",
+      "settings": {
+        "aspect_ratio": "21:9",
+        "resolution": "1k",
+        "quality": "high"
+      },
+      "credits": 1.5,
+      "prompt": "An extremely wide, flat horizontal banner design with a 6 to 1 shape, centred in the image, filling the full width; the areas above and below the banner are plain flat dark grey. A public notice from an invented city council: bold headline text \"PLANT A TREE, COOL YOUR STREET\" with a simple illustrated row of young shade trees and leaves. Muted, slightly faded print colours: cream background, deep green, olive, mustard. Large legible type. Not a mock-up: no billboard frame, no wall, no perspective, no people, no logos, no crest, no QR code, no phone number, no web address, no other text."
+    },
+    {
+      "batch": 3,
+      "job": "0c733c8c-fec3-4975-bb44-68fbac6b015b",
+      "source": "h10_slowdown.png",
+      "output": "apps/web/public/assets/ads/street_market/sm-slow-down.webp",
+      "model": "gpt_image_2_5",
+      "settings": {
+        "aspect_ratio": "21:9",
+        "resolution": "1k",
+        "quality": "high"
+      },
+      "credits": 1.5,
+      "prompt": "An extremely wide, flat horizontal banner design with a 6 to 1 shape, centred in the image, filling the full width; the areas above and below the banner are plain flat dark grey. A road-safety notice from an invented city council: bold headline text \"SLOW DOWN NEAR THE MARKET\" with a simple round speed-limit style road sign and a few market stall awnings drawn as flat shapes. Muted, slightly faded print colours: cream background, charcoal, maroon, mustard. Large legible type. Not a mock-up: no billboard frame, no wall, no perspective, no people, no figures, no logos, no QR code, no phone number, no web address, no other text."
+    },
+    {
+      "batch": 3,
+      "job": "9f4b17df-2ed3-4bf7-8f2c-97da9a085ec8",
+      "source": "h11_bakery.png",
+      "output": "apps/web/public/assets/ads/street_market/sm-bakery-wide.webp",
+      "model": "gpt_image_2_5",
+      "settings": {
+        "aspect_ratio": "21:9",
+        "resolution": "1k",
+        "quality": "high"
+      },
+      "credits": 1.5,
+      "prompt": "An extremely wide, flat horizontal banner design with a 6 to 1 shape, centred in the image, filling the full width; the areas above and below the banner are plain flat dark grey. The banner is for an invented neighbourhood bakery: bold headline text \"SUNRISE BAKERY\" and a smaller line \"Bread, cakes and pies\", with a simple illustrated row of loaves, cakes and pies. Muted, slightly faded print colours: cream background, warm brown, deep green, mustard. Large legible type. Not a mock-up: no billboard frame, no wall, no perspective, no people, no logos, no QR code, no phone number, no web address, no other text."
+    },
+    {
+      "batch": 4,
+      "job": "9a37ba51-a473-455e-989a-a153c5715bff",
+      "source": "lunar_sky.png",
+      "output": "apps/web/public/assets/backdrops/lunar_outpost/sky.webp",
+      "model": "gpt_image_2_5",
+      "settings": {
+        "aspect_ratio": "21:9",
+        "resolution": "2k",
+        "quality": "high",
+        "background": "opaque"
+      },
+      "credits": 2.75,
+      "prompt": "Wide panoramic space sky backdrop for a stylised side-view video game set on the Moon, painted in soft matte gouache with simple shapes. A deep black-blue sky with a dense, soft star field spread evenly across the whole width, a faint pale band of distant stars crossing it, and a large crescent Earth low in the upper left, glowing soft blue and white with swirling clouds. Calm, low contrast, painterly. Sky only: no ground, no horizon line, no mountains, no buildings, no spacecraft, no text, no logos."
+    },
+    {
+      "batch": 4,
+      "job": "f9a68902-49cf-4d48-afd5-ccc2b9f88776",
+      "source": "lunar_far.png",
+      "output": "apps/web/public/assets/backdrops/lunar_outpost/far.webp",
+      "model": "gpt_image_2_5",
+      "settings": {
+        "aspect_ratio": "21:9",
+        "resolution": "2k",
+        "quality": "high",
+        "background": "transparent"
+      },
+      "credits": 2.75,
+      "prompt": "Distant lunar landscape layer for a stylised side-view video game background, painted in soft flat matte gouache shapes. Grey cratered mountain ridges and rolling regolith hills of the Moon seen from far away, lit hard from a low sun on the left so each ridge has a pale lit side and a soft grey shadow side, a few distant crater rims. Very low contrast, cool neutral greys, no colour. The ridges sit along the bottom edge and fill the lower half of the image with an irregular outline; everything above the ridges is fully transparent with crisp edges, no glow, no haze. Flat orthographic side view, no buildings, no people, no vehicles, no text, no logos."
+    },
+    {
+      "batch": 4,
+      "job": "2353a943-e392-456f-a31a-ff10c8e0d227",
+      "source": "lunar_mid.png",
+      "output": "apps/web/public/assets/backdrops/lunar_outpost/mid.webp",
+      "model": "gpt_image_2_5",
+      "settings": {
+        "aspect_ratio": "21:9",
+        "resolution": "2k",
+        "quality": "high",
+        "background": "transparent"
+      },
+      "credits": 2.75,
+      "prompt": "Row of moon-base structures as a background layer for a stylised side-view video game, painted in soft matte gouache with simple shapes, toy-like and clean. An original lunar research outpost seen straight from the side on grey regolith: white and pale grey pressurised habitat modules, a large geodesic dome, cylindrical fuel tanks, radio masts and satellite dishes, rows of dark solar panels on frames, connecting tube corridors and a small cargo crane, with muted teal and olive accent stripes. Hard low sunlight from the left, soft grey shadows, low contrast. The structures stand on the bottom edge and fill the lower two thirds of the image; everything above them is fully transparent with crisp edges, no glow, no haze. Flat orthographic side view, no people, no vehicles, no flags, no text, no logos, no orange, no bright blue."
+    },
+    {
+      "batch": 4,
+      "job": "6bf3cdee-5406-4efe-9860-e990937c17d3",
+      "source": "storm_sky.png",
+      "output": "apps/web/public/assets/backdrops/storm_front/sky.webp",
+      "model": "gpt_image_2_5",
+      "settings": {
+        "aspect_ratio": "21:9",
+        "resolution": "2k",
+        "quality": "high",
+        "background": "opaque"
+      },
+      "credits": 2.75,
+      "prompt": "Wide panoramic sky backdrop for a stylised side-view video game, painted in soft matte gouache with simple shapes. A dramatic storm over a cold northern harbour: heavy layered slate-blue and charcoal storm clouds rolling across the whole width, a few lighter grey gaps, soft grey curtains of rain falling in places, and a faint pale glow of lightning inside one distant cloud. Moody but readable, low contrast, desaturated, painterly. Sky only: no ground, no sea, no horizon line, no buildings, no ships, no birds, no text, no logos."
+    },
+    {
+      "batch": 4,
+      "job": "be5a3496-cc10-4be6-8a31-6bc95b6b85a4",
+      "source": "storm_far.png",
+      "output": "apps/web/public/assets/backdrops/storm_front/far.webp",
+      "model": "gpt_image_2_5",
+      "settings": {
+        "aspect_ratio": "21:9",
+        "resolution": "2k",
+        "quality": "high",
+        "background": "transparent"
+      },
+      "credits": 2.75,
+      "prompt": "Distant storm-bound harbour layer for a stylised side-view video game background, painted in soft flat matte gouache shapes. An original cold northern port seen from far away in heavy rain: a long stone breakwater with a lighthouse, tall container cranes, stacks of plain unbranded shipping containers, two moored cargo ships and a low row of port sheds, all as soft hazy blue-grey silhouettes with a few pale wet highlights. Very low contrast, desaturated. The port sits along the bottom edge and fills the lower half of the image with an irregular outline; everything above it is fully transparent with crisp edges, no glow, no haze, no sky. Flat orthographic side view, no water surface, no people, no text, no logos, no signs."
+    },
+    {
+      "batch": 4,
+      "job": "fa786170-a313-49cf-a989-2d9f41a0fe33",
+      "source": "storm_mid.png",
+      "output": "apps/web/public/assets/backdrops/storm_front/mid.webp",
+      "model": "gpt_image_2_5",
+      "settings": {
+        "aspect_ratio": "21:9",
+        "resolution": "2k",
+        "quality": "high",
+        "background": "transparent"
+      },
+      "credits": 2.75,
+      "prompt": "Row of old harbour buildings as a background layer for a stylised side-view video game, painted in soft matte gouache with simple shapes, toy-like and clean. An original weathered cold-climate dockside seen straight from the side in the rain: brick and concrete warehouses with corrugated metal roofs and big loading doors, a tall rusty dock crane, stacks of plain shipping containers in muted grey, rust brown and dull green, a harbour master's tower, pipes, ladders and wet gleaming roofs. Low contrast, desaturated, muted colours, no bright blue and no orange. The buildings stand on the bottom edge and fill the lower two thirds of the image; everything above them is fully transparent with crisp edges, no glow, no haze. Flat orthographic side view, no water, no people, no vehicles, no text, no signs, no logos."
+    },
+    {
+      "batch": 4,
+      "job": "d0f150ce-3eb2-4421-99a2-18f6626ef41b",
+      "source": "lab_wall.png",
+      "output": "apps/web/public/assets/backdrops/flux_lab/wall.webp",
+      "model": "gpt_image_2_5",
+      "settings": {
+        "aspect_ratio": "21:9",
+        "resolution": "2k",
+        "quality": "high",
+        "background": "opaque"
+      },
+      "credits": 2.75,
+      "prompt": "Wide interior backdrop for a stylised side-view video game, painted in soft matte gouache with simple shapes: the far back wall of a huge original physics laboratory hall, seen straight on. Two great circular ring machines glowing soft cyan, tall glass containment cylinders, banks of panel lights, steel gantries and walkways, pipes and cable trays, ribbed wall panels and high clerestory windows letting in pale daylight. Cool clinical palette of steel greys and pale whites with soft cyan glows and a few small violet accents. Calm, evenly lit, low contrast, the whole frame filled with wall, floor at the very bottom edge and ceiling trusses at the very top edge. No people, no text, no logos, no signs."
+    },
+    {
+      "batch": 4,
+      "job": "9ce1d476-d472-4d94-8960-0d22faf0f946",
+      "source": "lab_mid.png",
+      "output": "apps/web/public/assets/backdrops/flux_lab/mid.webp",
+      "model": "gpt_image_2_5",
+      "settings": {
+        "aspect_ratio": "21:9",
+        "resolution": "2k",
+        "quality": "high",
+        "background": "transparent"
+      },
+      "credits": 2.75,
+      "prompt": "Row of laboratory machinery as a background layer for a stylised side-view video game, painted in soft matte gouache with simple shapes, toy-like and clean. Original physics-lab equipment standing on the floor, seen straight from the side: tall computer cabinets with small cyan status lights, cylindrical tanks, a cooling unit, coiled pipes, a robotic arm, control consoles, cable reels and a small gantry crane, in steel grey and off-white with a few muted violet accents. Even cool lighting, low contrast. The machines stand on the bottom edge and fill the lower half of the image; everything above them is fully transparent with crisp edges, no glow, no haze. Flat orthographic side view, no people, no text, no logos, no signs, no orange, no bright blue."
+    }
+  ]
+}

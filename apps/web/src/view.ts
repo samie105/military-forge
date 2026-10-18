@@ -184,6 +184,11 @@ export interface Frame {
   recording?: number;
   /** online + hitboxes on: recent server rewinds of our shots (docs/05 §15.3) */
   rewinds?: RewindView[];
+  /**
+   * The same on every client in a match, and one more for the next match: the room's seed plus the
+   * match number. The billboards' house art turns with it (render3d/ads); absent = 0.
+   */
+  matchSeed?: number;
 }
 
 export type FrameEventSink = (events: readonly SimEvent[]) => void;

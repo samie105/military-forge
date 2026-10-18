@@ -84,14 +84,19 @@ export function endToEnd(headers: IncomingHttpHeaders): OutgoingHttpHeaders {
 
 const IP = /^[0-9a-fA-F.:]{2,45}$/;
 
+/** 127.x.x.x, ::1 and their IPv4-mapped form: this Mac, where cloudflared runs. */
+const LOOPBACK = /^(127\.|::1$|::ffff:127\.)/;
+
 /**
  * The player's address: Cloudflare's CF-Connecting-IP when the request came through the tunnel
- * (only cloudflared and this Mac can reach the proxy: it listens on 127.0.0.1), else the socket's.
+ * (cloudflared runs on this Mac, so only a loopback socket may set it; with --lan, Wi-Fi players
+ * reach the proxy directly and can't), else the socket's.
  */
 export function clientIp(req: IncomingMessage): string {
+  const socketIp = req.socket.remoteAddress ?? '';
   const cf = req.headers['cf-connecting-ip'];
   const fromCf = typeof cf === 'string' ? cf.trim() : '';
-  return IP.test(fromCf) ? fromCf : (req.socket.remoteAddress ?? '');
+  return LOOPBACK.test(socketIp) && IP.test(fromCf) ? fromCf : socketIp;
 }
 
 /** Security headers for the app's pages and files (the API adds its own). */
@@ -134,6 +139,9 @@ export function staticPath(root: string, pathname: string): { kind: 'app' } | { 
 export function isHashedAsset(pathname: string): boolean {
   return /^\/assets\/[^/]+-[A-Za-z0-9_-]{8}\.[a-z0-9]+$/.test(pathname);
 }
+
+/** What /health says through the playtest: the game server is up, with no WebTransport gateway to offer. */
+export const PLAYTEST_HEALTH = { ok: true, webtransport: null } as const;
 
 function send(res: ServerResponse, status: number, body: string, headers: Record<string, string> = {}): void {
   res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', ...headers });
@@ -335,6 +343,12 @@ export function createProxy(options: ProxyOptions): Server {
     }
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       send(res, 405, 'Method not allowed', { Allow: 'GET, HEAD' });
+      return;
+    }
+    // the game client asks the game server's /health (same origin as /ws) for a WebTransport gateway;
+    // the tunnel carries no UDP to this Mac, so there's none: the client goes straight to WebSocket
+    if (pathname === '/health') {
+      send(res, 200, req.method === 'HEAD' ? '' : JSON.stringify(PLAYTEST_HEALTH), { 'Content-Type': 'application/json; charset=utf-8', ...securityHeaders(req.headers.host) });
       return;
     }
     const target = staticPath(root, pathname);

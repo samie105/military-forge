@@ -1,0 +1,152 @@
+{
+ "version": 1,
+ "map": "street-market",
+ "screens": [
+  {
+   "id": "house:sm-bakery",
+   "file": "sm-bakery.webp",
+   "title": "Sunrise Bakery",
+   "signalHues": {
+    "teamBlue": 0.0,
+    "teamOrange": 0.04,
+    "damageRed": 0.0
+   },
+   "saturation": 0.6,
+   "luminance": 0.4188
+  },
+  {
+   "id": "house:sm-kitchen",
+   "file": "sm-kitchen.webp",
+   "title": "Market Kitchen",
+   "signalHues": {
+    "teamBlue": 0.0,
+    "teamOrange": 0.015,
+    "damageRed": 0.062
+   },
+   "saturation": 0.7,
+   "luminance": 0.4555
+  },
+  {
+   "id": "house:sm-tailors",
+   "file": "sm-tailors.webp",
+   "title": "Golden Needle Tailors",
+   "signalHues": {
+    "teamBlue": 0.0,
+    "teamOrange": 0.002,
+    "damageRed": 0.046
+   },
+   "saturation": 0.8,
+   "luminance": 0.4432
+  },
+  {
+   "id": "house:sm-gutters",
+   "file": "sm-gutters.webp",
+   "title": "Keep our gutters clear",
+   "signalHues": {
+    "teamBlue": 0.0,
+    "teamOrange": 0.003,
+    "damageRed": 0.0
+   },
+   "saturation": 0.8,
+   "luminance": 0.391
+  },
+  {
+   "id": "house:sm-zebra",
+   "file": "sm-zebra.webp",
+   "title": "Cross at the zebra",
+   "signalHues": {
+    "teamBlue": 0.0,
+    "teamOrange": 0.0,
+    "damageRed": 0.0
+   },
+   "saturation": 0.8,
+   "luminance": 0.3611
+  },
+  {
+   "id": "house:sm-water",
+   "file": "sm-water.webp",
+   "title": "Drink clean water",
+   "signalHues": {
+    "teamBlue": 0.0,
+    "teamOrange": 0.048,
+    "damageRed": 0.024
+   },
+   "saturation": 0.6,
+   "luminance": 0.3959
+  },
+  {
+   "id": "house:sm-fish",
+   "file": "sm-fish.webp",
+   "title": "Harbour Fish Market",
+   "signalHues": {
+    "teamBlue": 0.0,
+    "teamOrange": 0.0,
+    "damageRed": 0.045
+   },
+   "saturation": 0.8,
+   "luminance": 0.4797
+  },
+  {
+   "id": "house:sm-market-day",
+   "file": "sm-market-day.webp",
+   "title": "Market day",
+   "signalHues": {
+    "teamBlue": 0.0,
+    "teamOrange": 0.023,
+    "damageRed": 0.04
+   },
+   "saturation": 0.6,
+   "luminance": 0.3879
+  }
+ ],
+ "hoardings": [
+  {
+   "id": "house:sm-city-market",
+   "file": "sm-city-market.webp",
+   "title": "City Market",
+   "signalHues": {
+    "teamBlue": 0.0,
+    "teamOrange": 0.014,
+    "damageRed": 0.05
+   },
+   "saturation": 0.8,
+   "luminance": 0.4714
+  },
+  {
+   "id": "house:sm-trees",
+   "file": "sm-trees.webp",
+   "title": "Plant a tree",
+   "signalHues": {
+    "teamBlue": 0.0,
+    "teamOrange": 0.0,
+    "damageRed": 0.0
+   },
+   "saturation": 0.8,
+   "luminance": 0.4627
+  },
+  {
+   "id": "house:sm-slow-down",
+   "file": "sm-slow-down.webp",
+   "title": "Slow down near the market",
+   "signalHues": {
+    "teamBlue": 0.0,
+    "teamOrange": 0.007,
+    "damageRed": 0.002
+   },
+   "saturation": 0.6,
+   "luminance": 0.3898
+  },
+  {
+   "id": "house:sm-bakery-wide",
+   "file": "sm-bakery-wide.webp",
+   "title": "Sunrise Bakery",
+   "signalHues": {
+    "teamBlue": 0.0,
+    "teamOrange": 0.07,
+    "damageRed": 0.003
+   },
+   "saturation": 0.7,
+   "luminance": 0.455
+  }
+ ]
+}

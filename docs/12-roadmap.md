@@ -55,7 +55,7 @@
 - XP/levels/stats, settings + rebinding, basic cosmetics (dyes, 10 items), telemetry funnel.
 - CI with golden replays + bot matches, staging with 24/7 bots.
 - Closed alpha: invite codes, 200 → 1,000 players.
-- Billboard groundwork (14 §8.1, 13 #704–707): `AdSlot` entity + lint, billboard structures in the Lagos Market and Mumbai Local kits, shared house-art pools, the array-texture renderer. House art only: no measurement, no sales. Measure the Nigerian and Indian share of web-build CCU in the closed alpha (14 §9.1 #8).
+- Billboard groundwork (14 §8.1, 13 #704–707): `AdSlot` entity + lint, billboard structures in the Street Market (the Lagos map) and Mumbai Local kits, shared house-art pools, the array-texture renderer. House art only: no measurement, no sales. Measure the Nigerian and Indian share of web-build CCU in the closed alpha (14 §9.1 #8).
 
 **Gate:**
 - D1 ≥ 25% among alpha testers.
@@ -70,7 +70,7 @@
 - Anti-cheat detection pipeline + admin review, reports, sanctions.
 - Regions + SIN + IAD. Load test 5k bots. Status page.
 - Open beta on our site + CrazyGames.
-- **Billboard ads thin pilot** (14 §8.1): Nigeria only, Lagos Market + the Strip, premium units only, hand-sold by one part-time seller at the index rate card; every creative human-reviewed with an ARCON certificate; server-modelled delivery estimates; 20% house-art hold-out. Entry gate: a Nigerian entity + bank account (decision #9). Its own gate (≥ 5 paying advertisers, zero harmful ads, ≥ 50% renewal, no significant D7 drop) doesn't block the game's launch.
+- **Billboard ads thin pilot** (14 §8.1): Nigeria only, Street Market + the Strip, premium units only, hand-sold by one part-time seller at the index rate card; every creative human-reviewed with an ARCON certificate; server-modelled delivery estimates; 20% house-art hold-out. Entry gate: a Nigerian entity + bank account (decision #9). Its own gate (≥ 5 paying advertisers, zero harmful ads, ≥ 50% renewal, no significant D7 drop) doesn't block the game's launch.
 
 **Gate:**
 - Load test: 5k CCU on staging with tick p99 < 10 ms.

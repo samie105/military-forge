@@ -27,6 +27,7 @@ import type { Frame } from '../view';
 import { Avatar, AvatarKit } from './avatar';
 import { RookieAssembler, toonRamp, type CharacterAssembler, type CharacterLod } from './character';
 import { CloudLayer } from './clouds';
+import { KIT_WAIT_MS, MapEnvironment, environmentFor, withTimeout } from './environment';
 import { buildDepthLayers, updateForeground, type DepthLayers } from './layers';
 import { lightingFor } from './lighting';
 import { buildMapGeometry } from './mapGeometry';
@@ -125,6 +126,8 @@ export class Renderer3D {
   private layers: DepthLayers;
   /** map zones (docs/02 §20): tinted volumes and particles */
   private zones: ZoneVolumes;
+  /** the map's kit, lighting look and dressing, for maps that have one (environment/) */
+  private env: MapEnvironment | null = null;
   /** the lighting preset's fog, and how far a fog event has thickened it (0 → 1) */
   private readonly fogBase = { near: 45, far: 150 };
   private fogMix = 0;
@@ -301,6 +304,7 @@ export class Renderer3D {
     this.scene.remove(this.layers.background, this.layers.foregroundGroup, this.zones.group);
     disposeTree(this.layers.background);
     disposeTree(this.layers.foregroundGroup);
+    this.env?.dispose();
     this.zones.dispose();
     this.zones = new ZoneVolumes(map);
     this.scene.add(this.zones.group);
@@ -309,7 +313,12 @@ export class Renderer3D {
 
   /** Everything that comes from the map: lighting preset, the gameplay plane, the depth layers and the effects' world. */
   private buildMap(map: MapDef): void {
-    const light = lightingFor(map.id);
+    const envDef = environmentFor(map.id);
+    this.env = envDef ? new MapEnvironment(envDef, map, import.meta.env.BASE_URL) : null;
+    this.env?.setShadowMap(this.preset.shadows === 'map');
+    // a map swapped in after load (online: the room's map) gets its art's shaders compiled as it arrives
+    if (this.ready) this.warmEnvironment();
+    const light = this.env?.look ?? lightingFor(map.id);
     const fog = this.scene.fog as Fog;
     fog.color.setHex(light.fog.color);
     fog.near = this.fogBase.near = light.fog.near;
@@ -322,7 +331,7 @@ export class Renderer3D {
     this.sun.intensity = light.sun.intensity;
     this.sunDir.fromArray(light.sun.dir).normalize();
     this.plane.geometry = buildMapGeometry(map, light);
-    this.layers = buildDepthLayers(map, light);
+    this.layers = this.env?.layers ?? buildDepthLayers(map, light);
     this.scene.add(this.layers.background, this.layers.foregroundGroup);
     // the effects take the new world and the relit scene (the constructor's first build runs before Vfx exists)
     this.vfx?.setMap(this.world);
@@ -331,13 +340,26 @@ export class Renderer3D {
   /** Loads the base character and effect assets, then compiles every material variant (docs/11 §3 shader warm-up). */
   async load(spawn: { x: number; y: number }): Promise<void> {
     const base = import.meta.env.BASE_URL;
-    await Promise.all([this.vfx.load(base), this.kit.loadWeapons(base, new GLTFLoader().setMeshoptDecoder(MeshoptDecoder))]);
+    // the map's kit (the play plane) only, and not for ever: the art around it pops in and is warmed when it lands
+    await Promise.all([this.vfx.load(base), this.kit.loadWeapons(base, new GLTFLoader().setMeshoptDecoder(MeshoptDecoder)), this.env && withTimeout(this.env.kitReady, KIT_WAIT_MS)]);
     try {
       await this.warmUp(spawn);
     } catch (err) {
       console.error('render3d: warm-up failed, characters may pop in', err);
     }
     this.ready = true;
+    this.warmEnvironment();
+  }
+
+  /**
+   * Compiles the map environment's materials once all its art is in (docs/11 §3: no first-sight
+   * hitches): whatever arrived after the load's warm-up, and everything for a map set later.
+   */
+  private warmEnvironment(): void {
+    const env = this.env;
+    env?.ready
+      .then(() => (this.env === env ? this.renderer.compileAsync(this.scene, this.camera3) : undefined))
+      .catch((err: unknown) => console.warn('render3d: environment warm-up failed', err));
   }
 
   private async warmUp(spawn: { x: number; y: number }): Promise<void> {
@@ -374,6 +396,7 @@ export class Renderer3D {
     this.dynres.minScale = this.preset.minScale;
     this.dynres.scale = Math.max(this.dynres.scale, this.preset.minScale);
     this.sun.castShadow = this.preset.shadows === 'map';
+    this.env?.setShadowMap(this.sun.castShadow);
     this.vfx.setPreset(this.preset);
     if (lodChanged) {
       for (const a of this.avatars.values()) a.dispose();
@@ -456,6 +479,8 @@ export class Renderer3D {
       this.sun.target.position.set(0, 0, 0);
     }
 
+    this.plane.visible = !this.env?.drawsPlane; // the kit draws the plane once it's in
+    this.env?.update(this.pose, frame, dt); // painted sky, lamp glows over players, billboard rotation
     this.pickupMeshes.sync(frame.pickups, dt);
     updateForeground(this.layers.foreground, frame.players, this.pose, dt);
     this.zones.update(frame, dt, now / 1000);

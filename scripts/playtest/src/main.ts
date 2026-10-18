@@ -21,13 +21,15 @@
  *        --tunnel-protocol quic|http2 (default quic, falling back to http2 when UDP is blocked) ·
  *        --map <id> (the rooms' map: movement-test by default; lunar-outpost, storm-front, flux-lab, …) ·
  *        --bots <n> (bots keep each room at n players: 4 by default, so two people get a real match;
- *        0 = no bots) · --bot-level easy|normal|hard (default normal)
+ *        0 = no bots) · --bot-level easy|normal|hard (default normal) ·
+ *        --lan (also open it to this Wi-Fi at http://<this Mac's address>:<port>, for friends in the
+ *        same place; pair it with --port for an address that stays the same between runs)
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { generateKeyPairSync } from 'node:crypto';
 import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer as createNetServer } from 'node:net';
-import { tmpdir } from 'node:os';
+import { networkInterfaces, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // the brand lives in one place (packages/shared/src/brand.ts), as vite.config.ts reads it
@@ -359,6 +361,16 @@ function build(): Promise<void> {
   });
 }
 
+/** This Mac's address on the local network (Wi-Fi or Ethernet), or null when it has none. */
+function lanAddress(): string | null {
+  const all = networkInterfaces();
+  const names = Object.keys(all).sort((a, b) => Number(!/^en\d/.test(a)) - Number(!/^en\d/.test(b)) || a.localeCompare(b));
+  for (const name of names) {
+    for (const a of all[name] ?? []) if (a.family === 'IPv4' && !a.internal && !a.address.startsWith('169.254.')) return a.address;
+  }
+  return null;
+}
+
 /** The box with the link: every line padded to the widest. */
 function box(lines: { text: string; style?: (s: string) => string }[]): string[] {
   const width = Math.max(...lines.map((l) => l.text.length)) + 2;
@@ -382,6 +394,11 @@ async function main(): Promise<void> {
   const gamePort = Number(option('game-port') ?? (await freePort()));
   const base = `http://127.0.0.1:${proxyPort}`;
   const localOrigins = [base, `http://localhost:${proxyPort}`];
+  // --lan: the proxy also listens on this Mac's network address, so people on the same Wi-Fi can play
+  const lanIp = flag('lan') ? lanAddress() : null;
+  if (flag('lan') && !lanIp) say(yellow('  --lan: this Mac has no local network address; only the tunnel link will work.'));
+  const lanSite = lanIp ? `http://${lanIp}:${proxyPort}` : null;
+  if (lanSite) localOrigins.push(lanSite);
   let roomCode = '';
   let servicesUp = false;
   let announced: string | null = null;
@@ -407,6 +424,9 @@ async function main(): Promise<void> {
       { text: link, style: (x) => bold(cyan(x)) },
       { text: '' },
       { text: roomCode ? `Room ${roomCode}. Home page: ${site}` : `Home page: ${site}`, style: dim },
+      ...(lanSite && site !== lanSite
+        ? [{ text: '' }, { text: `Same Wi-Fi: ${lanSite}${roomCode ? `/r/${roomCode}` : ''}`, style: (x: string) => bold(cyan(x)) }]
+        : []),
     ]))
       say(l);
     say(dim(`  (also in ${LINK_FILE})`));
@@ -416,7 +436,8 @@ async function main(): Promise<void> {
       say(dim('  • The link survives short outages; if the tunnel has to be recreated it changes, and the new one shows here.'));
       say(dim("  • Keep this Mac awake and online while you play (it won't idle-sleep while this runs)."));
       say(dim('  • Plays in a desktop browser (Chrome, Edge, Firefox, Safari) with a keyboard and mouse, or on a phone held sideways (touch controls).'));
-    } else say(dim('  • --local: only this machine can open it.'));
+    } else say(dim(lanSite ? '  • --local --lan: only this machine and this Wi-Fi can open it.' : '  • --local: only this machine can open it.'));
+    if (lanSite) say(dim('  • Same Wi-Fi: friends here open the Wi-Fi link; if macOS asks whether node may accept incoming connections, allow it.'));
     say('');
   };
 
@@ -512,7 +533,7 @@ async function main(): Promise<void> {
   });
   await new Promise<void>((done, fail) => {
     server.once('error', fail);
-    server.listen(proxyPort, '127.0.0.1', done);
+    server.listen(proxyPort, lanIp ? '0.0.0.0' : '127.0.0.1', done);
   });
   stoppers.push(async () => {
     server.closeAllConnections();

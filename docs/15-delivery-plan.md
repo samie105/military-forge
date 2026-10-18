@@ -39,7 +39,7 @@
 | **W5** | `arsenal` | The full docs/03 roster: pistols, SMGs, rifles, shotgun, sniper, heavies, melee + machete, weight (`moveSpeedMul`), proximity mine, gas, EMP, weapon spawners + pickups | `packages/content/src/{weapons,grenades}.ts`, `packages/sim/src/{combat,grenades,projectiles}.ts` | — |
 | **W6** | `netcode` | Lag compensation (300 ms rewind cap: 200 ms latency + 100 ms interpolation), delta snapshots + AOI, reconnect with session token, **WebTransport (UDP) gateway** with WebSocket fallback, low-bandwidth mode | `packages/netcode/**`, `packages/protocol/**` (owner of all encodings), `apps/game-server/src/transports.ts`, `apps/wt-gateway/**` | — |
 | **W7** | `ops` | GitHub Actions CI (lint, typecheck, test, golden, uWS fetch on Linux), Dockerfiles (game-server, api, web), Prometheus `/metrics`, Sentry wiring, staging deploy scripts (provider chosen by the user) | `.github/**`, `infra/**`, `**/Dockerfile`, `apps/game-server/src/metrics.ts` | user: hosting account |
-| **W8** | `art` | Runtime assets for W1/W2: real animation clips + aim offsets, dye-mask textures, 10 starter cosmetics, weapon models for the arsenal, first map kit (Lagos Market), meshopt + KTX2 exports | `art/**` (sources), exports via W1's pipeline into `apps/web/public/assets/**` | Higgsfield credits (ask above ~25 per batch) |
+| **W8** | `art` | Runtime assets for W1/W2: real animation clips + aim offsets, dye-mask textures, 10 starter cosmetics, weapon models for the arsenal, first map kit (Street Market, the Lagos map), meshopt + KTX2 exports | `art/**` (sources), exports via W1's pipeline into `apps/web/public/assets/**` | Higgsfield credits (ask above ~25 per batch) |
 
 **Hot spots and who decides:** `packages/protocol` → W6 · `apps/web/src/main.ts` → W4 (others add one-line hooks) · `apps/game-server/src/room.ts` → W4 for match state, W3 for routing · `packages/content/src/index.ts` → additive exports only.
 
@@ -56,13 +56,13 @@
 | W5 | weight + 3 new guns + melee | full roster + mines/gas/EMP | every weapon usable online; feel table in NOTES |
 | W6 | lag compensation | delta + AOI + reconnect | WebTransport path with fallback, measured on lossy profiles |
 | W7 | CI green on PRs | Dockerfiles + /metrics | staging deploy (after the user picks a host) |
-| W8 | clips + dye masks | starter cosmetics + 5 weapon models | Lagos Market kit |
+| W8 | clips + dye masks | starter cosmetics + 5 weapon models | Street Market kit |
 
 ---
 
 ## 5. Wave 2 and 3 queue (started by the orchestrator as dependencies land)
 
-**Wave 2:** maps 2–3 (Lagos Market, Mumbai Local) · TDM · tutorial + training · quick play matchmaking + region beacons · parties (groups) · XP/levels/stats · telemetry (PostHog) · staging + bot matches in CI · low-end performance pass.
+**Wave 2:** maps 2–3 (Street Market, Mumbai Local) · TDM · tutorial + training · quick play matchmaking + region beacons · parties (groups) · XP/levels/stats · telemetry (PostHog) · staging + bot matches in CI · low-end performance pass.
 
 **Wave 3:** Drop Zone BR (solo) · CTF · maps 4–7 · store + battle pass (cosmetics only) · payments (Paystack/Flutterwave/Razorpay/Xsolla) · CrazyGames/Poki builds · compliance pack · localisation (5 languages) · anti-cheat detection + admin console · load + soak tests · billboard ads pilot (docs/14).
 

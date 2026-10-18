@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import type { Duplex } from 'node:stream';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
-import { createProxy, isHashedAsset, pickEncoding, securityHeaders, staticPath } from '../src/proxy';
+import { clientIp, createProxy, isHashedAsset, pickEncoding, securityHeaders, staticPath } from '../src/proxy';
 import { parseTunnelUrl } from '../src/tunnel';
 
 // the build in a temp dir of its own, with a secret beside it (all removed afterwards)
@@ -157,6 +157,14 @@ describe('static files and app routes', () => {
     expect((await fetch(`${base}/assets/index-abC12_34.js`, { method: 'HEAD' })).status).toBe(200);
   });
 
+  it("answers the client's /health probe: no WebTransport through the tunnel (WebSocket at once, no 404)", async () => {
+    const res = await fetch(`${base}/health`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toMatch(/^application\/json/);
+    expect(await res.json()).toEqual({ ok: true, webtransport: null });
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+  });
+
   it('never serves anything outside the build, dotfiles or unknown paths', async () => {
     for (const path of ['/../secret.txt', '/assets/../../secret.txt', '/%2e%2e/secret.txt', '/..%2fsecret.txt', '/.hidden/x.txt', '/%00', '/nope.js', '/r/a/b']) {
       const res = await raw(path);
@@ -238,7 +246,7 @@ describe('the API under /api', () => {
     expect((await raw('/x/../api/version')).status).toBe(201);
     expect(apiSeen.at(-1)!.url).toBe('/version');
     const before = apiSeen.length;
-    for (const path of ['/api%2fversion', '/api/../../health', '/apiX']) expect((await raw(path)).status, path).toBe(404);
+    for (const path of ['/api%2fversion', '/api/../../version', '/apiX']) expect((await raw(path)).status, path).toBe(404);
     expect(apiSeen.length).toBe(before); // none of them reached the API
   });
 
@@ -322,5 +330,26 @@ describe('quick tunnel', () => {
     );
     expect(parseTunnelUrl('INF Requesting new quick Tunnel on trycloudflare.com...')).toBeNull();
     expect(parseTunnelUrl('ERR failed to request quick Tunnel: Post "https://api.trycloudflare.com/tunnel"')).toBeNull();
+  });
+});
+
+describe('clientIp', () => {
+  const req = (remoteAddress: string, cf?: string) =>
+    ({ socket: { remoteAddress }, headers: cf === undefined ? {} : { 'cf-connecting-ip': cf } }) as unknown as IncomingMessage;
+
+  it("takes Cloudflare's address only from this Mac (cloudflared)", () => {
+    expect(clientIp(req('127.0.0.1', '203.0.113.9'))).toBe('203.0.113.9');
+    expect(clientIp(req('::ffff:127.0.0.1', '203.0.113.9'))).toBe('203.0.113.9');
+    expect(clientIp(req('::1', '2001:db8::7'))).toBe('2001:db8::7');
+  });
+
+  it('ignores the header from a Wi-Fi player (--lan), so per-IP limits see the real socket', () => {
+    expect(clientIp(req('192.168.18.23', '203.0.113.9'))).toBe('192.168.18.23');
+    expect(clientIp(req('::ffff:192.168.18.23', '127.0.0.1'))).toBe('::ffff:192.168.18.23');
+  });
+
+  it('falls back to the socket for a missing or malformed header', () => {
+    expect(clientIp(req('127.0.0.1'))).toBe('127.0.0.1');
+    expect(clientIp(req('127.0.0.1', 'not an ip'))).toBe('127.0.0.1');
   });
 });

@@ -280,6 +280,7 @@ export class LocalMode {
       mapEvent: mapEventView(this.game),
       pickups: this.game.pickups.filter((k) => k.alive).map((k) => ({ id: k.id, def: k.def, x: k.x, y: k.y })),
       throwArc: this.throwPreview.update(this.game, this.me, this.sampler.throwAim),
+      matchSeed: (this.game.seed + (this.match?.number ?? 0)) >>> 0,
       ...(this.recorder ? { recording: this.recorder.length } : {}),
     };
   }

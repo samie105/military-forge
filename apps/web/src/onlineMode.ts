@@ -528,6 +528,7 @@ export class OnlineMode {
       mapEvent: pred?.started ? mapEventView(pred.game) : null,
       // the throw arc runs on the predicted game too, from our predicted state
       throwArc: pred?.started ? this.throwPreview.update(pred.game, pred.player, this.sampler.throwAim) : null,
+      matchSeed: (this.net.seed + (this.matchState?.number ?? 0)) >>> 0,
     };
   }
 

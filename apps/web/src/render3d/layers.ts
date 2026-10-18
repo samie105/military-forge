@@ -143,6 +143,11 @@ export function buildDepthLayers(map: MapDef, light: LightingPreset): DepthLayer
     const h = 7 + 20 * hash01(i, 7);
     far.setMatrixAt(i, m.makeScale(w, h, 1).setPosition(b.minX - 100 + i * 9, -2, -24 - 14 * hash01(i, 8)));
   }
+  // named: map environments pick these by name (environment/index.ts)
+  sky.name = 'sky';
+  far.name = 'far-skyline';
+  ground.name = 'ground';
+  mid.name = 'mid-blocks';
   background.add(sky, far, ground, mid);
 
   // foreground railings: two posts reaching below the view and two rails, merged per railing

@@ -1,0 +1,546 @@
+{
+ "id": "street-market",
+ "name": "Street Market",
+ "kit": "kits/street_market/kit_street_market.glb",
+ "bounds": {
+  "minX": -64,
+  "minY": -6,
+  "maxX": 64,
+  "maxY": 56
+ },
+ "terrainMaterial": 0,
+ "palette": {
+  "sky": "#c9c1b0",
+  "fog": "#cbbfa8",
+  "farTint": 0.55
+ },
+ "pieces": [
+  {
+   "piece": "sm_edge_block",
+   "x": -62,
+   "y": 0
+  },
+  {
+   "piece": "sm_edge_block",
+   "x": 62,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": -58,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": -54,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": -50,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": -46,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": -42,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": -38,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": -34,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": -30,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": -26,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": -22,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": -18,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": -14,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": -10,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": -6,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": -2,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": 2,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": 6,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": 10,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": 14,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": 18,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": 22,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": 26,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": 30,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": 34,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": 38,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": 42,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": 46,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": 50,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": 54,
+   "y": 0
+  },
+  {
+   "piece": "sm_ground_4m",
+   "x": 58,
+   "y": 0
+  },
+  {
+   "piece": "sm_house_3f",
+   "x": -57,
+   "y": 0
+  },
+  {
+   "piece": "sm_house_3f",
+   "x": 57,
+   "y": 0,
+   "flip": true
+  },
+  {
+   "piece": "sm_house_2f",
+   "x": -47,
+   "y": 0
+  },
+  {
+   "piece": "sm_house_2f",
+   "x": 47,
+   "y": 0,
+   "flip": true
+  },
+  {
+   "piece": "sm_stall_4m",
+   "x": -38,
+   "y": 0
+  },
+  {
+   "piece": "sm_stall_4m",
+   "x": 38,
+   "y": 0,
+   "flip": true
+  },
+  {
+   "piece": "sm_umbrella_stall",
+   "x": -34,
+   "y": 0
+  },
+  {
+   "piece": "sm_umbrella_stall",
+   "x": 34,
+   "y": 0,
+   "flip": true
+  },
+  {
+   "piece": "sm_stall_4m",
+   "x": -30,
+   "y": 0
+  },
+  {
+   "piece": "sm_stall_4m",
+   "x": 30,
+   "y": 0,
+   "flip": true
+  },
+  {
+   "piece": "sm_house_3f_blue",
+   "x": -20,
+   "y": 0
+  },
+  {
+   "piece": "sm_house_3f_blue",
+   "x": 20,
+   "y": 0,
+   "flip": true
+  },
+  {
+   "piece": "sm_crates",
+   "x": -14,
+   "y": 0
+  },
+  {
+   "piece": "sm_crates",
+   "x": 14,
+   "y": 0,
+   "flip": true
+  },
+  {
+   "piece": "sm_minibus",
+   "x": -9,
+   "y": 0
+  },
+  {
+   "piece": "sm_minibus",
+   "x": 9,
+   "y": 0,
+   "flip": true
+  },
+  {
+   "piece": "sm_tank_tower",
+   "x": 0,
+   "y": 0
+  },
+  {
+   "piece": "sm_billboard",
+   "x": 0,
+   "y": 0
+  }
+ ],
+ "decor": [
+  {
+   "piece": "sm_power_pole",
+   "x": -52,
+   "y": 0,
+   "z": -3.5
+  },
+  {
+   "piece": "sm_power_pole",
+   "x": -36,
+   "y": 0,
+   "z": -3.5
+  },
+  {
+   "piece": "sm_power_pole",
+   "x": -20,
+   "y": 0,
+   "z": -3.5
+  },
+  {
+   "piece": "sm_power_pole",
+   "x": -4,
+   "y": 0,
+   "z": -3.5
+  },
+  {
+   "piece": "sm_power_pole",
+   "x": 12,
+   "y": 0,
+   "z": -3.5
+  },
+  {
+   "piece": "sm_power_pole",
+   "x": 28,
+   "y": 0,
+   "z": -3.5
+  },
+  {
+   "piece": "sm_power_pole",
+   "x": 44,
+   "y": 0,
+   "z": -3.5
+  },
+  {
+   "piece": "sm_far_block_b",
+   "x": -66,
+   "y": 0,
+   "z": -24,
+   "flip": true
+  },
+  {
+   "piece": "sm_far_block_a",
+   "x": -53,
+   "y": 0,
+   "z": -28,
+   "flip": false
+  },
+  {
+   "piece": "sm_far_block_b",
+   "x": -40,
+   "y": 0,
+   "z": -32,
+   "flip": true
+  },
+  {
+   "piece": "sm_far_block_a",
+   "x": -27,
+   "y": 0,
+   "z": -24,
+   "flip": false
+  },
+  {
+   "piece": "sm_far_block_b",
+   "x": -14,
+   "y": 0,
+   "z": -28,
+   "flip": true
+  },
+  {
+   "piece": "sm_far_block_a",
+   "x": -1,
+   "y": 0,
+   "z": -32,
+   "flip": false
+  },
+  {
+   "piece": "sm_far_block_b",
+   "x": 12,
+   "y": 0,
+   "z": -24,
+   "flip": true
+  },
+  {
+   "piece": "sm_far_block_a",
+   "x": 25,
+   "y": 0,
+   "z": -28,
+   "flip": false
+  },
+  {
+   "piece": "sm_far_block_b",
+   "x": 38,
+   "y": 0,
+   "z": -32,
+   "flip": true
+  },
+  {
+   "piece": "sm_far_block_a",
+   "x": 51,
+   "y": 0,
+   "z": -24,
+   "flip": false
+  },
+  {
+   "piece": "sm_far_block_b",
+   "x": 64,
+   "y": 0,
+   "z": -28,
+   "flip": true
+  },
+  {
+   "piece": "sm_signboard",
+   "x": -25,
+   "y": 0,
+   "z": -2.2
+  },
+  {
+   "piece": "sm_signboard",
+   "x": 27,
+   "y": 0,
+   "z": -2.2
+  },
+  {
+   "piece": "sm_junction_block",
+   "x": -57,
+   "y": 0,
+   "z": -6
+  },
+  {
+   "piece": "sm_screen_8x6",
+   "x": -57,
+   "y": 13.9,
+   "z": -6,
+   "slotId": "street-market/S1",
+   "phaseIdx": 0
+  },
+  {
+   "piece": "sm_screen_tower",
+   "x": 14,
+   "y": 0,
+   "z": -7
+  },
+  {
+   "piece": "sm_screen_8x6",
+   "x": 14,
+   "y": 12.2,
+   "z": -7,
+   "slotId": "street-market/S2",
+   "phaseIdx": 1
+  },
+  {
+   "piece": "sm_screen_mast",
+   "x": -12,
+   "y": 0,
+   "z": -5
+  },
+  {
+   "piece": "sm_screen_8x6",
+   "x": -12,
+   "y": 6.4,
+   "z": -5,
+   "slotId": "street-market/S3",
+   "phaseIdx": 2
+  },
+  {
+   "piece": "sm_screen_8x6",
+   "x": 58,
+   "y": 19.4,
+   "z": -6,
+   "slotId": "street-market/S4",
+   "phaseIdx": 3
+  },
+  {
+   "piece": "sm_flyover",
+   "x": -47,
+   "y": 0,
+   "z": -8
+  },
+  {
+   "piece": "sm_hoarding_21x3_5",
+   "x": -47,
+   "y": 23.3,
+   "z": -8,
+   "slotId": "street-market/H1",
+   "phaseIdx": 0
+  },
+  {
+   "piece": "sm_east_block",
+   "x": 47,
+   "y": 0,
+   "z": -6
+  },
+  {
+   "piece": "sm_hoarding_18x3",
+   "x": 47,
+   "y": 13.4,
+   "z": -6,
+   "slotId": "street-market/H2",
+   "phaseIdx": 0
+  }
+ ],
+ "spawns": [
+  {
+   "x": -42,
+   "y": 0
+  },
+  {
+   "x": 42,
+   "y": 0
+  },
+  {
+   "x": -26,
+   "y": 0
+  },
+  {
+   "x": 26,
+   "y": 0
+  },
+  {
+   "x": -4,
+   "y": 0
+  },
+  {
+   "x": 4,
+   "y": 0
+  },
+  {
+   "x": -57,
+   "y": 12
+  },
+  {
+   "x": 57,
+   "y": 12
+  },
+  {
+   "x": -47,
+   "y": 8
+  },
+  {
+   "x": 47,
+   "y": 8
+  },
+  {
+   "x": -20,
+   "y": 12
+  },
+  {
+   "x": 20,
+   "y": 12
+  },
+  {
+   "x": 0,
+   "y": 10
+  },
+  {
+   "x": 0,
+   "y": 5.4
+  }
+ ]
+}

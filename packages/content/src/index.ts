@@ -3,6 +3,7 @@ import { lunarOutpostMap } from './maps/lunarOutpost';
 import { mechanicsTestMap } from './maps/mechanicsTest';
 import { movementTestMap } from './maps/movementTest';
 import { stormFrontMap } from './maps/stormFront';
+import { streetMarketMap } from './maps/streetMarket';
 import type { MapDef } from './maps/types';
 
 export * from './attachments';
@@ -16,7 +17,7 @@ export * from './pickups';
 export * from './shield';
 export * from './tuning';
 export * from './weapons';
-export { fluxLabMap, lunarOutpostMap, mechanicsTestMap, movementTestMap, stormFrontMap };
+export { fluxLabMap, lunarOutpostMap, mechanicsTestMap, movementTestMap, stormFrontMap, streetMarketMap };
 
 export const maps: Readonly<Record<string, MapDef>> = {
   [movementTestMap.id]: movementTestMap,
@@ -24,6 +25,7 @@ export const maps: Readonly<Record<string, MapDef>> = {
   [lunarOutpostMap.id]: lunarOutpostMap,
   [stormFrontMap.id]: stormFrontMap,
   [fluxLabMap.id]: fluxLabMap,
+  [streetMarketMap.id]: streetMarketMap,
 };
 
 /** Maps that show off map mechanics (docs/02 §20), for map pickers. */

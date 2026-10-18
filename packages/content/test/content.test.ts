@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import compiledStreetMarket from '../../../art/maps/street_market/street_market.map.json';
 import committedSchema from '../schema/map.schema.json';
 import stormFrontJson from '../src/maps/stormFront.map.json';
 import {
@@ -25,6 +26,7 @@ import {
   pickups,
   zonePoints,
   shotDamage,
+  streetMarketMap,
   timeToKill,
   tuningHash,
   weapons,
@@ -203,6 +205,12 @@ describe('maps', () => {
 
   it('registers the demo maps and the mechanics test map', () => {
     for (const id of [...DEMO_MAPS, 'mechanics-test']) expect(maps[id]?.id).toBe(id);
+  });
+
+  it('registers the Street Market exactly as the art pipeline compiled it (re-copy street_market.map.json after a recompile)', () => {
+    expect(maps['street-market']).toBe(streetMarketMap);
+    expect(streetMarketMap).toEqual(compiledStreetMarket);
+    expect(streetMarketMap.spawns.length).toBeGreaterThanOrEqual(12);
   });
 
   for (const map of Object.values(maps)) {

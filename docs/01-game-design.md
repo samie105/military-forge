@@ -123,7 +123,7 @@ Standard maps are about **120 × 60 m** (fit for 6–12 players); BR uses the 48
 | 1 | **Outpost** | classic base map | multi-level base with bushes | bushes hide crouched players (rendering only, never collision) | MVP |
 | 2 | **Catacombs** | underground tombs | long corridors, sniper lanes | rare Ripper spawn; darkness pockets | MVP |
 | 3 | **Highrise** | tower map | vertical skyscraper shaft + rooftops | the Widow spawns on the roof (race for it) | MVP |
-| 4 | **Lagos Market** | original | dense rooftops, danfo buses, stalls | breakable awnings (one-way platforms) | Launch |
+| 4 | **Street Market** (the Lagos map) | original | dense rooftops, danfo buses, stalls | breakable awnings (one-way platforms) | Launch |
 | 5 | **Mumbai Local** | original | train yard + moving train (kinematic platform) | the train passes every 45 s and pushes players | Launch |
 | 6 | **Snowblind** | snow map | open slopes, ice caves | slippery ice (lower ground friction) | Launch |
 | 7 | **Lunar** | moon base | low gravity everywhere | jet fuel lasts longer (built as map rules, 02-physics §20; the Lunar Outpost demo below) | Launch |

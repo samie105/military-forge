@@ -10,8 +10,9 @@
  * The Phase 0 debug client (dev builds at /):
  *   /            local mode: a deathmatch against three Normal bots (results, Play again) + live tuning, rendered in 3D;
  *                ?bots=<0-12>&botlevel=easy|normal|hard (?bots=0: the dummy targets)
- *   /?map=flux-lab   local mode on another map: lunar-outpost, storm-front, flux-lab (map mechanics demos,
- *                    docs/02 §20), mechanics-test, movement-test (default). Online, the server picks (--map=).
+ *   /?map=flux-lab   local mode on another map: street-market (W8's kit, drawn by render3d/environment),
+ *                    lunar-outpost, storm-front, flux-lab (map mechanics demos, docs/02 §20), mechanics-test,
+ *                    movement-test (default). Online, the server picks (--map=).
  *   /?time=60&kills=5&countdown=3       local match rules (0 = no limit); /?sandbox: free play, no match
  *   /?render=2d  the canvas-2D view instead (3D is the default, online too); ?gfx=low|medium|high;
  *                ?softgl accepts software WebGL for 3D (automated browsers always do; players on it get 2D)
@@ -165,7 +166,7 @@ if (appMode) {
     <a href="/locker.html">Locker</a>
     <a href="/armory.html">Armory</a>
     <a href="/?app">App</a>
-    <span class="maps">maps: ${[...DEMO_MAPS, 'mechanics-test']
+    <span class="maps">maps: ${['street-market', ...DEMO_MAPS, 'mechanics-test']
       .map((id) => `<a href="/?map=${id}" class="${!online && localMapId === id ? 'active' : ''}">${maps[id]!.name}</a>`)
       .join(' ')}</span>
   `;

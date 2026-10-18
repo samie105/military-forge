@@ -535,7 +535,7 @@
 - [ ] `453` **MVP** Map format: collision polygons + render glTF + spawners + zones + metadata
 - [ ] `454` **MVP** Map compiler CLI
 - [ ] `455` **L** Capture the Flag (flag as melee weapon, takes a slot)
-- [ ] `456` **L** 4 more maps (Lagos Market, Mumbai Local, Snowblind, Lunar) + Crossfire for CTF
+- [ ] `456` **L** 4 more maps: Street Market (the Lagos map), Mumbai Local, Snowblind and Lunar, + Crossfire for CTF
 - [ ] `457` **L** Map rotation and vote (3 options, avoid splitting playerbase: vote only in custom/long sessions)
 - [ ] `458` **L** Map readability palettes and hazard telegraphing
 - [ ] `459` **L** In-browser map editor (internal): polygon tool, props, spawners, zones, lighting presets
@@ -811,8 +811,8 @@
 ## Y. In-world advertising (14)
 
 - [ ] `704` **MVP** `AdSlot` map entity + editor lint rules 1–8: mid-depth only, size and count limits incl. highest zoom, hazard overlap, combat-heatmap check, moving-surface rules (14 §2.6)
-- [ ] `705` **MVP** Billboard structures with `AdSlot` placeholders in the Lagos Market and Mumbai Local kits (junction tower, flyover, gantry, foot-over-bridge), so ads aren't retrofitted
-- [ ] `706` **MVP** Shared house-art pools (≤ 8 images per format per map: fictional local businesses, notices, safety tips) for Lagos Market, Mumbai Local and the Strip
+- [ ] `705` **MVP** Billboard structures with `AdSlot` placeholders in the Street Market and Mumbai Local kits (junction tower, flyover, gantry, foot-over-bridge), so ads aren't retrofitted
+- [ ] `706` **MVP** Shared house-art pools (≤ 8 images per format per map: fictional local businesses, notices, safety tips) for the Street Market, Mumbai Local and the Strip
 - [ ] `707` **MVP** Array-texture ad renderer: fixed ETC1S layer pools (≈ 5.1 MB per map), ≤ 2 draw calls, unlit and excluded from bloom, one 10 s beat with 0.5 s crossfades (14 §4.4–4.5)
 - [ ] `708` **L** Signed ad manifest per map/geo/week (≤ 4 KB, hash-derived URLs); `adManifestUrl` in `mm.found` and room join responses; manual kill switch with `ads.revoke` + `EVENT_R` backup (14 §4.3)
 - [ ] `709` **L** Creative pipeline in an isolated container (no network, no secrets): format, OCR, URL/QR/phone, signal-hue, glare and figure checks; KTX2 encode (14 §3.1, §3.5)

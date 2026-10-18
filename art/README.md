@@ -731,9 +731,15 @@ What it checks:
 | Weapons Forge 8: concept sheet for 5 new weapons, GPT Image 2.5 medium 2k | **1.00** |
 | Weapons Forge 8, batch 2: concept sheet for 6 new weapons, GPT Image 2.5 medium 2k | **1.00** |
 | Weapons Forge 8c: flame puff flipbook, GPT Image 2.5 medium 2k | **1.00** |
-| **Total so far** | **103.00** |
+| Environments (orchestrator stream, cap 120): Street Market backdrops batch 1, day sky + far and mid skyline layers, GPT Image 2.5 high 2k (3 × 2.75) | **8.25** |
+| Environments: backdrops batch 2, second far and mid layers + dusk and night skies, GPT Image 2.5 high 2k (4 × 2.75) | **11.00** |
+| Environments: billboard house art batch 3, 8 Screens (4:3) + 4 Hoardings (21:9 → 6:1), GPT Image 2.5 high 1k (12 × 1.5; 8 resubmitted after a rate limit, not charged twice) | **18.00** |
+| Environments: backdrops batch 4 for Lunar Outpost (sky, ridges, moon base), Storm Front (storm sky, far port, dockside) and Flux Lab (hall wall, machinery), GPT Image 2.5 high 2k (8 × 2.75; 2 resubmitted after a rate limit, not charged twice) | **22.00** |
+| **Total so far** | **162.25** |
 
 Phase 0 Higgsfield job IDs: concepts A `160eb90e-41ab-4ecc-a917-1e76c0563b40`, B `b40714aa-ec2f-4d2a-a522-ff5a4ebe57cc`, C `3e234313-6c57-4cd7-9946-22e6cd62b4b3`; 3D `75fc7390-163d-4c95-869c-58e8544bd654`.
+
+Environments job IDs, with each image's exact prompt and settings, are in `apps/web/scripts/higgsfield-prompts.json` (originals are not committed; `apps/web/scripts/backdrops.py` turns them into `apps/web/public/assets/backdrops/`): batch 1 sky_day `5ef0226c-c5c9-40d4-82d3-0f3e803b92cd`, far_a `301ce1d0-a43c-4e40-bb9c-632621e912cb`, mid_a `b9a788a9-bb7f-474a-b52c-bcdaf3421cc8`; batch 2 far_b `277e2e91-fffc-4225-bac7-02ad0130e2b3`, mid_b `83e2f8aa-2e5d-4ecd-9207-33b49c1f8839`, sky_dusk `ea0f4669-60b5-406b-a8f6-7185f4394903`, sky_night `2bfae633-9388-4803-bf61-5359124245f2`; batch 3 (house art, `apps/web/scripts/house-ads.py` → `apps/web/public/assets/ads/street_market/`) bakery `b7cfdb8d-136d-41a3-b6ca-45879ef31077`, kitchen `5ac9ead8-86dd-4f2c-afba-4343d025a8ba`, tailors `7806dbab-983d-4b59-bbe4-efee89169642`, gutters `1edd4897-dfa9-461f-b044-7eaa5a5f549b`, zebra `9eeb8fd6-b6ac-4f1a-aeea-17a7c777b93a`, water `a2d553d2-8571-4175-b2ca-71cca67ee4b7`, fish `8163076e-37ee-44fd-a9e6-89d8766a2917`, market day `6200c838-e46e-46ad-bd03-09702b7d56ed`, city market `a7b69ac3-1f19-45e5-8160-e2948245ddd5`, trees `802189d6-5d66-4946-85cd-b25b65f74b6c`, slow down `0c733c8c-fec3-4975-bb44-68fbac6b015b`, bakery banner `9f4b17df-2ed3-4bf7-8f2c-97da9a085ec8`; batch 4 (backdrops for the other maps, each its own place) lunar sky `9a37ba51-a473-455e-989a-a153c5715bff`, lunar far `f9a68902-49cf-4d48-afd5-ccc2b9f88776`, lunar mid `2353a943-e392-456f-a31a-ff10c8e0d227`, storm sky `6bf3cdee-5406-4efe-9860-e990937c17d3`, storm far `be5a3496-cc10-4be6-8a31-6bc95b6b85a4`, storm mid `fa786170-a313-49cf-a989-2d9f41a0fe33`, lab wall `d0f150ce-3eb2-4421-99a2-18f6626ef41b`, lab mid `9ce1d476-d472-4d94-8960-0d22faf0f946`. Environments stream total: 59.25 of its 120-credit cap.
 
 ## Files
 
