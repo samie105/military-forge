@@ -5,7 +5,8 @@
  * creates a room. Arriving from name entry, the ID card becomes the player chip (motion P2); the
  * rows rise in turn (P3). The kit's "Last match" card waits for match history (not kept yet).
  */
-import { DEFAULT_LOADOUT, FRAG, maps, weapons } from '@military-forge/content';
+import { FRAG, maps, weapons } from '@military-forge/content';
+import { savedGunIndices } from '../../locker/accountSync';
 import { GAME_NAME } from '@military-forge/shared';
 import { Fragment, useEffect, useLayoutEffect, useRef, type CSSProperties } from 'react';
 import { useStore } from 'zustand';
@@ -65,7 +66,8 @@ export function Home({ store }: { store: ShellStore }) {
   }, []);
 
   const name = profile?.nickname ?? '';
-  const loadout = DEFAULT_LOADOUT.map((i) => weapons[i]).filter((w) => !!w);
+  // the two guns this player spawns with (the Locker's Guns tab, the Armory's Equip; the default pair until then)
+  const loadout = savedGunIndices().map((i) => weapons[i]).filter((w) => !!w);
   const ticker = sitrep();
   const row = (i: number) => ({ '--i': i }) as CSSProperties;
   return (

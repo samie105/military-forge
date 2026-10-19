@@ -26,6 +26,8 @@ export interface TicketClaims {
   room: string;
   exp: number;
   jti: string;
+  /** the player's saved gun pair, weapon ids (absent = the default pair); room.ts checks it against content */
+  guns?: [string, string];
 }
 
 export type TicketFailure = 'missing' | 'malformed' | 'bad_signature' | 'wrong_audience' | 'expired' | 'wrong_room' | 'used';
@@ -93,7 +95,8 @@ export class TicketVerifier {
     this.prune(now);
     if (this.used.has(jti)) return { ok: false, reason: 'used' };
     this.used.set(jti, exp + CLOCK_SKEW_S);
-    return { ok: true, claims: { sub, nick, room: claims.room, exp, jti } };
+    const guns = Array.isArray(claims.guns) && claims.guns.length === 2 && claims.guns.every(shortString) ? (claims.guns as [string, string]) : undefined;
+    return { ok: true, claims: { sub, nick, room: claims.room, exp, jti, ...(guns ? { guns } : {}) } };
   }
 
   /** tickets remembered as used (tests) */

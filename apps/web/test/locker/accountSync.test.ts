@@ -1,6 +1,6 @@
 import { DEFAULT_COSMETIC_LOADOUT, DEFAULT_LOADOUT, weapons } from '@military-forge/content';
 import { describe, expect, it } from 'vitest';
-import { LoadoutSync, gunIndices, type AccountLoadout, type LoadoutApi } from '../../src/locker/accountSync';
+import { LoadoutSync, gunIndices, localGunStore, saveGunsHere, savedGunIndices, type AccountLoadout, type LoadoutApi } from '../../src/locker/accountSync';
 import { LocalLoadoutStore, withItem } from '../../src/locker/loadouts';
 import { Api, ApiError, type Me } from '../../src/shell/api';
 
@@ -155,5 +155,37 @@ describe('Api sign-in listeners', () => {
     next = session('u2');
     await api.guest();
     expect(seen).toEqual(['u1', 'u2']);
+  });
+});
+
+describe('the gun pair', () => {
+  it('a pair saved on a page without the session (the Armory) reaches the account at the next sign-in', async () => {
+    const storage = memoryStorage();
+    expect(localGunStore(storage).get()).toEqual([...DEFAULT_LOADOUT]);
+    localGunStore(storage).set([WIDOW, K47]);
+    expect(savedGunIndices(storage)).toEqual([WIDOW, K47]);
+    expect(saveGunsHere([K47, K47], storage)).toBe(false); // the same gun twice isn't a pair
+    const machete = weapons.find((w) => w.id === 'machete')!.index;
+    expect(saveGunsHere([machete, K47], storage)).toBe(false); // nor is a melee weapon
+    const api = new FakeApi();
+    api.accounts.set('u1', { look: DEFAULT_COSMETIC_LOADOUT, guns: ['hammer44', 'buzz'] });
+    const sync = new LoadoutSync(api, storage, 0);
+    api.signIn('u1');
+    await settle(sync);
+    expect(api.accounts.get('u1')!.guns).toEqual(['widow', 'k47']);
+    expect(sync.guns.get()).toEqual([WIDOW, K47]);
+  });
+
+  it('a change made just before a room join goes up first, so the join ticket carries it', async () => {
+    const api = new FakeApi() as FakeApi & { hooks: (() => Promise<void>)[]; beforeRoom(h: () => Promise<void>): void };
+    api.hooks = [];
+    api.beforeRoom = (h) => void api.hooks.push(h);
+    api.signIn('u1');
+    const sync = new LoadoutSync(api, memoryStorage(), 60_000); // a long batching delay
+    await settle(sync);
+    sync.guns.set([K47, WIDOW]);
+    expect(api.puts).toHaveLength(0); // batched: not sent yet
+    for (const h of api.hooks) await h(); // what Api.joinRoom does first
+    expect(api.accounts.get('u1')!.guns).toEqual(['k47', 'widow']);
   });
 });

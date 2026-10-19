@@ -95,6 +95,7 @@ export class Api {
   private refreshFallback: string | null = null;
   me: Me | null = null;
   private readonly signInListeners = new Set<(me: Me) => void>();
+  private readonly roomHooks: (() => Promise<void>)[] = [];
 
   constructor(
     private readonly base = '/api',
@@ -185,11 +186,26 @@ export class Api {
     return this.me;
   }
 
-  createRoom(): Promise<RoomJoin> {
+  /**
+   * Runs `hook` before each room create or join, for at most 2 s (a slow one never holds a join up):
+   * the saved loadout sends a just-made change, so the join ticket carries the guns just chosen.
+   */
+  beforeRoom(hook: () => Promise<void>): void {
+    this.roomHooks.push(hook);
+  }
+
+  private async roomHooksDone(): Promise<void> {
+    if (!this.roomHooks.length) return;
+    await Promise.race([Promise.all(this.roomHooks.map((h) => h().catch(() => {}))), new Promise((r) => setTimeout(r, 2000))]);
+  }
+
+  async createRoom(): Promise<RoomJoin> {
+    await this.roomHooksDone();
     return this.request<RoomJoin>('POST', '/rooms', {}, true);
   }
 
-  joinRoom(code: string): Promise<RoomJoin> {
+  async joinRoom(code: string): Promise<RoomJoin> {
+    await this.roomHooksDone();
     return this.request<RoomJoin>('POST', `/rooms/${encodeURIComponent(code)}/join`, {}, true);
   }
 

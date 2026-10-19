@@ -132,7 +132,7 @@ export function createApp(deps: AppDeps) {
   if (config.resultsPublicKeyPem) app.route('/internal', matchRoutes({ db, key: resultsPublicKey(config.resultsPublicKeyPem), leaderboards, now }));
   app.route('/me', meRoutes({ config, db, kv, auth, profiles }));
   app.route('/nicknames', nicknameRoutes({ config, kv, auth, profiles }));
-  app.route('/rooms', roomRoutes({ config, kv, auth, profiles, presence, ticketKey: deps.ticketKey ?? null, now }));
+  app.route('/rooms', roomRoutes({ config, db, kv, auth, profiles, presence, ticketKey: deps.ticketKey ?? null, now }));
 
   app.notFound((c) => errorResponse(c, 404, 'not_found', `No route for ${c.req.method} ${c.req.path}`));
   app.onError((err, c) => {

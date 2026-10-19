@@ -1,8 +1,11 @@
 /** /rooms: minting codes, joining by code, the miss limit and the game-server address. */
+import { DEFAULT_COSMETIC_LOADOUT } from '@military-forge/content';
 import { isRoomCode } from '@military-forge/shared';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { generateSigningKey } from '../src/auth/keys';
 import { verifyJwt } from '../src/auth/tokens';
+import { loadouts } from '../src/db/schema';
 import { LIMITS } from '../src/http/rateLimit';
 import { ROOM_TTL_MS, TICKET_AUDIENCE, TICKET_ISSUER, keepRooms, type JoinTicketClaims, type RoomJoin } from '../src/rooms/routes';
 import { bearer, createGuest, createTestApi, json, type TestApi } from './helpers';
@@ -115,6 +118,33 @@ describe('join tickets (docs/06 §6)', () => {
       // a ticket is not an access token, and the access token key doesn't sign tickets
       expect(verifyJwt(created.ticket!, ticketKey.publicKey, { iss: 'api', aud: 'api', nowSeconds })).toEqual({ ok: false, reason: 'wrong_audience' });
       expect((await signed.app.request('/me', { headers: bearer(created.ticket!) })).status).toBe(401);
+      expect(a.guns).toBeUndefined(); // nothing saved: the game server gives the default pair
+    } finally {
+      await signed.close();
+    }
+  });
+
+  it("carries the player's saved gun pair, checked against the game's content again", async () => {
+    const ticketKey = generateSigningKey();
+    const signed = await createTestApi({}, { ticketKey });
+    try {
+      const s = await createGuest(signed);
+      const put = await signed.app.request('/me/loadout/0', {
+        method: 'PUT',
+        headers: { ...bearer(s.accessToken), 'content-type': 'application/json' },
+        body: JSON.stringify({ look: DEFAULT_COSMETIC_LOADOUT, guns: ['widow', 'k47'] }),
+      });
+      expect(put.status).toBe(200);
+      const room = async () => (await (await signed.app.request('/rooms', json({}, { ...bearer(s.accessToken), 'x-forwarded-for': signed.ip() }))).json()) as RoomJoin;
+      const claims = (r: RoomJoin) => {
+        const v = verifyJwt<JoinTicketClaims>(r.ticket!, ticketKey.publicKey, { iss: TICKET_ISSUER, aud: TICKET_AUDIENCE, nowSeconds: Math.floor(signed.clock.now() / 1000) });
+        if (!v.ok) throw new Error(v.reason);
+        return v.claims;
+      };
+      expect(claims(await room()).guns).toEqual(['widow', 'k47']);
+      // a row that no longer fits the content (written before a change) is left out, not passed on
+      await signed.database.db.update(loadouts).set({ data: { look: DEFAULT_COSMETIC_LOADOUT, guns: ['widow', 'machete'] } }).where(eq(loadouts.userId, s.user.id));
+      expect(claims(await room()).guns).toBeUndefined();
     } finally {
       await signed.close();
     }

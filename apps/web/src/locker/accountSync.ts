@@ -11,7 +11,7 @@
  *   session of tries is one request. If that fails, the change stays marked and goes up at the
  *   next change or sign-in.
  */
-import { DEFAULT_COSMETIC_LOADOUT, DEFAULT_LOADOUT, sanitizeCosmeticLoadout, weapons, type CosmeticLoadout } from '@military-forge/content';
+import { DEFAULT_COSMETIC_LOADOUT, DEFAULT_GUN_IDS, DEFAULT_LOADOUT, loadoutGunIndices, sanitizeCosmeticLoadout, weapons, type CosmeticLoadout } from '@military-forge/content';
 import { ApiError } from '../shell/api';
 import { LocalLoadoutStore, type LoadoutStore } from './loadouts';
 
@@ -30,6 +30,14 @@ export interface LoadoutApi {
   /** the look comes back as the server stored it; it's sanitised before use */
   getLoadout(slot: number): Promise<{ look: unknown; guns: [string, string] } | null>;
   putLoadout(slot: number, loadout: AccountLoadout): Promise<unknown>;
+  /** runs `hook` (awaited, briefly) before each room create or join: a just-made change reaches the join ticket */
+  beforeRoom?(hook: () => Promise<void>): void;
+}
+
+/** The two guns a player spawns with, as weapon indices (the Locker's Guns tab, the Armory's Equip). */
+export interface GunStore {
+  get(): [number, number];
+  set(pair: readonly [number, number]): void;
 }
 
 const GUNS_KEY = 'loadout.guns.v1';
@@ -45,13 +53,68 @@ function browserStorage(): KeyValueStorage | null {
   }
 }
 
-const defaultGuns = (): [string, string] => [weapons[DEFAULT_LOADOUT[0]]!.id, weapons[DEFAULT_LOADOUT[1]]!.id];
+const defaultGuns = (): [string, string] => [DEFAULT_GUN_IDS[0], DEFAULT_GUN_IDS[1]];
 
 /** A gun pair as weapon indices, falling back to the default pair for anything unknown, melee or doubled. */
 export function gunIndices(guns: readonly [string, string] | null): [number, number] {
-  const idx = guns?.map((id) => weapons.find((w) => w.id === id && w.fireMode !== 'melee')?.index);
-  if (!idx || idx[0] === undefined || idx[1] === undefined || idx[0] === idx[1]) return [DEFAULT_LOADOUT[0], DEFAULT_LOADOUT[1]];
-  return [idx[0], idx[1]];
+  return loadoutGunIndices(guns) ?? [DEFAULT_LOADOUT[0], DEFAULT_LOADOUT[1]];
+}
+
+function readJson<T>(storage: KeyValueStorage | null, key: string): T | null {
+  try {
+    return JSON.parse(storage?.getItem(key) ?? 'null') as T | null;
+  } catch {
+    return null;
+  }
+}
+
+function writeJson(storage: KeyValueStorage | null, key: string, value: unknown): void {
+  try {
+    storage?.setItem(key, JSON.stringify(value));
+  } catch {
+    /* storage blocked or full: this session only */
+  }
+}
+
+/** The gun pair saved on this device, by id (null: none). */
+export function readGunIds(storage: KeyValueStorage | null = browserStorage()): [string, string] | null {
+  const saved = readJson<{ version?: number; guns?: unknown }>(storage, GUNS_KEY);
+  return saved?.version === 1 && Array.isArray(saved.guns) && saved.guns.length === 2 && saved.guns.every((g) => typeof g === 'string') ? (saved.guns as [string, string]) : null;
+}
+
+/** The guns to spawn with on this device, as weapon indices (the default pair when nothing is saved). */
+export function savedGunIndices(storage: KeyValueStorage | null = browserStorage()): [number, number] {
+  return gunIndices(readGunIds(storage));
+}
+
+function syncState(storage: KeyValueStorage | null): SyncState {
+  const s = readJson<{ user?: unknown; dirty?: unknown }>(storage, SYNC_KEY);
+  const dirty = Array.isArray(s?.dirty) ? s.dirty.filter((p): p is Part => p === 'look' || p === 'guns') : [];
+  return { user: typeof s?.user === 'string' ? s.user : null, dirty };
+}
+
+/** Marks a part changed on this device (it goes to the account at the next sync); returns the new state. */
+function markChanged(storage: KeyValueStorage | null, part: Part, user: string | null): SyncState {
+  const st = syncState(storage);
+  const who = user ?? st.user;
+  const dirty = st.user === who ? st.dirty : [];
+  const next = { user: who, dirty: dirty.includes(part) ? dirty : [...dirty, part] };
+  writeJson(storage, SYNC_KEY, next);
+  return next;
+}
+
+/** Saves a gun pair on this device only (a page without the app's session: the Armory, locker.html); it reaches the account when the app next signs in. */
+export function saveGunsHere(pair: readonly [number, number], storage: KeyValueStorage | null = browserStorage()): boolean {
+  const ids = pair.map((i) => weapons[i]?.id);
+  if (!loadoutGunIndices(ids)) return false;
+  writeJson(storage, GUNS_KEY, { version: 1, guns: ids });
+  markChanged(storage, 'guns', null);
+  return true;
+}
+
+/** A GunStore on this device only (see saveGunsHere). */
+export function localGunStore(storage: KeyValueStorage | null = browserStorage()): GunStore {
+  return { get: () => savedGunIndices(storage), set: (pair) => void saveGunsHere(pair, storage) };
 }
 
 type Part = 'look' | 'guns';
@@ -70,6 +133,8 @@ export class LoadoutSync {
   private pulledFor: string | null = null;
   /** the Locker's store: cache first, then the account */
   readonly store: LoadoutStore;
+  /** the gun pair: cache first, then the account */
+  readonly guns: GunStore;
 
   constructor(
     private readonly api: LoadoutApi,
@@ -88,6 +153,9 @@ export class LoadoutSync {
         this.changed('look');
       },
     };
+    this.guns = { get: () => this.savedGunIndices(), set: (pair) => this.saveGuns(pair) };
+    // a room's join ticket carries the account's guns: a change made a moment ago goes up first
+    api.beforeRoom?.(() => this.flush());
     api.onSignIn(() => void this.sync());
     if (api.me) void this.sync();
   }
@@ -99,9 +167,7 @@ export class LoadoutSync {
 
   /** Remembers a gun pair (weapon indices) here and on the account. */
   saveGuns(indices: readonly [number, number]): void {
-    const guns = indices.map((i) => weapons[i]?.id) as [string | undefined, string | undefined];
-    if (!guns[0] || !guns[1]) return;
-    this.write(GUNS_KEY, { version: 1, guns });
+    if (!saveGunsHere(indices, this.storage)) return;
     this.changed('guns');
   }
 
@@ -116,10 +182,7 @@ export class LoadoutSync {
   }
 
   private changed(part: Part): void {
-    const st = this.state();
-    const user = this.api.me?.id ?? st.user;
-    const dirty = st.user === user ? st.dirty : [];
-    this.setState({ user, dirty: dirty.includes(part) ? dirty : [...dirty, part] });
+    markChanged(this.storage, part, this.api.me?.id ?? null);
     if (!this.api.me) return; // goes up at the next sign-in
     if (this.timer) clearTimeout(this.timer);
     this.timer = setTimeout(() => {
@@ -177,34 +240,18 @@ export class LoadoutSync {
   }
 
   private readGuns(): [string, string] | null {
-    const saved = this.read<{ version?: number; guns?: unknown }>(GUNS_KEY);
-    const guns = saved?.version === 1 && Array.isArray(saved.guns) && saved.guns.length === 2 && saved.guns.every((g) => typeof g === 'string') ? (saved.guns as [string, string]) : null;
-    return guns;
+    return readGunIds(this.storage);
   }
 
   private state(): SyncState {
-    const s = this.read<{ user?: unknown; dirty?: unknown }>(SYNC_KEY);
-    const dirty = Array.isArray(s?.dirty) ? s.dirty.filter((p): p is Part => p === 'look' || p === 'guns') : [];
-    return { user: typeof s?.user === 'string' ? s.user : null, dirty };
+    return syncState(this.storage);
   }
 
   private setState(s: SyncState): void {
-    this.write(SYNC_KEY, s);
-  }
-
-  private read<T>(key: string): T | null {
-    try {
-      return JSON.parse(this.storage?.getItem(key) ?? 'null') as T | null;
-    } catch {
-      return null;
-    }
+    writeJson(this.storage, SYNC_KEY, s);
   }
 
   private write(key: string, value: unknown): void {
-    try {
-      this.storage?.setItem(key, JSON.stringify(value));
-    } catch {
-      /* storage blocked or full: this session only */
-    }
+    writeJson(this.storage, key, value);
   }
 }

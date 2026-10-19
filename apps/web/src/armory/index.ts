@@ -10,7 +10,8 @@ import { statsCard, weaponDef } from './stats';
 import { startFitting } from '../ui/fit';
 import { weaponIcon } from '../ui/icons';
 import { mountSprite } from '../ui/sprite';
-import { getAttachment } from '@military-forge/content';
+import { getAttachment, isLoadoutGun, weapons as gameWeapons } from '@military-forge/content';
+import { localGunStore, type GunStore } from '../locker/accountSync';
 import { TextureLoader, type Texture } from 'three';
 import { camoFits, camoMaterial, prepareCamoPatterns, type CamoSheet } from './camo';
 import type { SpecialsManifest } from './specials';
@@ -41,6 +42,8 @@ export interface ArmoryOptions {
   fire?: boolean;
   /** "Try it in training" (a game weapon): default, the app's training with it in hand (/?app&try=id) */
   onTry?: (weaponId: string) => void;
+  /** the two guns the player spawns with (Equip as gun 1 / 2); default: this device's, which the app sends to the account (locker/accountSync.ts) */
+  guns?: GunStore;
 }
 
 export interface ArmoryHandle {
@@ -160,6 +163,11 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
           <section class="ticket ar__stats mf-card" aria-live="polite"></section>
           <section class="card ar__att mf-attach"></section>
           <details class="card mf-sockets-box"><summary class="label">Sockets · where parts and effects attach</summary><div class="mf-sockets"></div></details>
+          <section class="card mf-equip" aria-label="Equip">
+            <span class="label">Your guns · you spawn with these</span>
+            <p class="mf-equip__now"></p>
+            <div class="seg mf-equip__seg" role="group" aria-label="Equip this gun"><button type="button" class="seg__opt m-p8" data-action="equip" data-slot="0">${ic('check')}Equip as gun 1</button><button type="button" class="seg__opt m-p8" data-action="equip" data-slot="1">${ic('check')}Equip as gun 2</button></div>
+          </section>
           <button type="button" class="btn btn--volt btn--xl btn--block m-p8 mf-try" data-action="try">${ic('target')}Try it in training</button>
         </aside>
       </div>
@@ -175,6 +183,21 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
   const kind = $<HTMLElement>('.mf-ar__kind');
   const nameEl = $<HTMLElement>('.ar__name');
   const tryBtn = $<HTMLButtonElement>('[data-action="try"]');
+  const guns = options.guns ?? localGunStore();
+  const equipBox = $<HTMLElement>('.mf-equip');
+  const equipNow = $<HTMLElement>('.mf-equip__now');
+  /** the Equip box: your pair now, and which slot (if any) this gun is in; only for guns a player may choose */
+  const renderEquip = () => {
+    const def = weaponDef(current);
+    equipBox.hidden = !def || !isLoadoutGun(def.id);
+    const pair = guns.get();
+    equipNow.innerHTML = pair.map((i, n) => `<b>${n + 1}</b> ${escapeHtml(gameWeapons[i]?.name ?? '')}`).join('<span class="sep">·</span>');
+    for (const b of equipBox.querySelectorAll<HTMLElement>('[data-action="equip"]')) {
+      const inSlot = !!def && pair[Number(b.dataset.slot)] === def.index;
+      b.setAttribute('aria-pressed', String(inSlot));
+      b.setAttribute('aria-checked', String(inSlot));
+    }
+  };
   const socketPanel = $<HTMLElement>('.mf-sockets');
   const attachPanel = $<HTMLElement>('.mf-attach');
   const camoPanel = $<HTMLElement>('.mf-camo');
@@ -290,6 +313,7 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
           .join('')}</ul>`
       : '<span class="label">Stat card</span><p class="mf-ar__note">Art only so far: the model is ready, its stats come with the arsenal.</p>';
     tryBtn.hidden = !c || !weaponDef(id);
+    renderEquip();
     const ss = sockets[id]?.sockets ?? {};
     const offHand = sockets[id]?.frame === 'shield';
     socketPanel.innerHTML = `<ul>${Object.keys(ss)
@@ -337,6 +361,19 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
     const d = t.dataset;
     if (d.action === 'exit') options.onExit?.();
     else if (d.action === 'try') (options.onTry ?? tryInTraining)(current);
+    else if (d.action === 'equip') {
+      // this gun in that slot; if it was already the other one, the two swap
+      const def = weaponDef(current);
+      if (!def || !isLoadoutGun(def.id)) return;
+      const slot = Number(d.slot) as 0 | 1;
+      const pair = guns.get();
+      const next: [number, number] = [pair[0], pair[1]];
+      if (pair[1 - slot] === def.index) next[1 - slot] = pair[slot];
+      next[slot] = def.index;
+      guns.set(next);
+      status.textContent = `${def.name}: your gun ${slot + 1}`;
+      renderEquip();
+    }
     else if (d.weapon) void select(d.weapon);
     else if (d.attach) toggleAttach(d.attach);
     else if (d.camo !== undefined) {

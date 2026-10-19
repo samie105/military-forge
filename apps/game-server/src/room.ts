@@ -198,6 +198,8 @@ export class Client {
   playerId = -1;
   /** the API account this connection's join ticket named (rooms.ts); null = a guest without one, or a dev room */
   accountId: string | null = null;
+  /** the player's saved gun pair from the join ticket (weapon indices, checked against content); null = the default pair */
+  guns: [number, number] | null = null;
   name = '';
   closed = false;
   /** this client's inputs, by server tick */
@@ -685,6 +687,8 @@ export class Room {
     }
     const p = this.game.addPlayer(sanitizeName(rawName, `Player ${this.humanCount + 1}`));
     if (client.accountId) this.recorder?.setAccount(p, client.accountId);
+    // the guns they chose (their account's loadout): every spawn until a death keeps others (#125)
+    if (client.guns) this.game.setLoadout(p, client.guns);
     const session: Session = { token: newToken(), playerId: p.id, client: null, expiresAt: Infinity, idle: createInput(), prevToken: null, joinSeq: this.joins++, pingMs: -1 };
     this.sessions.set(session.token, session);
     if (this.match && !this.host) this.host = session;

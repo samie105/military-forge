@@ -4,7 +4,7 @@
  * both guns must be real, different, non-melee weapons. Nothing is fixed up silently: a bad id is
  * a 400 naming the field, so a client bug shows instead of a look quietly changing.
  */
-import { DYE_CHANNELS, LOADOUT_SLOTS, getCosmetic, weapons, type CosmeticDef } from '@military-forge/content';
+import { DYE_CHANNELS, LOADOUT_SLOTS, getCosmetic, isLoadoutGun, weapons, type CosmeticDef } from '@military-forge/content';
 import { z } from 'zod';
 import type { LoadoutData } from '../db/schema';
 
@@ -31,7 +31,7 @@ export function owns(def: CosmeticDef, level: number): boolean {
 }
 
 /** The guns a loadout may hold: every weapon but the melee ones. */
-export const LOADOUT_GUNS: ReadonlySet<string> = new Set(weapons.filter((w) => w.fireMode !== 'melee').map((w) => w.id));
+export const LOADOUT_GUNS: ReadonlySet<string> = new Set(weapons.filter((w) => isLoadoutGun(w.id)).map((w) => w.id));
 
 export interface LoadoutIssue {
   path: string;

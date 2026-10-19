@@ -55,3 +55,14 @@ html.mf-short :where(.mf-gear-fit) .menu-top { height: 88px; }
 html.mf-short :where(.mf-gear-fit) .ar__stats { padding: var(--sp-4); }
 html:is(.mf-short, .mf-big-text) :where(.mf-gear-fit) .ar__table { min-height: 220px; }
 html:is(.mf-narrow, .mf-big-text) :where(.mf-gear-fit) .mf-try { min-height: var(--btn-h); font-size: var(--fs-20); }
+
+/* Equip as gun 1 / gun 2: the two guns you spawn with (saved, then sent to your account) */
+:where(.mf-gear-fit) .mf-equip { display: grid; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); }
+:where(.mf-gear-fit) .mf-equip[hidden] { display: none; }
+:where(.mf-gear-fit) .mf-equip__now { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-2); font-size: var(--fs-16); }
+:where(.mf-gear-fit) .mf-equip__now b { color: var(--c-volt); font-family: var(--ff-mono, inherit); }
+:where(.mf-gear-fit) .mf-equip__now .sep { color: var(--c-muted); }
+:where(.mf-gear-fit) .mf-equip__seg { display: grid; grid-template-columns: 1fr 1fr; flex-wrap: nowrap; }
+:where(.mf-gear-fit) .mf-equip__seg .seg__opt[aria-pressed="true"] { background: var(--c-volt); color: var(--c-volt-ink); }
+html.mf-phone :where(.mf-gear-fit) .mf-equip { padding: var(--sp-2) var(--sp-3); }
+html.mf-phone :where(.mf-gear-fit) .mf-equip__seg .seg__opt { min-height: 48px; font-size: var(--fs-14); padding: 0 var(--sp-2); }

@@ -26,3 +26,17 @@ describe('Locker items (round two)', () => {
     expect(tileHtml(getCosmetic(hat.id)!, false, true, undefined, true)).toContain('aria-checked="true"');
   });
 });
+
+describe('gun tiles (the Locker Guns tab)', () => {
+  it("mark the slot's gun On, the other slot's gun as a swap, and the rest by class", async () => {
+    const { gunTileHtml } = await import('../../src/locker');
+    const { weapons } = await import('@military-forge/content');
+    const k47 = weapons.find((w) => w.id === 'k47')!;
+    const widow = weapons.find((w) => w.id === 'widow')!;
+    const buzz = weapons.find((w) => w.id === 'buzz')!;
+    const pair: [number, number] = [k47.index, widow.index];
+    expect(gunTileHtml(k47, 0, pair)).toMatch(/is-on[\s\S]*aria-checked="true"[\s\S]*data-gun="k47" data-gslot="0"[\s\S]*On/);
+    expect(gunTileHtml(widow, 0, pair)).toMatch(/Gun 2/);
+    expect(gunTileHtml(buzz, 1, pair)).toMatch(/SMG/);
+  });
+});

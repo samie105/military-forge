@@ -340,7 +340,7 @@ registerRoute({
     let cleanup: (() => void) | null = null;
     let closed = false;
     void import('./locker/route').then(({ mountLockerRoute }) => {
-      if (!closed) cleanup = mountLockerRoute(el, { onExit: close, ...(loadoutSync ? { store: loadoutSync.store } : {}) });
+      if (!closed) cleanup = mountLockerRoute(el, { onExit: close, ...(loadoutSync ? { store: loadoutSync.store, guns: loadoutSync.guns } : {}) });
     });
     return () => {
       closed = true;

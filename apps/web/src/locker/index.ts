@@ -13,12 +13,17 @@ import {
   cosmeticSourceLabel,
   cosmeticsForSlot,
   getCosmetic,
+  isLoadoutGun,
+  weapons,
   type CosmeticDef,
   type CosmeticLoadout,
   type CosmeticSlot,
   type DyeChannel,
+  type WeaponDef,
 } from '@military-forge/content';
 import { CharacterAssembler, type CharacterInstance } from '../character';
+import { weaponIcon } from '../ui/icons';
+import { localGunStore, type GunStore } from './accountSync';
 import { startFitting } from '../ui/fit';
 import { moveIndicator } from '../ui/motion';
 import { mountSprite } from '../ui/sprite';
@@ -37,6 +42,8 @@ export interface LockerOptions {
   onExit?: () => void;
   /** called after every change, already saved */
   onChange?: (loadout: CosmeticLoadout) => void;
+  /** the two guns to spawn with (the Guns tab); default: this device's (locker/accountSync.ts) */
+  guns?: GunStore;
 }
 
 export interface LockerHandle {
@@ -62,6 +69,8 @@ const TABS: readonly { id: string; label: string; icon: string; slots: readonly 
   { id: 'jetpack', label: 'Jetpack', icon: 'backpack', slots: [{ slot: 'jetpack', label: 'Jetpack' }, { slot: 'exhaust', label: 'Exhaust' }] },
   { id: 'dyes', label: 'Dyes', icon: 'palette', slots: [{ slot: 'dye', label: 'Dyes' }] },
   { id: 'trail', label: 'Dash trail', icon: 'sparkle', slots: [{ slot: 'trail', label: 'Dash trail' }] },
+  // not a look: the two guns you spawn with (the Armory's Equip sets them too)
+  { id: 'guns', label: 'Guns', icon: 'rack', slots: [] },
 ];
 const CHANNEL_LABEL: Readonly<Record<DyeChannel, string>> = { primary: 'Main', secondary: 'Trim', accent: 'Accent' };
 /** Each slot's glyph on an item without a colour (no item art yet). */
@@ -109,8 +118,34 @@ export function tileHtml(item: CosmeticDef, equipped: boolean, owned: boolean, c
   </button>`;
 }
 
+/** The guns a player may choose, in the game's order. */
+const LOADOUT_GUN_DEFS: readonly WeaponDef[] = weapons.filter((w) => isLoadoutGun(w.id));
+const GUN_CLASS: Readonly<Record<string, string>> = { sidearm: 'Sidearm', smg: 'SMG', rifle: 'Rifle', dmr: 'Marksman', sniper: 'Sniper', shotgun: 'Shotgun', heavy: 'Heavy', special: 'Special' };
+
+/** One gun in the Guns tab for loadout slot `slot`: On when it's that slot's, "Gun N" when it's the other's (picking it swaps the two). */
+export function gunTileHtml(w: WeaponDef, slot: 0 | 1, pair: readonly [number, number]): string {
+  const on = pair[slot] === w.index;
+  const other = pair[1 - slot] === w.index;
+  const icon = weaponIcon(w.id);
+  const art = icon ? `<span class="mf-item__glyph mf-gun__art">${ic(icon, 'ic ic--kf')}</span>` : `<span class="mf-item__glyph">${ic('rack')}</span>`;
+  const tag = on ? `<span class="tag tag--you">${ic('check')}On</span>` : other ? `<span class="tag tag--ghost">${ic('swap')}Gun ${2 - slot}</span>` : `<span class="tag tag--ghost">${GUN_CLASS[w.class] ?? w.class}</span>`;
+  return `<button type="button" class="item mm-tile mf-gun${on ? ' is-on' : ''}" role="radio" aria-checked="${on}" aria-pressed="${on}" data-gun="${w.id}" data-gslot="${slot}" title="${escapeHtml(`${w.name} · ${GUN_CLASS[w.class] ?? w.class}${other ? ` · now your gun ${2 - slot}: picking it swaps the two` : ''}`)}">
+    <span class="item__art">${art}</span>
+    <b class="item__name mm-name">${escapeHtml(w.name)}</b>
+    ${tag}
+  </button>`;
+}
+
+/** The Guns tab's two pickers. */
+function gunsHtml(pair: readonly [number, number]): string {
+  const picker = (slot: 0 | 1) =>
+    `<h3 class="label mf-lk__sub">Gun ${slot + 1} · ${escapeHtml(weapons[pair[slot]]?.name ?? '')}</h3><div class="items mm-grid mf-guns" role="radiogroup" aria-label="Gun ${slot + 1}">${LOADOUT_GUN_DEFS.map((w) => gunTileHtml(w, slot, pair)).join('')}</div>`;
+  return `<h2 class="display lk__h">Guns</h2><p class="lk__note mf-lk__guns-note">You spawn with these two. In a match you keep the guns you die holding.</p>${picker(0)}${picker(1)}`;
+}
+
 export function mountLocker(container: HTMLElement, options: LockerOptions = {}): LockerHandle {
   const store = options.store ?? new LocalLoadoutStore();
+  const guns = options.guns ?? localGunStore();
   const inventory = options.inventory ?? starterInventory;
   const assembler = options.assembler ?? new CharacterAssembler();
   mountSprite();
@@ -207,6 +242,11 @@ export function mountLocker(container: HTMLElement, options: LockerOptions = {})
     const sel = tabBar.querySelector<HTMLElement>('[aria-selected="true"]');
     if (sel) moveIndicator(tabBar.querySelector<HTMLElement>('.m-p5')!, sel.offsetLeft, sel.offsetWidth);
     const t = TABS[tab]!;
+    if (t.id === 'guns') {
+      panel.innerHTML = gunsHtml(guns.get());
+      renderWear();
+      return;
+    }
     const section = (slot: CosmeticSlot, label: string, multi: boolean) => {
       const list = cosmeticsForSlot(slot);
       const tiles = (channel?: DyeChannel) =>
@@ -258,6 +298,19 @@ export function mountLocker(container: HTMLElement, options: LockerOptions = {})
     else if (d.action === 'wear') {
       const next = preview();
       if (trying && inventory.owns(trying.id)) apply(next);
+    } else if (d.gun && d.gslot !== undefined) {
+      // a gun for slot N; the other slot's gun swaps places with it
+      const w = weapons.find((x) => x.id === d.gun);
+      if (!w) return;
+      const slot = Number(d.gslot) as 0 | 1;
+      const pair = guns.get();
+      const next: [number, number] = [pair[0], pair[1]];
+      if (pair[1 - slot] === w.index) next[1 - slot] = pair[slot];
+      next[slot] = w.index;
+      guns.set(next);
+      detail.textContent = `${w.name} is your gun ${slot + 1}`;
+      status.textContent = store.label;
+      render();
     } else if (d.tab !== undefined) {
       tab = Number(d.tab);
       render();

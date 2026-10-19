@@ -97,3 +97,14 @@ html.mf-short:where(:not(.mf-phone)) :where(.mf-gear-fit) .menu-top { height: 88
 :where(html.mf-phone) :where(.mf-gear-fit) .items { gap: var(--sp-2); }
 :where(html.mf-phone) :where(.mf-gear-fit) .item { padding: var(--sp-2); }
 :where(html.mf-phone) :where(.mf-gear-fit) .item__name { font-size: var(--fs-14); }
+
+/* the Guns tab, compact: 18 guns twice; a weapon's glyph is wide; no Wear it or Randomise (a pick is saved at once) */
+:where(.mf-gear-fit) .mf-guns { gap: var(--sp-2); }
+:where(.mf-gear-fit) .mf-guns .item__art { height: 56px; }
+:where(.mf-gear-fit) .mf-guns .item__name { font-size: var(--fs-14); }
+:where(html.mf-phone) :where(.mf-gear-fit) .mf-guns .item__art { height: 40px; }
+:where(.mf-gear-fit) .mf-gun__art .ic { width: 78%; height: auto; aspect-ratio: 8 / 3; stroke: none; fill: currentColor; }
+:where(.mf-gear-fit) .mf-gun:not(.is-on) .mf-item__glyph { --rarity: var(--c-muted); }
+.mf-gear-fit [data-active-state~="guns"] .lk__act { display: none; }
+:where(.mf-gear-fit) .mf-lk__guns-note { margin: 0 0 var(--sp-3); }
+:where(html.mf-phone) :where(.mf-gear-fit) .mf-gun__art .ic { width: 84%; }

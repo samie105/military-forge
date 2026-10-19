@@ -179,6 +179,13 @@ The API signs a short-lived **Ed25519 JWT**:
 ```
 The game server verifies with the API's public key, checks that `room` and `gs` match itself, and rejects any `jti` it has already seen (replay protection). Cosmetic ownership was already checked by the API when it signed the ticket.
 
+**Built so far:** `{iss, aud, sub, nick, room, iat, exp, jti, guns?}`.
+- `guns` is the player's saved pair from `loadouts` slot 0, by weapon id.
+- The API puts it in only when the pair still passes `loadoutGunIndices` from @military-forge/content: two different guns, no melee.
+- The game server checks it again, gives it at the player's first spawn and at every match start, and otherwise uses the default pair.
+- Respawns within a match keep the guns the player died holding (#125).
+- Bots keep their own loadouts.
+
 ---
 
 ## 7. Data model (Postgres, first cut)

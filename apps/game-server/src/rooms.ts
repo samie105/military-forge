@@ -13,6 +13,7 @@
  * the API approved; a resume needs its session token instead. Connections still at the door are
  * capped per IP, per room and overall, so idle sockets can't hold the server's room slots.
  */
+import { loadoutGunIndices } from '@military-forge/content';
 import { CONTENT_HASH, CloseCode, MsgType, PROTOCOL_VERSION, decodeMessage, encodeHello, encodePong, type HelloMsg, type Message } from '@military-forge/protocol';
 import { isRoomCode } from '@military-forge/shared';
 import { createMatchRules, type MatchRules } from '@military-forge/sim';
@@ -188,6 +189,7 @@ export class RoomRegistry {
     if (!room && this.rooms.size >= this.maxRooms) return this.turnAway(v, CloseCode.NoRoom, 'server full: too many rooms, try again soon');
     let hello = bytes;
     let accountId: string | null = null;
+    let guns: [number, number] | null = null;
     if (!resuming && v.code !== '' && this.tickets) {
       const verdict = this.tickets.admit(msg.ticket, v.code);
       if (!verdict.ok) {
@@ -197,12 +199,14 @@ export class RoomRegistry {
       // a new player, under the name the API approved (nickname rules, reserved names)
       hello = encodeHello(verdict.claims.nick, '');
       accountId = verdict.claims.sub;
+      guns = loadoutGunIndices(verdict.claims.guns); // null: not a pair a player may choose (the default pair then)
     }
     room ??= this.openRoom(v.code);
     this.leaveDoor(v);
     v.room = room;
     v.client = room.connect(v.conn);
     v.client.accountId = accountId;
+    v.client.guns = guns;
     room.receive(v.client, hello);
   }
 

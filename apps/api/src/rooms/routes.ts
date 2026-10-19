@@ -9,13 +9,17 @@
  * with the public key alone (apps/game-server tickets.ts). Without a ticket key (dev) it's null.
  */
 import { randomBytes } from 'node:crypto';
+import { loadoutGunIndices } from '@military-forge/content';
 import { normalizeRoomCode, roomCodeFromBytes } from '@military-forge/shared';
+import { and, eq } from 'drizzle-orm';
 import { Hono, type Context } from 'hono';
 import type { SigningKey } from '../auth/keys';
 import { requireAuth } from '../auth/middleware';
 import type { AuthService } from '../auth/sessions';
 import { signJwt, type StandardClaims } from '../auth/tokens';
 import type { Config } from '../config';
+import type { Db } from '../db/client';
+import { loadouts } from '../db/schema';
 import { clientRateLimitKey } from '../http/clientIp';
 import type { AppEnv } from '../http/context';
 import { ApiError } from '../http/errors';
@@ -70,10 +74,23 @@ export interface JoinTicketClaims extends StandardClaims {
   room: string;
   /** single use: the game server remembers it until it expires */
   jti: string;
+  /** the two guns the player spawns with (their saved loadout, weapon ids); absent = the default pair */
+  guns?: [string, string];
 }
 
-export function roomRoutes(deps: { config: Config; kv: Kv; auth: AuthService; profiles: ProfileService; presence?: PresenceService; ticketKey: SigningKey | null; now: () => number }): Hono<AppEnv> {
-  const { config, kv, auth, profiles, presence, ticketKey, now } = deps;
+/** The guns of the player's saved loadout (slot 0), when they're a pair a player may choose now. */
+async function savedGuns(db: Db, userId: string): Promise<[string, string] | null> {
+  const [row] = await db
+    .select({ data: loadouts.data })
+    .from(loadouts)
+    .where(and(eq(loadouts.userId, userId), eq(loadouts.slot, 0)));
+  const guns = row?.data.guns;
+  // content can change after a save (a gun renamed or made melee): check again, never trust the row
+  return guns && loadoutGunIndices(guns) ? [guns[0], guns[1]] : null;
+}
+
+export function roomRoutes(deps: { config: Config; db?: Db; kv: Kv; auth: AuthService; profiles: ProfileService; presence?: PresenceService; ticketKey: SigningKey | null; now: () => number }): Hono<AppEnv> {
+  const { config, db, kv, auth, profiles, presence, ticketKey, now } = deps;
   const app = new Hono<AppEnv>();
   app.use(requireAuth(auth));
 
@@ -82,6 +99,7 @@ export function roomRoutes(deps: { config: Config; kv: Kv; auth: AuthService; pr
     const me = await profiles.me(userId);
     if (!me) throw new ApiError(401, 'no_session', 'Sign in again');
     const iat = Math.floor(now() / 1000);
+    const guns = db ? await savedGuns(db, userId) : null;
     const claims: JoinTicketClaims = {
       iss: TICKET_ISSUER,
       aud: TICKET_AUDIENCE,
@@ -91,6 +109,7 @@ export function roomRoutes(deps: { config: Config; kv: Kv; auth: AuthService; pr
       nick: me.nickname,
       room: code,
       jti: randomBytes(16).toString('base64url'),
+      ...(guns ? { guns } : {}),
     };
     return signJwt(claims, ticketKey.privateKey);
   }

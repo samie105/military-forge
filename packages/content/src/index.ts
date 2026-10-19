@@ -19,6 +19,7 @@ export * from './projectiles';
 export * from './shield';
 export * from './tuning';
 export * from './weapons';
+export * from './loadoutGuns';
 export { fluxLabMap, lunarOutpostMap, mechanicsTestMap, movementTestMap, stormFrontMap, streetMarketMap };
 
 export const maps: Readonly<Record<string, MapDef>> = {
