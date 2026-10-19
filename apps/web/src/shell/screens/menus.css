@@ -136,6 +136,22 @@ html:is(.mf-short, .mf-big-text) .kit-v2 .home__poster-cta { margin-top: var(--s
 html:is(.mf-short, .mf-big-text) .kit-v2 .home__ticket { min-height: 128px; padding: var(--sp-4) var(--sp-6); }
 html:is(.mf-short, .mf-big-text) .kit-v2 .home__side { padding-top: var(--sp-2); gap: var(--sp-4); }
 html:is(.mf-short, .mf-big-text) .kit-v2 .mf-home__stage { padding-bottom: var(--sp-8); }
+/*
+ * Big text in a laptop's box (1280×720 at 150 %): the screen keeps 1600×900 design pixels, so Home
+ * trims to fit above the sitrep ticker: a shorter top bar and hints row, the poster without its
+ * blurb (Create room says it), shorter tickets; the top bar keeps every tab by showing the chip's
+ * initial only (the nameplate shows the name; screen readers still hear it).
+ */
+html.mf-short.mf-big-text .kit-v2 .home__top { height: 84px; }
+html.mf-short.mf-big-text .kit-v2 .menu-hints { height: 56px; }
+html.mf-short.mf-big-text .kit-v2 .home__poster-sub { display: none; }
+html.mf-short.mf-big-text .kit-v2 .home__play { gap: var(--sp-3); padding-top: 0; }
+html.mf-short.mf-big-text .kit-v2 .home__ticket { min-height: 0; padding: var(--sp-3) var(--sp-5); }
+html.mf-short.mf-big-text .kit-v2 .home__ticket .display { font-size: var(--fs-36); }
+html.mf-short.mf-big-text .kit-v2 .home__ticker { margin-bottom: var(--sp-1); }
+html.mf-narrow.mf-big-text .kit-v2 .home__top .me-chip > b { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+html.mf-narrow.mf-big-text .kit-v2 .home__top .me-chip { padding-right: 6px; }
+html.mf-narrow.mf-big-text .kit-v2 .home__top .tab { padding: 0 var(--sp-3); }
 html.mf-narrow .kit-v2 .lobby { grid-template-columns: 440px minmax(0, 1fr) 520px; gap: var(--sp-5); padding: 0; }
 html.mf-short .kit-v2 .lobby { padding-block: 0 var(--sp-3); }
 html:is(.mf-short, .mf-big-text) .kit-v2 .lobby__share { padding: var(--sp-6); gap: var(--sp-3); }

@@ -234,28 +234,31 @@ export function PhoneLobby({ lobby, tips = null }: { lobby: LobbyView; tips?: Bi
                 <Row key={p.id} p={p} i={i + 2} />
               ))}
             </ol>
-            <div className="pm-mission">
-              <span>
-                <Icon name="map" size="sm" />
-                <b data-bind="lobby.map.name">{lobby.mapName}</b>
-              </span>
-              <button type="button" className="pm-rules m-p8" onClick={() => setRules(true)}>
-                <Icon name="clock" size="sm" />
-                {minutesLabel(lobby.timeLimit)} · {killsLabel(lobby.killLimit)}
-                <Icon name={host ? 'edit' : 'chev-right'} size="sm" />
-              </button>
-            </div>
-            <div className="pm-bar">
-              <button type="button" className={`btn btn--sm m-p8 ${lobby.ready ? 'btn--ghost is-ready' : 'btn--ghost'}`} aria-pressed={lobby.ready} onClick={blurAfter(() => online?.setReady(!lobby.ready))}>
-                <Icon name={lobby.ready ? 'check' : 'clock'} />
-                Ready
-              </button>
-              {host && (
-                <button type="button" className="btn btn--paper btn--sm m-p8" disabled={!enough} title={enough ? 'Start the countdown now' : `Needs ${lobby.minPlayers} players`} onClick={blurAfter(() => online?.startMatch())}>
-                  <Icon name="play" />
-                  Start
+            {/* the match rules and Ready/Start: one footer, so at large text both stay in view (phone.css) */}
+            <div className="pm-roster__foot">
+              <div className="pm-mission">
+                <span>
+                  <Icon name="map" size="sm" />
+                  <b data-bind="lobby.map.name">{lobby.mapName}</b>
+                </span>
+                <button type="button" className="pm-rules m-p8" onClick={() => setRules(true)}>
+                  <Icon name="clock" size="sm" />
+                  {minutesLabel(lobby.timeLimit)} · {killsLabel(lobby.killLimit)}
+                  <Icon name={host ? 'edit' : 'chev-right'} size="sm" />
                 </button>
-              )}
+              </div>
+              <div className="pm-bar">
+                <button type="button" className={`btn btn--sm m-p8 ${lobby.ready ? 'btn--ghost is-ready' : 'btn--ghost'}`} aria-pressed={lobby.ready} onClick={blurAfter(() => online?.setReady(!lobby.ready))}>
+                  <Icon name={lobby.ready ? 'check' : 'clock'} />
+                  Ready
+                </button>
+                {host && (
+                  <button type="button" className="btn btn--paper btn--sm m-p8" disabled={!enough} title={enough ? 'Start the countdown now' : `Needs ${lobby.minPlayers} players`} onClick={blurAfter(() => online?.startMatch())}>
+                    <Icon name="play" />
+                    Start
+                  </button>
+                )}
+              </div>
             </div>
           </section>
         </div>

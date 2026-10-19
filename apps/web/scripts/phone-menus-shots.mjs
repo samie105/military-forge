@@ -293,7 +293,10 @@ try {
   await targets('lobby');
   await setText(1.5);
   await shot('m3-lobby-text150');
-  await onScreen('lobby 150%', '.pm-bar .btn');
+  await onScreen('lobby 150%', '.pm-bar .btn, .pm-rules');
+  await setText(1.25);
+  await sleep(500);
+  await onScreen('lobby 125%', '.pm-bar .btn, .pm-rules');
   await setText(1);
   // a share: the system sheet (stubbed: headless Chrome has none) then the "Shared" stamp
   await page.evaluate(() => {

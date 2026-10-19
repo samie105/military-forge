@@ -67,6 +67,7 @@ html.reduce-motion .mf-fit--phone { --m-rise: 0px; }
 .mf-fit--phone .pm-roster { padding: 8px 12px; gap: 5px; }
 .mf-fit--phone .pm-roster ol { gap: 2px; }
 .mf-fit--phone .pm-row { min-height: 32px; }
+.pm-roster__foot { display: contents; }
 .pm-rules { display: inline-flex; align-items: center; gap: 4px; min-height: var(--touch-min); margin: -10px 0; padding: 0 6px; border-radius: var(--r-xs); color: var(--c-text); font-size: var(--fs-14); font-weight: var(--fw-bold); cursor: pointer; }
 .pm-bar .is-ready { color: var(--c-ok); border-color: var(--c-ok); }
 /* the folded lobby: where the match clock goes (empty in warm-up), clear of the swap pill and the menu */
@@ -129,7 +130,12 @@ html.reduce-motion .pm-sheet.is-leaving { animation-name: pm-fade-out; }
 .is-text-lg .pm-score { width: 300px; }
 .is-text-lg .pm-score__row { flex-wrap: wrap; gap: 6px 14px; }
 .is-text-lg .pm > * { flex-shrink: 0; }
-.is-text-lg .pm-roster .pm-bar { position: sticky; bottom: 0; z-index: var(--z-local-2); margin: 0 -12px -8px; padding: 6px 12px 8px; background: var(--c-ink-800); border-top: 2px solid var(--c-line); }
+/* the rules and Ready/Start stick to the screen's bottom together (the roster scrolls under them) */
+.is-text-lg .pm-roster__foot { position: sticky; bottom: 0; z-index: var(--z-local-2); display: flex; flex-direction: column; gap: 4px; margin: auto -12px -8px; padding: 4px 12px 8px; background: var(--c-ink-800); border-top: 2px solid var(--c-line); }
+.is-text-lg .pm-roster__foot .pm-mission { margin-top: 0; padding-top: 0; flex-wrap: nowrap; justify-content: space-between; }
+.is-text-lg .pm-roster__foot .pm-mission > span { min-width: 0; overflow: hidden; }
+.is-text-lg .pm-roster__foot .pm-mission b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.is-text-lg .pm-rules { flex: none; margin: 0; }
 .is-text-lg .pm-pause { gap: 6px; padding: 10px 14px; }
 .is-text-lg .pm-pause .eyebrow { display: none; }
 .is-text-lg .pm-pause__t { font-size: calc(36px * var(--pm-head)); }

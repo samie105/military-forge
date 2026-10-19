@@ -165,6 +165,12 @@ describe('m-lobby', () => {
     expect(html).toMatch(/data-active-state="guest not-ready link-idle"/);
     expect(html).not.toContain('>Start<');
   });
+
+  it('the rules and Ready/Start share one footer (it sticks to the bottom at large text, so the rules stay on screen)', () => {
+    const html = withCtl(ctl(), <PhoneLobby lobby={lobby(true)} />);
+    const foot = html.slice(html.indexOf('class="pm-roster__foot"'));
+    expect(foot).toMatch(/^class="pm-roster__foot"><div class="pm-mission">[\s\S]*class="pm-rules[\s\S]*class="pm-bar"[\s\S]*Ready[\s\S]*Start/);
+  });
 });
 
 describe('m-pause', () => {
