@@ -89,7 +89,7 @@ export function Join() {
       .catch(() => setError('Paste with Ctrl+V (or ⌘V): the browser kept the clipboard to itself'));
 
   return (
-    <Screen name="join" kind="menu" kit="v2" states={[state === 'ready' ? 'pasted' : state]} label="Join with code">
+    <Screen name="join" kind="menu" states={[state === 'ready' ? 'pasted' : state]} label="Join with code">
       <Backdrop word="CODE" />
       <div className="menu">
         <header className="menu-top">

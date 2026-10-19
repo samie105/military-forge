@@ -79,7 +79,7 @@ export function Results({ view, results, actions, room, training }: { view: Matc
   }, []);
 
   return (
-    <Screen name="results" kind="menu" kit="v2" states={states} label="Match results" className={held ? 'mf-held' : undefined}>
+    <Screen name="results" kind="menu" states={states} label="Match results" className={held ? 'mf-held' : undefined}>
       <Backdrop word="GG" />
       <div className="menu">
         <header className="menu-top">

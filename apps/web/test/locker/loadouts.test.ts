@@ -74,7 +74,7 @@ describe('item tiles', () => {
     expect(html).toContain('aria-pressed="false"');
     const owned = tileHtml(getCosmetic('dye_red')!, true, true, 'primary');
     expect(owned).toContain('data-channel="primary"');
-    expect(owned).toContain('background:#c8332b');
+    expect(owned).toContain('--sw:#c8332b'); // the kit's swatch (.item__sw)
     expect(owned).not.toContain('mm-how');
   });
 });

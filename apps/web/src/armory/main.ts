@@ -1,8 +1,10 @@
 /** Standalone Armory page (/armory.html) until W4's shell hosts the Armory as a route. */
 import { GAME_NAME } from '@military-forge/shared';
+import { applyPageSettings } from '../ui/pageSettings';
 import type { LightPreset } from '../locker/turntable';
 import { mountArmory } from '.';
 
+applyPageSettings();
 document.title = `${GAME_NAME} · Armory`;
 const params = new URLSearchParams(location.search);
 const armory = mountArmory(document.getElementById('armory')!, {

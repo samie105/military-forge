@@ -22,7 +22,7 @@
  *   /?online&lowbw                      low-bandwidth mode (30 Hz inputs, 15 Hz snapshots)
  *   /?online&transport=ws|wt            force WebSocket / WebTransport (default: WT when the server has a gateway)
  */
-import { DEMO_MAPS, defaultTuning, getMap, maps, type MapDef } from '@military-forge/content';
+import { DEFAULT_LOADOUT, DEMO_MAPS, defaultTuning, getMap, maps, weapons, type MapDef } from '@military-forge/content';
 import { createConditionerSettings, parseNetSim } from '@military-forge/netcode';
 import { GAME_NAME } from '@military-forge/shared';
 import type { Input, SimEvent } from '@military-forge/sim';
@@ -152,6 +152,9 @@ function setMode(next: LocalMode | OnlineMode | null): void {
   if (next instanceof OnlineMode && settings?.lowBandwidth) next.net.setLowBandwidth(true);
 }
 
+/** The Armory's "Try it in training" (?try=<weapon id>): the gun the first training starts with. */
+let tryWeapon = weapons.find((w) => w.id === params.get('try')) ?? null;
+
 /** The app's game modes, driven by the shell (shell/controller.ts). */
 const host: GameHost = {
   get local() {
@@ -163,7 +166,12 @@ const host: GameHost = {
   startTraining(nickname) {
     // training: a deathmatch against three Normal bots (?bots= / ?botlevel=, ?sandbox for the range dummies)
     const rules = localMatchRules(params);
-    setMode(new LocalMode(sampler, camera, renderer, nickname, rules, localMapId, localBots(params, rules !== null)));
+    const local = new LocalMode(sampler, camera, renderer, nickname, rules, localMapId, localBots(params, rules !== null));
+    setMode(local);
+    // the Armory's "Try it in training": that gun in your hand (the second slot as usual), once
+    const tryGun = tryWeapon;
+    tryWeapon = null;
+    if (tryGun) local.setLoadout([tryGun.index, tryGun.index === DEFAULT_LOADOUT[1] ? DEFAULT_LOADOUT[0] : DEFAULT_LOADOUT[1]]);
   },
   startOnline(url, nickname, room, ticket, refreshTicket) {
     try {
@@ -261,7 +269,7 @@ registerRoute({
   mount: (el, close) => {
     let cleanup: (() => void) | null = null;
     let closed = false;
-    void import('./locker').then(({ mountLockerRoute }) => {
+    void import('./locker/route').then(({ mountLockerRoute }) => {
       if (!closed) cleanup = mountLockerRoute(el, { onExit: close });
     });
     return () => {

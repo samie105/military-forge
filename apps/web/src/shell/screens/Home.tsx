@@ -69,7 +69,7 @@ export function Home({ store }: { store: ShellStore }) {
   const ticker = sitrep();
   const row = (i: number) => ({ '--i': i }) as CSSProperties;
   return (
-    <Screen name="home" kind="menu" kit="v2" label="Home">
+    <Screen name="home" kind="menu" label="Home">
       <Backdrop word="PLAY" />
       <div className="menu">
         <header className="menu-top home__top">

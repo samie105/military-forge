@@ -169,7 +169,7 @@ export function Countdown({ view, state, held = false, bindings }: { view: Match
   const ring = n > 0 ? { '--count-from': Math.min(1, n / total), '--count': Math.max(0, (n - 1) / total) } : { '--count-from': 1, '--count': 1 };
   const intro = state === 'intro' || state === 'intro-leaving';
   return (
-    <Screen name="countdown" kind="game" kit="v2" states={[state]} label="Countdown" className={held ? 'mf-held' : undefined}>
+    <Screen name="countdown" kind="game" states={[state]} label="Countdown" className={held ? 'mf-held' : undefined}>
       {intro ? (
         <MapIntro view={view} leaving={state === 'intro-leaving'} held={held} />
       ) : (

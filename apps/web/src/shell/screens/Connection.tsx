@@ -48,7 +48,7 @@ const TONE = { warn: 'stamp--warn', bad: 'stamp--bad', info: 'stamp--volt' } as 
  */
 function ConnFrame({ states, label, children }: { states: string[]; label: string; children: ReactNode }) {
   return (
-    <Screen name="connection" kind="menu" kit="v2" states={states} label={label}>
+    <Screen name="connection" kind="menu" states={states} label={label}>
       <Backdrop word="COMMS" />
       <div className="conn__wrap">{children}</div>
     </Screen>
@@ -138,7 +138,7 @@ export function ReconnectBanner({ connection }: { connection: ConnectionView }) 
   if (phase === 'off') return null;
   const left = connection.until > 0 ? reconnectSecondsLeft(connection.until, performance.now()) : 0;
   return (
-    <Screen name="connection" kind="game" kit="v2" states={[phase === 'back' ? 'back' : 'reconnecting']} label="Reconnecting">
+    <Screen name="connection" kind="game" states={[phase === 'back' ? 'back' : 'reconnecting']} label="Reconnecting">
       {phase === 'back' ? (
         <span className="stamp stamp--ok stamp--lg mf-back-chip m-p7" role="status">
           <Icon name="check" />

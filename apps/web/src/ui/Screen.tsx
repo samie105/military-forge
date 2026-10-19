@@ -18,7 +18,6 @@ export function Screen({
   className,
   style,
   modal = false,
-  kit = 'v1',
   children,
 }: {
   name: string;
@@ -29,13 +28,11 @@ export function Screen({
   style?: CSSProperties;
   /** a game screen that takes the mouse (the menu over a running match) */
   modal?: boolean;
-  /** which kit's components the screen wears: round one until its phase ports it (kit.css, kit-v1.css) */
-  kit?: 'v1' | 'v2';
   children: ReactNode;
 }) {
   const active = states.filter(Boolean).join(' ') || 'default';
   return (
-    <div className={`${modal ? 'mf-fit mf-fit--modal' : 'mf-fit'} kit-${kit}`}>
+    <div className={`${modal ? 'mf-fit mf-fit--modal' : 'mf-fit'} kit-v2`}>
       <section className={['screen', `screen--${kind}`, className ?? ''].filter(Boolean).join(' ')} data-screen={name} data-active-state={active} aria-label={label} style={style}>
         {children}
       </section>

@@ -20,6 +20,7 @@ import { DRAGON, GAS, HitZone, weapons, type Tuning } from '@military-forge/cont
 import type { MatchView } from '../shell/matchView';
 import { formatClock, playerName } from '../shell/matchView';
 import { capText, iconHref, weaponIcon } from '../ui/icons';
+import { WorldTags } from './worldTags';
 import { flipTransform, moveIndicator, reduced, rollText, stagger, token } from '../ui/motion';
 import type { Frame, NetStats, PlayerView } from '../view';
 import { weaponUnderfoot } from '../weaponItems';
@@ -637,6 +638,8 @@ export class Hud {
   /** the desktop's damage arcs (round two) and the phone's (round one) */
   private readonly arcs: SVGSVGElement;
   private readonly phoneArcs: SVGSVGElement;
+  /** tags over the items on the map (worldTags.ts) */
+  private readonly worldTags: WorldTags;
   private readonly reticles: HTMLElement[];
   private readonly markers: HTMLElement[];
   private readonly beltList: HTMLElement;
@@ -705,6 +708,7 @@ export class Hud {
     ];
     this.arcs = one<SVGSVGElement>(`${desk} .dmg`);
     this.phoneArcs = one<SVGSVGElement>('.mf-hud-phone .dmg-arcs');
+    this.worldTags = new WorldTags(one<HTMLElement>(`${desk} .mf-world`));
     this.reticles = [one<HTMLElement>(`${desk} .reticle`), one<HTMLElement>('.mf-hud-phone .reticle')];
     this.markers = [...this.root.querySelectorAll<HTMLElement>(`${desk} .mf-mk`)];
     this.beltList = one<HTMLElement>(`${desk} .belt__list`);
@@ -841,6 +845,7 @@ export class Hud {
     this.drawBelt();
     feedTouchHud(values, tokens); // the phone's thumb dials wear these too (touch/skin.ts)
     this.place(input);
+    this.worldTags.update(frame.pickups, this.me, input.toScreen, Number(getComputedStyleValue('--hud-fit')) || 1, this.keys.interact ?? '', !this.me?.alive);
     // the white-out takes the HUD with the world; Reduce flashes keeps it readable over the dark-out
     const opacity = input.reduceFlashes ? '' : fixed(1 - Math.min(1, input.flash), 2);
     if (opacity !== this.opacity) {
@@ -876,6 +881,7 @@ export class Hud {
     window.removeEventListener('keydown', this.onKey);
     window.removeEventListener('keyup', this.onKey);
     window.removeEventListener('blur', this.onBlur);
+    this.worldTags.dispose();
     this.root.remove();
   }
 

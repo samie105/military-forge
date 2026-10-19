@@ -114,7 +114,7 @@ function AppScreens({ store }: { store: ShellStore }) {
       {overlay === 'name' && (phone ? <PhoneNameEntry store={store} first={false} /> : <NameEntry store={store} first={false} />)}
       <TuneToast note={tuneNote} />
       {notice && (
-        <div className="mf-fit mf-toast kit-v1">
+        <div className="mf-fit mf-toast kit-v2">
           <div className="mf-notice" role="status">
             <Icon name="ok" />
             {notice}
@@ -185,16 +185,16 @@ function TrainingScreen({ store }: { store: ShellStore }) {
 export function WarmupBar({ view, actions }: { view: MatchView; actions: ShellActions }) {
   return (
     <Screen name="lobby" kind="game" states={[view.ready ? 'ready' : 'not-ready']} label="Warm-up">
-      <div className="mf-lobby-strip hud-plate" role="region" aria-label="Warm-up">
-        <span className="badge badge--soon">Warm-up</span>
+      <div className="mf-lobby-strip plate m-p9" role="region" aria-label="Warm-up">
+        <span className="tag tag--soon">Warm-up</span>
         <span>Nothing counts until the match starts</span>
         {view.ready ? (
-          <button className="btn btn--secondary lobby__ready-on" aria-pressed="true" disabled>
+          <button className="btn btn--paper" aria-pressed="true" disabled>
             <Icon name="ok" />
             Ready: waiting for players
           </button>
         ) : (
-          <button className="btn btn--primary" onClick={blurAfter(actions.ready)}>
+          <button className="btn btn--volt m-p8" onClick={blurAfter(actions.ready)}>
             <Icon name="clock" />
             Ready
           </button>
@@ -220,10 +220,10 @@ function RouteView({ route }: { route: ShellRoute }) {
     };
   }, [route]);
   return (
-    <div className="mf-route kit-v1" aria-label={route.title}>
+    <div className="mf-route kit-v2" aria-label={route.title}>
       <div ref={el} className="mf-route__body" />
       {!route.ownExit && (
-        <button className="btn btn--secondary mf-route__back" onClick={closeRoute}>
+        <button className="btn btn--ghost btn--sm mf-route__back" onClick={closeRoute}>
           <Icon name="back" />
           Back
         </button>
@@ -288,17 +288,17 @@ function DebugScreens({ store }: { store: ShellStore }) {
 export function DebugClock({ view }: { view: MatchView }) {
   return (
     <>
-      <div className="hud-clock hud-plate">
+      <div className="hud-clock plate">
         <span className="hud-label">Deathmatch</span>
         <span className="hud-clock__time num">{formatClock(view.untimed ? view.secondsElapsed : view.secondsLeft)}</span>
         <span className="hud-label">{view.killLimit > 0 ? `First to ${view.killLimit}` : view.untimed ? 'No time limit' : 'No kill limit'}</span>
       </div>
       <div className="hud-score">
-        <div className="hud-score__cell hud-plate is-you">
+        <div className="hud-score__cell plate is-you">
           <span className="hud-label">You</span>
           <b className="num">{view.myScore}</b>
         </div>
-        <div className="hud-score__cell hud-plate">
+        <div className="hud-score__cell plate">
           <span className="hud-label">Leader{view.leaderName ? ` · ${view.leaderName}` : ''}</span>
           <b className="num">{view.leaderScore}</b>
         </div>

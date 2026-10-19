@@ -1,63 +1,102 @@
-/* The Locker (docs/04 §6). Everything is scoped under .mm-locker; mountLocker injects and removes it. */
-.mm-locker {
-  --bg: #0f141c;
-  --panel: #161d28;
-  --line: #2a3442;
-  --text: #e8edf3;
-  --muted: #8d99a8;
-  --accent: #3fb6a8;
-  position: absolute;
-  inset: 0;
+/*
+ * The Locker in round two's kit (data-screen="locker"; the look is kit.css's .lk / .items / .item).
+ * This file lays the screen out as a grid of the mm-* blocks (head, tabs, stage, panel), so the
+ * phone's layout (shell/screens/phone/locker.css, by grid area) still applies on a phone; there the
+ * screen isn't zoomed. Its rules are :where()-scoped so the phone's (.mf-route .mm-*) outrank them
+ * although this sheet comes later. mountLocker injects it and removes it. Tokens only.
+ */
+/* the menus' fit (app.css's .mf-fit, here too: locker.html and armory.html don't load app.css) */
+.mf-gear-fit { position: fixed; inset: 0; overflow: hidden; z-index: 1; }
+.mf-gear-fit > .screen { width: var(--fit-w, 1920px); height: var(--fit-h, 1080px); zoom: var(--fit, 1); }
+:where(.mf-gear-fit) .mm-locker {
+  --line: var(--c-line);
+  --accent: var(--c-volt);
   display: grid;
-  grid-template: 52px 1fr / 132px minmax(260px, 340px) 1fr;
-  grid-template-areas: 'head head head' 'tabs panel stage';
-  background: var(--bg);
-  color: var(--text);
-  font: 14px/1.35 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  grid-template: auto minmax(0, 1fr) / auto minmax(0, 1fr) 820px;
+  grid-template-areas: 'head tabs tabs' 'stage stage panel';
+  column-gap: var(--sp-8);
+  padding-bottom: var(--sp-7);
 }
-.mm-locker button { font: inherit; color: inherit; cursor: pointer; }
-.mm-locker :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.mm-header { grid-area: head; display: flex; align-items: center; gap: 12px; padding: 0 16px; border-bottom: 1px solid var(--line); }
-.mm-header h1 { margin: 0; font-size: 18px; letter-spacing: 0.08em; text-transform: uppercase; }
-.mm-status { margin-left: auto; color: var(--muted); font-size: 12px; }
-.mm-button { white-space: nowrap; background: #212b38; border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; }
-.mm-button:hover { border-color: var(--accent); }
-.mm-tabs { grid-area: tabs; display: flex; flex-direction: column; padding: 8px; gap: 2px; border-right: 1px solid var(--line); overflow-y: auto; }
-.mm-tabs button { text-align: left; background: none; border: 0; border-radius: 6px; padding: 9px 12px; color: var(--muted); }
-.mm-tabs button:hover { color: var(--text); background: #1b2431; }
-.mm-tabs button[aria-selected='true'] { color: var(--text); background: #223042; box-shadow: inset 3px 0 var(--accent); }
-.mm-panel { grid-area: panel; overflow-y: auto; padding: 12px; background: var(--panel); border-right: 1px solid var(--line); }
-.mm-panel h2 { margin: 12px 2px 8px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
-.mm-panel h2:first-child { margin-top: 0; }
-.mm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
-.mm-grid.mm-swatches { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
-.mm-tile { position: relative; display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; min-height: 76px; padding: 8px; text-align: left; background: #1d2633; border: 2px solid color-mix(in srgb, var(--rarity) 55%, transparent); border-radius: 8px; }
-.mm-tile:hover { border-color: var(--rarity); }
-.mm-tile[aria-pressed='true'] { border-color: var(--text); box-shadow: 0 0 0 2px var(--accent); }
-.mm-rarity { position: absolute; top: 6px; right: 6px; width: 13px; height: 13px; fill: var(--rarity); }
-.mm-swatch { width: 100%; flex: 1; min-height: 28px; border-radius: 5px; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.15); }
-.mm-name { font-size: 12.5px; font-weight: 600; padding-right: 14px; }
-.mm-locked { background: #171d26; }
-.mm-locked .mm-name, .mm-locked .mm-swatch { opacity: 0.55; }
-.mm-how { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); }
-.mm-lock-icon { width: 10px; height: 10px; flex: none; fill: currentColor; }
-.mm-stage { grid-area: stage; position: relative; min-width: 0; min-height: 0; }
-.mm-stage canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
-.mm-stage canvas:active { cursor: grabbing; }
-.mm-overlay { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); pointer-events: none; }
-.mm-overlay[hidden] { display: none; }
-.mm-controls { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 10px; }
-.mm-seg { display: flex; background: rgb(10 14 20 / 0.75); border: 1px solid var(--line); border-radius: 8px; padding: 3px; }
-.mm-seg button { background: none; border: 0; border-radius: 5px; padding: 5px 10px; color: var(--muted); }
-.mm-seg button[aria-pressed='true'] { background: #2a3a4e; color: var(--text); }
-.mm-detail { position: absolute; top: 12px; left: 16px; right: 16px; margin: 0; color: var(--muted); font-size: 13px; text-shadow: 0 1px 2px #000; }
+:where(.mf-gear-fit) .mm-header { grid-area: head; gap: var(--sp-5); }
+:where(.mf-gear-fit) .mm-status { font-size: var(--fs-14); color: var(--c-muted); white-space: nowrap; }
+:where(.mf-gear-fit) .mm-tabs { grid-area: tabs; position: relative; align-self: center; flex-wrap: wrap; margin-left: 0; }
+:where(.mf-gear-fit) .mm-tabs .m-p5 { bottom: -8px; height: 4px; background: var(--c-volt); border-radius: var(--r-pill); }
+:where(.mf-gear-fit) .mm-stage { grid-area: stage; min-width: 0; min-height: 0; }
+:where(.mf-gear-fit) .mm-stage .brackets { inset: 20px 80px 150px; }
+:where(.mf-gear-fit) .mm-stage canvas { position: absolute; inset: 0 0 60px; width: 100%; height: calc(100% - 60px); display: block; touch-action: none; cursor: grab; }
+:where(.mf-gear-fit) .mm-stage canvas:active { cursor: grabbing; }
+/* the stamp and its rule in one column, so a bigger stamp (Text size) pushes the rule down */
+:where(.mf-gear-fit) .mf-lk__fits { position: absolute; left: 20px; top: 30px; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-4); max-width: 300px; pointer-events: none; }
+:where(.mf-gear-fit) .mf-lk__fits .lk__fits, :where(.mf-gear-fit) .mf-lk__fits .lk__rule { position: static; }
+:where(.mf-gear-fit) .mf-lk__fits .lk__rule { width: auto; }
+:where(.mf-gear-fit) .mm-overlay { position: absolute; inset: 0; display: grid; place-items: center; color: var(--c-muted); font-size: var(--fs-20); pointer-events: none; }
+:where(.mf-gear-fit) .mm-overlay[hidden] { display: none; }
+:where(.mf-gear-fit) .mm-controls { position: absolute; left: 50%; bottom: 0; translate: -50% 0; display: flex; align-items: center; gap: var(--sp-5); white-space: nowrap; }
+:where(.mf-gear-fit) .mm-controls .seg__opt { min-height: 40px; font-size: var(--fs-14); }
+:where(.mf-gear-fit) .lk__drag { display: inline-flex; align-items: center; gap: 6px; }
+:where(.mf-gear-fit) .mm-panel { grid-area: panel; min-height: 0; }
+:where(.mf-gear-fit) .mm-panel__body { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; padding: 4px; margin: -4px; }
+:where(.mf-gear-fit) .items { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+:where(.mf-gear-fit) .mf-lk__sub { margin: var(--sp-4) 0 var(--sp-2); }
+:where(.mf-gear-fit) .lk__h + .mf-lk__sub { margin-top: 0; }
+:where(.mf-gear-fit) .item { position: relative; }
+:where(.mf-gear-fit) .item__art { position: relative; height: 120px; }
+:where(.mf-gear-fit) .item.is-picked { outline: var(--bw-chunky) dashed var(--c-volt); outline-offset: 3px; }
+:where(.mf-gear-fit) .item .tag { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:where(.mf-gear-fit) .mm-rarity { position: absolute; top: 8px; right: 8px; width: 16px; height: 16px; fill: var(--rarity); }
+:where(.mf-gear-fit) .mf-item__glyph { display: grid; place-items: center; width: 100%; height: 100%; background: color-mix(in srgb, var(--rarity) 22%, var(--c-ink-950)); color: var(--rarity); }
+:where(.mf-gear-fit) .mf-item__glyph .ic { width: 64px; height: 64px; stroke-width: 1.4; }
+:where(.mf-gear-fit) .mf-items--sw { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-3); }
+:where(.mf-gear-fit) .mf-items--sw .item__art { height: 84px; }
+:where(.mf-gear-fit) .mf-items--sw .item__sw { width: 64px; height: 64px; }
+:where(.mf-gear-fit) .mf-items--sw .item__name { font-size: var(--fs-16); }
+:where(.mf-gear-fit) .lk__note { min-height: 1.4em; }
+:where(.mf-gear-fit) .lk__act { justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--sp-3); }
+:where(.mf-gear-fit) .lk__act .btn { min-width: 0; }
+.mf-gear-fit [data-active-state~="trying-locked"] [data-action="wear"] { opacity: .55; }
 
-@media (max-width: 760px) {
-  .mm-locker { grid-template: 48px 46vh 44px 1fr / 1fr; grid-template-areas: 'head' 'stage' 'tabs' 'panel'; }
-  .mm-tabs { flex-direction: row; overflow-x: auto; padding: 4px 8px; border-right: 0; border-bottom: 1px solid var(--line); }
-  .mm-tabs button { white-space: nowrap; padding: 6px 10px; }
-  .mm-tabs button[aria-selected='true'] { box-shadow: inset 0 -3px var(--accent); }
-  .mm-controls { bottom: 8px; }
-  .mm-status { display: none; }
-  .mm-header .mm-button:last-child { margin-left: auto; }
+:where(.mf-gear-fit) .mm-controls .seg { flex-wrap: nowrap; }
+/* the 3D view's own backdrop sits in a booth over the camo */
+:where(.mf-gear-fit) .mm-stage canvas { border-radius: var(--r-lg); box-shadow: inset 0 0 0 var(--bw) var(--c-line); }
+
+/* a laptop's smaller box (ui/fit.ts) (not on a phone: its own layout, below) */
+@media not ((orientation: landscape) and (max-height: 500px) and (pointer: coarse)) {
+  html.mf-narrow :where(.mf-gear-fit) .items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  html.mf-narrow :where(.mf-gear-fit) .mf-items--sw { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  html:is(.mf-narrow, .mf-big-text) :where(.mf-gear-fit) .lk__act .btn--xl { min-height: var(--btn-h); font-size: var(--fs-20); padding-inline: var(--sp-5); }
+  html.mf-narrow :where(.mf-gear-fit) .mm-locker { grid-template: auto auto minmax(0, 1fr) / minmax(0, 1fr) 640px; grid-template-areas: 'head head' 'tabs tabs' 'stage panel'; column-gap: var(--sp-6); }
+  html.mf-narrow :where(.mf-gear-fit) .mm-tabs { margin-bottom: var(--sp-4); }
+  html.mf-short :where(.mf-gear-fit) .lk__h { font-size: var(--fs-48); margin-bottom: var(--sp-2); }
+  html.mf-short :where(.mf-gear-fit) .menu-top { height: 88px; }
+}
+
+/* a phone held sideways: the phone's layout (phone/locker.css) at the phone's own size, unzoomed */
+@media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
+  .mf-gear-fit > .screen { zoom: 1; width: 100%; height: 100%; }
+  :where(.mf-gear-fit) .mm-locker { column-gap: 0; padding-bottom: 0; }
+  :where(.mf-gear-fit) .bg__word, :where(.mf-gear-fit) .lk__rule, :where(.mf-gear-fit) .lk__drag, :where(.mf-gear-fit) .brackets { display: none; }
+  :where(.mf-gear-fit) .menu-top { height: auto; }
+  :where(.mf-gear-fit) .menu-top__title { font-size: var(--fs-28); }
+  :where(.mf-gear-fit) .lk__h { font-size: var(--fs-28); margin-bottom: var(--sp-2); }
+  :where(.mf-gear-fit) .lk__panel { padding: var(--sp-3); }
+  :where(.mf-gear-fit) .mf-lk__fits { left: 4px; top: 4px; }
+  :where(.mf-gear-fit) .item__art { height: 64px; }
+  :where(.mf-gear-fit) .mf-item__glyph .ic { width: 36px; height: 36px; }
+  :where(.mf-gear-fit) .mm-stage canvas { inset: 0; height: 100%; }
+  :where(.mf-gear-fit) .mm-tabs { flex-wrap: nowrap; }
+  :where(.mf-gear-fit) .lk__tabs .tab { font-size: var(--fs-14); padding: 0 var(--sp-3); }
+  :where(.mf-gear-fit) .mm-controls { translate: none; }
+  :where(.mf-gear-fit) .lk__act { padding-top: var(--sp-2); }
+  :where(.mf-gear-fit) .lk__act .btn { min-height: 48px; font-size: var(--fs-14); padding: 0 var(--sp-3); }
+  :where(.mf-gear-fit) .lk__act .btn .ic { width: 20px; height: 20px; }
+  :where(.mf-gear-fit) .lk__note { display: none; }
+  :where(.mf-gear-fit) .mm-tabs .m-p5 { display: none; }
+  :where(.mf-gear-fit) .menu-top { gap: var(--sp-3); }
+  :where(.mf-gear-fit) .menu-top .serial { display: none; }
+  :where(.mf-gear-fit) [data-group="light"] { display: none; }
+  :where(.mf-gear-fit) .lk__fits { scale: .7; transform-origin: 0 0; }
+  :where(.mf-gear-fit) .mf-lk__sub { margin: var(--sp-2) 0 var(--sp-1); }
+  :where(.mf-gear-fit) .items { gap: var(--sp-2); }
+  :where(.mf-gear-fit) .item { padding: var(--sp-2); }
+  :where(.mf-gear-fit) .item__name { font-size: var(--fs-14); }
 }

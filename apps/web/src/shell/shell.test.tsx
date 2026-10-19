@@ -355,7 +355,7 @@ describe('first-run controls card, warm-up, routes', () => {
   });
 
   it('the local warm-up has one Ready', () => {
-    expect(renderToStaticMarkup(<WarmupBar view={view({ phase: MatchPhase.Waiting })} actions={actions} />)).toMatch(/<button class="btn btn--primary">.*Ready<\/button>/);
+    expect(renderToStaticMarkup(<WarmupBar view={view({ phase: MatchPhase.Waiting })} actions={actions} />)).toMatch(/<button class="btn btn--volt m-p8">.*Ready<\/button>/);
     expect(renderToStaticMarkup(<WarmupBar view={view({ phase: MatchPhase.Waiting, ready: true })} actions={actions} />)).toContain('disabled');
   });
 

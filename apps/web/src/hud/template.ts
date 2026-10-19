@@ -49,6 +49,7 @@ function desktop(): string {
   <div class="vignette vignette--gas" data-state="gas" aria-hidden="true"></div>
   <div class="vignette vignette--stagger" data-state="heavy-hit" aria-hidden="true"></div>
   <div class="blood" data-state="blood-on+low-hp blood-on+heavy-hit blood-on+hurt" aria-hidden="true"></div>
+  <div class="mf-world" aria-hidden="true"></div>
 
   <div class="hud" role="group" aria-label="Match HUD">
     <div class="hud-tl">

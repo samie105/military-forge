@@ -244,7 +244,7 @@ function LobbyStrip({ lobby, onOpen }: { lobby: LobbyView; onOpen: () => void })
   const people = lobby.players.filter((p) => !p.isBot);
   const ready = people.filter((p) => p.ready).length;
   return (
-    <Screen name="lobby" kind="game" kit="v2" states={[lobby.isHost ? 'host' : 'guest', lobby.ready ? 'ready' : 'not-ready']} label="Room lobby (folded)">
+    <Screen name="lobby" kind="game" states={[lobby.isHost ? 'host' : 'guest', lobby.ready ? 'ready' : 'not-ready']} label="Room lobby (folded)">
       <div className="mf-lobby-strip plate m-p9" role="region" aria-label="Room">
         <span className="tag tag--ok">
           <Icon name="play" />
@@ -330,7 +330,7 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
   const row = (i: number) => ({ '--i': i }) as CSSProperties;
 
   return (
-    <Screen name="lobby" kind="menu" kit="v2" states={[host ? 'host' : 'guest', lobby.ready ? 'ready' : 'not-ready', copied ? 'copied' : 'link-idle']} label="Room lobby">
+    <Screen name="lobby" kind="menu" states={[host ? 'host' : 'guest', lobby.ready ? 'ready' : 'not-ready', copied ? 'copied' : 'link-idle']} label="Room lobby">
       <Backdrop word="ROOM" />
       <div className="menu">
         <header className="menu-top lobby__top">

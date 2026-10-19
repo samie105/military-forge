@@ -1,7 +1,10 @@
 /**
- * The Locker (docs/04 §6): customise your soldier. A self-contained module: mountLocker() builds
- * the screen inside any element and unmount() removes every trace (DOM, styles, WebGL, listeners),
- * so W4's shell can host it as a route later.
+ * The Locker (docs/04 §6) in round two's kit (data-screen="locker", UI v2 phase 6): customise your
+ * soldier. Pick an item to try it on (the soldier wears it), Wear it to keep it (an item you own; a
+ * locked one says how to get it). A self-contained module: mountLocker() builds the screen inside
+ * any element (fitted to the window like the menus, ui/fit.ts) and unmount() removes every trace
+ * (DOM, styles, WebGL, listeners); the shell hosts it as the #/locker route, locker.html on its own.
+ * The mm-* classes stay as hooks (the phone's layout, phone/locker.css, and the shot scripts).
  */
 import {
   DEFAULT_COSMETIC_LOADOUT,
@@ -16,6 +19,9 @@ import {
   type DyeChannel,
 } from '@military-forge/content';
 import { CharacterAssembler, type CharacterInstance } from '../character';
+import { startFitting } from '../ui/fit';
+import { moveIndicator } from '../ui/motion';
+import { mountSprite } from '../ui/sprite';
 import css from './locker.css?inline';
 import { LocalLoadoutStore, ownedOnly, randomLoadout, starterInventory, withDye, withItem, type Inventory, type LoadoutStore } from './loadouts';
 import { Turntable, type FocusPreset, type LightPreset } from './turntable';
@@ -44,20 +50,25 @@ export function mountLockerRoute(container: HTMLElement, options: LockerOptions 
   return () => handle.unmount();
 }
 
-const TABS: readonly { slot: CosmeticSlot; label: string }[] = [
-  { slot: 'bodyType', label: 'Body' },
-  { slot: 'skinTone', label: 'Skin' },
-  { slot: 'headgear', label: 'Headgear' },
-  { slot: 'eyewear', label: 'Eyewear' },
-  { slot: 'top', label: 'Top' },
-  { slot: 'gloves', label: 'Gloves' },
-  { slot: 'legs', label: 'Legs' },
-  { slot: 'boots', label: 'Boots' },
-  { slot: 'jetpack', label: 'Jetpack' },
-  { slot: 'exhaust', label: 'Exhaust' },
-  { slot: 'trail', label: 'Trail' },
-  { slot: 'dye', label: 'Dyes' },
+/**
+ * The Locker's sections in round two's kit (data-screen="locker"), each one or more of the
+ * loadout's slots. The kit's Gun finishes and Muzzle fire live in the Armory (camos, fire colours):
+ * they aren't part of the saved loadout yet.
+ */
+const TABS: readonly { id: string; label: string; icon: string; slots: readonly { slot: CosmeticSlot; label: string }[] }[] = [
+  { id: 'outfit', label: 'Outfit', icon: 'shirt', slots: [{ slot: 'top', label: 'Top' }, { slot: 'legs', label: 'Legs' }, { slot: 'gloves', label: 'Gloves' }, { slot: 'boots', label: 'Boots' }] },
+  { id: 'helmet', label: 'Helmet', icon: 'helmet', slots: [{ slot: 'headgear', label: 'Headgear' }, { slot: 'eyewear', label: 'Eyewear' }] },
+  { id: 'body', label: 'Body', icon: 'user', slots: [{ slot: 'bodyType', label: 'Build' }, { slot: 'skinTone', label: 'Skin' }] },
+  { id: 'jetpack', label: 'Jetpack', icon: 'backpack', slots: [{ slot: 'jetpack', label: 'Jetpack' }, { slot: 'exhaust', label: 'Exhaust' }] },
+  { id: 'dyes', label: 'Dyes', icon: 'palette', slots: [{ slot: 'dye', label: 'Dyes' }] },
+  { id: 'trail', label: 'Dash trail', icon: 'sparkle', slots: [{ slot: 'trail', label: 'Dash trail' }] },
 ];
+const CHANNEL_LABEL: Readonly<Record<DyeChannel, string>> = { primary: 'Main', secondary: 'Trim', accent: 'Accent' };
+/** Each slot's glyph on an item without a colour (no item art yet). */
+const SLOT_GLYPH: Partial<Record<CosmeticSlot, string>> = {
+  top: 'shirt', legs: 'shirt', gloves: 'hand', boots: 'shirt', headgear: 'helmet', eyewear: 'eye',
+  bodyType: 'user', jetpack: 'backpack', exhaust: 'flame', trail: 'sparkle',
+};
 
 const SHAPES: Record<string, string> = {
   circle: '<circle cx="6" cy="6" r="4.6"/>',
@@ -66,22 +77,35 @@ const SHAPES: Record<string, string> = {
   pentagon: '<path d="M6 .9 11.2 4.7 9.2 10.9H2.8L.8 4.7z"/>',
   star: '<path d="m6 .6 1.6 3.6 3.9.4-2.9 2.6.8 3.9L6 9.1l-3.4 2 .8-3.9L.5 4.6l3.9-.4z"/>',
 };
-const LOCK = '<svg class="mm-lock-icon" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 5.5V4a3 3 0 0 1 6 0v1.5h.5a1 1 0 0 1 1 1V11a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1zm1.5 0h3V4a1.5 1.5 0 0 0-3 0z"/></svg>';
+
+const ic = (name: string, cls = 'ic') => `<svg class="${cls}" aria-hidden="true"><use href="#icon-${name}"/></svg>`;
 
 function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
-/** One item tile: rarity frame + shape (colour-blind safe), swatch for colour items, lock + how-to-get. */
-export function tileHtml(item: CosmeticDef, equipped: boolean, owned: boolean, channel?: DyeChannel): string {
+/**
+ * One item in the kit's look (.item): its art (a colour's swatch, or the section's glyph on its
+ * rarity's tint), its rarity's shape (colour-blind safe), its name, and On / Owned / how to get it.
+ * `picked`: the one being tried on.
+ */
+export function tileHtml(item: CosmeticDef, equipped: boolean, owned: boolean, channel?: DyeChannel, picked = false, glyph = 'shirt'): string {
   const r = RARITY_STYLE[item.rarity];
   const how = owned ? '' : cosmeticSourceLabel(item.source);
   const title = `${item.name} · ${r.label}${how ? ` · Locked: ${how}` : ''}`;
-  return `<button type="button" class="mm-tile${owned ? '' : ' mm-locked'}" style="--rarity:${r.colour}" data-id="${item.id}"${channel ? ` data-channel="${channel}"` : ''} aria-pressed="${equipped}" title="${escapeHtml(title)}">
-    <svg class="mm-rarity" viewBox="0 0 12 12" role="img" aria-label="${r.label}">${SHAPES[r.shape]}</svg>
-    ${item.colour ? `<span class="mm-swatch" style="background:${item.colour}"></span>` : ''}
-    <span class="mm-name">${escapeHtml(item.name)}</span>
-    ${owned ? '' : `<span class="mm-how">${LOCK}${escapeHtml(how)}</span>`}
+  const art = item.colour
+    ? `<span class="item__sw" style="--sw:${item.colour}"></span>`
+    : `<span class="mf-item__glyph" style="--rarity:${r.colour}">${ic(glyph)}</span>`;
+  const tag = equipped
+    ? `<span class="tag tag--you">${ic('check')}On</span>`
+    : owned
+      ? '<span class="tag tag--ghost">Owned</span>'
+      : `<span class="tag tag--ghost mm-how">${ic('lock')}${escapeHtml(how)}</span>`;
+  const cls = ['item', 'mm-tile', equipped ? 'is-on' : '', owned ? '' : 'is-locked mm-locked', picked ? 'is-picked' : ''].filter(Boolean).join(' ');
+  return `<button type="button" class="${cls}" role="radio" aria-checked="${picked}" aria-pressed="${equipped}" style="--rarity:${r.colour}" data-id="${item.id}"${channel ? ` data-channel="${channel}"` : ''} title="${escapeHtml(title)}">
+    <span class="item__art">${art}<svg class="mm-rarity" viewBox="0 0 12 12" role="img" aria-label="${r.label}">${SHAPES[r.shape]}</svg></span>
+    <b class="item__name mm-name">${escapeHtml(item.name)}</b>
+    ${tag}
   </button>`;
 }
 
@@ -89,38 +113,64 @@ export function mountLocker(container: HTMLElement, options: LockerOptions = {})
   const store = options.store ?? new LocalLoadoutStore();
   const inventory = options.inventory ?? starterInventory;
   const assembler = options.assembler ?? new CharacterAssembler();
+  mountSprite();
+  startFitting();
   const style = document.createElement('style');
   style.textContent = css;
-  const root = document.createElement('div');
-  root.className = 'mm-locker';
-  root.innerHTML = `
-    <header class="mm-header">
-      ${options.onExit ? '<button type="button" class="mm-button" data-action="exit">&larr; Back</button>' : ''}
-      <h1>Locker</h1>
-      <span class="mm-status" aria-live="polite"></span>
-      <button type="button" class="mm-button" data-action="random">Randomise</button>
-    </header>
-    <nav class="mm-tabs" role="tablist">${TABS.map((t, i) => `<button type="button" role="tab" data-tab="${i}">${t.label}</button>`).join('')}</nav>
-    <section class="mm-panel" role="tabpanel"></section>
-    <div class="mm-stage">
-      <canvas aria-label="Your soldier. Drag to rotate, scroll to zoom."></canvas>
-      <div class="mm-overlay">Loading soldier…</div>
-      <div class="mm-controls">
-        <div class="mm-seg" data-group="focus"><button data-focus="full">Full</button><button data-focus="face">Face</button><button data-focus="jetpack">Jetpack</button></div>
-        <div class="mm-seg" data-group="light"><button data-light="lobby">Lobby</button><button data-light="night">Night</button><button data-light="desert">Desert</button></div>
+  const fit = document.createElement('div');
+  fit.className = 'mf mf-fit mf-gear-fit kit-v2';
+  fit.innerHTML = `
+  <section class="screen screen--menu" data-screen="locker" data-active-state="outfit" aria-label="Locker">
+    <div class="bg" aria-hidden="true"><div class="bg__scrim"></div><div class="bg__camo"></div><div class="bg__grid"></div><div class="bg__dots"></div><div class="bg__slash"></div><div class="bg__word">LOCKER</div></div>
+    <div class="menu mm-locker">
+      <header class="menu-top mm-header">
+        ${options.onExit ? `<button type="button" class="btn btn--ghost btn--icon btn--sm m-p8 mm-button" data-action="exit" aria-label="Back">${ic('back')}</button>` : ''}
+        <h1 class="menu-top__title">Locker</h1><span class="serial">Quartermaster</span>
+        <span class="mm-status" aria-live="polite"></span>
+      </header>
+      <nav class="tabs lk__tabs mm-tabs" role="tablist" aria-label="Locker sections">${TABS.map((t, i) => `<button type="button" class="tab m-p8" role="tab" data-tab="${i}">${ic(t.icon)}${t.label}</button>`).join('')}<span class="m-p5" aria-hidden="true"></span></nav>
+      <div class="lk__stage mm-stage">
+        <span class="brackets" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <div class="lk__disc" aria-hidden="true"></div>
+        <canvas aria-label="Your soldier. Drag to turn, scroll to zoom."></canvas>
+        <div class="mm-overlay">Loading soldier…</div>
+        <div class="mf-lk__fits">
+          <span class="stamp stamp--volt stamp--lg lk__fits m-p7">${ic('fits')}Fits the body</span>
+          <p class="lk__rule">Nothing you wear sticks out past the body, so every outfit hides and hits the same.</p>
+        </div>
+        <div class="mm-controls">
+          <div class="seg mm-seg" data-group="focus" role="radiogroup" aria-label="View"><button type="button" class="seg__opt" data-focus="full">Full</button><button type="button" class="seg__opt" data-focus="face">Face</button><button type="button" class="seg__opt" data-focus="jetpack">Jetpack</button></div>
+          <span class="label lk__drag">${ic('rotate', 'ic ic--sm')}Drag to turn</span>
+          <div class="seg mm-seg" data-group="light" role="radiogroup" aria-label="Light"><button type="button" class="seg__opt" data-light="lobby">Lobby</button><button type="button" class="seg__opt" data-light="night">Night</button><button type="button" class="seg__opt" data-light="desert">Desert</button></div>
+        </div>
       </div>
-      <p class="mm-detail" aria-live="polite"></p>
-    </div>`;
-  container.append(style, root);
+      <section class="lk__panel card card--print mm-panel" role="tabpanel">
+        <div class="mm-panel__body"></div>
+        <p class="mm-detail lk__note" aria-live="polite"></p>
+        <div class="lk__act">
+          <button type="button" class="btn btn--ghost m-p8" data-action="random">${ic('dice')}Randomise</button>
+          <button type="button" class="btn btn--paper btn--xl m-p8" data-action="wear" disabled>${ic('check')}<span class="mm-wear">Wear it</span></button>
+        </div>
+      </section>
+    </div>
+  </section>`;
+  container.append(style, fit);
+  const root = fit.querySelector<HTMLElement>('.mm-locker')!;
+  const screen = fit.querySelector<HTMLElement>('.screen')!;
 
   const $ = <T extends Element>(sel: string) => root.querySelector<T>(sel)!;
-  const panel = $<HTMLElement>('.mm-panel');
+  const panel = $<HTMLElement>('.mm-panel__body');
   const detail = $<HTMLElement>('.mm-detail');
   const status = $<HTMLElement>('.mm-status');
   const overlay = $<HTMLElement>('.mm-overlay');
+  const wear = $<HTMLButtonElement>('[data-action="wear"]');
+  const wearText = $<HTMLElement>('.mm-wear');
+  const tabBar = $<HTMLElement>('.mm-tabs');
   const turntable = new Turntable($<HTMLCanvasElement>('canvas'));
   let loadout: CosmeticLoadout = DEFAULT_COSMETIC_LOADOUT;
-  let tab = 2;
+  /** what's being tried on: an item (and its dye channel), null when the soldier wears the saved look */
+  let trying: { id: string; channel?: DyeChannel } | null = null;
+  let tab = 0;
   let character: CharacterInstance | null = null;
   let alive = true;
   /** the player changed something before the saved look arrived: their edit wins */
@@ -129,24 +179,62 @@ export function mountLocker(container: HTMLElement, options: LockerOptions = {})
   let saves = 0;
 
   const select = (group: string, attr: string, value: string) => {
-    for (const b of root.querySelectorAll<HTMLElement>(`[data-group="${group}"] button`)) b.setAttribute('aria-pressed', String(b.dataset[attr] === value));
+    for (const b of root.querySelectorAll<HTMLElement>(`[data-group="${group}"] button`)) {
+      b.setAttribute('aria-pressed', String(b.dataset[attr] === value));
+      b.setAttribute('aria-checked', String(b.dataset[attr] === value));
+    }
+  };
+
+  /** the look with what's being tried on */
+  const preview = (): CosmeticLoadout => {
+    if (!trying) return loadout;
+    const item = getCosmetic(trying.id);
+    if (!item) return loadout;
+    return item.slot === 'dye' ? withDye(loadout, trying.channel ?? 'primary', item.id) : withItem(loadout, item.slot, item.id);
+  };
+
+  const renderWear = () => {
+    const item = trying ? getCosmetic(trying.id) : null;
+    const owned = item ? inventory.owns(item.id) : false;
+    const isOn = !item || (item.slot === 'dye' ? loadout.dyes[trying!.channel ?? 'primary'] === item.id : loadout.items[item.slot] === item.id);
+    wear.disabled = !item || isOn || !owned;
+    wearText.textContent = item && !owned ? 'Locked' : 'Wear it';
+    screen.setAttribute('data-active-state', [TABS[tab]!.id, item ? (owned ? 'trying' : 'trying-locked') : 'idle'].join(' '));
   };
 
   const render = () => {
-    root.querySelectorAll<HTMLElement>('[data-tab]').forEach((b, i) => b.setAttribute('aria-selected', String(i === tab)));
-    const { slot } = TABS[tab]!;
-    const tiles = (channel?: DyeChannel) =>
-      cosmeticsForSlot(slot)
-        .map((c) => tileHtml(c, channel ? loadout.dyes[channel] === c.id : slot !== 'dye' && loadout.items[slot] === c.id, inventory.owns(c.id), channel))
-        .join('');
-    panel.innerHTML =
-      slot === 'dye'
-        ? DYE_CHANNELS.map((ch) => `<h2>${ch[0]!.toUpperCase()}${ch.slice(1)}</h2><div class="mm-grid mm-swatches">${tiles(ch)}</div>`).join('')
-        : `<div class="mm-grid${cosmeticsForSlot(slot)[0]?.colour ? ' mm-swatches' : ''}">${tiles()}</div>`;
+    tabBar.querySelectorAll<HTMLElement>('[data-tab]').forEach((b, i) => b.setAttribute('aria-selected', String(i === tab)));
+    const sel = tabBar.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (sel) moveIndicator(tabBar.querySelector<HTMLElement>('.m-p5')!, sel.offsetLeft, sel.offsetWidth);
+    const t = TABS[tab]!;
+    const section = (slot: CosmeticSlot, label: string, multi: boolean) => {
+      const list = cosmeticsForSlot(slot);
+      const tiles = (channel?: DyeChannel) =>
+        list
+          .map((c) =>
+            tileHtml(
+              c,
+              channel ? loadout.dyes[channel] === c.id : slot !== 'dye' && loadout.items[slot] === c.id,
+              inventory.owns(c.id),
+              channel,
+              trying?.id === c.id && trying.channel === channel,
+              SLOT_GLYPH[slot] ?? t.icon,
+            ),
+          )
+          .join('');
+      const sw = list[0]?.colour ? ' mf-items--sw' : '';
+      if (slot === 'dye') return DYE_CHANNELS.map((ch) => `<h3 class="label mf-lk__sub">${CHANNEL_LABEL[ch]}</h3><div class="items${sw} mm-grid" role="radiogroup" aria-label="${CHANNEL_LABEL[ch]} dye">${tiles(ch)}</div>`).join('');
+      return `${multi ? `<h3 class="label mf-lk__sub">${label}</h3>` : ''}<div class="items${sw} mm-grid" role="radiogroup" aria-label="${label}">${tiles()}</div>`;
+    };
+    panel.innerHTML = `<h2 class="display lk__h">${t.label}</h2>${t.slots.map((x) => section(x.slot, x.label, t.slots.length > 1)).join('')}`;
+    renderWear();
   };
+
+  const showOnSoldier = () => character?.setLoadout(preview());
 
   const apply = (next: CosmeticLoadout) => {
     loadout = next;
+    trying = null;
     edited = true;
     character?.setLoadout(loadout);
     render();
@@ -167,7 +255,10 @@ export function mountLocker(container: HTMLElement, options: LockerOptions = {})
     const d = target.dataset;
     if (d.action === 'exit') options.onExit?.();
     else if (d.action === 'random') apply(randomLoadout(inventory));
-    else if (d.tab !== undefined) {
+    else if (d.action === 'wear') {
+      const next = preview();
+      if (trying && inventory.owns(trying.id)) apply(next);
+    } else if (d.tab !== undefined) {
       tab = Number(d.tab);
       render();
     } else if (d.focus) {
@@ -177,12 +268,14 @@ export function mountLocker(container: HTMLElement, options: LockerOptions = {})
       turntable.setLighting(d.light as LightPreset);
       select('light', 'light', d.light);
     } else if (d.id) {
+      // try it on: the soldier wears it; Wear it keeps it (an item you own)
       const item = getCosmetic(d.id)!;
       const how = cosmeticSourceLabel(item.source);
-      detail.textContent = `${item.name} · ${RARITY_STYLE[item.rarity].label}${inventory.owns(item.id) ? '' : ` · Locked. How to get: ${how}`}`;
-      if (!inventory.owns(item.id)) return;
-      if (item.slot === 'dye') apply(withDye(loadout, d.channel as DyeChannel, item.id));
-      else apply(withItem(loadout, item.slot, item.id));
+      const owned = inventory.owns(item.id);
+      detail.textContent = `${item.name} · ${RARITY_STYLE[item.rarity].label}${owned ? '' : ` · Locked. How to get it: ${how}`}`;
+      trying = { id: item.id, ...(d.channel ? { channel: d.channel as DyeChannel } : {}) };
+      showOnSoldier();
+      render();
     }
   });
 
@@ -200,7 +293,7 @@ export function mountLocker(container: HTMLElement, options: LockerOptions = {})
       const instance = await assembler.create(loadout, 0);
       if (!alive) return instance.dispose();
       character = instance;
-      character.setLoadout(loadout);
+      character.setLoadout(preview());
       turntable.setCharacter(character);
       overlay.hidden = true;
       render();
@@ -217,7 +310,7 @@ export function mountLocker(container: HTMLElement, options: LockerOptions = {})
       alive = false;
       character?.dispose();
       turntable.dispose();
-      root.remove();
+      fit.remove();
       style.remove();
       if (!options.assembler) assembler.dispose();
     },

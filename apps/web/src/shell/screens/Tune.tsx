@@ -83,7 +83,7 @@ export function TunePanel({ online, getTuning, setTuning, subscribe, onClose, co
   const changed = Object.keys(changedTuning(t)).length;
 
   return (
-    <Screen name="tune" kind="game" kit="v2" states={[online ? 'host-open' : 'training-open', preset, copied === 'yes' ? 'copied' : 'idle']} label="Tune the game">
+    <Screen name="tune" kind="game" states={[online ? 'host-open' : 'training-open', preset, copied === 'yes' ? 'copied' : 'idle']} label="Tune the game">
       <aside className="tune m-p9 m-p9--right" aria-labelledby="tune-t">
         <header className="tune__head">
           <div>
@@ -235,7 +235,7 @@ export function TuneToast({ note }: { note: TuneNote | null }) {
   }, [note]);
   if (!shown) return null;
   return (
-    <Screen name="tune-toast" kind="game" kit="v2" states={[leaving ? 'leaving' : 'guest-view']} label="The host retuned the room">
+    <Screen name="tune-toast" kind="game" states={[leaving ? 'leaving' : 'guest-view']} label="The host retuned the room">
       <div className={leaving ? 'toast plate m-p9 is-leaving' : 'toast plate m-p9'} role="status">
         <Icon name="sliders" size="sm" />
         <span>

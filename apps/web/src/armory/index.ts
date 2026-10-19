@@ -6,7 +6,10 @@
  */
 import type { LightPreset } from '../locker/turntable';
 import css from './armory.css?inline';
-import { statsCard } from './stats';
+import { statsCard, weaponDef } from './stats';
+import { startFitting } from '../ui/fit';
+import { weaponIcon } from '../ui/icons';
+import { mountSprite } from '../ui/sprite';
 import { getAttachment } from '@military-forge/content';
 import { TextureLoader, type Texture } from 'three';
 import { camoFits, camoMaterial, prepareCamoPatterns, type CamoSheet } from './camo';
@@ -36,6 +39,8 @@ export interface ArmoryOptions {
   focus?: string;
   light?: LightPreset;
   fire?: boolean;
+  /** "Try it in training" (a game weapon): default, the app's training with it in hand (/?app&try=id) */
+  onTry?: (weaponId: string) => void;
 }
 
 export interface ArmoryHandle {
@@ -70,44 +75,106 @@ const SOCKET_NOTES: Record<string, string> = {
   pilot: 'pilot light', charge: 'charge wind-up', face: 'blocks bullets',
 };
 
+const ic = (name: string, cls = 'ic') => `<svg class="${cls}" aria-hidden="true"><use href="#icon-${name}"/></svg>`;
+
+/** The rack's families in the kit's order, and their words. */
+const FAMILIES: readonly [string, string][] = [
+  ['pistol', 'Pistol'], ['rifle', 'Rifle'], ['shotgun', 'Shotgun'], ['sniper', 'Sniper'], ['launcher', 'Launcher'],
+  ['heavy', 'Heavy'], ['shield', 'Shield'], ['melee', 'Melee'], ['thrown', 'Thrown'],
+];
+
+/** The kit's list (.ar__list): the weapons by family, each with its glyph. */
+export function weaponList(weapons: Readonly<Record<string, { name: string; family: string }>>): string {
+  const groups = new Map<string, [string, { name: string; family: string }][]>();
+  for (const [id, w] of Object.entries(weapons)) groups.set(w.family, [...(groups.get(w.family) ?? []), [id, w]]);
+  const order = [...FAMILIES.map(([f]) => f), ...[...groups.keys()].filter((f) => !FAMILIES.some(([k]) => k === f))];
+  return `<ul>${order
+    .filter((f) => groups.has(f))
+    .map((f) => {
+      const label = FAMILIES.find(([k]) => k === f)?.[1] ?? f;
+      const items = groups.get(f)!.map(([id, w]) => {
+        const glyph = weaponIcon(id);
+        return `<li><button type="button" class="ar__item m-p8" data-weapon="${id}" aria-pressed="false">${glyph ? ic(glyph, 'ic--kf') : ''}<span>${escapeHtml(w.name)}</span></button></li>`;
+      });
+      return `<li><span class="label">${escapeHtml(label)}</span><ul>${items.join('')}</ul></li>`;
+    })
+    .join('')}</ul>`;
+}
+
+/** An attachment's glyph by what it is (its id) or where it mounts. */
+export function attachIcon(id: string, mount: string): string {
+  if (/suppress|silenc/.test(id) || mount === 'muzzle') return 'att-suppressor';
+  if (/laser/.test(id)) return 'att-laser';
+  if (/grip/.test(id)) return 'att-foregrip';
+  if (/mag/.test(id) || mount === 'mag') return 'att-extmag';
+  if (mount === 'rail_bottom') return 'att-foregrip';
+  return 'att-scope';
+}
+
+/** Training with this gun in hand (main.ts reads ?try=). */
+function tryInTraining(weaponId: string): void {
+  location.assign(`/?app&try=${encodeURIComponent(weaponId)}`);
+}
+
 function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
 export function mountArmory(container: HTMLElement, options: ArmoryOptions = {}): ArmoryHandle {
   const assets = options.assets ?? 'assets/';
+  mountSprite();
+  startFitting();
   const style = document.createElement('style');
   style.textContent = css;
-  const root = document.createElement('div');
-  root.className = 'mf-armory';
-  root.innerHTML = `
-    <header class="mf-header">
-      ${options.onExit ? '<button type="button" class="mf-button" data-action="exit">&larr; Back</button>' : ''}
-      <h1>Armory</h1>
-      <span class="mf-status" aria-live="polite"></span>
-    </header>
-    <nav class="mf-list" aria-label="Weapons"></nav>
-    <div class="mf-stage">
-      <canvas aria-label="The weapon. Drag to rotate and tilt, scroll to zoom."></canvas>
-      <div class="mf-overlay">Loading…</div>
-      <div class="mf-controls">
-        <div class="mf-seg" data-group="focus"><button data-focus="whole">Whole</button><button data-focus="muzzle">Muzzle</button></div>
-        <button type="button" class="mf-toggle" data-action="sockets" aria-pressed="true">Sockets</button>
-        <button type="button" class="mf-toggle" data-action="fire">Fire</button>
-        <div class="mf-seg" data-group="light"><button data-light="lobby">Lobby</button><button data-light="night">Night</button><button data-light="desert">Desert</button></div>
+  const fit = document.createElement('div');
+  fit.className = 'mf mf-fit mf-gear-fit kit-v2';
+  fit.innerHTML = `
+  <section class="screen screen--menu" data-screen="armory" data-active-state="idle" aria-label="Armory">
+    <div class="bg" aria-hidden="true"><div class="bg__scrim"></div><div class="bg__camo"></div><div class="bg__grid"></div><div class="bg__dots"></div><div class="bg__slash"></div><div class="bg__word">ARMORY</div></div>
+    <div class="menu mf-armory">
+      <header class="menu-top mf-header">
+        ${options.onExit ? `<button type="button" class="btn btn--ghost btn--icon btn--sm m-p8" data-action="exit" aria-label="Back">${ic('back')}</button>` : ''}
+        <h1 class="menu-top__title">Armory</h1>
+        <span class="serial mf-status" aria-live="polite">Weapons bench</span>
+      </header>
+      <div class="menu-body ar">
+        <nav class="ar__list mf-list" aria-label="Weapons"></nav>
+        <div class="ar__stage mf-stage">
+          <span class="label label--volt mf-ar__kind"></span>
+          <h2 class="display display--print ar__name m-p1"></h2>
+          <div class="ar__table">
+            <div class="ar__disc" aria-hidden="true"><i></i></div>
+            <canvas aria-label="The weapon. Drag to turn and tilt, scroll to zoom."></canvas>
+            <div class="mf-overlay">Loading…</div>
+            <span class="ar__rot label">${ic('rotate', 'ic ic--sm')}Drag to turn · scroll to zoom</span>
+          </div>
+          <div class="mf-controls">
+            <button type="button" class="btn btn--volt btn--sm m-p8 mf-toggle" data-action="fire">${ic('target')}Fire</button>
+            <div class="seg" data-group="focus" role="radiogroup" aria-label="View"><button type="button" class="seg__opt" data-focus="whole">Whole</button><button type="button" class="seg__opt" data-focus="muzzle">Muzzle</button></div>
+            <div class="seg" data-group="light" role="radiogroup" aria-label="Light"><button type="button" class="seg__opt" data-light="lobby">Lobby</button><button type="button" class="seg__opt" data-light="night">Night</button><button type="button" class="seg__opt" data-light="desert">Desert</button></div>
+            <button type="button" class="btn btn--ghost btn--sm m-p8 mf-toggle" data-action="sockets" aria-pressed="true">${ic('eye')}Sockets</button>
+          </div>
+          <div class="ar__ctrl mf-camo"></div>
+        </div>
+        <aside class="ar__side mf-side">
+          <section class="ticket ar__stats mf-card" aria-live="polite"></section>
+          <section class="card ar__att mf-attach"></section>
+          <details class="card mf-sockets-box"><summary class="label">Sockets · where parts and effects attach</summary><div class="mf-sockets"></div></details>
+          <button type="button" class="btn btn--volt btn--xl btn--block m-p8 mf-try" data-action="try">${ic('target')}Try it in training</button>
+        </aside>
       </div>
     </div>
-    <aside class="mf-side">
-      <section class="mf-card" aria-live="polite"></section>
-      <section class="mf-camo"></section>
-      <section class="mf-attach"></section>
-      <section class="mf-sockets"></section>
-    </aside>`;
-  container.append(style, root);
+  </section>`;
+  container.append(style, fit);
+  const root = fit.querySelector<HTMLElement>('.mf-armory')!;
+  const screen = fit.querySelector<HTMLElement>('.screen')!;
 
   const $ = <T extends Element>(sel: string) => root.querySelector<T>(sel)!;
   const list = $<HTMLElement>('.mf-list');
   const card = $<HTMLElement>('.mf-card');
+  const kind = $<HTMLElement>('.mf-ar__kind');
+  const nameEl = $<HTMLElement>('.ar__name');
+  const tryBtn = $<HTMLButtonElement>('[data-action="try"]');
   const socketPanel = $<HTMLElement>('.mf-sockets');
   const attachPanel = $<HTMLElement>('.mf-attach');
   const camoPanel = $<HTMLElement>('.mf-camo');
@@ -129,29 +196,40 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
 
   const renderCamo = () => {
     if (!camoSheet) return;
-    const chips = (p: string[]) => `<span class="mf-chips">${p.map((c) => `<i style="background:${c}"></i>`).join('')}</span>`;
-    const button = ([id, c]: [string, CamoSheet['camos'][string]]) =>
-      `<button type="button" data-camo="${id}" aria-pressed="${camo === id}"${camoFits(c, current) ? '' : ' disabled title="not for this weapon"'}>${chips(c.palette)}${escapeHtml(c.name)}</button>`;
+    const dot = (p: string[]) => `<i class="mf-sw">${p.slice(0, 2).map((c) => `<b style="background:${c}"></b>`).join('')}</i>`;
+    const opt = ([id, c]: [string, CamoSheet['camos'][string]]) =>
+      `<button type="button" class="seg__opt" role="radio" data-camo="${id}" aria-checked="${camo === id}" aria-pressed="${camo === id}"${camoFits(c, current) ? '' : ' disabled title="Not for this weapon"'}>${dot(c.palette)}${escapeHtml(c.name)}</button>`;
     const all = Object.entries(camoSheet.camos);
     const finishes = all.filter(([, c]) => c.kind === 'finish');
+    const camos = all.filter(([, c]) => c.kind !== 'finish');
     const tints = vfx?.fireTints?.tints;
+    const factory = `<button type="button" class="seg__opt" role="radio" data-camo="" aria-checked="${camo === ''}" aria-pressed="${camo === ''}">Factory</button>`;
     // no camo panels (the riot shield, the grenades): no camo or finish to offer (review L12)
     const paintable = viewer.hasCamoPanels();
-    camoPanel.innerHTML = `${paintable ? `<h3>Camo <small>body panels only</small></h3><div class="mf-camos">
-      <button type="button" data-camo="" aria-pressed="${camo === ''}">Factory</button>
-      ${all.filter(([, c]) => c.kind !== 'finish').map(button).join('')}
-    </div>${finishes.length ? `<h3>Finish <small>cosmetic</small></h3><div class="mf-camos">${finishes.map(button).join('')}</div>` : ''}` : ''}${
+    camoPanel.innerHTML = `${
+      paintable
+        ? `<div><span class="label">Finish</span><div class="seg" role="radiogroup" aria-label="Finish">${factory}${finishes.map(opt).join('')}</div></div>${
+            camos.length ? `<div><span class="label">Camo · body panels</span><div class="seg" role="radiogroup" aria-label="Camo">${camos.map(opt).join('')}</div></div>` : ''
+          }`
+        : ''
+    }${
       tints && vfx?.weapons[current]?.flash
-        ? `<h3>Fire colour <small>cosmetic</small></h3><div class="mf-camos">${Object.entries(tints).map(([id, t]) =>
-          `<button type="button" data-tint="${id}" aria-pressed="${fireTint === id}">${t.flash ? chips([t.flash, t.tracer ?? t.flash]) : ''}${escapeHtml(t.name)}</button>`).join('')}</div>`
+        ? `<div><span class="label">Muzzle fire</span><div class="seg" role="radiogroup" aria-label="Muzzle fire">${Object.entries(tints)
+            .map(([id, t]) => `<button type="button" class="seg__opt" role="radio" data-tint="${id}" aria-checked="${fireTint === id}" aria-pressed="${fireTint === id}">${t.flash ? dot([t.flash, t.tracer ?? t.flash]) : ''}${escapeHtml(t.name)}</button>`)
+            .join('')}</div></div>`
         : ''
     }`;
+  };
+  const setState = () => {
+    const finish = camoSheet?.camos[camo]?.name.toLowerCase().replace(/\s+/g, '-') ?? 'factory';
+    screen.setAttribute('data-active-state', [current, finish, mounted.length ? 'attachment' : 'no-attachment'].filter(Boolean).join(' '));
   };
   const applyCamo = () => {
     const def = camoSheet?.camos[camo];
     const env = def?.kind === 'finish' ? viewer.environment() : null;
     viewer.setCamo(def && camoTex && camoSheet ? (m) => camoMaterial(m, camoTex!, camoSheet!, def, env) : null);
     renderCamo();
+    setState();
   };
   let attachIndex: Record<string, AttachmentEntry & { fits: string[] }> = {};
   /** mounted attachment ids on the current weapon */
@@ -160,13 +238,19 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
   const fitting = (id: string) => Object.keys(attachIndex).filter((a) => attachIndex[a]!.fits.includes(id));
   const renderAttach = () => {
     const list = fitting(current);
+    attachPanel.hidden = list.length === 0;
     attachPanel.innerHTML = list.length
-      ? `<h3>Attachments <small>in-match pickups</small></h3><ul>${list.map((a) =>
-        `<li><button type="button" data-attach="${a}" aria-pressed="${mounted.includes(a)}">${escapeHtml(getAttachment(a)?.name ?? a)}<small>${attachIndex[a]!.mount.replace('_', ' ')}</small></button></li>`).join('')}</ul>`
+      ? `<span class="label">Attachments · preview</span><div class="ar__atts">${list
+          .map((a) => {
+            const name = getAttachment(a)?.name ?? a;
+            return `<button type="button" class="attb m-p8" data-attach="${a}" aria-pressed="${mounted.includes(a)}" title="${escapeHtml(name)} · ${attachIndex[a]!.mount.replace('_', ' ')}">${ic(attachIcon(a, attachIndex[a]!.mount))}<span>${escapeHtml(name)}</span></button>`;
+          })
+          .join('')}</div><p class="mf-ar__note">In-match pickups: shown here on the gun.</p>`
       : '';
   };
   const applyAttach = async () => {
     renderAttach();
+    setState();
     const failed = await viewer.setAttachments(mounted.map((a) => ({ id: a, url: `${assets}attachments/${attachIndex[a]!.file}`, entry: attachIndex[a]! })));
     if (failed.length) {
       // a part that didn't load isn't mounted: un-press it
@@ -186,26 +270,43 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
   };
 
   const press = (group: string, attr: string, value: string) => {
-    for (const b of root.querySelectorAll<HTMLElement>(`[data-group="${group}"] button`)) b.setAttribute('aria-pressed', String(b.dataset[attr] === value));
+    for (const b of root.querySelectorAll<HTMLElement>(`[data-group="${group}"] button`)) {
+      b.setAttribute('aria-pressed', String(b.dataset[attr] === value));
+      b.setAttribute('aria-checked', String(b.dataset[attr] === value));
+    }
   };
 
   const renderCard = (id: string) => {
     const w = weapons[id]!;
     const c = statsCard(id);
-    const head = `<h2>${escapeHtml(c?.title ?? w.name)}</h2><p class="mf-sub">${escapeHtml(c?.subtitle ?? w.family)} · ${w.tris} tris · ${w.lengthM.toFixed(2)} m</p>`;
+    kind.textContent = c?.subtitle ?? w.family;
+    nameEl.textContent = c?.title ?? w.name;
+    nameEl.classList.remove('m-p1');
+    void nameEl.offsetWidth; // restart the focus pull for the new name
+    nameEl.classList.add('m-p1');
     card.innerHTML = c
-      ? head + `<dl>${c.rows.map((r) => `<div><dt>${escapeHtml(r.label)}</dt><dd>${escapeHtml(r.value)}</dd>${r.bar === undefined ? '' : `<span class="mf-bar" style="--fill:${(r.bar * 100).toFixed(0)}%"></span>`}</div>`).join('')}</dl>`
-      : head + '<p class="mf-note">Not in packages/content yet: the model is ready, the stats come with the arsenal stream.</p>';
+      ? `<span class="label">Stat card</span><ul>${c.rows
+          .map((r) => `<li><span>${escapeHtml(r.label)}</span><b class="num">${escapeHtml(r.value)}</b>${r.bar === undefined ? '' : `<span class="bar" style="--x:${r.bar.toFixed(3)}"><i></i></span>`}</li>`)
+          .join('')}</ul>`
+      : '<span class="label">Stat card</span><p class="mf-ar__note">Art only so far: the model is ready, its stats come with the arsenal.</p>';
+    tryBtn.hidden = !c || !weaponDef(id);
     const ss = sockets[id]?.sockets ?? {};
     const offHand = sockets[id]?.frame === 'shield';
-    socketPanel.innerHTML = `<h3>Sockets</h3><ul>${Object.keys(ss).map((name) =>
-      `<li><button type="button" data-socket="${name}"><span class="mf-dot" style="background:${SOCKET_COLOURS[name] ?? '#fff'}"></span>${name}<small>${name === 'grip' && offHand ? 'off hand' : (SOCKET_NOTES[name] ?? '')}${ss[name]!.occupied ? ` · ${escapeHtml(ss[name]!.occupied!)} built in` : ''}</small></button></li>`).join('')}</ul>`;
+    socketPanel.innerHTML = `<ul>${Object.keys(ss)
+      .map(
+        (name) =>
+          `<li><button type="button" data-socket="${name}"><span class="mf-dot" style="background:${SOCKET_COLOURS[name] ?? 'var(--c-text)'}"></span>${name}<small>${name === 'grip' && offHand ? 'off hand' : (SOCKET_NOTES[name] ?? '')}${ss[name]!.occupied ? ` · ${escapeHtml(ss[name]!.occupied!)} built in` : ''}</small></button></li>`,
+      )
+      .join('')}</ul>`;
   };
 
   const select = async (id: string) => {
     if (!weapons[id]) return;
     current = id;
-    for (const b of list.querySelectorAll<HTMLElement>('[data-weapon]')) b.setAttribute('aria-current', String(b.dataset.weapon === id));
+    for (const b of list.querySelectorAll<HTMLElement>('[data-weapon]')) {
+      b.setAttribute('aria-pressed', String(b.dataset.weapon === id));
+      b.classList.toggle('is-sel', b.dataset.weapon === id);
+    }
     renderCard(id);
     press('focus', 'focus', 'whole');
     const hook = vfx?.weapons[id];
@@ -235,6 +336,7 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
     if (!t) return;
     const d = t.dataset;
     if (d.action === 'exit') options.onExit?.();
+    else if (d.action === 'try') (options.onTry ?? tryInTraining)(current);
     else if (d.weapon) void select(d.weapon);
     else if (d.attach) toggleAttach(d.attach);
     else if (d.camo !== undefined) {
@@ -292,9 +394,8 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
       if (options.camo && cs?.camos[options.camo]) camo = options.camo;
       if (options.fireTint && v?.fireTints?.tints[options.fireTint]) fireTint = options.fireTint;
       renderCamo();
-      list.innerHTML = Object.entries(weapons).map(([id, e]) =>
-        `<button type="button" data-weapon="${id}"><strong>${escapeHtml(e.name)}</strong><small>${escapeHtml(e.family)}${statsCard(id) ? '' : ' · art only'}</small></button>`).join('');
-      status.textContent = `${Object.keys(weapons).length} weapons`;
+      list.innerHTML = weaponList(weapons);
+      status.textContent = `Weapons bench · ${Object.keys(weapons).length} on the rack`;
       await select(options.weapon && weapons[options.weapon] ? options.weapon : Object.keys(weapons)[0]!);
       if (!alive) return;
       for (const a of options.attach ?? []) if (attachIndex[a]?.fits.includes(current)) toggleAttach(a);
@@ -311,7 +412,7 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
     unmount() {
       alive = false;
       viewer.dispose();
-      root.remove();
+      fit.remove();
       style.remove();
     },
   };

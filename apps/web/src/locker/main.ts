@@ -1,7 +1,9 @@
-/** Standalone Locker page (/locker.html) until W4's shell hosts the Locker as a route. */
+/** Standalone Locker page (/locker.html); the app hosts the Locker as its #/locker route too. */
 import { GAME_NAME } from '@military-forge/shared';
+import { applyPageSettings } from '../ui/pageSettings';
 import { mountLocker } from '.';
 
+applyPageSettings();
 document.title = `${GAME_NAME} · Locker`;
 const locker = mountLocker(document.getElementById('locker')!, { onExit: () => location.assign('/') });
 

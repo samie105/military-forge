@@ -19,6 +19,9 @@ describe('links', () => {
     expect(intentFromLocation({ pathname: '/', search: '?room=kqx-mzp' })).toEqual({ to: 'join', code: 'KQXMZP' });
     expect(intentFromLocation({ pathname: '/r/NOPE0', search: '' })).toEqual({ to: 'home' });
     expect(intentFromLocation({ pathname: '/', search: '?app' })).toEqual({ to: 'home' });
+    // the Armory's Try it in training
+    expect(intentFromLocation({ pathname: '/', search: '?app&try=k47' })).toEqual({ to: 'training' });
+    expect(intentFromLocation({ pathname: '/', search: '?try=<script>' })).toEqual({ to: 'home' });
   });
 
   it("a room's socket is the API's gsUrl, else this site's own /ws/<code>", () => {

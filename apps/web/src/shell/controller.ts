@@ -138,6 +138,8 @@ function saveSettings(s: Settings): void {
 
 /** `/r/CODE` or `?room=CODE` → join it; anything else → home. */
 export function intentFromLocation(loc: Pick<Location, 'pathname' | 'search'>): Intent {
+  // the Armory's "Try it in training" (?try=<weapon id>): straight to training
+  if (/^[a-z0-9_-]{1,32}$/.test(new URLSearchParams(loc.search).get('try') ?? '')) return { to: 'training' };
   const path = /^\/r\/([^/]+)\/?$/.exec(loc.pathname);
   const raw = path ? decodeURIComponent(path[1]!) : new URLSearchParams(loc.search).get('room');
   if (raw === null) return { to: 'home' };
@@ -218,7 +220,7 @@ export class ShellController {
         /* none */
       }
       this.set({ profile: { nickname: name || `Pilot${Math.floor(Math.random() * 900 + 100)}`, changeableAt: null, offline: true } });
-      this.go(intent.to === 'join' ? intent : { to: 'home' });
+      this.go(intent.to === 'join' || intent.to === 'training' ? intent : { to: 'home' });
       return;
     }
     if (!me) {

@@ -50,7 +50,7 @@ export function TipsCard({ bindings, doubleTapDash = true }: { bindings: Setting
   const ctl = useCtl();
   const layout = useKeyboardLayout();
   return (
-    <Screen name="tips" kind="game" kit="v2" label="How to play">
+    <Screen name="tips" kind="game" label="How to play">
       <aside className="mf-tips card card--print m-p1" aria-label="How to play">
         <p className="eyebrow">How to play</p>
         <h2 className="display mf-tips__h">Controls</h2>

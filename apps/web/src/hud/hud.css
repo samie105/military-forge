@@ -118,3 +118,18 @@ html.reduce-motion #hud { transition: none; }
 #hud[data-active-state~="pickup-crate-leaving"] .mf-hud-desktop .pickup:not(.mf-pickup-item),
 #hud[data-active-state~="pickup-item-leaving"] .mf-hud-desktop .mf-pickup-item { animation: m-edge-out var(--m-fast) var(--ease-leave) both; }
 
+
+/* world-space tags (worldTags.ts): over the items on the map, placed by transform at a point above
+   them (above head height); a lone crate's label on its stem, the rack's paper tags on two rows (the
+   script stacks them by their measured height), its sign above */
+#hud .mf-hud-desktop .mf-world { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+#hud .mf-world > * { position: absolute; left: 0; top: 0; will-change: transform; translate: -50% -100%; }
+#hud .mf-world .crate__float { bottom: auto; }
+#hud .mf-world .crate__float i { height: 28px; }
+#hud .mf-world .crate__label b { font-weight: var(--fw-black); }
+#hud .mf-world .rack__tag { min-width: 0; box-shadow: var(--sh-card-sm); }
+#hud .mf-world .rack__tag b { font-size: var(--fs-18); }
+#hud .mf-world .rack__tag span { font-size: var(--fs-16); }
+#hud .mf-world .mf-rack-sign { display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); padding: var(--sp-2) var(--sp-4); background: var(--c-paper-3); color: var(--c-paper-text); border: var(--bw-chunky) solid var(--c-ink-950); border-radius: var(--r-sm); box-shadow: var(--sh-card-sm); font-size: var(--fs-16); font-weight: var(--fw-bold); white-space: nowrap; }
+#hud .mf-world .mf-rack-sign[hidden] { display: none; }
+#hud .mf-world .mf-rack-sign .display { font-size: var(--fs-28); background: var(--c-ink-950); color: var(--c-volt); padding: 0 var(--sp-3); rotate: -1.5deg; }

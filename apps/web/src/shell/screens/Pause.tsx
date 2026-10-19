@@ -38,7 +38,7 @@ export function Pause({ store }: { store: ShellStore }) {
   const row = (i: number) => ({ '--i': i }) as CSSProperties;
   const leaveLabel = room ? (playing ? 'Leave match' : 'Leave room') : 'Quit training';
   return (
-    <Screen name="pause" kind="game" kit="v2" states={[tune ? 'host' : 'guest', confirm ? 'confirm-leave' : 'menu']} label="Menu" modal>
+    <Screen name="pause" kind="game" states={[tune ? 'host' : 'guest', confirm ? 'confirm-leave' : 'menu']} label="Menu" modal>
       <div className="pause__dim mf-pause__dim" aria-hidden="true"></div>
       <nav className="pause plate m-p1" aria-label="Menu">
         <span className="eyebrow">{room ? 'Comms · the match keeps running' : 'Training keeps running'}</span>

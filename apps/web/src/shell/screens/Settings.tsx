@@ -576,7 +576,7 @@ export function SettingsScreen({ store }: { store: ShellStore }) {
     if (el && bar.current) moveIndicator(bar.current, el.offsetTop, el.offsetHeight);
   }, [tab]);
   return (
-    <Screen name="settings" kind="menu" kit="v2" states={[tab]} label="Settings" modal>
+    <Screen name="settings" kind="menu" states={[tab]} label="Settings" modal>
       <Backdrop word="SET" />
       <div className="menu">
         <header className="menu-top">
