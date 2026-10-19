@@ -1,11 +1,11 @@
 /**
- * Postgres schema, first cut of docs/06 §7: the identity tables only (users, identities,
- * profiles, sessions). Change it, then `pnpm --filter @military-forge/api db:generate` writes the
+ * Postgres schema, first cut of docs/06 §7: the identity tables (users, identities, profiles,
+ * sessions), the players' saved loadouts, and match results with lifetime stats. Change it, then `pnpm --filter @military-forge/api db:generate` writes the
  * next migration into drizzle/. Timestamps are always written by the app clock, so tests can
  * move time.
  */
 import { sql } from 'drizzle-orm';
-import { check, index, integer, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
+import { boolean, check, index, integer, jsonb, pgTable, primaryKey, smallint, text, timestamp } from 'drizzle-orm/pg-core';
 
 export const USER_STATUSES = ['active', 'banned', 'deleted'] as const;
 export type UserStatus = (typeof USER_STATUSES)[number];
@@ -81,4 +81,103 @@ export const sessions = pgTable(
     ipPrefix: text('ip_prefix'),
   },
   (t) => [index('sessions_user_id_idx').on(t.userId)],
+);
+
+/** How many saved loadouts a player has (docs/04 §6: three presets); the game uses slot 0 for now. */
+export const LOADOUT_SLOT_COUNT = 3;
+
+/** What a loadout row holds (validated against @military-forge/content on every write: loadouts/validate.ts). */
+export interface LoadoutData {
+  /** the Locker look: one cosmetic id per slot, one dye id per channel */
+  look: { items: Record<string, string>; dyes: Record<string, string> };
+  /** the two guns the player spawns with, by weapon id (not index: indices may move) */
+  guns: [string, string];
+}
+
+/** A player's saved loadouts (docs/06 §7 `loadouts(user_id, slot, data jsonb)`), one row per preset slot. */
+export const loadouts = pgTable(
+  'loadouts',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    slot: smallint('slot').notNull(),
+    data: jsonb('data').$type<LoadoutData>().notNull(),
+    updatedAt: timestamp('updated_at', tz).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.slot] }), check('loadouts_slot_check', sql`${t.slot} between 0 and ${sql.raw(String(LOADOUT_SLOT_COUNT - 1))}`)],
+);
+
+/**
+ * One row per finished match, written once (the game server's match id is the key: a retried
+ * report changes nothing). `result` keeps the whole report as sent, bots' counts included.
+ */
+export const matches = pgTable(
+  'matches',
+  {
+    id: text('id').primaryKey(),
+    mode: text('mode').notNull(),
+    map: text('map').notNull(),
+    room: text('room').notNull(),
+    startedAt: timestamp('started_at', tz).notNull(),
+    endedAt: timestamp('ended_at', tz).notNull(),
+    durationS: integer('duration_s').notNull(),
+    serverBuild: text('server_build').notNull(),
+    result: jsonb('result').notNull(),
+    recordedAt: timestamp('recorded_at', tz).notNull(),
+  },
+  (t) => [index('matches_ended_at_idx').on(t.endedAt)],
+);
+
+/** A person's line in a match (bots never get one). */
+export const matchPlayers = pgTable(
+  'match_players',
+  {
+    matchId: text('match_id')
+      .notNull()
+      .references(() => matches.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    placement: smallint('placement').notNull(),
+    score: integer('score').notNull(),
+    kills: integer('kills').notNull(),
+    deaths: integer('deaths').notNull(),
+    assists: integer('assists').notNull(),
+    damage: integer('damage').notNull(),
+    damageTaken: integer('damage_taken').notNull(),
+    headshots: integer('headshots').notNull(),
+    bestStreak: integer('best_streak').notNull(),
+    left: boolean('left').notNull(),
+    mvp: boolean('mvp').notNull(),
+    xpGained: integer('xp_gained').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.matchId, t.userId] }), index('match_players_user_id_idx').on(t.userId)],
+);
+
+/** `weapon_id` for the all-weapons totals row in stats_lifetime. */
+export const ALL_WEAPONS = '*';
+
+/**
+ * Lifetime totals per player (docs/06 §7): one `*` row with everything, plus one row per kill
+ * source (a weapon id, or melee / grenade / mine / gas / world) with its kills.
+ */
+export const statsLifetime = pgTable(
+  'stats_lifetime',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    weaponId: text('weapon_id').notNull(),
+    matches: integer('matches').notNull().default(0),
+    wins: integer('wins').notNull().default(0),
+    kills: integer('kills').notNull().default(0),
+    deaths: integer('deaths').notNull().default(0),
+    assists: integer('assists').notNull().default(0),
+    damage: integer('damage').notNull().default(0),
+    headshots: integer('headshots').notNull().default(0),
+    bestStreak: integer('best_streak').notNull().default(0),
+    playtimeS: integer('playtime_s').notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.weaponId] })],
 );

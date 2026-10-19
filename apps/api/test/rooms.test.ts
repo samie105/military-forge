@@ -44,6 +44,7 @@ describe('POST /rooms', () => {
     for (let i = 0; i < 10; i++) codes.add(((await (await create(host.accessToken)).json()) as RoomJoin).code);
     expect(codes.size).toBe(10);
     const code = [...codes][0]!;
+    if (api.kv.kind !== 'memory') return; // a real Valkey's TTLs can't be fast-forwarded
     // (access tokens last 15 min: a fresh guest for each join after the clock moves)
     api.clock.advance(ROOM_TTL_MS - 60_000);
     expect((await joinRoom((await createGuest(api)).accessToken, code)).status).toBe(200); // slides the expiry
@@ -74,6 +75,7 @@ describe('POST /rooms/:code/join', () => {
     const locked = await joinRoom(s.accessToken, real, ip);
     expect(locked.status).toBe(429); // even a right code, once locked out
     expect((await joinRoom(s.accessToken, real, api.ip())).status).toBe(200); // other networks are unaffected
+    if (api.kv.kind !== 'memory') return; // a real Valkey's window can't be fast-forwarded
     api.clock.advance(LIMITS.roomJoinMiss.windowMs);
     expect((await joinRoom(s.accessToken, real, ip)).status).toBe(200);
   });

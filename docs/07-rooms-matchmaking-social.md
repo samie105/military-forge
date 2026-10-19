@@ -189,7 +189,7 @@ POST   /auth/guest                    → {accessToken, refreshToken, user}
 POST   /auth/link/{provider}          → link identity to current user
 POST   /auth/refresh  ·  POST /auth/logout  ·  POST /auth/logout-all
 GET    /me  ·  PATCH /me (nickname, settings, privacy)  ·  DELETE /me (GDPR/DPDP deletion)
-GET    /me/inventory  ·  PUT /me/loadout/{slot}
+GET    /me/inventory  ·  GET|PUT /me/loadout/{slot}   (built: slots 0–2, look + two guns)
 GET    /regions                       → [{id, beaconUrl}]
 POST   /mm/tickets  ·  DELETE /mm/tickets/{id}
 POST   /rooms                         → create custom room → {code, gsHost, roomId, ticket}
@@ -197,8 +197,9 @@ POST   /rooms/{code}/join  {password?}→ {gsHost, roomId, ticket}
 GET    /rooms?region=&mode=           → public browser list
 POST   /parties  ·  POST /parties/{id}/invite  ·  POST /parties/join/{token}  ·  POST /parties/{id}/kick|leave|promote|ready
 GET    /friends  ·  POST /friends/request  ·  POST /friends/{id}/accept|decline|remove|block
-GET    /players/{id}/profile  ·  GET /players/{id}/matches
-GET    /leaderboards/{board}?period=&scope=global|region|friends
+GET    /players/{id}/profile  ·  GET /players/{id}/matches   (profile built: §12; `me` for yourself)
+GET    /leaderboards/{board}?period=&scope=global|region|friends   (built: xp|kills|wins × all|week, global)
+POST   /internal/matches               (game server → API, signed: §12)
 POST   /reports
 GET    /store  ·  POST /store/purchase  ·  POST /webhooks/{provider}   (idempotent)
 GET    /battlepass  ·  POST /missions/{id}/reroll
@@ -207,3 +208,46 @@ GET    /version                       → {minClient, latest, protocolVersion, c
 
 **Social WS events** (JSON; low rate, readability beats bytes here):
 `presence.update`, `party.state`, `party.invite`, `friend.request`, `friend.accepted`, `chat.message`, `mm.update {position, eta}`, `mm.found`, `mm.cancelled`, `notify {kind, payload}`, `maintenance {at}`.
+
+## 12. Match results, XP and leaderboards (built, first cut)
+
+**The flow.** When a match ends, the game server sends a report to the API's `POST /internal/matches` (apps/game-server/src/results.ts → apps/api/src/matches).
+- **Who's in it.** The report lists only people who came in with an API join ticket; the ticket's `sub` is their account. Bots never get a row, and neither do guests on a dev server without tickets.
+- **Signing.** The report is signed the way join tickets are, the other way round. The game server holds an Ed25519 key of its own (`RESULTS_PRIVATE_KEY`); the API holds only the public half (`RESULTS_PUBLIC_KEY`). The token uses the API's JWT format with issuer `game-server` and audience `api-results`. It lives one minute, names the match (`sub`) and carries the body's SHA-256, so it can't vouch for another report.
+- **Written once.** Each match is written once, keyed by the game server's match id. A retry or a replay changes nothing.
+- **Retries.** The game server retries for about 13 minutes (1 s, 5 s, 30 s, 2 min, 10 min) while the API is down. Reports waiting in memory are lost if the game server itself restarts.
+- **On the box.** `scripts/net-trial/data.sh` makes the key once and hands the private half to the game server and the public half to the API. Caddy answers `/api/internal/*` with 404, so the route isn't reachable from outside at all.
+
+**Tables** (docs/06 §7):
+- `matches`: one row per match. It keeps the whole report as sent, including the bot counts.
+- `match_players`: one line per person per match, with XP gained.
+- `stats_lifetime`: a `*` row with each player's totals (matches, wins, kills, deaths, assists, damage, headshots, best streak, playtime), plus one row per kill source with its kills. A kill source is a weapon id, or `melee`, `grenade`, `mine`, `gas` or `world`.
+
+**XP** (`@military-forge/shared` progression.ts, the only copy of the rule):
+
+| For | XP |
+|---|---|
+| Playing a match to the end | +100 |
+| Each kill | +10 |
+| Each assist | +5 |
+| 1st place (played to the end) | +50 |
+| 2nd or 3rd place (played to the end) | +25 |
+| Cap per match | 1000 |
+
+A player who leaves early keeps only the kill and assist XP.
+
+**Levels.** Reaching level L takes 50 × L × (L − 1) XP in all. Level 2 is at 100, level 3 at 300, level 4 at 600 and level 10 at 4,500; the cap is level 100. `profiles.xp` and `profiles.level` are updated in the same transaction as the match. A **win** is 1st place in a match played to the end.
+
+**Profile.** `GET /players/{id|me}/profile` returns:
+- Level, XP, and progress inside the level (`xpIntoLevel`, `xpForNextLevel`).
+- Lifetime stats.
+- Kills by weapon.
+- The last 10 matches.
+
+**Leaderboards.** `GET /leaderboards/{xp|kills|wins}?period=all|week&limit=` returns the top entries and the asking player's own rank.
+- **Storage.** Each board is a Valkey sorted set `lb:{board}:{all|YYYY-Www}`. The week is the ISO week in UTC, and weekly sets expire after 15 days.
+- **Scores.** A score is always an absolute total read from Postgres, never an increment, so writing it twice is harmless.
+- **Rebuilds.** A board that's empty in Valkey (a flush, a new box, a restarted dev API) is rebuilt from Postgres on the next read.
+- **Deleted accounts.** An account that's deleted or banned is dropped from what's shown, and from the set.
+
+**For now every match counts**, including custom rooms. §5 keeps custom rooms out of leaderboards to stop XP farming, but quick play doesn't exist yet, so the playtest's rooms are the only matches there are. When quick play lands, filter on `matches.room` and give custom rooms the capped time XP §5 describes.

@@ -21,6 +21,10 @@ export const LIMITS = {
   nicknameCheck: { name: 'nickcheck', limit: 60, windowMs: 60_000 },
   /** profile updates per user */
   profileUpdate: { name: 'profile', limit: 20, windowMs: 10 * 60_000 },
+  /** loadout saves per user (the web client batches a Locker session's changes into one) */
+  loadoutSave: { name: 'loadout', limit: 60, windowMs: 10 * 60_000 },
+  /** presence beats per user (the web client sends one every 30 s) */
+  presence: { name: 'presence', limit: 12, windowMs: 60_000 },
   /** custom rooms created, per user and per IP (docs/07 §5.1) */
   roomCreate: { name: 'roomnew', limit: 10, windowMs: 10 * 60_000 },
   roomCreateIp: { name: 'roomnewip', limit: 30, windowMs: 10 * 60_000 },

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DynamicResolution, PRESETS, SampleWindow, parsePreset } from '../presets';
+import { pixelRatio } from '..';
+import { DynamicResolution, PRESETS, SampleWindow, TierGovernor, parsePreset } from '../presets';
 
 describe('graphics presets', () => {
   it('parses ?gfx= and defaults to Low (the min-spec iGPU target)', () => {
@@ -89,5 +90,43 @@ describe('DynamicResolution', () => {
     d.pinned = 1;
     expect(feed(d, 50, 600)).toBe(0);
     expect(d.scale).toBe(1);
+  });
+});
+
+describe('quality for the device (the owner, 19 Oct)', () => {
+  it('a phone renders at its full pixel ratio on High (up to 3), 2 on Medium, 1.5 on Low; a desktop at the desktop caps', () => {
+    expect(pixelRatio(3, PRESETS.high.touchDprCap, null, 1)).toBe(3);
+    expect(pixelRatio(3.5, PRESETS.high.touchDprCap, null, 1)).toBe(3);
+    expect(pixelRatio(3, PRESETS.medium.touchDprCap, null, 1)).toBe(2);
+    expect(pixelRatio(3, PRESETS.low.touchDprCap, null, 1)).toBe(1.5);
+    expect(pixelRatio(2, PRESETS.high.dprCap, null, 1)).toBe(2);
+    expect(PRESETS.high.anisotropy).toBeGreaterThan(PRESETS.low.anisotropy);
+  });
+
+  it('Auto steps down only when frames miss at the lowest render scale, and back up (never past its start) after a run of clean ones', () => {
+    const g = new TierGovernor('high', 3, 5, 30);
+    expect(g.judge(true, false, false)).toBeNull(); // missing, but dynamic resolution still has room
+    expect(g.judge(true, true, false)).toBeNull();
+    expect(g.judge(true, true, false)).toBeNull();
+    expect(g.judge(true, true, false)).toBe('medium');
+    for (let i = 0; i < 4; i++) expect(g.judge(false, false, true)).toBeNull();
+    expect(g.judge(false, false, true)).toBe('high');
+    for (let i = 0; i < 50; i++) expect(g.judge(false, false, true)).toBeNull(); // the ceiling
+    // a fall soon after going up: the next try waits twice as long
+    const h = new TierGovernor('medium', 1, 2, 30);
+    expect(h.judge(true, true, false)).toBe('low');
+    h.judge(false, false, true);
+    expect(h.judge(false, false, true)).toBe('medium');
+    expect(h.judge(true, true, false)).toBe('low');
+    for (let i = 0; i < 3; i++) expect(h.judge(false, false, true)).toBeNull();
+    expect(h.judge(false, false, true)).toBe('medium');
+  });
+
+  it('dynamic resolution reports each window: missed or not', () => {
+    const d = new DynamicResolution(0.6, 1000 / 60, 4);
+    for (let i = 0; i < 4; i++) d.sample(30);
+    expect([d.windows, d.lastMissed]).toEqual([1, true]);
+    for (let i = 0; i < 4; i++) d.sample(16.7);
+    expect([d.windows, d.lastMissed]).toEqual([2, false]);
   });
 });

@@ -39,7 +39,7 @@ export interface TouchDeps {
     render(frame: TouchFrame, ...rest: never[]): void;
     onEvents(events: readonly SimEvent[], localId: number): void;
   };
-  view3d?: { setDprCap?(cap: number | null): void } | null;
+  view3d?: { setDprCap?(cap: number | null): void; setTouchDevice?(on: boolean): void } | null;
   /** a ✎ button on the controls opens the HUD editor (off once a Settings screen offers it) */
   editButton?: boolean;
   /** the room's tuning (the dash's flick mapping reads it); null or absent: the defaults */
@@ -142,8 +142,9 @@ export function mountTouch(d: TouchDeps): void {
   // dev builds: the API on window for automated checks (scripts/touch-check.mjs) and console poking
   if (import.meta.env.DEV) Object.assign(window, { __touch: { getTouchSettings, setTouchSettings, openTouchEditor, resetTouchLayout, touchActive, sticks: () => controller?.debugState() ?? null } });
 
-  // phones: the Low preset (the default) with a sharper cap; dynamic resolution stays on
-  if (isTouchDevice()) d.view3d?.setDprCap?.(MOBILE_DPR_CAP);
+  // phones and tablets: the presets' touch pixel-ratio caps (up to 3× on High: render3d presets.ts);
+  // dynamic resolution stays on
+  if (isTouchDevice()) d.view3d?.setTouchDevice?.(true);
 
   // auto: the first finger on the screen brings the controls up (a touchscreen laptop, say)
   window.addEventListener(

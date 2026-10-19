@@ -26,6 +26,25 @@ export interface RemoteView {
   readonly snapshots: readonly { msg: SnapshotMsg }[];
   remoteRenderTick(now?: number): number;
   remotePose(id: number, renderTick: number, out: RemotePose): RemotePose | null;
+  /**
+   * Own grenades the client flies from the throw (#142, net-high-ping.md): the server's copy of one
+   * is skipped while the client predicts it, and the predicted ones are drawn instead, already on
+   * the local timeline. Optional: older clients and the test fakes have neither.
+   */
+  predictsGrenade?(id: number): boolean;
+  ownGrenadeViews?(): readonly OwnGrenadeView[];
+}
+
+/** A predicted own grenade (netcode ownProjectiles.ts GrenadeView): ids from 1000 up. */
+export interface OwnGrenadeView {
+  id: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  fuse: number;
+  type: number;
+  state: number;
 }
 
 /** A grenade on the remote timeline (the snapshot's id, velocity and type ride along). */
@@ -112,7 +131,9 @@ export class OnlineView {
     if (!br) return;
     const { a, b, alpha } = br;
     let n = 0;
+    const predicted = this.net.predictsGrenade;
     for (const gb of b.grenades) {
+      if (predicted?.call(this.net, gb.id)) continue; // ours, flying from the throw: drawn from the prediction below
       const ga = a === b ? gb : byId(a.grenades, gb.id, gb.fuse);
       const g = this.grenade(n++, gb);
       if (ga) {
@@ -132,7 +153,7 @@ export class OnlineView {
     if (a !== b && alpha < 1) {
       // in a but not in b: it went off (its blast waits for b's tick) or left the view; carry it on
       for (const ga of a.grenades) {
-        if (byId(b.grenades, ga.id, -1, ga.fuse)) continue;
+        if (byId(b.grenades, ga.id, -1, ga.fuse) || predicted?.call(this.net, ga.id)) continue;
         const g = this.grenade(n++, ga);
         const ahead = Math.max(0, tick - a.serverTick) * DT;
         g.x = ga.x + ga.vx * ahead;
@@ -141,15 +162,21 @@ export class OnlineView {
         out.push(g);
       }
     }
+    // our own grenades as the client flies them, from the throw (already on the local timeline)
+    const own = this.net.ownGrenadeViews?.();
+    if (own) for (const o of own) out.push(this.grenade(n++, o));
   }
 
-  private grenade(i: number, src: SnapshotGrenade): TimelineGrenade {
+  private grenade(i: number, src: SnapshotGrenade | OwnGrenadeView): TimelineGrenade {
     const g = (this.grenades[i] ??= { id: 0, x: 0, y: 0, vx: 0, vy: 0, fuse: 0 });
     g.id = src.id;
     g.vx = src.vx;
     g.vy = src.vy;
     g.type = src.type;
     g.state = src.state; // a mine's light: flying, arming, armed, triggered
+    g.x = src.x;
+    g.y = src.y;
+    g.fuse = src.fuse;
     return g;
   }
 

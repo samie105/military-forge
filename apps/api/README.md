@@ -31,7 +31,7 @@ Migrations run on start (an advisory lock keeps several instances from racing). 
 | `pnpm --filter @military-forge/api db:migrate` | apply migrations without starting the server |
 | `DATABASE_URL=postgres://… pnpm --filter @military-forge/api exec tsx scripts/import-pglite.ts <dir>` | copy a PGlite directory's rows into Postgres (both migrated first; rows already there are skipped). The trial box does this once when it moves to Postgres; stop the API first |
 | `pnpm --filter @military-forge/api test` | in-process route tests on PGlite + memory KV |
-| `TEST_DATABASE_URL=postgres://game:game@localhost:55432/game TEST_REDIS_URL=redis://localhost:56379 pnpm --filter @military-forge/api test` | the same suite on the docker-compose services (**empties the `users` table first**) |
+| `TEST_DATABASE_URL=postgres://game:game@localhost:55432/game TEST_REDIS_URL=redis://localhost:56379 pnpm --filter @military-forge/api test --no-file-parallelism` | the same suite on the docker-compose services (**empties the `users` table first**; one file at a time, since they share the database). Each test API gets its own Valkey key prefix, and the steps that fast-forward a TTL run only on the in-memory KV |
 
 ## Routes
 
@@ -44,6 +44,11 @@ Migrations run on start (an advisory lock keeps several instances from racing). 
 | `POST /auth/logout {refreshToken?}` | cookie, body or Bearer | 204 |
 | `POST /auth/logout-all` | Bearer | 204: every session of the user |
 | `GET /me` · `PATCH /me {nickname}` · `DELETE /me` | Bearer | `Me` · `Me` · 204 |
+| `GET /me/loadout/:slot` · `PUT /me/loadout/:slot {look, guns}` (slots 0–2; the game uses 0) | Bearer | `{ slot, look, guns, updatedAt }` (GET: 404 `no_loadout` when nothing is saved). PUT checks every id against `@military-forge/content`: the item exists, is worn in that slot and is unlocked (starter items, or level items at that level), and the guns are two different non-melee weapons, by id. Otherwise 400 `invalid_loadout` with `issues: [{path, message}]`. 60 saves per 10 min per player |
+| `GET /players/:id/profile` (`me` = yourself) | Bearer | `{ id, nickname, xp, level, xpIntoLevel, xpForNextLevel, stats, killsBy, recent }` (docs/07 §12) |
+| `GET /leaderboards/:board?period=all\|week&limit=` (boards `xp`, `kills`, `wins`) | Bearer | `{ board, period, periodId, entries: [{rank, userId, nickname, level, score}], me }`, from Valkey `lb:{board}:{period}`, rebuilt from Postgres when empty |
+| `POST /internal/matches` | `GameServer <token>` (signed with the game server's results key) | 201 `{ recorded: true, players: [{userId, xpGained, xp, level}] }` · 200 `{ recorded: false }` for a match already recorded · on only with `RESULTS_PUBLIC_KEY` (docs/07 §12) |
+| `PUT /me/presence {room?}` · `DELETE /me/presence` · `GET /players/:id/presence` | Bearer | the caller's `{ status, room, lastSeenAt }` · 204 · `{ status: offline\|online\|in_room, lastSeenAt }` (the room code only for yourself). Valkey `presence:{userId}`, 60 s TTL, 12 beats a minute |
 | `GET /nicknames/check?nickname=` | optional Bearer | `{ nickname, valid, available, reason?, suggestions? }` |
 
 `Session = { accessToken, accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt, user: Me }`, `Me = { id, nickname, isGuest, createdAt, nicknameChangeableAt, level, xp }`. Errors are always `{ error: { code, message, ...extra } }`; the codes and the client flow are in the W3 notes file (`w3-api.md`).

@@ -49,6 +49,35 @@ function contract(name: string, make: () => Promise<{ kv: Kv; wait: (ms: number)
       await wait(80);
       expect(await kv.incr(k, 100)).toEqual({ value: 1, ttlMs: 100 });
     });
+
+    it('sorted sets: scores set (not added), highest first, ties as Redis orders them, ranks, expiry', async () => {
+      const { kv, wait } = ctx;
+      const k = key('lb');
+      expect(await kv.zcard(k)).toBe(0);
+      expect(await kv.ztop(k, 10)).toEqual([]);
+      await kv.zadd(k, [
+        { member: 'u_a', score: 10 },
+        { member: 'u_b', score: 30 },
+        { member: 'u_c', score: 10 },
+      ]);
+      await kv.zadd(k, [{ member: 'u_a', score: 20 }]);
+      await kv.zadd(k, []);
+      expect(await kv.zcard(k)).toBe(3);
+      expect(await kv.ztop(k, 2)).toEqual([
+        { member: 'u_b', score: 30 },
+        { member: 'u_a', score: 20 },
+      ]);
+      await kv.zadd(k, [{ member: 'u_d', score: 10 }]);
+      expect((await kv.ztop(k, 10)).slice(2).map((e) => e.member)).toEqual(['u_d', 'u_c']);
+      expect(await kv.zrank(k, 'u_a')).toEqual({ rank: 1, score: 20 });
+      expect(await kv.zrank(k, 'nobody')).toBeNull();
+      await kv.expire(k, 50);
+      await wait(80);
+      expect(await kv.zcard(k)).toBe(0);
+      await kv.zadd(k, [{ member: 'u_a', score: 1 }]);
+      expect(await kv.del(k)).toBe(true);
+      expect(await kv.zcard(k)).toBe(0);
+    });
   });
 }
 

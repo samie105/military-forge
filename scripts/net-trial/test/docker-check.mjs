@@ -2,7 +2,8 @@
  * Checks a box set up by cloud-init.sh in the local test container (docker-test.sh): every public
  * route through Caddy, the owner's private links, the probe's echo and results, the origin checks, and
  * the data stores: Postgres and Valkey on localhost with passwords, the API on them, the nightly
- * backup and its pruning, and (after a FROM= upgrade) the PGlite-era guest still signed in.
+ * backup and its pruning, match results signed with the box's key, and (after a FROM= upgrade) the
+ * PGlite-era guest still signed in.
  *   node scripts/net-trial/test/docker-check.mjs <container>
  * Caddy's internal CA signs the test certificate, so these requests skip certificate checks.
  */
@@ -174,6 +175,43 @@ check('the backup keeps the newest 7 dumps, today first', dumps.length === 7 && 
 check('the dump is private to postgres', sh(`stat -c "%a %U" /var/backups/military-forge/mf-${day(0)}.dump`).trim() === '600 postgres');
 check('the dump restores: it lists the users table', sh(`pg_restore -l /var/backups/military-forge/mf-${day(0)}.dump`).includes('TABLE public users'));
 check('the backup runs nightly', sh('systemctl is-enabled mf-backup.timer').trim() === 'enabled' && sh('systemctl show -p TimersCalendar mf-backup.timer').includes('02:30:00 UTC'));
+
+// match results: the game server has its key; a report signed with it is recorded, unsigned ones aren't
+check('the game server sends match results to the API', sh('journalctl -u mf-game --no-pager').includes('match results sent to the API'));
+check('the results route is not reachable from outside', (await post('/api/internal/matches', {})).status === 404);
+check('the API refuses an unsigned report', sh(`curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{}' http://127.0.0.1:8787/internal/matches`) === '401');
+const signer = `
+import { createHash, createPrivateKey, randomUUID, sign } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+const key = createPrivateKey(readFileSync('/etc/military-forge/results.key'));
+const now = new Date();
+const report = { matchId: randomUUID(), room: 'DOCKER', mode: 'deathmatch', map: 'street-market', startedAt: new Date(now - 60000).toISOString(), endedAt: now.toISOString(), durationS: 60, reason: 'time_limit', playerCount: 4, botCount: 3, serverBuild: 'docker-check',
+  players: [{ userId: process.argv[2], nickname: 'Checker', placement: 1, score: 3, kills: 3, deaths: 1, assists: 0, damageDealt: 300, damageTaken: 100, headshots: 1, bestStreak: 3, left: false, mvp: true, killsBy: { k47: 3 } }] };
+const body = JSON.stringify(report);
+const h = Buffer.from(JSON.stringify({ alg: 'EdDSA', typ: 'JWT' })).toString('base64url');
+const t = Math.floor(Date.now() / 1000);
+const p = Buffer.from(JSON.stringify({ iss: 'game-server', aud: 'api-results', sub: report.matchId, iat: t, exp: t + 60, jti: randomUUID(), bodySha256: createHash('sha256').update(body).digest('base64url') })).toString('base64url');
+const auth = 'GameServer ' + h + '.' + p + '.' + sign(null, Buffer.from(h + '.' + p), key).toString('base64url');
+const post = () => fetch('http://127.0.0.1:8787/internal/matches', { method: 'POST', headers: { 'content-type': 'application/json', authorization: auth }, body }).then((r) => r.status);
+console.log(await post(), await post());
+`;
+execFileSync('docker', ['exec', '-i', container, 'sh', '-c', 'cat >/tmp/mf-sign.mjs'], { input: signer });
+const statuses = sh(`/opt/node/bin/node /tmp/mf-sign.mjs ${guest.json().user.id}`).trim();
+check('a report signed with the box key is recorded once', statuses === '201 200', statuses);
+const profile = await get('/api/players/me/profile', { headers: { authorization: `Bearer ${token}` } });
+check("the player's profile has the match: XP, level, kills by weapon", profile.status === 200 && profile.json().xp === 100 + 30 + 50 && profile.json().stats?.wins === 1 && profile.json().killsBy?.[0]?.source === 'k47', profile.text.slice(0, 300));
+const board = await get('/api/leaderboards/xp?period=week', { headers: { authorization: `Bearer ${token}` } });
+check('the weekly XP board has them, from Valkey', board.status === 200 && board.json().me?.rank >= 1 && vk(`exists lb:xp:${board.json().periodId}`) === '1', board.text.slice(0, 300));
+
+// live data in Valkey: an API restart keeps the room (not re-made from KEEP_ROOMS), presence and rate limits
+const roomBefore = vk(`get room:${room}`);
+const presenceBeat = await call('/api/me/presence', { method: 'PUT', headers: { 'content-type': 'application/json', origin, authorization: `Bearer ${token}` }, body: JSON.stringify({ room }) });
+check('presence: in the room', presenceBeat.status === 200 && presenceBeat.json().status === 'in_room', presenceBeat.text);
+sh('systemctl restart mf-api && for i in $(seq 60); do curl -fs -o /dev/null http://127.0.0.1:8787/health && break; sleep 1; done');
+check('after an API restart the room record is the same one (Valkey kept it)', vk(`get room:${room}`) === roomBefore && !roomBefore.includes('"kept"'), roomBefore);
+const presenceAfter = await get('/api/players/me/presence', { headers: { authorization: `Bearer ${token}` } });
+check('after an API restart the presence is still there', presenceAfter.status === 200 && presenceAfter.json().status === 'in_room', presenceAfter.text);
+check('rate-limit counters live in Valkey', Number(vk("eval \"return #redis.call('keys', 'rl:*')\" 0")) > 0);
 
 // after FROM=<PGlite-era ref>: the guest made then is in Postgres and still signed in
 if (!fails('test -f /root/mf-before.json')) {

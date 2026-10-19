@@ -218,6 +218,19 @@ rl:{scope}:{key}             → token buckets (rate limits)
 stream: match.results, moderation.events
 ```
 
+**Built so far** (apps/api, Valkey via `REDIS_URL`, an in-memory stand-in without it for `pnpm dev` and tests):
+- `room:{code}`: room codes, with a sliding 6 h TTL.
+- `rl:{scope}:{key}`: fixed-window counters, not token buckets yet.
+- `presence:{userId}`: `{status: online|in_room, room, ts}`, TTL 60 s, from the web client's 30 s beat (`PUT /me/presence`) and from room create/join.
+- `lb:{board}:{all|YYYY-Www}`: leaderboards, rebuilt from Postgres when empty (docs/07 §12).
+
+On a box with Valkey all four outlive an API restart; the trial box's Valkey also keeps an append-only file, so they outlive a reboot too. `KEEP_ROOMS` is only needed with the in-memory stand-in (pnpm playtest). Match results go over a signed HTTP call (`POST /internal/matches`), not `stream: match.results`.
+
+**Tables built so far** (apps/api/src/db/schema.ts, migrations in apps/api/drizzle):
+- The identity tables.
+- `loadouts` (slots 0–2 of `{look, guns}`).
+- `matches`, `match_players` and `stats_lifetime` (the totals in a `*` row, plus kills per source).
+
 ---
 
 ## 8. Content pipeline (data-driven everything)

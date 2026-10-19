@@ -29,11 +29,13 @@ import { Btn, type Input, type SimEvent } from '@military-forge/sim';
 import { audio, startAudio } from './audio';
 import { Camera } from './camera';
 import { fxFrame, fxState, setReduceFlashes } from './fx';
-import { autoPreset, gpuRenderer } from './gfxAuto';
+import { autoPreset, deviceHints, gpuRenderer } from './gfxAuto';
 import { createHostTuning, tuningOffered } from './hostTuning';
 import { tuneChanges, tuneToastParts } from './shell/tune';
 import { InputSampler } from './input';
 import { localBots } from './localBots';
+import { LoadoutSync } from './locker/accountSync';
+import { PresenceBeat } from './presence';
 import { LocalMode } from './localMode';
 import { OnlineMode } from './onlineMode';
 import { mountHud, type ScoreRow } from './hud';
@@ -99,11 +101,26 @@ const localMapId = requestedMap && maps[requestedMap] ? requestedMap : 'movement
 let map: MapDef = getMap(online ? 'movement-test' : localMapId);
 let mode: LocalMode | OnlineMode | null = null;
 
-// Graphics quality (Settings → Graphics): a preset, or Auto, which follows the device (gfxAuto.ts:
-// High on a desktop with a real GPU, Low on phones); worked out once, when first needed
-let autoGraphicsPick: PresetName | null = null;
-const autoGraphics = (): PresetName => (autoGraphicsPick ??= autoPreset({ touch: isTouchDevice(), gpu: gpuRenderer() }));
+// Graphics quality (Settings → Graphics): a preset, or Auto, which starts as high as the device
+// should hold (gfxAuto.ts, worked out once, when first needed) and then adapts to the measured
+// frames in the 3D view (Renderer3D.setAutoTier); Settings shows the tier it is on now
+let autoGraphicsStart: PresetName | null = null;
+let autoGraphicsNow: PresetName | null = null;
+const autoStart = (): PresetName => (autoGraphicsStart ??= autoPreset({ touch: isTouchDevice(), gpu: gpuRenderer(), ...deviceHints() }));
+const autoGraphics = (): PresetName => autoGraphicsNow ?? autoStart();
 const graphicsPreset = (setting: GraphicsSetting): PresetName => (setting === 'auto' ? autoGraphics() : setting);
+/** whether the 3D view's Auto is adapting (set once per switch to or from Auto, not on every settings change) */
+let autoAdapting = false;
+function applyGraphics(setting: GraphicsSetting): void {
+  if (setting === 'auto') {
+    if (!autoAdapting) view3d?.setAutoTier(autoGraphics());
+    autoAdapting = true;
+    return;
+  }
+  autoAdapting = false;
+  view3d?.setAutoTier(null);
+  view3d?.setPreset(setting);
+}
 
 // 3D draws the world under the 2D canvas, which becomes the HUD + debug overlay (H/B). Online games
 // too (the owner's decision, 18 Oct): 3D unless ?render=2d, and the 2D view where WebGL can't start
@@ -115,6 +132,11 @@ const view3d = planeCamera
   ? create3d(view3dCanvas, planeCamera, map, firstPreset, (import.meta.env.DEV && !appMode) || params.has('perf'), undefined, softwareGl(params))
   : null;
 const use3d = view3d !== null;
+if (view3d) {
+  view3d.onAutoTier = (tier) => (autoGraphicsNow = tier);
+  // Auto from the start (no ?gfx=): adapting to the frames before Settings is ever opened
+  if (!params.get('gfx') && (!appMode || loadSettings().graphics === 'auto')) applyGraphics('auto');
+}
 const camera = view3d ? planeCamera! : new Camera();
 const sampler = new GameInput(canvas);
 // double-tap a direction to dash (docs/02 §21), on by default: ?dashtap=0 turns it off in the debug
@@ -168,11 +190,17 @@ function applyHudKeys(): void {
 }
 onInputDevice(applyHudKeys);
 
+/** the room code of the online match in play (presence), null otherwise */
+let onlineRoom: string | null = null;
+let presence: PresenceBeat | null = null;
+
 function setMode(next: LocalMode | OnlineMode | null): void {
   hostTuning?.close(); // it tunes the mode it was opened for
   if (mode instanceof OnlineMode) mode.dispose();
   mode = next;
   audio.reset();
+  if (!(next instanceof OnlineMode)) onlineRoom = null;
+  presence?.update();
   camera.setZoom(0, 1);
   if (next instanceof OnlineMode && settings?.lowBandwidth) next.net.setLowBandwidth(true);
 }
@@ -197,6 +225,7 @@ const host: GameHost = {
     const tryGun = tryWeapon;
     tryWeapon = null;
     if (tryGun) local.setLoadout([tryGun.index, tryGun.index === DEFAULT_LOADOUT[1] ? DEFAULT_LOADOUT[0] : DEFAULT_LOADOUT[1]]);
+    else if (loadoutSync) local.setLoadout(loadoutSync.savedGunIndices()); // the player's saved pair (the default until they pick one)
   },
   startOnline(url, nickname, room, ticket, refreshTicket) {
     try {
@@ -206,6 +235,7 @@ const host: GameHost = {
     }
     // WebTransport where the server routes it by room (/health webtransport.rooms), else WebSocket
     const online = new OnlineMode(url, nickname, sampler, camera, renderer, () => {}, createConditionerSettings(false), 'auto', { room, ...(ticket ? { ticket } : {}), ...(refreshTicket ? { refreshTicket } : {}) });
+    onlineRoom = room;
     setMode(online);
     // a guest hears the host retune the room (Tune the game): who changed what, for a moment
     online.onTuning((before, after, live) => {
@@ -221,7 +251,7 @@ const host: GameHost = {
   applySettings(next) {
     settings = next;
     options.showNet = next.netGraph;
-    view3d?.setPreset(graphicsPreset(next.graphics));
+    applyGraphics(next.graphics);
     // blood when soldiers are hit (Settings → Graphics, off by default): render3d's setBlood (#96)
     view3d?.setBlood(next.blood);
     if (mode instanceof OnlineMode && mode.net.lowBandwidth !== next.lowBandwidth) mode.net.setLowBandwidth(next.lowBandwidth);
@@ -301,7 +331,7 @@ registerRoute({
     let cleanup: (() => void) | null = null;
     let closed = false;
     void import('./locker/route').then(({ mountLockerRoute }) => {
-      if (!closed) cleanup = mountLockerRoute(el, { onExit: close });
+      if (!closed) cleanup = mountLockerRoute(el, { onExit: close, ...(loadoutSync ? { store: loadoutSync.store } : {}) });
     });
     return () => {
       closed = true;
@@ -316,6 +346,11 @@ const shell = mountShell(document.body, appMode ? { host } : {});
 // sound starts on the first tap or key (browsers allow it only then); the shell's store drives the
 // interface cues and the music
 startAudio(shell.store);
+// the saved loadout (look + guns) follows the account: read at sign-in, kept on this device as the offline cache
+const loadoutSync = shell.controller ? new LoadoutSync(shell.controller.api) : null;
+// "here" to the API every 30 s while visible, with the room when in an online match (presence.ts)
+presence = shell.controller ? new PresenceBeat(shell.controller.api, () => onlineRoom) : null;
+if (loadoutSync) document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && void loadoutSync.flush());
 
 // the HTML loading screen (index.html) stays until the shell has its first real screen (the API
 // answered or gave up), so nothing flashes in between

@@ -10,6 +10,7 @@ import { loadConfig } from '../src/config';
 import { openDatabase } from '../src/db/client';
 import { MemoryKv, type Kv } from '../src/kv/kv';
 import { RedisKv } from '../src/kv/redis';
+import { randomUUID } from 'node:crypto';
 import { createLogger } from '../src/log';
 
 export const START = Date.parse('2026-10-17T12:00:00Z');
@@ -31,12 +32,26 @@ export async function createTestApi(env: Record<string, string> = {}, options: {
   });
   const database = await openDatabase(config);
   if (database.kind === 'postgres') await database.db.execute(sql`truncate table users cascade`);
-  const kv: Kv = process.env.TEST_REDIS_URL ? await new RedisKv(process.env.TEST_REDIS_URL).connect() : new MemoryKv(clock.now);
-  const app = createApp({ config, database, kv, signingKey: generateSigningKey(), ticketKey: options.ticketKey ?? null, log: createLogger(config), now: clock.now });
+  // on a shared Valkey each test API gets keys of its own, so runs and files don't share rate-limit buckets
+  const keyPrefix = `test:${randomUUID()}:`;
+  const kv: Kv = process.env.TEST_REDIS_URL ? await new RedisKv(process.env.TEST_REDIS_URL, { keyPrefix }).connect() : new MemoryKv(clock.now);
+  const deps = { config, database, kv, signingKey: generateSigningKey(), ticketKey: options.ticketKey ?? null, log: createLogger(config), now: clock.now };
+  const app = createApp(deps);
   let ipCounter = 0;
+  const reconnected: Kv[] = [];
 
   return {
     app,
+    /**
+     * The API process restarting: a new app on the same database and the same Valkey (a new
+     * connection to it when TEST_REDIS_URL is set; with the in-memory KV, the same object stands in
+     * for Valkey). Its own state in memory starts over.
+     */
+    async restart() {
+      const kv2 = process.env.TEST_REDIS_URL ? await new RedisKv(process.env.TEST_REDIS_URL, { keyPrefix }).connect() : kv;
+      if (kv2 !== kv) reconnected.push(kv2);
+      return createApp({ ...deps, kv: kv2 });
+    },
     clock,
     config,
     database,
@@ -44,7 +59,7 @@ export async function createTestApi(env: Record<string, string> = {}, options: {
     /** a fresh client IP, so tests don't share rate-limit buckets */
     ip: () => `203.0.113.${++ipCounter % 250}`,
     async close() {
-      await Promise.all([database.close(), kv.close()]);
+      await Promise.all([database.close(), kv.close(), ...reconnected.map((k) => k.close())]);
     },
   };
 }

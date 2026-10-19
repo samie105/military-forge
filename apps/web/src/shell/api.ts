@@ -1,6 +1,6 @@
 /**
  * The API as the shell uses it (apps/api, docs/07 §3 and §11): guest sessions, the live nickname
- * check, nickname changes and rooms by code. Same origin under `/api` (the playtest proxy, Vite's
+ * check, nickname changes, rooms by code and the saved loadout (locker/accountSync.ts). Same origin under `/api` (the playtest proxy, Vite's
  * dev proxy), so no CORS and no third-party cookies.
  *
  * Session contract (W3): the access token lives in memory only; the refresh token in localStorage,
@@ -33,6 +33,14 @@ export interface NicknameCheck {
   available: boolean;
   reason?: string;
   suggestions?: string[];
+}
+
+/** A saved loadout (apps/api `/me/loadout/:slot`): the Locker look and the two guns, by id. */
+export interface SavedLoadout {
+  slot: number;
+  look: { items: Record<string, string>; dyes: Record<string, string> };
+  guns: [string, string];
+  updatedAt: string;
 }
 
 export interface RoomJoin {
@@ -86,6 +94,7 @@ export class Api {
   /** in memory too, for browsers that refuse localStorage */
   private refreshFallback: string | null = null;
   me: Me | null = null;
+  private readonly signInListeners = new Set<(me: Me) => void>();
 
   constructor(
     private readonly base = '/api',
@@ -121,8 +130,16 @@ export class Api {
     this.access = { token: s.accessToken, expiresAt: Date.parse(s.accessTokenExpiresAt) };
     this.refreshFallback = s.refreshToken;
     storeRefreshToken(s.refreshToken);
+    const changed = this.me?.id !== s.user.id;
     this.me = s.user;
+    if (changed) for (const listener of this.signInListeners) listener(s.user);
     return s.user;
+  }
+
+  /** Called whenever a different player is signed in (a restored session, a new guest); returns an unsubscribe. */
+  onSignIn(listener: (me: Me) => void): () => void {
+    this.signInListeners.add(listener);
+    return () => this.signInListeners.delete(listener);
   }
 
   /** A live access token: refreshes with the stored refresh token when needed. */
@@ -174,6 +191,30 @@ export class Api {
 
   joinRoom(code: string): Promise<RoomJoin> {
     return this.request<RoomJoin>('POST', `/rooms/${encodeURIComponent(code)}/join`, {}, true);
+  }
+
+  /** The account's saved loadout in `slot`, or null when nothing is saved there yet. */
+  async getLoadout(slot: number): Promise<SavedLoadout | null> {
+    try {
+      return await this.request<SavedLoadout>('GET', `/me/loadout/${slot}`, undefined, true);
+    } catch (e) {
+      if (e instanceof ApiError && e.code === 'no_loadout') return null;
+      throw e;
+    }
+  }
+
+  putLoadout(slot: number, loadout: Pick<SavedLoadout, 'look' | 'guns'>): Promise<SavedLoadout> {
+    return this.request<SavedLoadout>('PUT', `/me/loadout/${slot}`, { look: loadout.look, guns: loadout.guns }, true);
+  }
+
+  /** "I'm here" (presence, every 30 s while the page is visible): in `room` when in one. */
+  async beatPresence(room: string | null): Promise<void> {
+    await this.request<unknown>('PUT', '/me/presence', { room }, true);
+  }
+
+  /** Offline now (the page is going away). */
+  async clearPresence(): Promise<void> {
+    await this.request<unknown>('DELETE', '/me/presence', undefined, true);
   }
 
   /** The server's round trip (GET /version: no database work), ms: the ping the menus show before a game connects. */

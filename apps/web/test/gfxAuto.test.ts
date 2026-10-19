@@ -29,11 +29,28 @@ describe('Auto graphics', () => {
       expect(autoPreset({ touch: false, gpu }), String(gpu)).toBe('medium');
   });
 
-  it('phones and tablets, and software WebGL, get Low', () => {
-    expect(autoPreset({ touch: true, gpu: 'Apple GPU' })).toBe('low');
-    expect(autoPreset({ touch: true, gpu: 'Adreno (TM) 740' })).toBe('low');
+  it('software WebGL gets Low, phone or not', () => {
     expect(autoPreset({ touch: false, gpu: 'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)' })).toBe('low');
     expect(autoPreset({ touch: false, gpu: 'llvmpipe (LLVM 15.0.7, 256 bits)' })).toBe('low');
+    expect(autoPreset({ touch: true, gpu: 'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)' })).toBe('low');
+  });
+
+  it('phones and tablets start as high as their GPU should hold (the owner, 19 Oct: phones "not that clear")', () => {
+    const phone = (gpu: string | null, memory?: number, cores?: number) => autoPreset({ touch: true, gpu, memory, cores });
+    // iPhones and iPads; Snapdragon 855 and up, 8 Gen 1 and up; Mali G77/G78/G710+, Immortalis; Xclipse
+    for (const gpu of ['Apple GPU', 'Adreno (TM) 640', 'Adreno (TM) 660', 'Adreno (TM) 740', 'Adreno (TM) 830', 'Mali-G78 MP20', 'Mali-G715-Immortalis MC11', 'Mali-G710 MC10', 'Samsung Xclipse 920'])
+      expect(phone(gpu), gpu).toBe('high');
+    // upper-mid: Snapdragon 7-series, Mali G57/G68/G76/G610
+    for (const gpu of ['Adreno (TM) 618', 'Adreno (TM) 710', 'Mali-G57 MC2', 'Mali-G68 MC4', 'Mali-G610 MC6', 'WebKit WebGL', null])
+      expect(phone(gpu), String(gpu)).toBe('medium');
+    // older and budget GPUs
+    for (const gpu of ['Adreno (TM) 506', 'Adreno (TM) 610', 'Mali-G52 MC2', 'Mali-T880', 'PowerVR Rogue GE8320'])
+      expect(phone(gpu), gpu).toBe('low');
+    // little memory or few cores cap it
+    expect(phone('Adreno (TM) 740', 4)).toBe('medium');
+    expect(phone('Adreno (TM) 740', 2)).toBe('low');
+    expect(phone('Adreno (TM) 740', 8, 4)).toBe('medium');
+    expect(phone('Adreno (TM) 740', 8, 8)).toBe('high');
   });
 });
 

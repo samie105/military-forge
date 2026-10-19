@@ -107,6 +107,20 @@ describe('OnlineView: grenades on the remote timeline', () => {
     expect([g.type, g.state]).toEqual([4, 2]);
   });
 
+  it("own grenades from the throw (#142): the server's copy skipped while it's predicted, the predicted one drawn instead", () => {
+    const net = fakeNet([snap(100, [gren(3, 10, 60), gren(4, 20, 60)]), snap(102, [gren(3, 11, 58), gren(4, 21, 58)])], 101);
+    const predicted = Object.assign(net, {
+      predictsGrenade: (id: number) => id === 3,
+      ownGrenadeViews: () => [{ id: 1000, x: 12.5, y: 4, vx: 6, vy: 1, fuse: 55, type: 1, state: 0 }],
+    });
+    const f = new OnlineView(predicted).frame(frame(), 0);
+    expect(f.grenades.map((g) => g.id)).toEqual([4, 1000]);
+    const own = f.grenades[1]!;
+    expect([own.x, own.y, own.fuse, own.type]).toEqual([12.5, 4, 55, 1]);
+    // a client without the hooks (older, or the fakes): the server's, as before
+    expect(new OnlineView(fakeNet([snap(100, [gren(3, 10, 60)]), snap(102, [gren(3, 11, 58)])], 101)).frame(frame(), 0).grenades.map((g) => g.id)).toEqual([3]);
+  });
+
   it('a reused id with a fresh fuse is a different grenade', () => {
     const view = new OnlineView(fakeNet([snap(100, [gren(7, 20, 3)]), snap(102, [gren(7, 2, 95)])], 101));
     const g = view.frame(frame(), 0).grenades;

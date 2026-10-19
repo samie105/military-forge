@@ -10,6 +10,11 @@ export interface GraphicsPreset {
   name: PresetName;
   /** device pixel ratio cap */
   dprCap: number;
+  /**
+   * the cap on a phone or tablet (Renderer3D.setTouchDevice): their screens are small and dense, so
+   * a capable one renders at its full 2.5–3× on High (the owner, 19 Oct: phones "not that clear")
+   */
+  touchDprCap: number;
   /** MSAA on the default framebuffer (needs a reload to change) */
   antialias: boolean;
   /** blob/contact shadows under players, or one 1024² directional map over the gameplay frustum */
@@ -24,15 +29,17 @@ export interface GraphicsPreset {
   vfxDetail: number;
   /** real point lights for blasts; Low/Medium tint the ambient light instead (docs/11 §2) */
   vfxLights: boolean;
+  /** anisotropic texture filtering (capped by the GPU): sharp ground and wall art at a glancing angle */
+  anisotropy: number;
 }
 
 export const PRESETS: Readonly<Record<PresetName, GraphicsPreset>> = {
-  low: { name: 'low', dprCap: 1, antialias: false, shadows: 'blob', minScale: 0.6, remoteLod1: true, particles: 1500, vfxDetail: 0.6, vfxLights: false },
-  medium: { name: 'medium', dprCap: 1.25, antialias: true, shadows: 'blob', minScale: 0.7, remoteLod1: false, particles: 3000, vfxDetail: 0.8, vfxLights: false },
+  low: { name: 'low', dprCap: 1, touchDprCap: 1.5, antialias: false, shadows: 'blob', minScale: 0.6, remoteLod1: true, particles: 1500, vfxDetail: 0.6, vfxLights: false, anisotropy: 1 },
+  medium: { name: 'medium', dprCap: 1.25, touchDprCap: 2, antialias: true, shadows: 'blob', minScale: 0.7, remoteLod1: false, particles: 3000, vfxDetail: 0.8, vfxLights: false, anisotropy: 4 },
   // High renders a Retina desktop at its full 2× while the frame budget holds; dynamic resolution
   // steps it down from there (to 1.2×, High's old floor) when it doesn't. Touch devices stay capped
-  // at MOBILE_DPR_CAP (touch/index.ts).
-  high: { name: 'high', dprCap: 2, antialias: true, shadows: 'map', minScale: 0.6, remoteLod1: false, particles: 5000, vfxDetail: 1, vfxLights: true },
+  // at their touchDprCap.
+  high: { name: 'high', dprCap: 2, touchDprCap: 3, antialias: true, shadows: 'map', minScale: 0.6, remoteLod1: false, particles: 5000, vfxDetail: 1, vfxLights: true, anisotropy: 8 },
 };
 
 /** `?gfx=` value → preset (Low until auto quality exists: the min-spec target is an iGPU laptop). */
@@ -96,6 +103,10 @@ export class SampleWindow {
  */
 export class DynamicResolution {
   scale = 1;
+  /** the last full window missed the frame budget (TierGovernor) */
+  lastMissed = false;
+  /** windows judged so far (each `windowFrames` frames) */
+  windows = 0;
   /** a fixed scale (screenshots, benchmarks): sampling leaves it alone */
   pinned: number | null = null;
   private readonly window: SampleWindow;
@@ -110,7 +121,8 @@ export class DynamicResolution {
     readonly windowFrames = 60,
     readonly probeAfter = 5,
     readonly refreshWindows = 8,
-    readonly stallMs = 250,
+    // above a slow device's worst frames (a phone in software GL draws in ~0.5 s): those are misses, not stalls
+    readonly stallMs = 900,
   ) {
     this.window = new SampleWindow(windowFrames);
     this.mins = new SampleWindow(refreshWindows);
@@ -147,7 +159,9 @@ export class DynamicResolution {
       this.cleanWindows = 0;
     }
     this.refresh = refresh;
-    if (p90 > this.refresh * 1.1) {
+    this.windows++;
+    this.lastMissed = p90 > this.refresh * 1.1;
+    if (this.lastMissed) {
       this.scale = Math.max(this.minScale, round2(this.scale - 0.1));
       this.cleanWindows = 0;
     } else if (++this.cleanWindows >= this.probeAfter && this.scale < 1) {
@@ -155,6 +169,61 @@ export class DynamicResolution {
       this.cleanWindows = 0;
     }
     return this.scale !== before;
+  }
+}
+
+const TIERS: readonly PresetName[] = ['low', 'medium', 'high'];
+
+/**
+ * Settings → Quality: Auto, adapting (the owner, 19 Oct: "use the absolutely highest version it
+ * can"). Auto starts on the best tier the device should hold (gfxAuto.ts); this steps it down
+ * when frames keep missing at dynamic resolution's floor, and back up toward that start when they
+ * have room again. Fed once per dynamic-resolution window (`judge`, about a second each).
+ * - Down: `downAfter` missed windows in a row with the render scale already at its floor.
+ * - Up (never past the start): `upAfter` clean windows in a row at full scale. A tier that has to
+ *   be left again soon after going up waits twice as long before the next try (`backoff`).
+ */
+export class TierGovernor {
+  tier: PresetName;
+  private missed = 0;
+  private clean = 0;
+  private upWait: number;
+  /** windows since the last step up (a quick fall after one doubles the wait) */
+  private sinceUp = Infinity;
+
+  constructor(
+    /** the start: Auto's pick, and the ceiling */
+    readonly ceiling: PresetName,
+    readonly downAfter = 3,
+    readonly upAfter = 20,
+    readonly backoff = 30,
+  ) {
+    this.tier = ceiling;
+    this.upWait = upAfter;
+  }
+
+  /** One window's verdict: whether it missed, and whether the scale sits at its floor / at full. Returns the new tier, or null. */
+  judge(missed: boolean, atFloor: boolean, atFull: boolean): PresetName | null {
+    this.sinceUp++;
+    const i = TIERS.indexOf(this.tier);
+    if (missed && atFloor) {
+      this.clean = 0;
+      if (++this.missed >= this.downAfter && i > 0) {
+        this.missed = 0;
+        if (this.sinceUp < this.backoff) this.upWait *= 2;
+        return (this.tier = TIERS[i - 1]!);
+      }
+      return null;
+    }
+    this.missed = missed ? this.missed : 0;
+    if (!missed && atFull && i < TIERS.indexOf(this.ceiling)) {
+      if (++this.clean >= this.upWait) {
+        this.clean = 0;
+        this.sinceUp = 0;
+        return (this.tier = TIERS[i + 1]!);
+      }
+    } else if (missed) this.clean = 0;
+    return null;
   }
 }
 

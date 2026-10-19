@@ -22,6 +22,12 @@ import type { AppEnv } from './http/context';
 import { ApiError, errorResponse } from './http/errors';
 import type { Kv } from './kv/kv';
 import type { Logger } from './log';
+import { leaderboardRoutes, profileRoutes } from './leaderboards/routes';
+import { Leaderboards } from './leaderboards/service';
+import { loadoutRoutes } from './loadouts/routes';
+import { matchRoutes } from './matches/routes';
+import { resultsPublicKey } from './matches/report';
+import { PresenceService, mePresenceRoutes, playerPresenceRoute } from './presence/presence';
 import { ProfileService } from './me/profiles';
 import { meRoutes } from './me/routes';
 import { NicknamePolicy } from './nickname/rules';
@@ -71,7 +77,7 @@ export function createApp(deps: AppDeps) {
     cors({
       origin: (origin) => (originAllowed(origin) ? origin : null),
       credentials: true,
-      allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
       exposeHeaders: ['X-Request-Id', 'Retry-After'],
       maxAge: 600,
@@ -115,9 +121,18 @@ export function createApp(deps: AppDeps) {
   );
 
   app.route('/auth', authRoutes({ config, db, kv, auth, profiles, now }));
+  const presence = new PresenceService(kv, now);
+  app.route('/me/loadout', loadoutRoutes({ db, kv, auth, now }));
+  app.route('/me/presence', mePresenceRoutes({ auth, kv, presence }));
+  const leaderboards = new Leaderboards(db, kv, now);
+  app.route('/leaderboards', leaderboardRoutes({ auth, leaderboards }));
+  app.route('/players', profileRoutes({ db, auth }));
+  app.route('/players', playerPresenceRoute({ auth, presence }));
+  // the game server's match results: on only with its public key (RESULTS_PUBLIC_KEY)
+  if (config.resultsPublicKeyPem) app.route('/internal', matchRoutes({ db, key: resultsPublicKey(config.resultsPublicKeyPem), leaderboards, now }));
   app.route('/me', meRoutes({ config, db, kv, auth, profiles }));
   app.route('/nicknames', nicknameRoutes({ config, kv, auth, profiles }));
-  app.route('/rooms', roomRoutes({ config, kv, auth, profiles, ticketKey: deps.ticketKey ?? null, now }));
+  app.route('/rooms', roomRoutes({ config, kv, auth, profiles, presence, ticketKey: deps.ticketKey ?? null, now }));
 
   app.notFound((c) => errorResponse(c, 404, 'not_found', `No route for ${c.req.method} ${c.req.path}`));
   app.onError((err, c) => {

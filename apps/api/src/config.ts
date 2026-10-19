@@ -52,6 +52,11 @@ export interface Config {
    * the links it handed out (pnpm playtest passes the rooms in play when it restarts the API).
    */
   keepRooms: string[];
+  /**
+   * Match results from the game server (POST /internal/matches, docs/07 §12): the public half of
+   * the game server's own Ed25519 results key (PEM). null = the route is off (no results recorded).
+   */
+  resultsPublicKeyPem: string | null;
 }
 
 export class ConfigError extends Error {
@@ -93,6 +98,7 @@ const EnvSchema = z.object({
   JOIN_TICKET_PRIVATE_KEY: z.string().min(1).optional(),
   JOIN_TICKET_TTL_SECONDS: z.coerce.number().int().min(5).max(120).default(30),
   KEEP_ROOMS: list.default([]),
+  RESULTS_PUBLIC_KEY: z.string().min(1).optional(),
 });
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
@@ -143,5 +149,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     gameServerUrl: e.GAME_SERVER_URL?.replace(/\/+$/, '') ?? null,
     joinTicket: { privateKeyPem: e.JOIN_TICKET_PRIVATE_KEY?.replaceAll('\\n', '\n') ?? null, ttlSeconds: e.JOIN_TICKET_TTL_SECONDS },
     keepRooms: [...new Set(keepRooms)],
+    resultsPublicKeyPem: e.RESULTS_PUBLIC_KEY?.replaceAll('\\n', '\n') ?? null,
   };
 }

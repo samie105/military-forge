@@ -187,6 +187,7 @@ export class RoomRegistry {
     const resuming = room !== null && msg.resumeToken !== '' && room.hasSession(msg.resumeToken);
     if (!room && this.rooms.size >= this.maxRooms) return this.turnAway(v, CloseCode.NoRoom, 'server full: too many rooms, try again soon');
     let hello = bytes;
+    let accountId: string | null = null;
     if (!resuming && v.code !== '' && this.tickets) {
       const verdict = this.tickets.admit(msg.ticket, v.code);
       if (!verdict.ok) {
@@ -195,11 +196,13 @@ export class RoomRegistry {
       }
       // a new player, under the name the API approved (nickname rules, reserved names)
       hello = encodeHello(verdict.claims.nick, '');
+      accountId = verdict.claims.sub;
     }
     room ??= this.openRoom(v.code);
     this.leaveDoor(v);
     v.room = room;
     v.client = room.connect(v.conn);
+    v.client.accountId = accountId;
     room.receive(v.client, hello);
   }
 
@@ -215,6 +218,7 @@ export class RoomRegistry {
       ...this.options,
       seed: this.options.seed ?? this.seed++,
       match: this.options.match ?? CUSTOM_ROOM_RULES,
+      code,
     });
     this.rooms.set(code, room);
     this.log(`[rooms] opened ${code} (${this.rooms.size} open)`);

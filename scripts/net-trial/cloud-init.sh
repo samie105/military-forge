@@ -123,6 +123,7 @@ for k in access ticket; do [ -s "$ETC/$k.key" ] || openssl genpkey -algorithm ed
 	@pub path /trial-status /trial-status/* /owner-* /probe-config.json
 	route {
 		respond @foreign 403
+		respond /api/internal/* 404
 		handle_path /api/* {
 			reverse_proxy 127.0.0.1:8787
 		}

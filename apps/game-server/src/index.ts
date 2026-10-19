@@ -4,6 +4,7 @@ import { BOT_LEVELS, warmNavGraphs, type BotLevelId } from '@military-forge/bots
 import { ADMIN_BOT_LEVELS, maps, setAdminDefault } from '@military-forge/content';
 import { loadAdminDefaults, setAdminValues, startAdminServer } from './admin';
 import { describeNetSim, parseNetSim } from '@military-forge/netcode';
+import { ResultsReporter, resultsPrivateKey } from './results';
 import { createServer, nodeScheduler } from './server';
 import { TicketVerifier, ticketPublicKey } from './tickets';
 import { defaultGatewaySocket } from './transports';
@@ -94,6 +95,19 @@ if (adminToken) {
   }
 }
 
+// Match results (docs/07 §12): RESULTS_PRIVATE_KEY (an Ed25519 key of its own, PEM; the API holds
+// its public half as RESULTS_PUBLIC_KEY) and API_URL (the API's base, e.g. http://127.0.0.1:8787)
+// send each finished match in a room by code to the API, signed. Without them nothing is recorded.
+let results: ResultsReporter | null = null;
+if (process.env.RESULTS_PRIVATE_KEY && process.env.API_URL) {
+  try {
+    results = new ResultsReporter(process.env.API_URL.replace(/\/+$/, ''), resultsPrivateKey(process.env.RESULTS_PRIVATE_KEY));
+  } catch (e) {
+    console.error(`[game-server] RESULTS_PRIVATE_KEY: ${(e as Error).message}`);
+    process.exit(1);
+  }
+}
+
 const server = await createServer(
   port,
   {
@@ -117,7 +131,7 @@ const server = await createServer(
     defaultRoom,
     ...(maxRooms !== undefined && Number.isInteger(maxRooms) && maxRooms >= 0 ? { maxRooms } : {}),
     // rooms by code play the same map (one map per room until rooms can switch)
-    roomOptions: { mapId, hostTuning, ...(fillBots ? { fillBots } : {}), ...(armory ? { armory } : {}), ...lagComp },
+    roomOptions: { mapId, hostTuning, ...(fillBots ? { fillBots } : {}), ...(armory ? { armory } : {}), ...lagComp, results },
     tickets,
     trustProxy,
   },
@@ -125,6 +139,7 @@ const server = await createServer(
 console.log(
   `[game-server] ${server.room ? `room "${server.room.game.map.id}"` : 'no default room'} + rooms by code on ws://${host ?? 'localhost'}:${server.port} · transport ${server.transport === 'uws' ? 'uWebSockets.js' : 'ws (fallback)'} · dev commands ${dev ? 'on' : 'off'}` +
     ` · join tickets ${tickets ? 'required' : 'off (dev)'}` +
+    ` · match results ${results ? 'sent to the API' : 'not recorded'}` +
     (fillBots ? ` · bots fill rooms to ${fillBots.target} (${fillBots.level})` : '') +
     (hostTuning ? ' · hosts may tune their rooms' : '') +
     (armory ? ' · test armory on (one of every gun by the spawns)' : '') +

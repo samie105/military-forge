@@ -22,6 +22,7 @@ import { ApiError } from '../http/errors';
 import { LIMITS, enforceRateLimit } from '../http/rateLimit';
 import type { Kv } from '../kv/kv';
 import type { ProfileService } from '../me/profiles';
+import type { PresenceService } from '../presence/presence';
 
 /** A code stays joinable this long after its last join (docs/07 §5.4: rooms live ≤ 2 h idle-free; playtests run long). */
 export const ROOM_TTL_MS = 6 * 3600_000;
@@ -71,8 +72,8 @@ export interface JoinTicketClaims extends StandardClaims {
   jti: string;
 }
 
-export function roomRoutes(deps: { config: Config; kv: Kv; auth: AuthService; profiles: ProfileService; ticketKey: SigningKey | null; now: () => number }): Hono<AppEnv> {
-  const { config, kv, auth, profiles, ticketKey, now } = deps;
+export function roomRoutes(deps: { config: Config; kv: Kv; auth: AuthService; profiles: ProfileService; presence?: PresenceService; ticketKey: SigningKey | null; now: () => number }): Hono<AppEnv> {
+  const { config, kv, auth, profiles, presence, ticketKey, now } = deps;
   const app = new Hono<AppEnv>();
   app.use(requireAuth(auth));
 
@@ -94,12 +95,15 @@ export function roomRoutes(deps: { config: Config; kv: Kv; auth: AuthService; pr
     return signJwt(claims, ticketKey.privateKey);
   }
 
-  const join = async (code: string, userId: string): Promise<RoomJoin> => ({
-    code,
-    roomId: code,
-    gsUrl: config.gameServerUrl ? `${config.gameServerUrl}/ws/${code}` : null,
-    ticket: await ticketFor(userId, code),
-  });
+  const join = async (code: string, userId: string): Promise<RoomJoin> => {
+    await presence?.beat(userId, code); // in a room now (presence.ts)
+    return {
+      code,
+      roomId: code,
+      gsUrl: config.gameServerUrl ? `${config.gameServerUrl}/ws/${code}` : null,
+      ticket: await ticketFor(userId, code),
+    };
+  };
 
   app.post('/', async (c) => {
     const { userId } = c.get('auth')!;

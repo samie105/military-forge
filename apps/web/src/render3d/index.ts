@@ -12,11 +12,14 @@ import {
   Fog,
   Group,
   HemisphereLight,
+  Material,
   Mesh,
+  NearestFilter,
   MeshToonMaterial,
   Object3D,
   PerspectiveCamera,
   Scene,
+  Texture,
   Vector2,
   Vector3,
   WebGLRenderer,
@@ -36,7 +39,7 @@ import { buildMapGeometry } from './mapGeometry';
 import { OnlineView, type RemoteView } from './online';
 import { FOV_DEG, PlaneCamera, applyPlanePose, planePose } from './planeCamera';
 import { ZoneVolumes } from './zones';
-import { DynamicResolution, PRESETS, SampleWindow, parsePreset, type GraphicsPreset, type PresetName } from './presets';
+import { DynamicResolution, PRESETS, SampleWindow, TierGovernor, parsePreset, type GraphicsPreset, type PresetName } from './presets';
 import { eachKick, recoilOf } from './recoil';
 import { PickupMeshes, RicochetSparks } from './shield';
 import { WeaponItems } from './weaponItems';
@@ -68,8 +71,8 @@ export function online3d(params: URLSearchParams): boolean {
 }
 
 /**
- * The render pixel ratio: the device's, capped by the preset and by an override (touch devices:
- * MOBILE_DPR_CAP), the lower cap winning, so a phone on Low stays at 1; then the dynamic scale.
+ * The render pixel ratio: the device's, capped by the preset (its touchDprCap on a phone or tablet)
+ * and by an override, the lower cap winning; then the dynamic scale.
  */
 export function pixelRatio(device: number, presetCap: number, override: number | null, scale: number): number {
   return Math.min(device, presetCap, override ?? Infinity) * scale;
@@ -107,6 +110,10 @@ export interface RenderStats {
   /** main-thread time inside render(): animation, IK, culling and WebGL submission, ms */
   cpuMean: number;
   cpuP90: number;
+  /** Auto quality is adapting (the tier it started on, its ceiling), or null for a fixed preset */
+  auto: PresetName | null;
+  /** drawn at the touch caps (a phone or tablet) */
+  touch: boolean;
   calls: number;
   triangles: number;
   avatars: number;
@@ -490,6 +497,7 @@ export class Renderer3D {
       this.looks.clear();
     }
     this.resize();
+    if (this.ready) this.applyAnisotropy();
   }
 
   /** Pins the render scale (null = dynamic again): repeatable screenshots and measurements. */
@@ -503,6 +511,70 @@ export class Renderer3D {
     return this.preset.name;
   }
 
+  // --- render3d-b: quality for the device (the owner, 19 Oct) ---
+  /** a phone or tablet: the presets' touch caps (touch/index.ts) */
+  private touch = false;
+  /** Auto quality adapting to the measured frames, or null */
+  private governor: TierGovernor | null = null;
+  private judged = 0;
+  /** Auto stepped to another tier (main.ts: Settings shows it) */
+  onAutoTier: ((tier: PresetName) => void) | null = null;
+
+  /** A phone or tablet: render at the presets' touch caps (up to 3× on High) instead of the desktop ones. */
+  setTouchDevice(on: boolean): void {
+    this.touch = on;
+    this.resize();
+  }
+
+  /**
+   * Settings → Quality: Auto. `start` is Auto's pick for the device (gfxAuto.ts): the tier it runs
+   * and the ceiling it may come back up to; frames that keep missing at the lowest render scale step
+   * it down (TierGovernor). Null: a preset the player chose, left alone.
+   */
+  setAutoTier(start: PresetName | null): void {
+    this.governor = start ? new TierGovernor(start) : null;
+    this.judged = this.dynres.windows;
+    if (start && start !== this.preset.name) this.setPreset(start);
+  }
+
+  /** after each dynamic-resolution window: Auto's verdict on the tier */
+  private governTier(): void {
+    if (!this.governor || this.dynres.windows === this.judged) return;
+    this.judged = this.dynres.windows;
+    const next = this.governor.judge(this.dynres.lastMissed, this.dynres.scale <= this.preset.minScale + 1e-6, this.dynres.scale >= 1);
+    if (!next) return;
+    this.setPreset(next);
+    this.onAutoTier?.(next);
+  }
+
+  private anisoFrames = 0;
+  private readonly anisoVisit = (o: Object3D): void => {
+    const m = (o as Mesh).material as Material | Material[] | undefined;
+    if (!m) return;
+    if (Array.isArray(m)) for (const mat of m) this.anisoMaterial(mat);
+    else this.anisoMaterial(m);
+  };
+  private aniso = 1;
+
+  private anisoMaterial(m: Material): void {
+    const mat = m as Material & { map?: Texture | null; normalMap?: Texture | null; emissiveMap?: Texture | null };
+    for (const t of [mat.map, mat.normalMap, mat.emissiveMap]) {
+      if (!t || t.anisotropy === this.aniso || t.minFilter === NearestFilter) continue;
+      t.anisotropy = this.aniso;
+      t.needsUpdate = true;
+    }
+  }
+
+  /**
+   * Anisotropic filtering on the textures drawn (the preset's, capped by the GPU): the ground and the
+   * walls stay sharp at a glancing angle. Run on a preset change and every couple of seconds (art
+   * and characters arrive late); a texture already at it is left alone.
+   */
+  private applyAnisotropy(): void {
+    this.aniso = Math.max(1, Math.min(this.preset.anisotropy, this.renderer.capabilities.getMaxAnisotropy()));
+    this.scene.traverse(this.anisoVisit);
+  }
+
   /** A device-pixel-ratio cap on top of the preset's: the lower one wins (null: the preset's alone). */
   setDprCap(cap: number | null): void {
     this.dprCapOverride = cap;
@@ -511,7 +583,7 @@ export class Renderer3D {
 
   resize(): void {
     const canvas = this.renderer.domElement;
-    const dpr = pixelRatio(window.devicePixelRatio || 1, this.preset.dprCap, this.dprCapOverride, this.dynres.scale);
+    const dpr = pixelRatio(window.devicePixelRatio || 1, this.touch ? this.preset.touchDprCap : this.preset.dprCap, this.dprCapOverride, this.dynres.scale);
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
     // 2 CSS px at full resolution, whatever the render scale
@@ -531,7 +603,9 @@ export class Renderer3D {
       const ms = now - this.lastFrameAt;
       this.frameMs.push(ms);
       if (this.dynres.sample(ms)) this.resize();
+      this.governTier();
     }
+    if (this.anisoFrames++ % 120 === 0) this.applyAnisotropy();
     this.lastFrameAt = now;
 
     // online: remote players at net.remotePose on this frame's render tick, and the snapshot world
@@ -652,6 +726,8 @@ export class Renderer3D {
       frameP99: this.frameMs.percentile(0.99),
       cpuMean: this.cpuMs.mean(),
       cpuP90: this.cpuMs.percentile(0.9),
+      auto: this.governor?.ceiling ?? null,
+      touch: this.touch,
       calls: info.calls,
       triangles: info.triangles,
       avatars: this.avatars.size,
@@ -682,7 +758,7 @@ function disposeTree(root: Object3D): void {
 export function formatStats(s: RenderStats): string {
   const f = (v: number) => (Number.isFinite(v) ? v.toFixed(1) : '–');
   return (
-    `3D ${s.preset} · ${s.width}×${s.height} (dpr ${s.pixelRatio.toFixed(2)}, scale ${s.scale.toFixed(2)})\n` +
+    `3D ${s.auto ? `Auto: ${s.preset} (from ${s.auto})` : s.preset}${s.touch ? ' · touch' : ''} · ${s.width}×${s.height} (dpr ${s.pixelRatio.toFixed(2)}, scale ${s.scale.toFixed(2)})\n` +
     `frame p50 ${f(s.frameP50)} · p90 ${f(s.frameP90)} · p99 ${f(s.frameP99)} ms · render cpu ${f(s.cpuMean)} ms (p90 ${f(s.cpuP90)})\n` +
     `${s.calls} draw calls · ${(s.triangles / 1000).toFixed(1)}k tris · ${s.avatars} characters · ${s.particles} particles`
   );

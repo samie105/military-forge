@@ -74,10 +74,12 @@ describe('POST /auth/guest', () => {
     for (let i = 0; i < LIMITS.guestCreate.limit; i++) expect((await create()).status).toBe(201);
     const limited = await create();
     expect(limited.status).toBe(429);
-    expect(Number(limited.headers.get('retry-after'))).toBe(LIMITS.guestCreate.windowMs / 1000);
+    // Valkey counts real time, so its window has run on a little: about the full window
+    expect(Math.abs(Number(limited.headers.get('retry-after')) - LIMITS.guestCreate.windowMs / 1000)).toBeLessThanOrEqual(api.kv.kind === 'memory' ? 0 : 5);
     expect(((await limited.json()) as { error: { code: string } }).error.code).toBe('rate_limited');
     // other IPs are unaffected, and the window resets
     expect((await api.app.request('/auth/guest', { method: 'POST', headers: { 'x-forwarded-for': api.ip() } })).status).toBe(201);
+    if (api.kv.kind !== 'memory') return; // a real Valkey's window can't be fast-forwarded
     api.clock.advance(LIMITS.guestCreate.windowMs);
     expect((await create()).status).toBe(201);
   });

@@ -25,6 +25,7 @@
  */
 import { randomBytes } from 'node:crypto';
 import { adminJson, adminValues, onAdminValues } from './admin';
+import { MatchRecorder, type ResultsSink } from './results';
 import { addBot, removeBot, type BotLevelId } from '@military-forge/bots';
 import { ADMIN_BOT_LEVELS, adminTuning, adminValue, createTuning, defaultTuning, limitTuning, maps, type AdminValues, type Tuning } from '@military-forge/content';
 import {
@@ -122,6 +123,10 @@ export interface RoomOptions {
   fillBots?: { target: number; level: BotLevelId };
   /** where a message handler's unexpected error goes (the client is kicked, the room keeps running) */
   log?: (msg: string) => void;
+  /** match rooms: each finished match's results go here (results.ts; the API records them) */
+  results?: ResultsSink | null;
+  /** the room's code, for the results ('' = the default room) */
+  code?: string;
 }
 
 /** A player's claim on the room; outlives its connection for the reconnect grace. */
@@ -185,6 +190,8 @@ const MAX_INPUT_BYTES = 64;
 
 export class Client {
   playerId = -1;
+  /** the API account this connection's join ticket named (rooms.ts); null = a guest without one, or a dev room */
+  accountId: string | null = null;
   name = '';
   closed = false;
   /** this client's inputs, by server tick */
@@ -350,6 +357,8 @@ export class Room {
   private readonly offAdmin: () => void;
   /** the bots this room put in, oldest first */
   readonly bots: PlayerState[] = [];
+  /** reports each finished match (match rooms with a results sink) */
+  private readonly recorder: MatchRecorder | null;
 
   constructor(options: RoomOptions = {}) {
     this.log = options.log ?? ((msg) => console.error(msg));
@@ -366,6 +375,7 @@ export class Room {
     this.game.rewind = this.lagComp;
     this.lagComp?.record(this.game.tick, this.game.players);
     this.match = options.match ? new Match(this.game, options.match) : null;
+    this.recorder = this.match && options.results ? new MatchRecorder(options.results, options.code ?? '') : null;
     const fill = options.fillBots;
     this.fill = this.baseFill = fill && fill.target > 0 ? { target: Math.min(fill.target, MAX_PLAYERS), level: fill.level } : null;
     this.baseLimits = this.match ? { timeLimit: this.match.rules.timeLimit, killLimit: this.match.rules.killLimit } : null;
@@ -619,6 +629,7 @@ export class Room {
       return;
     }
     const p = this.game.addPlayer(sanitizeName(rawName, `Player ${this.humanCount + 1}`));
+    if (client.accountId) this.recorder?.setAccount(p, client.accountId);
     const session: Session = { token: newToken(), playerId: p.id, client: null, expiresAt: Infinity, idle: createInput(), prevToken: null, joinSeq: this.joins++, pingMs: -1 };
     this.sessions.set(session.token, session);
     if (this.match && !this.host) this.host = session;
@@ -942,6 +953,7 @@ export class Room {
     this.fillWithBots();
     if (this.match) {
       this.match.step(this.inputs);
+      this.recorder?.onMatchEvents(this.match, this.game.map.id);
       for (const e of this.match.events) {
         this.matchDirty = true;
         if (e.type === 'phase') this.matchUrgent = true;

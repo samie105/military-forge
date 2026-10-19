@@ -15,6 +15,7 @@
   "dependencies": {
     "@electric-sql/pglite": "0.5.10",
     "@hono/node-server": "2.1.5",
+    "@military-forge/content": "workspace:*",
     "@military-forge/protocol": "workspace:*",
     "@military-forge/shared": "workspace:*",
     "drizzle-orm": "0.45.4",

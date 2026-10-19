@@ -6,6 +6,8 @@
 # Safe to re-run.
 #   - Passwords: made once, kept in $ETC/db (0600, root).
 #   - Backups: a nightly pg_dump into /var/backups/military-forge (mf-YYYY-MM-DD.dump), newest 7 kept.
+#   - Match results: an Ed25519 key of the game server's own ($ETC/results.key, made once); the game
+#     server gets it and the API its public half, through systemd drop-ins.
 #   - A box that ran on PGlite: its rows move into Postgres once; the old directory stays as
 #     $DATA/pglite.imported-<time>.
 
@@ -51,6 +53,19 @@ chmod 0755 /usr/local/sbin/mf-backup
 printf '[Unit]\nDescription=Military Forge: back up the database\nAfter=postgresql.service\n[Service]\nType=oneshot\nUser=postgres\nUMask=0077\nExecStart=/usr/local/sbin/mf-backup\n' >/etc/systemd/system/mf-backup.service
 printf '[Unit]\nDescription=Military Forge: back up the database nightly\n[Timer]\nOnCalendar=*-*-* 02:30:00 UTC\nPersistent=true\n[Install]\nWantedBy=timers.target\n' >/etc/systemd/system/mf-backup.timer
 systemctl daemon-reload && systemctl enable --now --quiet mf-backup.timer || fail 'the backup timer'
+
+# match results (docs/07 §12): the game server signs each finished match with a key of its own and
+# the API checks it with the public half; systemd drop-ins hand them to the two services
+[ -s "$ETC/results.key" ] || openssl genpkey -algorithm ed25519 -out "$ETC/results.key"
+chown root:mf "$ETC/results.key" && chmod 0640 "$ETC/results.key"
+oneline() { awk '{printf "%s\\n", $0}'; }
+(umask 027 && printf "RESULTS_PRIVATE_KEY='%s'\nAPI_URL='http://127.0.0.1:8787'\n" "$(oneline <"$ETC/results.key")" >"$ETC/game-results.env")
+(umask 027 && printf "RESULTS_PUBLIC_KEY='%s'\n" "$(openssl pkey -in "$ETC/results.key" -pubout | oneline)" >"$ETC/api-results.env")
+chown root:mf "$ETC/game-results.env" "$ETC/api-results.env"
+for u in game api; do
+  mkdir -p "/etc/systemd/system/mf-$u.service.d"
+  printf '[Service]\nEnvironmentFile=%s/%s-results.env\n' "$ETC" "$u" >"/etc/systemd/system/mf-$u.service.d/results.conf"
+done
 
 # once: PGlite's rows into Postgres. The API stops first (PGlite has one writer); cloud-init.sh starts it again.
 if [ -f "$DATA/pglite/PG_VERSION" ]; then

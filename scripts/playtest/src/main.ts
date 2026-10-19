@@ -490,9 +490,11 @@ async function main(): Promise<void> {
   }
 
   // fresh keys per run (never written to disk, never sent to a browser): the API's access tokens,
-  // and join tickets (the API signs them, the game server checks them)
+  // join tickets (the API signs them, the game server checks them) and match results (the game
+  // server signs them, the API checks them)
   const accessKey = generateKeyPairSync('ed25519');
   const ticketKey = generateKeyPairSync('ed25519');
+  const resultsKey = generateKeyPairSync('ed25519');
   const map = option('map');
   const bots = option('bots') ?? '4';
   const botLevel = option('bot-level') ?? 'normal';
@@ -514,6 +516,9 @@ async function main(): Promise<void> {
       DEFAULT_ROOM: '0',
       MAX_ROOMS: '24',
       JOIN_TICKET_PUBLIC_KEY: ticketKey.publicKey.export({ type: 'spki', format: 'pem' }).toString(),
+      // each finished match goes to the API (XP, stats, leaderboards)
+      RESULTS_PRIVATE_KEY: resultsKey.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
+      API_URL: `http://127.0.0.1:${apiPort}`,
       TRUST_PROXY: '1',
       ...(map ? { MAP: map } : {}),
       BOTS: bots,
@@ -560,6 +565,7 @@ async function main(): Promise<void> {
       KEEP_ROOMS: rooms.keepList().join(','),
       ACCESS_TOKEN_PRIVATE_KEY: accessKey.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
       JOIN_TICKET_PRIVATE_KEY: ticketKey.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
+      RESULTS_PUBLIC_KEY: resultsKey.publicKey.export({ type: 'spki', format: 'pem' }).toString(),
       // the API trusts only this local origin; the proxy vouches for the tunnel's current one (CSRF)
       CORS_ORIGINS: localOrigins.join(','),
       COOKIE_SECURE: local ? 'false' : 'true',

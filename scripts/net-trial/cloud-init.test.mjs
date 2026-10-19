@@ -90,6 +90,12 @@ describe('data.sh', () => {
       assert.ok(/^(DB_URL|KV_URL)=|^ALTER ROLE|printf .*>/.test(line.trim()) || line.includes('(umask'), line);
     }
   });
+  it('gives the game server a results key of its own and the API its public half; Caddy hides the route', () => {
+    assert.match(data, /openssl genpkey -algorithm ed25519 -out "\$ETC\/results\.key"/);
+    assert.match(data, /RESULTS_PRIVATE_KEY=.*API_URL='http:\/\/127\.0\.0\.1:8787'/);
+    assert.match(data, /RESULTS_PUBLIC_KEY=.*openssl pkey -in "\$ETC\/results\.key" -pubout/);
+    assert.match(text, /respond \/api\/internal\/\* 404/);
+  });
   it('backs up nightly into /var/backups/military-forge and keeps 7', () => {
     assert.match(data, /OnCalendar=\*-\*-\* 02:30:00 UTC/);
     assert.match(data, /head -n -7/);
