@@ -12,8 +12,11 @@
  *
  * Set on <html> once and on every resize, with two classes for the menus' smaller boxes (app.css
  * reflows the wide screens in them): html.mf-narrow under 1800 design pixels wide, html.mf-short
- * under 1000 high.
+ * under 1000 high. On an upright phone the page is turned (landscape.ts) and the window's size is
+ * the turned box's.
  */
+import { applyLandscape, viewport } from './landscape';
+
 export const DESIGN_W = 1920;
 export const DESIGN_H = 1080;
 export const PHONE_W = 812;
@@ -53,8 +56,9 @@ export function menuFit(vw: number, vh: number): Fit {
 let started = false;
 
 function apply(root: HTMLElement): void {
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
+  // the page's own size: a phone held upright lays out sideways (landscape.ts)
+  applyLandscape(root);
+  const { w: vw, h: vh } = viewport();
   const set = (name: 'fit' | 'hud' | 'phone', f: Fit) => {
     const fit = name === 'fit' ? '--fit' : `--${name}-fit`;
     root.style.setProperty(fit, f.fit.toFixed(4));

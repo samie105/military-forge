@@ -33,12 +33,12 @@
 /* the kit's phone safe box: clear of the notch and the home indicator (needs viewport-fit=cover, set while active) */
 .mf-touch-safe {
   position: absolute;
-  top: max(10px, env(safe-area-inset-top, 0px));
-  right: max(var(--phone-notch), env(safe-area-inset-right, 0px));
-  bottom: max(21px, env(safe-area-inset-bottom, 0px));
-  left: max(var(--phone-notch), env(safe-area-inset-left, 0px));
+  top: max(10px, var(--sa-t));
+  right: max(var(--phone-notch), var(--sa-r));
+  bottom: max(21px, var(--sa-b));
+  left: max(var(--phone-notch), var(--sa-l));
 }
-.mf-touch-menus .mf-touch-safe, .mf-touch-menus .mf-touch-rotate { visibility: hidden; }
+.mf-touch-menus .mf-touch-safe { visibility: hidden; }
 
 /* ---- a control: centred on its place, its skin zoomed to its size (--k), never under 48 px ---- */
 .mf-ctl {
@@ -97,25 +97,6 @@
 /* the dev client's ✎ (app mode edits from Settings) */
 .mf-touch-edit { left: 50%; top: 28px; }
 
-/* ---- portrait: ask for landscape ---- */
-.mf-touch-rotate {
-  position: fixed;
-  inset: 0;
-  z-index: 1;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  text-align: center;
-  background: var(--c-scrim-strong);
-  pointer-events: auto;
-}
-.mf-touch-rotate[hidden] { display: none; }
-.mf-touch-rotate__card { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 24px 28px; max-width: 320px; }
-.mf-touch-rotate__card .display { font-size: var(--fs-28); }
-.mf-touch-rotate__card p { color: var(--c-muted); }
-.mf-touch-rotate__icon { animation: mf-turn 1.8s var(--ease-travel) infinite; }
-@keyframes mf-turn { 0%, 30% { rotate: 0deg; } 60%, 100% { rotate: 90deg; } }
-
 /* ---- the editor: every control shows, dashed; the picked one in volt; the one under the finger lifts ---- */
 .mf-touch-editing .mf-ctl { pointer-events: auto; transition: scale var(--m-base) var(--ease-settle), filter var(--m-base) var(--ease-settle); }
 .mf-touch-editing .mf-ctl::after { content: ''; position: absolute; inset: -6px; border: 2px dashed var(--c-paper); border-radius: 50%; pointer-events: none; }
@@ -132,7 +113,7 @@
 .mf-touch-editor {
   position: absolute;
   left: 50%;
-  top: calc(max(10px, env(safe-area-inset-top, 0px)) + 56px);
+  top: calc(max(10px, var(--sa-t)) + 56px);
   translate: calc(-50% - 44px) 0;
   z-index: 2;
   width: 296px;
@@ -145,7 +126,7 @@
   transition: opacity var(--m-fast) var(--ease-arrive);
 }
 .mf-touch-editor[hidden], .mf-touch-editor-row[hidden], .mf-touch-editor [hidden] { display: none; }
-.mf-touch-editor-bottom { top: auto; bottom: max(8px, env(safe-area-inset-bottom, 0px)); }
+.mf-touch-editor-bottom { top: auto; bottom: max(8px, var(--sa-b)); }
 .mf-touch-editor-dragging { opacity: 0.15; pointer-events: none; }
 .mf-touch-editor-row { display: flex; flex-wrap: nowrap; gap: 6px; align-items: center; }
 .mf-touch-editor-more { flex-wrap: wrap; gap: 0 12px; padding: 0 4px 2px; }

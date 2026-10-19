@@ -14,6 +14,7 @@
  * under Reduce motion becomes an opacity change of 120 ms at most, or nothing. Never use these on a
  * value written every frame.
  */
+import { logicalRect, viewport } from './landscape';
 
 const STAGGER_CAP = 10;
 
@@ -76,8 +77,8 @@ const round = (n: number, places = 2) => Math.round(n * 10 ** places) / 10 ** pl
  * shell is about 90 % there. Returns the animation (null when there's nothing to animate).
  */
 export function sharedElement(from: Element | Box, to: HTMLElement, options: { content?: readonly Element[] } = {}): Animation | null {
-  const a = 'getBoundingClientRect' in from ? from.getBoundingClientRect() : from;
-  const b = to.getBoundingClientRect();
+  const a = 'getBoundingClientRect' in from ? logicalRect(from) : from;
+  const b = logicalRect(to);
   for (const old of to.getAnimations?.() ?? []) old.cancel();
   if (reduced()) return to.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 120, easing: 'linear' });
   if (b.width === 0 || b.height === 0) return null;
@@ -195,7 +196,9 @@ export function flood(
     return Promise.resolve();
   }
   doc.querySelector('.m-p6')?.remove();
-  const at = (p: FloodAnchor) => ('getBoundingClientRect' in p ? centre(p.getBoundingClientRect()) : p);
+  // the page's own coordinates (an upright phone plays turned: landscape.ts)
+  const at = (p: FloodAnchor) => ('getBoundingClientRect' in p ? centre(logicalRect(p)) : p);
+  const view = viewport();
   const circle = (r: number, p: { x: number; y: number }) => `circle(${r}px at ${p.x}px ${p.y}px)`;
   const a = at(from);
   const sheet = doc.createElement('div');
@@ -205,13 +208,13 @@ export function flood(
   if (options.color) sheet.style.setProperty('--m-flood', options.color);
   doc.body.append(sheet);
   const travel = token('--ease-travel', 'ease-in-out');
-  const grow = sheet.animate([{ clipPath: circle(0, a) }, { clipPath: circle(floodRadius(a.x, a.y, innerWidth, innerHeight), a) }], { duration: 320, easing: travel, fill: 'forwards' });
+  const grow = sheet.animate([{ clipPath: circle(0, a) }, { clipPath: circle(floodRadius(a.x, a.y, view.w, view.h), a) }], { duration: 320, easing: travel, fill: 'forwards' });
   return grow.finished
     .then(() => {
       options.onCovered?.();
       const to = typeof options.to === 'function' ? options.to() : options.to;
       const b = to ? at(to) : a;
-      const r = floodRadius(b.x, b.y, innerWidth, innerHeight);
+      const r = floodRadius(b.x, b.y, view.w, view.h);
       return sheet.animate([{ clipPath: circle(r, b) }, { clipPath: circle(0, b) }], { duration: 320, easing: travel, fill: 'forwards' }).finished;
     })
     .then(

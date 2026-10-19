@@ -1,28 +1,26 @@
 /*
- * The Locker on a phone held sideways (the kit's m-locker): the stage on the left, the items on the
+ * The Locker on a phone (held sideways, or upright and turned: html.mf-phone, ui/landscape.ts; the kit's m-locker): the stage on the left, the items on the
  * right, the sections in a scrolling row above them, clear of the notch, every target 48 px. Layout
  * only, over today's Locker (locker/, its own look); the kit's Locker v2 (Fits the body, Share, Wear
  * it) is the desktop's phase 6. Scoped under the shell's route (.mf-route) so it outranks the
  * Locker's own stylesheet, which it injects after this one.
  */
-@media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
-  .mf-route .mm-locker {
-    grid-template: 52px 50px minmax(0, 1fr) / minmax(200px, 36%) minmax(0, 1fr);
-    grid-template-areas: 'head head' 'tabs tabs' 'stage panel';
-    padding: 0 max(var(--phone-notch, 44px), env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(var(--phone-notch, 44px), env(safe-area-inset-left, 0px));
-  }
-  .mf-route .mm-header { padding: 0 2px; gap: 8px; }
-  .mf-route .mm-header h1 { font-size: 16px; }
-  .mf-route .mm-status { display: none; }
-  .mf-route .mm-button { min-height: 48px; padding: 0 14px; }
-  .mf-route .mm-header .mm-button:last-child { margin-left: auto; }
-  .mf-route .mm-tabs { flex-direction: row; align-items: center; overflow-x: auto; padding: 0; gap: 4px; border-right: 0; border-bottom: 1px solid var(--line); scrollbar-width: none; overscroll-behavior: contain; }
-  .mf-route .mm-tabs button { flex: none; min-height: 48px; padding: 0 14px; white-space: nowrap; }
-  .mf-route .mm-tabs button[aria-selected='true'] { box-shadow: inset 0 -3px var(--accent); }
-  .mf-route .mm-panel { padding: 8px; border-right: 0; border-left: 1px solid var(--line); overscroll-behavior: contain; }
-  .mf-route .mm-grid { grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 6px; }
-  .mf-route .mm-tile { min-height: 64px; }
-  .mf-route .mm-controls { left: 4px; right: 4px; bottom: 4px; transform: none; flex-wrap: wrap; justify-content: center; gap: 4px; }
-  .mf-route .mm-seg button { min-height: 48px; min-width: 48px; padding: 0 8px; }
-  .mf-route .mm-detail { top: 4px; left: 6px; right: 6px; font-size: 12px; }
+:where(html.mf-phone) .mf-route .mm-locker {
+  grid-template: 52px 50px minmax(0, 1fr) / minmax(200px, 36%) minmax(0, 1fr);
+  grid-template-areas: 'head head' 'tabs tabs' 'stage panel';
+  padding: 0 max(var(--phone-notch, 44px), var(--sa-r)) var(--sa-b) max(var(--phone-notch, 44px), var(--sa-l));
 }
+:where(html.mf-phone) .mf-route .mm-header { padding: 0 2px; gap: 8px; }
+:where(html.mf-phone) .mf-route .mm-header h1 { font-size: 16px; }
+:where(html.mf-phone) .mf-route .mm-status { display: none; }
+:where(html.mf-phone) .mf-route .mm-button { min-height: 48px; padding: 0 14px; }
+:where(html.mf-phone) .mf-route .mm-header .mm-button:last-child { margin-left: auto; }
+:where(html.mf-phone) .mf-route .mm-tabs { flex-direction: row; align-items: center; overflow-x: auto; padding: 0; gap: 4px; border-right: 0; border-bottom: 1px solid var(--line); scrollbar-width: none; overscroll-behavior: contain; }
+:where(html.mf-phone) .mf-route .mm-tabs button { flex: none; min-height: 48px; padding: 0 14px; white-space: nowrap; }
+:where(html.mf-phone) .mf-route .mm-tabs button[aria-selected='true'] { box-shadow: inset 0 -3px var(--accent); }
+:where(html.mf-phone) .mf-route .mm-panel { padding: 8px; border-right: 0; border-left: 1px solid var(--line); overscroll-behavior: contain; }
+:where(html.mf-phone) .mf-route .mm-grid { grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 6px; }
+:where(html.mf-phone) .mf-route .mm-tile { min-height: 64px; }
+:where(html.mf-phone) .mf-route .mm-controls { left: 4px; right: 4px; bottom: 4px; transform: none; flex-wrap: wrap; justify-content: center; gap: 4px; }
+:where(html.mf-phone) .mf-route .mm-seg button { min-height: 48px; min-width: 48px; padding: 0 8px; }
+:where(html.mf-phone) .mf-route .mm-detail { top: 4px; left: 6px; right: 6px; font-size: 12px; }

@@ -11,6 +11,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from
 import { eventLook } from '../../hud/model';
 import { Icon } from '../../ui/Icon';
 import { Kbd } from '../../ui/Kbd';
+import { viewport } from '../../ui/landscape';
 import { flood, sharedElement, type Box } from '../../ui/motion';
 import { Screen } from '../../ui/Screen';
 import type { Bindings } from '../controls';
@@ -59,7 +60,7 @@ export function useCountdown(view: MatchView | null): { state: CountdownState; v
       setIntro('intro');
       setHeld(true);
       const start = take('start');
-      const from = start ? { x: start.left + start.width / 2, y: start.top + start.height / 2 } : { x: innerWidth / 2, y: innerHeight / 2 };
+      const from = start ? { x: start.left + start.width / 2, y: start.top + start.height / 2 } : { x: viewport().w / 2, y: viewport().h / 2 };
       // the intro's time starts once it is uncovered (the world's first frames can be slow to come)
       void flood(from, {
         to: () => document.querySelector('.intro__inner'),

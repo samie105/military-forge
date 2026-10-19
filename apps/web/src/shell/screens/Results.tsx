@@ -12,6 +12,7 @@
 import { MatchEndReason, MatchPhase, TICK_RATE, type MatchResults, type MatchStanding } from '@military-forge/sim';
 import { useContext, useEffect, useState, type CSSProperties } from 'react';
 import { Icon } from '../../ui/Icon';
+import { viewport } from '../../ui/landscape';
 import { flood } from '../../ui/motion';
 import { Screen, blurAfter } from '../../ui/Screen';
 import { ControllerContext } from '../context';
@@ -75,7 +76,7 @@ export function Results({ view, results, actions, room, training }: { view: Matc
   // entrances (the winner's P1, the standings' P3, the MVP's P7) wait until it has covered the screen
   const [held, setHeld] = useState(true);
   useEffect(() => {
-    void flood({ x: innerWidth / 2, y: 60 }, { to: () => document.querySelector('.res__name'), onCovered: () => setHeld(false) });
+    void flood({ x: viewport().w / 2, y: 60 }, { to: () => document.querySelector('.res__name'), onCovered: () => setHeld(false) });
   }, []);
 
   return (

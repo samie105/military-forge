@@ -40,6 +40,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { characterToonRamp } from '../character';
+import { logicalPoint } from '../ui/landscape';
 import { glowMaterial } from './glow';
 import { LightPool } from './lights';
 import { previewReach, type SpecialAnchors, type SpecialsManifest, SpecialsPreview } from './specials';
@@ -567,16 +568,17 @@ export class ArmoryViewer {
   };
 
   private readonly onPointerDown = (e: PointerEvent): void => {
-    this.drag = { x: e.clientX, y: e.clientY };
+    this.drag = logicalPoint(e); // the page's axes (an upright phone plays turned: ui/landscape.ts)
     this.yawVelocity = 0;
     this.canvas.setPointerCapture(e.pointerId);
   };
 
   private readonly onPointerMove = (e: PointerEvent): void => {
     if (!this.drag) return;
-    const dx = e.clientX - this.drag.x;
-    const dy = e.clientY - this.drag.y;
-    this.drag = { x: e.clientX, y: e.clientY };
+    const at = logicalPoint(e);
+    const dx = at.x - this.drag.x;
+    const dy = at.y - this.drag.y;
+    this.drag = at;
     this.yaw += dx * 0.01;
     this.pitch = Math.min(0.6, Math.max(-0.6, this.pitch + dy * 0.006));
     this.yawVelocity = dx * 0.6;

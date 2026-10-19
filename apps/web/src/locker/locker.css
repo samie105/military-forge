@@ -59,44 +59,41 @@
 /* the 3D view's own backdrop sits in a booth over the camo */
 :where(.mf-gear-fit) .mm-stage canvas { border-radius: var(--r-lg); box-shadow: inset 0 0 0 var(--bw) var(--c-line); }
 
-/* a laptop's smaller box (ui/fit.ts) (not on a phone: its own layout, below) */
-@media not ((orientation: landscape) and (max-height: 500px) and (pointer: coarse)) {
-  html.mf-narrow :where(.mf-gear-fit) .items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  html.mf-narrow :where(.mf-gear-fit) .mf-items--sw { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  html:is(.mf-narrow, .mf-big-text) :where(.mf-gear-fit) .lk__act .btn--xl { min-height: var(--btn-h); font-size: var(--fs-20); padding-inline: var(--sp-5); }
-  html.mf-narrow :where(.mf-gear-fit) .mm-locker { grid-template: auto auto minmax(0, 1fr) / minmax(0, 1fr) 640px; grid-template-areas: 'head head' 'tabs tabs' 'stage panel'; column-gap: var(--sp-6); }
-  html.mf-narrow :where(.mf-gear-fit) .mm-tabs { margin-bottom: var(--sp-4); }
-  html.mf-short :where(.mf-gear-fit) .lk__h { font-size: var(--fs-48); margin-bottom: var(--sp-2); }
-  html.mf-short :where(.mf-gear-fit) .menu-top { height: 88px; }
-}
+/* a laptop's smaller box (ui/fit.ts) (not on a phone: its own layout, below; html.mf-phone: ui/landscape.ts) */
+html.mf-narrow:where(:not(.mf-phone)) :where(.mf-gear-fit) .items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+html.mf-narrow:where(:not(.mf-phone)) :where(.mf-gear-fit) .mf-items--sw { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+html:is(.mf-narrow, .mf-big-text):where(:not(.mf-phone)) :where(.mf-gear-fit) .lk__act .btn--xl { min-height: var(--btn-h); font-size: var(--fs-20); padding-inline: var(--sp-5); }
+html.mf-narrow:where(:not(.mf-phone)) :where(.mf-gear-fit) .mm-locker { grid-template: auto auto minmax(0, 1fr) / minmax(0, 1fr) 640px; grid-template-areas: 'head head' 'tabs tabs' 'stage panel'; column-gap: var(--sp-6); }
+html.mf-narrow:where(:not(.mf-phone)) :where(.mf-gear-fit) .mm-tabs { margin-bottom: var(--sp-4); }
+html.mf-short:where(:not(.mf-phone)) :where(.mf-gear-fit) .lk__h { font-size: var(--fs-48); margin-bottom: var(--sp-2); }
+html.mf-short:where(:not(.mf-phone)) :where(.mf-gear-fit) .menu-top { height: 88px; }
 
-/* a phone held sideways: the phone's layout (phone/locker.css) at the phone's own size, unzoomed */
-@media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
-  .mf-gear-fit > .screen { zoom: 1; width: 100%; height: 100%; }
-  :where(.mf-gear-fit) .mm-locker { column-gap: 0; padding-bottom: 0; }
-  :where(.mf-gear-fit) .bg__word, :where(.mf-gear-fit) .lk__rule, :where(.mf-gear-fit) .lk__drag, :where(.mf-gear-fit) .brackets { display: none; }
-  :where(.mf-gear-fit) .menu-top { height: auto; }
-  :where(.mf-gear-fit) .menu-top__title { font-size: var(--fs-28); }
-  :where(.mf-gear-fit) .lk__h { font-size: var(--fs-28); margin-bottom: var(--sp-2); }
-  :where(.mf-gear-fit) .lk__panel { padding: var(--sp-3); }
-  :where(.mf-gear-fit) .mf-lk__fits { left: 4px; top: 4px; }
-  :where(.mf-gear-fit) .item__art { height: 64px; }
-  :where(.mf-gear-fit) .mf-item__glyph .ic { width: 36px; height: 36px; }
-  :where(.mf-gear-fit) .mm-stage canvas { inset: 0; height: 100%; }
-  :where(.mf-gear-fit) .mm-tabs { flex-wrap: nowrap; }
-  :where(.mf-gear-fit) .lk__tabs .tab { font-size: var(--fs-14); padding: 0 var(--sp-3); }
-  :where(.mf-gear-fit) .mm-controls { translate: none; }
-  :where(.mf-gear-fit) .lk__act { padding-top: var(--sp-2); }
-  :where(.mf-gear-fit) .lk__act .btn { min-height: 48px; font-size: var(--fs-14); padding: 0 var(--sp-3); }
-  :where(.mf-gear-fit) .lk__act .btn .ic { width: 20px; height: 20px; }
-  :where(.mf-gear-fit) .lk__note { display: none; }
-  :where(.mf-gear-fit) .mm-tabs .m-p5 { display: none; }
-  :where(.mf-gear-fit) .menu-top { gap: var(--sp-3); }
-  :where(.mf-gear-fit) .menu-top .serial { display: none; }
-  :where(.mf-gear-fit) [data-group="light"] { display: none; }
-  :where(.mf-gear-fit) .lk__fits { scale: .7; transform-origin: 0 0; }
-  :where(.mf-gear-fit) .mf-lk__sub { margin: var(--sp-2) 0 var(--sp-1); }
-  :where(.mf-gear-fit) .items { gap: var(--sp-2); }
-  :where(.mf-gear-fit) .item { padding: var(--sp-2); }
-  :where(.mf-gear-fit) .item__name { font-size: var(--fs-14); }
-}
+/* a phone (held sideways, or upright and turned: html.mf-phone, ui/landscape.ts): the phone's layout
+   (phone/locker.css) at the phone's own size, unzoomed */
+:where(html.mf-phone) .mf-gear-fit > .screen { zoom: 1; width: 100%; height: 100%; }
+:where(html.mf-phone) :where(.mf-gear-fit) .mm-locker { column-gap: 0; padding-bottom: 0; }
+:where(html.mf-phone) :where(.mf-gear-fit) .bg__word, :where(html.mf-phone) :where(.mf-gear-fit) .lk__rule, :where(html.mf-phone) :where(.mf-gear-fit) .lk__drag, :where(html.mf-phone) :where(.mf-gear-fit) .brackets { display: none; }
+:where(html.mf-phone) :where(.mf-gear-fit) .menu-top { height: auto; }
+:where(html.mf-phone) :where(.mf-gear-fit) .menu-top__title { font-size: var(--fs-28); }
+:where(html.mf-phone) :where(.mf-gear-fit) .lk__h { font-size: var(--fs-28); margin-bottom: var(--sp-2); }
+:where(html.mf-phone) :where(.mf-gear-fit) .lk__panel { padding: var(--sp-3); }
+:where(html.mf-phone) :where(.mf-gear-fit) .mf-lk__fits { left: 4px; top: 4px; }
+:where(html.mf-phone) :where(.mf-gear-fit) .item__art { height: 64px; }
+:where(html.mf-phone) :where(.mf-gear-fit) .mf-item__glyph .ic { width: 36px; height: 36px; }
+:where(html.mf-phone) :where(.mf-gear-fit) .mm-stage canvas { inset: 0; height: 100%; }
+:where(html.mf-phone) :where(.mf-gear-fit) .mm-tabs { flex-wrap: nowrap; }
+:where(html.mf-phone) :where(.mf-gear-fit) .lk__tabs .tab { font-size: var(--fs-14); padding: 0 var(--sp-3); }
+:where(html.mf-phone) :where(.mf-gear-fit) .mm-controls { translate: none; }
+:where(html.mf-phone) :where(.mf-gear-fit) .lk__act { padding-top: var(--sp-2); }
+:where(html.mf-phone) :where(.mf-gear-fit) .lk__act .btn { min-height: 48px; font-size: var(--fs-14); padding: 0 var(--sp-3); }
+:where(html.mf-phone) :where(.mf-gear-fit) .lk__act .btn .ic { width: 20px; height: 20px; }
+:where(html.mf-phone) :where(.mf-gear-fit) .lk__note { display: none; }
+:where(html.mf-phone) :where(.mf-gear-fit) .mm-tabs .m-p5 { display: none; }
+:where(html.mf-phone) :where(.mf-gear-fit) .menu-top { gap: var(--sp-3); }
+:where(html.mf-phone) :where(.mf-gear-fit) .menu-top .serial { display: none; }
+:where(html.mf-phone) :where(.mf-gear-fit) [data-group="light"] { display: none; }
+:where(html.mf-phone) :where(.mf-gear-fit) .lk__fits { scale: .7; transform-origin: 0 0; }
+:where(html.mf-phone) :where(.mf-gear-fit) .mf-lk__sub { margin: var(--sp-2) 0 var(--sp-1); }
+:where(html.mf-phone) :where(.mf-gear-fit) .items { gap: var(--sp-2); }
+:where(html.mf-phone) :where(.mf-gear-fit) .item { padding: var(--sp-2); }
+:where(html.mf-phone) :where(.mf-gear-fit) .item__name { font-size: var(--fs-14); }

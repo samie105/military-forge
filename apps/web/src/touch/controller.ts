@@ -17,6 +17,7 @@ import type { Camera } from '../camera';
 import { TAP_MS, type ThrowLatch } from '../input';
 import { NO_WEAPON } from '@military-forge/content';
 import type { Frame } from '../view';
+import { logicalPoint, logicalRect } from '../ui/landscape';
 import { cross, drawIn, glideHome, growIn, settleNow, shrinkOut, stamp } from './fx';
 import {
   PILLS,
@@ -71,7 +72,6 @@ export type TouchFrame = Pick<Frame, 'localId' | 'players' | 'pickups'>;
 export class TouchController {
   readonly root: HTMLDivElement;
   private readonly safe: HTMLDivElement;
-  private readonly rotate: HTMLDivElement;
   private readonly editor: HTMLDivElement;
   private readonly guides: { x: HTMLDivElement; y: HTMLDivElement };
   private readonly els = new Map<ControlId, HTMLDivElement>();
@@ -131,16 +131,6 @@ export class TouchController {
       edit.dataset.mfEdit = '';
     }
     this.skin = new TouchSkin(this.root);
-    this.rotate = div('mf-touch-rotate', this.root);
-    this.rotate.innerHTML = `<div class="mf-touch-rotate__card plate"><svg class="ic ic--xl mf-touch-rotate__icon" aria-hidden="true"><use href="#icon-rotate"/></svg><b class="display">Turn your phone sideways</b><p>The game plays in landscape.</p></div>`;
-    if (document.fullscreenEnabled) {
-      const fs = document.createElement('button');
-      fs.className = 'btn btn--volt btn--sm';
-      fs.type = 'button';
-      fs.textContent = 'Play full screen';
-      fs.addEventListener('click', () => void this.fullscreenLandscape());
-      this.rotate.firstElementChild!.append(fs);
-    }
     this.editor = this.buildEditor();
 
     const on = <K extends keyof WindowEventMap>(type: K, fn: (e: WindowEventMap[K]) => void, opts?: AddEventListenerOptions) => {
@@ -291,7 +281,7 @@ export class TouchController {
     // a swap: the two guns' boxes before the icons change, so they can cross to their new places
     const guns = this.swapping ? this.swapGuns() : null;
     this.swapping = false;
-    const was = guns?.map((g) => g.getBoundingClientRect());
+    const was = guns?.map((g) => logicalRect(g));
     this.skin.update(values, tokens);
     // (the pill stays put under a tapping thumb; only the guns inside it move)
     if (guns && was) cross(guns[0], guns[1], was[0]!, was[1]!, this.equip.ms);
@@ -366,7 +356,6 @@ export class TouchController {
     // large text (Settings → Accessibility, 125 % and up): the pills drop their extra words (touch.css)
     const scale = Number(document.documentElement.style.getPropertyValue('--text-scale')) || 1;
     if (scale >= 1.25 !== this.root.classList.contains('mf-text-lg')) this.root.classList.toggle('mf-text-lg', scale >= 1.25);
-    this.rotate.hidden = !(this.active && !hide && innerHeight > innerWidth);
     this.raf = requestAnimationFrame(this.frame);
   };
 
@@ -380,7 +369,6 @@ export class TouchController {
       if (!target?.closest('.mf-touch-editor')) this.editDown(e, target);
       return;
     }
-    if (target?.closest('.mf-touch-rotate')) return;
     const ctl = target?.closest<HTMLElement>('[data-mf-control]');
     if (target?.closest('[data-mf-edit]')) {
       e.preventDefault();
@@ -395,21 +383,23 @@ export class TouchController {
     // the game itself (either canvas, or nothing but the page): a stick for that half of the screen
     if (!(target === document.documentElement || target === document.body || target instanceof HTMLCanvasElement || target?.closest('.mf-touch'))) return;
     e.preventDefault(); // no mouse emulation, no scrolling, no text selection
-    const rect = this.safe.getBoundingClientRect();
-    const leftHalf = e.clientX < rect.left + rect.width / 2;
+    // the page's own coordinates: an upright phone plays turned onto its side (ui/landscape.ts)
+    const at = logicalPoint(e);
+    const rect = logicalRect(this.safe);
+    const leftHalf = at.x < rect.left + rect.width / 2;
     const id = leftHalf === (this.settings.handed === 'right') ? 'move' : 'aim';
     if ([...this.grabs.values()].some((g) => g.kind === 'stick' && g.id === id)) return; // one thumb per stick
     const el = this.els.get(id)!;
     const radius = (this.sizes.get(id)?.px ?? 96) / 2;
     // floating: the dial comes to the thumb (its base kept inside the safe area); a glide home stops here
-    const cx = clamp(e.clientX, rect.left + radius, rect.right - radius);
-    const cy = clamp(e.clientY, rect.top + radius, rect.bottom - radius);
+    const cx = clamp(at.x, rect.left + radius, rect.right - radius);
+    const cy = clamp(at.y, rect.top + radius, rect.bottom - radius);
     settleNow(el);
     el.style.left = `${cx - rect.left}px`;
     el.style.top = `${cy - rect.top}px`;
     el.classList.add('mf-down');
     this.grabs.set(e.pointerId, { kind: 'stick', id, cx, cy, radius, startAt: e.timeStamp, peak: 0, peakDir: 0 });
-    this.moveStick(id, e.clientX - cx, e.clientY - cy);
+    this.moveStick(id, at.x - cx, at.y - cy);
   }
 
   private pressControl(e: PointerEvent, id: ControlId, el: HTMLElement): void {
@@ -418,7 +408,7 @@ export class TouchController {
     el.classList.add('mf-down'); // P8: pressed in this frame
     const s = this.state;
     if (def.kind === 'drag') {
-      const r = el.getBoundingClientRect();
+      const r = logicalRect(el);
       s.grenadeActive = true;
       // tap: a quick throw on release; hold: the arc, thrown on release (the throw latch)
       if (this.host.throwLatch) this.host.throwLatch.press(performance.now());
@@ -452,8 +442,9 @@ export class TouchController {
       return;
     }
     e.preventDefault();
-    if (g.kind === 'stick') this.moveStick(g.id, e.clientX - g.cx, e.clientY - g.cy, g);
-    else if (g.kind === 'grenade') shapeStick(e.clientX - g.cx, e.clientY - g.cy, g.radius, GRENADE_STICK, this.state.grenade);
+    const at = logicalPoint(e);
+    if (g.kind === 'stick') this.moveStick(g.id, at.x - g.cx, at.y - g.cy, g);
+    else if (g.kind === 'grenade') shapeStick(at.x - g.cx, at.y - g.cy, g.radius, GRENADE_STICK, this.state.grenade);
     else if (g.kind === 'edit') this.editMove(g, e);
     else if (g.kind === 'pinch') this.pinchMove(g, e);
   }
@@ -492,9 +483,9 @@ export class TouchController {
         Object.assign(s.aim, zeroStick());
       }
       // the dial glides home from where the thumb took it
-      const from = el.getBoundingClientRect();
+      const from = logicalRect(el);
       this.place();
-      const to = el.getBoundingClientRect();
+      const to = logicalRect(el);
       glideHome(el, from.left - to.left, from.top - to.top);
     } else if (g.kind === 'grenade') {
       // lifted: it throws (a tap: a quick throw); dragged off or cancelled: no throw
@@ -630,7 +621,8 @@ export class TouchController {
 
   private editDown(e: PointerEvent, target: Element | null): void {
     e.preventDefault();
-    this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const p = logicalPoint(e);
+    this.pointers.set(e.pointerId, p);
     // a second finger while one drags: pinch that control's size
     const dragging = [...this.grabs.entries()].find(([, g]) => g.kind === 'edit');
     if (dragging) {
@@ -638,7 +630,7 @@ export class TouchController {
       const a = this.pointers.get(first);
       if (a) {
         const cur = placementFor(this.layout, g.id, this.settings.handed);
-        this.grabs.set(first, { kind: 'pinch', id: g.id, startDist: Math.max(1, Math.hypot(e.clientX - a.x, e.clientY - a.y)), startSize: cur.size, other: e.pointerId });
+        this.grabs.set(first, { kind: 'pinch', id: g.id, startDist: Math.max(1, Math.hypot(p.x - a.x, p.y - a.y)), startSize: cur.size, other: e.pointerId });
         this.showGuides([]);
       }
       return;
@@ -653,9 +645,9 @@ export class TouchController {
     const id = (el.dataset.mfControl ?? el.dataset.mfStick) as ControlId;
     this.selected = id;
     // the finger's offset from the control's place (its centre; a pill's nominal centre)
-    const box = this.safe.getBoundingClientRect();
+    const box = logicalRect(this.safe);
     const at = placementFor(this.layout, id, this.settings.handed);
-    this.grabs.set(e.pointerId, { kind: 'edit', id, dx: e.clientX - (box.left + at.x * box.width), dy: e.clientY - (box.top + at.y * box.height) });
+    this.grabs.set(e.pointerId, { kind: 'edit', id, dx: p.x - (box.left + at.x * box.width), dy: p.y - (box.top + at.y * box.height) });
     // the control lifts and follows the finger raw
     settleNow(el);
     el.classList.add('mf-lifted');
@@ -665,10 +657,11 @@ export class TouchController {
   }
 
   private editMove(g: Extract<Grab, { kind: 'edit' }>, e: PointerEvent): void {
-    this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    const rect = this.safe.getBoundingClientRect();
+    const p = logicalPoint(e);
+    this.pointers.set(e.pointerId, p);
+    const rect = logicalRect(this.safe);
     const cur = placementFor(this.layout, g.id, this.settings.handed);
-    const raw = { x: (e.clientX - g.dx - rect.left) / rect.width, y: (e.clientY - g.dy - rect.top) / rect.height };
+    const raw = { x: (p.x - g.dx - rect.left) / rect.width, y: (p.y - g.dy - rect.top) / rect.height };
     const others = [...this.els.keys()].filter((id) => id !== g.id).map((id) => placementFor(this.layout, id, this.settings.handed));
     const snap = snapPlacement(raw, others, rect.width, rect.height);
     this.showGuides(snap.guides);
@@ -677,7 +670,7 @@ export class TouchController {
   }
 
   private pinchMove(g: Extract<Grab, { kind: 'pinch' }>, e: PointerEvent): void {
-    this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    this.pointers.set(e.pointerId, logicalPoint(e));
     const ids = [...this.grabs.entries()].find(([, v]) => v === g)?.[0];
     const a = ids === undefined ? undefined : this.pointers.get(ids);
     const b = this.pointers.get(g.other);
@@ -691,7 +684,7 @@ export class TouchController {
     const a = this.pointers.get(first);
     if (!a) return;
     // back to a drag with the finger that's still down
-    const box = this.safe.getBoundingClientRect();
+    const box = logicalRect(this.safe);
     const at = placementFor(this.layout, g.id, this.settings.handed);
     this.grabs.set(first, { kind: 'edit', id: g.id, dx: a.x - (box.left + at.x * box.width), dy: a.y - (box.top + at.y * box.height) });
     saveLayout(this.store, this.layout);
@@ -815,13 +808,10 @@ export class TouchController {
     }
   }
 
-  private async fullscreenLandscape(): Promise<void> {
-    try {
-      await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
-      await (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }).lock?.('landscape');
-    } catch {
-      /* not allowed here (iPhone Safari): turning the phone works too */
-    }
+  /** The sticks right now (dev builds' automated checks: the dials' input on a turned phone). */
+  debugState(): { move: StickVector; aim: StickVector; moveActive: boolean; aimActive: boolean } {
+    const s = this.state;
+    return { move: { ...s.move }, aim: { ...s.aim }, moveActive: s.moveActive, aimActive: s.aimActive };
   }
 
   /** The skins' bound keys (tests). */

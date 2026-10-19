@@ -6,6 +6,7 @@
  */
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { Icon } from '../../ui/Icon';
+import { logicalRect } from '../../ui/landscape';
 import { rollText, type Box } from '../../ui/motion';
 import './menus.css';
 import { useServerPing } from '../context';
@@ -69,7 +70,7 @@ const handoffs = new Map<string, Box>();
 
 /** A screen leaves: where `el` was, for the next screen to grow out of (P2) or to flood from (P6). */
 export function remember(key: string, el: Element | null): void {
-  const r = el?.getBoundingClientRect();
+  const r = el ? logicalRect(el) : null; // the page's coordinates (an upright phone plays turned)
   if (r && r.width > 0) handoffs.set(key, { left: r.left, top: r.top, width: r.width, height: r.height });
   else handoffs.delete(key);
 }

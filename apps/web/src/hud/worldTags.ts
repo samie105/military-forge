@@ -15,6 +15,7 @@
  */
 import { grenades, pickups as pickupDefs, weapons, type PickupDef } from '@military-forge/content';
 import { iconHref, weaponIcon } from '../ui/icons';
+import { logicalRect, viewport, type Box } from '../ui/landscape';
 import type { PickupView } from '../view';
 import { weaponFamily } from './model';
 
@@ -118,7 +119,7 @@ export class WorldTags {
   private signSize: { w: number; h: number } | null = null;
   /** the rack's first row's height (design px), for the second row */
   private rowH = 0;
-  private plates: DOMRect[] = [];
+  private plates: Box[] = [];
   private platesAt = -Infinity;
 
   constructor(private readonly layer: HTMLElement) {
@@ -135,8 +136,7 @@ export class WorldTags {
    */
   update(items: readonly PickupView[] | undefined, me: { x: number; y: number; alive: boolean } | null, toScreen: (x: number, y: number) => { x: number; y: number }, fit: number, interactKey: string, hidden: boolean): void {
     const plan = hidden || !items?.length ? { tags: [], sign: null } : planTags(items, me?.alive ? me : null);
-    const w = innerWidth;
-    const h = innerHeight;
+    const { w, h } = viewport(); // the page's own size (an upright phone plays turned: ui/landscape.ts)
     const plates = this.plateRects();
     const seen = new Set<number>();
     for (const t of plan.tags) {
@@ -211,14 +211,14 @@ export class WorldTags {
   }
 
   /** The HUD's plates on screen now (the swap card, the corners, the clock): the tags keep off them. Read every 200 ms. */
-  private plateRects(): DOMRect[] {
+  private plateRects(): Box[] {
     const now = performance.now();
     if (now - this.platesAt < 200) return this.plates;
     this.platesAt = now;
     const screen = this.layer.closest('.screen');
     if (!screen) return (this.plates = []);
     this.plates = [...screen.querySelectorAll<HTMLElement>('.pickup, .hud-bl, .hud-br .plate, .hud-match .plate, .hud-tl .plate')]
-      .map((el) => el.getBoundingClientRect())
+      .map((el) => logicalRect(el))
       .filter((r) => r.width > 0 && r.height > 0);
     return this.plates;
   }

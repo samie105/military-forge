@@ -5,25 +5,27 @@
  * components (kit-v2) and move by the shared motion system at phone distances (--m-rise 10 px).
  */
 import { useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
+import { LANDSCAPE_PHONE_QUERY, UPRIGHT_PHONE_QUERY, isPhoneShape } from '../../../ui/landscape';
 
 /** A phone held sideways: a finger for a pointer and no more than 500 px of height (tablets keep the desktop menus). */
-export const PHONE_QUERY = '(orientation: landscape) and (max-height: 500px) and (pointer: coarse)';
+export const PHONE_QUERY = LANDSCAPE_PHONE_QUERY;
 
 /** Dev builds: `?phone` forces the phone menus in any window (screenshots, a desktop browser). */
 function forced(): boolean {
   return import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).has('phone');
 }
 
+/** A phone, held sideways or upright (an upright phone plays turned onto its side: ui/landscape.ts). */
 export function isPhoneLayout(): boolean {
   if (forced()) return true;
-  return typeof matchMedia === 'function' && matchMedia(PHONE_QUERY).matches;
+  return isPhoneShape();
 }
 
 function subscribe(onChange: () => void): () => void {
   if (typeof matchMedia !== 'function') return () => {};
-  const mq = matchMedia(PHONE_QUERY);
-  mq.addEventListener('change', onChange);
-  return () => mq.removeEventListener('change', onChange);
+  const mqs = [matchMedia(PHONE_QUERY), matchMedia(UPRIGHT_PHONE_QUERY)];
+  for (const mq of mqs) mq.addEventListener('change', onChange);
+  return () => mqs.forEach((mq) => mq.removeEventListener('change', onChange));
 }
 
 /** True while the phone menus apply; follows the phone turning (and a window resized past the query). */

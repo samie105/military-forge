@@ -136,7 +136,7 @@ export function mountTouch(d: TouchDeps): void {
   };
 
   // dev builds: the API on window for automated checks (scripts/touch-check.mjs) and console poking
-  if (import.meta.env.DEV) Object.assign(window, { __touch: { getTouchSettings, setTouchSettings, openTouchEditor, resetTouchLayout, touchActive } });
+  if (import.meta.env.DEV) Object.assign(window, { __touch: { getTouchSettings, setTouchSettings, openTouchEditor, resetTouchLayout, touchActive, sticks: () => controller?.debugState() ?? null } });
 
   // phones: the Low preset (the default) with a sharper cap; dynamic resolution stays on
   if (isTouchDevice()) d.view3d?.setDprCap?.(MOBILE_DPR_CAP);

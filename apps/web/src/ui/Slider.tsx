@@ -3,6 +3,7 @@
  * drag anywhere on it, or use the arrow keys, Page Up/Down, Home and End.
  */
 import { useRef, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
+import { logicalPoint, logicalRect } from './landscape';
 
 export interface SliderProps {
   /** 0..1 */
@@ -35,8 +36,9 @@ export function Slider({ value, onChange, label, valueText, step = 0.05, ticks, 
     if (Math.abs(snapped - v) > 1e-9) onChange(clamp01(snapped));
   };
   const fromPointer = (e: PointerEvent<HTMLDivElement>) => {
-    const r = el.current!.getBoundingClientRect();
-    if (r.width > 0) set((e.clientX - r.left) / r.width);
+    // the page's own axes: an upright phone plays turned onto its side (landscape.ts)
+    const r = logicalRect(el.current!);
+    if (r.width > 0) set((logicalPoint(e).x - r.left) / r.width);
   };
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     const moves: Record<string, number> = { ArrowLeft: -step, ArrowDown: -step, ArrowRight: step, ArrowUp: step, PageDown: -step * 4, PageUp: step * 4 };

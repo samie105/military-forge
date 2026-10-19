@@ -1,13 +1,22 @@
 /*
- * The loading screen's only script (index.html, before the app's bundle): fits the kit's
- * 1920×1080 screen to the window (the app's fit.ts takes over later), names the room of a room
+ * The loading screen's only script (index.html, before the app's bundle): turns the page onto its
+ * side on an upright phone and fits the kit's 1920×1080 screen to the window (the app's
+ * ui/landscape.ts and fit.ts take over later), names the room of a room
  * link, and turns the tips every 4 s the kit's way (data-active-state="tip-N").
  */
 (function () {
   var root = document.documentElement;
+  // a phone held upright turns the page onto its side (the app's ui/landscape.ts keeps this up after)
+  function turned() {
+    return !!(window.matchMedia && window.matchMedia('(orientation: portrait) and (max-width: 500px) and (pointer: coarse)').matches);
+  }
   function fit() {
-    var w = window.innerWidth;
-    var h = window.innerHeight;
+    var rotated = turned();
+    root.classList.toggle('mf-rotated', rotated);
+    root.style.setProperty('--app-w', window.innerHeight + 'px');
+    root.style.setProperty('--app-h', window.innerWidth + 'px');
+    var w = rotated ? window.innerHeight : window.innerWidth;
+    var h = rotated ? window.innerWidth : window.innerHeight;
     var f = Math.min(w / 1920, h / 1080) || 1;
     root.style.setProperty('--fit', f.toFixed(4));
     root.style.setProperty('--fit-w', (w / f).toFixed(1) + 'px');

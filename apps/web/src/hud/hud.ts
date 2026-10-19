@@ -20,6 +20,7 @@ import { DRAGON, GAS, HitZone, weapons, type Tuning } from '@military-forge/cont
 import type { MatchView } from '../shell/matchView';
 import { formatClock, playerName } from '../shell/matchView';
 import { capText, iconHref, weaponIcon } from '../ui/icons';
+import { logicalRect, type Box } from '../ui/landscape';
 import { WorldTags } from './worldTags';
 import { flipTransform, moveIndicator, reduced, rollText, stagger, token } from '../ui/motion';
 import type { Frame, NetStats, PlayerView } from '../view';
@@ -1010,11 +1011,11 @@ export class Hud {
     if (!changed || swap <= 0 || reduced()) return;
     const { held, slung } = this.slots;
     if (held.hasAttribute('hidden') || slung.hasAttribute('hidden') || typeof held.animate !== 'function') return;
-    const a = held.getBoundingClientRect();
-    const b = slung.getBoundingClientRect();
+    const a = logicalRect(held);
+    const b = logicalRect(slung);
     if (a.width === 0 || b.width === 0) return;
     const zoom = Number(getComputedStyleValue('--hud-fit')) || 1;
-    const local = (r: DOMRect) => ({ left: r.left / zoom, top: r.top / zoom, width: r.width / zoom, height: r.height / zoom });
+    const local = (r: Box) => ({ left: r.left / zoom, top: r.top / zoom, width: r.width / zoom, height: r.height / zoom });
     const duration = Math.max(250, Math.min(600, (swap / 60) * 1000));
     const easing = token('--ease-travel', 'cubic-bezier(0.7, 0, 0.16, 1)');
     for (const [card, from, to] of [

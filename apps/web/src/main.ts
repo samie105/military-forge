@@ -44,6 +44,7 @@ import { toKeyBindings, uiCodes } from './shell/controls';
 import { PlaneCamera, create3d, online3d, parsePreset, softwareGl, type PresetName } from './render3d';
 import { countFrame, framesPerSecond, recordNet } from './stats';
 import { isTouchDevice, mountTouch } from './touch';
+import { startLandscape } from './ui/landscape';
 import type { Frame } from './view';
 
 const params = new URLSearchParams(location.search);
@@ -57,6 +58,9 @@ const shorthand = ['rtt', 'loss', 'jitter', 'dup']
   .map((k) => `${k}=${params.get(k)}`)
   .join(',');
 const netSim = parseNetSim(params.get('netsim') ?? shorthand) ?? createConditionerSettings(false);
+
+// phones play in landscape whichever way they're held: before anything measures the window
+startLandscape();
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const view3dCanvas = document.getElementById('view3d') as HTMLCanvasElement;

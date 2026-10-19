@@ -1,0 +1,13 @@
+/*
+ * The safe area's insets (the notch, the home bar) on the page's own sides (ui/landscape.ts): on an
+ * upright phone the page is turned 90° clockwise, so its top is the screen's right, its right the
+ * screen's bottom, its bottom the screen's left and its left the screen's top (the notch). The phone
+ * layouts read --sa-* instead of env(safe-area-inset-*).
+ */
+:root { --sa-t: env(safe-area-inset-top, 0px); --sa-r: env(safe-area-inset-right, 0px); --sa-b: env(safe-area-inset-bottom, 0px); --sa-l: env(safe-area-inset-left, 0px); }
+html.mf-rotated { --sa-t: env(safe-area-inset-right, 0px); --sa-r: env(safe-area-inset-bottom, 0px); --sa-b: env(safe-area-inset-left, 0px); --sa-l: env(safe-area-inset-top, 0px); }
+html.mf-rotated { --safe-t: max(0px, var(--sa-t)); --safe-r: max(0px, var(--sa-r)); --safe-b: max(0px, var(--sa-b)); --safe-l: max(0px, var(--sa-l)); }
+html.mf-rotated .screen--phone { --safe-t: max(10px, var(--sa-t)); --safe-l: max(var(--phone-notch), var(--sa-l)); --safe-r: max(var(--phone-notch), var(--sa-r)); --safe-b: max(21px, var(--sa-b)); }
+
+/* the turn itself (index.html has it too, for the loading screen before the app's scripts arrive) */
+html.mf-rotated body { position: fixed; top: 0; left: 0; width: var(--app-w, 100vh); height: var(--app-h, 100vw); transform-origin: 0 0; transform: translateX(var(--app-h, 100vw)) rotate(90deg); }

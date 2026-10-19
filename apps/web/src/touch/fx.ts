@@ -5,6 +5,7 @@
  * of 120 ms at most, or nothing. None of them runs on a value written every frame. The shared helpers
  * (reduced, tokenMs) are ui/motion.ts's; these are the phone's own moves.
  */
+import { logicalRect, type Box } from '../ui/landscape';
 import { reduced, tokenMs } from '../ui/motion';
 
 /** Reduce motion (ui/motion.ts: the Settings switch or the system's preference). */
@@ -113,14 +114,15 @@ export function settleNow(el: Element): void {
 /**
  * The swap pill's two guns cross (like the desktop's slot cards): the gun now in hand travels from
  * where the slung one was, the slung one from where the held one was, over the gun's real equip time
- * on --ease-travel. `held`/`back` are the icons after the swap; `heldWas`/`backWas` their boxes before.
+ * on --ease-travel. `held`/`back` are the icons after the swap; `heldWas`/`backWas` their boxes before
+ * (logicalRect: the page's coordinates).
  */
-export function cross(held: Element, back: Element, heldWas: DOMRect, backWas: DOMRect, duration: number): void {
+export function cross(held: Element, back: Element, heldWas: Box, backWas: Box, duration: number): void {
   const travel = easing('--ease-travel', 'cubic-bezier(0.7, 0, 0.16, 1)');
-  const move = (el: Element, from: DOMRect) => {
+  const move = (el: Element, from: Box) => {
     if (typeof (el as HTMLElement).animate !== 'function') return;
     stop(el);
-    const to = el.getBoundingClientRect();
+    const to = logicalRect(el); // the page's own axes (an upright phone plays turned: ui/landscape.ts)
     if (!to.width || !from.width) return;
     if (reducedMotion()) {
       (el as HTMLElement).animate([{ opacity: 0 }, { opacity: 1 }], { duration: 120 });

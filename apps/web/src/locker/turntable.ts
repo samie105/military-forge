@@ -20,6 +20,7 @@ import {
   WebGLRenderer,
 } from 'three';
 import { OutlineMaterial, characterToonRamp, type CharacterInstance } from '../character';
+import { logicalPoint } from '../ui/landscape';
 
 export type FocusPreset = 'full' | 'face' | 'jetpack';
 export type LightPreset = 'lobby' | 'night' | 'desert';
@@ -182,7 +183,7 @@ export class Turntable {
   };
 
   private readonly onPointerDown = (e: PointerEvent): void => {
-    this.dragX = e.clientX;
+    this.dragX = logicalPoint(e).x; // the page's axes (an upright phone plays turned: ui/landscape.ts)
     this.yawVelocity = 0;
     this.yawTarget = null;
     this.canvas.setPointerCapture(e.pointerId);
@@ -190,8 +191,9 @@ export class Turntable {
 
   private readonly onPointerMove = (e: PointerEvent): void => {
     if (this.dragX === null) return;
-    const dx = e.clientX - this.dragX;
-    this.dragX = e.clientX;
+    const x = logicalPoint(e).x;
+    const dx = x - this.dragX;
+    this.dragX = x;
     this.yaw += dx * 0.01;
     this.yawVelocity = dx * 0.6;
   };
