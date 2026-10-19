@@ -6,12 +6,12 @@
     {
       "status": "INFO",
       "check": "file size",
-      "detail": "117 KB"
+      "detail": "123 KB"
     },
     {
       "status": "PASS",
       "check": "triangles",
-      "detail": "775 of 1000 (body and 1 parts)"
+      "detail": "889 of 1000 (body and 1 parts)"
     },
     {
       "status": "PASS",
@@ -39,9 +39,14 @@
       "detail": "ok"
     },
     {
-      "status": "WARN",
+      "status": "PASS",
       "check": "weaponId in packages/content",
-      "detail": "rattler is not in packages/content/src/{weapons,grenades}.ts yet"
+      "detail": "rattler"
+    },
+    {
+      "status": "PASS",
+      "check": "node names exact (no Blender .001 suffix)",
+      "detail": "ok"
     },
     {
       "status": "INFO",
@@ -91,7 +96,7 @@
     {
       "status": "PASS",
       "check": "casings eject to the right (+X)",
-      "detail": "at x +0.034, dir x +0.80"
+      "detail": "at x +0.030, dir x +0.80"
     },
     {
       "status": "PASS",
@@ -106,7 +111,7 @@
     {
       "status": "PASS",
       "check": "moving part part_mag",
-      "detail": "57 tris, axis (0.0, -0.24, -0.97), travel 0.12 m"
+      "detail": "102 tris, axis (0.0, -0.24, -0.97), travel 0.12 m, cut clean (closed)"
     }
   ]
 }

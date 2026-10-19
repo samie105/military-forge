@@ -6,17 +6,17 @@
     {
       "status": "INFO",
       "check": "file size",
-      "detail": "129 KB"
+      "detail": "127 KB"
     },
     {
       "status": "PASS",
       "check": "triangles",
-      "detail": "872 of 1000 (body and 1 parts)"
+      "detail": "872 of 1000"
     },
     {
       "status": "PASS",
       "check": "one mesh, one material",
-      "detail": "1 body + 1 moving part(s), 1 material(s): 2 draw call(s)"
+      "detail": "1 draw call(s)"
     },
     {
       "status": "PASS",
@@ -39,9 +39,14 @@
       "detail": "ok"
     },
     {
-      "status": "WARN",
+      "status": "PASS",
       "check": "weaponId in packages/content",
-      "detail": "bullpup is not in packages/content/src/{weapons,grenades}.ts yet"
+      "detail": "bullpup"
+    },
+    {
+      "status": "PASS",
+      "check": "node names exact (no Blender .001 suffix)",
+      "detail": "ok"
     },
     {
       "status": "INFO",
@@ -107,11 +112,6 @@
       "status": "PASS",
       "check": "rail_bottom below the bore, facing down",
       "detail": "z -0.066 vs bore +0.016, length 0.08 m"
-    },
-    {
-      "status": "PASS",
-      "check": "moving part part_mag",
-      "detail": "58 tris, axis (0.0, -0.2, -0.98), travel 0.1 m"
     }
   ]
 }

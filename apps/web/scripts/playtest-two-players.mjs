@@ -8,7 +8,7 @@
  *   node apps/web/scripts/playtest-two-players.mjs https://<words>.trycloudflare.com/r/<CODE> [out dir]
  *
  * Works on the production build (no dev hooks): it only clicks, types and holds keys. A home-page
- * URL works too (player A makes the room with Play with friends).
+ * URL works too (player A makes the room with Create room).
  */
 /* global process */
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
@@ -96,14 +96,14 @@ const b = await player('B');
 const net = { A: [], B: [] };
 try {
   await enter(a, link, `Ade${suffix()}`);
-  if (!/\/r\/[A-Z]{6}/.test(link)) await (await byText(a.page, 'button', 'Play with friends')).click();
+  if (!/\/r\/[A-Z]{6}/.test(link)) await (await byText(a.page, 'button', 'Create room')).click();
   const lobby = '[data-screen="lobby"]';
   await a.page.waitForSelector(lobby, { timeout: 60_000 });
   const roomLink = a.page.url();
   log('room', roomLink);
   await enter(b, roomLink, `Kemi${suffix()}`);
   await b.page.waitForSelector(lobby, { timeout: 60_000 });
-  await a.page.waitForFunction(() => document.querySelectorAll('.player-list .player-row:not(.player-row--open) .avatar:not(.avatar--bot)').length === 2, { timeout: 30_000 });
+  await a.page.waitForFunction(() => document.querySelectorAll('.prows .prow:not(.prow--open) .avatar:not(.avatar--bot)').length === 2, { timeout: 30_000 });
   log('both in the lobby');
   // the host's settings: a 1-minute match, first to 5 (the kill limit steps by 5)
   await (await a.page.waitForSelector('xpath/.//*[@aria-labelledby="tl-label"]/button[normalize-space(.)="1"]')).click();

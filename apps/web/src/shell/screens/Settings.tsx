@@ -3,7 +3,7 @@
  * click then press), Accessibility, Network, and Touch for the phone controls (touch-interfaces.md).
  * Everything saves on this device as it changes; Back (Esc) and Done close it.
  */
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { useStore } from 'zustand';
 import { framesPerSecond, netHistory, NET_HISTORY } from '../../stats';
 import { getTouchSettings, onTouchChange, openTouchEditor, resetTouchLayout, setTouchSettings, type TouchSettings } from '../../touch';
@@ -11,10 +11,12 @@ import { DEFAULT_TOUCH_SETTINGS } from '../../touch/settings';
 import { Icon } from '../../ui/Icon';
 import { Kbd, Cap } from '../../ui/Kbd';
 import { Screen, Switch, blurAfter, pingQuality } from '../../ui/Screen';
+import { moveIndicator } from '../../ui/motion';
 import { Slider } from '../../ui/Slider';
 import { useCtl, useKeyboardLayout, useTicker } from '../context';
 import { ACTIONS, MAX_BINDINGS, defaultBindings, keyLabel, rebind, unbind, type ActionDef, type ActionId } from '../controls';
 import { DEFAULT_AUDIO, DEFAULT_SETTINGS, type AudioSettings, type GraphicsPreset, type Settings, type SettingsTab, type ShellStore } from '../store';
+import { Backdrop } from './frame';
 
 export const TABS: readonly { id: SettingsTab; label: string; icon: string }[] = [
   { id: 'graphics', label: 'Graphics', icon: 'monitor' },
@@ -48,49 +50,47 @@ function Graphics({ settings }: { settings: Settings }) {
   const ctl = useCtl();
   useTicker(1000);
   const fps = Math.round(framesPerSecond());
-  const auto = settings.graphics === 'auto';
-  // Auto shows the preset it picked as the checked card
-  const current = auto ? (ctl.host.autoGraphics ?? null) : settings.graphics;
+  const picked = settings.graphics;
+  const now = picked === 'auto' ? ctl.host.autoGraphics : picked;
+  const text = QUALITY.find((q) => q.id === now)?.text ?? '';
   return (
-    <div className="tabpanel" role="tabpanel" aria-label="Graphics">
-      <h2 className="display h2">Graphics</h2>
-      <div className="setrow">
-        <div>
-          <p className="setrow__label">Automatic quality</p>
-          <p className="setrow__desc">{autoText(ctl.host.autoGraphics)}</p>
+    <div className="tabpanel mf-tabpanel" role="tabpanel" aria-label="Graphics">
+      <h2 className="display set__h">Graphics</h2>
+      <div className="srow">
+        <div className="srow__txt">
+          <b id="q-label">Quality</b>
+          <span>
+            {picked === 'auto' ? autoText(ctl.host.autoGraphics) : text}
+            {fps > 0 && ` · ${fps} fps here now`}
+          </span>
         </div>
-        <Switch on={auto} onChange={(on) => ctl.updateSettings({ graphics: on ? 'auto' : (current ?? 'medium') })} label="Automatic quality" />
-      </div>
-      <div className="setrow setrow--stack">
-        <div>
-          <p className="setrow__label" id="q-label">
-            Quality
-          </p>
-          <p className="setrow__desc">Lower it if the game feels slow; raise it if it runs smoothly. It changes at once (smoother edges after a reload).</p>
-        </div>
-        <div className="quality" role="radiogroup" aria-labelledby="q-label">
-          {QUALITY.map((q) => (
-            <button key={q.id} className="quality__opt" role="radio" aria-checked={current === q.id} onClick={() => ctl.updateSettings({ graphics: q.id })}>
-              <b>{q.name}</b>
-              <span>{q.text}</span>
-              {current === q.id && fps > 0 && <span className="quality__fps num">{fps} fps here now</span>}
-            </button>
-          ))}
+        <div className="srow__ctrl" data-bind="settings.graphics">
+          <div className="seg" role="radiogroup" aria-labelledby="q-label">
+            {(['auto', ...QUALITY.map((q) => q.id)] as const).map((id) => (
+              <button key={id} type="button" className="seg__opt" role="radio" aria-checked={picked === id} onClick={() => ctl.updateSettings({ graphics: id })}>
+                {id === 'auto' ? 'Auto' : QUALITY.find((q) => q.id === id)!.name}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
-      <div className="setrow">
-        <div>
-          <p className="setrow__label">Blood effects</p>
-          <p className="setrow__desc">Blood when soldiers are hit. Off by default.</p>
+      <div className="srow">
+        <div className="srow__txt">
+          <b>Blood effects</b>
+          <span>Off by default. Hits and damage read the same with it off.</span>
         </div>
-        <Switch on={settings.blood} onChange={(blood) => ctl.updateSettings({ blood })} label="Blood effects" />
+        <div className="srow__ctrl" data-bind="settings.blood">
+          <Switch on={settings.blood} onChange={(blood) => ctl.updateSettings({ blood })} label="Blood effects" />
+        </div>
       </div>
-      <div className="setrow">
-        <div>
-          <p className="setrow__label">Show FPS</p>
-          <p className="setrow__desc">A small frame counter in the top-left corner.</p>
+      <div className="srow">
+        <div className="srow__txt">
+          <b>Show FPS</b>
+          <span>A small frame counter in the top-left corner.</span>
         </div>
-        <Switch on={settings.showFps} onChange={(showFps) => ctl.updateSettings({ showFps })} label="Show FPS" />
+        <div className="srow__ctrl">
+          <Switch on={settings.showFps} onChange={(showFps) => ctl.updateSettings({ showFps })} label="Show FPS" />
+        </div>
       </div>
     </div>
   );
@@ -103,19 +103,21 @@ function Volume({ audio, k, label, desc }: { audio: AudioSettings; k: 'master' |
   const muted = audio[`${k}Muted`];
   const set = (patch: Partial<AudioSettings>) => ctl.updateSettings({ audio: { ...audio, ...patch } });
   return (
-    <div className="setrow">
-      <div>
-        <p className="setrow__label">{label}</p>
-        <p className="setrow__desc">{desc}</p>
+    <div className="srow">
+      <div className="srow__txt">
+        <b>{label}</b>
+        <span>{desc}</span>
       </div>
-      <div className="volrow">
-        <button className={muted ? 'iconbtn is-on' : 'iconbtn'} aria-label={muted ? `Unmute ${label.toLowerCase()}` : `Mute ${label.toLowerCase()}`} aria-pressed={muted} onClick={() => set({ [`${k}Muted`]: !muted })}>
-          <Icon name="speaker" />
-        </button>
-        <Slider value={audio[k]} onChange={(v) => set({ [k]: v })} label={`${label} volume`} valueText={pct(audio[k])} />
-        <output className="volrow__val num" data-bind={`settings.audio.${k}`}>
-          {pct(audio[k])}
-        </output>
+      <div className="srow__ctrl">
+        <div className="volrow">
+          <button className={muted ? 'iconbtn is-on' : 'iconbtn'} aria-label={muted ? `Unmute ${label.toLowerCase()}` : `Mute ${label.toLowerCase()}`} aria-pressed={muted} onClick={() => set({ [`${k}Muted`]: !muted })}>
+            <Icon name="speaker" />
+          </button>
+          <Slider value={audio[k]} onChange={(v) => set({ [k]: v })} label={`${label} volume`} valueText={pct(audio[k])} />
+          <output className="volrow__val num" data-bind={`settings.audio.${k}`}>
+            {pct(audio[k])}
+          </output>
+        </div>
       </div>
     </div>
   );
@@ -123,8 +125,8 @@ function Volume({ audio, k, label, desc }: { audio: AudioSettings; k: 'master' |
 
 function Audio({ settings }: { settings: Settings }) {
   return (
-    <div className="tabpanel" role="tabpanel" aria-label="Audio">
-      <h2 className="display h2">Audio</h2>
+    <div className="tabpanel mf-tabpanel" role="tabpanel" aria-label="Audio">
+      <h2 className="display set__h">Audio</h2>
       <p className="status status--info">
         <Icon name="info" />
         The game has no sound yet: these are saved for when it does.
@@ -144,53 +146,43 @@ function BindButton({ action, index, code, capture, onCapture, layout }: { actio
   const listening = capture?.action === action.id && capture.index === index;
   if (listening)
     return (
-      <button className="bindbtn bindbtn--listen" aria-live="polite" onClick={() => onCapture(null)}>
+      <button type="button" className="btn btn--volt btn--sm mf-bindbtn m-p8" aria-live="polite" onClick={() => onCapture(null)}>
         Press a key…
       </button>
     );
   if (!code)
     return (
-      <button className="bindbtn bindbtn--empty" aria-label={`Add a key for ${action.label}`} onClick={() => onCapture({ action: action.id, index })}>
+      <button type="button" className="btn btn--ghost btn--sm mf-bindbtn m-p8" aria-label={`Add a key for ${action.label}`} onClick={() => onCapture({ action: action.id, index })}>
         Not set
       </button>
     );
   return (
-    <button className="bindbtn" aria-label={`${action.label}: ${keyLabel(code, layout)}. Click to change`} onClick={() => onCapture({ action: action.id, index })}>
+    <button type="button" className="btn btn--ghost btn--sm mf-bindbtn m-p8" aria-label={`${action.label}: ${keyLabel(code, layout)}. Click to change`} onClick={() => onCapture({ action: action.id, index })}>
       <Kbd code={code} layout={layout} />
     </button>
   );
 }
 
-function BindTable({ actions, settings, capture, onCapture, layout }: { actions: readonly ActionDef[]; settings: Settings; capture: Capture; onCapture: (c: Capture) => void; layout: ReadonlyMap<string, string> | null }) {
+/** The kit's binding list (.binds): each action, its keys (two at most), each a button that listens for a new one. */
+function BindList({ actions, settings, capture, onCapture, layout }: { actions: readonly ActionDef[]; settings: Settings; capture: Capture; onCapture: (c: Capture) => void; layout: ReadonlyMap<string, string> | null }) {
   return (
-    <table className="bindtable">
-      <thead>
-        <tr>
-          <th scope="col">Action</th>
-          <th scope="col">Key 1</th>
-          <th scope="col">Key 2</th>
-        </tr>
-      </thead>
-      <tbody>
-        {actions.map((a) => {
-          const codes = settings.bindings[a.id];
-          return (
-            <tr key={a.id}>
-              <th scope="row">
-                {a.label}
-                {a.hint && <span className="bindtable__hint small muted">{a.hint}</span>}
-              </th>
-              {Array.from({ length: MAX_BINDINGS }, (_, i) => (
-                <td key={i}>
-                  {/* the second key can only be added once the first exists */}
-                  {i <= codes.length && <BindButton action={a} index={i} code={codes[i]} capture={capture} onCapture={onCapture} layout={layout} />}
-                </td>
-              ))}
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <ul className="binds" aria-label="Key bindings">
+      {actions.map((a) => {
+        const codes = settings.bindings[a.id];
+        return (
+          <li key={a.id}>
+            <span>
+              {a.label}
+              {a.hint && <span className="bindtable__hint">{a.hint}</span>}
+            </span>
+            {Array.from({ length: MAX_BINDINGS }, (_, i) =>
+              // the second key can only be added once the first exists
+              i <= codes.length ? <BindButton key={i} action={a} index={i} code={codes[i]} capture={capture} onCapture={onCapture} layout={layout} /> : null,
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -245,21 +237,17 @@ function Controls({ settings }: { settings: Settings }) {
     };
   }, [capture, bindings, ctl, layout]);
 
-  const half = Math.ceil(ACTIONS.length / 2);
   return (
-    <div className="tabpanel" role="tabpanel" aria-label="Controls">
+    <div className="tabpanel mf-tabpanel" role="tabpanel" aria-label="Controls">
       <div className="tabpanel__head">
-        <h2 className="display h2">Controls</h2>
+        <h2 className="display set__h">Controls</h2>
         <span className="topbar__spacer"></span>
         <Switch on={settings.doubleTapDash} onChange={(doubleTapDash) => ctl.updateSettings({ doubleTapDash })} label="Double-tap a direction to dash" showState={false} />
       </div>
-      <p className="setrow__desc">
+      <p className="mf-set__note">
         Click a key to change it, then press the new key or mouse button. <Cap>Esc</Cap> cancels, <Cap>Backspace</Cap> clears it. Each action can have two keys; <Cap>Esc</Cap> always opens the menu.
       </p>
-      <div className="binds">
-        <BindTable actions={ACTIONS.slice(0, half)} settings={settings} capture={capture} onCapture={setCapture} layout={layout} />
-        <BindTable actions={ACTIONS.slice(half)} settings={settings} capture={capture} onCapture={setCapture} layout={layout} />
-      </div>
+      <BindList actions={ACTIONS} settings={settings} capture={capture} onCapture={setCapture} layout={layout} />
       {moved && (
         <p className="status status--warn bind-conflict" role="status">
           <Icon name="warn" />
@@ -282,62 +270,70 @@ function Accessibility({ settings }: { settings: Settings }) {
   const ctl = useCtl();
   const i = Math.max(0, TEXT_SIZES.findIndex((t) => Math.abs(t - settings.textScale) < 0.01));
   return (
-    <div className="tabpanel" role="tabpanel" aria-label="Accessibility">
-      <h2 className="display h2">Accessibility</h2>
-      <div className="setrow">
-        <div>
-          <p className="setrow__label">Reduce flashes</p>
-          <p className="setrow__desc">Flashbangs dim and blur the screen instead of turning it white.</p>
+    <div className="tabpanel mf-tabpanel" role="tabpanel" aria-label="Accessibility">
+      <h2 className="display set__h">Accessibility</h2>
+      <div className="srow">
+        <div className="srow__txt">
+          <b>Reduce flashes</b>
+          <span>Flashbangs dim and blur the screen instead of turning it white.</span>
         </div>
-        <Switch on={settings.reduceFlashes} onChange={(reduceFlashes) => ctl.updateSettings({ reduceFlashes })} label="Reduce flashes" />
-      </div>
-      <div className="setrow">
-        <div>
-          <p className="setrow__label">Reduce motion</p>
-          <p className="setrow__desc">No screen shake, no zooming numbers, no pulsing warnings.</p>
+        <div className="srow__ctrl">
+          <Switch on={settings.reduceFlashes} onChange={(reduceFlashes) => ctl.updateSettings({ reduceFlashes })} label="Reduce flashes" />
         </div>
-        <Switch on={settings.reduceMotion} onChange={(reduceMotion) => ctl.updateSettings({ reduceMotion })} label="Reduce motion" />
       </div>
-      <div className="setrow setrow--stack">
-        <div>
-          <p className="setrow__label" id="cb-label">
+      <div className="srow">
+        <div className="srow__txt">
+          <b>Reduce motion</b>
+          <span>No screen shake, no zooming numbers, no pulsing warnings.</span>
+        </div>
+        <div className="srow__ctrl">
+          <Switch on={settings.reduceMotion} onChange={(reduceMotion) => ctl.updateSettings({ reduceMotion })} label="Reduce motion" />
+        </div>
+      </div>
+      <div className="srow mf-srow--stack">
+        <div className="srow__txt">
+          <b id="cb-label">
             Colour-blind team colours
-          </p>
-          <p className="setrow__desc">Teams also get a shape on their name tags, so colour is never the only clue. Team modes aren't in the game yet: your choice is kept for them.</p>
+          </b>
+          <span>Teams also get a shape on their name tags, so colour is never the only clue. Team modes aren't in the game yet: your choice is kept for them.</span>
         </div>
-        <div className="cb" role="radiogroup" aria-labelledby="cb-label">
-          {CB.map((c) => (
-            <button key={c.id} className="cb__opt" role="radio" aria-checked={settings.colorBlind === c.id} onClick={() => ctl.updateSettings({ colorBlind: c.id })}>
-              <span className="cb__sw" style={{ '--a': c.a, '--b': c.b } as CSSProperties}>
-                <i>◆</i>
-                <i>▲</i>
-              </span>
-              <b>{c.name}</b>
-            </button>
-          ))}
+        <div className="srow__ctrl">
+          <div className="cb" role="radiogroup" aria-labelledby="cb-label">
+            {CB.map((c) => (
+              <button key={c.id} className="cb__opt" role="radio" aria-checked={settings.colorBlind === c.id} onClick={() => ctl.updateSettings({ colorBlind: c.id })}>
+                <span className="cb__sw" style={{ '--a': c.a, '--b': c.b } as CSSProperties}>
+                  <i>◆</i>
+                  <i>▲</i>
+                </span>
+                <b>{c.name}</b>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
-      <div className="setrow">
-        <div>
-          <p className="setrow__label">Text size</p>
-          <p className="setrow__desc">
+      <div className="srow">
+        <div className="srow__txt">
+          <b>Text size</b>
+          <span>
             Menus and HUD text. Preview: <span data-bind="settings.textPreview">Respawn in 3 s</span>
-          </p>
+          </span>
         </div>
-        <div className="volrow volrow--text">
-          <Slider
-            value={i / (TEXT_SIZES.length - 1)}
-            step={1 / (TEXT_SIZES.length - 1)}
-            onChange={(v) => ctl.updateSettings({ textScale: TEXT_SIZES[Math.round(v * (TEXT_SIZES.length - 1))]! })}
-            label="Text size"
-            valueText={pct(settings.textScale)}
-            min={100}
-            max={150}
-            ticks={TEXT_SIZES.map((t) => String(Math.round(t * 100)))}
-          />
-          <output className="volrow__val num" data-bind="settings.textSize">
-            {pct(settings.textScale)}
-          </output>
+        <div className="srow__ctrl">
+          <div className="volrow volrow--text">
+            <Slider
+              value={i / (TEXT_SIZES.length - 1)}
+              step={1 / (TEXT_SIZES.length - 1)}
+              onChange={(v) => ctl.updateSettings({ textScale: TEXT_SIZES[Math.round(v * (TEXT_SIZES.length - 1))]! })}
+              label="Text size"
+              valueText={pct(settings.textScale)}
+              min={100}
+              max={150}
+              ticks={TEXT_SIZES.map((t) => String(Math.round(t * 100)))}
+            />
+            <output className="volrow__val num" data-bind="settings.textSize">
+              {pct(settings.textScale)}
+            </output>
+          </div>
         </div>
       </div>
     </div>
@@ -355,21 +351,25 @@ function Network({ settings, inRoom }: { settings: Settings; inRoom: boolean }) 
   const median = samples.length ? [...samples].map((s) => s.pingMs).sort((a, b) => a - b)[samples.length >> 1]! : -1;
   const connected = inRoom && live;
   return (
-    <div className="tabpanel" role="tabpanel" aria-label="Network">
-      <h2 className="display h2">Network</h2>
-      <div className="setrow">
-        <div>
-          <p className="setrow__label">Low-bandwidth mode</p>
-          <p className="setrow__desc">Sends fewer updates to save data. Good on mobile data. Other players may move a little less smoothly.</p>
+    <div className="tabpanel mf-tabpanel" role="tabpanel" aria-label="Network">
+      <h2 className="display set__h">Network</h2>
+      <div className="srow">
+        <div className="srow__txt">
+          <b>Low-bandwidth mode</b>
+          <span>Sends fewer updates to save data. Good on mobile data. Other players may move a little less smoothly.</span>
         </div>
-        <Switch on={settings.lowBandwidth} onChange={(lowBandwidth) => ctl.updateSettings({ lowBandwidth })} label="Low-bandwidth mode" />
+        <div className="srow__ctrl">
+          <Switch on={settings.lowBandwidth} onChange={(lowBandwidth) => ctl.updateSettings({ lowBandwidth })} label="Low-bandwidth mode" />
+        </div>
       </div>
-      <div className="setrow">
-        <div>
-          <p className="setrow__label">Net graph</p>
-          <p className="setrow__desc">Shows ping and packet loss in the top-left corner during a match.</p>
+      <div className="srow">
+        <div className="srow__txt">
+          <b>Net graph</b>
+          <span>Shows ping and packet loss in the top-left corner during a match.</span>
         </div>
-        <Switch on={settings.netGraph} onChange={(netGraph) => ctl.updateSettings({ netGraph })} label="Net graph" />
+        <div className="srow__ctrl">
+          <Switch on={settings.netGraph} onChange={(netGraph) => ctl.updateSettings({ netGraph })} label="Net graph" />
+        </div>
       </div>
       <div className="netcard">
         <div className="netgraph" role="img" aria-label={`Last ${NET_HISTORY} seconds of ping`}>
@@ -442,80 +442,96 @@ function Touch() {
   const t = useTouchSettings();
   const set = (patch: Partial<TouchSettings>) => setTouchSettings(patch);
   return (
-    <div className="tabpanel" role="tabpanel" aria-label="Touch">
-      <h2 className="display h2">Touch</h2>
-      <div className="setrow">
-        <div>
-          <p className="setrow__label">Touch controls</p>
-          <p className="setrow__desc">Sticks and buttons on the screen. Auto shows them on phones and tablets, or once you touch the screen.</p>
+    <div className="tabpanel mf-tabpanel" role="tabpanel" aria-label="Touch">
+      <h2 className="display set__h">Touch</h2>
+      <div className="srow">
+        <div className="srow__txt">
+          <b>Touch controls</b>
+          <span>Sticks and buttons on the screen. Auto shows them on phones and tablets, or once you touch the screen.</span>
         </div>
-        <Seg value={t.mode} label="Touch controls" options={[['auto', 'Auto'], ['on', 'On'], ['off', 'Off']]} onChange={(mode) => set({ mode })} />
-      </div>
-      <div className="setrow">
-        <div>
-          <p className="setrow__label">Fire</p>
-          <p className="setrow__desc">Hold: fire while the aim stick is pushed past half-way. On release: lift your thumb to fire once.</p>
-        </div>
-        <Seg value={t.fire} label="Fire" options={[['hold', 'Hold'], ['release', 'On release']]} onChange={(fire) => set({ fire })} />
-      </div>
-      <div className="setrow">
-        <div>
-          <p className="setrow__label">Aim assist</p>
-          <p className="setrow__desc">The aim stick leans gently toward a target near where you point. Touch only.</p>
-        </div>
-        <Switch on={t.aimAssist} onChange={(aimAssist) => set({ aimAssist })} label="Aim assist" />
-      </div>
-      <div className="setrow">
-        <div>
-          <p className="setrow__label">Left-handed</p>
-          <p className="setrow__desc">Mirrors the whole layout.</p>
-        </div>
-        <Switch on={t.handed === 'left'} onChange={(on) => set({ handed: on ? 'left' : 'right' })} label="Left-handed" />
-      </div>
-      <div className="setrow">
-        <div>
-          <p className="setrow__label">Vibrate when hit</p>
-          <p className="setrow__desc">Where the browser allows it.</p>
-        </div>
-        <Switch on={t.vibrate} onChange={(vibrate) => set({ vibrate })} label="Vibrate when hit" />
-      </div>
-      <div className="setrow">
-        <div>
-          <p className="setrow__label">Swipe to dash</p>
-          <p className="setrow__desc">Swipe the move stick and lift to dash that way.</p>
-        </div>
-        <Switch on={t.swipeDash} onChange={(swipeDash) => set({ swipeDash })} label="Swipe to dash" />
-      </div>
-      <div className="setrow">
-        <div>
-          <p className="setrow__label">Opacity</p>
-          <p className="setrow__desc">How solid the controls look.</p>
-        </div>
-        <div className="volrow">
-          <Slider value={(t.opacity - 0.15) / 0.85} onChange={(v) => set({ opacity: Math.round((0.15 + v * 0.85) * 100) / 100 })} label="Touch controls opacity" valueText={pct(t.opacity)} min={15} max={100} />
-          <output className="volrow__val num">{pct(t.opacity)}</output>
+        <div className="srow__ctrl">
+          <Seg value={t.mode} label="Touch controls" options={[['auto', 'Auto'], ['on', 'On'], ['off', 'Off']]} onChange={(mode) => set({ mode })} />
         </div>
       </div>
-      <div className="setrow">
-        <div>
-          <p className="setrow__label">Layout</p>
-          <p className="setrow__desc">Drag, resize and fade each control. Saved on this device.</p>
+      <div className="srow">
+        <div className="srow__txt">
+          <b>Fire</b>
+          <span>Hold: fire while the aim stick is pushed past half-way. On release: lift your thumb to fire once.</span>
         </div>
-        <div className="seg">
-          <button
-            className="btn btn--secondary"
-            onClick={blurAfter(() => {
-              ctl.closeOverlay();
-              openTouchEditor();
-            })}
-          >
-            <Icon name="edit" />
-            Edit layout
-          </button>
-          <button className="btn btn--ghost" onClick={blurAfter(() => resetTouchLayout())}>
-            <Icon name="refresh" />
-            Reset layout
-          </button>
+        <div className="srow__ctrl">
+          <Seg value={t.fire} label="Fire" options={[['hold', 'Hold'], ['release', 'On release']]} onChange={(fire) => set({ fire })} />
+        </div>
+      </div>
+      <div className="srow">
+        <div className="srow__txt">
+          <b>Aim assist</b>
+          <span>The aim stick leans gently toward a target near where you point. Touch only.</span>
+        </div>
+        <div className="srow__ctrl">
+          <Switch on={t.aimAssist} onChange={(aimAssist) => set({ aimAssist })} label="Aim assist" />
+        </div>
+      </div>
+      <div className="srow">
+        <div className="srow__txt">
+          <b>Left-handed</b>
+          <span>Mirrors the whole layout.</span>
+        </div>
+        <div className="srow__ctrl">
+          <Switch on={t.handed === 'left'} onChange={(on) => set({ handed: on ? 'left' : 'right' })} label="Left-handed" />
+        </div>
+      </div>
+      <div className="srow">
+        <div className="srow__txt">
+          <b>Vibrate when hit</b>
+          <span>Where the browser allows it.</span>
+        </div>
+        <div className="srow__ctrl">
+          <Switch on={t.vibrate} onChange={(vibrate) => set({ vibrate })} label="Vibrate when hit" />
+        </div>
+      </div>
+      <div className="srow">
+        <div className="srow__txt">
+          <b>Swipe to dash</b>
+          <span>Swipe the move stick and lift to dash that way.</span>
+        </div>
+        <div className="srow__ctrl">
+          <Switch on={t.swipeDash} onChange={(swipeDash) => set({ swipeDash })} label="Swipe to dash" />
+        </div>
+      </div>
+      <div className="srow">
+        <div className="srow__txt">
+          <b>Opacity</b>
+          <span>How solid the controls look.</span>
+        </div>
+        <div className="srow__ctrl">
+          <div className="volrow">
+            <Slider value={(t.opacity - 0.15) / 0.85} onChange={(v) => set({ opacity: Math.round((0.15 + v * 0.85) * 100) / 100 })} label="Touch controls opacity" valueText={pct(t.opacity)} min={15} max={100} />
+            <output className="volrow__val num">{pct(t.opacity)}</output>
+          </div>
+        </div>
+      </div>
+      <div className="srow">
+        <div className="srow__txt">
+          <b>Layout</b>
+          <span>Drag, resize and fade each control. Saved on this device.</span>
+        </div>
+        <div className="srow__ctrl">
+          <div className="seg">
+            <button
+              className="btn btn--secondary"
+              onClick={blurAfter(() => {
+                ctl.closeOverlay();
+                openTouchEditor();
+              })}
+            >
+              <Icon name="edit" />
+              Edit layout
+            </button>
+            <button className="btn btn--ghost" onClick={blurAfter(() => resetTouchLayout())}>
+              <Icon name="refresh" />
+              Reset layout
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -552,48 +568,59 @@ export function SettingsScreen({ store }: { store: ShellStore }) {
     if (patch) ctl.updateSettings(patch);
     else setTouchSettings(DEFAULT_TOUCH_SETTINGS);
   };
+  // the tab indicator slides to the picked tab (P5, vertical)
+  const nav = useRef<HTMLElement>(null);
+  const bar = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const el = nav.current?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (el && bar.current) moveIndicator(bar.current, el.offsetTop, el.offsetHeight);
+  }, [tab]);
   return (
-    <Screen name="settings" kind="menu" states={[tab]} label="Settings" modal>
-      <header className="topbar">
-        <button className="btn btn--ghost" onClick={blurAfter(() => ctl.back())}>
-          <Icon name="back" />
-          Back <Cap>Esc</Cap>
-        </button>
-        <span className="topbar__title">Settings</span>
-        <div className="topbar__spacer"></div>
-        <span className="small muted">Saved on this device</span>
-      </header>
-
-      <div className="screen-body settings">
-        <div className="tabs" role="tablist" aria-orientation="vertical" aria-label="Settings sections">
-          {TABS.map((t) => (
-            <button key={t.id} className="tab" role="tab" data-tab={t.id} aria-selected={tab === t.id} onClick={() => ctl.setSettingsTab(t.id)}>
-              <Icon name={t.icon} />
-              {t.label}
+    <Screen name="settings" kind="menu" kit="v2" states={[tab]} label="Settings" modal>
+      <Backdrop word="SET" />
+      <div className="menu">
+        <header className="menu-top">
+          <button className="btn btn--ghost btn--icon btn--sm m-p8" type="button" aria-label="Back" onClick={blurAfter(() => ctl.back())}>
+            <Icon name="back" />
+          </button>
+          <h1 className="menu-top__title">Settings</h1>
+          <span className="menu-top__spacer"></span>
+          <span className="label">Saved on this device</span>
+        </header>
+        <div className="menu-body set">
+          <nav ref={nav} className="tabs tabs--v set__tabs mf-set__tabs" role="tablist" aria-orientation="vertical" aria-label="Settings sections">
+            <span ref={bar} className="m-p5 m-p5--y mf-set__bar" aria-hidden="true"></span>
+            {TABS.map((t) => (
+              <button key={t.id} type="button" className="tab" role="tab" data-tab={t.id} aria-selected={tab === t.id} onClick={() => ctl.setSettingsTab(t.id)}>
+                <Icon name={t.icon} />
+                {t.label}
+              </button>
+            ))}
+          </nav>
+          <div className="set__panel card card--print">
+            {tab === 'graphics' && <Graphics settings={settings} />}
+            {tab === 'audio' && <Audio settings={settings} />}
+            {tab === 'controls' && <Controls settings={settings} />}
+            {tab === 'accessibility' && <Accessibility settings={settings} />}
+            {tab === 'network' && <Network settings={settings} inRoom={inRoom} />}
+            {tab === 'touch' && <Touch />}
+          </div>
+        </div>
+        <footer className="menu-hints">
+          <button className="btn btn--ghost btn--sm m-p8" type="button" onClick={blurAfter(reset)}>
+            <Icon name="refresh" />
+            Reset this tab
+          </button>
+          <span>
+            <Cap>Esc</Cap> Back
+          </span>
+          <span className="menu-hints__end">
+            <button className="btn btn--volt m-p8" type="button" onClick={blurAfter(() => ctl.back())}>
+              Done
             </button>
-          ))}
-        </div>
-
-        <div className="settings__panel panel">
-          {tab === 'graphics' && <Graphics settings={settings} />}
-          {tab === 'audio' && <Audio settings={settings} />}
-          {tab === 'controls' && <Controls settings={settings} />}
-          {tab === 'accessibility' && <Accessibility settings={settings} />}
-          {tab === 'network' && <Network settings={settings} inRoom={inRoom} />}
-          {tab === 'touch' && <Touch />}
-        </div>
+          </span>
+        </footer>
       </div>
-
-      <footer className="settings__bar">
-        <button className="btn btn--ghost" onClick={blurAfter(reset)}>
-          <Icon name="refresh" />
-          Reset this tab
-        </button>
-        <span className="topbar__spacer"></span>
-        <button className="btn btn--primary btn--xl" onClick={blurAfter(() => ctl.back())}>
-          Done
-        </button>
-      </footer>
     </Screen>
   );
 }

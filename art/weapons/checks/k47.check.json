@@ -6,12 +6,12 @@
     {
       "status": "INFO",
       "check": "file size",
-      "detail": "118 KB"
+      "detail": "123 KB"
     },
     {
       "status": "PASS",
       "check": "triangles",
-      "detail": "920 of 1000 (body and 1 parts)"
+      "detail": "992 of 1000 (body and 1 parts)"
     },
     {
       "status": "PASS",
@@ -42,6 +42,11 @@
       "status": "PASS",
       "check": "weaponId in packages/content",
       "detail": "k47"
+    },
+    {
+      "status": "PASS",
+      "check": "node names exact (no Blender .001 suffix)",
+      "detail": "ok"
     },
     {
       "status": "INFO",
@@ -91,12 +96,12 @@
     {
       "status": "PASS",
       "check": "muzzle fires along +Y with a bore radius",
-      "detail": "dir (0.0, 1.0, 0.0), bore 0.028 m"
+      "detail": "dir (0.0, 1.0, 0.0), bore 0.029 m"
     },
     {
       "status": "PASS",
       "check": "casings eject to the right (+X)",
-      "detail": "at x +0.062, dir x +0.80"
+      "detail": "at x +0.033, dir x +0.80"
     },
     {
       "status": "PASS",
@@ -111,7 +116,7 @@
     {
       "status": "PASS",
       "check": "moving part part_mag",
-      "detail": "75 tris, axis (0.0, 0.24, -0.97), travel 0.12 m"
+      "detail": "140 tris, axis (0.0, 0.24, -0.97), travel 0.12 m"
     }
   ]
 }

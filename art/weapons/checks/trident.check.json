@@ -6,12 +6,12 @@
     {
       "status": "INFO",
       "check": "file size",
-      "detail": "127 KB"
+      "detail": "132 KB"
     },
     {
       "status": "PASS",
       "check": "triangles",
-      "detail": "920 of 1000 (body and 1 parts)"
+      "detail": "994 of 1000 (body and 1 parts)"
     },
     {
       "status": "PASS",
@@ -39,9 +39,14 @@
       "detail": "ok"
     },
     {
-      "status": "WARN",
+      "status": "PASS",
       "check": "weaponId in packages/content",
-      "detail": "trident is not in packages/content/src/{weapons,grenades}.ts yet"
+      "detail": "trident"
+    },
+    {
+      "status": "PASS",
+      "check": "node names exact (no Blender .001 suffix)",
+      "detail": "ok"
     },
     {
       "status": "INFO",
@@ -111,7 +116,7 @@
     {
       "status": "PASS",
       "check": "moving part part_mag",
-      "detail": "56 tris, axis (0.0, 0.37, -0.93), travel 0.12 m"
+      "detail": "100 tris, axis (0.0, 0.37, -0.93), travel 0.12 m"
     }
   ]
 }

@@ -1,12 +1,15 @@
 /**
- * 5 · Connection (the kit's data-screen="connection"): getting into a room step by step, the
- * reconnecting banner over the live game, and the alerts when a room can't be reached or ends.
+ * 5 · Connection (round two's data-screen="connection"): getting into a room step by step, the
+ * reconnecting banner over the live game, and the alerts when a room can't be reached or ends: a
+ * paper ticket over the scrim, stamped with what happened.
  */
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Icon } from '../../ui/Icon';
 import { Screen, blurAfter } from '../../ui/Screen';
 import { ALERT_LOOK } from '../alerts';
 import { useCtl, useTicker } from '../context';
 import type { AlertInfo, ConnectionView } from '../store';
+import { Backdrop, RollNum } from './frame';
 
 /** 0: the API is finding (or making) the room; 1: the game server is letting us in; 2: the first world update. */
 export type ConnectStep = 0 | 1 | 2;
@@ -23,33 +26,51 @@ const STEPS: readonly [now: string, done: string][] = [
   ['Loading the map', 'Map loaded'],
 ];
 
+/** The kit's stamp on each alert: a word and its tone. */
+const STAMP: Readonly<Record<AlertInfo['kind'], string>> = {
+  'room-full': 'Full',
+  'room-not-found': 'No room',
+  'new-version': 'Update',
+  'server-full': 'Busy',
+  'connection-lost': 'Offline',
+  offline: 'Offline',
+  'slow-down': 'Wait',
+  replaced: 'Elsewhere',
+  refused: 'Refused',
+  error: 'Error',
+};
+const TONE = { warn: 'stamp--warn', bad: 'stamp--bad', info: 'stamp--volt' } as const;
+
+/**
+ * The backdrop and card holder every connection screen shares. The kit shows the game through a
+ * scrim, but no world is drawn while we connect or once the link is gone, so the menus' camo stands
+ * in for it (the scrim would only turn it black).
+ */
+function ConnFrame({ states, label, children }: { states: string[]; label: string; children: ReactNode }) {
+  return (
+    <Screen name="connection" kind="menu" kit="v2" states={states} label={label}>
+      <Backdrop word="COMMS" />
+      <div className="conn__wrap">{children}</div>
+    </Screen>
+  );
+}
+
 export function Connecting({ code, step, creating = false, onCancel }: { code: string | null; step: ConnectStep; creating?: boolean; onCancel: () => void }) {
   return (
-    <Screen name="connection" kind="menu" states={['connecting']} label="Connecting">
-      <div className="conn" role="status">
-        <div className="conn__radar" aria-hidden="true">
-          <span className="spinner conn__spinner"></span>
-        </div>
-        <h1 className="display h2">{creating && !code ? 'Making your room…' : 'Connecting…'}</h1>
-        <p className="lead">
-          {code ? (
-            <>
-              Joining room{' '}
-              <b className="num" data-bind="room.code">
-                {code}
-              </b>
-            </>
-          ) : creating ? (
-            'A room of your own, with a link to send your friends'
-          ) : (
-            'Looking for the room'
-          )}
-        </p>
+    <ConnFrame states={['connecting']} label="Connecting">
+      <div className="conn ticket m-p1" role="alertdialog" aria-labelledby="conn-connecting">
+        <span className="tape" style={{ left: '46%', top: -12 }} aria-hidden="true"></span>
+        <span className="stamp stamp--volt stamp--lg conn__stamp">{creating && !code ? 'Making' : 'Joining'}</span>
+        <Icon name="server" className="conn__ghost" />
+        <h1 id="conn-connecting" className="display conn__title">
+          {creating && !code ? 'Making your room' : code ? `Joining room ${code}` : 'Finding the room'}
+        </h1>
+        <p className="conn__body">{creating && !code ? 'A room of your own, with a link to send your friends.' : 'Getting you in: a few seconds.'}</p>
         <ol className="conn__steps">
           {STEPS.map(([now, done], i) =>
             i < step ? (
               <li key={i} className="is-done">
-                <Icon name="ok" />
+                <Icon name="check" size="sm" />
                 {done}
               </li>
             ) : i === step ? (
@@ -59,17 +80,20 @@ export function Connecting({ code, step, creating = false, onCancel }: { code: s
               </li>
             ) : (
               <li key={i}>
-                <Icon name="clock" />
+                <Icon name="clock" size="sm" />
                 {now}
               </li>
             ),
           )}
         </ol>
-        <button className="btn btn--ghost btn--xl" onClick={blurAfter(onCancel)}>
-          Cancel
-        </button>
+        <div className="conn__actions">
+          <button className="btn btn--ghost btn--xl m-p8" type="button" onClick={blurAfter(onCancel)}>
+            <Icon name="close" />
+            Cancel
+          </button>
+        </div>
       </div>
-    </Screen>
+    </ConnFrame>
   );
 }
 
@@ -78,24 +102,58 @@ export function reconnectSecondsLeft(until: number, now: number): number {
   return Math.max(0, Math.ceil((until - now) / 1000));
 }
 
-/** Over the live game, under the clock: the match keeps going while we try. */
+/** How long the "Back" chip shows once a reconnect lands (motion spec §4.1). */
+const BACK_MS = 1200;
+
+/**
+ * Over the live game: the reconnecting banner comes in from the top edge (P9) while we try, its try
+ * count rolling (P4); when the connection is back it leaves accelerating and a green "Back" chip
+ * stamps in (P7) for 1.2 s.
+ */
 export function ReconnectBanner({ connection }: { connection: ConnectionView }) {
   useTicker(1000);
+  const reconnecting = connection.state === 'reconnecting';
+  const [phase, setPhase] = useState<'off' | 'on' | 'leaving' | 'back'>(reconnecting ? 'on' : 'off');
+  const was = useRef(reconnecting);
+  useEffect(() => {
+    if (reconnecting) {
+      was.current = true;
+      setPhase('on');
+      return undefined;
+    }
+    if (!was.current) return undefined;
+    was.current = false;
+    if (connection.state !== 'connected') {
+      setPhase('off');
+      return undefined;
+    }
+    setPhase('leaving');
+    const t1 = window.setTimeout(() => setPhase('back'), 170);
+    const t2 = window.setTimeout(() => setPhase('off'), 170 + BACK_MS);
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+  }, [reconnecting, connection.state]);
+  if (phase === 'off') return null;
   const left = connection.until > 0 ? reconnectSecondsLeft(connection.until, performance.now()) : 0;
   return (
-    <Screen name="connection" kind="game" states={['reconnecting']} label="Reconnecting">
-      <div className="hud conn__hud">
-        <div className="net-banner" role="status">
+    <Screen name="connection" kind="game" kit="v2" states={[phase === 'back' ? 'back' : 'reconnecting']} label="Reconnecting">
+      {phase === 'back' ? (
+        <span className="stamp stamp--ok stamp--lg mf-back-chip m-p7" role="status">
+          <Icon name="check" />
+          Back
+        </span>
+      ) : (
+        <div className={phase === 'leaving' ? 'reconnect plate m-p9 is-leaving' : 'reconnect plate m-p9'} role="status">
           <span className="spinner"></span>
-          <div>
-            <p className="net-banner__title">Reconnecting…</p>
-            <p className="net-banner__sub">
-              Attempt <span data-bind="net.attempt">{Math.max(1, connection.attempt)}</span>
-              {left > 0 ? `, still trying for ${left} s` : ''}. The match keeps going.
-            </p>
-          </div>
+          <span>
+            <b>Connection dropped.</b> Reconnecting · try <RollNum value={Math.max(1, connection.attempt)} />
+            {left > 0 ? ` · ${left} s left` : ''}
+          </span>
+          <span className="reconnect__sub">The match keeps running</span>
         </div>
-      </div>
+      )}
     </Screen>
   );
 }
@@ -104,32 +162,39 @@ export function Alert({ alert, onRejoin }: { alert: AlertInfo; onRejoin: (() => 
   const ctl = useCtl();
   const look = ALERT_LOOK[alert.kind];
   return (
-    <Screen name="connection" kind="menu" states={[alert.kind]} label={alert.title}>
-      <div className="alert" role="alert">
-        <span className={`alert__icon alert__icon--${look.tone}`}>
-          <Icon name={look.icon} size="xl" />
-        </span>
-        <h1 className="display h2">{alert.title}</h1>
-        <p className="lead">{alert.message}</p>
-        <p className="alert__code">Code {alert.code}</p>
-        <div className="alert__actions">
+    <ConnFrame states={[alert.kind]} label={alert.title}>
+      <div className="conn ticket m-p1" role="alertdialog" aria-labelledby="conn-alert">
+        <span className="tape" style={{ left: '46%', top: -12 }} aria-hidden="true"></span>
+        <span className={`stamp ${TONE[look.tone]} stamp--lg conn__stamp m-p7`}>{STAMP[alert.kind]}</span>
+        <Icon name={look.icon} className="conn__ghost" />
+        <h1 id="conn-alert" className="display conn__title">
+          {alert.title}
+        </h1>
+        <p className="conn__body">{alert.message}</p>
+        <p className="conn__body mf-conn__code num">Code {alert.code}</p>
+        <div className="conn__actions">
           {alert.action === 'reload' ? (
-            <button className="btn btn--primary btn--xl" onClick={() => location.reload()}>
+            <button className="btn btn--volt btn--xl m-p8" type="button" onClick={() => location.reload()}>
               <Icon name="refresh" />
-              Reload
+              Reload now
             </button>
           ) : alert.action === 'rejoin' && onRejoin ? (
-            <button className="btn btn--primary btn--xl" onClick={blurAfter(onRejoin)}>
+            <button className="btn btn--volt btn--xl m-p8" type="button" onClick={blurAfter(onRejoin)}>
               <Icon name="refresh" />
-              Rejoin
+              Try again
+            </button>
+          ) : alert.kind === 'room-not-found' ? (
+            <button className="btn btn--volt btn--xl m-p8" type="button" onClick={blurAfter(() => ctl.openOverlay('join'))}>
+              <Icon name="keyboard" />
+              Type a code
             </button>
           ) : null}
-          <button className="btn btn--secondary btn--xl" onClick={blurAfter(() => ctl.go({ to: 'home' }))}>
+          <button className="btn btn--ghost btn--xl m-p8" type="button" onClick={blurAfter(() => ctl.go({ to: 'home' }))}>
             <Icon name="back" />
             Home
           </button>
         </div>
       </div>
-    </Screen>
+    </ConnFrame>
   );
 }

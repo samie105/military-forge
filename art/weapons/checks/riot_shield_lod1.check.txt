@@ -1,11 +1,12 @@
 asset-check: art/weapons/riot_shield_lod1.glb  [weapon]
 -----------------------------------------------------------------------------------------------------------------
-INFO  file size                                              27 KB
+INFO  file size                                              26 KB
 PASS  triangles                                              316 of 1000
 PASS  one mesh, one material                                 1 draw call(s)
 INFO  GPU texture memory (KTX2 est.)                         0.00 MB, 0 image(s)
 PASS  extras weaponId/family/aimPose/hands                   ok
 WARN  weaponId in packages/content                           riot_shield is not in packages/content/src/{weapons,grenades}.ts yet
+PASS  node names exact (no Blender .001 suffix)              ok
 INFO  nodes                                                  face, grip, ground
 PASS  origin on the weapon (the grip)                        bbox (-0.28, -0.1, -0.45)..(0.28, 0.04, 0.45)
 PASS  family is a docs/04 §4.2 family                        'shield'
@@ -17,4 +18,5 @@ PASS  sockets on the weapon (within 3 cm)                    ok
 PASS  shield face: strike face +Z, in front of the strap     at z +0.090, dir (0.0, 0.0, 1.0), half size (0.28, 0.45)
 PASS  shield 0.55 × 0.90 m (what players see = what blocks)  0.56 × 0.90 m
 -----------------------------------------------------------------------------------------------------------------
-RESULT: PASS  (12 pass, 1 warn, 0 fail)
+RESULT: PASS  (13 pass, 1 warn, 0 fail)
+

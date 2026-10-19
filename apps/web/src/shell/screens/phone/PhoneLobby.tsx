@@ -20,9 +20,9 @@ import { playerName } from '../../matchView';
 import type { LobbyPlayer, LobbyView } from '../../onlineView';
 import { encodeQr, qrSvgPath } from '../../qr';
 import { KILL_STEP, ROOM_SLOTS, TIME_CHOICES, killsLabel, minutesLabel, useRoomSetting } from '../Lobby';
-import { TipsCard } from '../Tips';
 import { PhoneScreen, rise } from './layout';
 import { Roll, ShareChip, Sheet, initial, shareRoom, useShareChip } from './parts';
+import { PhoneTips } from './PhoneTips';
 
 function Row({ p, i }: { p: LobbyPlayer; i: number }) {
   const ready = p.ready || p.isBot;
@@ -142,8 +142,11 @@ function RulesSheet({ lobby, open, onClose }: { lobby: LobbyView; open: boolean;
   );
 }
 
-/** `tips`: the player's bindings while the first-run controls card is due (it shows once the lobby folds). */
-export function PhoneLobby({ lobby, tips = null, doubleTapDash = true }: { lobby: LobbyView; tips?: Bindings | null; doubleTapDash?: boolean }) {
+/**
+ * `tips`: set while the first-run controls card is due (it shows once the lobby folds): the touch tips,
+ * not the desktop's keys. The props match the desktop Lobby's; the bindings and `doubleTapDash` are the keyboard's.
+ */
+export function PhoneLobby({ lobby, tips = null }: { lobby: LobbyView; tips?: Bindings | null; doubleTapDash?: boolean }) {
   const ctl = useCtl();
   const online = ctl.host.online;
   const [folded, setFolded] = useState(false);
@@ -155,7 +158,7 @@ export function PhoneLobby({ lobby, tips = null, doubleTapDash = true }: { lobby
     return (
       <>
         <PhoneLobbyStrip lobby={lobby} onOpen={() => setFolded(false)} />
-        {tips && <TipsCard bindings={tips} doubleTapDash={doubleTapDash} />}
+        {tips && <PhoneTips />}
       </>
     );
 

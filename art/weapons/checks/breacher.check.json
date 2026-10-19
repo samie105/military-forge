@@ -6,12 +6,12 @@
     {
       "status": "INFO",
       "check": "file size",
-      "detail": "116 KB"
+      "detail": "113 KB"
     },
     {
       "status": "PASS",
       "check": "triangles",
-      "detail": "921 of 1000 (body and 1 parts)"
+      "detail": "993 of 1000 (body and 1 parts)"
     },
     {
       "status": "PASS",
@@ -42,6 +42,11 @@
       "status": "PASS",
       "check": "weaponId in packages/content",
       "detail": "breacher"
+    },
+    {
+      "status": "PASS",
+      "check": "node names exact (no Blender .001 suffix)",
+      "detail": "ok"
     },
     {
       "status": "INFO",
@@ -96,7 +101,7 @@
     {
       "status": "PASS",
       "check": "casings eject to the right (+X)",
-      "detail": "at x +0.063, dir x +0.80"
+      "detail": "at x +0.041, dir x +0.80"
     },
     {
       "status": "PASS",
@@ -106,7 +111,7 @@
     {
       "status": "PASS",
       "check": "moving part part_pump",
-      "detail": "245 tris, axis (0.0, -1.0, 0.0), travel 0.06 m"
+      "detail": "298 tris, axis (0.0, -1.0, 0.0), travel 0.06 m, cut clean (closed)"
     }
   ]
 }

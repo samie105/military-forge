@@ -50,10 +50,10 @@ export function TipsCard({ bindings, doubleTapDash = true }: { bindings: Setting
   const ctl = useCtl();
   const layout = useKeyboardLayout();
   return (
-    <Screen name="tips" kind="game" label="How to play">
-      <aside className="mf-tips panel ticks" aria-label="How to play">
+    <Screen name="tips" kind="game" kit="v2" label="How to play">
+      <aside className="mf-tips card card--print m-p1" aria-label="How to play">
         <p className="eyebrow">How to play</p>
-        <h2 className="display h2">Controls</h2>
+        <h2 className="display mf-tips__h">Controls</h2>
         <dl className="mf-tips__keys">
           {tipsRows(bindings).map(([what, codes]) => (
             <div key={what}>
@@ -87,11 +87,12 @@ export function TipsCard({ bindings, doubleTapDash = true }: { bindings: Setting
         </ul>
         <div className="mf-tips__actions">
           {/* no autoFocus: the card sits over live play, where Space and the arrows are the game's */}
-          <button className="btn btn--primary btn--xl" onClick={blurAfter(() => ctl.closeTips())}>
+          <button type="button" className="btn btn--volt btn--xl m-p8" onClick={blurAfter(() => ctl.closeTips())}>
             Got it
           </button>
           <button
-            className="btn btn--ghost"
+            type="button"
+            className="btn btn--ghost m-p8"
             onClick={blurAfter(() => {
               ctl.closeTips();
               ctl.openSettings('controls');

@@ -1,26 +1,27 @@
 asset-check: art/weapons/hammer44.glb  [weapon]
-----------------------------------------------------------------------------------------------------
-INFO  file size                                 121 KB
-PASS  triangles                                 824 of 1000 (body and 1 parts)
-PASS  one mesh, one material                    1 body + 1 moving part(s), 1 material(s): 2 draw call(s)
-PASS  texture size: hammer44_albedo             256x256 (max 256)
-PASS  texture POT: hammer44_albedo              power of two
-INFO  GPU texture memory (KTX2 est.)            0.04 MB, 1 image(s)
-PASS  extras weaponId/family/aimPose/hands      ok
-PASS  weaponId in packages/content              hammer44
-INFO  nodes                                     eject, grip, mag, muzzle, rail_bottom, rail_top
-PASS  origin on the weapon (the grip)           bbox (-0.04, -0.1, -0.07)..(0.05, 0.19, 0.29)
-PASS  family is a docs/04 §4.2 family           'pistol'
-PASS  aimPose has clips                         'pistol'
-PASS  muzzle node ahead of the grip (+Y)        muzzle at glTF y +0.29 m
-PASS  sockets for the family                    grip, muzzle, mag, rail_top, eject
-PASS  socket directions (unit `dir`)            ok
-PASS  sockets on the weapon (within 3 cm)       ok
-PASS  muzzle fires along +Y with a bore radius  dir (0.0, 1.0, 0.0), bore 0.027 m
-PASS  casings eject to the right (+X)           at x +0.045, dir x +0.61
-PASS  rail_top above the bore, facing up        z +0.094 vs bore +0.061, length 0.10 m
-PASS  rail_bottom below the bore, facing down   z +0.035 vs bore +0.061, length 0.06 m
-PASS  moving part part_cylinder                 200 tris, axis (0.0, 1.0, 0.0), angle 60°
-----------------------------------------------------------------------------------------------------
-RESULT: PASS  (18 pass, 0 warn, 0 fail)
+-----------------------------------------------------------------------------------------------------
+INFO  file size                                  126 KB
+PASS  triangles                                  924 of 1000 (body and 1 parts)
+PASS  one mesh, one material                     1 body + 1 moving part(s), 1 material(s): 2 draw call(s)
+PASS  texture size: hammer44_albedo              256x256 (max 256)
+PASS  texture POT: hammer44_albedo               power of two
+INFO  GPU texture memory (KTX2 est.)             0.04 MB, 1 image(s)
+PASS  extras weaponId/family/aimPose/hands       ok
+PASS  weaponId in packages/content               hammer44
+PASS  node names exact (no Blender .001 suffix)  ok
+INFO  nodes                                      eject, grip, mag, muzzle, rail_bottom, rail_top
+PASS  origin on the weapon (the grip)            bbox (-0.04, -0.1, -0.07)..(0.05, 0.19, 0.29)
+PASS  family is a docs/04 §4.2 family            'pistol'
+PASS  aimPose has clips                          'pistol'
+PASS  muzzle node ahead of the grip (+Y)         muzzle at glTF y +0.29 m
+PASS  sockets for the family                     grip, muzzle, mag, rail_top, eject
+PASS  socket directions (unit `dir`)             ok
+PASS  sockets on the weapon (within 3 cm)        ok
+PASS  muzzle fires along +Y with a bore radius   dir (0.0, 1.0, 0.0), bore 0.027 m
+PASS  casings eject to the right (+X)            at x +0.045, dir x +0.61
+PASS  rail_top above the bore, facing up         z +0.094 vs bore +0.061, length 0.10 m
+PASS  rail_bottom below the bore, facing down    z +0.035 vs bore +0.061, length 0.06 m
+PASS  moving part part_cylinder                  248 tris, axis (0.0, 1.0, 0.0), angle 60°
+-----------------------------------------------------------------------------------------------------
+RESULT: PASS  (19 pass, 0 warn, 0 fail)
 

@@ -1,0 +1,191 @@
+/*
+ * Round two's desktop menus as the app hosts them (the look is kit.css's; this file only fills the
+ * gaps between the kit's static markup and live controls, and adds the motion spec's menu moves,
+ * docs/design/ui-motion-spec.md §4.1). Tokens only.
+ */
+
+/* a real text field inside the kit's .input box */
+.kit-v2 .mf-input__field { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; background: transparent; color: inherit; font: inherit; font-stretch: inherit; }
+:where(.kit-v2) .input:focus-within { outline: var(--bw-chunky) solid var(--c-volt); outline-offset: 4px; }
+
+/* the ID card's photo: the rookie's helmet stands in for the kit's preview art */
+.kit-v2 .mf-idcard__helmet { position: absolute; margin: 0; left: 50%; top: 50%; width: 260px; height: 260px; translate: -50% -50%; color: var(--c-ink-950); stroke-width: 1.4; }
+
+/* name taken: the box nudges once, two frames each way (the only shake menus get is Join's "no") */
+:where(.kit-v2) [data-active-state~="taken"] .input { animation: mf-nudge 50ms linear 1; }
+@keyframes mf-nudge { 0% { translate: 3px 0; } 50% { translate: -3px 0; } 100% { translate: 0 0; } }
+
+/* the kit's links as buttons (tickets, tabs): the kit's own alignment */
+:where(.kit-v2) button.ticket { text-align: left; align-items: stretch; }
+:where(.kit-v2) button.ticket:disabled, :where(.kit-v2) .home__create:disabled { opacity: .55; cursor: not-allowed; }
+
+/*
+ * Home's stage: the rookie's helmet stands in for the kit's preview art, above the nameplate in the
+ * middle column; the helmet shrinks (to nothing) before the nameplate runs into it, and a long name
+ * steps down so it fits the column (--chars: its length).
+ */
+.kit-v2 .mf-home__stage { container-type: inline-size; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: var(--sp-5); min-width: 0; min-height: 0; padding: var(--sp-8) 0 var(--sp-11) var(--sp-8); }
+.kit-v2 .mf-home__helmet { position: static; flex: 0 1 280px; min-height: 0; width: auto; height: auto; aspect-ratio: 1; align-self: center; color: var(--c-volt); stroke-width: 1.2; opacity: .9; }
+.kit-v2 .mf-home__nameplate { position: static; max-width: 100%; }
+.kit-v2 .mf-home__nameplate .display { font-size: min(var(--fs-120), calc(100cqi / (var(--chars, 6) * 0.62))); white-space: nowrap; }
+.kit-v2 .mf-home__nameplate .home__loadout { flex-wrap: wrap; border-radius: var(--r-md); row-gap: 0; }
+.kit-v2 .mf-loadout__item { display: inline-flex; align-items: center; gap: var(--sp-2); white-space: nowrap; }
+
+/* Join: real inputs in the kit's letter boxes; each stamps as it fills (P7), and a wrong code shakes the
+   row once, ±4 px (the one shake menus allow: it means "no") */
+:where(.kit-v2) input.codebox__cell { text-align: center; text-transform: uppercase; caret-color: transparent; }
+:where(.kit-v2) .codebox__cell.mf-filled { animation: m-stamp var(--m-fast) var(--ease-settle) both; }
+/* an <input> is always :empty, so the kit's empty-cell look would cover a filled letter too */
+:where(.kit-v2) .codebox__cell.mf-filled:empty { background: var(--c-paper); color: var(--c-paper-text); border-color: var(--c-ink-950); box-shadow: var(--sh-card-sm); }
+:where(.kit-v2) [data-active-state~="pasted"] .codebox__cell.mf-filled:empty { box-shadow: var(--sh-off-sm) var(--c-ok); }
+:where(.kit-v2) [data-active-state~="error"] .codebox__cell.mf-filled:empty { background: var(--c-hp); color: var(--c-hp-ink); box-shadow: var(--sh-off-sm) var(--c-ink-950); }
+:where(.kit-v2) [data-active-state~="error"] .codebox { animation: mf-shake 240ms var(--ease-settle) 1; }
+@keyframes mf-shake { 20% { translate: -4px 0; } 45% { translate: 4px 0; } 70% { translate: -2px 0; } 100% { translate: 0 0; } }
+
+/* Connection: the alert's code line, small; "Back" when a reconnect lands (P7, 1.2 s) */
+:where(.kit-v2) .mf-conn__code { font-size: var(--fs-16); }
+:where(.kit-v2) .mf-back-chip { position: absolute; top: 150px; left: 50%; translate: -50% 0; background: var(--c-plate-strong); }
+
+/* Lobby: the link ticket's buttons in a row; Copy link swaps to "Copied ✓" (the new label arrives as the
+   old one leaves: React swaps the keyed button); the host's Start glows slowly once everyone is ready */
+.mf-linkt__acts { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+/* a narrow share card (a laptop, big text): the link and its buttons go under the QR */
+:where(.kit-v2) .linkt { flex-wrap: wrap; }
+:where(.kit-v2) .linkt__qr { flex: none; }
+:where(.kit-v2) .linkt__body { flex: 1 1 200px; }
+.mf-swap-in { animation: m-rise var(--m-fast) var(--ease-arrive) both; }
+:where(.kit-v2) .mf-glow { animation: mf-glow 1.2s ease-in-out infinite; }
+@keyframes mf-glow { 50% { box-shadow: var(--sh-press), 0 0 0 6px var(--c-volt-soft); } }
+:where(.kit-v2) .mf-seg-solo { box-shadow: inset 0 0 0 var(--bw) var(--c-line-strong); }
+:where(.kit-v2) .mf-seg-solo[aria-pressed="true"] { background: var(--c-volt); color: var(--c-volt-ink); box-shadow: none; }
+:where(.kit-v2) .lobby__code { display: inline-flex; gap: .04em; }
+
+/* the folded lobby (placed by app.css): the room code */
+:where(.kit-v2) .mf-lobby-strip__code { font-weight: var(--fw-black); letter-spacing: .08em; }
+/* the mission card's maps scroll inside it when there are more than fit */
+.kit-v2 .lobby__set .maps { flex: 1; min-height: 0; overflow-y: auto; padding: 4px; margin: -4px; scrollbar-width: thin; }
+
+/* the countdown: its ring empties over each second (app.css's mf-count, from --count-from to --count);
+   the kit's pop on the number and GO gives way to the motion spec's P1 and P7 */
+.kit-v2 .mf-cd__ring .cd__fill { animation: mf-count 1s linear forwards; }
+html.reduce-motion .kit-v2 .mf-cd__ring .cd__fill { animation: none; }
+.kit-v2 .cd__go.m-p7 { animation: m-stamp var(--m-fast) var(--ease-settle) both; }
+.kit-v2 .cd__num .display.m-p1 { animation: m-pull var(--m-slow) var(--ease-arrive) both; }
+
+/* Results: the winner's poster holds the trophy (the kit's preview art isn't the game's); the standings
+   in the kit's table look, your row and the winner's marked */
+.kit-v2 .mf-res__trophy { position: absolute; left: 50%; top: 52%; width: 240px; height: 240px; translate: -50% -50%; color: var(--c-brass-ink); stroke-width: 1.2; }
+.kit-v2 .mf-standings__who { display: inline-flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.kit-v2 .mf-standings .avatar { width: 32px; height: 32px; font-size: var(--fs-16); }
+.kit-v2 .mf-standings .avatar .ic { width: 18px; height: 18px; }
+.kit-v2 .mf-standings tr.is-you > * { background: var(--c-volt-soft); }
+.kit-v2 .mf-standings tr.is-winner td:first-child { color: var(--c-brass); }
+
+/* Settings: the panel scrolls (Touch, text at 150 %); a tab's content arrives 8 px from the right; the
+   picked tab's bar slides along the tabs (P5, vertical); key buttons in the kit's ghost look */
+.kit-v2 .set__panel { overflow-y: auto; scrollbar-width: thin; }
+.kit-v2 .mf-tabpanel { animation: mf-tab-in var(--m-base) var(--ease-arrive) both; }
+@keyframes mf-tab-in { from { opacity: 0; translate: 8px 0; } to { opacity: 1; translate: 0 0; } }
+.kit-v2 .mf-set__tabs { position: relative; }
+.kit-v2 .mf-set__bar { left: -14px; top: 0; width: 5px; height: 1px; background: var(--c-volt); border-radius: var(--r-xxs); }
+.m-p5--y { transform-origin: 50% 0; transform: translateY(calc(var(--m5-l) * 1px)) scaleY(calc(var(--m5-r) - var(--m5-l))); }
+.kit-v2 .mf-set__note { font-size: var(--fs-16); color: var(--c-muted); margin-bottom: var(--sp-3); }
+.kit-v2 .mf-bindbtn { min-width: 88px; }
+.kit-v2 .binds .bindtable__hint { display: block; font-size: var(--fs-14); font-weight: var(--fw-reg); color: var(--c-muted); }
+.kit-v2 .tabpanel__head { display: flex; align-items: center; gap: var(--sp-4); }
+
+/* Pause: the game behind dims over --m-fast; the score line under the title */
+.kit-v2 .mf-pause__dim { animation: mf-fade-in var(--m-fast) linear both; }
+@keyframes mf-fade-in { from { opacity: 0; } }
+.kit-v2 .mf-pause__score { font-size: var(--fs-18); font-weight: var(--fw-bold); margin-top: calc(var(--sp-3) * -1); }
+
+/* the controls card (the app's own) in round two's print card */
+.kit-v2 .mf-tips__h { font-size: var(--fs-64); }
+.kit-v2 .mf-tips .muted { color: var(--c-muted); }
+/* at large text a roster row wraps its ping and ready chip under the name instead of clipping them */
+.kit-v2 .prow { flex-wrap: wrap; row-gap: 4px; }
+
+/*
+ * Fit (ui/fit.ts): on a 1280×720 or 1366×768 laptop the menus get a 1600×900 box at 0.8 zoom
+ * (html.mf-narrow under 1800 design pixels wide, html.mf-short under 1000 high); the wide screens
+ * tighten instead of colliding. And Text size: body text grows up to 150 %, display type (48 px and
+ * up, already large) at most a little, so it doesn't push the screens apart; from 130 % (html.mf-big-
+ * text, main.ts) the biggest pieces tighten as in the laptop's box.
+ */
+.kit-v2 > .screen--menu {
+  --fs-48: calc(48px * min(var(--text-scale), 1.2));
+  --fs-64: calc(64px * min(var(--text-scale), 1.15));
+  --fs-88: calc(88px * min(var(--text-scale), 1.1));
+  --fs-120: calc(120px * min(var(--text-scale), 1.1));
+  --fs-180: calc(180px * min(var(--text-scale), 1.05));
+  --fs-280: 280px;
+  --fs-code: 136px;
+}
+:where(.kit-v2) .net-pill, :where(.kit-v2) .brand__words { white-space: nowrap; }
+html.mf-narrow .kit-v2 .home { grid-template-columns: 640px minmax(0, 1fr) 340px; gap: var(--sp-7); }
+/* big text in the laptop's box: the top bar keeps every tab and the chip (the pill keeps its ms) */
+html.mf-narrow.mf-big-text .kit-v2 .home__top { gap: var(--sp-4); }
+html.mf-narrow.mf-big-text .kit-v2 .net-pill__word { display: none; }
+/* the stage's corner brackets frame the helmet; in a short box the nameplate climbs into them */
+html:is(.mf-short, .mf-big-text) .kit-v2 .mf-home__stage .brackets { display: none; }
+html.mf-narrow .kit-v2 .home__poster-title, html.mf-narrow .kit-v2 .home__poster-no { font-size: var(--fs-88); }
+html:is(.mf-short, .mf-big-text) .kit-v2 .home__poster { padding: var(--sp-6) var(--sp-7); }
+html:is(.mf-short, .mf-big-text) .kit-v2 .home__poster-title, html:is(.mf-short, .mf-big-text) .kit-v2 .home__poster-no { font-size: var(--fs-64); }
+html:is(.mf-short, .mf-big-text) .kit-v2 .home__soon { display: none; }
+html:is(.mf-short, .mf-big-text) .kit-v2 .home__poster-cta { margin-top: var(--sp-4); }
+html:is(.mf-short, .mf-big-text) .kit-v2 .home__ticket { min-height: 128px; padding: var(--sp-4) var(--sp-6); }
+html:is(.mf-short, .mf-big-text) .kit-v2 .home__side { padding-top: var(--sp-2); gap: var(--sp-4); }
+html:is(.mf-short, .mf-big-text) .kit-v2 .mf-home__stage { padding-bottom: var(--sp-8); }
+html.mf-narrow .kit-v2 .lobby { grid-template-columns: 440px minmax(0, 1fr) 520px; gap: var(--sp-5); padding: 0; }
+html.mf-short .kit-v2 .lobby { padding-block: 0 var(--sp-3); }
+html:is(.mf-short, .mf-big-text) .kit-v2 .lobby__share { padding: var(--sp-6); gap: var(--sp-3); }
+html:is(.mf-short, .mf-big-text) .kit-v2 .lobby__share-title { font-size: var(--fs-64); }
+html:is(.mf-short, .mf-big-text) .kit-v2 .linkt__qr { width: 96px; height: 96px; }
+/* Results in the laptop box: narrower side columns so the standings keep every column, a smaller
+   poster and MVP card so the vote and its buttons stay on screen; with big text too, Damage steps out
+   of the table (it is on the MVP card and your own line) */
+html.mf-narrow .kit-v2 .res { grid-template-columns: 360px minmax(0, 1fr) 360px; gap: var(--sp-6); }
+html.mf-narrow .kit-v2 .mvp { width: 100%; height: auto; aspect-ratio: 1; }
+html.mf-narrow .kit-v2 .mvp__big { font-size: var(--fs-120); }
+html.mf-narrow .kit-v2 .mvp__name { font-size: var(--fs-64); }
+html:is(.mf-short, .mf-big-text) .kit-v2 .res__poster { height: 300px; }
+html:is(.mf-short, .mf-big-text) .kit-v2 .res__name { font-size: var(--fs-88); }
+html:is(.mf-short, .mf-big-text) .kit-v2 .mvp { width: 100%; aspect-ratio: 6 / 5; }
+html:is(.mf-short, .mf-big-text) .kit-v2 .mvp__inner { padding: var(--sp-3) var(--sp-4); }
+html:is(.mf-short, .mf-big-text) .kit-v2 .mvp__big { font-size: var(--fs-88); }
+html:is(.mf-short, .mf-big-text) .kit-v2 .mvp__name { font-size: var(--fs-48); }
+html:is(.mf-short, .mf-big-text) .kit-v2 .mvp__stats b { font-size: var(--fs-28); }
+html:is(.mf-short, .mf-big-text) .kit-v2 .res__share { gap: var(--sp-3); min-height: 0; }
+html:is(.mf-short, .mf-big-text) .kit-v2 .res__share > .btn { font-size: var(--fs-20); min-height: var(--btn-h); }
+html:is(.mf-short, .mf-big-text) .kit-v2 .votes { gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); }
+html:is(.mf-short, .mf-big-text) .kit-v2 .votes .btn { min-height: var(--btn-h-sm); }
+/* big text in the laptop's box: the MVP card steps aside (the MVP tag is in the standings) */
+html.mf-short.mf-big-text .kit-v2 .mvp { display: none; }
+html.mf-narrow.mf-big-text .kit-v2 .mf-col-dmg { display: none; }
+.kit-v2 .mf-standings th, .kit-v2 .mf-standings td { white-space: nowrap; }
+html.mf-narrow .kit-v2 .mf-standings :is(th, td) { padding-inline: var(--sp-1); }
+
+/* Pause: the items keep their height (the list scrolls when it can't fit); with big text the plate
+   widens and the labels step down so they stay on one or two lines */
+:where(.kit-v2) .pause { overflow-y: auto; scrollbar-width: thin; }
+:where(.kit-v2) .pause__btn { flex: none; }
+html.mf-big-text .kit-v2 .pause { width: 700px; }
+html.mf-big-text .kit-v2 .pause__btn { font-size: var(--fs-20); }
+html.mf-big-text .kit-v2 .pause__confirm { left: 820px; }
+html.mf-short .kit-v2 .pause { top: var(--sp-8); bottom: var(--sp-8); gap: var(--sp-3); padding: var(--sp-6) var(--sp-7); }
+html.mf-short .kit-v2 .pause__title { font-size: var(--fs-88); margin-bottom: 0; }
+html.mf-short .kit-v2 .pause__btn { min-height: var(--btn-h); padding-block: var(--sp-2); }
+html.mf-short.mf-big-text .kit-v2 .pause__btn { min-height: var(--btn-h-sm); font-size: var(--fs-18); }
+html.mf-short.mf-big-text .kit-v2 .pause__btn .btn__sub { display: none; }
+
+/* the map list keeps whole cards and scrolls, the roster's head wraps under its title */
+:where(.kit-v2) .lobby__set .maps { grid-auto-rows: max-content; }
+:where(.kit-v2) .lobby__head { flex-wrap: wrap; row-gap: var(--sp-1); }
+:where(.kit-v2) .lobby__head .display { white-space: nowrap; }
+
+/* a screen that arrives under a flood (P6) holds its entrances until the flood has covered it, then
+   they play as the flood contracts onto it (Countdown, Results) */
+:where(.kit-v2) .mf-held :is(.m-p1, .m-p3, .m-p7, .m-p9) { animation-play-state: paused; }
+/* the map intro waits out of sight (its band sweeps in once it is uncovered) */
+:where(.kit-v2) .mf-held .intro { visibility: hidden; }
+:where(.kit-v2) .mf-held .intro__band { animation-play-state: paused; }

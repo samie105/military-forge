@@ -40,9 +40,11 @@ export function useTicker(ms: number): number {
 
 /** The server's round trip as the home and room screens show it: the API's, measured every 10 s. */
 export function useServerPing(): number {
-  const ctl = useCtl();
+  // no controller (a screen rendered on its own, in tests): no ping
+  const ctl = useContext(ControllerContext);
   const [ms, setMs] = useState(-1);
   useEffect(() => {
+    if (!ctl) return undefined;
     let live = true;
     const measure = () =>
       ctl.api.ping().then(

@@ -1,18 +1,22 @@
 /**
- * 2 · Home (the kit's data-screen="home"): the player's name, Play with friends, Join, Training,
- * Locker, Armory, Settings, the soldier and what they spawn with, and a controls reminder from the
- * player's own bindings. Enter starts Play with friends.
+ * 2 · Home (round two's data-screen="home"): the brand, the tabs (Play, Locker, Armory, Settings),
+ * Play with friends (Create room), Join with code, Training, the player's nameplate and what they
+ * spawn with, field orders with the player's own keys, and the sitrep ticker of the maps. Enter
+ * creates a room. Arriving from name entry, the ID card becomes the player chip (motion P2); the
+ * rows rise in turn (P3). The kit's "Last match" card waits for match history (not kept yet).
  */
-import { DEFAULT_LOADOUT, FRAG, weapons } from '@military-forge/content';
+import { DEFAULT_LOADOUT, FRAG, maps, weapons } from '@military-forge/content';
 import { GAME_NAME } from '@military-forge/shared';
-import { useEffect } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, type CSSProperties } from 'react';
 import { useStore } from 'zustand';
 import { Icon, weaponIcon } from '../../ui/Icon';
 import { Cap, Kbd } from '../../ui/Kbd';
-import { Ping, Screen } from '../../ui/Screen';
-import { useCtl, useServerPing } from '../context';
-import type { Bindings } from '../controls';
+import { sharedElement } from '../../ui/motion';
+import { Screen } from '../../ui/Screen';
+import { useCtl } from '../context';
 import type { ShellStore } from '../store';
+import { Backdrop, Hint, Hints, NetPill, takeCard } from './frame';
+import { MAP_CARDS, ROOM_SLOTS, lobbyMaps } from './Lobby';
 
 /** The brand: the emblem and the name, once in the whole UI (round two's .brand on Home). */
 export function Brand() {
@@ -30,54 +34,17 @@ export function Brand() {
   );
 }
 
-/** The controls strip: every main action with the player's first key. */
-export function ControlsStrip({ bindings, onChange }: { bindings: Bindings; onChange: () => void }) {
-  const k = (id: keyof Bindings) => bindings[id][0];
-  const rows: [string, (string | undefined)[]][] = [
-    ['Move', [k('left'), k('right')]],
-    ['Jet', [k('jet')]],
-    ['Crouch', [k('down')]],
-    ['Dash', [k('dash')]],
-    ['Fire', [k('fire')]],
-    ['Reload', [k('reload')]],
-    ['Swap', [k('swap')]],
-    ['Grenade: tap throws, hold aims', [k('grenade')]],
-    ['Melee', [k('melee')]],
-    ['Shield', [k('shield')]],
-    ['Scores', [k('scoreboard')]],
-  ];
-  return (
-    <footer className="controls-strip" aria-label="Controls reminder">
-      <span className="eyebrow">
-        <Icon name="keyboard" size="sm" />
-        Controls
-      </span>
-      <ul className="controls-strip__list">
-        {rows.map(([what, codes]) => (
-          <li key={what}>
-            <span className="keys">
-              {codes.filter(Boolean).map((c) => (
-                <Kbd key={c} code={c} />
-              ))}
-            </span>
-            {what}
-          </li>
-        ))}
-      </ul>
-      <button className="btn btn--ghost" onClick={onChange}>
-        Change keys
-        <Icon name="chev-right" size="sm" />
-      </button>
-    </footer>
-  );
+/** The sitrep ticker: the maps a room can play, each with its line (decoration; aria-hidden). */
+function sitrep(): string[] {
+  return lobbyMaps('').map((id) => [maps[id]?.name, MAP_CARDS[id]?.blurb].filter(Boolean).join(' · '));
 }
 
 export function Home({ store }: { store: ShellStore }) {
   const ctl = useCtl();
   const profile = useStore(store, (s) => s.profile);
   const settings = useStore(store, (s) => s.settings);
-  const ping = useServerPing();
   const offline = !!profile?.offline;
+  const chip = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -91,136 +58,195 @@ export function Home({ store }: { store: ShellStore }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [ctl, offline]);
 
-  const loadout = DEFAULT_LOADOUT.map((i) => weapons[i]).filter((w) => !!w);
-  return (
-    <Screen name="home" kind="menu" label="Home">
-      <header className="topbar">
-        <Brand />
-        <div className="topbar__spacer"></div>
-        {offline ? (
-          <span className="status status--warn">
-            <Icon name="unplug" />
-            Server offline
-          </span>
-        ) : (
-          <Ping ms={ping} label="Server" />
-        )}
-        <button className="btn btn--secondary btn--icon" aria-label="Settings" onClick={() => ctl.openSettings()}>
-          <Icon name="gear" />
-        </button>
-      </header>
+  // from name entry: the ID card becomes the player chip (motion P2)
+  useLayoutEffect(() => {
+    const from = takeCard();
+    if (from && chip.current) sharedElement(from, chip.current);
+  }, []);
 
-      <div className="screen-body home">
-        <div className="home__main">
-          <div className="home__id">
-            <p className="eyebrow">Soldier</p>
-            <div className="home__namerow">
-              <h1 className="home__player" data-bind="player.name">
-                {profile?.nickname ?? ''}
-              </h1>
-              {!offline && (
-                <button className="btn btn--ghost" onClick={() => ctl.openOverlay('name')}>
-                  <Icon name="edit" />
-                  Edit name
+  const name = profile?.nickname ?? '';
+  const loadout = DEFAULT_LOADOUT.map((i) => weapons[i]).filter((w) => !!w);
+  const ticker = sitrep();
+  const row = (i: number) => ({ '--i': i }) as CSSProperties;
+  return (
+    <Screen name="home" kind="menu" kit="v2" label="Home">
+      <Backdrop word="PLAY" />
+      <div className="menu">
+        <header className="menu-top home__top">
+          <Brand />
+          <nav className="tabs home__tabs" aria-label="Main">
+            <button type="button" className="tab" aria-selected="true">
+              <Icon name="play" />
+              Play
+            </button>
+            <button type="button" className="tab m-p8" aria-selected="false" onClick={() => (location.hash = '#/locker')}>
+              <Icon name="shirt" />
+              Locker
+            </button>
+            <button type="button" className="tab m-p8" aria-selected="false" onClick={() => location.assign('/armory.html')}>
+              <Icon name="rack" />
+              Armory
+            </button>
+            <button type="button" className="tab m-p8" aria-selected="false" onClick={() => ctl.openSettings()}>
+              <Icon name="gear" />
+              Settings
+            </button>
+          </nav>
+          <span className="menu-top__spacer"></span>
+          <NetPill offline={offline} />
+          <span ref={chip} className="me-chip">
+            <span className="avatar" aria-hidden="true">
+              {([...name.trim()][0] ?? '?').toUpperCase()}
+            </span>
+            <b data-bind="player.name">{name}</b>
+          </span>
+        </header>
+
+        <div className="menu-body home">
+          <div className="home__play">
+            <span className="eyebrow m-p3" style={row(0)}>
+              Ops briefing · Deathmatch with friends
+            </span>
+            <article className="poster halftone-ink home__poster m-p3" style={row(1)}>
+              <span className="btn__sticker" style={{ top: -16, right: 40 }}>
+                The host can tune the game
+              </span>
+              <b className="home__poster-no display" aria-hidden="true">
+                01
+              </b>
+              <span className="serial">Op 01 · Squad deployment</span>
+              <h2 className="display home__poster-title">
+                Play with
+                <br />
+                friends
+              </h2>
+              <p className="home__poster-sub">Make a room, send the link to your group chat, and fight. Bots fill empty slots.</p>
+              <div className="home__poster-cta">
+                <button className="btn btn--ink btn--xl home__create m-p8" type="button" disabled={offline} onClick={() => ctl.go({ to: 'create' })}>
+                  <Icon name="users-plus" />
+                  Create room
                 </button>
-              )}
-            </div>
+                <Cap lg>Enter</Cap>
+                <span className="home__poster-meta">Up to {ROOM_SLOTS} · link + QR</span>
+              </div>
+              <span className="hazard" aria-hidden="true"></span>
+            </article>
             {offline && (
               <p className="status status--warn">
                 <Icon name="warn" />
                 The game server can't be reached right now: Training still works.
               </p>
             )}
-          </div>
-
-          <button className="cta-main" disabled={offline} onClick={() => ctl.go({ to: 'create' })}>
-            <span className="cta-main__icon">
-              <Icon name="users-plus" size="xl" />
-            </span>
-            <span className="cta-main__text">
-              <span className="cta-main__title">Play with friends</span>
-              <span className="cta-main__sub">Make a room, then share the link on WhatsApp</span>
-            </span>
-            <Cap lg>Enter</Cap>
-            <Icon name="arrow-right" size="lg" />
-          </button>
-
-          <div className="home__grid">
-            <button className="tile" disabled={offline} onClick={() => ctl.openOverlay('join')}>
-              <Icon name="link" size="lg" />
-              <span className="tile__title">Join with code</span>
-              <span className="tile__sub">Type 6 letters or paste a link</span>
-            </button>
-            <button className="tile" onClick={() => ctl.go({ to: 'training' })}>
-              <Icon name="target" size="lg" />
-              <span className="tile__title">Training</span>
-              <span className="tile__sub">Practice against bots</span>
-            </button>
-            <div className="tile tile--soon" aria-disabled="true">
-              <Icon name="bolt" size="lg" />
-              <span className="tile__title">Quick play</span>
-              <span className="tile__sub">Jump into a match with anyone</span>
-              <span className="badge badge--soon">Coming soon</span>
+            <div className="home__row">
+              <button type="button" className="ticket rivets home__ticket m-p3" style={row(2)} disabled={offline} onClick={() => ctl.openOverlay('join')}>
+                <Icon name="link" className="home__ghost" />
+                <span className="label">02 — Got a code?</span>
+                <b className="display">Join with code</b>
+                <span className="home__ticket-sub">6 letters, or paste the link</span>
+              </button>
+              <button type="button" className="ticket rivets home__ticket m-p3" style={row(3)} onClick={() => ctl.go({ to: 'training' })}>
+                <Icon name="target" className="home__ghost" />
+                <span className="label">03 — Solo</span>
+                <b className="display">Training</b>
+                <span className="home__ticket-sub">Practice against bots</span>
+              </button>
+            </div>
+            <div className="home__soon m-p3" style={row(4)} aria-disabled="true">
+              <span className="label">04</span>
+              <b className="display">Quick play</b>
+              <span>Match with anyone</span>
+              <span className="tag tag--soon">Coming soon</span>
             </div>
           </div>
 
-          <nav className="home__nav" aria-label="More">
-            <button className="navtile" onClick={() => (location.hash = '#/locker')}>
-              <Icon name="helmet" size="lg" />
-              <span>
-                <span className="navtile__title">Locker</span>
-                <span className="navtile__sub">Dress your soldier</span>
-              </span>
-            </button>
-            <button className="navtile" onClick={() => location.assign('/armory.html')}>
-              <Icon name="rack" size="lg" />
-              <span>
-                <span className="navtile__title">Armory</span>
-                <span className="navtile__sub">Look at the guns</span>
-              </span>
-            </button>
-            <button className="navtile" onClick={() => ctl.openSettings()}>
-              <Icon name="gear" size="lg" />
-              <span>
-                <span className="navtile__title">Settings</span>
-                <span className="navtile__sub">Graphics, sound, keys</span>
-              </span>
-            </button>
-          </nav>
-        </div>
-
-        <aside className="home__hero" aria-label="Your soldier">
-          <div className="home__stage home__stage--emblem">
-            <span className="home__stencil" aria-hidden="true">
-              Rookie kit
+          {/* the helmet stands in for the kit's soldier (a gap): it gives way first when the nameplate needs the room */}
+          <div className="home__stage mf-home__stage">
+            <span className="brackets" style={{ inset: '20px 40px 120px 90px' }} aria-hidden="true">
+              <i></i>
+              <i></i>
+              <i></i>
+              <i></i>
             </span>
-            <div className="home__podium" aria-hidden="true"></div>
-            <div className="home__soldier" role="img" aria-label="Your soldier in the rookie kit">
-              <Icon name="helmet" />
-            </div>
-            <div className="loadout">
-              <p className="eyebrow">You spawn with</p>
-              <ul className="loadout__list">
-                {loadout.map((w) => {
+            <Icon name="helmet" className="mf-home__helmet" />
+            <div className="home__nameplate mf-home__nameplate" style={{ '--chars': Math.max(4, name.length) } as CSSProperties}>
+              <span className="stamp stamp--volt m-p7">Ready</span>
+              <b className="display" data-bind="player.name">
+                {name}
+              </b>
+              <span className="home__loadout">
+                {loadout.map((w, i) => {
                   const icon = weaponIcon(w.id);
                   return (
-                    <li key={w.id}>
-                      {icon && <Icon name={icon} size="wpn" />}
-                      <span>{w.name}</span>
-                    </li>
+                    <Fragment key={w.id}>
+                      {i > 0 && <span className="sep">/</span>}
+                      <span className="mf-loadout__item">
+                        {icon && <Icon name={icon} className="ic--kf" />}
+                        <span data-bind={`player.slot.${i}.name`}>{w.name}</span>
+                      </span>
+                    </Fragment>
                   );
                 })}
-                <li>
-                  <Icon name="g-frag" />
+                <span className="sep">/</span>
+                <span className="mf-loadout__item">
+                  <Icon name="g-frag" className="ic--fill" />
                   <span>Frag ×{FRAG.spawnCount}</span>
-                </li>
-              </ul>
+                </span>
+              </span>
+              {!offline && (
+                <button type="button" className="btn btn--ghost btn--sm m-p8" onClick={() => ctl.openOverlay('name')}>
+                  <Icon name="edit" />
+                  Edit name
+                </button>
+              )}
             </div>
           </div>
-        </aside>
-      </div>
 
-      <ControlsStrip bindings={settings.bindings} onChange={() => ctl.openSettings('controls')} />
+          <aside className="home__side">
+            <section className="card card--print home__news m-p3" style={row(5)}>
+              <span className="label label--volt">Field orders</span>
+              <ul>
+                <li>
+                  <Icon name="g-frag" className="ic--fill" />
+                  <span>
+                    <b>Grenade belt</b> · tap <Kbd code={settings.bindings.grenade[0]} /> to throw, hold it to aim the arc
+                  </span>
+                </li>
+                <li>
+                  <Icon name="dash" />
+                  <span>
+                    <b>Dash</b> · <Kbd code={settings.bindings.dash[0]} /> with a direction, 8 ways
+                  </span>
+                </li>
+                <li>
+                  <Icon name="sliders" />
+                  <span>
+                    <b>Tune the game</b> · the host changes gravity, fuel and more, live
+                  </span>
+                </li>
+              </ul>
+              <button type="button" className="btn btn--paper btn--sm btn--block m-p8" onClick={() => ctl.openSettings('controls')}>
+                <Icon name="keyboard" />
+                All the keys
+              </button>
+            </section>
+          </aside>
+        </div>
+        <div className="ticker home__ticker" aria-hidden="true">
+          <span className="ticker__tag">
+            <Icon name="radio" />
+            Sitrep
+          </span>
+          <div className="ticker__run">
+            {[...ticker, ...ticker].map((t, i) => (
+              <span key={i}>{t}</span>
+            ))}
+          </div>
+        </div>
+        <Hints>
+          <Hint keys={<Cap>Enter</Cap>}>Create room</Hint>
+          <Hint keys={<Cap>Esc</Cap>}>Menu</Hint>
+        </Hints>
+      </div>
     </Screen>
   );
 }

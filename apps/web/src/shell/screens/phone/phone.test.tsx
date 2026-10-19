@@ -10,8 +10,11 @@ import { createShellStore } from '../../store';
 import { PHONE_QUERY, isPhoneLayout } from './layout';
 import { PhoneHome } from './PhoneHome';
 import { PhoneLobby } from './PhoneLobby';
+import { PhoneNameEntry } from './PhoneNameEntry';
 import { PhonePause } from './PhonePause';
 import { PhoneResults, resultText } from './PhoneResults';
+import { PhoneSettings, phoneTab } from './PhoneSettings';
+import { PhoneTips, touchTips } from './PhoneTips';
 import { shareData } from './parts';
 
 beforeAll(() => vi.stubGlobal('location', { origin: 'https://abc.trycloudflare.com', host: 'abc.trycloudflare.com', protocol: 'https:', search: '' }));
@@ -205,5 +208,69 @@ describe('m-results', () => {
     expect(guest).not.toContain('>Lobby<');
     const noMvp: MatchResults = { ...results, mvpKey: -1, standings: results.standings.map((s) => ({ ...s, mvp: false })) };
     expect(renderToStaticMarkup(<PhoneResults view={view()} results={noMvp} actions={actions} training={{ leave: vi.fn() }} />)).not.toContain('pm-mvp');
+  });
+});
+
+describe('phone settings', () => {
+  it('Touch first with Edit and Reset layout; Graphics, Audio, Access, Network; no key bindings on a phone', () => {
+    const store = createShellStore({ settingsTab: 'touch' });
+    const c = ctl({ back: vi.fn(), setSettingsTab: vi.fn(), updateSettings: vi.fn(), host: { online: null, autoGraphics: 'low' } });
+    const html = withCtl(c, <PhoneSettings store={store} />);
+    expect(html).toContain('data-screen="m-settings"');
+    for (const t of ['Touch', 'Graphics', 'Audio', 'Access', 'Network', 'Edit', 'Reset', 'Left-handed', 'Aim assist', 'Done']) expect(html).toContain(t);
+    expect(html).not.toContain('Controls');
+    expect(phoneTab('controls')).toBe('touch');
+    expect(phoneTab('audio')).toBe('audio');
+    const access = withCtl(c, <PhoneSettings store={createShellStore({ settingsTab: 'accessibility' })} />);
+    for (const t of ['Text size', 'Reduce motion', 'Reduce flashes', 'Colour-blind teams']) expect(access).toContain(t);
+  });
+});
+
+describe('touch tips (the first-run card on a phone)', () => {
+  it('what each thumb does, in the player\'s own touch settings', () => {
+    const right = touchTips({ handed: 'right', fire: 'hold', swipeDash: true });
+    expect(right.map((t) => t.what)).toEqual(['Left dial', 'Right dial', 'Grenade']);
+    expect(right[0].how).toBe('Move. Up flies, down crouches, a swipe dashes.');
+    expect(right[1].how).toBe('Aim. Push far to fire.');
+    expect(right[2].how).toBe('Hold to aim, let go to throw.');
+    const left = touchTips({ handed: 'left', fire: 'release', swipeDash: false });
+    expect(left.map((t) => t.what)).toEqual(['Right dial', 'Left dial', 'Grenade']);
+    expect(left[0].how).not.toContain('dash');
+    expect(left[1].how).toBe('Aim, then lift to fire.');
+  });
+
+  it('no keys, no mouse: the dials, Got it and Touch settings', () => {
+    const html = withCtl(ctl({ closeTips: vi.fn() }), <PhoneTips />);
+    expect(html).toContain('data-screen="m-tips"');
+    for (const t of ['Left dial', 'Right dial', 'Grenade', 'Got it', 'aria-label="Touch settings"']) expect(html).toContain(t);
+    for (const t of ['kbd', 'Mouse', 'Esc', 'Change keys', 'SHIFT', 'Space']) expect(html).not.toContain(t);
+    expect(html).not.toContain('autofocus');
+  });
+});
+
+describe('phone name entry', () => {
+  it('first visit: the card, the name field (not focused: the keyboard waits for a tap), Continue held until the name checks out, Pick one for me', () => {
+    const html = withCtl(ctl({ checkName: vi.fn(), setName: vi.fn() }), <PhoneNameEntry store={createShellStore()} first />);
+    expect(html).toContain('data-screen="m-name"');
+    expect(html).toContain('data-active-state="empty"');
+    expect(html).toContain('aria-label="Your name"');
+    expect(html).toContain('enterKeyHint="go"');
+    expect(html).not.toContain('autofocus');
+    expect(html).toMatch(/<button type="submit"[^>]*disabled=""[^>]*>Continue/);
+    expect(html).toContain('Pick one for me');
+    expect(html).not.toContain('Cancel');
+    expect(html).not.toContain('mf-fit--modal');
+    expect(html).not.toMatch(/kbd|Enter/);
+  });
+
+  it('Edit name: the current name, Save allowed as is, Cancel; over Home', () => {
+    const store = createShellStore({ profile: { nickname: 'Ade', changeableAt: null, offline: false } as never });
+    const html = withCtl(ctl({ checkName: vi.fn(), setName: vi.fn() }), <PhoneNameEntry store={store} first={false} />);
+    expect(html).toContain('data-active-state="same"');
+    expect(html).toContain('value="Ade"');
+    expect(html).toMatch(/pm-id__name[^>]*>Ade</);
+    expect(html).toMatch(/<button type="submit"(?![^>]*disabled)[^>]*>Save/);
+    expect(html).toContain('Cancel');
+    expect(html).toContain('mf-fit--modal');
   });
 });

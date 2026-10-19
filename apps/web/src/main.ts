@@ -199,6 +199,8 @@ const host: GameHost = {
     // …and the 3D view's: no camera shake or kick, a softer gun kick, a dimmer blast light (render3d)
     view3d?.setReducedMotion(next.reduceMotion);
     html.style.setProperty('--text-scale', String(next.textScale));
+    // big text: the menus tighten their largest pieces the way they do in a laptop's smaller box
+    html.classList.toggle('mf-big-text', next.textScale >= 1.3);
   },
   setInputBlocked(blocked) {
     sampler.blocked = blocked;

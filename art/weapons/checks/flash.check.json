@@ -6,12 +6,12 @@
     {
       "status": "INFO",
       "check": "file size",
-      "detail": "47 KB"
+      "detail": "55 KB"
     },
     {
       "status": "PASS",
       "check": "triangles",
-      "detail": "608 of 1000"
+      "detail": "704 of 1000"
     },
     {
       "status": "PASS",
@@ -34,6 +34,11 @@
       "detail": "flash"
     },
     {
+      "status": "PASS",
+      "check": "node names exact (no Blender .001 suffix)",
+      "detail": "ok"
+    },
+    {
       "status": "INFO",
       "check": "nodes",
       "detail": "grip, ground, light, pin"
@@ -41,7 +46,7 @@
     {
       "status": "PASS",
       "check": "origin on the weapon (the grip)",
-      "detail": "bbox (-0.09, -0.14, -0.08)..(0.09, 0.1, 0.08)"
+      "detail": "bbox (-0.08, -0.14, -0.09)..(0.08, 0.1, 0.09)"
     },
     {
       "status": "PASS",

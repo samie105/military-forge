@@ -1,5 +1,5 @@
 /**
- * The phone menus (m-home, m-lobby, m-pause, m-results) in headless Chrome as a landscape phone
+ * The phone menus (name entry, m-home, m-lobby, m-pause, m-results, the touch tips) in headless Chrome as a landscape phone
  * (812×375, touch, a coarse pointer), plain, at 150 % text and with Reduce motion, and frame strips of
  * their transitions (animations slowed 10× through CDP: a shot every 160 ms = one per 16 ms of
  * animation time; phone-strips.py stitches them). Home and the pause menu are the real app (training);
@@ -92,6 +92,16 @@ async function targets(where) {
   );
   for (const t of small) problems.push(`${where}: "${t.name}" is ${t.w.toFixed(0)}×${t.h.toFixed(0)} px`);
 }
+/** Every one of these buttons is inside the window (not scrolled or pushed off it). */
+async function onScreen(where, sel) {
+  const off = await page.$$eval(sel, (bs) =>
+    bs
+      .map((b) => ({ name: b.textContent.trim().slice(0, 20), r: b.getBoundingClientRect() }))
+      .filter(({ r }) => r.bottom > innerHeight + 0.5 || r.top < -0.5 || r.right > innerWidth + 0.5)
+      .map(({ name, r }) => `${name} at y ${Math.round(r.top)}–${Math.round(r.bottom)}`),
+  );
+  for (const o of off) problems.push(`${where}: ${o} is off screen`);
+}
 const setText = (scale) => page.evaluate((s) => document.documentElement.style.setProperty('--text-scale', String(s)), scale);
 const reduce = (on) => page.evaluate((v) => document.documentElement.classList.toggle('reduce-motion', v), on);
 const store = (fn) => page.evaluate(fn);
@@ -125,8 +135,20 @@ const RESULTS = JSON.stringify({
 
 try {
   await page.goto(`${base}/?app&time=600`, { waitUntil: 'load' });
-  await page.waitForSelector('input[aria-label="Your name"]', { timeout: 60_000 });
-  await page.type('input[aria-label="Your name"]', `Ade${Math.floor(Math.random() * 900 + 100)}`);
+  await page.waitForSelector('[data-screen="m-name"] input[aria-label="Your name"]', { timeout: 60_000 });
+  // ---- name entry: the phone's own (the typing band on top, clear of the keyboard) ----
+  await shot('m0-name', 1200);
+  await iconsResolve('name');
+  await targets('name');
+  await setText(1.5);
+  await shot('m0-name-text150');
+  await onScreen('name 150%', '[data-screen="m-name"] .btn');
+  await setText(1);
+  await page.type('input[aria-label="Your name"]', 'Ad');
+  await shot('m0-name-short', 500);
+  await page.type('input[aria-label="Your name"]', `e${Math.floor(Math.random() * 900 + 100)}`);
+  await page.waitForSelector('[data-screen="m-name"]:not([data-active-state="checking"])', { timeout: 10_000 });
+  await shot('m0-name-typed', 400);
   // the name check (no API here: it settles as unchecked, Continue on)
   for (let i = 0; i < 10 && !(await page.$('[data-screen="m-home"]')); i++) {
     await sleep(1200);
@@ -150,6 +172,32 @@ try {
   );
   await sleep(600);
 
+  // ---- Edit name over Home ----
+  await store(() => window.__game.shell.store.setState({ overlay: 'name' }));
+  await page.waitForSelector('[data-screen="m-name"]', { timeout: 10_000 });
+  await shot('m0-name-edit', 900);
+  await targets('edit name');
+  await (await page.waitForSelector('xpath/.//button[normalize-space(.)="Cancel"]')).click();
+  await page.waitForFunction(() => !document.querySelector('[data-screen="m-name"]'), { timeout: 10_000 });
+  await sleep(500);
+
+  // ---- settings: the phone's own screen (Touch first) ----
+  await page.$eval('.pm-nav__i:last-child', (b) => b.click());
+  await page.waitForSelector('[data-screen="m-settings"]', { timeout: 10_000 });
+  await page.$$eval('.pm-rail__i', (b) => b[0].click());
+  await shot('m7-settings-touch', 800);
+  await iconsResolve('settings');
+  await targets('settings');
+  await page.$$eval('.pm-rail__i', (b) => b[3].click());
+  await shot('m7-settings-access', 600);
+  await setText(1.5);
+  await shot('m7-settings-access-text150');
+  await targets('settings 150%');
+  await setText(1);
+  await page.$eval('[data-screen="m-settings"] .btn--volt', (b) => b.click());
+  await page.waitForSelector('[data-screen="m-home"]', { timeout: 10_000 });
+  await sleep(500);
+
   // ---- the Locker (a route): the phone layout of today's Locker ----
   await page.evaluate(() => (location.hash = '#/locker'));
   await page.waitForSelector('.mf-route .mm-locker', { timeout: 30_000 });
@@ -163,9 +211,52 @@ try {
   // ---- m-pause: training, then the ❚❚ button ----
   await (await page.waitForSelector('xpath/.//button[contains(normalize-space(.), "Training")]')).click();
   await page.waitForFunction(() => window.__game?.mode?.update && document.querySelector('.mf-touch:not([hidden])'), { timeout: 60_000 });
-  await sleep(1500);
-  const got = await page.$('xpath/.//button[contains(normalize-space(.), "Got it")]');
-  if (got) await got.click();
+  // ---- the first-run tips: the touch card, not the desktop's keys, clear of the controls ----
+  await page.waitForSelector('[data-screen="m-tips"]', { timeout: 10_000 });
+  if (await page.$('.mf-tips')) problems.push('tips: the desktop keys card shows on a phone');
+  await shot('m8-tips', 1500);
+  await iconsResolve('tips');
+  await targets('tips');
+  const clear = async (where) => {
+    const hits = await page.evaluate(() => {
+      const card = document.querySelector('.pm-tips').getBoundingClientRect();
+      return [...document.querySelectorAll('.mf-touch [class*="mf-ctl-"]')]
+        .filter((el) => el.offsetParent && !el.closest('[hidden]'))
+        .map((el) => ({ c: [...el.classList].find((k) => k.startsWith('mf-ctl-')), r: el.getBoundingClientRect() }))
+        .filter(({ r }) => r.width && r.left < card.right && r.right > card.left && r.top < card.bottom && r.bottom > card.top)
+        .map(({ c }) => c);
+    });
+    for (const h of hits) problems.push(`${where}: the tips card covers ${h}`);
+  };
+  await clear('tips');
+  await setText(1.5);
+  await shot('m8-tips-text150');
+  await onScreen('tips 150%', '.pm-tips .btn');
+  await clear('tips 150%');
+  await setText(1);
+  await strip('tips-in', () =>
+    store(() => {
+      const s = window.__game.shell.store;
+      s.setState({ tips: false });
+      requestAnimationFrame(() => s.setState({ tips: true }));
+    }),
+    18,
+  );
+  // Reduce motion and Reduce flashes: the card fades in where it stands (no rise)
+  await reduce(true);
+  await page.evaluate(() => document.documentElement.classList.add('reduce-flashes'));
+  await strip('tips-in-reduced', () =>
+    store(() => {
+      const s = window.__game.shell.store;
+      s.setState({ tips: false });
+      requestAnimationFrame(() => s.setState({ tips: true }));
+    }),
+    10,
+  );
+  await reduce(false);
+  await page.evaluate(() => document.documentElement.classList.remove('reduce-flashes'));
+  await (await page.waitForSelector('xpath/.//button[contains(normalize-space(.), "Got it")]')).click();
+  await page.waitForFunction(() => !document.querySelector('[data-screen="m-tips"]'), { timeout: 5000 });
   await sleep(4000);
   const pause = await page.$eval('.mf-touch .mf-ctl-pause', (el) => {
     const r = el.getBoundingClientRect();
@@ -182,6 +273,7 @@ try {
   await targets('pause');
   await setText(1.5);
   await shot('m4-pause-text150');
+  await onScreen('pause 150%', '.pm-pause .btn');
   await setText(1);
   await (await page.waitForSelector('xpath/.//nav[contains(@class,"pm-pause")]//button[contains(normalize-space(.), "Leave")]')).click();
   await shot('m4-pause-leave', 600);
@@ -201,6 +293,7 @@ try {
   await targets('lobby');
   await setText(1.5);
   await shot('m3-lobby-text150');
+  await onScreen('lobby 150%', '.pm-bar .btn');
   await setText(1);
   // a share: the system sheet (stubbed: headless Chrome has none) then the "Shared" stamp
   await page.evaluate(() => {

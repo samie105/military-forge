@@ -1,19 +1,31 @@
 /**
- * 10 · Results (the kit's data-screen="results"): the winner and why the match ended, your place and
- * numbers with the MVP, the final standings, and the rematch vote. Local matches (training) and
- * rooms share it; rooms add the host's "Back to lobby" and leaving.
+ * 10 · Results (round two's data-screen="results"): the winner and why the match ended, your place
+ * and numbers, the final standings, the MVP card and the rematch vote. Local matches (training) and
+ * rooms share it; rooms add the host's "Back to lobby", sharing and leaving. Motion: the screen
+ * floods from the clock (P6), the winner focus-pulls in (P1), the MVP card stamps (P7), the standings
+ * rise in turn (P3), and each vote pip stamps as its vote lands (P7).
+ *
+ * The kit's highlight reel (longest shot, biggest launch, dash kills), the per-weapon report, best
+ * streaks, main guns and the MVP card as a square image aren't recorded by the match yet: the
+ * standings take the middle column, and the share button shares the room (the PR lists the gaps).
  */
 import { MatchEndReason, MatchPhase, TICK_RATE, type MatchResults, type MatchStanding } from '@military-forge/sim';
+import { useContext, useEffect, useState, type CSSProperties } from 'react';
 import { Icon } from '../../ui/Icon';
+import { flood } from '../../ui/motion';
 import { Screen, blurAfter } from '../../ui/Screen';
+import { ControllerContext } from '../context';
 import { formatClock, ordinal, playerName, type MatchView } from '../matchView';
 import type { ShellActions } from '../store';
+import { Backdrop, NetPill } from './frame';
 
 export interface ResultsExtras {
   /** a room: the host may send everyone back to the lobby */
   isHost: boolean;
   /** the host's player id (the Host badge), -1 = none */
   hostId: number;
+  /** the room's code (the MVP card's challenge, sharing) */
+  code?: string;
   leave(): void;
 }
 
@@ -48,6 +60,7 @@ export function Results({ view, results, actions, room, training }: { view: Matc
   // ids are slots: after a leave, the leaver's row can carry your id, so skip departed rows
   const me = results.standings.find((s) => s.id === view.localId && !s.left);
   const winner = winnerOf(results.standings);
+  const top = results.standings.find((s) => s.placement === 1);
   const chip = reasonChip(results, view.killLimit);
   const mvp = results.standings.find((s) => s.mvp);
   const voting = view.phase === MatchPhase.Ending || view.phase === MatchPhase.Postgame;
@@ -55,199 +68,207 @@ export function Results({ view, results, actions, room, training }: { view: Matc
   const humans = Math.max(view.humans, view.votes);
   const host = !room || room.isHost;
   const states = [chip.state === 'time-up' ? 'time-up' : 'kill-limit', host ? 'host' : 'guest', view.voted ? 'voted' : 'not-voted'];
+  const code = room?.code;
+  const ctl = useContext(ControllerContext);
+
+  // the match ends with a flood from the clock (P6) that contracts onto the winner's name; the screen's
+  // entrances (the winner's P1, the standings' P3, the MVP's P7) wait until it has covered the screen
+  const [held, setHeld] = useState(true);
+  useEffect(() => {
+    void flood({ x: innerWidth / 2, y: 60 }, { to: () => document.querySelector('.res__name'), onCovered: () => setHeld(false) });
+  }, []);
 
   return (
-    <Screen name="results" kind="menu" states={states} label="Match results">
-      <div className="screen-body results">
-        <div className="results__left">
-          <p className="eyebrow">
-            <Icon name="trophy" size="sm" />
-            Match {results.number} · {view.mapName} · Deathmatch
-          </p>
-          <p className="results__winlabel">{winner.draw ? 'Top score shared' : 'Winner'}</p>
-          <h1 id="res-winner" className="results__winner display" data-bind="results.winner">
-            {winner.name}
-          </h1>
-          <p className="results__reason" data-bind="results.reason">
-            <span className="results__chip">
-              <Icon name={chip.icon} />
-              {chip.text}
-            </span>
-          </p>
-
-          {me && (
-            <div className="you-card ticks">
-              <div className="you-card__place">
-                <span className="eyebrow">You placed</span>
-                <span className="you-card__ord display" data-bind="results.me.placement">
+    <Screen name="results" kind="menu" kit="v2" states={states} label="Match results" className={held ? 'mf-held' : undefined}>
+      <Backdrop word="GG" />
+      <div className="menu">
+        <header className="menu-top">
+          <span className="eyebrow">
+            Debrief · Match {results.number} · {view.mapName}
+          </span>
+          <span className="res__why" data-bind="results.reason">
+            <Icon name={chip.icon} size="sm" /> <b>{chip.text}</b>
+          </span>
+          <span className="menu-top__spacer"></span>
+          <NetPill />
+        </header>
+        <div className="menu-body res">
+          <section className="res__win" aria-labelledby="res-title">
+            <div className="res__poster">
+              <Icon name="trophy" className="mf-res__trophy" />
+              <span className="stamp stamp--ink stamp--lg res__stamp m-p7">{winner.draw ? 'Draw' : 'Winner'}</span>
+            </div>
+            <h1 id="res-title" className="display res__name m-p1" data-bind="results.winner">
+              {winner.name}
+            </h1>
+            {top && !winner.draw && (
+              <p className="res__line">
+                <b className="num">{top.kills}</b> kills · <b className="num">{top.deaths}</b> deaths · <b className="num">{thousands(top.damageDealt)}</b> damage
+              </p>
+            )}
+            {me && (
+              <div className="ticket rivets res__you m-p3" style={{ '--i': 1 } as CSSProperties}>
+                <span className="rank">
+                  <Icon name="rank" />
+                </span>
+                <span className="stamp stamp--ink" data-bind="results.me.placement">
                   {ordinal(me.placement)}
                 </span>
-                <span className="muted">
-                  of <span data-bind="results.playerCount">{results.standings.length}</span>
+                <span>
+                  <b>You</b> · <span className="num" data-bind="results.me.kills">{me.kills}</span> kills · <span className="num" data-bind="results.me.deaths">{me.deaths}</span> deaths ·{' '}
+                  <span className="num" data-bind="results.me.damage">
+                    {thousands(me.damageDealt)}
+                  </span>{' '}
+                  damage
                 </span>
               </div>
-              <dl className="you-card__stats">
-                <div>
-                  <dt>Kills</dt>
-                  <dd className="num" data-bind="results.me.kills">
-                    {me.kills}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Deaths</dt>
-                  <dd className="num" data-bind="results.me.deaths">
-                    {me.deaths}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Damage</dt>
-                  <dd className="num" data-bind="results.me.damage">
-                    {thousands(me.damageDealt)}
-                  </dd>
-                </div>
-                {mvp && (
-                  <div className="you-card__mvp">
-                    <dt>
-                      <Icon name="medal" size="sm" />
-                      MVP
-                    </dt>
-                    <dd>
-                      <span data-bind="results.mvp.name">{playerName(mvp.name, mvp.isBot)}</span>
-                      <span className="small muted" data-bind="results.mvp.reason">
-                        {mvp.kills} kills · {thousands(mvp.damageDealt)} damage
-                      </span>
-                    </dd>
-                  </div>
-                )}
-              </dl>
-            </div>
-          )}
-        </div>
-
-        <section className="panel results__table" aria-labelledby="st-title">
-          <div className="panel__head">
-            <h2 className="h3" id="st-title">
-              Final standings
-            </h2>
-          </div>
-          <table className="table table--results">
-            <thead>
-              <tr>
-                <th scope="col" className="t-rank">
-                  #
-                </th>
-                <th scope="col">Player</th>
-                <th scope="col" className="t-num">
-                  Kills
-                </th>
-                <th scope="col" className="t-num">
-                  Deaths
-                </th>
-                <th scope="col" className="t-num">
-                  Damage
-                </th>
-                <th scope="col" className="t-num">
-                  Score
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {results.standings.map((s) => {
-                const you = s === me;
-                const won = !winner.draw && s.placement === 1;
-                const cls = [won ? 'is-winner' : '', you ? 'is-you' : '', s.isBot ? 'is-bot' : ''].filter(Boolean).join(' ');
-                return (
-                  <tr key={s.key} className={cls || undefined}>
-                    <td className="t-rank">{won ? <Icon name="trophy" label="Winner" /> : s.placement}</td>
-                    <td>
-                      <span className="t-player">
-                        {s.isBot ? (
-                          <span className="avatar avatar--sm avatar--bot">
-                            <Icon name="bot" size="sm" />
-                          </span>
-                        ) : (
-                          <span className="avatar avatar--sm">{initial(s.name)}</span>
-                        )}
-                        {playerName(s.name, s.isBot)}
-                        {room && !s.left && s.id === room.hostId && (
-                          <span className="badge badge--host">
-                            <Icon name="star" />
-                            Host
-                          </span>
-                        )}
-                        {you && <span className="badge badge--you">You</span>}
-                        {s.mvp && (
-                          <span className="badge badge--mvp">
-                            <Icon name="medal" />
-                            MVP
-                          </span>
-                        )}
-                        {s.isBot && (
-                          <span className="badge badge--bot">
-                            <Icon name="bot" />
-                            Bot
-                          </span>
-                        )}
-                        {s.left && <span className="badge badge--bot">Left</span>}
-                      </span>
-                    </td>
-                    <td className="t-num">{s.kills}</td>
-                    <td className="t-num">{s.deaths}</td>
-                    <td className="t-num">{thousands(s.damageDealt)}</td>
-                    <td className="t-num t-score">{s.score}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </section>
-      </div>
-
-      <footer className="results__bar">
-        {view.voted ? (
-          <button className="btn btn--secondary btn--xl results__voted" aria-pressed="true" disabled>
-            <Icon name="ok" size="lg" />
-            You voted to play again
-          </button>
-        ) : (
-          <button className="btn btn--primary btn--xl" disabled={!voting} onClick={blurAfter(actions.playAgain)}>
-            <Icon name="refresh" size="lg" />
-            Play again
-          </button>
-        )}
-        <div className="votes" aria-label="Play again votes">
-          <span className="votes__pips" aria-hidden="true">
-            {Array.from({ length: humans }, (_, i) => (
-              <i key={i} className={i < view.votes ? 'on' : undefined}></i>
-            ))}
-          </span>
-          <span>
-            {closed ? (
-              'Room closed'
-            ) : (
-              <>
-                <b className="num" data-bind="results.votes">
-                  {view.votes}/{humans}
-                </b>{' '}
-                want a rematch{view.phase === MatchPhase.Postgame ? ` · ${view.secondsLeft} s` : ''}
-              </>
             )}
-          </span>
+          </section>
+
+          <section className="res__mid" aria-labelledby="st-title">
+            <span className="label label--volt" id="st-title">
+              Final standings
+            </span>
+            <div className="card card--print res__wpn">
+              <table className="wtable mf-standings">
+                <thead>
+                  <tr>
+                    <th scope="col">#</th>
+                    <th scope="col">Player</th>
+                    <th scope="col">Kills</th>
+                    <th scope="col">Deaths</th>
+                    <th scope="col" className="mf-col-dmg">Damage</th>
+                    <th scope="col">Score</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {results.standings.map((s, i) => {
+                    const you = s === me;
+                    const won = !winner.draw && s.placement === 1;
+                    const cls = ['m-p3', 'm-p3--tight', won ? 'is-winner' : '', you ? 'is-you' : '', s.isBot ? 'is-bot' : ''].filter(Boolean).join(' ');
+                    return (
+                      <tr key={s.key} className={cls} style={{ '--i': i } as CSSProperties}>
+                        <td className="num">{won ? <Icon name="trophy" label="Winner" /> : s.placement}</td>
+                        <th scope="row">
+                          <span className="mf-standings__who">
+                            {s.isBot ? (
+                              <span className="avatar avatar--bot">
+                                <Icon name="bot" />
+                              </span>
+                            ) : (
+                              <span className="avatar">{initial(s.name)}</span>
+                            )}
+                            {playerName(s.name, s.isBot)}
+                            {room && !s.left && s.id === room.hostId && (
+                              <span className="tag tag--host">
+                                <Icon name="crown" />
+                                Host
+                              </span>
+                            )}
+                            {you && <span className="tag tag--you">You</span>}
+                            {s.mvp && (
+                              <span className="tag tag--brass">
+                                <Icon name="medal" />
+                                MVP
+                              </span>
+                            )}
+                            {s.isBot && <span className="tag tag--bot">Bot</span>}
+                            {s.left && <span className="tag tag--ghost">Left</span>}
+                          </span>
+                        </th>
+                        <td className="num">{s.kills}</td>
+                        <td className="num">{s.deaths}</td>
+                        <td className="num mf-col-dmg">{thousands(s.damageDealt)}</td>
+                        <td className="num">{s.score}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="res__share" aria-label="Share and play again">
+            {mvp && (
+              <figure className="mvp m-p7" data-bind="results.mvp" aria-label="MVP card">
+                <div className="mvp__inner halftone-ink">
+                  <span className="mvp__kicker">
+                    <Icon name="emblem" className="mvp__emblem" />
+                    Decorated · match MVP · {view.mapName}
+                  </span>
+                  <b className="display mvp__big">MVP</b>
+                  <b className="display mvp__name" data-bind="results.mvp.name">
+                    {playerName(mvp.name, mvp.isBot)}
+                  </b>
+                  <div className="mvp__stats">
+                    <span>
+                      <b className="num">{mvp.kills}</b>kills
+                    </span>
+                    <span>
+                      <b className="num">{mvp.deaths}</b>deaths
+                    </span>
+                    <span>
+                      <b className="num">{thousands(mvp.damageDealt)}</b>damage
+                    </span>
+                  </div>
+                  {code && (
+                    <span className="mvp__cta">
+                      Beat me · room code <b data-bind="room.code">{code}</b>
+                    </span>
+                  )}
+                </div>
+              </figure>
+            )}
+            {code && ctl && (
+              <button className="btn btn--volt btn--xl btn--block m-p8" type="button" onClick={blurAfter(() => void ctl.shareLink(code))}>
+                <Icon name="share" />
+                <span className="btn__stack">
+                  Share the room
+                  <span className="btn__sub">Your share sheet, or the link copied</span>
+                </span>
+              </button>
+            )}
+            <div className="votes card" aria-label="Play again votes">
+              <div className="votes__top">
+                <b>Play again?</b>
+                <span className="pips votes__pips" aria-hidden="true">
+                  {Array.from({ length: humans }, (_, i) => (
+                    <i key={i} className={i < view.votes ? 'on m-p7' : undefined}></i>
+                  ))}
+                </span>
+                <span className="num" data-bind="results.votes">
+                  {closed ? 'Room closed' : `${view.votes}/${humans}${view.phase === MatchPhase.Postgame ? ` · ${view.secondsLeft} s` : ''}`}
+                </span>
+              </div>
+              <div className="votes__act">
+                {view.voted ? (
+                  <button className="btn btn--ghost m-p8" type="button" aria-pressed="true" disabled>
+                    <Icon name="check" />
+                    You voted
+                  </button>
+                ) : (
+                  <button className="btn btn--paper m-p8" type="button" disabled={!voting} onClick={blurAfter(actions.playAgain)}>
+                    <Icon name="refresh" />
+                    Play again
+                  </button>
+                )}
+                {host && (
+                  <button className="btn btn--ghost m-p8" type="button" disabled={closed} onClick={blurAfter(actions.backToLobby)}>
+                    <Icon name="users-plus" />
+                    Back to lobby
+                  </button>
+                )}
+                {(room ?? training) && (
+                  <button className="btn btn--ghost m-p8" type="button" onClick={blurAfter(() => (room ?? training)!.leave())}>
+                    <Icon name={room ? 'door-out' : 'back'} />
+                    {room ? 'Leave room' : 'Home'}
+                  </button>
+                )}
+              </div>
+            </div>
+          </section>
         </div>
-        <span className="topbar__spacer"></span>
-        {host && (
-          <button className="btn btn--secondary btn--xl" disabled={closed} onClick={blurAfter(actions.backToLobby)}>
-            <Icon name="user" />
-            Back to lobby
-          </button>
-        )}
-        {(room ?? training) && (
-          <button className="btn btn--ghost btn--xl" onClick={blurAfter(() => (room ?? training)!.leave())}>
-            <Icon name={room ? 'door-out' : 'back'} />
-            {room ? 'Leave room' : 'Home'}
-          </button>
-        )}
-      </footer>
+      </div>
     </Screen>
   );
 }

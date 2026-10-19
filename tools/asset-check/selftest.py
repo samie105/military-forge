@@ -11,6 +11,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+import bmesh
 import bpy
 
 REPO = Path(__file__).resolve().parents[2]
@@ -120,6 +121,17 @@ def team_orange_frag(objs):
     lin = (1.0, 0.194, 0.0103, 1.0)  # #ff7a1a in linear
     for d in objs["frag"].data.color_attributes[0].data:
         d.color = lin
+
+
+def open_slide(objs):
+    """The Hawk's slide, flagged cutClean, with three faces punched out of its shell."""
+    me = objs["part_slide"].data
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bm.faces.ensure_lookup_table()
+    bmesh.ops.delete(bm, geom=bm.faces[:3], context="FACES")
+    bm.to_mesh(me)
+    bm.free()
 
 
 def claims_casings(objs):
@@ -272,6 +284,7 @@ k47_edit(tmp / "k47_eject_left.glb", eject_left)
 k47_edit(tmp / "k47_no_rail.glb", no_rail)
 k47_edit(tmp / "shield_no_face.glb", no_face, "riot_shield")
 k47_edit(tmp / "dragon_casings.glb", claims_casings, "dragon")
+k47_edit(tmp / "hawk_open_slide.glb", open_slide, "hawk50")
 k47_edit(tmp / "frag_small.glb", shrink_frag, "frag")
 k47_edit(tmp / "shield_short.glb", short_shield, "riot_shield")
 k47_edit(tmp / "frag_orange.glb", team_orange_frag, "frag")
@@ -314,6 +327,8 @@ cases = [
     ("Aviators with a panel down to the shins fail (locality)", "fail", tmp / "aviators_panel.glb", "--kind", "part", "--base", OUTFIT),
     ("K-47 casings ejecting to the left fail", "fail", tmp / "k47_eject_left.glb", "--kind", "weapon"),
     ("K-47 without its top rail fails", "fail", tmp / "k47_no_rail.glb", "--kind", "weapon"),
+    ("Hawk .50 (slide cut clean: a closed shell) passes", "pass", REPO / "art/weapons/hawk50.glb", "--kind", "weapon"),
+    ("Hawk .50 with a hole in its cutClean slide fails", "fail", tmp / "hawk_open_slide.glb", "--kind", "weapon"),
     ("Dragon (no casings, no eject socket) passes", "pass", REPO / "art/weapons/dragon.glb", "--kind", "weapon"),
     ("Dragon marked as throwing casings, with no eject socket, fails", "fail", tmp / "dragon_casings.glb", "--kind", "weapon"),
     ("Riot Shield (shield space, face, grip, ground) passes", "pass", REPO / "art/weapons/riot_shield.glb", "--kind", "weapon"),

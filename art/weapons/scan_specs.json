@@ -1,5 +1,5 @@
 {
- "notes": "Per scanned weapon: how the raw Tripo model is oriented (Blender axes after import), the length it is scaled to (today's lengthM, so holds, sockets and attachments stay valid), the triangle budget, and sockets in normalised side-view coordinates of the final mesh: at = [u, v], u from the butt (0) to the muzzle (1), v from the bottom (0) to the top (1); side 'right' = on the gun's right surface; offset = metres added in the modelling frame (+X right, +Y forward, +Z up); other keys are copied as node extras (dir, lengthM, occupied, boreRadius). plain = [u0, v0, u1, v1] boxes in the same coordinates where the mesh never takes a camo (a barrel or blade that shares the body's colour). drop = metres the gun sits lower in the hand (sockets move with it, the off hand doesn't), so it clears the head at the ±45° aims (tools/asset-check/head_clearance.py). squash = [{box, scale: [along, height] or [along, height, width]}] reshapes a part before the bake (the Widow's shorter scope; the specials flattened whole). glow = hex colours whose clusters glow (lenses, cells, coils); glow_boxes = boxes whose vertices glow (the Dragon's pilot tab). clusters = colour clusters for the flatten (default 7). parts = {part_slide | part_pump | part_bolt | part_cylinder | part_mag: {box, side?, axis, travel (m) | angle (deg)}} cuts a moving part off into its own child mesh (the renderer animates it). build_gun_scan.py reads this; prompts and job ids are recorded in art/README.md.",
+ "notes": "Per scanned weapon: how the raw Tripo model is oriented (Blender axes after import), the length it is scaled to (today's lengthM, so holds, sockets and attachments stay valid), the triangle budget, and sockets in normalised side-view coordinates of the final mesh: at = [u, v], u from the butt (0) to the muzzle (1), v from the bottom (0) to the top (1); side 'right' = on the gun's right surface; offset = metres added in the modelling frame (+X right, +Y forward, +Z up); other keys are copied as node extras (dir, lengthM, occupied, boreRadius). plain = [u0, v0, u1, v1] boxes in the same coordinates where the mesh never takes a camo (a barrel or blade that shares the body's colour). drop = metres the gun sits lower in the hand (sockets move with it, the off hand doesn't), so it clears the head at the ±45° aims (tools/asset-check/head_clearance.py). squash = [{box, scale: [along, height] or [along, height, width]}] reshapes a part before the bake (the Widow's shorter scope; the specials flattened whole). glow = hex colours whose clusters glow (lenses, cells, coils); glow_boxes = boxes whose vertices glow (the Dragon's pilot tab). clusters = colour clusters for the flatten (default 7). parts = {part_slide | part_pump | part_bolt | part_cylinder | part_mag: {box, side?, inset? (m beyond the centreline), bisect? (true: a straight cut along the box; y or false where that costs too many triangles), axis, travel (m) | angle (deg), cutClean?}} cuts a moving part off into its own child mesh, caps both openings dark (review N1), and with cutClean: true lets the renderer animate it. build_gun_scan.py reads this; prompts and job ids are recorded in art/README.md.",
  "weapons": {
   "k47": {
    "concept_job": "ae7264dd-ac9f-4fe6-81c5-8d7fe95c68df",
@@ -27,7 +27,7 @@
    "plain": [[0.715, 0.735, 1.0, 1.0]],
    "drop": 0.04,
    "parts": {
-    "part_cylinder": {"box": [0.455, 0.6, 0.67, 0.92], "axis": [0, 1, 0], "angle": 60}
+    "part_cylinder": {"box": [0.455, 0.6, 0.67, 0.92], "bisect": false, "axis": [0, 1, 0], "angle": 60}
    },
    "sockets": {
     "grip": {"at": [0.2, 0.5], "dir": [0, 1, 0]},
@@ -44,7 +44,7 @@
    "forward": "+y", "up": "+z", "lengthM": 0.424, "tris": 850,
    "drop": 0.04,
    "parts": {
-    "part_mag": {"box": [0.62, 0.0, 0.76, 0.6], "axis": [0, 0, -1], "travel": 0.12}
+    "part_mag": {"box": [0.62, 0.0, 0.76, 0.585], "axis": [0, 0, -1], "travel": 0.12, "cutClean": true}
    },
    "sockets": {
     "grip": {"at": [0.4, 0.48], "dir": [0, 1, 0]},
@@ -62,7 +62,7 @@
    "plain": [[0.565, 0.76, 1.0, 1.0], [0.835, 0.45, 1.0, 0.76]],
    "drop": 0.145,
    "parts": {
-    "part_pump": {"box": [0.585, 0.44, 0.835, 0.77], "axis": [0, -1, 0], "travel": 0.06}
+    "part_pump": {"box": [0.585, 0.44, 0.835, 0.77], "axis": [0, -1, 0], "travel": 0.06, "cutClean": true}
    },
    "sockets": {
     "grip": {"at": [0.32, 0.32], "dir": [0, 1, 0]},
@@ -80,8 +80,8 @@
    "drop": 0.14,
    "squash": [{"box": [0.22, 0.66, 0.69, 1.0], "scale": [0.8, 0.85]}],
    "parts": {
-    "part_bolt": {"box": [0.35, 0.36, 0.43, 0.56], "side": "right", "axis": [0, -1, 0], "travel": 0.05},
-    "part_mag": {"box": [0.41, 0.1, 0.52, 0.34], "axis": [0, 0.243, -0.97], "travel": 0.1}
+    "part_bolt": {"box": [0.35, 0.36, 0.43, 0.56], "side": "right", "inset": 0.042, "axis": [0, -1, 0], "travel": 0.05, "cutClean": true},
+    "part_mag": {"box": [0.41, 0.1, 0.52, 0.3], "axis": [0, 0.243, -0.97], "travel": 0.1}
    },
    "sockets": {
     "grip": {"at": [0.29, 0.3], "dir": [0, 1, 0]},
@@ -109,7 +109,7 @@
    "forward": "+y", "up": "+z", "lengthM": 0.281, "tris": 800,
    "drop": 0.02,
    "parts": {
-    "part_slide": {"box": [0.03, 0.75, 0.95, 1.0], "axis": [0, -1, 0], "travel": 0.03}
+    "part_slide": {"box": [0.03, 0.75, 1.0, 1.0], "axis": [0, -1, 0], "travel": 0.03, "cutClean": true}
    },
    "sockets": {
     "grip": {"at": [0.22, 0.45], "dir": [0.0, 1.0, 0.0]},
@@ -127,7 +127,7 @@
    "plain": [[0.05, 0.0, 0.28, 0.39]],
    "drop": 0.055,
    "parts": {
-    "part_mag": {"box": [0.05, 0.0, 0.28, 0.39], "axis": [0, -0.243, -0.97], "travel": 0.12}
+    "part_mag": {"box": [0.05, 0.0, 0.28, 0.39], "axis": [0, -0.243, -0.97], "travel": 0.12, "cutClean": true}
    },
    "sockets": {
     "grip": {"at": [0.22, 0.6], "dir": [0.0, 1.0, 0.0]},
@@ -162,9 +162,6 @@
    "model_job": "da475499-9553-4882-94f3-f3c20de8ad28",
    "forward": "+y", "up": "+z", "lengthM": 0.629, "tris": 900,
    "drop": 0.15,
-   "parts": {
-    "part_mag": {"box": [0.1, 0.2, 0.25, 0.62], "axis": [0, -0.196, -0.981], "travel": 0.1}
-   },
    "sockets": {
     "grip": {"at": [0.38, 0.28], "dir": [0.0, 1.0, 0.0]},
     "muzzle": {"at": [1.0, 0.775], "dir": [0.0, 1.0, 0.0]},
@@ -201,7 +198,7 @@
    "plain": [[0.835, 0.0, 1.0, 1.0], [0.42, 0.15, 0.53, 0.4], [0.25, 0.74, 0.64, 1.0]],
    "drop": 0.13,
    "parts": {
-    "part_mag": {"box": [0.42, 0.15, 0.53, 0.4], "axis": [0, 0, -1], "travel": 0.1}
+    "part_mag": {"box": [0.42, 0.15, 0.53, 0.37], "axis": [0, 0, -1], "travel": 0.1, "cutClean": true}
    },
    "sockets": {
     "grip": {"at": [0.31, 0.28], "dir": [0.0, 1.0, 0.0]},
@@ -254,7 +251,7 @@
    "drop": 0.07,
    "squash": [{"box": [0.0, 0.0, 1.0, 1.0], "scale": [1, 0.52, 0.52]}],
    "parts": {
-    "part_mag": {"box": [0.27, 0.0, 0.7, 0.53], "axis": [0, 0, -1], "travel": 0.08}
+    "part_mag": {"box": [0.27, 0.0, 0.7, 0.53], "bisect": false, "axis": [0, 0, -1], "travel": 0.08}
    },
    "sockets": {
     "grip": {"at": [0.12, 0.35], "dir": [0.0, 1.0, 0.0]},
@@ -275,7 +272,7 @@
    "drop": 0.07,
    "squash": [{"box": [0.0, 0.0, 1.0, 1.0], "scale": [1, 0.57, 0.57]}],
    "parts": {
-    "part_mag": {"box": [0.33, 0.66, 0.555, 0.78], "side": "right", "axis": [1, 0, 0], "travel": 0.05}
+    "part_mag": {"box": [0.33, 0.66, 0.555, 0.78], "side": "right", "axis": [1, 0, 0], "travel": 0.05, "cutClean": true}
    },
    "sockets": {
     "grip": {"at": [0.3, 0.25], "dir": [0.0, 1.0, 0.0]},

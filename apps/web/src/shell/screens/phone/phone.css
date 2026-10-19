@@ -1,6 +1,6 @@
 /*
- * The phone menus (m-home, m-lobby, m-pause, m-results) in the app: the kit's .pm-* screens
- * (ui/kit.css) at 812×375 design pixels, zoomed by fit.ts's --phone-fit, plus what the app adds
+ * The phone menus (m-home, m-lobby, m-pause, m-results; the name entry and the touch tips) in the app:
+ * the kit's .pm-* screens (ui/kit.css) at 812×375 design pixels, zoomed by fit.ts's --phone-fit, plus what the app adds
  * (real buttons for the kit's tickets, the bottom sheet, the share chip, the warm-up strip). The motion
  * is the shared system at phone distances (docs/design/ui-motion-spec.md §4.2). Tokens only.
  */
@@ -42,8 +42,7 @@ html.reduce-motion .mf-fit--phone { --m-rise: 0px; }
 .mf-fit--phone .pm-brand .display { font-size: calc(24px * var(--pm-head)); }
 
 /* every target at least 48 px: the kit's 40 px avatar reaches further than it draws */
-.mf-fit--phone .pm-av { position: relative; cursor: pointer; }
-.mf-fit--phone .pm-av::after { content: ''; position: absolute; inset: -4px; }
+.mf-fit--phone .pm-av { width: var(--touch-min); height: var(--touch-min); cursor: pointer; }
 .mf-fit--phone .seg__opt { min-height: var(--touch-min); }
 
 /* ---- home ---- */
@@ -57,7 +56,7 @@ html.reduce-motion .mf-fit--phone { --m-rise: 0px; }
 
 /* ---- lobby ---- */
 .pm-code { white-space: nowrap; }
-.pm-warm { min-height: var(--touch-min); padding: 0 12px; cursor: pointer; }
+.mf-fit--phone .pm-warm { min-height: var(--touch-min); padding: 0 12px; cursor: pointer; }
 .pm-share { position: relative; }
 .pm-qr--wide { grid-column: 1 / -1; }
 .pm-qr--wide > span:last-child b { font-size: var(--fs-16); }
@@ -130,6 +129,87 @@ html.reduce-motion .pm-sheet.is-leaving { animation-name: pm-fade-out; }
 .is-text-lg .pm-score { width: 300px; }
 .is-text-lg .pm-score__row { flex-wrap: wrap; gap: 6px 14px; }
 .is-text-lg .pm > * { flex-shrink: 0; }
+.is-text-lg .pm-roster .pm-bar { position: sticky; bottom: 0; z-index: var(--z-local-2); margin: 0 -12px -8px; padding: 6px 12px 8px; background: var(--c-ink-800); border-top: 2px solid var(--c-line); }
+.is-text-lg .pm-pause { gap: 6px; padding: 10px 14px; }
+.is-text-lg .pm-pause .eyebrow { display: none; }
+.is-text-lg .pm-pause__t { font-size: calc(36px * var(--pm-head)); }
+.is-text-lg .pm-pause .btn { min-height: var(--touch-min); padding-block: 4px; }
 .is-text-lg :is(.pm-home, .pm-lobby) { flex: none; min-height: 0; }
 .is-text-lg .pm--res { align-items: flex-start; }
 .is-text-lg .pm-roster ol { overflow: visible; }
+
+/* ---- settings (no kit frame: built from the phone menus' parts) ---- */
+.pm--set { gap: 6px; }
+.pm-set-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 156px 1fr; gap: 10px; }
+.pm-rail { display: flex; flex-direction: column; gap: 4px; overflow-y: auto; }
+.pm-rail__i { display: flex; align-items: center; gap: 8px; min-height: var(--touch-min); padding: 0 10px; border-radius: var(--r-sm); background: var(--c-plate); border: 2px solid var(--c-line); color: var(--c-muted); font-size: var(--fs-14); font-weight: var(--fw-black); text-transform: uppercase; cursor: pointer; }
+.pm-rail__i.is-on { background: var(--c-paper); color: var(--c-paper-text); border-color: var(--c-ink-950); }
+.pm-rail__i span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-set-panel { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 6px 12px; display: flex; flex-direction: column; }
+.pm-set { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 4px 0; border-bottom: 1px solid var(--c-line); }
+.pm-set:last-child { border-bottom: 0; }
+.pm-set__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pm-set__text b { font-size: var(--fs-16); }
+.pm-set__text span { font-size: var(--fs-14); color: var(--c-muted); }
+.pm-set__ctl { display: flex; align-items: center; gap: 6px; flex: none; max-width: 62%; flex-wrap: wrap; justify-content: flex-end; }
+.pm-set__slider { display: flex; align-items: center; gap: 8px; width: 240px; max-width: 100%; }
+.pm-set__slider .slider { flex: 1; min-width: 0; }
+.pm-set__slider output { min-width: 3.2em; text-align: right; font-size: var(--fs-14); }
+.mf-fit--phone .switch { min-height: var(--touch-min); }
+.is-text-lg .pm-set { flex-wrap: wrap; }
+.is-text-lg .pm-set__ctl { max-width: 100%; }
+.is-text-lg .pm-set-body { grid-template-columns: 64px 1fr; }
+.is-text-lg .pm-rail__i span { display: none; }
+.is-text-lg .pm--set .pm-top .btn--ghost:not(.btn--icon) { font-size: 0; gap: 0; padding: 0 12px; }
+
+/*
+ * ---- touch tips (the first-run card on a phone): in the gap between the move dial (its rings and the
+ * fuel tag reach x 214) and the aim cluster (the next-grenade button starts at x 468), under the warm-up strip
+ * and above the take button; mirrored for the left hand. Opaque: the countdown can sit behind it.
+ * The rows scroll at large text; Got it stays on the card.
+ */
+.pm-tips { position: absolute; top: 50px; left: 224px; width: 238px; max-height: 244px; display: flex; flex-direction: column; gap: 6px; padding: 8px 12px 10px; background: var(--c-ink-900); pointer-events: auto; }
+.pm-tips.is-left { left: auto; right: 224px; }
+.pm-tips__list { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.pm-tips__row { display: flex; align-items: flex-start; gap: 8px; }
+.pm-tips__ic { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; color: var(--c-volt); box-shadow: inset 0 0 0 2px currentColor; }
+.pm-tips__ic .ic { width: 14px; height: 14px; }
+.pm-tips__text { display: flex; flex-direction: column; min-width: 0; font-size: var(--fs-14); line-height: 1.2; }
+.pm-tips__text b { font-weight: var(--fw-black); text-transform: uppercase; letter-spacing: 0.04em; }
+.pm-tips__actions { flex: none; display: flex; gap: 6px; }
+.pm-tips__actions .btn { min-height: var(--touch-min); padding-inline: 10px; white-space: nowrap; }
+.pm-tips__actions .btn--volt { flex: 1; }
+.pm-tips__actions .btn--icon { flex: none; width: var(--touch-min); padding: 0; }
+
+/* ---- name entry (no kit frame: round two's name-entry parts at phone size; the typing band on top, clear of the keyboard) ---- */
+.mf-fit--phone .pm.pm-ne { display: grid; grid-template-columns: 220px 1fr; gap: 24px; align-items: start; }
+.pm-ne__card { padding-top: 18px; }
+.pm-id { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 10px 12px 12px; border: var(--bw-chunky) solid var(--c-ink-950); border-radius: var(--r-md); box-shadow: var(--sh-card-sm); rotate: -3deg; }
+.pm-id__photo { display: grid; place-items: center; height: 132px; margin-bottom: 6px; border: var(--bw-chunky) solid var(--c-ink-950); border-radius: var(--r-sm); background-color: var(--c-volt); color: var(--c-ink-950); }
+.pm-id__photo .ic { width: 80px; height: 80px; stroke-width: 1.4; }
+.pm-id .serial { color: var(--c-olive-600); opacity: 1; font-size: var(--fs-14); }
+.pm-id__name { font-size: calc(32px * var(--pm-head)); color: var(--c-paper-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-id__meta { display: flex; align-items: baseline; gap: 6px; padding-top: 4px; border-top: var(--bw) dashed var(--c-paper-line); font-size: var(--fs-14); }
+.pm-id__stamp { position: absolute; right: 10px; top: 112px; rotate: -12deg; background: var(--c-paper); font-size: var(--fs-16); }
+.pm-ne__form { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding-top: 6px; }
+.pm-ne__head { display: flex; flex-direction: column; gap: 2px; }
+.pm-ne__row { display: flex; align-items: stretch; gap: 8px; }
+:where(.kit-v2) .pm-ne__input { flex: 1; min-width: 0; min-height: 56px; padding: 0 12px; gap: 8px; font-size: calc(28px * var(--pm-head)); cursor: text; }
+.pm-ne__field { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; padding: 0; background: transparent; color: inherit; font: inherit; font-stretch: inherit; }
+.pm-ne__field:focus-visible { box-shadow: none; }
+.pm-ne__field::placeholder { color: var(--c-paper-muted); opacity: 1; }
+.pm-ne__input:focus-within { outline: 3px solid var(--c-volt); outline-offset: 2px; }
+.pm-ne__input .input__count { font-size: var(--fs-14); }
+.pm-ne__row .btn { min-height: 56px; padding-inline: 14px; white-space: nowrap; }
+.pm-ne__check { min-height: 24px; display: flex; align-items: center; }
+.pm-ne__check .status { font-size: var(--fs-16); }
+.pm-ne__help { color: var(--c-muted); font-size: var(--fs-14); }
+.pm-ne__sugg { display: flex; flex-wrap: wrap; gap: 6px; }
+.pm-ne__sugg .btn { min-height: var(--touch-min); }
+.pm-ne__more { display: flex; align-items: center; gap: 12px; }
+.pm-ne__more .btn { flex: none; min-height: var(--touch-min); }
+.is-text-lg .pm-tips__ic { display: none; }
+.is-text-lg .pm-tips .eyebrow { display: none; }
+.mf-fit--phone.is-text-lg .pm.pm-ne { grid-template-columns: 1fr; }
+.is-text-lg .pm-ne__card { display: none; }
+.is-text-lg .pm-ne__more { flex-wrap: wrap; gap: 4px 12px; }

@@ -6,6 +6,7 @@ PASS  one mesh, one material                                 1 draw call(s)
 INFO  GPU texture memory (KTX2 est.)                         0.00 MB, 0 image(s)
 PASS  extras weaponId/family/aimPose/hands                   ok
 PASS  weaponId in packages/content                           mine
+PASS  node names exact (no Blender .001 suffix)              ok
 INFO  nodes                                                  grip, ground, light
 PASS  origin on the weapon (the grip)                        bbox (-0.1, -0.06, -0.1)..(0.1, 0.04, 0.1)
 PASS  family is a docs/04 §4.2 family                        'thrown'
@@ -18,5 +19,5 @@ PASS  sockets for the family                                 grip
 PASS  socket directions (unit `dir`)                         ok
 PASS  sockets on the weapon (within 3 cm)                    ok
 -----------------------------------------------------------------------------------------------------------------
-RESULT: PASS  (14 pass, 0 warn, 0 fail)
+RESULT: PASS  (15 pass, 0 warn, 0 fail)
 

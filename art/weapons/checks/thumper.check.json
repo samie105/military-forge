@@ -39,9 +39,14 @@
       "detail": "ok"
     },
     {
-      "status": "WARN",
+      "status": "PASS",
       "check": "weaponId in packages/content",
-      "detail": "thumper is not in packages/content/src/{weapons,grenades}.ts yet"
+      "detail": "thumper"
+    },
+    {
+      "status": "PASS",
+      "check": "node names exact (no Blender .001 suffix)",
+      "detail": "ok"
     },
     {
       "status": "INFO",

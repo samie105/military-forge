@@ -6,12 +6,12 @@
     {
       "status": "INFO",
       "check": "file size",
-      "detail": "114 KB"
+      "detail": "121 KB"
     },
     {
       "status": "PASS",
       "check": "triangles",
-      "detail": "776 of 1000 (body and 1 parts)"
+      "detail": "932 of 1000 (body and 1 parts)"
     },
     {
       "status": "PASS",
@@ -39,9 +39,14 @@
       "detail": "ok"
     },
     {
-      "status": "WARN",
+      "status": "PASS",
       "check": "weaponId in packages/content",
-      "detail": "hawk50 is not in packages/content/src/{weapons,grenades}.ts yet"
+      "detail": "hawk50"
+    },
+    {
+      "status": "PASS",
+      "check": "node names exact (no Blender .001 suffix)",
+      "detail": "ok"
     },
     {
       "status": "INFO",
@@ -86,7 +91,7 @@
     {
       "status": "PASS",
       "check": "muzzle fires along +Y with a bore radius",
-      "detail": "dir (0.0, 1.0, 0.0), bore 0.023 m"
+      "detail": "dir (0.0, 1.0, 0.0), bore 0.025 m"
     },
     {
       "status": "PASS",
@@ -106,7 +111,7 @@
     {
       "status": "PASS",
       "check": "moving part part_slide",
-      "detail": "271 tris, axis (0.0, -1.0, 0.0), travel 0.03 m"
+      "detail": "396 tris, axis (0.0, -1.0, 0.0), travel 0.03 m, cut clean (closed)"
     }
   ]
 }

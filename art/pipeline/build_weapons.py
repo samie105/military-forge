@@ -428,15 +428,16 @@ def gas(g):  # toxic gas grenade: a squat canister with a hazard band and a valv
     g.ground(-top)
 
 
-def flash(g):  # flashbang: a slotted steel cylinder
-    h, r = 0.20, 0.08
-    # mid steel with light slots, so it reads darker than the pale smoke canister beside it
-    g.cyl((0, 0, 0), r, h, STEEL, axis="Z", verts=14, bevel=0.005)
-    for z in (-h / 2 + 0.01, h / 2 - 0.01):
-        g.cyl((0, 0, z), r * 1.03, 0.02, DARK, axis="Z", verts=14, bevel=0)              # end caps
+def flash(g):  # flashbang: a spool, two wide dark end plates round a narrow slotted core
+    # Its side view is an "I", not a block: the smoke canister beside it is a tall pale block, and the
+    # review found the two slotted cylinders too alike. The core is mid steel with bright slots.
+    h, r, core, plate = 0.19, 0.086, 0.052, 0.034
+    g.cyl((0, 0, 0), core, h - 2 * plate + 0.004, STEEL, axis="Z", verts=12, bevel=0.003)
+    for z in (-(h - plate) / 2, (h - plate) / 2):
+        g.cyl((0, 0, z), r, plate, DARK, axis="Z", verts=14, bevel=0.005)               # the end plates
     for i in range(6):                                                                   # the slots
         a = i * math.pi / 3
-        g.box((r * math.cos(a), r * math.sin(a), 0.0), (0.012, 0.018, 0.12), WHITE, rot=(0, 0, math.degrees(a)), bevel=0)
+        g.box((core * math.cos(a), core * math.sin(a), 0.0), (0.008, 0.016, 0.1), WHITE, rot=(0, 0, math.degrees(a)), bevel=0)
     _fuse(g, h / 2)
     g.ground(-h / 2)
 

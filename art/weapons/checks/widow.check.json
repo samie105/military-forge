@@ -6,12 +6,12 @@
     {
       "status": "INFO",
       "check": "file size",
-      "detail": "123 KB"
+      "detail": "124 KB"
     },
     {
       "status": "PASS",
       "check": "triangles",
-      "detail": "950 of 1000 (body and 2 parts)"
+      "detail": "992 of 1000 (body and 2 parts)"
     },
     {
       "status": "PASS",
@@ -42,6 +42,11 @@
       "status": "PASS",
       "check": "weaponId in packages/content",
       "detail": "widow"
+    },
+    {
+      "status": "PASS",
+      "check": "node names exact (no Blender .001 suffix)",
+      "detail": "ok"
     },
     {
       "status": "INFO",
@@ -111,12 +116,12 @@
     {
       "status": "PASS",
       "check": "moving part part_bolt",
-      "detail": "46 tris, axis (0.0, -1.0, 0.0), travel 0.05 m"
+      "detail": "40 tris, axis (0.0, -1.0, 0.0), travel 0.05 m, cut clean (closed)"
     },
     {
       "status": "PASS",
       "check": "moving part part_mag",
-      "detail": "46 tris, axis (0.0, 0.24, -0.97), travel 0.1 m"
+      "detail": "74 tris, axis (0.0, 0.24, -0.97), travel 0.1 m"
     }
   ]
 }

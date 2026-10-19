@@ -6,7 +6,8 @@
  *     preview's page background;
  *   - the review tooling (.dev-* and its --c-dev-* tokens) and the preview images (the kit's last
  *     <style>: .world-*, .art-*) are left out;
- *   - the join code's caret cell is .codebox__cell.is-caret (the preview pinned it to one cell);
+ *   - the join code's caret cell is .codebox__cell.is-caret (the preview pinned it to one cell), and
+ *     an empty one .is-empty too (the app's cells are inputs, never :empty);
  *   - fonts: the kit's Google Fonts <link> is replaced by the same two families served from this site
  *     (fonts.css, @fontsource, SIL OFL); the tokens keep the kit's fallbacks.
  *   - while round one's screens are still being ported (docs/design/ui-v2-wiring-brief.md), the rules
@@ -570,9 +571,9 @@ a.ticket{ color:var(--c-paper-text); }
 .join__title{ font-size:var(--fs-180); }
 :where(.kit-v2) .codebox{ position:relative; display:flex; gap:var(--sp-5); margin-top:var(--sp-3); }
 :where(.kit-v2) .codebox__cell{ display:grid; place-items:center; width:150px; height:184px; background:var(--c-paper); color:var(--c-paper-text); border:var(--bw-chunky) solid var(--c-ink-950); border-bottom-width:12px; border-radius:var(--r-md); font:var(--fw-display) var(--fs-code)/1 var(--f-display); box-shadow:var(--sh-card-sm); }
-:where(.kit-v2) .codebox__cell:empty{ background:var(--c-ink-800); border-color:var(--c-line-strong); box-shadow:none; }
+:where(.kit-v2) .codebox__cell:empty,:where(.kit-v2) .codebox__cell.is-empty{ background:var(--c-ink-800); border-color:var(--c-line-strong); box-shadow:none; }
 .codebox__stamp{ position:absolute; right:40px; top:-34px; background:var(--c-ink-900); transform:rotate(8deg); }
-:where(.kit-v2) [data-active-state~="typing"] .codebox__cell:nth-child(4),:where(.kit-v2) [data-active-state~="empty"] .codebox__cell:nth-child(1){ border-color:var(--c-volt); box-shadow:var(--sh-ring) var(--c-volt-soft); background-image:linear-gradient(var(--c-volt),var(--c-volt)); background-size:6px 96px; background-position:center; background-repeat:no-repeat; }
+:where(.kit-v2) .codebox__cell.is-caret{ border-color:var(--c-volt); box-shadow:var(--sh-ring) var(--c-volt-soft); background-image:linear-gradient(var(--c-volt),var(--c-volt)); background-size:6px 96px; background-position:center; background-repeat:no-repeat; }
 :where(.kit-v2) [data-active-state~="pasted"] .codebox__cell{ box-shadow:var(--sh-off-sm) var(--c-ok); }
 :where(.kit-v2) [data-active-state~="error"] .codebox__cell{ background:var(--c-hp); color:var(--c-hp-ink); box-shadow:var(--sh-off-sm) var(--c-ink-950); }
 :where(.kit-v2) [data-active-state~="error"] .codebox{ animation:shake 320ms var(--ease-out) 1; }

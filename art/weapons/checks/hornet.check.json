@@ -6,12 +6,12 @@
     {
       "status": "INFO",
       "check": "file size",
-      "detail": "119 KB"
+      "detail": "125 KB"
     },
     {
       "status": "PASS",
       "check": "triangles",
-      "detail": "872 of 1000 (body and 1 parts)"
+      "detail": "986 of 1000 (body and 1 parts)"
     },
     {
       "status": "PASS",
@@ -39,9 +39,14 @@
       "detail": "ok"
     },
     {
-      "status": "WARN",
+      "status": "PASS",
       "check": "weaponId in packages/content",
-      "detail": "hornet is not in packages/content/src/{weapons,grenades}.ts yet"
+      "detail": "hornet"
+    },
+    {
+      "status": "PASS",
+      "check": "node names exact (no Blender .001 suffix)",
+      "detail": "ok"
     },
     {
       "status": "INFO",
@@ -111,7 +116,7 @@
     {
       "status": "PASS",
       "check": "moving part part_mag",
-      "detail": "83 tris, axis (0.0, 0.0, -1.0), travel 0.12 m"
+      "detail": "134 tris, axis (0.0, 0.0, -1.0), travel 0.12 m"
     }
   ]
 }

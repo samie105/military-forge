@@ -8,7 +8,7 @@
  *   sharedElement(from, to)    P2: FLIP: `to` starts where `from` was and travels to its own place
  *   rollText(el, next)         P4: a number's changed digits roll (old up and out, new up from below)
  *   moveIndicator(el, x, w)    P5: an underline or knob whose leading edge leads and trailing edge settles
- *   flood(from, options)       P6: a circle grows from the trigger past the far corner, then clears
+ *   flood(from, options)       P6: a circle grows from the trigger past the far corner, then contracts onto the next screen's anchor
  *
  * Every helper takes over from whatever ran before (no queues, nothing waits on an animation), and
  * under Reduce motion becomes an opacity change of 120 ms at most, or nothing. Never use these on a
@@ -175,29 +175,48 @@ export function floodRadius(x: number, y: number, w: number, h: number): number 
   return Math.ceil(Math.max(Math.hypot(x, y), Math.hypot(w - x, y), Math.hypot(x, h - y), Math.hypot(w - x, h - y)));
 }
 
+/** Where a flood contracts to: an element (its centre), a point, or one looked up once it has covered the screen. */
+export type FloodAnchor = Element | { x: number; y: number };
+
 /**
- * P6: a circle grows from the trigger (an element, or a point) past the farthest corner in ~320 ms,
- * then clears; at most one on screen (a new one replaces it). `color` defaults to --c-volt. Big
- * moments only: GO, a match won. Reduce flashes keeps it faint (kit.css); Reduce motion skips it.
+ * P6: a circle grows from the trigger (an element, or a point) past the farthest corner in 320 ms,
+ * then contracts onto the next screen's anchor (`to`; the trigger when there is none), uncovering
+ * it. `onCovered` runs when the screen is covered (the next screen's entrances start then). At most
+ * one on screen (a new one replaces it). `color` defaults to --c-volt. Big moments only: GO, a match
+ * won. Reduce flashes keeps it faint (kit.css); Reduce motion skips it (and `onCovered` runs at once).
  */
-export function flood(from: Element | { x: number; y: number }, options: { color?: string } = {}): Promise<void> {
+export function flood(
+  from: FloodAnchor,
+  options: { color?: string; to?: FloodAnchor | (() => FloodAnchor | null); onCovered?: () => void } = {},
+): Promise<void> {
   const doc = globalThis.document;
-  if (!doc || reduced()) return Promise.resolve();
+  if (!doc || reduced() || typeof doc.body?.animate !== 'function') {
+    options.onCovered?.();
+    return Promise.resolve();
+  }
   doc.querySelector('.m-p6')?.remove();
-  const point = 'getBoundingClientRect' in from ? centre(from.getBoundingClientRect()) : from;
-  const r = floodRadius(point.x, point.y, innerWidth, innerHeight);
-  const circle = doc.createElement('div');
-  circle.className = 'm-p6';
-  circle.setAttribute('aria-hidden', 'true');
-  Object.assign(circle.style, { left: `${point.x - r}px`, top: `${point.y - r}px`, width: `${r * 2}px`, height: `${r * 2}px` });
-  if (options.color) circle.style.setProperty('--m-flood', options.color);
-  doc.body.append(circle);
-  const grow = circle.animate([{ transform: 'scale(0)' }, { transform: 'scale(1)' }], { duration: 320, easing: token('--ease-travel', 'ease-in-out'), fill: 'forwards' });
+  const at = (p: FloodAnchor) => ('getBoundingClientRect' in p ? centre(p.getBoundingClientRect()) : p);
+  const circle = (r: number, p: { x: number; y: number }) => `circle(${r}px at ${p.x}px ${p.y}px)`;
+  const a = at(from);
+  const sheet = doc.createElement('div');
+  sheet.className = 'm-p6';
+  sheet.setAttribute('aria-hidden', 'true');
+  Object.assign(sheet.style, { left: '0', top: '0', width: '100%', height: '100%', borderRadius: '0' });
+  if (options.color) sheet.style.setProperty('--m-flood', options.color);
+  doc.body.append(sheet);
+  const travel = token('--ease-travel', 'ease-in-out');
+  const grow = sheet.animate([{ clipPath: circle(0, a) }, { clipPath: circle(floodRadius(a.x, a.y, innerWidth, innerHeight), a) }], { duration: 320, easing: travel, fill: 'forwards' });
   return grow.finished
-    .then(() => circle.animate([{ opacity: 1 }, { opacity: 0 }], { duration: tokenMs('--m-base', 240), easing: token('--ease-leave', 'ease-in'), fill: 'forwards' }).finished)
+    .then(() => {
+      options.onCovered?.();
+      const to = typeof options.to === 'function' ? options.to() : options.to;
+      const b = to ? at(to) : a;
+      const r = floodRadius(b.x, b.y, innerWidth, innerHeight);
+      return sheet.animate([{ clipPath: circle(r, b) }, { clipPath: circle(0, b) }], { duration: 320, easing: travel, fill: 'forwards' }).finished;
+    })
     .then(
-      () => circle.remove(),
-      () => circle.remove(),
+      () => sheet.remove(),
+      () => sheet.remove(),
     );
 }
 

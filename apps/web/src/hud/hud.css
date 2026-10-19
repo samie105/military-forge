@@ -25,8 +25,17 @@ html[data-touch-controls] #hud .mf-hud-fit:not(.mf-hud-fit--phone) { display: no
 #hud .mf-hud-desktop .slot--held .ic--wpn-lg { color: var(--c-text); }
 /* three-digit vitals (100 HP, 100 fuel) at the HUD's number size */
 #hud .mf-hud-desktop .vital { grid-template-columns: 24px 80px minmax(0, 1fr); }
-/* the crate's gun names stay on one line */
+/* the crate's gun names stay on one line, and the card grows to fit them (two long names, big text) */
 #hud .pickup__gun { white-space: nowrap; }
+#hud .mf-hud-desktop .pickup { width: max-content; min-width: 480px; }
+/* a window narrower than the kit's 1920 (the HUD keeps its text readable, so its design gets
+   narrower): the bottom-centre prompt no longer fits between the vitals and the slots, so it sits
+   above them */
+#hud .mf-hud-desktop { container-type: inline-size; }
+@container (max-width: 1927px) {
+  /* …a little smaller, so it stays low and off the middle of the screen */
+  #hud .mf-hud-desktop .pickup { bottom: calc(var(--hud-m) + var(--safe-b) + 232px); scale: 0.8; transform-origin: 50% 100%; }
+}
 /* the net plate's signal in the ping's colour */
 #hud .hud-net[data-tone="warn"] { color: var(--c-warn); }
 #hud .hud-net[data-tone="bad"] { color: var(--c-hp); }

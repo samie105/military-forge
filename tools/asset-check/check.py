@@ -31,6 +31,7 @@ import struct
 import sys
 from pathlib import Path
 
+import bmesh
 import bpy
 import numpy as np
 from mathutils import Vector
@@ -762,17 +763,19 @@ def check_weapon(r: Report, objs, args):
              f"{o.length:.3f} m" if o is not None else "no offhand node (two-handed)")
     check_sockets(r, objs, family, lo, hi, props.get("casings", True))
     if parts:
-        check_parts(r, parts, lo, hi)
+        check_parts(r, parts, lo, hi, body)
 
 
 PART_KINDS = {"part_slide", "part_pump", "part_bolt", "part_cylinder", "part_mag"}
 
 
-def check_parts(r: Report, parts, lo, hi):
+def check_parts(r: Report, parts, lo, hi, body=()):
     """Moving parts (the owner's request, 18 Oct): `part_*` child meshes the renderer animates when the gun
     fires or reloads. Each must be a known kind, have triangles, sit on the weapon, and carry its motion in
     extras: a unit `axis` in the weapon frame and a `travel` in metres (slide, pump, bolt, mag) or an
-    `angle` in degrees (cylinder)."""
+    `angle` in degrees (cylinder). A part flagged `cutClean` (the renderer only moves those; review N1) must
+    be a closed shell once its seams are welded, and so must the body where the part sits: an open edge on
+    either is a cut that shows when the part moves."""
     for o in sorted(parts, key=lambda o: o.name):
         name = o.name.split(".")[0]
         problems = []
@@ -791,9 +794,43 @@ def check_parts(r: Report, parts, lo, hi):
         plo, phi = bbox([p for t in world_tris([o]) for p in t]) if n else (lo, hi)
         if any(plo[i] < lo[i] - 0.02 or phi[i] > hi[i] + 0.02 for i in range(3)):
             problems.append("outside the weapon's bounds")
+        clean = o.get("cutClean")
+        if clean is not None and clean is not True and clean != 1:
+            problems.append("`cutClean` is only ever true")
+        if clean:
+            k = open_edges(o)
+            if k:
+                problems.append(f"flagged `cutClean` but has {k} open edges")
+            # the opening it leaves in the body (seen once it moves): open body edges within 1 cm of it
+            plo, phi = bbox([p for t in world_tris([o]) for p in t])
+            near = sum(open_edges(b, (plo - Vector((0.01,) * 3), phi + Vector((0.01,) * 3))) for b in body)
+            if near:
+                problems.append(f"flagged `cutClean` but leaves {near} open edges in the body where it sits")
         motion = f"travel {travel} m" if travel is not None else f"angle {angle}°"
         r.ok(not problems, f"moving part {name}",
-             "; ".join(problems) if problems else f"{n} tris, axis {tuple(round(float(c), 2) for c in a)}, {motion}")
+             "; ".join(problems) if problems else f"{n} tris, axis {tuple(round(float(c), 2) for c in a)}, {motion}"
+             + (", cut clean (closed)" if clean else ""))
+
+
+def open_edges(o, within=None):
+    """Edges with one face once coincident vertices (UV and normal splits) are welded; with `within`
+    (lo, hi in world space), only those whose middle lies in that box."""
+    bm = bmesh.new()
+    bm.from_mesh(o.data)
+    # 0.1 mm: the glTF splits are exact copies, but the runtime's quantised positions (meshopt, up to ~0.07 mm
+    # steps on a 1.15 m gun) can part two vertices the source file has within a micron of each other
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-4)
+    n = 0
+    for e in bm.edges:
+        if not e.is_boundary:
+            continue
+        if within is not None:
+            m = o.matrix_world @ ((e.verts[0].co + e.verts[1].co) / 2)
+            if not all(within[0][i] <= m[i] <= within[1][i] for i in range(3)):
+                continue
+        n += 1
+    bm.free()
+    return n
 
 
 def _gltf(v):

@@ -6,7 +6,7 @@
     {
       "status": "INFO",
       "check": "file size",
-      "detail": "27 KB"
+      "detail": "26 KB"
     },
     {
       "status": "PASS",
@@ -32,6 +32,11 @@
       "status": "WARN",
       "check": "weaponId in packages/content",
       "detail": "riot_shield is not in packages/content/src/{weapons,grenades}.ts yet"
+    },
+    {
+      "status": "PASS",
+      "check": "node names exact (no Blender .001 suffix)",
+      "detail": "ok"
     },
     {
       "status": "INFO",

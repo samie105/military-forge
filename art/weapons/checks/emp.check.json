@@ -34,6 +34,11 @@
       "detail": "emp"
     },
     {
+      "status": "PASS",
+      "check": "node names exact (no Blender .001 suffix)",
+      "detail": "ok"
+    },
+    {
       "status": "INFO",
       "check": "nodes",
       "detail": "grip, ground, light"

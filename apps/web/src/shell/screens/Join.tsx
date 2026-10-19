@@ -1,5 +1,5 @@
 /**
- * 3 · Join with code (the kit's data-screen="join"): six letter boxes; typing moves along, Backspace
+ * 3 · Join with code (round two's data-screen="join"): six letter boxes; typing moves along, Backspace
  * moves back, and a pasted link or code (anywhere on the screen) fills them. The API says whether
  * the room exists before the game connects: "No room with that code" stays on this screen.
  */
@@ -9,6 +9,7 @@ import { Icon } from '../../ui/Icon';
 import { Cap } from '../../ui/Kbd';
 import { Screen } from '../../ui/Screen';
 import { useCtl } from '../context';
+import { Backdrop, Hint, Hints, NetPill } from './frame';
 
 export type JoinState = 'empty' | 'typing' | 'pasted' | 'ready' | 'error';
 
@@ -81,140 +82,150 @@ export function Join() {
     else if (e.key === 'Enter') void join();
   };
 
+  const pasteLink = () =>
+    void navigator.clipboard
+      ?.readText()
+      .then((t) => fill(t, true))
+      .catch(() => setError('Paste with Ctrl+V (or ⌘V): the browser kept the clipboard to itself'));
+
   return (
-    <Screen name="join" kind="menu" states={[state === 'ready' ? 'pasted' : state]} label="Join with code">
-      <header className="topbar">
-        <button className="btn btn--ghost" onClick={() => ctl.closeOverlay()}>
-          <Icon name="back" />
-          Home
-        </button>
-        <span className="topbar__title">Join with code</span>
-      </header>
-
-      <div className="screen-body join">
-        <div className="join__main">
-          <p className="eyebrow">Room code</p>
-          <h1 id="join-title" className="display h1">
-            Type your friend's code
-          </h1>
-          <p className="lead">Six letters. Got a link instead? Paste it into any box and we'll pull the code out of it.</p>
-
-          <div className="codebox" role="group" aria-label="Room code, 6 letters">
-            {Array.from({ length: ROOM_CODE_LENGTH }, (_, i) => (
-              <input
-                key={i}
-                ref={(el) => {
-                  boxes.current[i] = el;
-                }}
-                className={i === code.length && state !== 'error' ? 'codebox__cell is-caret' : 'codebox__cell'}
-                maxLength={ROOM_CODE_LENGTH}
-                inputMode="text"
-                autoCapitalize="characters"
-                autoComplete="off"
-                spellCheck={false}
-                aria-label={`Letter ${i + 1}`}
-                data-bind={`join.code.${i}`}
-                value={code[i] ?? ''}
-                onKeyDown={(e) => onKey(i, e)}
-                onChange={(e) => {
-                  const typed = codeLetters(e.target.value);
-                  if (!typed) return;
-                  // typing into a box replaces from there on; several letters (autofill) spill over
-                  const next = (code.slice(0, i) + typed).slice(0, ROOM_CODE_LENGTH);
-                  setCode(next);
-                  setPasted(false);
-                  setError(null);
-                  focus(Math.min(next.length, ROOM_CODE_LENGTH - 1));
-                }}
-              />
-            ))}
-          </div>
-
-          <div className="join__status" aria-live="polite">
-            {state === 'empty' && (
-              <p className="status status--info">
-                <Icon name="info" />
-                Letters only: codes skip I, L and O
-              </p>
-            )}
-            {state === 'typing' && (
-              <p className="status status--info">
-                <Icon name="info" />
-                <span data-bind="join.progress">
-                  {code.length} of {ROOM_CODE_LENGTH} letters
+    <Screen name="join" kind="menu" kit="v2" states={[state === 'ready' ? 'pasted' : state]} label="Join with code">
+      <Backdrop word="CODE" />
+      <div className="menu">
+        <header className="menu-top">
+          <button className="btn btn--ghost btn--icon btn--sm m-p8" type="button" aria-label="Back to home" onClick={() => ctl.closeOverlay()}>
+            <Icon name="back" />
+          </button>
+          <span className="label">Home</span>
+          <span className="menu-top__spacer"></span>
+          <NetPill />
+        </header>
+        <div className="menu-body join">
+          <div className="join__main">
+            <span className="eyebrow">Private room</span>
+            <h1 id="join-title" className="display display--print join__title m-p1">
+              Join with code
+            </h1>
+            <p className="lead">Type the 6 letters, or paste the whole link: we pull the code out of it.</p>
+            <div className="codebox" role="group" aria-label="Room code, 6 letters">
+              {Array.from({ length: ROOM_CODE_LENGTH }, (_, i) => (
+                <input
+                  key={i}
+                  ref={(el) => {
+                    boxes.current[i] = el;
+                  }}
+                  className={['codebox__cell', code[i] ? 'mf-filled' : 'is-empty', i === code.length && state !== 'error' ? 'is-caret' : ''].filter(Boolean).join(' ')}
+                  maxLength={ROOM_CODE_LENGTH}
+                  inputMode="text"
+                  autoCapitalize="characters"
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-label={`Letter ${i + 1}`}
+                  data-bind={`join.code.${i}`}
+                  value={code[i] ?? ''}
+                  onKeyDown={(e) => onKey(i, e)}
+                  onChange={(e) => {
+                    const typed = codeLetters(e.target.value);
+                    if (!typed) return;
+                    // typing into a box replaces from there on; several letters (autofill) spill over
+                    const next = (code.slice(0, i) + typed).slice(0, ROOM_CODE_LENGTH);
+                    setCode(next);
+                    setPasted(false);
+                    setError(null);
+                    focus(Math.min(next.length, ROOM_CODE_LENGTH - 1));
+                  }}
+                />
+              ))}
+              {state === 'pasted' && (
+                <span className="stamp stamp--ok stamp--lg codebox__stamp m-p7">
+                  <Icon name="check" />
+                  Link pasted
                 </span>
-              </p>
-            )}
-            {state === 'pasted' && (
-              <p className="status status--ok">
-                <Icon name="ok" />
-                Link pasted. Found code {code}
-              </p>
-            )}
-            {state === 'ready' && (
-              <p className="status status--ok">
-                <Icon name="ok" />
-                Code {code}: press Enter to join
-              </p>
-            )}
-            {state === 'error' && (
-              <div>
-                <p className="status status--bad">
+              )}
+              {state === 'error' && (
+                <span className="stamp stamp--bad stamp--lg codebox__stamp m-p7">
+                  <Icon name="close" />
+                  No room
+                </span>
+              )}
+            </div>
+            <div className="join__status" role="status" aria-live="polite">
+              {state === 'empty' && (
+                <span className="status status--busy">
+                  <Icon name="keyboard" />
+                  Type or paste: letters only (codes skip I, L and O)
+                </span>
+              )}
+              {state === 'typing' && (
+                <span className="status status--busy">
+                  <span data-bind="join.progress">
+                    {code.length} of {ROOM_CODE_LENGTH} letters
+                  </span>
+                </span>
+              )}
+              {state === 'pasted' && (
+                <span className="status status--ok">
+                  <Icon name="ok" />
+                  Link pasted: code {code}
+                </span>
+              )}
+              {state === 'ready' && (
+                <span className="status status--ok">
+                  <Icon name="ok" />
+                  Code {code}: press Enter to join
+                </span>
+              )}
+              {state === 'error' && (
+                <span className="status status--bad">
                   <Icon name="bad" />
-                  {error}
-                </p>
-                <p className="join__hint muted">Check the letters with your friend, or ask them to send the link again. A room closes when everyone leaves.</p>
-              </div>
-            )}
-          </div>
-
-          <div className="join__actions">
-            <button className="btn btn--primary btn--xl" disabled={code.length !== ROOM_CODE_LENGTH || busy || state === 'error'} onClick={() => void join()}>
-              {busy ? 'Joining…' : 'Join room'} {code.length === ROOM_CODE_LENGTH && !busy && state !== 'error' && <Cap>Enter</Cap>}
-            </button>
-            <button
-              className="btn btn--secondary btn--xl"
-              onClick={() =>
-                void navigator.clipboard
-                  ?.readText()
-                  .then((t) => fill(t, true))
-                  .catch(() => setError('Paste with Ctrl+V (or ⌘V): the browser kept the clipboard to itself'))
-              }
-            >
-              <Icon name="paste" />
-              Paste link
-            </button>
-          </div>
-        </div>
-
-        <aside className="join__help" aria-label="Where to find the code">
-          <div className="chatmock" aria-hidden="true">
-            <div className="chatmock__head">
-              <span className="chatmock__avatar">LS</span>
-              <span>
-                <b>Lagos squad</b>
-                <span className="chatmock__sub">Kemi, Raja, Tunde, you</span>
-              </span>
-            </div>
-            <div className="chatmock__body">
-              <div className="bubble">
-                <span className="bubble__who">Kemi</span>
-                Room's up, 5 min deathmatch. Join fast!
-                <span className="bubble__link">
-                  …/r/<mark>KMTXRA</mark>
+                  {error}. Check the letters with your friend, or ask for the link again.
                 </span>
-                <span className="bubble__time">21:04</span>
-              </div>
-              <div className="bubble bubble--me">
-                Coming<span className="bubble__time">21:05</span>
-              </div>
+              )}
+            </div>
+            <div className="join__actions">
+              <button className="btn btn--volt btn--xl m-p8" type="button" disabled={code.length !== ROOM_CODE_LENGTH || busy || state === 'error'} aria-disabled={code.length !== ROOM_CODE_LENGTH || busy || state === 'error'} onClick={() => void join()}>
+                <Icon name="door-out" />
+                {busy ? 'Joining…' : 'Join room'}
+              </button>
+              <button className="btn btn--paper btn--xl m-p8" type="button" onClick={pasteLink}>
+                <Icon name="paste" />
+                Paste link
+              </button>
             </div>
           </div>
-          <p className="join__caption">
-            <Icon name="info" />
-            The code is the last 6 letters of the room link.
-          </p>
-        </aside>
+          <aside className="ticket join__help" aria-label="Where to find the code">
+            <span className="label">Where to find it</span>
+            <b className="display join__help-title">At the end of the link</b>
+            <div className="chatmock" aria-hidden="true">
+              <div className="chatmock__head">
+                <span className="avatar">S</span>
+                <span>
+                  <b>Squad night</b>
+                  <br />
+                  <span className="chatmock__sub">Kemi, Raja, Tunde, you</span>
+                </span>
+              </div>
+              <div className="chatmock__msg">
+                <b>Kemi</b>
+                <p>Room's up: deathmatch, 4 slots left, get in fast</p>
+                <p className="chatmock__link">
+                  …/r/<mark>KMTXRA</mark>
+                </p>
+                <span className="chatmock__time">21:04</span>
+              </div>
+            </div>
+            <div className="ticket__perf"></div>
+            <p className="join__note">
+              <Icon name="info" />
+              The code is the last 6 letters of the room link. A room closes when everyone leaves.
+            </p>
+          </aside>
+        </div>
+        <Hints>
+          <Hint keys={<Cap>Enter</Cap>}>Join</Hint>
+          <Hint keys={<Cap>Ctrl V</Cap>}>Paste</Hint>
+          <Hint keys={<Cap>Esc</Cap>}>Back</Hint>
+        </Hints>
       </div>
     </Screen>
   );

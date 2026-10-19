@@ -69,10 +69,11 @@ async function enterName(p, name) {
   await p.page.type('#ne-input', name);
   await nameFree(p);
   await p.page.keyboard.press('Enter');
-  await p.page.waitForSelector('[data-screen="home"], [data-screen="lobby"]', { timeout: 60_000 });
+  await p.page.waitForSelector('[data-screen="home"], [data-screen="m-home"], [data-screen="lobby"]', { timeout: 60_000 });
 }
 
 const a = await launch('A');
+let phone = null;
 const b = await launch('B');
 try {
   // ---- loading: the page's own screen, before the app's script runs
@@ -119,7 +120,7 @@ try {
   await click(a, 'Done');
 
   // ---- a room: A makes it, B joins with the code
-  await click(a, 'Play with friends');
+  await click(a, 'Create room');
   await screen(a, 'lobby');
   const link = a.page.url();
   const code = /\/r\/([A-Z]{6})/.exec(link)[1];
@@ -127,6 +128,7 @@ try {
   await sleep(1200);
   await shot(a, '20-lobby-host');
   await click(a, 'Copy link');
+  await button(a, 'Copied');
   await shot(a, '21-lobby-link-copied');
 
   // join with code: typing, a wrong code, then a pasted link
@@ -158,7 +160,7 @@ try {
   await screen(b, 'lobby');
   b.page.off('request', slowJoin);
   await b.page.setRequestInterception(false);
-  await a.page.waitForFunction(() => document.querySelectorAll('.player-list .player-row:not(.player-row--open) .avatar:not(.avatar--bot)').length === 2, { timeout: 30_000 });
+  await a.page.waitForFunction(() => document.querySelectorAll('.prows .prow:not(.prow--open) .avatar:not(.avatar--bot)').length === 2, { timeout: 30_000 });
   await (await a.page.waitForSelector('xpath/.//*[@aria-labelledby="tl-label"]/button[normalize-space(.)="1"]')).click();
   await b.page.waitForFunction(() => document.querySelector('[data-bind="room.timeLimit"]')?.textContent === '1 min', { timeout: 15_000 });
   await shot(a, '27-lobby-host-two');
@@ -167,10 +169,20 @@ try {
   await shot(b, '29-lobby-folded-controls-card');
   await click(b, 'Got it');
   await click(b, 'Lobby');
+  // the host folds the first-run controls card too, so it doesn't cover the map intro and countdown
+  await click(a, 'Warm up');
+  await click(a, 'Got it');
+  await click(a, 'Lobby');
 
   // ---- the match
   for (const p of [a, b]) await (await p.page.waitForSelector('xpath/.//footer//button[normalize-space(.)="Ready"]')).click();
   await screen(a, 'countdown');
+  // round two: the map intro as the countdown begins, then "Match 1", then 3, 2, 1
+  await a.page.waitForSelector('[data-screen="countdown"][data-active-state~="intro"]', { timeout: 5_000 }).catch(() => {});
+  // the flood clears first (P6), then the intro card is in full view
+  await a.page.waitForFunction(() => !document.querySelector('.m-p6'), { timeout: 5_000 }).catch(() => {});
+  await shot(a, '30a-map-intro');
+  await a.page.waitForSelector('[data-screen="countdown"]:is([data-active-state~="match"], [data-active-state~="3"], [data-active-state~="2"])', { timeout: 10_000 }).catch(() => {});
   await shot(a, '30-countdown');
   await a.page.waitForSelector('[data-screen="countdown"][data-active-state~="go"]', { timeout: 15_000 }).catch(() => {});
   await shot(a, '31-countdown-go');
@@ -250,7 +262,7 @@ try {
   await shot(a, '42-training-hud');
 
   await b.browser.close();
-  const phone = await launch('phone', { width: 812, height: 375, deviceScaleFactor: 2, isMobile: true, hasTouch: true, isLandscape: true });
+  phone = await launch('phone', { width: 812, height: 375, deviceScaleFactor: 2, isMobile: true, hasTouch: true, isLandscape: true });
   await phone.page.goto(`${base}/?app&time=40`, { waitUntil: 'load' });
   await enterName(phone, `Raja${suffix()}`);
   await shot(phone, '50-phone-home');
@@ -271,4 +283,5 @@ try {
 } finally {
   await a.browser.close();
   await b.browser.close().catch(() => {});
+  await phone?.browser.close().catch(() => {});
 }

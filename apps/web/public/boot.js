@@ -22,6 +22,9 @@
     document.getElementById('boot-room').hidden = false;
   }
 
+  var slow = document.getElementById('boot-slow');
+  if (slow) setTimeout(function () { slow.classList.add('is-on'); }, 20000);
+
   var splash = document.getElementById('boot-splash');
   var screen = splash && splash.querySelector('.screen');
   if (!screen) return;
@@ -32,5 +35,7 @@
     n = (n % 3) + 1;
     screen.setAttribute('data-active-state', 'tip-' + n);
     for (var i = 0; i < tips.length; i++) tips[i].hidden = tips[i].getAttribute('data-state') !== 'tip-' + n;
+    var count = document.getElementById('boot-tip');
+    if (count) count.textContent = String(n);
   }, 4000);
 })();

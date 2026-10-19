@@ -6,12 +6,12 @@
     {
       "status": "INFO",
       "check": "file size",
-      "detail": "78 KB"
+      "detail": "134 KB"
     },
     {
       "status": "PASS",
       "check": "triangles",
-      "detail": "888 of 1000"
+      "detail": "921 of 1000"
     },
     {
       "status": "PASS",
@@ -19,9 +19,19 @@
       "detail": "1 draw call(s)"
     },
     {
+      "status": "PASS",
+      "check": "texture size: pulse_albedo",
+      "detail": "256x256 (max 256)"
+    },
+    {
+      "status": "PASS",
+      "check": "texture POT: pulse_albedo",
+      "detail": "power of two"
+    },
+    {
       "status": "INFO",
       "check": "GPU texture memory (KTX2 est.)",
-      "detail": "0.00 MB, 0 image(s)"
+      "detail": "0.04 MB, 1 image(s)"
     },
     {
       "status": "PASS",
@@ -29,9 +39,14 @@
       "detail": "ok"
     },
     {
-      "status": "WARN",
+      "status": "PASS",
       "check": "weaponId in packages/content",
-      "detail": "pulse is not in packages/content/src/{weapons,grenades}.ts yet"
+      "detail": "pulse"
+    },
+    {
+      "status": "PASS",
+      "check": "node names exact (no Blender .001 suffix)",
+      "detail": "ok"
     },
     {
       "status": "INFO",
@@ -41,7 +56,7 @@
     {
       "status": "PASS",
       "check": "origin on the weapon (the grip)",
-      "detail": "bbox (-0.05, -0.13, -0.32)..(0.05, 0.1, 0.45)"
+      "detail": "bbox (-0.06, -0.09, -0.28)..(0.06, 0.14, 0.5)"
     },
     {
       "status": "PASS",
@@ -56,7 +71,7 @@
     {
       "status": "PASS",
       "check": "muzzle node ahead of the grip (+Y)",
-      "detail": "muzzle at glTF y +0.47 m"
+      "detail": "muzzle at glTF y +0.50 m"
     },
     {
       "status": "PASS",
@@ -81,12 +96,12 @@
     {
       "status": "PASS",
       "check": "muzzle fires along +Y with a bore radius",
-      "detail": "dir (0.0, 1.0, 0.0), bore 0.030 m"
+      "detail": "dir (0.0, 1.0, 0.0), bore 0.034 m"
     },
     {
       "status": "PASS",
       "check": "rail_top above the bore, facing up",
-      "detail": "z +0.132 vs bore +0.060, length 0.10 m"
+      "detail": "z +0.087 vs bore +0.025, length 0.10 m"
     }
   ]
 }

@@ -506,7 +506,7 @@ python3 art/pipeline/build_grenade_fx.py --runtime apps/web/public/assets
 ### One model per grenade type (the owner, 18 Oct)
 
 ![Grenade types](screenshots/grenade-types.png)
-*The six throwables at one scale, and below at about gameplay size on dark ground.*
+*The six throwables at one scale; below, on dark ground, at gameplay size (1×: a 0.2 m grenade is about 11 px) and at 4×.*
 
 Each grenade reads by its shape, not only its colour. They're built by `build_weapons.py` (`--only smoke,gas,flash,emp` rebuilds just these and merges them into weapons.json and sockets.json):
 
@@ -515,12 +515,12 @@ Each grenade reads by its shape, not only its colour. They're built by `build_we
 | `frag` | the ball with its sand band (unchanged) | 624 | grip, pin, light, ground |
 | `smoke` | a tall pale canister (0.17 × 0.25 m) with a ring of dark vent holes and dark bands | 632 | grip, pin, light, ground |
 | `gas` | a squat yellow-green canister (0.18 × 0.21 m) with a yellow/black hazard band and a valve with a red handwheel | 576 | grip, light, ground |
-| `flash` | a slotted cylinder (0.16 × 0.20 m): mid steel with six light slots and dark end caps | 608 | grip, pin, light, ground |
+| `flash` | a spool (0.17 × 0.19 m): two wide dark end plates round a narrow mid-steel core with six bright slots, so its side view is an "I" beside the smoke's tall block (review: the two slotted cylinders read alike) | 704 | grip, pin, light, ground |
 | `emp` | a disc (0.20 × 0.06 m) with two glowing pale-cyan coils round its rim (`_GLOW`) and an emitter on top | 616 | grip, light, ground |
 | `mine` | the hazard-striped disc (unchanged) | 616 | grip, light, ground |
 
 - **Rules:** all are sim-sized (half-width 0.086–0.105 m for a 0.10 m sim ball), at least 25 ΔE from both team colours (orange ≥ 33, blue 67), and pass asset-check 14/14.
-- **Fuse lights:** each keeps the red `light` the renderer blinks, and a `pin` where it has a pin.
+- **Fuse lights:** the frag, smoke, gas and flashbang keep a red fuse dome on the `light` node the renderer blinks, and a `pin` where they have one. The EMP's `light` is its white emitter, like the mine's, so the renderer can tint it.
 - **Which file reads them:** `render3d/grenades.ts` draws the frag (`frag.glb`). `render3d/clouds.ts` draws the other types today, as coloured balls (`GRENADE_COLORS` on `ballGeo`). It should load `smoke.glb`, `gas.glb`, `flash.glb` and `emp.glb` (in `assets/weapons/`, with their `ground` rest frame) in their place. The mine stays clouds.ts's puck, or `mine.glb`.
 
 ## Riot shield (Weapons Forge 10)
@@ -804,6 +804,35 @@ The Dragon, Arc, Popper, Ripper and Pulse go through the same pipeline, with the
 - **Ripper:** "Orthographic turnaround sheet of ONE chunky toy saw-blade launcher for a stylised cartoon video game, three views in a single row on a flat plain light grey background, each view separated by wide empty gaps, all at the same scale and the same height, perfectly aligned: (1) left: the right side of the gun, muzzle pointing to the right; (2) middle: the end view looking straight at the muzzle; (3) right: the left side of the gun, muzzle pointing to the left. Invented design, not based on any real-world firearm: a big round light-steel toothed saw blade half-hidden inside a rounded olive-green guard housing at the front of the gun, a boxy dark gunmetal body, a sand-tan stock, a dark pistol grip, a flat rail on top, and a bright yellow toy safety lip on the front of the guard. Bevelled boxy toy shapes, clean flat colours with soft cel shading, no text, no logos, no letters, no hands, no background objects."
 - **Pulse:** "Orthographic turnaround sheet of ONE chunky toy energy orb gun for a stylised cartoon video game, three views in a single row on a flat plain light grey background, each view separated by wide empty gaps, all at the same scale and the same height, perfectly aligned: (1) left: the right side of the gun, muzzle pointing to the right; (2) middle: the end view looking straight at the muzzle; (3) right: the left side of the gun, muzzle pointing to the left. Invented design, not based on any real-world firearm: three short dark claw prongs at the front holding a glowing pale sky-blue energy sphere, three glowing pale sky-blue ring coils around a thick barrel, an off-white and sand-tan bulky body, a dark pistol grip, a flat rail on top, a short olive stock. No dark blue. Bevelled boxy toy shapes, clean flat colours with soft cel shading, no text, no logos, no letters, no hands, no background objects."
 </details>
+
+### Part cuts that hold together in motion (review N1)
+
+![Part cuts](screenshots/parts-cut-clean.png)
+*Each part at full travel (`partsview`), before and after: the cut is capped dark on the part and on the body, so nothing tears open.*
+
+render3d moves a `part_*` node only when it carries `cutClean: true` (gunParts.ts, render3d-b-gun-mechanisms.md). Until now every cut was an open seam in the fused generated shell: the Hammer's cylinder showed its hollow inside, the Hawk's slide left its tip behind, and the mags dragged shards and sheets of skin with them. `build_gun_scan.py` now cuts parts like this:
+
+- **A straight cut:** the faces overlapping a part's box are first split along the box's planes (`bisect_plane`), so no face straddles the cut to leave a spike. Where that costs too many triangles (the Hammer's cylinder sits in a frame window; the Dragon's tank on a bracket), `bisect: false` keeps the shell's own edges.
+- **Capped both sides:** every opening the cut leaves, on the part and on the body, is filled (`holes_fill`, then a fan for any loop it can't take), and every other opening on the part too, so the part is a closed shell. Caps sample the albedo's darkest texel and take no camo or glow. Vertices within 0.1 mm are welded first: the runtime file's quantised positions (meshopt) can part a pair the source has within a micron, and a cap built on the pair then leaves an opening there.
+- **Tighter boxes:** the Hawk's slide box now takes the toy tip with it. The Widow's bolt takes only what stands out past the stock (`inset` 0.042 m), so it no longer carries a strip of skin, and it lifts about the bore line, not about its own middle. The Widow's, Buzz's and Longbow's mag boxes stop just below the receiver.
+- **Within budget:** the cuts and caps add triangles, so a gun with parts is decimated further until all of it, caps included, fits the 1,000-tri budget (a dry run of the cut before the bake). Against each spec's `tris` target, the body before the cut is 25 % lower on the Breacher (950 → 709), 22 % on the Arc, 17 % on the Widow, 14 % on the K-47, 11 % on the Trident and Longbow and 9 % on the Dragon; the Hawk, Hammer, Buzz, Rattler and Hornet fit without it.
+- **asset-check:** a part flagged `cutClean` must be a closed shell once its glTF splits are welded (at 0.1 mm, above the runtime's quantisation step), and the body must have no open edge within 1 cm of where the part sits (the opening it leaves, seen once it moves). Selftest case: a hole punched in the Hawk's slide fails. It counts open edges, not slivers: those the review saw at the K-47's, Hornet's and Trident's mag wells (the Trident's a ~10 cm needle) took those three mags' flags off.
+- **The muzzle's bore** is measured on the whole gun before the parts are cut off: the Hawk's slide now carries the muzzle tip, and the bore measured on the body alone had dropped from 0.0233 to 0.0094 m (a suppressor about 0.4× as thick in the Armory). It is 0.025 m now; the attachments rebuild unchanged.
+
+| Gun | Part | cutClean | Part caps / body caps (tris) | Gun tris (before → after) |
+|---|---|---|---|---|
+| Hawk .50 | `part_slide` | yes | 37 / 39 | 776 → 932 |
+| Hammer .44 | `part_cylinder` | no: the cylinder is a closed shell, but the frame keeps 14 open edges around it (the scan fuses the cylinder into the frame's inside, with non-manifold seams there), so it stays still in game. A straight cut needed ~115-tri caps and left the body 344–458 tris. | 48 / 52 | 824 → 924 |
+| Breacher | `part_pump` | yes | 56 / 56 | 921 → 993 |
+| Widow | `part_bolt` | yes | 13 / 13 | 950 → 992 |
+| Widow | `part_mag` | no: 4 open edges where a sliver of the scan folds onto the cut | 22 / 22 | |
+| Buzz, Rattler, Longbow, Arc | `part_mag` | yes | 23–56 / 25–54 | within 1,000 |
+| K-47, Hornet, Trident | `part_mag` | no: slivers at the mag well once the mag drops (review) | 26–37 / 26–37 | within 1,000 |
+| Dragon | `part_mag` (tank) | no: 3 open edges, as the Widow's mag | 52 / 54 | 950 → 996 |
+| Bullpup | none now | | | 872 |
+
+- **The Bullpup's mag is no longer a part:** it is a panel set into the stock, so no side-view box frees it without the stock's skin. It's baked into the gun, which is how render3d drew it anyway.
+- render3d animates the slide, pump, bolt and cylinder. Mags stay still for now, so the unflagged mags change nothing on screen. The Hammer's cylinder stays still too until it gets a clean cut: probably a modelled cylinder in the scan's colours, rather than a cut from the fused shell.
 
 ## Review lows (18 Oct 2026, review-art-stacks.md and the environments review)
 

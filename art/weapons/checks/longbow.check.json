@@ -6,12 +6,12 @@
     {
       "status": "INFO",
       "check": "file size",
-      "detail": "122 KB"
+      "detail": "124 KB"
     },
     {
       "status": "PASS",
       "check": "triangles",
-      "detail": "950 of 1000 (body and 1 parts)"
+      "detail": "994 of 1000 (body and 1 parts)"
     },
     {
       "status": "PASS",
@@ -39,9 +39,14 @@
       "detail": "ok"
     },
     {
-      "status": "WARN",
+      "status": "PASS",
       "check": "weaponId in packages/content",
-      "detail": "longbow is not in packages/content/src/{weapons,grenades}.ts yet"
+      "detail": "longbow"
+    },
+    {
+      "status": "PASS",
+      "check": "node names exact (no Blender .001 suffix)",
+      "detail": "ok"
     },
     {
       "status": "INFO",
@@ -96,7 +101,7 @@
     {
       "status": "PASS",
       "check": "casings eject to the right (+X)",
-      "detail": "at x +0.037, dir x +0.80"
+      "detail": "at x +0.038, dir x +0.80"
     },
     {
       "status": "PASS",
@@ -111,7 +116,7 @@
     {
       "status": "PASS",
       "check": "moving part part_mag",
-      "detail": "32 tris, axis (0.0, 0.0, -1.0), travel 0.1 m"
+      "detail": "76 tris, axis (0.0, 0.0, -1.0), travel 0.1 m, cut clean (closed)"
     }
   ]
 }

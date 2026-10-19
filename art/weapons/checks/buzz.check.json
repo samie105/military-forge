@@ -6,12 +6,12 @@
     {
       "status": "INFO",
       "check": "file size",
-      "detail": "120 KB"
+      "detail": "126 KB"
     },
     {
       "status": "PASS",
       "check": "triangles",
-      "detail": "823 of 1000 (body and 1 parts)"
+      "detail": "944 of 1000 (body and 1 parts)"
     },
     {
       "status": "PASS",
@@ -42,6 +42,11 @@
       "status": "PASS",
       "check": "weaponId in packages/content",
       "detail": "buzz"
+    },
+    {
+      "status": "PASS",
+      "check": "node names exact (no Blender .001 suffix)",
+      "detail": "ok"
     },
     {
       "status": "INFO",
@@ -106,7 +111,7 @@
     {
       "status": "PASS",
       "check": "moving part part_mag",
-      "detail": "53 tris, axis (0.0, 0.0, -1.0), travel 0.12 m"
+      "detail": "96 tris, axis (0.0, 0.0, -1.0), travel 0.12 m, cut clean (closed)"
     }
   ]
 }

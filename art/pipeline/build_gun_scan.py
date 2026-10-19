@@ -49,6 +49,7 @@ TEX = 256
 TEAM = {"blue": "#2f7dff", "orange": "#ff7a1a"}
 SAT_CAP = 0.44  # cap_team_hues
 TEAM_SHARE_MAX = 0.02  # of the albedo's covered texels, per team and test
+TRI_BUDGET = 1000  # the weapon budget (docs/04 §9.4), with the parts and their cut caps
 
 AXES = {"+x": Vector((1, 0, 0)), "-x": Vector((-1, 0, 0)), "+y": Vector((0, 1, 0)), "-y": Vector((0, -1, 0)),
         "+z": Vector((0, 0, 1)), "-z": Vector((0, 0, -1))}
@@ -393,14 +394,15 @@ def socket_points(obj, spec, bounds):
     return out
 
 
-def bore_radius_at(obj, muzzle):
-    """Half the mesh's height over its last 2 cm toward the muzzle (socket frame: the bore runs along
-    Blender +Z after the export rotation, height is Blender -Y), for the flash and the suppressor."""
+def bore_radius_at(obj, muzzle, along=2, height=1):
+    """Half the mesh's height over its last 2 cm toward the muzzle, for the flash and the suppressor. Axes:
+    the socket frame by default (the bore runs along Blender +Z after the export rotation, height is
+    Blender -Y); the modelling frame is along=1, height=2."""
     pts = np.array([v.co[:] for v in obj.data.vertices])
-    near = pts[pts[:, 2] > muzzle.z - 0.02]
+    near = pts[pts[:, along] > muzzle[along] - 0.02]
     if len(near) < 3:
         return 0.015
-    return float(max(0.008, min(0.08, (near[:, 1].max() - near[:, 1].min()) / 2)))
+    return float(max(0.008, min(0.08, (near[:, height].max() - near[:, height].min()) / 2)))
 
 
 # ------------------------------------------------------------------ moving parts
@@ -423,57 +425,203 @@ def unsquash_points(co, spec, bounds):
     return co
 
 
-def cut_parts(low, spec, bounds):
+def cap_uv(small, covered):
+    """UV of the darkest texel well inside the bake (its 3×3 neighbourhood covered too): the cut caps sample it."""
+    lum = small @ np.array([0.2126, 0.7152, 0.0722])
+    inner = covered.copy()
+    for dy in (-1, 0, 1):
+        for dx in (-1, 0, 1):
+            inner &= np.roll(np.roll(covered, dy, 0), dx, 1)
+    r, c = np.unravel_index(np.argmin(np.where(inner, lum, np.inf)), lum.shape)
+    return (c + 0.5) / lum.shape[1], (r + 0.5) / lum.shape[0]  # Blender's pixel rows start at the bottom
+
+
+def cut_parts(low, spec, bounds, dark_uv, quiet=False):
     """Spec `parts` (the owner's request, 18 Oct): {"part_slide" | "part_pump" | "part_bolt" | "part_cylinder" |
-    "part_mag": {"box": [u0, v0, u1, v1], "side": "right"|"left" (optional), "axis": [x, y, z], "travel": m or
-    "angle": deg}}. The faces whose centre falls in the box (side-view coordinates of the unsquashed
-    silhouette, as for sockets) move to their own mesh, which keeps the UVs, the albedo and `_CAMO`. The
-    renderer moves it along `axis` (weapon frame: +Y muzzle, +Z up, +X right) by `travel`, or turns it by
-    `angle`, when the gun fires or reloads. Returns [(object, spec)]."""
+    "part_mag": {"box": [u0, v0, u1, v1], "side": "right"|"left" (optional), "inset": m (optional), "axis":
+    [x, y, z], "travel": m or "angle": deg, "bisect": false | "y" (optional), "cutClean": true (optional)}}. The box is in side-view coordinates of
+    the unsquashed silhouette, as for sockets; with `side`, only what lies more than `inset` metres out on that
+    side of the centreline. The faces in the box move to their own mesh, which keeps the UVs, the albedo and
+    `_CAMO`. The renderer moves it along `axis` (weapon frame: +Y muzzle, +Z up, +X right) by `travel`, or turns
+    it by `angle`, when the gun fires or reloads.
+    Review N1 (an open cut tears when the part moves): the shell is first split along the box's planes, so the
+    cut is straight (no faces straddle it to leave shards and spikes; `bisect: "y"` cuts only at the box's front
+    and back, `false` keeps the shell's own edges, where a full straight cut costs too many triangles), and both
+    openings, on the part and on the
+    body, are closed with caps that sample the albedo's darkest texel and take no camo. `cutClean` goes to the
+    node only where the spec sets it, once the part has been checked at full travel. Returns [(object, spec)]."""
     out = []
     lo, hi = bounds
     for name, cfg in spec.get("parts", {}).items():
-        me = low.data
-        centres = np.array([p.center[:] for p in me.polygons])
-        pre = unsquash_points(centres, spec, bounds)
-        u = (pre[:, 1] - lo[1]) / (hi[1] - lo[1])
-        v = (pre[:, 2] - lo[2]) / (hi[2] - lo[2])
         u0, v0, u1, v1 = cfg["box"]
-        sel = (u >= u0) & (u <= u1) & (v >= v0) & (v <= v1)
-        side = cfg.get("side")
-        if side == "right":
-            sel &= pre[:, 0] > 0
-        elif side == "left":
-            sel &= pre[:, 0] < 0
+        (_, ya, za), (_, yb, zb) = squash_points([[0.0, lo[1] + u0 * (hi[1] - lo[1]), lo[2] + v0 * (hi[2] - lo[2])],
+                                                   [0.0, lo[1] + u1 * (hi[1] - lo[1]), lo[2] + v1 * (hi[2] - lo[2])]],
+                                                  spec, bounds)
+        side = {"right": 1, "left": -1}.get(cfg.get("side"), 0)
+        xcut = side * cfg.get("inset", 0.0)
+        bm = bmesh.new()
+        bm.from_mesh(low.data)
+        planes = [((0, ya, 0), (0, 1, 0)), ((0, yb, 0), (0, 1, 0)), ((0, 0, za), (0, 0, 1)), ((0, 0, zb), (0, 0, 1))]
+        if side:
+            planes.append(((xcut, 0, 0), (1, 0, 0)))
+
+        def overlaps(f, m=1e-4):
+            cs = np.array([v.co[:] for v in f.verts])
+            return (cs[:, 1].max() >= ya - m and cs[:, 1].min() <= yb + m and cs[:, 2].max() >= za - m
+                    and cs[:, 2].min() <= zb + m and (not side or (side * cs[:, 0]).max() >= side * xcut - m))
+
+        cut = cfg.get("bisect", True)  # True: all the box's planes; "y": its front and back only; False: none
+        for co, no in [pl for pl in planes if cut is True or (cut == "y" and pl[1][1])]:
+            faces = [f for f in bm.faces if overlaps(f)]
+            geom = faces + list({e for f in faces for e in f.edges}) + list({v for f in faces for v in f.verts})
+            bmesh.ops.bisect_plane(bm, geom=geom, plane_co=co, plane_no=no, dist=1e-5)
+        bmesh.ops.triangulate(bm, faces=[f for f in bm.faces if len(f.verts) > 3])
+
+        def inside(f):
+            c = f.calc_center_median()
+            return ya <= c.y <= yb and za <= c.z <= zb and (not side or side * c.x >= side * xcut)
+
+        bm.faces.ensure_lookup_table()
+        sel = np.array([inside(f) for f in bm.faces])
         if not sel.any():
-            log(f"{low.name}: {name} selects no faces; skipped")
+            bm.free()
+            if not quiet:
+                log(f"{low.name}: {name} selects no faces; skipped")
             continue
+        seam = bm.verts.layers.int.new("_seam")
+        for v in bm.verts:
+            ins = {inside(f) for f in v.link_faces}
+            v[seam] = int(len(ins) == 2)
         part = low.copy()
         part.data = low.data.copy()
         part.name = part.data.name = name
         bpy.context.scene.collection.objects.link(part)
-        for obj, drop_sel in ((part, ~sel), (low, sel)):
-            bm = bmesh.new()
-            bm.from_mesh(obj.data)
-            bm.faces.ensure_lookup_table()
-            bmesh.ops.delete(bm, geom=[bm.faces[i] for i in np.nonzero(drop_sel)[0]], context="FACES")
-            bm.to_mesh(obj.data)
-            bm.free()
+        for obj, drop in ((part, ~sel), (low, sel)):
+            b2 = bm.copy()
+            b2.faces.ensure_lookup_table()
+            bmesh.ops.delete(b2, geom=[b2.faces[i] for i in np.nonzero(drop)[0]], context="FACES")
+            # vertices within 0.1 mm become one, as they will once exported (the runtime's quantised positions
+            # move by up to ~0.07 mm) and welded: caps built on a near pair leave an opening there
+            bmesh.ops.remove_doubles(b2, verts=b2.verts, dist=1e-4)
+            sl = b2.verts.layers.int["_seam"]
+            # every opening that touches the cut; on the part, every opening at all, so it comes out a closed
+            # shell even where the cut meets a hole the decimation left (the asset check welds and counts)
+            rim = [e for lp in boundary_loops(b2) if obj is part or any(v[sl] for e in lp for v in e.verts) for e in lp]
+            caps = bmesh.ops.holes_fill(b2, edges=rim, sides=0)["faces"]
+            caps = bmesh.ops.triangulate(b2, faces=caps)["faces"]
+            # what holes_fill leaves (a loop touching another, or one running into a non-manifold edge): a fan
+            for lp in boundary_loops(b2):
+                if obj is part or any(v[sl] for e in lp for v in e.verts):
+                    caps += fan_fill(b2, lp)
+            left = sum(1 for e in b2.edges if e.is_boundary)  # what neither could close
+            if caps:  # its own vertices: a cap takes no camo or glow, and samples the dark texel
+                caps = [g for g in bmesh.ops.split(b2, geom=caps)["geom"] if isinstance(g, bmesh.types.BMFace)]
+                uv = b2.loops.layers.uv.active  # none yet in cut_total's dry run
+                for f in caps:
+                    for loop in f.loops if uv is not None else ():
+                        loop[uv].uv = dark_uv
+                    for v in f.verts:
+                        for layer in ("_CAMO", "_GLOW"):
+                            if layer in b2.verts.layers.float:
+                                v[b2.verts.layers.float[layer]] = 0.0
+            b2.verts.layers.int.remove(sl)
+            b2.to_mesh(obj.data)
+            b2.free()
             obj.data.update()
+            if not quiet:
+                log(f"{low.name}: {name} {'part' if obj is part else 'body'} cut capped with {len(caps)} tris"
+                    + (f"; {left} open edges left" if left else ""))
+        bm.free()
         out.append((part, cfg))
     return out
 
 
+def boundary_loops(bm):
+    """The mesh's open edges, grouped into connected loops."""
+    bm.verts.index_update()
+    bm.edges.index_update()
+    edges = [e for e in bm.edges if e.is_boundary]
+    at = {}
+    for e in edges:
+        for v in e.verts:
+            at.setdefault(v.index, []).append(e)
+    seen, loops = set(), []
+    for e in edges:
+        if e.index in seen:
+            continue
+        loop, stack = [], [e]
+        while stack:
+            x = stack.pop()
+            if x.index in seen:
+                continue
+            seen.add(x.index)
+            loop.append(x)
+            stack += [y for v in x.verts for y in at[v.index]]
+        loops.append(loop)
+    return loops
+
+
+def fan_fill(bm, loop):
+    """Close one open loop of edges with a fan of triangles about its centre, wound like the faces beside
+    it (so the cap faces out). A chain that doesn't close (it runs into a non-manifold edge) is closed from
+    end to end. Returns the new faces."""
+    adj = {}
+    for e in loop:
+        a, b = e.verts
+        adj.setdefault(a, []).append(b)
+        adj.setdefault(b, []).append(a)
+    if len(adj) < 3 or any(len(n) > 2 for n in adj.values()):
+        return []
+    ends = [v for v, n in adj.items() if len(n) == 1]
+    path = [ends[0] if ends else next(iter(adj))]
+    seen = {path[0]}
+    while True:
+        nxt = [w for w in adj[path[-1]] if w not in seen]
+        if not nxt:
+            break
+        path.append(nxt[0])
+        seen.add(nxt[0])
+    edge = next(e for e in loop if set(e.verts) == {path[0], path[1]})
+    if edge.link_faces and any(lp.vert is path[0] and lp.link_loop_next.vert is path[1] for lp in edge.link_faces[0].loops):
+        path.reverse()  # the neighbour runs a→b along this edge, so the cap runs b→a
+    centre = bm.verts.new(sum((v.co for v in path), Vector()) / len(path))
+    faces = []
+    for i, v in enumerate(path):
+        w = path[(i + 1) % len(path)]
+        try:
+            faces.append(bm.faces.new((v, w, centre)))
+        except ValueError:  # that triangle exists already
+            pass
+    return faces
+
+
+def cut_total(low, spec, bounds):
+    """Triangles of the whole gun once its parts are cut and capped: a dry run on a copy, before the bake."""
+    tmp = low.copy()
+    tmp.data = low.data.copy()
+    bpy.context.scene.collection.objects.link(tmp)
+    objs = [tmp] + [o for o, _ in cut_parts(tmp, spec, bounds, (0.0, 0.0), quiet=True)]
+    n = sum(tri_count(o) for o in objs)
+    for o in objs:
+        me = o.data
+        bpy.data.objects.remove(o, do_unlink=True)
+        bpy.data.meshes.remove(me)
+    return n
+
+
 def pivot_part(part, cfg, body):
     """Origin at the part's centre (its pivot: a cylinder turns about it), parented to the body, with its
-    motion as node extras."""
+    motion as node extras. A bolt's handle lifts about the bore line, so its pivot sits on the centreline at
+    the handle's top (the meshes are in the export frame here: +Z muzzle, −Y up)."""
     vs = np.array([v.co[:] for v in part.data.vertices])
     centre = Vector(((vs.min(0) + vs.max(0)) / 2).tolist())
+    if part.name.startswith("part_bolt"):
+        centre.x, centre.y = 0.0, float(vs[:, 1].min())
     part.data.transform(Matrix.Translation(-centre))
     part.location = centre
     part.parent = body
     part["axis"] = [round(c, 3) for c in Vector(cfg["axis"]).normalized()]
-    for k in ("travel", "angle"):
+    for k in ("travel", "angle", "lift", "cutClean"):
         if k in cfg:
             part[k] = cfg[k]
 
@@ -508,7 +656,17 @@ def build(wid, manifest, sockets_doc):
     low.data = high.data.copy()
     bpy.context.scene.collection.objects.link(low)
     low.name = wid
-    tris = decimate(low, spec.get("tris", 950))
+    target = spec.get("tris", 950)
+    tris = decimate(low, target)
+    if spec.get("parts"):  # the straight cuts and their caps add triangles: decimate further until it all fits
+        for _ in range(5):
+            total = cut_total(low, spec, bounds)
+            if total <= TRI_BUDGET:
+                break
+            target = int(target * (TRI_BUDGET - 10) / total)  # the cut's cost shrinks with the mesh, so step in proportion
+            low.data = high.data.copy()
+            tris = decimate(low, target)
+        log(f"{wid}: decimated to {tris} so the gun, its parts and their cut caps come to {total} tris")
     srgb, img = bake_albedo(low, high)
     flat, ids, cent = flatten(srgb, spec)
     # team colours stay off the finish (the kit rule)
@@ -552,7 +710,9 @@ def build(wid, manifest, sockets_doc):
 
     # sockets: grip at the origin (measured on the whole mesh, before any part is cut off)
     pts = socket_points(low, spec, bounds)
-    parts = cut_parts(low, spec, bounds)
+    # the bore on the whole gun, before a slide that carries the muzzle tip is cut off (the Hawk's: review)
+    bore = bore_radius_at(low, pts["muzzle"][0], along=1, height=2) if "muzzle" in pts else None
+    parts = cut_parts(low, spec, bounds, cap_uv(small, covered))
     meshes = [low] + [o for o, _ in parts]
     grip = pts["grip"][0].copy()
     for o in meshes:
@@ -591,7 +751,7 @@ def build(wid, manifest, sockets_doc):
             d = Vector(extras["dir"]).normalized()
             extras["dir"] = [round(c, 3) for c in d]
         if name == "muzzle":
-            extras["boreRadius"] = round(s.get("boreRadius") or bore_radius_at(low, rot @ p), 4)
+            extras["boreRadius"] = round(s.get("boreRadius") or bore, 4)
         for k, v in extras.items():
             e[k] = v
         bpy.context.scene.collection.objects.link(e)

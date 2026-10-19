@@ -27,7 +27,7 @@ import { Results } from './screens/Results';
 import { SettingsScreen } from './screens/Settings';
 import { TipsCard } from './screens/Tips';
 import { releaseShellFocus } from './focus';
-import { PhoneHome, PhoneLobby, PhonePause, PhoneResults, usePhoneLayout } from './screens/phone';
+import { PhoneHome, PhoneLobby, PhoneNameEntry, PhonePause, PhoneResults, PhoneSettings, PhoneTips, usePhoneLayout } from './screens/phone';
 import { closeRoute, runCleanup, type ShellActions, type ShellRoute, type ShellStore } from './store';
 
 export { ControllerContext };
@@ -80,7 +80,7 @@ function AppScreens({ store }: { store: ShellStore }) {
       // the page's own loading screen (index.html) stays up until the first real screen
       break;
     case 'name':
-      body = <NameEntry store={store} first />;
+      body = phone ? <PhoneNameEntry store={store} first /> : <NameEntry store={store} first />;
       break;
     case 'home':
       body = phone ? <PhoneHome store={store} /> : <Home store={store} />;
@@ -98,17 +98,18 @@ function AppScreens({ store }: { store: ShellStore }) {
       body = <TrainingScreen store={store} />;
       break;
   }
-  // the first-run controls card: in a room's lobby it waits until the player folds it to warm up
-  const inLobby = screen.name === 'room' && match?.phase === MatchPhase.Waiting;
+  // the first-run controls card: in a room's lobby it waits until the player folds it to warm up, and
+  // it waits out the countdown (the map intro and 3-2-1 are on screen then): it comes after GO
+  const inLobby = (screen.name === 'room' && match?.phase === MatchPhase.Waiting) || match?.phase === MatchPhase.Countdown;
   const playing = screen.name === 'room' || screen.name === 'training';
   return (
     <>
       {body}
-      {tips && playing && !overlay && !inLobby && <TipsCard bindings={settings.bindings} doubleTapDash={settings.doubleTapDash} />}
+      {tips && playing && !overlay && !inLobby && (phone ? <PhoneTips /> : <TipsCard bindings={settings.bindings} doubleTapDash={settings.doubleTapDash} />)}
       {overlay === 'menu' && (phone ? <PhonePause store={store} /> : <Pause store={store} />)}
-      {overlay === 'settings' && <SettingsScreen store={store} />}
+      {overlay === 'settings' && (phone ? <PhoneSettings store={store} /> : <SettingsScreen store={store} />)}
       {overlay === 'join' && <Join />}
-      {overlay === 'name' && <NameEntry store={store} first={false} />}
+      {overlay === 'name' && (phone ? <PhoneNameEntry store={store} first={false} /> : <NameEntry store={store} first={false} />)}
       {notice && (
         <div className="mf-fit mf-toast kit-v1">
           <div className="mf-notice" role="status">
@@ -144,16 +145,16 @@ function RoomScreen({ store, code }: { store: ShellStore; code: string }) {
   return (
     <>
       {match?.phase === MatchPhase.Waiting && lobby && (phone ? <PhoneLobby lobby={lobby} tips={tips && !overlay ? bindings : null} doubleTapDash={doubleTapDash} /> : <Lobby lobby={lobby} tips={tips && !overlay ? bindings : null} doubleTapDash={doubleTapDash} />)}
-      {countdown && <Countdown view={countdown.view} state={countdown.state} />}
+      {countdown && <Countdown view={countdown.view} state={countdown.state} held={countdown.held} bindings={bindings} />}
       {match &&
         ENDED.has(match.phase) &&
         match.results &&
         (phone ? (
-          <PhoneResults view={match} results={match.results} actions={actions} room={{ isHost: lobby?.isHost ?? false, hostId: host?.id ?? -1, leave: () => ctl.leave() }} code={code} />
+          <PhoneResults view={match} results={match.results} actions={actions} room={{ isHost: lobby?.isHost ?? false, hostId: host?.id ?? -1, code, leave: () => ctl.leave() }} code={code} />
         ) : (
-          <Results view={match} results={match.results} actions={actions} room={{ isHost: lobby?.isHost ?? false, hostId: host?.id ?? -1, leave: () => ctl.leave() }} />
+          <Results view={match} results={match.results} actions={actions} room={{ isHost: lobby?.isHost ?? false, hostId: host?.id ?? -1, code, leave: () => ctl.leave() }} />
         ))}
-      {connection.state === 'reconnecting' && <ReconnectBanner connection={connection} />}
+      <ReconnectBanner connection={connection} />
     </>
   );
 }
@@ -162,12 +163,13 @@ function TrainingScreen({ store }: { store: ShellStore }) {
   const ctl = useCtl();
   const match = useStore(store, (s) => s.match);
   const actions = useStore(store, (s) => s.actions);
+  const bindings = useStore(store, (s) => s.settings.bindings);
   const countdown = useCountdown(match);
   const phone = usePhoneLayout();
   return (
     <>
       {match?.phase === MatchPhase.Waiting && <WarmupBar view={match} actions={actions} />}
-      {countdown && <Countdown view={countdown.view} state={countdown.state} />}
+      {countdown && <Countdown view={countdown.view} state={countdown.state} held={countdown.held} bindings={bindings} />}
       {match &&
         ENDED.has(match.phase) &&
         match.results &&
@@ -259,6 +261,7 @@ function DebugScreens({ store }: { store: ShellStore }) {
   const match = useStore(store, (s) => s.match);
   const actions = useStore(store, (s) => s.actions);
   const banner = useMapEventBanner(store);
+  const bindings = useStore(store, (s) => s.settings.bindings);
   const countdown = useCountdown(match);
   return (
     <>
@@ -273,7 +276,7 @@ function DebugScreens({ store }: { store: ShellStore }) {
         </Screen>
       )}
       {match?.phase === MatchPhase.Waiting && <WarmupBar view={match} actions={actions} />}
-      {countdown && <Countdown view={countdown.view} state={countdown.state} />}
+      {countdown && <Countdown view={countdown.view} state={countdown.state} held={countdown.held} bindings={bindings} />}
       {match && ENDED.has(match.phase) && match.results && <Results view={match} results={match.results} actions={actions} />}
     </>
   );

@@ -153,10 +153,10 @@ describe("results (the kit's screen 10)", () => {
     const html = renderToStaticMarkup(<Results view={view({ results })} results={results} actions={actions} room={{ isHost: true, hostId: 4, leave: vi.fn() }} />);
     expect(html).toContain('data-screen="results"');
     expect(html).toMatch(/data-active-state="kill-limit host not-voted"/);
-    expect(html).toContain('Match 2 · Lunar Outpost · Deathmatch');
-    expect(html).toMatch(/results__winner[^>]*>Ade</);
+    expect(html).toContain('Debrief · Match 2 · Lunar Outpost');
+    expect(html).toMatch(/res__name[^>]*>Ade</);
     expect(html).toContain('Kill limit reached · 10 kills');
-    expect(html).toMatch(/you-card__ord[^>]*>1st</);
+    expect(html).toMatch(/results\.me\.placement">1st</);
     expect(html).toContain('1,234');
     expect(html).toMatch(/is-winner is-you.*Ade.*Host.*You.*MVP/);
     expect(html).toMatch(/is-bot.*Strafer.*Bot/);
@@ -164,15 +164,15 @@ describe("results (the kit's screen 10)", () => {
     expect(html).toContain('Play again');
     expect(html).toContain('Back to lobby');
     expect(html).toContain('Leave room');
-    expect(html).toMatch(/0\/2<\/b> want a rematch/);
+    expect(html).toMatch(/results\.votes">0\/2</);
   });
 
   it('a guest has no Back to lobby; a vote shows as cast; a closed room says so', () => {
     const guest = renderToStaticMarkup(<Results view={view({ phase: MatchPhase.Postgame, voted: true, votes: 1 })} results={results} actions={actions} room={{ isHost: false, hostId: 0, leave: vi.fn() }} />);
     expect(guest).not.toContain('Back to lobby');
-    expect(guest).toContain('You voted to play again');
-    expect(guest).toMatch(/1\/2<\/b> want a rematch · 7 s/);
-    expect(guest).toMatch(/<i class="on"><\/i><i><\/i>/);
+    expect(guest).toContain('You voted');
+    expect(guest).toMatch(/results\.votes">1\/2 · 7 s</);
+    expect(guest).toMatch(/<i class="on m-p7"><\/i><i><\/i>/);
     const closed = renderToStaticMarkup(<Results view={view({ phase: MatchPhase.Closed })} results={results} actions={actions} />);
     expect(closed).toContain('Room closed');
   });
@@ -180,7 +180,7 @@ describe("results (the kit's screen 10)", () => {
   it('a leaver who held your slot id is not you; a shared top score is a draw', () => {
     const reused: MatchResults = { ...results, standings: [standing(4, 'Kemi', 1, { key: 1, left: true, score: 5, kills: 5 }), standing(0, 'Strafer', 2, { isBot: true }), standing(4, 'You', 3, { key: 9, kills: 1, deaths: 4 })] };
     const html = renderToStaticMarkup(<Results view={view()} results={reused} actions={actions} />);
-    expect(html).toMatch(/you-card__ord[^>]*>3rd</);
+    expect(html).toMatch(/results\.me\.placement">3rd</);
     const p = (name: string, score: number, isBot = false) => ({ name, score, isBot });
     expect(winnerOf([p('A', 3), p('B', 3)])).toEqual({ name: 'Draw', draw: true });
     expect(winnerOf([p('A', 0), p('B', 0)]).draw).toBe(true);
@@ -198,12 +198,17 @@ describe('countdown (screen 6)', () => {
     expect(countdownState(view({ phase: MatchPhase.Countdown, secondsLeft: 1 }))).toBe('1');
     expect(countdownState(view({ phase: MatchPhase.InProgress }))).toBeNull();
     expect(rulesLine(view({ killLimit: 0, timeLimit: 300 }))).toEqual({ kills: 'no kill limit', time: '5:00' });
+    const stand = renderToStaticMarkup(<Countdown view={view({ phase: MatchPhase.Countdown, secondsLeft: 5, number: 1 })} state="match" />);
+    expect(stand).toContain('Match 1');
+    expect(stand).toContain('Lunar Outpost');
+    expect(stand).toContain('first to 10');
     const html = renderToStaticMarkup(<Countdown view={view({ phase: MatchPhase.Countdown, secondsLeft: 2, number: 1 })} state="2" />);
     expect(html).toMatch(/data-active-state="2"/);
-    expect(html).toContain('Match 1');
-    expect(html).toContain('Lunar Outpost');
-    expect(html).toMatch(/countdown__num[^>]*>2</);
-    expect(html).toContain('first to 10');
+    expect(html).toMatch(/countdown\.value">2</);
+    // as the countdown begins: the map intro, its name and rules
+    const intro = renderToStaticMarkup(<Countdown view={view({ phase: MatchPhase.Countdown, secondsLeft: 5, number: 1 })} state="intro" />);
+    expect(intro).toMatch(/intro__name[^>]*>Lunar Outpost</);
+    expect(intro).toContain('The Moon');
   });
 });
 
@@ -238,12 +243,13 @@ describe('lobby (screen 4)', () => {
     expect(html.match(/data-bind="room\.code\.\d"/g)).toHaveLength(6);
     expect(html).toContain('Copy link');
     expect(html).toContain('abc.trycloudflare.com/r/KMTXRA');
-    expect(html).toContain('Share on WhatsApp');
+    expect(html).toContain('WhatsApp');
+    expect(html).toContain('Share room link');
     expect(html).toMatch(/<svg viewBox="0 0 \d+ \d+"[^>]*><path fill="var\(--c-qr-dark\)"/);
-    expect(html).toContain('2 / 8');
-    expect(html).toContain('1 of 2 ready');
-    expect(html.match(/player-row--open/g)).toHaveLength(6);
-    expect(html).toMatch(/player-row is-you.*Ade.*Host.*You/);
+    expect(html).toMatch(/Roster <span class="num">2<\/span><span class="lobby__of">\/8</);
+    expect(html).toMatch(/<span class="num">1<\/span> of 2 ready/);
+    expect(html.match(/prow prow--open/g)).toHaveLength(6);
+    expect(html).toMatch(/prow is-you.*Ade.*Host.*You/);
     expect(html).toMatch(/role="radio" aria-checked="true"[^>]*>5</);
     expect(html).toContain('Start now');
     expect(html).toContain("You&#x27;re ready");
@@ -255,7 +261,7 @@ describe('lobby (screen 4)', () => {
     expect(html).toContain('The host picks the settings');
     expect(html).toContain('5 min');
     expect(html).toContain('10 kills');
-    expect(html).toMatch(/player-row is-you-guest.*Kemi/);
+    expect(html).toMatch(/prow is-you-guest.*Kemi/);
     expect(html).not.toContain('Start now');
     expect([minutesLabel(0), killsLabel(0), minutesLabel(120)]).toEqual(['No time limit', 'No kill limit', '2 min']);
     expect(lobbyMaps('movement-test')).not.toContain('mechanics-test');
