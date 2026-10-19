@@ -79,7 +79,12 @@ export const TUNE_ROWS: readonly TuneRow[] = [
   plain('gravity', 'Gravity', 'gravity', 'm/s²'),
   plain('runSpeed', 'Run speed', 'walkMax', 'm/s'),
   dashDistance,
-  plain('dashCooldown', 'Dash · cooldown', 'dashCooldown', 's'),
+  // the owner's fluid dash (19 Oct): no cooldown; fuel per dash, the chain, the gap, and the stick's range
+  plain('dashCost', 'Dash · fuel per dash', 'dashFuelCost', ''),
+  plain('dashChain', 'Dash · chain window', 'dashChainWindow', 's'),
+  plain('dashGap', 'Dash · gap between dashes', 'dashGap', 's'),
+  plain('dashWeakest', 'Dash · weakest (stick)', 'dashMinStrength', '×'),
+  plain('dashFlick', 'Dash · full flick (stick)', 'dashFlickFull', '/s'),
   plain('blastLaunch', 'Blast launch', 'blastImpulseScale', '×'),
   plain('throwSpeed', 'Grenade throw speed', 'grenadeThrowScale', '×'),
   plain('respawn', 'Respawn time', 'respawnDelay', 's'),
@@ -107,8 +112,8 @@ export type PresetId = 'classic' | 'floaty' | 'chaos';
 /** The presets: partial tunings over the defaults (Classic is the defaults). */
 export const PRESETS: Readonly<Record<PresetId, Partial<Tuning>>> = {
   classic: {},
-  floaty: { gravity: 12, jetThrust: 30, fuelBurn: 34, walkMax: 4.5, dashCooldown: 1.2 },
-  chaos: { gravity: 26, walkMax: 7, dashSpeed: 28, dashCooldown: 0.4, blastImpulseScale: 2.2, grenadeThrowScale: 1.5, respawnDelay: 1 },
+  floaty: { gravity: 12, jetThrust: 30, fuelBurn: 34, walkMax: 4.5, dashFuelCost: 22 },
+  chaos: { gravity: 26, walkMax: 7, dashSpeed: 28, dashFuelCost: 8, blastImpulseScale: 2.2, grenadeThrowScale: 1.5, respawnDelay: 1 },
 };
 
 export const PRESET_NAMES: Readonly<Record<PresetId | 'custom', string>> = { classic: 'Classic', floaty: 'Floaty', chaos: 'Chaos', custom: 'Custom' };
@@ -144,7 +149,7 @@ export function tuneChanges(before: Tuning, after: Tuning): { label: string; val
   return out;
 }
 
-/** The guest's toast: "Ade changed Gravity to 12 m/s² · Dash cooldown to 0.6 s" (two at most, then "+N more"). */
+/** The guest's toast: "Ade changed Gravity to 12 m/s² · Dash chain window to 0.6 s" (two at most, then "+N more"). */
 export function tuneToastParts(who: string, changes: readonly { label: string; value: string }[]): { who: string; items: { label: string; value: string }[]; more: number } | null {
   if (changes.length === 0) return null;
   return { who, items: changes.slice(0, 2), more: Math.max(0, changes.length - 2) };

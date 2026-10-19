@@ -6,6 +6,7 @@ import { Linger, blastName, hudFrame, netGraph, pingLook, type HudInput, type Hu
 import { conditions, crateCompare, damageArc, dashHint, dashStatus, eventLook, feedFromEvents, fuelView, grenadeBelt, healthView, isBlastSource, isBurnTick, pickupIcon, pickupNear, pickupPrompt, screenAngle, shieldStatus, tunedSummary, weaponCards, weaponFamily, weightWords, type HudPlayer } from './model';
 import { StateTokens, stateMatches } from './state';
 import { HUD_VARS, hudTemplate } from './template';
+import type { NetStats } from '../view';
 
 const t = createTuning();
 const names = new Map([
@@ -159,12 +160,12 @@ describe('riot shield, dash, conditions, grenade belt, pickups (UI brief fields)
     expect(shieldStatus({})).toEqual({ state: 'none', hp: 0, fill: 0 });
   });
 
-  it('dash: ready, recharging (with seconds), or the air dash spent until landing', () => {
-    const full = t.dashCooldown * 60;
-    expect(dashStatus({ dashCooldown: 0, airDashUsed: false, grounded: true }, t)).toEqual({ state: 'ready', fill: 0, seconds: 0 });
-    expect(dashStatus({ dashCooldown: full / 2, airDashUsed: true, grounded: false }, t)).toMatchObject({ state: 'cooldown', fill: 0.5, seconds: t.dashCooldown / 2 });
-    expect(dashStatus({ dashCooldown: 0, airDashUsed: true, grounded: false }, t).state).toBe('spent');
-    expect(dashStatus({ dashCooldown: 0, airDashUsed: true, grounded: true }, t).state).toBe('ready');
+  it('dash: no cooldown, the fuel: ready with the dashes it buys, or spent and refilling toward one', () => {
+    const cost = t.dashFuelCost;
+    expect(dashStatus({ fuel: t.fuelMax }, t)).toEqual({ state: 'ready', fill: 0, left: Math.floor(t.fuelMax / cost) });
+    expect(dashStatus({ fuel: cost }, t)).toEqual({ state: 'ready', fill: 0, left: 1 });
+    expect(dashStatus({ fuel: cost / 4 }, t)).toEqual({ state: 'spent', fill: 0.75, left: 0 });
+    expect(dashStatus({ fuel: 5 }, { dashFuelCost: 0 })).toEqual({ state: 'ready', fill: 0, left: -1 });
   });
 
   it("conditions: the map's EMP, the EMP grenade's lockout, flashbang blindness, gas", () => {
@@ -253,7 +254,7 @@ describe('the kit wiring', () => {
 });
 
 describe('hudFrame', () => {
-  const me = player({ hp: 25, shield: 'front', shieldHp: 240, dashCooldown: 30, jetDisabled: true, weapons: [{ def: 0, mag: 2, reserve: 24, reloadTicks: 20 }, { def: 1, mag: 40, reserve: 250, reloadTicks: 0 }], frags: 2 });
+  const me = player({ hp: 25, shield: 'front', shieldHp: 240, fuel: 4, jetDisabled: true, weapons: [{ def: 0, mag: 2, reserve: 24, reloadTicks: 20 }, { def: 1, mag: 40, reserve: 250, reloadTicks: 0 }], frags: 2 });
   const event = { id: 'storm', kind: 'emp', name: 'EMP STORM', description: 'Jetpacks offline', phase: 'warning' as const, secondsLeft: 2.4, progress: 0.4, color: 0xf4d84a, zones: [], occurrence: 1, bulletRangeMul: 1 };
   const input = (over: Partial<HudInput> = {}): HudInput => ({
     frame: { tick: 1, localId: 0, players: [me], grenades: [], pickups: [{ id: 3, def: 0, x: 12, y: 2 }], mapEvent: event },
@@ -285,6 +286,37 @@ describe('hudFrame', () => {
     const dead = hudFrame(input({ frame: { tick: 1, localId: 0, players: [{ ...me, alive: false, respawnTicks: 90 }], grenades: [] } }), { ...memory, death: { label: 'Taken out by', killer: 'Kemi', icon: '#icon-wpn-widow' } }).values;
     const crate = hudFrame(input(solo(me, { pickups: [{ id: 4, def: weaponPickup(WIDOW.index)!.index, x: me.x, y: me.y }] })), memory).values;
     expect([...bound].filter((k) => alive[k] === undefined && dead[k] === undefined && crate[k] === undefined)).toEqual([]);
+  });
+
+  it('the net plate reads ping, jitter, loss and the transport (and a compact line for phones)', () => {
+    const prediction: NonNullable<NetStats['prediction']> = {
+      inputBufferHealth: 2,
+      timeScale: 1,
+      unackedTicks: 12,
+      correctionsPerMin: 0,
+      mispredictionsPerMin: 0,
+      lastErrorCm: 0,
+      resyncs: 0,
+      snapshotLossPct: 2.04,
+      rttJitterMs: 18.4,
+      netSim: 'off',
+      lowBandwidth: false,
+      suggestLowBandwidth: false,
+    };
+    const net: NetStats = { rttMs: 151.6, snapshotsPerSec: 30, kbInPerSec: 8, kbOutPerSec: 4, interpDelayMs: 140, status: 'connected', transport: 'wt', prediction };
+    const v = hudFrame(input({ frame: { ...input().frame, net } }), memory).values;
+    expect(v['net.ping']).toBe('152 ms');
+    expect(v['net.jitter']).toBe('±18');
+    expect(v['net.loss']).toBe('2.0%');
+    expect(v['net.via']).toBe('WT');
+    expect(v['net.viaTitle']).toBe('WebTransport (UDP)');
+    expect(v['net.short']).toBe('±18 · 2.0% · WT');
+    expect(netGraph(net)).toMatch(/WebTransport/);
+    const ws = hudFrame(input({ frame: { ...input().frame, net: { ...net, transport: 'ws', prediction: { ...prediction, snapshotLossPct: 12.6 } } } }), memory).values;
+    expect(ws['net.short']).toBe('±18 · 13% · WS');
+    const none = hudFrame(input({ frame: { ...input().frame, net: { ...net, transport: undefined, prediction: undefined } } }), memory).values;
+    expect(none['net.short']).toBe('0.0%');
+    expect(none['net.via']).toBe('');
   });
 
   it("the brief's fields as the kit's values and state tokens", () => {
@@ -442,7 +474,10 @@ describe('round two desktop HUD', () => {
     expect(hint.tokens).toContain('dash-hint');
     expect(hint.values).toMatchObject({ 'dash.hintDir': 'Up-right', 'dash.hintRotate': 'rotate(45 50 50)', 'dash.hintArrow': '-45deg' });
     expect(dashHint(4)).toEqual({ words: 'Left', rose: -90, arrow: -180 });
-    expect(with_({ airDashUsed: true, grounded: false }).tokens).toContain('air-used');
+    const dry = with_({ fuel: t.dashFuelCost / 2 });
+    expect(dry.tokens).toEqual(expect.arrayContaining(['dash-cooldown', 'air-used']));
+    expect(dry.tokens).not.toContain('dash-ready');
+    expect(with_({}).values['dash.left']).toMatch(/^×\d+$/);
   });
 
   it('a weapon crate underfoot: Swap your gun for it, with the quick compare', () => {

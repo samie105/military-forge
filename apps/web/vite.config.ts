@@ -39,7 +39,8 @@ export default defineConfig({
     sourcemap: false,
     // Pages: the game (index.html), the Locker (locker.html, also a route inside the game), the Armory (armory.html)
     // the owner's admin page (admin.html: /admin on pnpm playtest) and the net trial's ping probe
-    // (probe.html: /probe on the trial boxes, docs/net-trial.md).
-    rolldownOptions: { input: { main: 'index.html', locker: 'locker.html', armory: 'armory.html', admin: 'admin.html', probe: 'probe.html' } },
+    // (probe.html: /probe on the trial boxes, docs/net-trial.md), the controller check (gamepad.html: every axis and button, live)
+    // and the sound board (sounds.html: every sound with a play button, docs/audio.md).
+    rolldownOptions: { input: { main: 'index.html', locker: 'locker.html', armory: 'armory.html', admin: 'admin.html', probe: 'probe.html', gamepad: 'gamepad.html', sounds: 'sounds.html' } },
   },
 });

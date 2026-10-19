@@ -88,6 +88,8 @@ export interface SimOptions {
   beforeTick?: (room: Room, nets: NetClient[]) => void;
   /** called after every server tick */
   afterTick?: (room: Room, nets: NetClient[]) => void;
+  /** called after each client frame is "drawn" (its render tick taken) */
+  onFrame?: (k: number, nowMs: number, net: NetClient, dtSec: number) => void;
   /** these clients run in low-bandwidth mode (docs/05 §2.2) */
   lowBandwidth?: number[];
   /**
@@ -95,6 +97,8 @@ export interface SimOptions {
    * 'ws': a TCP stream, losses are retransmitted and stall everything behind them (WebSocket).
    */
   transport?: 'ws' | 'wt';
+  /** the conditioner's random seed (loss, jitter, spike schedule): another run of the same profile */
+  linkSeed?: number;
 }
 
 /** Defers callbacks to the next whole second while `asleep()` (background-tab timer alignment). */
@@ -204,7 +208,7 @@ export function simulate(settings: ConditionerSettings, seconds: number, options
     });
     if (options.lowBandwidth?.includes(k)) net.setLowBandwidth(true);
     nets.push(net);
-    wire(k, 0);
+    wire(k, options.linkSeed ?? 0);
   }
   nets.forEach((c, k) => clock.setTimeout(() => c.onOpen(), 30 * k));
   if (options.drop) {
@@ -256,6 +260,7 @@ export function simulate(settings: ConditionerSettings, seconds: number, options
       if (now < nextFrame[k]!) continue;
       nets[k]!.update((now - lastFrame[k]!) / 1000, input(k));
       const view = nets[k]!.remoteRenderTick(now); // "draw" the frame: the next input reports this view
+      options.onFrame?.(k, now, nets[k]!, (now - lastFrame[k]!) / 1000);
       const newest = nets[k]!.snapshots.at(-1)?.msg.serverTick;
       if (now > warmupSeconds * 1000 && newest !== undefined) {
         frames[k]!++;

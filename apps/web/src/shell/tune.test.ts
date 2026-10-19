@@ -10,7 +10,23 @@ const fieldOf = (key: string) => TUNING_GROUPS.flatMap((g) => g.fields).find((f)
 
 describe('Tune the game: the rows', () => {
   it('maps the kit rows to real tuning keys, with their own min, max and step', () => {
-    expect(TUNE_ROWS.map((r) => r.key)).toEqual(['fuelMax', 'fuelBurn', 'fuelRegenGround', 'jetThrust', 'gravity', 'walkMax', 'dashSpeed', 'dashCooldown', 'blastImpulseScale', 'grenadeThrowScale', 'respawnDelay']);
+    expect(TUNE_ROWS.map((r) => r.key)).toEqual([
+      'fuelMax',
+      'fuelBurn',
+      'fuelRegenGround',
+      'jetThrust',
+      'gravity',
+      'walkMax',
+      'dashSpeed',
+      'dashFuelCost',
+      'dashChainWindow',
+      'dashGap',
+      'dashMinStrength',
+      'dashFlickFull',
+      'blastImpulseScale',
+      'grenadeThrowScale',
+      'respawnDelay',
+    ]);
     for (const r of TUNE_ROWS.filter((x) => x.id !== 'dashDistance')) {
       const f = fieldOf(r.key);
       expect([r.min(defaultTuning), r.max(defaultTuning), r.step(defaultTuning)]).toEqual([f.min, f.max, f.step]);
@@ -54,11 +70,11 @@ describe('Tune the game: presets', () => {
 describe('Tune the game: what a guest hears', () => {
   it('lists the changes in the panel words, two at most and how many more', () => {
     const before = createTuning();
-    const after = createTuning({ gravity: 12, dashCooldown: 0.6, fuelRegenAir: 20 });
+    const after = createTuning({ gravity: 12, dashChainWindow: 0.6, fuelRegenAir: 20 });
     const changes = tuneChanges(before, after);
     expect(changes.slice(0, 2)).toEqual([
       { label: 'Gravity', value: '12\u00a0m/s²' },
-      { label: 'Dash cooldown', value: '0.6\u00a0s' },
+      { label: 'Dash chain window', value: '0.6\u00a0s' },
     ]);
     expect(changes[2]!.value).toBe('20');
     expect(tuneToastParts('Ade', changes)).toEqual({ who: 'Ade', items: changes.slice(0, 2), more: 1 });

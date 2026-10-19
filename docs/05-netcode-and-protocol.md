@@ -13,8 +13,8 @@
 | Sim rate | **60 Hz** client + server | jetpack movement is fast; 2D sim is cheap |
 | Snapshot rate | **30 Hz** rooms, **20 Hz** BR (+ AOI tiers) | ~8–12 KB/s down per player |
 | Input rate | **60 Hz**, each packet carries the last **3–4 inputs** (redundancy) | survives 1–3 lost packets without a server-side input miss |
-| Interp delay | adaptive, **~70–100 ms** (2 snapshot intervals + jitter) | |
-| Lag comp cap | **300 ms** total rewind (18 ticks): 200 ms of latency on top of the 100 ms interpolation delay (367 ms in low-bandwidth mode: 150 ms + 1 tick of input batching) | beyond that, players lead their shots; also limits fake-lag "backtrack" abuse. A 200 ms total cap would clip every shot above ~75 ms RTT |
+| Interp delay | adaptive, **50–200 ms** (1 snapshot interval + the late tail of arrivals + an interval per snapshot lost in a row; §10) | ~60 ms on a clean path, ~130–170 ms at 150 ms ±40 jitter with loss |
+| Lag comp cap | **500 ms** total rewind (30 ticks): 300 ms of latency on top of the most the interpolation delay can be (200 ms; one tick more in low-bandwidth mode). A server may set its own (`LAG_COMP_MAX_MS`; the Johannesburg trial box: 900) | beyond that, players lead their shots; also limits fake-lag "backtrack" abuse. The old 300 ms (200 + a fixed 100) clipped every shot above ~175 ms RTT: on Nigerian mobile data (19 Oct 2026) that was every shot |
 | Transport (MVP) | **WebSocket over TLS on 443** (uWebSockets.js) | reaches ~100% of networks; simplest |
 | Transport (Phase 2) | **WebTransport datagrams** as an upgrade, WS fallback | Baseline since Safari 26.4 (Mar 2026); ~30–50% less jitter on lossy/mobile networks (reported) |
 | WebRTC DataChannel | **Not planned** | signalling + ICE + TURN complexity. Only needed for UDP on iOS < 26.4 / iPhone XS–XR, which matters little with desktop first |
@@ -102,7 +102,8 @@ Goal: the client runs **ahead** of the server so each input arrives just before 
    - health > 4 → `timeScale = 0.97`
    - else → ease back to 1.0
    This is Overwatch's "time dilation" trick. The player never notices ±3%.
-4. **Hard resync** if the drift exceeds 10 ticks (tab was asleep): jump the tick, flush prediction history, and request a full snapshot.
+4. **Hard resync** if the drift exceeds 8 ticks **for 5 s** (a clock that really moved), or at once beyond 120 ticks behind (a tab that slept) or 30 ahead (the server holds 48): jump the tick, flush prediction history, and request a full snapshot. A phone's upload queue filling up (a latency spike: +1 s for a couple of seconds) pushes the health far down and then gives it back. Jumping through one gains nothing, since the inputs sent after the jump wait in the same queue, and it costs a lurch, then a freeze when the queue drains. So the client rides spikes out (19 Oct 2026; was: a jump at 8 ticks off, 116 jumps in 6 minutes on the MTN profile, now 1).
+5. **Cushion** (as built: the `targetBuffer` jitter term): when inputs arrive late, the band moves up by how late they were (peak-hold, at most 6 ticks, shrinking 0.5 tick a second). The next dip of the same size is absorbed instead of repeated. Over WebSocket at 150 ms ±40 jitter it cut corrections from 19 to 3 a minute. A hard resync clears it (a sleeping tab says nothing about the path).
 
 ---
 
@@ -145,6 +146,7 @@ repeat count:
   u16 aim                    // 0..65535 ↔ 0..2π
   u3  weaponSelect           // 0 = no change, 1..7 slot
   u3  throwStrength          // grenade (0..7)
+  u3  dashStrength           // dash (0..7, 7 = full; v14: touch scales it by the stick's push and flick)
   u8  renderLag              // not on inputs[0]: ticks before renderTick that the frame sampling
                              // this input was drawn, in 1/16 tick (0–15.94); lag comp rewinds each
                              // input to its own view (batched inputs, redundant copies after a loss)
@@ -224,9 +226,11 @@ Repeated in the next 3 snapshots (dedupe by projId+kind) so loss doesn't drop a 
               u16 ticks left in the phase that began  // 51 bits; tag 7 is the last free tag: make it an escape
 ```
 
-As built (Phase 0, `packages/protocol/src/snapshot.ts`), the event tags are 0 shot, 1 explosion, 2 death, 3 hit, 4 spawn, 5 sound, **6 map event (v8)**, **7 extended (v8)**: a u4 kind follows, then its fields, so the 3-bit tag never runs out. Extended kind 0 is **DASH** (u5 player, i24 x, i24 y, u3 direction; 02-physics §21), sent to clients that can see the dasher, never to the dasher (it draws its own from prediction). **Extended events carry no length prefix:** a client can't skip a kind it doesn't know, so every new ext kind still needs a PROTOCOL_VERSION bump, and its number is claimed in the protocol registry before use. A MAP_EVENT announces; it doesn't carry state anyone needs to stay in sync, so a lost snapshot only loses a banner cue: the HUD reads the same event from the client's own copy of the schedule (§8).
+As built (Phase 0, `packages/protocol/src/snapshot.ts`), the event tags are 0 shot, 1 explosion, 2 death, 3 hit, 4 spawn, 5 sound, **6 map event (v8)**, **7 extended (v8)**: a u4 kind follows, then its fields, so the 3-bit tag never runs out. Extended kind 0 is **DASH** (u5 player, i24 x, i24 y, u3 direction, u3 chain since v14; 02-physics §21), sent to clients that can see the dasher, never to the dasher (it draws its own from prediction). **Extended events carry no length prefix:** a client can't skip a kind it doesn't know, so every new ext kind still needs a PROTOCOL_VERSION bump, and its number is claimed in the protocol registry before use. A MAP_EVENT announces; it doesn't carry state anyone needs to stay in sync, so a lost snapshot only loses a banner cue: the HUD reads the same event from the client's own copy of the schedule (§8).
 
 v8 also appends a **dash group** to the local-player block (dashTicks u6, dashDir u3, normalised to 0 outside a burst, dashCooldown u8, airDashUsed u1: 18 bits, sent only when it changes) and widens the remote-player flags to 8 bits with `dashing`.
+
+**v14 (the owner's fluid dash; NOTES §28):** INPUT gains a trailing u3 `dashStrength` per input. The dash group keeps its indices with new meanings: 43 `dashGap` u6 (the re-trigger gap, was dashCooldown u8) and 44 `dashChain` u3 (the link in a chain, was airDashUsed u1). A new group after the burn group, 63–64: `dashChainTicks` u7 (the chain window left) and `dashPower` u3 (the current dash's strength, normalised to 0 outside a burst); 15 delta groups. The DASH ext event gains a trailing u3 `chain`.
 
 **Riot shield and pickups (built, protocol v9; `packages/protocol/src/{localState,snapshot}.ts`; allocations from the protocol registry):**
 - **INPUT:** `buttons` bit 14 = `Btn.Shield` (raise / sling, edge-triggered in the sim). The web client binds it to **X**.
@@ -277,7 +281,7 @@ v8 also appends a **dash group** to the local-player block (dashTicks u6, dashDi
 ```
 onFire(shooter, inputTick, renderTick, renderFrac):
   t = renderTick + renderFrac/256
-  t = clamp(t, now − 18 ticks, now)                  // 300 ms cap (200 ms latency + 100 ms interp delay)
+  t = clamp(t, now − 30 ticks, now)                  // 500 ms cap (300 ms latency + up to 200 ms interp delay)
   for each other player p: pose = lerp(history[p] at the snapshot ticks around t, as the client interpolated)   // hitboxes only
   ray-test world (CURRENT geometry) + rewound hitboxes
   apply damage NOW (no rewinding health)
@@ -293,6 +297,7 @@ The client shows **predicted** impact sparks and tracers instantly, but the **hi
 - The client spawns a predicted projectile immediately (temp id = `inputTick << 4 | shotIndex`).
 - The server spawns at fire time and **fast-forwards** it by `min(shooterRTT/2, 100 ms)` of sim steps (collision included), so it roughly matches the shooter's view without favouring them too much.
 - On `NEW` from the server with a matching `(owner, spawnTick, shotIndex)`, the client **adopts** the server id and blends any position error over 100 ms.
+- **As built (19 Oct 2026, `packages/netcode/src/ownProjectiles.ts`):** own grenades and projectiles fly from the throw in a world of their own (the map, the seed, the tuning, no players), stepped tick for tick with the prediction. The first own grenade of the same type that a snapshot shows after the throw is matched to it. While matched, the server's copy is hidden; ours settles where it lands and hands over when the server's reaches that spot, or goes when the server's is gone. If they are > 1.5 m apart at the same tick, the server's is drawn from then on. A throw no snapshot ever shows goes after 75 ticks. Before this an own grenade appeared a round trip after the throw: 244 ms at 150 ms ±40, 576 ms (p50) on the MTN profile. The 2D view and `NetClient.grenadeViews()` have it. The 3D view draws snapshot grenades on its own timeline: `net.ownGrenadeViews()` and `net.predictsGrenade(id)` are its hooks.
 - No rewind for projectile-vs-player collision (current positions). Rockets are slow enough that this reads fairly.
 
 ---
@@ -321,7 +326,7 @@ onSnapshot(s) {
 }
 ```
 
-**What is predicted:** own movement, jetpack, fuel, crouch, dash (its burst, cooldown and air dash are in the local block), own weapon fire timing/ammo/reload, own projectiles' flight, muzzle flash, recoil, own grenade arc and throw.
+**What is predicted:** own movement, jetpack, fuel, crouch, dash (its burst, cooldown and air dash are in the local block), own weapon fire timing/ammo/reload, own projectiles' flight, muzzle flash, recoil, own grenade arc and throw. (As built: own grenades and projectiles fly from the throw since 19 Oct 2026, §7.3.)
 **Map mechanics (02-physics §20) are predicted with nothing on the wire.** Map rules and zones come from the `MapDef` (CONTENT_HASH refuses mismatched builds, and covers the zone and event kinds' defaults), and the map-event schedule is a pure function of the map, the room seed (WELCOME) and the tick. The predictor's Game has all three and steps the same tick numbers as the server, so a gravity surge, an EMP storm or a jump pad hits the predicted player on exactly the tick it hits the server's, also when reconciliation re-simulates old ticks. `apps/game-server/test/mapMechanics.test.ts` walks a client through every zone and a whole event loop of the mechanics-test map: no mispredictions on a clean LAN, and < 1 correction/min at 150 ms / 2 % loss. A client stripped of the map's mechanics mispredicts dozens of times in 30 s, so the test has teeth. **If a mechanic ever needs per-match state** (an event a host triggers, a schedule that restarts at GO), that state must reach clients before the ticks it affects: a reliable message, or the local block.
 **What is NOT predicted:** damage to others, deaths, pickups (shown optimistically with a 150 ms "pending" state, then confirmed or reverted), score.
 **Collisions with other players:** players don't body-block each other (a genre convention), which removes the biggest source of mispredictions in shooters.
@@ -358,6 +363,9 @@ BR (≤ 40–50 players, big map):
 ```
 renderServerTime = estServerTime − interpDelay
 interpDelay = clamp(max(2 × snapshotInterval, snapshotInterval + 2 × jitterStd), 50 ms, 200 ms)  // smoothed
+// as built (19 Oct 2026, NetClient.adaptInterpDelay): interval × (1 + the 2nd-longest run of lost
+// snapshots in 10 s, ≤ 3) + p95 of how late arrivals were vs the quickest (last ~3 s) + 10 ms;
+// up 60 ms/s, down 10 ms/s. Low-bandwidth mode: at least 150 ms. A fixed delay, for tests: options.interpDelayMs
 for each remote:
   find snapshots A ≤ renderServerTime < B → lerp position, shortest-arc lerp aim, discrete fields from A (B when alpha > 0.5)
   no B yet → extrapolate with last velocity up to 100 ms, then hold. Reconverge over 100 ms when data arrives
@@ -393,7 +401,7 @@ CI alarm: if the p95 snapshot size grows > 20% between builds, fail the perf che
 
 | Condition | Behaviour |
 |---|---|
-| Lost input packets | covered by 3–4× redundancy; if a tick's input is still missing, the server repeats the last input and flags it `predicted`. A late real input is discarded (never rewrite the past) |
+| Lost input packets | covered by 3–4× redundancy; if a tick's input is still missing, the server repeats the last input and flags it `predicted`. A late real input is discarded (never rewrite the past), **except its presses**: an action button the client pressed on a tick that came too late (fire, dash, grenade, reload, swap, melee, shield, …: `LATCHED_BUTTONS`), and the sim didn't have down, is applied on the next tick, once, up to 45 ticks late (`InputBuffer.forSim`). On the MTN profile this cut lost dashes from 24 to 11, lost throws from 22 to 3 and lost shots from 101 to 35 in 6 minutes |
 | Lost snapshots | next snapshot deltas from the last acked baseline; interpolation buffer absorbs ≤ 2 losses |
 | Jitter spike | interpDelay grows (smoothed) and shrinks back slowly (hysteresis) |
 | Connection stall (WebSocket) | the socket stays open and queues what it can't send, then hands it all over at once. While the server has been silent for 500 ms, or `bufferedAmount` is over 1 KB, the client sends 4 INPUTs a second instead of 60 (each carries the newest inputs; the rest would arrive too late to use). The server drops whatever is still over its INPUT allowance (§14). WebTransport datagrams don't queue, so they're never held back |
@@ -412,7 +420,7 @@ CI alarm: if the p95 snapshot size grows > 20% between builds, fail the perf che
 - Token buckets per connection: INPUT ≤ 70/s (60 + slack), CMD ≤ 20/s, CHAT ≤ 1/s (burst 5), PING ≤ 5/s.
   - INPUT: up to 3 s of unused allowance carries over. INPUTs over it are dropped, not a kick: a stalled stream's backlog arrives all at once (§13). The newest one over the limit is applied at the next tick. A client that's over the limit for 10 s in a row is flooding and is kicked (`RATE_LIMITED`).
   - Every other message: 200/s, with 3 s carried over, then a kick (`RATE_LIMITED`). CMDs over their own bucket are dropped.
-- Inputs whose `newestTick` is too far ahead of server time (> 30 ticks) are rejected. That's speedhack by clock manipulation.
+- Inputs whose `newestTick` is too far ahead of server time (≥ 48 ticks; was 32) are rejected. That's speedhack by clock manipulation. A phone's upload queue draining after a spike can hand over inputs ~40 ticks ahead for a moment.
 - Rotate message-type IDs and field order per build (cheap obfuscation; deters casual packet-editing scripts).
 - See 10-security-anticheat for behavioural detection.
 

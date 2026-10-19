@@ -228,7 +228,7 @@ describe('phone settings', () => {
     expect(phoneTab('controls')).toBe('touch');
     expect(phoneTab('audio')).toBe('audio');
     const access = withCtl(c, <PhoneSettings store={createShellStore({ settingsTab: 'accessibility' })} />);
-    for (const t of ['Text size', 'Reduce motion', 'Reduce flashes', 'Colour-blind teams']) expect(access).toContain(t);
+    for (const t of ['Text size', 'Reduce motion', 'Reduce flashes', 'Soften loud bursts', 'Colour-blind teams']) expect(access).toContain(t);
   });
 });
 

@@ -100,7 +100,7 @@ const me = (page) =>
   page.evaluate(() => {
     const m = window.__game.mode;
     const p = m.me;
-    return { x: p.x, y: p.y, mag: p.weapons[p.active].mag, active: p.active, frags: p.frags, dashCooldown: p.dashCooldown, live: m.game.grenades.filter((g) => g.alive).length };
+    return { x: p.x, y: p.y, mag: p.weapons[p.active].mag, active: p.active, frags: p.frags, dashed: p.dashChainTicks > 0, live: m.game.grenades.filter((g) => g.alive).length };
   });
 
 async function centre(page, selector) {
@@ -223,16 +223,16 @@ try {
     await f.flick(1, L.x, L.y, 90, 0, 120);
     await sleep(150);
     s1 = await me(page);
-    check('swipe and lift on the move stick dashes', s1.dashCooldown > 0, `cooldown ${s1.dashCooldown}`);
-    await sleep(1200);
+    check('swipe and lift on the move stick dashes', s1.dashed, `chain window open: ${s1.dashed}`);
+    await sleep(600);
     s0 = await settle(page);
     await f.flick(1, L.x, L.y, 90, 0, 450); // the same stroke, slowly: a step, not a dash
     await sleep(150);
     s1 = await me(page);
-    check('a slow stroke is a step, not a dash', s1.dashCooldown === 0 && s1.x > s0.x, `cooldown ${s1.dashCooldown}`);
+    check('a slow stroke is a step, not a dash', !s1.dashed && s1.x > s0.x, `chain window open: ${s1.dashed}`);
 
     const d = await centre(page, '.mf-ctl-dash');
-    await sleep(1200); // the dash cooldown
+    await sleep(600); // past the chain window
     await f.drag(1, L.x, L.y, -70, 0); // holding left…
     await f.touch(5, d.x, d.y);
     await sleep(60);
@@ -240,7 +240,7 @@ try {
     await sleep(120);
     s1 = await me(page);
     await f.lift(1);
-    check('dash button dashes the way the stick points', s1.dashCooldown > 0);
+    check('dash button dashes the way the stick points', s1.dashed);
 
     const page2 = await page.evaluate(() => ({ scroll: window.scrollY, scale: window.visualViewport?.scale ?? 1, selected: String(window.getSelection?.() ?? '') }));
     check('no scrolling, zoom or text selection after all that', page2.scroll === 0 && page2.scale === 1 && page2.selected === '', JSON.stringify(page2));

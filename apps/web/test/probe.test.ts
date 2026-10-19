@@ -1,6 +1,7 @@
 /** The net trial's ping probe (src/probe/stats.ts): the numbers it reports and the result it posts. */
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { PING_BYTES, echoSeq, guessDevice, median, missingAnswer, parseConfig, percentile, pingFrame, resultPayload, summarize, verdict, type Answers } from '../src/probe/stats';
+import { PING_BYTES, REFERENCES, echoSeq, refUrl, refsPayload, traceColo, guessDevice, median, missingAnswer, parseConfig, percentile, pingFrame, resultPayload, summarize, verdict, type Answers } from '../src/probe/stats';
 
 const answers = (over: Partial<Answers> = {}): Answers => ({ city: 'Lagos', network: 'mtn', isp: '', connection: 'mobile', device: 'Android phone', note: '', ...over });
 
@@ -94,5 +95,48 @@ describe('probe answers and result', () => {
     expect(verdict(a, b)).toEqual({ faster: 'Lagos', slower: 'Johannesburg', by: 61 });
     expect(verdict(b, a)?.faster).toBe('Lagos');
     expect(verdict(a, { name: 'x', s: summarize([null]) })).toBeNull();
+  });
+});
+
+describe('reference pings', () => {
+  it('have unique ids the probe server keeps, over HTTPS', () => {
+    const ids = REFERENCES.map((r) => r.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const r of REFERENCES) {
+      expect(r.id).toMatch(/^[a-z0-9-]{2,24}$/);
+      expect(new URL(r.url).protocol).toBe('https:');
+    }
+    expect(REFERENCES.length).toBeLessThanOrEqual(16);
+  });
+
+  it("are all allowed by the trial box's Content-Security-Policy", () => {
+    const script = readFileSync(new URL('../../../scripts/net-trial/cloud-init.sh', import.meta.url), 'utf8');
+    const csp = /connect-src ([^;]*);/.exec(script)?.[1] ?? '';
+    const allowed = csp.split(/\s+/).filter((s) => s.startsWith('https://'));
+    for (const r of REFERENCES) {
+      const host = new URL(r.url).host;
+      expect(allowed.some((a) => { const h = a.slice('https://'.length); return h === host || (h.startsWith('*.') && host.endsWith(h.slice(1))); }), host).toBe(true);
+    }
+  });
+
+  it('cache-bust every request', () => {
+    const ref = REFERENCES.find((r) => r.id === 'cf-edge')!;
+    expect(refUrl(ref, 1)).toMatch(/\/trace\?mf=\w+1$/);
+    expect(refUrl(REFERENCES[0]!, 2)).toMatch(/\?mf=\w+2$/);
+    expect(refUrl(ref, 1)).not.toBe(refUrl(ref, 2));
+  });
+
+  it("read Cloudflare's city from its trace", () => {
+    expect(traceColo('fl=1\nh=speed.cloudflare.com\nloc=NG\ncolo=LOS\nhttp=http/2\n')).toBe('LOS');
+    expect(traceColo('colo=<x>')).toBe('');
+  });
+
+  it('go into the result with their summary', () => {
+    const p = refsPayload({ 'aws-eu-west-2': { rtts: [150.04, null, 160], colo: '', error: '' } }) as Record<string, { rtts: unknown[]; median: number; loss: number }>;
+    expect(p['aws-eu-west-2']!.rtts).toEqual([150, null, 160]);
+    expect(p['aws-eu-west-2']!.median).toBe(155);
+    expect(p['aws-eu-west-2']!.loss).toBeCloseTo(33.3, 1);
+    const body = resultPayload('id-12345678', { trial: 't', regions: [], results: [] }, answers(), {}, { at: '', page: '', backgrounded: false });
+    expect(body.refs).toEqual({});
   });
 });

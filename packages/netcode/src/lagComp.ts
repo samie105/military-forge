@@ -8,23 +8,27 @@
  * the client interpolates them (interpolation.ts). The shooter itself is never rewound, and damage
  * applies now.
  *
- * Cap: docs/05 caps the total rewind at 300 ms: 200 ms of latency on top of the 100 ms
- * interpolation delay (367 ms for low-bandwidth clients, after a warm-up). In this tick-aligned
- * model a shot at tick T was aimed at render tick ≈ T − (RTT + input buffer + interpolation delay),
- * i.e. ~280 ms back at the 150 ms target profile, so a 200 ms cap on the total would leave every
- * shot at that RTT uncompensated. Beyond ~175 ms RTT players lead their shots, and fake lag gains
- * at most the cap.
+ * Cap: docs/05 §7.1 caps the total rewind at 500 ms: 300 ms of latency on top of the most the
+ * adaptive interpolation delay can be (200 ms; one tick more for low-bandwidth clients). In this
+ * tick-aligned model a shot at tick T was aimed at render tick ≈ T − (RTT + input buffer +
+ * interpolation delay), i.e. ~340 ms back at 150 ms ±40 jitter and ~400 ms at 250 ms. The old
+ * 300 ms cap (200 + a fixed 100) clipped every shot above ~175 ms RTT: on the owner's mobile paths
+ * (19 Oct 2026) that was every shot. Beyond the cap players lead their shots, and fake lag gains
+ * at most the cap. A server can set its own total (LAG_COMP_MAX_MS; the Johannesburg trial box
+ * uses more, for 500 ms phones).
  */
 import { MAX_PLAYERS, shieldRaised, shieldSlung, type HitPose, type PlayerState, type TargetRewind } from '@military-forge/sim';
 import { lerpPosition } from './interpolation';
 import { TICK_MS } from './ticks';
 
 /** Latency the server compensates at most, on top of the interpolation delay (docs/05 §1). */
-export const LAG_COMP_LATENCY_CAP_MS = 200;
-/** NetClient's default interpolation delay (docs/05 §10). */
+export const LAG_COMP_LATENCY_CAP_MS = 300;
+/** NetClient's starting interpolation delay (docs/05 §10); it adapts within 50–200 ms. */
 export const INTERP_DELAY_MS = 100;
-/** Hit-pose history kept per player: 1 s at 60 Hz, rounded up to a power of two. */
-export const POSE_HISTORY_TICKS = 64;
+/** The most NetClient's adaptive interpolation delay can be (client.ts MAX_INTERP_DELAY_MS). */
+export const MAX_VIEW_DELAY_MS = 200;
+/** Hit-pose history kept per player: 2.1 s at 60 Hz (room for a LAG_COMP_MAX_MS up to 2 s). */
+export const POSE_HISTORY_TICKS = 128;
 const MASK = POSE_HISTORY_TICKS - 1;
 const ALIVE = 1;
 const CROUCHED = 2;
@@ -39,7 +43,7 @@ export interface LagCompOptions {
   snapshotEvery?: number;
   /**
    * total rewind cap in ms for every shooter. Default: LAG_COMP_LATENCY_CAP_MS on top of each
-   * shooter's interpolation delay (setView), i.e. 300 ms normally, 367 ms in low-bandwidth mode (150 ms + 1 tick of input batching).
+   * shooter's view delay (setView), i.e. 500 ms normally, 517 ms in low-bandwidth mode (+ 1 tick of input batching).
    */
   maxRewindMs?: number;
   /** keep a log of every rewind for the debug overlay (dev) */
@@ -94,7 +98,7 @@ export class LagCompensator implements TargetRewind {
   constructor(options: LagCompOptions = {}) {
     this.snapshotEvery = Math.max(1, options.snapshotEvery ?? 2);
     this.fixedCapTicks = options.maxRewindMs === undefined ? Number.NaN : options.maxRewindMs / TICK_MS;
-    this.maxRewindTicks = Number.isNaN(this.fixedCapTicks) ? (LAG_COMP_LATENCY_CAP_MS + INTERP_DELAY_MS) / TICK_MS : this.fixedCapTicks;
+    this.maxRewindTicks = Number.isNaN(this.fixedCapTicks) ? (LAG_COMP_LATENCY_CAP_MS + MAX_VIEW_DELAY_MS) / TICK_MS : this.fixedCapTicks;
     this.logging = options.log ?? false;
   }
 
@@ -128,7 +132,7 @@ export class LagCompensator implements TargetRewind {
    * The render tick `shooterId`'s screen showed when it sampled this tick's input (NaN: none), and
    * the spacing of the snapshots it interpolates between (default: the room's).
    */
-  setView(shooterId: number, renderTick: number, snapshotEvery = this.snapshotEvery, interpDelayMs = INTERP_DELAY_MS): void {
+  setView(shooterId: number, renderTick: number, snapshotEvery = this.snapshotEvery, interpDelayMs = MAX_VIEW_DELAY_MS): void {
     if (shooterId < 0 || shooterId >= MAX_PLAYERS) return;
     this.views[shooterId] = renderTick;
     this.spacing[shooterId] = snapshotEvery;

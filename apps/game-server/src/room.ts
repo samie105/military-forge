@@ -57,7 +57,7 @@ import {
 } from '@military-forge/protocol';
 import {
   ConditionedLink,
-  INTERP_DELAY_MS,
+  MAX_VIEW_DELAY_MS,
   InputBuffer,
   LOW_BANDWIDTH_INTERP_DELAY_MS,
   LagCompensator,
@@ -925,11 +925,12 @@ export class Room {
       if (health !== HEALTH_UNKNOWN && health < c.healthMin) c.healthMin = health;
       // this tick's input, or the last one repeated (docs/05 §13)
       c.inputs.take(current, c.lastInput);
-      this.inputs[c.playerId] = c.lastInput;
+      // plus any press that arrived too late for its own tick (late, not lost: docs/05 §13)
+      this.inputs[c.playerId] = c.inputs.forSim(current, c.lastInput);
       // the rewind cap allows for this client's view delay: interpolation (+ input batching when
       // slim, once it has been slim for LOW_BW_WARMUP_TICKS)
       const lowBandwidth = c.lowBwSince >= 0 && current - c.lowBwSince >= LOW_BW_WARMUP_TICKS;
-      const viewDelayMs = lowBandwidth ? LOW_BANDWIDTH_INTERP_DELAY_MS + TICK_MS : INTERP_DELAY_MS;
+      const viewDelayMs = lowBandwidth ? Math.max(LOW_BANDWIDTH_INTERP_DELAY_MS, MAX_VIEW_DELAY_MS) + TICK_MS : MAX_VIEW_DELAY_MS;
       lagComp?.setView(c.playerId, c.inputs.renderTickFor(current), lowBandwidth ? c.snapshotEvery : this.snapshotEvery, viewDelayMs);
     }
     // players waiting for a reconnect stand idle; give up on them after the grace

@@ -1,6 +1,6 @@
 /**
  * Smoke test of the production build's pages of their own (locker.html, armory.html, admin.html,
- * probe.html): each one loads in headless Chrome from the built files, draws its root and throws no
+ * probe.html, gamepad.html, sounds.html): each one loads in headless Chrome from the built files, draws its root and throws no
  * page error. The dev server can't catch a page whose chunk imports the game's entry chunk (which
  * then boots the game with no canvas: #132 review H1); this can.
  *
@@ -26,6 +26,8 @@ const PAGES = [
   ['armory.html', '.mf-armory'],
   ['admin.html', 'body *'],
   ['probe.html', 'body *'],
+  ['gamepad.html', '.padcheck h1'],
+  ['sounds.html', '.board .snd'],
 ];
 
 if (!existsSync(join(dist, 'locker.html'))) {

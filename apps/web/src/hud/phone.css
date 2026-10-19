@@ -31,6 +31,9 @@ html.reduce-motion .mf-hud-phone { --m-rise: 0px; }
 
 /* ping under the kill line: the bars and the number in the ping's colour (good, mid, bad) */
 .pt-ping > span { display: inline-flex; align-items: center; gap: 4px; }
+/* the compact readout after the ping: ±jitter · loss · WT/WS */
+.pt-ping__more { color: var(--c-muted); font-weight: var(--fw-semi); font-size: calc(12px * var(--text-scale, 1)); white-space: nowrap; }
+.pt-ping__more:empty { display: none; }
 .pt-ping .ping--mid .sig i:nth-child(4), .pt-ping .ping--bad .sig i:nth-child(n + 3) { opacity: 0.25; }
 
 /* the owner's admin page changed this server's numbers: a brass tag under the ping, clear of the clock */

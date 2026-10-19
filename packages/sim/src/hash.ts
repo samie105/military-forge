@@ -80,12 +80,14 @@ export function hashGame(game: Game): number {
     // resting value, so the existing goldens (none of which swing a melee weapon) keep their hashes.
     if (p.meleeTicks !== 0) f.int(p.meleeTicks);
     // dash (docs/02 §21): likewise only away from rest (tagged), so replays that never dash keep their hashes
-    if (p.dashTicks !== 0 || p.dashCooldown !== 0 || p.airDashUsed) {
+    if (p.dashTicks !== 0 || p.dashGap !== 0 || p.dashChainTicks !== 0 || p.dashChain !== 0) {
       f.int(0xda54);
       f.int(p.dashTicks);
-      f.int(p.dashTicks > 0 ? p.dashDir : 0); // the direction only matters during a burst
-      f.int(p.dashCooldown);
-      f.bool(p.airDashUsed);
+      f.int(p.dashTicks > 0 ? p.dashDir : 0); // the direction and strength only matter during a burst
+      f.int(p.dashGap);
+      f.int(p.dashChain);
+      f.int(p.dashChainTicks);
+      f.int(p.dashTicks > 0 ? p.dashPower : 0);
     }
     // riot shield: likewise (tagged); its other fields rest whenever it has no HP (shield.ts)
     if (p.shieldHp !== 0) {

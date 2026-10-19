@@ -187,7 +187,7 @@ async function states() {
 
   // dual, the dash recharging, launched by a blast
   await reset();
-  const dual = guns({ def: W.hawk, mag: 7, reserve: 42 }, { def: W.hawk, mag: 5, reserve: 42 }, { ...normal, dual: true, dashCooldown: 36, grounded: false, vx: 24, vy: 9 });
+  const dual = guns({ def: W.hawk, mag: 7, reserve: 42 }, { def: W.hawk, mag: 5, reserve: 42 }, { ...normal, dual: true, fuel: 6, grounded: false, vx: 24, vy: 9 });
   await patch(dual);
   await sleep(700);
   await now({ me: dual, ev: `(me, [a]) => [{ type: 'hit', attacker: a, target: me, damage: 35, zone: 1, source: 14 }]` });
@@ -401,7 +401,7 @@ async function strips() {
     await strip('belt-cycle', { clip: R.belt, ms: 304, before: () => patch({ grenadeCounts: [3, 2, 1, 1, 2, 1], grenadeType: 0 }), trigger: () => now({ me: { grenadeCounts: [3, 2, 1, 1, 2, 1], grenadeType: 1 } }) });
     await strip('throw-meter', { clip: R.reticle, ms: 192, trigger: () => now({ input: '{ throwAim: 4 }' }) });
     await strip('quick-throw', { clip: R.reticle, ms: 160, trigger: () => now({ input: '{ quickThrowAt: performance.now() }' }) });
-    await strip('dash-ready', { clip: R.dash, ms: 192, before: () => patch({ dashCooldown: 2 }), trigger: () => now({ me: { dashCooldown: 0 } }) });
+    await strip('dash-ready', { clip: R.dash, ms: 192, before: () => patch({ fuel: 8 }), trigger: () => now({ me: { fuel: 196 } }) });
     await strip('pickup-in', { clip: R.pickup, ms: 272, before: () => patch(hammerBuzz({ active: 0 })), trigger: () => now({ me: hammerBuzz({ active: 0 }), frame: `(f, me) => ({ pickups: [{ id: 9, def: ${crate(W.dragon)}, x: me.x, y: me.y }] })` }) });
     await strip('pickup-leave', {
       clip: R.pickup,

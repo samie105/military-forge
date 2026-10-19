@@ -241,20 +241,25 @@ export function shieldStatus(p: Pick<PlayerView, 'shield' | 'shieldHp'>): Shield
 }
 
 export interface DashStatus {
-  /** ready; cooldown (recharging); spent (this flight's air dash is used; back on landing) */
-  state: 'ready' | 'cooldown' | 'spent';
-  /** 0..1 of the cooldown still to run */
+  /** ready (the fuel buys a dash); spent (not enough fuel for one: the ring refills toward it) */
+  state: 'ready' | 'spent';
+  /** 0..1 of a dash's fuel still to come back (0 when ready) */
   fill: number;
-  /** seconds of cooldown left */
-  seconds: number;
+  /** full dashes the fuel buys now (-1: dashes are free) */
+  left: number;
 }
 
-export function dashStatus(p: Pick<PlayerView, 'dashCooldown' | 'airDashUsed' | 'grounded'>, t: Pick<Tuning, 'dashCooldown'>): DashStatus {
-  const left = Math.max(0, p.dashCooldown ?? 0);
-  const total = t.dashCooldown * 60;
-  const fill = total > 0 ? Math.min(1, left / total) : 0;
-  if (left > 0) return { state: 'cooldown', fill, seconds: left / 60 };
-  return { state: p.airDashUsed && !p.grounded ? 'spent' : 'ready', fill: 0, seconds: 0 };
+/**
+ * The dash as the HUD shows it (docs/02 §21, the owner, 19 Oct: "as far as you have fuel you can
+ * dash as many times as you want but it eats from your fuel"): no cooldown, just the fuel.
+ */
+export function dashStatus(p: Pick<PlayerView, 'fuel'>, t: Pick<Tuning, 'dashFuelCost'>): DashStatus {
+  const cost = t.dashFuelCost;
+  if (!(cost > 0)) return { state: 'ready', fill: 0, left: -1 };
+  const fuel = Math.max(0, p.fuel);
+  const left = Math.floor(fuel / cost + 1e-9);
+  if (left > 0) return { state: 'ready', fill: 0, left };
+  return { state: 'spent', fill: Math.min(1, 1 - fuel / cost), left: 0 };
 }
 
 export interface Conditions {

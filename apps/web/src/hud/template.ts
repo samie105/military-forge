@@ -54,7 +54,7 @@ function desktop(): string {
   <div class="hud" role="group" aria-label="Match HUD">
     <div class="hud-tl">
       <div class="hud-net plate" data-state="fps"><span class="num" data-bind="fps.value"></span><span class="hud-net__loss">fps</span></div>
-      <div class="hud-net plate" data-state="net" data-bind-attr="title: net.detail; data-detail: net.detail; data-tone: net.tone"><span class="sig" data-bind-attr="class: net.sig" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="num" data-bind="net.ping"></span><span class="hud-net__loss num"><span data-bind="net.loss"></span> loss</span></div>
+      <div class="hud-net plate" data-state="net" data-bind-attr="title: net.detail; data-detail: net.detail; data-tone: net.tone"><span class="sig" data-bind-attr="class: net.sig" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="num" data-bind="net.ping"></span><span class="hud-net__jit num" data-bind="net.jitter"></span><span class="hud-net__loss num"><span data-bind="net.loss"></span> loss</span><span class="hud-net__via" data-bind="net.via" data-bind-attr="title: net.viaTitle"></span></div>
       <div class="tuned plate mf-hud-admin" data-state="admin" title="The owner changed gameplay numbers on this server (the admin page)">${ic('sliders', 'ic--sm')}<b>Tuned by admin</b></div>
       <div class="tuned plate m-p7" data-state="tuned">${ic('sliders', 'ic--sm')}<b>Tuned by host</b><span data-bind="match.tunedSummary"></span></div>
     </div>
@@ -99,7 +99,7 @@ function desktop(): string {
           </svg>
           <svg class="ic ic--lg dash__icon" aria-hidden="true"><use href="#icon-dash"/></svg>
           <b class="dash__cd num" data-state="dash-cooldown" data-bind="dash.cooldown"></b>
-          <div class="dash__foot"><kbd class="kbd" data-bind="bind.dash.0"></kbd><span class="dash__air" aria-label="Air dash">Air</span></div>
+          <div class="dash__foot"><kbd class="kbd" data-bind="bind.dash.0"></kbd><span class="dash__air" aria-label="Dashes the fuel buys" data-bind="dash.left"></span></div>
           <span class="dash__hint" data-state="dash-hint" data-bind-var="--hint-rot: dash.hintArrow">${ic('arrow-right', 'ic--sm')}<span data-bind="dash.hintDir"></span></span>
         </div>
       </div>

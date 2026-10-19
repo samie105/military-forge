@@ -30,7 +30,8 @@ import { loadExplosionArt, loadWeaponVfx, type ExplosionArt, type FlipbookArt } 
 import { ParticleLayer } from './particles';
 import { ParticlePool } from './pool';
 import { ProjectileFx, type GunPointLookup } from './projectiles';
-import { ShieldBlasts } from './shieldBlast';
+import { MeleeFx, type SwingLookup } from './melee';
+import { ShieldBlasts, shieldBreak } from './shieldBlast';
 import { CameraShake, blastTrauma } from './shake';
 import { ThrowArc } from './throwArc';
 
@@ -122,6 +123,13 @@ export class Vfx {
   private readonly grenadeFx: GrenadeFx;
   /** a launcher's blast at a riot shield's face: the plate's flare and sparks */
   private readonly shieldBlasts = new ShieldBlasts();
+  /** melee: the swing's trail and the hit (melee.ts) */
+  private readonly melee: MeleeFx;
+  private breakSeed = 0x0b1e;
+  private readonly breakRand = (): number => {
+    this.breakSeed = (Math.imul(this.breakSeed, 1664525) + 1013904223) >>> 0;
+    return this.breakSeed / 4294967296;
+  };
   private readonly modules: VfxModule[] = [];
   /** the Low preset (fewer casings) */
   private low = false;
@@ -143,7 +151,10 @@ export class Vfx {
     ejects: EjectLookup = () => false,
     /** a drawn gun's named socket (`pilot`, `charge`) for the projectiles' tells (Renderer3D: from the avatars) */
     gunPoints: GunPointLookup = () => false,
+    /** a soldier's weapon mid-strike, for the swing's trail (Renderer3D: from the avatars) */
+    swings: SwingLookup = () => false,
   ) {
+    this.melee = new MeleeFx(swings);
     const atlas = vfxAtlas();
     const grid = [ATLAS_GRID, ATLAS_GRID] as const;
     this.decals = new ParticleLayer(DECALS_MAX, { texture: atlas, grid, blend: 'alpha', depthTest: true, renderOrder: 10, polygonOffset: true });
@@ -341,6 +352,7 @@ export class Vfx {
 
   /** Blood on player hits (blood.ts), instead of the non-gory thud. */
   setBlood(on: boolean): void {
+    this.melee.blood = on;
     this.gunfire.blood = on;
   }
 
@@ -359,6 +371,9 @@ export class Vfx {
     this.casings.onEvents(events);
     this.projectiles.onEvents(events);
     this.dash.onEvents(events, this.ctx);
+    this.melee.onEvents(events, this.ctx, this.world, this.ctx.detail);
+    // a riot shield broken at 0 HP: a flash, its shards and sparks (docs/03 §5)
+    for (const e of events) if (e.type === 'shieldBreak') shieldBreak(e.x, e.y, this.glowPool, this.smokePool, this.ctx.detail, this.breakRand);
     for (const e of events) {
       // arsenal-b: a flashbang (3) or EMP (5) going off isn't a fireball; its own effects draw it
       const kind = (e as { grenade?: number }).grenade ?? 0;
@@ -419,6 +434,7 @@ export class Vfx {
     this.decals.end();
     // the shields as this frame drew them, for the blasts of the next batch of events
     this.shieldBlasts.players = frame.players;
+    this.melee.update(frame, this.ctx, this.ctx.detail, this.ctx.reducedMotion);
     return this.shake.update(dt);
   }
 

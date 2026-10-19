@@ -31,12 +31,13 @@ import type { CharacterInstance, CharacterLod } from './character';
 import { GunParts, cycleByClass, ease, partPose, type GunCycle, type PartPose } from './gunParts';
 import { AimClips, HOLDS, holdFamily, type AimPose, type HoldProfile } from './holds';
 import { KICK_MAX, recoilOf } from './recoil';
-import { DEFAULT_OFFHAND, loadWeaponModels, type GltfSource, type GunMaterials, type WeaponModel } from './weaponModels';
+import { DEFAULT_OFFHAND, bakeGltfMesh, loadWeaponModels, type GltfSource, type GunMaterials, type WeaponModel } from './weaponModels';
 import { orientSocket, rotateWorld, solveTwoBone } from './ik';
 import { FootPlanter, LocoLayer, aimElevation, facingOf, facingYaw, stepYaw } from './locomotion';
 import { MotionLayer } from './motion';
 import { ShieldKit, ShieldRig } from './shield';
 import { SlingRig, slingPointFor, switchPhase, switchSeconds, type SlingPoint, type SwitchPose } from './sling';
+import { SwingClock, swingPose, type SwingPose } from './swing';
 
 /** GPU resources shared by every avatar. */
 export class AvatarKit {
@@ -81,7 +82,15 @@ export class AvatarKit {
   // --- render3d-b: weapon models (W8 GLBs, placeholders until they load) ---
   /** W8's weapon GLBs; each replaces its placeholder as it arrives (weaponModels.ts). */
   loadWeapons(baseUrl: string, loader: GltfSource): Promise<void> {
-    return loadWeaponModels(baseUrl, loader, this.gunMaterials, (def, model) => this.models.set(def, model));
+    // the riot shield's Forge model in place of the placeholder plate (shield.ts); a failure keeps the plate
+    const shield = loader
+      .loadAsync(`${baseUrl}assets/weapons/riot_shield.glb`)
+      .then((gltf) => {
+        const geometry = bakeGltfMesh(gltf);
+        if (geometry) this.shield.setModel(geometry);
+      })
+      .catch((err: unknown) => console.warn('render3d: riot_shield.glb failed to load, drawing the placeholder shield', err));
+    return Promise.all([loadWeaponModels(baseUrl, loader, this.gunMaterials, (def, model) => this.models.set(def, model)), shield]).then(() => undefined);
   }
 
   /** A scanned gun's toon material, one per albedo texture. */
@@ -197,6 +206,9 @@ const _qb = new Quaternion();
 const _held = new Matrix4();
 const _inv = new Matrix4();
 const _h = new Vector3();
+const _swing: SwingPose = { weight: 0, angle: 0, reach: 0, striking: false };
+const _sd = new Vector3();
+const _su = new Vector3();
 const EJECT_DIR = new Vector3(0.8, -0.25, 0.55).normalize();
 
 /** recoil.ts: an arm's kick settles at its weapon's rate, then takes the shots that just landed. */
@@ -312,12 +324,61 @@ export class Avatar {
     this.feet.update(p, this.yaw, this.loco, dt, world, this.motion.drop);
     // --- end animation ---
     this.watchSwitch(p, dt);
+    this.swing.update(p.meleeTicks, dt);
     this.aim(p, facing);
     this.hangGuns(p);
     this.shield.update(p.shield, this.pivot);
     this.settleRecoil(dt);
     this.updateFlame(p, dt);
     if (blobShadows) this.updateBlob(p, world);
+  }
+
+  // --- render3d-b: melee swings (swing.ts) ---
+  private readonly swing = new SwingClock();
+
+  /** One of its melee hits landed: a remote swing (no `meleeTicks` online) plays from the strike. */
+  struck(): void {
+    if (this.pivot.visible) this.swing.struck();
+  }
+
+  /** Mid-strike: the hand and the weapon's tip (its `muzzle`, a blade's point) in world space, for the trail (vfx/melee.ts). */
+  swingSegment(out: { hx: number; hy: number; tx: number; ty: number }): boolean {
+    const arm = this.right;
+    if (!this.pivot.visible || !arm) return false;
+    if (!swingPose(this.swing.t, weapons[arm.def]?.fireMode === 'melee', _swing).striking) return false;
+    arm.hand.getWorldPosition(_h);
+    out.hx = _h.x;
+    out.hy = _h.y;
+    if (arm.def === NO_WEAPON) _h.set(0, 0.12, 0);
+    else _h.copy(this.kit.weapon(arm.def).muzzle);
+    arm.socket.localToWorld(_h);
+    out.tx = _h.x;
+    out.ty = _h.y;
+    return true;
+  }
+
+  /**
+   * The gun arm through a swing, over where its hold put it: drawn back, then a blade sweeping
+   * down through the arc (a gun or a fist jabbing out), then easing back. The weapon turns with it.
+   */
+  private swingArm(arm: Arm, p: PlayerView, facing: 1 | -1, def: number): void {
+    const slash = weapons[def]?.fireMode === 'melee';
+    const pose = swingPose(this.swing.t, slash, _swing);
+    if (pose.weight <= 0) return;
+    const a = p.aim + facing * pose.angle;
+    _sd.set(Math.cos(a), Math.sin(a), 0);
+    _su.set(-Math.sin(a) * facing, Math.cos(a) * facing, 0);
+    arm.upper.getWorldPosition(_s);
+    arm.hand.getWorldPosition(_c);
+    _t.copy(_s).addScaledVector(_sd, arm.length * pose.reach).addScaledVector(_lat, -0.12).lerp(_c, 1 - pose.weight);
+    // the elbow: behind the swing and down
+    _p.copy(_s).addScaledVector(_sd, -0.3).addScaledVector(UP, -0.35).addScaledVector(_lat, -0.2);
+    solveTwoBone(arm.upper, arm.lower, arm.hand, _t, _p);
+    if (arm.def === NO_WEAPON) return;
+    // the weapon: from along the aim to along the swing (a blade out from the hand like an arm's length more)
+    _sd.lerp(_gunDir, 1 - pose.weight).normalize();
+    _su.lerp(_gunUp, 1 - pose.weight).normalize(); // _gunUp stays as aim() set it: the left arm reads it next
+    orientSocket(arm.hand, arm.socket, _sd, _su);
   }
 
   /** animation: a hit landed (motion.ts hit reactions); `scale` is 1, or less under Reduce motion */
@@ -382,6 +443,7 @@ export class Avatar {
     if (this.right) {
       this.aimArm(this.right, inHand, 1, switching ? this.holdOf(inHand, false) : hold, posed);
       if (switching) this.carry(this.right, switching, p.shield === 'back');
+      else this.swingArm(this.right, p, facing, inHand);
     }
     if (this.left) {
       this.left.gun.visible = false;

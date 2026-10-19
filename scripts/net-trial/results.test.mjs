@@ -14,6 +14,14 @@ const run = (id, over = {}) => ({
 });
 
 describe('results', () => {
+  it('tables reference pings as ref:<id> next to our regions', () => {
+    const rows = table([run('a', { refs: { 'aws-eu-west-2': { rtts: [150, 160, null] } } }), run('b')], { refs: true });
+    assert.deepEqual(
+      rows.map((r) => [r.city, r.network, r.region, r.runs, r.median, r.loss]),
+      [['Lagos', 'MTN', 'ref:aws-eu-west-2', 1, 155, (1 / 3) * 100]],
+    );
+    assert.ok(table([run('a')]).every((r) => !r.region.startsWith('ref:')));
+  });
   it('tidies city and network names', () => {
     assert.equal(cityName('  port   harcourt '), 'Port Harcourt');
     assert.equal(cityName('ile-ife'), 'Ile-Ife');

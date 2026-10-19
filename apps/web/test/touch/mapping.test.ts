@@ -1,6 +1,6 @@
 import { Btn } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
-import { ASSIST, FIRE_AT, aimOnTarget, assistAim, createTouchState, desiredAim, grenadeStrength, throwStrength, touchButtons } from '../../src/touch/mapping';
+import { ASSIST, FIRE_AT, aimOnTarget, assistAim, createTouchState, dashStrength, desiredAim, flickRate, grenadeStrength, throwStrength, touchButtons } from '../../src/touch/mapping';
 import { AIM_STICK, GRENADE_STICK, MOVE_STICK, shapeStick } from '../../src/touch/stick';
 
 describe('touch → Input mapping', () => {
@@ -40,6 +40,16 @@ describe('touch → Input mapping', () => {
     s.pulses = Btn.Dash;
     s.dashDir = Btn.Left | Btn.Jet; // …but the swipe was up-left
     expect(touchButtons(s, 'hold')).toBe(Btn.Dash | Btn.Left | Btn.Jet);
+  });
+
+  it('a dash is as strong as the stick was pushed, and as fast (the owner: a quick flick, a strong dash)', () => {
+    const full = 6; // defaultTuning.dashFlickFull
+    expect(dashStrength(1, flickRate(1, 0, 100), full)).toBe(7); // full push in 0.1 s: a flick
+    expect(dashStrength(1, flickRate(1, 0, 1000), full)).toBe(Math.round(7 * (0.5 + 0.5 / full))); // full push, slowly
+    expect(dashStrength(0.4, flickRate(0.4, 0, 1200), full)).toBeLessThanOrEqual(2); // a gentle push: a short dash
+    expect(dashStrength(0, 0, full)).toBe(7); // the stick alone: the way you face, in full
+    expect(dashStrength(0.8, flickRate(0.8, 0, 50), full)).toBeGreaterThan(dashStrength(0.8, flickRate(0.8, 0, 600), full));
+    expect(createTouchState().dashStrength).toBe(7);
   });
 
   it('Dash tapped with the move stick idle sends no direction: the sim dashes the way the soldier faces', () => {

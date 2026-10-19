@@ -7,6 +7,9 @@
  *
  *   node scripts/net-trial/results.mjs <results.jsonl>… [--csv] [--include-backgrounded] [--by-connection]
  *
+ * Reference pings (the page's round trips to public endpoints in other cities, stats.ts REFERENCES)
+ * follow as their own table, next to our servers, and in the CSV as regions `ref:<id>`.
+ *
  * Same definitions as the probe page (apps/web/src/probe/stats.ts): median = middle value (mean of the
  * two middle ones), p95 = nearest rank, jitter = mean |Δ| between consecutive received pings (per run,
  * then averaged over runs), loss = pings with no echo / pings sent.
@@ -93,13 +96,17 @@ export function pool(measurements) {
   };
 }
 
-/** Rows of city × network (× connection) × region, sorted, with pooled numbers. */
-export function table(runs, { byConnection = false } = {}) {
+/**
+ * Rows of city × network (× connection) × region, sorted, with pooled numbers. `refs`: the
+ * reference pings instead, as regions `ref:<id>`.
+ */
+export function table(runs, { byConnection = false, refs = false } = {}) {
   const groups = new Map();
   for (const r of runs) {
     const city = cityName(r.city) || '(no city)';
     const network = networkName(r) + (byConnection && r.connection ? ` (${r.connection})` : '');
-    for (const [region, m] of Object.entries(r.regions ?? {})) {
+    const source = refs ? Object.fromEntries(Object.entries(r.refs ?? {}).map(([id, m]) => [`ref:${id}`, m])) : (r.regions ?? {});
+    for (const [region, m] of Object.entries(source)) {
       const key = JSON.stringify([city, network, region]);
       if (!groups.has(key)) groups.set(key, { city, network, region, ms: [] });
       groups.get(key).ms.push(m);
@@ -175,9 +182,10 @@ export function main(argv) {
   const { runs: all, bad } = readRuns(texts);
   const runs = includeBackgrounded ? all : all.filter((r) => !r.backgrounded);
   const rows = table(runs, { byConnection });
+  const refRows = table(runs, { byConnection, refs: true });
   if (csv) {
     console.log(['city', 'network', 'region', 'runs', 'pings', 'median_ms', 'p95_ms', 'jitter_ms', 'loss_pct'].join(','));
-    for (const r of rows) console.log([r.city, r.network, r.region, r.runs, r.pings, r.median?.toFixed(1), r.p95?.toFixed(1), r.jitter?.toFixed(1), r.loss?.toFixed(2)].map(csvCell).join(','));
+    for (const r of [...rows, ...refRows]) console.log([r.city, r.network, r.region, r.runs, r.pings, r.median?.toFixed(1), r.p95?.toFixed(1), r.jitter?.toFixed(1), r.loss?.toFixed(2)].map(csvCell).join(','));
     return 0;
   }
   const skipped = all.length - runs.length;
@@ -200,6 +208,11 @@ export function main(argv) {
     console.log('\nAll cities, per network\n');
     const perNetwork = table(runs.map((r) => ({ ...r, city: 'All' })), { byConnection });
     console.log(render(['', 'Network', 'Region', 'Runs', 'Pings', 'Median', 'p95', 'Jitter', 'Loss'], perNetwork.map((r) => [r.city, r.network, r.region, r.runs, r.pings, ms(r.median), ms(r.p95), ms(r.jitter), pct(r.loss)])));
+  }
+  if (refRows.length) {
+    console.log('\nOther cities (reference pings: HTTPS round trips to public endpoints, not game servers), with our servers\n');
+    const both = [...rows, ...refRows].sort((a, b) => a.city.localeCompare(b.city) || a.network.localeCompare(b.network) || (a.median ?? Infinity) - (b.median ?? Infinity));
+    console.log(render(['City', 'Network', 'Where', 'Runs', 'Samples', 'Median', 'p95', 'Loss'], both.map((r) => [r.city, r.network, r.region, r.runs, r.pings, ms(r.median), ms(r.p95), pct(r.loss)])));
   }
   console.log('\nNetworks as typed vs as seen (ASN of the tester’s network)\n');
   for (const { network, asns } of asnsByNetwork(runs)) console.log(`  ${network}: ${asns.map(([a, n]) => `${a} ×${n}`).join(', ')}`);

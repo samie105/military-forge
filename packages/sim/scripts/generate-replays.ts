@@ -43,7 +43,7 @@ const T = Btn.CycleGrenade;
 function script(steps: Step[]): Input[] {
   const out: Input[] = [];
   for (const [n, buttons, aimDeg = 0] of steps) {
-    for (let i = 0; i < n; i++) out.push({ buttons, aim: angleToU16((aimDeg * Math.PI) / 180), weaponSelect: 0, throwStrength: 7 });
+    for (let i = 0; i < n; i++) out.push({ buttons, aim: angleToU16((aimDeg * Math.PI) / 180), weaponSelect: 0, throwStrength: 7, dashStrength: 7 });
   }
   return out;
 }
@@ -349,7 +349,7 @@ function matchScenario(): ReplayFile {
     commands.push([tick, player, kind]);
     applyMatchCommand(match, humans[player]!.id, kind);
   };
-  const input = (buttons: number, aimDeg: number): Input => ({ buttons, aim: angleToU16((aimDeg * Math.PI) / 180), weaponSelect: 0, throwStrength: 7 });
+  const input = (buttons: number, aimDeg: number): Input => ({ buttons, aim: angleToU16((aimDeg * Math.PI) / 180), weaponSelect: 0, throwStrength: 7, dashStrength: 7 });
 
   let tick = 0;
   for (let closedFor = 0; closedFor < 60; tick++) {
@@ -405,13 +405,15 @@ function recorded(
 }
 
 const deg = (d: number) => angleToU16((d * Math.PI) / 180);
-const act = (buttons: number, aimDeg = 0, throwStrength = 7): Input => ({ buttons, aim: deg(aimDeg), weaponSelect: 0, throwStrength });
+const act = (buttons: number, aimDeg = 0, throwStrength = 7, dashStrength = 7): Input => ({ buttons, aim: deg(aimDeg), weaponSelect: 0, throwStrength, dashStrength });
 
 /**
  * Dash (docs/02 §21) on the movement-test map, driven by the player's state so every case happens:
- * a ground dash, an up-dash, a drop-through dash on a one-way platform, the one air dash (and a
- * refused second one), a refused straight-down dash on solid floor, a wall stop at the 12 m tower,
- * a slam, a down-left dash along the floor, and a press inside the cooldown.
+ * a ground dash, an up-dash, a drop-through dash on a one-way platform, an air dash and a second
+ * one chained onto it, a refused straight-down dash on solid floor, a wall stop at the 12 m tower,
+ * a slam, a down-left dash along the floor, a press inside the re-trigger gap, then (v14) a double
+ * dash up, a right-then-up chain, a weak dash (a gentle stick push), and dashes in the air until
+ * the fuel runs out.
  */
 {
   let phase = 0;
@@ -421,9 +423,9 @@ const act = (buttons: number, aimDeg = 0, throwStrength = 7): Input => ({ button
     since = 0;
   };
   scenarios.push(
-    recorded('dash', { map: 'movement-test', seed: 1234, dummies: true, starts: [{ x: 127, y: 0 }] }, 60 * 22, (_g, me) => {
+    recorded('dash', { map: 'movement-test', seed: 1234, dummies: true, starts: [{ x: 127, y: 0 }] }, 60 * 32, (_g, me) => {
       since++;
-      const ready = me.dashCooldown === 0 && me.dashTicks === 0;
+      const ready = me.dashGap === 0 && me.dashTicks === 0;
       const settled = me.grounded && since > 10;
       switch (phase) {
         case 0: // ground dash along the facing
@@ -454,7 +456,7 @@ const act = (buttons: number, aimDeg = 0, throwStrength = 7): Input => ({ button
           if (me.y < 4 || !ready) return act(J);
           next();
           return act(Btn.Dash | R);
-        case 7: // a second air dash: refused
+        case 7: // a second air dash, inside the first one's window: it chains
           if (since < 12) return act(J);
           next();
           return act(Btn.Dash | Btn.Left);
@@ -473,14 +475,49 @@ const act = (buttons: number, aimDeg = 0, throwStrength = 7): Input => ({ button
           if (me.y < 4) return act(J);
           next();
           return act(Btn.Dash | D);
-        case 11: // down-left on the floor: along it; then a press inside the cooldown
+        case 11: // down-left on the floor: along it; then a press inside the re-trigger gap (refused)
           if (!settled || !ready) return act(0);
           next();
           return act(Btn.Dash | D | Btn.Left);
         case 12:
-          if (since < 4) return act(0);
+          if (since < 2) return act(0);
           next();
           return act(Btn.Dash | Btn.Left);
+        case 13: // a double dash up: two fast climbs
+          if (!settled || !ready || me.fuel < 150) return act(0);
+          next();
+          return act(Btn.Dash | J);
+        case 14:
+          if (since < 5) return act(J);
+          next();
+          return act(Btn.Dash | J);
+        case 15: // right, then up: a chain that turns
+          if (!settled || !ready || me.fuel < 150) return act(0);
+          next();
+          return act(Btn.Dash | R);
+        case 16:
+          if (since < 6) return act(R);
+          next();
+          return act(Btn.Dash | J | R);
+        case 17: // a weak dash: a gentle push of the stick
+          if (!settled || !ready || since < 20) return act(0);
+          next();
+          return act(Btn.Dash | Btn.Left, 0, 7, 2);
+        case 18: // back into the open, settle and refuel, then up…
+          if (me.x > 124) return act(Btn.Left);
+          if (!settled || since < 90) return act(0);
+          next();
+          return act(J);
+        case 19: // …and dash about in the air until the fuel runs out
+          if (me.y < 3) return act(J);
+          next();
+          return act(Btn.Dash | R);
+        case 20:
+          if (since > 240) {
+            next();
+            return act(0);
+          }
+          return act(since % 8 === 0 ? Btn.Dash | (since % 16 === 0 ? R : Btn.Left) : 0);
         default:
           return act(0);
       }
@@ -670,9 +707,9 @@ function shieldScenario(): ReplayFile {
   let beat = 0;
   let n = 0;
   const held: [Input, Input, Input] = [
-    { buttons: 0, aim: left, weaponSelect: 0, throwStrength: 7 },
-    { buttons: 0, aim: 0, weaponSelect: 0, throwStrength: 7 },
-    { buttons: 0, aim: 0, weaponSelect: 0, throwStrength: 7 },
+    { buttons: 0, aim: left, weaponSelect: 0, throwStrength: 7, dashStrength: 7 },
+    { buttons: 0, aim: 0, weaponSelect: 0, throwStrength: 7, dashStrength: 7 },
+    { buttons: 0, aim: 0, weaponSelect: 0, throwStrength: 7, dashStrength: 7 },
   ];
   while (beat < beats.length) {
     if (game.tick > 3000) throw new Error(`shield scenario stuck in beat ${beat}`);
@@ -696,7 +733,10 @@ function shieldScenario(): ReplayFile {
 scenarios.push(shieldScenario());
 
 mkdirSync(OUT, { recursive: true });
+// `tsx scripts/generate-replays.ts dash shield` writes only those
+const only = process.argv.slice(2);
 for (const s of scenarios) {
+  if (only.length > 0 && !only.includes(s.name)) continue;
   writeFileSync(join(OUT, `${s.name}.replay.json`), JSON.stringify(s) + '\n');
   console.log(`wrote ${s.name} (${s.ticks} ticks)`);
 }

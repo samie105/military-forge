@@ -9,7 +9,8 @@
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json",
     "bench": "tsx scripts/bench-room.ts",
-    "netsim": "tsx scripts/netsim-report.ts"
+    "netsim": "tsx scripts/netsim-report.ts",
+    "netfeel": "tsx scripts/netfeel.ts"
   },
   "dependencies": {
     "@military-forge/bots": "workspace:*",

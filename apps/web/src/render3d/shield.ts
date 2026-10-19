@@ -68,7 +68,10 @@ function painted(geometry: BufferGeometry, hex: number): BufferGeometry {
 
 /** GPU resources shared by every shield, item and spark. */
 export class ShieldKit {
-  readonly geometry: BufferGeometry;
+  /** the placeholder plate until the Forge's riot_shield.glb loads (setModel) */
+  geometry: BufferGeometry;
+  /** every mesh drawing the shield, so a loaded model replaces the placeholder in all of them */
+  private readonly users = new Set<Mesh>();
   readonly material: MeshToonMaterial;
   readonly sparkGeometry: BufferGeometry;
   /** warm and drawn on top: the plate (or a pale sky) must not hide or wash it out */
@@ -90,6 +93,24 @@ export class ShieldKit {
     this.material = new MeshToonMaterial({ vertexColors: true, gradientMap: ramp });
     // a four-point star: the long arms along the shield's normal (local +X)
     this.sparkGeometry = mergeGeometries([new BoxGeometry(0.75, 0.08, 0.08), new BoxGeometry(0.09, 0.42, 0.09)])!;
+  }
+
+  /** A mesh drawing the shield (it takes the model when it loads); `false` lets it go. */
+  use(mesh: Mesh, on = true): void {
+    if (on) this.users.add(mesh);
+    else this.users.delete(mesh);
+  }
+
+  /**
+   * The Forge's model (riot_shield.glb, baked into shield space: origin at the arm strap, +Y up,
+   * +Z out of the strike face 9 cm in front, 0.56 × 0.90 m: the placeholder's own frame) in place
+   * of the placeholder plate, on every shield already drawn.
+   */
+  setModel(geometry: BufferGeometry): void {
+    const old = this.geometry;
+    this.geometry = geometry;
+    for (const m of this.users) m.geometry = geometry;
+    old.dispose();
   }
 }
 
@@ -118,6 +139,7 @@ export class ShieldRig {
 
   constructor(bone: (name: string) => Object3D | null, kit: ShieldKit) {
     this.mesh = new Mesh(kit.geometry, kit.material);
+    kit.use(this.mesh);
     this.mesh.name = 'riot-shield';
     this.mesh.visible = false;
     this.front = shieldSocket(bone, SHIELD_SOCKETS.front);
@@ -173,6 +195,7 @@ export class PickupMeshes {
       let m = this.meshes.get(k.id);
       if (!m) {
         m = new Mesh(this.kit.geometry, this.kit.material);
+        this.kit.use(m);
         m.castShadow = true;
         this.meshes.set(k.id, m);
         this.group.add(m);
@@ -185,6 +208,7 @@ export class PickupMeshes {
     for (const [id, m] of this.meshes) {
       if (this.seen.has(id)) continue;
       m.removeFromParent();
+      this.kit.use(m, false);
       this.meshes.delete(id);
     }
   }

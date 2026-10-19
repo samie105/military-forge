@@ -42,15 +42,16 @@ function flat(width = 400, ceiling = 60, extra: { points: number[] }[] = []): Ma
   };
 }
 
-function setup(tuning: Partial<Tuning>, seed = 1, map: MapDef = flat()): { game: Game; p: PlayerState; step: (buttons: number, aimRad?: number) => void } {
+function setup(tuning: Partial<Tuning>, seed = 1, map: MapDef = flat()): { game: Game; p: PlayerState; step: (buttons: number, aimRad?: number, dashStrength?: number) => void } {
   const game = new Game({ map, seed, tuning });
   const p = game.addPlayer('probe');
   const input: Input = createInput();
   const inputs: (Input | undefined)[] = [];
   inputs[p.id] = input;
-  const step = (buttons: number, aimRad = 0) => {
+  const step = (buttons: number, aimRad = 0, dashStrength = 7) => {
     input.buttons = buttons;
     input.aim = angleToU16(aimRad);
+    input.dashStrength = dashStrength;
     game.step(inputs);
   };
   for (let i = 0; i < 10; i++) step(0);
@@ -521,10 +522,83 @@ export interface DashMetrics {
   wallStop: number;
   /** seconds the burst lasts, for the animation */
   burst: number;
+  /** a sideways dash from a 6 m hover: distance covered in the 0.5 s from the press (m) */
+  airRun: number;
+  /** the weakest dash (a gentle stick push, strength 0): ground covered from standing (m) */
+  weak: number;
+  /** a double dash along the ground (the second as the first ends): ground covered (m) */
+  chainRun: number;
+  /** a double dash up from standing (the second as the first ends): height reached (m) */
+  chainUp: number;
+  /** right, then up as the first ends (a chain that turns): height and distance at the apex (m) */
+  turnUp: number;
+  turnRun: number;
+  /** full dashes a full tank buys */
+  perTank: number;
+  /** fuel a double dash costs (share of the tank) */
+  chainFuel: number;
+}
+
+/** Holds `buttons` for one tick (a fresh press), then nothing until the burst has run, `burst` ticks in all. */
+function dashThen(step: (buttons: number, aimRad?: number, dashStrength?: number) => void, buttons: number, burst: number, strength = 7): void {
+  step(buttons, 0, strength);
+  for (let i = 1; i < burst; i++) step(0);
 }
 
 export function measureDash(tuning: Partial<Tuning> = {}): DashMetrics {
-  const m: DashMetrics = { flat: 0, up: 0, diagUp: 0, diagRun: 0, slamTime: 0, fallTime: 0, wallStop: 0, burst: 0 };
+  const t = { ...defaultTuning, ...tuning };
+  const burst = t.dashBurstTicks;
+  const m: DashMetrics = { flat: 0, up: 0, diagUp: 0, diagRun: 0, slamTime: 0, fallTime: 0, wallStop: 0, burst: 0, airRun: 0, weak: 0, chainRun: 0, chainUp: 0, turnUp: 0, turnRun: 0, perTank: 0, chainFuel: 0 };
+  {
+    const { p, step } = setup(tuning);
+    p.y = 6;
+    p.vy = 0;
+    p.grounded = false;
+    const x0 = p.x;
+    step(Btn.Dash | Btn.Right);
+    for (let i = 1; i < 30; i++) step(0);
+    m.airRun = p.x - x0;
+  }
+  {
+    const { p, step } = setup(tuning);
+    const x0 = p.x;
+    step(Btn.Dash, 0, 0);
+    for (let i = 0; i < 120 && (p.vx !== 0 || !p.grounded); i++) step(0);
+    m.weak = p.x - x0;
+  }
+  {
+    const { p, step } = setup(tuning);
+    const x0 = p.x;
+    const fuel0 = p.fuel;
+    dashThen(step, Btn.Dash | Btn.Right, burst);
+    step(Btn.Dash | Btn.Right);
+    m.chainFuel = (fuel0 - p.fuel) / t.fuelMax;
+    for (let i = 0; i < 120 && (p.vx !== 0 || !p.grounded); i++) step(0);
+    m.chainRun = p.x - x0;
+  }
+  {
+    const { p, step } = setup(tuning);
+    dashThen(step, Btn.Dash | Btn.Jet, burst);
+    step(Btn.Dash | Btn.Jet);
+    for (let i = 0; i < 120 && !(i > 5 && p.grounded); i++) {
+      step(0);
+      m.chainUp = Math.max(m.chainUp, p.y);
+    }
+  }
+  {
+    const { p, step } = setup(tuning);
+    const x0 = p.x;
+    dashThen(step, Btn.Dash | Btn.Right, burst);
+    step(Btn.Dash | Btn.Jet);
+    for (let i = 0; i < 120 && !(i > 5 && p.grounded); i++) {
+      step(0);
+      if (p.y > m.turnUp) {
+        m.turnUp = p.y;
+        m.turnRun = p.x - x0;
+      }
+    }
+  }
+  m.perTank = t.dashFuelCost > 0 ? Math.floor(t.fuelMax / t.dashFuelCost) : Infinity;
   {
     const { p, step } = setup(tuning);
     const x0 = p.x;

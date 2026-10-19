@@ -163,6 +163,8 @@ export class BotBrain implements Brain {
   private nextGrenade = 0;
   /** dash this tick with these direction buttons (0: no dodge) */
   private dodge = 0;
+  /** no dodge before this tick: the sim has no dash cooldown since v14, so the bot keeps its old 1 s rhythm */
+  private nextDodge = 0;
   /** the shield key can be pressed again from this tick (no flapping) */
   private shieldAt = 0;
   /** the item slot it's going for (−1: none) */
@@ -325,6 +327,7 @@ export class BotBrain implements Brain {
     buttons |= this.shieldKey(self);
     out.weaponSelect = hands.weaponSelect;
     out.throwStrength = 7;
+    out.dashStrength = 7; // bots dash at full strength, as the keyboard does
 
     // frags only (for now): while it has some, the belt stays on them (the cycle key steps through
     // the types held; a pickup can leave it on smoke, say, once the frags ran out)
@@ -798,12 +801,12 @@ export class BotBrain implements Brain {
   }
 
   /**
-   * Hit this tick: maybe dash away from the attacker (cooldown, fuel and the jetpack permitting),
+   * Hit this tick: maybe dash away from the attacker (at most once a second, fuel and the jetpack permitting),
    * into open space and not into gas. Away from where it knows the attacker is; a random side if it
    * can't place it. Gas isn't dodged: the tree walks it out.
    */
   private maybeDodge(game: Game, self: PlayerState, env: BodyEnv | null): void {
-    if (self.dashCooldown > 0 || self.fuel < game.tuning.dashFuelCost + 5 || game.inputsFrozen || dashBlocked(self, env)) return;
+    if (this.now < this.nextDodge || self.dashGap > 0 || self.fuel < game.tuning.dashFuelCost + 5 || game.inputsFrozen || dashBlocked(self, env)) return;
     let from = -1;
     for (const e of game.events) {
       if (e.type === 'hit' && e.target === self.id && e.attacker >= 0 && e.attacker !== self.id && e.source !== DamageSource.Gas) from = e.attacker;
@@ -826,6 +829,7 @@ export class BotBrain implements Brain {
       // not into gas it has seen
       if (this.perception.gasAt(game, self.x + dx * 2.4, self.y + dy * 2.4, GAS_MARGIN) > 0) continue;
       this.dodge = buttons;
+      this.nextDodge = this.now + 60;
       return;
     }
   }

@@ -215,7 +215,7 @@ let lastNote = 0;
 
 /**
  * A guest's word that the host just retuned the room (the kit's toast under the clock): "Ade changed
- * Gravity to 12 m/s² · Dash cooldown to 0.6 s". It comes in from the top (P9) and leaves after 3.2 s;
+ * Gravity to 12 m/s² · Dash chain window to 0.6 s". It comes in from the top (P9) and leaves after 3.2 s;
  * "Tuned by host" stays on the HUD.
  */
 export function TuneToast({ note }: { note: TuneNote | null }) {

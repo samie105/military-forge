@@ -27,6 +27,7 @@ export function botInput(game: Game, p: PlayerState, out: Input): void {
   out.buttons = 0;
   out.weaponSelect = 0;
   out.throwStrength = 7;
+  out.dashStrength = 7;
   const s = p.script;
   if (s) {
     switch (s.kind) {

@@ -39,6 +39,10 @@ html[data-touch-controls] #hud .mf-hud-fit:not(.mf-hud-fit--phone) { display: no
 /* the net plate's signal in the ping's colour */
 #hud .hud-net[data-tone="warn"] { color: var(--c-warn); }
 #hud .hud-net[data-tone="bad"] { color: var(--c-hp); }
+/* jitter and the transport (WT/WS) next to ping and loss: the numbers the owner reports */
+#hud .hud-net__jit { margin-left: calc(-1 * var(--sp-2)); color: var(--c-muted); font-weight: var(--fw-semi); }
+#hud .hud-net__via { color: var(--c-muted); font-weight: var(--fw-semi); letter-spacing: 0.04em; }
+#hud .hud-net__jit:empty, #hud .hud-net__via:empty { display: none; }
 /* the burning cue (the flamethrower), in the kit's cue look */
 #hud .cue--burn { border-color: var(--c-hp); }
 #hud .cue--burn > .ic { color: var(--c-hp); }
@@ -65,7 +69,7 @@ html[data-touch-controls] #hud .mf-hud-fit:not(.mf-hud-fit--phone) { display: no
 /* three-digit vitals (100 HP, 100 fuel) at the HUD's number size: the kit's 3ch column fits two */
 #hud .vital { grid-template-columns: 24px 3.6em minmax(0, 1fr); }
 
-/* the air dash's pip goes hollow once this flight's air dash is used */
+/* the dash pip (the dashes the fuel buys, v14) goes hollow when the fuel buys none */
 #hud .hud-dash__air.is-used { color: var(--c-muted); }
 #hud .hud-dash__air.is-used::before { background: transparent; }
 

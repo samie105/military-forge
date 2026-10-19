@@ -356,6 +356,7 @@ export class Match {
       f.aim = src.aim;
       f.weaponSelect = 0;
       f.throwStrength = src.throwStrength;
+      f.dashStrength = src.dashStrength;
       this.frozenRefs[id] = f;
     }
     return this.frozenRefs;

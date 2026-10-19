@@ -8,6 +8,7 @@
 import { MatchPhase } from '@military-forge/sim';
 import { useEffect, useRef, type CSSProperties } from 'react';
 import { useStore } from 'zustand';
+import { useShownControls } from '../gamepad/react';
 import { eventLook } from '../hud/model';
 import { Icon } from '../ui/Icon';
 import { Screen, blurAfter } from '../ui/Screen';
@@ -54,9 +55,10 @@ function AppScreens({ store }: { store: ShellStore }) {
   const notice = useStore(store, (s) => s.notice);
   const tuneNote = useStore(store, (s) => s.tuneNote);
   const tips = useStore(store, (s) => s.tips);
-  const settings = useStore(store, (s) => s.settings);
   const match = useStore(store, (s) => s.match);
   const phone = usePhoneLayout();
+  // the keyboard's keys, or a controller's buttons while one plays (gamepad/)
+  const shown = useShownControls(store);
 
   // the countdown and the match are play: the shell's buttons (Start now, Ready, the controls card)
   // let go of the keyboard, so Space and the arrows are the game's from the first frame
@@ -107,7 +109,7 @@ function AppScreens({ store }: { store: ShellStore }) {
   return (
     <>
       {body}
-      {tips && playing && !overlay && !inLobby && (phone ? <PhoneTips /> : <TipsCard bindings={settings.bindings} doubleTapDash={settings.doubleTapDash} />)}
+      {tips && playing && !overlay && !inLobby && (phone ? <PhoneTips /> : <TipsCard bindings={shown.bindings} doubleTapDash={shown.doubleTapDash} />)}
       {overlay === 'menu' && (phone ? <PhonePause store={store} /> : <Pause store={store} />)}
       {overlay === 'settings' && (phone ? <PhoneSettings store={store} /> : <SettingsScreen store={store} />)}
       {overlay === 'join' && <Join />}
@@ -134,8 +136,7 @@ function RoomScreen({ store, code }: { store: ShellStore; code: string }) {
   const lobby = useStore(store, (s) => s.lobby);
   const actions = useStore(store, (s) => s.actions);
   const tips = useStore(store, (s) => s.tips);
-  const bindings = useStore(store, (s) => s.settings.bindings);
-  const doubleTapDash = useStore(store, (s) => s.settings.doubleTapDash);
+  const { bindings, doubleTapDash } = useShownControls(store);
   const overlay = useStore(store, (s) => s.overlay);
   const countdown = useCountdown(match);
   const phone = usePhoneLayout();
@@ -166,7 +167,7 @@ function TrainingScreen({ store }: { store: ShellStore }) {
   const ctl = useCtl();
   const match = useStore(store, (s) => s.match);
   const actions = useStore(store, (s) => s.actions);
-  const bindings = useStore(store, (s) => s.settings.bindings);
+  const { bindings } = useShownControls(store);
   const countdown = useCountdown(match);
   const phone = usePhoneLayout();
   return (

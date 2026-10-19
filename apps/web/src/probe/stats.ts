@@ -80,6 +80,80 @@ export function echoSeq(data: unknown): number | null {
   return new DataView(data).getUint32(0);
 }
 
+// ---------- reference pings (no servers of ours) ----------
+
+/**
+ * Public endpoints in candidate cities, timed from the tester's device for comparison with our own
+ * server (the owner's question, 19 Oct 2026: would Europe or Lagos beat Johannesburg for MTN?).
+ * Each is a tiny HTTPS response; the page times repeated requests on a warm connection, so a
+ * sample is about one round trip (plus the endpoint's few ms of work).
+ *   - AWS regions: DynamoDB's health check (`/ping`, ~40 bytes, CORS open): what a game server in
+ *     that region would see, give or take the provider. London stands in for Azure UK South,
+ *     Spain for Azure Spain Central (blocked on the student plan).
+ *   - Lagos: AWS's Lagos Local Zone has no public endpoint, and no big cloud has a Nigerian region.
+ *     ixpn.ng is the Internet Exchange Point of Nigeria's own site (AS36940, Lagos), at the exchange
+ *     MTN, Airtel and Glo peer at: the best stand-in for a box at a Lagos data centre. nobus.io is
+ *     Nobus, a Nigerian cloud (AS328668, Lagos). Neither sends CORS headers, so they're timed as
+ *     opaque (no-cors) fetches; their small favicons are fetched.
+ *   - Cloudflare's nearest edge: names the city it answered from (LOS = Lagos), the floor of what
+ *     this device can reach.
+ */
+export interface ProbeReference {
+  id: string;
+  name: string;
+  provider: string;
+  url: string;
+  /** opaque fetch (the endpoint sends no CORS headers) */
+  opaque?: boolean;
+}
+
+export const REFERENCES: readonly ProbeReference[] = [
+  { id: 'lagos-ixpn', name: 'Lagos', provider: 'IXPN, the Nigerian exchange', url: 'https://ixpn.ng/favicon.ico', opaque: true },
+  { id: 'lagos-nobus', name: 'Lagos', provider: 'Nobus cloud', url: 'https://nobus.io/favicon.ico', opaque: true },
+  { id: 'cf-edge', name: 'Nearest edge', provider: 'Cloudflare', url: 'https://speed.cloudflare.com/cdn-cgi/trace' },
+  { id: 'aws-af-south-1', name: 'Cape Town', provider: 'AWS af-south-1', url: 'https://dynamodb.af-south-1.amazonaws.com/ping' },
+  { id: 'aws-eu-west-2', name: 'London', provider: 'AWS eu-west-2', url: 'https://dynamodb.eu-west-2.amazonaws.com/ping' },
+  { id: 'aws-eu-west-1', name: 'Ireland', provider: 'AWS eu-west-1', url: 'https://dynamodb.eu-west-1.amazonaws.com/ping' },
+  { id: 'aws-eu-south-2', name: 'Spain', provider: 'AWS eu-south-2', url: 'https://dynamodb.eu-south-2.amazonaws.com/ping' },
+  { id: 'aws-eu-west-3', name: 'Paris', provider: 'AWS eu-west-3', url: 'https://dynamodb.eu-west-3.amazonaws.com/ping' },
+  { id: 'aws-eu-central-1', name: 'Frankfurt', provider: 'AWS eu-central-1', url: 'https://dynamodb.eu-central-1.amazonaws.com/ping' },
+  { id: 'aws-me-central-1', name: 'UAE', provider: 'AWS me-central-1', url: 'https://dynamodb.me-central-1.amazonaws.com/ping' },
+];
+
+/** Requests per reference: the first ones open the connection (DNS, TCP, TLS) and aren't counted. */
+export const REF_WARMUP = 3;
+export const REF_SAMPLES = 15;
+/** A request slower than this counts as lost. */
+export const REF_TIMEOUT_MS = 5000;
+
+export interface RefRun {
+  rtts: (number | null)[];
+  /** the Cloudflare city code that answered (cf-edge only: `colo=` in its body), else '' */
+  colo: string;
+  error: string;
+}
+
+/** A cache-busted URL for one reference request. */
+export function refUrl(ref: ProbeReference, n: number): string {
+  return `${ref.url}${ref.url.includes('?') ? '&' : '?'}mf=${Date.now().toString(36)}${n}`;
+}
+
+/** The city code in a Cloudflare trace body (`colo=LOS`), or ''. */
+export function traceColo(body: string): string {
+  return /^colo=([A-Z]{3})$/m.exec(body)?.[1] ?? '';
+}
+
+/** The references' part of a result: raw round trips and their summary, per reference. */
+export function refsPayload(runs: Record<string, RefRun>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [id, run] of Object.entries(runs)) {
+    const rtts = run.rtts.map((x) => (x === null ? null : round1(x)));
+    const s = summarize(rtts);
+    out[id] = { sent: s.sent, rtts, median: s.median, p95: s.p95, min: s.min, loss: s.loss, colo: run.colo, error: run.error };
+  }
+  return out;
+}
+
 export interface ProbeRegion {
   id: string;
   name: string;
@@ -167,7 +241,13 @@ export interface RegionRun {
 }
 
 /** The JSON posted to the results endpoint: the answers, and per region the raw RTTs and their summary. */
-export function resultPayload(id: string, config: ProbeConfig, answers: Answers, runs: Record<string, RegionRun>, extra: { at: string; page: string; backgrounded: boolean }) {
+export function resultPayload(
+  id: string,
+  config: ProbeConfig,
+  answers: Answers,
+  runs: Record<string, RegionRun>,
+  extra: { at: string; page: string; backgrounded: boolean; refs?: Record<string, RefRun> },
+) {
   const regions: Record<string, unknown> = {};
   for (const [rid, run] of Object.entries(runs)) {
     // the summary from the RTTs as stored, so results.mjs gets the same numbers from them
@@ -197,6 +277,7 @@ export function resultPayload(id: string, config: ProbeConfig, answers: Answers,
     page: extra.page,
     backgrounded: extra.backgrounded,
     regions,
+    refs: refsPayload(extra.refs ?? {}),
   };
 }
 

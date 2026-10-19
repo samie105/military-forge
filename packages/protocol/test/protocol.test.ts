@@ -138,11 +138,11 @@ describe('messages', () => {
     expect(isUnreliableMessage(encodeTuning('{}'))).toBe(false);
   });
 
-  it('input packets carry up to 4 redundant inputs in 13–31 bytes, each with its render lag', () => {
+  it('input packets carry up to 4 redundant inputs in 14–32 bytes, each with its render lag', () => {
     const inputs = [0, 1, 2, 3].map((i) => ({ ...createInput(), buttons: Btn.Right | (i % 2 ? Btn.Fire : 0), aim: 1000 * i }));
     const renderLags = [0, 0.0625, 4.5, 15.9375];
     const sizes = [1, 2, 3, 4].map((n) => encodeInput({ newestTick: 1, ackSnapshotSeq: 0, renderTick: 0, renderFrac: 0, inputs: inputs.slice(0, n) }).length);
-    expect(sizes).toEqual([13, 19, 25, 31]);
+    expect(sizes).toEqual([14, 20, 26, 32]); // v14: + u3 dashStrength each
     const bytes = encodeInput({ newestTick: 65535, ackSnapshotSeq: 12, renderTick: 400, renderFrac: 128, inputs, renderLags });
     const m = decodeMessage(bytes);
     expect(m).toEqual({ type: MsgType.Input, newestTick: 65535, ackSnapshotSeq: 12, renderTick: 400, renderFrac: 128, inputs, renderLags });
@@ -583,7 +583,7 @@ describe('local-player block', () => {
     expect(deltas).toBeGreaterThan(500);
   });
 
-  it('round-trips dash state (burst, direction, cooldown, the air dash), full and delta, on every tick', () => {
+  it('round-trips dash state (burst, direction, gap, chain, window, strength), full and delta, on every tick', () => {
     const game = new Game({ seed: 7 });
     const me = game.addPlayer('me');
     const inputs: ReturnType<typeof createInput>[] = [];
@@ -591,15 +591,17 @@ describe('local-player block', () => {
     const baselines = new SnapshotBaselines();
     const decoder = new SnapshotDecoder();
     const ghost = new PlayerState(me.id);
-    // dash right, up-left, then jet and dash again in the air, down-dash, and presses during the cooldown
+    // dash right, up-left, then jet and dash again in the air, down-dash, presses inside the gap,
+    // chains (a press every 12 ticks is inside the window), every strength, and an empty tank
     const script = [Btn.Dash | Btn.Right, Btn.Right, Btn.Dash | Btn.Jet | Btn.Left, Btn.Jet, Btn.Jet, Btn.Dash | Btn.Right, Btn.Dash | Btn.Down, 0, Btn.Dash, 0];
     let burstTicks = 0;
-    let airDashes = 0;
+    let chained = 0;
     for (let t = 0; t < 900; t++) {
-      inputs[me.id] = { ...createInput(), buttons: script[Math.floor(t / 23) % script.length]! & (t % 23 < 2 ? ~0 : ~Btn.Dash) };
+      const k = Math.floor(t / 12);
+      inputs[me.id] = { ...createInput(), buttons: script[k % script.length]! & (t % 12 < 2 ? ~0 : ~Btn.Dash), dashStrength: k % 8 };
       game.step(inputs);
       if (me.dashTicks > 0) burstTicks++;
-      if (me.airDashUsed && game.events.some((e) => e.type === 'dash')) airDashes++;
+      if (game.events.some((e) => e.type === 'dash' && (e.chain ?? 0) > 0)) chained++;
       enc.begin(game, t + 1, game.events);
       const server = captureLocalState(me, createLocalState());
       const snap = decodeMessage(enc.encodeFor({ baselines: null, ackInputTick: t & 0xffff, inputBufferHealth: 1, local: me, view: null })) as SnapshotMsg;
@@ -611,7 +613,7 @@ describe('local-player block', () => {
       expect(describeLocalDiff(got.local!, server)).toBe('');
     }
     expect(burstTicks).toBeGreaterThan(60);
-    expect(airDashes).toBeGreaterThan(2);
+    expect(chained).toBeGreaterThan(2);
   });
 
   it('dashes reach other clients that can see the dasher, never the dasher itself; remotes carry a dashing flag', () => {
@@ -1039,7 +1041,8 @@ describe('more guns (v11)', () => {
 describe('launchers and the flamethrower (v12)', () => {
   it('takes the v12 slots from the protocol registry: a burn group after the fire-mode group', () => {
     expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(12);
-    expect([LS.burnTicks, LOCAL_STATE_FIELDS]).toEqual([62, 63]);
+    expect(LS.burnTicks).toBe(62);
+    expect(LOCAL_STATE_FIELDS).toBeGreaterThanOrEqual(63); // v14 (the dash chain) appends after it
   });
 
   it('projectiles ride the grenade records: types past 7 (u4) and a blade\'s 300-tick fuse (u9) round-trip', () => {
@@ -1146,12 +1149,33 @@ describe('items in smoke (review M2)', () => {
 
 describe('the admin page\'s overrides (v13)', () => {
   it('OVERRIDES (0x28) and WELCOME\'s overridesJson carry the admin values whole, however many', () => {
-    expect(PROTOCOL_VERSION).toBe(13);
+    expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(13);
     expect(MsgType.Overrides).toBe(0x28);
     const many = JSON.stringify(Object.fromEntries(Array.from({ length: 400 }, (_, i) => [`weapon.gun${i}.damage`, i + 0.25])));
     expect(many.length).toBeGreaterThan(4096);
     expect(decodeMessage(encodeOverrides(many))).toEqual({ type: MsgType.Overrides, overridesJson: many });
     const welcome = { playerId: 2, seed: 9, serverTick: 120, mapId: 'movement-test', tuningJson: '{}', sessionToken: 'tok', resumed: false, overridesJson: many };
     expect(decodeMessage(encodeWelcome(welcome))).toEqual({ type: MsgType.Welcome, ...welcome });
+  });
+});
+
+describe('the fluid dash (v14)', () => {
+  it('takes the v14 slots from the protocol registry: INPUT dashStrength, the reworked dash group, a chain group', () => {
+    expect(PROTOCOL_VERSION).toBe(14);
+    expect([LS.dashTicks, LS.dashDir, LS.dashGap, LS.dashChain]).toEqual([41, 42, 43, 44]);
+    expect([LS.dashChainTicks, LS.dashPower, LOCAL_STATE_FIELDS]).toEqual([63, 64, 65]);
+  });
+
+  it('INPUT carries every dash strength; the DASH event carries its chain link', () => {
+    const inputs = [0, 3, 6, 7].map((dashStrength) => ({ ...createInput(), buttons: Btn.Dash, dashStrength }));
+    const m = decodeMessage(encodeInput({ newestTick: 9, ackSnapshotSeq: 0, renderTick: 0, renderFrac: 0, inputs })) as { inputs: { dashStrength: number }[] };
+    expect(m.inputs.map((i) => i.dashStrength)).toEqual([0, 3, 6, 7]);
+    const game = new Game({ seed: 3, dummies: false });
+    const me = game.addPlayer('me');
+    const other = game.addPlayer('other');
+    other.spawn(me.x + 4, me.y, game.tuning);
+    const events: SimEvent[] = [{ type: 'dash', player: other.id, x: 4.5, y: 1.25, dir: 2, chain: 5 }];
+    const snap = decodeMessage(encodeSnapshot(game, 1, events, { local: me })) as SnapshotMsg;
+    expect(snap.events).toEqual(events);
   });
 });

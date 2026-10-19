@@ -30,7 +30,7 @@ describe('riot shield on the wire (protocol v9)', () => {
   it('takes the v9 slots from the protocol registry, next to the dash (v8) without overlapping it', () => {
     expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(9); // v10 (arsenal B) appends after the shield's slots
     expect([Btn.Dash, Btn.Shield]).toEqual([1 << 13, 1 << 14]);
-    expect([LS.dashTicks, LS.airDashUsed, LS.shieldHp, LS.shieldStowed, LS.shieldTicks]).toEqual([41, 44, 45, 46, 47]);
+    expect([LS.dashTicks, LS.dashChain, LS.shieldHp, LS.shieldStowed, LS.shieldTicks]).toEqual([41, 44, 45, 46, 47]);
     expect(LOCAL_STATE_FIELDS).toBeGreaterThanOrEqual(48);
     // a carrier dashing with its shield slung: the dashing flag (128) and the shield state (256/512) both arrive
     const game = new Game({ seed: 4, dummies: false });
@@ -47,7 +47,7 @@ describe('riot shield on the wire (protocol v9)', () => {
     // the extended kinds side by side: DASH 0, RICOCHET 1, SHIELD_BREAK 2, PICKUP 3, after a MAP_EVENT (tag 6)
     const events: SimEvent[] = [
       { type: 'mapEvent', event: 0, phase: 1, occurrence: 3, zone: -1, flip: false, ticks: 600 },
-      { type: 'dash', player: p.id, x: 5, y: 1, dir: 2 },
+      { type: 'dash', player: p.id, x: 5, y: 1, dir: 2, chain: 0 },
       { type: 'ricochet', shooter: obs.id, owner: p.id, weapon: HAMMER.index, x: 5.5, y: 1, nx: -1, ny: 0, ex: 1, ey: 1, hit: 0, target: -1, zone: 0 },
       { type: 'shieldBreak', owner: p.id, attacker: obs.id, x: 5.5, y: 1 },
       { type: 'pickup', player: p.id, item: RIOT_SHIELD_PICKUP.index, x: 6, y: 0 },

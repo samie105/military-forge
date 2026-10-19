@@ -1,16 +1,19 @@
 /**
  * Dash (docs/02 §21): a brief 8-way jetpack burst on its own button. Distances per direction,
- * walls, the cooldown, one air dash per flight, fuel and EMP, knockback, one-way platforms, the
- * exit speed, and the dash event.
+ * walls, the re-trigger gap, dashing as often as the fuel lasts, chains, strength, fuel and EMP,
+ * knockback, one-way platforms, the exit speed (and what it carries), and the dash event.
  */
 import { BREACHER, defaultTuning } from '@military-forge/content';
 import { angleToU16 } from '@military-forge/shared';
 import { describe, expect, it } from 'vitest';
-import { Btn, DASH_DX, DASH_DY, DASH_UP_FRESH_TICKS, createInput, type Game, type Input, type PlayerState, type SimEvent } from '../src';
+import { Btn, DASH_DX, DASH_DY, DASH_UP_FRESH_TICKS, createInput, dashStrengthMul, type Game, type Input, type PlayerState, type SimEvent } from '../src';
 import { flatMap, hold, makeGame, placeOnGround, rect } from './helpers';
 
 const BURST = defaultTuning.dashBurstTicks;
 const BURST_M = (defaultTuning.dashSpeed * BURST) / 60; // 2.67 m
+const T = defaultTuning;
+const GAP = Math.round(T.dashGap * 60);
+const WINDOW = Math.round(T.dashChainWindow * 60);
 
 /** One tick with `buttons` (the dash needs a press: the tick before must not hold Dash). */
 function tap(game: Game, p: PlayerState, buttons: number): SimEvent[] {
@@ -89,7 +92,7 @@ describe('dash', () => {
     const solid = standing();
     tap(solid.game, solid.p, Btn.Dash | Btn.Down);
     expect(solid.p.dashTicks).toBe(0);
-    expect(solid.p.dashCooldown).toBe(0);
+    expect(solid.p.dashGap).toBe(0);
     expect(solid.p.fuel).toBe(defaultTuning.fuelMax);
   });
 
@@ -98,7 +101,7 @@ describe('dash', () => {
     placeOnGround(game, p, 20, 4);
     expect(p.y).toBeCloseTo(4, 2);
     tap(game, p, Btn.Dash | Btn.Down);
-    expect(p.airDashUsed).toBe(false); // started on the platform: not the air dash
+    expect(p.dashTicks).toBe(BURST - 1);
     hold(game, p, 0, 40);
     expect(p.y).toBeLessThan(0.01);
     expect(p.grounded).toBe(true);
@@ -118,53 +121,100 @@ describe('dash', () => {
     }
   });
 
-  it('a 1 s cooldown: a fresh press 59 ticks later does nothing, one 60 ticks later dashes', () => {
+  it('no cooldown: after a short re-trigger gap a press dashes again; one inside the gap does nothing and costs nothing', () => {
     const pressAfter = (k: number) => {
       const { game, p } = standing();
       tap(game, p, Btn.Dash | Btn.Right);
       hold(game, p, 0, k - 1);
+      const fuel = p.fuel;
       tap(game, p, Btn.Dash | Btn.Left);
-      return p.dashTicks;
+      return { started: p.dashTicks === BURST - 1 && p.dashDir === 4, spent: fuel - p.fuel };
     };
-    expect(pressAfter(21)).toBe(0);
-    expect(pressAfter(59)).toBe(0);
-    expect(pressAfter(60)).toBe(BURST - 1);
+    expect(pressAfter(GAP - 1)).toMatchObject({ started: false });
+    expect(pressAfter(GAP).started).toBe(true);
+    expect(pressAfter(60).started).toBe(true);
+    expect(pressAfter(GAP - 1).spent).toBeLessThanOrEqual(0); // refused: at most the regen moved it
   });
 
-  it('one air dash per flight; landing gives it back (a dash from the ground is not the air one)', () => {
+  it('dashes as often as the fuel lasts, in the air as on the ground; an empty tank refuses', () => {
     const { game, p } = standing();
-    tap(game, p, Btn.Dash | Btn.Jet); // from the ground: up
-    expect(p.airDashUsed).toBe(false);
-    hold(game, p, Btn.Jet, 70); // stay up past the cooldown
-    expect(p.grounded).toBe(false);
-    tap(game, p, Btn.Dash | Btn.Right); // the air dash
-    expect(p.dashTicks).toBe(BURST - 1);
-    expect(p.airDashUsed).toBe(true);
-    hold(game, p, Btn.Jet, 70);
-    tap(game, p, Btn.Dash | Btn.Right); // spent: nothing
-    expect(p.dashTicks).toBe(0);
-    while (!p.grounded) hold(game, p, 0, 1);
-    hold(game, p, 0, 1);
-    expect(p.airDashUsed).toBe(false);
-    hold(game, p, 0, 240); // refuel
-    hold(game, p, Btn.Jet, 20);
-    tap(game, p, Btn.Dash | Btn.Left); // a new flight, a new air dash
-    expect(p.dashTicks).toBe(BURST - 1);
-    expect(p.airDashUsed).toBe(true);
+    tap(game, p, Btn.Dash | Btn.Jet); // up off the floor, then nothing but dashes
+    let dashes = 1;
+    for (let i = 0; i < 40; i++) {
+      hold(game, p, 0, GAP + 1);
+      tap(game, p, Btn.Dash | (i % 2 ? Btn.Left : Btn.Right));
+      if (p.dashTicks === BURST - 1) dashes++;
+      else break;
+    }
+    expect(dashes).toBe(Math.floor(T.fuelMax / T.dashFuelCost)); // 12 on a 196 tank (the air regen waits while dashing)
+    expect(p.fuel).toBeLessThan(T.dashFuelCost);
   });
 
-  it('costs fuel, needs it, and an EMP blocks it (it is a jetpack burst)', () => {
+  it('chains: a dash inside the window is the next link, a little faster; after the window a new chain starts', () => {
     const { game, p } = standing();
-    tap(game, p, Btn.Dash);
-    expect(p.fuel).toBeCloseTo(defaultTuning.fuelMax - defaultTuning.dashFuelCost, 6);
-    const dry = standing();
-    dry.p.fuel = defaultTuning.dashFuelCost - 1;
-    tap(dry.game, dry.p, Btn.Dash);
-    expect(dry.p.dashTicks).toBe(0);
-    const { game: g2, p: p2 } = makeGame({ ...flatMap(), zones: [{ id: 'emp', kind: 'emp', rect: [0, 0, 60, 28] }] });
-    placeOnGround(g2, p2, 20);
-    tap(g2, p2, Btn.Dash);
-    expect(p2.dashTicks).toBe(0);
+    expect(tap(game, p, Btn.Dash | Btn.Right).find((e) => e.type === 'dash')).toMatchObject({ chain: 0 });
+    hold(game, p, 0, GAP - 1);
+    expect(tap(game, p, Btn.Dash | Btn.Right).find((e) => e.type === 'dash')).toMatchObject({ chain: 1 });
+    expect(p.vx).toBeCloseTo(T.dashSpeed * T.dashChainBonus, 2);
+    hold(game, p, 0, WINDOW + 1);
+    expect(p.dashChain).toBe(0);
+    expect(tap(game, p, Btn.Dash | Btn.Left).find((e) => e.type === 'dash')).toMatchObject({ chain: 0 });
+  });
+
+  it('a double dash up (the second as the first ends) climbs twice as high; right-then-up turns in one move', () => {
+    const climb = (double: boolean) => {
+      const { game, p } = standing();
+      tap(game, p, Btn.Dash | Btn.Jet);
+      hold(game, p, 0, BURST - 1);
+      if (double) tap(game, p, Btn.Dash | Btn.Jet);
+      let top = p.y;
+      for (let i = 0; i < 90; i++) {
+        hold(game, p, 0, 1);
+        top = Math.max(top, p.y);
+      }
+      return top;
+    };
+    const one = climb(false);
+    const two = climb(true);
+    expect(two).toBeGreaterThan(1.9 * one);
+    const { game, p } = standing();
+    const x0 = p.x;
+    tap(game, p, Btn.Dash | Btn.Right);
+    hold(game, p, Btn.Right, GAP - 1);
+    tap(game, p, Btn.Dash | Btn.Jet | Btn.Right);
+    expect(p.dashDir).toBe(1); // up-right, without a stop in between
+    expect(p.dashChain).toBe(1);
+    hold(game, p, 0, BURST);
+    expect(p.x - x0).toBeGreaterThan(BURST_M);
+    expect(p.y).toBeGreaterThan(1);
+    // straight up after right: it curves (the sideways speed flows on, within the carry), no corner
+    const curve = standing();
+    tap(curve.game, curve.p, Btn.Dash | Btn.Right);
+    hold(curve.game, curve.p, 0, GAP - 1);
+    tap(curve.game, curve.p, Btn.Dash | Btn.Jet);
+    expect(curve.p.dashDir).toBe(2);
+    expect(curve.p.vy).toBeGreaterThan(T.dashSpeed);
+    expect(curve.p.vx).toBeCloseTo(T.dashCarry * T.dashSpeed * T.dashChainBonus, 2);
+  });
+
+  it('strength scales the distance and the fuel: a gentle push is a short, cheap dash', () => {
+    const run = (strength: number) => {
+      const { game, p } = standing();
+      const x0 = p.x;
+      const inputs: Input[] = [];
+      inputs[p.id] = { ...createInput(), buttons: Btn.Dash | Btn.Right, dashStrength: strength };
+      game.step(inputs);
+      const spent = T.fuelMax - p.fuel;
+      hold(game, p, 0, BURST - 1);
+      return { dx: p.x - x0, spent };
+    };
+    const full = run(7);
+    const weak = run(0);
+    expect(full.spent).toBeCloseTo(T.dashFuelCost, 2); // fuel is on the 1/1024 grid
+    expect(weak.spent).toBeCloseTo(T.dashFuelCost * T.dashMinStrength, 2);
+    expect(weak.dx / full.dx).toBeCloseTo(dashStrengthMul(T, 0), 1);
+    expect(run(4).dx).toBeGreaterThan(weak.dx);
+    expect(run(4).dx).toBeLessThan(full.dx);
   });
 
   it('a blast knocks you out of a dash: no invulnerability frames', () => {
@@ -210,11 +260,19 @@ describe('dash', () => {
     expect(p.vx).toBe(defaultTuning.launchSpeedX);
   });
 
-  it('leaves you within the walk or air caps, and at most dashExitUp going up', () => {
+  it('lets go keeping a share of its sideways speed (it flows on, then the drag takes it), and at most dashExitUp going up', () => {
     const { game, p } = standing();
     tap(game, p, Btn.Dash | Btn.Right);
     hold(game, p, 0, BURST - 1);
-    expect(Math.abs(p.vx)).toBeLessThanOrEqual(defaultTuning.walkMax);
+    expect(p.vx).toBeCloseTo(Math.max(T.walkMax, T.dashCarry * T.dashSpeed), 3);
+    expect(p.vx).toBeLessThan(T.launchSpeedX);
+    hold(game, p, 0, 30);
+    expect(p.vx).toBe(0); // the ground's friction stops it
+    const plain = standing();
+    tap(plain.game, plain.p, Btn.Dash | Btn.Right);
+    plain.game.tuning.dashCarry = 0;
+    hold(plain.game, plain.p, 0, BURST - 1);
+    expect(Math.abs(plain.p.vx)).toBeLessThanOrEqual(defaultTuning.walkMax); // no carry: back within the walk cap
     const up = standing();
     tap(up.game, up.p, Btn.Dash | Btn.Jet);
     hold(up.game, up.p, 0, BURST - 1);
@@ -226,7 +284,7 @@ describe('dash', () => {
     const { game, p } = standing();
     const x0 = p.x;
     const events = tap(game, p, Btn.Dash | Btn.Left | Btn.Jet);
-    expect(events.filter((e) => e.type === 'dash')).toEqual([{ type: 'dash', player: p.id, x: x0, y: p.prevY, dir: 3 }]);
+    expect(events.filter((e) => e.type === 'dash')).toEqual([{ type: 'dash', player: p.id, x: x0, y: p.prevY, dir: 3, chain: 0 }]);
     hold(game, p, 0, 1);
     expect(game.events.some((e) => e.type === 'dash')).toBe(false);
   });

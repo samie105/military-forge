@@ -8,11 +8,11 @@
  * bidirectional stream with u16 length prefixes (§2.3: Safari leaks flow-control credit with a
  * stream per message).
  *
- * Selection (§2.1): try WebTransport first (2 s to become ready), insist on real datagrams
+ * Selection (§2.1): try WebTransport first (4 s to become ready), insist on real datagrams
  * (Safari may silently fall back to HTTP/2 without them), and fall back to WebSocket. Only a
- * failure that says "this network blocks UDP" (no handshake within 2 s, or no datagrams) on a first
+ * failure that says "this network blocks UDP" (no handshake within 4 s, or no datagrams) on a first
  * connect is remembered, for an hour, per network type and server host, so a doomed network doesn't
- * pay 2 s every time. A refused or broken gateway (4xx/5xx, a reset) costs one attempt, nothing more.
+ * pay 4 s every time. A refused or broken gateway (4xx/5xx, a reset) costs one attempt, nothing more.
  * Once a session has fallen back to WebSocket it stays there until the page reloads.
  */
 import { isUnreliableMessage } from '@military-forge/protocol';
@@ -69,7 +69,12 @@ export function webTransportUrl(endpoint: WebTransportEndpoint, room: string): s
 
 /** Datagram budget (§2.3): never fragment; bigger unreliable messages use the stream. */
 const MAX_DATAGRAM_BYTES = 1000;
-const WT_READY_TIMEOUT_MS = 2000;
+/**
+ * A WebTransport handshake takes ~2 round trips (QUIC, then the CONNECT): 0.3 s at 150 ms, but ~1 s
+ * at the 500 ms Nigerian phones measured on 19 Oct 2026, with a tail past 1.3 s. 2 s timed out on
+ * those, and the timeout was remembered as "this network blocks UDP" for an hour.
+ */
+const WT_READY_TIMEOUT_MS = 4000;
 const FAILURE_MEMORY_MS = 3600 * 1000;
 
 /** Why WebTransport didn't work. `networkBlocksIt`: the signature of a network that drops UDP. */
@@ -168,15 +173,15 @@ export async function openWebTransport(endpoint: WebTransportEndpoint, handlers:
   wt.closed.catch(() => {}); // observed below once open; never an unhandled rejection before that
   let stream: WebTransportBidirectionalStream;
   try {
-    // no answer at all in 2 s is what a UDP-blocking network looks like; a quick refusal (a 4xx/5xx,
+    // no answer at all in 4 s is what a UDP-blocking network looks like; a quick refusal (a 4xx/5xx,
     // connection refused) is just this server, this time
-    await withTimeout(wt.ready, WT_READY_TIMEOUT_MS, () => new WebTransportUnavailable('WebTransport not ready in 2 s', true)).catch((e: unknown) => {
+    await withTimeout(wt.ready, WT_READY_TIMEOUT_MS, () => new WebTransportUnavailable(`WebTransport not ready in ${WT_READY_TIMEOUT_MS / 1000} s`, true)).catch((e: unknown) => {
       throw e instanceof WebTransportUnavailable ? e : new WebTransportUnavailable(`WebTransport refused (${(e as Error).message})`, false);
     });
     // Safari can complete the handshake over HTTP/2, which has no datagrams: that's no better than WS
     const reliability = (wt as WebTransport & { reliability?: string }).reliability;
     if (reliability !== undefined && reliability !== 'supports-unreliable') throw new WebTransportUnavailable(`WebTransport without datagrams (${reliability})`, true);
-    stream = await withTimeout(wt.createBidirectionalStream(), WT_READY_TIMEOUT_MS, () => new WebTransportUnavailable('WebTransport stream not open in 2 s', false));
+    stream = await withTimeout(wt.createBidirectionalStream(), WT_READY_TIMEOUT_MS, () => new WebTransportUnavailable(`WebTransport stream not open in ${WT_READY_TIMEOUT_MS / 1000} s`, false));
   } catch (e) {
     wt.close();
     throw e instanceof WebTransportUnavailable ? e : new WebTransportUnavailable((e as Error).message, false);

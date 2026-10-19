@@ -10,6 +10,7 @@
  * Settings and the HUD layout are saved on the device (localStorage). The API below is what the
  * Settings screen calls (touch-interfaces.md in the shared notes).
  */
+import { defaultTuning, type Tuning } from '@military-forge/content';
 import type { Input, SimEvent } from '@military-forge/sim';
 import type { Camera } from '../camera';
 import type { ThrowLatch } from '../input';
@@ -41,6 +42,8 @@ export interface TouchDeps {
   view3d?: { setDprCap?(cap: number | null): void } | null;
   /** a ✎ button on the controls opens the HUD editor (off once a Settings screen offers it) */
   editButton?: boolean;
+  /** the room's tuning (the dash's flick mapping reads it); null or absent: the defaults */
+  tuning?: () => Pick<Tuning, 'dashFlickFull'> | null;
 }
 
 let settings: TouchSettings = loadSettings(null);
@@ -96,6 +99,7 @@ function sync(): void {
         camera: d.camera,
         blocked: () => d.sampler.blocked === true,
         throwLatch: d.sampler.throwLatch ?? null,
+        dashFlickFull: () => (d.tuning?.() ?? defaultTuning).dashFlickFull,
       };
       controller = new TouchController(host, settings, loadLayout(storage()), storage(), setTouchSettings, d.editButton ?? true);
       controller.setActive(wanted());

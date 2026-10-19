@@ -257,7 +257,16 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
     v['net.tone'] = look.tone;
     v['net.phoneClass'] = `phud-ping num ${look.cls}`;
     v['net.ping'] = `${ping} ms`;
-    v['net.loss'] = `${(net.prediction?.snapshotLossPct ?? 0).toFixed(1)}%`;
+    const loss = net.prediction?.snapshotLossPct ?? 0;
+    const jitter = net.prediction ? `±${Math.round(net.prediction.rttJitterMs)}` : '';
+    const via = net.transport === 'wt' ? 'WT' : net.transport === 'ws' ? 'WS' : '';
+    v['net.loss'] = `${loss.toFixed(1)}%`;
+    // the readout the owner reports from (19 Oct 2026): jitter and the transport next to ping and loss
+    v['net.jitter'] = jitter;
+    v['net.via'] = via;
+    v['net.viaTitle'] = via === 'WT' ? 'WebTransport (UDP)' : via === 'WS' ? 'WebSocket (TCP)' : '';
+    // phones: one compact line after the ping
+    v['net.short'] = [jitter, `${loss < 10 ? loss.toFixed(1) : Math.round(loss)}%`, via].filter(Boolean).join(' · ');
     v['net.detail'] = mem.netDetail;
   }
   on('fps', input.showFps && input.fps > 0);
@@ -318,13 +327,15 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
   }
   v['v.shield'] = fixed(sh.fill);
 
-  // dash: the ring empties at once and refills raw (1 = ready), the seconds in the middle, the air
-  // dash's pip, and the last dash's direction on the rose for a moment
+  // dash: no cooldown, the fuel (docs/02 §21). The ring is full while the fuel buys a dash and
+  // refills toward one when it doesn't; the pip counts the dashes in the tank; the last dash's
+  // direction shows on the rose for a moment
   const d = dashStatus(me, t);
   on('dash-ready', d.state === 'ready');
-  on('dash-cooldown', d.state === 'cooldown');
-  on('air-used', d.state === 'spent' || (!!me.airDashUsed && !me.grounded));
-  v['dash.cooldown'] = d.state === 'cooldown' ? d.seconds.toFixed(1) : '';
+  on('dash-cooldown', d.state === 'spent');
+  on('air-used', d.state === 'spent');
+  v['dash.cooldown'] = '';
+  v['dash.left'] = d.left < 0 ? '∞' : `×${d.left}`;
   v['v.dash'] = fixed(1 - d.fill);
   const hint = mem.dashDir === null || mem.dashDir === undefined ? null : dashHint(mem.dashDir);
   on('dash-hint', me.alive && !!hint);
@@ -1150,7 +1161,7 @@ export function netGraph(n: NetStats | undefined): string {
   if (!n) return 'local match · no network';
   const p = n.prediction;
   const lines = [
-    `ping ${n.rttMs.toFixed(0)} ms${p ? ` ±${p.rttJitterMs.toFixed(0)}` : ''} · loss ${p ? p.snapshotLossPct.toFixed(1) : '0.0'}% · ${n.snapshotsPerSec.toFixed(0)} snap/s`,
+    `ping ${n.rttMs.toFixed(0)} ms${p ? ` ±${p.rttJitterMs.toFixed(0)}` : ''} · loss ${p ? p.snapshotLossPct.toFixed(1) : '0.0'}% · ${n.snapshotsPerSec.toFixed(0)} snap/s${n.transport ? ` · ${n.transport === 'wt' ? 'WebTransport' : 'WebSocket'}` : ''}`,
     `↓ ${n.kbInPerSec.toFixed(1)} KB/s · ↑ ${n.kbOutPerSec.toFixed(1)} KB/s · interp ${n.interpDelayMs} ms`,
   ];
   if (p) lines.push(`buffer ${Number.isNaN(p.inputBufferHealth) ? '–' : p.inputBufferHealth} · ×${p.timeScale.toFixed(3)} · corrections ${p.correctionsPerMin.toFixed(1)}/min`);

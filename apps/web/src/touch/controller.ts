@@ -33,7 +33,7 @@ import {
   type TouchLayout,
 } from './layout';
 import type { KeyValueStore as Store, TouchSettings } from './settings';
-import { FIRE_AT, assistAim, createTouchState, desiredAim, grenadeStrength, touchButtons, type AimTarget } from './mapping';
+import { FIRE_AT, assistAim, createTouchState, dashStrength, desiredAim, flickRate, grenadeStrength, touchButtons, type AimTarget } from './mapping';
 import { EquipClock, SKIN_BASE, TouchSkin, controlValues, localView, phoneTokens, skinHtml, type LocalView } from './skin';
 import { AIM_STICK, GRENADE_STICK, MOVE_STICK, isSwipe, knobOffset, moveButtons, shapeStick, zeroStick, type StickVector } from './stick';
 import './touch.css';
@@ -48,7 +48,7 @@ const HUD_STALE_MS = 250;
 const CONTEXT: Partial<Record<ControlId, string>> = { take: 'near-crate', zoom: 'zoomable' };
 
 type Grab =
-  | { kind: 'stick'; id: 'move' | 'aim'; cx: number; cy: number; radius: number; startAt: number; peak: number; peakDir: number }
+  | { kind: 'stick'; id: 'move' | 'aim'; cx: number; cy: number; radius: number; startAt: number; peak: number; peakDir: number; peakAt: number }
   | { kind: 'grenade'; cx: number; cy: number; radius: number; downAt: number }
   | { kind: 'button'; def: ControlDef }
   | { kind: 'edit'; id: ControlId; dx: number; dy: number }
@@ -64,6 +64,8 @@ export interface TouchHost {
   readonly throwLatch: ThrowLatch | null;
   /** menus are open (the shell blocks input): the controls hide and leave touches to the menus */
   blocked(): boolean;
+  /** the room's tuning dashFlickFull (a full-strength flick, deflections a second; docs/02 §21) */
+  dashFlickFull(): number;
 }
 
 /** The part of a frame the controls read (render's frame: view.ts Frame). */
@@ -201,6 +203,8 @@ export class TouchController {
     if (!this.playing) return;
     const s = this.state;
     out.buttons |= touchButtons(s, this.settings.fire);
+    // a dash from the stick goes as hard as the stick was pushed (the keyboard's is always full)
+    if (s.pulses & Btn.Dash) out.dashStrength = s.dashStrength;
     const want = desiredAim(s);
     if (want !== null) {
       this.aimAngle = assistAim(this.aimAngle, want, sx, sy, this.targets, this.settings.aimAssist);
@@ -217,6 +221,7 @@ export class TouchController {
     if (s.grenadeActive) this.host.throwLatch?.aimWith(grenadeStrength(s), performance.now());
     s.pulses = 0;
     s.dashDir = 0;
+    s.dashStrength = 7;
   }
 
   /** Zoom-button presses since the last call, as wheel steps (the last level wraps back to none). */
@@ -398,8 +403,10 @@ export class TouchController {
     el.style.left = `${cx - rect.left}px`;
     el.style.top = `${cy - rect.top}px`;
     el.classList.add('mf-down');
-    this.grabs.set(e.pointerId, { kind: 'stick', id, cx, cy, radius, startAt: e.timeStamp, peak: 0, peakDir: 0 });
-    this.moveStick(id, at.x - cx, at.y - cy);
+    const grab: Grab = { kind: 'stick', id, cx, cy, radius, startAt: e.timeStamp, peak: 0, peakDir: 0, peakAt: e.timeStamp };
+    this.grabs.set(e.pointerId, grab);
+    // a thumb landing already pushed is an instant flick
+    this.moveStick(id, at.x - cx, at.y - cy, grab, e.timeStamp);
   }
 
   private pressControl(e: PointerEvent, id: ControlId, el: HTMLElement): void {
@@ -421,7 +428,11 @@ export class TouchController {
     if (def.bit) {
       s.held |= def.bit;
       s.pulses |= def.bit;
-      if (def.bit === Btn.Dash) s.dashDir = s.moveActive ? moveButtons(s.move) : 0;
+      if (def.bit === Btn.Dash) {
+        s.dashDir = s.moveActive ? moveButtons(s.move) : 0;
+        const stick = this.moveGrab();
+        s.dashStrength = s.moveActive && stick ? dashStrength(s.move.mag, flickRate(stick.peak, stick.startAt, stick.peakAt), this.host.dashFlickFull()) : 7;
+      }
     }
     if (def.id === 'zoom') {
       // +1 a level; when the last press changed nothing (the deepest zoom), back to none
@@ -443,7 +454,7 @@ export class TouchController {
     }
     e.preventDefault();
     const at = logicalPoint(e);
-    if (g.kind === 'stick') this.moveStick(g.id, at.x - g.cx, at.y - g.cy, g);
+    if (g.kind === 'stick') this.moveStick(g.id, at.x - g.cx, at.y - g.cy, g, e.timeStamp);
     else if (g.kind === 'grenade') shapeStick(at.x - g.cx, at.y - g.cy, g.radius, GRENADE_STICK, this.state.grenade);
     else if (g.kind === 'edit') this.editMove(g, e);
     else if (g.kind === 'pinch') this.pinchMove(g, e);
@@ -472,6 +483,7 @@ export class TouchController {
         if (lifted && this.settings.swipeDash && isSwipe(at - g.startAt, g.peak)) {
           s.pulses |= Btn.Dash;
           s.dashDir = g.peakDir;
+          s.dashStrength = dashStrength(g.peak, flickRate(g.peak, g.startAt, g.peakAt), this.host.dashFlickFull());
         }
         s.moveActive = false;
         Object.assign(s.move, zeroStick());
@@ -521,7 +533,13 @@ export class TouchController {
     else window.setTimeout(off, 280);
   }
 
-  private moveStick(id: 'move' | 'aim', dx: number, dy: number, g?: Extract<Grab, { kind: 'stick' }>): void {
+  /** The move stick's grab, while a thumb is on it. */
+  private moveGrab(): Extract<Grab, { kind: 'stick' }> | null {
+    for (const g of this.grabs.values()) if (g.kind === 'stick' && g.id === 'move') return g;
+    return null;
+  }
+
+  private moveStick(id: 'move' | 'aim', dx: number, dy: number, g?: Extract<Grab, { kind: 'stick' }>, at = 0): void {
     const radius = (this.sizes.get(id)?.px ?? 96) / 2;
     const k = this.sizes.get(id)?.k ?? 1;
     const off = knobOffset(dx, dy, radius);
@@ -535,6 +553,7 @@ export class TouchController {
       if (g && v.mag >= g.peak) {
         g.peak = v.mag;
         g.peakDir = moveButtons(v);
+        g.peakAt = at;
       }
     } else {
       s.aimActive = true;

@@ -29,7 +29,7 @@ export function phoneHudTemplate(): string {
     <div class="pt-cue plate" data-state="low-hp+alive" role="status">${ic('hp', 'ic--sm')}<b>Low health</b><span data-bind="player.hpCue"></span></div>
     <div class="pt-clock plate" data-state="match"><b class="num" data-bind="match.timeLeft"></b><span><span class="hud-label">You</span> <b class="num" data-bind="match.myScore"></b><i></i><span class="hud-label" data-bind="match.leaderShort"></span> <b class="num" data-bind="match.leaderScore"></b></span></div>
     <span class="phud-admin hud-label" data-state="admin">Tuned by admin</span>
-    <span class="pt-ping" data-state="net"><span data-bind-attr="class: net.phoneClass"><span class="sig" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span data-bind="net.ping"></span></span></span>
+    <span class="pt-ping" data-state="net"><span data-bind-attr="class: net.phoneClass"><span class="sig" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span data-bind="net.ping"></span></span><span class="pt-ping__more num" data-bind="net.short"></span></span>
     <span class="pt-arcwarn mf-arcwarn" data-state="arc-warning" role="status">${ic('warn', 'ic--sm')}Arc bends<span data-bind-show="event.name"> · <span data-bind="event.name"></span></span></span>
     <div class="pickup plate pt-pickup" data-state="pickup" role="status"><svg class="ic ic--sm" aria-hidden="true"><use data-bind-attr="href: pickup.icon"/></svg><span data-bind="pickup.text"></span></div>
     <div class="respawn plate" data-state="spectating" role="status">

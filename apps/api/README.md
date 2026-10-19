@@ -29,6 +29,7 @@ Migrations run on start (an advisory lock keeps several instances from racing). 
 | `pnpm --filter @military-forge/api keygen` | print a new `ACCESS_TOKEN_PRIVATE_KEY` line |
 | `pnpm --filter @military-forge/api db:generate` | after editing `src/db/schema.ts`: write the next SQL migration into `drizzle/` |
 | `pnpm --filter @military-forge/api db:migrate` | apply migrations without starting the server |
+| `DATABASE_URL=postgres://… pnpm --filter @military-forge/api exec tsx scripts/import-pglite.ts <dir>` | copy a PGlite directory's rows into Postgres (both migrated first; rows already there are skipped). The trial box does this once when it moves to Postgres; stop the API first |
 | `pnpm --filter @military-forge/api test` | in-process route tests on PGlite + memory KV |
 | `TEST_DATABASE_URL=postgres://game:game@localhost:55432/game TEST_REDIS_URL=redis://localhost:56379 pnpm --filter @military-forge/api test` | the same suite on the docker-compose services (**empties the `users` table first**) |
 

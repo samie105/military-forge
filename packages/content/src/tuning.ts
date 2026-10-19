@@ -67,17 +67,28 @@ export interface Tuning {
   dropThroughHold: number;
   dropThroughTime: number;
 
-  // Dash (docs/02 §21): a brief 8-way jetpack burst
-  /** m/s along the dash direction during the burst (× weapon weight × map speed) */
+  // Dash (docs/02 §21): a brief 8-way jetpack burst that costs fuel, as often as the fuel lasts,
+  // and chains (the owner, 19 Oct: "as far as you have fuel you can dash as many times as you want")
+  /** m/s along the dash direction during a full-strength burst (× weapon weight × map speed) */
   dashSpeed: number;
   /** burst length in ticks */
   dashBurstTicks: number;
-  /** seconds between dashes */
-  dashCooldown: number;
-  /** fuel per dash (0 = free) */
+  /** seconds after a dash before another press can dash: held or mashed keys don't machine-gun */
+  dashGap: number;
+  /** fuel per full-strength dash (a weaker one costs its share; 0 = free) */
   dashFuelCost: number;
   /** the most upward speed a dash leaves you with (m/s): an up-dash can't become a jet launch */
   dashExitUp: number;
+  /** seconds after a dash starts in which the next one chains onto it */
+  dashChainWindow: number;
+  /** a chained dash's speed (×): the second, third… link of a chain is this much faster */
+  dashChainBonus: number;
+  /** share of the burst's sideways speed a dash keeps when it ends, above the walk and air caps (never above launchSpeedX) */
+  dashCarry: number;
+  /** the weakest dash's speed and fuel, as a share of a full one (a gentle push of the stick) */
+  dashMinStrength: number;
+  /** touch: a flick of the move stick this fast (full deflections a second) dashes at full strength */
+  dashFlickFull: number;
 
   // Grenades and blasts: scales on every grenade's own numbers (grenades.ts), for live tuning
   /** × each grenade's throw speed (the sim's throw, the aiming arc and the bots' throws) */
@@ -146,9 +157,16 @@ export const defaultTuning: Readonly<Tuning> = Object.freeze({
   // ground (2.05 → 2.85 m) in the same 0.13 s blink, with the same cooldown
   dashSpeed: 20,
   dashBurstTicks: 8,
-  dashCooldown: 1.0,
-  dashFuelCost: 8,
+  // the owner, 19 Oct ("it's not fluid"): no cooldown and no one-air-dash rule; each dash costs
+  // fuel instead (~12 full dashes on a 196 tank), and dashes chain into one fluid move
+  dashGap: 0.07,
+  dashFuelCost: 16,
   dashExitUp: 2,
+  dashChainWindow: 0.35,
+  dashChainBonus: 1.15,
+  dashCarry: 0.4,
+  dashMinStrength: 0.45,
+  dashFlickFull: 6,
 
   grenadeThrowScale: 1,
   blastImpulseScale: 1,
@@ -211,8 +229,13 @@ export const TUNING_GROUPS: readonly { title: string; fields: readonly TuningFie
     fields: [
       { key: 'dashSpeed', label: 'Speed (m/s)', min: 4, max: 30, step: 0.5 },
       { key: 'dashBurstTicks', label: 'Length (ticks)', min: 1, max: 30, step: 1 },
-      { key: 'dashCooldown', label: 'Cooldown (s)', min: 0, max: 4, step: 0.05 },
-      { key: 'dashFuelCost', label: 'Fuel per dash', min: 0, max: 50, step: 1 },
+      { key: 'dashFuelCost', label: 'Fuel per dash', min: 0, max: 60, step: 1 },
+      { key: 'dashGap', label: 'Gap before the next dash (s)', min: 0, max: 1, step: 0.01 },
+      { key: 'dashChainWindow', label: 'Chain window (s)', min: 0, max: 2, step: 0.05 },
+      { key: 'dashChainBonus', label: 'Chained dash speed (×)', min: 1, max: 2, step: 0.05 },
+      { key: 'dashCarry', label: 'Speed kept after (share)', min: 0, max: 1, step: 0.05 },
+      { key: 'dashMinStrength', label: 'Weakest dash (share of full)', min: 0.1, max: 1, step: 0.05 },
+      { key: 'dashFlickFull', label: 'Touch: full-strength flick (/s)', min: 1, max: 20, step: 0.5 },
       { key: 'dashExitUp', label: 'Most upward speed after (m/s)', min: 0, max: 10, step: 0.1 },
     ],
   },

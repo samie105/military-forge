@@ -9,9 +9,9 @@ import { DEG2RAD, approach, quantize, simCos, simExp, simSin, u16ToAngle, POS_IN
 import { lungeSpeed } from './combat';
 import { DT, SKIN, ticks } from './constants';
 import { closestSegSeg, createClosestPair, rayCapsule, closestPointOnSegment } from './geometry';
-import { Btn, isDown, wasPressed } from './input';
+import { Btn, isDown, wasPressed, type Input } from './input';
 import type { BodyEnv } from './mechanics';
-import { capDashExit, heldSpeedMul, type PlayerState } from './player';
+import { capDashExit, dashBurstSpeed, dashStrengthMul, heldSpeedMul, type PlayerState } from './player';
 import { shieldInFront } from './shield';
 import { CollisionWorld, SegFlag } from './world';
 
@@ -452,7 +452,7 @@ const DASH_INDEX = [
 /**
  * A dash is a jetpack burst, so whatever cuts the jetpack (an EMP field or storm, an EMP grenade's
  * lockout) blocks it too. A riot shield up or coming up blocks it as well: lower the shield to dash.
- * A blocked press costs nothing (no cooldown, no fuel).
+ * A blocked press costs nothing (no gap, no fuel).
  */
 export function dashBlocked(p: PlayerState, env: BodyEnv | null): boolean {
   // a riot shield up (or coming up) holds you back: lower it to dash (mechanics-dash.md)
@@ -467,15 +467,22 @@ export function dashBlocked(p: PlayerState, env: BodyEnv | null): boolean {
 export const DASH_UP_FRESH_TICKS = 6;
 
 /**
- * Starts a dash on the Dash press if one is allowed; returns whether it did. Direction: Left/Right
- * and a fresh Jet (up) / Down, 8-way; none = along the facing. On the ground, down only means
- * "along the ground" (with a sideways direction) or "through this one-way platform" (straight
- * down); straight down into solid ground does nothing and costs nothing.
+ * Starts a dash on the Dash press if one is allowed; returns whether it did. Any time the fuel
+ * covers it (the owner, 19 Oct: "as far as you have fuel you can dash as many times as you want"),
+ * after the short re-trigger gap, in the air as often as on the ground, and during a burst: a dash
+ * started within the chain window of the last one chains onto it (a turn, a double dash up), a
+ * little faster. Its strength (Input.dashStrength) scales its speed and its fuel alike.
+ *
+ * Direction: Left/Right and a fresh Jet (up) / Down, 8-way; none = along the facing. On the
+ * ground, down only means "along the ground" (with a sideways direction) or "through this one-way
+ * platform" (straight down); straight down into solid ground does nothing and costs nothing.
  */
-function startDash(p: PlayerState, t: Tuning, env: BodyEnv | null, buttons: number): boolean {
-  if (p.dashTicks > 0 || p.dashCooldown > 0 || dashBlocked(p, env)) return false;
-  const fromGround = p.grounded;
-  if ((!fromGround && p.airDashUsed) || p.fuel < t.dashFuelCost) return false;
+function startDash(p: PlayerState, t: Tuning, env: BodyEnv | null, input: Input): boolean {
+  if (p.dashGap > 0 || dashBlocked(p, env)) return false;
+  const buttons = input.buttons;
+  const power = Math.max(0, Math.min(7, input.dashStrength | 0));
+  const cost = t.dashFuelCost * dashStrengthMul(t, power);
+  if (cost > 0 && p.fuel < cost) return false;
   const ix = (isDown(buttons, Btn.Right) ? 1 : 0) - (isDown(buttons, Btn.Left) ? 1 : 0);
   const up = isDown(buttons, Btn.Jet) && p.jetTicks <= DASH_UP_FRESH_TICKS;
   let iy = up ? 1 : isDown(buttons, Btn.Down) ? -1 : 0;
@@ -489,13 +496,16 @@ function startDash(p: PlayerState, t: Tuning, env: BodyEnv | null, buttons: numb
   }
   const dir = DASH_INDEX[iy + 1]![ix + 1]!;
   p.dashDir = dir >= 0 ? dir : p.facing > 0 ? 0 : 4;
+  // within the window of the last dash: the next link of its chain (≤ 7, the wire's u3)
+  p.dashChain = p.dashChainTicks > 0 ? Math.min(7, p.dashChain + 1) : 0;
+  p.dashChainTicks = ticks(t.dashChainWindow);
+  p.dashPower = power;
   p.dashTicks = t.dashBurstTicks;
-  p.dashCooldown = ticks(t.dashCooldown);
-  if (t.dashFuelCost > 0) {
-    p.fuel = Math.max(0, p.fuel - t.dashFuelCost);
+  p.dashGap = ticks(t.dashGap);
+  if (cost > 0) {
+    p.fuel = Math.max(0, p.fuel - cost);
     p.fuelRegenDelay = ticks(t.fuelRegenDelayAir);
   }
-  if (!fromGround) p.airDashUsed = true; // a dash from the ground (even through a platform) isn't the air dash
   if (iy > 0) p.grounded = false;
   return true;
 }
@@ -536,14 +546,15 @@ export function stepMovement(world: CollisionWorld, p: PlayerState, t: Tuning, e
   const speedMul = env ? heldSpeedMul(p) * env.moveSpeedMul : heldSpeedMul(p);
 
   // --- 0. dash (docs/02 §21): the burst overrides intent, jetpack and gravity below ---
-  if (p.dashCooldown > 0) p.dashCooldown--;
-  if (p.grounded) p.airDashUsed = false;
+  if (p.dashGap > 0) p.dashGap--;
+  if (p.dashChainTicks > 0) p.dashChainTicks--;
+  else p.dashChain = 0;
   if (p.dashTicks > 0 && p.grounded && DASH_DY[p.dashDir]! < 0) {
     // a down-dash that lands is a slam: it ends here
     p.dashTicks = 0;
     capDashExit(p, t, speedMul);
   }
-  const dashStarted = wasPressed(buttons, p.prevButtons, Btn.Dash) && startDash(p, t, env, buttons);
+  const dashStarted = wasPressed(buttons, p.prevButtons, Btn.Dash) && startDash(p, t, env, input);
   const dashing = p.dashTicks > 0;
 
   // --- 1. horizontal intent ---
@@ -616,9 +627,16 @@ export function stepMovement(world: CollisionWorld, p: PlayerState, t: Tuning, e
 
   // --- 3b. dash burst: a fixed velocity along the dash, no gravity, so up and down dashes are crisp ---
   if (dashing) {
-    const speed = t.dashSpeed * speedMul;
+    const speed = dashBurstSpeed(p, t) * speedMul;
     const dy = DASH_DY[p.dashDir]!;
-    p.vx = DASH_DX[p.dashDir]! * speed;
+    const dx = DASH_DX[p.dashDir]!;
+    if (dx !== 0) p.vx = dx * speed;
+    else {
+      // straight up or down: the sideways speed you had flows on (a run into an up-dash, a chain
+      // turning from right to up curves instead of cornering), within what a dash's exit keeps
+      const keep = Math.min(t.launchSpeedX, Math.max(cap, t.dashCarry * speed));
+      p.vx = Math.max(-keep, Math.min(keep, p.vx));
+    }
     p.vy = p.grounded && dy <= 0 ? 0 : dy * speed; // along the ground: the move follows its slope
     p.dashTicks--;
   }
@@ -650,7 +668,8 @@ export function stepMovement(world: CollisionWorld, p: PlayerState, t: Tuning, e
   if (wasGrounded && res.hitWall && Math.abs(intendedVx) > 0.01) {
     tryStepUp(world, p, t, startX, startY, intendedVx, cosMax);
   }
-  if (dashing && p.dashTicks === 0) capDashExit(p, t, speedMul);
+  // the burst lets go: within the caps, but keeping a share of its sideways speed, so it flows on
+  if (dashing && p.dashTicks === 0) capDashExit(p, t, speedMul, Math.abs(DASH_DX[p.dashDir]!) * dashBurstSpeed(p, t) * speedMul * t.dashCarry);
 
   // --- 6. ground detection / snap (§10.4) ---
   oneWay.prevFeetY = p.prevY;

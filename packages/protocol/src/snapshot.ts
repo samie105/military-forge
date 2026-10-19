@@ -548,7 +548,7 @@ function readExtEvent(r: BitReader): SnapshotEvent {
   const kind = r.bits(EXT_BITS);
   switch (kind) {
     case EXT_DASH:
-      return { type: 'dash', player: unPid(r.bits(5)), x: r.signed(24) / POS_INV, y: r.signed(24) / POS_INV, dir: r.bits(3) };
+      return { type: 'dash', player: unPid(r.bits(5)), x: r.signed(24) / POS_INV, y: r.signed(24) / POS_INV, dir: r.bits(3), chain: r.bits(3) };
     case EXT_RICOCHET: {
       const shooter = unPid(r.bits(5));
       const owner = unPid(r.bits(5));
@@ -593,7 +593,7 @@ function writeEvent(w: BitWriter, e: SimEvent): void {
       w.bits(EVENT_SPAWN, 3).unsigned(pid(e.player), 5);
       break;
     case 'dash':
-      w.bits(EVENT_EXT, 3).bits(EXT_DASH, EXT_BITS).unsigned(pid(e.player), 5).signed(pos(e.x), 24).signed(pos(e.y), 24).unsigned(e.dir, 3);
+      w.bits(EVENT_EXT, 3).bits(EXT_DASH, EXT_BITS).unsigned(pid(e.player), 5).signed(pos(e.x), 24).signed(pos(e.y), 24).unsigned(e.dir, 3).unsigned(e.chain ?? 0, 3);
       break;
     case 'mapEvent':
       w.bits(EVENT_MAP, 3)

@@ -38,8 +38,12 @@ export type SimEvent =
    * clients draw a blast, a flash or an EMP ring; smoke and gas show up as clouds instead.
    */
   | { type: 'explosion'; x: number; y: number; radius: number; owner: number; grenade?: number }
-  /** a dash started (docs/02 §21): feet position at the start, 8-way direction (0 = right, CCW) */
-  | { type: 'dash'; player: number; x: number; y: number; dir: number }
+  /**
+   * a dash started (docs/02 §21): feet position at the start, 8-way direction (0 = right, CCW), and
+   * its link in a chain (0 = a first dash, 1 = chained onto the last one, …; v14), so a renderer can
+   * draw a chain as one streak
+   */
+  | { type: 'dash'; player: number; x: number; y: number; dir: number; chain?: number }
   /**
    * A map event's warning started, it started, or it ended (mapEvents.ts, docs/02 §20.7). `event`
    * indexes the map's event defs; `ticks` is what is left of the phase that just began (0 on end).

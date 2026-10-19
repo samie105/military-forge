@@ -79,11 +79,19 @@ interface Burst {
 
 /** A dash's trail (docs/02 §21): from where it started, along its direction. */
 interface DashStreak {
+  player: number;
   x: number;
   y: number;
   dir: number;
   age: number;
+  /** metres it reaches: a full dash's, or up to where the next link of its chain started */
+  len: number;
+  /** drawn at its full length at once (a link a chained dash continued) */
+  grown: boolean;
 }
+
+/** a full dash's length (m): 20 m/s × 8 ticks */
+const DASH_LEN = 2.7;
 
 /** 8-way dash directions (0 = right, counter-clockwise), as the sim's DASH_DX/DASH_DY. */
 const DASH_UNIT = Array.from({ length: 8 }, (_, i) => [Math.cos((i * Math.PI) / 4), Math.sin((i * Math.PI) / 4)] as const);
@@ -435,9 +443,22 @@ export class Renderer {
           if (e.killer === localId && e.victim !== localId) this.hitMarker = { age: 0, head: false, kill: true };
           break;
         }
-        case 'dash':
-          this.dashes.push({ x: e.x, y: e.y, dir: e.dir, age: 0 });
+        case 'dash': {
+          // a chained link (v14) continues the last streak: that one ends where this one starts and
+          // fades with it, so a chain reads as one streak that turns
+          if ((e.chain ?? 0) > 0) {
+            for (let i = this.dashes.length - 1; i >= 0; i--) {
+              const prev = this.dashes[i]!;
+              if (prev.player !== e.player) continue;
+              prev.len = Math.min(prev.len, Math.hypot(e.x - prev.x, e.y - prev.y));
+              prev.age = 0;
+              prev.grown = true;
+              break;
+            }
+          }
+          this.dashes.push({ player: e.player, x: e.x, y: e.y, dir: e.dir, age: 0, len: DASH_LEN, grown: false });
           break;
+        }
         case 'mapEvent': {
           // map events (docs/02 §20.7): the banner is the shell's; the feed keeps a short history
           const def = this.map.events?.defs[e.event];
@@ -1165,7 +1186,7 @@ export class Renderer {
         ctx.fill();
       }
     }
-    // dash trails: a fading band from the start along the dash, ~ its length (14 m/s × 8 ticks ≈ 1.9 m)
+    // dash trails: a fading band from the start along the dash, ~ its length; a chain's links join up
     for (let i = this.dashes.length - 1; i >= 0; i--) {
       const d = this.dashes[i]!;
       d.age += dt;
@@ -1176,7 +1197,7 @@ export class Renderer {
       if (!world) continue; // render3d draws dashes (the debug overlay and ?render=2d keep the band)
       const a = 1 - d.age / 0.3;
       const [ux, uy] = DASH_UNIT[d.dir] ?? DASH_UNIT[0]!;
-      const len = 1.9 * Math.min(1, d.age / 0.13);
+      const len = d.grown ? d.len : d.len * Math.min(1, d.age / 0.13);
       // the 3D trail's mint green (render3d/vfx/dashTrail.ts), nobody's team colour, for everyone
       ctx.strokeStyle = `rgba(120,240,160,${0.6 * a})`;
       ctx.lineWidth = 0.5 * cam.ppm;

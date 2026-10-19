@@ -139,3 +139,82 @@ export class ShieldBlasts {
     return this.seed / 4294967296;
   }
 }
+
+/** shards of the broken plate: the shield's light steel */
+const SHARD_TINT = [0.42, 0.55, 0.68] as const;
+const breakSpec: ParticleSpec = particleSpec();
+
+/**
+ * A riot shield broken at (x, y) (`shieldBreak`, at 0 HP: docs/03 §5), which drew nothing in 3D: a
+ * flash, the plate's steel shards thrown out and falling, and sparks. `smoke` takes the shards
+ * (alpha-blended, in front), `glow` the flash and sparks.
+ */
+export function shieldBreak(x: number, y: number, glow: ParticlePool, smoke: ParticlePool, detail: number, rand: () => number): void {
+  const p = breakSpec;
+  const fresh = (): ParticleSpec => Object.assign(p, base);
+  fresh();
+  p.x = x;
+  p.y = y;
+  p.z = 0.5;
+  p.life = 0.14;
+  p.size0 = 1.3;
+  p.size1 = 0.7;
+  p.rot = rand() * Math.PI;
+  p.ramp = Ramp.Flash;
+  p.cell = Cell.Star;
+  [p.tr, p.tg, p.tb] = FLARE_TINT;
+  glow.emit(p);
+  fresh();
+  p.x = x;
+  p.y = y;
+  p.z = 0.5;
+  p.life = 0.22;
+  p.size0 = 0.4;
+  p.size1 = 1.6;
+  p.ease = 0.5;
+  p.alpha = 0.7;
+  p.ramp = Ramp.Ring;
+  p.cell = Cell.Ring;
+  glow.emit(p);
+  for (let i = 0, n = Math.max(5, Math.round(12 * detail)); i < n; i++) {
+    const a = rand() * Math.PI * 2;
+    const v = 2 + rand() * 4.5;
+    fresh();
+    p.x = x + Math.cos(a) * 0.15;
+    p.y = y + (rand() - 0.3) * 0.6;
+    p.z = 0.5;
+    p.vx = Math.cos(a) * v;
+    p.vy = Math.abs(Math.sin(a)) * v + 1.5;
+    p.grav = 16;
+    p.drag = 0.4;
+    p.life = 0.6 + rand() * 0.4;
+    p.size0 = p.size1 = 0.08 + rand() * 0.09;
+    p.rot = rand() * Math.PI;
+    p.spin = (rand() - 0.5) * 18;
+    p.front = 1;
+    p.ramp = Ramp.Book;
+    p.cell = Cell.Chunk;
+    [p.tr, p.tg, p.tb] = SHARD_TINT;
+    smoke.emit(p);
+  }
+  for (let i = 0, n = Math.max(4, Math.round(14 * detail)); i < n; i++) {
+    const a = rand() * Math.PI * 2;
+    const v = 4 + rand() * 8;
+    fresh();
+    p.x = x;
+    p.y = y;
+    p.z = 0.5;
+    p.vx = Math.cos(a) * v;
+    p.vy = Math.sin(a) * v + 1;
+    p.grav = 12;
+    p.drag = 2.2;
+    p.life = 0.2 + rand() * 0.3;
+    p.size0 = 0.12;
+    p.size1 = 0.05;
+    p.aspect = 0.35;
+    p.stretch = 0.035;
+    p.ramp = Ramp.Spark;
+    p.cell = Cell.Streak;
+    glow.emit(p);
+  }
+}

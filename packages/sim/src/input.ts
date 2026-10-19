@@ -32,10 +32,15 @@ export interface Input {
   weaponSelect: number;
   /** grenade throw strength 0..7 */
   throwStrength: number;
+  /**
+   * a dash's strength 0..7 (v14; docs/02 §21): 7 = full (the keyboard, bots); touch scales it by
+   * how far and how fast the move stick was pushed. Read on the tick the dash starts.
+   */
+  dashStrength: number;
 }
 
 export function createInput(): Input {
-  return { buttons: 0, aim: 0, weaponSelect: 0, throwStrength: 7 };
+  return { buttons: 0, aim: 0, weaponSelect: 0, throwStrength: 7, dashStrength: 7 };
 }
 
 export function copyInput(dst: Input, src: Readonly<Input>): Input {
@@ -43,6 +48,7 @@ export function copyInput(dst: Input, src: Readonly<Input>): Input {
   dst.aim = src.aim;
   dst.weaponSelect = src.weaponSelect;
   dst.throwStrength = src.throwStrength;
+  dst.dashStrength = src.dashStrength;
   return dst;
 }
 

@@ -3,6 +3,7 @@
  * with the player's own keys, a few tips, and the way to Settings → Controls. It shows the first
  * time a player gets into a game, and from the in-match menu.
  */
+import { isPadCode } from '../../gamepad/glyphs';
 import { capText } from '../../ui/icons';
 import { Icon } from '../../ui/Icon';
 import { Kbd } from '../../ui/Kbd';
@@ -49,6 +50,8 @@ export function dashTip(bindings: Settings['bindings'], doubleTapDash: boolean, 
 export function TipsCard({ bindings, doubleTapDash = true }: { bindings: Settings['bindings']; doubleTapDash?: boolean }) {
   const ctl = useCtl();
   const layout = useKeyboardLayout();
+  // a controller's bindings (gamepad/prompts.ts: moving is a stick): aim with the other stick, Options for the menu
+  const pad = isPadCode(bindings.left[0]);
   return (
     <Screen name="tips" kind="game" label="How to play">
       <aside className="mf-tips card card--print m-p1" aria-label="How to play">
@@ -64,17 +67,19 @@ export function TipsCard({ bindings, doubleTapDash = true }: { bindings: Setting
           <div>
             <dt>Aim</dt>
             <dd>
-              <span className="kbd">
-                <Icon name="target" />
-                Mouse
-              </span>
+              {pad ? (
+                <Kbd code={bindings.left[0] === 'PadLS' ? 'PadRS' : 'PadLS'} />
+              ) : (
+                <span className="kbd">
+                  <Icon name="target" />
+                  Mouse
+                </span>
+              )}
             </dd>
           </div>
           <div>
             <dt>Menu</dt>
-            <dd>
-              <kbd className="kbd">Esc</kbd>
-            </dd>
+            <dd>{pad ? <Kbd code="Pad9" /> : <kbd className="kbd">Esc</kbd>}</dd>
           </div>
         </dl>
         <ul className="mf-tips__list">

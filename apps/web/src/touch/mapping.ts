@@ -23,6 +23,8 @@ export interface TouchState {
   pulses: number;
   /** direction buttons a pulsed dash goes with (the move stick when it was pressed or swiped) */
   dashDir: number;
+  /** the pulsed dash's strength 0–7 (Input.dashStrength, v14): the stick's push and how fast it got there */
+  dashStrength: number;
   /**
    * the grenade button is held (the throw latch, input.ts): a tap is a quick throw at 70 %; a hold
    * shows the arc, aimed with the right stick (or the button's own drag), whose push sets the
@@ -33,7 +35,7 @@ export interface TouchState {
 }
 
 export function createTouchState(): TouchState {
-  return { move: zeroStick(), moveActive: false, aim: zeroStick(), aimActive: false, held: 0, pulses: 0, dashDir: 0, grenadeActive: false, grenade: zeroStick() };
+  return { move: zeroStick(), moveActive: false, aim: zeroStick(), aimActive: false, held: 0, pulses: 0, dashDir: 0, dashStrength: 7, grenadeActive: false, grenade: zeroStick() };
 }
 
 /** The buttons this sample: held buttons and pulses, movement from the left stick, fire per mode. */
@@ -46,6 +48,24 @@ export function touchButtons(s: TouchState, fire: FireMode): number {
   // a dash goes the way the stick pointed when it was asked for, even if the thumb has moved on
   if (s.pulses & Btn.Dash) b = (b & ~(Btn.Left | Btn.Right | Btn.Jet | Btn.Down)) | s.dashDir;
   return b;
+}
+
+/**
+ * A dash's strength 0–7 (Input.dashStrength) from the move stick (the owner, 19 Oct: "it depends on
+ * how fast the players are moving their joystick"): how far it's pushed, and how fast it got there.
+ * A flick reaching its push at `flickFull` deflections a second or faster counts in full; a slow
+ * push counts for half; the stick left alone (the dash goes the way you face) is a full dash. The
+ * sim turns 0–7 into dashMinStrength…1 of a full dash's speed and fuel.
+ */
+export function dashStrength(mag: number, rate: number, flickFull: number): number {
+  if (!(mag > 0.05)) return 7;
+  const quick = flickFull > 0 ? Math.min(1, Math.max(0, rate) / flickFull) : 1;
+  return Math.round(Math.min(1, mag) * (0.5 + 0.5 * quick) * 7);
+}
+
+/** How fast a stick reached its peak push, in deflections a second (`startAt`, `peakAt` in ms). */
+export function flickRate(peak: number, startAt: number, peakAt: number): number {
+  return peak / Math.max(1 / 60, (peakAt - startAt) / 1000);
 }
 
 /** Throw strength 0–7 (70–100 %) from a stick's push. */

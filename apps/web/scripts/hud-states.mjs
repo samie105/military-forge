@@ -72,7 +72,7 @@ try {
   await patch({ hp: 24 });
   await shot('41-low-hp');
 
-  await patch((me) => ({ dashCooldown: 30, weapons: me.weapons.map((w, i) => (i === me.active ? { ...w, mag: 0, reloadTicks: 45 } : w)) }));
+  await patch((me) => ({ fuel: 6, weapons: me.weapons.map((w, i) => (i === me.active ? { ...w, mag: 0, reloadTicks: 45 } : w)) }));
   await shot('42-reloading-dash-cooldown');
 
   await patch({ shield: 'front', shieldHp: 212 });

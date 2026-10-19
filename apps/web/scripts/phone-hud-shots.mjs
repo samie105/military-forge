@@ -226,12 +226,12 @@ try {
     await patch({});
     await sleep(800);
 
-    // the dash ring sweeps back and ticks when it's ready
+    // the dash ring refills with the fuel and ticks when a dash is affordable again (v14: no cooldown)
     const dashClip = await page.$eval('.mf-ctl-dash', (el) => {
       const r = el.getBoundingClientRect();
       return { x: r.left - 20, y: r.top - 20, width: r.width + 40, height: r.height + 40 };
     });
-    await patch(() => ({ dashCooldown: Math.max(0, (window.__dashLeft = (window.__dashLeft ?? 8) - 1)) }));
+    await patch(() => ({ fuel: Math.min(20, (window.__dashFuel = (window.__dashFuel ?? 4) + 2)) }));
     await strip('dash-ready', async () => {}, dashClip, 22);
     await patch({});
     await sleep(500);

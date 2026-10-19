@@ -1,5 +1,6 @@
 /** Standalone Armory page (/armory.html) until W4's shell hosts the Armory as a route. */
 import { GAME_NAME } from '@military-forge/shared';
+import { mountPadMenus } from '../gamepad';
 import { applyPageSettings } from '../ui/pageSettings';
 import type { LightPreset } from '../locker/turntable';
 import { mountArmory } from '.';
@@ -19,6 +20,8 @@ const armory = mountArmory(document.getElementById('armory')!, {
   camo: params.get('camo') ?? undefined,
   fireTint: params.get('tint') ?? undefined,
 });
+// a controller drives the page like a menu (D-pad / stick moves, Cross / A presses, Circle / B: Back)
+mountPadMenus();
 
 // Dev-only hook for automated screenshots and console poking (stripped from production builds).
 if (import.meta.env.DEV) Object.assign(window, { __armory: armory });

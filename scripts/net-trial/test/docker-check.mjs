@@ -1,6 +1,8 @@
 /**
  * Checks a box set up by cloud-init.sh in the local test container (docker-test.sh): every public
- * route through Caddy, the owner's private links, the probe's echo and results, and the origin checks.
+ * route through Caddy, the owner's private links, the probe's echo and results, the origin checks, and
+ * the data stores: Postgres and Valkey on localhost with passwords, the API on them, the nightly
+ * backup and its pruning, and (after a FROM= upgrade) the PGlite-era guest still signed in.
  *   node scripts/net-trial/test/docker-check.mjs <container>
  * Caddy's internal CA signs the test certificate, so these requests skip certificate checks.
  */
@@ -10,6 +12,15 @@ import { request } from 'node:https';
 const container = process.argv[2] ?? 'mf-trial-test';
 const origin = 'https://127-0-0-1.sslip.io:8443';
 const sh = (cmd) => execFileSync('docker', ['exec', container, 'sh', '-c', cmd], { encoding: 'utf8' });
+const fails = (cmd) => {
+  try {
+    sh(`${cmd} 2>&1`);
+    return false;
+  } catch {
+    return true;
+  }
+};
+const envOf = (file) => Object.fromEntries([...sh(`cat ${file}`).matchAll(/^(\w+)='?(.*?)'?$/gm)].map((m) => [m[1], m[2]]));
 const secrets = Object.fromEntries(
   sh('cat /etc/military-forge/secrets')
     .trim()
@@ -105,16 +116,75 @@ const echoed = await new Promise((resolve) => {
 });
 check('the echo socket echoes through Caddy', echoed === '130:7,7,7', echoed);
 check('an echo socket from another site is refused', (await upgrade('/echo', 'https://evil.example')) === 403);
-const run = { id: 'docker-check-1', city: 'Lagos', network: 'mtn', device: 'Android phone', regions: { los: { sent: 3, rtts: [20, 21, null] } } };
+// the box's region id comes from where it is (where.sh; 'box' in a container)
+const regionId = config.regions?.[0]?.id ?? 'box';
+const run = {
+  id: 'docker-check-1',
+  city: 'Lagos',
+  network: 'mtn',
+  device: 'Android phone',
+  regions: { [regionId]: { sent: 3, rtts: [20, 21, null] } },
+  refs: { 'aws-eu-west-2': { rtts: [150, 151, null], median: 150.5, colo: '' } },
+};
 const posted = await post('/probe-api/results', run);
 check('a probe result is saved', posted.status === 201, posted.text);
 const exported = await get(`/probe-api/export/${secrets.EXPORT_TOKEN}`);
 check('the export has it (with the token)', exported.status === 200 && exported.text.includes('docker-check-1'));
+check('with its reference pings', exported.text.includes('"aws-eu-west-2"'));
 check('the export needs the token', (await get('/probe-api/export/nope-nope-nope-nope-nope')).status === 404);
 const file = sh('cat /var/lib/military-forge/probe/results.jsonl');
 check('no address in the results file', !/\b(127\.0\.0\.1|172\.\d+\.\d+\.\d+|192\.168\.)/.test(file));
 
-const units = sh('systemctl is-active mf-api mf-game mf-probe caddy mf-room.timer').trim().split('\n');
+// ---------- the data stores ----------
+check('the database passwords file is 0600 root', sh('stat -c "%a %U" /etc/military-forge/db').trim() === '600 root');
+const db = envOf('/etc/military-forge/db');
+const apiEnv = envOf('/etc/military-forge/api.env');
+check(
+  'the API runs in production on Postgres and Valkey',
+  apiEnv.NODE_ENV === 'production' && apiEnv.DATABASE_URL === `postgres://mf:${db.PG_PASS}@127.0.0.1:5432/mf` && apiEnv.REDIS_URL === `redis://:${db.KV_PASS}@127.0.0.1:6379` && !('PGLITE_DIR' in apiEnv),
+  JSON.stringify(Object.keys(apiEnv)),
+);
+const apiHealth = await get('/api/health');
+check('the API is up on Postgres and Valkey', apiHealth.status === 200 && /"db":"postgres","kv":"redis","dbUp":true,"kvUp":true/.test(apiHealth.text), apiHealth.text);
+const listening = sh("ss -Hltn '( sport = :5432 or sport = :6379 )'")
+  .trim()
+  .split('\n')
+  .map((l) => l.split(/\s+/)[3]);
+check(
+  'Postgres and Valkey listen on localhost only',
+  listening.length >= 2 && listening.every((a) => /^(127\.0\.0\.1|\[::1\]):(5432|6379)$/.test(a)) && listening.some((a) => a.endsWith(':5432')) && listening.some((a) => a.endsWith(':6379')),
+  listening.join(' '),
+);
+const psql = (sql) => sh(`PGPASSWORD='${db.PG_PASS}' psql -h 127.0.0.1 -U mf -d mf -XAtc "${sql}"`).trim();
+check('Postgres refuses the mf role without its password', fails('psql -h 127.0.0.1 -U mf -d mf -w -c "select 1"'));
+const users = Number(psql('select count(*) from users'));
+check('the guests made above are rows in Postgres', users >= 2, String(users));
+check('Valkey refuses without its password', sh('valkey-cli -h 127.0.0.1 ping 2>&1').includes('NOAUTH'));
+const vk = (args) => sh(`REDISCLI_AUTH='${db.KV_PASS}' valkey-cli -h 127.0.0.1 ${args}`).trim();
+check('Valkey answers with it', vk('ping') === 'PONG');
+check(`the room ${room} lives in Valkey`, vk(`exists room:${room}`) === '1');
+check('Valkey keeps an append-only file and never evicts', vk('config get appendonly').endsWith('yes') && vk('config get maxmemory-policy').endsWith('noeviction'));
+
+// backups: a run makes today's dump (only postgres can read it) and keeps the newest 7
+const day = (n) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+sh(`cd /var/backups/military-forge && for n in ${[3, 4, 5, 6, 7, 8, 9, 10, 11].map(day).join(' ')}; do echo old >mf-$n.dump; done && chown postgres:postgres mf-*.dump`);
+sh('systemctl start mf-backup.service');
+const dumps = sh('ls -1 /var/backups/military-forge').trim().split('\n');
+check('the backup keeps the newest 7 dumps, today first', dumps.length === 7 && dumps.at(-1) === `mf-${day(0)}.dump` && !dumps.includes(`mf-${day(9)}.dump`), dumps.join(' '));
+check('the dump is private to postgres', sh(`stat -c "%a %U" /var/backups/military-forge/mf-${day(0)}.dump`).trim() === '600 postgres');
+check('the dump restores: it lists the users table', sh(`pg_restore -l /var/backups/military-forge/mf-${day(0)}.dump`).includes('TABLE public users'));
+check('the backup runs nightly', sh('systemctl is-enabled mf-backup.timer').trim() === 'enabled' && sh('systemctl show -p TimersCalendar mf-backup.timer').includes('02:30:00 UTC'));
+
+// after FROM=<PGlite-era ref>: the guest made then is in Postgres and still signed in
+if (!fails('test -f /root/mf-before.json')) {
+  const before = JSON.parse(sh('cat /root/mf-before.json'));
+  check('the PGlite directory was moved aside once', fails('test -e /var/lib/military-forge/pglite') && sh('ls -d /var/lib/military-forge/pglite.imported-* | wc -l').trim() === '1');
+  check('the guest from before the upgrade is in Postgres with its name', psql(`select nickname from profiles where user_id = '${before.user.id}'`) === 'Kemi Before');
+  const refreshed = await post('/api/auth/refresh', { refreshToken: before.refreshToken });
+  check('their refresh token still signs them in', refreshed.status === 200 && refreshed.json().user?.id === before.user.id, refreshed.text.slice(0, 200));
+}
+
+const units = sh('systemctl is-active mf-api mf-game mf-probe caddy mf-room.timer postgresql valkey-server mf-backup.timer').trim().split('\n');
 check('services active', units.every((u) => u === 'active'), units.join(' '));
 check('the game server runs on uWebSockets.js', sh('journalctl -u mf-game --no-pager').includes('uWebSockets.js'));
 

@@ -61,6 +61,7 @@ for (const t of DASH_TARGETS) {
   rows.push([t.label, v.toFixed(2), `${mark(v >= t.min && v <= t.max)}  (target ${t.min}–${t.max}: ${t.why})`]);
 }
 rows.push(['Dash: up-right from standing, apex / run (m)', `${d.diagUp.toFixed(2)} / ${d.diagRun.toFixed(2)}`, '']);
+rows.push(['Dash right, then up: distance at the apex (m)', d.turnRun.toFixed(2), '']);
 rows.push(['Fall from a 6 m hover, no dash (s)', d.fallTime.toFixed(2), '']);
 
 for (const w of weapons) {

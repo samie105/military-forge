@@ -17,6 +17,8 @@ import { useCtl } from '../../context';
 import type { AudioSettings, Settings, SettingsTab, ShellStore } from '../../store';
 import { TEXT_SIZES, autoText, resetPatch } from '../Settings';
 import { PhoneScreen, rise } from './layout';
+import { PadControls } from '../../../gamepad/PadSettings';
+import { useInputDevice } from '../../../gamepad/react';
 
 /** The phone's sections: Touch first; no key bindings (Controls) on a phone. */
 export const PHONE_TABS: readonly { id: SettingsTab; label: string; icon: string }[] = [
@@ -26,6 +28,9 @@ export const PHONE_TABS: readonly { id: SettingsTab; label: string; icon: string
   { id: 'accessibility', label: 'Access', icon: 'access' },
   { id: 'network', label: 'Network', icon: 'globe' },
 ];
+
+/** A controller's section ("Pad"), once a pad has been used on this phone (gamepad/). */
+const PAD_TAB = { id: 'controls', label: 'Pad', icon: 'sliders' } as const satisfies (typeof PHONE_TABS)[number];
 
 /** The tab a phone shows: the store's, unless it's one the phone leaves to the desktop (Controls). */
 export function phoneTab(tab: SettingsTab): SettingsTab {
@@ -145,10 +150,12 @@ function Graphics({ settings }: { settings: Settings }) {
 function Audio({ settings }: { settings: Settings }) {
   const ctl = useCtl();
   const audio = settings.audio;
-  const rows: ['master' | 'effects' | 'music', string][] = [
+  const rows: ['master' | 'effects' | 'music' | 'ui' | 'voice', string][] = [
     ['master', 'Master'],
     ['effects', 'Effects'],
     ['music', 'Music'],
+    ['ui', 'Interface'],
+    ['voice', 'Voices'],
   ];
   const set = (patch: Partial<AudioSettings>) => ctl.updateSettings({ audio: { ...audio, ...patch } });
   return (
@@ -167,6 +174,9 @@ function Audio({ settings }: { settings: Settings }) {
           </Row>
         );
       })}
+      <Row i={rows.length} label="Headphones (3D sound)" desc="Earbuds: enemies placed by ear. Off for speakers.">
+        <Switch on={audio.headphones} onChange={(headphones) => set({ headphones })} label="Headphones (3D sound)" />
+      </Row>
     </>
   );
 }
@@ -188,7 +198,10 @@ function Accessibility({ settings }: { settings: Settings }) {
       <Row i={2} label="Reduce flashes" desc="No bright flashes or fast blinking.">
         <Switch on={settings.reduceFlashes} onChange={(reduceFlashes) => ctl.updateSettings({ reduceFlashes })} label="Reduce flashes" />
       </Row>
-      <Row i={3} label="Colour-blind teams">
+      <Row i={3} label="Soften loud bursts" desc="Quieter blasts, no ear ring.">
+        <Switch on={settings.softBursts} onChange={(softBursts) => ctl.updateSettings({ softBursts })} label="Soften loud bursts" />
+      </Row>
+      <Row i={4} label="Colour-blind teams">
         <Seg
           value={settings.colorBlind}
           label="Colour-blind teams"
@@ -221,13 +234,16 @@ function Network({ settings }: { settings: Settings }) {
 export function PhoneSettings({ store }: { store: ShellStore }) {
   const ctl = useCtl();
   const settings = useStore(store, (s) => s.settings);
-  const tab = phoneTab(useStore(store, (s) => s.settingsTab));
+  const padSeen = useInputDevice().pad !== null;
+  const tabs = padSeen ? [...PHONE_TABS, PAD_TAB] : PHONE_TABS;
+  const stored = useStore(store, (s) => s.settingsTab);
+  const tab = padSeen && stored === 'controls' ? 'controls' : phoneTab(stored);
   const reset = () => {
     const patch = resetPatch(tab);
     if (patch) ctl.updateSettings(patch);
     else setTouchSettings(DEFAULT_TOUCH_SETTINGS);
   };
-  const label = PHONE_TABS.find((t) => t.id === tab)!.label;
+  const label = tabs.find((t) => t.id === tab)!.label;
   return (
     <PhoneScreen name="m-settings" label="Settings" word="SET" modal states={[tab]}>
       <div className="pm pm--set">
@@ -248,7 +264,7 @@ export function PhoneSettings({ store }: { store: ShellStore }) {
         </header>
         <div className="pm-set-body">
           <nav className="pm-rail" role="tablist" aria-orientation="vertical" aria-label="Settings sections">
-            {PHONE_TABS.map((t, i) => (
+            {tabs.map((t, i) => (
               <button type="button" key={t.id} role="tab" aria-selected={tab === t.id} className={`pm-rail__i m-p3${tab === t.id ? ' is-on' : ''}`} style={rise(i)} onClick={() => ctl.setSettingsTab(t.id)}>
                 <Icon name={t.icon} />
                 <span>{t.label}</span>
@@ -262,6 +278,7 @@ export function PhoneSettings({ store }: { store: ShellStore }) {
             {tab === 'audio' && <Audio settings={settings} />}
             {tab === 'accessibility' && <Accessibility settings={settings} />}
             {tab === 'network' && <Network settings={settings} />}
+            {tab === 'controls' && <PadControls phone pad={settings.pad} onChange={(pad) => ctl.updateSettings({ pad })} reduceFlashes={settings.reduceFlashes} />}
           </section>
         </div>
       </div>

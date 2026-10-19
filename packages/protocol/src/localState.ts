@@ -60,8 +60,9 @@ export const LS = {
   // dash (v8, docs/02 §21): its own group after melee
   dashTicks: 41,
   dashDir: 42,
-  dashCooldown: 43,
-  airDashUsed: 44,
+  // v14 (the owner's fluid dash): the re-trigger gap and the chain's link replace the cooldown and the air dash
+  dashGap: 43,
+  dashChain: 44,
   // riot shield (v9), its own group after the dash: the carry mode and raise timer set the speed
   // and what the shield key does, so prediction needs them. HP is the server's (bullets), but it
   // rides along.
@@ -86,13 +87,16 @@ export const LS = {
   burst1: 61,
   // the flamethrower's burn (v12): prediction takes the burn's damage pulses exactly
   burnTicks: 62,
+  // the dash chain (v14): the window still open for the next link, and the current dash's strength
+  dashChainTicks: 63,
+  dashPower: 64,
 } as const;
 
 /** Offsets inside a weapon slot. */
 export const LS_SLOT = { def: 0, mag: 1, reserve: 2, cooldown: 3, reloadTicks: 4, bloom: 5, ticksSinceShot: 6 } as const;
 const SLOT_FIELDS = 7;
 
-export const LOCAL_STATE_FIELDS = LS.burnTicks + 1;
+export const LOCAL_STATE_FIELDS = LS.dashPower + 1;
 
 /** grenade types whose counts travel in the grenade group (type 0, the frag, is `frags`) */
 const OTHER_GRENADES = GRENADE_TYPES - 1;
@@ -113,7 +117,8 @@ const GROUPS: readonly (readonly [number, number])[] = [
   [LS.grenadeType, LS.blindTicks],
   [LS.blindTicks, LS.spin0],
   [LS.spin0, LS.burnTicks],
-  [LS.burnTicks, LOCAL_STATE_FIELDS],
+  [LS.burnTicks, LS.dashChainTicks],
+  [LS.dashChainTicks, LOCAL_STATE_FIELDS],
 ];
 
 /** Ground normals are quantised to 1/65536 by the sim (quantizeMovement). */
@@ -132,12 +137,13 @@ const BITS: readonly number[] = [
   ...SLOT_BITS,
   ...SLOT_BITS,
   6, // meleeTicks (a swing lasts ≤ 0.6 s = 36 ticks)
-  6, 3, 8, 1, // dashTicks (≤ 63), dashDir (8-way), dashCooldown (≤ 255 ticks), airDashUsed
+  6, 3, 6, 3, // dashTicks (≤ 63), dashDir (8-way), dashGap (≤ 1 s = 60 ticks), dashChain (≤ 7)
   19, 1, 5, // shieldHp (1/1024, ≤ 300), shieldStowed, shieldTicks (≤ raise time, 15)
   3, ...new Array<number>(OTHER_GRENADES).fill(3), // grenadeType, counts (≤ 7)
   8, 7, 6, 8, // blindTicks (≤ 4.25 s), blindFade (≤ 2.1 s), gasTicks (≤ 1 s), jetDisabledTicks (≤ 4.25 s)
   8, 2, 8, 2, // spin0 (≤ SPIN_FULL 240, or a charge's ticks), burst0 (≤ 3), spin1, burst1
   7, // burnTicks (≤ 2 s)
+  7, 3, // dashChainTicks (≤ 2 s = 120 ticks), dashPower (0..7)
 ];
 
 if (BITS.length !== LOCAL_STATE_FIELDS) throw new Error('local state layout out of sync');
@@ -209,8 +215,8 @@ export function captureLocalState(p: PlayerState, out: LocalState): LocalState {
   out[LS.dashTicks] = p.dashTicks;
   // the direction only matters during a burst: normalised to 0 otherwise, like the ground normal
   out[LS.dashDir] = p.dashTicks > 0 ? p.dashDir : 0;
-  out[LS.dashCooldown] = p.dashCooldown;
-  out[LS.airDashUsed] = p.airDashUsed ? 1 : 0;
+  out[LS.dashGap] = p.dashGap;
+  out[LS.dashChain] = p.dashChain;
   out[LS.shieldHp] = fx(p.shieldHp, SCALAR_INV);
   out[LS.shieldStowed] = p.shieldStowed ? 1 : 0;
   out[LS.shieldTicks] = p.shieldTicks;
@@ -225,6 +231,9 @@ export function captureLocalState(p: PlayerState, out: LocalState): LocalState {
   out[LS.spin1] = p.weapons[1].spin;
   out[LS.burst1] = p.weapons[1].burst;
   out[LS.burnTicks] = p.burnTicks;
+  out[LS.dashChainTicks] = p.dashChainTicks;
+  // the strength is only read during a burst: at rest it's 0 on both sides
+  out[LS.dashPower] = p.dashTicks > 0 ? p.dashPower : 0;
   for (let i = 0; i < LOCAL_STATE_FIELDS; i++) out[i] = fit(out[i]!, BITS[i]!);
   return out;
 }
@@ -273,8 +282,8 @@ export function applyLocalState(s: LocalState, p: PlayerState): void {
   p.meleeTicks = s[LS.meleeTicks]!;
   p.dashTicks = s[LS.dashTicks]!;
   p.dashDir = s[LS.dashDir]!;
-  p.dashCooldown = s[LS.dashCooldown]!;
-  p.airDashUsed = s[LS.airDashUsed] === 1;
+  p.dashGap = s[LS.dashGap]!;
+  p.dashChain = s[LS.dashChain]!;
   p.shieldHp = s[LS.shieldHp]! / SCALAR_INV;
   p.shieldStowed = s[LS.shieldStowed] === 1;
   p.shieldTicks = s[LS.shieldTicks]!;
@@ -289,6 +298,8 @@ export function applyLocalState(s: LocalState, p: PlayerState): void {
   p.weapons[1].spin = s[LS.spin1]!;
   p.weapons[1].burst = s[LS.burst1]!;
   p.burnTicks = s[LS.burnTicks]!;
+  p.dashChainTicks = s[LS.dashChainTicks]!;
+  p.dashPower = s[LS.dashPower]!;
 }
 
 export function localStatesEqual(a: LocalState, b: LocalState): boolean {

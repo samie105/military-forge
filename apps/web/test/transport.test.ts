@@ -45,7 +45,7 @@ let serverRoutesRooms = false;
 
 async function connect(reconnect = false, wsUrl = 'ws://gs.example.com:9001') {
   const pending = connectGame(wsUrl, 'auto', handlers, reconnect);
-  await vi.advanceTimersByTimeAsync(2100);
+  await vi.advanceTimersByTimeAsync(4100);
   return pending;
 }
 
@@ -80,9 +80,9 @@ describe('transport selection', () => {
     expect(FakeWebTransport.created).toBe(2);
   });
 
-  it('no handshake within 2 s on a first connect looks like a UDP-blocking network: remembered for an hour', async () => {
+  it('no handshake within 4 s on a first connect looks like a UDP-blocking network: remembered for an hour', async () => {
     FakeWebTransport.mode = 'hang';
-    expect((await connect()).fallbackReason).toMatch(/not ready in 2 s/);
+    expect((await connect()).fallbackReason).toMatch(/not ready in 4 s/);
     const next = await connect();
     expect(next.fallbackReason).toMatch(/blocked WebTransport recently/);
     expect(FakeWebTransport.created).toBe(1);

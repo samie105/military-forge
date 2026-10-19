@@ -9,6 +9,7 @@ import type { OnlineMode } from '../onlineMode';
 import type { LocalMode } from '../localMode';
 import { alertFromApiError } from './alerts';
 import { Api, ApiError, NICKNAME_REASONS, type Me, type NicknameCheck, type RoomJoin } from './api';
+import { sanitizePadSettings } from '../gamepad/settings';
 import { sanitizeBindings } from './controls';
 import { DEFAULT_SETTINGS, type AudioSettings, type GraphicsPreset, type Intent, type Overlay, type Profile, type Settings, type SettingsTab, type ShellState, type ShellStore, type TuneNote } from './store';
 
@@ -92,19 +93,26 @@ export function sanitizeSettings(raw: unknown, defaults: Settings = DEFAULT_SETT
       master: unit(a.master, da.master),
       effects: unit(a.effects, da.effects),
       music: unit(a.music, da.music),
+      ui: unit(a.ui, da.ui),
+      voice: unit(a.voice, da.voice),
       masterMuted: flag(a.masterMuted, da.masterMuted),
       effectsMuted: flag(a.effectsMuted, da.effectsMuted),
       musicMuted: flag(a.musicMuted, da.musicMuted),
+      uiMuted: flag(a.uiMuted, da.uiMuted),
+      voiceMuted: flag(a.voiceMuted, da.voiceMuted),
+      headphones: flag(a.headphones, da.headphones),
     },
     netGraph: flag(s.netGraph, defaults.netGraph),
     lowBandwidth: flag(s.lowBandwidth, defaults.lowBandwidth),
     reduceFlashes: flag(s.reduceFlashes, defaults.reduceFlashes),
+    softBursts: flag(s.softBursts, defaults.softBursts),
     reduceMotion: flag(s.reduceMotion, defaults.reduceMotion),
     colorBlind: s.colorBlind === 'deutan' || s.colorBlind === 'tritan' || s.colorBlind === 'standard' ? s.colorBlind : defaults.colorBlind,
     textScale: scale,
     doubleTapDash: flag(s.doubleTapDash, defaults.doubleTapDash),
     blood: flag(s.blood, defaults.blood),
     bindings: sanitizeBindings(s.bindings),
+    pad: sanitizePadSettings(s.pad),
   };
 }
 

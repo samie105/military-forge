@@ -184,6 +184,8 @@ All VFX respect the presets and **reduced motion**: no flashes > 3 per second (p
 
 ## 6. Audio
 
+> **Built (19 Oct 2026):** `apps/web/src/audio` (NOTES §28). Every sound is synthesized in code (no files yet; `docs/audio-asset-wishlist.md` ranks what to record or generate). The buses are Master, Effects (the world, with blasts on their own un-ducked sub-bus), Music, Interface and Voices, each a setting. The plan below is what it follows; the differences: panning is by world position from the listener (the local player; HRTF with headphones), occlusion counts walls along one ray per sound start (cached), the voice cap is 40, and the space is two convolution reverbs on synthesized impulses (open street, under cover). The mix rules: `docs/audio-design.md`.
+
 **Graph:**
 ```
 sources → [per-voice gain + StereoPanner] → category bus (weapons, impacts, movement, UI, announcer, music, voice)

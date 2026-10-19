@@ -37,6 +37,8 @@ export function shootingRange(
   frameMs?: number,
   /** fire on ticks ≡ this (mod 40): odd offsets put shots on the older tick of a batched pair */
   fireOffset = 0,
+  /** the conditioner's seed (another run of the same profile) */
+  linkSeed = 0,
 ): RangeResult {
   const result: RangeResult = { shots: 0, hits: 0, blocked: 0, poseErrors: [], rewindTicks: [], clamped: 0 };
   const aimedAt = new Map<number, { x: number; y: number }>();
@@ -47,6 +49,7 @@ export function shootingRange(
   let shooterId = -1;
   simulate(settings, seconds, {
     warmupSeconds: 2,
+    linkSeed,
     room: { dummies: false, lagComp, dev: true },
     ...(shooterLowBandwidth ? { lowBandwidth: [1] } : {}),
     ...(frameMs ? { frameMs } : {}),

@@ -36,7 +36,7 @@ export { MsgType } from './wire';
  *     remote flag 128 DASHING (flags 8 bits) · local block 41–44 (dash group).
  *     Map events announce a map event's warning, start and end (docs/02 §20.7); map rules, zones and the schedule add
  *     nothing else (they come from the map and the seed). The dash group holds dashTicks, dashDir, dashCooldown and
- *     airDashUsed (docs/02 §21). Extended events carry no length, so each new ext kind is a version bump too.
+ *     airDashUsed (docs/02 §21; v14 reworks it). Extended events carry no length, so each new ext kind is a version bump too.
  * v9 (riot shield + pickups): ext kinds 1 RICOCHET · 2 SHIELD_BREAK · 3 PICKUP · INPUT bit 14 Shield ·
  *     remote flags 256/512 = a 2-bit shield state (0 none, 1 slung, 2 raising, 3 up; flags 10 bits) ·
  *     local block 45–47 (shield group: shieldHp, shieldStowed, shieldTicks) · a pickups section after the grenades
@@ -59,8 +59,12 @@ export { MsgType } from './wire';
  * v13 (arsenal, the owner's admin page): OVERRIDES (0x28, a u16-length JSON of the admin's changed
  *     gameplay values) and WELCOME's trailing overridesJson (u16-length; `{}` when none), so every
  *     client's weapons and grenades match the server's. The admin page itself talks HTTP.
+ * v14 (arsenal, the owner's fluid dash): INPUT + u3 dashStrength per input (0..7, 7 = full) · the
+ *     dash group's 43 is dashGap u6 (was dashCooldown u8) and 44 dashChain u3 (was airDashUsed u1) ·
+ *     local block 63–64, one group after the burn group (dashChainTicks u7 · dashPower u3; 15 delta
+ *     groups) · the DASH ext event + u3 chain. No new tags, ext kinds, flags, INPUT bits or messages.
  */
-export const PROTOCOL_VERSION = 13;
+export const PROTOCOL_VERSION = 14;
 
 /**
  * Everything the sim reads from packages/content: a client and server that disagree on any of it
@@ -361,7 +365,7 @@ export function encodeInputInto(writer: BitWriter, m: Omit<InputMsg, 'type'>, co
   writer.reset().u8(MsgType.Input).u16(m.newestTick).u16(m.ackSnapshotSeq).u16(m.renderTick).u8(m.renderFrac).bits(n - 1, 2);
   for (let i = 0; i < n; i++) {
     const input = m.inputs[i]!;
-    writer.u16(input.buttons).u16(input.aim).unsigned(input.weaponSelect, 3).unsigned(input.throwStrength, 3);
+    writer.u16(input.buttons).u16(input.aim).unsigned(input.weaponSelect, 3).unsigned(input.throwStrength, 3).unsigned(input.dashStrength, 3);
     if (i > 0) writer.unsigned(Math.min(MAX_RENDER_LAG, Math.round((m.renderLags?.[i] ?? i) * RENDER_LAG_STEPS)), RENDER_LAG_BITS);
   }
   return writer.finish();
@@ -465,8 +469,9 @@ export function decodeMessage(bytes: Uint8Array): Message {
         const aim = r.u16();
         const weaponSelect = r.bits(3);
         const throwStrength = r.bits(3);
+        const dashStrength = r.bits(3);
         renderLags.push(i > 0 ? r.bits(RENDER_LAG_BITS) / RENDER_LAG_STEPS : 0);
-        inputs.push({ buttons, aim, weaponSelect, throwStrength });
+        inputs.push({ buttons, aim, weaponSelect, throwStrength, dashStrength });
       }
       endOfInput(r);
       return { type, newestTick, ackSnapshotSeq, renderTick, renderFrac, inputs, renderLags };
@@ -558,6 +563,7 @@ export function decodeInputInto(bytes: Uint8Array, out: InputPacket): InputPacke
     input.aim = r.u16();
     input.weaponSelect = r.bits(3);
     input.throwStrength = r.bits(3);
+    input.dashStrength = r.bits(3);
     out.renderLags[i] = i > 0 ? r.bits(RENDER_LAG_BITS) / RENDER_LAG_STEPS : 0;
   }
   endOfInput(r);

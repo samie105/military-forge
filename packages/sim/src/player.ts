@@ -105,10 +105,14 @@ export class PlayerState {
   dashTicks = 0;
   /** 8-way direction of the current (or last) dash: 0 = right, counter-clockwise in 45° steps */
   dashDir = 0;
-  /** ticks until the next dash is allowed */
-  dashCooldown = 0;
-  /** this airborne period's one air dash is spent (landing resets it) */
-  airDashUsed = false;
+  /** ticks until another press can dash (the re-trigger gap: held or mashed keys don't machine-gun) */
+  dashGap = 0;
+  /** links in the current chain: 0 = a first dash, 1 = the second (a double dash), … (≤ 7) */
+  dashChain = 0;
+  /** ticks left in which another dash chains onto the last one (0 = no chain open) */
+  dashChainTicks = 0;
+  /** the current (or last) dash's strength, 0..7 (Input.dashStrength when it started; 7 = full) */
+  dashPower = 0;
   /** riot shield HP; 0 = no shield (shield.ts). The two fields below are 0/false without one */
   shieldHp = 0;
   /** slung on purpose with the shield key: it stays on the back until the key raises it again */
@@ -206,8 +210,10 @@ export class PlayerState {
     this.meleeTicks = 0;
     this.dashTicks = 0;
     this.dashDir = 0;
-    this.dashCooldown = 0;
-    this.airDashUsed = false;
+    this.dashGap = 0;
+    this.dashChain = 0;
+    this.dashChainTicks = 0;
+    this.dashPower = 0;
     this.shieldHp = 0;
     this.shieldStowed = false;
     this.shieldTicks = 0;
@@ -288,13 +294,26 @@ export function heldSpeedMul(p: PlayerState): number {
   return Math.min(held, p.shieldTicks > 0 ? RIOT_SHIELD.moveSpeedMul : RIOT_SHIELD.slungSpeedMul);
 }
 
+/** A dash's strength (0..7, Input.dashStrength) as a share of a full dash's speed and fuel. */
+export function dashStrengthMul(t: Tuning, power: number): number {
+  const s = Math.max(0, Math.min(7, power));
+  return t.dashMinStrength + ((1 - t.dashMinStrength) * s) / 7;
+}
+
+/** The speed of `p`'s current burst before weight and map speed: its strength, and the chain bonus for a chained link. */
+export function dashBurstSpeed(p: PlayerState, t: Tuning): number {
+  return t.dashSpeed * dashStrengthMul(t, p.dashPower) * (p.dashChain > 0 ? t.dashChainBonus : 1);
+}
+
 /**
  * A dash's exit (docs/02 §21): sideways speed back within the walk or air cap (× `speedMul`, the
- * weapon weight × the map's speed, and never above launchSpeedX, so a dash never turns into a
- * slow-bleeding launch), and at most dashExitUp upward. For a burst that ends and one cut short.
+ * weapon weight × the map's speed), or `carry` when that is more (the share of the burst's own
+ * sideways speed it keeps, so a dash flows on instead of stopping dead), and never above
+ * launchSpeedX, so a dash never turns into a slow-bleeding launch; at most dashExitUp upward.
+ * For a burst that ends (with its carry) and one cut short (none).
  */
-export function capDashExit(p: PlayerState, t: Tuning, speedMul: number): void {
-  const cap = Math.min(t.launchSpeedX, (p.grounded ? (p.crouched ? t.crouchMax : t.walkMax) : t.airMaxX) * speedMul);
+export function capDashExit(p: PlayerState, t: Tuning, speedMul: number, carry = 0): void {
+  const cap = Math.min(t.launchSpeedX, Math.max(carry, (p.grounded ? (p.crouched ? t.crouchMax : t.walkMax) : t.airMaxX) * speedMul));
   if (p.vx > cap) p.vx = cap;
   else if (p.vx < -cap) p.vx = -cap;
   if (p.vy > t.dashExitUp) p.vy = t.dashExitUp;
@@ -303,10 +322,12 @@ export function capDashExit(p: PlayerState, t: Tuning, speedMul: number): void {
 /**
  * A push (a bullet's hit impulse, melee, a blast) ends a dash on the spot: no invulnerability
  * frames. The burst's speed first drops to the exit caps, so the push starts from there instead of
- * from 14 m/s. `mapSpeedMul` is the map's moveSpeedMul where the player is (1 without mechanics).
+ * from the dash's speed. `mapSpeedMul` is the map's moveSpeedMul where the player is (1 without mechanics).
  */
 export function knockOutOfDash(p: PlayerState, t: Tuning, mapSpeedMul = 1): void {
   if (p.dashTicks === 0) return;
   p.dashTicks = 0;
+  p.dashChainTicks = 0; // and the chain with it: the next dash starts a new one
+  p.dashChain = 0;
   capDashExit(p, t, heldSpeedMul(p) * mapSpeedMul);
 }

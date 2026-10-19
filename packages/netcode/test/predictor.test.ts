@@ -208,4 +208,51 @@ describe('InputBuffer (server)', () => {
     expect(buf.refused).toBe(1);
     expect(buf.push(104 + MAX_INPUT_LEAD - 1, createInput(), 104)).toBe(true);
   });
+
+  it('applies a press that arrived too late for its tick on the next one, once (docs/05 §13)', () => {
+    const buf = new InputBuffer();
+    const out = createInput();
+    const press = (buttons: number) => ({ ...createInput(), buttons });
+    buf.notePacket(100);
+    buf.push(100, press(Btn.Right), 100);
+    buf.take(100, out);
+    expect(buf.forSim(100, out).buttons).toBe(Btn.Right);
+    // 101–103 never arrive in time: the sim repeats Right
+    for (const t of [101, 102, 103]) {
+      expect(buf.take(t, out)).toBe(false);
+      expect(buf.forSim(t, out).buttons).toBe(Btn.Right);
+    }
+    // a late packet: a dash tapped on 102, released on 103, and the on-time 104 (no dash)
+    buf.notePacket(104);
+    for (const [t, b] of [[104, Btn.Left], [103, Btn.Left], [102, Btn.Left | Btn.Dash], [101, Btn.Left]] as const) buf.push(t, press(b), 104);
+    expect(buf.take(104, out)).toBe(true);
+    const sim = buf.forSim(104, out);
+    expect(sim.buttons).toBe(Btn.Left | Btn.Dash); // the dash happens, two ticks late
+    expect(out.buttons).toBe(Btn.Left); // the input that repeats if 105 goes missing stays clean
+    expect(buf.latched).toBe(1);
+    // the same late inputs again (redundant copies): applied once only
+    for (const [t, b] of [[103, Btn.Left], [102, Btn.Left | Btn.Dash]] as const) buf.push(t, press(b), 105);
+    buf.push(105, press(Btn.Left), 105);
+    buf.take(105, out);
+    expect(buf.forSim(105, out).buttons).toBe(Btn.Left);
+    expect(buf.latched).toBe(1);
+  });
+
+  it("doesn't latch what the sim already had down, or a held button (no press edge)", () => {
+    const buf = new InputBuffer();
+    const out = createInput();
+    const press = (buttons: number) => ({ ...createInput(), buttons });
+    buf.notePacket(200);
+    buf.push(200, press(Btn.Fire), 200);
+    buf.take(200, out);
+    buf.forSim(200, out);
+    buf.take(201, out); // missed: Fire repeated
+    buf.forSim(201, out);
+    buf.notePacket(202);
+    buf.push(202, press(0), 202);
+    buf.push(201, press(Btn.Fire), 202); // late, Fire held since 200: no new press
+    buf.take(202, out);
+    expect(buf.forSim(202, out).buttons).toBe(0);
+    expect(buf.latched).toBe(0);
+  });
 });

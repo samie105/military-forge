@@ -61,6 +61,24 @@ describe('sanitizeResult', () => {
     assert.equal(r.value.regions.los.connectMs, 120.4);
     assert.deepEqual(r.value.regions.los.rtts, [30.1, 31, null, 29]);
   });
+  it('keeps reference pings by id, with numbers only (no URLs, no extra fields)', () => {
+    const refs = {
+      'aws-eu-west-2': { rtts: [150.04, 151, null, 'x'], median: 150.5, p95: 151, colo: '', url: 'https://evil.example', error: '' },
+      'cf-edge': { rtts: [40], median: 40, colo: 'LOS' },
+      'Bad Id!': { rtts: [1] },
+      empty: { rtts: [] },
+      odd: { rtts: [9], colo: '<script>' },
+    };
+    const r = sanitizeResult(run({ refs }), ['los']);
+    assert.ok(r.ok);
+    assert.deepEqual(Object.keys(r.value.refs).sort(), ['aws-eu-west-2', 'cf-edge', 'odd']);
+    assert.deepEqual(r.value.refs['aws-eu-west-2'].rtts, [150, 151, null, null]);
+    assert.equal(r.value.refs['aws-eu-west-2'].received, 2);
+    assert.equal(r.value.refs['aws-eu-west-2'].url, undefined);
+    assert.equal(r.value.refs['cf-edge'].colo, 'LOS');
+    assert.equal(r.value.refs.odd.colo, '');
+    assert.deepEqual(sanitizeResult(run(), ['los']).value.refs, {});
+  });
   it('needs a city, a known network and a device', () => {
     assert.equal(sanitizeResult(run({ city: '  ' }), ['los']).ok, false);
     assert.equal(sanitizeResult(run({ network: 'mtn-ng' }), ['los']).ok, false);

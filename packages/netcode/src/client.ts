@@ -24,6 +24,7 @@ import {
 import { DT, Game, MAX_PLAYERS, createInput, type Input, type PlayerState, type SimEvent } from '@military-forge/sim';
 import { InputPacer, RttEstimator, type PacerOptions } from './clock';
 import { bracketSnapshots, lerpPosition, quantizeRenderTick, type SnapshotBracket } from './interpolation';
+import { OwnProjectiles, type GrenadeView } from './ownProjectiles';
 import { Predictor, type ReconcileKind } from './predictor';
 import { TICK_MS, unwrapTick } from './ticks';
 
@@ -50,7 +51,10 @@ export interface NetClientOptions {
   now(): number;
   /** inputs per packet: the newest plus redundant copies (docs/05 §1: 3–4) */
   redundancy?: number;
-  /** remote players are drawn this far in the past (docs/05 §10) */
+  /**
+   * remote players are drawn this far in the past (docs/05 §10). Unset (the default): adaptive, from
+   * how unevenly snapshots arrive (adaptInterpDelay); set: fixed (tests).
+   */
   interpDelayMs?: number;
   pacer?: Partial<PacerOptions>;
   /**
@@ -65,7 +69,10 @@ export interface NetClientOptions {
 export interface ReceivedSnapshot {
   msg: SnapshotMsg;
   recvMs: number;
+  /** encoded size, bytes */
+  bytes: number;
 }
+
 
 /** Fills `out` with this tick's input; `me` is the predicted local player (null before the first snapshot). */
 export type InputSource = (me: PlayerState | null, out: Input) => void;
@@ -98,6 +105,16 @@ export interface NetClientStats {
 
 /** remote players are drawn this far back in low-bandwidth mode (15 Hz snapshots); lag comp allows for it */
 export const LOW_BANDWIDTH_INTERP_DELAY_MS = 150;
+/** the adaptive interpolation delay's range (docs/05 §10: 50–200 ms; lag comp's cap allows for the top) */
+export const MIN_INTERP_DELAY_MS = 50;
+export const MAX_INTERP_DELAY_MS = 200;
+/** where it starts, before any snapshot has been seen */
+const START_INTERP_DELAY_MS = 100;
+/** snapshots the delay is worked out from (~3 s) */
+const INTERP_WINDOW = 90;
+/** how fast it moves, ms per second: up quickly (remote players run ~6 % slow meanwhile), down gently */
+const INTERP_GROW_PER_SEC = 60;
+const INTERP_SHRINK_PER_SEC = 10;
 const MAX_STEPS_PER_UPDATE = 16;
 const PING_INTERVAL_MS = 1000;
 const PING_BURST = 5;
@@ -133,6 +150,8 @@ export class NetClient {
   adminValues: AdminValues = {};
   seed = 1;
   predictor: Predictor | null = null;
+  /** own grenades and projectiles, flown from the throw (docs/05 §7.3) */
+  ownShots: OwnProjectiles | null = null;
   readonly rtt = new RttEstimator();
   readonly pacer: InputPacer;
   /** newest last; for remote-player interpolation */
@@ -179,6 +198,10 @@ export class NetClient {
   private readonly redundancy: number;
   private interpDelayMs: number;
   private readonly baseInterpDelayMs: number;
+  /** the adaptive delay's goal (adaptive only), and recent snapshots' arrival offsets (recv − serverTick × tick) */
+  private interpTarget: number;
+  private readonly adaptive: boolean;
+  private readonly arrivals: number[] = [];
   /** low-bandwidth mode (docs/05 §2.2): one INPUT per 2 ticks, 15 Hz snapshots */
   private lowBw = false;
   /** until then snapshots may still arrive at either rate (a mode switch is on its way): lenient loss */
@@ -193,7 +216,8 @@ export class NetClient {
 
   constructor(private readonly options: NetClientOptions) {
     this.redundancy = Math.max(1, Math.min(4, options.redundancy ?? 4));
-    this.interpDelayMs = this.baseInterpDelayMs = options.interpDelayMs ?? 100;
+    this.adaptive = options.interpDelayMs === undefined;
+    this.interpDelayMs = this.baseInterpDelayMs = this.interpTarget = options.interpDelayMs ?? START_INTERP_DELAY_MS;
     this.pacer = new InputPacer(options.pacer);
     this.ticket = options.ticket ?? '';
   }
@@ -250,6 +274,7 @@ export class NetClient {
   setTuning(t: Tuning): void {
     this.tuning = { ...t };
     if (this.predictor) this.predictor.game.tuning = this.tuning;
+    if (this.ownShots) this.ownShots.tuning = this.tuning;
     this.options.send(encodeCmd(CmdKind.SetTuning, JSON.stringify(t)));
   }
 
@@ -266,7 +291,8 @@ export class NetClient {
       this.rateChangeUntil = this.options.now() + rtt + 4 * TICK_MS + 50;
     }
     this.lowBw = on;
-    this.interpDelayMs = on ? Math.max(this.baseInterpDelayMs, LOW_BANDWIDTH_INTERP_DELAY_MS) : this.baseInterpDelayMs;
+    if (!this.adaptive) this.interpDelayMs = on ? Math.max(this.baseInterpDelayMs, LOW_BANDWIDTH_INTERP_DELAY_MS) : this.baseInterpDelayMs;
+    else if (on) this.interpDelayMs = Math.max(this.interpDelayMs, LOW_BANDWIDTH_INTERP_DELAY_MS);
     this.unsentTicks = 0;
     if (this.connected) this.options.send(encodeCmd(CmdKind.SetLowBandwidth, on ? '1' : '0'));
   }
@@ -311,6 +337,7 @@ export class NetClient {
           // render tick and the lag-comp view for their whole buffer
           if (!resumingSame) {
             this.snapshots.length = 0;
+            this.arrivals.length = 0;
             this.names.clear();
             this.heldSince.fill(-Infinity);
           }
@@ -334,7 +361,11 @@ export class NetClient {
         if (resumingSame) {
           this.resyncPending = true;
           this.predictor!.game.tuning = this.tuning;
-        } else this.predictor = new Predictor(new Game({ map: this.map, seed: this.seed, tuning: this.tuning, dummies: false }), msg.playerId, this.options.name);
+          if (this.ownShots) this.ownShots.tuning = this.tuning;
+        } else {
+          this.predictor = new Predictor(new Game({ map: this.map, seed: this.seed, tuning: this.tuning, dummies: false }), msg.playerId, this.options.name);
+          this.ownShots = new OwnProjectiles(this.map, this.seed, this.tuning);
+        }
         this.burstLeft = PING_BURST;
         this.nextPingAt = now;
         break;
@@ -352,12 +383,13 @@ export class NetClient {
       case MsgType.Tuning:
         this.tuning = parseTuning(msg.tuningJson, this.tuning);
         if (this.predictor) this.predictor.game.tuning = this.tuning;
+        if (this.ownShots) this.ownShots.tuning = this.tuning;
         break;
       case MsgType.Overrides:
         this.applyOverrides(msg.overridesJson);
         break;
       case MsgType.Snapshot:
-        this.onSnapshot(msg, now);
+        this.onSnapshot(msg, now, bytes.length);
         break;
       case MsgType.Kick:
         this.status = `kicked: ${msg.reason}`;
@@ -370,7 +402,7 @@ export class NetClient {
     return msg;
   }
 
-  private onSnapshot(msg: SnapshotMsg, now: number): void {
+  private onSnapshot(msg: SnapshotMsg, now: number, size: number): void {
     if (this.lastSeq >= 0) {
       // seqs run 1..65535 (0 means "nothing acked"), so they wrap mod 65535
       const gap = (msg.seq - this.lastSeq + 0xffff) % 0xffff;
@@ -381,7 +413,11 @@ export class NetClient {
       this.seqWindow.push({ at: now, lost: Math.max(0, Math.round(gap / per) - 1) });
     }
     this.lastSeq = msg.seq;
-    this.snapshots.push({ msg, recvMs: now });
+    this.snapshots.push({ msg, recvMs: now, bytes: size });
+    this.arrivals.push(now - msg.serverTick * TICK_MS);
+    if (this.arrivals.length > INTERP_WINDOW) this.arrivals.shift();
+    if (this.adaptive) this.interpTarget = this.adaptInterpDelay();
+    this.ownShots?.onSnapshot(msg, this.myId);
     if (this.snapshots.length > SNAPSHOT_BUFFER) this.snapshots.shift();
 
     const pred = this.predictor;
@@ -410,6 +446,11 @@ export class NetClient {
    */
   update(dtSec: number, sample: InputSource): void {
     const now = this.options.now();
+    if (this.adaptive) {
+      const d = this.interpTarget - this.interpDelayMs;
+      const step = Math.min(dtSec, 0.25) * (d > 0 ? INTERP_GROW_PER_SEC : INTERP_SHRINK_PER_SEC);
+      this.interpDelayMs += Math.max(-step, Math.min(step, d));
+    }
     if (!this.connected || this.resyncPending) {
       this.predictor?.decayOffset(dtSec);
       return;
@@ -442,6 +483,7 @@ export class NetClient {
       this.sampledView[pred.tick & 63] = Number.isNaN(this.shownRenderTick) ? this.remoteRenderTick() : this.shownRenderTick;
       this.sampledFor[pred.tick & 63] = pred.tick;
       pred.step(this.input);
+      this.ownShots?.afterStep(pred.tick - 1, pred.game, pred.player.id, pred.events);
       for (const e of pred.events) this.predictedEvents.push(e);
       pred.events.length = 0;
       if (!this.lowBw || ++this.unsentTicks >= 2) {
@@ -511,6 +553,51 @@ export class NetClient {
     out.y = this.lerped.y;
     out.src = br.alpha < 0.5 ? p0 : p1;
     return out;
+  }
+
+  /**
+   * The interpolation delay the last few seconds of snapshots ask for (docs/05 §10): one snapshot
+   * interval, plus how much later than the quickest the slow ones arrived (95th percentile), plus an
+   * interval for each snapshot lost in a row in the longer gaps (the next one must bridge them). A clean path
+   * gets ~60 ms (was a fixed 100), 150 ms ±40 jitter ~130 ms; it never goes past 200 ms, where lag
+   * compensation's cap stops covering it. Remote players freeze when this is too short.
+   */
+  private adaptInterpDelay(): number {
+    const a = this.arrivals;
+    if (a.length < 10) return this.interpTarget;
+    let best = Infinity;
+    for (const x of a) best = Math.min(best, x);
+    const late = a.map((x) => x - best).sort((x, y) => x - y);
+    const p95 = late[Math.min(late.length - 1, Math.floor(0.95 * late.length))]!;
+    const interval = (this.lowBw ? 4 : 2) * TICK_MS;
+    // gaps: a loss needs one more interval to bridge, a burst as many as it lost in a row (the
+    // second-longest gap of the last 10 s: one odd burst doesn't set it, a habit does)
+    const gaps = this.seqWindow.map((w) => w.lost).sort((x, y) => y - x);
+    const gap = Math.min(3, gaps[1] ?? 0);
+    const floor = this.lowBw ? LOW_BANDWIDTH_INTERP_DELAY_MS : MIN_INTERP_DELAY_MS;
+    return Math.max(floor, Math.min(MAX_INTERP_DELAY_MS, interval * (1 + gap) + p95 + 10));
+  }
+
+  /**
+   * Grenades and projectiles to draw now: the newest snapshot's, with our own predicted ones from
+   * the throw instead of the server's copies (OwnProjectiles).
+   */
+  grenadeViews(_now = this.options.now()): GrenadeView[] {
+    const newest = this.snapshots[this.snapshots.length - 1]?.msg ?? null;
+    if (this.ownShots) return this.ownShots.views(newest);
+    return (newest?.grenades ?? []).map((g) => ({ key: `s${g.id}`, id: g.id, owner: g.owner, x: g.x, y: g.y, vx: g.vx, vy: g.vy, fuse: g.fuse, type: g.type, state: g.state }));
+  }
+
+  /**
+   * For a view that draws the snapshots' grenades on its own timeline (render3d's OnlineView): our
+   * predicted ones, and whether a server grenade is one of them (skip it).
+   */
+  ownGrenadeViews(): GrenadeView[] {
+    return this.ownShots?.ownViews() ?? [];
+  }
+
+  predictsGrenade(id: number): boolean {
+    return this.ownShots?.predicts(id) ?? false;
   }
 
   get interpDelay(): number {

@@ -126,12 +126,12 @@ describe('riot shield and the dash (docs/02 §21: dashBlocked)', () => {
     hold(game, p, 0, 5);
     expect(shieldInFront(p) && !shieldRaised(p)).toBe(true); // coming up
     hold(game, p, Btn.Dash | Btn.Right, 1);
-    expect([p.dashTicks, p.dashCooldown]).toEqual([0, 0]);
+    expect([p.dashTicks, p.dashGap]).toEqual([0, 0]);
     hold(game, p, 0, SHIELD_RAISE_TICKS);
     expect(shieldRaised(p)).toBe(true);
     const fuel = p.fuel;
     hold(game, p, Btn.Dash | Btn.Right, 1);
-    expect([p.dashTicks, p.dashCooldown, p.fuel]).toEqual([0, 0, fuel]);
+    expect([p.dashTicks, p.dashGap, p.fuel]).toEqual([0, 0, fuel]);
     hold(game, p, 0, 1);
     hold(game, p, Btn.Shield, 1); // sling it
     hold(game, p, 0, 1);

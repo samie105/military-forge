@@ -8,6 +8,8 @@ import { useStore } from 'zustand';
 import { framesPerSecond, netHistory, NET_HISTORY } from '../../stats';
 import { getTouchSettings, onTouchChange, openTouchEditor, resetTouchLayout, setTouchSettings, type TouchSettings } from '../../touch';
 import { DEFAULT_TOUCH_SETTINGS } from '../../touch/settings';
+import { PadControls } from '../../gamepad/PadSettings';
+import { DEFAULT_PAD_SETTINGS } from '../../gamepad/settings';
 import { Icon } from '../../ui/Icon';
 import { Kbd, Cap } from '../../ui/Kbd';
 import { Screen, Switch, blurAfter, pingQuality } from '../../ui/Screen';
@@ -98,7 +100,7 @@ function Graphics({ settings }: { settings: Settings }) {
 
 // ------------------------------------------------------------------ audio
 
-function Volume({ audio, k, label, desc }: { audio: AudioSettings; k: 'master' | 'effects' | 'music'; label: string; desc: string }) {
+function Volume({ audio, k, label, desc }: { audio: AudioSettings; k: 'master' | 'effects' | 'music' | 'ui' | 'voice'; label: string; desc: string }) {
   const ctl = useCtl();
   const muted = audio[`${k}Muted`];
   const set = (patch: Partial<AudioSettings>) => ctl.updateSettings({ audio: { ...audio, ...patch } });
@@ -123,17 +125,32 @@ function Volume({ audio, k, label, desc }: { audio: AudioSettings; k: 'master' |
   );
 }
 
+/** Headphones: 3D sound by ear. Browsers can't tell a page what's plugged in, so it's the player's call. */
+function Headphones({ audio }: { audio: AudioSettings }) {
+  const ctl = useCtl();
+  return (
+    <div className="srow">
+      <div className="srow__txt">
+        <b>Headphones (3D sound)</b>
+        <span>For headphones or earbuds: you hear enemies left, right, above and below. Off for speakers.</span>
+      </div>
+      <div className="srow__ctrl">
+        <Switch on={audio.headphones} onChange={(headphones) => ctl.updateSettings({ audio: { ...audio, headphones } })} label="Headphones (3D sound)" />
+      </div>
+    </div>
+  );
+}
+
 function Audio({ settings }: { settings: Settings }) {
   return (
     <div className="tabpanel mf-tabpanel" role="tabpanel" aria-label="Audio">
       <h2 className="display set__h">Audio</h2>
-      <p className="status status--info">
-        <Icon name="info" />
-        The game has no sound yet: these are saved for when it does.
-      </p>
-      <Volume audio={settings.audio} k="master" label="Master volume" desc="Everything the game plays." />
+      <Volume audio={settings.audio} k="master" label="Master volume" desc="Everything the game plays. It goes quiet when you switch tabs." />
       <Volume audio={settings.audio} k="effects" label="Effects" desc="Guns, footsteps, jetpacks, explosions." />
-      <Volume audio={settings.audio} k="music" label="Music" desc="Menus, countdown and results." />
+      <Volume audio={settings.audio} k="music" label="Music" desc="Menus, the lobby and the match-start sting." />
+      <Volume audio={settings.audio} k="ui" label="Interface" desc="Clicks, the countdown, hit and kill confirms." />
+      <Volume audio={settings.audio} k="voice" label="Voices" desc="Soldiers getting hit or coughing in gas." />
+      <Headphones audio={settings.audio} />
     </div>
   );
 }
@@ -254,6 +271,7 @@ function Controls({ settings }: { settings: Settings }) {
           {moved}
         </p>
       )}
+      <PadControls pad={settings.pad} onChange={(pad) => ctl.updateSettings({ pad })} reduceFlashes={settings.reduceFlashes} />
     </div>
   );
 }
@@ -279,6 +297,15 @@ function Accessibility({ settings }: { settings: Settings }) {
         </div>
         <div className="srow__ctrl">
           <Switch on={settings.reduceFlashes} onChange={(reduceFlashes) => ctl.updateSettings({ reduceFlashes })} label="Reduce flashes" />
+        </div>
+      </div>
+      <div className="srow">
+        <div className="srow__txt">
+          <b>Soften loud bursts</b>
+          <span>Explosions and flashbangs play quieter, without the ear ring, and nothing gets loud all at once.</span>
+        </div>
+        <div className="srow__ctrl">
+          <Switch on={settings.softBursts} onChange={(softBursts) => ctl.updateSettings({ softBursts })} label="Soften loud bursts" />
         </div>
       </div>
       <div className="srow">
@@ -548,9 +575,9 @@ export function resetPatch(tab: SettingsTab): Partial<Settings> | null {
     case 'audio':
       return { audio: DEFAULT_AUDIO };
     case 'controls':
-      return { bindings: defaultBindings(), doubleTapDash: DEFAULT_SETTINGS.doubleTapDash };
+      return { bindings: defaultBindings(), doubleTapDash: DEFAULT_SETTINGS.doubleTapDash, pad: DEFAULT_PAD_SETTINGS };
     case 'accessibility':
-      return { reduceFlashes: DEFAULT_SETTINGS.reduceFlashes, reduceMotion: DEFAULT_SETTINGS.reduceMotion, colorBlind: DEFAULT_SETTINGS.colorBlind, textScale: DEFAULT_SETTINGS.textScale };
+      return { reduceFlashes: DEFAULT_SETTINGS.reduceFlashes, softBursts: DEFAULT_SETTINGS.softBursts, reduceMotion: DEFAULT_SETTINGS.reduceMotion, colorBlind: DEFAULT_SETTINGS.colorBlind, textScale: DEFAULT_SETTINGS.textScale };
     case 'network':
       return { lowBandwidth: DEFAULT_SETTINGS.lowBandwidth, netGraph: DEFAULT_SETTINGS.netGraph };
     case 'touch':

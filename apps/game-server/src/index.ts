@@ -66,6 +66,15 @@ const fillBots = botTarget > 0 ? { target: botTarget, level: botLevel } : undefi
 const hostTuning = process.env.HOST_TUNING === '1' || (dev && process.env.HOST_TUNING !== '0');
 // The test armory (one of every gun on a rack near the spawns): --armory or ARMORY=1 (the playtest's default)
 const armory = process.argv.includes('--armory') || process.env.ARMORY === '1' || process.env.ARMORY === 'true';
+// Lag compensation's total rewind cap (docs/05 §7.1): LAG_COMP_MAX_MS=900 lets shots from ~700 ms
+// phones land (the Johannesburg trial box, where Nigerian mobile data measured 513 ms median). Unset:
+// 500 ms (300 ms of latency on top of the most the interpolation delay can be).
+const lagCompMaxMs = process.env.LAG_COMP_MAX_MS ? Number(process.env.LAG_COMP_MAX_MS) : undefined;
+if (lagCompMaxMs !== undefined && !(lagCompMaxMs >= 100 && lagCompMaxMs <= 2000)) {
+  console.error('[game-server] LAG_COMP_MAX_MS takes 100–2000 (ms)');
+  process.exit(1);
+}
+const lagComp = lagCompMaxMs !== undefined ? { lagComp: { maxRewindMs: lagCompMaxMs } } : {};
 // a nav graph takes 90–270 ms to build: build the rooms' map before anyone joins, not on the first bot
 if (fillBots) warmNavGraphs([maps[mapId]!]);
 
@@ -93,19 +102,22 @@ const server = await createServer(
     dummies: !fillBots,
     ...(fillBots ? { fillBots } : {}),
     ...(armory ? { armory } : {}),
+    ...lagComp,
     mapId,
     seed: Number(process.env.SEED ?? 1),
     ...(netSim ? { netSim: { settings: netSim, scheduler: nodeScheduler } } : {}),
   },
   console.log,
   'uws',
-  defaultRoom ? wtSocket : undefined,
+  // the bridge opens sessions through the room registry, rooms by code included (NOTES §16): a
+  // server without the default room (DEFAULT_ROOM=0, the trial box) needs it as much
+  wtSocket,
   {
     ...(host ? { host } : {}),
     defaultRoom,
     ...(maxRooms !== undefined && Number.isInteger(maxRooms) && maxRooms >= 0 ? { maxRooms } : {}),
     // rooms by code play the same map (one map per room until rooms can switch)
-    roomOptions: { mapId, hostTuning, ...(fillBots ? { fillBots } : {}), ...(armory ? { armory } : {}) },
+    roomOptions: { mapId, hostTuning, ...(fillBots ? { fillBots } : {}), ...(armory ? { armory } : {}), ...lagComp },
     tickets,
     trustProxy,
   },
@@ -116,6 +128,7 @@ console.log(
     (fillBots ? ` · bots fill rooms to ${fillBots.target} (${fillBots.level})` : '') +
     (hostTuning ? ' · hosts may tune their rooms' : '') +
     (armory ? ' · test armory on (one of every gun by the spawns)' : '') +
+    (lagCompMaxMs !== undefined ? ` · lag compensation up to ${lagCompMaxMs} ms` : '') +
     (netSim ? ` · NET_SIM ${describeNetSim(netSim)}` : '') +
     (wtSocket ? ` · WebTransport gateway socket ${wtSocket}` : ''),
 );

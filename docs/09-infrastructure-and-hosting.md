@@ -82,6 +82,39 @@ The genre's core audience is India, Nigeria/West Africa, SE Asia, the Middle Eas
 | Launch | + `sin` (Singapore), `iad` (US East) | SE Asia, Americas |
 | Growth | + `gru` (São Paulo), `los` (Lagos bare metal via Zenlayer or Local Zone), `del`/`blr`, Gulf (re-evaluate) | |
 
+### 4.1 Lagos versus Johannesburg for the trial (19 Oct 2026; advice only, nothing bought)
+
+**What was measured.** Round trips from MTN Nigeria (AS29465, Port Harcourt), with the probe's reference pings (docs/net-trial.md §3) run from the dev Mac on that network, 20 warm requests each:
+
+| Where | Median | p90 |
+|---|---|---|
+| Lagos: IXPN's own site (AS36940, at the exchange) | **66 ms** | 114 ms |
+| Lagos: Nobus cloud (AS328668) | 68 ms | 157 ms |
+| Cape Town (AWS af-south-1) | 124 ms | 220 ms |
+| **Johannesburg: our Azure box** (`/health`; its WebSocket echo: 150 ms, p95 221) | **142 ms** | 202 ms |
+| London (AWS) | 153 ms | 272 ms |
+| Frankfurt, Paris, Ireland, Spain (AWS) | 182–216 ms | 208–261 ms |
+| Cloudflare's nearest edge (answered from **Amsterdam**) | 192 ms | 471 ms |
+| UAE (AWS) | 345 ms | 411 ms |
+
+**What it says:**
+- **Europe doesn't beat Johannesburg from MTN.** London is ~10 ms worse at the median and worse in the tail; the rest are worse still. The Azure student plan blocking UK South and Spain Central costs nothing.
+- **A Lagos box would roughly halve the round trip:** ~66–70 ms against ~140–150 ms. MTN, Airtel and Glo all peer at IXPN in Lagos, so a box at a Lagos data centre on the exchange is one short hop for all three. Expect the same for the other networks; the probe's runs from Airtel and Glo phones will confirm it.
+- **The owner's phone measured 513 ms median / 1347 ms p95** to the same box, on the same network in the same city. That is 3–4× the Mac's 150 / 221 ms. So most of the phone's number is its own last mile (indoor 4G, its upload queue filling: bufferbloat), not MTN's route to South Africa. **A Lagos box doesn't fix that part:** netfeel's "Lagos box, same spikes" row still loses control for a second per spike (NOTES §28). The probe's reference pings, run from the phone, tell which it is: if Lagos also shows ~450 ms from the phone, it's the radio.
+- **Feel at those numbers** (netfeel, NOTES §28): a clean 90 ms path plays with ~2 corrections a minute and every shot compensated; the Johannesburg path at ~150 ms ±40 is close behind with today's fixes. The gap that matters is the phone's spikes, wherever the box is.
+
+**Lagos options; all need a paid account (none has a free tier or student credit):**
+
+| Option | What | Account | Notes |
+|---|---|---|---|
+| **AWS Lagos Local Zone** (`af-south-1-los-1`) | EC2 in Lagos, gen-5 instances (t3, c5, m5) | a **paid AWS account** with a card (the free tier and student credits don't cover Local Zones); opt in to Cape Town, then the zone | docs/net-trial.md is the click-by-click; ~$6–15 for a 3-day trial (its §6). Bandwidth billed (GameLift's free bandwidth is gen-6+ only) |
+| **Nobus** (nobus.io, AS328668, Lagos) | Nigerian cloud VMs | a business account, paid in naira | VM prices are behind their calculator or sales. Their published egress is ₦6,000 per GB per month, so check bandwidth before committing (a 10-player evening is ~2 GB) |
+| **Lineserve** (Lagos data centre) | Nigerian cloud VPS, billed per second | a paid account | listed from ~₦7,580/month; a 2 vCPU / 4 GB server around ₦27,400/month on a third-party comparison. Check that the box is really in Lagos (many "Nigerian" hosts are abroad): run `scripts/net-trial/where.sh` and the probe |
+| **Colocation** (Rack Centre, MainOne/Equinix LG, Digital Realty Lekki: IXPN has a point of presence there) | your own server in a Lagos data centre | a contract | for later, at launch scale |
+| **GCE africa-south1 / Azure South Africa North** | Johannesburg (what we have) | Azure for Students, $100 credit, no card | stay here until a Lagos box is paid for |
+
+**Advice:** keep Johannesburg for now and turn on WebTransport there (docs/net-trial.md §1.1). Ask the testers to run `/probe` from their phones: the reference pings show, per network, whether Lagos would cut their round trip as it does for the Mac. If it does, a short paid trial in the AWS Lagos Local Zone (docs/net-trial.md, the same script) is the cheapest way to measure it for real.
+
 Region choice is **data-driven**: the ping-beacon results (07-rooms §6.1) are logged per country/ASN, so we add a region when a population sits above 120 ms.
 
 ---
@@ -164,6 +197,8 @@ node (e.g. fra-gs-01, 8 vCPU)
 ```
 
 **WebTransport gateway (phase 2).** One `wt-gateway` per node listens on 443/udp (`WT_ADDR=0.0.0.0:443`; the firewall already allows 443/udp) and routes by URL path: `WT_ROUTES=/wt/1=/run/military-forge/gs1.sock,…,/wt/7=/run/military-forge/gs7.sock`, with each gs@N started with `WT_SOCKET=/run/military-forge/gsN.sock`. Each game server advertises its own URL (`https://<node>/wt/<N>`, from `WT_PUBLIC_URL` + its path) in `/health`, so the join ticket only needs the WebSocket address. It uses the node's wildcard certificate (`WT_CERT`/`WT_KEY`; reloaded on SIGHUP or when the files change after renewal). systemd: `wt-gateway.service` runs as the gs@ user, shares `RuntimeDirectory=military-forge` (mode 0700; the sockets are 0600), `Restart=always`, `KillSignal=SIGTERM`, `TimeoutStopSec=10`: on SIGTERM it drains, closing sessions with 1001 so players resume (over WebSocket until it's back) and keep their match. A gs@N restart costs only its own sessions. Limits: 1000 sessions per node and 8 per IP (`WT_MAX_SESSIONS`, `WT_MAX_SESSIONS_PER_IP`). Each game server pings its gateway every second and stops advertising it after 3 s of silence.
+
+**The trial box (19 Oct 2026; docs/net-trial.md §1.1)** runs the same pieces on one machine: one game server with `WT_SOCKET=/run/military-forge/gs1.sock`, one gateway on UDP 443 (`WT_PUBLIC_URL=https://<host>/wt`, no `WT_ROUTES`) using a copy of Caddy's Let's Encrypt certificate, and Caddy limited to HTTP/1.1 and HTTP/2 so UDP 443 is free. The firewall rule it needs is **UDP 443 inbound from anywhere**.
 
 Images are built once in CI (`ghcr.io/…/game-server:{sha}`), pulled per node, and rolled with drain (06-architecture §5.4). Node bootstrap is scripted with Ansible or cloud-init, so adding a region is about one hour of work.
 

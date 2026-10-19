@@ -60,10 +60,6 @@ export interface PlayerView {
   shield?: 'front' | 'back' | 'raising';
   /** the riot shield's HP left (local player, and every player in local mode) */
   shieldHp?: number;
-  /** the local player: dash cooldown left, ticks (0 = ready; docs/02 §21) */
-  dashCooldown?: number;
-  /** the local player: this flight's one air dash is spent (back on landing) */
-  airDashUsed?: boolean;
   /** the local player: the jetpack (and so the dash) is dead here, an EMP zone or storm (map mechanics) */
   jetDisabled?: boolean;
   /** the local player: ticks left drawing the gun swapped to, or going in or out of dual (sim swapTicks; 0 = ready) */
@@ -142,6 +138,8 @@ export interface NetStats {
   kbOutPerSec: number;
   interpDelayMs: number;
   status: string;
+  /** the transport in use: WebTransport (QUIC datagrams) or WebSocket; unset before one is open */
+  transport?: 'wt' | 'ws';
   prediction?: PredictionStats;
 }
 
@@ -210,11 +208,9 @@ export type FrameEventSink = (events: readonly SimEvent[]) => void;
 
 const statusEnv = createBodyEnv();
 
-/** The local player's movement state for the HUD: the dash cooldown, the air dash, the map's EMP. */
-export function mobilityView(game: Pick<Game, 'mech' | 'tuning'>, p: PlayerState): Pick<PlayerView, 'dashCooldown' | 'airDashUsed' | 'jetDisabled' | 'swapTicks'> {
+/** The local player's movement state for the HUD: the swap timer and the map's EMP (the dash reads the fuel: docs/02 §21). */
+export function mobilityView(game: Pick<Game, 'mech' | 'tuning'>, p: PlayerState): Pick<PlayerView, 'jetDisabled' | 'swapTicks'> {
   return {
-    dashCooldown: p.dashCooldown,
-    airDashUsed: p.airDashUsed,
     swapTicks: p.swapTicks,
     jetDisabled: game.mech ? game.mech.bodyEnv(p, game.tuning, statusEnv).jetDisabled : false,
   };

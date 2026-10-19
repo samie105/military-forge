@@ -1,0 +1,100 @@
+/*
+ * The controller's own pieces (gamepad/): the focus ring while a pad drives the menus, its glyphs in
+ * keycaps, the hint bar. Kit tokens (ui/kit.css), with fallbacks for pages without the kit.
+ */
+
+/* the kit's focus ring shows for the keyboard (:focus-visible); a pad's focus moves are programmatic,
+   which some browsers don't count as visible, so the ring follows the pad's focus too */
+html[data-input='pad'] :focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: var(--sh-focus, 0 0 0 3px #0e100b, 0 0 0 6px #d6ff3b);
+}
+html[data-input='pad'] body:not(.mf) :focus {
+  outline: 3px solid var(--c-volt, #d6ff3b);
+  outline-offset: 3px;
+}
+
+/* a pad glyph: one line high, the keycap's colour */
+.mf-padglyph {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  line-height: 0;
+}
+.mf-padglyph__svg {
+  height: 1.35em;
+  width: auto;
+  overflow: visible;
+}
+.kbd.kbd--pad {
+  gap: 0.25em;
+  padding-inline: 0.3em;
+}
+.kbd--pad .mf-padglyph__svg {
+  height: max(1.9em, 24px);
+}
+
+.mf-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* the hint bar: bottom right, above the screens' own footers (their key hints, Done), over the shell (z 50) */
+.mf-pad-hints {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: calc(max(16px, env(safe-area-inset-bottom)) + 64px);
+  z-index: 60;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--c-ink-900, #0e100b) 82%, transparent);
+  border: 1px solid var(--c-paper-line, #ab9b6c);
+  color: var(--c-paper, #ece3c8);
+  font: 600 calc(14px * var(--text-scale, 1)) / 1 var(--f-ui, system-ui, sans-serif);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.mf-pad-hints[hidden] {
+  display: none;
+}
+.mf-pad-hints__i {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.mf-pad-hints__t:empty {
+  display: none;
+}
+/* phones: lower and smaller, under the menus' bottom bars */
+html.mf-phone .mf-pad-hints {
+  bottom: max(6px, var(--sa-b, 0px));
+  right: max(12px, var(--sa-r, 0px));
+  gap: 10px;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+html:not([data-input='pad']) .mf-pad-hints {
+  display: none;
+}
+
+/*
+ * Phones: while a controller plays, the touch buttons step aside (they come back with the first
+ * touch: device.ts switches to touch). The two thumb dials stay as gauges, without their sticks:
+ * they carry the phone HUD's HP, fuel and ammo (touch/skin.ts), which nothing else shows on a phone.
+ */
+html[data-input='pad'] .mf-touch .mf-ctl:not(.mf-ctl-move):not(.mf-ctl-aim) {
+  visibility: hidden;
+}
+html[data-input='pad'] .mf-touch .mf-ctl {
+  pointer-events: none;
+}
+html[data-input='pad'] .mf-touch :is(.dial__knob, .dial__base, .dial__groove, .dial__hint) {
+  visibility: hidden;
+}

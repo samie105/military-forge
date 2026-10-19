@@ -1,0 +1,230 @@
+/*
+ * The sound board (sounds.html): every sound in the game with a play button, the buses' volumes,
+ * where a world sound comes from, and stress tests for the voice limits. The kit's tokens only.
+ */
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--c-ink-900);
+  color: var(--c-text);
+}
+.board {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: var(--sp-4) var(--sp-4) var(--sp-10);
+  font-family: var(--f-ui);
+  font-size: var(--fs-16);
+}
+.board__bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  gap: var(--sp-3);
+  padding: var(--sp-3) 0 var(--sp-4);
+  background: var(--c-ink-900);
+  border-bottom: var(--bw) solid var(--c-line);
+}
+.board__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+.board__title {
+  margin: 0;
+  font-family: var(--f-display);
+  font-weight: 400;
+  font-size: var(--fs-28);
+  letter-spacing: var(--ls-display);
+}
+.board__title small {
+  font-family: var(--f-ui);
+  font-size: var(--fs-14);
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  color: var(--c-brass);
+  margin-left: var(--sp-2);
+}
+.board__status {
+  color: var(--c-muted-2);
+  font-size: var(--fs-14);
+  font-variant-numeric: tabular-nums;
+}
+.board__status.is-live {
+  color: var(--c-volt);
+}
+.board__mix {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--sp-2) var(--sp-4);
+}
+.board__ctl {
+  display: grid;
+  gap: var(--sp-1);
+  font-size: var(--fs-14);
+  color: var(--c-muted);
+}
+.board__ctl span {
+  display: flex;
+  justify-content: space-between;
+}
+.board__ctl output {
+  color: var(--c-text);
+  font-variant-numeric: tabular-nums;
+}
+.board__ctl input[type='range'] {
+  width: 100%;
+  accent-color: var(--c-volt);
+}
+.board__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  align-items: center;
+}
+.board__tools label {
+  display: inline-flex;
+  gap: var(--sp-2);
+  align-items: center;
+  color: var(--c-muted);
+  font-size: var(--fs-14);
+}
+.board__search {
+  min-height: 40px;
+  padding: 0 var(--sp-3);
+  border: var(--bw) solid var(--c-line-strong);
+  border-radius: var(--r-sm);
+  background: var(--c-ink-800);
+  color: var(--c-text);
+  font: inherit;
+  min-width: 0;
+  flex: 1 1 200px;
+}
+.board__group {
+  margin-top: var(--sp-6);
+}
+.board__group h2 {
+  margin: 0 0 var(--sp-2);
+  font-family: var(--f-display);
+  font-weight: 400;
+  font-size: var(--fs-24);
+  letter-spacing: var(--ls-display);
+  color: var(--c-paper);
+}
+.board__group h2 small {
+  font-family: var(--f-ui);
+  font-size: var(--fs-14);
+  color: var(--c-muted-2);
+  margin-left: var(--sp-2);
+}
+.board__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--sp-2);
+}
+.snd {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border: var(--bw) solid var(--c-line);
+  border-radius: var(--r-sm);
+  background: var(--c-ink-800);
+  min-width: 0;
+}
+.snd.is-playing {
+  border-color: var(--c-volt-line);
+  background: var(--c-ink-700);
+}
+.snd__play {
+  width: 44px;
+  height: 44px;
+  border: var(--bw) solid var(--c-ink-950);
+  border-radius: var(--r-sm);
+  background: var(--c-volt);
+  color: var(--c-volt-ink);
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+.snd__play.is-loop {
+  background: var(--c-brass);
+  color: var(--c-brass-ink);
+}
+.snd__txt {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.snd__txt b {
+  font-size: var(--fs-16);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.snd__txt code {
+  font-size: var(--fs-14);
+  color: var(--c-muted-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.snd__vars {
+  display: flex;
+  gap: var(--sp-1);
+  align-items: center;
+}
+.snd__vars button {
+  min-width: 30px;
+  height: 30px;
+  border: var(--bw) solid var(--c-line-strong);
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--c-muted);
+  font: inherit;
+  font-size: var(--fs-14);
+  cursor: pointer;
+}
+.snd__vars button:hover,
+.snd__play:hover {
+  filter: brightness(1.1);
+}
+.snd__bus {
+  font-size: 11px;
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  color: var(--c-brass);
+}
+.board__gate {
+  margin: var(--sp-10) auto;
+  max-width: 520px;
+  text-align: center;
+  display: grid;
+  gap: var(--sp-4);
+}
+.board__gate h1 {
+  margin: 0;
+  font-family: var(--f-display);
+  font-weight: 400;
+  font-size: var(--fs-48);
+}
+.board__gate p {
+  margin: 0;
+  color: var(--c-muted);
+}
+@media (max-width: 700px) {
+  /* a phone: the bar scrolls away with the page instead of covering the list */
+  .board__bar {
+    position: static;
+  }
+  .board__mix {
+    grid-template-columns: 1fr 1fr;
+  }
+  .board__list {
+    grid-template-columns: 1fr;
+  }
+}

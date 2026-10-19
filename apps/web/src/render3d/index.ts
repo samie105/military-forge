@@ -5,7 +5,7 @@
  * effects through `onEvents` (main.ts forwards the 2D renderer's events here).
  */
 import type { MapDef } from '@military-forge/content';
-import { CollisionWorld, type SimEvent } from '@military-forge/sim';
+import { CollisionWorld, DamageSource, type SimEvent } from '@military-forge/sim';
 import {
   BufferGeometry,
   DirectionalLight,
@@ -43,6 +43,7 @@ import { WeaponItems } from './weaponItems';
 import { Vfx } from './vfx';
 import { isTouchDevice } from '../touch';
 import type { EjectLookup } from './vfx/casings';
+import type { SwingLookup } from './vfx/melee';
 import type { GunPointLookup } from './vfx/projectiles';
 import type { BodyLookup } from './vfx/dash';
 import type { MuzzleLookup } from './vfx/gunfire';
@@ -254,7 +255,7 @@ export class Renderer3D {
     this.buildMap(map);
     this.scene.add(this.plane, this.zones.group);
     // after buildMap: the blast light flashes from the map's light levels
-    this.vfx = new Vfx(this.scene, this.world, camera, { hemi: this.hemi, sun: this.sun }, ramp, preset, this.muzzleOf, this.bodyOf, this.ejectOf, this.gunPointOf);
+    this.vfx = new Vfx(this.scene, this.world, camera, { hemi: this.hemi, sun: this.sun }, ramp, preset, this.muzzleOf, this.bodyOf, this.ejectOf, this.gunPointOf, this.swingOf);
     // reduced motion (docs/11 §5): the OS setting until the settings screen calls setReducedMotion
     this.setReducedMotion(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
     // riot shields lying on the map, and the ricochet spark (an effect module: it gets the sim events)
@@ -276,6 +277,8 @@ export class Renderer3D {
   private readonly ejectOf: EjectLookup = (id, weapon, out, dir, bore) => this.avatars.get(id)?.eject(weapon, out, dir, bore) ?? false;
   /** a drawn gun's named socket (the Dragon's pilot light, the Ripper's and Pulse's charge) */
   private readonly gunPointOf: GunPointLookup = (id, weapon, name, out) => this.avatars.get(id)?.gunPoint(weapon, name, out) ?? false;
+  /** a soldier's weapon mid-strike (the swing's trail) */
+  private readonly swingOf: SwingLookup = (id, out) => this.avatars.get(id)?.swingSegment(out) ?? false;
 
   /** the online timeline while online play is attached (attach) */
   private online: OnlineView | null = null;
@@ -317,6 +320,8 @@ export class Renderer3D {
     eachKick(events, this.onKick);
     // animation: hit reactions (motion.ts), for every drawn player, the remote ones included
     for (const r of hitReactions(events, this.chestOf)) this.avatars.get(r.target)?.hit(r.dirX, r.dirY, r.size, r.zone, this.reducedMotion ? HIT.reduced : 1);
+    // a melee hit: the attacker's swing plays from the strike where its swing wasn't sent (a remote player online)
+    for (const e of events) if (e.type === 'hit' && e.source === DamageSource.Melee) this.avatars.get(e.attacker)?.struck();
   };
 
   /** a drawn player's chest (hit directions), or null */

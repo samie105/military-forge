@@ -59,7 +59,8 @@ describe('admin fields', () => {
     expect(max('weapon.dragon.burnSeconds') * 60).toBeLessThanOrEqual(127); // burnTicks u7
     // the tuning panel's fields too (local block)
     expect(max('tuning.dashBurstTicks')).toBeLessThanOrEqual(63); // dashTicks u6
-    expect(max('tuning.dashCooldown') * 60).toBeLessThanOrEqual(255); // dashCooldown u8
+    expect(max('tuning.dashGap') * 60).toBeLessThanOrEqual(63); // dashGap u6 (v14)
+    expect(max('tuning.dashChainWindow') * 60).toBeLessThanOrEqual(127); // dashChainTicks u7 (v14)
     expect(max('tuning.jetKickTicks')).toBeLessThanOrEqual(63); // jetTicks u6
     expect(max('tuning.fuelMax')).toBeLessThanOrEqual(1023); // fuel: 20 bits of 1/1024
     expect(Math.max(max('tuning.fuelRegenDelayGround'), max('tuning.fuelRegenDelayAir')) * 60).toBeLessThanOrEqual(1023); // fuelRegenDelay u10

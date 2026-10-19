@@ -66,10 +66,21 @@ export const EVENT_TARGETS: Target[] = [
   { key: 'gustDrift', label: 'Wind gusts: drift of a 1 s fall at a peak (m)', min: 4, max: 9, why: 'a gust visibly throws fliers sideways, then dies down' },
 ];
 
-/** Dash (docs/02 §21, owner request: "brief, like a fighting game's, but up and down too"); keys are DashMetrics fields. */
+/**
+ * Dash (docs/02 §21, owner requests: "brief, like a fighting game's, but up and down too", then on
+ * 19 Oct "it's not fluid … as far as you have fuel you can dash as many times as you want … double
+ * dash"); keys are DashMetrics fields. Chained dashes are pressed as the first one ends.
+ */
 export const DASH_TARGETS: Target[] = [
-  { key: 'flat', label: 'Dash: ground covered from standing (m)', min: 2.6, max: 3.1, why: '40% farther than the first 2.05 m (owner: "the dash to go farther"), still a hop, not a teleport' },
+  { key: 'flat', label: 'Dash: ground covered from standing (m)', min: 2.8, max: 3.5, why: '40% farther than the first 2.05 m, and it flows on (dashCarry) instead of stopping dead' },
   { key: 'up', label: 'Dash: up from standing (m)', min: 2.4, max: 3, why: 'onto a crate and then some, under half a second storey (~6 m): the jetpack still owns real height' },
+  { key: 'weak', label: 'Dash: a gentle stick push, ground covered (m)', min: 1.1, max: 1.8, why: 'touch: a short hop, about half a full dash (a quick flick is a full one)' },
+  { key: 'airRun', label: 'Dash: sideways from a hover, covered in 0.5 s (m)', min: 4.3, max: 6, why: 'it carries on a little after the burst, then the air drag takes it: fluid, not a blink' },
+  { key: 'chainRun', label: 'Double dash along the ground (m)', min: 5.5, max: 7.5, why: 'two dashes in one move (owner: "dash twice"), a little faster the second time' },
+  { key: 'chainUp', label: 'Double dash up from standing (m)', min: 5, max: 6.8, why: 'two fast climbs: about a storey (~6 m), still less than a tank of jet (25 m)' },
+  { key: 'turnUp', label: 'Dash right, then up: height (m)', min: 2.6, max: 3.6, why: 'the chain turns without a stop' },
+  { key: 'perTank', label: 'Dashes on a full tank', min: 10, max: 14, why: 'as often as the fuel lasts (owner), and every dash eats the jetpack' },
+  { key: 'chainFuel', label: 'Double dash: share of the tank', min: 0.13, max: 0.2, why: 'about a sixth of the tank: chains are cheap enough to use, dear enough to choose' },
   { key: 'slamTime', label: 'Dash: down from a 6 m hover, to the ground (s)', min: 0.3, max: 0.5, why: 'a real drop: falling takes ~0.8 s' },
   { key: 'wallStop', label: 'Dash: at a wall 1 m away, distance covered (m)', min: 0.95, max: 1, why: 'move-and-slide stops it at the wall: no tunnelling' },
   { key: 'burst', label: 'Dash: burst length (s)', min: 0.1, max: 0.17, why: 'brief: the animation is a blink, not a run' },

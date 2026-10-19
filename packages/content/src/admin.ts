@@ -352,7 +352,7 @@ export const ADMIN_PRESETS: Readonly<Record<'classic' | 'floaty' | 'chaos', Admi
     'tuning.respawnDelay': 1,
     'tuning.healthRegen': 12,
     'tuning.fuelRegenGround': 90,
-    'tuning.dashCooldown': 0.4,
+    'tuning.dashFuelCost': 8,
     [`grenade.${FRAG.id}.radius`]: 6,
     [`grenade.${FRAG.id}.impulse`]: 40,
     [`grenade.${GAS.id}.radius`]: 5,

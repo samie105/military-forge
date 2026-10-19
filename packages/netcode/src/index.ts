@@ -7,3 +7,4 @@ export * from './interpolation';
 export * from './lagComp';
 export * from './predictor';
 export * from './ticks';
+export * from './ownProjectiles';

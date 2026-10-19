@@ -133,6 +133,10 @@ export function cymruLookup({ timeoutMs = 1500 } = {}) {
 
 // ---------- results ----------
 
+/** reference ids look like `aws-eu-west-2`, `lagos-ixpn`, `cf-edge`; a run carries at most this many */
+const REF_ID = /^[a-z0-9-]{2,24}$/;
+const MAX_REFS = 16;
+
 // control characters (C0 and DEL) become spaces
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u001f\u007f]/g;
@@ -173,6 +177,24 @@ export function sanitizeResult(raw, regionIds) {
     };
   }
   if (!Object.keys(regions).length) return { ok: false, error: 'no measurements' };
+  // reference pings (apps/web/src/probe/stats.ts REFERENCES): public endpoints in other cities
+  const refs = {};
+  if (raw.refs && typeof raw.refs === 'object' && !Array.isArray(raw.refs)) {
+    for (const [id, r] of Object.entries(raw.refs).slice(0, MAX_REFS)) {
+      if (!REF_ID.test(id) || !r || typeof r !== 'object') continue;
+      const rtts = Array.isArray(r.rtts) ? r.rtts.slice(0, 100).map((x) => (num(x, 0, 60_000) === null ? null : round1(x))) : [];
+      if (!rtts.length) continue;
+      refs[id] = {
+        sent: rtts.length,
+        received: rtts.filter((x) => x !== null).length,
+        rtts,
+        median: num(r.median, 0, 60_000),
+        p95: num(r.p95, 0, 60_000),
+        colo: typeof r.colo === 'string' && /^[A-Z]{3}$/.test(r.colo) ? r.colo : '',
+        error: text(r.error, 120),
+      };
+    }
+  }
   const at = text(raw.at, 40);
   return {
     ok: true,
@@ -190,6 +212,7 @@ export function sanitizeResult(raw, regionIds) {
       page: text(raw.page, 100),
       backgrounded: raw.backgrounded === true,
       regions,
+      refs,
     },
   };
 }

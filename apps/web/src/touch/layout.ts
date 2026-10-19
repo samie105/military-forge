@@ -62,7 +62,7 @@ export function availableControls(): readonly ControlDef[] {
  * bases sit at (128, 266) and (684, 266); shield, reload, dash, grenade and melee fan round the aim
  * dial as drawn; the swap pill and the menu top right; the take button (only near a crate) at the
  * bottom centre (22 px left of the kit's, so a long gun name stays clear of the melee button). Shield,
- * reload and dash sit a few px further apart than drawn: their rings (the dash's cooldown, a reload's
+ * reload and dash sit a few px further apart than drawn: their rings (the dash's fuel, a reload's
  * progress) reach 5 px past the button, and the kit's places let them touch. The scoreboard sits under
  * the ping (and the "Tuned by admin" tag) on the left. Cycle-grenade, zoom and the scoreboard aren't drawn in the kit and sit where they
  * clear it. A player's saved places (TouchLayout) still win over these.

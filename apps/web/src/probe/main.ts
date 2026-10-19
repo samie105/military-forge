@@ -12,18 +12,26 @@ import {
   NETWORKS,
   PING_HZ,
   PINGS,
+  REFERENCES,
+  REF_SAMPLES,
+  REF_TIMEOUT_MS,
+  REF_WARMUP,
   WARMUP,
   echoSeq,
   guessDevice,
   missingAnswer,
   parseConfig,
   pingFrame,
+  refUrl,
   resultPayload,
+  traceColo,
   summarize,
   verdict,
   type Answers,
   type ProbeConfig,
+  type ProbeReference,
   type ProbeRegion,
+  type RefRun,
   type RegionRun,
   type Summary,
 } from './stats';
@@ -70,6 +78,9 @@ function newId(): string {
     return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   }
 }
+
+/** Cloudflare city codes testers are likely to get */
+const COLO_CITY: Record<string, string> = { LOS: 'Lagos', ACC: 'Accra', JNB: 'Johannesburg', CPT: 'Cape Town', LHR: 'London', AMS: 'Amsterdam', FRA: 'Frankfurt', CDG: 'Paris', MRS: 'Marseille', MAD: 'Madrid', LIS: 'Lisbon' };
 
 const fmt = (v: number | null, unit = ' ms') => (v === null ? '–' : `${Math.round(v)}${unit}`);
 
@@ -156,6 +167,76 @@ function measure(region: ProbeRegion, onProgress: (done: number, s: Summary) => 
       send();
     };
   });
+}
+
+/**
+ * One reference's round trips (stats.ts REFERENCES): REF_WARMUP requests open the connection, then
+ * REF_SAMPLES timed ones, one at a time on the warm connection, each cache-busted.
+ */
+async function measureRef(ref: ProbeReference, onSample: (rtts: (number | null)[]) => void): Promise<RefRun> {
+  const rtts: (number | null)[] = [];
+  let colo = '';
+  let error = '';
+  for (let n = 0; n < REF_WARMUP + REF_SAMPLES; n++) {
+    const t0 = performance.now();
+    let rtt: number | null = null;
+    try {
+      const res = await fetch(refUrl(ref, n), {
+        mode: ref.opaque ? 'no-cors' : 'cors',
+        cache: 'no-store',
+        credentials: 'omit',
+        referrerPolicy: 'no-referrer',
+        signal: AbortSignal.timeout(REF_TIMEOUT_MS),
+      });
+      rtt = performance.now() - t0; // the response's headers: one round trip on a warm connection
+      const body = await res.text().catch(() => '');
+      if (ref.id === 'cf-edge' && !colo) colo = traceColo(body);
+    } catch (e) {
+      error = (e as Error).name === 'TimeoutError' ? `no answer within ${REF_TIMEOUT_MS / 1000} s` : 'could not reach it';
+    }
+    if (n >= REF_WARMUP) {
+      rtts.push(rtt);
+      onSample(rtts);
+    }
+  }
+  if (rtts.some((x) => x !== null)) error = '';
+  return { rtts, colo, error };
+}
+
+/** The reference pings' table: each city's median and p95, and how it compares with our server. */
+function refTable(): { section: HTMLElement; body: HTMLTableSectionElement } {
+  const body = el('tbody');
+  const section = el(
+    'section',
+    { class: 'probe__refs' },
+    el('h2', {}, 'Other cities, for comparison'),
+    el('p', { class: 'probe__refs-note' }, 'Round trips to public cloud endpoints (not game servers), timed the same moment from this device.'),
+    el('table', {}, el('thead', {}, el('tr', {}, el('th', { scope: 'col' }, 'Where'), el('th', { scope: 'col' }, 'Median'), el('th', { scope: 'col' }, 'p95'))), body),
+  );
+  return { section, body };
+}
+
+function refRows(body: HTMLTableSectionElement, ours: { name: string; s: Summary }[], refs: Record<string, RefRun>): void {
+  const rows = [
+    ...ours.map((o) => ({ name: o.name, provider: 'our game server', s: o.s, ours: true, error: '' })),
+    ...REFERENCES.filter((r) => refs[r.id]).map((r) => {
+      const run = refs[r.id]!;
+      const where = r.id === 'cf-edge' && run.colo ? `${r.name} (${COLO_CITY[run.colo] ?? run.colo})` : r.name;
+      return { name: where, provider: r.provider, s: summarize(run.rtts), ours: false, error: run.error };
+    }),
+  ];
+  rows.sort((a, b) => (a.s.median ?? Infinity) - (b.s.median ?? Infinity));
+  body.replaceChildren(
+    ...rows.map((r) =>
+      el(
+        'tr',
+        r.ours ? { class: 'is-ours' } : {},
+        el('th', { scope: 'row' }, r.name, el('small', {}, r.provider)),
+        el('td', {}, r.error && r.s.median === null ? '–' : fmt(r.s.median)),
+        el('td', {}, fmt(r.s.p95)),
+      ),
+    ),
+  );
 }
 
 function select(name: string, label: string, options: readonly { id: string; label: string }[], value: string, placeholder: string): HTMLLabelElement {
@@ -249,6 +330,8 @@ function render(config: ProbeConfig): void {
   );
   const cards = config.regions.map((r) => ({ region: r, ...regionCard(r) }));
   const summary = el('p', { class: 'probe__verdict', 'aria-live': 'polite' });
+  const refs = refTable();
+  refs.section.hidden = true;
   root.replaceChildren(
     el(
       'header',
@@ -257,16 +340,17 @@ function render(config: ProbeConfig): void {
       el(
         'p',
         {},
-        `Measures your connection to ${config.regions.length === 1 ? 'our game server' : `our ${config.regions.length} test servers at once`}: ${PINGS} pings${config.regions.length === 1 ? '' : ' each'}, ${PING_HZ} a second, like the game. It takes about ${Math.ceil((WARMUP + PINGS) / PING_HZ + GRACE_MS / 1000)} seconds. Keep this page open and on screen while it runs.`,
+        `Measures your connection to ${config.regions.length === 1 ? 'our game server' : `our ${config.regions.length} test servers at once`}: ${PINGS} pings${config.regions.length === 1 ? '' : ' each'}, ${PING_HZ} a second, like the game, then to other cities for comparison. It takes under a minute. Keep this page open and on screen while it runs.`,
       ),
     ),
     form,
     el('div', { class: 'probe__regions' }, ...cards.map((c) => c.card)),
     summary,
+    refs.section,
     el(
       'p',
       { class: 'probe__privacy' },
-      'What we keep: what you type above and the timings. Not your name, not your IP address: the server notes only which network (ASN) the test came from. Run it again at another time of day or on another network: every run helps.',
+      'What we keep: what you type above and the timings. Not your name, not your IP address: the server notes only which network (ASN) the test came from. The comparison asks public sites (AWS, Cloudflare, IXPN, Nobus) for a tiny file, so they see a visit as any website would. Run it again at another time of day or on another network: every run helps.',
     ),
   );
   root.removeAttribute('aria-busy');
@@ -316,13 +400,28 @@ function render(config: ProbeConfig): void {
         showStats(stats, summarize(run.rtts), run.connectMs, run.error);
       }),
     );
+    // then the other cities, after our own pings so they don't share the link with them
+    status.textContent = 'Comparing with other cities…';
+    refs.section.hidden = false;
+    const ours = cards.map((c) => ({ name: c.region.name, s: summarize(runs[c.region.id]!.rtts) }));
+    const refRuns: Record<string, RefRun> = {};
+    performance.clearResourceTimings?.();
+    await Promise.all(
+      REFERENCES.map(async (ref) => {
+        refRuns[ref.id] = await measureRef(ref, (rtts) => {
+          refRuns[ref.id] = { rtts, colo: refRuns[ref.id]?.colo ?? '', error: '' };
+          refRows(refs.body, ours, refRuns);
+        });
+        refRows(refs.body, ours, refRuns);
+      }),
+    );
     running = false;
     const [a, b] = cards;
     const v = a && b ? verdict({ name: a.region.name, s: summarize(runs[a.region.id]!.rtts) }, { name: b.region.name, s: summarize(runs[b.region.id]!.rtts) }) : null;
     summary.textContent = v ? `${v.faster} was ${v.by} ms faster than ${v.slower} at the median.` : '';
     if (backgrounded) summary.textContent += ' (The page was in the background for part of the test, so these numbers may be off: run it again with the page on screen.)';
     status.textContent = 'Saving your result…';
-    const body = resultPayload(newId(), config, answers, runs, { at: new Date().toISOString(), page: location.host, backgrounded });
+    const body = resultPayload(newId(), config, answers, runs, { at: new Date().toISOString(), page: location.host, backgrounded, refs: refRuns });
     const saved = await post(config, body);
     status.textContent = saved.ok
       ? `Saved, thank you!${saved.asName ? ` (Your network as the server saw it: ${saved.asName}.)` : ''} Run it again any time.`

@@ -148,6 +148,55 @@ body {
   margin: var(--sp-4) 0 0;
   font-weight: 700;
 }
+.probe__refs {
+  margin-top: var(--sp-5);
+  padding: var(--sp-4);
+  background: var(--c-ink-800);
+  border: var(--bw) solid var(--c-line);
+  border-radius: var(--r-md);
+}
+.probe__refs h2 {
+  margin: 0 0 var(--sp-1);
+  font-size: var(--fs-20);
+}
+.probe__refs-note {
+  margin: 0 0 var(--sp-3);
+  font-size: var(--fs-14);
+  color: var(--c-muted);
+}
+.probe__refs table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.probe__refs th,
+.probe__refs td {
+  padding: var(--sp-1) 0;
+  text-align: right;
+  border-top: var(--bw) solid var(--c-line);
+}
+.probe__refs td {
+  padding-left: var(--sp-3);
+  white-space: nowrap;
+}
+.probe__refs thead th {
+  border-top: 0;
+  font-weight: 400;
+  color: var(--c-muted);
+}
+.probe__refs th[scope='row'],
+.probe__refs thead th:first-child {
+  text-align: left;
+}
+.probe__refs th small {
+  display: block;
+  font-size: var(--fs-14);
+  font-weight: 400;
+  color: var(--c-brass);
+}
+.probe__refs tr.is-ours th[scope='row'] {
+  color: var(--c-volt);
+}
 .probe__privacy {
   margin-top: var(--sp-6);
   font-size: var(--fs-14);

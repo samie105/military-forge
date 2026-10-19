@@ -8,8 +8,8 @@ import { hashGame } from './hash';
 import { createInput, type Input } from './input';
 import { Match, hashMatch, type MatchRules } from './match';
 
-/** [repeatCount, buttons, aim, weaponSelect, throwStrength] */
-export type InputRun = [number, number, number, number, number];
+/** [repeatCount, buttons, aim, weaponSelect, throwStrength, dashStrength?] (a run without dashStrength, from before v14, dashes at full strength: 7) */
+export type InputRun = [number, number, number, number, number] | [number, number, number, number, number, number];
 
 export type MatchCommandKind = 'ready' | 'unready' | 'start' | 'rematch' | 'lobby';
 /** [tick, human player index, command]: applied before that tick is simulated */
@@ -66,8 +66,9 @@ export function encodeRuns(inputs: readonly Input[]): InputRun[] {
   const runs: InputRun[] = [];
   for (const i of inputs) {
     const last = runs[runs.length - 1];
-    if (last && last[1] === i.buttons && last[2] === i.aim && last[3] === i.weaponSelect && last[4] === i.throwStrength) last[0]++;
-    else runs.push([1, i.buttons, i.aim, i.weaponSelect, i.throwStrength]);
+    if (last && last[1] === i.buttons && last[2] === i.aim && last[3] === i.weaponSelect && last[4] === i.throwStrength && (last[5] ?? 7) === i.dashStrength) last[0]++;
+    // full strength (the usual) stays off the file: replays from before v14 read the same
+    else runs.push(i.dashStrength === 7 ? [1, i.buttons, i.aim, i.weaponSelect, i.throwStrength] : [1, i.buttons, i.aim, i.weaponSelect, i.throwStrength, i.dashStrength]);
   }
   return runs;
 }
@@ -75,8 +76,8 @@ export function encodeRuns(inputs: readonly Input[]): InputRun[] {
 /** Expands runs into one Input per tick (padding with the last input). */
 export function decodeRuns(runs: readonly InputRun[], ticks: number): Input[] {
   const out: Input[] = [];
-  for (const [count, buttons, aim, weaponSelect, throwStrength] of runs) {
-    for (let i = 0; i < count && out.length < ticks; i++) out.push({ buttons, aim, weaponSelect, throwStrength });
+  for (const [count, buttons, aim, weaponSelect, throwStrength, dashStrength = 7] of runs) {
+    for (let i = 0; i < count && out.length < ticks; i++) out.push({ buttons, aim, weaponSelect, throwStrength, dashStrength });
   }
   while (out.length < ticks) out.push(out.length ? { ...out[out.length - 1]! } : createInput());
   return out;

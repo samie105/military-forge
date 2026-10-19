@@ -19,13 +19,13 @@ describe('netcode end to end (simulated network)', () => {
       expect(c.corrections / r.minutes).toBeLessThan(1);
       expect(c.resyncs).toBe(0);
     }
-    // the pacer keeps 1–2 spare ticks queued on the server
-    const inBand = r.healths.filter((h) => h >= 1 && h <= 2).length / r.healths.length;
+    // the pacer keeps 1–2 spare ticks queued on the server, plus a tick or two of cushion after dips
+    const inBand = r.healths.filter((h) => h >= 1 && h <= 4).length / r.healths.length;
     expect(inBand).toBeGreaterThan(0.9);
     expect(Math.abs(mean(r.timeScales) - 1)).toBeLessThan(0.005);
-    // the client runs ahead by ~one-way latency + the buffer: 75 ms ≈ 4.5 ticks, + 1–2
+    // the client runs ahead by ~one-way latency + the buffer: 75 ms ≈ 4.5 ticks, + 1–2 (+ cushion)
     expect(mean(r.leadTicks)).toBeGreaterThan(5);
-    expect(mean(r.leadTicks)).toBeLessThan(8.5);
+    expect(mean(r.leadTicks)).toBeLessThan(9.5);
     const stats = r.clients[0]!.net.stats();
     expect(stats.rttMs).toBeGreaterThan(140);
     expect(stats.rttMs).toBeLessThan(170);
@@ -150,7 +150,7 @@ describe('netcode end to end (simulated network)', () => {
     expect(udp.interpStallPct).toBeLessThan(0.5);
     expect(tcp.interpStallPct).toBeGreaterThan(2);
     expect(udp.corrections).toBe(0);
-    expect(tcp.corrections).toBeGreaterThan(5); // inputs stuck behind a retransmit arrive too late
+    expect(tcp.corrections).toBeGreaterThan(2); // inputs stuck behind a retransmit arrive too late (fewer since the pacer's cushion)
   });
 });
 

@@ -352,6 +352,8 @@ export class InputSampler {
     // the default throw strength; the latch writes a throw's own after this line, so nothing below
     // may write it again
     out.throwStrength = 7;
+    // the keyboard dashes at full strength (touch writes the stick's after this, input.ts → touch/index.ts)
+    out.dashStrength = 7;
     out.buttons = buttons;
     out.aim = angleToU16(Math.atan2(dy, dx));
     out.weaponSelect = slot;

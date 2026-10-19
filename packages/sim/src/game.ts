@@ -247,7 +247,7 @@ export class Game {
       if (!p?.alive) continue;
       const x0 = p.x;
       const y0 = p.y;
-      if (stepMovement(this.world, p, t, mech ? mech.bodyEnv(p, t, bodyEnv) : null)) this.events.push({ type: 'dash', player: p.id, x: x0, y: y0, dir: p.dashDir });
+      if (stepMovement(this.world, p, t, mech ? mech.bodyEnv(p, t, bodyEnv) : null)) this.events.push({ type: 'dash', player: p.id, x: x0, y: y0, dir: p.dashDir, chain: p.dashChain });
     }
     // the shield key and carry modes, before anyone fires: every shot this tick meets the same shields
     for (const p of this.players) if (p?.alive) stepShield(p);

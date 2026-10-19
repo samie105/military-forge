@@ -1,21 +1,20 @@
 #!/bin/bash
-# Military Forge one-box trial server: paste into EC2 "User data" on Ubuntu 24.04 (docs/net-trial.md).
-# Status: https://<ip-with-dashes>.sslip.io/trial-status/ · private links: EC2 "Get system log".
+# Military Forge trial server, Ubuntu 24.04: cloud-init user data (docs/net-trial.md).
 # Re-run: sudo /usr/local/sbin/mf-trial-setup
 # shellcheck disable=SC2015,SC2016,SC2019,SC2086,SC1091
 
-# ---------- settings ----------
+# -- settings
 REPO="${MF_REPO:-https://github.com/samie105/military-forge}"
 REF="${MF_REF:-main}"
 MAP="street-market"
 BOTS="4"
 BOT_LEVEL="normal"
-PROBE_NAME="Lagos"
-PROBE_PROVIDER="AWS Local Zone"
+PROBE_NAME="" # empty: where the box is
+PROBE_PROVIDER=""
 ACME_EMAIL=""
 # local tests only
 HOST="${MF_HOST:-}" TLS="${MF_TLS:-auto}" ORIGIN_PORT="${MF_ORIGIN_PORT:-}"
-# -------------------------------
+# --
 
 set -uo pipefail
 umask 022
@@ -62,7 +61,7 @@ status() { # the public page and its JSON; the owner's page once the secrets exi
 phase() { PHASE="$1"; log "== $1"; status; }
 fail() { phase "failed: $1"; console "MILITARY FORGE setup FAILED: $1 ($ORIGIN/trial-status/)"; exit 1; }
 
-# ---------- the address ----------
+# -- the address
 log "Military Forge trial setup ($REPO $REF)"
 if [ -z "$HOST" ]; then
   ip=''
@@ -79,15 +78,14 @@ mkdir -p "$PUB/trial-status" "$WEB" "$DATA/probe"
 ADMIN_TOKEN='' EXPORT_TOKEN='' OWNER=''
 phase 'installing packages'
 
-# swap for the web build (4 GB, or 2 GB on a small disk)
 if ! systemd-detect-virt -cq && [ -z "$(swapon --noheadings)" ]; then
   g=$(df --output=avail -BG / | tail -1 | tr -dc 0-9); z=2; [ "$g" -ge 12 ] && z=4
   [ "$g" -ge 6 ] && fallocate -l ${z}G /swapfile && chmod 600 /swapfile && mkswap -q /swapfile && swapon /swapfile && echo '/swapfile none swap sw 0 0' >>/etc/fstab && log "swap ${z} GB"
 fi
 
-# ---------- packages ----------
-for _ in 1 2 3; do apt-get update -q >/dev/null && apt-get install -y -q --no-install-recommends caddy git curl ca-certificates jq openssl xz-utils >/dev/null && break; sleep 10; done
-command -v caddy >/dev/null && command -v jq >/dev/null || fail 'apt-get install'
+# -- packages
+for _ in 1 2 3; do apt-get update -q >/dev/null && apt-get install -y -q --no-install-recommends caddy git curl ca-certificates jq openssl xz-utils postgresql-16 valkey-server >/dev/null && break; sleep 10; done
+type -P caddy jq pg_dump valkey-server >/dev/null||fail 'apt-get install'
 id mf >/dev/null 2>&1 || useradd --system --home-dir "$DATA" --shell /usr/sbin/nologin mf
 install -d -o mf -g mf -m 0750 "$DATA" "$DATA/probe"
 install -d -o mf -g mf -m 0755 "$SRC"
@@ -95,22 +93,23 @@ install -d -o root -g mf -m 0750 "$ETC"
 chmod 0755 "$PUB" "$PUB/trial-status"
 cp -f "$0" /usr/local/sbin/mf-trial-setup 2>/dev/null && chmod 0700 /usr/local/sbin/mf-trial-setup
 
-# ---------- secrets (made once) ----------
+# -- secrets (made once)
 r() { openssl rand -hex "$1"; }
 [ -s "$ETC/secrets" ] || (umask 077; printf 'ADMIN_TOKEN=%s\nEXPORT_TOKEN=%s\nOWNER=%s\n' "$(r 24)" "$(r 24)" "$(r 12)" >"$ETC/secrets")
 . "$ETC/secrets"
 for k in access ticket; do [ -s "$ETC/$k.key" ] || openssl genpkey -algorithm ed25519 -out "$ETC/$k.key"; chown root:mf "$ETC/$k.key"; chmod 0640 "$ETC/$k.key"; done
 
-# ---------- Caddy first: the status page works while the rest installs ----------
+# -- Caddy first (status page during setup)
 [ -f "$WEB/index.html" ] || page "$WEB/index.html" 'Setting up' 1 "<p>Setting up: <a href=\"/trial-status/\">status</a></p>"
 {
-  printf '{\n%s}\n\n%s {\n' "${ACME_EMAIL:+	email $ACME_EMAIL
+  # no HTTP/3: UDP 443 is WebTransport's (wt-setup.sh)
+  printf '{\n\tservers {\n\t\tprotocols h1 h2\n\t}\n%s}\n\n%s {\n' "${ACME_EMAIL:+	email $ACME_EMAIL
 }" "$HOST"
   [ "$TLS" = internal ] && printf '\ttls internal\n'
   cat <<EOF
 	encode zstd gzip
 	header {
-		Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' data: blob: https://$HOST${ORIGIN_PORT:+:$ORIGIN_PORT} wss://$HOST${ORIGIN_PORT:+:$ORIGIN_PORT}; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' data: blob: https://$HOST${ORIGIN_PORT:+:$ORIGIN_PORT} wss://$HOST${ORIGIN_PORT:+:$ORIGIN_PORT} https://*.amazonaws.com https://speed.cloudflare.com https://ixpn.ng https://nobus.io; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 		X-Content-Type-Options nosniff
 		Referrer-Policy same-origin
 	}
@@ -151,7 +150,7 @@ mv /etc/caddy/Caddyfile.new /etc/caddy/Caddyfile
 systemctl enable --quiet caddy && systemctl restart caddy || fail 'starting Caddy'
 log "Caddy up (Let's Encrypt needs ports 80 and 443 open)"
 
-# ---------- the code ----------
+# -- the code
 phase 'downloading the game'
 as_mf() { runuser -u mf -- env HOME="$DATA" PATH="$PATH" "$@"; }
 if [ -d "$SRC/.git" ]; then
@@ -161,6 +160,8 @@ else
 fi
 COMMIT=$(as_mf git -C "$SRC" log -1 --format='%h %cs')
 log "commit $COMMIT"
+IFS='|' read -r PID pn pp < <(bash "$SRC/scripts/net-trial/where.sh" 2>/dev/null); PID=${PID:-box}
+PROBE_NAME=${PROBE_NAME:-${pn:-this box}} PROBE_PROVIDER=${PROBE_PROVIDER:-$pp}
 
 phase 'installing Node and pnpm'
 major=$(jq -r '.engines.node // ""' "$SRC/package.json" | grep -o '[0-9]\+' | head -1)
@@ -191,16 +192,18 @@ rm -rf "$WEB.new" && cp -a "$SRC/apps/web/dist" "$WEB.new" && rm -rf "$WEB" && m
 sed -i "s#%ORIGIN%#$ORIGIN#g; s#</head>#<meta name=\"mf-tune\" content=\"host\" /></head>#" "$WEB/index.html"
 [ -f "$WEB/probe.html" ] && [ -f "$SRC/scripts/net-trial/probe-server/server.mjs" ] && PROBE=1
 
-# ---------- services ----------
+# -- services
+. "$SRC/scripts/net-trial/data.sh" # Postgres and Valkey: sets DB_URL, KV_URL
 phase 'starting the game'
 pem() { awk '{printf "%s\\n", $0}'; }
 envfile() { (umask 027; cat >"$ETC/$1"); chown root:mf "$ETC/$1"; }
 ROOM=$(cat "$ETC/room-code" 2>/dev/null | tr -dc A-Z)
 envfile api.env <<EOF
-NODE_ENV='development'
+NODE_ENV='production'
 API_HOST='127.0.0.1'
 API_PORT='8787'
-PGLITE_DIR='$DATA/pglite'
+DATABASE_URL='$DB_URL'
+REDIS_URL='$KV_URL'
 ACCESS_TOKEN_PRIVATE_KEY='$(pem <"$ETC/access.key")'
 JOIN_TICKET_PRIVATE_KEY='$(pem <"$ETC/ticket.key")'
 CORS_ORIGINS='$ORIGIN'
@@ -225,25 +228,26 @@ ARMORY='1'
 ADMIN_TOKEN='$ADMIN_TOKEN'
 ADMIN_PORT='9002'
 ADMIN_DEFAULTS='$DATA/admin-defaults.json'
+LAG_COMP_MAX_MS='900'
 EOF
 envfile probe.env <<EOF
 PORT='9300'
 HOST='127.0.0.1'
 PROBE_DATA_DIR='$DATA/probe'
-PROBE_REGION='los'
-PROBE_REGIONS='los'
+PROBE_REGION='$PID'
+PROBE_REGIONS='$PID'
 PROBE_ORIGINS='$ORIGIN'
 PROBE_EXPORT_TOKEN='$EXPORT_TOKEN'
 TRUST_PROXY='1'
 EOF
 jq -n --arg n "$PROBE_NAME" --arg p "$PROBE_PROVIDER" --arg h "$HOST${ORIGIN_PORT:+:$ORIGIN_PORT}" \
-  '{trial: "mf-trial", regions: [{id: "los", name: $n, provider: $p, echo: "wss://\($h)/echo"}], results: ["https://\($h)/probe-api/results"]}' >"$PUB/probe-config.json"
+  --arg i "$PID" '{trial: "mf-trial", regions: [{id: $i, name: $n, provider: $p, echo: "wss://\($h)/echo"}], results: ["https://\($h)/probe-api/results"]}' >"$PUB/probe-config.json"
 
 unit() { # unit <name> <description> <dir> <command>
   cat >"/etc/systemd/system/$1.service" <<EOF
 [Unit]
 Description=$2
-After=network-online.target
+After=network-online.target postgresql.service valkey-server.service
 [Service]
 User=mf
 Group=mf
@@ -267,7 +271,6 @@ unit mf-api 'Military Forge API' "$SRC/apps/api" "$NODE_DIR/bin/node --import ts
 unit mf-game 'Military Forge game server' "$SRC/apps/game-server" "$NODE_DIR/bin/node --max-semi-space-size=64 --import tsx $SRC/apps/game-server/src/index.ts"
 unit mf-probe 'Military Forge ping probe' "$SRC" "$NODE_DIR/bin/node $SRC/scripts/net-trial/probe-server/server.mjs"
 
-# the room: made once, kept (KEEP_ROOMS; a join every 2 h slides its expiry)
 cat >/usr/local/sbin/mf-room <<'EOF'
 #!/bin/bash
 API=http://127.0.0.1:8787 ETC=/etc/military-forge
@@ -292,6 +295,8 @@ chmod 0755 /usr/local/sbin/mf-room
 printf '[Unit]\nDescription=Military Forge: keep the trial room open\nAfter=mf-api.service\n[Service]\nType=oneshot\nExecStart=/usr/local/sbin/mf-room\n' >/etc/systemd/system/mf-room.service
 printf '[Unit]\nDescription=Military Forge: keep the trial room open\n[Timer]\nOnBootSec=5min\nOnUnitActiveSec=2h\n[Install]\nWantedBy=timers.target\n' >/etc/systemd/system/mf-room.timer
 
+W="$SRC/scripts/net-trial/wt-setup.sh"
+[ -f "$W" ] && bash "$W" env
 systemctl daemon-reload
 services='mf-api mf-game'
 [ "$PROBE" = 1 ] && services="$services mf-probe"
@@ -316,4 +321,5 @@ Admin:  $ORIGIN/admin#t=$ADMIN_TOKEN
 ============================================="
 log "$b"
 console "$b"
+[ -f "$W" ] && MF_HOST=$HOST MF_ORIGIN_PORT=$ORIGIN_PORT bash "$W" gateway
 exit 0

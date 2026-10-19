@@ -25,7 +25,8 @@
 import { DEFAULT_LOADOUT, DEMO_MAPS, defaultTuning, getMap, maps, weapons, type MapDef } from '@military-forge/content';
 import { createConditionerSettings, parseNetSim } from '@military-forge/netcode';
 import { GAME_NAME } from '@military-forge/shared';
-import type { Input, SimEvent } from '@military-forge/sim';
+import { Btn, type Input, type SimEvent } from '@military-forge/sim';
+import { audio, startAudio } from './audio';
 import { Camera } from './camera';
 import { fxFrame, fxState, setReduceFlashes } from './fx';
 import { autoPreset, gpuRenderer } from './gfxAuto';
@@ -44,6 +45,8 @@ import { toKeyBindings, uiCodes } from './shell/controls';
 import { PlaneCamera, create3d, online3d, parsePreset, softwareGl, type PresetName } from './render3d';
 import { countFrame, framesPerSecond, recordNet } from './stats';
 import { isTouchDevice, mountTouch } from './touch';
+import { applyPadSettings, currentDevice, mountGamepad, onInputDevice } from './gamepad';
+import { padShownBindings } from './gamepad/prompts';
 import { startLandscape } from './ui/landscape';
 import type { Frame } from './view';
 
@@ -75,12 +78,15 @@ function showToast(message: string): void {
 
 /** Gameplay input that menus can switch off (aim still follows the mouse). */
 class GameInput extends InputSampler {
+  /** the buttons of the last sample (the empty click listens for Fire) */
+  lastButtons = 0;
   override sample(camera: Camera, sx: number, sy: number, out?: Input): Input {
     const input = super.sample(camera, sx, sy, out);
     if (this.blocked) {
       input.buttons = 0;
       input.weaponSelect = 0;
     }
+    this.lastButtons = input.buttons;
     return input;
   }
 }
@@ -125,6 +131,7 @@ class GameRenderer extends Renderer {
   override onEvents(events: readonly SimEvent[], localId: number): void {
     super.onEvents(events, localId);
     hud?.onEvents(events, localId);
+    audio.onEvents(events, localId); // the game's sound (apps/web/src/audio): lazy, after the first tap or key
   }
   override setNames(names: Map<number, string>, bots: ReadonlySet<number> = new Set()): void {
     super.setNames(names, bots);
@@ -136,7 +143,10 @@ const renderer = new GameRenderer(canvas, camera, map, () => mode?.tuning() ?? d
 void view3d?.load(map.spawns[0]!);
 view3d?.attach(renderer, () => (mode instanceof OnlineMode ? mode.net : null)); // sim events → 3D effects; online: remotePose (render3d)
 // phones and tablets: twin sticks + buttons (apps/web/src/touch); the app's Settings → Touch has "Edit layout"
-mountTouch({ sampler, camera, renderer, view3d, editButton: !appMode });
+mountTouch({ sampler, camera, renderer, view3d, editButton: !appMode, tuning: () => mode?.tuning() ?? null });
+// game controllers (apps/web/src/gamepad): play, the menus, rumble, prompts in the pad's buttons
+// (on a phone the touch buttons step aside while a pad plays: gamepad/pad.css)
+mountGamepad({ sampler, camera, renderer, scoreboardCode: () => scoreboardKeys[0] });
 
 // the room host's live tuning panel (the in-match menu's "Tune the game"), where the page offers it:
 // pnpm playtest --tune flags the page; the game server then lets the host (only) tune the room
@@ -147,11 +157,22 @@ let settings: Settings | null = null;
 let serverHost = '';
 /** page-level keys from the Controls settings (the debug client keeps N) */
 let netGraphKeys: readonly string[] = ['KeyN'];
+let scoreboardKeys: readonly string[] = ['Tab'];
+
+/** The HUD's keycaps: the player's keys, or a controller's buttons while one plays (gamepad/prompts.ts). */
+function applyHudKeys(): void {
+  if (!settings || !hud) return;
+  const b = currentDevice().kind === 'pad' ? padShownBindings(settings.pad) : settings.bindings;
+  const key = (action: keyof typeof b) => b[action][0];
+  hud.setKeys({ dash: key('dash'), grenade: key('grenade'), cycleGrenade: key('cycleGrenade'), shield: key('shield'), swap: key('swap'), reload: key('reload'), scoreboard: key('scoreboard'), interact: key('interact'), fire: key('fire') });
+}
+onInputDevice(applyHudKeys);
 
 function setMode(next: LocalMode | OnlineMode | null): void {
   hostTuning?.close(); // it tunes the mode it was opened for
   if (mode instanceof OnlineMode) mode.dispose();
   mode = next;
+  audio.reset();
   camera.setZoom(0, 1);
   if (next instanceof OnlineMode && settings?.lowBandwidth) next.net.setLowBandwidth(true);
 }
@@ -207,9 +228,13 @@ const host: GameHost = {
     sampler.bindings = toKeyBindings(next.bindings);
     sampler.doubleTapDash = next.doubleTapDash;
     netGraphKeys = uiCodes(next.bindings, 'netGraph');
-    hud?.setScoreboardKeys(uiCodes(next.bindings, 'scoreboard'));
-    const key = (action: keyof typeof next.bindings) => next.bindings[action][0];
-    hud?.setKeys({ dash: key('dash'), grenade: key('grenade'), cycleGrenade: key('cycleGrenade'), shield: key('shield'), swap: key('swap'), reload: key('reload'), scoreboard: key('scoreboard'), interact: key('interact'), fire: key('fire') });
+    scoreboardKeys = uiCodes(next.bindings, 'scoreboard');
+    hud?.setScoreboardKeys(scoreboardKeys);
+    applyHudKeys();
+    // controllers: their settings, and no rumble under Reduce flashes
+    applyPadSettings(next.pad, next.reduceFlashes);
+    // the sound: bus volumes and mutes, and Accessibility's "Soften loud bursts"
+    audio.applySettings(next.audio, next.softBursts);
     // Reduce flashes: the flashbang effect (fx, which remembers it) and the UI (the kit's html.reduce-flashes)
     setReduceFlashes(next.reduceFlashes);
     const html = document.documentElement;
@@ -247,6 +272,8 @@ if (appMode) {
     <a href="/?online" target="_blank">+ 2nd tab</a>
     <a href="/locker.html">Locker</a>
     <a href="/armory.html">Armory</a>
+    <a href="/gamepad.html">Pad check</a>
+    <a href="/sounds.html">Sounds</a>
     <a href="/?app">App</a>
     <span class="maps">maps: ${['street-market', ...DEMO_MAPS, 'mechanics-test']
       .map((id) => `<a href="/?map=${id}" class="${!online && localMapId === id ? 'active' : ''}">${maps[id]!.name}</a>`)
@@ -286,6 +313,9 @@ registerRoute({
 // App shell (W4): screens over the canvas. Other workstreams plug in with one line each, e.g.
 // registerRoute({ id: 'locker', title: 'Locker', mount }) from './shell' (opens at #/locker).
 const shell = mountShell(document.body, appMode ? { host } : {});
+// sound starts on the first tap or key (browsers allow it only then); the shell's store drives the
+// interface cues and the music
+startAudio(shell.store);
 
 // the HTML loading screen (index.html) stays until the shell has its first real screen (the API
 // answered or gave up), so nothing flashes in between
@@ -467,6 +497,7 @@ function frame(now: number): void {
   if (!mode) {
     hud?.setVisible(false);
     if (!covered) drawMenuBackdrop(now, dt);
+    audio.onFrame(null, dt, null);
     shell.update();
     shell.setMapEvent(null);
     return;
@@ -497,6 +528,7 @@ function frame(now: number): void {
   shell.setMapEvent(f.mapEvent);
   if (covered) return; // the mode keeps running (online: inputs and heartbeats), nothing is drawn
   renderer.render(f, dt, options, appMode ? '' : HELP);
+  audio.onFrame(f, dt, { fuelMax: mode.tuning().fuelMax, fireHeld: (sampler.lastButtons & Btn.Fire) !== 0, map });
   fxFrame(f, dt); // flashbang white-out / gas edge over the view (arsenal B, apps/web/src/fx)
   if (f.net && mode instanceof OnlineMode) recordNet(now, f.net.rttMs, f.net.prediction?.snapshotLossPct ?? 0, serverHost);
   if (hud) {

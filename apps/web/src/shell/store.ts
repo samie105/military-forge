@@ -3,6 +3,7 @@
  * registry other workstreams plug their screens into (W2's Locker: one line in main.ts).
  */
 import { createStore, type StoreApi } from 'zustand/vanilla';
+import { DEFAULT_PAD_SETTINGS, type PadSettings } from '../gamepad/settings';
 import { defaultBindings, type Bindings } from './controls';
 import type { MapEventBanner } from './mapEventBanner';
 import type { MatchView } from './matchView';
@@ -87,14 +88,23 @@ export type GraphicsPreset = 'low' | 'medium' | 'high';
 export type GraphicsSetting = 'auto' | GraphicsPreset;
 export type ColorBlindMode = 'standard' | 'deutan' | 'tritan';
 
-/** Volumes 0..1 and mutes (Settings → Audio; saved for when the game has sound). */
+/** Volumes 0..1 and mutes (Settings → Audio). */
 export interface AudioSettings {
   master: number;
+  /** the world: guns, footsteps, jetpacks, explosions */
   effects: number;
   music: number;
+  /** menu clicks, the countdown, hit and kill confirms */
+  ui: number;
+  /** the soldiers' voices (hurt, coughing) and the flashbang's ear ring */
+  voice: number;
   masterMuted: boolean;
   effectsMuted: boolean;
   musicMuted: boolean;
+  uiMuted: boolean;
+  voiceMuted: boolean;
+  /** headphones or earbuds: 3D (HRTF) sound, so enemies left, right, above and below are placed by ear */
+  headphones: boolean;
 }
 
 export interface Settings {
@@ -108,6 +118,8 @@ export interface Settings {
   lowBandwidth: boolean;
   /** accessibility: soften full-screen flashes (flashbangs, explosions) */
   reduceFlashes: boolean;
+  /** accessibility: explosions and flashbangs quieter, no ear ring, a harder limiter on the mix */
+  softBursts: boolean;
   /** accessibility: no shake, no zooming numbers, no pulsing warnings (html.reduce-motion) */
   reduceMotion: boolean;
   /** team colours for colour-blind players (teams aren't in the game yet: saved) */
@@ -120,9 +132,11 @@ export interface Settings {
   blood: boolean;
   /** every action's keys and mouse buttons (controls.ts) */
   bindings: Bindings;
+  /** game controllers: buttons, sticks, triggers, rumble (Settings → Controls → Controller; gamepad/settings.ts) */
+  pad: PadSettings;
 }
 
-export const DEFAULT_AUDIO: AudioSettings = { master: 0.8, effects: 0.9, music: 0.35, masterMuted: false, effectsMuted: false, musicMuted: false };
+export const DEFAULT_AUDIO: AudioSettings = { master: 0.8, effects: 0.9, music: 0.35, ui: 0.7, voice: 0.8, masterMuted: false, effectsMuted: false, musicMuted: false, uiMuted: false, voiceMuted: false, headphones: false };
 
 export const DEFAULT_SETTINGS: Settings = {
   graphics: 'auto',
@@ -131,12 +145,14 @@ export const DEFAULT_SETTINGS: Settings = {
   netGraph: false,
   lowBandwidth: false,
   reduceFlashes: false,
+  softBursts: false,
   reduceMotion: false,
   colorBlind: 'standard',
   textScale: 1,
   doubleTapDash: true,
   blood: false,
   bindings: defaultBindings(),
+  pad: DEFAULT_PAD_SETTINGS,
 };
 
 /** Online connection, as the shell shows it (onlineMode.ts ConnectionInfo). */
@@ -180,7 +196,7 @@ export interface ShellState {
 
 export type ShellStore = StoreApi<ShellState>;
 
-/** "Ade changed Gravity to 12 m/s² · Dash cooldown to 0.6 s" (two at most, then how many more). */
+/** "Ade changed Gravity to 12 m/s² · Dash chain window to 0.6 s" (two at most, then how many more). */
 export interface TuneNote {
   id: number;
   who: string;

@@ -2,6 +2,8 @@
  * Names in the kit's icon sprite (sprite.ts) for game things, shared by the React screens (Icon.tsx)
  * and the DOM HUD (hud/): weapons by content id, keycap text for key codes and mouse buttons.
  */
+import { currentDevice, currentPadFamily } from '../gamepad/device';
+import { isPadCode, padLabel } from '../gamepad/glyphs';
 import { keyLabel } from '../shell/controls';
 import { SPRITE_IDS } from './sprite';
 
@@ -34,5 +36,7 @@ export const MOUSE_CAPS: Readonly<Record<string, readonly [icon: string | null, 
 
 /** The text a keycap shows for a binding (the player's keyboard layout where the browser tells it). */
 export function capText(code: string, layout?: ReadonlyMap<string, string> | null): string {
+  // a controller's button ('Pad3' → "△" or "Y"), in the family the prompts use now (gamepad/)
+  if (isPadCode(code)) return padLabel(code, currentPadFamily(), { short: true, dualSense: currentDevice().dualSense });
   return MOUSE_CAPS[code]?.[1] ?? keyLabel(code, layout);
 }

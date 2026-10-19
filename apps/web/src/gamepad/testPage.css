@@ -1,0 +1,29 @@
+/* The controller check page (gamepad.html): kit tokens, a plain scrolling page. */
+html, body { margin: 0; min-height: 100%; background: var(--c-ink-900); }
+.padcheck { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; color: var(--c-text); }
+.padcheck__top { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.padcheck__top h1 { margin: 0; font-size: var(--fs-40, 40px); }
+.padcheck__lead { max-width: 70ch; color: var(--c-muted); }
+.padcheck__device { font-weight: 700; }
+.padcheck__pads { display: grid; gap: 20px; }
+.padcheck__pad { padding: 20px; box-sizing: border-box; min-width: 0; max-width: 100%; width: auto; overflow-wrap: anywhere; }
+.padcheck__pad h2 { margin: 0 0 4px; font-size: 18px; overflow-wrap: anywhere; }
+.padcheck__pad h3 { margin: 18px 0 8px; font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; }
+.padcheck__meta { margin: 0; color: var(--c-muted); font-size: 14px; }
+.padcheck__sticks { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 12px; }
+.padcheck__stick { position: relative; width: 100px; height: 100px; border: 2px solid currentColor; border-radius: 50%; display: grid; place-items: center; }
+.padcheck__stick i { position: absolute; left: 40px; top: 40px; width: 20px; height: 20px; border-radius: 50%; background: currentColor; }
+.padcheck__stick b { position: absolute; top: 104px; font-size: 13px; white-space: nowrap; }
+.padcheck__dz { position: absolute; width: calc(100% * var(--dz)); height: calc(100% * var(--dz)); border-radius: 50%; border: 1px dashed currentColor; opacity: 0.6; }
+.padcheck__axes, .padcheck__buttons { list-style: none; margin: 30px 0 0; padding: 0; display: grid; gap: 6px; }
+.padcheck__axes { margin-top: 0; grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr)); }
+.padcheck__axes li { display: grid; grid-template-columns: 64px 1fr 48px; align-items: center; gap: 8px; font-size: 14px; }
+.padcheck__bar { position: relative; height: 10px; border: 1px solid currentColor; border-radius: 5px; }
+.padcheck__bar i { position: absolute; top: 0; bottom: 0; left: calc(50% + min(0, var(--v, 0)) * 50%); width: calc(max(var(--v, 0), -1 * var(--v, 0)) * 50%); background: currentColor; }
+.padcheck__buttons { margin-top: 0; grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr)); }
+.padcheck__buttons li { display: grid; grid-template-columns: 34px 1fr 40px; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--c-line); border-radius: 8px; font-size: 14px; background: linear-gradient(90deg, var(--c-volt-soft) calc(var(--v, 0) * 100%), transparent 0); }
+.padcheck__buttons li.is-on { border-color: var(--c-text); box-shadow: inset 0 0 0 1px var(--c-text); }
+.padcheck__bname small { display: block; color: var(--c-muted); font-size: 12px; }
+.padcheck__bits { font-weight: 600; min-height: 1.5em; }
+.padcheck__rumble { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.padcheck__none { margin-top: 12px; }

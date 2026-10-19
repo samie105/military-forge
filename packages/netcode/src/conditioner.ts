@@ -28,7 +28,25 @@ export interface LinkSettings {
   stream?: boolean;
   /** extra delay of a retransmitted message in stream mode, ms (default ≈ one RTT: 2 × latency, ≥ 40) */
   retransmitMs?: number;
+  /**
+   * Loss comes in bursts (a Gilbert–Elliott model): mean length of a bad spell, ms. During a spell
+   * BURST_LOSS_PCT of messages are lost, outside it none; `lossPct` stays the long-run average.
+   * 0 / unset: independent losses.
+   */
+  burstMs?: number;
+  /**
+   * Latency spikes (a mobile uplink's queue filling up, "bufferbloat"): extra one-way delay at a
+   * spike's peak, ms. Messages stay in order through a spike (a queue is a queue). 0 / unset: none.
+   */
+  spikeMs?: number;
+  /** mean time between spike starts, ms (default 8000) */
+  spikeEveryMs?: number;
+  /** how long one spike lasts, ms (default 1500) */
+  spikeLengthMs?: number;
 }
+
+/** loss inside a burst (burstMs): the bursts are as long and as frequent as the average needs */
+export const BURST_LOSS_PCT = 60;
 
 export interface ConditionerSettings {
   enabled: boolean;
@@ -104,6 +122,34 @@ export const NET_PRESETS: Readonly<Record<string, ConditionerSettings>> = {
   'Mobile (300 ms, 3%)': symmetric(300, 3, 40),
 };
 
+/**
+ * The owner's conditions (19 Oct 2026, Nigeria on mobile data to Johannesburg): the profiles the
+ * high-ping work is judged on (`pnpm --filter @military-forge/game-server netfeel`).
+ */
+export const FEEL_PRESETS: Readonly<Record<string, ConditionerSettings>> = {
+  'Target (150 ms ±40, 3%)': symmetric(150, 3, 40),
+  'Bad (250 ms, 10% in bursts)': burst(symmetric(250, 10, 20), 120),
+  // MTN 4G, Port Harcourt → Johannesburg, measured with /probe on 19 Oct: median 513 ms, p95 1347 ms,
+  // 0 % loss. Uplink queue spikes (+1 s, 2.5 s long, one every ~7 s) reproduce that: median 513, p95 1343
+  'MTN 4G (500 ms, spikes to 1.3 s)': upSpikes(symmetric(500, 0, 25), 1000, 7000, 2500),
+};
+
+/** The same settings with latency spikes on the uplink only (a phone's upload queue). */
+export function upSpikes(s: ConditionerSettings, spikeMs: number, spikeEveryMs = 8000, spikeLengthMs = 1500): ConditionerSettings {
+  return { ...s, up: { ...s.up, spikeMs, spikeEveryMs, spikeLengthMs } };
+}
+
+/** The same settings with loss in bursts of `burstMs` on average (both directions). */
+export function burst(s: ConditionerSettings, burstMs: number): ConditionerSettings {
+  return { ...s, up: { ...s.up, burstMs }, down: { ...s.down, burstMs } };
+}
+
+/** The same settings with latency spikes (both directions, independently). */
+export function spikes(s: ConditionerSettings, spikeMs: number, spikeEveryMs = 8000, spikeLengthMs = 1500): ConditionerSettings {
+  const k = { spikeMs, spikeEveryMs, spikeLengthMs };
+  return { ...s, up: { ...s.up, ...k }, down: { ...s.down, ...k } };
+}
+
 export function copySettings(dst: ConditionerSettings, src: Readonly<ConditionerSettings>): ConditionerSettings {
   dst.enabled = src.enabled;
   Object.assign(dst.up, src.up);
@@ -151,6 +197,18 @@ export function parseNetSim(spec: string | undefined | null): ConditionerSetting
         case 'reorder':
           l.reorder = value !== 0;
           break;
+        case 'burst':
+          l.burstMs = value;
+          break;
+        case 'spike':
+          l.spikeMs = value;
+          break;
+        case 'spikeevery':
+          l.spikeEveryMs = value;
+          break;
+        case 'spikelen':
+          l.spikeLengthMs = value;
+          break;
         default:
           throw new Error(`netsim: unknown key "${field}"`);
       }
@@ -162,7 +220,7 @@ export function parseNetSim(spec: string | undefined | null): ConditionerSetting
 export function describeNetSim(s: Readonly<ConditionerSettings>): string {
   if (!s.enabled) return 'off';
   const d = (l: LinkSettings) =>
-    `${l.latencyMs.toFixed(0)}±${l.jitterMs.toFixed(0)} ms ${l.lossPct}%${l.stream ? ' (TCP retransmits)' : ''}${l.dupPct ? ` dup ${l.dupPct}%` : ''}${l.reorder ? ' reorder' : ''}`;
+    `${l.latencyMs.toFixed(0)}±${l.jitterMs.toFixed(0)} ms ${l.lossPct}%${l.stream ? ' (TCP retransmits)' : ''}${l.burstMs ? ` in ${l.burstMs} ms bursts` : ''}${l.spikeMs ? ` spikes +${l.spikeMs} ms` : ''}${l.dupPct ? ` dup ${l.dupPct}%` : ''}${l.reorder ? ' reorder' : ''}`;
   return `up ${d(s.up)} · down ${d(s.down)}`;
 }
 
@@ -188,11 +246,18 @@ export class ConditionedLink {
   readonly stats: LinkStats = { sent: 0, dropped: 0, duplicated: 0, delivered: 0, retransmitted: 0 };
   private readonly queue: Pending[] = [];
   private readonly rng: Xoshiro128;
+  /** draws for the burst and spike schedules: their own, so the schedule doesn't depend on the traffic */
+  private readonly scheduleRng: Xoshiro128;
   private timer: unknown = null;
   private timerAt = Infinity;
   /** delivery time of the newest in-order message (keeps FIFO when reorder is off) */
   private lastAt = -Infinity;
   private disposed = false;
+  /** burst loss (burstMs): the current spell, bad or good, and when it ends */
+  private bad = true;
+  private spellEnds = -Infinity;
+  /** latency spikes (spikeMs): the next (or current) spike's start */
+  private spikeAt = Number.NaN;
 
   constructor(
     private readonly settings: LinkSettings,
@@ -203,6 +268,7 @@ export class ConditionedLink {
     seed = 1,
   ) {
     this.rng = new Xoshiro128(seed);
+    this.scheduleRng = new Xoshiro128((seed ^ 0x5bd1e995) >>> 0);
   }
 
   /** messages waiting to be delivered */
@@ -225,22 +291,24 @@ export class ConditionedLink {
     if (s.stream) {
       // TCP: the segment is resent ~1 RTT later and the stream stalls behind it
       let at = this.scheduler.now() + this.delay();
-      if (this.rng.nextFloat() * 100 < s.lossPct) {
+      if (this.lost()) {
         this.stats.retransmitted++;
         at += s.retransmitMs ?? Math.max(40, 2 * s.latencyMs);
       }
       this.schedule(bytes, at, false);
       return;
     }
-    if (unreliable && this.rng.nextFloat() * 100 < s.lossPct) {
+    if (unreliable && this.lost()) {
       this.stats.dropped++;
       return;
     }
     const now = this.scheduler.now();
-    this.schedule(bytes, now + this.delay(), unreliable && s.reorder);
+    // a spike is a queue: nothing overtakes inside it
+    const reorder = s.reorder && this.spike(now) === 0;
+    this.schedule(bytes, now + this.delay(), unreliable && reorder);
     if (unreliable && s.dupPct > 0 && this.rng.nextFloat() * 100 < s.dupPct) {
       this.stats.duplicated++;
-      this.schedule(bytes, now + this.delay(), s.reorder);
+      this.schedule(bytes, now + this.delay(), reorder);
     }
   }
 
@@ -253,7 +321,41 @@ export class ConditionedLink {
 
   private delay(): number {
     const s = this.settings;
-    return Math.max(0, s.latencyMs + s.jitterMs * (2 * this.rng.nextFloat() - 1));
+    return Math.max(0, s.latencyMs + s.jitterMs * (2 * this.rng.nextFloat() - 1)) + this.spike(this.scheduler.now());
+  }
+
+  /** Whether the next message is lost: independent draws, or bursts (burstMs). */
+  private lost(): boolean {
+    const s = this.settings;
+    if (!(s.lossPct > 0)) return false;
+    if (!s.burstMs || s.burstMs <= 0) return this.rng.nextFloat() * 100 < s.lossPct;
+    const now = this.scheduler.now();
+    // the share of time spent in bad spells that gives the average loss
+    const share = Math.min(1, s.lossPct / BURST_LOSS_PCT);
+    const inBad = share >= 1 ? s.lossPct : BURST_LOSS_PCT;
+    if (share >= 1) return this.rng.nextFloat() * 100 < inBad;
+    if (this.spellEnds === -Infinity) this.spellEnds = now; // starts in a good spell, drawn below
+    while (now >= this.spellEnds) {
+      this.bad = !this.bad;
+      const mean = this.bad ? s.burstMs : (s.burstMs * (1 - share)) / share;
+      this.spellEnds += Math.max(1, 2 * this.scheduleRng.nextFloat() * mean); // uniform around the mean
+    }
+    return this.bad && this.rng.nextFloat() * 100 < inBad;
+  }
+
+  /** Extra one-way delay now from a latency spike (spikeMs), ms. */
+  private spike(now: number): number {
+    const s = this.settings;
+    if (!s.spikeMs || s.spikeMs <= 0) return 0;
+    const every = s.spikeEveryMs ?? 8000;
+    const length = s.spikeLengthMs ?? 1500;
+    // gaps uniform around the mean (Math.log isn't deterministic across engines)
+    if (Number.isNaN(this.spikeAt)) this.spikeAt = now + 2 * this.scheduleRng.nextFloat() * every;
+    while (now >= this.spikeAt + length) this.spikeAt += length + 2 * this.scheduleRng.nextFloat() * every;
+    if (now < this.spikeAt) return 0;
+    // the queue fills over most of the spike and drains quickly at its end
+    const u = (now - this.spikeAt) / length;
+    return s.spikeMs * (u < 0.8 ? u / 0.8 : (1 - u) / 0.2);
   }
 
   private schedule(bytes: Uint8Array, at: number, mayReorder: boolean): void {

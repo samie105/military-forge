@@ -21,6 +21,7 @@ import { ConditionedLink, NetClient, TICK_MS, describeNetSim, type ConditionerSe
 import { CloseCode, CmdKind, MsgType, encodeCmd, isUnreliableMessage, type MatchStateMsg, type SnapshotPlayer } from '@military-forge/protocol';
 import { u16ToAngle } from '@military-forge/shared';
 import { MatchPhase, TICK_RATE, blindIntensity, type PlayerState, type SimEvent } from '@military-forge/sim';
+import { audio } from './audio';
 import type { Camera } from './camera';
 import { cloudView, statusView } from './grenadeViews';
 import type { InputSampler } from './input';
@@ -36,7 +37,12 @@ import { mobilityView, shieldView, type CloudView, type Frame, type PlayerView, 
  * be out for up to a minute and still come back on its own.
  */
 const RECONNECT_WINDOW_MS = 60_000;
-const WT_SILENCE_MS = 1500;
+/**
+ * A WebTransport session silent this long is given up for WebSocket. 1.5 s (was) is shorter than a
+ * phone's upload queue spike (the owner's MTN 4G: p95 1.35 s round trips, 19 Oct 2026): every spike
+ * would have thrown the session away for TCP, the transport that suffers most from them.
+ */
+const WT_SILENCE_MS = 3000;
 /** close codes that mean "don't come back" */
 const FATAL_CLOSE = new Set<number>([
   CloseCode.VersionMismatch,
@@ -417,9 +423,13 @@ export class OnlineMode {
         this.snapCount++;
         // own shots are drawn from the prediction the moment they're fired; skip the server's copies
         const me = this.net.myId;
-        // SOUND events (gunfire off screen) have no renderer yet: audio comes later
+        // SOUND events (gunfire off screen) have no renderer: the sound plays them, from their side
         this.renderer.onEvents(
           msg.events.filter((e): e is SimEvent => e.type !== 'sound' && !(e.type === 'shot' && e.shooter === me)),
+          me,
+        );
+        audio.onEvents(
+          msg.events.filter((e) => e.type === 'sound'),
           me,
         );
         break;
@@ -467,7 +477,7 @@ export class OnlineMode {
 
   /**
    * A WebTransport session can stay "open" with nothing arriving (a hung gateway, a path that went
-   * dark) until QUIC's idle timeout. Snapshots come 15–30 times a second, so after 1.5 s of silence
+   * dark) until QUIC's idle timeout. Snapshots come 15–30 times a second, so after 3 s of silence
    * give up on it and resume over WebSocket.
    */
   private checkSilence(now: number): void {
@@ -500,8 +510,14 @@ export class OnlineMode {
       this.sendCmd(CmdKind.ReportPing, String(Math.round(this.net.rtt.median)));
     }
     // own shots and dashes are drawn from prediction the moment they happen
-    const own: SimEvent[] = this.net.drainEvents().filter((e) => e.type === 'shot' || e.type === 'dash');
+    const drained = this.net.drainEvents();
+    const own: SimEvent[] = drained.filter((e) => e.type === 'shot' || e.type === 'dash');
     if (own.length) this.renderer.onEvents(own, this.net.myId);
+    // our throws and launches, heard the moment they happen (the server's copies follow)
+    audio.onEvents(
+      drained.filter((e) => e.type === 'throw' || e.type === 'launch'),
+      this.net.myId,
+    );
 
     // rates for the net graph
     const windowMs = now - this.rate.windowStart;
@@ -520,6 +536,7 @@ export class OnlineMode {
       kbOutPerSec: this.rate.kbOut,
       interpDelayMs: this.net.interpDelay,
       status: `${this.status}${this.transportNote ? ` · ${this.transportNote}` : ''}`,
+      ...(this.transport ? { transport: this.transport.kind } : {}),
       prediction: {
         inputBufferHealth: s.inputBufferHealth,
         timeScale: s.timeScale,
@@ -562,7 +579,8 @@ export class OnlineMode {
       tick: pred?.started ? pred.tick : newest.msg.serverTick,
       localId: this.net.myId,
       players,
-      grenades: newest.msg.grenades.map((g) => ({ x: g.x, y: g.y, fuse: g.fuse, type: g.type, state: g.state, id: g.id, vx: g.vx, vy: g.vy })),
+      // own grenades and projectiles from the throw (predicted), everyone else's from the newest snapshot
+      grenades: this.net.grenadeViews(now).map((g) => ({ x: g.x, y: g.y, fuse: g.fuse, type: g.type, state: g.state, id: g.id, vx: g.vx, vy: g.vy })),
       pickups: newest.msg.pickups,
       clouds,
       net,

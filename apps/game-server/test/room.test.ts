@@ -292,22 +292,26 @@ describe('Room', () => {
     const shooter = room.game.players[a.welcome.playerId]!;
     const target = room.game.players[b.welcome.playerId]!;
     const out = createHitPose();
-    /** One tick whose input reports a view 20 ticks (333 ms) old: was it clamped? */
-    const clampedAt20 = () => {
+    /**
+     * One tick whose input reports a view 30.5 ticks (508 ms) old: was it clamped? The cap is 300 ms
+     * on top of the most the view delay can be: 200 ms (30 ticks), or in low-bandwidth mode 200 ms
+     * + 1 tick of batching (31 ticks).
+     */
+    const clampedAt30 = () => {
       const t = room.game.tick;
-      room.receive(a.client, encodeInput({ newestTick: t, ackSnapshotSeq: 0, renderTick: t - 20, renderFrac: 0, inputs: [createInput()] }));
+      room.receive(a.client, encodeInput({ newestTick: t, ackSnapshotSeq: 0, renderTick: t - 31, renderFrac: 128, inputs: [createInput()] }));
       room.tick();
       const before = lc.clamped;
       lc.pose(target, shooter, out);
       return lc.clamped > before;
     };
-    expect(clampedAt20()).toBe(true); // 300 ms cap
+    expect(clampedAt30()).toBe(true); // 500 ms cap
     room.receive(a.client, encodeCmd(CmdKind.SetLowBandwidth, '1'));
-    expect(clampedAt20()).toBe(true); // just switched on: not yet
+    expect(clampedAt30()).toBe(true); // just switched on: not yet
     for (let i = 0; i < 60; i++) room.tick();
-    expect(clampedAt20()).toBe(false); // a second later: 150 ms interpolation + 1 tick + 200 ms
+    expect(clampedAt30()).toBe(false); // a second later: 200 ms view delay + 1 tick + 300 ms
     room.receive(a.client, encodeCmd(CmdKind.SetLowBandwidth, '0'));
-    expect(clampedAt20()).toBe(true); // off: at once
+    expect(clampedAt30()).toBe(true); // off: at once
   });
 
   it('CMDs beyond 20/s (bursts of 20) are dropped, never strikes; SetLowBandwidth is never dropped', () => {
