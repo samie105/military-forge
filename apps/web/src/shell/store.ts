@@ -168,6 +168,8 @@ export interface ShellState {
   settings: Settings;
   /** a short-lived message ("Link copied") */
   notice: string | null;
+  /** a guest's word that the host just retuned the room (Tune the game); a new id each time */
+  tuneNote: TuneNote | null;
   /** the map event being announced or running (docs/02 §20.7), null when none */
   mapEvent: MapEventBanner | null;
   /** the controls card and tips (first match, or Menu → Controls & tips) */
@@ -177,6 +179,14 @@ export interface ShellState {
 }
 
 export type ShellStore = StoreApi<ShellState>;
+
+/** "Ade changed Gravity to 12 m/s² · Dash cooldown to 0.6 s" (two at most, then how many more). */
+export interface TuneNote {
+  id: number;
+  who: string;
+  items: readonly { label: string; value: string }[];
+  more: number;
+}
 
 const noop = (): void => {};
 
@@ -192,6 +202,7 @@ export function createShellStore(initial: Partial<ShellState> = {}): ShellStore 
     actions: { playAgain: noop, backToLobby: noop, ready: noop },
     settings: DEFAULT_SETTINGS,
     notice: null,
+    tuneNote: null,
     mapEvent: null,
     tips: false,
     settingsTab: 'graphics',

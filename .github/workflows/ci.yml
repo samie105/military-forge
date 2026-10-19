@@ -104,7 +104,8 @@ jobs:
       - name: Test CI scripts
         id: ci-scripts
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: node --test ".github/scripts/*.test.mjs"
+        # and the net-trial kit's: the probe service, the results table, cloud-init.sh (size, bash -n, shellcheck)
+        run: node --test ".github/scripts/*.test.mjs" "scripts/net-trial/**/*.test.mjs"
 
       # The production build (docs/06 §10: … → golden replays → build). Typecheck and vitest both
       # accept an import of a missing asset (vite/client types `*?url` as string, and vitest resolves

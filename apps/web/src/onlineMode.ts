@@ -16,7 +16,7 @@
  * (docs/06 §5.2) so the countdown doesn't mispredict; the session token is kept in sessionStorage
  * so a page reload resumes the same player within the room's reconnect grace.
  */
-import { weapons, NO_WEAPON, type MapDef, type Tuning } from '@military-forge/content';
+import { defaultTuning, weapons, NO_WEAPON, type MapDef, type Tuning } from '@military-forge/content';
 import { ConditionedLink, NetClient, TICK_MS, describeNetSim, type ConditionerSettings, type RemotePose, type Scheduler } from '@military-forge/netcode';
 import { CloseCode, CmdKind, MsgType, encodeCmd, isUnreliableMessage, type MatchStateMsg, type SnapshotPlayer } from '@military-forge/protocol';
 import { u16ToAngle } from '@military-forge/shared';
@@ -148,6 +148,18 @@ export class OnlineMode {
   private readonly remotePos: RemotePose = { x: 0, y: 0, src: null! };
   /** called when the room's tuning changed under us (another client's live edit) */
   onTuningFromServer: () => void = () => {};
+  private readonly tuningListeners = new Set<(before: Tuning, after: Tuning, live: boolean) => void>();
+  private lastTuning: Tuning | null = null;
+
+  /**
+   * Hears the room's tuning change under us: what it was and is, and `live` once the match is under
+   * way here (the room's tuning arriving as we join isn't a change anyone made just now). Returns
+   * the way to stop.
+   */
+  onTuning(fn: (before: Tuning, after: Tuning, live: boolean) => void): () => void {
+    this.tuningListeners.add(fn);
+    return () => this.tuningListeners.delete(fn);
+  }
 
   constructor(
     private readonly url: string,
@@ -393,9 +405,14 @@ export class OnlineMode {
         // the roster knows every bot; the snapshots only those in view
         this.renderer.setNames(this.net.names, new Set(msg.entries.filter((e) => e.isBot).map((e) => e.id)));
         break;
-      case MsgType.Tuning:
+      case MsgType.Tuning: {
+        const before = this.lastTuning ?? defaultTuning;
+        const after = { ...this.net.tuning };
+        this.lastTuning = after;
         this.onTuningFromServer();
+        for (const fn of this.tuningListeners) fn(before, after, this.snapCount > 0);
         break;
+      }
       case MsgType.Snapshot: {
         this.snapCount++;
         // own shots are drawn from the prediction the moment they're fired; skip the server's copies
@@ -423,6 +440,7 @@ export class OnlineMode {
   }
 
   setTuning(t: Tuning): void {
+    this.lastTuning = { ...t };
     this.net.setTuning(t);
   }
 

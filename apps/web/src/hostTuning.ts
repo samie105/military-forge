@@ -1,15 +1,20 @@
 /**
  * The tuning panel for a room's host: the owner tunes the game while playing with friends
- * (pnpm playtest --tune). "Tune the game" in the in-match menu opens it, docked right over the game
- * and the lobby; it steps aside while a menu is open (setCovered). Edits apply at once: in training to the local match, online to the whole
- * room (SetTuning; the server holds the host to the panel's keys and ranges and sends TUNING to
- * everyone else), so every client's prediction stays in step. "Copy values" copies what differs from
- * the defaults as JSON, ready to become the new defaults. The panel (tweakpane) loads on first use.
+ * (pnpm playtest --tune). "Tune the game" in the in-match menu opens it: round two's panel
+ * (shell/screens/Tune.tsx), docked at the right edge over the game and the lobby; it steps aside
+ * while a menu is open (setCovered). Edits apply at once: in training to the local match, online to
+ * the whole room (SetTuning; the server holds the host to the panel's keys and ranges and sends
+ * TUNING to everyone else), so every client's prediction stays in step. "Copy values" copies what
+ * differs from the defaults as JSON, ready to become the new defaults. "All values" opens the full
+ * dev panel (tweakpane, every key), loaded on first use.
  */
 import type { Tuning } from '@military-forge/content';
+import { createElement } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
 import { typingInto } from './input';
 import type { LocalMode } from './localMode';
 import { OnlineMode } from './onlineMode';
+import { TunePanel, type FullPanel } from './shell/screens/Tune';
 
 /** Does this page offer the host's panel? The playtest's --tune flags the page (proxy.ts TUNE_META); dev builds always do. */
 export function tuningOffered(doc: Document = document, dev = import.meta.env.DEV): boolean {
@@ -26,8 +31,6 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
-const icon = (name: string) => `<svg class="ic" aria-hidden="true"><use href="#icon-${name}"/></svg>`;
-
 export interface HostTuning {
   /** shows the panel for the game mode running now (nothing without one) */
   open(): void;
@@ -39,12 +42,17 @@ export interface HostTuning {
   onClose: () => void;
 }
 
+/** How long after the last edit a room hears it (a dragged slider sends its value, not every step). */
+const SEND_MS = 120;
+
 export function createHostTuning(getMode: () => LocalMode | OnlineMode | null, parent: HTMLElement = document.body): HostTuning {
   let root: HTMLElement | null = null;
+  let react: Root | null = null;
   let mode: LocalMode | OnlineMode | null = null;
   let covered = false;
-  /** bumps on every open/close: a slow panel import never lands in a closed or newer one */
-  let generation = 0;
+  let sendTimer = 0;
+  /** the edit a room hasn't heard yet (sent when the pause ends, or as the panel closes) */
+  let pending: (() => void) | null = null;
 
   const api: HostTuning = {
     onClose: () => {},
@@ -60,94 +68,97 @@ export function createHostTuning(getMode: () => LocalMode | OnlineMode | null, p
       if (!target) return;
       if (root && mode === target) return;
       close();
-      const gen = ++generation;
       mode = target;
       const online = target instanceof OnlineMode;
       root = document.createElement('div');
-      root.className = 'mf mf-tune-root kit-v1';
-      root.innerHTML = `
-        <aside class="mf-tune panel" aria-label="Tune the game">
-          <header class="mf-tune__head">
-            <div>
-              <p class="eyebrow">${icon('ev-gravity')} Host · live</p>
-              <h2 class="h3">Tune the game</h2>
-            </div>
-            <button type="button" class="iconbtn" data-act="close" aria-label="Close the tuning panel">${icon('close')}</button>
-          </header>
-          <p class="mf-tune__note muted">${online ? 'Changes apply at once to everyone in this room.' : 'Changes apply at once to this training match.'}</p>
-          <div class="mf-tune__pane"></div>
-          <footer class="mf-tune__foot">
-            <button type="button" class="btn btn--primary" data-act="copy">${icon('copy')} Copy values</button>
-            <span class="mf-tune__status small" role="status"></span>
-          </footer>
-          <textarea class="mf-tune__out" readonly hidden aria-label="The changed values as JSON"></textarea>
-        </aside>`;
+      root.className = 'mf mf-tune-root';
       if (covered) root.style.display = 'none';
       parent.appendChild(root);
-      const status = root.querySelector<HTMLElement>('.mf-tune__status')!;
-      const out = root.querySelector<HTMLTextAreaElement>('.mf-tune__out')!;
       // the panel never keeps the game's keys: after a slider or a button it lets go of the keyboard
       // (a focused slider steps with the arrows: playing on with ← → would retune the room), and a
       // value typed into a field lets go on Enter
+      const here = root;
       const letGo = () => {
         const el = document.activeElement;
-        if (el instanceof HTMLElement && root?.contains(el) && !typingInto(el)) el.blur();
+        if (el instanceof HTMLElement && here.contains(el) && !typingInto(el)) el.blur();
       };
       root.addEventListener('pointerup', () => window.setTimeout(letGo, 0));
       root.addEventListener('keydown', (e) => {
         if ((e.key === 'Enter' || e.key === 'Escape') && e.target instanceof HTMLElement && typingInto(e.target)) e.target.blur();
       });
-      root.querySelector('[data-act="close"]')!.addEventListener('click', () => {
-        close();
-        api.onClose();
-      });
 
-      let panel: { refresh(): void; values(): Tuning } | null = null;
-      root.querySelector('[data-act="copy"]')!.addEventListener('click', () => {
-        if (!panel) return;
-        void (async () => {
-          const { tuningValuesJson } = await import('./tuningPanel');
-          const json = tuningValuesJson(panel!.values());
-          const changed = Object.keys(JSON.parse(json) as object).length;
-          const what = changed === 0 ? 'Nothing changed yet (the defaults)' : `${changed} changed ${changed === 1 ? 'value' : 'values'}`;
-          if (await copyText(json)) {
-            out.hidden = true;
-            status.textContent = `Copied: ${what}`;
-          } else {
-            // no clipboard here: show them, selected, for the keyboard's copy
-            out.value = json;
-            out.hidden = false;
-            out.focus();
-            out.select();
-            status.textContent = `${what}: press Ctrl+C (⌘C on a Mac)`;
-          }
-        })();
-      });
-
-      void import('./tuningPanel').then(({ createTuningPanel }) => {
-        if (gen !== generation || !root) return;
-        panel = createTuningPanel(
-          root.querySelector<HTMLElement>('.mf-tune__pane')!,
-          null,
-          {
-            getTuning: () => target.tuning(),
-            onTuningChanged: (t) => {
-              if (target instanceof OnlineMode) target.setTuning(t);
+      // training takes a change at once; a room hears the last one after a short pause
+      const setTuning = (t: Tuning) => {
+        if (!(target instanceof OnlineMode)) {
+          target.setTuning(t);
+          return;
+        }
+        Object.assign(target.tuning(), t); // our prediction straight away
+        window.clearTimeout(sendTimer);
+        pending = () => target.setTuning({ ...t });
+        sendTimer = window.setTimeout(flush, SEND_MS);
+      };
+      const subscribe = (fn: () => void) => (target instanceof OnlineMode ? target.onTuning(() => fn()) : () => {});
+      const openAll = (el: HTMLElement, onChange: () => void): FullPanel => {
+        let panel: { pane: { dispose(): void }; refresh(): void; values(): Tuning } | null = null;
+        let gone = false;
+        void import('./tuningPanel').then(({ createTuningPanel }) => {
+          if (gone) return;
+          panel = createTuningPanel(
+            el,
+            null,
+            {
+              getTuning: () => target.tuning(),
+              onTuningChanged: (t) => {
+                setTuning(t);
+                onChange();
+              },
             },
+            { title: null, expanded: [], labels: true },
+          );
+        });
+        return {
+          refresh: () => panel?.refresh(),
+          values: () => panel?.values() ?? target.tuning(),
+          dispose: () => {
+            gone = true;
+            panel?.pane.dispose();
           },
-          { title: null, expanded: ['Jetpack', 'Fuel'], labels: true },
-        );
-        // another host's edit, or the server putting ours back: show the room's values
-        if (target instanceof OnlineMode) target.onTuningFromServer = () => panel?.refresh();
-      });
+        };
+      };
+      react = createRoot(root);
+      react.render(
+        createElement(TunePanel, {
+          online,
+          getTuning: () => target.tuning(),
+          setTuning,
+          subscribe,
+          onClose: () => {
+            close();
+            api.onClose();
+          },
+          copy: copyText,
+          openAll,
+        }),
+      );
     },
     close,
   };
 
+  function flush(): void {
+    window.clearTimeout(sendTimer);
+    const send = pending;
+    pending = null;
+    send?.();
+  }
+
   function close(): void {
-    generation++;
-    if (mode instanceof OnlineMode) mode.onTuningFromServer = () => {};
+    flush();
     mode = null;
+    const r = react;
+    react = null;
+    // React lets go of the tree after the current render
+    if (r) queueMicrotask(() => r.unmount());
     root?.remove();
     root = null;
   }

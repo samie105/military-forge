@@ -7,7 +7,7 @@
  * however slow the machine.
  *
  * One player plays it through: name, Home, Join, Settings, a room with the bots (lobby, countdown,
- * pause, a dropped link, results), then training for the countdown's numbers and GO. A variant
+ * pause, a dropped link, results), then training for the countdown's numbers and GO, and Tune the game. A variant
  * runs the same with Reduce motion or Reduce flashes on (the names get the suffix).
  *
  *   cd apps/web && DEV_API=http://127.0.0.1:8791 pnpm exec vite --port 5191 --strictPort
@@ -28,6 +28,7 @@ const suffix = variant ? `-${variant}` : '';
 const CHROME = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const FRAME_MS = 16;
+mkdirSync(out, { recursive: true });
 
 const browser = await puppeteer.launch({
   executablePath: CHROME,
@@ -307,6 +308,23 @@ try {
   await ctl('go', { to: 'training' });
   await strip('countdown-number', { ms: 288, clip: '.cd__num', prep: () => wait('[data-screen="countdown"][data-active-state~="3"]', 60_000), trigger: () => wait('[data-screen="countdown"][data-active-state~="2"]', 5_000), slow: false });
   await strip('countdown-go', { ms: 320, trigger: () => wait('[data-screen="countdown"][data-active-state~="go"]', 60_000), slow: false });
+
+  // ---- Tune the game (phase 5): the panel slides in, a preset rolls the values, a guest's toast
+  await wait('#hud[data-active-state~="match"]', 60_000);
+  await sleep(1500);
+  await strip('tune-open', { ms: 480, trigger: async () => (await ctl('openTuning'), await wait('[data-screen="tune"] .tune')) });
+  await sleep(1200);
+  await strip('tune-preset', { ms: 288, clip: '.tune__list', trigger: async () => (await click('Floaty'), await wait('[data-screen="tune"][data-active-state~="floaty"]')) });
+  await sleep(800);
+  await strip('tune-toast', {
+    ms: 304,
+    clip: '.toast',
+    trigger: async () => {
+      // the toast a guest gets (one player here: the shell is told directly, as main.ts does on TUNING)
+      await page.evaluate(() => window.__game.shell.controller.showTuneNote({ who: 'Ade', items: [{ label: 'Gravity', value: '12\u00a0m/s²' }, { label: 'Dash cooldown', value: '0.6\u00a0s' }], more: 0 }));
+      await wait('[data-screen="tune-toast"]');
+    },
+  });
   console.log('done');
 } catch (e) {
   console.error('FAILED', e.message);

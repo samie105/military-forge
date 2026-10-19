@@ -1,0 +1,155 @@
+/*
+ * The ping probe (probe.html): the kit's tokens and fonts (kit.css, fonts.css), one column on a
+ * phone, the two regions side by side from 640 px. Tokens only, no raw colours.
+ */
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--c-ink-900);
+}
+.probe {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: var(--sp-5) var(--sp-4) var(--sp-10);
+}
+.probe__head h1 {
+  margin: 0 0 var(--sp-2);
+  font-family: var(--f-display);
+  font-weight: 400;
+  font-size: var(--fs-28);
+  letter-spacing: var(--ls-display);
+  text-transform: uppercase;
+}
+.probe__head p {
+  margin: 0 0 var(--sp-5);
+  color: var(--c-muted);
+}
+.probe__form {
+  display: grid;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  background: var(--c-ink-800);
+  border: var(--bw) solid var(--c-line);
+  border-radius: var(--r-md);
+}
+.probe__field {
+  display: grid;
+  gap: var(--sp-1);
+}
+.probe__field[hidden] {
+  display: none;
+}
+.probe__field span {
+  font-size: var(--fs-14);
+  color: var(--c-muted);
+}
+.probe__field input,
+.probe__field select {
+  min-height: 44px;
+  padding: 0 var(--sp-3);
+  font: inherit;
+  color: var(--c-text);
+  background: var(--c-ink-950);
+  border: var(--bw) solid var(--c-line-strong);
+  border-radius: var(--r-sm);
+}
+.probe__field input:focus-visible,
+.probe__field select:focus-visible,
+.probe__go:focus-visible {
+  outline: var(--bw) solid var(--c-volt);
+  outline-offset: 2px;
+}
+.probe__go {
+  min-height: 52px;
+  margin-top: var(--sp-2);
+  font: inherit;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--c-volt-ink);
+  background: var(--c-volt);
+  border: var(--bw) solid var(--c-ink-950);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.probe__go:hover {
+  background: var(--c-volt-hi);
+}
+.probe__go:disabled {
+  color: var(--c-muted-2);
+  background: var(--c-ink-700);
+  border-color: var(--c-line);
+  cursor: progress;
+}
+.probe__status {
+  margin: 0;
+  min-height: 1.4em;
+  color: var(--c-muted);
+}
+.probe__status.is-error,
+.probe__err {
+  color: var(--c-danger-text);
+}
+.probe__regions {
+  display: grid;
+  gap: var(--sp-3);
+  margin-top: var(--sp-5);
+}
+@media (min-width: 640px) {
+  .probe__regions {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.probe__region {
+  padding: var(--sp-4);
+  background: var(--c-ink-800);
+  border: var(--bw) solid var(--c-line);
+  border-radius: var(--r-md);
+}
+.probe__region h2 {
+  margin: 0 0 var(--sp-3);
+  font-size: var(--fs-20);
+}
+.probe__region h2 small {
+  display: block;
+  font-size: var(--fs-14);
+  font-weight: 400;
+  color: var(--c-brass);
+}
+.probe__track {
+  height: 6px;
+  margin-bottom: var(--sp-3);
+  background: var(--c-ink-950);
+  border-radius: var(--r-pill);
+  overflow: hidden;
+}
+.probe__bar {
+  width: 0;
+  height: 100%;
+  background: var(--c-volt);
+  transition: width 0.2s linear;
+}
+.probe__stats {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--sp-1) var(--sp-4);
+  margin: 0;
+}
+.probe__stats dt {
+  color: var(--c-muted);
+}
+.probe__stats dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.probe__verdict {
+  margin: var(--sp-4) 0 0;
+  font-weight: 700;
+}
+.probe__privacy {
+  margin-top: var(--sp-6);
+  font-size: var(--fs-14);
+  color: var(--c-muted-2);
+}

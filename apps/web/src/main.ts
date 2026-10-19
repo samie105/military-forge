@@ -30,6 +30,7 @@ import { Camera } from './camera';
 import { fxFrame, fxState, setReduceFlashes } from './fx';
 import { autoPreset, gpuRenderer } from './gfxAuto';
 import { createHostTuning, tuningOffered } from './hostTuning';
+import { tuneChanges, tuneToastParts } from './shell/tune';
 import { InputSampler } from './input';
 import { localBots } from './localBots';
 import { LocalMode } from './localMode';
@@ -171,7 +172,15 @@ const host: GameHost = {
       serverHost = '';
     }
     // WebTransport where the server routes it by room (/health webtransport.rooms), else WebSocket
-    setMode(new OnlineMode(url, nickname, sampler, camera, renderer, () => {}, createConditionerSettings(false), 'auto', { room, ...(ticket ? { ticket } : {}), ...(refreshTicket ? { refreshTicket } : {}) }));
+    const online = new OnlineMode(url, nickname, sampler, camera, renderer, () => {}, createConditionerSettings(false), 'auto', { room, ...(ticket ? { ticket } : {}), ...(refreshTicket ? { refreshTicket } : {}) });
+    setMode(online);
+    // a guest hears the host retune the room (Tune the game): who changed what, for a moment
+    online.onTuning((before, after, live) => {
+      const lobby = shell.store.getState().lobby;
+      if (!live || lobby?.isHost) return;
+      const note = tuneToastParts(lobby?.players.find((p) => p.host)?.name ?? 'The host', tuneChanges(before, after));
+      if (note) shell.controller?.showTuneNote(note);
+    });
   },
   stop() {
     setMode(null);

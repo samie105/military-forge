@@ -123,36 +123,12 @@ html.mf-short .lobby .invite__copy { min-height: 72px; }
 html.mf-short .lobby .roomcode span { height: 80px; }
 
 /*
- * The host's tuning panel (hostTuning.ts; pnpm playtest --tune): docked right over the game and the
- * lobby (above #shell's screens), hidden while a menu is open, in window pixels (not fitted).
- * Tweakpane draws the values in the kit's colours.
+ * The host's tuning panel (hostTuning.ts; pnpm playtest --tune): round two's .tune panel
+ * (shell/screens/Tune.tsx, menus.css) over the game and the lobby (above #shell's screens), hidden
+ * while a menu is open. Under "All values", tweakpane draws every key in the kit's colours.
  */
 .mf-tune-root { position: fixed; inset: 0; z-index: calc(var(--z-panel) + 5); pointer-events: none; }
-.mf-tune {
-  position: absolute;
-  top: calc(max(24px, var(--safe-t)) + var(--sp-4));
-  right: calc(max(32px, var(--safe-r)) + var(--sp-4));
-  /* clear of the lobby's Ready / Start and the HUD's bottom corner */
-  max-height: calc(100vh - max(24px, var(--safe-t)) - max(24px, var(--safe-b)) - 120px);
-  width: min(380px, calc(100vw - 2 * var(--sp-4)));
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-  padding: var(--sp-3) var(--sp-4);
-  background: color-mix(in srgb, var(--c-ink-800) 94%, transparent);
-  box-shadow: var(--sh-card-sm);
-  font-family: var(--f-ui);
-  font-size: 15px;
-  pointer-events: auto;
-}
-.mf-tune__head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-2); }
-.mf-tune__head .h3 { font-size: 22px; }
-.mf-tune__note { font-size: 14px; }
-.mf-tune__pane { flex: 1; min-height: 0; overflow-y: auto; }
-.mf-tune__foot { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
-.mf-tune__foot .btn { min-height: 40px; padding: var(--sp-1) var(--sp-5); font-size: 16px; }
-.mf-tune__status { color: var(--c-muted); }
-.mf-tune__out { width: 100%; height: 120px; resize: vertical; font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--c-text); background: var(--c-ink-950); border: var(--bw) solid var(--c-line); border-radius: var(--r-sm); padding: var(--sp-2); }
+.mf-tune__out textarea { width: 100%; height: 120px; resize: vertical; font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--c-text); background: var(--c-ink-950); border: var(--bw) solid var(--c-line); border-radius: var(--r-sm); padding: var(--sp-2); }
 .mf-tune__pane .tp-rotv {
   --tp-base-background-color: var(--c-ink-800);
   --tp-base-shadow-color: transparent;

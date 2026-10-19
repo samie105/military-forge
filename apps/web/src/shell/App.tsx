@@ -26,6 +26,7 @@ import { Pause } from './screens/Pause';
 import { Results } from './screens/Results';
 import { SettingsScreen } from './screens/Settings';
 import { TipsCard } from './screens/Tips';
+import { TuneToast } from './screens/Tune';
 import { releaseShellFocus } from './focus';
 import { PhoneHome, PhoneLobby, PhoneNameEntry, PhonePause, PhoneResults, PhoneSettings, PhoneTips, usePhoneLayout } from './screens/phone';
 import { closeRoute, runCleanup, type ShellActions, type ShellRoute, type ShellStore } from './store';
@@ -51,6 +52,7 @@ function AppScreens({ store }: { store: ShellStore }) {
   const screen = useStore(store, (s) => s.screen);
   const overlay = useStore(store, (s) => s.overlay);
   const notice = useStore(store, (s) => s.notice);
+  const tuneNote = useStore(store, (s) => s.tuneNote);
   const tips = useStore(store, (s) => s.tips);
   const settings = useStore(store, (s) => s.settings);
   const match = useStore(store, (s) => s.match);
@@ -110,6 +112,7 @@ function AppScreens({ store }: { store: ShellStore }) {
       {overlay === 'settings' && (phone ? <PhoneSettings store={store} /> : <SettingsScreen store={store} />)}
       {overlay === 'join' && <Join />}
       {overlay === 'name' && (phone ? <PhoneNameEntry store={store} first={false} /> : <NameEntry store={store} first={false} />)}
+      <TuneToast note={tuneNote} />
       {notice && (
         <div className="mf-fit mf-toast kit-v1">
           <div className="mf-notice" role="status">

@@ -10,7 +10,7 @@ import type { LocalMode } from '../localMode';
 import { alertFromApiError } from './alerts';
 import { Api, ApiError, NICKNAME_REASONS, type Me, type NicknameCheck, type RoomJoin } from './api';
 import { sanitizeBindings } from './controls';
-import { DEFAULT_SETTINGS, type AudioSettings, type GraphicsPreset, type Intent, type Overlay, type Profile, type Settings, type SettingsTab, type ShellState, type ShellStore } from './store';
+import { DEFAULT_SETTINGS, type AudioSettings, type GraphicsPreset, type Intent, type Overlay, type Profile, type Settings, type SettingsTab, type ShellState, type ShellStore, type TuneNote } from './store';
 
 /** What main.ts gives the shell: the running game mode and how to swap it. */
 export interface GameHost {
@@ -444,6 +444,13 @@ export class ShellController {
     saveSettings(settings);
     this.set({ settings });
     this.host.applySettings(settings);
+  }
+
+  private tuneNotes = 0;
+
+  /** A guest's toast: the host just retuned the room (main.ts hears it from the online mode). */
+  showTuneNote(note: Omit<TuneNote, 'id'>): void {
+    this.set({ tuneNote: { ...note, id: ++this.tuneNotes } });
   }
 
   notify(message: string): void {

@@ -38,7 +38,8 @@ export default defineConfig({
     target: 'es2022',
     sourcemap: false,
     // Pages: the game (index.html), the Locker (locker.html, also a route inside the game), the Armory (armory.html)
-    // and the owner's admin page (admin.html: /admin on pnpm playtest).
-    rolldownOptions: { input: { main: 'index.html', locker: 'locker.html', armory: 'armory.html', admin: 'admin.html' } },
+    // the owner's admin page (admin.html: /admin on pnpm playtest) and the net trial's ping probe
+    // (probe.html: /probe on the trial boxes, docs/net-trial.md).
+    rolldownOptions: { input: { main: 'index.html', locker: 'locker.html', armory: 'armory.html', admin: 'admin.html', probe: 'probe.html' } },
   },
 });

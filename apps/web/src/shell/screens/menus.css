@@ -189,3 +189,14 @@ html.mf-short.mf-big-text .kit-v2 .pause__btn .btn__sub { display: none; }
 /* the map intro waits out of sight (its band sweeps in once it is uncovered) */
 :where(.kit-v2) .mf-held .intro { visibility: hidden; }
 :where(.kit-v2) .mf-held .intro__band { animation-play-state: paused; }
+
+/* Tune the game: the kit's panel takes the pointer over the game; Custom is the presets' read-out,
+   not a choice; the full dev panel (All values) and the no-clipboard JSON sit in the panel's flow */
+.mf-fit > .screen--game .tune { pointer-events: auto; }
+:where(.kit-v2) .tune__presets .seg__opt { flex: 1; }
+:where(.kit-v2) .tune__presets .seg__opt:disabled { cursor: default; }
+:where(.kit-v2) .tune__presets .seg__opt:disabled:not([aria-checked="true"]) { opacity: .55; }
+:where(.kit-v2) .trow__top > b:first-child { white-space: nowrap; }
+.kit-v2 .mf-tune__all { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-3); padding: var(--sp-3) 0; border-top: var(--bw) solid var(--c-line); }
+.kit-v2 .mf-tune__all .mf-tune__pane { align-self: stretch; }
+.kit-v2 .mf-tune__out { flex-basis: 100%; display: flex; flex-direction: column; gap: var(--sp-1); font-size: var(--fs-14); color: var(--c-muted); }

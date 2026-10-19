@@ -1,0 +1,208 @@
+/**
+ * The ping probe's logic (probe.html, docs/net-trial.md), kept apart from the DOM so it is tested:
+ * the summary of one region's pings, the ping frames, the page's config, the tester's answers and
+ * the result it posts. scripts/net-trial/results.mjs pools the raw RTTs with the same definitions.
+ */
+
+/** Pings per region per run: 10 s at the game's snapshot rate. */
+export const PINGS = 300;
+export const PING_HZ = 30;
+/** Pings sent first and not counted (TCP and TLS settling in). */
+export const WARMUP = 10;
+/** How long to wait for the last echoes before a ping counts as lost. */
+export const GRACE_MS = 2000;
+/** A ping is about the size of a game input message. */
+export const PING_BYTES = 32;
+
+export interface Summary {
+  sent: number;
+  received: number;
+  /** ms, the middle of the received RTTs (mean of the two middle ones for an even count) */
+  median: number | null;
+  /** ms, nearest-rank 95th percentile */
+  p95: number | null;
+  /** ms, mean absolute difference between consecutive received RTTs (in send order) */
+  jitter: number | null;
+  /** % of pings with no echo within GRACE_MS */
+  loss: number;
+  min: number | null;
+  max: number | null;
+  /** % of received pings slower than 150 ms (where a shooter starts to feel it) */
+  over150: number | null;
+}
+
+const round1 = (v: number) => Math.round(v * 10) / 10;
+
+/** Nearest-rank percentile of an ascending list. */
+export function percentile(sorted: readonly number[], p: number): number | null {
+  if (!sorted.length) return null;
+  const rank = Math.ceil((p / 100) * sorted.length);
+  return sorted[Math.min(sorted.length, Math.max(1, rank)) - 1]!;
+}
+
+export function median(sorted: readonly number[]): number | null {
+  const n = sorted.length;
+  if (!n) return null;
+  return n % 2 ? sorted[(n - 1) / 2]! : (sorted[n / 2 - 1]! + sorted[n / 2]!) / 2;
+}
+
+/** One region's run: `rtts[i]` is ping i's round trip in ms, or null when it never came back. */
+export function summarize(rtts: readonly (number | null)[]): Summary {
+  const got = rtts.filter((x): x is number => x !== null);
+  const sorted = [...got].sort((a, b) => a - b);
+  let jitterSum = 0;
+  for (let i = 1; i < got.length; i++) jitterSum += Math.abs(got[i]! - got[i - 1]!);
+  const med = median(sorted);
+  const p95 = percentile(sorted, 95);
+  return {
+    sent: rtts.length,
+    received: got.length,
+    median: med === null ? null : round1(med),
+    p95: p95 === null ? null : round1(p95),
+    jitter: got.length > 1 ? round1(jitterSum / (got.length - 1)) : null,
+    loss: rtts.length ? round1(((rtts.length - got.length) / rtts.length) * 100) : 0,
+    min: sorted.length ? round1(sorted[0]!) : null,
+    max: sorted.length ? round1(sorted[sorted.length - 1]!) : null,
+    over150: got.length ? round1((got.filter((x) => x > 150).length / got.length) * 100) : null,
+  };
+}
+
+/** A ping: its sequence number, then padding to PING_BYTES. */
+export function pingFrame(seq: number): ArrayBuffer {
+  const buf = new ArrayBuffer(PING_BYTES);
+  new DataView(buf).setUint32(0, seq);
+  return buf;
+}
+
+/** The sequence number in an echo, or null when it isn't one of ours. */
+export function echoSeq(data: unknown): number | null {
+  if (!(data instanceof ArrayBuffer) || data.byteLength !== PING_BYTES) return null;
+  return new DataView(data).getUint32(0);
+}
+
+export interface ProbeRegion {
+  id: string;
+  name: string;
+  provider: string;
+  echo: string;
+}
+export interface ProbeConfig {
+  trial: string;
+  regions: ProbeRegion[];
+  /** where results go, in order (the Lagos box first, Johannesburg as the fallback) */
+  results: string[];
+}
+
+/** /probe-config.json (written on each box by the bootstrap), checked; null when unusable. */
+export function parseConfig(raw: unknown): ProbeConfig | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const regions = Array.isArray(r.regions)
+    ? r.regions.flatMap((x: unknown) => {
+        const g = (x ?? {}) as Record<string, unknown>;
+        return typeof g.id === 'string' && /^[a-z0-9-]{2,16}$/.test(g.id) && typeof g.echo === 'string' && /^wss?:\/\//.test(g.echo)
+          ? [{ id: g.id, name: typeof g.name === 'string' ? g.name : g.id, provider: typeof g.provider === 'string' ? g.provider : '', echo: g.echo }]
+          : [];
+      })
+    : [];
+  const results = Array.isArray(r.results) ? r.results.filter((u): u is string => typeof u === 'string' && /^https?:\/\//.test(u)) : [];
+  if (!regions.length) return null;
+  return { trial: typeof r.trial === 'string' ? r.trial : '', regions, results };
+}
+
+export const NETWORKS = [
+  { id: 'mtn', label: 'MTN' },
+  { id: 'airtel', label: 'Airtel' },
+  { id: 'glo', label: 'Glo' },
+  { id: '9mobile', label: '9mobile' },
+  { id: 'fibre', label: 'Fibre or home broadband' },
+  { id: 'starlink', label: 'Starlink' },
+  { id: 'other', label: 'Other' },
+] as const;
+export type NetworkId = (typeof NETWORKS)[number]['id'];
+
+export const CONNECTIONS = [
+  { id: 'mobile', label: 'Mobile data (3G/4G/5G)' },
+  { id: 'wifi', label: 'Wi-Fi' },
+  { id: 'ethernet', label: 'Cable (Ethernet)' },
+] as const;
+
+export const DEVICES = ['Android phone', 'iPhone', 'Android tablet', 'iPad', 'Windows PC or laptop', 'Mac', 'Chromebook', 'Linux PC', 'Other'] as const;
+
+/** A first guess at the device from the user agent (only the guess is shown; the agent is never sent). */
+export function guessDevice(ua: string): (typeof DEVICES)[number] | '' {
+  if (/iPad/.test(ua)) return 'iPad';
+  if (/iPhone|iPod/.test(ua)) return 'iPhone';
+  if (/Android/.test(ua)) return /Mobile/.test(ua) ? 'Android phone' : 'Android tablet';
+  if (/CrOS/.test(ua)) return 'Chromebook';
+  if (/Windows/.test(ua)) return 'Windows PC or laptop';
+  if (/Macintosh/.test(ua)) return 'Mac';
+  if (/Linux/.test(ua)) return 'Linux PC';
+  return '';
+}
+
+export interface Answers {
+  city: string;
+  network: NetworkId | '';
+  /** the ISP's name for fibre, or the network's name for "other" */
+  isp: string;
+  connection: string;
+  device: string;
+  note: string;
+}
+
+/** What still needs answering before a run, or '' when the answers will do. */
+export function missingAnswer(a: Answers): string {
+  if (!a.city.trim()) return 'Which city are you in?';
+  if (!a.network) return 'Which network are you on?';
+  if ((a.network === 'fibre' || a.network === 'other') && !a.isp.trim()) return a.network === 'fibre' ? "What's the fibre or broadband company called?" : "What's the network called?";
+  if (!a.device) return 'Which device is this?';
+  return '';
+}
+
+export interface RegionRun {
+  connectMs: number | null;
+  rtts: (number | null)[];
+  error: string;
+}
+
+/** The JSON posted to the results endpoint: the answers, and per region the raw RTTs and their summary. */
+export function resultPayload(id: string, config: ProbeConfig, answers: Answers, runs: Record<string, RegionRun>, extra: { at: string; page: string; backgrounded: boolean }) {
+  const regions: Record<string, unknown> = {};
+  for (const [rid, run] of Object.entries(runs)) {
+    // the summary from the RTTs as stored, so results.mjs gets the same numbers from them
+    const rtts = run.rtts.map((x) => (x === null ? null : round1(x)));
+    const s = summarize(rtts);
+    regions[rid] = {
+      connectMs: run.connectMs === null ? null : round1(run.connectMs),
+      sent: s.sent,
+      rtts,
+      median: s.median,
+      p95: s.p95,
+      jitter: s.jitter,
+      loss: s.loss,
+      error: run.error,
+    };
+  }
+  return {
+    id,
+    trial: config.trial,
+    at: extra.at,
+    city: answers.city.trim(),
+    network: answers.network,
+    isp: answers.isp.trim(),
+    connection: answers.connection,
+    device: answers.device,
+    note: answers.note.trim(),
+    page: extra.page,
+    backgrounded: extra.backgrounded,
+    regions,
+  };
+}
+
+/** The region with the lower median and by how much, for the summary line; null if one is missing. */
+export function verdict(a: { name: string; s: Summary }, b: { name: string; s: Summary }): { faster: string; slower: string; by: number } | null {
+  if (a.s.median === null || b.s.median === null) return null;
+  const [f, s] = a.s.median <= b.s.median ? [a, b] : [b, a];
+  return { faster: f.name, slower: s.name, by: round1(s.s.median! - f.s.median!) };
+}

@@ -19,11 +19,15 @@ export interface SliderProps {
   min?: number;
   max?: number;
   disabled?: boolean;
+  /** where the default sits, 0..1 (the kit's .slider__def mark: Tune the game) */
+  def?: number;
+  /** the value as shown, for aria-valuenow (default: the 0..1 value mapped onto min..max, rounded) */
+  now?: number;
 }
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
-export function Slider({ value, onChange, label, valueText, step = 0.05, ticks, min = 0, max = 100, disabled = false }: SliderProps) {
+export function Slider({ value, onChange, label, valueText, step = 0.05, ticks, min = 0, max = 100, disabled = false, def, now }: SliderProps) {
   const el = useRef<HTMLDivElement>(null);
   const v = clamp01(value);
   const set = (next: number) => {
@@ -52,7 +56,7 @@ export function Slider({ value, onChange, label, valueText, step = 0.05, ticks, 
       aria-label={label}
       aria-valuemin={min}
       aria-valuemax={max}
-      aria-valuenow={Math.round(min + v * (max - min))}
+      aria-valuenow={now ?? Math.round(min + v * (max - min))}
       aria-valuetext={valueText}
       aria-disabled={disabled || undefined}
       onKeyDown={disabled ? undefined : onKey}
@@ -69,6 +73,7 @@ export function Slider({ value, onChange, label, valueText, step = 0.05, ticks, 
       <div className="slider__track">
         <div className="slider__fill"></div>
       </div>
+      {def !== undefined && <div className="slider__def" style={{ '--d': clamp01(def) } as CSSProperties} aria-hidden="true"></div>}
       <div className="slider__thumb"></div>
       {ticks && (
         <div className="slider__ticks" aria-hidden="true">

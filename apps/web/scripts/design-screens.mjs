@@ -202,6 +202,18 @@ try {
   await sleep(800);
   await shot(a, '33-scoreboard');
   await a.page.keyboard.up('Tab');
+  // Tune the game: the host's panel, then a preset, which the guest hears as a toast
+  await a.page.evaluate(() => window.__game.shell.controller.openTuning());
+  await a.page.waitForSelector('[data-screen="tune"] .tune', { timeout: 10_000 });
+  await sleep(900);
+  await shot(a, '33a-tune-host');
+  await click(a, 'Floaty');
+  await b.page.waitForSelector('[data-screen="tune-toast"]', { timeout: 10_000 });
+  await sleep(600);
+  await shot(a, '33b-tune-host-floaty');
+  await shot(b, '33c-tune-guest');
+  await click(a, 'Reset');
+  await (await a.page.waitForSelector('[data-screen="tune"] button[aria-label="Close"]')).click();
   await a.page.keyboard.press('Escape');
   await screen(a, 'pause');
   await shot(a, '34-pause');

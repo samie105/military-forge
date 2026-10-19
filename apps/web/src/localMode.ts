@@ -103,6 +103,11 @@ export class LocalMode {
     return this.game.tuning;
   }
 
+  /** A new tuning for this match, from now on (a new object, so the HUD sees the change: "Tuned by host"). */
+  setTuning(t: Tuning): void {
+    this.game.tuning = { ...t };
+  }
+
   zoomMax(): number {
     const ws = this.me.weapons.filter((w) => w.def !== NO_WEAPON).map((w) => weapons[w.def]!.zoomMax);
     return this.me.dual ? Math.min(...ws) : (weapons[this.me.weapons[this.me.active]!.def]?.zoomMax ?? 1);
