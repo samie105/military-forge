@@ -401,13 +401,17 @@ export function dashHint(dir: number): { words: string; rose: number; arrow: num
   return { words: DASH_WORDS[k]!, rose: 90 - 45 * k, arrow: -45 * k };
 }
 
-/** The "Tuned by host" tag: what the room's host changed, the first two by name (2 → "Gravity 0.6× · Dash speed 1.4×"). */
-export function tunedSummary(t: Tuning): string {
+/**
+ * The "Tuned by host" tag: what the room's host changed, the first two by name (2 → "Gravity 0.6× ·
+ * Dash speed 1.4×"), against `base`: the defaults, or online the defaults with the admin's values
+ * (those show as "Tuned by admin", not as the host's).
+ */
+export function tunedSummary(t: Tuning, base: Tuning = defaultTuning): string {
   const parts: string[] = [];
   for (const group of TUNING_GROUPS) {
     for (const f of group.fields) {
       const now = t[f.key];
-      const was = defaultTuning[f.key];
+      const was = base[f.key];
       if (now === was) continue;
       const label = f.label.replace(/\s*\(.*\)\s*$/, '');
       const first = label.split(' ')[0]!.toLowerCase();

@@ -4,7 +4,7 @@
  * words a guest reads when the host changes something. The whole set of keys stays in the dev panel
  * (tweakpane, tuningPanel.ts), which the host's panel opens under "All values".
  */
-import { TUNING_GROUPS, changedTuning, createTuning, defaultTuning, type Tuning, type TuningField } from '@military-forge/content';
+import { TUNING_GROUPS, adminTuning, changedTuning, createTuning, defaultTuning, type AdminValues, type Tuning, type TuningField } from '@military-forge/content';
 import { TICK_RATE } from '@military-forge/sim';
 
 type Key = keyof Tuning;
@@ -147,6 +147,29 @@ export function tuneChanges(before: Tuning, after: Tuning): { label: string; val
       out.push({ label: `${g.title} · ${f.label.replace(/\s*\(.*\)$/, '')}`, value: String(after[f.key]) });
     }
   return out;
+}
+
+/** Tuning keys whose admin value differs between two sets of the admin page's values. */
+export function adminTuningKeys(before: AdminValues, after: AdminValues): Set<keyof Tuning> {
+  const a = adminTuning(before) as Record<string, number | undefined>;
+  const b = adminTuning(after) as Record<string, number | undefined>;
+  const keys = new Set<keyof Tuning>();
+  for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) if (a[k] !== b[k]) keys.add(k as keyof Tuning);
+  return keys;
+}
+
+/**
+ * A tuning change split by who made it: the admin's keys (`adminKeys`, the owner's admin page)
+ * and the rest (the room's host). Each part is `before` with only its own keys moved.
+ */
+export function splitTuneChange(before: Tuning, after: Tuning, adminKeys: ReadonlySet<keyof Tuning>): { admin: Tuning; host: Tuning } {
+  const admin = { ...before };
+  const host = { ...after };
+  for (const k of adminKeys) {
+    (admin as Record<string, number>)[k] = after[k] as number;
+    (host as Record<string, number>)[k] = before[k] as number;
+  }
+  return { admin, host };
 }
 
 /** The guest's toast: "Ade changed Gravity to 12 m/s² · Dash chain window to 0.6 s" (two at most, then "+N more"). */

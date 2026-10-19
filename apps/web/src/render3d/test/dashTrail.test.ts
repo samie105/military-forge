@@ -64,7 +64,7 @@ describe('the dash trail (green ribbon + sparkles)', () => {
     expect(trail.mesh.visible).toBe(false);
   });
 
-  it('sparkles along the way, fewer under Reduce motion, steady under Reduce flashes', () => {
+  it('embers along the way, fewer under Reduce motion and on Low', () => {
     const run = (over: Partial<VfxContext>, steady = false) => {
       const fx = ctx(over);
       const trail = new DashTrail(fx.scene);

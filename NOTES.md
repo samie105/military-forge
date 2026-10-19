@@ -989,3 +989,24 @@ Snapshot sizes and data are unchanged (a 2-player room: ~1.9 KB/s down, 64–85 
 - **Audition:** `/sounds.html` (the sound board; also a link in the debug client's bar). Tests: `src/audio/*.test.ts` (every sound renders clean, every weapon and grenade has its sounds, the engine's buses, limits, cooldowns, panning, ducking, softening, the hidden tab and loops on a fake context, the unlocker, the director's mapping and the shell cues).
 - **Not done:** surfaces under footsteps, sound through a slab's open ends (occlusion is a straight line), an announcer (the Voices bus is ready), and recorded assets (`docs/audio-asset-wishlist.md`).
 
+## 29. Onboarding and sockets audit fixes (19 Oct 2026)
+
+- **M1, a silent connection.**
+  - The WebSocket path had no watchdog and no connect timeout. It now has both: 4 s of silence (3 s on WebTransport, 8 s before WELCOME), and 6 s to open. The watchdog runs on a timer, not the frame loop.
+  - The `/health` lookup gets 4 s (was 1.5 s, too short for a fresh TLS connection at 500 ms).
+  - Checked in the browser with the server paused for 15 s: dropped at 4.4 s, banner shown, resumed the moment it came back.
+  - The server now repeats a silent client's last input for 0.5 s only, then neutral with the aim kept (`MAX_REPEAT_TICKS`). netfeel's MTN profile improved with it: corrections 300 → 226/min, lurches 24 → 9.
+- **M2, admin limits.** `applyAdmin` wrote the room's default limits over the match on every admin edit. Now:
+  - only limits the admin page changed (set, edited or cleared) move;
+  - a running match keeps its limits until it's back in the lobby or counting down;
+  - a cleared admin limit returns to the room's own, the host's if it set one.
+- **M3, admin credited to the host.**
+  - The server sends OVERRIDES before TUNING, so a client knows which tuning keys the admin just moved (`adminTuningKeys` in `shell/tune.ts`). Those show as "Admin changed…" to everyone; the rest stay the host's.
+  - "Tuned by host" now compares with the room's own tuning (defaults plus the admin's, `OnlineMode.tuningBase()`), so admin values show only as "Tuned by admin".
+- **L4, a host that's gone.** A host disconnected or silent for 5 s (`HOST_AWAY_TICKS`) hands the room to the longest-present player still talking; the others see "Host left: <name> is the host now".
+- **L8, the host's Tune panel.**
+  - An edit made while disconnected waits and goes out with the next WELCOME.
+  - A clamped edit is echoed back to the host.
+  - WELCOME refreshes an open Tune panel (the tuning listeners hear it, not as a live change).
+- **wt-setup.sh's self-test** said "no WebTransport session" on the live box while browsers connected. The cause was `grep -q` under `pipefail` (the probe's pipe broke after READY); reproduced locally and fixed. `wt-setup.sh gateway` re-runs the gateway setup by hand and reads the host from Caddy's site.
+

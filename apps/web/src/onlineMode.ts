@@ -16,7 +16,8 @@
  * (docs/06 §5.2) so the countdown doesn't mispredict; the session token is kept in sessionStorage
  * so a page reload resumes the same player within the room's reconnect grace.
  */
-import { defaultTuning, weapons, NO_WEAPON, type MapDef, type Tuning } from '@military-forge/content';
+import { adminTuning, createTuning, defaultTuning, weapons, NO_WEAPON, type AdminValues, type MapDef, type Tuning } from '@military-forge/content';
+import { adminTuningKeys } from './shell/tune';
 import { ConditionedLink, NetClient, TICK_MS, describeNetSim, type ConditionerSettings, type RemotePose, type Scheduler } from '@military-forge/netcode';
 import { CloseCode, CmdKind, MsgType, encodeCmd, isUnreliableMessage, type MatchStateMsg, type SnapshotPlayer } from '@military-forge/protocol';
 import { u16ToAngle } from '@military-forge/shared';
@@ -43,6 +44,18 @@ const RECONNECT_WINDOW_MS = 60_000;
  * would have thrown the session away for TCP, the transport that suffers most from them.
  */
 const WT_SILENCE_MS = 3000;
+/**
+ * The same for WebSocket (the onboarding/sockets audit, M1): a TCP path that goes dark doesn't
+ * close, it just stops delivering, and the socket stays "open" for as long as the stall lasts (a
+ * 47 s lobby stall showed nothing; afterwards TCP's backed-off retransmits took ~15 s more). After
+ * 4 s of silence (snapshots come 15–30 a second; a 500 ms phone's worst tail is ~1.3 s) the socket
+ * is dropped, the reconnect banner shows, and fresh connections are tried until one gets through.
+ */
+const WS_SILENCE_MS = 4000;
+/** A HELLO that gets no WELCOME in this long: the connection is as good as silent. */
+const JOIN_SILENCE_MS = 8000;
+/** how often the watchdog looks (a timer: it runs behind the lobby and in a hidden tab too) */
+const WATCHDOG_MS = 500;
 /** close codes that mean "don't come back" */
 const FATAL_CLOSE = new Set<number>([
   CloseCode.VersionMismatch,
@@ -120,6 +133,12 @@ const browserScheduler: Scheduler = {
   clearTimeout: (handle) => window.clearTimeout(handle as number),
 };
 
+/**
+ * The room's tuning changed: what it was and is, `live` once the match is under way here, and which
+ * keys the owner's admin page changed (the rest are the host's: attribute them separately).
+ */
+export type TuningListener = (before: Tuning, after: Tuning, live: boolean, adminKeys: ReadonlySet<keyof Tuning>) => void;
+
 export class OnlineMode {
   /** the throw arc while a grenade throw is aimed (both views draw it) */
   private readonly throwPreview = new ThrowPreview();
@@ -132,6 +151,7 @@ export class OnlineMode {
   private droppedAt = 0;
   private reconnectAttempt = 0;
   private reconnectTimer = 0;
+  private watchdogTimer = 0;
   /** when the transport last delivered anything (the silence watchdog) */
   private lastMessageAt = 0;
   /** the next attempt goes straight to WebSocket (WebTransport just went silent on us) */
@@ -154,7 +174,15 @@ export class OnlineMode {
   private readonly remotePos: RemotePose = { x: 0, y: 0, src: null! };
   /** called when the room's tuning changed under us (another client's live edit) */
   onTuningFromServer: () => void = () => {};
-  private readonly tuningListeners = new Set<(before: Tuning, after: Tuning, live: boolean) => void>();
+  private readonly tuningListeners = new Set<TuningListener>();
+  private readonly hostListeners = new Set<(was: number, now: number) => void>();
+  /** the admin values last heard (WELCOME, OVERRIDES): to tell which tuning keys the admin just changed */
+  private adminSeen: AdminValues = {};
+  /** tuning keys the latest OVERRIDES changed: the TUNING right after it is the admin's for those */
+  private adminKeys = new Set<keyof Tuning>();
+  /** the room's tuning without the admin's: what "Tuned by host" compares with */
+  private baseFor: AdminValues | null = null;
+  private base: Tuning = defaultTuning;
   private lastTuning: Tuning | null = null;
 
   /**
@@ -162,7 +190,7 @@ export class OnlineMode {
    * way here (the room's tuning arriving as we join isn't a change anyone made just now). Returns
    * the way to stop.
    */
-  onTuning(fn: (before: Tuning, after: Tuning, live: boolean) => void): () => void {
+  onTuning(fn: TuningListener): () => void {
     this.tuningListeners.add(fn);
     return () => this.tuningListeners.delete(fn);
   }
@@ -199,6 +227,7 @@ export class OnlineMode {
     this.net.sessionToken = loadToken(options.room);
 
     this.open();
+    this.watchdogTimer = window.setInterval(() => this.checkSilence(performance.now()), WATCHDOG_MS);
   }
 
   /** The room code this mode plays in ('' = the dev room). */
@@ -397,16 +426,36 @@ export class OnlineMode {
     const msg = this.net.receive(bytes);
     if (!msg) return;
     switch (msg.type) {
-      case MsgType.Welcome:
+      case MsgType.Welcome: {
         this.status = msg.resumed ? `connected (resumed after ${((performance.now() - this.droppedAt) / 1000).toFixed(1)} s)` : 'connected';
         this.conn = { ...FRESH, state: 'connected', detail: '', code: 0 };
         this.droppedAt = 0;
         this.reconnectAttempt = 0;
         saveToken(this.options.room, msg.sessionToken);
+        // the room's tuning as it is now (it may have changed while we were away): an open Tune
+        // panel and the HUD hear of it (not live: nobody "just" changed it)
+        const keys = adminTuningKeys(this.adminSeen, this.net.adminValues);
+        this.adminSeen = this.net.adminValues;
+        const before = this.lastTuning ?? defaultTuning;
+        const after = { ...this.net.tuning };
+        this.lastTuning = after;
+        if (sameTuning(before, after)) break;
+        this.onTuningFromServer();
+        for (const fn of this.tuningListeners) fn(before, after, false, keys);
         break;
-      case MsgType.MatchState:
+      }
+      case MsgType.Overrides:
+        // the admin's values come just before its TUNING (room.ts applyAdmin): remember which keys they moved
+        this.adminKeys = adminTuningKeys(this.adminSeen, this.net.adminValues);
+        this.adminSeen = this.net.adminValues;
+        break;
+      case MsgType.MatchState: {
+        const was = this.matchState?.hostId ?? -1;
         this.matchState = msg;
+        // the host left or went quiet (room.ts HOST_AWAY_TICKS): someone else runs the room now
+        if (was >= 0 && msg.hostId >= 0 && msg.hostId !== was) for (const fn of this.hostListeners) fn(was, msg.hostId);
         break;
+      }
       case MsgType.Roster:
         // the roster knows every bot; the snapshots only those in view
         this.renderer.setNames(this.net.names, new Set(msg.entries.filter((e) => e.isBot).map((e) => e.id)));
@@ -415,8 +464,10 @@ export class OnlineMode {
         const before = this.lastTuning ?? defaultTuning;
         const after = { ...this.net.tuning };
         this.lastTuning = after;
+        const keys = this.adminKeys;
+        this.adminKeys = new Set();
         this.onTuningFromServer();
-        for (const fn of this.tuningListeners) fn(before, after, this.snapCount > 0);
+        for (const fn of this.tuningListeners) fn(before, after, this.snapCount > 0, keys);
         break;
       }
       case MsgType.Snapshot: {
@@ -449,6 +500,22 @@ export class OnlineMode {
     return this.net.tuning;
   }
 
+  /** Hears the room's host change (the old one left or went quiet): old and new player ids. Returns the way to stop. */
+  onHostChange(fn: (was: number, now: number) => void): () => void {
+    this.hostListeners.add(fn);
+    return () => this.hostListeners.delete(fn);
+  }
+
+  /** The room's tuning before any host's edits: the defaults with the admin's values ("Tuned by host" compares with it). */
+  tuningBase(): Tuning {
+    const values = this.net.adminValues;
+    if (values !== this.baseFor) {
+      this.baseFor = values;
+      this.base = createTuning({ ...defaultTuning, ...adminTuning(values) });
+    }
+    return this.base;
+  }
+
   setTuning(t: Tuning): void {
     this.lastTuning = { ...t };
     this.net.setTuning(t);
@@ -469,6 +536,7 @@ export class OnlineMode {
     this.disposed = true;
     this.net.clearOverrides();
     window.clearTimeout(this.reconnectTimer);
+    window.clearInterval(this.watchdogTimer);
     this.currentAttempt = null;
     this.up.dispose();
     this.down.dispose();
@@ -476,22 +544,25 @@ export class OnlineMode {
   }
 
   /**
-   * A WebTransport session can stay "open" with nothing arriving (a hung gateway, a path that went
-   * dark) until QUIC's idle timeout. Snapshots come 15–30 times a second, so after 3 s of silence
-   * give up on it and resume over WebSocket.
+   * A connection can stay "open" with nothing arriving: a hung gateway, or a path that went dark
+   * (TCP doesn't close for that; QUIC only at its idle timeout). Snapshots come 15–30 times a
+   * second, so after WT_SILENCE_MS / WS_SILENCE_MS of silence (JOIN_SILENCE_MS while waiting for
+   * WELCOME) give up on it and resume on a fresh connection: WebSocket after a silent WebTransport.
    */
   private checkSilence(now: number): void {
     const t = this.transport;
-    if (t?.kind !== 'wt' || !this.net.isConnected || now - this.lastMessageAt < WT_SILENCE_MS) return;
+    if (!t || this.disposed) return;
+    const limit = !this.net.isConnected ? JOIN_SILENCE_MS : t.kind === 'wt' ? WT_SILENCE_MS : WS_SILENCE_MS;
+    if (now - this.lastMessageAt < limit) return;
     this.currentAttempt = null; // its close is ours, not a drop to handle twice
-    t.close(1000, 'no traffic');
-    this.skipWebTransport = true;
-    this.dropped(1006, `no traffic for ${WT_SILENCE_MS / 1000} s`);
+    this.transport = null;
+    t.close(4000, 'no traffic');
+    if (t.kind === 'wt') this.skipWebTransport = true;
+    this.dropped(1006, `no traffic for ${Math.round(limit / 1000)} s`);
   }
 
   update(dt: number): Frame {
     const now = performance.now();
-    this.checkSilence(now);
     const t = this.net.tuning;
     // 60 Hz (± the pacer's 3 %) predicted ticks, one input each, aimed from the predicted shoulder
     this.net.update(dt, (me: PlayerState | null, out) => {
@@ -680,4 +751,9 @@ export class OnlineMode {
       deaths: src.deaths,
     };
   }
+}
+
+function sameTuning(a: Tuning, b: Tuning): boolean {
+  for (const k of Object.keys(b) as (keyof Tuning)[]) if (a[k] !== b[k]) return false;
+  return true;
 }

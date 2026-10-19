@@ -49,12 +49,17 @@ export function seedOf(x: number, y: number): number {
 const base = particleSpec();
 const preset = (over: Partial<ParticleSpec>): Readonly<ParticleSpec> => Object.freeze({ ...base, ...over });
 
-const FLASH_STAR = preset({ z: 0.5, life: 0.11, size0: 3.2, size1: 5, ramp: Ramp.Flash, cell: Cell.Star });
+// the war tone (the owner, 19 Oct): a brief hot flash, not a sparkle; a faint shockwave; the column into dark smoke
+const FLASH_STAR = preset({ z: 0.5, life: 0.07, size0: 2.2, size1: 3.2, ramp: Ramp.Flash, cell: Cell.Star });
 const FLASH_GLOW = preset({ z: 0.4, life: 0.16, size0: 7, size1: 9, ramp: Ramp.Flash, cell: Cell.Glow, alpha: 0.55 });
 const CORE = preset({ life: 0.6, size0: 1.6, size1: 5.4, ease: 0.45, ramp: Ramp.Fire, cell: Cell.Fire });
 const FIRE = preset({ drag: 3.5, size0: 0.9, size1: 2.4, ease: 0.6, ramp: Ramp.Fire, cell: Cell.Fire });
-const RING = preset({ z: 0.7, life: 0.32, size0: 0.8, ease: 0.4, ramp: Ramp.Ring, cell: Cell.Ring, alpha: 0.9 });
-const GROUND_RING = preset({ life: 0.42, size0: 1, ease: 0.4, ramp: Ramp.Ring, cell: Cell.Ring, alpha: 0.75, orient: 1 });
+const RING = preset({ z: 0.7, life: 0.28, size0: 0.8, ease: 0.4, ramp: Ramp.Ring, cell: Cell.Ring, alpha: 0.5 });
+/** the Forge's shockwave opacity, toned down: a pressure ripple, not a bright hoop */
+const SHOCKWAVE_TONE = 0.55;
+/** the lingering smoke: darker (soot), and a few more puffs */
+const SMOKE_TINT = [0.62, 0.6, 0.58] as const;
+const GROUND_RING = preset({ life: 0.42, size0: 1, ease: 0.4, ramp: Ramp.Ring, cell: Cell.Ring, alpha: 0.45, orient: 1 });
 const SPARK = preset({ drag: 1.2, grav: 14, size0: 0.2, size1: 0.14, aspect: 0.4, stretch: 0.045, ramp: Ramp.Spark, cell: Cell.Streak });
 const CHUNK = preset({ drag: 0.3, grav: 20, ramp: Ramp.Chunk, cell: Cell.Chunk, front: 1 });
 const DUST = preset({ drag: 2.6, size0: 0.5, size1: 1.8, ease: 0.6, ramp: Ramp.Dust, cell: Cell.Dust });
@@ -156,7 +161,7 @@ export function spawnExplosion(t: ExplosionTargets, world: CollisionWorld, x: nu
     p.size0 = 2 * sw.fromM * k;
     p.size1 = 2 * sw.toM * k * 1.12; // the ring's bright edge sits at 89 % of the card
     p.life = sw.seconds;
-    p.alpha = sw.opacity;
+    p.alpha = sw.opacity * SHOCKWAVE_TONE;
     [p.tr, p.tg, p.tb] = sw.tint;
   }
   t.glow.emit(p);
@@ -246,8 +251,9 @@ export function spawnExplosion(t: ExplosionTargets, world: CollisionWorld, x: nu
   // lingering smoke: slow soot-grey puffs that rise and spread (lit from above, so unrotated); the
   // flipbook brings its own smoke, so fewer of them then, to keep the column hanging after it
   {
-    for (let i = 0, count = t.book ? n(4) : n(9); i < count; i++) {
+    for (let i = 0, count = t.book ? n(6) : n(11); i < count; i++) {
       p = from(SMOKE);
+      [p.tr, p.tg, p.tb] = SMOKE_TINT;
       p.x = x + range(-0.8, 0.8) * s;
       p.y = y + range(0, 0.8) * s;
       p.z = range(-0.6, 1.2);

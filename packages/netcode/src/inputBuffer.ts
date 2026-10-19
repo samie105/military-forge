@@ -24,6 +24,14 @@ export const MAX_INPUT_LEAD = 48;
 export const MAX_LATCH_TICKS = 45;
 /** the late-press records span late presses and the lead (MAX_LATCH_TICKS + MAX_INPUT_LEAD < this) */
 const PRESS_RING = 128;
+/**
+ * How long the server repeats a client's last input while none arrive (a stalled connection): 0.5 s.
+ * After that the player lets go of everything (keeps its aim) instead of running or jetting on
+ * for the whole stall: a held key during a 6 s black hole walked the player off a ledge (#M1).
+ * Long enough that a latency spike's late inputs (they arrive in a burst and are mostly dropped
+ * anyway) rarely meet it.
+ */
+export const MAX_REPEAT_TICKS = 30;
 
 export const LATCHED_BUTTONS =
   Btn.Fire | Btn.Fire2 | Btn.Reload | Btn.Swap | Btn.Grenade | Btn.Melee | Btn.Interact | Btn.Dual | Btn.CycleGrenade | Btn.Dash | Btn.Shield;
@@ -45,6 +53,11 @@ export class InputBuffer {
   refused = 0;
   /** presses that arrived late and were applied a few ticks later instead of being lost */
   latched = 0;
+  /** ticks in a row simulated without this client's input (MAX_REPEAT_TICKS) */
+  missedRun = 0;
+  /** ticks simulated with a neutral input after the repeat ran out */
+  neutral = 0;
+  private readonly idleInput = createInput();
 
   // late presses (docs/05 §13): what the client sent and what the sim used, per tick
   private readonly sentTick = new Float64Array(PRESS_RING).fill(-1);
@@ -96,9 +109,13 @@ export class InputBuffer {
   take(tick: number, out: Input): boolean {
     const i = tick & (INPUT_RING - 1);
     if (this.ticks[i] !== tick) {
-      if (this.newestSeen >= 0) this.missed++;
+      if (this.newestSeen >= 0) {
+        this.missed++;
+        this.missedRun++;
+      }
       return false;
     }
+    this.missedRun = 0;
     copyInput(out, this.inputs[i]!);
     this.ticks[i] = -1;
     this.used++;
@@ -130,13 +147,20 @@ export class InputBuffer {
     }
     this.late.length = 0;
     let use: Readonly<Input> = out;
-    const add = this.latchButtons & ~out.buttons;
-    if (add !== 0 || (this.latchSelect !== 0 && out.weaponSelect === 0)) {
-      copyInput(this.simInput, out);
+    if (this.missedRun > MAX_REPEAT_TICKS) {
+      // a stall: hands off the keys (the aim stays where it was)
+      this.idleInput.aim = out.aim;
+      use = this.idleInput;
+      this.neutral++;
+    }
+    const add = this.latchButtons & ~use.buttons;
+    if (add !== 0 || (this.latchSelect !== 0 && use.weaponSelect === 0)) {
+      const base = use;
+      copyInput(this.simInput, base);
       this.simInput.buttons |= add;
-      if (out.weaponSelect === 0) this.simInput.weaponSelect = this.latchSelect;
+      if (base.weaponSelect === 0) this.simInput.weaponSelect = this.latchSelect;
       for (let b = add; b !== 0; b &= b - 1) this.latched++;
-      if (out.weaponSelect === 0 && this.latchSelect !== 0) this.latched++;
+      if (base.weaponSelect === 0 && this.latchSelect !== 0) this.latched++;
       use = this.simInput;
     }
     this.latchButtons = 0;

@@ -1,6 +1,7 @@
 import { BREACHER, BUZZ, HAMMER, SHREDDER, WIDOW, movementTestMap } from '@military-forge/content';
 import { CollisionWorld, type SimEvent } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
+import { Cell } from '../vfx/atlas';
 import { Gunfire, type MuzzleLookup } from '../vfx/gunfire';
 import { parseWeaponVfx } from '../vfx/manifest';
 import { F, ParticlePool, STRIDE } from '../vfx/pool';
@@ -91,13 +92,31 @@ describe('Gunfire', () => {
     }
   });
 
-  it('a player hit: a hot thud and a few sparks, no dust (no gore)', () => {
+  it('a player hit: a dull thud (no star), one puff of cloth, a few sparks; no chips, no gore', () => {
     const g = new Gunfire(world);
     const t = targets();
     g.onEvents([shot({ hit: 2, target: 3, ex: 157, ey: 1.1 })]);
     g.update(1 / 60, t, noMuzzle);
-    expect(count(t.smoke, Ramp.Dust)).toBe(0);
+    expect(count(t.smoke, Ramp.Dust)).toBe(1);
+    expect(count(t.smoke, Ramp.Book)).toBe(0); // chips are for walls
     expect(count(t.glow, Ramp.Spark)).toBeGreaterThanOrEqual(2);
+    let stars = 0;
+    for (let i = 0; i < t.glow.count; i++) if (t.glow.data[i * STRIDE + F.cell] === Cell.Star && t.glow.data[i * STRIDE + F.ramp] === Ramp.Flash && t.glow.data[i * STRIDE + F.x]! > 156) stars++;
+    expect(stars).toBe(0);
+  });
+
+  it('the war tone: a wall hit throws chips and dust; the shot leaves gun smoke at the muzzle; tracers are thin', () => {
+    const g = new Gunfire(world);
+    const t = targets();
+    g.onEvents([shot({ hit: 1, ex: 160, ey: 1 })]);
+    g.update(1 / 60, t, noMuzzle);
+    expect(count(t.smoke, Ramp.Book)).toBeGreaterThanOrEqual(2); // chips
+    expect(count(t.smoke, Ramp.Trail)).toBeGreaterThanOrEqual(1); // gun smoke
+    for (let i = 0; i < t.glow.count; i++) {
+      const o = i * STRIDE;
+      if (t.glow.data[o + F.cell] !== Cell.Tracer) continue;
+      expect(t.glow.data[o + F.size0]! * t.glow.data[o + F.aspect]!).toBeLessThan(0.07); // the bolt under 7 cm wide
+    }
   });
 
   it('the sniper leaves a smoke line that hangs', () => {

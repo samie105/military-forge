@@ -1,9 +1,10 @@
 /**
  * The dash's green trail (the owner's playtest, 18 Oct: "the dash should have like a blur or green
  * trail with sparkles"): a soft ribbon, the body's width, streaming behind every dashing soldier,
- * local and remote, bright at the body and thinning and fading toward its tail, with green-white
- * sparkles shed along it that twinkle out. It rides on top of the jet kick, the speed lines and
- * the afterimages (dash.ts, dashGhosts.ts).
+ * local and remote, bright at the body and thinning and fading toward its tail. The owner's war
+ * tone (19 Oct: "serious battle", not "joyous") makes it a tactical energy streak: a few hot
+ * embers shed along it, short streaks that cool and fall away, instead of twinkling glitter. It
+ * rides on top of the jet kick, the speed lines and the afterimages (dash.ts, dashGhosts.ts).
  *
  * Green (a mint, hue ~145°) is nobody's team colour: well apart from team blue and team orange.
  * Reduce motion: a shorter ribbon and half the sparkles. Reduce flashes: sparkles hold steady
@@ -31,7 +32,9 @@ import { particleSpec, type ParticleSpec } from './pool';
 import { Ramp } from './ramps';
 
 /** the trail's green, linear RGB: a mint well apart from team blue and team orange */
-export const TRAIL_GREEN = [0.25, 1, 0.42] as const;
+export const TRAIL_GREEN = [0.2, 0.9, 0.38] as const;
+/** the embers: hot white-green cooling through the spark ramp */
+const EMBER_TINT = [0.8, 1, 0.82] as const;
 /** seconds of path the ribbon shows behind a dashing body (Reduce motion: shorter) */
 export const TRAIL_SECONDS = 0.24;
 const CALM_SECONDS = 0.12;
@@ -44,8 +47,8 @@ const Z = -0.08;
 /** ribbons drawn at once, and the samples each keeps */
 export const MAX_TRAILS = 8;
 const SAMPLES = 20;
-/** sparkles shed per metre of trail (× the preset's detail; half under Reduce motion) */
-export const SPARKLES_PER_M = 9;
+/** embers shed per metre of trail (× the preset's detail; half under Reduce motion) */
+export const SPARKLES_PER_M = 5.5;
 
 interface Trail {
   id: number;
@@ -204,17 +207,19 @@ export class DashTrail {
       p.x = x - dx * k + (this.rand() - 0.5) * WIDTH * 0.8;
       p.y = y - dy * k + (this.rand() - 0.5) * WIDTH * 0.9;
       p.z = Z + (this.rand() - 0.5) * 0.4;
-      p.vx = (this.rand() - 0.5) * 0.8 - dx * 2;
-      p.vy = (this.rand() - 0.5) * 0.8 + 0.3;
-      p.drag = 4;
-      p.life = 0.3 + 0.25 * this.rand();
-      p.size0 = 0.16 + 0.1 * this.rand();
+      // an ember: a short hot streak thrown back off the streak, cooling as it falls away
+      p.vx = (this.rand() - 0.5) * 1.2 - dx * 4;
+      p.vy = (this.rand() - 0.2) * 1.4;
+      p.grav = 3;
+      p.drag = 3;
+      p.life = 0.22 + 0.22 * this.rand();
+      p.size0 = 0.07 + 0.04 * this.rand();
       p.size1 = 0.02;
-      p.rot = this.rand() * Math.PI;
-      // a twinkle: the star spins as it shrinks (held still under Reduce flashes)
-      p.spin = this.steady ? 0 : (this.rand() - 0.5) * 14;
-      p.ramp = Ramp.Sparkle;
-      p.cell = Cell.Star;
+      p.aspect = 0.35;
+      p.stretch = this.steady ? 0.01 : 0.03;
+      p.ramp = Ramp.Spark;
+      p.cell = Cell.Streak;
+      [p.tr, p.tg, p.tb] = EMBER_TINT;
       fx.glow.emit(p);
     }
   }

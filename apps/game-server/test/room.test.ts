@@ -209,13 +209,19 @@ describe('Room', () => {
     room.receive(a.client, encodeCmd(CmdKind.SetTuning, JSON.stringify({ gravity: 25, fuelMax: 1e9, capsuleRadius: 0.01, grenadeThrowScale: 1.3 })));
     expect(room.game.tuning).toMatchObject({ gravity: 25, fuelMax: 300, capsuleRadius: 0.32, grenadeThrowScale: 1.3 });
     expect(JSON.parse((b.conn.last(MsgType.Tuning) as TuningMsg).tuningJson)).toMatchObject({ gravity: 25, fuelMax: 300 });
-    expect(tuningSeen(a.conn)).toBe(0); // the host predicts with its own edit already
+    // the host asked for more than the panel allows: it hears what the room took (#L8)
+    expect(tuningSeen(a.conn)).toBe(1);
+    expect(JSON.parse((a.conn.last(MsgType.Tuning) as TuningMsg).tuningJson)).toMatchObject({ fuelMax: 300, capsuleRadius: 0.32 });
+    // an edit the room takes as it is: the host predicts with it already, nothing comes back
+    room.receive(a.client, encodeCmd(CmdKind.SetTuning, JSON.stringify({ ...room.game.tuning, gravity: 24 })));
+    expect(room.game.tuning.gravity).toBe(24);
+    expect(tuningSeen(a.conn)).toBe(1);
     // a guest can't: the room keeps its tuning, and the guest's prediction is put back to it
     const before = tuningSeen(b.conn);
     room.receive(b.client, encodeCmd(CmdKind.SetTuning, JSON.stringify({ gravity: 5 })));
-    expect(room.game.tuning.gravity).toBe(25);
+    expect(room.game.tuning.gravity).toBe(24);
     expect(tuningSeen(b.conn)).toBe(before + 1);
-    expect(JSON.parse((b.conn.last(MsgType.Tuning) as TuningMsg).tuningJson)).toMatchObject({ gravity: 25 });
+    expect(JSON.parse((b.conn.last(MsgType.Tuning) as TuningMsg).tuningJson)).toMatchObject({ gravity: 24 });
     expect(b.conn.closed).toBeNull();
   });
 

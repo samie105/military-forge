@@ -1,5 +1,5 @@
 import { FRAG, K47, adminField, createTuning } from '@military-forge/content';
-import { MsgType, encodeOverrides, encodePong, encodeRoster, encodeSnapshot, encodeWelcome } from '@military-forge/protocol';
+import { CmdKind, MsgType, decodeMessage, encodeOverrides, encodePong, encodeRoster, encodeSnapshot, encodeWelcome } from '@military-forge/protocol';
 import { Game } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
 import { NetClient } from '../src';
@@ -191,5 +191,21 @@ describe('NetClient: content shared with the server (one process)', () => {
     expect(K47.damage).toBe(adminField('weapon.k47.damage')!.def);
     net.clearOverrides();
     expect(K47.damage).toBe(adminField('weapon.k47.damage')!.def);
+  });
+
+  it("a host's tuning edit made while disconnected goes out with the next WELCOME, and stays ours (the audit, L8)", () => {
+    const sent: Uint8Array[] = [];
+    const net = new NetClient({ name: 't', send: (b) => sent.push(b), now: () => 0 });
+    welcomed(false, net);
+    net.onClose(); // the connection dropped
+    sent.length = 0;
+    net.setTuning(createTuning({ gravity: 9 }));
+    expect(sent.length).toBe(0); // nowhere to send it: kept
+    expect(net.tuning.gravity).toBe(9); // our prediction has it already
+    welcomed(true, net); // back: the room's WELCOME still says the old gravity
+    const cmds = sent.map((b) => decodeMessage(b)).filter((m) => m.type === MsgType.Cmd);
+    expect(cmds.some((m) => m.type === MsgType.Cmd && m.kind === CmdKind.SetTuning && JSON.parse(m.payload).gravity === 9)).toBe(true);
+    expect(net.tuning.gravity).toBe(9);
+    expect(net.pendingTuning).toBeNull();
   });
 });

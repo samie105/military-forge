@@ -80,8 +80,22 @@ const RICOCHET_TINT: [number, number, number] = [0.6, 0.93, 1];
 const SNIPER_TRAIL = { tint: [0.62, 0.62, 0.6] as [number, number, number], widthM: 0.05, seconds: 0.45 };
 const FLASH_TINT: [number, number, number] = [1, 0.85, 0.5];
 /** hitscan: the hit is already decided, so a tracer reaches its end within this */
-const MAX_FLIGHT = 0.07;
-const MIN_SPEED = 220;
+const MAX_FLIGHT = 0.05;
+const MIN_SPEED = 320;
+/**
+ * The war tone (the owner, 19 Oct: "war, military, serious battle, hard-boiled", not "joyous"):
+ * tracers thinner and quicker, flashes shorter and hot with a wisp of gun smoke, impacts dust,
+ * sparks and chips rather than stars.
+ */
+const TRACER_THIN = 0.62;
+const TRACER_BOLT = 0.8;
+const FLASH_SHORT = 0.75;
+/** gun smoke off the muzzle: grey, drifting up and away */
+const MUZZLE_SMOKE_TINT = [0.82, 0.8, 0.76] as const;
+/** chips off stone and concrete: grey; off dirt: earth */
+const CHIP_STONE = [0.52, 0.5, 0.47] as const;
+const CHIP_DIRT = [0.36, 0.28, 0.2] as const;
+const CHIP_WOOD = [0.45, 0.33, 0.2] as const;
 /** the light pop's peak (×style intensity) and fade */
 const LIGHT_PEAK = 22;
 const QUEUE_MAX = 256;
@@ -272,14 +286,14 @@ export class Gunfire {
       p.x = x + c * w * (0.5 - style.originU);
       p.y = y + s * w * (0.5 - style.originU);
       p.z = z + 0.02;
-      p.life = style.seconds;
+      p.life = style.seconds * FLASH_SHORT;
       p.size0 = p.size1 = w;
       p.aspect = ((style.heightM * k) / w) * (style.flipV && this.rand() < 0.5 ? -1 : 1);
       p.rot = angle + (this.rand() * 2 - 1) * style.rollRad;
       p.cell = style.frames[Math.floor(this.rand() * style.frames.length)]!;
       p.ramp = Ramp.Book;
-      this.flashPool.emit(p, rider ? this.anchor(rider.shooter, rider.weapon, x, y, z, angle, style.seconds) : 0);
-      seconds = style.seconds;
+      this.flashPool.emit(p, rider ? this.anchor(rider.shooter, rider.weapon, x, y, z, angle, style.seconds * FLASH_SHORT) : 0);
+      seconds = style.seconds * FLASH_SHORT;
       if (style.light) {
         light = style.light.intensity;
         this.light.color.copy(style.light.color);
@@ -292,9 +306,9 @@ export class Gunfire {
       p.x = x;
       p.y = y;
       p.z = z + 0.02;
-      p.life = 0.05;
-      p.size0 = len * 0.8;
-      p.size1 = len * 0.6;
+      p.life = 0.035;
+      p.size0 = len * 0.7;
+      p.size1 = len * 0.5;
       p.rot = this.rand() * Math.PI;
       p.ramp = Ramp.Flash;
       p.cell = Cell.Star;
@@ -304,7 +318,7 @@ export class Gunfire {
       p.x = x + c * len * 0.45;
       p.y = y + s * len * 0.45;
       p.z = z + 0.02;
-      p.life = 0.045;
+      p.life = 0.035;
       p.size0 = p.size1 = len * 1.1;
       p.aspect = 0.42;
       p.rot = angle;
@@ -315,10 +329,35 @@ export class Gunfire {
       this.light.color.setRGB(1, 0.85, 0.55);
       this.light.distance = 3 + cls.flash * 2;
     }
+    this.gunSmoke(fx, x + c * 0.08, y + s * 0.08, z, c, s, cls);
     // the light pop: High's pooled point light (Low and Medium: the emissive cards only, docs/11 §2)
     this.light.position.set(x, y, z + 0.6);
     this.lightLevel = Math.max(this.lightLevel, light / 3);
     this.lightTau = seconds / 2;
+  }
+
+  /** A wisp or two of gun smoke off the muzzle, drifting up and on along the shot. */
+  private gunSmoke(fx: GunfireTargets, x: number, y: number, z: number, c: number, s: number, cls: ClassFx): void {
+    for (let i = 0, n = this.detail >= 0.8 && cls.flash >= 0.6 ? 2 : 1; i < n; i++) {
+      const p = reset();
+      p.x = x + c * 0.06 * i;
+      p.y = y + s * 0.06 * i;
+      p.z = z - 0.02;
+      p.vx = c * (0.5 + this.rand() * 0.4);
+      p.vy = s * (0.5 + this.rand() * 0.4) + 0.35;
+      p.drag = 2.4;
+      p.life = 0.45 + this.rand() * 0.25;
+      p.size0 = 0.07 + cls.flash * 0.06;
+      p.size1 = 0.3 + cls.flash * 0.2;
+      p.ease = 0.55;
+      p.alpha = 0.32;
+      p.rot = this.rand() * Math.PI * 2;
+      p.spin = (this.rand() - 0.5) * 1.5;
+      p.ramp = Ramp.Trail;
+      p.cell = Cell.Puff;
+      [p.tr, p.tg, p.tb] = MUZZLE_SMOKE_TINT;
+      fx.smoke.emit(p);
+    }
   }
 
   /** The tag (anchor index + 1) for a flash riding this gun, its muzzle at (x, y, z) and `angle`; 0 when all are busy. */
@@ -392,8 +431,8 @@ export class Gunfire {
   private tracer(fx: GunfireTargets, x: number, y: number, z: number, ux: number, uy: number, dist: number, cls: ClassFx, styleName: string | null, tintOver: readonly [number, number, number] | null = null): void {
     const style = styleName ? this.art?.tracers[styleName] : undefined;
     const tint = tintOver ?? style?.tint ?? TRACER_TINT;
-    const width = style?.widthM ?? cls.width;
-    const len = Math.min(style?.lengthM ?? cls.length, dist);
+    const width = (style?.widthM ?? cls.width) * TRACER_THIN;
+    const len = Math.min((style?.lengthM ?? cls.length) * TRACER_BOLT, dist);
     const speed = Math.max(style?.speedMps ?? 0, MIN_SPEED, dist / MAX_FLIGHT);
     const angle = Math.atan2(uy, ux);
     // the bolt: a bright streak racing from the muzzle to the end, its head at +U
@@ -416,11 +455,11 @@ export class Gunfire {
     p.x = x + ux * dist * 0.5;
     p.y = y + uy * dist * 0.5;
     p.z = z;
-    p.life = 0.1;
+    p.life = 0.06;
     p.size0 = p.size1 = dist;
     p.aspect = (width * 1.4) / dist;
     p.rot = angle;
-    p.alpha = 0.65;
+    p.alpha = 0.45;
     p.ramp = Ramp.Tracer;
     p.cell = Cell.Line;
     [p.tr, p.tg, p.tb] = tint;
@@ -506,19 +545,38 @@ export class Gunfire {
     }
     // a riot shield (3) is a steel plate: sparks, no dust
     const metal = material === 1 || e.hit === 3;
-    // a hot point where it struck
+    // a hot point where it struck: brief and small, no star (a player hit: a dull thud)
     let p = reset();
     p.x = e.ex;
     p.y = e.ey;
     p.z = 0.3;
-    p.life = player ? 0.08 : 0.06;
-    p.size0 = player ? 0.55 : 0.32;
-    p.size1 = player ? 0.3 : 0.2;
+    p.life = player ? 0.06 : 0.045;
+    p.size0 = player ? 0.32 : 0.26;
+    p.size1 = player ? 0.18 : 0.14;
     p.rot = this.rand() * Math.PI;
     p.ramp = Ramp.Flash;
-    p.cell = player ? Cell.Star : Cell.Glow;
-    if (player && e.zone === HitZone.Head) [p.tr, p.tg, p.tb] = [1, 0.55, 0.35];
+    p.cell = Cell.Glow;
+    if (player) [p.tr, p.tg, p.tb] = e.zone === HitZone.Head ? [0.85, 0.42, 0.3] : [0.8, 0.62, 0.45];
     fx.glow.emit(p);
+    if (player) {
+      // a puff of torn cloth and dust off the body, along the shot
+      p = reset();
+      p.x = e.ex;
+      p.y = e.ey;
+      p.z = 0.32;
+      p.vx = ux * 1.2;
+      p.vy = uy * 1.2 + 0.2;
+      p.drag = 4;
+      p.life = 0.3;
+      p.size0 = 0.12;
+      p.size1 = 0.36;
+      p.ease = 0.6;
+      p.alpha = 0.6;
+      p.ramp = Ramp.Dust;
+      p.cell = Cell.Dust;
+      p.rot = this.rand() * 6.28;
+      fx.smoke.emit(p);
+    }
     // sparks: off the surface (reflected), or a small splash back toward the shooter
     const rx = ux - 2 * (ux * nx + uy * ny) * nx;
     const ry = uy - 2 * (ux * nx + uy * ny) * ny;
@@ -542,7 +600,33 @@ export class Gunfire {
       p.cell = Cell.Streak;
       fx.glow.emit(p);
     }
-    // a little dust off stone and dirt
+    // chips off stone, concrete and dirt, thrown off the surface and falling
+    if (!player && !metal) {
+      // map materials: 0 concrete, 2 wood, 3 dirt (content maps/types.ts)
+      const chip = material === 3 ? CHIP_DIRT : material === 2 ? CHIP_WOOD : CHIP_STONE;
+      for (let i = 0, count = n(3); i < count; i++) {
+        const a = Math.atan2(ny, nx) + (this.rand() * 2 - 1) * 1.1;
+        const v = 1.8 + this.rand() * 3;
+        p = reset();
+        p.x = e.ex + nx * 0.03;
+        p.y = e.ey + ny * 0.03;
+        p.z = 0.32;
+        p.vx = Math.cos(a) * v;
+        p.vy = Math.sin(a) * v + 1;
+        p.grav = 18;
+        p.drag = 0.6;
+        p.life = 0.45 + this.rand() * 0.3;
+        p.size0 = p.size1 = 0.035 + this.rand() * 0.035;
+        p.rot = this.rand() * Math.PI;
+        p.spin = (this.rand() - 0.5) * 20;
+        p.front = 1;
+        p.ramp = Ramp.Book;
+        p.cell = Cell.Chunk;
+        [p.tr, p.tg, p.tb] = chip;
+        fx.smoke.emit(p);
+      }
+    }
+    // dust off stone and dirt
     if (!player && !metal) {
       p = reset();
       p.x = e.ex + nx * 0.05;

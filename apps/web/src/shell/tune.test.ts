@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { TunePanel } from './screens/Tune';
-import { PRESETS, TUNE_ROWS, formatTune, presetOf, presetTuning, rowChanged, tuneChanges, tuneToastParts, type PresetId } from './tune';
+import { PRESETS, TUNE_ROWS, formatTune, presetOf, presetTuning, rowChanged, tuneChanges, tuneToastParts, adminTuningKeys, splitTuneChange, type PresetId } from './tune';
 
 const row = (id: string) => TUNE_ROWS.find((r) => r.id === id)!;
 const fieldOf = (key: string) => TUNING_GROUPS.flatMap((g) => g.fields).find((f) => f.key === key)!;
@@ -94,5 +94,24 @@ describe('Tune the game: the panel', () => {
     expect(html.match(/slider__def/g)).toHaveLength(TUNE_ROWS.length);
     expect(html).toMatch(/data-tab="custom" aria-checked="true"/);
     expect(html).toContain('trow is-changed');
+  });
+});
+
+describe("who changed the room's tuning (the audit, M3)", () => {
+  it("tells the admin page's keys from the host's", () => {
+    const keys = adminTuningKeys({ 'tuning.gravity': 12 }, { 'tuning.gravity': 9, 'tuning.fuelMax': 250 });
+    expect([...keys].sort()).toEqual(['fuelMax', 'gravity']);
+    expect(adminTuningKeys({ 'tuning.gravity': 12 }, {})).toEqual(new Set(['gravity'])); // cleared: back to the default
+    expect(adminTuningKeys({}, { 'weapon.k47.damage': 20 })).toEqual(new Set()); // not a tuning key
+  });
+
+  it("splits one change into the admin's part and the host's", () => {
+    const before = { ...defaultTuning };
+    const after = { ...defaultTuning, gravity: 9, walkMax: defaultTuning.walkMax + 1 };
+    const { admin, host } = splitTuneChange(before, after, new Set<keyof typeof before>(['gravity']));
+    expect(tuneChanges(before, admin).map((c) => c.label).join()).toMatch(/Gravity/i);
+    expect(tuneChanges(before, admin).some((c) => /walk/i.test(c.label))).toBe(false);
+    expect(tuneChanges(before, host).some((c) => /gravity/i.test(c.label))).toBe(false);
+    expect(tuneChanges(before, host).length).toBe(1);
   });
 });

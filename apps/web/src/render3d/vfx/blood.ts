@@ -43,7 +43,8 @@ export interface BloodTargets {
 export function bloodHit(t: BloodTargets, world: CollisionWorld, x: number, y: number, ux: number, uy: number, damage: number, head: boolean, detail: number, rand: () => number): void {
   const k = Math.min(2.2, Math.max(0.4, damage / 30)) * (head ? 1.4 : 1);
   const along = Math.atan2(uy, ux);
-  for (let i = 0, n = Math.max(2, Math.round((3 + 6 * k) * detail)); i < n; i++) {
+  // restrained (the owner's war tone, 19 Oct): a few dark drops and a thin mist, not a spray
+  for (let i = 0, n = Math.max(2, Math.round((2 + 4 * k) * detail)); i < n; i++) {
     const a = along + (rand() * 2 - 1) * 0.7;
     const v = (1.5 + 3 * rand()) * (0.8 + 0.25 * k);
     const p = reset();
@@ -72,8 +73,8 @@ export function bloodHit(t: BloodTargets, world: CollisionWorld, x: number, y: n
     p.vy = uy * 0.6;
     p.drag = 3;
     p.life = 0.3;
-    p.size0 = 0.16 * k;
-    p.size1 = 0.5 * k;
+    p.size0 = 0.12 * k;
+    p.size1 = 0.38 * k;
     p.ease = 0.5;
     p.rot = rand() * Math.PI * 2;
     p.ramp = Ramp.BloodMist;

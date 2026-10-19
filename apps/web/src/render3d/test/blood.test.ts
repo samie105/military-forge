@@ -72,7 +72,7 @@ describe('Gunfire: a player hit is a thud, or blood when it is on (off by defaul
   it('on: droplets and a splat instead of the thud, scaled by the weapon (a Widow more than a Buzz)', () => {
     const widow = fire(true, hitShot(WIDOW.index));
     const buzz = fire(true, hitShot(BUZZ.index));
-    expect(count(widow.glow, 'cell', Cell.Star)).toBe(count(fire(false, hitShot(WIDOW.index)).glow, 'cell', Cell.Star) - 1); // the thud's star is gone
+    expect(count(widow.smoke, 'ramp', Ramp.Dust)).toBe(count(fire(false, hitShot(WIDOW.index)).smoke, 'ramp', Ramp.Dust) - 1); // the thud's puff of cloth is gone
     expect(count(widow.smoke, 'ramp', Ramp.Blood)).toBeGreaterThan(count(buzz.smoke, 'ramp', Ramp.Blood));
     expect(widow.decals.count).toBeGreaterThanOrEqual(1);
   });

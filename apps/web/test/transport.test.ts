@@ -3,7 +3,7 @@
  * attempt leaves behind decides whether the next connect even tries.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { connectGame, healthUrl, roomOfUrl, webTransportUrl } from '../src/transport';
+import { WS_CONNECT_TIMEOUT_MS, connectGame, healthUrl, openWebSocket, roomOfUrl, webTransportUrl } from '../src/transport';
 
 class FakeWebTransport {
   static mode: 'ok' | 'refuse' | 'hang' = 'ok';
@@ -118,5 +118,32 @@ describe('transport selection', () => {
     expect(FakeWebTransport.lastUrl).toBe('https://gs.example.com:4433/wt?room=KQMZPT');
     await connect(); // the default room: the plain URL
     expect(FakeWebTransport.lastUrl).toBe('https://gs.example.com:4433/wt');
+  });
+});
+
+describe('WebSocket connect timeout (the audit, M1)', () => {
+  it("a socket that never opens (a dark path) is given up after WS_CONNECT_TIMEOUT_MS", async () => {
+    class HangingWebSocket {
+      static readonly OPEN = 1;
+      static closed = 0;
+      readyState = 0;
+      binaryType = '';
+      onopen: (() => void) | null = null; // never called: it never opens
+      onmessage: unknown = null;
+      onclose: unknown = null;
+      send() {}
+      close() {
+        HangingWebSocket.closed++;
+      }
+    }
+    vi.stubGlobal('WebSocket', HangingWebSocket);
+    let error = '';
+    const p = openWebSocket('ws://gs.example.com:9001', handlers).catch((e: Error) => (error = e.message));
+    await vi.advanceTimersByTimeAsync(WS_CONNECT_TIMEOUT_MS - 100);
+    expect(error).toBe('');
+    await vi.advanceTimersByTimeAsync(200);
+    await p;
+    expect(error).toMatch(/not open in 6 s/);
+    expect(HangingWebSocket.closed).toBe(1);
   });
 });

@@ -40,6 +40,8 @@ Since 19 Oct 2026 the box also runs the WebTransport gateway (`apps/wt-gateway`,
     - The game server advertises the gateway in `/health` (`webtransport: {url, certHashes: [], rooms: true}`), which is how the page finds it: no client setting.
   - **Self-test:** `/health` must advertise the gateway. Then `mf-wt-probe` opens a real QUIC session to `https://127.0.0.1/wt` (the certificate pinned by hash) and waits for its stream (`READY`). The result is in `/var/log/mf-trial.log`.
   - **If any step fails**, the log says why and the game stays on WebSocket.
+  - **Re-running just the gateway** (after a fix, or to see the self-test again): `sudo bash /opt/military-forge/src/scripts/net-trial/wt-setup.sh gateway`. It needs no settings (the box's name comes from Caddy's site). With no argument the script prints its usage. A full `sudo /usr/local/sbin/mf-trial-setup` runs it too.
+  - **The self-test said "no WebTransport session" on the live box (19 Oct) while browsers connected fine.** The cause was the check itself: under `pipefail`, `grep -q` stopping at READY made the probe's pipe fail. It now reads the probe's whole output. It connects to 127.0.0.1 (Azure doesn't hairpin to the VM's own public address) with the certificate pinned by hash, and prints the probe's last lines when it does fail.
 - **Firewall:** allow **UDP 443 inbound from anywhere** (Azure: an inbound rule in the VM's network security group, protocol UDP, destination port 443, source Any; AWS: the security group rule above), next to TCP 80 and 443. Ubuntu's own firewall is off.
 - **Checking it from a phone:** the HUD's net readout says WT or WS. `https://<host>/health` shows the advertised gateway.
 

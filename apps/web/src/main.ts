@@ -31,7 +31,7 @@ import { Camera } from './camera';
 import { fxFrame, fxState, setReduceFlashes } from './fx';
 import { autoPreset, deviceHints, gpuRenderer } from './gfxAuto';
 import { createHostTuning, tuningOffered } from './hostTuning';
-import { tuneChanges, tuneToastParts } from './shell/tune';
+import { splitTuneChange, tuneChanges, tuneToastParts } from './shell/tune';
 import { InputSampler } from './input';
 import { localBots } from './localBots';
 import { LoadoutSync } from './locker/accountSync';
@@ -237,12 +237,21 @@ const host: GameHost = {
     const online = new OnlineMode(url, nickname, sampler, camera, renderer, () => {}, createConditionerSettings(false), 'auto', { room, ...(ticket ? { ticket } : {}), ...(refreshTicket ? { refreshTicket } : {}) });
     onlineRoom = room;
     setMode(online);
-    // a guest hears the host retune the room (Tune the game): who changed what, for a moment
-    online.onTuning((before, after, live) => {
+    // who changed what, for a moment: the owner's admin page ("Admin", everyone hears it) or the
+    // room's host retuning the room (Tune the game; its guests hear it)
+    online.onTuning((before, after, live, adminKeys) => {
+      if (!live) return;
       const lobby = shell.store.getState().lobby;
-      if (!live || lobby?.isHost) return;
-      const note = tuneToastParts(lobby?.players.find((p) => p.host)?.name ?? 'The host', tuneChanges(before, after));
+      const split = splitTuneChange(before, after, adminKeys);
+      const note =
+        tuneToastParts('Admin', tuneChanges(before, split.admin)) ??
+        (lobby?.isHost ? null : tuneToastParts(lobby?.players.find((p) => p.host)?.name ?? 'The host', tuneChanges(before, split.host)));
       if (note) shell.controller?.showTuneNote(note);
+    });
+    // the host left (or its connection went quiet): say who runs the room now
+    online.onHostChange((_was, now) => {
+      const name = now === online.localId ? null : (online.net.names.get(now) ?? 'another player');
+      shell.controller?.notify(name ? `Host left: ${name} is the host now` : "Host left: you're the host now");
     });
   },
   stop() {
@@ -572,6 +581,8 @@ function frame(now: number): void {
     hud.update({
       frame: f,
       tuning: mode.tuning(),
+      // "Tuned by host" names what the host changed from the room's own (the admin's values aren't its)
+      ...(mode instanceof OnlineMode ? { tuningBase: mode.tuningBase() } : {}),
       match: state.match,
       zoom: camera.zoom + 1,
       toScreen,

@@ -499,6 +499,10 @@ describe('round two desktop HUD', () => {
   it('"Tuned by host" when the room plays changed values: the first two by name', () => {
     expect(tunedSummary(createTuning())).toBe('');
     expect(tunedSummary(createTuning({ gravity: defaultTuning.gravity * 0.6, dashSpeed: defaultTuning.dashSpeed * 1.4 }))).toBe('Gravity 0.6× · Dash speed 1.4×');
+    // online, the admin's values are the room's own: only what the host changed on top is the host's (the audit, M3)
+    const adminBase = createTuning({ gravity: defaultTuning.gravity * 0.6 });
+    expect(tunedSummary(createTuning({ gravity: defaultTuning.gravity * 0.6 }), adminBase)).toBe('');
+    expect(tunedSummary(createTuning({ gravity: defaultTuning.gravity * 0.6, dashSpeed: defaultTuning.dashSpeed * 1.4 }), adminBase)).toBe('Dash speed 1.4×');
     expect(tunedSummary(createTuning({ gravity: defaultTuning.gravity * 0.5, dashSpeed: defaultTuning.dashSpeed * 2, walkMax: defaultTuning.walkMax * 1.5 }))).toBe('Gravity 0.5× · Dash speed 2× · 1 more');
     const tuned = hudFrame(base({ tuning: createTuning({ gravity: defaultTuning.gravity * 0.6 }) }), mem);
     expect(tuned.tokens).toContain('tuned');

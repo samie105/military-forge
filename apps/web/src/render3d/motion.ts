@@ -103,17 +103,20 @@ export const HIT = {
   min: 0.12,
   max: 1.5,
   /** at size 1: the torso's flinch away from the shot, the head's snap on a headshot, the twist from behind (rad) */
-  flinch: 15 * DEG,
+  flinch: 17 * DEG,
   head: 20 * DEG,
   twist: 20 * DEG,
   /** at size 1 on the ground: the knees give this much (m, the hips drop) */
-  buckle: 0.07,
+  buckle: 0.1,
   /** the head snap and the twist from behind show at least this size: they say where a hit came from */
   cue: 0.45,
   /** in the air: everything this much bigger, and the whole body turns with the flinch rather than the spine alone */
   air: 1.6,
-  /** how fast a reaction plays out (critically damped, rad/s): it peaks after 1/ω (45 ms) and is gone in ~0.25 s */
-  omega: 22,
+  /**
+   * how fast a reaction plays out (critically damped, rad/s): it peaks after 1/ω (65 ms) and is gone in ~0.35 s.
+   * Weighty (the owner's war tone, 19 Oct): a body that takes the hit, not one that bounces off it
+   */
+  omega: 15,
   /** Reduce motion: reactions this much of their size */
   reduced: 0.3,
 };

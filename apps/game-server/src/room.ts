@@ -184,6 +184,12 @@ const CMD_BURST = 20;
  * so toggling it around a shot earns nothing.
  */
 const LOW_BW_WARMUP_TICKS = 60;
+/**
+ * A host gone this long (disconnected, or its connection silent: a stall the server can't see as a
+ * close) hands the room to the longest-present player still here (docs/07 §5.3), so nobody waits
+ * out the 20 s reconnect grace to start the match. 5 s: longer than a reconnect after a blip.
+ */
+export const HOST_AWAY_TICKS = 5 * 60;
 const BACKPRESSURE_LIMIT = 16 * 1024;
 /** docs/05 §14: INPUT packets are tiny; anything bigger is malformed */
 const MAX_INPUT_BYTES = 64;
@@ -225,6 +231,8 @@ export class Client {
   cmdTokens = CMD_BURST;
   cmdTokensAt = 0;
   snapshotsSkipped = 0;
+  /** server tick of the last message from this connection (a host gone silent hands over: HOST_AWAY_TICKS) */
+  lastHeardTick = 0;
   /** the player this connection drives (null before WELCOME) */
   session: Session | null = null;
   /** network conditioner links (only with RoomOptions.netSim) */
@@ -353,7 +361,14 @@ export class Room {
   private fill: { target: number; level: BotLevelId } | null;
   /** RoomOptions.fillBots, and the match limits it was made with: what the admin page's reset goes back to */
   private readonly baseFill: { target: number; level: BotLevelId } | null;
-  private readonly baseLimits: { timeLimit: number; killLimit: number } | null;
+  /** the room's own limits: its defaults, then whatever its host set in the lobby */
+  private baseLimits: { timeLimit: number; killLimit: number } | null;
+  /**
+   * The admin page's match limits as last applied (undefined: not set), and limits it changed that
+   * wait for the match to be between games (a running match keeps the limits it started with).
+   */
+  private adminLimits: { timeLimit?: number; killLimit?: number } = {};
+  private pendingLimits: { timeLimit?: number; killLimit?: number } | null = null;
   private readonly offAdmin: () => void;
   /** the bots this room put in, oldest first */
   readonly bots: PlayerState[] = [];
@@ -398,18 +413,38 @@ export class Room {
       this.fill = target > 0 ? { target, level: ADMIN_BOT_LEVELS[adminValue(values, 'bots.level')] ?? 'normal' } : null;
     } else this.fill = this.baseFill;
     if (this.match && this.baseLimits) {
-      this.match.rules.timeLimit = values['match.timeLimit'] ?? this.baseLimits.timeLimit;
-      this.match.rules.killLimit = values['match.killLimit'] ?? this.baseLimits.killLimit;
-      this.matchDirty = true;
+      // only the limits the admin changed (set, edited or cleared), and never under a running match:
+      // an admin edit to jet fuel mustn't reset the host's 1-minute match to the server's defaults
+      const next = { timeLimit: values['match.timeLimit'], killLimit: values['match.killLimit'] };
+      for (const key of ['timeLimit', 'killLimit'] as const) {
+        if (next[key] === this.adminLimits[key]) continue;
+        (this.pendingLimits ??= {})[key] = next[key] ?? this.baseLimits[key];
+      }
+      this.adminLimits = next;
+      this.applyPendingLimits();
     }
     if (!broadcast) return;
     const tuning = encodeTuning(JSON.stringify(this.game.tuning));
     const overrides = encodeOverrides(adminJson());
+    // OVERRIDES first: a client hearing the TUNING after it knows the admin's values, so it can
+    // tell the admin's change from a host's ("Tuned by admin", not "<host> changed…")
     for (const c of this.clients) {
       if (!c.joined) continue;
-      c.conn.send(tuning);
       c.conn.send(overrides);
+      c.conn.send(tuning);
     }
+  }
+
+  /** The admin's changed limits, once the match is in the lobby or counting down to a new one. */
+  private applyPendingLimits(): void {
+    const m = this.match;
+    if (!m || !this.pendingLimits) return;
+    if (m.phase !== MatchPhase.Waiting && m.phase !== MatchPhase.Countdown) return;
+    const p = this.pendingLimits;
+    if (p.timeLimit !== undefined) m.rules.timeLimit = p.timeLimit;
+    if (p.killLimit !== undefined) m.rules.killLimit = p.killLimit;
+    this.pendingLimits = null;
+    this.matchDirty = true;
   }
 
   /** player id of the host, -1 = none (or not a match room) */
@@ -436,6 +471,7 @@ export class Room {
     const sim = this.netSim;
     if (!sim) {
       const client = new Client(conn, this.snapshotEvery);
+      client.lastHeardTick = this.game.tick;
       this.clients.add(client);
       return client;
     }
@@ -447,6 +483,7 @@ export class Room {
       this.snapshotEvery,
     );
     client.down = down;
+    client.lastHeardTick = this.game.tick;
     client.up = new ConditionedLink(sim.settings.up, enabled, sim.scheduler, (b) => this.handleSafely(client, b), isUnreliableMessage, this.linkSeed++);
     this.clients.add(client);
     return client;
@@ -483,6 +520,23 @@ export class Room {
     this.broadcastRoster();
   }
 
+  /** The host is gone or silent for HOST_AWAY_TICKS: the longest-present player still here takes over. */
+  private checkHost(): void {
+    const h = this.host;
+    if (!this.match || !h) return;
+    const now = this.game.tick;
+    const awaySince = h.client ? h.client.lastHeardTick : h.expiresAt - this.graceTicks;
+    if (now - awaySince < HOST_AWAY_TICKS) return;
+    let best: Session | null = null;
+    for (const s of this.sessions.values()) {
+      if (s === h || !s.client || now - s.client.lastHeardTick >= HOST_AWAY_TICKS) continue;
+      if (!best || s.joinSeq < best.joinSeq) best = s;
+    }
+    if (!best) return;
+    this.host = best;
+    this.matchDirty = this.matchUrgent = true;
+  }
+
   /** docs/07 §5.3 host migration: the session that joined first among those left. */
   private longestPresent(): Session | null {
     let best: Session | null = null;
@@ -512,6 +566,7 @@ export class Room {
    * a bug, logged, and costs only the client that sent it (kicked, 1011); the room and server go on.
    */
   private handleSafely(client: Client, bytes: Uint8Array): void {
+    client.lastHeardTick = this.game.tick;
     try {
       this.handle(client, bytes);
     } catch (e) {
@@ -725,9 +780,13 @@ export class Room {
         }
       }
       this.game.tuning = createTuning({ ...this.game.tuning, ...next });
-      // every client predicts with the room's tuning: keep them in step
+      // every client predicts with the room's tuning: keep them in step. The sender too when the
+      // room took something else than it asked for (a host's value clamped to the limits): its
+      // prediction and its open Tune panel must show what the room really runs
       const bytes = encodeTuning(JSON.stringify(this.game.tuning));
-      for (const c of this.clients) if (c.joined && c !== client) c.conn.send(bytes);
+      const t = this.game.tuning as unknown as Record<string, number>;
+      const asked = Object.keys(parsed).some((k) => k in t && parsed[k] !== t[k]);
+      for (const c of this.clients) if (c.joined && (c !== client || asked)) c.conn.send(bytes);
     } catch {
       client.strikes++;
     }
@@ -767,6 +826,7 @@ export class Room {
         if (!next) break;
         m.rules.timeLimit = next.timeLimit;
         m.rules.killLimit = next.killLimit;
+        this.baseLimits = { timeLimit: next.timeLimit, killLimit: next.killLimit };
         // other maps: the room would need a new Game; until then only the current map is accepted
         break;
       }
@@ -944,6 +1004,7 @@ export class Room {
       const viewDelayMs = lowBandwidth ? Math.max(LOW_BANDWIDTH_INTERP_DELAY_MS, MAX_VIEW_DELAY_MS) + TICK_MS : MAX_VIEW_DELAY_MS;
       lagComp?.setView(c.playerId, c.inputs.renderTickFor(current), lowBandwidth ? c.snapshotEvery : this.snapshotEvery, viewDelayMs);
     }
+    this.checkHost();
     // players waiting for a reconnect stand idle; give up on them after the grace
     for (const s of this.sessions.values()) {
       if (s.client) continue;
@@ -956,7 +1017,10 @@ export class Room {
       this.recorder?.onMatchEvents(this.match, this.game.map.id);
       for (const e of this.match.events) {
         this.matchDirty = true;
-        if (e.type === 'phase') this.matchUrgent = true;
+        if (e.type === 'phase') {
+          this.matchUrgent = true;
+          this.applyPendingLimits();
+        }
       }
     } else this.game.step(this.inputs);
     lagComp?.record(this.game.tick, this.game.players);

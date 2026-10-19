@@ -16,7 +16,7 @@
  * banners (P9) that leave accelerating (Linger), the HP bar's ease (P10) on a hit only.
  */
 import { DamageSource, MatchPhase, type SimEvent } from '@military-forge/sim';
-import { DRAGON, GAS, HitZone, weapons, type Tuning } from '@military-forge/content';
+import { DRAGON, GAS, HitZone, defaultTuning, weapons, type Tuning } from '@military-forge/content';
 import type { MatchView } from '../shell/matchView';
 import { formatClock, playerName } from '../shell/matchView';
 import { capText, iconHref, weaponIcon } from '../ui/icons';
@@ -90,6 +90,8 @@ export interface HudInput {
   scoreRows(): ScoreRow[] | null;
   /** the owner changed gameplay numbers on this server (the admin page): a small tag */
   adminTuned?: boolean;
+  /** what "Tuned by host" compares with: the room's tuning before the host's edits (default: the shipped defaults) */
+  tuningBase?: Tuning;
   /** while a grenade throw is aimed (held past a tap): the strength it would go with, 0..7; −1 otherwise */
   throwAim?: number;
   /** when the last quick throw (a tap) was let go, ms (performance.now) */
@@ -190,12 +192,14 @@ export function pingLook(ms: number): { cls: string; bars: number; sig: string; 
 }
 
 let tunedFor: Tuning | null = null;
+let tunedBase: Tuning | null = null;
 let tunedText = '';
 /** tunedSummary, once per tuning object (the mode hands the same one every frame) */
-function tunedOnce(t: Tuning): string {
-  if (t !== tunedFor) {
+function tunedOnce(t: Tuning, base: Tuning): string {
+  if (t !== tunedFor || base !== tunedBase) {
     tunedFor = t;
-    tunedText = tunedSummary(t);
+    tunedBase = base;
+    tunedText = tunedSummary(t, base);
   }
   return tunedText;
 }
@@ -225,7 +229,7 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
   v['match.myScore'] = String(m?.myScore ?? 0);
   v['match.leaderShort'] = m?.leaderName || 'Leader';
   v['match.leaderScore'] = String(m?.leaderScore ?? 0);
-  const tuned = tunedOnce(t);
+  const tuned = tunedOnce(t, input.tuningBase ?? defaultTuning);
   on('tuned', tuned !== '');
   v['match.tunedSummary'] = tuned;
 

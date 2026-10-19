@@ -94,11 +94,27 @@ function withTimeout<T>(p: Promise<T>, ms: number, error: () => Error): Promise<
 
 // ---------- WebSocket ----------
 
-export function openWebSocket(url: string, handlers: TransportHandlers): Promise<GameTransport> {
+/**
+ * A WebSocket that hasn't opened in this long won't (a dark path: TCP keeps trying for minutes).
+ * Opening takes ~3 round trips (TCP, TLS, the upgrade): ~1.5 s at 500 ms, ~4 s in a bad tail.
+ */
+export const WS_CONNECT_TIMEOUT_MS = 6000;
+
+export function openWebSocket(url: string, handlers: TransportHandlers, timeoutMs = WS_CONNECT_TIMEOUT_MS): Promise<GameTransport> {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(url);
     ws.binaryType = 'arraybuffer';
     let open = false;
+    const timer = window.setTimeout(() => {
+      if (open) return;
+      ws.onclose = null;
+      try {
+        ws.close();
+      } catch {
+        /* still connecting: it's dropped */
+      }
+      reject(new Error(`WebSocket not open in ${timeoutMs / 1000} s`));
+    }, timeoutMs);
     const transport: GameTransport = {
       kind: 'ws',
       send(bytes) {
@@ -112,10 +128,12 @@ export function openWebSocket(url: string, handlers: TransportHandlers): Promise
     };
     ws.onopen = () => {
       open = true;
+      window.clearTimeout(timer);
       resolve(transport);
     };
     ws.onmessage = (ev) => handlers.onMessage(new Uint8Array(ev.data as ArrayBuffer));
     ws.onclose = (ev) => {
+      window.clearTimeout(timer);
       if (!open) reject(new Error(`WebSocket closed before opening (${ev.code})`));
       else handlers.onClose(ev.code, ev.reason);
     };
@@ -274,7 +292,8 @@ export function healthUrl(wsUrl: string): string {
 /** Asks the game server whether a WebTransport gateway is attached. */
 export async function discoverWebTransport(wsUrl: string): Promise<WebTransportEndpoint | null> {
   try {
-    const res = await fetch(healthUrl(wsUrl), { signal: AbortSignal.timeout(1500) });
+    // 4 s: a fresh TLS connection is ~3 round trips, ~1.5 s at the 500 ms phones measured (19 Oct)
+    const res = await fetch(healthUrl(wsUrl), { signal: AbortSignal.timeout(4000) });
     const body = (await res.json()) as { webtransport?: WebTransportEndpoint | null };
     return body.webtransport ?? null;
   } catch {

@@ -271,12 +271,21 @@ export class NetClient {
     return false;
   }
 
+  /**
+   * The room's host retunes the room. While disconnected the edit waits and goes out with the next
+   * WELCOME (it was silently lost: the onboarding/sockets audit, L8); the server answers with the
+   * room's tuning when it took something else (clamped, or we're no longer the host).
+   */
   setTuning(t: Tuning): void {
     this.tuning = { ...t };
     if (this.predictor) this.predictor.game.tuning = this.tuning;
     if (this.ownShots) this.ownShots.tuning = this.tuning;
-    this.options.send(encodeCmd(CmdKind.SetTuning, JSON.stringify(t)));
+    if (this.connected) this.options.send(encodeCmd(CmdKind.SetTuning, JSON.stringify(t)));
+    else this.pendingTuning = { ...t };
   }
+
+  /** a host's tuning edit made while disconnected, sent on the next WELCOME */
+  pendingTuning: Tuning | null = null;
 
   /**
    * Low-bandwidth mode (docs/05 §2.2, §13): inputs go two ticks per packet at 30 Hz (the 4-deep
@@ -351,6 +360,12 @@ export class NetClient {
         this.map = getMap(msg.mapId);
         this.tuning = parseTuning(msg.tuningJson, this.tuning);
         this.applyOverrides(msg.overridesJson);
+        if (this.pendingTuning) {
+          // the edit made while we were away: ours again, and the room's once it hears it
+          this.tuning = { ...this.pendingTuning };
+          this.options.send(encodeCmd(CmdKind.SetTuning, JSON.stringify(this.pendingTuning)));
+          this.pendingTuning = null;
+        }
         const rtt = now - this.helloAt;
         this.rtt.add(rtt);
         // Inputs sent now arrive ~1 RTT after the server sent this; land them mid-band early.

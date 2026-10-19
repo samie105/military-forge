@@ -40,11 +40,17 @@ EOF
   exit 0
 fi
 [ "${1:-}" = gateway ] || {
-  echo "usage: wt-setup.sh env|gateway" >&2
+  echo "usage: sudo bash wt-setup.sh gateway   (re-runs the gateway setup: build, certificate, service, self-test)" >&2
+  echo "       sudo bash wt-setup.sh env       (the game server's side; cloud-init.sh runs both)" >&2
   exit 2
 }
 
-HOST=${MF_HOST:?MF_HOST}
+# the box's name: MF_HOST, or the site Caddy serves (a re-run by hand needs no settings)
+HOST=${MF_HOST:-$(sed -n 's/^\([^[:space:]{][^[:space:]]*\) {$/\1/p' /etc/caddy/Caddyfile 2>/dev/null | head -1)}
+[ -n "$HOST" ] || {
+  log "no MF_HOST, and no site in /etc/caddy/Caddyfile"
+  exit 2
+}
 PUBLIC="https://$HOST${MF_ORIGIN_PORT:+:$MF_ORIGIN_PORT}/wt"
 dl() { curl -fsSL --retry 6 --retry-all-errors --retry-delay 5 -m 600 "$@"; }
 
@@ -171,11 +177,15 @@ done
 }
 if [ -x "$PROBE" ]; then
   hash=$(openssl x509 -in $ETC/wt/cert.pem -outform der | sha256sum | cut -d' ' -f1)
-  # a real QUIC session through the gateway to the game server's bridge: READY once its stream is open
-  if printf 'QUIT\n' | timeout 10 "$PROBE" "https://127.0.0.1:443/wt" "$hash" 2>&1 | grep -q '^READY'; then
+  # A real QUIC session through the gateway to the game server's bridge, on the box itself
+  # (127.0.0.1: Azure doesn't hairpin to the VM's own public address), the certificate pinned by
+  # hash: READY once its stream is open. The output is read whole: piped into `grep -q` under
+  # pipefail, the probe's SIGPIPE after READY made a working gateway look broken (19 Oct, live box).
+  out=$(printf 'QUIT\n' | timeout 10 "$PROBE" "https://127.0.0.1:443/wt" "$hash" 2>&1)
+  if printf '%s\n' "$out" | grep -q '^READY'; then
     log "self-test: a WebTransport session opened through the gateway"
   else
-    log "self-test: no WebTransport session (check the gateway's log: journalctl -u mf-wt)"
+    log "self-test: no WebTransport session: $(printf '%s' "$out" | tail -2 | tr '\n' ' ') (the gateway's log: journalctl -u mf-wt)"
   fi
 fi
 log "WebTransport on $PUBLIC (UDP 443)"
