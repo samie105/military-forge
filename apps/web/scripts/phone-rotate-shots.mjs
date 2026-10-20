@@ -158,6 +158,8 @@ try {
   await page.goto(`${base}/?app&time=600`, { waitUntil: 'load' });
   await page.evaluate(() => {
     localStorage.setItem('mf.touch.settings.v1', JSON.stringify({ mode: 'on' }));
+    // the drill (Learn the controls) has its own check: phone-gestures-shots.mjs
+    localStorage.setItem('mf.touch.drill.v1', 'done');
     localStorage.removeItem('mf.touch.layout.v1');
   });
   await page.reload({ waitUntil: 'load' });
@@ -170,6 +172,17 @@ try {
   check(turned.box.join() === '0,0,375,812', `upright: turned, it fills the 375×812 screen (${turned.box.join(', ')})`);
   await shot('r0-name', 1200);
   await iconsResolve('name');
+  // once, on the upright name screen: a card that reads upright asks to turn the phone (typing sideways
+  // under a sideways form is awkward); "Keep it upright" puts it away for good
+  const tip = await page.$eval('.pm-turn', (el) => {
+    const r = el.getBoundingClientRect();
+    return [Math.round(r.width), Math.round(r.height)];
+  }).catch(() => null);
+  check(!!tip && tip[0] === 375 && tip[1] === 812, `upright, first visit: the turn-your-phone card reads upright, filling the screen (${tip})`);
+  await shot('r0-turn-tip', 300);
+  await tap('.pm-turn .btn', 'Keep it upright');
+  await sleep(300);
+  check(!(await page.$('.pm-turn')), 'Keep it upright puts the card away');
 
   // the first tap: full screen, then the lock (both refused: the page stays turned)
   await tap('[data-screen="m-name"] input[aria-label="Your name"]', 'the name field');

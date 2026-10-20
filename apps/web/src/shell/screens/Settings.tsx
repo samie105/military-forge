@@ -310,6 +310,15 @@ function Accessibility({ settings }: { settings: Settings }) {
       </div>
       <div className="srow">
         <div className="srow__txt">
+          <b>Reduce transparency</b>
+          <span>Menus, panels and the HUD's plates are solid instead of frosted glass. Easier to read, and lighter on slow devices.</span>
+        </div>
+        <div className="srow__ctrl">
+          <Switch on={settings.reduceTransparency} onChange={(reduceTransparency) => ctl.updateSettings({ reduceTransparency })} label="Reduce transparency" />
+        </div>
+      </div>
+      <div className="srow">
+        <div className="srow__txt">
           <b>Reduce motion</b>
           <span>No screen shake, no zooming numbers, no pulsing warnings.</span>
         </div>
@@ -577,7 +586,7 @@ export function resetPatch(tab: SettingsTab): Partial<Settings> | null {
     case 'controls':
       return { bindings: defaultBindings(), doubleTapDash: DEFAULT_SETTINGS.doubleTapDash, pad: DEFAULT_PAD_SETTINGS };
     case 'accessibility':
-      return { reduceFlashes: DEFAULT_SETTINGS.reduceFlashes, softBursts: DEFAULT_SETTINGS.softBursts, reduceMotion: DEFAULT_SETTINGS.reduceMotion, colorBlind: DEFAULT_SETTINGS.colorBlind, textScale: DEFAULT_SETTINGS.textScale };
+      return { reduceFlashes: DEFAULT_SETTINGS.reduceFlashes, softBursts: DEFAULT_SETTINGS.softBursts, reduceMotion: DEFAULT_SETTINGS.reduceMotion, reduceTransparency: DEFAULT_SETTINGS.reduceTransparency, colorBlind: DEFAULT_SETTINGS.colorBlind, textScale: DEFAULT_SETTINGS.textScale };
     case 'network':
       return { lowBandwidth: DEFAULT_SETTINGS.lowBandwidth, netGraph: DEFAULT_SETTINGS.netGraph };
     case 'touch':

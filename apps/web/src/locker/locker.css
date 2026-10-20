@@ -77,7 +77,7 @@ html.mf-short:where(:not(.mf-phone)) :where(.mf-gear-fit) .menu-top { height: 88
 :where(html.mf-phone) :where(.mf-gear-fit) .menu-top__title { font-size: var(--fs-28); }
 :where(html.mf-phone) :where(.mf-gear-fit) .lk__h { font-size: var(--fs-28); margin-bottom: var(--sp-2); }
 :where(html.mf-phone) :where(.mf-gear-fit) .lk__panel { padding: var(--sp-3); }
-:where(html.mf-phone) :where(.mf-gear-fit) .mf-lk__fits { left: 4px; top: 4px; }
+:where(html.mf-phone) :where(.mf-gear-fit) .mf-lk__fits { left: 6px; top: 6px; max-width: calc(100% - 12px); }
 :where(html.mf-phone) :where(.mf-gear-fit) .item__art { height: 64px; }
 :where(html.mf-phone) :where(.mf-gear-fit) .mf-item__glyph .ic { width: 36px; height: 36px; }
 :where(html.mf-phone) :where(.mf-gear-fit) .mm-stage canvas { inset: 0; height: 100%; }
@@ -92,7 +92,9 @@ html.mf-short:where(:not(.mf-phone)) :where(.mf-gear-fit) .menu-top { height: 88
 :where(html.mf-phone) :where(.mf-gear-fit) .menu-top { gap: var(--sp-3); }
 :where(html.mf-phone) :where(.mf-gear-fit) .menu-top .serial { display: none; }
 :where(html.mf-phone) :where(.mf-gear-fit) [data-group="light"] { display: none; }
-:where(html.mf-phone) :where(.mf-gear-fit) .lk__fits { scale: .7; transform-origin: 0 0; }
+/* the stamp at a phone's size (not the desktop's stamp scaled): it stays on the stage, clear of the item panel */
+:where(html.mf-phone) :where(.mf-gear-fit) .lk__fits { font-size: var(--fs-16); padding: 2px 8px; gap: 4px; white-space: nowrap; }
+:where(html.mf-phone) :where(.mf-gear-fit) .lk__fits .ic { width: 16px; height: 16px; }
 :where(html.mf-phone) :where(.mf-gear-fit) .mf-lk__sub { margin: var(--sp-2) 0 var(--sp-1); }
 :where(html.mf-phone) :where(.mf-gear-fit) .items { gap: var(--sp-2); }
 :where(html.mf-phone) :where(.mf-gear-fit) .item { padding: var(--sp-2); }

@@ -11,4 +11,5 @@ export function applyPageSettings(html: HTMLElement = document.documentElement):
   html.classList.toggle('mf-big-text', s.textScale >= 1.3);
   html.classList.toggle('reduce-motion', s.reduceMotion);
   html.classList.toggle('reduce-flashes', s.reduceFlashes);
+  html.classList.toggle('reduce-transparency', s.reduceTransparency);
 }

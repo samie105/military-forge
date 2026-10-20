@@ -1,7 +1,7 @@
 /**
  * The first-run controls card on a phone (the desktop's TipsCard lists keys and a mouse, which a phone
  * hasn't got): what each thumb does, in the player's own touch settings (which hand, how the aim dial
- * fires, swipe to dash), and the way to Settings → Touch. It shows the first time a player gets into a
+ * fires, swipe to dash, the button gestures), and Learn: the drill (touch-controls-v3.md). It shows the first time a player gets into a
  * game (in a room's lobby once they fold it to warm up) and from the in-match menu, like the desktop's.
  *
  * It sits in the gap between the move dial and the aim cluster (mirrored for the left hand), below the
@@ -12,7 +12,7 @@
 import { useEffect, useState } from 'react';
 import { Icon } from '../../../ui/Icon';
 import { blurAfter } from '../../../ui/Screen';
-import { getTouchSettings, onTouchChange, type TouchSettings } from '../../../touch';
+import { drillDone, getTouchSettings, onTouchChange, requestDrill, type TouchSettings } from '../../../touch';
 import { useCtl } from '../../context';
 import { PhoneScreen, rise } from './layout';
 
@@ -25,12 +25,12 @@ export interface TouchTip {
 }
 
 /** The card's rows for these touch settings (pure: the tests and the card share it). */
-export function touchTips(s: Pick<TouchSettings, 'handed' | 'fire' | 'swipeDash'>): TouchTip[] {
+export function touchTips(s: Pick<TouchSettings, 'handed' | 'fire' | 'swipeDash'> & Partial<Pick<TouchSettings, 'gestures'>>): TouchTip[] {
   const [moveSide, aimSide] = s.handed === 'left' ? ['Right', 'Left'] : ['Left', 'Right'];
   return [
     { what: `${moveSide} dial`, how: `Move. Up flies, down crouches${s.swipeDash ? ', a swipe dashes' : ''}.`, icon: 'jet' },
     { what: `${aimSide} dial`, how: s.fire === 'release' ? 'Aim, then lift to fire.' : 'Aim. Push far to fire.', icon: 'target' },
-    { what: 'Grenade', how: 'Hold to aim, let go to throw.', icon: 'g-frag' },
+    { what: 'Grenade', how: s.gestures === false ? 'Hold to aim, let go to throw.' : 'Tap: throw. Swipe ↑↓: switch. Hold and drag: aim.', icon: 'g-frag' },
   ];
 }
 
@@ -38,6 +38,14 @@ export function PhoneTips() {
   const ctl = useCtl();
   const [s, setS] = useState(getTouchSettings);
   useEffect(() => onTouchChange(() => setS(getTouchSettings())), []);
+  // the first time in Training on a phone, the drill teaches instead (touch-controls-v3.md §3)
+  const drill = ctl.store?.getState().screen.name === 'training' && !drillDone();
+  useEffect(() => {
+    if (!drill) return;
+    requestDrill();
+    ctl.closeTips();
+  }, [drill, ctl]);
+  if (drill) return null;
   return (
     <PhoneScreen name="m-tips" kind="game" label="How to play" states={[s.handed === 'left' ? 'left-handed' : 'right-handed']}>
       <aside className={`pm-tips plate m-p3${s.handed === 'left' ? ' is-left' : ''}`} style={rise(0)} aria-label="How to play">
@@ -62,14 +70,15 @@ export function PhoneTips() {
           </button>
           <button
             type="button"
-            className="btn btn--ghost btn--sm btn--icon m-p8"
-            aria-label="Touch settings"
+            className="btn btn--ghost btn--sm m-p8"
+            aria-label="Learn the controls"
             onClick={blurAfter(() => {
               ctl.closeTips();
-              ctl.openSettings('touch');
+              requestDrill();
             })}
           >
-            <Icon name="touch" />
+            <Icon name="play" />
+            Learn
           </button>
         </div>
       </aside>

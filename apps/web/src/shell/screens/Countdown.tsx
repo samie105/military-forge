@@ -17,6 +17,7 @@ import { Screen } from '../../ui/Screen';
 import type { Bindings } from '../controls';
 import { formatClock, type MatchView } from '../matchView';
 import { take } from './frame';
+import { useTouchPrompts } from './phone/layout';
 import { MAP_CARDS, eventChip, mapEvents } from './Lobby';
 
 export type CountdownState = 'intro' | 'intro-leaving' | 'match' | '3' | '2' | '1' | 'go';
@@ -164,6 +165,8 @@ function MapIntro({ view, leaving, held }: { view: MatchView; leaving: boolean; 
 
 export function Countdown({ view, state, held = false, bindings }: { view: MatchView; state: CountdownState; held?: boolean; bindings?: Bindings }) {
   const rules = rulesLine(view);
+  // on a phone the tip says what to swipe and hold, not which key
+  const touch = useTouchPrompts();
   const total = Math.max(1, Math.min(3, view.countdownTotal || 3));
   const n = Number(state);
   // the ring empties over each second: from n/total to (n-1)/total (app.css animates between them)
@@ -202,7 +205,8 @@ export function Countdown({ view, state, held = false, bindings }: { view: Match
             )}
             {state === 'go' && <b className="display cd__go m-p7">Go!</b>}
           </div>
-          {state !== 'go' && bindings && (
+          {state !== 'go' && bindings && touch && <p className="cd__hint plate">Tip: swipe the dash button any way · hold the grenade and drag to aim</p>}
+          {state !== 'go' && bindings && !touch && (
             <p className="cd__hint plate">
               Tip: <Kbd code={bindings.dash[0]} /> dash · hold <Kbd code={bindings.grenade[0]} /> to aim a grenade
             </p>

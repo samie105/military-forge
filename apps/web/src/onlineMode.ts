@@ -17,6 +17,7 @@
  * so a page reload resumes the same player within the room's reconnect grace.
  */
 import { adminTuning, createTuning, defaultTuning, weapons, NO_WEAPON, type AdminValues, type MapDef, type Tuning } from '@military-forge/content';
+import { RECONNECT_WINDOW_MS, reconnectDelay } from './shell/reconnect';
 import { adminTuningKeys } from './shell/tune';
 import { ConditionedLink, NetClient, TICK_MS, describeNetSim, type ConditionerSettings, type RemotePose, type Scheduler } from '@military-forge/netcode';
 import { CloseCode, CmdKind, MsgType, encodeCmd, isUnreliableMessage, type MatchStateMsg, type SnapshotPlayer } from '@military-forge/protocol';
@@ -37,7 +38,6 @@ import { mobilityView, shieldView, type CloudView, type Frame, type PlayerView, 
  * player, which needs a fresh join ticket (OnlineOptions.refreshTicket), so a flaky connection can
  * be out for up to a minute and still come back on its own.
  */
-const RECONNECT_WINDOW_MS = 60_000;
 /**
  * A WebTransport session silent this long is given up for WebSocket. 1.5 s (was) is shorter than a
  * phone's upload queue spike (the owner's MTN 4G: p95 1.35 s round trips, 19 Oct 2026): every spike
@@ -361,7 +361,7 @@ export class OnlineMode {
       return;
     }
     this.net.onClose();
-    const delay = Math.min(2000, 250 * 2 ** this.reconnectAttempt++);
+    const delay = reconnectDelay(this.reconnectAttempt++);
     this.status = `reconnecting… (${why}; retry in ${(delay / 1000).toFixed(2)} s)`;
     this.conn = { ...FRESH, state: 'reconnecting', detail: why, code, since: this.droppedAt, until: this.droppedAt + RECONNECT_WINDOW_MS, attempt: this.reconnectAttempt };
     this.reconnectTimer = window.setTimeout(() => this.open(), delay);

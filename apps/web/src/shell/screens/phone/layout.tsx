@@ -5,7 +5,7 @@
  * components (kit-v2) and move by the shared motion system at phone distances (--m-rise 10 px).
  */
 import { useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
-import { LANDSCAPE_PHONE_QUERY, UPRIGHT_PHONE_QUERY, isPhoneShape } from '../../../ui/landscape';
+import { LANDSCAPE_PHONE_QUERY, UPRIGHT_PHONE_QUERY, isPhoneShape, isRotated } from '../../../ui/landscape';
 
 /** A phone held sideways: a finger for a pointer and no more than 500 px of height (tablets keep the desktop menus). */
 export const PHONE_QUERY = LANDSCAPE_PHONE_QUERY;
@@ -31,6 +31,37 @@ function subscribe(onChange: () => void): () => void {
 /** True while the phone menus apply; follows the phone turning (and a window resized past the query). */
 export function usePhoneLayout(): boolean {
   return useSyncExternalStore(subscribe, isPhoneLayout, () => false);
+}
+
+function subscribeUpright(onChange: () => void): () => void {
+  if (typeof matchMedia !== 'function') return () => {};
+  const mq = matchMedia(UPRIGHT_PHONE_QUERY);
+  mq.addEventListener('change', onChange);
+  return () => mq.removeEventListener('change', onChange);
+}
+
+/** The page is turned onto an upright phone (ui/landscape.ts) right now. */
+export function useRotated(): boolean {
+  return useSyncExternalStore(subscribeUpright, isRotated, () => false);
+}
+
+/** The touch controls are what the player plays with (a phone; not a pad plugged into it): prompts say what to tap, not a key. */
+export function touchPrompts(): boolean {
+  if (typeof document === 'undefined') return false;
+  const html = document.documentElement;
+  return html.hasAttribute('data-touch-controls') && html.dataset.input !== 'pad';
+}
+
+function subscribeInput(onChange: () => void): () => void {
+  if (typeof MutationObserver === 'undefined' || typeof document === 'undefined') return () => {};
+  const mo = new MutationObserver(onChange);
+  mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-touch-controls', 'data-input'] });
+  return () => mo.disconnect();
+}
+
+/** touchPrompts(), following the device (touch/index.ts sets data-touch-controls; gamepad/device.ts data-input). */
+export function useTouchPrompts(): boolean {
+  return useSyncExternalStore(subscribeInput, touchPrompts, () => false);
 }
 
 /** Settings → Text size (main.ts writes --text-scale on <html>): 1 … 1.5. */

@@ -8,7 +8,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useStore } from 'zustand';
-import { getTouchSettings, onTouchChange, openTouchEditor, resetTouchLayout, setTouchSettings, type TouchSettings } from '../../../touch';
+import { getTouchSettings, onTouchChange, openTouchEditor, requestDrill, resetTouchHints, resetTouchLayout, setTouchSettings, type TouchSettings } from '../../../touch';
 import { DEFAULT_TOUCH_SETTINGS } from '../../../touch/settings';
 import { Icon } from '../../../ui/Icon';
 import { Switch, blurAfter } from '../../../ui/Screen';
@@ -73,8 +73,34 @@ function Touch() {
   const ctl = useCtl();
   const t = useTouchSettings();
   const set = (patch: Partial<TouchSettings>) => setTouchSettings(patch);
+  const [hintsReset, setHintsReset] = useState(false);
+  // "Learn the controls": in a game, at once; from the menus, in Training
+  const learn = () => {
+    const screen = ctl.store.getState().screen.name;
+    requestDrill();
+    ctl.closeOverlay();
+    if (screen !== 'training' && screen !== 'room') ctl.go({ to: 'training' });
+  };
   return (
     <>
+      <Row i={0} label="Learn the controls" desc="A short drill in Training, one move at a time. Hints: the first-time tips again.">
+        <button type="button" className="btn btn--volt btn--sm" onClick={blurAfter(learn)}>
+          <Icon name="play" />
+          Start
+        </button>
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm"
+          aria-label="Show the hints again"
+          onClick={blurAfter(() => {
+            resetTouchHints();
+            setHintsReset(true);
+          })}
+        >
+          <Icon name={hintsReset ? 'check' : 'info'} />
+          {hintsReset ? 'Back on' : 'Hints'}
+        </button>
+      </Row>
       <Row i={0} label="Layout" desc="Drag, pinch and fade each control. Saved on this phone.">
         <button
           type="button"
@@ -110,7 +136,34 @@ function Touch() {
       <Row i={6} label="Swipe to dash" desc="Swipe the move stick and lift.">
         <Switch on={t.swipeDash} onChange={(swipeDash) => set({ swipeDash })} label="Swipe to dash" />
       </Row>
-      <Row i={7} label="Opacity" desc="How solid the controls' plates look.">
+      <Row i={6} label="Button gestures" desc="Swipe the grenade to change it, hold the gun pill for a radial, swipe the dash. Off: plain taps.">
+        <Switch on={t.gestures} onChange={(gestures) => set({ gestures })} label="Button gestures" />
+      </Row>
+      <Row i={7} label="Auto-fire" desc="Fires by itself while your aim is on an enemy in range.">
+        <Switch on={t.autoFire} onChange={(autoFire) => set({ autoFire })} label="Auto-fire" />
+      </Row>
+      <Row i={7} label="Button haptics" desc="A short buzz on a throw, a swap, a dash swipe.">
+        <Switch on={t.haptics} onChange={(haptics) => set({ haptics })} label="Button haptics" />
+      </Row>
+      <Row i={8} label="View distance" desc="Close: soldiers big and clear. Wide: more of the map. A pinch sets it too.">
+        <div className="pm-set__slider">
+          <Slider value={(t.view - 0.5) / 0.5} onChange={(v) => set({ view: Math.round((0.5 + v * 0.5) * 100) / 100 })} label="View distance" valueText={t.view <= 0.66 ? 'Close' : t.view >= 0.9 ? 'Wide' : 'Mid'} min={0} max={100} />
+          <output>{t.view <= 0.66 ? 'Close' : t.view >= 0.9 ? 'Wide' : 'Mid'}</output>
+        </div>
+      </Row>
+      <Row i={8} label="Pinch to zoom" desc="Two fingers on one side: closer or wider. Two-finger double tap: recentre.">
+        <Switch on={t.pinchZoom} onChange={(pinchZoom) => set({ pinchZoom })} label="Pinch to zoom" />
+      </Row>
+      <Row i={8} label="Look-ahead" desc="The view leans toward where you aim.">
+        <Switch on={t.lookAhead} onChange={(lookAhead) => set({ lookAhead })} label="Look-ahead" />
+      </Row>
+      <Row i={9} label="Camera shake" desc="Blasts and recoil in the 3D view.">
+        <div className="pm-set__slider">
+          <Slider value={t.shake} onChange={(v) => set({ shake: Math.round(v * 20) / 20 })} label="Camera shake" valueText={pct(t.shake)} min={0} max={100} />
+          <output className="num">{pct(t.shake)}</output>
+        </div>
+      </Row>
+      <Row i={10} label="Opacity" desc="How solid the controls' plates look.">
         <div className="pm-set__slider">
           <Slider value={(t.opacity - 0.15) / 0.85} onChange={(v) => set({ opacity: Math.round((0.15 + v * 0.85) * 100) / 100 })} label="Touch controls opacity" valueText={pct(t.opacity)} min={15} max={100} />
           <output className="num">{pct(t.opacity)}</output>

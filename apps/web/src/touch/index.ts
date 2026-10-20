@@ -16,6 +16,7 @@ import type { Camera } from '../camera';
 import type { ThrowLatch } from '../input';
 import type { TouchController, TouchFrame } from './controller';
 import { clearLayout, loadSettings, saveSettings, sanitizeSettings, type KeyValueStore, type TouchSettings } from './settings';
+import { drillSeen, markDrillSeen, saveSeen } from './teach';
 
 export type { FireMode, Handed, TouchMode, TouchSettings } from './settings';
 
@@ -39,7 +40,11 @@ export interface TouchDeps {
     render(frame: TouchFrame, ...rest: never[]): void;
     onEvents(events: readonly SimEvent[], localId: number): void;
   };
-  view3d?: { setDprCap?(cap: number | null): void; setTouchDevice?(on: boolean): void } | null;
+  /**
+   * The 3D view. setShakeScale (0–1: Settings → Touch → Camera shake) is render3d-b's to add; until it
+   * exists the setting is saved and waits (touch-interfaces.md, the shared notes).
+   */
+  view3d?: { setDprCap?(cap: number | null): void; setTouchDevice?(on: boolean): void; setShakeScale?(k: number): void } | null;
   /** a ✎ button on the controls opens the HUD editor (off once a Settings screen offers it) */
   editButton?: boolean;
   /** the room's tuning (the dash's flick mapping reads it); null or absent: the defaults */
@@ -51,6 +56,8 @@ let controller: TouchController | null = null;
 let loading: Promise<void> | null = null;
 let deps: TouchDeps | null = null;
 let touchedOnce = false;
+/** "Learn the controls" was asked for before the controls were up (Settings, the controls card) */
+let drillPending = false;
 const listeners = new Set<() => void>();
 
 function storage(): KeyValueStore | null {
@@ -102,6 +109,9 @@ function sync(): void {
         dashFlickFull: () => (d.tuning?.() ?? defaultTuning).dashFlickFull,
       };
       controller = new TouchController(host, settings, loadLayout(storage()), storage(), setTouchSettings, d.editButton ?? true);
+      if (drillPending) controller.startDrill();
+      drillPending = false;
+      if (import.meta.env.DEV) controller.onAction((a) => (window as unknown as { __touch?: { actions: string[] } }).__touch?.actions.push(a));
       controller.setActive(wanted());
       notify();
     });
@@ -140,7 +150,22 @@ export function mountTouch(d: TouchDeps): void {
   };
 
   // dev builds: the API on window for automated checks (scripts/touch-check.mjs) and console poking
-  if (import.meta.env.DEV) Object.assign(window, { __touch: { getTouchSettings, setTouchSettings, openTouchEditor, resetTouchLayout, touchActive, sticks: () => controller?.debugState() ?? null } });
+  if (import.meta.env.DEV)
+    Object.assign(window, {
+      __touch: {
+        getTouchSettings,
+        setTouchSettings,
+        openTouchEditor,
+        resetTouchLayout,
+        touchActive,
+        requestDrill,
+        resetTouchHints,
+        sticks: () => controller?.debugState() ?? null,
+        /** what the player did, newest last (the v3 checks) */
+        actions: [] as string[],
+      },
+    });
+  applyShake();
 
   // phones and tablets: the presets' touch pixel-ratio caps (up to 3× on High: render3d presets.ts);
   // dynamic resolution stays on
@@ -168,7 +193,34 @@ export function setTouchSettings(patch: Partial<TouchSettings>): void {
   settings = sanitizeSettings({ ...settings, ...patch });
   saveSettings(storage(), settings);
   controller?.applySettings(settings);
+  applyShake();
   sync();
+}
+
+/** Camera shake (Settings → Touch): the 3D view's, on touch devices only (the desktop keeps its own). */
+function applyShake(): void {
+  if (deps && isTouchDevice()) deps.view3d?.setShakeScale?.(settings.shake);
+}
+
+/**
+ * "Learn the controls" (touch-controls-v3.md §3): the drill starts as soon as the player is in a game
+ * with the touch controls up (now, if they are).
+ */
+export function requestDrill(): void {
+  if (controller) controller.startDrill();
+  else drillPending = true;
+}
+
+/** The drill was finished or closed on this phone (it no longer starts by itself in Training). */
+export function drillDone(): boolean {
+  return drillSeen(storage());
+}
+
+/** Settings → Touch → Show hints again: the first-time hints show again, and the drill starts by itself again. */
+export function resetTouchHints(): void {
+  controller?.resetHints();
+  if (!controller) saveSeen(storage(), new Set());
+  markDrillSeen(storage(), false);
 }
 
 /** The touch controls are on screen (or would be, outside the menus). */

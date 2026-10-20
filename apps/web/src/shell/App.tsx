@@ -6,8 +6,9 @@
  * here runs per frame: the store changes when something visible does.
  */
 import { MatchPhase } from '@military-forge/sim';
-import { useEffect, useRef, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useStore } from 'zustand';
+import { assetLoad, type AssetLoad } from '../assetLoad';
 import { useShownControls } from '../gamepad/react';
 import { eventLook } from '../hud/model';
 import { Icon } from '../ui/Icon';
@@ -16,8 +17,9 @@ import { alertFromConnection } from './alerts';
 import { ControllerContext, useCtl } from './context';
 import type { ShellController } from './controller';
 import type { MapEventBanner as MapEventBannerView } from './mapEventBanner';
+import { holdLoading } from './mapLoading';
 import { formatClock, type MatchView } from './matchView';
-import { Alert, Connecting, ReconnectBanner, connectStep } from './screens/Connection';
+import { Alert, Connecting, MapLoading, ReconnectBanner, connectStep } from './screens/Connection';
 import { Countdown, useCountdown } from './screens/Countdown';
 import { Home } from './screens/Home';
 import { Join } from './screens/Join';
@@ -141,8 +143,12 @@ function RoomScreen({ store, code }: { store: ShellStore; code: string }) {
   const countdown = useCountdown(match);
   const phone = usePhoneLayout();
 
-  if (!connection || connection.state === 'connecting' || connection.state === 'joining' || (connection.state === 'connected' && !match)) {
+  const loading = useLoadingHold(connection?.state === 'connected', !!match, match?.phase === MatchPhase.Waiting);
+  if (!connection || connection.state === 'connecting' || connection.state === 'joining') {
     return <Connecting code={code} step={connectStep(connection, !!match)} onCancel={() => ctl.leave()} />;
+  }
+  if (loading) {
+    return <MapLoading code={code} lobby={lobby} mapName={lobby?.mapName || match?.mapName || ''} haveMatch={!!match} load={loading} bindings={bindings} onCancel={() => ctl.leave()} />;
   }
   if (connection.state === 'failed') return <Alert alert={alertFromConnection(connection, code)} onRejoin={() => ctl.rejoin()} />;
   const host = lobby?.players.find((p) => p.host);
@@ -161,6 +167,31 @@ function RoomScreen({ store, code }: { store: ShellStore; code: string }) {
       <ReconnectBanner connection={connection} />
     </>
   );
+}
+
+/**
+ * The map loading screen's hold (shell/mapLoading.ts): from the room letting us in until the first
+ * world update, and in a lobby until the map's art is in (8 s at most). Counted from this room's
+ * screen mounting; once let go, it never comes back for this room (later downloads pop in). Returns
+ * the load to show while it holds, null once it doesn't.
+ */
+function useLoadingHold(connected: boolean, haveMatch: boolean, waiting: boolean): AssetLoad | null {
+  const [mark] = useState(() => assetLoad.mark());
+  const firstWorld = useRef<number | null>(null);
+  const released = useRef(false);
+  const [, setTick] = useState(0);
+  const load = assetLoad.since(mark);
+  if (haveMatch && firstWorld.current === null) firstWorld.current = performance.now();
+  const heldMs = firstWorld.current === null ? 0 : performance.now() - firstWorld.current;
+  const hold = connected && !released.current && holdLoading({ haveMatch, waiting, load, heldMs });
+  if (connected && haveMatch && !hold) released.current = true;
+  // while it holds, look again 4 times a second (files land without a store change)
+  useEffect(() => {
+    if (!hold) return undefined;
+    const t = window.setInterval(() => setTick((n) => n + 1), 250);
+    return () => window.clearInterval(t);
+  }, [hold]);
+  return hold ? load : null;
 }
 
 function TrainingScreen({ store }: { store: ShellStore }) {

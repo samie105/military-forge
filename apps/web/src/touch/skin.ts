@@ -66,7 +66,8 @@ export function skinHtml(id: ControlId): string {
   <span class="dial__mode" data-state="grenade-aim">Aim the arc</span>
 </div>`;
     case 'shield':
-      return `<div class="mf-skin dial-btn dial-btn--shield">${ic('shield')}</div>`;
+      // the riot shield's HP rides the button as a ring (--shield-hp), with its number, while one is carried
+      return `<div class="mf-skin dial-btn dial-btn--shield">${ic('shield')}<span class="mf-shield-hp" data-state="shield">${ring(27)}</span><b class="num tb__sub" data-state="shield" data-bind="player.shield.hp"></b></div>`;
     case 'reload':
       return `<div class="mf-skin dial-btn dial-btn--reload">${ic('reload')}<b class="num tb__sub" data-state="gun" data-bind="player.slot.0.mag"></b><span data-state="reloading">${ring(27)}</span></div>`;
     case 'dash':
@@ -246,6 +247,8 @@ export function controlValues(hud: Readonly<Record<string, string>>, local: Loca
   values['touch.throw'] = extra.throwAim >= 0 ? fixed(Math.max(0.06, extra.throwAim / 7)) : '0';
   values['touch.equip'] = fixed(extra.equip);
   values['touch.zoom'] = values['weapon.zoom'] && values['weapon.zoom'] !== '1×' ? values['weapon.zoom'] : '';
+  // the shield's number shows only while one is carried (the HUD writes it then)
+  values['player.shield.hp'] ??= '';
   return values;
 }
 

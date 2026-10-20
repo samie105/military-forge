@@ -135,6 +135,9 @@ const RESULTS = JSON.stringify({
 
 try {
   await page.goto(`${base}/?app&time=600`, { waitUntil: 'load' });
+  // the controls card (m-tips) is what this run checks: the "Learn the controls" drill, which takes its
+  // place the first time in Training, has its own check (phone-gestures-shots.mjs)
+  await page.evaluate(() => localStorage.setItem('mf.touch.drill.v1', 'done'));
   await page.waitForSelector('[data-screen="m-name"] input[aria-label="Your name"]', { timeout: 60_000 });
   // ---- name entry: the phone's own (the typing band on top, clear of the keyboard) ----
   await shot('m0-name', 1200);

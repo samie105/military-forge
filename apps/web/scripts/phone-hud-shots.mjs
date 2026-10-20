@@ -106,6 +106,8 @@ try {
   await page.goto(`${base}/?app&time=600`, { waitUntil: 'load' });
   await page.evaluate(() => {
     localStorage.setItem('mf.touch.settings.v1', JSON.stringify({ mode: 'on' }));
+    // the drill (Learn the controls) has its own check: phone-gestures-shots.mjs
+    localStorage.setItem('mf.touch.drill.v1', 'done');
     localStorage.removeItem('mf.touch.layout.v1');
   });
   await page.reload({ waitUntil: 'load' });

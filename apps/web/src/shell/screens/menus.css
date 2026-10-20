@@ -216,3 +216,22 @@ html.mf-short.mf-big-text .kit-v2 .pause__btn .btn__sub { display: none; }
 .kit-v2 .mf-tune__all { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-3); padding: var(--sp-3) 0; border-top: var(--bw) solid var(--c-line); }
 .kit-v2 .mf-tune__all .mf-tune__pane { align-self: stretch; }
 .kit-v2 .mf-tune__out { flex-basis: 100%; display: flex; flex-direction: column; gap: var(--sp-1); font-size: var(--fs-14); color: var(--c-muted); }
+
+/* the map loading screen (Connection.tsx MapLoading, the kit's 15 · Loading): the tip card's pager
+   dots and the next tips, and a way out under the bar */
+:where(.kit-v2) .mf-load__tiphead { display: flex; align-items: center; gap: var(--sp-2); }
+.kit-v2 .mf-load__dots { display: flex; gap: 6px; margin-left: auto; }
+.kit-v2 .mf-load__dots i { width: 8px; height: 8px; border-radius: 4px; background: var(--c-paper-line); transition: width var(--m-fast) var(--ease-out); }
+.kit-v2 .mf-load__dots i.is-on { width: 22px; background: var(--c-paper-text); }
+.kit-v2 .mf-load__next { margin: 0; padding-top: var(--sp-3); border-top: 2px dashed var(--c-paper-line); font-size: var(--fs-14); color: var(--c-paper-muted); }
+.kit-v2 .mf-load__cancel { align-self: flex-start; margin-top: var(--sp-2); }
+/* the reconnect's tries (Connection.tsx TryPips, Pen N3): one pip a try, the one under way lit; on the
+   lost card, the failed ones in the alert's red */
+.kit-v2 .mf-reconnect__body { display: flex; flex-direction: column; gap: 6px; }
+.kit-v2 .mf-tries { display: flex; flex-wrap: wrap; gap: 3px; max-width: 360px; }
+.kit-v2 .mf-tries i { width: 8px; height: 8px; border-radius: 2px; background: var(--c-pip-off); }
+.kit-v2 .mf-tries i.is-done { background: var(--c-warn); }
+.kit-v2 .mf-tries i.is-now { background: var(--c-volt); }
+.kit-v2 .mf-tries.is-failed i.is-done { background: var(--c-hp); }
+.kit-v2 .mf-conn__tries { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); }
+.kit-v2 .mf-conn__tries .mf-tries i:not(.is-done) { background: var(--c-paper-line); }

@@ -79,6 +79,9 @@
 .dial-btn--sm { width: 48px; height: 48px; }
 .dial-btn--sm .ic { width: 20px; height: 20px; }
 .dial-btn--reload .tb__ring { position: absolute; inset: -5px; width: calc(100% + 10px); height: calc(100% + 10px); transform: rotate(-90deg); }
+.mf-shield-hp .tb__ring { position: absolute; inset: -5px; width: calc(100% + 10px); height: calc(100% + 10px); transform: rotate(-90deg); }
+.mf-shield-hp .tb__ring circle { fill: none; stroke: var(--c-shield); stroke-width: 4; stroke-dasharray: 100; stroke-dashoffset: calc(100 - var(--shield-hp, 0) * 100); }
+[data-active-state~='shield-up'] .dial-btn--shield { border-color: var(--c-volt); }
 .dial-btn--reload .tb__ring circle { fill: none; stroke: var(--c-paper); stroke-width: 4; stroke-dasharray: 100; stroke-dashoffset: calc(100 - var(--reload) * 100); }
 .mf-touch .pt-swap { white-space: nowrap; }
 .mf-touch .pt-pick { white-space: nowrap; }
@@ -153,3 +156,112 @@ html[data-touch-controls] #game, html[data-touch-controls] #view3d { touch-actio
 
 /* Reduce motion: the kit stops every animation and transition inside .kit-v2 (kit.css); the HP arc jumps too */
 html.reduce-motion .mf-touch { transition: none; --m-rise: 0px; }
+
+/*
+ * ---- v3: Frost's controls in Field Print's colours (owner, 19 Oct: "the Frost control joystick, Frost
+ * look and Frost feel to an extent"; Pen MOBILE ZAc68 "Concept B · Thumb Dials") ----
+ * Frost's shapes and feel: round glass plates with a thin bright rim, a top light and a soft drop, the
+ * game blurred behind them; a glossy sphere for each knob. Field Print's colours and type: olive ink
+ * glass, paper rims and knobs, volt for what's live (the aim knob, a press, the dash ring), brass, the
+ * stencil numbers. The glass falls back to a solid translucent fill where blur costs too much (a slow
+ * phone: html.mf-glass-off, set by the controller), where it isn't supported, and under Reduce transparency.
+ */
+.mf-touch {
+  --glass-fill: color-mix(in srgb, var(--c-ink-900) 34%, transparent);
+  --glass-solid: color-mix(in srgb, var(--c-ink-900) 70%, transparent);
+  --glass-rim: color-mix(in srgb, var(--c-paper) 42%, transparent);
+  --glass-rim-lo: color-mix(in srgb, var(--c-paper) 12%, transparent);
+  --glass-hi: radial-gradient(120% 90% at 30% 18%, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0.02) 60%, transparent);
+  --glass-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 8px 18px rgb(0 0 0 / 0.32);
+  --glass-blur: blur(10px) saturate(1.15);
+}
+.mf-touch :is(.dial__base, .dial-btn, .tb, .pt-swap, .pt-pick) {
+  background: var(--glass-hi), var(--glass-fill);
+  border: 1.5px solid var(--glass-rim);
+  border-bottom-color: var(--glass-rim-lo);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+/* the dial's inner ring: a thin line, not the kit's dash (Frost's dial) */
+.mf-touch .dial__groove { border: 1.5px solid color-mix(in srgb, var(--c-paper) 22%, transparent); }
+/* the knobs: glossy spheres; paper for moving, volt for aiming */
+.mf-touch .dial__knob {
+  background: radial-gradient(circle at 34% 28%, #fffdf4 0%, var(--c-paper) 42%, var(--c-paper-3) 100%);
+  border: 1.5px solid color-mix(in srgb, var(--c-ink-950) 70%, transparent);
+  box-shadow: 0 6px 14px rgb(0 0 0 / 0.38), inset 0 -4px 8px rgb(0 0 0 / 0.12);
+}
+.mf-touch .dial__knob--aim {
+  background: radial-gradient(circle at 34% 28%, #f6ffd0 0%, var(--c-volt) 46%, var(--c-olive-300) 100%);
+  color: var(--c-volt-ink);
+}
+.mf-touch .dial-btn .ic { color: var(--c-paper); }
+/* a thumb on a control: its rim lights volt */
+.mf-touch .mf-ctl.mf-down :is(.dial-btn, .tb, .pt-swap, .pt-pick) { border-color: var(--c-volt); box-shadow: var(--glass-shadow), 0 0 0 3px color-mix(in srgb, var(--c-volt) 22%, transparent); }
+/* the solid fallback */
+html.mf-glass-off .mf-touch :is(.dial__base, .dial-btn, .tb, .pt-swap, .pt-pick) { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--glass-hi), var(--glass-solid); }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .mf-touch :is(.dial__base, .dial-btn, .tb, .pt-swap, .pt-pick) { background: var(--glass-hi), var(--glass-solid); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .mf-touch :is(.dial__base, .dial-btn, .tb, .pt-swap, .pt-pick) { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--c-ink-900); }
+}
+
+/* ---- v3: the gestures' overlays (overlays.ts): the belt's fan, the radial, a hint, the drill ---- */
+.mf-touch-fx { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.mf-touch-fx [hidden] { display: none !important; }
+/* the grenade belt: a drum of the types carried, the one a scrub lands on level with the button */
+.mf-fan { position: absolute; width: 150px; height: 34px; overflow: visible; padding: 0; background: none; border: 0; }
+.mf-fan[data-side='left'] { translate: -100% 0; }
+.mf-fan ul { margin: 0; padding: 0; list-style: none; transition: translate var(--m-fast) var(--ease-settle); }
+.mf-fan__row { display: flex; align-items: center; gap: 6px; height: 30px; margin-bottom: 4px; padding: 0 10px; border-radius: var(--r-xs) var(--r-md) var(--r-xs) var(--r-md); background: var(--glass-solid, rgb(14 16 11 / 0.7)); border: 1.5px solid var(--glass-rim-lo); color: var(--c-muted); font-size: var(--fs-14); font-weight: var(--fw-bold); white-space: nowrap; opacity: 0.75; }
+.mf-fan__row span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.mf-fan__row b { color: var(--c-text); }
+.mf-fan__row.is-held { color: var(--c-text); opacity: 1; }
+.mf-fan__row.is-landing { opacity: 1; color: var(--c-volt-ink); background: var(--c-volt); border-color: var(--c-volt); }
+.mf-fan__row.is-landing b { color: var(--c-volt-ink); }
+.mf-fan p { margin: 2px 0 0; padding: 2px 8px; border-radius: var(--r-xs); background: var(--c-plate-strong); color: var(--c-muted); font-size: var(--fs-14); white-space: nowrap; }
+.mf-fan:not([hidden]) { animation: mf-fan-in var(--m-fast) var(--ease-arrive) both; }
+.mf-fan.is-leaving { animation: mf-fade-out var(--m-fast) var(--ease-leave) both; }
+@keyframes mf-fan-in { from { opacity: 0; scale: 0.92; } to { opacity: 1; scale: 1; } }
+@keyframes mf-fade-out { to { opacity: 0; } }
+/* the gun pill's radial: three choices fanned away from the screen's edge */
+.mf-radial { position: absolute; width: 0; height: 0; }
+
+.mf-radial__it { position: absolute; translate: -50% -50%; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 64px; min-height: var(--touch-min); padding: 6px 8px; border-radius: var(--r-xs) var(--r-md) var(--r-xs) var(--r-md); background: var(--glass-hi), var(--glass-solid, rgb(14 16 11 / 0.7)); border: 1.5px solid var(--glass-rim); color: var(--c-text); font-size: var(--fs-14); font-weight: var(--fw-bold); white-space: nowrap; animation: mf-fan-in var(--m-fast) var(--ease-arrive) both; }
+.mf-radial__it .ic { width: 22px; height: 22px; }
+.mf-radial__it .ic--kf { width: 48px; height: 18px; color: var(--c-fin-gold); }
+.mf-radial__it.is-picked { background: var(--c-volt); border-color: var(--c-volt); color: var(--c-volt-ink); scale: 1.08; }
+.mf-radial__it.is-picked .ic--kf { color: var(--c-volt-ink); }
+/* a first-time hint: a chip beside the control */
+.mf-hintchip { position: absolute; max-width: 220px; padding: 6px 10px; border-radius: var(--r-xs) var(--r-md) var(--r-xs) var(--r-md); background: var(--c-ink-900); border: 1.5px solid var(--c-volt); color: var(--c-text); font-size: var(--fs-14); font-weight: var(--fw-bold); line-height: 1.2; box-shadow: 0 6px 14px rgb(0 0 0 / 0.35); animation: mf-fan-in var(--m-base) var(--ease-arrive) both; }
+.mf-hintchip[data-side='left'] { translate: -100% -50%; }
+.mf-hintchip[data-side='right'] { translate: 0 -50%; }
+.mf-hintchip[data-side='above'] { translate: -50% -100%; }
+.mf-hintchip[data-side='below'] { translate: -50% 0; }
+/* a moment's cue by a control: "Shield broken" (a stamp, P7) */
+.mf-cue { position: absolute; translate: -100% -50%; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 2px solid var(--c-hp); border-radius: var(--r-xs); background: var(--c-ink-900); color: var(--c-danger-text); font-size: var(--fs-14); font-weight: var(--fw-black); text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; rotate: -4deg; }
+.mf-cue .ic { width: 16px; height: 16px; }
+/* "Learn the controls": one goal at a time, top centre, clear of the dials */
+.mf-drill { position: absolute; left: 43%; top: 52px; translate: -50% 0; width: 280px; display: flex; flex-direction: column; gap: 2px; padding: 6px 10px 8px; background: var(--c-ink-900); pointer-events: auto; animation: mf-fan-in var(--m-base) var(--ease-arrive) both; }
+.mf-drill__top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.mf-drill__top .btn--icon { margin: -6px -8px -6px 0; min-width: var(--touch-min); min-height: var(--touch-min); box-shadow: none; }
+.mf-drill__goal { display: inline-flex; align-items: center; gap: 6px; font: var(--fw-display) calc(24px * min(var(--text-scale, 1), 1.15))/1 var(--f-display); text-transform: uppercase; color: var(--c-text); }
+.mf-drill__how { margin: 0; color: var(--c-text); font-size: var(--fs-14); line-height: 1.25; }
+.mf-drill__foot { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.mf-drill__foot .btn { margin-left: auto; min-height: var(--touch-min); box-shadow: none; }
+.mf-drill__dots { display: flex; gap: 3px; }
+.mf-drill__dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--c-touch); }
+.mf-drill__dots i.is-done { background: var(--c-volt); }
+.mf-drill__dots i.is-skipped { background: var(--c-muted); }
+.mf-drill__dots i.is-now { background: var(--c-paper); }
+.mf-drill__tick { display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px; border-radius: var(--r-xs); background: var(--c-volt); color: var(--c-volt-ink); font-size: var(--fs-14); font-weight: var(--fw-black); text-transform: uppercase; }
+.mf-drill__tick .ic { width: 14px; height: 14px; }
+/* the control a drill step is about: a volt ring pulses round it */
+.mf-ctl.mf-teach::before { content: ''; position: absolute; inset: -10px; border-radius: 50%; border: 2px solid var(--c-volt); pointer-events: none; animation: mf-teach 1.4s var(--ease-travel) infinite; }
+.mf-ctl.mf-teach.mf-pill::before { border-radius: var(--r-md); }
+.mf-stick.mf-teach::before { inset: calc(16px * var(--k, 1) - 10px); }
+@keyframes mf-teach { 0% { opacity: 0.9; scale: 1; } 70%, 100% { opacity: 0; scale: 1.18; } }
+.mf-touch-editing .mf-touch-fx { display: none; }
+.mf-text-lg .mf-drill { width: 360px; }
+html.reduce-motion .mf-ctl.mf-teach::before { animation: none; opacity: 0.9; }

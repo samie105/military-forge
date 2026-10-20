@@ -1392,7 +1392,9 @@ export class Renderer {
       ctx.textAlign = 'center';
       ctx.font = 'bold 14px ui-monospace, monospace';
       ctx.fillStyle = crateColor(under.weapon);
-      ctx.fillText(takePrompt(under, p), cam.width / 2, cam.height - 170);
+      // a phone's touch controls take it with the Take button, not a key
+      const touch = document.documentElement.hasAttribute('data-touch-controls') && document.documentElement.dataset.input !== 'pad';
+      ctx.fillText(takePrompt(under, p, touch ? null : 'E'), cam.width / 2, cam.height - 170);
       ctx.restore();
     }
     const status = statusTags(p, true);

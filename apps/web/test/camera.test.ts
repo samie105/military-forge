@@ -88,3 +88,34 @@ describe('camera vs AOI', () => {
     expect(cam.x + halfW).toBeLessThanOrEqual(aoi.maxX);
   });
 });
+
+describe('the phone view (Camera.viewScale, Settings → Touch → View distance)', () => {
+  it('sits closer than the zoom level: a smaller view, bigger soldiers; never wider than the level, never under half', () => {
+    const cam = new Camera();
+    cam.resize(812, 375);
+    const full = cam.viewWidth;
+    const ppm = cam.ppm;
+    cam.viewScale = 0.62;
+    expect(cam.viewWidth).toBeCloseTo(full * 0.62, 6);
+    expect(cam.ppm).toBeCloseTo(ppm / 0.62, 6); // a soldier ~1.6× as tall on screen
+    cam.viewScale = 3;
+    expect(cam.viewWidth).toBeCloseTo(full, 6);
+    cam.viewScale = 0.1;
+    expect(cam.viewWidth).toBeCloseTo(full * 0.5, 6);
+  });
+
+  it('look-ahead scales with the setting; off, the view stays on the soldier', () => {
+    const map = getMap('movement-test') ?? getMap('lunar-outpost')!;
+    const cx = (map.bounds.minX + map.bounds.maxX) / 2;
+    const cy = (map.bounds.minY + map.bounds.maxY) / 2;
+    const at = (la: number) => {
+      const cam = new Camera();
+      cam.resize(812, 375);
+      cam.lookAhead = la;
+      cam.follow(cx, cy, cx + 30, cy, 1, map);
+      return cam.x;
+    };
+    expect(at(1)).toBeGreaterThan(at(0));
+    expect(at(0)).toBeCloseTo(cx, 3);
+  });
+});

@@ -1,0 +1,60 @@
+/*
+ * Frost's feel in Field Print's colours (owner, 19 Oct: "the one that has the lemon green, with the
+ * frost look and feel to an extent"; docs/design/pen-diff.md §3). The dark surfaces that float over
+ * the game or a menu become frosted glass: a translucent ink fill over a blurred backdrop, a light
+ * top edge and a soft outer shadow, with Frost's two-corner rounding on the big panels. Volt, olive,
+ * brass, paper cards and the stencil type stay as they are; paper (tickets, the print cards) stays
+ * paper. Tokens only.
+ *
+ * Solid fallback: html.reduce-transparency (Settings → Accessibility, on by default when the OS asks
+ * for less transparency), html.gfx-low (Low graphics: blur costs the GPU every frame), and browsers
+ * without backdrop-filter get the kit's own opaque fills.
+ */
+:root {
+  /* the glass: ink at 58 % (panels) and 72 % (HUD plates, which sit on a moving world) */
+  --frost-fill: color-mix(in srgb, var(--c-ink-950) 58%, transparent);
+  --frost-fill-hud: color-mix(in srgb, var(--c-ink-950) 72%, transparent);
+  --frost-line: color-mix(in srgb, var(--c-paper) 22%, transparent);
+  --frost-hi: color-mix(in srgb, var(--c-paper) 12%, transparent);
+  --frost-shadow: 0 12px 32px color-mix(in srgb, var(--c-ink-950) 55%, transparent);
+  --blur-frost: 20px;
+  --blur-hud: 12px;
+  /* Frost's corners: square top-left and bottom-right */
+  --r-frost: 0 28px 0 28px;
+  --r-frost-sm: 0 18px 0 18px;
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  /* ---- panels over the game or a menu: pause, Tune the game, toasts and banners (Settings is a
+     paper card, and paper stays paper) ---- */
+  html:not(.reduce-transparency):not(.gfx-low) :is(.pause, .tune, .toast, .mf-notice, .reconnect, .mf-hud-banner, .mf-lobby-strip) {
+    background: var(--frost-fill);
+    background-image: radial-gradient(120% 90% at 0% 0%, var(--frost-hi), transparent 60%);
+    border-color: var(--frost-line);
+    box-shadow: inset 0 1px 0 var(--frost-hi), var(--frost-shadow);
+    backdrop-filter: blur(var(--blur-frost)) saturate(1.15);
+  }
+  html:not(.reduce-transparency):not(.gfx-low) :is(.pause, .tune) { border-radius: var(--r-frost); }
+  html:not(.reduce-transparency):not(.gfx-low) :is(.toast, .mf-notice, .reconnect, .mf-hud-banner) { border-radius: var(--r-frost-sm); }
+
+  /* the dimmed game behind the pause menu is blurred too (Frost's overlay rule: the live game sharp,
+     an overlay over it blurred) */
+  html:not(.reduce-transparency):not(.gfx-low) :is(.pause__dim, .mf-pause__dim) { backdrop-filter: blur(6px); }
+
+  /* the dark menu cards on the camo (the lobby's roster and mission, the results' table): glass too */
+  html:not(.reduce-transparency):not(.gfx-low) .screen--menu .card:not(.card--print) {
+    background: var(--frost-fill);
+    border-color: var(--frost-line);
+    box-shadow: inset 0 1px 0 var(--frost-hi);
+    backdrop-filter: blur(var(--blur-frost));
+  }
+
+  /* ---- the HUD's plates: glass that keeps the HUD readable (a stronger fill, a lighter blur, the
+     kit's text shadow and corners) ---- */
+  html:not(.reduce-transparency):not(.gfx-low) #hud .mf-hud-desktop .plate {
+    background: var(--frost-fill-hud);
+    border-color: var(--frost-line);
+    box-shadow: inset 0 1px 0 var(--frost-hi);
+    backdrop-filter: blur(var(--blur-hud));
+  }
+}

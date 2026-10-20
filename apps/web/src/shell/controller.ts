@@ -107,6 +107,7 @@ export function sanitizeSettings(raw: unknown, defaults: Settings = DEFAULT_SETT
     reduceFlashes: flag(s.reduceFlashes, defaults.reduceFlashes),
     softBursts: flag(s.softBursts, defaults.softBursts),
     reduceMotion: flag(s.reduceMotion, defaults.reduceMotion),
+    reduceTransparency: flag(s.reduceTransparency, defaults.reduceTransparency),
     colorBlind: s.colorBlind === 'deutan' || s.colorBlind === 'tritan' || s.colorBlind === 'standard' ? s.colorBlind : defaults.colorBlind,
     textScale: scale,
     doubleTapDash: flag(s.doubleTapDash, defaults.doubleTapDash),
@@ -125,10 +126,19 @@ function prefersReducedMotion(): boolean {
   }
 }
 
+/** The OS asks for less transparency: solid surfaces start on (ui/frost.css). */
+function prefersReducedTransparency(): boolean {
+  try {
+    return window.matchMedia('(prefers-reduced-transparency: reduce)').matches;
+  } catch {
+    return false;
+  }
+}
+
 /** The settings saved on this device (main.ts reads them before the shell starts: the 3D view's first preset). */
 export function loadSettings(): Settings {
   const reduced = prefersReducedMotion();
-  const defaults = { ...DEFAULT_SETTINGS, reduceFlashes: reduced, reduceMotion: reduced };
+  const defaults = { ...DEFAULT_SETTINGS, reduceFlashes: reduced, reduceMotion: reduced, reduceTransparency: prefersReducedTransparency() };
   try {
     return sanitizeSettings(JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? 'null'), defaults);
   } catch {

@@ -4,6 +4,7 @@
  */
 import { CloseCode } from '@military-forge/protocol';
 import { ApiError } from './api';
+import { RECONNECT_WINDOW_MS, reconnectTries } from './reconnect';
 import type { AlertInfo, ConnectionView } from './store';
 
 /** "ROOM_FULL · room KMTXRA" */
@@ -56,7 +57,15 @@ export function alertFromConnection(c: Pick<ConnectionView, 'code' | 'detail' | 
     default: {
       const tries = c.attempt > 0 ? ` after ${c.attempt} ${c.attempt === 1 ? 'try' : 'tries'}` : '';
       const last = c.lastPingMs >= 0 ? ` · last ping ${c.lastPingMs} ms, ${Math.round(c.lossPct)}% loss` : '';
-      return { kind: 'connection-lost', title: 'Connection lost', message: `We couldn't reach the server${tries}. Check your data or Wi-Fi, then rejoin.`, code: `CONNECTION_LOST${last}`, action: 'rejoin' };
+      const of = Math.max(c.attempt, reconnectTries(RECONNECT_WINDOW_MS));
+      return {
+        kind: 'connection-lost',
+        title: 'Connection lost',
+        message: `We couldn't reach the server${tries}. Check your data or Wi-Fi, then rejoin.`,
+        code: `CONNECTION_LOST${last}`,
+        action: 'rejoin',
+        ...(c.attempt > 0 ? { tries: { made: c.attempt, of } } : {}),
+      };
     }
   }
 }

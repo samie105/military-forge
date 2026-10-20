@@ -320,7 +320,7 @@ describe('join, names, connection, pause and settings', () => {
   it('settings: Reset this tab resets that section only', () => {
     expect(resetPatch('controls')).toMatchObject({ doubleTapDash: true });
     expect(resetPatch('graphics')).toEqual({ graphics: 'auto', showFps: false, blood: false });
-    expect(Object.keys(resetPatch('accessibility')!)).toEqual(['reduceFlashes', 'softBursts', 'reduceMotion', 'colorBlind', 'textScale']);
+    expect(Object.keys(resetPatch('accessibility')!)).toEqual(['reduceFlashes', 'softBursts', 'reduceMotion', 'reduceTransparency', 'colorBlind', 'textScale']);
     expect(resetPatch('touch')).toBeNull();
   });
 });

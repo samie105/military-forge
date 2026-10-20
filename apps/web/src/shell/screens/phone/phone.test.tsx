@@ -238,19 +238,25 @@ describe('touch tips (the first-run card on a phone)', () => {
     expect(right.map((t) => t.what)).toEqual(['Left dial', 'Right dial', 'Grenade']);
     expect(right[0].how).toBe('Move. Up flies, down crouches, a swipe dashes.');
     expect(right[1].how).toBe('Aim. Push far to fire.');
-    expect(right[2].how).toBe('Hold to aim, let go to throw.');
+    expect(right[2].how).toBe('Tap: throw. Swipe ↑↓: switch. Hold and drag: aim.');
+    expect(touchTips({ handed: 'right', fire: 'hold', swipeDash: true, gestures: false })[2]!.how).toBe('Hold to aim, let go to throw.');
     const left = touchTips({ handed: 'left', fire: 'release', swipeDash: false });
     expect(left.map((t) => t.what)).toEqual(['Right dial', 'Left dial', 'Grenade']);
     expect(left[0].how).not.toContain('dash');
     expect(left[1].how).toBe('Aim, then lift to fire.');
   });
 
-  it('no keys, no mouse: the dials, Got it and Touch settings', () => {
+  it('no keys, no mouse: the dials, Got it and Learn (the drill)', () => {
     const html = withCtl(ctl({ closeTips: vi.fn() }), <PhoneTips />);
     expect(html).toContain('data-screen="m-tips"');
-    for (const t of ['Left dial', 'Right dial', 'Grenade', 'Got it', 'aria-label="Touch settings"']) expect(html).toContain(t);
+    for (const t of ['Left dial', 'Right dial', 'Grenade', 'Got it', 'aria-label="Learn the controls"']) expect(html).toContain(t);
     for (const t of ['kbd', 'Mouse', 'Esc', 'Change keys', 'SHIFT', 'Space']) expect(html).not.toContain(t);
     expect(html).not.toContain('autofocus');
+  });
+
+  it('the first time in Training the drill teaches instead: the card steps aside', () => {
+    const html = withCtl(ctl({ closeTips: vi.fn(), store: createShellStore({ screen: { name: 'training' } }) }), <PhoneTips />);
+    expect(html).toBe('');
   });
 });
 

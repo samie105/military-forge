@@ -42,14 +42,19 @@ export function weaponUnderfoot(items: readonly PickupView[] | undefined, p: Pic
   return best;
 }
 
-/** What standing on a gun you don't hold says: `[E] take Widow (swaps your Hammer .44)`. */
-export function takePrompt(under: WeaponUnderfoot, p: Pick<PlayerView, 'weapons' | 'active'>): string {
+/**
+ * What standing on a gun you don't hold says: `[E] take Widow (swaps your Hammer .44)`, in the
+ * player's own key (`key`), or on a phone (null) the touch wording: `Tap Take: Widow (…)`.
+ */
+export function takePrompt(under: WeaponUnderfoot, p: Pick<PlayerView, 'weapons' | 'active'>, key: string | null = 'E'): string {
   const inHand = weapons[p.weapons[p.active]?.def ?? -1];
-  return `[E] take ${under.weapon.name}${inHand ? ` (swaps your ${inHand.name})` : ''}`;
+  const swaps = inHand ? ` (swaps your ${inHand.name})` : '';
+  return key === null ? `Tap Take: ${under.weapon.name}${swaps}` : `[${key}] take ${under.weapon.name}${swaps}`;
 }
 
-/** A gun lying close by: E takes it, unless you hold one already (walking over it is ammo). */
-export function nearbyWeaponPrompt(def: PickupDef, p: Pick<PlayerView, 'weapons'>): string {
+/** A gun lying close by: the take key (`key`; null: a phone's Take button) takes it, unless you hold one already (walking over it is ammo). */
+export function nearbyWeaponPrompt(def: PickupDef, p: Pick<PlayerView, 'weapons'>, key: string | null = 'E'): string {
   const held = def.weapon !== undefined && (p.weapons ?? []).some((w) => w.def === def.weapon);
-  return held ? `${def.name}: walk over for ammo` : `${def.name}: stand on it, E to take`;
+  if (held) return `${def.name}: walk over for ammo`;
+  return key === null ? `${def.name}: stand on it, then tap Take` : `${def.name}: stand on it, ${key} to take`;
 }

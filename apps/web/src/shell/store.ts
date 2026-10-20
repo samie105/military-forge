@@ -67,6 +67,8 @@ export type SettingsTab = 'graphics' | 'audio' | 'controls' | 'accessibility' | 
 export type AlertKind = 'room-full' | 'room-not-found' | 'new-version' | 'server-full' | 'connection-lost' | 'offline' | 'slow-down' | 'replaced' | 'refused' | 'error';
 
 export interface AlertInfo {
+  /** a dropped connection that gave up: the tries made, of the most the window holds (the pips) */
+  tries?: { made: number; of: number };
   kind: AlertKind;
   title: string;
   message: string;
@@ -122,6 +124,8 @@ export interface Settings {
   softBursts: boolean;
   /** accessibility: no shake, no zooming numbers, no pulsing warnings (html.reduce-motion) */
   reduceMotion: boolean;
+  /** accessibility: solid surfaces instead of frosted glass (html.reduce-transparency, ui/frost.css) */
+  reduceTransparency: boolean;
   /** team colours for colour-blind players (teams aren't in the game yet: saved) */
   colorBlind: ColorBlindMode;
   /** menus and HUD text, 1..1.5 (the kit's --text-scale) */
@@ -147,6 +151,7 @@ export const DEFAULT_SETTINGS: Settings = {
   reduceFlashes: false,
   softBursts: false,
   reduceMotion: false,
+  reduceTransparency: false,
   colorBlind: 'standard',
   textScale: 1,
   doubleTapDash: true,

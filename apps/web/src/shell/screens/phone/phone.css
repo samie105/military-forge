@@ -219,3 +219,17 @@ html.reduce-motion .pm-sheet.is-leaving { animation-name: pm-fade-out; }
 .mf-fit--phone.is-text-lg .pm.pm-ne { grid-template-columns: 1fr; }
 .is-text-lg .pm-ne__card { display: none; }
 .is-text-lg .pm-ne__more { flex-wrap: wrap; gap: 4px 12px; }
+
+/*
+ * The upright phone's one-time tip on the name screen (PhoneNameEntry's TurnTip): the page is turned
+ * onto its side (ui/landscape.ts), so the card turns back (−90°) to read upright. A 375 × 812 box
+ * centred in the 812 × 375 screen, rotated, covers it exactly.
+ */
+.pm-turn { position: absolute; left: 50%; top: 50%; z-index: var(--z-panel); width: 375px; height: 812px; translate: -50% -50%; rotate: -90deg; display: grid; place-items: center; padding: 24px; background: color-mix(in srgb, var(--c-ink-950) 92%, transparent); animation: pm-fade var(--m-base) var(--ease-arrive) both; }
+.pm-turn__card { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 24px 22px; text-align: center; }
+.pm-turn__card .ic { width: 56px; height: 56px; color: var(--c-volt); animation: pm-turn 1.8s var(--ease-travel) infinite; }
+.pm-turn__card .display { font-size: calc(28px * var(--pm-head)); }
+.pm-turn__card p { margin: 0; color: var(--c-text); font-size: var(--fs-16); }
+.pm-turn__card .btn { min-height: var(--touch-min); }
+@keyframes pm-turn { 0%, 30% { rotate: 0deg; } 60%, 100% { rotate: 90deg; } }
+html.reduce-motion .pm-turn__card .ic { animation: none; }

@@ -66,3 +66,64 @@ html:is(.mf-narrow, .mf-big-text) :where(.mf-gear-fit) .mf-try { min-height: var
 :where(.mf-gear-fit) .mf-equip__seg .seg__opt[aria-pressed="true"] { background: var(--c-volt); color: var(--c-volt-ink); }
 html.mf-phone :where(.mf-gear-fit) .mf-equip { padding: var(--sp-2) var(--sp-3); }
 html.mf-phone :where(.mf-gear-fit) .mf-equip__seg .seg__opt { min-height: 48px; font-size: var(--fs-14); padding: 0 var(--sp-2); }
+
+/*
+ * ---- a phone (held sideways, or upright and turned: html.mf-phone, ui/landscape.ts): the Armory's
+ * own layout at the phone's size, unzoomed (the desktop page scaled down made every button tiny) ----
+ * The weapons in a row of chips along the top; the gun on its table on the left; its card, finish,
+ * attachments, Equip and Try on the right, scrolling. Field Print's colours and type; the rails sit on
+ * Frost glass (blurred camo behind), solid where blur is too dear (html.mf-glass-off, Reduce
+ * transparency, no backdrop-filter). Every target 48 px.
+ */
+html.mf-phone .mf-gear-fit > .screen { zoom: 1; width: 100%; height: 100%; }
+html.mf-phone :where(.mf-gear-fit) .mf-armory {
+  --glass: color-mix(in srgb, var(--c-ink-900) 46%, transparent);
+  --glass-solid: color-mix(in srgb, var(--c-ink-900) 78%, transparent);
+  --glass-rim: color-mix(in srgb, var(--c-paper) 30%, transparent);
+  padding: max(4px, var(--sa-t, 0px)) max(var(--phone-notch, 44px), var(--sa-r, 0px)) max(6px, var(--sa-b, 0px)) max(var(--phone-notch, 44px), var(--sa-l, 0px));
+  display: flex; flex-direction: column; gap: 6px; height: 100%; box-sizing: border-box;
+}
+html.mf-phone :where(.mf-gear-fit) .bg__word { display: none; }
+html.mf-phone :where(.mf-gear-fit) .mf-armory .menu-top { height: 48px; flex: none; gap: var(--sp-3); align-items: center; padding: 0; margin: 0; }
+html.mf-phone :where(.mf-gear-fit) .mf-armory .menu-top__title { font-size: var(--fs-28); line-height: 1; margin: 0; }
+html.mf-phone :where(.mf-gear-fit) .mf-armory .menu-top .serial { display: none; }
+html.mf-phone :where(.mf-gear-fit) .mf-armory .menu-top .btn--icon { min-width: 48px; min-height: 48px; }
+html.mf-phone :where(.mf-gear-fit) .menu-body.ar {
+  flex: 1; min-height: 0; padding: 0;
+  grid-template: auto minmax(0, 1fr) / minmax(0, 1fr) minmax(260px, 40%);
+  grid-template-areas: 'list list' 'stage side'; gap: 6px 10px;
+}
+/* the weapons: one scrolling row of chips, the family labels between them */
+html.mf-phone :where(.mf-gear-fit) .ar__list { grid-area: list; overflow-x: auto; overflow-y: hidden; padding: 4px 6px; border-radius: var(--r-sm); background: var(--glass); border: 1.5px solid var(--glass-rim); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); scrollbar-width: none; overscroll-behavior: contain; }
+html.mf-phone :where(.mf-gear-fit) .ar__list > ul, html.mf-phone :where(.mf-gear-fit) .ar__list > ul > li, html.mf-phone :where(.mf-gear-fit) .ar__list > ul > li > ul { display: flex; flex-direction: row; align-items: center; gap: 4px; flex-wrap: nowrap; margin: 0; }
+html.mf-phone :where(.mf-gear-fit) .ar__list .label { display: block; margin: 0 2px 0 8px; font-size: var(--fs-14); writing-mode: horizontal-tb; white-space: nowrap; }
+html.mf-phone :where(.mf-gear-fit) .ar__item { width: auto; min-height: 48px; padding: 0 10px; white-space: nowrap; }
+/* the gun on its table, the name over it; the bench's extras step aside */
+html.mf-phone :where(.mf-gear-fit) .ar__stage { grid-area: stage; min-height: 0; overflow-x: hidden; overflow-y: auto; gap: 4px; overscroll-behavior: contain; scrollbar-width: none; }
+html.mf-phone :where(.mf-gear-fit) .ar__name { font-size: calc(26px * min(var(--text-scale, 1), 1.15)); line-height: 1; }
+html.mf-phone :where(.mf-gear-fit) .mf-ar__kind { font-size: var(--fs-14); }
+html.mf-phone :where(.mf-gear-fit) .ar__table { flex: none; min-height: 0; height: 140px; }
+html.mf-phone :where(.mf-gear-fit) .ar__table canvas { inset: 0; height: 100%; }
+html.mf-phone :where(.mf-gear-fit) :is(.ar__rot, .ar__disc, [data-group="light"], [data-action="sockets"], .mf-sockets-box) { display: none; }
+html.mf-phone :where(.mf-gear-fit) .mf-controls { flex: none; flex-wrap: nowrap; gap: var(--sp-2); justify-content: flex-start; }
+html.mf-phone :where(.mf-gear-fit) .mf-controls :is(.btn, .seg__opt) { min-height: 48px; font-size: var(--fs-14); padding: 0 var(--sp-3); }
+/* the finish, camo and muzzle fire: one scrolling row */
+html.mf-phone :where(.mf-gear-fit) .ar__ctrl { flex: none; flex-wrap: nowrap; justify-content: flex-start; gap: var(--sp-4); margin-top: 0; overflow-x: auto; scrollbar-width: none; overscroll-behavior: contain; }
+html.mf-phone :where(.mf-gear-fit) .ar__ctrl .seg { flex-wrap: nowrap; }
+html.mf-phone :where(.mf-gear-fit) .ar__ctrl .seg__opt { min-height: 48px; font-size: var(--fs-14); white-space: nowrap; }
+/* the card side: stats, attachments, Equip, Try; scrolls on its glass rail */
+html.mf-phone :where(.mf-gear-fit) .ar__side { grid-area: side; gap: var(--sp-2); margin: 0; padding: 6px; border-radius: var(--r-sm); background: var(--glass); border: 1.5px solid var(--glass-rim); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); overscroll-behavior: contain; }
+html.mf-phone :where(.mf-gear-fit) .ar__stats { padding: var(--sp-3) var(--sp-4); }
+html.mf-phone :where(.mf-gear-fit) .ar__stats li { font-size: var(--fs-14); }
+html.mf-phone :where(.mf-gear-fit) .ar__att { padding: var(--sp-3); }
+html.mf-phone :where(.mf-gear-fit) .ar__atts { grid-template-columns: repeat(3, 1fr); }
+html.mf-phone :where(.mf-gear-fit) .attb { min-height: 64px; }
+html.mf-phone :where(.mf-gear-fit) .mf-try.btn { flex: none; min-height: 48px; font-size: var(--fs-16); padding-inline: var(--sp-3); }
+html.mf-phone :where(.mf-gear-fit) .mf-equip__seg .seg__opt { white-space: normal; line-height: 1.1; }
+/* the glass's solid fallback */
+html.mf-glass-off :where(.mf-gear-fit) :is(.ar__list, .ar__side) { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--glass-solid); }
+@media (prefers-reduced-transparency: reduce) {
+  html.mf-phone :where(.mf-gear-fit) :is(.ar__list, .ar__side) { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--c-ink-900); }
+}
+/* large text: the card side widens; the table keeps the rest */
+html.mf-phone.mf-big-text :where(.mf-gear-fit) .menu-body.ar { grid-template-columns: minmax(0, 1fr) minmax(300px, 48%); }

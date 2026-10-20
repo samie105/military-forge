@@ -51,6 +51,8 @@ import { applyPadSettings, currentDevice, mountGamepad, onInputDevice } from './
 import { padShownBindings } from './gamepad/prompts';
 import { startLandscape } from './ui/landscape';
 import type { Frame } from './view';
+import { DefaultLoadingManager } from 'three';
+import { assetLoad } from './assetLoad';
 
 const params = new URLSearchParams(location.search);
 /** the player-facing app, or (dev builds at `/`) the Phase 0 debug client */
@@ -92,6 +94,9 @@ class GameInput extends InputSampler {
     return input;
   }
 }
+
+// the map loading screen's real progress: every GLTF, texture and KTX2 the 3D view loads, from the start
+assetLoad.attach(DefaultLoadingManager);
 
 /** local mode's map (the debug client's map links, or `?map=` for training); online, the server's */
 const requestedMap = params.get('map');
@@ -281,6 +286,9 @@ const host: GameHost = {
     html.classList.toggle('reduce-flashes', next.reduceFlashes);
     // the kit's Reduce motion and Text size (every font-size token multiplies --text-scale)
     html.classList.toggle('reduce-motion', next.reduceMotion);
+    // frosted glass (ui/frost.css): solid under Reduce transparency, and on Low graphics (blur costs GPU)
+    html.classList.toggle('reduce-transparency', next.reduceTransparency);
+    html.classList.toggle('gfx-low', graphicsPreset(next.graphics) === 'low');
     // …and the 3D view's: no camera shake or kick, a softer gun kick, a dimmer blast light (render3d)
     view3d?.setReducedMotion(next.reduceMotion);
     html.style.setProperty('--text-scale', String(next.textScale));

@@ -47,6 +47,20 @@ export interface TouchSettings {
    * carry (HP, fuel, the ammo ring) stay readable whatever it is. 1 = the kit's look, already translucent
    */
   opacity: number;
+  /** swipes and holds on the buttons (touch-controls-v3.md); off: every button is a plain tap, as before */
+  gestures: boolean;
+  /** fire by itself while the aim lies on an enemy in range (an accessibility option) */
+  autoFire: boolean;
+  /** short buzzes on a throw, a swap, a dash swipe, a radial pick (where the phone can vibrate) */
+  haptics: boolean;
+  /** the view leans toward where you aim; off: it stays on your soldier */
+  lookAhead: boolean;
+  /** two fingers on one side pinch the view's zoom; a two-finger double tap recentres */
+  pinchZoom: boolean;
+  /** how hard blasts and recoil shake the 3D view, 0–1 */
+  shake: number;
+  /** how much of the game's view a phone shows, 0.5–1 (Camera.viewScale): closer by default, so soldiers read; a pinch sets it */
+  view: number;
 }
 
 export const DEFAULT_TOUCH_SETTINGS: Readonly<TouchSettings> = {
@@ -57,7 +71,16 @@ export const DEFAULT_TOUCH_SETTINGS: Readonly<TouchSettings> = {
   vibrate: true,
   swipeDash: true,
   opacity: 1,
+  gestures: true,
+  autoFire: false,
+  haptics: true,
+  lookAhead: true,
+  pinchZoom: true,
+  shake: 1,
+  view: 0.62,
 };
+
+export const VIEW_LIMITS = { min: 0.5, max: 1 } as const;
 
 /**
  * Round one's default opacity (its flat controls were opaque): a save carrying it, from before the
@@ -72,8 +95,10 @@ export function sanitizeSettings(raw: unknown): TouchSettings {
   if (r.mode === 'auto' || r.mode === 'on' || r.mode === 'off') s.mode = r.mode;
   if (r.fire === 'hold' || r.fire === 'release') s.fire = r.fire;
   if (r.handed === 'right' || r.handed === 'left') s.handed = r.handed;
-  for (const k of ['aimAssist', 'vibrate', 'swipeDash'] as const) if (typeof r[k] === 'boolean') s[k] = r[k];
+  for (const k of ['aimAssist', 'vibrate', 'swipeDash', 'gestures', 'autoFire', 'haptics', 'lookAhead', 'pinchZoom'] as const) if (typeof r[k] === 'boolean') s[k] = r[k];
   if (isFiniteNumber(r.opacity)) s.opacity = clamp(r.opacity, LIMITS.opacityMin, LIMITS.opacityMax);
+  if (isFiniteNumber(r.shake)) s.shake = clamp(r.shake, 0, 1);
+  if (isFiniteNumber(r.view)) s.view = clamp(r.view, VIEW_LIMITS.min, VIEW_LIMITS.max);
   return s;
 }
 

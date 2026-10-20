@@ -16,12 +16,20 @@ export class Camera {
   zoom = 0;
   width = 1;
   height = 1;
+  /** how far the view leans toward the reticle, 0–1 (phones: Settings → Touch → Look-ahead) */
+  lookAhead = 1;
+  /**
+   * How much of the zoom level's view shows, 0.5–1: under 1 the view sits closer (phones: soldiers big
+   * enough to read on a small screen; a pinch changes it). Never wider than the level, so the
+   * server's area of interest (AOI_MARGIN, packages/netcode/src/aoi.ts) still covers it.
+   */
+  viewScale = 1;
   private initialised = false;
   private lastPx = 0;
   private lastPy = 0;
 
   get viewWidth(): number {
-    return BASE_VIEW_WIDTH * ZOOM_MULTIPLIERS[this.zoom]!;
+    return BASE_VIEW_WIDTH * ZOOM_MULTIPLIERS[this.zoom]! * Math.max(0.5, Math.min(1, this.viewScale));
   }
 
   /** pixels per metre: the full view width always fits the screen */
@@ -70,7 +78,7 @@ export class Camera {
     const cx = px;
     const cy = py + VIEW_FOCUS_Y;
     // look-ahead toward the reticle, up to 35% of the half view
-    const la = VIEW_LOOKAHEAD;
+    const la = VIEW_LOOKAHEAD * Math.max(0, Math.min(1, this.lookAhead));
     const lx = Math.max(-halfW * la, Math.min(halfW * la, (mouseWorldX - cx) * la));
     const ly = Math.max(-halfH * la, Math.min(halfH * la, (mouseWorldY - cy) * la));
     let tx = cx + lx;
@@ -87,6 +95,11 @@ export class Camera {
     const k = 1 - Math.exp(-dt * 10);
     this.x += (tx - this.x) * k;
     this.y += (ty - this.y) * k;
+  }
+
+  /** Jumps to where the view is heading on the next follow, without the spring (a two-finger double tap). */
+  recentre(): void {
+    this.initialised = false;
   }
 
   toScreenX(x: number): number {

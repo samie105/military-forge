@@ -117,6 +117,8 @@ export interface HudMemory {
   sinceHitS: number;
   death: DeathInfo | null;
   keys: HudKeys;
+  /** the touch controls are playing (a phone): prompts say what to tap, not which key */
+  touch?: boolean;
   /** the net plate's detail (title), refreshed four times a second */
   netDetail: string;
   /** the health bar's ghost: where health was before the last hits (0..1) */
@@ -427,7 +429,7 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
   // the item underfoot or close by: a weapon crate you stand on gets the quick compare; the rest,
   // pickupPrompt's line ("Riot Shield: walk over to take")
   const item = pickupNear(me, frame.pickups);
-  const prompt = pickupPrompt(me, frame.pickups);
+  const prompt = pickupPrompt(me, frame.pickups, mem.touch ? null : mem.keys.interact || 'E');
   const under = me.alive ? weaponUnderfoot(frame.pickups, me) : null;
   const crate = under && !under.held ? under : null;
   on('pickup', !!prompt);
@@ -834,6 +836,7 @@ export class Hud {
       sinceHitS: (now - this.lastHitAt) / 1000,
       death: this.death,
       keys: this.keys,
+      touch: typeof document !== 'undefined' && document.documentElement.hasAttribute('data-touch-controls') && document.documentElement.dataset.input !== 'pad',
       netDetail: this.netDetail,
       hpGhost: this.ghostAt(hpFill, now),
       hitMarker: hitting,
