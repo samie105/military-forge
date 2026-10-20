@@ -110,7 +110,7 @@ const store = (fn) => page.evaluate(fn);
 const ROOM = `({
   screen: { name: 'room', code: 'KMTXRA' },
   connection: { state: 'connected', detail: '', code: 0, since: 0, until: 0, attempt: 0, lastPingMs: 38, lossPct: 0 },
-  lobby: { code: 'KMTXRA', isHost: true, ready: false, minPlayers: 2, timeLimit: 300, killLimit: 20, mapId: 'lunar-outpost', mapName: 'Lunar Outpost', players: [
+  lobby: { code: 'KMTXRA', isHost: true, ready: false, minPlayers: 2, timeLimit: 300, killLimit: 20, bots: 4, botLevel: 'normal', mapId: 'lunar-outpost', mapName: 'Lunar Outpost', players: [
     { id: 0, name: 'Ade', isBot: false, ready: false, host: true, you: true, pingMs: 38 },
     { id: 1, name: 'Kemi', isBot: false, ready: true, host: false, you: false, pingMs: 52 },
     { id: 2, name: 'Raja', isBot: false, ready: false, host: false, you: false, pingMs: 91 },
@@ -152,6 +152,16 @@ try {
   await page.type('input[aria-label="Your name"]', `e${Math.floor(Math.random() * 900 + 100)}`);
   await page.waitForSelector('[data-screen="m-name"]:not([data-active-state="checking"])', { timeout: 10_000 });
   await shot('m0-name-typed', 400);
+  // a new name and the keyboard's Go straight away, while it's still being checked (Continue is disabled
+  // then): it must still submit (#167's enterSubmits); the API decides
+  await page.click('input[aria-label="Your name"]', { clickCount: 3 });
+  await page.type('input[aria-label="Your name"]', `Ade${Math.floor(Math.random() * 900 + 100)}`);
+  const checking = await page.$('[data-screen="m-name"][data-active-state~="checking"]');
+  await page.keyboard.press('Enter');
+  const went = await page.waitForSelector('[data-screen="m-home"]', { timeout: 15_000 }).catch(() => null);
+  if (!checking) console.log('note: the check had settled before Go (nothing to prove this run)');
+  if (!went) problems.push('name: Go (Enter) while the name is being checked does nothing');
+  else console.log('ok: Go while the name is being checked submits it');
   // the name check (no API here: it settles as unchecked, Continue on)
   for (let i = 0; i < 10 && !(await page.$('[data-screen="m-home"]')); i++) {
     await sleep(1200);

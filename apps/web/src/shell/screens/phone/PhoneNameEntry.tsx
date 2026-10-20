@@ -17,7 +17,7 @@ import { blurAfter } from '../../../ui/Screen';
 import { NICKNAME_REASONS, type NicknameCheck } from '../../api';
 import { useCtl } from '../../context';
 import type { ShellStore } from '../../store';
-import { NAME_MAX, NAME_MIN, nameState } from '../NameEntry';
+import { NAME_MAX, NAME_MIN, enterSubmits, nameState } from '../NameEntry';
 import { PhoneScreen, rise, useRotated } from './layout';
 
 /** The upright-phone tip on the name screen was seen (once a phone). */
@@ -136,7 +136,7 @@ export function PhoneNameEntry({ store, first }: { store: ShellStore; first: boo
         className="pm pm-ne"
         onSubmit={(e) => {
           e.preventDefault();
-          if (canContinue) void submit(name.trim());
+          if (enterSubmits(state, canContinue, busy)) void submit(name.trim());
         }}
       >
         <div className="pm-ne__card m-p1" aria-hidden="true">
@@ -177,6 +177,13 @@ export function PhoneNameEntry({ store, first }: { store: ShellStore; first: boo
                 placeholder="Your name"
                 aria-label="Your name"
                 aria-describedby="pm-ne-check"
+                // the keyboard's Go while the name is still being checked: the browser skips a form whose
+                // submit button is disabled, so the field submits itself (NameEntry's enterSubmits; #167)
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
+                  e.preventDefault();
+                  if (enterSubmits(state, canContinue, busy)) void submit(name.trim());
+                }}
                 onChange={(e) => {
                   setName(e.target.value);
                   setError(null);
