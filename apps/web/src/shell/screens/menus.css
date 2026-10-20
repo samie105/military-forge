@@ -252,3 +252,14 @@ html.mf-short.mf-big-text .kit-v2 .pause__btn .btn__sub { display: none; }
 .kit-v2 .mf-cb__tag--b { box-shadow: inset 0 -3px 0 var(--b); }
 .kit-v2 .mf-cb__tag--a i { color: var(--a); font-style: normal; }
 .kit-v2 .mf-cb__tag--b i { color: var(--b); font-style: normal; }
+
+/* Name entry in a laptop's box (1280×720 fits 1600×900; audit L1): the ID card and the title shrink so
+   the field, Continue and "Pick one for me" sit above the fold, and the form column never runs past
+   the right edge (its grid track can shrink below the title's longest word) */
+html:is(.mf-narrow, .mf-short) .kit-v2 .ne { grid-template-columns: 500px minmax(0, 1fr); gap: var(--sp-8); }
+html:is(.mf-narrow, .mf-short) .kit-v2 .ne .idcard { zoom: 0.8; }
+html:is(.mf-narrow, .mf-short) .kit-v2 .ne__form { min-width: 0; gap: var(--sp-4); }
+html.mf-short .kit-v2 .ne__title { font-size: var(--fs-120); }
+html.mf-short.mf-big-text .kit-v2 .ne__title { font-size: var(--fs-88); }
+html.mf-short.mf-big-text .kit-v2 .ne .lead { font-size: var(--fs-16); }
+html.mf-short.mf-big-text .kit-v2 .ne__actions { padding-top: 0; gap: var(--sp-3); }

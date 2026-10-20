@@ -31,6 +31,16 @@ export function nameState(name: string, check: NicknameCheck | null, current: st
   return check.available ? 'available' : 'taken';
 }
 
+/**
+ * Enter submits whenever Continue would, and also while the name is still being checked (typing
+ * then Enter at once): the server's answer decides, and a taken name comes back with suggestions.
+ * The browser's own Enter-to-submit skips a form whose submit button is disabled, so the field
+ * handles Enter itself.
+ */
+export function enterSubmits(state: NameState, canContinue: boolean, busy: boolean): boolean {
+  return canContinue || (!busy && state === 'checking');
+}
+
 /** A stable "No." for the ID card, from the name (decoration, the same every time for a name). */
 function cardNumber(name: string): string {
   let h = 2166136261;
@@ -119,7 +129,7 @@ export function NameEntry({ store, first }: { store: ShellStore; first: boolean 
           className="menu-body ne"
           onSubmit={(e) => {
             e.preventDefault();
-            if (canContinue) void submit(name.trim());
+            if (enterSubmits(state, canContinue, busy)) void submit(name.trim());
           }}
         >
           {/* the ID card: a live preview of the name; it focus-pulls in (P1) and stamps once the name is free (P7) */}
@@ -184,6 +194,11 @@ export function NameEntry({ store, first }: { store: ShellStore; first: boolean 
                     setName(e.target.value);
                     setError(null);
                     setSuggestions([]);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
+                    e.preventDefault();
+                    if (enterSubmits(state, canContinue, busy)) void submit(name.trim());
                   }}
                 />
                 <span className="input__count num" data-bind="nameEntry.length">

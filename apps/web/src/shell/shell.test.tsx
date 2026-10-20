@@ -16,7 +16,7 @@ import { connectStep, reconnectSecondsLeft } from './screens/Connection';
 import { Countdown, countdownState, rulesLine } from './screens/Countdown';
 import { codeLetters, joinState } from './screens/Join';
 import { Lobby, killsLabel, lobbyMaps, minutesLabel } from './screens/Lobby';
-import { nameState } from './screens/NameEntry';
+import { enterSubmits, nameState } from './screens/NameEntry';
 import { Pause, leaveCost } from './screens/Pause';
 import { Results, reasonChip, winnerOf } from './screens/Results';
 import { NameTagPreview, autoText, resetPatch } from './screens/Settings';
@@ -303,6 +303,16 @@ describe('join, names, connection, pause and settings', () => {
     // the live check failed (API down, 5xx, 429): unchecked, and Continue lets the API decide (review M2)
     expect(nameState('Ade_07', null, null, false, true)).toBe('unchecked');
     expect(nameState('Ade_07', null, null, true, true)).toBe('checking');
+  });
+
+  it('name entry: Enter submits when Continue would, and while the name is still being checked (audit L1)', () => {
+    expect(enterSubmits('available', true, false)).toBe(true);
+    // typed, then Enter at once: the API decides (a taken name comes back with suggestions)
+    expect(enterSubmits('checking', false, false)).toBe(true);
+    expect(enterSubmits('checking', false, true)).toBe(false);
+    expect(enterSubmits('too-short', false, false)).toBe(false);
+    expect(enterSubmits('taken', false, false)).toBe(false);
+    expect(enterSubmits('empty', false, false)).toBe(false);
   });
 
   it('connection: the steps, and the reconnect countdown', () => {
