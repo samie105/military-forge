@@ -141,6 +141,8 @@ describe('m-lobby', () => {
     killLimit: 20,
     mapId: 'lunar-outpost',
     mapName: 'Lunar Outpost',
+    bots: 4,
+    botLevel: 'normal',
   });
 
   it('the host: the code, the share poster first with the QR, the roster (bots ready, no [BOT] tag), the rules, Ready and Start', () => {

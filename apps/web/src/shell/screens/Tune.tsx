@@ -12,7 +12,10 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSPropert
 import { Icon } from '../../ui/Icon';
 import { Screen, blurAfter } from '../../ui/Screen';
 import { Slider } from '../../ui/Slider';
+import { useTicker } from '../context';
+import { BotSettings, type BotLevel } from '../roomBots';
 import type { TuneNote } from '../store';
+import { useRoomSetting } from './Lobby';
 import { PRESET_NAMES, TUNE_ROWS, formatTune, presetOf, presetTuning, rowChanged, tuneNumber, type PresetId, type TuneRow } from '../tune';
 import { RollNum } from './frame';
 
@@ -25,6 +28,8 @@ export interface TunePanelProps {
   subscribe(fn: () => void): () => void;
   onClose(): void;
   copy(text: string): Promise<boolean>;
+  /** a room's bots (v17), the host's: read live (the room answers), set at once; absent in training */
+  room?: { get(): { bots: number; level: BotLevel }; set(change: { bots?: number; botLevel?: BotLevel }): void };
   /** mounts the full dev panel (every key) in `el`, calling `onChange` after its edits */
   openAll?(el: HTMLElement, onChange: () => void): FullPanel;
 }
@@ -41,7 +46,7 @@ const same = (a: Tuning, b: Tuning) => JSON.stringify(a) === JSON.stringify(b);
 /** How long Copy values says "Copied" (as the lobby's Copy link). */
 const COPIED_MS = 1600;
 
-export function TunePanel({ online, getTuning, setTuning, subscribe, onClose, copy, openAll }: TunePanelProps) {
+export function TunePanel({ online, getTuning, setTuning, subscribe, onClose, copy, openAll, room }: TunePanelProps) {
   const [t, setT] = useState<Tuning>(() => ({ ...getTuning() }));
   const [copied, setCopied] = useState<'no' | 'yes' | 'shown'>('no');
   const [json, setJson] = useState('');
@@ -105,6 +110,7 @@ export function TunePanel({ online, getTuning, setTuning, subscribe, onClose, co
             <Icon name="close" />
           </button>
         </header>
+        {room && <RoomBots room={room} />}
         <div className="tune__presets">
           <span className="label" id="tune-presets">
             Presets
@@ -250,5 +256,32 @@ export function TuneToast({ note }: { note: TuneNote | null }) {
         </span>
       </div>
     </Screen>
+  );
+}
+
+/** The room's bots in the Tune panel (the host's; live, mid-match too): what the room says, or what was just picked. */
+function RoomBots({ room }: { room: NonNullable<TunePanelProps['room']> }) {
+  useTicker(500);
+  const now = room.get();
+  const [bots, showBots] = useRoomSetting(now.bots);
+  const [level, showLevel] = useRoomSetting<BotLevel>(now.level);
+  return (
+    <div className="tune__presets mf-tune__bots">
+      <BotSettings
+        id="tune"
+        bots={bots}
+        level={level}
+        onBots={(n) => {
+          showBots(n);
+          room.set({ bots: n });
+        }}
+        onLevel={(l) => {
+          showLevel(l);
+          room.set({ botLevel: l });
+        }}
+        segClass="seg seg--block"
+        optClass="m-p8"
+      />
+    </div>
   );
 }

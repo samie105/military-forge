@@ -235,3 +235,20 @@ html.mf-short.mf-big-text .kit-v2 .pause__btn .btn__sub { display: none; }
 .kit-v2 .mf-tries.is-failed i.is-done { background: var(--c-hp); }
 .kit-v2 .mf-conn__tries { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); }
 .kit-v2 .mf-conn__tries .mf-tries i:not(.is-done) { background: var(--c-paper-line); }
+
+/* Tune the game: the room's bots (host, v17) above the presets, label over segment like the presets */
+:where(.kit-v2) .mf-tune__bots { padding-bottom: var(--sp-2); }
+:where(.kit-v2) .mf-tune__bots .seg__opt { flex: 1; }
+/* the countdown's stepper (Countdown.tsx CountdownSteps, Pen N9): Match N → 3 → 2 → 1 → GO */
+.kit-v2 .mf-cd__steps { display: flex; justify-content: center; align-items: center; gap: var(--sp-3); margin: var(--sp-5) 0 0; padding: 0; list-style: none; font: var(--fw-display) var(--fs-24)/1 var(--f-display); color: var(--c-muted); text-shadow: var(--ts-hud); }
+.kit-v2 .mf-cd__steps li + li::before { content: '→'; margin-right: var(--sp-3); color: var(--c-muted); opacity: 0.6; }
+.kit-v2 .mf-cd__steps li.is-done { opacity: 0.45; }
+.kit-v2 .mf-cd__steps li.is-now { color: var(--c-volt); }
+/* Settings → Accessibility: the colour-blind name-tag preview (Settings.tsx NameTagPreview, Pen N10) */
+.kit-v2 .srow__ctrl:has(> .mf-cb__preview) { flex-wrap: wrap; }
+.kit-v2 .mf-cb__preview { flex-basis: 100%; justify-content: flex-end; display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-3); }
+.kit-v2 .mf-cb__tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: var(--r-xs); background: var(--c-ink-950); color: var(--c-text); font-weight: var(--fw-bold); text-shadow: var(--ts-hud); }
+.kit-v2 .mf-cb__tag--a { box-shadow: inset 0 -3px 0 var(--a); }
+.kit-v2 .mf-cb__tag--b { box-shadow: inset 0 -3px 0 var(--b); }
+.kit-v2 .mf-cb__tag--a i { color: var(--a); font-style: normal; }
+.kit-v2 .mf-cb__tag--b i { color: var(--b); font-style: normal; }

@@ -3,7 +3,7 @@
  * countdown, status and results screens don't care where a match runs) plus the online lobby.
  */
 import { maps } from '@military-forge/content';
-import type { MatchStateMsg } from '@military-forge/protocol';
+import type { BotLevelWire, MatchStateMsg } from '@military-forge/protocol';
 import { MatchPhase, TICK_RATE, type MatchResults } from '@military-forge/sim';
 import { playerName, type MatchView } from './matchView';
 
@@ -39,6 +39,9 @@ export interface LobbyView {
   killLimit: number;
   mapId: string;
   mapName: string;
+  /** the room's bots: the players they fill it up to (0 = no bots), and their level (v17) */
+  bots: number;
+  botLevel: BotLevelWire;
 }
 
 const ENDED = new Set<number>([MatchPhase.Ending, MatchPhase.Postgame, MatchPhase.Closed]);
@@ -142,13 +145,15 @@ export function lobbyView(src: OnlineSource): LobbyView | null {
     killLimit: s.rules.killLimit,
     mapId: s.mapId,
     mapName: maps[s.mapId]?.name ?? s.mapId,
+    bots: s.rules.bots,
+    botLevel: s.rules.botLevel,
   };
 }
 
 export function sameLobby(a: LobbyView | null, b: LobbyView | null): boolean {
   if (!a || !b) return a === b;
   if (a.players.length !== b.players.length) return false;
-  for (const k of ['code', 'isHost', 'ready', 'minPlayers', 'timeLimit', 'killLimit', 'mapId'] as const) if (a[k] !== b[k]) return false;
+  for (const k of ['code', 'isHost', 'ready', 'minPlayers', 'timeLimit', 'killLimit', 'mapId', 'bots', 'botLevel'] as const) if (a[k] !== b[k]) return false;
   return a.players.every((p, i) => {
     const q = b.players[i]!;
     return p.id === q.id && p.name === q.name && p.isBot === q.isBot && p.ready === q.ready && p.host === q.host && p.you === q.you && p.pingMs === q.pingMs;

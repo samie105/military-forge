@@ -6,7 +6,7 @@ const state = (over: Partial<Omit<MatchStateMsg, 'type'>> = {}): Omit<MatchState
   phaseStartTick: 4_000_000_123,
   number: 3,
   endReason: 0,
-  rules: { timeLimit: 300, killLimit: 20, countdown: 5, ending: 10, postgame: 15, minPlayers: 2, onNoRematch: 'lobby' },
+  rules: { timeLimit: 300, killLimit: 20, countdown: 5, ending: 10, postgame: 15, minPlayers: 2, onNoRematch: 'lobby', bots: 4, botLevel: 'hard' },
   mapId: 'movement-test',
   hostId: 4,
   lobby: [
@@ -29,6 +29,14 @@ describe('MATCH_STATE (0x23)', () => {
     expect(decodeMessage(encodeMatchState(ended))).toEqual({ type: MsgType.MatchState, ...ended });
     const empty = state({ lobby: [], standings: [], rules: { ...state().rules, timeLimit: 0, killLimit: 0, onNoRematch: 'close' } });
     expect(decodeMessage(encodeMatchState(empty))).toEqual({ type: MsgType.MatchState, ...empty });
+  });
+
+  it("carries the room's bots: their fill (0 = none) and level (v17)", () => {
+    for (const [bots, botLevel] of [[0, 'normal'], [8, 'easy'], [4, 'hard']] as const) {
+      const m = state({ rules: { ...state().rules, bots, botLevel } });
+      expect((decodeMessage(encodeMatchState(m)) as MatchStateMsg).rules).toMatchObject({ bots, botLevel });
+    }
+    expect((decodeMessage(encodeMatchState(state({ rules: { ...state().rules, bots: 99 } }))) as MatchStateMsg).rules.bots).toBe(31);
   });
 
   it('is reliable, compact, and clamps what does not fit', () => {

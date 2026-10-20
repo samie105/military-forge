@@ -137,3 +137,17 @@ html.reduce-motion #hud { transition: none; }
 #hud .mf-world .mf-rack-sign { display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); padding: var(--sp-2) var(--sp-4); background: var(--c-paper-3); color: var(--c-paper-text); border: var(--bw-chunky) solid var(--c-ink-950); border-radius: var(--r-sm); box-shadow: var(--sh-card-sm); font-size: var(--fs-16); font-weight: var(--fw-bold); white-space: nowrap; }
 #hud .mf-world .mf-rack-sign[hidden] { display: none; }
 #hud .mf-world .mf-rack-sign .display { font-size: var(--fs-28); background: var(--c-ink-950); color: var(--c-volt); padding: 0 var(--sp-3); rotate: -1.5deg; }
+
+/* the scoreboard's leader bar and its ping bands (Pen N4: green to 100 ms, amber to 200, red beyond) */
+.mf-board .sb__lead { margin: 0 0 var(--sp-3); padding: var(--sp-2) var(--sp-4); border-left: 6px solid var(--c-volt); background: var(--c-volt-soft); font-size: var(--fs-18); font-weight: var(--fw-bold); }
+.mf-board .sb__ping.ping--good { color: var(--c-ok); }
+.mf-board .sb__ping.ping--mid { color: var(--c-warn); }
+.mf-board .sb__ping.ping--bad { color: var(--c-hp); }
+/* the dash beside the fuel (the fluid dash, docs/02 §21; Pen build list 1): no cooldown ring, the
+   8-way rose and the last dash's arrow stay. The fuel bar shows what the next dash eats (the fill's
+   last --dash-cost, darkened) and a tick at one dash's worth; under it the dash plate dims. */
+#hud .mf-hud-desktop .bar--fuel .mf-fuel__cost { position: absolute; top: 0; bottom: 0; left: calc(max(0, var(--fuel, 1) - var(--dash-cost, 0)) * 100%); width: calc(min(var(--fuel, 1), var(--dash-cost, 0)) * 100%); background: color-mix(in srgb, var(--c-ink-950) 45%, transparent); }
+#hud .mf-hud-desktop .bar--fuel .mf-fuel__tick { position: absolute; top: 0; bottom: 0; left: calc(var(--dash-cost, 0) * 100%); width: 2px; margin-left: -1px; background: var(--c-paper); opacity: 0.7; }
+#hud[data-active-state~="dash-cooldown"] .mf-hud-desktop .bar--fuel .mf-fuel__cost { background: color-mix(in srgb, var(--c-hp) 55%, transparent); }
+#hud[data-active-state~="dash-cooldown"] .mf-hud-desktop .dash { opacity: 0.55; }
+#hud[data-active-state~="dash-cooldown"] .mf-hud-desktop .dash__icon { visibility: visible; color: var(--c-muted); }

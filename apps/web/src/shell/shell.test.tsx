@@ -19,7 +19,7 @@ import { Lobby, killsLabel, lobbyMaps, minutesLabel } from './screens/Lobby';
 import { nameState } from './screens/NameEntry';
 import { Pause, leaveCost } from './screens/Pause';
 import { Results, reasonChip, winnerOf } from './screens/Results';
-import { autoText, resetPatch } from './screens/Settings';
+import { NameTagPreview, autoText, resetPatch } from './screens/Settings';
 import { dashTip } from './screens/Tips';
 
 const actions = { playAgain: vi.fn(), backToLobby: vi.fn(), ready: vi.fn() };
@@ -210,6 +210,14 @@ describe('countdown (screen 6)', () => {
     expect(intro).toMatch(/intro__name[^>]*>Lunar Outpost</);
     expect(intro).toContain('The Moon');
   });
+
+  it('the stepper: Match N → 3 → 2 → 1 → GO, the stops passed dimmed and the one now lit; Hold Tab', () => {
+    const html = renderToStaticMarkup(<Countdown view={view({ phase: MatchPhase.Countdown, secondsLeft: 2, number: 2 })} state="2" bindings={defaultBindings()} />);
+    expect(html).toContain('<ol class="mf-cd__steps" aria-hidden="true"><li class="is-done">Match 2</li><li class="is-done">3</li><li class="is-now">2</li><li>1</li><li>GO</li></ol>');
+    expect(html).toMatch(/hold <kbd[^>]*>Tab<\/kbd> to see who&#x27;s in/);
+    const go = renderToStaticMarkup(<Countdown view={view({ phase: MatchPhase.InProgress, number: 2 })} state="go" />);
+    expect(go).toContain('<li class="is-now">GO</li>');
+  });
 });
 
 describe('lobby (screen 4)', () => {
@@ -228,6 +236,8 @@ describe('lobby (screen 4)', () => {
     killLimit: 10,
     mapId: 'movement-test',
     mapName: 'Movement Test',
+    bots: 4,
+    botLevel: 'normal',
   });
   const ctl = { host: { online: null }, copyLink: vi.fn(), shareOnWhatsApp: vi.fn(), shareLink: vi.fn(), openSettings: vi.fn(), leave: vi.fn() } as unknown as ShellController;
   const render = (isHost: boolean) =>
@@ -253,6 +263,11 @@ describe('lobby (screen 4)', () => {
     expect(html).toMatch(/role="radio" aria-checked="true"[^>]*>5</);
     expect(html).toContain('Start now');
     expect(html).toContain("You&#x27;re ready");
+    // the room's bots (v17): Off / Fill to 4 / Fill to 8, and the level
+    expect(html).toContain('Bots fill to 4 · Normal');
+    expect(html).toMatch(/role="radio" aria-checked="true"[^>]*>Fill to 4</);
+    expect(html).toMatch(/role="radio" aria-checked="false"[^>]*>Off</);
+    expect(html).toMatch(/role="radio" aria-checked="true"[^>]*>Normal</);
   });
 
   it('a guest reads the settings, and the highlight follows the guest', () => {
@@ -261,6 +276,8 @@ describe('lobby (screen 4)', () => {
     expect(html).toContain('The host picks the settings');
     expect(html).toContain('5 min');
     expect(html).toContain('10 kills');
+    expect(html).toContain('Bots fill to 4 · Normal'); // a guest sees the room's bots, can't change them
+    expect(html).not.toContain('Fill to 8');
     expect(html).toMatch(/prow is-you-guest.*Kemi/);
     expect(html).not.toContain('Start now');
     expect([minutesLabel(0), killsLabel(0), minutesLabel(120)]).toEqual(['No time limit', 'No kill limit', '2 min']);
@@ -315,6 +332,14 @@ describe('join, names, connection, pause and settings', () => {
   it('pause: what leaving costs', () => {
     expect(leaveCost(view({ phase: MatchPhase.InProgress, myScore: 6 }), true)).toBe("Your score (6) won't count. You can come back with the room link while the room is open.");
     expect(leaveCost(null, false)).toBe('Nothing from training is kept.');
+  });
+
+  it('settings: the colour-blind name tags preview the chosen pair, each team with its shape', () => {
+    const std = renderToStaticMarkup(<NameTagPreview mode="standard" />);
+    expect(std).toContain('--a:var(--c-team-a);--b:var(--c-team-b)');
+    expect(std).toMatch(/In match:.*◆.*Kemi.*▲.*Tolu/);
+    expect(renderToStaticMarkup(<NameTagPreview mode="deutan" />)).toContain('--b:var(--c-warn)');
+    expect(renderToStaticMarkup(<NameTagPreview mode="tritan" />)).toContain('--a:var(--c-hp);--b:var(--c-ev-squall)');
   });
 
   it('settings: Reset this tab resets that section only', () => {
@@ -448,6 +473,8 @@ describe("the host's tuning panel (pnpm playtest --tune)", () => {
     killLimit: 10,
     mapId: 'movement-test',
     mapName: 'Movement Test',
+    bots: 4,
+    botLevel: 'normal',
   });
 
   it("only the room's host (or anyone in training) gets it, only where the page offers it", () => {

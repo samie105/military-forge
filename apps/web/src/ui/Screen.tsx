@@ -3,6 +3,10 @@
  * a switch, a segmented choice. Markup and class names are the kit's; see kit.css.
  */
 import type { CSSProperties, ReactNode } from 'react';
+import { pingQuality } from './ping';
+
+/** The kit's ping bands (ui/ping.ts, which the HUD's scoreboard shares). */
+export { pingQuality };
 
 export type ScreenKind = 'menu' | 'game';
 
@@ -40,13 +44,6 @@ export function Screen({
   );
 }
 
-/** Ping quality the kit's way: green up to 100 ms, amber to 200, red beyond; 4…1 signal bars. */
-export function pingQuality(ms: number): { cls: 'ping--good' | 'ping--mid' | 'ping--bad'; bars: 1 | 2 | 3 | 4 } {
-  if (ms <= 50) return { cls: 'ping--good', bars: 4 };
-  if (ms <= 100) return { cls: 'ping--good', bars: 3 };
-  if (ms <= 200) return { cls: 'ping--mid', bars: 2 };
-  return { cls: 'ping--bad', bars: 1 };
-}
 
 export function Ping({ ms, label, bars = true }: { ms: number; label?: string | undefined; bars?: boolean }) {
   if (!(ms >= 0)) return <span className="ping muted">{label ? `${label} · ` : ''}no ping</span>;

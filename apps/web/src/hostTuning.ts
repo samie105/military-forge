@@ -139,6 +139,15 @@ export function createHostTuning(getMode: () => LocalMode | OnlineMode | null, p
           },
           copy: copyText,
           openAll,
+          // a room's bots (v17): what MATCH_STATE says, set with the host's MatchSettings
+          ...(target instanceof OnlineMode
+            ? {
+                room: {
+                  get: () => ({ bots: target.matchState?.rules.bots ?? 0, level: target.matchState?.rules.botLevel ?? 'normal' }),
+                  set: (change: { bots?: number; botLevel?: 'easy' | 'normal' | 'hard' }) => target.setMatchSettings(change),
+                },
+              }
+            : {}),
         }),
       );
     },

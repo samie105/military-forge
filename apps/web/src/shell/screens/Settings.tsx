@@ -74,6 +74,7 @@ function Graphics({ settings }: { settings: Settings }) {
               </button>
             ))}
           </div>
+          <NameTagPreview mode={settings.colorBlind} />
         </div>
       </div>
       <div className="srow">
@@ -278,11 +279,30 @@ function Controls({ settings }: { settings: Settings }) {
 
 // ------------------------------------------------------------------ accessibility
 
-const CB: readonly { id: Settings['colorBlind']; name: string; a: string; b: string }[] = [
+/** The team pairs: the kit's blue and orange; blue and yellow (no red-green); red and teal (no blue-yellow). */
+export const CB: readonly { id: Settings['colorBlind']; name: string; a: string; b: string }[] = [
   { id: 'standard', name: 'Standard', a: 'var(--c-team-a)', b: 'var(--c-team-b)' },
-  { id: 'deutan', name: 'Red-green safe', a: 'var(--c-team-a)', b: 'var(--c-team-b)' },
-  { id: 'tritan', name: 'Blue-yellow safe', a: 'var(--c-team-a)', b: 'var(--c-team-b)' },
+  { id: 'deutan', name: 'Red-green safe', a: 'var(--c-team-a)', b: 'var(--c-warn)' },
+  { id: 'tritan', name: 'Blue-yellow safe', a: 'var(--c-hp)', b: 'var(--c-ev-squall)' },
 ];
+
+/** "In match:" two name tags in the chosen pair, each with its team's shape (Pen N10). */
+export function NameTagPreview({ mode }: { mode: Settings['colorBlind'] }) {
+  const c = CB.find((x) => x.id === mode) ?? CB[0]!;
+  return (
+    <div className="mf-cb__preview" style={{ '--a': c.a, '--b': c.b } as CSSProperties}>
+      <span className="label">In match:</span>
+      <span className="mf-cb__tag mf-cb__tag--a">
+        <i aria-hidden="true">◆</i>
+        Kemi
+      </span>
+      <span className="mf-cb__tag mf-cb__tag--b">
+        <i aria-hidden="true">▲</i>
+        Tolu
+      </span>
+    </div>
+  );
+}
 
 function Accessibility({ settings }: { settings: Settings }) {
   const ctl = useCtl();

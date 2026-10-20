@@ -41,6 +41,23 @@ export function rulesLine(view: Pick<MatchView, 'killLimit' | 'timeLimit'>): { k
   };
 }
 
+/** The stepper's stops (Pen N9): the match's stand-by, the three seconds, GO. */
+const STEPS = ['match', '3', '2', '1', 'go'] as const;
+
+/** "Match 1 → 3 → 2 → 1 → GO" under the number: the stops passed dimmed, the one now lit. */
+export function CountdownSteps({ state, number }: { state: CountdownState; number: number }) {
+  const at = STEPS.indexOf(state as (typeof STEPS)[number]);
+  return (
+    <ol className="mf-cd__steps" aria-hidden="true">
+      {STEPS.map((s, i) => (
+        <li key={s} className={i < at ? 'is-done' : i === at ? 'is-now' : undefined}>
+          {s === 'match' ? `Match ${number}` : s === 'go' ? 'GO' : s}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 /**
  * The countdown while it runs, and GO for a moment after (keeps the last view to say it). As the
  * countdown begins, the screen floods in from the button that started it (P6: the lobby's Start or
@@ -204,11 +221,17 @@ export function Countdown({ view, state, held = false, bindings }: { view: Match
               </div>
             )}
             {state === 'go' && <b className="display cd__go m-p7">Go!</b>}
+            <CountdownSteps state={state} number={view.number} />
           </div>
           {state !== 'go' && bindings && touch && <p className="cd__hint plate">Tip: swipe the dash button any way · hold the grenade and drag to aim</p>}
           {state !== 'go' && bindings && !touch && (
             <p className="cd__hint plate">
               Tip: <Kbd code={bindings.dash[0]} /> dash · hold <Kbd code={bindings.grenade[0]} /> to aim a grenade
+              {bindings.scoreboard[0] && (
+                <>
+                  {' · '}hold <Kbd code={bindings.scoreboard[0]} /> to see who's in
+                </>
+              )}
             </p>
           )}
         </>

@@ -23,6 +23,7 @@ import type { LobbyPlayer, LobbyView } from '../onlineView';
 import { encodeQr, qrSvgPath } from '../qr';
 import type { Bindings } from '../controls';
 import { Backdrop, RollNum, remember } from './frame';
+import { BotSettings, botsLine, type BotLevel } from '../roomBots';
 import { TipsCard } from './Tips';
 
 /** Players a room takes (the game server's default maxHumans: MATCH_STATE doesn't carry it). */
@@ -77,8 +78,8 @@ export function killsLabel(kills: number): string {
  * A host setting as the host sees it: their last choice at once, until the room's answer (a round
  * trip away) says the same, or 3 s pass (the server didn't take it). Quick clicks add up.
  */
-export function useRoomSetting(server: number): [number, (value: number) => void] {
-  const [local, setLocal] = useState<number | null>(null);
+export function useRoomSetting<T extends number | string>(server: T): [T, (value: T) => void] {
+  const [local, setLocal] = useState<T | null>(null);
   useEffect(() => {
     if (local !== null && local === server) setLocal(null);
   }, [server, local]);
@@ -288,6 +289,8 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
   const [copied, setCopied] = useState(false);
   const [timeLimit, showTime] = useRoomSetting(lobby.timeLimit);
   const [kills, showKills] = useRoomSetting(lobby.killLimit);
+  const [bots, showBots] = useRoomSetting(lobby.bots);
+  const [botLevel, showBotLevel] = useRoomSetting<BotLevel>(lobby.botLevel);
   const link = roomLink(lobby.code);
   const qr = useMemo(() => qrSvgPath(encodeQr(link), 1), [link]);
   const rows = useWithLeavers(lobby.players, (p) => p.id);
@@ -453,7 +456,7 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
             {!enough ? (
               <p className="lobby__note">
                 <Icon name="info" size="sm" />
-                Waiting for at least {lobby.minPlayers} players: bots fill in when the match starts.
+                Waiting for at least {lobby.minPlayers} players{bots > 0 ? ": bots fill in when the match starts" : " (bots are off)"}.
               </p>
             ) : (
               !host && (
@@ -495,6 +498,10 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
               <span>
                 <Icon name="skull" size="sm" />
                 <b data-bind="room.killLimit">{killsLabel(kills)}</b>
+              </span>
+              <span>
+                <Icon name="bot" size="sm" />
+                <b data-bind="room.bots">{botsLine(bots, botLevel)}</b>
               </span>
             </div>
             {host && (
@@ -544,6 +551,19 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
                     No limit
                   </button>
                 </div>
+                <BotSettings
+                  id="lobby"
+                  bots={bots}
+                  level={botLevel}
+                  onBots={(n) => {
+                    showBots(n);
+                    online?.setMatchSettings({ bots: n });
+                  }}
+                  onLevel={(l) => {
+                    showBotLevel(l);
+                    online?.setMatchSettings({ botLevel: l });
+                  }}
+                />
               </div>
             )}
             <span className="label">Map</span>

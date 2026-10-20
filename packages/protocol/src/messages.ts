@@ -63,11 +63,13 @@ export { MsgType } from './wire';
  *     dash group's 43 is dashGap u6 (was dashCooldown u8) and 44 dashChain u3 (was airDashUsed u1) ·
  *     local block 63–64, one group after the burn group (dashChainTicks u7 · dashPower u3; 15 delta
  *     groups) · the DASH ext event + u3 chain. No new tags, ext kinds, flags, INPUT bits or messages.
- * v15 is claimed by ui-playtest (room bots: MATCH_STATE rules + bots u5 · botLevel u2), not on main yet.
  * v16 (arsenal, remote melee swings): remote flags 13 bits (4096 = swinging); when set, the state group
  *     carries a trailing u6 meleeTicks (a remote swing that misses shows too). Nothing else changes.
+ * v17 (ui-playtest, the host's bots): MATCH_STATE's rules gain bots u5 (fill target, 0 = none) and
+ *     botLevel u2 (easy, normal, hard) after onNoRematch; the MatchSettings CMD's JSON takes bots and
+ *     botLevel in any phase. (Claimed as v15; renumbered after v16 landed first.)
  */
-export const PROTOCOL_VERSION = 16;
+export const PROTOCOL_VERSION = 17;
 
 /**
  * Everything the sim reads from packages/content: a client and server that disagree on any of it
@@ -154,7 +156,11 @@ export const CmdKind = {
   Rematch: 6,
   /** host: everyone back to the lobby (abandons a running match) */
   ReturnToLobby: 7,
-  /** host, lobby only: JSON `{ timeLimit?, killLimit?, mapId? }` (ROOM_SETTING_LIMITS; 0 = off) */
+  /**
+   * host: JSON `{ timeLimit?, killLimit?, mapId?, bots?, botLevel? }`. The limits and the map in the
+   * lobby only (ROOM_SETTING_LIMITS; 0 = off); the bots (ROOM_BOT_CHOICES, 'easy' | 'normal' | 'hard')
+   * in any phase, live (v17)
+   */
   MatchSettings: 8,
   /** the client's round-trip time in whole ms, for everyone's scoreboard (every few seconds) */
   ReportPing: 9,

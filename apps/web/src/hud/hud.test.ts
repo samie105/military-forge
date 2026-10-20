@@ -3,7 +3,7 @@ import { BUZZ, DRAGON, HAMMER, HitZone, K47, NO_WEAPON, SHREDDER, THUMPER, WIDOW
 import { DamageSource, MatchPhase } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
 import { Linger, blastName, hudFrame, netGraph, pingLook, type HudInput, type HudMemory } from './hud';
-import { conditions, crateCompare, damageArc, dashHint, dashStatus, eventLook, feedFromEvents, fuelView, grenadeBelt, healthView, isBlastSource, isBurnTick, pickupIcon, pickupNear, pickupPrompt, screenAngle, shieldStatus, tunedSummary, weaponCards, weaponFamily, weightWords, type HudPlayer } from './model';
+import { conditions, leaderLine, crateCompare, damageArc, dashHint, dashStatus, eventLook, feedFromEvents, fuelView, grenadeBelt, healthView, isBlastSource, isBurnTick, pickupIcon, pickupNear, pickupPrompt, screenAngle, shieldStatus, tunedSummary, weaponCards, weaponFamily, weightWords, type HudPlayer, type ScoreRow } from './model';
 import { StateTokens, stateMatches } from './state';
 import { HUD_VARS, hudTemplate } from './template';
 import type { NetStats } from '../view';
@@ -478,6 +478,16 @@ describe('round two desktop HUD', () => {
     expect(dry.tokens).toEqual(expect.arrayContaining(['dash-cooldown', 'air-used']));
     expect(dry.tokens).not.toContain('dash-ready');
     expect(with_({}).values['dash.left']).toMatch(/^×\d+$/);
+    // the fuel bar's mark: one dash's worth of the tank
+    expect(Number(with_({}).values['v.dashCost'])).toBeCloseTo(t.dashFuelCost / t.fuelMax, 2);
+  });
+
+  it('the desktop dash has no cooldown ring: the rose and the fuel-cost marks instead', () => {
+    const html = hudTemplate();
+    expect(html).not.toContain('dash__fill');
+    expect(html).toContain('dash__rose');
+    expect(html).toMatch(/bar--fuel[^]*mf-fuel__cost[^]*mf-fuel__tick/);
+    expect(HUD_VARS).toContain('--dash-cost: v.dashCost');
   });
 
   it('a weapon crate underfoot: Swap your gun for it, with the quick compare', () => {
@@ -585,3 +595,14 @@ function player(over: Partial<HudPlayer>): HudPlayer {
     ...over,
   };
 }
+
+describe("the scoreboard's leader bar (Pen N4)", () => {
+  const row = (key: number, name: string, score: number, you = false): ScoreRow => ({ key, name, score, kills: score, deaths: 0, assists: 0, ping: -1, you, host: false, bot: false, left: false });
+  it('says who leads, towards the kill limit, and where you stand', () => {
+    expect(leaderLine([row(1, 'Kemi', 8), row(2, 'Ade', 6, true)], 10)).toBe("Kemi leads 8/10 · you're 2 kills behind");
+    expect(leaderLine([row(2, 'Ade', 8, true), row(1, 'Kemi', 7)], 10)).toBe('You lead 8/10 · 1 kill ahead of Kemi');
+    expect(leaderLine([row(1, 'Kemi', 5), row(2, 'Tolu', 5), row(3, 'Ade', 2, true)], 0)).toBe("Tied at 5 · you're 3 kills behind");
+    expect(leaderLine([row(2, 'Ade', 3, true)], 10)).toBe('You lead 3/10');
+    expect(leaderLine([], 10)).toBe('');
+  });
+});

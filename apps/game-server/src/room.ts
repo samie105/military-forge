@@ -29,6 +29,7 @@ import { MatchRecorder, type ResultsSink } from './results';
 import { addBot, removeBot, type BotLevelId } from '@military-forge/bots';
 import { ADMIN_BOT_LEVELS, adminTuning, adminValue, createTuning, defaultTuning, limitTuning, maps, type AdminValues, type Tuning } from '@military-forge/content';
 import {
+  BOT_LEVELS_WIRE,
   CONTENT_HASH,
   CloseCode,
   CmdKind,
@@ -304,6 +305,28 @@ export function parseMatchSettings(payload: string, current: Pick<MatchRules, 't
   return { timeLimit, killLimit, mapId: map };
 }
 
+/**
+ * The host's bots from a MatchSettings CMD (v17): `{ bots?, botLevel? }`, the players bots keep the
+ * room at (0 = none, at most MAX_PLAYERS) and their level. Undefined when the payload has neither
+ * (a limits-only edit), null when it's malformed; a missing half keeps `current`'s.
+ */
+export function parseBotSettings(payload: string, current: { target: number; level: BotLevelId }): { target: number; level: BotLevelId } | null | undefined {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(payload);
+  } catch {
+    return null;
+  }
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  if (o.bots === undefined && o.botLevel === undefined) return undefined;
+  const target = o.bots === undefined ? current.target : o.bots;
+  const level = o.botLevel === undefined ? current.level : o.botLevel;
+  if (typeof target !== 'number' || !Number.isInteger(target) || target < 0 || target > MAX_PLAYERS) return null;
+  if (typeof level !== 'string' || !(BOT_LEVELS_WIRE as readonly string[]).includes(level)) return null;
+  return { target, level: level as BotLevelId };
+}
+
 function standingWire(s: MatchStanding): MatchStandingWire {
   return {
     id: s.id,
@@ -361,6 +384,12 @@ export class Room {
   private readonly log: (msg: string) => void;
   /** the bots this room keeps: the admin page's, else RoomOptions.fillBots; null = no bots */
   private fill: { target: number; level: BotLevelId } | null;
+  /**
+   * The room's host's choice (MatchSettings `bots` / `botLevel`, the lobby's rules and Tune the
+   * game; target 0 = no bots), which outranks `fill` for this room from then on; undefined until the
+   * host picks.
+   */
+  private hostFill: { target: number; level: BotLevelId } | undefined = undefined;
   /** RoomOptions.fillBots, and the match limits it was made with: what the admin page's reset goes back to */
   private readonly baseFill: { target: number; level: BotLevelId } | null;
   /** the room's own limits: its defaults, then whatever its host set in the lobby */
@@ -825,7 +854,15 @@ export class Room {
         if (isHost) m.returnToLobby();
         break;
       case CmdKind.MatchSettings: {
-        if (!isHost || m.phase !== MatchPhase.Waiting) break;
+        if (!isHost) break;
+        // the bots: in any phase, live (the next tick's fill adds or removes them)
+        const bots = parseBotSettings(payload, this.hostFill ?? { target: this.fill?.target ?? 0, level: this.fill?.level ?? 'normal' });
+        if (bots === null) break;
+        if (bots) {
+          this.hostFill = bots;
+          this.log(`[room] host sets bots: ${bots.target > 0 ? `fill to ${bots.target} (${bots.level})` : 'off'}`);
+        }
+        if (m.phase !== MatchPhase.Waiting) break;
         const next = parseMatchSettings(payload, m.rules, this.game.map.id);
         if (!next) break;
         m.rules.timeLimit = next.timeLimit;
@@ -852,7 +889,7 @@ export class Room {
       phaseStartTick: this.game.tick - m.phaseTick,
       number: m.number,
       endReason: m.endReason,
-      rules: m.rules,
+      rules: { ...m.rules, bots: this.botFill?.target ?? 0, botLevel: (this.hostFill ?? this.fill)?.level ?? 'normal' },
       mapId: this.game.map.id,
       hostId: this.hostId,
       lobby: m.players.flatMap((p) => (p ? [{ id: p.id, ready: p.ready, rematch: p.rematch, pingMs: pings.get(p.id) ?? -1 }] : [])),
@@ -954,8 +991,14 @@ export class Room {
    * and they all go with the last human. Before the tick's step, as a replay puts them back
    * (packages/bots botReplaySetup).
    */
+  /** The bots this room keeps now: the host's choice, else the admin page's or RoomOptions'; null = none. */
+  get botFill(): { target: number; level: BotLevelId } | null {
+    if (this.hostFill === undefined) return this.fill;
+    return this.hostFill.target > 0 ? this.hostFill : null;
+  }
+
   private fillWithBots(): void {
-    const fill = this.fill;
+    const fill = this.botFill;
     // no bots wanted (the admin page turned them off too): the ones in go
     if (!fill && this.bots.length === 0) return;
     const humans = this.humanCount;

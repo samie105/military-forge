@@ -89,16 +89,14 @@ function desktop(): string {
           <div class="vital vital--hp">${ic('hp')}<b class="vital__num num" data-bind="player.hp"></b>
             <div class="bar bar--hp" role="meter" aria-label="Health" aria-valuemin="0" aria-valuemax="100" data-bind-attr="aria-valuenow: player.hp"><i class="bar__ghost"></i><i class="bar__fill"></i><span class="bar__ticks"></span></div></div>
           <div class="vital vital--fuel">${ic('fuel')}<b class="vital__num num" data-bind="player.fuel"></b>
-            <div class="vital__stack"><div class="bar bar--fuel" role="meter" aria-label="Jet fuel" aria-valuemin="0" aria-valuemax="100" data-bind-attr="aria-valuenow: player.fuel"><i></i></div><div class="bar bar--delay" aria-hidden="true"><i></i></div></div></div>
+            <div class="vital__stack"><div class="bar bar--fuel" role="meter" aria-label="Jet fuel" aria-valuemin="0" aria-valuemax="100" data-bind-attr="aria-valuenow: player.fuel"><i></i><span class="mf-fuel__cost" aria-hidden="true"></span><span class="mf-fuel__tick" aria-hidden="true"></span></div><div class="bar bar--delay" aria-hidden="true"><i></i></div></div></div>
         </div>
         <div class="dash plate" aria-label="Dash">
           <svg class="dash__ring" viewBox="0 0 100 100" aria-hidden="true">
-            <circle class="dash__track" cx="50" cy="50" r="40"/><circle class="dash__fill" cx="50" cy="50" r="40" pathLength="100"/>
             <g class="dash__rose">${[0, 45, 90, 135, 180, 225, 270, 315].map((a) => `<path transform="rotate(${a} 50 50)" d="M50 2v6"/>`).join('')}</g>
             <path class="dash__dir" data-state="dash-hint" data-bind-attr="transform: dash.hintRotate" d="M50 0v10"/>
           </svg>
           <svg class="ic ic--lg dash__icon" aria-hidden="true"><use href="#icon-dash"/></svg>
-          <b class="dash__cd num" data-state="dash-cooldown" data-bind="dash.cooldown"></b>
           <div class="dash__foot"><kbd class="kbd" data-bind="bind.dash.0"></kbd><span class="dash__air" aria-label="Dashes the fuel buys" data-bind="dash.left"></span></div>
           <span class="dash__hint" data-state="dash-hint" data-bind-var="--hint-rot: dash.hintArrow">${ic('arrow-right', 'ic--sm')}<span data-bind="dash.hintDir"></span></span>
         </div>
@@ -221,7 +219,7 @@ function desktop(): string {
 }
 
 /** The bars' numbers, as CSS variables on the HUD root (#hud, its data-bind-var): both layouts read them. */
-export const HUD_VARS = '--hp: v.hp; --hp-ghost: v.hpGhost; --fuel: v.fuel; --fuel-delay: v.fuelDelay; --shield-hp: v.shield; --dash: v.dash; --reload: v.reload; --respawn: v.respawn; --event: v.event; --equip: v.equip; --throw: v.throw';
+export const HUD_VARS = '--hp: v.hp; --hp-ghost: v.hpGhost; --fuel: v.fuel; --fuel-delay: v.fuelDelay; --shield-hp: v.shield; --dash: v.dash; --dash-cost: v.dashCost; --reload: v.reload; --respawn: v.respawn; --event: v.event; --equip: v.equip; --throw: v.throw';
 
 export function hudTemplate(): string {
   return `<div class="mf-fit mf-hud-fit kit-v2">${desktop()}</div><div class="mf-fit mf-hud-fit mf-hud-fit--phone kit-v2">${phoneHudTemplate()}</div>`;

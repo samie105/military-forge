@@ -1149,7 +1149,7 @@ describe('items in smoke (review M2)', () => {
 
 describe('the admin page\'s overrides (v13)', () => {
   it('OVERRIDES (0x28) and WELCOME\'s overridesJson carry the admin values whole, however many', () => {
-    expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(13);
+    expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(13); // v13 brought OVERRIDES; later versions keep it
     expect(MsgType.Overrides).toBe(0x28);
     const many = JSON.stringify(Object.fromEntries(Array.from({ length: 400 }, (_, i) => [`weapon.gun${i}.damage`, i + 0.25])));
     expect(many.length).toBeGreaterThan(4096);
@@ -1182,7 +1182,7 @@ describe('the fluid dash (v14)', () => {
 
 describe('remote melee swings (v16)', () => {
   it('a remote swing travels, full and delta, every tick of it, and a miss shows', () => {
-    expect(PROTOCOL_VERSION).toBe(16);
+    expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(16);
     const game = new Game({ seed: 5, dummies: false });
     const viewer = game.addPlayer('viewer');
     const swinger = game.addPlayer('swinger');

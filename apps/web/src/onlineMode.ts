@@ -279,7 +279,8 @@ export class OnlineMode {
     this.sendCmd(CmdKind.ReturnToLobby);
   }
 
-  setMatchSettings(settings: { timeLimit?: number; killLimit?: number; mapId?: string }): void {
+  /** Host: the room's limits and map (lobby only) and its bots (any phase, v17). */
+  setMatchSettings(settings: { timeLimit?: number; killLimit?: number; mapId?: string; bots?: number; botLevel?: 'easy' | 'normal' | 'hard' }): void {
     this.sendCmd(CmdKind.MatchSettings, JSON.stringify(settings));
   }
 

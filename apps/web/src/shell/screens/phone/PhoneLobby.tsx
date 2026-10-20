@@ -23,6 +23,7 @@ import { KILL_STEP, ROOM_SLOTS, TIME_CHOICES, killsLabel, minutesLabel, useRoomS
 import { PhoneScreen, rise } from './layout';
 import { Roll, ShareChip, Sheet, initial, shareRoom, useShareChip } from './parts';
 import { PhoneTips } from './PhoneTips';
+import { BOT_LEVELS, BOT_LEVEL_NAMES, botFillChoices, botsLine, type BotLevel } from '../../roomBots';
 
 function Row({ p, i }: { p: LobbyPlayer; i: number }) {
   const ready = p.ready || p.isBot;
@@ -81,6 +82,8 @@ function RulesSheet({ lobby, open, onClose }: { lobby: LobbyView; open: boolean;
   const online = ctl.host.online;
   const [timeLimit, showTime] = useRoomSetting(lobby.timeLimit);
   const [kills, showKills] = useRoomSetting(lobby.killLimit);
+  const [bots, showBots] = useRoomSetting(lobby.bots);
+  const [botLevel, showBotLevel] = useRoomSetting<BotLevel>(lobby.botLevel);
   const limits = ROOM_SETTING_LIMITS;
   const times = TIME_CHOICES.filter((m) => m === 0 || (m * 60 >= limits.timeLimit.min && m * 60 <= limits.timeLimit.max));
   const host = lobby.isHost;
@@ -135,8 +138,29 @@ function RulesSheet({ lobby, open, onClose }: { lobby: LobbyView; open: boolean;
           )}
         </div>
       </div>
+      {/* the room's bots (desktop UI agent, v17): live, mid-match too */}
+      <div className="pm-sheet__row">
+        <span className="label">Bots</span>
+        <div className="seg pm-seg" role="radiogroup" aria-label="Bots">
+          {botFillChoices(bots).map((n) => (
+            <button type="button" key={n} role="radio" aria-checked={bots === n} className="seg__opt m-p8" disabled={!host} onClick={() => (showBots(n), online?.setMatchSettings({ bots: n }))}>
+              {n === 0 ? 'Off' : n}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="pm-sheet__row">
+        <span className="label">Bot level</span>
+        <div className="seg pm-seg" role="radiogroup" aria-label="Bot level">
+          {BOT_LEVELS.map((l) => (
+            <button type="button" key={l} role="radio" aria-checked={botLevel === l} className="seg__opt m-p8" disabled={!host || bots === 0} onClick={() => (showBotLevel(l), online?.setMatchSettings({ botLevel: l }))}>
+              {BOT_LEVEL_NAMES[l]}
+            </button>
+          ))}
+        </div>
+      </div>
       <p className="pm-sheet__note">
-        {minutesLabel(timeLimit)} · {killsLabel(kills)}
+        {minutesLabel(timeLimit)} · {killsLabel(kills)} · {botsLine(bots, botLevel)}
       </p>
     </Sheet>
   );

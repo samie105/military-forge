@@ -95,6 +95,17 @@ describe('Tune the game: the panel', () => {
     expect(html).toMatch(/data-tab="custom" aria-checked="true"/);
     expect(html).toContain('trow is-changed');
   });
+
+  it("a room's host also gets the room's bots (v17); training doesn't", () => {
+    const t = createTuning();
+    const props = { online: true, getTuning: () => t, setTuning: () => {}, subscribe: () => () => {}, onClose: () => {}, copy: async () => true };
+    const room = { get: () => ({ bots: 0, level: 'hard' as const }), set: () => {} };
+    const html = renderToStaticMarkup(createElement(TunePanel, { ...props, room }));
+    expect(html).toMatch(/role="radio" aria-checked="true"[^>]*>Off</);
+    expect(html).toContain('Fill to 8');
+    expect(html).toMatch(/aria-checked="true" disabled=""[^>]*>Hard</); // no level while bots are off
+    expect(renderToStaticMarkup(createElement(TunePanel, { ...props, online: false }))).not.toContain('Fill to 4');
+  });
 });
 
 describe("who changed the room's tuning (the audit, M3)", () => {

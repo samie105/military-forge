@@ -206,6 +206,25 @@ export function weaponCards(p: Pick<PlayerView, 'weapons' | 'active' | 'dual'>):
   });
 }
 
+/**
+ * The scoreboard's leader bar (docs/design/pen-diff.md N4): who leads, towards the kill limit, and
+ * where you stand ("Kemi leads 8/10 · you're 2 kills behind"). Rows in rank order; '' when empty.
+ */
+export function leaderLine(rows: readonly ScoreRow[], killLimit: number, name: (r: ScoreRow) => string = (r) => r.name): string {
+  const top = rows[0];
+  if (!top) return '';
+  const of = killLimit > 0 ? `/${killLimit}` : '';
+  const kills = (n: number) => `${n} ${n === 1 ? 'kill' : 'kills'}`;
+  const me = rows.find((r) => r.you);
+  const second = rows[1];
+  if (second && second.score === top.score) {
+    const behind = me && me.score < top.score ? ` · you're ${kills(top.score - me.score)} behind` : '';
+    return `Tied at ${top.score}${of}${behind}`;
+  }
+  if (top.you) return `You lead ${top.score}${of}${second ? ` · ${kills(top.score - second.score)} ahead of ${name(second)}` : ''}`;
+  return `${name(top)} leads ${top.score}${of}${me ? ` · you're ${kills(top.score - me.score)} behind` : ''}`;
+}
+
 export interface ScoreRow {
   key: number;
   name: string;

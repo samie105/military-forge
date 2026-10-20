@@ -95,6 +95,8 @@ describe('the map loading screen', () => {
       killLimit: 10,
       mapId: 'street-market',
       mapName: 'Street Market',
+      bots: 4,
+      botLevel: 'normal',
     };
     const html = renderToStaticMarkup(
       createElement(MapLoading, { code: 'KMTXRB', lobby, mapName: 'Street Market', haveMatch: true, load: busy, bindings: defaultBindings(), onCancel: () => {} }),

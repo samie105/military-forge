@@ -114,7 +114,7 @@ const state = (over: Partial<MatchStateMsg> = {}): MatchStateMsg => ({
   phaseStartTick: 1000,
   number: 0,
   endReason: 0,
-  rules: { timeLimit: 300, killLimit: 20, countdown: 5, ending: 10, postgame: 15, minPlayers: 2, onNoRematch: 'lobby' },
+  rules: { timeLimit: 300, killLimit: 20, countdown: 5, ending: 10, postgame: 15, minPlayers: 2, onNoRematch: 'lobby', bots: 4, botLevel: 'normal' },
   mapId: 'movement-test',
   hostId: 2,
   lobby: [
@@ -163,6 +163,15 @@ describe('online match and lobby views', () => {
     expect(lobbyView(source(state(), 2))!.isHost).toBe(true);
     expect(sameLobby(view, lobbyView(source(state())))).toBe(true);
     expect(sameLobby(view, lobbyView(source(state({ hostId: 5 }))))).toBe(false);
+  });
+
+  it("the lobby carries the room's bots, and a change to them is a change (v17)", () => {
+    const view = lobbyView(source(state()))!;
+    expect(view).toMatchObject({ bots: 4, botLevel: 'normal' });
+    const off = lobbyView(source(state({ rules: { ...state().rules, bots: 0 } })))!;
+    expect(off.bots).toBe(0);
+    expect(sameLobby(view, off)).toBe(false);
+    expect(sameLobby(view, lobbyView(source(state({ rules: { ...state().rules, botLevel: 'hard' } }))))).toBe(false);
   });
 
   it('the lobby: bots filling the room are marked as bots (they never ready up, and needn’t)', () => {

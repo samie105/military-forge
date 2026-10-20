@@ -20,6 +20,7 @@ import { DRAGON, GAS, HitZone, defaultTuning, weapons, type Tuning } from '@mili
 import type { MatchView } from '../shell/matchView';
 import { formatClock, playerName } from '../shell/matchView';
 import { capText, iconHref, weaponIcon } from '../ui/icons';
+import { pingQuality } from '../ui/ping';
 import { logicalRect, type Box } from '../ui/landscape';
 import { WorldTags } from './worldTags';
 import { flipTransform, moveIndicator, reduced, rollText, stagger, token } from '../ui/motion';
@@ -39,6 +40,7 @@ import {
   healthView,
   isBlastSource,
   isBurnTick,
+  leaderLine,
   pickupIcon,
   pickupNear,
   pickupPrompt,
@@ -284,7 +286,7 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
 
   const me = (frame.players.find((p) => p.id === frame.localId) ?? null) as HudPlayer | null;
   if (!me) {
-    for (const k of ['v.hp', 'v.hpGhost', 'v.fuel', 'v.fuelDelay', 'v.shield', 'v.dash', 'v.reload', 'v.respawn', 'v.equip', 'v.throw']) v[k] = '0';
+    for (const k of ['v.hp', 'v.hpGhost', 'v.fuel', 'v.fuelDelay', 'v.shield', 'v.dash', 'v.dashCost', 'v.reload', 'v.respawn', 'v.equip', 'v.throw']) v[k] = '0';
     return { values: v, tokens };
   }
   on('alive', me.alive);
@@ -307,6 +309,8 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
   v['player.fuel'] = String(Math.round(fv.fill * 100));
   v['v.fuel'] = fixed(fv.fill);
   v['v.fuelDelay'] = fixed(fv.delayLeft);
+  // what the next dash costs, on the fuel bar (the fluid dash: no cooldown, it eats fuel)
+  v['v.dashCost'] = fixed(t.fuelMax > 0 ? Math.max(0, Math.min(1, t.dashFuelCost / t.fuelMax)) : 0);
   on('emp', c.emp);
   v['player.empCause'] = c.empSeconds > 0 ? 'EMP grenade' : 'EMP field';
   v['player.jetDisabled'] = c.empSeconds > 0 ? `${c.empSeconds.toFixed(1)} s` : '';
@@ -333,14 +337,13 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
   }
   v['v.shield'] = fixed(sh.fill);
 
-  // dash: no cooldown, the fuel (docs/02 §21). The ring is full while the fuel buys a dash and
-  // refills toward one when it doesn't; the pip counts the dashes in the tank; the last dash's
-  // direction shows on the rose for a moment
+  // dash: no cooldown, the fuel (docs/02 §21). The desktop shows it on the fuel bar (v.dashCost
+  // above) and dims the dash plate when the fuel buys none; the pip counts the dashes in the tank;
+  // the last dash's direction shows on the rose for a moment. (--dash still feeds the phone's ring.)
   const d = dashStatus(me, t);
   on('dash-ready', d.state === 'ready');
   on('dash-cooldown', d.state === 'spent');
   on('air-used', d.state === 'spent');
-  v['dash.cooldown'] = '';
   v['dash.left'] = d.left < 0 ? '∞' : `×${d.left}`;
   v['v.dash'] = fixed(1 - d.fill);
   const hint = mem.dashDir === null || mem.dashDir === undefined ? null : dashHint(mem.dashDir);
@@ -693,6 +696,7 @@ export class Hud {
   private boardKey = '';
   private boardCells: HTMLElement[][] = [];
   private boardClock: HTMLElement | null = null;
+  private boardLead: HTMLElement | null = null;
   private scoreboardCodes: readonly string[] = ['Tab'];
   private blocked = false;
   private visible: boolean | null = null;
@@ -1100,9 +1104,11 @@ export class Hud {
       const limit = match ? (match.killLimit > 0 ? `first to ${match.killLimit}` : 'no kill limit') : '';
       el('span', 'sb__meta', head).textContent = ['Deathmatch', match?.mapName ?? '', limit].filter(Boolean).join(' · ');
       this.boardClock = el('b', 'sb__clock num', head);
+      // who leads and where you stand (rewritten below with the scores)
+      this.boardLead = el('p', 'sb__lead');
       const table = el('table', 'sb__table');
       const tr = el('tr', '', el('thead', '', table));
-      for (const text of ['#', 'Player', 'Kills', 'Deaths', 'Ping']) {
+      for (const text of ['#', 'Player', 'Score', 'Kills', 'Deaths', 'Ping']) {
         const th = el('th', '', tr);
         th.scope = 'col';
         th.textContent = text;
@@ -1125,28 +1131,41 @@ export class Hud {
         if (r.host) el('span', 'tag tag--host', who).textContent = 'Host';
         if (r.bot) el('span', 'tag tag--bot', who).textContent = 'Bot';
         if (r.left) el('span', 'tag tag--ghost', who).textContent = 'Left';
-        return [rank, el('td', 'num sb__k', row), el('td', 'num', row), el('td', 'num sb__ping', row)];
+        return [rank, el('td', 'num sb__k', row), el('td', 'num', row), el('td', 'num', row), el('td', 'num sb__ping', row)];
       });
       if (!list.length) {
         const empty = el('td', 'sb__ping', el('tr', '', body));
-        empty.colSpan = 5;
+        empty.colSpan = 6;
         empty.textContent = 'Scores show while a match runs.';
       }
       const foot = el('footer', 'sb__foot');
       foot.append('Hold ');
       el('kbd', 'kbd', foot).textContent = this.keys.scoreboard || 'Tab';
       foot.append(' to keep this open · ranked by score: kills minus self-kills · bots show no ping');
-      this.board.replaceChildren(head, table, foot);
+      this.board.replaceChildren(head, this.boardLead, table, foot);
       this.boardKey = key;
     }
     if (this.boardClock && this.boardClock.textContent !== clock) this.boardClock.textContent = clock;
+    const lead = leaderLine(list, match?.killLimit ?? 0, (r) => playerName(r.name, r.bot));
+    if (this.boardLead && this.boardLead.textContent !== lead) {
+      this.boardLead.textContent = lead;
+      this.boardLead.hidden = !lead;
+    }
     list.forEach((r, i) => {
       const cells = this.boardCells[i];
       if (!cells) return;
-      const text = [String(i + 1), String(r.kills), String(r.deaths), r.ping >= 0 ? `${r.ping} ms` : '·'];
+      const text = [String(i + 1), String(r.score), String(r.kills), String(r.deaths), r.ping >= 0 ? `${r.ping} ms` : '·'];
       cells.forEach((c, j) => {
         if (c.textContent !== text[j]) c.textContent = text[j]!;
       });
+      // the ping in the kit's bands (green to 100 ms, amber to 200, red beyond)
+      const ping = cells[5]!;
+      const band = r.ping >= 0 ? pingQuality(r.ping).cls : '';
+      if (ping.dataset.band !== band) {
+        ping.classList.remove('ping--good', 'ping--mid', 'ping--bad');
+        if (band) ping.classList.add(band);
+        ping.dataset.band = band;
+      }
     });
   }
 }

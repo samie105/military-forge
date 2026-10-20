@@ -24,7 +24,15 @@ export interface MatchRulesWire {
   postgame: number;
   minPlayers: number;
   onNoRematch: 'close' | 'lobby';
+  /** the room's bots (v17): the players bots fill it up to, 0 = no bots (the host's room setting) */
+  bots: number;
+  /** their level (v17) */
+  botLevel: BotLevelWire;
 }
+
+/** Bot levels on the wire (packages/bots BOT_LEVELS ids), by index. */
+export const BOT_LEVELS_WIRE = ['easy', 'normal', 'hard'] as const;
+export type BotLevelWire = (typeof BOT_LEVELS_WIRE)[number];
 
 /** A player in the room right now: lobby flags and the ping their client reports. */
 export interface MatchLobbyEntry {
@@ -89,6 +97,11 @@ export const ROOM_SETTING_LIMITS = {
   killLimit: { min: 5, max: 100 },
 } as const;
 
+/** The bot fills a host may pick (players the room is kept at, 0 = no bots). */
+export const ROOM_BOT_CHOICES = [0, 4, 8] as const;
+/** The most a room's bot fill can say on the wire (u5). */
+export const MAX_BOT_FILL = 31;
+
 const MAX_LOBBY = 31;
 const MAX_STANDINGS = 63;
 const NO_KEY = 0xffff;
@@ -111,6 +124,8 @@ export function encodeMatchState(m: Omit<MatchStateMsg, 'type'>): Uint8Array {
     .unsigned(r.postgame, 7)
     .unsigned(r.minPlayers, 5)
     .bool(r.onNoRematch === 'lobby')
+    .unsigned(Math.max(0, Math.min(MAX_BOT_FILL, r.bots)), 5)
+    .unsigned(Math.max(0, BOT_LEVELS_WIRE.indexOf(r.botLevel)), 2)
     .string(m.mapId)
     .unsigned(pid(m.hostId), 5);
   const lobby = m.lobby.slice(0, MAX_LOBBY);
@@ -164,6 +179,8 @@ export function decodeMatchStateBody(r: BitReader): MatchStateMsg {
     postgame: r.bits(7),
     minPlayers: r.bits(5),
     onNoRematch: r.bool() ? 'lobby' : 'close',
+    bots: r.bits(5),
+    botLevel: BOT_LEVELS_WIRE[r.bits(2)] ?? 'normal',
   };
   const mapId = r.string();
   const hostId = unPid(r.bits(5));
