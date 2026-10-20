@@ -1161,7 +1161,7 @@ describe('the admin page\'s overrides (v13)', () => {
 
 describe('the fluid dash (v14)', () => {
   it('takes the v14 slots from the protocol registry: INPUT dashStrength, the reworked dash group, a chain group', () => {
-    expect(PROTOCOL_VERSION).toBe(14);
+    expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(14);
     expect([LS.dashTicks, LS.dashDir, LS.dashGap, LS.dashChain]).toEqual([41, 42, 43, 44]);
     expect([LS.dashChainTicks, LS.dashPower, LOCAL_STATE_FIELDS]).toEqual([63, 64, 65]);
   });
@@ -1177,5 +1177,39 @@ describe('the fluid dash (v14)', () => {
     const events: SimEvent[] = [{ type: 'dash', player: other.id, x: 4.5, y: 1.25, dir: 2, chain: 5 }];
     const snap = decodeMessage(encodeSnapshot(game, 1, events, { local: me })) as SnapshotMsg;
     expect(snap.events).toEqual(events);
+  });
+});
+
+describe('remote melee swings (v16)', () => {
+  it('a remote swing travels, full and delta, every tick of it, and a miss shows', () => {
+    expect(PROTOCOL_VERSION).toBe(16);
+    const game = new Game({ seed: 5, dummies: false });
+    const viewer = game.addPlayer('viewer');
+    const swinger = game.addPlayer('swinger');
+    viewer.spawn(20, 0, game.tuning);
+    swinger.spawn(26, 0, game.tuning);
+    game.setLoadout(swinger, [MACHETE.index, MACHETE.index]);
+    const enc = new SnapshotEncoder();
+    const baselines = new SnapshotBaselines();
+    const decoder = new SnapshotDecoder();
+    const inputs: ReturnType<typeof createInput>[] = [];
+    let swinging = 0;
+    let deltas = 0;
+    for (let t = 0; t < 240; t++) {
+      // a swing every second, aimed away from the viewer: every one misses
+      inputs[swinger.id] = { ...createInput(), buttons: t % 60 === 5 ? Btn.Melee : 0 };
+      game.step(inputs);
+      enc.begin(game, t + 1, game.events);
+      const full = decodeMessage(enc.encodeFor({ baselines: null, ackInputTick: 0, inputBufferHealth: 0, local: viewer, view: null })) as SnapshotMsg;
+      expect(full.players.find((p) => p.id === swinger.id)!.meleeTicks).toBe(swinger.meleeTicks);
+      const got = decoder.decode(enc.encodeFor({ baselines, ackInputTick: 0, inputBufferHealth: 0, local: viewer, view: null }));
+      baselines.ack(got.seq);
+      if (got.baselineSeq !== 0) deltas++;
+      expect(got.players.find((p) => p.id === swinger.id)!.meleeTicks).toBe(swinger.meleeTicks);
+      if (swinger.meleeTicks > 0) swinging++;
+      expect(game.events.some((e) => e.type === 'hit')).toBe(false);
+    }
+    expect(swinging).toBeGreaterThan(40);
+    expect(deltas).toBeGreaterThan(200);
   });
 });

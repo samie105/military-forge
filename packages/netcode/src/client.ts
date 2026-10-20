@@ -83,6 +83,26 @@ export interface RemotePose {
   y: number;
   /** discrete fields (alive, crouch, weapons…) come from this snapshot entry */
   src: SnapshotPlayer;
+  /**
+   * a melee swing's progress at the render tick (v16; 0 idle, 1 = started, fractional between
+   * ticks): from the later snapshot when its swing had already started by then, else the earlier
+   * one's carried on, so a swing plays smoothly between snapshots two or four ticks apart (set by
+   * remotePose; optional so a caller's own scratch pose needn't carry it)
+   */
+  meleeTicks?: number;
+}
+
+/**
+ * A remote swing's progress at render tick `t`, from two snapshots (`m0` at tick `t0`, `m1` at
+ * `t1`): meleeTicks counts up one a tick from 1 when a swing starts and drops to 0 when it ends.
+ */
+export function swingAt(m0: number, t0: number, m1: number, t1: number, t: number): number {
+  if (m1 > 0) {
+    const at = m1 - (t1 - t);
+    if (at >= 1) return at;
+  }
+  // the earlier swing carried on (if it ended within the gap, by at most the gap's few ticks)
+  return m0 > 0 ? m0 + (t - t0) : 0;
 }
 
 export interface NetClientStats {
@@ -567,6 +587,7 @@ export class NetClient {
     out.x = this.lerped.x;
     out.y = this.lerped.y;
     out.src = br.alpha < 0.5 ? p0 : p1;
+    out.meleeTicks = swingAt(p0.meleeTicks, br.a.serverTick, p1.meleeTicks, br.b.serverTick, renderTick);
     return out;
   }
 

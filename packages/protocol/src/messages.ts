@@ -63,8 +63,11 @@ export { MsgType } from './wire';
  *     dash group's 43 is dashGap u6 (was dashCooldown u8) and 44 dashChain u3 (was airDashUsed u1) ·
  *     local block 63–64, one group after the burn group (dashChainTicks u7 · dashPower u3; 15 delta
  *     groups) · the DASH ext event + u3 chain. No new tags, ext kinds, flags, INPUT bits or messages.
+ * v15 is claimed by ui-playtest (room bots: MATCH_STATE rules + bots u5 · botLevel u2), not on main yet.
+ * v16 (arsenal, remote melee swings): remote flags 13 bits (4096 = swinging); when set, the state group
+ *     carries a trailing u6 meleeTicks (a remote swing that misses shows too). Nothing else changes.
  */
-export const PROTOCOL_VERSION = 14;
+export const PROTOCOL_VERSION = 16;
 
 /**
  * Everything the sim reads from packages/content: a client and server that disagree on any of it

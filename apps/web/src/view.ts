@@ -49,7 +49,7 @@ export interface PlayerView {
   active: number;
   dual: boolean;
   weapons: WeaponView[];
-  /** melee swing progress (sim PlayerState.meleeTicks): 0 idle, 1 = swing started. Absent for remote players online */
+  /** melee swing progress (sim PlayerState.meleeTicks): 0 idle, 1 = swing started. Online, remote players' comes from the snapshots (v16), fractional between ticks */
   meleeTicks?: number;
   /** in a dash burst (docs/02 §21): pose and streak. The 'dash' event carries its start and direction */
   dashing?: boolean;

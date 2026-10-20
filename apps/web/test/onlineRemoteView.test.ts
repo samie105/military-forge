@@ -29,17 +29,24 @@ const remote = (over: Partial<SnapshotPlayer> = {}): SnapshotPlayer => ({
   shield: 'none',
   burning: false,
   windup: false,
+  meleeTicks: 0,
   ...over,
 });
 
 describe("OnlineMode's view of a remote player", () => {
   // remoteView needs only the names it reads from the net client
   const mode = Object.assign(Object.create(OnlineMode.prototype), { net: { names: new Map<number, string>() } }) as unknown as {
-    remoteView(src: SnapshotPlayer, isLocal: boolean, x: number, y: number): PlayerView;
+    remoteView(src: SnapshotPlayer, isLocal: boolean, x: number, y: number, meleeTicks?: number): PlayerView;
   };
 
   it('marks the gun in hand reloading while the snapshot says so (a revolver drops its casings then)', () => {
     expect(mode.remoteView(remote(), false, 10, 0).weapons.map((w) => w.reloadTicks)).toEqual([0, 0]);
     expect(mode.remoteView(remote({ reloading: true }), false, 10, 0).weapons.map((w) => w.reloadTicks)).toEqual([0, 1]);
+  });
+
+  it('carries a remote melee swing (v16), so a swing that misses shows too', () => {
+    expect(mode.remoteView(remote(), false, 10, 0).meleeTicks).toBe(0);
+    expect(mode.remoteView(remote({ meleeTicks: 5 }), false, 10, 0).meleeTicks).toBe(5);
+    expect(mode.remoteView(remote({ meleeTicks: 5 }), false, 10, 0, 4.5).meleeTicks).toBe(4.5); // at the render tick
   });
 });

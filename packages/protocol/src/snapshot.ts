@@ -78,6 +78,11 @@ export interface SnapshotPlayer {
   burning: boolean;
   /** the gun in hand spinning up (a minigun) or charging (Ripper, Pulse), v12: the tell (and its sound) */
   windup: boolean;
+  /**
+   * a melee swing's progress (v16; sim PlayerState.meleeTicks): 0 idle, 1 = the swing started, up
+   * to the swing's length, so a swing that misses shows too
+   */
+  meleeTicks: number;
 }
 
 export type SnapshotShield = 'none' | 'slung' | 'raising' | 'up';
@@ -178,7 +183,8 @@ const F_W1 = 9;
 const F_KILLS = 10;
 const F_DEATHS = 11;
 const F_RESPAWN = 12;
-const FIELDS = 13;
+const F_MELEE = 13;
+const FIELDS = 14;
 
 const FLAG_ALIVE = 1;
 const FLAG_BOT = 2;
@@ -197,8 +203,12 @@ const SHIELD_SHIFT = 8;
 const FLAG_BURNING = 1024;
 /** winding up (v12): the gun in hand spinning up or spun (a minigun) or charging (Ripper, Pulse): a tell */
 const FLAG_WINDUP = 2048;
-/** remote flags on the wire (v8: 8, with dashing; v9: 10, with the shield state; v12: 12, burning and wind-up) */
-const FLAG_BITS = 12;
+/** a melee swing under way (v16): its u6 progress follows the flags in the state group */
+const FLAG_SWING = 4096;
+/** remote flags on the wire (v8: 8, with dashing; v9: 10, with the shield state; v12: 12, burning and wind-up; v16: 13, swinging) */
+const FLAG_BITS = 13;
+/** a swing's progress on the wire (≤ 63 ticks; the admin caps a swing at 1 s) */
+const MELEE_BITS = 6;
 
 function shieldState(p: PlayerState): number {
   if (p.shieldHp <= 0) return 0;
@@ -235,6 +245,7 @@ function captureRemote(p: PlayerState, out: Int32Array, o: number): void {
     (p.dashTicks > 0 ? FLAG_DASHING : 0) |
     (p.burnTicks > 0 ? FLAG_BURNING : 0) |
     ((p.weapons[p.active]?.spin ?? 0) > 0 ? FLAG_WINDUP : 0) |
+    (p.meleeTicks > 0 ? FLAG_SWING : 0) |
     (shieldState(p) << SHIELD_SHIFT);
   out[o + F_X] = clamp(pos(p.x), -(1 << 23), (1 << 23) - 1);
   out[o + F_Y] = clamp(pos(p.y), -(1 << 23), (1 << 23) - 1);
@@ -248,6 +259,7 @@ function captureRemote(p: PlayerState, out: Int32Array, o: number): void {
   out[o + F_KILLS] = clamp(p.kills, -32768, 32767);
   out[o + F_DEATHS] = clamp(p.deaths, 0, 65535);
   out[o + F_RESPAWN] = clamp(p.respawnTicks, 0, 255);
+  out[o + F_MELEE] = clamp(p.meleeTicks, 0, (1 << MELEE_BITS) - 1);
 }
 
 function changedGroups(cur: Int32Array, c: number, base: Int32Array, b: number): number {
@@ -255,7 +267,7 @@ function changedGroups(cur: Int32Array, c: number, base: Int32Array, b: number):
   if (cur[c + F_X] !== base[b + F_X] || cur[c + F_Y] !== base[b + F_Y]) m |= G_POS;
   if (cur[c + F_VX] !== base[b + F_VX] || cur[c + F_VY] !== base[b + F_VY]) m |= G_VEL;
   if (cur[c + F_AIM] !== base[b + F_AIM]) m |= G_AIM;
-  if (cur[c + F_FLAGS] !== base[b + F_FLAGS]) m |= G_STATE;
+  if (cur[c + F_FLAGS] !== base[b + F_FLAGS] || cur[c + F_MELEE] !== base[b + F_MELEE]) m |= G_STATE;
   if (cur[c + F_HP] !== base[b + F_HP]) m |= G_HP;
   if (cur[c + F_ACTIVE] !== base[b + F_ACTIVE] || cur[c + F_W0] !== base[b + F_W0] || cur[c + F_W1] !== base[b + F_W1]) m |= G_WEAPON;
   if (cur[c + F_KILLS] !== base[b + F_KILLS] || cur[c + F_DEATHS] !== base[b + F_DEATHS]) m |= G_SCORE;
@@ -273,7 +285,10 @@ function writeRemote(w: BitWriter, cur: Int32Array, c: number, mask: number, bas
   }
   if (mask & G_VEL) w.signed(cur[c + F_VX]!, 12).signed(cur[c + F_VY]!, 12);
   if (mask & G_AIM) w.bits(cur[c + F_AIM]!, 10);
-  if (mask & G_STATE) w.bits(cur[c + F_FLAGS]!, FLAG_BITS);
+  if (mask & G_STATE) {
+    w.bits(cur[c + F_FLAGS]!, FLAG_BITS);
+    if (cur[c + F_FLAGS]! & FLAG_SWING) w.bits(cur[c + F_MELEE]!, MELEE_BITS);
+  }
   if (mask & G_HP) w.bits(cur[c + F_HP]!, 8);
   if (mask & G_WEAPON) w.bits(cur[c + F_ACTIVE]!, 1).bits(cur[c + F_W0]!, 6).bits(cur[c + F_W1]!, 6);
   if (mask & G_SCORE) w.signed(cur[c + F_KILLS]!, 16).bits(cur[c + F_DEATHS]!, 16);
@@ -296,7 +311,10 @@ function readRemote(r: BitReader, out: Int32Array, o: number, mask: number): voi
     out[o + F_VY] = r.signed(12);
   }
   if (mask & G_AIM) out[o + F_AIM] = r.bits(10);
-  if (mask & G_STATE) out[o + F_FLAGS] = r.bits(FLAG_BITS);
+  if (mask & G_STATE) {
+    out[o + F_FLAGS] = r.bits(FLAG_BITS);
+    out[o + F_MELEE] = out[o + F_FLAGS]! & FLAG_SWING ? r.bits(MELEE_BITS) : 0;
+  }
   if (mask & G_HP) out[o + F_HP] = r.bits(8);
   if (mask & G_WEAPON) {
     out[o + F_ACTIVE] = r.bits(1);
@@ -336,6 +354,7 @@ function toSnapshotPlayer(id: number, s: Int32Array, o: number): SnapshotPlayer 
     shield: SHIELD_STATES[(flags >> SHIELD_SHIFT) & 3]!,
     burning: (flags & FLAG_BURNING) !== 0,
     windup: (flags & FLAG_WINDUP) !== 0,
+    meleeTicks: s[o + F_MELEE]!,
   };
 }
 

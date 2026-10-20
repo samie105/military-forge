@@ -261,6 +261,8 @@ v8 also appends a **dash group** to the local-player block (dashTicks u6, dashDi
 - **EXPLOSION:** the grenade type u3 → **u4** (a launcher's blast names its projectile; the Pulse's burst is an EMP).
 - **Local block 62:** `burnTicks` u7 (14 delta groups): prediction takes a burn's damage pulses exactly.
 - **Remote flags 12 bits:** 1024 burning; 2048 winding up (the gun in hand spinning up or charging: a minigun, a Ripper, a Pulse; the #99 review's tell).
+
+**Remote melee swings (built, protocol v16; NOTES §32):** remote flags widen to **13 bits** with **4096 swinging** (meleeTicks > 0); while it's set, the remote record's state group carries a trailing **u6 `meleeTicks`** (1 = the swing started, up to its length, ≤ 1 s by the admin's cap), and the group is re-sent while it changes. The client (`NetClient.remotePose` → `swingAt`) takes the swing's progress at the render tick from the two snapshots around it, so another player's swing plays smoothly and **a miss shows too** (before, a remote swing only showed when it landed a hit). v15 is ui-playtest's (room bots), claimed but not on main when this landed.
 - **Items in smoke (no wire change, the #99 review's M2):** an item a client can't see (inside smoke it's outside of, behind it, or in its full white: the players' mask) stays as the client last had it, present or not, until the spot can be seen; a full snapshot leaves such items out, and the PICKUP event isn't sent. **Blasts** at a spot smoke hides from the client arrive as SOUND only (a rocket blowing up on a hidden body would mark it).
 
 ### 6.3 Reliable EVENT_R examples (msgpackr-encoded, rare)

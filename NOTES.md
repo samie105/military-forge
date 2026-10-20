@@ -1010,3 +1010,12 @@ Snapshot sizes and data are unchanged (a 2-player room: ~1.9 KB/s down, 64–85 
   - WELCOME refreshes an open Tune panel (the tuning listeners hear it, not as a live change).
 - **wt-setup.sh's self-test** said "no WebTransport session" on the live box while browsers connected. The cause was `grep -q` under `pipefail` (the probe's pipe broke after READY); reproduced locally and fixed. `wt-setup.sh gateway` re-runs the gateway setup by hand and reads the host from Caddy's site.
 
+
+## 32. Remote melee swings on the wire (20 Oct 2026, render3d-b's melee audit, protocol v16)
+
+- **The gap:** a remote player's `meleeTicks` wasn't in the snapshot, so online another player's machete or melee bash showed only when it landed a hit (render3d played it from the strike); misses were invisible.
+- **The fix (v16, registered first; v15 is ui-playtest's room bots, claimed and not yet on main):** remote flags 12 → 13 bits, **4096 = swinging**, and while it's set the state group carries a **u6 `meleeTicks`** after the flags. The state group is re-sent while the swing runs (13 + 6 bits a snapshot), nothing at rest.
+- **On the client:** `NetClient.remotePose` fills `RemotePose.meleeTicks` from the two snapshots around the render tick (`swingAt`): the later one's swing counted back when it had started by then, else the earlier one's counted on. It is fractional between ticks, so a swing plays smoothly at 2 or 4 ticks per snapshot. `OnlineMode.remoteView` puts it in `PlayerView.meleeTicks`, which render3d's `SwingClock`, the 2D view and the audio director already read. The swing sound plays for remote swings as well.
+- **Prediction:** unchanged. The local player's swing was already in the local block (v6), and remote players aren't predicted. No sim change, so no golden moved.
+- **Tests:** protocol (a remote machete swinging and missing four times, every tick round-tripped full and delta), netcode (`swingAt`), web (`remoteView` carries it).
+- **Shield HP for the HUD:** already there. `PlayerView.shieldHp` is the local player's riot-shield HP in both modes: local mode for every player, online from the predicted local block (it rides the v9 shield group). The HUD's `shieldStatus` reads it (`player.shield.hp` / `.max`, the `v.shield` bar). Remote players' shield HP stays private (only the shield's state travels). Noted for the UI agents in the shared notes (`remote-melee.md`).

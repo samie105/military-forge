@@ -171,7 +171,7 @@ export class OnlineMode {
   private readonly renderPos = { x: 0, y: 0 };
   /** the most blinded the predicted local player was over this frame's ticks (a flashbang inside a hitch still shows) */
   private peakBlind = 0;
-  private readonly remotePos: RemotePose = { x: 0, y: 0, src: null! };
+  private readonly remotePos: RemotePose = { x: 0, y: 0, src: null!, meleeTicks: 0 };
   /** called when the room's tuning changed under us (another client's live edit) */
   onTuningFromServer: () => void = () => {};
   private readonly tuningListeners = new Set<TuningListener>();
@@ -639,7 +639,7 @@ export class OnlineMode {
         continue;
       }
       const pose = this.net.remotePose(pb.id, renderTick, this.remotePos);
-      if (pose) players.push(this.remoteView(pose.src, isLocal, pose.x, pose.y));
+      if (pose) players.push(this.remoteView(pose.src, isLocal, pose.x, pose.y, pose.meleeTicks ?? pose.src.meleeTicks));
     }
     const clouds: CloudView[] = [];
     for (const c of newest.msg.clouds) {
@@ -718,7 +718,7 @@ export class OnlineMode {
     };
   }
 
-  private remoteView(src: SnapshotPlayer, isLocal: boolean, x: number, y: number): PlayerView {
+  private remoteView(src: SnapshotPlayer, isLocal: boolean, x: number, y: number, meleeTicks = src.meleeTicks): PlayerView {
     return {
       id: src.id,
       name: this.net.names.get(src.id) ?? `#${src.id}`,
@@ -742,6 +742,8 @@ export class OnlineMode {
       dashing: src.dashing,
       burning: src.burning,
       windup: src.windup,
+      // v16: a remote swing at the render tick (a miss shows too, not only the hit that lands)
+      meleeTicks,
       // other players' ammo isn't sent (only the local block has it); the snapshot's reloading flag
       // marks the gun in hand as reloading (render3d drops a revolver's casings as a reload starts)
       weapons: src.weapons.map((w, i) => ({ def: w.def, mag: 0, reserve: 0, reloadTicks: src.reloading && i === src.active ? 1 : 0 })),

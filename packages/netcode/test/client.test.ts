@@ -2,7 +2,7 @@ import { FRAG, K47, adminField, createTuning } from '@military-forge/content';
 import { CmdKind, MsgType, decodeMessage, encodeOverrides, encodePong, encodeRoster, encodeSnapshot, encodeWelcome } from '@military-forge/protocol';
 import { Game } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
-import { NetClient } from '../src';
+import { NetClient, swingAt } from '../src';
 
 function welcomed(resumed = false, client?: NetClient) {
   let now = 0;
@@ -125,7 +125,7 @@ describe('NetClient', () => {
     expect(joiner.id).toBe(id);
     joiner.x = 120;
     roster();
-    const pose = { x: 0, y: 0, src: null! } as Parameters<typeof net.remotePose>[2];
+    const pose: Parameters<typeof net.remotePose>[2] = { x: 0, y: 0, src: null!, meleeTicks: 0 };
     expect(net.remotePose(id, before - 2, pose)).toBeNull(); // not in any snapshot yet: not drawn
     snapshot();
     snapshot();
@@ -207,5 +207,17 @@ describe('NetClient: content shared with the server (one process)', () => {
     expect(cmds.some((m) => m.type === MsgType.Cmd && m.kind === CmdKind.SetTuning && JSON.parse(m.payload).gravity === 9)).toBe(true);
     expect(net.tuning.gravity).toBe(9);
     expect(net.pendingTuning).toBeNull();
+  });
+});
+
+describe('a remote swing at the render tick (v16)', () => {
+  it('counts on from the snapshots, starts between them, and ends', () => {
+    expect(swingAt(0, 100, 0, 102, 101)).toBe(0); // idle
+    expect(swingAt(3, 100, 5, 102, 101)).toBe(4); // one swing, between its snapshots
+    expect(swingAt(3, 100, 5, 102, 101.5)).toBe(4.5); // fractional render ticks
+    expect(swingAt(0, 100, 2, 102, 101.5)).toBe(1.5); // started at 101: shown from then
+    expect(swingAt(0, 100, 2, 102, 100.5)).toBe(0); // not yet
+    expect(swingAt(35, 100, 0, 102, 101)).toBe(36); // ending within the gap: carried at most the gap
+    expect(swingAt(35, 100, 1, 102, 101)).toBe(36); // a fresh swing at 102: the old one until then
   });
 });
