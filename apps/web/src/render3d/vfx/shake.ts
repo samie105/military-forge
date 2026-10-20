@@ -29,6 +29,11 @@ export function blastTrauma(d: number, full: number, zero = full + SHAKE_RANGE):
 export class CameraShake {
   trauma = 0;
   enabled = true;
+  /**
+   * The player's camera-shake setting, 0–1 (Renderer3D.setShakeScale, the phone's Settings slider, #159):
+   * every shake and kick shows this much, so SHAKE_MAX and KICK_LIMIT are scaled by it; 0 = none.
+   */
+  scale = 1;
   private t = 0;
   readonly offset = { x: 0, y: 0 };
   private kx = 0;
@@ -61,6 +66,8 @@ export class CameraShake {
     this.offset.x = s * (0.6 * Math.sin(t * 61.7) + 0.4 * Math.sin(t * 37.3 + 1.7)) + this.kx;
     this.offset.y = s * (0.6 * Math.sin(t * 53.1 + 0.9) + 0.4 * Math.sin(t * 29.9 + 4.2)) + this.ky;
     // a kick shows in full on the frame it lands, then settles
+    this.offset.x *= this.scale;
+    this.offset.y *= this.scale;
     const settle = Math.exp(-KICK_RECOVER * dt);
     this.kx *= settle;
     this.ky *= settle;

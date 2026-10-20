@@ -363,6 +363,11 @@ export class Renderer3D {
    * No camera shake or camera kick, half the gun kick, a third of the blast light, fuse lights
    * blinking ≤ 3 times a second, hit reactions at HIT.reduced of their size.
    */
+  /** The player's camera-shake setting, 0–1 (#159's slider; touch/index.ts calls it): every shake and kick scaled; 0 = none. */
+  setShakeScale(k: number): void {
+    this.vfx.shake.scale = Number.isFinite(k) ? Math.min(1, Math.max(0, k)) : 1;
+  }
+
   setReducedMotion(on: boolean): void {
     this.reducedMotion = on;
     this.vfx.setReducedMotion(on);

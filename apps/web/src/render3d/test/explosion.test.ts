@@ -269,3 +269,25 @@ describe("the launchers' blasts in their own styles (explosions.vfx.json)", () =
     expect(t.book!.pool.data[F.size0]).toBeCloseTo(rocket.book!.sizeM, 3); // k = 1 at its own radius
   });
 });
+
+describe('the camera-shake setting (setShakeScale, #159)', () => {
+  it('scales every shake and kick: half at 0.5, none at 0', () => {
+    const run = (scale: number) => {
+      const s = new CameraShake();
+      s.scale = scale;
+      s.add(1);
+      s.kick(0.1, 0);
+      let peak = 0;
+      for (let i = 0; i < 10; i++) {
+        const o = s.update(1 / 60);
+        peak = Math.max(peak, Math.hypot(o.x, o.y));
+      }
+      return peak;
+    };
+    const full = run(1);
+    expect(full).toBeGreaterThan(0);
+    expect(run(0.5)).toBeCloseTo(full / 2, 6);
+    expect(run(0)).toBe(0);
+    expect(full).toBeLessThanOrEqual(SHAKE_MAX + 0.15);
+  });
+});
