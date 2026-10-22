@@ -121,6 +121,9 @@ importers:
       '@military-forge/content':
         specifier: workspace:*
         version: link:../../packages/content
+      '@military-forge/game-server':
+        specifier: workspace:*
+        version: link:../game-server
       '@military-forge/netcode':
         specifier: workspace:*
         version: link:../../packages/netcode

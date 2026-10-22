@@ -353,7 +353,7 @@ export class NetClient {
     } else msg = decodeMessage(bytes) as ServerMessage;
     switch (msg.type) {
       case MsgType.Welcome: {
-        const resumingSame = msg.resumed && this.predictor !== null && this.predictor.player.id === msg.playerId;
+        const resumingSame = msg.resumed && this.predictor !== null && this.predictor.player.id === msg.playerId && this.map.id === msg.mapId;
         if (this.myId >= 0) {
           // a new connection: the server has fresh baselines for it, so drop ours
           this.snapshotDecoder.reset();

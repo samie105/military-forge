@@ -47,8 +47,8 @@ const ENVIRONMENT_CREDIT_TICKS = ticks(5);
 const bodyEnv = createBodyEnv();
 
 export class Game {
-  readonly map: MapDef;
-  readonly world: CollisionWorld;
+  map: MapDef;
+  world: CollisionWorld;
   tuning: Tuning;
   readonly seed: number;
   tick = 0;
@@ -59,7 +59,7 @@ export class Game {
   /** items lying on the map (alive ones) */
   readonly pickups: PickupState[] = Array.from({ length: MAX_PICKUPS }, (_, i) => new PickupState(i));
   /** the map's spawners; empty with pickups off */
-  readonly spawners: SpawnerState[];
+  spawners: SpawnerState[];
   /** smoke and gas clouds (clouds.ts) */
   readonly clouds: CloudState[] = Array.from({ length: MAX_CLOUDS }, (_, i) => new CloudState(i));
   /** events produced by the most recent step() */
@@ -67,7 +67,7 @@ export class Game {
   /** lag compensation for hitscan (server only; null = test targets where they are now) */
   rewind: TargetRewind | null = null;
   /** the map's rules, zones and events (docs/02 §20); null when it has none */
-  readonly mech: MapMechanics | null;
+  mech: MapMechanics | null;
   /** set by Match.step outside the warm-up and the match: bots keep their aim, press nothing */
   inputsFrozen = false;
   private readonly ids = new IdAllocator(MAX_PLAYERS);
@@ -82,6 +82,21 @@ export class Game {
     this.spawners = this.pickupsEnabled ? createSpawners(this.map, this.world, options.armory ?? false) : [];
     resetPickups(this);
     if (options.dummies) for (const d of this.map.dummies) this.addDummy(d);
+  }
+
+  /** Change the arena between matches while keeping player IDs and room sessions intact. */
+  changeMap(mapId: string, armory = false): void {
+    if (this.map.id === mapId) return;
+    this.map = getMap(mapId);
+    this.world = new CollisionWorld(this.map);
+    this.mech = MapMechanics.compile(this.map);
+    this.spawners = this.pickupsEnabled ? createSpawners(this.map, this.world, armory) : [];
+    for (const grenade of this.grenades) grenade.alive = false;
+    for (const cloud of this.clouds) cloud.alive = false;
+    this.events.length = 0;
+    for (const player of this.players) if (player) player.alive = false;
+    for (const player of this.players) if (player) this.respawn(player);
+    resetPickups(this);
   }
 
   addPlayer(name: string): PlayerState {

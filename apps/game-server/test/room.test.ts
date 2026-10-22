@@ -69,6 +69,22 @@ function sendInput(room: Room, client: ReturnType<typeof join>['client'], tick: 
 }
 
 describe('Room', () => {
+  it('lets the host switch maps in the lobby and resynchronizes every connected player', () => {
+    const room = new Room({ dummies: false, match: { minPlayers: 1 } });
+    const host = join(room, 'Host');
+    const guest = join(room, 'Guest');
+    room.receive(guest.client, encodeCmd(CmdKind.MatchSettings, JSON.stringify({ mapId: 'lunar-outpost' })));
+    expect(room.game.map.id).toBe('movement-test');
+    room.receive(host.client, encodeCmd(CmdKind.MatchSettings, JSON.stringify({ mapId: 'lunar-outpost' })));
+    expect(room.game.map.id).toBe('lunar-outpost');
+    for (const player of [host, guest]) {
+      expect(player.conn.last(MsgType.Welcome)?.mapId).toBe('lunar-outpost');
+      expect(player.conn.last(MsgType.Welcome)?.playerId).toBe(player.welcome.playerId);
+    }
+    room.tick();
+    expect(room.encodeMatchState()).toBeDefined();
+  });
+
   it('welcomes two players with distinct ids and a roster including the dummies', () => {
     const room = new Room({ dummies: true });
     const a = join(room, 'Ade');
@@ -528,4 +544,3 @@ describe('Room', () => {
     });
   });
 });
-

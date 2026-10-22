@@ -1019,3 +1019,20 @@ Snapshot sizes and data are unchanged (a 2-player room: ~1.9 KB/s down, 64–85 
 - **Prediction:** unchanged. The local player's swing was already in the local block (v6), and remote players aren't predicted. No sim change, so no golden moved.
 - **Tests:** protocol (a remote machete swinging and missing four times, every tick round-tripped full and delta), netcode (`swingAt`), web (`remoteView` carries it).
 - **Shield HP for the HUD:** already there. `PlayerView.shieldHp` is the local player's riot-shield HP in both modes: local mode for every player, online from the predicted local block (it rides the v9 shield group). The HUD's `shieldStatus` reads it (`player.shield.hp` / `.max`, the `v.shield` bar). Remote players' shield HP stays private (only the shield's state travels). Noted for the UI agents in the shared notes (`remote-melee.md`).
+
+## 30. Local rooms: same Wi-Fi, peer to peer (20 Oct 2026, owner request; docs/05 §2.4)
+
+> "Add a feature where people can create a local room with just Wi-Fi if they're connected, so it uses their Wi-Fi."
+
+- **Engine (this step):**
+  - The host's browser runs the game server's own Room, in a worker. The room code was made browser-safe: `adminState.ts` and `matchRecorder.ts` hold the parts with no Node imports, and tokens use Web Crypto.
+  - Guests connect over WebRTC data channels (`apps/web/src/lan`), set up through the game server's relay (`lanSignal.ts`, `/ws/lan/…`) or offline by packed codes.
+  - Nothing is recorded (no results sink).
+  - Debug client: `?lanhost[&bots=4]` and `?lanjoin=CODE`.
+- **Measured** on this Mac (two tabs, the host hidden): RTT 1.5 ms, jitter 0.4 ms, 60 Hz, 0 corrections. The host leaving ends guests' games in about 2 s (4006).
+- **Limits:**
+  - The game page must already be loaded; with no service worker, a device with no internet can't load the game.
+  - mDNS must pass on the network: Wi-Fi with client isolation blocks it all.
+  - There is no host hand-over.
+  - The host's tab must not be killed (a phone that locks or switches apps suspends it).
+- **Next step:** the screens: a "Local room (same Wi-Fi)" choice, the code with a QR code, and the offline QR exchange.

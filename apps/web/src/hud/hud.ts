@@ -20,6 +20,7 @@ import { DRAGON, GAS, HitZone, defaultTuning, weapons, type Tuning } from '@mili
 import type { MatchView } from '../shell/matchView';
 import { formatClock, playerName } from '../shell/matchView';
 import { capText, iconHref, weaponIcon } from '../ui/icons';
+import { drawButtonCap } from '../gamepad/caps';
 import { pingQuality } from '../ui/ping';
 import { logicalRect, type Box } from '../ui/landscape';
 import { WorldTags } from './worldTags';
@@ -267,12 +268,12 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
     v['net.ping'] = `${ping} ms`;
     const loss = net.prediction?.snapshotLossPct ?? 0;
     const jitter = net.prediction ? `±${Math.round(net.prediction.rttJitterMs)}` : '';
-    const via = net.transport === 'wt' ? 'WT' : net.transport === 'ws' ? 'WS' : '';
+    const via = net.transport === 'wt' ? 'WT' : net.transport === 'ws' ? 'WS' : net.transport === 'lan' ? 'LAN' : '';
     v['net.loss'] = `${loss.toFixed(1)}%`;
     // the readout the owner reports from (19 Oct 2026): jitter and the transport next to ping and loss
     v['net.jitter'] = jitter;
     v['net.via'] = via;
-    v['net.viaTitle'] = via === 'WT' ? 'WebTransport (UDP)' : via === 'WS' ? 'WebSocket (TCP)' : '';
+    v['net.viaTitle'] = via === 'WT' ? 'WebTransport (UDP)' : via === 'WS' ? 'WebSocket (TCP)' : via === 'LAN' ? 'Local room: straight to the host over your Wi-Fi' : '';
     // phones: one compact line after the ping
     v['net.short'] = [jitter, `${loss < 10 ? loss.toFixed(1) : Math.round(loss)}%`, via].filter(Boolean).join(' · ');
     v['net.detail'] = mem.netDetail;
@@ -686,6 +687,7 @@ export class Hud {
   private lastActive = -1;
   private death: DeathInfo | null = null;
   private keys: HudKeys = {};
+  private keyCodes: Partial<Record<keyof HudKeys, string | undefined>> = {};
   private netDetail = '';
   private netAt = 0;
   private ghost = { value: 1, heldUntil: 0, lastHp: 1, at: 0 };
@@ -752,6 +754,11 @@ export class Hud {
     const keys: HudKeys = {};
     for (const [k, code] of Object.entries(codes) as [keyof HudKeys, string | undefined][]) keys[k] = code ? capText(code, layout) : '';
     this.keys = keys;
+    this.keyCodes = codes;
+    for (const cap of this.root.querySelectorAll<HTMLElement>('kbd[data-bind]')) {
+      const action = cap.getAttribute('data-bind')?.split('.')[1] as keyof HudKeys;
+      drawButtonCap(cap, codes[action], keys[action] ?? '');
+    }
   }
 
   /** Menus over the game: no scoreboard on Tab. */
@@ -787,7 +794,10 @@ export class Hud {
         if (!burn) {
           const look = arcLook(e.source, e.damage);
           if (look.kind !== 'bullet') this.heavyUntil = now + HEAVY_MS;
-          if (e.attacker !== localId) this.damageArc(e.attacker, look.kind, look.amount);
+          if (e.attacker !== localId) {
+            const shot = events.find((event): event is Extract<SimEvent, { type: 'shot' }> => event.type === 'shot' && event.shooter === e.attacker && event.target === localId && event.hit === 2);
+            this.damageArc(e.attacker, look.kind, look.amount, shot ? { x: shot.ox, y: shot.oy } : undefined);
+          }
         }
         if (isBlastSource(e.source)) {
           const by = e.attacker === localId || e.attacker < 0 ? null : playerName(this.names.get(e.attacker) ?? `Player ${e.attacker + 1}`, this.isBot(e.attacker));
@@ -868,7 +878,7 @@ export class Hud {
     this.drawBelt();
     feedTouchHud(values, tokens); // the phone's thumb dials wear these too (touch/skin.ts)
     this.place(input);
-    this.worldTags.update(frame.pickups, this.me, input.toScreen, Number(getComputedStyleValue('--hud-fit')) || 1, this.keys.interact ?? '', !this.me?.alive);
+    this.worldTags.update(frame.pickups, this.me, input.toScreen, Number(getComputedStyleValue('--hud-fit')) || 1, this.keys.interact ?? '', !this.me?.alive, this.keyCodes.interact);
     // the white-out takes the HUD with the world; Reduce flashes keeps it readable over the dark-out
     const opacity = input.reduceFlashes ? '' : fixed(1 - Math.min(1, input.flash), 2);
     if (opacity !== this.opacity) {
@@ -974,16 +984,16 @@ export class Hud {
   }
 
   /**
-   * A damage arc toward who hit us (an unseen attacker: a ring), in the kit's kinds: bullet, heavy,
-   * blast; its weight in --amt. It fades in over --m-instant, holds and fades over 600 ms (hud.css);
-   * the arcs before it dim (old).
+   * A damage arc and close pointer toward the incoming shot (or attacker when the shot isn't in
+   * this event batch). An unseen source gets a ring. Older indicators dim as new hits arrive.
    */
-  private damageArc(attacker: number, kind: ArcKind, amount: number): void {
+  private damageArc(attacker: number, kind: ArcKind, amount: number, origin?: { x: number; y: number }): void {
     const me = this.me;
     const from = attacker >= 0 ? this.others.find((p) => p.id === attacker) : undefined;
-    const angle = me && from ? (screenAngle(me, from) * 180) / Math.PI + 90 : null;
+    const source = origin ?? from;
+    const angle = me && source ? (screenAngle(me, source) * 180) / Math.PI + 90 : null;
     // round two (desktop)
-    for (const old of this.arcs.querySelectorAll('.dmg__arc')) old.classList.add('dmg__arc--old');
+    for (const old of this.arcs.querySelectorAll('.dmg__arc, .dmg__pointer')) old.classList.add('dmg__arc--old');
     const arc = document.createElementNS(SVG, angle === null ? 'circle' : 'path');
     if (angle === null) arc.setAttribute('r', '400');
     else arc.setAttribute('d', ARC_D);
@@ -992,10 +1002,19 @@ export class Hud {
     (arc as SVGElement).style.setProperty('--amt', fixed(amount, 2));
     (arc as SVGElement).style.setProperty('--rot', `${(angle ?? 0).toFixed(1)}deg`);
     this.arcs.appendChild(arc);
-    while (this.arcs.children.length > 4) this.arcs.firstElementChild?.remove();
+    if (angle !== null) {
+      const pointer = document.createElementNS(SVG, 'path');
+      pointer.setAttribute('d', 'M 0 -148 L -15 -114 L 0 -121 L 15 -114 Z');
+      pointer.setAttribute('transform', `rotate(${angle.toFixed(1)})`);
+      pointer.setAttribute('class', `dmg__pointer dmg__pointer--${kind}`);
+      (pointer as SVGElement).style.setProperty('--amt', fixed(amount, 2));
+      this.arcs.appendChild(pointer);
+      window.setTimeout(() => pointer.remove(), ARC_MS);
+    }
+    while (this.arcs.children.length > 8) this.arcs.firstElementChild?.remove();
     window.setTimeout(() => arc.remove(), ARC_MS);
     // round one (phone)
-    for (const old of this.phoneArcs.querySelectorAll('.dmg-arc')) old.classList.add('dmg-arc--old');
+    for (const old of this.phoneArcs.querySelectorAll('.dmg-arc, .dmg-pointer')) old.classList.add('dmg-arc--old');
     let p: SVGElement;
     if (angle !== null) {
       p = document.createElementNS(SVG, 'path');
@@ -1007,7 +1026,15 @@ export class Hud {
     }
     p.setAttribute('class', 'dmg-arc');
     this.phoneArcs.appendChild(p);
-    while (this.phoneArcs.children.length > 4) this.phoneArcs.firstElementChild?.remove();
+    if (angle !== null) {
+      const pointer = document.createElementNS(SVG, 'path');
+      pointer.setAttribute('d', 'M 0 -104 L -12 -76 L 0 -82 L 12 -76 Z');
+      pointer.setAttribute('transform', `rotate(${angle.toFixed(1)})`);
+      pointer.setAttribute('class', `dmg-pointer dmg-pointer--${kind}`);
+      this.phoneArcs.appendChild(pointer);
+      window.setTimeout(() => pointer.remove(), ARC_MS);
+    }
+    while (this.phoneArcs.children.length > 8) this.phoneArcs.firstElementChild?.remove();
     window.setTimeout(() => p.remove(), ARC_MS);
   }
 
@@ -1140,7 +1167,7 @@ export class Hud {
       }
       const foot = el('footer', 'sb__foot');
       foot.append('Hold ');
-      el('kbd', 'kbd', foot).textContent = this.keys.scoreboard || 'Tab';
+      drawButtonCap(el('kbd', 'kbd', foot), this.keyCodes.scoreboard, this.keys.scoreboard || 'Tab');
       foot.append(' to keep this open · ranked by score: kills minus self-kills · bots show no ping');
       this.board.replaceChildren(head, this.boardLead, table, foot);
       this.boardKey = key;
@@ -1187,7 +1214,7 @@ export function netGraph(n: NetStats | undefined): string {
   if (!n) return 'local match · no network';
   const p = n.prediction;
   const lines = [
-    `ping ${n.rttMs.toFixed(0)} ms${p ? ` ±${p.rttJitterMs.toFixed(0)}` : ''} · loss ${p ? p.snapshotLossPct.toFixed(1) : '0.0'}% · ${n.snapshotsPerSec.toFixed(0)} snap/s${n.transport ? ` · ${n.transport === 'wt' ? 'WebTransport' : 'WebSocket'}` : ''}`,
+    `ping ${n.rttMs.toFixed(0)} ms${p ? ` ±${p.rttJitterMs.toFixed(0)}` : ''} · loss ${p ? p.snapshotLossPct.toFixed(1) : '0.0'}% · ${n.snapshotsPerSec.toFixed(0)} snap/s${n.transport ? ` · ${n.transport === 'wt' ? 'WebTransport' : n.transport === 'ws' ? 'WebSocket' : 'local room'}` : ''}`,
     `↓ ${n.kbInPerSec.toFixed(1)} KB/s · ↑ ${n.kbOutPerSec.toFixed(1)} KB/s · interp ${n.interpDelayMs} ms`,
   ];
   if (p) lines.push(`buffer ${Number.isNaN(p.inputBufferHealth) ? '–' : p.inputBufferHealth} · ×${p.timeScale.toFixed(3)} · corrections ${p.correctionsPerMin.toFixed(1)}/min`);

@@ -23,9 +23,8 @@
  * leaving for good brings a bot in, and the last human out takes them all. They're players like any
  * other (roster, snapshots, standings, the `[BOT]` tag on their names), running in the room's sim.
  */
-import { randomBytes } from 'node:crypto';
-import { adminJson, adminValues, onAdminValues } from './admin';
-import { MatchRecorder, type ResultsSink } from './results';
+import { adminJson, adminValues, onAdminValues } from './adminState';
+import { MatchRecorder, type ResultsSink } from './matchRecorder';
 import { addBot, removeBot, type BotLevelId } from '@military-forge/bots';
 import { ADMIN_BOT_LEVELS, adminTuning, adminValue, createTuning, defaultTuning, limitTuning, maps, type AdminValues, type Tuning } from '@military-forge/content';
 import {
@@ -151,7 +150,14 @@ export interface Session {
   pingMs: number;
 }
 
-const newToken = () => randomBytes(18).toString('base64url');
+/** 18 random bytes, base64url (Web Crypto: a room runs in Node and, for a local room's host, in a browser) */
+const newToken = () => {
+  const bytes = globalThis.crypto.getRandomValues(new Uint8Array(18));
+  let s = '';
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+};
+const utf8 = new TextEncoder();
 
 const MAX_STRIKES = 3;
 /** messages other than INPUT (PING, CMD, HELLO): an honest client sends a few a second */
@@ -270,7 +276,7 @@ export function sanitizeName(raw: string, fallback: string): string {
   let name = '';
   let count = 0;
   for (const { segment } of graphemes.segment(clean.replace(BOT_TAG_PREFIX, ''))) {
-    if (count === MAX_NAME_GRAPHEMES || Buffer.byteLength(name + segment) > MAX_NAME_BYTES) break;
+    if (count === MAX_NAME_GRAPHEMES || utf8.encode(name + segment).length > MAX_NAME_BYTES) break;
     name += segment;
     count++;
   }
@@ -360,6 +366,7 @@ export class Room {
   private readonly maxHumans: number;
   private readonly snapshotEvery: number;
   private readonly dev: boolean;
+  private readonly armory: boolean;
   private readonly hostTuning: boolean;
   private readonly aoi: boolean;
   private readonly graceTicks: number;
@@ -412,6 +419,7 @@ export class Room {
     this.maxHumans = options.maxHumans ?? 8;
     this.snapshotEvery = options.snapshotEvery ?? 2;
     this.dev = options.dev ?? true;
+    this.armory = options.armory ?? false;
     this.hostTuning = options.hostTuning ?? false;
     this.aoi = options.aoi ?? true;
     this.graceTicks = Math.round(((options.reconnectGraceMs ?? 20_000) / 1000) * 60);
@@ -868,7 +876,30 @@ export class Room {
         m.rules.timeLimit = next.timeLimit;
         m.rules.killLimit = next.killLimit;
         this.baseLimits = { timeLimit: next.timeLimit, killLimit: next.killLimit };
-        // other maps: the room would need a new Game; until then only the current map is accepted
+        if (next.mapId !== this.game.map.id) {
+          this.game.changeMap(next.mapId, this.armory);
+          this.lagComp?.reset();
+          this.lagComp?.record(this.game.tick, this.game.players);
+          this.pendingEvents.length = 0;
+          this.previousEvents.length = 0;
+          for (const c of this.clients) {
+            if (!c.joined || !c.session) continue;
+            c.baselines.reset();
+            c.lastSnapshotTick = -1;
+            c.conn.send(encodeWelcome({
+              playerId: c.playerId,
+              seed: this.game.seed,
+              serverTick: this.game.tick,
+              mapId: next.mapId,
+              tuningJson: JSON.stringify(this.game.tuning),
+              sessionToken: c.session.token,
+              resumed: false,
+              overridesJson: adminJson(),
+            }));
+            c.conn.send(encodeRoster(this.rosterEntries()));
+          }
+          this.log(`[room] host switched map to ${next.mapId}`);
+        }
         break;
       }
       default:

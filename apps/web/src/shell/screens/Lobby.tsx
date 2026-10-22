@@ -181,7 +181,7 @@ function PlayerRow({ p, hostView, leaving, i }: { p: LobbyPlayer; hostView: bool
 }
 
 /** A map's card (the kit's .mapcard): its drawn thumbnail, name, place, tagline and what can happen there. */
-function MapCard({ id, picked }: { id: string; picked: boolean }) {
+function MapCard({ id, picked, disabled, onSelect }: { id: string; picked: boolean; disabled: boolean; onSelect: () => void }) {
   const card = MAP_CARDS[id];
   const art = card?.art;
   return (
@@ -190,8 +190,8 @@ function MapCard({ id, picked }: { id: string; picked: boolean }) {
       className={picked ? 'mapcard is-picked m-p8' : 'mapcard m-p8'}
       role="radio"
       aria-checked={picked}
-      disabled={!picked}
-      title={picked ? undefined : 'Rooms play one map for now: picking another comes with map rotation'}
+      disabled={disabled}
+      onClick={blurAfter(onSelect)}
       data-map={id}
     >
       <div className={`thumb thumb--${art ?? 'storm'}`} aria-hidden="true">
@@ -291,6 +291,7 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
   const [kills, showKills] = useRoomSetting(lobby.killLimit);
   const [bots, showBots] = useRoomSetting(lobby.bots);
   const [botLevel, showBotLevel] = useRoomSetting<BotLevel>(lobby.botLevel);
+  const [mapId, showMap] = useRoomSetting(lobby.mapId);
   const link = roomLink(lobby.code);
   const qr = useMemo(() => qrSvgPath(encodeQr(link), 1), [link]);
   const rows = useWithLeavers(lobby.players, (p) => p.id);
@@ -569,7 +570,10 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
             <span className="label">Map</span>
             <div className="maps" role="radiogroup" aria-label="Map" data-bind="room.map">
               {lobbyMaps(lobby.mapId).map((id) => (
-                <MapCard key={id} id={id} picked={id === lobby.mapId} />
+                <MapCard key={id} id={id} picked={id === mapId} disabled={!host} onSelect={() => {
+                  showMap(id);
+                  online?.setMatchSettings({ mapId: id });
+                }} />
               ))}
             </div>
           </section>

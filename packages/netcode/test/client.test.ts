@@ -97,6 +97,27 @@ describe('NetClient', () => {
     expect(net.snapshots).toHaveLength(0);
   });
 
+  it('starts a new prediction timeline when a room changes maps', () => {
+    const { net, game, advance } = welcomed();
+    game.step([]);
+    advance(33);
+    net.receive(encodeSnapshot(game, 1, []));
+    const oldPrediction = net.predictor;
+    net.receive(encodeWelcome({
+      playerId: net.myId,
+      seed: game.seed,
+      serverTick: game.tick,
+      mapId: 'lunar-outpost',
+      tuningJson: JSON.stringify(createTuning()),
+      sessionToken: 'same-room',
+      resumed: false,
+      overridesJson: '{}',
+    }));
+    expect(net.map.id).toBe('lunar-outpost');
+    expect(net.predictor).not.toBe(oldPrediction);
+    expect(net.snapshots).toHaveLength(0);
+  });
+
   it('a reused id is never drawn at the departed player\'s poses', () => {
     const { net, game, me, advance } = welcomed();
     const leaver = game.addPlayer('leaver');

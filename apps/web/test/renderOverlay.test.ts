@@ -11,11 +11,13 @@ import type { Frame } from '../src/view';
 function recordingCanvas() {
   const fills: string[] = [];
   const strokes: string[] = [];
+  const rects: { color: string; width: number; height: number }[] = [];
   const state: Record<string, unknown> = {};
   const ctx = new Proxy(state, {
     get(target, prop: string) {
       if (prop in target) return target[prop];
       if (prop === 'fill') return () => fills.push(String(target.fillStyle));
+      if (prop === 'fillRect') return (_x: number, _y: number, width: number, height: number) => rects.push({ color: String(target.fillStyle), width, height });
       if (prop === 'stroke') return () => strokes.push(String(target.strokeStyle));
       return () => {};
     },
@@ -25,7 +27,7 @@ function recordingCanvas() {
     },
   });
   const canvas = { getContext: () => ctx, clientWidth: 1280, clientHeight: 720, width: 0, height: 0 } as unknown as HTMLCanvasElement;
-  return { canvas, fills, strokes };
+  return { canvas, fills, strokes, rects };
 }
 
 const GRENADE = '#3fb950';
@@ -38,7 +40,7 @@ const isDash = (stroke: string) => stroke.startsWith('rgba(120,240,160');
 const isRicochet = (stroke: string) => stroke.startsWith('rgba(165,243,252') || stroke.startsWith('rgba(255,244,200');
 
 function setup() {
-  const { canvas, fills, strokes } = recordingCanvas();
+  const { canvas, fills, strokes, rects } = recordingCanvas();
   const camera = new Camera();
   camera.resize(1280, 720);
   camera.x = 20;
@@ -49,11 +51,23 @@ function setup() {
   const shot: SimEvent = { type: 'shot', shooter: 0, weapon: 0, ox: 18.5, oy: 1.2, ex: 25, ey: 1.3, hit: 1, target: -1, zone: 0 };
   const dash: SimEvent = { type: 'dash', player: 0, x: 18, y: 0, dir: 0 };
   const bounce: SimEvent = { type: 'ricochet', shooter: 0, owner: 4, weapon: 0, x: 24, y: 1.3, nx: -1, ny: 0, ex: 20, ey: 3, hit: 0, target: -1, zone: 0 };
-  return { r, fills, strokes, frame, blast, shot, dash, bounce };
+  return { r, fills, strokes, rects, frame, blast, shot, dash, bounce };
 }
 
 describe('2D overlay over the 3D view', () => {
   const opts = (over: Partial<RenderOptions>): RenderOptions => ({ showHitboxes: false, showGrid: false, showNet: false, overlay: true, ...over });
+
+  it('draws damaged players\' head bars in the normal 3D view and hides them in smoke', () => {
+    const { r, rects, frame } = setup();
+    const rival = playerView({ id: 1, name: 'Rival', isLocal: false, x: 20, hp: 45 });
+    frame.players.push(rival);
+    r.render(frame, 1 / 60, opts({ hud: 'none' }), '');
+    expect(rects).toContainEqual({ color: '#f3b64a', width: 54 * 0.45, height: 6 });
+    rects.length = 0;
+    frame.clouds = [{ id: 0, type: 0, x: rival.x, y: rival.y + 1, radius: 3, density: 1, opaque: 3, age: 0 }];
+    r.render(frame, 1 / 60, opts({ hud: 'none' }), '');
+    expect(rects.some((rect) => rect.color === '#f3b64a')).toBe(false);
+  });
 
   it('leaves grenades, tracers, ricochets, blasts and dashes to render3d', () => {
     const { r, fills, strokes, frame, blast, shot, dash, bounce } = setup();

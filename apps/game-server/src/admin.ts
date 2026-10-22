@@ -17,39 +17,10 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { dirname } from 'node:path';
-import { ADMIN_FIELDS, ADMIN_PRESETS, applyContentOverrides, clampAdmin, type AdminValues } from '@military-forge/content';
+import { ADMIN_FIELDS, ADMIN_PRESETS, clampAdmin, type AdminValues } from '@military-forge/content';
+import { adminValues, setAdminValues } from './adminState';
 
-let current: AdminValues = {};
-let json = '{}';
-const listeners = new Set<(values: AdminValues) => void>();
-
-/** The admin values in force on this server (only what differs from the defaults). */
-export function adminValues(): AdminValues {
-  return current;
-}
-
-/** The same, as the JSON clients get (WELCOME, OVERRIDES). */
-export function adminJson(): string {
-  return json;
-}
-
-/**
- * New admin values for the whole server (clamped; anything not in them goes back to its default):
- * the content numbers change now, then every room hears of it (`onAdminValues`).
- */
-export function setAdminValues(raw: unknown): AdminValues {
-  current = clampAdmin(raw);
-  json = JSON.stringify(current);
-  applyContentOverrides(current, true);
-  for (const fn of listeners) fn(current);
-  return current;
-}
-
-/** Calls `fn` with the values every time they change; returns the unsubscribe. */
-export function onAdminValues(fn: (values: AdminValues) => void): () => void {
-  listeners.add(fn);
-  return () => listeners.delete(fn);
-}
+export { adminJson, adminValues, onAdminValues, setAdminValues } from './adminState';
 
 /** The values saved by "Save as defaults" in `file`, or none (a missing or broken file is no values). */
 export function loadAdminDefaults(file: string, log: (msg: string) => void = () => {}): AdminValues {
@@ -138,7 +109,7 @@ function readJson(req: IncomingMessage): Promise<unknown> {
 export function startAdminServer(options: AdminServerOptions): Promise<AdminServer> {
   const log = options.log ?? (() => {});
   if (options.token.length < 16) throw new Error('admin token too short');
-  const state = () => ({ fields: catalogue(), values: current, presets: Object.keys(ADMIN_PRESETS), defaultsFile: options.defaultsFile ?? null });
+  const state = () => ({ fields: catalogue(), values: adminValues(), presets: Object.keys(ADMIN_PRESETS), defaultsFile: options.defaultsFile ?? null });
   const server: Server = createServer(async (req, res) => {
     const path = (req.url ?? '/').split('?')[0]!;
     if (!path.startsWith('/admin/api/')) return reply(res, 404, { error: 'not found' });
@@ -149,7 +120,7 @@ export function startAdminServer(options: AdminServerOptions): Promise<AdminServ
       if (req.method !== 'GET' && !/^application\/json\b/.test(req.headers['content-type'] ?? '')) return reply(res, 415, { error: 'JSON only' });
       if (route === 'PUT /values') {
         setAdminValues(await readJson(req));
-        log(`[admin] ${Object.keys(current).length} values changed`);
+        log(`[admin] ${Object.keys(adminValues()).length} values changed`);
         return reply(res, 200, state());
       }
       const preset = /^POST \/preset\/([a-z]+)$/.exec(route)?.[1];
@@ -163,9 +134,9 @@ export function startAdminServer(options: AdminServerOptions): Promise<AdminServ
       if (route === 'POST /save') {
         if (!options.defaultsFile) return reply(res, 409, { error: 'this server has no defaults file' });
         mkdirSync(dirname(options.defaultsFile), { recursive: true });
-        writeFileSync(options.defaultsFile, `${JSON.stringify(current, null, 2)}\n`);
-        log(`[admin] saved ${Object.keys(current).length} values as the defaults (${options.defaultsFile})`);
-        return reply(res, 200, { ok: true, file: options.defaultsFile, values: current });
+        writeFileSync(options.defaultsFile, `${JSON.stringify(adminValues(), null, 2)}\n`);
+        log(`[admin] saved ${Object.keys(adminValues()).length} values as the defaults (${options.defaultsFile})`);
+        return reply(res, 200, { ok: true, file: options.defaultsFile, values: adminValues() });
       }
       return reply(res, 404, { error: 'not found' });
     } catch (e) {

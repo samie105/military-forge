@@ -4,17 +4,18 @@
  */
 import { crackle, decayEnv, fadeInPlace, linEnv, mixInto, modal, mulInPlace, noise, osc, seamless, svf, sweep, tremoloInPlace, wanderInPlace } from '../dsp';
 import { clack, gunshot, sequence, slide, thump, whoosh, type GunParams } from './kit';
+import { recordedFoley } from '../recordings/render';
 import type { RenderCtx, SoundDef } from './types';
 
 const G = 'Weapons';
 
 // Each family's weight (the owner: "hard boiled … like war"): a pistol snaps, a rifle cracks, an
 // SMG chatters, an LMG chugs, a shotgun booms, a sniper cracks and rolls away in echoes.
-const PISTOL: GunParams = { len: 0.5, crack: 0.9, crackLen: 0.004, body: 1, bodyT60: 0.07, bodyCut: [6500, 380], bodySweep: 0.05, thump: 0.9, thumpF: [150, 48], thumpT60: 0.1, sub: 0.5, mech: 0.35, mechF: 3400, tail: 0.3, tailT60: 0.4, tailCut: 1100, echo: [0.12, 0.3, 2], drive: 3.2 };
+const PISTOL: GunParams = { len: 0.5, crack: 1.1, crackLen: 0.004, body: 1, bodyT60: 0.07, bodyCut: [6500, 380], bodySweep: 0.05, thump: 0.9, thumpF: [150, 48], thumpT60: 0.1, sub: 0.5, mech: 0.35, mechF: 3400, tail: 0.24, tailT60: 0.4, tailCut: 1100, drive: 3.2 };
 const SMG: GunParams = { len: 0.32, crack: 0.8, crackLen: 0.003, body: 0.95, bodyT60: 0.045, bodyCut: [7000, 700], bodySweep: 0.03, thump: 0.7, thumpF: [170, 65], thumpT60: 0.05, sub: 0.35, mech: 0.4, mechF: 4200, rattle: 0.35, tail: 0.22, tailT60: 0.22, tailCut: 1400, drive: 3.4 };
-const RIFLE: GunParams = { len: 0.7, crack: 1.3, crackLen: 0.005, body: 1, bodyT60: 0.09, bodyCut: [8000, 360], bodySweep: 0.06, thump: 1, thumpF: [125, 40], thumpT60: 0.13, sub: 0.7, mech: 0.3, mechF: 3000, rattle: 0.4, tail: 0.38, tailT60: 0.6, tailCut: 1000, echo: [0.14, 0.35, 3], drive: 3.8 };
-const SHOTGUN: GunParams = { len: 0.9, crack: 0.9, crackLen: 0.006, body: 1.2, bodyT60: 0.17, bodyCut: [5000, 220], bodySweep: 0.1, thump: 1.2, thumpF: [95, 30], thumpT60: 0.24, sub: 1, mech: 0.2, mechF: 2400, tail: 0.45, tailT60: 0.8, tailCut: 800, echo: [0.16, 0.4, 3], drive: 4.2 };
-const SNIPER: GunParams = { len: 1.3, crack: 1.5, crackLen: 0.007, body: 1.1, bodyT60: 0.13, bodyCut: [9000, 300], bodySweep: 0.08, thump: 1.2, thumpF: [100, 30], thumpT60: 0.26, sub: 0.9, mech: 0.25, mechF: 2700, tail: 0.5, tailT60: 1.2, tailCut: 800, echo: [0.24, 0.45, 4], drive: 4 };
+const RIFLE: GunParams = { len: 0.7, crack: 1.4, crackLen: 0.005, body: 1, bodyT60: 0.09, bodyCut: [8000, 360], bodySweep: 0.06, thump: 1, thumpF: [125, 40], thumpT60: 0.13, sub: 0.7, mech: 0.3, mechF: 3000, rattle: 0.4, tail: 0.3, tailT60: 0.6, tailCut: 1000, drive: 3.8 };
+const SHOTGUN: GunParams = { len: 0.9, crack: 1, crackLen: 0.006, body: 1.2, bodyT60: 0.17, bodyCut: [5000, 220], bodySweep: 0.1, thump: 1.2, thumpF: [95, 30], thumpT60: 0.24, sub: 1, mech: 0.2, mechF: 2400, tail: 0.4, tailT60: 0.8, tailCut: 800, drive: 4.2 };
+const SNIPER: GunParams = { len: 1.3, crack: 1.6, crackLen: 0.007, body: 1.1, bodyT60: 0.13, bodyCut: [9000, 300], bodySweep: 0.08, thump: 1.2, thumpF: [100, 30], thumpT60: 0.26, sub: 0.9, mech: 0.25, mechF: 2700, tail: 0.42, tailT60: 1.2, tailCut: 800, drive: 4 };
 const LMG: GunParams = { len: 0.42, crack: 1, crackLen: 0.004, body: 1.1, bodyT60: 0.075, bodyCut: [6000, 420], bodySweep: 0.05, thump: 1.1, thumpF: [105, 36], thumpT60: 0.09, sub: 0.9, mech: 0.35, mechF: 2600, rattle: 0.55, tail: 0.25, tailT60: 0.28, tailCut: 1000, drive: 4.2 };
 
 const gun = (label: string, p: GunParams, extra: Partial<SoundDef> = {}): SoundDef => ({
@@ -34,36 +35,32 @@ const gun = (label: string, p: GunParams, extra: Partial<SoundDef> = {}): SoundD
 
 /** A magazine pulled out: a release click, then the slide out. `size` 0.5 (pistol) … 1.4 (LMG box). */
 function magOut(r: RenderCtx, size: number): Float32Array {
-  return sequence(r, 0.3, [
-    [0, clack(r, 2600 / size, 0.9, 0.06), 0.7],
-    [0.02, slide(r, 0.12 * size, 1800, 900, 1.2), 0.5],
+  return sequence(r, 0.34, [
+    [0, recordedFoley('mag_release', r.sr), 0.8],
+    [0.035, recordedFoley('rifle_release', r.sr), size >= 0.95 ? 0.52 : 0.22],
   ]);
 }
 
 /** A magazine seated: the slide in, a firm clack and a thunk. */
 function magIn(r: RenderCtx, size: number): Float32Array {
-  return sequence(r, 0.3, [
-    [0, slide(r, 0.08 * size, 900, 2000, 1.2), 0.4],
-    [0.07 * size, clack(r, 2100 / size, 0.85, 0.09), 1],
-    [0.07 * size, thump(r, 0.08, 180 / size, 90, 0.05), 0.6],
+  return sequence(r, 0.32, [
+    [0, recordedFoley('mag_seat', r.sr), 0.9],
+    [0.035 * size, recordedFoley('round', r.sr), size >= 1.2 ? 0.4 : 0.2],
   ]);
 }
 
 /** A bolt or slide racked: back (click + slide), then home (a harder clack). */
 function rack(r: RenderCtx, size: number, gap = 0.09): Float32Array {
-  return sequence(r, 0.35, [
-    [0, clack(r, 3000 / size, 1, 0.05), 0.6],
-    [0.01, slide(r, gap, 2500, 1400, 2), 0.35],
-    [gap + 0.01, clack(r, 2400 / size, 1, 0.08), 1],
+  return sequence(r, 0.7, [
+    [0, recordedFoley(size < 0.8 ? 'pistol_action' : 'rifle_action', r.sr), 0.9],
+    [gap + 0.05, recordedFoley('mag_seat', r.sr), 0.18],
   ]);
 }
 
 /** The dry click of an empty gun. */
 function dry(r: RenderCtx, f: number): Float32Array {
-  return sequence(r, 0.12, [
-    [0, clack(r, f, 1, 0.05), 1],
-    [0.0, modal(r.sr, 0.05, f * 0.5, [[1, 0.3, 0.012]], r.rng), 0.4],
-  ]);
+  const body = mulInPlace(svf(noise(r.sr, 0.045, r.rng, 'pink'), r.sr, 'lp', Math.min(1900, f), 0.7), decayEnv(r.sr, 0.045, 0.017));
+  return sequence(r, 0.18, [[0, recordedFoley('dry_click', r.sr), 0.95], [0, body, 0.12]]);
 }
 
 /** Drawing a gun: cloth and a grip, then the gun's own clack. */
@@ -71,9 +68,8 @@ function draw(r: RenderCtx, size: number): Float32Array {
   const { sr, rng } = r;
   const cloth = mulInPlace(svf(noise(sr, 0.18, rng, 'pink'), sr, 'bp', sweep(600, 1800, 0.18), 0.9), linEnv(sr, 0.18, [[0, 0], [0.08, 1], [0.18, 0]]));
   return sequence(r, 0.4, [
-    [0, cloth, 0.5],
-    [0.13, clack(r, 2200 / size, 0.9, 0.1), 0.9],
-    [0.2, clack(r, 3600 / size, 1, 0.05), 0.35],
+    [0, cloth, 0.3],
+    [0.13, recordedFoley(size >= 1 ? 'rifle_release' : 'mag_release', sr), 0.35],
   ]);
 }
 
@@ -123,31 +119,19 @@ export const weaponSounds = {
   'shotgun.fire': gun('Shotgun: fire', SHOTGUN, { maxVoices: 4, cooldown: 0.05 }),
   'shotgun.shell': part('Shotgun: shell in', (r) =>
     sequence(r, 0.2, [
-      [0, slide(r, 0.06, 1200, 2400, 1.4), 0.5],
-      [0.05, clack(r, 1500, 0.6, 0.08), 0.9],
+      [0, recordedFoley('round', r.sr), 0.8],
+      [0.05, recordedFoley('mag_seat', r.sr), 0.35],
     ]),
   ),
   'shotgun.pump': part('Shotgun: pump', (r) =>
-    sequence(r, 0.4, [
-      [0, slide(r, 0.08, 900, 1700, 1.2), 0.6],
-      [0.07, clack(r, 1700, 0.9, 0.08), 1],
-      [0.16, slide(r, 0.07, 1700, 1000, 1.2), 0.55],
-      [0.22, clack(r, 2100, 1, 0.1), 1.1],
-    ]),
+    recordedFoley('shotgun_action', r.sr),
   { gain: 0.7 }),
   'shotgun.empty': part('Shotgun: empty click', (r) => dry(r, 2200), { gain: 0.45, cooldown: 0.12, range: 15 }),
   'shotgun.draw': part('Shotgun: draw', (r) => draw(r, 1.15)),
   // ---------------------------------------------------------------- sniper and DMR (Widow, Longbow)
   'sniper.fire': gun('Sniper: fire', SNIPER, { maxVoices: 3, cooldown: 0.05, range: 90, priority: 75 }),
   'sniper.bolt': part('Sniper: bolt cycle', (r) =>
-    sequence(r, 0.5, [
-      [0, clack(r, 2800, 1, 0.05), 0.7],
-      [0.05, slide(r, 0.09, 2600, 1500, 2), 0.5],
-      [0.15, clack(r, 2000, 1, 0.06), 0.6],
-      [0.22, slide(r, 0.08, 1500, 2600, 2), 0.45],
-      [0.3, clack(r, 2400, 1, 0.08), 1],
-      [0.36, clack(r, 3100, 1, 0.05), 0.6],
-    ]),
+    sequence(r, 0.55, [[0, recordedFoley('rifle_action', r.sr), 1], [0.26, recordedFoley('mag_release', r.sr), 0.18]]),
   { gain: 0.6 }),
   'sniper.magout': part('Sniper: mag out', (r) => magOut(r, 1.05)),
   'sniper.magin': part('Sniper: mag in', (r) => magIn(r, 1.05)),
@@ -172,22 +156,16 @@ export const weaponSounds = {
     group: G,
     bus: 'sfx',
     render: (r) => {
-      // a casing hits, bounces two or three times, each smaller and sooner, then rolls
+      // Irregular muted metal contacts, with a real round-handling transient at the front.
       const { rng } = r;
-      const parts: [number, Float32Array, number][] = [];
-      let t = 0;
-      let g = 1;
-      const f = rng.range(4200, 5600);
-      for (let i = 0; i < 4; i++) {
-        parts.push([t, modal(r.sr, 0.12, rng.jitter(f, 0.03), [[1, 1, 0.04], [2.32, 0.6, 0.025], [4.25, 0.35, 0.012], [6.1, 0.2, 0.008]], rng), g]);
-        t += rng.range(0.07, 0.12) * g;
-        g *= rng.range(0.45, 0.6);
-      }
-      parts.push([t, mulInPlace(svf(crackle(r.sr, 0.15, rng, 200, 0.0006), r.sr, 'bp', 5000, 2), decayEnv(r.sr, 0.15, 0.1)), 0.15]);
-      return sequence(r, 0.6, parts);
+      const contact = mulInPlace(svf(noise(r.sr, 0.035, rng), r.sr, 'bp', rng.range(1500, 2600), 0.8), decayEnv(r.sr, 0.035, 0.012));
+      return sequence(r, 0.35, [
+        [0, recordedFoley('round', r.sr), 0.33],
+        [rng.range(0.1, 0.16), contact, 0.25],
+      ]);
     },
     variants: 4,
-    gain: 0.18,
+    gain: 0.11,
     maxVoices: 4,
     cooldown: 0.05,
     range: 12,
@@ -197,9 +175,9 @@ export const weaponSounds = {
     label: 'Shotgun hull on the ground',
     group: G,
     bus: 'sfx',
-    render: (r) => sequence(r, 0.4, [[0, clack(r, r.rng.range(900, 1200), 0.35, 0.08), 1], [0.09, clack(r, r.rng.range(1000, 1300), 0.3, 0.06), 0.45]]),
+    render: (r) => sequence(r, 0.3, [[0, recordedFoley('round', r.sr), 0.45], [0.12, recordedFoley('mag_release', r.sr), 0.13]]),
     variants: 2,
-    gain: 0.16,
+    gain: 0.1,
     maxVoices: 2,
     cooldown: 0.1,
     range: 12,
@@ -270,8 +248,7 @@ export const weaponSounds = {
   'launcher.load': part('Launcher: load', (r) =>
     sequence(r, 0.45, [
       [0, slide(r, 0.18, 500, 1200, 1.1), 0.6],
-      [0.17, clack(r, 1100, 0.6, 0.12), 1],
-      [0.18, thump(r, 0.12, 140, 70, 0.07), 0.6],
+      [0.17, recordedFoley('mag_seat', r.sr), 0.8],
     ]),
   ),
   'launcher.empty': part('Launcher: empty click', (r) => dry(r, 1700), { gain: 0.45, cooldown: 0.12, range: 15 }),

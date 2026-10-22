@@ -42,7 +42,7 @@ describe('every sound', () => {
     }
   });
 
-  // memory, not download: the bank is code (tens of kB); this is the decoded audio a page holds
+  // Memory, not download: this is the decoded audio a page holds
   // if it plays every take of every sound (a match renders only what it hears, a few MB)
   it('fits the memory budget: everything rendered at once stays under 20 MB', () => {
     let bytes = 0;

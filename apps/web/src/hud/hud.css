@@ -65,6 +65,7 @@ html[data-touch-controls] #hud .mf-hud-fit:not(.mf-hud-fit--phone) { display: no
 /* the reticle and the damage arcs follow the pointer and the player by transform (hud.ts place()) */
 #hud :is(.reticle, .dmg-arcs) { left: 0; top: 0; will-change: transform; }
 #hud .mf-hud-desktop .dmg { left: -400px; top: -400px; will-change: transform; }
+#hud .mf-hud-phone .dmg-arcs { position: absolute; width: 400px; height: 400px; margin-left: -200px; margin-top: -200px; overflow: visible; }
 
 /* three-digit vitals (100 HP, 100 fuel) at the HUD's number size: the kit's 3ch column fits two */
 #hud .vital { grid-template-columns: 24px 3.6em minmax(0, 1fr); }
@@ -103,6 +104,12 @@ html.reduce-motion #hud { transition: none; }
 #hud .dmg__arc { --o: calc(.45 + var(--amt, .5) * .55); animation: mf-arc 1300ms linear both; }
 #hud .dmg__arc--old { --o: .35; }
 #hud .dmg__arc--heavy { stroke-width: calc(10px + var(--amt, .5) * 26px); }
+#hud :is(.dmg__pointer, .dmg-pointer) { --o: calc(.75 + var(--amt, .5) * .25); fill: var(--c-hp); stroke: var(--c-ink-950); stroke-width: 3px; stroke-linejoin: round; animation: mf-arc 1300ms linear both; }
+#hud :is(.dmg__pointer--heavy, .dmg__pointer--blast, .dmg-pointer--heavy, .dmg-pointer--blast) { fill: var(--c-paper); }
+#hud :is(.dmg__pointer--gas, .dmg-pointer--gas) { fill: var(--c-ev-squall); }
+#hud :is(.dmg__pointer.dmg__arc--old, .dmg-pointer.dmg-arc--old) { opacity: .35; }
+#hud .mf-hud-phone .dmg-arc { --o: .8; fill: none; stroke: var(--c-hp); stroke-width: 9px; stroke-linecap: round; animation: mf-arc 1300ms linear both; }
+#hud .mf-hud-phone .dmg-arc--old { opacity: .35; }
 @keyframes mf-arc { from { opacity: 0; } 7% { opacity: var(--o); } 54% { opacity: var(--o); } to { opacity: 0; } }
 
 /* ammo: empty turns the count red with a stamp (P7) */

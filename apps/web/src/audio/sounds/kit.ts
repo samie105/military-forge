@@ -37,10 +37,8 @@ export interface GunParams {
 }
 
 /**
- * A gunshot, built the way a real one sounds up close: a sharp N-wave crack (the bullet's shock
- * wave), the muzzle blast (noise through a closing low-pass), a sub-heavy body thump, the action's
- * metal, then an outdoor tail and slap-back echoes. Driven hard into saturation and a soft clip
- * so it has grit, not a clean synth tone.
+ * Close gunfire: a short crack, broadband pressure, low-mid blast, then a dry action and tail.
+ * Keeping the bass mostly aperiodic avoids a repeated synth note during automatic fire.
  */
 export function gunshot(r: RenderCtx, p: GunParams): Float32Array {
   const { sr, rng } = r;
@@ -56,13 +54,16 @@ export function gunshot(r: RenderCtx, p: GunParams): Float32Array {
   // the muzzle blast
   const body = mulInPlace(svf(noise(sr, L, rng), sr, 'lp', sweep(rng.jitter(p.bodyCut[0], 0.08), p.bodyCut[1], p.bodySweep), 0.9), decayEnv(sr, L, rng.jitter(p.bodyT60, 0.1), 0.0003));
   mixInto(out, body, sr, 0, p.body);
-  // the thump and a low shelf of sub under it
-  const thump = mulInPlace(osc(sr, L, 'sine', sweep(rng.jitter(p.thumpF[0], 0.06), p.thumpF[1], p.thumpT60 * 0.6)), decayEnv(sr, L, p.thumpT60, 0.0012));
-  mixInto(out, thump, sr, 0, p.thump);
-  const sub = mulInPlace(svf(noise(sr, L, rng, 'brown'), sr, 'lp', 160, 0.9), decayEnv(sr, L, p.thumpT60 * 1.6, 0.002));
-  mixInto(out, sub, sr, 0, (p.sub ?? 0.6) * 2.5);
+  // Low-mid air movement carries weight without a pitched bass drop on every shot.
+  const pressure = mulInPlace(svf(noise(sr, L, rng, 'pink'), sr, 'bp', rng.jitter(p.thumpF[0] * 2.8, 0.12), 0.7), decayEnv(sr, L, p.thumpT60, 0.0006));
+  mixInto(out, pressure, sr, 0, p.thump * 1.25);
+  const sub = mulInPlace(svf(noise(sr, L, rng, 'brown'), sr, 'hp', 45, 0.7), decayEnv(sr, L, p.thumpT60 * 0.8, 0.0008));
+  mixInto(out, sub, sr, 0, (p.sub ?? 0.6) * 0.55);
   // the action's metal
-  if (p.mech > 0) mixInto(out, modal(sr, 0.08, rng.jitter(p.mechF, 0.06), METAL, rng), sr, rng.range(0.001, 0.004), p.mech);
+  if (p.mech > 0) {
+    const action = mulInPlace(svf(noise(sr, 0.028, rng), sr, 'bp', rng.jitter(p.mechF, 0.1), 0.8), decayEnv(sr, 0.028, 0.012, 0.0002));
+    mixInto(out, action, sr, rng.range(0.008, 0.018), p.mech * 0.65);
+  }
   if (p.rattle) {
     const rat = mulInPlace(svf(crackle(sr, 0.09, rng, 500, 0.0012), sr, 'bp', rng.range(2800, 4200), 1.4), linEnv(sr, 0.09, [[0, 0], [0.015, 1], [0.09, 0]]));
     mixInto(out, rat, sr, rng.range(0.012, 0.025), p.rattle);
@@ -71,7 +72,7 @@ export function gunshot(r: RenderCtx, p: GunParams): Float32Array {
   const tail = mulInPlace(svf(noise(sr, L, rng, 'pink'), sr, 'lp', sweep(p.tailCut * 1.6, p.tailCut * 0.5, L), 0.7), linEnv(sr, L, [[0, 0], [0.008, 1], [L, 0]]));
   mulInPlace(tail, decayEnv(sr, L, p.tailT60, 0.006));
   mixInto(out, tail, sr, 0, p.tail);
-  let y = clipInPlace(driveInPlace(dcBlock(out, sr), p.drive), 0.8);
+  let y = clipInPlace(driveInPlace(dcBlock(out, sr), p.drive * 0.48), 0.93);
   if (p.echo) y = echo(y, sr, rng.jitter(p.echo[0], 0.15), p.echo[1], p.echo[2], 1400);
   return fadeInPlace(y, sr, 0.0001, 0.03);
 }

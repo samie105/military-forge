@@ -102,6 +102,14 @@ export class LagCompensator implements TargetRewind {
     this.logging = options.log ?? false;
   }
 
+  /** Old positions belong to the previous arena after a lobby map change. */
+  reset(): void {
+    this.tickAt.fill(-1);
+    this.occupant.fill(null);
+    this.since.fill(0);
+    this.log.length = 0;
+  }
+
   /** Stores everyone's hit pose for `tick` (the state a snapshot for that tick shows). */
   record(tick: number, players: readonly (PlayerState | null)[]): void {
     const slot = tick & MASK;

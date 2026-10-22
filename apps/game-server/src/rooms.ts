@@ -17,6 +17,7 @@ import { loadoutGunIndices } from '@military-forge/content';
 import { CONTENT_HASH, CloseCode, MsgType, PROTOCOL_VERSION, decodeMessage, encodeHello, encodePong, type HelloMsg, type Message } from '@military-forge/protocol';
 import { isRoomCode } from '@military-forge/shared';
 import { createMatchRules, type MatchRules } from '@military-forge/sim';
+import { LanSignal } from './lanSignal';
 import { Room, type Client, type ClientConn, type RoomOptions } from './room';
 import { TICKET_FAILURE_TEXT, type TicketVerifier } from './tickets';
 
@@ -101,6 +102,8 @@ export class RoomRegistry {
   /** the default room ('' code), if any */
   readonly defaultRoom: Room | null;
   readonly rooms = new Map<string, Room>();
+  /** local rooms' signaling (/ws/lan/…): their games run in their hosts' browsers */
+  readonly lan = new LanSignal();
   private readonly options: RoomOptions;
   private readonly maxRooms: number;
   private readonly emptyTicks: number;
@@ -138,6 +141,8 @@ export class RoomRegistry {
    * for its HELLO; null when it's refused right away (`conn` is closed already).
    */
   open(url: string, conn: ClientConn, ip: string | null = null): Connection | null {
+    // local rooms (same Wi-Fi) only pass their WebRTC descriptions through here (lanSignal.ts)
+    if (LanSignal.handles(url)) return this.lan.open(url, conn, ip);
     const code = roomCodeFromUrl(url);
     if (code === null) return refuse(conn, CloseCode.NoRoom, 'invalid room code');
     if (code === '' && !this.defaultRoom) return refuse(conn, CloseCode.NoRoom, 'no room code');

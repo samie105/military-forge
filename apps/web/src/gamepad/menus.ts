@@ -59,8 +59,53 @@ export function focusedIn(scope: Element): HTMLElement | null {
 
 export function focusEl(el: HTMLElement): void {
   // focusVisible: the kit's ring shows for a pad as it does for the keyboard (where the browser takes the option)
+  document.querySelector('.mf-pad-focused')?.classList.remove('mf-pad-focused');
   el.focus({ preventScroll: true, focusVisible: true } as FocusOptions);
+  el.classList.add('mf-pad-focused');
   el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+}
+
+/** Enough to find the same choice if a selection replaces its DOM node. */
+export interface FocusAnchor {
+  scope: Element;
+  screen: string;
+  id: string;
+  tab: string;
+  label: string;
+  x: number;
+  y: number;
+}
+
+export function rememberFocus(scope: Element, el: HTMLElement | null = focusedIn(scope)): FocusAnchor | null {
+  if (!el) return null;
+  const rect = logicalRect(el);
+  return {
+    scope,
+    screen: scope.getAttribute('data-screen') ?? scope.querySelector('[data-screen]')?.getAttribute('data-screen') ?? '',
+    id: el.id,
+    tab: el.getAttribute('data-tab') ?? '',
+    label: el.getAttribute('aria-label') ?? '',
+    x: (rect.left + rect.right) / 2,
+    y: (rect.top + rect.bottom) / 2,
+  };
+}
+
+/** Restore the selected control, not the first button, after React refreshes a menu. */
+export function restoreFocus(scope: Element, anchor: FocusAnchor | null): HTMLElement | null {
+  if (!anchor) return null;
+  const screen = scope.getAttribute('data-screen') ?? scope.querySelector('[data-screen]')?.getAttribute('data-screen') ?? '';
+  if (anchor.scope !== scope && (anchor.scope.isConnected || !screen || screen !== anchor.screen)) return null;
+  const list = focusables(scope);
+  if (!list.length) return null;
+  const named = list.find((el) => (anchor.id && el.id === anchor.id) || (anchor.tab && el.getAttribute('data-tab') === anchor.tab) || (anchor.label && el.getAttribute('aria-label') === anchor.label));
+  const closest = list.reduce((best, el) => {
+    const r = logicalRect(el);
+    const distance = Math.hypot((r.left + r.right) / 2 - anchor.x, (r.top + r.bottom) / 2 - anchor.y);
+    return distance < best.distance ? { el, distance } : best;
+  }, { el: list[0]!, distance: Infinity }).el;
+  const chosen = named ?? closest;
+  focusEl(chosen);
+  return chosen;
 }
 
 /** The first control a pad lands on: one that asks to be (data-pad-first, autofocus), the screen's main button, or the top-left one. */
@@ -124,16 +169,17 @@ export function activate(scope: Element): void {
 }
 
 /** L1 / R1: the previous or next tab of the tab strip in `scope` (Settings' sections, the Locker's). */
-export function switchTab(scope: Element, step: 1 | -1): boolean {
+export function switchTab(scope: Element, step: 1 | -1, onSelect?: (tab: HTMLElement) => void): boolean {
   const strip = scope.querySelector('[role="tablist"]');
   if (!strip) return false;
   const tabs = Array.from(strip.querySelectorAll<HTMLElement>('[role="tab"]')).filter(visible);
   const selected = tabs.findIndex((t) => t.getAttribute('aria-selected') === 'true' || t.classList.contains('is-on') || t.classList.contains('is-active'));
   const i = nextTab(tabs.length, selected, step);
   if (i < 0) return false;
+  // The old panel may be replaced on click. Remember and focus the new tab before it happens.
+  focusEl(tabs[i]!);
+  onSelect?.(tabs[i]!);
   tabs[i]!.click();
-  // keep the pad's focus on the strip, so the next L1 / R1 and the D-pad start from the new tab
-  if (focusedIn(scope) && strip.contains(document.activeElement)) focusEl(tabs[i]!);
   return true;
 }
 

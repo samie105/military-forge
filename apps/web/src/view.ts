@@ -139,7 +139,7 @@ export interface NetStats {
   interpDelayMs: number;
   status: string;
   /** the transport in use: WebTransport (QUIC datagrams) or WebSocket; unset before one is open */
-  transport?: 'wt' | 'ws';
+  transport?: 'wt' | 'ws' | 'lan';
   prediction?: PredictionStats;
 }
 

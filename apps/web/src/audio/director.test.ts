@@ -148,7 +148,7 @@ describe('hits and kills', () => {
     events([{ type: 'hit', attacker: FOE, target: ME, damage: 25, zone: HitZone.Torso, source: K47.index }]);
     const hit = sink.plays.find((p) => p.id === 'hit.taken')!;
     expect(hit.o.pan).toBeGreaterThan(0.5);
-    expect(sink.ids()).toContain('voice.hurt');
+    // Hurt vocals vary and are intentionally omitted on some hits to avoid repetition.
   });
 
   it('your headshot dings, and the kill after it is a headshot kill', () => {
@@ -272,6 +272,11 @@ describe('the gun in hand', () => {
     const empty = player(ME, { weapons: [{ def: K47.index, mag: 0, reserve: 0, reloadTicks: 0 }, { def: NO_WEAPON, mag: 0, reserve: 0, reloadTicks: 0 }] });
     step(frame([empty]), { ...X, fireHeld: true });
     expect(sink.ids()).toContain('rifle.empty');
+    for (let i = 0; i < 60; i++) step(frame([empty]), { ...X, fireHeld: true });
+    expect(sink.ids().filter((id) => id === 'rifle.empty')).toHaveLength(1);
+    step(frame([empty]), { ...X, fireHeld: false });
+    step(frame([empty]), { ...X, fireHeld: true });
+    expect(sink.ids().filter((id) => id === 'rifle.empty')).toHaveLength(2);
   });
 
   it('a melee swing whooshes once per swing (its ticks count up)', () => {

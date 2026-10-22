@@ -9,6 +9,7 @@
  * after it (P3); a player joining rises in, the counts roll (P4), a ready tick stamps (P7); Share is
  * P8, then the share sheet, then a "Shared" stamp.
  */
+import { maps } from '@military-forge/content';
 import { ROOM_SETTING_LIMITS } from '@military-forge/protocol';
 import { useMemo, useState } from 'react';
 import { Icon } from '../../../ui/Icon';
@@ -19,7 +20,7 @@ import type { Bindings } from '../../controls';
 import { playerName } from '../../matchView';
 import type { LobbyPlayer, LobbyView } from '../../onlineView';
 import { encodeQr, qrSvgPath } from '../../qr';
-import { KILL_STEP, ROOM_SLOTS, TIME_CHOICES, killsLabel, minutesLabel, useRoomSetting } from '../Lobby';
+import { KILL_STEP, ROOM_SLOTS, TIME_CHOICES, killsLabel, lobbyMaps, minutesLabel, useRoomSetting } from '../Lobby';
 import { PhoneScreen, rise } from './layout';
 import { Roll, ShareChip, Sheet, initial, shareRoom, useShareChip } from './parts';
 import { PhoneTips } from './PhoneTips';
@@ -84,6 +85,7 @@ function RulesSheet({ lobby, open, onClose }: { lobby: LobbyView; open: boolean;
   const [kills, showKills] = useRoomSetting(lobby.killLimit);
   const [bots, showBots] = useRoomSetting(lobby.bots);
   const [botLevel, showBotLevel] = useRoomSetting<BotLevel>(lobby.botLevel);
+  const [mapId, showMap] = useRoomSetting(lobby.mapId);
   const limits = ROOM_SETTING_LIMITS;
   const times = TIME_CHOICES.filter((m) => m === 0 || (m * 60 >= limits.timeLimit.min && m * 60 <= limits.timeLimit.max));
   const host = lobby.isHost;
@@ -104,6 +106,19 @@ function RulesSheet({ lobby, open, onClose }: { lobby: LobbyView; open: boolean;
         <button type="button" className="btn btn--ghost btn--sm btn--icon m-p8" aria-label="Close" onClick={onClose}>
           <Icon name="close" />
         </button>
+      </div>
+      <div className="pm-sheet__row">
+        <span className="label">Map</span>
+        <div className="seg pm-seg" role="radiogroup" aria-label="Map">
+          {lobbyMaps(lobby.mapId).map((id) => (
+            <button type="button" key={id} role="radio" aria-checked={mapId === id} className="seg__opt m-p8" disabled={!host} onClick={() => {
+              showMap(id);
+              online?.setMatchSettings({ mapId: id });
+            }}>
+              {maps[id]?.name ?? id}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="pm-sheet__row">
         <span className="label">Time limit</span>

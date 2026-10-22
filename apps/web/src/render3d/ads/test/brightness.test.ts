@@ -29,7 +29,10 @@ const read = (p: string) => readFileSync(new URL(p, WEB));
 const json = <T>(p: string) => JSON.parse(read(p).toString()) as T;
 const slots = json<AdSlot[]>('public/assets/kits/street_market/street_market.adslots.json');
 const layout = json<KitLayout>('public/assets/kits/street_market/street_market.layout.json');
-const pool = json<{ screens: { luminance: number }[]; hoardings: { luminance: number }[] }>('public/assets/ads/street_market/house.json');
+type Lum = { luminance: number };
+const pool = json<{ screens: Lum[]; hoardings: Lum[]; studio?: { screens: Lum[]; hoardings: Lum[] } }>('public/assets/ads/street_market/house.json');
+/** the local house art and the studio's (Deet Studios) creatives */
+const creatives = [...pool.screens, ...pool.hoardings, ...(pool.studio?.screens ?? []), ...(pool.studio?.hoardings ?? [])];
 /** the weathering map's mean (textures.ts grimeTexture: ≈ 0.92) */
 const GRIME_MEAN = 0.92;
 
@@ -52,7 +55,7 @@ function ratios(look: EnvironmentLook): number[] {
   const dir = new Vector3(...look.sun.dir).normalize();
   const lift = new Color(look.grade.haze).multiplyScalar(look.midLift);
   const layers = (['gameplay', 'mid'] as const).map((layer) => ({ layer, g: mergeLayer(pieces, items, layer, { grade })! }));
-  const brightest = Math.max(...[...pool.screens, ...pool.hoardings].map((e) => e.luminance));
+  const brightest = Math.max(...creatives.map((e) => e.luminance));
   const board = brightest * lum(new Color(look.adTint));
   const irr = new Color();
   const out = new Color();
@@ -98,8 +101,9 @@ describe('billboard brightness per look (docs/14 §3.4)', () => {
   });
 
   it('the house art records its luminance (house-ads.py), so the model reads the real creatives', () => {
-    for (const e of [...pool.screens, ...pool.hoardings]) {
-      expect(e.luminance).toBeGreaterThan(0.1);
+    for (const e of creatives) {
+      // real pixels, not a missing value: the darkest is Deet's ink-black Hoarding (≈ 0.09)
+      expect(e.luminance).toBeGreaterThan(0.05);
       expect(e.luminance).toBeLessThan(0.9);
     }
   });

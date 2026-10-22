@@ -24,6 +24,18 @@ high 1k; job ids in art/README.md's cost table); they are not committed. Per ima
   lowest if none fits: a format's layers are one array, so every creative needs its copy.
 Writes <out>/<map>/house.json: the pool the renderer loads. `--ktx2-only` keeps the shipped WebPs
 and saturations and only rewrites the KTX2 layers.
+
+The studio's own creatives (Deet Studios, who make the game) go through the same grade and checks
+into the pool's `studio` lists: every match shows some of them (render3d/ads houseManifest). Their
+masters are committed (art/ads/deet, designed in Pen at docs/14 §3.1's upload sizes, exactly 4:3 or
+6:1), so they can be rebuilt without the house art's raw originals:
+
+    python3 -I apps/web/scripts/house-ads.py <map> --studio-only apps/web/public/assets/ads
+
+A studio creative with several sources is a Motion creative (docs/14 §3.3): still keyframes, all
+graded alike; the first is its `file` (and the still where keyframes don't play), the rest its
+`keys`. Each keyframe's mean luminance is recorded, so the tests can hold the change between them
+far under a flash.
 """
 import json
 import subprocess
@@ -68,6 +80,21 @@ POOLS = {
             ("house:sm-bakery-wide", "h11_bakery.png", "6:1", "Sunrise Bakery"),
         ],
     ),
+}
+
+# per map folder: [(creative id, sources, format, title)], sources in art/ads/deet. Screens alternate
+# still / Motion, so the two a match takes (houseManifest) usually include one Motion creative.
+STUDIO_DIR = Path(__file__).resolve().parents[3] / "art" / "ads" / "deet"
+STUDIO = {
+    "street_market": [
+        ("house:deet-wordmark", ("s0_deet_wordmark.png",), "4:3", "DEET Studios: Products. Worlds. Games."),
+        ("house:deet-we-build-motion", ("m0_deet_we_build_k0.png", "m0_deet_we_build_k1.png"), "4:3", "DEET Studios: We build / The whole thing."),
+        ("house:deet-one-studio", ("s1_deet_one_studio.png",), "4:3", "DEET Studios: One studio, brand through to backend."),
+        ("house:deet-products-motion", ("m1_deet_products_k0.png", "m1_deet_products_k1.png"), "4:3", "DEET Studios: Products. Worlds. Games. / Your idea, built whole."),
+        ("house:deet-we-build", ("s2_deet_we_build.png",), "4:3", "DEET Studios: We build products that scale."),
+        ("house:deet-wordmark-wide", ("h0_deet_wordmark.png",), "6:1", "DEET Studios: Products. Worlds. Games."),
+        ("house:deet-one-studio-wide", ("h1_deet_one_studio.png",), "6:1", "DEET Studios: One studio, brand to backend."),
+    ],
 }
 
 GRADE = {"contrast": 0.8, "sat": 0.8, "ceiling": 0.9, "haze": (196, 207, 214), "hazeAmount": 0.06}
@@ -167,7 +194,57 @@ def encode(graded, size, path):
     return np.asarray(Image.open(path).convert("RGB"))
 
 
+def studio_pool(key, dest):
+    """The studio's creatives for one map (STUDIO), graded and checked like the house art."""
+    pool = {"screens": [], "hoardings": []}
+    for cid, srcs, fmt, title in STUDIO.get(key, []):
+        ratio, size = (4 / 3, SCREEN) if fmt == "4:3" else (6.0, HOARDING)
+        arrs = [np.asarray(crop_ratio(Image.open(STUDIO_DIR / src).convert("RGB"), ratio)) for src in srcs]
+        base = cid.split(":")[1]
+        names = [f"{base}{f'-k{i}' if i else ''}.webp" for i in range(len(arrs))]
+        sat = GRADE["sat"]
+        while True:
+            shipped = [encode(grade(a, GRADE, sat), size, dest / n) for a, n in zip(arrs, names)]
+            shares = [signal_share(px) for px in shipped]
+            share = {k: max(sh[k] for sh in shares) for k in SIGNAL_HUES}
+            if max(share.values()) < SIGNAL_LIMIT or sat <= 0.3:
+                break
+            sat = round(sat - 0.1, 2)
+        lums = [round(mean_luminance(px), 4) for px in shipped]
+        ktx2 = [n.replace(".webp", ".ktx2") for n in names]
+        qs = [write_ktx2(grade(a, GRADE, sat), KTX2_SIZE[fmt], dest / k, (dest / n).stat().st_size * KTX2_MAX_RATIO) for a, n, k in zip(arrs, names, ktx2)]
+        entry = {"id": cid, "file": names[0], "ktx2": ktx2[0]}
+        if len(names) > 1:
+            entry["keys"] = [{"file": n, "ktx2": k} for n, k in zip(names[1:], ktx2[1:])]
+        entry |= {"title": title, "signalHues": {k: round(v, 3) for k, v in share.items()}, "saturation": sat, "luminance": max(lums)}
+        if len(names) > 1:
+            entry["keyLuminance"] = lums
+        (pool["screens"] if fmt == "4:3" else pool["hoardings"]).append(entry)
+        sizes = ", ".join(f"{(dest / n).stat().st_size} B / KTX2 q{q} {(dest / k).stat().st_size} B" for n, k, q in zip(names, ktx2, qs))
+        print(f"{cid}: {len(names)} key(s) {size[0]}x{size[1]} [{sizes}], signal hues {entry['signalHues']}, sat {sat:.2f}, lum {lums}")
+    return pool
+
+
+def pool_files(pool):
+    """Every file a pool ships: (webp, ktx2) per image, keyframes included."""
+    entries = pool["screens"] + pool["hoardings"] + pool.get("studio", {}).get("screens", []) + pool.get("studio", {}).get("hoardings", [])
+    return [(x["file"], x["ktx2"]) for e in entries for x in [e, *e.get("keys", [])]]
+
+
+def write_pool(dest, pool):
+    (dest / "house.json").write_text(json.dumps(pool, indent=1) + "\n")
+    files = pool_files(pool)
+    print(json.dumps({"total_bytes": sum((dest / w).stat().st_size for w, _ in files), "ktx2_bytes": sum((dest / k).stat().st_size for _, k in files)}))
+
+
 def main():
+    if "--studio-only" in sys.argv:
+        key, out = [a for a in sys.argv[1:] if a != "--studio-only"]
+        dest = Path(out) / key
+        pool = json.loads((dest / "house.json").read_text())
+        pool["studio"] = studio_pool(key, dest)
+        write_pool(dest, pool)
+        return
     args = [a for a in sys.argv[1:] if a != "--ktx2-only"]
     ktx2_only = len(args) != len(sys.argv) - 1
     key, raw, out = args[0], Path(args[1]), Path(args[2])
@@ -208,9 +285,7 @@ def main():
         (pool["screens"] if fmt == "4:3" else pool["hoardings"]).append(entry)
         print(f"{cid}: {size[0]}x{size[1]} {(dest / name).stat().st_size} B, KTX2 q{q} {(dest / ktx2).stat().st_size} B, signal hues {entry['signalHues']}, sat {sat:.2f}, lum {entry['luminance']}")
     ktx2 = {fmt: list(size) for fmt, size in KTX2_SIZE.items()}
-    (dest / "house.json").write_text(json.dumps({"version": 1, "map": map_id, "ktx2Size": ktx2, **pool}, indent=1) + "\n")
-    entries_all = pool["screens"] + pool["hoardings"]
-    print(json.dumps({"total_bytes": sum((dest / e["file"]).stat().st_size for e in entries_all), "ktx2_bytes": sum((dest / e["ktx2"]).stat().st_size for e in entries_all)}))
+    write_pool(dest, {"version": 1, "map": map_id, "ktx2Size": ktx2, **pool, "studio": studio_pool(key, dest)})
 
 
 if __name__ == "__main__":

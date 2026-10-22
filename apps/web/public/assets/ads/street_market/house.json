@@ -170,5 +170,122 @@
    "saturation": 0.7,
    "luminance": 0.455
   }
- ]
+ ],
+ "studio": {
+  "screens": [
+   {
+    "id": "house:deet-wordmark",
+    "file": "deet-wordmark.webp",
+    "ktx2": "deet-wordmark.ktx2",
+    "title": "DEET Studios: Products. Worlds. Games.",
+    "signalHues": {
+     "teamBlue": 0.001,
+     "teamOrange": 0.037,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.1119
+   },
+   {
+    "id": "house:deet-we-build-motion",
+    "file": "deet-we-build-motion.webp",
+    "ktx2": "deet-we-build-motion.ktx2",
+    "keys": [
+     {
+      "file": "deet-we-build-motion-k1.webp",
+      "ktx2": "deet-we-build-motion-k1.ktx2"
+     }
+    ],
+    "title": "DEET Studios: We build / The whole thing.",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.005,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.1249,
+    "keyLuminance": [
+     0.1058,
+     0.1249
+    ]
+   },
+   {
+    "id": "house:deet-one-studio",
+    "file": "deet-one-studio.webp",
+    "ktx2": "deet-one-studio.ktx2",
+    "title": "DEET Studios: One studio, brand through to backend.",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.022,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.2917
+   },
+   {
+    "id": "house:deet-products-motion",
+    "file": "deet-products-motion.webp",
+    "ktx2": "deet-products-motion.ktx2",
+    "keys": [
+     {
+      "file": "deet-products-motion-k1.webp",
+      "ktx2": "deet-products-motion-k1.ktx2"
+     }
+    ],
+    "title": "DEET Studios: Products. Worlds. Games. / Your idea, built whole.",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.018,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.2983,
+    "keyLuminance": [
+     0.2929,
+     0.2983
+    ]
+   },
+   {
+    "id": "house:deet-we-build",
+    "file": "deet-we-build.webp",
+    "ktx2": "deet-we-build.ktx2",
+    "title": "DEET Studios: We build products that scale.",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.0,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.3006
+   }
+  ],
+  "hoardings": [
+   {
+    "id": "house:deet-wordmark-wide",
+    "file": "deet-wordmark-wide.webp",
+    "ktx2": "deet-wordmark-wide.ktx2",
+    "title": "DEET Studios: Products. Worlds. Games.",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.016,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.0932
+   },
+   {
+    "id": "house:deet-one-studio-wide",
+    "file": "deet-one-studio-wide.webp",
+    "ktx2": "deet-one-studio-wide.ktx2",
+    "title": "DEET Studios: One studio, brand to backend.",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.015,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.2968
+   }
+  ]
+ }
 }

@@ -66,6 +66,28 @@ interface GameTransport {
 - Server options: Node binding `@fails-components/webtransport` (single maintainer: risk), or **preferred**: a small **Rust WT gateway** (quinn + web-transport-quinn) on each game node that terminates QUIC and forwards frames to the Node room process over a Unix socket. It's isolated, fast, and swappable.
 - Certificates: real TLS via a wildcard cert on per-node subdomains (`fra-03.gs.example.com`). `serverCertificateHashes` (≤ 14-day ECDSA certs) is an option for ephemeral fleets on bare IPs.
 
+### 2.4 Local rooms: same Wi-Fi, peer to peer (built, 20 Oct 2026; apps/web/src/lan)
+
+The owner wanted to play with people on the same Wi-Fi or phone hotspot at LAN ping, even with the internet slow or down. Phones and browsers can't listen on a port, so the host's browser runs the room and the guests connect to it over WebRTC.
+
+- **Host-authoritative in the host's page:**
+  - It is the game server's own `Room` (apps/game-server/src/room.ts, made browser-safe: Web Crypto, no Node imports), run in a **worker** (`lan/roomWorker.ts`). A hidden tab's timers slow to 1 Hz; a worker's keep 60 Hz. With the room on the page's own timers, a guest measured 5 ticks a second while the host's tab was in the background; in the worker, 60.
+  - Every byte from a guest goes through `Room.receive`: the same decoders, strikes, rate limits, input lead limit and host-only commands as on the server. On top of that, the page drops non-binary frames and anything over 4 KB, closing that guest. A guest's state is never taken from it.
+  - The host plays through a link inside the page, as one more client.
+- **No results:** a local room has no results sink, so no account, XP or leaderboard ever hears of it.
+- **Transport:** two negotiated data channels per guest, like WebTransport: `u` (unordered, no retransmits) for INPUT, PING, PONG and SNAPSHOT, and `r` (reliable) for the rest.
+  - A **0xFF** frame on `r` is a close frame (u16 code, reason), the channel's stand-in for a WebSocket close. 0xFF is reserved in the protocol registry.
+  - The HUD readout says **LAN**.
+- **ICE:** no ICE servers offline, so only the devices' own addresses are used; browsers show them as mDNS `.local` names. Online, one public STUN server adds the network's public address, for networks where mDNS doesn't pass. ICE prefers host candidates, so traffic stays on the Wi-Fi.
+- **Descriptions are packed** (`lan/sdp.ts`): ICE credentials, the DTLS fingerprint and role, and UDP candidates, in ~130–200 characters. `unpackSdp` rebuilds a minimal SDP and treats a code as untrusted input.
+- **Joining online:** through the game server's relay (`/ws/lan/host`, `/ws/lan/join/<CODE>`; apps/game-server/src/lanSignal.ts). It passes one offer and one answer, then nothing.
+  - Limits: 2 KB per description, 10 messages a second, 4 rooms per address, 15 guests per room.
+  - A reconnect re-signals with the same code and the room gives the player back (its session token).
+- **Joining offline:** the host's offer and the guest's reply as QR codes or pasted text (`LanHost.newOffer` / `acceptAnswer`, `answerFor`). A dropped offline link needs new codes.
+- **The host leaving** closes every guest's channels: guests end with 4006 ("the host closed the local room") within about 2 s, measured. There is no hand-over: the authoritative state lives in the host's page.
+- **Measured on this Mac**, two browser tabs, host tab hidden: RTT 1.5 ms, jitter 0.4 ms, 0 % loss, 60 ticks a second, interpolation at its 50 ms floor, 0 corrections. That is loopback; real same-Wi-Fi is typically 2–10 ms.
+- **Simulated** (netsim), 5 ms ±3 with 0.5 % loss: 0 corrections and 0 missed inputs a minute.
+
 ---
 
 ## 3. Connection handshake

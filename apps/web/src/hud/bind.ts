@@ -38,7 +38,10 @@ export class Binder {
   constructor(root: Element) {
     const all = (attr: string) => [...(root.matches(`[${attr}]`) ? [root] : []), ...root.querySelectorAll(`[${attr}]`)];
     const add = (key: string, write: (v: string) => void) => this.bindings.push({ key: key.trim(), last: null, write });
-    for (const el of all('data-bind')) add(el.getAttribute('data-bind')!, (v) => (el.textContent = v));
+    for (const el of all('data-bind')) add(el.getAttribute('data-bind')!, (v) => {
+      // setKeys owns vector controller caps; never replace their SVG with text each frame.
+      if (!el.hasAttribute('data-pad-code')) el.textContent = v;
+    });
     for (const el of all('data-bind-roll')) add(el.getAttribute('data-bind-roll')!, (v) => rollText(el as HTMLElement, v));
     for (const el of all('data-bind-state')) add(el.getAttribute('data-bind-state')!, (v) => el.setAttribute('data-state', v));
     for (const el of all('data-bind-show')) add(el.getAttribute('data-bind-show')!, (v) => el.toggleAttribute('hidden', v === ''));

@@ -1,7 +1,7 @@
 /**
  * Button glyphs for prompts: PlayStation's shapes or Xbox's letters (and Nintendo's, which sit the
  * other way round), as text for the HUD's keycaps and as small drawings for the menus' (Kbd).
- * The drawings are this game's own: plain outlines in the text colour, no brand art or brand colours.
+ * The drawings are this game's own: scalable outlines with each family's familiar face-button colours.
  *
  * A pad binding is shown as a code in the keyboard's namespace so every prompt (HUD, tips, the
  * controls card) can take it where it takes 'KeyE': `Pad<n>` is standard button n (standard.ts),
@@ -110,7 +110,8 @@ const SHAPES = [
 /** The face button `b` (0..3): a ring with the family's shape or letter. */
 function faceGlyph(b: number, f: GlyphFamily): string {
   const ring = '<circle cx="12" cy="12" r="10"/>';
-  return svg(ring + (f === 'playstation' ? SHAPES[b]! : text(FACE[f][b]!, 12, 11)));
+  const drawing = svg(ring + (f === 'playstation' ? SHAPES[b]! : text(FACE[f][b]!, 12, 11)));
+  return f === 'nintendo' ? drawing : drawing.replace('class="mf-padglyph__svg"', `class="mf-padglyph__svg mf-padglyph__${f === 'playstation' ? 'ps' : 'xbox'}${b}"`);
 }
 
 /** A shoulder (a flat bumper) or a trigger (a taller, rounded-top shape) with its name. */

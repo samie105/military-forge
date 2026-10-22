@@ -7,7 +7,11 @@
  * - unlit and non-emissive (a plain texture times the look's tint), flagged `noBloom` for the
  *   High post pass when it lands;
  * - rotation on the shared 10 s beat with a 0.5 s crossfade (rotation.ts), at most two surfaces lit
- *   on screen (visibility.ts), and an "AD" chip on paid frames only.
+ *   on screen (visibility.ts), and an "AD" chip on paid frames only;
+ * - Motion creatives (docs/14 §3.3) as extra layers `${id}#k`, their keyframes on the same clock, so
+ *   the one fade uniform serves both the beat and the keyframes. Only the KTX2 path uploads them
+ *   (≈ 74 KB each on the GPU); the decoded fallback shows a Motion creative's first keyframe as a
+ *   still, which keeps it inside docs/14 §4.9's 5.1 MB plan.
  *
  * GPU memory: each format's array holds only the creatives the current manifest shows: with house
  * art the match's 6 Screen creatives and 2 Hoarding creatives, at about their drawn size (384 × 288,
@@ -38,8 +42,8 @@ import {
 } from 'three';
 import { arrayFromLayers, textureBytes, type Ktx2Source } from '../environment/ktx2';
 import type { PlanePose } from '../planeCamera';
-import { houseManifest, type AdManifest, type AdSlot, type HouseEntry, type HousePool } from './manifest';
-import { crossfade, frameIndex, previousFrame } from './rotation';
+import { houseManifest, poolEntries, type AdFrame, type AdManifest, type AdSlot, type HouseEntry, type HousePool } from './manifest';
+import { CROSSFADE_MS, crossfade, frameIndex, keyFade, keySegment, lastKeySegment, previousFrame } from './rotation';
 import { LitLimiter } from './visibility';
 
 export interface FormatSpec {
@@ -129,6 +133,18 @@ export function referencedCreatives(manifest: AdManifest, slots: readonly AdSlot
   return [...out];
 }
 
+/** The layers a format's creatives take with their keyframes: id, then `${id}#1` … for a Motion creative. */
+export function keyframeLayers(ids: readonly string[], keys: (id: string) => number): string[] {
+  return ids.flatMap((id) => [id, ...Array.from({ length: Math.max(1, keys(id)) - 1 }, (_, k) => `${id}#${k + 1}`)]);
+}
+
+/** Layer of keyframe `key` of a frame's creative: keyframe 0 where that keyframe isn't uploaded, layer 0 where nothing is. */
+function layerOf(layers: ReadonlyMap<string, number>, frame: AdFrame | undefined, key: number): number {
+  if (!frame) return 0;
+  const k = key % Math.max(1, frame.k ?? 1);
+  return (k ? layers.get(`${frame.c}#${k}`) : undefined) ?? layers.get(frame.c) ?? 0;
+}
+
 /** One RGBA8 layer with its mip chain, bytes. */
 export function layerBytes(spec: FormatSpec): number {
   return Math.round((spec.width * spec.height * 4 * 4) / 3);
@@ -144,20 +160,27 @@ export function plannedGpuBytes(manifest: AdManifest, slots: readonly AdSlot[]):
 
 /**
  * The rotation for every slot of one format at `matchTimeMs`: which layers to fade between, and
- * whether the frames are paid. A creative without a layer (not uploaded yet) falls back to layer 0.
+ * whether the frames are paid. During the beat's crossfade: the previous frame's last keyframe into
+ * the current frame's first; then the current frame's keyframes (a still's are all the same layer).
+ * A creative without a layer (not uploaded yet) falls back to layer 0, a keyframe without one to
+ * its creative's first.
  */
 export function rotationState(slots: readonly AdSlot[], manifest: AdManifest, layers: ReadonlyMap<string, number>, matchTimeMs: number, out?: InstanceState): InstanceState {
   const st = out ?? { layers: new Float32Array(slots.length * 2), paid: new Float32Array(slots.length * 2), fade: 1 };
+  const dwell = slots[0]?.dwellMs ?? 10_000;
+  const beat = ((matchTimeMs % dwell) + dwell) % dwell < CROSSFADE_MS;
+  const seg = keySegment(matchTimeMs, dwell);
+  const kf = keyFade(matchTimeMs, dwell);
   slots.forEach((slot, i) => {
     const frames = manifest.slots.find((s) => s.slot === slot.slotId)?.frames ?? [];
-    const prev = frames[previousFrame(slot, matchTimeMs)];
     const cur = frames[frameIndex(slot, matchTimeMs)];
-    st.layers[i * 2] = (prev && layers.get(prev.c)) ?? 0;
-    st.layers[i * 2 + 1] = (cur && layers.get(cur.c)) ?? 0;
+    const prev = beat ? frames[previousFrame(slot, matchTimeMs)] : cur;
+    st.layers[i * 2] = beat ? layerOf(layers, prev, lastKeySegment(dwell)) : layerOf(layers, cur, kf < 1 ? seg - 1 : seg);
+    st.layers[i * 2 + 1] = layerOf(layers, cur, beat ? 0 : seg);
     st.paid[i * 2] = prev?.paid ? 1 : 0;
     st.paid[i * 2 + 1] = cur?.paid ? 1 : 0;
   });
-  st.fade = slots.length ? crossfade(matchTimeMs, slots[0]!.dwellMs) : 1;
+  st.fade = slots.length ? (beat ? crossfade(matchTimeMs, dwell) : kf) : 1;
   return st;
 }
 
@@ -245,6 +268,8 @@ export class AdBoards {
   private readonly images = new Map<string, Promise<HTMLImageElement | null>>();
   private readonly files: Map<string, string>;
   private readonly ktx2Files: Map<string, string>;
+  /** keyframes per pool creative (1 = a still) */
+  private readonly keyCount: Map<string, number>;
   /** GPU bytes of what is uploaded now, per format (null: nothing yet) */
   private readonly uploaded = new Map<string, number>();
   /** what the boards show now */
@@ -268,8 +293,11 @@ export class AdBoards {
     private readonly ktx2: Ktx2Source = null,
   ) {
     this.limiter = new LitLimiter(slots);
-    this.files = new Map([...pool.screens, ...pool.hoardings].map((e) => [e.id, e.file]));
-    this.ktx2Files = new Map([...pool.screens, ...pool.hoardings].filter((e) => e.ktx2).map((e) => [e.id, e.ktx2!]));
+    const entries = poolEntries(pool);
+    this.files = new Map(entries.map((e) => [e.id, e.file]));
+    const files = entries.flatMap((e) => [[e.id, e.ktx2] as const, ...(e.keys ?? []).map((k, i) => [`${e.id}#${i + 1}`, k.ktx2] as const)]);
+    this.ktx2Files = new Map(files.filter((f): f is readonly [string, string] => !!f[1]));
+    this.keyCount = new Map(entries.map((e) => [e.id, (e.keys?.length ?? 0) + 1]));
     this.manifest = houseManifest(mapId, slots, pool, 0);
     const m = new Matrix4();
     for (const spec of Object.values(FORMATS)) {
@@ -334,26 +362,28 @@ export class AdBoards {
     if (typeof document === 'undefined') return; // tests: no images, no GPU
     for (const f of this.formats) {
       const ids = referencedCreatives(manifest, f.slots, f.spec.format);
-      const install = (tex: Texture) => {
+      const install = (tex: Texture, layerIds: readonly string[]) => {
         if (this.disposed || generation !== this.generation) return tex.dispose();
         const old = f.mesh.material.uniforms.uMap!.value as Texture | null;
         f.mesh.material.uniforms.uMap!.value = tex;
-        f.layers = layerTable(ids);
+        f.layers = layerTable(layerIds);
         this.uploaded.set(f.spec.format, textureBytes(tex));
         old?.dispose();
       };
       const decoded = () =>
         Promise.all(ids.map((id) => (this.files.has(id) ? loadImage(this.images, this.base + this.files.get(id)!) : Promise.resolve(null)))).then((images) =>
-          install(arrayTexture(images, f.spec)),
+          install(arrayTexture(images, f.spec), ids),
         );
       // KTX2 layers stay compressed on the GPU (docs/14 §4.5's ETC1S pool); any failure: the WebPs
+      // (with Motion creatives' keyframes: compressed, they fit the plan)
       const ktx2 = this.ktx2;
-      if (ktx2 && ids.length && ids.every((id) => this.ktx2Files.has(id))) {
-        void Promise.all(ids.map((id) => ktx2.loadAsync(this.base + this.ktx2Files.get(id)!) as Promise<CompressedTexture>))
+      const keyed = keyframeLayers(ids, (id) => this.keyCount.get(id) ?? 1);
+      if (ktx2 && keyed.length && keyed.every((id) => this.ktx2Files.has(id))) {
+        void Promise.all(keyed.map((id) => ktx2.loadAsync(this.base + this.ktx2Files.get(id)!) as Promise<CompressedTexture>))
           .then((layers) => {
             const tex = arrayFromLayers(layers);
             for (const l of layers) l.dispose();
-            install(tex);
+            install(tex, keyed);
           })
           .catch((err: unknown) => {
             console.warn('ads: KTX2 layers not transcoded, loading the WebPs', err);

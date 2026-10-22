@@ -4,9 +4,9 @@
  * (≤ 2 lit on screen) and boards.ts (the ≤ 2-draw renderer). The map environment owns the boards
  * of a map with ad slots (environment/index.ts, `EnvironmentDef.ads`).
  */
-export { AD_POOL_BUDGET, AdBoards, CREATIVE_Z, FORMATS, layerBytes, layerTable, plannedGpuBytes, referencedCreatives, rotationState, type FormatSpec, type InstanceState } from './boards';
-export { checkManifest, fetchAdManifest, houseManifest, type AdFrame, type AdManifest, type AdSlot, type HouseEntry, type HousePool } from './manifest';
-export { CROSSFADE_MS, DWELL_MS, TICK_MS, crossfade, frameIndex, previousFrame } from './rotation';
+export { AD_POOL_BUDGET, AdBoards, CREATIVE_Z, FORMATS, keyframeLayers, layerBytes, layerTable, plannedGpuBytes, referencedCreatives, rotationState, type FormatSpec, type InstanceState } from './boards';
+export { STUDIO_SCREENS, checkManifest, fetchAdManifest, houseManifest, poolEntries, type AdFrame, type AdManifest, type AdSlot, type HouseEntry, type HousePool } from './manifest';
+export { CROSSFADE_MS, DWELL_MS, KEY_FADE_MS, KEY_MS, MAX_KEYS, TICK_MS, crossfade, frameIndex, keyFade, keySegment, lastKeySegment, previousFrame } from './rotation';
 export { LitLimiter, MAX_LIT, ON_SCREEN, slotInView } from './visibility';
 
 /** Where a map's slots and house pool are, under BASE_URL. */

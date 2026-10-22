@@ -15,6 +15,8 @@
  */
 import { grenades, pickups as pickupDefs, weapons, type PickupDef } from '@military-forge/content';
 import { iconHref, weaponIcon } from '../ui/icons';
+import { drawButtonCap } from '../gamepad/caps';
+import { currentPadFamily } from '../gamepad/device';
 import { logicalRect, viewport, type Box } from '../ui/landscape';
 import type { PickupView } from '../view';
 import { weaponFamily } from './model';
@@ -134,7 +136,7 @@ export class WorldTags {
    * object), `fit` the HUD's zoom, `interactKey` the Take key's cap for the rack's sign; `hidden`
    * clears them (no match on screen, spectating, a menu over the game).
    */
-  update(items: readonly PickupView[] | undefined, me: { x: number; y: number; alive: boolean } | null, toScreen: (x: number, y: number) => { x: number; y: number }, fit: number, interactKey: string, hidden: boolean): void {
+  update(items: readonly PickupView[] | undefined, me: { x: number; y: number; alive: boolean } | null, toScreen: (x: number, y: number) => { x: number; y: number }, fit: number, interactKey: string, hidden: boolean, interactCode?: string): void {
     const plan = hidden || !items?.length ? { tags: [], sign: null } : planTags(items, me?.alive ? me : null);
     const { w, h } = viewport(); // the page's own size (an upright phone plays turned: ui/landscape.ts)
     const plates = this.plateRects();
@@ -180,8 +182,9 @@ export class WorldTags {
       this.sign.hidden = true;
       return;
     }
-    if (this.signKey !== interactKey) {
-      this.signKey = interactKey;
+    const signKey = `${interactKey}:${interactCode ?? ''}:${currentPadFamily()}`;
+    if (this.signKey !== signKey) {
+      this.signKey = signKey;
       this.signSize = null;
       this.sign.innerHTML = '';
       const b = document.createElement('b');
@@ -191,7 +194,7 @@ export class WorldTags {
       line.append('Walk up to any gun · ');
       const kbd = document.createElement('kbd');
       kbd.className = 'kbd';
-      kbd.textContent = interactKey || 'E';
+      drawButtonCap(kbd, interactCode, interactKey || 'E');
       line.append(kbd, ' to take it');
       this.sign.append(b, line);
     }

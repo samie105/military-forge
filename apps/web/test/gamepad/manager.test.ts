@@ -3,6 +3,7 @@ import { Btn, createInput } from '@military-forge/sim';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ThrowLatch } from '../../src/input';
 import { PadManager } from '../../src/gamepad/manager';
+import { currentDevice } from '../../src/gamepad/device';
 import { B } from '../../src/gamepad/standard';
 
 interface FakePad {
@@ -159,6 +160,17 @@ describe('menus and play', () => {
     m.applySettings({ ...m.settings, enabled: false }, false);
     press(B.R2);
     expect(sample().buttons).toBe(0);
+  });
+
+  it('disconnect releases gameplay input and restores keyboard prompts', () => {
+    const { m, sample } = setup();
+    press(B.R2);
+    expect(sample().buttons & Btn.Fire).toBe(Btn.Fire);
+    expect(currentDevice().kind).toBe('pad');
+    pad.connected = false;
+    expect(sample().buttons).toBe(0);
+    expect(m.state.connected).toBe(false);
+    expect(currentDevice().kind).toBe('keys');
   });
 
   it('a rebind listens for the next button and keeps it from the menus', () => {

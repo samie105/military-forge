@@ -113,7 +113,7 @@ export function feedFromEvents(events: readonly SimEvent[], localId: number, nam
 
 /**
  * Screen angle (radians, 0 = right, clockwise: screen y points down) from `me` to a world point.
- * The damage arc points this way.
+ * Damage arcs and pointers point this way.
  */
 export function screenAngle(me: { x: number; y: number }, at: { x: number; y: number }): number {
   return Math.atan2(-(at.y - me.y), at.x - me.x);

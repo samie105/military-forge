@@ -15,7 +15,6 @@ import {
   SMOKE,
   STANDING_HITBOXES,
   ZONE_KINDS,
-  defaultTuning,
   pickups as pickupDefs,
   resolveEvent,
   resolveZone,
@@ -554,9 +553,10 @@ export class Renderer {
     arcDots(view, 0, this.arcDot);
   }
 
-  /** Overlay without the debug world layers: damage numbers, HUD and reticle (render3d draws grenades, tracers and blasts). */
+  /** Overlay without the debug world layers: head-level health, damage numbers, HUD and reticle. */
   private drawOverlayHud(frame: Frame, dt: number, opts: RenderOptions, help: string): void {
     const byId = new Map(frame.players.map((p) => [p.id, p]));
+    for (const p of frame.players) this.drawPlayerHealth(p, frame.clouds);
     this.drawEffects(dt, byId, false);
     this.drawLetterbox();
     const local = byId.get(frame.localId);
@@ -822,24 +822,42 @@ export class Renderer {
       ctx.stroke();
     }
 
-    // name + HP bar (none over a head in smoke: the tag would give the player away)
+    this.drawPlayerHealth(p, clouds);
+  }
+
+  /** Screen-space bar follows the head in both 2D and the transparent overlay over 3D. */
+  private drawPlayerHealth(p: PlayerView, clouds?: readonly CloudView[]): void {
+    if (!p.alive) return;
+    const ctx = this.ctx;
+    const cam = this.camera;
+    const t = this.tuningRef();
+    const h = p.crouched ? t.crouchHeight : t.standHeight;
+    const r = t.capsuleRadius;
     if (!p.isLocal && inSmoke(clouds, p.x, p.y + h - r)) return;
     const sx = cam.toScreenX(p.x);
-    const sy = cam.toScreenY(p.y + h + 0.25);
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.fillRect(sx - 22, sy, 44, 5);
-    ctx.fillStyle = p.hp > 50 ? '#3fb950' : p.hp > 25 ? '#d29922' : '#f85149';
-    ctx.fillRect(sx - 22, sy, (44 * p.hp) / defaultTuning.healthMax, 5);
-    ctx.fillStyle = color;
+    const sy = cam.toScreenY(p.y + h + 0.32);
+    if (sx < -40 || sx > cam.width + 40 || sy < cam.band.top + 18 || sy > cam.band.bottom - 8) return;
+    const amount = Math.max(0, Math.min(1, p.hp / t.healthMax));
+    const width = 54;
+    ctx.fillStyle = 'rgba(5,8,8,0.82)';
+    ctx.fillRect(sx - width / 2 - 2, sy - 2, width + 4, 10);
+    ctx.fillStyle = 'rgba(255,255,255,0.14)';
+    ctx.fillRect(sx - width / 2, sy, width, 6);
+    ctx.fillStyle = amount > 0.6 ? '#9bd95b' : amount > 0.3 ? '#f3b64a' : '#ef665d';
+    ctx.fillRect(sx - width / 2, sy, width * amount, 6);
+    ctx.fillStyle = p.isLocal ? COLORS.local : p.isBot ? COLORS.bot : COLORS.enemy;
     ctx.textAlign = 'center';
-    ctx.font = '11px ui-monospace, monospace';
-    ctx.fillText(name, sx, sy - 4);
+    ctx.font = 'bold 11px ui-monospace, monospace';
+    ctx.shadowColor = 'rgba(0,0,0,0.9)';
+    ctx.shadowBlur = 4;
+    ctx.fillText(this.names.get(p.id) ?? p.name, sx, sy - 7, 110);
+    ctx.shadowBlur = 0;
     // status effects (players whose state we hold: everyone locally, ourselves online)
     const status = statusTags(p);
     if (status) {
       ctx.fillStyle = '#ffa657';
       ctx.font = 'bold 10px ui-monospace, monospace';
-      ctx.fillText(status, sx, sy - 16);
+      ctx.fillText(status, sx, sy - 19);
     }
   }
 

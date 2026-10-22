@@ -17,7 +17,8 @@
  */
 import { isUnreliableMessage } from '@military-forge/protocol';
 
-export type TransportKind = 'ws' | 'wt';
+/** 'lan': a local room's WebRTC data channels, or the host's own in-page link (lan/) */
+export type TransportKind = 'ws' | 'wt' | 'lan';
 
 export interface TransportHandlers {
   onMessage(bytes: Uint8Array): void;

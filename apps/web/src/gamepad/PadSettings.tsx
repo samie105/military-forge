@@ -21,6 +21,11 @@ const CAPTURE_S = 6;
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 const FAMILY_NAME = { playstation: 'PlayStation', xbox: 'Xbox', nintendo: 'Nintendo', generic: 'Controller' } as const;
+const STYLE_CARDS = [
+  { id: 'playstation', name: 'PlayStation', image: '/assets/controller-dualsense.png', buttons: '△ ○ □ ✕' },
+  { id: 'xbox', name: 'Xbox', image: '/assets/controller-xbox.png', buttons: 'Y B X A' },
+  { id: 'nintendo', name: 'Nintendo', image: '/assets/controller-switch.png', buttons: 'X A Y B' },
+] as const;
 
 type Capture = { action: PadActionId; index: number } | null;
 
@@ -139,6 +144,8 @@ export function PadControls({ pad, onChange, reduceFlashes = false, phone = fals
   }, [capture, manager]);
 
   const active = manager?.active ?? pads[0] ?? null;
+  const picturedFamily = pad.glyphs === 'auto' ? (active ? padFamily(active.id) : 'playstation') : pad.glyphs;
+  const pictured = STYLE_CARDS.find((card) => card.id === picturedFamily) ?? STYLE_CARDS[0];
   const fixed: [string, string][] = [
     ['Move', pad.swapSticks ? 'PadRS' : 'PadLS'],
     ['Aim', padAimCode(pad)],
@@ -168,6 +175,10 @@ export function PadControls({ pad, onChange, reduceFlashes = false, phone = fals
           ? `${padName(active.id)}${pads.length > 1 ? ` (and ${pads.length - 1} more: the last one used plays)` : ''}${active.mapping === 'standard' ? '' : '. Its buttons may be laid out differently: rebind any that are off below.'}`
           : 'No controller yet. Connect one (USB or Bluetooth) and press any button. PlayStation, Xbox and most other pads work.'}
       </p>
+      <div className="mf-padset__preview" aria-label={`${pictured.name} controller preview`}>
+        <img src={pictured.image} alt={`${pictured.name} controller`} draggable={false} />
+        <span><b>{active ? padName(active.id) : pictured.name}</b><small>{active ? 'Connected controller' : 'Controller preview'}</small></span>
+      </div>
       {!phone && (
         <p className="mf-set__note">
           Press a button below, then the controller button you want. <Cap>Esc</Cap> cancels, <Cap>Backspace</Cap> clears it. In menus the D-pad or the left stick moves, {device.kind === 'pad' ? <PadKbd code="Pad0" /> : 'the bottom button'} selects, {device.kind === 'pad' ? <PadKbd code="Pad1" /> : 'the right one'} goes back.
@@ -214,19 +225,19 @@ export function PadControls({ pad, onChange, reduceFlashes = false, phone = fals
           {moved}
         </p>
       )}
-      <Row phone={phone} label="Button glyphs" desc="Which buttons the prompts show. Auto follows the controller you use.">
-        <div className="seg" role="radiogroup" aria-label="Button glyphs">
-          {(
-            [
-              ['auto', 'Auto'],
-              ['playstation', 'PlayStation'],
-              ['xbox', 'Xbox'],
-            ] as [GlyphSetting, string][]
-          ).map(([id, text]) => (
-            <button key={id} type="button" className="seg__opt" role="radio" aria-checked={pad.glyphs === id} onClick={() => set({ glyphs: id })}>
-              {text}
-            </button>
-          ))}
+      <Row phone={phone} label="Button style" desc="Auto follows the controller you use. Choose a style only if its buttons are labelled differently.">
+        <div className="mf-pad-style" role="radiogroup" aria-label="Button style">
+          <button type="button" className="mf-pad-style__auto" role="radio" aria-checked={pad.glyphs === 'auto'} onClick={() => set({ glyphs: 'auto' })}>
+            <span>Auto detect</span><small>{active ? FAMILY_NAME[padFamily(active.id)] : 'Uses your connected controller'}</small>
+          </button>
+          <div className="mf-pad-style__cards">
+            {STYLE_CARDS.map(({ id, name, image, buttons }) => (
+              <button key={id} type="button" className="mf-pad-style__card" role="radio" aria-label={`${name} button style`} aria-checked={pad.glyphs === id} onClick={() => set({ glyphs: id as GlyphSetting })}>
+                <img src={image} alt="" draggable={false} loading="lazy" />
+                <span>{name}</span><small>{buttons}</small>
+              </button>
+            ))}
+          </div>
         </div>
       </Row>
       <Row phone={phone} label="Aim speed" desc="How fast the aim turns to where the stick points. All the way right: at once.">

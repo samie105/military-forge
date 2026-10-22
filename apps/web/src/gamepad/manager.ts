@@ -11,9 +11,9 @@ import { Btn, type Input, type SimEvent } from '@military-forge/sim';
 import type { Camera } from '../camera';
 import type { ThrowLatch } from '../input';
 import { assistAim, type AimTarget } from '../touch/mapping';
-import { currentDevice, notePad, onInputDevice } from './device';
+import { currentDevice, noteKeys, notePad, onInputDevice } from './device';
 import { dashDirection, heldBits, moveBits, navRepeats, padDashStrength, padThrowStrength, reticleDistance, shapeAxes, stepAim, stickNavDirection, triggerHeld, type NavDir, type StickVector } from './mapping';
-import { activate, findScroller, focusFirst, focusedIn, focusables, hasTabs, moveFocus, switchTab } from './menus';
+import { activate, findScroller, focusFirst, focusedIn, focusables, hasTabs, moveFocus, rememberFocus, restoreFocus, switchTab, type FocusAnchor } from './menus';
 import { rumbleFor, scaleRumble, type Rumble } from './rumble';
 import { DEFAULT_PAD_SETTINGS, buttonMap, type ButtonMap, type PadSettings } from './settings';
 import { AXIS, B, BUTTON_COUNT, isDualSense, padFamily } from './standard';
@@ -83,6 +83,7 @@ export class PadManager {
   /** a game overlay the pad was sent into with a Share / View tap */
   private overlay: Element | null = null;
   private scroller: { scope: Element; el: Element | null } | null = null;
+  private menuFocus: FocusAnchor | null = null;
   private capture: ((button: number) => void) | null = null;
   private scoreboardDown = false;
   private zoomBefore: number | null = null;
@@ -91,6 +92,7 @@ export class PadManager {
   private lastShotRumble = -Infinity;
   private raf = 0;
   private readonly listeners = new Set<() => void>();
+  private display: (() => void) | null = null;
 
   constructor(private readonly host: PadHost) {
     onInputDevice((d) => {
@@ -104,6 +106,7 @@ export class PadManager {
     if (typeof window === 'undefined' || typeof navigator === 'undefined' || typeof navigator.getGamepads !== 'function') return;
     const loop = (now: number) => {
       this.poll(now);
+      this.display?.();
       this.raf = requestAnimationFrame(loop);
     };
     const begin = () => {
@@ -121,13 +124,21 @@ export class PadManager {
     this.settings = settings;
     this.reduceFlashes = reduceFlashes;
     this.map = buttonMap(settings.bindings);
-    if (!settings.enabled) this.releaseAll();
+    if (!settings.enabled) {
+      this.releaseAll();
+      if (currentDevice().kind === 'pad') noteKeys();
+    }
   }
 
   /** Something about the pads changed (connected, the device, a capture ended): the Settings panel re-reads. */
   onChange(fn: () => void): () => void {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);
+  }
+
+  /** Visual controller display after polling, including on menu-only pages. */
+  setDisplay(fn: () => void): void {
+    this.display = fn;
   }
 
   private notify(): void {
@@ -200,6 +211,7 @@ export class PadManager {
       if (this.index >= 0) {
         this.index = -1;
         this.releaseAll();
+        if (currentDevice().kind === 'pad') noteKeys();
       }
       return;
     }
@@ -233,6 +245,7 @@ export class PadManager {
       if (this.mode === 'play') this.leavePlay();
       this.mode = mode;
       this.nav.dir = null;
+      if (mode !== 'menu') this.menuFocus = null;
       this.notify();
     }
     for (let i = 0; i < BUTTON_COUNT; i++) {
@@ -285,6 +298,15 @@ export class PadManager {
   // ------------------------------------------------------------------ menus
 
   private pollMenu(scope: Element, now: number): void {
+    if (currentDevice().kind !== 'pad') {
+      this.menuFocus = null;
+      return;
+    }
+    if (!focusedIn(scope)) {
+      const restored = restoreFocus(scope, this.menuFocus);
+      if (!restored) focusFirst(scope);
+    }
+    this.menuFocus = rememberFocus(scope) ?? this.menuFocus;
     if (this.pressed(B.South)) activate(scope);
     if (this.pressed(B.East)) {
       if (this.overlay && scope === this.overlay) this.leaveOverlay();
@@ -294,8 +316,8 @@ export class PadManager {
       if (this.overlay && scope === this.overlay) this.leaveOverlay();
       this.host.pause();
     }
-    if (this.pressed(B.L1)) switchTab(scope, -1);
-    if (this.pressed(B.R1)) switchTab(scope, 1);
+    if (this.pressed(B.L1)) switchTab(scope, -1, (tab) => { this.menuFocus = rememberFocus(scope, tab); });
+    if (this.pressed(B.R1)) switchTab(scope, 1, (tab) => { this.menuFocus = rememberFocus(scope, tab); });
 
     // the D-pad, or the left stick past half-way: focus moves (held: repeats)
     const dir: NavDir | null = this.held[B.Up] ? 'up' : this.held[B.Down] ? 'down' : this.held[B.Left] ? 'left' : this.held[B.Right] ? 'right' : stickNavDirection(this.axes[0]!, this.axes[1]!);
@@ -303,9 +325,11 @@ export class PadManager {
     else if (dir !== this.nav.dir) {
       this.nav = { dir, downAt: now, lastAt: now };
       moveFocus(scope, dir);
+      this.menuFocus = rememberFocus(scope) ?? this.menuFocus;
     } else if (navRepeats(this.nav.downAt, this.nav.lastAt, now)) {
       this.nav.lastAt = now;
       moveFocus(scope, dir);
+      this.menuFocus = rememberFocus(scope) ?? this.menuFocus;
     }
 
     // the right stick scrolls a long panel

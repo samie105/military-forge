@@ -30,7 +30,7 @@ import type { InputSampler } from './input';
 import { mapEventView } from './mapEvent';
 import { ThrowPreview } from './throwPreview';
 import type { Renderer } from './render';
-import { connectGame, type GameTransport } from './transport';
+import { connectGame, type GameTransport, type TransportHandlers } from './transport';
 import { mobilityView, shieldView, type CloudView, type Frame, type PlayerView, type RewindView } from './view';
 
 /**
@@ -104,6 +104,12 @@ export interface OnlineOptions {
    * our player go, the old ticket is spent or expired and the server says so (4007).
    */
   refreshTicket?: () => Promise<string | null>;
+  /**
+   * A local room (same Wi-Fi, lan/): the connection is made here instead of to a game server, a
+   * WebRTC link to the host's browser (or, for the host, a link inside the page). Called again to
+   * reconnect. `url` is then only a label.
+   */
+  connect?: (handlers: TransportHandlers, reconnect: boolean) => Promise<GameTransport>;
 }
 
 const sessionKey = (room: string) => `room.session.${room}`;
@@ -220,7 +226,7 @@ export class OnlineMode {
         this.up.send(bytes);
       },
       // a stalled WebSocket queues INPUTs and delivers them all at once: NetClient thins them out
-      stream: () => this.transport?.kind !== 'wt',
+      stream: () => this.transport?.kind === 'ws',
       backlog: () => this.transport?.backlog() ?? 0,
     });
     // a reload resumes the same player while the room still holds it
@@ -314,7 +320,7 @@ export class OnlineMode {
     this.currentAttempt = attempt;
     const prefer = this.skipWebTransport && this.preferTransport === 'auto' ? 'ws' : this.preferTransport;
     this.skipWebTransport = false;
-    connectGame(this.url, prefer, {
+    const handlers: TransportHandlers = {
       onMessage: (bytes) => {
         if (this.currentAttempt !== attempt) return;
         this.lastMessageAt = performance.now();
@@ -324,20 +330,26 @@ export class OnlineMode {
       onClose: (code, reason) => {
         if (this.currentAttempt === attempt) this.dropped(code, reason);
       },
-    }, this.droppedAt !== 0).then(
+    };
+    const connect = this.options.connect;
+    (connect
+      ? connect(handlers, this.droppedAt !== 0).then((transport) => ({ transport, fallbackReason: null as string | null }))
+      : connectGame(this.url, prefer, handlers, this.droppedAt !== 0)
+    ).then(
       ({ transport, fallbackReason }) => {
         if (this.currentAttempt !== attempt || this.disposed) return transport.close();
         this.transport = transport;
         this.lastMessageAt = performance.now();
         // the conditioner models what loss does to this transport: retransmit stalls on TCP
         this.netSim.up.stream = this.netSim.down.stream = transport.kind === 'ws';
-        this.transportNote = transport.kind === 'wt' ? 'WebTransport (UDP)' : `WebSocket${fallbackReason ? ` (${fallbackReason})` : ''}`;
+        this.transportNote = transport.kind === 'wt' ? 'WebTransport (UDP)' : transport.kind === 'lan' ? 'local room (Wi-Fi)' : `WebSocket${fallbackReason ? ` (${fallbackReason})` : ''}`;
         this.status = this.droppedAt ? 'resuming…' : 'joining…';
         if (!this.droppedAt) this.conn = { ...FRESH, state: 'joining', detail: '', code: 0 };
         this.net.onOpen();
       },
-      (e: Error) => {
-        if (this.currentAttempt === attempt) this.dropped(1006, e.message);
+      (e: Error & { code?: number }) => {
+        // a local room's connector says why with a close code (4006: the room is gone)
+        if (this.currentAttempt === attempt) this.dropped(typeof e.code === 'number' ? e.code : 1006, e.message);
       },
     );
   }
@@ -553,7 +565,7 @@ export class OnlineMode {
   private checkSilence(now: number): void {
     const t = this.transport;
     if (!t || this.disposed) return;
-    const limit = !this.net.isConnected ? JOIN_SILENCE_MS : t.kind === 'wt' ? WT_SILENCE_MS : WS_SILENCE_MS;
+    const limit = !this.net.isConnected ? JOIN_SILENCE_MS : t.kind === 'ws' ? WS_SILENCE_MS : WT_SILENCE_MS;
     if (now - this.lastMessageAt < limit) return;
     this.currentAttempt = null; // its close is ours, not a drop to handle twice
     this.transport = null;

@@ -74,6 +74,8 @@ Interstitial or video ads during play (rewarded ads stay opt-in, 01 §10) · per
 
 House-only surfaces are danfo side panels, stall posters, shop signs, awnings and anything on or near the play plane. They're dressed with **fictional local businesses** ("Mama Put", "Iya Basira's Buka", a Dadar chai stall), community notices and safety tips. They never carry our own store promos either: "buy the pass now" aimed at kids is a direct exhortation (§7.3).
 
+**Studio creatives (Deet Studios, who make the game).** The studio's own brand art runs as house art on the Street Market's ad surfaces: never paid, never chipped, never a store promo, and held to every rule in §3. They sit in the pool's `studio` lists, outside the local pool's ≤ 8 per format (lint 6). Every match's six-creative Screen set takes **2 studio Screens** (frames 0 and 3, so they're spread across the loop) and 4 local ones. The first Hoarding (H1) shows a studio banner, and H2 shows local art. The masters live in `art/ads/deet` (designed in Pen, in the Deet document's "DEET × Military Forge — Street Market billboards" board). `apps/web/scripts/house-ads.py <map> --studio-only <out>` rebuilds them. A paid booking replaces them like any house frame.
+
 Share of the screen by zoom level (03 §10; FOV 35°, 16:9):
 
 | Zoom | 1× | 2× | 3× | 4× | 5× | 6× | 7× |
@@ -205,8 +207,15 @@ The deploy plane, its path, supply drops (crate, canopy, flare, minimap marker) 
 
 ### 3.3 Animation
 
-- **Launch:** static only.
+- **Launch:** paid creatives are static only. Studio creatives already use the Motion format below.
 - **Post (Motion add-on):** ≤ 4 still keyframes, each shown ≥ 1.5 s, crossfades ≤ 0.3 s, no flashes, muted. Delivered as KTX2 layers and measured under the IAB 2-second rule for video and dynamic ads.
+- **How the renderer plays them** (`render3d/ads`, built for the studio's creatives):
+  - A manifest frame carries its keyframe count (`k`), and keyframe *n* is layer `{id}#n`.
+  - Keyframes run on the match clock and restart at every beat. The 10 s dwell splits into six segments: five of 1.5 s, then a last one of 2.5 s that takes the remainder, so no keyframe is cut short. Segment *s* shows keyframe *s* mod *k*.
+  - Each change is a 0.3 s crossfade, so there's at most one change in any 1.5 s.
+  - The beat's 0.5 s crossfade runs from the outgoing frame's last keyframe into the next frame's first.
+  - Keyframes play only where KTX2 transcodes (≈ 74 KB per layer on the GPU). The decoded-WebP fallback shows keyframe 0 as a still, so it stays inside the 5.1 MB plan (§4.9).
+  - `house-ads.py` records each keyframe's mean luminance, and the tests hold the keyframes of one creative within 0.1 of each other: a change never reads as a flash.
 
 ### 3.4 What the engine does to every creative
 

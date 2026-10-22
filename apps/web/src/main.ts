@@ -39,6 +39,8 @@ import { PresenceBeat } from './presence';
 import { LocalMode } from './localMode';
 import { OnlineMode } from './onlineMode';
 import { mountHud, type ScoreRow } from './hud';
+import { LanHost } from './lan/host';
+import { joinByCode, lanSignalUrl, normalizeLanCode } from './lan/guest';
 import { Renderer, type RenderOptions } from './render';
 import { localMatchRules, mountShell, registerRoute, type GameHost, type Settings } from './shell';
 import { loadSettings } from './shell/controller';
@@ -57,7 +59,10 @@ import { assetLoad } from './assetLoad';
 const params = new URLSearchParams(location.search);
 /** the player-facing app, or (dev builds at `/`) the Phase 0 debug client */
 const appMode = !import.meta.env.DEV || params.has('app') || params.has('room') || location.pathname.startsWith('/r/');
-const online = !appMode && (params.has('online') || params.has('server'));
+/** the debug client in a local room (lan/): `?lanhost` hosts one, `?lanjoin=CODE` joins one (the app has its own screens) */
+const lanHostParam = !appMode && params.has('lanhost');
+const lanJoinParam = appMode ? null : params.get('lanjoin');
+const online = !appMode && (params.has('online') || params.has('server') || lanHostParam || lanJoinParam !== null);
 const serverUrl = params.get('server') ?? `ws://${location.hostname || 'localhost'}:9001`;
 const name = (params.get('name') ?? `Pilot-${Math.floor(Math.random() * 9000 + 1000)}`).slice(0, 16);
 const shorthand = ['rtt', 'loss', 'jitter', 'dup']
@@ -105,6 +110,8 @@ const localMapId = requestedMap && maps[requestedMap] ? requestedMap : 'movement
 // local mode: the ?map= map; online mode: the server's, from WELCOME (followed in frame())
 let map: MapDef = getMap(online ? 'movement-test' : localMapId);
 let mode: LocalMode | OnlineMode | null = null;
+// dev builds: the running mode for measuring scripts in the browser (net stats, the local room's ping)
+if (import.meta.env.DEV) (window as unknown as { __mfMode: () => unknown }).__mfMode = () => mode;
 
 // Graphics quality (Settings → Graphics): a preset, or Auto, which starts as high as the device
 // should hold (gfxAuto.ts, worked out once, when first needed) and then adapts to the measured
@@ -330,7 +337,14 @@ if (appMode) {
     showToast(`Unknown map "${requestedMap}". Maps: ${Object.keys(maps).join(', ')}`);
     setTimeout(() => (toast.style.display = 'none'), 4000);
   }
-  if (online) {
+  if (lanHostParam) {
+    const lan = new LanHost({ signalUrl: lanSignalUrl('host'), fillBots: params.has('bots') ? { target: Number(params.get('bots')) || 4, level: 'normal' } : null });
+    lan.onChange(() => showToast(lan.code ? `Local room ${lan.code}: ${lan.connectedGuests} joined (?lanjoin=${lan.code})` : lan.signalError || 'local room: waiting for a code…'));
+    mode = new OnlineMode('lan://host', name, sampler, camera, renderer, showToast, netSim, 'auto', { connect: (h) => lan.hostTransport(h) });
+  } else if (lanJoinParam !== null) {
+    const code = normalizeLanCode(lanJoinParam) ?? '';
+    mode = new OnlineMode(`lan://${code}`, name, sampler, camera, renderer, showToast, netSim, 'auto', { connect: (h) => joinByCode(code, h) });
+  } else if (online) {
     const prefer = params.get('transport');
     mode = new OnlineMode(serverUrl, name, sampler, camera, renderer, showToast, netSim, prefer === 'ws' || prefer === 'wt' ? prefer : 'auto');
   } else {

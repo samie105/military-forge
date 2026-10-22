@@ -133,7 +133,6 @@ export class AudioDirector {
   /** victims our last hit on was to the head (a headshot kill) */
   private readonly headOn = new Set<number>();
   private lowFuelAt = -Infinity;
-  private emptyAt = -Infinity;
   private fireWasHeld = false;
   private coughAt = -Infinity;
   private blindPeak = 0;
@@ -184,6 +183,7 @@ export class AudioDirector {
       case 'death':
         if (e.victim === me) {
           s.play('death.self');
+          s.play('voice.death', { gain: 0.9, priority: 20 });
           this.stopPlayerLoops(me);
         } else {
           s.play('voice.death', this.at(e.victim));
@@ -304,9 +304,9 @@ export class AudioDirector {
     }
     if (!ws.fire) return;
     s.play(ws.fire, { ...o, rate: ws.rate, gain: ws.gain });
-    if (ws.cycle) s.play(ws.cycle.id, { ...o, delay: ws.cycle.after, gain: 0.9 });
+    if (ws.cycle) s.play(ws.cycle.id, { ...o, delay: ws.cycle.after, gain: 0.55 });
     // the spent case lands a moment later (a shotgun's when it's pumped); close by only (its range)
-    if (ws.brass && Math.random() < 0.7) {
+    if (ws.brass && Math.random() < 0.3) {
       const after = (ws.cycle?.after ?? 0) + 0.3 + Math.random() * 0.25;
       s.play(ws.brass, { ...o, ...(own ? { pan: Math.random() * 0.6 - 0.1 } : {}), delay: after });
     }
@@ -325,7 +325,9 @@ export class AudioDirector {
         s.play('hit.taken', { pan, gain: Math.min(1, 0.55 + e.damage / 60), priority: 10 });
         s.duckOwn(0.4, 0.25);
       }
-      if (!burn || Math.random() < 0.3) s.play('voice.hurt', { pan: pan * 0.3 });
+      if ((!burn && e.damage >= 16 && Math.random() < 0.55) || (burn && Math.random() < 0.08)) {
+        s.play('voice.hurt', { pan: pan * 0.3 });
+      }
       return;
     }
     if (e.source === DamageSource.Melee) s.play('melee.hit', { ...this.at(e.target), priority: e.attacker === me ? 15 : 0 });
@@ -334,7 +336,7 @@ export class AudioDirector {
       if (head) this.headOn.add(e.target);
       else this.headOn.delete(e.target);
       s.play(head ? 'hit.head' : 'hit.marker');
-    } else if (e.damage >= 20) s.play('voice.hurt', { ...this.at(e.target), gain: 0.7 });
+    } else if (e.damage >= 24 && Math.random() < 0.45) s.play('voice.hurt', { ...this.at(e.target), gain: 0.7 });
   }
 
   // ================================================================ frames
@@ -514,9 +516,8 @@ export class AudioDirector {
     // the dry click: the trigger pulled on an empty gun that isn't reloading
     const w = me.weapons[me.active];
     const ws = w && w.def !== NO_WEAPON ? weaponSounds(w.def) : null;
-    if (x.fireHeld && w && ws && ws.family !== 'melee' && w.mag === 0 && w.reloadTicks === 0 && (!this.fireWasHeld || now - this.emptyAt > 0.35)) {
+    if (x.fireHeld && !this.fireWasHeld && w && ws && ws.family !== 'melee' && w.mag === 0 && w.reloadTicks === 0) {
       s.play(ws.empty);
-      this.emptyAt = now;
     }
     this.fireWasHeld = x.fireHeld;
     // a flashbang: the world muffled and (unless softened) the ears ringing

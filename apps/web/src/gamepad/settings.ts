@@ -72,11 +72,13 @@ export const RESERVED_BUTTONS: ReadonlySet<number> = new Set([B.Start]);
 
 export type PadBindings = Readonly<Record<PadActionId, readonly number[]>>;
 
-export type GlyphSetting = 'auto' | 'playstation' | 'xbox';
+export type GlyphSetting = 'auto' | 'playstation' | 'xbox' | 'nintendo';
 
 export interface PadSettings {
   /** read controllers at all (off: a pad plugged in for something else is ignored) */
   enabled: boolean;
+  /** Compact physical controller diagram over the map. */
+  showLayout: boolean;
   /** which buttons the prompts draw: the connected pad's (auto), or always PlayStation's or Xbox's */
   glyphs: GlyphSetting;
   bindings: PadBindings;
@@ -118,6 +120,7 @@ export function defaultPadBindings(): PadBindings {
 
 export const DEFAULT_PAD_SETTINGS: Readonly<PadSettings> = {
   enabled: true,
+  showLayout: true,
   glyphs: 'auto',
   bindings: defaultPadBindings(),
   aimSpeed: 1,
@@ -164,7 +167,8 @@ export function sanitizePadSettings(raw: unknown): PadSettings {
   const flag = (v: unknown, fallback: boolean) => (typeof v === 'boolean' ? v : fallback);
   return {
     enabled: flag(r.enabled, d.enabled),
-    glyphs: r.glyphs === 'playstation' || r.glyphs === 'xbox' || r.glyphs === 'auto' ? r.glyphs : d.glyphs,
+    showLayout: flag(r.showLayout, d.showLayout),
+    glyphs: r.glyphs === 'playstation' || r.glyphs === 'xbox' || r.glyphs === 'nintendo' || r.glyphs === 'auto' ? r.glyphs : d.glyphs,
     bindings: sanitizePadBindings(r.bindings),
     aimSpeed: num(r.aimSpeed, PAD_LIMITS.aimSpeed, d.aimSpeed),
     aimCurve: num(r.aimCurve, PAD_LIMITS.aimCurve, d.aimCurve),
