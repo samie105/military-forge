@@ -5,16 +5,21 @@
  * every item. Loadouts travel as fixed lists of compact wire ids (docs/04 §5.1).
  */
 
-/** Every slot a loadout fills, in wire order. `dye` items fill the three dye channels instead. */
+/** Every slot a loadout fills. `dye` items fill the three dye channels instead. `hair` (22 Oct, the female
+ *  body) came after the wire form was fixed, so on the wire it follows the dyes (cosmeticLoadoutWireIds). */
 export const LOADOUT_SLOTS = [
-  'bodyType', 'skinTone', 'headgear', 'eyewear', 'top', 'gloves', 'legs', 'boots', 'jetpack', 'exhaust', 'trail',
+  'bodyType', 'skinTone', 'headgear', 'eyewear', 'top', 'gloves', 'legs', 'boots', 'jetpack', 'exhaust', 'trail', 'hair',
 ] as const;
 export type LoadoutSlot = (typeof LOADOUT_SLOTS)[number];
 export type CosmeticSlot = LoadoutSlot | 'dye';
 
 /** Slots filled by a mesh part merged into the character's single skinned mesh (docs/04 §5.3). */
-export const PART_SLOTS = ['headgear', 'eyewear', 'top', 'gloves', 'legs', 'boots', 'jetpack'] as const;
+export const PART_SLOTS = ['headgear', 'eyewear', 'top', 'gloves', 'legs', 'boots', 'jetpack', 'hair'] as const;
 export type PartSlot = (typeof PART_SLOTS)[number];
+
+/** The base body meshes (docs/04 §3): every body type is built on one of them, on the one shared skeleton. */
+export const BODIES = ['male', 'female'] as const;
+export type Body = (typeof BODIES)[number];
 
 /** Dye-mask channels (docs/04 §5.4): R = primary, G = secondary, B = accent. */
 export const DYE_CHANNELS = ['primary', 'secondary', 'accent'] as const;
@@ -81,6 +86,10 @@ export interface CosmeticDef {
   colour?: string;
   /** body types: width of the torso and limbs, 1..COSMETIC_ENVELOPE_MUL (the head never scales, so it stays on its hitbox) */
   widthMul?: number;
+  /** body types: the base body mesh they're built on */
+  body?: Body;
+  /** parts made for some bodies only (e.g. the female body's hairstyles); absent = every body */
+  fits?: readonly Body[];
 }
 
 /** docs/04 §1.2: parts may grow the base body's bounds by at most 10%... */
@@ -98,7 +107,7 @@ function item(
   name: string,
   rarity: Rarity,
   source: CosmeticSource,
-  extra: Partial<Pick<CosmeticDef, 'colour' | 'widthMul' | 'tags' | 'releaseSeason'>> & { art?: boolean; dyeable?: boolean } = {},
+  extra: Partial<Pick<CosmeticDef, 'colour' | 'widthMul' | 'body' | 'fits' | 'tags' | 'releaseSeason'>> & { art?: boolean; dyeable?: boolean } = {},
 ): CosmeticDef {
   const { art, dyeable, ...rest } = extra;
   const isPart = (PART_SLOTS as readonly string[]).includes(slot);
@@ -126,11 +135,14 @@ function colours(slot: CosmeticSlot, firstWireId: number, list: readonly [string
  * (apps/web/public/assets/cosmetics/index.json) where W8 has made the item.
  */
 export const cosmetics: readonly CosmeticDef[] = [
-  item(1, 'body_standard', 'bodyType', 'Standard', 'common', STARTER, { widthMul: 1 }),
-  item(2, 'body_stocky', 'bodyType', 'Stocky', 'common', STARTER, { widthMul: 1.08 }),
+  item(1, 'body_standard', 'bodyType', 'Standard', 'common', STARTER, { widthMul: 1, body: 'male' }),
+  item(2, 'body_stocky', 'bodyType', 'Stocky', 'common', STARTER, { widthMul: 1.08, body: 'male' }),
   // Slim keeps the standard width (docs/04 §1.2 forbids shrinking): its look comes from W8's slim mesh
   // variant (slimmer limbs inside the same silhouette). Until that lands it renders as Standard.
-  item(3, 'body_slim', 'bodyType', 'Slim', 'uncommon', { kind: 'level', level: 5 }, { widthMul: 1 }),
+  item(3, 'body_slim', 'bodyType', 'Slim', 'uncommon', { kind: 'level', level: 5 }, { widthMul: 1, body: 'male' }),
+  // The female soldier (owner, 22 Oct): her own base mesh on the same skeleton, sockets and hitbox. The
+  // Forge's art is on its way; until it lands she renders as Standard (docs/04 §5.2: art never blocks play).
+  item(4, 'body_female', 'bodyType', 'Female', 'common', STARTER, { widthMul: 1, body: 'female' }),
 
   ...colours('skinTone', 20, [
     ['skin_01', 'Porcelain', '#f6dcc8'], ['skin_02', 'Ivory', '#edc5a9'], ['skin_03', 'Peach', '#e4b28f'],
@@ -184,7 +196,18 @@ export const cosmetics: readonly CosmeticDef[] = [
     ['dye_forest', 'Forest', '#2f6b3a'], ['dye_sky', 'Sky', '#5aa9e6'], ['dye_navy', 'Navy', '#24365e'],
     ['dye_purple', 'Grape', '#6d3fa0'], ['dye_pink', 'Bubblegum', '#ee7fb4'], ['dye_brown', 'Cocoa', '#6b4428'],
     ['dye_crimson', 'Crimson', '#8f1028', 'rare', STORE], ['dye_gold', 'Gold Leaf', '#d4a017', 'legendary', { kind: 'battlePass', season: 1, tier: 100 }],
+    // colourways for the outfits (22 Oct): field and street tones
+    ['dye_khaki', 'Khaki', '#9a8c5e'], ['dye_stone', 'Stone', '#8a8578'], ['dye_gunmetal', 'Gunmetal', '#4a4f56'],
+    ['dye_indigo', 'Indigo', '#2f3a6e'], ['dye_terracotta', 'Terracotta', '#9c4a32'], ['dye_mustard', 'Mustard', '#b8922e'],
+    ['dye_wine', 'Wine', '#5c1e2b', 'uncommon', { kind: 'level', level: 8 }], ['dye_denim', 'Denim', '#4b6080', 'uncommon', { kind: 'level', level: 12 }],
   ]),
+
+  // hair (22 Oct): `hair_body` is the body's own hair (the male body's is part of its mesh; the female body
+  // shows her default style); the styles are made for the female body (`fits`)
+  item(260, 'hair_body', 'hair', 'Natural', 'common', STARTER, { dyeable: false }),
+  item(261, 'hair_bun', 'hair', 'Field Bun', 'common', STARTER, { fits: ['female'] }),
+  item(262, 'hair_braids', 'hair', 'Cornrow Braids', 'common', STARTER, { fits: ['female'] }),
+  item(263, 'hair_crop', 'hair', 'Short Crop', 'uncommon', { kind: 'level', level: 6 }, { fits: ['female'] }),
 ];
 
 const byId = new Map(cosmetics.map((c) => [c.id, c]));
@@ -221,6 +244,7 @@ export const DEFAULT_COSMETIC_LOADOUT: CosmeticLoadout = Object.freeze({
     jetpack: 'jetpack_twin_tank',
     exhaust: 'exhaust_flame',
     trail: 'trail_ribbon',
+    hair: 'hair_body',
   }),
   dyes: Object.freeze({ primary: 'dye_sand', secondary: 'dye_olive', accent: 'dye_teal' }),
 });
@@ -229,31 +253,55 @@ function pick(value: unknown, slot: CosmeticSlot, fallback: string): string {
   return typeof value === 'string' && byId.get(value)?.slot === slot ? value : fallback;
 }
 
+/** The base body a loadout's body type is built on. */
+export function loadoutBody(loadout: CosmeticLoadout): Body {
+  return byId.get(loadout.items.bodyType)?.body ?? 'male';
+}
+
+/** Whether a part fits a body (absent `fits` = every body). */
+export function fitsBody(def: CosmeticDef, body: Body): boolean {
+  return !def.fits || def.fits.includes(body);
+}
+
 /**
- * Any value (saved JSON, a network message) → a valid loadout. Unknown ids and items in the wrong
- * slot fall back to the default for that slot. Ownership is checked separately (inventory).
+ * Any value (saved JSON, a network message) → a valid loadout. Unknown ids, items in the wrong slot and
+ * parts made for another body fall back to the default for that slot; so does a slot the value lacks (a
+ * loadout saved before `hair` existed gets the body's own hair). Ownership is checked separately (inventory).
  */
 export function sanitizeCosmeticLoadout(value: unknown): CosmeticLoadout {
   const v = (typeof value === 'object' && value !== null ? value : {}) as { items?: Record<string, unknown>; dyes?: Record<string, unknown> };
   const items = {} as Record<LoadoutSlot, string>;
   for (const slot of LOADOUT_SLOTS) items[slot] = pick(v.items?.[slot], slot, DEFAULT_COSMETIC_LOADOUT.items[slot]);
+  const body = byId.get(items.bodyType)?.body ?? 'male';
+  for (const slot of LOADOUT_SLOTS) if (!fitsBody(byId.get(items[slot])!, body)) items[slot] = DEFAULT_COSMETIC_LOADOUT.items[slot];
   const dyes = {} as Record<DyeChannel, string>;
   for (const ch of DYE_CHANNELS) dyes[ch] = pick(v.dyes?.[ch], 'dye', DEFAULT_COSMETIC_LOADOUT.dyes[ch]);
   return { items, dyes };
 }
 
-/** Wire form: one u16 per loadout slot, then one per dye channel (14 ids, fixed order). */
+/** The slots of the first wire form (14 ids: these 11, then the 3 dyes); slots added later follow the dyes. */
+const WIRE_V1_SLOTS = 11;
+const WIRE_ORDER: readonly ({ slot: LoadoutSlot } | { dye: DyeChannel })[] = [
+  ...LOADOUT_SLOTS.slice(0, WIRE_V1_SLOTS).map((slot) => ({ slot })),
+  ...DYE_CHANNELS.map((dye) => ({ dye })),
+  ...LOADOUT_SLOTS.slice(WIRE_V1_SLOTS).map((slot) => ({ slot })),
+];
+
+/** Wire form: one u16 per slot of the first form, one per dye channel, then one per later slot (15 ids:
+ *  `hair` last). A 14-id loadout from before `hair` still reads: its hair is the body's own. */
 export function cosmeticLoadoutWireIds(loadout: CosmeticLoadout): number[] {
-  const ids = [...LOADOUT_SLOTS.map((s) => loadout.items[s]), ...DYE_CHANNELS.map((c) => loadout.dyes[c])];
-  return ids.map((id) => byId.get(id)?.wireId ?? 0);
+  return WIRE_ORDER.map((w) => byId.get('slot' in w ? loadout.items[w.slot] : loadout.dyes[w.dye])?.wireId ?? 0);
 }
 
 export function cosmeticLoadoutFromWireIds(wireIds: readonly number[]): CosmeticLoadout {
   const id = (i: number) => (wireIds[i] === undefined ? undefined : byWireId.get(wireIds[i]!)?.id);
-  return sanitizeCosmeticLoadout({
-    items: Object.fromEntries(LOADOUT_SLOTS.map((s, i) => [s, id(i)])),
-    dyes: Object.fromEntries(DYE_CHANNELS.map((c, i) => [c, id(LOADOUT_SLOTS.length + i)])),
+  const items: Record<string, string | undefined> = {};
+  const dyes: Record<string, string | undefined> = {};
+  WIRE_ORDER.forEach((w, i) => {
+    if ('slot' in w) items[w.slot] = id(i);
+    else dyes[w.dye] = id(i);
   });
+  return sanitizeCosmeticLoadout({ items, dyes });
 }
 
 /** FNV-1a over the wire ids: equal looks hash equally on every client and on the server (docs/04 §5.7). */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_COSMETIC_LOADOUT, LOADOUT_SLOTS, getCosmetic } from '@military-forge/content';
+import { DEFAULT_COSMETIC_LOADOUT, LOADOUT_SLOTS, getCosmetic, sanitizeCosmeticLoadout } from '@military-forge/content';
 import { tileHtml } from '../../src/locker';
 import { LocalLoadoutStore, ownedOnly, randomLoadout, starterInventory, withDye, withItem } from '../../src/locker/loadouts';
 
@@ -60,6 +60,8 @@ describe('ownership and randomise', () => {
         seen.add(look.items[slot]);
       }
       for (const id of Object.values(look.dyes)) expect(starterInventory.owns(id)).toBe(true);
+      // parts fit the body it picked (no female hairstyle on the male body)
+      expect(sanitizeCosmeticLoadout(look)).toEqual(look);
     }
     expect(seen.size).toBeGreaterThan(LOADOUT_SLOTS.length * 2);
   });

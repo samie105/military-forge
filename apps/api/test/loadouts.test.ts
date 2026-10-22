@@ -66,6 +66,25 @@ describe('GET/PUT /me/loadout/:slot', () => {
     expect((await get(s.accessToken)).status).toBe(404); // nothing was stored
   });
 
+  it('takes a look saved before the hair slot (it stores the body\'s own hair), and refuses a part made for another body', async () => {
+    const s = await createGuest(api);
+    const old = valid();
+    delete old.look.items.hair;
+    const res = await put(s.accessToken, old);
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { look: { items: Record<string, string> } }).look.items.hair).toBe(DEFAULT_COSMETIC_LOADOUT.items.hair);
+
+    const female = valid();
+    female.look.items.bodyType = 'body_female';
+    female.look.items.hair = 'hair_braids';
+    expect((await put(s.accessToken, female)).status).toBe(200);
+    const onMale = valid();
+    onMale.look.items.hair = 'hair_braids';
+    const bad = await put(s.accessToken, onMale);
+    expect(bad.status).toBe(400);
+    expect((await errorOf(bad)).issues).toEqual([{ path: 'look.items.hair', message: '"hair_braids" is made for the female body' }]);
+  });
+
   it('refuses a malformed body: missing slots, extra fields, wrong types', async () => {
     const s = await createGuest(api);
     const missing = valid();

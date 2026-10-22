@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BODIES,
   COSMETIC_ENVELOPE_MUL,
   DEFAULT_COSMETIC_LOADOUT,
   DYE_CHANNELS,
@@ -14,13 +15,16 @@ import {
   cosmeticSourceLabel,
   cosmetics,
   cosmeticsForSlot,
+  fitsBody,
   getCosmetic,
+  getCosmeticByWireId,
+  loadoutBody,
   sanitizeCosmeticLoadout,
   type CosmeticLoadout,
 } from '../src';
 
 /** The only fields an item may carry. Anything gameplay-shaped (hitbox, speed, scale, loudness...) fails here. */
-const ALLOWED_KEYS = new Set(['id', 'wireId', 'slot', 'name', 'rarity', 'assets', 'dyeable', 'source', 'releaseSeason', 'tags', 'colour', 'widthMul']);
+const ALLOWED_KEYS = new Set(['id', 'wireId', 'slot', 'name', 'rarity', 'assets', 'dyeable', 'source', 'releaseSeason', 'tags', 'colour', 'widthMul', 'body', 'fits']);
 const COLOUR_SLOTS = new Set(['skinTone', 'exhaust', 'dye']);
 
 function withItem(slot: string, id: string): CosmeticLoadout {
@@ -53,6 +57,8 @@ describe('cosmetics: fairness (docs/04 §1)', () => {
       const def = getCosmetic(DEFAULT_COSMETIC_LOADOUT.items[slot]);
       expect(def?.slot, slot).toBe(slot);
       expect(def?.source.kind, slot).toBe('starter');
+      // ...and fits every body, so it can replace a part made for another one
+      for (const body of BODIES) expect(fitsBody(def!, body), `${slot} on ${body}`).toBe(true);
     }
     for (const ch of DYE_CHANNELS) expect(getCosmetic(DEFAULT_COSMETIC_LOADOUT.dyes[ch])?.source.kind).toBe('starter');
   });
@@ -113,6 +119,40 @@ describe('cosmetics: data', () => {
   });
 });
 
+describe('bodies (owner, 22 Oct: the female soldier)', () => {
+  it('every body type is built on a base body, and there is a female one', () => {
+    for (const c of cosmeticsForSlot('bodyType')) expect(BODIES, c.id).toContain(c.body);
+    expect(getCosmetic('body_female')).toMatchObject({ slot: 'bodyType', body: 'female', widthMul: 1, source: { kind: 'starter' } });
+    expect(loadoutBody(DEFAULT_COSMETIC_LOADOUT)).toBe('male');
+  });
+
+  it('only parts carry `fits`, naming real bodies; the hairstyles are made for the female body', () => {
+    for (const c of cosmetics) {
+      if (!c.fits) continue;
+      expect((PART_SLOTS as readonly string[]).includes(c.slot), c.id).toBe(true);
+      expect(c.fits.length, c.id).toBeGreaterThan(0);
+      for (const b of c.fits) expect(BODIES, c.id).toContain(b);
+    }
+    const styles = cosmeticsForSlot('hair').filter((c) => c.id !== DEFAULT_COSMETIC_LOADOUT.items.hair);
+    expect(styles.length).toBeGreaterThanOrEqual(3);
+    for (const c of styles) expect(c.fits, c.id).toEqual(['female']);
+  });
+
+  it('a part made for another body falls back to the slot default; on its own body it stays', () => {
+    const female = withItem('bodyType', 'body_female');
+    const styled = { ...female, items: { ...female.items, hair: 'hair_braids' } };
+    expect(sanitizeCosmeticLoadout(styled)).toEqual(styled);
+    const onMale = sanitizeCosmeticLoadout(withItem('hair', 'hair_braids'));
+    expect(onMale.items.hair).toBe(DEFAULT_COSMETIC_LOADOUT.items.hair);
+  });
+
+  it('a loadout saved before `hair` existed loads, with the body\'s own hair', () => {
+    const { hair: _, ...old } = DEFAULT_COSMETIC_LOADOUT.items;
+    const saved = { items: { ...old, headgear: 'headgear_beret' }, dyes: DEFAULT_COSMETIC_LOADOUT.dyes };
+    expect(sanitizeCosmeticLoadout(saved)).toEqual(withItem('headgear', 'headgear_beret'));
+  });
+});
+
 describe('cosmetic loadouts', () => {
   it('sanitising keeps valid items and replaces unknown or wrong-slot ids with the slot default', () => {
     const good = withItem('headgear', 'headgear_beret');
@@ -132,6 +172,17 @@ describe('cosmetic loadouts', () => {
     expect(cosmeticLoadoutFromWireIds(ids)).toEqual(l);
     expect(cosmeticLoadoutFromWireIds([])).toEqual(DEFAULT_COSMETIC_LOADOUT);
     expect(cosmeticLoadoutFromWireIds([9999, 0, 40])).toEqual(DEFAULT_COSMETIC_LOADOUT);
+  });
+
+  it('the wire form keeps the first 14 ids in place (11 slots, then the 3 dyes); hair follows', () => {
+    const female = { items: { ...DEFAULT_COSMETIC_LOADOUT.items, bodyType: 'body_female', hair: 'hair_bun' }, dyes: { primary: 'dye_red', secondary: 'dye_navy', accent: 'dye_gold' } };
+    const ids = cosmeticLoadoutWireIds(female);
+    expect(ids).toHaveLength(15);
+    expect(getCosmeticByWireId(ids[11]!)?.id).toBe('dye_red');
+    expect(getCosmeticByWireId(ids[14]!)?.id).toBe('hair_bun');
+    // a 14-id loadout from before `hair`: everything reads as it did, and the hair is the body's own
+    const old = cosmeticLoadoutFromWireIds(ids.slice(0, 14));
+    expect(old).toEqual({ ...female, items: { ...female.items, hair: DEFAULT_COSMETIC_LOADOUT.items.hair } });
   });
 
   it('hash is stable, a u32, and sensitive to every slot and dye', () => {

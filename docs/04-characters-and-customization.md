@@ -46,10 +46,10 @@ These are **original IPs**. Design them for the core audience (India, Nigeria, S
 
 | Slot | Examples | Notes |
 |---|---|---|
-| Body type | standard / stocky / slim | same hitbox; mesh variants share one skeleton |
+| Body type | standard / stocky / slim (male) · female (owner, 22 Oct) | same hitbox; every body type is built on a base body (`body`: male or female), and all share one skeleton, sockets and clips |
 | Skin tone | 12 tones + fantasy tones (robot chrome, zombie) | palette, not textures |
 | Face | 10 shapes · eyes · mouth · expression set | expressions animate on emotes, kills, and when hurt |
-| Hair / facial hair | 30+ | hidden or cut by headgear via "hair cut masks" |
+| Hair / facial hair | 30+ | the `hair` slot (22 Oct): `hair_body` is the body's own hair; styles name the bodies they're made for (`fits`), and a part made for another body falls back to the slot default. Hidden or cut by headgear via "hair cut masks" (`hidesHair`) |
 | Headgear | helmets, caps, berets, bandanas, crowns | a headshot can pop it off (cosmetic, 02-physics §16) |
 | Eyewear / mask | goggles, aviators, gas masks, visors | |
 | Top / Gloves / Legs / Boots | outfits | |

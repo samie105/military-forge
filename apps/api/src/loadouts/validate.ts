@@ -4,15 +4,18 @@
  * both guns must be real, different, non-melee weapons. Nothing is fixed up silently: a bad id is
  * a 400 naming the field, so a client bug shows instead of a look quietly changing.
  */
-import { DYE_CHANNELS, LOADOUT_SLOTS, getCosmetic, isLoadoutGun, weapons, type CosmeticDef } from '@military-forge/content';
+import { DEFAULT_COSMETIC_LOADOUT, DYE_CHANNELS, LOADOUT_SLOTS, fitsBody, getCosmetic, isLoadoutGun, weapons, type CosmeticDef, type LoadoutSlot } from '@military-forge/content';
 import { z } from 'zod';
 import type { LoadoutData } from '../db/schema';
 
 const id = z.string().min(1).max(64);
 
+/** Slots added after clients were saving looks: a body without them is still valid, and stores the default. */
+const LATER_SLOTS: ReadonlySet<LoadoutSlot> = new Set(['hair']);
+
 export const LoadoutBody = z.strictObject({
   look: z.strictObject({
-    items: z.strictObject(Object.fromEntries(LOADOUT_SLOTS.map((s) => [s, id])) as Record<(typeof LOADOUT_SLOTS)[number], typeof id>),
+    items: z.strictObject(Object.fromEntries(LOADOUT_SLOTS.map((s) => [s, LATER_SLOTS.has(s) ? id.optional() : id])) as Record<LoadoutSlot, typeof id>),
     dyes: z.strictObject(Object.fromEntries(DYE_CHANNELS.map((c) => [c, id])) as Record<(typeof DYE_CHANNELS)[number], typeof id>),
   }),
   guns: z.tuple([id, id]),
@@ -47,7 +50,14 @@ export function loadoutIssues(body: LoadoutBody, level: number): LoadoutIssue[] 
     else if (def.slot !== slot) issues.push({ path, message: `"${value}" is a ${def.slot} item, not ${slot}` });
     else if (!owns(def, level)) issues.push({ path, message: `"${value}" isn't unlocked` });
   };
-  for (const slot of LOADOUT_SLOTS) cosmetic(`look.items.${slot}`, body.look.items[slot], slot);
+  const items = withDefaults(body);
+  for (const slot of LOADOUT_SLOTS) cosmetic(`look.items.${slot}`, items[slot], slot);
+  // a part made for another body (the female body's hairstyles on the male one)
+  const frame = getCosmetic(items.bodyType)?.body;
+  for (const slot of LOADOUT_SLOTS) {
+    const def = getCosmetic(items[slot]);
+    if (frame && def?.slot === slot && !fitsBody(def, frame)) issues.push({ path: `look.items.${slot}`, message: `"${items[slot]}" is made for the ${def.fits!.join(' or ')} body` });
+  }
   for (const ch of DYE_CHANNELS) cosmetic(`look.dyes.${ch}`, body.look.dyes[ch], 'dye');
   body.guns.forEach((gun, i) => {
     if (!LOADOUT_GUNS.has(gun)) issues.push({ path: `guns.${i}`, message: `"${gun}" isn't a gun you can carry` });
@@ -56,6 +66,13 @@ export function loadoutIssues(body: LoadoutBody, level: number): LoadoutIssue[] 
   return issues;
 }
 
+/** The look's items with every later slot the client left out filled with its default. */
+function withDefaults(body: LoadoutBody): Record<LoadoutSlot, string> {
+  const items = { ...body.look.items } as Record<LoadoutSlot, string>;
+  for (const slot of LATER_SLOTS) items[slot] ??= DEFAULT_COSMETIC_LOADOUT.items[slot];
+  return items;
+}
+
 export function toLoadoutData(body: LoadoutBody): LoadoutData {
-  return { look: { items: { ...body.look.items }, dyes: { ...body.look.dyes } }, guns: [body.guns[0], body.guns[1]] };
+  return { look: { items: withDefaults(body), dyes: { ...body.look.dyes } }, guns: [body.guns[0], body.guns[1]] };
 }

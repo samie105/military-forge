@@ -7,8 +7,10 @@ import {
   DYE_CHANNELS,
   LOADOUT_SLOTS,
   cosmeticsForSlot,
+  fitsBody,
   getCosmetic,
   sanitizeCosmeticLoadout,
+  type Body,
   type CosmeticLoadout,
   type DyeChannel,
   type LoadoutSlot,
@@ -85,11 +87,14 @@ export function ownedOnly(loadout: CosmeticLoadout, inventory: Inventory): Cosme
   return out;
 }
 
-/** A random look from owned items only (docs/04 §6 "randomise"). */
+/** A random look from owned items only (docs/04 §6 "randomise"): the body first, then parts that fit it. */
 export function randomLoadout(inventory: Inventory, random: () => number = Math.random): CosmeticLoadout {
+  let body: Body = 'male';
   const pick = (slot: LoadoutSlot | 'dye') => {
-    const owned = cosmeticsForSlot(slot).filter((c) => inventory.owns(c.id));
-    return owned[Math.floor(random() * owned.length)]!.id;
+    const owned = cosmeticsForSlot(slot).filter((c) => inventory.owns(c.id) && fitsBody(c, body));
+    const chosen = owned[Math.floor(random() * owned.length)]!;
+    if (slot === 'bodyType') body = chosen.body ?? 'male';
+    return chosen.id;
   };
   const items = Object.fromEntries(LOADOUT_SLOTS.map((s) => [s, pick(s)])) as Record<LoadoutSlot, string>;
   const dyes = Object.fromEntries(DYE_CHANNELS.map((c) => [c, pick('dye')])) as Record<DyeChannel, string>;
