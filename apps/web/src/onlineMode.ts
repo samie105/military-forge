@@ -110,6 +110,8 @@ export interface OnlineOptions {
    * reconnect. `url` is then only a label.
    */
   connect?: (handlers: TransportHandlers, reconnect: boolean) => Promise<GameTransport>;
+  /** a local room (the lobby says so: same Wi-Fi only) */
+  local?: boolean;
 }
 
 const sessionKey = (room: string) => `room.session.${room}`;
@@ -239,6 +241,11 @@ export class OnlineMode {
   /** The room code this mode plays in ('' = the dev room). */
   get room(): string {
     return this.options.room ?? '';
+  }
+
+  /** A local room (same Wi-Fi, lan/). */
+  get local(): boolean {
+    return this.options.local === true;
   }
 
   get connection(): ConnectionInfo {

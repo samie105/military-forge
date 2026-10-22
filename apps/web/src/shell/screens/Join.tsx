@@ -183,6 +183,7 @@ export function Join() {
               )}
             </div>
             <div className="join__actions">
+              {/* a local room's host with no internet: swap QR codes instead (LanPanels) */}
               <button className="btn btn--volt btn--xl m-p8" type="button" disabled={code.length !== ROOM_CODE_LENGTH || busy || state === 'error'} aria-disabled={code.length !== ROOM_CODE_LENGTH || busy || state === 'error'} onClick={() => void join()}>
                 <Icon name="door-out" />
                 {busy ? 'Joining…' : 'Join room'}
@@ -192,6 +193,10 @@ export function Join() {
                 Paste link
               </button>
             </div>
+            <button className="btn btn--ghost btn--sm m-p8 mf-join__lan" type="button" onClick={() => ctl.openOverlay('lan-join')}>
+              <Icon name="wifi" />
+              No internet? Join a local room with the host's QR
+            </button>
           </div>
           <aside className="ticket join__help" aria-label="Where to find the code">
             <span className="label">Where to find it</span>

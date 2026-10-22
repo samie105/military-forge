@@ -278,6 +278,29 @@ function LobbyStrip({ lobby, onOpen }: { lobby: LobbyView; onOpen: () => void })
   );
 }
 
+/**
+ * A local room (same Wi-Fi, lan/): says so, and gives its host the way in for a player with no
+ * internet (QR codes both ways, LanPanels). Shared with the phone lobby.
+ */
+export function LocalRoomNote({ lobby }: { lobby: LobbyView }) {
+  const ctl = useCtl();
+  return (
+    <div className="mf-lan__note">
+      <span className="tag">
+        <Icon name="wifi" />
+        Local room · same Wi-Fi only
+      </span>
+      <span className="mf-lan__note-sub">{lobby.code ? 'Friends on this Wi-Fi or hotspot join with the code.' : 'No internet: add players with QR codes.'}</span>
+      {lobby.isHost && (
+        <button className="btn btn--paper btn--sm m-p8" type="button" onClick={blurAfter(() => ctl.openOverlay('lan-add'))}>
+          <Icon name="qr" />
+          Add a player without internet
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** How long Copy link says "Copied" (motion spec §4.1: 1.6 s, then back). */
 const COPIED_MS = 1600;
 
@@ -383,6 +406,9 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
               <br />
               squad
             </h2>
+            {/* a local room with no internet has no code or link: players join by QR codes */}
+            {(!lobby.local || lobby.code !== '') && (
+              <>
             <button className="btn btn--ink btn--xl btn--block lobby__share-btn m-p8" type="button" onClick={blurAfter(() => void ctl.shareLink(lobby.code))}>
               <Icon name="share" />
               <span className="btn__stack">
@@ -417,13 +443,18 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
                       Copy link
                     </button>
                   )}
-                  <button className="btn btn--paper btn--sm m-p8" type="button" onClick={blurAfter(() => ctl.shareOnWhatsApp(lobby.code))}>
-                    <Icon name="chat" />
-                    WhatsApp
-                  </button>
+                  {!lobby.local && (
+                    <button className="btn btn--paper btn--sm m-p8" type="button" onClick={blurAfter(() => ctl.shareOnWhatsApp(lobby.code))}>
+                      <Icon name="chat" />
+                      WhatsApp
+                    </button>
+                  )}
                 </span>
               </div>
             </div>
+              </>
+            )}
+            {lobby.local && <LocalRoomNote lobby={lobby} />}
             <span className="hazard" aria-hidden="true"></span>
           </section>
 

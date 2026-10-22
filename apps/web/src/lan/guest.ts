@@ -8,16 +8,44 @@
  *   reply code the host scans in turn. A dropped offline link can't be redialled without new codes.
  */
 import { CloseCode } from '@military-forge/protocol';
+import { normalizeRoomCode } from '@military-forge/shared';
 import type { GameTransport, TransportHandlers } from '../transport';
 import { LanError, answerOffer, channelsOpen, newPeer, peerTransport, type Peer } from './peer';
 
 /** the relay must hand over an offer within this long */
 const OFFER_TIMEOUT_MS = 10_000;
 
-/** A local room's code (6 letters, as the host shows it) from what a person typed, or null. */
+/** A local room's code (6 letters, as the host shows it, the API rooms' alphabet) from what a person typed, or null. */
 export function normalizeLanCode(typed: string): string | null {
-  const code = typed.toUpperCase().replace(/[^A-Z]/g, '');
-  return /^[A-Z]{6}$/.test(code) ? code : null;
+  return normalizeRoomCode(typed);
+}
+
+/**
+ * Whether the relay has a local room with `code`: a join socket either gets the host's offer
+ * (yes; the socket closes and the host drops that offer) or is refused (no). 3 s at most.
+ */
+export function lanRoomExists(code: string, WebSocketImpl: typeof WebSocket = WebSocket): Promise<boolean> {
+  return new Promise((resolve) => {
+    let ws: WebSocket;
+    try {
+      ws = new WebSocketImpl(lanSignalUrl(`join/${code}`));
+    } catch {
+      return resolve(false);
+    }
+    const done = (yes: boolean) => {
+      clearTimeout(timer);
+      ws.onmessage = ws.onclose = null;
+      try {
+        ws.close();
+      } catch {
+        /* gone */
+      }
+      resolve(yes);
+    };
+    const timer = setTimeout(() => done(false), 3000);
+    ws.onmessage = () => done(true);
+    ws.onclose = () => done(false);
+  });
 }
 
 /** The relay's address for this page (the game server's /ws/ path on the same site). */

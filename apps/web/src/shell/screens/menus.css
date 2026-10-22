@@ -263,3 +263,22 @@ html.mf-short .kit-v2 .ne__title { font-size: var(--fs-120); }
 html.mf-short.mf-big-text .kit-v2 .ne__title { font-size: var(--fs-88); }
 html.mf-short.mf-big-text .kit-v2 .ne .lead { font-size: var(--fs-16); }
 html.mf-short.mf-big-text .kit-v2 .ne__actions { padding-top: 0; gap: var(--sp-3); }
+
+/* Local rooms (same Wi-Fi, lan/): Home's ticket, the lobby's note, and the QR-code panels (LanPanels.tsx) */
+.kit-v2 .mf-home__local { white-space: nowrap; }
+.kit-v2 .mf-lan__note { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); margin-top: var(--sp-4); }
+.kit-v2 .mf-lan__note-sub { font-size: var(--fs-14); }
+.kit-v2 .mf-join__lan { margin-top: var(--sp-4); align-self: flex-start; }
+.kit-v2 .mf-lan { display: flex; flex-direction: column; gap: var(--sp-5); max-width: 1100px; margin: 0 auto; width: 100%; }
+.kit-v2 .mf-lan__title { margin: 0; }
+.kit-v2 .mf-lan__steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: var(--sp-5); }
+.kit-v2 .mf-lan__step { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-3); padding: var(--sp-5); min-width: 0; }
+.kit-v2 .mf-lan__sub { margin: 0; font-size: var(--fs-14); }
+/* a ~200-character code is a dense QR: big, with a white quiet zone, so a phone camera reads it from arm's length */
+.kit-v2 .mf-lan__qr { display: block; width: min(320px, 100%); aspect-ratio: 1; padding: 10px; background: #fff; border-radius: var(--r-xs); }
+.kit-v2 .mf-lan__qr svg { display: block; width: 100%; height: 100%; }
+.kit-v2 .mf-lan__paste { display: flex; flex-direction: column; gap: var(--sp-2); width: 100%; }
+.kit-v2 .mf-lan__text { box-sizing: border-box; padding: var(--sp-2) var(--sp-3); background: var(--c-paper); color: var(--c-paper-text); border: var(--bw) solid var(--c-ink-950); border-radius: var(--r-xs); width: 100%; min-height: 4.5em; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--fs-14); word-break: break-all; }
+.kit-v2 .mf-lan__acts { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.kit-v2 .mf-lan__scan { display: flex; flex-direction: column; gap: var(--sp-2); width: 100%; }
+.kit-v2 .mf-lan__video { width: 100%; max-height: 280px; object-fit: cover; border-radius: var(--r-xs); background: var(--c-ink-950); }

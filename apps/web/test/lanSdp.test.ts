@@ -75,7 +75,7 @@ describe('packed local-room descriptions', () => {
   });
 
   it('room codes and the relay address', () => {
-    expect(normalizeLanCode(' lqj-nrm ')).toBe('LQJNRM');
+    expect(normalizeLanCode(' kqj-nrm ')).toBe('KQJNRM');
     expect(normalizeLanCode('ABC')).toBeNull();
     expect(lanSignalUrl('host', { protocol: 'https:', host: '40-123-240-224.sslip.io' })).toBe('wss://40-123-240-224.sslip.io/ws/lan/host');
     expect(lanSignalUrl('join/LQJNRM', { protocol: 'http:', host: 'localhost:5173' })).toBe('ws://localhost:5173/ws/lan/join/LQJNRM');

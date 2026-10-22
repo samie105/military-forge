@@ -10,6 +10,8 @@ import { playerName, type MatchView } from './matchView';
 /** What the shell reads from an online mode (onlineMode.ts implements it). */
 export interface OnlineSource {
   readonly room: string;
+  /** a local room (same Wi-Fi, lan/): played straight to the host's device */
+  readonly local?: boolean;
   readonly localId: number;
   readonly matchState: MatchStateMsg | null;
   serverTickNow(now?: number): number;
@@ -28,7 +30,10 @@ export interface LobbyPlayer {
 }
 
 export interface LobbyView {
+  /** the room's code ('' for a local room with no internet: players join by QR codes) */
   code: string;
+  /** a local room (same Wi-Fi only) */
+  local?: boolean;
   players: LobbyPlayer[];
   isHost: boolean;
   /** you are ready */
@@ -137,6 +142,7 @@ export function lobbyView(src: OnlineSource): LobbyView | null {
   players.sort((a, b) => Number(b.host) - Number(a.host) || a.id - b.id);
   return {
     code: src.room,
+    local: src.local === true,
     players,
     isHost: s.hostId === me && me >= 0,
     ready: s.lobby.find((p) => p.id === me)?.ready ?? false,
@@ -153,7 +159,7 @@ export function lobbyView(src: OnlineSource): LobbyView | null {
 export function sameLobby(a: LobbyView | null, b: LobbyView | null): boolean {
   if (!a || !b) return a === b;
   if (a.players.length !== b.players.length) return false;
-  for (const k of ['code', 'isHost', 'ready', 'minPlayers', 'timeLimit', 'killLimit', 'mapId', 'bots', 'botLevel'] as const) if (a[k] !== b[k]) return false;
+  for (const k of ['code', 'local', 'isHost', 'ready', 'minPlayers', 'timeLimit', 'killLimit', 'mapId', 'bots', 'botLevel'] as const) if (a[k] !== b[k]) return false;
   return a.players.every((p, i) => {
     const q = b.players[i]!;
     return p.id === q.id && p.name === q.name && p.isBot === q.isBot && p.ready === q.ready && p.host === q.host && p.you === q.you && p.pingMs === q.pingMs;

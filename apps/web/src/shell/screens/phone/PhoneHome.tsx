@@ -63,13 +63,18 @@ export function PhoneHome({ store }: { store: ShellStore }) {
             <span className="hazard" aria-hidden="true"></span>
           </article>
           <div className="pm-col">
-            <button type="button" className="ticket rivets pm-tk m-p3 m-p8" style={rise(2)} disabled={offline} onClick={() => ctl.openOverlay('join')}>
+            <button type="button" className="ticket rivets pm-tk m-p3 m-p8" style={rise(2)} onClick={() => ctl.openOverlay('join')}>
               <span className="label">02 · Got a code?</span>
               <b className="display">Join</b>
             </button>
             <button type="button" className="ticket rivets pm-tk m-p3 m-p8" style={rise(3)} onClick={() => ctl.go({ to: 'training' })}>
               <span className="label">03 · Solo</span>
               <b className="display">Training</b>
+            </button>
+            {/* a local room (lan/): host it here; friends on the same Wi-Fi or hotspot join by code or QR */}
+            <button type="button" className="ticket rivets pm-tk m-p3 m-p8" style={rise(3)} onClick={() => ctl.go({ to: 'local' })}>
+              <span className="label">04 · Same Wi-Fi</span>
+              <b className="display">Local</b>
             </button>
           </div>
           <div className="pm-stage m-p3" style={rise(4)} role="img" aria-label={`Your soldier, ${name}`}>

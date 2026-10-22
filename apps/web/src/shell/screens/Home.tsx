@@ -129,6 +129,14 @@ export function Home({ store }: { store: ShellStore }) {
                   Create room
                 </button>
                 <Cap lg>Enter</Cap>
+                {/* a local room (lan/): this device hosts, friends on the same Wi-Fi or hotspot join; it works with the internet slow or down */}
+                <button className="btn btn--paper btn--lg mf-home__local m-p8" type="button" onClick={() => ctl.go({ to: 'local' })} title="Host on this device: friends on the same Wi-Fi or hotspot join. Works without internet.">
+                  <Icon name="wifi" />
+                  <span className="btn__stack">
+                    Local room
+                    <span className="btn__sub">Same Wi-Fi only</span>
+                  </span>
+                </button>
                 <span className="home__poster-meta">Up to {ROOM_SLOTS} · link + QR</span>
               </div>
               <span className="hazard" aria-hidden="true"></span>
@@ -140,7 +148,7 @@ export function Home({ store }: { store: ShellStore }) {
               </p>
             )}
             <div className="home__row">
-              <button type="button" className="ticket rivets home__ticket m-p3" style={row(2)} disabled={offline} onClick={() => ctl.openOverlay('join')}>
+              <button type="button" className="ticket rivets home__ticket m-p3" style={row(2)} onClick={() => ctl.openOverlay('join')}>
                 <Icon name="link" className="home__ghost" />
                 <span className="label">02 — Got a code?</span>
                 <b className="display">Join with code</b>

@@ -42,7 +42,8 @@ export function runCleanup(cleanup: RouteCleanup): void {
 }
 
 /** Where the player wants to go next (the app shell's navigation). */
-export type Intent = { to: 'home' } | { to: 'create' } | { to: 'join'; code: string } | { to: 'training' };
+/** `local`: host a local room (same Wi-Fi, lan/) */
+export type Intent = { to: 'home' } | { to: 'create' } | { to: 'join'; code: string } | { to: 'training' } | { to: 'local' };
 
 export type Screen =
   | { name: 'boot' }
@@ -51,11 +52,13 @@ export type Screen =
   | { name: 'home' }
   /** creating (code null) or looking up a room (API), before the game connects */
   | { name: 'finding'; code: string | null; creating: boolean }
-  | { name: 'room'; code: string }
+  /** `local`: a local room (same Wi-Fi), hosted here or joined */
+  | { name: 'room'; code: string; local?: boolean }
   | { name: 'training' }
   | { name: 'error'; alert: AlertInfo; retry: Intent | null };
 
-export type Overlay = 'menu' | 'settings' | 'join' | 'name' | null;
+/** `lan-add`: the host adds a player by QR codes; `lan-join`: join a local room by the host's QR code (no internet) */
+export type Overlay = 'menu' | 'settings' | 'join' | 'name' | 'lan-add' | 'lan-join' | null;
 
 /** Settings sections (the kit's five tabs, and Touch for the phone controls). */
 export type SettingsTab = 'graphics' | 'audio' | 'controls' | 'accessibility' | 'network' | 'touch';

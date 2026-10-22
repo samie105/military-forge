@@ -13,10 +13,12 @@
  * address, 15 guests per room. The host leaving closes its guests (4006, the room is gone).
  */
 import { CloseCode } from '@military-forge/protocol';
+import { ROOM_CODE_ALPHABET } from '@military-forge/shared';
 import type { ClientConn } from './room';
 
 export const LAN_PREFIX = '/ws/lan/';
-const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+/** the same letters as the API's room codes (no I, L or O): Join with code takes either */
+const CODE_LETTERS = ROOM_CODE_ALPHABET;
 const MAX_SDP = 2048;
 const MAX_MESSAGES_PER_SECOND = 10;
 const MAX_HOSTS_PER_IP = 4;
@@ -93,6 +95,7 @@ export class LanSignal {
     const path = url.split('?')[0]!.slice(LAN_PREFIX.length);
     if (path === 'host') return this.openHost(conn, ip ?? '');
     const m = /^join\/([A-Z]{6})$/.exec(path);
+    // (any six capitals: an unknown code is refused below like a wrong one)
     if (m) return this.openGuest(m[1]!, conn);
     conn.close(CloseCode.NoRoom, 'not a local room path');
     return null;

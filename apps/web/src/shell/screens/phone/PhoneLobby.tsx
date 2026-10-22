@@ -16,6 +16,7 @@ import { Icon } from '../../../ui/Icon';
 import { blurAfter } from '../../../ui/Screen';
 import { useCtl } from '../../context';
 import { roomLink } from '../../controller';
+import { LocalRoomNote } from '../Lobby';
 import type { Bindings } from '../../controls';
 import { playerName } from '../../matchView';
 import type { LobbyPlayer, LobbyView } from '../../onlineView';
@@ -228,6 +229,8 @@ export function PhoneLobby({ lobby, tips = null }: { lobby: LobbyView; tips?: Bi
         <div className="pm-lobby">
           <section className="poster halftone-ink pm-share m-p3" style={rise(0)} aria-label="Invite friends">
             <b className="display pm-share__t">Rally your squad</b>
+            {(!lobby.local || lobby.code !== '') && (
+              <>
             <button
               type="button"
               className="btn btn--ink btn--block pm-share__btn m-p8"
@@ -254,7 +257,10 @@ export function PhoneLobby({ lobby, tips = null }: { lobby: LobbyView; tips?: Bi
                 </span>
               </div>
             </div>
+              </>
+            )}
             <ShareChip outcome={chip} />
+            {lobby.local && <LocalRoomNote lobby={lobby} />}
             <span className="hazard" aria-hidden="true"></span>
           </section>
 

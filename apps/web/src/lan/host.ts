@@ -112,12 +112,32 @@ export class LanHost {
   constructor(private readonly options: LanHostOptions = {}) {
     this.room = new WorkerRoom({
       seed: options.seed ?? Math.floor(Math.random() * 0x7fffffff),
-      ...(options.mapId ? { mapId: options.mapId } : {}),
+      mapId: options.mapId ?? 'street-market',
       ...(options.fillBots ? { fillBots: options.fillBots } : {}),
     });
     if (options.signalUrl) this.openSignal(options.signalUrl);
     // the host's page closing ends the room (guests are told: their channels close)
     window.addEventListener('pagehide', this.onPageHide);
+  }
+
+  /**
+   * The room code from the relay, or '' once it's clear there won't be one (no connection to the
+   * game server: players then join by QR codes), at most `timeoutMs` from now.
+   */
+  whenCoded(timeoutMs = 4000): Promise<string> {
+    if (this.code || this.signalError || !this.signal) return Promise.resolve(this.code);
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        off();
+        resolve(this.code);
+      }, timeoutMs);
+      const off = this.onChange(() => {
+        if (!this.code && !this.signalError) return;
+        clearTimeout(timer);
+        off();
+        resolve(this.code);
+      });
+    });
   }
 
   /** Hears changes to the code, the guests or the relay (the lobby's local-room card). Returns the way to stop. */

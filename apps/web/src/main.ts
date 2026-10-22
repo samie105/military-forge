@@ -40,7 +40,7 @@ import { LocalMode } from './localMode';
 import { OnlineMode } from './onlineMode';
 import { mountHud, type ScoreRow } from './hud';
 import { LanHost } from './lan/host';
-import { joinByCode, lanSignalUrl, normalizeLanCode } from './lan/guest';
+import { connectAnswered, joinByCode, lanSignalUrl, normalizeLanCode } from './lan/guest';
 import { Renderer, type RenderOptions } from './render';
 import { localMatchRules, mountShell, registerRoute, type GameHost, type Settings } from './shell';
 import { loadSettings } from './shell/controller';
@@ -206,9 +206,15 @@ onInputDevice(applyHudKeys);
 let onlineRoom: string | null = null;
 let presence: PresenceBeat | null = null;
 
+/** the local room hosted on this device (lan/), while its mode runs */
+let lanHost: LanHost | null = null;
+
 function setMode(next: LocalMode | OnlineMode | null): void {
   hostTuning?.close(); // it tunes the mode it was opened for
   if (mode instanceof OnlineMode) mode.dispose();
+  // the host leaving its local room closes it for everyone
+  lanHost?.close();
+  lanHost = null;
   mode = next;
   audio.reset();
   if (!(next instanceof OnlineMode)) onlineRoom = null;
@@ -219,6 +225,26 @@ function setMode(next: LocalMode | OnlineMode | null): void {
 
 /** The Armory's "Try it in training" (?try=<weapon id>): the gun the first training starts with. */
 let tryWeapon = weapons.find((w) => w.id === params.get('try')) ?? null;
+
+/** The online mode's notices for the shell: tuning changes (who made them) and a new host. */
+function watchOnline(online: OnlineMode): void {
+  // who changed what, for a moment: the owner's admin page ("Admin", everyone hears it) or the
+  // room's host retuning the room (Tune the game; its guests hear it)
+  online.onTuning((before, after, live, adminKeys) => {
+    if (!live) return;
+    const lobby = shell.store.getState().lobby;
+    const split = splitTuneChange(before, after, adminKeys);
+    const note =
+      tuneToastParts('Admin', tuneChanges(before, split.admin)) ??
+      (lobby?.isHost ? null : tuneToastParts(lobby?.players.find((p) => p.host)?.name ?? 'The host', tuneChanges(before, split.host)));
+    if (note) shell.controller?.showTuneNote(note);
+  });
+  // the host left (or its connection went quiet): say who runs the room now
+  online.onHostChange((_was, now) => {
+    const name = now === online.localId ? null : (online.net.names.get(now) ?? 'another player');
+    shell.controller?.notify(name ? `Host left: ${name} is the host now` : "Host left: you're the host now");
+  });
+}
 
 /** The app's game modes, driven by the shell (shell/controller.ts). */
 const host: GameHost = {
@@ -249,22 +275,36 @@ const host: GameHost = {
     const online = new OnlineMode(url, nickname, sampler, camera, renderer, () => {}, createConditionerSettings(false), 'auto', { room, ...(ticket ? { ticket } : {}), ...(refreshTicket ? { refreshTicket } : {}) });
     onlineRoom = room;
     setMode(online);
-    // who changed what, for a moment: the owner's admin page ("Admin", everyone hears it) or the
-    // room's host retuning the room (Tune the game; its guests hear it)
-    online.onTuning((before, after, live, adminKeys) => {
-      if (!live) return;
-      const lobby = shell.store.getState().lobby;
-      const split = splitTuneChange(before, after, adminKeys);
-      const note =
-        tuneToastParts('Admin', tuneChanges(before, split.admin)) ??
-        (lobby?.isHost ? null : tuneToastParts(lobby?.players.find((p) => p.host)?.name ?? 'The host', tuneChanges(before, split.host)));
-      if (note) shell.controller?.showTuneNote(note);
+    watchOnline(online);
+  },
+  get lan() {
+    return lanHost;
+  },
+  async startLocalHost(nickname) {
+    serverHost = '';
+    // bots fill it to 4 like the live server's rooms (the lobby's Bots setting turns them off)
+    const lan = new LanHost({ signalUrl: lanSignalUrl('host'), fillBots: { target: 4, level: 'normal' } });
+    const code = await lan.whenCoded();
+    const online = new OnlineMode(`lan://${code || 'local'}`, nickname, sampler, camera, renderer, () => {}, createConditionerSettings(false), 'auto', {
+      room: code,
+      local: true,
+      connect: (h) => lan.hostTransport(h),
     });
-    // the host left (or its connection went quiet): say who runs the room now
-    online.onHostChange((_was, now) => {
-      const name = now === online.localId ? null : (online.net.names.get(now) ?? 'another player');
-      shell.controller?.notify(name ? `Host left: ${name} is the host now` : "Host left: you're the host now");
+    setMode(online);
+    lanHost = lan; // after setMode: it closes the one before
+    watchOnline(online);
+    return code;
+  },
+  startLocalJoin(nickname, how) {
+    serverHost = '';
+    const code = 'code' in how ? how.code : '';
+    const online = new OnlineMode(`lan://${code || 'local'}`, nickname, sampler, camera, renderer, () => {}, createConditionerSettings(false), 'auto', {
+      room: code,
+      local: true,
+      connect: 'code' in how ? (h) => joinByCode(code, h) : connectAnswered(how.answered),
     });
+    setMode(online);
+    watchOnline(online);
   },
   stop() {
     setMode(null);

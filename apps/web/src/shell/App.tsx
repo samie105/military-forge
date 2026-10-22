@@ -23,6 +23,7 @@ import { Alert, Connecting, MapLoading, ReconnectBanner, connectStep } from './s
 import { Countdown, useCountdown } from './screens/Countdown';
 import { Home } from './screens/Home';
 import { Join } from './screens/Join';
+import { LanAddPlayer, LanJoin } from './screens/LanPanels';
 import { Lobby } from './screens/Lobby';
 import { NameEntry } from './screens/NameEntry';
 import { Pause } from './screens/Pause';
@@ -115,6 +116,8 @@ function AppScreens({ store }: { store: ShellStore }) {
       {overlay === 'menu' && (phone ? <PhonePause store={store} /> : <Pause store={store} />)}
       {overlay === 'settings' && (phone ? <PhoneSettings store={store} /> : <SettingsScreen store={store} />)}
       {overlay === 'join' && <Join />}
+      {overlay === 'lan-add' && <LanAddPlayer />}
+      {overlay === 'lan-join' && <LanJoin />}
       {overlay === 'name' && (phone ? <PhoneNameEntry store={store} first={false} /> : <NameEntry store={store} first={false} />)}
       <TuneToast note={tuneNote} />
       {notice && (

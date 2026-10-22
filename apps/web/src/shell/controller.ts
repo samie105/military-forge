@@ -24,6 +24,15 @@ export interface GameHost {
    * checks none). `refreshTicket` asks the API for a new one when a long drop outlasted the player.
    */
   startOnline(url: string, name: string, room: string, ticket: string | null, refreshTicket?: () => Promise<string | null>): void;
+  /**
+   * Local rooms (same Wi-Fi, lan/): host one here (its code from the game server's relay, '' with
+   * no connection), or join one by code (the relay) or by the host's QR code (a peer `answerFor`
+   * made, no internet).
+   */
+  startLocalHost?(name: string): Promise<string>;
+  startLocalJoin?(name: string, how: { code: string } | { answered: import('../lan/peer').Peer }): void;
+  /** the local room hosted here, while it runs */
+  readonly lan?: import('../lan/host').LanHost | null;
   /** back to the menus (the map turns slowly behind them) */
   stop(): void;
   applySettings(settings: Settings): void;
@@ -265,6 +274,13 @@ export class ShellController {
         this.set({ screen: { name: 'training' }, lobby: null, connection: null });
         this.firstTips();
         return;
+      case 'local':
+        if (!this.profile) {
+          this.set({ screen: { name: 'name', then: intent } });
+          return;
+        }
+        void this.hostLocal();
+        return;
       case 'create':
       case 'join':
         if (!this.profile) {
@@ -272,12 +288,37 @@ export class ShellController {
           return;
         }
         if (this.profile.offline) {
+          // no API: a code may still be a local room's, through the game server's relay
+          if (intent.to === 'join' && this.host.startLocalJoin) return this.joinLocal(intent.code);
           this.set({ screen: { name: 'error', alert: alertFromApiError(new ApiError(0, 'network', 'offline'), intent.to === 'join' ? intent.code : undefined), retry: intent } });
           return;
         }
         void this.findRoom(intent);
         return;
     }
+  }
+
+  /** Host a local room (same Wi-Fi): this device runs it; friends join by its code or QR codes. */
+  private async hostLocal(): Promise<void> {
+    if (!this.host.startLocalHost) return;
+    this.host.stop();
+    this.set({ screen: { name: 'finding', code: null, creating: true }, match: null, lobby: null });
+    const code = await this.host.startLocalHost(this.profile!.nickname);
+    this.setUrl(code ? `/r/${code}` : '/');
+    this.set({ screen: { name: 'room', code, local: true } });
+    this.firstTips();
+  }
+
+  /** Join a local room by its code (the relay), or by the host's QR code (`answered`, no internet). */
+  joinLocal(code: string, answered?: import('../lan/peer').Peer): void {
+    if (!this.host.startLocalJoin || !this.profile) return;
+    this.closeOverlay();
+    this.host.stop();
+    this.set({ match: null, lobby: null });
+    this.host.startLocalJoin(this.profile.nickname, answered ? { answered } : { code });
+    this.setUrl(code ? `/r/${code}` : '/');
+    this.set({ screen: { name: 'room', code, local: true } });
+    this.firstTips();
   }
 
   private async findRoom(intent: Extract<Intent, { to: 'create' | 'join' }>): Promise<void> {
@@ -310,7 +351,14 @@ export class ShellController {
     try {
       room = await this.api.joinRoom(code);
     } catch (e) {
-      if (e instanceof ApiError && (e.code === 'room_not_found' || e.code === 'invalid_room_code')) return 'not_found';
+      if (e instanceof ApiError && (e.code === 'room_not_found' || e.code === 'invalid_room_code')) {
+        // not one of the server's rooms: maybe a local room (same Wi-Fi) with that code
+        if (e.code === 'room_not_found' && (await this.localRoomExists(code))) {
+          this.joinLocal(code);
+          return 'ok';
+        }
+        return 'not_found';
+      }
       if (e instanceof ApiError && e.code === 'rate_limited') return 'rate_limited';
       if (e instanceof ApiError && (e.code === 'no_session' || e.status === 401)) {
         this.closeOverlay();
@@ -327,6 +375,13 @@ export class ShellController {
     this.set({ match: null, lobby: null });
     this.enterRoom(room);
     return 'ok';
+  }
+
+  /** Whether the relay knows a local room with `code` (it answers within a moment either way). */
+  private async localRoomExists(code: string): Promise<boolean> {
+    if (!this.host.startLocalJoin) return false;
+    const { lanRoomExists } = await import('../lan/guest');
+    return lanRoomExists(code);
   }
 
   private enterRoom(room: RoomJoin): void {
@@ -360,7 +415,10 @@ export class ShellController {
   /** Reconnect to the same room after a failure (the session may still resume within its grace). */
   rejoin(): void {
     const screen = this.store.getState().screen;
-    if (screen.name === 'room') this.go({ to: 'join', code: screen.code });
+    if (screen.name === 'room' && screen.local) {
+      if (screen.code) this.joinLocal(screen.code);
+      else this.go({ to: 'home' });
+    } else if (screen.name === 'room') this.go({ to: 'join', code: screen.code });
   }
 
   /** "Tune the game" in the menu: this page offers the panel, and you're the room's host (or in training). */
