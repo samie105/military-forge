@@ -203,12 +203,25 @@ export const SOMETIMES: ReadonlySet<ControlId> = new Set([...offHud('classic'), 
 export const REF_BOX = { w: 724, h: 344 } as const;
 
 /** An anchor as a placement (fractions of a w×h box) for the right-handed layout. */
+/**
+ * The safe box's height (mm) the layout is drawn for: a shorter box (a phone with its browser's bars
+ * showing, 780×304; a small Android) draws the whole layout smaller, places and sizes alike, so nothing
+ * runs into the top bar and every gap keeps its share (the mobile audit, P1-10). 375 px tall and up: 1.
+ */
+export const LAYOUT_HEIGHT_MM = 57;
+
+/** How much smaller the mm layout is drawn in a box `h` px tall (1: as designed). */
+export function layoutScale(h: number): number {
+  return Math.min(1, h / PX_PER_MM / LAYOUT_HEIGHT_MM);
+}
+
 export function anchorPlacement(a: Anchor, w: number, h: number): Placement {
-  const px = a.dx * PX_PER_MM;
-  const py = a.dy * PX_PER_MM;
+  const mm = PX_PER_MM * layoutScale(h);
+  const px = a.dx * mm;
+  const py = a.dy * mm;
   const x = a.corner === 'TC' ? w / 2 + px : a.corner === 'BL' || a.corner === 'TL' ? px : w - px;
   const y = a.corner === 'TL' || a.corner === 'TR' || a.corner === 'TC' ? py : h - py;
-  return { x: x / w, y: y / h, size: (a.hit * PX_PER_MM) / Math.min(w, h), opacity: 1 };
+  return { x: x / w, y: y / h, size: (a.hit * mm) / Math.min(w, h), opacity: 1 };
 }
 
 /** The default placements in the reference box (the editor's and the tests' fallback). */

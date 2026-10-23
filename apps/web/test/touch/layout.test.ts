@@ -1,6 +1,6 @@
 import { Btn } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
-import { CONTEXT_PRIORITY, DEFAULT_PLACEMENTS, MIN_TARGET_PX, OFF_HUD, PILLS, PINNABLE, PX_PER_MM, SAFE_INSETS, availableControls, loadLayout, placementFor, saveLayout, sizePx, snapPlacement, withPinned, withPlacement, type ControlId, type TouchLayout } from '../../src/touch/layout';
+import { CONTEXT_PRIORITY, layoutScale, DEFAULT_PLACEMENTS, MIN_TARGET_PX, OFF_HUD, PILLS, PINNABLE, PX_PER_MM, SAFE_INSETS, availableControls, loadLayout, placementFor, saveLayout, sizePx, snapPlacement, withPinned, withPlacement, type ControlId, type TouchLayout } from '../../src/touch/layout';
 import { AUTO_VIEW, DEFAULT_TOUCH_SETTINGS, LAYOUT_KEY, LIMITS, PRESET_SETTINGS, SETTINGS_KEY, autoView, clearLayout, clearMoves, loadSettings, saveSettings, type KeyValueStore, type PresetId } from '../../src/touch/settings';
 import { isCustomLayout, withoutMoves } from '../../src/touch/layout';
 
@@ -298,5 +298,20 @@ describe('touch HUD layout', () => {
     const store = memoryStore();
     saveSettings(store, { ...DEFAULT_TOUCH_SETTINGS, view: 0.7, viewAuto: false });
     expect(loadSettings(store)).toMatchObject({ view: 0.7, viewAuto: false });
+  });
+
+  it('a short box (the browser\'s bars showing, 780×304; 640×360) draws the layout smaller: nothing reaches the top bar, gaps hold', () => {
+    for (const [W, H] of [[780, 304], [640, 360], [812, 375], [932, 430]] as const) {
+      const at = lay(W, H);
+      const ids: ControlId[] = ['grenade', 'jet', 'swap', 'reload', 'take', 'pause', 'scores'];
+      for (const a of ids)
+        for (const b of ids) {
+          if (a >= b) continue;
+          const gap = Math.hypot(at(a).x - at(b).x, at(a).y - at(b).y) - (at(a).d + at(b).d) / 2;
+          expect(gap, `${W}×${H}: ${a}/${b}`).toBeGreaterThanOrEqual(10);
+        }
+      for (const id of ['grenade', 'jet'] as ControlId[]) expect(at(id).d, `${W}×${H}: ${id}`).toBeGreaterThanOrEqual(56);
+    }
+    expect(layoutScale(344)).toBe(1); // an 812×375 phone: as designed
   });
 });

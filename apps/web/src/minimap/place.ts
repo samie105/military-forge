@@ -14,6 +14,10 @@ const PHONE_SIZES = [
 ] as const;
 const PHONE_SLOTS = [
   { x: PHONE.safeL + 8, y: PHONE.safeT + 6 },
+  // on the top bar, right of the 🏆 scores button (the top-left one is the scores button's own, in
+  // the default layout): a short screen (the browser's bars showing) has no room lower down (the
+  // mobile audit, P1-10)
+  { x: PHONE.safeL + 58, y: PHONE.safeT + 2 },
   { x: PHONE.safeL + 8, y: PHONE.safeT + 132 },
 ] as const;
 export interface Box {

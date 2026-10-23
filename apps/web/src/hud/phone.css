@@ -57,3 +57,12 @@ html[data-touch-crate] .ph .pt-pickup { display: none; }
 
 /* the reticle: the kit's phone cross, a little smaller than the desktop's */
 .mf-hud-phone .reticle .reticle__x { left: -20px; top: -20px; width: 40px; height: 40px; }
+
+/* ---- clear of the touch controls (the mobile audit, P1-10) ---- */
+/* the kill feed starts under the 🏆 scores button, not on it (the minimap, when there is one, moves it
+   under itself: minimap.css) */
+#hud .ph .pt-feed { top: calc(var(--safe-t) + 56px); }
+/* a gun or an item underfoot, and the compare card: top centre, under the clock, off the grenade and
+   the arc (they sat on the grenade and its count) */
+#hud .ph .pt-pickup { top: calc(var(--safe-t) + 44px); bottom: auto; left: 50%; }
+#hud .ph .pt-cmp { top: calc(var(--safe-t) + 44px); bottom: auto; left: 50%; }
