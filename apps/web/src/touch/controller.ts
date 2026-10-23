@@ -49,6 +49,14 @@ const RETICLE_M = 7;
 const GRENADE_REACH = 2.4;
 /** Without a HUD feeding values (the dev client), the controls draw what they read from the frame alone. */
 const HUD_STALE_MS = 250;
+/**
+ * A grab whose finger has gone quiet this long, after its events lost their way (the element it
+ * started on left the page, or the browser took its capture), is let go: WebKit can drop a pointerup
+ * then, and the stick would push forever (QA, 23 Oct: qa-bullets-lag-touch.md §3 M). A new thumb on
+ * a stick that quiet takes it over. (A thumb resting still sends nothing either, so quiet alone never
+ * lets go.)
+ */
+const STALE_MS = 1000;
 /** Controls only in play some of the time: the take button near a crate, zoom with a gun that zooms. */
 const CONTEXT: Partial<Record<ControlId, string>> = { take: 'near-crate', zoom: 'zoomable' };
 
@@ -93,6 +101,8 @@ export class TouchController {
   /** each control's size on screen (px) and its skin's zoom, from the last place() */
   private readonly sizes = new Map<ControlId, { px: number; k: number }>();
   private readonly grabs = new Map<number, Grab>();
+  /** each grab's finger: when it last sent anything, the element it started on, whether its capture was lost */
+  private readonly grabSeen = new Map<number, { at: number; from: Element | null; lost: boolean }>();
   /** fingers down in the editor (a second one on the screen pinches the control the first drags) */
   private readonly pointers = new Map<number, { x: number; y: number }>();
   private readonly state = createTouchState();
@@ -182,10 +192,34 @@ export class TouchController {
       window.addEventListener(type, fn, opts);
       this.cleanups.push(() => window.removeEventListener(type, fn, opts));
     };
-    on('pointerdown', (e) => this.onDown(e), { capture: true, passive: false });
-    on('pointermove', (e) => this.onMove(e), { capture: true, passive: false });
+    on(
+      'pointerdown',
+      (e) => {
+        this.onDown(e);
+        if (this.grabs.has(e.pointerId)) this.grabSeen.set(e.pointerId, { at: e.timeStamp, from: e.target as Element | null, lost: false });
+      },
+      { capture: true, passive: false },
+    );
+    on(
+      'pointermove',
+      (e) => {
+        const seen = this.grabSeen.get(e.pointerId);
+        if (seen) {
+          seen.at = e.timeStamp;
+          seen.lost = false;
+        }
+        this.onMove(e);
+      },
+      { capture: true, passive: false },
+    );
     on('pointerup', (e) => this.onUp(e), { capture: true });
     on('pointercancel', (e) => this.onUp(e), { capture: true });
+    // the browser took a grab's capture without a pointerup (its element left the page): the watchdog
+    // in frame() lets it go once it has been quiet for STALE_MS
+    on('lostpointercapture', (e) => {
+      const seen = this.grabSeen.get(e.pointerId);
+      if (seen && this.grabs.has(e.pointerId)) seen.lost = true;
+    }, { capture: true });
     // a real mouse takes the aim back (tablets with a mouse); emulated mouse events from a touch don't
     on('mousemove', (e) => {
       const emulated = (e as MouseEvent & { sourceCapabilities?: { firesTouchEvents?: boolean } }).sourceCapabilities?.firesTouchEvents;
@@ -214,6 +248,7 @@ export class TouchController {
     this.active = on;
     this.root.hidden = !on;
     document.documentElement.toggleAttribute('data-touch-controls', on);
+    this.syncPlaying();
     this.setViewport(on);
     if (on) {
       this.touchOwnsAim = true;
@@ -229,7 +264,6 @@ export class TouchController {
       this.host.camera.lookAhead = 1;
       this.host.camera.viewScale = 1;
       this.overlays.clear();
-      document.documentElement.removeAttribute('data-touch-playing');
       document.documentElement.removeAttribute('data-touch-crate');
     }
   }
@@ -441,14 +475,50 @@ export class TouchController {
       this.hiddenForMenus = hide;
       this.root.classList.toggle('mf-touch-menus', hide);
       if (hide) this.releaseAll();
+      this.syncPlaying();
     }
-    document.documentElement.toggleAttribute('data-touch-playing', this.playing);
+    this.reapStale(performance.now());
     // large text (Settings → Accessibility, 125 % and up): the pills drop their extra words (touch.css)
     const scale = Number(document.documentElement.style.getPropertyValue('--text-scale')) || 1;
     if (scale >= 1.25 !== this.root.classList.contains('mf-text-lg')) this.root.classList.toggle('mf-text-lg', scale >= 1.25);
     this.watchGlass();
     this.raf = requestAnimationFrame(this.frame);
   };
+
+  /**
+   * The page's touch-action follows play at once (html[data-touch-playing]: touch.css), not a frame
+   * later: a finger landing in between, or a phone turning with a thumb down, would otherwise start a
+   * browser scroll that takes the touch from the stick (QA, 23 Oct: §3 L).
+   */
+  private syncPlaying(): void {
+    document.documentElement.toggleAttribute('data-touch-playing', this.playing);
+  }
+
+  /** Lets a grab go as if its finger had been dragged off (no tap, no throw, no release-to-fire). */
+  private letGo(pointerId: number, at: number): void {
+    const g = this.grabs.get(pointerId);
+    this.grabSeen.delete(pointerId);
+    this.pointers.delete(pointerId);
+    if (!g) return;
+    if (g.kind === 'camera') {
+      this.endCamera(pointerId, g, at);
+      return;
+    }
+    this.grabs.delete(pointerId);
+    this.release(g, at, false);
+  }
+
+  /** The watchdog: a grab whose events lost their way and that has been quiet for STALE_MS goes. */
+  private reapStale(now: number): void {
+    for (const [id, seen] of this.grabSeen) {
+      if (!this.grabs.has(id)) {
+        this.grabSeen.delete(id);
+        continue;
+      }
+      const lostWay = seen.lost || (seen.from !== null && !seen.from.isConnected);
+      if (lostWay && now - seen.at >= STALE_MS) this.letGo(id, now);
+    }
+  }
 
   private glassAt = 0;
   private slowFrames = 0;
@@ -488,6 +558,8 @@ export class TouchController {
       this.pressControl(e, ctl.dataset.mfControl as ControlId, ctl);
       return;
     }
+    // a button over the game (the drill's Skip and Close): a tap for it, not a stick
+    if (target?.closest('button, a[href], [role="button"]')) return;
     // the game itself (either canvas, or nothing but the page): a stick for that half of the screen
     if (!(target === document.documentElement || target === document.body || target instanceof HTMLCanvasElement || target?.closest('.mf-touch'))) return;
     e.preventDefault(); // no mouse emulation, no scrolling, no text selection
@@ -499,8 +571,14 @@ export class TouchController {
     const same = [...this.grabs.entries()].find(([, g]) => g.kind === 'stick' && g.id === id) as [number, Extract<Grab, { kind: 'stick' }>] | undefined;
     if (same) {
       // a second finger on the same side right after the first: the camera (pinch to zoom, two-finger taps)
-      if (this.settings.pinchZoom && e.timeStamp - same[1].startAt <= GESTURE.pinchMs) this.startCamera(same[0], same[1], e.pointerId, at, e.timeStamp);
-      return; // one thumb per stick
+      if (this.settings.pinchZoom && e.timeStamp - same[1].startAt <= GESTURE.pinchMs) {
+        this.startCamera(same[0], same[1], e.pointerId, at, e.timeStamp);
+        return;
+      }
+      // one thumb per stick, unless the old grab's finger has gone quiet: its lift may never come
+      // (WebKit), and a new thumb on the dial means the old one is gone
+      if (e.timeStamp - (this.grabSeen.get(same[0])?.at ?? e.timeStamp) < STALE_MS) return;
+      this.letGo(same[0], e.timeStamp);
     }
     const el = this.els.get(id)!;
     const radius = (this.sizes.get(id)?.px ?? 96) / 2;
@@ -585,6 +663,7 @@ export class TouchController {
   private onUp(e: PointerEvent): void {
     const g = this.grabs.get(e.pointerId);
     this.pointers.delete(e.pointerId);
+    this.grabSeen.delete(e.pointerId);
     if (!g) {
       // the second finger of a pinch lifted: the first one drags again (the camera's: it ends)
       for (const [id, p] of this.grabs) {
@@ -1074,6 +1153,7 @@ export class TouchController {
       this.release(g, 0, false);
     }
     this.pointers.clear();
+    this.grabSeen.clear();
     this.overlays?.hideRadial();
     this.overlays?.hideFan();
     const s = this.state;
@@ -1141,6 +1221,7 @@ export class TouchController {
       this.overlays.clear();
     }
     this.editing = on;
+    this.syncPlaying();
     this.selected = null;
     this.root.classList.toggle('mf-touch-editing', on);
     this.editor.hidden = !on;

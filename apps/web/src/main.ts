@@ -52,6 +52,7 @@ import { isTouchDevice, mountTouch } from './touch';
 import { applyPadSettings, currentDevice, mountGamepad, onInputDevice } from './gamepad';
 import { padShownBindings } from './gamepad/prompts';
 import { startLandscape } from './ui/landscape';
+import { startMultiTouchTaps } from './ui/multiTouchTap';
 import type { Frame } from './view';
 import { DefaultLoadingManager } from 'three';
 import { assetLoad } from './assetLoad';
@@ -73,6 +74,8 @@ const netSim = parseNetSim(params.get('netsim') ?? shorthand) ?? createCondition
 
 // phones play in landscape whichever way they're held: before anything measures the window
 startLandscape();
+// a tap on a menu button while a thumb rests on a dial: the browser sends no click, so this does
+if (navigator.maxTouchPoints > 0) startMultiTouchTaps();
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const view3dCanvas = document.getElementById('view3d') as HTMLCanvasElement;

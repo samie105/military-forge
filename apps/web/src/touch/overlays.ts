@@ -163,18 +163,51 @@ export class TouchOverlays {
 
   // ---- the drill's plate ----
 
+  /** the plate's last content: it's rebuilt only when that changes */
+  private plateHtml = '';
+
+  /**
+   * The plate, rebuilt only when what it says changes, and then only its words: the plate takes
+   * touches (a stick can start on it), and an element taken out from under a thumb can lose that
+   * thumb's pointerup in WebKit, leaving the stick pushed (QA, 23 Oct: qa-bullets-lag-touch.md §3 M).
+   * Its frame and its buttons stay put.
+   */
   showDrill(d: Drill): void {
     const s = d.step;
     const n = d.steps.length;
-    const dots = d.steps.map((st, i) => `<i class="${d.ticked.has(st.id) ? 'is-done' : d.skipped.has(st.id) ? 'is-skipped' : i === d.index ? 'is-now' : ''}"></i>`).join('');
-    const done = d.justTicked ? `<span class="mf-drill__tick m-p7">${svg('#icon-check')}Done</span>` : '';
-    this.plate.innerHTML = s
-      ? `<div class="mf-drill__top"><span class="eyebrow">Drill · ${d.index + 1}/${n}</span><button type="button" class="btn btn--ghost btn--icon btn--sm" data-drill="close" aria-label="Close the drill">${svg('#icon-close')}</button></div>
-<b class="mf-drill__goal">${esc(s.goal)}</b><p class="mf-drill__how">${esc(s.how)}</p>
-<div class="mf-drill__foot"><span class="mf-drill__dots" aria-hidden="true">${dots}</span>${done}<button type="button" class="btn btn--ghost btn--sm" data-drill="skip">Skip</button></div>`
-      : `<div class="mf-drill__top"><span class="eyebrow">Learn the controls</span><button type="button" class="btn btn--ghost btn--icon btn--sm" data-drill="close" aria-label="Close">${svg('#icon-close')}</button></div>
-<b class="mf-drill__goal">${svg('#icon-check')} All done</b><p class="mf-drill__how">Replay it any time: Settings → Touch → Learn the controls.</p>`;
+    const parts = s
+      ? {
+          eyebrow: `Drill · ${d.index + 1}/${n}`,
+          close: 'Close the drill',
+          goal: esc(s.goal),
+          how: esc(s.how),
+          dots: d.steps.map((st, i) => (d.ticked.has(st.id) ? 'is-done' : d.skipped.has(st.id) ? 'is-skipped' : i === d.index ? 'is-now' : '')),
+          done: !!d.justTicked,
+          skip: true,
+        }
+      : { eyebrow: 'Learn the controls', close: 'Close', goal: `${svg('#icon-check')} All done`, how: 'Replay it any time: Settings → Touch → Learn the controls.', dots: [], done: false, skip: false };
+    const key = JSON.stringify(parts);
     this.plate.hidden = false;
+    if (key === this.plateHtml) return;
+    this.plateHtml = key;
+    if (!this.plate.firstChild) {
+      this.plate.innerHTML = `<div class="mf-drill__top"><span class="eyebrow"></span><button type="button" class="btn btn--ghost btn--icon btn--sm" data-drill="close">${svg('#icon-close')}</button></div>
+<b class="mf-drill__goal"></b><p class="mf-drill__how"></p>
+<div class="mf-drill__foot"><span class="mf-drill__dots" aria-hidden="true"></span><span class="mf-drill__done"></span><button type="button" class="btn btn--ghost btn--sm" data-drill="skip">Skip</button></div>`;
+    }
+    const q = <T extends Element>(sel: string) => this.plate.querySelector<T>(sel)!;
+    q('.mf-drill__top .eyebrow').textContent = parts.eyebrow;
+    q('[data-drill="close"]').setAttribute('aria-label', parts.close);
+    q('.mf-drill__goal').innerHTML = parts.goal;
+    q('.mf-drill__how').innerHTML = parts.how;
+    // the dots: the same <i>s while the count holds, only their classes change
+    const dots = q<HTMLElement>('.mf-drill__dots');
+    if (dots.children.length !== parts.dots.length) dots.innerHTML = parts.dots.map(() => '<i></i>').join('');
+    parts.dots.forEach((cls, i) => (dots.children[i]!.className = cls));
+    const done = q<HTMLElement>('.mf-drill__done');
+    const had = done.childElementCount > 0;
+    if (parts.done !== had) done.innerHTML = parts.done ? `<span class="mf-drill__tick m-p7">${svg('#icon-check')}Done</span>` : '';
+    q<HTMLElement>('[data-drill="skip"]').hidden = !parts.skip;
   }
 
   hideDrill(): void {
