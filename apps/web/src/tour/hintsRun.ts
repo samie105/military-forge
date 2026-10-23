@@ -32,6 +32,8 @@ export interface HintDeps {
   touch?: {
     possible(): readonly TouchHintId[];
     rect(control: string): Box | null;
+    /** the touch controls are what the player plays with now: no key caps, the touch words */
+    active?(): boolean;
   } | null;
 }
 
@@ -123,7 +125,11 @@ export class HintRunner {
   private watchMatch(): void {
     const phase = this.d.store.getState().match?.phase;
     if (phase === this.phase) return;
-    if (phase === MatchPhase.InProgress) this.engine.matchStart(this.d.memory.facts.get());
+    if (phase === MatchPhase.InProgress) {
+      this.engine.matchStart(this.d.memory.facts.get());
+      // GO counts as a spawn: no tip over the first 5 s of the fight (the GO banner, the first moves)
+      if (this.alive) this.engine.spawn(this.t());
+    }
     this.engine.setCountdown(phase === MatchPhase.Countdown);
     this.phase = phase;
   }
@@ -141,22 +147,26 @@ export class HintRunner {
     this.showing = { def, at: this.clock() };
     this.d.memory.record({ t: 'hint.shown', hint: def.id });
     const b = this.d.bindings();
-    const keys = def.keys.flatMap((a: ActionId) => (b[a][0] ? [this.d.cap(b[a][0])] : []));
     const touch = this.d.touch;
-    const control = def.control;
+    const onTouch = !!touch?.active?.();
+    // on touch: no key caps (a phone has no Shift), and the words for the dials (#259: a flick dashes)
+    const keys = onTouch ? [] : def.keys.flatMap((a: ActionId) => (b[a][0] ? [this.d.cap(b[a][0])] : []));
+    const body = onTouch ? (TOUCH_BODY[def.id] ?? def.body) : def.body;
+    const control = def.control ?? (onTouch ? TOUCH_RING[def.id] : undefined);
     this.spot.show({
       id: `hint:${def.id}`,
       // a touch hint rings its control (as First flight does); the rest, their HUD plate
       target: control && touch ? { kind: 'rect', rect: () => touch.rect(control), shape: 'circle' } : def.hud ? { kind: 'selector', selector: `[data-tour="${def.hud}"]` } : [],
       eyebrow: 'Tip',
       title: def.title,
-      body: def.body,
+      body,
       keys,
       block: 'none',
       dim: 0,
       place: 'top-centre',
       anchor: 'none',
       skipLabel: "Don't show tips",
+      variant: 'strip',
     });
   }
 
@@ -165,3 +175,12 @@ export class HintRunner {
     void this.spot.hide();
   }
 }
+
+/** The keyboard hints' words on touch (the dials have no keys to show). */
+const TOUCH_BODY: Partial<Record<HintId, string>> = {
+  dash: 'Flick the move dial any way. Dodges fire.',
+  grenade: 'Tap the grenade button. Hold it to aim.',
+  'own-grenade': 'Hold the grenade button: the arc shows where it lands.',
+};
+/** …and the control they ring there */
+const TOUCH_RING: Partial<Record<HintId, string>> = { dash: 'move', grenade: 'grenade', 'own-grenade': 'grenade' };

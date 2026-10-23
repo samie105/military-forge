@@ -54,7 +54,7 @@ export const FLIGHT_GOALS: readonly FlightGoal[] = [
 export type Marker = 'run' | 'up' | 'target';
 
 /** A touch control the tour can ring (touch/layout.ts ControlId). */
-export type TouchControl = 'move' | 'aim' | 'fire' | 'dash' | 'grenade';
+export type TouchControl = 'move' | 'aim' | 'fire' | 'dash' | 'grenade' | 'jet';
 
 export interface GoalView {
   title: string;
@@ -75,6 +75,10 @@ export interface TouchWords {
   moveSide: 'left' | 'right';
   /** the fire mode (touch/settings.ts FireMode: auto, pull, button, release) */
   fire: string;
+  /** the layout shows a JET button (Classic): Fly rings it */
+  jetButton?: boolean;
+  /** a DASH button is pinned: otherwise (the default, #259) a flick of the move dial dashes and Dash rings the dial */
+  dashButton?: boolean;
 }
 
 const SHAPE: Record<FlightGoalId, Omit<GoalView, 'title' | 'body' | 'help'>> = {
@@ -92,7 +96,9 @@ export function goalView(goal: FlightGoalId, device: Device, touch: TouchWords =
   if (device === 'touch') {
     // touch: the control is ringed and named; no key caps (the words say which dial or button)
     // Fire with the FIRE button (that fire mode): the button, not the aim dial
-    const control = goal === 'hit' && touch.fire === 'button' ? 'fire' : shape.touch;
+    // Fly on Classic: the JET button; Dash without a pinned button: the move dial's flick (#259)
+    const control =
+      goal === 'hit' && touch.fire === 'button' ? 'fire' : goal === 'fly' && touch.jetButton ? 'jet' : goal === 'dash' && !touch.dashButton ? 'move' : shape.touch;
     return { ...copy, keys: [], hud: goal === 'fly' ? 'fuel' : null, touch: control, marker: shape.marker };
   }
   // a pad's move stick has one code (left and right are the same stick)

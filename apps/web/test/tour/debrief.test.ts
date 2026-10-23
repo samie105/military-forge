@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { debrief } from '../../src/tour/debrief';
 import { newFacts, reduceFacts } from '../../src/tour/facts';
-import { HOME_STOPS, STOPS, homeStopsWanted } from '../../src/tour/homeStops';
+import { HOME_IDLE_MS, HOME_STOPS, STOPS, homeStopsDue, homeStopsWanted } from '../../src/tour/homeStops';
 import type { MatchSummary } from '../../src/tour/track';
 
 const f0 = newFacts(0);
@@ -37,5 +37,11 @@ describe('Home stops', () => {
     const played = reduceFacts(f0, { k: 'match', online: false, finished: true, kills: 1, deaths: {}, moves: [] });
     expect(homeStopsWanted(played)).toBe(true);
     expect(homeStopsWanted(reduceFacts(played, { k: 'tour', tour: HOME_STOPS, skipped: true }))).toBe(false);
+  });
+
+  it('never on the Home a match just ended into; only after Home sat idle (P1-5)', () => {
+    expect(homeStopsDue(true, 0, 60_000)).toBe(false);
+    expect(homeStopsDue(false, 1000, 1000 + HOME_IDLE_MS - 1)).toBe(false);
+    expect(homeStopsDue(false, 1000, 1000 + HOME_IDLE_MS)).toBe(true);
   });
 });

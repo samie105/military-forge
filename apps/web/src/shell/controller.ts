@@ -235,6 +235,23 @@ export class ShellController {
     store.setState({ settings });
     host.applySettings(settings);
     window.addEventListener('popstate', () => this.onPopState());
+    // the match ended under the menu or Settings (mobile audit P1-2): they close, so Results shows (the
+    // pause must never say the match is running after its end)
+    store.subscribe((s, before) => {
+      if (matchEnded(before, s) && (s.overlay === 'menu' || s.overlay === 'settings')) this.closeOverlay();
+    });
+    // Play now's room (P1-6): as soon as it's ours and full enough (bots count), the countdown starts
+    store.subscribe((s) => {
+      if (!this.quickStart) return;
+      if (s.screen.name !== 'room' && s.screen.name !== 'finding') {
+        this.quickStart = false;
+        return;
+      }
+      if (quickStartReady(s)) {
+        this.quickStart = false;
+        this.host.online?.startMatch();
+      }
+    });
     // the tuning panel goes away with host rights (another player became host, or we left), and
     // steps aside while a menu is open
     store.subscribe((s) => {
@@ -511,6 +528,24 @@ export class ShellController {
     this.set({ screen: { name: 'training', tour: 'first-flight' }, lobby: null, connection: null, tips: false });
   }
 
+  /** Play now's room waits to start its countdown (playNow) */
+  private quickStart = false;
+
+  /**
+   * Play now (mobile audit P1-6): one tap to a fight. Online: a room of our own that bots fill, its
+   * countdown started at once (friends can still join by its code). No API (offline): training
+   * against bots. No name yet: the name screen first, then the same.
+   */
+  playNow(): void {
+    if (!this.profile) {
+      this.set({ screen: { name: 'name', then: { to: 'training' } } });
+      return;
+    }
+    if (this.profile.offline) return this.go({ to: 'training' });
+    this.quickStart = true;
+    this.go({ to: 'create' });
+  }
+
   /** Live fire: a recruit's first match, against 3 Easy bots (first to 5 kills, or 3 minutes). */
   startLiveFire(): void {
     this.train('live-fire');
@@ -546,6 +581,11 @@ export class ShellController {
   }
 
   // ---- names (docs/07 §3) ----
+
+  /** Whose room an invite's code is, for the name screen (null: unknown). */
+  peekRoom(code: string): Promise<{ code: string; host: string | null } | null> {
+    return this.api.peekRoom(code);
+  }
 
   checkName(nickname: string): Promise<NicknameCheck> {
     return this.api.checkNickname(nickname);
@@ -706,4 +746,17 @@ export function tipsCalm(s: ShellState): boolean {
   if (s.overlay !== null || s.route !== null || s.tips || s.title !== 'off') return false;
   if (s.screen.name === 'home') return true;
   return s.screen.name === 'room' && (s.match === null || s.match.phase === MatchPhase.Waiting);
+}
+
+/** The clock stopped: the match went from its countdown or play to its end (results, the vote, closed). */
+export function matchEnded(before: ShellState, now: ShellState): boolean {
+  const was = before.match?.phase;
+  const is = now.match?.phase;
+  return (was === MatchPhase.InProgress || was === MatchPhase.Countdown) && (is === MatchPhase.Ending || is === MatchPhase.Postgame || is === MatchPhase.Closed);
+}
+
+/** Play now's room may start: we host it, it's in the lobby, and it has the players it needs (bots count). */
+export function quickStartReady(s: ShellState): boolean {
+  const l = s.lobby;
+  return s.screen.name === 'room' && !!l && l.isHost && (s.match === null || s.match.phase === MatchPhase.Waiting) && l.players.length >= l.minPlayers;
 }

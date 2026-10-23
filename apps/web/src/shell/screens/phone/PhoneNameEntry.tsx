@@ -17,6 +17,7 @@ import { blurAfter } from '../../../ui/Screen';
 import { NICKNAME_REASONS, type NicknameCheck } from '../../api';
 import { useCtl } from '../../context';
 import type { ShellStore } from '../../store';
+import { joiningLine, useJoining } from '../joining';
 import { NAME_MAX, NAME_MIN, enterSubmits, nameState } from '../NameEntry';
 import { PhoneScreen, rise, useRotated } from './layout';
 
@@ -54,6 +55,8 @@ function TurnTip({ onDone }: { onDone: () => void }) {
 export function PhoneNameEntry({ store, first }: { store: ShellStore; first: boolean }) {
   const ctl = useCtl();
   const profile = useStore(store, (s) => s.profile);
+  // an invite link: whose room this leads into (P1-3)
+  const joining = useJoining(store);
   const current = first ? null : (profile?.nickname ?? null);
   const [name, setName] = useState(profile?.nickname ?? '');
   const [check, setCheck] = useState<NicknameCheck | null>(null);
@@ -159,7 +162,7 @@ export function PhoneNameEntry({ store, first }: { store: ShellStore; first: boo
 
         <div className="pm-ne__form">
           <header className="pm-ne__head m-p3" style={rise(0)}>
-            <span className="eyebrow">{first ? 'New recruit' : 'Your callsign'}</span>
+            <span className="eyebrow" data-bind="nameEntry.joining">{joining ? joiningLine(joining) : first ? 'New recruit' : 'Your callsign'}</span>
             <h1 className="display pm-h">What do we call you?</h1>
           </header>
 
@@ -195,7 +198,7 @@ export function PhoneNameEntry({ store, first }: { store: ShellStore; first: boo
               </span>
             </label>
             <button type="submit" className="btn btn--volt btn--sm m-p8" disabled={!canContinue}>
-              {first ? 'Continue' : 'Save'}
+              {joining ? 'Join room' : first ? 'Continue' : 'Save'}
               <Icon name="arrow-right" />
             </button>
           </div>

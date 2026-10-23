@@ -23,3 +23,29 @@ describe('no card over a running match (mobile audit P0-3)', () => {
     expect(tipsCalm(state({ screen: { name: 'home' }, tips: true }))).toBe(false);
   });
 });
+
+describe('the match ends under the menu (mobile audit P1-2)', () => {
+  it('from the countdown or play to the end counts; anything else does not', async () => {
+    const { matchEnded } = await import('../src/shell/controller');
+    const at = (phase: number) => state({ screen: { name: 'room', code: 'ABCDEF' }, match: match(phase) });
+    expect(matchEnded(at(MatchPhase.InProgress), at(MatchPhase.Ending))).toBe(true);
+    expect(matchEnded(at(MatchPhase.Countdown), at(MatchPhase.Postgame))).toBe(true);
+    expect(matchEnded(at(MatchPhase.InProgress), at(MatchPhase.InProgress))).toBe(false);
+    expect(matchEnded(at(MatchPhase.Waiting), at(MatchPhase.Countdown))).toBe(false);
+    expect(matchEnded(at(MatchPhase.Ending), at(MatchPhase.Postgame))).toBe(false);
+  });
+});
+
+describe('Play now (mobile audit P1-6)', () => {
+  it("its room starts when it's ours, in the lobby, and full enough (bots count)", async () => {
+    const { quickStartReady } = await import('../src/shell/controller');
+    const lobby = (isHost: boolean, players: number, minPlayers = 2) => ({ isHost, minPlayers, players: Array.from({ length: players }, (_, i) => ({ id: i })) }) as unknown as ShellState['lobby'];
+    const room = (over: Partial<ShellState>) => state({ screen: { name: 'room', code: 'ABCDEF' }, match: match(MatchPhase.Waiting), ...over });
+    expect(quickStartReady(room({ lobby: lobby(true, 4) }))).toBe(true);
+    expect(quickStartReady(room({ lobby: lobby(true, 1) }))).toBe(false);
+    expect(quickStartReady(room({ lobby: lobby(false, 4) }))).toBe(false);
+    expect(quickStartReady(room({ lobby: lobby(true, 4), match: match(MatchPhase.Countdown) }))).toBe(false);
+    expect(quickStartReady(state({ screen: { name: 'home' }, lobby: lobby(true, 4) }))).toBe(false);
+  });
+});
+

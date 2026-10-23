@@ -30,6 +30,17 @@ export function homeStopsWanted(f: Facts): boolean {
   return !f.tours[HOME_STOPS] && (f.experience === 'veteran' || f.matches.local + f.matches.online >= 1);
 }
 
+/** Home must sit idle this long (no tap, key or pad press) before the pass may start. */
+export const HOME_IDLE_MS = 6000;
+
+/**
+ * When the pass may start (P1-5: let the player breathe): on a Home visit that didn't come straight
+ * from a match, after HOME_IDLE_MS without input. Pure: main.ts feeds the times.
+ */
+export function homeStopsDue(cameFromMatch: boolean, lastInputAt: number, now: number): boolean {
+  return !cameFromMatch && now - lastInputAt >= HOME_IDLE_MS;
+}
+
 const target = (id: Stop['id']): HTMLElement | null => {
   const el = document.querySelector<HTMLElement>(`[data-tour="${id}"]`);
   return el && !(el as HTMLButtonElement).disabled && el.getClientRects().length > 0 ? el : null;
@@ -60,7 +71,9 @@ export function runHomeStops(memory: TourMemory, device: () => Device, spotlight
     const step: SpotStep = {
       id: `${HOME_STOPS}:${s.id}`,
       target: { kind: 'element', el: () => target(s.id) },
-      block: 'outside',
+      // never blocking (mobile audit P1-5): the dim shows the way but every tap reaches the screen
+      block: 'none',
+      dim: 0.5,
       eyebrow: `Orders · ${i + 1}/${stops.length}`,
       progress: [i, stops.length],
       title: s.title,
@@ -77,14 +90,16 @@ export function runHomeStops(memory: TourMemory, device: () => Device, spotlight
     if (i < stops.length) show();
     else end('finished');
   };
-  // pressing the target (through the hole) does the thing: the pass ends there
+  // a tap on the screen itself (not the callout) does what it says and ends the pass: on the ringed
+  // control that's this stop done, anywhere else the pass is left (P1-5: a tap is never eaten as Next)
   const onTargetClick = (e: MouseEvent) => {
+    if (over || !(e.target instanceof Node) || spotEl()?.contains(e.target)) return;
     const el = target(stops[i]!.id);
-    if (!over && el && e.target instanceof Node && el.contains(e.target)) {
-      log(stops[i]!.id, 'done');
-      end('finished');
-    }
+    const hit = !!el && el.contains(e.target);
+    log(stops[i]!.id, hit ? 'done' : 'abandoned');
+    end(hit ? 'finished' : 'abandoned');
   };
+  const spotEl = () => document.querySelector('.mf-spot');
   document.addEventListener('click', onTargetClick, true);
   spot.onPrimary = () => next('done');
   spot.onSkip = (_id, all) => {

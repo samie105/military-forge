@@ -256,6 +256,7 @@ export class FirstFlight {
       body: TOUR_COPY.completeBody(this.finishedIn),
       primary: { label: TOUR_COPY.liveFire },
       skipLabel: TOUR_COPY.later,
+      variant: 'strip',
       place: 'top-centre',
       anchor: 'none',
       block: 'none',
@@ -282,7 +283,7 @@ export class FirstFlight {
     const keys = v.keys.flatMap((a: ActionId) => (b[a][0] ? [this.d.cap(b[a][0])] : []));
     const count = step.count ?? 1;
     const tally = ticked ? count : this.tour.tally;
-    const key = `${step.id}|${device}|${touch.moveSide}|${touch.fire}|${keys.join(' ')}|${tally}|${ticked}`;
+    const key = `${step.id}|${device}|${touch.moveSide}|${touch.fire}|${touch.jetButton}|${touch.dashButton}|${keys.join(' ')}|${tally}|${ticked}`;
     if (key === this.drawn) return;
     this.drawn = key;
     const [i, n] = this.tour.position;
@@ -313,6 +314,7 @@ export class FirstFlight {
       place: 'top-centre',
       anchor: 'none',
       block: 'none',
+      variant: 'strip',
       skipAll: true,
       // the live region: the whole goal once, then only what changed (the tally)
       announce: fresh || !this.shown ? `Step ${at + 1} of ${n}. ${v.title} ${body}` : ticked ? TOUR_COPY.confirmed : TOUR_COPY.tally(tally, count),

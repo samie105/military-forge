@@ -12,6 +12,7 @@ import { Screen } from '../../ui/Screen';
 import { NICKNAME_REASONS, type NicknameCheck } from '../api';
 import { useCtl } from '../context';
 import type { ShellStore } from '../store';
+import { joiningLine, useJoining } from './joining';
 import { Backdrop, Hint, Hints, NetPill, rememberCard } from './frame';
 
 export const NAME_MIN = 3;
@@ -52,6 +53,8 @@ function cardNumber(name: string): string {
 export function NameEntry({ store, first }: { store: ShellStore; first: boolean }) {
   const ctl = useCtl();
   const profile = useStore(store, (s) => s.profile);
+  // an invite link: whose room this leads into (P1-3)
+  const joining = useJoining(store);
   const current = first ? null : (profile?.nickname ?? null);
   const [name, setName] = useState(profile?.nickname ?? '');
   const [check, setCheck] = useState<NicknameCheck | null>(null);
@@ -122,7 +125,7 @@ export function NameEntry({ store, first }: { store: ShellStore; first: boolean 
       <Backdrop word="RECRUIT" />
       <div className="menu">
         <header className="menu-top">
-          <span className="eyebrow">{first ? 'Enlistment · first time here' : 'Your callsign'}</span>
+          <span className="eyebrow" data-bind="nameEntry.joining">{joining ? joiningLine(joining) : first ? 'Enlistment · first time here' : 'Your callsign'}</span>
           <span className="menu-top__spacer"></span>
           <NetPill offline={!!profile?.offline} />
         </header>
@@ -268,7 +271,7 @@ export function NameEntry({ store, first }: { store: ShellStore; first: boolean 
 
             <div className="ne__actions">
               <button type="submit" className="btn btn--volt btn--xl m-p8" disabled={!canContinue} aria-disabled={!canContinue}>
-                {first ? 'Continue' : 'Save'}
+                {joining ? 'Join room' : first ? 'Continue' : 'Save'}
                 <Icon name="arrow-right" />
               </button>
               {first ? (

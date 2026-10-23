@@ -204,6 +204,15 @@ export class Api {
     return this.request<RoomJoin>('POST', '/rooms', {}, true);
   }
 
+  /** Whose room a code is (the invite link's name screen; no session needed). Null when unknown or unreachable. */
+  async peekRoom(code: string): Promise<{ code: string; host: string | null } | null> {
+    try {
+      return await this.request<{ code: string; host: string | null }>('GET', `/rooms/${encodeURIComponent(code)}`);
+    } catch {
+      return null;
+    }
+  }
+
   async joinRoom(code: string): Promise<RoomJoin> {
     await this.roomHooksDone();
     return this.request<RoomJoin>('POST', `/rooms/${encodeURIComponent(code)}/join`, {}, true);

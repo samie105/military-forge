@@ -83,8 +83,38 @@
 .mf-spot.is-phone .mf-spot__skip { min-height: 44px; }
 .mf-spot.is-phone .mf-spot__stamp { font-size: 16px; padding: 2px var(--sp-2); }
 
+/* the strip (play, mobile audit P1-1): one line at the top edge, about 40 px tall; the rings stay. The
+   body gives way first (ellipsis), then the eyebrow; Skip links stay reachable (44 px tall targets). */
+.mf-spot.is-strip .mf-spot__callout {
+  flex-direction: row; align-items: center; gap: 10px; flex-wrap: nowrap;
+  max-width: min(760px, calc(100% - 24px)); min-height: 40px; max-height: 48px; padding: 0 6px 0 14px;
+  border-radius: 0 0 14px 14px; overflow: hidden; animation-name: mf-spot-strip-in;
+}
+@keyframes mf-spot-strip-in { from { opacity: 0; translate: 0 -100%; } }
+.mf-spot.is-strip .mf-spot__eyebrow { flex: none; gap: 6px; font-size: 11px; letter-spacing: .18em; white-space: nowrap; }
+.mf-spot.is-strip .mf-spot__eyebrow::before { display: none; }
+.mf-spot.is-strip .mf-spot__pips { margin-left: 4px; }
+.mf-spot.is-strip .mf-spot__pips i { width: 10px; height: 4px; }
+.mf-spot.is-strip .mf-spot__title { flex: none; font-size: 20px; white-space: nowrap; }
+.mf-spot.is-strip .mf-spot__body { flex: 1 1 auto; min-width: 0; flex-wrap: nowrap; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.mf-spot.is-strip .mf-spot__keys { display: inline-flex; vertical-align: middle; }
+.mf-spot.is-strip .mf-spot__keys .kbd { font-size: 12px; min-height: 22px; padding: 0 6px; }
+.mf-spot.is-strip .mf-spot__help { display: none; }
+.mf-spot.is-strip.is-timeout .mf-spot__body { display: none; }
+.mf-spot.is-strip.is-timeout .mf-spot__help { display: block; flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+.mf-spot.is-strip .mf-spot__actions { flex: none; margin: 0; gap: 2px; }
+.mf-spot.is-strip .mf-spot__skip { min-height: 40px; padding: 0 8px; font-size: 12px; white-space: nowrap; }
+.mf-spot.is-strip .mf-spot__primary { min-height: 34px; padding: 0 12px; font-size: 13px; }
+.mf-spot.is-strip .mf-spot__stamp { font-size: 13px; padding: 1px 6px; border-width: 2px; outline-offset: 2px; }
+/* a phone: between the top bar's corner buttons (🏆, pause) */
+.mf-spot.is-phone.is-strip .mf-spot__callout { max-width: calc(100% - 192px); border-radius: 0 0 12px 12px; }
+.mf-spot.is-phone.is-strip .mf-spot__title { font-size: 18px; }
+/* a narrow screen: the eyebrow's words go (the pips stay) */
+@media (max-width: 700px) { .mf-spot.is-strip .mf-spot__eyebrow { font-size: 0; } .mf-spot.is-strip .mf-spot__eyebrow .mf-spot__pips { margin: 0; } }
+
 /* leaving (P9's exit) */
 .mf-spot.is-leaving { opacity: 0; transition: opacity 200ms var(--ease-leave); }
+.mf-spot.is-leaving, .mf-spot.is-leaving * { pointer-events: none !important; }
 
 /* Reduce motion: no travel, no pulse, no focus pull: opacity only */
 .mf-spot.is-reduced :is(.mf-spot__ring, .mf-spot__callout, .mf-spot__dim) { transition: opacity 120ms linear; animation: none; }

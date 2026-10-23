@@ -119,6 +119,29 @@ export function roomRoutes(deps: {
 }): Hono<AppEnv> {
   const { config, db, kv, auth, profiles, presence, party, ticketKey, now } = deps;
   const app = new Hono<AppEnv>();
+
+  /** The room's host's nickname from its record (null: unreadable, or the host is gone). */
+  async function hostName(raw: string): Promise<string | null> {
+    try {
+      return (await profiles.me((JSON.parse(raw) as RoomRecord).host))?.nickname ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * A room by its code, for the invite link's name screen (mobile audit P1-3): whose room it is. No
+   * session needed (a new player has none yet); only the host's nickname, which everyone in the room
+   * sees anyway. A miss counts toward the same per-IP limit as a wrong code on join.
+   */
+  app.get('/:code', async (c) => {
+    const code = normalizeRoomCode(c.req.param('code'));
+    if (!code) return miss(c, 'Room codes are 6 letters', 400, 'invalid_room_code');
+    const raw = await kv.get(`room:${code}`);
+    if (!raw) return miss(c, `No room ${code}: check the code, or ask for a new link`, 404, 'room_not_found');
+    return c.json({ code, host: await hostName(raw) });
+  });
+
   app.use(requireAuth(auth));
 
   async function ticketFor(userId: string, code: string): Promise<string | null> {

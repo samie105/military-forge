@@ -59,9 +59,9 @@ export function Home({ store }: { store: ShellStore }) {
       // Enter is Play with friends only when nothing has focus: on a focused button it presses that button.
       // Not under an overlay (Join, the QR panels), nor when a box took it (a pasted code's Enter: the box
       // may be gone by now, focus on body)
-      if (e.code === 'Enter' && !e.defaultPrevented && !store.getState().overlay && !offline && (document.activeElement === null || document.activeElement === document.body)) {
+      if (e.code === 'Enter' && !e.defaultPrevented && !store.getState().overlay && (document.activeElement === null || document.activeElement === document.body)) {
         e.preventDefault();
-        ctl.go({ to: 'create' });
+        ctl.playNow();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -94,7 +94,7 @@ export function Home({ store }: { store: ShellStore }) {
               <Icon name="shirt" />
               Locker
             </button>
-            <button type="button" className="tab m-p8" onClick={() => location.assign('/armory.html')}>
+            <button type="button" className="tab m-p8" onClick={() => (location.hash = '#/armory')}>
               <Icon name="rack" />
               Armory
             </button>
@@ -126,19 +126,20 @@ export function Home({ store }: { store: ShellStore }) {
               <b className="home__poster-no display" aria-hidden="true">
                 01
               </b>
-              <span className="serial">Op 01 · Squad deployment</span>
-              <h2 className="display home__poster-title">
-                Play with
-                <br />
-                friends
-              </h2>
-              <p className="home__poster-sub">Make a room, send the link to your group chat, and fight. Bots fill empty slots.</p>
+              <span className="serial">Op 01 · Quick match</span>
+              <h2 className="display home__poster-title">Play now</h2>
+              <p className="home__poster-sub">{offline ? 'The game server is out of reach: a training match against bots.' : 'A room of your own, bots fill it, the fight starts at once. Friends join by its code.'}</p>
               <div className="home__poster-cta">
-                <button className="btn btn--ink btn--xl home__create m-p8" type="button" data-tour="create" disabled={offline} onClick={() => ctl.go({ to: 'create' })}>
+                {/* one tap to a fight (mobile audit P1-6); Create room is the friends' way in */}
+                <button className="btn btn--ink btn--xl home__create m-p8" type="button" data-tour="play" onClick={() => ctl.playNow()}>
+                  <Icon name="play" />
+                  Play now
+                </button>
+                <Cap lg>Enter</Cap>
+                <button className="btn btn--paper btn--lg m-p8" type="button" data-tour="create" disabled={offline} onClick={() => ctl.go({ to: 'create' })}>
                   <Icon name="users-plus" />
                   Create room
                 </button>
-                <Cap lg>Enter</Cap>
                 {/* a local room (lan/): this device hosts, friends on the same Wi-Fi or hotspot join; it works with the internet slow or down */}
                 <button className="btn btn--paper btn--lg mf-home__local m-p8" type="button" onClick={() => ctl.go({ to: 'local' })} title="Host on this device: friends on the same Wi-Fi or hotspot join. Works without internet.">
                   <Icon name="wifi" />
@@ -271,7 +272,7 @@ export function Home({ store }: { store: ShellStore }) {
           </div>
         </div>
         <Hints>
-          <Hint keys={<Cap>Enter</Cap>}>Create room</Hint>
+          <Hint keys={<Cap>Enter</Cap>}>Play now</Hint>
           <Hint keys={<Cap>Esc</Cap>}>Menu</Hint>
         </Hints>
       </div>

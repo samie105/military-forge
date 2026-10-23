@@ -54,8 +54,8 @@ export const HINTS: Readonly<Record<HintId, HintDef>> = {
 
 export const SPAWN_QUIET_S = 5;
 export const DAMAGE_QUIET_S = 3;
-/** a hint shows this long unless done first (it never blocks play) */
-export const HINT_SHOW_MS = 7000;
+/** a hint shows this long unless done first (it never blocks play; mobile audit P1-1: 4 s) */
+export const HINT_SHOW_MS = 4000;
 export const HINTS_KEY = 'mf.hints.v1';
 
 export interface HintMemory {

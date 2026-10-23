@@ -51,6 +51,11 @@ export interface SpotStep {
   /** 'outside': menus (the dim blocks, the hole passes); 'none' (default): play, nothing is blocked */
   block?: 'outside' | 'none';
   /**
+   * 'strip': one slim line at the screen's top edge (play: never over the battlefield's centre, at most
+   * ~15 % of a 360 px screen; mobile audit P1-1). 'card' (default): the Frost callout.
+   */
+  variant?: 'card' | 'strip';
+  /**
    * What the callout keeps clear of: 'all' (default) its targets; 'none' only `place` (in play, where a
    * world marker moves every frame, the callout holds still)
    */
@@ -259,6 +264,7 @@ export class Spotlight {
     this.el.hidden = false;
     this.el.classList.toggle('is-blocking', blocking);
     this.el.classList.toggle('is-phone', this.phone());
+    this.el.classList.toggle('is-strip', step.variant === 'strip');
     this.el.classList.toggle('is-reduced', this.reducedMotion());
     this.el.classList.remove('is-leaving');
     if (!same) this.el.classList.remove('is-timeout');
@@ -304,6 +310,8 @@ export class Spotlight {
     window.clearTimeout(this.timer);
     this.unwatch();
     document.removeEventListener('keydown', this.onKey, true);
+    // the moment it starts leaving it takes no tap: the next one reaches the game or the screen (P1-5)
+    this.el.classList.remove('is-blocking');
     this.el.classList.add('is-leaving');
     return new Promise((done) => {
       this.hideTimer = window.setTimeout(
@@ -378,7 +386,11 @@ export class Spotlight {
     const step = this.step;
     if (!step) return;
     const holes = this.currentHoles(step);
-    if (!force && !holesMoved(holes, this.holes)) return;
+    if (!force && !holesMoved(holes, this.holes)) {
+      // a strip follows the match clock (it shows after GO), even with its holes still
+      if (step.variant === 'strip' && this.stripTop() !== this.stripAt) this.placeCallout(step, holes);
+      return;
+    }
     this.holes = holes;
     const v = viewport();
     this.dim.style.clipPath = dimPath(v.w, v.h, holes);
@@ -409,11 +421,30 @@ export class Spotlight {
     });
   }
 
+  /** where a strip's top goes: under the match clock when one is on screen at the top, else 0 */
+  private stripAt = -1;
+  private stripTop(): number {
+    for (const e of document.querySelectorAll('.pt-clock, [data-tour="clock"]')) {
+      const b = logicalRect(e);
+      if (b.width > 0 && b.height > 0 && b.top < 100 && getComputedStyle(e).visibility !== 'hidden' && getComputedStyle(e).opacity !== '0') return Math.round(b.bottom + 4);
+    }
+    return 0;
+  }
+
   private placeCallout(step: SpotStep, holes: readonly Hole[]): void {
     const c = this.callout;
     const size = { width: c.offsetWidth, height: c.offsetHeight };
-    const place = this.phone() ? 'top-centre' : (step.place ?? 'auto');
-    const at = placeCallout(step.anchor === 'none' ? null : unionBox(holes), size, this.safeBox(), place);
+    const place = this.phone() || step.variant === 'strip' ? 'top-centre' : (step.place ?? 'auto');
+    let safe = this.safeBox();
+    if (step.variant === 'strip') {
+      // the strip sits under the match clock (it never hides the score), and on a phone between the top
+      // bar's corner buttons (🏆 and pause: 96 px each side)
+      const top = Math.max(safe.top, this.stripTop());
+      this.stripAt = this.stripTop();
+      const side = this.phone() ? 96 : 0;
+      safe = box(safe.left + side, top, safe.width - 2 * side, safe.bottom - top);
+    }
+    const at = placeCallout(step.anchor === 'none' ? null : unionBox(holes), size, safe, place);
     c.style.transform = `translate3d(${n(at.left)}px, ${n(at.top)}px, 0)`;
     c.dataset.side = at.side;
   }

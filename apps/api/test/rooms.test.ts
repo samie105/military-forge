@@ -201,3 +201,18 @@ describe('KEEP_ROOMS', () => {
     expect(JSON.parse((await api.kv.get(`room:${made.code}`))!)).toMatchObject({ host: expect.not.stringMatching(/^kept$/) });
   });
 });
+
+describe('GET /rooms/:code (the invite link, mobile audit P1-3)', () => {
+  it("says whose room a code is, with no session; a wrong code is a miss", async () => {
+    const host = await createGuest(api);
+    const room = (await (await create(host.accessToken)).json()) as RoomJoin;
+    const res = await api.app.request(`/rooms/${room.code.toLowerCase()}`, { headers: { 'x-forwarded-for': api.ip() } });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { code: string; host: string | null };
+    expect(body.code).toBe(room.code);
+    expect(typeof body.host).toBe('string');
+    expect(body.host!.length).toBeGreaterThan(2);
+    expect((await api.app.request('/rooms/QQQQQQ', { headers: { 'x-forwarded-for': api.ip() } })).status).toBe(404);
+    expect((await api.app.request('/rooms/x', { headers: { 'x-forwarded-for': api.ip() } })).status).toBe(400);
+  });
+});

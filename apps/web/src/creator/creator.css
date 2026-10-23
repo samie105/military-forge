@@ -194,3 +194,18 @@ html:is(.mf-narrow, .mf-big-text):where(:not(.mf-phone)) .mf-cr-fit [data-active
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__act-gap { display: none; }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__act [data-action="save"] { flex: 1 1 auto; min-width: 0; }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__act [data-action="save"] .mf-cr__save { overflow: hidden; text-overflow: ellipsis; }
+/* mobile audit P1-8: Save says "Save" on a phone (the long words were cut to "SAVE A…") */
+:where(.mf-cr-fit) .mf-cr__save-short { display: none; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__act [data-action="save"] .mf-cr__save { display: none; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__act [data-action="save"] .mf-cr__save-short { display: inline; }
+/* the tabs not chosen: icon only, so Colourways never runs off the screen; a fade says there's more */
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__panel .tab:not([aria-selected="true"]) .mf-cr__tablabel { display: none; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__panel .tab:not([aria-selected="true"]) { min-width: 44px; justify-content: center; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__panel .tabs { mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent); }
+/* the list: rows snap to its top, a fade at its foot, room to scroll the last row clear of the buttons */
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__list { scroll-snap-type: y proximity; scroll-padding: 4px 0 16px; padding-bottom: 16px; mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent); }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__list .item { scroll-snap-align: start; }
+
+/* each item's own picture (P1-8): the soldier wearing it, in the tile's art box */
+:where(.mf-cr-fit) .mf-item__glyph.has-thumb { padding: 0; overflow: hidden; }
+:where(.mf-cr-fit) .mf-item__thumb { width: 100%; height: 100%; object-fit: cover; object-position: 50% 20%; display: block; }

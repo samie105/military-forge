@@ -31,6 +31,7 @@ import { Turntable, type FocusPreset, type LightPreset } from '../locker/turntab
 import { startFitting } from '../ui/fit';
 import { moveIndicator } from '../ui/motion';
 import { mountSprite } from '../ui/sprite';
+import { getPortrait, peekPortrait, type PortraitRequest } from '../portrait';
 import css from './creator.css?inline';
 import { BODY_NAMES, BODY_SLOTS, bodyCards, itemsFor, lookTabs, markCreatorSeen, withBody, type BodyCard } from './model';
 
@@ -153,7 +154,7 @@ export function mountCreator(container: HTMLElement, options: CreatorOptions = {
           <span class="mf-cr__act-gap"></span>
           <button type="button" class="btn btn--ghost m-p8" data-action="prev" aria-label="Back to body" hidden>${ic('back')}<span class="mf-cr__label">Body</span></button>
           <button type="button" class="btn btn--paper m-p8" data-action="next">Next: look${ic('arrow-right')}</button>
-          <button type="button" class="btn btn--volt btn--xl m-p8" data-action="save">${ic('check')}<span class="mf-cr__save">Save soldier</span></button>
+          <button type="button" class="btn btn--volt btn--xl m-p8" data-action="save">${ic('check')}<span class="mf-cr__save">Save soldier</span><span class="mf-cr__save-short" aria-hidden="true">Save</span></button>
         </div>
       </aside>
     </div>
@@ -263,16 +264,45 @@ export function mountCreator(container: HTMLElement, options: CreatorOptions = {
       tabsEl.hidden = false;
       bodyStep.hidden = true;
       bodyStep.innerHTML = '';
-      tabsEl.innerHTML = `${tabs.map((t, i) => `<button type="button" class="tab m-p8" role="tab" data-tab="${i}" aria-selected="${i === tab}">${ic(t.icon)}${t.label}</button>`).join('')}<span class="m-p5" aria-hidden="true"></span>`;
+      // the label in a span: on a phone the tabs not chosen show their icon only, so every tab fits (P1-8)
+      tabsEl.innerHTML = `${tabs.map((t, i) => `<button type="button" class="tab m-p8" role="tab" data-tab="${i}" aria-selected="${i === tab}" aria-label="${escapeHtml(t.label)}">${ic(t.icon)}<span class="mf-cr__tablabel">${t.label}</span></button>`).join('')}<span class="m-p5" aria-hidden="true"></span>`;
       const sel = tabsEl.querySelector<HTMLElement>('[aria-selected="true"]');
-      if (sel) moveIndicator(tabsEl.querySelector<HTMLElement>('.m-p5')!, sel.offsetLeft, sel.offsetWidth);
+      if (sel) {
+        moveIndicator(tabsEl.querySelector<HTMLElement>('.m-p5')!, sel.offsetLeft, sel.offsetWidth);
+        sel.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      }
       const t = tabs[tab]!;
       list.innerHTML = t.slots.map((s) => grid(s.slot, s.label, t.slots.length > 1, t.icon)).join('');
     }
+    paintThumbs();
     next.hidden = step !== 'body';
     prev.hidden = step !== 'look';
     save.disabled = saving;
     saveText.textContent = first ? 'Save and play' : 'Save soldier';
+  };
+
+  /**
+   * Each item's own picture (mobile audit P1-8: one glyph per slot told the items apart by name only):
+   * the soldier's look with that item, drawn by the portrait service, in the tile's art box. Head items
+   * get the head-and-shoulders portrait, the rest the full body. Drawn when idle, cached; the glyph
+   * stays until a picture is in (and when 3D isn't available here).
+   */
+  const HEAD_SLOTS: ReadonlySet<string> = new Set(['headgear', 'eyewear', 'hair']);
+  const paintThumbs = () => {
+    for (const tile of list.querySelectorAll<HTMLElement>('.item[data-id]:not([data-channel])')) {
+      const glyph = tile.querySelector<HTMLElement>('.mf-item__glyph');
+      const def = getCosmetic(tile.dataset.id ?? '');
+      if (!glyph || !def || def.slot === 'dye' || def.slot === 'bodyType') continue;
+      const req: PortraitRequest = { look: withItem(draft, def.slot as LoadoutSlot, def.id), size: 128, pose: HEAD_SLOTS.has(def.slot) ? 'portrait' : 'poster-1' };
+      const put = (img: { url: string; fallback?: boolean } | null) => {
+        if (!img || img.fallback || !glyph.isConnected) return;
+        glyph.innerHTML = `<img class="mf-item__thumb" src="${img.url}" alt="" draggable="false">`;
+        glyph.classList.add('has-thumb');
+      };
+      const cached = peekPortrait(req);
+      if (cached) put(cached);
+      else void getPortrait(req, 'idle').then(put, () => {});
+    }
   };
 
   const set = (loadout: CosmeticLoadout) => {

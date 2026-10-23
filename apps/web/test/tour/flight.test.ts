@@ -115,8 +115,9 @@ describe('First flight: the goals', () => {
     for (const g of FLIGHT_GOALS)
       for (const d of devices)
         for (const moveSide of ['left', 'right'] as const)
-          for (const fire of ['auto', 'pull', 'button', 'release']) {
-            const c = FLIGHT_COPY[g.id as FlightGoalId](d, { moveSide, fire });
+          for (const fire of ['auto', 'pull', 'button', 'release'])
+          for (const buttons of [false, true]) {
+            const c = FLIGHT_COPY[g.id as FlightGoalId](d, { moveSide, fire, jetButton: buttons, dashButton: buttons });
             expect(words(c.title)).toBeLessThanOrEqual(3);
             expect(words(c.body)).toBeLessThanOrEqual(12);
             expect(`${c.title} ${c.body} ${c.help}`).not.toMatch(/!|awesome|great job|let's/i);
@@ -126,6 +127,11 @@ describe('First flight: the goals', () => {
     expect(goalView('hit', 'touch', { moveSide: 'right', fire: 'pull' }).body).toContain('left dial');
     expect(goalView('hit', 'touch', { moveSide: 'left', fire: 'auto' }).body).toContain('fires itself');
     expect(goalView('hit', 'touch', { moveSide: 'left', fire: 'button' })).toMatchObject({ touch: 'fire' });
+    // #259: no DASH button by default, so Dash teaches the flick on the move dial; Classic's JET for Fly
+    expect(goalView('dash', 'touch', { moveSide: 'left', fire: 'auto' })).toMatchObject({ touch: 'move', body: 'Flick the left dial any way, then let go.' });
+    expect(goalView('dash', 'touch', { moveSide: 'left', fire: 'auto', dashButton: true }).touch).toBe('dash');
+    expect(goalView('fly', 'touch', { moveSide: 'left', fire: 'auto', jetButton: true })).toMatchObject({ touch: 'jet' });
+    expect(goalView('fly', 'touch', { moveSide: 'left', fire: 'auto', jetButton: true }).body).toContain('Hold JET');
   });
 
   it('the Briefing\'s Change cycles Touch, Keyboard and mouse, Controller', () => {

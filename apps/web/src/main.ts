@@ -75,7 +75,7 @@ import { titleWanted } from './shell/title';
 import { startTourMemory, type TourMemory } from './tour';
 import { FirstFlight, flightWasOpen } from './tour/firstFlight';
 import { FIRST_FLIGHT } from './tour/flight';
-import { homeStopsWanted, runHomeStops } from './tour/homeStops';
+import { homeStopsDue, homeStopsWanted, runHomeStops } from './tour/homeStops';
 import { HintRunner } from './tour/hintsRun';
 import type { Device } from './tour/log';
 import { provideTourMemory } from './tour/live';
@@ -561,6 +561,34 @@ registerRoute({
   },
 });
 
+// The Armory as a shell route (#/armory; mobile audit P0-6): no page load, so full screen and the app's
+// state survive. Back closes it; "Try it in training" starts training with that gun in hand.
+registerRoute({
+  id: 'armory',
+  title: 'Armory',
+  ownExit: true,
+  mount: (el, close) => {
+    let cleanup: (() => void) | null = null;
+    let closed = false;
+    void import('./armory/route').then(({ mountArmoryRoute }) => {
+      if (!closed)
+        cleanup = mountArmoryRoute(el, {
+          onExit: close,
+          onTry: (id) => {
+            tryWeapon = weapons.find((w) => w.id === id) ?? null;
+            close();
+            shell.controller?.go({ to: 'training' });
+          },
+          ...(loadoutSync ? { guns: loadoutSync.guns } : {}),
+        });
+    });
+    return () => {
+      closed = true;
+      cleanup?.();
+    };
+  },
+});
+
 // The character creator (#/creator; owner, 22 Oct): body first, then the look. It follows the name
 // screen once on this device (first: "Skip for now"), and the Locker opens it again (Back returns there).
 let creatorFrom: 'first' | 'locker' | null = null;
@@ -743,7 +771,8 @@ function newFlight(memory: TourMemory): FirstFlight {
     cap: (code) => (isPadCode(code) ? capText(code) : keyLabel(code, keyLayout)),
     touchWords: () => {
       const t = getTouchSettings();
-      return { moveSide: t.handed === 'left' ? 'right' : 'left', fire: t.fire };
+      // Classic's JET button, and a DASH button only when pinned (#259: a flick dashes)
+      return { moveSide: t.handed === 'left' ? 'right' : 'left', fire: t.fire, jetButton: touchControlRect('jet') !== null, dashButton: touchControlRect('dash') !== null };
     },
     touchRect: (id) => touchControlRect(id),
     // a menu, a route, the controls card or the phone's first-run fire chooser: the tour waits
@@ -780,32 +809,43 @@ if (appMode && tourMemory) {
       return !!flight || s.overlay !== null || s.route !== null || s.tips || touchDrillRunning();
     },
     // the touch controls' gesture hints are hints here too: one at a time with the rest (§3.6)
-    touch: { possible: () => touchHintsPossible() as TouchHintId[], rect: (c) => touchControlRect(c as ControlId) },
+    touch: { possible: () => touchHintsPossible() as TouchHintId[], rect: (c) => touchControlRect(c as ControlId), active: () => touchActive() },
   });
   hints.seenBefore(touchHintsSeen());
   onTouchAction((a) => {
     for (const id of touchHintsDoneBy(a)) hints?.done(id as HintId);
   });
   onTouchHintsReset(() => hints?.resetTouch());
-  // Home's three stops (§3.5): once, the first time on Home after a match (or a veteran's first Home),
-  // when Home has settled; leaving Home or opening anything over it ends the pass
+  // Home's three stops (§3.5): once, after a match was played (or a veteran's first Home), but never on
+  // the Home a match just ended into, and only once Home has sat idle (mobile audit P1-5: let the player
+  // breathe). Leaving Home or opening anything over it ends the pass.
   let stopStops: (() => void) | null = null;
-  let stopsTimer = 0;
-  shell.store.subscribe((s) => {
+  let stopsPoll = 0;
+  let cameFromMatch = false;
+  let lastInputAt = performance.now();
+  for (const type of ['pointerdown', 'keydown', 'wheel'] as const) window.addEventListener(type, () => (lastInputAt = performance.now()), { capture: true, passive: true });
+  onInputDevice(() => (lastInputAt = performance.now())); // a pad's press
+  shell.store.subscribe((s, before) => {
+    if (s.screen.name === 'home' && before.screen.name !== 'home') {
+      cameFromMatch = before.screen.name === 'room' || before.screen.name === 'training';
+      lastInputAt = performance.now(); // the idle time counts from arriving on Home
+    }
     const calm = s.screen.name === 'home' && s.title === 'off' && s.route === null && s.overlay === null && !s.tips;
     if (!calm) {
-      window.clearTimeout(stopsTimer);
-      stopsTimer = 0;
+      window.clearInterval(stopsPoll);
+      stopsPoll = 0;
       stopStops?.();
       stopStops = null;
       return;
     }
-    if (stopStops || stopsTimer || !homeStopsWanted(memory.facts.get())) return;
-    stopsTimer = window.setTimeout(() => {
-      stopsTimer = 0;
+    if (stopStops || stopsPoll || cameFromMatch || !homeStopsWanted(memory.facts.get())) return;
+    stopsPoll = window.setInterval(() => {
+      if (!homeStopsDue(cameFromMatch, lastInputAt, performance.now())) return;
+      window.clearInterval(stopsPoll);
+      stopsPoll = 0;
       const now = shell.store.getState();
       if (now.screen.name === 'home' && now.route === null && now.overlay === null && homeStopsWanted(memory.facts.get())) stopStops = runHomeStops(memory, tourDevice);
-    }, 900);
+    }, 1000);
   });
   // a reload during First flight goes straight back in at the next goal (and ?flight starts it: playtests)
   let checked = false;

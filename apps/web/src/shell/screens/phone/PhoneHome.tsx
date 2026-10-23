@@ -88,15 +88,24 @@ export function PhoneHome({ store }: { store: ShellStore }) {
             className="poster halftone-ink pm-poster m-p3"
             style={rise(1)}
           >
-            <span className="serial">Op 01 · Squad deployment</span>
-            <b className="display pm-poster__t m-p1">
-              Play with
-              <br />
-              friends
-            </b>
+            <span className="serial">Op 01 · Quick match</span>
+            <b className="display pm-poster__t m-p1">Play now</b>
+            {/* one tap to a fight (mobile audit P1-6): a room that bots fill, its countdown at once; offline: training */}
             <button
               type="button"
-              className="btn btn--ink pm-create m-p8"
+              className="btn btn--ink pm-create pm-play m-p8"
+              data-tour="play"
+              onClick={() => ctl.playNow()}
+            >
+              <Icon name="play" />
+              Play now
+            </button>
+            <span className="pm-poster__note">
+              {offline ? "Offline: training against bots · Local room works without it" : "Bots fill the room · friends join by code"}
+            </span>
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm pm-create-room m-p8"
               data-tour="create"
               disabled={offline}
               onClick={() => ctl.go({ to: "create" })}
@@ -104,11 +113,6 @@ export function PhoneHome({ store }: { store: ShellStore }) {
               <Icon name="users-plus" />
               Create room
             </button>
-            {offline && (
-              <span className="pm-poster__note">
-                Needs internet · Local room works without it
-              </span>
-            )}
             <span className="hazard" aria-hidden="true"></span>
           </article>
           <div className="pm-col">
@@ -182,7 +186,7 @@ export function PhoneHome({ store }: { store: ShellStore }) {
         <nav className="pm-nav m-p3" style={rise(5)} aria-label="Main">
           <button type="button" className="pm-nav__i is-on" aria-current="page">
             <Icon name="play" />
-            <span>Play</span>
+            <span>Home</span>
           </button>
           <button
             type="button"
@@ -196,7 +200,7 @@ export function PhoneHome({ store }: { store: ShellStore }) {
           <button
             type="button"
             className="pm-nav__i m-p8"
-            onClick={() => location.assign("/armory.html")}
+            onClick={() => (location.hash = "#/armory")}
           >
             <Icon name="rack" />
             <span>Armory</span>

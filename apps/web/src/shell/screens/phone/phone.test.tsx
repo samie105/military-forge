@@ -121,11 +121,13 @@ describe('m-home', () => {
     for (const t of ['Create room', 'Join', 'Training', 'Locker', 'Armory', 'Settings', '>Ade<']) expect(html).toContain(t);
   });
 
-  it('offline: Create room and Join wait, Training still works', () => {
+  it('offline: Create room waits, Play now (training against bots) and Training still work', () => {
     const store = createShellStore({ profile: { nickname: 'Ade', changeableAt: null, offline: true } as never });
     const html = withCtl(ctl(), <PhoneHome store={store} />);
     expect(html).toContain('Offline');
-    expect(html).toMatch(/<button type="button" class="btn btn--ink pm-create m-p8" data-tour="create" disabled="">/);
+    // Play now is the hero (mobile audit P1-6), Create room the smaller second
+    expect(html).toMatch(/<button type="button" class="btn btn--ink pm-create pm-play m-p8" data-tour="play">/);
+    expect(html).toMatch(/<button type="button" class="btn btn--ghost btn--sm pm-create-room m-p8" data-tour="create" disabled="">/);
     expect(html).toMatch(/<button type="button" class="ticket rivets pm-tk m-p3 m-p8" style="--i:3">/); // Training, enabled
   });
 });

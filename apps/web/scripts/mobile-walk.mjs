@@ -8,6 +8,19 @@
  * Scenarios (all by default):
  *   no-popups   a new player's first training match: no "How to play", tip card or fire chooser opens
  *               during the countdown or the clock, and none stacks; the controls card waits for Home.
+ *   home-taps   Home's stops start only on an idle Home (never the one a match ends into); a tap on the
+ *               real control acts and ends the pass (never counts as Next); the tap after Skip acts.
+ *   slim-cards  First flight's orders and a match's tip are a slim strip at the top edge: at most 15 % of
+ *               the 360 px height, clear of the battlefield's centre.
+ *   play-now    Home's hero is Play now: one tap to a fight (offline here: training against bots).
+ *   creator     the creator on a phone: every target 44 px or more, Save whole, every tab on screen, a tap on a
+ *               part-shown card picks it (never Back), and items show their own pictures.
+ *   invite      a new player from an invite link (/r/CODE): the name screen says whose room it is and its
+ *               button says Join room (the API's GET /rooms/:code is stubbed: no API runs here).
+ *   match-end   a match that ends while the pause menu (or Settings) is open: they close and Results shows;
+ *               the pause never says the match is running after its end.
+ *   armory      Home's Armory tab opens the Armory in the app (no page load: the page's state survives),
+ *               Back returns to Home, and "Try it in training" starts training without a reload.
  * Exits 1 on any failed check.
  */
 /* global process */
@@ -55,6 +68,7 @@ async function tap(page, sel, text = '') {
     (s, t) => {
       const el = [...document.querySelectorAll(s)].find((e) => (!t || (e.textContent ?? '').toLowerCase().includes(t.toLowerCase())) && e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden');
       if (!el) return null;
+      el.scrollIntoView({ block: 'center', inline: 'center' }); // a finger scrolls to it first
       const r = el.getBoundingClientRect();
       return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
     },
@@ -76,8 +90,8 @@ const until = async (page, fn, ms = 30_000, arg) => {
 };
 
 /** Title → name → (creator: Skip) → Briefing (veteran) → Home, as a new player. */
-async function newPlayerToHome(page, profile) {
-  await page.goto(`${base}/?app`, { waitUntil: 'load' });
+async function newPlayerToHome(page, profile, query = '') {
+  await page.goto(`${base}/?app${query}`, { waitUntil: 'load' });
   await sleep(1500);
   await page.evaluate(() => document.querySelector('.pm-turn__card button')?.click());
   // the title: tap anywhere
@@ -90,13 +104,18 @@ async function newPlayerToHome(page, profile) {
     await page.keyboard.type(`Walk${Math.floor(Math.random() * 900 + 100)}`);
     await page.keyboard.press('Enter');
   }
-  if (await until(page, () => !!document.querySelector('[data-screen="creator"] [data-action="skip"]'), 20_000)) {
-    await sleep(800);
-    await tap(page, '[data-screen="creator"] [data-action="skip"]');
-  }
-  if (await until(page, () => !!document.querySelector('[data-screen="briefing"]'), 15_000)) {
-    await sleep(600);
-    await tap(page, '[data-answer="veteran"]');
+  // whichever comes next: Create your soldier (Skip), the Briefing (veteran), or Home
+  for (let i = 0; i < 3; i++) {
+    await until(page, () => !!document.querySelector('[data-screen="creator"] [data-action="skip"], [data-screen="briefing"], [data-screen="home"], [data-screen="m-home"]'), 20_000);
+    if (await page.$('[data-screen="creator"] [data-action="skip"]')) {
+      await sleep(800);
+      await tap(page, '[data-screen="creator"] [data-action="skip"]');
+      await sleep(600);
+    } else if (await page.$('[data-screen="briefing"]')) {
+      await sleep(600);
+      await tap(page, '[data-answer="veteran"]');
+      await sleep(600);
+    } else break;
   }
   return until(page, () => !!document.querySelector('[data-screen="home"], [data-screen="m-home"]'), 20_000);
 }
@@ -143,11 +162,290 @@ async function noPopups(profile) {
   await page.close();
 }
 
-const SCENARIOS = { 'no-popups': noPopups };
+// ---- P1-5: the Home tour never eats a tap
+const FACTS = (over) => JSON.stringify({ v: 1, firstSeen: Date.now(), lastSession: Date.now(), sessions: 2, devices: ['touch'], lastDevice: 'touch', experience: 'veteran', promoted: false, invited: false, tours: {}, matches: { local: 1, online: 0, finished: 1, wonInARow: 0 }, kills: 1, deaths: {}, moves: {}, screens: [], rooms: { created: 0, joined: 0, local: 0 }, soldierSaved: true, touch: { missedTaps: 0, hops: 0 }, cards: {}, ...over });
+
+async function homeTaps(profile) {
+  const page = await phone(profile);
+  await page.evaluate((f) => {
+    localStorage.setItem('mf-creator-seen', '1');
+    localStorage.setItem('tips.seen.v1', '1');
+    localStorage.setItem('mf.facts.v1', f);
+  }, FACTS({}));
+  check(`${profile}: to Home`, await newPlayerToHome(page, profile));
+  // busy on Home (a tap every 2 s on the brand, which does nothing): no pass
+  const taps = [Date.now()];
+  for (let i = 0; i < 4; i++) {
+    await tap(page, '.pm-brand, .brand');
+    taps.push(Date.now());
+    await sleep(2000);
+  }
+  if (process.env.WALK_DEBUG) console.log('taps', taps.map((t) => t - taps[0]), await page.evaluate((t0) => JSON.parse(localStorage.getItem('mf.log.v1') ?? '[]').filter((e) => e.tour).map((e) => `${e.step ?? e.result}:${e.status ?? ''}@${e.at - t0}ms(${e.ms})`), taps[0]));
+  const busy = await page.evaluate(() => {
+    const el = document.querySelector('.mf-spot:not([hidden])');
+    return el ? { title: el.querySelector('.mf-spot__title')?.textContent, cls: el.className, log: JSON.parse(localStorage.getItem('mf.log.v1') ?? '[]').filter((e) => e.tour).map((e) => `${e.tour}:${e.step ?? e.result}:${e.status ?? ''}`) } : null;
+  });
+  check(`${profile}: no tour while the player is busy`, busy === null, JSON.stringify(busy));
+  // idle: the pass comes
+  const up = await until(page, () => !!document.querySelector('.mf-spot:not([hidden]) .mf-spot__title'), 15_000);
+  const first = await page.evaluate(() => {
+    const st = window.__game.shell.store.getState();
+    return { title: document.querySelector('.mf-spot:not([hidden]) .mf-spot__title')?.textContent ?? null, state: { screen: st.screen.name, overlay: st.overlay, route: st.route?.id ?? null, tips: st.tips, title: st.title }, log: JSON.parse(localStorage.getItem('mf.log.v1') ?? '[]').filter((e) => e.tour).map((e) => `${e.tour}:${e.step ?? e.result}:${e.status ?? ''}`), facts: JSON.parse(localStorage.getItem('mf.facts.v1') ?? '{}').tours };
+  });
+  await page.screenshot({ path: join(out, `p1-5-${profile}-stop.png`) });
+  check(`${profile}: an idle Home gets the stops`, up, JSON.stringify(first));
+  // a tap on the ringed control does it (Join opens), and the pass ends; it never counts as Next
+  const ringed = await page.evaluate(() => (document.querySelector('.mf-spot__title')?.textContent ?? '').includes('code') ? 'join' : 'locker');
+  await tap(page, `[data-tour="${ringed}"]`);
+  await sleep(1200);
+  const after = await page.evaluate(() => ({
+    spot: !!document.querySelector('.mf-spot:not([hidden]):not(.is-leaving)'),
+    overlay: window.__game.shell.store.getState().overlay,
+    route: window.__game.shell.store.getState().route?.id ?? null,
+    log: JSON.parse(localStorage.getItem('mf.log.v1') ?? '[]').filter((e) => e.tour === 'home-stops').map((e) => (e.step ? `${e.step}:${e.status}` : e.result)),
+  }));
+  await page.screenshot({ path: join(out, `p1-5-${profile}-tapped.png`) });
+  check(`${profile}: the tap on the ringed control acted and ended the pass`, !after.spot && (after.overlay === 'join' || after.route === 'locker') && after.log.includes('finished'), JSON.stringify(after));
+  await page.close();
+
+  // Skip, then at once the Locker: the first tap opens it
+  const p2 = await phone(profile);
+  await p2.evaluate((f) => {
+    localStorage.setItem('mf-creator-seen', '1');
+    localStorage.setItem('tips.seen.v1', '1');
+    localStorage.setItem('mf.facts.v1', f);
+  }, FACTS({}));
+  await newPlayerToHome(p2, profile);
+  await until(p2, () => !!document.querySelector('.mf-spot:not([hidden]) .mf-spot__skip'), 20_000);
+  await sleep(500);
+  await tap(p2, '.mf-spot__skip', 'skip');
+  await sleep(60);
+  await tap(p2, '[data-tour="locker"], .pm-tabs button, button', 'locker');
+  await sleep(1500);
+  const locker = await p2.evaluate(() => window.__game.shell.store.getState().route?.id ?? null);
+  check(`${profile}: after Skip, the very next tap (Locker) acts`, locker === 'locker', String(locker));
+  await p2.close();
+
+  // the Home a match ends into: no stops
+  const p3 = await phone(profile);
+  await p3.evaluate((f) => {
+    localStorage.setItem('mf-creator-seen', '1');
+    localStorage.setItem('tips.seen.v1', '1');
+    localStorage.setItem('mf.facts.v1', f);
+  }, FACTS({}));
+  await newPlayerToHome(p3, profile);
+  await p3.evaluate(() => window.__game.shell.controller.go({ to: 'training' }));
+  await sleep(3000);
+  await p3.evaluate(() => window.__game.shell.controller.leave());
+  await sleep(9000);
+  check(`${profile}: no tour on the Home a match just ended into`, !(await p3.evaluate(() => !!document.querySelector('.mf-spot:not([hidden])'))));
+  await p3.close();
+}
+
+// ---- P1-1: the cards in play are a slim strip at the top edge
+async function slimCards(profile) {
+  const H = 360; // the logical height, sideways or turned
+  const measure = (page) =>
+    page.evaluate(() => {
+      const c = document.querySelector('.mf-spot:not([hidden]) .mf-spot__callout');
+      if (!c) return null;
+      // the turned page: logical px are the page's own (offset box), not the screen's
+      const turned = document.documentElement.classList.contains('mf-rotated');
+      const r = c.getBoundingClientRect();
+      const box = turned ? { top: c.offsetTop, height: c.offsetHeight, left: c.offsetLeft, width: c.offsetWidth } : { top: r.top, height: r.height, left: r.left, width: r.width };
+      const t = getComputedStyle(c).transform;
+      const m = /matrix\(([^)]+)\)/.exec(t);
+      if (turned && m) {
+        const v = m[1].split(',').map(Number);
+        box.left = v[4];
+        box.top = v[5];
+      }
+      return { ...box, title: c.querySelector('.mf-spot__title')?.textContent, w: turned ? innerHeight : innerWidth };
+    });
+  const page = await phone(profile);
+  await page.evaluate((f) => {
+    localStorage.setItem('mf-creator-seen', '1');
+    localStorage.setItem('tips.seen.v1', '1');
+    localStorage.setItem('mf.facts.v1', f);
+  }, FACTS({ matches: { local: 3, online: 0, finished: 3, wonInARow: 0 }, tours: { 'home-stops': { done: [], finished: true, skipped: false } } }));
+  await newPlayerToHome(page, profile);
+  await page.evaluate(() => window.__game.shell.controller.startFlight());
+  await until(page, () => document.querySelector('.mf-choose:not([hidden])') || document.querySelector('.mf-spot:not([hidden]) .mf-spot__callout'), 30_000);
+  await page.evaluate(() => document.querySelector('.mf-choose [data-fire="auto"]')?.click());
+  await until(page, () => !!document.querySelector('.mf-spot:not([hidden]) .mf-spot__callout'), 20_000);
+  await sleep(2500); // past the strip's slide-in
+  const flight = await measure(page);
+  await page.screenshot({ path: join(out, `p1-1-${profile}-flight.png`) });
+  check(`${profile}: First flight's order is a strip ≤ 15 % of the height, at the top edge`, !!flight && flight.height <= H * 0.15 && flight.top + flight.height <= H * 0.2, JSON.stringify(flight));
+  // a match tip (dash never used across 3 matches): the same strip
+  await page.evaluate(() => window.__game.shell.controller.go({ to: 'training' }));
+  const tip = await until(page, () => document.querySelector('.mf-spot:not([hidden]) .mf-spot__title')?.textContent === 'Dash.', 40_000);
+  await sleep(700); // past the slide-in
+  const t = tip ? await measure(page) : null;
+  await page.screenshot({ path: join(out, `p1-1-${profile}-tip.png`) });
+  const clear = await page.evaluate(() => {
+    const c = document.querySelector('.mf-spot:not([hidden]) .mf-spot__callout')?.getBoundingClientRect();
+    const hit = (sel) => [...document.querySelectorAll(sel)].some((e) => {
+      const b = e.getBoundingClientRect();
+      return c && b.width && !(b.right <= c.left || b.left >= c.right || b.bottom <= c.top || b.top >= c.bottom);
+    });
+    return { clock: hit('.pt-clock'), pause: hit('.mf-ctl-pause') };
+  });
+  check(`${profile}: a match tip is the same strip, clear of the clock and the pause button`, !!t && t.height <= H * 0.15 && t.top + t.height <= H * 0.3 && !clear.clock && !clear.pause, JSON.stringify({ ...t, ...clear }));
+  await page.close();
+}
+
+// ---- P0-6: the Armory is a route, never a page load
+async function armory(profile) {
+  const page = await phone(profile);
+  await page.evaluate((f) => {
+    localStorage.setItem('mf-creator-seen', '1');
+    localStorage.setItem('tips.seen.v1', '1');
+    localStorage.setItem('mf.facts.v1', f);
+  }, FACTS({ tours: { 'home-stops': { done: [], finished: true, skipped: false } } }));
+  await newPlayerToHome(page, profile);
+  await page.evaluate(() => (window.__sameDocument = true));
+  await tap(page, '.pm-tabs button, .tab, button', 'armory');
+  const open = await until(page, () => window.__game?.shell?.store?.getState().route?.id === 'armory' && !!document.querySelector('[data-screen="armory"], .ar'), 20_000);
+  await sleep(2500);
+  await page.screenshot({ path: join(out, `p0-6-${profile}-armory.png`) });
+  const kept = await page.evaluate(() => ({ same: window.__sameDocument === true, path: location.pathname, hash: location.hash }));
+  check(`${profile}: the Armory opens in the app, no page load`, open && kept.same && kept.path === '/', JSON.stringify(kept));
+  await tap(page, '[data-action="exit"]');
+  const home = await until(page, () => window.__game.shell.store.getState().route === null && !!document.querySelector('[data-screen="m-home"], [data-screen="home"]'), 10_000);
+  check(`${profile}: Back returns to Home, same page`, home && (await page.evaluate(() => window.__sameDocument === true)));
+  await tap(page, '.pm-tabs button, .tab, button', 'armory');
+  await until(page, () => !!document.querySelector('[data-action="try"]'), 20_000);
+  await sleep(1500);
+  await tap(page, '[data-action="try"]');
+  const training = await until(page, () => window.__game.shell.store.getState().screen.name === 'training', 15_000);
+  check(`${profile}: Try it in training starts training, same page`, training && (await page.evaluate(() => window.__sameDocument === true)));
+  await page.close();
+}
+
+// ---- P1-2: the match ends under the menu
+async function matchEnd(profile) {
+  const page = await phone(profile);
+  await page.evaluate((f) => {
+    localStorage.setItem('mf-creator-seen', '1');
+    localStorage.setItem('tips.seen.v1', '1');
+    localStorage.setItem('mf.facts.v1', f);
+  }, FACTS({ tours: { 'home-stops': { done: [], finished: true, skipped: false } } }));
+  // a 12 s match
+  await newPlayerToHome(page, profile, '&time=12&countdown=1');
+  await page.evaluate(() => window.__game.shell.controller.go({ to: 'training' }));
+  await until(page, () => window.__game.shell.store.getState().match?.phase === 2, 20_000);
+  await sleep(1500);
+  await tap(page, '[aria-label="Menu"], [aria-label="Pause"], .mf-ctl-pause');
+  if (!(await page.evaluate(() => window.__game.shell.store.getState().overlay))) await page.evaluate(() => window.__game.shell.controller.openOverlay('menu'));
+  await sleep(800);
+  await page.screenshot({ path: join(out, `p1-2-${profile}-paused.png`) });
+  const results = await until(page, () => window.__game.shell.store.getState().match?.phase >= 3 && !!document.querySelector('[data-screen="results"], [data-screen="m-results"]'), 30_000);
+  await sleep(1500);
+  const st = await page.evaluate(() => ({ overlay: window.__game.shell.store.getState().overlay, phase: window.__game.shell.store.getState().match?.phase, running: /still running/i.test(document.body.innerText) }));
+  await page.screenshot({ path: join(out, `p1-2-${profile}-results.png`) });
+  check(`${profile}: the match ended under the menu: the menu closed and Results shows`, results && st.overlay === null && !st.running, JSON.stringify(st));
+  await page.close();
+}
+
+// ---- P1-3: the invite link says whose room
+async function invite(profile) {
+  const page = await phone(profile);
+  await page.setRequestInterception(true);
+  page.on('request', (r) => {
+    if (r.method() === 'GET' && /\/api\/rooms\/QRTZPK$/.test(new URL(r.url()).pathname)) void r.respond({ status: 200, contentType: 'application/json', body: JSON.stringify({ code: 'QRTZPK', host: 'WildCobra535' }) });
+    else void r.continue();
+  });
+  // (a service worker may take over the navigation: the page still loads)
+  await page.goto(`${base}/r/QRTZPK`, { waitUntil: 'domcontentloaded' }).catch(() => {});
+  await sleep(1000);
+  await page.evaluate(() => document.querySelector('.pm-turn__card button')?.click());
+  await until(page, () => !!document.querySelector('input[aria-label="Your name"]'), 60_000);
+  const ok = await until(page, () => /WildCobra535/.test(document.querySelector('[data-bind="nameEntry.joining"]')?.textContent ?? ''), 15_000);
+  const seen = await page.evaluate(() => ({ line: document.querySelector('[data-bind="nameEntry.joining"]')?.textContent, button: [...document.querySelectorAll('button[type="submit"]')].map((b) => b.textContent?.trim()).find(Boolean) }));
+  await page.screenshot({ path: join(out, `p1-3-${profile}-invite.png`) });
+  check(`${profile}: the invite's name screen says whose room, and Join room`, ok && /Join room/.test(seen.button ?? ''), JSON.stringify(seen));
+  await page.close();
+}
+
+// ---- P1-6: one tap to a fight
+async function playNow(profile) {
+  const page = await phone(profile);
+  await page.evaluate((f) => {
+    localStorage.setItem('mf-creator-seen', '1');
+    localStorage.setItem('tips.seen.v1', '1');
+    localStorage.setItem('mf.facts.v1', f);
+  }, FACTS({ tours: { 'home-stops': { done: [], finished: true, skipped: false } } }));
+  await newPlayerToHome(page, profile);
+  await sleep(1200);
+  await page.screenshot({ path: join(out, `p1-6-${profile}-home.png`) });
+  const hero = await page.evaluate(() => {
+    const b = document.querySelector('[data-tour="play"]')?.getBoundingClientRect();
+    const c = document.querySelector('[data-tour="create"]')?.getBoundingClientRect();
+    return { play: b && Math.round(b.width * b.height), create: c && Math.round(c.width * c.height) };
+  });
+  check(`${profile}: Play now is the biggest button, Create room secondary`, !!hero.play && hero.play > (hero.create ?? 0), JSON.stringify(hero));
+  await tap(page, '[data-tour="play"]');
+  const fight = await until(page, () => {
+    const s = window.__game.shell.store.getState();
+    return (s.screen.name === 'training' || s.screen.name === 'room' || s.screen.name === 'finding') && true;
+  }, 15_000);
+  const where = await page.evaluate(() => window.__game.shell.store.getState().screen.name);
+  check(`${profile}: one tap to a fight (offline: training against bots)`, fight && where === 'training', where);
+  await page.close();
+}
+
+// ---- P1-8: the creator's layout on a phone
+async function creator(profile) {
+  const page = await phone(profile);
+  await page.evaluate(() => localStorage.setItem('mf-creator-seen', '1'));
+  await page.goto(`${base}/?app#/creator`, { waitUntil: 'load' });
+  await until(page, () => !!document.querySelector('[data-screen="creator"]'), 60_000);
+  await sleep(2500);
+  await page.evaluate(() => document.querySelector('.pm-turn__card button')?.click());
+  const audit = () =>
+    page.evaluate(() => {
+      const vis = (e) => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden';
+      const small = [...document.querySelectorAll('[data-screen="creator"] button')].filter((b) => vis(b) && !b.closest('.items')).map((b) => ({ t: (b.getAttribute('aria-label') || b.textContent || '').trim().slice(0, 14), r: b.getBoundingClientRect() })).filter((x) => Math.min(x.r.width, x.r.height) < 43.5).map((x) => `${x.t} ${Math.round(x.r.width)}x${Math.round(x.r.height)}`);
+      const save = document.querySelector('[data-action="save"]');
+      const vw = document.documentElement.classList.contains('mf-rotated') ? innerHeight : innerWidth;
+      const turned = document.documentElement.classList.contains('mf-rotated');
+      const tabs = [...document.querySelectorAll('.mf-cr__tabs .tab')].filter(vis).map((t) => { const r = t.getBoundingClientRect(); return turned ? r.bottom : r.right; });
+      const edge = turned ? innerHeight : innerWidth;
+      return { small, save: save && vis(save) ? { text: save.textContent.trim(), clipped: [...save.querySelectorAll('span')].some((sp) => vis(sp) && sp.scrollWidth > sp.clientWidth + 1) } : null, tabsOff: tabs.filter((x) => x > edge + 1).length, vw };
+    });
+  const bodyStep = await audit();
+  await page.screenshot({ path: join(out, `p1-8-${profile}-body.png`) });
+  check(`${profile}: body step: no target under 44 px, Save whole`, !bodyStep.small.length && !!bodyStep.save && !bodyStep.save.clipped, JSON.stringify(bodyStep));
+  await tap(page, '[data-action="next"]');
+  await sleep(1500);
+  const look = await audit();
+  check(`${profile}: look step: no target under 44 px, every tab on screen, Save whole`, !look.small.length && look.tabsOff === 0 && !!look.save && !look.save.clipped, JSON.stringify(look));
+  // a part-shown card: a tap on its visible part picks it, never the buttons under the list
+  const pick = await page.evaluate(() => {
+    const list = document.querySelector('.mf-cr__list').getBoundingClientRect();
+    const turned = document.documentElement.classList.contains('mf-rotated');
+    const tile = [...document.querySelectorAll('.mf-cr__list .item')].find((t) => { const r = t.getBoundingClientRect(); return turned ? r.left < list.left && r.right > list.left : r.top < list.bottom && r.bottom > list.bottom; });
+    if (!tile) return { none: true };
+    const r = tile.getBoundingClientRect();
+    const x = turned ? (Math.max(r.left, list.left) + r.right) / 2 : r.left + r.width / 2;
+    const y = turned ? r.top + r.height / 2 : (r.top + Math.min(r.bottom, list.bottom)) / 2;
+    const hit = document.elementFromPoint(x, y);
+    return { id: tile.dataset.id, x, y, hits: hit?.closest('.item')?.dataset.id ?? hit?.closest('button')?.dataset.action ?? hit?.className };
+  });
+  check(`${profile}: a tap on a part-shown card's visible half lands on the card`, pick.none || pick.hits === pick.id, JSON.stringify(pick));
+  const thumbs = await until(page, () => document.querySelectorAll('.mf-item__glyph.has-thumb').length >= 2, 40_000);
+  await sleep(500);
+  await page.screenshot({ path: join(out, `p1-8-${profile}-look.png`) });
+  check(`${profile}: items show their own pictures`, thumbs, String(await page.evaluate(() => document.querySelectorAll('.mf-item__glyph.has-thumb').length)));
+  await page.close();
+}
+
+const SCENARIOS = { 'no-popups': noPopups, 'home-taps': homeTaps, 'slim-cards': slimCards, armory, 'match-end': matchEnd, invite, 'play-now': playNow, creator };
 try {
   for (const [name, run] of Object.entries(SCENARIOS)) {
     if (only.length && !only.includes(name)) continue;
-    for (const profile of ['sideways', 'upright']) await run(profile);
+    for (const profile of (process.env.PROFILES ?? 'sideways,upright').split(',')) await run(profile);
   }
 } finally {
   await browser.close();

@@ -13,7 +13,7 @@ export interface FlightCopy {
   help: string;
 }
 
-type Words = { moveSide: 'left' | 'right'; fire: string };
+type Words = { moveSide: 'left' | 'right'; fire: string; jetButton?: boolean; dashButton?: boolean };
 const other = (side: 'left' | 'right') => (side === 'left' ? 'right' : 'left');
 
 /** Fire on touch, per fire mode (touch/settings.ts FireMode; the aim dial's side) */
@@ -32,7 +32,9 @@ export const FLIGHT_COPY: Record<'run' | 'fly' | 'hit' | 'dash' | 'throw', (devi
       : { title: 'Run.', body: 'Reach the marker.', help: d === 'pad' ? 'Push the move stick either way.' : 'Hold a direction key. 3 m does it.' },
   fly: (d, t) =>
     d === 'touch'
-      ? { title: 'Fly.', body: `Push the ${t.moveSide} dial up. Reach the marker.`, help: `Push the ${t.moveSide} dial up and hold.` }
+      ? t.jetButton
+        ? { title: 'Fly.', body: `Hold JET, or push the ${t.moveSide} dial up. Reach the marker.`, help: 'Hold JET until you reach the marker.' }
+        : { title: 'Fly.', body: `Push the ${t.moveSide} dial up. Reach the marker.`, help: `Push the ${t.moveSide} dial up and hold.` }
       : { title: 'Fly.', body: 'Hold to fly. Watch the fuel.', help: 'Up to the marker. Fuel refills on the ground.' },
   hit: (d, t) =>
     d === 'touch'
@@ -40,7 +42,9 @@ export const FLIGHT_COPY: Record<'run' | 'fly' | 'hit' | 'dash' | 'throw', (devi
       : { title: 'Fire.', body: '3 hits on the target.', help: d === 'pad' ? 'Aim with the other stick. The ring marks the target.' : 'Aim with the mouse. The ring marks the target.' },
   dash: (d, t) =>
     d === 'touch'
-      ? { title: 'Dash.', body: `Tap the dash button, or flick the ${t.moveSide} dial.`, help: 'Swipe the dash button any way.' }
+      ? t.dashButton
+        ? { title: 'Dash.', body: `Tap the dash button, or flick the ${t.moveSide} dial.`, help: 'Swipe the dash button any way.' }
+        : { title: 'Dash.', body: `Flick the ${t.moveSide} dial any way, then let go.`, help: 'Push it to the rim fast and lift: a flick.' }
       : { title: 'Dash.', body: 'Dodges fire. Any direction.', help: 'Hold a direction, then dash.' },
   throw: (d) =>
     d === 'touch'

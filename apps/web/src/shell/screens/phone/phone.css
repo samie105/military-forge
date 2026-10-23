@@ -95,10 +95,10 @@ html.reduce-motion .mf-fit--phone { --m-rise: 0px; }
 .pm-share .pm-chip { top: auto; bottom: 30px; }
 .pm-pause .pm-chip { top: auto; bottom: 12px; }
 .pm-scrim { position: absolute; inset: 0; z-index: var(--z-panel); background: var(--c-scrim); animation: pm-fade var(--m-fast) var(--ease-arrive) both; }
-.pm-scrim.is-leaving { animation: pm-fade-out var(--m-fast) var(--ease-leave) both; }
+.pm-scrim.is-leaving { animation: pm-fade-out var(--m-fast) var(--ease-leave) both; pointer-events: none; }
 @keyframes pm-fade-out { to { opacity: 0; } }
 .pm-sheet { position: absolute; z-index: var(--z-panel); left: 50%; bottom: 0; width: min(560px, calc(100% - 2 * var(--safe-l))); translate: -50% 0; display: flex; flex-direction: column; gap: 10px; padding: 14px 16px calc(var(--safe-b) + 6px); border-bottom: 0; border-radius: var(--r-md) var(--r-md) 0 0; animation: pm-sheet-in var(--m-base) var(--ease-arrive) both; }
-.pm-sheet.is-leaving { animation: pm-sheet-out var(--m-fast) var(--ease-leave) both; }
+.pm-sheet.is-leaving { animation: pm-sheet-out var(--m-fast) var(--ease-leave) both; pointer-events: none; }
 @keyframes pm-sheet-in { from { transform: translateY(100%); } to { transform: none; } }
 @keyframes pm-sheet-out { to { transform: translateY(100%); } }
 html.reduce-motion .pm-sheet { animation-name: pm-fade; }
@@ -381,3 +381,7 @@ html.reduce-motion .pm-turn__card .ic { animation: none; }
 .pm-adv__sum b::after { content: '›'; font-size: 20px; line-height: 1; transition: rotate var(--m-fast) var(--ease-settle); }
 .pm-adv[open] .pm-adv__sum b::after { rotate: 90deg; }
 .pm-adv__sum span { color: var(--c-muted); font-size: var(--fs-14); }
+
+/* Play now is the hero (mobile audit P1-6); Create room sits under it, smaller, on the volt poster */
+.pm-poster .pm-create-room { align-self: flex-start; min-height: 44px; padding: 0 10px; color: var(--c-volt-ink); border-color: color-mix(in srgb, var(--c-volt-ink) 40%, transparent); font-size: var(--fs-14); }
+.pm-poster .pm-create-room:disabled { opacity: 0.55; }
