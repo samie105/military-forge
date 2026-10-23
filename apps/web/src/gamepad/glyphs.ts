@@ -5,13 +5,14 @@
  *
  * A pad binding is shown as a code in the keyboard's namespace so every prompt (HUD, tips, the
  * controls card) can take it where it takes 'KeyE': `Pad<n>` is standard button n (standard.ts),
- * `PadLS` / `PadRS` the sticks, `PadLSUp` / `PadLSDown` the left stick pushed up or down.
+ * `PadLS` / `PadRS` the sticks, `PadLSUp` / `PadLSDown` the left stick pushed up or down, and
+ * `PadHold<n>` button n held (Standard's "hold X to take").
  */
 import { B, type PadFamily } from './standard';
 
 export type GlyphFamily = Exclude<PadFamily, 'generic'>;
 
-const PAD_CODE = /^Pad(\d{1,2}|LS|RS|LSUp|LSDown|RSUp|RSDown)$/;
+const PAD_CODE = /^Pad(\d{1,2}|Hold\d{1,2}|LS|RS|LSUp|LSDown|RSUp|RSDown)$/;
 
 export function isPadCode(code: string | undefined | null): code is string {
   return typeof code === 'string' && PAD_CODE.test(code);
@@ -19,11 +20,14 @@ export function isPadCode(code: string | undefined | null): code is string {
 
 export const padCode = (button: number): string => `Pad${button}`;
 
-/** The button a `Pad<n>` code names, or −1 (a stick code). */
+/** The button a `Pad<n>` (or `PadHold<n>`) code names, or −1 (a stick code). */
 export function padButtonOf(code: string): number {
-  const m = /^Pad(\d{1,2})$/.exec(code);
+  const m = /^Pad(?:Hold)?(\d{1,2})$/.exec(code);
   return m ? Number(m[1]) : -1;
 }
+
+/** A `PadHold<n>` code: button n held. */
+export const isHoldCode = (code: string): boolean => /^PadHold\d{1,2}$/.test(code);
 
 /** A generic pad shows Xbox's letters (most PC pads print them). */
 export const glyphFamily = (f: PadFamily): GlyphFamily => (f === 'generic' ? 'xbox' : f);
@@ -58,6 +62,7 @@ export interface LabelOptions {
 /** The words or symbol for a pad code ('Pad3' → "△" or "Y"), or '' for a code that isn't a pad's. */
 export function padLabel(code: string, family: PadFamily, opts: LabelOptions = {}): string {
   const f = glyphFamily(family);
+  if (isHoldCode(code)) return `Hold ${padLabel(`Pad${padButtonOf(code)}`, family, opts)}`;
   switch (code) {
     case 'PadLS':
       return 'L stick';
@@ -88,6 +93,7 @@ export function padLabel(code: string, family: PadFamily, opts: LabelOptions = {
 /** What a screen reader hears: "Triangle button", "Right trigger"… (the drawings are aria-hidden). */
 export function padSpoken(code: string, family: PadFamily, opts: LabelOptions = {}): string {
   const f = glyphFamily(family);
+  if (isHoldCode(code)) return `Hold ${padSpoken(`Pad${padButtonOf(code)}`, family, opts)}`;
   const b = padButtonOf(code);
   if (f === 'playstation' && b >= 0 && b <= B.North) return ['Cross', 'Circle', 'Square', 'Triangle'][b]! + ' button';
   if (b >= 0 && b <= B.North) return `${FACE[f][b]} button`;
@@ -152,9 +158,19 @@ function centreGlyph(kind: 'menu' | 'view' | 'share' | 'pad' | 'home' | 'plus' |
   return svg(`<rect x="2.5" y="5" width="19" height="14" rx="7"/>${signs[kind]}`);
 }
 
+/**
+ * A held button: the word HOLD, then the button's own drawing (nested, so its colours and shape
+ * stay), so a prompt reads "HOLD (X) take" without new HUD words.
+ */
+function holdGlyph(button: string): string {
+  const inner = button.replace(/^<svg class="([^"]*)"/, '<svg x="27" class="$1"');
+  return `<svg class="mf-padglyph__svg mf-padglyph--hold" viewBox="0 0 51 24" width="51" height="24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${text('HOLD', 12.5, 9.5)}${inner}</svg>`;
+}
+
 /** The drawing for a pad code (an inline SVG string), or '' for a code that isn't a pad's. */
 export function padGlyphSvg(code: string, family: PadFamily): string {
   const f = glyphFamily(family);
+  if (isHoldCode(code)) return holdGlyph(padGlyphSvg(`Pad${padButtonOf(code)}`, family));
   switch (code) {
     case 'PadLS':
       return stickGlyph('L', null);

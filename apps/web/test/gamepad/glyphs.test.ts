@@ -125,9 +125,9 @@ describe('prompts in the pad’s buttons', () => {
     const b = padShownBindings(DEFAULT_PAD_SETTINGS);
     const rows = Object.fromEntries(tipsRows(b));
     expect(rows['Move']).toEqual(['PadLS']);
-    expect(rows['Jet (hold)']).toEqual(['PadLSUp', 'Pad0']);
+    expect(rows['Jet (hold)']).toEqual(['PadLSUp', `Pad${B.L2}`]);
     expect(rows['Fire']).toEqual([`Pad${B.R2}`]);
-    expect(rows['Take a gun']).toEqual([`Pad${B.North}`]);
+    expect(rows['Take a gun']).toEqual([`PadHold${B.West}`]); // Standard: hold X to take
     expect(rows['Scoreboard (hold)']).toEqual([`Pad${B.Select}`]);
     expect(padAimCode(DEFAULT_PAD_SETTINGS)).toBe('PadRS');
   });
@@ -135,8 +135,19 @@ describe('prompts in the pad’s buttons', () => {
   it('swapped sticks and no stick jet show up in the prompts', () => {
     const b = padShownBindings({ ...DEFAULT_PAD_SETTINGS, swapSticks: true, stickJet: false });
     expect(b.left).toEqual(['PadRS']);
-    expect(b.jet).toEqual(['Pad0']);
+    expect(b.jet).toEqual([`Pad${B.L2}`, `Pad${B.South}`]);
     expect(padAimCode({ ...DEFAULT_PAD_SETTINGS, swapSticks: true })).toBe('PadLS');
+  });
+
+  it('a held button reads "Hold X" and draws the word HOLD before the button', () => {
+    expect(isPadCode('PadHold2')).toBe(true);
+    expect(padButtonOf('PadHold2')).toBe(2);
+    expect(padLabel('PadHold2', 'xbox')).toBe('Hold X');
+    expect(padLabel('PadHold2', 'playstation')).toBe('Hold □');
+    expect(padSpoken('PadHold2', 'playstation')).toBe('Hold Square button');
+    const svg = padGlyphSvg('PadHold2', 'xbox');
+    expect(svg).toContain('HOLD');
+    expect(svg).toContain('x="27"');
   });
 
   it('every keyboard action has an entry (the shape the prompts take)', () => {

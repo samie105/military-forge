@@ -227,3 +227,153 @@ html[data-input='pad'] .mf-pad-focused {
   .mf-pad-style__card img { height: 45px; }
   .mf-pad-style__card small { display: none; }
 }
+
+/* Settings → Controller's live check (PadLive.tsx): the stick-test circles and the live mapping */
+.mf-padlive {
+  margin: var(--sp-4, 16px) 0;
+  padding: var(--sp-4, 16px);
+  border: var(--bw, 1px) solid var(--c-line, #3a3d2c);
+  border-radius: 12px;
+}
+.mf-padlive.is-testing {
+  border-color: var(--c-volt, #d6ff3b);
+  box-shadow: 0 0 0 1px var(--c-volt, #d6ff3b) inset;
+}
+.mf-padlive__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.mf-padlive__head > span {
+  flex: 1 1 240px;
+  color: var(--c-muted, #a9a68e);
+  font-size: var(--fs-14, 14px);
+}
+.mf-padlive__sticks {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.mf-padlive__stick {
+  margin: 0;
+  width: 230px;
+  text-align: center;
+}
+.mf-padlive__stick svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.mf-padlive__stick figcaption {
+  display: grid;
+  gap: 2px;
+  font-size: var(--fs-14, 14px);
+}
+.mf-padlive__stick figcaption span {
+  color: var(--c-muted, #a9a68e);
+}
+.mf-padlive__rim {
+  fill: color-mix(in srgb, var(--c-ink-900, #0e100b) 70%, transparent);
+  stroke: var(--c-line, #3a3d2c);
+  stroke-width: 2;
+}
+.mf-padlive__outer {
+  fill: none;
+  stroke: var(--c-muted, #a9a68e);
+  stroke-dasharray: 4 5;
+  opacity: 0.6;
+}
+.mf-padlive__dead {
+  fill: color-mix(in srgb, var(--c-muted, #a9a68e) 28%, transparent);
+  stroke: var(--c-muted, #a9a68e);
+  stroke-width: 1;
+}
+.mf-padlive__hold {
+  fill: color-mix(in srgb, var(--c-volt, #d6ff3b) 9%, transparent);
+  stroke: color-mix(in srgb, var(--c-volt, #d6ff3b) 45%, transparent);
+  stroke-dasharray: 3 4;
+}
+.mf-padlive__jet {
+  fill: color-mix(in srgb, var(--c-volt, #d6ff3b) 26%, transparent);
+  stroke: var(--c-volt, #d6ff3b);
+}
+.mf-padlive__crouch {
+  fill: color-mix(in srgb, var(--c-brass, #c9a24a) 28%, transparent);
+  stroke: var(--c-brass, #c9a24a);
+}
+.mf-padlive__run {
+  stroke: var(--c-paper, #ece3c8);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 4;
+}
+.mf-padlive__ring {
+  fill: none;
+  stroke: var(--c-paper, #ece3c8);
+  stroke-dasharray: 5 4;
+  opacity: 0.7;
+}
+.mf-padlive__ring--pull {
+  stroke: var(--c-volt, #d6ff3b);
+}
+.mf-padlive__dot {
+  fill: var(--c-volt, #d6ff3b);
+  stroke: var(--c-ink-900, #0e100b);
+  stroke-width: 3;
+}
+.mf-padlive__dot.is-dead {
+  fill: var(--c-muted, #a9a68e);
+}
+.mf-padlive__legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  flex: 1 1 220px;
+  font-size: var(--fs-14, 14px);
+  color: var(--c-muted, #a9a68e);
+}
+.mf-padlive__key {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 8px;
+  border-radius: 3px;
+  vertical-align: -2px;
+}
+.mf-padlive__key--dead { background: color-mix(in srgb, var(--c-muted, #a9a68e) 40%, transparent); }
+.mf-padlive__key--run { border-left: 2px dashed var(--c-paper, #ece3c8); border-radius: 0; width: 8px; }
+.mf-padlive__key--jet { background: color-mix(in srgb, var(--c-volt, #d6ff3b) 40%, transparent); border: 1px solid var(--c-volt, #d6ff3b); }
+.mf-padlive__key--crouch { background: color-mix(in srgb, var(--c-brass, #c9a24a) 40%, transparent); border: 1px solid var(--c-brass, #c9a24a); }
+.mf-padlive__key--ring { border: 1px dashed var(--c-volt, #d6ff3b); border-radius: 50%; }
+.mf-padlive__map {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
+  gap: 6px;
+}
+.mf-padlive__map li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--c-line, #3a3d2c);
+  border-radius: 8px;
+  font-size: var(--fs-14, 14px);
+}
+.mf-padlive__map li > span {
+  flex: 1;
+}
+.mf-padlive__map li.is-on {
+  border-color: var(--c-volt, #d6ff3b);
+  background: color-mix(in srgb, var(--c-volt, #d6ff3b) 16%, transparent);
+}
+.mf-padlive__reads {
+  margin: 10px 0 0;
+  font-size: var(--fs-14, 14px);
+}

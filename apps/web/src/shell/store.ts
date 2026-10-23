@@ -61,7 +61,7 @@ export type Screen =
 export type Overlay = 'menu' | 'settings' | 'join' | 'name' | 'lan-add' | 'lan-join' | null;
 
 /** Settings sections (the kit's five tabs, and Touch for the phone controls). */
-export type SettingsTab = 'graphics' | 'audio' | 'controls' | 'accessibility' | 'network' | 'touch';
+export type SettingsTab = 'graphics' | 'audio' | 'controls' | 'controller' | 'accessibility' | 'network' | 'touch';
 
 /**
  * Why the player can't get into (or stay in) a room, as the kit's connection screen shows it: the

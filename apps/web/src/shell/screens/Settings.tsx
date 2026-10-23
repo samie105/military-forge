@@ -24,6 +24,7 @@ export const TABS: readonly { id: SettingsTab; label: string; icon: string }[] =
   { id: 'graphics', label: 'Graphics', icon: 'monitor' },
   { id: 'audio', label: 'Audio', icon: 'speaker' },
   { id: 'controls', label: 'Controls', icon: 'keyboard' },
+  { id: 'controller', label: 'Controller', icon: 'sliders' },
   { id: 'accessibility', label: 'Accessibility', icon: 'access' },
   { id: 'network', label: 'Network', icon: 'globe' },
   { id: 'touch', label: 'Touch', icon: 'target' },
@@ -272,7 +273,6 @@ function Controls({ settings }: { settings: Settings }) {
           {moved}
         </p>
       )}
-      <PadControls pad={settings.pad} onChange={(pad) => ctl.updateSettings({ pad })} reduceFlashes={settings.reduceFlashes} />
     </div>
   );
 }
@@ -604,7 +604,9 @@ export function resetPatch(tab: SettingsTab): Partial<Settings> | null {
     case 'audio':
       return { audio: DEFAULT_AUDIO };
     case 'controls':
-      return { bindings: defaultBindings(), doubleTapDash: DEFAULT_SETTINGS.doubleTapDash, pad: DEFAULT_PAD_SETTINGS };
+      return { bindings: defaultBindings(), doubleTapDash: DEFAULT_SETTINGS.doubleTapDash };
+    case 'controller':
+      return { pad: DEFAULT_PAD_SETTINGS };
     case 'accessibility':
       return { reduceFlashes: DEFAULT_SETTINGS.reduceFlashes, softBursts: DEFAULT_SETTINGS.softBursts, reduceMotion: DEFAULT_SETTINGS.reduceMotion, reduceTransparency: DEFAULT_SETTINGS.reduceTransparency, colorBlind: DEFAULT_SETTINGS.colorBlind, textScale: DEFAULT_SETTINGS.textScale };
     case 'network':
@@ -657,6 +659,11 @@ export function SettingsScreen({ store }: { store: ShellStore }) {
             {tab === 'graphics' && <Graphics settings={settings} />}
             {tab === 'audio' && <Audio settings={settings} />}
             {tab === 'controls' && <Controls settings={settings} />}
+            {tab === 'controller' && (
+              <div className="tabpanel mf-tabpanel" role="tabpanel" aria-label="Controller">
+                <PadControls pad={settings.pad} onChange={(pad) => ctl.updateSettings({ pad })} reduceFlashes={settings.reduceFlashes} />
+              </div>
+            )}
             {tab === 'accessibility' && <Accessibility settings={settings} />}
             {tab === 'network' && <Network settings={settings} inRoom={inRoom} />}
             {tab === 'touch' && <Touch />}

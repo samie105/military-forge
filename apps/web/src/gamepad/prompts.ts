@@ -27,7 +27,8 @@ export function padShownBindings(pad: PadSettings): Bindings {
     slot1: [],
     slot2: [],
     dual: codes('dual'),
-    interact: codes('interact'),
+    // Standard: hold reload to take ("Hold X"), then any button bound to take
+    interact: pad.holdTake && pad.bindings.reload.length ? [`PadHold${pad.bindings.reload[0]}`, ...codes('interact')] : codes('interact'),
     shield: codes('shield'),
     scoreboard: codes('scoreboard'),
     netGraph: [],

@@ -13,10 +13,11 @@ import type { Input, SimEvent } from '@military-forge/sim';
 import type { Camera } from '../camera';
 import type { ThrowLatch } from '../input';
 import { appMenuScope, appOverlayScope, sendKey } from './menus';
-import { PadManager, type PadHost } from './manager';
+import { PadManager, type PadFrame, type PadHost } from './manager';
+import type { MapDef } from '@military-forge/content';
 import { currentDevice, currentPadFamily, onInputDevice, setGlyphSetting, startDeviceTracking } from './device';
 import { padGlyphSvg, padLabel } from './glyphs';
-import type { PadSettings } from './settings';
+import { applyPadPreset, type PadPresetId, type PadSettings } from './settings';
 import './pad.css';
 
 export { currentDevice, currentPadFamily, onInputDevice, type InputDevice, type InputKind } from './device';
@@ -41,11 +42,13 @@ export interface GamepadDeps {
   };
   camera: Camera;
   renderer: {
-    render(frame: { localId: number; players: readonly { id: number; alive: boolean; x: number; y: number }[] }, ...rest: never[]): void;
+    render(frame: PadFrame, ...rest: never[]): void;
     onEvents(events: readonly SimEvent[], localId: number): void;
   };
   /** the keyboard code that holds the scoreboard open (the HUD listens for it) */
   scoreboardCode?: () => string | undefined;
+  /** the map being played (aim assist's line of sight: walls hide enemies) */
+  map?: () => MapDef | null;
 }
 
 const escape = () => sendKey(window, 'Escape');
@@ -65,6 +68,7 @@ export function mountGamepad(d: GamepadDeps): PadManager {
       const code = d.scoreboardCode?.() ?? 'Tab';
       window.dispatchEvent(new KeyboardEvent(down ? 'keydown' : 'keyup', { key: code === 'Tab' ? 'Tab' : code, code, bubbles: true, cancelable: true }));
     },
+    map: d.map,
   };
   const m = (manager = new PadManager(host));
 
@@ -89,7 +93,8 @@ export function mountGamepad(d: GamepadDeps): PadManager {
 
   mountHints(m);
   m.start();
-  if (import.meta.env.DEV) Object.assign(window, { __pad: { manager: m, device: currentDevice } });
+  // dev builds: the manager, the device, and a layout switch for scripts (pad-check.mjs)
+  if (import.meta.env.DEV) Object.assign(window, { __pad: { manager: m, device: currentDevice, layout: (id: PadPresetId) => m.applySettings(applyPadPreset(m.settings, id), false) } });
   return m;
 }
 

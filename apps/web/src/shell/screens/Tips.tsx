@@ -100,7 +100,7 @@ export function TipsCard({ bindings, doubleTapDash = true }: { bindings: Setting
             className="btn btn--ghost m-p8"
             onClick={blurAfter(() => {
               ctl.closeTips();
-              ctl.openSettings('controls');
+              ctl.openSettings(pad ? 'controller' : 'controls');
             })}
           >
             <Icon name="keyboard" />

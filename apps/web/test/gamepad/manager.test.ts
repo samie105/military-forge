@@ -5,6 +5,7 @@ import { ThrowLatch } from '../../src/input';
 import { PadManager } from '../../src/gamepad/manager';
 import { currentDevice } from '../../src/gamepad/device';
 import { B } from '../../src/gamepad/standard';
+import { DEFAULT_PAD_SETTINGS, applyPadPreset } from '../../src/gamepad/settings';
 
 interface FakePad {
   id: string;
@@ -127,6 +128,117 @@ describe('the pad in play', () => {
     press(B.Select, false);
     sample();
     expect(calls.scoreboard).toEqual([true, false]);
+  });
+});
+
+describe('the Standard preset in play', () => {
+  it('LT jets while held (and ✕ / A too); it lets go under 0.20', () => {
+    const { sample } = setup();
+    press(B.L2, true, 0.35);
+    expect(sample().buttons & Btn.Jet).toBe(Btn.Jet);
+    press(B.L2, true, 0.22);
+    expect(sample().buttons & Btn.Jet).toBe(Btn.Jet);
+    press(B.L2, true, 0.19);
+    expect(sample().buttons & Btn.Jet).toBe(0);
+    press(B.South);
+    expect(sample().buttons & Btn.Jet).toBe(Btn.Jet);
+  });
+
+  it('X reloads at once; held 0.3 s it also takes the gun underfoot, once', () => {
+    const { m, poll } = setup();
+    const at = (t: number) => {
+      const out = createInput();
+      m.apply(out, 0, 0, t);
+      return out.buttons;
+    };
+    press(B.West);
+    expect(at(1000) & (Btn.Reload | Btn.Interact)).toBe(Btn.Reload);
+    expect(at(1200) & Btn.Interact).toBe(0);
+    expect(at(1310) & Btn.Interact).toBe(Btn.Interact);
+    expect(at(1400) & Btn.Interact).toBe(0); // once per hold
+    press(B.West, false);
+    poll();
+    press(B.West);
+    expect(at(1500) & Btn.Interact).toBe(0); // a new press starts its own clock
+  });
+
+  it('a run that drifts up doesn’t take off; a steep push does', () => {
+    const { sample } = setup();
+    pad.axes = [Math.cos(0.7), -Math.sin(0.7), 0, 0]; // 40° up
+    expect(sample().buttons & (Btn.Jet | Btn.Right)).toBe(Btn.Right);
+    pad.axes = [Math.cos(1.2), -Math.sin(1.2), 0, 0]; // 69° up
+    expect(sample().buttons & Btn.Jet).toBe(Btn.Jet);
+    pad.axes = [Math.cos(0.45), -Math.sin(0.45), 0, 0]; // back to 26°: still flying
+    expect(sample().buttons & Btn.Jet).toBe(Btn.Jet);
+  });
+
+  it('the aim holds under 0.30 of raw push, and a turnaround lands in 3 ticks', () => {
+    const { sample } = setup();
+    pad.axes = [0, 0, 1, 0]; // right
+    expect(sample().aim).toBe(0);
+    pad.axes = [0, 0, 0, -0.25]; // a light push up: under 0.30, the aim holds
+    expect(sample().aim).toBe(0);
+    pad.axes = [0, 0, -1, 0]; // left: a flip
+    const ticks: number[] = [];
+    for (let i = 0; i < 3; i++) ticks.push(sample().aim);
+    expect(ticks[2]).toBe(32768);
+    expect(ticks[0]).not.toBe(32768);
+  });
+});
+
+describe('One-stick', () => {
+  it('the aim finds the nearest enemy in sight and the gun fires by itself after 100 ms on him', () => {
+    const { m } = setup();
+    m.applySettings(applyPadPreset(DEFAULT_PAD_SETTINGS, 'oneStick'), false);
+    const frame = { localId: 0, players: [{ id: 0, alive: true, x: 0, y: 0, active: 0, weapons: [{ def: 0 }] }, { id: 1, alive: true, x: 8, y: 2 - 0.7 }] };
+    m.onFrame(frame);
+    const at = (t: number) => {
+      const out = createInput();
+      m.apply(out, 0, 2, t);
+      return out;
+    };
+    let out = at(1000);
+    for (let t = 1017; t < 1100; t += 17) out = at(t);
+    // aimed at (8, 2) from the shoulder (0, 2): straight right
+    expect(out.aim === 0 || out.aim === 65535).toBe(true);
+    expect(at(1105).buttons & Btn.Fire).toBe(Btn.Fire);
+    // the enemy gone: the gun keeps firing 150 ms, then stops
+    m.onFrame({ ...frame, players: [frame.players[0]!] });
+    expect(at(1200).buttons & Btn.Fire).toBe(Btn.Fire);
+    expect(at(1300).buttons & Btn.Fire).toBe(0);
+  });
+
+  it('with nobody in sight the aim follows the way you move', () => {
+    const { m } = setup();
+    m.applySettings(applyPadPreset(DEFAULT_PAD_SETTINGS, 'oneStick'), false);
+    m.onFrame({ localId: 0, players: [{ id: 0, alive: true, x: 0, y: 0, active: 0, weapons: [{ def: 0 }] }] });
+    pad.axes = [-1, 0, 0, 0];
+    let out = createInput();
+    for (let t = 1000; t < 1100; t += 17) {
+      out = createInput();
+      m.apply(out, 0, 2, t);
+    }
+    expect(out.aim).toBe(32768);
+    expect(out.buttons & Btn.Fire).toBe(0);
+  });
+});
+
+describe('the controller check in Settings', () => {
+  it('presses only show while testing: no menu moves; Options ends it', () => {
+    const menu = { open: true };
+    const { m, poll, calls } = setup(menu);
+    let ended = 0;
+    m.testInput(() => ended++);
+    press(B.East);
+    poll();
+    press(B.East, false);
+    poll();
+    expect(calls.back).toBe(0);
+    press(B.Start);
+    poll();
+    expect(ended).toBe(1);
+    expect(calls.pause).toBe(0);
+    expect(m.testingInput).toBe(false);
   });
 });
 

@@ -12,9 +12,11 @@ import { Switch, blurAfter } from '../ui/Screen';
 import { padManager } from '.';
 import { padCode } from './glyphs';
 import { PadKbd, useInputDevice } from './react';
-import { DEFAULT_PAD_SETTINGS, MAX_PAD_BINDINGS, PAD_ACTIONS, PAD_LIMITS, rebindPad, unbindPad, type GlyphSetting, type PadActionDef, type PadActionId, type PadSettings } from './settings';
+import { DEFAULT_PAD_SETTINGS, MAX_PAD_BINDINGS, PAD_ACTIONS, PAD_LIMITS, PAD_PRESETS, PAD_PRESET_ORDER, applyPadPreset, padLayoutOf, rebindPad, unbindPad, type GlyphSetting, type PadActionDef, type PadActionId, type PadSettings } from './settings';
 import { padFamily } from './standard';
 import { padAimCode, PAD_MENU_CODE } from './prompts';
+import { PadLive } from './PadLive';
+import { ASSIST_LEVELS, type AssistLevel } from '../input/assist';
 
 /** How long a rebind waits for a button (s). */
 const CAPTURE_S = 6;
@@ -28,6 +30,14 @@ const STYLE_CARDS = [
 ] as const;
 
 type Capture = { action: PadActionId; index: number } | null;
+
+const ASSIST_NAME: Record<AssistLevel, string> = { off: 'Off', light: 'Light', standard: 'Standard', strong: 'Strong' };
+const ASSIST_TEXT: Record<AssistLevel, string> = {
+  off: 'No help: the aim goes exactly where the stick points.',
+  light: 'The aim slows a little on an enemy, so a sweep lingers on him. It never pulls.',
+  standard: 'Light, plus a gentle pull toward an enemy near your aim line while you aim (at most 3° a tick, within your gun’s range). You always win a disagreement.',
+  strong: 'Standard, plus the aim stays on your target when you let the stick go.',
+};
 
 /** The pads connected now (re-read when one comes or goes). */
 function usePads(): Gamepad[] {
@@ -163,8 +173,29 @@ export function PadControls({ pad, onChange, reduceFlashes = false, phone = fals
       <Switch on={pad.enabled} onChange={(enabled) => set({ enabled })} label="Use controllers" showState={false} />
     </div>
   );
-  const binds = (a: PadActionDef) =>
-    Array.from({ length: MAX_PAD_BINDINGS }, (_, i) => (i <= pad.bindings[a.id].length ? <BindButton key={i} action={a} index={i} button={pad.bindings[a.id][i]} capture={capture} onCapture={setCapture} /> : null));
+  const layout = padLayoutOf(pad);
+  const layoutRow = (
+    <Row phone={phone} label="Layout" desc={layout === 'custom' ? 'Custom: your own buttons. Pick a layout to start again from it.' : PAD_PRESETS[layout].blurb}>
+      <div className="seg" role="radiogroup" aria-label="Controller layout">
+        {PAD_PRESET_ORDER.map((id) => (
+          <button key={id} type="button" className="seg__opt" role="radio" aria-checked={layout === id} onClick={() => onChange(applyPadPreset(pad, id))}>
+            {PAD_PRESETS[id].name}
+          </button>
+        ))}
+        {layout === 'custom' && (
+          <button type="button" className="seg__opt" role="radio" aria-checked disabled>
+            Custom
+          </button>
+        )}
+      </div>
+    </Row>
+  );
+  const holdTakeCode = pad.holdTake && pad.bindings.reload[0] !== undefined ? `PadHold${pad.bindings.reload[0]}` : null;
+  const binds = (a: PadActionDef) => [
+    // hold to take: the reload button, held (not a binding of its own)
+    a.id === 'interact' && holdTakeCode ? <PadKbd key="hold" code={holdTakeCode} /> : null,
+    ...Array.from({ length: MAX_PAD_BINDINGS }, (_, i) => (i <= pad.bindings[a.id].length ? <BindButton key={i} action={a} index={i} button={pad.bindings[a.id][i]} capture={capture} onCapture={setCapture} /> : null)),
+  ];
 
   return (
     <section className="mf-padset" aria-label="Controller">
@@ -175,6 +206,8 @@ export function PadControls({ pad, onChange, reduceFlashes = false, phone = fals
           ? `${padName(active.id)}${pads.length > 1 ? ` (and ${pads.length - 1} more: the last one used plays)` : ''}${active.mapping === 'standard' ? '' : '. Its buttons may be laid out differently: rebind any that are off below.'}`
           : 'No controller yet. Connect one (USB or Bluetooth) and press any button. PlayStation, Xbox and most other pads work.'}
       </p>
+      {layoutRow}
+      <PadLive pad={pad} />
       <div className="mf-padset__preview" aria-label={`${pictured.name} controller preview`}>
         <img src={pictured.image} alt={`${pictured.name} controller`} draggable={false} />
         <span><b>{active ? padName(active.id) : pictured.name}</b><small>{active ? 'Connected controller' : 'Controller preview'}</small></span>
@@ -252,11 +285,26 @@ export function PadControls({ pad, onChange, reduceFlashes = false, phone = fals
       <Row phone={phone} label="Swap sticks" desc="Move with the right stick, aim with the left.">
         <Switch on={pad.swapSticks} onChange={(swapSticks) => set({ swapSticks })} label="Swap sticks" />
       </Row>
-      <Row phone={phone} label="Push up to jet" desc="Pushing the move stick up jets, as the jet button does.">
+      <Row phone={phone} label="Push up to jet" desc="Pushing the move stick steeply up jets, as the jet buttons do. A run that drifts up doesn't take off.">
         <Switch on={pad.stickJet} onChange={(stickJet) => set({ stickJet })} label="Push up to jet" />
       </Row>
-      <Row phone={phone} label="Aim assist" desc="The touch controls' light assist: the aim slows a little on a target. It never pulls.">
-        <Switch on={pad.aimAssist} onChange={(aimAssist) => set({ aimAssist })} label="Aim assist" />
+      <Row phone={phone} label="Aim for me" desc="The aim follows the nearest enemy you can see, in your gun's range; otherwise the way you move. Push the aim stick to take over. (One-stick)">
+        <Switch on={pad.autoAim} onChange={(autoAim) => set({ autoAim })} label="Aim for me" />
+      </Row>
+      <Row phone={phone} label="Fire for me" desc="The gun fires by itself while the aim lies on an enemy in range, after a tenth of a second. (One-stick)">
+        <Switch on={pad.autoFire} onChange={(autoFire) => set({ autoFire })} label="Fire for me" />
+      </Row>
+      <Row phone={phone} label="Hold reload to take" desc="Hold the reload button to take the gun you stand on. A tap still reloads.">
+        <Switch on={pad.holdTake} onChange={(holdTake) => set({ holdTake })} label="Hold reload to take" />
+      </Row>
+      <Row phone={phone} label="Aim assist" desc={ASSIST_TEXT[pad.assist]}>
+        <div className="seg" role="radiogroup" aria-label="Aim assist">
+          {ASSIST_LEVELS.map((level) => (
+            <button key={level} type="button" className="seg__opt" role="radio" aria-checked={pad.assist === level} onClick={() => set({ assist: level })}>
+              {ASSIST_NAME[level]}
+            </button>
+          ))}
+        </div>
       </Row>
       <Row phone={phone} label="Move stick dead zone" desc="Raise it if you drift with the stick let go.">
         <Range value={pad.moveDeadzone} range={PAD_LIMITS.deadzone} step={0.01} onChange={(moveDeadzone) => set({ moveDeadzone })} label="Move stick dead zone" show={pct} />
@@ -264,11 +312,11 @@ export function PadControls({ pad, onChange, reduceFlashes = false, phone = fals
       <Row phone={phone} label="Aim stick dead zone">
         <Range value={pad.aimDeadzone} range={PAD_LIMITS.deadzone} step={0.01} onChange={(aimDeadzone) => set({ aimDeadzone })} label="Aim stick dead zone" show={pct} />
       </Row>
-      <Row phone={phone} label={<>Fire trigger <Kbd code={padCode(7)} /></>} desc="How far you pull it before it fires.">
-        <Range value={pad.fireThreshold} range={PAD_LIMITS.threshold} step={0.05} onChange={(fireThreshold) => set({ fireThreshold })} label="Fire trigger threshold" show={pct} />
+      <Row phone={phone} label={<>Right trigger <Kbd code={padCode(7)} /></>} desc="How far you pull it before it counts (it lets go 10% lower).">
+        <Range value={pad.fireThreshold} range={PAD_LIMITS.threshold} step={0.05} onChange={(fireThreshold) => set({ fireThreshold })} label="Right trigger threshold" show={pct} />
       </Row>
-      <Row phone={phone} label={<>Aim trigger <Kbd code={padCode(6)} /></>}>
-        <Range value={pad.aimThreshold} range={PAD_LIMITS.threshold} step={0.05} onChange={(aimThreshold) => set({ aimThreshold })} label="Aim trigger threshold" show={pct} />
+      <Row phone={phone} label={<>Left trigger <Kbd code={padCode(6)} /></>}>
+        <Range value={pad.aimThreshold} range={PAD_LIMITS.threshold} step={0.05} onChange={(aimThreshold) => set({ aimThreshold })} label="Left trigger threshold" show={pct} />
       </Row>
       <Row phone={phone} label="Vibration" desc={reduceFlashes ? 'Off while Reduce flashes is on (Accessibility).' : 'When you fire, get hit, dash, and when blasts go off near you. Where the browser allows it.'}>
         <Switch on={pad.vibration} onChange={(vibration) => set({ vibration })} label="Vibration" />

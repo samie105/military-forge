@@ -11,7 +11,7 @@ import { applyPageSettings } from '../ui/pageSettings';
 import { currentDevice, notePad, onInputDevice, startDeviceTracking } from './device';
 import { glyphFamily, padCode, padGlyphSvg, padLabel } from './glyphs';
 import { PadManager } from './manager';
-import { dashDirection, heldBits, moveBits, padDashStrength, shapeAxes, triggerHeld } from './mapping';
+import { MOVE_ZONES, dashDirection, heldBits, moveBits, padDashStrength, shapeAxes, triggerHeld } from './mapping';
 import { PAD_ACTIONS, buttonMap } from './settings';
 import { B, BUTTON_COUNT, isDualSense, padFamily } from './standard';
 
@@ -21,7 +21,7 @@ startDeviceTracking();
 
 const root = document.getElementById('padcheck')!;
 const pad = loadSettings().pad;
-const map = buttonMap(pad.bindings);
+const map = buttonMap(pad.bindings, pad.holdTake);
 const rumbler = new PadManager({ menuScope: () => null, back: () => {}, pause: () => {} });
 
 const BIT_NAMES = Object.entries(Btn).filter(([n]) => n !== 'Repeat') as [string, number][];
@@ -149,7 +149,7 @@ function frame(): void {
     held.set(p.index, h);
     if (any) notePad(padFamily(p.id), isDualSense(p.id));
     const [lx, ly, rx, ry] = pad.swapSticks ? [p.axes[2] ?? 0, p.axes[3] ?? 0, p.axes[0] ?? 0, p.axes[1] ?? 0] : [p.axes[0] ?? 0, p.axes[1] ?? 0, p.axes[2] ?? 0, p.axes[3] ?? 0];
-    const move = shapeAxes(lx, ly, pad.moveDeadzone);
+    const move = shapeAxes(lx, ly, pad.moveDeadzone, 1, undefined, MOVE_ZONES.snapDeg);
     const aim = shapeAxes(rx, pad.invertY ? -ry : ry, pad.aimDeadzone, pad.aimCurve);
     c.sticks[0].style.transform = `translate(${(lx * 40).toFixed(1)}px, ${(ly * 40).toFixed(1)}px)`;
     c.sticks[1].style.transform = `translate(${(rx * 40).toFixed(1)}px, ${(ry * 40).toFixed(1)}px)`;

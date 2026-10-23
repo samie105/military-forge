@@ -30,7 +30,7 @@ export const PHONE_TABS: readonly { id: SettingsTab; label: string; icon: string
 ];
 
 /** A controller's section ("Pad"), once a pad has been used on this phone (gamepad/). */
-const PAD_TAB = { id: 'controls', label: 'Pad', icon: 'sliders' } as const satisfies (typeof PHONE_TABS)[number];
+const PAD_TAB = { id: 'controller', label: 'Pad', icon: 'sliders' } as const satisfies (typeof PHONE_TABS)[number];
 
 /** The tab a phone shows: the store's, unless it's one the phone leaves to the desktop (Controls). */
 export function phoneTab(tab: SettingsTab): SettingsTab {
@@ -290,7 +290,7 @@ export function PhoneSettings({ store }: { store: ShellStore }) {
   const padSeen = useInputDevice().pad !== null;
   const tabs = padSeen ? [...PHONE_TABS, PAD_TAB] : PHONE_TABS;
   const stored = useStore(store, (s) => s.settingsTab);
-  const tab = padSeen && stored === 'controls' ? 'controls' : phoneTab(stored);
+  const tab = padSeen && stored === 'controller' ? 'controller' : phoneTab(stored);
   const reset = () => {
     const patch = resetPatch(tab);
     if (patch) ctl.updateSettings(patch);
@@ -331,7 +331,7 @@ export function PhoneSettings({ store }: { store: ShellStore }) {
             {tab === 'audio' && <Audio settings={settings} />}
             {tab === 'accessibility' && <Accessibility settings={settings} />}
             {tab === 'network' && <Network settings={settings} />}
-            {tab === 'controls' && <PadControls phone pad={settings.pad} onChange={(pad) => ctl.updateSettings({ pad })} reduceFlashes={settings.reduceFlashes} />}
+            {tab === 'controller' && <PadControls phone pad={settings.pad} onChange={(pad) => ctl.updateSettings({ pad })} reduceFlashes={settings.reduceFlashes} />}
           </section>
         </div>
       </div>

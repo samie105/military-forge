@@ -101,7 +101,7 @@ export class ControllerOverlay {
       const legend = this.el.querySelector('.mf-pad-layout__legend')!;
       const rows = menu
         ? [{ label: 'Select', buttons: [0] }, { label: 'Back', buttons: [1] }, { label: 'Navigate', buttons: [12] }, { label: 'Tabs', buttons: [4, 5] }]
-        : PAD_ACTIONS.filter((a) => ['jet', 'reload', 'swap', 'interact'].includes(a.id)).map((a) => ({ label: a.id === 'interact' ? 'Take / use' : a.label.replace(' (hold)', ''), buttons: m.settings.bindings[a.id] }));
+        : PAD_ACTIONS.filter((a) => ['jet', 'reload', 'swap', 'interact'].includes(a.id)).map((a) => ({ label: a.id === 'interact' ? (m.settings.holdTake && !m.settings.bindings.interact.length ? 'Take (hold reload)' : 'Take / use') : a.label.replace(' (hold)', ''), buttons: a.id === 'interact' && m.settings.holdTake ? [...m.settings.bindings.reload.slice(0, 1), ...m.settings.bindings.interact] : m.settings.bindings[a.id] }));
       for (const rowData of rows) {
         const row = document.createElement('span');
         row.className = 'mf-pad-layout__action';

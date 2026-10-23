@@ -183,7 +183,7 @@ view3d?.attach(renderer, () => (mode instanceof OnlineMode ? mode.net : null)); 
 mountTouch({ sampler, camera, renderer, view3d, editButton: !appMode, tuning: () => mode?.tuning() ?? null });
 // game controllers (apps/web/src/gamepad): play, the menus, rumble, prompts in the pad's buttons
 // (on a phone the touch buttons step aside while a pad plays: gamepad/pad.css)
-mountGamepad({ sampler, camera, renderer, scoreboardCode: () => scoreboardKeys[0] });
+mountGamepad({ sampler, camera, renderer, scoreboardCode: () => scoreboardKeys[0], map: () => map });
 
 // the room host's live tuning panel (the in-match menu's "Tune the game"), where the page offers it:
 // pnpm playtest --tune flags the page; the game server then lets the host (only) tune the room

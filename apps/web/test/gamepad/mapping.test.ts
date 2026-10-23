@@ -2,7 +2,7 @@
 import { Btn } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
 import { FULL_FLICK, RETICLE, TRIGGER_HYSTERESIS, dashDirection, heldBits, moveBits, navRepeats, NAV_REPEAT, padDashStrength, padThrowStrength, reticleDistance, shapeAxes, stepAim, stickNavDirection, triggerHeld } from '../../src/gamepad/mapping';
-import { DEFAULT_PAD_SETTINGS, MAX_PAD_BINDINGS, PAD_ACTIONS, buttonMap, defaultPadBindings, rebindPad, sanitizePadBindings, sanitizePadSettings, unbindPad } from '../../src/gamepad/settings';
+import { DEFAULT_PAD_SETTINGS, MAX_PAD_BINDINGS, PAD_ACTIONS, PAD_PRESETS, PAD_PRESET_ORDER, buttonMap, defaultPadBindings, rebindPad, sanitizePadBindings, sanitizePadSettings, unbindPad } from '../../src/gamepad/settings';
 import { B, BUTTON_COUNT, padFamily } from '../../src/gamepad/standard';
 
 const pressing = (...buttons: number[]) => {
@@ -14,17 +14,30 @@ const pressing = (...buttons: number[]) => {
 describe('the default layout', () => {
   const map = buttonMap(defaultPadBindings());
 
-  it('R2 fires, L2 aims, ✕ / A jets, L1 dashes, □ / X reloads, ○ / B swaps, △ / Y takes, R3 melees', () => {
+  it('Standard: LT and ✕ / A jet, RT fires, LB dashes, B melees, X reloads, Y swaps, L3 crouches, R3 spins up', () => {
     expect(heldBits(pressing(B.R2), map)).toBe(Btn.Fire);
-    expect(heldBits(pressing(B.L2), map)).toBe(Btn.Fire2);
+    expect(heldBits(pressing(B.L2), map)).toBe(Btn.Jet);
     expect(heldBits(pressing(B.South), map)).toBe(Btn.Jet);
     expect(heldBits(pressing(B.L1), map)).toBe(Btn.Dash);
     expect(heldBits(pressing(B.West), map)).toBe(Btn.Reload);
-    expect(heldBits(pressing(B.East), map)).toBe(Btn.Swap);
-    expect(heldBits(pressing(B.North), map)).toBe(Btn.Interact);
-    expect(heldBits(pressing(B.R3), map)).toBe(Btn.Melee);
+    expect(heldBits(pressing(B.North), map)).toBe(Btn.Swap);
+    expect(heldBits(pressing(B.East), map)).toBe(Btn.Melee);
+    expect(heldBits(pressing(B.R3), map)).toBe(Btn.Fire2);
     expect(heldBits(pressing(B.L3), map)).toBe(Btn.Down);
     expect(heldBits(pressing(B.Up, B.Down, B.Right), map)).toBe(Btn.Dual | Btn.Shield | Btn.CycleGrenade);
+  });
+
+  it('Standard takes a gun with a held X (no button of its own); Classic keeps Y', () => {
+    expect(DEFAULT_PAD_SETTINGS.holdTake).toBe(true);
+    expect(buttonMap(defaultPadBindings(), true).holdTake.has(B.West)).toBe(true);
+    expect(buttonMap(defaultPadBindings(), false).holdTake.size).toBe(0);
+    const classic = buttonMap(PAD_PRESETS.classic.bindings, PAD_PRESETS.classic.holdTake);
+    expect(heldBits(pressing(B.North), classic)).toBe(Btn.Interact);
+    expect(heldBits(pressing(B.South), classic)).toBe(Btn.Jet);
+    expect(heldBits(pressing(B.L2), classic)).toBe(Btn.Fire2);
+    expect(heldBits(pressing(B.East), classic)).toBe(Btn.Swap);
+    expect(heldBits(pressing(B.R3), classic)).toBe(Btn.Melee);
+    expect(classic.holdTake.size).toBe(0);
   });
 
   it('the grenade button never reaches the sim held (the throw latch throws on its release)', () => {
@@ -38,11 +51,14 @@ describe('the default layout', () => {
     expect([...map.scoreboard].sort((a, b) => a - b)).toEqual([B.Select, B.Extra]);
   });
 
-  it('every action has a default and no button does two things', () => {
-    const used = PAD_ACTIONS.flatMap((a) => a.defaults);
-    expect(new Set(used).size).toBe(used.length);
-    for (const a of PAD_ACTIONS) expect(a.defaults.length).toBeGreaterThan(0);
-    expect(used).not.toContain(B.Start);
+  it('no button does two things in any preset, and Options is never one of them', () => {
+    for (const id of PAD_PRESET_ORDER) {
+      const used = PAD_ACTIONS.flatMap((a) => PAD_PRESETS[id].bindings[a.id]);
+      expect(new Set(used).size).toBe(used.length);
+      expect(used).not.toContain(B.Start);
+      // every action has a button, except take in a hold-to-take layout
+      for (const a of PAD_ACTIONS) if (!(a.id === 'interact' && PAD_PRESETS[id].holdTake)) expect(PAD_PRESETS[id].bindings[a.id].length).toBeGreaterThan(0);
+    }
   });
 });
 
@@ -56,7 +72,7 @@ describe('sticks: dead zone and response curve', () => {
     const just = shapeAxes(0.16, 0, 0.15);
     expect(just.mag).toBeGreaterThan(0);
     expect(just.mag).toBeLessThan(0.05);
-    expect(shapeAxes(0.95, 0, 0.15).mag).toBeCloseTo(1);
+    expect(shapeAxes(0.92, 0, 0.15).mag).toBeCloseTo(1); // the outer dead zone: 0.92 is all the way
     // a diagonal past the zone counts like a straight push of the same length
     const diag = shapeAxes(0.5 / Math.SQRT2, 0.5 / Math.SQRT2, 0.15);
     expect(diag.mag).toBeCloseTo(shapeAxes(0.5, 0, 0.15).mag);
@@ -74,13 +90,13 @@ describe('sticks: dead zone and response curve', () => {
     expect(shapeAxes(1, 0, 0.1, 2).mag).toBeCloseTo(1);
   });
 
-  it('the move stick walks, jets when pushed up (if allowed) and crouches when pulled down', () => {
-    expect(moveBits(shapeAxes(0.9, 0, 0.2), true)).toBe(Btn.Right);
-    expect(moveBits(shapeAxes(-0.9, 0, 0.2), true)).toBe(Btn.Left);
-    expect(moveBits(shapeAxes(0.6, -0.7, 0.2), true)).toBe(Btn.Right | Btn.Jet);
-    expect(moveBits(shapeAxes(0.6, -0.7, 0.2), false)).toBe(Btn.Right);
-    expect(moveBits(shapeAxes(0, 0.9, 0.2), true)).toBe(Btn.Down);
-    expect(moveBits(shapeAxes(0.1, 0.1, 0.2), true)).toBe(0);
+  it('the move stick walks, jets when pushed steeply up (if allowed) and crouches when pulled down', () => {
+    expect(moveBits(shapeAxes(0.9, 0, 0.15), true)).toBe(Btn.Right);
+    expect(moveBits(shapeAxes(-0.9, 0, 0.15), true)).toBe(Btn.Left);
+    expect(moveBits(shapeAxes(0.4, -0.9, 0.15), true)).toBe(Btn.Right | Btn.Jet);
+    expect(moveBits(shapeAxes(0.4, -0.9, 0.15), false)).toBe(Btn.Right);
+    expect(moveBits(shapeAxes(0, 0.9, 0.15), true)).toBe(Btn.Down);
+    expect(moveBits(shapeAxes(0.1, 0.1, 0.15), true)).toBe(0);
   });
 
   it('the reticle sits as far out as the aim stick is pushed', () => {
@@ -163,10 +179,10 @@ describe('menus', () => {
 
 describe('settings', () => {
   it('rebinding a button takes it off the action that had it', () => {
-    const { bindings, took } = rebindPad(defaultPadBindings(), 'melee', B.East, 0);
-    expect(took).toBe('swap');
-    expect(bindings.melee[0]).toBe(B.East);
-    expect(bindings.swap).toEqual([]);
+    const { bindings, took } = rebindPad(defaultPadBindings(), 'reload', B.East, 0);
+    expect(took).toBe('melee');
+    expect(bindings.reload[0]).toBe(B.East);
+    expect(bindings.melee).toEqual([]);
   });
 
   it('Options / Menu is never rebound (always the menu)', () => {
@@ -175,10 +191,10 @@ describe('settings', () => {
   });
 
   it('a second button can be added, then cleared', () => {
-    const { bindings } = rebindPad(defaultPadBindings(), 'jet', B.L1, 1);
-    expect(bindings.jet).toEqual([B.South, B.L1]);
-    expect(bindings.dash).toEqual([]);
-    expect(unbindPad(bindings, 'jet', 1).jet).toEqual([B.South]);
+    const { bindings } = rebindPad(defaultPadBindings(), 'dash', B.R3, 1);
+    expect(bindings.dash).toEqual([B.L1, B.R3]);
+    expect(bindings.fire2).toEqual([]);
+    expect(unbindPad(bindings, 'dash', 1).dash).toEqual([B.L1]);
   });
 
   it('saved bindings are cleaned: unknown buttons, the menu button and duplicates go', () => {

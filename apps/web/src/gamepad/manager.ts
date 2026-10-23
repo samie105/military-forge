@@ -9,13 +9,16 @@
 import { angleToU16 } from '@military-forge/shared';
 import { Btn, type Input, type SimEvent } from '@military-forge/sim';
 import type { Camera } from '../camera';
-import type { ThrowLatch } from '../input';
-import { assistAim, type AimTarget } from '../touch/mapping';
+import { throwStrengthAt, type ThrowLatch } from '../input';
+import { weapons, type MapDef } from '@military-forge/content';
+import { AimAssist, onTarget, type AssistTarget } from '../input/assist';
+import { Sight, sightPoints, type SightCloud } from '../input/sight';
+import { wrapAngle } from '../touch/stick';
 import { currentDevice, noteKeys, notePad, onInputDevice } from './device';
-import { dashDirection, heldBits, moveBits, navRepeats, padDashStrength, padThrowStrength, reticleDistance, shapeAxes, stepAim, stickNavDirection, triggerHeld, type NavDir, type StickVector } from './mapping';
+import { AIM_MIN_PUSH, MOVE_ZONES, createAimState, createMoveState, dashDirection, heldBits, moveStep, navRepeats, padDashStrength, padThrowStrength, reticleDistance, shapeAxes, stepAim, stickNavDirection, triggerHeld, type NavDir, type StickVector } from './mapping';
 import { activate, findScroller, focusFirst, focusedIn, focusables, hasTabs, moveFocus, rememberFocus, restoreFocus, switchTab, type FocusAnchor } from './menus';
 import { rumbleFor, scaleRumble, type Rumble } from './rumble';
-import { DEFAULT_PAD_SETTINGS, buttonMap, type ButtonMap, type PadSettings } from './settings';
+import { DEFAULT_PAD_SETTINGS, HOLD_TAKE_MS, buttonMap, type ButtonMap, type PadSettings } from './settings';
 import { AXIS, B, BUTTON_COUNT, isDualSense, padFamily } from './standard';
 
 /** What the manager needs from the page. Only the members it uses (main.ts's sampler, or none on the Armory page). */
@@ -33,7 +36,21 @@ export interface PadHost {
   pause(): void;
   /** the scoreboard button held or let go (the HUD's Tab) */
   scoreboard?(down: boolean): void;
+  /** the map being played (aim assist's line of sight) */
+  map?(): MapDef | null;
 }
+
+/** The frame being drawn, as far as the pad reads it (view.ts Frame). */
+export interface PadFrame {
+  localId: number;
+  players: readonly { id: number; alive: boolean; x: number; y: number; crouched?: boolean; active?: number; weapons?: readonly { def: number }[] }[];
+  clouds?: readonly SightCloud[];
+}
+
+/** Magnetism needs the aim stick pushed at least this far (raw; spec §5.4). */
+export const PAD_PULL_MIN = 0.5;
+/** Auto-fire (One-stick): the first shot after this long on target, and it keeps firing this long after (ms; spec §4.5). */
+export const AUTO_FIRE = { dwell: 100, linger: 150 };
 
 /** A Share / View press let go this soon is a tap (the overlay's buttons), not a look at the scoreboard. */
 export const SELECT_TAP_MS = 250;
@@ -53,7 +70,7 @@ type Mode = 'play' | 'menu' | 'capture';
 export class PadManager {
   settings: PadSettings = DEFAULT_PAD_SETTINGS;
   private reduceFlashes = false;
-  private map: ButtonMap = buttonMap(DEFAULT_PAD_SETTINGS.bindings);
+  private map: ButtonMap = buttonMap(DEFAULT_PAD_SETTINGS.bindings, DEFAULT_PAD_SETTINGS.holdTake);
   /** the pad that plays (the Gamepad's index), −1 none */
   private index = -1;
   private family = padFamily('');
@@ -64,7 +81,13 @@ export class PadManager {
   /** buttons still held from the menus (or the capture) when play resumed: they wait to be let go */
   private readonly suppressed = new Array<boolean>(BUTTON_COUNT).fill(false);
   private readonly downAt = new Array<number>(BUTTON_COUNT).fill(0);
+  /** a held reload button already took the gun underfoot (hold to take) */
+  private readonly tookOnHold = new Array<boolean>(BUTTON_COUNT).fill(false);
   private axes = [0, 0, 0, 0];
+  /** the aim stick's raw push (its angle holds under AIM_MIN_PUSH) */
+  private aimRaw = 0;
+  private readonly moveState = createMoveState();
+  private readonly aimState = createAimState();
   private readonly move: StickVector = { x: 0, y: 0, mag: 0 };
   private readonly aim: StickVector = { x: 0, y: 0, mag: 0 };
   private mode: Mode = 'play';
@@ -87,7 +110,19 @@ export class PadManager {
   private capture: ((button: number) => void) | null = null;
   private scoreboardDown = false;
   private zoomBefore: number | null = null;
-  private targets: AimTarget[] = [];
+  private targets: AssistTarget[] = [];
+  private readonly sight = new Sight();
+  private readonly assist = new AimAssist();
+  /** the gun in hand's range (m; 0: none), for assist */
+  private range = 0;
+  /** the shoulder at the last sample (One-stick's lob reaches the target from here) */
+  private shoulder: { x: number; y: number } | null = null;
+  /** auto-fire: on target since (ms; null: off it), firing, and firing until (the linger) */
+  private onTargetSince: number | null = null;
+  private autoFiring = false;
+  private lingerUntil = 0;
+  /** Settings' controller check: the pad's input is only shown, not acted on, until Options ends it */
+  private testing: (() => void) | null = null;
   private me: { x: number; y: number } | null = null;
   private lastShotRumble = -Infinity;
   private raf = 0;
@@ -123,7 +158,7 @@ export class PadManager {
   applySettings(settings: PadSettings, reduceFlashes: boolean): void {
     this.settings = settings;
     this.reduceFlashes = reduceFlashes;
-    this.map = buttonMap(settings.bindings);
+    this.map = buttonMap(settings.bindings, settings.holdTake);
     if (!settings.enabled) {
       this.releaseAll();
       if (currentDevice().kind === 'pad') noteKeys();
@@ -169,6 +204,19 @@ export class PadManager {
     return this.capture !== null;
   }
 
+  /**
+   * Settings' controller check: while on, presses and sticks only show on the page (no menu moves, no
+   * back); Options ends it and calls `onEnd`. Null ends it from the page.
+   */
+  testInput(onEnd: (() => void) | null): void {
+    this.testing = onEnd;
+    this.notify();
+  }
+
+  get testingInput(): boolean {
+    return this.testing !== null;
+  }
+
   // ------------------------------------------------------------------ polling
 
   private releaseAll(): void {
@@ -179,6 +227,9 @@ export class PadManager {
     this.dash = null;
     this.move.mag = this.move.x = this.move.y = 0;
     this.aim.mag = this.aim.x = this.aim.y = 0;
+    Object.assign(this.moveState, createMoveState());
+    this.aimState.flipRate = 0;
+    this.assist.reset();
     this.host.sampler?.throwLatch?.cancel();
     if (this.scoreboardDown) {
       this.scoreboardDown = false;
@@ -232,8 +283,9 @@ export class PadManager {
 
     // sticks (the left moves and the right aims, or swapped)
     const [mx, my, ax, ay] = s.swapSticks ? [this.axes[2]!, this.axes[3]!, this.axes[0]!, this.axes[1]!] : this.axes;
-    shapeAxes(mx!, my!, s.moveDeadzone, 1, this.move);
+    shapeAxes(mx!, my!, s.moveDeadzone, 1, this.move, MOVE_ZONES.snapDeg);
     shapeAxes(ax!, s.invertY ? -ay! : ay!, s.aimDeadzone, s.aimCurve, this.aim);
+    this.aimRaw = Math.hypot(ax!, ay!);
     this.flick.push({ t: now, mag: this.move.mag });
     while (this.flick.length > 1 && now - this.flick[0]!.t > FLICK_WINDOW) this.flick.shift();
 
@@ -253,7 +305,16 @@ export class PadManager {
       if (this.suppressed[i] && !this.held[i]) this.suppressed[i] = this.prevHeld[i] = false;
     }
 
-    if (mode === 'capture') this.pollCapture();
+    if (this.testing) {
+      // the controller check: every button and stick is the player's to try; Options ends it
+      if (this.pressed(B.Start)) {
+        const done = this.testing;
+        this.testing = null;
+        this.suppressed[B.Start] = true;
+        done();
+        this.notify();
+      }
+    } else if (mode === 'capture') this.pollCapture();
     else if (mode === 'menu') this.pollMenu(scope!, now);
     else this.pollPlay(now);
     for (let i = 0; i < BUTTON_COUNT; i++) this.prevHeld[i] = this.held[i]!;
@@ -364,7 +425,13 @@ export class PadManager {
   private pollPlay(now: number): void {
     const m = this.map;
     for (let i = 0; i < BUTTON_COUNT; i++) {
+      // hold to take: a reload button held HOLD_TAKE_MS takes the gun underfoot (its tap reloaded already)
+      if (m.holdTake.has(i) && this.held[i] && !this.suppressed[i] && !this.tookOnHold[i] && now - this.downAt[i]! >= HOLD_TAKE_MS) {
+        this.tookOnHold[i] = true;
+        this.pulses |= Btn.Interact;
+      }
       if (this.pressed(i)) {
+        this.tookOnHold[i] = false;
         this.pulses |= m.bits[i]! & ~Btn.Grenade;
         if (m.grenade.has(i)) this.host.sampler?.throwLatch?.press(now);
         if (m.dash.has(i)) {
@@ -418,6 +485,9 @@ export class PadManager {
 
   /** A held grenade's strength: the aim stick's push, or its last push while it rests. */
   private throwStrength(): number {
+    // One-stick: an auto-aimed lob, as far as the enemy the aim is on
+    const t = this.settings.autoAim && this.aim.mag === 0 && this.assist.target !== null ? this.targets.find((x) => x.id === this.assist.target) : null;
+    if (t && this.shoulder) return throwStrengthAt(Math.hypot(t.x - this.shoulder.x, t.y - this.shoulder.y));
     return padThrowStrength(this.aim.mag > 0 ? this.aim.mag : this.aimHeldMag);
   }
 
@@ -438,7 +508,7 @@ export class PadManager {
     if (this.index < 0 || this.mode !== 'play' || !this.settings.enabled) return;
     const s = this.settings;
     const held = this.held.map((h, i) => h && !this.suppressed[i]);
-    let b = heldBits(held, this.map) | moveBits(this.move, s.stickJet) | this.pulses;
+    let b = heldBits(held, this.map) | moveStep(this.moveState, this.move, s.stickJet) | this.pulses;
     if (this.dash) {
       const DIR = Btn.Left | Btn.Right | Btn.Jet | Btn.Down;
       b = (b & ~DIR) | this.dash.dir | Btn.Dash;
@@ -449,14 +519,43 @@ export class PadManager {
     out.buttons |= b;
     this.pulses = 0;
 
-    // the aim: toward the stick, at its turn speed, with the touch controls' light friction on a target
-    if (this.aim.mag > 0) {
+    // the aim: toward the stick (only past AIM_MIN_PUSH of raw push: no wobble near the dead zone), at
+    // its turn speed, a flip past 90° within 3 ticks, with the touch controls' light friction on a target
+    this.shoulder = { x: sx, y: sy };
+    const assist = { level: s.assist, pullMinPush: PAD_PULL_MIN, sx, sy, range: this.range, targets: this.targets };
+    if (this.aim.mag > 0 && this.aimRaw >= AIM_MIN_PUSH) {
       const want = Math.atan2(this.aim.y, this.aim.x);
       if (!this.ownsAim) this.aimAngle = want;
-      this.aimAngle = assistAim(this.aimAngle, stepAim(this.aimAngle, want, s.aimSpeed), sx, sy, this.targets, s.aimAssist);
+      // a turnaround isn't slowed (or pulled back) by a target behind it
+      const flipping = this.aimState.flipRate > 0 || Math.abs(wrapAngle(want - this.aimAngle)) > Math.PI / 2;
+      const stepped = stepAim(this.aimAngle, want, s.aimSpeed, this.aimState);
+      this.aimAngle = flipping ? stepped : this.assist.step({ ...assist, current: this.aimAngle, desired: stepped, stickAngle: want, stick: this.aimRaw });
       this.reticle += (reticleDistance(this.aim.mag) - this.reticle) * RETICLE_EASE;
       this.aimHeldMag = this.aim.mag;
       this.ownsAim = true;
+    } else if (s.autoAim) {
+      // One-stick: the nearest enemy in sight and range, otherwise the way the move stick points
+      this.ownsAim = true;
+      const aim = this.assist.step({ ...assist, level: 'strong', current: this.aimAngle, desired: this.aimAngle, stick: 0, autoAcquire: true });
+      this.aimAngle = this.assist.target === null && this.move.mag > 0 ? stepAim(this.aimAngle, Math.atan2(this.move.y, this.move.x), s.aimSpeed, this.aimState) : aim;
+    } else if (this.ownsAim) {
+      // the stick let go: Strong holds the chosen target (the others leave the aim where it is)
+      this.aimAngle = this.assist.step({ ...assist, current: this.aimAngle, desired: this.aimAngle, stick: 0 });
+    }
+    // auto-fire (One-stick): on an enemy for 100 ms, fire; keep firing 150 ms after he leaves the line
+    if (s.autoFire && this.ownsAim && this.range > 0 && !this.host.sampler?.throwLatch?.holding) {
+      if (onTarget(this.aimAngle, sx, sy, this.targets, this.range)) {
+        this.onTargetSince ??= now;
+        if (now - this.onTargetSince >= AUTO_FIRE.dwell) {
+          this.autoFiring = true;
+          this.lingerUntil = now + AUTO_FIRE.linger;
+        }
+      } else this.onTargetSince = null;
+      if (this.autoFiring && now >= this.lingerUntil) this.autoFiring = false;
+      if (this.autoFiring) out.buttons |= Btn.Fire;
+    } else {
+      this.onTargetSince = null;
+      this.autoFiring = false;
     }
     if (this.ownsAim) {
       out.aim = angleToU16(this.aimAngle);
@@ -478,13 +577,21 @@ export class PadManager {
   // ------------------------------------------------------------------ the game's frames and events
 
   /** The frame drawn: the aim assist's targets and where the local player stands (blasts nearby). */
-  onFrame(frame: { localId: number; players: readonly { id: number; alive: boolean; x: number; y: number }[] }): void {
-    this.targets.length = 0;
+  onFrame(frame: PadFrame): void {
     this.me = null;
+    this.range = 0;
+    let eye: { x: number; y: number } | null = null;
     for (const p of frame.players) {
-      if (p.id === frame.localId) this.me = { x: p.x, y: p.y };
-      else if (p.alive) this.targets.push({ x: p.x, y: p.y + 0.9 });
+      if (p.id !== frame.localId) continue;
+      this.me = { x: p.x, y: p.y };
+      eye = { x: p.x, y: p.y + sightPoints(p.crouched).head };
+      const def = p.weapons?.[p.active ?? 0]?.def;
+      this.range = (def !== undefined && weapons[def]?.range) || 0;
     }
+    // assist's targets: enemies the player can see from his eyes (no walls, no smoke between)
+    this.sight.setMap(this.host.map?.());
+    if (eye) this.sight.targets(frame.players, frame.localId, eye.x, eye.y, frame.clouds, this.targets);
+    else this.targets.length = 0;
   }
 
   /** Rumble for what just happened to the local player, while a pad is the device. */

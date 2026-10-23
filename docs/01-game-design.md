@@ -61,19 +61,19 @@ We keep the first list and design against the second.
 | Action | Keyboard + mouse | Gamepad (Gamepad API) |
 |---|---|---|
 | Move | `A` / `D` | left stick X |
-| Jetpack (thrust) | `W` or `Space` (hold) | left stick up / ✕ (A) |
-| Crouch / drop through platforms | `S` (hold) | left stick down / L3 |
+| Jetpack (thrust) | `W` or `Space` (hold) | L2 (LT) hold, or ✕ (A), or the left stick pushed steeply up (55°–125°) |
+| Crouch / drop through platforms | `S` (hold) | left stick straight down (±30°) / L3 |
 | Dash (8-way with `A`/`D`/`W`/`S`; none = facing) | `Shift` (tap), or double-tap a direction (setting) | L1 (LB) + left stick; a flick dashes harder |
 | Aim | mouse cursor (world-space reticle) | right stick, reticle at the stick's reach (optional light aim assist, as touch's) |
 | Fire | LMB (hold) | R2 (RT), analog threshold |
-| Zoom cycle / secondary fire | RMB / wheel | L2 (LT) hold: alt fire + zoom out · D-pad ← steps zoom |
+| Zoom cycle / secondary fire | RMB / wheel | R3 hold: spin-up / alt fire + zoom out · D-pad ← steps zoom |
 | Reload | `R` | □ (X) |
-| Swap weapon | `Q` / wheel | ○ (B) |
+| Swap weapon | `Q` / wheel | △ (Y) |
 | Dual-wield toggle | `F` | D-pad ↑ |
-| Melee | `V` / mouse 4 | R3 |
+| Melee | `V` / mouse 4 | ○ (B) |
 | Grenade throw (tap) / aim (hold) | `G` | R1 (RB); hold aims the arc with the right stick |
 | Cycle grenade type | `T` / mouse 5 | D-pad → |
-| Pick up / interact | `E` | △ (Y) |
+| Pick up / interact | `E` | hold □ (X) |
 | Heal wheel (BR) | `H` (hold) | to place when BR lands (D-pad ↓ is the shield) |
 | Ping (BR/team) | `Z` / MMB | to place with team modes |
 | Shield up / sling | `X` | D-pad ↓ |
@@ -82,7 +82,7 @@ We keep the first list and design against the second.
 | Chat / team chat / quick chat | `Enter` / `Y` / `C` (wheel) | to place (Options is the menu) |
 | Emote wheel | `B` | — |
 
-Everything is **rebindable** and has hold/toggle options. Mouse uses raw input with the pointer **not** locked (the reticle is a world-space cursor, like a mobile aim stick). There's a "confine cursor" option for multi-monitor setups. **Touch:** floating twin sticks (left: move, push up to jet, down to crouch, swipe and lift to dash; right: aim, firing past half-way or on release, a setting) plus buttons for grenade (hold and drag to aim the arc), next grenade, swap, reload, dash, melee, zoom and shield, a left-handed mirror, and a HUD editor (drag/resize/opacity per button, saved on the device). Optional light aim assist (a slowdown while the aim is on an enemy, never a pull), on by default for touch only. The controls produce the same input as the keyboard (`apps/web/src/touch`). **Controllers** (DualSense, DualShock 4, Xbox and other standard-mapping pads, through the Gamepad API): the same positions on every pad, prompts in its own glyphs, the menus driven by the D-pad or left stick (✕/A select, ○/B back, L1/R1 tabs), rumble, and Settings → Controls → Controller for remapping, sticks, triggers and vibration (`apps/web/src/gamepad`, NOTES §28).
+Everything is **rebindable** and has hold/toggle options. Mouse uses raw input with the pointer **not** locked (the reticle is a world-space cursor, like a mobile aim stick). There's a "confine cursor" option for multi-monitor setups. **Touch:** floating twin sticks (left: move, push up to jet, down to crouch, swipe and lift to dash; right: aim, firing past half-way or on release, a setting) plus buttons for grenade (hold and drag to aim the arc), next grenade, swap, reload, dash, melee, zoom and shield, a left-handed mirror, and a HUD editor (drag/resize/opacity per button, saved on the device). Optional light aim assist (a slowdown while the aim is on an enemy, never a pull), on by default for touch only. The controls produce the same input as the keyboard (`apps/web/src/touch`). **Controllers** (DualSense, DualShock 4, Xbox and other standard-mapping pads, through the Gamepad API): the same positions on every pad, prompts in its own glyphs, the menus driven by the D-pad or left stick (✕/A select, ○/B back, L1/R1 tabs), rumble, and Settings → Controller for layouts (Standard, the default above; Classic, Bumper Jet, Southpaw, One-stick), a live stick and button check, aim assist levels, remapping, sticks, triggers and vibration (`apps/web/src/gamepad`, NOTES §29; the zones are docs/design/controls-research.md §5).
 
 ---
 
