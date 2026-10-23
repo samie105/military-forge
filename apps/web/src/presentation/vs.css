@@ -1,0 +1,155 @@
+/* The VS poster and its folded strip (presentation/VsPoster.tsx; Pen board "MATCH PRESENTATION · avatars,
+   teams, VS"). Desktop is drawn at 1920×1080 (the Screen's fit), the phone at 812×375 (PhoneScreen's).
+   Tokens only; motion from the kit's tokens; Reduce motion keeps a plain fade. */
+
+.vs-screen { pointer-events: none; }
+.vs { position: absolute; inset: 0; overflow: hidden; z-index: var(--z-banner); color: var(--c-text); pointer-events: auto;
+  background: radial-gradient(130% 130% at 50% 55%, var(--c-olive-800) 0%, var(--c-ink-950) 100%);
+  animation: vs-in var(--m-scene, 520ms) var(--ease-arrive) both; }
+.vs.is-held { visibility: hidden; animation-play-state: paused; }
+.vs.is-held * { animation-play-state: paused; }
+.vs.is-leaving { animation: vs-fold 400ms var(--ease-leave) both; transform-origin: 50% 0; }
+@keyframes vs-in { from { opacity: 0; } }
+@keyframes vs-fold { to { transform: translateY(-38%) scaleY(0.12); opacity: 0; } }
+
+.vs__bg { position: absolute; inset: 0; pointer-events: none; }
+.vs__slash { position: absolute; left: -200px; right: -200px; top: 470px; height: 330px; background: var(--c-volt-soft); transform: rotate(-5deg); opacity: .6; }
+.vs__slash--brass { top: 840px; height: 46px; background: var(--c-brass-soft); }
+
+.vs__head { position: absolute; left: 96px; top: 72px; z-index: 2; display: flex; flex-direction: column; gap: 4px; }
+.vs__kicker { font: var(--fw-black, 800) var(--fs-28, 28px)/1.1 var(--f-ui); letter-spacing: .22em; text-transform: uppercase; color: var(--c-volt); }
+.vs__map { font-size: 150px; line-height: .95; color: var(--c-paper); text-shadow: var(--ts-print); white-space: nowrap; }
+.vs__rules { font: 600 28px/1.2 var(--f-ui); color: var(--c-muted); }
+
+.vs__stamp { position: absolute; right: 96px; top: 150px; padding: 6px 30px; background: var(--c-volt); color: var(--c-volt-ink); border: 6px solid var(--c-volt-ink); font-size: 120px; line-height: 1; letter-spacing: .03em; transform: rotate(-4deg);
+  animation: vs-stamp var(--m-slow) var(--ease-arrive) 240ms both; }
+@keyframes vs-stamp { from { transform: rotate(-4deg) scale(1.6); opacity: 0; } }
+
+/* the roll call: one row (2 on a full room), "you" first and lifted with a volt underline */
+.vs__rows { position: absolute; left: 0; right: 0; bottom: 110px; display: flex; flex-direction: column; align-items: center; gap: 28px; }
+.vs__row { display: flex; gap: 22px; justify-content: center; margin: 0; padding: 0; list-style: none; }
+.vs__card { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 200px; position: relative;
+  animation: vs-card-in var(--m-slow) var(--ease-arrive) both; animation-delay: calc(120ms + var(--i, 0) * var(--m-stagger)); }
+@keyframes vs-card-in { from { transform: translateY(var(--m-rise, 14px)) translateX(-40px); opacity: 0; } }
+.vs__card.is-you { transform: translateY(-30px); }
+.vs__card.is-you::after { content: ''; position: absolute; left: 0; right: 0; bottom: -18px; height: 8px; background: var(--c-volt); }
+.vs__body { width: 200px; height: 300px; }
+.vs__body.pt { background: transparent; }
+.vs__body .pt__base { opacity: .55; }
+.vs__face { width: 120px; height: 120px; border: 2px solid var(--c-line-strong); background: var(--c-olive-800); }
+.vs__card.is-you .vs__face { border-color: var(--c-volt); }
+.vs__name { align-self: stretch; text-align: center; padding: 6px 10px; background: var(--c-paper); color: var(--c-paper-text); font: var(--fw-display) 34px/1 var(--f-display); letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vs__card.is-you .vs__name { background: var(--c-volt); color: var(--c-volt-ink); }
+.vs__tags { display: flex; gap: 6px; }
+.vs__card--compact { width: 150px; }
+.vs__card--compact .vs__name { font-size: 26px; }
+.vs__rows--rows .vs__row { gap: 18px; }
+
+/* 1v1: mirrored halves facing the centre, a big VS between */
+.vs__duel { position: absolute; inset: 0; z-index: 0; }
+.vs--duel .vs__skip { left: 50%; translate: -50% 0; }
+.vs__duel::before, .vs__duel::after { content: ''; position: absolute; top: -200px; bottom: -200px; width: 62%; transform: skewX(-8deg); }
+.vs__duel::before { left: -10%; background: linear-gradient(90deg, var(--c-olive-700), transparent); }
+.vs__duel::after { right: -10%; background: linear-gradient(270deg, var(--c-brass-soft), transparent); }
+.vs--duel .vs__slash { display: none; }
+.vs__side { position: absolute; bottom: 70px; margin: 0; padding: 0; list-style: none; z-index: 1; }
+.vs__side--l { left: 220px; }
+.vs__side--r { right: 220px; }
+.vs__duel .vs__card { width: 400px; gap: 16px; }
+.vs__duel .vs__card.is-you { transform: none; }
+.vs__duel .vs__card.is-you::after { display: none; }
+.vs__duel .vs__body { width: 400px; height: 600px; }
+.vs__card--r .vs__body { transform: scaleX(-1); }
+.vs__card--r { animation-name: vs-card-in-r; }
+@keyframes vs-card-in-r { from { transform: translateX(60px); opacity: 0; } }
+.vs__duel .vs__name { align-self: auto; font-size: 72px; padding: 6px 18px; }
+.vs__stamp--big { position: absolute; left: 50%; top: 40%; right: auto; z-index: 2; translate: -50% -50%; font-size: 220px; padding: 0 34px; border-width: 8px; }
+.vs__stamp--mark { position: static; font-size: 60px; padding: 0 10px; border-width: 3px; background: var(--c-paper); color: var(--c-paper-text); border-color: var(--c-paper-text); animation-delay: 360ms; align-self: center; }
+
+/* teams: one column per team, VS marks between (team modes aren't in the sim yet) */
+.vs__teams { position: absolute; left: 96px; right: 96px; top: 340px; display: flex; gap: 30px; }
+.vs__team { flex: 1; display: flex; gap: 30px; }
+.vs__col { flex: 1; display: flex; flex-direction: column; gap: 14px; margin: 0; padding: 0 0 0 24px; list-style: none; border-left: 8px solid var(--c-volt); }
+.vs__team[data-team="1"] .vs__col { border-color: var(--c-brass); }
+.vs__team[data-team="2"] .vs__col { border-color: var(--c-muted); }
+.vs__team[data-team="3"] .vs__col { border-color: var(--c-hp); }
+.vs__teams .vs__card { flex-direction: row; width: auto; gap: 16px; padding: 8px 16px 8px 8px; background: var(--c-ink-850); border: 2px solid var(--c-line); }
+.vs__teams .vs__card.is-you { transform: none; border-color: var(--c-volt); background: var(--c-olive-800); }
+.vs__teams .vs__card.is-you::after { display: none; }
+.vs__teams .vs__face { width: 112px; height: 112px; }
+.vs__teams .vs__name { align-self: center; background: none; color: var(--c-paper); font-size: 40px; padding: 0; text-align: left; }
+
+.vs__skip { position: absolute; z-index: 2; left: 96px; bottom: 44px; margin: 0; display: flex; gap: 14px; align-items: center; font: 600 22px/1 var(--f-ui); color: var(--c-muted-2); }
+.vs__skip .kbd { padding: 4px 10px; background: var(--c-paper); color: var(--c-paper-text); border-radius: 4px; font-weight: 800; font-size: 20px; }
+
+/* a smaller window (html.mf-narrow: < 1800 design px wide, e.g. a 1280×720 laptop at 0.8 zoom) */
+html.mf-narrow .vs__map { font-size: 120px; }
+html.mf-narrow .vs__stamp:not(.vs__stamp--big, .vs__stamp--mark) { font-size: 92px; top: 130px; }
+html.mf-narrow .vs__row { gap: 14px; }
+html.mf-narrow .vs__card:not(.vs__card--compact) { width: 168px; }
+html.mf-narrow .vs__card:not(.vs__card--compact) .vs__body { width: 168px; height: 252px; }
+html.mf-narrow .vs__card--compact { width: 140px; }
+html.mf-narrow .vs__name { font-size: 28px; }
+html.mf-narrow .vs__duel .vs__card { width: 340px; }
+html.mf-narrow .vs__duel .vs__body { width: 340px; height: 510px; }
+html.mf-narrow .vs__side--l { left: 140px; }
+html.mf-narrow .vs__side--r { right: 140px; }
+
+/* the folded strip: the top band through 3-2-1 */
+.vs-strip { position: absolute; left: 0; right: 0; top: 0; height: 96px; display: flex; align-items: center; gap: 20px; padding: 0 48px; padding-top: var(--safe-t);
+  background: rgba(20, 23, 16, .82); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 2px solid var(--c-line);
+  animation: vs-strip-in var(--m-slow) var(--ease-arrive) both; pointer-events: none; z-index: var(--z-banner); }
+@keyframes vs-strip-in { from { transform: translateY(-100%); } }
+.vs-strip__map { font-size: 48px; color: var(--c-paper); white-space: nowrap; }
+.vs-strip__mode { font: 800 22px/1 var(--f-ui); letter-spacing: .18em; text-transform: uppercase; color: var(--c-volt); white-space: nowrap; }
+.vs-strip__faces { margin-left: auto; display: flex; gap: 8px; }
+.vs-strip__face { width: 60px; height: 60px; border-radius: 50%; overflow: hidden; border: 3px solid var(--c-ink-950); background: var(--c-olive-800); }
+.vs-strip__face.is-you { border-color: var(--c-volt); }
+
+/* the phone: 812×375, inside the safe areas */
+.screen--phone .vs__slash { top: 150px; height: 150px; left: -60px; right: -60px; }
+.screen--phone .vs__slash--brass { top: 300px; height: 18px; }
+.screen--phone .vs__head { left: calc(44px + var(--safe-l)); top: calc(18px + var(--safe-t)); gap: 0; }
+.screen--phone .vs__kicker { font-size: 11px; letter-spacing: .2em; }
+.screen--phone .vs__map { font-size: 44px; }
+.screen--phone .vs__rules { display: none; }
+.screen--phone .vs__stamp { right: calc(32px + var(--safe-r)); top: calc(30px + var(--safe-t)); font-size: 40px; padding: 2px 12px; border-width: 3px; }
+.screen--phone .vs__rows { bottom: calc(26px + var(--safe-b)); gap: 8px; }
+.screen--phone .vs__row { gap: 8px; }
+.screen--phone .vs__card { width: 84px; gap: 4px; }
+.screen--phone .vs__card.is-you { transform: translateY(-10px); }
+.screen--phone .vs__card.is-you::after { bottom: -7px; height: 3px; }
+.screen--phone .vs__body { width: 84px; height: 126px; }
+.screen--phone .vs__name { font-size: 16px; padding: 2px 4px; }
+.screen--phone .vs__tags .tag { font-size: 9px; padding: 1px 5px; }
+.screen--phone .vs__card--compact { width: 72px; }
+.screen--phone .vs__face { width: 60px; height: 60px; }
+.screen--phone .vs__side { bottom: calc(12px + var(--safe-b)); }
+.screen--phone .vs__side--l { left: calc(120px + var(--safe-l)); }
+.screen--phone .vs__side--r { right: calc(120px + var(--safe-r)); }
+.screen--phone .vs__duel .vs__card { width: 116px; gap: 6px; }
+.screen--phone .vs__duel .vs__body { width: 116px; height: 174px; }
+.screen--phone .vs__duel .vs__name { font-size: 26px; padding: 2px 10px; }
+.screen--phone .vs__stamp--big { right: auto; font-size: 84px; padding: 0 12px; border-width: 4px; top: 48%; }
+.screen--phone .vs__teams { left: calc(44px + var(--safe-l)); right: calc(44px + var(--safe-r)); top: calc(86px + var(--safe-t)); gap: 10px; }
+.screen--phone .vs__team { gap: 10px; }
+.screen--phone .vs__col { gap: 6px; padding-left: 10px; border-left-width: 4px; }
+.screen--phone .vs__teams .vs__card { width: auto; padding: 4px 8px 4px 4px; gap: 10px; }
+.screen--phone .vs__card--compact .vs__tags { display: none; }
+.screen--phone .vs__rows--rows .vs__face { width: 52px; height: 52px; }
+.screen--phone .vs__teams .vs__face { width: 40px; height: 40px; }
+.screen--phone .vs__teams .vs__name { font-size: 20px; }
+.screen--phone .vs__stamp--mark { font-size: 28px; }
+.screen--phone .vs-strip { height: calc(44px + var(--safe-t)); padding: var(--safe-t) calc(16px + var(--safe-r)) 0 calc(16px + var(--safe-l)); gap: 10px; }
+.screen--phone .vs-strip__map { font-size: 22px; }
+.screen--phone .vs-strip__mode { font-size: 10px; letter-spacing: .12em; }
+.screen--phone .vs-strip__face { width: 28px; height: 28px; border-width: 2px; }
+.screen--phone .vs-strip__faces { gap: 4px; }
+
+/* Reduce motion: a 120 ms fade in and out; no slides, no stamp */
+html.reduce-motion .vs, html.reduce-motion .vs * , html.reduce-motion .vs-strip { animation: none !important; }
+html.reduce-motion .vs { animation: vs-in 120ms linear both !important; }
+html.reduce-motion .vs.is-leaving { animation: vs-out 120ms linear both !important; }
+@keyframes vs-out { to { opacity: 0; } }
+/* Reduce transparency (the kit's switch): a solid strip */
+html.reduce-transparency .vs-strip { background: var(--c-ink-850); backdrop-filter: none; -webkit-backdrop-filter: none; }

@@ -1,9 +1,8 @@
 /**
  * Looks on the wire (protocol v19), seen in the browser: two players in separate headless Chrome
  * profiles through a playtest link. A has saved a look of her own (the female soldier, red and
- * white, bandana, aviators); B has the default. They meet in a match, and B's screen draws A, and the
- * room's bots, each in their own look. Shots of B's screen (and A's) go to the out dir, every
- * 1.2 s of play, to pick from.
+ * white, bandana, aviators); B has the default. B's lobby shows A's soldier as her avatar (and the
+ * bots' seeded looks); then A starts the match and B gets the VS poster and its strip.
  *
  *   lockf -k /tmp/military-forge-heavy.lock pnpm --filter @military-forge/web build
  *   pnpm playtest --local --no-build --port 8177
@@ -77,34 +76,30 @@ try {
   const roomLink = a.page.url();
   log('room', roomLink);
   await enter(b, roomLink, `Kemi${Math.floor(Math.random() * 900 + 100)}`, null);
-  await sleep(4000);
-  await b.page.screenshot({ path: join(out, `${form}-lobby-B.png`) });
-  await (await byText(a.page, 'button', 'Start now')).click();
-  await a.page.waitForSelector('#hud[data-active-state~="match"]', { timeout: 60_000 });
-  log('match on');
-  for (const p of [a, b]) {
-    const got = await p.page.$('xpath/.//button[contains(normalize-space(.), "Got it")]');
-    if (got) await got.click();
-  }
-  // A holds still; B goes looking for her (left, then right), hopping over steps: shots of both, to pick from
-  const dirs = ['KeyA', 'KeyD'];
-  let dir = 0;
-  if (!phone) await b.page.keyboard.down(dirs[dir]);
-  for (let i = 0; i < 20; i++) {
-    await sleep(1200);
-    if (!phone) {
-      if (i === 9) {
-        await b.page.keyboard.up(dirs[dir]);
-        dir = 1;
-        await b.page.keyboard.down(dirs[dir]);
-      }
-      if (i % 2 === 0) await b.page.keyboard.down('KeyW');
-      else await b.page.keyboard.up('KeyW');
-    }
-    await b.page.screenshot({ path: join(out, `${form}-match-B-${String(i).padStart(2, '0')}.png`) });
-    if (!phone && i % 4 === 0) await a.page.screenshot({ path: join(out, `${form}-match-A-${String(i).padStart(2, '0')}.png`) });
-    log('shot', i);
-  }
+  await b.page.waitForSelector('[data-screen="lobby"], [data-screen="m-lobby"]', { timeout: 60_000 });
+  // B's lobby rows wear everyone's soldier: A's from A's look on the wire (v19), the bots' seeded looks
+  await b.page
+    .waitForFunction(() => document.querySelectorAll('.avatar--portrait .pt').length >= 3 && document.querySelectorAll('.avatar--portrait .pt').length === document.querySelectorAll('.avatar--portrait .pt__img').length, { timeout: 180_000, polling: 500 })
+    .catch(() => log('not every lobby avatar landed'));
+  await b.page.screenshot({ path: join(out, `${form}-lobby-avatars-B.png`) });
+  log('lobby shot');
+  // the room warms the poster renders while everyone waits in the lobby
+  await sleep(phone ? 20_000 : 30_000);
+  // the host starts it (a slow page can lose the host role to the other: HOST_AWAY_TICKS)
+  const startNow = (p) => p.page.evaluate(() => {
+    const btn = [...document.querySelectorAll('button')].find((b) => /start now/i.test(b.textContent ?? ''));
+    btn?.click();
+    return !!btn;
+  });
+  for (let i = 0; i < 20 && !(await startNow(b)) && !(await startNow(a)); i++) await sleep(500);
+  // once the flood has uncovered it
+  await b.page.waitForSelector('.vs:not(.is-held)', { timeout: 60_000 });
+  // the poster holds 1.6 s: the quickest capture there is
+  await b.page.screenshot({ path: join(out, `${form}-poster-B.jpg`), type: 'jpeg', quality: 92, optimizeForSpeed: true });
+  log('poster shot');
+  await b.page.waitForSelector('[data-screen="vs-strip"], [data-screen="m-vs-strip"]', { timeout: 60_000 });
+  await b.page.screenshot({ path: join(out, `${form}-strip-B.png`) });
+  log('strip shot');
   console.log(JSON.stringify({ errors: { A: a.errors, B: b.errors } }, null, 2));
 } catch (e) {
   log('FAILED', e.message);

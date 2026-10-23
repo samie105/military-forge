@@ -19,6 +19,7 @@ import { formatClock, type MatchView } from '../matchView';
 import { take } from './frame';
 import { useTouchPrompts } from './phone/layout';
 import { MAP_CARDS, eventChip, mapEvents } from './Lobby';
+import { VsPoster, VsStrip, useFighters } from '../../presentation/VsPoster';
 
 export type CountdownState = 'intro' | 'intro-leaving' | 'match' | '3' | '2' | '1' | 'go';
 
@@ -26,7 +27,8 @@ export type CountdownState = 'intro' | 'intro-leaving' | 'match' | '3' | '2' | '
 export const GO_MS = 900;
 /** How long the map intro shows as the countdown begins, then its exit (ms; motion spec §4.1). */
 export const INTRO_MS = 1600;
-const LEAVE_MS = 170;
+/** the intro's exit: the VS poster folds into its strip over 400 ms (research §8.1: 1.6 → 2.0 s) */
+const LEAVE_MS = 400;
 
 export function countdownState(view: Pick<MatchView, 'phase' | 'secondsLeft'>): CountdownState | null {
   if (view.phase !== MatchPhase.Countdown) return null;
@@ -181,15 +183,34 @@ function MapIntro({ view, leaving, held }: { view: MatchView; leaving: boolean; 
 }
 
 export function Countdown({ view, state, held = false, bindings }: { view: MatchView; state: CountdownState; held?: boolean; bindings?: Bindings }) {
-  const rules = rulesLine(view);
+  // the VS poster (presentation/, owner 23 Oct) in place of the map intro and the "Match 1" beat, once the
+  // room's fighters are known; any key or tap folds it early (this player only)
+  const fighters = useFighters();
+  const [skipped, setSkipped] = useState<'no' | 'folding' | 'gone'>('no');
+  useEffect(() => {
+    if (state !== 'intro' && state !== 'intro-leaving') setSkipped('no');
+  }, [state]);
+  useEffect(() => {
+    if (skipped !== 'folding') return undefined;
+    const t = window.setTimeout(() => setSkipped('gone'), LEAVE_MS);
+    return () => window.clearTimeout(t);
+  }, [skipped]);
   // on a phone the tip says what to swipe and hold, not which key
   const touch = useTouchPrompts();
+  const poster = fighters.length > 0;
+  if (poster && (state === 'intro' || state === 'intro-leaving') && skipped !== 'gone') {
+    return <VsPoster view={view} fighters={fighters} leaving={state === 'intro-leaving' || skipped === 'folding'} held={held} onSkip={() => setSkipped('folding')} />;
+  }
+  // folded early by a key or tap: the strip and the stand-by until the countdown's own 3
+  if (poster && skipped === 'gone' && (state === 'intro' || state === 'intro-leaving')) state = 'match';
+  const rules = rulesLine(view);
   const total = Math.max(1, Math.min(3, view.countdownTotal || 3));
   const n = Number(state);
   // the ring empties over each second: from n/total to (n-1)/total (app.css animates between them)
   const ring = n > 0 ? { '--count-from': Math.min(1, n / total), '--count': Math.max(0, (n - 1) / total) } : { '--count-from': 1, '--count': 1 };
   const intro = state === 'intro' || state === 'intro-leaving';
   return (
+    <>
     <Screen name="countdown" kind="game" states={[state]} label="Countdown" className={held ? 'mf-held' : undefined}>
       {intro ? (
         <MapIntro view={view} leaving={state === 'intro-leaving'} held={held} />
@@ -197,7 +218,7 @@ export function Countdown({ view, state, held = false, bindings }: { view: Match
         <>
           <div className="cd__dim" aria-hidden="true"></div>
           <div className="cd" role="timer" aria-live="assertive">
-            {state === 'match' && (
+            {state === 'match' && !poster && (
               <div className="cd__match m-p1">
                 <span className="label label--volt">Stand by</span>
                 <b className="display cd__match-title" data-bind="match.label">
@@ -237,5 +258,8 @@ export function Countdown({ view, state, held = false, bindings }: { view: Match
         </>
       )}
     </Screen>
+    {/* after the countdown's own layers, so its dim doesn't cover the strip */}
+    {poster && !intro && state !== 'go' && <VsStrip view={view} fighters={fighters} />}
+    </>
   );
 }

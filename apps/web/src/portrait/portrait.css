@@ -1,0 +1,16 @@
+/* Portraits (portrait/Portrait.tsx): the soldier over the silhouette, cross-faded in (§7.2). Tokens only. */
+.pt { position: relative; display: block; width: 100%; height: 100%; overflow: hidden; }
+.pt > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; user-select: none; -webkit-user-drag: none; }
+.pt__img { animation: pt-in 120ms var(--ease-arrive, ease-out) both; }
+.pt__img.is-cached { animation: none; }
+/* once the soldier is in, the silhouette under it goes (it shows through a tall render's empty corners) */
+.pt:has(> .pt__img) > .pt__base { opacity: 0; transition: opacity 120ms linear; }
+@keyframes pt-in { from { opacity: 0; } }
+html.reduce-motion .pt__img { animation: none; }
+@media (prefers-reduced-motion: reduce) { .pt__img { animation: none; } }
+
+/* the kit's .avatar disc holding a portrait instead of an initial (lobby rows, results, scoreboard) */
+.avatar.avatar--portrait { padding: 0; overflow: hidden; background: var(--c-olive-800); position: relative; }
+.avatar.avatar--portrait .pt > img { object-position: 50% 8%; }
+.avatar.avatar--portrait .avatar__bot { position: absolute; right: -2px; bottom: -2px; display: grid; place-items: center; width: 45%; height: 45%; border-radius: 50%; background: var(--c-ink-600); color: var(--c-text); border: 1px solid var(--c-line-strong); }
+.avatar.avatar--portrait .avatar__bot .ic { width: 70%; height: 70%; }

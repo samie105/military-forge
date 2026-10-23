@@ -23,21 +23,17 @@ import { encodeQr, qrSvgPath } from '../../qr';
 import { KILL_STEP, ROOM_SLOTS, TIME_CHOICES, killsLabel, lobbyMaps, minutesLabel, useRoomSetting } from '../Lobby';
 import { PhoneScreen, rise } from './layout';
 import { LobbyInvite } from '../../../social/SocialLayer';
-import { Roll, ShareChip, Sheet, initial, shareRoom, useShareChip } from './parts';
+import { Roll, ShareChip, Sheet, shareRoom, useShareChip } from './parts';
 import { PhoneTips } from './PhoneTips';
+import { PlayerAvatar } from '../../../presentation/PlayerAvatar';
 import { BOT_LEVELS, BOT_LEVEL_NAMES, botFillChoices, botsLine, type BotLevel } from '../../roomBots';
 
 function Row({ p, i }: { p: LobbyPlayer; i: number }) {
   const ready = p.ready || p.isBot;
   return (
     <li className={`pm-row m-p3${p.you ? ' is-you' : ''}`} style={rise(i)}>
-      {p.isBot ? (
-        <span className="avatar avatar--bot">
-          <Icon name="bot" />
-        </span>
-      ) : (
-        <span className="avatar">{initial(p.name)}</span>
-      )}
+      {/* the player's soldier as their avatar (presentation/, owner 23 Oct) */}
+      <PlayerAvatar id={p.id} name={p.name} bot={p.isBot} />
       <b className="pm-row__name">{playerName(p.name, p.isBot)}</b>
       {p.host && (
         <span className="tag tag--host">

@@ -15,6 +15,7 @@
  * raw; discrete changes get the patterns: rolls (P4) on counts and clocks, stamps (P7), edge
  * banners (P9) that leave accelerating (Linger), the HP bar's ease (P10) on a hit only.
  */
+import { avatarElement } from '../presentation/domAvatar';
 import { DamageSource, MatchPhase, type SimEvent } from '@military-forge/sim';
 import { DRAGON, GAS, HitZone, POWER_WEAPONS, defaultTuning, weapons, type Tuning } from '@military-forge/content';
 import type { MatchView } from '../shell/matchView';
@@ -1270,8 +1271,8 @@ export class Hud {
         if (fresh) stagger(row, i);
         const rank = el('td', 'sb__rank num', row);
         const who = el('td', 'sb__name', row);
-        if (r.bot) el('span', 'avatar avatar--bot', who).appendChild(svgIcon('ic', iconHref('bot')));
-        else el('span', 'avatar', who).textContent = ([...r.name.trim()][0] ?? '?').toUpperCase();
+        // their soldier's portrait when the lobby cached it (presentation/domAvatar.ts), else the initial
+        who.appendChild(avatarElement(document, r.left ? -1 : (r.id ?? -1), r.name, r.bot));
         el('b', '', who).textContent = playerName(r.name, r.bot);
         if (i === 0 && lead) {
           const crown = el('span', 'stamp stamp--volt sb__crown', who);

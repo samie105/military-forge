@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>VS poster preview</title>
+    <link rel="stylesheet" href="/src/ui/fonts.css" />
+    <link rel="stylesheet" href="/src/ui/kit.css" />
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #0e100b; }
+      #world { position: fixed; inset: 0; background: linear-gradient(#6f8796, #a3ad78 70%, #36401f 70%); }
+    </style>
+  </head>
+  <body>
+    <!-- dev only: the VS poster and its strip with real portraits, for design checks and screenshots
+         (src/presentation/preview.tsx; ?n=8 · ?teams=4v4|4v4v4|2v2v2v2 · ?state=poster|strip|lobby · ?phone · ?reduce) -->
+    <div id="world"></div>
+    <script type="module" src="/src/presentation/preview.tsx"></script>
+  </body>
+</html>

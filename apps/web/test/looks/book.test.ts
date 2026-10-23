@@ -47,9 +47,9 @@ describe('the look book', () => {
     expect(looks.get(2)).not.toEqual(looks.get(1));
   });
 
-  it('a room\'s HELLO carries the saved look as wire ids (none saved: none sent)', async () => {
+  it('a room\'s HELLO carries the saved look as wire ids (none saved: the default Rookie)', async () => {
     const storage = memoryStorage();
-    expect(savedLookIds(new LocalLoadoutStore(storage))).toBeNull();
+    expect(savedLookIds(new LocalLoadoutStore(storage))).toEqual(cosmeticLoadoutWireIds(DEFAULT_COSMETIC_LOADOUT));
     await new LocalLoadoutStore(storage).save(HERS);
     expect(savedLookIds(new LocalLoadoutStore(storage))).toEqual(cosmeticLoadoutWireIds(HERS));
   });

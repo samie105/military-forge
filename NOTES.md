@@ -1376,3 +1376,24 @@ Spec: docs/design/character-feel-research.md §3.3, §5.1 A, §9. Animation only
   - **Follow-through:** the lean settles on an underdamped spring (ζ 0.72), and the head trails the lean and swings through it. A dash coils against its direction for 35 ms, then stretches past its pose and settles (ζ 0.62).
   - **Measured:** the climb pose at 90% came 417 ms after leaving the ground; now 183 ms. A 10 m/s landing's knee turned 31° in one frame; now ≤ 14° a frame, at the bottom in 3 frames, with a 6% rebound.
   - **Trade-off:** that rate limit makes the landing shallower than main's: the hips drop at most 9% of the head's height (main: 14%).
+
+## 47. Looks on the wire, avatars and the VS poster (23 Oct 2026, the owner: "the character card with the face … the profile of the gamer", "a VS and like a poster before the game")
+
+**What the owner sees:** everyone's soldier looks the way its player made it, on every screen. A player's avatar is their own soldier: lobby rows, the scoreboard, results. When a match starts, a VS poster shows every fighter in their real look for about 2 s, inside the usual 5 s countdown, then folds into a strip at the top while 3-2-1 and GO play as before.
+
+- **Looks on the wire (protocol v19, PR #195; docs/05 §6, docs/04 §5):** a look is its cosmetic wire ids. It travels in the join ticket, the HELLO, a SetLook CMD and ROSTER's new tail, never in snapshots. The server holds each look to the body's fit and to what the player has unlocked (content `admitLook`). Bots wear seeded looks (`botLook`).
+- **Portraits (`apps/web/src/portrait/`, research §7):**
+  - The player's real soldier, rendered on the device through the game's own WebGL context (one assembler shared with the 3D view) into a 4× MSAA render target, read back with `readRenderTargetPixelsAsync`, and kept as WebP.
+  - Sizes: 64/128/256 head-and-shoulders, and 512×768 full body for the poster.
+  - Cached by look hash in memory (96) and Cache Storage (`mf-portraits-v1`), keyed by the art's manifests too.
+  - Rendering runs freely in menus and lobbies, and under the poster. It never runs mid-fight; while dead, one job at a time.
+  - A team-tinted silhouette with the initial shows until the picture lands (120 ms cross-fade, none under Reduce motion).
+  - `getAvatar(look)` / `peekAvatar` is for the friends list (social).
+- **The poster (`apps/web/src/presentation/`, research §8; Pen board "MATCH PRESENTATION · avatars, teams, VS"):**
+  - It replaces the map intro and the "Match 1" beat. It comes in as the countdown starts and holds to 1.6 s.
+  - It folds by 2.0 s into the strip (map, rules, faces).
+  - Any key or tap folds it early.
+  - Layouts are data (`vsLayout`): ALL VS ALL in one row (2–8) or two rows (9–16), and a 1v1 duel with a big VS. Team layouts (4v4, 4v4v4, 2v2v2v2) render for when team modes exist.
+  - The lobby warms everyone's avatar and poster render (`warmRoomPortraits`), so the countdown only shows pictures.
+- **Not yet:** team modes (the sim has free-for-all only), the art pipeline's pre-rendered portrait atlas (the middle fallback), the poster sound (the audio agent's), the female body's own rig (she draws on the male rig until her art lands).
+- **Checks:** dev-only `vsposter.html` (`?n=`, `?teams=`, `?state=poster|strip|lobby`, `?phone`). Shots come from `apps/web/scripts/vs-shots.mjs`, `portrait-renders.mjs` and `looks-shots.mjs` (two players through a playtest link: B's lobby wears A's soldier).

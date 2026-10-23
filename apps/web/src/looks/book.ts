@@ -7,13 +7,63 @@
  * avatar portraits (the lobby, scoreboard, results and friends: see match-presentation.md in the notes).
  * A player missing from the book has no look known (an older page): draw a placeholder.
  */
-import { botLook, cosmeticLoadoutFromWireIds, cosmeticLoadoutHash, cosmeticLoadoutWireIds, lookSeed, type CosmeticLoadout } from '@military-forge/content';
+import { DEFAULT_COSMETIC_LOADOUT, botLook, cosmeticLoadoutFromWireIds, cosmeticLoadoutHash, cosmeticLoadoutWireIds, lookSeed, type CosmeticLoadout } from '@military-forge/content';
 import { LocalLoadoutStore } from '../locker/loadouts';
+import { placeholderLoadout } from '../render3d/character';
+
+/** Who is in the room, as the presentation shows them (the VS poster, team cards): the ROSTER's names. */
+export interface Fighter {
+  id: number;
+  /** the roster's name ("[BOT] Kolo" for a bot) */
+  name: string;
+  isBot: boolean;
+}
 
 export class LookBook {
   private byId = new Map<number, CosmeticLoadout>();
   private hashes = new Map<number, number>();
+  private fightersNow: readonly Fighter[] = [];
+  private local = -1;
+  private host = -1;
   private readonly listeners = new Set<() => void>();
+  /** bumped on every change (React's useSyncExternalStore snapshot) */
+  version = 0;
+
+  /** Who is in the room and which of them is us (a ROSTER, a training match's players). */
+  setRoster(localId: number, fighters: readonly Fighter[]): void {
+    const same =
+      localId === this.local &&
+      fighters.length === this.fightersNow.length &&
+      fighters.every((f, i) => {
+        const g = this.fightersNow[i]!;
+        return f.id === g.id && f.name === g.name && f.isBot === g.isBot;
+      });
+    if (same) return;
+    this.local = localId;
+    this.fightersNow = fighters.map((f) => ({ ...f }));
+    this.emit();
+  }
+
+  /** Everyone in the room (roster order). */
+  fighters(): readonly Fighter[] {
+    return this.fightersNow;
+  }
+
+  /** Our player id (-1: not in a room). */
+  get localId(): number {
+    return this.local;
+  }
+
+  /** The room's host (MATCH_STATE's hostId; -1: none, or training). */
+  get hostId(): number {
+    return this.host;
+  }
+
+  setHost(id: number): void {
+    if (id === this.host) return;
+    this.host = id;
+    this.emit();
+  }
 
   /** Everyone's look at once (a new ROSTER, a new training match): replaces what was there. */
   replace(looks: Iterable<readonly [number, CosmeticLoadout]>): void {
@@ -25,14 +75,24 @@ export class LookBook {
     if (!same) this.emit();
   }
 
-  /** Nobody's look (left the room, back to the menus). */
+  /** Nobody's look, nobody in the room (left the room, back to the menus). */
   clear(): void {
+    this.setHost(-1);
+    this.setRoster(-1, []);
     this.replace([]);
   }
 
   /** The look of player `id`; null = none known (draw a placeholder). */
   get(id: number): CosmeticLoadout | null {
     return this.byId.get(id) ?? null;
+  }
+
+  /**
+   * What player `id` is drawn in: their look, else (a player in the room whose page sends none) the 3D
+   * view's placeholder for that id, so the avatar and the soldier in the world agree; null for nobody.
+   */
+  drawn(id: number): CosmeticLoadout | null {
+    return this.byId.get(id) ?? (id >= 0 && this.fightersNow.some((f) => f.id === id) ? placeholderLoadout(id) : null);
   }
 
   /** cosmeticLoadoutHash of player `id`'s look (the avatar cache's key); null = none known. */
@@ -52,6 +112,7 @@ export class LookBook {
   }
 
   private emit(): void {
+    this.version++;
     for (const l of [...this.listeners]) l();
   }
 }
@@ -71,12 +132,12 @@ export function botLooks(seed: number, bots: Iterable<{ id: number; name: string
 
 /**
  * The look this device has saved (the Locker's, the account's once synced), as cosmetic wire ids for a
- * room's HELLO; null when nothing is saved (the room then uses the account's look from the join ticket,
- * or a placeholder). Everything goes: the room holds it to what the player owns.
+ * room's HELLO; the default Rookie when nothing is saved. Everything goes: the room holds it to what the
+ * player owns.
  */
-export function savedLookIds(store: Pick<LocalLoadoutStore, 'peek'> = new LocalLoadoutStore()): number[] | null {
-  const look = store.peek();
-  return look ? cosmeticLoadoutWireIds(look) : null;
+export function savedLookIds(store: Pick<LocalLoadoutStore, 'peek'> = new LocalLoadoutStore()): number[] {
+  // nothing saved yet: the default Rookie, as this page draws us (a later account sync sends the saved one)
+  return cosmeticLoadoutWireIds(store.peek() ?? DEFAULT_COSMETIC_LOADOUT);
 }
 
 /** Feeds the book to a view that draws looks (render3d's LoadoutDirectory) now and on every change; returns the unsubscribe. */

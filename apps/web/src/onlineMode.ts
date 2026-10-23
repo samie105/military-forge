@@ -230,7 +230,7 @@ export class OnlineMode {
     this.net = new NetClient({
       name,
       ...(options.ticket ? { ticket: options.ticket } : {}),
-      ...(look ? { look } : {}),
+      look,
       now: () => performance.now(),
       send: (bytes) => {
         this.bytesOut += bytes.length;
@@ -517,6 +517,7 @@ export class OnlineMode {
       case MsgType.MatchState: {
         const was = this.matchState?.hostId ?? -1;
         this.matchState = msg;
+        lookBook.setHost(msg.hostId);
         // the host left or went quiet (room.ts HOST_AWAY_TICKS): someone else runs the room now
         if (was >= 0 && msg.hostId >= 0 && msg.hostId !== was) for (const fn of this.hostListeners) fn(was, msg.hostId);
         break;
@@ -524,7 +525,8 @@ export class OnlineMode {
       case MsgType.Roster:
         // the roster knows every bot; the snapshots only those in view
         this.renderer.setNames(this.net.names, new Set(msg.entries.filter((e) => e.isBot).map((e) => e.id)));
-        // v19: everyone's look, ours included (what the others see us in)
+        // v19: everyone's look, ours included (what the others see us in), and who's in (the VS poster)
+        lookBook.setRoster(this.net.myId, msg.entries.map((e) => ({ id: e.id, name: e.name, isBot: e.isBot })));
         lookBook.replace(looksFromWire(this.net.looks));
         break;
       case MsgType.Tuning: {

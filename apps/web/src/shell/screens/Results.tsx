@@ -19,6 +19,7 @@ import { ControllerContext } from '../context';
 import { formatClock, ordinal, playerName, type MatchView } from '../matchView';
 import type { ShellActions } from '../store';
 import { Backdrop, NetPill } from './frame';
+import { PlayerAvatar } from '../../presentation/PlayerAvatar';
 
 export interface ResultsExtras {
   /** a room: the host may send everyone back to the lobby */
@@ -53,9 +54,6 @@ export function reasonChip(results: Pick<MatchResults, 'reason' | 'durationTicks
 
 const thousands = (n: number) => n.toLocaleString('en-US');
 
-function initial(name: string): string {
-  return ([...name.trim()][0] ?? '?').toUpperCase();
-}
 
 export function Results({ view, results, actions, room, training }: { view: MatchView; results: MatchResults; actions: ShellActions; room?: ResultsExtras | undefined; training?: { leave(): void } | undefined }) {
   // ids are slots: after a leave, the leaver's row can carry your id, so skip departed rows
@@ -152,13 +150,8 @@ export function Results({ view, results, actions, room, training }: { view: Matc
                         <td className="num">{won ? <Icon name="trophy" label="Winner" /> : s.placement}</td>
                         <th scope="row">
                           <span className="mf-standings__who">
-                            {s.isBot ? (
-                              <span className="avatar avatar--bot">
-                                <Icon name="bot" />
-                              </span>
-                            ) : (
-                              <span className="avatar">{initial(s.name)}</span>
-                            )}
+                            {/* their soldier as their avatar (presentation/); a player who left: the silhouette (ids are reused) */}
+                            <PlayerAvatar id={s.left ? -1 : s.id} name={s.name} bot={s.isBot} />
                             {playerName(s.name, s.isBot)}
                             {room && !s.left && s.id === room.hostId && (
                               <span className="tag tag--host">

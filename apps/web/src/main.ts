@@ -25,7 +25,7 @@
 import { DEFAULT_LOADOUT, DEMO_MAPS, cosmeticLoadoutWireIds, defaultTuning, getMap, maps, weapons, type MapDef } from '@military-forge/content';
 import { createConditionerSettings, parseNetSim } from '@military-forge/netcode';
 import { GAME_NAME } from '@military-forge/shared';
-import { Btn, type Input, type SimEvent } from '@military-forge/sim';
+import { Btn, MatchPhase, type Input, type SimEvent } from '@military-forge/sim';
 import { audio, startAudio } from './audio';
 import { Camera } from './camera';
 import { fxFrame, fxState, setReduceFlashes } from './fx';
@@ -49,6 +49,10 @@ import { toKeyBindings, uiCodes } from './shell/controls';
 import { PlaneCamera, create3d, online3d, parsePreset, softwareGl, type PresetName } from './render3d';
 import { LoadoutDirectory } from './render3d/character';
 import { followLooks, lookBook } from './looks/book';
+import { CharacterAssembler } from './character';
+import { getAvatar, getPortrait, installPortraits, portraits, setPortraitPolicy, type PortraitPolicy } from './portrait';
+import { warmRoomPortraits } from './presentation/warm';
+import { posterUp } from './presentation/state';
 import { countFrame, framesPerSecond, recordNet } from './stats';
 import { isTouchDevice, mountTouch } from './touch';
 import { applyPadSettings, currentDevice, mountGamepad, onInputDevice } from './gamepad';
@@ -154,9 +158,18 @@ const firstPreset = parsePreset(params.get('gfx') ?? graphicsPreset(appMode ? lo
 // who wears what in 3D (v19): the room's looks from the look book, the saved look for us until the room says
 const loadouts3d = new LoadoutDirectory();
 followLooks(lookBook, loadouts3d);
+// one assembler for the 3D view and the portraits: they share its geometry and part caches
+const soldiers = new CharacterAssembler();
 const view3d = planeCamera
-  ? create3d(view3dCanvas, planeCamera, map, firstPreset, (import.meta.env.DEV && !appMode) || params.has('perf'), undefined, softwareGl(params), loadouts3d)
+  ? create3d(view3dCanvas, planeCamera, map, firstPreset, (import.meta.env.DEV && !appMode) || params.has('perf'), soldiers, softwareGl(params), loadouts3d)
   : null;
+// avatars and the VS poster's renders: the players' real soldiers, through the game's own WebGL context
+// (portrait/, research §7); a page without 3D shows silhouettes
+if (view3d) installPortraits(view3d.renderer, soldiers);
+setPortraitPolicy(portraitPolicy);
+// the room's avatars and VS poster renders, warmed whenever its looks change (the countdown only shows pictures)
+if (view3d) warmRoomPortraits(lookBook);
+if (import.meta.env.DEV) (window as unknown as { __mfPortraits: unknown }).__mfPortraits = { portraits, getAvatar, getPortrait, lookBook };
 const use3d = view3d !== null;
 if (view3d) {
   view3d.onAutoTier = (tier) => (autoGraphicsNow = tier);
@@ -605,12 +618,26 @@ resize();
 
 const EMPTY_FRAME: Frame = { tick: 0, localId: -1, players: [], grenades: [] };
 
+/**
+ * When portraits may render (research §7.3.3): freely in menus and lobbies; in the countdown only under
+ * the VS poster; never mid-fight; one at a time while we're dead.
+ */
+function portraitPolicy(): PortraitPolicy {
+  if (!mode) return 'menus';
+  const phase = mode instanceof LocalMode ? mode.match?.phase : mode.matchState?.phase;
+  // the countdown: only while the VS poster covers the world (training has no lobby to warm them in)
+  if (phase === MatchPhase.Countdown) return posterUp() ? 'idle' : 'busy';
+  if (phase !== MatchPhase.InProgress && phase !== undefined) return 'menus';
+  const me = mode instanceof LocalMode ? mode.me : mode.net.predictor?.player;
+  return me && !me.alive ? 'idle' : 'busy';
+}
+
 /** The Tab scoreboard: the local match's standings, or the room's from MATCH_STATE (with pings). */
 function scoreRows(): ScoreRow[] | null {
   if (mode instanceof LocalMode) {
     const me = mode.localId;
     return (
-      mode.match?.standings().map((s) => ({ key: s.key, name: s.name, score: s.score, kills: s.kills, deaths: s.deaths, assists: s.assists, ping: -1, you: s.id === me && !s.left, host: false, bot: s.isBot, left: s.left })) ?? null
+      mode.match?.standings().map((s) => ({ key: s.key, id: s.id, name: s.name, score: s.score, kills: s.kills, deaths: s.deaths, assists: s.assists, ping: -1, you: s.id === me && !s.left, host: false, bot: s.isBot, left: s.left })) ?? null
     );
   }
   const st = mode?.matchState;

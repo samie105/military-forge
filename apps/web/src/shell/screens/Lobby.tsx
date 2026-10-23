@@ -26,6 +26,7 @@ import type { Bindings } from '../controls';
 import { Backdrop, RollNum, remember } from './frame';
 import { BotSettings, botsLine, type BotLevel } from '../roomBots';
 import { TipsCard } from './Tips';
+import { PlayerAvatar } from '../../presentation/PlayerAvatar';
 
 /** Players a room takes (the game server's default maxHumans: MATCH_STATE doesn't carry it). */
 export const ROOM_SLOTS = 8;
@@ -92,10 +93,6 @@ export function useRoomSetting<T extends number | string>(server: T): [T, (value
   return [local ?? server, setLocal];
 }
 
-function initial(name: string): string {
-  return ([...name.trim()][0] ?? '?').toUpperCase();
-}
-
 /** A list's items plus those that just left, kept `ms` longer (flagged) so they can animate out. */
 export function useWithLeavers<T>(items: readonly T[], key: (t: T) => string | number, ms = 170): { item: T; leaving: boolean }[] {
   const gone = useRef(new Map<string | number, { item: T; until: number }>());
@@ -131,13 +128,8 @@ function PlayerRow({ p, hostView, leaving, i }: { p: LobbyPlayer; hostView: bool
   const ping = pingLook(p.pingMs);
   return (
     <li className={`prow${you} ${leaving ? 'm-leave' : 'm-p3 m-p3--tight'}`} style={{ '--i': i } as CSSProperties}>
-      {p.isBot ? (
-        <span className="avatar avatar--bot">
-          <Icon name="bot" />
-        </span>
-      ) : (
-        <span className="avatar">{initial(p.name)}</span>
-      )}
+      {/* the player's soldier as their avatar (presentation/, owner 23 Oct) */}
+      <PlayerAvatar id={p.id} name={p.name} bot={p.isBot} />
       <b className="prow__name">{playerName(p.name, p.isBot)}</b>
       {p.host && (
         <span className="tag tag--host">
