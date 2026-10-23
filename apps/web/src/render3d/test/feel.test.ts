@@ -188,12 +188,22 @@ describe('§9 death: not invisible on the death frame; gone within 0.7 s; one se
   }, SLOW);
 });
 
-describe('§9 walk band: the foot on the ground keeps up with the ground', () => {
-  // (the run band, 2–5 m/s, is the foot-skate PR's)
-  for (const speed of [0.5, 1.0, 1.5])
-    it(`at ${speed} m/s the contact foot moves at ≤ 15% of the ground speed (the planted walk, mocap_clips.py)`, async () => {
+describe('§9 foot skate: the foot on the ground keeps up with the ground', () => {
+  // the planted walk (mocap_clips.py), the run, and FootPlanter's contact holds. Through the walk-run blend (2–2.5 m/s)
+  // this metric still counts lift-off and touch-down frames within 1.5 cm of the floor: 16–21% (main: 44%, 37%)
+  for (const [speed, most] of [
+    [0.5, 0.15],
+    [1.0, 0.15],
+    [1.5, 0.15],
+    [1.8, 0.15],
+    [2.0, 0.25],
+    [2.5, 0.25],
+    [3.5, 0.15],
+    [5, 0.15],
+  ] as const)
+    it(`at ${speed} m/s the contact foot moves at ≤ ${most * 100}% of the ground speed`, async () => {
       const r = await contactSkate(speed);
-      expect(r.share).toBeLessThanOrEqual(0.15);
+      expect(r.share).toBeLessThanOrEqual(most);
     }, SLOW);
 });
 

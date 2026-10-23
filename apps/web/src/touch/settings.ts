@@ -5,7 +5,8 @@
 
 export type KeyValueStore = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
-export const LAYOUT_KEY = 'mf.touch.layout.v1';
+/** v2: the mm-anchored Classic layout (controls spec §4.2); a v1 layout (the kit's places) isn't carried over. */
+export const LAYOUT_KEY = 'mf.touch.layout.v2';
 export const SETTINGS_KEY = 'mf.touch.settings.v1';
 /**
  * Saved with the settings: 2 = the round-two kit's controls (opacity 1 is its look); 3 = the four fire

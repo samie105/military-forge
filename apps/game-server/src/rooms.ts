@@ -14,7 +14,7 @@
  * capped per IP, per room and overall, so idle sockets can't hold the server's room slots.
  */
 import { loadoutGunIndices, type LookVouch } from '@military-forge/content';
-import { CONTENT_HASH, CloseCode, MsgType, decodeMessage, encodeHello, encodePong, protocolSupported, type HelloMsg, type Message } from '@military-forge/protocol';
+import { CONTENT_HASH, CloseCode, HelloFlag, MsgType, decodeMessage, encodeHello, encodePong, protocolSupported, type HelloMsg, type Message } from '@military-forge/protocol';
 import { isRoomCode } from '@military-forge/shared';
 import { createMatchRules, type MatchRules } from '@military-forge/sim';
 import { LanSignal } from './lanSignal';
@@ -192,6 +192,8 @@ export class RoomRegistry {
     let room = this.roomOf(v.code);
     // a player coming back (reconnect, reload) is admitted by its session token
     const resuming = room !== null && msg.resumeToken !== '' && room.hasSession(msg.resumeToken);
+    // v20: spectators watch rooms that are open; they never open one (nothing to watch)
+    if (msg.spectate && !resuming && !room) return this.turnAway(v, CloseCode.NoRoom, 'nobody is playing in this room');
     if (!room && this.rooms.size >= this.maxRooms) return this.turnAway(v, CloseCode.NoRoom, 'server full: too many rooms, try again soon');
     let hello = bytes;
     let accountId: string | null = null;
@@ -206,7 +208,7 @@ export class RoomRegistry {
       }
       // a new player, under the name the API approved (nickname rules, reserved names), wearing the look
       // their page asked for (v19; room.ts holds it to what the ticket says they own)
-      hello = encodeHello(verdict.claims.nick, '', '', msg.look);
+      hello = encodeHello(verdict.claims.nick, '', '', msg.look, msg.spectate ? HelloFlag.Spectate : 0);
       accountId = verdict.claims.sub;
       guns = loadoutGunIndices(verdict.claims.guns); // null: not a pair a player may choose (the default pair then)
       party = verdict.claims.party ?? null;

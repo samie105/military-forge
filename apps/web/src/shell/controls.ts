@@ -27,7 +27,8 @@ export type ActionId =
   | 'shield'
   | 'scoreboard'
   | 'netGraph'
-  | 'talk';
+  | 'talk'
+  | 'map';
 
 export interface ActionDef {
   id: ActionId;
@@ -67,6 +68,8 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'netGraph', label: 'Net graph', group: 'Interface', ui: true, defaults: ['KeyN'] },
   // voice chat (voice/): V, as the owner asked; melee moved to C (settings rev 3 moves saved ones too)
   { id: 'talk', label: 'Push to talk (hold)', group: 'Interface', ui: true, defaults: ['KeyV'], hint: 'Voice chat: soldiers near you hear you. B talks to your party' },
+  // the big map (minimap/): pans and zooms; a pad double-taps View / Share, a phone taps the minimap
+  { id: 'map', label: 'Big map', group: 'Interface', ui: true, defaults: ['KeyM'], hint: 'Opens and closes the whole level: drag to pan, the wheel zooms' },
 ];
 
 /** two keys per action (Settings → Controls has two columns, as in the design) */
@@ -154,7 +157,7 @@ export function toKeyBindings(bindings: Bindings): KeyBindings {
 }
 
 /** The keyboard codes of a page-level action (scoreboard, net graph). */
-export function uiCodes(bindings: Bindings, action: 'scoreboard' | 'netGraph' | 'talk'): readonly string[] {
+export function uiCodes(bindings: Bindings, action: 'scoreboard' | 'netGraph' | 'talk' | 'map'): readonly string[] {
   return bindings[action].filter((c) => !c.startsWith('Mouse'));
 }
 

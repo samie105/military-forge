@@ -1,9 +1,11 @@
 import { fluxLabMap } from './maps/fluxLab';
+import { fogStairMap } from './maps/fogStair';
 import { lunarOutpostMap } from './maps/lunarOutpost';
 import { mechanicsTestMap } from './maps/mechanicsTest';
 import { movementTestMap } from './maps/movementTest';
 import { stormFrontMap } from './maps/stormFront';
 import { streetMarketMap } from './maps/streetMarket';
+import { verticalTestMap } from './maps/verticalTest';
 import type { MapDef } from './maps/types';
 
 export * from './admin';
@@ -14,6 +16,7 @@ export * from './grenades';
 export * from './hitboxes';
 export * from './maps/mapJson';
 export * from './maps/mechanics';
+export * from './maps/tiers';
 export * from './maps/types';
 export * from './pickups';
 export * from './projectiles';
@@ -22,7 +25,7 @@ export * from './tuning';
 export * from './weapons';
 export * from './loadoutGuns';
 export * from './voice';
-export { fluxLabMap, lunarOutpostMap, mechanicsTestMap, movementTestMap, stormFrontMap, streetMarketMap };
+export { fluxLabMap, fogStairMap, lunarOutpostMap, mechanicsTestMap, movementTestMap, stormFrontMap, streetMarketMap, verticalTestMap };
 
 export const maps: Readonly<Record<string, MapDef>> = {
   [movementTestMap.id]: movementTestMap,
@@ -31,6 +34,8 @@ export const maps: Readonly<Record<string, MapDef>> = {
   [stormFrontMap.id]: stormFrontMap,
   [fluxLabMap.id]: fluxLabMap,
   [streetMarketMap.id]: streetMarketMap,
+  [verticalTestMap.id]: verticalTestMap,
+  [fogStairMap.id]: fogStairMap,
 };
 
 /** Maps that show off map mechanics (docs/02 §20), for map pickers. */

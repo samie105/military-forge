@@ -33,6 +33,7 @@ from PIL import Image, ImageFilter
 LUNAR = (64, 70, 84)  # space: a dark blue-grey "haze" only for palette discipline (there's no air)
 STORM = (95, 108, 122)
 LAB = (150, 165, 178)
+FOG = (169, 177, 180)  # river fog (Fog Stair: rendered by art/pipeline/build_fog_stair_backdrops.py and fog_stair_sky.py, no credits)
 
 # name: (source, kind, width px, settings); kinds: sky (camera-anchored), layer (transparent panel),
 # wall (an opaque panel: an interior's back wall)
@@ -52,6 +53,9 @@ SPECS = {
     "storm_front/mid": ("storm_mid.png", "layer", 1536, {"alpha": (200, 250), "sat": 0.65, "haze": 0.15, "contrast": 0.85, "hazeRGB": STORM}),
     "flux_lab/wall": ("lab_wall.png", "wall", 2048, {"sat": 0.7, "haze": 0.12, "contrast": 0.8, "hazeRGB": LAB}),
     "flux_lab/mid": ("lab_mid.png", "layer", 1536, {"alpha": (200, 250), "sat": 0.5, "haze": 0.4, "contrast": 0.62, "hazeRGB": LAB}),
+    "fog_stair/sky": ("fog_sky.png", "sky", 1024, {}),
+    "fog_stair/far": ("fog_far.png", "layer", 1024, {"alpha": (130, 245), "sat": 0.6, "haze": 0.2, "contrast": 0.82, "hazeRGB": FOG}),
+    "fog_stair/mid": ("fog_mid.png", "layer", 1536, {"alpha": (200, 250), "sat": 0.66, "haze": 0.12, "contrast": 0.86, "hazeRGB": FOG}),
 }
 
 # KTX2 copies (ETC1S) ship only where they cost at most 1.2× the WebP download, at the best basisu

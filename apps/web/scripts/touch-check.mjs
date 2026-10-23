@@ -253,14 +253,15 @@ try {
     const page2 = await page.evaluate(() => ({ scroll: window.scrollY, scale: window.visualViewport?.scale ?? 1, selected: String(window.getSelection?.() ?? '') }));
     check('no scrolling, zoom or text selection after all that', page2.scroll === 0 && page2.scale === 1 && page2.selected === '', JSON.stringify(page2));
 
-    // the editor: drag reload somewhere else; it's there after a reload
+    // the editor: drag the dash button somewhere else; it's there after a reload (reload itself only
+    // shows in the corner slot now, controls spec §4.2)
     const edit = await centre(page, '.mf-touch-edit');
     await f.touch(6, edit.x, edit.y);
     await f.lift(6);
     await sleep(200);
     check('the ✎ button opens the HUD editor', await page.evaluate(() => !document.querySelector('.mf-touch-editor').hidden));
-    const before = await centre(page, '.mf-ctl-reload');
-    await f.drag(6, before.x, before.y, -150, 90, 8);
+    const before = await centre(page, '.mf-ctl-dash');
+    await f.drag(6, before.x, before.y, -150, 60, 8);
     await f.lift(6);
     await sleep(100);
     await page.screenshot({ path: join(outDir, 'editor-landscape.png') });
@@ -270,8 +271,8 @@ try {
     await page.evaluate(() => document.querySelector('[data-ed="done"]').click()); // the tap may land as a click only
     await sleep(200);
     await ready(page, `${base}/?sandbox&render=2d`);
-    const after = await centre(page, '.mf-ctl-reload');
-    check("an edited layout survives a reload (snapping may pull it a few px onto a guide)", Math.abs(after.x - (before.x - 150)) <= 9 && Math.abs(after.y - (before.y + 90)) <= 9, `(${before.x.toFixed(0)},${before.y.toFixed(0)}) → (${after.x.toFixed(0)},${after.y.toFixed(0)})`);
+    const after = await centre(page, '.mf-ctl-dash');
+    check("an edited layout survives a reload (snapping may pull it a few px onto a guide)", Math.abs(after.x - (before.x - 150)) <= 9 && Math.abs(after.y - (before.y + 60)) <= 9, `(${before.x.toFixed(0)},${before.y.toFixed(0)}) → (${after.x.toFixed(0)},${after.y.toFixed(0)})`);
     await page.evaluate(() => window.__touch.resetTouchLayout());
 
     await page.evaluate(() => window.__touch.setTouchSettings({ handed: 'left' }));

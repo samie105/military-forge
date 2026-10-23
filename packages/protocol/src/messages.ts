@@ -21,7 +21,7 @@ import { createInput, type Input } from '@military-forge/sim';
 import { BitReader, BitWriter, DecodeError } from './bitstream';
 import { decodeMatchStateBody, type MatchStateMsg } from './matchState';
 import { decodeFullSnapshot, type SnapshotMsg } from './snapshot';
-import { MsgType, pid, pos, unPid } from './wire';
+import { MsgType, NO_PLAYER, pid, pos, unPid } from './wire';
 
 export { MsgType } from './wire';
 
@@ -78,11 +78,17 @@ export { MsgType } from './wire';
  *     after the ticket (the ticket is then always written), and CMD kind 12 SetLook (JSON array of the
  *     ids). The join ticket gains `look` and `lvl` (API → game server, not the wire). Nothing else changes,
  *     so v17 and v18 clients still join (MIN_PROTOCOL_VERSION); they never send a look.
+ * v20 (spectating): HELLO + u8 flags after the look (bit 0: join as a spectator) · WELCOME + u8 flags
+ *     (bit 0: a spectator, no player) and, for a spectator, u10 delayTicks · SPECTATE_ACK 0x2C (C→S,
+ *     unreliable: u16 seq, a spectator's ack) · SPECTATE 0x2D (S→C: mode, follow, queue, delay, free
+ *     slots, the room's spectators) · CMD kind 13 Spectate (JSON { follow?, play? }) · close code 4008
+ *     SpectatorsFull. Spectators' voice ids are 32 + seat. Nothing else changes, so v17–v19 clients
+ *     still join; they never spectate.
  */
-export const PROTOCOL_VERSION = 19;
+export const PROTOCOL_VERSION = 20;
 /**
- * The oldest client a server still admits. v18 and v19 only added messages and trailing fields an
- * older client never reads or sends, so v17 pages still play (without voice, without looks).
+ * The oldest client a server still admits. v18–v20 only added messages and trailing fields an
+ * older client never reads or sends, so v17 pages still play (without voice, looks or spectating).
  */
 export const MIN_PROTOCOL_VERSION = 17;
 
@@ -158,6 +164,8 @@ export const CloseCode = {
   NoRoom: 4006,
   /** a room by code needs a valid join ticket from the API (docs/06 §6): missing, forged, expired, used or for another room */
   TicketInvalid: 4007,
+  /** v20: a spectator for a room that already has all the spectators it takes (the admin's spectate.cap) */
+  SpectatorsFull: 4008,
 } as const;
 
 export const CmdKind = {
@@ -190,7 +198,48 @@ export const CmdKind = {
   Voice: 11,
   /** v19: wear this look (a JSON array of cosmetic wire ids, encodeLookCmd); the room re-sends the ROSTER */
   SetLook: 12,
+  /** v20: spectating (JSON SpectateCmd): whom a dead player's death cam follows, a spectator's wish to play */
+  Spectate: 13,
 } as const;
+
+/** v20: HELLO's flags (after the look). */
+export const HelloFlag = {
+  /** join as a spectator: no player slot, never sends INPUT */
+  Spectate: 1,
+} as const;
+
+/** v20: WELCOME's flags (after overridesJson). */
+export const WelcomeFlag = {
+  /** this connection is a spectator: it has no player (playerId is NO_PLAYER) */
+  Spectator: 1,
+} as const;
+
+/** v20: a client's spectating mode (SPECTATE). */
+export const SpectateMode = {
+  /** playing, alive (nothing to watch) */
+  Playing: 0,
+  /** dead: the death cam until the respawn */
+  Dead: 1,
+  /** a spectator: no player, the room's whole map, behind live by the delay */
+  Spectator: 2,
+} as const;
+export type SpectateModeId = (typeof SpectateMode)[keyof typeof SpectateMode];
+
+/** v20: a spectator's place in the queue for a player slot (SPECTATE). */
+export const SpectateQueue = {
+  /** watching, not asking to play */
+  Watching: 0,
+  /** plays the moment a slot is free (mid-match too) */
+  Now: 1,
+  /** plays at the next round: once the match isn't counting down or running, and a slot is free */
+  Next: 2,
+} as const;
+export type SpectateQueueId = (typeof SpectateQueue)[keyof typeof SpectateQueue];
+
+/** v20: spectators per room at most (the admin's spectate.cap goes up to this; SPECTATE's list is u4) */
+export const MAX_SPECTATORS = 8;
+/** v20: a spectator's voice id is this plus its seat (VOICE_DOWN / VOICE_STATE ids are u8) */
+export const SPECTATOR_VOICE_BASE = 32;
 
 
 export const MAX_INPUTS_PER_PACKET = 4;
@@ -204,7 +253,16 @@ export const HEALTH_UNKNOWN = -128;
  */
 export function isUnreliableMessage(bytes: Uint8Array): boolean {
   const type = bytes[0];
-  return type === MsgType.Input || type === MsgType.Ping || type === MsgType.Pong || type === MsgType.Snapshot || type === MsgType.Debug || type === MsgType.VoiceUp || type === MsgType.VoiceDown;
+  return (
+    type === MsgType.Input ||
+    type === MsgType.Ping ||
+    type === MsgType.Pong ||
+    type === MsgType.Snapshot ||
+    type === MsgType.Debug ||
+    type === MsgType.VoiceUp ||
+    type === MsgType.VoiceDown ||
+    type === MsgType.SpectateAck
+  );
 }
 
 export const DebugKind = {
@@ -228,6 +286,8 @@ export interface HelloMsg {
   ticket: string;
   /** v19: the look the player wants to wear (cosmetic wire ids); null = none sent (older clients) */
   look: number[] | null;
+  /** v20: join as a spectator (HelloFlag.Spectate); false for older clients */
+  spectate: boolean;
 }
 
 export interface WelcomeMsg {
@@ -247,6 +307,43 @@ export interface WelcomeMsg {
    * with the same weapons and grenades as everyone else
    */
   overridesJson: string;
+  /** v20: this connection is a spectator (WelcomeFlag.Spectator): no player, `playerId` is meaningless */
+  spectator: boolean;
+  /** v20: how far behind live a spectator's feed runs, ticks (0 otherwise) */
+  delayTicks: number;
+}
+
+/** v20: a spectator's snapshot ack (C→S): it never sends INPUT, where players ack. */
+export interface SpectateAckMsg {
+  type: typeof MsgType.SpectateAck;
+  seq: number;
+}
+
+/** v20: one of the room's spectators (SPECTATE): its voice id (32 + seat) and name. */
+export interface SpectatorEntry {
+  voiceId: number;
+  name: string;
+}
+
+/** v20: spectating, as it stands for this client (S→C, reliable; on join and on every change). */
+export interface SpectateMsg {
+  type: typeof MsgType.Spectate;
+  mode: SpectateModeId;
+  /** whom the server centres a dead player's area of interest on; −1 = none */
+  follow: number;
+  queue: SpectateQueueId;
+  /** how far behind live the feed runs, ticks (a spectator's; 0 for the dead) */
+  delayTicks: number;
+  /** player slots free now (a spectator's "Jump in now") */
+  slots: number;
+  /** the room's spectators */
+  spectators: SpectatorEntry[];
+}
+
+/** v20: the Spectate CMD (JSON): whom the death cam follows; a spectator's wish to play. */
+export interface SpectateCmd {
+  follow?: number;
+  play?: 'now' | 'next' | false;
 }
 
 export interface PingMsg {
@@ -359,8 +456,8 @@ export interface RewindDebugMsg {
   targets: RewindTarget[];
 }
 
-export type ServerMessage = WelcomeMsg | PongMsg | SnapshotMsg | RosterMsg | KickMsg | TuningMsg | OverridesMsg | RewindDebugMsg | MatchStateMsg;
-export type ClientMessage = HelloMsg | PingMsg | InputMsg | CmdMsg;
+export type ServerMessage = WelcomeMsg | PongMsg | SnapshotMsg | RosterMsg | KickMsg | TuningMsg | OverridesMsg | RewindDebugMsg | MatchStateMsg | SpectateMsg;
+export type ClientMessage = HelloMsg | PingMsg | InputMsg | CmdMsg | SpectateAckMsg;
 export type Message = ServerMessage | ClientMessage;
 
 // ---------- encoders ----------
@@ -369,13 +466,16 @@ const w = new BitWriter(4096);
 
 /**
  * Trailing fields are optional on decode: the join ticket (u16-length string) is sent when there is one
- * or a look follows it; the look (v19) when there is one.
+ * or a look follows it; the look (v19) when there is one or flags follow it (count 0 = none); the
+ * flags (v20, HelloFlag) when any is set.
  */
-export function encodeHello(name: string, resumeToken = '', ticket = '', look: readonly number[] | null = null): Uint8Array {
+export function encodeHello(name: string, resumeToken = '', ticket = '', look: readonly number[] | null = null, flags = 0): Uint8Array {
   w.reset().u8(MsgType.Hello).u16(PROTOCOL_VERSION).u32(CONTENT_HASH).string(name).string(resumeToken);
   const withLook = look !== null && look.length > 0;
-  if (ticket || withLook) w.string(ticket, 16);
-  if (withLook) writeLook(w, look);
+  const withFlags = (flags & 0xff) !== 0;
+  if (ticket || withLook || withFlags) w.string(ticket, 16);
+  if (withLook || withFlags) writeLook(w, look);
+  if (withFlags) w.u8(flags & 0xff);
   return w.finish().slice();
 }
 
@@ -412,11 +512,14 @@ export function parseLookCmd(payload: string): number[] | null {
   return raw.every((v) => Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 0xffff) ? (raw as number[]) : null;
 }
 
-export function encodeWelcome(m: Omit<WelcomeMsg, 'type'>): Uint8Array {
-  return w
-    .reset()
+/** Longest spectator delay WELCOME and SPECTATE carry (u10 ticks, ~17 s). */
+export const MAX_SPECTATE_DELAY_TICKS = 1023;
+
+/** v20: the flags byte always goes out (a v17–v19 decoder stops before it); a spectator's delay follows it. */
+export function encodeWelcome(m: Omit<WelcomeMsg, 'type' | 'spectator' | 'delayTicks'> & Partial<Pick<WelcomeMsg, 'spectator' | 'delayTicks'>>): Uint8Array {
+  w.reset()
     .u8(MsgType.Welcome)
-    .unsigned(m.playerId, 5)
+    .unsigned(m.spectator ? 31 : m.playerId, 5)
     .u32(m.seed)
     .u32(m.serverTick)
     .string(m.mapId)
@@ -424,8 +527,60 @@ export function encodeWelcome(m: Omit<WelcomeMsg, 'type'>): Uint8Array {
     .string(m.sessionToken)
     .bool(m.resumed)
     .string(m.overridesJson, 16)
-    .finish()
-    .slice();
+    .u8(m.spectator ? WelcomeFlag.Spectator : 0);
+  if (m.spectator) w.unsigned(Math.max(0, Math.min(MAX_SPECTATE_DELAY_TICKS, Math.round(m.delayTicks ?? 0))), 10);
+  return w.finish().slice();
+}
+
+/** v20: a spectator's ack of the newest snapshot it decoded. */
+export function encodeSpectateAck(seq: number): Uint8Array {
+  return w.reset().u8(MsgType.SpectateAck).u16(seq & 0xffff).finish().slice();
+}
+
+/** v20: SPECTATE (see SpectateMsg). */
+export function encodeSpectate(m: Omit<SpectateMsg, 'type'>): Uint8Array {
+  const n = Math.min(MAX_SPECTATORS, m.spectators.length);
+  w.reset()
+    .u8(MsgType.Spectate)
+    .unsigned(m.mode, 2)
+    .unsigned(pid(m.follow), 5)
+    .unsigned(m.queue, 2)
+    .unsigned(Math.max(0, Math.min(MAX_SPECTATE_DELAY_TICKS, Math.round(m.delayTicks))), 10)
+    .unsigned(Math.max(0, Math.min(31, m.slots)), 5)
+    .unsigned(n, 4);
+  for (let i = 0; i < n; i++) w.u8(m.spectators[i]!.voiceId).string(m.spectators[i]!.name);
+  return w.finish().slice();
+}
+
+/** v20: the Spectate CMD (C→S). */
+export function encodeSpectateCmd(cmd: SpectateCmd): Uint8Array {
+  return encodeCmd(CmdKind.Spectate, JSON.stringify(cmd));
+}
+
+/**
+ * A Spectate CMD's payload, held to its shape: `follow` a player id (0..30), `play` "now", "next" or
+ * false; null when it's malformed or names neither.
+ */
+export function parseSpectateCmd(payload: string): SpectateCmd | null {
+  if (payload.length > 128) return null;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(payload);
+  } catch {
+    return null;
+  }
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const out: SpectateCmd = {};
+  if (o.follow !== undefined) {
+    if (!Number.isInteger(o.follow) || (o.follow as number) < 0 || (o.follow as number) >= NO_PLAYER) return null;
+    out.follow = o.follow as number;
+  }
+  if (o.play !== undefined) {
+    if (o.play !== 'now' && o.play !== 'next' && o.play !== false) return null;
+    out.play = o.play;
+  }
+  return out.follow === undefined && out.play === undefined ? null : out;
 }
 
 export function encodePing(clientTime: number): Uint8Array {
@@ -526,20 +681,44 @@ export function decodeMessage(bytes: Uint8Array): Message {
       const ticket = r.remainingBits >= 16 ? r.string(16) : '';
       // v19: a look after the ticket (5 bits at least: anything shorter is the last byte's padding)
       const look = r.remainingBits >= 8 ? readLook(r) : null;
-      return { type, protocolVersion, contentHash, name, resumeToken, ticket, look };
+      // v20: flags after the look (written only when one is set)
+      const flags = r.remainingBits >= 8 ? r.u8() : 0;
+      return { type, protocolVersion, contentHash, name, resumeToken, ticket, look, spectate: (flags & HelloFlag.Spectate) !== 0 };
     }
-    case MsgType.Welcome:
-      return {
-        type,
-        playerId: r.bits(5),
-        seed: r.u32(),
-        serverTick: r.u32(),
-        mapId: r.string(),
-        tuningJson: r.string(16),
-        sessionToken: r.string(),
-        resumed: r.bool(),
-        overridesJson: r.string(16),
-      };
+    case MsgType.Welcome: {
+      const playerId = r.bits(5);
+      const seed = r.u32();
+      const serverTick = r.u32();
+      const mapId = r.string();
+      const tuningJson = r.string(16);
+      const sessionToken = r.string();
+      const resumed = r.bool();
+      const overridesJson = r.string(16);
+      // v20: flags, and a spectator's delay (a v19 server's WELCOME ends before them)
+      const flags = r.remainingBits >= 8 ? r.u8() : 0;
+      const spectator = (flags & WelcomeFlag.Spectator) !== 0;
+      const delayTicks = spectator ? r.bits(10) : 0;
+      return { type, playerId: spectator ? -1 : playerId, seed, serverTick, mapId, tuningJson, sessionToken, resumed, overridesJson, spectator, delayTicks };
+    }
+    case MsgType.SpectateAck: {
+      const seq = r.u16();
+      if (r.remainingBits >= 8) throw new DecodeError('trailing bytes after SPECTATE_ACK');
+      return { type, seq };
+    }
+    case MsgType.Spectate: {
+      const mode = r.bits(2);
+      if (mode > SpectateMode.Spectator) throw new DecodeError(`unknown spectate mode ${mode}`);
+      const follow = unPid(r.bits(5));
+      const queue = r.bits(2);
+      if (queue > SpectateQueue.Next) throw new DecodeError(`unknown spectate queue ${queue}`);
+      const delayTicks = r.bits(10);
+      const slots = r.bits(5);
+      const n = r.bits(4);
+      if (n > MAX_SPECTATORS) throw new DecodeError(`${n} spectators`);
+      const spectators: SpectatorEntry[] = [];
+      for (let i = 0; i < n; i++) spectators.push({ voiceId: r.u8(), name: r.string() });
+      return { type, mode: mode as SpectateModeId, follow, queue: queue as SpectateQueueId, delayTicks, slots, spectators };
+    }
     case MsgType.Ping:
       return { type, clientTime: r.f64() };
     case MsgType.Pong:

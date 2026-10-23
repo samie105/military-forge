@@ -74,6 +74,8 @@ const AIR_MAX_TIME = 5;
 const AIR_STALL_TIME = 1.5;
 /** spatial index cell (m) */
 const CELL = 2;
+/** nodes this close under the map's top edge stand on its roof, sealed off by the ceiling (m) */
+const ROOF_BAND = 0.5;
 
 const hit = createRayHit();
 
@@ -180,6 +182,17 @@ export class NavGraph {
     return id;
   }
 
+  /** Puts back a node made by a build (navGraphFromData): its id is its index, no merge check. */
+  restoreNode(n: NavNode): void {
+    if (n.id !== this.nodes.length) throw new Error(`nav node ${n.id} out of order`);
+    this.nodes.push(n);
+    this.out.push([]);
+    const cell = this.cellOf(n.x, n.y);
+    const list = this.cells.get(cell);
+    if (list) list.push(n.id);
+    else this.cells.set(cell, [n.id]);
+  }
+
   /** The link from → to, or −1. */
   linkBetween(from: number, to: number): number {
     for (const l of this.out[from]!) if (this.links[l]!.to === to) return l;
@@ -197,6 +210,32 @@ export class NavGraph {
     this.links.push({ id, from, to, kind, time, fuel, pad, early });
     this.out[from]!.push(id);
   }
+}
+
+/** A graph as plain data: what a worker that built it sends back (structured clone). */
+export interface NavGraphData {
+  nodes: NavNode[];
+  links: NavLink[];
+}
+
+/** The graph's nodes and links as plain data (navGraphFromData puts it back together). */
+export function navGraphData(graph: NavGraph): NavGraphData {
+  return { nodes: graph.nodes, links: graph.links };
+}
+
+/**
+ * A graph from its data, for this map's collision world: the nodes, links, outgoing lists and the
+ * spatial index exactly as the build made them (a page builds its training map's graph in a worker,
+ * apps/web navWarm.ts).
+ */
+export function navGraphFromData(map: MapDef, world: CollisionWorld, data: NavGraphData): NavGraph {
+  const graph = new NavGraph(map, world);
+  for (const n of data.nodes) graph.restoreNode({ ...n });
+  for (const l of data.links) {
+    graph.links.push({ ...l });
+    graph.out[l.from]!.push(l.id);
+  }
+  return graph;
 }
 
 /**
@@ -374,15 +413,20 @@ export function* navGraphSteps(map: MapDef, world: CollisionWorld, t: Tuning): G
   const scc = stronglyConnected(graph);
   for (const n of graph.nodes) n.surface = scc[n.id]!;
 
-  // 4. air links: to the nearest node of every other surface in range, if the probe gets there
+  // 4. air links: to the nearest node of every other surface in range, if the probe gets there.
+  // Nodes on the map's roof (the top of its ceiling, at bounds.maxY) are kept but never flown to or
+  // from: the ceiling seals them off, so every such flight failed after a 1.5 s stall (a third of
+  // the probe's steps on a tall map); the graphs are the same without them.
   goal.jet = true;
+  const roof = map.bounds.maxY - ROOF_BAND;
   const nearestBySurface = new Map<number, number>();
   for (const a of graph.nodes) {
+    if (a.y >= roof) continue;
     nearestBySurface.clear();
     const dist = new Map<number, number>();
     graph.forNear(a.x, a.y + (AIR_REACH_UP - AIR_REACH_DOWN) / 2, AIR_REACH_X, (AIR_REACH_UP + AIR_REACH_DOWN) / 2, (id) => {
       const b = graph.nodes[id]!;
-      if (b.surface === a.surface) return;
+      if (b.surface === a.surface || b.y >= roof) return;
       const d = (b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y);
       const prev = dist.get(b.surface);
       if (prev === undefined || d < prev || (d === prev && id < nearestBySurface.get(b.surface)!)) {

@@ -750,6 +750,18 @@ export const FEET = {
   release: [0.62, 0.72] as const,
   /** a lock this far (m) from where the clip has the foot is stale (a teleport, a respawn): plant afresh */
   stale: 0.6,
+  /** a foot whose clip ankle is within this (m) of standing on the floor is down: held from this share of a cycle
+   *  before its stance to this share after (contact holds; a foot that lifts lets go over `letGo` s) */
+  contact: 0.015,
+  early: 0.08,
+  late: 0.12,
+  /** …and only while the foot is within this share of the release distance (FEET.release[0]) */
+  lateReach: 0.8,
+  letGo: 0.08,
+  letGoSpeed: 1.5,
+  letGoMax: 0.25,
+  /** a swinging foot is at least this high (m) over the floor at mid-swing */
+  clearance: 0.03,
   /** a held foot the full dip falls this much short of (m) is let go (the body has climbed a step away from it) */
   overreach: 0.04,
   /** half a sole's length (m): a foot stands on the highest floor within this of its ankle */
@@ -818,6 +830,9 @@ interface Plant {
   need: number;
   /** how far (m) this leg may reach from the hip to its target */
   reach: number;
+  /** held in a stance (or on the floor near one) this frame; where the clip had the ankle last frame (world x) */
+  holding: boolean;
+  clipX: number;
 }
 
 /** What planting reads from a player view. */
@@ -869,6 +884,8 @@ export class FootPlanter {
     ty: 0,
     need: 0,
     reach: 0,
+    holding: false,
+    clipX: NaN,
   }));
   /** the ground normal under each planted foot */
   private readonly normals = [new Vector3(0, 1, 0), new Vector3(0, 1, 0)];
@@ -881,6 +898,8 @@ export class FootPlanter {
   private lastY = NaN;
   /** the body's yaw last frame: it only changes while turning to face the other way */
   private lastYaw = NaN;
+  /** 1 running forward, 0 backpedalling, eased (the swing clearance is for forward gaits) */
+  private readonly forward = new Spring(1, 12);
   /** a facing turn on the spot: each foot steps from where it stood to its new spot (TURN); `first` steps first */
   private step: { t: number; from: [Vector3, Vector3]; first: number } | null = null;
   /** where each ankle ended up last frame (world) */
@@ -949,6 +968,7 @@ export class FootPlanter {
     // crouch foot held down would be left a body length behind in one stance
     const turning = Math.abs(yaw - this.lastYaw) > 1e-4;
     this.lastYaw = yaw;
+    this.forward.step(p.vx * Math.sin(yaw) < 0 ? 0 : 1, dt);
     // a facing turn on the spot steps the feet round (TURN): the one already toward the new facing stays down while
     // the other steps, then it steps too, each lifted, so neither slides
     const standing = (p.grounded ?? true) && grounded > 0.5 && Math.abs(p.vx) < TURN.standing && !p.dashing;
@@ -991,15 +1011,29 @@ export class FootPlanter {
         // a foot held through either would be left behind, so it is let go at once, while it is still near the clip's
         plant.weight.x = plant.weight.v = 0;
       }
-      if (s < 0) {
-        plant.locked = false;
-        plant.held = 0;
-        plant.weight.step(moving * strength, dt);
-      } else {
+      // a foot on the floor near its stance is held whatever the phase says: one landing early (a sprint's foot comes
+      // down a frame before its stance) or lifting late (a walk's long stance through the walk-run blend) would
+      // otherwise slide along the floor (docs/design/character-feel-research.md §3.4)
+      const floorAt = plant.locked ? plant.ground : Number.isNaN(plant.swingX) ? floor : plant.swing;
+      const contact = _ankle.y + drop - (floorAt + this.ankleHeight) < FEET.contact;
+      // (backpedalling runs the cycle backwards: the foot comes down at the stance's far end)
+      const [before, after] = p.vx * Math.sin(yaw) < 0 ? [FEET.late, FEET.early] : [FEET.early, FEET.late];
+      const near = stanceAt(loco.phase, loco.touchDown + k * 0.5 - before, stance + before + after) >= 0;
+      // (on flat ground only: on a slope or a step's edge the floor under a foot isn't the floor the clip stands it
+      // on, and the stance's own timing holds it better)
+      const flat = Math.abs(floorAt - floor) < 0.02 && this.normals[k]!.y > 0.97;
+      // (past its stance, a held foot is kept only while the leg still reaches it comfortably: a foot left far behind
+      // would pull the hips down after it)
+      const comfortable = !plant.locked || Math.hypot(plant.x - _hip.x, _ankle.z - _hip.z) / len < FEET.release[0] * FEET.lateReach;
+      const touching = contact && near && flat && moving > 0.5 && (s >= 0 || comfortable);
+      const inHold = s >= 0 || touching;
+      let target = 0;
+      if (inHold) {
         // a foot is put down where it stops moving along with the body: while the clip still carries it forward
-        // (touching down, or a cycle blending in from a standstill) the plant goes with it
-        const ahead = (_ankle.x - plant.x) * Math.sign(p.vx) > 0;
-        if (!plant.locked || ahead || Math.abs(plant.x - _ankle.x) > FEET.stale) {
+        // above the floor (a cycle blending in from a standstill) the plant goes with it; on the floor it stays
+        const fresh = !plant.holding || !plant.locked;
+        const ahead = (!contact || plant.weight.x < 0.9) && s >= 0 && s < 0.5 && (_ankle.x - plant.x) * Math.sign(p.vx) > 0;
+        if (fresh || ahead || Math.abs(plant.x - _ankle.x) > FEET.stale) {
           plant.locked = true;
           plant.x = _ankle.x;
           plant.ground = this.footGround(world, _ankle.x, floor, this.normals[k]!);
@@ -1013,7 +1047,30 @@ export class FootPlanter {
         plant.need = _hip.y - plant.ty - Math.sqrt(Math.max(0, plant.reach * plant.reach - flat * flat));
         const reachable = (1 - smoothstep(FEET.release[0], FEET.release[1], flat / len)) * (1 - smoothstep(0, FEET.overreach, plant.need - FEET.maxDip));
         const weight = plant.weight.step(moving * strength * reachable, dt);
-        plant.held = weight > 1e-3 ? Math.min(1, weight) * plantWeight(s, stance, loco.gait.cadence) : 0;
+        // on the floor, held at once (a foot stops where it lands; the lock is where it is); the stance's ends off the
+        // floor fade as before
+        const fade = touching ? 1 : plantWeight(s, stance, loco.gait.cadence);
+        target = weight > 1e-3 ? Math.min(1, weight) * fade : 0;
+      } else {
+        // letting go, the foot follows the clip's lift (it is off the floor by now) and its swing: the gap to where the
+        // clip has it closes at the let-go's pace, not at the swing's (a swing is fast; a held foot left behind it
+        // would catch up in a jump)
+        plant.ty = _ankle.y + drop + ((plant.locked ? plant.ground : floor) - floor);
+        if (plant.locked && Number.isFinite(plant.clipX)) plant.x += _ankle.x - plant.clipX;
+        plant.weight.step(moving * strength, dt);
+      }
+      plant.clipX = _ankle.x;
+      plant.holding = inHold;
+      // a hold comes in at once and goes no faster than over FEET.letGo (from full; a facing turn, which swings the feet
+      // round the body, twice as fast): the foot moves from where it stood to where the clip has it over a few frames,
+      // in the air. A dash lets go at once
+      // (a wide gap closes at FEET.letGoSpeed at most, however short the let-go, within FEET.letGoMax)
+      const gap = Math.abs(plant.x - _ankle.x);
+      const rate = Math.max(1 / FEET.letGoMax, Math.min(1 / (turning ? FEET.letGo / 2 : FEET.letGo), FEET.letGoSpeed / Math.max(gap, 1e-3)));
+      plant.held = target >= plant.held || p.dashing ? target : Math.max(target, plant.held - dt * rate);
+      if (plant.held <= 1e-3) {
+        plant.held = 0;
+        if (!inHold) plant.locked = false;
       }
       const held = plant.held;
       plant.tx = _ankle.x + (plant.x - _ankle.x) * held;
@@ -1047,8 +1104,16 @@ export class FootPlanter {
       const clip = _ankle.y + drop;
       const push = Number.isNaN(plant.swingX) ? 0 : softPlus(plant.swing + this.ankleHeight - clip - FEET.soft / 2, FEET.soft);
       plant.push = Math.min(FEET.maxLift, push >= plant.push ? Math.min(push, plant.push + dt * FEET.liftRate) : Math.max(push, plant.push - dt * FEET.letDown));
-      const free = clip + plant.push;
-      _target.set(plant.tx, free + (plant.ty - free) * held, _ankle.z);
+      let free = clip + plant.push;
+      // a swinging foot clears the floor by FEET.clearance at mid-swing: a blend of two cycles (walk into run) can
+      // otherwise carry it forward along the floor
+      const u = (((loco.phase - (loco.touchDown + k * 0.5)) % 1) + 1) % 1;
+      if (u >= stance && !step) {
+        // (eased in with the swing and out with any hold still letting go, so the lift never jumps; not backpedalling,
+        // where the cycle runs backwards and the clip's own feet come down where the lift would hold them up)
+        const lift = FEET.clearance * Math.sin((Math.PI * (u - stance)) / (1 - stance)) * (1 - held) ** 3 * Math.min(1, moving) * this.forward.x;
+        free = Math.max(free, (Number.isNaN(plant.swingX) ? floor : plant.swing) + this.ankleHeight + lift);
+      }      _target.set(plant.tx, free + (plant.ty - free) * held, _ankle.z);
       if (step) {
         // this foot's window in the step: the first foot early, the second late, overlapping a little
         const span = TURN.stepSeconds;
@@ -1086,7 +1151,8 @@ export class FootPlanter {
     this.step = null;
     this.hasLast = false;
     for (const plant of this.plants) {
-      plant.locked = false;
+      plant.locked = plant.holding = false;
+      plant.clipX = NaN;
       plant.held = plant.weight.x = plant.weight.v = plant.push = 0;
       plant.swingX = NaN;
     }

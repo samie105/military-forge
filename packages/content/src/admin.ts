@@ -262,6 +262,15 @@ prop('Voice chat', 'Proximity', 'voice.falloffStart', 'Full volume up to (m)', V
 prop('Voice chat', 'Last words', 'voice.lastWords', 'Last words after a death (s)', VOICE, 'lastWords', 0, 30, 0.5);
 prop('Voice chat', 'Streams', 'voice.maxSpeakers', 'Voices heard at once', VOICE, 'maxSpeakers', 1, 8, 1);
 
+// ---------- spectating (v20): the game server's ----------
+
+// spectators per room (they take no player slot, but each gets the whole map: bandwidth stays bounded)
+add({ key: 'spectate.cap', group: 'Spectating', section: 'Spectators', label: 'Spectators per room (0: spectating off)', min: 0, max: 8, step: 1, def: 4, scope: 'server' });
+// a spectator's feed runs this far behind the match, so nobody watching can call out live positions
+add({ key: 'spectate.delay', group: 'Spectating', section: 'Spectators', label: 'Spectators watch this far behind (s)', min: 0, max: 10, step: 0.5, def: 3, scope: 'server' });
+// the death cam until the respawn: 0 off (your own body), 1 your killer only, 2 your killer then anyone
+add({ key: 'spectate.deathCam', group: 'Spectating', section: 'Death cam', label: 'Death cam (0 off, 1 the killer only, 2 the killer then anyone)', min: 0, max: 2, step: 1, def: 2, scope: 'server' });
+
 /** Every field the admin page offers, in page order. */
 export const ADMIN_FIELDS: readonly AdminField[] = fields;
 const byKey = new Map(fields.map((f) => [f.key, f]));

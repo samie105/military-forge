@@ -102,7 +102,7 @@ for k in access ticket; do [ -s "$ETC/$k.key" ] || openssl genpkey -algorithm ed
 # -- Caddy first (status page during setup)
 [ -f "$WEB/index.html" ] || page "$WEB/index.html" 'Setting up' 1 "<p>Setting up: <a href=\"/trial-status/\">status</a></p>"
 {
-  # no HTTP/3: UDP 443 is WebTransport's (wt-setup.sh)
+  # no h3: UDP 443 is WebTransport's
   printf '{\n\tservers {\n\t\tprotocols h1 h2\n\t}\n%s}\n\n%s {\n' "${ACME_EMAIL:+	email $ACME_EMAIL
 }" "$HOST"
   [ "$TLS" = internal ] && printf '\ttls internal\n'
@@ -135,6 +135,7 @@ for k in access ticket; do [ -s "$ETC/$k.key" ] || openssl genpkey -algorithm ed
 			root $PUB
 		}
 		header /assets/* Cache-Control "public, max-age=604800"
+		header /r/* X-Robots-Tag noindex
 		rewrite / /index.html
 		rewrite /r/* /index.html
 		rewrite /admin /admin.html
@@ -190,7 +191,7 @@ phase 'building the web app'
 (cd "$SRC/apps/web" && as_mf env NODE_ENV=production NODE_OPTIONS=--max-old-space-size=2560 node_modules/.bin/vite build) >"$DATA/build.log" 2>&1 ||
   { tail -20 "$DATA/build.log"; fail 'the web build'; }
 rm -rf "$WEB.new" && cp -a "$SRC/apps/web/dist" "$WEB.new" && rm -rf "$WEB" && mv "$WEB.new" "$WEB" || fail 'copying the build'
-sed -i "s#%ORIGIN%#$ORIGIN#g; s#</head>#<meta name=\"mf-tune\" content=\"host\" /></head>#" "$WEB/index.html"
+sed -i "s#%ORIGIN%#$ORIGIN#g; s#</head>#<meta name=\"mf-tune\" content=\"host\" /></head>#" "$WEB"/{index.html,robots.txt,sitemap.xml}
 [ -f "$WEB/probe.html" ] && [ -f "$SRC/scripts/net-trial/probe-server/server.mjs" ] && PROBE=1
 
 # -- services

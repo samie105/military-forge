@@ -34,6 +34,9 @@ import { createHostTuning, tuningOffered } from './hostTuning';
 import { splitTuneChange, tuneChanges, tuneToastParts } from './shell/tune';
 import { InputSampler } from './input';
 import { localBots } from './localBots';
+import { warmNavGraph } from './navWarm';
+import { Minimap } from './minimap/minimap';
+import { capText } from './ui/icons';
 import { LoadoutSync } from './locker/accountSync';
 import { PresenceBeat } from './presence';
 import { LocalMode } from './localMode';
@@ -66,6 +69,7 @@ import { creatorSeen } from './creator/model';
 import { titleWanted } from './shell/title';
 import { startTourMemory, type TourMemory } from './tour';
 import { mountTourReadout } from './tour/readout';
+import { releaseLanding } from './ui/landing';
 import { Spotlight } from './ui/spotlight';
 import { voiceChat } from './voice';
 
@@ -186,6 +190,8 @@ const options: RenderOptions = { showHitboxes: false, showGrid: !use3d, showNet:
 // The canvas HUD, its reticle and the help line stay in the debug client (dev `/`) only.
 if (appMode) Object.assign(options, { showGrid: false, hud: 'none', reticle: false });
 const hud = appMode ? mountHud() : null;
+// the minimap (minimap/): every map, every tier; enemies only as seen or heard
+const minimap = appMode ? new Minimap() : null;
 
 /** The onboarding's memory (tour/): on-device facts and the event log; the app only (set once the shell is up). */
 let tourMemory: TourMemory | null = null;
@@ -195,8 +201,12 @@ class GameRenderer extends Renderer {
   override onEvents(events: readonly SimEvent[], localId: number): void {
     super.onEvents(events, localId);
     hud?.onEvents(events, localId);
+    minimap?.onEvents(events, localId);
     tourMemory?.onEvents(events, localId);
     audio.onEvents(events, localId); // the game's sound (apps/web/src/audio): lazy, after the first tap or key
+  }
+  override onSounds(sounds: readonly { x: number; y: number }[]): void {
+    minimap?.onSounds(sounds);
   }
   override setNames(names: Map<number, string>, bots: ReadonlySet<number> = new Set()): void {
     super.setNames(names, bots);
@@ -211,7 +221,7 @@ view3d?.attach(renderer, () => (mode instanceof OnlineMode ? mode.net : null)); 
 mountTouch({ sampler, camera, renderer, view3d, editButton: !appMode, tuning: () => mode?.tuning() ?? null, map: () => map });
 // game controllers (apps/web/src/gamepad): play, the menus, rumble, prompts in the pad's buttons
 // (on a phone the touch buttons step aside while a pad plays: gamepad/pad.css)
-mountGamepad({ sampler, camera, renderer, scoreboardCode: () => scoreboardKeys[0], map: () => map });
+mountGamepad({ sampler, camera, renderer, scoreboardCode: () => scoreboardKeys[0], map: () => map, toggleMap: () => minimap?.toggleBig() });
 
 // the room host's live tuning panel (the in-match menu's "Tune the game"), where the page offers it:
 // pnpm playtest --tune flags the page; the game server then lets the host (only) tune the room
@@ -223,6 +233,7 @@ let serverHost = '';
 /** page-level keys from the Controls settings (the debug client keeps N) */
 let netGraphKeys: readonly string[] = ['KeyN'];
 let scoreboardKeys: readonly string[] = ['Tab'];
+let mapKeys: readonly string[] = ['KeyM'];
 
 /** The HUD's keycaps: the player's keys, or a controller's buttons while one plays (gamepad/prompts.ts). */
 function applyHudKeys(): void {
@@ -354,6 +365,10 @@ const host: GameHost = {
     netGraphKeys = uiCodes(next.bindings, 'netGraph');
     scoreboardKeys = uiCodes(next.bindings, 'scoreboard');
     hud?.setScoreboardKeys(scoreboardKeys);
+    mapKeys = uiCodes(next.bindings, 'map');
+    minimap?.setKey(mapKeys[0] ? capText(mapKeys[0]) : null);
+    minimap?.setColorBlind(next.colorBlind);
+    minimap?.setReducedMotion(next.reduceMotion);
     voiceChat.talkKeys = uiCodes(next.bindings, 'talk');
     voiceChat.padButtons = next.pad.enabled ? next.pad.bindings.talk : [];
     applyHudKeys();
@@ -404,7 +419,7 @@ if (appMode) {
     <a href="/gamepad.html">Pad check</a>
     <a href="/sounds.html">Sounds</a>
     <a href="/?app">App</a>
-    <span class="maps">maps: ${['street-market', ...DEMO_MAPS, 'mechanics-test']
+    <span class="maps">maps: ${['street-market', ...DEMO_MAPS, 'mechanics-test', 'vertical-test']
       .map((id) => `<a href="/?map=${id}" class="${!online && localMapId === id ? 'active' : ''}">${maps[id]!.name}</a>`)
       .join(' ')}</span>
   `;
@@ -426,6 +441,14 @@ if (appMode) {
     const rules = localMatchRules(params);
     mode = new LocalMode(sampler, camera, renderer, name, rules, localMapId, localBots(params, rules !== null));
   }
+}
+
+// training's bots need the map's nav graph: build it in idle time while the player is in the menus
+// (navWarm.ts), not on training's first frame. Dev builds log how long it took (tall-map perf script).
+if (appMode && !online) {
+  void warmNavGraph(getMap(localMapId)).then((r) => {
+    if (import.meta.env.DEV) (window as unknown as { __navWarm: typeof r }).__navWarm = r;
+  });
 }
 
 // The Locker as a shell route (#/locker); loaded on first use.
@@ -530,12 +553,13 @@ loadoutSync?.onLook((look) => {
 if (import.meta.env.DEV) Object.assign(window, { __Spotlight: Spotlight });
 
 // the HTML loading screen (index.html) stays until the shell has its first real screen (the API
-// answered or gave up), so nothing flashes in between
+// answered or gave up), so nothing flashes in between; the landing (ui/landing.ts) goes under the app then
 const splash = document.getElementById('boot-splash');
 if (splash) {
   const hide = () => {
     splash.classList.add('gone');
     setTimeout(() => splash.remove(), 400);
+    releaseLanding();
   };
   // the title screen covers the wait itself (its prompt turns into a loading line if pressed early)
   if (!appMode || shell.store.getState().screen.name !== 'boot' || shell.store.getState().title !== 'off') hide();
@@ -673,6 +697,7 @@ function drawMenuBackdrop(now: number, dt: number): void {
   const mid = (b.minX + b.maxX) / 2;
   const x = mid + (b.maxX - b.minX) * 0.3 * Math.sin(now / 1000 / 24);
   const y = map.spawns[0]!.y + 2;
+  camera.flightVy = 0;
   camera.follow(x, y, x, y, dt, map);
   options.overlay = view3d?.drawing ?? false;
   view3dCanvas.style.visibility = options.overlay ? 'visible' : 'hidden';
@@ -681,6 +706,8 @@ function drawMenuBackdrop(now: number, dt: number): void {
 }
 
 const pointer = { x: 0, y: 0 };
+/** what's on screen (world rect), for the minimap */
+const minimapView = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
 
 let last = performance.now();
 function frame(now: number): void {
@@ -693,6 +720,7 @@ function frame(now: number): void {
   // UI toggles (not gameplay inputs); the app keeps only the net graph, on its bound keys
   let toggled = false;
   if (appMode) {
+    if (!sampler.blocked && mapKeys.some((code) => sampler.consumePress(code))) minimap?.toggleBig();
     if (!sampler.blocked && netGraphKeys.some((code) => sampler.consumePress(code))) {
       options.showNet = !options.showNet;
       toggled = true;
@@ -724,6 +752,7 @@ function frame(now: number): void {
   const covered = shell.store.getState().route !== null;
   if (!mode) {
     hud?.setVisible(false);
+    minimap?.setVisible(false);
     if (!covered) drawMenuBackdrop(now, dt);
     audio.onFrame(null, dt, null);
     voiceChat.frame(null);
@@ -748,13 +777,26 @@ function frame(now: number): void {
     renderer.setMap(map);
     view3d?.setMap(map);
   }
+  minimap?.setMap(map);
   const me = f.players.find((p) => p.id === f.localId);
   const mouse = sampler.mouseWorld(camera);
-  if (me) camera.follow(me.x, me.y, mouse.x, mouse.y, dt, map);
+  if (me) {
+    camera.flightVy = me.alive ? me.vy : 0; // tall maps: the view leans the way you fly (camera.ts)
+    camera.follow(me.x, me.y, mouse.x, mouse.y, dt, map);
+  }
   renderer.mouse.x = sampler.mouseX;
   renderer.mouse.y = sampler.mouseY;
   shell.update(mode instanceof LocalMode ? mode : null);
   shell.setMapEvent(f.mapEvent);
+  if (minimap) {
+    minimap.setVisible(!covered && shell.store.getState().overlay === null);
+    const { halfW, halfH } = camera.halfExtents;
+    minimapView.minX = camera.x - halfW;
+    minimapView.maxX = camera.x + halfW;
+    minimapView.minY = camera.y - halfH;
+    minimapView.maxY = camera.y + halfH;
+    minimap.update(f, minimapView, now);
+  }
   if (covered) return; // the mode keeps running (online: inputs and heartbeats), nothing is drawn
   renderer.render(f, dt, options, appMode ? '' : HELP);
   audio.onFrame(f, dt, { fuelMax: mode.tuning().fuelMax, fireHeld: (sampler.lastButtons & Btn.Fire) !== 0, map });

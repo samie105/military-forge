@@ -1,6 +1,6 @@
 import { Btn } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PLACEMENTS, MIN_TARGET_PX, PILLS, SAFE_INSETS, availableControls, loadLayout, placementFor, saveLayout, sizePx, snapPlacement, withPlacement } from '../../src/touch/layout';
+import { CONTEXT_PRIORITY, DEFAULT_PLACEMENTS, MIN_TARGET_PX, OFF_HUD, PILLS, PINNABLE, PX_PER_MM, SAFE_INSETS, availableControls, loadLayout, placementFor, saveLayout, sizePx, snapPlacement, withPinned, withPlacement, type ControlId, type TouchLayout } from '../../src/touch/layout';
 import { DEFAULT_TOUCH_SETTINGS, LAYOUT_KEY, LIMITS, SETTINGS_KEY, clearLayout, loadSettings, saveSettings, type KeyValueStore } from '../../src/touch/settings';
 
 function memoryStore(init: Record<string, string> = {}): KeyValueStore & { data: Record<string, string> } {
@@ -21,46 +21,90 @@ describe('touch HUD layout', () => {
     expect(placementFor(layout, 'aim', 'left').y).toBe(DEFAULT_PLACEMENTS.aim.y);
   });
 
-  it("defaults follow the round-two kit's phone HUD (m-hud): the thumb dials and the buttons where it draws them", () => {
-    // the kit's 812×375 frame and its safe box (44 px each side, 10 top, 21 bottom): 724×344
-    const box = { left: SAFE_INSETS.left, top: SAFE_INSETS.top, w: 812 - SAFE_INSETS.left - SAFE_INSETS.right, h: 375 - SAFE_INSETS.top - SAFE_INSETS.bottom };
-    expect(box).toEqual({ left: 44, top: 10, w: 724, h: 344 });
+  // the spec's Classic layout (controls-research.md §4.2): mm anchors, the same reach on every phone
+  const PHONES: [number, number][] = [
+    [667, 375],
+    [812, 375],
+    [844, 390],
+    [915, 412],
+    [932, 430],
+  ];
+  const lay = (W: number, H: number, layout: TouchLayout = { placements: {} }) => {
+    const box = { left: SAFE_INSETS.left, top: SAFE_INSETS.top, w: W - SAFE_INSETS.left - SAFE_INSETS.right, h: H - SAFE_INSETS.top - SAFE_INSETS.bottom };
     const unit = Math.min(box.w, box.h);
-    const at = (id: keyof typeof DEFAULT_PLACEMENTS) => ({ x: box.left + DEFAULT_PLACEMENTS[id].x * box.w, y: box.top + DEFAULT_PLACEMENTS[id].y * box.h, d: sizePx(DEFAULT_PLACEMENTS[id], unit) });
-    // the kit's centres and diameters (its left/top + half the size): dials' bases 136 px
-    const kit: [keyof typeof DEFAULT_PLACEMENTS, number, number, number][] = [
-      ['move', 128, 266, 136],
-      ['aim', 684, 266, 136],
-      ['shield', 679, 132, 52],
-      ['reload', 619, 149, 52],
-      ['dash', 573, 191, 52],
-      ['grenade', 551, 250, 58],
-      ['melee', 558, 312, 52],
-      ['pause', 744, 34, 48],
+    return (id: ControlId) => {
+      const p = placementFor(layout, id, 'right', box);
+      return { x: box.left + p.x * box.w, y: box.top + p.y * box.h, d: sizePx(p, unit), box };
+    };
+  };
+  // what the HUD shows by default (the context slot drawn by Take, where it will be)
+  const ON_HUD: ControlId[] = ['move', 'aim', 'grenade', 'dash', 'swap', 'take', 'scores', 'pause'];
+
+  it('at 812×375 the controls sit where the spec puts them (±1 px)', () => {
+    const at = lay(812, 375);
+    const want: [ControlId, number, number][] = [
+      ['move', 140, 264],
+      ['aim', 672, 264],
+      ['grenade', 521, 302],
+      ['dash', 557, 217],
+      ['swap', 620, 150],
+      ['take', 703, 110],
+      ['scores', 68, 34],
+      ['pause', 744, 34],
     ];
-    // shield, reload and dash are spread a few px from where the kit draws them (their rings touched)
-    const nudged = new Set(['shield', 'reload', 'dash']);
-    for (const [id, x, y, d] of kit) {
-      const p = at(id);
-      const tol = nudged.has(id) ? 10 : 2;
-      expect(Math.abs(p.x - x), `${id} x`).toBeLessThanOrEqual(tol);
-      expect(Math.abs(p.y - y), `${id} y`).toBeLessThanOrEqual(tol);
-      expect(Math.abs(p.d - d), `${id} size`).toBeLessThanOrEqual(2);
+    for (const [id, x, y] of want) {
+      expect(Math.abs(at(id).x - x), `${id} x`).toBeLessThanOrEqual(1);
+      expect(Math.abs(at(id).y - y), `${id} y`).toBeLessThanOrEqual(1);
     }
-    // the dial buttons' rings (the dash cooldown, a reload's progress: 5 px past the button) keep 4 px apart
-    const ring: Record<string, number> = { shield: 0, reload: 5, dash: 5, grenade: 0, melee: 0 };
-    for (const a of Object.keys(ring)) for (const b of Object.keys(ring)) if (a < b) expect(Math.hypot(at(a as 'dash').x - at(b as 'dash').x, at(a as 'dash').y - at(b as 'dash').y) - (at(a as 'dash').d + at(b as 'dash').d) / 2 - ring[a]! - ring[b]!, `${a}/${b} gap`).toBeGreaterThanOrEqual(4);
-    // round controls never overlap (pills are checked by their height: their width follows the gun's name)
-    const round = (Object.keys(DEFAULT_PLACEMENTS) as (keyof typeof DEFAULT_PLACEMENTS)[]).filter((id) => !PILLS.has(id));
-    // (FIRE sits at the aim dial's rest on purpose: in Fire button mode the dial only shows under a thumb)
-    const together = (a: string, b: string) => !(a === 'aim' && b === 'fire');
-    for (const a of round) for (const b of round) if (a < b && together(a, b)) expect(Math.hypot(at(a).x - at(b).x, at(a).y - at(b).y), `${a}/${b}`).toBeGreaterThan((at(a).d + at(b).d) / 2);
-    // every target is at least 48 px, and inside the safe box
-    for (const id of Object.keys(DEFAULT_PLACEMENTS) as (keyof typeof DEFAULT_PLACEMENTS)[]) {
-      expect(at(id).d, id).toBeGreaterThanOrEqual(MIN_TARGET_PX);
-      expect(DEFAULT_PLACEMENTS[id].x, id).toBeGreaterThanOrEqual(LIMITS.min);
-      expect(DEFAULT_PLACEMENTS[id].x, id).toBeLessThanOrEqual(LIMITS.max);
+  });
+
+  it('on five phones (667–932 px): hits ≥ 10 mm (primaries 12, the top bar 8), ≥ 2 mm apart, the arc 42 ± 1 mm from the corner, only the top bar in the top band', () => {
+    for (const [W, H] of PHONES) {
+      const at = lay(W, H);
+      for (const id of ON_HUD) {
+        const min = id === 'scores' || id === 'pause' ? 48 : id === 'dash' || id === 'grenade' ? 72 : 60;
+        expect(at(id).d, `${W}: ${id} size`).toBeGreaterThanOrEqual(min);
+      }
+      for (const a of ON_HUD)
+        for (const b of ON_HUD) {
+          if (a >= b) continue;
+          const gap = Math.hypot(at(a).x - at(b).x, at(a).y - at(b).y) - (at(a).d + at(b).d) / 2;
+          expect(gap, `${W}: ${a}/${b} gap`).toBeGreaterThanOrEqual(12);
+        }
+      const corner = { x: W - SAFE_INSETS.right, y: H - SAFE_INSETS.bottom };
+      for (const id of ['grenade', 'dash', 'swap', 'take'] as ControlId[]) {
+        const mm = Math.hypot(at(id).x - corner.x, at(id).y - corner.y) / PX_PER_MM;
+        expect(Math.abs(mm - 42), `${W}: ${id} at ${mm.toFixed(1)} mm`).toBeLessThanOrEqual(1);
+      }
+      for (const id of ON_HUD) if (id !== 'scores' && id !== 'pause') expect(at(id).y, `${W}: ${id} below the top band`).toBeGreaterThanOrEqual(90);
     }
+  });
+
+  it('pinned controls (the editor) get their own places, clear of the HUD and of each other', () => {
+    const layout: TouchLayout = { placements: {}, pinned: [...PINNABLE] };
+    for (const [W, H] of PHONES) {
+      const at = lay(W, H, layout);
+      const all = [...ON_HUD, ...PINNABLE];
+      for (const a of all)
+        for (const b of all) {
+          if (a >= b) continue;
+          const gap = Math.hypot(at(a).x - at(b).x, at(a).y - at(b).y) - (at(a).d + at(b).d) / 2;
+          expect(gap, `${W}: ${a}/${b}`).toBeGreaterThanOrEqual(PILLS.has(a) || PILLS.has(b) ? 4 : 12);
+        }
+    }
+    // pins survive a save and a load; unknown ones are dropped
+    const store = memoryStore();
+    saveLayout(store, withPinned({ placements: {} }, 'reload', true));
+    expect(loadLayout(store).pinned).toEqual(['reload']);
+    store.data[LAYOUT_KEY] = JSON.stringify({ placements: {}, pinned: ['reload', 'jetpack'] });
+    expect(loadLayout(store).pinned).toEqual(['reload']);
+    expect(withPinned({ placements: {}, pinned: ['reload'] }, 'reload', false).pinned).toEqual([]);
+  });
+
+  it('the HUD carries the arc; next grenade, melee, reload, zoom and the shield come by the context slot (or a pin)', () => {
+    expect([...OFF_HUD].sort()).toEqual(['cycleGrenade', 'melee', 'reload', 'shield', 'take', 'zoom']);
+    expect(CONTEXT_PRIORITY).toEqual(['take', 'melee', 'shield', 'reload', 'zoom']);
+    expect(LAYOUT_KEY).toBe('mf.touch.layout.v2');
   });
 
   it('no target is ever drawn under 48 px, however small the layout says', () => {

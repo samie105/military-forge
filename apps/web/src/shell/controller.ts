@@ -582,11 +582,19 @@ export class ShellController {
 
   // ---- browser history ----
 
+  /** the path and query the shell last stood on: a popstate that changes only the #hash isn't the shell's */
+  private lastPath = typeof location === 'undefined' ? '' : location.pathname + location.search;
+
   private setUrl(path: string): void {
     if (location.pathname + location.search !== path) history.pushState(null, '', path);
+    this.lastPath = location.pathname + location.search;
   }
 
   private onPopState(): void {
+    // a #hash of its own (the landing's #about, a route's #/locker): the screens stay as they are
+    const path = location.pathname + location.search;
+    if (path === this.lastPath) return;
+    this.lastPath = path;
     const intent = intentFromLocation(location);
     const screen = this.store.getState().screen;
     if (intent.to === 'join' && screen.name === 'room' && screen.code === intent.code) return;

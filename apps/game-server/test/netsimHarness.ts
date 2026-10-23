@@ -99,6 +99,8 @@ export interface SimOptions {
   transport?: 'ws' | 'wt';
   /** the conditioner's random seed (loss, jitter, spike schedule): another run of the same profile */
   linkSeed?: number;
+  /** v20: these clients join as spectators (no player, no INPUT) */
+  spectate?: number[];
 }
 
 /** Defers callbacks to the next whole second while `asleep()` (background-tab timer alignment). */
@@ -205,6 +207,7 @@ export function simulate(settings: ConditionerSettings, seconds: number, options
       // delayed OVERRIDES (or clearing them) would change the server's weapons mid-run; production
       // clients, in their own pages, apply them.
       ownContent: false,
+      ...(options.spectate?.includes(k) ? { spectate: true } : {}),
     });
     if (options.lowBandwidth?.includes(k)) net.setLowBandwidth(true);
     nets.push(net);
@@ -271,22 +274,22 @@ export function simulate(settings: ConditionerSettings, seconds: number, options
     }
     if (now === warmupSeconds * 1000) {
       nets.forEach((c, k) => {
-        base[k] = { corrections: c.predictor!.stats.corrections, mispredictions: c.predictor!.stats.mispredictions, resyncs: c.pacer.resyncs, missed: conns[k]!.inputs.missed };
+        base[k] = { corrections: c.predictor?.stats.corrections ?? 0, mispredictions: c.predictor?.stats.mispredictions ?? 0, resyncs: c.pacer.resyncs, missed: conns[k]!.inputs.missed };
       });
     }
     if (now > warmupSeconds * 1000 && now % 100 === 0) {
       const c = nets[0]!;
       healths.push(c.pacer.health);
       timeScales.push(c.pacer.timeScale);
-      leadTicks.push(c.predictor!.tick - room.game.tick);
+      if (c.predictor) leadTicks.push(c.predictor.tick - room.game.tick);
     }
   }
   return {
     clients: nets.map((net, k) => ({
       net,
       server: conns[k]!,
-      corrections: net.predictor!.stats.corrections - base[k]!.corrections,
-      mispredictions: net.predictor!.stats.mispredictions - base[k]!.mispredictions,
+      corrections: (net.predictor?.stats.corrections ?? 0) - base[k]!.corrections,
+      mispredictions: (net.predictor?.stats.mispredictions ?? 0) - base[k]!.mispredictions,
       resyncs: net.pacer.resyncs - base[k]!.resyncs,
       missedInputs: conns[k]!.inputs.missed - base[k]!.missed,
       downBytesPerSec: downBytes[k]! / (seconds - warmupSeconds),

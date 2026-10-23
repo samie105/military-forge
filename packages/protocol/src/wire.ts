@@ -22,6 +22,10 @@ export const MsgType = {
   VoiceDown: 0x2a,
   /** v18: who in the room has voice on, a mic, is in your party, muted by you (reliable) */
   VoiceState: 0x2b,
+  /** v20: a spectator's snapshot ack (C→S, unreliable): spectators never send INPUT, where players ack */
+  SpectateAck: 0x2c,
+  /** v20: spectating: your mode, whom your death cam follows, your place in the queue, the room's spectators (S→C) */
+  Spectate: 0x2d,
   /** dev only: server-side debug views (lag-compensation rewinds) */
   Debug: 0x30,
   Kick: 0x3f,

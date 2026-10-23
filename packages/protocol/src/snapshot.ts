@@ -686,18 +686,48 @@ function seqNewer(a: number, b: number): boolean {
   return d !== 0 && d < 0x8000;
 }
 
+/**
+ * v20: the snapshot ring a spectator's baselines (server) and decoder (client) keep. Its feed runs
+ * `delayTicks` behind, so an ack reaches the server that many ticks after the snapshot it names was
+ * encoded, and the client decodes as many newer ones before a delta against it arrives: the ring
+ * covers the delay's snapshots (one every `snapshotEvery` ticks) plus 32 (about a second) for the
+ * round trip, as a power of two, from 64 to 1024: a 3 s delay keeps 128. A longer round trip only
+ * costs full snapshots until the acks catch up.
+ */
+export function spectatorRing(delayTicks: number, snapshotEvery = 2): number {
+  const need = Math.ceil(Math.max(0, delayTicks) / Math.max(1, snapshotEvery)) + 32;
+  let size = 64;
+  while (size < need && size < 1024) size *= 2;
+  return size;
+}
+
 /** What the server sent one client recently: the baselines its next snapshots can delta against. */
 export class SnapshotBaselines {
+  /** a player's ring (players ack within a round trip) */
   static readonly SIZE = 32;
-  /** newest snapshot this client says it decoded (INPUT.ackSnapshotSeq), 0 = none */
+  /** newest snapshot this client says it decoded (INPUT.ackSnapshotSeq, a spectator's SPECTATE_ACK), 0 = none */
   acked = 0;
-  readonly seqs = new Int32Array(SnapshotBaselines.SIZE).fill(-1);
-  readonly present = new Uint8Array(SnapshotBaselines.SIZE * MAX_PLAYERS);
-  readonly states = new Int32Array(SnapshotBaselines.SIZE * MAX_PLAYERS * FIELDS);
-  readonly locals: LocalState[] = Array.from({ length: SnapshotBaselines.SIZE }, createLocalState);
-  readonly hasLocal = new Uint8Array(SnapshotBaselines.SIZE);
+  readonly seqs: Int32Array;
+  readonly present: Uint8Array;
+  readonly states: Int32Array;
+  readonly locals: LocalState[];
+  readonly hasLocal: Uint8Array;
   /** the item list each snapshot left the client with */
-  readonly pickups = new Int32Array(SnapshotBaselines.SIZE * PICKUP_LIST);
+  readonly pickups: Int32Array;
+
+  /**
+   * @param size snapshots remembered, a power of two: SIZE for a player; a spectator's feed is held
+   *   back (v20), so its acks come a delay later and it needs spectatorRing(delayTicks)
+   */
+  constructor(readonly size: number = SnapshotBaselines.SIZE) {
+    if (size < 1 || (size & (size - 1)) !== 0) throw new Error(`baseline ring ${size}: not a power of two`);
+    this.seqs = new Int32Array(size).fill(-1);
+    this.present = new Uint8Array(size * MAX_PLAYERS);
+    this.states = new Int32Array(size * MAX_PLAYERS * FIELDS);
+    this.locals = Array.from({ length: size }, createLocalState);
+    this.hasLocal = new Uint8Array(size);
+    this.pickups = new Int32Array(size * PICKUP_LIST);
+  }
 
   ack(seq: number): void {
     if (seq !== 0 && (this.acked === 0 || seqNewer(seq, this.acked))) this.acked = seq;
@@ -706,7 +736,7 @@ export class SnapshotBaselines {
   /** ring slot holding `seq`, or −1 */
   slotOf(seq: number): number {
     if (seq === 0) return -1;
-    const slot = seq & (SnapshotBaselines.SIZE - 1);
+    const slot = seq & (this.size - 1);
     return this.seqs[slot] === seq ? slot : -1;
   }
 
@@ -727,6 +757,11 @@ export interface SnapshotTarget {
   local: PlayerState | null;
   /** AOI rect, null = everything */
   view: ViewRect | null;
+  /**
+   * v20: whose eyes smoke is judged from (a dead player's death cam: the player it follows, whose
+   * view `view` is); default the local player. Only sight: own shots and grenades stay `local`'s.
+   */
+  eyes?: number;
   /** events from snapshot intervals this client skipped (low-bandwidth mode), sent before this one's */
   extraEvents?: readonly SimEvent[];
 }
@@ -744,6 +779,8 @@ export class SnapshotEncoder {
   private readonly inView = new Uint8Array(MAX_PLAYERS);
   /** this client is in a flashbang's full white (encodeFor): it's sent no one else */
   private blind = false;
+  /** whose eyes smoke is judged from this encodeFor (SnapshotTarget.eyes; −1: nobody's) */
+  private eyes = -1;
   /** who smoke hides from whom this snapshot (sim clouds.ts) */
   private readonly sight = new SmokeSight();
   private readonly masks = new Uint8Array(MAX_PLAYERS);
@@ -784,6 +821,7 @@ export class SnapshotEncoder {
     const bl = t.baselines;
     const bslot = bl ? bl.slotOf(bl.acked) : -1;
     const viewer = t.local ? t.local.id : -1;
+    this.eyes = t.eyes ?? viewer;
     const view = t.view;
     // a flashbang's full white is the server's word too: while it lasts the client gets nobody else,
     // so a client that hides the white-out still sees nothing (the fade is the client's to draw)
@@ -807,7 +845,7 @@ export class SnapshotEncoder {
     const bp = bslot * MAX_PLAYERS;
     for (let id = 0; id < MAX_PLAYERS; id++) {
       const visible =
-        this.present[id] === 1 && (view === null || id === viewer || (!this.blind && inRect(view, this.xs[id]!, this.ys[id]!) && !this.sight.hides(viewer, id)));
+        this.present[id] === 1 && (view === null || id === viewer || (!this.blind && inRect(view, this.xs[id]!, this.ys[id]!) && !this.sight.hides(this.eyes, id)));
       this.inView[id] = visible ? 1 : 0;
       const inBase = bslot >= 0 && bl!.present[bp + id] === 1;
       if (visible) {
@@ -848,7 +886,7 @@ export class SnapshotEncoder {
 
     // items on the map in view, only when they changed: one that vanished or appeared out of view
     // would give away a hidden player taking it, or dying with a shield
-    const items = this.itemsFor(view, viewer, bslot >= 0 ? bl!.pickups : null, bslot * PICKUP_LIST);
+    const items = this.itemsFor(view, bslot >= 0 ? bl!.pickups : null, bslot * PICKUP_LIST);
     const pickupsChanged = bslot < 0 || !samePickups(items, 0, bl!.pickups, bslot * PICKUP_LIST);
     w.bool(pickupsChanged);
     if (pickupsChanged) {
@@ -900,7 +938,7 @@ export class SnapshotEncoder {
 
     // remember what this client now has
     if (bl) {
-      const slot = this.seq & (SnapshotBaselines.SIZE - 1);
+      const slot = this.seq & (bl.size - 1);
       bl.seqs[slot] = this.seq;
       const sp = slot * MAX_PLAYERS;
       for (let id = 0; id < MAX_PLAYERS; id++) {
@@ -1002,10 +1040,10 @@ export class SnapshotEncoder {
    * himself away: the crate vanishes, his old gun appears where he stands (review M2). The client
    * catches up when the smoke clears. Without a baseline, items it can't see aren't sent.
    */
-  private itemsFor(view: ViewRect | null, viewer: number, base: Int32Array | null, bo: number): Int32Array {
+  private itemsFor(view: ViewRect | null, base: Int32Array | null, bo: number): Int32Array {
     const items = pickupsInView(this.pickups, view, this.viewPickups);
     if (view === null) return items;
-    const hidden = (list: Int32Array, o: number) => this.blind || this.sight.pointHidden(viewer, list[o + 2]! / POS_INV, list[o + 3]! / POS_INV);
+    const hidden = (list: Int32Array, o: number) => this.blind || this.sight.pointHidden(this.eyes, list[o + 2]! / POS_INV, list[o + 3]! / POS_INV);
     this.curRow.fill(-1);
     this.baseRow.fill(-1);
     let anyHidden = false;
@@ -1057,7 +1095,7 @@ export class SnapshotEncoder {
     if (!g.alive) return false;
     if (view === null) return true;
     if (!inRect(view, g.x, g.y) || (this.blind && g.owner !== viewer)) return false;
-    return (viewer >= 0 && g.owner === viewer) || !this.sight.pointHidden(viewer, g.x, g.y);
+    return (viewer >= 0 && g.owner === viewer) || !this.sight.pointHidden(this.eyes, g.x, g.y);
   }
 
   /** A HIT names its attacker to the attacker, the victim, and clients that can see the attacker. */
@@ -1067,11 +1105,11 @@ export class SnapshotEncoder {
 
   /**
    * Smoke (anti-wallhack): a line from (ox, oy) to `tracer`'s end vanishes where it enters smoke the
-   * viewer can't see into, as a miss with no target, whatever it hit in there (`lb` holds its clip;
+   * viewer's eyes can't see into, as a miss with no target, whatever it hit in there (`lb` holds its clip;
    * cut it shorter). The cut doesn't tell a hit from a miss: both stop at the same place.
    */
-  private smokeCut(ox: number, oy: number, viewer: number, kind: number): number {
-    const t = this.sight.tracerCut(viewer, ox, oy, tracer.ex, tracer.ey);
+  private smokeCut(ox: number, oy: number, kind: number): number {
+    const t = this.sight.tracerCut(this.eyes, ox, oy, tracer.ex, tracer.ey);
     if (t >= lb.t1) return kind;
     lb.t1 = Math.max(lb.t0, t);
     return 3;
@@ -1086,7 +1124,7 @@ export class SnapshotEncoder {
       case 'pickup':
         if (view === null || e.player === viewer) return 1;
         // an item taken in smoke the client can't see into (or in its full white) changes nothing for it (items held back, review M2)
-        return inRect(view, e.x, e.y) && !this.blind && !this.sight.pointHidden(viewer, e.x, e.y) ? 1 : 0;
+        return inRect(view, e.x, e.y) && !this.blind && !this.sight.pointHidden(this.eyes, e.x, e.y) ? 1 : 0;
       case 'shieldBreak':
         return view === null || e.owner === viewer || this.seen(e.owner) ? 1 : 0;
       case 'ricochet': {
@@ -1104,7 +1142,7 @@ export class SnapshotEncoder {
           // into a player smoke hides: on past it as a miss, then cut like any other line
           this.carryOn(e.x, e.y, e.ex, e.ey, e.weapon);
           segmentInRect(view, e.x, e.y, tracer.ex, tracer.ey);
-          return this.smokeCut(e.x, e.y, viewer, 3);
+          return this.smokeCut(e.x, e.y, 3);
         }
         if ((e.hit === 2 || e.hit === 3) && e.target >= 0 && !this.seen(e.target)) {
           const v = this.inset;
@@ -1113,10 +1151,10 @@ export class SnapshotEncoder {
           v.maxX = view.maxX - BODY_REACH;
           v.maxY = view.maxY - BODY_REACH;
           if (!segmentInRect(v, e.x, e.y, e.ex, e.ey)) lb.t0 = lb.t1 = 0;
-          return this.smokeCut(e.x, e.y, viewer, 3);
+          return this.smokeCut(e.x, e.y, 3);
         }
         segmentInRect(view, e.x, e.y, e.ex, e.ey);
-        return this.smokeCut(e.x, e.y, viewer, lb.t1 < 1 ? 3 : 1);
+        return this.smokeCut(e.x, e.y, lb.t1 < 1 ? 3 : 1);
       }
       case 'shot': {
         if (viewer >= 0 && e.shooter === viewer) return 0;
@@ -1131,7 +1169,7 @@ export class SnapshotEncoder {
           // into a player (or its shield) smoke hides: on past it as a miss, then cut like any other tracer
           this.carryOn(e.ox, e.oy, e.ex, e.ey, e.weapon);
           if (!segmentInRect(view, e.ox, e.oy, tracer.ex, tracer.ey)) return 2;
-          return this.smokeCut(e.ox, e.oy, viewer, 3);
+          return this.smokeCut(e.ox, e.oy, 3);
         }
         // a tracer ending on a culled player's body or shield (hit 3) stops short of it
         if ((e.hit === 2 || e.hit === 3) && e.target >= 0 && !this.seen(e.target)) {
@@ -1143,16 +1181,16 @@ export class SnapshotEncoder {
           // nothing of it inside the shrunk view (all in the off-screen margin): a zero-length miss at
           // the visible shooter's muzzle, so whether anything arrives doesn't tell a hit from a miss
           if (!segmentInRect(v, e.ox, e.oy, e.ex, e.ey)) lb.t0 = lb.t1 = 0;
-          return this.smokeCut(e.ox, e.oy, viewer, 3);
+          return this.smokeCut(e.ox, e.oy, 3);
         }
         if (!segmentInRect(view, e.ox, e.oy, e.ex, e.ey)) return 2;
-        return this.smokeCut(e.ox, e.oy, viewer, lb.t0 > 0 || lb.t1 < 1 ? 3 : 1);
+        return this.smokeCut(e.ox, e.oy, lb.t0 > 0 || lb.t1 < 1 ? 3 : 1);
       }
       case 'explosion':
         if (view === null) return 1;
         // a blast where smoke hides the spot from the client (a rocket on a hidden body) is only heard,
         // like tracers into smoke: a fireball would mark the body
-        return inRect(view, e.x, e.y) && !this.blind && !this.sight.pointHidden(viewer, e.x, e.y) ? 1 : 2;
+        return inRect(view, e.x, e.y) && !this.blind && !this.sight.pointHidden(this.eyes, e.x, e.y) ? 1 : 2;
       case 'hit':
         // hit markers for the attacker, damage numbers over targets in view (and not hidden in smoke)
         if (view === null || e.attacker === viewer || e.target === viewer) return 1;
@@ -1197,12 +1235,22 @@ export function encodeSnapshot(
  */
 export class SnapshotDecoder {
   static readonly SIZE = 64;
-  private readonly seqs = new Int32Array(SnapshotDecoder.SIZE).fill(-1);
-  private readonly present = new Uint8Array(SnapshotDecoder.SIZE * MAX_PLAYERS);
-  private readonly states = new Int32Array(SnapshotDecoder.SIZE * MAX_PLAYERS * FIELDS);
-  private readonly locals: (LocalState | null)[] = new Array<LocalState | null>(SnapshotDecoder.SIZE).fill(null);
+  private readonly seqs: Int32Array;
+  private readonly present: Uint8Array;
+  private readonly states: Int32Array;
+  private readonly locals: (LocalState | null)[];
   /** each snapshot's items (shared, never mutated: an unchanged list is the baseline's array) */
-  private readonly pickups: SnapshotPickup[][] = new Array<SnapshotPickup[]>(SnapshotDecoder.SIZE).fill([]);
+  private readonly pickups: SnapshotPickup[][];
+
+  /** @param size snapshots kept, a power of two: SIZE, or a spectator's spectatorRing(delayTicks) (v20) */
+  constructor(readonly size: number = SnapshotDecoder.SIZE) {
+    if (size < 1 || (size & (size - 1)) !== 0) throw new Error(`snapshot ring ${size}: not a power of two`);
+    this.seqs = new Int32Array(size).fill(-1);
+    this.present = new Uint8Array(size * MAX_PLAYERS);
+    this.states = new Int32Array(size * MAX_PLAYERS * FIELDS);
+    this.locals = new Array<LocalState | null>(size).fill(null);
+    this.pickups = new Array<SnapshotPickup[]>(size).fill([]);
+  }
   private readonly pickupList = new Int32Array(PICKUP_LIST);
   private readonly nowPresent = new Uint8Array(MAX_PLAYERS);
   private readonly nowStates = new Int32Array(MAX_PLAYERS * FIELDS);
@@ -1224,7 +1272,7 @@ export class SnapshotDecoder {
     const hasLocal = r.bool();
     let bslot = -1;
     if (baselineSeq !== 0) {
-      bslot = baselineSeq & (SnapshotDecoder.SIZE - 1);
+      bslot = baselineSeq & (this.size - 1);
       if (this.seqs[bslot] !== baselineSeq) throw new DecodeError(`missing baseline ${baselineSeq}`);
     }
     const baseLocal = bslot >= 0 ? this.locals[bslot]! : null;
@@ -1301,7 +1349,7 @@ export class SnapshotDecoder {
     for (let i = 0; i < eventCount; i++) events.push(readEvent(r));
 
     // keep it as a baseline for later snapshots
-    const slot = seq & (SnapshotDecoder.SIZE - 1);
+    const slot = seq & (this.size - 1);
     this.seqs[slot] = seq;
     this.present.set(this.nowPresent, slot * MAX_PLAYERS);
     this.states.set(now, slot * MAX_PLAYERS * FIELDS);

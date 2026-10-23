@@ -331,7 +331,8 @@ try {
     }
     const aimBefore = (await since(0)).at(-1).aim;
     // where things are, found before the hop (the hop itself is quick: well inside 0.7 s)
-    const rl = await ctlCentre('.mf-ctl-reload');
+    // a button on the HUD (reload only shows in the context slot now: the dash is always there)
+    const rl = await ctlCentre('.mf-ctl-dash');
     const back = await emptyNear(R.x - 30, R.y + 20); // lands somewhere else in the aim zone, doesn't move
     await lift(2);
     await touch(6, rl.x, rl.y);

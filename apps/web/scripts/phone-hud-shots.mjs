@@ -255,7 +255,7 @@ try {
     await page.evaluate(() => window.__touch.openTouchEditor());
     await sleep(600);
     await shot('m1-editor', 300);
-    const r = await centre('.mf-ctl-reload');
+    const r = await centre('.mf-ctl-dash');
     await touch('touchStart', [{ id: 4, x: r.x, y: r.y }]);
     for (let i = 1; i <= 6; i++) {
       await touch('touchMove', [{ id: 4, x: r.x - 10 * i, y: r.y + 4 * i }]);
@@ -266,9 +266,9 @@ try {
     // pinch: a second finger on the screen while one holds a control resizes it
     await page.evaluate(() => window.__touch.resetTouchLayout());
     await sleep(300);
-    const sizeOf = () => page.$eval('.mf-ctl-melee', (el) => el.getBoundingClientRect().width);
+    const sizeOf = () => page.$eval('.mf-ctl-grenade', (el) => el.getBoundingClientRect().width);
     const before = await sizeOf();
-    const d = await centre('.mf-ctl-melee');
+    const d = await centre('.mf-ctl-grenade');
     await touch('touchStart', [{ id: 5, x: d.x, y: d.y }]);
     await touch('touchStart', [{ id: 5, x: d.x, y: d.y }, { id: 6, x: d.x - 70, y: d.y - 30 }]);
     for (let i = 1; i <= 5; i++) {

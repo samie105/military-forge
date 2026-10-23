@@ -1397,3 +1397,162 @@ Spec: docs/design/character-feel-research.md §3.3, §5.1 A, §9. Animation only
   - The lobby warms everyone's avatar and poster render (`warmRoomPortraits`), so the countdown only shows pictures.
 - **Not yet:** team modes (the sim has free-for-all only), the art pipeline's pre-rendered portrait atlas (the middle fallback), the poster sound (the audio agent's), the female body's own rig (she draws on the male rig until her art lands).
 - **Checks:** dev-only `vsposter.html` (`?n=`, `?teams=`, `?state=poster|strip|lobby`, `?phone`). Shots come from `apps/web/scripts/vs-shots.mjs`, `portrait-renders.mjs` and `looks-shots.mjs` (two players through a playtest link: B's lobby wears A's soldier).
+
+- **Foot skate through the run band (`locomotion.ts` `FootPlanter`, `FEET.contact`…`clearance`):** the planter also holds a foot that's on the floor near its stance, whatever the phase says.
+  - **Why:** a sprint's foot comes down a frame early, and through the walk-run blend the walk's long stance keeps the foot down after the blended stance ends. Both used to slide while the hold faded.
+  - **Where:** flat ground only. Past its stance, a held foot is kept only while the leg reaches it comfortably (a foot left far behind would drag the hips down).
+  - **Letting go:** follows the foot's own lift and swing, closing the gap at no more than 1.5 m/s.
+  - **Swing clearance:** a swinging foot clears the floor by 3 cm at mid-swing, eased in and out (forward gaits only).
+  - **feet.test.ts:** "extra foot motion" now counts only frames off the floor; on the floor a planted foot is meant to stop dead, and `slide` checks that. The held-height check uses firm holds (> 0.9).
+  - **Measured** (contact-foot speed / ground speed, the lowest foot within 1.5 cm of the floor in two frames running):
+
+    | Speed (m/s) | 0.5 | 1.0 | 1.5 | 1.8 | 2.0 | 2.5 | 3.5 | 5 |
+    |---|---|---|---|---|---|---|---|---|
+    | main | 2% | 81% | 76% | — | 44% | 37% | 19% | 20% |
+    | now | 0% | 0% | 0% | 1% | 16% | 21% | 4% | 6% |
+
+    2.0 and 2.5 m/s are above §9's 15%: what's left is lift-off and touch-down frames within 1.5 cm of the floor through the walk-run blend.
+  - **The walk slot:** the Forge can replace `walk` with a hand-keyed planted cycle (`clips.gait()`); the locomotion measures whatever clip is named `walk`.
+
+## 48. Tall maps, phase 1: tiers, updrafts, a soft ceiling and the vertical test map (23 Oct 2026, the owner: "very big maps with vertical layers")
+
+The owner's 18 Oct decision, green-lit 23 Oct: battle zones stacked higher and higher that players fly up to and drop back down from. Phase 1 is the tech, on a greybox (`vertical-test`); the first real map (Fog Stair, the owner's pick) builds on it. No protocol change: the wire already carries a tall map (below), and everything new is map content, which CONTENT_HASH covers.
+
+- **Tiers (`MapDef.tiers`, bottom to top, at least two):** each is an id, a HUD name and a floor line. `tierIndexAt(map, y)` (content `maps/tiers.ts`) puts feet from 1.5 m under a line up to the next on that tier.
+  - **Respawns spread across tiers** (sim `Game.respawn`): only spawns on the tiers with the fewest living players count, then the farthest from everyone as before. A map without tiers takes the old path, so every golden is unchanged.
+- **New zone kinds** (content `ZONE_KINDS`; the 2D overlay and 3D volumes draw them like any zone):
+  - `updraft`: wind [0, 26] with drag 0.9 (fliers drift up at about 6.7 m/s with no jet, the default gravity being 20) and refuelling at 3×. A free way up, but slow and in plain sight.
+  - `thinAir`: the soft ceiling. Jetpacks cut out and wind [0, −14] pushes you back down. The hard ceiling stays a solid.
+- **Floor rules:** unchanged. Falling below `bounds.minY + 0.5` kills, credited to the last attacker within the window. A tall map closes its floor (the street is solid), so only a pit you build kills.
+- **Pickup pools for tiers:** `common` (everyday guns) and `power` (the power weapons), alongside `weapons` (both).
+- **`vertical-test`** (200 × 108 m, symmetric): streets (y 0) with arcades under three towers → rooftops (y 20) with footbridges → five high platforms (y 42) → a sky deck (y 66) with slab wings. Thin air starts at y 82; the ceiling is at y 100.
+  - A full tank climbs about 18–25 m, so one tier costs most of it (a test: from the street a full tank reaches the roofs but never the high tier).
+  - Perches every 11–12 m make the climb in hops. They also let the bots' air links (≤ 12.5 m up) cross it.
+  - Updrafts lift you from the outer streets to the high tier, and from over the bridges past the sky deck's wings.
+  - Pickups reward the climb: grenades and everyday guns low, shields on the bridges, power weapons high, and two power spots on the sky deck.
+  - Every one-way is a slab (`blocksBullets`). The arcade legs and the platforms' struts are bullet-only posts.
+  - Tests: sim `tiers.test.ts` covers slabs from both sides, every solid and post from both sides, the climb, the updraft, thin air and the respawn spread. Content `tallMaps.test.ts` covers the tiers, the zones, the pools and the map's promises.
+- **Large-map limits, checked:**
+  - Sim: the collision grid is 4 m cells over the bounds (vertical-test: 51 × 27 cells).
+  - Positions on the wire are 24-bit at 1/1024 m (±8 km). SOUND events are the limit: 8-bit cells of 4 m, so ±508 m. protocol `bigMaps.test.ts` holds every map to ±500 m and checks a shot heard from each corner of a 1 km map.
+- **Nav graph:** nodes on the map's roof (the top of its ceiling, at `bounds.maxY`) are no longer flown to or from: the ceiling seals them off. Every shipped map's graph is byte-identical with and without the change, so no bot golden moved. It cut 25–60% of the probe's steps on the demo maps.
+- **Bots on vertical-test** (30 seeds × 3 min, 6 bots, two of each level, pickups on):
+  - stuck 0.002% (worst 1 s);
+  - 40.6 kills a run;
+  - 292 m/bot/min;
+  - 1 shot beyond reach in 28,873;
+  - time on tiers: streets 30%, rooftops 55%, high 13%, sky deck 3%.
+
+
+
+## 49. Tall maps on screen: the minimap, the flight lean, and the nav graph in a worker (23 Oct 2026, the owner: "what of mini maps so people don't get lost")
+
+No protocol change. Everything is client-side, and every map gets the minimap, not only tall ones.
+
+### The minimap (`apps/web/src/minimap`)
+- **What it shows:** the whole level side-on, in the HUD's top-left corner.
+  - The level: solids, slabs (fly up, drop through), updrafts as volt columns, thin air hatched, and tier bands.
+  - **Your tier:** the rail down the left edge, and the header's name plus n/N ("ROOFTOPS 2/4"). Maps without tiers show their name.
+  - You as a chevron the way you aim, the rect of what's on your screen, pickups (power weapons brass diamonds, guns squares, items dots), and allies (team modes: `setAllies`).
+- **Enemies, only as legitimately known (`EnemyIntel`, no wallhacks):**
+  - In sight: on your own screen this frame.
+  - **Last seen:** a hollow mark where an enemy left the screen, went into smoke or died. It fades over 5 s and doesn't follow them.
+  - **Heard:** a ring for off-screen gunfire and blasts at a 4 m spot, fading over 3 s. Online it's the server's SOUND events (onlineMode → `Renderer.onSounds`). Local play coarsens its exact shots the same way, so the minimap never knows more than an online client.
+- **The big map:**
+  - Opened by **M** (Settings → Controls → Big map), a **tap** on the minimap on a phone, or a **double tap of View / Share** on a pad (`PadHost.toggleMap`; a single tap still reaches the overlay buttons).
+  - Drag pans; the wheel, a pinch, + and − zoom (up to 6×); Fit resets. A key runs along the foot.
+- **Phones:**
+  - It sits top-left in the safe box, 72 px tall, as wide as the level's shape needs.
+  - Every 600 ms it measures the touch controls (`.mf-touch .mf-ctl`) and moves lower or shrinks to 46 px when one is there: the left FIRE, or a player's own layout (`place.ts`, tested).
+  - The big map sits between the move dial and the right-hand buttons, pulled clear of any control. Its shade takes no touches, so the thumbs keep playing; Close or the minimap closes it.
+  - It dims after 2.5 s with nothing new (the controls' Auto-fade) and lights up on a new tier or a new mark.
+- **Accessibility:** Reduce motion stops the rings' pulse. The colour-blind modes recolour enemies and allies, and shapes carry the meaning too. Reduce transparency drops the glass.
+- **Cheap:** the level is drawn once per map and size into one canvas; each frame (≤ 30 a second) clears a second canvas and draws the dots.
+
+### The camera leans the way you fly (`camera.ts`)
+- **The lean:**
+  - Climbing faster than 2 m/s: up, fully at 6 m/s, 45% of the budget.
+  - Falling faster than 4 m/s: further down, fully at 14 m/s, 65%.
+  - The lean eases at 3/s and follows the Look-ahead setting.
+- **The budget (`leanBudget`)** is what the server's AOI covers and this screen doesn't show: the AOI's 35% reticle look-ahead of the 4:3 half-height, plus the height it serves that a wider screen leaves out.
+  - On a 4:3 screen that's the reticle look-ahead alone; on a phone in landscape it's about twice that.
+  - So nothing new reaches the wire: test/camera.test.ts sweeps every aspect, zoom, view distance, reticle and flight, and steps a climb that turns into a fall frame by frame.
+- **Pull-back:** a phone's close view (`viewScale` < 1) eases back out to the zoom level's full view while you climb or fall faster than 5 m/s, then closes in again.
+
+### Training's nav graph in a worker (`navWarm.ts`, `navWorker.ts`)
+- While the player is in the menus, a worker builds the training map's graph and posts it back as plain data. The page rebuilds it (bots `navGraphFromData`, about 10 ms) and hands it to the cache (`provideNavGraph`).
+- Without workers it builds in idle slices of ≤ 6 ms.
+- If training starts first, the bots finish the build there, as before.
+
+### Measured
+`apps/web/scripts/tall-map-shots.mjs`; headless Chrome on this Mac's GPU, vertical-test, 6 bots; load 12–20 from other sessions.
+
+| | Desktop 1920×1080 | Phone 812×375, CPU ×4 |
+|---|---|---|
+| Nav graph before training | worker 519 ms; the page busy ≤ 7.8 ms | worker 410 ms; the page busy ≤ 18 ms |
+| Training's start | 232 ms, no long task | 276 ms, one 137 ms task (was **2,857 ms with a 2,001 ms freeze**, `--cold`) |
+| Frames, 10–15 s in | p50 16.7 / p90 17.5 ms, 47–49 draws, 76–90K tris | p50 16.5–16.7 / p90 18.8–19.0 ms (Auto → Low), 39 draws, 29–34K tris |
+| JS heap | 92 MB | 107–114 MB |
+
+The Street Market under the same phone conditions: p50 16.7 / p90 18.9 ms by 15 s, with long tasks up to 690 ms in its first 5 s (its kit). A tall greybox costs a phone less than the Street Market.
+
+**Snapshots** (`bench-room.ts --map=`, 12 humans): the AOI culls more on a big map.
+
+| Map | Per client | Average snapshot |
+|---|---|---|
+| movement-test | 4.3 KB/s | 142 B |
+| street-market | 3.9 KB/s | 131 B |
+| vertical-test | 2.4 KB/s | 79 B |
+| fog-stair | 2.3 KB/s | 75 B |
+
+Tick avg 0.05 ms on all four.
+
+## 50. Fog Stair: the first big real map (23 Oct 2026, the owner's pick)
+
+The owner picked **FOG STAIR** from the four places offered (Cloudline, Tin Terraces, Fog Stair, Steel Mirage). It's a mountain city on a river gorge in south-west China: streets where one road's ground floor is the next road's twentieth, long public stairs, a monorail through a tower, rooftop footbridges, and river fog. It's an original place with no real skyline and no lettering; nothing in it is Lagos.
+
+- **The map** (`packages/content/src/maps/fogStair.ts`, 244 × 108 m) is mirrored about the river (x 120), so neither bank holds the high ground.
+- **Its four tiers:**
+  - **Riverside (y 0):** the quays, the arcades under the two towers, and the river (deep water: slow, floaty; bullets die in it).
+  - **The Stairs (y 20):** two 45° public stairs on each bank, and the terrace between them with a shop-house.
+  - **Monorail (y 38):** the hilltop lanes, the viaduct over the stairs, a station inside each tower (the track runs through a 5.5 m gap), and the river bridge with a parked car as the only cover over the gorge.
+  - **Rooftops (y 62):** the towers' roofs (water tanks, radio masts), the footbridge across the gorge, and the hill pavilions.
+  Thin air starts at y 82 and the ceiling is at y 100.
+  The painted near towers are hazed 50% toward the fog, so they read as background, never as walls.
+- **Getting up:**
+  - The stairs are the free way up: slow and in the open.
+  - Jets take most of a tank per tier.
+  - Balconies every 11–12 m on the towers' faces and a perch on each hill let you climb in hops.
+  - Updrafts rise from the river to the monorail bridge and from the hilltops to the pavilions.
+- **Pickups pay for the climb:**
+  - grenades and everyday guns at the riverside;
+  - guns on the terrace and the shop-house roof;
+  - shields in the stations, grenades on the hilltops and the monorail car;
+  - power weapons on the roof bridge and the pavilions.
+- **Its event:** RIVER FOG (`fog`: bullets fall short for 20 s), on a random 75 s cycle at a 60% chance, from 45 s in.
+- **Its look** (render3d/environment/places.ts `FOG`, `FOG_STAIR`): kit-less for now (the extruded collision is the play plane, recoloured).
+  - Morning overcast from the upper left, weathered concrete, faded tile and brick, green-grey paint, and a dense blue-grey fog.
+  - The painted layers come from **the art pipeline at no Forge credit:** `art/pipeline/build_fog_stair_backdrops.py` (Blender, Cycles) renders the far bank (stacked towers up a ridge, a monorail viaduct with a train, a few warm windows) and the near towers (balcony bands, tanks, masts, blank sign boards), both fading into the river fog. `art/pipeline/fog_stair_sky.py` paints the sky. `apps/web/scripts/backdrops.py` grades all three into `assets/backdrops/fog_stair/`.
+  - Re-run: render to a raw dir, then `python3 -I apps/web/scripts/backdrops.py apps/web/public/assets/backdrops <raw dir>`.
+- **Tests:**
+  - content `tallMaps.test.ts`: mirrored, the tiers, the river is water, the fog event, power weapons only on the rooftops, no Lagos words.
+  - sim `tiers.test.ts`, for every tall map: every slab from both sides, every solid and post from both sides.
+  - bots: the nav and 5-minute soak suites run on it with every registered map.
+- **Bots** (30 seeds × 3 min, 6 bots, two of each level):
+  - stuck 0.003% (worst 1 s);
+  - 34.3 kills a run;
+  - 281 m/bot/min;
+  - 4 shots beyond reach in 25,960;
+  - time on tiers: riverside 25%, stairs 19%, monorail 49%, rooftops 7%.
+- **Nav graph:** 832 nodes and 3,864 links, built in 368 ms on this Mac (Street Market: 299 ms, on the same quiet run).
+- **Measured** (`tall-map-shots.mjs --map fog-stair`, 6 bots, this Mac's GPU, load 10–17):
+  - **Desktop 1920×1080:**
+    - The graph was built in a worker (292 ms), and training started in 72 ms.
+    - Frames p50 16.7–17.0 / p90 17.7–18.1 ms, 57–108 draws, 89–132K tris.
+  - **Phone 812×375, CPU ×4:**
+    - Worker 285 ms, and training started in 180 ms.
+    - Frames p50 16.7–17.3 / p90 18.3–23.9 ms as Auto steps High → Medium → Low.
+    - One 906 ms long task about 10 s in, during Auto's tier changes.
+  - **Snapshots:** 2.3 KB/s per client with 12 humans (Street Market: 3.9). The ticks average 0.05 ms.
+  - Screenshots: `docs/screenshots/maps-vertical/fog-stair-*`.
+- **Next, the art:** a Blender kit for the play plane (the towers, stairs, monorail, station and bridges, like the Street Market's kit) and painted Higgsfield versions of the three layers. Both are asked of the Forge session in the shared notes (`maps-vertical.md`).

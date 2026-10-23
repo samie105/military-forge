@@ -215,8 +215,41 @@ function servePage(req: IncomingMessage, res: ServerResponse, file: string, allo
     send(res, 404, 'Not found');
     return;
   }
-  const body = Buffer.from(pageWithFlags(pageForOrigin(html, req.headers.host, allowed), { tune }));
-  res.writeHead(200, { ...securityHeaders(req.headers.host), 'Content-Type': MIME['.html']!, 'Cache-Control': 'no-cache', 'Content-Length': String(body.length) });
+  const raw = Buffer.from(pageWithFlags(pageForOrigin(html, req.headers.host, allowed), { tune }));
+  // the page carries the landing (docs/seo.md), ~30 KB: compressed like the files
+  const encoding = pickEncoding(req.headers['accept-encoding'], file, raw.length);
+  const body = encoding === 'br' ? brotliCompressSync(raw) : encoding === 'gzip' ? gzipSync(raw) : raw;
+  res.writeHead(200, {
+    ...securityHeaders(req.headers.host),
+    // a room's page is a moment, not a page to find in search (docs/seo.md)
+    ...(isRoomPage(req.url ?? '') ? { 'X-Robots-Tag': 'noindex' } : {}),
+    'Content-Type': MIME['.html']!,
+    'Cache-Control': 'no-cache',
+    ...(encoding ? { 'Content-Encoding': encoding } : {}),
+    Vary: 'Accept-Encoding',
+    'Content-Length': String(body.length),
+  });
+  res.end(req.method === 'HEAD' ? undefined : body);
+}
+
+/** A room's link (/r/CODE): the app, sent noindex. */
+export function isRoomPage(url: string): boolean {
+  return /^\/r\/[^/?#]+\/?(?:[?#]|$)/.test(url);
+}
+
+/** The crawl files (apps/web/seo.ts) carry `%ORIGIN%` like the page: filled in per request. */
+export const ORIGIN_FILES: Readonly<Record<string, string>> = { '/robots.txt': MIME['.txt']!, '/sitemap.xml': 'application/xml; charset=utf-8' };
+
+function serveOriginFile(req: IncomingMessage, res: ServerResponse, file: string, type: string, allowed: readonly string[]): void {
+  let text: string;
+  try {
+    text = readFileSync(file, 'utf8');
+  } catch {
+    send(res, 404, 'Not found', securityHeaders(req.headers.host));
+    return;
+  }
+  const body = Buffer.from(pageForOrigin(text, req.headers.host, allowed));
+  res.writeHead(200, { ...securityHeaders(req.headers.host), 'Content-Type': type, 'Cache-Control': 'no-cache', 'Content-Length': String(body.length) });
   res.end(req.method === 'HEAD' ? undefined : body);
 }
 
@@ -423,6 +456,11 @@ export function createProxy(options: ProxyOptions): Server {
     // the tunnel carries no UDP to this Mac, so there's none: the client goes straight to WebSocket
     if (pathname === '/health') {
       send(res, 200, req.method === 'HEAD' ? '' : JSON.stringify(PLAYTEST_HEALTH), { 'Content-Type': 'application/json; charset=utf-8', ...securityHeaders(req.headers.host) });
+      return;
+    }
+    const originType = ORIGIN_FILES[pathname];
+    if (originType) {
+      serveOriginFile(req, res, resolve(root, `.${pathname}`), originType, options.allowedOrigins());
       return;
     }
     const target = staticPath(root, pathname);

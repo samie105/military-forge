@@ -273,9 +273,11 @@ describe('Room', () => {
     const a = join(room, 'A');
     const b = join(room, 'B');
     room.receive(a.client, encodeCmd(CmdKind.SetLowBandwidth, '1'));
-    const before = a.conn.sent.length;
+    // snapshots only (a v20 page also hears SPECTATE now and then)
+    const snaps = () => a.conn.messages().filter((m) => m.type === MsgType.Snapshot).length;
+    const before = snaps();
     for (let i = 0; i < 4; i++) room.tick(); // ticks 1–4: snapshots at 2 and 4 for B, only 4 for A
-    expect(a.conn.sent.length - before).toBe(1);
+    expect(snaps() - before).toBe(1);
     // B dies in an interval A skips: A still hears about it
     while (room.game.tick % 4 !== 1) room.tick();
     room.game.players[b.welcome.playerId]!.y = room.game.map.bounds.minY; // fell out of the map
@@ -286,9 +288,9 @@ describe('Room', () => {
     const deaths = a.conn.messages().filter((m): m is SnapshotMsg => m.type === MsgType.Snapshot).flatMap((m) => m.events.filter((e) => e.type === 'death'));
     expect(deaths).toHaveLength(1);
     room.receive(a.client, encodeCmd(CmdKind.SetLowBandwidth, '0'));
-    const n = a.conn.sent.length;
+    const n = snaps();
     for (let i = 0; i < 4; i++) room.tick();
-    expect(a.conn.sent.length - n).toBe(2);
+    expect(snaps() - n).toBe(2);
   });
 
   it('clients get the room\'s snapshot rate, and half of it in low-bandwidth mode', () => {

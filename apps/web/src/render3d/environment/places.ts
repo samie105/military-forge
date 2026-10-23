@@ -175,3 +175,66 @@ export const FLUX_LAB: EnvironmentDef = {
     ],
   },
 };
+
+/**
+ * Fog Stair (maps-vertical; the owner's pick, 23 Oct): a mountain city on a river gorge in the
+ * morning, fog off the river. Soft overcast light from the upper left, weathered concrete, faded
+ * tile and brick, green-grey paint; distance and the river's fog swallow everything behind the
+ * play plane. Its own place: no Lagos styling.
+ */
+export const FOG: EnvironmentLook = {
+  ...MARKET_DAY,
+  name: 'fog',
+  sky: [0x7a8a98, 0xc9c8bc],
+  skyStops: [0xb9bdb8, 0xc6c6bb, 0x7a8a98],
+  sunGlow: { ...MARKET_DAY.sunGlow, color: 0xffecc8, strength: 0.18 },
+  fog: { color: 0xa9b1b4, near: 45, far: 210 },
+  hemi: { sky: 0xd5dde2, ground: 0x5d625e, intensity: 1.9 },
+  sun: { color: 0xfff1dc, intensity: 1.45, dir: [-0.45, 0.78, 0.44] },
+  palette: {
+    front: [0x7d7f7c, 0x8f8b80, 0x7a5f52, 0x6c7a72, 0x8a9396],
+    cap: [0xa6a8a3, 0xb6b0a2, 0x9b7c6b, 0x8fa096, 0xaeb7ba],
+    oneWay: 0xb98a3e,
+    ground: 0x74786f,
+    mid: [0x9aa2a4, 0x929b9e, 0xa4aaa9, 0x8c9598],
+    far: 0x9ba4a8,
+    fore: 0x2b2f2e,
+  },
+  backdropTint: { sky: 0xffffff, far: 0xe8ecec, mid: 0xe2e6e6 },
+  // fog: the near towers stay well back (they must never read as walls that stop bullets)
+  backdropHaze: { color: 0xa9b1b4, amount: { far: 0.25, mid: 0.5 } },
+  lampGlow: null,
+};
+
+export const FOG_STAIR: EnvironmentDef = {
+  mapId: 'fog-stair',
+  looks: { fog: FOG },
+  defaultLook: 'fog',
+  backdrop: {
+    base: 'assets/backdrops/fog_stair/',
+    skies: { fog: 'sky.webp' },
+    layers: [
+      {
+        name: 'far',
+        z: -40,
+        y: -4,
+        panels: [
+          { file: 'far.webp', x: 10, width: 120 },
+          { file: 'far.webp', x: 120, width: 120, flip: true },
+          { file: 'far.webp', x: 230, width: 120 },
+        ],
+      },
+      {
+        name: 'mid',
+        z: -14,
+        y: -5,
+        panels: [
+          { file: 'mid.webp', x: 20, width: 90 },
+          { file: 'mid.webp', x: 100, width: 90, flip: true },
+          { file: 'mid.webp', x: 180, width: 90 },
+          { file: 'mid.webp', x: 250, width: 90, flip: true },
+        ],
+      },
+    ],
+  },
+};

@@ -36,6 +36,8 @@ export interface PadHost {
   pause(): void;
   /** the scoreboard button held or let go (the HUD's Tab) */
   scoreboard?(down: boolean): void;
+  /** the scoreboard button double-tapped: the big map opens or closes (minimap/) */
+  toggleMap?(): void;
   /** the map being played (aim assist's line of sight) */
   map?(): MapDef | null;
 }
@@ -54,6 +56,8 @@ export const AUTO_FIRE = { dwell: 100, linger: 150 };
 
 /** A Share / View press let go this soon is a tap (the overlay's buttons), not a look at the scoreboard. */
 export const SELECT_TAP_MS = 250;
+/** Two such taps this close together: the big map (minimap/). */
+export const SELECT_DOUBLE_TAP_MS = 400;
 /** Reticle reach smoothing per tick (the reticle glides as the stick's push changes). */
 const RETICLE_EASE = 0.35;
 /** Right-stick scrolling in menus: px per frame at full push. */
@@ -109,6 +113,8 @@ export class PadManager {
   private menuFocus: FocusAnchor | null = null;
   private capture: ((button: number) => void) | null = null;
   private scoreboardDown = false;
+  /** when View / Share was last tapped (a double tap opens the big map) */
+  private selectTapAt = -Infinity;
   private zoomBefore: number | null = null;
   private targets: AssistTarget[] = [];
   private readonly sight = new Sight();
@@ -460,8 +466,17 @@ export class PadManager {
             this.scoreboardDown = false;
             this.host.scoreboard?.(false);
           }
-          // a tap: the buttons on screen over play (the warm-up's Ready, the controls card's Got it)
-          if (now - this.downAt[i]! < SELECT_TAP_MS) this.enterOverlay();
+          // a tap: the buttons on screen over play (the warm-up's Ready, the controls card's Got it);
+          // a second tap soon after: the big map
+          if (now - this.downAt[i]! < SELECT_TAP_MS) {
+            if (now - this.selectTapAt < SELECT_DOUBLE_TAP_MS && this.host.toggleMap) {
+              this.selectTapAt = -Infinity;
+              this.host.toggleMap();
+            } else {
+              this.selectTapAt = now;
+              this.enterOverlay();
+            }
+          }
         }
       }
     }

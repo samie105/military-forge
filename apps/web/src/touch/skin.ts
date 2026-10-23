@@ -80,7 +80,8 @@ export function skinHtml(id: ControlId): string {
     case 'melee':
       return `<div class="mf-skin dial-btn dial-btn--melee">${ic('melee')}</div>`;
     case 'cycleGrenade':
-      return `<div class="mf-skin dial-btn dial-btn--sm">${ic('refresh', 'ic--sm')}</div>`;
+      // the next grenade: the belt's grenade with an arrow (not the reload's circular arrow: spec §4.2, one shape per control)
+      return `<div class="mf-skin dial-btn dial-btn--sm dial-btn--next"><svg class="ic ic--fill ic--sm" aria-hidden="true"><use data-bind-attr="href: touch.grenade.icon"/></svg>${ic('chev-right', 'ic--sm mf-next-arrow')}</div>`;
     case 'zoom':
       return `<div class="mf-skin dial-btn dial-btn--sm">${ic('zoom', 'ic--sm')}<b class="num tb__sub" data-bind="touch.zoom" data-bind-show="touch.zoom"></b></div>`;
     case 'scores':

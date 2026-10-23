@@ -58,36 +58,78 @@ export function availableControls(): readonly ControlDef[] {
   return CONTROLS.filter((c) => c.id !== 'shield' || SHIELD_BIT !== 0);
 }
 
+/** CSS px per mm on a phone (controls spec §0: an iPhone is 6.0, a Pixel 7 6.2): the layout's anchors are in mm. */
+export const PX_PER_MM = 6;
+
+/** A safe-box corner, and how far in from its side (dx) and up or down from its edge (dy) a control's centre is, in mm; its hit size (mm). */
+export interface Anchor {
+  corner: 'BL' | 'BR' | 'TL' | 'TR';
+  dx: number;
+  dy: number;
+  hit: number;
+}
+
 /**
- * Right-handed defaults: the owner's round-two kit's phone HUD (docs/design/military-forge-ui-v2.html,
- * "M1 Phone HUD · thumb dials", 812×375). Its safe box is the frame less 44 px at each side (the
- * notch), 10 px at the top and 21 px at the bottom (724×344: SAFE_INSETS); the thumb dials' 136 px
- * bases sit at (128, 266) and (684, 266); shield, reload, dash, grenade and melee fan round the aim
- * dial as drawn; the swap pill and the menu top right; the take button (only near a crate) at the
- * bottom centre (22 px left of the kit's, so a long gun name stays clear of the melee button). Shield,
- * reload and dash sit a few px further apart than drawn: their rings (the dash's fuel, a reload's
- * progress) reach 5 px past the button, and the kit's places let them touch. The scoreboard sits under
- * the ping (and the "Tuned by admin" tag) on the left. Cycle-grenade, zoom and the scoreboard aren't drawn in the kit and sit where they
- * clear it. A player's saved places (TouchLayout) still win over these.
+ * The Classic layout (controls spec §4.2): every control anchored to a corner of the safe box in mm,
+ * so thumbs reach the same places on a 667 px phone and a 932 px one. The action arc sits 42 mm from
+ * the bottom-right corner (grenade, dash, the swap pill, the context slot): outside the aim stick's
+ * landing spread, 21° apart, 3.4 mm between 12 mm hit areas. Primaries (dash, grenade, FIRE) are 12 mm,
+ * secondaries (swap, the context slot) 10, the top bar (menu, scores) 8; the sticks' bases 22 mm.
+ * Melee, shield, reload, zoom and Take share the context slot, one at a time (CONTEXT_PRIORITY);
+ * next grenade isn't on the HUD (a swipe on the grenade does it). The editor can pin any of them back
+ * (TouchLayout.pinned): pinned, a control has its own place (PINNED_ANCHORS).
  */
-export const DEFAULT_PLACEMENTS: Readonly<Record<ControlId, Placement>> = {
-  move: { x: 0.116, y: 0.744, size: 0.395, opacity: 1 },
-  aim: { x: 0.884, y: 0.744, size: 0.395, opacity: 1 },
-  shield: { x: 0.888, y: 0.331, size: 0.151, opacity: 1 },
-  reload: { x: 0.8025, y: 0.387, size: 0.151, opacity: 1 },
-  dash: { x: 0.7265, y: 0.517, size: 0.151, opacity: 1 },
-  grenade: { x: 0.7, y: 0.698, size: 0.169, opacity: 1 },
-  melee: { x: 0.71, y: 0.878, size: 0.151, opacity: 1 },
-  cycleGrenade: { x: 0.619, y: 0.68, size: 0.14, opacity: 1 },
-  zoom: { x: 0.967, y: 0.32, size: 0.14, opacity: 1 },
-  pause: { x: 0.967, y: 0.07, size: 0.14, opacity: 1 },
-  swap: { x: 0.791, y: 0.084, size: 0.151, opacity: 1 },
-  take: { x: 0.47, y: 0.907, size: 0.151, opacity: 1 },
-  scores: { x: 0.033, y: 0.36, size: 0.14, opacity: 1 },
-  // FIRE at the aim dial's rest, 14 mm (84 px; §4.4: BR 16, 15); the left one at TL 20, 14 (the left index finger)
-  fire: { x: 0.884, y: 0.744, size: 0.244, opacity: 1 },
-  fireLeft: { x: 0.166, y: 0.244, size: 0.209, opacity: 1 },
+export const CLASSIC: Readonly<Record<ControlId, Anchor>> = {
+  move: { corner: 'BL', dx: 16, dy: 15, hit: 22 },
+  aim: { corner: 'BR', dx: 16, dy: 15, hit: 22 },
+  grenade: { corner: 'BR', dx: 41.1, dy: 8.7, hit: 12 },
+  dash: { corner: 'BR', dx: 35.2, dy: 22.9, hit: 12 },
+  swap: { corner: 'BR', dx: 24.7, dy: 34, hit: 10 },
+  // the context slot: whichever of these is in play (one at a time)
+  take: { corner: 'BR', dx: 10.9, dy: 40.6, hit: 10 },
+  melee: { corner: 'BR', dx: 10.9, dy: 40.6, hit: 10 },
+  shield: { corner: 'BR', dx: 10.9, dy: 40.6, hit: 10 },
+  reload: { corner: 'BR', dx: 10.9, dy: 40.6, hit: 10 },
+  zoom: { corner: 'BR', dx: 10.9, dy: 40.6, hit: 10 },
+  cycleGrenade: { corner: 'BR', dx: 48, dy: 31, hit: 10 },
+  scores: { corner: 'TL', dx: 4, dy: 4, hit: 8 },
+  pause: { corner: 'TR', dx: 4, dy: 4, hit: 8 },
+  // FIRE (Fire button mode) at the aim stick's rest, 14 mm; the left one for the left index finger
+  fire: { corner: 'BR', dx: 16, dy: 15, hit: 14 },
+  fireLeft: { corner: 'TL', dx: 20, dy: 14, hit: 12 },
 };
+
+/** Where a context control sits when the player pins it to the HUD (the editor): a column left of the arc. */
+export const PINNED_ANCHORS: Readonly<Partial<Record<ControlId, Anchor>>> = {
+  melee: { corner: 'BR', dx: 55, dy: 8.7, hit: 10 },
+  reload: { corner: 'BR', dx: 57, dy: 21, hit: 10 },
+  cycleGrenade: { corner: 'BR', dx: 48, dy: 31, hit: 10 },
+  shield: { corner: 'BR', dx: 60, dy: 33, hit: 10 },
+  zoom: { corner: 'BR', dx: 40, dy: 44, hit: 10 },
+};
+/** The context slot's controls, most urgent first: a gun underfoot, an enemy in reach, a shield carried, a low magazine, a scope. */
+export const CONTEXT_PRIORITY: readonly ControlId[] = ['take', 'melee', 'shield', 'reload', 'zoom'];
+/** Controls that are off the HUD unless pinned (next grenade) or the context slot shows them. */
+export const OFF_HUD: ReadonlySet<ControlId> = new Set(['cycleGrenade', ...CONTEXT_PRIORITY]);
+/** The controls the editor can pin to the HUD. */
+export const PINNABLE: readonly ControlId[] = ['cycleGrenade', 'melee', 'reload', 'shield', 'zoom'];
+
+/** The reference safe box (the kit's 812×375 frame less its insets), for a placement asked for without one. */
+export const REF_BOX = { w: 724, h: 344 } as const;
+
+/** An anchor as a placement (fractions of a w×h box) for the right-handed layout. */
+export function anchorPlacement(a: Anchor, w: number, h: number): Placement {
+  const px = a.dx * PX_PER_MM;
+  const py = a.dy * PX_PER_MM;
+  const x = a.corner === 'BL' || a.corner === 'TL' ? px : w - px;
+  const y = a.corner === 'TL' || a.corner === 'TR' ? py : h - py;
+  return { x: x / w, y: y / h, size: (a.hit * PX_PER_MM) / Math.min(w, h), opacity: 1 };
+}
+
+/** The default placements in the reference box (the editor's and the tests' fallback). */
+export const DEFAULT_PLACEMENTS: Readonly<Record<ControlId, Placement>> = Object.fromEntries(
+  (Object.keys(CLASSIC) as ControlId[]).map((id) => [id, anchorPlacement(CLASSIC[id], REF_BOX.w, REF_BOX.h)]),
+) as Record<ControlId, Placement>;
 
 /**
  * The kit's phone safe box (its --safe-* on .screen--phone): at least these insets, more where the
@@ -109,17 +151,32 @@ export function sizePx(p: Pick<Placement, 'size'>, unit: number): number {
 export interface TouchLayout {
   /** the player's changes (right-handed coordinates); the rest are defaults */
   placements: Partial<Record<ControlId, Placement>>;
+  /** controls pinned to the HUD that it doesn't carry by default (next grenade, melee, reload, shield, zoom) */
+  pinned?: ControlId[];
 }
 
-export function placementFor(layout: TouchLayout, id: ControlId, handed: Handed): Placement {
-  const p = layout.placements[id] ?? DEFAULT_PLACEMENTS[id];
+/**
+ * Where a control goes in a w×h safe box (px): the player's own place if it was moved, else its mm
+ * anchor (its pinned one, if pinned); mirrored for the left-handed layout.
+ */
+export function placementFor(layout: TouchLayout, id: ControlId, handed: Handed, box: { w: number; h: number } = REF_BOX): Placement {
+  const pinned = layout.pinned?.includes(id) ? PINNED_ANCHORS[id] : undefined;
+  const p = layout.placements[id] ?? anchorPlacement(pinned ?? CLASSIC[id], Math.max(1, box.w), Math.max(1, box.h));
   return handed === 'left' ? { ...p, x: 1 - p.x } : { ...p };
 }
 
 /** Records an edit made on screen (in the current handedness). */
 export function withPlacement(layout: TouchLayout, id: ControlId, screen: Placement, handed: Handed): TouchLayout {
   const p = clampPlacement(handed === 'left' ? { ...screen, x: 1 - screen.x } : screen);
-  return { placements: { ...layout.placements, [id]: p } };
+  return { ...layout, placements: { ...layout.placements, [id]: p } };
+}
+
+/** Pins a control to the HUD, or unpins it (the editor). */
+export function withPinned(layout: TouchLayout, id: ControlId, on: boolean): TouchLayout {
+  const pinned = new Set(layout.pinned ?? []);
+  if (on) pinned.add(id);
+  else pinned.delete(id);
+  return { ...layout, pinned: PINNABLE.filter((x) => pinned.has(x)) };
 }
 
 /** A guide line the editor shows while a dragged control snaps to it (a fraction of the safe box). */
@@ -174,13 +231,16 @@ const isFiniteNumber = (v: unknown): v is number => typeof v === 'number' && Num
 export function loadLayout(store: KeyValueStore | null): TouchLayout {
   const placements: Partial<Record<ControlId, Placement>> = {};
   try {
-    const raw = JSON.parse(store?.getItem(LAYOUT_KEY) ?? 'null') as { placements?: Record<string, unknown> } | null;
+    const raw = JSON.parse(store?.getItem(LAYOUT_KEY) ?? 'null') as { placements?: Record<string, unknown>; pinned?: unknown[] } | null;
     for (const [id, v] of Object.entries(raw?.placements ?? {})) {
       if (!CONTROL_IDS.includes(id as ControlId) || typeof v !== 'object' || v === null) continue;
       const p = v as Record<string, unknown>;
       if (!isFiniteNumber(p.x) || !isFiniteNumber(p.y) || !isFiniteNumber(p.size)) continue;
       placements[id as ControlId] = clampPlacement({ x: p.x, y: p.y, size: p.size, opacity: isFiniteNumber(p.opacity) ? p.opacity : 1 });
     }
+    const pins = Array.isArray(raw?.pinned) ? raw.pinned : [];
+    const pinned = PINNABLE.filter((id) => pins.includes(id));
+    return pinned.length ? { placements, pinned } : { placements };
   } catch {
     /* unreadable: defaults */
   }

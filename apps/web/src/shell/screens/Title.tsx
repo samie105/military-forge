@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useStore } from 'zustand';
 import { GAME_NAME } from '@military-forge/shared';
 import { buildId, keyArt } from 'virtual:title-info';
+import { landingOwns, onPlay } from '../../ui/landing';
 import { reduced } from '../../ui/motion';
 import { Screen } from '../../ui/Screen';
 import { useServerPing } from '../context';
@@ -98,13 +99,14 @@ export function TitleScreen({ store }: { store: ShellStore }) {
   useEffect(() => {
     if (state !== 'on') return undefined;
     const onKey = (e: KeyboardEvent) => {
-      if (!continuesTitle(e)) return;
+      // the About sheet and the link into it (ui/landing.ts) keep their keys
+      if (landingOwns(e.target) || !continuesTitle(e)) return;
       e.preventDefault();
       e.stopImmediatePropagation();
       pressTitle(store);
     };
     const onPointer = (e: PointerEvent) => {
-      if (e.button > 0) return;
+      if (e.button > 0 || landingOwns(e.target)) return;
       e.preventDefault();
       swallowNextClick();
       pressTitle(store);
@@ -137,6 +139,9 @@ export function TitleScreen({ store }: { store: ShellStore }) {
       cancelAnimationFrame(frame);
     };
   }, [state, store]);
+
+  // the landing's Play now (index.html): pressed while the page loaded, or on the About sheet
+  useEffect(() => (state === 'on' ? onPlay(() => pressTitle(store)) : undefined), [state, store]);
 
   // pressed while the app was getting ready: go as soon as it is
   useEffect(() => {
@@ -238,6 +243,10 @@ export function TitleScreen({ store }: { store: ShellStore }) {
             </>
           )}
         </div>
+        {/* the landing's About sheet (index.html, public/boot.js): what the game is, for anyone curious */}
+        <a className="mf-title__about" href="#about">
+          About the game
+        </a>
         <span className="mf-title__corner mf-title__corner--build">build {buildId}</span>
         <span className="mf-title__corner mf-title__corner--net">
           <i className={ping >= 0 ? 'is-live' : ''} aria-hidden="true" />

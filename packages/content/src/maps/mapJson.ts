@@ -26,7 +26,7 @@ const ZONE_KEYS = ['id', 'kind', 'rect', 'points', 'launch', 'event', 'label', .
 const EVENT_KEYS = ['id', 'kind', 'name', 'description', 'duration', 'warning', 'gustPeriod', 'windFlip', 'pickOneZone', ...MODIFIER_KEYS];
 const SPAWNER_KEYS = ['id', 'pool', 'spots', 'first', 'respawn', 'maxActive'];
 const ONE_WAY_KEYS = ['ax', 'ay', 'bx', 'by', 'blocksBullets'];
-const TOP_KEYS = ['$schema', 'id', 'name', 'bounds', 'solids', 'oneWays', 'bulletOnly', 'spawns', 'dummies', 'labels', 'rules', 'zones', 'events', 'spawners', 'armory'];
+const TOP_KEYS = ['$schema', 'id', 'name', 'bounds', 'solids', 'oneWays', 'bulletOnly', 'spawns', 'dummies', 'labels', 'rules', 'zones', 'events', 'spawners', 'armory', 'tiers'];
 
 class Problems {
   readonly list: string[] = [];
@@ -176,6 +176,16 @@ export function parseMapJson(json: unknown, source = 'map'): MapDef {
         }),
       );
     }
+    if (m.tiers !== undefined) {
+      p.array('$.tiers', m.tiers, (tier, at) =>
+        p.object(at, tier, (o) => {
+          p.keys(at, o, ['id', 'name', 'y']);
+          p.str(`${at}.id`, o.id);
+          p.str(`${at}.name`, o.name);
+          p.num(`${at}.y`, o.y);
+        }),
+      );
+    }
     if (m.armory !== undefined) {
       p.object('$.armory', m.armory, (o) => {
         p.keys('$.armory', o, ['x', 'y', 'dir']);
@@ -272,6 +282,20 @@ export function mapJsonSchema(): object {
       zones: { type: 'array', items: { $ref: '#/$defs/zone' }, description: 'Areas that change the rules inside them (docs/02 §20.2).' },
       events: { $ref: '#/$defs/events' },
       spawners: { type: 'array', items: { $ref: '#/$defs/spawner' }, description: 'Pickup spawners: items at random spots and times (docs/03 §12).' },
+      tiers: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['id', 'name', 'y'],
+          additionalProperties: false,
+          properties: {
+            id: { type: 'string', description: 'Unique within the map.' },
+            name: { type: 'string', description: 'The HUD minimap\'s name for it, e.g. "Rooftops".' },
+            y: { type: 'number', description: "The tier's floor height (m); feet from 1.5 m under it up to the next tier's line are on it." },
+          },
+        },
+        description: 'Stacked battle zones, bottom to top (at least two to count): respawns spread players across them and the minimap names them.',
+      },
       armory: {
         type: 'object',
         required: ['x', 'y'],

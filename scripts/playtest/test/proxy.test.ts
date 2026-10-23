@@ -11,16 +11,18 @@ import { join } from 'node:path';
 import type { Duplex } from 'node:stream';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
-import { TUNE_META, clientIp, createProxy, isHashedAsset, pageForOrigin, pageWithFlags, pickEncoding, securityHeaders, staticPath } from '../src/proxy';
+import { TUNE_META, clientIp, createProxy, isHashedAsset, isRoomPage, pageForOrigin, pageWithFlags, pickEncoding, securityHeaders, staticPath } from '../src/proxy';
 import { parseTunnelUrl } from '../src/tunnel';
 
 // the build in a temp dir of its own, with a secret beside it (all removed afterwards)
 const outer = mkdtempSync(join(tmpdir(), 'playtest-proxy-'));
 const root = join(outer, 'dist');
 mkdirSync(join(root, 'assets'), { recursive: true });
-writeFileSync(join(root, 'index.html'), '<!doctype html><title>app</title><meta property="og:image" content="%ORIGIN%/og-image.jpg">');
+writeFileSync(join(root, 'index.html'), `<!doctype html><title>app</title><meta property="og:image" content="%ORIGIN%/og-image.jpg"><!-- the landing's words ${'x'.repeat(600)} -->`);
 writeFileSync(join(root, 'assets', 'index-abC12_34.js'), 'console.log(1)');
 writeFileSync(join(root, 'locker.html'), '<!doctype html><title>locker</title>');
+writeFileSync(join(root, 'robots.txt'), 'User-agent: *\nSitemap: %ORIGIN%/sitemap.xml\n');
+writeFileSync(join(root, 'sitemap.xml'), '<urlset><url><loc>%ORIGIN%/</loc></url></urlset>');
 const BIG_JS = `export const data = ${JSON.stringify(Array.from({ length: 400 }, (_, i) => ({ i, name: 'player', ok: true })))};`;
 writeFileSync(join(root, 'assets', 'chunk-Zq9_xY12.js'), BIG_JS);
 // a secret next to the build must stay unreachable
@@ -157,6 +159,21 @@ describe('static files and app routes', () => {
     expect((await fetch(`${base}/assets/index-abC12_34.js`, { headers: { 'if-none-match': etag } })).status).toBe(304);
     expect((await fetch(`${base}/locker.html`)).status).toBe(200);
     expect((await fetch(`${base}/assets/index-abC12_34.js`, { method: 'HEAD' })).status).toBe(200);
+  });
+
+  it('sends room pages noindex, and fills the crawl files with the address asked for (docs/seo.md)', async () => {
+    expect((await fetch(`${base}/r/KQXMZP`)).headers.get('x-robots-tag')).toBe('noindex');
+    expect((await fetch(`${base}/`)).headers.get('x-robots-tag')).toBeNull();
+    // the page (with its landing) leaves compressed when the browser takes it
+    const zipped = await raw('/', { 'accept-encoding': 'gzip' });
+    expect(zipped.headers['content-encoding']).toBe('gzip');
+    expect([isRoomPage('/r/KQXMZP'), isRoomPage('/r/KQXMZP/?x=1'), isRoomPage('/'), isRoomPage('/robots.txt')]).toEqual([true, true, false, false]);
+    const robots = await fetch(`${base}/robots.txt`);
+    expect(robots.headers.get('content-type')).toMatch(/^text\/plain/);
+    expect(await robots.text()).toContain(`Sitemap: http://127.0.0.1:${port(proxy)}/sitemap.xml`);
+    const sitemap = await fetch(`${base}/sitemap.xml`);
+    expect(sitemap.headers.get('content-type')).toMatch(/^application\/xml/);
+    expect(await sitemap.text()).toContain(`<loc>http://127.0.0.1:${port(proxy)}/</loc>`);
   });
 
   it("answers the client's /health probe: no WebTransport through the tunnel (WebSocket at once, no 404)", async () => {

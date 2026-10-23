@@ -49,6 +49,8 @@ export interface GamepadDeps {
   scoreboardCode?: () => string | undefined;
   /** the map being played (aim assist's line of sight: walls hide enemies) */
   map?: () => MapDef | null;
+  /** View / Share double-tapped: the big map (minimap/) */
+  toggleMap?: () => void;
 }
 
 const escape = () => sendKey(window, 'Escape');
@@ -69,6 +71,7 @@ export function mountGamepad(d: GamepadDeps): PadManager {
       window.dispatchEvent(new KeyboardEvent(down ? 'keydown' : 'keyup', { key: code === 'Tab' ? 'Tab' : code, code, bubbles: true, cancelable: true }));
     },
     map: d.map,
+    ...(d.toggleMap ? { toggleMap: d.toggleMap } : {}),
   };
   const m = (manager = new PadManager(host));
 

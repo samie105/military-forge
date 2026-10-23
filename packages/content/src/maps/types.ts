@@ -98,6 +98,8 @@ export type ZoneKind =
   | 'jumpPad'
   | 'boostPad'
   | 'emp'
+  | 'updraft'
+  | 'thinAir'
   | 'custom';
 
 /**
@@ -194,6 +196,24 @@ export interface MapSpawner {
   maxActive?: number;
 }
 
+/**
+ * A battle zone stacked on the ones below it (owner, 18 Oct: "battle zones stacked higher and
+ * higher that players fly up to and drop back down from"): ground streets, rooftops, high
+ * platforms, a sky deck. The HUD's minimap names the tier you're on, and respawns spread players
+ * across the tiers (sim game.ts). Listed bottom to top.
+ */
+export interface MapTier {
+  /** unique within the map */
+  id: string;
+  /** the HUD's name for it, e.g. "Rooftops" */
+  name: string;
+  /**
+   * The tier's floor height (m). Feet at or above `y − TIER_SLACK` and below the next tier's line
+   * are on this tier; below the first tier's line still counts as the first tier.
+   */
+  y: number;
+}
+
 export interface MapDef {
   id: string;
   name: string;
@@ -220,6 +240,11 @@ export interface MapDef {
   events?: MapEvents;
   /** pickup spawners (docs/03 §12); a map without them plays exactly as before */
   spawners?: MapSpawner[];
+  /**
+   * Stacked battle zones, bottom to top (at least two to count). Respawns spread players across
+   * them, and the HUD's minimap names them. A map without tiers plays exactly as before.
+   */
+  tiers?: MapTier[];
   /**
    * Where the test armory's rack starts (GameOptions.armory: one of every gun, near the spawns,
    * respawning fast): the first gun's x, a height above the floor it drops onto, and which way the

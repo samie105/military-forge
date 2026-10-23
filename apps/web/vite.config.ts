@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin, type ProxyOptions } from 'vite';
 // the brand lives in one place (packages/shared/src/brand.ts): pages get it at build time
 import { GAME_NAME } from '../../packages/shared/src/brand';
+// the crawl and install files: /manifest.webmanifest, /robots.txt, /sitemap.xml (docs/seo.md)
+import { seo } from './seo';
 
 /**
  * The app reaches the API at /api and rooms at /ws/<code> on its own origin (the playtest proxy,
@@ -68,7 +70,7 @@ const titleInfo: Plugin = {
 };
 
 export default defineConfig({
-  plugins: [brand, titleInfo],
+  plugins: [brand, titleInfo, seo(GAME_NAME)],
   server: { port: 5173, proxy },
   preview: { proxy },
   build: {

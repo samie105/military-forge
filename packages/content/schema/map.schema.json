@@ -196,6 +196,33 @@
       },
       "description": "Pickup spawners: items at random spots and times (docs/03 §12)."
     },
+    "tiers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "y"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique within the map."
+          },
+          "name": {
+            "type": "string",
+            "description": "The HUD minimap's name for it, e.g. \"Rooftops\"."
+          },
+          "y": {
+            "type": "number",
+            "description": "The tier's floor height (m); feet from 1.5 m under it up to the next tier's line are on it."
+          }
+        }
+      },
+      "description": "Stacked battle zones, bottom to top (at least two to count): respawns spread players across them and the minimap names them."
+    },
     "armory": {
       "type": "object",
       "required": [
@@ -240,6 +267,8 @@
           "enum": [
             "shield",
             "weapons",
+            "common",
+            "power",
             "weapon:hammer44",
             "weapon:buzz",
             "weapon:k47",
@@ -446,6 +475,14 @@
             {
               "const": "emp",
               "description": "EMP field: Jetpacks cut out inside. Defaults: jetDisabled true."
+            },
+            {
+              "const": "updraft",
+              "description": "Updraft: Rising air: fliers drift up at about 6 m/s without burning fuel, and refuel on the way. Defaults: wind [0, 26], drag 0.9, fuelRegenMul 3."
+            },
+            {
+              "const": "thinAir",
+              "description": "Thin air: The soft ceiling: jetpacks cut out and the air pushes you back down. Defaults: jetDisabled true, wind [0, -14]."
             },
             {
               "const": "custom",

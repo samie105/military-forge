@@ -395,6 +395,9 @@ export class Renderer {
     }
   }
 
+  /** Gunfire and blasts off screen, online (SOUND events: 4 m positions): nothing to draw here; the minimap hears them. */
+  onSounds(_sounds: readonly { x: number; y: number }[]): void {}
+
   /** Turns sim events into short-lived visual effects. */
   onEvents(events: readonly SimEvent[], localId: number): void {
     this.forwardEvents?.(events, localId);

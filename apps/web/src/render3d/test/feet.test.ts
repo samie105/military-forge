@@ -123,8 +123,9 @@ function* walkOver(x0: number, x1: number, vx: number): Generator<PlayerView> {
 }
 
 /**
- * What planting adds: foot motion relative to the pelvis beyond the twin's (cm/frame), and how sharply the knee
- * turns, planted and clip-only (°/frame², second difference: a snap is a spike).
+ * What planting adds: foot motion relative to the pelvis beyond the twin's (cm/frame) while the foot is off the floor
+ * (on it, a planted foot stops where it lands and stays: `slide` checks that), and how sharply the knee turns,
+ * planted and clip-only (°/frame², second difference: a snap is a spike).
  */
 function pops(run: Run) {
   let foot = 0;
@@ -135,7 +136,10 @@ function pops(run: Run) {
     for (let k = 0; k < 2; k++) {
       const [a0, a1, a2] = [run.a[i - 2]![k]!, run.a[i - 1]![k]!, run.a[i]![k]!];
       const [b0, b1, b2] = [run.b[i - 2]![k]!, run.b[i - 1]![k]!, run.b[i]![k]!];
-      foot = Math.max(foot, Math.hypot(a2.rx - a1.rx - (b2.rx - b1.rx), a2.ry - a1.ry - (b2.ry - b1.ry)) * 100);
+      // on the floor a planted foot stops where it lands (that's the point: no skate); off it, nothing pops
+      const floorY = (l: Leg) => groundAt(l.x, l.y - REST) + REST;
+      const onFloor = (l: Leg) => l.y - floorY(l) < 0.015;
+      if (!(onFloor(a1) && onFloor(a2))) foot = Math.max(foot, Math.hypot(a2.rx - a1.rx - (b2.rx - b1.rx), a2.ry - a1.ry - (b2.ry - b1.ry)) * 100);
       jerkA = Math.max(jerkA, Math.abs(a2.knee - 2 * a1.knee + a0.knee));
       jerkB = Math.max(jerkB, Math.abs(b2.knee - 2 * b1.knee + b0.knee));
       // a held leg may unbend to FEET.unbend of its length (a bent walk reaching a step down), never further
@@ -145,14 +149,16 @@ function pops(run: Run) {
   return { foot, jerkA, jerkB, straighter };
 }
 
-/** Mean speed (m/s) a held foot moves along the ground, weighted by how firmly it is held (frames held > ½). */
+/** Mean speed (m/s) a held foot moves along the ground, weighted by how firmly it is held (frames held > ½, on the
+ *  floor: a hold letting go follows the foot's lift and swing in the air). */
 function slide(run: Run): number {
   let sum = 0;
   let w = 0;
   for (let i = 1; i < run.a.length; i++)
     for (let k = 0; k < 2; k++) {
       const f = run.a[i]![k]!;
-      if (f.planted <= 0.5) continue;
+      const last = run.a[i - 1]![k]!;
+      if (f.planted <= 0.5 || f.y - (groundAt(f.x, f.y - REST) + REST) > 0.015 || last.y - (groundAt(last.x, last.y - REST) + REST) > 0.015) continue;
       sum += (Math.abs(f.x - run.a[i - 1]![k]!.x) / DT) * f.planted;
       w += f.planted;
     }
@@ -175,9 +181,9 @@ describe('planted feet on W8 clips: no snaps', () => {
       // (the Forge's walk_slow is down 65 % of its cycle, its run 17 %)
       for (const k of [0, 1]) expect(share(run, k), `foot ${k} held share`).toBeGreaterThan(speed <= 1.2 ? 0.25 : 0.03);
       // on flat ground a held foot keeps the clip's own height (a heel-strike walk, a forefoot run), or stands on the
-      // ground where the clip (and the run's lean) would put it into it
+      // ground where the clip (and the run's lean) would put it into it (held firmly: a hold letting go follows the lift)
       for (let i = 0; i < run.a.length; i++)
-        for (const k of [0, 1]) if (run.a[i]![k]!.planted > 0.5) expect(Math.abs(run.a[i]![k]!.y - Math.max(run.b[i]![k]!.y, REST - FEET.soft / 2))).toBeLessThan(0.01);
+        for (const k of [0, 1]) if (run.a[i]![k]!.planted > 0.9) expect(Math.abs(run.a[i]![k]!.y - Math.max(run.b[i]![k]!.y, REST - FEET.soft / 2))).toBeLessThan(0.01);
     }, SLOW);
   }
 
@@ -216,7 +222,7 @@ describe('planted feet on W8 clips: no snaps', () => {
     // (crouch_walk is down half its cycle; at 2.9 cycles/s the 70 ms fades leave a fifth of it held past ½)
     for (const k of [0, 1]) expect(share(run, k), `foot ${k} held share`).toBeGreaterThan(0.15);
     for (let i = 0; i < run.a.length; i++)
-      for (const k of [0, 1]) if (run.a[i]![k]!.planted > 0.5) expect(Math.abs(run.a[i]![k]!.y - Math.max(run.b[i]![k]!.y, REST - FEET.soft / 2))).toBeLessThan(0.01);
+      for (const k of [0, 1]) if (run.a[i]![k]!.planted > 0.9) expect(Math.abs(run.a[i]![k]!.y - Math.max(run.b[i]![k]!.y, REST - FEET.soft / 2))).toBeLessThan(0.01);
     const p = pops(run);
     expect(p.foot, 'extra foot motion (cm/frame)').toBeLessThan(1 + 0.9 * 2.2);
     expect(p.jerkA, 'knee jerk (°/frame²)').toBeLessThan(1.5 * p.jerkB + 4);

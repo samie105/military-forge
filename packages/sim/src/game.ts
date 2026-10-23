@@ -2,7 +2,7 @@
  * The authoritative simulation of one room (docs/06 §5.3). The same class runs headless on the
  * game server, in the browser for local play/prediction, and in golden-replay tests.
  */
-import { NO_WEAPON, createTuning, getMap, weapons, type DummySpawn, type MapDef, type Tuning } from '@military-forge/content';
+import { NO_WEAPON, createTuning, getMap, mapTiers, tierIndexAt, weapons, type DummySpawn, type MapDef, type Tuning } from '@military-forge/content';
 import { IdAllocator } from '@military-forge/shared';
 import { botInput } from './bots';
 import { CloudState, stepClouds } from './clouds';
@@ -151,13 +151,20 @@ export class Game {
     return null;
   }
 
-  /** Spawn point farthest from other living players (ties: lowest index). Dummies use their home. Public for match start (match.ts). */
+  /**
+   * Spawn point farthest from other living players (ties: lowest index). On a map with tiers, only
+   * spawns on the tiers with the fewest living players count, so a match spreads across its stacked
+   * battle zones instead of piling onto one. Dummies use their home. Public for match start (match.ts).
+   */
   respawn(p: PlayerState): void {
     let sx = p.homeX;
     let sy = p.homeY;
     if (!p.isBot || p.brain) {
+      const fewest = this.leastCrowdedTier(p);
       let bestScore = -1;
-      for (const s of this.map.spawns) {
+      for (let i = 0; i < this.map.spawns.length; i++) {
+        const s = this.map.spawns[i]!;
+        if (fewest >= 0 && this.spawnTier[i] !== fewest) continue;
         let nearest = Infinity;
         for (const q of this.players) {
           if (!q || q === p || !q.alive) continue;
@@ -176,6 +183,41 @@ export class Game {
     giveLoadout(p, weapons, respawnGuns(p));
     depenetrate(this.world, p, this.tuning);
     this.events.push({ type: 'spawn', player: p.id });
+  }
+
+  /** each spawn's tier (MapDef.tiers), or empty on a map without tiers */
+  private spawnTierCache: Int8Array | null = null;
+  private spawnTierMap: MapDef | null = null;
+  private get spawnTier(): Int8Array {
+    if (!this.spawnTierCache || this.spawnTierMap !== this.map) {
+      this.spawnTierCache = Int8Array.from(this.map.spawns, (s) => tierIndexAt(this.map, s.y));
+      this.spawnTierMap = this.map;
+    }
+    return this.spawnTierCache;
+  }
+  private readonly tierCount = new Int32Array(16);
+
+  /**
+   * The tier (with a spawn on it) holding the fewest living players other than `p`, lowest first on
+   * a tie; −1 on a map without tiers (the plain farthest-spawn rule, unchanged).
+   */
+  private leastCrowdedTier(p: PlayerState): number {
+    const tiers = mapTiers(this.map);
+    if (!tiers) return -1;
+    const n = Math.min(tiers.length, this.tierCount.length);
+    const count = this.tierCount;
+    count.fill(0);
+    for (const q of this.players) {
+      if (!q || q === p || !q.alive) continue;
+      count[Math.min(n - 1, tierIndexAt(this.map, q.y))]!++;
+    }
+    const spawnTier = this.spawnTier;
+    let best = -1;
+    for (let i = 0; i < spawnTier.length; i++) {
+      const t = Math.min(n - 1, spawnTier[i]!);
+      if (best < 0 || count[t]! < count[best]! || (count[t] === count[best] && t < best)) best = t;
+    }
+    return best;
   }
 
   /**

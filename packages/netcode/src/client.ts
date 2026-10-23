@@ -9,11 +9,16 @@ import {
   BitWriter,
   CmdKind,
   DecodeError,
+  HelloFlag,
   MsgType,
   SnapshotDecoder,
   decodeMessage,
   encodeCmd,
   encodeHello,
+  encodeSpectateAck,
+  encodeSpectateCmd,
+  spectatorRing,
+  type SpectateMsg,
   encodeLookCmd,
   encodeInputInto,
   encodePing,
@@ -41,6 +46,11 @@ export interface NetClientOptions {
    * HELLO; the room holds it to what the player owns and tells everyone in the ROSTER (NetClient.looks).
    */
   look?: readonly number[];
+  /**
+   * v20: join as a spectator (no player slot, no INPUT): the room's whole map, behind live by its
+   * delay. NetClient.spectating says whether the room took us as one; `play()` asks for a slot.
+   */
+  spectate?: boolean;
   /** hands bytes to the transport (through the conditioner, if any) */
   send(bytes: Uint8Array): void;
   /**
@@ -190,7 +200,18 @@ export class NetClient {
   deltaMisses = 0;
   /** INPUTs not sent because the connection had stalled (NetClientOptions.stream) */
   inputsHeldBack = 0;
-  private readonly snapshotDecoder = new SnapshotDecoder();
+  private snapshotDecoder = new SnapshotDecoder();
+  /**
+   * v20: the room took this connection as a spectator (WELCOME's flag): no player, no prediction,
+   * no INPUT; snapshots are acked with SPECTATE_ACK. A spectator given a slot gets a player WELCOME.
+   */
+  spectating = false;
+  /** v20: a spectator's feed runs this far behind the match, ticks (WELCOME) */
+  spectateDelayTicks = 0;
+  /** v20: spectating as the room last said (SPECTATE): mode, the death cam's follow, the queue, spectators */
+  spectate: SpectateMsg | null = null;
+  /** v20: the next HELLO asks to spectate (NetClientOptions.spectate; off once we play) */
+  wantsSpectate: boolean;
   readonly names = new Map<number, string>();
   /**
    * v19: everyone's look as the room lets them wear it (player id → cosmetic wire ids; decode with
@@ -215,6 +236,8 @@ export class NetClient {
 
   private acc = 0;
   private helloAt = 0;
+  /** a HELLO went out and its WELCOME hasn't come back yet */
+  private helloPending = false;
   /** when the server last sent anything */
   private lastHeardAt = 0;
   private nextStalledInputAt = 0;
@@ -260,6 +283,7 @@ export class NetClient {
     this.pacer = new InputPacer(options.pacer);
     this.ticket = options.ticket ?? '';
     this.look = options.look ?? null;
+    this.wantsSpectate = options.spectate === true;
   }
 
   get joined(): boolean {
@@ -273,7 +297,26 @@ export class NetClient {
   onOpen(): void {
     this.status = this.sessionToken ? 'resuming…' : 'joining…';
     this.helloAt = this.lastHeardAt = this.options.now();
-    this.options.send(encodeHello(this.options.name, this.sessionToken, this.ticket, this.look));
+    this.helloPending = true;
+    // a spectator has no session to resume: it comes back as a spectator (a fresh seat)
+    this.options.send(encodeHello(this.options.name, this.sessionToken, this.ticket, this.look, this.wantsSpectate && !this.sessionToken ? HelloFlag.Spectate : 0));
+  }
+
+  /**
+   * v20: a spectator asks for a player slot: 'now' the moment one is free (mid-match too), 'next' at
+   * the next round, false to stay watching. The room answers with a player WELCOME when it seats us.
+   */
+  play(when: 'now' | 'next' | false): void {
+    if (this.connected && this.spectating) this.options.send(encodeSpectateCmd({ play: when }));
+  }
+
+  /**
+   * v20: whom to watch. A dead player's death cam: the room sends what that player sees (it may
+   * refuse: the admin's death-cam rule; SPECTATE says whom it follows). A spectator gets the whole
+   * map anyway; it tells the room only for its own record.
+   */
+  follow(id: number): void {
+    if (this.connected && id >= 0) this.options.send(encodeSpectateCmd({ follow: id }));
   }
 
   /** The transport dropped (not a kick): freeze until a new one is open (call onOpen again). */
@@ -382,8 +425,12 @@ export class NetClient {
     } else msg = decodeMessage(bytes) as ServerMessage;
     switch (msg.type) {
       case MsgType.Welcome: {
-        const resumingSame = msg.resumed && this.predictor !== null && this.predictor.player.id === msg.playerId && this.map.id === msg.mapId;
-        if (this.myId >= 0) {
+        const resumingSame = !msg.spectator && msg.resumed && this.predictor !== null && this.predictor.player.id === msg.playerId && this.map.id === msg.mapId;
+        // v20: a spectator's snapshots come a delay late, so its decoder keeps enough of them for the deltas
+        const ring = msg.spectator ? spectatorRing(msg.delayTicks) : SnapshotDecoder.SIZE;
+        if (ring !== this.snapshotDecoder.size) this.snapshotDecoder = new SnapshotDecoder(ring);
+        // a spectator taking a slot (or a spectator's new map) is a new timeline, like a fresh join
+        if (this.myId >= 0 || this.spectating) {
           // a new connection: the server has fresh baselines for it, so drop ours
           this.snapshotDecoder.reset();
           this.lastSeq = -1;
@@ -403,6 +450,9 @@ export class NetClient {
         }
         this.connected = true;
         if (this.lowBw) this.options.send(encodeCmd(CmdKind.SetLowBandwidth, '1')); // a new connection starts at full rate
+        this.spectating = msg.spectator;
+        this.spectateDelayTicks = msg.delayTicks;
+        if (!msg.spectator) this.wantsSpectate = false; // we play now: a reconnect resumes the player
         this.sessionToken = msg.sessionToken;
         this.myId = msg.playerId;
         this.status = msg.resumed ? 'connected (resumed)' : 'connected';
@@ -416,14 +466,22 @@ export class NetClient {
           this.options.send(encodeCmd(CmdKind.SetTuning, JSON.stringify(this.pendingTuning)));
           this.pendingTuning = null;
         }
-        const rtt = now - this.helloAt;
-        this.rtt.add(rtt);
+        // the HELLO→WELCOME round trip, when this WELCOME answers a HELLO (a spectator seated as a
+        // player, or a host's map switch, gets one out of the blue: the estimate so far then)
+        const answered = this.helloPending;
+        this.helloPending = false;
+        const rtt = answered || this.rtt.count === 0 ? now - this.helloAt : this.rtt.median;
+        if (answered) this.rtt.add(rtt);
         // Inputs sent now arrive ~1 RTT after the server sent this; land them mid-band early.
         const o = this.pacer.options;
         this.startTick = msg.serverTick + Math.ceil(rtt / TICK_MS + (o.low + o.high) / 2 + 0.5);
         this.startAt = now;
-        // same player: keep predicting from the old state until the first snapshot re-anchors it
-        if (resumingSame) {
+        if (msg.spectator) {
+          // nothing to predict: remote players only, interpolated as everyone else's are
+          this.predictor = null;
+          this.ownShots = null;
+        } else if (resumingSame) {
+          // same player: keep predicting from the old state until the first snapshot re-anchors it
           this.resyncPending = true;
           this.predictor!.game.tuning = this.tuning;
           if (this.ownShots) this.ownShots.tuning = this.tuning;
@@ -461,6 +519,9 @@ export class NetClient {
       case MsgType.Kick:
         this.status = `kicked: ${msg.reason}`;
         break;
+      case MsgType.Spectate:
+        this.spectate = msg;
+        break;
       case MsgType.Debug:
         this.rewinds.push({ msg, recvMs: now });
         if (this.rewinds.length > 32) this.rewinds.shift();
@@ -480,6 +541,8 @@ export class NetClient {
       this.seqWindow.push({ at: now, lost: Math.max(0, Math.round(gap / per) - 1) });
     }
     this.lastSeq = msg.seq;
+    // v20: a spectator acks every snapshot it decoded (it sends no INPUT, where players ack)
+    if (this.spectating && this.connected) this.options.send(encodeSpectateAck(msg.seq));
     this.snapshots.push({ msg, recvMs: now, bytes: size });
     this.arrivals.push(now - msg.serverTick * TICK_MS);
     if (this.arrivals.length > INTERP_WINDOW) this.arrivals.shift();

@@ -33,6 +33,8 @@ export function padShownBindings(pad: PadSettings): Bindings {
     scoreboard: codes('scoreboard'),
     netGraph: [],
     talk: codes('talk'),
+    // the big map: a double tap of the scoreboard's button (no keycap of its own)
+    map: [],
   };
   return out;
 }

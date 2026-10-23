@@ -50,9 +50,18 @@ import {
   CmdKind,
   DecodeError,
   HEALTH_UNKNOWN,
+  MAX_SPECTATORS,
   MsgType,
+  SPECTATOR_VOICE_BASE,
   SnapshotBaselines,
   SnapshotEncoder,
+  SpectateMode,
+  SpectateQueue,
+  encodeSpectate,
+  parseSpectateCmd,
+  spectatorRing,
+  type SpectateModeId,
+  type SpectateQueueId,
   createInputPacket,
   decodeInputInto,
   decodeMessage,
@@ -253,8 +262,8 @@ export class Client {
   readonly lastInput: Input = createInput();
   /** lowest buffer health since the last snapshot */
   healthMin = Infinity;
-  /** snapshots sent to this client recently: delta baselines (docs/05 §11) */
-  readonly baselines = new SnapshotBaselines();
+  /** snapshots sent to this client recently: delta baselines (docs/05 §11; a spectator's ring fits its delay) */
+  baselines = new SnapshotBaselines();
   /** this client's area of interest, recomputed every snapshot */
   readonly view: ViewRect = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
   /** server tick low-bandwidth mode was switched on, -1 = off */
@@ -286,6 +295,26 @@ export class Client {
   up: ConditionedLink | null = null;
   down: ConditionedLink | null = null;
 
+  // ---- v20: spectating ----
+  /** a spectator (HELLO's flag): no player, never sends INPUT; gets the whole map, `delayTicks` behind */
+  spectator = false;
+  /** its seat among the room's spectators (voice id SPECTATOR_VOICE_BASE + seat), −1 = none */
+  seat = -1;
+  /** a spectator's feed runs this far behind the match (fixed when it came in: its baselines ring fits it) */
+  delayTicks = 0;
+  /** a spectator's wish to play (SpectateQueue) */
+  queue: SpectateQueueId = SpectateQueue.Watching;
+  /** a spectator's look from its HELLO, worn if it takes a slot */
+  look: number[] | null = null;
+  /** the death cam (a dead v20 player): whose view its snapshots follow, −1 = its own */
+  follow = -1;
+  /** who killed it last (the death cam starts there, and spectate.deathCam 1 keeps it there), −1 = nobody */
+  killer = -1;
+  /** a spectator's messages held back by the delay (snapshots may be skipped under backpressure, the rest not) */
+  readonly delayed: { at: number; bytes: Uint8Array; snapshot: boolean }[] = [];
+  /** the SPECTATE this client was last sent (a new one goes only when it differs) */
+  spectateSent = '';
+
   /**
    * @param snapshotEvery ticks between this client's snapshots: the room's interval, doubled in
    *   low-bandwidth mode
@@ -297,6 +326,16 @@ export class Client {
 
   get joined(): boolean {
     return this.playerId >= 0;
+  }
+
+  /** in the room: a player, or a spectator (gets the room's messages) */
+  get inRoom(): boolean {
+    return this.playerId >= 0 || this.spectator;
+  }
+
+  /** its voice id (v20): its player id, or a spectator's 32 + seat; −1 = none yet */
+  get voiceId(): number {
+    return this.playerId >= 0 ? this.playerId : this.spectator && this.seat >= 0 ? SPECTATOR_VOICE_BASE + this.seat : -1;
   }
 }
 
@@ -526,7 +565,7 @@ export class Room {
     // OVERRIDES first: a client hearing the TUNING after it knows the admin's values, so it can
     // tell the admin's change from a host's ("Tuned by admin", not "<host> changed…")
     for (const c of this.clients) {
-      if (!c.joined) continue;
+      if (!c.inRoom) continue;
       c.conn.send(overrides);
       c.conn.send(tuning);
     }
@@ -549,9 +588,21 @@ export class Room {
     return this.host?.playerId ?? -1;
   }
 
-  /** nobody connected and no session waiting for a reconnect: the registry may close it */
+  /**
+   * Nobody playing and no session waiting for a reconnect: the registry may close it. Spectators
+   * don't keep a room open (v20): with nobody left to watch they go when it closes.
+   */
   get empty(): boolean {
-    return this.clients.size === 0 && this.sessions.size === 0;
+    if (this.sessions.size > 0) return false;
+    for (const c of this.clients) if (!c.spectator) return false;
+    return true;
+  }
+
+  /** the room's spectators now (v20) */
+  get spectatorCount(): number {
+    let n = 0;
+    for (const c of this.clients) if (c.spectator) n++;
+    return n;
   }
 
   /** humans in the room, including those waiting to reconnect (they keep their slot) */
@@ -595,6 +646,7 @@ export class Room {
     client.up?.dispose();
     client.down?.dispose();
     this.clients.delete(client);
+    if (client.spectator) this.unseat(client);
     const s = client.session;
     client.session = null;
     client.playerId = -1;
@@ -706,7 +758,7 @@ export class Room {
     }
     // voice frames (v18): their own budget in the relay (up to 60 a second), never the message one
     if (bytes[0] === MsgType.VoiceUp) {
-      if (client.joined) this.voice.onFrame(client, bytes);
+      if (client.voiceId >= 0) this.voice.onFrame(client, bytes);
       return;
     }
     if (--client.messageTokens < 0) {
@@ -716,7 +768,7 @@ export class Room {
     let msg: ClientMessage;
     try {
       const decoded = decodeMessage(bytes);
-      if (decoded.type !== MsgType.Hello && decoded.type !== MsgType.Ping && decoded.type !== MsgType.Cmd) {
+      if (decoded.type !== MsgType.Hello && decoded.type !== MsgType.Ping && decoded.type !== MsgType.Cmd && decoded.type !== MsgType.SpectateAck) {
         throw new DecodeError('server-only message type from client');
       }
       msg = decoded;
@@ -727,7 +779,11 @@ export class Room {
 
     switch (msg.type) {
       case MsgType.Hello:
-        this.onHello(client, msg.protocolVersion, msg.contentHash, msg.name, msg.resumeToken, msg.look);
+        this.onHello(client, msg.protocolVersion, msg.contentHash, msg.name, msg.resumeToken, msg.look, msg.spectate);
+        break;
+      case MsgType.SpectateAck:
+        // v20: spectators ack here (they never send INPUT); a player's ack rides its INPUT
+        if (client.spectator) client.baselines.ack(msg.seq);
         break;
       case MsgType.Ping:
         this.confirmToken(client);
@@ -772,8 +828,8 @@ export class Room {
     for (let i = 0; i < m.count; i++) client.inputs.push(newest - i, m.inputs[i]!, current, renderTick - m.renderLags[i]!);
   }
 
-  private onHello(client: Client, version: number, contentHash: number, rawName: string, resumeToken: string, look: number[] | null = null): void {
-    if (client.joined) return;
+  private onHello(client: Client, version: number, contentHash: number, rawName: string, resumeToken: string, look: number[] | null = null, spectate = false): void {
+    if (client.joined || client.spectator) return;
     // v17 and v18 pages still play (no looks, no voice): MIN_PROTOCOL_VERSION
     if (!protocolSupported(version) || contentHash !== CONTENT_HASH) {
       this.kick(client, CloseCode.VersionMismatch, 'version mismatch: refresh to update');
@@ -787,11 +843,21 @@ export class Room {
       if (look) this.wear(resumed, look);
       return;
     }
+    // v20: a spectator takes a seat, not a slot
+    if (spectate && client.protocolVersion >= 20) {
+      this.seatSpectator(client, rawName, look);
+      return;
+    }
     if (this.humanCount >= this.maxHumans) {
       this.kick(client, CloseCode.RoomFull, 'room full');
       return;
     }
-    const p = this.game.addPlayer(sanitizeName(rawName, `Player ${this.humanCount + 1}`));
+    this.addHuman(client, sanitizeName(rawName, `Player ${this.humanCount + 1}`), look);
+  }
+
+  /** A new player for this connection: its soldier, its session, its look; everyone hears of it. */
+  private addHuman(client: Client, name: string, look: number[] | null): void {
+    const p = this.game.addPlayer(name);
     if (client.accountId) this.recorder?.setAccount(p, client.accountId);
     // the guns they chose (their account's loadout): every spawn until a death keeps others (#125)
     if (client.guns) this.game.setLoadout(p, client.guns);
@@ -856,9 +922,20 @@ export class Room {
   }
 
   private onCmd(client: Client, kind: number, payload: string): void {
+    if (client.spectator) {
+      this.onSpectatorCmd(client, kind, payload);
+      return;
+    }
     if (!client.joined) return;
     if (kind === CmdKind.Voice) {
       this.voice.onSettings(client, payload);
+      return;
+    }
+    if (kind === CmdKind.Spectate) {
+      // v20: a dead player's death cam (whom it follows)
+      const cmd = parseSpectateCmd(payload);
+      if (!cmd) client.strikes++;
+      else if (cmd.follow !== undefined && client.protocolVersion >= 20) this.setFollow(client, cmd.follow);
       return;
     }
     if (kind >= CmdKind.Ready && kind <= CmdKind.Leave) {
@@ -885,12 +962,215 @@ export class Room {
     if (kind === CmdKind.SetLowBandwidth) {
       // half the snapshot rate for this client (docs/05 §2.2); allowed outside dev rooms too
       const on = payload === '1';
-      client.snapshotEvery = on ? this.snapshotEvery * 2 : this.snapshotEvery;
-      if (!on) client.lowBwSince = -1;
-      else if (client.lowBwSince < 0) client.lowBwSince = this.game.tick;
+      this.setLowBandwidth(client, on);
     } else if (kind === CmdKind.Respawn) {
       const p = this.game.players[client.playerId];
       if (p?.alive) p.spawn(p.x, p.y + 0.5, this.game.tuning);
+    }
+  }
+
+  private setLowBandwidth(client: Client, on: boolean): void {
+    client.snapshotEvery = on ? this.snapshotEvery * 2 : this.snapshotEvery;
+    if (!on) client.lowBwSince = -1;
+    else if (client.lowBwSince < 0) client.lowBwSince = this.game.tick;
+  }
+
+  // ---------- v20: spectating ----------
+
+  /** The admin's spectating numbers (content admin.ts, group "Spectating"). */
+  private get spectateCap(): number {
+    return Math.max(0, Math.min(MAX_SPECTATORS, Math.round(adminValue(adminValues(), 'spectate.cap'))));
+  }
+
+  private get spectateDelayTicks(): number {
+    return Math.max(0, Math.min(1023, Math.round(adminValue(adminValues(), 'spectate.delay') * 60)));
+  }
+
+  /** 0 off, 1 the killer only, 2 the killer then anyone */
+  private get deathCam(): number {
+    return Math.round(adminValue(adminValues(), 'spectate.deathCam'));
+  }
+
+  /** something a SPECTATE carries changed for everyone (the list, free slots): checked this tick */
+  private spectateDirty = false;
+
+  /**
+   * A spectator comes in (HELLO's flag): a seat under the cap (spectate.cap; 0 = off), a feed delayed
+   * by spectate.delay with a baselines ring that fits it, the room's state now (WELCOME, ROSTER,
+   * SPECTATE; MATCH_STATE rides the delay with the snapshots).
+   */
+  private seatSpectator(client: Client, rawName: string, look: number[] | null): void {
+    const cap = this.spectateCap;
+    if (cap === 0 || this.spectatorCount >= cap) {
+      this.kick(client, CloseCode.SpectatorsFull, cap === 0 ? 'spectating is off on this server' : 'this room has all the spectators it takes');
+      return;
+    }
+    const taken = new Set<number>();
+    for (const c of this.clients) if (c.spectator) taken.add(c.seat);
+    let seat = 0;
+    while (taken.has(seat)) seat++;
+    client.spectator = true;
+    client.seat = seat;
+    client.name = sanitizeName(rawName, `Spectator ${seat + 1}`);
+    client.look = look;
+    client.delayTicks = this.spectateDelayTicks;
+    client.baselines = new SnapshotBaselines(spectatorRing(client.delayTicks, this.snapshotEvery));
+    client.lastSnapshotTick = -1;
+    client.queue = SpectateQueue.Watching;
+    this.welcomeSpectator(client);
+    client.conn.send(encodeRoster(this.rosterEntries()));
+    if (this.match) this.sendDelayed(client, this.encodeMatchState(), false);
+    this.spectateDirty = true;
+    this.voice.changed();
+    this.log(`[room] ${client.name} is watching (${this.spectatorCount}/${cap}, ${(client.delayTicks / 60).toFixed(1)} s behind)`);
+  }
+
+  private welcomeSpectator(client: Client): void {
+    client.conn.send(
+      encodeWelcome({
+        playerId: -1,
+        seed: this.game.seed,
+        serverTick: this.game.tick,
+        mapId: this.game.map.id,
+        tuningJson: JSON.stringify(this.game.tuning),
+        sessionToken: '',
+        resumed: false,
+        overridesJson: adminJson(),
+        spectator: true,
+        delayTicks: client.delayTicks,
+      }),
+    );
+  }
+
+  /** A spectator's seat is free again (it left, or took a slot). */
+  private unseat(client: Client): void {
+    this.voice.remove(client.voiceId);
+    client.spectator = false;
+    client.seat = -1;
+    client.delayed.length = 0;
+    client.queue = SpectateQueue.Watching;
+    this.spectateDirty = true;
+    this.voice.changed();
+  }
+
+  /** A message for a spectator, held back by its delay (in order with its snapshots). */
+  private sendDelayed(client: Client, bytes: Uint8Array, snapshot: boolean): void {
+    if (client.delayTicks === 0) {
+      if (!snapshot || client.conn.bufferedAmount() <= BACKPRESSURE_LIMIT) client.conn.send(bytes);
+      else client.snapshotsSkipped++;
+      return;
+    }
+    client.delayed.push({ at: this.game.tick + client.delayTicks, bytes, snapshot });
+  }
+
+  /** Each tick: what a spectator's delay has held long enough goes out (a stale snapshot skipped on a backed-up socket). */
+  private flushDelayed(): void {
+    const now = this.game.tick;
+    for (const c of this.clients) {
+      if (!c.spectator || c.delayed.length === 0) continue;
+      let i = 0;
+      for (; i < c.delayed.length && c.delayed[i]!.at <= now; i++) {
+        const d = c.delayed[i]!;
+        if (d.snapshot && c.conn.bufferedAmount() > BACKPRESSURE_LIMIT) c.snapshotsSkipped++;
+        else c.conn.send(d.bytes);
+      }
+      if (i > 0) c.delayed.splice(0, i);
+    }
+  }
+
+  /** The Spectate CMD from a spectator: whom it follows (its own camera's business), its wish to play. */
+  private onSpectatorCmd(client: Client, kind: number, payload: string): void {
+    if (kind === CmdKind.Voice) this.voice.onSettings(client, payload);
+    else if (kind === CmdKind.Leave) this.kick(client, 1000, 'left the room');
+    else if (kind === CmdKind.SetLowBandwidth) this.setLowBandwidth(client, payload === '1');
+    else if (kind === CmdKind.Spectate) {
+      const cmd = parseSpectateCmd(payload);
+      if (!cmd) {
+        client.strikes++;
+        return;
+      }
+      if (cmd.follow !== undefined) client.follow = cmd.follow;
+      if (cmd.play !== undefined) {
+        client.queue = cmd.play === 'now' ? SpectateQueue.Now : cmd.play === 'next' ? SpectateQueue.Next : SpectateQueue.Watching;
+        this.spectateDirty = true;
+      }
+    }
+  }
+
+  /** A dead v20 player's death cam follows `id`, as far as spectate.deathCam allows. */
+  private setFollow(client: Client, id: number): void {
+    const me = this.game.players[client.playerId];
+    if (!me || me.alive) return;
+    const cam = this.deathCam;
+    const target = this.game.players[id];
+    if (cam === 0 || !target || id === client.playerId) return;
+    if (cam === 1 && id !== client.killer) return;
+    client.follow = id;
+    this.spectateDirty = true;
+  }
+
+  /** Free player slots now. */
+  private get freeSlots(): number {
+    return Math.max(0, this.maxHumans - this.humanCount);
+  }
+
+  /** Spectators who asked to play take the free slots: "now" at once, "next" once the match is between rounds. */
+  private seatPlayers(): void {
+    if (this.freeSlots === 0) return;
+    const phase = this.match?.phase;
+    const betweenRounds = !this.match || (phase !== MatchPhase.Countdown && phase !== MatchPhase.InProgress);
+    // the longest-waiting first (the lowest seat came in first among equals)
+    const waiting = [...this.clients].filter((c) => c.spectator && (c.queue === SpectateQueue.Now || (c.queue === SpectateQueue.Next && betweenRounds))).sort((a, b) => a.seat - b.seat);
+    for (const c of waiting) {
+      if (this.freeSlots === 0) break;
+      const name = c.name;
+      const look = c.look;
+      this.unseat(c);
+      // a fresh join on the same connection: live snapshots from now, a player's ring
+      c.baselines = new SnapshotBaselines();
+      c.lastSnapshotTick = -1;
+      c.snapshotEvery = c.lowBwSince >= 0 ? this.snapshotEvery * 2 : this.snapshotEvery;
+      this.addHuman(c, name, look);
+      if (this.match) c.conn.send(this.encodeMatchState());
+      this.log(`[room] ${name} stopped watching and plays`);
+    }
+  }
+
+  /** The death cam: who just died (their killer first) and who came back. */
+  private trackDeaths(): void {
+    for (const e of this.game.events) {
+      if (e.type !== 'death') continue;
+      for (const c of this.clients) {
+        if (c.playerId !== e.victim || c.protocolVersion < 20) continue;
+        c.killer = e.killer !== e.victim ? e.killer : -1;
+        c.follow = this.deathCam > 0 && c.killer >= 0 && this.game.players[c.killer] ? c.killer : -1;
+        this.spectateDirty = true;
+      }
+    }
+    for (const c of this.clients) {
+      if (c.follow < 0 || c.spectator) continue;
+      const me = this.game.players[c.playerId];
+      // back in play (or gone): the death cam ends; a followed player who left leaves it on our body
+      if (!me || me.alive || !this.game.players[c.follow]) c.follow = -1;
+    }
+  }
+
+  /** SPECTATE to every v20 client whose view of it changed (the room's spectators, its mode, follow, queue). */
+  private sendSpectateStates(): void {
+    const list = [...this.clients]
+      .filter((c) => c.spectator)
+      .sort((a, b) => a.seat - b.seat)
+      .map((c) => ({ voiceId: c.voiceId, name: c.name }));
+    const slots = this.freeSlots;
+    for (const c of this.clients) {
+      if (!c.inRoom || c.protocolVersion < 20) continue;
+      const me = c.joined ? this.game.players[c.playerId] : null;
+      const mode: SpectateModeId = c.spectator ? SpectateMode.Spectator : me && !me.alive ? SpectateMode.Dead : SpectateMode.Playing;
+      const msg = { mode, follow: c.spectator ? -1 : c.follow, queue: c.spectator ? c.queue : SpectateQueue.Watching, delayTicks: c.spectator ? c.delayTicks : 0, slots, spectators: list };
+      const key = JSON.stringify(msg);
+      if (key === c.spectateSent) continue;
+      c.spectateSent = key;
+      c.conn.send(encodeSpectate(msg));
     }
   }
 
@@ -914,7 +1194,7 @@ export class Room {
       const bytes = encodeTuning(JSON.stringify(this.game.tuning));
       const t = this.game.tuning as unknown as Record<string, number>;
       const asked = Object.keys(parsed).some((k) => k in t && parsed[k] !== t[k]);
-      for (const c of this.clients) if (c.joined && (c !== client || asked)) c.conn.send(bytes);
+      for (const c of this.clients) if (c.inRoom && (c !== client || asked)) c.conn.send(bytes);
     } catch {
       client.strikes++;
     }
@@ -976,6 +1256,15 @@ export class Room {
           this.pendingEvents.length = 0;
           this.previousEvents.length = 0;
           for (const c of this.clients) {
+            if (c.spectator) {
+              // a spectator's feed starts again on the new map (what it held back was the old one's)
+              c.baselines.reset();
+              c.lastSnapshotTick = -1;
+              c.delayed.length = 0;
+              this.welcomeSpectator(c);
+              c.conn.send(encodeRoster(this.rosterEntries()));
+              continue;
+            }
             if (!c.joined || !c.session) continue;
             c.baselines.reset();
             c.lastSnapshotTick = -1;
@@ -1026,7 +1315,11 @@ export class Room {
     this.matchDirty = this.matchUrgent = false;
     this.matchSentAt = this.game.tick;
     const bytes = this.encodeMatchState();
-    for (const c of this.clients) if (c.joined) c.conn.send(bytes);
+    for (const c of this.clients) {
+      if (c.joined) c.conn.send(bytes);
+      // spectators: with the snapshots it describes (the scoreboard mustn't run ahead of the feed)
+      else if (c.spectator) this.sendDelayed(c, bytes, false);
+    }
   }
 
   /** Dev rooms: show each shooter the poses its shots were tested against (rewind visualiser). */
@@ -1128,7 +1421,8 @@ export class Room {
 
   private broadcastRoster(): void {
     const bytes = encodeRoster(this.rosterEntries());
-    for (const c of this.clients) if (c.joined) c.conn.send(bytes);
+    for (const c of this.clients) if (c.inRoom) c.conn.send(bytes);
+    this.spectateDirty = true; // the free slots
     // a ROSTER carries every look: a look change waiting for its own goes with this one
     this.lookRosterDirty = false;
   }
@@ -1227,6 +1521,7 @@ export class Room {
       if (current >= s.expiresAt) this.endSession(s);
       else this.inputs[s.playerId] = s.idle;
     }
+    this.seatPlayers();
     this.fillWithBots();
     if (this.match) {
       this.match.step(this.inputs);
@@ -1239,6 +1534,7 @@ export class Room {
         }
       }
     } else this.game.step(this.inputs);
+    this.trackDeaths();
     lagComp?.record(this.game.tick, this.game.players);
     if (lagComp && lagComp.log.length > 0) this.sendRewindDebug(lagComp, current);
     for (const e of this.game.events) this.pendingEvents.push(e);
@@ -1248,7 +1544,23 @@ export class Room {
       this.snapshotSeq = (this.snapshotSeq % 0xffff) + 1;
       this.snapshots.begin(this.game, this.snapshotSeq, this.pendingEvents);
       for (const c of this.clients) {
-        if (!c.joined || c.closed || this.game.tick % c.snapshotEvery !== 0) continue;
+        if (!c.inRoom || c.closed || this.game.tick % c.snapshotEvery !== 0) continue;
+        // skipped the previous interval (low-bandwidth mode): its events come with this one
+        const skipped = c.lastSnapshotTick >= 0 && this.game.tick - c.lastSnapshotTick > this.snapshotEvery;
+        if (c.spectator) {
+          // v20: no player, the whole map (the free camera goes anywhere), held back by its delay
+          c.lastSnapshotTick = this.game.tick;
+          const bytes = this.snapshots.encodeFor({
+            baselines: c.baselines,
+            ackInputTick: 0,
+            inputBufferHealth: HEALTH_UNKNOWN,
+            local: null,
+            view: null,
+            ...(skipped ? { extraEvents: this.previousEvents } : {}),
+          });
+          this.sendDelayed(c, bytes, true);
+          continue;
+        }
         // on TCP a stale snapshot is worse than a missing one (docs/05 §2.2)
         if (c.conn.bufferedAmount() > BACKPRESSURE_LIMIT) {
           c.snapshotsSkipped++;
@@ -1257,8 +1569,9 @@ export class Room {
         const health = c.healthMin === Infinity ? HEALTH_UNKNOWN : Math.max(-127, Math.min(127, c.healthMin));
         c.healthMin = Infinity;
         const me = this.game.players[c.playerId] ?? null;
-        // skipped the previous interval (low-bandwidth mode): its events come with this one
-        const skipped = c.lastSnapshotTick >= 0 && this.game.tick - c.lastSnapshotTick > this.snapshotEvery;
+        // v20: a dead player's death cam sees what the player it follows sees (its view, its eyes)
+        const followed = c.follow >= 0 && me && !me.alive ? (this.game.players[c.follow] ?? null) : null;
+        const eye = followed ?? me;
         c.lastSnapshotTick = this.game.tick;
         c.conn.send(
           this.snapshots.encodeFor({
@@ -1266,7 +1579,8 @@ export class Room {
             ackInputTick: current & 0xffff,
             inputBufferHealth: health,
             local: me,
-            view: this.aoi && me ? aoiRect(me, this.game.map, c.view) : null,
+            view: this.aoi && eye ? aoiRect(eye, this.game.map, c.view) : null,
+            ...(followed ? { eyes: followed.id } : {}),
             ...(skipped ? { extraEvents: this.previousEvents } : {}),
           }),
         );
@@ -1279,6 +1593,11 @@ export class Room {
     if (this.match) {
       const since = this.game.tick - this.matchSentAt;
       if (this.matchUrgent || (this.matchDirty && since >= MATCH_STATE_MIN_TICKS) || since >= MATCH_STATE_REFRESH_TICKS) this.sendMatchState();
+    }
+    this.flushDelayed();
+    if (this.spectateDirty || this.game.tick % 10 === 0) {
+      this.spectateDirty = false;
+      this.sendSpectateStates();
     }
     this.voice.tick();
     if (this.lookRosterDirty && this.game.tick - this.lookRosterAt >= LOOK_ROSTER_TICKS) {

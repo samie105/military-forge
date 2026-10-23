@@ -52,7 +52,7 @@ import { skyGradient, sunGlow } from './sky';
 import { KERB_Z, buildBackGround, buildStreet, streetHeight } from './street';
 import { QuadBuilder } from './shapes';
 import { SHOP_SIGNS, signAtlas, signGeometry, type SignPlacement } from './signs';
-import { FLUX_LAB, LUNAR_OUTPOST, STORM_FRONT } from './places';
+import { FLUX_LAB, FOG_STAIR, LUNAR_OUTPOST, STORM_FRONT } from './places';
 import { textureBytes, type Ktx2Source } from './ktx2';
 import { STREET_MARKET } from './streetMarket';
 import { disposeTextures, glowTexture, grimeTexture, softBoxTexture } from './textures';
@@ -91,6 +91,7 @@ export const ENVIRONMENTS: Readonly<Record<string, EnvironmentDef>> = {
   [LUNAR_OUTPOST.mapId]: LUNAR_OUTPOST,
   [STORM_FRONT.mapId]: STORM_FRONT,
   [FLUX_LAB.mapId]: FLUX_LAB,
+  [FOG_STAIR.mapId]: FOG_STAIR,
 };
 
 export function environmentFor(mapId: string): EnvironmentDef | null {

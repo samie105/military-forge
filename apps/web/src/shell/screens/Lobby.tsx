@@ -45,6 +45,9 @@ export const MAP_CARDS: Readonly<Record<string, { blurb: string; thumb: string; 
   'lunar-outpost': { blurb: 'Low gravity', thumb: 'map-thumb--lunar', place: 'The Moon', tagline: 'Low gravity, with Earth in the sky', art: 'lunar' },
   'storm-front': { blurb: 'Wind and EMP storms', thumb: 'map-thumb--storm', place: 'A cold port', tagline: 'Rain, cranes and a storm that never stops', art: 'storm' },
   'flux-lab': { blurb: 'Pads and gravity pockets', thumb: 'map-thumb--flux', place: 'Research hall', tagline: 'A lab hall where gravity misbehaves', art: 'flux' },
+  // tall maps (maps-vertical): stacked battle zones, a minimap to find your way
+  'fog-stair': { blurb: 'Four tiers up a river gorge', thumb: '', place: 'A mountain city, south-west China', tagline: 'Long stairs, a monorail and rooftop bridges in the river fog' },
+  'vertical-test': { blurb: 'Learn the tall maps', thumb: 'map-thumb--test', place: 'Training range', tagline: 'Four stacked tiers, updrafts and thin air' },
 };
 
 /** A map event's chip class, by kind (the kit's chip--gravity, --emp, --fog, --squall). */

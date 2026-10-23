@@ -87,6 +87,9 @@ export interface SpawnPool {
 export const SPAWN_POOLS: Readonly<Record<string, SpawnPool>> = {
   shield: { id: 'shield', items: [{ pickup: RIOT_SHIELD_PICKUP.id, weight: 1 }] },
   weapons: { id: 'weapons', items: WEAPON_PICKUPS.map((k) => ({ pickup: k.id, weight: POWER_WEAPONS.has(weapons[k.weapon!]!.id) ? 1 : 3 })) },
+  // tall maps reward the climb (maps-vertical): everyday guns low down, power weapons up high
+  common: { id: 'common', items: WEAPON_PICKUPS.filter((k) => !POWER_WEAPONS.has(weapons[k.weapon!]!.id)).map((k) => ({ pickup: k.id, weight: 1 })) },
+  power: { id: 'power', items: WEAPON_PICKUPS.filter((k) => POWER_WEAPONS.has(weapons[k.weapon!]!.id)).map((k) => ({ pickup: k.id, weight: 1 })) },
   // one gun each: a classic fixed weapon spawn, and the test armory's rack (GameOptions.armory)
   ...Object.fromEntries(WEAPON_PICKUPS.map((k) => [k.id, { id: k.id, items: [{ pickup: k.id, weight: 1 }] }])),
   // a random pair of one type (owner, 17 Oct): frags most often, the tricks less, the strongest least

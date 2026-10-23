@@ -148,6 +148,8 @@ Goal: the client runs **ahead** of the server so each input arrives just before 
 | 0x29 | VOICE_UP | C→S | unreliable | ≤ 50/s while talking | a voice frame (Opus or the fallback), its channel and level (v18, §17) |
 | 0x2A | VOICE_DOWN | S→C | unreliable | per speaker heard | the frame, its speaker, how it reached you, last words (v18) |
 | 0x2B | VOICE_STATE | S→C | reliable | on change | who has voice and a mic, your party, your mutes, the dead (v18) |
+| 0x2C | SPECTATE_ACK | C→S | unreliable | per snapshot | a spectator's snapshot ack (it sends no INPUT) (v20, §18) |
+| 0x2D | SPECTATE | S→C | reliable | on change | your spectating mode, the death cam's target, your queue for a slot, the delay, free slots, the room's spectators (v20) |
 | 0x30 | DEBUG | S→C | unreliable | dev only | server hitboxes, rewind visualisation, AI state |
 | 0x3F | KICK | S→C | reliable | — | reason code then close |
 
@@ -566,3 +568,18 @@ The owner's "audio support" (23 Oct 2026): team and party voice in rooms of up t
 - Unit tests: `packages/protocol/test/voice.test.ts` (the wire), `apps/game-server/test/voice.test.ts` (routing, last words, the cap, the budget, v17 clients) and `apps/web/src/voice/voice.test.ts` (tiers, the jitter buffer, ADPCM, push to talk).
 - End to end: `apps/web/scripts/voice-e2e.mjs` runs headless Chrome with its fake microphone. Two players talk in the lobby and mid-match, a phone joins, and it takes the screenshots in `docs/screenshots/social/voice/`. With `ADMIN_URL` and `ADMIN_TOKEN` it widens "Voices carry" so they're within earshot on Flux Lab.
 - Headless Chrome is no judge of timing: with no sound card its audio clock crawls (0.04 s in 2 s of wall time under load) and a busy page gets its frames in bursts. So the jitter buffer's skip counts there mean nothing; check the sound by ear on real devices.
+
+## 18. Spectating (built, protocol v20)
+
+The owner's "spectating too will bang" (23 Oct 2026): watch after you die, watch a room that is full or mid-match, and a free camera.
+
+**Two kinds of watching:**
+- **The death cam (a dead v20 player):** until the respawn (3 s by default) the player's own snapshots follow its killer, then whoever it picks (CMD 13 `{ follow }`). The server centres that client's AOI on the followed player and judges smoke from that player's eyes (`SnapshotTarget.eyes`); the local block (the respawn timer) still comes. It is live: the player has just died to that soldier and is back in seconds. The admin's `spectate.deathCam` sets it: 0 off, 1 the killer only, 2 the killer then anyone (default).
+- **A spectator (HELLO flag):** no player slot, never sends INPUT. It gets every player (no AOI: its free camera can go anywhere) and no local block, **held back by `spectate.delay`** (default 3 s, 0–10) so nobody watching can call out live positions. MATCH_STATE rides the same delay (the scoreboard never runs ahead of the feed); ROSTER, SPECTATE, TUNING and OVERRIDES don't. It acks with SPECTATE_ACK; its baselines ring (server) and decoder (client) fit the delay (`spectatorRing`: a 3 s delay keeps 128), so deltas keep flowing though its acks come 3 s late. A spectator who asks to play (CMD 13 `{ play: "now" | "next" }`) is seated on the same connection when a slot is free ("next": once the match isn't counting down or running) and gets a player WELCOME: a fresh join.
+
+**Limits:** `spectate.cap` spectators per room (default 4, at most 8, 0 = spectating off); past it, close code 4008. Spectators take no player slot and never open a room (4006). A room with only spectators left closes like an empty one.
+
+**Wire:** HELLO + u8 flags (bit 0 spectate) · WELCOME + u8 flags (bit 0 spectator) + u10 delayTicks for a spectator · SPECTATE_ACK (u16 seq) · SPECTATE (u2 mode · u5 follow · u2 queue · u10 delayTicks · u5 free slots · u4 n · n × (u8 voice id · name)) · CMD 13 Spectate (JSON) · close 4008. The exact layout and the old-client rules are in the protocol registry (v20). v17–v19 pages never spectate, never read the new tails, never get a death cam.
+
+**Voice:** a spectator talks and is heard as voice id 32 + seat. In play its voice reaches only dead players past their last words and other spectators, whatever channel it picks (not even a living party mate); it hears what a dead player hears, minus the proximity around a body it doesn't have. Outside play the room's lobby route as usual.
+

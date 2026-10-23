@@ -47,6 +47,19 @@ import {
   type RosterMsg,
   type SnapshotMsg,
   type ViewRect,
+  CloseCode,
+  HelloFlag,
+  MAX_SPECTATORS,
+  SPECTATOR_VOICE_BASE,
+  SpectateMode,
+  SpectateQueue,
+  encodeSpectate,
+  encodeSpectateAck,
+  encodeSpectateCmd,
+  parseSpectateCmd,
+  spectatorRing,
+  type SpectateMsg,
+  type WelcomeMsg,
 } from '../src';
 
 function rng(seed: number) {
@@ -103,7 +116,7 @@ describe('bitstream', () => {
 
 describe('messages', () => {
   it('hello / welcome / ping / pong / cmd / roster round-trip', () => {
-    expect(decodeMessage(encodeHello('Ade'))).toEqual({ type: MsgType.Hello, protocolVersion: PROTOCOL_VERSION, contentHash: CONTENT_HASH, name: 'Ade', resumeToken: '', ticket: '', look: null });
+    expect(decodeMessage(encodeHello('Ade'))).toEqual({ type: MsgType.Hello, protocolVersion: PROTOCOL_VERSION, contentHash: CONTENT_HASH, name: 'Ade', resumeToken: '', ticket: '', look: null, spectate: false });
     expect(decodeMessage(encodeHello('Ade', 'tok-123'))).toMatchObject({ name: 'Ade', resumeToken: 'tok-123', ticket: '' });
     // a join ticket (a JWT: longer than a u8-length string) follows the token
     const ticket = `eyJhbGciOiJFZERTQSJ9.${'x'.repeat(400)}.sig`;
@@ -112,7 +125,7 @@ describe('messages', () => {
     const bare = encodeHello('Kemi');
     expect(decodeMessage(bare.subarray(0, bare.length - 1))).toMatchObject({ name: 'Kemi', resumeToken: '' });
     const welcome = { playerId: 4, seed: 123456789, serverTick: 99, mapId: 'movement-test', tuningJson: '{"gravity":20}', sessionToken: 'abc_DEF-123', resumed: true, overridesJson: '{"weapon.k47.damage":14}' };
-    expect(decodeMessage(encodeWelcome(welcome))).toEqual({ type: MsgType.Welcome, ...welcome });
+    expect(decodeMessage(encodeWelcome(welcome))).toEqual({ type: MsgType.Welcome, ...welcome, spectator: false, delayTicks: 0 });
     expect(decodeMessage(encodePing(1234.5))).toEqual({ type: MsgType.Ping, clientTime: 1234.5 });
     expect(decodeMessage(encodePong(1234.5, 77))).toEqual({ type: MsgType.Pong, clientTime: 1234.5, serverTick: 77 });
     expect(decodeMessage(encodeCmd(1, '{"a":1}'))).toEqual({ type: MsgType.Cmd, kind: 1, payload: '{"a":1}' });
@@ -1162,7 +1175,7 @@ describe('the admin page\'s overrides (v13)', () => {
     expect(many.length).toBeGreaterThan(4096);
     expect(decodeMessage(encodeOverrides(many))).toEqual({ type: MsgType.Overrides, overridesJson: many });
     const welcome = { playerId: 2, seed: 9, serverTick: 120, mapId: 'movement-test', tuningJson: '{}', sessionToken: 'tok', resumed: false, overridesJson: many };
-    expect(decodeMessage(encodeWelcome(welcome))).toEqual({ type: MsgType.Welcome, ...welcome });
+    expect(decodeMessage(encodeWelcome(welcome))).toEqual({ type: MsgType.Welcome, ...welcome, spectator: false, delayTicks: 0 });
   });
 });
 
@@ -1298,9 +1311,156 @@ describe('looks on the wire (v19)', () => {
   });
 
   it('v17 and v18 clients are still admitted; nothing newer or older', () => {
-    expect(PROTOCOL_VERSION).toBe(19);
+    expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(19);
     expect(MIN_PROTOCOL_VERSION).toBe(17);
-    expect([16, 17, 18, 19, 20].map(protocolSupported)).toEqual([false, true, true, true, false]);
+    expect([16, 17, 18, 19, 20, 21].map(protocolSupported)).toEqual([false, true, true, true, true, false]);
     expect(CmdKind.SetLook).toBe(12);
+  });
+});
+
+describe('spectating (v20)', () => {
+  it('takes the v20 slots from the protocol registry', () => {
+    expect(PROTOCOL_VERSION).toBe(20);
+    expect(MsgType.SpectateAck).toBe(0x2c);
+    expect(MsgType.Spectate).toBe(0x2d);
+    expect(CmdKind.Spectate).toBe(13);
+    expect(CloseCode.SpectatorsFull).toBe(4008);
+    expect(HelloFlag.Spectate).toBe(1);
+    expect(SPECTATOR_VOICE_BASE + MAX_SPECTATORS).toBeLessThanOrEqual(255);
+    expect(isUnreliableMessage(encodeSpectateAck(7))).toBe(true);
+    expect(isUnreliableMessage(encodeSpectate({ mode: 2, follow: -1, queue: 0, delayTicks: 180, slots: 0, spectators: [] }))).toBe(false);
+  });
+
+  it('HELLO: the spectate flag after the look; the ticket and look are written (empty) when only the flag follows', () => {
+    const ticket = `eyJhbGciOiJFZERTQSJ9.${'x'.repeat(300)}.sig`;
+    const look = [4, 17, 260];
+    expect(decodeMessage(encodeHello('Ade', '', '', null, HelloFlag.Spectate))).toMatchObject({ name: 'Ade', ticket: '', look: null, spectate: true });
+    expect(decodeMessage(encodeHello('Ade', '', ticket, look, HelloFlag.Spectate))).toMatchObject({ ticket, look, spectate: true });
+    expect(decodeMessage(encodeHello('Ade', 'tok', ticket, look))).toMatchObject({ resumeToken: 'tok', ticket, look, spectate: false });
+    // whatever the name and token lengths, padding never reads as a flag, and the flag never as padding
+    for (let len = 1; len < 10; len++) {
+      expect(decodeMessage(encodeHello('n'.repeat(len), 't'.repeat(len)))).toMatchObject({ look: null, spectate: false });
+      expect(decodeMessage(encodeHello('n'.repeat(len), '', '', null, HelloFlag.Spectate))).toMatchObject({ look: null, spectate: true });
+      expect(decodeMessage(encodeHello('n'.repeat(len), '', '', look.slice(0, len % 3), HelloFlag.Spectate))).toMatchObject({ spectate: true });
+    }
+  });
+
+  it('WELCOME: a spectator has no player and a delay; a v17–v19 decoder reads the same WELCOME and stops before the tail', () => {
+    const base = { playerId: 3, seed: 5, serverTick: 1000, mapId: 'street-market', tuningJson: '{}', sessionToken: '', resumed: false, overridesJson: '{}' };
+    expect(decodeMessage(encodeWelcome({ ...base, spectator: true, delayTicks: 180 }))).toEqual({ type: MsgType.Welcome, ...base, playerId: -1, spectator: true, delayTicks: 180 });
+    expect((decodeMessage(encodeWelcome({ ...base, spectator: true, delayTicks: 99_999 })) as WelcomeMsg).delayTicks).toBe(1023);
+    // a v19 decoder, as it shipped
+    const old = (bytes: Uint8Array) => {
+      const r = new BitReader(bytes);
+      r.u8();
+      return { playerId: r.bits(5), seed: r.u32(), serverTick: r.u32(), mapId: r.string(), tuningJson: r.string(16), sessionToken: r.string(), resumed: r.bool(), overridesJson: r.string(16) };
+    };
+    expect(old(encodeWelcome(base))).toEqual(base);
+    expect(old(encodeWelcome({ ...base, spectator: true, delayTicks: 180 }))).toEqual({ ...base, playerId: 31 });
+    // a v19 server's WELCOME (no tail): a player, no delay
+    const w = new BitWriter(256).u8(MsgType.Welcome).unsigned(3, 5).u32(5).u32(1000).string('street-market').string('{}', 16).string('').bool(false).string('{}', 16);
+    expect(decodeMessage(w.finish().slice())).toEqual({ type: MsgType.Welcome, ...base, spectator: false, delayTicks: 0 });
+  });
+
+  it('SPECTATE round-trips: mode, follow, queue, delay, free slots and the room\'s spectators', () => {
+    const m: Omit<SpectateMsg, 'type'> = {
+      mode: SpectateMode.Spectator,
+      follow: 6,
+      queue: SpectateQueue.Next,
+      delayTicks: 180,
+      slots: 2,
+      spectators: [
+        { voiceId: 32, name: 'Kemi' },
+        { voiceId: 35, name: 'Ọlá 🎯' },
+      ],
+    };
+    expect(decodeMessage(encodeSpectate(m))).toEqual({ type: MsgType.Spectate, ...m });
+    const dead = { mode: SpectateMode.Dead, follow: -1, queue: SpectateQueue.Watching, delayTicks: 0, slots: 0, spectators: [] };
+    expect(decodeMessage(encodeSpectate(dead))).toEqual({ type: MsgType.Spectate, ...dead });
+    // the list is capped at MAX_SPECTATORS
+    const many = Array.from({ length: 12 }, (_, i) => ({ voiceId: 32 + i, name: `s${i}` }));
+    expect((decodeMessage(encodeSpectate({ ...m, spectators: many })) as SpectateMsg).spectators).toHaveLength(MAX_SPECTATORS);
+  });
+
+  it('SPECTATE_ACK carries a u16 seq and nothing else', () => {
+    expect(decodeMessage(encodeSpectateAck(65_535))).toEqual({ type: MsgType.SpectateAck, seq: 65_535 });
+    expect(decodeMessage(encodeSpectateAck(65_536 + 9))).toEqual({ type: MsgType.SpectateAck, seq: 9 });
+    expect(() => decodeMessage(new Uint8Array([MsgType.SpectateAck, 1, 2, 3]))).toThrow(DecodeError);
+  });
+
+  it('the Spectate CMD (13): follow a player, ask to play now or next round; anything else is refused', () => {
+    const cmd = decodeMessage(encodeSpectateCmd({ follow: 4, play: 'next' }));
+    expect(cmd).toEqual({ type: MsgType.Cmd, kind: CmdKind.Spectate, payload: '{"follow":4,"play":"next"}' });
+    expect(parseSpectateCmd((cmd as { payload: string }).payload)).toEqual({ follow: 4, play: 'next' });
+    expect(parseSpectateCmd('{"play":false}')).toEqual({ play: false });
+    expect(parseSpectateCmd('{"play":"now"}')).toEqual({ play: 'now' });
+    for (const bad of ['', 'x', '[]', '{}', '{"follow":-1}', '{"follow":31}', '{"follow":1.5}', '{"follow":"2"}', '{"play":true}', '{"play":"later"}', `{"follow":1,"pad":"${'x'.repeat(200)}"}`])
+      expect(parseSpectateCmd(bad), bad).toBeNull();
+  });
+
+  it('a spectator\'s ring covers its delay: deltas keep flowing though acks come 3 s late (the default ring would send full snapshots)', () => {
+    expect(spectatorRing(0)).toBe(64);
+    expect(spectatorRing(180)).toBe(128);
+    expect(spectatorRing(600)).toBe(512);
+    expect(spectatorRing(10_000)).toBe(1024);
+    const run = (bl: SnapshotBaselines, dec: SnapshotDecoder) => {
+      const game = new Game({ seed: 4, dummies: true });
+      const a = game.addPlayer('a');
+      const enc = new SnapshotEncoder();
+      const full = new SnapshotEncoder();
+      const inputs: ReturnType<typeof createInput>[] = [];
+      const queue: { at: number; bytes: Uint8Array; truth: SnapshotMsg }[] = [];
+      let seq = 0;
+      let deltas = 0;
+      let got = 0;
+      for (let t = 0; t < 1200; t++) {
+        inputs[a.id] = { ...createInput(), buttons: t % 100 < 50 ? Btn.Right : Btn.Left | Btn.Jet, aim: (t * 77) & 0xffff };
+        game.step(inputs);
+        if (game.tick % 2 !== 0) continue;
+        seq++;
+        enc.begin(game, seq, game.events);
+        full.begin(game, seq, game.events);
+        // a spectator: no local block, the whole map, held back 180 ticks (90 snapshots), acked 5 snapshots after decoding
+        const bytes = enc.encodeFor({ baselines: bl, ackInputTick: 0, inputBufferHealth: -128, local: null, view: null });
+        queue.push({ at: seq + 90, bytes, truth: decodeMessage(full.encodeFor({ baselines: null, ackInputTick: 0, inputBufferHealth: -128, local: null, view: null })) as SnapshotMsg });
+        while (queue.length && queue[0]!.at <= seq) {
+          const q = queue.shift()!;
+          let msg: SnapshotMsg;
+          try {
+            msg = dec.decode(q.bytes);
+          } catch (e) {
+            expect((e as Error).message).toMatch(/missing baseline/);
+            continue;
+          }
+          got++;
+          if (msg.baselineSeq !== 0) deltas++;
+          expect(msg.players).toEqual(q.truth.players);
+          expect(msg.local).toBeNull();
+          const ackSeq = msg.seq;
+          setTimeout0(() => bl.ack(ackSeq));
+        }
+        flush0(seq);
+      }
+      return { got, deltas };
+    };
+    // acks travel 5 snapshots back to the server
+    let pending: { at: number; fn: () => void }[] = [];
+    let nowSeq = 0;
+    const setTimeout0 = (fn: () => void) => pending.push({ at: nowSeq + 5, fn });
+    const flush0 = (seq: number) => {
+      nowSeq = seq;
+      const due = pending.filter((p) => p.at <= seq);
+      pending = pending.filter((p) => p.at > seq);
+      for (const p of due) p.fn();
+    };
+    const ring = spectatorRing(180);
+    const spectator = run(new SnapshotBaselines(ring), new SnapshotDecoder(ring));
+    expect(spectator.got).toBeGreaterThan(500);
+    // full only until the first ack is back (the delay plus the ack's way): every one after is a delta
+    expect(spectator.got - spectator.deltas).toBeLessThanOrEqual(96);
+    pending = [];
+    const player = run(new SnapshotBaselines(), new SnapshotDecoder());
+    expect(player.deltas).toBe(0); // its acks are always older than its 32-snapshot ring: full every time
+    expect(() => new SnapshotBaselines(100)).toThrow();
   });
 });

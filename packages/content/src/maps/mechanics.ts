@@ -100,6 +100,19 @@ export const ZONE_KINDS: Readonly<Record<ZoneKind, ZoneKindInfo>> = {
   jumpPad: { label: 'Jump pad', description: 'Launches you straight up.', color: 0xe3b341, defaults: { launch: [0, 16] } },
   boostPad: { label: 'Boost pad', description: 'Throws you forward in a long, low arc.', color: 0xff7b72, defaults: { launch: [16, 9] } },
   emp: { label: 'EMP field', description: 'Jetpacks cut out inside.', color: 0xd2a8ff, defaults: { jetDisabled: true } },
+  // tall maps (maps-vertical): a free but slow, exposed way up, and the soft ceiling over the top tier
+  updraft: {
+    label: 'Updraft',
+    description: 'Rising air: fliers drift up at about 6 m/s without burning fuel, and refuel on the way.',
+    color: 0x9be9a8,
+    defaults: { wind: [0, 26], drag: 0.9, fuelRegenMul: 3 },
+  },
+  thinAir: {
+    label: 'Thin air',
+    description: 'The soft ceiling: jetpacks cut out and the air pushes you back down.',
+    color: 0xc9d1d9,
+    defaults: { jetDisabled: true, wind: [0, -14] },
+  },
   custom: { label: 'Custom', description: 'Only the effects you set.', color: 0x8b949e, defaults: {} },
 };
 

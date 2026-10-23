@@ -225,8 +225,11 @@ export function decodeVoiceState(bytes: Uint8Array): VoiceStateMsg {
   return { type: MsgType.VoiceState, fallback: (bytes[1]! & 1) !== 0, peers };
 }
 
-/** The Voice CMD's JSON, held to its shape (unknown fields dropped, mutes to valid player ids). */
-export function parseVoiceSettings(payload: string, maxPlayers = 32): VoiceSettingsCmd | null {
+/**
+ * The Voice CMD's JSON, held to its shape (unknown fields dropped, mutes to valid voice ids: players
+ * 0–31 and, v20, spectators 32 + seat, up to 40).
+ */
+export function parseVoiceSettings(payload: string, maxPlayers = 40): VoiceSettingsCmd | null {
   let raw: unknown;
   try {
     raw = JSON.parse(payload);

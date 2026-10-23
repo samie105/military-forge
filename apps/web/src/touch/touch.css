@@ -309,3 +309,10 @@ html.reduce-motion .mf-ctl.mf-teach::before { animation: none; opacity: 0.9; }
 .mf-choose__tag { padding: 1px 5px; border-radius: var(--r-xs); background: var(--c-volt); color: var(--c-volt-ink); font-size: 10px; font-weight: var(--fw-black); text-transform: uppercase; letter-spacing: 0.06em; }
 .mf-choose__note { margin: 0; font-size: var(--fs-14); color: var(--c-muted); }
 .mf-text-lg .mf-choose__opt > span:last-child { display: none; }
+
+/* next grenade (pinned only, controls spec §4.2): the belt's grenade and an arrow, distinct from reload's circular arrow */
+.dial-btn--next { grid-auto-flow: column; gap: 0; }
+.dial-btn--next .mf-next-arrow { width: 12px; height: 12px; margin-left: -3px; }
+/* the editor's "On the HUD too" row (pinning the context slot's controls) */
+.mf-touch-editor-pins { flex-wrap: wrap; gap: 4px 12px; }
+.mf-touch-editor-pins .label { width: 100%; font-size: var(--fs-14); }

@@ -18,6 +18,10 @@
  * - Each listener gets at most VOICE.maxSpeakers voices at once: party and team first, then the
  *   nearest; a voice past the cap waits until one goes quiet. Phones decode only so many.
  * - A connection backed up (a stalled WebSocket) skips voice rather than queue stale audio.
+ * - **Spectators** (v20) talk as voice id 32 + seat. In play their voice reaches only the dead
+ *   (past their last words) and other spectators, whatever channel they pick, so nobody watching
+ *   can coach a living player; they hear what a dead player hears, minus the proximity around a body
+ *   they don't have (the dead, their party, the lobby outside play).
  */
 import { VOICE } from '@military-forge/content';
 import {
@@ -52,6 +56,10 @@ const TICKS_PER_SECOND = 60;
 export interface VoiceClient {
   readonly playerId: number;
   readonly joined: boolean;
+  /** v20: who it is to voice: its player id, or a spectator's 32 + seat; −1 = nobody yet */
+  readonly voiceId: number;
+  /** v20: a spectator (no soldier) */
+  readonly spectator: boolean;
   /** the protocol version its HELLO said */
   protocolVersion: number;
   /** its party (the join ticket), or null */
@@ -149,7 +157,7 @@ export class VoiceRelay {
   onFrame(speaker: VoiceClient, bytes: Uint8Array): void {
     this.counters.in++;
     const s = speaker.voice;
-    if (!speaker.joined || !s?.on || !s.mic || !VoiceRelay.capable(speaker)) return;
+    if (speaker.voiceId < 0 || !s?.on || !s.mic || !VoiceRelay.capable(speaker)) return;
     const now = this.room.tick;
     // a token bucket: 60 frames a second, a second of burst
     const elapsed = Math.max(0, now - (speaker.voiceTokensAt ?? now));
@@ -169,28 +177,34 @@ export class VoiceRelay {
       return;
     }
 
-    const id = speaker.playerId;
+    const id = speaker.voiceId;
     const inPlay = this.room.inPlay();
-    const origin = this.origin(id);
-    const silenced = inPlay && this.silenced(id);
-    const team = this.room.teamOf(id);
+    const watching = speaker.spectator;
+    const origin = watching ? null : this.origin(id);
+    const silenced = inPlay && (watching || this.silenced(id));
+    const team = watching ? null : this.room.teamOf(id);
     const r2 = VOICE.radius * VOICE.radius;
     for (const l of this.room.clients()) {
-      if (l === speaker || !l.joined || !l.voice?.on || !VoiceRelay.capable(l) || l.voiceMutes?.has(id)) continue;
+      if (l === speaker || l.voiceId < 0 || !l.voice?.on || !VoiceRelay.capable(l) || l.voiceMutes?.has(id)) continue;
       const partyMate = speaker.party !== null && l.party === speaker.party;
-      const teammate = team !== null && this.room.teamOf(l.playerId) === team;
+      const teammate = team !== null && !l.spectator && this.room.teamOf(l.playerId) === team;
+      // the dead past their last words and the spectators: who a spectator's voice may reach in play
+      const outOfPlay = l.spectator || this.silenced(l.playerId);
       let route: VoiceRouteId | null = null;
       let priority = 0;
-      if (channel === VoiceChannel.Party) {
+      if (watching && inPlay) {
+        // a spectator in play: the dead and the other spectators only (its party among them first)
+        if (outOfPlay) [route, priority] = channel === VoiceChannel.Party && partyMate ? [VoiceRoute.Party, 3] : [VoiceRoute.Dead, 1];
+      } else if (channel === VoiceChannel.Party) {
         if (partyMate) [route, priority] = [VoiceRoute.Party, 3];
       } else if (channel === VoiceChannel.Team) {
         if (teammate) [route, priority] = [VoiceRoute.Team, 3];
       } else if (!inPlay) {
         [route, priority] = [VoiceRoute.Lobby, 2];
       } else if (silenced) {
-        // the dead to the dead, any distance
-        if (this.silenced(l.playerId)) [route, priority] = [VoiceRoute.Dead, 1];
-      } else if (origin && l.voice.proximity && (l.voice.hearOpponents || partyMate || teammate)) {
+        // the dead to the dead (and to the spectators), any distance
+        if (outOfPlay) [route, priority] = [VoiceRoute.Dead, 1];
+      } else if (origin && !l.spectator && l.voice.proximity && (l.voice.hearOpponents || partyMate || teammate)) {
         const at = this.room.player(l.playerId);
         if (at) {
           const d2 = (at.x - origin.x) ** 2 + (at.y - origin.y) ** 2;
@@ -235,11 +249,11 @@ export class VoiceRelay {
   private sendState(): void {
     this.dirty = false;
     this.lastStateTick = this.room.tick;
-    const all = [...this.room.clients()].filter((c) => c.joined);
+    const all = [...this.room.clients()].filter((c) => c.voiceId >= 0);
     const fallback = all.some((c) => c.voice?.on && !c.voice.opus);
     for (const l of all) {
       if (!l.voice || !VoiceRelay.capable(l)) continue;
-      const team = this.room.teamOf(l.playerId);
+      const team = l.spectator ? null : this.room.teamOf(l.playerId);
       const peers = all
         .filter((c) => c !== l)
         .map((c) => {
@@ -247,10 +261,11 @@ export class VoiceRelay {
           if (c.voice?.on) flags |= PEER_VOICE;
           if (c.voice?.on && c.voice.mic) flags |= PEER_MIC;
           if (l.party !== null && c.party === l.party) flags |= PEER_PARTY;
-          if (l.voiceMutes?.has(c.playerId)) flags |= PEER_MUTED;
-          if (team !== null && this.room.teamOf(c.playerId) === team) flags |= PEER_TEAM;
-          if (this.room.inPlay() && this.silenced(c.playerId)) flags |= PEER_DEAD;
-          return { id: c.playerId, flags };
+          if (l.voiceMutes?.has(c.voiceId)) flags |= PEER_MUTED;
+          if (team !== null && !c.spectator && this.room.teamOf(c.playerId) === team) flags |= PEER_TEAM;
+          // a spectator talks like the dead in play: only to the dead and the spectators
+          if (this.room.inPlay() && (c.spectator || this.silenced(c.playerId))) flags |= PEER_DEAD;
+          return { id: c.voiceId, flags };
         });
       l.conn.send(encodeVoiceState(fallback, peers));
     }

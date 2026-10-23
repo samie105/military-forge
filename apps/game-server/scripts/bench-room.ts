@@ -4,7 +4,7 @@
  * buffers so the numbers (and the GC pauses) are the server's own.
  * Fake clients ack each snapshot 5 snapshots (~150 ms) after it was sent, like a client at
  * 150 ms RTT, so the server delta-compresses against acked baselines (docs/05 §11).
- * Run: pnpm --filter @military-forge/game-server bench [humans=2] [ticks=6000] [--no-delta] [--no-aoi]
+ * Run: pnpm --filter @military-forge/game-server bench [humans=2] [ticks=6000] [--no-delta] [--no-aoi] [--map=<id>]
  */
 import { PerformanceObserver, constants, type PerformanceEntry } from 'node:perf_hooks';
 import { BitWriter, MsgType, encodeHello, encodeInputInto } from '@military-forge/protocol';
@@ -16,6 +16,8 @@ const humans = Number(args[0] ?? 2);
 const ticks = Number(args[1] ?? 6000);
 const delta = !process.argv.includes('--no-delta');
 const aoi = !process.argv.includes('--no-aoi');
+/** the room's map (tall maps: maps-vertical, NOTES §48); movement-test by default */
+const mapId = process.argv.find((a) => a.startsWith('--map='))?.slice('--map='.length);
 const ACK_DELAY_SNAPSHOTS = 5;
 const gcPauses: number[] = [];
 let majorGcs = 0;
@@ -27,7 +29,7 @@ const gc = new PerformanceObserver((list) => {
 });
 gc.observe({ entryTypes: ['gc'] });
 
-const room = new Room({ dummies: true, maxHumans: 16, aoi });
+const room = new Room({ dummies: true, maxHumans: 16, aoi, ...(mapId ? { mapId } : {}) });
 let bytesOut = 0;
 let snapshotBytes = 0;
 let snapshots = 0;
@@ -80,7 +82,7 @@ const stats = (times: number[]) => {
   const pct = (p: number) => warm[Math.min(warm.length - 1, Math.floor(p * warm.length))]!.toFixed(3);
   return `avg ${(warm.reduce((a, b) => a + b, 0) / warm.length).toFixed(3)} · p50 ${pct(0.5)} · p99 ${pct(0.99)} · max ${pct(1)}`;
 };
-console.log(`${room.humanCount} humans + ${room.game.playerCount() - room.humanCount} dummies, ${ticks} ticks · delta ${delta ? 'on' : 'off'} · AOI ${aoi ? 'on' : 'off'}`);
+console.log(`${room.game.map.id}: ${room.humanCount} humans + ${room.game.playerCount() - room.humanCount} dummies, ${ticks} ticks · delta ${delta ? 'on' : 'off'} · AOI ${aoi ? 'on' : 'off'}`);
 console.log(`  tick ms:           ${stats(tickTimes)}`);
 console.log(`  receive+tick ms:   ${stats(totalTimes)}`);
 console.log(

@@ -145,6 +145,21 @@ export function workNavBuilds(stop: () => boolean): boolean {
   return queue.length > 0;
 }
 
+/**
+ * A graph built elsewhere for this map and tuning (a page's worker, apps/web navWarm.ts): kept as if
+ * built here, and its queued build, if any, dropped.
+ */
+export function provideNavGraph(map: MapDef, t: Tuning, graph: NavGraph): void {
+  const key = navKey(t);
+  const build = graphsOf(map).builds.get(key);
+  if (build) {
+    graphsOf(map).builds.delete(key);
+    const i = queue.indexOf(build);
+    if (i >= 0) queue.splice(i, 1);
+  }
+  keep(map, key, graph);
+}
+
 /** How many builds are queued. */
 export function navBuildsQueued(): number {
   return queue.length;

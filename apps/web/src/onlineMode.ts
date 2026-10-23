@@ -548,10 +548,9 @@ export class OnlineMode {
           msg.events.filter((e): e is SimEvent => e.type !== 'sound' && !(e.type === 'shot' && e.shooter === me)),
           me,
         );
-        audio.onEvents(
-          msg.events.filter((e) => e.type === 'sound'),
-          me,
-        );
+        const sounds = msg.events.filter((e) => e.type === 'sound');
+        audio.onEvents(sounds, me);
+        if (sounds.length) this.renderer.onSounds(sounds); // the minimap hears them (no wallhacks: 4 m cells)
         break;
       }
       case MsgType.Kick:

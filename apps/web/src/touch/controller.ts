@@ -23,13 +23,17 @@ import { GESTURE, beltAfter, beltOf, beltSteps, cyclePresses, dashButtons, isQui
 import { TouchOverlays, type RadialItem } from './overlays';
 import { CHAIN_MS, Drill, HINTS, HINT_DONE_BY, loadSeen, markDrillSeen, nextHint, saveSeen, type Hint, type TouchAction } from './teach';
 import {
+  CONTEXT_PRIORITY,
+  OFF_HUD,
   PILLS,
+  PINNABLE,
   SHIELD_BIT,
   availableControls,
   placementFor,
   saveLayout,
   sizePx,
   snapPlacement,
+  withPinned,
   withPlacement,
   type ControlDef,
   type ControlId,
@@ -70,7 +74,10 @@ const DASH_DECIDE_MS = 90;
 /** A second finger on a stick's side pinches the camera only this far from the first (20 mm), with the first still in its dead zone (§4.6). */
 const PINCH_MIN_PX = 120;
 /** Controls only in play some of the time: the take button near a crate, zoom with a gun that zooms. */
-const CONTEXT: Partial<Record<ControlId, string>> = { take: 'near-crate', zoom: 'zoomable' };
+/** Melee comes into the context slot with an enemy this close (m; spec §4.2). */
+const MELEE_REACH = 2.5;
+/** Reload comes into the context slot with the magazine this low (its share; spec §4.2). */
+const RELOAD_SHOWS_AT = 0.4;
 
 type Grab =
   // a stick: (cx, cy) is its origin, exactly where the thumb landed (§4.3; it follows a thumb past
@@ -125,6 +132,11 @@ export class TouchController {
   private readonly fade = new FadeClock<ControlId>();
   private readonly awake = new Set<ControlId>();
   private beltTotal = -1;
+  /** the context slot's inputs (onFrame): an enemy within MELEE_REACH, the magazine at RELOAD_SHOWS_AT or less */
+  private enemyNear = false;
+  private lowMag = false;
+  /** the safe box's size (px), from the last place(): the mm anchors are laid out in it */
+  private box = { w: 724, h: 344 };
   /** each grab's finger: when it last sent anything, the element it started on, whether its capture was lost */
   private readonly grabSeen = new Map<number, { at: number; from: Element | null; lost: boolean }>();
   /** fingers down in the editor (a second one on the screen pinches the control the first drags) */
@@ -406,6 +418,11 @@ export class TouchController {
     this.local = localView(frame);
     const me = frame.players.find((p) => p.id === frame.localId);
     const def = me?.weapons[me.active]?.def ?? -1;
+    // the context slot: an enemy in melee reach, a magazine running low
+    this.enemyNear = !!me?.alive && frame.players.some((p) => p.alive && p.id !== frame.localId && Math.hypot(p.x - me.x, p.y - me.y) <= MELEE_REACH);
+    const held = me?.weapons[me.active];
+    const magSize = def >= 0 ? (weapons[def]?.mag ?? 0) : 0;
+    this.lowMag = !!me?.alive && magSize > 0 && held !== undefined && held.mag / magSize <= RELOAD_SHOWS_AT;
     this.weaponDef = def >= 0 ? weapons[def] : undefined;
     // Auto fire's targets: enemies the player can see from his eyes (the sim's sight rule)
     if (me?.alive && this.settings.fire === 'auto') {
@@ -504,7 +521,7 @@ export class TouchController {
     if (fell('dash-cooldown')) this.tick(skinOf('dash'));
     if (fell('reloading') && now.has('alive')) this.tick(skinOf('reload'));
     if (rose('match') || (rose('alive') && now.has('match'))) drawIn(this.root);
-    for (const [id, token] of Object.entries(CONTEXT) as [ControlId, string][]) this.context(id, now.has(token));
+    this.refreshContext(now);
     // the phone HUD's pickup line steps aside while the take button offers the crate's gun (hud/phone.css)
     document.documentElement.toggleAttribute('data-touch-crate', now.has('near-crate'));
     this.tokensBefore = now;
@@ -516,10 +533,34 @@ export class TouchController {
   }
 
   /** A control that's only in play sometimes comes in (grows) and goes (shrinks); in the editor it always shows. */
-  private context(id: ControlId, on: boolean): void {
+  /**
+   * The context slot (spec §4.2): one control at a time, the most urgent in play (CONTEXT_PRIORITY):
+   * Take with a gun underfoot, melee with an enemy within 2.5 m, the shield while one's carried,
+   * reload with the magazine at 40 % or less, zoom with a scoped gun. A control the player pinned to
+   * the HUD (the editor) has its own place instead, and next grenade only shows pinned. In the editor
+   * the slot shows Take, where it will be.
+   */
+  private refreshContext(tokens: ReadonlySet<string>): void {
+    const pinned = new Set(this.layout.pinned ?? []);
+    const inPlay: Partial<Record<ControlId, boolean>> = {
+      take: tokens.has('near-crate'),
+      melee: this.enemyNear,
+      shield: this.canShield(),
+      reload: this.lowMag,
+      zoom: tokens.has('zoomable'),
+      cycleGrenade: true,
+    };
+    const slot = this.editing ? 'take' : (CONTEXT_PRIORITY.find((id) => !pinned.has(id) && inPlay[id]) ?? null);
+    for (const id of OFF_HUD) {
+      const want = pinned.has(id) ? this.editing || (id === 'zoom' || id === 'shield' ? !!inPlay[id] : true) : slot === id;
+      this.context(id, want, false);
+    }
+  }
+
+  private context(id: ControlId, on: boolean, editAll = true): void {
     const el = this.els.get(id);
     if (!el) return;
-    const want = on || this.editing;
+    const want = on || (editAll && this.editing);
     if (want === this.shown.has(id)) {
       if (want) this.leaveOnLift.delete(id);
       return;
@@ -1421,8 +1462,13 @@ export class TouchController {
       el.dataset.mfStick = def.id;
       this.knobs.set(def.id as 'move' | 'aim', el.querySelector<HTMLElement>('.mf-knob')!);
     }
-    if (def.id in CONTEXT || def.id === 'fire' || def.id === 'fireLeft') el.classList.add('mf-off');
+    if (OFF_HUD.has(def.id) || def.id === 'fire' || def.id === 'fireLeft') el.classList.add('mf-off');
     this.els.set(def.id, el);
+  }
+
+  /** A control's placement in the current safe box (layout.ts placementFor: the mm anchors laid out at this size). */
+  private at(id: ControlId): Placement {
+    return placementFor(this.layout, id, this.settings.handed, this.box);
   }
 
   /** Puts every control at its place (its centre) for the current size, handedness and opacity. */
@@ -1430,9 +1476,10 @@ export class TouchController {
     if (!this.active) return;
     const w = this.safe.clientWidth;
     const h = this.safe.clientHeight;
+    if (w > 0 && h > 0) this.box = { w, h };
     const unit = Math.min(w, h);
     for (const [id, el] of this.els) {
-      const p = placementFor(this.layout, id, this.settings.handed);
+      const p = this.at(id);
       const px = sizePx(p, unit);
       const k = px / SKIN_BASE[id];
       this.sizes.set(id, { px, k });
@@ -1473,8 +1520,8 @@ export class TouchController {
     this.root.classList.toggle('mf-touch-editing', on);
     this.editor.hidden = !on;
     if (!on) saveLayout(this.store, this.layout);
-    // every control shows while it's being placed, the take button and zoom included
-    for (const id of Object.keys(CONTEXT) as ControlId[]) this.context(id, this.tokensBefore.has(CONTEXT[id]!));
+    // while it's being placed: the context slot (shown by Take) and the pinned controls
+    this.refreshContext(this.tokensBefore);
     this.syncEditor();
     this.place();
   }
@@ -1489,7 +1536,7 @@ export class TouchController {
       const [first, g] = dragging as [number, Extract<Grab, { kind: 'edit' }>];
       const a = this.pointers.get(first);
       if (a) {
-        const cur = placementFor(this.layout, g.id, this.settings.handed);
+        const cur = this.at(g.id);
         this.grabs.set(first, { kind: 'pinch', id: g.id, startDist: Math.max(1, Math.hypot(p.x - a.x, p.y - a.y)), startSize: cur.size, other: e.pointerId });
         this.showGuides([]);
       }
@@ -1506,7 +1553,7 @@ export class TouchController {
     this.selected = id;
     // the finger's offset from the control's place (its centre; a pill's nominal centre)
     const box = logicalRect(this.safe);
-    const at = placementFor(this.layout, id, this.settings.handed);
+    const at = this.at(id);
     this.grabs.set(e.pointerId, { kind: 'edit', id, dx: p.x - (box.left + at.x * box.width), dy: p.y - (box.top + at.y * box.height) });
     // the control lifts and follows the finger raw
     settleNow(el);
@@ -1520,9 +1567,9 @@ export class TouchController {
     const p = logicalPoint(e);
     this.pointers.set(e.pointerId, p);
     const rect = logicalRect(this.safe);
-    const cur = placementFor(this.layout, g.id, this.settings.handed);
+    const cur = this.at(g.id);
     const raw = { x: (p.x - g.dx - rect.left) / rect.width, y: (p.y - g.dy - rect.top) / rect.height };
-    const others = [...this.els.keys()].filter((id) => id !== g.id).map((id) => placementFor(this.layout, id, this.settings.handed));
+    const others = [...this.els.keys()].filter((id) => id !== g.id).map((id) => this.at(id));
     const snap = snapPlacement(raw, others, rect.width, rect.height);
     this.showGuides(snap.guides);
     this.layout = withPlacement(this.layout, g.id, { ...cur, x: snap.x, y: snap.y }, this.settings.handed);
@@ -1535,7 +1582,7 @@ export class TouchController {
     const a = ids === undefined ? undefined : this.pointers.get(ids);
     const b = this.pointers.get(g.other);
     if (!a || !b) return;
-    const cur = placementFor(this.layout, g.id, this.settings.handed);
+    const cur = this.at(g.id);
     this.layout = withPlacement(this.layout, g.id, { ...cur, size: g.startSize * (Math.hypot(a.x - b.x, a.y - b.y) / g.startDist) }, this.settings.handed);
     this.place();
   }
@@ -1545,7 +1592,7 @@ export class TouchController {
     if (!a) return;
     // back to a drag with the finger that's still down
     const box = logicalRect(this.safe);
-    const at = placementFor(this.layout, g.id, this.settings.handed);
+    const at = this.at(g.id);
     this.grabs.set(first, { kind: 'edit', id: g.id, dx: a.x - (box.left + at.x * box.width), dy: a.y - (box.top + at.y * box.height) });
     saveLayout(this.store, this.layout);
     this.syncEditor();
@@ -1571,7 +1618,7 @@ export class TouchController {
 
   private editSelected(change: (p: Placement) => Placement): void {
     if (!this.selected) return;
-    const cur = placementFor(this.layout, this.selected, this.settings.handed);
+    const cur = this.at(this.selected);
     this.layout = withPlacement(this.layout, this.selected, change(cur), this.settings.handed);
     saveLayout(this.store, this.layout);
     this.place();
@@ -1606,6 +1653,12 @@ export class TouchController {
         <label><input type="checkbox" data-ed="assist" /> Aim assist</label>
         <label><input type="checkbox" data-ed="vibrate" /> Vibrate</label>
         <label><input type="checkbox" data-ed="swipe" /> Flick to dash</label>
+      </div>
+      <div class="mf-touch-editor-row mf-touch-editor-pins" data-ed="pins" hidden>
+        <span class="label">On the HUD too</span>
+        ${PINNABLE.filter((id) => availableControls().some((c) => c.id === id))
+          .map((id) => `<label><input type="checkbox" data-pin="${id}" /> ${availableControls().find((c) => c.id === id)!.label}</label>`)
+          .join('')}
       </div>`;
     const q = <T extends HTMLElement>(name: string) => ed.querySelector<T>(`[data-ed="${name}"]`)!;
     q('smaller').addEventListener('click', () => this.editSelected((p) => ({ ...p, size: p.size / 1.12 })));
@@ -1622,13 +1675,24 @@ export class TouchController {
     q('reset').addEventListener('click', () => {
       this.layout = { placements: {} };
       saveLayout(this.store, this.layout);
+      this.refreshContext(this.tokensBefore);
       this.place();
       this.syncEditor();
     });
     q('done').addEventListener('click', () => this.setEditing(false));
+    // pinning a control the HUD doesn't carry by default (next grenade, melee, reload, shield, zoom): its own place
+    ed.querySelectorAll<HTMLInputElement>('[data-pin]').forEach((box) =>
+      box.addEventListener('change', () => {
+        this.layout = withPinned(this.layout, box.dataset.pin as ControlId, box.checked);
+        saveLayout(this.store, this.layout);
+        this.refreshContext(this.tokensBefore);
+        this.place();
+      }),
+    );
     q('options').addEventListener('click', () => {
       const more = q('more');
       more.hidden = !more.hidden;
+      q('pins').hidden = more.hidden;
       q('options').setAttribute('aria-expanded', String(!more.hidden));
     });
     q('dock').addEventListener('click', () => {
@@ -1644,13 +1708,15 @@ export class TouchController {
     q('title').textContent = def ? def.label : 'Drag · pinch';
     q('sel').hidden = !def;
     q('sel-opacity').hidden = !def;
-    if (this.selected) q<HTMLInputElement>('opacity').value = String(Math.round(placementFor(this.layout, this.selected, this.settings.handed).opacity * 100));
+    if (this.selected) q<HTMLInputElement>('opacity').value = String(Math.round(this.at(this.selected).opacity * 100));
     q<HTMLInputElement>('left').checked = this.settings.handed === 'left';
     q<HTMLSelectElement>('fire').value = this.settings.fire;
     q<HTMLInputElement>('assist').checked = this.settings.aimAssist;
     q<HTMLInputElement>('vibrate').checked = this.settings.vibrate;
     q<HTMLInputElement>('swipe').checked = this.settings.swipeDash;
     q<HTMLInputElement>('all').value = String(Math.round(this.settings.opacity * 100));
+    const pinned = new Set(this.layout.pinned ?? []);
+    this.editor.querySelectorAll<HTMLInputElement>('[data-pin]').forEach((box) => (box.checked = pinned.has(box.dataset.pin as ControlId)));
   }
 
   // ---------- page ----------
@@ -1669,9 +1735,9 @@ export class TouchController {
   }
 
   /** The sticks right now (dev builds' automated checks: the dials' input on a turned phone). */
-  debugState(): { move: StickVector; aim: StickVector; moveActive: boolean; aimActive: boolean; aimFire: boolean; resume: { at: number; button: boolean } | null; fire: FireMode; visible: number; range: number; shoulder: { x: number; y: number }; targets: { x: number; y: number }[] } {
+  debugState(): { move: StickVector; aim: StickVector; moveActive: boolean; aimActive: boolean; aimFire: boolean; resume: { at: number; button: boolean } | null; fire: FireMode; visible: number; range: number; shoulder: { x: number; y: number }; targets: { x: number; y: number }[]; enemyNear: boolean; lowMag: boolean } {
     const s = this.state;
-    return { move: { ...s.move }, aim: { ...s.aim }, moveActive: s.moveActive, aimActive: s.aimActive, aimFire: s.aimFire, resume: this.aimLift && { at: this.aimLift.at, button: this.aimLift.button }, fire: this.fireNow, visible: this.visible.length, range: this.weaponDef?.range ?? 0, shoulder: { ...this.shoulder }, targets: this.visible.map((t) => ({ x: t.x, y: t.y })) };
+    return { move: { ...s.move }, aim: { ...s.aim }, moveActive: s.moveActive, aimActive: s.aimActive, aimFire: s.aimFire, resume: this.aimLift && { at: this.aimLift.at, button: this.aimLift.button }, fire: this.fireNow, visible: this.visible.length, range: this.weaponDef?.range ?? 0, shoulder: { ...this.shoulder }, targets: this.visible.map((t) => ({ x: t.x, y: t.y })), enemyNear: this.enemyNear, lowMag: this.lowMag };
   }
 
   /** The skins' bound keys (tests). */

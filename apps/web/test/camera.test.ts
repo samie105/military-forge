@@ -119,3 +119,131 @@ describe('the phone view (Camera.viewScale, Settings → Touch → View distance
     expect(at(0)).toBeCloseTo(cx, 3);
   });
 });
+
+describe('tall maps: the view leans the way you fly (maps-vertical)', () => {
+  const map = getMap('vertical-test');
+  const mid = (map.bounds.minX + map.bounds.maxX) / 2;
+
+  /** steady flight at vy for 3 s, mouse on the focus: where the camera's centre settles above the focus */
+  const settled = (vy: number, width = 1600, height = 900, viewScale = 1) => {
+    const cam = new Camera();
+    cam.resize(width, height);
+    cam.viewScale = viewScale;
+    cam.flightVy = vy;
+    for (let i = 0; i < 180; i++) cam.follow(mid, 40, mid, 40.9, 1 / 60, map);
+    return { cam, offset: cam.y - (40 + 0.9) };
+  };
+
+  it('up while climbing, further down while falling, level otherwise', () => {
+    const still = settled(0).offset;
+    const climbing = settled(6.5).offset;
+    const falling = settled(-18).offset;
+    expect(Math.abs(still)).toBeLessThan(1e-6);
+    expect(climbing).toBeGreaterThan(2);
+    expect(falling).toBeLessThan(-3);
+    expect(-falling).toBeGreaterThan(climbing);
+    // a jump or a step down barely moves it
+    expect(Math.abs(settled(1.5).offset)).toBeLessThan(1e-6);
+    expect(Math.abs(settled(-3.5).offset)).toBeLessThan(1e-6);
+  });
+
+  it('a phone in landscape leans further than a 4:3 screen: it has more of the AOI to spare', () => {
+    expect(settled(-18, 812, 375).offset).toBeLessThan(settled(-18, 1200, 900).offset);
+  });
+
+  it('look-ahead off keeps the view on the soldier', () => {
+    const cam = new Camera();
+    cam.resize(812, 375);
+    cam.lookAhead = 0;
+    cam.flightVy = -18;
+    for (let i = 0; i < 180; i++) cam.follow(mid, 40, mid, 40.9, 1 / 60, map);
+    expect(cam.y).toBeCloseTo(40.9, 6);
+  });
+
+  it("a phone's close view pulls back out on a fast climb or fall, and closes in again after", () => {
+    const close = settled(0, 812, 375, 0.62).cam.viewWidth;
+    const flying = settled(-18, 812, 375, 0.62).cam;
+    expect(flying.viewWidth).toBeGreaterThan(close * 1.4);
+    expect(flying.viewWidth).toBeLessThanOrEqual(36 + 1e-9); // never past the zoom level's own view
+    flying.flightVy = 0;
+    for (let i = 0; i < 240; i++) flying.follow(mid, 40, mid, 40.9, 1 / 60, map);
+    expect(flying.viewWidth).toBeLessThan(close * 1.05);
+  });
+
+  it('never shows more than the AOI sends, for any flight, screen, zoom, view distance and reticle', () => {
+    const game = new Game({ map, dummies: false });
+    const p = game.addPlayer('me');
+    const zoomMax = Math.max(...p.weapons.map((w) => weapons[w.def]?.zoomMax ?? 1));
+    const aoi: ViewRect = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    const b = map.bounds;
+    let checked = 0;
+    for (let aspect = 0.4; aspect <= 2.5 + 1e-9; aspect += 0.3) {
+      for (let zoom = 0; zoom < zoomMax; zoom++) {
+        for (const viewScale of [0.5, 0.62, 1]) {
+          for (const vy of [-36, -14, -6, 0, 4, 6.5, 20]) {
+            for (const [px, py] of [
+              [mid, 1],
+              [mid, 40],
+              [b.maxX - 1, b.maxY - 4],
+              [b.minX + 1, 0],
+            ] as const) {
+              for (const my of [-1e4, 1e4, py]) {
+                const cam = new Camera();
+                cam.resize(1200, 1200 * aspect);
+                cam.setZoom(zoom, zoomMax);
+                cam.viewScale = viewScale;
+                cam.flightVy = vy;
+                cam.follow(px, py, px, my, 1, map); // first call: jumps straight to the target
+                for (let i = 0; i < 120; i++) cam.follow(px, py, px, my, 1 / 60, map); // settle the lean and pull
+                p.x = px;
+                p.y = py;
+                p.vx = 0;
+                p.vy = 0; // strict: no velocity margin from the AOI
+                aoiRect(p, map, aoi);
+                const { halfW, halfH } = cam.halfExtents;
+                expect(cam.x - halfW).toBeGreaterThanOrEqual(aoi.minX + AOI_MARGIN - 1e-6);
+                expect(cam.x + halfW).toBeLessThanOrEqual(aoi.maxX - AOI_MARGIN + 1e-6);
+                expect(cam.y - halfH, `aspect ${aspect} zoom ${zoom} scale ${viewScale} vy ${vy} at ${px},${py}`).toBeGreaterThanOrEqual(aoi.minY + AOI_MARGIN - 1e-6);
+                expect(cam.y + halfH, `aspect ${aspect} zoom ${zoom} scale ${viewScale} vy ${vy} at ${px},${py}`).toBeLessThanOrEqual(aoi.maxY - AOI_MARGIN + 1e-6);
+                checked++;
+              }
+            }
+          }
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(1000);
+  });
+
+  it('a climb that turns into a fall stays inside the AOI frame by frame (the springs lag; the margin covers them)', () => {
+    const game = new Game({ map, dummies: false });
+    const p = game.addPlayer('me');
+    const aoi: ViewRect = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    for (const [w, h, scale] of [
+      [812, 375, 0.62],
+      [1600, 900, 1],
+      [1200, 900, 1],
+    ] as const) {
+      const cam = new Camera();
+      cam.resize(w, h);
+      cam.viewScale = scale;
+      let y = 0;
+      let vy = 0;
+      for (let t = 0; t < 12 * 60; t++) {
+        // 4 s of jetting up, then a fall back to the street, then standing
+        vy = t < 240 ? 6.5 : y > 0 ? Math.max(-36, vy - 20 / 60) : 0;
+        y = Math.max(0, y + vy / 60);
+        cam.flightVy = vy;
+        cam.follow(mid, y, mid, y, 1 / 60, map);
+        p.x = mid;
+        p.y = y;
+        p.vx = 0;
+        p.vy = vy;
+        aoiRect(p, map, aoi);
+        const { halfH } = cam.halfExtents;
+        expect(cam.y - halfH, `${w}×${h} t ${t}`).toBeGreaterThanOrEqual(aoi.minY);
+        expect(cam.y + halfH, `${w}×${h} t ${t}`).toBeLessThanOrEqual(aoi.maxY);
+      }
+    }
+  });
+});

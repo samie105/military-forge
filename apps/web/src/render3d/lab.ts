@@ -137,6 +137,7 @@ export const SCENARIOS: Readonly<Record<string, Scenario>> = {
     },
   },
   'walk-band': { title: 'Walk band: 1.5 m/s (one cycle)', lead: 1.5, shots: cycle(0.5), script: () => ({ vx: 1.5, aim: aimRight }) },
+  jog: { title: 'Walk into run: 2.5 m/s (one cycle)', lead: 1.5, shots: cycle(0.44), script: () => ({ vx: 2.5, aim: aimRight }) },
   'reload-rifle': {
     title: 'Reload: K-47 (2.0 s), standing',
     lead: 1,

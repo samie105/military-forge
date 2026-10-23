@@ -19,8 +19,8 @@ export { BOT_LEVELS, botLevel, type BotLevel, type BotLevelId } from './levels';
 export { Motor, type MotorGoal } from './motor';
 export { BOT_NAMES, BOT_TAG, botName } from './names';
 export { PathFinder } from './nav/astar';
-export { latestNavGraph, navBuildsQueued, navGraphFor, navKey, queueNavGraphs, readyNavGraph, requestNavGraph, warmNavGraphs, workNavBuilds } from './nav/cache';
-export { LinkKind, buildNavGraph, navGraphSteps, type NavGraph, type NavLink, type NavNode } from './nav/graph';
+export { latestNavGraph, navBuildsQueued, navGraphFor, navKey, provideNavGraph, queueNavGraphs, readyNavGraph, requestNavGraph, warmNavGraphs, workNavBuilds } from './nav/cache';
+export { LinkKind, buildNavGraph, navGraphData, navGraphFromData, navGraphSteps, type NavGraph, type NavGraphData, type NavLink, type NavNode } from './nav/graph';
 export { Navigator } from './nav/navigator';
 export { Perception, type Contact } from './perception';
 
