@@ -145,6 +145,9 @@ Goal: the client runs **ahead** of the server so each input arrives just before 
 | 0x22 | EVENT_R | S→C | reliable | on demand | kills, deaths, score, pickups taken, weapon spawns, match state, round end, chat, system messages |
 | 0x23 | MATCH_STATE | S→C | reliable | on change | lobby/countdown/in-progress/ending, timers, scores |
 | 0x24 | STORM | S→C | reliable | on phase | BR zone schedule (clients simulate the shrink locally from it) |
+| 0x29 | VOICE_UP | C→S | unreliable | ≤ 50/s while talking | a voice frame (Opus or the fallback), its channel and level (v18, §17) |
+| 0x2A | VOICE_DOWN | S→C | unreliable | per speaker heard | the frame, its speaker, how it reached you, last words (v18) |
+| 0x2B | VOICE_STATE | S→C | reliable | on change | who has voice and a mic, your party, your mutes, the dead (v18) |
 | 0x30 | DEBUG | S→C | unreliable | dev only | server hitboxes, rewind visualisation, AI state |
 | 0x3F | KICK | S→C | reliable | — | reason code then close |
 
@@ -479,3 +482,78 @@ If time-to-first-playable matters more than control, Colyseus 0.18 (Aug 2026, MI
 **Trade-offs:** a generic schema delta is larger than our bit-packed snapshots; there's a 63-field-per-schema limit; and the netcode features are brand new (shipped Aug 2026), so they're less battle-tested.
 
 **Recommendation:** build our own netcode on uWebSockets.js (§1). Treat Colyseus 0.18's implementation as **reference reading**, and use it only if the team is 1–2 people racing to a demo. In that case keep `packages/sim` framework-agnostic so we can leave later.
+
+
+## 17. Voice chat (built, protocol v18)
+
+The owner's "audio support" (23 Oct 2026): team and party voice in rooms of up to about 8, plus (owner, later that day) proximity voice that opponents can hear and "last words".
+
+**The design: Opus frames over the game's own connection, relayed by the game server.**
+- **The relay** (`apps/game-server/src/voice.ts`) reads only a 4-byte header and forwards the client's bytes. It never decodes audio.
+- **The path:** on WebTransport the frames are datagrams (`isUnreliableMessage`), so a lost one costs only itself. On WebSocket they share the stream.
+  - **Sender:** the client skips frames while its socket is backed up (> 32 KB).
+  - **Server:** it skips a listener whose connection is backed up (> 16 KB), the line snapshots use.
+- **Nothing new to run:** no SFU, no TURN, no port, no service, nothing per minute.
+- **Why not WebRTC:**
+  - Peer-to-peer meshes fail behind the carrier-grade NAT most Nigerian 4G phones sit behind, so they'd need a TURN relay. That's a new UDP port range on the box and its bandwidth bill.
+  - An SFU is another process to run.
+  - Neither could decide proximity from sim positions the way the game server can.
+
+**Wire** (`packages/protocol/src/voice.ts`):
+- **VOICE_UP** = u8 type · u16 seq · u8 (codec 2 bits · channel 2 bits · level 4 bits) · u8 (frame 20/40/60 ms · redundant flag) · [u8 n · the previous frame] · the frame.
+- **VOICE_DOWN** = u8 type · u8 speaker · u8 route (+ bit 7 last words) · VOICE_UP's bytes from the seq on.
+- **VOICE_STATE** = u8 type · u8 flags (bit 0: the room uses the fallback codec) · u8 n · n × (u8 id · u8 PEER_* flags).
+- **CMD kind 11 (Voice)** carries the whole voice state as JSON: `{ on, mic, opus, proximity, hearOpponents, mute }`.
+- **Old clients:** the server admits v17 and v18 (`MIN_PROTOCOL_VERSION`). A v17 client never receives a voice message.
+
+**Who hears a frame** (server-side, so a modded client can't hear far-away enemies):
+
+| Channel the speaker picks | Phase | Who hears it | Played as |
+|---|---|---|---|
+| Near (V / the phone's mic) | in play | anyone whose soldier is within `VOICE.radius` (24 m) of the speaker's, opponents included, unless they turned off Proximity or Hear opponents | 3D at the speaker's soldier: full volume to `VOICE.falloffStart` (4 m), fading to nothing at the radius; walls muffle (the map's acoustics); HRTF with Headphones on |
+| Near, a speaker who just died | in play | the same, from the death spot, for `VOICE.lastWords` (6 s): **last words** | 3D, brass "last words" tag |
+| Near, a speaker dead past last words | in play | other dead players only, any distance | flat, quieter |
+| Near | lobby, results | everyone in the room | flat |
+| Party (B) | any | party mates (the join ticket's `party`), anywhere | flat |
+| Team radio | team modes | teammates anywhere (free-for-all has no teams yet: `teamOf` is null) | radio filter |
+
+- **Mutes:** a listener's mutes and "Hear opponents" off stop the frames at the server, which saves the download.
+- **Cap:** each listener gets at most `VOICE.maxSpeakers` (4) voices at once. Party and team come first, then the nearest.
+- **Budget and errors:** each speaker may send 60 frames a second. A malformed frame is dropped, never a kick.
+- **Tuning:** radius, falloff start, last words and the cap are admin-page numbers (group "Voice chat"; content `VOICE`). They reach clients with OVERRIDES like the rest.
+
+**Codecs and quality (every network, 4G the floor):**
+
+| Tier | Opus | Frames | When |
+|---|---|---|---|
+| saver | 16 kbps | 60 ms | Data saver, `saveData`, 2G/3G, RTT ≥ 250 ms or loss ≥ 5 % |
+| normal | 24 kbps | 40 ms | otherwise |
+| high | 40 kbps | 20 ms | RTT < 90 ms, under 1 % loss, ≥ 5 Mbps where the browser says (Wi-Fi, 5G) |
+
+- **Loss:** under loss (≥ 3 %) each packet also carries the previous frame, and the receiver fills a gap with it.
+- **The jitter buffer** (`apps/web/src/voice/playout.ts`):
+  - It holds 60–250 ms and grows when frames come late.
+  - A missing frame is covered once by the last one, quieter.
+  - A backlog is skipped rather than played late.
+- **Opus** runs through WebCodecs: Chrome and Edge 94+, Android Chrome, Samsung Internet, Firefox 130+ desktop, and Safari 26+ (iOS 26).
+- **Fallback where a browser has no Opus encoder or decoder** (Safari before 26, Firefox on Android):
+  - The codec is IMA ADPCM at 6 kHz, about 24 kbps, in plain JavaScript with no download.
+  - Every frame carries its own predictor, so a lost frame costs only itself.
+  - A room where anyone can't decode Opus switches everyone to it (VOICE_STATE's flag), so everyone hears everyone.
+- **Microphone capture:** an AudioWorklet (`public/audio/voice-capture.js`, same origin, so the site's CSP allows it), or a ScriptProcessor where there's none.
+- **Browser processing:** echo cancellation, noise suppression and auto gain stay on.
+- **No mic:** if the mic is refused, the player is listen-only: they hear everyone and send nothing, and the UI says so.
+
+**Controls:**
+- **Keyboard:** push to talk by default on V (melee moved to C; saved settings rev 3 moves a saved V too). B talks to the party. Both are rebindable in Settings › Controls.
+- **Controller:** the touchpad (PlayStation) is the default talk button; rebindable.
+- **Phone:** the mic button above the move dial. Hold it, or slide it up to lock it on.
+- **Open mic:** a noise gate, with its threshold and a live meter in Settings.
+- **Settings › Audio › Voice chat:** on/off, the mic (permission, Test mic), how you talk, the gate, mic volume, voice volume, Proximity, Hear opponents, and Voice quality (Auto / Data saver).
+- **The pause menu's comms card:** mute any player, Mute all opponents, and a greyed Report (soon).
+- **Speaking rings:** on the speaking tags over soldiers, the who's-talking strip, the scoreboard rows and the pause card.
+
+**Testing:**
+- Unit tests: `packages/protocol/test/voice.test.ts` (the wire), `apps/game-server/test/voice.test.ts` (routing, last words, the cap, the budget, v17 clients) and `apps/web/src/voice/voice.test.ts` (tiers, the jitter buffer, ADPCM, push to talk).
+- End to end: `apps/web/scripts/voice-e2e.mjs` runs headless Chrome with its fake microphone. Two players talk in the lobby and mid-match, a phone joins, and it takes the screenshots in `docs/screenshots/social/voice/`. With `ADMIN_URL` and `ADMIN_TOKEN` it widens "Voices carry" so they're within earshot on Flux Lab.
+- Headless Chrome is no judge of timing: with no sound card its audio clock crawls (0.04 s in 2 s of wall time under load) and a busy page gets its frames in bursts. So the jitter buffer's skip counts there mean nothing; check the sound by ear on real devices.

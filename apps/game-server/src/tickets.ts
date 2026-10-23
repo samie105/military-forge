@@ -28,6 +28,8 @@ export interface TicketClaims {
   jti: string;
   /** the player's saved gun pair, weapon ids (absent = the default pair); room.ts checks it against content */
   guns?: [string, string];
+  /** the player's party (the API's invites/party): party voice reaches its other members */
+  party?: string;
 }
 
 export type TicketFailure = 'missing' | 'malformed' | 'bad_signature' | 'wrong_audience' | 'expired' | 'wrong_room' | 'used';
@@ -96,7 +98,8 @@ export class TicketVerifier {
     if (this.used.has(jti)) return { ok: false, reason: 'used' };
     this.used.set(jti, exp + CLOCK_SKEW_S);
     const guns = Array.isArray(claims.guns) && claims.guns.length === 2 && claims.guns.every(shortString) ? (claims.guns as [string, string]) : undefined;
-    return { ok: true, claims: { sub, nick, room: claims.room, exp, jti, ...(guns ? { guns } : {}) } };
+    const party = shortString(claims.party) ? (claims.party as string) : undefined;
+    return { ok: true, claims: { sub, nick, room: claims.room, exp, jti, ...(guns ? { guns } : {}), ...(party ? { party } : {}) } };
   }
 
   /** tickets remembered as used (tests) */

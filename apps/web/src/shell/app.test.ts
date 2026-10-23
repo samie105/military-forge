@@ -49,6 +49,20 @@ describe('settings and controls', () => {
     expect(sanitizeSettings({ graphics: 'high' })).toMatchObject({ graphics: 'high' });
     // saved since: every choice stays
     expect(sanitizeSettings({ rev: SETTINGS_REV, graphics: 'low', doubleTapDash: false, blood: true })).toMatchObject({ graphics: 'low', doubleTapDash: false, blood: true });
+    // rev 2 (rev 1's choices kept): only the rev 3 move happens
+    expect(sanitizeSettings({ rev: 2, graphics: 'low' })).toMatchObject({ graphics: 'low' });
+  });
+
+  it('rev 3: V is push to talk (voice chat); a saved V on melee moves to C, or just goes when C is taken', () => {
+    expect(defaultBindings()).toMatchObject({ talk: ['KeyV'], melee: ['KeyC', 'Mouse3'] });
+    const moved = sanitizeSettings({ rev: 2, bindings: { melee: ['KeyV', 'Mouse3'] } }).bindings;
+    expect(moved.melee).toEqual(['KeyC', 'Mouse3']);
+    expect(moved.talk).toEqual(['KeyV']);
+    const cTaken = sanitizeSettings({ rev: 2, bindings: { melee: ['KeyV'], reload: ['KeyC'] } }).bindings;
+    expect(cTaken.melee).toEqual([]);
+    expect(cTaken.talk).toEqual(['KeyV']);
+    // chosen after rev 3: V on melee stays, and talk gives way (each key does one thing)
+    expect(sanitizeSettings({ rev: SETTINGS_REV, bindings: { melee: ['KeyV'] } }).bindings.melee).toEqual(['KeyV']);
   });
 
   it('defaults cover every action, each key once', () => {

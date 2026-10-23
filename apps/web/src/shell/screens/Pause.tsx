@@ -14,6 +14,8 @@ import { useCtl } from '../context';
 import { formatClock, type MatchView } from '../matchView';
 import type { ShellStore } from '../store';
 import { ROOM_SLOTS } from './Lobby';
+import { inviteFriends } from '../../social/SocialLayer';
+import { VoicePauseCard } from '../../voice/VoiceHud';
 
 /** What leaving costs, in the confirm dialog's words. */
 export function leaveCost(match: MatchView | null, inRoom: boolean): string {
@@ -60,7 +62,7 @@ export function Pause({ store }: { store: ShellStore }) {
           Resume
         </button>
         {room && (
-          <button className="btn btn--volt btn--xl btn--block pause__btn m-p3 m-p8" style={row(1)} type="button" onClick={blurAfter(() => void ctl.shareLink(room))}>
+          <button className="btn btn--volt btn--xl btn--block pause__btn m-p3 m-p8" style={row(1)} type="button" onClick={blurAfter(() => inviteFriends(ctl, () => void ctl.shareLink(room)))}>
             <Icon name="users-plus" />
             <span className="btn__stack">
               Invite friends
@@ -104,6 +106,8 @@ export function Pause({ store }: { store: ShellStore }) {
           <Cap>Esc</Cap> back to the fight
         </p>
       </nav>
+      {/* voice chat (voice/): mute a player, Mute all opponents */}
+      {room && !confirm && <VoicePauseCard shell={store} />}
       {confirm && (
         <div className="pause__confirm ticket m-p1" role="alertdialog" aria-labelledby="leave-t" aria-describedby="leave-desc">
           <h2 id="leave-t" className="display">

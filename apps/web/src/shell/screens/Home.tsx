@@ -18,6 +18,7 @@ import { useCtl } from '../context';
 import type { ShellStore } from '../store';
 import { Backdrop, Hint, Hints, NetPill, takeCard } from './frame';
 import { MAP_CARDS, ROOM_SLOTS, lobbyMaps } from './Lobby';
+import { FriendsButton, SquadCard } from '../../social/SocialLayer';
 
 /** The brand: the emblem and the name, once in the whole UI (round two's .brand on Home). */
 export function Brand() {
@@ -95,6 +96,7 @@ export function Home({ store }: { store: ShellStore }) {
             </button>
           </nav>
           <span className="menu-top__spacer"></span>
+          <FriendsButton />
           <NetPill offline={offline} />
           <span ref={chip} className="me-chip">
             <span className="avatar" aria-hidden="true">
@@ -212,6 +214,7 @@ export function Home({ store }: { store: ShellStore }) {
           </div>
 
           <aside className="home__side">
+            <SquadCard />
             <section className="card card--print home__news m-p3" style={row(5)}>
               <span className="label label--volt">Field orders</span>
               <ul>

@@ -26,7 +26,8 @@ export type ActionId =
   | 'interact'
   | 'shield'
   | 'scoreboard'
-  | 'netGraph';
+  | 'netGraph'
+  | 'talk';
 
 export interface ActionDef {
   id: ActionId;
@@ -53,7 +54,7 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'fire', label: 'Fire', group: 'Combat', bit: Btn.Fire, defaults: ['Mouse0'] },
   { id: 'fire2', label: 'Alt fire / scope', group: 'Combat', bit: Btn.Fire2, defaults: ['Mouse2'] },
   { id: 'reload', label: 'Reload', group: 'Combat', bit: Btn.Reload, defaults: ['KeyR'] },
-  { id: 'melee', label: 'Melee', group: 'Combat', bit: Btn.Melee, defaults: ['KeyV', 'Mouse3'] },
+  { id: 'melee', label: 'Melee', group: 'Combat', bit: Btn.Melee, defaults: ['KeyC', 'Mouse3'] },
   { id: 'grenade', label: 'Throw grenade', group: 'Combat', bit: Btn.Grenade, defaults: ['KeyG'], hint: 'Tap: quick throw · hold: aim the arc, release to throw' },
   { id: 'cycleGrenade', label: 'Next grenade', group: 'Combat', bit: Btn.CycleGrenade, defaults: ['KeyT', 'Mouse4'] },
   { id: 'swap', label: 'Swap weapon', group: 'Weapons', bit: Btn.Swap, defaults: ['KeyQ'] },
@@ -64,6 +65,8 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'shield', label: 'Shield up / sling', group: 'Weapons', bit: Btn.Shield, defaults: ['KeyX'] },
   { id: 'scoreboard', label: 'Scoreboard (hold)', group: 'Interface', ui: true, defaults: ['Tab'] },
   { id: 'netGraph', label: 'Net graph', group: 'Interface', ui: true, defaults: ['KeyN'] },
+  // voice chat (voice/): V, as the owner asked; melee moved to C (settings rev 3 moves saved ones too)
+  { id: 'talk', label: 'Push to talk (hold)', group: 'Interface', ui: true, defaults: ['KeyV'], hint: 'Voice chat: soldiers near you hear you. B talks to your party' },
 ];
 
 /** two keys per action (Settings → Controls has two columns, as in the design) */
@@ -151,7 +154,7 @@ export function toKeyBindings(bindings: Bindings): KeyBindings {
 }
 
 /** The keyboard codes of a page-level action (scoreboard, net graph). */
-export function uiCodes(bindings: Bindings, action: 'scoreboard' | 'netGraph'): readonly string[] {
+export function uiCodes(bindings: Bindings, action: 'scoreboard' | 'netGraph' | 'talk'): readonly string[] {
   return bindings[action].filter((c) => !c.startsWith('Mouse'));
 }
 

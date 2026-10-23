@@ -227,6 +227,8 @@ export function leaderLine(rows: readonly ScoreRow[], killLimit: number, name: (
 
 export interface ScoreRow {
   key: number;
+  /** the player's id in the room (voice chat lights the row while they talk: voice/) */
+  id?: number;
   name: string;
   score: number;
   kills: number;

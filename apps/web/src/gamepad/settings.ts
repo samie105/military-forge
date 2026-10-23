@@ -25,6 +25,7 @@ export type PadActionId =
   | 'cycleGrenade'
   | 'dual'
   | 'zoom'
+  | 'talk'
   | 'scoreboard';
 
 export interface PadActionDef {
@@ -56,7 +57,9 @@ export const PAD_ACTIONS: readonly PadActionDef[] = [
   { id: 'dual', label: 'Dual wield', bit: Btn.Dual, defaults: [B.Up] },
   { id: 'cycleGrenade', label: 'Next grenade', bit: Btn.CycleGrenade, defaults: [B.Right] },
   { id: 'zoom', label: 'Zoom', defaults: [B.Left], hint: 'Steps the view out on a gun that zooms, then back' },
-  { id: 'scoreboard', label: 'Scoreboard (hold)', defaults: [B.Select, B.Extra] },
+  // voice chat: before the scoreboard, so an older save's touchpad (the scoreboard's second) goes to it
+  { id: 'talk', label: 'Push to talk (hold)', defaults: [B.Extra], hint: 'The touchpad on PlayStation pads; on others, pick a button' },
+  { id: 'scoreboard', label: 'Scoreboard (hold)', defaults: [B.Select] },
 ];
 
 /** Two buttons per action at most (as for keys). */

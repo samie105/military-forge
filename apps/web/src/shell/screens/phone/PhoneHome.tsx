@@ -11,6 +11,7 @@ import { useCtl, useServerPing } from '../../context';
 import type { ShellStore } from '../../store';
 import { PhoneScreen, rise } from './layout';
 import { initial } from './parts';
+import { FriendsButton, PhoneSquad } from '../../../social/SocialLayer';
 
 export function PhoneHome({ store }: { store: ShellStore }) {
   const ctl = useCtl();
@@ -32,6 +33,7 @@ export function PhoneHome({ store }: { store: ShellStore }) {
             </b>
           </span>
           <span className="menu-top__spacer"></span>
+          <FriendsButton phone />
           {offline ? (
             <span className="status status--warn pm-pill">
               <Icon name="unplug" size="sm" />
@@ -89,6 +91,8 @@ export function PhoneHome({ store }: { store: ShellStore }) {
             </span>
             <span className="pm-name display">{name}</span>
           </div>
+          {/* friends online (social/), over the top of the stage */}
+          <PhoneSquad />
         </div>
 
         <nav className="pm-nav m-p3" style={rise(5)} aria-label="Main">

@@ -24,6 +24,7 @@
  * other (roster, snapshots, standings, the `[BOT]` tag on their names), running in the room's sim.
  */
 import { adminJson, adminValues, onAdminValues } from './adminState';
+import { VoiceRelay } from './voice';
 import { MatchRecorder, type ResultsSink } from './matchRecorder';
 import { addBot, latestNavGraph, removeBot, requestNavGraph, type BotLevelId, type NavGraph } from '@military-forge/bots';
 import { ADMIN_BOT_LEVELS, adminTuning, adminValue, createTuning, defaultTuning, limitTuning, maps, type AdminValues, type Tuning } from '@military-forge/content';
@@ -35,7 +36,6 @@ import {
   DecodeError,
   HEALTH_UNKNOWN,
   MsgType,
-  PROTOCOL_VERSION,
   SnapshotBaselines,
   SnapshotEncoder,
   createInputPacket,
@@ -55,6 +55,8 @@ import {
   type MatchStandingWire,
   type RewindTarget,
   type ViewRect,
+  type VoiceSettingsCmd,
+  protocolSupported,
 } from '@military-forge/protocol';
 import {
   ConditionedLink,
@@ -152,6 +154,8 @@ export interface Session {
   readonly joinSeq: number;
   /** round-trip time its client last reported (CmdKind.ReportPing), ms; -1 = not yet */
   pingMs: number;
+  /** the player's party (the join ticket's `party`), kept across reconnects for party voice */
+  party: string | null;
 }
 
 /** 18 random bytes, base64url (Web Crypto: a room runs in Node and, for a local room's host, in a browser) */
@@ -211,6 +215,16 @@ export class Client {
   accountId: string | null = null;
   /** the player's saved gun pair from the join ticket (weapon indices, checked against content); null = the default pair */
   guns: [number, number] | null = null;
+  /** the protocol version its HELLO said (v17 clients play on, without voice: MIN_PROTOCOL_VERSION) */
+  protocolVersion = 0;
+  /** the join ticket's party (invites/party on the API): party voice reaches party mates; null = none */
+  party: string | null = null;
+  /** voice chat (voice.ts): its settings (null: never asked for voice), its mutes, its frame budget, what it hears now */
+  voice: VoiceSettingsCmd | null = null;
+  voiceMutes?: Set<number>;
+  voiceTokens?: number;
+  voiceTokensAt?: number;
+  voiceActive?: Map<number, [number, number]>;
   name = '';
   closed = false;
   /** this client's inputs, by server tick */
@@ -416,8 +430,12 @@ export class Room {
   readonly bots: PlayerState[] = [];
   /** reports each finished match (match rooms with a results sink) */
   private readonly recorder: MatchRecorder | null;
+  /** voice chat's relay (v18): who hears whom, frame by frame */
+  readonly voice: VoiceRelay;
 
   constructor(options: RoomOptions = {}) {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const room = this;
     this.log = options.log ?? ((msg) => console.error(msg));
     this.game = new Game({ seed: options.seed ?? 1, mapId: options.mapId ?? 'movement-test', dummies: options.dummies ?? true, pickups: options.pickups ?? true, armory: options.armory ?? false });
     this.maxHumans = options.maxHumans ?? 8;
@@ -437,6 +455,17 @@ export class Room {
     const fill = options.fillBots;
     this.fill = this.baseFill = fill && fill.target > 0 ? { target: Math.min(fill.target, MAX_PLAYERS), level: fill.level } : null;
     this.baseLimits = this.match ? { timeLimit: this.match.rules.timeLimit, killLimit: this.match.rules.killLimit } : null;
+    this.voice = new VoiceRelay({
+      get tick() {
+        return room.game.tick;
+      },
+      clients: () => this.clients,
+      // free play (dev rooms) is always play; a match only while counting down or running
+      inPlay: () => !this.match || this.match.phase === MatchPhase.Countdown || this.match.phase === MatchPhase.InProgress,
+      player: (id) => this.game.players[id] ?? null,
+      // free-for-all: no teams yet (team radio arrives with team modes)
+      teamOf: () => null,
+    });
     // the owner's admin page (admin.ts): its values now, and whenever they change
     this.applyAdmin(adminValues(), false);
     this.offAdmin = onAdminValues((values) => this.applyAdmin(values, true));
@@ -548,6 +577,7 @@ export class Room {
     client.session = null;
     client.playerId = -1;
     if (!s) return;
+    this.voice.changed();
     if (resumable && this.graceTicks > 0) {
       s.client = null;
       s.expiresAt = this.game.tick + this.graceTicks;
@@ -558,6 +588,7 @@ export class Room {
   }
 
   private endSession(s: Session): void {
+    this.voice.remove(s.playerId);
     this.sessions.delete(s.token);
     if (s.prevToken) this.unconfirmed.delete(s.prevToken);
     this.game.removePlayer(s.playerId);
@@ -651,6 +682,11 @@ export class Room {
       this.onInput(client);
       return;
     }
+    // voice frames (v18): their own budget in the relay (up to 60 a second), never the message one
+    if (bytes[0] === MsgType.VoiceUp) {
+      if (client.joined) this.voice.onFrame(client, bytes);
+      return;
+    }
     if (--client.messageTokens < 0) {
       this.kick(client, CloseCode.RateLimited, 'rate limited');
       return;
@@ -716,7 +752,8 @@ export class Room {
 
   private onHello(client: Client, version: number, contentHash: number, rawName: string, resumeToken: string): void {
     if (client.joined) return;
-    if (version !== PROTOCOL_VERSION || contentHash !== CONTENT_HASH) {
+    client.protocolVersion = version;
+    if (!protocolSupported(version) || contentHash !== CONTENT_HASH) {
       this.kick(client, CloseCode.VersionMismatch, 'version mismatch: refresh to update');
       return;
     }
@@ -733,7 +770,7 @@ export class Room {
     if (client.accountId) this.recorder?.setAccount(p, client.accountId);
     // the guns they chose (their account's loadout): every spawn until a death keeps others (#125)
     if (client.guns) this.game.setLoadout(p, client.guns);
-    const session: Session = { token: newToken(), playerId: p.id, client: null, expiresAt: Infinity, idle: createInput(), prevToken: null, joinSeq: this.joins++, pingMs: -1 };
+    const session: Session = { token: newToken(), playerId: p.id, client: null, expiresAt: Infinity, idle: createInput(), prevToken: null, joinSeq: this.joins++, pingMs: -1, party: client.party };
     this.sessions.set(session.token, session);
     if (this.match && !this.host) this.host = session;
     this.attach(client, session, false);
@@ -770,6 +807,9 @@ export class Room {
     s.expiresAt = Infinity;
     client.session = s;
     client.playerId = s.playerId;
+    // a reconnect carries no ticket: the party stays with the session
+    client.party = s.party;
+    this.voice.changed();
     const p = this.game.players[s.playerId]!;
     client.name = p.name;
     client.lastInput.aim = s.idle.aim;
@@ -789,6 +829,10 @@ export class Room {
 
   private onCmd(client: Client, kind: number, payload: string): void {
     if (!client.joined) return;
+    if (kind === CmdKind.Voice) {
+      this.voice.onSettings(client, payload);
+      return;
+    }
     if (kind >= CmdKind.Ready && kind <= CmdKind.Leave) {
       this.onMatchCmd(client, kind, payload);
       return;
@@ -1173,5 +1217,6 @@ export class Room {
       const since = this.game.tick - this.matchSentAt;
       if (this.matchUrgent || (this.matchDirty && since >= MATCH_STATE_MIN_TICKS) || since >= MATCH_STATE_REFRESH_TICKS) this.sendMatchState();
     }
+    this.voice.tick();
   }
 }

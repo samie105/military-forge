@@ -16,6 +16,12 @@ export const MsgType = {
   Tuning: 0x26,
   /** v13: the admin page's gameplay overrides (weapons, grenades…), applied to every client's content */
   Overrides: 0x28,
+  /** v18: a voice frame from a client (voice.ts; unreliable) */
+  VoiceUp: 0x29,
+  /** v18: a voice frame to a client, with its speaker and route (unreliable) */
+  VoiceDown: 0x2a,
+  /** v18: who in the room has voice on, a mic, is in your party, muted by you (reliable) */
+  VoiceState: 0x2b,
   /** dev only: server-side debug views (lag-compensation rewinds) */
   Debug: 0x30,
   Kick: 0x3f,

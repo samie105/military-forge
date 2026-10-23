@@ -8,6 +8,7 @@ import { createApp } from '../src/app';
 import { generateSigningKey, type SigningKey } from '../src/auth/keys';
 import { loadConfig } from '../src/config';
 import { openDatabase } from '../src/db/client';
+import { MemoryBus, RedisBus, type EventBus } from '../src/events/bus';
 import { MemoryKv, type Kv } from '../src/kv/kv';
 import { RedisKv } from '../src/kv/redis';
 import { randomUUID } from 'node:crypto';
@@ -35,7 +36,8 @@ export async function createTestApi(env: Record<string, string> = {}, options: {
   // on a shared Valkey each test API gets keys of its own, so runs and files don't share rate-limit buckets
   const keyPrefix = `test:${randomUUID()}:`;
   const kv: Kv = process.env.TEST_REDIS_URL ? await new RedisKv(process.env.TEST_REDIS_URL, { keyPrefix }).connect() : new MemoryKv(clock.now);
-  const deps = { config, database, kv, signingKey: generateSigningKey(), ticketKey: options.ticketKey ?? null, log: createLogger(config), now: clock.now };
+  const bus: EventBus = process.env.TEST_REDIS_URL ? await new RedisBus(process.env.TEST_REDIS_URL, keyPrefix).connect() : new MemoryBus();
+  const deps = { config, database, kv, bus, signingKey: generateSigningKey(), ticketKey: options.ticketKey ?? null, log: createLogger(config), now: clock.now };
   const app = createApp(deps);
   let ipCounter = 0;
   const reconnected: Kv[] = [];
@@ -56,10 +58,12 @@ export async function createTestApi(env: Record<string, string> = {}, options: {
     config,
     database,
     kv,
+    /** the push channel's fan-out (events/bus.ts) */
+    bus,
     /** a fresh client IP, so tests don't share rate-limit buckets */
     ip: () => `203.0.113.${++ipCounter % 250}`,
     async close() {
-      await Promise.all([database.close(), kv.close(), ...reconnected.map((k) => k.close())]);
+      await Promise.all([database.close(), kv.close(), bus.close(), ...reconnected.map((k) => k.close())]);
     },
   };
 }
@@ -92,4 +96,15 @@ export async function createGuest(api: TestApi, body: Record<string, unknown> = 
   const res = await api.app.request('/auth/guest', json(body, { 'x-forwarded-for': api.ip() }));
   if (res.status !== 201) throw new Error(`guest create failed: ${res.status} ${await res.text()}`);
   return (await res.json()) as SessionBody;
+}
+
+let befriendIp = 0;
+
+/** Makes two players friends through the API (a request by friend code, then accept). */
+export async function befriend(app: TestApi['app'], a: SessionBody, b: SessionBody): Promise<void> {
+  const list = (await (await app.request('/friends', { headers: bearer(b.accessToken) })).json()) as { code: string };
+  const asked = await app.request('/friends/requests', json({ code: list.code }, { ...bearer(a.accessToken), 'x-forwarded-for': `198.51.100.${++befriendIp % 250}` }));
+  if (asked.status !== 200) throw new Error(`friend request failed: ${asked.status} ${await asked.text()}`);
+  const accepted = await app.request(`/friends/requests/${a.user.id}/accept`, json({}, bearer(b.accessToken)));
+  if (accepted.status !== 200) throw new Error(`accept failed: ${accepted.status} ${await accepted.text()}`);
 }

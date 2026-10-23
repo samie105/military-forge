@@ -23,6 +23,7 @@ import type { LobbyPlayer, LobbyView } from '../../onlineView';
 import { encodeQr, qrSvgPath } from '../../qr';
 import { KILL_STEP, ROOM_SLOTS, TIME_CHOICES, killsLabel, lobbyMaps, minutesLabel, useRoomSetting } from '../Lobby';
 import { PhoneScreen, rise } from './layout';
+import { LobbyInvite } from '../../../social/SocialLayer';
 import { Roll, ShareChip, Sheet, initial, shareRoom, useShareChip } from './parts';
 import { PhoneTips } from './PhoneTips';
 import { BOT_LEVELS, BOT_LEVEL_NAMES, botFillChoices, botsLine, type BotLevel } from '../../roomBots';
@@ -257,6 +258,8 @@ export function PhoneLobby({ lobby, tips = null }: { lobby: LobbyView; tips?: Bi
                 </span>
               </div>
             </div>
+            {/* friends (social/): invite them straight to this room */}
+            {!lobby.local && <LobbyInvite phone />}
               </>
             )}
             <ShareChip outcome={chip} />

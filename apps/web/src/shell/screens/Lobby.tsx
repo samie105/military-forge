@@ -14,6 +14,7 @@ import { maps, type MapEventKind } from '@military-forge/content';
 import { ROOM_SETTING_LIMITS } from '@military-forge/protocol';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Icon } from '../../ui/Icon';
+import { LobbyInvite } from '../../social/SocialLayer';
 import { Screen, blurAfter } from '../../ui/Screen';
 import { eventLook } from '../../hud/model';
 import { useCtl } from '../context';
@@ -452,6 +453,8 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
                 </span>
               </div>
             </div>
+            {/* friends (social/): invite them straight to this room */}
+            {!lobby.local && <LobbyInvite />}
               </>
             )}
             {lobby.local && <LocalRoomNote lobby={lobby} />}

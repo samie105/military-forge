@@ -31,6 +31,11 @@ export class RedisKv implements Kv {
     return this.redis.get(key);
   }
 
+  async mget(keys: readonly string[]): Promise<(string | null)[]> {
+    if (!keys.length) return [];
+    return this.redis.mget(...keys);
+  }
+
   async set(key: string, value: string, opts: { ttlMs?: number; onlyIfAbsent?: boolean } = {}): Promise<boolean> {
     const { ttlMs, onlyIfAbsent } = opts;
     let res: 'OK' | null;

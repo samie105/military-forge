@@ -32,6 +32,7 @@ export function padShownBindings(pad: PadSettings): Bindings {
     shield: codes('shield'),
     scoreboard: codes('scoreboard'),
     netGraph: [],
+    talk: codes('talk'),
   };
   return out;
 }

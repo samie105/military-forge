@@ -35,6 +35,7 @@ import { TuneToast } from './screens/Tune';
 import { releaseShellFocus } from './focus';
 import { PhoneHome, PhoneLobby, PhoneNameEntry, PhonePause, PhoneResults, PhoneSettings, PhoneTips, usePhoneLayout } from './screens/phone';
 import { closeRoute, runCleanup, type ShellActions, type ShellRoute, type ShellStore } from './store';
+import { SocialLayer } from '../social/SocialLayer';
 
 export { ControllerContext };
 export { TipsCard, tipsRows } from './screens/Tips';
@@ -120,6 +121,8 @@ function AppScreens({ store }: { store: ShellStore }) {
       {overlay === 'lan-add' && <LanAddPlayer />}
       {overlay === 'lan-join' && <LanJoin />}
       {overlay === 'name' && (phone ? <PhoneNameEntry store={store} first={false} /> : <NameEntry store={store} first={false} />)}
+      {/* friends (social/): the panel, over the menus and the in-match menu */}
+      <SocialLayer />
       <TuneToast note={tuneNote} />
       <TitleScreen store={store} />
       {notice && (

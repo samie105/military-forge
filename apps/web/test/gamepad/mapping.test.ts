@@ -45,10 +45,11 @@ describe('the default layout', () => {
     expect(map.grenade.has(B.R1)).toBe(true);
   });
 
-  it('zoom, the scoreboard and the menu are the page’s: no sim bits', () => {
+  it('zoom, the scoreboard, push to talk and the menu are the page’s: no sim bits', () => {
     expect(heldBits(pressing(B.Left, B.Select, B.Extra, B.Start), map)).toBe(0);
     expect(map.zoom.has(B.Left)).toBe(true);
-    expect([...map.scoreboard].sort((a, b) => a - b)).toEqual([B.Select, B.Extra]);
+    // the touchpad is voice chat's push to talk (v18); Create / Share / View holds the scoreboard
+    expect([...map.scoreboard]).toEqual([B.Select]);
   });
 
   it('no button does two things in any preset, and Options is never one of them', () => {

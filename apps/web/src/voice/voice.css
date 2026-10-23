@@ -1,0 +1,168 @@
+/*
+ * Voice chat on screen (board "SOCIAL · friends, invites, voice", S4/S5/S6/P3/P4): the push-to-talk
+ * plate, the phone's mic button, who's talking, the speaking tags over soldiers, the scoreboard's
+ * talking rows, the settings rows and the pause menu's comms card. Field Print tokens only; volt =
+ * talking, brass = last words, red = blocked or muted.
+ */
+
+/* ---- the layer: the HUD's own fit, so the plate lines up with the vitals ---- */
+.mf-voice { z-index: var(--z-hud); }
+.mf-voice:not(.mf-fit--phone) > .screen { width: var(--hud-w, 1920px); height: var(--hud-h, 1080px); zoom: var(--hud-fit, 1); }
+.vc-screen { position: relative; pointer-events: none; }
+
+/* who's talking: left edge, middle (desktop); on phones right of the scoreboard button, under the
+   ping and the "Tuned by admin" tag and clear of the vitals (two at most there) */
+.vc-strip { position: absolute; left: calc(var(--safe-l) + var(--hud-m)); top: calc(var(--safe-t) + 430px); display: flex; flex-direction: column; gap: var(--sp-2); pointer-events: none; }
+.vc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: max-content;
+  padding: 6px 16px 6px 6px;
+  background: var(--frost-fill-hud, var(--c-plate));
+  border: 1.5px solid color-mix(in srgb, var(--c-paper) 20%, transparent);
+  border-radius: 0 14px 0 14px;
+  color: var(--c-text);
+  font-size: var(--fs-16);
+  text-shadow: var(--ts-hud);
+}
+.vc-chip--talk { border-color: var(--c-volt); box-shadow: 0 0 calc(4px + var(--lvl, 0) * 18px) var(--c-volt-glow); }
+.vc-chip--talk.is-last { border-color: var(--c-brass); box-shadow: none; }
+.vc-chip--warn { color: var(--c-danger-text); border-color: color-mix(in srgb, var(--c-hp) 60%, transparent); padding: 8px 14px; }
+.vc-chip__who { display: flex; flex-direction: column; line-height: 1.1; }
+.vc-chip__who b { font-weight: var(--fw-bold); }
+.vc-chip__who span { font-size: var(--fs-14); font-weight: var(--fw-black); letter-spacing: .12em; text-transform: uppercase; color: var(--c-volt); }
+.vc-chip--talk.is-last .vc-chip__who span { color: var(--c-brass); }
+.vc-chip--talk.is-party .vc-chip__who span { color: var(--c-ok); }
+.vc-av { width: 36px; height: 36px; font-size: var(--fs-20); box-shadow: 0 0 0 calc(2px + var(--lvl, 0) * 4px) var(--c-volt); }
+.is-last .vc-av { box-shadow: 0 0 0 2px var(--c-brass); opacity: .8; }
+/* three bars that follow the voice's level */
+.vc-bars { display: inline-flex; align-items: flex-end; gap: 3px; height: 20px; }
+.vc-bars i { width: 4px; border-radius: 2px; background: var(--c-volt); height: calc(4px + var(--lvl, 0) * 16px); transition: height var(--m-fast, .16s) linear; }
+.vc-bars i:nth-child(2) { height: calc(6px + var(--lvl, 0) * 14px); }
+.vc-bars i:nth-child(3) { height: calc(3px + var(--lvl, 0) * 10px); }
+.is-last .vc-bars i { background: var(--c-brass); }
+
+/* ---- desktop: push to talk, bottom left over the vitals ---- */
+.vc-ptt {
+  position: absolute;
+  left: calc(var(--safe-l) + var(--hud-m));
+  bottom: calc(var(--safe-b) + 214px);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 8px 18px 8px 8px;
+  background: var(--frost-fill-hud, var(--c-plate));
+  border: 1.5px solid color-mix(in srgb, var(--c-paper) 20%, transparent);
+  border-radius: 0 16px 0 16px;
+  color: var(--c-text);
+  text-shadow: var(--ts-hud);
+  pointer-events: none;
+  opacity: .85;
+}
+.vc-ptt__mic { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--c-ink-700); color: var(--c-muted); }
+.vc-ptt__text { display: flex; flex-direction: column; line-height: 1.15; }
+.vc-ptt__text b { font-size: var(--fs-16); font-weight: var(--fw-black); letter-spacing: .08em; text-transform: uppercase; }
+.vc-ptt__text span { font-size: var(--fs-14); color: var(--c-muted); }
+.vc-ptt.is-on { opacity: 1; background: color-mix(in srgb, var(--c-volt-ink) 90%, transparent); border-color: var(--c-volt); box-shadow: 0 0 calc(8px + var(--lvl, 0) * 20px) var(--c-volt-glow); }
+.vc-ptt.is-on .vc-ptt__mic { background: var(--c-volt); color: var(--c-volt-ink); }
+.vc-ptt.is-on .vc-ptt__text b { color: var(--c-volt); }
+
+/* ---- phone: the mic button, above-right of the move dial (clear of the action arc) ---- */
+.vc-screen--phone .vc-strip { left: calc(var(--safe-l) + 56px); top: calc(var(--safe-t) + 92px); gap: 4px; }
+.vc-screen--phone .vc-chip { padding: 3px 10px 3px 3px; gap: 6px; font-size: 12px; }
+.vc-screen--phone .vc-chip__who span { font-size: 9px; }
+.vc-screen--phone .vc-av { width: 24px; height: 24px; font-size: 12px; }
+.vc-screen--phone .vc-bars { height: 14px; }
+.vc-mic { position: absolute; left: calc(var(--safe-l) + 226px); bottom: calc(var(--safe-b) + 66px); display: flex; align-items: center; gap: 8px; pointer-events: none; }
+.vc-mic__btn {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--c-touch, var(--c-plate));
+  border: 2px solid color-mix(in srgb, var(--c-paper) 35%, transparent);
+  color: var(--c-text);
+  pointer-events: auto;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.vc-mic__btn .ic { width: 26px; height: 26px; }
+.vc-mic.is-on .vc-mic__btn { background: var(--c-volt); color: var(--c-volt-ink); border-color: var(--c-ink-950); box-shadow: 0 0 18px var(--c-volt-glow); }
+.vc-mic__lock { position: absolute; left: 6px; bottom: 64px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px; border-radius: 22px; background: color-mix(in srgb, var(--c-ink-950) 80%, transparent); border: 1.5px solid var(--c-volt-line); color: var(--c-volt); }
+.vc-mic.is-lifting .vc-mic__lock { background: var(--c-volt); color: var(--c-volt-ink); }
+.vc-mic__label { padding: 4px 9px; border-radius: 0 8px 0 8px; background: color-mix(in srgb, var(--c-volt-ink) 90%, transparent); border: 1px solid var(--c-volt); color: var(--c-volt); font-size: 11px; font-weight: var(--fw-black); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+
+/* ---- speaking tags over soldiers (window pixels, moved by transform) ---- */
+.vc-tags { position: fixed; inset: 0; z-index: var(--z-hud); pointer-events: none; overflow: hidden; }
+.vc-tag {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px 2px 2px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--c-ink-950) 80%, transparent);
+  border: 1.5px solid var(--c-volt);
+  color: var(--c-text);
+  font: var(--fw-bold) 13px/1 var(--f-ui);
+  white-space: nowrap;
+  will-change: transform;
+}
+.vc-tag .ic { position: relative; width: 18px; height: 18px; padding: 3px; border-radius: 50%; background: var(--c-volt); color: var(--c-volt-ink); stroke-width: 2.6; }
+.vc-tag__ring { position: absolute; left: 1px; top: 50%; width: 20px; height: 20px; margin-top: -10px; border-radius: 50%; box-shadow: 0 0 0 calc(2px + var(--lvl, 0) * 6px) var(--c-volt-glow); }
+.vc-tag.is-last { border-color: var(--c-brass); }
+.vc-tag.is-last .ic { background: var(--c-brass); }
+html.reduce-motion .vc-tag__ring, html.reduce-motion .vc-bars i { transition: none; box-shadow: none; }
+
+/* ---- the scoreboard: a talking row (hud.ts gives rows data-pid) ---- */
+#hud .sb tr.vc-talking .avatar { box-shadow: 0 0 0 3px var(--c-volt), 0 0 14px var(--c-volt-glow); }
+
+/* ---- Settings › Audio › Voice chat ---- */
+.vc-settings { display: contents; }
+.vc-settings__h { margin-top: var(--sp-6); }
+.vc-microw { display: inline-flex; align-items: center; gap: var(--sp-3); }
+.vc-meter { position: relative; display: block; width: 160px; height: 10px; border-radius: 5px; background: var(--c-track); overflow: hidden; }
+.vc-meter i { position: absolute; inset: 0 auto 0 0; width: calc(var(--lvl, 0) * 100%); background: var(--c-ok); transition: width 80ms linear; }
+.vc-meter::after { content: ""; position: absolute; top: -2px; bottom: -2px; left: calc(var(--gate, 0.3) * 100%); width: 2px; background: var(--c-volt); }
+.vc-note { color: var(--c-muted); font-size: var(--fs-14); }
+
+/* ---- the pause menu's comms card: mute, Mute all opponents, Report (soon) ---- */
+.vc-pause {
+  position: absolute;
+  right: calc(var(--safe-r) + 72px);
+  top: calc(var(--safe-t) + 120px);
+  width: 520px;
+  max-height: calc(100% - 240px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-5) var(--sp-6);
+  background: var(--c-plate-strong);
+  border: 1.5px solid var(--c-line-strong);
+  border-radius: 0 var(--r-lg) 0 var(--r-lg);
+  color: var(--c-text);
+  pointer-events: auto;
+  overflow-y: auto;
+}
+@supports (backdrop-filter: blur(1px)) {
+  html:not(.reduce-transparency):not(.gfx-low) .vc-pause {
+    background: color-mix(in srgb, var(--c-ink-950) 80%, transparent);
+    border-color: var(--frost-line);
+    backdrop-filter: blur(var(--blur-frost));
+  }
+}
+.vc-pause__head { display: flex; align-items: center; gap: var(--sp-3); }
+.vc-pause__list { display: flex; flex-direction: column; gap: var(--sp-2); }
+.vc-pause__row { display: flex; align-items: center; gap: var(--sp-3); padding: 6px 8px; border-radius: var(--r-xs); background: var(--c-ink-850); }
+.vc-pause__row .vc-chip__who { flex: 1; min-width: 0; }
+.vc-pause__row .vc-chip__who span { color: var(--c-muted); }
+.vc-pause__row.is-talking .vc-av { box-shadow: 0 0 0 3px var(--c-volt); }
+.vc-pause--phone { right: var(--safe-r); top: calc(var(--safe-t) + 132px); bottom: max(10px, var(--safe-b)); width: 330px; max-height: none; padding: 8px 12px; gap: 6px; border-radius: 0 var(--r-md) 0 var(--r-md); }
+.vc-pause--phone .vc-pause__row { padding: 4px 6px; }
+.vc-pause--phone .btn--icon { width: var(--touch-min); min-height: var(--touch-min); }
+.vc-pause--phone .switch { font-size: 13px; gap: 8px; }

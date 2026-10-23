@@ -7,6 +7,7 @@ import { ConfigError, loadConfig, type Config } from './config';
 import { openDatabase } from './db/client';
 import { MemoryKv, type Kv } from './kv/kv';
 import { RedisKv } from './kv/redis';
+import { MemoryBus, RedisBus, type EventBus } from './events/bus';
 import { createLogger } from './log';
 import { keepRooms } from './rooms/routes';
 
@@ -25,6 +26,8 @@ try {
 const log = createLogger(config);
 const database = await openDatabase(config, { baseDir: PACKAGE_DIR });
 const kv: Kv = config.redisUrl ? await new RedisKv(config.redisUrl).connect() : new MemoryKv();
+// the social push channel's fan-out: Valkey pub/sub (any API process delivers), else this process alone
+const bus: EventBus = config.redisUrl ? await new RedisBus(config.redisUrl).connect() : new MemoryBus();
 // KEEP_ROOMS: the codes a previous run handed out stay joinable (pnpm playtest's restarts)
 if (config.keepRooms.length) log.info({ rooms: config.keepRooms, added: await keepRooms(kv, config.keepRooms) }, 'holding room codes from KEEP_ROOMS');
 const signingKey = config.accessToken.privateKeyPem
@@ -33,7 +36,7 @@ const signingKey = config.accessToken.privateKeyPem
 // join tickets for the game server (docs/06 §6): none without a key (dev: its rooms are open)
 const ticketKey = config.joinTicket.privateKeyPem ? signingKeyFromPem(config.joinTicket.privateKeyPem) : null;
 
-const app = createApp({ config, database, kv, signingKey, ticketKey, log });
+const app = createApp({ config, database, kv, signingKey, ticketKey, log, bus });
 const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
   log.info(
     { port: info.port, db: database.kind, kv: kv.kind, env: config.env },
@@ -51,7 +54,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     closing = true;
     log.info({ signal }, 'shutting down');
     server.close(async () => {
-      await Promise.allSettled([database.close(), kv.close()]);
+      await Promise.allSettled([database.close(), kv.close(), bus.close()]);
       process.exit(0);
     });
     // don't hang on keep-alive connections

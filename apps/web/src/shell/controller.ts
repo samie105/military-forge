@@ -59,10 +59,11 @@ export type JoinResult = 'ok' | 'not_found' | 'rate_limited' | 'error';
 
 const SETTINGS_KEY = 'settings.v1';
 /**
- * Saved settings carry this. Before it (none): Low graphics and double-tap dash off were the
- * defaults, not choices, so those two values load as the new defaults (Auto, on) once.
+ * Saved settings carry this. Before rev 2 (none): Low graphics and double-tap dash off were the
+ * defaults, not choices, so those two values load as the new defaults (Auto, on) once. Before
+ * rev 3: V was melee's; it's push to talk now (voice chat), so a saved V on melee moves to C.
  */
-export const SETTINGS_REV = 2;
+export const SETTINGS_REV = 3;
 const OFFLINE_NAME_KEY = 'profile.offlineName.v1';
 const TIPS_SEEN_KEY = 'tips.seen.v1';
 
@@ -85,10 +86,19 @@ function flag(key: string, storage: () => Storage): void {
 /** Saved settings → valid settings (anything unknown or malformed falls back to `defaults`). */
 export function sanitizeSettings(raw: unknown, defaults: Settings = DEFAULT_SETTINGS): Settings {
   const s = { ...(typeof raw === 'object' && raw !== null ? raw : {}) } as Partial<Record<keyof Settings | 'rev', unknown>>;
-  if (raw !== null && typeof raw === 'object' && !(typeof s.rev === 'number' && s.rev >= SETTINGS_REV)) {
+  const rev = typeof s.rev === 'number' ? s.rev : 0;
+  if (raw !== null && typeof raw === 'object' && rev < 2) {
     // saved before the defaults changed (rev 2): the old defaults weren't choices
     if (s.graphics === 'low') delete s.graphics;
     if (s.doubleTapDash === false) delete s.doubleTapDash;
+  }
+  if (raw !== null && typeof raw === 'object' && rev < 3 && typeof s.bindings === 'object' && s.bindings !== null) {
+    // rev 3: V is push to talk; melee's V moves to C (unless C does something else already)
+    const b = { ...(s.bindings as Record<string, unknown>) };
+    const melee = b.melee;
+    const cTaken = Object.entries(b).some(([k, v]) => k !== 'melee' && Array.isArray(v) && v.includes('KeyC'));
+    if (Array.isArray(melee) && melee.includes('KeyV')) b.melee = cTaken ? melee.filter((c) => c !== 'KeyV') : melee.map((c) => (c === 'KeyV' ? 'KeyC' : c));
+    s.bindings = b;
   }
   const flag = (v: unknown, fallback: boolean) => (typeof v === 'boolean' ? v : fallback);
   const unit = (v: unknown, fallback: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : fallback);

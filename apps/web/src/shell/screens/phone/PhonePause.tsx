@@ -17,6 +17,8 @@ import { formatClock } from '../../matchView';
 import type { ShellStore } from '../../store';
 import { leaveCost } from '../Pause';
 import { PhoneScreen, rise } from './layout';
+import { inviteFriends } from '../../../social/SocialLayer';
+import { VoicePauseCard } from '../../../voice/VoiceHud';
 import { Roll, ShareChip, Sheet, shareRoom, useShareChip } from './parts';
 
 export function PhonePause({ store }: { store: ShellStore }) {
@@ -49,7 +51,8 @@ export function PhonePause({ store }: { store: ShellStore }) {
             className="btn btn--volt btn--sm btn--block m-p3 m-p8"
             style={rise(1)}
             onClick={blurAfter(() => {
-              void shareRoom(room).then(showChip);
+              // friends: the invite picker (it has the link too); otherwise the share sheet
+              inviteFriends(ctl, () => void shareRoom(room).then(showChip));
             })}
           >
             <Icon name="users-plus" />
@@ -104,6 +107,8 @@ export function PhonePause({ store }: { store: ShellStore }) {
           </span>
         </div>
       </aside>
+      {/* voice chat (voice/): mute a player, Mute all opponents (under the sitrep) */}
+      {room && <VoicePauseCard shell={store} />}
 
       <Sheet open={confirm} onClose={() => setConfirm(false)} label={what === 'training' ? 'Quit training?' : `Leave this ${what}?`}>
         <div className="pm-sheet__head">

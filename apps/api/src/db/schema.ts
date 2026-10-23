@@ -1,6 +1,7 @@
 /**
  * Postgres schema, first cut of docs/06 §7: the identity tables (users, identities, profiles,
- * sessions), the players' saved loadouts, and match results with lifetime stats. Change it, then `pnpm --filter @military-forge/api db:generate` writes the
+ * sessions), the players' saved loadouts, match results with lifetime stats, and friends (friend
+ * codes, friendships, requests, blocks). Change it, then `pnpm --filter @military-forge/api db:generate` writes the
  * next migration into drizzle/. Timestamps are always written by the app clock, so tests can
  * move time.
  */
@@ -57,6 +58,11 @@ export const profiles = pgTable('profiles', {
   nicknameChangedAt: timestamp('nickname_changed_at', tz),
   level: integer('level').notNull().default(1),
   xp: integer('xp').notNull().default(0),
+  /**
+   * The short code friends add you by (friends/code.ts: 8 letters and digits, no lookalikes), made
+   * the first time it's needed; null until then. A new code (rotate) retires the old one.
+   */
+  friendCode: text('friend_code').unique(),
 });
 
 /** One row per signed-in device: the refresh token family (auth/sessions.ts). */
@@ -180,4 +186,55 @@ export const statsLifetime = pgTable(
     playtimeS: integer('playtime_s').notNull().default(0),
   },
   (t) => [primaryKey({ columns: [t.userId, t.weaponId] })],
+);
+
+/**
+ * Friendships, stored both ways (one row per side), so "my friends" is one indexed lookup and
+ * either side removing it deletes both rows (friends/service.ts).
+ */
+export const friendships = pgTable(
+  'friendships',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    friendId: text('friend_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', tz).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.friendId] }), index('friendships_friend_id_idx').on(t.friendId), check('friendships_not_self', sql`${t.userId} <> ${t.friendId}`)],
+);
+
+/** A friend request waiting for an answer (from → to). Accepting turns it into a friendship. */
+export const friendRequests = pgTable(
+  'friend_requests',
+  {
+    fromId: text('from_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    toId: text('to_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', tz).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.fromId, t.toId] }), index('friend_requests_to_id_idx').on(t.toId), check('friend_requests_not_self', sql`${t.fromId} <> ${t.toId}`)],
+);
+
+/**
+ * Blocks (one way: `userId` blocked `blockedId`). A block ends any friendship and request between
+ * the two; the blocked player is never told, and their requests and invites go nowhere.
+ */
+export const blocks = pgTable(
+  'blocks',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    blockedId: text('blocked_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', tz).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.blockedId] }), index('blocks_blocked_id_idx').on(t.blockedId), check('blocks_not_self', sql`${t.userId} <> ${t.blockedId}`)],
 );

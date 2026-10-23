@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { LIMITS } from '../src/http/rateLimit';
 import { PRESENCE_TTL_MS } from '../src/presence/presence';
 import type { RoomJoin } from '../src/rooms/routes';
-import { bearer, createGuest, createTestApi, json, type TestApi } from './helpers';
+import { befriend, bearer, createGuest, createTestApi, json, type TestApi } from './helpers';
 
 let api: TestApi;
 beforeAll(async () => {
@@ -46,22 +46,26 @@ describe('after an API restart', () => {
 });
 
 describe('presence', () => {
-  it('online while the beats come, in a room once in one (others never see which), offline when they stop or it is cleared', async () => {
+  it("online while the beats come, in a room once in one (friends see which), offline when they stop or it is cleared; strangers see nothing", async () => {
     const me = await createGuest(api);
     const other = await createGuest(api);
-    expect(await presenceOf(api.app, other.accessToken, me.user.id)).toEqual({ status: 'offline', lastSeenAt: null });
+    const stranger = await createGuest(api);
+    await befriend(api.app, me, other);
+    expect(await presenceOf(api.app, other.accessToken, me.user.id)).toEqual({ status: 'offline', room: null, lastSeenAt: null });
 
     const res = await beat(api.app, me.accessToken);
     expect(await res.json()).toEqual({ status: 'online', room: null, lastSeenAt: new Date(api.clock.now()).toISOString() });
     expect(await presenceOf(api.app, other.accessToken, me.user.id)).toMatchObject({ status: 'online' });
+    // presence is private: a stranger can't tell whether you're on (or exist)
+    const peek = await api.app.request(`/players/${me.user.id}/presence`, { headers: bearer(stranger.accessToken) });
+    expect(peek.status).toBe(403);
+    expect(((await peek.json()) as { error: { code: string } }).error.code).toBe('not_friends');
 
-    // joining a room marks it; the code is shown to the player only
+    // joining a room marks it; friends see the code (a code is an invitation)
     const room = (await (await api.app.request('/rooms', json({}, { ...bearer(other.accessToken), 'x-forwarded-for': api.ip() }))).json()) as RoomJoin;
     expect((await joinOn(api.app, me.accessToken, room.code, api.ip())).status).toBe(200);
     expect(await presenceOf(api.app, me.accessToken, 'me')).toMatchObject({ status: 'in_room', room: room.code });
-    const seen = await presenceOf(api.app, other.accessToken, me.user.id);
-    expect(seen.status).toBe('in_room');
-    expect(seen).not.toHaveProperty('room');
+    expect(await presenceOf(api.app, other.accessToken, me.user.id)).toMatchObject({ status: 'in_room', room: room.code });
     // a beat naming a code that doesn't exist is just "online"
     expect(await (await beat(api.app, me.accessToken, 'QQQQQQ')).json()).toMatchObject({ status: 'online', room: null });
 
@@ -71,8 +75,7 @@ describe('presence', () => {
     if (api.kv.kind !== 'memory') return; // a real Valkey's TTL can't be fast-forwarded
     await beat(api.app, me.accessToken);
     api.clock.advance(PRESENCE_TTL_MS + 1);
-    const late = await createGuest(api);
-    expect(await presenceOf(api.app, late.accessToken, me.user.id)).toMatchObject({ status: 'offline' });
+    expect(await presenceOf(api.app, other.accessToken, me.user.id)).toMatchObject({ status: 'offline' });
   });
 
   it('needs a signed-in player, a well-formed body, and is rate limited', async () => {

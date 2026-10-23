@@ -22,6 +22,7 @@ import { stormFrontMap } from './maps/stormFront';
 import { streetMarketMap } from './maps/streetMarket';
 import { ARMORY_RESPAWN_RANGE, POWER_WEAPONS, SPAWN_POOLS } from './pickups';
 import { TUNING_GROUPS, defaultTuning, type Tuning } from './tuning';
+import { VOICE } from './voice';
 import { weapons, type WeaponDef } from './weapons';
 
 export type AdminScope = 'tuning' | 'content' | 'server';
@@ -253,6 +254,13 @@ add({ key: 'match.killLimit', group: 'Bots & match', section: 'Match', label: 'K
 // lag compensation's latency cap (netcode LAG_COMP_LATENCY_CAP_MS; a server's LAG_COMP_LATENCY_MS):
 // shots are rewound for this much latency, plus the most the shooter's view can lag (200 ms)
 add({ key: 'net.lagCompMs', group: 'Network', section: 'Lag compensation', label: 'Rewind shots for up to this much latency (ms; the view delay, 200 ms, comes on top)', min: 0, max: 1000, step: 10, def: 250, scope: 'server' });
+
+// ---------- voice chat (v18): proximity, last words ----------
+
+prop('Voice chat', 'Proximity', 'voice.radius', 'Voices carry (m)', VOICE, 'radius', 4, 80, 1);
+prop('Voice chat', 'Proximity', 'voice.falloffStart', 'Full volume up to (m)', VOICE, 'falloffStart', 0, 30, 0.5);
+prop('Voice chat', 'Last words', 'voice.lastWords', 'Last words after a death (s)', VOICE, 'lastWords', 0, 30, 0.5);
+prop('Voice chat', 'Streams', 'voice.maxSpeakers', 'Voices heard at once', VOICE, 'maxSpeakers', 1, 8, 1);
 
 /** Every field the admin page offers, in page order. */
 export const ADMIN_FIELDS: readonly AdminField[] = fields;

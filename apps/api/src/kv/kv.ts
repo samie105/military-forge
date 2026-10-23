@@ -6,6 +6,8 @@
 export interface Kv {
   readonly kind: 'memory' | 'redis';
   get(key: string): Promise<string | null>;
+  /** Several keys in one round trip, in order (null where missing): a friends list's presence. */
+  mget(keys: readonly string[]): Promise<(string | null)[]>;
   /** returns false when `onlyIfAbsent` is set and the key already exists */
   set(key: string, value: string, opts?: { ttlMs?: number; onlyIfAbsent?: boolean }): Promise<boolean>;
   /** returns true when a key was removed */
@@ -58,6 +60,10 @@ export class MemoryKv implements Kv {
 
   async get(key: string): Promise<string | null> {
     return this.live(key)?.value ?? null;
+  }
+
+  async mget(keys: readonly string[]): Promise<(string | null)[]> {
+    return keys.map((k) => this.live(k)?.value ?? null);
   }
 
   async set(key: string, value: string, opts: { ttlMs?: number; onlyIfAbsent?: boolean } = {}): Promise<boolean> {

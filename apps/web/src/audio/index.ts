@@ -11,6 +11,7 @@ import type { StoreApi } from 'zustand/vanilla';
 import type { AudioSettings, ShellState } from '../shell/store';
 import type { Frame } from '../view';
 import type { AudioEvent, FrameExtras } from './director';
+import type { AudioEngine } from './engine';
 import type { AudioRuntime } from './runtime';
 import { createUnlocker, makeAudioContext } from './unlock';
 
@@ -55,6 +56,10 @@ export const audio = {
   /** a new game mode (or none): forget the last one's loops */
   reset(): void {
     runtime?.reset();
+  },
+  /** the running engine, null until the first tap starts the sound (voice chat plays through it) */
+  engine(): AudioEngine | null {
+    return runtime?.engine ?? null;
   },
   /** Settings → Audio, and Accessibility's "Soften loud bursts" */
   applySettings(a: AudioSettings, softBursts: boolean): void {

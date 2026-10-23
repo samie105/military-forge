@@ -24,7 +24,7 @@ const KEY_BINDINGS: Record<string, number> = {
   KeyG: Btn.Grenade,
   KeyT: Btn.CycleGrenade,
   KeyE: Btn.Interact,
-  KeyV: Btn.Melee,
+  KeyC: Btn.Melee,
   ShiftLeft: Btn.Dash,
   ShiftRight: Btn.Dash,
   KeyX: Btn.Shield,

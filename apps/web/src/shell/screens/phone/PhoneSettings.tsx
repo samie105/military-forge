@@ -15,6 +15,7 @@ import { Switch, blurAfter } from '../../../ui/Screen';
 import { Slider } from '../../../ui/Slider';
 import { useCtl } from '../../context';
 import type { AudioSettings, Settings, SettingsTab, ShellStore } from '../../store';
+import { VoiceSettingsSection } from '../../../voice/VoiceHud';
 import { TEXT_SIZES, autoText, resetPatch } from '../Settings';
 import { PhoneScreen, rise } from './layout';
 import { PadControls } from '../../../gamepad/PadSettings';
@@ -230,6 +231,8 @@ function Audio({ settings }: { settings: Settings }) {
       <Row i={rows.length} label="Headphones (3D sound)" desc="Earbuds: enemies placed by ear. Off for speakers.">
         <Switch on={audio.headphones} onChange={(headphones) => set({ headphones })} label="Headphones (3D sound)" />
       </Row>
+      {/* voice chat (voice/): its own rows, saved on this device */}
+      <VoiceSettingsSection />
     </>
   );
 }

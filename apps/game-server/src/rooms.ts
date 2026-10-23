@@ -14,7 +14,7 @@
  * capped per IP, per room and overall, so idle sockets can't hold the server's room slots.
  */
 import { loadoutGunIndices } from '@military-forge/content';
-import { CONTENT_HASH, CloseCode, MsgType, PROTOCOL_VERSION, decodeMessage, encodeHello, encodePong, type HelloMsg, type Message } from '@military-forge/protocol';
+import { CONTENT_HASH, CloseCode, MsgType, decodeMessage, encodeHello, encodePong, protocolSupported, type HelloMsg, type Message } from '@military-forge/protocol';
 import { isRoomCode } from '@military-forge/shared';
 import { createMatchRules, type MatchRules } from '@military-forge/sim';
 import { LanSignal } from './lanSignal';
@@ -185,7 +185,8 @@ export class RoomRegistry {
   }
 
   private hello(v: Visitor, msg: HelloMsg, bytes: Uint8Array): void {
-    if (msg.protocolVersion !== PROTOCOL_VERSION || msg.contentHash !== CONTENT_HASH) {
+    // v17 pages still play (no voice for them): MIN_PROTOCOL_VERSION
+    if (!protocolSupported(msg.protocolVersion) || msg.contentHash !== CONTENT_HASH) {
       return this.turnAway(v, CloseCode.VersionMismatch, 'version mismatch: refresh to update');
     }
     let room = this.roomOf(v.code);
@@ -195,6 +196,7 @@ export class RoomRegistry {
     let hello = bytes;
     let accountId: string | null = null;
     let guns: [number, number] | null = null;
+    let party: string | null = null;
     if (!resuming && v.code !== '' && this.tickets) {
       const verdict = this.tickets.admit(msg.ticket, v.code);
       if (!verdict.ok) {
@@ -205,6 +207,7 @@ export class RoomRegistry {
       hello = encodeHello(verdict.claims.nick, '');
       accountId = verdict.claims.sub;
       guns = loadoutGunIndices(verdict.claims.guns); // null: not a pair a player may choose (the default pair then)
+      party = verdict.claims.party ?? null;
     }
     room ??= this.openRoom(v.code);
     this.leaveDoor(v);
@@ -212,6 +215,7 @@ export class RoomRegistry {
     v.client = room.connect(v.conn);
     v.client.accountId = accountId;
     v.client.guns = guns;
+    v.client.party = party;
     room.receive(v.client, hello);
   }
 

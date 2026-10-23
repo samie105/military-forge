@@ -17,6 +17,7 @@ import { moveIndicator } from '../../ui/motion';
 import { Slider } from '../../ui/Slider';
 import { useCtl, useKeyboardLayout, useTicker } from '../context';
 import { ACTIONS, MAX_BINDINGS, defaultBindings, keyLabel, rebind, unbind, type ActionDef, type ActionId } from '../controls';
+import { VoiceSettingsSection } from '../../voice/VoiceHud';
 import { DEFAULT_AUDIO, DEFAULT_SETTINGS, type AudioSettings, type GraphicsPreset, type Settings, type SettingsTab, type ShellStore } from '../store';
 import { Backdrop } from './frame';
 
@@ -153,6 +154,8 @@ function Audio({ settings }: { settings: Settings }) {
       <Volume audio={settings.audio} k="ui" label="Interface" desc="Clicks, the countdown, hit and kill confirms." />
       <Volume audio={settings.audio} k="voice" label="Voices" desc="Soldiers getting hit or coughing in gas." />
       <Headphones audio={settings.audio} />
+      {/* voice chat (voice/): its own rows, saved on this device */}
+      <VoiceSettingsSection />
     </div>
   );
 }

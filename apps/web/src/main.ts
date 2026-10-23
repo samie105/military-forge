@@ -58,6 +58,7 @@ import { DefaultLoadingManager } from 'three';
 import { assetLoad } from './assetLoad';
 import { creatorSeen } from './creator/model';
 import { titleWanted } from './shell/title';
+import { voiceChat } from './voice';
 
 const params = new URLSearchParams(location.search);
 /** the player-facing app, or (dev builds at `/`) the Phase 0 debug client */
@@ -223,6 +224,8 @@ function setMode(next: LocalMode | OnlineMode | null): void {
   mode = next;
   audio.reset();
   if (!(next instanceof OnlineMode)) onlineRoom = null;
+  // voice chat (v18): in online rooms only
+  voiceChat.attach(next instanceof OnlineMode ? next : null);
   presence?.update();
   camera.setZoom(0, 1);
   if (next instanceof OnlineMode && settings?.lowBandwidth) next.net.setLowBandwidth(true);
@@ -326,6 +329,8 @@ const host: GameHost = {
     netGraphKeys = uiCodes(next.bindings, 'netGraph');
     scoreboardKeys = uiCodes(next.bindings, 'scoreboard');
     hud?.setScoreboardKeys(scoreboardKeys);
+    voiceChat.talkKeys = uiCodes(next.bindings, 'talk');
+    voiceChat.padButtons = next.pad.enabled ? next.pad.bindings.talk : [];
     applyHudKeys();
     // controllers: their settings, and no rumble under Reduce flashes
     applyPadSettings(next.pad, next.reduceFlashes);
@@ -581,6 +586,7 @@ function scoreRows(): ScoreRow[] | null {
   const pings = new Map(st.lobby.map((p) => [p.id, p.pingMs]));
   return st.standings.map((s) => ({
     key: s.key,
+    id: s.id,
     name: s.name,
     score: s.score,
     kills: s.kills,
@@ -660,6 +666,7 @@ function frame(now: number): void {
     hud?.setVisible(false);
     if (!covered) drawMenuBackdrop(now, dt);
     audio.onFrame(null, dt, null);
+    voiceChat.frame(null);
     shell.update();
     shell.setMapEvent(null);
     return;
@@ -691,6 +698,9 @@ function frame(now: number): void {
   if (covered) return; // the mode keeps running (online: inputs and heartbeats), nothing is drawn
   renderer.render(f, dt, options, appMode ? '' : HELP);
   audio.onFrame(f, dt, { fuelMax: mode.tuning().fuelMax, fireHeld: (sampler.lastButtons & Btn.Fire) !== 0, map });
+  // voice chat: voices follow their soldiers; menus over the game take push to talk's key
+  voiceChat.blocked = shell.store.getState().overlay !== null;
+  voiceChat.frame(f, toScreen);
   fxFrame(f, dt); // flashbang white-out / gas edge over the view (arsenal B, apps/web/src/fx)
   if (f.net && mode instanceof OnlineMode) recordNet(now, f.net.rttMs, f.net.prediction?.snapshotLossPct ?? 0, serverHost);
   if (hud) {

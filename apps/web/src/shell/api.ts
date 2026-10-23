@@ -233,6 +233,23 @@ export class Api {
     await this.request<unknown>('DELETE', '/me/presence', undefined, true);
   }
 
+  /**
+   * A signed-in call for the modules beside the shell (social/: friends, invites): the same base,
+   * session refresh and `{ error }` contract as everything here.
+   */
+  authed<T>(method: string, path: string, body?: unknown): Promise<T> {
+    return this.request<T>(method, path, body, true);
+  }
+
+  /**
+   * A signed-in long response (the social push channel, GET /events: Server-Sent Events read with
+   * fetch, so the token travels in a header, never in a URL). The caller reads and closes the body.
+   */
+  async stream(path: string, signal: AbortSignal): Promise<Response> {
+    const token = await this.accessToken();
+    return this.fetchImpl(`${this.base}${path}`, { headers: { authorization: `Bearer ${token}`, accept: 'text/event-stream' }, signal, credentials: 'same-origin', cache: 'no-store' });
+  }
+
   /** The server's round trip (GET /version: no database work), ms: the ping the menus show before a game connects. */
   async ping(): Promise<number> {
     const t0 = performance.now();

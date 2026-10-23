@@ -15,6 +15,13 @@ import { secureHeaders } from 'hono/secure-headers';
 import pkg from '../package.json' with { type: 'json' };
 import type { SigningKey } from './auth/keys';
 import { authRoutes } from './auth/routes';
+import { MemoryBus, type EventBus } from './events/bus';
+import { eventRoutes } from './events/routes';
+import { friendRoutes } from './friends/routes';
+import { FriendsService } from './friends/service';
+import { PartyService } from './invites/party';
+import { inviteRoutes, partyRoutes } from './invites/routes';
+import { InviteService } from './invites/service';
 import { AuthService } from './auth/sessions';
 import type { Config } from './config';
 import type { Database } from './db/client';
@@ -42,6 +49,8 @@ export interface AppDeps {
   /** signs join tickets for the game server (docs/06 §6); null = none (dev) */
   ticketKey?: SigningKey | null;
   log: Logger;
+  /** the social push channel's fan-out (events/bus.ts): Valkey pub/sub in production, in memory otherwise */
+  bus?: EventBus;
   /** injectable clock (ms) for tests */
   now?: () => number;
 }
@@ -127,12 +136,26 @@ export function createApp(deps: AppDeps) {
   const leaderboards = new Leaderboards(db, kv, now);
   app.route('/leaderboards', leaderboardRoutes({ auth, leaderboards }));
   app.route('/players', profileRoutes({ db, auth }));
-  app.route('/players', playerPresenceRoute({ auth, presence }));
+  // the push channel (GET /events): friends' lists, presence changes, invites, the party
+  const bus = deps.bus ?? new MemoryBus();
+  const tell = (userIds: readonly string[], event: Parameters<EventBus['publish']>[1]) => {
+    for (const id of userIds) void bus.publish(id, event).catch((err: unknown) => log.warn({ err }, 'event not published'));
+  };
+  const friends = new FriendsService(db, presence, now, (ids) => tell(ids, { type: 'friends' }));
+  // a status or room change reaches the player's friends at once (presence stays friends-only)
+  presence.onChange(async (userId, p) => tell(await friends.friendIds(userId), { type: 'presence', id: userId, status: p.status, room: p.room }));
+  const party = new PartyService(db, kv, bus, now);
+  const invites = new InviteService(db, kv, bus, friends, presence, party, now);
+  app.route('/events', eventRoutes({ auth, kv, bus, now }));
+  app.route('/friends', friendRoutes({ config, kv, auth, friends }));
+  app.route('/invites', inviteRoutes({ kv, auth, invites, now }));
+  app.route('/party', partyRoutes({ kv, auth, party }));
+  app.route('/players', playerPresenceRoute({ auth, presence, areFriends: (a, b) => friends.areFriends(a, b) }));
   // the game server's match results: on only with its public key (RESULTS_PUBLIC_KEY)
   if (config.resultsPublicKeyPem) app.route('/internal', matchRoutes({ db, key: resultsPublicKey(config.resultsPublicKeyPem), leaderboards, now }));
   app.route('/me', meRoutes({ config, db, kv, auth, profiles }));
   app.route('/nicknames', nicknameRoutes({ config, kv, auth, profiles }));
-  app.route('/rooms', roomRoutes({ config, db, kv, auth, profiles, presence, ticketKey: deps.ticketKey ?? null, now }));
+  app.route('/rooms', roomRoutes({ config, db, kv, auth, profiles, presence, party, ticketKey: deps.ticketKey ?? null, now }));
 
   app.notFound((c) => errorResponse(c, 404, 'not_found', `No route for ${c.req.method} ${c.req.path}`));
   app.onError((err, c) => {

@@ -30,6 +30,20 @@ export const LIMITS = {
   roomCreateIp: { name: 'roomnewip', limit: 30, windowMs: 10 * 60_000 },
   /** joins with a code that doesn't exist, per IP (docs/07 §5.1: brute-forcing codes is pointless) */
   roomJoinMiss: { name: 'roommiss', limit: 5, windowMs: 60_000 },
+  /**
+   * friend requests by name or code, hits and misses alike, per user and per IP: finding out who
+   * exists by name stays slow (the friends panel's Add a friend)
+   */
+  friendLookup: { name: 'friendlook', limit: 20, windowMs: 10 * 60_000 },
+  friendLookupIp: { name: 'friendlookip', limit: 60, windowMs: 10 * 60_000 },
+  /** reading the friends list, per user (the panel refreshes every 30 s while open) */
+  friendsRead: { name: 'friends', limit: 60, windowMs: 60_000 },
+  /** accept, decline, cancel, remove, block, unblock, a new code, invite answers, leaving a party: per user */
+  friendWrite: { name: 'friendwrite', limit: 120, windowMs: 10 * 60_000 },
+  /** invites sent, per user (the same invite again waits 5 s: invites/service.ts) */
+  inviteSend: { name: 'invite', limit: 40, windowMs: 10 * 60_000 },
+  /** push-channel connects per user (GET /events; one per tab every ~15 min, more on a bad network) */
+  eventsConnect: { name: 'events', limit: 30, windowMs: 60_000 },
 } as const satisfies Record<string, RateRule>;
 
 export async function enforceRateLimit(kv: Kv, rule: RateRule, key: string): Promise<void> {

@@ -1266,6 +1266,7 @@ export class Hud {
       const lead = list.length > 1 && list[0]!.score > list[1]!.score;
       this.boardCells = list.map((r, i) => {
         const row = el('tr', [fresh ? 'm-p3 m-p3--tight' : '', r.you ? 'is-you' : ''].filter(Boolean).join(' '), body);
+        if (r.id !== undefined && !r.left) row.dataset.pid = String(r.id); // voice chat's talking ring (voice/voice.css)
         if (fresh) stagger(row, i);
         const rank = el('td', 'sb__rank num', row);
         const who = el('td', 'sb__name', row);

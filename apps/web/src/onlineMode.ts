@@ -184,6 +184,9 @@ export class OnlineMode {
   onTuningFromServer: () => void = () => {};
   private readonly tuningListeners = new Set<TuningListener>();
   private readonly hostListeners = new Set<(was: number, now: number) => void>();
+  /** voice chat (voice/voice.ts, v18): VOICE_DOWN and VOICE_STATE go here, not to the netcode */
+  private readonly voiceListeners = new Set<(bytes: Uint8Array) => void>();
+  private readonly connectedListeners = new Set<() => void>();
   /** the admin values last heard (WELCOME, OVERRIDES): to tell which tuning keys the admin just changed */
   private adminSeen: AdminValues = {};
   /** tuning keys the latest OVERRIDES changed: the TUNING right after it is the admin's for those */
@@ -290,6 +293,37 @@ export class OnlineMode {
 
   returnToLobby(): void {
     this.sendCmd(CmdKind.ReturnToLobby);
+  }
+
+  // ---- voice chat (v18, voice/voice.ts) ----
+
+  /** Everyone's name by player id (the roster): voice chat's labels. */
+  get playerNames(): ReadonlyMap<number, string> {
+    return this.net.names;
+  }
+
+  /** VOICE_DOWN and VOICE_STATE as they arrive; returns the stop. */
+  onVoice(fn: (bytes: Uint8Array) => void): () => void {
+    this.voiceListeners.add(fn);
+    return () => this.voiceListeners.delete(fn);
+  }
+
+  /** After every WELCOME (joined, or back after a drop); returns the stop. */
+  onConnected(fn: () => void): () => void {
+    this.connectedListeners.add(fn);
+    return () => this.connectedListeners.delete(fn);
+  }
+
+  /** A voice frame up; skipped while a stalled WebSocket is backed up (stale voice is worse than none). */
+  sendVoice(bytes: Uint8Array): void {
+    if (!this.net.isConnected || (this.transport?.backlog() ?? 0) > 32 * 1024) return;
+    this.bytesOut += bytes.length;
+    this.up.send(bytes);
+  }
+
+  /** The Voice CMD (JSON, protocol voice.ts). */
+  sendVoiceSettings(json: string): void {
+    this.sendCmd(CmdKind.Voice, json);
   }
 
   /** Host: the room's limits and map (lobby only) and its bots (any phase, v17). */
@@ -443,6 +477,10 @@ export class OnlineMode {
 
 
   private onMessage(bytes: Uint8Array): void {
+    if (bytes[0] === MsgType.VoiceDown || bytes[0] === MsgType.VoiceState) {
+      for (const fn of this.voiceListeners) fn(bytes);
+      return;
+    }
     const msg = this.net.receive(bytes);
     if (!msg) return;
     switch (msg.type) {
@@ -452,6 +490,7 @@ export class OnlineMode {
         this.droppedAt = 0;
         this.reconnectAttempt = 0;
         saveToken(this.options.room, msg.sessionToken);
+        for (const fn of this.connectedListeners) fn();
         // the room's tuning as it is now (it may have changed while we were away): an open Tune
         // panel and the HUD hear of it (not live: nobody "just" changed it)
         const keys = adminTuningKeys(this.adminSeen, this.net.adminValues);

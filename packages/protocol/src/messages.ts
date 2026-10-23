@@ -68,8 +68,21 @@ export { MsgType } from './wire';
  * v17 (ui-playtest, the host's bots): MATCH_STATE's rules gain bots u5 (fill target, 0 = none) and
  *     botLevel u2 (easy, normal, hard) after onNoRematch; the MatchSettings CMD's JSON takes bots and
  *     botLevel in any phase. (Claimed as v15; renumbered after v16 landed first.)
+ * v18 (social, voice chat): VOICE_UP 0x29 (C→S, unreliable) · VOICE_DOWN 0x2A (S→C, unreliable) ·
+ *     VOICE_STATE 0x2B (S→C) · CMD kind 11 Voice (JSON) (voice.ts). Nothing else changes, so a v17
+ *     client still joins (MIN_PROTOCOL_VERSION) and simply never gets voice.
  */
-export const PROTOCOL_VERSION = 17;
+export const PROTOCOL_VERSION = 18;
+/**
+ * The oldest client a server still admits. v18 only added messages a v17 client never receives
+ * (the server sends voice only to clients that said v18 and asked for it), so v17 pages still play.
+ */
+export const MIN_PROTOCOL_VERSION = 17;
+
+/** A client's protocol version this server can serve. */
+export function protocolSupported(version: number): boolean {
+  return version >= MIN_PROTOCOL_VERSION && version <= PROTOCOL_VERSION;
+}
 
 /**
  * Everything the sim reads from packages/content: a client and server that disagree on any of it
@@ -166,6 +179,8 @@ export const CmdKind = {
   ReportPing: 9,
   /** leaving for good: the player goes now instead of waiting out the reconnect grace */
   Leave: 10,
+  /** v18: voice chat settings (JSON VoiceSettingsCmd, voice.ts), the whole state each time */
+  Voice: 11,
 } as const;
 
 export const MAX_INPUTS_PER_PACKET = 4;
@@ -179,7 +194,7 @@ export const HEALTH_UNKNOWN = -128;
  */
 export function isUnreliableMessage(bytes: Uint8Array): boolean {
   const type = bytes[0];
-  return type === MsgType.Input || type === MsgType.Ping || type === MsgType.Pong || type === MsgType.Snapshot || type === MsgType.Debug;
+  return type === MsgType.Input || type === MsgType.Ping || type === MsgType.Pong || type === MsgType.Snapshot || type === MsgType.Debug || type === MsgType.VoiceUp || type === MsgType.VoiceDown;
 }
 
 export const DebugKind = {

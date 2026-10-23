@@ -26,6 +26,7 @@ import { ApiError } from '../http/errors';
 import { LIMITS, enforceRateLimit } from '../http/rateLimit';
 import type { Kv } from '../kv/kv';
 import type { ProfileService } from '../me/profiles';
+import type { PartyService } from '../invites/party';
 import type { PresenceService } from '../presence/presence';
 
 /** A code stays joinable this long after its last join (docs/07 §5.4: rooms live ≤ 2 h idle-free; playtests run long). */
@@ -76,6 +77,8 @@ export interface JoinTicketClaims extends StandardClaims {
   jti: string;
   /** the two guns the player spawns with (their saved loadout, weapon ids); absent = the default pair */
   guns?: [string, string];
+  /** the player's party (invites/party.ts): party voice reaches party mates anywhere in the room; absent = none */
+  party?: string;
 }
 
 /** The guns of the player's saved loadout (slot 0), when they're a pair a player may choose now. */
@@ -89,8 +92,18 @@ async function savedGuns(db: Db, userId: string): Promise<[string, string] | nul
   return guns && loadoutGunIndices(guns) ? [guns[0], guns[1]] : null;
 }
 
-export function roomRoutes(deps: { config: Config; db?: Db; kv: Kv; auth: AuthService; profiles: ProfileService; presence?: PresenceService; ticketKey: SigningKey | null; now: () => number }): Hono<AppEnv> {
-  const { config, db, kv, auth, profiles, presence, ticketKey, now } = deps;
+export function roomRoutes(deps: {
+  config: Config;
+  db?: Db;
+  kv: Kv;
+  auth: AuthService;
+  profiles: ProfileService;
+  presence?: PresenceService;
+  party?: PartyService;
+  ticketKey: SigningKey | null;
+  now: () => number;
+}): Hono<AppEnv> {
+  const { config, db, kv, auth, profiles, presence, party, ticketKey, now } = deps;
   const app = new Hono<AppEnv>();
   app.use(requireAuth(auth));
 
@@ -100,6 +113,7 @@ export function roomRoutes(deps: { config: Config; db?: Db; kv: Kv; auth: AuthSe
     if (!me) throw new ApiError(401, 'no_session', 'Sign in again');
     const iat = Math.floor(now() / 1000);
     const guns = db ? await savedGuns(db, userId) : null;
+    const partyId = party ? await party.partyOf(userId) : null;
     const claims: JoinTicketClaims = {
       iss: TICKET_ISSUER,
       aud: TICKET_AUDIENCE,
@@ -110,6 +124,7 @@ export function roomRoutes(deps: { config: Config; db?: Db; kv: Kv; auth: AuthSe
       room: code,
       jti: randomBytes(16).toString('base64url'),
       ...(guns ? { guns } : {}),
+      ...(partyId ? { party: partyId } : {}),
     };
     return signJwt(claims, ticketKey.privateKey);
   }

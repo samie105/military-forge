@@ -10,6 +10,7 @@ import { EVENT_KINDS, grenades, weapons } from '@military-forge/content';
 import { describe, expect, it } from 'vitest';
 import { eventLook } from '../src/hud/model';
 import { iconHref, weaponIcon } from '../src/ui/icons';
+import { SOCIAL_ICONS } from '../src/social/icons';
 import { SPRITE_IDS } from '../src/ui/sprite';
 
 const SRC = fileURLToPath(new URL('../src', import.meta.url));
@@ -24,7 +25,8 @@ function files(dir: string, ext: RegExp): string[] {
 }
 const sources = files(SRC, /\.(tsx?|css)$/).filter((f) => !/\.test\.tsx?$/.test(f));
 const read = (f: string) => readFileSync(f, 'utf8');
-const inSprite = (href: string) => SPRITE_IDS.includes(href.replace(/^#/, ''));
+// the kit's sprite, and the social screens' own small one (social/icons.ts: `sx-*`)
+const inSprite = (href: string) => SPRITE_IDS.includes(href.replace(/^#/, '')) || SOCIAL_ICONS.some((n) => `icon-${n}` === href.replace(/^#/, ''));
 
 describe('icons', () => {
   it('every icon the code names by a literal is in the sprite', () => {

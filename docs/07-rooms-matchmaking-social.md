@@ -141,6 +141,8 @@ Matchmaker loop (every 1 s, leader-elected per region):
 
 ## 7. Friends & presence
 
+> **Built (23 Oct 2026), first cut:** §13 below. It differs from this plan in three places: friends add each other by exact name or a short friend code (there's no `#tag`); presence is `offline | online | in_room(code)`; invites last 2 minutes and arrive over the API's push channel (no Web Push yet).
+
 - Add by nickname#tag, by profile link, from "recent players" (last 20 matches), or from a QR code on the profile.
 - Requests → accept/decline. Block removes the friendship and prevents invites, chat and same-party.
 - **Presence** (`presence:{userId}` in Redis, TTL 60 s, refreshed by the social WS): `offline | online | in_menu | in_queue(mode) | in_match(mode, joinable?) | in_custom_room(code?)`. "Appear offline" and "friends-only invites" privacy options.
@@ -162,7 +164,7 @@ Create (level 10+, cost soft currency), tag `[ABC]` shown before names, roles le
 | Contextual pings | ✅ (BR) | middle-click/`Z`: enemy, loot, go-here, danger. Shows on the minimap strip + in world. Cooldown 1 s, burst 3 |
 | Emotes / stickers | ✅ | 6 equippable slots. Soft cooldown 2 s, hard 6 s after a burst. Mute blocks a player's emotes too |
 | Text chat | ✅ | lobby, team, all, party, DM (friends only). **Off by default** for under-13 / unknown age and wherever the portal asks to disable chat |
-| Voice | post-MVP | party/team channels via **LiveKit** (open-source SFU), push-to-talk default, per-player volume, off for minors. Optional proximity voice in custom rooms (Web Audio `PannerNode`) |
+| Voice | ✅ (built, v18) | **Built 23 Oct 2026 without an SFU:** the game server relays Opus frames on the game's own connection (docs/05 §17). Proximity (opponents too, last words), party and team radio; push-to-talk default; per-player mute and Mute all opponents. Off for minors when ages exist |
 
 **Chat safety pipeline:**
 1. Normalise: NFKC, confusables, leetspeak (`1→i, 3→e, @→a`), repeated characters.
@@ -196,7 +198,7 @@ POST   /rooms                         → create custom room → {code, gsHost, 
 POST   /rooms/{code}/join  {password?}→ {gsHost, roomId, ticket}
 GET    /rooms?region=&mode=           → public browser list
 POST   /parties  ·  POST /parties/{id}/invite  ·  POST /parties/join/{token}  ·  POST /parties/{id}/kick|leave|promote|ready
-GET    /friends  ·  POST /friends/request  ·  POST /friends/{id}/accept|decline|remove|block
+GET    /friends  ·  POST /friends/requests  ·  POST /friends/requests/{id}/accept|decline  ·  DELETE /friends/{id}  ·  POST /friends/blocks   (built: §13)
 GET    /players/{id}/profile  ·  GET /players/{id}/matches   (profile built: §12; `me` for yourself)
 GET    /leaderboards/{board}?period=&scope=global|region|friends   (built: xp|kills|wins × all|week, global)
 POST   /internal/matches               (game server → API, signed: §12)
@@ -251,3 +253,70 @@ A player who leaves early keeps only the kill and assist XP.
 - **Deleted accounts.** An account that's deleted or banned is dropped from what's shown, and from the set.
 
 **For now every match counts**, including custom rooms. §5 keeps custom rooms out of leaderboards to stop XP farming, but quick play doesn't exist yet, so the playtest's rooms are the only matches there are. When quick play lands, filter on `matches.room` and give custom rooms the capped time XP §5 describes.
+
+## 13. Friends and presence (built, 23 Oct 2026)
+
+The owner's 23 Oct ask: "adding audio support, friends list and invites". This is the friends half; invites and voice follow in the same section as they land.
+
+**Identity.** Every player is a guest today: a stable user id that lives as long as its session (§3). Friendships hang on that id. A guest who clears their browser starts a new account without friends; account linking (later) keeps them. A deleted account's friendships, requests and blocks go with it (database cascades).
+
+**Adding someone.**
+- **By exact name:** the nickname's confusable skeleton (§3), so `KEMI_0PS` finds `Kemi_Ops` and nobody else; there's no search or partial match.
+- **By friend code:** 8 symbols from an alphabet without lookalikes (no 0/O, 1/I/L, U), shown `7KQ4-M9XP`, made the first time it's needed (`profiles.friend_code`). `POST /friends/code` makes a new one; the old one stops working.
+- **Rate limits:** a lookup by name or code counts against 20 per 10 minutes per player and 60 per IP, whether it finds anyone or not, so nobody can sweep the player list.
+
+**Requests.** A request waits until it's answered: accept, decline, or the sender takes it back. Asking someone who already asked you makes you friends at once. Limits: 50 requests waiting per player, 200 friends.
+
+**Blocking.** A block ends the friendship and every request between the two. The blocked player is never told: their new requests are stored but never shown, and are dropped when the block is lifted. A blocked player can't see your presence.
+
+**Presence is private.** Only you and your friends see it (`GET /players/{id}/presence` answers anyone else 403 `not_friends`). Friends see the room's code too, since a code is an invitation and friends are who you'd invite. The friends list reads every friend's presence in one Valkey round trip (`MGET`). An offline friend shows when their account last signed in.
+
+**Tables** (migration `0003_friends`): `friendships(user_id, friend_id, created_at)`, stored both ways; `friend_requests(from_id, to_id, created_at)`; `blocks(user_id, blocked_id, created_at)`; and `profiles.friend_code` (unique). Every table cascades on account deletion and refuses a row that names the same player twice.
+
+**Web** (`apps/web/src/social/`):
+- The friends panel: a Frost drawer on desktop, a sheet on phones. It shows your code, Add a friend, and three tabs (Friends, Requests, Blocked). Friends are grouped In a match / Online / Offline, with Join and a menu to remove or block (each asked once more).
+- Home: a Friends button with a badge, and the Squad card (a strip on phones).
+- Actions apply at once and roll back with a notice if the API refuses.
+- Design: the board "SOCIAL · friends, invites, voice" in the owner's Pen file.
+
+### 13.1 Invites, parties and the push channel (built, 23 Oct 2026)
+
+**Invites.** You can invite a friend to the room you're in from three places: the friends panel (Invite on a friend's row), the lobby (Invite friends) and the pause menu (Invite friends). The pause and lobby buttons open the invite picker.
+- **Only friends:** a block ends the friendship, so it stops invites too.
+- **Which room:** the one you're in (`POST /invites {to, room?}`), and it must exist.
+- **Two minutes:** an invite lasts 2 minutes. Inviting the same friend to the same room again sends it again with fresh time, no sooner than 5 s after the last.
+- **The toast:** the friend gets Join, Decline and Later (×), wherever they are. Mid-match it sits top left, clear of the HUD's middle; in the menus, top centre. It also has a greyed Watch, the hook for spectating, which is planned separately.
+- **Badge:** unseen invites count in the Friends badge with requests.
+- **Joining:** Join is the usual room flow (`/r/CODE`, a fresh join ticket). Mid-match it first leaves the current room for good (the Leave CMD), so nobody waits out a reconnect grace.
+- **Storage:** invites live in Valkey only (`inv:{id}`, `inv:to:{userId}`, `inv:from:{userId}`), with the answer kept for the sender.
+- **The countdown:** it runs on the server's clock. `GET /invites` returns `now`, so a phone with a wrong clock still shows the right time left.
+
+**Not friends yet?** The picker also has Copy invite link, Share… (the phone's own share sheet) and WhatsApp: the room's `/r/CODE` link.
+
+**Parties.**
+- **Joining:** accepting an invite puts you in the inviter's party, a new one for the two of you if they had none. Accepting someone else's invite moves you to theirs.
+- **Life and size:** a party lives 6 hours after its last use (`party:{id}`, `partyof:{userId}` in Valkey) and holds at most 8. A party of one ends by itself.
+- **Leaving:** Leave on Home's squad card.
+- **Voice:** the join ticket carries the party id (`party`), so party voice can reach party mates anywhere in a room (§13.2).
+- **Privacy:** party mates who aren't friends see each other's names, never their presence.
+
+**The push channel (`GET /events`, Server-Sent Events from the API).** Invites, requests, friends' status changes, answers to your invites and party changes arrive within a second.
+- **Why SSE from the API, not the game socket:** it works in the menus (no game connection there). The API already owns friends, rooms and presence. And it's one long response on the API's own Caddy route (`/api/*`): no new port, process or service.
+- **Through Caddy:** it carries `Cache-Control: no-cache, no-transform`, so Caddy's site-wide `encode` leaves it alone, and Caddy's `reverse_proxy` flushes `text/event-stream` at once.
+- **Staying open:** a comment every 20 s keeps phones' carrier NATs open.
+- **Auth:** the web client reads it with `fetch` so the token goes in a header, not a URL.
+- **Ending and reconnecting:** the stream ends with the access token (15 min), and the client opens a new one at once. After a failure it backs off from 1 s to 30 s.
+- **Limits:** at most 4 streams per player per API process, and 30 connects a minute.
+- **Fan-out:** with `REDIS_URL` the events go through Valkey pub/sub (`ev:{userId}`), so any API process can hold the stream.
+- **Catching up:** while the stream is down, the friends list's own refresh (every 30–60 s) keeps it roughly right. When it reconnects, the client reloads invites, the party and the list.
+
+### 13.2 Voice chat (built, 23 Oct 2026)
+
+The design and the wire are in docs/05 §17. The social parts:
+- **Party voice:** reaches party mates (§13.1) anywhere in a room, through the join ticket's `party` claim.
+- **Privacy:** your mutes are yours. The server stops sending a muted player to you, and they're never told. Mute all opponents (the pause menu) and Hear opponents (Settings) are the same switch.
+- **Safety:**
+  - per-player mute in the pause menu's comms card;
+  - Mute all opponents;
+  - push-to-talk by default;
+  - a greyed Report (`data-hook="report"`) waits for reporting (§10).
