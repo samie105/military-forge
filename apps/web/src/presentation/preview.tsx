@@ -19,6 +19,10 @@ import '../shell/screens/phone/phone.css';
 import { PlayerAvatar } from './PlayerAvatar';
 import { VsPoster, useFighters } from './VsPoster';
 import { warmRoomPortraits } from './warm';
+import { TeamRoster, TeamModePicker } from '../teams/TeamRoster';
+import { TeamStandings } from '../teams/TeamResults';
+import { TeamStrip } from '../teams/hudStrip';
+import { applyTeamPalette } from '../teams/palette';
 
 const params = new URLSearchParams(location.search);
 const n = Math.max(1, Math.min(16, Number(params.get('n') ?? 8)));
@@ -49,6 +53,9 @@ const TEAMS: Record<string, number[]> = { '1v1': [1, 1], '2v2': [2, 2], '4v4': [
 const split = TEAMS[params.get('teams') ?? ''];
 let at = 0;
 const teams = split ? split.map((size) => Array.from({ length: size }, () => at++)) : null;
+
+applyTeamPalette((params.get('cb') as 'standard' | 'deutan' | 'tritan' | null) ?? 'standard');
+if (teams) lookBook.setTeams(teams.length, new Map(teams.flatMap((ids, t) => ids.map((id) => [id, t] as const))));
 
 const view: MatchView = {
   phase: MatchPhase.Countdown, number: 1, secondsLeft: state === 'strip' ? 3 : 5, untimed: false, secondsElapsed: 0, killLimit: 20, timeLimit: 300, countdownTotal: 5,
@@ -82,8 +89,32 @@ function Lobby() {
   );
 }
 
+/** Team modes: the lobby's team groups (host view, one player picked), the mode picker, and results by team. */
+function TeamPreview() {
+  const all = useFighters();
+  const players = all.map((f) => ({ id: f.id, name: f.name, isBot: f.isBot, ready: f.id % 3 === 0, host: f.host, you: f.you, pingMs: 30, team: lookBook.teamOf(f.id) }));
+  const scores = teams ? teams.map((_, t) => [24, 19, 21, 12][t]!) : [];
+  return (
+    <div className="mf-fit kit-v2">
+      <section className="screen screen--menu" data-screen="teams-preview" style={{ padding: 72, display: 'grid', gridTemplateColumns: '700px 1fr', gap: 48 }}>
+        <div className="card card--print" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <h2 className="display" style={{ fontSize: 48, margin: 0 }}>Roster {players.length}/16</h2>
+          <TeamRoster players={players} teams={teams?.length ?? 0} host onMove={() => {}} />
+        </div>
+        <div className="card card--print" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16, alignSelf: 'start' }}>
+          <h2 className="display" style={{ fontSize: 48, margin: 0 }}>Mission</h2>
+          <TeamModePicker teams={teams?.length ?? 0} onTeams={() => {}} />
+          <span className="label">Results by team</span>
+          <TeamStandings results={{ teamScores: scores, standings: all.map((f, i) => ({ placement: i + 1, id: f.id, key: f.id, name: f.name, isBot: f.isBot, left: false, score: 0, kills: 0, deaths: 0, suicides: 0, assists: 0, damageDealt: 0, damageTaken: 0, headshots: 0, bestStreak: 0, rating: 0, mvp: false, team: lookBook.teamOf(f.id) })) }} myTeam={0} />
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function Preview() {
   const all = useFighters();
+  if (state === 'teams') return <TeamPreview />;
   if (state === 'lobby') return <Lobby />;
   if (state === 'strip') return <Countdown view={view} state="3" />;
   return <VsPoster view={view} fighters={all} leaving={false} held={false} teams={teams} />;
@@ -96,3 +127,5 @@ document.body.appendChild(root);
 mountSprite();
 startFitting();
 createRoot(root).render(<Preview />);
+// the HUD's team strip as it shows mid-match (?state=strip with teams)
+if (teams && state === 'strip') new TeamStrip().update({ ...view, phase: MatchPhase.InProgress, teams: teams.length, teamScores: teams.map((_, t) => [24, 19, 21, 12][t]!), myTeam: 0 });

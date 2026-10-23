@@ -41,6 +41,8 @@ export interface MatchLobbyEntry {
   rematch: boolean;
   /** round-trip time the player's client measured, ms; -1 = not reported yet */
   pingMs: number;
+  /** v21 team modes: the player's team (0-based), −1 = none (a free-for-all, or an older server) */
+  team?: number;
 }
 
 /** One scoreboard row (sim MatchStanding without placement, which is the list order, and rating). */
@@ -60,6 +62,8 @@ export interface MatchStandingWire {
   damageTaken: number;
   headshots: number;
   bestStreak: number;
+  /** v21 team modes: the player's team, −1 = none */
+  team?: number;
 }
 
 /** The last finished match (from ENDING until the next GO). Keys, not slot ids: 1st place may have left. */
@@ -89,6 +93,12 @@ export interface MatchStateMsg {
   /** best first: the live standings, or the final results' from ENDING on */
   standings: MatchStandingWire[];
   results: MatchResultsWire | null;
+  /** v21: 0 = free-for-all, else 2–4 teams (MATCH_STATE's teams section; 0 from an older server) */
+  teams?: number;
+  /** v21: each team's score (team kills), empty in a free-for-all */
+  teamScores?: number[];
+  /** v21: the last match's winning team, −1 = none (no results, a draw, a free-for-all) */
+  winnerTeam?: number;
 }
 
 /** What a host may set in a custom room (docs/07 §5.2): limits in seconds / score, 0 = off. */
@@ -106,6 +116,11 @@ const MAX_LOBBY = 31;
 const MAX_STANDINGS = 63;
 const NO_KEY = 0xffff;
 const NO_PING = 1023;
+/** v21: a team on the wire (u3); 7 = none */
+const NO_TEAM = 7;
+const MAX_TEAMS_WIRE = 4;
+const teamOut = (t: number | undefined) => (t === undefined || t < 0 || t >= MAX_TEAMS_WIRE ? NO_TEAM : t);
+const teamIn = (t: number) => (t === NO_TEAM ? -1 : t);
 
 const w = new BitWriter(1024);
 
@@ -158,6 +173,15 @@ export function encodeMatchState(m: Omit<MatchStateMsg, 'type'>): Uint8Array {
       .u32(res.durationTicks)
       .unsigned(res.winnerKey < 0 ? NO_KEY : res.winnerKey, 16)
       .unsigned(res.mvpKey < 0 ? NO_KEY : res.mvpKey, 16);
+  }
+  // v21: the teams section (always written; v17–v20 decoders stop before it)
+  const teams = Math.max(0, Math.min(MAX_TEAMS_WIRE, m.teams ?? 0));
+  w.u8(teams);
+  if (teams > 0) {
+    for (let t = 0; t < teams; t++) w.signed(Math.max(-2047, Math.min(2047, m.teamScores?.[t] ?? 0)), 12);
+    for (const e of lobby) w.unsigned(teamOut(e.team), 3);
+    for (const st of standings) w.unsigned(teamOut(st.team), 3);
+    w.unsigned(teamOut(m.winnerTeam), 3);
   }
   return w.finish().slice();
 }
@@ -216,5 +240,21 @@ export function decodeMatchStateBody(r: BitReader): MatchStateMsg {
   if (r.bool()) {
     results = { number: r.u16(), reason: r.bits(2), durationTicks: r.u32(), winnerKey: key(r.bits(16)), mvpKey: key(r.bits(16)) };
   }
-  return { type: MsgType.MatchState, phase, phaseStartTick, number, endReason, rules, mapId, hostId, lobby, standings, results };
+  // v21's teams section; a MATCH_STATE from an older server ends here (its padding is < 8 bits)
+  let teams = 0;
+  const teamScores: number[] = [];
+  let winnerTeam = -1;
+  for (const e of lobby) e.team = -1;
+  for (const st of standings) st.team = -1;
+  if (r.remainingBits >= 8) {
+    teams = r.u8();
+    if (teams > MAX_TEAMS_WIRE || teams === 1) throw new DecodeError(`bad team count ${teams}`);
+    if (teams > 0) {
+      for (let t = 0; t < teams; t++) teamScores.push(r.signed(12));
+      for (const e of lobby) e.team = teamIn(r.bits(3));
+      for (const st of standings) st.team = teamIn(r.bits(3));
+      winnerTeam = teamIn(r.bits(3));
+    }
+  }
+  return { type: MsgType.MatchState, phase, phaseStartTick, number, endReason, rules, mapId, hostId, lobby, standings, results, teams, teamScores, winnerTeam };
 }

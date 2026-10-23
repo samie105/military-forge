@@ -248,6 +248,11 @@ add({ key: 'bots.count', group: 'Bots & match', section: 'Bots', label: 'Fill ro
 add({ key: 'bots.level', group: 'Bots & match', section: 'Bots', label: 'Level (0 easy, 1 normal, 2 hard)', min: 0, max: 2, step: 1, def: 1, scope: 'server' });
 add({ key: 'match.timeLimit', group: 'Bots & match', section: 'Match', label: 'Time limit (s)', min: 60, max: 1200, step: 30, def: 300, scope: 'server' });
 add({ key: 'match.killLimit', group: 'Bots & match', section: 'Match', label: 'Kill limit', min: 5, max: 100, step: 1, def: 20, scope: 'server' });
+// team modes (protocol v21): friendly fire rides the tuning (every client predicts with it), the team kill limits are the room's
+add({ key: 'tuning.friendlyFire', group: 'Bots & match', section: 'Teams', label: 'Friendly fire (0 off, 1 on)', min: 0, max: 1, step: 1, def: 0, scope: 'tuning', tuningKey: 'friendlyFire' });
+add({ key: 'teams.killLimit2', group: 'Bots & match', section: 'Teams', label: 'Team kill limit, 2 teams', min: 5, max: 200, step: 1, def: 30, scope: 'server' });
+add({ key: 'teams.killLimit3', group: 'Bots & match', section: 'Teams', label: 'Team kill limit, 3 teams', min: 5, max: 200, step: 1, def: 25, scope: 'server' });
+add({ key: 'teams.killLimit4', group: 'Bots & match', section: 'Teams', label: 'Team kill limit, 4 teams', min: 5, max: 200, step: 1, def: 20, scope: 'server' });
 
 // ---------- the network (the server's) ----------
 

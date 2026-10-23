@@ -84,11 +84,16 @@ export { MsgType } from './wire';
  *     slots, the room's spectators) · CMD kind 13 Spectate (JSON { follow?, play? }) · close code 4008
  *     SpectatorsFull. Spectators' voice ids are 32 + seat. Nothing else changes, so v17–v19 clients
  *     still join; they never spectate.
+ * v21 (match presentation, team modes): MATCH_STATE gains a trailing teams section (u8 teams: 0 free-
+ *     for-all, 2–4; then s12 × teams team scores, u3 per lobby entry and per standing, u3 winner team;
+ *     7 = none) that v17–v20 decoders never read; the MatchSettings CMD's JSON takes `teams` (lobby
+ *     only); CMD kind 14 SetTeam (host, lobby: JSON { id, team }); TUNING gains `friendlyFire`. No
+ *     snapshot, INPUT, ROSTER or HELLO change. (v20 is spectating's.)
  */
-export const PROTOCOL_VERSION = 20;
+export const PROTOCOL_VERSION = 21;
 /**
- * The oldest client a server still admits. v18–v20 only added messages and trailing fields an
- * older client never reads or sends, so v17 pages still play (without voice, looks or spectating).
+ * The oldest client a server still admits. v18–v21 only added messages and trailing fields an
+ * older client never reads or sends, so v17 pages still play (without voice, looks, spectating or teams).
  */
 export const MIN_PROTOCOL_VERSION = 17;
 
@@ -200,6 +205,8 @@ export const CmdKind = {
   SetLook: 12,
   /** v20: spectating (JSON SpectateCmd): whom a dead player's death cam follows, a spectator's wish to play */
   Spectate: 13,
+  /** v21: host, lobby only: JSON `{ id, team }` moves that player to that team (team modes) */
+  SetTeam: 14,
 } as const;
 
 /** v20: HELLO's flags (after the look). */
@@ -240,6 +247,19 @@ export type SpectateQueueId = (typeof SpectateQueue)[keyof typeof SpectateQueue]
 export const MAX_SPECTATORS = 8;
 /** v20: a spectator's voice id is this plus its seat (VOICE_DOWN / VOICE_STATE ids are u8) */
 export const SPECTATOR_VOICE_BASE = 32;
+
+/** v21: a SetTeam CMD's payload → `{ id, team }`; null when malformed. */
+export function parseSetTeam(payload: string): { id: number; team: number } | null {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(payload);
+  } catch {
+    return null;
+  }
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const { id, team } = raw as Record<string, unknown>;
+  return Number.isInteger(id) && Number.isInteger(team) && (id as number) >= 0 && (id as number) < 32 && (team as number) >= 0 && (team as number) < 4 ? { id: id as number, team: team as number } : null;
+}
 
 
 export const MAX_INPUTS_PER_PACKET = 4;

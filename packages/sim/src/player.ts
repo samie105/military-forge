@@ -51,6 +51,8 @@ export function createWeaponSlot(): WeaponSlot {
 export class PlayerState {
   name = '';
   isBot = false;
+  /** team modes (protocol v21): the player's team, 0-based; -1 = none (free-for-all) */
+  team = -1;
   /** scripted dummy (no brain) */
   script: DummyScript | null = null;
   /** a real bot's brain (packages/bots); null for humans and dummies */
@@ -230,6 +232,11 @@ export class PlayerState {
 }
 
 /** Seconds to go from one gun to two (or back): also the cost of putting a dual pair away for the shield. */
+/** Teammates (team modes): the same team, and not the same player. Free-for-all players (team -1) have none. */
+export function allies(a: PlayerState, b: PlayerState): boolean {
+  return a !== b && a.team >= 0 && a.team === b.team;
+}
+
 export const DUAL_TOGGLE_TIME = 0.45;
 
 /** Swapping weapons, or going in or out of dual, cancels reloads (docs/03 §9), and a burst in progress. */

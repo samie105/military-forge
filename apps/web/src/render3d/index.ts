@@ -446,7 +446,7 @@ export class Renderer3D {
   private warmEnvironment(): void {
     const env = this.env;
     env?.ready
-      .then(() => (this.env === env ? this.renderer.compileAsync(this.scene, this.camera3) : undefined))
+      .then(() => (this.env === env ? this.compileTiers() : undefined))
       .catch((err: unknown) => console.warn('render3d: environment warm-up failed', err));
   }
 
@@ -470,7 +470,7 @@ export class Renderer3D {
     // every effect on show (the dash trail, casings, a sprite in every particle layer, a grenade of
     // each type, an afterimage of the first warm-up soldier)
     this.vfx.showForWarmUp(spawn.x, spawn.y + 1, insts[0]);
-    await this.renderer.compileAsync(this.scene, this.camera3);
+    await this.compileTiers();
     // and one real draw of it all, on every preset (QA 23 Oct): compileAsync links the programs, but
     // drivers that build a pipeline (or upload a texture or buffer) on the first draw did it on the
     // first dash, jet or grenade, 80–350 ms each on a software or weak GPU. Where the sun casts
@@ -488,6 +488,48 @@ export class Renderer3D {
     this.warmedUp.push(...warm);
   }
 
+  /**
+   * Compiles the scene's shaders for this tier and, when a tier Auto may step down to lights the
+   * scene differently, for that one too. High's effect lights and sun shadow are part of every lit
+   * material's program: stepping down mid-match linked them all again at once (a 906 ms freeze on
+   * Fog Stair, phone profile at 4× CPU). Each material keeps every program it has linked, so the
+   * step finds the lower tier's waiting. The light set is swapped only for the compile's synchronous
+   * part (where the programs are picked) and swapped back before any frame draws.
+   */
+  private compileTiers(): Promise<unknown> {
+    const now = this.renderer.compileAsync(this.scene, this.camera3);
+    const lower = PRESETS.medium;
+    if (!this.governor || (this.preset.vfxLights === lower.vfxLights && this.preset.shadows === lower.shadows)) return now.then(() => this.linkPrograms());
+    this.vfx.setLights(lower.vfxLights);
+    this.sun.castShadow = lower.shadows === 'map';
+    const stepped = this.renderer.compileAsync(this.scene, this.camera3);
+    this.vfx.setLights(this.preset.vfxLights);
+    this.sun.castShadow = this.preset.shadows === 'map';
+    return Promise.all([now, stepped]).then(() => this.linkPrograms());
+  }
+
+  /**
+   * Finishes every compiled program now, a few each frame, instead of at its first draw. Without
+   * KHR_parallel_shader_compile (software GL, some phones) compileAsync resolves at once and the link
+   * waits for the first draw that uses the program: the tier step's 2.4 s freeze on Fog Stair was
+   * exactly that (getShaderInfoLog and getProgramParameter on the lower tier's programs). A program
+   * already used returns at once.
+   */
+  private linkPrograms(budgetMs = 8): Promise<void> {
+    const programs = [...(this.renderer.info.programs ?? [])] as { getUniforms(): unknown }[];
+    return new Promise((done) => {
+      const step = () => {
+        const end = performance.now() + budgetMs;
+        while (programs.length && performance.now() < end) programs.pop()!.getUniforms();
+        if (!programs.length) done();
+        // a hidden tab has no frames: a load there must still finish
+        else if (typeof document !== 'undefined' && document.hidden) setTimeout(step, 0);
+        else requestAnimationFrame(step);
+      };
+      step();
+    });
+  }
+
   /** The in-game finish on a soldier: the outline, and the rim light of the Locker preset this map matches. */
   private dress(inst: CharacterInstance): CharacterInstance {
     inst.setOutline(this.outline);
@@ -496,9 +538,16 @@ export class Renderer3D {
     return inst;
   }
 
-  setPreset(name: PresetName): void {
-    const lodChanged = PRESETS[name].remoteLod1 !== this.preset.remoteLod1;
+  /**
+   * `auto`: Auto stepping a tier mid-match (TierGovernor). Then nothing is rebuilt that would hitch:
+   * the soldiers on screen keep their mesh (new ones take the tier's LOD), and the textures keep
+   * their filtering (changing it re-uploads every texture); the shaders were compiled at load
+   * (compileTiers). Resolution, effects and shadows follow at once.
+   */
+  setPreset(name: PresetName, auto = false): void {
+    const lodChanged = PRESETS[name].remoteLod1 !== this.preset.remoteLod1 && !auto;
     this.preset = PRESETS[name];
+    if (!auto) this.filtering = this.preset;
     this.dynres.minScale = this.preset.minScale;
     this.dynres.scale = Math.max(this.dynres.scale, this.preset.minScale);
     this.sun.castShadow = this.preset.shadows === 'map';
@@ -511,7 +560,7 @@ export class Renderer3D {
       this.looks.clear();
     }
     this.resize();
-    if (this.ready) this.applyAnisotropy();
+    if (this.ready && !auto) this.applyAnisotropy();
   }
 
   /** Pins the render scale (null = dynamic again): repeatable screenshots and measurements. */
@@ -557,7 +606,7 @@ export class Renderer3D {
     this.judged = this.dynres.windows;
     const next = this.governor.judge(this.dynres.lastMissed, this.dynres.scale <= this.preset.minScale + 1e-6, this.dynres.scale >= 1);
     if (!next) return;
-    this.setPreset(next);
+    this.setPreset(next, true);
     this.onAutoTier?.(next);
   }
 
@@ -584,8 +633,11 @@ export class Renderer3D {
    * walls stay sharp at a glancing angle. Run on a preset change and every couple of seconds (art
    * and characters arrive late); a texture already at it is left alone.
    */
+  /** the preset whose texture filtering is in use: the player's (or Auto's start), not a tier Auto stepped to mid-match */
+  private filtering: GraphicsPreset = PRESETS.low;
+
   private applyAnisotropy(): void {
-    this.aniso = Math.max(1, Math.min(this.preset.anisotropy, this.renderer.capabilities.getMaxAnisotropy()));
+    this.aniso = Math.max(1, Math.min(this.filtering.anisotropy, this.renderer.capabilities.getMaxAnisotropy()));
     this.scene.traverse(this.anisoVisit);
   }
 
@@ -694,6 +746,7 @@ export class Renderer3D {
       if (avatar) {
         // animation LOD (animLod.ts, the animation agent's): off screen, small or LOD1 soldiers are posed less
         avatar.update(p, dt, this.world, blob, animDetail(p.x, p.y, p.isLocal, avatar.lod, this.camera));
+        this.applyTeamColour(p.id);
         continue;
       }
       if (this.pending.has(p.id)) continue;
@@ -725,6 +778,20 @@ export class Renderer3D {
       this.avatars.delete(id);
       this.looks.delete(id);
     }
+  }
+
+  /**
+   * Team modes (v21, match presentation): each soldier's team colour on the dye mask's team channel
+   * (the armband glow, docs/04 §1.4); null = none. main.ts sets it from the team palette.
+   */
+  teamColourOf: ((id: number) => number | null) | null = null;
+  private readonly teamColours = new Map<number, number | null>();
+
+  private applyTeamColour(id: number): void {
+    const colour = this.teamColourOf?.(id) ?? null;
+    if (this.teamColours.get(id) === colour) return;
+    this.teamColours.set(id, colour);
+    this.looks.get(id)?.setTeamColour(colour);
   }
 
   stats(): RenderStats {

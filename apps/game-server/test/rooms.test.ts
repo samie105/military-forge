@@ -307,7 +307,7 @@ describe('match rooms', () => {
     let s = a.conn.match();
     expect(s).toMatchObject({ phase: MatchPhase.Waiting, hostId: a.id, mapId: 'movement-test', number: 0 });
     expect(s.rules).toMatchObject({ timeLimit: 2, killLimit: 0, countdown: 1 });
-    expect(s.lobby).toEqual([{ id: a.id, ready: false, rematch: false, pingMs: -1 }]);
+    expect(s.lobby).toEqual([{ id: a.id, team: -1, ready: false, rematch: false, pingMs: -1 }]);
 
     const b = join(room, 'Kemi');
     a.cmd(CmdKind.Ready, '1');
@@ -317,8 +317,8 @@ describe('match rooms', () => {
     expect(s.hostId).toBe(a.id);
     expect(s.lobby).toEqual(
       expect.arrayContaining([
-        { id: a.id, ready: true, rematch: false, pingMs: 42 },
-        { id: b.id, ready: false, rematch: false, pingMs: -1 },
+        { id: a.id, ready: true, rematch: false, pingMs: 42, team: -1 },
+        { id: b.id, ready: false, rematch: false, pingMs: -1, team: -1 },
       ]),
     );
     expect(s.phase).toBe(MatchPhase.Waiting); // Kemi isn't ready

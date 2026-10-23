@@ -30,6 +30,11 @@ const SHOTS = [
   ['desktop-05-lobby-avatars', 'desktop', 'n=8&state=lobby'],
   ['desktop-06-teams-4v4v4-later', 'desktop', 'n=12&teams=4v4v4'],
   ['laptop-1280-poster-all-vs-all-8', 'laptop', 'n=8'],
+  ['desktop-07-teams-lobby-and-results-4v4v4', 'desktop', 'n=12&teams=4v4v4&state=teams'],
+  ['desktop-08-teams-poster-4v4', 'desktop', 'n=8&teams=4v4'],
+  ['desktop-09-teams-strip-2v2v2v2', 'desktop', 'n=8&teams=2v2v2v2&state=strip'],
+  ['desktop-10-teams-lobby-red-green-safe', 'desktop', 'n=8&teams=4v4&state=teams&cb=deutan'],
+  ['phone-06-teams-poster-4v4v4', 'phone', 'n=12&teams=4v4v4&phone'],
   ['phone-01-poster-all-vs-all-8', 'phone', 'n=8&phone'],
   ['phone-02-poster-1v1', 'phone', 'n=2&phone'],
   ['phone-03-poster-all-vs-all-16', 'phone', 'n=16&phone'],
@@ -51,7 +56,10 @@ const browser = await puppeteer.launch({
   protocolTimeout: 600_000,
 });
 try {
+  // ONLY=<regex>: just those shots
+  const only = process.env.ONLY ? new RegExp(process.env.ONLY) : null;
   for (const [name, kind, query] of SHOTS) {
+    if (only && !only.test(name)) continue;
     const page = await browser.newPage();
     page.on('pageerror', (e) => problems.push(`${name}: ${e.message}`));
     // the female soldier's rig 404s until her art lands (the assembler draws her on the male rig: #175)

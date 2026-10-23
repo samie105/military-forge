@@ -1,0 +1,65 @@
+/* Team modes (teams/): the lobby's team groups, team marks (shape + letter, never colour alone). Tokens only. */
+.mf-tm { display: inline-flex; align-items: center; gap: 2px; color: var(--tc); font-weight: var(--fw-black, 800); line-height: 1; }
+.mf-tm i { font-style: normal; font-size: 1.1em; }
+.mf-tm b { font-size: .8em; padding: 1px 4px; border-radius: 3px; background: var(--tc); color: var(--c-ink-950); }
+.mf-tm--sm { font-size: 13px; }
+
+.mf-teams { display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow: auto; }
+.mf-team { border-left: 6px solid var(--tc); background: var(--c-ink-850); border-radius: var(--r-sm); }
+.mf-team__head { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: color-mix(in srgb, var(--tc) 14%, transparent); }
+.mf-team__name { font: var(--fw-display) 24px/1 var(--f-display); text-transform: uppercase; letter-spacing: .04em; color: var(--c-paper); }
+.mf-team__n { font-size: 14px; color: var(--c-muted); margin-right: auto; }
+.mf-team__move { border-color: var(--tc); color: var(--tc); }
+.mf-team__rows { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 6px 8px 8px; list-style: none; }
+.mf-team__row { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 2px 8px 2px 4px; border-radius: var(--r-sm); border: var(--bw, 2px) solid transparent; }
+.mf-team__row.is-you { border-color: var(--c-volt-line); background: var(--c-volt-soft); }
+.mf-team__row.is-picked { border-color: var(--tc); background: color-mix(in srgb, var(--tc) 18%, transparent); }
+.mf-team__pick { display: flex; align-items: center; gap: 10px; min-width: 0; margin-right: auto; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+span.mf-team__pick { cursor: default; }
+.mf-team__pick b { font-size: 16px; font-weight: var(--fw-black, 800); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mf-team__row .avatar { width: 32px; height: 32px; }
+.mf-team__ready { font-size: 13px; font-weight: 800; color: var(--c-muted); }
+.mf-team__ready.is-ready { color: var(--c-ok); }
+.mf-teams__loose { margin: 0; font-size: 14px; color: var(--c-muted); }
+.mf-teams--phone .mf-team__name { font-size: 16px; }
+.mf-teams--phone .mf-team__row { min-height: 30px; }
+.mf-teams--phone .mf-team__row .avatar { width: 26px; height: 26px; }
+.mf-teams--phone .mf-team__pick b { font-size: 13px; }
+.mf-teams--phone .mf-team__head { padding: 3px 8px; gap: 6px; }
+.mf-teams--phone .mf-team__rows { padding: 3px 6px 5px; gap: 2px; }
+
+/* the HUD scoreboard by team (hud.ts + teams/scoreboard.ts) */
+.sb__team td { padding: 8px 12px; background: color-mix(in srgb, var(--tc) 16%, transparent); border-left: 6px solid var(--tc); }
+.sb__teamname { font: var(--fw-display) 22px/1 var(--f-display); text-transform: uppercase; letter-spacing: .04em; color: var(--tc); }
+.sb__teamscore { text-align: right; font: var(--fw-display) 28px/1 var(--f-display); color: var(--c-paper); }
+tr[style*="--tc"] > .sb__rank { box-shadow: inset 4px 0 0 var(--tc); }
+
+/* the HUD's team score strip (teams/hudStrip.ts): top centre, under the clock, while the match runs, in the
+   You and Lead chips' place (hidden in team modes: hud.ts's 'teams' token) */
+#hud[data-active-state~="teams"] .mf-hud-desktop .hud-score { visibility: hidden; }
+.mf-tstrip { position: fixed; left: 50%; top: calc(94px * var(--hud-fit, 1)); z-index: 4; /* under #hud (5), so the Tab scoreboard covers it */ display: flex; gap: 8px; align-items: center; translate: -50% 0; zoom: var(--hud-fit, 1); pointer-events: none; }
+html.mf-phone .mf-tstrip { top: calc(var(--safe-t, 0px) + 46px * var(--phone-fit, 1)); zoom: var(--phone-fit, 1); gap: 4px; }
+.mf-tstrip[hidden] { display: none; }
+.mf-tstrip__team { display: flex; align-items: center; gap: 8px; padding: 4px 12px; background: rgba(20, 23, 16, .82); border-bottom: 4px solid var(--tc); border-radius: 4px; }
+.mf-tstrip__team.is-mine { outline: 2px solid var(--c-volt); }
+.mf-tstrip__team.is-lead .mf-tstrip__score { color: var(--c-volt); }
+.mf-tstrip__shape { color: var(--tc); font-weight: 800; font-size: 18px; }
+.mf-tstrip__score { font: var(--fw-display) 32px/1 var(--f-display); color: var(--c-paper); min-width: 1.4em; text-align: center; }
+.mf-tstrip__limit { font: 800 16px/1 var(--f-ui); color: var(--c-paper); text-shadow: 0 1px 2px var(--c-ink-950); }
+html.mf-phone .mf-tstrip__score { font-size: 22px; }
+html.mf-phone .mf-tstrip__team { padding: 2px 8px; gap: 4px; }
+
+/* results by team (teams/TeamResults.tsx) */
+.mf-tres { display: flex; flex-direction: column; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
+.mf-tres__team { display: flex; align-items: center; gap: 12px; padding: 8px 14px; background: var(--c-ink-850); border-left: 8px solid var(--tc); border-radius: var(--r-sm); font-size: 22px; }
+.mf-tres__team.is-mine { outline: 2px solid var(--c-volt-line); }
+.mf-tres__place { font: var(--fw-display) 22px/1 var(--f-display); color: var(--c-muted); min-width: 2.4em; }
+.mf-tres__name { font: var(--fw-display) 26px/1 var(--f-display); text-transform: uppercase; color: var(--c-paper); }
+.mf-tres__score { margin-left: auto; font: var(--fw-display) 40px/1 var(--f-display); color: var(--c-paper); }
+.mf-tres__faces { display: flex; gap: 4px; }
+.mf-tres__face { width: 36px; height: 36px; border-radius: 50%; overflow: hidden; border: 2px solid var(--tc); background: var(--c-olive-800); }
+.mf-tres--compact .mf-tres__team { padding: 3px 8px; gap: 6px; font-size: 14px; }
+.mf-tres--compact .mf-tres__name { font-size: 15px; }
+.mf-tres--compact .mf-tres__score { font-size: 20px; }
+.mf-tres--compact .mf-tres__place { font-size: 14px; }
+.mf-tres--compact { gap: 3px; margin-top: 4px; }

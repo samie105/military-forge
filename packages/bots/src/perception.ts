@@ -17,6 +17,7 @@
  */
 import { MINE, STANDING_HITBOXES, grenades } from '@military-forge/content';
 import {
+  allies,
   MAX_CLOUDS,
   MAX_GRENADES,
   MAX_PICKUPS,
@@ -186,6 +187,8 @@ export class Perception {
       if (e.type === 'shot') {
         if (e.shooter === self.id) continue;
         const q = game.players[e.shooter];
+        // team modes: a teammate's shot is nobody to hunt
+        if (q && allies(self, q)) continue;
         // a shooter on its screen: the tracer shows who and where (it's in sight anyway)
         if (q?.alive && this.sees(sight, self, q)) {
           this.note(q, tick);
@@ -203,7 +206,7 @@ export class Perception {
       } else if (e.type === 'hit') {
         if (e.target !== self.id || e.attacker < 0 || e.attacker === self.id) continue;
         const q = game.players[e.attacker];
-        if (!q?.alive) continue;
+        if (!q?.alive || allies(self, q)) continue;
         const c = this.contacts[q.id]!;
         c.hurtTick = tick;
         // the HIT names who hurt it; where they are is only what it sees, or the SOUND of that shot
@@ -233,6 +236,11 @@ export class Perception {
     for (const q of game.players) {
       if (!q || q === self) continue;
       const c = this.contacts[q.id]!;
+      // team modes: teammates are never contacts (it never aims at, chases or flees them)
+      if (allies(self, q)) {
+        c.known = c.visible = false;
+        continue;
+      }
       if (q.alive && this.sees(sight, self, q)) {
         if (!c.visible) c.since = tick;
         this.note(q, tick);

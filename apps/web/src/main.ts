@@ -56,6 +56,8 @@ import { followLooks, lookBook } from './looks/book';
 import { CharacterAssembler } from './character';
 import { getAvatar, getPortrait, installPortraits, portraits, setPortraitPolicy, type PortraitPolicy } from './portrait';
 import { warmRoomPortraits } from './presentation/warm';
+import { applyTeamPalette, teamColour } from './teams/palette';
+import { TeamStrip } from './teams/hudStrip';
 import { posterUp } from './presentation/state';
 import { countFrame, framesPerSecond, recordNet } from './stats';
 import { getTouchSettings, isTouchDevice, mountTouch, touchActive, touchControlRect } from './touch';
@@ -183,6 +185,8 @@ const view3d = planeCamera
 // avatars and the VS poster's renders: the players' real soldiers, through the game's own WebGL context
 // (portrait/, research §7); a page without 3D shows silhouettes
 if (view3d) installPortraits(view3d.renderer, soldiers);
+// team modes (v21): each soldier's team colour (the armband glow), from the look book's teams
+if (view3d) view3d.teamColourOf = (id) => teamColour(lookBook.teamOf(id));
 setPortraitPolicy(portraitPolicy);
 // the room's avatars and VS poster renders, warmed whenever its looks change (the countdown only shows pictures)
 if (view3d) warmRoomPortraits(lookBook);
@@ -220,12 +224,24 @@ let tourMemory: TourMemory | null = null;
 /** First flight (tour/firstFlight.ts), while training runs it */
 let flight: FirstFlight | null = null;
 
+// team modes (v21): your teammates are the minimap's allies (always on it, never an enemy mark)
+let alliesDirty = true;
+let alliesFor = -2;
+lookBook.subscribe(() => (alliesDirty = true));
+function syncMinimapAllies(localId: number): void {
+  if (!minimap || (!alliesDirty && localId === alliesFor)) return;
+  alliesDirty = false;
+  alliesFor = localId;
+  minimap.setAllies(lookBook.teammatesOf(localId));
+}
+
 /** The 2D renderer, also feeding the HUD the events and names every mode already reports. */
 class GameRenderer extends Renderer {
   override onEvents(events: readonly SimEvent[], localId: number): void {
     super.onEvents(events, localId);
     hud?.onEvents(events, localId);
     minimap?.onEvents(events, localId);
+    syncMinimapAllies(localId);
     tourMemory?.onEvents(events, localId);
     flight?.onEvents(events, localId);
     audio.onEvents(events, localId); // the game's sound (apps/web/src/audio): lazy, after the first tap or key
@@ -439,6 +455,8 @@ const host: GameHost = {
     html.classList.toggle('gfx-low', graphicsPreset(next.graphics) === 'low');
     // …and the 3D view's: no camera shake or kick, a softer gun kick, a dimmer blast light (render3d)
     view3d?.setReducedMotion(next.reduceMotion);
+    // team modes (v21): the team palette for the chosen colour-blind mode (DOM, 3D, minimap)
+    applyTeamPalette(next.colorBlind);
     html.style.setProperty('--text-scale', String(next.textScale));
     // big text: the menus tighten their largest pieces the way they do in a laptop's smaller box
     html.classList.toggle('mf-big-text', next.textScale >= 1.3);
@@ -596,6 +614,9 @@ if (appMode)
   shell.store.subscribe((now, before) => {
     if (before.screen.name === 'name' && now.screen.name === 'home' && !creatorSeen(storageOrNull())) openCreator('first');
   });
+// team modes (v21): the HUD's team score strip, from the shell's match view
+const teamStrip = new TeamStrip();
+shell.store.subscribe((now) => teamStrip.update(now.match));
 // v19: a look saved while playing (the Locker, the creator) reaches the 3D view and the room we're in at once
 loadoutSync?.onLook((look) => {
   loadouts3d.setLocal(look);
@@ -831,7 +852,7 @@ function scoreRows(): ScoreRow[] | null {
   if (mode instanceof LocalMode) {
     const me = mode.localId;
     return (
-      mode.match?.standings().map((s) => ({ key: s.key, id: s.id, name: s.name, score: s.score, kills: s.kills, deaths: s.deaths, assists: s.assists, ping: -1, you: s.id === me && !s.left, host: false, bot: s.isBot, left: s.left })) ?? null
+      mode.match?.standings().map((s) => ({ key: s.key, id: s.id, team: s.team ?? -1, name: s.name, score: s.score, kills: s.kills, deaths: s.deaths, assists: s.assists, ping: -1, you: s.id === me && !s.left, host: false, bot: s.isBot, left: s.left })) ?? null
     );
   }
   const st = mode?.matchState;
@@ -841,6 +862,7 @@ function scoreRows(): ScoreRow[] | null {
   return st.standings.map((s) => ({
     key: s.key,
     id: s.id,
+    team: s.team ?? -1,
     name: s.name,
     score: s.score,
     kills: s.kills,

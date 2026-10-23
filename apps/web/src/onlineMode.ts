@@ -372,8 +372,13 @@ export class OnlineMode {
   }
 
   /** Host: the room's limits and map (lobby only) and its bots (any phase, v17). */
-  setMatchSettings(settings: { timeLimit?: number; killLimit?: number; mapId?: string; bots?: number; botLevel?: 'easy' | 'normal' | 'hard' }): void {
+  setMatchSettings(settings: { timeLimit?: number; killLimit?: number; mapId?: string; bots?: number; botLevel?: 'easy' | 'normal' | 'hard'; teams?: number }): void {
     this.sendCmd(CmdKind.MatchSettings, JSON.stringify(settings));
+  }
+
+  /** Host, lobby (v21 team modes): a player onto a team. */
+  setTeam(id: number, team: number): void {
+    this.sendCmd(CmdKind.SetTeam, JSON.stringify({ id, team }));
   }
 
   /** Leaves for good: the server drops the player now (no reconnect grace), then the socket closes. */
@@ -570,6 +575,8 @@ export class OnlineMode {
         const was = this.matchState?.hostId ?? -1;
         this.matchState = msg;
         lookBook.setHost(msg.hostId);
+        // team modes (v21): who is on which team (the VS poster, team colours)
+        lookBook.setTeams(msg.teams ?? 0, new Map(msg.lobby.map((e) => [e.id, e.team ?? -1] as const)));
         // the host left or went quiet (room.ts HOST_AWAY_TICKS): someone else runs the room now
         if (was >= 0 && msg.hostId >= 0 && msg.hostId !== was) for (const fn of this.hostListeners) fn(was, msg.hostId);
         break;

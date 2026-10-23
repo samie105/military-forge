@@ -15,7 +15,7 @@ import { copyInput, type Input } from './input';
 import { MapMechanics, createBodyEnv } from './mechanics';
 import { depenetrate, quantizeMovement, stepMovement } from './movement';
 import { PickupState, createSpawners, dropCarried, resetPickups, stepPickups, type SpawnerState } from './pickups';
-import { PlayerState, giveLoadout, keepGuns, respawnGuns } from './player';
+import { PlayerState, allies, giveLoadout, keepGuns, respawnGuns } from './player';
 import type { TargetRewind } from './rewind';
 import { stepShield } from './shield';
 import { CollisionWorld } from './world';
@@ -39,6 +39,9 @@ export interface GameOptions {
    */
   armory?: boolean;
 }
+
+/** Team spawns: how much a teammate nearby counts, against an enemy far away (metres per metre). */
+const TEAM_SPAWN_PULL = 0.35;
 
 /** Seconds within which a hazard death is credited to the last attacker (docs/03 §8). */
 const ENVIRONMENT_CREDIT_TICKS = ticks(5);
@@ -152,14 +155,50 @@ export class Game {
   }
 
   /**
-   * Spawn point farthest from other living players (ties: lowest index). On a map with tiers, only
-   * spawns on the tiers with the fewest living players count, so a match spreads across its stacked
-   * battle zones instead of piling onto one. Dummies use their home. Public for match start (match.ts).
+   * Team modes: the safest spawn, away from enemies and near teammates. Each spawn scores its distance
+   * to the nearest living enemy, less TEAM_SPAWN_PULL of its distance to the nearest living teammate;
+   * the highest wins (ties: lowest index). With no enemy alive, the one nearest a teammate. On a map
+   * with tiers, only the least crowded tier's spawns count, as in a free-for-all.
+   */
+  private teamSpawn(p: PlayerState, fewest: number): { x: number; y: number } | null {
+    let best: { x: number; y: number } | null = null;
+    let bestScore = -Infinity;
+    for (let i = 0; i < this.map.spawns.length; i++) {
+      const s = this.map.spawns[i]!;
+      if (fewest >= 0 && this.spawnTier[i] !== fewest) continue;
+      let enemy = Infinity;
+      let mate = Infinity;
+      for (const q of this.players) {
+        if (!q || q === p || !q.alive) continue;
+        const dx = q.x - s.x;
+        const dy = q.y - s.y;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (allies(p, q)) mate = Math.min(mate, d);
+        else enemy = Math.min(enemy, d);
+      }
+      const score = (enemy === Infinity ? 1000 : enemy) - (mate === Infinity ? 0 : TEAM_SPAWN_PULL * mate);
+      if (score > bestScore) {
+        bestScore = score;
+        best = s;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Spawn point farthest from other living players (ties: lowest index); in team modes teamSpawn. On a
+   * map with tiers, only spawns on the tiers with the fewest living players count, so a match spreads
+   * across its stacked battle zones instead of piling onto one. Dummies use their home. Public for
+   * match start (match.ts).
    */
   respawn(p: PlayerState): void {
     let sx = p.homeX;
     let sy = p.homeY;
-    if (!p.isBot || p.brain) {
+    const team = p.team >= 0 && (!p.isBot || p.brain) ? this.teamSpawn(p, this.leastCrowdedTier(p)) : null;
+    if (team) {
+      sx = team.x;
+      sy = team.y;
+    } else if (!p.isBot || p.brain) {
       const fewest = this.leastCrowdedTier(p);
       let bestScore = -1;
       for (let i = 0; i < this.map.spawns.length; i++) {
@@ -244,8 +283,18 @@ export class Game {
     p.refillGrenades();
   }
 
+  /**
+   * Whether `attacker` may hurt `target` (team modes): friendly fire off, teammates don't hurt each
+   * other (bullets, blasts, flames, gas, swings); your own grenade still hurts you.
+   */
+  canHurt(attacker: number, target: PlayerState): boolean {
+    if (this.tuning.friendlyFire >= 1 || attacker === target.id) return true;
+    const by = this.players[attacker];
+    return !by || !allies(by, target);
+  }
+
   damage(target: PlayerState, amount: number, attacker: number, source: number, zone: number): void {
-    if (!target.alive || amount <= 0) return;
+    if (!target.alive || amount <= 0 || !this.canHurt(attacker, target)) return;
     target.hp -= amount;
     target.regenDelay = ticks(this.tuning.healthRegenDelay);
     if (attacker !== target.id) {

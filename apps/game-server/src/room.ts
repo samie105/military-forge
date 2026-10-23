@@ -75,6 +75,7 @@ import {
   encodeWelcome,
   isUnreliableMessage,
   parseLookCmd,
+  parseSetTeam,
   protocolSupported,
   ROOM_SETTING_LIMITS,
   type ClientMessage,
@@ -100,6 +101,7 @@ import {
   MAX_PLAYERS,
   Match,
   MatchPhase,
+  TEAM_MODES,
   createInput,
   type Input,
   type MatchRules,
@@ -412,6 +414,17 @@ export function parseBotSettings(payload: string, current: { target: number; lev
   return { target, level: level as BotLevelId };
 }
 
+/** The host's mode from a MatchSettings CMD (v21): `teams` 0, 2, 3 or 4; undefined when absent or not one of those. */
+export function parseTeamsSetting(payload: string): number | undefined {
+  try {
+    const o = JSON.parse(payload) as Record<string, unknown> | null;
+    const t = o && typeof o === 'object' ? o.teams : undefined;
+    return typeof t === 'number' && (TEAM_MODES as readonly number[]).includes(t) ? t : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function standingWire(s: MatchStanding): MatchStandingWire {
   return {
     id: s.id,
@@ -429,6 +442,7 @@ function standingWire(s: MatchStanding): MatchStandingWire {
     damageTaken: s.damageTaken,
     headshots: s.headshots,
     bestStreak: s.bestStreak,
+    team: s.team,
   };
 }
 
@@ -512,6 +526,8 @@ export class Room {
     this.game.rewind = this.lagComp;
     this.lagComp?.record(this.game.tick, this.game.players);
     this.match = options.match ? new Match(this.game, options.match) : null;
+    // team modes: party mates (the join ticket's party, social) are dealt onto one team
+    if (this.match) this.match.groupOf = (id) => this.partyOf(id);
     this.recorder = this.match && options.results ? new MatchRecorder(options.results, options.code ?? '') : null;
     const fill = options.fillBots;
     this.fill = this.baseFill = fill && fill.target > 0 ? { target: Math.min(fill.target, MAX_PLAYERS), level: fill.level } : null;
@@ -524,8 +540,11 @@ export class Room {
       // free play (dev rooms) is always play; a match only while counting down or running
       inPlay: () => !this.match || this.match.phase === MatchPhase.Countdown || this.match.phase === MatchPhase.InProgress,
       player: (id) => this.game.players[id] ?? null,
-      // free-for-all: no teams yet (team radio arrives with team modes)
-      teamOf: () => null,
+      // team modes (v21): the sim's team; free-for-all has none
+      teamOf: (id) => {
+        const t = this.game.players[id]?.team ?? -1;
+        return t >= 0 ? t : null;
+      },
     });
     // the owner's admin page (admin.ts): its values now, and whenever they change
     this.applyAdmin(adminValues(), false);
@@ -581,6 +600,12 @@ export class Room {
     if (p.killLimit !== undefined) m.rules.killLimit = p.killLimit;
     this.pendingLimits = null;
     this.matchDirty = true;
+  }
+
+  /** The party of the player with this id (its session's), null = none. */
+  private partyOf(id: number): string | null {
+    for (const s of this.sessions.values()) if (s.playerId === id) return s.party;
+    return null;
   }
 
   /** player id of the host, -1 = none (or not a match room) */
@@ -942,6 +967,13 @@ export class Room {
       this.onMatchCmd(client, kind, payload);
       return;
     }
+    if (kind === CmdKind.SetTeam) {
+      // v21, host only, lobby only: a player onto a team (the lobby's team columns)
+      const move = parseSetTeam(payload);
+      if (!move) client.strikes++;
+      else if (this.match && this.host === client.session && this.match.setTeam(move.id, move.team)) this.matchDirty = true;
+      return;
+    }
     if (kind === CmdKind.SetLook) {
       // v19, any room and phase: a malformed list is a strike, a look with things they don't own is fixed up
       const ids = parseLookCmd(payload);
@@ -1239,6 +1271,13 @@ export class Room {
           this.log(`[room] host sets bots: ${bots.target > 0 ? `fill to ${bots.target} (${bots.level})` : 'off'}`);
         }
         if (m.phase !== MatchPhase.Waiting) break;
+        // v21: the mode (free-for-all or 2–4 teams); the kill limit follows it unless this CMD names one
+        const teams = parseTeamsSetting(payload);
+        if (teams !== undefined && teams !== m.teams && m.setTeams(teams)) {
+          const limit = teams > 0 ? adminValue(adminValues(), `teams.killLimit${teams}`) : (this.baseLimits?.killLimit ?? m.rules.killLimit);
+          if (!/"killLimit"/.test(payload)) m.rules.killLimit = Math.min(255, limit);
+          this.log(`[room] host sets the mode: ${teams > 0 ? `${teams} teams` : 'free-for-all'}`);
+        }
         const next = parseMatchSettings(payload, m.rules, this.game.map.id);
         if (!next) break;
         m.rules.timeLimit = next.timeLimit;
@@ -1305,9 +1344,13 @@ export class Room {
       rules: { ...m.rules, bots: this.botFill?.target ?? 0, botLevel: (this.hostFill ?? this.fill)?.level ?? 'normal' },
       mapId: this.game.map.id,
       hostId: this.hostId,
-      lobby: m.players.flatMap((p) => (p ? [{ id: p.id, ready: p.ready, rematch: p.rematch, pingMs: pings.get(p.id) ?? -1 }] : [])),
+      lobby: m.players.flatMap((p) => (p ? [{ id: p.id, ready: p.ready, rematch: p.rematch, pingMs: pings.get(p.id) ?? -1, team: p.state.team }] : [])),
       standings: (ended && r ? r.standings : m.standings()).map(standingWire),
       results: r ? { number: r.number, reason: r.reason, durationTicks: r.durationTicks, winnerKey: r.winnerKey, mvpKey: r.mvpKey } : null,
+      // v21 team modes: the mode, the team scores (the final ones once ended), the winner
+      teams: m.teams,
+      teamScores: ended && r ? r.teamScores : m.teamScores,
+      winnerTeam: r ? r.winnerTeam : -1,
     });
   }
 

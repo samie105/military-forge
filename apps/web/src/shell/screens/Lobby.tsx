@@ -31,6 +31,7 @@ import { Backdrop, RollNum, remember } from './frame';
 import { BotSettings, botsLine, type BotLevel } from '../roomBots';
 import { TipsCard } from './Tips';
 import { PlayerAvatar } from '../../presentation/PlayerAvatar';
+import { TeamModePicker, TeamRoster, modeName } from '../../teams/TeamRoster';
 
 /** Players a room takes (the game server's default maxHumans: MATCH_STATE doesn't carry it). */
 export const ROOM_SLOTS = 8;
@@ -496,6 +497,10 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
                 </span>
               </span>
             </div>
+            {/* team modes (teams/, v21): one group per team; the host moves players between them */}
+            {(lobby.teams ?? 0) > 0 ? (
+              <TeamRoster players={lobby.players} teams={lobby.teams ?? 0} host={host} onMove={(id, t) => online?.setTeam(id, t)} />
+            ) : (
             <ol className="prows">
               {rows.map(({ item: p, leaving }, i) => (
                 <PlayerRow key={p.id} p={p} hostView={host} leaving={leaving} i={i} />
@@ -509,6 +514,7 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
                 </li>
               ))}
             </ol>
+            )}
             {!enough ? (
               <p className="lobby__note">
                 <Icon name="info" size="sm" />
@@ -545,7 +551,7 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
             <div className="lobby__limits">
               <span>
                 <Icon name="target" size="sm" />
-                <b>Deathmatch</b>
+                <b data-bind="room.mode">{modeName(lobby.teams ?? 0)}</b>
               </span>
               <span>
                 <Icon name="clock" size="sm" />
@@ -562,6 +568,8 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
             </div>
             {host && (
               <div className="lobby__opts">
+                {/* team modes (v21): the kill limit follows the mode */}
+                <TeamModePicker teams={lobby.teams ?? 0} onTeams={(t) => online?.setMatchSettings({ teams: t })} />
                 <span className="label" id="tl-label">
                   Time limit
                 </span>

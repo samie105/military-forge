@@ -34,6 +34,12 @@ export interface MatchView {
   voted: boolean;
   /** final results of the last match (ENDING onwards, and in the lobby after it) */
   results: MatchResults | null;
+  /** team modes (v21): 0 = free-for-all, else 2–4 teams */
+  teams?: number;
+  /** team modes: each team's score now (the final ones once ended); empty in a free-for-all */
+  teamScores?: readonly number[];
+  /** team modes: the local player's team, −1 = none */
+  myTeam?: number;
 }
 
 export function matchView(match: Match, localId: number): MatchView {
@@ -72,12 +78,21 @@ export function matchView(match: Match, localId: number): MatchView {
     humans: match.humanCount(),
     voted: me?.rematch ?? false,
     results: match.results,
+    teams: match.teams,
+    teamScores: match.results && match.phase >= MatchPhase.Ending ? (match.results.teamScores ?? []) : match.teamScores,
+    myTeam: match.teams > 0 ? (me?.state.team ?? -1) : -1,
   };
 }
 
 export function sameView(a: MatchView | null, b: MatchView | null): boolean {
   if (!a || !b) return a === b;
-  for (const k of Object.keys(a) as (keyof MatchView)[]) if (a[k] !== b[k]) return false;
+  for (const k of Object.keys(a) as (keyof MatchView)[]) {
+    if (k === 'teamScores') {
+      const x = a.teamScores ?? [];
+      const y = b.teamScores ?? [];
+      if (x.length !== y.length || x.some((v, i) => v !== y[i])) return false;
+    } else if (a[k] !== b[k]) return false;
+  }
   return true;
 }
 

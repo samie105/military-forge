@@ -341,8 +341,16 @@ export class Vfx {
     this.low = preset.name === 'low';
     this.casings.setLimits(this.low, this.ctx.reducedMotion);
     if (this.ghosts.max === 0) this.ghosts.clear();
-    this.projectiles.lights = preset.vfxLights;
-    if (preset.vfxLights) this.scene.add(this.flash.point, this.gunfire.light, this.projectiles.light);
+    this.setLights(preset.vfxLights);
+  }
+
+  /**
+   * The effects' real point lights (High) in the scene or out of it. Renderer3D also flips them for a
+   * moment at load, to compile the scene's shaders for the light set of a tier Auto may step to.
+   */
+  setLights(on: boolean): void {
+    this.projectiles.lights = on;
+    if (on) this.scene.add(this.flash.point, this.gunfire.light, this.projectiles.light);
     else {
       this.flash.point.removeFromParent();
       this.gunfire.light.removeFromParent();

@@ -297,3 +297,23 @@ describe('perception: only what a human in its place could know', () => {
   });
 });
 
+
+describe('perception on teams (team modes, v21)', () => {
+  it('a teammate in plain sight is never a contact, nor is a teammate who shoots; an enemy is', () => {
+    const game = new Game({ map: flatMap() });
+    const { me, per } = observer(game, 20);
+    const mate = dummyAt(game, 26);
+    const enemy = dummyAt(game, 30);
+    me.team = mate.team = 0;
+    enemy.team = 1;
+    per.look(game, me);
+    expect(per.contacts[mate.id]!.known).toBe(false);
+    expect(per.contacts[enemy.id]!.visible).toBe(true);
+    const { s, inputs } = shooter(game, 24);
+    s.team = 0;
+    game.step(inputs);
+    expect(game.events.some((e) => e.type === 'shot' && e.shooter === s.id)).toBe(true);
+    per.hear(game, me);
+    expect(per.contacts[s.id]!.known).toBe(false);
+  });
+});

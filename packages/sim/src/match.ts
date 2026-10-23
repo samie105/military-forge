@@ -54,6 +54,20 @@ export interface MatchRules {
   minPlayers: number;
   /** when the vote times out with no votes: close the room (quick play) or go back to the lobby (custom rooms) */
   onNoRematch: 'close' | 'lobby';
+  /**
+   * Team modes (protocol v21): 0 = free-for-all; 2, 3 or 4 teams (Team Deathmatch). The kill limit is
+   * then the team's: the first team to it wins.
+   */
+  teams: number;
+}
+
+/** The modes a room can play: free-for-all, then 2, 3 and 4 teams. */
+export const TEAM_MODES = [0, 2, 3, 4] as const;
+export const MAX_TEAMS = 4;
+
+/** The kill limit a mode starts with (the admin page tunes the team ones): first team to 30, 25, 20. */
+export function defaultKillLimit(teams: number): number {
+  return teams === 3 ? 25 : teams === 4 ? 20 : 30;
 }
 
 /** Deathmatch: most kills in 6 min or first to 30 (docs/01 §6); phase lengths from docs/06 §5.2. */
@@ -65,6 +79,7 @@ export const DEATHMATCH_RULES: Readonly<MatchRules> = {
   postgame: 15,
   minPlayers: 2,
   onNoRematch: 'close',
+  teams: 0,
 };
 
 export function createMatchRules(overrides: Partial<MatchRules> = {}): MatchRules {
@@ -161,6 +176,8 @@ export interface MatchStanding {
   bestStreak: number;
   rating: number;
   mvp: boolean;
+  /** team modes: the player's team (−1 in a free-for-all) */
+  team?: number;
 }
 
 export interface MatchResults {
@@ -174,6 +191,10 @@ export interface MatchResults {
   /** MatchStanding.key of the MVP, −1 when nobody earned a positive rating */
   mvpKey: number;
   standings: MatchStanding[];
+  /** team modes: the teams' final scores (empty in a free-for-all) */
+  teamScores?: number[];
+  /** team modes: the winning team, −1 for a draw or a free-for-all */
+  winnerTeam?: number;
 }
 
 /** score ↓, kills ↓, deaths ↑, damage ↓, earliest to reach the score, id */
@@ -206,6 +227,14 @@ export class Match {
   readonly players: (MatchPlayer | null)[] = new Array<MatchPlayer | null>(MAX_PLAYERS).fill(null);
   /** players who left during the current match */
   readonly departed: MatchPlayer[] = [];
+  /** team modes: each team's score (team kills, less suicides), and the tick it last changed */
+  teamScores: number[] = [];
+  private teamScoreTicks: number[] = [];
+  /**
+   * The room's party of a player (social parties: kept together when teams are dealt), null = none.
+   * Rooms set it; local play leaves it.
+   */
+  groupOf: ((id: number) => string | null) | null = null;
   private startRequested = false;
   private lobbyRequested = false;
   /** next MatchPlayer.key */
@@ -218,7 +247,106 @@ export class Match {
     rules: Partial<MatchRules> = {},
   ) {
     this.rules = createMatchRules(rules);
+    this.resetTeamScores();
     this.sync();
+  }
+
+  get teams(): number {
+    return this.rules.teams;
+  }
+
+  /**
+   * Host, lobby only: the mode. Everyone is dealt onto the new teams (party mates together, bots
+   * spread), or off teams for a free-for-all. Returns false when refused (not a mode, not the lobby).
+   */
+  setTeams(teams: number): boolean {
+    if (!(TEAM_MODES as readonly number[]).includes(teams) || this.phase !== MatchPhase.Waiting) return false;
+    this.rules.teams = teams;
+    this.resetTeamScores();
+    for (const p of this.game.players) if (p) p.team = -1;
+    if (teams > 0) {
+      // humans first in join order, then bots: parties land together, bots fill the gaps
+      const order = this.players.filter((m): m is MatchPlayer => m !== null).sort((a, b) => Number(a.isBot) - Number(b.isBot) || a.key - b.key);
+      for (const m of order) m.state.team = this.pickTeam(m.state);
+    }
+    return true;
+  }
+
+  /** Host, lobby only: a player onto a team (a swap in the lobby's team columns). */
+  setTeam(id: number, team: number): boolean {
+    const m = this.players[id];
+    if (!m || this.teams === 0 || this.phase !== MatchPhase.Waiting) return false;
+    if (!Number.isInteger(team) || team < 0 || team >= this.teams) return false;
+    m.state.team = team;
+    return true;
+  }
+
+  /** Players on each team now (team modes). */
+  teamSizes(): number[] {
+    const sizes = new Array<number>(this.teams).fill(0);
+    for (const m of this.players) if (m && m.state.team >= 0 && m.state.team < this.teams) sizes[m.state.team]!++;
+    return sizes;
+  }
+
+  /** A newcomer's team: a party mate's while it's at most one bigger than the smallest; else the smallest (lowest index). */
+  private pickTeam(p: PlayerState): number {
+    const sizes = this.teamSizes();
+    const min = Math.min(...sizes);
+    const group = this.groupOf?.(p.id) ?? null;
+    if (group) {
+      for (const m of this.players) {
+        if (!m || m.state === p || m.state.team < 0 || this.groupOf?.(m.id) !== group) continue;
+        if (sizes[m.state.team]! <= min + 1) return m.state.team;
+      }
+    }
+    return sizes.indexOf(min);
+  }
+
+  /**
+   * Countdown: even the teams out (no team more than one bigger than another). Bots move first, then
+   * humans with no party mate on their team, the newest first.
+   */
+  private balanceTeams(): void {
+    for (let guard = 0; guard < MAX_PLAYERS; guard++) {
+      const sizes = this.teamSizes();
+      const max = Math.max(...sizes);
+      const min = Math.min(...sizes);
+      if (max - min <= 1) return;
+      const from = sizes.indexOf(max);
+      const to = sizes.indexOf(min);
+      const on = this.players.filter((m): m is MatchPlayer => m !== null && m.state.team === from);
+      const loner = (m: MatchPlayer) => {
+        const g = this.groupOf?.(m.id) ?? null;
+        return !g || !on.some((o) => o !== m && this.groupOf?.(o.id) === g);
+      };
+      const pick = on.filter((m) => m.isBot).sort((a, b) => b.key - a.key)[0] ?? on.filter(loner).sort((a, b) => b.key - a.key)[0] ?? on.sort((a, b) => b.key - a.key)[0];
+      if (!pick) return;
+      pick.state.team = to;
+    }
+  }
+
+  private resetTeamScores(): void {
+    this.teamScores = new Array<number>(this.rules.teams).fill(0);
+    this.teamScoreTicks = new Array<number>(this.rules.teams).fill(0);
+  }
+
+  private addTeamScore(team: number, delta: number): void {
+    if (team < 0 || team >= this.teams) return;
+    this.teamScores[team]! += delta;
+    this.teamScoreTicks[team] = this.tick;
+  }
+
+  /** The leading team: most score, then the earliest to reach it; −1 on a level tie (a draw) or with no teams. */
+  leadingTeam(): number {
+    let best = -1;
+    let draw = false;
+    for (let t = 0; t < this.teams; t++) {
+      if (best < 0 || this.teamScores[t]! > this.teamScores[best]!) {
+        best = t;
+        draw = false;
+      } else if (this.teamScores[t] === this.teamScores[best]) draw = true;
+    }
+    return draw ? -1 : best;
   }
 
   /** Inputs reach the sim (warm-up and the match itself); otherwise everyone is frozen. */
@@ -313,6 +441,7 @@ export class Match {
         bestStreak: m.bestStreak,
         rating: m.rating,
         mvp: false,
+        team: this.teams > 0 ? m.state.team : -1,
       }),
     );
     // highest positive rating; ties go to the better placement
@@ -340,6 +469,8 @@ export class Match {
         if (this.phase === MatchPhase.InProgress) this.departed.push(m);
       }
       this.players[id] = p ? new MatchPlayer(id, this.joins++, p, this.tick) : null;
+      // team modes: a newcomer (bots too) is dealt onto a team at once
+      if (p && this.teams > 0 && (p.team < 0 || p.team >= this.teams)) p.team = this.pickTeam(p);
     }
   }
 
@@ -391,6 +522,7 @@ export class Match {
     if (killerId === victimId) {
       victim.suicides++;
       this.addScore(victim, -1); // docs/03 §8: −1 suicide
+      this.addTeamScore(victim.state.team, -1);
     } else {
       killer = this.players[killerId] ?? null;
       if (killer) {
@@ -398,6 +530,7 @@ export class Match {
         killer.streak++;
         killer.bestStreak = Math.max(killer.bestStreak, killer.streak);
         this.addScore(killer, 1);
+        this.addTeamScore(killer.state.team, 1);
       }
     }
     const assists = this.creditAssists(victim, killer);
@@ -469,7 +602,7 @@ export class Match {
         else if (this.phaseTick >= this.phaseLength()) this.enter(MatchPhase.InProgress);
         break;
       case MatchPhase.InProgress:
-        if (r.killLimit > 0 && this.topScore() >= r.killLimit) this.finish(MatchEndReason.KillLimit);
+        if (r.killLimit > 0 && (this.teams > 0 ? Math.max(...this.teamScores) : this.topScore()) >= r.killLimit) this.finish(MatchEndReason.KillLimit);
         else if (r.timeLimit > 0 && this.phaseTick >= this.phaseLength()) this.finish(MatchEndReason.TimeLimit);
         break;
       case MatchPhase.Ending:
@@ -508,6 +641,8 @@ export class Match {
   /** Countdown entry: spawn assignment and loadout lock (docs/06 §5.2), fresh stats. */
   private beginMatch(): void {
     this.departed.length = 0;
+    if (this.teams > 0) this.balanceTeams();
+    this.resetTeamScores();
     const game = this.game;
     for (const g of game.grenades) g.alive = false;
     resetPickups(game); // warm-up items gone, spawners start over
@@ -534,6 +669,8 @@ export class Match {
       winnerKey: standings[0]?.key ?? -1,
       mvpKey: standings.find((s) => s.mvp)?.key ?? -1,
       standings,
+      teamScores: this.teamScores.slice(),
+      winnerTeam: this.teams > 0 ? this.leadingTeam() : -1,
     };
     this.enter(MatchPhase.Ending);
   }
@@ -578,6 +715,8 @@ export function hashMatch(match: Match, gameHash: number): number {
     else f.int(-1);
   }
   for (const m of match.departed) player(m);
+  // team modes only (a free-for-all hashes as it always did)
+  for (const t of match.teamScores) f.int(t);
   const r = match.results;
   f.int(r ? r.number : -2);
   f.int(r ? r.winnerKey : -2);

@@ -27,6 +27,8 @@ export interface LobbyPlayer {
   you: boolean;
   /** -1 = not reported yet */
   pingMs: number;
+  /** team modes (v21): the player's team, −1 = none */
+  team?: number;
 }
 
 export interface LobbyView {
@@ -47,6 +49,8 @@ export interface LobbyView {
   /** the room's bots: the players they fill it up to (0 = no bots), and their level (v17) */
   bots: number;
   botLevel: BotLevelWire;
+  /** team modes (v21): 0 = free-for-all, else 2–4 teams */
+  teams?: number;
 }
 
 const ENDED = new Set<number>([MatchPhase.Ending, MatchPhase.Postgame, MatchPhase.Closed]);
@@ -84,7 +88,9 @@ function buildResults(s: MatchStateMsg): MatchResults | null {
     durationTicks: s.results.durationTicks,
     winnerKey: s.results.winnerKey,
     mvpKey: s.results.mvpKey,
-    standings: s.standings.map((r, i) => ({ ...r, placement: i + 1, rating: 0 })),
+    standings: s.standings.map((r, i) => ({ ...r, placement: i + 1, rating: 0, team: r.team ?? -1 })),
+    teamScores: s.teamScores ?? [],
+    winnerTeam: s.winnerTeam ?? -1,
   };
 }
 
@@ -127,6 +133,9 @@ export function onlineMatchView(src: OnlineSource, now = performance.now()): Mat
     voted: mine?.rematch ?? false,
     // the results table shows the final standings, which only travel from ENDING on
     results: ENDED.has(s.phase) ? resultsOf(s) : null,
+    teams: s.teams ?? 0,
+    teamScores: s.teamScores ?? [],
+    myTeam: (s.teams ?? 0) > 0 ? (mine?.team ?? -1) : -1,
   };
 }
 
@@ -136,7 +145,7 @@ export function lobbyView(src: OnlineSource): LobbyView | null {
   const me = src.localId;
   const players = s.lobby.map((p): LobbyPlayer => {
     const row = s.standings.find((r) => r.id === p.id && !r.left);
-    return { id: p.id, name: row?.name ?? `Player ${p.id + 1}`, isBot: row?.isBot ?? false, ready: p.ready, host: p.id === s.hostId, you: p.id === me, pingMs: p.pingMs };
+    return { id: p.id, name: row?.name ?? `Player ${p.id + 1}`, isBot: row?.isBot ?? false, ready: p.ready, host: p.id === s.hostId, you: p.id === me, pingMs: p.pingMs, team: (s.teams ?? 0) > 0 ? (p.team ?? -1) : -1 };
   });
   // host first, then join order (ids are slots, roughly join order)
   players.sort((a, b) => Number(b.host) - Number(a.host) || a.id - b.id);
@@ -153,15 +162,16 @@ export function lobbyView(src: OnlineSource): LobbyView | null {
     mapName: maps[s.mapId]?.name ?? s.mapId,
     bots: s.rules.bots,
     botLevel: s.rules.botLevel,
+    teams: s.teams ?? 0,
   };
 }
 
 export function sameLobby(a: LobbyView | null, b: LobbyView | null): boolean {
   if (!a || !b) return a === b;
   if (a.players.length !== b.players.length) return false;
-  for (const k of ['code', 'local', 'isHost', 'ready', 'minPlayers', 'timeLimit', 'killLimit', 'mapId', 'bots', 'botLevel'] as const) if (a[k] !== b[k]) return false;
+  for (const k of ['code', 'local', 'isHost', 'ready', 'minPlayers', 'timeLimit', 'killLimit', 'mapId', 'bots', 'botLevel', 'teams'] as const) if (a[k] !== b[k]) return false;
   return a.players.every((p, i) => {
     const q = b.players[i]!;
-    return p.id === q.id && p.name === q.name && p.isBot === q.isBot && p.ready === q.ready && p.host === q.host && p.you === q.you && p.pingMs === q.pingMs;
+    return p.id === q.id && p.name === q.name && p.isBot === q.isBot && p.ready === q.ready && p.host === q.host && p.you === q.you && p.pingMs === q.pingMs && p.team === q.team;
   });
 }

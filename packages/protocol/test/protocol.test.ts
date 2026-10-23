@@ -1313,14 +1313,14 @@ describe('looks on the wire (v19)', () => {
   it('v17 and v18 clients are still admitted; nothing newer or older', () => {
     expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(19);
     expect(MIN_PROTOCOL_VERSION).toBe(17);
-    expect([16, 17, 18, 19, 20, 21].map(protocolSupported)).toEqual([false, true, true, true, true, false]);
+    expect([16, 17, 18, 19, 20, 21, PROTOCOL_VERSION + 1].map(protocolSupported)).toEqual([false, true, true, true, true, true, false]);
     expect(CmdKind.SetLook).toBe(12);
   });
 });
 
 describe('spectating (v20)', () => {
   it('takes the v20 slots from the protocol registry', () => {
-    expect(PROTOCOL_VERSION).toBe(20);
+    expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(20);
     expect(MsgType.SpectateAck).toBe(0x2c);
     expect(MsgType.Spectate).toBe(0x2d);
     expect(CmdKind.Spectate).toBe(13);

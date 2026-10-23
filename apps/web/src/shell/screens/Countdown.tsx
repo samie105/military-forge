@@ -19,7 +19,7 @@ import { formatClock, type MatchView } from '../matchView';
 import { take } from './frame';
 import { useTouchPrompts } from './phone/layout';
 import { MAP_CARDS, eventChip, mapEvents } from './Lobby';
-import { VsPoster, VsStrip, useFighters } from '../../presentation/VsPoster';
+import { VsPoster, VsStrip, useFighters, useTeamLists } from '../../presentation/VsPoster';
 
 export type CountdownState = 'intro' | 'intro-leaving' | 'match' | '3' | '2' | '1' | 'go';
 
@@ -186,6 +186,8 @@ export function Countdown({ view, state, held = false, bindings }: { view: Match
   // the VS poster (presentation/, owner 23 Oct) in place of the map intro and the "Match 1" beat, once the
   // room's fighters are known; any key or tap folds it early (this player only)
   const fighters = useFighters();
+  // team modes (v21): the poster's team layouts
+  const teamLists = useTeamLists(fighters);
   const [skipped, setSkipped] = useState<'no' | 'folding' | 'gone'>('no');
   useEffect(() => {
     if (state !== 'intro' && state !== 'intro-leaving') setSkipped('no');
@@ -199,7 +201,7 @@ export function Countdown({ view, state, held = false, bindings }: { view: Match
   const touch = useTouchPrompts();
   const poster = fighters.length > 0;
   if (poster && (state === 'intro' || state === 'intro-leaving') && skipped !== 'gone') {
-    return <VsPoster view={view} fighters={fighters} leaving={state === 'intro-leaving' || skipped === 'folding'} held={held} onSkip={() => setSkipped('folding')} />;
+    return <VsPoster view={view} fighters={fighters} leaving={state === 'intro-leaving' || skipped === 'folding'} held={held} onSkip={() => setSkipped('folding')} teams={teamLists} />;
   }
   // folded early by a key or tap: the strip and the stand-by until the countdown's own 3
   if (poster && skipped === 'gone' && (state === 'intro' || state === 'intro-leaving')) state = 'match';
@@ -259,7 +261,7 @@ export function Countdown({ view, state, held = false, bindings }: { view: Match
       )}
     </Screen>
     {/* after the countdown's own layers, so its dim doesn't cover the strip */}
-    {poster && !intro && state !== 'go' && <VsStrip view={view} fighters={fighters} />}
+    {poster && !intro && state !== 'go' && <VsStrip view={view} fighters={fighters} teams={teamLists} />}
     </>
   );
 }

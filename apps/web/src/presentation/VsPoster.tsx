@@ -17,6 +17,8 @@ import { PhoneScreen, usePhoneLayout } from '../shell/screens/phone/layout';
 import { Screen } from '../ui/Screen';
 import { cardName, rulesLine, vsLayout, type VsFighter, type VsLayout } from './layout';
 import { showPoster } from './state';
+import { TeamMark } from '../teams/TeamRoster';
+import { TEAM_NAMES } from '../teams/palette';
 import './vs.css';
 
 /** Everyone in the room as the poster shows them (follows ROSTER and MATCH_STATE). */
@@ -29,6 +31,13 @@ export function useFighters(): VsFighter[] {
   const me = lookBook.localId;
   const host = lookBook.hostId;
   return lookBook.fighters().map((f) => ({ ...f, you: f.id === me, host: f.id === host }));
+}
+
+/** Team modes (v21): each team's player ids, in team order; null in a free-for-all. */
+export function useTeamLists(fighters: readonly VsFighter[]): number[][] | null {
+  const n = lookBook.teams;
+  if (n <= 0) return null;
+  return Array.from({ length: n }, (_, t) => fighters.filter((f) => lookBook.teamOf(f.id) === t).map((f) => f.id));
 }
 
 /** The pose a fighter strikes on the poster: theirs once they can pick one; by look until then. */
@@ -84,8 +93,12 @@ function Lineup({ layout, phone }: { layout: VsLayout; phone: boolean }) {
     return (
       <div className="vs__teams" data-teams={layout.sides.length}>
         {layout.sides.map((side, s) => (
-          <div key={s} className="vs__team" data-team={s}>
+          <div key={s} className="vs__team" data-team={s} style={{ '--tc': `var(--c-team-${s}, currentColor)` } as CSSProperties}>
             <ul className="vs__col">
+              <li className="vs__teamhead">
+                <TeamMark team={s} />
+                <b className="display">Team {TEAM_NAMES[s]}</b>
+              </li>
               {side.map((f, i) => (
                 <Card key={f.id} f={f} i={i + s * 4} compact />
               ))}
@@ -145,7 +158,7 @@ export function VsPoster({ view, fighters, leaving, held, onSkip, teams = null }
           Match {view.number} · {teams ? 'Team deathmatch' : 'Deathmatch'}
         </span>
         <h1 className="display vs__map">{view.mapName}</h1>
-        <span className="vs__rules">{rulesLine(view.killLimit, view.timeLimit)}</span>
+        <span className="vs__rules">{rulesLine(view.killLimit, view.timeLimit).replace(/^First to/, teams ? 'First team to' : 'First to')}</span>
       </header>
       {layout.kind !== 'duel' && layout.kind !== 'teams' && (
         <b className="vs__stamp display" aria-hidden="true">
@@ -172,15 +185,15 @@ export function VsPoster({ view, fighters, leaving, held, onSkip, teams = null }
 }
 
 /** The poster folded: a slim strip at the top with the map, the rules and everyone's face (during 3-2-1). */
-export function VsStrip({ view, fighters }: { view: MatchView; fighters: readonly VsFighter[] }) {
+export function VsStrip({ view, fighters, teams = null }: { view: MatchView; fighters: readonly VsFighter[]; teams?: readonly (readonly number[])[] | null }) {
   const phone = usePhoneLayout();
-  const layout = vsLayout(fighters);
+  const layout = vsLayout(fighters, teams);
   const faces = layout.sides.flat();
   const body = (
     <div className="vs-strip" aria-hidden="true">
       <b className="display vs-strip__map">{view.mapName}</b>
       <span className="vs-strip__mode">
-        {layout.stamp} · {rulesLine(view.killLimit, view.timeLimit)}
+        {teams ? `Team deathmatch · ${rulesLine(view.killLimit, view.timeLimit).replace(/^First to/, 'First team to')}` : `${layout.stamp} · ${rulesLine(view.killLimit, view.timeLimit)}`}
       </span>
       <span className="vs-strip__faces">
         {faces.slice(0, phone ? 8 : 16).map((f) => (

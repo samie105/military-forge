@@ -23,10 +23,11 @@ import { reasonChip, winnerOf, type ResultsExtras } from '../Results';
 import { PhoneScreen, rise } from './layout';
 import { Roll, ShareChip, shareData, useShareChip } from './parts';
 import { SavedAdsList } from '../../../ads/SavedAds';
+import { TeamStandings, teamWinner } from '../../../teams/TeamResults';
 
 /** The words a shared result says: who won the match, where, and how you did. */
 export function resultText(view: Pick<MatchView, 'mapName'>, results: MatchResults, localId: number): string {
-  const winner = winnerOf(results.standings);
+  const winner = (results.teamScores?.length ?? 0) > 0 ? teamWinner(results) : winnerOf(results.standings);
   const me = results.standings.find((s) => s.id === localId && !s.left);
   const top = winner.draw ? `A draw on ${view.mapName}` : `${winner.name} won on ${view.mapName}`;
   const mine = me ? `: I came ${ordinal(me.placement)} with ${me.kills} ${me.kills === 1 ? 'kill' : 'kills'}` : '';
@@ -35,7 +36,9 @@ export function resultText(view: Pick<MatchView, 'mapName'>, results: MatchResul
 
 export function PhoneResults({ view, results, actions, room, training, code }: { view: MatchView; results: MatchResults; actions: ShellActions; room?: ResultsExtras | undefined; training?: { leave(): void } | undefined; code?: string | undefined }) {
   const me = results.standings.find((s) => s.id === view.localId && !s.left);
-  const winner = winnerOf(results.standings);
+  // team modes (v21): the winning team, and the teams' scores in the ticket
+  const teamMode = (results.teamScores?.length ?? 0) > 0;
+  const winner = teamMode ? teamWinner(results) : winnerOf(results.standings);
   const chip = reasonChip(results, view.killLimit);
   const mvp = results.standings.find((s) => s.mvp);
   const voting = view.phase === MatchPhase.Ending || view.phase === MatchPhase.Postgame;
@@ -102,8 +105,9 @@ export function PhoneResults({ view, results, actions, room, training, code }: {
               {chip.text}
             </span>
             <b className="display" data-bind="results.winner">
-              {winner.draw ? 'Top score shared' : `${winner.name} wins`}
+              {winner.draw ? (teamMode ? 'Teams level: a draw' : 'Top score shared') : `${winner.name} wins`}
             </b>
+            {teamMode && <TeamStandings results={results} myTeam={view.myTeam ?? -1} compact />}
           </div>
           <button type="button" className="btn btn--volt btn--block m-p3" style={rise(3)} onClick={blurAfter(share)}>
             <Icon name="share" />

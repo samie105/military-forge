@@ -362,7 +362,7 @@ function Accessibility({ settings }: { settings: Settings }) {
           <div className="cb" role="radiogroup" aria-labelledby="cb-label">
             {CB.map((c) => (
               <button key={c.id} className="cb__opt" role="radio" aria-checked={settings.colorBlind === c.id} onClick={() => ctl.updateSettings({ colorBlind: c.id })}>
-                <span className="cb__sw" style={{ '--a': c.a, '--b': c.b } as CSSProperties}>
+                <span className="cb__sw" aria-hidden="true" style={{ '--a': c.a, '--b': c.b } as CSSProperties}>
                   <i>◆</i>
                   <i>▲</i>
                 </span>

@@ -104,6 +104,7 @@ export class LocalMode {
     // v19: the bots wear the seeded looks a room would give them (the local player: the saved look)
     const players = this.game.players.filter((p): p is PlayerState => p !== null);
     lookBook.setRoster(this.me.id, players.map((p) => ({ id: p.id, name: p.name, isBot: p.isBot })));
+    lookBook.setTeams(this.match?.teams ?? 0, new Map(players.map((p) => [p.id, p.team] as const)));
     const mine = new LocalLoadoutStore().peek();
     lookBook.replace([...botLooks(SEED, players.filter((p) => p.isBot)), ...(mine ? [[this.me.id, ownedOnly(mine, starterInventory)] as const] : [])]);
   }

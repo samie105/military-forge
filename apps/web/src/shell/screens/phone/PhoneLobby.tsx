@@ -27,6 +27,7 @@ import { LobbyInvite } from '../../../social/SocialLayer';
 import { Roll, ShareChip, Sheet, shareRoom, useShareChip } from './parts';
 import { PhoneTips } from './PhoneTips';
 import { PlayerAvatar } from '../../../presentation/PlayerAvatar';
+import { TeamRoster } from '../../../teams/TeamRoster';
 import { BOT_LEVELS, BOT_LEVEL_NAMES, botFillChoices, botsLine, type BotLevel } from '../../roomBots';
 
 function Row({ p, i }: { p: LobbyPlayer; i: number }) {
@@ -142,6 +143,16 @@ function RulesSheet({ lobby, open, onClose }: { lobby: LobbyView; open: boolean;
         <button type="button" className="btn btn--ghost btn--sm btn--icon m-p8" aria-label="Close" onClick={onClose}>
           <Icon name="close" />
         </button>
+      </div>
+      <div className="pm-sheet__row">
+        <span className="label">Mode</span>
+        <div className="seg pm-seg" role="radiogroup" aria-label="Mode">
+          {[0, 2, 3, 4].map((t) => (
+            <button type="button" key={t} role="radio" aria-checked={(lobby.teams ?? 0) === t} className="seg__opt m-p8" disabled={!host} onClick={() => online?.setMatchSettings({ teams: t })}>
+              {t === 0 ? 'Free-for-all' : `${t} teams`}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="pm-sheet__row">
         <span className="label">Map</span>
@@ -327,11 +338,16 @@ export function PhoneLobby({ lobby, tips = null }: { lobby: LobbyView; tips?: Bi
                 <Roll value={readyCount} /> ready
               </span>
             </div>
+            {/* team modes (teams/, v21): grouped by team; the host taps a player, then Move here */}
+            {(lobby.teams ?? 0) > 0 ? (
+              <TeamRoster players={lobby.players} teams={lobby.teams ?? 0} host={lobby.isHost} onMove={(id, t) => online?.setTeam(id, t)} phone />
+            ) : (
             <ol>
               {lobby.players.map((p, i) => (
                 <Row key={p.id} p={p} i={i + 2} />
               ))}
             </ol>
+            )}
             {/* the match rules and Ready/Start: one footer, so at large text both stay in view (phone.css) */}
             <div className="pm-roster__foot">
               <div className="pm-mission">

@@ -25,6 +25,8 @@ export class LookBook {
   private fightersNow: readonly Fighter[] = [];
   private local = -1;
   private host = -1;
+  private teamCount = 0;
+  private teamById = new Map<number, number>();
   private readonly listeners = new Set<() => void>();
   /** bumped on every change (React's useSyncExternalStore snapshot) */
   version = 0;
@@ -59,6 +61,33 @@ export class LookBook {
     return this.host;
   }
 
+  /** Team modes (v21): how many teams (0 = free-for-all) and who is on which. */
+  setTeams(teams: number, byId: ReadonlyMap<number, number>): void {
+    const same = teams === this.teamCount && byId.size === this.teamById.size && [...byId].every(([id, t]) => this.teamById.get(id) === t);
+    if (same) return;
+    this.teamCount = teams;
+    this.teamById = new Map(teams > 0 ? byId : []);
+    this.emit();
+  }
+
+  /** 0 = free-for-all, else the number of teams. */
+  get teams(): number {
+    return this.teamCount;
+  }
+
+  /** A player's team, −1 = none. */
+  teamOf(id: number): number {
+    return this.teamById.get(id) ?? -1;
+  }
+
+  /** The players on `id`'s team besides `id` (empty in a free-for-all): the minimap's allies. */
+  teammatesOf(id: number): Set<number> {
+    const team = this.teamOf(id);
+    const out = new Set<number>();
+    if (team >= 0) for (const [other, t] of this.teamById) if (t === team && other !== id) out.add(other);
+    return out;
+  }
+
   setHost(id: number): void {
     if (id === this.host) return;
     this.host = id;
@@ -78,6 +107,7 @@ export class LookBook {
   /** Nobody's look, nobody in the room (left the room, back to the menus). */
   clear(): void {
     this.setHost(-1);
+    this.setTeams(0, new Map());
     this.setRoster(-1, []);
     this.replace([]);
   }

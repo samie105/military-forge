@@ -10,7 +10,7 @@ import { DamageSource } from './events';
 import type { Game } from './game';
 import { rayCapsule, rayCircle } from './geometry';
 import { Btn, isDown, wasPressed } from './input';
-import { DUAL_TOGGLE_TIME, cancelReloads, knockOutOfDash, type PlayerState, type WeaponSlot } from './player';
+import { DUAL_TOGGLE_TIME, allies, cancelReloads, knockOutOfDash, type PlayerState, type WeaponSlot } from './player';
 import { stepGrenadeBelt } from './grenades';
 import { launchProjectile } from './projectiles';
 import { damageMine, mineHit, shootableMine } from './mines';
@@ -164,9 +164,12 @@ function traceTargets(
   target.t = maxT;
   target.zone = HitZone.None;
   target.shield = false;
+  const passAllies = game.tuning.friendlyFire < 1;
   for (const q of game.players) {
     if (!q || q.id === shooter.id || (skipMask & (1 << q.id)) !== 0) continue;
     if (!q.alive && (blockMask & (1 << q.id)) === 0) continue;
+    // team modes, friendly fire off: shots and swings go through teammates (and their shields)
+    if (passAllies && allies(shooter, q)) continue;
     // lag compensation (server): test the target where the shooter saw it (docs/05 §7.1), unless
     // that was long ago and the target is behind cover now (the cover rule, rewind.ts)
     let rewound = game.rewind !== null && game.rewind.pose(q, shooter, pose);

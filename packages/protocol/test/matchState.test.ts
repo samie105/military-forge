@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CmdKind, DecodeError, MsgType, decodeMessage, encodeCmd, encodeMatchState, isUnreliableMessage, type MatchStateMsg } from '../src';
+import { CmdKind, DecodeError, MsgType, decodeMessage, encodeCmd, encodeMatchState, isUnreliableMessage, parseSetTeam, type MatchStateMsg } from '../src';
 
 const state = (over: Partial<Omit<MatchStateMsg, 'type'>> = {}): Omit<MatchStateMsg, 'type'> => ({
   phase: 2,
@@ -24,11 +24,11 @@ const state = (over: Partial<Omit<MatchStateMsg, 'type'>> = {}): Omit<MatchState
 describe('MATCH_STATE (0x23)', () => {
   it('round-trips phase, timers, rules, host, lobby flags, standings and results', () => {
     const m = state();
-    expect(decodeMessage(encodeMatchState(m))).toEqual({ type: MsgType.MatchState, ...m });
+    expect(decodeMessage(encodeMatchState(m))).toEqual({ type: MsgType.MatchState, ...ffa(m) });
     const ended = state({ phase: 3, endReason: 1, results: { number: 3, reason: 1, durationTicks: 21_600, winnerKey: 7, mvpKey: -1 }, hostId: -1 });
-    expect(decodeMessage(encodeMatchState(ended))).toEqual({ type: MsgType.MatchState, ...ended });
+    expect(decodeMessage(encodeMatchState(ended))).toEqual({ type: MsgType.MatchState, ...ffa(ended) });
     const empty = state({ lobby: [], standings: [], rules: { ...state().rules, timeLimit: 0, killLimit: 0, onNoRematch: 'close' } });
-    expect(decodeMessage(encodeMatchState(empty))).toEqual({ type: MsgType.MatchState, ...empty });
+    expect(decodeMessage(encodeMatchState(empty))).toEqual({ type: MsgType.MatchState, ...ffa(empty) });
   });
 
   it("carries the room's bots: their fill (0 = none) and level (v17)", () => {
@@ -74,5 +74,43 @@ describe('MATCH_STATE (0x23)', () => {
         expect(e).toBeInstanceOf(DecodeError);
       }
     }
+  });
+});
+
+/** What a v21 decoder adds to a free-for-all MATCH_STATE: no teams, nobody on one. */
+function ffa<T extends Omit<MatchStateMsg, 'type'>>(m: T): T {
+  return { ...m, lobby: m.lobby.map((e) => ({ ...e, team: -1 })), standings: m.standings.map((st) => ({ ...st, team: -1 })), teams: 0, teamScores: [], winnerTeam: -1 };
+}
+
+describe('MATCH_STATE teams section (v21)', () => {
+  it('round-trips the mode, team scores, every lobby entry\'s and standing\'s team, and the winner', () => {
+    const base = decodeMessage(encodeMatchState(state())) as MatchStateMsg;
+    const lobby = base.lobby.map((e, i) => ({ ...e, team: i % 3 }));
+    const standings = base.standings.map((st, i) => ({ ...st, team: i % 2 === 0 ? 2 : -1 }));
+    const m = { ...state(), lobby, standings, teams: 3, teamScores: [12, -1, 30], winnerTeam: 2 };
+    const got = decodeMessage(encodeMatchState(m)) as MatchStateMsg;
+    expect(got).toMatchObject({ teams: 3, teamScores: [12, -1, 30], winnerTeam: 2 });
+    expect(got.lobby.map((e) => e.team)).toEqual(lobby.map((e) => e.team));
+    expect(got.standings.map((st) => st.team)).toEqual(standings.map((st) => st.team));
+  });
+
+  it('a v17–v20 decoder reads a v21 MATCH_STATE as it always did; a v21 decoder reads an old one as a free-for-all', () => {
+    const bytes = encodeMatchState({ ...state(), teams: 2, teamScores: [3, 4], winnerTeam: -1 });
+    // the old decoder is the new one minus the tail: decoding the same fields gives the same values
+    const got = decodeMessage(bytes) as MatchStateMsg;
+    expect({ ...got, teams: undefined, teamScores: undefined, winnerTeam: undefined, lobby: got.lobby.map(({ team: _t, ...e }) => e), standings: got.standings.map(({ team: _t, ...st }) => st) }).toMatchObject({ phase: state().phase, mapId: state().mapId });
+    // an older server's MATCH_STATE: everything up to the results, nothing after (strip the tail byte)
+    const plain = encodeMatchState(state());
+    const old = plain.subarray(0, plain.length - 1);
+    const read = decodeMessage(old) as MatchStateMsg;
+    expect(read.teams).toBe(0);
+  });
+});
+
+describe('SetTeam (CMD 14, v21)', () => {
+  it('takes { id, team } and nothing else', () => {
+    expect(CmdKind.SetTeam).toBe(14);
+    expect(parseSetTeam('{"id":3,"team":1}')).toEqual({ id: 3, team: 1 });
+    for (const bad of ['', '[]', '{"id":3}', '{"id":-1,"team":0}', '{"id":3,"team":4}', '{"id":1.5,"team":0}', 'null']) expect(parseSetTeam(bad), bad).toBeNull();
   });
 });

@@ -41,6 +41,8 @@ export function hashGame(game: Game): number {
       continue;
     }
     f.int(p.id);
+    // team modes only: a free-for-all hashes as it always did (its golden replays stay)
+    if (p.team >= 0) f.int(1000 + p.team);
     f.bool(p.alive);
     f.int(p.respawnTicks);
     f.fx(p.x);

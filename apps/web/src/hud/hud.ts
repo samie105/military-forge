@@ -16,6 +16,7 @@
  * banners (P9) that leave accelerating (Linger), the HP bar's ease (P10) on a hit only.
  */
 import { avatarElement } from '../presentation/domAvatar';
+import { orderByTeam, teamHeading, teamTotals } from '../teams/scoreboard';
 import { DamageSource, MatchPhase, type SimEvent } from '@military-forge/sim';
 import { SpectateQueue } from '@military-forge/protocol';
 import type { SpectateView } from '../spectate/director';
@@ -262,9 +263,12 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
   const m = input.match;
   const playing = !!m && m.phase === MatchPhase.InProgress;
   on('match', playing);
-  v['match.mode'] = 'Deathmatch';
+  // team modes (v21): the team strip (teams/hudStrip.ts) stands in for the You and Lead chips
+  const teamed = (m?.teams ?? 0) > 0;
+  on('teams', teamed);
+  v['match.mode'] = teamed ? 'Team deathmatch' : 'Deathmatch';
   v['match.timeLeft'] = m && playing ? formatClock(m.untimed ? m.secondsElapsed : m.secondsLeft) : '';
-  v['match.limit'] = m ? (m.killLimit > 0 ? `First to ${m.killLimit}` : m.untimed ? 'No time limit' : 'No kill limit') : '';
+  v['match.limit'] = m ? (m.killLimit > 0 ? `First ${teamed ? 'team ' : ''}to ${m.killLimit}` : m.untimed ? 'No time limit' : 'No kill limit') : '';
   v['match.myScore'] = String(m?.myScore ?? 0);
   v['match.leaderShort'] = m?.leaderName || 'Leader';
   v['match.leaderScore'] = String(m?.leaderScore ?? 0);
@@ -850,6 +854,8 @@ export class Hud {
   private scoreboardAt = 0;
   private boardKey = '';
   private boardCells: HTMLElement[][] = [];
+  /** team modes: each team header's score cell */
+  private boardTeams: { team: number; cell: HTMLElement }[] = [];
   private boardClock: HTMLElement | null = null;
   private boardLead: HTMLElement | null = null;
   private scoreboardCodes: readonly string[] = ['Tab'];
@@ -1416,14 +1422,16 @@ export class Hud {
    * order or player rebuilds the rows without the entrance.
    */
   private drawScoreboard(rows: ScoreRow[] | null, match: MatchView | null, fresh: boolean): void {
-    const list = rows ?? [];
-    const key = list.map((r) => `${r.key}:${r.bot ? 1 : 0}:${r.you ? 1 : 0}:${r.host ? 1 : 0}:${r.left ? 1 : 0}:${r.name}`).join('|');
+    // team modes (v21, teams/scoreboard.ts): grouped by team, the leading team first
+    const teamed = (rows ?? []).some((r) => (r.team ?? -1) >= 0);
+    const list = teamed ? orderByTeam(rows ?? []) : (rows ?? []);
+    const key = list.map((r) => `${r.key}:${r.bot ? 1 : 0}:${r.you ? 1 : 0}:${r.host ? 1 : 0}:${r.left ? 1 : 0}:${r.name}:${r.team ?? -1}`).join('|');
     const clock = match?.phase === MatchPhase.InProgress ? formatClock(match.untimed ? match.secondsElapsed : match.secondsLeft) : '';
     if (fresh || key !== this.boardKey) {
       const head = el('header', 'sb__head');
       el('h1', 'display', head).textContent = 'Scoreboard';
       const limit = match ? (match.killLimit > 0 ? `first to ${match.killLimit}` : 'no kill limit') : '';
-      el('span', 'sb__meta', head).textContent = ['Deathmatch', match?.mapName ?? '', limit].filter(Boolean).join(' · ');
+      el('span', 'sb__meta', head).textContent = [teamed ? 'Team deathmatch' : 'Deathmatch', match?.mapName ?? '', teamed && limit ? `first team to ${match!.killLimit}` : limit].filter(Boolean).join(' · ');
       this.boardClock = el('b', 'sb__clock num', head);
       // who leads and where you stand (rewritten below with the scores)
       this.boardLead = el('p', 'sb__lead');
@@ -1436,8 +1444,20 @@ export class Hud {
       }
       const body = el('tbody', '', table);
       const lead = list.length > 1 && list[0]!.score > list[1]!.score;
+      this.boardTeams = [];
       this.boardCells = list.map((r, i) => {
+        if (teamed && (r.team ?? -1) >= 0 && list[i - 1]?.team !== r.team) {
+          const trTeam = el('tr', 'sb__team', body);
+          trTeam.style.setProperty('--tc', `var(--c-team-${r.team}, currentColor)`);
+          const cell = el('td', '', trTeam);
+          cell.colSpan = 2;
+          el('b', 'sb__teamname', cell).textContent = teamHeading(r.team!);
+          const score = el('td', 'num sb__teamscore', trTeam);
+          score.colSpan = 4;
+          this.boardTeams.push({ team: r.team!, cell: score });
+        }
         const row = el('tr', [fresh ? 'm-p3 m-p3--tight' : '', r.you ? 'is-you' : ''].filter(Boolean).join(' '), body);
+        if (teamed && (r.team ?? -1) >= 0) row.style.setProperty('--tc', `var(--c-team-${r.team}, currentColor)`);
         if (r.id !== undefined && !r.left) row.dataset.pid = String(r.id); // voice chat's talking ring (voice/voice.css)
         if (fresh) stagger(row, i);
         const rank = el('td', 'sb__rank num', row);
@@ -1473,15 +1493,22 @@ export class Hud {
       this.boardLead.textContent = lead;
       this.boardLead.hidden = !lead;
     }
+    const totals = teamed ? teamTotals(list) : null;
+    for (const t of this.boardTeams) {
+      const text = String(totals?.get(t.team) ?? 0);
+      if (t.cell.textContent !== text) t.cell.textContent = text;
+    }
     list.forEach((r, i) => {
       const cells = this.boardCells[i];
       if (!cells) return;
-      const text = [String(i + 1), String(r.score), String(r.kills), String(r.deaths), r.ping >= 0 ? `${r.ping} ms` : '·'];
+      // in team modes the rank is within the team
+      const rank = teamed ? list.slice(0, i).filter((q) => q.team === r.team).length + 1 : i + 1;
+      const text = [String(rank), String(r.score), String(r.kills), String(r.deaths), r.ping >= 0 ? `${r.ping} ms` : '·'];
       cells.forEach((c, j) => {
         if (c.textContent !== text[j]) c.textContent = text[j]!;
       });
       // the ping in the kit's bands (green to 100 ms, amber to 200, red beyond)
-      const ping = cells[5]!;
+      const ping = cells[4]!; // rank, score, kills, deaths, ping
       const band = r.ping >= 0 ? pingQuality(r.ping).cls : '';
       if (ping.dataset.band !== band) {
         ping.classList.remove('ping--good', 'ping--mid', 'ping--bad');

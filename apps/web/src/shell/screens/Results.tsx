@@ -21,6 +21,8 @@ import type { ShellActions } from '../store';
 import { Backdrop, NetPill } from './frame';
 import { PlayerAvatar } from '../../presentation/PlayerAvatar';
 import { SavedAdsList } from '../../ads/SavedAds';
+import { TeamStandings, teamWinner } from '../../teams/TeamResults';
+import { TeamMark } from '../../teams/TeamRoster';
 
 export interface ResultsExtras {
   /** a room: the host may send everyone back to the lobby */
@@ -59,7 +61,9 @@ const thousands = (n: number) => n.toLocaleString('en-US');
 export function Results({ view, results, actions, room, training }: { view: MatchView; results: MatchResults; actions: ShellActions; room?: ResultsExtras | undefined; training?: { leave(): void } | undefined }) {
   // ids are slots: after a leave, the leaver's row can carry your id, so skip departed rows
   const me = results.standings.find((s) => s.id === view.localId && !s.left);
-  const winner = winnerOf(results.standings);
+  // team modes (v21): the winning team, and the teams' standings under it
+  const teamMode = (results.teamScores?.length ?? 0) > 0;
+  const winner = teamMode ? teamWinner(results) : winnerOf(results.standings);
   const top = results.standings.find((s) => s.placement === 1);
   const chip = reasonChip(results, view.killLimit);
   const mvp = results.standings.find((s) => s.mvp);
@@ -101,7 +105,8 @@ export function Results({ view, results, actions, room, training }: { view: Matc
             <h1 id="res-title" className="display res__name m-p1" data-bind="results.winner">
               {winner.name}
             </h1>
-            {top && !winner.draw && (
+            {teamMode && <TeamStandings results={results} myTeam={view.myTeam ?? -1} />}
+            {top && !winner.draw && !teamMode && (
               <p className="res__line">
                 <b className="num">{top.kills}</b> kills · <b className="num">{top.deaths}</b> deaths · <b className="num">{thousands(top.damageDealt)}</b> damage
               </p>
@@ -153,6 +158,7 @@ export function Results({ view, results, actions, room, training }: { view: Matc
                           <span className="mf-standings__who">
                             {/* their soldier as their avatar (presentation/); a player who left: the silhouette (ids are reused) */}
                             <PlayerAvatar id={s.left ? -1 : s.id} name={s.name} bot={s.isBot} />
+                            {teamMode && <TeamMark team={s.team ?? -1} small />}
                             {playerName(s.name, s.isBot)}
                             {room && !s.left && s.id === room.hostId && (
                               <span className="tag tag--host">

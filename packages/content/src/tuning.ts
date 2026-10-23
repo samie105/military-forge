@@ -55,6 +55,10 @@ export interface Tuning {
   healthRegenDelay: number;
   respawnDelay: number;
 
+  // Teams (team modes, protocol v21)
+  /** 1: teammates hurt each other (and block each other's shots); 0, the default: they don't. Your own grenade always hurts you. */
+  friendlyFire: number;
+
   // Body
   capsuleRadius: number;
   standHeight: number;
@@ -145,6 +149,8 @@ export const defaultTuning: Readonly<Tuning> = Object.freeze({
   healthRegen: 6,
   healthRegenDelay: 4,
   respawnDelay: 3,
+
+  friendlyFire: 0,
 
   capsuleRadius: 0.32,
   standHeight: 1.5,

@@ -69,10 +69,11 @@
 /* teams: one column per team, VS marks between (team modes aren't in the sim yet) */
 .vs__teams { position: absolute; left: 96px; right: 96px; top: 340px; display: flex; gap: 30px; }
 .vs__team { flex: 1; display: flex; gap: 30px; }
-.vs__col { flex: 1; display: flex; flex-direction: column; gap: 14px; margin: 0; padding: 0 0 0 24px; list-style: none; border-left: 8px solid var(--c-volt); }
-.vs__team[data-team="1"] .vs__col { border-color: var(--c-brass); }
-.vs__team[data-team="2"] .vs__col { border-color: var(--c-muted); }
-.vs__team[data-team="3"] .vs__col { border-color: var(--c-hp); }
+.vs__col { flex: 1; display: flex; flex-direction: column; gap: 14px; margin: 0; padding: 0 0 0 24px; list-style: none; border-left: 8px solid var(--tc, var(--c-volt)); }
+.vs__teamhead { display: flex; align-items: center; gap: 12px; font-size: 30px; }
+.vs__teamhead b { font-size: 40px; color: var(--c-paper); }
+.vs__teams .vs__card.is-you { border-color: var(--c-volt); }
+.vs__teams .vs__card { border-left: 4px solid var(--tc, var(--c-line)); }
 .vs__teams .vs__card { flex-direction: row; width: auto; gap: 16px; padding: 8px 16px 8px 8px; background: var(--c-ink-850); border: 2px solid var(--c-line); }
 .vs__teams .vs__card.is-you { transform: none; border-color: var(--c-volt); background: var(--c-olive-800); }
 .vs__teams .vs__card.is-you::after { display: none; }
@@ -131,7 +132,7 @@ html.mf-narrow .vs__side--r { right: 140px; }
 .screen--phone .vs__duel .vs__body { width: 116px; height: 174px; }
 .screen--phone .vs__duel .vs__name { font-size: 26px; padding: 2px 10px; }
 .screen--phone .vs__stamp--big { right: auto; font-size: 84px; padding: 0 12px; border-width: 4px; top: 48%; }
-.screen--phone .vs__teams { left: calc(44px + var(--safe-l)); right: calc(44px + var(--safe-r)); top: calc(86px + var(--safe-t)); gap: 10px; }
+.screen--phone .vs__teams { left: calc(44px + var(--safe-l)); right: calc(44px + var(--safe-r)); top: calc(76px + var(--safe-t)); gap: 10px; }
 .screen--phone .vs__team { gap: 10px; }
 .screen--phone .vs__col { gap: 6px; padding-left: 10px; border-left-width: 4px; }
 .screen--phone .vs__teams .vs__card { width: auto; padding: 4px 8px 4px 4px; gap: 10px; }
@@ -139,6 +140,9 @@ html.mf-narrow .vs__side--r { right: 140px; }
 .screen--phone .vs__rows--rows .vs__face { width: 52px; height: 52px; }
 .screen--phone .vs__teams .vs__face { width: 40px; height: 40px; }
 .screen--phone .vs__teams .vs__name { font-size: 20px; }
+.screen--phone .vs__teamhead { font-size: 14px; gap: 6px; }
+.screen--phone .vs__teamhead b { font-size: 18px; white-space: nowrap; }
+.screen--phone .vs__teams[data-teams="3"] .vs__teamhead b, .screen--phone .vs__teams[data-teams="4"] .vs__teamhead b { font-size: 14px; }
 .screen--phone .vs__stamp--mark { font-size: 28px; }
 .screen--phone .vs-strip { height: calc(44px + var(--safe-t)); padding: var(--safe-t) calc(16px + var(--safe-r)) 0 calc(16px + var(--safe-l)); gap: 10px; }
 .screen--phone .vs-strip__map { font-size: 22px; }

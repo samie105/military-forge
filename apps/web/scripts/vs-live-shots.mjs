@@ -42,7 +42,7 @@ try {
     localStorage.setItem('mf.name', 'Ade');
     localStorage.setItem('locker.loadout.v1', JSON.stringify({ version: 1, loadout: { items: { bodyType: 'body_female', skinTone: 'skin_10', headgear: 'headgear_bandana', eyewear: 'eyewear_aviators', top: 'top_fatigues', gloves: 'gloves_tactical', legs: 'legs_fatigues', boots: 'boots_jungle', jetpack: 'jetpack_drum', exhaust: 'exhaust_plasma', trail: 'trail_smoke', hair: 'hair_braids' }, dyes: { primary: 'dye_red', secondary: 'dye_white', accent: 'dye_yellow' } } }));
   });
-  await page.goto(`${base}/?app&bots=7`, { waitUntil: 'load', timeout: 180_000 });
+  await page.goto(`${base}/?app&bots=7${process.env.TEAMS ? `&teams=${process.env.TEAMS}` : ''}`, { waitUntil: 'load', timeout: 180_000 });
   // the title: any key / tap
   await new Promise((r) => setTimeout(r, 3000));
   await page.keyboard.press('Enter');

@@ -387,3 +387,12 @@ html.reduce-motion .kit-v2 .mf-wait .spinner { border-color: var(--c-volt); }
 .kit-v2 .mf-steps li + li::before { content: "›"; position: absolute; left: -14px; color: var(--c-muted); font-weight: var(--fw-black); }
 .kit-v2 .mf-steps li.is-on { background: var(--c-volt); color: var(--c-volt-ink); border-color: var(--c-volt); }
 .kit-v2 .mf-steps li.is-done { color: var(--c-ok); border-color: var(--c-ok); }
+
+/* Settings → Accessibility → Colour-blind team colours: the three choices as real targets (they had
+   no styles: 20 px tall at a laptop's zoom), each with its two team shapes in the scheme's colours */
+.kit-v2 .cb { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.kit-v2 .cb__opt { display: inline-flex; align-items: center; gap: var(--sp-3); min-height: 48px; padding: 0 var(--sp-4); border: var(--bw) solid var(--c-line-strong); border-radius: var(--r-sm); background: var(--c-ink-950); color: var(--c-text); font-size: var(--fs-16); }
+.kit-v2 .cb__opt[aria-checked="true"] { border-color: var(--c-volt); box-shadow: inset 0 0 0 2px var(--c-volt); }
+.kit-v2 .cb__sw { display: inline-flex; gap: 2px; font-size: var(--fs-18); }
+.kit-v2 .cb__sw i { font-style: normal; color: var(--a); }
+.kit-v2 .cb__sw i + i { color: var(--b); }

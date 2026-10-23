@@ -1642,3 +1642,13 @@ This is docs/design/onboarding-research.md §3.2–§3.4 and §7 phase 3; the de
   - Home stops, the Debrief and Next orders (phase 4);
   - the hints engine (phase 5);
   - the phone pause menu's Restart and Skip training (asked of the phone agent).
+
+## 53. Team modes: 2v2 to 8v8, 4v4v4, 2v2v2v2 (23 Oct 2026, the owner: "team deathmatch preset … 4v4 or 4v4v4")
+
+**What the owner sees:** the host picks Free-for-all or 2, 3 or 4 teams in the lobby's Mission (phone: Match rules). The roster splits into team groups; the host taps a player, then "Move here" on another team. Friendly fire is off. The match shows a team score strip under the clock, the scoreboard (Tab) groups players by team with each team's score, the VS poster shows the team columns, and results lead with the winning team and the teams' standings, every player's own stats underneath. Teams wear colour plus a shape and a letter (◆ A, ▲ B, ● C, ■ D), in a palette per colour-blind mode.
+
+- **Sim (packages/sim):** `PlayerState.team`, `allies()`, `Game.canHurt` (tuning `friendlyFire`, admin "Bots & match → Teams"), team spawns, `Match.setTeams / setTeam / teamSizes / leadingTeam / teamScores`, `groupOf` for parties, `defaultKillLimit(teams)`; results gain `teamScores`, `winnerTeam`, standings `team`. Bots: perception skips teammates.
+- **Wire (v21):** docs/05 §6 "Team modes"; the notes' protocol registry.
+- **Web:** `apps/web/src/teams/` (palette, TeamRoster + TeamModePicker, TeamStandings, the HUD strip, the scoreboard grouping), the look book's `setTeams/teamOf`, render3d's `teamColourOf` hook (the armband glow), `?teams=2|3|4` in training.
+- **The minimap:** your teammates are its allies (`minimap.setAllies(lookBook.teammatesOf(you))`, main.ts), so they always show as circles and never as enemy marks. To colour dots by team, the maps agent has `teamColour(team)` / `teamColourCss(team)`, `TEAM_SHAPES`, `TEAM_LETTERS` and `onTeamPalette(listener)` from `apps/web/src/teams/palette.ts`, and `lookBook.teamOf(id)`.
+- **Fixed on the way:** the Tab scoreboard read its ping cell at index 5 of five, so its update threw after the first row and the other rows stayed blank. It now reads index 4 (hud.ts).
