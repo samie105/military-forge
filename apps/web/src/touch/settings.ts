@@ -33,6 +33,29 @@ export type Handed = 'right' | 'left';
 export type FireMode = 'auto' | 'pull' | 'button' | 'release';
 export const FIRE_MODES: readonly FireMode[] = ['auto', 'pull', 'button', 'release'];
 
+/**
+ * The touch layouts (controls spec §4.2; their places are layout.ts's PRESETS): Classic (two thumbs,
+ * the default), Claw (index fingers on the top corners), One-thumb assist (one hand; aim and fire
+ * automatic).
+ */
+export type PresetId = 'classic' | 'claw' | 'oneThumb';
+export const PRESET_IDS: readonly PresetId[] = ['classic', 'claw', 'oneThumb'];
+export const PRESET_NAMES: Readonly<Record<PresetId, string>> = { classic: 'Classic', claw: 'Claw', oneThumb: 'One-thumb assist' };
+export const PRESET_HELP: Readonly<Record<PresetId, string>> = {
+  classic: 'Two thumbs: move on the left, aim on the right, the buttons in an arc by your right thumb.',
+  claw: 'Index fingers on the top corners: jet and dash on the left, fire and grenade on the right. Thumbs only move and aim.',
+  oneThumb: 'One hand: aim and fire are automatic, with big dash, grenade and swap buttons. Drag on the right to aim yourself.',
+};
+const isPresetId = (v: unknown): v is PresetId => typeof v === 'string' && (PRESET_IDS as readonly string[]).includes(v);
+
+/** What picking a preset sets besides its places (§4.2 "Preset rules"): the fire mode, stick-up jet, extra fingers firing. */
+export const PRESET_SETTINGS: Readonly<Record<PresetId, Readonly<Partial<TouchSettings>>>> = {
+  classic: { stickJet: true, tapFire: false },
+  // the left FIRE would sit on JET
+  claw: { fire: 'button', fireChosen: true, stickJet: false, tapFire: true, leftFire: false },
+  oneThumb: { fire: 'auto', fireChosen: true, stickJet: true, tapFire: false },
+};
+
 /** The touch aim assist levels, as Settings, the pause menu's editor and the drill name them. */
 export const ASSIST_NAMES: Readonly<Record<AssistLevel, string>> = { off: 'Off', light: 'Light', standard: 'Standard', strong: 'Strong' };
 /** What each level does, in the player's words (controls spec §4.5). */
@@ -47,6 +70,17 @@ export const ASSIST_HELP: Readonly<Record<AssistLevel, string>> = {
 export function clearLayout(store: KeyValueStore | null): void {
   try {
     store?.removeItem(LAYOUT_KEY);
+  } catch {
+    /* nothing saved, nothing to clear */
+  }
+}
+
+/** Another preset picked before the HUD loaded: the moves saved on the old one go, the pins stay (layout.ts withoutMoves, on storage). */
+export function clearMoves(store: KeyValueStore | null): void {
+  try {
+    const raw = JSON.parse(store?.getItem(LAYOUT_KEY) ?? 'null') as { pinned?: unknown } | null;
+    if (!raw || typeof raw !== 'object') return;
+    store?.setItem(LAYOUT_KEY, JSON.stringify(Array.isArray(raw.pinned) && raw.pinned.length ? { placements: {}, pinned: raw.pinned } : { placements: {} }));
   } catch {
     /* nothing saved, nothing to clear */
   }
@@ -78,6 +112,12 @@ export interface TouchSettings {
   vibrate: boolean;
   /** flick and lift the move stick to dash */
   swipeDash: boolean;
+  /** the layout the controls start from (PresetId); the player's moves are the layout's placements */
+  preset: PresetId;
+  /** push the move stick up to jet (Claw turns it off: the left index finger has JET) */
+  stickJet: boolean;
+  /** an extra finger on empty aim-side space fires while it's down (Claw's "tap anywhere to fire") */
+  tapFire: boolean;
   /** back on the aim stick within 0.7 s of a button: the same aim and push carry on (and Pull keeps firing) */
   keepAim: boolean;
   /**
@@ -112,6 +152,9 @@ export const DEFAULT_TOUCH_SETTINGS: Readonly<TouchSettings> = {
   handed: 'right',
   vibrate: true,
   swipeDash: true,
+  preset: 'classic',
+  stickJet: true,
+  tapFire: false,
   keepAim: true,
   opacity: 0.5,
   autoFade: true,
@@ -140,7 +183,8 @@ export function sanitizeSettings(raw: unknown): TouchSettings {
   if (r.fire === 'hold') s.fire = r.autoFire === true ? 'auto' : 'pull';
   else if (typeof r.fire === 'string' && (FIRE_MODES as readonly string[]).includes(r.fire)) s.fire = r.fire as FireMode;
   if (r.handed === 'right' || r.handed === 'left') s.handed = r.handed;
-  for (const k of ['vibrate', 'swipeDash', 'keepAim', 'gestures', 'haptics', 'lookAhead', 'pinchZoom', 'fireChosen', 'precisionRelease', 'leftFire', 'autoFade'] as const) if (typeof r[k] === 'boolean') s[k] = r[k];
+  if (isPresetId(r.preset)) s.preset = r.preset;
+  for (const k of ['vibrate', 'swipeDash', 'stickJet', 'tapFire', 'keepAim', 'gestures', 'haptics', 'lookAhead', 'pinchZoom', 'fireChosen', 'precisionRelease', 'leftFire', 'autoFade'] as const) if (typeof r[k] === 'boolean') s[k] = r[k];
   // the old switch: off stays off; on (the default everyone had) is the new default, Standard
   if (isAssistLevel(r.assist)) s.assist = r.assist;
   else if (r.aimAssist === false) s.assist = 'off';

@@ -216,7 +216,7 @@
 .sx-screen--phone .sx-note { font-size: var(--fs-14); }
 .sx-screen--phone .sx-empty { padding: 10px; font-size: var(--fs-14); }
 
-.sx-fbtn--phone { min-height: 40px; width: 44px; }
+.sx-fbtn--phone { min-height: 44px; width: 44px; }
 .sx-psquad {
   grid-column: 3;
   grid-row: 1;

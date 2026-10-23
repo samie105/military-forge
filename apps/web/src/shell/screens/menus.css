@@ -161,24 +161,25 @@ html:is(.mf-short, .mf-big-text) .kit-v2 .lobby__share-title { font-size: var(--
 html:is(.mf-short, .mf-big-text) .kit-v2 .linkt__qr { width: 96px; height: 96px; }
 /* Results in the laptop box: narrower side columns so the standings keep every column, a smaller
    poster and MVP card so the vote and its buttons stay on screen; with big text too, Damage steps out
-   of the table (it is on the MVP card and your own line) */
+   of the table (it is on the MVP card and your own line). The desktop screen's only: on a phone they
+   stretched the MVP card (.pm-mvp) across the row and left the debrief beside it 0 px wide. */
 html.mf-narrow .kit-v2 .res { grid-template-columns: 360px minmax(0, 1fr) 360px; gap: var(--sp-6); }
-html.mf-narrow .kit-v2 .mvp { width: 100%; height: auto; aspect-ratio: 1; }
-html.mf-narrow .kit-v2 .mvp__big { font-size: var(--fs-120); }
-html.mf-narrow .kit-v2 .mvp__name { font-size: var(--fs-64); }
+html.mf-narrow .kit-v2 [data-screen='results'] .mvp { width: 100%; height: auto; aspect-ratio: 1; }
+html.mf-narrow .kit-v2 [data-screen='results'] .mvp__big { font-size: var(--fs-120); }
+html.mf-narrow .kit-v2 [data-screen='results'] .mvp__name { font-size: var(--fs-64); }
 html:is(.mf-short, .mf-big-text) .kit-v2 .res__poster { height: 300px; }
 html:is(.mf-short, .mf-big-text) .kit-v2 .res__name { font-size: var(--fs-88); }
-html:is(.mf-short, .mf-big-text) .kit-v2 .mvp { width: 100%; aspect-ratio: 6 / 5; }
-html:is(.mf-short, .mf-big-text) .kit-v2 .mvp__inner { padding: var(--sp-3) var(--sp-4); }
-html:is(.mf-short, .mf-big-text) .kit-v2 .mvp__big { font-size: var(--fs-88); }
-html:is(.mf-short, .mf-big-text) .kit-v2 .mvp__name { font-size: var(--fs-48); }
-html:is(.mf-short, .mf-big-text) .kit-v2 .mvp__stats b { font-size: var(--fs-28); }
+html:is(.mf-short, .mf-big-text) .kit-v2 [data-screen='results'] .mvp { width: 100%; aspect-ratio: 6 / 5; }
+html:is(.mf-short, .mf-big-text) .kit-v2 [data-screen='results'] .mvp__inner { padding: var(--sp-3) var(--sp-4); }
+html:is(.mf-short, .mf-big-text) .kit-v2 [data-screen='results'] .mvp__big { font-size: var(--fs-88); }
+html:is(.mf-short, .mf-big-text) .kit-v2 [data-screen='results'] .mvp__name { font-size: var(--fs-48); }
+html:is(.mf-short, .mf-big-text) .kit-v2 [data-screen='results'] .mvp__stats b { font-size: var(--fs-28); }
 html:is(.mf-short, .mf-big-text) .kit-v2 .res__share { gap: var(--sp-3); min-height: 0; }
 html:is(.mf-short, .mf-big-text) .kit-v2 .res__share > .btn { font-size: var(--fs-20); min-height: var(--btn-h); }
 html:is(.mf-short, .mf-big-text) .kit-v2 .votes { gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); }
 html:is(.mf-short, .mf-big-text) .kit-v2 .votes .btn { min-height: var(--btn-h-sm); }
 /* big text in the laptop's box: the MVP card steps aside (the MVP tag is in the standings) */
-html.mf-short.mf-big-text .kit-v2 .mvp { display: none; }
+html.mf-short.mf-big-text .kit-v2 [data-screen='results'] .mvp { display: none; }
 html.mf-narrow.mf-big-text .kit-v2 .mf-col-dmg { display: none; }
 .kit-v2 .mf-standings th, .kit-v2 .mf-standings td { white-space: nowrap; }
 html.mf-narrow .kit-v2 .mf-standings :is(th, td) { padding-inline: var(--sp-1); }

@@ -37,7 +37,7 @@ function PanelBody({ social, phone }: { social: SocialController; phone: boolean
   const list = useSel(social.store, (s) => s.list);
   const error = useSel(social.store, (s) => s.error);
   const tab = useSel(social.store, (s) => s.panel.tab);
-  const drawer = useRef<HTMLElement>(null);
+  const drawer = useRef<HTMLDivElement>(null);
 
   // Esc closes the panel (and only the panel: the shell's menu toggle doesn't see it)
   useEffect(() => {
@@ -58,7 +58,8 @@ function PanelBody({ social, phone }: { social: SocialController; phone: boolean
     <div className={`mf-fit ${phone ? 'mf-fit--phone ' : ''}mf-fit--modal kit-v2 mf-social`}>
       <section className={`screen screen--game sx-screen${phone ? ' screen--phone sx-screen--phone' : ''}`} data-screen="friends" aria-label="Friends">
         <button type="button" className="sx-scrim" aria-label="Close friends" onClick={() => social.closePanel()}></button>
-        <aside ref={drawer} className="sx-drawer m-p9 m-p9--right" role="dialog" aria-modal="true" aria-labelledby="sx-title" tabIndex={-1}>
+        {/* a div, not an aside: an aside can't take role="dialog" (axe aria-allowed-role) */}
+        <div ref={drawer} className="sx-drawer m-p9 m-p9--right" role="dialog" aria-modal="true" aria-labelledby="sx-title" tabIndex={-1}>
           <header className="sx-drawer__head">
             <h2 id="sx-title" className="display sx-drawer__title">
               Friends
@@ -119,7 +120,7 @@ function PanelBody({ social, phone }: { social: SocialController; phone: boolean
             <Icon name="lock" size="sm" />
             Friends see your status and your room. Nobody else does.
           </p>
-        </aside>
+        </div>
       </section>
     </div>
   );

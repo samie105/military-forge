@@ -8,7 +8,7 @@
 import { FRAG, maps, weapons } from '@military-forge/content';
 import { savedGunIndices } from '../../locker/accountSync';
 import { GAME_NAME } from '@military-forge/shared';
-import { Fragment, useEffect, useLayoutEffect, useRef, type CSSProperties } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { useStore } from 'zustand';
 import { Icon, weaponIcon } from '../../ui/Icon';
 import { Cap, Kbd } from '../../ui/Kbd';
@@ -20,6 +20,9 @@ import { Backdrop, Hint, Hints, NetPill, takeCard } from './frame';
 import { MAP_CARDS, ROOM_SLOTS, lobbyMaps } from './Lobby';
 import { FriendsButton, SquadCard } from '../../social/SocialLayer';
 import { SavedAdsList } from '../../ads/SavedAds';
+import { NextOrders } from '../../tour/NextOrders';
+import { currentDevice } from '../../gamepad';
+import { drillDone, isTouchDevice } from '../../touch';
 
 /** The brand: the emblem and the name, once in the whole UI (round two's .brand on Home). */
 export function Brand() {
@@ -48,6 +51,8 @@ export function Home({ store }: { store: ShellStore }) {
   const settings = useStore(store, (s) => s.settings);
   const offline = !!profile?.offline;
   const chip = useRef<HTMLSpanElement>(null);
+  // what Next orders know of this device now (tour/orders.ts)
+  const [ordersContext] = useState(() => ({ offline, touch: isTouchDevice(), pad: currentDevice().pad !== null, drillDone: drillDone() }));
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -85,7 +90,7 @@ export function Home({ store }: { store: ShellStore }) {
               <Icon name="play" />
               Play
             </button>
-            <button type="button" className="tab m-p8" onClick={() => (location.hash = '#/locker')}>
+            <button type="button" className="tab m-p8" data-tour="locker" onClick={() => (location.hash = '#/locker')}>
               <Icon name="shirt" />
               Locker
             </button>
@@ -129,7 +134,7 @@ export function Home({ store }: { store: ShellStore }) {
               </h2>
               <p className="home__poster-sub">Make a room, send the link to your group chat, and fight. Bots fill empty slots.</p>
               <div className="home__poster-cta">
-                <button className="btn btn--ink btn--xl home__create m-p8" type="button" disabled={offline} onClick={() => ctl.go({ to: 'create' })}>
+                <button className="btn btn--ink btn--xl home__create m-p8" type="button" data-tour="create" disabled={offline} onClick={() => ctl.go({ to: 'create' })}>
                   <Icon name="users-plus" />
                   Create room
                 </button>
@@ -153,7 +158,7 @@ export function Home({ store }: { store: ShellStore }) {
               </p>
             )}
             <div className="home__row">
-              <button type="button" className="ticket rivets home__ticket m-p3" style={row(2)} onClick={() => ctl.openOverlay('join')}>
+              <button type="button" className="ticket rivets home__ticket m-p3" style={row(2)} data-tour="join" onClick={() => ctl.openOverlay('join')}>
                 <Icon name="link" className="home__ghost" />
                 <span className="label">02 — Got a code?</span>
                 <b className="display">Join with code</b>
@@ -218,6 +223,9 @@ export function Home({ store }: { store: ShellStore }) {
 
           <aside className="home__side">
             <SquadCard />
+            <NextOrders
+              context={ordersContext}
+              fallback={
             <section className="card card--print home__news m-p3" style={row(5)}>
               <span className="label label--volt">Field orders</span>
               <ul>
@@ -245,6 +253,8 @@ export function Home({ store }: { store: ShellStore }) {
                 All the keys
               </button>
             </section>
+              }
+            />
             {/* the billboard ads the player saved during play (tap-to-save): only what they chose */}
             <SavedAdsList where="home" />
           </aside>

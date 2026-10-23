@@ -7,7 +7,7 @@
 import { grenades } from '@military-forge/content';
 import { iconHref } from '../ui/icons';
 import type { RadialChoice, Vec } from './gestures';
-import { FIRE_HOW, type Drill, type Hint } from './teach';
+import { drillHow, type Drill, type DrillContext, type Hint } from './teach';
 import { FIRE_MODE_TEXT, fireArt } from './fireArt';
 import { FIRE_MODES, type FireMode } from './settings';
 
@@ -212,7 +212,7 @@ export class TouchOverlays {
    * thumb's pointerup in WebKit, leaving the stick pushed (QA, 23 Oct: qa-bullets-lag-touch.md §3 M).
    * Its frame and its buttons stay put.
    */
-  showDrill(d: Drill, fire: FireMode = 'pull'): void {
+  showDrill(d: Drill, how: DrillContext = { fire: 'pull', stickJet: true, preset: 'classic' }): void {
     const s = d.step;
     const n = d.steps.length;
     const parts = s
@@ -220,7 +220,7 @@ export class TouchOverlays {
           eyebrow: `Drill · ${d.index + 1}/${n}`,
           close: 'Close the drill',
           goal: esc(s.goal),
-          how: esc(s.id === 'fire' ? FIRE_HOW[fire] : s.how),
+          how: esc(drillHow(s, how)),
           dots: d.steps.map((st, i) => (d.ticked.has(st.id) ? 'is-done' : d.skipped.has(st.id) ? 'is-skipped' : i === d.index ? 'is-now' : '')),
           done: !!d.justTicked,
           skip: true,

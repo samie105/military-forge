@@ -112,6 +112,19 @@ describe('touch → Input mapping', () => {
   });
 });
 
+describe('stick-up jet (Claw turns it off)', () => {
+  it('pushed straight up, the stick jets; with stickJet off it only walks', () => {
+    const s = createTouchState();
+    s.moveActive = true;
+    Object.assign(s.move, { x: 0.35, y: 0.93, mag: 1 });
+    expect(updateMove(s) & Btn.Jet).toBe(Btn.Jet);
+    s.moveBits = 0;
+    const b = updateMove(s, false);
+    expect(b & Btn.Jet).toBe(0);
+    expect(b & Btn.Right).toBe(Btn.Right);
+  });
+});
+
 describe('aim assist push (the shared core does the rest: test/input/assist.test.ts)', () => {
   const at = (mag: number, aimActive = true, autoFiring = false) => ({ aimActive, aim: { x: mag, y: 0, mag }, autoFiring });
 

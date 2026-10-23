@@ -73,8 +73,10 @@ export function pullFires(push: number, was: boolean): boolean {
 }
 
 /** The move stick's buttons now, from its reading and the last ones (thresholds with hysteresis, stick.ts). */
-export function updateMove(s: TouchState): number {
+export function updateMove(s: TouchState, stickJet = true): number {
   s.moveBits = s.moveActive ? touchMoveButtons(s.move, s.moveBits) : 0;
+  // Claw: the stick doesn't jet (JET is the left index finger's); pushed up, it only walks
+  if (!stickJet) s.moveBits &= ~Btn.Jet;
   return s.moveBits;
 }
 

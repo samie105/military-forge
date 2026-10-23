@@ -15,12 +15,12 @@ import type { Input, SimEvent } from '@military-forge/sim';
 import type { Camera } from '../camera';
 import type { ThrowLatch } from '../input';
 import type { TouchController, TouchFrame } from './controller';
-import { clearLayout, loadSettings, saveSettings, sanitizeSettings, type KeyValueStore, type TouchSettings } from './settings';
+import { PRESET_SETTINGS, clearLayout, clearMoves, loadSettings, saveSettings, sanitizeSettings, type KeyValueStore, type PresetId, type TouchSettings } from './settings';
 import type { ControlId } from './layout';
 import { drillSeen, markDrillSeen, saveSeen, type TouchAction } from './teach';
 import type { Box } from '../ui/landscape';
 
-export type { FireMode, Handed, TouchMode, TouchSettings } from './settings';
+export type { FireMode, Handed, PresetId, TouchMode, TouchSettings } from './settings';
 export type { ControlId } from './layout';
 export type { TouchAction } from './teach';
 
@@ -55,6 +55,8 @@ export interface TouchDeps {
   tuning?: () => Pick<Tuning, 'dashFlickFull'> | null;
   /** the map being played: Auto fire fires only at enemies in sight (input/sight.ts) */
   map?: () => MapDef | null;
+  /** a game is running (absent: always, as in the dev client): the page's zoom lock is only on over one */
+  inGame?: () => boolean;
 }
 
 let settings: TouchSettings = loadSettings(null);
@@ -114,6 +116,7 @@ function sync(): void {
         throwLatch: d.sampler.throwLatch ?? null,
         dashFlickFull: () => (d.tuning?.() ?? defaultTuning).dashFlickFull,
         map: () => d.map?.() ?? null,
+        inGame: () => d.inGame?.() ?? true,
       };
       controller = new TouchController(host, settings, loadLayout(storage()), storage(), setTouchSettings, d.editButton ?? true);
       if (drillPending) controller.startDrill();
@@ -165,6 +168,7 @@ export function mountTouch(d: TouchDeps): void {
       __touch: {
         getTouchSettings,
         setTouchSettings,
+        setTouchPreset,
         openTouchEditor,
         resetTouchLayout,
         touchActive,
@@ -268,6 +272,17 @@ export function openTouchEditor(): void {
   touchedOnce = true;
   sync();
   void (loading ?? Promise.resolve()).then(() => controller?.openEditor());
+}
+
+/**
+ * Settings → Touch → Layout (controls spec §4.2): a preset's places, and the settings it implies
+ * (PRESET_SETTINGS: the fire mode, stick-up jet, extra fingers firing). Moves made on the old preset's
+ * places go ("My layout" forks a preset); pinned controls stay.
+ */
+export function setTouchPreset(preset: PresetId): void {
+  if (controller) controller.dropMoves();
+  else clearMoves(storage());
+  setTouchSettings({ preset, ...PRESET_SETTINGS[preset] });
 }
 
 /** Back to the default layout (sizes, places, opacity) for this device. */

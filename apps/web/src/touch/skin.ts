@@ -42,6 +42,7 @@ export const SKIN_BASE: Readonly<Record<ControlId, number>> = {
   take: 52,
   fire: 84,
   fireLeft: 72,
+  jet: 58,
 };
 
 /** The dials' box (px, design) around their 136 px base: the HP/fuel and ammo arcs ride outside it. */
@@ -98,6 +99,9 @@ export function skinHtml(id: ControlId): string {
     case 'fireLeft':
       // FIRE: a big round trigger with the magazine on it (Fire button mode)
       return `<div class="mf-skin dial-btn dial-btn--fire">${ic('target')}<b class="dial-btn__word">Fire</b><b class="num tb__sub" data-state="gun" data-bind="player.slot.0.mag"></b></div>`;
+    case 'jet':
+      // Claw's JET (left index finger): the fuel left rides it (a vital: it never fades)
+      return `<div class="mf-skin dial-btn dial-btn--jet">${ic('jet')}<b class="num tb__sub" data-bind="player.fuel" data-bind-show="player.fuel"></b></div>`;
     case 'take':
       return `<div class="mf-skin pt-pick">${ic('swap', 'ic--sm')}<span data-bind="touch.take.verb"></span><svg class="ic--kf" aria-hidden="true"><use data-bind-attr="href: touch.take.icon"/></svg><b data-bind="touch.take.name"></b></div>`;
   }

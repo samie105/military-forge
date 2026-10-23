@@ -5,7 +5,7 @@
  *  - the "Learn the controls" drill: one goal at a time, ticked off when the player does it.
  * The controller reports what the player did as actions (TouchAction); both listen.
  */
-import type { FireMode } from './settings';
+import type { FireMode, TouchSettings } from './settings';
 import type { ControlId } from './layout';
 import type { KeyValueStore } from './settings';
 
@@ -122,6 +122,23 @@ export const FIRE_HOW: Readonly<Record<FireMode, string>> = {
   button: 'Hold FIRE. Drag it to aim while you shoot.',
   release: 'Drag the right dial to aim, then lift to fire.',
 };
+
+/** What the drill's words and pointer depend on: the fire mode, whether the stick jets, the layout. */
+export type DrillContext = Pick<TouchSettings, 'fire' | 'stickJet' | 'preset'>;
+
+/** A step's words for this layout: the fire step per fire mode (One-thumb: automatic), the jet step on JET when the stick doesn't jet. */
+export function drillHow(s: Pick<DrillStep, 'id' | 'how'>, c: DrillContext): string {
+  if (s.id === 'fire') return c.preset === 'oneThumb' ? 'Aim and fire are automatic: face a target and you shoot. Drag on the right half to aim yourself.' : FIRE_HOW[c.fire];
+  if (s.id === 'jet' && !c.stickJet) return 'Hold JET, top left, to fire the jetpack. Its number is the fuel left: it refills on the ground.';
+  return s.how;
+}
+
+/** The control a step points at for this layout. */
+export function drillControl(s: Pick<DrillStep, 'id' | 'control'>, c: DrillContext): ControlId | null {
+  if (s.id === 'fire' && c.fire === 'button' && c.preset !== 'oneThumb') return 'fire';
+  if (s.id === 'jet' && !c.stickJet) return 'jet';
+  return s.control;
+}
 
 export const DRILL: readonly DrillStep[] = [
   { id: 'move', goal: 'Run', how: 'Push the left dial left or right.', control: 'move', done: ['move'] },

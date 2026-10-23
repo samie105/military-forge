@@ -89,7 +89,9 @@ html.mf-phone :where(.mf-gear-fit) .mf-armory .menu-top__title { font-size: var(
 html.mf-phone :where(.mf-gear-fit) .mf-armory .menu-top .serial { display: none; }
 html.mf-phone :where(.mf-gear-fit) .mf-armory .menu-top .btn--icon { min-width: 48px; min-height: 48px; }
 html.mf-phone :where(.mf-gear-fit) .menu-body.ar {
-  flex: 1; min-height: 0; padding: 0;
+  /* no bleed (kit.css gives .menu-body -24px -20px for the desktop's stickers): it pulled the weapon
+     strip up over the header and out past the side insets */
+  flex: 1; min-height: 0; padding: 0; margin: 0;
   grid-template: auto minmax(0, 1fr) / minmax(0, 1fr) minmax(260px, 40%);
   grid-template-areas: 'list list' 'stage side'; gap: 6px 10px;
 }

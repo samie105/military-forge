@@ -151,7 +151,7 @@ export function mountCreator(container: HTMLElement, options: CreatorOptions = {
         <div class="mf-cr__act">
           <button type="button" class="btn btn--ghost m-p8" data-action="random" aria-label="Randomise">${ic('dice')}<span class="mf-cr__label">Randomise</span></button>
           <span class="mf-cr__act-gap"></span>
-          <button type="button" class="btn btn--ghost m-p8" data-action="prev" hidden>${ic('back')}Body</button>
+          <button type="button" class="btn btn--ghost m-p8" data-action="prev" aria-label="Back to body" hidden>${ic('back')}<span class="mf-cr__label">Body</span></button>
           <button type="button" class="btn btn--paper m-p8" data-action="next">Next: look${ic('arrow-right')}</button>
           <button type="button" class="btn btn--volt btn--xl m-p8" data-action="save">${ic('check')}<span class="mf-cr__save">Save soldier</span></button>
         </div>

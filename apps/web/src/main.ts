@@ -74,7 +74,10 @@ import { titleWanted } from './shell/title';
 import { startTourMemory, type TourMemory } from './tour';
 import { FirstFlight, flightWasOpen } from './tour/firstFlight';
 import { FIRST_FLIGHT } from './tour/flight';
+import { homeStopsWanted, runHomeStops } from './tour/homeStops';
+import { HintRunner } from './tour/hintsRun';
 import type { Device } from './tour/log';
+import { provideTourMemory } from './tour/live';
 import { mountTourReadout } from './tour/readout';
 import { BackdropPacer } from './ui/backdrop';
 import { releaseLanding } from './ui/landing';
@@ -223,6 +226,8 @@ if (import.meta.env.DEV) Object.assign(window, { __spectate: spectate });
 let tourMemory: TourMemory | null = null;
 /** First flight (tour/firstFlight.ts), while training runs it */
 let flight: FirstFlight | null = null;
+/** the contextual hints in a match (tour/hintsRun.ts), the app only */
+let hints: HintRunner | null = null;
 
 // team modes (v21): your teammates are the minimap's allies (always on it, never an enemy mark)
 let alliesDirty = true;
@@ -244,6 +249,7 @@ class GameRenderer extends Renderer {
     syncMinimapAllies(localId);
     tourMemory?.onEvents(events, localId);
     flight?.onEvents(events, localId);
+    hints?.onEvents(events, localId);
     audio.onEvents(events, localId); // the game's sound (apps/web/src/audio): lazy, after the first tap or key
   }
   override onSounds(sounds: readonly { x: number; y: number }[]): void {
@@ -259,7 +265,7 @@ const renderer = new GameRenderer(canvas, camera, map, () => mode?.tuning() ?? d
 void view3d?.load(map.spawns[0]!);
 view3d?.attach(renderer, () => (mode instanceof OnlineMode ? mode.net : null)); // sim events → 3D effects; online: remotePose (render3d)
 // phones and tablets: twin sticks + buttons (apps/web/src/touch); the app's Settings → Touch has "Edit layout"
-mountTouch({ sampler, camera, renderer, view3d, editButton: !appMode, tuning: () => mode?.tuning() ?? null, map: () => map });
+mountTouch({ sampler, camera, renderer, view3d, editButton: !appMode, tuning: () => mode?.tuning() ?? null, map: () => map, inGame: () => mode !== null });
 // game controllers (apps/web/src/gamepad): play, the menus, rumble, prompts in the pad's buttons
 // (on a phone the touch buttons step aside while a pad plays: gamepad/pad.css)
 mountGamepad({ sampler, camera, renderer, scoreboardCode: () => scoreboardKeys[0], map: () => map, toggleMap: () => minimap?.toggleBig() });
@@ -345,7 +351,7 @@ const host: GameHost = {
     // training: a deathmatch against three Normal bots (?bots= / ?botlevel=, ?sandbox for the range dummies);
     // First flight: the range's targets, no match; Live fire: a recruit's first match, 3 Easy bots
     const rules = kind === 'flight' ? null : kind === 'live-fire' ? LIVE_FIRE_RULES : localMatchRules(params);
-    const bots = kind === 'flight' ? null : kind === 'live-fire' ? LIVE_FIRE_BOTS : localBots(params, rules !== null);
+    const bots = kind === 'flight' ? null : kind === 'live-fire' ? LIVE_FIRE_BOTS : kind === 'hard' ? { ...LIVE_FIRE_BOTS, level: 'hard' as const } : localBots(params, rules !== null);
     const local = new LocalMode(sampler, camera, renderer, nickname, rules, localMapId, bots);
     setMode(local);
     // the Armory's "Try it in training": that gun in your hand (the second slot as usual), once
@@ -603,6 +609,7 @@ if (loadoutSync) document.addEventListener('visibilitychange', () => document.vi
 // device only; ?tourlog shows them on the page
 if (appMode) {
   tourMemory = startTourMemory({ store: shell.store, storage: storageOrNull(), invited: location.pathname.startsWith('/r/') });
+  provideTourMemory(tourMemory); // Home's Next orders read the facts live
   tourMemory.setDevice(isTouchDevice() ? 'touch' : 'keyboard');
   onInputDevice((d) => tourMemory?.setDevice(d.kind === 'pad' ? 'pad' : d.kind === 'touch' ? 'touch' : 'keyboard'));
   if (params.has('tourlog')) mountTourReadout(tourMemory);
@@ -729,6 +736,38 @@ if (appMode && tourMemory) {
       flight.dispose();
       flight = null;
     }
+  });
+  // contextual hints in matches (§3.6): quiet during First flight and under any menu
+  hints = new HintRunner({
+    memory,
+    storage: storageOrNull(),
+    store: shell.store,
+    bindings: () => (tourDevice() === 'pad' && settings ? padShownBindings(settings.pad) : (settings?.bindings ?? defaultBindings())),
+    cap: (code) => (isPadCode(code) ? capText(code) : keyLabel(code, keyLayout)),
+    quiet: () => {
+      const s = shell.store.getState();
+      return !!flight || s.overlay !== null || s.route !== null || s.tips;
+    },
+  });
+  // Home's three stops (§3.5): once, the first time on Home after a match (or a veteran's first Home),
+  // when Home has settled; leaving Home or opening anything over it ends the pass
+  let stopStops: (() => void) | null = null;
+  let stopsTimer = 0;
+  shell.store.subscribe((s) => {
+    const calm = s.screen.name === 'home' && s.title === 'off' && s.route === null && s.overlay === null;
+    if (!calm) {
+      window.clearTimeout(stopsTimer);
+      stopsTimer = 0;
+      stopStops?.();
+      stopStops = null;
+      return;
+    }
+    if (stopStops || stopsTimer || !homeStopsWanted(memory.facts.get())) return;
+    stopsTimer = window.setTimeout(() => {
+      stopsTimer = 0;
+      const now = shell.store.getState();
+      if (now.screen.name === 'home' && now.route === null && now.overlay === null && homeStopsWanted(memory.facts.get())) stopStops = runHomeStops(memory, tourDevice);
+    }, 900);
   });
   // a reload during First flight goes straight back in at the next goal (and ?flight starts it: playtests)
   let checked = false;
@@ -1004,6 +1043,7 @@ function frame(now: number): void {
   renderer.mouse.y = sampler.mouseY;
   shell.update(mode instanceof LocalMode ? mode : null);
   flight?.frame(); // First flight: its goals tick, its markers follow the camera
+  hints?.frame(me ? { alive: me.alive, grounded: me.grounded, fuel: me.fuel } : null); // a tip when one is due
   shell.setMapEvent(f.mapEvent);
   if (minimap) {
     minimap.setVisible(!covered && shell.store.getState().overlay === null);

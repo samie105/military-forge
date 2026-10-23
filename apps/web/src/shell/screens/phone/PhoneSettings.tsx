@@ -8,9 +8,10 @@
  */
 import { useEffect, useState } from 'react';
 import { useStore } from 'zustand';
-import { getTouchSettings, onTouchChange, openTouchEditor, requestDrill, resetTouchHints, resetTouchLayout, setTouchSettings, type TouchSettings } from '../../../touch';
-import { ASSIST_HELP, ASSIST_NAMES, DEFAULT_TOUCH_SETTINGS } from '../../../touch/settings';
+import { getTouchSettings, onTouchChange, openTouchEditor, requestDrill, resetTouchHints, resetTouchLayout, setTouchPreset, setTouchSettings, type TouchSettings } from '../../../touch';
+import { ASSIST_HELP, ASSIST_NAMES, DEFAULT_TOUCH_SETTINGS, PRESET_HELP, PRESET_IDS, PRESET_NAMES, type PresetId } from '../../../touch/settings';
 import { ASSIST_LEVELS, type AssistLevel } from '../../../input/assist';
+import { canVibrate } from '../../../touch/platform';
 import { Icon } from '../../../ui/Icon';
 import { FIRE_MODE_TEXT } from '../../../touch/fireArt';
 import { FirePicker } from '../FirePicker';
@@ -125,6 +126,14 @@ function Touch() {
       <Row i={1} label="Touch controls" desc="Auto: on phones and tablets, or once you touch the screen.">
         <Seg value={t.mode} label="Touch controls" options={[['auto', 'Auto'], ['on', 'On'], ['off', 'Off']]} onChange={(mode) => set({ mode })} />
       </Row>
+      {/* controls spec §4.2 (item 7): the presets; moving a control in the editor makes it "My layout" there */}
+      <div className="pm-set pm-set--block m-p3">
+        <span className="pm-set__text">
+          <b>Preset</b>
+          <span>{PRESET_HELP[t.preset]}</span>
+        </span>
+        <Seg value={t.preset} label="Preset" options={PRESET_IDS.map((id) => [id, id === 'oneThumb' ? 'One-thumb' : PRESET_NAMES[id]] as [PresetId, string])} onChange={(preset) => setTouchPreset(preset)} />
+      </div>
       {/* the owner, 23 Oct: "a way to fade the buttons" (touch/fade.ts); the pause menu has the slider too */}
       <Row i={1} label="Button fade" desc="How faded the buttons get. HP, fuel and ammo never fade.">
         <div className="pm-set__slider">
@@ -160,9 +169,18 @@ function Touch() {
       <Row i={4} label="Left-handed" desc="Mirrors the whole layout.">
         <Switch on={t.handed === 'left'} onChange={(on) => set({ handed: on ? 'left' : 'right' })} label="Left-handed" />
       </Row>
-      <Row i={5} label="Vibrate when hit">
-        <Switch on={t.vibrate} onChange={(vibrate) => set({ vibrate })} label="Vibrate when hit" />
+      <Row i={4} label="Push up to jet" desc="The move stick flies. Off in Claw: JET is a button.">
+        <Switch on={t.stickJet} onChange={(stickJet) => set({ stickJet })} label="Push up to jet" />
       </Row>
+      <Row i={4} label="Extra finger fires" desc="A second finger on the right fires while it's down.">
+        <Switch on={t.tapFire} onChange={(tapFire) => set({ tapFire })} label="Extra finger fires" />
+      </Row>
+      {/* iOS Safari can't buzz: no switches that do nothing (§4.8) */}
+      {canVibrate() && (
+        <Row i={5} label="Vibrate when hit">
+          <Switch on={t.vibrate} onChange={(vibrate) => set({ vibrate })} label="Vibrate when hit" />
+        </Row>
+      )}
       <Row i={6} label="Flick to dash" desc="Flick the move stick and lift.">
         <Switch on={t.swipeDash} onChange={(swipeDash) => set({ swipeDash })} label="Flick to dash" />
       </Row>
@@ -172,9 +190,11 @@ function Touch() {
       <Row i={6} label="Button gestures" desc="Swipe the grenade to change it, hold the gun pill for a radial, swipe the dash. Off: plain taps.">
         <Switch on={t.gestures} onChange={(gestures) => set({ gestures })} label="Button gestures" />
       </Row>
-      <Row i={7} label="Button haptics" desc="A short buzz on a throw, a swap, a dash swipe.">
-        <Switch on={t.haptics} onChange={(haptics) => set({ haptics })} label="Button haptics" />
-      </Row>
+      {canVibrate() && (
+        <Row i={7} label="Button haptics" desc="A short buzz on a throw, a swap, a dash swipe.">
+          <Switch on={t.haptics} onChange={(haptics) => set({ haptics })} label="Button haptics" />
+        </Row>
+      )}
       <Row i={8} label="View distance" desc="Close: soldiers big and clear. Wide: more of the map. A pinch sets it too.">
         <div className="pm-set__slider">
           <Slider value={(t.view - 0.5) / 0.5} onChange={(v) => set({ view: Math.round((0.5 + v * 0.5) * 100) / 100 })} label="View distance" valueText={t.view <= 0.66 ? 'Close' : t.view >= 0.9 ? 'Wide' : 'Mid'} min={0} max={100} />

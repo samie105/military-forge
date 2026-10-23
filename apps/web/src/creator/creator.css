@@ -148,12 +148,12 @@ html:is(.mf-narrow, .mf-big-text):where(:not(.mf-phone)) .mf-cr-fit [data-active
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__title .eyebrow { display: none; }
 :where(html.mf-phone) :where(.mf-cr-fit) .menu-top__title { font-size: var(--fs-24); }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__steps { gap: var(--sp-1); }
-:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__steps button { min-height: 36px; padding: 0 var(--sp-3) 0 4px; font-size: var(--fs-14); }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__steps button { min-height: 44px; padding: 0 var(--sp-3) 0 4px; font-size: var(--fs-14); }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__steps .num { width: 26px; height: 26px; }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__status { display: none; }
-:where(html.mf-phone) :where(.mf-cr-fit) .menu-top .btn--sm { min-height: 36px; padding: 0 var(--sp-3); font-size: var(--fs-14); }
+:where(html.mf-phone) :where(.mf-cr-fit) .menu-top .btn--sm { min-height: 44px; min-width: 44px; padding: 0 var(--sp-3); font-size: var(--fs-14); }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__view { left: var(--sp-1); right: var(--sp-1); bottom: var(--sp-1); translate: none; gap: var(--sp-2); padding: 4px; justify-content: space-between; }
-:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__view .seg__opt { min-height: 32px; padding: 0 8px; font-size: var(--fs-14); }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__view .seg__opt { min-height: 44px; padding: 0 8px; font-size: var(--fs-14); }
 :where(html.mf-phone) :where(.mf-cr-fit) :is(.mf-cr__hint, .mf-cr__zoom, [data-group="light"]) { display: none; }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__placeholder { left: 4px; top: 4px; right: 4px; max-width: none; padding: var(--sp-2) var(--sp-3); gap: 4px; }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__placeholder .stamp { font-size: var(--fs-14); padding: 2px 8px; }
@@ -163,7 +163,7 @@ html:is(.mf-narrow, .mf-big-text):where(:not(.mf-phone)) .mf-cr-fit [data-active
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__view { right: auto; }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__panel { padding: var(--sp-2) var(--sp-3); gap: var(--sp-2); }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__panel .tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
-:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__panel .tab { min-height: 36px; padding: 0 var(--sp-2); font-size: var(--fs-14); white-space: nowrap; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__panel .tab { min-height: 44px; padding: 0 var(--sp-2); font-size: var(--fs-14); white-space: nowrap; }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__panel .tabs .m-p5 { display: none; }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__h { font-size: var(--fs-24); margin-bottom: var(--sp-1); }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__bodies { gap: var(--sp-2); }
@@ -178,6 +178,8 @@ html:is(.mf-narrow, .mf-big-text):where(:not(.mf-phone)) .mf-cr-fit [data-active
 :where(html.mf-phone) :where(.mf-cr-fit) .item__art { height: 52px; }
 :where(html.mf-phone) :where(.mf-cr-fit) .item__name { font-size: var(--fs-14); }
 :where(html.mf-phone) :where(.mf-cr-fit) .item .tag { font-size: 11px; }
+/* a locked item's how-to ("Reach level 5") wraps rather than ellipsising */
+:where(html.mf-phone) :where(.mf-cr-fit) .item .tag { white-space: normal; height: auto; min-height: 20px; line-height: 1.2; padding-block: 2px; text-align: left; }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-item__glyph .ic { width: 30px; height: 30px; }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-items--sw { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-items--sw .item__art { height: 44px; }
@@ -186,7 +188,9 @@ html:is(.mf-narrow, .mf-big-text):where(:not(.mf-phone)) .mf-cr-fit [data-active
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__act { flex-wrap: nowrap; gap: var(--sp-2); }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__act .btn { min-height: 44px; padding: 0 var(--sp-3); font-size: var(--fs-14); white-space: nowrap; }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__act .btn .ic { width: 18px; height: 18px; }
-:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__act [data-action="random"] .mf-cr__label { display: none; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__act :is([data-action="random"], [data-action="prev"]) .mf-cr__label { display: none; }
+/* the icon-only buttons stay square at 44 px, so Save soldier keeps its words (web-quality audit, 640×360) */
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__act :is([data-action="random"], [data-action="prev"]) { min-width: 44px; padding: 0 var(--sp-2); }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__act-gap { display: none; }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__act [data-action="save"] { flex: 1 1 auto; min-width: 0; }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__act [data-action="save"] .mf-cr__save { overflow: hidden; text-overflow: ellipsis; }

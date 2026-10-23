@@ -316,3 +316,19 @@ html.reduce-motion .mf-ctl.mf-teach::before { animation: none; opacity: 0.9; }
 /* the editor's "On the HUD too" row (pinning the context slot's controls) */
 .mf-touch-editor-pins { flex-wrap: wrap; gap: 4px 12px; }
 .mf-touch-editor-pins .label { width: 100%; font-size: var(--fs-14); }
+
+/* ---------- presets (controls spec §4.2, item 7) ---------- */
+/* the editor's first row: Classic, Claw, One-thumb, My layout, as one segmented row (the panel stays
+   short: it sits over controls whichever way it docks) */
+.mf-touch-editor-presets { display: flex; padding: 3px; gap: 2px; background: var(--c-ink-900); border-radius: 10px; }
+.mf-touch-editor-presets button { flex: auto; min-height: var(--touch-min); padding: 0 4px; border: 0; border-radius: 8px; background: none; color: var(--c-muted); font: inherit; font-size: var(--fs-12, 12px); white-space: nowrap; }
+.mf-touch-editor-presets button[aria-checked='true'] { background: var(--c-volt); color: var(--c-volt-ink); }
+.mf-touch-editor-presets button:disabled { opacity: 0.45; }
+/* Claw puts menu and scores at the top centre, DASH and GRENADE below them: the ✎ (only outside the app) goes under all four */
+.mf-touch[data-preset='claw'] .mf-touch-edit { top: 172px; }
+/* One-thumb assist: the aim is automatic, so its dial shows only under a finger that takes it over */
+.mf-touch[data-preset='oneThumb']:not(.mf-touch-editing) .mf-ctl-aim:not(.mf-down) { opacity: 0; }
+/* Claw: the move stick doesn't jet (JET is the left index finger's) */
+.mf-touch.mf-nostickjet .dial__hint--up { display: none; }
+/* JET (Claw's left index finger): the jet icon with the fuel left */
+.dial-btn--jet .tb__sub { font-size: var(--fs-12, 12px); }

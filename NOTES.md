@@ -965,6 +965,19 @@ Every gun with a W8 model that fires bullets now has stats (`packages/content/sr
   - **Layouts:** Standard (default), Classic, **Bumper Jet** (LB jets, LT dashes, the stick never jets), **Southpaw** (Standard with the sticks swapped and the triggers and bumpers swapped: LT fire, RT jet, RB dash, LB grenade) and **One-stick** (accessibility: move with the left stick; the aim follows the nearest enemy in sight and in the gun's range, otherwise the way you move; the gun fires by itself after 100 ms on target and lingers 150 ms; Strong assist; a held grenade lobs as far as the target; the right stick still takes over while pushed; B swap, Y melee). A layout is its buttons plus its switches; leaving One-stick puts Standard assist back. "Aim for me" and "Fire for me" are switches of their own.
   - **Settings → Controller** is its own tab now (the phone's "Pad" tab is the same page). At its top, a **live check**: each stick in a test circle that draws its dead zone, the 0.92 outer ring, the run lines, the stick-jet cone and its hold zone, the crouch wedge (and on the aim stick where it starts turning and where assist pulls), with the stick's dot live; every action with its buttons lit while held; and what the game reads. "Test the controller" keeps presses from working the menu until Options ends it.
   - **Checked** with the fake pad (`pad-check.mjs`, 21/21): Bumper Jet's stick up doesn't jet, LB jets, LT dashes; Southpaw's right stick moves, LT fires, RT jets; One-stick near a range dummy aims at it and fires on its own after the dwell.
+- **Touch layout presets (23 Oct 2026, controls spec §4.2, item 7; the phone agent).** `settings.preset`: **Classic** (default), **Claw**, **One-thumb assist**, in Settings → Touch → Preset (desktop and phone) and the HUD editor's first row (plus "My layout" once a control is moved: the editor forks the preset; picking a preset drops the moves, keeps the pins). Each sets what it implies (`PRESET_SETTINGS`).
+  - **Claw:** the index fingers work the top corners: JET (new control, hold; it carries the fuel) TL 20, 14 mm and DASH TL 40, 18 on the left, FIRE TR 20, 14 and GRENADE TR 40, 18 on the right; swap and the context slot take dash's and grenade's arc spots; menu and scores at the top centre. Fire button mode, "Push up to jet" off, and "Extra finger fires" on (a second finger on the aim side fires while it's down; no pinch on that side then). The spec's 42, 12 for dash and grenade left them 0.5 mm apart on a 667 px phone and the swap pill under FIRE on 375 px tall phones: moved as above. The editor opens docked at the bottom in Claw.
+  - **One-thumb assist:** the move stick, DASH BR 16, 14 and GRENADE BR 34, 14 and SWAP BR 16, 32 at 15 mm, the context slot BR 34, 32 at 12 mm. Aim is automatic (Strong's lock acquiring the nearest enemy in sight and range, else the way you move) and so is fire (Auto); the aim dial shows only under a finger, and a drag on the right takes the aim over.
+  - JET also shows in any layout with "Push up to jet" off (Classic's spot TL 42, 14). The drill's words follow the layout (`teach.ts drillHow`).
+  - **Checked** in Chrome with real touches (a scratch check, 27/27): all three layouts on five phones (667–932 px) with every drawn control ≥ 12 px from the next (pills measured as drawn); the editor's row picks Claw with its settings and a drag makes it My layout; Claw's JET jets while held, its stick pushed up doesn't, an extra finger fires while the thumb keeps aiming and stops on lift; One-thumb finds a range dummy by itself (0.3° off) and fires, and a drag takes the aim.
+  - Not done: One-thumb's grenade lob at the nearest enemy (the spec's "auto-aimed lob") throws along the automatic aim for now; a true lob needs the bots' `solveThrow` from both game modes.
+- **The phone platform around a match (23 Oct 2026, controls spec §4.8–4.9, item 9; the phone agent).** `touch/platform.ts`, wired by the controller:
+  - **iOS edge swipes:** in play, a `touchstart` within 24 px of a physical side edge is `preventDefault`ed (non-passive listener; viewport x is the physical screen's, turned page or not). The controls act on pointer events, which still arrive.
+  - **Back gesture:** in play, a `CloseWatcher` (Android Chrome 120+) turns the back gesture into the pause menu (Escape); a watcher answers one back, so a touch in play arms a new one. No history sentinel (it would fight the shell's routes); iOS has no CloseWatcher.
+  - **Full screen left during play:** pause; the next touch in play goes back to full screen.
+  - **Wake lock:** the first touch in play asks for `navigator.wakeLock` (a refusal waits 5 s before a tap asks again); asked again when the page comes back; let go out of play.
+  - **Haptics:** every buzz ≥ 12 ms (6–8 may not register), at most one per 70 ms; "Vibrate when hit" and "Button haptics" (and the editor's Vibrate) hide where there's no Vibration API (iOS Safari).
+  - Not done: §4.7's fade floors (stick bases ≥ 30 %, buttons ≥ 70 %) contradict the owner's Button fade slider (15–100 %): his call. The iOS "Add to Home Screen" tip and the bfcache rejoin (§4.9.2, 4.9.5) are left.
 
 ## 30. High ping: what made it feel unresponsive, and the fixes (19 Oct 2026, owner's report)
 
@@ -1652,3 +1665,62 @@ This is docs/design/onboarding-research.md §3.2–§3.4 and §7 phase 3; the de
 - **Web:** `apps/web/src/teams/` (palette, TeamRoster + TeamModePicker, TeamStandings, the HUD strip, the scoreboard grouping), the look book's `setTeams/teamOf`, render3d's `teamColourOf` hook (the armband glow), `?teams=2|3|4` in training.
 - **The minimap:** your teammates are its allies (`minimap.setAllies(lookBook.teammatesOf(you))`, main.ts), so they always show as circles and never as enemy marks. To colour dots by team, the maps agent has `teamColour(team)` / `teamColourCss(team)`, `TEAM_SHAPES`, `TEAM_LETTERS` and `onTeamPalette(listener)` from `apps/web/src/teams/palette.ts`, and `lookBook.teamOf(id)`.
 - **Fixed on the way:** the Tab scoreboard read its ping cell at index 5 of five, so its update threw after the first row and the other rows stayed blank. It now reads index 4 (hud.ts).
+
+## 54. Onboarding, phase 4a: Next orders and the Field manual (23 Oct 2026, owner request)
+This is docs/design/onboarding-research.md §5; the Pen board's D4.
+- **`tour/orders.ts`, pure and unit-tested:**
+  - `recommend(facts, context, now)` returns at most 3 cards, best first;
+  - score = base × relevance (1–1.5) × novelty (1, 0.6 after 3 shows, 0.3 after 6);
+  - "Not now" rests a card for 7 days; taking it retires it;
+  - hard gates come first: offline hides the room cards, no pad means no controller card, touch cards only on touch.
+- **The catalogue:** §5's cards, built from what the facts already hold.
+  - Two are left out: Refresher needs the previous session's date (the facts keep only the latest), and the phone fire-mode card needs a hit rate.
+  - A veteran who never flew sees "First flight" offered low (30).
+- **`fieldManual(facts)`:** the six items, with Every control optional.
+- **Home (`tour/NextOrders.tsx`):**
+  - it replaces the side column's static "Field orders" card, which stays as the fallback when there's no card or no onboarding memory;
+  - the top card is in volt, two compact rows follow, and the Field manual is folded beneath (n/6);
+  - the cards are fixed for the visit: taking one or putting it off removes it, but new facts don't reshuffle them;
+  - every card shown, taken or put off is a fact and a log line (`card.shown`, `card.tapped`, `card.dismissed`, with rank and score).
+- **Actions** go through the shell: `startFlight`, the new `train(kind)` (Live fire = 3 Easy bots, `hard` = 3 Hard bots), create, join, local, the creator, Settings tabs.
+- **`tour/live.ts`:** main.ts provides the onboarding memory; React reads the facts with `useTourFacts()`.
+- **Not yet:** the phone Home's placement (asked of the phone agent: `NextOrders` is exported); hiding the manual from Settings.
+
+## 55. Onboarding, phase 4b: Home stops and the Debrief (23 Oct 2026, owner request)
+This is docs/design/onboarding-research.md §3.2 and §3.5.
+- **Home stops (`tour/homeStops.ts`):** one blocking spotlight pass of three stops: Create room ("Play with friends. Share the code."), Join with code ("Got a code? In here.") and the Locker ("Your kit. Change it any time.").
+  - **When:** once per device, on a settled Home (no route or overlay), after the first match, or on a veteran's first Home.
+  - **Controls:** Next, then Done; Skip skips a stop and Escape skips the pass. Pressing the target through the hole does what it says and ends the pass.
+  - **Targets:** Home's `data-tour="create|join|locker"`. A stop whose target is off (offline: Create room) is left out. The phone Home has no hooks yet, so the pass waits there (asked of the phone agent).
+  - **Logging:** every stop is a `tour.step`, the pass a `tour.end`, and the fact is `tours['home-stops']`.
+- **The Debrief on Results (`tour/debrief.ts`, pure; `tour/DebriefLines.tsx`):** for the first 5 finished matches on a device, three lines under the player's own line:
+  - what was done: kills and the moves used ("6 kills · dash, grenades");
+  - one thing to try, most pressing first: Easier start at 8+ deaths with ≤ 1 kill, then gas, then own grenades, then no dash, no grenade, no gun taken;
+  - the top Next orders card, with its button.
+  - The onboarding memory now keeps `lastMatch`, the match summary, for it.
+- **Not yet:** the lobby stops (Ready, Invite), and the invited friend's 3-goal flight in the warm-up; the phone Results' Debrief and the phone Home's hooks (asked of the phone agent).
+
+## 56. Onboarding, phase 5: contextual hints (23 Oct 2026, owner request)
+This is docs/design/onboarding-research.md §3.6.
+- **The engine (`tour/hints.ts`):** pure and unit-tested. Signals go in, at most one hint comes out when the rules allow.
+- **The rules:**
+  - one hint per life;
+  - none in the first 5 s after a spawn;
+  - none within 3 s of taking or dealing damage;
+  - none in the countdown;
+  - each hint at most its Max, ever on the device (`mf.hints.v1`);
+  - "Don't show tips" (the link on every hint) turns them off.
+- **The hints:**
+  - **Gas:** after two gas deaths in a match.
+  - **Fuel:** after the second fall out of fuel.
+  - **Dash / Grenade:** when that move went unused across 2+ matches, and withdrawn once it's used.
+  - **Hold to aim:** at once after a death to your own grenade.
+  - The words never blame ("The middle kills").
+- **The runtime (`tour/hintsRun.ts`):** fed the sim's events and the local player's frame in main.ts. It shows a hint only in a match in progress, as a non-blocking spotlight with no dim: a ring on the HUD plate it's about, the player's own key, top-centre.
+  - It stays 7 s, or until the player does the thing (`hint.acted`, with the seconds).
+  - It's quiet during First flight and under any menu or route.
+- **Not yet:**
+  - empty-magazine reloads and the nearest-gun tag (they need the HUD's ammo and pickup state);
+  - the 14-day refresher;
+  - a Settings → Accessibility → Tips switch (the link stands in);
+  - the touch HINTS (`touch/teach.ts`) folding into this engine (asked of the phone agent).

@@ -8,7 +8,7 @@ import { MatchPhase, type SimEvent } from '@military-forge/sim';
 import type { ShellState, ShellStore } from '../shell/store';
 import { FactStore, daysBetween, type FactEvent, type Facts } from './facts';
 import { EventLog, type Device, type Move, type TourLogEvent } from './log';
-import { MatchTracker } from './track';
+import { MatchTracker, type MatchSummary } from './track';
 
 export type { Facts, FactEvent } from './facts';
 export type { Device, Move, Persona, TourLogEvent } from './log';
@@ -16,6 +16,8 @@ export type { Device, Move, Persona, TourLogEvent } from './log';
 export interface TourMemory {
   readonly log: EventLog;
   readonly facts: FactStore;
+  /** the last match played to its end (or left), for the Debrief on Results */
+  readonly lastMatch: MatchSummary | null;
   /** the sim events of every frame (GameRenderer.onEvents) */
   onEvents(events: readonly SimEvent[], localId: number): void;
   /** the device the player is using now (detected; a pad from its first button) */
@@ -59,9 +61,11 @@ export function startTourMemory(o: TourMemoryOptions): TourMemory {
     log.record({ t: 'first.kill', sinceTitle: hit ? Math.round((clock() - hit) / 100) / 10 : null, sinceMatch: Math.round(secondsIntoMatch * 10) / 10 });
   };
 
+  let lastMatch: MatchSummary | null = null;
   const finish = (s: ShellState, finished: boolean) => {
     const sum = tracker.end();
     if (!sum) return;
+    lastMatch = sum; // before the facts change: the Debrief re-renders on them
     const results = s.match?.results;
     const me = results?.standings.find((r) => r.id === s.match?.localId && !r.left);
     const won = finished && !!me && me.key === results?.winnerKey;
@@ -96,6 +100,9 @@ export function startTourMemory(o: TourMemoryOptions): TourMemory {
   return {
     log,
     facts,
+    get lastMatch() {
+      return lastMatch;
+    },
     onEvents: (events, localId) => tracker.onEvents(events, localId),
     setDevice: (device) => {
       if (facts.get().lastDevice !== device) facts.apply({ k: 'device', device });

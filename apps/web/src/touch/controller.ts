@@ -17,11 +17,12 @@ import type { Camera } from '../camera';
 import { TAP_MS, type ThrowLatch } from '../input';
 import { NO_WEAPON, weapons, type MapDef } from '@military-forge/content';
 import type { Frame } from '../view';
-import { logicalPoint, logicalRect, type Box } from '../ui/landscape';
+import { enterLandscape, logicalPoint, logicalRect, type Box } from '../ui/landscape';
+import { BackToPause, WakeLockKeeper, canVibrate, inEdgeBand } from './platform';
 import { cross, drawIn, glideHome, growIn, settleNow, shrinkOut, stamp } from './fx';
 import { GESTURE, beltAfter, beltOf, beltSteps, cyclePresses, dashButtons, isQuickSwipe, nearestPick, radialAngles, radialSpots, type Vec } from './gestures';
 import { TouchOverlays, type RadialItem } from './overlays';
-import { CHAIN_MS, Drill, HINTS, HINT_DONE_BY, loadSeen, markDrillSeen, nextHint, saveSeen, type Hint, type TouchAction } from './teach';
+import { CHAIN_MS, Drill, HINTS, HINT_DONE_BY, drillControl, loadSeen, markDrillSeen, nextHint, saveSeen, type Hint, type TouchAction } from './teach';
 import {
   CONTEXT_PRIORITY,
   OFF_HUD,
@@ -29,18 +30,20 @@ import {
   PINNABLE,
   SHIELD_BIT,
   availableControls,
+  isCustomLayout,
   placementFor,
   saveLayout,
   sizePx,
   snapPlacement,
   withPinned,
   withPlacement,
+  withoutMoves,
   type ControlDef,
   type ControlId,
   type Placement,
   type TouchLayout,
 } from './layout';
-import { ASSIST_NAMES, DEFAULT_TOUCH_SETTINGS, VIEW_LIMITS, type FireMode, type KeyValueStore as Store, type TouchSettings } from './settings';
+import { ASSIST_NAMES, DEFAULT_TOUCH_SETTINGS, PRESET_HELP, PRESET_IDS, PRESET_NAMES, PRESET_SETTINGS, VIEW_LIMITS, type FireMode, type KeyValueStore as Store, type PresetId, type TouchSettings } from './settings';
 import { AutoTrigger, TOUCH_PULL_MIN, assistPush, autoRange, createTouchState, dashStrength, desiredAim, effectiveFire, flickRate, grenadeStrength, pullFires, touchButtons, updateMove } from './mapping';
 import { ASSIST_LEVELS, AimAssist, onTarget as onAutoTarget, type AssistLevel, type AssistTarget } from '../input/assist';
 import { Sight, sightPoints } from '../input/sight';
@@ -88,7 +91,7 @@ type Grab =
   | { kind: 'button'; def: ControlDef }
   // Fire button mode's FIRE (§4.4): the trigger held while it's down; on the right one, a drag from it
   // aims too (a floating stick from where the thumb landed), unless a thumb is already on the aim stick
-  | { kind: 'fire'; def: ControlDef; aim: { cx: number; cy: number; radius: number } | null }
+  | { kind: 'fire'; def: ControlDef; aim: { cx: number; cy: number; radius: number } | null; tap?: boolean }
   // v3 gestures (gestures.ts): the gun pill (tap/swipe: swap, hold: the radial), the dash button (a
   // swipe picks the way), the shield (hold: raised while held)
   | { kind: 'swap'; downAt: number; x0: number; y0: number; done: boolean; radial: boolean; pick: number; items: RadialItem[]; spots: Vec[]; dead: number }
@@ -113,6 +116,8 @@ export interface TouchHost {
   dashFlickFull(): number;
   /** the map being played (Auto fire's line of sight, input/sight.ts) */
   map?(): MapDef | null;
+  /** a game is running (the app's title, home and other screens without one: false); absent: always */
+  inGame?(): boolean;
 }
 
 /** The part of a frame the controls read (render's frame: view.ts Frame). */
@@ -171,11 +176,19 @@ export class TouchController {
   private touchOwnsAim = true;
   private active = false;
   private hiddenForMenus = false;
+  /** a game is running under the controls (host.inGame): the page's zoom lock needs one */
+  private inGame = true;
   private editing = false;
   private selected: ControlId | null = null;
   private zoomSteps = 0;
   private zoomBefore: number | null = null;
   private lastBuzz = 0;
+  /** the screen kept on while playing (asked for from a tap) */
+  private readonly wake = new WakeLockKeeper();
+  /** Android's back gesture opens the pause menu while playing (CloseWatcher) */
+  private readonly back = new BackToPause(() => this.openPause());
+  /** full screen was left during play: the next tap in play goes back to it */
+  private refullscreen = false;
   /** when a finger last touched: mouse events right after are the browser's emulation, not a mouse */
   private lastTouchAt = -Infinity;
   private raf = 0;
@@ -221,6 +234,8 @@ export class TouchController {
       const edit = div('mf-ctl mf-touch-edit', this.safe);
       edit.innerHTML = `<span class="mf-skin dial-btn dial-btn--sm"><svg class="ic ic--sm" aria-hidden="true"><use href="#icon-edit"/></svg></span>`;
       edit.title = 'Edit the touch controls';
+      edit.setAttribute('role', 'button');
+      edit.setAttribute('aria-label', 'Edit the touch controls');
       edit.dataset.mfEdit = '';
     }
     this.skin = new TouchSkin(this.root);
@@ -281,7 +296,24 @@ export class TouchController {
     };
     for (const type of ['gesturestart', 'gesturechange', 'contextmenu', 'dblclick'] as const) on(type as keyof WindowEventMap, stop, { passive: false });
     on('touchmove', stop, { passive: false });
-    const vis = () => document.hidden && this.releaseAll();
+    // iOS edge swipes (back and forward) start within 24 px of a physical side edge: not while playing
+    // (§4.9.1). Pointer events still arrive; only the browser's own gesture (and synthetic clicks) go
+    on('touchstart', (e) => {
+      if (this.playing && [...(e as TouchEvent).changedTouches].some((t) => inEdgeBand(t.clientX, innerWidth))) e.preventDefault();
+    }, { passive: false });
+    // full screen left during play (a swipe from the edge, the back gesture): pause; the next tap in
+    // play goes back to full screen
+    const fs = () => {
+      if (document.fullscreenElement || !this.playing || !this.inGame) return;
+      this.refullscreen = true;
+      this.openPause();
+    };
+    document.addEventListener('fullscreenchange', fs);
+    this.cleanups.push(() => document.removeEventListener('fullscreenchange', fs));
+    const vis = () => {
+      if (document.hidden) this.releaseAll();
+      else this.wake.visible();
+    };
     document.addEventListener('visibilitychange', vis);
     this.cleanups.push(() => document.removeEventListener('visibilitychange', vis));
   }
@@ -313,7 +345,6 @@ export class TouchController {
     this.root.hidden = !on;
     document.documentElement.toggleAttribute('data-touch-controls', on);
     this.syncPlaying();
-    this.setViewport(on);
     if (on) {
       this.touchOwnsAim = true;
       this.host.camera.lookAhead = this.settings.lookAhead ? 1 : 0;
@@ -390,6 +421,11 @@ export class TouchController {
       // a grenade's arc goes exactly where its stick points: no assist on throws
       this.aimAngle = want;
       this.touchOwnsAim = true;
+    } else if (want === null && this.touchOwnsAim && this.settings.preset === 'oneThumb') {
+      // One-thumb assist: the aim finds the nearest enemy in sight and range by itself (Strong's lock,
+      // acquiring), else it follows the way you move; a drag on the right takes over (the branch below)
+      const aim = this.aimAssist.step({ level: 'strong', current: this.aimAngle, desired: this.aimAngle, stick: 0, pullMinPush: TOUCH_PULL_MIN, sx, sy, range: this.weaponDef?.range ?? 0, targets: this.visible, autoAcquire: true });
+      this.aimAngle = this.aimAssist.target === null && s.moveActive && Math.abs(s.move.x) >= 0.3 ? (s.move.x > 0 ? 0 : Math.PI) : aim;
     } else if (want !== null || this.touchOwnsAim) {
       // the assist level (§4.5): friction while the stick turns the aim, magnetism while it's pushed
       // (or while Auto fires), Strong's lock with it let go. The mouse never gets any of it.
@@ -601,6 +637,11 @@ export class TouchController {
   // ---------- pointers ----------
 
   private readonly frame = () => {
+    const game = this.host.inGame?.() ?? true;
+    if (game !== this.inGame) {
+      this.inGame = game;
+      this.syncPlaying();
+    }
     const hide = this.host.blocked();
     if (hide !== this.hiddenForMenus) {
       this.hiddenForMenus = hide;
@@ -625,6 +666,32 @@ export class TouchController {
    */
   private syncPlaying(): void {
     document.documentElement.toggleAttribute('data-touch-playing', this.playing);
+    // no pinch zoom only over a game (the editor and the first-run card included): the title and every
+    // menu keep the browser's zoom (WCAG 1.4.4; the web-quality audit, 23 Oct)
+    this.setViewport(this.active && this.inGame && !this.hiddenForMenus);
+    // out of play: the back gesture and the screen are the browser's again (in play, a tap claims them: onDown)
+    if (!(this.playing && this.inGame)) {
+      this.back.arm(false);
+      this.wake.want(false);
+    }
+  }
+
+  /** The pause menu, as the menu button opens it (the Escape key). */
+  private openPause(): void {
+    this.releaseAll();
+    key('keydown', 'Escape');
+    key('keyup', 'Escape');
+  }
+
+  /** A touch in play: the screen stays on, a back gesture pauses, and full screen comes back if it was left (§4.9). */
+  private claimPlatform(): void {
+    if (!this.playing || !this.inGame) return;
+    this.wake.want(true);
+    this.back.arm(true);
+    if (this.refullscreen) {
+      this.refullscreen = false;
+      void enterLandscape();
+    }
   }
 
   /** Lets a grab go as if its finger had been dragged off (no tap, no throw, no release-to-fire). */
@@ -712,7 +779,10 @@ export class TouchController {
     const target = e.target as Element | null;
     // a mouse only uses the on-screen buttons; on the game it keeps aiming and firing as usual
     if (e.pointerType === 'mouse' && !target?.closest('[data-mf-control], [data-mf-edit], .mf-touch-editor')) return;
-    if (e.pointerType !== 'mouse') this.lastTouchAt = e.timeStamp;
+    if (e.pointerType !== 'mouse') {
+      this.lastTouchAt = e.timeStamp;
+      this.claimPlatform();
+    }
     if (this.editing) {
       if (!target?.closest('.mf-touch-editor')) this.editDown(e, target);
       return;
@@ -739,6 +809,15 @@ export class TouchController {
     const leftHalf = at.x < rect.left + rect.width / 2;
     const id = leftHalf === (this.settings.handed === 'right') ? 'move' : 'aim';
     const same = [...this.grabs.entries()].find(([, g]) => g.kind === 'stick' && g.id === id) as [number, Extract<Grab, { kind: 'stick' }>] | undefined;
+    if (same && id === 'aim' && this.settings.tapFire) {
+      // Claw: an extra finger on empty aim-side space fires while it's down ("tap anywhere to fire";
+      // no pinch on this side then: a still thumb plus a finger is how claw players shoot)
+      const fire = availableControls().find((c) => c.id === 'fire');
+      if (fire) {
+        this.pressFire(e, fire, true);
+        return;
+      }
+    }
     if (same) {
       // a second finger on the same side: the camera (pinch to zoom, two-finger taps) only when it lands
       // soon, well apart (20 mm), and the first thumb hasn't moved; otherwise a stray finger (a claw
@@ -896,6 +975,7 @@ export class TouchController {
       el.classList.remove('mf-down', 'mf-fire');
       // the knob springs home (touch.css: its transition, on --ease-settle, runs once the thumb is off)
       this.knobs.get(g.id)!.style.transform = '';
+      this.stickValue(g.id, null);
       if (g.id === 'move') {
         if (lifted && this.settings.swipeDash && isFlick({ durationMs: at - g.startAt, peak: g.peak, riseMs: g.peakAt - g.riseFrom, outSpeed: outSpeed(g) })) {
           s.pulses |= Btn.Dash;
@@ -969,12 +1049,13 @@ export class TouchController {
     } else if (g.kind === 'camera') {
       this.grabs.delete(g.other);
     } else if (g.kind === 'fire') {
-      s.held &= ~Btn.Fire;
+      // FIRE and a Claw finger can both be down: the trigger lets go with the last of them
+      if (![...this.grabs.values()].some((o) => o !== g && o.kind === 'fire')) s.held &= ~Btn.Fire;
       if (g.aim) {
         s.aimActive = false;
         Object.assign(s.aim, zeroStick());
       }
-      this.lifted(g.def.id);
+      if (!g.tap) this.lifted(g.def.id);
     } else if (g.kind === 'button') {
       if (g.def.bit) s.held &= ~g.def.bit;
       if (g.def.key && g.def.key !== 'Escape') key('keyup', g.def.key);
@@ -1141,10 +1222,16 @@ export class TouchController {
    * floating stick from where the thumb landed, so one touch fires and steers; not when a thumb is
    * already on the aim stick (then it only fires), and never the left one (an index finger).
    */
-  private pressFire(e: PointerEvent, def: ControlDef): void {
+  private pressFire(e: PointerEvent, def: ControlDef, tap = false): void {
     const s = this.state;
     s.held |= Btn.Fire;
     s.pulses |= Btn.Fire;
+    if (tap) {
+      // Claw's extra finger: fire only; the thumb keeps the aim
+      this.grabs.set(e.pointerId, { kind: 'fire', def, aim: null, tap: true });
+      this.act('fire');
+      return;
+    }
     const aimHeld = [...this.grabs.values()].some((g) => (g.kind === 'stick' && g.id === 'aim') || (g.kind === 'fire' && g.aim));
     const at = logicalPoint(e);
     const radius = (this.sizes.get('aim')?.px ?? 136) / 2;
@@ -1167,6 +1254,38 @@ export class TouchController {
     if (aim && aim.dataset.fire !== this.fireNow) aim.dataset.fire = this.fireNow;
     this.context('fire', this.settings.fire === 'button');
     this.context('fireLeft', this.settings.fire === 'button' && this.settings.leftFire);
+    // JET: Claw's left index finger, or anyone whose move stick doesn't jet
+    this.context('jet', this.settings.preset === 'claw' || !this.settings.stickJet);
+  }
+
+  /** The preset on the root (touch.css: One-thumb's aim dial shows only under a finger; no jet hint on a stick that doesn't jet). */
+  private presetClass(): void {
+    if (this.root.dataset.preset !== this.settings.preset) this.root.dataset.preset = this.settings.preset;
+    this.root.classList.toggle('mf-nostickjet', !this.settings.stickJet);
+  }
+
+  /** A preset picked (the editor's first row; Settings goes through index.ts): its places, and the settings it implies. */
+  private pickPreset(preset: PresetId): void {
+    this.layout = withoutMoves(this.layout);
+    saveLayout(this.store, this.layout);
+    this.onSettingsEdited({ preset, ...PRESET_SETTINGS[preset] });
+    this.dockEditor(preset === 'claw');
+    this.refreshContext(this.tokensBefore);
+    this.place();
+    this.syncEditor();
+  }
+
+  /** The editor panel at the top (by default) or the bottom (⌄; Claw's default). */
+  private dockEditor(bottom: boolean): void {
+    this.editor.classList.toggle('mf-touch-editor-bottom', bottom);
+    const dock = this.editor.querySelector('[data-ed="dock"]');
+    if (dock) dock.innerHTML = `<svg class="ic ic--sm" aria-hidden="true"><use href="#icon-${bottom ? 'chev-up' : 'chev-down'}"/></svg>`;
+  }
+
+  /** Another preset was picked in Settings: the moves made on the old one's places go (the pins stay). */
+  dropMoves(): void {
+    this.layout = withoutMoves(this.layout);
+    saveLayout(this.store, this.layout);
   }
 
   /** The dash button's tap: the full dash the way you face (the keyboard's), once. */
@@ -1252,9 +1371,13 @@ export class TouchController {
 
   /** A short buzz for a committed gesture (Settings → Button haptics; phones that can). */
   private buzz(ms: number): void {
-    if (!this.settings.haptics || typeof navigator === 'undefined' || !('vibrate' in navigator)) return;
+    if (!this.settings.haptics || !canVibrate()) return;
+    // at most one buzz per 70 ms (as the hit's); never under 12 ms: 6–8 may not register (§4.8, [S28])
+    const now = performance.now();
+    if (now - this.lastBuzz <= 70) return;
+    this.lastBuzz = now;
     try {
-      navigator.vibrate(ms);
+      navigator.vibrate(Math.max(12, ms));
     } catch {
       /* not allowed here */
     }
@@ -1345,9 +1468,9 @@ export class TouchController {
   private renderDrill(): void {
     const d = this.drill;
     if (!d) return;
-    this.overlays.showDrill(d, this.settings.fire);
-    // Fire button mode: the fire step points at FIRE
-    this.teach(d.step?.id === 'fire' && this.settings.fire === 'button' ? 'fire' : (d.step?.control ?? null));
+    this.overlays.showDrill(d, this.settings);
+    // the step's control for this layout (FIRE in Fire button mode, JET when the stick doesn't jet)
+    this.teach(d.step ? drillControl(d.step, this.settings) : null);
     if (d.justTicked) {
       const was = d.justTicked;
       window.setTimeout(() => {
@@ -1418,6 +1541,7 @@ export class TouchController {
     const s = this.state;
     const v: StickVector = id === 'move' ? s.move : s.aim;
     shapeStick(dx, dy, radius, id === 'move' ? MOVE_STICK : AIM_STICK, v);
+    this.stickValue(id, v);
     if (g) {
       // when the push left 0.3 (a flick's rise starts there): between two readings, where the line
       // was crossed, so a phone's sparse moves don't make a quick flick look slow
@@ -1430,7 +1554,7 @@ export class TouchController {
     }
     if (id === 'move') {
       s.moveActive = true;
-      updateMove(s);
+      updateMove(s, this.settings.stickJet);
       if (g && v.mag >= g.peak) {
         // the flick's rise is timed to the first moment it reached its peak (a stick held at the rim
         // stays at 1: later moments don't make the rise slower)
@@ -1470,6 +1594,15 @@ export class TouchController {
     el.dataset.mfControl = def.id;
     el.title = def.title;
     el.setAttribute('aria-label', def.title);
+    // a button, or (the sticks) a slider whose value is the push (stickValue); pointer-only, so not in
+    // the tab order: the keyboard and pads have their own bindings
+    if (def.kind === 'stick') {
+      el.setAttribute('role', 'slider');
+      el.setAttribute('aria-valuemin', '0');
+      el.setAttribute('aria-valuemax', '100');
+      el.setAttribute('aria-valuenow', '0');
+      el.setAttribute('aria-valuetext', 'At rest');
+    } else el.setAttribute('role', 'button');
     el.innerHTML = skinHtml(def.id);
     if (def.kind === 'stick') {
       // sticks are grabbed through their half of the screen, not their circle (except in the editor)
@@ -1477,17 +1610,18 @@ export class TouchController {
       el.dataset.mfStick = def.id;
       this.knobs.set(def.id as 'move' | 'aim', el.querySelector<HTMLElement>('.mf-knob')!);
     }
-    if (OFF_HUD.has(def.id) || def.id === 'fire' || def.id === 'fireLeft') el.classList.add('mf-off');
+    if (OFF_HUD.has(def.id) || def.id === 'fire' || def.id === 'fireLeft' || def.id === 'jet') el.classList.add('mf-off');
     this.els.set(def.id, el);
   }
 
   /** A control's placement in the current safe box (layout.ts placementFor: the mm anchors laid out at this size). */
   private at(id: ControlId): Placement {
-    return placementFor(this.layout, id, this.settings.handed, this.box);
+    return placementFor(this.layout, id, this.settings.handed, this.box, this.settings.preset);
   }
 
   /** Puts every control at its place (its centre) for the current size, handedness and opacity. */
   private place(): void {
+    this.presetClass();
     if (!this.active) return;
     const w = this.safe.clientWidth;
     const h = this.safe.clientHeight;
@@ -1534,6 +1668,8 @@ export class TouchController {
     this.selected = null;
     this.root.classList.toggle('mf-touch-editing', on);
     this.editor.hidden = !on;
+    // Claw's index-finger controls live up top, under the panel's usual place: it opens at the bottom
+    if (on) this.dockEditor(this.settings.preset === 'claw');
     if (!on) saveLayout(this.store, this.layout);
     // while it's being placed: the context slot (shown by Take) and the pinned controls
     this.refreshContext(this.tokensBefore);
@@ -1651,6 +1787,10 @@ export class TouchController {
         <span class="mf-touch-editor-title">${icon('drag')}<b data-ed="title"></b></span>
         <button type="button" class="btn btn--volt btn--sm" data-ed="done">${icon('check')}Done</button>
       </div>
+      <div class="mf-touch-editor-presets" role="radiogroup" aria-label="Preset">
+        ${PRESET_IDS.map((id) => `<button type="button" role="radio" data-preset="${id}" title="${PRESET_HELP[id]}" aria-label="${PRESET_NAMES[id]}">${id === 'oneThumb' ? 'One-thumb' : PRESET_NAMES[id]}</button>`).join('')}
+        <button type="button" role="radio" data-preset="mine" disabled title="Your moves on top of a preset: drag or resize any control">My layout</button>
+      </div>
       <div class="mf-touch-editor-row">
         <span class="mf-touch-editor-sel" data-ed="sel">
           <button type="button" class="btn btn--ink btn--sm btn--icon" data-ed="smaller" aria-label="Smaller">${icon('minus')}</button>
@@ -1666,7 +1806,7 @@ export class TouchController {
         <label><input type="checkbox" data-ed="left" /> Left-handed</label>
         <label>Fire <select data-ed="fire"><option value="auto">Auto</option><option value="pull">Pull</option><option value="button">Fire button</option><option value="release">Release</option></select></label>
         <label>Aim assist <select data-ed="assist">${ASSIST_LEVELS.map((l) => `<option value="${l}">${ASSIST_NAMES[l]}</option>`).join('')}</select></label>
-        <label><input type="checkbox" data-ed="vibrate" /> Vibrate</label>
+        ${canVibrate() ? '<label><input type="checkbox" data-ed="vibrate" /> Vibrate</label>' : ''}
         <label><input type="checkbox" data-ed="swipe" /> Flick to dash</label>
       </div>
       <div class="mf-touch-editor-row mf-touch-editor-pins" data-ed="pins" hidden>
@@ -1684,7 +1824,7 @@ export class TouchController {
     toggle('left', (on) => ({ handed: on ? 'left' : 'right' }));
     q<HTMLSelectElement>('fire').addEventListener('change', (e) => this.onSettingsEdited({ fire: (e.target as HTMLSelectElement).value as FireMode, fireChosen: true }));
     q<HTMLSelectElement>('assist').addEventListener('change', (e) => this.onSettingsEdited({ assist: (e.target as HTMLSelectElement).value as AssistLevel }));
-    toggle('vibrate', (on) => ({ vibrate: on }));
+    if (canVibrate()) toggle('vibrate', (on) => ({ vibrate: on }));
     toggle('swipe', (on) => ({ swipeDash: on }));
     q<HTMLInputElement>('all').addEventListener('input', (e) => this.onSettingsEdited({ opacity: Number((e.target as HTMLInputElement).value) / 100 }));
     q('reset').addEventListener('click', () => {
@@ -1695,6 +1835,12 @@ export class TouchController {
       this.syncEditor();
     });
     q('done').addEventListener('click', () => this.setEditing(false));
+    ed.querySelectorAll<HTMLButtonElement>('[data-preset]').forEach((b) =>
+      b.addEventListener('click', () => {
+        const id = b.dataset.preset as PresetId | 'mine';
+        if (id !== 'mine') this.pickPreset(id);
+      }),
+    );
     // pinning a control the HUD doesn't carry by default (next grenade, melee, reload, shield, zoom): its own place
     ed.querySelectorAll<HTMLInputElement>('[data-pin]').forEach((box) =>
       box.addEventListener('change', () => {
@@ -1710,10 +1856,7 @@ export class TouchController {
       q('pins').hidden = more.hidden;
       q('options').setAttribute('aria-expanded', String(!more.hidden));
     });
-    q('dock').addEventListener('click', () => {
-      const bottom = ed.classList.toggle('mf-touch-editor-bottom');
-      q('dock').innerHTML = icon(bottom ? 'chev-up' : 'chev-down');
-    });
+    q('dock').addEventListener('click', () => this.dockEditor(!ed.classList.contains('mf-touch-editor-bottom')));
     return ed;
   }
 
@@ -1727,16 +1870,40 @@ export class TouchController {
     q<HTMLInputElement>('left').checked = this.settings.handed === 'left';
     q<HTMLSelectElement>('fire').value = this.settings.fire;
     q<HTMLSelectElement>('assist').value = this.settings.assist;
-    q<HTMLInputElement>('vibrate').checked = this.settings.vibrate;
+    const vibrate = this.editor.querySelector<HTMLInputElement>('[data-ed="vibrate"]');
+    if (vibrate) vibrate.checked = this.settings.vibrate;
     q<HTMLInputElement>('swipe').checked = this.settings.swipeDash;
     q<HTMLInputElement>('all').value = String(Math.round(this.settings.opacity * 100));
+    // the preset row: "My layout" once a control was moved or resized (the editor forks the preset)
+    const mine = isCustomLayout(this.layout);
+    this.editor.querySelectorAll<HTMLButtonElement>('[data-preset]').forEach((b) => {
+      const on = b.dataset.preset === (mine ? 'mine' : this.settings.preset);
+      b.setAttribute('aria-checked', String(on));
+      if (b.dataset.preset === 'mine') b.disabled = !mine;
+    });
     const pinned = new Set(this.layout.pinned ?? []);
     this.editor.querySelectorAll<HTMLInputElement>('[data-pin]').forEach((box) => (box.checked = pinned.has(box.dataset.pin as ControlId)));
   }
 
   // ---------- page ----------
 
-  /** No pinch zoom, and the safe areas reported (viewport-fit=cover), while the controls are up. */
+  /**
+   * A stick's state for assistive tech (role="slider"): its push in 10 % steps and which way, set only
+   * when that changes (a thumb sends a move a frame; the attributes change a few times a push).
+   */
+  private stickValue(id: 'move' | 'aim', v: StickVector | null): void {
+    const el = this.els.get(id);
+    if (!el) return;
+    const pct = v ? Math.round(Math.min(1, v.mag) * 10) * 10 : 0;
+    const deg = v ? (Math.atan2(v.y, v.x) * 180) / Math.PI : 0;
+    const way = pct === 0 ? '' : ['right', 'up and right', 'up', 'up and left', 'left', 'down and left', 'down', 'down and right'][((Math.round(deg / 45) % 8) + 8) % 8];
+    const text = pct === 0 ? 'At rest' : `Pushed ${pct} %, ${way}`;
+    if (el.getAttribute('aria-valuetext') === text) return;
+    el.setAttribute('aria-valuenow', String(pct));
+    el.setAttribute('aria-valuetext', text);
+  }
+
+  /** No pinch zoom, and the safe areas reported (viewport-fit=cover), while a game is up under the controls (syncPlaying). */
   private setViewport(on: boolean): void {
     const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
     if (!meta) return;
@@ -1750,9 +1917,9 @@ export class TouchController {
   }
 
   /** The sticks right now (dev builds' automated checks: the dials' input on a turned phone). */
-  debugState(): { move: StickVector; aim: StickVector; moveActive: boolean; aimActive: boolean; aimFire: boolean; resume: { at: number; button: boolean } | null; fire: FireMode; visible: number; range: number; shoulder: { x: number; y: number }; targets: { x: number; y: number }[]; assist: AssistLevel; locked: number | null; enemyNear: boolean; lowMag: boolean } {
+  debugState(): { move: StickVector; aim: StickVector; moveActive: boolean; aimActive: boolean; aimFire: boolean; resume: { at: number; button: boolean } | null; fire: FireMode; visible: number; range: number; shoulder: { x: number; y: number }; targets: { x: number; y: number }[]; preset: PresetId; assist: AssistLevel; locked: number | null; enemyNear: boolean; lowMag: boolean } {
     const s = this.state;
-    return { move: { ...s.move }, aim: { ...s.aim }, moveActive: s.moveActive, aimActive: s.aimActive, aimFire: s.aimFire, resume: this.aimLift && { at: this.aimLift.at, button: this.aimLift.button }, fire: this.fireNow, visible: this.visible.length, range: this.weaponDef?.range ?? 0, shoulder: { ...this.shoulder }, targets: this.visible.map((t) => ({ x: t.x, y: t.y })), assist: this.settings.assist, locked: this.aimAssist.target, enemyNear: this.enemyNear, lowMag: this.lowMag };
+    return { move: { ...s.move }, aim: { ...s.aim }, moveActive: s.moveActive, aimActive: s.aimActive, aimFire: s.aimFire, resume: this.aimLift && { at: this.aimLift.at, button: this.aimLift.button }, fire: this.fireNow, visible: this.visible.length, range: this.weaponDef?.range ?? 0, shoulder: { ...this.shoulder }, targets: this.visible.map((t) => ({ x: t.x, y: t.y })), preset: this.settings.preset, assist: this.settings.assist, locked: this.aimAssist.target, enemyNear: this.enemyNear, lowMag: this.lowMag };
   }
 
   /** The skins' bound keys (tests). */

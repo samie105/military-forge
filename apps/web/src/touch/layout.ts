@@ -4,9 +4,11 @@
  * shorter side), stored for the right-handed layout; the left-handed one mirrors them.
  */
 import { Btn } from '@military-forge/sim';
-import { LAYOUT_KEY, LIMITS, clamp, type Handed, type KeyValueStore } from './settings';
+import { LAYOUT_KEY, LIMITS, clamp, type Handed, type KeyValueStore, type PresetId } from './settings';
 
-export type ControlId = 'move' | 'aim' | 'grenade' | 'cycleGrenade' | 'dash' | 'melee' | 'reload' | 'swap' | 'zoom' | 'shield' | 'take' | 'pause' | 'scores' | 'fire' | 'fireLeft';
+export { PRESET_HELP, PRESET_IDS, PRESET_NAMES, PRESET_SETTINGS, type PresetId } from './settings';
+
+export type ControlId = 'move' | 'aim' | 'grenade' | 'cycleGrenade' | 'dash' | 'melee' | 'reload' | 'swap' | 'zoom' | 'shield' | 'take' | 'pause' | 'scores' | 'fire' | 'fireLeft' | 'jet';
 
 export interface ControlDef {
   id: ControlId;
@@ -49,6 +51,8 @@ export const CONTROLS: readonly ControlDef[] = [
   // Fire button mode only (settings.fire 'button', §4.4): FIRE fires while held; drag it to aim while firing
   { id: 'fire', kind: 'tap', label: 'Fire', bit: Btn.Fire, title: 'Fire: hold to shoot; drag it to aim while you shoot' },
   { id: 'fireLeft', kind: 'tap', label: 'Fire (left)', bit: Btn.Fire, title: 'Fire, for the left index finger: hold to shoot' },
+  // Claw's (§4.2): the left index finger jets, so the move stick needn't
+  { id: 'jet', kind: 'tap', label: 'Jet', bit: Btn.Jet, title: 'Jet: hold to fly' },
 ];
 
 export const CONTROL_IDS: readonly ControlId[] = CONTROLS.map((c) => c.id);
@@ -63,7 +67,8 @@ export const PX_PER_MM = 6;
 
 /** A safe-box corner, and how far in from its side (dx) and up or down from its edge (dy) a control's centre is, in mm; its hit size (mm). */
 export interface Anchor {
-  corner: 'BL' | 'BR' | 'TL' | 'TR';
+  /** TC: the top centre (dx from the middle, + to the right; dy down) */
+  corner: 'BL' | 'BR' | 'TL' | 'TR' | 'TC';
   dx: number;
   dy: number;
   hit: number;
@@ -97,7 +102,57 @@ export const CLASSIC: Readonly<Record<ControlId, Anchor>> = {
   // FIRE (Fire button mode) at the aim stick's rest, 14 mm; the left one for the left index finger
   fire: { corner: 'BR', dx: 16, dy: 15, hit: 14 },
   fireLeft: { corner: 'TL', dx: 20, dy: 14, hit: 12 },
+  // JET: only with "Push up to jet" off (Claw's left index finger has it at TL 20, 14); clear of the left FIRE
+  jet: { corner: 'TL', dx: 42, dy: 14, hit: 12 },
 };
+
+/**
+ * The layouts a player picks from (controls spec §4.2; the editor's first row, Settings → Touch):
+ * - classic: two thumbs (the default; CLASSIC above);
+ * - claw: three or four fingers. The index fingers work the top corners: JET and DASH on the left,
+ *   FIRE and GRENADE on the right; thumbs only move and aim. The arc keeps the swap pill and the
+ *   context slot; menu and scores move to the top centre. Fire button mode, stick-up jet off, and
+ *   any extra finger on the aim side fires (PRESET_SETTINGS);
+ * - oneThumb (One-thumb assist, accessibility): the move stick, and three 15 mm buttons for the right
+ *   thumb (dash, grenade, swap; the context slot beside them). The aim is automatic (the nearest
+ *   enemy in sight and range, else the way you move) and so is fire (Auto); a drag on empty right-side
+ *   space takes the aim over while it lasts.
+ * The preset is a setting (TouchSettings.preset, with what it implies: PRESET_SETTINGS); the layout's
+ * placements are the player's moves on top of it ("My layout"), dropped when another preset is picked.
+ */
+const CONTEXT_AT = (a: Omit<Anchor, 'corner'> & { corner?: Anchor['corner'] }): Partial<Record<ControlId, Anchor>> => {
+  const at: Anchor = { corner: 'BR', ...a };
+  return { take: at, melee: at, shield: at, reload: at, zoom: at };
+};
+
+export const PRESETS: Readonly<Record<PresetId, Readonly<Record<ControlId, Anchor>>>> = {
+  classic: CLASSIC,
+  claw: {
+    ...CLASSIC,
+    jet: { corner: 'TL', dx: 20, dy: 14, hit: 12 },
+    // the spec's 42, 12 leaves DASH and GRENADE 0.5 mm apart on a 667 px phone, and DASH under the
+    // scores button there: 40 in and 18 down keeps every gap ≥ 2 mm on all five phones
+    dash: { corner: 'TL', dx: 40, dy: 18, hit: 12 },
+    fire: { corner: 'TR', dx: 20, dy: 14, hit: 12 },
+    grenade: { corner: 'TR', dx: 40, dy: 18, hit: 12 },
+    // the arc keeps the swap pill and the context slot, in the places dash and grenade leave: at the
+    // spec's (swap 24.7, 34) the pill sits under FIRE on a 375 px tall phone
+    swap: { corner: 'BR', dx: 35.2, dy: 22.9, hit: 10 },
+    ...CONTEXT_AT({ dx: 41.1, dy: 8.7, hit: 10 }),
+    // one each side of the middle, 24 px (4 mm) apart
+    scores: { corner: 'TC', dx: -6, dy: 4, hit: 8 },
+    pause: { corner: 'TC', dx: 6, dy: 4, hit: 8 },
+  },
+  oneThumb: {
+    ...CLASSIC,
+    dash: { corner: 'BR', dx: 16, dy: 14, hit: 15 },
+    grenade: { corner: 'BR', dx: 34, dy: 14, hit: 15 },
+    swap: { corner: 'BR', dx: 16, dy: 32, hit: 15 },
+    // the spec leaves it out; Take, reload and the rest still need a place: beside swap, 12 mm
+    ...CONTEXT_AT({ dx: 34, dy: 32, hit: 12 }),
+  },
+};
+
 
 /** Where a context control sits when the player pins it to the HUD (the editor): a column left of the arc. */
 export const PINNED_ANCHORS: Readonly<Partial<Record<ControlId, Anchor>>> = {
@@ -121,8 +176,8 @@ export const REF_BOX = { w: 724, h: 344 } as const;
 export function anchorPlacement(a: Anchor, w: number, h: number): Placement {
   const px = a.dx * PX_PER_MM;
   const py = a.dy * PX_PER_MM;
-  const x = a.corner === 'BL' || a.corner === 'TL' ? px : w - px;
-  const y = a.corner === 'TL' || a.corner === 'TR' ? py : h - py;
+  const x = a.corner === 'TC' ? w / 2 + px : a.corner === 'BL' || a.corner === 'TL' ? px : w - px;
+  const y = a.corner === 'TL' || a.corner === 'TR' || a.corner === 'TC' ? py : h - py;
   return { x: x / w, y: y / h, size: (a.hit * PX_PER_MM) / Math.min(w, h), opacity: 1 };
 }
 
@@ -155,13 +210,21 @@ export interface TouchLayout {
   pinned?: ControlId[];
 }
 
+/** "My layout": the preset with controls the player moved or resized (the editor forks it). */
+export const isCustomLayout = (layout: TouchLayout): boolean => Object.keys(layout.placements).length > 0;
+
+/** Another preset picked: its places from scratch (the player's moves dropped); the pins stay. */
+export function withoutMoves(layout: TouchLayout): TouchLayout {
+  return layout.pinned?.length ? { placements: {}, pinned: [...layout.pinned] } : { placements: {} };
+}
+
 /**
  * Where a control goes in a w×h safe box (px): the player's own place if it was moved, else its mm
  * anchor (its pinned one, if pinned); mirrored for the left-handed layout.
  */
-export function placementFor(layout: TouchLayout, id: ControlId, handed: Handed, box: { w: number; h: number } = REF_BOX): Placement {
+export function placementFor(layout: TouchLayout, id: ControlId, handed: Handed, box: { w: number; h: number } = REF_BOX, preset: PresetId = 'classic'): Placement {
   const pinned = layout.pinned?.includes(id) ? PINNED_ANCHORS[id] : undefined;
-  const p = layout.placements[id] ?? anchorPlacement(pinned ?? CLASSIC[id], Math.max(1, box.w), Math.max(1, box.h));
+  const p = layout.placements[id] ?? anchorPlacement(pinned ?? PRESETS[preset][id], Math.max(1, box.w), Math.max(1, box.h));
   return handed === 'left' ? { ...p, x: 1 - p.x } : { ...p };
 }
 

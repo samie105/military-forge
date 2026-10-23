@@ -17,7 +17,7 @@ import { DEFAULT_SETTINGS, type AudioSettings, type GraphicsPreset, type Intent,
  * What training plays: a local match against bots (the default), First flight (the onboarding's range:
  * the map's targets, no match) or Live fire (a recruit's first match: 3 Easy bots, first to 5).
  */
-export type TrainingKind = 'match' | 'flight' | 'live-fire';
+export type TrainingKind = 'match' | 'flight' | 'live-fire' | 'hard';
 
 /** What main.ts gives the shell: the running game mode and how to swap it. */
 export interface GameHost {
@@ -495,10 +495,17 @@ export class ShellController {
 
   /** Live fire: a recruit's first match, against 3 Easy bots (first to 5 kills, or 3 minutes). */
   startLiveFire(): void {
+    this.train('live-fire');
+  }
+
+  /** Training of a kind (Next orders: Live fire, Normal or Hard bots); First flight is startFlight. */
+  train(kind: TrainingKind): void {
+    if (kind === 'flight') return this.startFlight();
+    if (kind === 'match') return this.go({ to: 'training' });
     this.closeOverlay();
     this.host.stop();
     this.setUrl('/');
-    this.host.startTraining(this.profile?.nickname ?? 'You', 'live-fire');
+    this.host.startTraining(this.profile?.nickname ?? 'You', kind);
     this.set({ screen: { name: 'training' }, lobby: null, connection: null, tips: false });
   }
 

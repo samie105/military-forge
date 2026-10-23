@@ -6,9 +6,10 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { useStore } from 'zustand';
 import { framesPerSecond, netHistory, NET_HISTORY } from '../../stats';
-import { getTouchSettings, onTouchChange, openTouchEditor, resetTouchLayout, setTouchSettings, type TouchSettings } from '../../touch';
-import { ASSIST_HELP, ASSIST_NAMES, DEFAULT_TOUCH_SETTINGS } from '../../touch/settings';
+import { getTouchSettings, onTouchChange, openTouchEditor, resetTouchLayout, setTouchPreset, setTouchSettings, type TouchSettings } from '../../touch';
+import { ASSIST_HELP, ASSIST_NAMES, DEFAULT_TOUCH_SETTINGS, PRESET_HELP, PRESET_IDS, PRESET_NAMES, type PresetId } from '../../touch/settings';
 import { ASSIST_LEVELS, type AssistLevel } from '../../input/assist';
+import { canVibrate } from '../../touch/platform';
 import { PadControls } from '../../gamepad/PadSettings';
 import { DEFAULT_PAD_SETTINGS } from '../../gamepad/settings';
 import { Icon } from '../../ui/Icon';
@@ -514,6 +515,14 @@ function Touch() {
           <Seg value={t.mode} label="Touch controls" options={[['auto', 'Auto'], ['on', 'On'], ['off', 'Off']]} onChange={(mode) => set({ mode })} />
         </div>
       </div>
+      {/* controls spec §4.2 (item 7): the presets; moving a control in the editor makes it "My layout" there */}
+      <div className="srow mf-srow--block">
+        <div className="srow__txt">
+          <b>Preset</b>
+          <span>{PRESET_HELP[t.preset]} Picking one sets its fire mode too.</span>
+        </div>
+        <Seg value={t.preset} label="Preset" options={PRESET_IDS.map((id) => [id, PRESET_NAMES[id]] as [PresetId, string])} onChange={(preset) => setTouchPreset(preset)} />
+      </div>
       {/* the owner, 23 Oct: "a way to fade the buttons" (touch/fade.ts); the pause menu has the slider too */}
       <div className="srow">
         <div className="srow__txt">
@@ -583,13 +592,34 @@ function Touch() {
       </div>
       <div className="srow">
         <div className="srow__txt">
-          <b>Vibrate when hit</b>
-          <span>Where the browser allows it.</span>
+          <b>Push up to jet</b>
+          <span>Push the move stick up to fly. Claw turns it off: your left index finger has a JET button.</span>
         </div>
         <div className="srow__ctrl">
-          <Switch on={t.vibrate} onChange={(vibrate) => set({ vibrate })} label="Vibrate when hit" />
+          <Switch on={t.stickJet} onChange={(stickJet) => set({ stickJet })} label="Push up to jet" />
         </div>
       </div>
+      <div className="srow">
+        <div className="srow__txt">
+          <b>Extra finger fires</b>
+          <span>A second finger on the right half, beside your aiming thumb, fires while it's down. On in Claw.</span>
+        </div>
+        <div className="srow__ctrl">
+          <Switch on={t.tapFire} onChange={(tapFire) => set({ tapFire })} label="Extra finger fires" />
+        </div>
+      </div>
+      {/* only where the browser can buzz (§4.8: iOS Safari can't) */}
+      {canVibrate() && (
+        <div className="srow">
+          <div className="srow__txt">
+            <b>Vibrate when hit</b>
+            <span>Where the browser allows it.</span>
+          </div>
+          <div className="srow__ctrl">
+            <Switch on={t.vibrate} onChange={(vibrate) => set({ vibrate })} label="Vibrate when hit" />
+          </div>
+        </div>
+      )}
       <div className="srow">
         <div className="srow__txt">
           <b>Flick to dash</b>

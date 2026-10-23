@@ -9,6 +9,7 @@
  * streaks, main guns and the MVP card as a square image aren't recorded by the match yet: the
  * standings take the middle column, and the share button shares the room (the PR lists the gaps).
  */
+import { DebriefLines } from '../../tour/DebriefLines';
 import { MatchEndReason, MatchPhase, TICK_RATE, type MatchResults, type MatchStanding } from '@military-forge/sim';
 import { useContext, useEffect, useState, type CSSProperties } from 'react';
 import { Icon } from '../../ui/Icon';
@@ -128,6 +129,8 @@ export function Results({ view, results, actions, room, training }: { view: Matc
                 </span>
               </div>
             )}
+            {/* the first few matches: what you did, one thing to try, the next order (the onboarding tour) */}
+            <DebriefLines />
           </section>
 
           <section className="res__mid" aria-labelledby="st-title">

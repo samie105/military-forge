@@ -1,7 +1,8 @@
 import { Btn } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
 import { CONTEXT_PRIORITY, DEFAULT_PLACEMENTS, MIN_TARGET_PX, OFF_HUD, PILLS, PINNABLE, PX_PER_MM, SAFE_INSETS, availableControls, loadLayout, placementFor, saveLayout, sizePx, snapPlacement, withPinned, withPlacement, type ControlId, type TouchLayout } from '../../src/touch/layout';
-import { DEFAULT_TOUCH_SETTINGS, LAYOUT_KEY, LIMITS, SETTINGS_KEY, clearLayout, loadSettings, saveSettings, type KeyValueStore } from '../../src/touch/settings';
+import { DEFAULT_TOUCH_SETTINGS, LAYOUT_KEY, LIMITS, PRESET_SETTINGS, SETTINGS_KEY, clearLayout, clearMoves, loadSettings, saveSettings, type KeyValueStore, type PresetId } from '../../src/touch/settings';
+import { isCustomLayout, withoutMoves } from '../../src/touch/layout';
 
 function memoryStore(init: Record<string, string> = {}): KeyValueStore & { data: Record<string, string> } {
   const data = { ...init };
@@ -29,11 +30,11 @@ describe('touch HUD layout', () => {
     [915, 412],
     [932, 430],
   ];
-  const lay = (W: number, H: number, layout: TouchLayout = { placements: {} }) => {
+  const lay = (W: number, H: number, layout: TouchLayout = { placements: {} }, preset: PresetId = 'classic') => {
     const box = { left: SAFE_INSETS.left, top: SAFE_INSETS.top, w: W - SAFE_INSETS.left - SAFE_INSETS.right, h: H - SAFE_INSETS.top - SAFE_INSETS.bottom };
     const unit = Math.min(box.w, box.h);
     return (id: ControlId) => {
-      const p = placementFor(layout, id, 'right', box);
+      const p = placementFor(layout, id, 'right', box, preset);
       return { x: box.left + p.x * box.w, y: box.top + p.y * box.h, d: sizePx(p, unit), box };
     };
   };
@@ -78,6 +79,70 @@ describe('touch HUD layout', () => {
       }
       for (const id of ON_HUD) if (id !== 'scores' && id !== 'pause') expect(at(id).y, `${W}: ${id} below the top band`).toBeGreaterThanOrEqual(90);
     }
+  });
+
+  it('Claw at 812×375: JET and DASH for the left index finger, FIRE and GRENADE for the right, menu and scores at the top centre (±1 px)', () => {
+    const at = lay(812, 375, { placements: {} }, 'claw');
+    const want: [ControlId, number, number][] = [
+      ['jet', 164, 94],
+      // the spec's 42, 12 (296, 82 and 516, 82) moved 2 mm out and 6 down: clear of each other and the top bar on a 667 px phone
+      ['dash', 284, 118],
+      ['fire', 648, 94],
+      ['grenade', 528, 118],
+      // the arc keeps the swap pill and the context slot, where dash and grenade were (clear of FIRE)
+      ['swap', 557, 217],
+      ['take', 521, 302],
+    ];
+    for (const [id, x, y] of want) {
+      expect(Math.abs(at(id).x - x), `${id} x ${at(id).x.toFixed(1)}`).toBeLessThanOrEqual(1);
+      expect(Math.abs(at(id).y - y), `${id} y ${at(id).y.toFixed(1)}`).toBeLessThanOrEqual(1);
+    }
+    // one each side of the middle (of the safe box), 24 px apart
+    const mid = SAFE_INSETS.left + (812 - SAFE_INSETS.left - SAFE_INSETS.right) / 2;
+    expect(at('scores').x).toBeLessThan(mid);
+    expect(at('pause').x).toBeGreaterThan(mid);
+    expect(at('pause').x - at('scores').x - (at('pause').d + at('scores').d) / 2).toBeCloseTo(24, 0);
+  });
+
+  it('Claw and One-thumb assist on five phones: primaries 12 mm (One-thumb\'s 15), nothing closer than 2 mm', () => {
+    const SHOWN: Record<Exclude<PresetId, 'classic'>, ControlId[]> = {
+      claw: ['move', 'aim', 'jet', 'dash', 'fire', 'grenade', 'swap', 'take', 'scores', 'pause'],
+      // One-thumb's aim dial shows only under a finger: not a target
+      oneThumb: ['move', 'dash', 'grenade', 'swap', 'take', 'scores', 'pause'],
+    };
+    for (const preset of ['claw', 'oneThumb'] as const)
+      for (const [W, H] of PHONES) {
+        const at = lay(W, H, { placements: {} }, preset);
+        const ids = SHOWN[preset];
+        const big = preset === 'oneThumb' ? 90 : 72;
+        for (const id of ['dash', 'grenade'] as ControlId[]) expect(at(id).d, `${preset} ${W}: ${id}`).toBeGreaterThanOrEqual(big);
+        for (const a of ids)
+          for (const b of ids) {
+            if (a >= b || (a === 'aim' && b === 'fire') || (a === 'fire' && b === 'aim')) continue;
+            const gap = Math.hypot(at(a).x - at(b).x, at(a).y - at(b).y) - (at(a).d + at(b).d) / 2;
+            expect(gap, `${preset} ${W}: ${a}/${b} gap`).toBeGreaterThanOrEqual(12);
+          }
+      }
+  });
+
+  it('a preset sets what it implies; the moves made on the old one go, the pins stay', () => {
+    expect(PRESET_SETTINGS.claw).toMatchObject({ fire: 'button', stickJet: false, tapFire: true, leftFire: false });
+    expect(PRESET_SETTINGS.oneThumb).toMatchObject({ fire: 'auto', stickJet: true, tapFire: false });
+    expect(PRESET_SETTINGS.classic).toMatchObject({ stickJet: true, tapFire: false });
+    const moved: TouchLayout = { placements: { dash: { x: 0.5, y: 0.5, size: 0.2, opacity: 1 } }, pinned: ['melee'] };
+    expect(isCustomLayout(moved)).toBe(true);
+    expect(withoutMoves(moved)).toEqual({ placements: {}, pinned: ['melee'] });
+    expect(isCustomLayout(withoutMoves(moved))).toBe(false);
+    // the same before the HUD has loaded: on the saved layout
+    const store = memoryStore();
+    saveLayout(store, moved);
+    clearMoves(store);
+    expect(loadLayout(store)).toEqual({ placements: {}, pinned: ['melee'] });
+    // settings: a preset loads as saved; anything else is Classic
+    saveSettings(store, { ...DEFAULT_TOUCH_SETTINGS, preset: 'claw', ...PRESET_SETTINGS.claw });
+    expect(loadSettings(store)).toMatchObject({ preset: 'claw', fire: 'button', stickJet: false, tapFire: true });
+    store.setItem(SETTINGS_KEY, JSON.stringify({ preset: 'thumbs' }));
+    expect(loadSettings(store).preset).toBe('classic');
   });
 
   it('pinned controls (the editor) get their own places, clear of the HUD and of each other', () => {

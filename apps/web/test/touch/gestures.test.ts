@@ -3,7 +3,7 @@ import { Btn } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
 import { GESTURE, beltAfter, beltOf, beltSteps, cyclePresses, dashButtons, isQuickSwipe, nearestPick, pinchSteps, radialAngles, radialPick, radialSpots, swipeAxis } from '../../src/touch/gestures';
 import { DEFAULT_TOUCH_SETTINGS, sanitizeSettings } from '../../src/touch/settings';
-import { DRILL, Drill, HINTS, loadSeen, nextHint, saveSeen } from '../../src/touch/teach';
+import { DRILL, Drill, FIRE_HOW, HINTS, drillControl, drillHow, loadSeen, nextHint, saveSeen } from '../../src/touch/teach';
 
 describe('swipes on a button', () => {
   it('a quick swipe: far enough, soon enough; a slow drag or a twitch is not one', () => {
@@ -157,5 +157,20 @@ describe('the drill', () => {
     const controls = new Set(DRILL.map((s) => s.control));
     for (const c of ['move', 'aim', 'dash', 'grenade', 'swap', 'reload', 'melee', 'shield', 'zoom', 'take', 'scores'] as const) expect(controls.has(c)).toBe(true);
     expect(DRILL.find((s) => s.id === 'jet')!.how).toMatch(/fuel/);
+  });
+
+  it('the drill follows the layout: JET when the stick doesn\'t jet, FIRE in Fire button mode, automatic fire in One-thumb', () => {
+    const step = (id: string) => DRILL.find((s) => s.id === id)!;
+    const classic = { fire: 'pull', stickJet: true, preset: 'classic' } as const;
+    const claw = { fire: 'button', stickJet: false, preset: 'claw' } as const;
+    const one = { fire: 'auto', stickJet: true, preset: 'oneThumb' } as const;
+    expect(drillControl(step('jet'), classic)).toBe('move');
+    expect(drillControl(step('jet'), claw)).toBe('jet');
+    expect(drillHow(step('jet'), claw)).toMatch(/Hold JET/);
+    expect(drillControl(step('fire'), claw)).toBe('fire');
+    expect(drillHow(step('fire'), claw)).toBe(FIRE_HOW.button);
+    expect(drillHow(step('fire'), one)).toMatch(/automatic/);
+    expect(drillControl(step('fire'), one)).toBe('aim');
+    expect(drillHow(step('dash'), claw)).toBe(step('dash').how);
   });
 });
