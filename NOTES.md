@@ -784,7 +784,7 @@ Of the 190, 143 were under 40 HP when the cloud popped and 14 were whited out by
   - Config: `--bots=<n>` / `BOTS` and `--bot-level=` / `BOT_LEVEL` on the game server (bots take the dummies' place in the default room). `pnpm playtest` fills rooms to 4 Normal bots by default (`--bots`, `--bot-level`).
   - The lobby shows a BOT badge where a person has a ready dot, and its "ready" count is people only.
   - **Replays (review L3):** `ReplayFile.bots` records each bot's seed serial, join tick and leave tick (`botSpecs`). `botReplaySetup` adds and removes them at those ticks through a new per-tick replay hook, so a game whose bots came and went replays bit-identically (`test/rooms.test.ts`). Replays from before these fields: every bot from the start, in order.
-  - **Nav graphs (L6):** the cache keeps 4 tunings per map (least recently used out), and `warmNavGraphs(maps)` builds them up front: the game server does it at startup when bots are on, so the first bot doesn't stall every room for 90–270 ms.
+  - **Nav graphs (L6):** the cache keeps 4 tunings per map (least recently used out), and `warmNavGraphs(maps)` builds them up front: the game server does it at startup when bots are on, so the first bot doesn't stall every room for 90–270 ms. Since §37, rooms never build one on a tick: builds run between ticks.
   - Checked end to end with `pnpm playtest --local`: a room opened with 3 `[BOT]` players in the lobby (BOT badges), the host started at once, bots fought the warm-up and the match and came for the idle human, with no console errors.
 - **Next:** bots throwing smoke, flashbangs, gas, mines and EMP; the host choosing the number of bots and their level in the lobby (a MatchSettings field).
 
@@ -974,7 +974,7 @@ Every gun with a W8 model that fires bullets now has stats (`packages/content/sr
 1. **Latency spikes made the client yo-yo.** Inputs arrived late, the pacer jumped ahead (a lurch: the fast-forward runs the held input), then the queue drained and it jumped back (a freeze). 116 jumps in 6 minutes on the MTN profile (now 1). Now a spike is ridden out: a jump needs 5 s off, or more than 2 s behind (a tab that slept), or more than 30 ticks ahead.
 2. **Presses lost.** An input that came after its tick was dropped, and a tap with it: dashes and throws the client showed never happened. Late presses are now applied on the next tick, once.
 3. **Own grenades appeared a round trip late**, from where the hand had been. They now fly from the throw (`ownProjectiles.ts`). The 3D view needs its owner to wire `net.ownGrenadeViews()` and `net.predictsGrenade(id)` into `render3d/online.ts`'s timeline; the 2D view has it now.
-4. **Lag compensation capped every shot at ≥ 175 ms RTT** (300 ms total). It's now 500 ms by default, and `LAG_COMP_MAX_MS` on a server (the trial box: 900).
+4. **Lag compensation capped every shot at ≥ 175 ms RTT** (300 ms total). It's now 500 ms by default, and `LAG_COMP_MAX_MS` on a server (the trial box: 900). Since §38: 450 ms, the cover rule, and no `LAG_COMP_MAX_MS`.
 5. **Remote players froze** whenever ±40 ms jitter or a lost snapshot outran the fixed 100 ms interpolation delay. It now adapts to 50–200 ms.
 6. **Over WebSocket, jitter starved the server of inputs.** The pacer now keeps a cushion of up to 6 ticks after late inputs.
 
@@ -1070,3 +1070,164 @@ Snapshot sizes and data are unchanged (a 2-player room: ~1.9 KB/s down, 64–85 
 - **Map events:** `EventTimeline` (model.ts) turns the frame's warning/active into warning → impact (900 ms) → active → all-clear (1.8 s); a late join skips the impact; a new event takes over at once. The warning has a hazard head, the kind's icon with a gravity arrow, the name, the effect, and a countdown digit that stamps each second in a draining ring; the impact stamps the name between two shock lines in the upper third, then lifts into the strip; the strip shows the effect in a few words, the seconds and a draining bar; the all-clear says what is back. Screen treatments under the plates (`.mf-evfx[data-kind]`): surge pressure lines and a top-heavy vignette, low-gravity motes and a float on the corner plates, EMP static and a HUD flicker (desktop, two dips a second, off with Reduce flashes), fog haze, gust streaks, flip chevrons that turn over at the impact. The warning edges the screen in hazard tape. The audio director ticks the warning's last three seconds (`ui.count`); the siren, the start sting and the end blip were already there.
 - **Polish:** the kill confirm (TAKEN OUT, the name stamped again on each kill, a headshot tag, the streak: "2 down" … "Unstoppable"), the respawn digit stamps each second, and the spectator bar's visuals (watching, prev/next, Join next round) are in place, hidden, for when spectating lands with netcode.
 - **Rules kept:** transform and opacity only, nothing transitions a per-frame value; Reduce motion stops it all (kit.css); no new backdrop blur on the phone; on phones that drop frames (`mf-glass-off`) and Low graphics the treatments hold still; status is always colour + icon + word.
+## 34. Platforms drawn solid now stop bullets (23 Oct 2026, QA's "bullets pass through obstacles")
+
+> The owner still sees "bullets pass through obstacles". QA (qa-bullets-lag-touch.md §1) found one-ways drawn solid that let bullets through: every one-way is `OneWay|BulletPass` unless `blocksBullets`, and maps without a kit draw them as 0.22 m slabs.
+
+- **The rule (owner, 18 Oct):** slabs and roofs block bullets; anything bullets pass must read clearly as passable. Every one-way on every map is drawn as a slab, zinc sheet or canopy, so **all of them now carry `blocksBullets`**:
+  - Flux Lab catwalks (4..24, 86..106 at 7 m);
+  - Lunar Outpost (20..26 and 94..100 at 6 m, 10..14 and 106..110 at 5 m);
+  - Storm Front (the piers at 4 m, the 12, 11 and 18 m ledges);
+  - mechanics-test and movement-test;
+  - Street Market's stall awnings and umbrella canopies. §18's "One-way slabs" left them see-through as sheet and cloth; they look solid, so they block now. The kit marks the two pieces (`build_market_kit.py`) and `compile_map.py` writes the flag: 21 of 21 one-ways.
+- **Kit GLBs:** only the two pieces' extras changed. They were patched into the committed GLBs (art and runtime), and the mesh bytes are identical. A Blender rebuild with the updated script gives the same extras, but its mesh bytes drift (float noise), so it wasn't committed.
+- **Bodies are unchanged:** a slab is still one-way. You fly up through it, stand on it, and drop through it.
+- **What changes:** bullets, ricochets, blasts, gas, flashes and sight lines stop at these platforms from either side, and grenades bounce off their undersides.
+- **Bots:** their line of fire and sight (`BulletPass` masks) now treats these platforms as walls, so they stop shooting at players who stand above or below one; nav is unchanged (bodies). The three bot goldens re-recorded for that; soak and behaviour tests pass. No sim golden moved (no replay shot through a platform).
+- **Guard:** content.test.ts fails on any see-through one-way not listed (the list is empty). A future grate or torn canopy needs art that reads as passable first.
+
+## 35. Bullet-only colliders and the Street Market's missing ones (23 Oct 2026, QA's "bullets pass through obstacles")
+
+- **The gap (qa-bullets-lag-touch.md §1):** Street Market kit parts drawn on the gameplay plane had no collider, so bullets flew through them: the minibus underside (0–0.35 m), the catwalk's front plate, the balcony handrails, the stall posts, the tank tower's legs, the umbrella poles and the billboard masts.
+- **A new collider kind, `MapDef.bulletOnly`:** polygons that stop bullets (hitscan, ricochet legs, the muzzle guard) and the bots' line of fire, and nothing else.
+  - They sit outside the collision grid, so bodies, grenades, projectiles, blasts, gas, sight, nav and the renderers' probes never see them, and movement can't snag on a post.
+  - `CollisionWorld.raycastBullet` = `raycast` plus a scan of them (a few dozen edges, brute force); the nearer hit wins.
+  - An edge counts only from outside, so a shooter standing at a pole can still shoot out of it.
+  - Map JSON and the schema take `bulletOnly` (default material metal).
+  - The bots use `raycastBullet` for their line of fire and spot choice, so they don't shoot into poles. Choosing cover still uses walls only, so a thin pole isn't cover.
+  - render3d's impact spark looks the surface up with `raycastBullet` (one line in vfx/gunfire.ts), so a hit on a pole sparks as steel.
+  - The 2D view outlines bullet-only parts.
+- **Street Market:** the kit's new `bulletOnly` extra carries 57 parts: 2 stall posts per stall, the umbrella pole (steel), the tank tower's 2 legs and 2 braces, the billboard's 2 masts and the catwalk's front plate (x −4..4, y 10–10.8), and every balcony's 3 posts and top rail (steel). The minibus body solid now reaches the ground, closing its 0.35 m gap for bullets and rolling grenades; nobody fits under it anyway.
+  - The committed GLBs got only the changed extras; the mesh bytes are untouched (a Blender rebuild with the script gives the same extras).
+  - compile_map.py writes them. The sightline lint is unchanged: thin parts aren't sight blockers.
+- **Probe tests:** `packages/sim/test/bulletOnly.test.ts` covers:
+  - the rules: both sides stop a shot, a shot over the top is clear, a shot from inside leaves, the world in front wins, a player walks through, a real shot stops at a post;
+  - a ray fired at each Street Market part, which stops on it.
+- **Goldens:** none moved (no replay shoots at these parts or rolls a grenade under a bus).
+
+## 36. Tracers fly the sim's ray (23 Oct 2026, QA's "bullets pass through obstacles", L)
+
+- **The gap (qa-bullets-lag-touch.md §1):** render3d drew the tracer from the drawn muzzle to the shot's end. The drawn gun sits below the sim's 1.08 m shoulder line (the ray starts there), so a shot that cleared a 1.0 m crate was drawn cutting through it.
+- **The fix:** `vfx/gunfire.ts`:
+  - the bolt and its path line now run along the sim's own ray, from the shot's `ox, oy` (the sim muzzle, on the ray) to `ex, ey`, at the drawn gun's depth;
+  - the flash stays on the drawn muzzle;
+  - a short joiner line in the tracer's tint (0.06 s, like the path) bridges the drawn muzzle to the ray's start, so the streak still reads as leaving the gun;
+  - the impact's direction is the sim ray's too.
+  
+  A drawn path can no longer cross a collider the sim ray didn't. The joiner spans only the gap between the gun and the ray, within the gun's own reach.
+- **Not fixed: parallax.** Front faces stand 0.6–1.1 m in front of the gameplay plane, so under the perspective camera they look up to 0.3–0.58 m wider than their colliders near the screen edges. A shot that clears a collider's corner there can still look as if it grazes the front face. A fix would mean drawing the gameplay plane orthographically or pulling front faces back to the plane, and neither is cheap; it's left for render3d-b and art.
+- **Test:** `render3d/test/gunfire.test.ts`: with the drawn gun 0.3 m under the sim line, the bolt and the path lie on the sim line and the joiner meets the gun.
+
+## 37. Warm-up draws every effect once (23 Oct 2026, QA's first-use and match-start hitches)
+
+- **The report (qa-bullets-lag-touch.md §2):** in headless software GL, the first dash, grenade, shot and jet each hitched (350, 300, 90 and 83 ms), and long tasks of 346–626 ms showed up in the first ~5 s of a match.
+- **The cause, for the GL part:** the load's warm-up only *compiled* programs (`compileAsync`). It didn't *draw*, except for the shadow pass on High. Drivers that build a pipeline, or upload a texture or buffer, on an object's first draw did that work mid-game. A probe that logs every (object, material state) the renderer draws for the first time found these new on first use:
+  - the grenade meshes (each type);
+  - the particle layers (glow, smoke, decals, the blast flipbooks, the Forge muzzle flashes);
+  - the throw arc;
+  - the casings;
+  - the dash trail.
+- **The fix (render3d, hook-shaped):**
+  - `Vfx.showForWarmUp(x, y, ghost)` puts every effect on show: the meshes of their own as before, plus a sprite in every particle layer (each blend and depth state), a grenade of each type (`GrenadeRenderer.showForWarmUp`), and an afterimage of a warm-up soldier (`DashGhosts.showForWarmUp`, whatever the tier's `max`, so a later tier with afterimages doesn't build its material mid-game).
+  - `Renderer3D.warmUp` then draws one real frame on **every** preset (it used to on High only). `endWarmUp()` takes it all down.
+- **Measured** with headless Chrome, first use then second use, local training:
+
+| Run | First dash | First jet | Objects drawn for the first time after the warm-up |
+|---|---|---|---|
+| Software GL (SwiftShader), HUD hidden, before | 283 ms | — | 19 objects over the first 6 s and the first actions, plus 1 texture and 4 geometries on the dash |
+| Software GL (SwiftShader), HUD hidden, after | 67 ms | 17 ms | none |
+| Software GL (SwiftShader), HUD shown, before | 333 ms | 317 ms | — |
+| Software GL (SwiftShader), HUD shown, after | ~217 ms | 50–150 ms | — |
+| **Real GPU** (ANGLE Metal, M2 Pro, High), before | 17 ms | 17 ms | — |
+| **Real GPU** (ANGLE Metal, M2 Pro, High), after | 17 ms | 17 ms | — |
+
+  On the real GPU every action, and the first 6 s of a match, is 17 ms frames both before and after, and nothing is drawn for the first time after the warm-up. The QA numbers came from software GL. Phones, whose drivers build pipelines lazily, are where the warm-up should count.
+- **Not fixed: the HUD.** With the HUD shown, software GL still pays ~150–200 ms on the first dash and jet. That is the HUD's first animations and composited layers being rasterised in software. Phones raster on the GPU; the UI agents could warm those states during the loading screen if a real phone shows it.
+- **Not fixed: the match-start stall in software GL.** With the warm-up, no new objects are drawn in the first 6 s, but dynamic resolution steps the render scale down every second on a slow device, and each step is a `setSize` (a drawing-buffer realloc; 194 ms in QA's software profile). Clean on the real GPU. A smaller first scale for slow devices, or rendering at a viewport inside a fixed buffer, would avoid it.
+- **The tier governor (render3d/index.ts):** it doesn't recompile shaders mid-match between Low and Medium. On the real GPU, `setPreset` medium → low → medium cost one 17 ms frame and +0 programs. High → medium (the sun's shadows off) took one 50 ms frame. Medium → high re-linked 3 programs, the shadow variants three had released. Phones' Auto ceiling is below High, so their switches don't recompile.
+
+
+## 38. Bots' nav graphs build between ticks, never on one (23 Oct 2026, QA: "bullets, lag, touch")
+
+QA found the whole server froze when a bot came in under a tuning the server hadn't built a nav graph for. `fillWithBots` runs inside `Room.tick`, and `addBot` built the graph there, synchronously: 263–330 ms on the shipped maps, during which every room on the process stopped. It happened with the admin page's values (the first room after each restart), a bot refilling a slot in a host-tuned room, a host's map switch, and LRU churn. A grenade-scale change rebuilt too, though it can't change a graph.
+
+- **The key is the movement tuning only** (`navKey`). Health, respawns, the aim origin, grenade throw and blast scales, and the touch flick don't reach the movement code, so they don't rebuild (a test builds both and compares). Every other field does: the probe flies the real movement code with the whole tuning.
+- **Builds are steps:** `navGraphSteps` is the same build as a generator (a settle, a walk or a flight per step: p99 0.3–0.8 ms, at most 2.5–3.2 ms cold), and makes the identical graph (the golden tests pass unchanged).
+- **Rooms never build:** a room asks with `requestNavGraph`. If the graph isn't ready, the build is queued and the new bot comes in on the map's newest graph meanwhile; with none for the map (a first switch to it), the bot waits. Bots already in keep the graph they came with, as before.
+  - The queue runs the most recently asked-for build first: a host dragging a slider wants the last value. It holds at most 8; a room that still wants a dropped build asks again on its next fill.
+  - Rooms ask as soon as their tuning or map changes (admin values, a host's Tune edit, bots switched on, a map switch), so the graph is usually ready before a bot needs it.
+- **Spare time builds them:** the server's tick loop lends up to 6 ms of each gap between ticks to `workNavBuilds`, and never the last 4 ms before the next tick (`loop.ts` `onIdle`; a local room's worker does the same). The 10 s room report shows `nav builds N ms between ticks`.
+- **Startup** builds the rooms' map for the tuning the rooms start on (the admin page's saved values) and for the defaults, before anyone joins, and queues the other maps for spare time.
+- **A host's map switch** now takes the bots out and brings them back on the new map's graph. Before, they kept navigating the old map's graph and mechanics.
+- **Measured** with a real tick loop on Street Market. The admin page sends a jet-thrust nudge, gravity and fuel (a tuning the server hasn't seen), and the room adds a bot. Three runs each, on a busy Mac (load 13–25):
+
+  | | Longest tick | Longest gap between ticks | Ticks dropped | Graph ready after |
+  |---|---|---|---|---|
+  | Before (built on the tick) | 333–685 ms | 333–685 ms | 15–36 | the same tick |
+  | After (between ticks) | 2.3–2.6 ms | 18–21 ms (no build: 18–27 ms) | 0 | 0.9–1.2 s |
+
+  The new bot came in at once on the previous graph. `test/navBuilds.test.ts` checks that no tick takes over 40 ms of CPU and that no tick finishes a build, while a new tuning arrives and while a map switch waits for its graph. The old code fails it: one tick took 658 ms.
+
+
+## 39. Lag compensation: a 450 ms cap and the cover rule (23 Oct 2026, QA: "bullets, lag, touch")
+
+QA found players on the trial box being hit after reaching cover. The box rewound shots up to 900 ms (`LAG_COMP_MAX_MS='900'` in cloud-init, chosen for 500 ms phones), so a player could be hit for up to 0.9 s after reaching cover on their own screen: 3.6 m at a walk, more with a dash. From the victim's side it looks like bullets pass through walls.
+
+- **The cap is 250 ms of latency** on top of the most a shooter's view can lag (200 ms of interpolation), so 450 ms of rewind at most (it was 300 + 200). A shot needs RTT + input buffer + interpolation: netfeel's p95 is 130 ms on a LAN, 300 ms at the trial box's 110 ms, 380 ms at 150 ms ±40 and 530 ms at 250 ms. So every shot up to ~250 ms RTT lands where it was aimed, and beyond that players lead their shots.
+- **The cover rule** (sim `rewind.ts`): a rewind longer than 150 ms (9 ticks) doesn't count against a target that is behind solid cover now. Cover means level geometry that stops a bullet lies between the shot's origin and the target's head, torso and legs alike. The shot is then tested against where the target is, so the wall takes it. A shorter rewind, or a target still partly in the open, is rewound as usual. `LagCompensator.covers` counts these; the debug log marks them.
+- **Tunable:** `LAG_COMP_LATENCY_MS` (0–1000) sets a server's latency cap. The admin page's **Network › Lag compensation** (`net.lagCompMs`) changes it live in every room, and clearing it gives each room its own value back. `LAG_COMP_MAX_MS` (a total) is no longer read: a box that still has it logs that at startup and runs the new cap. cloud-init no longer sets it.
+- **Shooting range** (a shooter on a tower taps at a target walking 5 m/s below, aiming where its screen draws it; 3 × 60 s per row). "Moved" is how far the target had gone since the pose its hit was tested at, which is what the target feels as being hit late.
+
+  | profile | 900 ms total (old box) | 300 + view (old default) | **250 + view (new)** | 200 + view |
+  |---|---|---|---|---|
+  | LAN, trial box 110 ms, 150 ms ±40 | 100% | 100% | **100%** | 100% |
+  | Bad (250 ms, 10% in bursts) | 100% · moved p95 2.7 m | 100% | **93% · 2.3 m** | 72% |
+  | MTN 4G (500 ms, spikes to 1.3 s) | 88% · moved p95 3.9 m | 22% | **19% · 2.3 m** | 18% |
+
+- **Cover range** (a shooter on an 8 m ledge, a target walking 5 m/s under a slab that hides it from the ledge half the time; 2 × 40 s, 72 shots). The column is how many hits landed on a target that was already behind cover at the server's present:
+
+  | profile | old box (900 ms, no rule) | 250 + view, no rule | **250 + view + cover rule** |
+  |---|---|---|---|
+  | LAN (20 ms) | 2 of 36 hits | 2 of 36 | **2 of 36** (rewinds under 150 ms) |
+  | trial box (110 ms ±15, 5%) | 6 of 28 | 6 of 28 | **1 of 23** |
+  | 150 ms ±40, 3% | 9 of 33 | 9 of 33 | **0 of 24** |
+  | Bad (250 ms) | 11 of 29 | 11 of 29 | **0 of 18** |
+  | MTN 4G | 8 of 21 | 2 of 9 | **0 of 7** |
+
+- **The trade-off:**
+  - Players under ~250 ms RTT lose nothing.
+  - Players on 500 ms mobile paths (the owner on MTN) hit a walking target 19% of the time instead of 88%, unless they lead it by about 0.3 s (~1.3 m). Their targets are hit at most 2.3 m late instead of 3.9 m.
+  - The cover rule costs only the hits on targets already behind cover, at any ping.
+  - If high-ping play matters more on a box, raise `net.lagCompMs` on the admin page (500 ms gives 700 ms of rewind). The cover rule still protects players behind cover.
+
+
+## 40. Latency spikes: remote players carried on, corrections that slide or jump (23 Oct 2026, QA: "bullets, lag, touch")
+
+QA measured two effects of latency spikes in netfeel. Remote players froze 18.9% of frames on the "bad" WebSocket profile: past the newest snapshot they were held, and nothing extrapolated. Corrections on the spike profiles pulled the drawn local player back at up to 32 m/s: rubber-banding.
+
+- **Remote players are carried on** past the newest snapshot (`interpolation.ts` `extrapolationTicks`, `NetClient.remotePose`).
+  - They keep the snapshot's velocity (on the wire for this since v1) in full for 50 ms, then slow evenly to a stop at 150 ms (100 ms of motion at most), and are held after that.
+  - A carried-on player stops a body's half-width short of a wall and half a body short of a floor or ceiling (the prediction's map), and a dead one isn't carried on.
+  - The server's lag compensation tests shots against where the player really was at that render tick, and the carried-on pose is nearer to it than a frozen one.
+  - Both views draw remote players through `remotePose`, so the 3D view has it with no render3d change.
+- **Corrections slide or jump** (`predictor.ts`):
+  - The 80 ms exponential still smooths small errors over several frames, but never pulls the drawn player faster than 8 m/s (`CORRECTION_PULL_MAX`, ~1.6× a walk).
+  - An offset past 2 m (`CORRECTION_SNAP`; one correction, or several in a row adding up) is one jump instead of a long drag that would leave the drawn player far from where its shots start.
+  - Above 3 m (respawns, teleports) it was always a jump.
+- **What doesn't change:** the corrections themselves. On the spike profiles the server runs for half a second on the player's last input and then on none, because the phone's inputs are a second late. That divergence is what gets corrected.
+  - Repeating the last input for longer made it worse: on the MTN profile, a 1 s repeat gave 228 corrections/min against 188, and 1.5 s gave 240. A held input goes stale as fast as letting go does.
+  - The fix for those players is the path (WebTransport, a nearer box: NOTES §30).
+- **netfeel** (3 × 60 s per profile; client 0 plays every action; the other player now in every snapshot, so the new smoothness table can draw it):
+
+  | profile | via | correction pull p99 / max | visible correction p99 / max | corrections shown as a jump /min | other player held still | other player off p99 / max | other player pops /min |
+  |---|---|---|---|---|---|---|---|
+  | 150 ms ±40, 3% | WS | 0.05 / 4.5 → 0.05 / 4.5 m/s | 0.3 / 32 → 0.3 / 32 cm | 0.4 → 0.4 | **3.2% → 0.0%** | **12 / 64 → 2 / 14 cm** | **7.2 → 0** |
+  | 250 ms, 10% bursts | WT | 0.27 / 5.7 → same | 1.9 / 40 → same | 0.4 → 0.4 | 0.2% → 0.0% | 6 / 37 → 6 / 23 cm | 0.4 → 0 |
+  | 250 ms, 10% bursts | WS | 0.41 / 11.2 → 0.46 / **8.0** m/s | 3.0 / 81 → 3.3 / 91 cm | 1.2 → 1.2 | **18.9% → 0.0%** | **65 / 145 → 15 / 42 cm** | **63.6 → 2.4** |
+  | MTN 4G (500 ms, +1 s spikes) | WT | **15.7 / 32.3 → 8.0 / 8.0** m/s | 111 / 234 → 119 / **187** cm | 6.0 → 13.6 | 0% → 0% | 1 / 11 → same | 0 → 0 |
+  | Lagos box, est., same spikes | WT | **13.8 / 32.3 → 8.0 / 8.0** m/s | 99 / 232 → 94 / **181** cm | 1.2 → 7.6 | 0% → 0% | 1 / 7 → same | 0 → 0 |
+  | Lagos box, est., no spikes | WT | 0.16 / 25.4 → 0.04 / **6.1** m/s | 1.1 / 184 → 0.3 / **43** cm | 0 → 0.4 | 0% → 0% | 2 / 8 → same | 0 → 0 |
+
+  "Other player held still" is past the newest snapshot and past the extrapolation. Before, every frame past the newest snapshot was held.
+- **Hits** on the shooting range are unchanged at every profile (100% up to 250 ms, 22% on MTN at the default cap): the shooter aims where its screen draws the target, carried on or not.
+- **The trade-off and the knobs:** on the spike profiles, the 2–3 m corrections that used to be quick drags (up to 32 m/s) are now jumps, 13.6 a minute on MTN instead of 6. Smaller ones slide at no more than 8 m/s. A higher `CORRECTION_SNAP` gives fewer jumps and longer drags: at 2.5 m, MTN had 10 jumps a minute and the drawn player trailed 151 cm at p99. A lower one gives the reverse: at 1.5 m, 18 jumps a minute and 85 cm.

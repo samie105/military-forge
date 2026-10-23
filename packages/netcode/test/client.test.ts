@@ -2,7 +2,7 @@ import { FRAG, K47, adminField, createTuning } from '@military-forge/content';
 import { CmdKind, MsgType, decodeMessage, encodeOverrides, encodePong, encodeRoster, encodeSnapshot, encodeWelcome } from '@military-forge/protocol';
 import { Game } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
-import { NetClient, swingAt } from '../src';
+import { NetClient, REMOTE_EXTRAPOLATE_TICKS, extrapolationTicks, swingAt } from '../src';
 
 function welcomed(resumed = false, client?: NetClient) {
   let now = 0;
@@ -240,5 +240,43 @@ describe('a remote swing at the render tick (v16)', () => {
     expect(swingAt(0, 100, 2, 102, 100.5)).toBe(0); // not yet
     expect(swingAt(35, 100, 0, 102, 101)).toBe(36); // ending within the gap: carried at most the gap
     expect(swingAt(35, 100, 1, 102, 101)).toBe(36); // a fresh swing at 102: the old one until then
+  });
+});
+
+describe('a remote player past the newest snapshot (a late or lost one)', () => {
+  it('is carried on along its velocity for a moment, slowing to a stop, then held; never into a wall; a dead one stays put', () => {
+    const { net, game, me, advance } = welcomed();
+    const runner = game.addPlayer('runner');
+    // runs right at the thin wall of the shooting range (x 160–160.4)
+    runner.x = 158.9;
+    runner.y = 0;
+    let seq = 0;
+    const snapshot = () => {
+      runner.vx = 6;
+      game.step([]);
+      advance(33);
+      net.receive(encodeSnapshot(game, ++seq, []));
+    };
+    net.receive(encodeRoster([me, runner].map((p) => ({ id: p.id, name: p.name, isBot: false, since: 0 }))));
+    for (let i = 0; i < 4; i++) snapshot();
+    const newest = net.snapshots.at(-1)!.msg;
+    const pb = newest.players.find((p) => p.id === runner.id)!;
+    expect(pb.vx).toBeGreaterThan(3);
+    const pose: Parameters<typeof net.remotePose>[2] = { x: 0, y: 0, src: null!, meleeTicks: 0 };
+    const at = (ahead: number) => net.remotePose(runner.id, newest.serverTick + ahead, pose)!.x;
+    expect(at(0)).toBeCloseTo(pb.x, 6);
+    // full speed for 3 ticks, then slowing: 6 ticks of motion at most, from 9 ticks on
+    expect([0, 1, 3, 6, 9, 12].map(extrapolationTicks)).toEqual([0, 1, 3, 5.25, 6, 6]);
+    expect(at(2)).toBeCloseTo(pb.x + (pb.vx * 2) / 60, 6);
+    expect(at(REMOTE_EXTRAPOLATE_TICKS)).toBeCloseTo(at(REMOTE_EXTRAPOLATE_TICKS + 30), 9); // then held
+    // 6 ticks at its speed would take it into the wall: it stops a body's half-width short
+    expect(pb.x + (pb.vx * 6) / 60).toBeGreaterThan(160 - 0.35);
+    expect(at(REMOTE_EXTRAPOLATE_TICKS)).toBeCloseTo(160 - 0.35, 3);
+    // a dead player isn't carried on
+    runner.alive = false;
+    snapshot();
+    const last = net.snapshots.at(-1)!.msg;
+    const dead = last.players.find((p) => p.id === runner.id)!;
+    expect(net.remotePose(runner.id, last.serverTick + 5, pose)!.x).toBe(dead.x);
   });
 });

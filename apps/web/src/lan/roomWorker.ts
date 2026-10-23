@@ -8,6 +8,7 @@
  *                   {t:'disconnect', id, resumable} · {t:'close', code, reason}
  *   worker → page   {t:'send', id, bytes} · {t:'kick', id, code, reason}
  */
+import { workNavBuilds } from '@military-forge/bots';
 import { Room, type Client, type ClientConn } from '@military-forge/game-server/room';
 import { TICK_RATE } from '@military-forge/sim';
 import { LOCAL_ROOM_RULES, type RoomWorkerOptions } from './rules';
@@ -21,6 +22,9 @@ type In =
 
 const TICK_MS = 1000 / TICK_RATE;
 const MAX_CATCH_UP = 5;
+/** spare time between ticks lent to nav graph builds (ms; game-server loop.ts's numbers) */
+const IDLE_MAX_MS = 6;
+const IDLE_MARGIN_MS = 4;
 const scope = self as unknown as { postMessage(msg: unknown, transfer?: Transferable[]): void; onmessage: ((ev: MessageEvent<In>) => void) | null };
 
 let room: Room | null = null;
@@ -37,6 +41,11 @@ function tick(): void {
     steps++;
   }
   if (now - next > TICK_MS * MAX_CATCH_UP) next = now + TICK_MS;
+  // the bots' nav graph (a new map or tuning) builds between ticks, as on the server (loop.ts)
+  if (steps > 0) {
+    const end = Math.min(performance.now() + IDLE_MAX_MS, next - IDLE_MARGIN_MS);
+    if (performance.now() < end) workNavBuilds(() => performance.now() >= end);
+  }
 }
 
 scope.onmessage = (ev) => {

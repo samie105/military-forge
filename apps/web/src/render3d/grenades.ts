@@ -183,6 +183,9 @@ export interface GrenadeFx {
   glow: ParticleLayer;
 }
 
+/** scratch for showForWarmUp */
+const _warmM = new Matrix4();
+
 export class GrenadeRenderer {
   readonly tracker: GrenadeTracker;
   readonly body: InstancedMesh;
@@ -233,6 +236,26 @@ export class GrenadeRenderer {
   /** A new map (Vfx.setMap). */
   setWorld(world: CollisionWorld): void {
     this.tracker.setWorld(world);
+  }
+
+  /** One of it at (x, y), body and hull, so the warm-up draws it (Vfx.showForWarmUp); its next update hides it. */
+  showForWarmUp(x: number, y: number): void {
+    _warmM.makeTranslation(x, y, 0);
+    this.body.setMatrixAt(0, _warmM);
+    this.hulls.setMatrixAt(0, _warmM);
+    this.body.count = 1;
+    this.hulls.count = 1;
+    for (const m of this.meshes) {
+      m.instanceMatrix.needsUpdate = true;
+      m.visible = true;
+    }
+  }
+
+  endWarmUp(): void {
+    for (const m of this.meshes) {
+      m.count = 0;
+      m.visible = false;
+    }
   }
 
   setModel(model: ThrowableModel): void {

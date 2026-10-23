@@ -9,7 +9,7 @@
  * - `content`: a number on a weapon, grenade or projectile definition, changed in place in this
  *   module's objects (`applyContentOverrides`) on the server and, from the OVERRIDES message, on
  *   every client, so the sim and its prediction read the same numbers;
- * - `server`: pickups, bots and the match, which only the game server runs.
+ * - `server`: pickups, bots, the match and lag compensation, which only the game server runs.
  * Every range stays inside what the protocol carries (a magazine fits u8, a fuse u9 ticks, a
  * flashbang's white-out the blind ticks, and so on).
  */
@@ -247,6 +247,12 @@ add({ key: 'bots.count', group: 'Bots & match', section: 'Bots', label: 'Fill ro
 add({ key: 'bots.level', group: 'Bots & match', section: 'Bots', label: 'Level (0 easy, 1 normal, 2 hard)', min: 0, max: 2, step: 1, def: 1, scope: 'server' });
 add({ key: 'match.timeLimit', group: 'Bots & match', section: 'Match', label: 'Time limit (s)', min: 60, max: 1200, step: 30, def: 300, scope: 'server' });
 add({ key: 'match.killLimit', group: 'Bots & match', section: 'Match', label: 'Kill limit', min: 5, max: 100, step: 1, def: 20, scope: 'server' });
+
+// ---------- the network (the server's) ----------
+
+// lag compensation's latency cap (netcode LAG_COMP_LATENCY_CAP_MS; a server's LAG_COMP_LATENCY_MS):
+// shots are rewound for this much latency, plus the most the shooter's view can lag (200 ms)
+add({ key: 'net.lagCompMs', group: 'Network', section: 'Lag compensation', label: 'Rewind shots for up to this much latency (ms; the view delay, 200 ms, comes on top)', min: 0, max: 1000, step: 10, def: 250, scope: 'server' });
 
 /** Every field the admin page offers, in page order. */
 export const ADMIN_FIELDS: readonly AdminField[] = fields;

@@ -55,10 +55,10 @@ export const lunarOutpostMap: MapDef = {
     rect(52, 22, 68, 22.6),
   ],
   oneWays: [
-    { ax: 20, ay: 6, bx: 26, by: 6 },
-    { ax: 94, ay: 6, bx: 100, by: 6 },
-    { ax: 10, ay: 5, bx: 14, by: 5 },
-    { ax: 106, ay: 5, bx: 110, by: 5 },
+    { ax: 20, ay: 6, bx: 26, by: 6, blocksBullets: true },
+    { ax: 94, ay: 6, bx: 100, by: 6, blocksBullets: true },
+    { ax: 10, ay: 5, bx: 14, by: 5, blocksBullets: true },
+    { ax: 106, ay: 5, bx: 110, by: 5, blocksBullets: true },
   ],
   spawns: [
     { x: 4, y: 0 },

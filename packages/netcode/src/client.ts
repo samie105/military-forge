@@ -21,9 +21,9 @@ import {
   type SnapshotMsg,
   type SnapshotPlayer,
 } from '@military-forge/protocol';
-import { DT, Game, MAX_PLAYERS, createInput, type Input, type PlayerState, type SimEvent } from '@military-forge/sim';
+import { DT, Game, MAX_PLAYERS, SegFlag, createInput, createRayHit, type Input, type PlayerState, type SimEvent } from '@military-forge/sim';
 import { InputPacer, RttEstimator, type PacerOptions } from './clock';
-import { bracketSnapshots, lerpPosition, quantizeRenderTick, type SnapshotBracket } from './interpolation';
+import { bracketSnapshots, extrapolationTicks, lerpPosition, quantizeRenderTick, type SnapshotBracket } from './interpolation';
 import { OwnProjectiles, type GrenadeView } from './ownProjectiles';
 import { Predictor, type ReconcileKind } from './predictor';
 import { TICK_MS, unwrapTick } from './ticks';
@@ -140,6 +140,10 @@ const PING_INTERVAL_MS = 1000;
 const PING_BURST = 5;
 const PING_BURST_INTERVAL_MS = 50;
 const SNAPSHOT_BUFFER = 60;
+const TICK_S = TICK_MS / 1000;
+/** a carried-on remote player stops this far from a wall (m: about a body's half-width) and from a floor or ceiling (half its height) */
+const EXTRAPOLATE_HALF_WIDTH = 0.35;
+const EXTRAPOLATE_HALF_HEIGHT = 0.9;
 const RATE_WINDOW_MS = 60_000;
 /** no word from the server for this long (snapshots come every 33–67 ms): the connection has stalled */
 const STALL_MS = 500;
@@ -233,6 +237,7 @@ export class NetClient {
   private shownRenderTick = Number.NaN;
   private readonly bracket: SnapshotBracket = { a: null!, b: null!, alpha: 1 };
   private readonly lerped = { x: 0, y: 0 };
+  private readonly extrapolateHit = createRayHit();
 
   constructor(private readonly options: NetClientOptions) {
     this.redundancy = Math.max(1, Math.min(4, options.redundancy ?? 4));
@@ -586,9 +591,38 @@ export class NetClient {
     lerpPosition(p0.x, p0.y, p1.x, p1.y, br.alpha, this.lerped);
     out.x = this.lerped.x;
     out.y = this.lerped.y;
+    // past the newest snapshot: carried on along its velocity for a moment, not frozen (interpolation.ts)
+    if (renderTick > newest.serverTick && p1 === pb && pb.alive) this.extrapolate(pb, extrapolationTicks(renderTick - newest.serverTick) * TICK_S, out);
     out.src = br.alpha < 0.5 ? p0 : p1;
     out.meleeTicks = swingAt(p0.meleeTicks, br.a.serverTick, p1.meleeTicks, br.b.serverTick, renderTick);
     return out;
+  }
+
+  /**
+   * Moves `out` (at `p`'s newest pose) on along `p`'s velocity for `seconds`, stopping short of
+   * anything solid on the way (one-way platforms aside): a carried-on player doesn't walk into a
+   * wall or sink into the floor. The map is the prediction's (none yet: no check).
+   */
+  private extrapolate(p: SnapshotPlayer, seconds: number, out: RemotePose): void {
+    const dx = p.vx * seconds;
+    const dy = p.vy * seconds;
+    let len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 1e-4) return;
+    const world = this.predictor?.game.world;
+    if (world) {
+      const ux = dx / len;
+      const uy = dy / len;
+      // from the body's middle, kept a body's half-extent from what it would hit
+      const reach = len + Math.abs(ux) * EXTRAPOLATE_HALF_WIDTH + Math.abs(uy) * EXTRAPOLATE_HALF_HEIGHT;
+      if (world.raycast(p.x, p.y + EXTRAPOLATE_HALF_HEIGHT, ux, uy, reach, SegFlag.OneWay, this.extrapolateHit)) {
+        len = Math.max(0, Math.min(len, this.extrapolateHit.t - Math.abs(ux) * EXTRAPOLATE_HALF_WIDTH - Math.abs(uy) * EXTRAPOLATE_HALF_HEIGHT));
+      }
+      out.x = p.x + ux * len;
+      out.y = p.y + uy * len;
+      return;
+    }
+    out.x = p.x + dx;
+    out.y = p.y + dy;
   }
 
   /**

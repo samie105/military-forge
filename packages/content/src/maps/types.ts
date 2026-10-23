@@ -200,6 +200,14 @@ export interface MapDef {
   bounds: { minX: number; minY: number; maxX: number; maxY: number };
   solids: MapPolygon[];
   oneWays: MapOneWay[];
+  /**
+   * Thin parts that stop bullets (and so the bots' line of fire) but nothing else: poles, posts,
+   * rails, plates (23 Oct QA: "bullets pass through obstacles"). Bodies, grenades, projectiles,
+   * blasts, gas and sight pass them, so they never snag movement. A bullet that starts inside one
+   * (a shooter standing at a pole) leaves it freely; one coming from outside stops at its edge.
+   * Polygons like solids (any winding); no thickness lint.
+   */
+  bulletOnly?: MapPolygon[];
   /** feet positions for human players */
   spawns: { x: number; y: number }[];
   dummies: DummySpawn[];

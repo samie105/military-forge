@@ -60,7 +60,7 @@ export const mechanicsTestMap: MapDef = {
     rect(-2, CEILING, WIDTH + 2, CEILING + 2), // ceiling
     rect(168, 0, 169, 1.1, Material.Wood), // gallery cover
   ],
-  oneWays: [{ ax: 58, ay: 6, bx: 64, by: 6 }],
+  oneWays: [{ ax: 58, ay: 6, bx: 64, by: 6, blocksBullets: true }],
   spawns: [
     { x: 2, y: 0 },
     { x: 146, y: 0 },

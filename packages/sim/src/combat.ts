@@ -14,7 +14,7 @@ import { DUAL_TOGGLE_TIME, cancelReloads, knockOutOfDash, type PlayerState, type
 import { stepGrenadeBelt } from './grenades';
 import { launchProjectile } from './projectiles';
 import { damageMine, mineHit, shootableMine } from './mines';
-import { createHitPose } from './rewind';
+import { REWIND_COVER_TICKS, createHitPose } from './rewind';
 import { damageShield, shieldHitT, shieldInFront, shieldRaised, shieldSlung } from './shield';
 import { SegFlag, createRayHit } from './world';
 
@@ -115,6 +115,24 @@ function dualable(slot: WeaponSlot): boolean {
   return def !== undefined && def.hands === 1 && def.fireMode !== 'melee';
 }
 
+/**
+ * The target is hidden from (sx, sy) now: solid level geometry (what stops a bullet) between there
+ * and its head, its torso and its legs alike.
+ */
+function inCover(game: Game, sx: number, sy: number, q: PlayerState): boolean {
+  const box = q.crouched ? CROUCHED_HITBOXES : STANDING_HITBOXES;
+  return hidden(game, sx, sy, q.x, q.y + box.head.y) && hidden(game, sx, sy, q.x, q.y + (box.torso.y0 + box.torso.y1) / 2) && hidden(game, sx, sy, q.x, q.y + (box.legs.y0 + box.legs.y1) / 2);
+}
+
+/** Something that stops a bullet lies between (sx, sy) and (x, y). */
+function hidden(game: Game, sx: number, sy: number, x: number, y: number): boolean {
+  const dx = x - sx;
+  const dy = y - sy;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  return len > 1e-6 && game.world.raycast(sx, sy, dx / len, dy / len, len, SegFlag.BulletPass, coverHit);
+}
+const coverHit = createRayHit();
+
 /** Result of traceTargets. Module scratch: the sim is single-threaded. */
 const target = { id: -1, t: 0, zone: 0, shield: false, nx: 1 };
 
@@ -149,8 +167,13 @@ function traceTargets(
   for (const q of game.players) {
     if (!q || q.id === shooter.id || (skipMask & (1 << q.id)) !== 0) continue;
     if (!q.alive && (blockMask & (1 << q.id)) === 0) continue;
-    // lag compensation (server): test the target where the shooter saw it (docs/05 §7.1)
-    const rewound = game.rewind !== null && game.rewind.pose(q, shooter, pose);
+    // lag compensation (server): test the target where the shooter saw it (docs/05 §7.1), unless
+    // that was long ago and the target is behind cover now (the cover rule, rewind.ts)
+    let rewound = game.rewind !== null && game.rewind.pose(q, shooter, pose);
+    if (rewound && pose.ticksBack > REWIND_COVER_TICKS && inCover(game, sx, sy, q)) {
+      rewound = false;
+      game.rewind!.covered?.(q, shooter);
+    }
     if (rewound && !pose.alive) continue;
     const qx = rewound ? pose.x : q.x;
     const qy = rewound ? pose.y : q.y;
@@ -215,7 +238,7 @@ function fireShot(game: Game, p: PlayerState, slot: WeaponSlot, def: WeaponDef):
   let visX = sx + aimDir.x * def.muzzleLength;
   let visY = sy + aimDir.y * def.muzzleLength;
   let maxT = def.range;
-  const blocked = world.raycast(sx, sy, aimDir.x, aimDir.y, def.muzzleLength, SegFlag.BulletPass, guard);
+  const blocked = world.raycastBullet(sx, sy, aimDir.x, aimDir.y, def.muzzleLength, SegFlag.BulletPass, guard);
   if (blocked) {
     visX = guard.x;
     visY = guard.y;
@@ -307,7 +330,7 @@ function traceBullet(game: Game, p: PlayerState, def: WeaponDef, sx: number, sy:
   if (blocked) hitKind = 1;
   // walls only count within the bullet's reach: the weapon's range, or what the map leaves of it
   // (shorter in fog, longer under a map-wide multiplier above 1)
-  else if (game.world.raycast(sx, sy, dir.x, dir.y, endT, SegFlag.BulletPass, hit)) {
+  else if (game.world.raycastBullet(sx, sy, dir.x, dir.y, endT, SegFlag.BulletPass, hit)) {
     endT = hit.t;
     hitKind = 1;
   }
@@ -400,7 +423,7 @@ function strikeShield(
     endT = mech.bulletReach(left);
   }
   let hitKind: 0 | 1 | 2 | 3 = 0;
-  if (game.world.raycast(bx, by, dir.x, dir.y, endT, SegFlag.BulletPass, hit)) {
+  if (game.world.raycastBullet(bx, by, dir.x, dir.y, endT, SegFlag.BulletPass, hit)) {
     endT = hit.t;
     hitKind = 1;
   }

@@ -6,14 +6,19 @@
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join as joinPath } from 'node:path';
-import { K47, THUMPER, adminField, weapons } from '@military-forge/content';
-import { symmetric } from '@military-forge/netcode';
+import { warmNavGraphs } from '@military-forge/bots';
+import { K47, THUMPER, adminField, maps, weapons } from '@military-forge/content';
+import { LAG_COMP_LATENCY_CAP_MS, symmetric } from '@military-forge/netcode';
 import { MsgType, decodeMessage, encodeHello, type Message, type OverridesMsg, type TuningMsg, type WelcomeMsg } from '@military-forge/protocol';
 import { Btn } from '@military-forge/sim';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { adminJson, loadAdminDefaults, setAdminValues, startAdminServer, tokenOk } from '../src/admin';
 import { Room, type ClientConn } from '../src/room';
 import { simulate } from './netsimHarness';
+
+// rooms build their bots' nav graphs between ticks (the server's tick loop), so a bot can wait for
+// one: these are built up front, as the server does at startup
+beforeAll(() => warmNavGraphs([maps['movement-test']!]), 30_000);
 
 afterEach(() => {
   setAdminValues({});
@@ -134,6 +139,25 @@ describe('admin values reach every room and every client', () => {
     setAdminValues({});
     room.tick();
     expect(room.bots).toHaveLength(0);
+  });
+
+  it("lag compensation's latency cap: the admin's, live, in every room; cleared, each room's own again", () => {
+    expect(adminField('net.lagCompMs')!.def).toBe(LAG_COMP_LATENCY_CAP_MS);
+    const plain = new Room({ dummies: false });
+    const own = new Room({ dummies: false, lagComp: { latencyCapMs: 120 } });
+    const fixed = new Room({ dummies: false, lagComp: { maxRewindMs: 900 } });
+    const before = () => {
+      expect([plain.lagComp!.latencyCapMs, own.lagComp!.latencyCapMs]).toEqual([LAG_COMP_LATENCY_CAP_MS, 120]);
+      expect(fixed.lagComp!.maxRewindTicks).toBeCloseTo(54, 9); // 900 ms in all
+    };
+    before();
+    setAdminValues({ 'net.lagCompMs': 400 });
+    for (const room of [plain, own, fixed]) {
+      expect(room.lagComp!.latencyCapMs).toBe(400);
+      expect(room.lagComp!.maxRewindTicks).toBeCloseTo(36, 9); // 400 ms + the 200 ms view delay
+    }
+    setAdminValues({});
+    before();
   });
 });
 

@@ -3,8 +3,8 @@
     python3 art/pipeline/compile_map.py art/maps/street_market/layout.json
 
 Reads the layout (pieces + flips + spawns + decor) and the kit GLB's per-piece extras (terrain /
-solids / oneWays / blocksBullets / noFlip / adSlot, written by build_market_kit.py), then writes next to
-the layout:
+solids / oneWays / blocksBullets / bulletOnly / noFlip / adSlot, written by build_market_kit.py), then
+writes next to the layout:
 
 * <folder>.map.json: the MapDef the sim loads (packages/content/src/maps/types.ts):
   - terrain pieces (ground blocks, houses, the edge blocks) merge into ONE terrain polygon whose
@@ -13,6 +13,8 @@ the layout:
   - one-way platforms (awnings, balconies, catwalks, the umbrella slopes) become oneWays; those of a
     piece marked `blocksBullets` (floor slabs: balconies, the tank deck, the catwalk) carry
     `blocksBullets: true`, so they stop bullets, blasts, gas and sight (docs/11 §2);
+  - thin parts that stop bullets only (posts, poles, masts, rails, plates) become bulletOnly
+    polygons: bodies, grenades, blasts and sight pass them (23 Oct QA);
   - bounds.maxY is a ceiling: a 2 m solid along the top, like movementTest's.
 * <folder>.adslots.json: the docs/14 §4.2 AdSlot list, one per decor bezel with a `slotId`.
 
@@ -138,7 +140,7 @@ def main():
         if item.get("flip") and kit.get(item["piece"], {}).get("noFlip"):
             errors.append(f"{item['piece']} at x {item['x']} is flipped, but it carries lettering (noFlip)")
 
-    intervals, solids, one_ways, slabs = [], [], [], []
+    intervals, solids, one_ways, slabs, bullet_only = [], [], [], [], []
     for item in layout["pieces"]:
         pc = kit.get(item["piece"])
         if pc is None:
@@ -159,6 +161,8 @@ def main():
             pa, pb = (x + (-ax if flip else ax), y + ay), (x + (-bx if flip else bx), y + by)
             one_ways.append(tuple(pa + pb) if pa[0] <= pb[0] else tuple(pb + pa))
             slabs.append(pc.get("blocksBullets") is True)
+        for poly in pc.get("bulletOnly", []):
+            bullet_only.append((place_poly(poly, x, y, flip), pc.get("bulletOnlyMaterial", pc.get("material", 0))))
 
     # ---- terrain skyline (ground, houses, edge blocks) → one polygon
     xs = sorted({b["minX"], b["maxX"], *[i[0] for i in intervals], *[i[1] for i in intervals]})
@@ -357,6 +361,8 @@ def main():
         + [{"points": [c for p in pts for c in p], "material": m} for pts, m, _, _ in solids],
         "oneWays": [{"ax": ax, "ay": ay, "bx": bx, "by": by, **({"blocksBullets": True} if slab else {})}
                     for (ax, ay, bx, by), slab in zip(one_ways, slabs)],
+        **({"bulletOnly": [{"points": [round(c, 3) for p in pts for c in p], "material": m} for pts, m in bullet_only]}
+           if bullet_only else {}),
         "spawns": [{"x": s["x"], "y": s["y"]} for s in layout["spawns"]],
         "dummies": [],
         "labels": [],
@@ -364,7 +370,7 @@ def main():
     print(f"compile_map: {layout['name']} ({map_id})  {w_:.0f} × {h_:.0f} m")
     print(f"  pieces {len(layout['pieces'])} gameplay + {len(layout.get('decor', []))} decor; ad slots {len(ad_slots)}")
     print(f"  terrain polygon {len(terrain)} points; solids {len(solids)} + ceiling; one-ways {len(one_ways)} ({sum(slabs)} slabs); "
-          f"spawns {len(layout['spawns'])}")
+          f"bullet-only parts {len(bullet_only)}; spawns {len(layout['spawns'])}")
     print(f"  walkable heights (m): {walk}")
     print(f"  standing spots {len(spots)}; clear sightlines ≥ {WIDOW_RANGE:.0f} m: {len(clear_long)}")
     for n in notes:

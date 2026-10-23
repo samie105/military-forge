@@ -1,12 +1,18 @@
 /** results.ts: a finished match's report (people with accounts only), signed, sent with retries. */
 import { createHash, generateKeyPairSync, sign, verify } from 'node:crypto';
+import { warmNavGraphs } from '@military-forge/bots';
+import { maps } from '@military-forge/content';
 import { encodeCmd, encodeHello, CmdKind } from '@military-forge/protocol';
 import { DamageSource, MatchPhase, ticks, type Match } from '@military-forge/sim';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { MatchRecorder, RESULTS_AUDIENCE, RESULTS_ISSUER, ResultsReporter, killSourceName, signReport, type MatchReport } from '../src/results';
 import { Room, type ClientConn } from '../src/room';
 import { RoomRegistry } from '../src/rooms';
 import { TICKET_AUDIENCE, TICKET_ISSUER, TicketVerifier } from '../src/tickets';
+
+// rooms build their bots' nav graphs between ticks (the server's tick loop), so a bot can wait for
+// one: these are built up front, as the server does at startup
+beforeAll(() => warmNavGraphs([maps['movement-test']!, maps['street-market']!]), 30_000);
 
 const conn = (): ClientConn => ({ send() {}, close() {}, bufferedAmount: () => 0 });
 const quick = { countdown: 1, timeLimit: 2, killLimit: 0, ending: 1, postgame: 2, onNoRematch: 'lobby' as const };

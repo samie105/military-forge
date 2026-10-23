@@ -112,10 +112,10 @@ export const movementTestMap: MapDef = {
     rect(134, 4, 140, 4.5, Material.Wood),
   ],
   oneWays: [
-    { ax: 124, ay: 2.5, bx: 130, by: 2.5 },
-    { ax: 126, ay: 5, bx: 132, by: 5 },
-    { ax: 124, ay: 7.5, bx: 130, by: 7.5 },
-    { ax: 144, ay: 12, bx: 148, by: 12 },
+    { ax: 124, ay: 2.5, bx: 130, by: 2.5, blocksBullets: true },
+    { ax: 126, ay: 5, bx: 132, by: 5, blocksBullets: true },
+    { ax: 124, ay: 7.5, bx: 130, by: 7.5, blocksBullets: true },
+    { ax: 144, ay: 12, bx: 148, by: 12, blocksBullets: true },
   ],
   spawns: [
     { x: 2, y: 0 },

@@ -1,7 +1,8 @@
 /**
- * Shooting-range scenario for lag compensation: a shooter on top of the 12 m tower aims down at a
- * target walking back and forth below it (x 148–153), exactly where its own screen draws it (the
- * interpolated snapshots), tapping fire every 40 ticks. The steep angle matters: in a side view a
+ * Shooting-range scenario for lag compensation: a shooter at the end of the 12 m tower's ledge aims
+ * down at a target walking back and forth below it (x 150.5–153.5), exactly where its own screen
+ * draws it (the interpolated snapshots), tapping fire every 40 ticks. The ledge stops bullets since
+ * the 23 Oct QA, so the target stays far enough out for the shots to clear its end. The steep angle matters: in a side view a
  * flat shot runs along the line a walking target moves on and would hit it anyway.
  * Used by test/lagcomp.test.ts.
  */
@@ -11,10 +12,10 @@ import { angleToU16 } from '@military-forge/shared';
 import { Btn } from '@military-forge/sim';
 import { simulate } from './netsimHarness';
 
-const SHOOTER_X = 143.6;
+const SHOOTER_X = 147.7;
 const SHOOTER_Y = 12;
-const TARGET_MIN_X = 148;
-const TARGET_MAX_X = 153;
+const TARGET_MIN_X = 150.5; // the shots clear the ledge's end (148) from 150 out
+const TARGET_MAX_X = 153.5; // short of the low cover at 154
 const WARMUP_MS = 5000;
 const TORSO_MID = (STANDING_HITBOXES.torso.y0 + STANDING_HITBOXES.torso.y1) / 2;
 
@@ -27,11 +28,13 @@ export interface RangeResult {
   poseErrors: number[];
   rewindTicks: number[];
   clamped: number;
+  /** how far the target had gone, from the pose the server tested to where it was (m): a hit's lag, as the target feels it */
+  moved: number[];
 }
 
 export function shootingRange(
   settings: ConditionerSettings,
-  lagComp: boolean | { maxRewindMs: number },
+  lagComp: boolean | { maxRewindMs?: number; latencyCapMs?: number },
   seconds = 40,
   shooterLowBandwidth = false,
   frameMs?: number,
@@ -40,7 +43,7 @@ export function shootingRange(
   /** the conditioner's seed (another run of the same profile) */
   linkSeed = 0,
 ): RangeResult {
-  const result: RangeResult = { shots: 0, hits: 0, blocked: 0, poseErrors: [], rewindTicks: [], clamped: 0 };
+  const result: RangeResult = { shots: 0, hits: 0, blocked: 0, poseErrors: [], rewindTicks: [], clamped: 0, moved: [] };
   const aimedAt = new Map<number, { x: number; y: number }>();
   const pose: RemotePose = { x: 0, y: 0, src: null! };
   let placed = false;
@@ -82,6 +85,7 @@ export function shootingRange(
         if (r.shooter !== shooterId || r.target !== targetId || !aimed) continue;
         result.poseErrors.push(Math.hypot(aimed.x - r.x, aimed.y - r.y));
         result.rewindTicks.push(r.tick - r.viewTick);
+        result.moved.push(Math.hypot(r.x - r.nowX, r.y - r.nowY));
         if (r.clamped) result.clamped++;
       }
     },

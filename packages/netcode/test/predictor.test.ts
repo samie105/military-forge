@@ -1,7 +1,7 @@
 import { HEALTH_UNKNOWN, LS, captureLocalState, createLocalState, describeLocalDiff, type LocalState } from '@military-forge/protocol';
 import { Btn, Game, createInput, type Input, type PlayerState } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
-import { InputBuffer, MAX_INPUT_LEAD, Predictor, VISIBLE_ERROR, type ReconcileKind } from '../src';
+import { CORRECTION_PULL_MAX, CORRECTION_SNAP, InputBuffer, MAX_INPUT_LEAD, Predictor, SMOOTHING_SECONDS, VISIBLE_ERROR, type ReconcileKind } from '../src';
 
 const SEED = 77;
 
@@ -139,6 +139,35 @@ describe('prediction + reconciliation', () => {
     expect(Math.hypot(h.pred.offset.x, h.pred.offset.y)).toBeLessThan(offset * 0.35);
     for (let f = 0; f < 30; f++) h.pred.decayOffset(1 / 60);
     expect(Math.hypot(h.pred.offset.x, h.pred.offset.y)).toBeLessThan(VISIBLE_ERROR);
+  });
+
+  it('a correction pulls the drawn player at most CORRECTION_PULL_MAX a second: a slide, not a yank', () => {
+    const h = setup();
+    run(h, 30);
+    const pull = (offset: number) => {
+      h.pred.offset.x = offset;
+      h.pred.offset.y = 0;
+      h.pred.decayOffset(1 / 60);
+      return h.pred.lastSlideM * 60; // m/s
+    };
+    expect(pull(0.3)).toBeCloseTo(0.3 * (1 - Math.exp(-1 / 60 / SMOOTHING_SECONDS)) * 60, 6); // small: the 80 ms exponential
+    expect(pull(1.2)).toBeCloseTo(CORRECTION_PULL_MAX, 6); // was 15 m/s at its start
+  });
+
+  it('errors in a row that add up past CORRECTION_SNAP are one jump, not a long drag', () => {
+    const h = setup();
+    run(h, 100);
+    h.pred.offset.x = -(CORRECTION_SNAP - 0.05); // a correction still under way (drawn behind, to the left)
+    let kicked = false;
+    run(h, 30, {
+      beforeServerStep: () => {
+        if (kicked) return;
+        h.me.x += 0.5; // and another error on top, the same way
+        kicked = true;
+      },
+    });
+    expect(h.pred.stats.snaps).toBe(1);
+    expect(Math.hypot(h.pred.offset.x, h.pred.offset.y)).toBeLessThan(CORRECTION_SNAP);
   });
 
   it('damage from others is a misprediction but not a visible correction', () => {

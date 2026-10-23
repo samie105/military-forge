@@ -18,7 +18,18 @@ export interface HitPose {
   shield: boolean;
   /** its riot shield was slung (blocking the back) */
   shieldBack: boolean;
+  /** how far back the pose is, in ticks (fractional: between snapshots) */
+  ticksBack: number;
 }
+
+/**
+ * The cover rule (QA, 23 Oct 2026: "hit after reaching cover"). A rewind longer than this (150 ms)
+ * doesn't count against a target that is behind solid cover now, from the shot's origin, head to
+ * legs: the shot is tested against where the target is, so the wall takes it. A shorter rewind,
+ * or a target still partly in the open, is rewound as usual. Favouring the shooter stops where
+ * the target would see itself shot through a wall.
+ */
+export const REWIND_COVER_TICKS = 9;
 
 export interface TargetRewind {
   /**
@@ -26,8 +37,10 @@ export interface TargetRewind {
    * to test the target's current state. Called during Game.step, once per target per shot.
    */
   pose(target: PlayerState, shooter: PlayerState, out: HitPose): boolean;
+  /** The pose just given was turned down by the cover rule (counts, the debug log). */
+  covered?(target: PlayerState, shooter: PlayerState): void;
 }
 
 export function createHitPose(): HitPose {
-  return { x: 0, y: 0, crouched: false, alive: true, facing: 1, shield: false, shieldBack: false };
+  return { x: 0, y: 0, crouched: false, alive: true, facing: 1, shield: false, shieldBack: false, ticksBack: 0 };
 }

@@ -12,9 +12,14 @@ glTF extras carry its gameplay collision in piece-local metres (x right, y up):
                                        them with the ground into ONE terrain skyline polygon
   solids     [[x0, y0, x1, y1, ...]]   free-standing solid polygons, CCW (bus body, stall counter)
   oneWays    [[ax, ay, bx, by], ...]   one-way platforms (awnings, balconies, catwalks), may slope
-  blocksBullets  true on pieces whose one-ways are floor slabs (balconies, the tank deck, the catwalk):
-             they stop bullets, blasts, gas and sight and stay one-way for bodies (docs/11 §2);
-             absent on sheet and cloth (awnings, umbrellas), which bullets pass
+  blocksBullets  true on pieces whose one-ways stop bullets: the floor slabs (balconies, the tank deck,
+             the catwalk) and, since the owner's 23 Oct QA, the stall awnings and umbrella canopies
+             too (drawn as solid zinc and cloth, so they block: anything bullets pass must read as
+             passable). They stop bullets, blasts, gas and sight and stay one-way for bodies (docs/11 §2)
+  bulletOnly [[x0, y0, x1, y1, ...]]   thin parts that stop bullets but not bodies (MapDef.bulletOnly):
+             posts, poles, masts, rails, the catwalk's front plate (23 Oct QA: a bullet must not
+             fly through anything drawn on the gameplay plane). Movement never snags on them.
+  bulletOnlyMaterial  their sim material when it isn't the piece's (steel rails on a concrete house)
   material   sim material id (packages/content Material: 0 concrete, 1 metal, 2 wood, 3 dirt)
   noFlip     true on pieces with lettering: the layout must not mirror them
   adSlot     on Screen / Hoarding bezels (docs/14 §2.1, §4.2): kind, format, size [w, h] m,
@@ -91,6 +96,12 @@ _bsdf.inputs["Roughness"].default_value = 0.9
 _vc = MAT.node_tree.nodes.new("ShaderNodeVertexColor")
 _vc.layer_name = "Col"
 MAT.node_tree.links.new(_vc.outputs["Color"], _bsdf.inputs["Base Color"])
+
+
+def rect(x0, y0, x1, y1):
+    """A CCW rectangle as a flat polygon, on a 1 mm grid (no float noise in the extras)."""
+    x0, y0, x1, y1 = (round(v, 3) for v in (x0, y0, x1, y1))
+    return [x0, y0, x1, y0, x1, y1, x0, y1]
 
 
 class Piece:
@@ -259,6 +270,11 @@ def building(pid, height, color, balconies):
             p.box((px - 0.03, -0.93, z), (px + 0.03, -0.87, z + 0.88), STEEL, 0.0)
         p.box((x0, -0.92, z + 0.85), (x1, -0.88, z + 0.9), STEEL, 0.0)
         p.one_ways.append((x0, z, x1, z))
+        # the handrail stops bullets (bullet-only: you still walk the balcony through it)
+        rails = p.extras.setdefault("bulletOnly", [])
+        rails += [rect(px - 0.03, z, px + 0.03, z + 0.88) for px in (x0 + 0.05, (x0 + x1) / 2, x1 - 0.05)]
+        rails.append(rect(x0, z + 0.85, x1, z + 0.9))
+        p.extras["bulletOnlyMaterial"] = 1  # steel
     if balconies:
         p.extras["blocksBullets"] = True  # 0.15 m concrete slabs under thin railings
     p.terrain = [(-3, 3, height)]
@@ -287,6 +303,8 @@ def stall_4m():
     p.box((-2.05, -1.02, 2.9), (2.05, -0.95, 3.1), AWNING, 0.0)
     p.solids = [(-1.5, 0, 1.5, 0, 1.5, 1.0, -1.5, 1.0)]
     p.one_ways = [(-2.0, 3.05, 2.0, 3.05)]
+    p.extras["blocksBullets"] = True  # corrugated zinc drawn solid: it stops bullets (23 Oct QA)
+    p.extras["bulletOnly"] = [rect(x - 0.05, 0, x + 0.05, 3.0) for x in (-1.9, 1.9)]  # the posts
     return p
 
 
@@ -317,6 +335,9 @@ def umbrella_stall():
     # the canopy's top along the gameplay plane is 3.05 − 0.45 |x| / 1.7 (a 15° slope): 2.63 at
     # |x| 1.6, put on the 0.05 m collision grid
     p.one_ways = [(-1.6, 2.65, 0.0, 3.05), (0.0, 3.05, 1.6, 2.65)]
+    p.extras["blocksBullets"] = True  # an unbroken canopy drawn solid: it stops bullets (23 Oct QA)
+    p.extras["bulletOnly"] = [rect(-0.04, 0.8, 0.04, 2.6)]  # the pole, from the counter to the canopy
+    p.extras["bulletOnlyMaterial"] = 1  # a steel pole on a wooden stall
     return p
 
 
@@ -339,7 +360,9 @@ def minibus():
         for y in (-0.85, 0.85):
             p.cyl((x, y, 0.33), 0.33, 0.24, BLACK, axis="Y", verts=12)  # wheels touch y = 0
     p.box((-2.3, -0.8, 2.3), (1.9, 0.8, 2.36), STEEL, 0.0)  # roof rack, flush on the walkable roof
-    p.solids = [(-2.6, 0.35, 2.6, 0.35, 2.6, 1.6, 2.2, 2.3, -2.6, 2.3)]
+    # down to the ground: the 0.35 m under the body let bullets and rolling grenades through under
+    # the bus (23 Oct QA); nobody fits under it anyway (the capsule is 0.64 m wide)
+    p.solids = [(-2.6, 0.0, 2.6, 0.0, 2.6, 1.6, 2.2, 2.3, -2.6, 2.3)]
     return p
 
 
@@ -358,6 +381,8 @@ def tank_tower():
     p.one_ways = [(-1.6, 4.0, -0.8, 4.0), (0.8, 4.0, 1.6, 4.0)]
     p.extras["blocksBullets"] = True  # a steel deck plate
     p.solids = [(-0.8, 4.0, 0.8, 4.0, 0.8, 5.4, -0.8, 5.4)]
+    # the legs and the cross braces stop bullets (bullet-only: you walk between the legs)
+    p.extras["bulletOnly"] = [rect(x - 0.06, 0, x + 0.06, 3.9) for x in (-1.4, 1.4)] + [rect(-1.45, z, 1.45, z + 0.06) for z in (1.3, 2.7)]
     return p
 
 
@@ -391,6 +416,9 @@ def billboard():
     p.text("FRUIT   BREAD   TOOLS", (0, 0.17, 12.8), 0.42, (0.30, 0.20, 0.12))
     p.one_ways = [(-4.0, 10.0, 4.0, 10.0)]
     p.extras["blocksBullets"] = True  # the catwalk's box beam
+    # the masts and the catwalk's front plate stop bullets (bullet-only: you stand on the catwalk in
+    # front of the plate and walk past the masts)
+    p.extras["bulletOnly"] = [rect(x - 0.14, 0, x + 0.14, 17.2) for x in (-3.2, 3.2)] + [rect(-4.0, 10.0, 4.0, 10.8)]
     p.solids = [(-4.0, 12.0, 4.0, 12.0, 4.0, 15.2, 0.0, 20.2, -4.0, 15.2)]
     return p
 

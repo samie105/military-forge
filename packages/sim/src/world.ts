@@ -116,9 +116,10 @@ export function thinnestSolid(pts: readonly number[]): number {
  * Map compiler (docs/02 §4): normalises winding to CCW, drops degenerate vertices, merges
  * collinear edges and rejects self-intersecting polygons. Warns about short edges and thin solids.
  */
-export function compileMapSegments(map: MapDef): { segments: CompiledSegment[]; warnings: string[] } {
+export function compileMapSegments(map: MapDef): { segments: CompiledSegment[]; warnings: string[]; shots: CompiledSegment[] } {
   const segments: CompiledSegment[] = [];
   const warnings: string[] = [];
+  const shots: CompiledSegment[] = [];
 
   map.solids.forEach((poly, pi) => {
     let pts = poly.points.slice();
@@ -190,11 +191,34 @@ export function compileMapSegments(map: MapDef): { segments: CompiledSegment[]; 
     const flags = ow.blocksBullets ? SegFlag.OneWay : SegFlag.OneWay | SegFlag.BulletPass;
     segments.push({ ax, ay, bx, by, flags, material: 2 });
   }
-  return { segments, warnings };
+
+  // bullet-only parts (poles, rails, plates): CCW edges, outward normals; only raycastBullet sees them
+  (map.bulletOnly ?? []).forEach((poly, pi) => {
+    let pts = poly.points.slice();
+    if (pts.length < 6 || pts.length % 2 !== 0) throw new Error(`bulletOnly #${pi}: needs ≥ 3 points`);
+    if (signedArea2(pts) < 0) {
+      const rev: number[] = [];
+      for (let i = pts.length - 2; i >= 0; i -= 2) rev.push(pts[i]!, pts[i + 1]!);
+      pts = rev;
+    }
+    const n = pts.length / 2;
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      shots.push({ ax: pts[i * 2]!, ay: pts[i * 2 + 1]!, bx: pts[j * 2]!, by: pts[j * 2 + 1]!, flags: SegFlag.Solid, material: poly.material ?? 1 });
+    }
+  });
+  return { segments, warnings, shots };
 }
 
 export class CollisionWorld {
+  /** segments in the grid: everything bodies, grenades, blasts and sight collide with */
   readonly segCount: number;
+  /**
+   * bullet-only segments (MapDef.bulletOnly) follow the grid's, at indices segCount … segCount +
+   * shotCount − 1: in the same arrays (normals, materials) but not in the grid, so only
+   * raycastBullet finds them
+   */
+  readonly shotCount: number;
   readonly ax: Float64Array;
   readonly ay: Float64Array;
   readonly bx: Float64Array;
@@ -219,18 +243,22 @@ export class CollisionWorld {
   private stampValue = 0;
 
   constructor(readonly map: MapDef) {
-    const { segments, warnings } = compileMapSegments(map);
+    const compiled = compileMapSegments(map);
+    const { warnings } = compiled;
+    const segments = [...compiled.segments, ...compiled.shots];
     this.warnings = warnings;
-    const n = segments.length;
+    const n = compiled.segments.length;
     this.segCount = n;
-    this.ax = new Float64Array(n);
-    this.ay = new Float64Array(n);
-    this.bx = new Float64Array(n);
-    this.by = new Float64Array(n);
-    this.nx = new Float64Array(n);
-    this.ny = new Float64Array(n);
-    this.flags = new Uint8Array(n);
-    this.material = new Uint8Array(n);
+    this.shotCount = compiled.shots.length;
+    const all = segments.length;
+    this.ax = new Float64Array(all);
+    this.ay = new Float64Array(all);
+    this.bx = new Float64Array(all);
+    this.by = new Float64Array(all);
+    this.nx = new Float64Array(all);
+    this.ny = new Float64Array(all);
+    this.flags = new Uint8Array(all);
+    this.material = new Uint8Array(all);
     segments.forEach((s, i) => {
       this.ax[i] = s.ax;
       this.ay[i] = s.ay;
@@ -380,6 +408,33 @@ export class CollisionWorld {
       }
     }
     if (bestSeg < 0) return false;
+    out.t = best;
+    out.seg = bestSeg;
+    out.x = ox + dx * best;
+    out.y = oy + dy * best;
+    return true;
+  }
+
+  /**
+   * A bullet's raycast: `raycast` (skipping `ignoreFlags`, BulletPass for bullets), then the
+   * bullet-only parts (MapDef.bulletOnly) up to that hit, nearer wins. A bullet-only edge counts
+   * only from outside (the ray moving against its outward normal), so a shot that starts inside a
+   * pole leaves it. Used by hitscan, ricochets and the bots' line of fire; nothing else sees them.
+   */
+  raycastBullet(ox: number, oy: number, dx: number, dy: number, maxT: number, ignoreFlags: number, out: RayHit): boolean {
+    const hitWorld = this.raycast(ox, oy, dx, dy, maxT, ignoreFlags, out);
+    if (this.shotCount === 0 || Number.isNaN(ox + oy + dx + dy)) return hitWorld;
+    let best = hitWorld ? out.t : maxT;
+    let bestSeg = -1;
+    for (let seg = this.segCount, end = this.segCount + this.shotCount; seg < end; seg++) {
+      if (dx * this.nx[seg]! + dy * this.ny[seg]! >= 0) continue; // leaving, or along it
+      const t = raySegment(ox, oy, dx, dy, this.ax[seg]!, this.ay[seg]!, this.bx[seg]!, this.by[seg]!);
+      if (t < best) {
+        best = t;
+        bestSeg = seg;
+      }
+    }
+    if (bestSeg < 0) return hitWorld;
     out.t = best;
     out.seg = bestSeg;
     out.x = ox + dx * best;

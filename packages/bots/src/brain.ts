@@ -190,8 +190,10 @@ export class BotBrain implements Brain {
     readonly level: BotLevel,
     /** this bot's number in the game (0 = first bot added): part of its seed */
     readonly serial: number,
+    /** its nav graph: default the game's (built now if it isn't); a room passes one it has ready */
+    graph?: NavGraph,
   ) {
-    this.graph = navGraphFor(game);
+    this.graph = graph ?? navGraphFor(game);
     this.nav = new Navigator(this.graph);
     this.nav.maxFuel = level.jetSkill * game.tuning.fuelMax;
     this.rng = new Xoshiro128(hash4(game.seed, SEED_SALT, serial, 0));
@@ -502,7 +504,7 @@ export class BotBrain implements Brain {
     const dx = q.x - x;
     const dy = q.y + 0.85 - (y + EYE);
     const d = Math.sqrt(dx * dx + dy * dy);
-    return d < 1e-6 || !this.game.world.raycast(x, y + EYE, dx / d, dy / d, d, SegFlag.BulletPass, ray);
+    return d < 1e-6 || !this.game.world.raycastBullet(x, y + EYE, dx / d, dy / d, d, SegFlag.BulletPass, ray);
   }
 
   /**
@@ -732,7 +734,7 @@ export class BotBrain implements Brain {
       const dx = tx - n.x;
       const dy = ty - (n.y + EYE);
       const d = Math.sqrt(dx * dx + dy * dy);
-      let hits = d < 1e-6 || !this.game.world.raycast(n.x, n.y + EYE, dx / d, dy / d, d, SegFlag.BulletPass, ray);
+      let hits = d < 1e-6 || !this.game.world.raycastBullet(n.x, n.y + EYE, dx / d, dy / d, d, SegFlag.BulletPass, ray);
       if (hits) hits = this.gunRange < 0 ? d <= BASH_SPOT : this.rangeUsed(n.x, n.y + EYE, tx, ty) <= this.gunRange;
       const move = Math.abs(n.x - self.x) + Math.abs(n.y - self.y);
       const strafe = move < 1 ? -1.5 : move <= 5 ? (Math.sign(n.x - self.x) === this.strafeSide ? 2 : 0.5) : -0.2 * (move - 5);
@@ -757,6 +759,7 @@ export class BotBrain implements Brain {
       const tx = n.x - c.x;
       const ty = n.y + 0.9 - (c.y + EYE);
       const far = Math.sqrt(tx * tx + ty * ty);
+      // a thin pole isn't cover: walls only (raycast, not raycastBullet)
       const hidden = far > 1e-6 && this.game.world.raycast(c.x, c.y + EYE, tx / far, ty / far, far, SegFlag.BulletPass, ray);
       const sx = n.x - self.x;
       const sy = n.y - self.y;

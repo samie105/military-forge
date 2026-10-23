@@ -1,8 +1,8 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { BOT_LEVELS, warmNavGraphs, type BotLevelId } from '@military-forge/bots';
-import { ADMIN_BOT_LEVELS, maps, setAdminDefault } from '@military-forge/content';
-import { loadAdminDefaults, setAdminValues, startAdminServer } from './admin';
+import { BOT_LEVELS, queueNavGraphs, warmNavGraphs, type BotLevelId } from '@military-forge/bots';
+import { ADMIN_BOT_LEVELS, adminTuning, adminValue, maps, setAdminDefault } from '@military-forge/content';
+import { adminValues, loadAdminDefaults, setAdminValues, startAdminServer } from './admin';
 import { describeNetSim, parseNetSim } from '@military-forge/netcode';
 import { ResultsReporter, resultsPrivateKey } from './results';
 import { createServer, nodeScheduler } from './server';
@@ -67,17 +67,18 @@ const fillBots = botTarget > 0 ? { target: botTarget, level: botLevel } : undefi
 const hostTuning = process.env.HOST_TUNING === '1' || (dev && process.env.HOST_TUNING !== '0');
 // The test armory (one of every gun on a rack near the spawns): --armory or ARMORY=1 (the playtest's default)
 const armory = process.argv.includes('--armory') || process.env.ARMORY === '1' || process.env.ARMORY === 'true';
-// Lag compensation's total rewind cap (docs/05 §7.1): LAG_COMP_MAX_MS=900 lets shots from ~700 ms
-// phones land (the Johannesburg trial box, where Nigerian mobile data measured 513 ms median). Unset:
-// 500 ms (300 ms of latency on top of the most the interpolation delay can be).
-const lagCompMaxMs = process.env.LAG_COMP_MAX_MS ? Number(process.env.LAG_COMP_MAX_MS) : undefined;
-if (lagCompMaxMs !== undefined && !(lagCompMaxMs >= 100 && lagCompMaxMs <= 2000)) {
-  console.error('[game-server] LAG_COMP_MAX_MS takes 100–2000 (ms)');
+// Lag compensation (docs/05 §7.1): LAG_COMP_LATENCY_MS is the latency a shot is rewound for, on top
+// of the most a shooter's view can lag (200 ms); default 250 ms (450 ms of rewind). The admin page's
+// net.lagCompMs changes it live. LAG_COMP_MAX_MS (a total; the trial box ran 900 ms, and players were
+// hit up to 0.9 s after reaching cover: QA, 23 Oct 2026) is no longer read.
+const lagCompLatencyMs = process.env.LAG_COMP_LATENCY_MS ? Number(process.env.LAG_COMP_LATENCY_MS) : undefined;
+if (lagCompLatencyMs !== undefined && !(lagCompLatencyMs >= 0 && lagCompLatencyMs <= 1000)) {
+  console.error('[game-server] LAG_COMP_LATENCY_MS takes 0–1000 (ms)');
   process.exit(1);
 }
-const lagComp = lagCompMaxMs !== undefined ? { lagComp: { maxRewindMs: lagCompMaxMs } } : {};
-// a nav graph takes 90–270 ms to build: build the rooms' map before anyone joins, not on the first bot
-if (fillBots) warmNavGraphs([maps[mapId]!]);
+if (process.env.LAG_COMP_MAX_MS) console.log(`[game-server] LAG_COMP_MAX_MS=${process.env.LAG_COMP_MAX_MS} is no longer read: the rewind cap is LAG_COMP_LATENCY_MS (default 250 ms of latency) or the admin page's`);
+if (lagCompLatencyMs !== undefined) setAdminDefault('net.lagCompMs', lagCompLatencyMs);
+const lagComp = lagCompLatencyMs !== undefined ? { lagComp: { latencyCapMs: lagCompLatencyMs } } : {};
 
 // The owner's admin page (pnpm playtest → /admin): ADMIN_TOKEN (the run's secret, 16+ characters)
 // and ADMIN_PORT turn its API on (127.0.0.1, behind the playtest proxy). The values saved with
@@ -93,6 +94,18 @@ if (adminToken) {
     setAdminValues(saved);
     console.log(`[admin] ${Object.keys(saved).length} saved values from ${adminDefaults}`);
   }
+}
+// A nav graph takes 90–330 ms to build. Rooms never build one on a tick (they queue it for the time
+// between ticks and their bots wait), so build the rooms' map now, before anyone joins, for the
+// tuning the rooms start on (the admin page's saved values) and the defaults; the other maps (a host
+// can switch) build in the spare time between ticks once the server runs.
+if (fillBots || adminValue(adminValues(), 'bots.count') > 0) {
+  const t0 = performance.now();
+  const startTuning = adminTuning(adminValues());
+  warmNavGraphs([maps[mapId]!], startTuning);
+  if (Object.keys(startTuning).length) warmNavGraphs([maps[mapId]!]);
+  queueNavGraphs(Object.values(maps).filter((m) => m.id !== mapId), startTuning);
+  console.log(`[game-server] bots' nav graph for ${mapId} built in ${(performance.now() - t0).toFixed(0)} ms; the other maps build between ticks`);
 }
 
 // Match results (docs/07 §12): RESULTS_PRIVATE_KEY (an Ed25519 key of its own, PEM; the API holds
@@ -143,7 +156,7 @@ console.log(
     (fillBots ? ` · bots fill rooms to ${fillBots.target} (${fillBots.level})` : '') +
     (hostTuning ? ' · hosts may tune their rooms' : '') +
     (armory ? ' · test armory on (one of every gun by the spawns)' : '') +
-    (lagCompMaxMs !== undefined ? ` · lag compensation up to ${lagCompMaxMs} ms` : '') +
+    (lagCompLatencyMs !== undefined ? ` · lag compensation for up to ${lagCompLatencyMs} ms of latency` : '') +
     (netSim ? ` · NET_SIM ${describeNetSim(netSim)}` : '') +
     (wtSocket ? ` · WebTransport gateway socket ${wtSocket}` : ''),
 );

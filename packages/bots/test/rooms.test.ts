@@ -1,12 +1,30 @@
 /**
  * What rooms need from the bots (bots-interfaces.md, review L3 and L6): bots that come and go
  * mid-game are recorded with their seed serial and their join and leave ticks, so a replay puts
- * each back as it was; nav graphs are kept for several tunings per map and can be built up front.
+ * each back as it was; nav graphs are kept for several tunings per map (keyed on the movement
+ * fields), can be built up front, and build in small steps for a server to run between ticks.
  */
-import { getMap } from '@military-forge/content';
-import { Game, hashGame, runReplay, type ReplayFile } from '@military-forge/sim';
+import { createTuning, getMap } from '@military-forge/content';
+import { CollisionWorld, Game, hashGame, runReplay, type ReplayFile } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
-import { addBot, addBots, botReplaySetup, botSpecs, navGraphFor, removeBot, warmNavGraphs } from '../src';
+import {
+  addBot,
+  addBots,
+  botReplaySetup,
+  botSpecs,
+  buildNavGraph,
+  latestNavGraph,
+  navBuildsQueued,
+  navGraphFor,
+  navGraphSteps,
+  navKey,
+  readyNavGraph,
+  removeBot,
+  requestNavGraph,
+  warmNavGraphs,
+  workNavBuilds,
+  type NavGraph,
+} from '../src';
 import { BotBrain } from '../src/brain';
 
 describe('bots that come and go (rooms)', () => {
@@ -60,4 +78,74 @@ describe('nav graphs for rooms', () => {
     expect(navGraphFor(plain)).toBe(built);
     expect(navGraphFor(floaty)).toBe(other);
   });
+
+  /** what a graph is, to compare two builds */
+  const shape = (g: NavGraph) => JSON.stringify([g.nodes, g.links]);
+
+  it('a graph depends on the movement tuning only: health, respawns, the aim origin, grenades and blasts change nothing', () => {
+    const map = getMap('lunar-outpost');
+    const world = new CollisionWorld(map);
+    const plain = buildNavGraph(map, world, createTuning());
+    // every field the key leaves out, far from its default
+    const other = createTuning({ healthMax: 40, healthRegen: 90, healthRegenDelay: 0.1, respawnDelay: 9, shoulderStand: 0.3, shoulderCrouch: 0.2, shoulderForward: 0.9, grenadeThrowScale: 2.5, blastImpulseScale: 3, dashFlickFull: 1 });
+    expect(navKey(other)).toBe(navKey(createTuning()));
+    expect(shape(buildNavGraph(map, world, other))).toBe(shape(plain));
+    // and a movement field is in the key
+    expect(navKey(createTuning({ jetThrust: 37.5 }))).not.toBe(navKey(createTuning()));
+  }, 30_000);
+
+  it("a build in steps (a server's, between ticks) makes the same graph as one all at once", () => {
+    const map = getMap('mechanics-test');
+    const world = new CollisionWorld(map);
+    const t = createTuning();
+    const steps = navGraphSteps(map, world, t);
+    let n = 0;
+    let r = steps.next();
+    while (!r.done) {
+      n++;
+      r = steps.next();
+    }
+    expect(n).toBeGreaterThan(500); // small steps
+    expect(shape(r.value)).toBe(shape(buildNavGraph(map, world, t)));
+  }, 30_000);
+
+  it('requests queue builds (nothing built on the call); the newest asked for is built first; the queue is bounded', () => {
+    const map = getMap('storm-front');
+    const world = new CollisionWorld(map);
+    const a = createTuning({ gravity: 19 });
+    const b = createTuning({ gravity: 21 });
+    expect(requestNavGraph(map, world, a)).toBeNull();
+    expect(requestNavGraph(map, world, b)).toBeNull();
+    expect(requestNavGraph(map, world, b)).toBeNull(); // asked again: still one build
+    expect(navBuildsQueued()).toBe(2);
+    expect(latestNavGraph(map)).toBeNull();
+    // a step at a time until b is done: a is untouched meanwhile
+    let steps = 0;
+    while (!readyNavGraph(map, b)) {
+      workNavBuilds(() => true);
+      steps++;
+    }
+    expect(steps).toBeGreaterThan(100);
+    expect(readyNavGraph(map, a)).toBeNull();
+    expect(latestNavGraph(map)).toBe(readyNavGraph(map, b));
+    // navGraphFor finishes a queued build instead of starting another
+    const game = new Game({ map, dummies: false, tuning: { gravity: 19 } });
+    const ga = navGraphFor(game);
+    expect(navBuildsQueued()).toBe(0);
+    expect(readyNavGraph(map, a)).toBe(ga);
+  }, 30_000);
+
+  it('at most 8 builds queue: the least recently asked for goes (a room that still wants it asks again)', () => {
+    const map = getMap('lunar-outpost');
+    const world = new CollisionWorld(map);
+    for (let i = 0; i < 9; i++) requestNavGraph(map, world, createTuning({ gravity: 10 + i }));
+    expect(navBuildsQueued()).toBe(8);
+    const done: number[] = [];
+    while (navBuildsQueued()) {
+      const before = navBuildsQueued();
+      workNavBuilds(() => true);
+      if (navBuildsQueued() < before) done.push([18, 17, 16, 15, 14, 13, 12, 11, 10].find((g) => !done.includes(g) && readyNavGraph(map, createTuning({ gravity: g })))!);
+    }
+    expect(done).toEqual([18, 17, 16, 15, 14, 13, 12, 11]); // newest first; gravity 10 was dropped
+  }, 30_000);
 });

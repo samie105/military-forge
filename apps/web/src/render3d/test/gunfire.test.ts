@@ -62,6 +62,32 @@ describe('Gunfire', () => {
     expect(t2.glow.data[ramps(t2.glow).indexOf(Ramp.Flash) * STRIDE + F.x]).toBeCloseTo(140);
   });
 
+  it('the tracer flies the sim ray, never the drawn muzzle\'s line to the end (23 Oct QA); a joiner meets the gun', () => {
+    const g = new Gunfire(world);
+    const t = targets();
+    // the drawn gun sits 0.3 m under the sim's line: a streak from it would cut through a crate the
+    // shot cleared
+    const muzzle: MuzzleLookup = (_id, _w, out, dir) => {
+      out.set(150.2, 0.9, 0.15);
+      dir.set(1, 0, 0);
+      return true;
+    };
+    g.onEvents([shot({ ox: 150.3, oy: 1.2, ex: 159.3, ey: 1.2, hit: 0 })]);
+    g.update(1 / 60, t, muzzle);
+    const r = ramps(t.glow);
+    const bolt = r.indexOf(Ramp.Book);
+    expect(field(t.glow, bolt, F.y)).toBeCloseTo(1.2, 6); // on the sim line, not drifting up from 0.9
+    expect(field(t.glow, bolt, F.vy)).toBeCloseTo(0, 6);
+    const lines = r.map((x, i) => (x === Ramp.Tracer ? i : -1)).filter((i) => i >= 0);
+    expect(lines).toHaveLength(2); // the path and the joiner
+    const path = lines.find((i) => field(t.glow, i, F.size0) > 5)!;
+    expect(field(t.glow, path, F.y)).toBeCloseTo(1.2, 6);
+    expect(field(t.glow, path, F.size0)).toBeCloseTo(9, 6);
+    const join = lines.find((i) => i !== path)!;
+    expect(field(t.glow, join, F.x)).toBeCloseTo(150.25, 6);
+    expect(field(t.glow, join, F.y)).toBeCloseTo(1.05, 6);
+  });
+
   it('a shotgun blast: one flash for the shot, a tracer per pellet', () => {
     const g = new Gunfire(world);
     const t = targets();

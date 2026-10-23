@@ -25,6 +25,22 @@ const frame = (over: Partial<Frame> = {}): Frame => ({ tick: 1, localId: 0, play
 const blast: SimEvent = { type: 'explosion', x: 151, y: 0.1, radius: 4, owner: 0 };
 
 describe('Vfx', () => {
+  it('the warm-up puts every effect on show for one draw (QA 23 Oct: first-use hitches), then takes it all down', () => {
+    const { vfx, scene } = system();
+    vfx.showForWarmUp(150, 1);
+    for (const l of [vfx.glow, vfx.smoke, vfx.decals, vfx.arc.layer]) {
+      expect(l.count).toBeGreaterThan(0);
+      expect(l.mesh.visible).toBe(true);
+    }
+    for (const g of vfx.throwables) for (const m of g.meshes) expect([m.visible, m.count]).toEqual([true, 1]);
+    const drawn = () => scene.children.filter((o) => o.visible).length;
+    const during = drawn();
+    vfx.endWarmUp();
+    for (const l of [vfx.glow, vfx.smoke, vfx.decals, vfx.arc.layer]) expect(l.count).toBe(0);
+    for (const g of vfx.throwables) for (const m of g.meshes) expect([m.visible, m.count]).toEqual([false, 0]);
+    expect(drawn()).toBeLessThan(during);
+  });
+
   it('a blast fills the layers, shakes the camera and flashes; then it all dies away and the layers hide', () => {
     const { vfx } = system();
     vfx.onEvents([blast]);

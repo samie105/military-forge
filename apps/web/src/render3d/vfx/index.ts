@@ -21,7 +21,7 @@ import { bakeMesh } from '../weaponModels';
 import { ATLAS_GRID, vfxAtlas } from './atlas';
 import { CASING_KINDS, Casings, DEFAULT_NODES, type CasingArt, type CasingKind, type EjectLookup } from './casings';
 import { DashFx, type BodyLookup } from './dash';
-import { DashGhosts } from './dashGhosts';
+import { DashGhosts, type GhostSource } from './dashGhosts';
 import { DashTrail } from './dashTrail';
 import { spawnExplosion, type ExplosionTargets } from './explosion';
 import { SceneFlash } from './flash';
@@ -438,17 +438,42 @@ export class Vfx {
     return this.shake.update(dt);
   }
 
-  /** Effects drawn by meshes of their own, on show at (x, y) so the shader warm-up compiles them; `endWarmUp()` after. */
-  showForWarmUp(x: number, y: number): void {
+  /**
+   * Every effect on show at (x, y), so the warm-up compiles it and draws it once (docs/11 §3; QA 23 Oct:
+   * a driver that builds a pipeline on its first draw built it on the first dash, jet or grenade):
+   * the meshes of their own, a sprite in every particle layer (each blend and depth state), a grenade
+   * of each type, and an afterimage of `ghost` (a warm-up soldier). `endWarmUp()` after the draw.
+   */
+  showForWarmUp(x: number, y: number, ghost?: GhostSource): void {
     this.trail.showForWarmUp(x, y);
     this.casings.showForWarmUp(_warm.set(x, y, 0));
     this.projectiles.showForWarmUp(x, y);
+    for (const l of this.warmLayers()) {
+      l.begin();
+      l.sprite(x, y, 0, 0.5, 0, 1, 1, 1, 1, 0);
+      l.end();
+    }
+    for (const g of this.throwables) g.showForWarmUp(x, y);
+    if (ghost) this.ghosts.showForWarmUp(ghost);
   }
 
   endWarmUp(): void {
     this.trail.clear();
     this.casings.clear(); // they cast no shadows: nothing more to compile
     this.projectiles.clear();
+    for (const l of this.warmLayers()) {
+      l.begin();
+      l.end();
+    }
+    for (const g of this.throwables) g.endWarmUp();
+    this.ghosts.clear();
+  }
+
+  /** every particle layer in the scene: decals, smoke, glow, the throw arc, the blast flipbooks and the muzzle flashes */
+  private warmLayers(): ParticleLayer[] {
+    const layers = [this.decals, this.smoke, this.glow, this.arc.layer, ...this.books.map((b) => b.layer)];
+    if (this.gunfire.flashLayer) layers.push(this.gunfire.flashLayer);
+    return layers;
   }
 
   /** live particles (the docs/11 §3 budget counts these) */

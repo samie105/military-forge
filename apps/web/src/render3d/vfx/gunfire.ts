@@ -248,27 +248,49 @@ export class Gunfire {
     const def = weapons[e.weapon];
     const cls = def ? CLASS_FX[def.class] : null;
     if (!def || !cls) return;
-    // from the drawn muzzle when the shooter is drawn (and not wedged in a wall), else the sim's
-    let ox = e.ox;
-    let oy = e.oy;
-    let oz = 0;
-    let dx = e.ex - e.ox;
-    let dy = e.ey - e.oy;
+    // The flash sits on the drawn muzzle when the shooter is drawn (and not wedged in a wall), else
+    // on the sim's. The tracer always flies the sim's own ray, (ox, oy) → (ex, ey): the drawn gun
+    // sits below the sim's 1.08 m shoulder line, and a streak from it to the end point used to cut
+    // through a crate the shot had cleared (23 Oct QA). A short joiner bridges the drawn muzzle to
+    // the ray, so the streak still reads as leaving the gun.
+    const sdx = e.ex - e.ox;
+    const sdy = e.ey - e.oy;
+    const dist = Math.sqrt(sdx * sdx + sdy * sdy);
+    const ux = dist > 1e-6 ? sdx / dist : 1;
+    const uy = dist > 1e-6 ? sdy / dist : 0;
     const drawn = muzzle(e.shooter, e.weapon, _m, _d) && (_m.x - e.ox) ** 2 + (_m.y - e.oy) ** 2 < 1.44;
-    if (drawn) {
-      ox = _m.x;
-      oy = _m.y;
-      oz = _m.z;
-      dx = e.ex - ox;
-      dy = e.ey - oy;
-    }
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    const ux = dist > 1e-6 ? dx / dist : 1;
-    const uy = dist > 1e-6 ? dy / dist : 0;
+    const fxX = drawn ? _m.x : e.ox;
+    const fxY = drawn ? _m.y : e.oy;
+    const oz = drawn ? _m.z : 0;
     const entry = this.art?.weapons[def.id];
-    if (first) this.flash(fx, ox, oy, oz, drawn ? Math.atan2(_d.y, _d.x) : Math.atan2(uy, ux), cls, entry?.flash ?? null, entry?.flashScale ?? 1, drawn ? e : null);
-    if (tracer && dist > 0.3) this.tracer(fx, ox, oy, oz, ux, uy, dist, cls, entry?.tracer ?? null);
+    if (first) this.flash(fx, fxX, fxY, oz, drawn ? Math.atan2(_d.y, _d.x) : Math.atan2(uy, ux), cls, entry?.flash ?? null, entry?.flashScale ?? 1, drawn ? e : null);
+    if (tracer && dist > 0.3) {
+      this.tracer(fx, e.ox, e.oy, oz, ux, uy, dist, cls, entry?.tracer ?? null);
+      if (drawn) this.joiner(fx, fxX, fxY, e.ox, e.oy, oz, cls, entry?.tracer ?? null);
+    }
     if (e.hit) this.impact(fx, e, ux, uy);
+  }
+
+  /** The drawn muzzle to the start of the sim's ray: a short line in the tracer's tint, gone with its path line. */
+  private joiner(fx: GunfireTargets, x0: number, y0: number, x1: number, y1: number, z: number, cls: ClassFx, styleName: string | null): void {
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 0.02) return;
+    const style = styleName ? this.art?.tracers[styleName] : undefined;
+    const p = reset();
+    p.x = (x0 + x1) / 2;
+    p.y = (y0 + y1) / 2;
+    p.z = z;
+    p.life = 0.06;
+    p.size0 = p.size1 = len;
+    p.aspect = ((style?.widthM ?? cls.width) * TRACER_THIN * 1.4) / len;
+    p.rot = Math.atan2(dy, dx);
+    p.alpha = 0.45;
+    p.ramp = Ramp.Tracer;
+    p.cell = Cell.Line;
+    [p.tr, p.tg, p.tb] = style?.tint ?? TRACER_TINT;
+    fx.glow.emit(p);
   }
 
   /** `rider`: the shot of a drawn gun, whose Forge flash then rides it */
@@ -526,7 +548,8 @@ export class Gunfire {
     let nx = -ux;
     let ny = -uy;
     let material = 0;
-    if (e.hit === 1 && this.world.raycast(e.ex - ux * 0.3, e.ey - uy * 0.3, ux, uy, 0.6, SegFlag.BulletPass, hit)) {
+    // raycastBullet: a pole or rail the shot stopped on (MapDef.bulletOnly) sparks as its own material
+    if (e.hit === 1 && this.world.raycastBullet(e.ex - ux * 0.3, e.ey - uy * 0.3, ux, uy, 0.6, SegFlag.BulletPass, hit)) {
       nx = this.world.nx[hit.seg]!;
       ny = this.world.ny[hit.seg]!;
       // the surface faces back along the shot

@@ -25,7 +25,7 @@
  */
 import { adminJson, adminValues, onAdminValues } from './adminState';
 import { MatchRecorder, type ResultsSink } from './matchRecorder';
-import { addBot, removeBot, type BotLevelId } from '@military-forge/bots';
+import { addBot, latestNavGraph, removeBot, requestNavGraph, type BotLevelId, type NavGraph } from '@military-forge/bots';
 import { ADMIN_BOT_LEVELS, adminTuning, adminValue, createTuning, defaultTuning, limitTuning, maps, type AdminValues, type Tuning } from '@military-forge/content';
 import {
   BOT_LEVELS_WIRE,
@@ -108,8 +108,12 @@ export interface RoomOptions {
   hostTuning?: boolean;
   /** server-side network conditioner on every connection (docs/05 §15.2; dev/testing only) */
   netSim?: { settings: ConditionerSettings; scheduler: Scheduler };
-  /** lag compensation for hitscan (default on); `maxRewindMs` overrides the cap */
-  lagComp?: boolean | { maxRewindMs?: number };
+  /**
+   * lag compensation for hitscan (default on): `latencyCapMs` is the latency compensated on top of
+   * the view delay (default LAG_COMP_LATENCY_CAP_MS, 250 ms), `maxRewindMs` a fixed total instead.
+   * The admin page's net.lagCompMs outranks both while it's set.
+   */
+  lagComp?: boolean | { maxRewindMs?: number; latencyCapMs?: number };
   /** send each client only what its camera can show (default on, docs/05 §9) */
   aoi?: boolean;
   /** how long a dropped player waits for its session to reconnect (rooms 20 s, BR 60 s; 0 = never) */
@@ -447,10 +451,13 @@ export class Room {
   private applyAdmin(values: AdminValues, broadcast: boolean): void {
     this.game.tuning = createTuning({ ...defaultTuning, ...adminTuning(values) });
     for (const s of this.game.spawners) s.refreshWeights();
+    // lag compensation's latency cap: the admin's while set, else the room's own (RoomOptions.lagComp)
+    this.lagComp?.setLatencyCap('net.lagCompMs' in values ? adminValue(values, 'net.lagCompMs') : null);
     if ('bots.count' in values || 'bots.level' in values) {
       const target = Math.min(adminValue(values, 'bots.count'), MAX_PLAYERS);
       this.fill = target > 0 ? { target, level: ADMIN_BOT_LEVELS[adminValue(values, 'bots.level')] ?? 'normal' } : null;
     } else this.fill = this.baseFill;
+    this.prepareBotGraph();
     if (this.match && this.baseLimits) {
       // only the limits the admin changed (set, edited or cleared), and never under a running match:
       // an admin edit to jet fuel mustn't reset the host's 1-minute match to the server's defaults
@@ -821,6 +828,7 @@ export class Room {
         }
       }
       this.game.tuning = createTuning({ ...this.game.tuning, ...next });
+      this.prepareBotGraph();
       // every client predicts with the room's tuning: keep them in step. The sender too when the
       // room took something else than it asked for (a host's value clamped to the limits): its
       // prediction and its open Tune panel must show what the room really runs
@@ -868,6 +876,7 @@ export class Room {
         if (bots === null) break;
         if (bots) {
           this.hostFill = bots;
+          this.prepareBotGraph();
           this.log(`[room] host sets bots: ${bots.target > 0 ? `fill to ${bots.target} (${bots.level})` : 'off'}`);
         }
         if (m.phase !== MatchPhase.Waiting) break;
@@ -877,7 +886,12 @@ export class Room {
         m.rules.killLimit = next.killLimit;
         this.baseLimits = { timeLimit: next.timeLimit, killLimit: next.killLimit };
         if (next.mapId !== this.game.map.id) {
+          // the bots know the old map (its nav graph and mechanics): they go, and the fill brings
+          // them back on the new map's graph (built between ticks if it isn't ready)
+          for (const bot of this.bots.splice(0)) removeBot(this.game, bot);
+          this.matchDirty = true;
           this.game.changeMap(next.mapId, this.armory);
+          this.prepareBotGraph();
           this.lagComp?.reset();
           this.lagComp?.record(this.game.tick, this.game.players);
           this.pendingEvents.length = 0;
@@ -1040,12 +1054,29 @@ export class Room {
       changed = true;
     }
     while (fill && this.bots.length < want && this.game.players.some((p) => !p)) {
-      this.bots.push(addBot(this.game, { level: fill.level }));
+      const graph = this.botGraph();
+      if (!graph) break; // being built between ticks: the bot comes in when it's ready
+      this.bots.push(addBot(this.game, { level: fill.level, graph }));
       changed = true;
     }
     if (!changed) return;
     this.broadcastRoster();
     this.matchDirty = true;
+  }
+
+  /**
+   * A new bot's nav graph: the one for the room's map and tuning if it's built, else the map's
+   * newest meanwhile (null: none yet). Never built here, on the tick: one build (90–330 ms) froze
+   * every room on the server. The build is queued for the time between ticks (bots/nav/cache.ts,
+   * the tick loop's idle work); bots already in keep the graph they came with.
+   */
+  private botGraph(): NavGraph | null {
+    return requestNavGraph(this.game.map, this.game.world, this.game.tuning) ?? latestNavGraph(this.game.map);
+  }
+
+  /** A new map or tuning: its bots' graph starts building now (between ticks), ready for the next bot. */
+  private prepareBotGraph(): void {
+    if (this.botFill) requestNavGraph(this.game.map, this.game.world, this.game.tuning);
   }
 
   /** The bot to make room with: the lowest score in the match, the newest on a tie (out of `bots`). */

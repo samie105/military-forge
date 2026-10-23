@@ -26,7 +26,7 @@ const ZONE_KEYS = ['id', 'kind', 'rect', 'points', 'launch', 'event', 'label', .
 const EVENT_KEYS = ['id', 'kind', 'name', 'description', 'duration', 'warning', 'gustPeriod', 'windFlip', 'pickOneZone', ...MODIFIER_KEYS];
 const SPAWNER_KEYS = ['id', 'pool', 'spots', 'first', 'respawn', 'maxActive'];
 const ONE_WAY_KEYS = ['ax', 'ay', 'bx', 'by', 'blocksBullets'];
-const TOP_KEYS = ['$schema', 'id', 'name', 'bounds', 'solids', 'oneWays', 'spawns', 'dummies', 'labels', 'rules', 'zones', 'events', 'spawners', 'armory'];
+const TOP_KEYS = ['$schema', 'id', 'name', 'bounds', 'solids', 'oneWays', 'bulletOnly', 'spawns', 'dummies', 'labels', 'rules', 'zones', 'events', 'spawners', 'armory'];
 
 class Problems {
   readonly list: string[] = [];
@@ -74,12 +74,15 @@ export function parseMapJson(json: unknown, source = 'map'): MapDef {
     p.object('$.bounds', m.bounds, (b) => {
       for (const k of ['minX', 'minY', 'maxX', 'maxY']) p.num(`$.bounds.${k}`, b[k]);
     });
-    p.array('$.solids', m.solids, (s, at) =>
-      p.object(at, s, (o) => {
-        if (!Array.isArray(o.points) || !o.points.every(isNum)) p.add(`${at}.points`, 'must be an array of numbers');
-        if (o.material !== undefined && !Number.isInteger(o.material)) p.add(`${at}.material`, 'must be an integer');
-      }),
-    );
+    const polygons = (path: string, list: unknown) =>
+      p.array(path, list, (s, at) =>
+        p.object(at, s, (o) => {
+          if (!Array.isArray(o.points) || !o.points.every(isNum)) p.add(`${at}.points`, 'must be an array of numbers');
+          if (o.material !== undefined && !Number.isInteger(o.material)) p.add(`${at}.material`, 'must be an integer');
+        }),
+      );
+    polygons('$.solids', m.solids);
+    if (m.bulletOnly !== undefined) polygons('$.bulletOnly', m.bulletOnly);
     p.array('$.oneWays', m.oneWays, (s, at) =>
       p.object(at, s, (o) => {
         p.keys(at, o, ONE_WAY_KEYS);
@@ -249,6 +252,18 @@ export function mapJsonSchema(): object {
           },
         },
         description: 'Platforms you fly up through and land on; hold Down to drop. Bullets pass them unless blocksBullets.',
+      },
+      bulletOnly: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['points'],
+          properties: {
+            points: { type: 'array', items: { type: 'number' }, minItems: 6, description: 'Flat [x0, y0, x1, y1, …], either winding.' },
+            material: { type: 'integer', minimum: 0, maximum: 4, description: '0 concrete, 1 metal, 2 wood, 3 dirt, 4 glass (default metal).' },
+          },
+        },
+        description: 'Thin parts (poles, posts, rails, plates) that stop bullets and the bots\' line of fire but not bodies, grenades, blasts, gas or sight. A bullet starting inside one leaves it.',
       },
       spawns: { type: 'array', items: point, description: 'Feet positions for players.' },
       dummies: { type: 'array', items: { type: 'object', required: ['name', 'x', 'y', 'script'] }, description: 'Scripted targets for local play.' },

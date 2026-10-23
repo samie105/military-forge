@@ -1,12 +1,17 @@
 /** A player's saved gun pair, carried in the join ticket: their first spawn, every match start; bots keep their own. */
 import { generateKeyPairSync, sign } from 'node:crypto';
-import { DEFAULT_LOADOUT, weapons } from '@military-forge/content';
+import { warmNavGraphs } from '@military-forge/bots';
+import { DEFAULT_LOADOUT, maps, weapons } from '@military-forge/content';
 import { CmdKind, encodeCmd, encodeHello } from '@military-forge/protocol';
 import { MatchPhase, ticks } from '@military-forge/sim';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import type { ClientConn } from '../src/room';
 import { RoomRegistry } from '../src/rooms';
 import { TICKET_AUDIENCE, TICKET_ISSUER, TicketVerifier } from '../src/tickets';
+
+// rooms build their bots' nav graphs between ticks (the server's tick loop), so a bot can wait for
+// one: these are built up front, as the server does at startup
+beforeAll(() => warmNavGraphs([maps['movement-test']!]), 30_000);
 
 const keys = generateKeyPairSync('ed25519');
 const nowS = 1_760_000_000;

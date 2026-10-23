@@ -13,11 +13,11 @@ import type { MapDef } from './types';
  * a recompile; content.test.ts fails while the two differ (spawners and the armory rack are gameplay,
  * added here on top).
  *
- * The floors among its one-ways (the house balconies, the tank tower's deck and the billboard
- * catwalk, concrete and steel) carry `blocksBullets`, so they stop bullets while staying one-way for
- * bodies (owner's playtest, 18 Oct: "bullets go through buildings"). The kit marks those pieces and
- * compile_map.py writes the flag, so a recompile keeps the 13; content.test.ts lists them. Stall
- * awnings and umbrella canopies (sheet and cloth) still let bullets through, like railings.
+ * Every one of its one-ways carries `blocksBullets`, so they stop bullets while staying one-way for
+ * bodies: the floors (house balconies, the tank tower's deck, the billboard catwalk) since the
+ * owner's 18 Oct playtest ("bullets go through buildings"), and the stall awnings and umbrella
+ * canopies since the 23 Oct QA (drawn as solid zinc and cloth, they must not let bullets through).
+ * The kit marks those pieces and compile_map.py writes the flag, so a recompile keeps all 21.
  */
 export const streetMarketMap: MapDef = {
   ...parseMapJson(json, 'streetMarket.map.json'),

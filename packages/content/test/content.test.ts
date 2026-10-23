@@ -291,13 +291,18 @@ describe('maps', () => {
     expect(streetMarketMap.spawns.length).toBeGreaterThanOrEqual(12);
   });
 
-  it('Street Market: the floors stop bullets (balconies, the tank deck, the catwalk); awnings and umbrellas let them through', () => {
-    const slab = (o: MapOneWay) => o.blocksBullets === true;
-    const at = (o: MapOneWay) => `${Math.min(o.ax, o.bx)}..${Math.max(o.ax, o.bx)}@${Math.max(o.ay, o.by)}`;
-    const balconies = ['-54..-52@4', '-54..-52@8', '52..54@4', '52..54@8', '-52..-50@4', '50..52@4', '-25..-23@4', '-17..-15@8', '23..25@4', '15..17@8'];
-    expect(streetMarketMap.oneWays.filter(slab).map(at).sort()).toEqual([...balconies, '-1.6..-0.8@4', '0.8..1.6@4', '-4..4@10'].sort());
-    // every one-way left see-through is a stall awning or an umbrella canopy (≤ 3.05 m, over a stall)
-    for (const o of streetMarketMap.oneWays.filter((w) => !slab(w))) expect(Math.max(o.ay, o.by)).toBeLessThanOrEqual(3.05);
+  it('every one-way on every map stops bullets: they are all drawn solid (owner, 18 Oct; 23 Oct QA)', () => {
+    // The owner's rule: slabs and roofs block bullets, and anything bullets pass must read as
+    // passable. Every one-way the maps have is drawn as a solid slab, zinc or cloth (render3d's
+    // 0.22 m slabs, the Street Market kit), so all of them carry blocksBullets. A see-through one
+    // (a grate, a torn canopy) needs art that reads that way first, then an entry here.
+    const seeThrough: string[] = [];
+    const at = (id: string, o: MapOneWay) => `${id} ${Math.min(o.ax, o.bx)}..${Math.max(o.ax, o.bx)}@${Math.max(o.ay, o.by)}`;
+    const open = Object.values(maps).flatMap((m) => m.oneWays.filter((o) => o.blocksBullets !== true).map((o) => at(m.id, o)));
+    expect(open).toEqual(seeThrough);
+    // the Street Market: the 13 floor slabs (balconies, the tank deck, the catwalk), and the stall
+    // awnings and umbrella canopies since the 23 Oct QA, all from the kit's marks
+    expect(streetMarketMap.oneWays).toHaveLength(21);
   });
 
   for (const map of Object.values(maps)) {
@@ -422,6 +427,7 @@ describe('map JSON format (docs/02 §20.6)', () => {
     const slab = JSON.parse(JSON.stringify(maps['storm-front'])) as { oneWays: Record<string, unknown>[] };
     slab.oneWays[0]!.blocksBullets = true;
     slab.oneWays[1]!.blocksBullets = false;
+    delete slab.oneWays[2]!.blocksBullets; // every Storm Front one-way is a slab since the 23 Oct QA
     const map = parseMapJson(slab);
     expect(map.oneWays[0]!.blocksBullets).toBe(true);
     expect(map.oneWays[1]!.blocksBullets).toBe(false);

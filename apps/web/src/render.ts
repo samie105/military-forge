@@ -631,6 +631,21 @@ export class Renderer {
       ctx.stroke();
     }
     ctx.setLineDash([]);
+    // bullet-only parts (posts, poles, rails, plates: MapDef.bulletOnly) outlined in steel: they stop
+    // bullets, bodies walk through them
+    ctx.strokeStyle = 'rgba(190,205,220,0.75)';
+    ctx.lineWidth = 1.5;
+    for (const poly of this.map.bulletOnly ?? []) {
+      ctx.beginPath();
+      for (let i = 0; i < poly.points.length; i += 2) {
+        const sx = cam.toScreenX(poly.points[i]!);
+        const sy = cam.toScreenY(poly.points[i + 1]!);
+        if (i === 0) ctx.moveTo(sx, sy);
+        else ctx.lineTo(sx, sy);
+      }
+      ctx.closePath();
+      ctx.stroke();
+    }
     ctx.fillStyle = COLORS.label;
     ctx.font = '12px ui-monospace, monospace';
     ctx.textAlign = 'center';

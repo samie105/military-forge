@@ -3,11 +3,17 @@
  * the target with [BOT] players; a human coming in takes the lowest-scoring bot's place, one leaving
  * for good brings a bot back, and the last human out takes them all. They play the match like anyone.
  */
+import { warmNavGraphs } from '@military-forge/bots';
+import { maps } from '@military-forge/content';
 import { CmdKind, MsgType, decodeMessage, encodeCmd, encodeHello, type MatchStateMsg, type Message, type RosterMsg } from '@military-forge/protocol';
 import { MatchPhase } from '@military-forge/sim';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { Room, parseBotSettings, type ClientConn } from '../src/room';
 import { CUSTOM_ROOM_RULES } from '../src/rooms';
+
+// rooms build their bots' nav graphs between ticks (the server's tick loop), so a bot can wait for
+// one: these are built up front, as the server does at startup
+beforeAll(() => warmNavGraphs([maps['movement-test']!]), 30_000);
 
 class FakeConn implements ClientConn {
   readonly sent: Uint8Array[] = [];

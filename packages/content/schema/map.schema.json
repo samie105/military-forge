@@ -106,6 +106,32 @@
       },
       "description": "Platforms you fly up through and land on; hold Down to drop. Bullets pass them unless blocksBullets."
     },
+    "bulletOnly": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "points"
+        ],
+        "properties": {
+          "points": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 6,
+            "description": "Flat [x0, y0, x1, y1, …], either winding."
+          },
+          "material": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4,
+            "description": "0 concrete, 1 metal, 2 wood, 3 dirt, 4 glass (default metal)."
+          }
+        }
+      },
+      "description": "Thin parts (poles, posts, rails, plates) that stop bullets and the bots' line of fire but not bodies, grenades, blasts, gas or sight. A bullet starting inside one leaves it."
+    },
     "spawns": {
       "type": "array",
       "items": {

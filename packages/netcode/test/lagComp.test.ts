@@ -78,10 +78,11 @@ describe('LagCompensator', () => {
     const game = new Game({ seed: 9, dummies: false });
     const shooter = game.addPlayer('shooter');
     const target = game.addPlayer('target');
-    // shooter on top of the 12 m tower, target walking right on the ground below it
-    shooter.x = 143.6;
+    // shooter at the end of the 12 m tower's ledge (a slab since the 23 Oct QA: the shot clears its
+    // end), target walking right on the ground below it, short of the low cover at 154
+    shooter.x = 147.7;
     shooter.y = 12;
-    target.x = 148;
+    target.x = 150.5;
     target.y = 0;
     const lc = new LagCompensator();
     lc.record(game.tick, game.players);
@@ -127,9 +128,9 @@ describe('LagCompensator', () => {
       const game = new Game({ seed: 9, dummies: false });
       const shooter = game.addPlayer('shooter');
       const leaver = game.addPlayer('leaver');
-      shooter.x = 143.6;
+      shooter.x = 147.7;
       shooter.y = 12;
-      leaver.x = 149;
+      leaver.x = 151;
       leaver.y = 0;
       const lc = new LagCompensator();
       game.rewind = lc;

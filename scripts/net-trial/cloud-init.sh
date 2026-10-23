@@ -229,7 +229,6 @@ ARMORY='1'
 ADMIN_TOKEN='$ADMIN_TOKEN'
 ADMIN_PORT='9002'
 ADMIN_DEFAULTS='$DATA/admin-defaults.json'
-LAG_COMP_MAX_MS='900'
 EOF
 envfile probe.env <<EOF
 PORT='9300'

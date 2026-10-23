@@ -4,7 +4,7 @@
  * the final pose (aim included), so it costs a draw call per character mesh while it shows.
  * Medium and High keep a few (`max`); Low none.
  */
-import { Group, MeshBasicMaterial, Skeleton, SkinnedMesh, type Color, type Scene } from 'three';
+import { Color, Group, MeshBasicMaterial, Skeleton, SkinnedMesh, type Scene } from 'three';
 import type { CharacterInstance } from '../character';
 
 /** seconds an afterimage takes to fade */
@@ -12,6 +12,7 @@ export const GHOST_LIFE = 0.28;
 /** a dashing character leaves one this often (s) when 4 may show; fewer allowed, spaced wider */
 export const GHOST_EVERY = 0.035;
 const GHOST_OPACITY = 0.42;
+const WARM_TINT = new Color(1, 1, 1);
 
 /** A skeleton whose pose was copied in: the renderer's per-frame update leaves it as it is. */
 class FrozenSkeleton extends Skeleton {
@@ -75,6 +76,17 @@ export class DashGhosts {
       if (k <= 0) g.group.visible = false;
       else g.material.opacity = GHOST_OPACITY * k * k;
     }
+  }
+
+  /**
+   * One afterimage of `inst` whatever `max` is (the warm-up draws its skinned, see-through material
+   * once, so neither the first dash nor a later tier with afterimages builds it mid-game); clear() hides it.
+   */
+  showForWarmUp(inst: GhostSource): void {
+    const max = this.max;
+    this.max = Math.max(1, max);
+    this.snap(inst, WARM_TINT);
+    this.max = max;
   }
 
   /** Hides them all (a new map, a preset with none). */

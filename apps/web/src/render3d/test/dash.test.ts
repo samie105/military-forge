@@ -143,4 +143,14 @@ describe('DashGhosts', () => {
     ghosts.snap(b, new Color(1, 1, 1));
     expect(ghosts.count).toBe(0);
   });
+
+  it('the warm-up shows one whatever `max` is (Low too: a later tier may add them), and clear() hides it', () => {
+    const ghosts = new DashGhosts(new Scene());
+    ghosts.max = 0;
+    ghosts.showForWarmUp(body());
+    expect(ghosts.count).toBe(1);
+    expect(ghosts.max).toBe(0);
+    ghosts.clear();
+    expect(ghosts.count).toBe(0);
+  });
 });

@@ -40,8 +40,8 @@ export const fluxLabMap: MapDef = {
     rect(86, 0, 88, 1.2, Material.Wood),
   ],
   oneWays: [
-    { ax: 4, ay: 7, bx: 24, by: 7 },
-    { ax: 86, ay: 7, bx: 106, by: 7 },
+    { ax: 4, ay: 7, bx: 24, by: 7, blocksBullets: true },
+    { ax: 86, ay: 7, bx: 106, by: 7, blocksBullets: true },
   ],
   spawns: [
     { x: 4, y: 0 },

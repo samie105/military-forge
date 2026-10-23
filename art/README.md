@@ -63,6 +63,8 @@ A generic market street (no real place: invented, region-neutral signage, a plai
 | `terrain: [[x0, x1, h]]` | a rectangle standing on y = 0 (ground blocks, houses, edge blocks) | merged with the ground into **one terrain polygon** whose top is the skyline, like `movementTest` (no internal edges to snag on) |
 | `solids: [[x, y, …]]` | free-standing CCW polygons (stall counters, minibus bodies, tank, billboard panel) | one solid each |
 | `oneWays: [[ax, ay, bx, by]]` | drop-through ledges (awnings, balconies, tower deck, catwalk, the umbrella's two 15° slopes) | `oneWays` |
+| `blocksBullets` | the piece's one-ways stop bullets (every piece's do since the 23 Oct QA) | `blocksBullets` on its one-ways |
+| `bulletOnly: [[x, y, …]]` | thin parts that stop bullets but not bodies: stall posts, the umbrella pole, tank tower legs and braces, billboard masts and the catwalk's front plate, balcony handrails (`bulletOnlyMaterial` when not the piece's material) | `bulletOnly` polygons |
 | `layer` | `gameplay` / `mid` / `far` (docs/11 §2) | only `gameplay` pieces collide; `mid`/`far` go in the layout's `decor` |
 | `material` | sim material id (0 concrete, 1 metal, 2 wood, 3 dirt) | solid `material` |
 | `noFlip` | the piece has lettering | the layout may not mirror it |
@@ -73,9 +75,9 @@ A generic market street (no real place: invented, region-neutral signage, a plai
 | Piece | Layer | Tris | Collision |
 |---|---|---|---|
 | `sm_ground_4m` | gameplay | 336 | terrain 4 m at y 0 |
-| `sm_stall_4m` | gameplay | 1,544 | counter solid 1.0 m, awning one-way 3.05 m |
+| `sm_stall_4m` | gameplay | 1,544 | counter solid 1.0 m, awning one-way 3.05 m (blocks bullets) |
 | `sm_umbrella_stall` | gameplay | 360 | counter solid 0.8 m, canopy one-ways 2.65 → 3.05 → 2.65 m (it follows the cone) |
-| `sm_minibus` | gameplay | 752 | body solid from 0.35 m with the sloped front drawn to match, roof 2.3 m; the rack lies flush on it (the luggage that stood 0.5 m above the walkable roof is gone: environments review L15) |
+| `sm_minibus` | gameplay | 752 | body solid from the ground (the 0.35 m under it let bullets and rolling grenades through: 23 Oct QA) with the sloped front drawn to match, roof 2.3 m; the rack lies flush on it (the luggage that stood 0.5 m above the walkable roof is gone: environments review L15) |
 | `sm_crates` | gameplay | 260 | one stepped solid, 1.0 / 1.6 m |
 | `sm_tank_tower` | gameplay | 332 | deck one-ways at 4 m either side of the tank solid (top 5.4 m) |
 | `sm_billboard` | gameplay | 550 | catwalk one-way at 10 m; panel solid 12–15.2 m with a 51° gable to 20.2 m (too steep to stand on). House-only (never sold) |

@@ -460,16 +460,18 @@ export class Renderer3D {
     cam.x = spawn.x;
     cam.y = spawn.y;
     applyPlanePose(this.camera3, planePose(cam, FOV_DEG, undefined, this.pose));
-    this.vfx.showForWarmUp(spawn.x, spawn.y + 1); // effects with meshes of their own (the dash trail, casings)
+    // every effect on show (the dash trail, casings, a sprite in every particle layer, a grenade of
+    // each type, an afterimage of the first warm-up soldier)
+    this.vfx.showForWarmUp(spawn.x, spawn.y + 1, insts[0]);
     await this.renderer.compileAsync(this.scene, this.camera3);
+    // and one real draw of it all, on every preset (QA 23 Oct): compileAsync links the programs, but
+    // drivers that build a pipeline (or upload a texture or buffer) on the first draw did it on the
+    // first dash, jet or grenade, 80–350 ms each on a software or weak GPU. Where the sun casts
+    // shadows (High) the same draw links its depth programs (the skinned soldiers' included).
+    this.sun.target.position.set(spawn.x, spawn.y, 0);
+    this.sun.position.copy(this.sun.target.position).addScaledVector(this.sunDir, 50);
+    this.renderer.render(this.scene, this.camera3);
     this.vfx.endWarmUp();
-    // compileAsync skips the shadow pass: where the sun casts shadows (High), one draw links its
-    // depth programs (the skinned soldiers' included) now, not when the first soldiers spawn
-    if (this.sun.castShadow) {
-      this.sun.target.position.set(spawn.x, spawn.y, 0);
-      this.sun.position.copy(this.sun.target.position).addScaledVector(this.sunDir, 50);
-      this.renderer.render(this.scene, this.camera3);
-    }
     // keep the warm-up soldiers, off the scene: disposing them would release the dye, blob and shadow programs (no
     // other material uses them yet), and the first real soldiers would link them again mid-game (review L1)
     for (const a of warm) {

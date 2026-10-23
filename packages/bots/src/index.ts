@@ -6,6 +6,7 @@
  */
 import type { Game, PlayerState, ReplayBot, ReplayFile, ReplaySetup } from '@military-forge/sim';
 import { BotBrain } from './brain';
+import type { NavGraph } from './nav/graph';
 import { botLevel, type BotLevelId } from './levels';
 import { botName } from './names';
 
@@ -18,8 +19,8 @@ export { BOT_LEVELS, botLevel, type BotLevel, type BotLevelId } from './levels';
 export { Motor, type MotorGoal } from './motor';
 export { BOT_NAMES, BOT_TAG, botName } from './names';
 export { PathFinder } from './nav/astar';
-export { navGraphFor, warmNavGraphs } from './nav/cache';
-export { LinkKind, buildNavGraph, type NavGraph, type NavLink, type NavNode } from './nav/graph';
+export { latestNavGraph, navBuildsQueued, navGraphFor, navKey, queueNavGraphs, readyNavGraph, requestNavGraph, warmNavGraphs, workNavBuilds } from './nav/cache';
+export { LinkKind, buildNavGraph, navGraphSteps, type NavGraph, type NavLink, type NavNode } from './nav/graph';
 export { Navigator } from './nav/navigator';
 export { Perception, type Contact } from './perception';
 
@@ -30,6 +31,11 @@ export interface BotSpec {
   name?: string;
   /** its seed serial (a replay puts a bot back with the one it had); default the game's next */
   serial?: number;
+  /**
+   * its nav graph: default the game's map and tuning's, built now if it isn't (90–330 ms). A room
+   * passes one it has ready (readyNavGraph / requestNavGraph / latestNavGraph): never a build on a tick.
+   */
+  graph?: NavGraph;
 }
 
 /** Every bot a game has had, for replays: who, its serial, when it joined and left. */
@@ -62,7 +68,7 @@ export function addBot(game: Game, spec: BotSpec = {}): PlayerState {
   roster.next = Math.max(roster.next, serial + 1);
   const level = botLevel(spec.level);
   const p = game.addPlayer(spec.name ?? botName(serial));
-  const brain = new BotBrain(game, level, serial);
+  const brain = new BotBrain(game, level, serial, spec.graph);
   p.isBot = true;
   p.brain = brain;
   game.setLoadout(p, brain.loadout);

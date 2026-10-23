@@ -82,6 +82,7 @@ Segment flags:
 | `SOLID` | blocks players, projectiles, grenades, LOS |
 | `ONE_WAY` | platform you can fly up through from below; solid only when moving down onto it *and* the feet were above it last tick. Holding **down** for 0.15 s drops through. It is also `BULLET_PASS`, like a railing (bullets, blasts, gas, sight and grenades from below go through), unless the map marks it `blocksBullets`: a floor or roof slab, still one-way for bodies, that stops all of those from either side |
 | `BULLET_PASS` | chain-link fences, railings: block bodies, not bullets |
+| bullet-only (`MapDef.bulletOnly`) | the opposite: thin posts, poles, masts, rails and plates that **stop bullets** (hitscan, ricochet legs) and the bots' line of fire, and nothing else: bodies, grenades, projectiles, blasts, gas and sight pass them, so they never snag movement. They sit outside the grid (only `raycastBullet` sees them), and an edge counts only from outside, so a shot that starts inside one (a shooter at a pole) leaves it (23 Oct QA, NOTES §35) |
 | `GLASS` | breakable; HP pool; when destroyed it is removed from the grid (server event) |
 | `BOUNCY` | restitution override for grenades (fun maps) |
 | `KILL` | instant death on contact (pits, crushers, lava) |

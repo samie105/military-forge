@@ -14,7 +14,7 @@
 | Snapshot rate | **30 Hz** rooms, **20 Hz** BR (+ AOI tiers) | ~8–12 KB/s down per player |
 | Input rate | **60 Hz**, each packet carries the last **3–4 inputs** (redundancy) | survives 1–3 lost packets without a server-side input miss |
 | Interp delay | adaptive, **50–200 ms** (1 snapshot interval + the late tail of arrivals + an interval per snapshot lost in a row; §10) | ~60 ms on a clean path, ~130–170 ms at 150 ms ±40 jitter with loss |
-| Lag comp cap | **500 ms** total rewind (30 ticks): 300 ms of latency on top of the most the interpolation delay can be (200 ms; one tick more in low-bandwidth mode). A server may set its own (`LAG_COMP_MAX_MS`; the Johannesburg trial box: 900) | beyond that, players lead their shots; also limits fake-lag "backtrack" abuse. The old 300 ms (200 + a fixed 100) clipped every shot above ~175 ms RTT: on Nigerian mobile data (19 Oct 2026) that was every shot |
+| Lag comp cap | **450 ms** total rewind (27 ticks): 250 ms of latency on top of the most the interpolation delay can be (200 ms; one tick more in low-bandwidth mode). A server sets its own latency (`LAG_COMP_LATENCY_MS`), and the admin page's `net.lagCompMs` changes it live. **Cover rule:** a rewind over 150 ms doesn't count against a target behind solid cover now (§7.1) | up to ~250 ms RTT every shot lands where it was aimed; beyond that, players lead their shots; also limits fake-lag "backtrack" abuse. The trial box ran 900 ms for 500 ms phones, and players were hit up to 0.9 s after reaching cover (QA, 23 Oct 2026; NOTES §39) |
 | Transport (MVP) | **WebSocket over TLS on 443** (uWebSockets.js) | reaches ~100% of networks; simplest |
 | Transport (Phase 2) | **WebTransport datagrams** as an upgrade, WS fallback | Baseline since Safari 26.4 (Mar 2026); ~30–50% less jitter on lossy/mobile networks (reported) |
 | WebRTC DataChannel | **Not planned** | signalling + ICE + TURN complexity. Only needed for UDP on iOS < 26.4 / iPhone XS–XR, which matters little with desktop first |
@@ -307,14 +307,16 @@ v8 also appends a **dash group** to the local-player block (dashTicks u6, dashDi
 ```
 onFire(shooter, inputTick, renderTick, renderFrac):
   t = renderTick + renderFrac/256
-  t = clamp(t, now − 30 ticks, now)                  // 500 ms cap (300 ms latency + up to 200 ms interp delay)
+  t = clamp(t, now − 27 ticks, now)                  // 450 ms cap (250 ms latency + up to 200 ms interp delay)
   for each other player p: pose = lerp(history[p] at the snapshot ticks around t, as the client interpolated)   // hitboxes only
+    if now − t > 9 ticks and p is behind solid cover now (head, torso and legs, from the shot's origin): pose = p now   // the cover rule
   ray-test world (CURRENT geometry) + rewound hitboxes
   apply damage NOW (no rewinding health)
 ```
 - The shooter is **not** rewound (they shoot from where they are).
 - Breakable geometry uses current state (simpler, and fair: you can't shoot through glass that broke a moment ago on your screen).
-- **Favour-the-shooter side effects:** a victim can die ~100–300 ms "after" reaching cover on their own screen. Mitigations: the cap, a clear hit-direction indicator, and killcams that show the shooter's view.
+- **Favour-the-shooter side effects:** a victim can die ~100–300 ms "after" reaching cover on their own screen. Mitigations: the cap, the cover rule, a clear hit-direction indicator, and killcams that show the shooter's view.
+- **The cover rule** (`sim/rewind.ts` `REWIND_COVER_TICKS`, 23 Oct 2026): a rewind longer than 150 ms is turned down when the target is behind solid cover at the server's present time, from the shot's origin to its head, torso and legs alike. The shot is then tested against where the target is, so the wall takes it. A shorter rewind (a LAN's is ~120–130 ms), or a target still partly in the open, is rewound as usual. Measured on a cover range (NOTES §39), hits on a target already behind cover went from 21–38% of all hits to 0–4%. They fell at every ping from the trial box's 110 ms to MTN's 500 ms, and no other hits were lost.
 
 ### 7.2 Hit confirmation
 The client shows **predicted** impact sparks and tracers instantly, but the **hit marker and damage number** only appear on the server's `HIT_CONFIRM`. Wrong hit markers feel worse than late ones.
@@ -348,6 +350,8 @@ onSnapshot(s) {
   const err = sub(before, after);
   if (length(err) > 3) visualOffset = ZERO;          // teleport/respawn: snap
   else visualOffset = add(visualOffset, err);        // decays: visualOffset *= exp(-frameDt / 0.08)
+  // as built (23 Oct 2026): the decay moves the drawn player at most 8 m/s (CORRECTION_PULL_MAX), and an
+  // offset past 2 m (one error or several in a row: CORRECTION_SNAP) is one jump instead (NOTES §40)
   stats.corrections++;
 }
 ```
@@ -395,6 +399,10 @@ interpDelay = clamp(max(2 × snapshotInterval, snapshotInterval + 2 × jitterStd
 for each remote:
   find snapshots A ≤ renderServerTime < B → lerp position, shortest-arc lerp aim, discrete fields from A (B when alpha > 0.5)
   no B yet → extrapolate with last velocity up to 100 ms, then hold. Reconverge over 100 ms when data arrives
+  // as built (23 Oct 2026, interpolation.ts extrapolationTicks, NetClient.remotePose): the snapshot's
+  // velocity in full for 50 ms, then slowing evenly to a stop at 150 ms (100 ms of motion at most), held
+  // after; never into a wall, floor or ceiling of the map; not when dead. No reconvergence pass: the
+  // carried-on pose is close enough that the next snapshot's pose takes over (NOTES §40)
   spawn → appear at first snapshot (with spawn VFX); despawn → fade 150 ms
 ```
 Store 1 s of snapshots per entity in a ring buffer. Animation is driven by interpolated velocity + state flags, so remote characters never "moonwalk".

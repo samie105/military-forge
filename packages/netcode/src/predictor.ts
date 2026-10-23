@@ -7,7 +7,8 @@
  * the server's state for tick `ack`:
  *   - equal integers (the common case) → nothing to do;
  *   - otherwise → adopt the server state, re-simulate ack+1 … now from the recorded inputs, and
- *     hide the position jump with a visual offset that decays over ~80 ms.
+ *     hide the position jump with a visual offset that decays over ~80 ms, pulling the drawn
+ *     player at most CORRECTION_PULL_MAX a second (a slide, not a yank); past CORRECTION_SNAP, a jump.
  *
  * The prediction world holds only the local player. Not predicted (server-authoritative, arrive as
  * corrections): damage from others, knockback from explosions, deaths, respawn position, and own
@@ -33,6 +34,18 @@ export const SNAP_DISTANCE = 3;
 export const VISIBLE_ERROR = 0.001;
 /** Visual error decay time constant (docs/05 §8). */
 export const SMOOTHING_SECONDS = 0.08;
+/**
+ * The most a correction pulls the drawn player per second (m/s, ~1.6× a walk): a correction reads
+ * as a slide, not a yank. The exponential's start is 1/SMOOTHING_SECONDS of the error a second
+ * (12.5 m/s for 1 m); a latency spike's corrections pulled at up to 32 m/s (netfeel, MTN).
+ */
+export const CORRECTION_PULL_MAX = 8;
+/**
+ * A visual error bigger than this (one correction, or several in a row) is shown as one jump
+ * instead (m): a slide that long would drag the drawn player far behind its real one, where its
+ * shots start. Latency spikes (the server ran without our inputs for half a second) cause them.
+ */
+export const CORRECTION_SNAP = 2;
 /** Longest gap fast-forward will simulate; beyond it the next snapshot is adopted instead. */
 const MAX_FAST_FORWARD = 600;
 
@@ -85,6 +98,8 @@ export class Predictor {
   readonly events: SimEvent[] = [];
   /** visual error being smoothed away, added to the render position */
   readonly offset = { x: 0, y: 0 };
+  /** how far the last decayOffset moved the drawn player (m): a correction's slide, felt as a pull */
+  lastSlideM = 0;
   readonly stats = createPredictionStats();
   /** newest server tick reconciled */
   lastAck = -1;
@@ -241,10 +256,20 @@ export class Predictor {
 
   /** Decays the visual error (call once per rendered frame). */
   decayOffset(dtSec: number): void {
-    const k = simExp(-dtSec / SMOOTHING_SECONDS);
-    this.offset.x *= k;
-    this.offset.y *= k;
+    const x0 = this.offset.x;
+    const y0 = this.offset.y;
+    const len = Math.sqrt(x0 * x0 + y0 * y0);
+    if (len > 0) {
+      // exponential (SMOOTHING_SECONDS), never pulling faster than CORRECTION_PULL_MAX
+      const d = Math.min(len * (1 - simExp(-dtSec / SMOOTHING_SECONDS)), CORRECTION_PULL_MAX * dtSec);
+      const k = len > d ? (len - d) / len : 0;
+      this.offset.x *= k;
+      this.offset.y *= k;
+    }
     if (Math.abs(this.offset.x) + Math.abs(this.offset.y) < 1e-4) this.offset.x = this.offset.y = 0;
+    const sx = x0 - this.offset.x;
+    const sy = y0 - this.offset.y;
+    this.lastSlideM = Math.sqrt(sx * sx + sy * sy);
   }
 
   private applyError(dx: number, dy: number): ReconcileKind {
@@ -259,6 +284,11 @@ export class Predictor {
     }
     this.offset.x += dx;
     this.offset.y += dy;
+    // a big error (or errors in a row that add up to one): one jump now, not a long drag
+    if (this.offset.x * this.offset.x + this.offset.y * this.offset.y > CORRECTION_SNAP * CORRECTION_SNAP) {
+      this.offset.x = this.offset.y = 0;
+      this.stats.snaps++;
+    }
     if (err <= VISIBLE_ERROR) return 'mispredicted';
     this.stats.corrections++;
     this.stats.maxErrorM = Math.max(this.stats.maxErrorM, err);

@@ -265,8 +265,21 @@ export function insideSolid(map: MapDef, x: number, y: number): boolean {
   return false;
 }
 
-/** Builds the graph for a map (see the file header). Tens of milliseconds for the shipped maps. */
+/** Builds the graph for a map (see the file header): 90–330 ms for the shipped maps, all at once. */
 export function buildNavGraph(map: MapDef, world: CollisionWorld, t: Tuning): NavGraph {
+  const steps = navGraphSteps(map, world, t);
+  for (;;) {
+    const r = steps.next();
+    if (r.done) return r.value;
+  }
+}
+
+/**
+ * The same build in small steps (a settle, a walk or a flight each, well under a millisecond to a
+ * few): a server runs them between ticks (bots/nav/cache.ts workNavBuilds), never on one. The
+ * steps and their order are the same as buildNavGraph's, so is the graph.
+ */
+export function* navGraphSteps(map: MapDef, world: CollisionWorld, t: Tuning): Generator<void, NavGraph, void> {
   const graph = new NavGraph(map, world);
   const mech = MapMechanics.compile(map);
   const probe = new Probe(world, t, mech, map);
@@ -289,6 +302,7 @@ export function buildNavGraph(map: MapDef, world: CollisionWorld, t: Tuning): Na
     for (let i = 0; i <= n; i++) {
       const x = span > 2 * END_INSET ? Math.min(x1 - END_INSET, Math.max(x0 + END_INSET, x0 + (span * i) / n)) : (x0 + x1) / 2;
       const y = ay + ((by - ay) * (x - ax)) / (bx - ax);
+      yield;
       probe.place(x, y + 0.02);
       if (!probe.settle()) continue;
       const p = probe.p;
@@ -326,6 +340,7 @@ export function buildNavGraph(map: MapDef, world: CollisionWorld, t: Tuning): Na
         }
       });
       if (best < 0) continue;
+      yield;
       const b = graph.nodes[best]!;
       probe.place(a.x, a.y + 0.02);
       if (!probe.settle()) continue;
@@ -369,6 +384,7 @@ export function buildNavGraph(map: MapDef, world: CollisionWorld, t: Tuning): Na
     });
     const targets = [...nearestBySurface.values()].sort((x, y) => x - y);
     for (const bid of targets) {
+      yield;
       goal.early = false;
       if (flyAirLink(graph, probe, motor, goal, a.id, bid, t)) continue;
       goal.early = true;

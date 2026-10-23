@@ -2,6 +2,7 @@
  * Game server = rooms (the default dev room + rooms by code, rooms.ts) + one tick loop + a WebSocket
  * transport (uWebSockets.js, or `ws` as fallback). The WebTransport gateway feeds the default room.
  */
+import { workNavBuilds } from '@military-forge/bots';
 import type { Scheduler } from '@military-forge/netcode';
 import { TICK_RATE } from '@military-forge/sim';
 import { startTickLoop } from './loop';
@@ -93,19 +94,25 @@ export async function createServer(
   const transportOptions = { webTransport, trustProxy: options.trustProxy ?? false, log, ...(options.host ? { host: options.host } : {}) };
   const transport = uws ? await startUws(uws.mod, port, target, transportOptions) : await startWs(port, target, transportOptions);
 
-  const loop = startTickLoop(TICK_RATE, () => rooms.tick());
+  // the bots' nav graphs build in the spare time between ticks, never on one (bots/nav/cache.ts)
+  const loop = startTickLoop(TICK_RATE, () => rooms.tick(), undefined, (budgetMs) => {
+    const end = performance.now() + budgetMs;
+    return workNavBuilds(() => performance.now() >= end);
+  });
   const rateTimer = setInterval(() => rooms.resetRateLimits(), 1000);
   const reportTimer = setInterval(() => {
     const s = loop.stats;
     if (s.ticks === 0) return;
     log(
       `[room${rooms.rooms.size ? `s ${target.roomCount}` : ''}] ${rooms.humanCount} players · ${s.ticks} ticks · avg ${(s.busyMs / s.ticks).toFixed(3)} ms · max ${s.maxTickMs.toFixed(3)} ms` +
-        (s.dropped ? ` · dropped ${s.dropped}` : ''),
+        (s.dropped ? ` · dropped ${s.dropped}` : '') +
+        (s.idleWorkMs >= 1 ? ` · nav builds ${s.idleWorkMs.toFixed(0)} ms between ticks` : ''),
     );
     s.ticks = 0;
     s.busyMs = 0;
     s.maxTickMs = 0;
     s.dropped = 0;
+    s.idleWorkMs = 0;
   }, 10_000);
 
   return {
