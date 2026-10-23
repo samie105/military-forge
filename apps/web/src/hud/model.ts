@@ -2,10 +2,10 @@
  * The HUD's numbers, as pure functions of the frame, the tuning and recent events, so they're
  * testable without a DOM. hud.ts turns them into elements.
  */
-import { DRAGON, HitZone, NO_WEAPON, RIOT_SHIELD, TUNING_GROUPS, defaultTuning, grenades, pickups as pickupDefs, weapons, type PickupDef, type Tuning, type WeaponDef } from '@military-forge/content';
+import { DRAGON, GRENADE_PICKUP_COUNT, HitZone, NO_WEAPON, RIOT_SHIELD, TUNING_GROUPS, defaultTuning, grenades, pickups as pickupDefs, weapons, type PickupDef, type Tuning, type WeaponDef } from '@military-forge/content';
 import { DamageSource, type SimEvent } from '@military-forge/sim';
 import { iconHref, weaponIcon } from '../ui/icons';
-import type { PickupView, PlayerView, WeaponView } from '../view';
+import type { MapEventView, PickupView, PlayerView, WeaponView } from '../view';
 import { nearbyWeaponPrompt, takePrompt, weaponUnderfoot } from '../weaponItems';
 
 /**
@@ -493,4 +493,181 @@ export function crateCompare(held: WeaponDef, floor: WeaponDef): CompareRow[] {
     { key: 'weight', held: weightWords(held.moveSpeedMul), floor: weightWords(floor.moveSpeedMul), a: Math.max(0.08, heavy(held)), b: Math.max(0.08, heavy(floor)), dir: weightDir, delta: weightDir === 'up' ? 'faster' : weightDir === 'down' ? 'slower' : 'same' },
     row('mag', held.mag, floor.mag, MOST.mag, String),
   ];
+}
+
+// ---- the premium in-match moments (owner, 23 Oct: the swap, guns on the ground, map events) ----
+
+/** A gun's fire mode in a word, for the compare card's art strip. */
+const FIRE_WORDS: Readonly<Record<string, string>> = { semi: 'Semi-auto', auto: 'Full auto', burst: 'Burst', spinup: 'Spin-up', beam: 'Beam', charge: 'Charge', melee: 'Melee' };
+
+export function fireWords(def: Pick<WeaponDef, 'fireMode'> | undefined): string {
+  return def ? (FIRE_WORDS[def.fireMode] ?? def.fireMode) : '';
+}
+
+/** The item card's look: a gun (volt), grenades (brass), the riot shield (steel). */
+export type ItemTone = 'gun' | 'grenades' | 'shield';
+
+export interface ItemCard {
+  title: string;
+  line: string;
+  icon: string;
+  tone: ItemTone;
+}
+
+/**
+ * The card for an item close by that isn't a gun underfoot (that one gets the compare card): a
+ * grenade pair with what it does to your belt, the riot shield with its HP, a gun a step away.
+ * `key`: the take key's cap; null on a phone (the Take button).
+ */
+export function itemCard(def: PickupDef, me: Partial<Pick<PlayerView, 'weapons'>> & Partial<Pick<ArsenalFields, 'grenadeCounts'>>, key: string | null = 'E'): ItemCard {
+  const icon = pickupIcon(def);
+  if (def.kind === 'grenades' && def.grenade !== undefined) {
+    const g = grenades[def.grenade];
+    const max = g?.maxCount ?? 0;
+    const have = me.grenadeCounts?.[def.grenade] ?? 0;
+    const after = Math.min(max, have + GRENADE_PICKUP_COUNT);
+    const line = have >= max ? 'Belt full · walk over to take' : `Walk over to take · belt ${have}/${max} → ${after}/${max}`;
+    return { title: def.name, line, icon, tone: 'grenades' };
+  }
+  if (def.kind === 'weapon' && def.weapon !== undefined) {
+    const w = weapons[def.weapon];
+    const held = (me.weapons ?? []).some((s) => s.def === def.weapon);
+    const line = held ? 'Walk over it for ammo' : key === null ? 'Stand on it, then tap Take' : `Stand on it · ${key} to take`;
+    return { title: w?.name ?? def.name, line: `${weaponFamily(w)} · ${line}`, icon, tone: 'gun' };
+  }
+  return { title: def.name, line: `${RIOT_SHIELD.hp} HP · walk over to take`, icon, tone: 'shield' };
+}
+
+/** How far (m) a world tag stays full size; it is smallest and faintest from TAG_FAR on, gone past TAG_GONE. */
+export const TAG_NEAR = 6;
+export const TAG_FAR = 30;
+export const TAG_GONE = 48;
+
+/**
+ * A world tag's size and strength by its distance from you (m): full up to TAG_NEAR, then down to
+ * 0.72 scale and 0.45 opacity at TAG_FAR; hidden (null) past TAG_GONE. Stepped (scale by 0.02,
+ * opacity by 0.05), so a tag is rewritten only when the step changes, not every frame you move.
+ */
+export function tagFade(distance: number): { scale: number; opacity: number } | null {
+  if (!(distance <= TAG_GONE)) return null;
+  const k = Math.max(0, Math.min(1, (distance - TAG_NEAR) / (TAG_FAR - TAG_NEAR)));
+  const step = (v: number, s: number) => Math.round(v / s) * s;
+  return { scale: +step(1 - 0.28 * k, 0.02).toFixed(2), opacity: +step(1 - 0.55 * k, 0.05).toFixed(2) };
+}
+
+/** A tag's distance in words: whole metres up close, 5 m steps beyond 10 m. */
+export function tagDistance(distance: number): string {
+  const d = Math.max(0, distance);
+  return `${d < 10 ? Math.round(d) : Math.round(d / 5) * 5} m`;
+}
+
+/** A map event's stage on screen: the warning, the impact as it starts, running, and the all-clear after. */
+export type EventStage = 'warning' | 'impact' | 'active' | 'end';
+
+export interface EventMoment {
+  stage: EventStage;
+  kind: string;
+  name: string;
+  description: string;
+  /** whole seconds left in its phase (warning: to the start; active: to the end); 0 at the end */
+  seconds: number;
+  /** warning: 0 → 1 toward the start; active: 1 → 0 as it runs out; end: 0 */
+  progress: number;
+}
+
+/** The impact stamp's time on screen as an event starts, and the all-clear's after it ends (ms). */
+export const EVENT_IMPACT_MS = 900;
+export const EVENT_END_MS = 1800;
+
+/**
+ * The map event's sequence (warning → impact → active → end) from the frame's event and the clock.
+ * The frame only knows warning and active; this remembers when the active phase began (the impact
+ * plays for EVENT_IMPACT_MS, unless we joined mid-event) and what just ended (the all-clear plays
+ * for EVENT_END_MS). A new event takes over at once, whatever is showing.
+ */
+export class EventTimeline {
+  private current: { key: string; kind: string; name: string; description: string; warned: boolean; activeAt: number } | null = null;
+  private ended: { kind: string; name: string; description: string; until: number } | null = null;
+
+  update(view: Pick<MapEventView, 'id' | 'kind' | 'name' | 'description' | 'phase' | 'secondsLeft' | 'progress' | 'occurrence'> | null | undefined, now: number): EventMoment | null {
+    if (view) {
+      const key = `${view.id}:${view.occurrence}`;
+      if (this.current?.key !== key) {
+        this.current = { key, kind: view.kind, name: view.name, description: view.description, warned: false, activeAt: -Infinity };
+        this.ended = null;
+      }
+      const c = this.current;
+      const seconds = Math.max(1, Math.ceil(view.secondsLeft - 1e-9));
+      const base = { kind: c.kind, name: c.name, description: c.description, seconds };
+      if (view.phase === 'warning') {
+        c.warned = true;
+        return { ...base, stage: 'warning', progress: clamp01(view.progress) };
+      }
+      // the start: an impact, unless we came in after it (a late join, a reconnect)
+      if (c.activeAt === -Infinity) c.activeAt = c.warned || view.progress < 0.05 ? now : now - EVENT_IMPACT_MS;
+      return { ...base, stage: now - c.activeAt < EVENT_IMPACT_MS ? 'impact' : 'active', progress: clamp01(1 - view.progress) };
+    }
+    const c = this.current;
+    if (c) {
+      this.current = null;
+      if (c.activeAt !== -Infinity) this.ended = { kind: c.kind, name: c.name, description: c.description, until: now + EVENT_END_MS };
+    }
+    if (this.ended && now < this.ended.until) return { stage: 'end', kind: this.ended.kind, name: this.ended.name, description: this.ended.description, seconds: 0, progress: 0 };
+    this.ended = null;
+    return null;
+  }
+}
+
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+
+/** The frame's event as a moment without the timeline's memory: warning or active (no impact, no all-clear). */
+export function eventMomentOf(view: Pick<MapEventView, 'kind' | 'name' | 'description' | 'phase' | 'secondsLeft' | 'progress'> | null | undefined): EventMoment | null {
+  if (!view) return null;
+  const warning = view.phase === 'warning';
+  return {
+    stage: warning ? 'warning' : 'active',
+    kind: view.kind,
+    name: view.name,
+    description: view.description,
+    seconds: Math.max(1, Math.ceil(view.secondsLeft - 1e-9)),
+    progress: clamp01(warning ? view.progress : 1 - view.progress),
+  };
+}
+
+/** The event's effect in a few words for the active strip: what follows the colon ("…: jets climb slowly" → "Jets climb slowly"). */
+export function eventEffect(description: string): string {
+  const i = description.indexOf(':');
+  const s = (i >= 0 ? description.slice(i + 1) : description).trim();
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+}
+
+/** What the all-clear says is back, by kind. */
+const EVENT_END_LINES: Readonly<Record<string, string>> = {
+  gravitySurge: 'Gravity back to normal',
+  lowGravity: 'Gravity back to normal',
+  flip: 'Gravity back to normal',
+  emp: 'Jetpacks back online',
+  fog: 'Full range again',
+  gust: 'The wind drops',
+};
+
+export function eventEndLine(kind: string): string {
+  return EVENT_END_LINES[kind] ?? 'Back to normal';
+}
+
+/** The small arrow on the event's icon: which way gravity goes (surge down, low gravity up, flip both). */
+export function eventArrow(kind: string): string {
+  return kind === 'gravitySurge' ? 'chev-down' : kind === 'lowGravity' ? 'chev-up' : kind === 'flip' ? 'rotate' : '';
+}
+
+/** The screen treatment's kind (hud.css .mf-evfx[data-kind]): the event kinds, anything else 'custom'. */
+export function eventFx(kind: string): string {
+  return kind in EVENT_END_LINES ? kind : 'custom';
+}
+
+/** Kill streaks in the war tone's words: 2 → "2 down", up to "Unstoppable" past 7; '' for one. */
+export function streakWords(streak: number): string {
+  if (streak < 2) return '';
+  if (streak >= 8) return 'Unstoppable';
+  return `${streak} down`;
 }

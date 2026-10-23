@@ -125,7 +125,6 @@ html.reduce-motion #hud { transition: none; }
 #hud .mf-hud-desktop .sb.m-p1 { animation-duration: var(--m-fast); }
 
 /* edge banners leave accelerating (hud.ts Linger keeps them up for the exit) */
-#hud[data-active-state~="event-leaving"] .evb,
 #hud[data-active-state~="pickup-crate-leaving"] .mf-hud-desktop .pickup:not(.mf-pickup-item),
 #hud[data-active-state~="pickup-item-leaving"] .mf-hud-desktop .mf-pickup-item { animation: m-edge-out var(--m-fast) var(--ease-leave) both; }
 
@@ -135,9 +134,6 @@ html.reduce-motion #hud { transition: none; }
    script stacks them by their measured height), its sign above */
 #hud .mf-hud-desktop .mf-world { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
 #hud .mf-world > * { position: absolute; left: 0; top: 0; will-change: transform; translate: -50% -100%; }
-#hud .mf-world .crate__float { bottom: auto; }
-#hud .mf-world .crate__float i { height: 28px; }
-#hud .mf-world .crate__label b { font-weight: var(--fw-black); }
 #hud .mf-world .rack__tag { min-width: 0; box-shadow: var(--sh-card-sm); }
 #hud .mf-world .rack__tag b { font-size: var(--fs-18); }
 #hud .mf-world .rack__tag span { font-size: var(--fs-16); }

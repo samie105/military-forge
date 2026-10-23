@@ -16,15 +16,15 @@
  * banners (P9) that leave accelerating (Linger), the HP bar's ease (P10) on a hit only.
  */
 import { DamageSource, MatchPhase, type SimEvent } from '@military-forge/sim';
-import { DRAGON, GAS, HitZone, defaultTuning, weapons, type Tuning } from '@military-forge/content';
+import { DRAGON, GAS, HitZone, POWER_WEAPONS, defaultTuning, weapons, type Tuning } from '@military-forge/content';
 import type { MatchView } from '../shell/matchView';
 import { formatClock, playerName } from '../shell/matchView';
 import { capText, iconHref, weaponIcon } from '../ui/icons';
 import { drawButtonCap } from '../gamepad/caps';
 import { pingQuality } from '../ui/ping';
-import { logicalRect, type Box } from '../ui/landscape';
-import { WorldTags } from './worldTags';
-import { flipTransform, moveIndicator, reduced, rollText, stagger, token } from '../ui/motion';
+import { logicalRect } from '../ui/landscape';
+import { PHONE_TAGS, WorldTags } from './worldTags';
+import { moveIndicator, reduced, rollText, stagger, token } from '../ui/motion';
 import type { Frame, NetStats, PlayerView } from '../view';
 import { weaponUnderfoot } from '../weaponItems';
 import { Binder } from './bind';
@@ -34,23 +34,33 @@ import {
   damageArc as arcLook,
   dashHint,
   dashStatus,
+  eventArrow,
+  eventEffect,
+  eventEndLine,
+  eventFx,
   eventLook,
+  eventMomentOf,
+  EventTimeline,
   feedFromEvents,
+  fireWords,
   fuelView,
   grenadeBelt,
   healthView,
   isBlastSource,
   isBurnTick,
+  itemCard,
   leaderLine,
   pickupIcon,
   pickupNear,
   pickupPrompt,
   screenAngle,
   shieldStatus,
+  streakWords,
   tunedSummary,
   weaponCards,
   weaponFamily,
   type ArcKind,
+  type EventMoment,
   type FeedEntry,
   type HudPlayer,
   type ScoreRow,
@@ -59,6 +69,7 @@ import { StateTokens } from './state';
 import { HUD_VARS, hudTemplate } from './template';
 import { feedTouchHud } from '../touch';
 import './hud.css';
+import './premium.css';
 
 export type BannerKind = 'info' | 'event' | 'success' | 'warning' | 'danger';
 
@@ -146,6 +157,14 @@ export interface HudMemory {
   swapTotal?: number;
   /** a quick throw (a tap) was just let go: its stamp */
   quickThrow?: boolean;
+  /** the map event's moment (warning, impact, active, all-clear: EventTimeline); absent, read from the frame (no impact or all-clear) */
+  event?: EventMoment | null;
+  /** a draw just ended: the gun now in hand lands (its name and class stamp, the art settles) */
+  drawn?: boolean;
+  /** a moment after a draw: the cue under the held gun keeps saying which key swaps back */
+  swapHint?: boolean;
+  /** our last kill, to confirm (who, our streak, a headshot); `n` counts them so a new one restamps */
+  kill?: { victim: string; streak: number; headshot: boolean; n: number } | null;
 }
 
 export interface HudFrame {
@@ -170,6 +189,12 @@ const HP_EASE_MS = 300;
 const LAUNCH_MS = 2500;
 const DASH_HINT_MS = 600;
 const QUICK_MS = 450;
+/** the gun now in hand lands (stamps) this long after its draw ends */
+const DRAWN_MS = 450;
+/** the draw cue keeps naming the swap-back key this long after the draw */
+const SWAP_HINT_MS = 1200;
+/** a kill's confirmation stays up this long */
+const KILL_CONFIRM_MS = 1500;
 const SHIELD_WORDS = {
   up: { state: 'Up', covers: 'Front covered', action: 'sling to dash' },
   raising: { state: 'Raising', covers: 'Coming up', action: 'sling to dash' },
@@ -238,23 +263,48 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
   on('tuned', tuned !== '');
   v['match.tunedSummary'] = tuned;
 
-  // the map event (docs/02 §20.7): its banner under the clock, warning then running
+  // the map event (docs/02 §20.7) as a sequence: the warning with its countdown, the impact as it
+  // starts, the strip while it runs, the all-clear after (EventTimeline); its screen treatment by kind
   const e = frame.mapEvent ?? null;
   on('event', !!e);
   on('event-active', e?.phase === 'active');
   on('event-warning', e?.phase === 'warning');
-  if (e) {
-    const look = eventLook(e.kind);
-    const warning = e.phase === 'warning';
-    const seconds = String(Math.max(1, Math.ceil(e.secondsLeft - 1e-9)));
+  const moment = mem.event !== undefined ? mem.event : eventMomentOf(e);
+  const stage = moment?.stage ?? null;
+  on('ev-shown', !!stage);
+  on('ev-warning', stage === 'warning');
+  on('ev-impact', stage === 'impact');
+  on('ev-active', stage === 'active');
+  on('ev-end', stage === 'end');
+  // the treatment's own token while it runs (hud.css: the low-gravity float, the EMP flicker)
+  if (moment && (stage === 'impact' || stage === 'active')) tokens.push(`ev-fx-${eventFx(moment.kind)}`);
+  if (moment) {
+    const look = eventLook(moment.kind);
+    const arrow = eventArrow(moment.kind);
+    const warning = stage === 'warning';
+    const running = stage === 'impact' || stage === 'active';
+    const seconds = String(moment.seconds);
     v['event.color'] = look.color;
     v['event.icon'] = iconHref(look.icon);
-    v['event.name'] = e.name;
-    v['event.description'] = e.description;
+    v['event.arrow'] = arrow ? iconHref(arrow) : '';
+    v['event.name'] = moment.name;
+    v['event.description'] = moment.description;
+    v['event.effect'] = eventEffect(moment.description);
+    v['event.over'] = `${moment.name} over`;
+    v['event.endLine'] = eventEndLine(moment.kind);
+    v['event.fx'] = eventFx(moment.kind);
+    v['event.stage'] = stage!;
     v['event.startsIn'] = warning ? seconds : '';
-    v['event.timeLeft'] = warning ? '' : seconds;
-    v['v.event'] = warning ? '0' : fixed(1 - e.progress, 2);
-  } else v['v.event'] = '0';
+    v['event.count'] = warning ? seconds : '';
+    // the digit stamps each second: its class alternates, so the stamp's animation starts again
+    v['event.countClass'] = `display num mf-evw__digit mf-evw__digit--${moment.seconds % 2 ? 'a' : 'b'}`;
+    v['event.timeLeft'] = running ? seconds : '';
+    v['v.event'] = running ? fixed(moment.progress, 2) : '0';
+    v['v.evWarn'] = warning ? fixed(moment.progress, 3) : '0';
+  } else {
+    v['v.event'] = '0';
+    v['v.evWarn'] = '0';
+  }
 
   // the net plate and the frame counter
   const net = frame.net;
@@ -288,6 +338,7 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
   const me = (frame.players.find((p) => p.id === frame.localId) ?? null) as HudPlayer | null;
   if (!me) {
     for (const k of ['v.hp', 'v.hpGhost', 'v.fuel', 'v.fuelDelay', 'v.shield', 'v.dash', 'v.dashCost', 'v.reload', 'v.respawn', 'v.equip', 'v.throw']) v[k] = '0';
+    v['v.equipMs'] = '400ms';
     return { values: v, tokens };
   }
   on('alive', me.alive);
@@ -364,6 +415,10 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
   on('switching', !!held && swap > 0);
   v['v.equip'] = swap > 0 && (mem.swapTotal ?? 0) > 0 ? fixed(1 - Math.min(1, swap / mem.swapTotal!), 2) : '0';
   v['player.slot.0.equipLeft'] = swap > 0 ? `${(swap / 60).toFixed(1)} s` : '';
+  // the draw's length for its motion (the ghosts' slide, hud.css), the gun's real equip time
+  v['v.equipMs'] = `${Math.round(Math.max(250, Math.min(600, ((mem.swapTotal ?? 0) / 60) * 1000)))}ms`;
+  on('drawn', !!held && swap === 0 && !!mem.drawn);
+  on('swap-hint', !!held && !me.dual && (swap > 0 || !!mem.swapHint));
   if (held) {
     const def = weapons[held.def];
     const hand = me.dual ? cards : [held];
@@ -388,6 +443,7 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
     v['player.slot.0.idx'] = String(held.slot + 1);
     v['player.slot.0.name'] = second && second.name !== held.name ? `${held.name} & ${second.name}` : held.name;
     v['player.slot.0.family'] = weaponFamily(def);
+    v['player.slot.0.fire'] = held.melee ? 'Melee' : fireWords(def);
     v['player.slot.0.icon'] = icon;
     v['player.dual.icon'] = second ? href(weaponIcon(weapons[second.def]?.id)) : icon;
     v['player.slot.0.mag'] = String(held.mag);
@@ -439,9 +495,17 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
   on('pickup', !!prompt);
   on('pickup-crate', !!crate);
   on('pickup-item', !!prompt && !crate);
+  for (const k of ['pickup.item.title', 'pickup.item.line', 'pickup.item.tone', 'pickup.weapon.power']) v[k] = '';
   if (prompt) {
     v['pickup.text'] = prompt;
     v['pickup.icon'] = item ? pickupIcon(item) : crate ? href(weaponIcon(crate.weapon.id)) : '';
+    // the item card: what it is and what it does for you (a grenade pair on your belt, the shield's HP)
+    if (item && !crate) {
+      const card = itemCard(item, me, mem.touch ? null : mem.keys.interact || 'E');
+      v['pickup.item.title'] = card.title;
+      v['pickup.item.line'] = card.line;
+      v['pickup.item.tone'] = card.tone;
+    }
   }
   if (crate) {
     const inHand = held ? weapons[held.def] : undefined;
@@ -449,6 +513,10 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
     on('pickup-cmp', !!inHand && inHand.fireMode !== 'melee');
     v['pickup.verb'] = inHand ? 'Swap' : 'Take';
     v['pickup.weapon.name'] = crate.weapon.name;
+    v['pickup.weapon.family'] = weaponFamily(crate.weapon);
+    v['pickup.weapon.fire'] = fireWords(crate.weapon);
+    v['pickup.weapon.magWords'] = crate.weapon.fireMode === 'melee' ? 'No ammo' : `${crate.weapon.mag}-round mag`;
+    v['pickup.weapon.power'] = POWER_WEAPONS.has(crate.weapon.id) ? 'power' : '';
     v['pickup.weapon.icon'] = href(weaponIcon(crate.weapon.id));
     v['pickup.held.name'] = inHand?.name ?? '';
     v['pickup.held.icon'] = href(weaponIcon(inHand?.id));
@@ -475,10 +543,23 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
     v['death.icon'] = death.icon;
     const waiting = me.respawnTicks > 0;
     v['death.lead'] = waiting ? 'Respawn in' : 'Respawning…';
-    v['player.respawnIn'] = waiting ? String(Math.ceil(me.respawnTicks / 60)) : '';
+    const left = Math.ceil(me.respawnTicks / 60);
+    v['player.respawnIn'] = waiting ? String(left) : '';
+    // the digit stamps each second (its class alternates, so the animation starts again)
+    v['death.numClass'] = `num mf-num--${left % 2 ? 'a' : 'b'}`;
     v['death.unit'] = waiting ? 's' : '';
     v['v.respawn'] = total > 0 ? fixed(1 - Math.min(1, me.respawnTicks / total)) : '1';
   } else v['v.respawn'] = '0';
+
+  // our kill, confirmed: who, a headshot, the streak in words ("3 down")
+  const kc = me.alive ? (mem.kill ?? null) : null;
+  on('kill-confirm', !!kc);
+  on('kill-head', !!kc?.headshot);
+  v['kill.victim'] = kc?.victim ?? '';
+  v['kill.class'] = `display mf-kc__name mf-kc__name--${(kc?.n ?? 0) % 2 ? 'a' : 'b'}`;
+  v['kill.streak'] = kc ? streakWords(kc.streak) : '';
+  // the spectator bar's visuals are in place for when spectating lands (netcode); nothing drives them yet
+  v['spectate.name'] = '';
 
   // the reticle and its markers
   on('reticle', !!input.pointer && me.alive);
@@ -651,7 +732,11 @@ export class Hud {
   private readonly binder: Binder;
   private readonly states: StateTokens;
   private readonly linger = new Linger([
-    { main: 'event', members: ['event-active', 'event-warning'] },
+    { main: 'ev-warning', members: [] },
+    { main: 'ev-active', members: [] },
+    { main: 'ev-end', members: [] },
+    { main: 'kill-confirm', members: ['kill-head'] },
+    { main: 'drawn', members: [] },
     { main: 'pickup-crate', members: ['pickup-swaps', 'pickup-cmp'] },
     { main: 'pickup-item', members: [] },
   ]);
@@ -684,6 +769,16 @@ export class Hud {
   private dash: { dir: number; until: number } | null = null;
   private swapTotal = 0;
   private lastSwap = 0;
+  private drawnUntil = 0;
+  private swapHintUntil = 0;
+  /** the map event's sequence (warning → impact → active → all-clear) */
+  private readonly events = new EventTimeline();
+  /** our kills since we last died, and the last one to confirm */
+  private streak = 0;
+  private kill: { victim: string; streak: number; headshot: boolean; n: number; until: number } | null = null;
+  private kills = 0;
+  /** the world tags on the phone screen (the nearest few, smaller) */
+  private readonly phoneTags: WorldTags;
   private lastActive = -1;
   private death: DeathInfo | null = null;
   private keys: HudKeys = {};
@@ -733,6 +828,7 @@ export class Hud {
     this.arcs = one<SVGSVGElement>(`${desk} .dmg`);
     this.phoneArcs = one<SVGSVGElement>('.mf-hud-phone .dmg-arcs');
     this.worldTags = new WorldTags(one<HTMLElement>(`${desk} .mf-world`));
+    this.phoneTags = new WorldTags(one<HTMLElement>('.mf-hud-phone .mf-world'), PHONE_TAGS);
     this.reticles = [one<HTMLElement>(`${desk} .reticle`), one<HTMLElement>('.mf-hud-phone .reticle')];
     this.markers = [...this.root.querySelectorAll<HTMLElement>(`${desk} .mf-mk`)];
     this.beltList = one<HTMLElement>(`${desk} .belt__list`);
@@ -822,6 +918,14 @@ export class Hud {
     for (const p of this.others) if (p.isBot) bots.add(p.id);
     for (const entry of feedFromEvents(events, localId, this.names, () => ++this.feedKey, bots)) {
       this.addFeed(entry);
+      if (entry.mine === 'killer') {
+        this.streak += 1;
+        this.kills += 1;
+        this.kill = { victim: playerName(entry.victim, entry.victimBot), streak: this.streak, headshot: entry.headshot, n: this.kills, until: now + KILL_CONFIRM_MS };
+      } else if (entry.mine === 'victim') {
+        this.streak = 0;
+        this.kill = null;
+      }
       if (entry.mine === 'victim') {
         this.death = entry.fell
           ? { label: 'You fell', killer: '', icon: '' }
@@ -844,7 +948,13 @@ export class Hud {
     const hpFill = this.me ? Math.max(0, Math.min(1, this.me.hp / input.tuning.healthMax)) : 1;
     const swap = Math.max(0, this.me?.swapTicks ?? 0);
     if (swap > this.lastSwap) this.swapTotal = swap;
+    // a draw just ended: the gun lands, and the cue says which key swaps back a moment longer
+    if (this.lastSwap > 0 && swap === 0) {
+      this.drawnUntil = now + DRAWN_MS;
+      this.swapHintUntil = now + SWAP_HINT_MS;
+    }
     this.lastSwap = swap;
+    if (this.kill && now >= this.kill.until) this.kill = null;
     const hitting = now < this.hitMarkerUntil;
     const { values, tokens } = hudFrame(input, {
       sinceHitS: (now - this.lastHitAt) / 1000,
@@ -866,6 +976,10 @@ export class Hud {
       dashDir: this.dash && now < this.dash.until ? this.dash.dir : null,
       swapTotal: this.swapTotal,
       quickThrow: now - (input.quickThrowAt ?? -Infinity) < QUICK_MS,
+      event: this.events.update(frame.mapEvent, now),
+      drawn: now < this.drawnUntil,
+      swapHint: now < this.swapHintUntil,
+      kill: this.kill,
     });
     this.binder.update(values);
     this.states.set(this.linger.apply(tokens, now));
@@ -878,7 +992,11 @@ export class Hud {
     this.drawBelt();
     feedTouchHud(values, tokens); // the phone's thumb dials wear these too (touch/skin.ts)
     this.place(input);
-    this.worldTags.update(frame.pickups, this.me, input.toScreen, Number(getComputedStyleValue('--hud-fit')) || 1, this.keys.interact ?? '', !this.me?.alive, this.keyCodes.interact);
+    // the world tags of the screen that shows (the desktop's, or the phone's while the touch controls are up)
+    const phone = typeof document !== 'undefined' && document.documentElement.hasAttribute('data-touch-controls');
+    const tags = { on: phone ? this.phoneTags : this.worldTags, off: phone ? this.worldTags : this.phoneTags };
+    tags.off.update(undefined, null, input.toScreen, 1, '', true);
+    tags.on.update(frame.pickups, this.me, input.toScreen, Number(getComputedStyleValue(phone ? '--phone-fit' : '--hud-fit')) || 1, this.keys.interact ?? '', !this.me?.alive, this.keyCodes.interact);
     // the white-out takes the HUD with the world; Reduce flashes keeps it readable over the dark-out
     const opacity = input.reduceFlashes ? '' : fixed(1 - Math.min(1, input.flash), 2);
     if (opacity !== this.opacity) {
@@ -915,6 +1033,7 @@ export class Hud {
     window.removeEventListener('keyup', this.onKey);
     window.removeEventListener('blur', this.onBlur);
     this.worldTags.dispose();
+    this.phoneTags.dispose();
     this.root.remove();
   }
 
@@ -1048,9 +1167,11 @@ export class Hud {
   }
 
   /**
-   * A swap: the two slot cards cross (motion spec §4.1). The held card grows out of where the slung
-   * one is and the slung card shrinks out of the held one's place, on --ease-travel over the gun's
-   * real equip time (0.25–0.6 s); the equip ring fills at the same pace from the sim.
+   * A swap: the two slot cards trade places (motion spec §4.1) over the gun's real equip time
+   * (0.25–0.6 s) on --ease-travel. The held card grows into its place from where the slung card was
+   * (one uniform scale, anchored at the slung card's corner, so nothing is stretched); the slung card
+   * slides back from the held card's side and fades in. The equip bar and ring fill at the same pace
+   * from the sim; the incoming gun's art and its ghosts (hud.css) ride inside the held card.
    */
   private crossSlots(swap: number): void {
     const me = this.me;
@@ -1060,20 +1181,21 @@ export class Hud {
     if (!changed || swap <= 0 || reduced()) return;
     const { held, slung } = this.slots;
     if (held.hasAttribute('hidden') || slung.hasAttribute('hidden') || typeof held.animate !== 'function') return;
+    const zoom = Number(getComputedStyleValue('--hud-fit')) || 1;
     const a = logicalRect(held);
     const b = logicalRect(slung);
     if (a.width === 0 || b.width === 0) return;
-    const zoom = Number(getComputedStyleValue('--hud-fit')) || 1;
-    const local = (r: Box) => ({ left: r.left / zoom, top: r.top / zoom, width: r.width / zoom, height: r.height / zoom });
     const duration = Math.max(250, Math.min(600, (swap / 60) * 1000));
     const easing = token('--ease-travel', 'cubic-bezier(0.7, 0, 0.16, 1)');
-    for (const [card, from, to] of [
-      [held, b, a],
-      [slung, a, b],
-    ] as const) {
-      for (const old of card.getAnimations()) old.cancel();
-      card.animate([{ transformOrigin: '0 0', transform: flipTransform(local(from), local(to)) }, { transformOrigin: '0 0', transform: 'none' }], { duration, easing });
-    }
+    for (const card of [held, slung]) for (const old of card.getAnimations()) if (!('animationName' in old)) old.cancel(); // ours, not the CSS stamps
+    // the held card, from the slung card's box: same bottom-left corner, scaled to its height
+    const k = Math.max(0.3, Math.min(1, b.height / a.height));
+    const dx = (b.left - a.left) / zoom;
+    const dy = (b.top + b.height - (a.top + a.height)) / zoom;
+    held.animate([{ transformOrigin: '0 100%', transform: `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px) scale(${k.toFixed(3)})`, opacity: 0.35 }, { transformOrigin: '0 100%', transform: 'none', opacity: 1 }], { duration, easing });
+    // the slung card, sliding back from where the held one was
+    const sx = (a.left - b.left) / zoom;
+    slung.animate([{ transform: `translateX(${(sx * 0.5).toFixed(1)}px)`, opacity: 0 }], { duration, easing }); // to its own place and opacity
   }
 
   /**

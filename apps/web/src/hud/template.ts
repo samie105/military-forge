@@ -16,6 +16,7 @@
  * filled by hud.ts into the empty containers marked here.
  */
 
+import { eventFxTemplate, eventTemplate } from './eventTemplate';
 import { phoneHudTemplate } from './templatePhone';
 
 
@@ -49,6 +50,7 @@ function desktop(): string {
   <div class="vignette vignette--gas" data-state="gas" aria-hidden="true"></div>
   <div class="vignette vignette--stagger" data-state="heavy-hit" aria-hidden="true"></div>
   <div class="blood" data-state="blood-on+low-hp blood-on+heavy-hit blood-on+hurt" aria-hidden="true"></div>
+  ${eventFxTemplate()}
   <div class="mf-world" aria-hidden="true"></div>
 
   <div class="hud" role="group" aria-label="Match HUD">
@@ -118,6 +120,7 @@ function desktop(): string {
           <kbd class="kbd" data-bind="bind.swap.0"></kbd>
         </div>
         <div class="slot slot--held plate" data-state="weapon">
+          <i class="mf-drawbar" data-state="switching" aria-hidden="true"></i>
           <div class="slot__top">
             <span class="slot__idx" data-bind="player.slot.0.idx"></span>
             <b class="slot__name" data-bind="player.slot.0.name"></b>
@@ -127,6 +130,7 @@ function desktop(): string {
           </div>
           <div class="slot__main">
             <span class="slot__art">
+              <span class="mf-ghosts" data-state="switching+!dual" aria-hidden="true">${wpn('player.slot.0.icon', 'ic--wpn-lg mf-ghost')}${wpn('player.slot.0.icon', 'ic--wpn-lg mf-ghost mf-ghost--2')}</span>
               <svg class="ic--wpn-lg" aria-hidden="true" data-state="!dual"><use data-bind-attr="href: player.slot.0.icon"/></svg>
               <span class="slot__dual" data-state="dual">${wpn('player.slot.0.icon', 'ic--wpn-lg')}${wpn('player.dual.icon', 'ic--wpn-lg')}</span>
               <span class="equip" data-state="switching" role="progressbar" aria-label="Drawing" aria-valuemin="0" aria-valuemax="1">
@@ -148,50 +152,49 @@ function desktop(): string {
           <div class="slot__cue slot__cue--reload" data-state="reloading"><div class="bar bar--reload"><i></i></div><span class="hud-label">Reloading</span></div>
           <div class="slot__cue slot__cue--low" data-state="low-ammo">${ic('warn', 'ic--sm')}<b>Low ammo</b><kbd class="kbd" data-bind="bind.reload.0"></kbd><span>Reload</span></div>
           <div class="slot__cue slot__cue--empty" data-state="empty">${ic('empty', 'ic--sm')}<b>Empty</b><kbd class="kbd" data-bind="bind.reload.0"></kbd><span>Reload</span><kbd class="kbd" data-bind="bind.swap.0"></kbd><span>Swap</span></div>
-          <div class="slot__cue slot__cue--switch" data-state="switching">${ic('swap', 'ic--sm')}<span>Drawing <b data-bind="player.slot.0.name"></b><span data-state="slung-gun"> · <span data-bind="player.slot.1.name"></span> goes on your back</span></span></div>
+          <div class="slot__cue slot__cue--switch mf-drawcue" data-state="switching swap-hint">${ic('swap', 'ic--sm')}<b class="mf-drawcue__kick" data-state="switching">Drawing</b><b class="mf-drawcue__kick mf-drawcue__kick--ready" data-state="!switching">Ready</b><span class="mf-drawcue__what" data-bind="player.slot.0.fire"></span><span class="mf-drawcue__back" data-state="slung-item"><kbd class="kbd" data-bind="bind.swap.0"></kbd><span>back to <b data-bind="player.slot.1.name"></b></span></span></div>
           <div class="slot__cue slot__cue--melee" data-state="melee-only">${ic('crate', 'ic--sm')}<span>No guns left · find a crate</span></div>
         </div>
       </div>
     </div>
 
-    <div class="pickup plate m-p9 m-p9--bottom" data-state="pickup-crate" role="status">
-      <div class="pickup__head">
-        <span class="pickup__key"><kbd class="kbd kbd--lg" data-bind="bind.interact.0"></kbd></span>
-        <b data-bind="pickup.verb"></b>
-        <span class="pickup__gun" data-state="pickup-swaps">${wpn('pickup.held.icon', 'ic--kf')}<span data-bind="pickup.held.name"></span></span>
-        <svg class="ic pickup__x" aria-hidden="true" data-state="pickup-swaps"><use href="#icon-swap"/></svg>
-        <span class="pickup__gun pickup__gun--new"><span class="m-p7">${wpn('pickup.weapon.icon', 'ic--kf')}</span><b data-bind="pickup.weapon.name"></b></span>
+    <div class="pickup plate m-p9 m-p9--bottom mf-cmpcard" data-state="pickup-crate" role="status" data-bind-attr="data-power: pickup.weapon.power">
+      <div class="pickup__head mf-cmpcard__head">
+        <span class="pickup__key"><svg class="mf-keyring" viewBox="0 0 60 60" aria-hidden="true"><circle cx="30" cy="30" r="27"/></svg><kbd class="kbd kbd--lg" data-bind="bind.interact.0"></kbd></span>
+        <span class="mf-cmpcard__title"><span class="mf-cmpcard__verb" data-bind="pickup.verb"></span><span class="mf-cmpcard__name"><b class="display" data-bind="pickup.weapon.name"></b><span class="mf-chip m-p7" data-bind="pickup.weapon.family"></span></span></span>
+        <span class="mf-cmpcard__gun m-p7">${wpn('pickup.weapon.icon', 'ic--wpn mf-cmpcard__wpn')}</span>
       </div>
+      <p class="mf-cmpcard__sub"><span class="mf-cmpcard__for" data-state="pickup-swaps">${ic('swap', 'ic--sm')}for your <b data-bind="pickup.held.name"></b></span><span data-bind="pickup.weapon.fire"></span><span data-bind="pickup.weapon.magWords"></span></p>
       <table class="cmp" data-state="pickup-cmp" aria-label="The gun in your hand against the one here">
         <thead><tr><th class="vh">Stat</th><th data-bind="pickup.held.name"></th><th class="vh">Bars</th><th data-bind="pickup.weapon.name"></th><th class="vh">Change</th></tr></thead>
         <tbody>${cmp}</tbody>
       </table>
     </div>
-    <div class="pickup plate m-p9 m-p9--bottom mf-pickup-item" data-state="pickup-item" role="status">
-      <div class="pickup__head"><span class="m-p7"><svg class="ic ic--lg" aria-hidden="true"><use data-bind-attr="href: pickup.icon"/></svg></span><span data-bind="pickup.text"></span></div>
+    <div class="pickup plate m-p9 m-p9--bottom mf-pickup-item" data-state="pickup-item" role="status" data-bind-attr="data-tone: pickup.item.tone">
+      <div class="pickup__head"><span class="mf-item__ic m-p7"><svg class="ic ic--lg" aria-hidden="true"><use data-bind-attr="href: pickup.icon"/></svg></span><span class="mf-item__text"><b data-bind="pickup.item.title"></b><span data-bind="pickup.item.line"></span></span></div>
     </div>
 
     <div class="respawn plate" data-state="spectating" role="status">
       <p class="respawn__by"><span class="hud-label" data-bind="death.label"></span> <b data-bind="death.killer"></b><svg class="ic--kf" aria-hidden="true" data-state="death-weapon"><use data-bind-attr="href: death.icon"/></svg></p>
-      <p class="respawn__timer"><span data-bind="death.lead"></span> <b class="num" data-bind="player.respawnIn"></b> <span data-bind="death.unit"></span></p>
+      <p class="respawn__timer"><span data-bind="death.lead"></span> <b data-bind="player.respawnIn" data-bind-attr="class: death.numClass"></b> <span data-bind="death.unit"></span></p>
       <div class="bar bar--respawn"><i></i></div>
+    </div>
+
+    <div class="mf-kc" data-state="kill-confirm" role="status">
+      <span class="mf-kc__tag">${ic('target', 'ic--sm')}Taken out</span>
+      <b data-bind="kill.victim" data-bind-attr="class: kill.class"></b>
+      <span class="mf-kc__more"><span class="mf-kc__head" data-state="kill-head">${ic('b-headshot', 'ic--sm')}Headshot</span><span class="mf-kc__streak" data-bind-show="kill.streak" data-bind="kill.streak"></span></span>
+    </div>
+
+    <div class="mf-spec plate m-p9 m-p9--bottom" data-state="spectate-bar" role="status" aria-label="Spectating">
+      <span class="mf-spec__nav">${ic('chev-left', 'ic--sm')}Prev</span>
+      <span class="mf-spec__who"><span class="hud-label">Watching</span><b class="display" data-bind="spectate.name"></b></span>
+      <span class="mf-spec__nav">Next${ic('chev-right', 'ic--sm')}</span>
+      <span class="mf-spec__join">${ic('play', 'ic--sm')}Join next round</span>
     </div>
   </div>
 
-  <div class="evb m-p9" data-state="event" role="status" data-bind-var="--ev: event.color">
-    <div class="evb__plate">
-      <span class="evb__icwrap"><svg class="ic evb__ic" aria-hidden="true"><use data-bind-attr="href: event.icon"/></svg></span>
-      <div class="evb__text">
-        <span class="evb__kicker m-p7" data-state="event-active">Map event · now</span>
-        <span class="evb__kicker evb__kicker--warn" data-state="event-warning">${ic('warn', 'ic--sm')}Incoming in <b class="num"><span data-bind-roll="event.startsIn"></span> s</b></span>
-        <b class="display evb__title" data-bind="event.name"></b>
-        <span class="evb__desc" data-bind="event.description"></span>
-      </div>
-      <b class="evb__time num" data-state="event-active"><span data-bind-roll="event.timeLeft"></span> s</b>
-    </div>
-    <div class="bar evb__bar" data-state="event-active" aria-hidden="true"><i></i></div>
-    <div class="evb__stripes" data-state="event-warning" aria-hidden="true"></div>
-  </div>
+  ${eventTemplate()}
 
   <div class="feedback" aria-hidden="true">
     <svg class="dmg" viewBox="-400 -400 800 800"></svg>
@@ -219,7 +222,7 @@ function desktop(): string {
 }
 
 /** The bars' numbers, as CSS variables on the HUD root (#hud, its data-bind-var): both layouts read them. */
-export const HUD_VARS = '--hp: v.hp; --hp-ghost: v.hpGhost; --fuel: v.fuel; --fuel-delay: v.fuelDelay; --shield-hp: v.shield; --dash: v.dash; --dash-cost: v.dashCost; --reload: v.reload; --respawn: v.respawn; --event: v.event; --equip: v.equip; --throw: v.throw';
+export const HUD_VARS = '--hp: v.hp; --hp-ghost: v.hpGhost; --fuel: v.fuel; --fuel-delay: v.fuelDelay; --shield-hp: v.shield; --dash: v.dash; --dash-cost: v.dashCost; --reload: v.reload; --respawn: v.respawn; --event: v.event; --equip: v.equip; --equip-ms: v.equipMs; --throw: v.throw';
 
 export function hudTemplate(): string {
   return `<div class="mf-fit mf-hud-fit kit-v2">${desktop()}</div><div class="mf-fit mf-hud-fit mf-hud-fit--phone kit-v2">${phoneHudTemplate()}</div>`;

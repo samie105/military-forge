@@ -116,6 +116,8 @@ const pickupKind = new Map(pickups.map((p) => [p.index, p.kind]));
 export class AudioDirector {
   private localId = -1;
   private frameNo = 0;
+  /** the map event's warning second last counted (eventCountdown) */
+  private lastCount = '';
   private readonly players = new Map<number, PlayerMemo>();
   private readonly grenades = new Map<number, GrenadeMemo>();
   private readonly clouds = new Set<number>();
@@ -352,7 +354,22 @@ export class AudioDirector {
     if (me) this.local(me, extras);
     this.projectiles(f.grenades);
     this.hiss(f);
+    this.eventCountdown(f);
     this.expire();
+  }
+
+  /**
+   * The map event's warning counts down its last three seconds on the war-tone drum (ui.count), in
+   * step with the HUD's countdown digit (hud/eventTemplate.ts); the siren (event.warn) opens the
+   * warning and event.start lands on the impact, both from the sim's mapEvent events.
+   */
+  private eventCountdown(f: Frame): void {
+    const e = f.mapEvent;
+    const n = e && e.phase === 'warning' ? Math.max(1, Math.ceil(e.secondsLeft - 1e-9)) : 0;
+    const key = e ? `${e.id}:${e.occurrence}:${n}` : '';
+    if (key === this.lastCount) return;
+    this.lastCount = key;
+    if (n >= 1 && n <= 3) this.sink.play('ui.count', { priority: 70 });
   }
 
   private player(p: PlayerView, dt: number): void {

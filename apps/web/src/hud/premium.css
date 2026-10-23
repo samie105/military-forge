@@ -1,0 +1,365 @@
+/*
+ * The premium in-match moments (owner, 23 Oct 2026: "the ui for the swapping guns and all needs to
+ * be premium, the guns on the ground … when something is happening like the surge … a more better ui
+ * since it's a game"). Design: the Pen board "IN-MATCH · premium HUD". Field Print plates, Frost glass
+ * only where the desktop already has it (never new blur on the phone), the war tone. Tokens only.
+ *
+ *   1. the swap: the held card's draw bar (--equip, raw), ghost trails over the gun's equip time
+ *      (--equip-ms), the landing (drawn: the art settles, the name and class stamp, a volt edge), the
+ *      draw cue with the swap-back key; the phone's draw toast
+ *   2. guns on the ground: world tags (worldTags.ts) that shrink and fade with distance, the compare
+ *      card, the item card; the phone's compare chip
+ *   3. the map event: warning → impact → active → all-clear (eventTemplate.ts), one screen
+ *      treatment per kind (.mf-evfx[data-kind])
+ *   4. polish: the kill confirm with the streak, the respawn digit, the spectator bar (visuals only)
+ *
+ * Motion: transform and opacity only (and the individual translate/scale properties, so a pattern
+ * composes with an element's own transform); nothing transitions a per-frame value. Reduce motion:
+ * kit.css stops every animation (html.reduce-motion), so each moment is a plain show and hide.
+ * Reduce flashes: no flicker, no bright steps.
+ */
+
+/* ======================================================= 1. the swap */
+
+#hud .mf-hud-desktop .slot--held { position: relative; }
+/* the class as a paper chip, the kit's stencil-plate look */
+#hud .mf-hud-desktop .slot__fam { padding: 1px 8px; background: var(--c-paper); color: var(--c-paper-text); border-radius: var(--r-xs); text-shadow: none; font-weight: var(--fw-black); letter-spacing: .08em; }
+#hud .mf-hud-desktop .slot__fam:empty { display: none; }
+
+/* the draw: a volt bar along the card's top edge fills with the equip clock (raw) */
+#hud .mf-drawbar { position: absolute; left: 14px; right: 14px; top: -2px; height: 4px; border-radius: var(--r-xxs); background: var(--c-volt); transform-origin: 0 50%; transform: scaleX(var(--equip, 0)); }
+#hud[data-active-state~="switching"] .mf-hud-desktop .slot--held { border-color: var(--c-volt-line); }
+#hud[data-active-state~="switching"] .mf-hud-desktop .slot--slung { opacity: .72; }
+
+/* the incoming gun slides in over its real equip time, two volt ghosts streaming behind it */
+#hud .mf-ghosts { position: absolute; inset: 0; pointer-events: none; }
+#hud .mf-ghost { position: absolute; left: 0; top: 0; color: var(--c-volt); --c-tip: var(--c-volt); opacity: 0; animation: mf-ghost var(--equip-ms, 400ms) var(--ease-arrive) both; }
+#hud .mf-ghost--2 { color: var(--c-volt-hi); --c-tip: var(--c-volt-hi); animation-delay: calc(var(--equip-ms, 400ms) * .14); }
+@keyframes mf-ghost { 0% { opacity: 0; translate: -140px 0; } 20% { opacity: .55; } 100% { opacity: 0; translate: -6px 0; } }
+#hud[data-active-state~="switching"] .mf-hud-desktop .slot__art > svg { animation: mf-draw-in var(--equip-ms, 400ms) var(--ease-arrive) both; }
+@keyframes mf-draw-in { from { translate: -56px 0; opacity: .15; } 70% { opacity: .75; } to { translate: 0 0; opacity: .85; } }
+
+/* the landing: the art settles with weight, the name and class stamp, the card's edge flashes volt once */
+#hud .mf-hud-desktop .slot--held::after { content: ""; position: absolute; inset: -3px; border: 3px solid var(--c-volt); border-radius: inherit; opacity: 0; pointer-events: none; }
+#hud[data-active-state~="drawn"] .mf-hud-desktop .slot--held::after { animation: mf-edge-flash 460ms var(--ease-leave) both; }
+@keyframes mf-edge-flash { from { opacity: .95; } to { opacity: 0; } }
+#hud[data-active-state~="drawn"] .mf-hud-desktop .slot__art > svg { animation: mf-land var(--m-base) var(--ease-settle) both; }
+@keyframes mf-land { from { scale: 1.1; } to { scale: 1; } }
+#hud[data-active-state~="drawn"] .mf-hud-desktop :is(.slot__name, .slot__fam) { animation: m-stamp var(--m-fast) var(--ease-settle) both; }
+#hud[data-active-state~="drawn"] .mf-hud-desktop .ammo__mag { animation: m-stamp var(--m-fast) var(--ease-settle) both; }
+
+/* the draw cue: DRAWING (then READY), how it fires, and the key that swaps back */
+#hud .mf-drawcue { gap: var(--sp-2); animation: m-rise var(--m-fast) var(--ease-arrive) both; }
+#hud .mf-drawcue > .ic { color: var(--c-volt); }
+#hud .mf-drawcue__kick { color: var(--c-volt); font-size: var(--fs-14); font-weight: var(--fw-black); letter-spacing: .14em; text-transform: uppercase; }
+#hud .mf-drawcue__kick--ready { color: var(--c-ok); }
+#hud .mf-drawcue__what { color: var(--c-muted); font-weight: var(--fw-semi); }
+#hud .mf-drawcue__back { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; color: var(--c-muted); white-space: nowrap; }
+#hud .mf-drawcue__back b { color: var(--c-text); }
+
+/* the phone: a draw toast above the bottom centre (the swap pill's guns cross in the touch layer) */
+.ph .pt-draw { position: absolute; left: 42%; bottom: calc(var(--safe-b) + 58px); transform: translateX(-50%); display: grid; grid-template-columns: auto auto auto; align-items: center; column-gap: 8px; row-gap: 0; max-width: 236px; padding: 3px 10px 7px; border-color: var(--c-volt); font-size: var(--fs-14); white-space: nowrap; animation: m-rise var(--m-fast) var(--ease-arrive) both; }
+.ph .pt-draw > .pt-draw__kick { grid-column: 1 / 3; }
+.ph .pt-draw > .pt-draw__ammo { grid-column: 3; grid-row: 1; justify-self: end; }
+.ph .pt-draw > :is(.ic--kf, .pt-draw__name, .mf-chip) { grid-row: 2; }
+.ph .pt-draw__kick { color: var(--c-volt); font-weight: var(--fw-black); letter-spacing: .12em; text-transform: uppercase; }
+.ph .pt-draw .ic--kf { width: 44px; height: 16.5px; color: var(--c-text); }
+.ph .pt-draw__name { font-size: var(--fs-24); line-height: 1; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.ph .pt-draw__ammo { color: var(--c-muted); font-weight: var(--fw-bold); }
+.ph .pt-draw__bar { position: absolute; left: 10px; right: 10px; bottom: 2px; height: 3px; border-radius: var(--r-xxs); background: var(--c-volt); transform-origin: 0 50%; transform: scaleX(var(--equip, 0)); }
+#hud[data-active-state~="drawn"] .ph :is(.pt-draw__name, .pt-draw .mf-chip) { animation: m-stamp var(--m-fast) var(--ease-settle) both; }
+#hud[data-active-state~="drawn-leaving"] .ph .pt-draw { animation: m-leave var(--m-fast) var(--ease-leave) both; }
+/* the swap pill (touch layer) during a draw: a volt edge and a bar along its foot that fills with the equip ring */
+.mf-touch [data-active-state~="swap"] .pt-swap { border-color: var(--c-volt); }
+.mf-touch .pt-swap::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: 2px; height: 3px; border-radius: var(--r-xxs); background: var(--c-volt); transform-origin: 0 50%; transform: scaleX(var(--equip, 1)); opacity: 0; }
+.mf-touch [data-active-state~="swap"] .pt-swap::after { opacity: 1; }
+.mf-touch [data-active-state~="drawn"] .pt-swap__held b { animation: m-stamp var(--m-fast) var(--ease-settle) both; }
+
+/* a paper chip: a gun's class */
+#hud .mf-chip { display: inline-block; padding: 1px 7px; border-radius: var(--r-xs); background: var(--c-paper); color: var(--c-paper-text); font-size: var(--fs-14); font-weight: var(--fw-black); letter-spacing: .08em; line-height: 1.3; text-transform: uppercase; text-shadow: none; white-space: nowrap; }
+#hud .mf-chip:empty { display: none; }
+
+/* ======================================================= 2. guns on the ground */
+
+/* world tags: anchored at the stem's foot, scaled about it (worldTags.ts writes translate + scale) */
+#hud .mf-world > .mf-wtag--crate { display: flex; flex-direction: column; align-items: center; transform-origin: 50% 100%; --tag: var(--c-volt); }
+#hud .mf-world > .mf-wtag--power { --tag: var(--c-brass); }
+#hud .mf-world > .mf-wtag--grenades { --tag: var(--c-paper-3); }
+#hud .mf-world > .mf-wtag--shield { --tag: var(--c-shield); }
+#hud .mf-wtag__plate { display: flex; align-items: center; gap: 8px; padding: 5px 10px; background: var(--c-plate-strong); border: var(--bw) solid var(--tag); border-radius: var(--r-xs) var(--r-md) var(--r-xs) var(--r-md); color: var(--c-text); text-shadow: var(--ts-hud); white-space: nowrap; }
+#hud .mf-wtag__plate .ic--kf { width: 52px; height: 19.5px; color: var(--c-text); }
+#hud .mf-wtag__plate .ic--sm { color: var(--tag); --c-cut: var(--c-plate-strong); }
+#hud .mf-wtag__name { font-size: var(--fs-18); font-weight: var(--fw-black); letter-spacing: .03em; text-transform: uppercase; }
+#hud .mf-wtag__cls { padding: 0 6px; border-radius: var(--r-xxs); background: var(--c-paper); color: var(--c-paper-text); font-size: var(--fs-14); font-weight: var(--fw-black); letter-spacing: .06em; text-transform: uppercase; text-shadow: none; }
+#hud .mf-wtag--power .mf-wtag__cls { background: var(--c-brass); color: var(--c-brass-ink); }
+#hud .mf-wtag__meta { color: var(--c-muted); font-size: var(--fs-14); font-weight: var(--fw-bold); }
+#hud .mf-wtag__stem { width: 2px; height: 44px; background: linear-gradient(var(--tag), transparent); }
+/* the phone's: smaller, on the phone's plate (no blur on a phone) */
+#hud .mf-hud-phone .mf-world { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+#hud .mf-hud-phone .mf-wtag__plate { gap: 5px; padding: 2px 7px; }
+#hud .mf-hud-phone .mf-wtag__plate .ic--kf { width: 34px; height: 13px; }
+#hud .mf-hud-phone .mf-wtag__name { font-size: var(--fs-14); }
+#hud .mf-hud-phone :is(.mf-wtag__cls, .mf-wtag__meta) { display: none; }
+#hud .mf-hud-phone .mf-wtag__stem { height: 20px; }
+
+/* the compare card (compact, it sits over the bottom of play): the key in a ring, the verb over the new
+   gun's name and class, its art; what it replaces, how it fires, its mag; the five bars (they fill in
+   as the card arrives) */
+#hud .mf-hud-desktop .mf-cmpcard { width: max-content; min-width: 500px; max-width: 640px; gap: 6px; padding-top: var(--sp-2); }
+#hud .mf-cmpcard[data-power="power"] { border-color: var(--c-brass); }
+#hud .mf-cmpcard__head { gap: var(--sp-3); }
+#hud .mf-cmpcard .pickup__key { position: relative; flex: none; }
+#hud .mf-keyring { position: absolute; inset: 0; width: 60px; height: 60px; overflow: visible; }
+#hud .mf-keyring circle { fill: none; stroke: var(--c-volt); stroke-width: 3; }
+#hud .mf-cmpcard[data-power="power"] .mf-keyring circle { stroke: var(--c-brass); }
+#hud .mf-cmpcard__title { display: flex; flex-direction: column; min-width: 0; }
+#hud .mf-cmpcard__verb { color: var(--c-volt); font-size: var(--fs-14); font-weight: var(--fw-black); letter-spacing: .2em; text-transform: uppercase; }
+#hud .mf-cmpcard[data-power="power"] .mf-cmpcard__verb { color: var(--c-brass); }
+#hud .mf-cmpcard__name { display: flex; align-items: center; gap: var(--sp-2); }
+#hud .mf-cmpcard__name .display { font-size: var(--fs-36); line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#hud .mf-cmpcard__gun { display: block; margin-left: auto; flex: none; }
+#hud .mf-cmpcard__wpn { width: 150px; height: 56px; color: var(--c-text); }
+#hud .mf-cmpcard[data-power="power"] .mf-cmpcard__wpn { color: var(--c-brass); }
+#hud .mf-cmpcard__sub { display: flex; align-items: center; gap: var(--sp-2); padding-bottom: 6px; border-bottom: var(--bw) solid var(--c-line); color: var(--c-muted); font-size: var(--fs-14); font-weight: var(--fw-semi); white-space: nowrap; }
+#hud .mf-cmpcard__sub > span + span::before { content: "·"; margin-right: var(--sp-2); }
+#hud .mf-cmpcard__for { display: inline-flex; align-items: center; gap: 4px; }
+#hud .mf-cmpcard__for .ic { color: var(--c-volt); }
+#hud .mf-cmpcard__for b { color: var(--c-text); }
+#hud .mf-cmpcard .cmp :is(th, td) { padding-block: 1px; white-space: nowrap; }
+#hud .mf-cmpcard .cmp__bars { width: 130px; }
+#hud .mf-cmpcard .cmp__bars i { height: 5px; }
+#hud .mf-cmpcard :is(.cmp__a, .cmp__b) { animation: mf-bar-in var(--m-slow) var(--ease-arrive) both; }
+#hud .mf-cmpcard .cmp__b { animation-delay: 60ms; }
+@keyframes mf-bar-in { from { scale: 0 1; } }
+
+/* the item card: what it is (in its tone: grenades brass, the shield steel, a gun volt) and what it does for you */
+#hud .mf-hud-desktop .mf-pickup-item { width: max-content; min-width: 0; max-width: 680px; }
+#hud .mf-pickup-item[data-tone="grenades"] { border-color: var(--c-brass); }
+#hud .mf-pickup-item[data-tone="shield"] { border-color: var(--c-shield); }
+#hud .mf-item__ic { display: grid; place-items: center; flex: none; width: 52px; height: 52px; border-radius: var(--r-xs); background: var(--c-volt); color: var(--c-ink-950); text-shadow: none; --c-cut: var(--c-volt); }
+#hud .mf-pickup-item[data-tone="grenades"] .mf-item__ic { background: var(--c-brass); --c-cut: var(--c-brass); }
+#hud .mf-pickup-item[data-tone="shield"] .mf-item__ic { background: var(--c-shield); --c-cut: var(--c-shield); }
+#hud .mf-pickup-item:is([data-tone="grenades"], [data-tone="gun"]) .mf-item__ic .ic { fill: currentColor; stroke: none; }
+#hud .mf-pickup-item[data-tone="gun"] .mf-item__ic { width: 96px; }
+#hud .mf-pickup-item[data-tone="gun"] .mf-item__ic .ic { width: 80px; height: 30px; }
+#hud .mf-item__text { display: flex; flex-direction: column; gap: 2px; }
+#hud .mf-item__text b { font-size: var(--fs-20); font-weight: var(--fw-black); letter-spacing: .04em; text-transform: uppercase; }
+#hud .mf-item__text span { color: var(--c-muted); font-size: var(--fs-16); font-weight: var(--fw-semi); }
+
+/* the phone: the compare chip above the Take button (the touch layer's), and the item line's words */
+.ph .pt-cmp { position: absolute; left: 42%; bottom: calc(var(--safe-b) + 58px); transform: translateX(-50%); display: flex; flex-direction: column; gap: 3px; width: 236px; padding: 5px 10px 7px; border-color: var(--c-volt); font-size: var(--fs-14); animation: m-rise var(--m-fast) var(--ease-arrive) both; }
+.ph .pt-cmp__head { display: flex; flex-wrap: wrap; align-items: center; column-gap: 6px; }
+.ph .pt-cmp__head .ic--kf { width: 40px; height: 15px; color: var(--c-text); }
+.ph .pt-cmp__head .display { font-size: var(--fs-20); line-height: 1.05; }
+.ph .pt-cmp__for { flex-basis: 100%; color: var(--c-muted); font-weight: var(--fw-semi); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ph .pt-cmp__row { display: grid; grid-template-columns: 3.2em minmax(0, 1fr) 4em; align-items: center; gap: 6px; }
+.ph .pt-cmp__row .cmp__bars i { display: block; height: 4px; margin: 1px 0; border-radius: var(--r-xxs); transform-origin: 0 50%; }
+.ph .pt-cmp__row .cmp__a { background: var(--c-muted-2); transform: scaleX(var(--a)); }
+.ph .pt-cmp__row .cmp__b { background: var(--c-volt); transform: scaleX(var(--b)); }
+.ph .pt-cmp__row .cmp__d { justify-self: end; font-weight: var(--fw-black); }
+.ph .pt-cmp__row .cmp__d--up { color: var(--c-ok); }
+.ph .pt-cmp__row .cmp__d--down { color: var(--c-danger-text); }
+.ph .pt-pickup[data-tone] { border-color: var(--c-volt); }
+.ph .pt-pickup[data-tone="grenades"] { border-color: var(--c-brass); }
+.ph .pt-pickup[data-tone="shield"] { border-color: var(--c-shield); }
+.ph .pt-pickup b { text-transform: uppercase; font-weight: var(--fw-black); }
+.ph .pt-pickup .pt-pickup__line { color: var(--c-muted); }
+
+/* ======================================================= 3. the map event */
+
+#hud .mf-ev { position: absolute; inset: 0; z-index: var(--z-banner); pointer-events: none; }
+#hud .mf-ev :is(.mf-evw, .mf-evi, .mf-eva, .mf-eve) { position: absolute; left: 50%; transform: translateX(-50%); }
+/* the kind's icon in its colour, an arrow for which way gravity goes */
+#hud .mf-ev__ic { position: relative; display: grid; place-items: center; flex: none; width: 96px; height: 96px; border-radius: var(--r-sm); background: var(--ev); color: var(--c-ink-950); text-shadow: none; }
+#hud .mf-ev__glyph { width: 60px; height: 60px; stroke-width: 2.2; }
+#hud .mf-ev__arrow { position: absolute; right: -8px; bottom: -8px; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--c-ink-950); border: 2px solid var(--ev); color: var(--ev); }
+
+/* the warning: a hazard head, the plate in the warn colour, the countdown digit in a draining ring */
+#hud .mf-evw { top: calc(var(--safe-t) + 150px); width: 880px; }
+#hud .mf-evw__head { display: flex; justify-content: space-between; align-items: center; padding: 4px 20px; border-radius: var(--r-xs) var(--r-lg) 0 0; background: repeating-linear-gradient(-45deg, var(--c-warn) 0 14px, color-mix(in srgb, var(--c-warn) 80%, var(--c-ink-950)) 14px 28px); color: var(--c-warn-ink); font-size: var(--fs-14); font-weight: var(--fw-black); letter-spacing: .3em; text-transform: uppercase; }
+#hud .mf-evw__head > span { display: inline-flex; align-items: center; gap: 8px; }
+#hud .mf-evw__body { display: flex; align-items: center; gap: var(--sp-6); padding: var(--sp-4) var(--sp-6) var(--sp-5) var(--sp-4); background: var(--c-plate-strong); border: var(--bw-chunky) solid var(--c-warn); border-top: 0; border-radius: 0 0 var(--r-xs) var(--r-lg); text-shadow: var(--ts-hud); }
+#hud .mf-evw__text { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+#hud .mf-evw__name { font-size: var(--fs-64); color: var(--c-text); }
+#hud .mf-evw__desc { font-size: var(--fs-20); font-weight: var(--fw-semi); color: var(--c-text); }
+/* the phone says the effect in a few words instead (one line) */
+#hud .mf-evw__effect { display: none; font-weight: var(--fw-semi); color: var(--c-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#hud .mf-evw__count { position: relative; display: grid; place-items: center; flex: none; width: 112px; height: 112px; }
+#hud .mf-evw__count svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+#hud .mf-evw__track { fill: var(--c-ink-950); stroke: var(--c-ink-600); stroke-width: 7; }
+#hud .mf-evw__drain { fill: none; stroke: var(--c-warn); stroke-width: 7; stroke-dasharray: 100; stroke-dashoffset: calc(var(--ev-warn, 0) * 100); }
+#hud .mf-evw__digit { position: relative; font-size: 80px; line-height: 1; color: var(--c-warn); }
+/* each second the digit stamps: the class alternates (hud.ts), so the animation starts again */
+#hud .mf-evw__digit--a { animation: mf-count-a 420ms var(--ease-settle) both; }
+#hud .mf-evw__digit--b { animation: mf-count-b 420ms var(--ease-settle) both; }
+@keyframes mf-count-a { from { scale: 1.45; opacity: .2; } 45% { opacity: 1; } to { scale: 1; opacity: 1; } }
+@keyframes mf-count-b { from { scale: 1.45; opacity: .2; } 45% { opacity: 1; } to { scale: 1; opacity: 1; } }
+
+/* the impact: the name stamped across the upper third between two shock lines, then it lifts away into the strip */
+#hud .mf-evi { top: calc(var(--safe-t) + 280px); display: flex; flex-direction: column; align-items: center; gap: 10px; width: 1040px; animation: mf-impact 900ms linear both; }
+#hud .mf-evi__line { display: block; width: 100%; height: 4px; background: var(--ev); animation: mf-shock 520ms var(--ease-arrive) both; }
+#hud .mf-evi__name { font-size: var(--fs-120); color: var(--c-text); text-shadow: var(--ts-hud); }
+#hud .mf-evi__now { padding: 4px 16px; border-radius: var(--r-xs); background: var(--ev); color: var(--c-ink-950); font-size: var(--fs-18); font-weight: var(--fw-black); letter-spacing: .25em; text-transform: uppercase; }
+@keyframes mf-impact { 0% { opacity: 0; scale: 1.14; } 12% { opacity: 1; scale: 1; } 70% { opacity: 1; translate: 0 0; scale: 1; } 100% { opacity: 0; translate: 0 -110px; scale: .6; } }
+@keyframes mf-shock { from { scale: 0 1; } to { scale: 1 1; } }
+
+/* the active strip: icon, name, the effect in a few words, the seconds left and a bar that drains */
+#hud .mf-eva { top: calc(var(--safe-t) + 150px); width: 560px; }
+#hud .mf-eva__row { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2) var(--sp-4) var(--sp-2) var(--sp-2); background: var(--c-plate-strong); border: var(--bw) solid var(--ev); border-bottom: 0; border-radius: var(--r-xs) var(--r-lg) 0 0; text-shadow: var(--ts-hud); }
+#hud :is(.mf-eva, .mf-eve) .mf-ev__ic { width: 44px; height: 44px; border-radius: var(--r-xs); }
+#hud :is(.mf-eva, .mf-eve) .mf-ev__glyph { width: 28px; height: 28px; }
+#hud .mf-eva .mf-ev__arrow { right: -6px; bottom: -6px; width: 20px; height: 20px; }
+#hud .mf-eva .mf-ev__arrow .ic { width: 12px; height: 12px; }
+#hud .mf-eva__text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+#hud .mf-eva__text b { font-size: var(--fs-20); font-weight: var(--fw-black); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#hud .mf-eva__text span { color: var(--c-muted); font-size: var(--fs-16); font-weight: var(--fw-semi); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#hud .mf-eva__time { font: var(--fw-display) var(--fs-48)/1 var(--f-display); color: var(--ev); white-space: nowrap; }
+#hud .mf-eva__bar { height: 6px; background: var(--c-ink-600); border-radius: 0 0 var(--r-xxs) var(--r-xxs); overflow: hidden; }
+#hud .mf-eva__bar > i { display: block; height: 100%; background: var(--ev); transform-origin: 0 50%; transform: scaleX(var(--event, 0)); }
+
+/* the all-clear */
+#hud .mf-eve { top: calc(var(--safe-t) + 150px); width: 560px; display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2) var(--sp-4) var(--sp-2) var(--sp-2); background: var(--c-plate-strong); border: var(--bw) solid var(--c-plate-line); border-radius: var(--r-xs) var(--r-lg) var(--r-xs) var(--r-lg); text-shadow: var(--ts-hud); }
+#hud .mf-eve__ic { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: var(--r-xs); background: var(--c-ink-700); color: var(--c-ok); }
+#hud .mf-eve__clear { padding: 2px 8px; border: var(--bw) solid var(--c-ok); border-radius: var(--r-xs); color: var(--c-ok); font-size: var(--fs-14); font-weight: var(--fw-black); letter-spacing: .2em; text-transform: uppercase; white-space: nowrap; text-shadow: none; }
+
+/* what leaves goes accelerating (hud.ts Linger keeps the token on for the exit) */
+#hud[data-active-state~="ev-warning-leaving"] .mf-evw,
+#hud[data-active-state~="ev-active-leaving"] .mf-eva,
+#hud[data-active-state~="ev-end-leaving"] .mf-eve { animation: m-edge-out var(--m-fast) var(--ease-leave) both; }
+
+/* Frost glass on the desktop's event plates, as on its other plates (frost.css); never on the phone */
+@supports (backdrop-filter: blur(1px)) {
+  html:not(.reduce-transparency):not(.gfx-low) #hud .mf-hud-desktop :is(.mf-evw__body, .mf-eva__row, .mf-eve) { background: var(--frost-fill-hud); backdrop-filter: blur(var(--blur-hud)); }
+}
+
+/* the phone: the same sequence, compact, under the clock; the respawn card and the arc warning step down while it shows */
+#hud .mf-hud-phone .mf-ev :is(.mf-evw, .mf-eva, .mf-eve) { top: calc(var(--safe-t) + 62px); }
+#hud .mf-hud-phone .mf-evw { width: 340px; }
+#hud .mf-hud-phone .mf-evw__head { padding: 1px 10px; letter-spacing: .18em; border-radius: var(--r-xs) var(--r-md) 0 0; }
+#hud .mf-hud-phone .mf-evw__head .ic { display: none; }
+#hud .mf-hud-phone .mf-evw__body { gap: 10px; padding: 6px 10px 8px 8px; border-width: var(--bw); border-radius: 0 0 var(--r-xs) var(--r-md); }
+#hud .mf-hud-phone .mf-ev__ic { width: 40px; height: 40px; border-radius: var(--r-xs); }
+#hud .mf-hud-phone .mf-ev__glyph { width: 26px; height: 26px; }
+#hud .mf-hud-phone .mf-ev__arrow { right: -5px; bottom: -5px; width: 18px; height: 18px; border-width: 1px; }
+#hud .mf-hud-phone .mf-ev__arrow .ic { width: 11px; height: 11px; }
+#hud .mf-hud-phone .mf-evw__name { font-size: var(--fs-28); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#hud .mf-hud-phone .mf-evw__desc { display: none; }
+#hud .mf-hud-phone .mf-evw__effect { display: block; font-size: var(--fs-14); }
+#hud .mf-hud-phone .mf-evw__count { width: 46px; height: 46px; }
+#hud .mf-hud-phone .mf-evw__track, #hud .mf-hud-phone .mf-evw__drain { stroke-width: 9; }
+#hud .mf-hud-phone .mf-evw__digit { font-size: 32px; }
+#hud .mf-hud-phone .mf-evi { top: calc(var(--safe-t) + 104px); width: 460px; gap: 4px; }
+#hud .mf-hud-phone .mf-evi__line { height: 3px; }
+#hud .mf-hud-phone .mf-evi__name { font-size: var(--fs-48); }
+#hud .mf-hud-phone .mf-evi__now { padding: 2px 10px; font-size: var(--fs-14); letter-spacing: .16em; }
+#hud .mf-hud-phone :is(.mf-eva, .mf-eve) { width: 268px; }
+#hud .mf-hud-phone .mf-eva__row { gap: 8px; padding: 3px 10px 3px 3px; border-radius: var(--r-xs) var(--r-md) 0 0; }
+#hud .mf-hud-phone .mf-eve { gap: 8px; padding: 3px 10px 3px 3px; border-radius: var(--r-xs) var(--r-md) var(--r-xs) var(--r-md); }
+#hud .mf-hud-phone :is(.mf-eva, .mf-eve) .mf-ev__ic, #hud .mf-hud-phone .mf-eve__ic { width: 28px; height: 28px; }
+#hud .mf-hud-phone :is(.mf-eva, .mf-eve) .mf-ev__glyph, #hud .mf-hud-phone .mf-eve__ic .ic { width: 18px; height: 18px; }
+#hud .mf-hud-phone .mf-eva .mf-ev__arrow { display: none; }
+#hud .mf-hud-phone :is(.mf-eva__text b, .mf-eve b) { font-size: var(--fs-14); }
+#hud .mf-hud-phone .mf-eva__text span { display: none; }
+#hud .mf-hud-phone .mf-eve .mf-eva__text span { font-size: var(--fs-14); }
+#hud .mf-hud-phone .mf-eva__time { font-size: var(--fs-24); }
+#hud .mf-hud-phone .mf-eva__bar { height: 4px; }
+#hud .mf-hud-phone .mf-eve__clear { display: none; }
+#hud[data-active-state~="ev-shown"] .ph .respawn { top: calc(var(--safe-t) + 138px); }
+#hud[data-active-state~="ev-shown"] .ph .mf-arcwarn { top: calc(var(--safe-t) + 106px); }
+
+/* the screen treatment: under the HUD plates, over the world; in with the event, out with the all-clear */
+#hud .mf-evfx { position: absolute; inset: 0; z-index: var(--z-vignette); overflow: hidden; pointer-events: none; animation: mf-fx-in 420ms var(--ease-arrive) both; }
+#hud .mf-evfx[data-stage="end"] { animation: mf-fx-out 420ms var(--ease-leave) both; }
+@keyframes mf-fx-in { from { opacity: 0; } }
+@keyframes mf-fx-out { to { opacity: 0; } }
+#hud .mf-evfx > i { position: absolute; display: none; pointer-events: none; }
+#hud .mf-evfx__tint, #hud .mf-evfx__x { inset: 0; }
+#hud .mf-evfx :is(.mf-evfx__l, .mf-evfx__r) { top: -100%; height: 300%; width: 20px; }
+#hud .mf-evfx__l { left: 12px; }
+#hud .mf-evfx__r { right: 12px; }
+
+/* gravity surge: heavy pressure lines falling down both edges, the top third darkened, the floor in violet */
+#hud .mf-evfx[data-kind="gravitySurge"]:not([data-stage="warning"]) > i { display: block; }
+#hud .mf-evfx[data-kind="gravitySurge"] .mf-evfx__tint { background: linear-gradient(180deg, color-mix(in srgb, var(--c-ink-950) 55%, transparent) 0%, transparent 36%, transparent 78%, color-mix(in srgb, var(--c-ev-gravity) 24%, transparent) 100%); }
+#hud .mf-evfx[data-kind="gravitySurge"] :is(.mf-evfx__l, .mf-evfx__r) { background: repeating-linear-gradient(180deg, transparent 0 40px, color-mix(in srgb, var(--c-ev-gravity) 70%, transparent) 40px 100px) 0 0 / 4px 100% no-repeat, repeating-linear-gradient(180deg, transparent 0 66px, color-mix(in srgb, var(--c-ev-gravity) 45%, transparent) 66px 100px) 13px 0 / 3px 100% no-repeat; animation: mf-fall 700ms linear infinite; }
+@keyframes mf-fall { from { translate: 0 0; } to { translate: 0 100px; } }
+#hud .mf-evfx[data-kind="gravitySurge"] .mf-evfx__x { display: none; }
+
+/* low gravity: motes rising at the edges, the floor lit; the corners' plates float a few px */
+#hud .mf-evfx[data-kind="lowGravity"]:not([data-stage="warning"]) :is(.mf-evfx__tint, .mf-evfx__l, .mf-evfx__r) { display: block; }
+#hud .mf-evfx[data-kind="lowGravity"] .mf-evfx__tint { background: linear-gradient(0deg, color-mix(in srgb, var(--c-ev-gravity) 22%, transparent) 0%, transparent 32%); }
+#hud .mf-evfx[data-kind="lowGravity"] :is(.mf-evfx__l, .mf-evfx__r) { background: radial-gradient(circle, color-mix(in srgb, var(--c-ev-gravity) 75%, transparent) 0 3px, transparent 4px) 0 0 / 20px 120px repeat-y; animation: mf-rise-up 2400ms linear infinite; }
+@keyframes mf-rise-up { from { translate: 0 0; } to { translate: 0 -120px; } }
+#hud[data-active-state~="ev-fx-lowGravity"] .mf-hud-desktop :is(.hud-bl, .hud-br) { animation: mf-float 1500ms ease-in-out infinite alternate; }
+@keyframes mf-float { to { translate: 0 -6px; } }
+
+/* EMP storm: static over the screen, a magenta edge; the HUD flickers (two dips a second, never bright) */
+#hud .mf-evfx[data-kind="emp"]:not([data-stage="warning"]) :is(.mf-evfx__tint, .mf-evfx__x) { display: block; }
+#hud .mf-evfx[data-kind="emp"] .mf-evfx__tint { background: radial-gradient(ellipse at center, transparent 60%, color-mix(in srgb, var(--c-ev-emp) 24%, transparent) 100%); }
+#hud .mf-evfx[data-kind="emp"] .mf-evfx__x { top: -28px; bottom: -28px; background: repeating-linear-gradient(0deg, color-mix(in srgb, var(--c-ev-emp) 12%, transparent) 0 2px, transparent 2px 7px); animation: mf-static 480ms steps(4) infinite; }
+@keyframes mf-static { from { translate: 0 0; } to { translate: 0 28px; } }
+#hud[data-active-state~="ev-fx-emp"] .mf-hud-desktop .hud { animation: mf-flicker 1000ms steps(1) infinite; }
+@keyframes mf-flicker { 0% { opacity: 1; } 44% { opacity: .82; } 50% { opacity: 1; } 86% { opacity: .9; } 90% { opacity: 1; } }
+html.reduce-flashes #hud .hud { animation: none; }
+/* phones that drop frames (touch.ts sets mf-glass-off) and Low graphics: the treatments hold still */
+html:is(.mf-glass-off, .gfx-low) #hud .mf-evfx > i { animation: none; }
+
+/* fog bank: a pale haze closing in from the edges, drifting slowly; the centre stays clear */
+#hud .mf-evfx[data-kind="fog"]:not([data-stage="warning"]) :is(.mf-evfx__tint, .mf-evfx__x) { display: block; }
+#hud .mf-evfx[data-kind="fog"] .mf-evfx__tint { background: radial-gradient(ellipse at center, transparent 34%, color-mix(in srgb, var(--c-ev-fog) 50%, transparent) 100%); }
+#hud .mf-evfx[data-kind="fog"] .mf-evfx__x { left: -60px; right: -60px; background: radial-gradient(ellipse 40% 60% at 12% 70%, color-mix(in srgb, var(--c-ev-fog) 30%, transparent), transparent), radial-gradient(ellipse 36% 50% at 88% 30%, color-mix(in srgb, var(--c-ev-fog) 26%, transparent), transparent); animation: mf-drift 8s ease-in-out infinite alternate; }
+@keyframes mf-drift { to { translate: 48px 0; } }
+
+/* wind gusts: thin streaks crossing the screen */
+#hud .mf-evfx[data-kind="gust"]:not([data-stage="warning"]) .mf-evfx__x { display: block; }
+#hud .mf-evfx[data-kind="gust"] .mf-evfx__x { left: -400px; right: -400px; background: repeating-linear-gradient(90deg, transparent 0 140px, color-mix(in srgb, var(--c-ev-squall) 55%, transparent) 140px 230px, transparent 230px 400px) 0 18% / 100% 2px no-repeat, repeating-linear-gradient(90deg, transparent 0 60px, color-mix(in srgb, var(--c-ev-squall) 40%, transparent) 60px 200px, transparent 200px 400px) 0 64% / 100% 2px no-repeat, repeating-linear-gradient(90deg, transparent 0 250px, color-mix(in srgb, var(--c-ev-squall) 50%, transparent) 250px 330px, transparent 330px 400px) 0 86% / 100% 3px no-repeat; animation: mf-gust 700ms linear infinite; }
+@keyframes mf-gust { from { translate: 0 0; } to { translate: 400px 0; } }
+
+/* gravity pocket: up/down chevrons at both sides turn over once at the impact; the ceiling in violet */
+#hud .mf-evfx[data-kind="flip"]:not([data-stage="warning"]) :is(.mf-evfx__tint, .mf-evfx__l, .mf-evfx__r) { display: block; }
+#hud .mf-evfx[data-kind="flip"] .mf-evfx__tint { background: linear-gradient(180deg, color-mix(in srgb, var(--c-ev-gravity) 26%, transparent) 0%, transparent 26%); }
+#hud .mf-evfx[data-kind="flip"] :is(.mf-evfx__l, .mf-evfx__r) { top: calc(50% - 40px); height: 80px; width: 24px; }
+#hud .mf-evfx[data-kind="flip"] :is(.mf-evfx__l, .mf-evfx__r)::before,
+#hud .mf-evfx[data-kind="flip"] :is(.mf-evfx__l, .mf-evfx__r)::after { content: ""; position: absolute; left: 2px; width: 16px; height: 16px; border: 0 solid var(--c-ev-gravity); border-top-width: 4px; border-left-width: 4px; rotate: 45deg; }
+#hud .mf-evfx[data-kind="flip"] :is(.mf-evfx__l, .mf-evfx__r)::before { top: 8px; }
+#hud .mf-evfx[data-kind="flip"] :is(.mf-evfx__l, .mf-evfx__r)::after { bottom: 8px; rotate: 225deg; }
+#hud .mf-evfx[data-kind="flip"][data-stage="impact"] :is(.mf-evfx__l, .mf-evfx__r) { animation: mf-turn 640ms var(--ease-travel) both; }
+@keyframes mf-turn { from { rotate: 0deg; } to { rotate: 180deg; } }
+
+/* custom: the event's colour at the edges */
+#hud .mf-evfx[data-kind="custom"]:not([data-stage="warning"]) .mf-evfx__tint { display: block; background: radial-gradient(ellipse at center, transparent 60%, color-mix(in srgb, var(--ev, var(--c-ev-gravity)) 22%, transparent) 100%); }
+
+/* the warning, any kind (after the kinds, and stronger: their looks wait for the impact): hazard tape
+   along the top and bottom edges, an amber edge */
+#hud .mf-evfx.mf-evfx[data-stage="warning"] :is(.mf-evfx__tint, .mf-evfx__x) { display: block; inset: 0; animation: none; }
+#hud .mf-evfx.mf-evfx[data-stage="warning"] :is(.mf-evfx__l, .mf-evfx__r) { display: none; }
+#hud .mf-evfx.mf-evfx[data-stage="warning"] .mf-evfx__tint { background: radial-gradient(ellipse at center, transparent 58%, color-mix(in srgb, var(--c-warn) 20%, transparent) 100%); }
+#hud .mf-evfx.mf-evfx[data-stage="warning"] .mf-evfx__x { background: repeating-linear-gradient(-45deg, var(--c-warn) 0 10px, var(--c-ink-950) 10px 20px) top / 100% 8px no-repeat, repeating-linear-gradient(-45deg, var(--c-warn) 0 10px, var(--c-ink-950) 10px 20px) bottom / 100% 8px no-repeat; opacity: .85; }
+
+/* ======================================================= 4. polish */
+
+/* the kill confirm: TAKEN OUT, the name stamped (again on each kill), a headshot and the streak */
+#hud .mf-kc { position: absolute; left: 50%; top: 70%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 2px; text-shadow: var(--ts-hud); animation: m-rise var(--m-fast) var(--ease-arrive) both; }
+#hud .mf-kc__tag { display: inline-flex; align-items: center; gap: 6px; color: var(--c-volt); font-size: var(--fs-14); font-weight: var(--fw-black); letter-spacing: .26em; text-transform: uppercase; }
+#hud .mf-kc__name { font-size: var(--fs-64); color: var(--c-text); white-space: nowrap; }
+#hud .mf-kc__name--a { animation: mf-kc-a 260ms var(--ease-settle) both; }
+#hud .mf-kc__name--b { animation: mf-kc-b 260ms var(--ease-settle) both; }
+@keyframes mf-kc-a { from { scale: 1.3; opacity: 0; } 40% { opacity: 1; } to { scale: 1; opacity: 1; } }
+@keyframes mf-kc-b { from { scale: 1.3; opacity: 0; } 40% { opacity: 1; } to { scale: 1; opacity: 1; } }
+#hud .mf-kc__more { display: flex; align-items: center; gap: var(--sp-2); }
+#hud .mf-kc__head { display: inline-flex; align-items: center; gap: 4px; color: var(--c-brass); font-size: var(--fs-14); font-weight: var(--fw-black); letter-spacing: .14em; text-transform: uppercase; }
+#hud .mf-kc__streak { padding: 2px 10px; border-radius: var(--r-xs); background: var(--c-volt); color: var(--c-volt-ink); font: var(--fw-display) var(--fs-20)/1.1 var(--f-display); letter-spacing: .06em; text-transform: uppercase; text-shadow: none; }
+#hud .mf-kc__streak:not([hidden]) { animation: m-stamp var(--m-fast) var(--ease-settle) both; }
+#hud[data-active-state~="kill-confirm-leaving"] .mf-kc { animation: m-leave var(--m-fast) var(--ease-leave) both; }
+
+/* the respawn card arrives; its digit stamps each second */
+#hud .respawn { animation: m-rise var(--m-base) var(--ease-arrive) both; }
+#hud .respawn__timer .mf-num--a { display: inline-block; animation: mf-count-a 360ms var(--ease-settle) both; }
+#hud .respawn__timer .mf-num--b { display: inline-block; animation: mf-count-b 360ms var(--ease-settle) both; }
+
+/* the spectator bar (visuals ready; spectating itself comes with netcode): who you watch, prev/next, join next round */
+#hud .mf-spec { position: absolute; left: 50%; bottom: calc(var(--hud-m) + var(--safe-b)); transform: translateX(-50%); display: flex; align-items: center; gap: var(--sp-5); padding: var(--sp-2) var(--sp-3) var(--sp-2) var(--sp-4); }
+#hud .mf-spec__nav { display: inline-flex; align-items: center; gap: 4px; color: var(--c-muted); font-size: var(--fs-14); font-weight: var(--fw-black); letter-spacing: .14em; text-transform: uppercase; }
+#hud .mf-spec__who { display: flex; flex-direction: column; align-items: center; min-width: 220px; }
+#hud .mf-spec__who .display { font-size: var(--fs-36); }
+#hud .mf-spec__join { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: var(--r-xs); background: var(--c-volt); color: var(--c-volt-ink); font-weight: var(--fw-black); letter-spacing: .06em; text-transform: uppercase; text-shadow: none; }

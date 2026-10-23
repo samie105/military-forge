@@ -192,6 +192,21 @@ describe('threats and cues', () => {
   });
 });
 
+describe('map events', () => {
+  it("the warning's last three seconds tick once each, in step with the HUD's countdown; nothing while it runs", () => {
+    const { sink, step } = setup();
+    const ev = (phase: 'warning' | 'active', secondsLeft: number, occurrence = 1) => ({ mapEvent: { id: 'surge', kind: 'gravitySurge', name: 'GRAVITY SURGE', description: '', phase, secondsLeft, progress: 0, color: 0, zones: [], occurrence, bulletRangeMul: 1 } });
+    const ticks = () => sink.plays.filter((p) => p.id === 'ui.count').length;
+    for (const left of [4.5, 3.9, 3.4, 2.9, 2.5, 2.1, 1.6, 0.9, 0.2]) step(frame([player(ME)], [], ev('warning', left)));
+    expect(ticks()).toBe(3);
+    for (const left of [14.9, 2.5, 1.2]) step(frame([player(ME)], [], ev('active', left)));
+    expect(ticks()).toBe(3);
+    // the next occurrence counts again
+    step(frame([player(ME)], [], ev('warning', 2.2, 2)));
+    expect(ticks()).toBe(4);
+  });
+});
+
 describe('blasts', () => {
   it('each grenade type has its own blast, and big ones duck the rest', () => {
     const { sink, step, events } = setup();
