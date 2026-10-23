@@ -192,6 +192,23 @@ export class OnlineMode {
   /** when the page last came into view (an outage before that, in the background, wasn't seen) */
   private visibleAt = 0;
   private readonly onVisibility = () => this.visibilityChanged();
+  /**
+   * Back from the back/forward cache (iOS Safari keeps the page, its memory and the session's token,
+   * but not its connection): don't wait out the silence watchdog; drop the dead socket now and resume
+   * the session (the mobile audit, §4.9.2). Any other pageshow is a plain "back in view".
+   */
+  private readonly onPageShow = (e: Event) => {
+    const t = this.transport;
+    if ((e as PageTransitionEvent).persisted && t && !this.disposed) {
+      this.currentAttempt = null; // its close is ours, not a drop to handle twice
+      this.transport = null;
+      t.close(4000, 'back from the page cache');
+      if (!this.droppedAt) this.droppedAt = performance.now();
+      this.dropped(1006, 'back from the page cache');
+      return;
+    }
+    this.visibilityChanged();
+  };
   private readonly onOnline = () => this.retryNow('back online');
   readonly net: NetClient;
   private readonly up: ConditionedLink;
@@ -275,7 +292,7 @@ export class OnlineMode {
     this.watchdogTimer = window.setInterval(() => this.checkSilence(performance.now()), WATCHDOG_MS);
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', this.onVisibility);
-      window.addEventListener('pageshow', this.onVisibility);
+      window.addEventListener('pageshow', this.onPageShow);
       window.addEventListener('online', this.onOnline);
     }
   }
@@ -743,7 +760,7 @@ export class OnlineMode {
     window.clearInterval(this.watchdogTimer);
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', this.onVisibility);
-      window.removeEventListener('pageshow', this.onVisibility);
+      window.removeEventListener('pageshow', this.onPageShow);
       window.removeEventListener('online', this.onOnline);
     }
     this.currentAttempt = null;

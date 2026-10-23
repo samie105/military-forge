@@ -178,3 +178,10 @@ html.reduce-motion .vc-tag__ring, html.reduce-motion .vc-bars i { transition: no
 .vc-pause--phone .vc-pause__row { padding: 4px 6px; }
 .vc-pause--phone .btn--icon { width: var(--touch-min); min-height: var(--touch-min); }
 .vc-pause--phone .switch { font-size: 13px; gap: 8px; }
+
+/* the lobby's Talk pill: in the roster's header, not on the top bar (the lobby's own buttons are there) */
+.vc-mic.vc-mic--inline { position: static; flex-direction: row; align-items: center; gap: 8px; pointer-events: auto; }
+.vc-mic--inline .vc-mic__lock, .vc-mic--inline .vc-mic__help { position: absolute; z-index: 5; }
+/* the pause card's "My mic" row */
+.vc-pause__me { display: flex; align-items: center; gap: 10px; padding: 6px 0 8px; border-bottom: 1px solid var(--c-line); }
+.vc-pause__me .vc-chip__who { flex: 1; min-width: 0; }

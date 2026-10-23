@@ -69,7 +69,8 @@ export function VoiceHud({ shell, chat = voiceChat }: { shell: ShellStore; chat?
     <div className={`mf-fit ${phone ? 'mf-fit--phone ' : ''}kit-v2 mf-voice`}>
       <section className={`screen screen--game vc-screen${phone ? ' screen--phone vc-screen--phone' : ''}`} data-screen="voice" aria-label="Voice chat">
         <TalkingStrip chat={chat} phone={phone} />
-        {phone ? overlay === null && humans > 0 && <PhoneMic chat={chat} /> : inPlay && overlay === null && <PttPlate chat={chat} />}
+        {/* phones: the top bar's Talk pill in a match; the lobby has its own, in the roster's header */}
+        {phone ? overlay === null && humans > 0 && phase !== MatchPhase.Waiting && <PhoneMic chat={chat} /> : inPlay && overlay === null && <PttPlate chat={chat} />}
       </section>
     </div>
   );
@@ -167,7 +168,7 @@ function useDialogUp(): boolean {
   return up;
 }
 
-export function PhoneMic({ chat }: { chat: VoiceChat }) {
+export function PhoneMic({ chat, inline = false }: { chat: VoiceChat; inline?: boolean }) {
   const talking = useVoice((s) => s.talking, chat);
   const locked = useVoice((s) => s.locked, chat);
   const mic = useVoice((s) => s.mic, chat);
@@ -219,7 +220,7 @@ export function PhoneMic({ chat }: { chat: VoiceChat }) {
     idle: 'Hold to talk; slide down to lock it on',
   }[state];
   return (
-    <div className={`vc-mic is-${state}${sliding ? ' is-sliding' : ''}`}>
+    <div className={`vc-mic is-${state}${sliding ? ' is-sliding' : ''}${inline ? ' vc-mic--inline' : ''}`}>
       <button
         type="button"
         className="vc-mic__btn"
@@ -365,6 +366,7 @@ export function VoicePauseCard({ shell, chat = voiceChat }: { shell: ShellStore;
   const peers = useVoice((s) => s.peers, chat);
   const speaking = useVoice((s) => s.speaking, chat);
   const players = useStoreSel(shell, (s) => s.lobby?.players ?? null);
+  const mic = useVoice((s) => s.mic, chat);
   const settings = useVoiceSettings();
   const phone = usePhoneLayout();
   if (!active || !players) return null;
@@ -377,6 +379,31 @@ export function VoicePauseCard({ shell, chat = voiceChat }: { shell: ShellStore;
         <span className="menu-top__spacer"></span>
         <Switch on={!settings.hearOpponents} onChange={(on) => setVoiceSettings({ hearOpponents: !on })} label="Mute all opponents" showState={false} />
       </header>
+      {/* my own mic (the mobile audit): how I talk, and a way back when the browser blocked it */}
+      <div className="vc-pause__me">
+        <span className="vc-chip__who">
+          <b>My mic</b>
+          <span>{mic === 'denied' ? 'Blocked by the browser' : mic === 'unavailable' ? 'No microphone found' : settings.mode === 'ptt' ? (phone ? 'Hold Talk to speak' : 'Hold the talk key to speak') : 'On when you speak'}</span>
+        </span>
+        {mic === 'denied' || mic === 'unavailable' ? (
+          <button type="button" className="btn btn--paper btn--sm" onClick={() => void chat.testMic()}>
+            Try again
+          </button>
+        ) : (
+          <div className={`seg${phone ? ' pm-seg' : ''}`} role="radiogroup" aria-label="My mic">
+            {(
+              [
+                ['ptt', phone ? 'Hold' : 'Push to talk'],
+                ['open', 'Open'],
+              ] as const
+            ).map(([id, text]) => (
+              <button type="button" key={id} className="seg__opt" role="radio" aria-checked={settings.mode === id} onClick={() => setVoiceSettings({ mode: id })}>
+                {text}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       {people.length === 0 && <p className="vc-note">Nobody else here talks yet: bots don't.</p>}
       <ul className="vc-pause__list">
         {people.map((p) => {

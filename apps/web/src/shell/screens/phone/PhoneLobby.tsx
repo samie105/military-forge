@@ -29,6 +29,8 @@ import { PhoneTips } from './PhoneTips';
 import { PlayerAvatar } from '../../../presentation/PlayerAvatar';
 import { TeamRoster } from '../../../teams/TeamRoster';
 import { BOT_LEVELS, BOT_LEVEL_NAMES, botFillChoices, botsLine, type BotLevel } from '../../roomBots';
+import { PhoneMic, useVoice } from '../../../voice/VoiceHud';
+import { voiceChat } from '../../../voice';
 
 function Row({ p, i }: { p: LobbyPlayer; i: number }) {
   const ready = p.ready || p.isBot;
@@ -239,6 +241,7 @@ export function PhoneLobby({ lobby, tips = null }: { lobby: LobbyView; tips?: Bi
   const [folded, setFolded] = useState(false);
   const [rules, setRules] = useState(false);
   const [chip, showChip] = useShareChip();
+  const voiceOn = useVoice((v) => v.active);
   const link = roomLink(lobby.code);
   const qr = useMemo(() => qrSvgPath(encodeQr(link), 1), [link]);
   if (folded)
@@ -333,6 +336,8 @@ export function PhoneLobby({ lobby, tips = null }: { lobby: LobbyView; tips?: Bi
               <b className="display" id="pm-roster-t">
                 Roster <Roll value={lobby.players.length} />/{ROOM_SLOTS}
               </b>
+              {/* push to talk, with someone to talk to (the mobile audit: here, not over the room link) */}
+              {voiceOn && lobby.players.some((p) => !p.isBot && !p.you) && <PhoneMic chat={voiceChat} inline />}
               <span className={`status ${readyCount === people.length ? 'status--ok' : 'status--busy'}`}>
                 <Icon name={readyCount === people.length ? 'ok' : 'clock'} size="sm" />
                 <Roll value={readyCount} /> ready

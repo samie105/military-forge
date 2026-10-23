@@ -1295,7 +1295,8 @@ export class Renderer {
       // render3d draws every burst over the 3D view: blasts (vfx), the flashbang's pop and the EMP's
       // ring (clouds.ts); the 2D view and the debug overlay draw them here
       if (!world) continue;
-      const k = b.age / 0.45;
+      // never under 0: a burst stamped a moment ahead of the frame drew a negative radius (arc throws)
+      const k = Math.max(0, b.age / 0.45);
       const [br, bg, bb] = BURST_RGB[b.grenade] ?? BURST_RGB[FRAG.index]!;
       // a flashbang is a small pop and its ring, never a white disc: full-screen white is the fx
       // overlay's (its limiter), and "Reduce flashes" greys the pop

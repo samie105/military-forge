@@ -64,5 +64,7 @@ html[data-touch-crate] .ph .pt-pickup { display: none; }
 #hud .ph .pt-feed { top: calc(var(--safe-t) + 56px); }
 /* a gun or an item underfoot, and the compare card: top centre, under the clock, off the grenade and
    the arc (they sat on the grenade and its count) */
-#hud .ph .pt-pickup { top: calc(var(--safe-t) + 44px); bottom: auto; left: 50%; }
-#hud .ph .pt-cmp { top: calc(var(--safe-t) + 44px); bottom: auto; left: 50%; }
+/* right edge just left of the touch layout's context slot (BR 40 mm: 240 px, half its 60 px, a gap),
+   so Take, melee or the shield showing there stays clear */
+#hud .ph .pt-pickup { top: calc(var(--safe-t) + 44px); bottom: auto; left: auto; right: calc(var(--safe-r) + 276px); translate: none; }
+#hud .ph .pt-cmp { top: calc(var(--safe-t) + 44px); bottom: auto; left: auto; right: calc(var(--safe-r) + 276px); transform: none; }

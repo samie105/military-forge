@@ -248,7 +248,8 @@ async function gestures(where) {
 
   // the camera: two fingers landing on the left side pinch; a two-finger double tap recentres
   await actions();
-  const L = (await rotated()) ? [{ x: 250, y: 200 }, { x: 250, y: 260 }] : [{ x: 200, y: 180 }, { x: 260, y: 180 }];
+  // a pinch needs its fingers 120 px apart and the first one still (controls spec §4.6, #197)
+  const L = (await rotated()) ? [{ x: 250, y: 150 }, { x: 250, y: 290 }] : [{ x: 150, y: 180 }, { x: 290, y: 180 }];
   await touch('touchStart', [{ id: 10, ...L[0] }]);
   await sleep(60);
   await touch('touchStart', [{ id: 10, ...L[0] }, { id: 11, ...L[1] }]);
@@ -277,6 +278,8 @@ try {
     // the fire mode chosen (the first-run chooser, #204, would hold play), Pull as before
     localStorage.setItem('mf.touch.settings.v1', JSON.stringify({ mode: 'on', fire: 'pull', fireChosen: true }));
     localStorage.removeItem('mf.touch.layout.v1');
+    // Classic keeps dash off the HUD (a flick dashes): these checks pin its button, as a player can
+    localStorage.setItem('mf.touch.layout.v3', JSON.stringify({ placements: {}, pinned: ['dash'] }));
     localStorage.removeItem('mf.touch.drill.v1');
     localStorage.removeItem('mf.touch.hints.v1');
     localStorage.removeItem('mf.hints.v1');
@@ -347,14 +350,14 @@ try {
   await sleep(300);
 
   // a first-time gesture hint, a few seconds into play (the onboarding's hint engine shows it, one tip at
-  // a time with the rest: tour/hints.ts): "Dash. Swipe the button to dash any way", ringing the dash button
+  // a time with the rest: tour/hints.ts), ringing its control (the first possible one: Dash, or Guns)
   // the drill just used every gesture, and a gesture the player uses is never taught: Settings' "Show
   // hints again", as a player would
   await page.evaluate(() => window.__touch.resetTouchHints());
   await page.waitForFunction(() => /Tip/i.test(document.querySelector('.mf-spot__eyebrow')?.textContent ?? '') && !!document.querySelector('.mf-spot__ring'), { timeout: 20_000 }).catch(() => null);
   await shot('l-hint', 200);
   const tip = await page.evaluate(() => ({ title: document.querySelector('.mf-spot__title')?.textContent ?? '', body: document.querySelector('.mf-spot__body')?.textContent ?? '', rings: document.querySelectorAll('.mf-spot__ring').length }));
-  check(/Dash/.test(tip.title) && /Swipe/.test(tip.body) && tip.rings > 0, `a first-time gesture hint shows as a tip, ringing its control (${tip.title} ${tip.body}; ${tip.rings} ring)`);
+  check(tip.title.length > 0 && /Swipe|Hold|Tap/.test(tip.body) && tip.rings > 0, `a first-time gesture hint shows as a tip, ringing its control (${tip.title} ${tip.body}; ${tip.rings} ring)`);
 
   // a strip: the belt fanning out under a swipe
   await me(() => {
@@ -379,10 +382,15 @@ try {
   // the glass's solid fallback (a slow phone, Reduce transparency)
   await page.evaluate(() => document.documentElement.classList.add('mf-glass-off'));
   await shot('l-hud-solid', 300);
-  const bf = await page.$eval('.mf-ctl-dash .dial-btn', (el) => getComputedStyle(el).backdropFilter);
+  const bf = await page.$eval('.mf-ctl-grenade .dial-btn', (el) => getComputedStyle(el).backdropFilter);
   check(bf === 'none', `the solid fallback drops the blur (${bf})`);
-  await page.evaluate(() => document.documentElement.classList.remove('mf-glass-off'));
-  const bf2 = await page.$eval('.mf-ctl-dash .dial-btn', (el) => getComputedStyle(el).backdropFilter);
+  // read in the same breath: on a slow page (headless Chrome) the controller turns the glass off again a frame later
+  const bf2 = await page.evaluate(() => {
+    document.documentElement.classList.remove('mf-glass-off');
+    const el = document.querySelector('.mf-ctl-grenade .dial-btn');
+    const cs = getComputedStyle(el);
+    return `${cs.backdropFilter}; html: ${document.documentElement.className}; --glass-blur: ${cs.getPropertyValue('--glass-blur')}`;
+  });
   check(/blur/.test(bf2), `the glass blurs what's behind it (${bf2})`);
 
   // upright: the page turns, every gesture reads the same

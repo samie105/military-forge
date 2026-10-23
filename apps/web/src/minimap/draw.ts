@@ -274,7 +274,7 @@ export function drawDots(ctx: CanvasRenderingContext2D, f: Fit, d: DotsInput, pa
     if (m.kind === 'heard') {
       ctx.lineWidth = 1.2 * unit;
       ctx.beginPath();
-      ctx.arc(x, y, (2.6 + 2.2 * (1 - m.alpha) + d.pulse) * unit, 0, Math.PI * 2);
+      ctx.arc(x, y, Math.max(0, (2.6 + 2.2 * (1 - m.alpha) + d.pulse) * unit), 0, Math.PI * 2);
       ctx.stroke();
       continue;
     }

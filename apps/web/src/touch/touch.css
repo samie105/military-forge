@@ -366,3 +366,8 @@ html.reduce-motion .mf-ctl.mf-teach::before { animation: none; opacity: 0.9; }
 .mf-touch .pt-pick { position: relative; left: auto; bottom: auto; transform: none; width: 52px; height: 52px; min-height: 0; padding: 0; justify-content: center; border-radius: 50%; }
 .mf-touch .pt-pick > :is(.ic--sm, span, b:not(.mf-cap)) { display: none; }
 .mf-touch .pt-pick .ic--kf { width: 34px; height: 20px; }
+
+/* the move dial's HP and fuel read-outs: side by side just above the dial, not on its rim, where they
+   sat on the HP and fuel arcs (the mobile audit, P1-10) */
+.mf-touch .dial--move .dial__lbl--hp { left: auto; right: calc(50% + 3px); top: -30px; }
+.mf-touch .dial--move .dial__lbl--fuel { right: auto; left: calc(50% + 3px); top: -30px; }
