@@ -51,6 +51,8 @@ export class Navigator {
   /** extra seconds for taking a link right now (into or through gas the bot has seen); Infinity closes it; set by the brain */
   penalty: (link: NavLink) => number = () => 0;
   private readonly fails = new Map<number, number>();
+  /** the approach node whose leg last gave up (−1: none): the next plan from the air picks another */
+  private approachFailed = -1;
   private linkTicks = 0;
   private best = Infinity;
   private stall = 0;
@@ -97,6 +99,7 @@ export class Navigator {
   /** Forget which links failed (a new life). */
   forget(): void {
     this.fails.clear();
+    this.approachFailed = -1;
   }
 
   /** The node the body stands at, or −1 (in the air, or off the graph). */
@@ -159,11 +162,22 @@ export class Navigator {
     let start = via >= 0 ? -1 : this.locate(self);
     if (start >= 0 && this.blocked(start)) start = -1;
     const approach = start < 0;
-    if (approach) start = via >= 0 ? via : this.graph.nearestUsable(self.x, self.y, 8, this.blocked);
-    // nothing near (the middle of a wide zero-g dome, which has no nodes): farther afield
-    if (approach && start < 0 && via < 0) start = this.graph.nearestUsable(self.x, self.y, APPROACH_FAR, this.blocked);
+    if (approach && via >= 0) start = via;
+    else if (approach) {
+      // the approach leg is flown straight at the node: the nearest one in a clear line (the nearest
+      // of all can be through a wall, as from beside a tower to the platform behind it), and not the
+      // one whose approach last gave up; then farther afield (the middle of a wide zero-g dome, which
+      // has no nodes); then the nearest, whatever's between
+      const g = this.graph;
+      const skip = this.skipApproach;
+      start = g.nearestUsable(self.x, self.y, 8, skip, true);
+      if (start < 0) start = g.nearestUsable(self.x, self.y, APPROACH_FAR, skip, true);
+      if (start < 0) start = g.nearestUsable(self.x, self.y, APPROACH_FAR, this.blocked);
+    } else this.approachFailed = -1; // on the graph again
     return { start, approach };
   }
+
+  private readonly skipApproach = (id: number): boolean => id === this.approachFailed || this.blocked(id);
 
   /** Takes the path just found (in `path`) to `goal`, after an approach leg to `approach` (−1: none). */
   private adopt(goal: number, approach: number, following: number): void {
@@ -210,7 +224,11 @@ export class Navigator {
       if (down && Math.abs(self.x - n.x) < ARRIVE_X && Math.abs(self.y - n.y) < ARRIVE_Y) {
         this.approach = -1;
         this.resetLink();
-      } else return this.steer(game, self, env, n, true, true, 2);
+      } else {
+        const buttons = this.steer(game, self, env, n, true, true, 2);
+        if (this.failed) this.approachFailed = n.id;
+        return buttons;
+      }
     }
     while (this.at < this.path.length) {
       const to = g.nodes[g.links[this.path[this.at]!]!.to]!;

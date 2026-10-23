@@ -20,6 +20,7 @@ import { BREACHER, BUZZ, FRAG, HAMMER, K47, RIOT_SHIELD, WIDOW, pickups as picku
 import { DEG2RAD, angleToU16, hash4, simAtan2, wrapAngle, Xoshiro128 } from '@military-forge/shared';
 import {
   Btn,
+  DT,
   DamageSource,
   MAX_PLAYERS,
   SegFlag,
@@ -304,7 +305,9 @@ export class BotBrain implements Brain {
       const dist = Math.sqrt(dx * dx + dy * dy);
       // in view isn't in reach: no shots into a wall, and the gunner fires only what carries that far
       const line = this.lineOfFire(self.x, self.y, q);
-      const used = line ? this.rangeUsed(sx, sy, q.x, q.y + 0.85) : 0;
+      // the shot leaves after this tick's move (think, move, fire): in reach from where both bodies
+      // are now and from where they'll be then, or a dash or a fall at the edge carries it out of reach
+      const used = line ? Math.max(this.rangeUsed(sx, sy, q.x, q.y + 0.85), this.rangeUsed(sx + self.vx * DT, sy + self.vy * DT, q.x + q.vx * DT, q.y + 0.85 + q.vy * DT)) : 0;
       if (line) this.inReach = dist < BASH_REACH || this.gunner.bestSlot(self, dist, used) >= 0;
       if (!this.planned) {
         const centre = this.aim.track(self, q, sx, sy);

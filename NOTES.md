@@ -1253,3 +1253,21 @@ The owner, 23 Oct: "when it's opened, it has an opened screen with a tap anywher
 - **Cheap on phones, gentle on motion:**
   - Phones: one layer drifts, with no sweep and no blur.
   - Reduce motion: nothing drifts or breathes, and leaving is a 220 ms cross-fade.
+
+## 42. Air control 20 → 32, and the stuck bot it showed up (23 Oct 2026, the owner: "use the best")
+
+- **The change:** `airAccel` 20 → 32 m/s² (docs/design/controls-research.md §5.8). Air reversal while jetting (+6.5 → −6.2 m/s) takes **400 ms** instead of 650 (24 ticks, not 39); from rest to the air cap, 0.20 s instead of 0.32. Ground movement is unchanged.
+- **Feel report** (`pnpm --filter @military-forge/sim feel`): every target still passes. Jet + run 42.1 → 42.5 m; long flight 96.8 → 97.9 m. Airborne shooters hold their line better against recoil: Breacher at 5 m airborne 1.40 → 0.78 s, Popper at 12 m airborne 4.41 → 2.38 s; other rows move by 0.06 s at most.
+- **A sim ground-check bug, fixed (`movement.ts` `sweepDown`):** a body standing at the foot of a step lower than its radius (movement-test's 0.2 m ledge), creeping toward it at about 0.02 m/s, met the step's top corner 0.3 mm before the floor in the ground sweep. That creep is too slow to survive the 1/1024 m position rounding. The corner reads as a steep slope, so the body stayed airborne, at rest on the floor: no ground friction (the creep never died), air regen, the air spread. A bot waits to be grounded before it "arrives", so it hovered there for 25 s. Now, when the first contact is steep and walkable ground lies within 1 cm under it (the wedge rule's tolerance), the body stands on that ground. At air 20 every sim golden is bit-identical with the fix; `movement.test.ts` covers both sides of a step.
+- **Bots, approach legs (`navigator.ts`, `graph.ts`):** from the air, a plan starts with a straight flight to the nearest node within 8 m, whatever was between. Falling down the right face of movement-test's tower, the nearest was on the platform behind the tower: the bot hovered against the wall until the stall timeout, and the replan chose the same node. Now the approach goes to the nearest node in a clear line (one-way platforms don't block), then one farther afield, then the nearest whatever's between. The node whose approach gave up is skipped until the bot stands on the graph again.
+- **Bots, shots at the edge of reach (`brain.ts`):** reach was checked from where the bodies are when the bot thinks, but the shot leaves after the tick's move. A dash or a step out at the range's edge carried about 0.5% of shots beyond reach on mechanics-test. That was already seed noise at air 20 (3 of 20 seeds over the soak's 1% line). Reach is now the worse of now and one tick on.
+- **Measured** (`probe-air`, not committed; the soak test's setups over many seeds; arsenal B: movement-test, game seeds 31+k, pops 77+k; local play: mechanics-test, an idle human and three Hard bots, seeds 1234+k):
+
+  | | Arsenal B, 30 seeds: stuck (mean · worst · seeds over 1%) | Local play, 20 seeds: shots beyond reach (mean · worst · seeds over 1%) |
+  |---|---|---|
+  | main, air 20 | 0.05% · 0.65% · 0 | 0.46% · 1.81% · 3 |
+  | main, air 32 | 0.17% · 2.22% · 2 (both at the 0.2 m step) | 0.60% · 1.63% · 4 |
+  | this branch, air 32 | **0.01% · 0.11% · 0** | **0.06% · 0.32% · 0** |
+  | this branch, air 20 | 0.05% · 0.49% · 0 | 0.04% · 0.36% · 0 |
+
+- **Goldens:** at air 20, every sim and bot golden and both closed-loop replays are bit-identical with all three fixes, so what moved comes from air control alone. At 32: 19 of 20 sim goldens (shield has no airborne steering), the regenerated `mech-events` and `mech-zones` replays (closed-loop scenarios), and the 3 bot goldens. Replays with dummies diverge at tick 0: the strafing dummy spawns airborne and steers.

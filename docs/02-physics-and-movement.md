@@ -159,7 +159,7 @@ BR squads: hp ≤ 0 with alive teammate ──▶ KNOCKED (crawl 1.2 m/s, bleed-
 | `GROUND_ACCEL` | 45 m/s² | reach max speed in ~0.11 s |
 | `GROUND_DECEL` | 55 m/s² | no input |
 | `GROUND_REVERSE` | 80 m/s² | input opposite to velocity, for crisp turns |
-| `AIR_ACCEL` | 20 m/s² | |
+| `AIR_ACCEL` | 32 m/s² | air reversal ~0.41 s (20 until 23 Oct: 0.65 s felt sluggish; docs/design/controls-research.md §5.8) |
 | `AIR_MAX_X` | 6.0 m/s | input-driven cap; impulses (explosions, recoil) may exceed it |
 | `AIR_DRAG_X` | 1.5 /s | exponential decay of excess horizontal speed above the cap |
 | `JET_THRUST` | 38 m/s² | net +18 m/s² against gravity |
@@ -284,6 +284,7 @@ Edge cases to test (each gets a unit test with a fixed seed and an expected fina
 - flying into a ceiling at full thrust → no tunnelling, no sticking
 - dashing, walking, falling or being launched (36 m/s) into a solid thinner than the capsule radius, down to 1 cm → stops at the near face
 - landing on a 49° vs 51° slope
+- standing at the foot of a step lower than the capsule radius, its top corner brushing the capsule's side → grounded. The ground sweep meets that corner a hair before the floor; a steep first contact with walkable ground within 1 cm under it counts as that ground (until 23 Oct it read as airborne, at rest on the floor)
 - standing on a `ONE_WAY` platform while another player stands below
 - teleport/respawn into overlap → depenetration routine pushes to nearest free point; fall back to spawn safety volume
 - 1-tick `ONE_WAY` drop-through then immediate jet

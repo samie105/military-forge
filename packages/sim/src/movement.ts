@@ -162,6 +162,11 @@ function sweepDown(world: CollisionWorld, p: PlayerState, r: number, dist: numbe
   let rightT = Infinity;
   let rightNx = 0;
   let rightNy = 0;
+  // earliest walkable contact, for when a steep one only brushes the side of the capsule (below)
+  let walkT = Infinity;
+  let walkSeg = -1;
+  let walkNx = 0;
+  let walkNy = 0;
   for (let k = 0; k < count; k++) {
     const seg = world.queryResult[k]!;
     const flags = world.flags[seg]!;
@@ -192,7 +197,14 @@ function sweepDown(world: CollisionWorld, p: PlayerState, r: number, dist: numbe
       bestNx = nx;
       bestNy = ny;
     }
-    if (ny < cosMax) {
+    if (ny >= cosMax) {
+      if (t < walkT) {
+        walkT = t;
+        walkSeg = seg;
+        walkNx = nx;
+        walkNy = ny;
+      }
+    } else {
       if (nx > 0.05 && t < leftT) {
         leftT = t;
         leftNx = nx;
@@ -205,7 +217,16 @@ function sweepDown(world: CollisionWorld, p: PlayerState, r: number, dist: numbe
     }
   }
   if (bestSeg < 0) return false;
-  if (bestNy < cosMax) {
+  if (bestNy < cosMax && (walkT - bestT) * dist <= 0.01) {
+    // the steep contact only brushes the capsule's side, with walkable ground right under it: the
+    // ground holds you. A body at the foot of a step lower than its radius touches the step's top
+    // corner a hair before the floor; it read as airborne, at rest on the floor, for as long as it
+    // stood there (no ground friction or regen, the air spread, a bot that never "arrives").
+    bestT = walkT;
+    bestSeg = walkSeg;
+    bestNx = walkNx;
+    bestNy = walkNy;
+  } else if (bestNy < cosMax) {
     // wedge: steep surfaces on both sides, touching at (almost) the same height
     if (leftT === Infinity || rightT === Infinity || Math.abs(leftT - rightT) * dist > 0.01) return false;
     let wx = leftNx + rightNx;

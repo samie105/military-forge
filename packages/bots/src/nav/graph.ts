@@ -142,18 +142,26 @@ export class NavGraph {
     return best;
   }
 
-  /** The nearest usable node within `reach` m of (x, y), whatever's between (−1 if none). */
-  nearestUsable(x: number, y: number, reach: number, skip?: (id: number) => boolean): number {
+  /**
+   * The nearest usable node within `reach` m of feet at (x, y), whatever's between (−1 if none);
+   * with `clear`, only one with a clear line between the body centres (one-way platforms don't block).
+   */
+  nearestUsable(x: number, y: number, reach: number, skip?: (id: number) => boolean, clear = false): number {
     let best = -1;
     let bestD = Infinity;
     this.forNear(x, y, reach, reach, (id) => {
       const n = this.nodes[id]!;
       if (!n.usable || skip?.(id)) return;
-      const d = (n.x - x) * (n.x - x) + (n.y - y) * (n.y - y);
-      if (d < bestD) {
-        bestD = d;
-        best = id;
+      const dx = n.x - x;
+      const dy = n.y - y;
+      const d = dx * dx + dy * dy;
+      if (d >= bestD) return;
+      if (clear && d > 1e-12) {
+        const len = Math.sqrt(d);
+        if (this.world.raycast(x, y + 0.75, dx / len, dy / len, len, SegFlag.OneWay, hit)) return;
       }
+      bestD = d;
+      best = id;
     });
     return best;
   }

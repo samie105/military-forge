@@ -190,6 +190,24 @@ describe('collision edge cases (docs/02 §10)', () => {
     }
   });
 
+  it('standing at the foot of a 0.2 m step, brushing its top corner, is standing (regression: airborne at rest)', () => {
+    // the capsule's side is a hair from the step's top corner, and a creep of 0.02 m/s toward it is
+    // swallowed by the position quantisation: the ground sweep met the corner first and read it as
+    // a steep slope, so the body stayed airborne on the floor (a bot hovered there for 25 s)
+    for (const dir of [1, -1]) {
+      const { game, p } = makeGame(flatMap([rect(10, 0, 14, 0.2)]));
+      p.x = dir > 0 ? 10 - 0.296875 : 14 + 0.296875;
+      p.y = 0.001953125;
+      p.vx = 0.02 * dir;
+      p.vy = 0;
+      p.grounded = false;
+      hold(game, p, 0, 10);
+      expect(p.grounded, `step to the ${dir > 0 ? 'right' : 'left'}`).toBe(true);
+      expect(p.vx).toBe(0); // ground friction
+      expect(p.y).toBeLessThan(SKIN * 2);
+    }
+  });
+
   it('one-way platforms: fly up through, land on top, hold down to drop through', () => {
     const { game, p } = makeGame(flatMap([], [{ ax: 3, ay: 3, bx: 9, by: 3 }]));
     placeOnGround(game, p, 5);

@@ -107,7 +107,10 @@ export const defaultTuning: Readonly<Tuning> = Object.freeze({
   groundDecel: 55,
   groundReverse: 80,
 
-  airAccel: 20,
+  // the owner (23 Oct, "use the best"): controls research §5.8 measured a 650 ms air reversal
+  // against 117 ms on the ground; 32 brings it to ~410 ms (0 → air cap in 0.19 s), still floatier
+  // than a precision platformer, which suits a jetpack game
+  airAccel: 32,
   airMaxX: 6.0,
   airDragX: 1.5,
   launchSpeedX: 12,
