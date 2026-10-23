@@ -233,3 +233,116 @@ html.reduce-motion .pm-sheet.is-leaving { animation-name: pm-fade-out; }
 .pm-turn__card .btn { min-height: var(--touch-min); }
 @keyframes pm-turn { 0%, 30% { rotate: 0deg; } 60%, 100% { rotate: 90deg; } }
 html.reduce-motion .pm-turn__card .ic { animation: none; }
+
+/*
+ * ---- local rooms (the Pen board "LOCAL ROOMS · same Wi-Fi", P0–P5): Home's ticket, Join with code,
+ * the lobby's half of the share poster, and the QR panels (PhoneLan.tsx). The QR card is paper and as
+ * big as the height allows; the step beside it is Frost glass; every target 48 px, the main action 64.
+ * ----
+ */
+.mf-fit--phone .pm-back { width: var(--touch-min); height: var(--touch-min); flex: none; }
+.pm-titles { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+.pm-eyebrow { font-size: calc(12px * var(--text-scale, 1)); font-weight: var(--fw-black); letter-spacing: 0.12em; text-transform: uppercase; color: var(--c-volt); line-height: 1.2; white-space: nowrap; }
+.pm-titles .pm-h { line-height: 0.92; white-space: nowrap; }
+.mf-fit--phone .pm-lan__tag { min-height: 32px; }
+
+/* P0 · home: the Local room ticket (lit up offline, when it's the way to play with friends) */
+.pm-home { grid-template-columns: 330px 196px 1fr; }
+.pm-tk--local .label { display: inline-flex; align-items: center; gap: 4px; }
+.pm-tk--local .label .ic { width: 14px; height: 14px; }
+.pm-tk--local { padding-block: 6px; }
+.pm-tk__sub { font-size: calc(12px * var(--text-scale, 1)); font-weight: var(--fw-bold); color: var(--c-paper-muted); }
+.pm-tk--local.is-hot { box-shadow: 0 0 0 3px var(--c-volt); }
+.pm-poster__note { font-size: calc(12px * var(--text-scale, 1)); font-weight: var(--fw-bold); color: var(--c-volt-ink); }
+.is-text-lg .pm-tk__sub { display: none; }
+
+/* P1 · Join with code: the boxes in the band the keyboard leaves */
+.pm-join { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 16px; }
+.pm-join__main { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.pm-codebox { display: flex; gap: 8px; }
+.pm-codebox__cell { width: 62px; height: 74px; box-sizing: border-box; padding: 0; text-align: center; background: var(--c-paper); color: var(--c-paper-text); border: var(--bw-chunky) solid var(--c-ink-950); border-bottom-width: 6px; border-radius: var(--r-sm); font: var(--fw-display) calc(44px * var(--pm-head)) / 1 var(--f-display); text-transform: uppercase; caret-color: var(--c-volt-ink); box-shadow: var(--sh-press-sm); }
+.pm-codebox__cell.is-empty { background: var(--c-ink-800); border-color: var(--c-line-strong); box-shadow: none; }
+.pm-codebox__cell:focus { outline: none; border-color: var(--c-volt); box-shadow: 0 0 0 3px var(--c-volt-soft); }
+.pm-codebox__cell.is-bad { background: var(--c-hp); color: var(--c-hp-ink); }
+[data-active-state~="error"] .pm-codebox { animation: shake 320ms var(--ease-out) 1; }
+.pm-join__status { display: flex; align-items: center; gap: 4px; min-height: 20px; margin: 0; font-size: var(--fs-14); font-weight: var(--fw-bold); color: var(--c-muted); }
+.pm-join__status.is-ok { color: var(--c-ok); }
+.pm-join__status.is-bad { color: var(--c-danger-text); }
+.pm-join__acts { display: flex; gap: 10px; }
+.mf-fit--phone :is(.pm-join__go, .pm-join__paste, .pm-join__scan) { min-height: 56px; padding: 0 16px; font-size: var(--fs-16); }
+.mf-fit--phone .pm-join__scan { padding: 0 10px; gap: 8px; white-space: nowrap; }
+.pm-join__go { flex: 1; }
+.pm-join__lan { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; min-height: 0; }
+.pm-join__lan .label { display: inline-flex; align-items: center; gap: 6px; }
+.pm-join__lan p { margin: 0; font-size: var(--fs-16); }
+.pm-join__scan { margin-top: auto; }
+.is-text-lg .pm-join { grid-template-columns: minmax(0, 1fr) 230px; }
+.is-text-lg .pm-codebox { gap: 6px; }
+.is-text-lg .pm-codebox__cell { width: 50px; height: 64px; }
+.is-text-lg .pm-join__lan p { display: none; }
+.mf-fit--phone.is-text-lg .pm-join__scan { white-space: normal; }
+
+/* P2 · the lobby: a local room's code to type, and the host's QR way in */
+.pm-share--local .pm-share__t { font-size: calc(32px * var(--pm-head)); }
+.pm-lan__how { display: flex; flex-direction: column; padding: 6px 12px; border: var(--bw-chunky) solid var(--c-ink-950); border-radius: var(--r-sm); }
+.pm-lan__how .label { display: inline-flex; align-items: center; gap: 4px; font-size: calc(12px * var(--text-scale, 1)); color: var(--c-paper-muted); opacity: 1; }
+.pm-lan__how-code { font-size: calc(40px * var(--pm-head)); letter-spacing: 0.12em; line-height: 1; }
+.pm-lan__how-t { font-size: calc(26px * var(--pm-head)); line-height: 1; }
+.mf-fit--phone .pm-lan__add { margin-top: auto; min-height: 48px; background: var(--c-ink-900); color: var(--c-volt); font-size: var(--fs-16); }
+.pm-lan__hint { font-size: calc(12px * var(--text-scale, 1)); font-weight: var(--fw-bold); color: var(--c-volt-ink); }
+.pm-lan__how + .pm-lan__hint { margin-top: auto; }
+/* large text: the poster's words get shorter (Share link, Join with code, Add by QR) rather than wrap */
+.is-text-lg .pm-share--local .pm-more { display: none; }
+.mf-fit--phone.is-text-lg .pm-share--local :is(.pm-share__btn, .pm-lan__add) { padding: 0 10px; gap: 8px; white-space: nowrap; }
+
+/* P3–P5 · the QR panels */
+.pm-lan { flex: 1; min-height: 0; display: grid; grid-template-columns: 236px minmax(0, 1fr); gap: 12px; }
+.pm-lan--vf { grid-template-columns: 300px minmax(0, 1fr); }
+.pm-lan__card { display: flex; flex-direction: column; gap: 6px; min-height: 0; padding: 8px; border: var(--bw-chunky) solid var(--c-ink-950); border-radius: var(--r-md); box-shadow: var(--sh-card-sm); }
+.pm-lan__card > .label { text-align: center; font-size: calc(12px * var(--text-scale, 1)); color: var(--c-paper-text); }
+/* the QR as big as the card leaves room for (square: the smaller of the box's sides) */
+.pm-lan__qrbox { flex: 1 1 0; min-height: 0; display: grid; place-items: center; container-type: size; }
+.mf-fit--phone .pm-lan__qrbox .mf-lan__qr { width: min(100cqw, 100cqh); height: min(100cqw, 100cqh); padding: 6px; }
+.mf-fit--phone .pm-lan__qrbox .mf-lan__qr--pending { padding: 10px; font-size: var(--fs-14); }
+.mf-fit--phone .pm-lan__qrbox .mf-wait { padding: 6px 8px; font-size: var(--fs-14); }
+.mf-fit--phone .pm-lan__copy { min-height: var(--touch-min); padding: 0 10px; gap: 8px; font-size: var(--fs-16); white-space: nowrap; }
+.mf-fit--phone .pm-lan__qrbox .mf-lan__qrwrap { display: grid; place-items: center; }
+.mf-fit--phone .mf-lan__used { font-size: var(--fs-20); }
+.pm-lan__card--vf { position: relative; padding: 0; background: none; border: 0; box-shadow: none; }
+.pm-lan__card--vf .mf-vf { height: 100%; flex: none; min-height: 0; border-radius: var(--r-md); }
+.mf-fit--phone .pm-lan__card--vf .mf-vf__in { padding: 14px; }
+.mf-fit--phone .mf-vf__corners i { width: 28px; height: 28px; }
+.mf-fit--phone .mf-vf__hint { font-size: var(--fs-14); }
+.mf-fit--phone .mf-vf .status { font-size: var(--fs-14); }
+.mf-fit--phone .pm-lan__close { position: absolute; top: 8px; right: 8px; width: var(--touch-min); height: var(--touch-min); background: var(--c-plate); }
+.pm-lan__panel { display: flex; flex-direction: column; gap: 8px; min-height: 0; padding: 12px 16px; overflow-y: auto; overscroll-behavior: contain; }
+.pm-lan__panel > .label { font-size: calc(12px * var(--text-scale, 1)); }
+.pm-lan__h { font-size: calc(28px * var(--pm-head)); line-height: 0.92; }
+.pm-lan__sub { margin: 0; font-size: var(--fs-14); color: var(--c-muted); }
+.pm-lan__note { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--fs-14); color: var(--c-muted); }
+.pm-lan__got { font-size: var(--fs-14); }
+.pm-lan__panel .pm-lan__vf { flex: 1 1 0; min-height: 0; }
+.mf-fit--phone .pm-lan__big { min-height: 64px; padding: 0 16px; font-size: var(--fs-16); }
+.mf-fit--phone .pm-lan__stop { min-height: var(--touch-min); font-size: var(--fs-16); }
+.pm-lan__panel .mf-paste { margin-top: auto; }
+.mf-fit--phone .mf-paste--compact .mf-paste__row { gap: 8px; flex-wrap: nowrap; }
+.mf-fit--phone .mf-paste--compact .mf-paste__text { flex: 1 1 0; min-height: var(--touch-min); padding: 0 12px; font-size: var(--fs-14); }
+.mf-fit--phone .mf-paste--compact .btn { flex: none; min-height: var(--touch-min); padding: 0 14px; font-size: var(--fs-16); }
+.mf-fit--phone .mf-paste--compact .btn--icon { width: var(--touch-min); padding: 0; }
+.mf-fit--phone .mf-paste__problem { font-size: var(--fs-14); }
+.pm-lan__result { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: auto; width: 100%; }
+.pm-lan__result .status { font-size: var(--fs-14); }
+.pm-lan__acts { display: flex; gap: 8px; width: 100%; }
+.pm-lan__acts .btn { flex: 1; }
+.mf-fit--phone .pm-lan__acts .btn { padding: 0 10px; gap: 8px; white-space: nowrap; }
+.pm-lan__waitbox { margin-top: auto; }
+.pm-lan__waitbox .mf-wait { display: flex; width: 100%; box-sizing: border-box; font-size: var(--fs-16); }
+.mf-fit--phone .mf-steps { gap: 16px; }
+.mf-fit--phone .mf-steps li { min-height: 24px; font-size: calc(12px * var(--text-scale, 1)); }
+.is-text-lg .pm-lan { grid-template-columns: 200px minmax(0, 1fr); }
+.is-text-lg .pm-lan--vf { grid-template-columns: 240px minmax(0, 1fr); }
+.is-text-lg .pm-lan__sub { display: none; }
+.is-text-lg .pm-lan__tag { display: none; }
+/* Copy as text → Copy: the paper card is narrower than the words at large text */
+.is-text-lg .pm-lan__copy .mf-copy__more { display: none; }
+.is-text-lg .pm-lan__card > .label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

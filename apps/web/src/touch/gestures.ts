@@ -154,22 +154,5 @@ export function pinchSteps(startDist: number, dist: number): number {
   return r >= 0 ? Math.floor(r) : -Math.floor(-r);
 }
 
-/**
- * Auto-fire (Settings, off by default): the aim lies on an enemy within `range` m and `cone` radians
- * of it. Pure: the shooter at (sx, sy), the aim angle the sim's (y up).
- */
-export function onTarget(aim: number, sx: number, sy: number, targets: readonly Vec[], range = 22, cone = (6 * Math.PI) / 180): boolean {
-  for (const t of targets) {
-    const dx = t.x - sx;
-    const dy = t.y - sy;
-    const d = Math.hypot(dx, dy);
-    if (d > range || d < 0.3) continue;
-    const off = Math.abs(Math.atan2(Math.sin(Math.atan2(dy, dx) - aim), Math.cos(Math.atan2(dy, dx) - aim)));
-    // close in, the cone widens to a body's half-width
-    if (off <= Math.max(cone, Math.atan2(0.45, d))) return true;
-  }
-  return false;
-}
-
 /** The buttons a shield press stands for: always the toggle (Btn.Shield); a hold sends a second one on release. */
 export const SHIELD_TOGGLE = (Btn as Record<string, number>).Shield ?? 0;

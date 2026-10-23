@@ -1,0 +1,14 @@
+/* Settings → Touch → Fire: four cards with their moving pictures (FirePicker.tsx) */
+.mf-firepick { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-3, 12px); width: 100%; }
+.mf-firepick__opt { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-height: var(--touch-min, 48px); padding: 10px; border-radius: var(--r-sm); border: 2px solid var(--c-line-strong); background: var(--c-ink-900); color: var(--c-text); text-align: left; cursor: pointer; }
+.mf-firepick__opt.is-on { border-color: var(--c-volt); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-volt) 22%, transparent); }
+.mf-firepick__opt b { font-size: var(--fs-16); font-weight: var(--fw-black); text-transform: uppercase; letter-spacing: 0.04em; }
+.mf-firepick__art { display: block; width: 100%; max-width: 140px; }
+.mf-firepick__line { font-size: var(--fs-14); line-height: 1.3; color: var(--c-muted); }
+.mf-firepick--compact { gap: 6px; }
+.mf-firepick--compact .mf-firepick__opt { padding: 6px; gap: 2px; }
+.mf-firepick--compact .mf-firepick__opt b { font-size: var(--fs-14); }
+.mf-firepick--compact .mf-firepick__art { max-width: 92px; }
+/* the picker takes the whole row, under its words (desktop Settings, the phone's Touch tab) */
+.srow.mf-srow--block { display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
+.pm-set.pm-set--block { flex-direction: column; align-items: stretch; gap: 6px; padding: 6px 0; }

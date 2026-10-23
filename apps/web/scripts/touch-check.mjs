@@ -113,6 +113,8 @@ async function centre(page, selector) {
 async function ready(page, url) {
   await page.goto(url);
   await page.waitForFunction(() => window.__game?.mode?.me && document.querySelector('.mf-touch') && !document.querySelector('.mf-touch').hidden, { timeout: 300_000 });
+  // these checks are written for Pull (the stick fires past its ring); the first-run chooser is answered
+  await page.evaluate(() => window.__touch.setTouchSettings({ fire: 'pull', fireChosen: true }));
   await sleep(600);
 }
 
@@ -158,7 +160,7 @@ try {
     await sleep(500);
     await f.lift(2);
     s1 = await me(page);
-    check('right stick pushed past half-way fires (hold mode)', s1.mag < s0.mag, `mag ${s0.mag} → ${s1.mag}`);
+    check('right stick pushed past its ring fires (Pull)', s1.mag < s0.mag, `mag ${s0.mag} → ${s1.mag}`);
 
     s0 = await settle(page);
     await f.drag(2, R.x, R.y, 20, 0, 3); // only aims
@@ -176,7 +178,7 @@ try {
     await sleep(300);
     s1 = await me(page);
     check('release mode: aiming holds fire, lifting fires once', held.mag === s0.mag && s1.mag === s0.mag - 1, `mag ${s0.mag} → ${held.mag} → ${s1.mag}`);
-    await page.evaluate(() => window.__touch.setTouchSettings({ fire: 'hold' }));
+    await page.evaluate(() => window.__touch.setTouchSettings({ fire: 'pull' }));
 
     // both thumbs at once: walk left while firing
     s0 = await settle(page);
@@ -203,7 +205,13 @@ try {
     check('grenade button: a tap throws', s1.frags === s0.frags - 1 || s1.live > s0.live, `frags ${s0.frags} → ${s1.frags}`);
 
     s0 = await settle(page);
-    await f.drag(3, g.x, g.y, -40, -60, 5);
+    // v3 gestures: a quick swipe up on the button changes the type; held still first, the drag aims
+    await f.touch(3, g.x, g.y);
+    await sleep(350);
+    for (let i = 1; i <= 5; i++) {
+      await f.touch(3, g.x - 8 * i, g.y - 12 * i);
+      await sleep(16);
+    }
     await sleep(300);
     await f.lift(3);
     await sleep(400);
@@ -318,7 +326,8 @@ try {
     const { page } = await phonePage(PORTRAIT);
     await ready(page, `${base}/?sandbox`);
     await sleep(1500);
-    check('portrait: the landscape prompt shows', await page.evaluate(() => !document.querySelector('.mf-touch-rotate').hidden));
+    // an upright phone plays turned onto its side (ui/landscape.ts): no "turn your phone" prompt
+    check('portrait: the page turns onto its side, the controls up', await page.evaluate(() => document.documentElement.classList.contains('mf-rotated') && !document.querySelector('.mf-touch')?.hidden));
     await page.screenshot({ path: join(outDir, 'portrait-375x812.png') });
     await page.close();
   }

@@ -9,6 +9,8 @@ import type { LobbyView } from '../../onlineView';
 import { createShellStore } from '../../store';
 import { PHONE_QUERY, isPhoneLayout } from './layout';
 import { PhoneHome } from './PhoneHome';
+import { PhoneJoin } from './PhoneJoin';
+import { PhoneLanAddPlayer, PhoneLanJoin } from './PhoneLan';
 import { PhoneLobby } from './PhoneLobby';
 import { PhoneNameEntry } from './PhoneNameEntry';
 import { PhonePause } from './PhonePause';
@@ -24,6 +26,8 @@ const actions = { playAgain: vi.fn(), backToLobby: vi.fn(), ready: vi.fn() };
 const ctl = (over: Partial<Record<keyof ShellController, unknown>> = {}) =>
   ({ host: { online: null }, go: vi.fn(), openOverlay: vi.fn(), openSettings: vi.fn(), closeOverlay: vi.fn(), leave: vi.fn(), canTune: () => false, openTuning: vi.fn(), api: { ping: () => Promise.resolve(30) }, ...over }) as unknown as ShellController;
 const withCtl = (c: ShellController, node: React.ReactNode) => renderToStaticMarkup(<ControllerContext.Provider value={c}>{node}</ControllerContext.Provider>);
+/** The words a screen reads, without its markup (a label may be split for large text). */
+const textOf = (html: string) => html.replace(/<[^>]+>/g, '');
 
 const view = (over: Partial<MatchView> = {}): MatchView => ({
   phase: MatchPhase.Ending,
@@ -150,7 +154,7 @@ describe('m-lobby', () => {
     expect(html).toContain('data-screen="m-lobby"');
     expect(html).toMatch(/data-active-state="host not-ready link-idle"/);
     expect(html).toMatch(/pm-code[^>]*>KMTXRA</);
-    expect(html).toContain('Share room link');
+    expect(textOf(html)).toContain('Share room link');
     expect(html).toContain('abc.trycloudflare.com/r/KMTXRA');
     expect(html).toMatch(/<svg viewBox="0 0 \d+ \d+"/); // a real QR
     expect(html).toContain('>Kestrel<');
@@ -172,6 +176,85 @@ describe('m-lobby', () => {
     const html = withCtl(ctl(), <PhoneLobby lobby={lobby(true)} />);
     const foot = html.slice(html.indexOf('class="pm-roster__foot"'));
     expect(foot).toMatch(/^class="pm-roster__foot"><div class="pm-mission">[\s\S]*class="pm-rules[\s\S]*class="pm-bar"[\s\S]*Ready[\s\S]*Start/);
+  });
+});
+
+describe('local rooms (the Pen board P0–P5)', () => {
+  const local = (isHost: boolean, code = 'KMTXRA'): LobbyView => ({
+    code,
+    local: true,
+    players: [
+      { id: 0, name: 'Ade', ready: false, host: true, you: isHost, isBot: false, pingMs: 1 },
+      { id: 1, name: 'Kemi', ready: true, host: false, you: !isHost, isBot: false, pingMs: 3 },
+    ],
+    isHost,
+    ready: false,
+    minPlayers: 2,
+    timeLimit: 300,
+    killLimit: 20,
+    mapId: 'lunar-outpost',
+    mapName: 'Lunar Outpost',
+    bots: 4,
+    botLevel: 'normal',
+  });
+
+  it('P0 · home: the Local room ticket, lit up offline (Create room says Local works without internet)', () => {
+    const online = withCtl(ctl(), <PhoneHome store={createShellStore({ profile: { nickname: 'Ade', changeableAt: null, offline: false } as never })} />);
+    expect(online).toContain('Local room');
+    expect(online).toContain('Works with no internet');
+    expect(online).not.toContain('is-hot');
+    const offline = withCtl(ctl(), <PhoneHome store={createShellStore({ profile: { nickname: 'Ade', changeableAt: null, offline: true } as never })} />);
+    expect(offline).toContain('pm-tk--local m-p3 m-p8 is-hot');
+    expect(offline).toContain('Local room works without it');
+  });
+
+  it('P1 · Join with code: six boxes the keyboard Go submits, none focused on arrival; the no-internet card', () => {
+    const html = withCtl(ctl(), <PhoneJoin />);
+    expect(html).toContain('data-screen="m-join"');
+    expect(html.match(/<input [^>]*enterKeyHint="go"/g)).toHaveLength(6);
+    expect(html).not.toContain('autofocus');
+    expect(html).toMatch(/<button type="button" class="btn btn--volt m-p8 pm-join__go" disabled=""/);
+    expect(html).toContain('No internet?');
+    expect(html).toContain('Scan host&#x27;s QR');
+  });
+
+  it('P2 · lobby: the code to type on the same Wi-Fi, the host\'s QR way in, the LAN ping (real: the lobby\'s own)', () => {
+    const host = withCtl(ctl(), <PhoneLobby lobby={local(true)} />);
+    expect(textOf(host)).toContain('On this Wi-Fi · Join with code');
+    expect(host).toMatch(/pm-lan__how-code[^>]*>KMTXRA</);
+    expect(textOf(host)).toContain('Add a player by QR');
+    expect(textOf(host)).toContain('Share room link');
+    expect(host).not.toContain('Scan to join');
+    expect(host).toMatch(/LAN<\/span><span class="num">1 ms/);
+    const guest = withCtl(ctl(), <PhoneLobby lobby={local(false)} />);
+    expect(textOf(guest)).not.toContain('Add a player by QR');
+    expect(textOf(guest)).toContain('Same Wi-Fi only: friends type this code in Join.');
+    // no internet at all: no code to type or share, friends join by QR
+    const offline = withCtl(ctl(), <PhoneLobby lobby={local(true, '')} />);
+    expect(textOf(offline)).not.toContain('Share room link');
+    expect(offline).not.toContain('pm-code');
+    expect(offline).toContain('Friends join by QR');
+  });
+
+  it('P3 · add a player: the code on paper, their reply (no camera here: the paste row says why), 48 px targets', () => {
+    expect(withCtl(ctl(), <PhoneLanAddPlayer />)).toContain('Only the room&#x27;s host');
+    const lan = { newOffer: vi.fn(() => new Promise(() => {})), acceptAnswer: vi.fn() };
+    const html = withCtl(ctl({ host: { online: null, lan } }), <PhoneLanAddPlayer />);
+    expect(html).toContain('data-screen="m-lan"');
+    expect(html).toContain('1 · They scan this');
+    expect(html).toContain('Making a code…');
+    expect(html).toContain('can&#x27;t read QR codes');
+    expect(html).toContain('Let in');
+    expect(html).toContain('aria-label="Paste"');
+  });
+
+  it('P4 · join: the steps (1 Scan on), the host\'s code pasted when there is no camera', () => {
+    const html = withCtl(ctl(), <PhoneLanJoin />);
+    expect(html).toContain('data-screen="m-lan"');
+    expect(html).toMatch(/<li class="is-on" aria-current="step"><span class="num">1<\/span>Scan<\/li>/);
+    expect(html).toContain('Scan the host&#x27;s QR');
+    expect(html).toContain('placeholder="…or paste the host&#x27;s code"');
+    expect(html).toContain('can&#x27;t read QR codes');
   });
 });
 
@@ -236,12 +319,14 @@ describe('phone settings', () => {
 
 describe('touch tips (the first-run card on a phone)', () => {
   it('what each thumb does, in the player\'s own touch settings', () => {
-    const right = touchTips({ handed: 'right', fire: 'hold', swipeDash: true });
+    const right = touchTips({ handed: 'right', fire: 'pull', swipeDash: true });
     expect(right.map((t) => t.what)).toEqual(['Left dial', 'Right dial', 'Grenade']);
-    expect(right[0].how).toBe('Move. Up flies, down crouches, a swipe dashes.');
-    expect(right[1].how).toBe('Aim. Push far to fire.');
+    expect(right[0].how).toBe('Move. Up flies, down crouches, a flick dashes.');
+    expect(right[1].how).toBe('Aim. Push past the ring to fire.');
+    expect(touchTips({ handed: 'right', fire: 'auto', swipeDash: true })[1]!.how).toBe('Aim. It fires by itself at someone in your sights.');
+    expect(touchTips({ handed: 'right', fire: 'button', swipeDash: true })[1]!.how).toBe('Aim. Hold FIRE to shoot.');
     expect(right[2].how).toBe('Tap: throw. Swipe ↑↓: switch. Hold and drag: aim.');
-    expect(touchTips({ handed: 'right', fire: 'hold', swipeDash: true, gestures: false })[2]!.how).toBe('Hold to aim, let go to throw.');
+    expect(touchTips({ handed: 'right', fire: 'pull', swipeDash: true, gestures: false })[2]!.how).toBe('Hold to aim, let go to throw.');
     const left = touchTips({ handed: 'left', fire: 'release', swipeDash: false });
     expect(left.map((t) => t.what)).toEqual(['Right dial', 'Left dial', 'Grenade']);
     expect(left[0].how).not.toContain('dash');

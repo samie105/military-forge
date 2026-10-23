@@ -24,12 +24,20 @@ export interface TouchTip {
   icon: string;
 }
 
+/** The aim dial's row per fire mode (Settings → Touch → Fire). */
+const AIM_HOW: Readonly<Record<TouchSettings['fire'], string>> = {
+  auto: 'Aim. It fires by itself at someone in your sights.',
+  pull: 'Aim. Push past the ring to fire.',
+  button: 'Aim. Hold FIRE to shoot.',
+  release: 'Aim, then lift to fire.',
+};
+
 /** The card's rows for these touch settings (pure: the tests and the card share it). */
 export function touchTips(s: Pick<TouchSettings, 'handed' | 'fire' | 'swipeDash'> & Partial<Pick<TouchSettings, 'gestures'>>): TouchTip[] {
   const [moveSide, aimSide] = s.handed === 'left' ? ['Right', 'Left'] : ['Left', 'Right'];
   return [
-    { what: `${moveSide} dial`, how: `Move. Up flies, down crouches${s.swipeDash ? ', a swipe dashes' : ''}.`, icon: 'jet' },
-    { what: `${aimSide} dial`, how: s.fire === 'release' ? 'Aim, then lift to fire.' : 'Aim. Push far to fire.', icon: 'target' },
+    { what: `${moveSide} dial`, how: `Move. Up flies, down crouches${s.swipeDash ? ', a flick dashes' : ''}.`, icon: 'jet' },
+    { what: `${aimSide} dial`, how: AIM_HOW[s.fire], icon: 'target' },
     { what: 'Grenade', how: s.gestures === false ? 'Hold to aim, let go to throw.' : 'Tap: throw. Swipe ↑↓: switch. Hold and drag: aim.', icon: 'g-frag' },
   ];
 }

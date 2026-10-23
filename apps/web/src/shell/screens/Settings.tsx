@@ -11,6 +11,7 @@ import { DEFAULT_TOUCH_SETTINGS } from '../../touch/settings';
 import { PadControls } from '../../gamepad/PadSettings';
 import { DEFAULT_PAD_SETTINGS } from '../../gamepad/settings';
 import { Icon } from '../../ui/Icon';
+import { FirePicker } from './FirePicker';
 import { Kbd, Cap } from '../../ui/Kbd';
 import { Screen, Switch, blurAfter, pingQuality } from '../../ui/Screen';
 import { moveIndicator } from '../../ui/motion';
@@ -512,15 +513,33 @@ function Touch() {
           <Seg value={t.mode} label="Touch controls" options={[['auto', 'Auto'], ['on', 'On'], ['off', 'Off']]} onChange={(mode) => set({ mode })} />
         </div>
       </div>
-      <div className="srow">
+      <div className="srow mf-srow--block">
         <div className="srow__txt">
           <b>Fire</b>
-          <span>Hold: fire while the aim stick is pushed past half-way. On release: lift your thumb to fire once.</span>
+          <span>How the gun fires on a touch screen. Auto suits most players: aim at someone and it shoots.</span>
+        </div>
+        <FirePicker value={t.fire} onChange={(fire) => set({ fire, fireChosen: true })} />
+      </div>
+      <div className="srow">
+        <div className="srow__txt">
+          <b>Precision weapons fire on release</b>
+          <span>In Auto and Pull: snipers, DMRs, charged guns and launchers aim first and fire as you lift.</span>
         </div>
         <div className="srow__ctrl">
-          <Seg value={t.fire} label="Fire" options={[['hold', 'Hold'], ['release', 'On release']]} onChange={(fire) => set({ fire })} />
+          <Switch on={t.precisionRelease} onChange={(precisionRelease) => set({ precisionRelease })} label="Precision weapons fire on release" />
         </div>
       </div>
+      {t.fire === 'button' && (
+        <div className="srow">
+          <div className="srow__txt">
+            <b>A second FIRE on the left</b>
+            <span>For your left index finger, top left: shoot while your right thumb aims.</span>
+          </div>
+          <div className="srow__ctrl">
+            <Switch on={t.leftFire} onChange={(leftFire) => set({ leftFire })} label="A second FIRE on the left" />
+          </div>
+        </div>
+      )}
       <div className="srow">
         <div className="srow__txt">
           <b>Aim assist</b>
@@ -550,11 +569,20 @@ function Touch() {
       </div>
       <div className="srow">
         <div className="srow__txt">
-          <b>Swipe to dash</b>
-          <span>Swipe the move stick and lift to dash that way.</span>
+          <b>Flick to dash</b>
+          <span>Flick the move stick and lift to dash that way.</span>
         </div>
         <div className="srow__ctrl">
-          <Switch on={t.swipeDash} onChange={(swipeDash) => set({ swipeDash })} label="Swipe to dash" />
+          <Switch on={t.swipeDash} onChange={(swipeDash) => set({ swipeDash })} label="Flick to dash" />
+        </div>
+      </div>
+      <div className="srow">
+        <div className="srow__txt">
+          <b>Keep aiming after a button</b>
+          <span>Back on the aim stick within a moment of a button: your aim carries on, and so does firing.</span>
+        </div>
+        <div className="srow__ctrl">
+          <Switch on={t.keepAim} onChange={(keepAim) => set({ keepAim })} label="Keep aiming after a button" />
         </div>
       </div>
       <div className="srow">

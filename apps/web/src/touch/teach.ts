@@ -5,6 +5,7 @@
  *  - the "Learn the controls" drill: one goal at a time, ticked off when the player does it.
  * The controller reports what the player did as actions (TouchAction); both listen.
  */
+import type { FireMode } from './settings';
 import type { ControlId } from './layout';
 import type { KeyValueStore } from './settings';
 
@@ -114,10 +115,18 @@ export interface DrillStep {
   needs?: 'shield' | 'zoom';
 }
 
+/** The drill's fire step says how the player's own fire mode fires (the owner: "the drill teaches whichever style is chosen"). */
+export const FIRE_HOW: Readonly<Record<FireMode, string>> = {
+  auto: 'Point the right dial at a target: you fire by yourself. Push it to the rim to fire anyway.',
+  pull: 'Push the right dial past its ring.',
+  button: 'Hold FIRE. Drag it to aim while you shoot.',
+  release: 'Drag the right dial to aim, then lift to fire.',
+};
+
 export const DRILL: readonly DrillStep[] = [
   { id: 'move', goal: 'Run', how: 'Push the left dial left or right.', control: 'move', done: ['move'] },
   { id: 'jet', goal: 'Fly', how: 'Push the left dial up to fire the jetpack. The green arc is its fuel: it refills on the ground.', control: 'move', done: ['jet'] },
-  { id: 'fire', goal: 'Aim and fire', how: 'Push the right dial past half-way.', control: 'aim', done: ['fire'] },
+  { id: 'fire', goal: 'Aim and fire', how: FIRE_HOW.pull, control: 'aim', done: ['fire'] },
   { id: 'dash', goal: 'Dash', how: 'Swipe the dash button any way, or flick the left dial. Each dash costs fuel.', control: 'dash', done: ['dash'] },
   { id: 'chain', goal: 'Chain dashes', how: 'Dash again straight after a dash: the second goes faster.', control: 'dash', done: ['chain'] },
   { id: 'cycle', goal: 'Change grenade', how: 'Swipe ↑ on the grenade button.', control: 'grenade', done: ['cycle'] },

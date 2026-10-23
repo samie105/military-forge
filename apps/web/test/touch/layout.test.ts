@@ -52,7 +52,9 @@ describe('touch HUD layout', () => {
     for (const a of Object.keys(ring)) for (const b of Object.keys(ring)) if (a < b) expect(Math.hypot(at(a as 'dash').x - at(b as 'dash').x, at(a as 'dash').y - at(b as 'dash').y) - (at(a as 'dash').d + at(b as 'dash').d) / 2 - ring[a]! - ring[b]!, `${a}/${b} gap`).toBeGreaterThanOrEqual(4);
     // round controls never overlap (pills are checked by their height: their width follows the gun's name)
     const round = (Object.keys(DEFAULT_PLACEMENTS) as (keyof typeof DEFAULT_PLACEMENTS)[]).filter((id) => !PILLS.has(id));
-    for (const a of round) for (const b of round) if (a < b) expect(Math.hypot(at(a).x - at(b).x, at(a).y - at(b).y), `${a}/${b}`).toBeGreaterThan((at(a).d + at(b).d) / 2);
+    // (FIRE sits at the aim dial's rest on purpose: in Fire button mode the dial only shows under a thumb)
+    const together = (a: string, b: string) => !(a === 'aim' && b === 'fire');
+    for (const a of round) for (const b of round) if (a < b && together(a, b)) expect(Math.hypot(at(a).x - at(b).x, at(a).y - at(b).y), `${a}/${b}`).toBeGreaterThan((at(a).d + at(b).d) / 2);
     // every target is at least 48 px, and inside the safe box
     for (const id of Object.keys(DEFAULT_PLACEMENTS) as (keyof typeof DEFAULT_PLACEMENTS)[]) {
       expect(at(id).d, id).toBeGreaterThanOrEqual(MIN_TARGET_PX);

@@ -40,6 +40,8 @@ export const SKIN_BASE: Readonly<Record<ControlId, number>> = {
   pause: 48,
   swap: 52,
   take: 52,
+  fire: 84,
+  fireLeft: 72,
 };
 
 /** The dials' box (px, design) around their 136 px base: the HP/fuel and ammo arcs ride outside it. */
@@ -61,6 +63,7 @@ export function skinHtml(id: ControlId): string {
       return `<div class="mf-skin dial dial--aim">
   <svg class="dial__arcs" viewBox="0 0 168 168" aria-hidden="true"><g class="mf-rounds" data-state="gun"></g>${arc('dial__throw', 'grenade-aim')}</svg>
   <span class="dial__base"></span><span class="dial__groove"></span>
+  <span class="dial__fireline" aria-hidden="true"></span><span class="dial__cancel" aria-hidden="true"></span><span class="dial__tag" aria-hidden="true">Auto</span>
   <span class="dial__knob dial__knob--aim mf-knob">${ic('target', 'ic--sm')}</span>
   <span class="dial__lbl dial__lbl--ammo" data-state="gun"><b class="num" data-bind="player.slot.0.mag"></b><span>/<span data-bind="player.slot.0.magSize"></span></span></span>
   <span class="dial__mode" data-state="grenade-aim">Aim the arc</span>
@@ -90,6 +93,10 @@ export function skinHtml(id: ControlId): string {
   <span class="pt-swap__back" data-state="slung">${ic('backpack', 'ic--sm')}<svg class="ic--kf mf-gun" aria-hidden="true" data-state="slung-icon"><use data-bind-attr="href: player.slot.1.icon"/></svg></span>
   <span class="pt-swap__eq" data-state="swap">${ring(25, '')}</span>
 </div>`;
+    case 'fire':
+    case 'fireLeft':
+      // FIRE: a big round trigger with the magazine on it (Fire button mode)
+      return `<div class="mf-skin dial-btn dial-btn--fire">${ic('target')}<b class="dial-btn__word">Fire</b><b class="num tb__sub" data-state="gun" data-bind="player.slot.0.mag"></b></div>`;
     case 'take':
       return `<div class="mf-skin pt-pick">${ic('swap', 'ic--sm')}<span data-bind="touch.take.verb"></span><svg class="ic--kf" aria-hidden="true"><use data-bind-attr="href: touch.take.icon"/></svg><b data-bind="touch.take.name"></b></div>`;
   }

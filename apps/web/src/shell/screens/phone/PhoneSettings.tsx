@@ -11,6 +11,8 @@ import { useStore } from 'zustand';
 import { getTouchSettings, onTouchChange, openTouchEditor, requestDrill, resetTouchHints, resetTouchLayout, setTouchSettings, type TouchSettings } from '../../../touch';
 import { DEFAULT_TOUCH_SETTINGS } from '../../../touch/settings';
 import { Icon } from '../../../ui/Icon';
+import { FIRE_MODE_TEXT } from '../../../touch/fireArt';
+import { FirePicker } from '../FirePicker';
 import { Switch, blurAfter } from '../../../ui/Screen';
 import { Slider } from '../../../ui/Slider';
 import { useCtl } from '../../context';
@@ -122,9 +124,21 @@ function Touch() {
       <Row i={1} label="Touch controls" desc="Auto: on phones and tablets, or once you touch the screen.">
         <Seg value={t.mode} label="Touch controls" options={[['auto', 'Auto'], ['on', 'On'], ['off', 'Off']]} onChange={(mode) => set({ mode })} />
       </Row>
-      <Row i={2} label="Fire" desc="Hold: past half-way fires. On release: lift to fire once.">
-        <Seg value={t.fire} label="Fire" options={[['hold', 'Hold'], ['release', 'Release']]} onChange={(fire) => set({ fire })} />
+      <div className="pm-set pm-set--block m-p3">
+        <span className="pm-set__text">
+          <b>Fire</b>
+          <span>{FIRE_MODE_TEXT[t.fire].line}</span>
+        </span>
+        <FirePicker value={t.fire} onChange={(fire) => set({ fire, fireChosen: true })} compact />
+      </div>
+      <Row i={2} label="Precision weapons fire on release" desc="Auto and Pull: snipers, DMRs, charged guns and launchers fire as you lift.">
+        <Switch on={t.precisionRelease} onChange={(precisionRelease) => set({ precisionRelease })} label="Precision weapons fire on release" />
       </Row>
+      {t.fire === 'button' && (
+        <Row i={2} label="A second FIRE on the left" desc="Top left, for your left index finger.">
+          <Switch on={t.leftFire} onChange={(leftFire) => set({ leftFire })} label="A second FIRE on the left" />
+        </Row>
+      )}
       <Row i={3} label="Aim assist" desc="The aim lingers on a target it crosses.">
         <Switch on={t.aimAssist} onChange={(aimAssist) => set({ aimAssist })} label="Aim assist" />
       </Row>
@@ -134,14 +148,14 @@ function Touch() {
       <Row i={5} label="Vibrate when hit">
         <Switch on={t.vibrate} onChange={(vibrate) => set({ vibrate })} label="Vibrate when hit" />
       </Row>
-      <Row i={6} label="Swipe to dash" desc="Swipe the move stick and lift.">
-        <Switch on={t.swipeDash} onChange={(swipeDash) => set({ swipeDash })} label="Swipe to dash" />
+      <Row i={6} label="Flick to dash" desc="Flick the move stick and lift.">
+        <Switch on={t.swipeDash} onChange={(swipeDash) => set({ swipeDash })} label="Flick to dash" />
+      </Row>
+      <Row i={6} label="Keep aiming after a button" desc="Back on the aim stick soon after a button: your aim and fire carry on.">
+        <Switch on={t.keepAim} onChange={(keepAim) => set({ keepAim })} label="Keep aiming after a button" />
       </Row>
       <Row i={6} label="Button gestures" desc="Swipe the grenade to change it, hold the gun pill for a radial, swipe the dash. Off: plain taps.">
         <Switch on={t.gestures} onChange={(gestures) => set({ gestures })} label="Button gestures" />
-      </Row>
-      <Row i={7} label="Auto-fire" desc="Fires by itself while your aim is on an enemy in range.">
-        <Switch on={t.autoFire} onChange={(autoFire) => set({ autoFire })} label="Auto-fire" />
       </Row>
       <Row i={7} label="Button haptics" desc="A short buzz on a throw, a swap, a dash swipe.">
         <Switch on={t.haptics} onChange={(haptics) => set({ haptics })} label="Button haptics" />

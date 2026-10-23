@@ -183,7 +183,7 @@ const renderer = new GameRenderer(canvas, camera, map, () => mode?.tuning() ?? d
 void view3d?.load(map.spawns[0]!);
 view3d?.attach(renderer, () => (mode instanceof OnlineMode ? mode.net : null)); // sim events → 3D effects; online: remotePose (render3d)
 // phones and tablets: twin sticks + buttons (apps/web/src/touch); the app's Settings → Touch has "Edit layout"
-mountTouch({ sampler, camera, renderer, view3d, editButton: !appMode, tuning: () => mode?.tuning() ?? null });
+mountTouch({ sampler, camera, renderer, view3d, editButton: !appMode, tuning: () => mode?.tuning() ?? null, map: () => map });
 // game controllers (apps/web/src/gamepad): play, the menus, rumble, prompts in the pad's buttons
 // (on a phone the touch buttons step aside while a pad plays: gamepad/pad.css)
 mountGamepad({ sampler, camera, renderer, scoreboardCode: () => scoreboardKeys[0], map: () => map });

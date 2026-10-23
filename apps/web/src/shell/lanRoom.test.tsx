@@ -6,7 +6,7 @@ import { ControllerContext } from './App';
 import { ShellController, type GameHost } from './controller';
 import type { LobbyView } from './onlineView';
 import { lobbyView } from './onlineView';
-import { LanAddPlayer, LanJoin } from './screens/LanPanels';
+import { LanAddPlayer, LanJoin, OFFER_PREFIX, REPLY_PREFIX, codeProblem, sentence } from './screens/LanPanels';
 import { LocalRoomNote } from './screens/Lobby';
 import { createShellStore } from './store';
 
@@ -89,10 +89,16 @@ describe('local rooms in the shell', () => {
         </ControllerContext.Provider>,
       );
     const hostView = render(lobby());
-    expect(hostView).toContain('same Wi-Fi only');
-    expect(hostView).toContain('Add a player without internet');
+    expect(hostView).toContain('Same Wi-Fi only');
+    expect(hostView).toContain('Join with code');
+    expect(hostView).toContain('mf-lan__how-code">QWERTY<');
+    expect(hostView).toContain('Add a player by QR');
     expect(render(lobby({ isHost: false }))).not.toContain('Add a player');
-    expect(render(lobby({ code: '' }))).toContain('No internet: add players with QR codes');
+    // no internet at all: no code; the paper card says friends join by QR, the host's button says how
+    const offline = render(lobby({ code: '' }));
+    expect(offline).toContain('Friends join by QR');
+    expect(offline).toContain('Add each player');
+    expect(render(lobby({ code: '', isHost: false }))).toContain('The host adds each friend');
   });
 
   it('lobbyView carries the local flag from the online mode', () => {
@@ -119,7 +125,39 @@ describe('local rooms in the shell', () => {
     expect(wrap(<LanAddPlayer />)).toContain('can add players this way');
     const join = wrap(<LanJoin />);
     expect(join).toContain('Join a local room');
-    expect(join).toContain('paste the host');
     expect(join).toContain('Same Wi-Fi only');
+    // no BarcodeDetector here (as on an iPhone): no camera, the paste row says why
+    expect(join).toContain('can&#x27;t read QR codes');
+    expect(join).toContain('placeholder="L1.o… the host&#x27;s code"');
+    expect(join).toContain('enterKeyHint="go"'); // the phone keyboard's Go key
+    expect(join).toContain('The host scans this');
+    expect(join).toContain('Your reply appears here once you have the host&#x27;s code');
+  });
+
+  it("the host's panel: step 1 their code on paper (being made), step 2 their reply, both ways", () => {
+    const { ctl } = setup();
+    const lan = { newOffer: vi.fn(() => new Promise(() => {})), acceptAnswer: vi.fn() };
+    (ctl.host as { lan: unknown }).lan = lan;
+    const html = renderToStaticMarkup(
+      <ControllerContext.Provider value={ctl}>
+        <LanAddPlayer />
+      </ControllerContext.Provider>,
+    );
+    expect(html).toContain('They scan this');
+    expect(html).toContain('Making a code…');
+    expect(html).toContain('Scan their reply');
+    expect(html).toContain('Let them in');
+    expect(html).toContain('mf-lan__glass');
+    (ctl.host as { lan: unknown }).lan = null;
+  });
+
+  it('a pasted code of the wrong kind says which it is, before the lan module sees it', () => {
+    expect(codeProblem('L1.a.xyz', REPLY_PREFIX)).toBeNull();
+    expect(codeProblem('  L1.o.xyz ', OFFER_PREFIX)).toBeNull();
+    expect(codeProblem('L1.o.xyz', REPLY_PREFIX)).toContain("this room's own code");
+    expect(codeProblem('L1.a.xyz', OFFER_PREFIX)).toContain('a reply code');
+    expect(codeProblem('https://example.com', OFFER_PREFIX)).toContain("isn't a local room code");
+    expect(sentence('could not reach the other device: are you on the same Wi-Fi?')).toBe('Could not reach the other device: are you on the same Wi-Fi?');
+    expect(sentence('not a local room code')).toBe('Not a local room code.');
   });
 });

@@ -10,15 +10,19 @@
  * Settings and the HUD layout are saved on the device (localStorage). The API below is what the
  * Settings screen calls (touch-interfaces.md in the shared notes).
  */
-import { defaultTuning, type Tuning } from '@military-forge/content';
+import { defaultTuning, type MapDef, type Tuning } from '@military-forge/content';
 import type { Input, SimEvent } from '@military-forge/sim';
 import type { Camera } from '../camera';
 import type { ThrowLatch } from '../input';
 import type { TouchController, TouchFrame } from './controller';
 import { clearLayout, loadSettings, saveSettings, sanitizeSettings, type KeyValueStore, type TouchSettings } from './settings';
-import { drillSeen, markDrillSeen, saveSeen } from './teach';
+import type { ControlId } from './layout';
+import { drillSeen, markDrillSeen, saveSeen, type TouchAction } from './teach';
+import type { Box } from '../ui/landscape';
 
 export type { FireMode, Handed, TouchMode, TouchSettings } from './settings';
+export type { ControlId } from './layout';
+export type { TouchAction } from './teach';
 
 /** Phones: sharp on a small, dense screen; dynamic resolution still drops the render scale when slow. */
 export const MOBILE_DPR_CAP = 1.5;
@@ -49,6 +53,8 @@ export interface TouchDeps {
   editButton?: boolean;
   /** the room's tuning (the dash's flick mapping reads it); null or absent: the defaults */
   tuning?: () => Pick<Tuning, 'dashFlickFull'> | null;
+  /** the map being played: Auto fire fires only at enemies in sight (input/sight.ts) */
+  map?: () => MapDef | null;
 }
 
 let settings: TouchSettings = loadSettings(null);
@@ -107,10 +113,14 @@ function sync(): void {
         blocked: () => d.sampler.blocked === true,
         throwLatch: d.sampler.throwLatch ?? null,
         dashFlickFull: () => (d.tuning?.() ?? defaultTuning).dashFlickFull,
+        map: () => d.map?.() ?? null,
       };
       controller = new TouchController(host, settings, loadLayout(storage()), storage(), setTouchSettings, d.editButton ?? true);
       if (drillPending) controller.startDrill();
       drillPending = false;
+      controller.onAction((a) => {
+        for (const fn of actionListeners) fn(a);
+      });
       if (import.meta.env.DEV) controller.onAction((a) => (window as unknown as { __touch?: { actions: string[] } }).__touch?.actions.push(a));
       controller.setActive(wanted());
       notify();
@@ -161,6 +171,8 @@ export function mountTouch(d: TouchDeps): void {
         requestDrill,
         resetTouchHints,
         sticks: () => controller?.debugState() ?? null,
+        onTouchAction,
+        touchControlRect,
         /** what the player did, newest last (the v3 checks) */
         actions: [] as string[],
       },
@@ -182,6 +194,28 @@ export function mountTouch(d: TouchDeps): void {
     { capture: true },
   );
   sync();
+}
+
+const actionListeners = new Set<(a: TouchAction) => void>();
+
+/**
+ * What the player did with the touch controls, as it happens (teach.ts TouchAction: 'move', 'jet',
+ * 'fire', 'dash', 'chain', 'throw', 'swap', 'radial', 'reload', 'pinch'…): the first flight (the
+ * onboarding tour) ticks its goals off by these. Works before the controls' chunk loads (nothing is
+ * heard until it does). Returns an unsubscribe.
+ */
+export function onTouchAction(fn: (a: TouchAction) => void): () => void {
+  actionListeners.add(fn);
+  return () => actionListeners.delete(fn);
+}
+
+/**
+ * Where a control is on screen right now, in the page's own coordinates (ui/landscape.ts logicalRect:
+ * an upright phone's turned page too), for a spotlight; null when it isn't shown (a context control
+ * out of play, the controls down). The sticks report their resting dial.
+ */
+export function touchControlRect(id: ControlId): Box | null {
+  return controller?.controlRect(id) ?? null;
 }
 
 export function getTouchSettings(): TouchSettings {

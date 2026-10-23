@@ -1,7 +1,7 @@
 /** Touch controls v3 (touch-controls-v3.md): the gestures, the hints and the drill, pure. */
 import { Btn } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
-import { GESTURE, beltAfter, beltOf, beltSteps, cyclePresses, dashButtons, isQuickSwipe, nearestPick, onTarget, pinchSteps, radialAngles, radialPick, radialSpots, swipeAxis } from '../../src/touch/gestures';
+import { GESTURE, beltAfter, beltOf, beltSteps, cyclePresses, dashButtons, isQuickSwipe, nearestPick, pinchSteps, radialAngles, radialPick, radialSpots, swipeAxis } from '../../src/touch/gestures';
 import { DEFAULT_TOUCH_SETTINGS, sanitizeSettings } from '../../src/touch/settings';
 import { DRILL, Drill, HINTS, loadSeen, nextHint, saveSeen } from '../../src/touch/teach';
 
@@ -90,24 +90,18 @@ describe('the camera', () => {
   });
 });
 
-describe('auto-fire', () => {
-  const me = { x: 0, y: 0 };
-  it('fires while the aim lies on an enemy in range, not off it or out of range', () => {
-    expect(onTarget(0, me.x, me.y, [{ x: 10, y: 0.3 }])).toBe(true);
-    expect(onTarget(0, me.x, me.y, [{ x: 10, y: 3 }])).toBe(false);
-    expect(onTarget(Math.PI, me.x, me.y, [{ x: 10, y: 0 }])).toBe(false);
-    expect(onTarget(0, me.x, me.y, [{ x: 40, y: 0 }])).toBe(false);
-    // close in, the cone is a body wide
-    expect(onTarget(0, me.x, me.y, [{ x: 1.5, y: 0.35 }])).toBe(true);
-  });
-});
-
 describe('settings', () => {
-  it('v3\'s defaults: gestures, haptics, pinch and look-ahead on; auto-fire off; full shake', () => {
-    expect(DEFAULT_TOUCH_SETTINGS).toMatchObject({ gestures: true, autoFire: false, haptics: true, lookAhead: true, pinchZoom: true, shake: 1, view: 0.62 });
+  it('v3\'s defaults: gestures, haptics, pinch and look-ahead on; Auto fire (the spec\'s default); full shake', () => {
+    expect(DEFAULT_TOUCH_SETTINGS).toMatchObject({ gestures: true, fire: 'auto', fireChosen: false, precisionRelease: true, leftFire: false, haptics: true, lookAhead: true, pinchZoom: true, shake: 1, view: 0.62 });
     expect(sanitizeSettings({ view: 0.2 }).view).toBe(0.5);
     expect(sanitizeSettings({ view: 2 }).view).toBe(1);
-    expect(sanitizeSettings({ gestures: false, autoFire: true, shake: 3 })).toMatchObject({ gestures: false, autoFire: true, shake: 1 });
+    expect(sanitizeSettings({ gestures: false, shake: 3 })).toMatchObject({ gestures: false, shake: 1 });
+    // the old names: 'hold' is Pull; 'hold' with the old auto-fire switch on is Auto
+    expect(sanitizeSettings({ fire: 'hold' }).fire).toBe('pull');
+    expect(sanitizeSettings({ fire: 'hold', autoFire: true }).fire).toBe('auto');
+    expect(sanitizeSettings({ fire: 'release' }).fire).toBe('release');
+    expect(sanitizeSettings({ fire: 'button', leftFire: true, fireChosen: true })).toMatchObject({ fire: 'button', leftFire: true, fireChosen: true });
+    expect(sanitizeSettings({ fire: 'spray' }).fire).toBe('auto');
     expect(sanitizeSettings({ shake: -1, haptics: 'yes' })).toMatchObject({ shake: 0, haptics: true });
   });
 });

@@ -281,22 +281,34 @@ function LobbyStrip({ lobby, onOpen }: { lobby: LobbyView; onOpen: () => void })
 
 /**
  * A local room (same Wi-Fi, lan/): says so, and gives its host the way in for a player with no
- * internet (QR codes both ways, LanPanels). Shared with the phone lobby.
+ * internet (QR codes both ways, LanPanels). L1 on the Pen board: a paper card with the code friends
+ * type on the same Wi-Fi (or, with no internet at all, that they join by QR), then the host's way in,
+ * an ink block with one volt button. It takes the room link's place (a local room's guests type the code).
  */
 export function LocalRoomNote({ lobby }: { lobby: LobbyView }) {
   const ctl = useCtl();
+  const offline = lobby.code === '';
   return (
-    <div className="mf-lan__note">
-      <span className="tag">
-        <Icon name="wifi" />
-        Local room · same Wi-Fi only
-      </span>
-      <span className="mf-lan__note-sub">{lobby.code ? 'Friends on this Wi-Fi or hotspot join with the code.' : 'No internet: add players with QR codes.'}</span>
+    <div className={`mf-lan__note${offline ? ' is-offline' : ''}`}>
+      <div className="paper mf-lan__how">
+        <span className="label">
+          <Icon name="wifi" size="sm" />
+          {offline ? 'Local room · no internet' : 'On this Wi-Fi or hotspot · Join with code'}
+        </span>
+        {offline ? <b className="display mf-lan__how-t">Friends join by QR</b> : <b className="display mf-lan__how-code">{lobby.code}</b>}
+        <span className="mf-lan__how-sub">{offline ? (lobby.isHost ? 'One swap per friend: they scan your code, you scan their reply.' : 'The host adds each friend with a QR swap.') : 'Friends type it in Join with code. Same Wi-Fi only: the game runs between your devices.'}</span>
+      </div>
       {lobby.isHost && (
-        <button className="btn btn--paper btn--sm m-p8" type="button" onClick={blurAfter(() => ctl.openOverlay('lan-add'))}>
-          <Icon name="qr" />
-          Add a player without internet
-        </button>
+        <div className="mf-lan__qrway">
+          <span className="label">
+            <Icon name="unplug" size="sm" />
+            {offline ? 'Add each player' : 'No internet? Swap QR codes'}
+          </span>
+          <button className="btn btn--volt btn--lg btn--block m-p8" type="button" onClick={blurAfter(() => ctl.openOverlay('lan-add'))}>
+            <Icon name="qr" />
+            Add a player by QR
+          </button>
+        </div>
       )}
     </div>
   );
@@ -367,13 +379,21 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
             Leave
           </button>
           <h1 className="menu-top__title">Room</h1>
-          <span className="stamp stamp--paper lobby__code m-p1" aria-label={`Room code: ${[...lobby.code].join(' ')}`}>
-            {[...lobby.code].map((ch, i) => (
-              <span key={i} data-bind={`room.code.${i}`}>
-                {ch}
-              </span>
-            ))}
-          </span>
+          {lobby.code !== '' && (
+            <span className="stamp stamp--paper lobby__code m-p1" aria-label={`Room code: ${[...lobby.code].join(' ')}`}>
+              {[...lobby.code].map((ch, i) => (
+                <span key={i} data-bind={`room.code.${i}`}>
+                  {ch}
+                </span>
+              ))}
+            </span>
+          )}
+          {lobby.local && (
+            <span className="tag mf-lan__head-tag" title="This device hosts the room: players on the same Wi-Fi or hotspot only">
+              <Icon name="wifi" />
+              {lobby.code ? 'Local room · same Wi-Fi' : 'Local room · QR only'}
+            </span>
+          )}
           <span className="tag tag--ok">
             <Icon name="play" />
             Warm-up live
@@ -384,9 +404,9 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
           </button>
           <span className="menu-top__spacer"></span>
           {me && !me.isBot && me.pingMs >= 0 && (
-            <span className="net-pill" title="Your round trip to the room">
+            <span className="net-pill" title={lobby.local ? 'Your round trip to the host, over the Wi-Fi' : 'Your round trip to the room'}>
               <span className={me.pingMs <= 100 ? 'dot' : me.pingMs <= 200 ? 'dot dot--warn' : 'dot dot--bad'}></span>
-              <span>Room</span>
+              <span>{lobby.local ? 'LAN' : 'Room'}</span>
               <span className="num">{Math.round(me.pingMs)} ms</span>
             </span>
           )}
@@ -408,8 +428,7 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
               squad
             </h2>
             {/* a local room with no internet has no code or link: players join by QR codes */}
-            {(!lobby.local || lobby.code !== '') && (
-              <>
+            {lobby.code !== '' && (
             <button className="btn btn--ink btn--xl btn--block lobby__share-btn m-p8" type="button" onClick={blurAfter(() => void ctl.shareLink(lobby.code))}>
               <Icon name="share" />
               <span className="btn__stack">
@@ -417,6 +436,9 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
                 <span className="btn__sub">Your share sheet, or the link copied</span>
               </span>
             </button>
+            )}
+            {/* a local room's guests type its code (LocalRoomNote): the link's ticket is for rooms online */}
+            {!lobby.local && (
             <div className="ticket linkt">
               <span className="qr linkt__qr" role="img" aria-label="QR code for the room link">
                 <svg viewBox={qr.viewBox} shapeRendering="crispEdges" aria-hidden="true">
@@ -444,19 +466,16 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
                       Copy link
                     </button>
                   )}
-                  {!lobby.local && (
-                    <button className="btn btn--paper btn--sm m-p8" type="button" onClick={blurAfter(() => ctl.shareOnWhatsApp(lobby.code))}>
-                      <Icon name="chat" />
-                      WhatsApp
-                    </button>
-                  )}
+                  <button className="btn btn--paper btn--sm m-p8" type="button" onClick={blurAfter(() => ctl.shareOnWhatsApp(lobby.code))}>
+                    <Icon name="chat" />
+                    WhatsApp
+                  </button>
                 </span>
               </div>
             </div>
+            )}
             {/* friends (social/): invite them straight to this room */}
             {!lobby.local && <LobbyInvite />}
-              </>
-            )}
             {lobby.local && <LocalRoomNote lobby={lobby} />}
             <span className="hazard" aria-hidden="true"></span>
           </section>
@@ -484,7 +503,7 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
                   <span className="avatar avatar--open">
                     <Icon name="plus" />
                   </span>
-                  <span className="prow__name">{i === 0 ? 'Open slot · share the link' : 'Open slot'}</span>
+                  <span className="prow__name">{i === 0 ? (lobby.local && lobby.code === '' ? 'Open slot · add by QR' : 'Open slot · share the link') : 'Open slot'}</span>
                 </li>
               ))}
             </ol>

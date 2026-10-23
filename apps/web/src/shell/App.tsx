@@ -33,7 +33,7 @@ import { TipsCard } from './screens/Tips';
 import { TitleScreen } from './screens/Title';
 import { TuneToast } from './screens/Tune';
 import { releaseShellFocus } from './focus';
-import { PhoneHome, PhoneLobby, PhoneNameEntry, PhonePause, PhoneResults, PhoneSettings, PhoneTips, usePhoneLayout } from './screens/phone';
+import { PhoneHome, PhoneJoin, PhoneLanAddPlayer, PhoneLanJoin, PhoneLobby, PhoneNameEntry, PhonePause, PhoneResults, PhoneSettings, PhoneTips, usePhoneLayout } from './screens/phone';
 import { closeRoute, runCleanup, type ShellActions, type ShellRoute, type ShellStore } from './store';
 import { SocialLayer } from '../social/SocialLayer';
 
@@ -117,9 +117,9 @@ function AppScreens({ store }: { store: ShellStore }) {
       {tips && playing && !overlay && !inLobby && (phone ? <PhoneTips /> : <TipsCard bindings={shown.bindings} doubleTapDash={shown.doubleTapDash} />)}
       {overlay === 'menu' && (phone ? <PhonePause store={store} /> : <Pause store={store} />)}
       {overlay === 'settings' && (phone ? <PhoneSettings store={store} /> : <SettingsScreen store={store} />)}
-      {overlay === 'join' && <Join />}
-      {overlay === 'lan-add' && <LanAddPlayer />}
-      {overlay === 'lan-join' && <LanJoin />}
+      {overlay === 'join' && (phone ? <PhoneJoin /> : <Join />)}
+      {overlay === 'lan-add' && (phone ? <PhoneLanAddPlayer /> : <LanAddPlayer />)}
+      {overlay === 'lan-join' && (phone ? <PhoneLanJoin /> : <LanJoin />)}
       {overlay === 'name' && (phone ? <PhoneNameEntry store={store} first={false} /> : <NameEntry store={store} first={false} />)}
       {/* friends (social/): the panel, over the menus and the in-match menu */}
       <SocialLayer />

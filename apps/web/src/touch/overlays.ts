@@ -7,7 +7,9 @@
 import { grenades } from '@military-forge/content';
 import { iconHref } from '../ui/icons';
 import type { RadialChoice, Vec } from './gestures';
-import type { Drill, Hint } from './teach';
+import { FIRE_HOW, type Drill, type Hint } from './teach';
+import { FIRE_MODE_TEXT, fireArt } from './fireArt';
+import { FIRE_MODES, type FireMode } from './settings';
 
 const svg = (href: string, cls = 'ic ic--sm') => `<svg class="${cls}" aria-hidden="true"><use href="${href}"/></svg>`;
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -27,6 +29,8 @@ export class TouchOverlays {
   private readonly hint: HTMLDivElement;
   private readonly cue: HTMLDivElement;
   readonly plate: HTMLDivElement;
+  private readonly chooser: HTMLDivElement;
+  private onChoose: ((m: FireMode) => void) | null = null;
   private fanTimer = 0;
   private hintTimer = 0;
   private radialItems: RadialItem[] = [];
@@ -47,6 +51,14 @@ export class TouchOverlays {
     this.plate.hidden = true;
     this.plate.setAttribute('role', 'region');
     this.plate.setAttribute('aria-label', 'Learn the controls');
+    this.chooser = el('mf-choose plate', this.layer);
+    this.chooser.hidden = true;
+    this.chooser.setAttribute('role', 'dialog');
+    this.chooser.setAttribute('aria-label', 'How do you want to shoot?');
+    this.chooser.addEventListener('click', (e) => {
+      const b = (e.target as Element).closest<HTMLElement>('[data-fire]');
+      if (b && this.onChoose) this.onChoose(b.dataset.fire as FireMode);
+    });
     this.plate.addEventListener('click', (e) => {
       const b = (e.target as Element).closest<HTMLElement>('[data-drill]');
       if (b?.dataset.drill === 'skip') onSkip();
@@ -161,6 +173,34 @@ export class TouchOverlays {
     this.cueTimer = window.setTimeout(() => (this.cue.hidden = true), ms);
   }
 
+  // ---- the first-run fire chooser (§4.10.1) ----
+
+  /** "How do you want to shoot?": the four modes with their pictures; a tap picks one (and closes it). */
+  showChooser(current: FireMode, onPick: (m: FireMode) => void): void {
+    this.onChoose = (m) => {
+      this.onChoose = null;
+      this.chooser.hidden = true;
+      onPick(m);
+    };
+    const cards = FIRE_MODES.map((m) => {
+      const t = FIRE_MODE_TEXT[m];
+      const tag = m === 'auto' ? '<span class="mf-choose__tag">Recommended</span>' : '';
+      return `<button type="button" class="mf-choose__opt${m === current ? ' is-on' : ''}" data-fire="${m}" aria-pressed="${m === current}">${fireArt(m)}<b>${esc(t.name)}</b>${tag}<span>${esc(t.line)}</span></button>`;
+    }).join('');
+    this.chooser.innerHTML = `<b class="mf-choose__t">How do you want to shoot?</b><div class="mf-choose__opts">${cards}</div><p class="mf-choose__note">Change it any time in Settings → Touch.</p>`;
+    this.chooser.hidden = false;
+  }
+
+  get choosing(): boolean {
+    return !this.chooser.hidden;
+  }
+
+  /** The choice was made elsewhere (Settings): the card goes without picking. */
+  hideChooser(): void {
+    this.onChoose = null;
+    this.chooser.hidden = true;
+  }
+
   // ---- the drill's plate ----
 
   /** the plate's last content: it's rebuilt only when that changes */
@@ -172,7 +212,7 @@ export class TouchOverlays {
    * thumb's pointerup in WebKit, leaving the stick pushed (QA, 23 Oct: qa-bullets-lag-touch.md §3 M).
    * Its frame and its buttons stay put.
    */
-  showDrill(d: Drill): void {
+  showDrill(d: Drill, fire: FireMode = 'pull'): void {
     const s = d.step;
     const n = d.steps.length;
     const parts = s
@@ -180,7 +220,7 @@ export class TouchOverlays {
           eyebrow: `Drill · ${d.index + 1}/${n}`,
           close: 'Close the drill',
           goal: esc(s.goal),
-          how: esc(s.how),
+          how: esc(s.id === 'fire' ? FIRE_HOW[fire] : s.how),
           dots: d.steps.map((st, i) => (d.ticked.has(st.id) ? 'is-done' : d.skipped.has(st.id) ? 'is-skipped' : i === d.index ? 'is-now' : '')),
           done: !!d.justTicked,
           skip: true,

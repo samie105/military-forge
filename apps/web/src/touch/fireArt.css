@@ -1,0 +1,44 @@
+/*
+ * The fire modes' little moving pictures (fireArt.ts): 2 s loops. Without animation (Reduce motion,
+ * html.reduce-motion stops them all) each rests on its key moment: the knob pushed, a shot out.
+ */
+.fa { display: block; width: 100%; height: auto; overflow: visible; }
+.fa .fa-base { fill: color-mix(in srgb, var(--c-ink-900) 80%, transparent); stroke: color-mix(in srgb, var(--c-paper) 45%, transparent); stroke-width: 1.5; }
+.fa .fa-ring { fill: none; stroke: var(--c-paper); stroke-width: 1.2; stroke-dasharray: 3 2; opacity: 0.8; }
+.fa .fa-cancel { fill: none; stroke: var(--c-paper); stroke-width: 1.2; }
+.fa .fa-knob { fill: var(--c-paper); transform: translate(10px, -3px); }
+.fa .fa-target { fill: var(--c-paper-3, #c8b88c); }
+.fa .fa-shot { stroke: var(--c-volt); stroke-width: 2.4; stroke-linecap: round; opacity: 1; }
+.fa .fa-fire circle { fill: var(--c-volt); stroke: var(--c-ink-950); stroke-width: 1.5; }
+.fa .fa-fire text, .fa .fa-tag text { font: 900 6px/1 sans-serif; letter-spacing: 0.06em; text-anchor: middle; fill: var(--c-volt-ink); }
+.fa .fa-fire { transform-box: fill-box; transform-origin: center; }
+.fa .fa-tag rect { fill: var(--c-volt); }
+
+.fa .fa-knob, .fa .fa-shot, .fa .fa-fire { animation-duration: 2s; animation-iteration-count: infinite; animation-timing-function: ease-in-out; }
+
+/* Auto: aim near the target, then shots come by themselves (a burst) */
+.fa--auto .fa-knob { animation-name: fa-auto-knob; }
+.fa--auto .fa-shot { animation-name: fa-auto-shot; animation-timing-function: steps(1, end); }
+@keyframes fa-auto-knob { 0% { transform: translate(0, 0); } 30%, 100% { transform: translate(7px, -2px); } }
+@keyframes fa-auto-shot { 0%, 39% { opacity: 0; } 40% { opacity: 1; } 46% { opacity: 0; } 54% { opacity: 1; } 60% { opacity: 0; } 68% { opacity: 1; } 74% { opacity: 0; } 82% { opacity: 1; } 88%, 100% { opacity: 0; } }
+
+/* Pull: the knob goes out past the ring; it fires while past it */
+.fa--pull .fa-knob { animation-name: fa-pull-knob; }
+.fa--pull .fa-shot { animation-name: fa-pull-shot; animation-timing-function: steps(1, end); }
+@keyframes fa-pull-knob { 0%, 8% { transform: translate(0, 0); } 40%, 85% { transform: translate(15px, -4px); } 100% { transform: translate(0, 0); } }
+@keyframes fa-pull-shot { 0%, 41% { opacity: 0; } 42% { opacity: 1; } 50% { opacity: 0; } 58% { opacity: 1; } 66% { opacity: 0; } 74% { opacity: 1; } 82%, 100% { opacity: 0; } }
+
+/* Fire button: the stick aims a little; FIRE pressed and held fires */
+.fa--button .fa-knob { animation-name: fa-button-knob; }
+.fa--button .fa-fire { animation-name: fa-button-press; }
+.fa--button .fa-shot { animation-name: fa-pull-shot; animation-timing-function: steps(1, end); }
+@keyframes fa-button-knob { 0% { transform: translate(0, 0); } 25%, 100% { transform: translate(7px, -3px); } }
+@keyframes fa-button-press { 0%, 38% { transform: scale(1); } 42%, 84% { transform: scale(0.86); } 90%, 100% { transform: scale(1); } }
+
+/* Release: drag out to aim, lift: one shot (the knob springs back) */
+.fa--release .fa-knob { animation-name: fa-release-knob; }
+.fa--release .fa-shot { animation-name: fa-release-shot; animation-timing-function: steps(1, end); }
+@keyframes fa-release-knob { 0%, 8% { transform: translate(0, 0); } 50%, 58% { transform: translate(14px, -4px); } 64%, 100% { transform: translate(0, 0); } }
+@keyframes fa-release-shot { 0%, 59% { opacity: 0; } 60% { opacity: 1; } 70%, 100% { opacity: 0; } }
+
+html.reduce-motion .fa :is(.fa-knob, .fa-shot, .fa-fire) { animation: none; }

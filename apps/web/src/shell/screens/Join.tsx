@@ -27,7 +27,28 @@ export function joinState(code: string, pasted: boolean, error: string | null): 
   return pasted ? 'pasted' : 'ready';
 }
 
-export function Join() {
+/** The way into a local room with no internet: the host's QR (LanPanels). L0 on the Pen board. */
+export function LanLink() {
+  const ctl = useCtl();
+  return (
+    <button className="mf-lanlink m-p8" type="button" onClick={() => ctl.openOverlay('lan-join')}>
+      <Icon name="unplug" />
+      <span className="mf-lanlink__text">
+        <span className="label label--volt">No internet?</span>
+        <b>Join a local room with the host's QR</b>
+      </span>
+      <Icon name="chev-right" />
+    </button>
+  );
+}
+
+/**
+ * The six boxes' state and keys, shared by the desktop Join and the phone's (PhoneJoin): typing moves
+ * along, Backspace moves back, a pasted link or code (anywhere on the screen) fills them, Enter (a
+ * phone keyboard's Go) joins. `autoFocus`: the first box takes the keys on arrival (not on a phone,
+ * where the keyboard would cover the screen before the player has seen it).
+ */
+export function useJoinCode({ autoFocus = true }: { autoFocus?: boolean } = {}) {
   const ctl = useCtl();
   const [code, setCode] = useState('');
   const [pasted, setPasted] = useState(false);
@@ -36,14 +57,16 @@ export function Join() {
   const boxes = useRef<(HTMLInputElement | null)[]>([]);
 
   const focus = (i: number) => boxes.current[Math.max(0, Math.min(ROOM_CODE_LENGTH - 1, i))]?.focus();
-  useEffect(() => focus(0), []);
+  useEffect(() => {
+    if (autoFocus) focus(0);
+  }, [autoFocus]);
 
   const fill = (text: string, fromPaste: boolean) => {
     const found = normalizeRoomCode(text) ?? codeLetters(text).slice(0, ROOM_CODE_LENGTH);
     setCode(found);
     setPasted(fromPaste && found.length === ROOM_CODE_LENGTH);
     setError(null);
-    focus(found.length);
+    if (autoFocus || found.length < ROOM_CODE_LENGTH) focus(found.length);
   };
 
   // a link pasted anywhere on the screen fills the boxes
@@ -59,8 +82,9 @@ export function Join() {
   });
 
   const state = joinState(code, pasted, error);
+  const complete = code.length === ROOM_CODE_LENGTH;
   const join = async () => {
-    if (code.length !== ROOM_CODE_LENGTH || busy) return;
+    if (!complete || busy) return;
     setBusy(true);
     const result = await ctl.joinByCode(code);
     setBusy(false);
@@ -79,7 +103,24 @@ export function Join() {
       focus(at);
     } else if (e.key === 'ArrowLeft') focus(i - 1);
     else if (e.key === 'ArrowRight') focus(i + 1);
-    else if (e.key === 'Enter') void join();
+    else if (e.key === 'Enter') {
+      // the phone keyboard's Go: the browser has no form to submit here, so the box joins itself
+      // (and Home under this overlay doesn't also take the Enter as Create room)
+      e.preventDefault();
+      e.stopPropagation();
+      void join();
+    }
+  };
+
+  const onType = (i: number, value: string) => {
+    const typed = codeLetters(value);
+    if (!typed) return;
+    // typing into a box replaces from there on; several letters (autofill) spill over
+    const next = (code.slice(0, i) + typed).slice(0, ROOM_CODE_LENGTH);
+    setCode(next);
+    setPasted(false);
+    setError(null);
+    focus(Math.min(next.length, ROOM_CODE_LENGTH - 1));
   };
 
   const pasteLink = () =>
@@ -87,6 +128,13 @@ export function Join() {
       ?.readText()
       .then((t) => fill(t, true))
       .catch(() => setError('Paste with Ctrl+V (or ⌘V): the browser kept the clipboard to itself'));
+
+  return { code, state, error, busy, complete, boxes, join, onKey, onType, pasteLink };
+}
+
+export function Join() {
+  const ctl = useCtl();
+  const { code, state, error, busy, boxes, join, onKey, onType, pasteLink } = useJoinCode();
 
   return (
     <Screen name="join" kind="menu" states={[state === 'ready' ? 'pasted' : state]} label="Join with code">
@@ -124,16 +172,7 @@ export function Join() {
                   data-bind={`join.code.${i}`}
                   value={code[i] ?? ''}
                   onKeyDown={(e) => onKey(i, e)}
-                  onChange={(e) => {
-                    const typed = codeLetters(e.target.value);
-                    if (!typed) return;
-                    // typing into a box replaces from there on; several letters (autofill) spill over
-                    const next = (code.slice(0, i) + typed).slice(0, ROOM_CODE_LENGTH);
-                    setCode(next);
-                    setPasted(false);
-                    setError(null);
-                    focus(Math.min(next.length, ROOM_CODE_LENGTH - 1));
-                  }}
+                  onChange={(e) => onType(i, e.target.value)}
                 />
               ))}
               {state === 'pasted' && (
@@ -193,11 +232,9 @@ export function Join() {
                 Paste link
               </button>
             </div>
-            <button className="btn btn--ghost btn--sm m-p8 mf-join__lan" type="button" onClick={() => ctl.openOverlay('lan-join')}>
-              <Icon name="wifi" />
-              No internet? Join a local room with the host's QR
-            </button>
+            <p className="mf-join__local">A local room's code works here too: friends on the same Wi-Fi type it like any other.</p>
           </div>
+          <div className="mf-join__side">
           <aside className="ticket join__help" aria-label="Where to find the code">
             <span className="label">Where to find it</span>
             <b className="display join__help-title">At the end of the link</b>
@@ -225,6 +262,9 @@ export function Join() {
               The code is the last 6 letters of the room link. A room closes when everyone leaves.
             </p>
           </aside>
+          {/* no internet: a local room's host and guest swap QR codes instead (LanPanels) */}
+          <LanLink />
+          </div>
         </div>
         <Hints>
           <Hint keys={<Cap>Enter</Cap>}>Join</Hint>

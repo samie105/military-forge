@@ -7,6 +7,8 @@ import './locker.css';
 
 export { PHONE_QUERY, PhoneScreen, isPhoneLayout, usePhoneLayout } from './layout';
 export { PhoneHome } from './PhoneHome';
+export { PhoneJoin } from './PhoneJoin';
+export { PhoneLanAddPlayer, PhoneLanJoin } from './PhoneLan';
 export { PhoneLobby } from './PhoneLobby';
 export { PhoneNameEntry } from './PhoneNameEntry';
 export { PhonePause } from './PhonePause';

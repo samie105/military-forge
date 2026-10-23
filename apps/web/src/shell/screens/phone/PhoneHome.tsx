@@ -62,6 +62,7 @@ export function PhoneHome({ store }: { store: ShellStore }) {
               <Icon name="users-plus" />
               Create room
             </button>
+            {offline && <span className="pm-poster__note">Needs internet · Local room works without it</span>}
             <span className="hazard" aria-hidden="true"></span>
           </article>
           <div className="pm-col">
@@ -73,10 +74,14 @@ export function PhoneHome({ store }: { store: ShellStore }) {
               <span className="label">03 · Solo</span>
               <b className="display">Training</b>
             </button>
-            {/* a local room (lan/): host it here; friends on the same Wi-Fi or hotspot join by code or QR */}
-            <button type="button" className="ticket rivets pm-tk m-p3 m-p8" style={rise(3)} onClick={() => ctl.go({ to: 'local' })}>
-              <span className="label">04 · Same Wi-Fi</span>
-              <b className="display">Local</b>
+            {/* a local room (lan/): host it here; friends on the same Wi-Fi or hotspot join by code or QR (P0: lit up offline) */}
+            <button type="button" className={`ticket rivets pm-tk pm-tk--local m-p3 m-p8${offline ? ' is-hot' : ''}`} style={rise(3)} onClick={() => ctl.go({ to: 'local' })}>
+              <span className="label">
+                <Icon name="wifi" size="sm" />
+                04 · Same Wi-Fi
+              </span>
+              <b className="display">Local room</b>
+              <span className="pm-tk__sub">Works with no internet</span>
             </button>
           </div>
           <div className="pm-stage m-p3" style={rise(4)} role="img" aria-label={`Your soldier, ${name}`}>

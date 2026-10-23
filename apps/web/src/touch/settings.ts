@@ -7,15 +7,24 @@ export type KeyValueStore = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 export const LAYOUT_KEY = 'mf.touch.layout.v1';
 export const SETTINGS_KEY = 'mf.touch.settings.v1';
-/** Saved with the settings: 2 = the round-two kit's controls (opacity 1 is its look). */
-export const SETTINGS_REV = 2;
+/** Saved with the settings: 2 = the round-two kit's controls (opacity 1 is its look); 3 = the four fire modes. */
+export const SETTINGS_REV = 3;
 
 export const LIMITS = { min: 0.03, max: 0.97, sizeMin: 0.08, sizeMax: 0.7, opacityMin: 0.15, opacityMax: 1 };
 
 export const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 
 export type Handed = 'right' | 'left';
-export type FireMode = 'hold' | 'release';
+/**
+ * How the gun fires on a phone (controls spec §4.4; the owner's "shooting styles", 23 Oct):
+ * - auto: the aim stick aims; the gun fires by itself while the aim lies on an enemy in sight and in
+ *   range (pushing the stick to the rim fires anyway). The default for new players.
+ * - pull: the aim stick fires while pushed past its fire line (today's "hold").
+ * - button: the aim stick only aims; a FIRE button fires while held (drag it to aim while firing).
+ * - release: drag to aim, lift to fire once.
+ */
+export type FireMode = 'auto' | 'pull' | 'button' | 'release';
+export const FIRE_MODES: readonly FireMode[] = ['auto', 'pull', 'button', 'release'];
 
 /** Back to the default layout on this device. */
 export function clearLayout(store: KeyValueStore | null): void {
@@ -33,15 +42,23 @@ export type TouchMode = 'auto' | 'on' | 'off';
 export interface TouchSettings {
   /** auto: on phones and tablets (a coarse pointer), or as soon as the screen is touched */
   mode: TouchMode;
-  /** hold: fire while the aim stick is pushed past half-way; release: aim, then lift to fire once */
+  /** how the gun fires (FireMode) */
   fire: FireMode;
+  /** the fire mode was picked (the first-run chooser, or Settings): until then the chooser shows once */
+  fireChosen: boolean;
+  /** snipers, DMRs, charged guns and launchers fire on release in Auto and Pull (§4.4's per-weapon rule) */
+  precisionRelease: boolean;
+  /** Fire button mode: a second FIRE at the top left, for the left index finger */
+  leftFire: boolean;
   /** a light slowdown while the aim lies on an enemy (docs/01 §4); touch only */
   aimAssist: boolean;
   handed: Handed;
   /** buzz when you're hit (where the browser allows vibration) */
   vibrate: boolean;
-  /** swipe and lift the move stick to dash */
+  /** flick and lift the move stick to dash */
   swipeDash: boolean;
+  /** back on the aim stick within 0.7 s of a button: the same aim and push carry on (and Pull keeps firing) */
+  keepAim: boolean;
   /**
    * overall opacity of the controls' plates (each control's own opacity multiplies it); the vitals they
    * carry (HP, fuel, the ammo ring) stay readable whatever it is. 1 = the kit's look, already translucent
@@ -49,8 +66,6 @@ export interface TouchSettings {
   opacity: number;
   /** swipes and holds on the buttons (touch-controls-v3.md); off: every button is a plain tap, as before */
   gestures: boolean;
-  /** fire by itself while the aim lies on an enemy in range (an accessibility option) */
-  autoFire: boolean;
   /** short buzzes on a throw, a swap, a dash swipe, a radial pick (where the phone can vibrate) */
   haptics: boolean;
   /** the view leans toward where you aim; off: it stays on your soldier */
@@ -65,14 +80,17 @@ export interface TouchSettings {
 
 export const DEFAULT_TOUCH_SETTINGS: Readonly<TouchSettings> = {
   mode: 'auto',
-  fire: 'hold',
+  fire: 'auto',
+  fireChosen: false,
+  precisionRelease: true,
+  leftFire: false,
   aimAssist: true,
   handed: 'right',
   vibrate: true,
   swipeDash: true,
+  keepAim: true,
   opacity: 1,
   gestures: true,
-  autoFire: false,
   haptics: true,
   lookAhead: true,
   pinchZoom: true,
@@ -93,9 +111,11 @@ export function sanitizeSettings(raw: unknown): TouchSettings {
   if (typeof raw !== 'object' || raw === null) return s;
   const r = raw as Record<string, unknown>;
   if (r.mode === 'auto' || r.mode === 'on' || r.mode === 'off') s.mode = r.mode;
-  if (r.fire === 'hold' || r.fire === 'release') s.fire = r.fire;
+  // 'hold' was Pull's old name; the old auto-fire switch on top of it is Auto now
+  if (r.fire === 'hold') s.fire = r.autoFire === true ? 'auto' : 'pull';
+  else if (typeof r.fire === 'string' && (FIRE_MODES as readonly string[]).includes(r.fire)) s.fire = r.fire as FireMode;
   if (r.handed === 'right' || r.handed === 'left') s.handed = r.handed;
-  for (const k of ['aimAssist', 'vibrate', 'swipeDash', 'gestures', 'autoFire', 'haptics', 'lookAhead', 'pinchZoom'] as const) if (typeof r[k] === 'boolean') s[k] = r[k];
+  for (const k of ['aimAssist', 'vibrate', 'swipeDash', 'keepAim', 'gestures', 'haptics', 'lookAhead', 'pinchZoom', 'fireChosen', 'precisionRelease', 'leftFire'] as const) if (typeof r[k] === 'boolean') s[k] = r[k];
   if (isFiniteNumber(r.opacity)) s.opacity = clamp(r.opacity, LIMITS.opacityMin, LIMITS.opacityMax);
   if (isFiniteNumber(r.shake)) s.shake = clamp(r.shake, 0, 1);
   if (isFiniteNumber(r.view)) s.view = clamp(r.view, VIEW_LIMITS.min, VIEW_LIMITS.max);

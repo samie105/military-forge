@@ -264,21 +264,121 @@ html.mf-short.mf-big-text .kit-v2 .ne__title { font-size: var(--fs-88); }
 html.mf-short.mf-big-text .kit-v2 .ne .lead { font-size: var(--fs-16); }
 html.mf-short.mf-big-text .kit-v2 .ne__actions { padding-top: 0; gap: var(--sp-3); }
 
-/* Local rooms (same Wi-Fi, lan/): Home's ticket, the lobby's note, and the QR-code panels (LanPanels.tsx) */
+/*
+ * Local rooms (same Wi-Fi, lan/): the Pen board "LOCAL ROOMS · same Wi-Fi" (docs/design/pen/local-rooms).
+ * L0 Home's button and Join's way in with no internet; L1 the lobby's note; L2/L3 the QR panels
+ * (LanPanels.tsx): the code to scan on paper, the other step on Frost glass, one loud action each.
+ */
 .kit-v2 .mf-home__local { white-space: nowrap; }
-.kit-v2 .mf-lan__note { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); margin-top: var(--sp-4); }
-.kit-v2 .mf-lan__note-sub { font-size: var(--fs-14); }
-.kit-v2 .mf-join__lan { margin-top: var(--sp-4); align-self: flex-start; }
-.kit-v2 .mf-lan { display: flex; flex-direction: column; gap: var(--sp-5); max-width: 1100px; margin: 0 auto; width: 100%; }
-.kit-v2 .mf-lan__title { margin: 0; }
-.kit-v2 .mf-lan__steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: var(--sp-5); }
-.kit-v2 .mf-lan__step { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-3); padding: var(--sp-5); min-width: 0; }
-.kit-v2 .mf-lan__sub { margin: 0; font-size: var(--fs-14); }
+
+/* L0 · Join: the way in with no internet */
+.kit-v2 .mf-join__local { margin: 0; color: var(--c-muted); font-size: var(--fs-18); }
+.kit-v2 .mf-join__side { display: flex; flex-direction: column; gap: var(--sp-7); min-width: 0; }
+.kit-v2 .mf-join__side .mf-lanlink__text b { font-size: var(--fs-20); }
+.kit-v2 .mf-lanlink { display: flex; align-items: center; gap: var(--sp-4); width: 100%; max-width: 820px; min-height: var(--btn-h-xl); padding: var(--sp-3) var(--sp-6); background: var(--c-ink-900); color: var(--c-text); border: var(--bw-chunky) solid var(--c-volt); border-radius: var(--r-sm); text-align: left; cursor: pointer; transition: background-color var(--dur-fast); }
+.kit-v2 .mf-lanlink:hover { background: var(--c-ink-800); }
+.kit-v2 .mf-lanlink:focus-visible { outline: 3px solid var(--c-volt); outline-offset: 3px; }
+.kit-v2 .mf-lanlink > .ic { flex: none; width: 36px; height: 36px; color: var(--c-volt); }
+.kit-v2 .mf-lanlink__text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.kit-v2 .mf-lanlink__text b { font-size: var(--fs-24); font-weight: var(--fw-bold); }
+
+/* L1 · the lobby: the header's tag, the poster's note and the host's QR way in */
+.kit-v2 .mf-lan__head-tag { color: var(--c-volt); box-shadow: inset 0 0 0 var(--bw) var(--c-volt-line); }
+.kit-v2 .mf-lan__note { display: flex; flex-direction: column; gap: var(--sp-4); width: 100%; margin-top: var(--sp-4); }
+.kit-v2 .mf-lan__how { display: flex; flex-direction: column; gap: var(--sp-1); padding: var(--sp-4) var(--sp-5); border: var(--bw-chunky) solid var(--c-ink-950); border-radius: var(--r-sm); }
+.kit-v2 .mf-lan__how .label { display: inline-flex; align-items: center; gap: var(--sp-2); opacity: 1; }
+.kit-v2 .mf-lan__how-t { font-size: var(--fs-36); line-height: 1; }
+.kit-v2 .mf-lan__how-code { font-size: var(--fs-64); line-height: 1; letter-spacing: .12em; white-space: nowrap; }
+.kit-v2 .mf-lan__how-sub { font-size: var(--fs-16); }
+.kit-v2 .mf-lan__qrway { display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-4) var(--sp-5); background: var(--c-ink-900); border-radius: var(--r-sm); }
+.kit-v2 .mf-lan__qrway .label { display: inline-flex; align-items: center; gap: var(--sp-2); color: var(--c-volt); opacity: 1; }
+.kit-v2 .mf-lan__qrway .btn { padding-inline: var(--sp-4); font-size: var(--fs-18); white-space: nowrap; }
+
+/* large text (130 % up): the local poster keeps the code and the QR way in above the fold */
+html.mf-big-text .kit-v2 .mf-lan__how-sub, html.mf-big-text .kit-v2 .lobby__share:has(.mf-lan__note) .btn__sub { display: none; }
+html.mf-big-text .kit-v2 :is(.mf-lan__how, .mf-lan__qrway) .label { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html.mf-big-text .kit-v2 :is(.mf-lan__how, .mf-lan__qrway) .label .ic { display: inline-block; margin-right: var(--sp-2); vertical-align: -0.15em; }
+html.mf-big-text .kit-v2 .mf-lan__qrway .btn { font-size: var(--fs-16); }
+html.mf-big-text .kit-v2 .mf-lan__how-code { font-size: var(--fs-48); }
+
+/* L2 / L3 · the QR panels */
+.kit-v2 .mf-lan { display: flex; flex-direction: column; gap: var(--sp-5); max-width: 1720px; margin: 0 auto; width: 100%; }
+.kit-v2 .mf-lan__eyebrow::before { display: none; }
+.kit-v2 .mf-lan__title { margin: 0; font-size: var(--fs-88); line-height: .9; }
+.kit-v2 .mf-lan__steps { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.55fr); align-items: stretch; gap: var(--sp-6); }
+.kit-v2 .mf-lan__steps--join { grid-template-columns: minmax(0, 1.05fr) auto minmax(0, 1.4fr); align-items: start; }
+.kit-v2 .mf-lan__step { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-4); padding: var(--sp-6) var(--sp-7); min-width: 0; }
+.kit-v2 .mf-lan__step--paper { -webkit-mask: none; mask: none; border: var(--bw-chunky) solid var(--c-ink-950); box-shadow: var(--sh-card); }
+.kit-v2 .mf-lan__h { margin: 0; font-size: var(--fs-48); line-height: .95; }
+.kit-v2 .mf-lan__sub { margin: 0; font-size: var(--fs-18); }
+.kit-v2 .mf-lan__glass .mf-lan__sub, .kit-v2 .mf-lan__noscan { color: var(--c-muted); }
+.kit-v2 .mf-lan__glass .label { color: var(--c-muted); }
+.kit-v2 .mf-lan__then { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--sp-2); color: var(--c-volt); }
+.kit-v2 .mf-lan__then .ic { width: 44px; height: 44px; stroke-width: 2.6; }
+.kit-v2 .mf-lan__then .label { color: var(--c-muted); }
+.kit-v2 .mf-lan__steps--join .mf-lan__then { align-self: center; }
 /* a ~200-character code is a dense QR: big, with a white quiet zone, so a phone camera reads it from arm's length */
-.kit-v2 .mf-lan__qr { display: block; width: min(320px, 100%); aspect-ratio: 1; padding: 10px; background: #fff; border-radius: var(--r-xs); }
+.kit-v2 .mf-lan__qr { display: block; box-sizing: border-box; width: min(400px, 100%); aspect-ratio: 1; padding: 12px; background: var(--c-qr-light); border-radius: var(--r-xs); }
 .kit-v2 .mf-lan__qr svg { display: block; width: 100%; height: 100%; }
-.kit-v2 .mf-lan__paste { display: flex; flex-direction: column; gap: var(--sp-2); width: 100%; }
-.kit-v2 .mf-lan__text { box-sizing: border-box; padding: var(--sp-2) var(--sp-3); background: var(--c-paper); color: var(--c-paper-text); border: var(--bw) solid var(--c-ink-950); border-radius: var(--r-xs); width: 100%; min-height: 4.5em; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--fs-14); word-break: break-all; }
-.kit-v2 .mf-lan__acts { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
-.kit-v2 .mf-lan__scan { display: flex; flex-direction: column; gap: var(--sp-2); width: 100%; }
-.kit-v2 .mf-lan__video { width: 100%; max-height: 280px; object-fit: cover; border-radius: var(--r-xs); background: var(--c-ink-950); }
+.kit-v2 .mf-lan__qr--pending { display: grid; place-items: center; padding: var(--sp-6); background: transparent; border: var(--bw-chunky) dashed var(--c-paper-line); color: var(--c-paper-muted); font-size: var(--fs-16); font-weight: var(--fw-bold); text-align: center; }
+.kit-v2 .mf-lan__replyrow { display: flex; gap: var(--sp-6); align-items: flex-start; width: 100%; }
+.kit-v2 .mf-lan__replyrow .mf-lan__qr { flex: none; width: min(380px, 56%); }
+.kit-v2 .mf-lan__replyrow .mf-lan__qrwrap { flex: none; width: min(380px, 56%); }
+.kit-v2 .mf-lan__replyrow .mf-lan__qrwrap .mf-lan__qr { width: 100%; }
+/* a code that's done its job: faded under a stamp */
+.kit-v2 .mf-lan__qrwrap { position: relative; display: block; }
+.kit-v2 .mf-lan__qrwrap.is-used .mf-lan__qr { opacity: .22; }
+.kit-v2 .mf-lan__used { position: absolute; left: 50%; top: 50%; translate: -50% -50%; background: var(--c-paper); }
+.kit-v2 .mf-lan__side { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-4); flex: 1; min-width: 0; }
+.kit-v2 .mf-lan__or { display: flex; align-items: center; gap: var(--sp-3); width: 100%; color: var(--c-muted); }
+.kit-v2 .mf-lan__or::before, .kit-v2 .mf-lan__or::after { content: ""; flex: 1; height: var(--bw); background: var(--c-line); }
+.kit-v2 .mf-lan__noscan { display: flex; align-items: flex-start; gap: var(--sp-2); margin: 0; font-size: var(--fs-18); }
+.kit-v2 .mf-lan__noscan .ic { flex: none; margin-top: 2px; }
+.kit-v2 .mf-lan__result { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-4); width: 100%; padding-top: var(--sp-2); }
+.kit-v2 .mf-lan__acts { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+.kit-v2 .mf-lan__got { color: var(--c-volt-ink); background: var(--c-volt); border-color: var(--c-ink-950); outline-color: var(--c-volt); font-size: var(--fs-28); }
+.kit-v2 .mf-lan__foot { margin: 0; }
+@supports (backdrop-filter: blur(1px)) {
+  html:not(.reduce-transparency):not(.gfx-low) .kit-v2 .mf-lan__glass { border-radius: var(--r-frost); }
+}
+
+/* the camera's frame (Viewfinder): volt corners, the picture, a scan line while it reads */
+.kit-v2 .mf-vf { position: relative; display: block; width: 100%; flex: 1 1 260px; min-height: 220px; overflow: hidden; background: var(--c-ink-950); border: var(--bw) solid var(--c-line-strong); border-radius: var(--r-sm); }
+.kit-v2 .mf-vf__video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.kit-v2 .mf-vf__corners i { position: absolute; width: 40px; height: 40px; border: 5px solid var(--c-volt); }
+.kit-v2 .mf-vf__corners i:nth-child(1) { left: 14px; top: 14px; border-width: 5px 0 0 5px; }
+.kit-v2 .mf-vf__corners i:nth-child(2) { right: 14px; top: 14px; border-width: 5px 5px 0 0; }
+.kit-v2 .mf-vf__corners i:nth-child(3) { left: 14px; bottom: 14px; border-width: 0 0 5px 5px; }
+.kit-v2 .mf-vf__corners i:nth-child(4) { right: 14px; bottom: 14px; border-width: 0 5px 5px 0; }
+.kit-v2 .mf-vf__line { position: absolute; left: 12%; right: 12%; top: 50%; height: 3px; background: var(--c-volt); box-shadow: 0 0 12px var(--c-volt-glow); animation: mf-vf-scan 2.4s ease-in-out infinite alternate; }
+@keyframes mf-vf-scan { from { translate: 0 -70px; } to { translate: 0 70px; } }
+html:is(.reduce-motion, .reduce-flashes) .kit-v2 .mf-vf__line { animation: none; box-shadow: none; }
+.kit-v2 .mf-vf__in { position: absolute; inset: 0; display: grid; place-items: center; padding: var(--sp-6); text-align: center; }
+.kit-v2 .mf-vf__hint { display: flex; flex-direction: column; align-items: center; gap: var(--sp-3); color: var(--c-muted); font-size: var(--fs-18); font-weight: var(--fw-bold); }
+.kit-v2 .mf-vf__hint .ic { color: var(--c-volt); }
+.kit-v2 .mf-vf__hint--low { align-self: end; padding: 4px 10px; background: var(--c-plate); border-radius: var(--r-xs); color: var(--c-text); }
+.kit-v2 .mf-vf .status { padding: var(--sp-2) var(--sp-3); background: var(--c-plate-strong); border-radius: var(--r-xs); font-size: var(--fs-16); }
+/* an upright phone plays turned onto its side (ui/landscape.ts): the camera's picture turns back */
+html.mf-rotated .kit-v2 .mf-vf { container-type: size; }
+html.mf-rotated .kit-v2 .mf-vf__video { inset: auto; left: 50%; top: 50%; width: 100cqh; height: 100cqw; transform: translate(-50%, -50%) rotate(-90deg); }
+
+/* the paste way in (PasteRow) */
+.kit-v2 .mf-paste { display: flex; flex-direction: column; gap: var(--sp-2); width: 100%; }
+.kit-v2 .mf-paste__row { display: flex; flex-wrap: wrap; align-items: stretch; gap: var(--sp-3); width: 100%; }
+/* the box takes a line of its own when the panel is narrow (the buttons go under it) */
+.kit-v2 .mf-paste__text { flex: 1 1 320px; min-width: 0; min-height: var(--btn-h); box-sizing: border-box; padding: 0 var(--sp-4); background: var(--c-paper); color: var(--c-paper-text); border: var(--bw-chunky) solid var(--c-ink-950); border-radius: var(--r-sm); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--fs-18); text-overflow: ellipsis; }
+.kit-v2 .mf-paste__text::placeholder { color: var(--c-paper-muted); }
+.kit-v2 .mf-paste__text:focus-visible { outline: 3px solid var(--c-volt); outline-offset: 2px; }
+.kit-v2 .mf-paste__text[aria-invalid="true"] { border-color: var(--c-hp); }
+.kit-v2 .mf-paste .btn { flex: 1 0 auto; padding-inline: var(--sp-5); font-size: var(--fs-18); }
+.kit-v2 .mf-paste__problem { font-size: var(--fs-16); }
+
+/* waiting for the other device, and the guest's steps */
+.kit-v2 .mf-wait { display: inline-flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); background: var(--c-ink-900); color: var(--c-text); border: var(--bw) solid var(--c-volt-line); border-radius: var(--r-sm); font-size: var(--fs-18); font-weight: var(--fw-bold); }
+.kit-v2 .mf-wait.is-done { color: var(--c-ok); border-color: var(--c-ok); }
+html.reduce-motion .kit-v2 .mf-wait .spinner { border-color: var(--c-volt); }
+.kit-v2 .mf-steps { display: flex; align-items: center; gap: 18px; margin: 0; padding: 0; list-style: none; }
+.kit-v2 .mf-steps li { position: relative; display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 0 8px; border: var(--bw) solid var(--c-line-strong); border-radius: var(--r-xs); color: var(--c-muted); font-size: var(--fs-14); font-weight: var(--fw-black); letter-spacing: .06em; text-transform: uppercase; }
+.kit-v2 .mf-steps li + li::before { content: "›"; position: absolute; left: -14px; color: var(--c-muted); font-weight: var(--fw-black); }
+.kit-v2 .mf-steps li.is-on { background: var(--c-volt); color: var(--c-volt-ink); border-color: var(--c-volt); }
+.kit-v2 .mf-steps li.is-done { color: var(--c-ok); border-color: var(--c-ok); }

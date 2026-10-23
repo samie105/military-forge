@@ -23,8 +23,9 @@ html.reduce-motion .mf-hud-phone { --m-rise: 0px; }
 .pt-cue { gap: 6px; }
 .pt-cue span:empty { display: none; }
 
-/* the clock: one line, or the score under the time when large text needs the room; a long leader name ends in … */
-.ph .pt-clock { flex-wrap: wrap; justify-content: center; column-gap: 10px; row-gap: 0; max-width: 244px; }
+/* the clock: one line, or the score under the time when large text needs the room; a long leader name ends in …
+   (260 px: at 244 the one-line clock sat right at the limit and some times, 9:49, wrapped) */
+.ph .pt-clock { flex-wrap: wrap; justify-content: center; column-gap: 10px; row-gap: 0; max-width: 260px; }
 .ph .pt-clock > span { display: inline-flex; align-items: baseline; gap: 4px; white-space: nowrap; }
 .ph .pt-clock [data-bind='match.leaderShort'] { display: inline-block; max-width: 6.5em; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
 .ph .pt-clock i { align-self: center; }

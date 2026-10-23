@@ -50,15 +50,17 @@ export function Home({ store }: { store: ShellStore }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // Enter is Play with friends only when nothing has focus: on a focused button it presses that button
-      if (e.code === 'Enter' && !offline && (document.activeElement === null || document.activeElement === document.body)) {
+      // Enter is Play with friends only when nothing has focus: on a focused button it presses that button.
+      // Not under an overlay (Join, the QR panels), nor when a box took it (a pasted code's Enter: the box
+      // may be gone by now, focus on body)
+      if (e.code === 'Enter' && !e.defaultPrevented && !store.getState().overlay && !offline && (document.activeElement === null || document.activeElement === document.body)) {
         e.preventDefault();
         ctl.go({ to: 'create' });
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [ctl, offline]);
+  }, [ctl, offline, store]);
 
   // from name entry: the ID card becomes the player chip (motion P2)
   useLayoutEffect(() => {
@@ -136,7 +138,7 @@ export function Home({ store }: { store: ShellStore }) {
                   <Icon name="wifi" />
                   <span className="btn__stack">
                     Local room
-                    <span className="btn__sub">Same Wi-Fi only</span>
+                    <span className="btn__sub">Same Wi-Fi · works offline</span>
                   </span>
                 </button>
                 <span className="home__poster-meta">Up to {ROOM_SLOTS} · link + QR</span>
@@ -146,7 +148,7 @@ export function Home({ store }: { store: ShellStore }) {
             {offline && (
               <p className="status status--warn">
                 <Icon name="warn" />
-                The game server can't be reached right now: Training still works.
+                The game server can't be reached right now: Training and Local room still work.
               </p>
             )}
             <div className="home__row">

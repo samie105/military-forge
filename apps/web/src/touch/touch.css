@@ -73,6 +73,28 @@
 .mf-touch .mf-rounds { opacity: var(--dial-in); }
 .mf-touch .mf-rounds__fill { stroke: var(--c-paper); }
 .mf-ctl-aim.mf-fire .dial__base { border-color: var(--c-hp); }
+/*
+ * The fire modes on the aim dial (settings.fire, §4.4; the controller sets data-fire to the mode for the
+ * gun in hand): Auto wears a tag; Pull draws its fire line (0.40 of the push: 27 px on a 68 px stick);
+ * Release a cancel ring in the centre while aiming (back inside it and lift: no shot); in Fire button
+ * mode the dial only shows while a thumb is on it (FIRE sits at its rest).
+ */
+.dial__fireline, .dial__cancel, .dial__tag { display: none; position: absolute; pointer-events: none; }
+.dial__fireline { inset: 56px; border-radius: 50%; border: 2px dashed color-mix(in srgb, var(--c-hp) 70%, transparent); }
+.mf-ctl-aim[data-fire='pull'] .dial__fireline { display: block; }
+.dial__cancel { inset: 74px; border-radius: 50%; border: 2px solid var(--c-paper); }
+.mf-ctl-aim[data-fire='release'].mf-down .dial__cancel { display: block; }
+.dial__tag { left: 50%; bottom: 20px; translate: -50% 0; padding: 1px 6px; border-radius: var(--r-xs); background: var(--c-volt); color: var(--c-volt-ink); font-size: 11px; font-weight: var(--fw-black); letter-spacing: 0.08em; text-transform: uppercase; }
+.mf-ctl-aim[data-fire='auto'] .dial__tag { display: block; }
+.mf-touch:not(.mf-touch-editing) .mf-ctl-aim[data-fire='button']:not(.mf-down) { opacity: 0; }
+/* FIRE (Fire button mode): the loudest button on the right, volt, the magazine on it */
+.dial-btn--fire { width: 84px; height: 84px; align-content: center; gap: 1px; }
+.mf-touch .mf-ctl .dial-btn--fire { background: color-mix(in srgb, var(--c-volt) 88%, transparent); border-color: var(--c-ink-950); }
+.mf-touch .mf-ctl .dial-btn--fire .ic { color: var(--c-volt-ink); width: 26px; height: 26px; }
+.dial-btn--fire .dial-btn__word { font: var(--fw-black) 13px/1 var(--f-ui, inherit); letter-spacing: 0.1em; text-transform: uppercase; color: var(--c-volt-ink); }
+.dial-btn--fire .tb__sub { color: var(--c-volt-ink); }
+.mf-ctl-fireLeft .dial-btn--fire { width: 72px; height: 72px; }
+.mf-touch .mf-ctl.mf-down .dial-btn--fire { box-shadow: 0 0 0 4px color-mix(in srgb, var(--c-volt) 40%, transparent); }
 .mf-touch [data-active-state~='no-grenades'] .dial-btn--grenade > .ic { opacity: 0.45; }
 
 /* ---- buttons the kit draws without these parts ---- */
@@ -265,3 +287,16 @@ html.mf-glass-off .mf-touch :is(.dial__base, .dial-btn, .tb, .pt-swap, .pt-pick)
 .mf-touch-editing .mf-touch-fx { display: none; }
 .mf-text-lg .mf-drill { width: 360px; }
 html.reduce-motion .mf-ctl.mf-teach::before { animation: none; opacity: 0.9; }
+
+/* The first-run fire chooser (§4.10.1): four cards over the game, a tap picks one */
+.mf-choose { position: absolute; left: 50%; top: 50%; translate: -50% -50%; width: min(700px, 100%); display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; background: var(--c-ink-900); pointer-events: auto; animation: mf-fan-in var(--m-base) var(--ease-arrive) both; z-index: 3; }
+.mf-choose__t { font: var(--fw-display) calc(26px * min(var(--text-scale, 1), 1.15))/1 var(--f-display); text-transform: uppercase; color: var(--c-text); }
+.mf-choose__opts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.mf-choose__opt { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-height: var(--touch-min); padding: 8px; border-radius: var(--r-sm); border: 2px solid var(--c-line-strong); background: color-mix(in srgb, var(--c-ink-950) 70%, transparent); color: var(--c-text); text-align: left; cursor: pointer; }
+.mf-choose__opt.is-on { border-color: var(--c-volt); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-volt) 25%, transparent); }
+.mf-choose__opt b { font-size: var(--fs-16); font-weight: var(--fw-black); text-transform: uppercase; letter-spacing: 0.04em; }
+.mf-choose__opt > span:last-child { font-size: 12px; line-height: 1.25; color: var(--c-muted); }
+.mf-choose__opt .fa { max-height: 64px; }
+.mf-choose__tag { padding: 1px 5px; border-radius: var(--r-xs); background: var(--c-volt); color: var(--c-volt-ink); font-size: 10px; font-weight: var(--fw-black); text-transform: uppercase; letter-spacing: 0.06em; }
+.mf-choose__note { margin: 0; font-size: var(--fs-14); color: var(--c-muted); }
+.mf-text-lg .mf-choose__opt > span:last-child { display: none; }
