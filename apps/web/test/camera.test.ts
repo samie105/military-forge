@@ -8,6 +8,7 @@ import type { ViewRect } from '@military-forge/protocol';
 import { Game } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
 import { Camera } from '../src/camera';
+import { TOUCH_EDGE_OVERRUN } from '../src/touch/controller';
 
 describe('camera vs AOI', () => {
   it('the visible rect lies inside the AOI rect for every aspect, zoom, reticle and position', () => {
@@ -149,6 +150,42 @@ describe('tall maps: the view leans the way you fly (maps-vertical)', () => {
 
   it('a phone in landscape leans further than a 4:3 screen: it has more of the AOI to spare', () => {
     expect(settled(-18, 812, 375).offset).toBeLessThan(settled(-18, 1200, 900).offset);
+  });
+
+  it('however far it leans, at any view and aim, the whole soldier stays on screen', () => {
+    for (const [w, h] of [[844, 390], [667, 375], [1280, 720]] as const)
+      for (const view of [0.62, 0.94, 1])
+        for (const vy of [-18, 6.5])
+          for (const aimDy of [-12, 12]) {
+            const cam = new Camera();
+            cam.resize(w, h);
+            cam.viewScale = view;
+            cam.flightVy = vy;
+            for (let i = 0; i < 240; i++) cam.follow(mid, 40, mid, 40.9 + aimDy, 1 / 60, map);
+            const { halfH } = cam.halfExtents;
+            // feet at 40, the head 1.75 above: both inside the view, with room to spare
+            expect(40 - (cam.y - halfH), `${w}×${h} view ${view} vy ${vy} aim ${aimDy}: feet`).toBeGreaterThan(0.5);
+            expect(cam.y + halfH - (40 + 1.75), `${w}×${h} view ${view} vy ${vy} aim ${aimDy}: head`).toBeGreaterThan(0.5);
+          }
+  });
+
+  it('on touch, a soldier at the map\'s very edge stays out of the dials\' columns (the view runs past the edge)', () => {
+    for (const [w, h] of [[780, 360], [844, 390], [667, 375]] as const) {
+      const at = (x: number, overrun: { x: number; down: number }) => {
+        const cam = new Camera();
+        cam.resize(w, h);
+        cam.viewScale = 0.8;
+        cam.edgeOverrun = overrun;
+        for (let i = 0; i < 120; i++) cam.follow(x, 40, x, 40.9, 1 / 60, map);
+        return cam.toScreenX(x) / w;
+      };
+      const desk = { x: 0, down: 0 };
+      // the desktop stops at the edge: the soldier slides to the screen's side
+      expect(at(map.bounds.maxX - 0.5, desk)).toBeGreaterThan(0.85);
+      // touch: left of the aim dial's column (it starts at ~74 %), right of the move dial's (ends ~26 %)
+      expect(at(map.bounds.maxX - 0.5, TOUCH_EDGE_OVERRUN), `${w}: right edge`).toBeLessThan(0.74);
+      expect(at(map.bounds.minX + 0.5, TOUCH_EDGE_OVERRUN), `${w}: left edge`).toBeGreaterThan(0.26);
+    }
   });
 
   it('look-ahead off keeps the view on the soldier', () => {

@@ -5,6 +5,7 @@
  * React screens only read the store and call these methods.
  */
 import { GAME_NAME, normalizeRoomCode } from '@military-forge/shared';
+import { MatchPhase } from '@military-forge/sim';
 import type { OnlineMode } from '../onlineMode';
 import type { LocalMode } from '../localMode';
 import { alertFromApiError } from './alerts';
@@ -51,6 +52,8 @@ export interface GameHost {
    * builds): the in-match menu offers it to the room's host, and in training.
    */
   readonly tuning?: { open(): void; close(): void; readonly isOpen: boolean; setCovered?(covered: boolean): void } | null;
+  /** another card is up that the controls card mustn't stack on (the phone's first-run fire chooser) */
+  readonly cardUp?: () => boolean;
   /** the preset Settings → Graphics → Auto picks on this device (gfxAuto.ts) */
   readonly autoGraphics?: GraphicsPreset;
 }
@@ -443,14 +446,29 @@ export class ShellController {
     this.firstTips();
   }
 
-  /** The controls card and tips the first time a player gets into a game. */
+  /** "How to play", waiting for a calm moment (firstTips) */
+  private tipsQueued = false;
+
+  /**
+   * The controls card the first time a player gets into a game: queued, never over a running match
+   * (mobile audit P0-3). It opens at the next calm moment (releaseTips): Home, or a room's lobby and
+   * warm-up, with nothing else open and no other card up (the phone's fire chooser).
+   */
   private firstTips(): void {
-    if (!flagged(TIPS_SEEN_KEY, () => localStorage)) this.set({ tips: true });
+    if (!flagged(TIPS_SEEN_KEY, () => localStorage)) this.tipsQueued = true;
+    this.releaseTips();
+  }
+
+  /** Every frame (shell.update) and on queueing: opens the queued controls card when it's calm. */
+  releaseTips(): void {
+    if (!this.tipsQueued || !tipsCalm(this.store.getState()) || this.host.cardUp?.()) return;
+    this.tipsQueued = false;
+    this.set({ tips: true, tipsAsked: false });
   }
 
   showTips(): void {
     this.closeOverlay();
-    this.set({ tips: true });
+    this.set({ tips: true, tipsAsked: true });
   }
 
   closeTips(): void {
@@ -678,4 +696,14 @@ export class ShellController {
     if (screen.name === 'room') this.host.online?.leave();
     this.go(intent);
   }
+}
+
+/**
+ * A moment a card may open in (mobile audit P0-3): Home after the title, or a room's lobby and warm-up
+ * (no countdown, no clock); never in training's match or First flight, never over another overlay.
+ */
+export function tipsCalm(s: ShellState): boolean {
+  if (s.overlay !== null || s.route !== null || s.tips || s.title !== 'off') return false;
+  if (s.screen.name === 'home') return true;
+  return s.screen.name === 'room' && (s.match === null || s.match.phase === MatchPhase.Waiting);
 }

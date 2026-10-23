@@ -203,6 +203,8 @@ export interface ShellState {
   mapEvent: MapEventBanner | null;
   /** the controls card and tips (first match, or Menu → Controls & tips) */
   tips: boolean;
+  /** the card was asked for (the menu's Controls): it may open over a running match; queued ones never do */
+  tipsAsked?: boolean;
   /** the Settings section open (Home's "Change keys" opens Controls) */
   settingsTab: SettingsTab;
   /**

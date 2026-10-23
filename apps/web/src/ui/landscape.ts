@@ -105,6 +105,11 @@ interface LockableOrientation {
   lock?: (o: string) => Promise<void>;
 }
 
+/** Launched from the home screen as an installed app in full screen: no browser bars to hide. */
+export function installedFullscreen(): boolean {
+  return matches('(display-mode: fullscreen)') || matches('(display-mode: standalone)') || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+}
+
 /** Full screen, then the landscape lock; whatever is refused is fine (the page turns instead). */
 export async function enterLandscape(doc: Document = document): Promise<void> {
   const el = doc.documentElement as HTMLElement & { requestFullscreen?: HTMLElement['requestFullscreen'] };
@@ -145,11 +150,17 @@ export function startLandscape(): void {
   update();
   window.addEventListener('resize', update);
   for (const q of [UPRIGHT_PHONE_QUERY, LANDSCAPE_PHONE_QUERY]) matchMedia(q).addEventListener?.('change', update);
-  // the first tap on a phone (Play, Continue, a dial): full screen and the lock need a user's gesture
-  const first = () => {
-    if (!isPhoneShape()) return;
-    window.removeEventListener('pointerup', first, true);
+  // a tap on a phone (Play, Join, Continue, a dial): full screen and the lock need a user's gesture. Not
+  // once only: full screen lost (a swipe from an edge, the keyboard, another page such as the Armory),
+  // the next tap takes it back, so the browser's bars don't come back to stay (the owner, 23 Oct)
+  let askedAt = -Infinity;
+  const tap = () => {
+    if (!isPhoneShape() || document.fullscreenElement || installedFullscreen()) return;
+    // at most once a second (a refusal, or a browser without it, shouldn't be asked on every tap)
+    const now = performance.now();
+    if (now - askedAt < 1000) return;
+    askedAt = now;
     void enterLandscape();
   };
-  window.addEventListener('pointerup', first, true);
+  window.addEventListener('pointerup', tap, true);
 }

@@ -10,4 +10,4 @@ html.mf-rotated { --safe-t: max(0px, var(--sa-t)); --safe-r: max(0px, var(--sa-r
 html.mf-rotated .screen--phone { --safe-t: max(10px, var(--sa-t)); --safe-l: max(var(--phone-notch), var(--sa-l)); --safe-r: max(var(--phone-notch), var(--sa-r)); --safe-b: max(21px, var(--sa-b)); }
 
 /* the turn itself (index.html has it too, for the loading screen before the app's scripts arrive) */
-html.mf-rotated body { position: fixed; top: 0; left: 0; width: var(--app-w, 100vh); height: var(--app-h, 100vw); transform-origin: 0 0; transform: translateX(var(--app-h, 100vw)) rotate(90deg); }
+html.mf-rotated body { position: fixed; top: 0; left: 0; width: var(--app-w, 100dvh); height: var(--app-h, 100dvw); transform-origin: 0 0; transform: translateX(var(--app-h, 100dvw)) rotate(90deg); }

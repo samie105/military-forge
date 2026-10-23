@@ -60,7 +60,7 @@ import { applyTeamPalette, teamColour } from './teams/palette';
 import { TeamStrip } from './teams/hudStrip';
 import { posterUp } from './presentation/state';
 import { countFrame, framesPerSecond, recordNet } from './stats';
-import { getTouchSettings, isTouchDevice, mountTouch, onTouchAction, onTouchHintsReset, touchActive, touchControlRect, touchDrillRunning, touchHintsDoneBy, touchHintsPossible, touchHintsSeen, type ControlId } from './touch';
+import { getTouchSettings, isTouchDevice, mountTouch, onTouchAction, onTouchHintsReset, setTouchMatchLive, touchActive, touchChoosing, touchControlRect, touchDrillRunning, touchHintsDoneBy, touchHintsPossible, touchHintsSeen, type ControlId } from './touch';
 import type { HintId, TouchHintId } from './tour/hints';
 import { applyPadSettings, currentDevice, isPadCode, mountGamepad, onInputDevice } from './gamepad';
 import { mountAdClicks } from './ads';
@@ -79,6 +79,7 @@ import { homeStopsWanted, runHomeStops } from './tour/homeStops';
 import { HintRunner } from './tour/hintsRun';
 import type { Device } from './tour/log';
 import { provideTourMemory } from './tour/live';
+import { startPwa } from './pwa';
 import { mountTourReadout } from './tour/readout';
 import { BackdropPacer } from './ui/backdrop';
 import { releaseLanding } from './ui/landing';
@@ -365,6 +366,8 @@ const host: GameHost = {
       camera.recentre();
     }
   },
+  // the phone's first-run fire chooser or a spotlight pass (Home's stops): the controls card waits (no stacking, P0-3)
+  cardUp: () => touchChoosing() || !!document.querySelector('.mf-spot:not([hidden]):not(.is-leaving)'),
   get tour() {
     return flight
       ? {
@@ -610,6 +613,8 @@ if (loadoutSync) document.addEventListener('visibilitychange', () => document.vi
 // device only; ?tourlog shows them on the page
 if (appMode) {
   tourMemory = startTourMemory({ store: shell.store, storage: storageOrNull(), invited: location.pathname.startsWith('/r/') });
+  // the installable app: the install prompt caught, the worker registered, updates on Home only (src/pwa)
+  startPwa(shell.store, storageOrNull());
   provideTourMemory(tourMemory); // Home's Next orders read the facts live
   tourMemory.setDevice(isTouchDevice() ? 'touch' : 'keyboard');
   onInputDevice((d) => tourMemory?.setDevice(d.kind === 'pad' ? 'pad' : d.kind === 'touch' ? 'touch' : 'keyboard'));
@@ -630,6 +635,13 @@ loadoutSync?.onLook((look) => {
   loadouts3d.setLocal(look);
   if (mode instanceof OnlineMode) mode.setLook(cosmeticLoadoutWireIds(look));
 });
+
+// no card over a running match (mobile audit P0-3): the phone's fire chooser waits out the countdown and the clock
+if (appMode)
+  shell.store.subscribe((s) => {
+    const phase = s.match?.phase;
+    setTouchMatchLive((s.screen.name === 'room' || s.screen.name === 'training') && (phase === MatchPhase.Countdown || phase === MatchPhase.InProgress));
+  });
 
 // ---- the onboarding tour (docs/design/onboarding-research.md §3): the Briefing, then First flight
 
@@ -762,7 +774,7 @@ if (appMode && tourMemory) {
   let stopStops: (() => void) | null = null;
   let stopsTimer = 0;
   shell.store.subscribe((s) => {
-    const calm = s.screen.name === 'home' && s.title === 'off' && s.route === null && s.overlay === null;
+    const calm = s.screen.name === 'home' && s.title === 'off' && s.route === null && s.overlay === null && !s.tips;
     if (!calm) {
       window.clearTimeout(stopsTimer);
       stopsTimer = 0;

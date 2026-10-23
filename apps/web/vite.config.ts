@@ -6,6 +6,8 @@ import { defineConfig, type Plugin, type ProxyOptions } from 'vite';
 import { GAME_NAME } from '../../packages/shared/src/brand';
 // the crawl and install files: /manifest.webmanifest, /robots.txt, /sitemap.xml (docs/seo.md)
 import { seo } from './seo';
+// the installable app's service worker, /sw.js (src/pwa registers it)
+import { pwa } from './pwa';
 
 /**
  * The app reaches the API at /api and rooms at /ws/<code> on its own origin (the playtest proxy,
@@ -70,7 +72,7 @@ const titleInfo: Plugin = {
 };
 
 export default defineConfig({
-  plugins: [brand, titleInfo, seo(GAME_NAME)],
+  plugins: [brand, titleInfo, seo(GAME_NAME), pwa()],
   server: { port: 5173, proxy },
   preview: { proxy },
   build: {

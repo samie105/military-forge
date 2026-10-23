@@ -9,7 +9,7 @@
 import { useEffect, useState } from 'react';
 import { useStore } from 'zustand';
 import { getTouchSettings, onTouchChange, openTouchEditor, requestDrill, resetTouchHints, resetTouchLayout, setTouchPreset, setTouchSettings, type TouchSettings } from '../../../touch';
-import { ASSIST_HELP, ASSIST_NAMES, DEFAULT_TOUCH_SETTINGS, PRESET_HELP, PRESET_IDS, PRESET_NAMES, type PresetId } from '../../../touch/settings';
+import { ASSIST_HELP, ASSIST_NAMES, DEFAULT_TOUCH_SETTINGS, autoView, PRESET_HELP, PRESET_IDS, PRESET_NAMES, type PresetId } from '../../../touch/settings';
 import { ASSIST_LEVELS, type AssistLevel } from '../../../input/assist';
 import { canVibrate } from '../../../touch/platform';
 import { Icon } from '../../../ui/Icon';
@@ -77,6 +77,9 @@ function useTouchSettings(): TouchSettings {
 function Touch() {
   const ctl = useCtl();
   const t = useTouchSettings();
+  // the view: sized to the screen until the player sets it (touch/settings.ts autoView)
+  const view = t.viewAuto ? autoView(typeof window === 'undefined' ? 780 : Math.max(window.innerWidth, window.innerHeight)) : t.view;
+  const viewWord = `${view <= 0.66 ? 'Close' : view >= 0.9 ? 'Wide' : 'Mid'}${t.viewAuto ? ' · auto' : ''}`;
   const set = (patch: Partial<TouchSettings>) => setTouchSettings(patch);
   const [hintsReset, setHintsReset] = useState(false);
   // "Learn the controls": in a game, at once; from the menus, in Training
@@ -126,14 +129,6 @@ function Touch() {
       <Row i={1} label="Touch controls" desc="Auto: on phones and tablets, or once you touch the screen.">
         <Seg value={t.mode} label="Touch controls" options={[['auto', 'Auto'], ['on', 'On'], ['off', 'Off']]} onChange={(mode) => set({ mode })} />
       </Row>
-      {/* controls spec §4.2 (item 7): the presets; moving a control in the editor makes it "My layout" there */}
-      <div className="pm-set pm-set--block m-p3">
-        <span className="pm-set__text">
-          <b>Preset</b>
-          <span>{PRESET_HELP[t.preset]}</span>
-        </span>
-        <Seg value={t.preset} label="Preset" options={PRESET_IDS.map((id) => [id, id === 'oneThumb' ? 'One-thumb' : PRESET_NAMES[id]] as [PresetId, string])} onChange={(preset) => setTouchPreset(preset)} />
-      </div>
       {/* the owner, 23 Oct: "a way to fade the buttons" (touch/fade.ts); the pause menu has the slider too */}
       <Row i={1} label="Button fade" desc="How faded the buttons get. HP, fuel and ammo never fade.">
         <div className="pm-set__slider">
@@ -146,21 +141,6 @@ function Touch() {
       </Row>
       <div className="pm-set pm-set--block m-p3">
         <span className="pm-set__text">
-          <b>Fire</b>
-          <span>{FIRE_MODE_TEXT[t.fire].line}</span>
-        </span>
-        <FirePicker value={t.fire} onChange={(fire) => set({ fire, fireChosen: true })} compact />
-      </div>
-      <Row i={2} label="Precision weapons fire on release" desc="Auto and Pull: snipers, DMRs, charged guns and launchers fire as you lift.">
-        <Switch on={t.precisionRelease} onChange={(precisionRelease) => set({ precisionRelease })} label="Precision weapons fire on release" />
-      </Row>
-      {t.fire === 'button' && (
-        <Row i={2} label="A second FIRE on the left" desc="Top left, for your left index finger.">
-          <Switch on={t.leftFire} onChange={(leftFire) => set({ leftFire })} label="A second FIRE on the left" />
-        </Row>
-      )}
-      <div className="pm-set pm-set--block m-p3">
-        <span className="pm-set__text">
           <b>Aim assist</b>
           <span>{ASSIST_HELP[t.assist]}</span>
         </span>
@@ -169,36 +149,16 @@ function Touch() {
       <Row i={4} label="Left-handed" desc="Mirrors the whole layout.">
         <Switch on={t.handed === 'left'} onChange={(on) => set({ handed: on ? 'left' : 'right' })} label="Left-handed" />
       </Row>
-      <Row i={4} label="Push up to jet" desc="The move stick flies. Off in Claw: JET is a button.">
-        <Switch on={t.stickJet} onChange={(stickJet) => set({ stickJet })} label="Push up to jet" />
-      </Row>
-      <Row i={4} label="Extra finger fires" desc="A second finger on the right fires while it's down.">
-        <Switch on={t.tapFire} onChange={(tapFire) => set({ tapFire })} label="Extra finger fires" />
-      </Row>
       {/* iOS Safari can't buzz: no switches that do nothing (§4.8) */}
       {canVibrate() && (
         <Row i={5} label="Vibrate when hit">
           <Switch on={t.vibrate} onChange={(vibrate) => set({ vibrate })} label="Vibrate when hit" />
         </Row>
       )}
-      <Row i={6} label="Flick to dash" desc="Flick the move stick and lift.">
-        <Switch on={t.swipeDash} onChange={(swipeDash) => set({ swipeDash })} label="Flick to dash" />
-      </Row>
-      <Row i={6} label="Keep aiming after a button" desc="Back on the aim stick soon after a button: your aim and fire carry on.">
-        <Switch on={t.keepAim} onChange={(keepAim) => set({ keepAim })} label="Keep aiming after a button" />
-      </Row>
-      <Row i={6} label="Button gestures" desc="Swipe the grenade to change it, hold the gun pill for a radial, swipe the dash. Off: plain taps.">
-        <Switch on={t.gestures} onChange={(gestures) => set({ gestures })} label="Button gestures" />
-      </Row>
-      {canVibrate() && (
-        <Row i={7} label="Button haptics" desc="A short buzz on a throw, a swap, a dash swipe.">
-          <Switch on={t.haptics} onChange={(haptics) => set({ haptics })} label="Button haptics" />
-        </Row>
-      )}
       <Row i={8} label="View distance" desc="Close: soldiers big and clear. Wide: more of the map. A pinch sets it too.">
         <div className="pm-set__slider">
-          <Slider value={(t.view - 0.5) / 0.5} onChange={(v) => set({ view: Math.round((0.5 + v * 0.5) * 100) / 100 })} label="View distance" valueText={t.view <= 0.66 ? 'Close' : t.view >= 0.9 ? 'Wide' : 'Mid'} min={0} max={100} />
-          <output>{t.view <= 0.66 ? 'Close' : t.view >= 0.9 ? 'Wide' : 'Mid'}</output>
+          <Slider value={(view - 0.5) / 0.5} onChange={(v) => set({ view: Math.round((0.5 + v * 0.5) * 100) / 100, viewAuto: false })} label="View distance" valueText={viewWord} min={0} max={100} />
+          <output>{viewWord}</output>
         </div>
       </Row>
       <Row i={8} label="Pinch to zoom" desc="Two fingers on one side: closer or wider. Two-finger double tap: recentre.">
@@ -213,6 +173,57 @@ function Touch() {
           <output className="num">{pct(t.shake)}</output>
         </div>
       </Row>
+      {/* the mobile audit (P0-5, P2-7): a stranger sees the few settings that matter; the fire modes,
+          the presets and the expert switches wait under Advanced (Auto fire and Classic are the defaults) */}
+      <details className="pm-adv m-p3">
+        <summary className="pm-adv__sum">
+          <b>Advanced</b>
+          <span>Fire modes, layouts and gestures</span>
+        </summary>
+        <div className="pm-set pm-set--block m-p3">
+          <span className="pm-set__text">
+            <b>Fire</b>
+            <span>{FIRE_MODE_TEXT[t.fire].line}</span>
+          </span>
+          <FirePicker value={t.fire} onChange={(fire) => set({ fire, fireChosen: true })} compact />
+        </div>
+        <Row i={2} label="Precision weapons fire on release" desc="Auto and Pull: snipers, DMRs, charged guns and launchers fire as you lift.">
+          <Switch on={t.precisionRelease} onChange={(precisionRelease) => set({ precisionRelease })} label="Precision weapons fire on release" />
+        </Row>
+        {t.fire === 'button' && (
+          <Row i={2} label="A second FIRE on the left" desc="Top left, for your left index finger.">
+            <Switch on={t.leftFire} onChange={(leftFire) => set({ leftFire })} label="A second FIRE on the left" />
+          </Row>
+        )}
+        {/* controls spec §4.2 (item 7): the presets; moving a control in the editor makes it "My layout" there */}
+        <div className="pm-set pm-set--block m-p3">
+          <span className="pm-set__text">
+            <b>Preset</b>
+            <span>{PRESET_HELP[t.preset]}</span>
+          </span>
+          <Seg value={t.preset} label="Preset" options={PRESET_IDS.map((id) => [id, id === 'oneThumb' ? 'One-thumb' : PRESET_NAMES[id]] as [PresetId, string])} onChange={(preset) => setTouchPreset(preset)} />
+        </div>
+        <Row i={4} label="Push up to jet" desc="The move stick flies. Off in Claw: JET is a button.">
+          <Switch on={t.stickJet} onChange={(stickJet) => set({ stickJet })} label="Push up to jet" />
+        </Row>
+        <Row i={4} label="Extra finger fires" desc="A second finger on the right fires while it's down.">
+          <Switch on={t.tapFire} onChange={(tapFire) => set({ tapFire })} label="Extra finger fires" />
+        </Row>
+        <Row i={6} label="Flick to dash" desc="Flick the move stick and lift.">
+          <Switch on={t.swipeDash} onChange={(swipeDash) => set({ swipeDash })} label="Flick to dash" />
+        </Row>
+        <Row i={6} label="Keep aiming after a button" desc="Back on the aim stick soon after a button: your aim and fire carry on.">
+          <Switch on={t.keepAim} onChange={(keepAim) => set({ keepAim })} label="Keep aiming after a button" />
+        </Row>
+        <Row i={6} label="Button gestures" desc="Swipe the grenade to change it, hold the gun pill for a radial, swipe the dash. Off: plain taps.">
+          <Switch on={t.gestures} onChange={(gestures) => set({ gestures })} label="Button gestures" />
+        </Row>
+        {canVibrate() && (
+          <Row i={7} label="Button haptics" desc="A short buzz on a throw, a swap, a dash swipe.">
+            <Switch on={t.haptics} onChange={(haptics) => set({ haptics })} label="Button haptics" />
+          </Row>
+        )}
+      </details>
     </>
   );
 }

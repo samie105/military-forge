@@ -98,6 +98,7 @@ export function mountShell(parent: HTMLElement = document.body, options: ShellOp
     store,
     controller,
     update(source) {
+      controller?.releaseTips(); // the queued controls card, at a calm moment (P0-3)
       const state = store.getState();
       const online = host?.online ?? null;
       local = host ? host.local : (source ?? null);

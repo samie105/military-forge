@@ -61,13 +61,15 @@ export function VoiceHud({ shell, chat = voiceChat }: { shell: ShellStore; chat?
     const rows = document.querySelectorAll<HTMLElement>('#hud .sb tr[data-pid]');
     for (const r of rows) r.classList.toggle('vc-talking', Number(r.dataset.pid) in speaking);
   }, [speaking]);
+  // someone to talk to: another human in the room (bots don't listen)
+  const humans = useStoreSel(shell, (s) => (s.lobby?.players ?? []).filter((p) => !p.isBot && !p.you).length);
   if (!active || screen !== 'room') return null;
   const inPlay = phase === null || IN_PLAY.has(phase);
   return (
     <div className={`mf-fit ${phone ? 'mf-fit--phone ' : ''}kit-v2 mf-voice`}>
       <section className={`screen screen--game vc-screen${phone ? ' screen--phone vc-screen--phone' : ''}`} data-screen="voice" aria-label="Voice chat">
         <TalkingStrip chat={chat} phone={phone} />
-        {phone ? overlay === null && <PhoneMic chat={chat} /> : inPlay && overlay === null && <PttPlate chat={chat} />}
+        {phone ? overlay === null && humans > 0 && <PhoneMic chat={chat} /> : inPlay && overlay === null && <PttPlate chat={chat} />}
       </section>
     </div>
   );
@@ -137,46 +139,91 @@ function PttPlate({ chat }: { chat: VoiceChat }) {
 }
 
 /** Phone: hold the mic to talk; slide it up to lock it on (tap again to stop). */
+/**
+ * The phone's push-to-talk (the owner, 23 Oct: "see where the mic is"): a mic button on the top edge
+ * beside the menu button, clear of both thumbs, with a word under it for its state. Hold to talk; slide
+ * down to lock it on (a tap stops). Blocked or missing, it stays and says so (a tap says how to fix it).
+ */
+/** A dialog, an alert or a coach card is on screen (drawn, not just in the page): the mic steps aside. */
+export function dialogUp(doc: Document = document): boolean {
+  for (const el of doc.querySelectorAll<HTMLElement>("[role='dialog'], [role='alertdialog'], .mf-spot")) {
+    if (el.closest('.vc-mic') || !el.getClientRects().length) continue;
+    const cs = getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) === 0) continue;
+    return true;
+  }
+  return false;
+}
+
+/** dialogUp, looked at four times a second (cards come and go without telling the voice layer). */
+function useDialogUp(): boolean {
+  const [up, setUp] = useState(false);
+  useEffect(() => {
+    const look = () => setUp(dialogUp());
+    look();
+    const t = window.setInterval(look, 250);
+    return () => window.clearInterval(t);
+  }, []);
+  return up;
+}
+
 export function PhoneMic({ chat }: { chat: VoiceChat }) {
   const talking = useVoice((s) => s.talking, chat);
   const locked = useVoice((s) => s.locked, chat);
   const mic = useVoice((s) => s.mic, chat);
   const start = useRef<{ y: number; id: number } | null>(null);
-  const [lifting, setLifting] = useState(false);
-  if (mic === 'denied' || mic === 'unavailable') return null;
+  const [sliding, setSliding] = useState(false);
+  const [help, setHelp] = useState(false);
+  const blocked = mic === 'denied' || mic === 'unavailable';
+  // never over a card: a tap meant for its button can't land on the mic (the mobile audit, P0-4)
+  const covered = useDialogUp();
+  useEffect(() => {
+    if (!help) return undefined;
+    const t = window.setTimeout(() => setHelp(false), 4000);
+    return () => window.clearTimeout(t);
+  }, [help]);
   const down = (e: ReactPointerEvent) => {
     e.preventDefault();
+    if (blocked) {
+      setHelp(true);
+      return;
+    }
     e.currentTarget.setPointerCapture(e.pointerId);
     start.current = { y: e.clientY, id: e.pointerId };
     chat.touchDown();
   };
   const move = (e: ReactPointerEvent) => {
     if (!start.current || locked) return;
-    const up = start.current.y - e.clientY;
-    setLifting(up > 16);
-    if (up > 48) {
+    const dy = e.clientY - start.current.y;
+    setSliding(dy > 16);
+    if (dy > 48) {
       start.current = null;
-      setLifting(false);
+      setSliding(false);
       chat.lock();
     }
   };
   const up = () => {
+    if (blocked) return;
     start.current = null;
-    setLifting(false);
+    setSliding(false);
     chat.touchUp();
   };
+  if (covered && !talking) return null;
+  const state = blocked ? 'blocked' : locked ? 'locked' : talking ? 'talking' : mic === 'asking' ? 'asking' : 'idle';
+  const word = { blocked: mic === 'denied' ? 'Mic blocked' : 'No mic', locked: 'On · tap to stop', talking: 'Talking', asking: 'Allow the mic', idle: 'Talk' }[state];
+  const label = {
+    blocked: mic === 'denied' ? 'Microphone blocked: allow it in the browser\'s site settings' : 'No microphone found',
+    locked: 'Talking, locked on: tap to stop',
+    talking: 'Talking: let go to stop',
+    asking: 'Allow the microphone to talk',
+    idle: 'Hold to talk; slide down to lock it on',
+  }[state];
   return (
-    <div className={`vc-mic${talking ? ' is-on' : ''}${locked ? ' is-locked' : ''}${lifting ? ' is-lifting' : ''}`}>
-      {(talking || lifting) && !locked && (
-        <span className="vc-mic__lock" aria-hidden="true">
-          <Icon name="lock" size="sm" />
-          <Icon name="chev-up" size="sm" />
-        </span>
-      )}
+    <div className={`vc-mic is-${state}${sliding ? ' is-sliding' : ''}`}>
       <button
         type="button"
         className="vc-mic__btn"
-        aria-label={locked ? 'Talking, locked on: tap to stop' : 'Hold to talk; slide up to lock'}
+        aria-label={label}
         aria-pressed={talking}
         onPointerDown={down}
         onPointerMove={move}
@@ -185,8 +232,21 @@ export function PhoneMic({ chat }: { chat: VoiceChat }) {
         onContextMenu={(e) => e.preventDefault()}
       >
         <Icon name="sx-mic" />
+        <span className="vc-mic__word" aria-hidden="true">
+          {word}
+        </span>
       </button>
-      {(talking || locked) && <span className="vc-mic__label">{locked ? 'Locked on · tap to stop' : 'Talking · nearby'}</span>}
+      {(talking || sliding) && !locked && (
+        <span className="vc-mic__lock" aria-hidden="true">
+          <Icon name="chev-down" size="sm" />
+          <Icon name="lock" size="sm" />
+        </span>
+      )}
+      {help && (
+        <span className="vc-mic__help" role="status">
+          {mic === 'denied' ? 'The browser blocked the mic. Allow it in the site settings (the icon left of the address), then come back.' : 'No microphone on this device.'}
+        </span>
+      )}
     </div>
   );
 }

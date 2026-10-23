@@ -372,3 +372,12 @@ html.reduce-motion .pm-turn__card .ic { animation: none; }
 /* First flight: Restart it, or Skip training, side by side under Resume */
 .pm-pause__tour { display: flex; gap: 8px; }
 .pm-pause__tour .btn { flex: 1; min-height: var(--touch-min, 48px); }
+
+/* Settings › Touch › Advanced (the mobile audit, P0-5): folded until asked for */
+.pm-adv { border-top: 1px solid var(--c-line); margin-top: 6px; }
+.pm-adv__sum { display: flex; flex-direction: column; justify-content: center; gap: 2px; min-height: var(--touch-min, 48px); padding: 6px 4px; cursor: pointer; list-style: none; }
+.pm-adv__sum::-webkit-details-marker { display: none; }
+.pm-adv__sum b { display: flex; align-items: center; gap: 8px; }
+.pm-adv__sum b::after { content: '›'; font-size: 20px; line-height: 1; transition: rotate var(--m-fast) var(--ease-settle); }
+.pm-adv[open] .pm-adv__sum b::after { rotate: 90deg; }
+.pm-adv__sum span { color: var(--c-muted); font-size: var(--fs-14); }

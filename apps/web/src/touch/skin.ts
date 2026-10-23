@@ -19,6 +19,8 @@ import { weaponUnderfoot } from '../weaponItems';
 import type { ControlId } from './layout';
 
 const ic = (name: string, cls = '') => `<svg class="ic${cls ? ` ${cls}` : ''}" aria-hidden="true"><use href="#icon-${name}"/></svg>`;
+/** A word under a button (the owner, 23 Oct: every control says what it is). */
+const cap = (word: string) => `<b class="mf-cap" aria-hidden="true">${word}</b>`;
 const ring = (r: number, cls = 'tb__ring') => `<svg class="${cls}" viewBox="0 0 60 60" aria-hidden="true"><circle cx="30" cy="30" r="${r}" pathLength="100"/></svg>`;
 const arc = (cls: string, state = '') => `<circle class="${cls}" cx="84" cy="84" r="80" stroke-width="8" pathLength="100"${state ? ` data-state="${state}"` : ''}/>`;
 
@@ -64,7 +66,7 @@ export function skinHtml(id: ControlId): string {
       return `<div class="mf-skin dial dial--aim">
   <svg class="dial__arcs" viewBox="0 0 168 168" aria-hidden="true"><g class="mf-rounds" data-state="gun"></g>${arc('dial__throw', 'grenade-aim')}</svg>
   <span class="dial__base"></span><span class="dial__groove"></span>
-  <span class="dial__fireline" aria-hidden="true"></span><span class="dial__cancel" aria-hidden="true"></span><span class="dial__tag" aria-hidden="true">Auto</span>
+  <span class="dial__fireline" aria-hidden="true"></span><span class="dial__cancel" aria-hidden="true"></span><span class="dial__tag" aria-hidden="true">Aim to shoot</span>
   <span class="dial__knob dial__knob--aim mf-knob">${ic('target', 'ic--sm')}</span>
   <span class="dial__lbl dial__lbl--ammo" data-state="gun" data-tour="ammo"><b class="num" data-bind="player.slot.0.mag"></b><span>/<span data-bind="player.slot.0.magSize"></span></span></span>
   <span class="dial__mode" data-state="grenade-aim">Aim the arc</span>
@@ -73,11 +75,11 @@ export function skinHtml(id: ControlId): string {
       // the riot shield's HP rides the button as a ring (--shield-hp), with its number, while one is carried
       return `<div class="mf-skin dial-btn dial-btn--shield">${ic('shield')}<span class="mf-shield-hp" data-state="shield">${ring(27)}</span><b class="num tb__sub" data-state="shield" data-bind="player.shield.hp"></b></div>`;
     case 'reload':
-      return `<div class="mf-skin dial-btn dial-btn--reload">${ic('reload')}<b class="num tb__sub" data-state="gun" data-bind="player.slot.0.mag"></b><span data-state="reloading">${ring(27)}</span></div>`;
+      return `<div class="mf-skin dial-btn dial-btn--reload">${ic('reload')}<b class="num tb__sub" data-state="gun" data-bind="player.slot.0.mag"></b><span data-state="reloading">${ring(27)}</span>${cap('Reload')}</div>`;
     case 'dash':
-      return `<div class="mf-skin dial-btn dial-btn--dash" data-tour="dash">${ic('dash')}${ring(27)}</div>`;
+      return `<div class="mf-skin dial-btn dial-btn--dash" data-tour="dash">${ic('dash')}${ring(27)}${cap('Dash')}</div>`;
     case 'grenade':
-      return `<div class="mf-skin dial-btn dial-btn--grenade" data-tour="belt"><svg class="ic ic--fill ic--sm" aria-hidden="true"><use data-bind-attr="href: touch.grenade.icon"/></svg><b class="num tb__sub" data-bind="touch.grenade.count"></b><span class="mf-quick" aria-hidden="true">Quick</span></div>`;
+      return `<div class="mf-skin dial-btn dial-btn--grenade" data-tour="belt"><svg class="ic ic--fill ic--sm" aria-hidden="true"><use data-bind-attr="href: touch.grenade.icon"/></svg><b class="num tb__sub" data-bind="touch.grenade.count"></b><span class="mf-quick" aria-hidden="true">Quick</span>${cap('Grenade')}</div>`;
     case 'melee':
       return `<div class="mf-skin dial-btn dial-btn--melee">${ic('melee')}</div>`;
     case 'cycleGrenade':
@@ -93,7 +95,7 @@ export function skinHtml(id: ControlId): string {
       return `<div class="mf-skin pt-swap">
   <span class="pt-swap__held"><svg class="ic--kf mf-gun" aria-hidden="true" data-state="held-icon"><use data-bind-attr="href: player.slot.0.icon"/></svg><b data-bind="player.slot.0.name"></b></span>
   <span class="pt-swap__back" data-state="slung">${ic('backpack', 'ic--sm')}<svg class="ic--kf mf-gun" aria-hidden="true" data-state="slung-icon"><use data-bind-attr="href: player.slot.1.icon"/></svg></span>
-  <span class="pt-swap__eq" data-state="swap">${ring(25, '')}</span>
+  <span class="pt-swap__eq" data-state="swap">${ring(25, '')}</span>${cap('Swap')}
 </div>`;
     case 'fire':
     case 'fireLeft':
@@ -101,9 +103,9 @@ export function skinHtml(id: ControlId): string {
       return `<div class="mf-skin dial-btn dial-btn--fire">${ic('target')}<b class="dial-btn__word">Fire</b><b class="num tb__sub" data-state="gun" data-bind="player.slot.0.mag"></b></div>`;
     case 'jet':
       // Claw's JET (left index finger): the fuel left rides it (a vital: it never fades)
-      return `<div class="mf-skin dial-btn dial-btn--jet">${ic('jet')}<b class="num tb__sub" data-bind="player.fuel" data-bind-show="player.fuel"></b></div>`;
+      return `<div class="mf-skin dial-btn dial-btn--jet">${ic('jet')}<b class="num tb__sub" data-bind="player.fuel" data-bind-show="player.fuel"></b>${cap('Jet')}</div>`;
     case 'take':
-      return `<div class="mf-skin pt-pick">${ic('swap', 'ic--sm')}<span data-bind="touch.take.verb"></span><svg class="ic--kf" aria-hidden="true"><use data-bind-attr="href: touch.take.icon"/></svg><b data-bind="touch.take.name"></b></div>`;
+      return `<div class="mf-skin pt-pick">${ic('swap', 'ic--sm')}<span data-bind="touch.take.verb"></span><svg class="ic--kf" aria-hidden="true"><use data-bind-attr="href: touch.take.icon"/></svg><b data-bind="touch.take.name"></b>${cap('Take')}</div>`;
   }
 }
 

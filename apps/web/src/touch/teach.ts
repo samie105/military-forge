@@ -131,17 +131,20 @@ export const FIRE_HOW: Readonly<Record<FireMode, string>> = {
 /** What the drill's words and pointer depend on: the fire mode, whether the stick jets, the layout. */
 export type DrillContext = Pick<TouchSettings, 'fire' | 'stickJet' | 'preset'>;
 
+/** The JET button is on the HUD: Classic and Claw, or any layout whose stick doesn't jet (controller.modeClass). */
+const jetShown = (c: DrillContext): boolean => c.preset !== 'oneThumb' || !c.stickJet;
+
 /** A step's words for this layout: the fire step per fire mode (One-thumb: automatic), the jet step on JET when the stick doesn't jet. */
 export function drillHow(s: Pick<DrillStep, 'id' | 'how'>, c: DrillContext): string {
   if (s.id === 'fire') return c.preset === 'oneThumb' ? 'Aim and fire are automatic: face a target and you shoot. Drag on the right half to aim yourself.' : FIRE_HOW[c.fire];
-  if (s.id === 'jet' && !c.stickJet) return 'Hold JET, top left, to fire the jetpack. Its number is the fuel left: it refills on the ground.';
+  if (s.id === 'jet' && jetShown(c)) return c.stickJet ? 'Hold JET (or push the left stick up) to fly. The number is the fuel left: it refills on the ground.' : 'Hold JET to fly. The number is the fuel left: it refills on the ground.';
   return s.how;
 }
 
 /** The control a step points at for this layout. */
 export function drillControl(s: Pick<DrillStep, 'id' | 'control'>, c: DrillContext): ControlId | null {
   if (s.id === 'fire' && c.fire === 'button' && c.preset !== 'oneThumb') return 'fire';
-  if (s.id === 'jet' && !c.stickJet) return 'jet';
+  if (s.id === 'jet' && jetShown(c)) return 'jet';
   return s.control;
 }
 

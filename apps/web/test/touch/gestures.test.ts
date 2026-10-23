@@ -92,8 +92,8 @@ describe('the camera', () => {
 
 describe('settings', () => {
   it('v3\'s defaults: gestures, haptics, pinch and look-ahead on; Auto fire (the spec\'s default); full shake', () => {
-    expect(DEFAULT_TOUCH_SETTINGS).toMatchObject({ gestures: true, fire: 'auto', fireChosen: false, precisionRelease: true, leftFire: false, haptics: true, lookAhead: true, pinchZoom: true, shake: 1, view: 0.62 });
-    expect(sanitizeSettings({ view: 0.2 }).view).toBe(0.5);
+    expect(DEFAULT_TOUCH_SETTINGS).toMatchObject({ gestures: true, fire: 'auto', fireChosen: false, precisionRelease: true, leftFire: false, haptics: true, lookAhead: true, pinchZoom: true, shake: 1, view: 0.8, viewAuto: true });
+    expect(sanitizeSettings({ view: 0.2 }).view).toBe(0.7);
     expect(sanitizeSettings({ view: 2 }).view).toBe(1);
     expect(sanitizeSettings({ gestures: false, shake: 3 })).toMatchObject({ gestures: false, shake: 1 });
     // the old names: 'hold' is Pull; 'hold' with the old auto-fire switch on is Auto
@@ -164,7 +164,8 @@ describe('the drill', () => {
     const classic = { fire: 'pull', stickJet: true, preset: 'classic' } as const;
     const claw = { fire: 'button', stickJet: false, preset: 'claw' } as const;
     const one = { fire: 'auto', stickJet: true, preset: 'oneThumb' } as const;
-    expect(drillControl(step('jet'), classic)).toBe('move');
+    expect(drillControl(step('jet'), classic)).toBe('jet'); // Classic has a JET button now
+    expect(drillControl(step('jet'), one)).toBe('move');
     expect(drillControl(step('jet'), claw)).toBe('jet');
     expect(drillHow(step('jet'), claw)).toMatch(/Hold JET/);
     expect(drillControl(step('fire'), claw)).toBe('fire');

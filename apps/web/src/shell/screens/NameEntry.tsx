@@ -64,7 +64,8 @@ export function NameEntry({ store, first }: { store: ShellStore; first: boolean 
   const input = useRef<HTMLInputElement>(null);
   const card = useRef<HTMLElement>(null);
 
-  useEffect(() => input.current?.focus(), []);
+  // no scroll jump on a phone: the field is where it is, the keyboard comes up under it
+  useEffect(() => input.current?.focus({ preventScroll: true }), []);
   // the live check, debounced while typing
   useEffect(() => {
     setCheck(null);

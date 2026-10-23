@@ -332,3 +332,37 @@ html.reduce-motion .mf-ctl.mf-teach::before { animation: none; opacity: 0.9; }
 .mf-touch.mf-nostickjet .dial__hint--up { display: none; }
 /* JET (Claw's left index finger): the jet icon with the fuel left */
 .dial-btn--jet .tb__sub { font-size: var(--fs-12, 12px); }
+
+/* ---- what each button is, in a word under it (the owner, 23 Oct: "would a new player understand
+   this in 10 seconds"); it rides the skin's zoom, and fades with the plate ---- */
+.mf-touch .mf-cap {
+  position: absolute; left: 50%; top: calc(100% + 3px); translate: -50% 0;
+  font: var(--fw-black, 900) 10px/1 var(--f-ui, inherit); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap;
+  color: var(--c-paper); text-shadow: 0 1px 2px rgb(0 0 0 / .85), 0 0 6px rgb(0 0 0 / .6); pointer-events: none;
+}
+.mf-touch .pt-swap .mf-cap { top: calc(100% + 4px); }
+/* the aim stick's "Aim to shoot" tag: wider words than "Auto" */
+.mf-touch .dial__tag { white-space: nowrap; }
+
+/* ---- what each button is, in a word under it (the owner, 23 Oct: "would a new player understand
+   this in 10 seconds"); it rides the skin's zoom, and fades with the plate ---- */
+.mf-touch .mf-cap {
+  position: absolute; left: 50%; top: calc(100% + 3px); translate: -50% 0;
+  font: var(--fw-black, 900) 10px/1 var(--f-ui, inherit); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap;
+  color: var(--c-paper); text-shadow: 0 1px 2px rgb(0 0 0 / .85), 0 0 6px rgb(0 0 0 / .6); pointer-events: none;
+}
+/* the aim stick's "Aim to shoot" tag: wider words than "Auto" */
+.mf-touch .dial__tag { white-space: nowrap; }
+
+/* swap: a round button like the rest (the owner's essentials, 23 Oct): the held gun's silhouette, the
+   word under it. As a pill, a gun's name made it ~200 px wide, under reload and JET; the name shows on
+   the HUD as you draw it, and holding the button opens both guns and melee */
+.mf-touch .pt-swap { width: 52px; height: 52px; min-height: 0; max-width: none; padding: 0; justify-content: center; border-radius: 50%; }
+.mf-touch .pt-swap__held { align-items: center; }
+.mf-touch .pt-swap__held b, .mf-touch .pt-swap__back { display: none; }
+.mf-touch .pt-swap .mf-gun { width: 34px; height: 20px; }
+/* Take: round too, volt (it's the one that's urgent), the gun underfoot's silhouette and the word; the
+   HUD's pickup card says which gun and what it does */
+.mf-touch .pt-pick { position: relative; left: auto; bottom: auto; transform: none; width: 52px; height: 52px; min-height: 0; padding: 0; justify-content: center; border-radius: 50%; }
+.mf-touch .pt-pick > :is(.ic--sm, span, b:not(.mf-cap)) { display: none; }
+.mf-touch .pt-pick .ic--kf { width: 34px; height: 20px; }

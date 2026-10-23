@@ -61,6 +61,8 @@ export interface TouchDeps {
 
 let settings: TouchSettings = loadSettings(null);
 let controller: TouchController | null = null;
+/** the match's countdown or clock runs (setTouchMatchLive) */
+let matchLive = false;
 let loading: Promise<void> | null = null;
 let deps: TouchDeps | null = null;
 let touchedOnce = false;
@@ -119,6 +121,7 @@ function sync(): void {
         inGame: () => d.inGame?.() ?? true,
       };
       controller = new TouchController(host, settings, loadLayout(storage()), storage(), setTouchSettings, d.editButton ?? true);
+      controller.setMatchLive(matchLive);
       if (drillPending) controller.startDrill();
       drillPending = false;
       controller.onAction((a) => {
@@ -297,6 +300,17 @@ export function touchDrillRunning(): boolean {
 /** The touch controls are on screen (or would be, outside the menus). */
 export function touchActive(): boolean {
   return controller?.isActive ?? false;
+}
+
+/** The match's countdown or clock runs (main.ts): the first-run fire chooser waits (mobile audit P0-3). */
+export function setTouchMatchLive(live: boolean): void {
+  matchLive = live;
+  controller?.setMatchLive(live);
+}
+
+/** The first-run fire chooser is up: other cards wait for it (no stacking). */
+export function touchChoosing(): boolean {
+  return controller?.isChoosing ?? false;
 }
 
 /** Opens the HUD editor (drag, resize, fade each control), bringing the controls up if needed. */

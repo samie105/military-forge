@@ -44,6 +44,15 @@ const browser = await puppeteer.launch({
 /** A phone page: touch emulation, a coarse pointer, the given viewport. */
 async function phonePage(viewport) {
   const page = await browser.newPage();
+  // Classic has no dash button since the owner's essentials (23 Oct): these checks pin it, as a player can
+  // in the editor (only on a fresh layout, so an edited one survives a reload)
+  await page.evaluateOnNewDocument(() => {
+    try {
+      if (!localStorage.getItem('mf.touch.layout.v3')) localStorage.setItem('mf.touch.layout.v3', JSON.stringify({ placements: {}, pinned: ['dash'] }));
+    } catch {
+      /* no storage */
+    }
+  });
   page.on('pageerror', (e) => console.error('page error:', e.message));
   const cdp = await page.createCDPSession();
   await page.emulate({ viewport, userAgent: PHONE_UA });
@@ -261,7 +270,7 @@ try {
     await sleep(200);
     check('the ✎ button opens the HUD editor', await page.evaluate(() => !document.querySelector('.mf-touch-editor').hidden));
     const before = await centre(page, '.mf-ctl-dash');
-    await f.drag(6, before.x, before.y, -150, 60, 8);
+    await f.drag(6, before.x, before.y, -150, -60, 8); // up: the pinned dash sits near the bottom edge
     await f.lift(6);
     await sleep(100);
     await page.screenshot({ path: join(outDir, 'editor-landscape.png') });
@@ -272,7 +281,7 @@ try {
     await sleep(200);
     await ready(page, `${base}/?sandbox&render=2d`);
     const after = await centre(page, '.mf-ctl-dash');
-    check("an edited layout survives a reload (snapping may pull it a few px onto a guide)", Math.abs(after.x - (before.x - 150)) <= 9 && Math.abs(after.y - (before.y + 60)) <= 9, `(${before.x.toFixed(0)},${before.y.toFixed(0)}) → (${after.x.toFixed(0)},${after.y.toFixed(0)})`);
+    check("an edited layout survives a reload (snapping may pull it a few px onto a guide)", Math.abs(after.x - (before.x - 150)) <= 9 && Math.abs(after.y - (before.y - 60)) <= 9, `(${before.x.toFixed(0)},${before.y.toFixed(0)}) → (${after.x.toFixed(0)},${after.y.toFixed(0)})`);
     await page.evaluate(() => window.__touch.resetTouchLayout());
 
     await page.evaluate(() => window.__touch.setTouchSettings({ handed: 'left' }));

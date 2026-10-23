@@ -60,6 +60,7 @@ function AppScreens({ store }: { store: ShellStore }) {
   const notice = useStore(store, (s) => s.notice);
   const tuneNote = useStore(store, (s) => s.tuneNote);
   const tips = useStore(store, (s) => s.tips);
+  const tipsAsked = useStore(store, (s) => s.tipsAsked === true);
   const match = useStore(store, (s) => s.match);
   const phone = usePhoneLayout();
   // the keyboard's keys, or a controller's buttons while one plays (gamepad/)
@@ -107,14 +108,16 @@ function AppScreens({ store }: { store: ShellStore }) {
       body = <TrainingScreen store={store} />;
       break;
   }
-  // the first-run controls card: in a room's lobby it waits until the player folds it to warm up, and
-  // it waits out the countdown (the map intro and 3-2-1 are on screen then): it comes after GO
-  const inLobby = (screen.name === 'room' && match?.phase === MatchPhase.Waiting) || match?.phase === MatchPhase.Countdown;
-  const playing = screen.name === 'room' || screen.name === 'training';
+  // the controls card: in a room's lobby it's the lobby's own panel; as a card it opens on Home or in
+  // play, but never over the countdown or a running match unless the player asked for it (the menu's
+  // Controls): the first-run card is queued for a calm moment (controller.releaseTips; mobile audit P0-3)
+  const inLobby = screen.name === 'room' && match?.phase === MatchPhase.Waiting;
+  const live = match?.phase === MatchPhase.Countdown || match?.phase === MatchPhase.InProgress;
+  const playing = screen.name === 'room' || screen.name === 'training' || screen.name === 'home';
   return (
     <>
       {body}
-      {tips && playing && !overlay && !inLobby && (phone ? <PhoneTips /> : <TipsCard bindings={shown.bindings} doubleTapDash={shown.doubleTapDash} />)}
+      {tips && playing && !overlay && !inLobby && (!live || tipsAsked) && (phone ? <PhoneTips /> : <TipsCard bindings={shown.bindings} doubleTapDash={shown.doubleTapDash} />)}
       {overlay === 'menu' && (phone ? <PhonePause store={store} /> : <Pause store={store} />)}
       {overlay === 'settings' && (phone ? <PhoneSettings store={store} /> : <SettingsScreen store={store} />)}
       {overlay === 'join' && (phone ? <PhoneJoin /> : <Join />)}

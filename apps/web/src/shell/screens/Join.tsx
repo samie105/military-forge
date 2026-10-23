@@ -59,7 +59,7 @@ export function useJoinCode({ autoFocus = true }: { autoFocus?: boolean } = {}) 
   const busy = pending !== null;
   const boxes = useRef<(HTMLInputElement | null)[]>([]);
 
-  const focus = (i: number) => boxes.current[Math.max(0, Math.min(ROOM_CODE_LENGTH - 1, i))]?.focus();
+  const focus = (i: number) => boxes.current[Math.max(0, Math.min(ROOM_CODE_LENGTH - 1, i))]?.focus({ preventScroll: true });
   useEffect(() => {
     if (autoFocus) focus(0);
   }, [autoFocus]);

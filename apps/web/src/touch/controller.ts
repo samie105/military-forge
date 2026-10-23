@@ -24,8 +24,9 @@ import { GESTURE, beltAfter, beltOf, beltSteps, cyclePresses, dashButtons, isQui
 import { TouchOverlays, type RadialItem } from './overlays';
 import { CHAIN_MS, Drill, drillControl, loadSeen, markDrillSeen, possibleHints, saveSeen, type TouchAction } from './teach';
 import {
-  CONTEXT_PRIORITY,
-  OFF_HUD,
+  CONTEXT_BY_PRESET,
+  SOMETIMES,
+  offHud,
   PILLS,
   PINNABLE,
   SHIELD_BIT,
@@ -43,7 +44,7 @@ import {
   type Placement,
   type TouchLayout,
 } from './layout';
-import { ASSIST_NAMES, DEFAULT_TOUCH_SETTINGS, PRESET_HELP, PRESET_IDS, PRESET_NAMES, PRESET_SETTINGS, VIEW_LIMITS, type FireMode, type KeyValueStore as Store, type PresetId, type TouchSettings } from './settings';
+import { ASSIST_NAMES, autoView, PRESET_HELP, PRESET_IDS, PRESET_NAMES, PRESET_SETTINGS, VIEW_LIMITS, type FireMode, type KeyValueStore as Store, type PresetId, type TouchSettings } from './settings';
 import { AutoTrigger, TOUCH_PULL_MIN, assistPush, autoRange, createTouchState, dashStrength, desiredAim, effectiveFire, flickRate, grenadeStrength, pullFires, touchButtons, updateMove } from './mapping';
 import { ASSIST_LEVELS, AimAssist, onTarget as onAutoTarget, type AssistLevel, type AssistTarget } from '../input/assist';
 import { Sight, sightPoints } from '../input/sight';
@@ -55,6 +56,15 @@ import './touch.css';
 
 /** Where the reticle (and the camera's look-ahead) sits along the touch aim, in metres. */
 const RETICLE_M = 7;
+/** The first-run "How do you want to shoot?" card (§4.10.1): off; Auto is the default. */
+const FIRST_RUN_CHOOSER = false;
+/**
+ * On touch, how far the view runs past the map's edge (shares of the half view; Camera.edgeOverrun):
+ * enough that a soldier at the very edge stands left of the aim dial's column (it spans 74–90 % of a
+ * phone's width) or right of the move dial's, never under a thumb (the mobile audit, P0-2: its 30 %
+ * still left him in the dial's column). Past the edge there's nothing the server would have to send.
+ */
+export const TOUCH_EDGE_OVERRUN = { x: 0.55, down: 0.25 } as const;
 /** The grenade button's drag reaches full strength this many button radii out. */
 const GRENADE_REACH = 2.4;
 /** Without a HUD feeding values (the dev client), the controls draw what they read from the frame alone. */
@@ -288,7 +298,11 @@ export class TouchController {
       const emulated = (e as MouseEvent & { sourceCapabilities?: { firesTouchEvents?: boolean } }).sourceCapabilities?.firesTouchEvents;
       if (!emulated && e.timeStamp - this.lastTouchAt > 800) this.touchOwnsAim = false;
     });
-    on('resize', () => this.place());
+    on('resize', () => {
+      this.place();
+      // turned, or a new window size: the auto view follows
+      if (this.active) this.host.camera.viewScale = this.viewNow();
+    });
     on('blur', () => this.releaseAll());
     // no pinch zoom, long-press menu or rubber-band scrolling while playing
     const stop = (e: Event) => {
@@ -325,10 +339,33 @@ export class TouchController {
 
   /** The first-run fire chooser is up (the controls wait under it). */
   private choosing = false;
+  /** A match's countdown or clock runs: no card may open over it (mobile audit P0-3) */
+  private matchLive = false;
+
+  get isChoosing(): boolean {
+    return this.choosing;
+  }
+
+  /**
+   * The countdown or the clock runs (main.ts, from the match phase). The first-run chooser never opens
+   * then, and one already up steps away unanswered: it asks again in the warm-up, the range or the lobby.
+   */
+  setMatchLive(live: boolean): void {
+    if (live === this.matchLive) return;
+    this.matchLive = live;
+    if (live && this.choosing) {
+      this.choosing = false;
+      this.overlays.hideChooser();
+      this.syncPlaying();
+    }
+  }
 
   /** Once, before the first play on this device (or after a reset): "How do you want to shoot?" (§4.10.1). */
   private maybeChoose(): void {
-    if (this.choosing || this.settings.fireChosen || !this.active || this.hiddenForMenus || this.editing) return;
+    // no first-run card (the owner, 23 Oct: a stranger shouldn't have to understand fire modes before
+    // playing): Auto it is; the choice lives in Settings → Touch and the HUD editor
+    if (!FIRST_RUN_CHOOSER) return;
+    if (this.matchLive || !this.inGame || this.choosing || this.settings.fireChosen || !this.active || this.hiddenForMenus || this.editing) return;
     this.choosing = true;
     this.releaseAll();
     this.syncPlaying();
@@ -348,7 +385,9 @@ export class TouchController {
     if (on) {
       this.touchOwnsAim = true;
       this.host.camera.lookAhead = this.settings.lookAhead ? 1 : 0;
-      this.host.camera.viewScale = this.settings.view;
+      this.host.camera.viewScale = this.viewNow();
+      // the soldier never slides under a thumb at the map's edge (the mobile audit, P0-2)
+      this.host.camera.edgeOverrun = { x: TOUCH_EDGE_OVERRUN.x, down: TOUCH_EDGE_OVERRUN.down };
       // the controls come up lit, then fade once left alone
       this.fade.wakeAll(this.els.keys(), performance.now());
       this.place();
@@ -359,6 +398,7 @@ export class TouchController {
       this.setEditing(false);
       this.host.camera.lookAhead = 1;
       this.host.camera.viewScale = 1;
+      this.host.camera.edgeOverrun = { x: 0, down: 0 };
       this.overlays.clear();
       document.documentElement.removeAttribute('data-touch-crate');
     }
@@ -378,9 +418,11 @@ export class TouchController {
     }
     if (this.active) {
       this.host.camera.lookAhead = settings.lookAhead ? 1 : 0;
-      this.host.camera.viewScale = settings.view;
+      this.host.camera.viewScale = this.viewNow();
     }
     if (layout) this.layout = layout;
+    // a preset changes what's on the HUD (Classic's reload and JET, Claw's dash)
+    this.refreshContext(this.tokensBefore);
     this.place();
     this.syncEditor();
   }
@@ -599,9 +641,17 @@ export class TouchController {
       reload: this.lowMag,
       zoom: tokens.has('zoomable'),
       cycleGrenade: true,
+      dash: true,
     };
-    const slot = this.editing ? 'take' : (CONTEXT_PRIORITY.find((id) => !pinned.has(id) && inPlay[id]) ?? null);
-    for (const id of OFF_HUD) {
+    const preset = this.settings.preset;
+    const slot = this.editing ? 'take' : (CONTEXT_BY_PRESET[preset].find((id) => !pinned.has(id) && inPlay[id]) ?? null);
+    const comes = offHud(preset);
+    for (const id of SOMETIMES) {
+      // on this preset's HUD all the time (Classic's reload, Claw's dash)
+      if (!comes.has(id)) {
+        this.context(id, true, false);
+        continue;
+      }
       const want = pinned.has(id) ? this.editing || (id === 'zoom' || id === 'shield' ? !!inPlay[id] : true) : slot === id;
       this.context(id, want, false);
     }
@@ -646,6 +696,12 @@ export class TouchController {
       this.hiddenForMenus = hide;
       this.root.classList.toggle('mf-touch-menus', hide);
       if (hide) this.releaseAll();
+      this.syncPlaying();
+    }
+    // the chooser belongs to play: out of a game or under the menus it steps away, unanswered
+    if (this.choosing && (!this.inGame || this.hiddenForMenus)) {
+      this.choosing = false;
+      this.overlays.hideChooser();
       this.syncPlaying();
     }
     this.maybeChoose();
@@ -1253,8 +1309,8 @@ export class TouchController {
     if (aim && aim.dataset.fire !== this.fireNow) aim.dataset.fire = this.fireNow;
     this.context('fire', this.settings.fire === 'button');
     this.context('fireLeft', this.settings.fire === 'button' && this.settings.leftFire);
-    // JET: Claw's left index finger, or anyone whose move stick doesn't jet
-    this.context('jet', this.settings.preset === 'claw' || !this.settings.stickJet);
+    // JET: Classic's arc and Claw's left index finger; One-thumb's only when its stick doesn't jet
+    this.context('jet', this.settings.preset !== 'oneThumb' || !this.settings.stickJet);
   }
 
   /** The preset on the root (touch.css: One-thumb's aim dial shows only under a finger; no jet hint on a stick that doesn't jet). */
@@ -1349,20 +1405,27 @@ export class TouchController {
     }
   }
 
+  /** The view now: the player's, or sized to the play area (autoView: as wide as readable soldiers allow). */
+  private viewNow(): number {
+    if (!this.settings.viewAuto) return this.settings.view;
+    const r = logicalRect(this.root);
+    return autoView(Math.max(r.width, r.height) > 0 ? r.width : Math.max(innerWidth, innerHeight));
+  }
+
   /** The camera's fingers lifted: a short still two-finger tap, twice, recentres (and resets the zoom). */
   private endCamera(first: number, g: Extract<Grab, { kind: 'camera' }>, t: number): void {
     this.grabs.delete(first);
     this.pointers.delete(first);
     this.pointers.delete(g.other);
     // a pinch's view is kept (Settings → Touch → View)
-    if (g.pinched) this.onSettingsEdited({ view: Math.round(this.host.camera.viewScale * 100) / 100 });
+    if (g.pinched) this.onSettingsEdited({ view: Math.round(this.host.camera.viewScale * 100) / 100, viewAuto: false });
     if (g.moved || t - g.downAt > GESTURE.twoTapMs) return;
     if (t - this.lastTwoTapAt <= GESTURE.doubleTapMs) {
       this.lastTwoTapAt = -Infinity;
       this.host.camera.recentre();
       this.zoomSteps -= this.host.camera.zoom;
       // and the view back to the phone's default distance
-      this.onSettingsEdited({ view: DEFAULT_TOUCH_SETTINGS.view });
+      this.onSettingsEdited({ viewAuto: true });
       this.act('recentre');
       this.buzz(10);
     } else this.lastTwoTapAt = t;
@@ -1600,7 +1663,7 @@ export class TouchController {
       el.dataset.mfStick = def.id;
       this.knobs.set(def.id as 'move' | 'aim', el.querySelector<HTMLElement>('.mf-knob')!);
     }
-    if (OFF_HUD.has(def.id) || def.id === 'fire' || def.id === 'fireLeft' || def.id === 'jet') el.classList.add('mf-off');
+    if (SOMETIMES.has(def.id) || def.id === 'fire' || def.id === 'fireLeft' || def.id === 'jet') el.classList.add('mf-off');
     this.els.set(def.id, el);
   }
 

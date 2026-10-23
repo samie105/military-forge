@@ -25,6 +25,11 @@ const FALL_FULL = 14;
 /** shares of the lean budget: falling leans further (you need to see where you land) */
 const RISE_LEAN = 0.45;
 const FALL_LEAN = 0.65;
+/**
+ * The whole soldier stays on screen however far the view leans (a wide phone view's budget can be
+ * taller than its half view): the focus keeps this far (m) inside the top and bottom edges.
+ */
+const KEEP_ON_SCREEN = 2.5;
 /** 1/s: how quickly the lean follows the flight */
 const FLIGHT_EASE = 3;
 /** a close view pulls back out above this vertical speed (m/s) … */
@@ -47,6 +52,12 @@ export class Camera {
    * server's area of interest (AOI_MARGIN, packages/netcode/src/aoi.ts) still covers it.
    */
   viewScale = 1;
+  /**
+   * On touch, how far the view may run past the map's edge, as shares of the half view (the mobile
+   * audit, P0-2): a soldier at the edge stays out of the control columns (the dials and the arc)
+   * instead of sliding under a thumb. 0 on a desktop: the view stops at the edge.
+   */
+  edgeOverrun = { x: 0, down: 0 };
   /**
    * The soldier's vertical speed (m/s), set before `follow`: the view leans the way it flies. 0 (or
    * never set) keeps the plain follow.
@@ -137,10 +148,13 @@ export class Camera {
     const lx = Math.max(-halfW * la, Math.min(halfW * la, (mouseWorldX - cx) * la));
     const ly = Math.max(-halfH * la, Math.min(halfH * la, (mouseWorldY - cy) * la));
     let tx = cx + lx;
-    let ty = cy + Math.max(-budget, Math.min(budget, ly + this.flightLean));
+    const reach = Math.min(budget, Math.max(0, halfH - KEEP_ON_SCREEN));
+    let ty = cy + Math.max(-reach, Math.min(reach, ly + this.flightLean));
     const b = map.bounds;
-    tx = Math.max(b.minX + halfW, Math.min(b.maxX - halfW, tx));
-    ty = Math.max(b.minY + halfH, Math.min(b.maxY - halfH, ty));
+    const padX = halfW * Math.max(0, this.edgeOverrun.x);
+    const padDown = halfH * Math.max(0, this.edgeOverrun.down);
+    tx = Math.max(b.minX + halfW - padX, Math.min(b.maxX - halfW + padX, tx));
+    ty = Math.max(b.minY + halfH - padDown, Math.min(b.maxY - halfH, ty));
     if (!this.initialised) {
       this.x = tx;
       this.y = ty;

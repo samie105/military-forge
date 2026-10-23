@@ -74,13 +74,18 @@
 .vc-screen--phone .vc-chip__who span { font-size: 9px; }
 .vc-screen--phone .vc-av { width: 24px; height: 24px; font-size: 12px; }
 .vc-screen--phone .vc-bars { height: 14px; }
-.vc-mic { position: absolute; left: calc(var(--safe-l) + 226px); bottom: calc(var(--safe-b) + 66px); display: flex; align-items: center; gap: 8px; pointer-events: none; }
+/* the mic: a "Talk" pill on the top bar, just left of the menu button (the touch layer's pause, TR 4 mm),
+   clear of both thumbs (the owner, 23 Oct; mobile audit P0-4). Only with another human in the room;
+   never over a dialog (a tap meant for a card can't land on it) */
+.vc-mic { position: absolute; right: calc(var(--safe-r) + 60px); top: calc(var(--safe-t) + 2px); display: flex; flex-direction: column; align-items: flex-end; gap: 4px; pointer-events: none; }
 .vc-mic__btn {
-  display: grid;
-  place-items: center;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 14px 0 10px;
+  border-radius: 22px;
   background: var(--c-touch, var(--c-plate));
   border: 2px solid color-mix(in srgb, var(--c-paper) 35%, transparent);
   color: var(--c-text);
@@ -88,12 +93,19 @@
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;
+  white-space: nowrap;
 }
-.vc-mic__btn .ic { width: 26px; height: 26px; }
-.vc-mic.is-on .vc-mic__btn { background: var(--c-volt); color: var(--c-volt-ink); border-color: var(--c-ink-950); box-shadow: 0 0 18px var(--c-volt-glow); }
-.vc-mic__lock { position: absolute; left: 6px; bottom: 64px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px; border-radius: 22px; background: color-mix(in srgb, var(--c-ink-950) 80%, transparent); border: 1.5px solid var(--c-volt-line); color: var(--c-volt); }
-.vc-mic.is-lifting .vc-mic__lock { background: var(--c-volt); color: var(--c-volt-ink); }
-.vc-mic__label { padding: 4px 9px; border-radius: 0 8px 0 8px; background: color-mix(in srgb, var(--c-volt-ink) 90%, transparent); border: 1px solid var(--c-volt); color: var(--c-volt); font-size: 11px; font-weight: var(--fw-black); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+.vc-mic__btn .ic { width: 22px; height: 22px; flex: none; }
+.vc-mic__word { font-size: 13px; line-height: 1; font-weight: var(--fw-black); letter-spacing: .06em; text-transform: uppercase; }
+.vc-mic.is-talking .vc-mic__btn, .vc-mic.is-locked .vc-mic__btn { background: var(--c-volt); color: var(--c-volt-ink); border-color: var(--c-ink-950); box-shadow: 0 0 18px var(--c-volt-glow); }
+/* blocked or missing: a slash through the mic, the warn colour; a tap says how to fix it */
+.vc-mic.is-blocked .vc-mic__btn { color: var(--c-warn, #ffb347); border-color: color-mix(in srgb, var(--c-warn, #ffb347) 60%, transparent); }
+.vc-mic.is-blocked .vc-mic__btn .ic { position: relative; }
+.vc-mic.is-blocked .vc-mic__btn::before { content: ''; position: absolute; left: 9px; width: 26px; height: 2.5px; border-radius: 2px; background: currentColor; rotate: -45deg; }
+/* slide down to lock: the lock waits below the pill */
+.vc-mic__lock { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px; margin-right: 12px; border-radius: 22px; background: color-mix(in srgb, var(--c-ink-950) 80%, transparent); border: 1.5px solid var(--c-volt-line); color: var(--c-volt); }
+.vc-mic.is-sliding .vc-mic__lock { background: var(--c-volt); color: var(--c-volt-ink); }
+.vc-mic__help { width: 240px; padding: 8px 10px; border-radius: 0 10px 0 10px; background: color-mix(in srgb, var(--c-ink-950) 92%, transparent); border: 1.5px solid var(--c-warn, #ffb347); color: var(--c-text); font-size: 12px; line-height: 1.3; }
 
 /* ---- speaking tags over soldiers (window pixels, moved by transform) ---- */
 .vc-tags { position: fixed; inset: 0; z-index: var(--z-hud); pointer-events: none; overflow: hidden; }

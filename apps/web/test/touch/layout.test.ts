@@ -1,7 +1,7 @@
 import { Btn } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
 import { CONTEXT_PRIORITY, DEFAULT_PLACEMENTS, MIN_TARGET_PX, OFF_HUD, PILLS, PINNABLE, PX_PER_MM, SAFE_INSETS, availableControls, loadLayout, placementFor, saveLayout, sizePx, snapPlacement, withPinned, withPlacement, type ControlId, type TouchLayout } from '../../src/touch/layout';
-import { DEFAULT_TOUCH_SETTINGS, LAYOUT_KEY, LIMITS, PRESET_SETTINGS, SETTINGS_KEY, clearLayout, clearMoves, loadSettings, saveSettings, type KeyValueStore, type PresetId } from '../../src/touch/settings';
+import { AUTO_VIEW, DEFAULT_TOUCH_SETTINGS, LAYOUT_KEY, LIMITS, PRESET_SETTINGS, SETTINGS_KEY, autoView, clearLayout, clearMoves, loadSettings, saveSettings, type KeyValueStore, type PresetId } from '../../src/touch/settings';
 import { isCustomLayout, withoutMoves } from '../../src/touch/layout';
 
 function memoryStore(init: Record<string, string> = {}): KeyValueStore & { data: Record<string, string> } {
@@ -39,17 +39,19 @@ describe('touch HUD layout', () => {
     };
   };
   // what the HUD shows by default (the context slot drawn by Take, where it will be)
-  const ON_HUD: ControlId[] = ['move', 'aim', 'grenade', 'dash', 'swap', 'take', 'scores', 'pause'];
+  const ON_HUD: ControlId[] = ['move', 'aim', 'grenade', 'jet', 'swap', 'reload', 'take', 'scores', 'pause'];
 
   it('at 812×375 the controls sit where the spec puts them (±1 px)', () => {
     const at = lay(812, 375);
     const want: [ControlId, number, number][] = [
       ['move', 140, 264],
       ['aim', 672, 264],
+      // the essentials (the owner, 23 Oct): grenade, JET, swap, reload in the arc; the context slot left of it
       ['grenade', 521, 302],
-      ['dash', 557, 217],
+      ['jet', 557, 217],
       ['swap', 620, 150],
-      ['take', 703, 110],
+      ['reload', 703, 110],
+      ['take', 528, 90],
       ['scores', 68, 34],
       ['pause', 744, 34],
     ];
@@ -63,7 +65,7 @@ describe('touch HUD layout', () => {
     for (const [W, H] of PHONES) {
       const at = lay(W, H);
       for (const id of ON_HUD) {
-        const min = id === 'scores' || id === 'pause' ? 48 : id === 'dash' || id === 'grenade' ? 72 : 60;
+        const min = id === 'scores' || id === 'pause' ? 48 : id === 'jet' || id === 'grenade' ? 72 : 60;
         expect(at(id).d, `${W}: ${id} size`).toBeGreaterThanOrEqual(min);
       }
       for (const a of ON_HUD)
@@ -73,7 +75,7 @@ describe('touch HUD layout', () => {
           expect(gap, `${W}: ${a}/${b} gap`).toBeGreaterThanOrEqual(12);
         }
       const corner = { x: W - SAFE_INSETS.right, y: H - SAFE_INSETS.bottom };
-      for (const id of ['grenade', 'dash', 'swap', 'take'] as ControlId[]) {
+      for (const id of ['grenade', 'jet', 'swap', 'reload'] as ControlId[]) {
         const mm = Math.hypot(at(id).x - corner.x, at(id).y - corner.y) / PX_PER_MM;
         expect(Math.abs(mm - 42), `${W}: ${id} at ${mm.toFixed(1)} mm`).toBeLessThanOrEqual(1);
       }
@@ -166,10 +168,10 @@ describe('touch HUD layout', () => {
     expect(withPinned({ placements: {}, pinned: ['reload'] }, 'reload', false).pinned).toEqual([]);
   });
 
-  it('the HUD carries the arc; next grenade, melee, reload, zoom and the shield come by the context slot (or a pin)', () => {
-    expect([...OFF_HUD].sort()).toEqual(['cycleGrenade', 'melee', 'reload', 'shield', 'take', 'zoom']);
-    expect(CONTEXT_PRIORITY).toEqual(['take', 'melee', 'shield', 'reload', 'zoom']);
-    expect(LAYOUT_KEY).toBe('mf.touch.layout.v2');
+  it('the HUD carries the arc (grenade, JET, swap, reload); Take, melee, zoom and the shield come by the context slot; dash and next grenade by a pin', () => {
+    expect([...OFF_HUD].sort()).toEqual(['cycleGrenade', 'dash', 'melee', 'shield', 'take', 'zoom']);
+    expect(CONTEXT_PRIORITY).toEqual(['take', 'melee', 'shield', 'zoom']);
+    expect(LAYOUT_KEY).toBe('mf.touch.layout.v3');
   });
 
   it('no target is ever drawn under 48 px, however small the layout says', () => {
@@ -274,5 +276,27 @@ describe('touch HUD layout', () => {
     const shield = availableControls().find((c) => c.id === 'shield');
     expect(shield?.bit ?? 0).toBe((Btn as Record<string, number>).Shield ?? 0);
     expect(Boolean(shield)).toBe('Shield' in Btn);
+  });
+
+  it('the phone view sizes itself to the screen: as wide as readable soldiers allow (the owner: "too close")', () => {
+    // the mobile audit's numbers: a 780 px Galaxy S23 at 0.80 (28.8 m across, a soldier ~41 px)
+    expect(autoView(780)).toBe(0.8);
+    expect(autoView(667)).toBe(0.7);
+    expect(autoView(844)).toBe(0.87);
+    expect(autoView(1000)).toBe(1);
+    expect(autoView(320)).toBe(AUTO_VIEW.min);
+    // a 1.5 m soldier at least ~37 px on every one of them
+    for (const w of [667, 812, 844, 915, 932]) expect((w / (AUTO_VIEW.baseWidth * autoView(w))) * 1.5, `${w}`).toBeGreaterThanOrEqual(36);
+    expect(DEFAULT_TOUCH_SETTINGS.viewAuto).toBe(true);
+  });
+
+  it('a saved 0.62 (the old default) loads as auto; a view the player chose stays', () => {
+    expect(loadSettings(memoryStore({ [SETTINGS_KEY]: JSON.stringify({ view: 0.62, rev: 4 }) })).viewAuto).toBe(true);
+    expect(loadSettings(memoryStore({ [SETTINGS_KEY]: JSON.stringify({ rev: 4 }) })).viewAuto).toBe(true);
+    const chosen = loadSettings(memoryStore({ [SETTINGS_KEY]: JSON.stringify({ view: 0.8, rev: 4 }) }));
+    expect([chosen.viewAuto, chosen.view]).toEqual([false, 0.8]);
+    const store = memoryStore();
+    saveSettings(store, { ...DEFAULT_TOUCH_SETTINGS, view: 0.7, viewAuto: false });
+    expect(loadSettings(store)).toMatchObject({ view: 0.7, viewAuto: false });
   });
 });

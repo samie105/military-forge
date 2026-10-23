@@ -7,15 +7,18 @@ import { isAssistLevel, type AssistLevel } from '../input/assist';
 
 export type KeyValueStore = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
-/** v2: the mm-anchored Classic layout (controls spec §4.2); a v1 layout (the kit's places) isn't carried over. */
-export const LAYOUT_KEY = 'mf.touch.layout.v2';
+/**
+ * v3: Classic's essentials (the owner, 23 Oct: JET, grenade, swap, reload; dash off the HUD); a v2
+ * layout's moves were made around a dash button that's gone, so they aren't carried over (nor v1's).
+ */
+export const LAYOUT_KEY = 'mf.touch.layout.v3';
 export const SETTINGS_KEY = 'mf.touch.settings.v1';
 /**
  * Saved with the settings: 2 = the round-two kit's controls (opacity 1 is its look); 3 = the four fire
  * modes; 4 = Button fade and Auto-fade (the owner, 23 Oct: an opacity of 1 saved before is the old
  * default, and loads as the new one).
  */
-export const SETTINGS_REV = 4;
+export const SETTINGS_REV = 5;
 
 export const LIMITS = { min: 0.03, max: 0.97, sizeMin: 0.08, sizeMax: 0.7, opacityMin: 0.15, opacityMax: 1 };
 
@@ -138,8 +141,14 @@ export interface TouchSettings {
   pinchZoom: boolean;
   /** how hard blasts and recoil shake the 3D view, 0–1 */
   shake: number;
-  /** how much of the game's view a phone shows, 0.5–1 (Camera.viewScale): closer by default, so soldiers read; a pinch sets it */
+  /** how much of the game's view a phone shows, 0.5–1 (Camera.viewScale), once the player chose it (a pinch, the slider) */
   view: number;
+  /**
+   * The view sized to the screen (autoView): as wide as the game's view where soldiers stay readable
+   * (the owner, 23 Oct: "the zoom for mobile is too close"). A pinch or the slider turns it off; a
+   * two-finger double tap turns it back on.
+   */
+  viewAuto: boolean;
 }
 
 export const DEFAULT_TOUCH_SETTINGS: Readonly<TouchSettings> = {
@@ -163,10 +172,25 @@ export const DEFAULT_TOUCH_SETTINGS: Readonly<TouchSettings> = {
   lookAhead: true,
   pinchZoom: true,
   shake: 1,
-  view: 0.62,
+  view: 0.8,
+  viewAuto: true,
 };
 
-export const VIEW_LIMITS = { min: 0.5, max: 1 } as const;
+/** A phone's view: 0.70–1 of the game's (pinch and slider; the mobile audit: never closer than 0.70). */
+export const VIEW_LIMITS = { min: 0.7, max: 1 } as const;
+
+/**
+ * The auto view: pixels per metre a phone keeps (a 1.5 m soldier about 41 px, about 7.5 mm on the glass:
+ * the mobile audit's number), and the closest it goes (0.70: a 780 px Galaxy S23 gets 0.80, a 915 px
+ * one 0.94). At the game's full view (1) a 36 m slice is as
+ * wide as a laptop shows; a phone is shorter, so it sees less height (about 4/5 of a laptop's).
+ */
+export const AUTO_VIEW = { pxPerMetre: 27, min: 0.7, baseWidth: 36 } as const;
+
+/** The view a phone's play area `width` px wide gets automatically: as wide as readable soldiers allow. */
+export function autoView(width: number): number {
+  return Math.round(clamp(width / (AUTO_VIEW.pxPerMetre * AUTO_VIEW.baseWidth), AUTO_VIEW.min, VIEW_LIMITS.max) * 100) / 100;
+}
 
 /**
  * Round one's default opacity (its flat controls were opaque): a save carrying it, from before the
@@ -184,7 +208,7 @@ export function sanitizeSettings(raw: unknown): TouchSettings {
   else if (typeof r.fire === 'string' && (FIRE_MODES as readonly string[]).includes(r.fire)) s.fire = r.fire as FireMode;
   if (r.handed === 'right' || r.handed === 'left') s.handed = r.handed;
   if (isPresetId(r.preset)) s.preset = r.preset;
-  for (const k of ['vibrate', 'swipeDash', 'stickJet', 'tapFire', 'keepAim', 'gestures', 'haptics', 'lookAhead', 'pinchZoom', 'fireChosen', 'precisionRelease', 'leftFire', 'autoFade'] as const) if (typeof r[k] === 'boolean') s[k] = r[k];
+  for (const k of ['viewAuto', 'vibrate', 'swipeDash', 'stickJet', 'tapFire', 'keepAim', 'gestures', 'haptics', 'lookAhead', 'pinchZoom', 'fireChosen', 'precisionRelease', 'leftFire', 'autoFade'] as const) if (typeof r[k] === 'boolean') s[k] = r[k];
   // the old switch: off stays off; on (the default everyone had) is the new default, Standard
   if (isAssistLevel(r.assist)) s.assist = r.assist;
   else if (r.aimAssist === false) s.assist = 'off';
@@ -201,6 +225,9 @@ export function loadSettings(store: KeyValueStore | null): TouchSettings {
     if (raw && raw.rev === undefined && raw.opacity === ROUND_ONE_OPACITY) s.opacity = DEFAULT_TOUCH_SETTINGS.opacity;
     // before Button fade, 1 was the default everyone had: the new default fades the idle controls
     if (raw && (typeof raw.rev !== 'number' || raw.rev < 4) && raw.opacity === 1) s.opacity = DEFAULT_TOUCH_SETTINGS.opacity;
+    // before the auto view, 0.62 was the default everyone had (not a choice): auto it is
+    if (raw && (typeof raw.rev !== 'number' || raw.rev < 5) && (raw.view === undefined || raw.view === 0.62)) s.viewAuto = true;
+    else if (raw && (typeof raw.rev !== 'number' || raw.rev < 5)) s.viewAuto = false;
     return s;
   } catch {
     return { ...DEFAULT_TOUCH_SETTINGS };

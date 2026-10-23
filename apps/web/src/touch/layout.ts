@@ -75,35 +75,38 @@ export interface Anchor {
 }
 
 /**
- * The Classic layout (controls spec §4.2): every control anchored to a corner of the safe box in mm,
- * so thumbs reach the same places on a 667 px phone and a 932 px one. The action arc sits 42 mm from
- * the bottom-right corner (grenade, dash, the swap pill, the context slot): outside the aim stick's
- * landing spread, 21° apart, 3.4 mm between 12 mm hit areas. Primaries (dash, grenade, FIRE) are 12 mm,
- * secondaries (swap, the context slot) 10, the top bar (menu, scores) 8; the sticks' bases 22 mm.
- * Melee, shield, reload, zoom and Take share the context slot, one at a time (CONTEXT_PRIORITY);
- * next grenade isn't on the HUD (a swipe on the grenade does it). The editor can pin any of them back
- * (TouchLayout.pinned): pinned, a control has its own place (PINNED_ANCHORS).
+ * The Classic layout (controls spec §4.2; the owner's essentials, 23 Oct): every control anchored to a
+ * corner of the safe box in mm, so thumbs reach the same places on a 667 px phone and a 932 px one.
+ * Two sticks (the left moves and jets, the right aims and fires: Auto, no FIRE button) and four
+ * buttons in an arc 42 mm from the bottom-right corner: grenade, JET, the swap pill, reload. The
+ * context slot, left of the arc, shows Take, melee, the shield or zoom when one is in play (one at a
+ * time); dash (a flick of the move stick) and next grenade (a swipe on the grenade) are off the HUD.
+ * The editor can pin any of them back (TouchLayout.pinned): pinned, a control has its own place
+ * (PINNED_ANCHORS). Primaries are 12 mm, secondaries 10, the top bar 8; the sticks' bases 22 mm.
  */
 export const CLASSIC: Readonly<Record<ControlId, Anchor>> = {
   move: { corner: 'BL', dx: 16, dy: 15, hit: 22 },
   aim: { corner: 'BR', dx: 16, dy: 15, hit: 22 },
+  // the essentials (the owner, 23 Oct: "one obvious way", nothing extra): JET, grenade, swap and reload
+  // in the arc; the right stick aims and fires (Auto), no FIRE button
   grenade: { corner: 'BR', dx: 41.1, dy: 8.7, hit: 12 },
-  dash: { corner: 'BR', dx: 35.2, dy: 22.9, hit: 12 },
+  jet: { corner: 'BR', dx: 35.2, dy: 22.9, hit: 12 },
   swap: { corner: 'BR', dx: 24.7, dy: 34, hit: 10 },
-  // the context slot: whichever of these is in play (one at a time)
-  take: { corner: 'BR', dx: 10.9, dy: 40.6, hit: 10 },
-  melee: { corner: 'BR', dx: 10.9, dy: 40.6, hit: 10 },
-  shield: { corner: 'BR', dx: 10.9, dy: 40.6, hit: 10 },
   reload: { corner: 'BR', dx: 10.9, dy: 40.6, hit: 10 },
-  zoom: { corner: 'BR', dx: 10.9, dy: 40.6, hit: 10 },
-  cycleGrenade: { corner: 'BR', dx: 48, dy: 31, hit: 10 },
+  // the context slot, above the arc: whichever of these is in play (one at a time). High enough that
+  // Take's pill (a gun's name: ~200 px) clears JET and the swap button, low enough to clear the clock
+  take: { corner: 'BR', dx: 40, dy: 44, hit: 10 },
+  melee: { corner: 'BR', dx: 40, dy: 44, hit: 10 },
+  shield: { corner: 'BR', dx: 40, dy: 44, hit: 10 },
+  zoom: { corner: 'BR', dx: 40, dy: 44, hit: 10 },
+  // off the HUD unless pinned (a flick of the move stick dashes; a swipe on the grenade changes type)
+  dash: { corner: 'BR', dx: 58, dy: 9, hit: 12 },
+  cycleGrenade: { corner: 'BR', dx: 58, dy: 22, hit: 10 },
   scores: { corner: 'TL', dx: 4, dy: 4, hit: 8 },
   pause: { corner: 'TR', dx: 4, dy: 4, hit: 8 },
   // FIRE (Fire button mode) at the aim stick's rest, 14 mm; the left one for the left index finger
   fire: { corner: 'BR', dx: 16, dy: 15, hit: 14 },
   fireLeft: { corner: 'TL', dx: 20, dy: 14, hit: 12 },
-  // JET: only with "Push up to jet" off (Claw's left index finger has it at TL 20, 14); clear of the left FIRE
-  jet: { corner: 'TL', dx: 42, dy: 14, hit: 12 },
 };
 
 /**
@@ -139,12 +142,16 @@ export const PRESETS: Readonly<Record<PresetId, Readonly<Record<ControlId, Ancho
     // spec's (swap 24.7, 34) the pill sits under FIRE on a 375 px tall phone
     swap: { corner: 'BR', dx: 35.2, dy: 22.9, hit: 10 },
     ...CONTEXT_AT({ dx: 41.1, dy: 8.7, hit: 10 }),
+    // reload is the context slot's here (its Classic spot is under FIRE)
+    reload: { corner: 'BR', dx: 41.1, dy: 8.7, hit: 10 },
     // one each side of the middle, 24 px (4 mm) apart
     scores: { corner: 'TC', dx: -6, dy: 4, hit: 8 },
     pause: { corner: 'TC', dx: 6, dy: 4, hit: 8 },
   },
   oneThumb: {
     ...CLASSIC,
+    // JET only with "Push up to jet" off: top left, clear of the big buttons
+    jet: { corner: 'TL', dx: 42, dy: 14, hit: 12 },
     dash: { corner: 'BR', dx: 16, dy: 14, hit: 15 },
     grenade: { corner: 'BR', dx: 34, dy: 14, hit: 15 },
     swap: { corner: 'BR', dx: 16, dy: 32, hit: 15 },
@@ -154,20 +161,43 @@ export const PRESETS: Readonly<Record<PresetId, Readonly<Record<ControlId, Ancho
 };
 
 
-/** Where a context control sits when the player pins it to the HUD (the editor): a column left of the arc. */
+/** Where a control sits when the player pins it to the HUD (the editor): around the arc, clear of it. */
 export const PINNED_ANCHORS: Readonly<Partial<Record<ControlId, Anchor>>> = {
-  melee: { corner: 'BR', dx: 55, dy: 8.7, hit: 10 },
-  reload: { corner: 'BR', dx: 57, dy: 21, hit: 10 },
-  cycleGrenade: { corner: 'BR', dx: 48, dy: 31, hit: 10 },
-  shield: { corner: 'BR', dx: 60, dy: 33, hit: 10 },
-  zoom: { corner: 'BR', dx: 40, dy: 44, hit: 10 },
+  // a column left of the arc (clear of the move stick's rest on a 667 px phone), and zoom by swap
+  dash: { corner: 'BR', dx: 58, dy: 9, hit: 12 },
+  cycleGrenade: { corner: 'BR', dx: 58, dy: 22, hit: 10 },
+  melee: { corner: 'BR', dx: 58, dy: 34, hit: 10 },
+  shield: { corner: 'BR', dx: 58, dy: 46, hit: 10 },
+  zoom: { corner: 'BR', dx: 26, dy: 48, hit: 10 },
+  // Claw and One-thumb only (Classic's reload is always on its HUD)
+  reload: { corner: 'BR', dx: 46, dy: 32, hit: 10 },
 };
-/** The context slot's controls, most urgent first: a gun underfoot, an enemy in reach, a shield carried, a low magazine, a scope. */
-export const CONTEXT_PRIORITY: readonly ControlId[] = ['take', 'melee', 'shield', 'reload', 'zoom'];
-/** Controls that are off the HUD unless pinned (next grenade) or the context slot shows them. */
-export const OFF_HUD: ReadonlySet<ControlId> = new Set(['cycleGrenade', ...CONTEXT_PRIORITY]);
+/**
+ * Each preset's context slot, most urgent first: a gun underfoot, an enemy in reach, a shield carried,
+ * (a low magazine,) a scope. Classic keeps reload on the HUD, so not in its slot.
+ */
+export const CONTEXT_BY_PRESET: Readonly<Record<PresetId, readonly ControlId[]>> = {
+  classic: ['take', 'melee', 'shield', 'zoom'],
+  claw: ['take', 'melee', 'shield', 'reload', 'zoom'],
+  oneThumb: ['take', 'melee', 'shield', 'reload', 'zoom'],
+};
+/** Controls off a preset's HUD unless pinned (Classic: dash too; a flick of the move stick dashes). */
+const PINNED_ONLY: Readonly<Record<PresetId, readonly ControlId[]>> = {
+  classic: ['cycleGrenade', 'dash'],
+  claw: ['cycleGrenade'],
+  oneThumb: ['cycleGrenade'],
+};
+/** A preset's controls that come and go: the context slot's and the pinned-only ones. */
+export function offHud(preset: PresetId): ReadonlySet<ControlId> {
+  return new Set([...PINNED_ONLY[preset], ...CONTEXT_BY_PRESET[preset]]);
+}
+/** Classic's (the default): kept for callers that don't know the preset. */
+export const CONTEXT_PRIORITY: readonly ControlId[] = CONTEXT_BY_PRESET.classic;
+export const OFF_HUD: ReadonlySet<ControlId> = offHud('classic');
 /** The controls the editor can pin to the HUD. */
-export const PINNABLE: readonly ControlId[] = ['cycleGrenade', 'melee', 'reload', 'shield', 'zoom'];
+export const PINNABLE: readonly ControlId[] = ['dash', 'cycleGrenade', 'melee', 'reload', 'shield', 'zoom'];
+/** Every control that can come and go in some preset (they start off the HUD). */
+export const SOMETIMES: ReadonlySet<ControlId> = new Set([...offHud('classic'), ...offHud('claw'), ...offHud('oneThumb')]);
 
 /** The reference safe box (the kit's 812×375 frame less its insets), for a placement asked for without one. */
 export const REF_BOX = { w: 724, h: 344 } as const;
@@ -196,7 +226,7 @@ export const SAFE_INSETS = { left: 44, right: 44, top: 10, bottom: 21 } as const
 export const MIN_TARGET_PX = 48;
 
 /** Controls that are wide pills (their size is the height; the width follows the content). */
-export const PILLS: ReadonlySet<ControlId> = new Set(['swap', 'take']);
+export const PILLS: ReadonlySet<ControlId> = new Set([]);
 
 /** A control's size on screen (px): its fraction of the safe box's shorter side, never under MIN_TARGET_PX. */
 export function sizePx(p: Pick<Placement, 'size'>, unit: number): number {
@@ -223,7 +253,8 @@ export function withoutMoves(layout: TouchLayout): TouchLayout {
  * anchor (its pinned one, if pinned); mirrored for the left-handed layout.
  */
 export function placementFor(layout: TouchLayout, id: ControlId, handed: Handed, box: { w: number; h: number } = REF_BOX, preset: PresetId = 'classic'): Placement {
-  const pinned = layout.pinned?.includes(id) ? PINNED_ANCHORS[id] : undefined;
+  // pinned: its own place, where it's otherwise off this preset's HUD (Classic's reload is always there)
+  const pinned = layout.pinned?.includes(id) && offHud(preset).has(id) ? PINNED_ANCHORS[id] : undefined;
   const p = layout.placements[id] ?? anchorPlacement(pinned ?? PRESETS[preset][id], Math.max(1, box.w), Math.max(1, box.h));
   return handed === 'left' ? { ...p, x: 1 - p.x } : { ...p };
 }

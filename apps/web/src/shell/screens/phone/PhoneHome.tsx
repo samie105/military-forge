@@ -13,6 +13,7 @@ import { PhoneScreen, rise } from "./layout";
 import { initial } from "./parts";
 import { FriendsButton, PhoneSquad } from "../../../social/SocialLayer";
 import { SavedAdsList } from "../../../ads/SavedAds";
+import { InstallToast } from "../../../pwa/InstallToast";
 import { useState } from "react";
 import { NextOrders } from "../../../tour/NextOrders";
 import { currentDevice } from "../../../gamepad";
@@ -210,6 +211,8 @@ export function PhoneHome({ store }: { store: ShellStore }) {
           </button>
         </nav>
       </div>
+      {/* install the game, play full screen (the owner, 23 Oct): Android's prompt, or iPhone's two taps */}
+      <InstallToast where="home" />
     </PhoneScreen>
   );
 }

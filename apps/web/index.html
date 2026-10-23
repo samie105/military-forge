@@ -17,6 +17,9 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <!-- an iPhone home-screen app draws under the status bar: the game's own safe areas keep clear of it -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="%GAME_NAME%" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="%GAME_NAME%" />
@@ -71,12 +74,15 @@
     <!-- Frost's feel in Field Print's colours: frosted panels and HUD plates, solid under Reduce transparency -->
     <link rel="stylesheet" href="/src/ui/frost.css" />
     <style>
-      html, body { margin: 0; height: 100%; background: #0d1117; color: #e6edf3; font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; }
+      /* the game is the page: no scrolling, no rubber-band or pull-to-refresh, no double-tap zoom in the
+         menus (a pinch still zooms them), so the browser's bars have nothing to come back on (full
+         screen hides them: ui/landscape.ts); play itself sets touch-action: none (touch.css) */
+      html, body { margin: 0; height: 100%; background: #0d1117; color: #e6edf3; font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; overscroll-behavior: none; touch-action: manipulation; }
       #game, #view3d { display: block; position: fixed; inset: 0; width: 100%; height: 100%; cursor: none; }
       /* a phone held upright where the landscape lock isn't possible (iPhone Safari): the page turns 90°
          clockwise and lays out in a landscape box (ui/landscape.ts; boot.js sets the class first).
          Everything fixed inside <body> is fixed to that box. */
-      html.mf-rotated body { position: fixed; top: 0; left: 0; width: var(--app-w, 100vh); height: var(--app-h, 100vw); transform-origin: 0 0; transform: translateX(var(--app-h, 100vw)) rotate(90deg); }
+      html.mf-rotated body { position: fixed; top: 0; left: 0; width: var(--app-w, 100dvh); height: var(--app-h, 100dvw); transform-origin: 0 0; transform: translateX(var(--app-h, 100dvw)) rotate(90deg); }
       #perf3d { position: fixed; right: 8px; bottom: 8px; margin: 0; padding: 4px 8px; background: rgba(13,17,23,.7); border-radius: 4px; font-size: 11px; pointer-events: none; white-space: pre; }
       #bar { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; align-items: center; background: rgba(13,17,23,.8); padding: 4px 8px; border-radius: 6px; border: 1px solid #30363d; }
       #bar:empty { display: none; }

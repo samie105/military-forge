@@ -24,6 +24,8 @@ export function seoFiles(name: string, date: string): SeoFiles {
     scope: '/',
     display: 'fullscreen',
     display_override: ['fullscreen', 'standalone'],
+    // a game, not an app store listing: don't offer a native app instead
+    prefer_related_applications: false,
     // phones always play sideways (the owner, 19 Oct)
     orientation: 'landscape',
     background_color: '#0e100b',
@@ -32,6 +34,7 @@ export function seoFiles(name: string, date: string): SeoFiles {
     icons: [
       { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
       { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: '/icons/icon-maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
       { src: '/icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
       { src: '/favicon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
     ],
