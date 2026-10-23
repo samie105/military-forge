@@ -605,7 +605,7 @@ The carrier stands with a Hammer. The shooter, grounded, re-aims at the carrier'
 - **Left stick (floating):** a thumb anywhere on the left half of the game grabs it there. Past 30 % sideways walks; half-way up jets; 60 % down crouches or drops. A quick stroke and lift (≤ 220 ms, ≥ 75 %) dashes that way (a slow stroke is just a step).
 - **Right stick (floating):** aims. Hold mode (default) fires while it's pushed past half-way and only aims nearer the centre; release mode aims, then fires once on lift (sliding back to the centre first cancels).
 - **Buttons:** grenade (hold = cook, drag = aim the arc and set the strength, release = throw; a tap throws at full strength, like G), next grenade, swap, reload, dash (the way the left stick points), melee, zoom (cycles, wraps back to none), shield (appears once `Btn.Shield` exists), menu (Escape) and scoreboard (held Tab).
-- **Aim assist (touch only, on by default, a setting):** friction, never magnetism. While the aim lies on an enemy (±0.9 m, ≤ 40 m) the stick turns it at 45 % per tick, so a sweeping thumb lingers on the target. It always ends up where the stick points and never turns toward anyone.
+- **Aim assist (touch and pads, never the mouse):** this friction-only switch became four levels on 23 Oct 2026 (Off · Light · Standard · Strong, one shared core): see "Aim assist levels" below. Light is this friction: while the aim lies on an enemy (±0.9 m, ≤ 40 m) the stick turns it at 45 % per tick.
 - **Look and fit:** semi-transparent, left- or right-handed, inside the safe areas (notches, home indicator; viewport-fit=cover while up). No page scroll, pinch zoom, double-tap zoom, long-press menu or text selection while playing. A "turn your phone sideways" prompt in portrait (with "Play full screen" where the browser allows it). Optional vibration when you're hit.
 - **The HUD editor** (✎ on the controls, or `openTouchEditor()` from Settings): drag any control, ± size, opacity per control and overall, reset. It's one compact row (dockable top or bottom) that fades while you drag. Saved on the device (`mf.touch.layout.v1`, settings `mf.touch.settings.v1`).
 
@@ -959,6 +959,8 @@ Every gun with a W8 model that fires bullets now has stats (`packages/content/sr
   - A turnaround past 90° isn't slowed or pulled back by a target behind it. Mouse aim never gets assist. Old saves: the assist switch on became Standard, off stays Off.
   - `onTarget()` is auto-fire's shared test: a projected miss within 0.45 m, out to 0.8 × the gun's range (40 m at most); dwell and linger timers are the caller's.
   - Not done: the scoreboard doesn't show each pad player's assist level (spec §5.4) yet; it needs a field on the wire.
+  - **Touch (the phone agent, item 6):** the same four levels in Settings → Touch (desktop and phone) and the HUD editor's options; Standard by default. Magnetism needs the aim stick's push ≥ 0.30 (`TOUCH_PULL_MIN`), or Auto firing (`assistPush`: the gun follows the enemy it's shooting). A grenade's aim gets no assist. The targets are the same `Sight` list Auto fire uses (so the old friction's quirk, teammates and enemies behind walls slowing the aim, is gone). Old saves: the switch on became Standard, off stays Off. `touch/mapping.ts`'s own `assistAim` and `aimOnTarget` are gone.
+  - **Checked** in headless Chrome with real touches (`touch-spec-check.mjs`, item 6 rows): the aim stick 3.5° off a range dummy 8.8 m away: Off stays 3.5° off; Standard settles 2.1° off, never moving more than 0.4° a tick; let go, Standard stays put (2.07° → 2.06°) and Strong's lock brings the aim onto him (1.94° → 0.02°).
 - **More layouts and the Controller page (23 Oct 2026, controls spec §5.6, item 7).**
   - **Layouts:** Standard (default), Classic, **Bumper Jet** (LB jets, LT dashes, the stick never jets), **Southpaw** (Standard with the sticks swapped and the triggers and bumpers swapped: LT fire, RT jet, RB dash, LB grenade) and **One-stick** (accessibility: move with the left stick; the aim follows the nearest enemy in sight and in the gun's range, otherwise the way you move; the gun fires by itself after 100 ms on target and lingers 150 ms; Strong assist; a held grenade lobs as far as the target; the right stick still takes over while pushed; B swap, Y melee). A layout is its buttons plus its switches; leaving One-stick puts Standard assist back. "Aim for me" and "Fire for me" are switches of their own.
   - **Settings → Controller** is its own tab now (the phone's "Pad" tab is the same page). At its top, a **live check**: each stick in a test circle that draws its dead zone, the 0.92 outer ring, the run lines, the stick-jet cone and its hold zone, the crouch wedge (and on the aim stick where it starts turning and where assist pulls), with the stick's dot live; every action with its buttons lit while held; and what the game reads. "Test the controller" keeps presses from working the menu until Options ends it.
@@ -1361,7 +1363,7 @@ Spec: docs/design/character-feel-research.md §3.3, §5.1 A, §9. Animation only
   - **Plant** the feet by IK (held, or marching like `clips.gait`).
   - **Stylize:** stand the spine and head up, and push arms and spine ×1.3.
   - **Append** LINEAR clips to `rookie_anims.glb`, keeping the other 36 byte for byte.
-  - **The clips:** a planted `walk` replaces W8's unplanted one (100STYLE's neutral walk on a 0.4 s cycle, feet down 55% at 1.2 m/s), plus `idle_shift` and `idle_look` (CMU 140_07 and 140_06) for the idle variants.
+  - **The clips:** a planted `walk` replaces W8's unplanted one (100STYLE's neutral walk on a 0.4 s cycle, feet down 55% at 1.2 m/s), plus `idle_shift` and `idle_look` (CMU 140_07, 0–4 s and 6–10 s) for the idle variants.
   - **Licences:** raw data stays out of the repo; sources are in `art/README.md` "Motion capture" and the credits at `/licenses/motion-data.txt`.
   - **Walk-band skate** (contact foot speed / ground speed): 1.0 m/s 81% → 8%, 1.5 m/s 76% → 3%. 2–5 m/s is the run blend, left for the foot-skate PR.
 - **The turn step (`locomotion.ts` `TurnClock`, `FootPlanter` step, `motion.ts` `TURN_LEAD`, `inertia.ts` `RollEase`):**
@@ -1556,3 +1558,50 @@ The owner picked **FOG STAIR** from the four places offered (Cloudline, Tin Terr
   - **Snapshots:** 2.3 KB/s per client with 12 humans (Street Market: 3.9). The ticks average 0.05 ms.
   - Screenshots: `docs/screenshots/maps-vertical/fog-stair-*`.
 - **Next, the art:** a Blender kit for the play plane (the towers, stairs, monorail, station and bridges, like the Street Market's kit) and painted Higgsfield versions of the three layers. Both are asked of the Forge session in the shared notes (`maps-vertical.md`).
+
+
+## 51. Spectating: the death cam, watching a room, a free camera (23 Oct 2026, the owner: "spectating too will bang")
+
+Protocol v20 (docs/05 §18; the protocol registry has the exact wire). Pen board "SPECTATE · death cam, watch, free camera".
+- **The death cam.** A dead player watches its killer until the respawn. Q / E (the bar's arrows, LB / RB) step to anyone else. The room sends that player's view (its AOI and its smoke sight), live, because the respawn is 3 s. The admin's `spectate.deathCam` can hold it to the killer or turn it off.
+- **Watching.** Watch is on Join with code, on a full room's alert and on a friend's invite. A spectator takes a seat, not a slot, and never sends input. It sees the whole map **3 s behind** (`spectate.delay`), so nobody watching can call out live positions; its scoreboard keeps the same delay. There are **4 seats** a room (`spectate.cap`).
+  - Following: prev / next, the picker (desktop) or a click on a soldier.
+  - **F**, Y or Free cam flies over the map: WASD, the stick or a drag pans, and the wheel, a pinch or the triggers zoom.
+  - **Join next round** queues for the next round; while a slot is free it reads **Jump in now**. The room seats the spectator on the same connection, live.
+- **Voice.** In play, a spectator's voice reaches only the dead and other spectators, so no coaching. It hears what the dead hear.
+- **Why the rings grow.** A spectator's acks come back 3 s late, so the server's baselines and the client's decoder keep `spectatorRing(delay)` snapshots (128 for 3 s). With the players' 32/64 every spectator snapshot would be full (protocol test).
+- **Checked.** The server tests (seat vs slot, the delayed feed, no actions, the cap, play now or next, the death cam, voice) and a two-client e2e on the simulated network: B follows A within 25 cm of where the server had A, 3 s behind, and then takes a slot. Also apps/web/scripts/spectate-e2e.mjs in headless Chrome (docs/screenshots/spectate/).
+
+- **Life (`motion.ts` `BREATHE`, `locomotion.ts` `IDLE`):**
+  - **Breathing** under the aim poses and the idle: a breath every 2.6–3.4 s, seeded per body. The chest bends ±0.6–1°, the shoulders lift ±1.5°, and the head trails. An armed soldier's torso never freezes, and the barrel stays within 0.5° of the aim (`MotionLayer.breathe` scales it; 0 in tests that check other stillness).
+  - **Idle variants:** standing still, every 8–15 s (seeded) a weight shift (`idle_shift`) or a look around (`idle_look`) plays through once, blended on springs. Armed, the hips and legs shift; unarmed, the whole body. `idle_look` moved to a calmer CMU window (140_07, 6–10 s): the first one stepped, turning a calf 23° in a frame.
+  - **Head look-at:** in play it's the aim, as before. The creator's look at the pointer is with the creator stage.
+  - **Blinks:** an art ask. The eye and jaw bones have no skin weights, so nothing is faked.
+- **Spring chains (`render3d/springs.ts`):** the VRM SpringBone 1.0 algorithm. Each joint's tail is a Verlet point on its offset from the joint: its own velocity less drag, the joint's acceleration felt the other way, stiffness toward rest, gravity, held at the bone's length and within `maxAngle` of rest. A steady run carries a tail along; only changes of speed swing it.
+  - **Today:** the skeleton has no strap, pouch, tank or hair bones, so the chains swing what already hangs free: the slung guns. They swing up to 22° about their grip when the body starts, stops or lands, and settle in about 0.3 s. Handoffs reset them.
+  - **Later:** the Forge's optional bones (`strap_*`, `pouch_*`, `tank_*`, `hair_*`) take the same `SpringChain`; the ask is in the shared notes.
+  - **Budget:** LOD1 bodies draw no slung guns, so no chains there, and remote soldiers on Low are LOD1.
+- **The creator's stage (`locker/stage.ts`, `locker/turntable.ts`):**
+  - **Shots:** each look tab and each changed slot has a camera shot, eased over 450 ms. Hair and headwear get head and shoulders, the outfit waist up, trousers and boots the whole body from 0.3 m lower, and gear from behind at 150°. `turntable.frameTab(id)` is the creator's one call (in its tab handler); `frameSlot(slot)` is used for a look change.
+  - **Studio:**
+    - The same key, fill and rim lights in every preset: adding lights would re-link shaders. There's no environment map, because `MeshToonMaterial` ignores it.
+    - A backdrop plate per preset: a vignette and a floor glow.
+    - A contact shadow: depth seen from under the floor, blurred twice, 256² on a phone and 512² on desktop, redrawn every other frame.
+    - The outline thickens as the camera comes closer.
+    - Pixel ratio up to 2 on a phone and 3 on desktop.
+  - **Equip reactions:** a 0.7–1.0 s one-shot over the idle when a slot changes: adjust the helmet (two-bone IK to the side of the head), flex the gloves, stamp a boot, shrug the pack, look down a sleeve or the trousers. None under Reduce motion.
+  - **Head look-at:** the head follows the pointer (±25° across, ±12° up and down). It doesn't follow a touch, a drag, or Reduce motion.
+  - **Render on demand:**
+    - Every frame while something moves.
+    - The idle at most 30 fps on a phone.
+    - Nothing 3 s after the last input under Reduce motion. The OS setting, or `setReducedMotion`; camera moves cut under it.
+    - `Timer` (Page Visibility) instead of `Clock`.
+  - **Close-up textures:** `CharacterInstance.setHero(true)` loads `dye.lod0.heroAlbedo` / `heroMask` when a body's manifest lists them. None do yet; it's an ask for the Forge.
+- **Animation LOD (`render3d/animLod.ts`, spec §3.8):** `animDetail()` says how much animation each soldier gets, and `Avatar.update`'s optional fifth argument applies it.
+  - **The local player:** always in full.
+  - **Off screen, beyond a 2 m margin:** nothing but the position. The pose waits and catches up (with at most 0.1 s of the missed time) when the soldier is back on screen; the feet start afresh.
+  - **Small (< 40 px tall) or drawn at LOD1** (the Low preset's remote soldiers): posed every other frame with the time owed, so the clips run at the same speed. No planted feet, so no foot raycasts or leg IK; the feet follow the clips.
+  - **Measured** on an 812×375 phone viewport at 3×, touch, 12 bots, CPU ×4 slower (headless Chrome on this Mac's GPU, 30 s each). The 3D view's render CPU (avatars plus draw submit):
+    - Low: 9.9 → 5.4 ms mean (p90 12.2 → 6.8).
+    - Medium: 11.6 → 6.3 ms (p90 15.4 → 7.5).
+    - Frame p90 on Medium: 22.8 → 18.4 ms.

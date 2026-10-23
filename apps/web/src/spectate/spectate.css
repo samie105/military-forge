@@ -1,0 +1,80 @@
+/*
+ * Spectating (v20): the spectator bar, its buttons and the top tags (Pen board "SPECTATE · death cam,
+ * watch, free camera"). Field Print: olive glass plates, volt for the one action, brass for the
+ * delay and a queued wish. The bar's base placement is premium.css's (#hud .mf-spec).
+ */
+
+/* the bar's buttons are the only things in the HUD that take a click or a tap */
+#hud .mf-spec button,
+#hud .mf-spec-pill { pointer-events: auto; cursor: pointer; font: inherit; color: inherit; background: none; border: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+#hud .mf-spec button *,
+#hud .mf-spec-pill * { pointer-events: none; }
+#hud .mf-spec .kbd { font-size: 11px; min-width: 22px; padding: 1px 5px; margin: 0 4px; opacity: .85; }
+
+/* desktop: [◀ PREV Q] WATCHING NAME (hp, gun · kills) [E NEXT ▶] | [FREE CAM F] [JOIN NEXT ROUND ↵] */
+#hud .mf-hud-desktop .mf-spec { gap: var(--sp-4); padding: 10px 14px; backdrop-filter: blur(10px) saturate(1.1); -webkit-backdrop-filter: blur(10px) saturate(1.1); }
+#hud .mf-hud-desktop .mf-spec__nav { display: inline-flex; align-items: center; gap: 2px; padding: 8px 12px; border: 1px solid var(--c-line); border-radius: var(--r-xs); }
+#hud .mf-hud-desktop .mf-spec__nav:hover { color: var(--c-text); border-color: var(--c-volt-line, var(--c-volt)); }
+#hud .mf-spec__who { gap: 2px; }
+#hud .mf-spec__who .display { line-height: 1; max-width: 12ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#hud .mf-spec__hp { display: block; width: 100%; max-width: 220px; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--c-text) 18%, transparent); position: relative; overflow: hidden; }
+#hud .mf-spec__hp::after { content: ""; position: absolute; inset: 0; transform-origin: 0 50%; transform: scaleX(var(--spec-hp, 0)); background: var(--c-volt); transition: transform 160ms linear; }
+#hud .mf-spec__line { font-size: var(--fs-12, 12px); letter-spacing: .12em; text-transform: uppercase; color: var(--c-muted); white-space: nowrap; }
+#hud .mf-spec__sep { width: 1px; align-self: stretch; background: var(--c-line); }
+#hud .mf-hud-desktop .mf-spec__free { display: inline-flex; align-items: center; padding: 8px 12px; border: 1px solid var(--c-line); border-radius: var(--r-xs); font-weight: var(--fw-black); letter-spacing: .12em; text-transform: uppercase; color: var(--c-text); }
+#hud .mf-spec .mf-spec__join { background: var(--c-volt); color: var(--c-volt-ink); padding: 8px 14px; }
+#hud .mf-spec .mf-spec__join[data-queued='yes'] { background: var(--c-brass); color: var(--c-brass-ink, var(--c-volt-ink)); }
+#hud .mf-hud-desktop .mf-spec__slot { position: absolute; right: 18px; top: -22px; color: var(--c-volt); letter-spacing: .2em; }
+
+/* the top tags: SPECTATING · 3 S DELAY (watching), N WATCHING */
+#hud .mf-spec-tags { position: absolute; left: calc(var(--hud-m) + var(--safe-l, 0px)); top: calc(var(--hud-m) + var(--safe-t, 0px) + 64px); display: flex; gap: 8px; }
+#hud .mf-spec-tag { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; font-weight: var(--fw-black); font-size: var(--fs-14); letter-spacing: .22em; text-transform: uppercase; color: var(--c-volt); }
+#hud .mf-spec-tag--delay { color: var(--c-brass); }
+#hud .mf-spec-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; animation: mf-spec-pulse 1.6s ease-in-out infinite; }
+#hud .mf-hud-desktop .mf-spec-tag--eyes { position: absolute; right: calc(var(--hud-m) + var(--safe-r, 0px)); bottom: calc(var(--hud-m) + var(--safe-b, 0px) + 112px); color: var(--c-text); }
+@keyframes mf-spec-pulse { 50% { opacity: .35; } }
+:root.reduce-motion #hud .mf-spec-dot { animation: none; }
+
+/* phone (812×375): name plate bottom centre between two 56 px thumb buttons; pills in the corners */
+#hud .mf-hud-phone .mf-spec--phone { position: absolute; left: 0; right: 0; bottom: calc(var(--safe-b, 0px) + 8px); transform: none; padding: 0; gap: 0; display: flex; justify-content: center; align-items: center; }
+/* prev / next: thumb buttons at the screen's edges, mid-height (clear of the mic and the pills) */
+#hud .mf-spec--phone .mf-spec__thumb { position: absolute; bottom: 150px; }
+#hud .mf-spec--phone [data-spec='prev'] { left: calc(var(--safe-l, 0px) + 12px); }
+#hud .mf-spec--phone [data-spec='next'] { right: calc(var(--safe-r, 0px) + 12px); }
+#hud .mf-spec--phone .mf-spec__who { display: flex; flex-direction: column; align-items: center; min-width: 200px; padding: 6px 18px 8px; }
+#hud .mf-spec--phone .mf-spec__who .display { font-size: 26px; }
+#hud .mf-spec--phone .mf-spec__line { font-size: 10px; }
+#hud .mf-spec .mf-spec__thumb { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: var(--c-plate); border: var(--bw, 1px) solid var(--c-plate-line); color: var(--c-text); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+#hud .mf-spec .mf-spec__thumb:active { background: var(--c-volt); color: var(--c-volt-ink); }
+#hud .mf-spec__thumb .ic { width: 24px; height: 24px; }
+#hud .mf-spec-pill { position: absolute; bottom: calc(var(--safe-b, 0px) + 12px); min-height: 48px; padding: 0 20px; border-radius: 26px; display: inline-flex; align-items: center; gap: 8px; font-weight: var(--fw-black); letter-spacing: .14em; text-transform: uppercase; font-size: 14px; }
+#hud .mf-spec-pill.mf-spec-pill--free { left: calc(var(--safe-l, 0px) + 12px); background: var(--c-plate); border: var(--bw, 1px) solid var(--c-plate-line); color: var(--c-text); }
+#hud .mf-spec-pill.mf-spec-pill--join { right: calc(var(--safe-r, 0px) + 12px); background: var(--c-volt); color: var(--c-volt-ink); }
+#hud .mf-spec-pill.mf-spec-pill--join[data-queued='yes'] { background: var(--c-brass); color: var(--c-brass-ink, var(--c-volt-ink)); }
+#hud .mf-spec-tag--phone { position: absolute; left: 50%; top: calc(var(--safe-t, 0px) + 52px); transform: translateX(-50%); padding: 6px 12px; font-size: 11px; white-space: nowrap; }
+#hud .mf-spec-tag--phone-eyes { position: absolute; right: calc(var(--safe-r, 0px) + 4px); top: calc(var(--safe-t, 0px) + 40px); padding: 4px 10px; font-size: 11px; color: var(--c-text); }
+
+/* while watching or on the death cam the touch controls step aside: the world takes drags and pinches */
+:root.mf-spectating .mf-touch { display: none !important; }
+:root.mf-spectating #game { cursor: grab; }
+:root.mf-spectating.mf-spec-free #game:active { cursor: grabbing; }
+
+/* the picker (desktop, watching): right edge */
+#hud .mf-spec-pick { position: absolute; right: calc(var(--hud-m) + var(--safe-r, 0px)); top: 50%; transform: translateY(-50%); width: 260px; margin: 0; padding: 10px; list-style: none; display: flex; flex-direction: column; gap: 4px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+#hud .mf-spec-pick[hidden] { display: none; }
+#hud .mf-spec-pick__head { padding: 2px 6px 6px; letter-spacing: .2em; }
+#hud .mf-spec-pick__row { pointer-events: auto; cursor: pointer; width: 100%; display: flex; align-items: center; gap: 10px; padding: 7px 10px; border: 0; border-radius: var(--r-xs); background: none; color: var(--c-text); font: inherit; font-weight: var(--fw-black); text-transform: uppercase; letter-spacing: .06em; text-align: left; }
+#hud .mf-spec-pick__row * { pointer-events: none; }
+#hud .mf-spec-pick__row:hover { background: color-mix(in srgb, var(--c-text) 8%, transparent); }
+#hud .mf-spec-pick__row.is-on { background: var(--c-volt); color: var(--c-volt-ink); }
+#hud .mf-spec-pick__row.is-down { color: var(--c-muted); }
+#hud .mf-spec-pick__row.is-down .mf-spec-pick__kd { color: var(--c-hp); }
+#hud .mf-spec-pick__dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid currentColor; flex: none; }
+#hud .mf-spec-pick__row.is-on .mf-spec-pick__dot { background: currentColor; }
+#hud .mf-spec-pick__name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* the death cam: the respawn card steps up above the bar (desktop); on the phone it stays at the top */
+#hud[data-active-state~="spec-death"] .mf-hud-desktop .respawn { bottom: calc(var(--hud-m) + var(--safe-b, 0px) + 150px); }
+
+/* a spectator has no soldier: the player's own plates (vitals, guns, your score) step aside */
+#hud[data-active-state~="spec-watch"] :is(.hud-bl, .hud-br, .hud-score, .reticle, .pickup) { display: none; }

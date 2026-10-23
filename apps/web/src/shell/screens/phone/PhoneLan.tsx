@@ -69,7 +69,7 @@ export function PhoneLanAddPlayer() {
   );
 
   return (
-    <PhoneScreen name="m-lan" label="Add a player" word="WI-FI" states={[status, scanning ? 'scanning' : null]}>
+    <PhoneScreen name="m-lan" label="Add a player" word="WI-FI" dialog states={[status, scanning ? 'scanning' : null]}>
       <div className="pm pm-lanp">
         <Top eyebrow="Local room · no internet" title="Add a player" tag="Same Wi-Fi" />
         {!lan ? (
@@ -163,7 +163,7 @@ export function PhoneLanJoin() {
   const got = useCallback((offer: string) => take(offer), [take]);
 
   return (
-    <PhoneScreen name="m-lan" label="Join a local room" word="WI-FI" states={[status, camera ? 'camera' : null]}>
+    <PhoneScreen name="m-lan" label="Join a local room" word="WI-FI" dialog states={[status, camera ? 'camera' : null]}>
       <div className="pm pm-lanp">
         <Top eyebrow="No internet needed" title="Join a local room" tag="Same Wi-Fi" />
         <div className={`pm-lan${scanStep ? ' pm-lan--vf' : ''}`}>

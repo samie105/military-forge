@@ -173,7 +173,7 @@ export function switchTab(scope: Element, step: 1 | -1, onSelect?: (tab: HTMLEle
   const strip = scope.querySelector('[role="tablist"]');
   if (!strip) return false;
   const tabs = Array.from(strip.querySelectorAll<HTMLElement>('[role="tab"]')).filter(visible);
-  const selected = tabs.findIndex((t) => t.getAttribute('aria-selected') === 'true' || t.classList.contains('is-on') || t.classList.contains('is-active'));
+  const selected = tabs.findIndex((t) => t.getAttribute('aria-selected') === 'true' || t.getAttribute('aria-current') === 'page' || t.classList.contains('is-on') || t.classList.contains('is-active'));
   const i = nextTab(tabs.length, selected, step);
   if (i < 0) return false;
   // The old panel may be replaced on click. Remember and focus the new tab before it happens.

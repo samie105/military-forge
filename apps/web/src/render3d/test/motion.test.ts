@@ -52,6 +52,7 @@ describe('lean ("how he should bend")', SLOW, () => {
     const spineTurn = async (holdLean: number) => {
       const inst = await rookieRig();
       const m = new MotionLayer(inst);
+      m.breathe = 0; // (breathing bends the spine on purpose)
       const rest = inst.bone('spine2')!.quaternion.clone();
       const restRoot = inst.bone('root')!.quaternion.clone();
       for (let i = 0; i < 120; i++) {

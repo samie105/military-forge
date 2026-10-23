@@ -23,7 +23,7 @@ export interface GameHost {
    * A room by code on the game server at `url`, admitted with the API's join ticket (null: the server
    * checks none). `refreshTicket` asks the API for a new one when a long drop outlasted the player.
    */
-  startOnline(url: string, name: string, room: string, ticket: string | null, refreshTicket?: () => Promise<string | null>): void;
+  startOnline(url: string, name: string, room: string, ticket: string | null, refreshTicket?: () => Promise<string | null>, options?: { spectate?: boolean }): void;
   /**
    * Local rooms (same Wi-Fi, lan/): host one here (its code from the game server's relay, '' with
    * no connection), or join one by code (the relay) or by the host's QR code (a peer `answerFor`
@@ -293,14 +293,16 @@ export class ShellController {
         return;
       case 'create':
       case 'join':
+      case 'watch':
         if (!this.profile) {
           this.set({ screen: { name: 'name', then: intent } });
           return;
         }
         if (this.profile.offline) {
-          // no API: a code may still be a local room's, through the game server's relay
+          // no API: a code may still be a local room's, through the game server's relay (local rooms
+          // have no spectators: watching one needs the API)
           if (intent.to === 'join' && this.host.startLocalJoin) return this.joinLocal(intent.code);
-          this.set({ screen: { name: 'error', alert: alertFromApiError(new ApiError(0, 'network', 'offline'), intent.to === 'join' ? intent.code : undefined), retry: intent } });
+          this.set({ screen: { name: 'error', alert: alertFromApiError(new ApiError(0, 'network', 'offline'), intent.to === 'create' ? undefined : intent.code), retry: intent } });
           return;
         }
         void this.findRoom(intent);
@@ -331,19 +333,21 @@ export class ShellController {
     this.firstTips();
   }
 
-  private async findRoom(intent: Extract<Intent, { to: 'create' | 'join' }>): Promise<void> {
+  private async findRoom(intent: Extract<Intent, { to: 'create' | 'join' | 'watch' }>): Promise<void> {
     this.host.stop();
-    this.set({ screen: { name: 'finding', code: intent.to === 'join' ? intent.code : null, creating: intent.to === 'create' }, match: null, lobby: null });
+    const code = intent.to === 'create' ? null : intent.code;
+    this.set({ screen: { name: 'finding', code, creating: intent.to === 'create' }, match: null, lobby: null });
     try {
-      const room = intent.to === 'create' ? await this.api.createRoom() : await this.api.joinRoom(intent.code);
-      this.enterRoom(room);
+      // a watcher's ticket is the same join ticket: the HELLO says "as a spectator"
+      const room = code === null ? await this.api.createRoom() : await this.api.joinRoom(code);
+      this.enterRoom(room, intent.to === 'watch');
     } catch (e) {
       if (e instanceof ApiError && (e.code === 'no_session' || e.status === 401)) {
         // the saved session is gone (expired, revoked): pick a name again
         this.set({ profile: null, screen: { name: 'name', then: intent } });
         return;
       }
-      const alert = alertFromApiError(e, intent.to === 'join' ? intent.code : undefined);
+      const alert = alertFromApiError(e, code ?? undefined);
       this.set({ screen: { name: 'error', alert, retry: alert.action ? intent : null } });
     }
   }
@@ -352,9 +356,10 @@ export class ShellController {
    * Join with code: asks the API first and stays on the Join screen when the room isn't there
    * ("No room with that code"); a room that exists is entered at once.
    */
-  async joinByCode(code: string): Promise<JoinResult> {
+  async joinByCode(code: string, watch = false): Promise<JoinResult> {
+    const intent: Intent = watch ? { to: 'watch', code } : { to: 'join', code };
     if (!this.profile || this.profile.offline) {
-      this.go({ to: 'join', code });
+      this.go(intent);
       return 'error';
     }
     let room: RoomJoin;
@@ -362,8 +367,9 @@ export class ShellController {
       room = await this.api.joinRoom(code);
     } catch (e) {
       if (e instanceof ApiError && (e.code === 'room_not_found' || e.code === 'invalid_room_code')) {
-        // not one of the server's rooms: maybe a local room (same Wi-Fi) with that code
-        if (e.code === 'room_not_found' && (await this.localRoomExists(code))) {
+        // not one of the server's rooms: maybe a local room (same Wi-Fi) with that code (joined, not
+        // watched: local rooms have no spectators)
+        if (!watch && e.code === 'room_not_found' && (await this.localRoomExists(code))) {
           this.joinLocal(code);
           return 'ok';
         }
@@ -372,19 +378,39 @@ export class ShellController {
       if (e instanceof ApiError && e.code === 'rate_limited') return 'rate_limited';
       if (e instanceof ApiError && (e.code === 'no_session' || e.status === 401)) {
         this.closeOverlay();
-        this.set({ profile: null, screen: { name: 'name', then: { to: 'join', code } } });
+        this.set({ profile: null, screen: { name: 'name', then: intent } });
         return 'error';
       }
       this.closeOverlay();
       const alert = alertFromApiError(e, code);
-      this.set({ screen: { name: 'error', alert, retry: alert.action ? { to: 'join', code } : null } });
+      this.set({ screen: { name: 'error', alert, retry: alert.action ? intent : null } });
       return 'error';
     }
     this.closeOverlay();
     this.host.stop();
     this.set({ match: null, lobby: null });
-    this.enterRoom(room);
+    this.enterRoom(room, watch);
     return 'ok';
+  }
+
+  /** Join with code's Watch: the same checks as Join, then the room as a spectator. */
+  watchByCode(code: string): Promise<JoinResult> {
+    return this.joinByCode(code, true);
+  }
+
+  /** Watch a room by code as a spectator (no slot: the room seats us when we ask and one is free). */
+  watch(code: string): void {
+    this.go({ to: 'watch', code });
+  }
+
+  /**
+   * A full room's Watch (the connection screen): watch the room on screen instead, the one the
+   * failed connection or the API lookup was for.
+   */
+  watchHere(): void {
+    const screen = this.store.getState().screen;
+    const code = screen.name === 'room' && !screen.local ? screen.code : screen.name === 'error' && screen.retry && 'code' in screen.retry ? screen.retry.code : '';
+    if (code) this.watch(code);
   }
 
   /** Whether the relay knows a local room with `code` (it answers within a moment either way). */
@@ -394,7 +420,8 @@ export class ShellController {
     return lanRoomExists(code);
   }
 
-  private enterRoom(room: RoomJoin): void {
+  /** Into the room the API found: to play, or (`watch`) as a spectator. */
+  private enterRoom(room: RoomJoin, watch = false): void {
     this.setUrl(`/r/${room.code}`);
     const code = room.code;
     const refreshTicket = () =>
@@ -402,8 +429,9 @@ export class ShellController {
         (again) => again.ticket,
         (e: unknown) => (e instanceof ApiError && e.code === 'room_not_found' ? null : Promise.reject(e)),
       );
-    this.host.startOnline(roomSocketUrl(room), this.profile!.nickname, code, room.ticket, refreshTicket);
-    this.set({ screen: { name: 'room', code: room.code } });
+    if (watch) this.host.startOnline(roomSocketUrl(room), this.profile!.nickname, code, room.ticket, refreshTicket, { spectate: true });
+    else this.host.startOnline(roomSocketUrl(room), this.profile!.nickname, code, room.ticket, refreshTicket);
+    this.set({ screen: watch ? { name: 'room', code: room.code, watch: true } : { name: 'room', code: room.code } });
     this.firstTips();
   }
 
@@ -422,13 +450,16 @@ export class ShellController {
     this.set({ tips: false });
   }
 
-  /** Reconnect to the same room after a failure (the session may still resume within its grace). */
+  /**
+   * Reconnect to the same room after a failure (the session may still resume within its grace); a
+   * watcher watches again.
+   */
   rejoin(): void {
     const screen = this.store.getState().screen;
     if (screen.name === 'room' && screen.local) {
       if (screen.code) this.joinLocal(screen.code);
       else this.go({ to: 'home' });
-    } else if (screen.name === 'room') this.go({ to: 'join', code: screen.code });
+    } else if (screen.name === 'room') this.go({ to: screen.watch ? 'watch' : 'join', code: screen.code });
   }
 
   /** "Tune the game" in the menu: this page offers the panel, and you're the room's host (or in training). */

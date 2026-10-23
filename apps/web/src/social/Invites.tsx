@@ -1,9 +1,9 @@
 /**
  * Invites on screen (board "SOCIAL", S3/S4/P3):
  * - InviteToast: a friend's invite, in the menus (top centre) and mid-match (top left, under the
- *   net plate; on phones top centre under the clock), with Join, Decline and a greyed Watch (the
- *   hook for spectating, planned separately), a 2-minute brass bar, and Later (×). It never takes
- *   the keyboard: the game keeps its keys.
+ *   net plate; on phones top centre under the clock), with Join, Decline and Watch (the room as a
+ *   spectator, v20: no slot, and it doesn't answer the invite), a 2-minute brass bar, and Later (×).
+ *   It never takes the keyboard: the game keeps its keys.
  * - InviteButton: the Invite action on a friend's row, with what became of it (Sent · 1:52,
  *   Declined, Joining).
  * - InvitePicker: "Invite to KMTXRA" from the lobby and the pause menu: friends to invite, and for
@@ -77,11 +77,10 @@ export function InviteToast({ social }: { social: SocialController }) {
               Decline
             </button>
             {!phone && (
-              // spectating is planned separately: this is where Watch goes
-              <button type="button" className="btn btn--ghost btn--sm sx-act sx-watch" disabled data-hook="watch" title="Watching a match is coming">
+              // the room as a spectator: the invite stays in Friends (Join still works until it runs out)
+              <button type="button" className="btn btn--ghost btn--sm sx-act sx-watch" data-hook="watch" title="Watch the match without joining" onClick={() => watchInvite(social, inv)}>
                 <Icon name="eye" />
                 Watch
-                <span className="tag tag--soon sx-soon">Soon</span>
               </button>
             )}
             <span className="menu-top__spacer"></span>
@@ -94,6 +93,18 @@ export function InviteToast({ social }: { social: SocialController }) {
       </section>
     </div>
   );
+}
+
+/**
+ * An invite's Watch: its room as a spectator. The toast goes away and the invite stays in Friends;
+ * a room we're in already is left for good first (as Join does), unless it's this one.
+ */
+export function watchInvite(social: SocialController, inv: ClientInvite): void {
+  social.hideInvite(inv);
+  const screen = social.shell.store.getState().screen;
+  if (screen.name === 'room' && screen.code === inv.room) return;
+  if (screen.name === 'room') social.shell.host?.online?.leave();
+  social.shell.go({ to: 'watch', code: inv.room });
 }
 
 /** A friend row's Invite, and what became of it. Only in a room, for friends who are on and elsewhere. */

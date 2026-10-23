@@ -6,7 +6,7 @@
 import type { WeaponDef } from '@military-forge/content';
 import { Btn } from '@military-forge/sim';
 import type { FireMode } from './settings';
-import { stickAngle, touchMoveButtons, wrapAngle, zeroStick, type StickVector } from './stick';
+import { stickAngle, touchMoveButtons, zeroStick, type StickVector } from './stick';
 
 export type { FireMode } from './settings';
 
@@ -167,39 +167,16 @@ export function desiredAim(s: TouchState): number | null {
   return null;
 }
 
-export interface AimTarget {
-  x: number;
-  y: number;
-}
-
-/** Aim assist (docs/01 §4: light, optional, touch only). */
-export const ASSIST = {
-  /** how wide a target counts (m, either side of its centre): a body plus a little slack */
-  radius: 0.9,
-  /** no assist beyond this (m) */
-  range: 40,
-  /** while the aim lies on a target, the stick turns it this much of the way per tick */
-  slow: 0.45,
-};
-
-/** Is the aim from (sx, sy) along `angle` on any target? */
-export function aimOnTarget(angle: number, sx: number, sy: number, targets: readonly AimTarget[]): boolean {
-  for (const t of targets) {
-    const dx = t.x - sx;
-    const dy = t.y - sy;
-    const d = Math.hypot(dx, dy);
-    if (d < 0.5 || d > ASSIST.range) continue;
-    if (Math.abs(wrapAngle(angle - Math.atan2(dy, dx))) <= Math.atan2(ASSIST.radius, d)) return true;
-  }
-  return false;
-}
+/** Touch magnetism needs the aim stick pushed this far (§4.5; a pad needs 0.50 of its raw push). */
+export const TOUCH_PULL_MIN = 0.3;
 
 /**
- * Friction, never magnetism: while the current aim lies on a target the stick turns it more slowly,
- * so a thumb sweeping past an enemy lingers on it. It still reaches wherever the stick points (in a
- * few ticks), and it never turns the aim toward anyone.
+ * The push the aim assist core (input/assist.ts) gets this tick: the aim stick's own while it aims;
+ * while Auto fires with the stick short of TOUCH_PULL_MIN (or let go), just enough for magnetism, so
+ * the gun follows the enemy it's shooting (§4.5: "or while Auto is firing"); otherwise 0 (let go:
+ * Strong's lock, nothing for the rest).
  */
-export function assistAim(current: number, desired: number, sx: number, sy: number, targets: readonly AimTarget[], enabled: boolean): number {
-  if (!enabled || !aimOnTarget(current, sx, sy, targets)) return desired;
-  return wrapAngle(current + wrapAngle(desired - current) * ASSIST.slow);
+export function assistPush(s: Pick<TouchState, 'aimActive' | 'aim' | 'autoFiring'>): number {
+  const push = s.aimActive && s.aim.mag >= AIM_MIN ? s.aim.mag : 0;
+  return s.autoFiring ? Math.max(push, TOUCH_PULL_MIN) : push;
 }

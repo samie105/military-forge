@@ -44,7 +44,7 @@ What went wrong, and what we design against:
 5. **No sound, no flashing, no video at launch.** Creative content is static. Rotation changes on one shared 10 s beat with a 0.5 s crossfade (§4.4). A surface may move slowly in the far background (the Wrap, the sky airship) under lint limits (§2.6). Motion creatives come later, under the photosensitivity rule (≤ 3 flashes/s, 11 §5).
 6. **Contextual only.** The only targeting keys are geo (country from IP), map, mode and week. No accounts, ages, interests, device IDs or cross-session identifiers. Assume minors play (10 §7). The house-art hold-out cohort (§8.1) is assigned by a salted hash of the account id for measurement only: it never selects creatives, and the privacy policy discloses it.
 7. **Clearly in-world and clearly paid.** Paid frames carry an **"AD" chip** on the screen bezel; house art doesn't. No creative may imitate game UI, items, effects or players (§3.2).
-8. **Never clickable in a match.** The mouse is for aiming and firing. No click-outs, URLs, QR codes or phone numbers (§3.2).
+8. **Nothing opens in a match.** The mouse is for aiming and firing. No click-outs, URLs, QR codes or phone numbers on a creative (§3.2). The owner's tap-to-save (23 Oct 2026, §4.11) lets a player *save* a billboard's ad with a deliberate gesture that never uses a gun button; saved ads open only from the after-match list, by the player's own tap.
 9. **A human reviews every creative before anyone sees it.** Every creative, every advertiser, every time, programmatic included (§6.6 condition 7). Paying never buys exposure on its own.
 10. **Off in portal builds.** CrazyGames, Poki and Playgama allow only their own SDK ads. `portal` builds show house art and make no ad requests (11 §8).
 11. **No paid influence on gameplay.** No branded weapons, stats, spawns, map geometry, loot or audio. Sponsorship changes paint, never collision or rules.
@@ -274,6 +274,8 @@ Every decision stores the code, a note and the reviewer ID. This is the audit tr
 
 The counsel opinion (13 #719) also checks the ARCON code's children's provisions against this list.
 
+The owner's own products are house art, but this table still applies to what they say. WorldStreet's trading creatives (forex, crypto) fall under the prohibited row. **The owner approved them for the boards on 23 Oct 2026 ("yes to worldstreet").** They carry "Trading involves risk. 18+." on the art and the category `finance` in the pool, so a region or audience can still leave them out (`houseManifest(…, { blockedCategories: new Set(['finance']) })`, render3d/ads/manifest.ts).
+
 ---
 
 ## 4. Technical design
@@ -470,6 +472,20 @@ worker: verify dt + manifest + schedule ─▶ apply server bound ─▶ dedup �
 | `dev` | test creatives and a measurement debug overlay (mask view, per-slot %, run counters); never counted |
 
 Streamer mode (13 #379, post-launch) gets a "house art on billboards" option, and that player's delivery isn't counted. Any wider billboard opt-out would be a free setting for every player (rule 12).
+
+### 4.11 Tap-to-save (the owner's ask, 23 Oct 2026)
+
+"On click of it takes them to the ad, but … we'll queue it to visit it after the game … so we don't just interrupt their gaming." Code: `apps/web/src/ads` (gestures, queue, cards) and `render3d/ads/click.ts` (config, checks, hit test).
+
+- **Gestures.** None uses a gun button, and none saves while a shot goes out (any sample with Fire or Fire2 between the gesture's start and just after its end cancels it):
+  - mouse and keyboard: point at a lit billboard and press the interact key (E unless rebound; not while a gun is underfoot, when E takes it), or middle-click it (while mouse 3 is unbound);
+  - touch: a quick, still tap on the billboard (≤ 250 ms, ≤ 6 px), one finger, off every control;
+  - controller: aim the reticle at it and tap View / Share / − (the scoreboard button; a hold still opens the scoreboard, and a double tap the big map, never a save).
+- **Feedback.** One quiet line, "Saved · Deet Studios · we'll show it after the match": an ARIA polite live region, no sound, no pause, nothing opens. A one-time hint teaches the gesture on each device.
+- **After the match.** The results screen and Home list the saved ads as small cards: the creative, the advertiser, Visit (a real new-tab link, `noopener noreferrer`) and Remove. One card per destination; a card stays until it's visited or removed, or for 24 h (localStorage). Finance cards repeat the risk line.
+- **Config.** Each sponsored creative names its advertiser (name, default https destination, UTM campaign tag) and may set its own destination and a category (house-ads.py `ADVERTISERS` and `SPONSORS`, copied into house.json). `checkManifest` refuses anything but https with a public host name. The Visit link adds `utm_source` (the game), `utm_medium=billboard`, the campaign and the creative (`utm_content`); never anything about the player.
+- **Counts.** Saves and visits are counted per creative on the device only. There is no upload (`AD_STATS_UPLOAD = false`) until the owner opts in, in line with rule 6.
+- **Sharing the boards (the owner, 23 Oct: "just show more of deet and remove those dummy ads").** The Street Market's invented local businesses and notices are gone; only real advertisers show. Every frame is sponsored, by weight: Deet Studios 2, WorldStreet 1. Each match's six-frame Screen set runs Deet, WorldStreet, Deet, Deet, WorldStreet, Deet. The Hoardings take the next turns of the same sequence, match after match. Each advertiser walks its own creatives, so a match never repeats one, and the next match moves on (Deet has 13 Screens, including five stills from the Pen VARIATIONS row). WorldStreet's finance creatives come out of WorldStreet's third.
 
 ---
 
@@ -841,7 +857,7 @@ Programmatic switches on in a geo only when **all** of these hold:
   - **US COPPA:** contextual ads and frequency capping count as "support for internal operations", so no parental consent is needed. The amended rule (compliance from 22 Apr 2026) requires separate consent for third-party targeted ads, which we never run.
   - **FTC native-ads guide:** virtual-world billboards that players recognise as ads need no extra label. We add the AD chip anyway (CARU: ads must be distinguishable from content).
 - **No direct exhortation to children** (EU UCPD Annex I no. 28; also ASCI and CARU) → R08. This binds our own house art too.
-- **No click-outs in matches**, no URLs, QR codes or phone numbers; handles are checked for minor-safe destinations (§5.5).
+- **No click-outs in matches**, no URLs, QR codes or phone numbers; handles are checked for minor-safe destinations (§5.5). Tap-to-save (§4.11) opens nothing in a match: the saved list after the match is the only way out, and only on the player's own tap.
 - **Proof of play never shows players' names, chat or clan tags** (§4.7).
 - **UK:**
   - The less-healthy food ad ban covers paid in-game ads from 5 Jan 2026. We go further: no identifiable HFSS products in any geo (§3.7).
@@ -946,13 +962,14 @@ The checklist lives in **docs/13 §Y** (items 704–739: 4 MVP, 22 L, 10 P). The
 | 3 | Legal entity: Nigerian company, offshore, or both? | Paystack settlement, VAT, ARCON standing, Razorpay | a Nigerian entity and bank account before the pilot (a hard gate, §5.4; 12 §3 #9) |
 | 4 | ARCON: do in-game ads count as online media (~3-month approvals) or outdoor (12 months)? Is vetting per creative or per placement? Do we need a media-owner licence? Can we file for advertisers? | compliance cost and pilot design | require advertiser certificates; counsel opinion before the pilot |
 | 5 | India: an entity or an agency for Razorpay and GST? ASCI membership? | India is ~45% of players in the model | house art in India until Phase 5 |
-| 6 | Click-throughs ever (e.g. for age-confirmed adults, or on the website Sponsors page)? | advertisers value clicks; risk for minors | no in-game clicks; Sponsors page on the website |
+| 6 | Click-throughs ever (e.g. for age-confirmed adults, or on the website Sponsors page)? | advertisers value clicks; risk for minors | **Answered by the owner (23 Oct 2026):** tap-to-save. A player saves a billboard in the match; the results screen and Home list it with a Visit link (§4.11). |
 | 7 | A player opt-out for billboards? | players hated ads in genre classics (01 §1) | no toggle (streamer mode only); if surveys exceed 10%, a free setting for every player, never a paid perk (rule 12) |
 | 8 | What are the real Nigerian and Indian shares of **web-build** CCU, and the deliverable share? | every forecast and price scales linearly with them | measure them during the Phase 2 closed alpha and re-base before quoting any price; until then 30% Nigeria and 0.71 deliverable, with the §6.1 sensitivity table |
 | 9 | Music or club sponsorships like Lagos Life's ₦50k song plays? | audio is a gameplay channel (footsteps, gunfire) | no |
 | 10 | Pilot inventory: premium units only, or more? | visible scarcity vs supply | premium only (§2.4) |
 | 11 | Will buyers pay airtime prices for whole surfaces (Screen Owner 3.5×, Hoarding 3×)? | their viewable CPM is 1.7–2.2× Meta's | test in the pilot; fallback ~1.5× (§6.3) |
 | 12 | Before brand and agency sales at scale: an independent methodology review, or a vendor whose measurement agencies already accept? | agencies expect IAS/DoubleVerify-style verification, which doesn't support a custom Three.js renderer | an independent methodology review first |
+| 13 | The owner's own finance products (WorldStreet: forex, crypto) on the boards, despite §3.7? | §3.7 prohibits the category; minors may play | **Answered by the owner (23 Oct 2026): yes.** They run with the risk line and the `finance` tag, switchable per region (§3.7 note); the WorldStreet logo use is confirmed. |
 
 ### 9.2 Sources
 

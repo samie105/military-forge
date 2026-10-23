@@ -22,6 +22,7 @@ import type { ShellActions } from '../../store';
 import { reasonChip, winnerOf, type ResultsExtras } from '../Results';
 import { PhoneScreen, rise } from './layout';
 import { Roll, ShareChip, shareData, useShareChip } from './parts';
+import { SavedAdsList } from '../../../ads/SavedAds';
 
 /** The words a shared result says: who won the match, where, and how you did. */
 export function resultText(view: Pick<MatchView, 'mapName'>, results: MatchResults, localId: number): string {
@@ -145,6 +146,8 @@ export function PhoneResults({ view, results, actions, room, training, code }: {
               </button>
             </div>
           )}
+          {/* the billboard ads the player saved during play (tap-to-save) */}
+          <SavedAdsList where="results" variant="strip" />
           <ShareChip outcome={shared} />
         </div>
       </div>

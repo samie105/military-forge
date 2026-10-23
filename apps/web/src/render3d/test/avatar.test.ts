@@ -121,6 +121,7 @@ describe('Avatar', () => {
 
   it('aims the spine and head without the turn piling up when the clip holds them still (regression: head spun while running)', () => {
     const { a, inst } = avatar();
+    a.motion.breathe = 0; // (breathing moves the head on purpose)
     const head = inst.bone('head')!;
     const pose = () => head.getWorldQuaternion(new Quaternion());
     // into the run clip, and long enough for the gait springs to settle

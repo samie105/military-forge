@@ -12,6 +12,7 @@ import type { ShellStore } from '../../store';
 import { PhoneScreen, rise } from './layout';
 import { initial } from './parts';
 import { FriendsButton, PhoneSquad } from '../../../social/SocialLayer';
+import { SavedAdsList } from '../../../ads/SavedAds';
 
 export function PhoneHome({ store }: { store: ShellStore }) {
   const ctl = useCtl();
@@ -98,6 +99,8 @@ export function PhoneHome({ store }: { store: ShellStore }) {
           </div>
           {/* friends online (social/), over the top of the stage */}
           <PhoneSquad />
+          {/* the billboard ads the player saved during play (tap-to-save), at the stage's foot */}
+          <SavedAdsList where="home" variant="dock" />
         </div>
 
         <nav className="pm-nav m-p3" style={rise(5)} aria-label="Main">

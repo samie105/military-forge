@@ -9,11 +9,11 @@ import { planePose, type PlanePose } from '../../planeCamera';
 import {
   AD_POOL_BUDGET,
   AdBoards,
+  DEFAULT_HOUSE_OPTIONS,
   FORMATS,
   KEY_FADE_MS,
   KEY_MS,
   MAX_KEYS,
-  STUDIO_SCREENS,
   checkManifest,
   crossfade,
   frameIndex,
@@ -28,9 +28,11 @@ import {
   previousFrame,
   referencedCreatives,
   rotationState,
+  sponsorTurns,
   type AdManifest,
   type AdSlot,
   type HouseEntry,
+  type HouseOptions,
   type HousePool,
 } from '..';
 import { LitLimiter, MAX_LIT, ON_SCREEN, slotInView } from '../visibility';
@@ -41,8 +43,8 @@ const json = <T>(url: URL) => JSON.parse(readFileSync(url, 'utf8')) as T;
 const slots = json<AdSlot[]>(new URL('public/assets/kits/street_market/street_market.adslots.json', WEB));
 /** what house-ads.py records next to each creative */
 type Checked = HouseEntry & { signalHues: Record<string, number>; luminance: number; keyLuminance?: number[] };
-const pool = json<Omit<HousePool, 'screens' | 'hoardings' | 'studio'> & { screens: Checked[]; hoardings: Checked[]; studio: { screens: Checked[]; hoardings: Checked[] } }>(new URL('public/assets/ads/street_market/house.json', WEB));
-const studio = [...pool.studio.screens, ...pool.studio.hoardings];
+const pool = json<Omit<HousePool, 'screens' | 'hoardings' | 'sponsored'> & { screens: Checked[]; hoardings: Checked[]; sponsored: { screens: Checked[]; hoardings: Checked[] } }>(new URL('public/assets/ads/street_market/house.json', WEB));
+const studio = [...pool.sponsored.screens, ...pool.sponsored.hoardings];
 
 /** Camera poses across the Street Market at every zoom: x and y across the clamp range. */
 function poses(): { zoom: number; pose: PlanePose }[] {
@@ -167,8 +169,6 @@ describe('readability (docs/14 §1.3)', () => {
     }
     expect(pool.screens.length).toBeLessThanOrEqual(8);
     expect(pool.hoardings.length).toBeLessThanOrEqual(8);
-    expect(pool.screens.length).toBeGreaterThanOrEqual(2);
-    expect(pool.hoardings.length).toBeGreaterThanOrEqual(2);
   });
 
   it('the environment’s dressing never covers a billboard (trees, bunting, street lamps), from any camera', () => {
@@ -198,26 +198,84 @@ describe('readability (docs/14 §1.3)', () => {
   });
 });
 
-describe('the studio’s creatives (Deet Studios) and Motion keyframes (docs/14 §3.3)', () => {
-  it('every match shows two studio Screens, spread across the loop, and a studio creative on the first Hoarding; never paid', () => {
-    expect(pool.studio.screens.length).toBeGreaterThanOrEqual(STUDIO_SCREENS);
-    const ids = new Set(studio.map((e) => e.id));
+describe('sponsored creatives (Deet Studios, WorldStreet) and Motion keyframes (docs/14 §3.3)', () => {
+  const advOf = new Map(studio.map((e) => [e.id, e.advertiser]));
+  it('only real advertisers: no local house art left, every frame sponsored, never paid', () => {
+    expect(pool.screens).toEqual([]);
+    expect(pool.hoardings).toEqual([]);
+    expect(new Set(advOf.values())).toEqual(new Set(['deet', 'worldstreet']));
     for (const seed of [0, 1, 2, 3, 4, 99]) {
       const m = houseManifest('street-market', slots, pool, seed);
-      for (const s of m.slots.slice(0, 4)) {
-        expect(s.frames.map((f) => ids.has(f.c))).toEqual([true, false, false, true, false, false]);
-        expect(s.frames).toEqual(m.slots[0]!.frames); // one shared set
+      for (const s of m.slots) for (const f of s.frames) {
+        expect(advOf.has(f.c), f.c).toBe(true);
+        expect(f.paid).toBe(false);
+        expect(f.click).toBeDefined();
       }
-      expect(ids.has(m.slots[4]!.frames[0]!.c)).toBe(true);
-      expect(ids.has(m.slots[5]!.frames[0]!.c)).toBe(false);
-      for (const f of m.slots.flatMap((s) => s.frames)) expect(f.paid).toBe(false);
+      for (const s of m.slots.slice(0, 4)) expect(s.frames).toEqual(m.slots[0]!.frames); // one shared set
+    }
+  });
+
+  it('Deet gets two thirds of the boards and WorldStreet a third, spread out, on Screens and Hoardings alike', () => {
+    expect(sponsorTurns([2, 1], 6)).toEqual([0, 1, 0, 0, 1, 0]);
+    expect(pool.advertisers?.deet?.weight).toBe(2);
+    expect(pool.advertisers?.worldstreet?.weight).toBe(1);
+    const screens = new Map<string, number>();
+    const hoardings = new Map<string, number>();
+    const add = (m: Map<string, number>, c: string) => m.set(advOf.get(c)!, (m.get(advOf.get(c)!) ?? 0) + 1);
+    for (let seed = 1000; seed < 1300; seed++) {
+      const m = houseManifest('street-market', slots, pool, seed);
+      const f = m.slots[0]!.frames;
+      // every match: 4 Deet frames and 2 WorldStreet, never two WorldStreet in a row
+      expect(f.map((x) => advOf.get(x.c))).toEqual(['deet', 'worldstreet', 'deet', 'deet', 'worldstreet', 'deet']);
+      for (const x of f) add(screens, x.c);
+      for (const s of m.slots.slice(4)) add(hoardings, s.frames[0]!.c);
+    }
+    expect(screens.get('deet')).toBe(1200);
+    expect(screens.get('worldstreet')).toBe(600);
+    expect(hoardings.get('deet')).toBe(400);
+    expect(hoardings.get('worldstreet')).toBe(200);
+  });
+
+  it('Deet’s frames don’t repeat: a match never shows one creative twice, and the next match moves on', () => {
+    const deet = pool.sponsored.screens.filter((e) => e.advertiser === 'deet');
+    expect(deet.length).toBeGreaterThanOrEqual(12);
+    let prev: string[] = [];
+    for (let seed = 0; seed < 30; seed++) {
+      const m = houseManifest('street-market', slots, pool, seed);
+      const ids = m.slots[0]!.frames.map((f) => f.c);
+      expect(new Set(ids).size).toBe(ids.length);
+      const hoard = m.slots.slice(4).map((s) => s.frames[0]!.c);
+      expect(new Set(hoard).size).toBe(hoard.length);
+      const shownDeet = ids.filter((c) => advOf.get(c) === 'deet');
+      expect(shownDeet.some((c) => prev.includes(c)), `match ${seed} repeats the last match's Deet frames`).toBe(false);
+      prev = shownDeet;
+    }
+  });
+
+  it('a category can be left off the boards (finance per region or audience); the advertiser keeps its share with the rest', () => {
+    expect(DEFAULT_HOUSE_OPTIONS.blockedCategories?.size ?? 0).toBe(0); // the owner approved finance, 23 Oct
+    const blocked = new Set(['finance']);
+    const finance = new Set(studio.filter((e) => e.category === 'finance').map((e) => e.id));
+    expect(finance.size).toBeGreaterThanOrEqual(2);
+    for (let seed = 0; seed < 40; seed++) {
+      const m = houseManifest('street-market', slots, pool, seed, { blockedCategories: blocked });
+      for (const f of m.slots.flatMap((s) => s.frames)) expect(finance.has(f.c), f.c).toBe(false);
+      expect(m.slots[0]!.frames.filter((f) => advOf.get(f.c) === 'worldstreet')).toHaveLength(2);
+      expect(checkManifest(m, slots, (c) => poolEntries(pool).some((e) => e.id === c))).toEqual([]);
+    }
+    // only one advertiser left: it takes every frame, all different
+    const deetOnly: HousePool = { ...pool, sponsored: { screens: pool.sponsored.screens.filter((e) => e.advertiser === 'deet'), hoardings: pool.sponsored.hoardings.filter((e) => e.advertiser === 'deet') } };
+    for (let seed = 0; seed < 10; seed++) {
+      const f = houseManifest('street-market', slots, deetOnly, seed).slots[0]!.frames;
+      expect(f.every((x) => advOf.get(x.c) === 'deet')).toBe(true);
+      expect(new Set(f.map((x) => x.c)).size).toBe(6);
     }
   });
 
   it('Motion frames carry their keyframe count; the manifest check bounds it (≤ 4 keyframes)', () => {
-    const motion = pool.studio.screens.filter((e) => e.keys?.length);
+    const motion = pool.sponsored.screens.filter((e) => e.keys?.length);
     expect(motion.length).toBeGreaterThanOrEqual(2);
-    const frames = [0, 1, 2, 3, 4].flatMap((seed) => houseManifest('street-market', slots, pool, seed).slots[0]!.frames);
+    const frames = Array.from({ length: 40 }, (_, seed) => houseManifest('street-market', slots, pool, seed, {}).slots[0]!.frames).flat();
     for (const e of motion) expect(frames.find((f) => f.c === e.id)?.k).toBe(e.keys!.length + 1);
     const m = houseManifest('street-market', slots, pool, 0);
     const bad: AdManifest = { ...m, slots: m.slots.map((s, i) => (i === 0 ? { ...s, frames: s.frames.map((f, j) => (j === 0 ? { ...f, k: MAX_KEYS + 1 } : f)) } : s)) };
@@ -247,7 +305,7 @@ describe('the studio’s creatives (Deet Studios) and Motion keyframes (docs/14 
   });
 
   it('a keyframe change is never a flash: keyframes of a Motion creative stay within 0.1 of each other’s mean luminance', () => {
-    for (const e of pool.studio.screens.filter((x) => x.keys?.length)) {
+    for (const e of studio.filter((x) => x.keys?.length)) {
       const l = e.keyLuminance!;
       expect(l).toHaveLength(e.keys!.length + 1);
       expect(Math.max(...l) - Math.min(...l), e.id).toBeLessThan(0.1);
@@ -257,7 +315,9 @@ describe('the studio’s creatives (Deet Studios) and Motion keyframes (docs/14 
 
   it('rotation fades a Motion creative between its keyframe layers, and from the last keyframe at the beat', () => {
     const screens = slots.filter((s) => s.format === '4:3');
-    const m = houseManifest('street-market', slots, pool, 1); // seed 1: frame 0 is the first Motion creative
+    // a match whose frame 0 is a Motion creative
+    const seed = Array.from({ length: 40 }, (_, i) => i).find((i) => houseManifest('street-market', slots, pool, i).slots[0]!.frames[0]!.k === 2)!;
+    const m = houseManifest('street-market', slots, pool, seed);
     const f0 = m.slots[0]!.frames[0]!;
     expect(f0.k).toBe(2);
     const keyed = keyframeLayers(referencedCreatives(m, slots, '4:3'), (id) => (poolEntries(pool).find((e) => e.id === id)?.keys?.length ?? 0) + 1);
@@ -302,14 +362,19 @@ describe('GPU memory and airtime (review M1)', () => {
     expect(plannedGpuBytes(paid, slots) - plannedGpuBytes(house, slots)).toBeLessThan(70 * 1024);
   });
 
-  it('every client in a match builds the same set, and over matches every pool creative is shown', () => {
+  it('every client in a match builds the same set, and over matches every pool creative is shown (and every allowed one with a category blocked)', () => {
     expect(houseManifest('street-market', slots, pool, 77)).toEqual(houseManifest('street-market', slots, pool, 77));
-    const seen = new Set<string>();
-    for (let match = 0; match < 8; match++) {
-      const m = houseManifest('street-market', slots, pool, 1234 + match);
-      for (const f of ['4:3', '6:1'] as const) for (const c of referencedCreatives(m, slots, f)) seen.add(c);
+    for (const opts of [DEFAULT_HOUSE_OPTIONS, { blockedCategories: new Set(['finance']) }] as HouseOptions[]) {
+      const seen = new Set<string>();
+      for (let match = 0; match < 24; match++) {
+        const m = houseManifest('street-market', slots, pool, 1234 + match, opts);
+        for (const f of ['4:3', '6:1'] as const) for (const c of referencedCreatives(m, slots, f)) seen.add(c);
+      }
+      const want = poolEntries(pool).filter((e) => !e.category || !opts.blockedCategories?.has(e.category));
+      expect([...seen].sort()).toEqual(want.map((e) => e.id).sort());
     }
-    expect([...seen].sort()).toEqual(poolEntries(pool).map((e) => e.id).sort());
+    // nothing is held back by default (the owner approved WorldStreet's finance creatives, 23 Oct)
+    expect(DEFAULT_HOUSE_OPTIONS.blockedCategories).toEqual(new Set());
   });
 
   it('the boards follow the match seed, unless a manifest was set from outside (the paid flow)', () => {

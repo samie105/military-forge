@@ -86,7 +86,7 @@ async function showStudio(page, screens, hoardings) {
   const kinds = await page.evaluate(
     ({ screens, hoardings }) => {
       const b = window.__game.view3d.env.boards;
-      const pool = [...b.pool.studio.screens, ...b.pool.studio.hoardings];
+      const pool = [...b.pool.sponsored.screens, ...b.pool.sponsored.hoardings];
       const frame = (id) => {
         const e = pool.find((x) => x.id === id);
         return e.keys?.length ? { c: id, k: e.keys.length + 1, paid: false } : { c: id, paid: false };

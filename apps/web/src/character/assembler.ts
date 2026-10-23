@@ -115,6 +115,10 @@ interface DyeEntry {
   defaults?: Partial<Record<DyeChannel, string>>;
   /** proposal for W8: the albedo's alpha already holds the skin weight */
   skin?: 'alpha';
+  /** a sharper albedo and mask for close-ups (the creator, portraits, the VS poster): same UVs, e.g. 1024² (the
+   *  animation agent's creator stage; the Forge makes them) */
+  heroAlbedo?: string;
+  heroMask?: string;
 }
 
 /** The fields of W8's manifests the assembler reads (rookie.json and cosmetics/<slot>/<id>.json). */
@@ -157,6 +161,8 @@ interface BaseRig {
   upperBodyBones: readonly string[];
   /** bind-pose position of every bone, for fitting skinned parts to body types */
   bonePositions: Map<string, Vector3>;
+  /** the LOD0 body's close-up textures, loaded on first ask; null when the manifest lists none */
+  hero: (() => Promise<{ albedo: Texture; mask: Texture }>) | null;
 }
 
 interface Part {
@@ -208,6 +214,11 @@ export interface CharacterInstance {
   setOutline(material: Material | null): void;
   /** the outline hull, while there is one */
   readonly outline: SkinnedMesh | null;
+  /**
+   * Close-up textures on the LOD0 body (the creator stage, portraits, posters) when the body's manifest lists them
+   * (`dye.lod0.heroAlbedo`, `heroMask`); resolves whether they're in. Off again: the normal ones.
+   */
+  setHero(on: boolean): Promise<boolean>;
   dispose(): void;
 }
 
@@ -474,6 +485,16 @@ export class CharacterAssembler {
       };
     };
     const lods = (await Promise.all([layer(lod0, 'lod0'), layer(lod1, 'lod1')])) as [Layer, Layer];
+    const heroOf = () => {
+      const entry = manifest.dye.lod0;
+      if (!entry.heroAlbedo || !entry.heroMask) return null;
+      let loading: Promise<{ albedo: Texture; mask: Texture }> | null = null;
+      return () =>
+        (loading ??= Promise.all([s.texture(dir + entry.heroAlbedo!, true), s.texture(dir + entry.heroMask!, false)]).then(([albedo, mask]) => ({
+          albedo: entry.skin === 'alpha' ? albedo : bodyAlbedoWithSkin(albedo, skin),
+          mask,
+        })));
+    };
     const bonePositions = new Map<string, Vector3>();
     const m = new Matrix4();
     mesh0.skeleton.bones.forEach((b, i) => bonePositions.set(b.name, new Vector3().setFromMatrixPosition(m.copy(mesh0.skeleton.boneInverses[i]!).invert())));
@@ -494,6 +515,7 @@ export class CharacterAssembler {
       defaultParts,
       upperBodyBones: manifest.upperBodyBones ?? [],
       bonePositions,
+      hero: heroOf(),
     };
   }
 
@@ -636,6 +658,9 @@ class Instance implements CharacterInstance {
     old.dispose();
     // the old rig's geometry key no longer applies: swap() acquires the new body's
     this.rig = rig;
+    // the close-up textures were the old body's
+    this.hero = null;
+    if (this.heroOn) void this.setHero(true);
   }
 
   setLod(lod: CharacterLod): void {
@@ -704,9 +729,27 @@ class Instance implements CharacterInstance {
     this.applyTextures();
   }
 
+  private hero: { albedo: Texture; mask: Texture } | null = null;
+  private heroOn = false;
+
+  async setHero(on: boolean): Promise<boolean> {
+    this.heroOn = on;
+    const rig = this.rig;
+    if (!on || !rig.hero) {
+      this.applyTextures();
+      return false;
+    }
+    const hero = await rig.hero().catch(() => null);
+    if (!hero || rig !== this.rig || !this.heroOn) return false;
+    this.hero = hero;
+    this.applyTextures();
+    return true;
+  }
+
   private applyTextures(): void {
     const base = this.rig.lods[this.lod];
-    this.material.setLayer(0, base.albedo, base.mask);
+    const hero = this.heroOn && this.lod === 0 && this.rig.hero ? this.hero : null;
+    this.material.setLayer(0, hero?.albedo ?? base.albedo, hero?.mask ?? base.mask);
     ART_SLOTS.forEach((_, i) => {
       const layer = this.parts[i]?.lods[this.lod];
       this.material.setLayer(i + 1, layer?.albedo ?? null, layer?.mask ?? null);

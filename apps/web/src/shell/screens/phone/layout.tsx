@@ -4,7 +4,8 @@
  * screens. They're 812×375 designs zoomed to the window by fit.ts's --phone-fit, wear round two's
  * components (kit-v2) and move by the shared motion system at phone distances (--m-rise 10 px).
  */
-import { useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
+import { useRef, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
+import { useFocusTrap } from '../../../ui/focusTrap';
 import { LANDSCAPE_PHONE_QUERY, UPRIGHT_PHONE_QUERY, isPhoneShape, isRotated } from '../../../ui/landscape';
 
 /** A phone held sideways: a finger for a pointer and no more than 500 px of height (tablets keep the desktop menus). */
@@ -94,6 +95,7 @@ export function PhoneScreen({
   label,
   word,
   modal = false,
+  dialog = false,
   className,
   style,
   children,
@@ -104,15 +106,27 @@ export function PhoneScreen({
   label: string;
   word?: string;
   modal?: boolean;
+  /** a dialog over another screen: role="dialog", focus kept inside (ui/focusTrap.ts) */
+  dialog?: boolean;
   className?: string;
   style?: CSSProperties;
   children: ReactNode;
 }) {
   const active = states.filter(Boolean).join(' ') || 'default';
   const large = useLargeText();
+  const ref = useRef<HTMLElement>(null);
+  useFocusTrap(ref, dialog);
   return (
     <div className={`mf-fit mf-fit--phone kit-v2${modal ? ' mf-fit--modal' : ''}${large ? ' is-text-lg' : ''}`}>
-      <section className={['screen', `screen--${kind}`, 'screen--phone', className ?? ''].filter(Boolean).join(' ')} data-screen={name} data-active-state={active} aria-label={label} style={style}>
+      <section
+        ref={ref}
+        className={['screen', `screen--${kind}`, 'screen--phone', className ?? ''].filter(Boolean).join(' ')}
+        data-screen={name}
+        data-active-state={active}
+        aria-label={label}
+        style={style}
+        {...(dialog ? { role: 'dialog', 'aria-modal': true, tabIndex: -1 } : {})}
+      >
         {word && (
           <div className="bg pbg" aria-hidden="true">
             <div className="bg__scrim"></div>

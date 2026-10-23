@@ -37,7 +37,7 @@ export function PhonePause({ store }: { store: ShellStore }) {
   const leaveWord = what === 'training' ? 'Quit training' : what === 'match' ? 'Leave match' : 'Leave room';
 
   return (
-    <PhoneScreen name="m-pause" kind="game" modal label="Menu" states={[host ? 'host' : 'guest', confirm ? 'confirm-leave' : 'menu']}>
+    <PhoneScreen name="m-pause" kind="game" modal dialog label="Menu" states={[host ? 'host' : 'guest', confirm ? 'confirm-leave' : 'menu']}>
       <div className="pause__dim pm-dim" aria-hidden="true"></div>
       <nav className="pm-pause plate m-p9 m-p9--left" aria-label="Menu">
         <span className="eyebrow">{room ? 'Match still running' : 'Training still running'}</span>

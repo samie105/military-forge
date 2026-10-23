@@ -109,6 +109,14 @@ export function mountShell(parent: HTMLElement = document.body, options: ShellOp
       if (!sameView(state.match, view) || !sameLobby(state.lobby, lobby) || !sameConnection(state.connection, connection)) {
         store.setState({ match: view, lobby, connection: connection && { ...connection } });
       }
+      // a spectator (v20): the lobby offers Join next round instead of Ready and Start
+      const spectating = online?.spectating === true;
+      const spectateQueue = (spectating && online?.spectateState?.queue) || 0;
+      if (state.spectating !== spectating || state.spectateQueue !== spectateQueue) {
+        // seated as a player: a rejoin from here plays again (the room screen forgets it came to watch)
+        const seated = state.spectating && !spectating && state.screen.name === 'room' && state.screen.watch === true && (online?.localId ?? -1) >= 0;
+        store.setState({ spectating, spectateQueue, ...(seated && state.screen.name === 'room' ? { screen: { ...state.screen, watch: false } } : {}) });
+      }
     },
     setMapEvent(view) {
       const banner = bannerOf(view);

@@ -1,0 +1,28 @@
+/*
+ * The cheap path (ui/lowEnd.ts): on a low-end device (html.mf-lowend) and on Low graphics
+ * (html.gfx-low) the interface drops its decoration, never its information:
+ *   - no backdrop blur anywhere: Frost glass becomes the kit's solid fills (frost.css and title.css
+ *     step aside on both classes; this catches every other panel, HUD plate and control);
+ *   - no idle loops behind the menus (the dots and words drifting, stickers bobbing, the ID card's sway,
+ *     the title's smoke, drift and light sweep, the armory's turning gun) and no blur in entrances.
+ * Moves that say something (a screen arriving, a button pressed, a counter rolling) stay: they're
+ * short, and transform and opacity only. Reduce motion (kit.css) still stops everything.
+ */
+html:is(.mf-lowend, .gfx-low) *,
+html:is(.mf-lowend, .gfx-low) *::before,
+html:is(.mf-lowend, .gfx-low) *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html:is(.mf-lowend, .gfx-low) {
+  /* the focus pull (motion P1) arrives without its blur: a blur repaints every frame it runs */
+  --m-pull-blur: 0px;
+}
+
+html:is(.mf-lowend, .gfx-low)
+  :is(.bg__dots, .bg__word, .btn__sticker, .soldier, .ticker__run, .idcard, .ar__gun, .mech--pump, .mech--pump i, .mech--bolt, .mech--casing i, .mf-vf__line, .mf-title__smoke, .mf-title__world, .mf-title__sweep) {
+  animation: none !important;
+}
+html:is(.mf-lowend, .gfx-low) .mf-title__sweep { display: none; }
+html:is(.mf-lowend, .gfx-low) .mf-title__world { transition: none; will-change: auto; }

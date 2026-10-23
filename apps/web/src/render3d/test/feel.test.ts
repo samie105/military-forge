@@ -308,3 +308,48 @@ describe('§9 timing: a take-off with a crouch, a landing with an attack and a r
     expect(rebound / deepest).toBeLessThanOrEqual(0.08);
   }, SLOW);
 });
+
+describe('§9 life: the armed upper body breathes, the gun stays on the aim; standing still, idle variants play', () => {
+  it('spine and clavicles move 0.8–2° on a 2.5–3.5 s breath while aiming a K-47; the barrel stays within 0.5°', async () => {
+    const av = await feelAvatar();
+    const views = [...timeline(60 + 7 * 60, 0, {}, { weapons: slots(K47.index, HAMMER.index), aim: 0.3 })];
+    const q = new Quaternion();
+    const along = new Vector3(Math.cos(0.3), Math.sin(0.3), 0);
+    const pitch: number[] = [];
+    let clav = { lo: Infinity, hi: -Infinity };
+    const spine = av.inst.bone('spine2')!;
+    const clavicle = av.inst.bone('clavicle_L')!;
+    const socket = av.inst.bone('socket_weapon_R')!;
+    turns(av, views, (_a, i) => {
+      if (i < 60) return;
+      // the chest's own bend (spine1 and spine2 under the hips: the idle's hips sway on their own clock), and the
+      // shoulder's height
+      const f = new Vector3(0, 1, 0).applyQuaternion(spine.quaternion).applyQuaternion(spine.parent!.quaternion);
+      pitch.push((Math.atan2(f.z, f.y) * 180) / Math.PI);
+      const y = clavicle.getWorldPosition(new Vector3()).y;
+      clav = { lo: Math.min(clav.lo, y), hi: Math.max(clav.hi, y) };
+      expect((new Vector3(0, 1, 0).applyQuaternion(socket.getWorldQuaternion(q)).angleTo(along) * 180) / Math.PI, `frame ${i}`).toBeLessThan(0.5);
+    });
+    const amp = (Math.max(...pitch) - Math.min(...pitch)) / 2;
+    expect(amp, 'chest amplitude (°)').toBeGreaterThanOrEqual(0.8);
+    expect(amp).toBeLessThanOrEqual(2);
+    expect(clav.hi - clav.lo, 'the shoulders lift (m)').toBeGreaterThan(0.002);
+    // the period: from the upward crossings of the mean
+    const mean = pitch.reduce((s, v) => s + v, 0) / pitch.length;
+    const ups = pitch.flatMap((v, i) => (i > 0 && pitch[i - 1]! < mean && v >= mean ? [i] : []));
+    const period = ((ups[ups.length - 1]! - ups[0]!) / (ups.length - 1)) * DT;
+    expect(period).toBeGreaterThanOrEqual(2.5);
+    expect(period).toBeLessThanOrEqual(3.5);
+  }, SLOW);
+
+  it('standing still, a weight shift or a look around comes in within 15 s, eased (no bone over 20° a frame)', async () => {
+    const av = await feelAvatar();
+    let seen = 0;
+    const frames = turns(av, timeline(17 * 60, 0, {}, {}), (a) => {
+      const w = a.loco.weights();
+      seen = Math.max(seen, (w.idleShift ?? 0) + (w.idleLook ?? 0));
+    });
+    expect(seen, 'a variant at full weight').toBeGreaterThan(0.9);
+    expect(peak(frames, 2).deg).toBeLessThan(20);
+  }, SLOW);
+});

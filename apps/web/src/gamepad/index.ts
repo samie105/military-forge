@@ -142,7 +142,8 @@ function hint(code: string, words: string): string {
 function mountHints(m: PadManager): void {
   const bar = document.createElement('div');
   bar.className = 'mf-pad-hints';
-  bar.setAttribute('role', 'note');
+  // a landmark of its own (a note outside every landmark is lost to a screen reader's landmark list)
+  bar.setAttribute('role', 'complementary');
   bar.setAttribute('aria-label', 'Controller buttons');
   document.body.appendChild(bar);
   let last = '';

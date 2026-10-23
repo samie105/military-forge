@@ -3,6 +3,8 @@
  * table and the HUD layout live in layout.ts, which only the touch HUD chunk loads.
  */
 
+import { isAssistLevel, type AssistLevel } from '../input/assist';
+
 export type KeyValueStore = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 /** v2: the mm-anchored Classic layout (controls spec §4.2); a v1 layout (the kit's places) isn't carried over. */
@@ -31,6 +33,16 @@ export type Handed = 'right' | 'left';
 export type FireMode = 'auto' | 'pull' | 'button' | 'release';
 export const FIRE_MODES: readonly FireMode[] = ['auto', 'pull', 'button', 'release'];
 
+/** The touch aim assist levels, as Settings, the pause menu's editor and the drill name them. */
+export const ASSIST_NAMES: Readonly<Record<AssistLevel, string>> = { off: 'Off', light: 'Light', standard: 'Standard', strong: 'Strong' };
+/** What each level does, in the player's words (controls spec §4.5). */
+export const ASSIST_HELP: Readonly<Record<AssistLevel, string>> = {
+  off: 'No help: the aim goes exactly where your thumb points.',
+  light: 'The aim slows a little on an enemy, so a sweep lingers on him. It never pulls.',
+  standard: 'Light, plus a gentle pull toward an enemy near your aim line while you aim, or while Auto fires. Your thumb always wins.',
+  strong: 'Standard, plus the aim stays on your target when you lift your thumb.',
+};
+
 /** Back to the default layout on this device. */
 export function clearLayout(store: KeyValueStore | null): void {
   try {
@@ -55,8 +67,12 @@ export interface TouchSettings {
   precisionRelease: boolean;
   /** Fire button mode: a second FIRE at the top left, for the left index finger */
   leftFire: boolean;
-  /** a light slowdown while the aim lies on an enemy (docs/01 §4); touch only */
-  aimAssist: boolean;
+  /**
+   * Touch aim assist (controls spec §4.5; the shared core in input/assist.ts): Off; Light (the old
+   * switch: the aim slows on an enemy); Standard (plus a gentle pull while you aim, or while Auto
+   * fires); Strong (plus the aim stays on the target when you let go). Touch and pads only.
+   */
+  assist: AssistLevel;
   handed: Handed;
   /** buzz when you're hit (where the browser allows vibration) */
   vibrate: boolean;
@@ -92,7 +108,7 @@ export const DEFAULT_TOUCH_SETTINGS: Readonly<TouchSettings> = {
   fireChosen: false,
   precisionRelease: true,
   leftFire: false,
-  aimAssist: true,
+  assist: 'standard',
   handed: 'right',
   vibrate: true,
   swipeDash: true,
@@ -124,7 +140,10 @@ export function sanitizeSettings(raw: unknown): TouchSettings {
   if (r.fire === 'hold') s.fire = r.autoFire === true ? 'auto' : 'pull';
   else if (typeof r.fire === 'string' && (FIRE_MODES as readonly string[]).includes(r.fire)) s.fire = r.fire as FireMode;
   if (r.handed === 'right' || r.handed === 'left') s.handed = r.handed;
-  for (const k of ['aimAssist', 'vibrate', 'swipeDash', 'keepAim', 'gestures', 'haptics', 'lookAhead', 'pinchZoom', 'fireChosen', 'precisionRelease', 'leftFire', 'autoFade'] as const) if (typeof r[k] === 'boolean') s[k] = r[k];
+  for (const k of ['vibrate', 'swipeDash', 'keepAim', 'gestures', 'haptics', 'lookAhead', 'pinchZoom', 'fireChosen', 'precisionRelease', 'leftFire', 'autoFade'] as const) if (typeof r[k] === 'boolean') s[k] = r[k];
+  // the old switch: off stays off; on (the default everyone had) is the new default, Standard
+  if (isAssistLevel(r.assist)) s.assist = r.assist;
+  else if (r.aimAssist === false) s.assist = 'off';
   if (isFiniteNumber(r.opacity)) s.opacity = clamp(r.opacity, LIMITS.opacityMin, LIMITS.opacityMax);
   if (isFiniteNumber(r.shake)) s.shake = clamp(r.shake, 0, 1);
   if (isFiniteNumber(r.view)) s.view = clamp(r.view, VIEW_LIMITS.min, VIEW_LIMITS.max);

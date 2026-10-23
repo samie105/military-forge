@@ -44,6 +44,7 @@ import { arrayFromLayers, textureBytes, type Ktx2Source } from '../environment/k
 import type { PlanePose } from '../planeCamera';
 import { houseManifest, poolEntries, type AdFrame, type AdManifest, type AdSlot, type HouseEntry, type HousePool } from './manifest';
 import { CROSSFADE_MS, crossfade, frameIndex, keyFade, keySegment, lastKeySegment, previousFrame } from './rotation';
+import { creativeAt, type BoardHit } from './click';
 import { LitLimiter } from './visibility';
 
 export interface FormatSpec {
@@ -250,6 +251,24 @@ function chipTexture(): CanvasTexture {
   return tex;
 }
 
+/** Boards alive now (one per loaded map with ad slots): tap-to-save asks the one being drawn. */
+const live = new Set<AdBoards>();
+
+/** The boards drawn within the last `withinMs` (the 3D view is up and showing them), or null. */
+export function drawnBoards(now: number = performance.now(), withinMs = 400): AdBoards | null {
+  let best: AdBoards | null = null;
+  for (const b of live) if (now - b.drawnAt <= withinMs && (!best || b.drawnAt > best.drawnAt)) best = b;
+  return best;
+}
+
+/** A board's creative under a point, with its picture (for the saved card). */
+export interface SavedPick extends BoardHit {
+  /** the creative's WebP, under the page's base URL; null when it isn't in the pool */
+  image: string | null;
+  /** its title (the words on it) */
+  title: string;
+}
+
 interface FormatMesh {
   spec: FormatSpec;
   slots: AdSlot[];
@@ -282,6 +301,12 @@ export class AdBoards {
   private generation = 0;
   private chip: CanvasTexture | null = null;
   private disposed = false;
+  /** when update() last ran (performance.now): the boards are on screen */
+  drawnAt = -Infinity;
+  /** the pose and match time of the last update: what is on screen */
+  private readonly pose: PlanePose = { x: 0, y: 0, z: 1, shift: 0, aspect: 1 };
+  private matchTimeMs = 0;
+  private readonly titles: Map<string, string>;
 
   constructor(
     readonly mapId: string,
@@ -298,6 +323,8 @@ export class AdBoards {
     const files = entries.flatMap((e) => [[e.id, e.ktx2] as const, ...(e.keys ?? []).map((k, i) => [`${e.id}#${i + 1}`, k.ktx2] as const)]);
     this.ktx2Files = new Map(files.filter((f): f is readonly [string, string] => !!f[1]));
     this.keyCount = new Map(entries.map((e) => [e.id, (e.keys?.length ?? 0) + 1]));
+    this.titles = new Map(entries.map((e) => [e.id, e.title]));
+    live.add(this);
     this.manifest = houseManifest(mapId, slots, pool, 0);
     const m = new Matrix4();
     for (const spec of Object.values(FORMATS)) {
@@ -403,6 +430,9 @@ export class AdBoards {
   update(matchTimeMs: number, pose: PlanePose, dt: number, matchSeed = 0): void {
     this.chooseHouse(matchSeed);
     const lit = this.limiter.update(pose, dt);
+    Object.assign(this.pose, pose);
+    this.matchTimeMs = matchTimeMs;
+    this.drawnAt = typeof performance === 'undefined' ? 0 : performance.now();
     for (const f of this.formats) {
       rotationState(f.slots, this.manifest, f.layers, matchTimeMs, f.state);
       const g = f.mesh.geometry;
@@ -417,6 +447,32 @@ export class AdBoards {
       aLayers.needsUpdate = aPaid.needsUpdate = aLit.needsUpdate = true;
       f.mesh.material.uniforms.uFade!.value = f.state.fade;
     }
+  }
+
+  /**
+   * The creative under the gameplay-plane point (x, y) as last drawn: only a lit surface whose
+   * creatives are in counts. Null over anything else.
+   */
+  pickAt(x: number, y: number): SavedPick | null {
+    const lit = new Float32Array(this.slots.length);
+    for (const f of this.formats) if (f.layers.size > 0) f.index.forEach((i) => (lit[i] = this.limiter.lit[i]!));
+    const hit = creativeAt(this.slots, this.manifest, lit, this.pose, this.matchTimeMs, x, y);
+    if (!hit) return null;
+    const file = this.files.get(hit.frame.c);
+    return { ...hit, image: file ? this.base + file : null, title: this.titles.get(hit.frame.c) ?? '' };
+  }
+
+  /** Some lit surface on screen shows a creative that can be saved (the tap-to-save hint). */
+  litOnScreenSavable(): boolean {
+    return this.formats.some(
+      (f) =>
+        f.layers.size > 0 &&
+        f.slots.some((slot, k) => {
+          if (this.limiter.lit[f.index[k]!]! <= 0.5) return false;
+          const frames = this.manifest.slots.find((s) => s.slot === slot.slotId)?.frames ?? [];
+          return !!frames[frameIndex(slot, this.matchTimeMs)]?.click;
+        }),
+    );
   }
 
   /** On-screen surfaces showing a creative right now (≤ 2 by construction). */
@@ -437,6 +493,7 @@ export class AdBoards {
 
   dispose(): void {
     this.disposed = true;
+    live.delete(this);
     this.chip?.dispose();
     for (const f of this.formats) {
       (f.mesh.material.uniforms.uMap!.value as Texture | null)?.dispose();

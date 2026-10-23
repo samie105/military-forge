@@ -117,7 +117,7 @@ export function NameEntry({ store, first }: { store: ShellStore; first: boolean 
   const preview = name.trim() || '—';
 
   return (
-    <Screen name="name-entry" kind="menu" states={[state]} label="Your name">
+    <Screen name="name-entry" kind="menu" states={[state]} label="Your name" dialog={!first}>
       <Backdrop word="RECRUIT" />
       <div className="menu">
         <header className="menu-top">

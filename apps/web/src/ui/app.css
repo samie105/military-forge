@@ -142,3 +142,14 @@ html.mf-short .lobby .roomcode span { height: 80px; }
   font-family: var(--f-ui);
   font-size: 13px;
 }
+
+/* a dialog screen takes focus itself when it opens (ui/focusTrap.ts): no ring around the whole screen */
+.mf-fit > .screen[role="dialog"]:focus { outline: none; box-shadow: none; }
+
+/* small phones (an iPhone SE, a 360-px Android held sideways) zoom the 812×375 phone screens below
+   0.92, which would put their 48-px targets under 44 px: the touch tokens grow to keep 44 CSS px
+   (WCAG 2.5.5). Such phones zoom by their width, so the screens have the height to spare. */
+.mf-fit.mf-fit--phone > .screen {
+  --touch-min: max(48px, calc(44px / var(--phone-fit, 1)));
+  --btn-h-sm: max(48px, calc(44px / var(--phone-fit, 1)));
+}

@@ -170,17 +170,21 @@ describe('shipped KTX2 copies', () => {
     expect(copies).toBeGreaterThanOrEqual(5);
   });
 
+  type Entry = { id: string; file: string; ktx2?: string; keys?: { file: string; ktx2?: string }[] };
   it('every house billboard has an ETC1S layer at its format’s size; each format’s layers cost ≤ 1.2× its WebPs', () => {
     for (const def of Object.values(ENVIRONMENTS)) {
       if (!def.ads) continue;
       const pool = JSON.parse(readFileSync(new URL(def.ads.pool, PUBLIC)).toString()) as {
         ktx2Size: Record<string, [number, number]>;
-        screens: { id: string; file: string; ktx2?: string }[];
-        hoardings: { id: string; file: string; ktx2?: string }[];
+        screens: Entry[];
+        hoardings: Entry[];
+        sponsored?: { screens: Entry[]; hoardings: Entry[] };
       };
+      // local house art and the sponsors' creatives (render3d/ads), Motion keyframes included
+      const layers = (list: Entry[]) => list.flatMap((e) => [e, ...(e.keys ?? []).map((k, i) => ({ id: `${e.id}#${i + 1}`, ...k }))]);
       for (const [format, list] of [
-        ['4:3', pool.screens],
-        ['6:1', pool.hoardings],
+        ['4:3', layers([...pool.screens, ...(pool.sponsored?.screens ?? [])])],
+        ['6:1', layers([...pool.hoardings, ...(pool.sponsored?.hoardings ?? [])])],
       ] as const) {
         expect(list.length).toBeGreaterThan(0);
         let webp = 0;

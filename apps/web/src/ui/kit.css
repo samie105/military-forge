@@ -448,7 +448,7 @@
 .tabs{ display:flex; gap:var(--sp-2); }
 .tab{ display:inline-flex; align-items:center; gap:var(--sp-2); min-height:52px; padding:0 var(--sp-5); border-radius:var(--r-sm); color:var(--c-muted); font-size:var(--fs-18); font-weight:var(--fw-black); font-stretch:var(--fstretch-wide); text-transform:uppercase; letter-spacing:.03em; }
 .tab:hover{ color:var(--c-text); }
-.tab[aria-selected="true"]{ background:var(--c-paper); color:var(--c-paper-text); box-shadow:var(--sh-press-sm); }
+.tab:is([aria-selected="true"], [aria-current="page"]){ background:var(--c-paper); color:var(--c-paper-text); box-shadow:var(--sh-press-sm); }
 .tabs--v{ flex-direction:column; }
 .tabs--v .tab{ justify-content:flex-start; }
 

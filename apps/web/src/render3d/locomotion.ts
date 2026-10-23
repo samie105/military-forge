@@ -434,6 +434,13 @@ interface Layer {
   duration: number;
 }
 
+/**
+ * Idle variants (docs/design/character-feel-research.md §5.1 E): standing still, every 8–15 s (seeded per body) a
+ * weight shift (`idle_shift`) or a look around (`idle_look`, mocap_clips.py) plays through once, blended in and out
+ * on springs (rad/s). Armed, the aim poses keep the upper body: the hips and legs shift.
+ */
+export const IDLE = { gap: [8, 15] as const, omega: 4 };
+
 /** A jet take-off: for this long (s) the climb pose comes in on a fast spring (rad/s), full at this climb speed (m/s). */
 export const TAKEOFF = { seconds: 0.35, omega: 30, full: 1.2 };
 
@@ -492,7 +499,14 @@ export class LocoLayer {
   private readonly clips = new Map<string, AnimationClip>();
   /** the skeleton's rest pose, taken before anything animates (the reference for unkeyed delta tracks) */
   private readonly rest: Map<string, RestPose>;
-  private layers: Record<'idle' | 'crouch' | 'slow' | 'walk' | 'run' | 'crouchStep' | 'ascend' | 'hover' | 'fall' | 'land', Layer | null>;
+  private layers: Record<'idle' | 'idleShift' | 'idleLook' | 'crouch' | 'slow' | 'walk' | 'run' | 'crouchStep' | 'ascend' | 'hover' | 'fall' | 'land', Layer | null>;
+  /** idle variants (IDLE): which one plays (0 none, 1 shift, 2 look), how long it has, and how long the body has stood */
+  private variant = 0;
+  private variantLeft = 0;
+  private stillFor = 0;
+  private nextVariant: number;
+  private variantSeed: number;
+  private readonly variantW = [new Spring(0, IDLE.omega), new Spring(0, IDLE.omega)];
   /** this frame's weight and time per distinct action */
   private slots = new Map<AnimationAction, { w: number; t: number }>();
   private upperBody = true;
@@ -529,7 +543,9 @@ export class LocoLayer {
     const measuredCrouch = crouchWalk && this.clips.has('crouch_idle') ? this.measure(crouchWalk) : null;
     this.crouchWalk = measuredCrouch?.stance ? measuredCrouch : null;
     // dummies standing side by side shouldn't breathe in sync
-    this.clock = Array.from({ length: 8 }, (_, i) => ((seed + 1) * 0.37 * (i + 1)) % 7);
+    this.clock = Array.from({ length: 10 }, (_, i) => ((seed + 1) * 0.37 * (i + 1)) % 7);
+    this.variantSeed = (seed * 2654435761) >>> 0;
+    this.nextVariant = this.idleGap();
     this.layers = this.build();
     this.slots = slotsOf(this.layers);
   }
@@ -604,7 +620,32 @@ export class LocoLayer {
       slot.t = -1;
     }
     for (let i = 0; i < this.clock.length; i++) this.clock[i]! += dt;
-    this.drive(L.idle, g * (1 - c), this.clock[0]!);
+    // idle variants: standing still a while, a weight shift or a look around plays through once, then the idle again
+    const still = p.grounded && !p.crouched && speed < 0.05;
+    this.stillFor = still ? this.stillFor + dt : 0;
+    if (!still) this.variant = 0;
+    else if (this.variant) {
+      this.variantLeft -= dt;
+      if (this.variantLeft <= 0) {
+        this.variant = 0;
+        this.stillFor = 0;
+        this.nextVariant = this.idleGap();
+      }
+    } else if (this.stillFor >= this.nextVariant) {
+      const choices = [L.idleShift ? 1 : 0, L.idleLook ? 2 : 0].filter((v) => v);
+      if (choices.length) {
+        this.variant = choices[this.rand() % choices.length]!;
+        const layer = this.variant === 1 ? L.idleShift : L.idleLook;
+        this.variantLeft = layer!.duration;
+        this.clock[this.variant === 1 ? 8 : 9] = 0;
+      } else this.stillFor = 0;
+    }
+    const w1 = this.variantW[0]!.step(this.variant === 1 ? 1 : 0, dt);
+    const w2 = this.variantW[1]!.step(this.variant === 2 ? 1 : 0, dt);
+    const base = Math.max(0, 1 - w1 - w2);
+    this.drive(L.idle, g * (1 - c) * base, this.clock[0]!);
+    this.drive(L.idleShift, g * (1 - c) * w1, this.clock[8]!);
+    this.drive(L.idleLook, g * (1 - c) * w2, this.clock[9]!);
     this.drive(L.crouch, g * c, this.clock[1]!);
     this.drive(L.ascend, (1 - g) * up, this.clock[2]!);
     this.drive(L.hover, (1 - g) * hover, this.clock[3]!);
@@ -630,6 +671,16 @@ export class LocoLayer {
       if (slot.t >= 0) action.time = slot.t;
     }
     return state;
+  }
+
+  /** Seconds standing still before the next idle variant (IDLE.gap, seeded per body). */
+  private idleGap(): number {
+    return IDLE.gap[0] + ((this.rand() % 1000) / 1000) * (IDLE.gap[1] - IDLE.gap[0]);
+  }
+
+  private rand(): number {
+    this.variantSeed = (Math.imul(this.variantSeed, 1664525) + 1013904223) >>> 0;
+    return this.variantSeed >>> 8;
   }
 
   /** The weight each layer asked for this frame (tests, debugging; a stand-in clip shared by two layers sums them). */
@@ -699,6 +750,8 @@ export class LocoLayer {
     const crouchIdle = pick(BASE_CLIPS.crouch);
     return {
       idle: play(idle),
+      idleShift: play(this.clips.get('idle_shift') ?? null),
+      idleLook: play(this.clips.get('idle_look') ?? null),
       crouch: play(crouchIdle),
       // (slow is measured in the constructor, before the first build)
       slow: this.slow ? additive(pick(BASE_CLIPS.slow), idle) : null,

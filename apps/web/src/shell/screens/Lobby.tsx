@@ -7,12 +7,16 @@
  * ready tick stamps (P7), Copy link swaps its label for 1.6 s, and the host's Start button glows when
  * everyone is ready.
  *
+ * A spectator (v20: in the room with no slot) gets no Ready, Start or warm-up: the footer says it's
+ * watching, with Join next round (and Stay watching once in line for a slot).
+ *
  * The kit's Same-Wi-Fi link, host tools (add or remove bots, kick), bot count and level, time of day
  * and a map choice aren't in the room protocol yet: their places stay empty (the PR lists them).
  */
 import { maps, type MapEventKind } from '@military-forge/content';
 import { ROOM_SETTING_LIMITS } from '@military-forge/protocol';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useStore } from 'zustand';
 import { Icon } from '../../ui/Icon';
 import { LobbyInvite } from '../../social/SocialLayer';
 import { Screen, blurAfter } from '../../ui/Screen';
@@ -316,6 +320,7 @@ const COPIED_MS = 1600;
 export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: LobbyView; tips?: Bindings | null; doubleTapDash?: boolean }) {
   const ctl = useCtl();
   const online = ctl.host.online;
+  const { spectating, queued } = useSpectating();
   const [folded, setFolded] = useState(false);
   const [copied, setCopied] = useState(false);
   const [timeLimit, showTime] = useRoomSetting(lobby.timeLimit);
@@ -365,7 +370,7 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
   const row = (i: number) => ({ '--i': i }) as CSSProperties;
 
   return (
-    <Screen name="lobby" kind="menu" states={[host ? 'host' : 'guest', lobby.ready ? 'ready' : 'not-ready', copied ? 'copied' : 'link-idle']} label="Room lobby">
+    <Screen name="lobby" kind="menu" states={[host ? 'host' : 'guest', lobby.ready ? 'ready' : 'not-ready', copied ? 'copied' : 'link-idle', ...(spectating ? ['watching'] : [])]} label="Room lobby">
       <Backdrop word="ROOM" />
       <div className="menu">
         <header className="menu-top lobby__top">
@@ -393,10 +398,12 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
             <Icon name="play" />
             Warm-up live
           </span>
-          <button className="btn btn--ghost btn--sm m-p8" type="button" onClick={blurAfter(() => setFolded(true))} title="Fold the lobby away and move around while you wait">
-            <Icon name="target" />
-            Warm up
-          </button>
+          {!spectating && (
+            <button className="btn btn--ghost btn--sm m-p8" type="button" onClick={blurAfter(() => setFolded(true))} title="Fold the lobby away and move around while you wait">
+              <Icon name="target" />
+              Warm up
+            </button>
+          )}
           <span className="menu-top__spacer"></span>
           {me && !me.isBot && me.pingMs >= 0 && (
             <span className="net-pill" title={lobby.local ? 'Your round trip to the host, over the Wi-Fi' : 'Your round trip to the room'}>
@@ -628,58 +635,105 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
         </div>
 
         <footer className="lobby__bar">
-          <p className="lobby__warm">
-            <span className="dot"></span>
-            Warm-up: move and shoot freely. Nothing counts until the match starts.
-          </p>
-          <span className="menu-top__spacer"></span>
-          {lobby.ready ? (
-            <button className="btn btn--ghost btn--xl m-p8" type="button" role="switch" aria-checked="true" onClick={blurAfter(() => online?.setReady(false))}>
-              <Icon name="check" />
-              You're ready
-            </button>
+          {spectating ? (
+            <SpectatorBar queued={queued} onPlay={(when) => online?.play(when)} />
           ) : (
-            <button
-              className="btn btn--ghost btn--xl m-p8"
-              type="button"
-              role="switch"
-              aria-checked="false"
-              onClick={(e) => {
-                remember('start', e.currentTarget);
-                blurAfter(() => online?.setReady(true))(e);
-              }}
-            >
-              <Icon name="check" />
-              Ready
-            </button>
-          )}
-          {host ? (
-            <button
-              className={allReady ? 'btn btn--paper btn--xl m-p8 mf-glow' : 'btn btn--paper btn--xl m-p8'}
-              type="button"
-              disabled={!enough}
-              title={enough ? 'Start the countdown now' : `Needs ${lobby.minPlayers} players`}
-              onClick={(e) => {
-                remember('start', e.currentTarget);
-                blurAfter(() => online?.startMatch())(e);
-              }}
-            >
-              <Icon name="play" />
-              <span className="btn__stack">
-                Start now
-                <span className="btn__sub">
-                  {readyCount} of {people.length} ready
-                </span>
-              </span>
-            </button>
-          ) : (
-            <p className="lobby__wait">
-              <span className="spinner"></span>
-              Waiting for {playerName(hostName, false)} to start, or everyone ready
-            </p>
+            <>
+              <p className="lobby__warm">
+                <span className="dot"></span>
+                Warm-up: move and shoot freely. Nothing counts until the match starts.
+              </p>
+              <span className="menu-top__spacer"></span>
+              {lobby.ready ? (
+                <button className="btn btn--ghost btn--xl m-p8" type="button" role="switch" aria-checked="true" onClick={blurAfter(() => online?.setReady(false))}>
+                  <Icon name="check" />
+                  You're ready
+                </button>
+              ) : (
+                <button
+                  className="btn btn--ghost btn--xl m-p8"
+                  type="button"
+                  role="switch"
+                  aria-checked="false"
+                  onClick={(e) => {
+                    remember('start', e.currentTarget);
+                    blurAfter(() => online?.setReady(true))(e);
+                  }}
+                >
+                  <Icon name="check" />
+                  Ready
+                </button>
+              )}
+              {host ? (
+                <button
+                  className={allReady ? 'btn btn--paper btn--xl m-p8 mf-glow' : 'btn btn--paper btn--xl m-p8'}
+                  type="button"
+                  disabled={!enough}
+                  title={enough ? 'Start the countdown now' : `Needs ${lobby.minPlayers} players`}
+                  onClick={(e) => {
+                    remember('start', e.currentTarget);
+                    blurAfter(() => online?.startMatch())(e);
+                  }}
+                >
+                  <Icon name="play" />
+                  <span className="btn__stack">
+                    Start now
+                    <span className="btn__sub">
+                      {readyCount} of {people.length} ready
+                    </span>
+                  </span>
+                </button>
+              ) : (
+                <p className="lobby__wait">
+                  <span className="spinner"></span>
+                  Waiting for {playerName(hostName, false)} to start, or everyone ready
+                </p>
+              )}
+            </>
           )}
         </footer>
       </div>
     </Screen>
+  );
+}
+
+/**
+ * A spectator's place in the room (v20): watching, or in line for a slot (SPECTATE's queue, 1 the
+ * moment one is free, 2 the next round), from the shell store.
+ */
+export function useSpectating(): { spectating: boolean; queued: boolean } {
+  const ctl = useCtl();
+  const spectating = useStore(ctl.store, (s) => s.spectating);
+  const queue = useStore(ctl.store, (s) => s.spectateQueue);
+  return { spectating, queued: spectating && queue !== 0 };
+}
+
+/** The lobby's footer for a spectator: no Ready or Start, the way to a slot instead. */
+function SpectatorBar({ queued, onPlay }: { queued: boolean; onPlay: (when: 'next' | false) => void }) {
+  return (
+    <>
+      <p className="lobby__warm" role="status">
+        <Icon name="eye" />
+        You're watching · you'll play when a slot opens
+      </p>
+      <span className="menu-top__spacer"></span>
+      {queued ? (
+        <>
+          <span className="status status--ok">
+            <Icon name="clock" size="sm" />
+            In line for a slot
+          </span>
+          <button className="btn btn--ghost btn--xl m-p8" type="button" onClick={blurAfter(() => onPlay(false))}>
+            <Icon name="eye" />
+            Stay watching
+          </button>
+        </>
+      ) : (
+        <button className="btn btn--volt btn--xl m-p8" type="button" onClick={blurAfter(() => onPlay('next'))}>
+          <Icon name="play" />
+          Join next round
+        </button>
+      )}
+    </>
   );
 }

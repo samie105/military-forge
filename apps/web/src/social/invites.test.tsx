@@ -4,7 +4,7 @@ import { ApiError } from '../shell/api';
 import { createShellStore, type Intent, type Screen } from '../shell/store';
 import type { Invite } from './api';
 import { EventStream, parseSse } from './events';
-import { InvitePicker, InviteToast } from './Invites';
+import { InvitePicker, InviteToast, watchInvite } from './Invites';
 import { SocialController, badgeCount, clockText, secondsLeft, type SocialShell } from './social';
 
 afterEach(() => vi.useRealTimers());
@@ -188,7 +188,7 @@ describe('invites in the SocialController', () => {
 });
 
 describe('the toast and the picker', () => {
-  it('the toast: who, which room, the time left, Join / Decline, and Watch waiting for spectating', () => {
+  it('the toast: who, which room, the time left, Join / Decline, and Watch', () => {
     const { shell } = fakeShell({}, { name: 'room', code: 'KMTXRA' });
     const social = new SocialController(shell, null);
     social.onEvent('invite', { invite: anInvite('i_1') });
@@ -196,10 +196,32 @@ describe('the toast and the picker', () => {
     expect(html).toContain('Join Kemi in');
     expect(html).toContain('OPSDEK');
     expect(html).toContain(clockText(120));
-    expect(html).toMatch(/data-hook="watch"[^>]*>|disabled[^>]*data-hook="watch"/);
+    // Watch (v20 spectating): on, no "Soon" tag
+    expect(html).toMatch(/<button type="button" class="btn btn--ghost btn--sm sx-act sx-watch" data-hook="watch"[^>]*>/);
+    expect(html).not.toMatch(/disabled=""[^>]*data-hook="watch"/);
+    expect(html).not.toContain('Soon');
     expect(html).not.toContain('Joining leaves this match'); // in the lobby: nothing to leave yet
     social.hideInvite(social.store.getState().invites[0]!);
     expect(renderToStaticMarkup(<InviteToast social={social} />)).toBe('');
+  });
+
+  it("Watch takes the invite's room as a spectator: the toast goes, the invite stays, a room we're in is left first", () => {
+    const { shell, gone, left } = fakeShell({}, { name: 'room', code: 'KMTXRA' });
+    const social = new SocialController(shell, null);
+    social.onEvent('invite', { invite: anInvite('i_1') });
+    const inv = social.store.getState().invites[0]!;
+    watchInvite(social, inv);
+    expect(left).toEqual(['left']);
+    expect(gone).toEqual([{ to: 'watch', code: inv.room }]);
+    expect(social.store.getState().invites).toHaveLength(1); // not answered: Join still works from Friends
+    expect(renderToStaticMarkup(<InviteToast social={social} />)).toBe('');
+    // already in that room: nothing to do
+    const here = fakeShell({}, { name: 'room', code: inv.room });
+    const again = new SocialController(here.shell, null);
+    again.onEvent('invite', { invite: anInvite('i_2') });
+    watchInvite(again, again.store.getState().invites[0]!);
+    expect(here.gone).toEqual([]);
+    expect(here.left).toEqual([]);
   });
 
   it('the picker lists friends to invite and the link for everyone else', async () => {

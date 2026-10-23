@@ -30,9 +30,9 @@ const json = <T>(p: string) => JSON.parse(read(p).toString()) as T;
 const slots = json<AdSlot[]>('public/assets/kits/street_market/street_market.adslots.json');
 const layout = json<KitLayout>('public/assets/kits/street_market/street_market.layout.json');
 type Lum = { luminance: number };
-const pool = json<{ screens: Lum[]; hoardings: Lum[]; studio?: { screens: Lum[]; hoardings: Lum[] } }>('public/assets/ads/street_market/house.json');
-/** the local house art and the studio's (Deet Studios) creatives */
-const creatives = [...pool.screens, ...pool.hoardings, ...(pool.studio?.screens ?? []), ...(pool.studio?.hoardings ?? [])];
+const pool = json<{ screens: Lum[]; hoardings: Lum[]; sponsored?: { screens: Lum[]; hoardings: Lum[] } }>('public/assets/ads/street_market/house.json');
+/** the local house art and the sponsored creatives (Deet Studios, WorldStreet) */
+const creatives = [...pool.screens, ...pool.hoardings, ...(pool.sponsored?.screens ?? []), ...(pool.sponsored?.hoardings ?? [])];
 /** the weathering map's mean (textures.ts grimeTexture: ≈ 0.92) */
 const GRIME_MEAN = 0.92;
 
@@ -106,5 +106,10 @@ describe('billboard brightness per look (docs/14 §3.4)', () => {
       expect(e.luminance).toBeGreaterThan(0.05);
       expect(e.luminance).toBeLessThan(0.9);
     }
+  });
+
+  it('no creative is brighter than the street’s old house art was (0.48: an advertiser never outshines the street)', () => {
+    // the brightest local house art before the owner removed it (23 Oct): Harbour Fish Market, 0.4797
+    for (const e of creatives) expect(e.luminance).toBeLessThanOrEqual(0.48);
   });
 });

@@ -327,7 +327,7 @@ The owner approved the free sources on 23 Oct: the CC0 sets, the CMU database an
 |---|---|---|---|
 | `walk` (replaces W8's unplanted walk) | 100STYLE's neutral walk, one straight cycle (frames 1168–1250): the hips, spine and arms, and its timing. The feet are planted: down 55% of a 0.4 s cycle, sliding back at 1.2 m/s, with 5 cm of lift. The toes stay out of the floor. | 100STYLE `Neutral/Neutral_FW.bvh` | CC BY 4.0: credit line in the game |
 | `idle_shift` | weight shifting from foot to foot; 4 s loop, feet planted | CMU `140_07` (Idle), 0–4 s | CMU: free for all uses, not to be resold as data |
-| `idle_look` | looking around; 4 s loop, feet planted | CMU `140_06` (Idle), 6–10 s | as above |
+| `idle_look` | looking around; 4 s loop, feet planted | CMU `140_07` (Idle), 6–10 s | as above |
 
 **Credits** (also served at `/licenses/motion-data.txt`):
 - "100STYLE dataset by Ian Mason, Sebastian Starke and Taku Komura, licensed under CC BY 4.0 (https://www.ianxmason.com/100style/)."

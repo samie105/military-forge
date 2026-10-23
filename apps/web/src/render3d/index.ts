@@ -30,6 +30,7 @@ import type { Frame } from '../view';
 import { Avatar, AvatarKit } from './avatar';
 import { HIT, hitReactions } from './motion';
 import { CharacterAssembler, OutlineMaterial, characterToonRamp, type CharacterInstance, type CharacterLod } from '../character';
+import { animDetail } from './animLod';
 import { LoadoutDirectory } from './character';
 import { CloudLayer } from './clouds';
 import { KIT_WAIT_MS, MapEnvironment, createKtx2, environmentFor, ktx2Gate, withTimeout, type Ktx2Source } from './environment';
@@ -691,7 +692,8 @@ export class Renderer3D {
       if (p.isLocal) this.localId = p.id;
       const avatar = this.avatars.get(p.id);
       if (avatar) {
-        avatar.update(p, dt, this.world, blob);
+        // animation LOD (animLod.ts, the animation agent's): off screen, small or LOD1 soldiers are posed less
+        avatar.update(p, dt, this.world, blob, animDetail(p.x, p.y, p.isLocal, avatar.lod, this.camera));
         continue;
       }
       if (this.pending.has(p.id)) continue;

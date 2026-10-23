@@ -73,7 +73,7 @@ describe('item tiles', () => {
     expect(html).toContain('mm-locked');
     expect(html).toContain('Battle pass S1 tier 34');
     expect(html).toContain('aria-label="Rare"');
-    expect(html).toContain('aria-pressed="false"');
+    expect(html).toContain('role="radio" aria-checked="false"'); // a radio: aria-checked only (On says what's worn)
     const owned = tileHtml(getCosmetic('dye_red')!, true, true, 'primary');
     expect(owned).toContain('data-channel="primary"');
     expect(owned).toContain('--sw:#c8332b'); // the kit's swatch (.item__sw)

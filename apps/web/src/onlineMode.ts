@@ -20,7 +20,7 @@ import { adminTuning, createTuning, defaultTuning, weapons, NO_WEAPON, type Admi
 import { RECONNECT_WINDOW_MS, reconnectDelay } from './shell/reconnect';
 import { adminTuningKeys } from './shell/tune';
 import { ConditionedLink, NetClient, TICK_MS, describeNetSim, type ConditionerSettings, type RemotePose, type Scheduler } from '@military-forge/netcode';
-import { CloseCode, CmdKind, MsgType, encodeCmd, isUnreliableMessage, type MatchStateMsg, type SnapshotPlayer } from '@military-forge/protocol';
+import { CloseCode, CmdKind, MsgType, encodeCmd, isUnreliableMessage, type MatchStateMsg, type SnapshotPlayer, type SpectateMsg } from '@military-forge/protocol';
 import { u16ToAngle } from '@military-forge/shared';
 import { MatchPhase, TICK_RATE, blindIntensity, type PlayerState, type SimEvent } from '@military-forge/sim';
 import { audio } from './audio';
@@ -66,6 +66,7 @@ const FATAL_CLOSE = new Set<number>([
   CloseCode.DuplicateSession,
   CloseCode.NoRoom,
   CloseCode.TicketInvalid,
+  CloseCode.SpectatorsFull,
   1000,
   1008,
   1011,
@@ -115,6 +116,11 @@ export interface OnlineOptions {
   local?: boolean;
   /** v19: the look to wear (the saved look as cosmetic wire ids); the room holds it to what we own */
   look?: readonly number[];
+  /**
+   * v20: watch the room as a spectator (no slot, no input; the whole map a few seconds behind).
+   * `play()` asks for a slot; the room seats us on this connection when one is free.
+   */
+  spectate?: boolean;
 }
 
 const sessionKey = (room: string) => `room.session.${room}`;
@@ -231,6 +237,7 @@ export class OnlineMode {
       name,
       ...(options.ticket ? { ticket: options.ticket } : {}),
       look,
+      ...(options.spectate ? { spectate: true } : {}),
       now: () => performance.now(),
       send: (bytes) => {
         this.bytesOut += bytes.length;
@@ -241,7 +248,8 @@ export class OnlineMode {
       backlog: () => this.transport?.backlog() ?? 0,
     });
     // a reload resumes the same player while the room still holds it
-    this.net.sessionToken = loadToken(options.room);
+    // (a spectator comes in fresh: an old token would bring a player back instead)
+    if (!options.spectate) this.net.sessionToken = loadToken(options.room);
 
     this.open();
     this.watchdogTimer = window.setInterval(() => this.checkSilence(performance.now()), WATCHDOG_MS);
@@ -301,11 +309,42 @@ export class OnlineMode {
     this.sendCmd(CmdKind.ReturnToLobby);
   }
 
+  // ---- spectating (v20, spectate/) ----
+
+  /** The room took us as a spectator (no player): the spectate director drives the camera. */
+  get spectating(): boolean {
+    return this.net.spectating;
+  }
+
+  /** What the room last said about our spectating (mode, death cam target, queue, the room's spectators). */
+  get spectateState(): SpectateMsg | null {
+    return this.net.spectate;
+  }
+
+  /** Seconds a spectator's feed runs behind the match (0 when playing). */
+  get spectateDelay(): number {
+    return this.net.spectating ? this.net.spectateDelayTicks / TICK_RATE : 0;
+  }
+
+  /** The death cam (dead) or the spectator's record: follow this player. */
+  follow(id: number): void {
+    this.net.follow(id);
+  }
+
+  /** A spectator asks for a slot: 'now', 'next' (next round) or false (stay watching). */
+  play(when: 'now' | 'next' | false): void {
+    this.net.play(when);
+  }
+
   // ---- voice chat (v18, voice/voice.ts) ----
 
-  /** Everyone's name by player id (the roster): voice chat's labels. */
+  /** Everyone's name by voice id (the roster, and v20's spectators at 32 + seat): voice chat's labels. */
   get playerNames(): ReadonlyMap<number, string> {
-    return this.net.names;
+    const spectators = this.net.spectate?.spectators ?? [];
+    if (spectators.length === 0) return this.net.names;
+    const names = new Map(this.net.names);
+    for (const s of spectators) names.set(s.voiceId, s.name);
+    return names;
   }
 
   /** VOICE_DOWN and VOICE_STATE as they arrive; returns the stop. */
@@ -414,6 +453,18 @@ export class OnlineMode {
       this.rejoinWithFreshTicket(why);
       return;
     }
+    // a spectator has no session to resume: it comes back for a fresh seat (a fresh ticket in a room by code)
+    if (this.net.spectating && !this.kicked && !FATAL_CLOSE.has(code) && now - this.droppedAt < RECONNECT_WINDOW_MS) {
+      if (this.options.refreshTicket) {
+        this.rejoinWithFreshTicket(why);
+        return;
+      }
+      this.net.onClose();
+      const delay = reconnectDelay(this.reconnectAttempt++);
+      this.conn = { ...FRESH, state: 'reconnecting', detail: why, code, since: this.droppedAt, until: this.droppedAt + RECONNECT_WINDOW_MS, attempt: this.reconnectAttempt };
+      this.reconnectTimer = window.setTimeout(() => this.open(), delay);
+      return;
+    }
     // never welcomed, kicked, refused, or out of time: give up
     const canRetry = this.net.sessionToken !== '' && !this.kicked && !FATAL_CLOSE.has(code) && now - this.droppedAt < RECONNECT_WINDOW_MS;
     if (!canRetry) {
@@ -495,7 +546,8 @@ export class OnlineMode {
         this.conn = { ...FRESH, state: 'connected', detail: '', code: 0 };
         this.droppedAt = 0;
         this.reconnectAttempt = 0;
-        saveToken(this.options.room, msg.sessionToken);
+        // a spectator has no session (''): nothing to resume on a reload
+        saveToken(this.options.room, msg.sessionToken || null);
         for (const fn of this.connectedListeners) fn();
         // the room's tuning as it is now (it may have changed while we were away): an open Tune
         // panel and the HUD hear of it (not live: nobody "just" changed it)

@@ -7,7 +7,8 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from
 import { useStore } from 'zustand';
 import { framesPerSecond, netHistory, NET_HISTORY } from '../../stats';
 import { getTouchSettings, onTouchChange, openTouchEditor, resetTouchLayout, setTouchSettings, type TouchSettings } from '../../touch';
-import { DEFAULT_TOUCH_SETTINGS } from '../../touch/settings';
+import { ASSIST_HELP, ASSIST_NAMES, DEFAULT_TOUCH_SETTINGS } from '../../touch/settings';
+import { ASSIST_LEVELS, type AssistLevel } from '../../input/assist';
 import { PadControls } from '../../gamepad/PadSettings';
 import { DEFAULT_PAD_SETTINGS } from '../../gamepad/settings';
 import { Icon } from '../../ui/Icon';
@@ -565,10 +566,10 @@ function Touch() {
       <div className="srow">
         <div className="srow__txt">
           <b>Aim assist</b>
-          <span>The aim stick leans gently toward a target near where you point. Touch only.</span>
+          <span>{ASSIST_HELP[t.assist]} Touch only; a mouse never gets it.</span>
         </div>
         <div className="srow__ctrl">
-          <Switch on={t.aimAssist} onChange={(aimAssist) => set({ aimAssist })} label="Aim assist" />
+          <Seg value={t.assist} label="Aim assist" options={ASSIST_LEVELS.map((l) => [l, ASSIST_NAMES[l]] as [AssistLevel, string])} onChange={(assist) => set({ assist })} />
         </div>
       </div>
       <div className="srow">
@@ -675,7 +676,7 @@ export function SettingsScreen({ store }: { store: ShellStore }) {
     if (el && bar.current) moveIndicator(bar.current, el.offsetTop, el.offsetHeight);
   }, [tab]);
   return (
-    <Screen name="settings" kind="menu" states={[tab]} label="Settings" modal>
+    <Screen name="settings" kind="menu" states={[tab]} label="Settings" modal dialog>
       <Backdrop word="SET" />
       <div className="menu">
         <header className="menu-top">

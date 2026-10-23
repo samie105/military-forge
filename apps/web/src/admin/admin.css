@@ -136,7 +136,7 @@ body {
     grid-template-columns: 1fr 1fr;
   }
 }
-.admin__section h3 {
+.admin__section h2 {
   margin: 0 0 var(--sp-2);
   font-size: var(--fs-14);
   letter-spacing: var(--ls-label);

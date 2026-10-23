@@ -11,7 +11,7 @@ The clips:
     walk         replaces W8's unplanted walk: a 100STYLE neutral walk's upper body, hips and timing, with planted
                  feet (mocap.march: down 55 % of the cycle, sliding back at 1.2 m/s) on a 0.4 s cycle for chibi legs
     idle_shift   CMU 140_07 (idle): weight shifting from foot to foot, looped, feet planted
-    idle_look    CMU 140_06 (idle): looking around, looped, feet planted
+    idle_look    CMU 140_07 (idle), 6–10 s: looking around, looped, feet planted
 Run it after build_character.py (which writes the hand-keyed library); it replaces the clips it makes and keeps
 every other clip byte for byte. Data files are only read.
 """
@@ -74,7 +74,7 @@ def build(data, rig):
     return [
         walk(data, rig),
         idle(data, rig, "idle_shift", "140_07", 0.0, 4.0),
-        idle(data, rig, "idle_look", "140_06", 6.0, 4.0),
+        idle(data, rig, "idle_look", "140_07", 6.0, 4.0),
     ]
 
 

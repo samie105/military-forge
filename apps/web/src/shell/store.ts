@@ -2,6 +2,7 @@
  * Shell state (Zustand, vanilla so the game loop can write it without React) and the route
  * registry other workstreams plug their screens into (W2's Locker: one line in main.ts).
  */
+import type { SpectateQueueId } from '@military-forge/protocol';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { DEFAULT_PAD_SETTINGS, type PadSettings } from '../gamepad/settings';
 import { defaultBindings, type Bindings } from './controls';
@@ -42,8 +43,8 @@ export function runCleanup(cleanup: RouteCleanup): void {
 }
 
 /** Where the player wants to go next (the app shell's navigation). */
-/** `local`: host a local room (same Wi-Fi, lan/) */
-export type Intent = { to: 'home' } | { to: 'create' } | { to: 'join'; code: string } | { to: 'training' } | { to: 'local' };
+/** `local`: host a local room (same Wi-Fi, lan/); `watch`: a room by code as a spectator (v20: no slot, no input) */
+export type Intent = { to: 'home' } | { to: 'create' } | { to: 'join'; code: string } | { to: 'watch'; code: string } | { to: 'training' } | { to: 'local' };
 
 export type Screen =
   | { name: 'boot' }
@@ -52,8 +53,8 @@ export type Screen =
   | { name: 'home' }
   /** creating (code null) or looking up a room (API), before the game connects */
   | { name: 'finding'; code: string | null; creating: boolean }
-  /** `local`: a local room (same Wi-Fi), hosted here or joined */
-  | { name: 'room'; code: string; local?: boolean }
+  /** `local`: a local room (same Wi-Fi), hosted here or joined; `watch`: we asked to watch it (a retry watches again) */
+  | { name: 'room'; code: string; local?: boolean; watch?: boolean }
   | { name: 'training' }
   | { name: 'error'; alert: AlertInfo; retry: Intent | null };
 
@@ -76,8 +77,11 @@ export interface AlertInfo {
   title: string;
   message: string;
   code: string;
-  /** the main button: rejoin the room, reload the page, or none (Home only) */
-  action: 'rejoin' | 'reload' | null;
+  /**
+   * The main button: rejoin the room, reload the page, watch the room instead (a full room: Watch,
+   * with Try again beside it), or none (Home only).
+   */
+  action: 'rejoin' | 'reload' | 'watch' | null;
 }
 
 export interface Profile {
@@ -208,6 +212,10 @@ export interface ShellState {
   title: TitleState;
   /** performance.now() of the press that left the title (0 = none yet): the audio's war-tone hit */
   titleHit: number;
+  /** the room took us as a spectator (v20, onlineMode's `spectating`): the lobby offers no Ready or Start */
+  spectating: boolean;
+  /** a spectator's wish to play (SPECTATE's queue): 0 watching, 1 the moment a slot is free, 2 next round */
+  spectateQueue: SpectateQueueId;
 }
 
 export type TitleState = 'on' | 'pressed' | 'leaving' | 'off';
@@ -242,6 +250,8 @@ export function createShellStore(initial: Partial<ShellState> = {}): ShellStore 
     settingsTab: 'graphics',
     title: 'off',
     titleHit: 0,
+    spectating: false,
+    spectateQueue: 0,
     ...initial,
   }));
 }

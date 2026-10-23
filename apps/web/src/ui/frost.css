@@ -7,8 +7,8 @@
  * paper. Tokens only.
  *
  * Solid fallback: html.reduce-transparency (Settings → Accessibility, on by default when the OS asks
- * for less transparency), html.gfx-low (Low graphics: blur costs the GPU every frame), and browsers
- * without backdrop-filter get the kit's own opaque fills.
+ * for less transparency), html.gfx-low (Low graphics: blur costs the GPU every frame), html.mf-lowend
+ * (a low-end device: ui/lowEnd.ts) and browsers without backdrop-filter get the kit's own opaque fills.
  */
 :root {
   /* the glass: ink at 58 % (panels) and 72 % (HUD plates, which sit on a moving world) */
@@ -27,22 +27,22 @@
 @supports (backdrop-filter: blur(1px)) {
   /* ---- panels over the game or a menu: pause, Tune the game, toasts and banners (Settings is a
      paper card, and paper stays paper) ---- */
-  html:not(.reduce-transparency):not(.gfx-low) :is(.pause, .tune, .toast, .mf-notice, .reconnect, .mf-hud-banner, .mf-lobby-strip) {
+  html:not(.reduce-transparency):not(.gfx-low):not(.mf-lowend) :is(.pause, .tune, .toast, .mf-notice, .reconnect, .mf-hud-banner, .mf-lobby-strip) {
     background: var(--frost-fill);
     background-image: radial-gradient(120% 90% at 0% 0%, var(--frost-hi), transparent 60%);
     border-color: var(--frost-line);
     box-shadow: inset 0 1px 0 var(--frost-hi), var(--frost-shadow);
     backdrop-filter: blur(var(--blur-frost)) saturate(1.15);
   }
-  html:not(.reduce-transparency):not(.gfx-low) :is(.pause, .tune) { border-radius: var(--r-frost); }
-  html:not(.reduce-transparency):not(.gfx-low) :is(.toast, .mf-notice, .reconnect, .mf-hud-banner) { border-radius: var(--r-frost-sm); }
+  html:not(.reduce-transparency):not(.gfx-low):not(.mf-lowend) :is(.pause, .tune) { border-radius: var(--r-frost); }
+  html:not(.reduce-transparency):not(.gfx-low):not(.mf-lowend) :is(.toast, .mf-notice, .reconnect, .mf-hud-banner) { border-radius: var(--r-frost-sm); }
 
   /* the dimmed game behind the pause menu is blurred too (Frost's overlay rule: the live game sharp,
      an overlay over it blurred) */
-  html:not(.reduce-transparency):not(.gfx-low) :is(.pause__dim, .mf-pause__dim) { backdrop-filter: blur(6px); }
+  html:not(.reduce-transparency):not(.gfx-low):not(.mf-lowend) :is(.pause__dim, .mf-pause__dim) { backdrop-filter: blur(6px); }
 
   /* the dark menu cards on the camo (the lobby's roster and mission, the results' table): glass too */
-  html:not(.reduce-transparency):not(.gfx-low) .screen--menu .card:not(.card--print) {
+  html:not(.reduce-transparency):not(.gfx-low):not(.mf-lowend) .screen--menu .card:not(.card--print) {
     background: var(--frost-fill);
     border-color: var(--frost-line);
     box-shadow: inset 0 1px 0 var(--frost-hi);
@@ -51,7 +51,7 @@
 
   /* ---- the HUD's plates: glass that keeps the HUD readable (a stronger fill, a lighter blur, the
      kit's text shadow and corners) ---- */
-  html:not(.reduce-transparency):not(.gfx-low) #hud .mf-hud-desktop .plate {
+  html:not(.reduce-transparency):not(.gfx-low):not(.mf-lowend) #hud .mf-hud-desktop .plate {
     background: var(--frost-fill-hud);
     border-color: var(--frost-line);
     box-shadow: inset 0 1px 0 var(--frost-hi);

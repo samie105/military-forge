@@ -3,7 +3,8 @@
  * share poster (Share room link through the phone's own share sheet, and the link's QR for a friend
  * next to you); the roster with who's ready (bots too); the map; Ready and, for the host, Start. The
  * match rules open in a bottom sheet (the host edits, guests read). "Warm up" folds the lobby to a
- * strip so the player can move and shoot behind it. Same actions as the desktop Lobby.
+ * strip so the player can move and shoot behind it. Same actions as the desktop Lobby; a spectator
+ * (v20) gets Join next round (or Stay watching) in Ready's place, and no warm-up.
  *
  * Motion: the room code focus-pulls in (P1), the share poster arrives first and the roster's rows
  * after it (P3); a player joining rises in, the counts roll (P4), a ready tick stamps (P7); Share is
@@ -20,7 +21,7 @@ import type { Bindings } from '../../controls';
 import { playerName } from '../../matchView';
 import type { LobbyPlayer, LobbyView } from '../../onlineView';
 import { encodeQr, qrSvgPath } from '../../qr';
-import { KILL_STEP, ROOM_SLOTS, TIME_CHOICES, killsLabel, lobbyMaps, minutesLabel, useRoomSetting } from '../Lobby';
+import { KILL_STEP, ROOM_SLOTS, TIME_CHOICES, killsLabel, lobbyMaps, minutesLabel, useRoomSetting, useSpectating } from '../Lobby';
 import { PhoneScreen, rise } from './layout';
 import { LobbyInvite } from '../../../social/SocialLayer';
 import { Roll, ShareChip, Sheet, shareRoom, useShareChip } from './parts';
@@ -223,6 +224,7 @@ function RulesSheet({ lobby, open, onClose }: { lobby: LobbyView; open: boolean;
 export function PhoneLobby({ lobby, tips = null }: { lobby: LobbyView; tips?: Bindings | null; doubleTapDash?: boolean }) {
   const ctl = useCtl();
   const online = ctl.host.online;
+  const { spectating, queued } = useSpectating();
   const [folded, setFolded] = useState(false);
   const [rules, setRules] = useState(false);
   const [chip, showChip] = useShareChip();
@@ -244,7 +246,7 @@ export function PhoneLobby({ lobby, tips = null }: { lobby: LobbyView; tips?: Bi
   const me = lobby.players.find((p) => p.you);
 
   return (
-    <PhoneScreen name="m-lobby" label="Room lobby" word="ROOM" states={[host ? 'host' : 'guest', lobby.ready ? 'ready' : 'not-ready', chip ? 'shared' : 'link-idle']}>
+    <PhoneScreen name="m-lobby" label="Room lobby" word="ROOM" states={[host ? 'host' : 'guest', lobby.ready ? 'ready' : 'not-ready', chip ? 'shared' : 'link-idle', ...(spectating ? ['watching'] : [])]}>
       <div className="pm">
         <header className="pm-top">
           <button type="button" className="btn btn--ghost btn--icon btn--sm m-p8" aria-label="Leave the room" onClick={blurAfter(() => ctl.leave())}>
@@ -264,10 +266,12 @@ export function PhoneLobby({ lobby, tips = null }: { lobby: LobbyView; tips?: Bi
               <span className="num">{Math.round(me.pingMs)} ms</span>
             </span>
           )}
-          <button type="button" className="tag tag--ok pm-warm m-p8" title="Fold the lobby away and move around while you wait" onClick={blurAfter(() => setFolded(true))}>
-            <Icon name="play" />
-            Warm up
-          </button>
+          {!spectating && (
+            <button type="button" className="tag tag--ok pm-warm m-p8" title="Fold the lobby away and move around while you wait" onClick={blurAfter(() => setFolded(true))}>
+              <Icon name="play" />
+              Warm up
+            </button>
+          )}
         </header>
 
         <div className="pm-lobby">
@@ -341,18 +345,39 @@ export function PhoneLobby({ lobby, tips = null }: { lobby: LobbyView; tips?: Bi
                   <Icon name={host ? 'edit' : 'chev-right'} size="sm" />
                 </button>
               </div>
-              <div className="pm-bar">
-                <button type="button" className={`btn btn--sm m-p8 ${lobby.ready ? 'btn--ghost is-ready' : 'btn--ghost'}`} aria-pressed={lobby.ready} onClick={blurAfter(() => online?.setReady(!lobby.ready))}>
-                  <Icon name={lobby.ready ? 'check' : 'clock'} />
-                  Ready
-                </button>
-                {host && (
-                  <button type="button" className="btn btn--paper btn--sm m-p8" disabled={!enough} title={enough ? 'Start the countdown now' : `Needs ${lobby.minPlayers} players`} onClick={blurAfter(() => online?.startMatch())}>
-                    <Icon name="play" />
-                    Start
+              {/* a spectator: watching, and the way to a slot instead of Ready and Start */}
+              {spectating ? (
+                <div className="pm-bar">
+                  <span className={`status ${queued ? 'status--ok' : 'status--busy'}`} role="status">
+                    <Icon name={queued ? 'clock' : 'eye'} size="sm" />
+                    {queued ? 'In line' : "You're watching"} · you'll play when a slot opens
+                  </span>
+                  {queued ? (
+                    <button type="button" className="btn btn--ghost btn--sm m-p8" onClick={blurAfter(() => online?.play(false))}>
+                      <Icon name="eye" />
+                      Stay watching
+                    </button>
+                  ) : (
+                    <button type="button" className="btn btn--volt btn--sm m-p8" onClick={blurAfter(() => online?.play('next'))}>
+                      <Icon name="play" />
+                      Join next round
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="pm-bar">
+                  <button type="button" className={`btn btn--sm m-p8 ${lobby.ready ? 'btn--ghost is-ready' : 'btn--ghost'}`} aria-pressed={lobby.ready} onClick={blurAfter(() => online?.setReady(!lobby.ready))}>
+                    <Icon name={lobby.ready ? 'check' : 'clock'} />
+                    Ready
                   </button>
-                )}
-              </div>
+                  {host && (
+                    <button type="button" className="btn btn--paper btn--sm m-p8" disabled={!enough} title={enough ? 'Start the countdown now' : `Needs ${lobby.minPlayers} players`} onClick={blurAfter(() => online?.startMatch())}>
+                      <Icon name="play" />
+                      Start
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </section>
         </div>

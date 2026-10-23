@@ -24,7 +24,7 @@ afterAll(() => vi.unstubAllGlobals());
 
 const actions = { playAgain: vi.fn(), backToLobby: vi.fn(), ready: vi.fn() };
 const ctl = (over: Partial<Record<keyof ShellController, unknown>> = {}) =>
-  ({ host: { online: null }, go: vi.fn(), openOverlay: vi.fn(), openSettings: vi.fn(), closeOverlay: vi.fn(), leave: vi.fn(), canTune: () => false, openTuning: vi.fn(), api: { ping: () => Promise.resolve(30) }, ...over }) as unknown as ShellController;
+  ({ store: createShellStore({ screen: { name: 'home' } }), host: { online: null }, go: vi.fn(), openOverlay: vi.fn(), openSettings: vi.fn(), closeOverlay: vi.fn(), leave: vi.fn(), canTune: () => false, openTuning: vi.fn(), api: { ping: () => Promise.resolve(30) }, ...over }) as unknown as ShellController;
 const withCtl = (c: ShellController, node: React.ReactNode) => renderToStaticMarkup(<ControllerContext.Provider value={c}>{node}</ControllerContext.Provider>);
 /** The words a screen reads, without its markup (a label may be split for large text). */
 const textOf = (html: string) => html.replace(/<[^>]+>/g, '');
@@ -177,6 +177,22 @@ describe('m-lobby', () => {
     const foot = html.slice(html.indexOf('class="pm-roster__foot"'));
     expect(foot).toMatch(/^class="pm-roster__foot"><div class="pm-mission">[\s\S]*class="pm-rules[\s\S]*class="pm-bar"[\s\S]*Ready[\s\S]*Start/);
   });
+
+  it('a spectator (v20): Join next round in Ready\'s place, Stay watching once in line, no warm-up', () => {
+    // (a server render reads the store's first state: a fresh store for each)
+    const store = createShellStore({ spectating: true, spectateQueue: 0 });
+    const watched = { ...lobby(false), players: lobby(false).players.map((p) => ({ ...p, you: false })) };
+    const html = withCtl(ctl({ store }), <PhoneLobby lobby={watched} />);
+    expect(html).toMatch(/data-active-state="guest not-ready link-idle watching"/);
+    const bar = textOf(html.slice(html.indexOf('class="pm-bar"')));
+    expect(bar).toContain("You're watching · you'll play when a slot opens".replace(/'/g, '&#x27;'));
+    expect(bar).toContain('Join next round');
+    expect(bar).not.toContain('Ready');
+    expect(html).not.toContain('Warm up');
+    const queued = textOf(withCtl(ctl({ store: createShellStore({ spectating: true, spectateQueue: 1 }) }), <PhoneLobby lobby={watched} />));
+    expect(queued).toContain('Stay watching');
+    expect(queued).not.toContain('Join next round');
+  });
 });
 
 describe('local rooms (the Pen board P0–P5)', () => {
@@ -214,6 +230,8 @@ describe('local rooms (the Pen board P0–P5)', () => {
     expect(html.match(/<input [^>]*enterKeyHint="go"/g)).toHaveLength(6);
     expect(html).not.toContain('autofocus');
     expect(html).toMatch(/<button type="button" class="btn btn--volt m-p8 pm-join__go" disabled=""/);
+    // Watch beside Join: the same code as a spectator, waiting for the same six letters
+    expect(html).toMatch(/<button type="button" class="btn btn--ghost m-p8 pm-join__paste pm-join__watch" data-hook="watch" disabled=""/);
     expect(html).toContain('No internet?');
     expect(html).toContain('Scan host&#x27;s QR');
   });

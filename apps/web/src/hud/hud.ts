@@ -17,6 +17,8 @@
  */
 import { avatarElement } from '../presentation/domAvatar';
 import { DamageSource, MatchPhase, type SimEvent } from '@military-forge/sim';
+import { SpectateQueue } from '@military-forge/protocol';
+import type { SpectateView } from '../spectate/director';
 import { DRAGON, GAS, HitZone, POWER_WEAPONS, defaultTuning, weapons, type Tuning } from '@military-forge/content';
 import type { MatchView } from '../shell/matchView';
 import { formatClock, playerName } from '../shell/matchView';
@@ -71,6 +73,7 @@ import { HUD_VARS, hudTemplate } from './template';
 import { feedTouchHud } from '../touch';
 import './hud.css';
 import './premium.css';
+import '../spectate/spectate.css';
 
 export type BannerKind = 'info' | 'event' | 'success' | 'warning' | 'danger';
 
@@ -113,6 +116,8 @@ export interface HudInput {
   quickThrowAt?: number;
   /** Settings → Graphics → Blood: the HUD's blood decals with the low-health and heavy-hit cues */
   blood?: boolean;
+  /** v20: spectating (spectate/director.ts): the death cam or a spectator's view; null when playing */
+  spectate?: SpectateView | null;
 }
 
 /** Keycap text for the actions the HUD names, from Settings → Controls. */
@@ -335,6 +340,7 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
 
   on('board', mem.boardOpen);
   on('blood-on', !!input.blood);
+  spectateValues(input.spectate ?? null, on, v);
 
   const me = (frame.players.find((p) => p.id === frame.localId) ?? null) as HudPlayer | null;
   if (!me) {
@@ -559,8 +565,6 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
   v['kill.victim'] = kc?.victim ?? '';
   v['kill.class'] = `display mf-kc__name mf-kc__name--${(kc?.n ?? 0) % 2 ? 'a' : 'b'}`;
   v['kill.streak'] = kc ? streakWords(kc.streak) : '';
-  // the spectator bar's visuals are in place for when spectating lands (netcode); nothing drives them yet
-  v['spectate.name'] = '';
 
   // the reticle and its markers
   on('reticle', !!input.pointer && me.alive);
@@ -570,6 +574,35 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
   on('launch-mark', mem.hitMarker && mem.launchMark);
   on('kill', mem.killMarker);
   return { values: v, tokens };
+}
+
+/**
+ * The spectator bar (v20): whom you watch, prev / next, the free camera, Join next round, and the
+ * top tags (spectating, how far behind live, how many watch). The death cam shows the bar's middle
+ * and arrows only (prev / next), under the respawn card.
+ */
+function spectateValues(sp: SpectateView | null, on: (token: string, yes: boolean) => void, v: Record<string, string>): void {
+  on('spectate-bar', !!sp);
+  on('spec-watch', sp?.kind === 'watch');
+  on('spec-death', sp?.kind === 'death');
+  on('spec-free', !!sp?.free);
+  on('spec-target', !!sp && sp.followId >= 0);
+  const queued = !!sp && sp.queue !== SpectateQueue.Watching;
+  on('spec-queued', queued);
+  on('spec-slot', !!sp && sp.slots > 0);
+  v['spectate.label'] = !sp ? '' : sp.kind === 'death' ? 'Death cam' : sp.free ? 'Overview' : 'Watching';
+  v['spectate.name'] = sp?.name ?? '';
+  v['spectate.line'] = sp?.line ?? '';
+  v['v.specHp'] = fixed(sp?.hp ?? 0);
+  v['spectate.freeLabel'] = sp?.free ? 'Follow' : 'Free cam';
+  v['spectate.queued'] = queued ? 'yes' : 'no';
+  v['spectate.join'] = queued ? 'Queued · cancel' : (sp?.slots ?? 0) > 0 ? 'Jump in now' : 'Join next round';
+  v['spectate.joinShort'] = queued ? 'Queued' : (sp?.slots ?? 0) > 0 ? 'Jump in' : 'Join';
+  const delay = sp && sp.kind === 'watch' && sp.delay > 0 ? `${Number.isInteger(sp.delay) ? sp.delay : sp.delay.toFixed(1)} s` : '';
+  v['spectate.delay'] = delay ? `${delay} delay` : '';
+  v['spectate.delayShort'] = delay;
+  v['spectate.watching'] = sp && sp.watching > 0 ? `${sp.watching} watching` : '';
+  v['spectate.watchingShort'] = sp && sp.watching > 0 ? String(sp.watching) : '';
 }
 
 /** The gas and burn cues: how much they hurt (content). */

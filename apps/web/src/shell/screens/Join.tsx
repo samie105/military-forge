@@ -1,7 +1,8 @@
 /**
  * 3 · Join with code (round two's data-screen="join"): six letter boxes; typing moves along, Backspace
  * moves back, and a pasted link or code (anywhere on the screen) fills them. The API says whether
- * the room exists before the game connects: "No room with that code" stays on this screen.
+ * the room exists before the game connects: "No room with that code" stays on this screen. Watch
+ * beside Join takes the same code into the room as a spectator (v20).
  */
 import { ROOM_CODE_ALPHABET, ROOM_CODE_LENGTH, normalizeRoomCode } from '@military-forge/shared';
 import { useEffect, useRef, useState } from 'react';
@@ -45,7 +46,7 @@ export function LanLink() {
 /**
  * The six boxes' state and keys, shared by the desktop Join and the phone's (PhoneJoin): typing moves
  * along, Backspace moves back, a pasted link or code (anywhere on the screen) fills them, Enter (a
- * phone keyboard's Go) joins. `autoFocus`: the first box takes the keys on arrival (not on a phone,
+ * phone keyboard's Go) joins; `watch` watches the room instead, with the same checks. `autoFocus`: the first box takes the keys on arrival (not on a phone,
  * where the keyboard would cover the screen before the player has seen it).
  */
 export function useJoinCode({ autoFocus = true }: { autoFocus?: boolean } = {}) {
@@ -53,7 +54,9 @@ export function useJoinCode({ autoFocus = true }: { autoFocus?: boolean } = {}) 
   const [code, setCode] = useState('');
   const [pasted, setPasted] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  // the lookup under way: Join's or Watch's (the other button waits)
+  const [pending, setPending] = useState<'join' | 'watch' | null>(null);
+  const busy = pending !== null;
   const boxes = useRef<(HTMLInputElement | null)[]>([]);
 
   const focus = (i: number) => boxes.current[Math.max(0, Math.min(ROOM_CODE_LENGTH - 1, i))]?.focus();
@@ -83,14 +86,16 @@ export function useJoinCode({ autoFocus = true }: { autoFocus?: boolean } = {}) 
 
   const state = joinState(code, pasted, error);
   const complete = code.length === ROOM_CODE_LENGTH;
-  const join = async () => {
+  const enter = async (how: 'join' | 'watch') => {
     if (!complete || busy) return;
-    setBusy(true);
-    const result = await ctl.joinByCode(code);
-    setBusy(false);
+    setPending(how);
+    const result = how === 'watch' ? await ctl.watchByCode(code) : await ctl.joinByCode(code);
+    setPending(null);
     if (result === 'not_found') setError('No room with that code');
     else if (result === 'rate_limited') setError('Too many wrong codes: wait a minute, then try again');
   };
+  const join = () => enter('join');
+  const watch = () => enter('watch');
 
   const onKey = (i: number, e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Backspace') {
@@ -129,15 +134,16 @@ export function useJoinCode({ autoFocus = true }: { autoFocus?: boolean } = {}) 
       .then((t) => fill(t, true))
       .catch(() => setError('Paste with Ctrl+V (or ⌘V): the browser kept the clipboard to itself'));
 
-  return { code, state, error, busy, complete, boxes, join, onKey, onType, pasteLink };
+  return { code, state, error, busy, pending, complete, boxes, join, watch, onKey, onType, pasteLink };
 }
 
 export function Join() {
   const ctl = useCtl();
-  const { code, state, error, busy, boxes, join, onKey, onType, pasteLink } = useJoinCode();
+  const { code, state, error, busy, pending, boxes, join, watch, onKey, onType, pasteLink } = useJoinCode();
+  const blocked = code.length !== ROOM_CODE_LENGTH || busy || state === 'error';
 
   return (
-    <Screen name="join" kind="menu" states={[state === 'ready' ? 'pasted' : state]} label="Join with code">
+    <Screen name="join" kind="menu" states={[state === 'ready' ? 'pasted' : state]} label="Join with code" dialog>
       <Backdrop word="CODE" />
       <div className="menu">
         <header className="menu-top">
@@ -223,9 +229,14 @@ export function Join() {
             </div>
             <div className="join__actions">
               {/* a local room's host with no internet: swap QR codes instead (LanPanels) */}
-              <button className="btn btn--volt btn--xl m-p8" type="button" disabled={code.length !== ROOM_CODE_LENGTH || busy || state === 'error'} aria-disabled={code.length !== ROOM_CODE_LENGTH || busy || state === 'error'} onClick={() => void join()}>
+              <button className="btn btn--volt btn--xl m-p8" type="button" disabled={blocked} aria-disabled={blocked} onClick={() => void join()}>
                 <Icon name="door-out" />
-                {busy ? 'Joining…' : 'Join room'}
+                {pending === 'join' ? 'Joining…' : 'Join room'}
+              </button>
+              {/* the room as a spectator: no slot needed, a seat when one opens and we ask */}
+              <button className="btn btn--ghost btn--xl m-p8" type="button" data-hook="watch" disabled={blocked} aria-disabled={blocked} title="Watch the match without taking a slot" onClick={() => void watch()}>
+                <Icon name="eye" />
+                {pending === 'watch' ? 'Watching…' : 'Watch'}
               </button>
               <button className="btn btn--paper btn--xl m-p8" type="button" onClick={pasteLink}>
                 <Icon name="paste" />

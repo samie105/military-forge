@@ -1,7 +1,7 @@
 import { weapons } from '@military-forge/content';
 import { Btn } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
-import { AIM_MIN, ASSIST, AUTO_FIRE, AutoTrigger, FIRE_OFF, FIRE_ON, FIRE_RIM, aimOnTarget, assistAim, autoRange, createTouchState, effectiveFire, dashStrength, desiredAim, flickRate, grenadeStrength, pullFires, throwStrength, touchButtons, updateMove } from '../../src/touch/mapping';
+import { AIM_MIN, AUTO_FIRE, AutoTrigger, FIRE_OFF, FIRE_ON, FIRE_RIM, TOUCH_PULL_MIN, assistPush, autoRange, createTouchState, effectiveFire, dashStrength, desiredAim, flickRate, grenadeStrength, pullFires, throwStrength, touchButtons, updateMove } from '../../src/touch/mapping';
 import { AIM_STICK, GRENADE_STICK, MOVE_STICK, shapeStick } from '../../src/touch/stick';
 
 describe('touch → Input mapping', () => {
@@ -112,29 +112,19 @@ describe('touch → Input mapping', () => {
   });
 });
 
-describe('aim assist (touch only, light)', () => {
-  const target = [{ x: 10, y: 0 }];
+describe('aim assist push (the shared core does the rest: test/input/assist.test.ts)', () => {
+  const at = (mag: number, aimActive = true, autoFiring = false) => ({ aimActive, aim: { x: mag, y: 0, mag }, autoFiring });
 
-  it('only counts targets the aim lies on, within range', () => {
-    expect(aimOnTarget(0, 0, 0, target)).toBe(true);
-    expect(aimOnTarget(Math.atan2(ASSIST.radius * 1.5, 10), 0, 0, target)).toBe(false);
-    expect(aimOnTarget(0, 0, 0, [{ x: ASSIST.range + 5, y: 0 }])).toBe(false);
+  it('is the aim stick\'s push while it aims, and nothing let go or under the aim threshold', () => {
+    expect(assistPush(at(0.62))).toBe(0.62);
+    expect(assistPush(at(0.62, false))).toBe(0);
+    expect(assistPush(at(AIM_MIN / 2))).toBe(0);
   });
 
-  it('slows the turn while on a target, never pulls toward one, and still gets there', () => {
-    const desired = 0.6;
-    const slowed = assistAim(0, desired, 0, 0, target, true);
-    expect(slowed).toBeCloseTo(desired * ASSIST.slow, 12);
-    expect(assistAim(0, desired, 0, 0, target, false)).toBe(desired); // off
-    expect(assistAim(1, 1.4, 0, 0, target, true)).toBe(1.4); // off target: untouched, no pull back to it
-    let aim = 0;
-    for (let i = 0; i < 12; i++) aim = assistAim(aim, desired, 0, 0, target, true);
-    expect(aim).toBeCloseTo(desired, 2);
-  });
-
-  it('takes the short way across ±π', () => {
-    const aim = assistAim(Math.PI - 0.01, -Math.PI + 0.05, 0, 0, [{ x: -10, y: 0 }], true);
-    expect(Math.abs(aim)).toBeGreaterThan(Math.PI - 0.02);
+  it('while Auto fires, enough for magnetism, so the gun stays on the enemy it shoots', () => {
+    expect(assistPush(at(0, false, true))).toBe(TOUCH_PULL_MIN);
+    expect(assistPush(at(0.2, true, true))).toBe(TOUCH_PULL_MIN);
+    expect(assistPush(at(0.8, true, true))).toBe(0.8);
   });
 });
 

@@ -2,7 +2,8 @@
  * The kit's building blocks as React: a screen frame (fit to the window), ping with signal bars,
  * a switch, a segmented choice. Markup and class names are the kit's; see kit.css.
  */
-import type { CSSProperties, ReactNode } from 'react';
+import { useRef, type CSSProperties, type ReactNode } from 'react';
+import { useFocusTrap } from './focusTrap';
 import { pingQuality } from './ping';
 
 /** The kit's ping bands (ui/ping.ts, which the HUD's scoreboard shares). */
@@ -22,6 +23,7 @@ export function Screen({
   className,
   style,
   modal = false,
+  dialog = false,
   children,
 }: {
   name: string;
@@ -32,12 +34,24 @@ export function Screen({
   style?: CSSProperties;
   /** a game screen that takes the mouse (the menu over a running match) */
   modal?: boolean;
+  /** a dialog over another screen (Settings, Join, the in-match menu): role="dialog", focus kept inside (ui/focusTrap.ts) */
+  dialog?: boolean;
   children: ReactNode;
 }) {
   const active = states.filter(Boolean).join(' ') || 'default';
+  const ref = useRef<HTMLElement>(null);
+  useFocusTrap(ref, dialog);
   return (
     <div className={`${modal ? 'mf-fit mf-fit--modal' : 'mf-fit'} kit-v2`}>
-      <section className={['screen', `screen--${kind}`, className ?? ''].filter(Boolean).join(' ')} data-screen={name} data-active-state={active} aria-label={label} style={style}>
+      <section
+        ref={ref}
+        className={['screen', `screen--${kind}`, className ?? ''].filter(Boolean).join(' ')}
+        data-screen={name}
+        data-active-state={active}
+        aria-label={label}
+        style={style}
+        {...(dialog ? { role: 'dialog', 'aria-modal': true, tabIndex: -1 } : {})}
+      >
         {children}
       </section>
     </div>

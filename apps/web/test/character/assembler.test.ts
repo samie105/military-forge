@@ -206,6 +206,16 @@ describe('CharacterAssembler (W8 rig)', () => {
     expect(hull.parent).toBeNull();
   });
 
+  it('close-up textures (the creator stage): none listed, setHero keeps the body as it is', async () => {
+    const c = await assembler().create(null);
+    const material = c.meshes[0]!.material as DyeMaterial;
+    const body = material.map;
+    await expect(c.setHero(true)).resolves.toBe(false);
+    expect(material.map).toBe(body);
+    await expect(c.setHero(false)).resolves.toBe(false);
+    expect(material.map).toBe(body);
+  });
+
   it('does not cache a failed base load: the next create() tries again', async () => {
     const source = fakeSource();
     source.failBase = 1;

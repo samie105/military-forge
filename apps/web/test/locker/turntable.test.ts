@@ -84,3 +84,61 @@ describe('Turntable', () => {
     t.dispose();
   });
 });
+
+describe('Turntable: the creator stage', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const make = async () => {
+    vi.stubGlobal('window', { devicePixelRatio: 1 });
+    vi.stubGlobal('requestAnimationFrame', () => 1);
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe(): void {}
+        disconnect(): void {}
+      },
+    );
+    const { Turntable } = await import('../../src/locker/turntable');
+    const canvas = { clientWidth: 320, clientHeight: 240, addEventListener() {}, removeEventListener() {} } as unknown as HTMLCanvasElement;
+    const t = new Turntable(canvas);
+    let ms = 0;
+    const tick = (t as unknown as { tick: (ms: number) => void }).tick;
+    /** runs the page at 60 Hz for `seconds`; the frames drawn */
+    const run = (seconds: number): number => {
+      const before = t.drawn;
+      for (let k = 0; k < seconds * 60; k++) tick((ms += 1000 / 60));
+      return t.drawn - before;
+    };
+    return { t, run, state: t as unknown as { targetY: number; distance: number; yaw: number; touch: boolean } };
+  };
+
+  it('frames a tab over 450 ms: the head and shoulders for hair', async () => {
+    const { t, run, state } = await make();
+    const { SHOTS } = await import('../../src/locker/stage');
+    run(1);
+    t.frameTab('hair');
+    run(0.2);
+    expect(state.targetY).toBeGreaterThan(SHOTS.full.y);
+    expect(state.targetY).toBeLessThan(SHOTS.head.y - 0.01); // still on its way
+    run(0.3);
+    expect(state.targetY).toBeCloseTo(SHOTS.head.y, 5);
+    expect(state.distance).toBeCloseTo(SHOTS.head.distance, 5);
+    expect(state.yaw).toBeCloseTo(SHOTS.head.yaw, 5);
+    t.dispose();
+  });
+
+  it('draws nothing at rest under Reduce motion, and at most 30 fps idle on a phone', async () => {
+    const { t, run, state } = await make();
+    t.setReducedMotion(true);
+    run(4);
+    expect(run(5)).toBe(0);
+    t.zoomBy(0.9); // an input wakes it
+    expect(run(0.5)).toBe(30);
+    t.setReducedMotion(false);
+    state.touch = true;
+    run(1);
+    expect(run(2)).toBeLessThanOrEqual(60);
+    t.dispose();
+  });
+});

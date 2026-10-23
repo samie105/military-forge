@@ -12,7 +12,7 @@ import { createShellStore, runCleanup } from './store';
 import { localMatchRules } from './localMatch';
 import { formatClock, matchView, ordinal, placeholderXp, sameView, type MatchView } from './matchView';
 import type { LobbyView } from './onlineView';
-import { connectStep, reconnectSecondsLeft } from './screens/Connection';
+import { Alert, connectStep, reconnectSecondsLeft } from './screens/Connection';
 import { Countdown, countdownState, rulesLine } from './screens/Countdown';
 import { codeLetters, joinState } from './screens/Join';
 import { Lobby, killsLabel, lobbyMaps, minutesLabel } from './screens/Lobby';
@@ -239,11 +239,12 @@ describe('lobby (screen 4)', () => {
     bots: 4,
     botLevel: 'normal',
   });
-  const ctl = { host: { online: null }, copyLink: vi.fn(), shareOnWhatsApp: vi.fn(), shareLink: vi.fn(), openSettings: vi.fn(), leave: vi.fn() } as unknown as ShellController;
-  const render = (isHost: boolean) =>
+  const online = { play: vi.fn(), setReady: vi.fn(), startMatch: vi.fn() };
+  // (a server render reads the store's first state: a fresh store for each)
+  const render = (isHost: boolean, view = lobby(isHost), store = createShellStore()) =>
     renderToStaticMarkup(
-      <ControllerContext.Provider value={ctl}>
-        <Lobby lobby={lobby(isHost)} />
+      <ControllerContext.Provider value={{ store, host: { online }, copyLink: vi.fn(), shareOnWhatsApp: vi.fn(), shareLink: vi.fn(), openSettings: vi.fn(), leave: vi.fn() } as unknown as ShellController}>
+        <Lobby lobby={view} />
       </ControllerContext.Provider>,
     );
 
@@ -283,6 +284,23 @@ describe('lobby (screen 4)', () => {
     expect([minutesLabel(0), killsLabel(0), minutesLabel(120)]).toEqual(['No time limit', 'No kill limit', '2 min']);
     expect(lobbyMaps('movement-test')).not.toContain('mechanics-test');
     expect(lobbyMaps('mechanics-test')).toContain('mechanics-test');
+  });
+
+  it('a spectator (v20): no Ready, Start or warm-up; Join next round, then Stay watching once in line', () => {
+    const watched = { ...lobby(false), players: lobby(false).players.map((p) => ({ ...p, you: false })), ready: false };
+    const html = render(false, watched, createShellStore({ spectating: true, spectateQueue: 0 }));
+    expect(html).toMatch(/data-active-state="guest not-ready link-idle watching"/);
+    expect(html).toContain('You&#x27;re watching · you&#x27;ll play when a slot opens');
+    expect(html).toContain('Join next round');
+    expect(html).not.toContain('Stay watching');
+    expect(html).not.toContain('role="switch"'); // Ready / You're ready
+    expect(html).not.toContain('Start now');
+    expect(html).not.toContain('Warm up');
+    const queued = render(false, watched, createShellStore({ spectating: true, spectateQueue: 2 }));
+    expect(queued).toContain('In line for a slot');
+    expect(queued).toContain('Stay watching');
+    expect(queued).not.toContain('Join next round');
+    expect(render(false)).not.toContain('Join next round');
   });
 });
 
@@ -329,8 +347,12 @@ describe('join, names, connection, pause and settings', () => {
     expect(alertFromApiError(new ApiError(429, 'rate_limited', 'x', { retryAfter: 30 })).message).toBe('Wait 30 s, then try again.');
     const closed = (code: number, detail = '') => alertFromConnection({ code, detail, attempt: 7, lastPingMs: 412, lossPct: 18.2 }, 'KMTXRA');
     expect(closed(4001)).toMatchObject({ kind: 'new-version', action: 'reload' });
-    expect(closed(4002)).toMatchObject({ kind: 'room-full', code: 'ROOM_FULL · room KMTXRA' });
+    // a full room offers to watch it (v20), with Try again beside it
+    expect(closed(4002)).toMatchObject({ kind: 'room-full', code: 'ROOM_FULL · room KMTXRA', action: 'watch', message: 'Every slot is taken. Watch the match and take the next free slot.' });
+    expect(closed(4008)).toMatchObject({ kind: 'room-full', title: 'Spectator seats are full', message: 'This room has all the spectators it takes. Try again in a bit.', code: 'SPECTATORS_FULL · room KMTXRA', action: 'rejoin' });
     expect(closed(4006).kind).toBe('server-full');
+    // a watcher never opens a room: no room means nobody is playing in it
+    expect(alertFromConnection({ code: 4006, detail: '', attempt: 0, lastPingMs: -1, lossPct: 0 }, 'KMTXRA', true)).toMatchObject({ kind: 'room-not-found', title: 'Nothing to watch', message: expect.stringContaining('Nobody is playing in this room right now') as string, action: 'rejoin' });
     expect(closed(4007, 'the room has closed')).toMatchObject({ kind: 'room-not-found', action: null });
     expect(closed(4007, 'join ticket expired')).toMatchObject({ kind: 'refused', action: 'rejoin' });
     expect(closed(1006)).toMatchObject({ kind: 'connection-lost', code: 'CONNECTION_LOST · last ping 412 ms, 18% loss' });
@@ -526,5 +548,69 @@ describe("the host's tuning panel (pnpm playtest --tune)", () => {
     };
     expect(menu(true)).toContain('Tune the game');
     expect(menu(false)).not.toContain('Tune the game');
+  });
+});
+
+describe('watching a room (v20 spectators)', () => {
+  beforeAll(() => {
+    vi.stubGlobal('window', Object.assign(new EventTarget(), { setTimeout, clearTimeout }));
+    vi.stubGlobal('history', { pushState: () => {}, replaceState: () => {}, state: null });
+    vi.stubGlobal('location', { origin: 'https://abc.example', host: 'abc.example', protocol: 'https:', pathname: '/', search: '' });
+    vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => {}, removeItem: () => {} });
+  });
+  afterAll(() => vi.unstubAllGlobals());
+
+  function setup(api: Partial<Api>) {
+    const host = { local: null, online: null, startTraining: vi.fn(), startOnline: vi.fn(), stop: vi.fn(), applySettings: vi.fn(), setInputBlocked: vi.fn() } as unknown as GameHost & { startOnline: ReturnType<typeof vi.fn> };
+    const store = createShellStore();
+    const ctl = new ShellController(store, host, api as Api);
+    store.setState({ profile: { nickname: 'Ade', changeableAt: null, offline: false } });
+    return { store, ctl, host };
+  }
+  const room = { code: 'KMTXRA', roomId: 'r1', gsUrl: 'wss://gs.example/ws/KMTXRA', ticket: 't1' };
+
+  it('the watch intent finds the room like Join, then starts it as a spectator; its retry watches again', async () => {
+    const joinRoom = vi.fn(async () => room);
+    const { store, ctl, host } = setup({ joinRoom });
+    ctl.go({ to: 'watch', code: 'KMTXRA' });
+    await vi.waitFor(() => expect(store.getState().screen).toEqual({ name: 'room', code: 'KMTXRA', watch: true }));
+    expect(joinRoom).toHaveBeenCalledWith('KMTXRA');
+    expect(host.startOnline).toHaveBeenCalledWith('wss://gs.example/ws/KMTXRA', 'Ade', 'KMTXRA', 't1', expect.any(Function), { spectate: true });
+    // the long-drop ticket refresh asks the API again, as for a player
+    const refresh = host.startOnline.mock.calls[0]![4] as () => Promise<string | null>;
+    await expect(refresh()).resolves.toBe('t1');
+    ctl.rejoin();
+    await vi.waitFor(() => expect(host.startOnline).toHaveBeenCalledTimes(2));
+    expect(host.startOnline.mock.calls[1]![5]).toEqual({ spectate: true });
+    // Join plays (no spectate option)
+    ctl.go({ to: 'join', code: 'KMTXRA' });
+    await vi.waitFor(() => expect(host.startOnline).toHaveBeenCalledTimes(3));
+    expect(host.startOnline.mock.calls[2]).toHaveLength(5);
+    expect(store.getState().screen).toEqual({ name: 'room', code: 'KMTXRA' });
+  });
+
+  it("Join with code's Watch: no room stays on the screen; a full room's Watch watches the room on screen", async () => {
+    const { store, ctl, host } = setup({ joinRoom: vi.fn(async (code: string) => (code === 'KMTXRA' ? room : Promise.reject(new ApiError(404, 'room_not_found', 'no room')))) });
+    expect(await ctl.watchByCode('ZZZZZZ')).toBe('not_found');
+    expect(host.startOnline).not.toHaveBeenCalled();
+    store.setState({ screen: { name: 'room', code: 'KMTXRA' } }); // a player's connection, refused: the room is full
+    ctl.watchHere();
+    await vi.waitFor(() => expect(store.getState().screen).toEqual({ name: 'room', code: 'KMTXRA', watch: true }));
+    expect(host.startOnline.mock.calls[0]![5]).toEqual({ spectate: true });
+    // an API failure while watching: its retry is a watch
+    const down = setup({ joinRoom: vi.fn(async () => Promise.reject(new ApiError(0, 'network', 'down'))) });
+    down.ctl.watch('KMTXRA');
+    await vi.waitFor(() => expect(down.store.getState().screen).toMatchObject({ name: 'error', retry: { to: 'watch', code: 'KMTXRA' } }));
+  });
+
+  it('the full-room alert: Watch first, Try again beside it', () => {
+    const { ctl } = setup({});
+    const full = alertFromConnection({ code: 4002, detail: '', attempt: 0, lastPingMs: -1, lossPct: 0 }, 'KMTXRA');
+    const html = renderToStaticMarkup(
+      <ControllerContext.Provider value={ctl}>
+        <Alert alert={full} onRejoin={() => {}} />
+      </ControllerContext.Provider>,
+    );
+    expect(html).toMatch(/btn btn--volt btn--xl m-p8" type="button" data-hook="watch">.*Watch<\/button><button class="btn btn--paper btn--xl m-p8" type="button">.*Try again/);
   });
 });

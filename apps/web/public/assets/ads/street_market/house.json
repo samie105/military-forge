@@ -11,173 +11,30 @@
    144
   ]
  },
- "screens": [
-  {
-   "id": "house:sm-bakery",
-   "file": "sm-bakery.webp",
-   "ktx2": "sm-bakery.ktx2",
-   "title": "Sunrise Bakery",
-   "signalHues": {
-    "teamBlue": 0.0,
-    "teamOrange": 0.04,
-    "damageRed": 0.0
-   },
-   "saturation": 0.6,
-   "luminance": 0.4188
+ "screens": [],
+ "hoardings": [],
+ "advertisers": {
+  "deet": {
+   "name": "Deet Studios",
+   "url": "https://deet.studio",
+   "utm": "street-market",
+   "weight": 2
   },
-  {
-   "id": "house:sm-kitchen",
-   "file": "sm-kitchen.webp",
-   "ktx2": "sm-kitchen.ktx2",
-   "title": "Market Kitchen",
-   "signalHues": {
-    "teamBlue": 0.0,
-    "teamOrange": 0.015,
-    "damageRed": 0.062
-   },
-   "saturation": 0.7,
-   "luminance": 0.4555
-  },
-  {
-   "id": "house:sm-tailors",
-   "file": "sm-tailors.webp",
-   "ktx2": "sm-tailors.ktx2",
-   "title": "Golden Needle Tailors",
-   "signalHues": {
-    "teamBlue": 0.0,
-    "teamOrange": 0.002,
-    "damageRed": 0.046
-   },
-   "saturation": 0.8,
-   "luminance": 0.4432
-  },
-  {
-   "id": "house:sm-gutters",
-   "file": "sm-gutters.webp",
-   "ktx2": "sm-gutters.ktx2",
-   "title": "Keep our gutters clear",
-   "signalHues": {
-    "teamBlue": 0.0,
-    "teamOrange": 0.003,
-    "damageRed": 0.0
-   },
-   "saturation": 0.8,
-   "luminance": 0.391
-  },
-  {
-   "id": "house:sm-zebra",
-   "file": "sm-zebra.webp",
-   "ktx2": "sm-zebra.ktx2",
-   "title": "Cross at the zebra",
-   "signalHues": {
-    "teamBlue": 0.0,
-    "teamOrange": 0.0,
-    "damageRed": 0.0
-   },
-   "saturation": 0.8,
-   "luminance": 0.3611
-  },
-  {
-   "id": "house:sm-water",
-   "file": "sm-water.webp",
-   "ktx2": "sm-water.ktx2",
-   "title": "Drink clean water",
-   "signalHues": {
-    "teamBlue": 0.0,
-    "teamOrange": 0.048,
-    "damageRed": 0.024
-   },
-   "saturation": 0.6,
-   "luminance": 0.3959
-  },
-  {
-   "id": "house:sm-fish",
-   "file": "sm-fish.webp",
-   "ktx2": "sm-fish.ktx2",
-   "title": "Harbour Fish Market",
-   "signalHues": {
-    "teamBlue": 0.0,
-    "teamOrange": 0.0,
-    "damageRed": 0.045
-   },
-   "saturation": 0.8,
-   "luminance": 0.4797
-  },
-  {
-   "id": "house:sm-market-day",
-   "file": "sm-market-day.webp",
-   "ktx2": "sm-market-day.ktx2",
-   "title": "Market day",
-   "signalHues": {
-    "teamBlue": 0.0,
-    "teamOrange": 0.023,
-    "damageRed": 0.04
-   },
-   "saturation": 0.6,
-   "luminance": 0.3879
+  "worldstreet": {
+   "name": "WorldStreet",
+   "url": "https://worldstreetgold.com",
+   "utm": "street-market",
+   "weight": 1
   }
- ],
- "hoardings": [
-  {
-   "id": "house:sm-city-market",
-   "file": "sm-city-market.webp",
-   "ktx2": "sm-city-market.ktx2",
-   "title": "City Market",
-   "signalHues": {
-    "teamBlue": 0.0,
-    "teamOrange": 0.014,
-    "damageRed": 0.05
-   },
-   "saturation": 0.8,
-   "luminance": 0.4714
-  },
-  {
-   "id": "house:sm-trees",
-   "file": "sm-trees.webp",
-   "ktx2": "sm-trees.ktx2",
-   "title": "Plant a tree",
-   "signalHues": {
-    "teamBlue": 0.0,
-    "teamOrange": 0.0,
-    "damageRed": 0.0
-   },
-   "saturation": 0.8,
-   "luminance": 0.4627
-  },
-  {
-   "id": "house:sm-slow-down",
-   "file": "sm-slow-down.webp",
-   "ktx2": "sm-slow-down.ktx2",
-   "title": "Slow down near the market",
-   "signalHues": {
-    "teamBlue": 0.0,
-    "teamOrange": 0.007,
-    "damageRed": 0.002
-   },
-   "saturation": 0.6,
-   "luminance": 0.3898
-  },
-  {
-   "id": "house:sm-bakery-wide",
-   "file": "sm-bakery-wide.webp",
-   "ktx2": "sm-bakery-wide.ktx2",
-   "title": "Sunrise Bakery",
-   "signalHues": {
-    "teamBlue": 0.0,
-    "teamOrange": 0.07,
-    "damageRed": 0.003
-   },
-   "saturation": 0.7,
-   "luminance": 0.455
-  }
- ],
- "studio": {
+ },
+ "sponsored": {
   "screens": [
    {
     "id": "house:deet-wordmark",
     "file": "deet-wordmark.webp",
     "ktx2": "deet-wordmark.ktx2",
     "title": "DEET Studios: Products. Worlds. Games.",
+    "advertiser": "deet",
     "signalHues": {
      "teamBlue": 0.001,
      "teamOrange": 0.037,
@@ -197,6 +54,7 @@
      }
     ],
     "title": "DEET Studios: We build / The whole thing.",
+    "advertiser": "deet",
     "signalHues": {
      "teamBlue": 0.0,
      "teamOrange": 0.005,
@@ -214,6 +72,7 @@
     "file": "deet-one-studio.webp",
     "ktx2": "deet-one-studio.ktx2",
     "title": "DEET Studios: One studio, brand through to backend.",
+    "advertiser": "deet",
     "signalHues": {
      "teamBlue": 0.0,
      "teamOrange": 0.022,
@@ -233,6 +92,7 @@
      }
     ],
     "title": "DEET Studios: Products. Worlds. Games. / Your idea, built whole.",
+    "advertiser": "deet",
     "signalHues": {
      "teamBlue": 0.0,
      "teamOrange": 0.018,
@@ -250,6 +110,7 @@
     "file": "deet-we-build.webp",
     "ktx2": "deet-we-build.ktx2",
     "title": "DEET Studios: We build products that scale.",
+    "advertiser": "deet",
     "signalHues": {
      "teamBlue": 0.0,
      "teamOrange": 0.0,
@@ -257,6 +118,248 @@
     },
     "saturation": 0.8,
     "luminance": 0.3006
+   },
+   {
+    "id": "house:deet-napkin-motion",
+    "file": "deet-napkin-motion.webp",
+    "ktx2": "deet-napkin-motion.ktx2",
+    "keys": [
+     {
+      "file": "deet-napkin-motion-k1.webp",
+      "ktx2": "deet-napkin-motion-k1.ktx2"
+     }
+    ],
+    "title": "DEET Studios: Napkin to live URL. / In weeks, not quarters.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.005,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.0891,
+    "keyLuminance": [
+     0.0822,
+     0.0891
+    ]
+   },
+   {
+    "id": "house:deet-friday-motion",
+    "file": "deet-friday-motion.webp",
+    "ktx2": "deet-friday-motion.ktx2",
+    "keys": [
+     {
+      "file": "deet-friday-motion-k1.webp",
+      "ktx2": "deet-friday-motion-k1.ktx2"
+     }
+    ],
+    "title": "DEET Studios: Launch isn't the finish. / It's Friday one.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.0,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.2169,
+    "keyLuminance": [
+     0.2115,
+     0.2169
+    ]
+   },
+   {
+    "id": "house:deet-phones-motion",
+    "file": "deet-phones-motion.webp",
+    "ktx2": "deet-phones-motion.ktx2",
+    "keys": [
+     {
+      "file": "deet-phones-motion-k1.webp",
+      "ktx2": "deet-phones-motion-k1.ktx2"
+     }
+    ],
+    "title": "DEET Studios: Tested on real phones. / Slow networks. Busy hours.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.0,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.305,
+    "keyLuminance": [
+     0.305,
+     0.2991
+    ]
+   },
+   {
+    "id": "house:deet-keep-dates",
+    "file": "deet-keep-dates.webp",
+    "ktx2": "deet-keep-dates.ktx2",
+    "title": "DEET Studios: We keep dates the way we keep promises.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.005,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.1076
+   },
+   {
+    "id": "house:deet-week-one",
+    "file": "deet-week-one.webp",
+    "ktx2": "deet-week-one.ktx2",
+    "title": "DEET Studios: Something real in week one.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.0,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.2074
+   },
+   {
+    "id": "house:deet-products-worlds",
+    "file": "deet-products-worlds.webp",
+    "ktx2": "deet-products-worlds.ktx2",
+    "title": "DEET Studios: Products. Worlds. Games.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.0,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.3013
+   },
+   {
+    "id": "house:deet-friday-lime",
+    "file": "deet-friday-lime.webp",
+    "ktx2": "deet-friday-lime.ktx2",
+    "title": "DEET Studios: Launch isn't the finish.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.0,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.3178
+   },
+   {
+    "id": "house:deet-phones-ink",
+    "file": "deet-phones-ink.webp",
+    "ktx2": "deet-phones-ink.ktx2",
+    "title": "DEET Studios: Tested on real phones.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.005,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.0897
+   },
+   {
+    "id": "house:ws-academy-motion",
+    "file": "ws-academy-motion.webp",
+    "ktx2": "ws-academy-motion.ktx2",
+    "keys": [
+     {
+      "file": "ws-academy-motion-k1.webp",
+      "ktx2": "ws-academy-motion-k1.ktx2"
+     }
+    ],
+    "title": "WorldStreet Academy: Learn the markets. / Start with the basics.",
+    "advertiser": "worldstreet",
+    "url": "https://academy.worldstreetgold.com",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.002,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.1028,
+    "keyLuminance": [
+     0.0935,
+     0.1028
+    ]
+   },
+   {
+    "id": "house:ws-worldspace-motion",
+    "file": "ws-worldspace-motion.webp",
+    "ktx2": "ws-worldspace-motion.ktx2",
+    "keys": [
+     {
+      "file": "ws-worldspace-motion-k1.webp",
+      "ktx2": "ws-worldspace-motion-k1.ktx2"
+     }
+    ],
+    "title": "WorldSpace: Your people. / Your signals.",
+    "advertiser": "worldstreet",
+    "url": "https://social.worldstreetgold.com",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.001,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.0871,
+    "keyLuminance": [
+     0.0857,
+     0.0871
+    ]
+   },
+   {
+    "id": "house:ws-xtream-motion",
+    "file": "ws-xtream-motion.webp",
+    "ktx2": "ws-xtream-motion.ktx2",
+    "keys": [
+     {
+      "file": "ws-xtream-motion-k1.webp",
+      "ktx2": "ws-xtream-motion-k1.ktx2"
+     }
+    ],
+    "title": "Xtream: Go live. / Your stage. Go live.",
+    "advertiser": "worldstreet",
+    "url": "https://xtream.worldstreetgold.com",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.001,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.0916,
+    "keyLuminance": [
+     0.0773,
+     0.0916
+    ]
+   },
+   {
+    "id": "house:ws-brand-motion",
+    "file": "ws-brand-motion.webp",
+    "ktx2": "ws-brand-motion.ktx2",
+    "keys": [
+     {
+      "file": "ws-brand-motion-k1.webp",
+      "ktx2": "ws-brand-motion-k1.ktx2"
+     }
+    ],
+    "title": "WorldStreet: Trade the world. / Own your future.",
+    "advertiser": "worldstreet",
+    "category": "finance",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.001,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.0884,
+    "keyLuminance": [
+     0.0884,
+     0.0878
+    ]
    }
   ],
   "hoardings": [
@@ -265,6 +368,7 @@
     "file": "deet-wordmark-wide.webp",
     "ktx2": "deet-wordmark-wide.ktx2",
     "title": "DEET Studios: Products. Worlds. Games.",
+    "advertiser": "deet",
     "signalHues": {
      "teamBlue": 0.0,
      "teamOrange": 0.016,
@@ -278,6 +382,7 @@
     "file": "deet-one-studio-wide.webp",
     "ktx2": "deet-one-studio-wide.ktx2",
     "title": "DEET Studios: One studio, brand to backend.",
+    "advertiser": "deet",
     "signalHues": {
      "teamBlue": 0.0,
      "teamOrange": 0.015,
@@ -285,6 +390,103 @@
     },
     "saturation": 0.8,
     "luminance": 0.2968
+   },
+   {
+    "id": "house:deet-release-wide-motion",
+    "file": "deet-release-wide-motion.webp",
+    "ktx2": "deet-release-wide-motion.ktx2",
+    "keys": [
+     {
+      "file": "deet-release-wide-motion-k1.webp",
+      "ktx2": "deet-release-wide-motion-k1.ktx2"
+     }
+    ],
+    "title": "DEET Studios: A release every Friday. / Napkin to live URL.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.016,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.094,
+    "keyLuminance": [
+     0.094,
+     0.0882
+    ]
+   },
+   {
+    "id": "house:deet-whole-wide-motion",
+    "file": "deet-whole-wide-motion.webp",
+    "ktx2": "deet-whole-wide-motion.ktx2",
+    "keys": [
+     {
+      "file": "deet-whole-wide-motion-k1.webp",
+      "ktx2": "deet-whole-wide-motion-k1.ktx2"
+     }
+    ],
+    "title": "DEET Studios: The whole thing. / Brand through to backend.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.0,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.3083,
+    "keyLuminance": [
+     0.3083,
+     0.3002
+    ]
+   },
+   {
+    "id": "house:ws-brand-wide-motion",
+    "file": "ws-brand-wide-motion.webp",
+    "ktx2": "ws-brand-wide-motion.ktx2",
+    "keys": [
+     {
+      "file": "ws-brand-wide-motion-k1.webp",
+      "ktx2": "ws-brand-wide-motion-k1.ktx2"
+     }
+    ],
+    "title": "WorldStreet: Trade the world. / Own your future.",
+    "advertiser": "worldstreet",
+    "category": "finance",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.001,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.071,
+    "keyLuminance": [
+     0.071,
+     0.0708
+    ]
+   },
+   {
+    "id": "house:ws-ecosystem-wide-motion",
+    "file": "ws-ecosystem-wide-motion.webp",
+    "ktx2": "ws-ecosystem-wide-motion.ktx2",
+    "keys": [
+     {
+      "file": "ws-ecosystem-wide-motion-k1.webp",
+      "ktx2": "ws-ecosystem-wide-motion-k1.ktx2"
+     }
+    ],
+    "title": "WorldStreet: Academy \u00b7 WorldSpace / Xtream \u00b7 WorldShop",
+    "advertiser": "worldstreet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.001,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.0686,
+    "keyLuminance": [
+     0.0686,
+     0.0645
+    ]
    }
   ]
  }

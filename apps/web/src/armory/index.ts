@@ -153,8 +153,8 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
           </div>
           <div class="mf-controls">
             <button type="button" class="btn btn--volt btn--sm m-p8 mf-toggle" data-action="fire">${ic('target')}Fire</button>
-            <div class="seg" data-group="focus" role="radiogroup" aria-label="View"><button type="button" class="seg__opt" data-focus="whole">Whole</button><button type="button" class="seg__opt" data-focus="muzzle">Muzzle</button></div>
-            <div class="seg" data-group="light" role="radiogroup" aria-label="Light"><button type="button" class="seg__opt" data-light="lobby">Lobby</button><button type="button" class="seg__opt" data-light="night">Night</button><button type="button" class="seg__opt" data-light="desert">Desert</button></div>
+            <div class="seg" data-group="focus" role="radiogroup" aria-label="View"><button type="button" class="seg__opt" role="radio" data-focus="whole">Whole</button><button type="button" class="seg__opt" role="radio" data-focus="muzzle">Muzzle</button></div>
+            <div class="seg" data-group="light" role="radiogroup" aria-label="Light"><button type="button" class="seg__opt" role="radio" data-light="lobby">Lobby</button><button type="button" class="seg__opt" role="radio" data-light="night">Night</button><button type="button" class="seg__opt" role="radio" data-light="desert">Desert</button></div>
             <button type="button" class="btn btn--ghost btn--sm m-p8 mf-toggle" data-action="sockets" aria-pressed="true">${ic('eye')}Sockets</button>
           </div>
           <div class="ar__ctrl mf-camo"></div>
@@ -195,7 +195,6 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
     for (const b of equipBox.querySelectorAll<HTMLElement>('[data-action="equip"]')) {
       const inSlot = !!def && pair[Number(b.dataset.slot)] === def.index;
       b.setAttribute('aria-pressed', String(inSlot));
-      b.setAttribute('aria-checked', String(inSlot));
     }
   };
   const socketPanel = $<HTMLElement>('.mf-sockets');
@@ -221,12 +220,12 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
     if (!camoSheet) return;
     const dot = (p: string[]) => `<i class="mf-sw">${p.slice(0, 2).map((c) => `<b style="background:${c}"></b>`).join('')}</i>`;
     const opt = ([id, c]: [string, CamoSheet['camos'][string]]) =>
-      `<button type="button" class="seg__opt" role="radio" data-camo="${id}" aria-checked="${camo === id}" aria-pressed="${camo === id}"${camoFits(c, current) ? '' : ' disabled title="Not for this weapon"'}>${dot(c.palette)}${escapeHtml(c.name)}</button>`;
+      `<button type="button" class="seg__opt" role="radio" data-camo="${id}" aria-checked="${camo === id}"${camoFits(c, current) ? '' : ' disabled title="Not for this weapon"'}>${dot(c.palette)}${escapeHtml(c.name)}</button>`;
     const all = Object.entries(camoSheet.camos);
     const finishes = all.filter(([, c]) => c.kind === 'finish');
     const camos = all.filter(([, c]) => c.kind !== 'finish');
     const tints = vfx?.fireTints?.tints;
-    const factory = `<button type="button" class="seg__opt" role="radio" data-camo="" aria-checked="${camo === ''}" aria-pressed="${camo === ''}">Factory</button>`;
+    const factory = `<button type="button" class="seg__opt" role="radio" data-camo="" aria-checked="${camo === ''}">Factory</button>`;
     // no camo panels (the riot shield, the grenades): no camo or finish to offer (review L12)
     const paintable = viewer.hasCamoPanels();
     camoPanel.innerHTML = `${
@@ -238,7 +237,7 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
     }${
       tints && vfx?.weapons[current]?.flash
         ? `<div><span class="label">Muzzle fire</span><div class="seg" role="radiogroup" aria-label="Muzzle fire">${Object.entries(tints)
-            .map(([id, t]) => `<button type="button" class="seg__opt" role="radio" data-tint="${id}" aria-checked="${fireTint === id}" aria-pressed="${fireTint === id}">${t.flash ? dot([t.flash, t.tracer ?? t.flash]) : ''}${escapeHtml(t.name)}</button>`)
+            .map(([id, t]) => `<button type="button" class="seg__opt" role="radio" data-tint="${id}" aria-checked="${fireTint === id}">${t.flash ? dot([t.flash, t.tracer ?? t.flash]) : ''}${escapeHtml(t.name)}</button>`)
             .join('')}</div></div>`
         : ''
     }`;
@@ -294,7 +293,6 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
 
   const press = (group: string, attr: string, value: string) => {
     for (const b of root.querySelectorAll<HTMLElement>(`[data-group="${group}"] button`)) {
-      b.setAttribute('aria-pressed', String(b.dataset[attr] === value));
       b.setAttribute('aria-checked', String(b.dataset[attr] === value));
     }
   };

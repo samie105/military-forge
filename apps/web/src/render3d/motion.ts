@@ -82,6 +82,19 @@ export const SQUASH = {
 };
 
 /**
+ * Breathing (docs/design/character-feel-research.md §3.5, §5.1 E): a loop under the aim poses and the idle, so an
+ * armed soldier's torso never freezes. Seeded per body: 2.6–3.4 s a breath; the chest ±1.2°, the shoulders ±1.5°,
+ * the head trailing (rad).
+ */
+export const BREATHE = {
+  period: [2.6, 3.4] as const,
+  spine1: 0.6 * DEG,
+  spine2: 1.0 * DEG,
+  clavicle: 1.5 * DEG,
+  head: 0.5 * DEG,
+};
+
+/**
  * Stylized timing (docs/design/character-feel-research.md §3.1, §5.1 E/§4 gap 6): anticipation and follow-through on
  * the procedural signals, never on the aim. The springs that were critically damped (no overshoot, which reads
  * mechanical) are slightly underdamped here (ζ 0.6–0.75: 3–10% overshoot).
@@ -369,6 +382,11 @@ export class MotionLayer {
    *  that puts on them now (rad) */
   private lead: Wobble | null = null;
   turnTwist = 0;
+  /** how much the body breathes (1; 0 still: tests that check something else holds the spine still) */
+  breathe = 1;
+  /** breathing: the phase (rad) and its rate (rad/s) */
+  private breath = 0;
+  private readonly breathRate: number;
   /** the head's rest height (m): a squash lowers it by `squash` of this */
   private readonly height: number;
 
@@ -377,10 +395,13 @@ export class MotionLayer {
     inst: Pick<CharacterInstance, 'root' | 'bone'>,
     seed = 0,
   ) {
-    const names = ['root', 'pelvis', 'spine1', 'spine2', 'neck', 'head', 'thigh_L', 'thigh_R', 'calf_L', 'calf_R', 'foot_L', 'foot_R', 'upperarm_L', 'upperarm_R', 'forearm_L', 'forearm_R'];
+    const names = ['root', 'pelvis', 'spine1', 'spine2', 'neck', 'head', 'clavicle_L', 'clavicle_R', 'thigh_L', 'thigh_R', 'calf_L', 'calf_R', 'foot_L', 'foot_R', 'upperarm_L', 'upperarm_R', 'forearm_L', 'forearm_R'];
     this.b = Object.fromEntries(names.map((n) => [n, inst.bone(n)]));
     this.bones = names.map((n) => this.b[n]).filter((o): o is Object3D => !!o);
     this.time = (seed * 0.61) % 10;
+    // each body breathes at its own pace and phase (BREATHE.period)
+    this.breathRate = (2 * Math.PI) / (BREATHE.period[0] + (((seed * 0.377) % 1) + 1) % 1 * (BREATHE.period[1] - BREATHE.period[0]));
+    this.breath = (seed * 1.7) % (2 * Math.PI);
     const head = inst.bone('head');
     inst.root.updateMatrixWorld(true);
     this.height = head ? inst.root.worldToLocal(head.getWorldPosition(new Vector3())).y : 1;
@@ -441,6 +462,7 @@ export class MotionLayer {
     if (p.deaths !== undefined && this.deaths !== undefined && p.deaths !== this.deaths) this.reset();
     this.deaths = p.deaths;
     this.time += dt;
+    this.breath = (this.breath + this.breathRate * dt) % (2 * Math.PI);
     const facing: 1 | -1 = Math.cos(p.aim) >= 0 ? 1 : -1;
     if (this.first) {
       this.velocity.x = p.vx;
@@ -559,6 +581,14 @@ export class MotionLayer {
     if (b.spine1) rotateWorld(b.spine1, _q.setFromAxisAngle(Z, -tilt * lower * spine));
     if (b.spine2) rotateWorld(b.spine2, _q.setFromAxisAngle(Z, -tilt * upper * spine));
     if (b.neck) rotateWorld(b.neck, _q.setFromAxisAngle(Z, tilt * (lower + upper) * spine * LEAN.neckCounter));
+    // breathing under everything (the aim poses are single frames, so an armed soldier never freezes): the chest
+    // rises and the shoulders lift on the in-breath, the head trailing a little behind
+    const inhale = Math.sin(this.breath) * this.breathe;
+    if (b.spine1) rotateWorld(b.spine1, _q.setFromAxisAngle(lat, -BREATHE.spine1 * inhale));
+    if (b.spine2) rotateWorld(b.spine2, _q.setFromAxisAngle(lat, -BREATHE.spine2 * Math.sin(this.breath - 0.3) * this.breathe));
+    if (b.clavicle_L) b.clavicle_L.quaternion.multiply(_q.setFromAxisAngle(Z, BREATHE.clavicle * inhale));
+    if (b.clavicle_R) b.clavicle_R.quaternion.multiply(_q.setFromAxisAngle(Z, -BREATHE.clavicle * inhale));
+    if (b.head) rotateWorld(b.head, _q.setFromAxisAngle(lat, BREATHE.head * Math.sin(this.breath - 0.9) * this.breathe));
     // the head trails the body's lean and swings through it (follow-through on the big head; the aim is the arms')
     if (b.head) rotateWorld(b.head, _q.setFromAxisAngle(Z, -(this.headLag.x - this.lean) * TIMING.headShare));
     // curl the spine into an up-dash tuck (+ about the body's left flexes forward, docs/04 §9.2)

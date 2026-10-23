@@ -20,6 +20,7 @@ import { formatClock, ordinal, playerName, type MatchView } from '../matchView';
 import type { ShellActions } from '../store';
 import { Backdrop, NetPill } from './frame';
 import { PlayerAvatar } from '../../presentation/PlayerAvatar';
+import { SavedAdsList } from '../../ads/SavedAds';
 
 export interface ResultsExtras {
   /** a room: the host may send everyone back to the lobby */
@@ -180,6 +181,8 @@ export function Results({ view, results, actions, room, training }: { view: Matc
                 </tbody>
               </table>
             </div>
+            {/* the billboard ads the player saved during play (tap-to-save): only what they chose */}
+            <SavedAdsList where="results" />
           </section>
 
           <section className="res__share" aria-label="Share and play again">

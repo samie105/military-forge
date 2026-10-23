@@ -291,7 +291,7 @@ html.reduce-motion .sx-toast__bar i { transition: none; }
 .sx-toast__acts { display: flex; align-items: center; gap: var(--sp-3); }
 .sx-toast__acts .sx-act { min-height: 48px; font-size: var(--fs-16); }
 .sx-toast__note { color: var(--c-muted); font-size: var(--fs-14); }
-.sx-watch { opacity: .7; }
+
 .sx-soon { min-height: 20px; font-size: 11px; }
 
 .sx-tscreen--phone .sx-toast { top: max(52px, var(--safe-t)); width: 384px; gap: 6px; padding: 8px 10px 8px 14px; }

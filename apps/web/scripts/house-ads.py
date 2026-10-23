@@ -25,17 +25,26 @@ high 1k; job ids in art/README.md's cost table); they are not committed. Per ima
 Writes <out>/<map>/house.json: the pool the renderer loads. `--ktx2-only` keeps the shipped WebPs
 and saturations and only rewrites the KTX2 layers.
 
-The studio's own creatives (Deet Studios, who make the game) go through the same grade and checks
-into the pool's `studio` lists: every match shows some of them (render3d/ads houseManifest). Their
-masters are committed (art/ads/deet, designed in Pen at docs/14 §3.1's upload sizes, exactly 4:3 or
-6:1), so they can be rebuilt without the house art's raw originals:
+Sponsored creatives (SPONSORS: the studio, Deet Studios, who make the game, and WorldStreet) go
+through the same grade and checks into the pool's `sponsored` lists: every match shows some of them,
+the advertisers sharing the boards fairly (render3d/ads houseManifest). Their masters are committed
+(art/ads/<advertiser>/, designed in Pen at docs/14 §3.1's upload sizes, exactly 4:3 or 6:1), so they
+can be rebuilt without the house art's raw originals:
 
-    python3 -I apps/web/scripts/house-ads.py <map> --studio-only apps/web/public/assets/ads
+    python3 -I apps/web/scripts/house-ads.py <map> --sponsored-only apps/web/public/assets/ads
 
-A studio creative with several sources is a Motion creative (docs/14 §3.3): still keyframes, all
+A sponsored creative with several sources is a Motion creative (docs/14 §3.3): still keyframes, all
 graded alike; the first is its `file` (and the still where keyframes don't play), the rest its
 `keys`. Each keyframe's mean luminance is recorded, so the tests can hold the change between them
 far under a flash.
+
+Click-through (the owner's tap-to-save, 23 Oct): each sponsored creative names its advertiser
+(ADVERTISERS: display name, default https destination, optional UTM campaign tag) and may set its
+own destination and a category ("finance" for anything about trading, so it can be switched off per
+region or audience). house.json carries both; the client checks them (checkManifest). Changing only
+a destination or a tag needs no re-encode:
+
+    python3 -I apps/web/scripts/house-ads.py <map> --clicks-only apps/web/public/assets/ads
 """
 import json
 import subprocess
@@ -60,40 +69,62 @@ KTX2_QUALITIES = (95, 80, 65, 50)
 SIGNAL_HUES = {"teamBlue": 216.0, "teamOrange": 25.0, "damageRed": 3.0}
 SIGNAL_LIMIT = 0.10
 
-# per map folder: (map id, [(creative id, source, format, title)]); titles are for logs and the
-# About-ads page later. The Street Market is the Lagos map: invented local businesses and civic notices.
+# per map folder: (map id, [(creative id, source, format, title)]): the local house pool. Empty since
+# 23 Oct 2026 (the owner: "remove those dummy ads"): the Street Market's invented local businesses and
+# civic notices are gone, and only real advertisers (SPONSORS) show. A map with ad slots and no
+# sponsors would list its own house art here again.
 POOLS = {
-    "street_market": (
-        "street-market",
-        [
-            ("house:sm-bakery", "s0_bakery.png", "4:3", "Sunrise Bakery"),
-            ("house:sm-kitchen", "s1_kitchen.png", "4:3", "Market Kitchen"),
-            ("house:sm-tailors", "s2_tailors.png", "4:3", "Golden Needle Tailors"),
-            ("house:sm-gutters", "s3_gutters.png", "4:3", "Keep our gutters clear"),
-            ("house:sm-zebra", "s4_zebra.png", "4:3", "Cross at the zebra"),
-            ("house:sm-water", "s5_water.png", "4:3", "Drink clean water"),
-            ("house:sm-fish", "s6_fish.png", "4:3", "Harbour Fish Market"),
-            ("house:sm-market-day", "s7_marketday.png", "4:3", "Market day"),
-            ("house:sm-city-market", "h8_citymarket.png", "6:1", "City Market"),
-            ("house:sm-trees", "h9_trees.png", "6:1", "Plant a tree"),
-            ("house:sm-slow-down", "h10_slowdown.png", "6:1", "Slow down near the market"),
-            ("house:sm-bakery-wide", "h11_bakery.png", "6:1", "Sunrise Bakery"),
-        ],
-    ),
+    "street_market": ("street-market", []),
 }
 
-# per map folder: [(creative id, sources, format, title)], sources in art/ads/deet. Screens alternate
-# still / Motion, so the two a match takes (houseManifest) usually include one Motion creative.
-STUDIO_DIR = Path(__file__).resolve().parents[3] / "art" / "ads" / "deet"
-STUDIO = {
+# Advertisers whose creatives a player can save (tap-to-save): name, default destination (https only)
+# and an optional UTM campaign tag (the client adds utm_source, the game, and utm_medium=billboard),
+# and their share of the boards: `weight` (the owner, 23 Oct: Deet about two thirds, WorldStreet a third).
+ADVERTISERS = {
+    "deet": {"name": "Deet Studios", "url": "https://deet.studio", "utm": "street-market", "weight": 2},
+    "worldstreet": {"name": "WorldStreet", "url": "https://worldstreetgold.com", "utm": "street-market", "weight": 1},
+}
+
+# per map folder: sponsored creatives, sources in art/ads/<advertiser>/. Screens alternate still /
+# Motion. Optional per creative: "url" (its own destination) and "category" ("finance": anything that
+# mentions trading, forex or crypto, which also carries "Trading involves risk. 18+." on the art).
+ART_DIR = Path(__file__).resolve().parents[3] / "art" / "ads"
+
+
+def ad(cid, advertiser, srcs, fmt, title, **extra):
+    return {"id": cid, "advertiser": advertiser, "srcs": srcs, "fmt": fmt, "title": title, **extra}
+
+
+WS_ACADEMY = "https://academy.worldstreetgold.com"
+WS_SOCIAL = "https://social.worldstreetgold.com"
+WS_XTREAM = "https://xtream.worldstreetgold.com"
+SPONSORS = {
     "street_market": [
-        ("house:deet-wordmark", ("s0_deet_wordmark.png",), "4:3", "DEET Studios: Products. Worlds. Games."),
-        ("house:deet-we-build-motion", ("m0_deet_we_build_k0.png", "m0_deet_we_build_k1.png"), "4:3", "DEET Studios: We build / The whole thing."),
-        ("house:deet-one-studio", ("s1_deet_one_studio.png",), "4:3", "DEET Studios: One studio, brand through to backend."),
-        ("house:deet-products-motion", ("m1_deet_products_k0.png", "m1_deet_products_k1.png"), "4:3", "DEET Studios: Products. Worlds. Games. / Your idea, built whole."),
-        ("house:deet-we-build", ("s2_deet_we_build.png",), "4:3", "DEET Studios: We build products that scale."),
-        ("house:deet-wordmark-wide", ("h0_deet_wordmark.png",), "6:1", "DEET Studios: Products. Worlds. Games."),
-        ("house:deet-one-studio-wide", ("h1_deet_one_studio.png",), "6:1", "DEET Studios: One studio, brand to backend."),
+        ad("house:deet-wordmark", "deet", ("s0_deet_wordmark.png",), "4:3", "DEET Studios: Products. Worlds. Games."),
+        ad("house:deet-we-build-motion", "deet", ("m0_deet_we_build_k0.png", "m0_deet_we_build_k1.png"), "4:3", "DEET Studios: We build / The whole thing."),
+        ad("house:deet-one-studio", "deet", ("s1_deet_one_studio.png",), "4:3", "DEET Studios: One studio, brand through to backend."),
+        ad("house:deet-products-motion", "deet", ("m1_deet_products_k0.png", "m1_deet_products_k1.png"), "4:3", "DEET Studios: Products. Worlds. Games. / Your idea, built whole."),
+        ad("house:deet-we-build", "deet", ("s2_deet_we_build.png",), "4:3", "DEET Studios: We build products that scale."),
+        # billboard set v2 (Deet's Pen file, board n8HYKf)
+        ad("house:deet-napkin-motion", "deet", ("m2_deet_napkin_k0.png", "m2_deet_napkin_k1.png"), "4:3", "DEET Studios: Napkin to live URL. / In weeks, not quarters."),
+        ad("house:deet-friday-motion", "deet", ("m3_deet_friday_k0.png", "m3_deet_friday_k1.png"), "4:3", "DEET Studios: Launch isn't the finish. / It's Friday one."),
+        ad("house:deet-phones-motion", "deet", ("m4_deet_phones_k0.png", "m4_deet_phones_k1.png"), "4:3", "DEET Studios: Tested on real phones. / Slow networks. Busy hours."),
+        # its VARIATIONS row (stills): headline swaps and colourways
+        ad("house:deet-keep-dates", "deet", ("s3_deet_keep_dates.png",), "4:3", "DEET Studios: We keep dates the way we keep promises."),
+        ad("house:deet-week-one", "deet", ("s4_deet_week_one.png",), "4:3", "DEET Studios: Something real in week one."),
+        ad("house:deet-products-worlds", "deet", ("s5_deet_products_worlds.png",), "4:3", "DEET Studios: Products. Worlds. Games."),
+        ad("house:deet-friday-lime", "deet", ("s6_deet_friday_lime.png",), "4:3", "DEET Studios: Launch isn't the finish."),
+        ad("house:deet-phones-ink", "deet", ("s7_deet_phones_ink.png",), "4:3", "DEET Studios: Tested on real phones."),
+        ad("house:deet-wordmark-wide", "deet", ("h0_deet_wordmark.png",), "6:1", "DEET Studios: Products. Worlds. Games."),
+        ad("house:deet-one-studio-wide", "deet", ("h1_deet_one_studio.png",), "6:1", "DEET Studios: One studio, brand to backend."),
+        ad("house:deet-release-wide-motion", "deet", ("h2_deet_release_k0.png", "h2_deet_release_k1.png"), "6:1", "DEET Studios: A release every Friday. / Napkin to live URL."),
+        ad("house:deet-whole-wide-motion", "deet", ("h3_deet_whole_k0.png", "h3_deet_whole_k1.png"), "6:1", "DEET Studios: The whole thing. / Brand through to backend."),
+        ad("house:ws-academy-motion", "worldstreet", ("m0_ws_academy_k0.png", "m0_ws_academy_k1.png"), "4:3", "WorldStreet Academy: Learn the markets. / Start with the basics.", url=WS_ACADEMY),
+        ad("house:ws-worldspace-motion", "worldstreet", ("m1_ws_worldspace_k0.png", "m1_ws_worldspace_k1.png"), "4:3", "WorldSpace: Your people. / Your signals.", url=WS_SOCIAL),
+        ad("house:ws-xtream-motion", "worldstreet", ("m2_ws_xtream_k0.png", "m2_ws_xtream_k1.png"), "4:3", "Xtream: Go live. / Your stage. Go live.", url=WS_XTREAM),
+        ad("house:ws-brand-motion", "worldstreet", ("m3_ws_brand_k0.png", "m3_ws_brand_k1.png"), "4:3", "WorldStreet: Trade the world. / Own your future.", category="finance"),
+        ad("house:ws-brand-wide-motion", "worldstreet", ("h0_ws_brand_k0.png", "h0_ws_brand_k1.png"), "6:1", "WorldStreet: Trade the world. / Own your future.", category="finance"),
+        ad("house:ws-ecosystem-wide-motion", "worldstreet", ("h1_ws_ecosystem_k0.png", "h1_ws_ecosystem_k1.png"), "6:1", "WorldStreet: Academy · WorldSpace / Xtream · WorldShop"),
     ],
 }
 
@@ -194,17 +225,39 @@ def encode(graded, size, path):
     return np.asarray(Image.open(path).convert("RGB"))
 
 
-def studio_pool(key, dest):
-    """The studio's creatives for one map (STUDIO), graded and checked like the house art."""
+def click_fields(a):
+    """The click-through fields a sponsored entry carries (advertiser, own destination, category)."""
+    out = {"advertiser": a["advertiser"]}
+    for k in ("url", "category"):
+        if a.get(k):
+            out[k] = a[k]
+    return out
+
+
+def check_clicks(entries):
+    """https destinations only (the client refuses anything else too), known advertisers."""
+    for a in [*ADVERTISERS.values(), *entries]:
+        url = a.get("url")
+        if url is not None and not url.startswith("https://"):
+            raise SystemExit(f"{a.get('id', a.get('name'))}: destination must be https: {url}")
+    for e in entries:
+        if e["advertiser"] not in ADVERTISERS:
+            raise SystemExit(f"{e['id']}: unknown advertiser {e['advertiser']}")
+
+
+def sponsored_pool(key, dest):
+    """The sponsored creatives for one map (SPONSORS), graded and checked like the house art."""
     pool = {"screens": [], "hoardings": []}
-    for cid, srcs, fmt, title in STUDIO.get(key, []):
+    check_clicks(SPONSORS.get(key, []))
+    for a in SPONSORS.get(key, []):
+        cid, srcs, fmt, title = a["id"], a["srcs"], a["fmt"], a["title"]
         ratio, size = (4 / 3, SCREEN) if fmt == "4:3" else (6.0, HOARDING)
-        arrs = [np.asarray(crop_ratio(Image.open(STUDIO_DIR / src).convert("RGB"), ratio)) for src in srcs]
+        arrs = [np.asarray(crop_ratio(Image.open(ART_DIR / a["advertiser"] / src).convert("RGB"), ratio)) for src in srcs]
         base = cid.split(":")[1]
         names = [f"{base}{f'-k{i}' if i else ''}.webp" for i in range(len(arrs))]
         sat = GRADE["sat"]
         while True:
-            shipped = [encode(grade(a, GRADE, sat), size, dest / n) for a, n in zip(arrs, names)]
+            shipped = [encode(grade(a_, GRADE, sat), size, dest / n) for a_, n in zip(arrs, names)]
             shares = [signal_share(px) for px in shipped]
             share = {k: max(sh[k] for sh in shares) for k in SIGNAL_HUES}
             if max(share.values()) < SIGNAL_LIMIT or sat <= 0.3:
@@ -212,11 +265,11 @@ def studio_pool(key, dest):
             sat = round(sat - 0.1, 2)
         lums = [round(mean_luminance(px), 4) for px in shipped]
         ktx2 = [n.replace(".webp", ".ktx2") for n in names]
-        qs = [write_ktx2(grade(a, GRADE, sat), KTX2_SIZE[fmt], dest / k, (dest / n).stat().st_size * KTX2_MAX_RATIO) for a, n, k in zip(arrs, names, ktx2)]
+        qs = [write_ktx2(grade(a_, GRADE, sat), KTX2_SIZE[fmt], dest / k, (dest / n).stat().st_size * KTX2_MAX_RATIO) for a_, n, k in zip(arrs, names, ktx2)]
         entry = {"id": cid, "file": names[0], "ktx2": ktx2[0]}
         if len(names) > 1:
             entry["keys"] = [{"file": n, "ktx2": k} for n, k in zip(names[1:], ktx2[1:])]
-        entry |= {"title": title, "signalHues": {k: round(v, 3) for k, v in share.items()}, "saturation": sat, "luminance": max(lums)}
+        entry |= {"title": title, **click_fields(a), "signalHues": {k: round(v, 3) for k, v in share.items()}, "saturation": sat, "luminance": max(lums)}
         if len(names) > 1:
             entry["keyLuminance"] = lums
         (pool["screens"] if fmt == "4:3" else pool["hoardings"]).append(entry)
@@ -225,9 +278,29 @@ def studio_pool(key, dest):
     return pool
 
 
+def advertisers_block():
+    return {k: {f: v[f] for f in ("name", "url", "utm", "weight") if v.get(f) is not None} for k, v in ADVERTISERS.items()}
+
+
+def refresh_clicks(key, pool):
+    """Rewrites only the click-through fields (advertisers, destinations, categories): no re-encode."""
+    by_id = {a["id"]: a for a in SPONSORS.get(key, [])}
+    check_clicks(list(by_id.values()))
+    for e in pool["sponsored"]["screens"] + pool["sponsored"]["hoardings"]:
+        for k in ("advertiser", "url", "category"):
+            e.pop(k, None)
+        fields = click_fields(by_id[e["id"]])
+        rest = {k: v for k, v in e.items() if k not in ("id", "file", "ktx2", "keys", "title")}
+        head = {k: e[k] for k in ("id", "file", "ktx2", "keys", "title") if k in e}
+        e.clear()
+        e.update({**head, **fields, **rest})
+    pool["advertisers"] = advertisers_block()
+    return pool
+
+
 def pool_files(pool):
     """Every file a pool ships: (webp, ktx2) per image, keyframes included."""
-    entries = pool["screens"] + pool["hoardings"] + pool.get("studio", {}).get("screens", []) + pool.get("studio", {}).get("hoardings", [])
+    entries = pool["screens"] + pool["hoardings"] + pool.get("sponsored", {}).get("screens", []) + pool.get("sponsored", {}).get("hoardings", [])
     return [(x["file"], x["ktx2"]) for e in entries for x in [e, *e.get("keys", [])]]
 
 
@@ -238,13 +311,26 @@ def write_pool(dest, pool):
 
 
 def main():
-    if "--studio-only" in sys.argv:
-        key, out = [a for a in sys.argv[1:] if a != "--studio-only"]
-        dest = Path(out) / key
-        pool = json.loads((dest / "house.json").read_text())
-        pool["studio"] = studio_pool(key, dest)
-        write_pool(dest, pool)
-        return
+    for flag in ("--sponsored-only", "--clicks-only"):
+        if flag in sys.argv:
+            key, out = [a for a in sys.argv[1:] if a != flag]
+            dest = Path(out) / key
+            pool = json.loads((dest / "house.json").read_text())
+            pool.pop("studio", None)  # the old name of the sponsored lists
+            # local house art no longer in POOLS (the dummies, 23 Oct) leaves the pool and the folder
+            keep = {cid for cid, *_ in POOLS[key][1]}
+            for fmt in ("screens", "hoardings"):
+                for e in [e for e in pool[fmt] if e["id"] not in keep]:
+                    for f in (e["file"], e.get("ktx2")):
+                        if f and (dest / f).exists():
+                            (dest / f).unlink()
+                pool[fmt] = [e for e in pool[fmt] if e["id"] in keep]
+            if flag == "--clicks-only":
+                pool = refresh_clicks(key, pool)
+            else:
+                pool = {**{k: v for k, v in pool.items() if k not in ("sponsored", "advertisers")}, "advertisers": advertisers_block(), "sponsored": sponsored_pool(key, dest)}
+            write_pool(dest, pool)
+            return
     args = [a for a in sys.argv[1:] if a != "--ktx2-only"]
     ktx2_only = len(args) != len(sys.argv) - 1
     key, raw, out = args[0], Path(args[1]), Path(args[2])
@@ -285,7 +371,7 @@ def main():
         (pool["screens"] if fmt == "4:3" else pool["hoardings"]).append(entry)
         print(f"{cid}: {size[0]}x{size[1]} {(dest / name).stat().st_size} B, KTX2 q{q} {(dest / ktx2).stat().st_size} B, signal hues {entry['signalHues']}, sat {sat:.2f}, lum {entry['luminance']}")
     ktx2 = {fmt: list(size) for fmt, size in KTX2_SIZE.items()}
-    write_pool(dest, {"version": 1, "map": map_id, "ktx2Size": ktx2, **pool, "studio": studio_pool(key, dest)})
+    write_pool(dest, {"version": 1, "map": map_id, "ktx2Size": ktx2, **pool, "advertisers": advertisers_block(), "sponsored": sponsored_pool(key, dest)})
 
 
 if __name__ == "__main__":

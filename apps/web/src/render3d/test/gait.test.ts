@@ -88,6 +88,7 @@ describe('W8 aim poses and locomotion share the mixer', () => {
   async function sway(bone: string, weapons: PlayerView['weapons']): Promise<number> {
     const inst = await rookieRig();
     const a = new Avatar(inst, 0, new AvatarKit(toonRamp()), 1);
+    a.motion.breathe = 0; // (breathing sways the spine on purpose: this checks the run's own sway)
     const b = inst.bone(bone)!;
     const first = new Quaternion();
     let worst = 0;

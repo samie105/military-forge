@@ -59,6 +59,7 @@ import { posterUp } from './presentation/state';
 import { countFrame, framesPerSecond, recordNet } from './stats';
 import { isTouchDevice, mountTouch } from './touch';
 import { applyPadSettings, currentDevice, mountGamepad, onInputDevice } from './gamepad';
+import { mountAdClicks } from './ads';
 import { padShownBindings } from './gamepad/prompts';
 import { startLandscape } from './ui/landscape';
 import { startMultiTouchTaps } from './ui/multiTouchTap';
@@ -69,9 +70,15 @@ import { creatorSeen } from './creator/model';
 import { titleWanted } from './shell/title';
 import { startTourMemory, type TourMemory } from './tour';
 import { mountTourReadout } from './tour/readout';
+import { BackdropPacer } from './ui/backdrop';
 import { releaseLanding } from './ui/landing';
+import { startLowEnd } from './ui/lowEnd';
+import './ui/lowend.css';
 import { Spotlight } from './ui/spotlight';
 import { voiceChat } from './voice';
+import { SpectateDirector, ZOOM_LEVELS, type SpectateView } from './spectate/director';
+import { SpectateInput } from './spectate/input';
+import { SpectatePicker } from './spectate/picker';
 
 const params = new URLSearchParams(location.search);
 /** the player-facing app, or (dev builds at `/`) the Phase 0 debug client */
@@ -90,6 +97,8 @@ const netSim = parseNetSim(params.get('netsim') ?? shorthand) ?? createCondition
 
 // phones play in landscape whichever way they're held: before anything measures the window
 startLandscape();
+// the low-end tier (ui/lowEnd.ts): a device that can't afford the interface's decoration drops it
+const lowEnd = startLowEnd();
 // a tap on a menu button while a thumb rests on a dial: the browser sends no click, so this does
 if (navigator.maxTouchPoints > 0) startMultiTouchTaps();
 
@@ -176,7 +185,10 @@ if (view3d) warmRoomPortraits(lookBook);
 if (import.meta.env.DEV) (window as unknown as { __mfPortraits: unknown }).__mfPortraits = { portraits, getAvatar, getPortrait, lookBook };
 const use3d = view3d !== null;
 if (view3d) {
-  view3d.onAutoTier = (tier) => (autoGraphicsNow = tier);
+  view3d.onAutoTier = (tier) => {
+    autoGraphicsNow = tier;
+    lowEnd.noteTier(tier);
+  };
   // Auto from the start (no ?gfx=): adapting to the frames before Settings is ever opened
   if (!params.get('gfx') && (!appMode || loadSettings().graphics === 'auto')) applyGraphics('auto');
 }
@@ -192,6 +204,12 @@ if (appMode) Object.assign(options, { showGrid: false, hud: 'none', reticle: fal
 const hud = appMode ? mountHud() : null;
 // the minimap (minimap/): every map, every tier; enemies only as seen or heard
 const minimap = appMode ? new Minimap() : null;
+
+// spectating (v20): the death cam and watching a room; its controls listen only while it runs
+const spectate = new SpectateDirector();
+const spectateInput = new SpectateInput(sampler, canvas);
+const spectatePicker = hud ? new SpectatePicker(document.querySelector('#hud .mf-hud-desktop .hud') ?? document.body) : null;
+if (import.meta.env.DEV) Object.assign(window, { __spectate: spectate });
 
 /** The onboarding's memory (tour/): on-device facts and the event log; the app only (set once the shell is up). */
 let tourMemory: TourMemory | null = null;
@@ -222,6 +240,8 @@ mountTouch({ sampler, camera, renderer, view3d, editButton: !appMode, tuning: ()
 // game controllers (apps/web/src/gamepad): play, the menus, rumble, prompts in the pad's buttons
 // (on a phone the touch buttons step aside while a pad plays: gamepad/pad.css)
 mountGamepad({ sampler, camera, renderer, scoreboardCode: () => scoreboardKeys[0], map: () => map, toggleMap: () => minimap?.toggleBig() });
+// tap-to-save billboard ads (apps/web/src/ads): after touch and the pad, so it sees their shots too
+mountAdClicks({ sampler, camera, canvas, view3d });
 
 // the room host's live tuning panel (the in-match menu's "Tune the game"), where the page offers it:
 // pnpm playtest --tune flags the page; the game server then lets the host (only) tune the room
@@ -309,14 +329,20 @@ const host: GameHost = {
     if (tryGun) local.setLoadout([tryGun.index, tryGun.index === DEFAULT_LOADOUT[1] ? DEFAULT_LOADOUT[0] : DEFAULT_LOADOUT[1]]);
     else if (loadoutSync) local.setLoadout(loadoutSync.savedGunIndices()); // the player's saved pair (the default until they pick one)
   },
-  startOnline(url, nickname, room, ticket, refreshTicket) {
+  startOnline(url, nickname, room, ticket, refreshTicket, opts) {
     try {
       serverHost = new URL(url).host;
     } catch {
       serverHost = '';
     }
     // WebTransport where the server routes it by room (/health webtransport.rooms), else WebSocket
-    const online = new OnlineMode(url, nickname, sampler, camera, renderer, () => {}, createConditionerSettings(false), 'auto', { room, ...(ticket ? { ticket } : {}), ...(refreshTicket ? { refreshTicket } : {}) });
+    // v20: `spectate` watches the room (no slot) instead of playing in it
+    const online = new OnlineMode(url, nickname, sampler, camera, renderer, () => {}, createConditionerSettings(false), 'auto', {
+      room,
+      ...(ticket ? { ticket } : {}),
+      ...(refreshTicket ? { refreshTicket } : {}),
+      ...(opts?.spectate ? { spectate: true } : {}),
+    });
     onlineRoom = room;
     setMode(online);
     watchOnline(online);
@@ -691,8 +717,10 @@ const toScreen = (x: number, y: number) => {
   return screenPoint;
 };
 
-/** The menus' backdrop: the camera drifts along the map. */
+/** The menus' backdrop: the camera drifts along the map (once a second while a screen covers it: ui/backdrop.ts). */
+const backdropPacer = new BackdropPacer();
 function drawMenuBackdrop(now: number, dt: number): void {
+  if (appMode && !backdropPacer.shouldDraw(now)) return;
   const b = map.bounds;
   const mid = (b.minX + b.maxX) / 2;
   const x = mid + (b.maxX - b.minX) * 0.3 * Math.sin(now / 1000 / 24);
@@ -745,6 +773,8 @@ function frame(now: number): void {
       if (sampler.consumePress('KeyO')) downloadReplay();
     }
   }
+  // spectating's keys (Q / E, F, Enter) before the frame's presses are dropped
+  const spectateActions = spectateInput.poll(camera, now);
   sampler.clearPresses();
   if (toggled) panel?.pane.refresh();
 
@@ -780,7 +810,27 @@ function frame(now: number): void {
   minimap?.setMap(map);
   const me = f.players.find((p) => p.id === f.localId);
   const mouse = sampler.mouseWorld(camera);
-  if (me) {
+  // v20: watching (a spectator) or the death cam: the camera goes where spectating says
+  const online = mode instanceof OnlineMode ? mode : null;
+  const spec: SpectateView | null = spectate.update(
+    f,
+    { spectating: online?.spectating ?? false, state: online?.spectateState ?? null, delay: online?.spectateDelay ?? 0 },
+    online ?? { follow: () => {}, play: () => {} },
+    spectateActions,
+    dt,
+    map,
+    camera,
+  );
+  spectateInput.active = spec !== null;
+  spectateInput.free = spec?.free === true;
+  document.documentElement.classList.toggle('mf-spectating', spec !== null);
+  document.documentElement.classList.toggle('mf-spec-free', spec?.free === true);
+  spectatePicker?.update(spec);
+  if (spec) {
+    camera.flightVy = 0;
+    camera.setZoom(spec.zoom, ZOOM_LEVELS);
+    camera.follow(spec.x, spec.y, spec.x, spec.y, dt, map);
+  } else if (me) {
     camera.flightVy = me.alive ? me.vy : 0; // tall maps: the view leans the way you fly (camera.ts)
     camera.follow(me.x, me.y, mouse.x, mouse.y, dt, map);
   }
@@ -828,6 +878,7 @@ function frame(now: number): void {
       throwAim: sampler.throwAim,
       quickThrowAt: sampler.quickThrowAt,
       blood: settings?.blood ?? false,
+      spectate: spec,
     });
   }
   if (options.overlay) view3d?.render(f, dt);
@@ -846,5 +897,6 @@ requestAnimationFrame(rafLoop);
 // behaviour). Browsers throttle timers in background tabs to ~1 Hz, which is fine.
 setInterval(() => {
   const now = performance.now();
-  if (now - lastRaf > 100) frame(now);
+  // in the menus there's nothing to keep alive while hidden (the backdrop, the shell): only a mode
+  if (now - lastRaf > 100 && mode) frame(now);
 }, 16);

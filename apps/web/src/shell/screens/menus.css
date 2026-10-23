@@ -54,8 +54,10 @@
 :where(.kit-v2) .linkt__qr { flex: none; }
 :where(.kit-v2) .linkt__body { flex: 1 1 200px; }
 .mf-swap-in { animation: m-rise var(--m-fast) var(--ease-arrive) both; }
-:where(.kit-v2) .mf-glow { animation: mf-glow 1.2s ease-in-out infinite; }
-@keyframes mf-glow { 50% { box-shadow: var(--sh-press), 0 0 0 6px var(--c-volt-soft); } }
+/* the glow is a ring of its own that fades in and out (opacity: the compositor's), not an animated
+   box-shadow (a repaint every frame) */
+:where(.kit-v2) .mf-glow::after { content: ""; position: absolute; inset: calc(var(--bw-chunky) * -1); border-radius: inherit; box-shadow: 0 0 0 6px var(--c-volt-soft); opacity: 0; pointer-events: none; animation: mf-glow 1.2s ease-in-out infinite; }
+@keyframes mf-glow { 50% { opacity: 1; } }
 :where(.kit-v2) .mf-seg-solo { box-shadow: inset 0 0 0 var(--bw) var(--c-line-strong); }
 :where(.kit-v2) .mf-seg-solo[aria-pressed="true"] { background: var(--c-volt); color: var(--c-volt-ink); box-shadow: none; }
 :where(.kit-v2) .lobby__code { display: inline-flex; gap: .04em; }

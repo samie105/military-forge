@@ -1,7 +1,7 @@
 /**
  * Join with code on a phone (the Pen board's P1; the desktop Join's boxes and keys: useJoinCode). The
  * six boxes sit in the top band, where a landscape phone's keyboard doesn't reach, and the keyboard's
- * Go joins; Join room and Paste below for a thumb. A Frost card on the right is the way in with no
+ * Go joins; Join room, Watch (the room as a spectator) and Paste below for a thumb. A Frost card on the right is the way in with no
  * internet: the host's QR (PhoneLanJoin). No box takes focus on arrival: the keyboard would cover the
  * screen before the player has seen it.
  */
@@ -14,11 +14,11 @@ import { PhoneScreen, rise } from './layout';
 
 export function PhoneJoin() {
   const ctl = useCtl();
-  const { code, state, error, busy, complete, boxes, join, onKey, onType, pasteLink } = useJoinCode({ autoFocus: false });
+  const { code, state, error, busy, pending, complete, boxes, join, watch, onKey, onType, pasteLink } = useJoinCode({ autoFocus: false });
   const blocked = !complete || busy || state === 'error';
 
   return (
-    <PhoneScreen name="m-join" label="Join with code" word="CODE" states={[state === 'ready' ? 'pasted' : state]}>
+    <PhoneScreen name="m-join" label="Join with code" word="CODE" dialog states={[state === 'ready' ? 'pasted' : state]}>
       <div className="pm">
         <header className="pm-top">
           <button type="button" className="btn btn--ghost btn--icon btn--sm m-p8 pm-back" aria-label="Back to home" onClick={blurAfter(() => ctl.closeOverlay())}>
@@ -73,7 +73,12 @@ export function PhoneJoin() {
             <div className="pm-join__acts">
               <button type="button" className="btn btn--volt m-p8 pm-join__go" disabled={blocked} aria-disabled={blocked} onClick={blurAfter(() => void join())}>
                 <Icon name="door-out" />
-                {busy ? 'Joining…' : 'Join room'}
+                {pending === 'join' ? 'Joining…' : 'Join room'}
+              </button>
+              {/* the room as a spectator (Paste's size: phone.css) */}
+              <button type="button" className="btn btn--ghost m-p8 pm-join__paste pm-join__watch" data-hook="watch" disabled={blocked} aria-disabled={blocked} onClick={blurAfter(() => void watch())}>
+                <Icon name="eye" />
+                {pending === 'watch' ? 'Watching…' : 'Watch'}
               </button>
               <button type="button" className="btn btn--paper m-p8 pm-join__paste" onClick={pasteLink}>
                 <Icon name="paste" />

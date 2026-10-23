@@ -406,7 +406,7 @@ export function useLanJoin() {
 function Frame({ title, eyebrow, name, children, note }: { title: string; eyebrow: string; name: string; children: ReactNode; note: string }) {
   const ctl = useCtl();
   return (
-    <Screen name={name} kind="menu" label={title}>
+    <Screen name={name} kind="menu" label={title} dialog>
       <Backdrop word="WI-FI" />
       <div className="menu">
         <header className="menu-top">

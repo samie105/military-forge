@@ -150,6 +150,8 @@ function RoomScreen({ store, code }: { store: ShellStore; code: string }) {
   const overlay = useStore(store, (s) => s.overlay);
   const countdown = useCountdown(match);
   const phone = usePhoneLayout();
+  // we came to watch (v20): a refused or dropped watcher's alert says so, and its retry watches again
+  const watching = useStore(store, (s) => s.screen.name === 'room' && s.screen.watch === true);
 
   const loading = useLoadingHold(connection?.state === 'connected', !!match, match?.phase === MatchPhase.Waiting);
   if (!connection || connection.state === 'connecting' || connection.state === 'joining') {
@@ -158,7 +160,7 @@ function RoomScreen({ store, code }: { store: ShellStore; code: string }) {
   if (loading) {
     return <MapLoading code={code} lobby={lobby} mapName={lobby?.mapName || match?.mapName || ''} haveMatch={!!match} load={loading} bindings={bindings} onCancel={() => ctl.leave()} />;
   }
-  if (connection.state === 'failed') return <Alert alert={alertFromConnection(connection, code)} onRejoin={() => ctl.rejoin()} />;
+  if (connection.state === 'failed') return <Alert alert={alertFromConnection(connection, code, watching)} onRejoin={() => ctl.rejoin()} />;
   const host = lobby?.players.find((p) => p.host);
   return (
     <>
@@ -260,7 +262,8 @@ function RouteView({ route }: { route: ShellRoute }) {
     };
   }, [route]);
   return (
-    <div className="mf-route kit-v2" aria-label={route.title}>
+    // a full-screen page of its own (the Locker, the creator): a named region (a div can't carry aria-label)
+    <section className="mf-route kit-v2" aria-label={route.title}>
       <div ref={el} className="mf-route__body" />
       {!route.ownExit && (
         <button className="btn btn--ghost btn--sm mf-route__back" onClick={closeRoute}>
@@ -268,7 +271,7 @@ function RouteView({ route }: { route: ShellRoute }) {
           Back
         </button>
       )}
-    </div>
+    </section>
   );
 }
 

@@ -1,0 +1,81 @@
+/*
+ * Tap-to-save (apps/web/src/ads): the in-match toast and the "Saved ads" cards on the results screen
+ * and Home. Field Print tokens only (ui/kit.css). The toast sits over the HUD (5) and the touch
+ * controls (6), under the shell's screens (10); it never takes a pointer.
+ */
+.mf-adtoast{
+  position:fixed; z-index:7; left:50%; top:calc(var(--safe-t) + 120px);
+  transform:translate(-50%, -6px); max-width:min(560px, calc(100vw - 32px));
+  padding:var(--sp-2) var(--sp-4); border-radius:var(--r-sm);
+  background:var(--c-plate); box-shadow:inset 0 0 0 1px var(--c-plate-line);
+  color:var(--c-text); font:var(--fw-semi) var(--fs-16)/1.25 var(--f-ui); letter-spacing:.01em; text-align:center;
+  pointer-events:none; opacity:0; visibility:hidden;
+  transition:opacity var(--m-fast) var(--ease-out, ease-out), transform var(--m-fast) var(--ease-out, ease-out), visibility 0s linear var(--m-fast);
+}
+.mf-adtoast.is-on{ opacity:1; visibility:visible; transform:translate(-50%, 0); transition-delay:0s; }
+.mf-adtoast::before{ content:""; display:inline-block; width:8px; height:8px; margin-right:var(--sp-2); border-radius:50%; background:var(--c-volt); vertical-align:1px; }
+/* phones: under the clock, a little smaller */
+html[data-touch-controls] .mf-adtoast{ top:calc(var(--safe-t) + 64px); font-size:var(--fs-14); }
+@media (prefers-reduced-motion: reduce){ .mf-adtoast, .mf-adtoast.is-on{ transform:translate(-50%, 0); transition:opacity var(--m-fast) linear, visibility 0s linear var(--m-fast); } }
+
+/* ---- "Saved ads": cards the player chose to keep (results screen, Home) ---- */
+.mf-saved{ display:flex; flex-direction:column; gap:var(--sp-2); padding:var(--sp-3) var(--sp-4) var(--sp-4); }
+.mf-saved__top{ display:flex; align-items:baseline; gap:var(--sp-2); }
+.mf-saved__top .label{ color:var(--c-brass); }
+.mf-saved__why{ margin:0; color:var(--c-muted); font-size:var(--fs-14); line-height:var(--lh-snug); }
+.mf-saved__list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:var(--sp-2); max-height:min(46vh, 420px); overflow-y:auto; overscroll-behavior:contain; }
+.mf-saved__card{ display:grid; grid-template-columns:auto minmax(0, 1fr); grid-template-areas:"img text" "act act"; align-items:center; gap:var(--sp-2) var(--sp-3); padding:var(--sp-2); border-radius:var(--r-sm); background:var(--c-ink-850); box-shadow:inset 0 0 0 1px var(--c-line); }
+.mf-saved__card > .mf-saved__img{ grid-area:img; }
+.mf-saved__card > .mf-saved__text{ grid-area:text; }
+.mf-saved__card > .mf-saved__act{ grid-area:act; }
+.mf-saved__img{ width:72px; height:54px; border-radius:var(--r-xs); object-fit:cover; background:var(--c-ink-950); box-shadow:inset 0 0 0 1px var(--c-line); }
+.mf-saved__img--wide{ object-fit:contain; }
+.mf-saved__text{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+.mf-saved__name{ color:var(--c-text); font-weight:var(--fw-black); font-size:var(--fs-16); }
+.mf-saved__title{ color:var(--c-muted); font-size:var(--fs-14); line-height:var(--lh-snug); overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+.mf-saved__note{ color:var(--c-paper-3, var(--c-muted)); font-size:12px; letter-spacing:.02em; }
+.mf-saved__act{ display:flex; gap:var(--sp-2); align-items:center; }
+.mf-saved__act > a{ flex:1; }
+.mf-saved .btn{ min-height:44px; }
+.mf-saved__remove{ min-width:44px; padding:0 var(--sp-2); }
+.mf-saved__remove .ic{ width:20px; height:20px; }
+.mf-saved :focus-visible{ outline:3px solid var(--c-focus); outline-offset:2px; }
+.mf-sr{ position:absolute !important; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+
+/* wide enough (the results' middle column): one row per card */
+.mf-saved--full{ container-type:inline-size; }
+@container (min-width: 460px){
+  .mf-saved--full .mf-saved__card{ grid-template-columns:auto minmax(0, 1fr) auto; grid-template-areas:"img text act"; }
+  .mf-saved--full .mf-saved__act > a{ flex:none; }
+}
+
+/* a short laptop screen: the column keeps its place, the list scrolls (one card and a peek of the next) */
+@media (max-height: 820px){
+  .mf-saved--full .mf-saved__why{ display:none; }
+  .mf-saved--full .mf-saved__list{ max-height:min(26vh, 200px); }
+}
+
+/* strip (the phone results at 812×375 design px): one row that scrolls sideways */
+.mf-saved--strip{ padding:var(--sp-2) var(--sp-3); gap:var(--sp-1); }
+.mf-saved--strip .mf-saved__why{ display:none; }
+.mf-saved--strip .mf-saved__list{ flex-direction:row; overflow-x:auto; scroll-snap-type:x mandatory; gap:var(--sp-2); padding-bottom:2px; }
+.mf-saved--strip{ min-width:0; }
+/* width 0 + min-width 100%: the row scrolls inside the column instead of widening it (the debrief's grid) */
+.mf-saved--strip .mf-saved__list{ max-height:none; overflow-y:hidden; width:0; min-width:100%; }
+.mf-saved--strip .mf-saved__card{ flex:0 0 auto; width:300px; scroll-snap-align:start; grid-template-columns:auto minmax(0, 1fr) auto; grid-template-areas:"img text act"; gap:var(--sp-2); padding:6px; }
+.mf-saved--strip .mf-saved__act > a{ flex:none; }
+.mf-saved--strip .mf-saved__img{ width:56px; height:42px; }
+.mf-saved--strip .mf-saved__title{ -webkit-line-clamp:1; }
+.mf-saved--strip .btn{ min-height:var(--touch-min); padding:0 var(--sp-3); }
+
+/* dock (the phone Home, over the stage's foot): narrow, no pictures, one card in view at a time */
+.pm-home > .mf-saved--dock{ grid-area:1 / 3; align-self:end; z-index:1; padding:var(--sp-2); gap:var(--sp-1); background:var(--c-plate); }
+.mf-saved--dock .mf-saved__why, .mf-saved--dock .mf-saved__img, .mf-saved--dock .mf-saved__title{ display:none; }
+.mf-saved--dock .mf-saved__list{ max-height:92px; scroll-snap-type:y mandatory; }
+.mf-saved--dock .mf-saved__card{ grid-template-columns:minmax(0, 1fr); grid-template-areas:"text" "act"; padding:6px; gap:6px; scroll-snap-align:start; }
+.mf-saved--dock .btn{ min-height:var(--touch-min); padding:0 var(--sp-2); }
+.mf-saved--dock .mf-saved__act > a{ min-width:0; }
+.mf-saved--dock .mf-saved__act > a .ic{ display:none; }
+.mf-saved--dock .mf-saved__remove{ flex:none; width:var(--touch-min); }
+/* the stage keeps its cell (an explicitly placed dock would otherwise push it to a new row) */
+.pm-home:has(> .mf-saved--dock) > .pm-stage{ grid-area:1 / 3; }

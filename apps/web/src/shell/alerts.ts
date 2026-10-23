@@ -30,14 +30,23 @@ export function alertFromApiError(e: unknown, room?: string): AlertInfo {
   return { kind: 'error', title: 'Something went wrong', message: (e as Error)?.message ?? String(e), code: 'ERROR', action: 'rejoin' };
 }
 
-/** A room connection that ended for good (onlineMode gave up, or the server refused or kicked us). */
-export function alertFromConnection(c: Pick<ConnectionView, 'code' | 'detail' | 'attempt' | 'lastPingMs' | 'lossPct'>, room: string): AlertInfo {
+/**
+ * A room connection that ended for good (onlineMode gave up, or the server refused or kicked us).
+ * `watching`: we came to watch (v20), so a retry watches again and a room nobody is in says so.
+ */
+export function alertFromConnection(c: Pick<ConnectionView, 'code' | 'detail' | 'attempt' | 'lastPingMs' | 'lossPct'>, room: string, watching = false): AlertInfo {
   switch (c.code) {
     case CloseCode.VersionMismatch:
       return { kind: 'new-version', title: 'New version available', message: 'The game was updated. Reload to get the latest version, then rejoin with the same link.', code: 'VERSION_MISMATCH', action: 'reload' };
     case CloseCode.RoomFull:
-      return { kind: 'room-full', title: 'This room is full', message: 'Every slot is taken. Try again when someone leaves.', code: codeLine('ROOM_FULL', room), action: 'rejoin' };
+      // a full room still has seats to watch from: the room seats a watcher who asks when a slot opens
+      return { kind: 'room-full', title: 'This room is full', message: 'Every slot is taken. Watch the match and take the next free slot.', code: codeLine('ROOM_FULL', room), action: 'watch' };
+    case CloseCode.SpectatorsFull:
+      return { kind: 'room-full', title: 'Spectator seats are full', message: 'This room has all the spectators it takes. Try again in a bit.', code: codeLine('SPECTATORS_FULL', room), action: 'rejoin' };
     case CloseCode.NoRoom:
+      // a watcher is never the one to open a room: no room here means nobody is playing in it
+      if (watching)
+        return { kind: 'room-not-found', title: 'Nothing to watch', message: 'Nobody is playing in this room right now. Try again once your friends are in.', code: codeLine('NO_ROOM', room), action: 'rejoin' };
       return { kind: 'server-full', title: 'Server is full', message: 'The server can’t open another room right now. Wait a few seconds and try again.', code: codeLine('NO_ROOM', room), action: 'rejoin' };
     case CloseCode.RateLimited:
       return { kind: 'server-full', title: 'Too much at once', message: 'Your connection sent more than the server takes at once (or too many tabs joined from here). Rejoin to carry on.', code: codeLine('RATE_LIMITED', room), action: 'rejoin' };

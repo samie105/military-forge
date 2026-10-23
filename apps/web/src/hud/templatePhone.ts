@@ -69,6 +69,15 @@ export function phoneHudTemplate(): string {
       <div class="pt-cmp__head"><svg class="ic--kf" aria-hidden="true"><use data-bind-attr="href: pickup.weapon.icon"/></svg><b class="display" data-bind="pickup.weapon.name"></b><span class="mf-chip" data-bind="pickup.weapon.family"></span><span class="pt-cmp__for" data-state="pickup-swaps">for your <span data-bind="pickup.held.name"></span></span></div>
       ${PHONE_CMP}
     </div>
+    <div class="mf-spec mf-spec--phone" data-state="spectate-bar" role="group" aria-label="Spectating">
+      <button type="button" class="mf-spec__thumb" data-spec="prev" aria-label="Previous soldier">${ic('chev-left')}</button>
+      <span class="mf-spec__who plate" role="status"><span class="hud-label" data-bind="spectate.label"></span><b class="display" data-bind="spectate.name"></b><i class="mf-spec__hp" data-state="spec-target" aria-hidden="true"></i><span class="mf-spec__line" data-bind="spectate.line"></span></span>
+      <button type="button" class="mf-spec__thumb" data-spec="next" aria-label="Next soldier">${ic('chev-right')}</button>
+    </div>
+    <button type="button" class="mf-spec-pill mf-spec-pill--free" data-spec="free" data-state="spec-watch">${ic('drag', 'ic--sm')}<span data-bind="spectate.freeLabel"></span></button>
+    <button type="button" class="mf-spec-pill mf-spec-pill--join" data-spec="join" data-state="spec-watch" data-bind-attr="data-queued: spectate.queued">${ic('play', 'ic--sm')}<span data-bind="spectate.joinShort"></span></button>
+    <span class="mf-spec-tag mf-spec-tag--phone plate" data-state="spec-watch"><i class="mf-spec-dot"></i>Spectating<span data-bind-show="spectate.delay"> · <span data-bind="spectate.delayShort"></span></span></span>
+    <span class="mf-spec-tag mf-spec-tag--phone-eyes plate" data-state="spectate-bar" data-bind-show="spectate.watching">${ic('eye', 'ic--sm')}<span data-bind="spectate.watchingShort"></span></span>
     <div class="respawn plate" data-state="spectating" role="status">
       <p class="respawn__by"><span class="hud-label" data-bind="death.label"></span> <b data-bind="death.killer"></b></p>
       <p class="respawn__timer"><span data-bind="death.lead"></span> <b data-bind="player.respawnIn" data-bind-attr="class: death.numClass"></b> <span data-bind="death.unit"></span></p>

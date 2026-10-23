@@ -92,7 +92,7 @@
 .mf-title__corner--net i { width: 12px; height: 12px; border-radius: 50%; background: var(--c-muted); }
 .mf-title__corner--net i.is-live { background: var(--c-ok); }
 @supports (backdrop-filter: blur(1px)) {
-  html:not(.reduce-transparency):not(.gfx-low) .mf-title:not(.is-phone) .mf-title__corner--net {
+  html:not(.reduce-transparency):not(.gfx-low):not(.mf-lowend) .mf-title:not(.is-phone) .mf-title__corner--net {
     background: var(--frost-fill, var(--c-ink-900)); border-color: var(--frost-line, var(--c-line)); backdrop-filter: blur(var(--blur-hud, 12px));
   }
 }

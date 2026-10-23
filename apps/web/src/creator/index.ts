@@ -137,9 +137,9 @@ export function mountCreator(container: HTMLElement, options: CreatorOptions = {
           <span class="mf-cr__placeholder-short">On the male body until her art lands</span>
         </div>
         <div class="mf-cr__view">
-          <div class="seg" data-group="focus" role="radiogroup" aria-label="View"><button type="button" class="seg__opt" data-focus="full">Full</button><button type="button" class="seg__opt" data-focus="face">Face</button><button type="button" class="seg__opt" data-focus="jetpack">Back</button></div>
+          <div class="seg" data-group="focus" role="radiogroup" aria-label="View"><button type="button" class="seg__opt" role="radio" data-focus="full">Full</button><button type="button" class="seg__opt" role="radio" data-focus="face">Face</button><button type="button" class="seg__opt" role="radio" data-focus="jetpack">Back</button></div>
           <div class="mf-cr__zoom" role="group" aria-label="Zoom"><button type="button" class="btn btn--ghost btn--icon btn--sm" data-zoom="in" aria-label="Zoom in">${ic('plus')}</button><button type="button" class="btn btn--ghost btn--icon btn--sm" data-zoom="out" aria-label="Zoom out">${ic('minus')}</button></div>
-          <div class="seg" data-group="light" role="radiogroup" aria-label="Light"><button type="button" class="seg__opt" data-light="lobby">Lobby</button><button type="button" class="seg__opt" data-light="night">Night</button><button type="button" class="seg__opt" data-light="desert">Desert</button></div>
+          <div class="seg" data-group="light" role="radiogroup" aria-label="Light"><button type="button" class="seg__opt" role="radio" data-light="lobby">Lobby</button><button type="button" class="seg__opt" role="radio" data-light="night">Night</button><button type="button" class="seg__opt" role="radio" data-light="desert">Desert</button></div>
         </div>
         <span class="label mf-cr__hint">${ic('rotate', 'ic ic--sm')}Drag to turn · scroll or pinch to zoom</span>
       </div>
@@ -350,6 +350,8 @@ export function mountCreator(container: HTMLElement, options: CreatorOptions = {
     else if (d.tab !== undefined) {
       tab = Number(d.tab);
       render();
+      // the stage frames the tab (locker/stage.ts shots; the animation agent's)
+      turntable.frameTab(lookTabs(body)[tab]?.id ?? '');
     } else if (d.focus) {
       turntable.setFocus(d.focus as FocusPreset);
       select('focus', 'focus', d.focus);

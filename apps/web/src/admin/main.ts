@@ -211,7 +211,7 @@ function render(s: AdminStateView): void {
     const count = el('span', { class: 'admin__count' });
     counts.set(group, count);
     const body = el('div', { class: 'admin__sections' });
-    for (const [section, fields] of sections) body.append(el('section', { class: 'admin__section' }, el('h3', {}, section), ...fields.map(row)));
+    for (const [section, fields] of sections) body.append(el('section', { class: 'admin__section' }, el('h2', {}, section), ...fields.map(row)));
     groups.push(el('details', { class: 'admin__group', ...(groups.length === 0 ? { open: '' } : {}) }, el('summary', {}, group, count), body));
   }
   root.replaceChildren(bar, ...groups);

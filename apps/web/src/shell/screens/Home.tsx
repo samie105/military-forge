@@ -19,6 +19,7 @@ import type { ShellStore } from '../store';
 import { Backdrop, Hint, Hints, NetPill, takeCard } from './frame';
 import { MAP_CARDS, ROOM_SLOTS, lobbyMaps } from './Lobby';
 import { FriendsButton, SquadCard } from '../../social/SocialLayer';
+import { SavedAdsList } from '../../ads/SavedAds';
 
 /** The brand: the emblem and the name, once in the whole UI (round two's .brand on Home). */
 export function Brand() {
@@ -80,19 +81,19 @@ export function Home({ store }: { store: ShellStore }) {
         <header className="menu-top home__top">
           <Brand />
           <nav className="tabs home__tabs" aria-label="Main">
-            <button type="button" className="tab" aria-selected="true">
+            <button type="button" className="tab" aria-current="page">
               <Icon name="play" />
               Play
             </button>
-            <button type="button" className="tab m-p8" aria-selected="false" onClick={() => (location.hash = '#/locker')}>
+            <button type="button" className="tab m-p8" onClick={() => (location.hash = '#/locker')}>
               <Icon name="shirt" />
               Locker
             </button>
-            <button type="button" className="tab m-p8" aria-selected="false" onClick={() => location.assign('/armory.html')}>
+            <button type="button" className="tab m-p8" onClick={() => location.assign('/armory.html')}>
               <Icon name="rack" />
               Armory
             </button>
-            <button type="button" className="tab m-p8" aria-selected="false" onClick={() => ctl.openSettings()}>
+            <button type="button" className="tab m-p8" onClick={() => ctl.openSettings()}>
               <Icon name="gear" />
               Settings
             </button>
@@ -244,6 +245,8 @@ export function Home({ store }: { store: ShellStore }) {
                 All the keys
               </button>
             </section>
+            {/* the billboard ads the player saved during play (tap-to-save): only what they chose */}
+            <SavedAdsList where="home" />
           </aside>
         </div>
         <div className="ticker home__ticker" aria-hidden="true">

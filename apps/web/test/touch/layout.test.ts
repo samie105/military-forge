@@ -180,8 +180,8 @@ describe('touch HUD layout', () => {
 
   it('settings round-trip and are sanitised', () => {
     const store = memoryStore();
-    saveSettings(store, { ...DEFAULT_TOUCH_SETTINGS, fire: 'release', handed: 'left', aimAssist: false, opacity: 0.8 });
-    expect(loadSettings(store)).toEqual({ ...DEFAULT_TOUCH_SETTINGS, fire: 'release', handed: 'left', aimAssist: false, opacity: 0.8 });
+    saveSettings(store, { ...DEFAULT_TOUCH_SETTINGS, fire: 'release', handed: 'left', assist: 'strong', opacity: 0.8 });
+    expect(loadSettings(store)).toEqual({ ...DEFAULT_TOUCH_SETTINGS, fire: 'release', handed: 'left', assist: 'strong', opacity: 0.8 });
     store.setItem(SETTINGS_KEY, JSON.stringify({ mode: 'always', fire: 'spray', opacity: 9, vibrate: 'yes' }));
     expect(loadSettings(store)).toEqual({ ...DEFAULT_TOUCH_SETTINGS, opacity: LIMITS.opacityMax });
   });
@@ -197,8 +197,15 @@ describe('touch HUD layout', () => {
     expect(loadSettings(store).opacity).toBe(0.55);
   });
 
-  it('aim assist defaults on (touch only); the shield button is there once the sim has its bit', () => {
-    expect(DEFAULT_TOUCH_SETTINGS.aimAssist).toBe(true);
+  it('the old aim assist switch carries over: off stays Off, on becomes Standard; a level loads as saved', () => {
+    expect(loadSettings(memoryStore({ [SETTINGS_KEY]: JSON.stringify({ aimAssist: false }) })).assist).toBe('off');
+    expect(loadSettings(memoryStore({ [SETTINGS_KEY]: JSON.stringify({ aimAssist: true }) })).assist).toBe('standard');
+    expect(loadSettings(memoryStore({ [SETTINGS_KEY]: JSON.stringify({ assist: 'light', aimAssist: false }) })).assist).toBe('light');
+    expect(loadSettings(memoryStore({ [SETTINGS_KEY]: JSON.stringify({ assist: 'max' }) })).assist).toBe('standard');
+  });
+
+  it('aim assist defaults to Standard (touch and pads only); the shield button is there once the sim has its bit', () => {
+    expect(DEFAULT_TOUCH_SETTINGS.assist).toBe('standard');
     const shield = availableControls().find((c) => c.id === 'shield');
     expect(shield?.bit ?? 0).toBe((Btn as Record<string, number>).Shield ?? 0);
     expect(Boolean(shield)).toBe('Shield' in Btn);

@@ -95,7 +95,7 @@ export function gunTileHtml(w: WeaponDef, slot: 0 | 1, pair: readonly [number, n
   const icon = weaponIcon(w.id);
   const art = icon ? `<span class="mf-item__glyph mf-gun__art">${ic(icon, 'ic ic--kf')}</span>` : `<span class="mf-item__glyph">${ic('rack')}</span>`;
   const tag = on ? `<span class="tag tag--you">${ic('check')}On</span>` : other ? `<span class="tag tag--ghost">${ic('swap')}Gun ${2 - slot}</span>` : `<span class="tag tag--ghost">${GUN_CLASS[w.class] ?? w.class}</span>`;
-  return `<button type="button" class="item mm-tile mf-gun${on ? ' is-on' : ''}" role="radio" aria-checked="${on}" aria-pressed="${on}" data-gun="${w.id}" data-gslot="${slot}" title="${escapeHtml(`${w.name} · ${GUN_CLASS[w.class] ?? w.class}${other ? ` · now your gun ${2 - slot}: picking it swaps the two` : ''}`)}">
+  return `<button type="button" class="item mm-tile mf-gun${on ? ' is-on' : ''}" role="radio" aria-checked="${on}" data-gun="${w.id}" data-gslot="${slot}" title="${escapeHtml(`${w.name} · ${GUN_CLASS[w.class] ?? w.class}${other ? ` · now your gun ${2 - slot}: picking it swaps the two` : ''}`)}">
     <span class="item__art">${art}</span>
     <b class="item__name mm-name">${escapeHtml(w.name)}</b>
     ${tag}
@@ -141,9 +141,9 @@ export function mountLocker(container: HTMLElement, options: LockerOptions = {})
           <p class="lk__rule">Nothing you wear sticks out past the body, so every outfit hides and hits the same.</p>
         </div>
         <div class="mm-controls">
-          <div class="seg mm-seg" data-group="focus" role="radiogroup" aria-label="View"><button type="button" class="seg__opt" data-focus="full">Full</button><button type="button" class="seg__opt" data-focus="face">Face</button><button type="button" class="seg__opt" data-focus="jetpack">Jetpack</button></div>
+          <div class="seg mm-seg" data-group="focus" role="radiogroup" aria-label="View"><button type="button" class="seg__opt" role="radio" data-focus="full">Full</button><button type="button" class="seg__opt" role="radio" data-focus="face">Face</button><button type="button" class="seg__opt" role="radio" data-focus="jetpack">Jetpack</button></div>
           <span class="label lk__drag">${ic('rotate', 'ic ic--sm')}Drag to turn</span>
-          <div class="seg mm-seg" data-group="light" role="radiogroup" aria-label="Light"><button type="button" class="seg__opt" data-light="lobby">Lobby</button><button type="button" class="seg__opt" data-light="night">Night</button><button type="button" class="seg__opt" data-light="desert">Desert</button></div>
+          <div class="seg mm-seg" data-group="light" role="radiogroup" aria-label="Light"><button type="button" class="seg__opt" role="radio" data-light="lobby">Lobby</button><button type="button" class="seg__opt" role="radio" data-light="night">Night</button><button type="button" class="seg__opt" role="radio" data-light="desert">Desert</button></div>
         </div>
       </div>
       <section class="lk__panel card card--print mm-panel" role="tabpanel">
@@ -182,7 +182,6 @@ export function mountLocker(container: HTMLElement, options: LockerOptions = {})
 
   const select = (group: string, attr: string, value: string) => {
     for (const b of root.querySelectorAll<HTMLElement>(`[data-group="${group}"] button`)) {
-      b.setAttribute('aria-pressed', String(b.dataset[attr] === value));
       b.setAttribute('aria-checked', String(b.dataset[attr] === value));
     }
   };

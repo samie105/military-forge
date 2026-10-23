@@ -9,7 +9,8 @@
 import { useEffect, useState } from 'react';
 import { useStore } from 'zustand';
 import { getTouchSettings, onTouchChange, openTouchEditor, requestDrill, resetTouchHints, resetTouchLayout, setTouchSettings, type TouchSettings } from '../../../touch';
-import { DEFAULT_TOUCH_SETTINGS } from '../../../touch/settings';
+import { ASSIST_HELP, ASSIST_NAMES, DEFAULT_TOUCH_SETTINGS } from '../../../touch/settings';
+import { ASSIST_LEVELS, type AssistLevel } from '../../../input/assist';
 import { Icon } from '../../../ui/Icon';
 import { FIRE_MODE_TEXT } from '../../../touch/fireArt';
 import { FirePicker } from '../FirePicker';
@@ -149,9 +150,13 @@ function Touch() {
           <Switch on={t.leftFire} onChange={(leftFire) => set({ leftFire })} label="A second FIRE on the left" />
         </Row>
       )}
-      <Row i={3} label="Aim assist" desc="The aim lingers on a target it crosses.">
-        <Switch on={t.aimAssist} onChange={(aimAssist) => set({ aimAssist })} label="Aim assist" />
-      </Row>
+      <div className="pm-set pm-set--block m-p3">
+        <span className="pm-set__text">
+          <b>Aim assist</b>
+          <span>{ASSIST_HELP[t.assist]}</span>
+        </span>
+        <Seg value={t.assist} label="Aim assist" options={ASSIST_LEVELS.map((l) => [l, ASSIST_NAMES[l]] as [AssistLevel, string])} onChange={(assist) => set({ assist })} />
+      </div>
       <Row i={4} label="Left-handed" desc="Mirrors the whole layout.">
         <Switch on={t.handed === 'left'} onChange={(on) => set({ handed: on ? 'left' : 'right' })} label="Left-handed" />
       </Row>
@@ -319,7 +324,7 @@ export function PhoneSettings({ store }: { store: ShellStore }) {
   };
   const label = tabs.find((t) => t.id === tab)!.label;
   return (
-    <PhoneScreen name="m-settings" label="Settings" word="SET" modal states={[tab]}>
+    <PhoneScreen name="m-settings" label="Settings" word="SET" modal dialog states={[tab]}>
       <div className="pm pm--set">
         <header className="pm-top">
           <button type="button" className="btn btn--ghost btn--icon btn--sm" aria-label="Back" onClick={blurAfter(() => ctl.back())}>

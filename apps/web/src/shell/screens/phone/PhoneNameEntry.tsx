@@ -131,7 +131,7 @@ export function PhoneNameEntry({ store, first }: { store: ShellStore; first: boo
   };
 
   return (
-    <PhoneScreen name="m-name" label="Your name" word="RECRUIT" modal={!first} states={[state, turnTip ? 'turn-tip' : null]}>
+    <PhoneScreen name="m-name" label="Your name" word="RECRUIT" modal={!first} dialog={!first} states={[state, turnTip ? 'turn-tip' : null]}>
       <form
         className="pm pm-ne"
         onSubmit={(e) => {

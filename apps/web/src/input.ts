@@ -303,6 +303,11 @@ export class InputSampler {
     this.throwLatch.cancel(); // focus lost while aiming: no throw
   }
 
+  /** A key held now (spectating's free camera pans with it). */
+  isDown(code: string): boolean {
+    return this.keys.has(code);
+  }
+
   /** One-shot key press since the last call (for UI toggles, not gameplay). */
   consumePress(code: string): boolean {
     const had = this.pressedOnce.has(code);

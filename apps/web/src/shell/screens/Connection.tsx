@@ -312,6 +312,20 @@ export function Alert({ alert, onRejoin }: { alert: AlertInfo; onRejoin: (() => 
               <Icon name="refresh" />
               Reload now
             </button>
+          ) : alert.action === 'watch' ? (
+            // a full room: watch it (the next free slot is ours when we ask), or try again to play
+            <>
+              <button className="btn btn--volt btn--xl m-p8" type="button" data-hook="watch" onClick={blurAfter(() => ctl.watchHere())}>
+                <Icon name="eye" />
+                Watch
+              </button>
+              {onRejoin && (
+                <button className="btn btn--paper btn--xl m-p8" type="button" onClick={blurAfter(onRejoin)}>
+                  <Icon name="refresh" />
+                  Try again
+                </button>
+              )}
+            </>
           ) : alert.action === 'rejoin' && onRejoin ? (
             <button className="btn btn--volt btn--xl m-p8" type="button" onClick={blurAfter(onRejoin)}>
               <Icon name="refresh" />

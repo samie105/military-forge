@@ -36,7 +36,7 @@ export function tileHtml(item: CosmeticDef, equipped: boolean, owned: boolean, c
       ? '<span class="tag tag--ghost">Owned</span>'
       : `<span class="tag tag--ghost mm-how">${ic('lock')}${escapeHtml(how)}</span>`;
   const cls = ['item', 'mm-tile', equipped ? 'is-on' : '', owned ? '' : 'is-locked mm-locked', picked ? 'is-picked' : ''].filter(Boolean).join(' ');
-  return `<button type="button" class="${cls}" role="radio" aria-checked="${picked}" aria-pressed="${equipped}" style="--rarity:${r.colour}" data-id="${item.id}"${channel ? ` data-channel="${channel}"` : ''} title="${escapeHtml(title)}">
+  return `<button type="button" class="${cls}" role="radio" aria-checked="${picked}" style="--rarity:${r.colour}" data-id="${item.id}"${channel ? ` data-channel="${channel}"` : ''} title="${escapeHtml(title)}">
     <span class="item__art">${art}<svg class="mm-rarity" viewBox="0 0 12 12" role="img" aria-label="${r.label}">${SHAPES[r.shape]}</svg></span>
     <b class="item__name mm-name">${escapeHtml(item.name)}</b>
     ${tag}

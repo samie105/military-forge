@@ -186,12 +186,20 @@ function desktop(): string {
       <span class="mf-kc__more"><span class="mf-kc__head" data-state="kill-head">${ic('b-headshot', 'ic--sm')}Headshot</span><span class="mf-kc__streak" data-bind-show="kill.streak" data-bind="kill.streak"></span></span>
     </div>
 
-    <div class="mf-spec plate m-p9 m-p9--bottom" data-state="spectate-bar" role="status" aria-label="Spectating">
-      <span class="mf-spec__nav">${ic('chev-left', 'ic--sm')}Prev</span>
-      <span class="mf-spec__who"><span class="hud-label">Watching</span><b class="display" data-bind="spectate.name"></b></span>
-      <span class="mf-spec__nav">Next${ic('chev-right', 'ic--sm')}</span>
-      <span class="mf-spec__join">${ic('play', 'ic--sm')}Join next round</span>
+    <div class="mf-spec plate m-p9 m-p9--bottom" data-state="spectate-bar" role="group" aria-label="Spectating">
+      <button type="button" class="mf-spec__nav" data-spec="prev" aria-label="Previous soldier">${ic('chev-left', 'ic--sm')}Prev<kbd class="kbd">Q</kbd></button>
+      <span class="mf-spec__who" role="status"><span class="hud-label" data-bind="spectate.label"></span><b class="display" data-bind="spectate.name"></b><i class="mf-spec__hp" data-state="spec-target" aria-hidden="true"></i><span class="mf-spec__line" data-bind="spectate.line"></span></span>
+      <button type="button" class="mf-spec__nav" data-spec="next" aria-label="Next soldier"><kbd class="kbd">E</kbd>Next${ic('chev-right', 'ic--sm')}</button>
+      <span class="mf-spec__sep" data-state="spec-watch" aria-hidden="true"></span>
+      <button type="button" class="mf-spec__free" data-spec="free" data-state="spec-watch"><span data-bind="spectate.freeLabel"></span><kbd class="kbd">F</kbd></button>
+      <span class="mf-spec__slot hud-label" data-state="spec-slot+spec-watch+!spec-queued">A slot is free</span>
+      <button type="button" class="mf-spec__join" data-spec="join" data-state="spec-watch" data-bind-attr="data-queued: spectate.queued">${ic('play', 'ic--sm')}<span data-bind="spectate.join"></span><kbd class="kbd">↵</kbd></button>
     </div>
+    <div class="mf-spec-tags" data-state="spec-watch" aria-hidden="true">
+      <span class="mf-spec-tag plate"><i class="mf-spec-dot"></i>Spectating</span>
+      <span class="mf-spec-tag mf-spec-tag--delay plate" data-bind-show="spectate.delay"><i class="mf-spec-dot"></i><span data-bind="spectate.delay"></span></span>
+    </div>
+    <div class="mf-spec-tag mf-spec-tag--eyes plate" data-state="spectate-bar" data-bind-show="spectate.watching" aria-hidden="true">${ic('eye', 'ic--sm')}<span data-bind="spectate.watching"></span></div>
   </div>
 
   ${eventTemplate()}
@@ -222,7 +230,7 @@ function desktop(): string {
 }
 
 /** The bars' numbers, as CSS variables on the HUD root (#hud, its data-bind-var): both layouts read them. */
-export const HUD_VARS = '--hp: v.hp; --hp-ghost: v.hpGhost; --fuel: v.fuel; --fuel-delay: v.fuelDelay; --shield-hp: v.shield; --dash: v.dash; --dash-cost: v.dashCost; --reload: v.reload; --respawn: v.respawn; --event: v.event; --equip: v.equip; --equip-ms: v.equipMs; --throw: v.throw';
+export const HUD_VARS = '--spec-hp: v.specHp; --hp: v.hp; --hp-ghost: v.hpGhost; --fuel: v.fuel; --fuel-delay: v.fuelDelay; --shield-hp: v.shield; --dash: v.dash; --dash-cost: v.dashCost; --reload: v.reload; --respawn: v.respawn; --event: v.event; --equip: v.equip; --equip-ms: v.equipMs; --throw: v.throw';
 
 export function hudTemplate(): string {
   return `<div class="mf-fit mf-hud-fit kit-v2">${desktop()}</div><div class="mf-fit mf-hud-fit mf-hud-fit--phone kit-v2">${phoneHudTemplate()}</div>`;

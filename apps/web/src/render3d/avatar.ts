@@ -35,12 +35,14 @@ import { KICK_MAX, recoilOf } from './recoil';
 import { DEFAULT_OFFHAND, bakeGltfMesh, loadWeaponModels, type GltfSource, type GunMaterials, type WeaponModel } from './weaponModels';
 import { orientSocket, rotateWorld, solveTwoBone } from './ik';
 import { ActionLayer, reloadClip, type ActionName } from './actions';
+import { FULL_DETAIL, type AnimDetail } from './animLod';
 import { OutlineMaterial } from '../character/outline';
 import { DEATH, collapseAt, deathSeconds, type CollapsePose, type DeathStyle } from './death';
 import { Inertializer, RollEase, WorldEase } from './inertia';
 import { FootPlanter, LocoLayer, TurnClock, UPPER_BODY, aimElevation, facingOf, facingYaw } from './locomotion';
 import { MotionLayer } from './motion';
 import { ShieldKit, ShieldRig } from './shield';
+import { SLUNG_GUN, SpringChain } from './springs';
 import { Handoff, SlingRig, slingPointFor, switchPhase, switchSeconds, type SlingPoint, type SwitchPose } from './sling';
 import { SwingClock, swingPose, type SwingPose } from './swing';
 
@@ -196,6 +198,9 @@ interface Arm {
   roll: RollEase;
 }
 
+/** a slung gun swings about its grip with its tail this far along its barrel (m) */
+const SLUNG_TAIL = new Vector3(0, 0.35, 0);
+
 /** poseKey's numbering of the actions (actions.ts) */
 const ACTION_KEYS: readonly (ActionName | null)[] = ['reload_rifle', 'reload_pistol', 'throw'];
 
@@ -284,6 +289,13 @@ export class Avatar {
   private deadT: number | null = null;
   /** PlayerView.deaths while alive: the motion layer starts afresh when it changes (the respawn) */
   private lifeDeaths = 0;
+  /** animation LOD (animLod.ts): the time not yet posed, frames since the last pose, whether last frame planted the feet
+   *  and whether the soldier was off screen; and the frames posed (tests, the stats) */
+  private owed = 0;
+  private skipped = 0;
+  private plantedLast = true;
+  private away = false;
+  posedFrames = 0;
   /** a dying soldier's own outline (the shared one can't dissolve per soldier), and the view it's posed from */
   private dyingOutline: OutlineMaterial | null = null;
   private sharedOutline: Material | null = null;
@@ -372,7 +384,7 @@ export class Avatar {
     return { upper, lower, hand, socket, gun, def: NO_WEAPON, length, kick: 0, kickNext: 0, parts: new GunParts(gun), shotAge: Infinity, inertiaIndex: -1, aimed: new Quaternion(), handEase: new WorldEase(), roll: new RollEase() };
   }
 
-  update(p: PlayerView, dt: number, world: CollisionWorld, blobShadows: boolean): void {
+  update(p: PlayerView, dt: number, world: CollisionWorld, blobShadows: boolean, detail: AnimDetail = FULL_DETAIL): void {
     // --- animation: the death beat (death.ts), and a fresh start at the respawn ---
     if (!p.alive) {
       this.dying(p, dt, world, blobShadows);
@@ -380,6 +392,18 @@ export class Avatar {
     }
     if (this.deadT !== null) this.revive();
     this.lifeDeaths = p.deaths;
+    // level of detail (animLod.ts): off screen only the position; small or LOD1, a pose every other frame
+    this.owed += dt;
+    if (!detail.visible || (detail.every === 2 && this.skipped++ % 2 === 0 && this.posedFrames > 0)) {
+      this.follow(p, blobShadows, !detail.visible);
+      return;
+    }
+    this.skipped = 0;
+    dt = Math.min(this.owed, 0.1);
+    this.owed = 0;
+    if (this.away) this.feet.reset();
+    this.away = false;
+    this.posedFrames++;
     // --- end animation ---
     this.pivot.visible = true;
     this.blob.visible = blobShadows;
@@ -416,7 +440,11 @@ export class Avatar {
     const leftHeld = p.dual || (active !== NO_WEAPON && weapons[active]?.hands === 2) || p.shield === 'front' || p.shield === 'raising';
     const held: ('L' | 'R')[] = [...(active !== NO_WEAPON || p.dual ? (['R'] as const) : []), ...(leftHeld ? (['L'] as const) : [])];
     this.motion.update(p, dt, this.yaw, this.loco, this.holdOf(active, p.dual).lean, held, target);
-    this.feet.update(p, this.yaw, this.loco, dt, world, this.motion.drop, this.turn.turning ? target : null);
+    if (detail.planted) {
+      if (!this.plantedLast) this.feet.reset();
+      this.feet.update(p, this.yaw, this.loco, dt, world, this.motion.drop, this.turn.turning ? target : null);
+    }
+    this.plantedLast = detail.planted;
     // --- end animation ---
     this.watchSwitch(p, dt);
     this.swing.update(p.meleeTicks, dt);
@@ -430,6 +458,21 @@ export class Avatar {
     this.updateFlame(p, dt);
     if (blobShadows) this.updateBlob(p, world);
   }
+
+  // --- animation: level of detail (animLod.ts) ---
+  /** A frame not posed: the body follows its position in the pose it has (off screen, it waits to be posed again). */
+  private follow(p: PlayerView, blobShadows: boolean, hidden: boolean): void {
+    this.pivot.visible = true;
+    this.pivot.position.set(p.x, p.y, 0);
+    if (hidden) {
+      this.away = true;
+      this.blob.visible = false;
+      return;
+    }
+    this.blob.visible = blobShadows && this.blob.visible;
+    this.blob.position.x = p.x;
+  }
+  // --- end animation: level of detail ---
 
   // --- animation: inertialization (inertia.ts) ---
   /** what the aim layer did with each hand this frame (aim()): the gun hand's weapon, the left hand's job */
@@ -901,6 +944,8 @@ export class Avatar {
   private readonly slungInHand = [true, true];
   private readonly stowed = [new Handoff(), new Handoff()] as const;
   private readonly drawn = new Handoff();
+  /** animation: each slot's slung gun on a spring (springs.ts), and the mount it was set up on */
+  private readonly slungSprings: ({ mount: Object3D | null; chain: SpringChain } | undefined)[] = [];
 
   private get switching(): boolean {
     return this.swDur > 0;
@@ -971,6 +1016,14 @@ export class Avatar {
         this.stowed[slot].start(this.right.gun.matrixWorld);
       }
       this.stowed[slot].apply(this.sling.meshes[slot], dt);
+      // animation: a slung gun swings on its mount as the body moves (springs.ts), once it's settled there
+      const mesh = this.sling.meshes[slot];
+      let spring = this.slungSprings[slot];
+      if (!spring || spring.mount !== mesh.parent) {
+        spring = this.slungSprings[slot] = { mount: mesh.parent, chain: new SpringChain([mesh], [SLUNG_TAIL], SLUNG_GUN, [new Quaternion()]) };
+      }
+      if (this.stowed[slot].active || !mesh.parent || !mesh.visible) spring.chain.reset();
+      else spring.chain.update(dt);
     }
     if (this.right?.gun.visible && this.drawn.active) this.drawn.apply(this.right.gun, dt);
   }

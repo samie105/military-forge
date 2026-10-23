@@ -1,6 +1,6 @@
 /* global process */
 /**
- * The controls spec's phone checks for its items 1 and 5 (docs/design/controls-research.md §4.11:
+ * The controls spec's phone checks for its items 1, 3, 5 and 6 (docs/design/controls-research.md §4.11:
  * sticks §4.3, gestures §4.6), in a phone-sized headless Chrome. Real CDP touches, timestamped where
  * timing matters (the controls time gestures by the events' own clocks); every sim tick's sampled
  * Input is read through a wrapper on the local game's sampler (dev builds).
@@ -467,6 +467,78 @@ try {
     await sleep(400);
     const m2 = await mag();
     check('Release: drag and lift fires one shot; back to the middle and lift: none', m1 === m0 - 1 && m2 === m1, `mag ${m0} → ${m1} → ${m2}`);
+  }
+  // ---------- item 6 · aim assist levels (§4.5; the shared core, input/assist.ts) ----------
+  {
+    // Fire button mode: the stick only aims, so nothing fires while we measure the aim
+    await setFire('button');
+    await page.evaluate(() => {
+      const m = window.__game.mode;
+      const me = m.me;
+      let best = null;
+      for (const p of m.game.players) if (p && p.id !== me.id && p.alive && (!best || Math.abs(p.x - me.x) < Math.abs(best.x - me.x))) best = p;
+      if (best) {
+        me.x = best.x - 10;
+        me.y = best.y;
+        me.vx = 0;
+        me.vy = 0;
+      }
+    });
+    await sleep(800);
+    await settle();
+    const st0 = await page.evaluate(() => window.__touch.sticks());
+    const tg = st0?.targets?.[0];
+    if (!tg) check('aim assist: a dummy in sight to aim near', false, JSON.stringify({ visible: st0?.visible, assist: st0?.assist }));
+    else {
+      const a0 = Math.atan2(tg.y - st0.shoulder.y, tg.x - st0.shoulder.x);
+      const d0 = Math.hypot(tg.x - st0.shoulder.x, tg.y - st0.shoulder.y);
+      const deg = (r) => (r * 180) / Math.PI;
+      // the sim's aim (u16) as degrees off the dummy
+      const offOf = (u16) => Math.abs(((((u16 / 65536) * 360 - deg(a0)) % 360) + 540) % 360 - 180);
+      const push = 50; // ≈ 0.8 of the stick: past touch magnetism's 0.30
+      // whole pixels, as a finger lands; the angle the stick really points at comes back
+      const aimAt = async (a) => {
+        const dx = Math.round(Math.cos(a) * push);
+        const dy = Math.round(-Math.sin(a) * push);
+        await touch(2, R.x + dx, R.y + dy);
+        return Math.atan2(-dy, dx);
+      };
+      /** The stick 3° off the dummy for `hold` ms, then (optionally) let go: the aim's offsets, held and after. */
+      const run = async (level, liftAfter = false) => {
+        await page.evaluate((assist) => window.__touch.setTouchSettings({ assist }), level);
+        await sleep(200);
+        await touch(2, R.x, R.y);
+        await aimAt(a0 + Math.PI / 3); // away first: no target chosen
+        await sleep(300);
+        const t0 = await now();
+        const stick = deg((await aimAt(a0 + (3 * Math.PI) / 180)) - a0);
+        await sleep(500);
+        const held = (await since(t0)).map((x) => offOf(x.aim));
+        let after = [];
+        if (liftAfter) {
+          const t1 = await now();
+          await lift(2);
+          await sleep(500);
+          after = (await since(t1)).map((x) => offOf(x.aim));
+        } else await lift(2);
+        await sleep(200);
+        return { held, after, stick: Math.abs(stick) };
+      };
+      const off = await run('off');
+      const std = await run('standard', true);
+      const strong = await run('strong', true);
+      const fmt = (a) => a.slice(-1).map((o) => o.toFixed(2)).join() + '°';
+      const steps = (a) => a.slice(1).map((o, i) => Math.abs(o - a[i]));
+      // Off: the aim sits where the stick points (3° off) once it has turned there
+      check('aim assist Off: the stick 3° off a dummy, the aim stays where it points', Math.abs(off.held.at(-1) - off.stick) < 0.3, `settled ${fmt(off.held)}, the stick ${off.stick.toFixed(2)}° (dummy ${d0.toFixed(1)} m)`);
+      // Standard: magnetism pulls it nearer, never more than 3° a tick once there
+      const settled = std.held.slice(std.held.findIndex((o) => o < 6));
+      check('aim assist Standard: 3° off, the aim settles nearer the dummy, at most 3° a tick', std.held.at(-1) < std.stick - 0.5 && steps(settled).every((d) => d <= 3.05), `settled ${fmt(std.held)}, the stick ${std.stick.toFixed(2)}°; the biggest step ${Math.max(0, ...steps(settled)).toFixed(2)}°`);
+      // let go: Standard leaves the aim where it was; Strong's lock brings it onto the dummy
+      check('aim assist Standard, let go: the aim stays put (no lock)', Math.abs(std.after.at(-1) - std.held.at(-1)) < 0.2, `${fmt(std.held)} → ${fmt(std.after)}`);
+      check('aim assist Strong, let go: the lock holds the aim on the dummy', strong.after.at(-1) < 0.5 && strong.after.at(-1) < strong.held.at(-1), `${fmt(strong.held)} → ${fmt(strong.after)}`);
+      await page.evaluate(() => window.__touch.setTouchSettings({ assist: 'standard' }));
+    }
   }
   await setFire('pull');
 } catch (e) {

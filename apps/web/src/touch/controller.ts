@@ -40,9 +40,9 @@ import {
   type Placement,
   type TouchLayout,
 } from './layout';
-import { DEFAULT_TOUCH_SETTINGS, VIEW_LIMITS, type FireMode, type KeyValueStore as Store, type TouchSettings } from './settings';
-import { AutoTrigger, assistAim, autoRange, createTouchState, dashStrength, desiredAim, effectiveFire, flickRate, grenadeStrength, pullFires, touchButtons, updateMove, type AimTarget } from './mapping';
-import { onTarget as onAutoTarget, type AssistTarget } from '../input/assist';
+import { ASSIST_NAMES, DEFAULT_TOUCH_SETTINGS, VIEW_LIMITS, type FireMode, type KeyValueStore as Store, type TouchSettings } from './settings';
+import { AutoTrigger, TOUCH_PULL_MIN, assistPush, autoRange, createTouchState, dashStrength, desiredAim, effectiveFire, flickRate, grenadeStrength, pullFires, touchButtons, updateMove } from './mapping';
+import { ASSIST_LEVELS, AimAssist, onTarget as onAutoTarget, type AssistLevel, type AssistTarget } from '../input/assist';
 import { Sight, sightPoints } from '../input/sight';
 import { EquipClock, SKIN_BASE, TouchSkin, controlValues, localView, phoneTokens, skinHtml, type LocalView } from './skin';
 import { iconHref, weaponIcon } from '../ui/icons';
@@ -142,9 +142,10 @@ export class TouchController {
   /** fingers down in the editor (a second one on the screen pinches the control the first drags) */
   private readonly pointers = new Map<number, { x: number; y: number }>();
   private readonly state = createTouchState();
-  private readonly targets: AimTarget[] = [];
-  /** enemies in sight (no wall, no smoke between: input/sight.ts), for Auto fire */
+  /** enemies in sight (no wall, no smoke between: input/sight.ts), for Auto fire and the aim assist */
   private readonly visible: AssistTarget[] = [];
+  /** the shared aim assist core (input/assist.ts; the pad has its own): its sticky target and Strong's lock */
+  private readonly aimAssist = new AimAssist();
   private readonly sight = new Sight();
   private readonly autoTrigger = new AutoTrigger();
   /** the gun in hand (its class, fire mode and range decide the fire mode it uses: effectiveFire) */
@@ -385,9 +386,25 @@ export class TouchController {
     if (buttons & Btn.Jet) this.act('jet');
     if (buttons & Btn.Fire) this.act('fire');
     const want = desiredAim(s);
-    if (want !== null) {
-      this.aimAngle = assistAim(this.aimAngle, want, sx, sy, this.targets, this.settings.aimAssist);
+    if (want !== null && s.grenadeActive) {
+      // a grenade's arc goes exactly where its stick points: no assist on throws
+      this.aimAngle = want;
       this.touchOwnsAim = true;
+    } else if (want !== null || this.touchOwnsAim) {
+      // the assist level (§4.5): friction while the stick turns the aim, magnetism while it's pushed
+      // (or while Auto fires), Strong's lock with it let go. The mouse never gets any of it.
+      this.aimAngle = this.aimAssist.step({
+        level: this.settings.assist,
+        current: this.aimAngle,
+        desired: want ?? this.aimAngle,
+        stick: assistPush(s),
+        pullMinPush: TOUCH_PULL_MIN,
+        sx,
+        sy,
+        range: this.weaponDef?.range ?? 0,
+        targets: this.visible,
+      });
+      if (want !== null) this.touchOwnsAim = true;
     }
     if (this.touchOwnsAim) {
       out.aim = angleToU16(this.aimAngle);
@@ -412,8 +429,6 @@ export class TouchController {
 
   /** The frame being drawn: the aim assist's targets, and what the controls show from it (the grenade, the crate, the equip clock). */
   onFrame(frame: TouchFrame): void {
-    this.targets.length = 0;
-    for (const p of frame.players) if (p.alive && p.id !== frame.localId) this.targets.push({ x: p.x, y: p.y + 0.9 });
     if (!this.active) return;
     this.local = localView(frame);
     const me = frame.players.find((p) => p.id === frame.localId);
@@ -424,8 +439,8 @@ export class TouchController {
     const magSize = def >= 0 ? (weapons[def]?.mag ?? 0) : 0;
     this.lowMag = !!me?.alive && magSize > 0 && held !== undefined && held.mag / magSize <= RELOAD_SHOWS_AT;
     this.weaponDef = def >= 0 ? weapons[def] : undefined;
-    // Auto fire's targets: enemies the player can see from his eyes (the sim's sight rule)
-    if (me?.alive && this.settings.fire === 'auto') {
+    // Auto fire's and the aim assist's targets: enemies the player can see from his eyes (the sim's sight rule)
+    if (me?.alive && (this.settings.fire === 'auto' || this.settings.assist !== 'off')) {
       this.sight.setMap(this.host.map?.());
       this.sight.targets(frame.players, frame.localId, me.x, me.y + sightPoints(me.crouched).head, frame.clouds, this.visible);
     } else this.visible.length = 0;
@@ -1650,7 +1665,7 @@ export class TouchController {
         <label>All controls <input type="range" min="15" max="100" step="5" data-ed="all" /></label>
         <label><input type="checkbox" data-ed="left" /> Left-handed</label>
         <label>Fire <select data-ed="fire"><option value="auto">Auto</option><option value="pull">Pull</option><option value="button">Fire button</option><option value="release">Release</option></select></label>
-        <label><input type="checkbox" data-ed="assist" /> Aim assist</label>
+        <label>Aim assist <select data-ed="assist">${ASSIST_LEVELS.map((l) => `<option value="${l}">${ASSIST_NAMES[l]}</option>`).join('')}</select></label>
         <label><input type="checkbox" data-ed="vibrate" /> Vibrate</label>
         <label><input type="checkbox" data-ed="swipe" /> Flick to dash</label>
       </div>
@@ -1668,7 +1683,7 @@ export class TouchController {
       q<HTMLInputElement>(name).addEventListener('change', (e) => this.onSettingsEdited(patch((e.target as HTMLInputElement).checked)));
     toggle('left', (on) => ({ handed: on ? 'left' : 'right' }));
     q<HTMLSelectElement>('fire').addEventListener('change', (e) => this.onSettingsEdited({ fire: (e.target as HTMLSelectElement).value as FireMode, fireChosen: true }));
-    toggle('assist', (on) => ({ aimAssist: on }));
+    q<HTMLSelectElement>('assist').addEventListener('change', (e) => this.onSettingsEdited({ assist: (e.target as HTMLSelectElement).value as AssistLevel }));
     toggle('vibrate', (on) => ({ vibrate: on }));
     toggle('swipe', (on) => ({ swipeDash: on }));
     q<HTMLInputElement>('all').addEventListener('input', (e) => this.onSettingsEdited({ opacity: Number((e.target as HTMLInputElement).value) / 100 }));
@@ -1711,7 +1726,7 @@ export class TouchController {
     if (this.selected) q<HTMLInputElement>('opacity').value = String(Math.round(this.at(this.selected).opacity * 100));
     q<HTMLInputElement>('left').checked = this.settings.handed === 'left';
     q<HTMLSelectElement>('fire').value = this.settings.fire;
-    q<HTMLInputElement>('assist').checked = this.settings.aimAssist;
+    q<HTMLSelectElement>('assist').value = this.settings.assist;
     q<HTMLInputElement>('vibrate').checked = this.settings.vibrate;
     q<HTMLInputElement>('swipe').checked = this.settings.swipeDash;
     q<HTMLInputElement>('all').value = String(Math.round(this.settings.opacity * 100));
@@ -1735,9 +1750,9 @@ export class TouchController {
   }
 
   /** The sticks right now (dev builds' automated checks: the dials' input on a turned phone). */
-  debugState(): { move: StickVector; aim: StickVector; moveActive: boolean; aimActive: boolean; aimFire: boolean; resume: { at: number; button: boolean } | null; fire: FireMode; visible: number; range: number; shoulder: { x: number; y: number }; targets: { x: number; y: number }[]; enemyNear: boolean; lowMag: boolean } {
+  debugState(): { move: StickVector; aim: StickVector; moveActive: boolean; aimActive: boolean; aimFire: boolean; resume: { at: number; button: boolean } | null; fire: FireMode; visible: number; range: number; shoulder: { x: number; y: number }; targets: { x: number; y: number }[]; assist: AssistLevel; locked: number | null; enemyNear: boolean; lowMag: boolean } {
     const s = this.state;
-    return { move: { ...s.move }, aim: { ...s.aim }, moveActive: s.moveActive, aimActive: s.aimActive, aimFire: s.aimFire, resume: this.aimLift && { at: this.aimLift.at, button: this.aimLift.button }, fire: this.fireNow, visible: this.visible.length, range: this.weaponDef?.range ?? 0, shoulder: { ...this.shoulder }, targets: this.visible.map((t) => ({ x: t.x, y: t.y })), enemyNear: this.enemyNear, lowMag: this.lowMag };
+    return { move: { ...s.move }, aim: { ...s.aim }, moveActive: s.moveActive, aimActive: s.aimActive, aimFire: s.aimFire, resume: this.aimLift && { at: this.aimLift.at, button: this.aimLift.button }, fire: this.fireNow, visible: this.visible.length, range: this.weaponDef?.range ?? 0, shoulder: { ...this.shoulder }, targets: this.visible.map((t) => ({ x: t.x, y: t.y })), assist: this.settings.assist, locked: this.aimAssist.target, enemyNear: this.enemyNear, lowMag: this.lowMag };
   }
 
   /** The skins' bound keys (tests). */
