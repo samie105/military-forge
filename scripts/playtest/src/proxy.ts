@@ -128,7 +128,7 @@ export function securityHeaders(host: string | undefined): Record<string, string
     'X-Frame-Options': 'DENY',
     'Referrer-Policy': 'same-origin',
     'Cross-Origin-Opener-Policy': 'same-origin',
-    'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+    'Permissions-Policy': 'camera=(), microphone=(self), geolocation=(), payment=(), usb=()',
   };
 }
 
