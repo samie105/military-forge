@@ -85,8 +85,11 @@ REGION_BONES = {
     "boots": {"calf_L", "calf_R", "foot_L", "foot_R", "toe_L", "toe_R"},
     "gloves": {"hand_L", "hand_R"},
     "jetpack": {"spine1", "spine2"},
-    "top": {"pelvis", "spine1", "spine2", "clavicle_L", "clavicle_R", "upperarm_L", "upperarm_R", "forearm_L", "forearm_R"},
-    "legs": {"pelvis", "thigh_L", "thigh_R", "calf_L", "calf_R"},
+    # a garment's hem lies over its region's border faces, one ring into the neighbouring bones (the neck, the
+    # wrists, the waist, the ankles: build_cosmetics.py garment_lod)
+    "top": {"pelvis", "spine1", "spine2", "clavicle_L", "clavicle_R", "upperarm_L", "upperarm_R", "forearm_L", "forearm_R",
+            "neck", "hand_L", "hand_R"},
+    "legs": {"pelvis", "thigh_L", "thigh_R", "calf_L", "calf_R", "spine1", "foot_L", "foot_R"},
     "hair": {"head", "jaw", "eye_L", "eye_R", "neck"},
 }
 HEAD_SLOTS = {"headgear", "eyewear"}  # eyewear's region also counts the default headgear

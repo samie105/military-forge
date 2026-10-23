@@ -18,7 +18,9 @@
       },
       "skin": "alpha",
       "skinNeutral": "#da9f75",
-      "skinHeadroom": 2
+      "skinHeadroom": 2,
+      "heroAlbedo": "textures/rookie_female_body_hero_dye_albedo.webp",
+      "heroMask": "textures/rookie_female_body_hero_dye_mask.png"
     },
     "lod1": {
       "mask": "textures/rookie_female_body_lod1_dye_mask.png",

@@ -75,6 +75,10 @@ LODS = {
     "": {"body": (2350, 512), "headgear": (450, 256), "boots": (300, 256), "jetpack": (550, 256)},
     "_lod1": {"body": (1000, 256), "headgear": (200, 128), "boots": (130, 128), "jetpack": (250, 128)},
 }
+# The creator's close-up textures (`dye.lod0.heroAlbedo` / `heroMask`, CharacterInstance.setHero): the LOD0 body
+# baked again at 1024² on the same UVs, with the same dye rules. Only the creator loads them, never a match.
+HERO_TEX = 1024
+HERO = {}  # (part, suffix) -> the hero albedo image
 PART_IDS = {"body": f"{NAME}_body", "headgear": "headgear_brim_helmet", "boots": "boots_combat", "jetpack": "jetpack_twin_tank"}
 PART_IDS = {k: v for k, v in PART_IDS.items() if k == "body" or k in WANT_PARTS}
 # file stems: another body's fit of a shared item gets the body's suffix (boots_combat_female.glb)
@@ -735,6 +739,15 @@ def make_lod(src, part, tris, tex, suffix):
                         cage_extrusion=0.02, max_ray_distance=0.06, margin=8)
     img.pack()
     log(f"{lo.name}: {t0} -> {t1} tris, baked {tex}² albedo")
+    if part == "body" and suffix == "":
+        hero = bpy.data.images.new(f"{NAME}_{part}_hero_albedo", HERO_TEX, HERO_TEX, alpha=False)
+        tn.image = hero
+        bpy.ops.object.bake(type="DIFFUSE", pass_filter={"COLOR"}, use_selected_to_active=True,
+                            cage_extrusion=0.02, max_ray_distance=0.06, margin=16)
+        tn.image = img
+        hero.use_fake_user = True  # unused until its masks are made (6): the orphan purge would take it
+        HERO[(part, suffix)] = hero
+        log(f"{lo.name}: baked the {HERO_TEX}² hero albedo")
     return lo, t1, img
 
 
@@ -974,6 +987,14 @@ for (part, suffix), (obj, tris, img) in parts.items():
     if bone:
         obj["attachBone"] = bone
     log(f"{tex_name}: dye defaults {defaults}, coverage {cover}")
+    if (part, suffix) in HERO:  # the close-ups: the same rules on the 1024² bake; the manifest keeps LOD0's defaults
+        hero = HERO[(part, suffix)]
+        hero.filepath_raw = str(TEXDIR / f"{tex_name}_hero_albedo.png")
+        hero.file_format = "PNG"
+        hero.save()
+        _, hero_cover = dye.make_masks(obj, hero, TEXDIR, f"{tex_name}_hero", rules, skin_rule=SKIN.get(part))
+        hero.use_fake_user = False  # not kept in the .blend
+        log(f"{tex_name}_hero: coverage {hero_cover}")
 
 # ------------------------------------------------------------------ 6b. body regions
 # Parts that replace a stretch of the body (a top, trousers, a hairstyle) name it in their manifest
@@ -987,6 +1008,56 @@ REGION_BONES = {
     "legs": {"pelvis"} | {f"{p}_{s}" for p in ("thigh", "calf") for s in "LR"},
 }
 HEAD = {"head", "jaw", "eye_L", "eye_R"}
+CLOTHED = {"spine1", "spine2", "pelvis"} | {f"{p}_{s}" for p in ("clavicle", "thigh", "calf") for s in "LR"}
+
+
+def fill_regions(me, codes, dom):
+    """Make the top and legs regions whole. A garment replaces its region and hems the region's border, so a hole in
+    it (cloth whose texels read as skin: the sand uniform is close to the skin) became a hem ring across the shirt,
+    with the body showing in it. Fill every small patch (up to 40 vertices, no hand or head in it: a bare forearm
+    and its hand are bounded by the sleeve alone) that the top and legs surround, with the code round it (the larger,
+    where both meet), and drop region specks (under 12 vertices) inside skin. Hair is left as it is: its holes are
+    ears."""
+    nbr = [[] for _ in me.vertices]
+    for e in me.edges:
+        a, b = e.vertices
+        nbr[a].append(b)
+        nbr[b].append(a)
+
+    def patches(pred):
+        seen, out = set(), []
+        for i in range(len(codes)):
+            if i in seen or not pred(i):
+                continue
+            comp, stack = [], [i]
+            seen.add(i)
+            while stack:
+                j = stack.pop()
+                comp.append(j)
+                for k in nbr[j]:
+                    if k not in seen and pred(k):
+                        seen.add(k)
+                        stack.append(k)
+            out.append(comp)
+        return out
+
+    cloth = (REGIONS["top"], REGIONS["legs"])
+    filled = specks = 0
+    for comp in patches(lambda i: codes[i] == 0):
+        inside = set(comp)
+        ring = [codes[k] for j in comp for k in nbr[j] if k not in inside]
+        if len(comp) <= 40 and ring and all(c in cloth for c in ring) and \
+                not any(dom[j].startswith("hand_") or dom[j] in HEAD for j in comp):
+            codes[comp] = max(cloth, key=ring.count)
+            filled += len(comp)
+    for code in cloth:
+        for comp in patches(lambda i: codes[i] == code):
+            inside = set(comp)
+            ring = [codes[k] for j in comp for k in nbr[j] if k not in inside]
+            if len(comp) < 12 and ring and all(c == 0 for c in ring):
+                codes[comp] = 0
+                specks += len(comp)
+    log(f"regions: {filled} vertices of holes filled, {specks} of specks dropped")
 
 
 def tag_regions(obj, stem):
@@ -1012,9 +1083,13 @@ def tag_regions(obj, stem):
     eye_z = arm_data.bones["eye_L"].head_local.z
     head_y = arm_data.bones["head"].head_local.y
     codes = np.zeros(len(me.vertices), dtype=np.float32)
+    doms = []
     for v in me.vertices:
         dom = names[max(v.groups, key=lambda g: g.weight).group] if v.groups else "root"
-        if skin[v.index] > 0.4:
+        doms.append(dom)
+        # the torso and legs are always clothed on these soldiers (the bare skin is forearms, hands, neck and face),
+        # and their sand cloth reads as skin to the texel test: trust it only where skin can be
+        if skin[v.index] > 0.4 and dom not in CLOTHED:
             continue
         if dom in HEAD:
             if dark[v.index] < 0.3 and (v.co.z > eye_z + 0.07 or v.co.y > head_y):
@@ -1023,6 +1098,7 @@ def tag_regions(obj, stem):
         for region, bones in REGION_BONES.items():
             if dom in bones:
                 codes[v.index] = REGIONS[region]
+    fill_regions(me, codes, doms)
     attr = me.attributes.new("_REGION", "FLOAT", "POINT")
     attr.data.foreach_set("value", codes)
     me.calc_loop_triangles()
@@ -1188,7 +1264,8 @@ if RUNTIME:
     char_dir = RUNTIME / "characters" / NAME
     slot_dir = lambda part: RUNTIME / "cosmetics" / part  # noqa: E731
     write_set(char_dir, slot_dir, runtime=True)
-    runtime_textures([f"{NAME}_body{s}" for s in LODS], char_dir / "textures", alpha="body" in SKIN)
+    runtime_textures([f"{NAME}_body{s}" for s in LODS] + [f"{FILE_IDS[p]}{s}_hero" for p, s in HERO],
+                     char_dir / "textures", alpha="body" in SKIN)
     for part in SLOT_PARTS:
         runtime_textures([f"{FILE_IDS[part]}{s}" for s in LODS], slot_dir(part) / "textures")
 
@@ -1196,7 +1273,9 @@ if RUNTIME:
         stem = f"{FILE_IDS[part]}{suffix}"
         return {"mask": f"textures/{stem}_dye_mask.png", "albedo": f"textures/{stem}_dye_albedo.webp",
                 "defaults": dyes[(part, suffix)][0],
-                **({"skin": "alpha", "skinNeutral": dye.SKIN_NEUTRAL, "skinHeadroom": dye.SKIN_HEADROOM} if part in SKIN else {})}
+                **({"skin": "alpha", "skinNeutral": dye.SKIN_NEUTRAL, "skinHeadroom": dye.SKIN_HEADROOM} if part in SKIN else {}),
+                **({"heroAlbedo": f"textures/{stem}_hero_dye_albedo.webp", "heroMask": f"textures/{stem}_hero_dye_mask.png"}
+                   if (part, suffix) in HERO else {})}
 
     (char_dir / f"{NAME}.json").write_text(json.dumps({
         "id": NAME, "body": BODY, "skeleton": "shared-v1", "heightM": HEIGHT if not SKELETON else 1.5,

@@ -7,6 +7,18 @@
       "manifest": "boots/boots_combat.json"
     },
     {
+      "id": "boots_desert",
+      "name": "Desert Boots",
+      "default": false,
+      "manifest": "boots/boots_desert.json"
+    },
+    {
+      "id": "boots_high_tops",
+      "name": "High-Tops",
+      "default": false,
+      "manifest": "boots/boots_high_tops.json"
+    },
+    {
       "id": "boots_jungle",
       "name": "Jungle Boots",
       "default": false,
@@ -27,10 +39,28 @@
       "manifest": "eyewear/eyewear_aviators.json"
     },
     {
+      "id": "eyewear_dust_scarf",
+      "name": "Dust Scarf",
+      "default": false,
+      "manifest": "eyewear/eyewear_dust_scarf.json"
+    },
+    {
       "id": "eyewear_gas_mask",
       "name": "Gas Mask",
       "default": false,
       "manifest": "eyewear/eyewear_gas_mask.json"
+    },
+    {
+      "id": "eyewear_goggles",
+      "name": "Ballistic Goggles",
+      "default": false,
+      "manifest": "eyewear/eyewear_goggles.json"
+    },
+    {
+      "id": "eyewear_shades",
+      "name": "Street Shades",
+      "default": false,
+      "manifest": "eyewear/eyewear_shades.json"
     }
   ],
   "gloves": [
@@ -69,6 +99,12 @@
       "manifest": "headgear/headgear_bandana.json"
     },
     {
+      "id": "headgear_beanie",
+      "name": "Watch Beanie",
+      "default": false,
+      "manifest": "headgear/headgear_beanie.json"
+    },
+    {
       "id": "headgear_beret",
       "name": "Beret",
       "default": false,
@@ -91,6 +127,18 @@
       "name": "Field Cap",
       "default": false,
       "manifest": "headgear/headgear_field_cap.json"
+    },
+    {
+      "id": "headgear_headwrap",
+      "name": "Head Wrap",
+      "default": false,
+      "manifest": "headgear/headgear_headwrap.json"
+    },
+    {
+      "id": "headgear_patrol_cap",
+      "name": "Patrol Cap",
+      "default": false,
+      "manifest": "headgear/headgear_patrol_cap.json"
     }
   ],
   "jetpack": [
@@ -111,6 +159,70 @@
       "name": "Twin Tank",
       "default": true,
       "manifest": "jetpack/jetpack_twin_tank.json"
+    }
+  ],
+  "legs": [
+    {
+      "id": "legs_cargo_long",
+      "name": "Long Cargos",
+      "default": false,
+      "manifest": "legs/legs_cargo_long.json"
+    },
+    {
+      "id": "legs_combat_trousers",
+      "name": "Combat Trousers",
+      "default": false,
+      "manifest": "legs/legs_combat_trousers.json"
+    },
+    {
+      "id": "legs_joggers",
+      "name": "Street Joggers",
+      "default": false,
+      "manifest": "legs/legs_joggers.json"
+    }
+  ],
+  "top": [
+    {
+      "id": "top_bomber",
+      "name": "Bomber Jacket",
+      "default": false,
+      "manifest": "top/top_bomber.json"
+    },
+    {
+      "id": "top_field_jacket",
+      "name": "Field Jacket",
+      "default": false,
+      "manifest": "top/top_field_jacket.json"
+    },
+    {
+      "id": "top_hoodie_street",
+      "name": "Street Hoodie",
+      "default": false,
+      "manifest": "top/top_hoodie_street.json"
+    },
+    {
+      "id": "top_jersey_street",
+      "name": "Street Jersey",
+      "default": false,
+      "manifest": "top/top_jersey_street.json"
+    },
+    {
+      "id": "top_plate_carrier",
+      "name": "Plate Carrier",
+      "default": false,
+      "manifest": "top/top_plate_carrier.json"
+    },
+    {
+      "id": "top_print_shirt",
+      "name": "Print Shirt",
+      "default": false,
+      "manifest": "top/top_print_shirt.json"
+    },
+    {
+      "id": "top_tee_field",
+      "name": "Field Tee",
+      "default": false,
+      "manifest": "top/top_tee_field.json"
     }
   ]
 }

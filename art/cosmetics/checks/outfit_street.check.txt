@@ -1,0 +1,73 @@
+asset-check: art/character/rookie_body.glb,art/cosmetics/top/top_hoodie_street.glb,art/cosmetics/legs/legs_cargo_long.glb,art/cosmetics/boots/boots_high_tops.glb,art/cosmetics/headgear/headgear_beanie.glb,art/cosmetics/eyewear/eyewear_goggles.glb,art/cosmetics/gloves/gloves_tactical.glb,art/cosmetics/jetpack/jetpack_rocket.glb  [character]
+--------------------------------------------------------------------------------------------------------
+INFO  file size                                     1049 KB over 8 files
+INFO  body triangles hidden by parts                1573 (legs, top)
+PASS  triangles (LOD0)                              3403 of 4000
+PASS  draw calls after part merge (docs/04 §5.3)    1 of 3 (8 before merging)
+PASS  texture size: boots_high_tops_albedo          256x256 (max 1024)
+PASS  texture POT: boots_high_tops_albedo           power of two
+PASS  texture size: eyewear_goggles_albedo          256x256 (max 1024)
+PASS  texture POT: eyewear_goggles_albedo           power of two
+PASS  texture size: gloves_tactical_albedo          256x256 (max 1024)
+PASS  texture POT: gloves_tactical_albedo           power of two
+PASS  texture size: headgear_beanie_albedo          256x256 (max 1024)
+PASS  texture POT: headgear_beanie_albedo           power of two
+PASS  texture size: jetpack_rocket_albedo           256x256 (max 1024)
+PASS  texture POT: jetpack_rocket_albedo            power of two
+PASS  texture size: legs_cargo_long_albedo          256x256 (max 1024)
+PASS  texture POT: legs_cargo_long_albedo           power of two
+PASS  texture size: rookie_body_albedo              512x512 (max 1024)
+PASS  texture POT: rookie_body_albedo               power of two
+PASS  texture size: top_hoodie_street_albedo        256x256 (max 1024)
+PASS  texture POT: top_hoodie_street_albedo         power of two
+PASS  texture size: rookie_body_dye_mask.png        512x512 (max 1024)
+PASS  texture POT: rookie_body_dye_mask.png         power of two
+PASS  texture size: top_hoodie_street_dye_mask.png  256x256 (max 1024)
+PASS  texture POT: top_hoodie_street_dye_mask.png   power of two
+PASS  texture size: legs_cargo_long_dye_mask.png    256x256 (max 1024)
+PASS  texture POT: legs_cargo_long_dye_mask.png     power of two
+PASS  texture size: boots_high_tops_dye_mask.png    256x256 (max 1024)
+PASS  texture POT: boots_high_tops_dye_mask.png     power of two
+PASS  texture size: headgear_beanie_dye_mask.png    256x256 (max 1024)
+PASS  texture POT: headgear_beanie_dye_mask.png     power of two
+PASS  texture size: eyewear_goggles_dye_mask.png    256x256 (max 1024)
+PASS  texture POT: eyewear_goggles_dye_mask.png     power of two
+PASS  texture size: gloves_tactical_dye_mask.png    256x256 (max 1024)
+PASS  texture POT: gloves_tactical_dye_mask.png     power of two
+PASS  texture size: jetpack_rocket_dye_mask.png     256x256 (max 1024)
+PASS  texture POT: jetpack_rocket_dye_mask.png      power of two
+PASS  GPU texture memory (KTX2 est.)                1.37 MB of 1.50 MB, 16 image(s)
+PASS  dye round trip: rookie_body                   dyed 65%: mean 0.002 p95 0.005 (max 0.012/0.04); undyed 35%: mean 0.0 p95 0.0/255 (max 5/16)
+PASS  dye round trip: top_hoodie_street             dyed 100%: mean 0.003 p95 0.004 (max 0.012/0.04)
+PASS  dye round trip: legs_cargo_long               dyed 100%: mean 0.002 p95 0.005 (max 0.012/0.04)
+PASS  dye round trip: boots_high_tops               dyed 84%: mean 0.009 p95 0.023 (max 0.012/0.04); undyed 16%: mean 0.0 p95 0.0/255 (max 5/16)
+PASS  dye round trip: headgear_beanie.001           dyed 100%: mean 0.002 p95 0.005 (max 0.012/0.04)
+PASS  dye round trip: eyewear_goggles.001           dyed 100%: mean 0.002 p95 0.004 (max 0.012/0.04)
+PASS  dye round trip: gloves_tactical.001           dyed 100%: mean 0.000 p95 0.001 (max 0.012/0.04)
+PASS  dye round trip: jetpack_rocket                dyed 65%: mean 0.004 p95 0.004 (max 0.012/0.04); undyed 35%: mean 0.0 p95 0.0/255 (max 5/16)
+PASS  armature                                      8 armature(s) with identical bones (assembled parts)
+PASS  deform bones (docs/04 §4.1)                   all 25 present
+PASS  sockets (docs/04 §4.1)                        all 7 present
+PASS  no unexpected bones                           none
+PASS  meshes skinned to the armature                8/8
+PASS  every vertex weighted                         0 unweighted of 9716
+PASS  ≤ 4 influences per vertex                     0 vertices over
+PASS  weights normalised                            0 vertices off by > 2%
+PASS  sockets are non-deform (no weights)           none weighted
+PASS  weights only on skeleton bones                ok
+PASS  same bind pose in every file                  worst toe_R: 0.0 mm, 0.00°
+INFO  bounds (m)                                    x -0.48..+0.48  depth(y) -0.28..+0.35  z +0.01..+1.45
+PASS  feet on the ground (min z = 0)                min z +0.008 m
+PASS  height vs hitbox top                          1.455 m, hitbox top 1.48 m (allowed 1.41-1.63)
+PASS  faces glTF +Z (toes ahead of ankles)          ok
+PASS  head centre vs head hitbox                    1.211 m vs 1.24 m (±0.08); head height 0.49 m vs 0.48 m
+PASS  chibi head ≈ ⅓ of height                      head 34% of height
+INFO  hitbox source                                 packages/content/src/hitboxes.ts
+PASS  silhouette covers hitboxes (no tiny skins)    65% of the hitbox area is drawn (min 60%)
+PASS  silhouette within hitbox envelope             1% of the silhouette is outside hitboxes x1.10 (max 25%; jetpack/arms)
+INFO  base bbox (cosmetics may grow it ≤ x1.10)     {"min": [-0.482, -0.275, 0.008], "max": [0.481, 0.349, 1.455]}
+INFO  animation clips                               none
+PASS  custom properties (docs/04 §8)                bodyTypes, envelopeOk, slot
+--------------------------------------------------------------------------------------------------------
+RESULT: PASS  (62 pass, 0 warn, 0 fail)
+

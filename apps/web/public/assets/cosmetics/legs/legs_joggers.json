@@ -1,0 +1,67 @@
+{
+  "id": "legs_joggers",
+  "slot": "legs",
+  "name": "Street Joggers",
+  "skeleton": "shared-v1",
+  "default": false,
+  "lods": {
+    "lod0": "legs_joggers.glb",
+    "lod1": "legs_joggers_lod1.glb"
+  },
+  "dye": {
+    "lod0": {
+      "mask": "textures/legs_joggers_dye_mask.png",
+      "albedo": "textures/legs_joggers_dye_albedo.webp",
+      "defaults": {
+        "primary": "#484d50",
+        "secondary": "#d19926"
+      }
+    },
+    "lod1": {
+      "mask": "textures/legs_joggers_lod1_dye_mask.png",
+      "albedo": "textures/legs_joggers_lod1_dye_albedo.webp",
+      "defaults": {
+        "primary": "#484d50",
+        "secondary": "#d19926"
+      }
+    }
+  },
+  "tris": {
+    "lod0": 493,
+    "lod1": 172
+  },
+  "source": "procedural",
+  "hidesBody": [
+    "legs"
+  ],
+  "bodies": {
+    "female": {
+      "lods": {
+        "lod0": "legs_joggers_female.glb",
+        "lod1": "legs_joggers_female_lod1.glb"
+      },
+      "dye": {
+        "lod0": {
+          "mask": "textures/legs_joggers_female_dye_mask.png",
+          "albedo": "textures/legs_joggers_female_dye_albedo.webp",
+          "defaults": {
+            "primary": "#4d5255",
+            "secondary": "#d19926"
+          }
+        },
+        "lod1": {
+          "mask": "textures/legs_joggers_female_lod1_dye_mask.png",
+          "albedo": "textures/legs_joggers_female_lod1_dye_albedo.webp",
+          "defaults": {
+            "primary": "#4d5255",
+            "secondary": "#d19926"
+          }
+        }
+      },
+      "tris": {
+        "lod0": 330,
+        "lod1": 155
+      }
+    }
+  }
+}

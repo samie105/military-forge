@@ -1,0 +1,32 @@
+asset-check: art/cosmetics/top/top_field_jacket_female.glb  [part]
+--------------------------------------------------------------------------------------------------------------
+INFO  file size                                           119 KB
+PASS  slot extra (docs/04 §3, §9.5)                       top
+PASS  hides the body's top                                806 body triangles hidden (hidesBody ['top'])
+PASS  triangles (slot top, LOD0)                          514 of 806
+PASS  one mesh, one material (docs/04 §5.3)               1 mesh(es), 1 draw call(s)
+PASS  texture size: top_field_jacket_female_albedo        256x256 (max 256)
+PASS  texture POT: top_field_jacket_female_albedo         power of two
+PASS  texture size: top_field_jacket_female_dye_mask.png  256x256 (max 256)
+PASS  texture POT: top_field_jacket_female_dye_mask.png   power of two
+INFO  GPU texture memory (KTX2 est.)                      0.12 MB, 2 image(s)
+PASS  required extras (docs/04 §9.5)                      ok
+WARN  cosmeticId in packages/content                      top_field_jacket is not in packages/content/src/cosmetics.ts (W2's catalogue names the items)
+PASS  dye round trip: top_field_jacket                    dyed 100%: mean 0.002 p95 0.005 (max 0.012/0.04)
+PASS  skinned in character space (docs/04 §9.3)           every vertex weighted to the shared skeleton
+PASS  armature                                            1 armature(s)
+PASS  deform bones (docs/04 §4.1)                         all 25 present
+PASS  sockets (docs/04 §4.1)                              all 7 present
+PASS  no unexpected bones                                 none
+PASS  meshes skinned to the armature                      1/1
+PASS  every vertex weighted                               0 unweighted of 1338
+PASS  ≤ 4 influences per vertex                           0 vertices over
+PASS  weights normalised                                  0 vertices off by > 2%
+PASS  sockets are non-deform (no weights)                 none weighted
+PASS  weights only on skeleton bones                      ok
+PASS  bind pose = the base body's                         worst -: 0.0 mm, 0.00° (max 1 mm, 0.1°)
+PASS  near its top bones (docs/04 §1.2 locality)          part (-0.45, -0.22, 0.46)..(0.45, 0.24, 0.98) vs region (-0.51, -0.26, 0.33)..(0.51, 0.28, 1.06)
+PASS  cosmetic envelope (top: base x1.10)                 part (-0.45, -0.22, 0.46)..(0.45, 0.24, 0.98) vs envelope (-0.51, -0.26, 0.0)..(0.51, 0.36, 1.48)
+--------------------------------------------------------------------------------------------------------------
+RESULT: PASS  (24 pass, 1 warn, 0 fail)
+

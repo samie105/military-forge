@@ -161,23 +161,45 @@ export const cosmetics: readonly CosmeticDef[] = [
   item(45, 'headgear_crown', 'headgear', 'Paper Crown', 'legendary', { kind: 'achievement', label: '100 headshots' }),
   // a bare head (22 Oct): the hair shows in full; every other hat hides it or sits over it (its `hidesHair` extra)
   item(46, 'headgear_none', 'headgear', 'None', 'common', STARTER, { dyeable: false }),
+  // the 22 Oct set (military + Lagos street): fits both bodies (hers sits inside his hair cap)
+  item(47, 'headgear_beanie', 'headgear', 'Watch Beanie', 'common', STARTER, { art: true }),
+  item(48, 'headgear_headwrap', 'headgear', 'Head Wrap', 'uncommon', { kind: 'level', level: 4 }, { art: true }),
+  item(49, 'headgear_patrol_cap', 'headgear', 'Patrol Cap', 'common', STARTER, { art: true }),
 
   item(60, 'eyewear_none', 'eyewear', 'None', 'common', STARTER, { dyeable: false }),
   item(61, 'eyewear_aviators', 'eyewear', 'Aviators', 'common', STARTER, { art: true }),
   item(62, 'eyewear_gas_mask', 'eyewear', 'Gas Mask', 'rare', { kind: 'battlePass', season: 1, tier: 34 }, { art: true }),
+  // face pieces (22 Oct); each has a female fit (its manifest's `bodies.female`)
+  item(63, 'eyewear_shades', 'eyewear', 'Street Shades', 'common', STARTER, { art: true }),
+  item(64, 'eyewear_dust_scarf', 'eyewear', 'Dust Scarf', 'common', STARTER, { art: true }),
+  item(65, 'eyewear_goggles', 'eyewear', 'Ballistic Goggles', 'uncommon', { kind: 'level', level: 7 }, { art: true }),
 
   item(80, 'top_fatigues', 'top', 'Rookie Fatigues', 'common', STARTER),
   item(81, 'top_track_jacket', 'top', 'Track Jacket', 'epic', STORE),
+  // tops and trousers (22 Oct): each replaces the body's own (`hidesBody` in cosmetics/<slot>/<id>.json) with a fit
+  // per body; they get `art` once the assembler draws the top and legs slots (forge-female-art.md)
+  item(82, 'top_tee_field', 'top', 'Field Tee', 'common', STARTER),
+  item(83, 'top_hoodie_street', 'top', 'Street Hoodie', 'common', STARTER),
+  item(84, 'top_jersey_street', 'top', 'Street Jersey', 'common', STARTER),
+  item(85, 'top_print_shirt', 'top', 'Print Shirt', 'uncommon', { kind: 'level', level: 5 }),
+  item(86, 'top_bomber', 'top', 'Bomber Jacket', 'uncommon', { kind: 'level', level: 8 }),
+  item(87, 'top_plate_carrier', 'top', 'Plate Carrier', 'rare', { kind: 'level', level: 12 }),
+  item(88, 'top_field_jacket', 'top', 'Field Jacket', 'common', STARTER),
 
   item(100, 'gloves_none', 'gloves', 'None', 'common', STARTER, { dyeable: false }),
   item(101, 'gloves_tactical', 'gloves', 'Tactical Gloves', 'common', STARTER, { art: true }),
 
   item(120, 'legs_fatigues', 'legs', 'Rookie Fatigues', 'common', STARTER),
   item(121, 'legs_cargo_shorts', 'legs', 'Cargo Shorts', 'uncommon', { kind: 'level', level: 15 }),
+  item(122, 'legs_combat_trousers', 'legs', 'Combat Trousers', 'common', STARTER),
+  item(123, 'legs_joggers', 'legs', 'Street Joggers', 'common', STARTER),
+  item(124, 'legs_cargo_long', 'legs', 'Long Cargos', 'uncommon', { kind: 'level', level: 6 }),
 
   item(140, 'boots_combat', 'boots', 'Combat Boots', 'common', STARTER, { art: true }),
   item(141, 'boots_jungle', 'boots', 'Jungle Boots', 'common', STARTER, { art: true }),
   item(142, 'boots_sneakers', 'boots', 'Sneakers', 'uncommon', { kind: 'level', level: 5 }, { art: true }),
+  item(143, 'boots_high_tops', 'boots', 'High-Tops', 'common', STARTER, { art: true }),
+  item(144, 'boots_desert', 'boots', 'Desert Boots', 'common', STARTER, { art: true }),
 
   item(160, 'jetpack_twin_tank', 'jetpack', 'Twin Tank', 'common', STARTER, { art: true }),
   item(161, 'jetpack_drum', 'jetpack', 'Drum Pack', 'common', STARTER, { art: true }),

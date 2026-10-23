@@ -1,5 +1,6 @@
 {
   "name": "rookie",
+  "body": "male",
   "height_m": 1.5,
   "source": "rookie_tripo_raw.glb",
   "skeleton": "shared-v1",
@@ -226,5 +227,22 @@
     "face_y": -0.2446,
     "jetpack_back_y": 0.1723,
     "jetpack_mid_z": 0.726
+  },
+  "regions": {
+    "hair": 1,
+    "top": 2,
+    "legs": 3
+  },
+  "regionTris": {
+    "_lod0": {
+      "hair": 102,
+      "top": 910,
+      "legs": 594
+    },
+    "_lod1": {
+      "hair": 25,
+      "top": 325,
+      "legs": 265
+    }
   }
 }

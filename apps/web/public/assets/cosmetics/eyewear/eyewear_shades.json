@@ -1,0 +1,66 @@
+{
+  "id": "eyewear_shades",
+  "slot": "eyewear",
+  "name": "Street Shades",
+  "skeleton": "shared-v1",
+  "default": false,
+  "lods": {
+    "lod0": "eyewear_shades.glb",
+    "lod1": "eyewear_shades_lod1.glb"
+  },
+  "dye": {
+    "lod0": {
+      "mask": "textures/eyewear_shades_dye_mask.png",
+      "albedo": "textures/eyewear_shades_dye_albedo.webp",
+      "defaults": {
+        "secondary": "#36393b",
+        "accent": "#2c3742"
+      }
+    },
+    "lod1": {
+      "mask": "textures/eyewear_shades_lod1_dye_mask.png",
+      "albedo": "textures/eyewear_shades_lod1_dye_albedo.webp",
+      "defaults": {
+        "secondary": "#36393b",
+        "accent": "#2c3742"
+      }
+    }
+  },
+  "tris": {
+    "lod0": 136,
+    "lod1": 70
+  },
+  "source": "procedural",
+  "attachBone": "head",
+  "socket": "socket_hat",
+  "bodies": {
+    "female": {
+      "lods": {
+        "lod0": "eyewear_shades_female.glb",
+        "lod1": "eyewear_shades_female_lod1.glb"
+      },
+      "dye": {
+        "lod0": {
+          "mask": "textures/eyewear_shades_female_dye_mask.png",
+          "albedo": "textures/eyewear_shades_female_dye_albedo.webp",
+          "defaults": {
+            "secondary": "#36393b",
+            "accent": "#2c3742"
+          }
+        },
+        "lod1": {
+          "mask": "textures/eyewear_shades_female_lod1_dye_mask.png",
+          "albedo": "textures/eyewear_shades_female_lod1_dye_albedo.webp",
+          "defaults": {
+            "secondary": "#36393b",
+            "accent": "#2c3742"
+          }
+        }
+      },
+      "tris": {
+        "lod0": 136,
+        "lod1": 70
+      }
+    }
+  }
+}

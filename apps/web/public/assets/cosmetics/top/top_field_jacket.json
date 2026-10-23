@@ -1,0 +1,69 @@
+{
+  "id": "top_field_jacket",
+  "slot": "top",
+  "name": "Field Jacket",
+  "skeleton": "shared-v1",
+  "default": false,
+  "lods": {
+    "lod0": "top_field_jacket.glb",
+    "lod1": "top_field_jacket_lod1.glb"
+  },
+  "dye": {
+    "lod0": {
+      "mask": "textures/top_field_jacket_dye_mask.png",
+      "albedo": "textures/top_field_jacket_dye_albedo.webp",
+      "defaults": {
+        "primary": "#949185",
+        "secondary": "#74746b",
+        "accent": "#29aaaa"
+      }
+    },
+    "lod1": {
+      "mask": "textures/top_field_jacket_lod1_dye_mask.png",
+      "albedo": "textures/top_field_jacket_lod1_dye_albedo.webp",
+      "defaults": {
+        "primary": "#949185",
+        "accent": "#2aaaaa"
+      }
+    }
+  },
+  "tris": {
+    "lod0": 575,
+    "lod1": 286
+  },
+  "source": "procedural",
+  "hidesBody": [
+    "top"
+  ],
+  "bodies": {
+    "female": {
+      "lods": {
+        "lod0": "top_field_jacket_female.glb",
+        "lod1": "top_field_jacket_female_lod1.glb"
+      },
+      "dye": {
+        "lod0": {
+          "mask": "textures/top_field_jacket_female_dye_mask.png",
+          "albedo": "textures/top_field_jacket_female_dye_albedo.webp",
+          "defaults": {
+            "primary": "#969387",
+            "secondary": "#727269",
+            "accent": "#29aaaa"
+          }
+        },
+        "lod1": {
+          "mask": "textures/top_field_jacket_female_lod1_dye_mask.png",
+          "albedo": "textures/top_field_jacket_female_lod1_dye_albedo.webp",
+          "defaults": {
+            "primary": "#949185",
+            "accent": "#29aaaa"
+          }
+        }
+      },
+      "tris": {
+        "lod0": 514,
+        "lod1": 280
+      }
+    }
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "id": "legs_combat_trousers",
+  "slot": "legs",
+  "name": "Combat Trousers",
+  "skeleton": "shared-v1",
+  "default": false,
+  "lods": {
+    "lod0": "legs_combat_trousers.glb",
+    "lod1": "legs_combat_trousers_lod1.glb"
+  },
+  "dye": {
+    "lod0": {
+      "mask": "textures/legs_combat_trousers_dye_mask.png",
+      "albedo": "textures/legs_combat_trousers_dye_albedo.webp",
+      "defaults": {
+        "primary": "#61663d",
+        "secondary": "#4f524f"
+      }
+    },
+    "lod1": {
+      "mask": "textures/legs_combat_trousers_lod1_dye_mask.png",
+      "albedo": "textures/legs_combat_trousers_lod1_dye_albedo.webp",
+      "defaults": {
+        "primary": "#61663d",
+        "secondary": "#53544d"
+      }
+    }
+  },
+  "tris": {
+    "lod0": 415,
+    "lod1": 196
+  },
+  "source": "procedural",
+  "hidesBody": [
+    "legs"
+  ],
+  "bodies": {
+    "female": {
+      "lods": {
+        "lod0": "legs_combat_trousers_female.glb",
+        "lod1": "legs_combat_trousers_female_lod1.glb"
+      },
+      "dye": {
+        "lod0": {
+          "mask": "textures/legs_combat_trousers_female_dye_mask.png",
+          "albedo": "textures/legs_combat_trousers_female_dye_albedo.webp",
+          "defaults": {
+            "primary": "#61663d",
+            "secondary": "#4e534b"
+          }
+        },
+        "lod1": {
+          "mask": "textures/legs_combat_trousers_female_lod1_dye_mask.png",
+          "albedo": "textures/legs_combat_trousers_female_lod1_dye_albedo.webp",
+          "defaults": {
+            "primary": "#61663d",
+            "secondary": "#505350"
+          }
+        }
+      },
+      "tris": {
+        "lod0": 310,
+        "lod1": 179
+      }
+    }
+  }
+}

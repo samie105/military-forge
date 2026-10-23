@@ -1,0 +1,264 @@
+{
+ "title": "Trousers, boots, headwear and face pieces on both bodies, and two full looks",
+ "cols": 8,
+ "cell": [
+  240,
+  330
+ ],
+ "cells": [
+  {
+   "label": "Combat Trousers: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 30,
+   "parts": {
+    "legs": "legs_combat_trousers",
+    "headgear": null
+   }
+  },
+  {
+   "label": "Combat Trousers: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 30,
+   "parts": {
+    "legs": "legs_combat_trousers",
+    "headgear": null
+   }
+  },
+  {
+   "label": "Street Joggers: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 30,
+   "parts": {
+    "legs": "legs_joggers",
+    "headgear": null
+   }
+  },
+  {
+   "label": "Street Joggers: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 30,
+   "parts": {
+    "legs": "legs_joggers",
+    "headgear": null
+   }
+  },
+  {
+   "label": "Long Cargos: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 30,
+   "parts": {
+    "legs": "legs_cargo_long",
+    "headgear": null
+   }
+  },
+  {
+   "label": "Long Cargos: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 30,
+   "parts": {
+    "legs": "legs_cargo_long",
+    "headgear": null
+   }
+  },
+  {
+   "label": "High-Tops: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 30,
+   "parts": {
+    "boots": "boots_high_tops",
+    "headgear": null
+   }
+  },
+  {
+   "label": "High-Tops: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 30,
+   "parts": {
+    "boots": "boots_high_tops",
+    "headgear": null
+   }
+  },
+  {
+   "label": "Desert Boots: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 30,
+   "parts": {
+    "boots": "boots_desert",
+    "headgear": null
+   }
+  },
+  {
+   "label": "Desert Boots: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 30,
+   "parts": {
+    "boots": "boots_desert",
+    "headgear": null
+   }
+  },
+  {
+   "label": "Watch Beanie: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 25,
+   "parts": {
+    "headgear": "headgear_beanie"
+   }
+  },
+  {
+   "label": "Watch Beanie: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 25,
+   "parts": {
+    "headgear": "headgear_beanie"
+   }
+  },
+  {
+   "label": "Head Wrap: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 25,
+   "parts": {
+    "headgear": "headgear_headwrap"
+   }
+  },
+  {
+   "label": "Head Wrap: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 25,
+   "parts": {
+    "headgear": "headgear_headwrap"
+   }
+  },
+  {
+   "label": "Patrol Cap: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 25,
+   "parts": {
+    "headgear": "headgear_patrol_cap"
+   }
+  },
+  {
+   "label": "Patrol Cap: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 25,
+   "parts": {
+    "headgear": "headgear_patrol_cap"
+   }
+  },
+  {
+   "label": "Street Shades: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 25,
+   "parts": {
+    "eyewear": "eyewear_shades",
+    "headgear": null
+   }
+  },
+  {
+   "label": "Street Shades: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 25,
+   "parts": {
+    "eyewear": "eyewear_shades",
+    "headgear": null
+   }
+  },
+  {
+   "label": "Dust Scarf: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 25,
+   "parts": {
+    "eyewear": "eyewear_dust_scarf",
+    "headgear": null
+   }
+  },
+  {
+   "label": "Dust Scarf: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 25,
+   "parts": {
+    "eyewear": "eyewear_dust_scarf",
+    "headgear": null
+   }
+  },
+  {
+   "label": "Ballistic Goggles: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 25,
+   "parts": {
+    "eyewear": "eyewear_goggles",
+    "headgear": null
+   }
+  },
+  {
+   "label": "Ballistic Goggles: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 25,
+   "parts": {
+    "eyewear": "eyewear_goggles",
+    "headgear": null
+   }
+  },
+  {
+   "label": "look 1: her, rifle",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 50,
+   "parts": {
+    "top": "top_bomber",
+    "legs": "legs_joggers",
+    "boots": "boots_high_tops",
+    "headgear": "headgear_beanie",
+    "eyewear": "eyewear_shades"
+   },
+   "loco": "idle",
+   "aim": "aim_rifle_level",
+   "weapon": "k47"
+  },
+  {
+   "label": "look 1: him, rifle",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 50,
+   "parts": {
+    "top": "top_bomber",
+    "legs": "legs_joggers",
+    "boots": "boots_high_tops",
+    "headgear": "headgear_beanie",
+    "eyewear": "eyewear_shades"
+   },
+   "loco": "idle",
+   "aim": "aim_rifle_level",
+   "weapon": "k47"
+  },
+  {
+   "label": "look 2: her, rifle",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 50,
+   "parts": {
+    "top": "top_plate_carrier",
+    "legs": "legs_combat_trousers",
+    "boots": "boots_desert",
+    "headgear": "headgear_patrol_cap",
+    "eyewear": "eyewear_goggles",
+    "gloves": "gloves_tactical"
+   },
+   "loco": "idle",
+   "aim": "aim_rifle_level",
+   "weapon": "k47"
+  },
+  {
+   "label": "look 2: him, rifle",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 50,
+   "parts": {
+    "top": "top_plate_carrier",
+    "legs": "legs_combat_trousers",
+    "boots": "boots_desert",
+    "headgear": "headgear_patrol_cap",
+    "eyewear": "eyewear_goggles",
+    "gloves": "gloves_tactical"
+   },
+   "loco": "idle",
+   "aim": "aim_rifle_level",
+   "weapon": "k47"
+  }
+ ]
+}

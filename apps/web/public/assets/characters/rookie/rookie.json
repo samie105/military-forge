@@ -1,5 +1,6 @@
 {
   "id": "rookie",
+  "body": "male",
   "skeleton": "shared-v1",
   "heightM": 1.5,
   "lods": {
@@ -18,7 +19,9 @@
       },
       "skin": "alpha",
       "skinNeutral": "#da9f75",
-      "skinHeadroom": 2
+      "skinHeadroom": 2,
+      "heroAlbedo": "textures/rookie_body_hero_dye_albedo.webp",
+      "heroMask": "textures/rookie_body_hero_dye_mask.png"
     },
     "lod1": {
       "mask": "textures/rookie_body_lod1_dye_mask.png",
@@ -32,6 +35,11 @@
       "skinNeutral": "#da9f75",
       "skinHeadroom": 2
     }
+  },
+  "regions": {
+    "hair": 1,
+    "top": 2,
+    "legs": 3
   },
   "defaultParts": {
     "headgear": "headgear_brim_helmet",

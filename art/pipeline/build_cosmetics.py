@@ -57,6 +57,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import dye  # noqa: E402
 import guard  # noqa: E402,F401  (a crash exits 1, not 0)
 import envelope  # noqa: E402
+import garments  # noqa: E402
 import nozzles  # noqa: E402
 
 argv = sys.argv[sys.argv.index("--") + 1:]
@@ -67,7 +68,7 @@ BODY = argv[argv.index("--body") + 1] if "--body" in argv else "male"
 BODY_BLEND = Path(argv[argv.index("--body-blend") + 1]) if "--body-blend" in argv else None
 # How each slot is fitted to another body: by its surface (back, face), with its head (headgear: a smaller head has a
 # smaller envelope) or rebuilt on it (gloves). Boots sit on the shared feet: they need no second fit.
-BODY_FITS = {"jetpack": "back", "eyewear": "face", "headgear": "head", "gloves": "rebuild"}
+BODY_FITS = {"jetpack": "back", "eyewear": "face", "headgear": "head", "gloves": "rebuild", "top": "rebuild", "legs": "rebuild"}
 
 # LOD0 / LOD1 triangle budgets per slot. Body 2,350 + one item per slot ≤ 3,950 tris (LOD1 1,720).
 SLOT_TRIS = {"headgear": (450, 200), "eyewear": (150, 70), "boots": (300, 130), "gloves": (150, 70), "jetpack": (550, 250),
@@ -472,6 +473,74 @@ def jungle_boots(it):
         _boot(it, side, (OLIVE, P), (BLACK, S), (GOLD, A), 0.22)
 
 
+# ---- the 22 Oct set (owner: female soldier, more dressings): headwear and face pieces for both bodies, original
+# designs (art/cosmetics/source/concepts/outfits_*.jpg). Hats fit both heads (hers sits inside his hair cap).
+
+TERRA, MUSTARD_C, INDIGO_C, CHARC, AMBER, TAN, BROWN_D = (0.68, 0.30, 0.19), (0.82, 0.60, 0.15), (0.15, 0.19, 0.38), (0.20, 0.21, 0.22), (0.92, 0.62, 0.16), (0.76, 0.62, 0.42), (0.36, 0.24, 0.14)
+
+
+def high_tops(it):
+    for side in (-1, 1):
+        _boot(it, side, (CREAM, P), (GUM, S), (TERRA, A), 0.19)
+
+
+def desert_boots(it):
+    for side in (-1, 1):
+        _boot(it, side, (TAN, P), (BROWN_D, S), (BRASS, A), 0.2)
+
+
+def beanie(it):
+    """Watch Beanie: a knitted crown over the hair cap and a folded cuff, ribbed in two tones."""
+    rib = lambda c: (((OLIVE if int((math.atan2(c.x, c.y - CAP_C.y) + math.pi) / (math.pi / 18)) % 2 else OLIVE_D), P))  # noqa: E731
+    it.ellipsoid(CAP_C + Vector((0, 0, 0.012)), CAP_R * 1.06, rib, P, keep=crown(cut_z=NECK_Z + 0.2), segs=20, rings=12)
+    it.torus((0, CAP_C.y, NECK_Z + 0.215), CAP_R.x * 1.085, 0.022, OLIVE_D, S, scale=(1.0, CAP_R.y / CAP_R.x, 1.0), segs=20)
+    it.extras["hidesHair"] = True
+
+
+def headwrap(it):
+    """Head Wrap: a print tie wrapped close round the head, knotted at the back with two short tails."""
+    band = lambda c: ((MUSTARD_C, S) if int((c.z - NECK_Z) / 0.028 + 0.35 * math.sin(c.x * 30)) % 3 == 0 else (INDIGO_C, P))  # noqa: E731
+    it.ellipsoid(CAP_C + Vector((0, 0.004, 0.006)), CAP_R * 1.045, band, P, keep=crown(cut_z=NECK_Z + 0.19), segs=20, rings=12)
+    knot = Vector((0, CAP_C.y + CAP_R.y * 1.04, NECK_Z + 0.27))
+    it.ellipsoid(knot, (0.05, 0.035, 0.035), INDIGO_C, P, segs=10, rings=6)
+    for side in (-1, 1):
+        it.box(knot + Vector((side * 0.04, 0.025, -0.055)), (0.045, 0.014, 0.1), MUSTARD_C, S, rot=(15, side * 25, 0), bevel=0.004)
+    it.extras["hidesHair"] = True
+
+
+def patrol_cap(it):
+    """Patrol Cap: a flat-topped field cap with a short stiff peak, sitting high enough that a bun shows below."""
+    it.ellipsoid(CAP_C + Vector((0, 0, 0.02)), CAP_R * Vector((1.06, 1.06, 1.0)), OLIVE, P, keep=crown(cut_z=NECK_Z + 0.25), segs=16, rings=10)
+    it.cyl((0, CAP_C.y, NECK_Z + 0.43), CAP_R.x * 0.98, 0.035, OLIVE, P, verts=16)
+    it.box((0, CAP_C.y - CAP_R.y * 1.05 - 0.045, NECK_Z + 0.27), (0.24, 0.1, 0.014), OLIVE_D, S, rot=(-12, 0, 0), bevel=0.008)
+    it.extras["hidesHair"] = False
+
+
+def shades(it):
+    """Street Shades: one wraparound smoked lens across both eyes, on charcoal arms."""
+    y = FACE_Y - 0.016
+    it.ellipsoid((0, y + 0.012, EYE_Z + 0.004), (0.15, 0.03, 0.032), SMOKE, A, segs=14, rings=5)
+    for side in (-1, 1):
+        it.box((side * 0.17, y + 0.11, EYE_Z + 0.01), (0.01, 0.22, 0.012), CHARC, S, rot=(0, 0, side * -16), bevel=0)
+
+
+def dust_scarf(it):
+    """Dust Scarf: a checked cotton scarf round the neck and pulled up over the nose and mouth, knotted behind."""
+    check = lambda c: ((BROWN_D, S) if (int(c.x / 0.022) + int(c.z / 0.022)) % 2 else (TAN, P))  # noqa: E731
+    it.torus((0, HEAD_Y + 0.005, NECK_Z + 0.005), 0.165, 0.045, check, P, scale=(1.0, 1.05, 0.9), segs=16)
+    it.ellipsoid((0, FACE_Y + 0.035, EYE_Z - 0.085), (0.15, 0.06, 0.075), check, P, segs=12, rings=7)
+    for side in (-1, 1):
+        it.box((side * 0.03, HEAD_Y + 0.2, NECK_Z + 0.04), (0.04, 0.012, 0.09), check, P, rot=(25, side * 20, 0), bevel=0.004)
+
+
+def goggles(it):
+    """Ballistic Goggles: one amber lens in a chunky olive frame, on a wide strap round the head."""
+    y = FACE_Y - 0.02
+    it.ellipsoid((0, y + 0.01, EYE_Z + 0.004), (0.14, 0.028, 0.045), AMBER, A, segs=14, rings=5)
+    it.torus((0, y + 0.012, EYE_Z + 0.004), 0.13, 0.014, OLIVE_D, S, scale=(1.0, 1.0, 0.36), rot=(90, 0, 0), segs=16)
+    it.torus((0, CAP_C.y + 0.02, EYE_Z + 0.01), CAP_R.x * 1.04, 0.012, OLIVE, S, scale=(1.0, 1.06, 1.0), segs=18)
+
+
 def tactical_gloves(it, src=None, offset=0.010):
     """Gloves follow the body's own hands: copy the hand faces, inflate them a little. Built again
     from each body LOD (LOD1 decimates the hands differently), and skinned with the body's own
@@ -556,6 +625,14 @@ ITEMS = [
     ("boots_sneakers", "boots", "Sneakers", sneakers),
     ("boots_jungle", "boots", "Jungle Boots", jungle_boots),
     ("gloves_tactical", "gloves", "Tactical Gloves", tactical_gloves),
+    ("boots_high_tops", "boots", "High-Tops", high_tops),
+    ("boots_desert", "boots", "Desert Boots", desert_boots),
+    ("headgear_beanie", "headgear", "Watch Beanie", beanie),
+    ("headgear_headwrap", "headgear", "Head Wrap", headwrap),
+    ("headgear_patrol_cap", "headgear", "Patrol Cap", patrol_cap),
+    ("eyewear_shades", "eyewear", "Street Shades", shades),
+    ("eyewear_dust_scarf", "eyewear", "Dust Scarf", dust_scarf),
+    ("eyewear_goggles", "eyewear", "Ballistic Goggles", goggles),
 ]
 RIGID = {"headgear": "head", "eyewear": "head", "jetpack": "spine2", "hair": "head"}
 SOCKET = {"headgear": "socket_hat", "eyewear": "socket_hat", "jetpack": "socket_jetpack", "hair": "socket_hat"}
@@ -760,6 +837,112 @@ def hair_lod(iid, src, size, lod1):
     return lo, tri_count(lo.data), alb, msk
 
 
+# ------------------------------------------------------------------ tops and trousers (garments.py)
+
+GARMENT_ITEMS = [
+    ("top_tee_field", "top", "Field Tee", None),
+    ("top_hoodie_street", "top", "Street Hoodie", None),
+    ("top_jersey_street", "top", "Street Jersey", None),
+    ("top_print_shirt", "top", "Print Shirt", None),
+    ("top_bomber", "top", "Bomber Jacket", None),
+    ("top_plate_carrier", "top", "Plate Carrier", None),
+    ("top_field_jacket", "top", "Field Jacket", None),
+    ("legs_combat_trousers", "legs", "Combat Trousers", None),
+    ("legs_joggers", "legs", "Street Joggers", None),
+    ("legs_cargo_long", "legs", "Long Cargos", None),
+]
+
+
+# docs/04 §1.2 locality, as tools/asset-check/check.py measures it: a garment's region bones plus the neighbouring ones
+# its hem reaches (the neck, the wrists, the waist, the ankles)
+GARMENT_BONES = {
+    "top": {"pelvis", "spine1", "spine2", "neck", "clavicle_L", "clavicle_R", "upperarm_L", "upperarm_R", "forearm_L",
+            "forearm_R", "hand_L", "hand_R"},
+    "legs": {"pelvis", "thigh_L", "thigh_R", "calf_L", "calf_R", "spine1", "foot_L", "foot_R"},
+}
+
+
+def locality_box(src, bones, scale=1.10, margin=0.03):
+    """The body vertices mostly skinned to `bones`, their box ×1.10 plus 3 cm, inside this body's envelope."""
+    names = {g.index: g.name for g in src.vertex_groups}
+    pts = np.array([tuple(src.matrix_world @ v.co) for v in src.data.vertices
+                    if v.groups and names[max(v.groups, key=lambda g: g.weight).group] in bones])
+    lo, hi = pts.min(axis=0), pts.max(axis=0)
+    c, h = (lo + hi) / 2, (hi - lo) / 2 * scale + margin
+    elo, ehi = (np.array(e, dtype=np.float64) for e in ENV_CHECK)
+    return np.maximum(c - h, elo), np.minimum(c + h, ehi)
+
+
+def garment_lod(iid, src, size, lod1):
+    """One LOD of a garment on body LOD `src` (garments.build), its textures baked from a 2×-subdivided copy whose
+    cloth faces are repainted with the style's colours (prints and stripes finer than the LOD's faces); the mask's
+    alpha is the team glow (the armband)."""
+    lo, hidden, painters = garments.build(iid, src, arm, lod1, scene)
+    t = decimate_free(lo, hidden)
+    # Still over, step by step: the pieces (hood, pockets, collars, plates: faces of kind 2 and up) may go too; then
+    # the cloth's own edge (the hem's inner side), as the trousers' long hems need. The hem's outer edge, over the
+    # body faces that stay drawn, is never moved, so the seam stays covered.
+    for tier in ("pieces", "cloth edge"):
+        if t <= hidden:
+            break
+        kind = lo.data.attributes["kind"].data  # read again: decimation replaces the mesh
+        if tier == "pieces":
+            keep = {i for p in lo.data.polygons if kind[p.index].value < 2 for i in p.vertices}
+        else:
+            keep = {i for p in lo.data.polygons if kind[p.index].value == 1 for i in p.vertices}
+            keep -= {i for p in lo.data.polygons if kind[p.index].value != 1 for i in p.vertices}
+        lo.vertex_groups["_free"].add([v.index for v in lo.data.vertices if v.index not in keep], 1.0, "REPLACE")
+        t = decimate_free(lo, hidden)
+        log(f"  {iid}{'_lod1' if lod1 else ''}: the {tier} decimated too: {t} tris")
+    if t > hidden:
+        raise RuntimeError(f"{iid}{'_lod1' if lod1 else ''}: {t} tris, over the {hidden} of the body it hides")
+    # the strict envelope, like every part, and the slot's locality box (tools/asset-check/check.py): the plate
+    # carrier's plates and pouches, a flared trouser leg
+    box = locality_box(src, GARMENT_BONES[garments.STYLES[iid]["region"]])
+    squeezed = envelope.squeeze(lo, box)
+    envelope.clamp(lo, box)
+    if squeezed:
+        log(f"  {iid}{'_lod1' if lod1 else ''}: squeezed into the envelope {squeezed} cm")
+    fine = lo.copy()
+    fine.data = lo.data.copy()
+    scene.collection.objects.link(fine)
+    bm = bmesh.new()
+    bm.from_mesh(fine.data)
+    bmesh.ops.subdivide_edges(bm, edges=bm.edges[:], cuts=2, use_grid_fill=True)
+    bm.to_mesh(fine.data)
+    bm.free()
+    me = fine.data
+    kind = me.attributes["kind"].data
+    col, dye_l, glow = (me.color_attributes[n].data for n in ("Col", "Dye", "Glow"))
+    for poly in me.polygons:
+        paint = painters.get(kind[poly.index].value)
+        if paint is None:  # hems and pieces keep their flat colours
+            continue
+        c = paint(poly.center, poly.normal)
+        rgb = [srgb_to_linear(x) for x in c[0]]
+        g = c[2] if len(c) > 2 else 0.0
+        for li in poly.loop_indices:
+            col[li].color = (*rgb, 1.0)
+            dye_l[li].color = (*[float(x) for x in c[1]], 0.0)
+            glow[li].color = (g, g, g, 1.0)
+    unwrap(lo)
+    stem = f"{iid}{'_lod1' if lod1 else ''}"
+    alb = bake_attr(lo, fine, "Col", size, f"{stem}_albedo", data=False)
+    msk = bake_attr(lo, fine, "Dye", size, f"{stem}_mask", data=True)
+    glw = bake_attr(lo, fine, "Glow", size, f"{stem}_glow", data=True)
+    px = np.array(msk.pixels[:], dtype=np.float32).reshape(size, size, 4)
+    px[..., 3] = np.array(glw.pixels[:], dtype=np.float32).reshape(size, size, 4)[..., 0]
+    msk.pixels[:] = px.ravel()
+    bpy.data.images.remove(glw)
+    bpy.data.objects.remove(fine, do_unlink=True)
+    for name in ("Glow",):
+        lo.data.color_attributes.remove(lo.data.color_attributes[name])
+    lo.data.attributes.remove(lo.data.attributes["kind"])
+    lo.vertex_groups.remove(lo.vertex_groups["_free"])
+    log(f"  {stem}: {t} tris of the {hidden} it hides")
+    return lo, t, alb, msk
+
+
 # (id, slot, name, None): built by hair_lod on the female body only (fits: female)
 HAIR_ITEMS = [
     ("hair_bun", "hair", "Field Bun", None),
@@ -843,6 +1026,8 @@ GENERATED = {
     "jetpack_drum": {"yaw": 90, "rules": rules_drum, "fit": "default"},
     "boots_sneakers": {"yaw": -90, "rules": rules_boots},
     "boots_jungle": {"yaw": -90, "rules": rules_boots},
+    "boots_high_tops": {"yaw": -90, "rules": rules_boots},
+    "boots_desert": {"yaw": -90, "rules": rules_boots},
 }
 
 
@@ -1003,10 +1188,11 @@ def paint_join(it):
         d_attr = me.color_attributes.new("Dye", "BYTE_COLOR", "CORNER")
         for poly in me.polygons:
             up = 1.07 if poly.normal.z > 0.6 else (0.88 if poly.normal.z < -0.6 else 1.0)
-            c = [srgb_to_linear(min(1.0, x * up)) for x in col]
+            rgb, dch = col(o.matrix_world @ poly.center) if callable(col) else (col, ch)  # a pattern: col(centre)
+            c = [srgb_to_linear(min(1.0, x * up)) for x in rgb]
             for li in poly.loop_indices:
                 c_attr.data[li].color = (*c, 1.0)
-                d_attr.data[li].color = tuple(float(v) for v in (list(ch) + [0, 0, 0, 0])[:4])
+                d_attr.data[li].color = tuple(float(v) for v in (list(dch) + [0, 0, 0, 0])[:4])
     for o in scene.objects:
         o.select_set(any(o == p[0] for p in it.parts))
     bpy.context.view_layer.objects.active = it.parts[0][0]
@@ -1119,8 +1305,8 @@ def skin(obj, slot, src=None):
         if b.use_deform and b.name not in obj.vertex_groups:
             obj.vertex_groups.new(name=b.name)
     vg = obj.vertex_groups
-    # gloves already carry the skin's own weights (tactical_gloves)
-    for v in obj.data.vertices if slot != "gloves" else ():
+    # gloves and garments already carry the skin's own weights (tactical_gloves, garments.py)
+    for v in obj.data.vertices if slot not in ("gloves", "top", "legs") else ():
         side = "L" if v.co.x >= 0 else "R"
         if slot in RIGID:
             vg[RIGID[slot]].add([v.index], 1.0, "REPLACE")
@@ -1351,8 +1537,15 @@ def finish(iid, slot, name, lods, gen, extras, own=False):
 body.hide_set(True)
 index = {}
 OWN = set()  # items made for this body only: their manifest's top level is this body's
-for iid, slot, name, build in ITEMS + (HAIR_ITEMS if BODY == "female" else []):
+for iid, slot, name, build in ITEMS + GARMENT_ITEMS + (HAIR_ITEMS if BODY == "female" else []):
     if ONLY and iid not in ONLY or BODY != "male" and slot not in BODY_FITS and slot != "hair":
+        continue
+    if slot in ("top", "legs"):
+        if "_REGION" not in body.data.attributes:
+            log(f"{iid}: skipped, the {BODY} body has no _REGION (rebuild it with build_character.py)")
+            continue
+        lods = {suffix: garment_lod(iid, src, TEX[k], bool(suffix)) for k, (suffix, src) in enumerate((("", body), ("_lod1", body_lod1)))}
+        finish(iid, slot, name, lods, None, {"hidesBody": [garments.STYLES[iid]["region"]]})
         continue
     if slot == "hair":
         lods = {suffix: hair_lod(iid, src, TEX[k], bool(suffix)) for k, (suffix, src) in enumerate((("", body), ("_lod1", body_lod1)))}

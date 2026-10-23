@@ -1,0 +1,95 @@
+{
+ "title": "The creator's close-up textures (dye.lod0.heroAlbedo / heroMask) against the in-game LOD0 ones",
+ "cols": 4,
+ "cell": [
+  420,
+  470
+ ],
+ "frame": {
+  "width": 0.6,
+  "bottom": 0.9,
+  "top": 1.5
+ },
+ "cells": [
+  {
+   "label": "her, 0\u00b0: in-game 512\u00b2",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 0,
+   "hero": false,
+   "parts": {
+    "headgear": null,
+    "jetpack": null
+   }
+  },
+  {
+   "label": "her, 0\u00b0: hero 1024\u00b2",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 0,
+   "hero": true,
+   "parts": {
+    "headgear": null,
+    "jetpack": null
+   }
+  },
+  {
+   "label": "her, 30\u00b0: in-game 512\u00b2",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 30,
+   "hero": false,
+   "parts": {
+    "headgear": null,
+    "jetpack": null
+   }
+  },
+  {
+   "label": "her, 30\u00b0: hero 1024\u00b2",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 30,
+   "hero": true,
+   "parts": {
+    "headgear": null,
+    "jetpack": null
+   }
+  },
+  {
+   "label": "him, 0\u00b0: in-game 512\u00b2",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 0,
+   "hero": false,
+   "parts": {
+    "headgear": null,
+    "jetpack": null
+   }
+  },
+  {
+   "label": "him, 0\u00b0: hero 1024\u00b2",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 0,
+   "hero": true,
+   "parts": {
+    "headgear": null,
+    "jetpack": null
+   }
+  },
+  {
+   "label": "him, 30\u00b0: in-game 512\u00b2",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 30,
+   "hero": false,
+   "parts": {
+    "headgear": null,
+    "jetpack": null
+   }
+  },
+  {
+   "label": "him, 30\u00b0: hero 1024\u00b2",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 30,
+   "hero": true,
+   "parts": {
+    "headgear": null,
+    "jetpack": null
+   }
+  }
+ ]
+}

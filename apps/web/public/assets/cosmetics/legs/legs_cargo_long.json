@@ -1,0 +1,67 @@
+{
+  "id": "legs_cargo_long",
+  "slot": "legs",
+  "name": "Long Cargos",
+  "skeleton": "shared-v1",
+  "default": false,
+  "lods": {
+    "lod0": "legs_cargo_long.glb",
+    "lod1": "legs_cargo_long_lod1.glb"
+  },
+  "dye": {
+    "lod0": {
+      "mask": "textures/legs_cargo_long_dye_mask.png",
+      "albedo": "textures/legs_cargo_long_dye_albedo.webp",
+      "defaults": {
+        "primary": "#949185",
+        "secondary": "#7c7c77"
+      }
+    },
+    "lod1": {
+      "mask": "textures/legs_cargo_long_lod1_dye_mask.png",
+      "albedo": "textures/legs_cargo_long_lod1_dye_albedo.webp",
+      "defaults": {
+        "primary": "#949185",
+        "secondary": "#7c7c77"
+      }
+    }
+  },
+  "tris": {
+    "lod0": 479,
+    "lod1": 198
+  },
+  "source": "procedural",
+  "hidesBody": [
+    "legs"
+  ],
+  "bodies": {
+    "female": {
+      "lods": {
+        "lod0": "legs_cargo_long_female.glb",
+        "lod1": "legs_cargo_long_female_lod1.glb"
+      },
+      "dye": {
+        "lod0": {
+          "mask": "textures/legs_cargo_long_female_dye_mask.png",
+          "albedo": "textures/legs_cargo_long_female_dye_albedo.webp",
+          "defaults": {
+            "primary": "#949185",
+            "secondary": "#7c7c74"
+          }
+        },
+        "lod1": {
+          "mask": "textures/legs_cargo_long_female_lod1_dye_mask.png",
+          "albedo": "textures/legs_cargo_long_female_lod1_dye_albedo.webp",
+          "defaults": {
+            "primary": "#949185",
+            "secondary": "#7d7d79"
+          }
+        }
+      },
+      "tris": {
+        "lod0": 314,
+        "lod1": 179
+      }
+    }
+  }
+}

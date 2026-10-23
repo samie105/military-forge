@@ -1,0 +1,32 @@
+asset-check: art/cosmetics/legs/legs_joggers_female.glb  [part]
+----------------------------------------------------------------------------------------------------------
+INFO  file size                                       81 KB
+PASS  slot extra (docs/04 §3, §9.5)                   legs
+PASS  hides the body's legs                           438 body triangles hidden (hidesBody ['legs'])
+PASS  triangles (slot legs, LOD0)                     330 of 438
+PASS  one mesh, one material (docs/04 §5.3)           1 mesh(es), 1 draw call(s)
+PASS  texture size: legs_joggers_female_albedo        256x256 (max 256)
+PASS  texture POT: legs_joggers_female_albedo         power of two
+PASS  texture size: legs_joggers_female_dye_mask.png  256x256 (max 256)
+PASS  texture POT: legs_joggers_female_dye_mask.png   power of two
+INFO  GPU texture memory (KTX2 est.)                  0.12 MB, 2 image(s)
+PASS  required extras (docs/04 §9.5)                  ok
+WARN  cosmeticId in packages/content                  legs_joggers is not in packages/content/src/cosmetics.ts (W2's catalogue names the items)
+PASS  dye round trip: legs_joggers                    dyed 100%: mean 0.003 p95 0.004 (max 0.012/0.04)
+PASS  skinned in character space (docs/04 §9.3)       every vertex weighted to the shared skeleton
+PASS  armature                                        1 armature(s)
+PASS  deform bones (docs/04 §4.1)                     all 25 present
+PASS  sockets (docs/04 §4.1)                          all 7 present
+PASS  no unexpected bones                             none
+PASS  meshes skinned to the armature                  1/1
+PASS  every vertex weighted                           0 unweighted of 942
+PASS  ≤ 4 influences per vertex                       0 vertices over
+PASS  weights normalised                              0 vertices off by > 2%
+PASS  sockets are non-deform (no weights)             none weighted
+PASS  weights only on skeleton bones                  ok
+PASS  bind pose = the base body's                     worst -: 0.0 mm, 0.00° (max 1 mm, 0.1°)
+PASS  near its legs bones (docs/04 §1.2 locality)     part (-0.27, -0.16, 0.18)..(0.26, 0.18, 0.65) vs region (-0.28, -0.26, 0.13)..(0.29, 0.21, 0.77)
+PASS  cosmetic envelope (legs: base x1.10)            part (-0.27, -0.16, 0.18)..(0.26, 0.18, 0.65) vs envelope (-0.51, -0.26, 0.0)..(0.51, 0.36, 1.48)
+----------------------------------------------------------------------------------------------------------
+RESULT: PASS  (24 pass, 1 warn, 0 fail)
+

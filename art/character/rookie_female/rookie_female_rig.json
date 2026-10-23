@@ -188,13 +188,13 @@
   "regionTris": {
     "_lod0": {
       "hair": 479,
-      "top": 673,
-      "legs": 400
+      "top": 806,
+      "legs": 438
     },
     "_lod1": {
       "hair": 129,
-      "top": 259,
-      "legs": 167
+      "top": 342,
+      "legs": 198
     }
   },
   "fittedTo": "rookie",

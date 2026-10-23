@@ -12,7 +12,8 @@
 // Spec: { title, cols, cell: [w, h], frame: { width, bottom, top }, defaults: {...cell}, cells: [cell] }, a cell:
 //   body (manifest under assets/), lod, parts { slot: id | null }, yaw (deg, 0 = facing the camera), loco (clip),
 //   aim (upper-body clip), action (upper-body clip), t (s), weapon / weaponL / slung / holster (weapon ids),
-//   dyes { primary, secondary, accent }, skin (hex), label.
+//   dyes { primary, secondary, accent }, skin (hex), hero (the body's close-up textures, `dye.lod0.heroAlbedo` /
+//   `heroMask`, as the creator's setHero), label.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
@@ -61,10 +62,13 @@ function dyeMaterial(dye, defaults, override, skin, skinTone) {
   return m;
 }
 
-async function layer(manifestPath, entry, lod) {
+async function layer(manifestPath, entry, lod, hero = false) {
   const base = dir(manifestPath);
+  const d = entry.dye[lod];
+  const close = hero && d.heroAlbedo && d.heroMask;
   const [g, albedo, mask] = await Promise.all([
-    gltf(base + entry.lods[lod]), texture(base + entry.dye[lod].albedo, false), texture(base + entry.dye[lod].mask, true),
+    gltf(base + entry.lods[lod]), texture(base + (close ? d.heroAlbedo : d.albedo), false),
+    texture(base + (close ? d.heroMask : d.mask), true),
   ]);
   return { gltf: g, dye: { albedo, mask }, defaults: entry.dye[lod].defaults ?? {}, skin: entry.dye[lod].skin === 'alpha' };
 }
@@ -105,7 +109,7 @@ async function soldier(cell) {
   const hidesHair = parts.some((p) => p.slot === 'headgear' && (extrasOf(p).hidesHair ?? p.manifest.hidesHair ?? true));
   const shown = parts.filter((p) => !(p.slot === 'hair' && hidesHair));
   const codes = shown.flatMap((p) => (p.manifest.hidesBody ?? []).map((r) => bodyManifest.regions?.[r])).filter((c) => c !== undefined);
-  const body = await layer(bodyPath, bodyManifest, lod);
+  const body = await layer(bodyPath, bodyManifest, lod, cell.hero);
   const root = SkeletonUtils.clone(body.gltf.scene);
   let bodyMesh = null;
   root.traverse((o) => { if (o.isSkinnedMesh) bodyMesh = o; });

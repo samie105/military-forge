@@ -1,0 +1,66 @@
+{
+  "id": "headgear_headwrap",
+  "slot": "headgear",
+  "name": "Head Wrap",
+  "skeleton": "shared-v1",
+  "default": false,
+  "lods": {
+    "lod0": "headgear_headwrap.glb",
+    "lod1": "headgear_headwrap_lod1.glb"
+  },
+  "dye": {
+    "lod0": {
+      "mask": "textures/headgear_headwrap_dye_mask.png",
+      "albedo": "textures/headgear_headwrap_dye_albedo.webp",
+      "defaults": {
+        "primary": "#293469",
+        "secondary": "#e0a429"
+      }
+    },
+    "lod1": {
+      "mask": "textures/headgear_headwrap_lod1_dye_mask.png",
+      "albedo": "textures/headgear_headwrap_lod1_dye_albedo.webp",
+      "defaults": {
+        "primary": "#313e7d",
+        "secondary": "#e0a429"
+      }
+    }
+  },
+  "tris": {
+    "lod0": 450,
+    "lod1": 200
+  },
+  "source": "procedural",
+  "attachBone": "head",
+  "socket": "socket_hat",
+  "bodies": {
+    "female": {
+      "lods": {
+        "lod0": "headgear_headwrap_female.glb",
+        "lod1": "headgear_headwrap_female_lod1.glb"
+      },
+      "dye": {
+        "lod0": {
+          "mask": "textures/headgear_headwrap_female_dye_mask.png",
+          "albedo": "textures/headgear_headwrap_female_dye_albedo.webp",
+          "defaults": {
+            "primary": "#293469",
+            "secondary": "#e0a429"
+          }
+        },
+        "lod1": {
+          "mask": "textures/headgear_headwrap_female_lod1_dye_mask.png",
+          "albedo": "textures/headgear_headwrap_female_lod1_dye_albedo.webp",
+          "defaults": {
+            "primary": "#313e7d",
+            "secondary": "#e0a429"
+          }
+        }
+      },
+      "tris": {
+        "lod0": 450,
+        "lod1": 200
+      }
+    }
+  }
+}

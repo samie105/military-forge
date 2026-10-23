@@ -1,0 +1,71 @@
+{
+  "id": "top_bomber",
+  "slot": "top",
+  "name": "Bomber Jacket",
+  "skeleton": "shared-v1",
+  "default": false,
+  "lods": {
+    "lod0": "top_bomber.glb",
+    "lod1": "top_bomber_lod1.glb"
+  },
+  "dye": {
+    "lod0": {
+      "mask": "textures/top_bomber_dye_mask.png",
+      "albedo": "textures/top_bomber_dye_albedo.webp",
+      "defaults": {
+        "primary": "#61663d",
+        "secondary": "#44484a",
+        "accent": "#29a8a8"
+      }
+    },
+    "lod1": {
+      "mask": "textures/top_bomber_lod1_dye_mask.png",
+      "albedo": "textures/top_bomber_lod1_dye_albedo.webp",
+      "defaults": {
+        "primary": "#61663d",
+        "secondary": "#464a4c",
+        "accent": "#29a8a8"
+      }
+    }
+  },
+  "tris": {
+    "lod0": 549,
+    "lod1": 296
+  },
+  "source": "procedural",
+  "hidesBody": [
+    "top"
+  ],
+  "bodies": {
+    "female": {
+      "lods": {
+        "lod0": "top_bomber_female.glb",
+        "lod1": "top_bomber_female_lod1.glb"
+      },
+      "dye": {
+        "lod0": {
+          "mask": "textures/top_bomber_female_dye_mask.png",
+          "albedo": "textures/top_bomber_female_dye_albedo.webp",
+          "defaults": {
+            "primary": "#61663d",
+            "secondary": "#44484a",
+            "accent": "#29a8a8"
+          }
+        },
+        "lod1": {
+          "mask": "textures/top_bomber_female_lod1_dye_mask.png",
+          "albedo": "textures/top_bomber_female_lod1_dye_albedo.webp",
+          "defaults": {
+            "primary": "#61663d",
+            "secondary": "#464b4d",
+            "accent": "#29a8a8"
+          }
+        }
+      },
+      "tris": {
+        "lod0": 564,
+        "lod1": 292
+      }
+    }
+  }
+}

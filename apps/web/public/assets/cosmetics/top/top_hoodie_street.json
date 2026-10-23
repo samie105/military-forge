@@ -1,0 +1,71 @@
+{
+  "id": "top_hoodie_street",
+  "slot": "top",
+  "name": "Street Hoodie",
+  "skeleton": "shared-v1",
+  "default": false,
+  "lods": {
+    "lod0": "top_hoodie_street.glb",
+    "lod1": "top_hoodie_street_lod1.glb"
+  },
+  "dye": {
+    "lod0": {
+      "mask": "textures/top_hoodie_street_dye_mask.png",
+      "albedo": "textures/top_hoodie_street_dye_albedo.webp",
+      "defaults": {
+        "primary": "#4d5255",
+        "secondary": "#dea228",
+        "accent": "#29a8a8"
+      }
+    },
+    "lod1": {
+      "mask": "textures/top_hoodie_street_lod1_dye_mask.png",
+      "albedo": "textures/top_hoodie_street_lod1_dye_albedo.webp",
+      "defaults": {
+        "primary": "#4f5457",
+        "secondary": "#d59c27",
+        "accent": "#29a8a8"
+      }
+    }
+  },
+  "tris": {
+    "lod0": 555,
+    "lod1": 310
+  },
+  "source": "procedural",
+  "hidesBody": [
+    "top"
+  ],
+  "bodies": {
+    "female": {
+      "lods": {
+        "lod0": "top_hoodie_street_female.glb",
+        "lod1": "top_hoodie_street_female_lod1.glb"
+      },
+      "dye": {
+        "lod0": {
+          "mask": "textures/top_hoodie_street_female_dye_mask.png",
+          "albedo": "textures/top_hoodie_street_female_dye_albedo.webp",
+          "defaults": {
+            "primary": "#4d5255",
+            "secondary": "#dea228",
+            "accent": "#29a8a8"
+          }
+        },
+        "lod1": {
+          "mask": "textures/top_hoodie_street_female_lod1_dye_mask.png",
+          "albedo": "textures/top_hoodie_street_female_lod1_dye_albedo.webp",
+          "defaults": {
+            "primary": "#4d5255",
+            "secondary": "#d19926",
+            "accent": "#29a8a8"
+          }
+        }
+      },
+      "tris": {
+        "lod0": 558,
+        "lod1": 306
+      }
+    }
+  }
+}

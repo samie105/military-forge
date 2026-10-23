@@ -10,7 +10,9 @@ Sources and authoring scripts for the game's art: the Rookie (base soldier), its
 | Done: Street Market kit | #10: 24-piece kit + compiled 128 × 62 m map (120 m of play between edge walls), collision from the kit's extras, 6 ad surfaces |
 | Hero cosmetics from Higgsfield | 5 of the 11 starter items rebuilt from generated models |
 | The female soldier | #203: a second base body on the Rookie's skeleton, her fits of the shared items, body regions |
-| **Her hairstyles** | **this branch**: Field Bun, Cornrow Braids, Short Crop, each replacing her own hair |
+| Her hairstyles | #210: Field Bun, Cornrow Braids, Short Crop, each replacing her own hair |
+| Outfits for both bodies | #247: 7 tops and jackets, 3 trousers, 2 boots, 3 hats, 3 face pieces; whole body regions |
+| **The creator's close-up textures** | **this branch**: both bodies at 1024² (`dye.lod0.heroAlbedo` / `heroMask`); wrist and toe checks for the animation stream |
 
 ## The female soldier (`rookie_female`, 22 Oct 2026)
 
@@ -142,6 +144,113 @@ Each style replaces her own hair. She wears a short natural afro, part of her me
    - LOD0 / LOD1 triangles: Field Bun 488 / 146, Cornrow Braids 450 / 163, Short Crop 494 / 129 (budgets 529 / 169).
 
 Hair is painted, not dyed: a primary dye would recolour it with the uniform.
+
+## The creator's close-up textures, and checks for the animation stream (23 Oct 2026)
+
+![In-game and close-up textures](screenshots/hero-textures.png)
+*Each face with the in-game LOD0 textures (512²) and the creator's close-ups (1024²).*
+
+**Close-up textures:**
+- Each body's manifest lists `dye.lod0.heroAlbedo` and `heroMask`. `CharacterInstance.setHero(true)` loads them in the creator; a match never does.
+- `build_character.py` bakes the LOD0 body a second time at `HERO_TEX` = 1024², on the same UVs and with the same dye rules. The skin weight is in the albedo's alpha.
+  - A rebuild makes them. These two came from a rebuild whose meshes match the committed ones vertex for vertex (the same positions and UVs, in another order), so only the textures and the manifests' two keys changed.
+- They are 0.29 MB WebP plus 0.2 MB PNG per body: about 11 MB of GPU memory with mipmaps while the creator shows them, and none in a match.
+- The sheet tool renders them with a cell's `hero: true` (`sheets/hero-textures.json`).
+
+**Checked for the animation stream** (the asks in `animation-feel.md`; measured on the shipped clips, each from a reset pose):
+- **Wrists:** no twist bone, so a hand's roll about the forearm all lands at the wrist. Linear blend skinning narrows the wrist's mid-weight ring to cos(θ/2).
+  - Worst cases: `throw` 165° (≈ 0.13), `idle_look` 130°, `aim_rifle_down90` 123°, `melee` 112° (≈ 0.56).
+  - Reloads stay under 36°, and no clip twists the elbow.
+  - Spreading weights toward the elbow can't lift that minimum. The fix is to split the twist between the forearm and the hand at runtime, or a twist bone (a skeleton change).
+- **Toes:** no clip bends `toe_L`/`toe_R` (under 1°), and the boots are rigid to the feet by design, so the toe bones carry no weight.
+- **Eyes and jaw:** the bones sit on the painted eyes and at mouth height. A blink needs a ring of vertices round each eye (about 40 triangles at LOD0), and both bodies are at their 2,350 / 1,000 budget, so it waits on a budget decision.
+
+## Outfits for both bodies (22 Oct 2026)
+
+![Tops](screenshots/outfits-tops.png)
+*The seven tops and jackets on her and on him.*
+
+![Trousers, boots, headwear, face pieces](screenshots/outfits-rest.png)
+*The trousers, the two boots, the three hats and the three face pieces, on her and on him.*
+
+The owner's "dressings": 18 original items, military plus Lagos street, each fitted to both bodies.
+
+**Concepts** (GPT Image 2.5, her concept sheet as the style reference; [concepts/](cosmetics/source/concepts/)):
+- 4 outfit sheets at medium 2k: tops, jackets and vests, trousers with footwear, headwear with face pieces (jobs `08b2f61d…`, `48939dd4…`, `5ebd78c3…`, `b017edc8…`; `outfits_*.jpg`);
+- 2 boot turnarounds at high 2k (`75bd4fbd…`, `cc83bec1…`; `boots_high_tops.jpg`, `boots_desert.jpg`).
+
+<details><summary>Prompts (exact text)</summary>
+
+Tops: "Outfit concept sheet for an original stylised toy-soldier game, in exactly the art style of the reference (soft vinyl designer-toy look, chibi proportions, light toon shading). Four TOPS, each worn by the female soldier from the reference, shown front view and back view side by side, four pairs in a row with clear gaps, plain flat light-grey background. Every top keeps a bright teal armband on the left upper arm. 1) FIELD TEE: an olive cotton tee with sleeves to the elbow, a crew neck, a small pale sand stencil chevron on the chest. 2) STREET HOODIE: a charcoal hoodie with a mustard yellow front panel, a big kangaroo pocket, the hood down around the neck, short drawstrings, ribbed cuffs. 3) STREET JERSEY: a loose sports jersey in cream with bold terracotta zig-zag bands across the chest and sleeves, a V neck, an original pattern with no numbers. 4) PRINT SHIRT: a short-sleeved camp-collar button shirt in an original bold West African style wax print of indigo, mustard and terracotta circles and leaves. Military plus Lagos streetwear, modest and practical, never glamorous. No text, no letters, no numbers, no logos, no brands, no insignia, no flags."
+
+Jackets and vests: "Outfit concept sheet for an original stylised toy-soldier game, in exactly the art style of the reference (soft vinyl designer-toy look, chibi proportions, light toon shading). Three JACKETS AND VESTS, each worn by the female soldier from the reference over her shirt, shown front view and back view side by side, three pairs in a row with clear gaps, plain flat light-grey background. Every one keeps a bright teal armband on the left upper arm. 1) BOMBER JACKET: a short olive bomber with chunky ribbed collar, cuffs and waistband in dark charcoal, a zip, a small zip pocket on the left sleeve, mustard yellow lining showing at the open collar. 2) PLATE CARRIER: a chunky tactical vest in coyote tan over the sand shirt, a big front plate and a back plate, three magazine pouches on the front, wide padded shoulder straps, side straps, a small grab handle on the back. 3) FIELD JACKET: a stone-grey four-pocket field jacket with a turn-down collar, flap chest and hip pockets, a drawstring waist, sleeves rolled once. Military plus Lagos streetwear, modest and practical, never glamorous. No text, no letters, no numbers, no logos, no brands, no insignia, no flags."
+
+Trousers and footwear: "Outfit concept sheet for an original stylised toy-soldier game, in exactly the art style of the reference (soft vinyl designer-toy look, chibi proportions, light toon shading). Top row: three pairs of TROUSERS, each shown front and back on their own with no body, chunky toy shapes: 1) COMBAT TROUSERS in olive with big cargo pockets on the thighs and rounded dark knee pads, tucked into the boots; 2) STREET JOGGERS in charcoal, tapered, with a mustard stripe down the side and ribbed ankle cuffs; 3) LONG CARGOS, loose straight cargo trousers in a stone grey and dark grey urban camouflage of blocky patches. Bottom row: two pairs of footwear, each shown from the side and the front: 4) HIGH-TOP SNEAKERS, chunky and street, off-white with terracotta panels and a gum sole, thick laces; 5) DESERT BOOTS, tan suede military boots with a dark brown sole, a padded collar and laces. Original designs, plain flat light-grey background, clear gaps between items. No text, no letters, no numbers, no logos, no brands, no insignia, no swoosh or stripe trademarks."
+
+Headwear and face pieces: "Accessory concept sheet for an original stylised toy-soldier game, in exactly the art style of the reference (soft vinyl designer-toy look, chibi head, light toon shading). Six head-and-shoulders busts of the female soldier from the reference, in two rows of three, plain flat light-grey background, clear gaps. Top row, HEADWEAR: 1) WATCH BEANIE, a knitted olive beanie with a folded cuff; 2) HEAD WRAP, a neat practical head tie wrapped close around the head and knotted at the back, in an indigo and mustard wax print; 3) PATROL CAP, a flat-topped field cap in olive with a short stiff peak. Bottom row, FACE ACCESSORIES: 4) STREET SHADES, wraparound sunglasses with a dark smoky lens and a charcoal frame; 5) DUST SCARF, a sand and dark brown checked cotton scarf wrapped around the neck and pulled up over the nose and mouth, knotted behind; 6) BALLISTIC GOGGLES, chunky goggles with a single amber lens on a wide olive strap, worn over the eyes. Military plus Lagos streetwear, practical, never glamorous. No text, no letters, no numbers, no logos, no brands, no insignia, no flags."
+
+High-tops: "Turnaround sheet for a 3D game asset: ONE PAIR of chunky toy HIGH-TOP SNEAKERS shown three times on a plain flat light-grey background, evenly spaced, no feet or legs inside. Left: the pair from the front, side by side; middle: the pair from the left side, one behind the other, both toes pointing to the left; right: the pair from the back, side by side. The same soft vinyl designer-toy style and chunky chibi proportions as the boots in the references: an off-white leather upper with terracotta panels around the heel, the toe cap edge and the collar, a padded collar, thick cream laces, a thick gum-brown cupsole with a rubber toe. An original street design. No text, no letters, no logos, no brands, no swoosh, no stripes trademark, no other objects."
+
+Desert boots: "Turnaround sheet for a 3D game asset: ONE PAIR of chunky toy DESERT COMBAT BOOTS shown three times on a plain flat light-grey background, evenly spaced, no feet or legs inside. Left: the pair from the front, side by side; middle: the pair from the left side, one behind the other, both toes pointing to the left; right: the pair from the back, side by side. The same soft vinyl designer-toy style and chunky chibi proportions as the boots in the references: tan suede uppers to just above the ankle, a dark brown padded collar, tan laces through dark brass eyelets, a thick dark brown lugged sole, a rounded toe. An original military design. No text, no letters, no logos, no brands, no insignia, no other objects."
+
+</details>
+
+| Slot | Items | Built |
+|---|---|---|
+| top (shirts) | Field Tee, Street Hoodie, Street Jersey, Print Shirt | garments.py, one fit per body |
+| top (jackets, vests) | Bomber Jacket, Plate Carrier, Field Jacket | garments.py, one fit per body |
+| legs | Combat Trousers, Street Joggers, Long Cargos | garments.py, one fit per body |
+| boots | High-Tops, Desert Boots | generated (Tripo), fits both (shared feet) |
+| headgear | Watch Beanie, Head Wrap, Patrol Cap | procedural, with her fit (`bodies.female`: narrowed with her head, like every hat) |
+| face (eyewear slot) | Street Shades, Dust Scarf, Ballistic Goggles | procedural, with her fit (`bodies.female`) |
+
+### Tops and trousers (`art/pipeline/garments.py`)
+
+A top or trousers replaces a stretch of the body: `hidesBody: ["top"]` or `["legs"]`, the body's `_REGION` faces. Each body LOD gets its own garment, built from that LOD's own region faces, so it fits each body and LOD exactly:
+
+1. **The cloth:** the region's faces, Taubin-smoothed with their edge pinned, so pouches and webbing flatten into cloth while the volume stays; then pushed out by the garment's thickness (5–16 mm).
+2. **Hems:** a band over the body's border faces (the strip that stays drawn between the region and the skin or the next region). Collars, cuffs and waistbands stand 3 mm proud, and the strip never shows through.
+3. **Pieces on the cloth's surface:**
+   - long sleeves (tubes down the forearm, as wide as the arm's own vertices, at most 7.5 cm: counting the shoulder's made the first ring a flare), the hood, pockets and flaps;
+   - the plate carrier's plates, pouches and straps, knee pads, cuffs, drawstrings. A plate stands flat in front of the outermost cloth under its whole footprint, so a lump under it (his moulded pack, a chest) stays behind it;
+   - the Long Cargos' loose legs, from under the knee over the boot top: each ring follows the cloth's own section (a chunky calf is far from round, and a round tube wide enough for its widest made a ledge round the shin);
+   - a jacket's hem hanging over any trousers.
+4. **The team armband** on every top's left upper arm: accent dye, glowing in the team colour (docs/04 §1.4).
+5. **Skin weights:** every vertex keeps those of the body vertex it came from; pieces take the nearest body vertex's.
+6. **Budget:** decimated to at most the triangles of the body it hides, so a dressed soldier stays inside docs/04 §5.6. First only the cloth's interior; if that isn't enough, the pieces too; then the cloth's own edge. The hem's outer edge, over the body faces that stay drawn, never moves, so the seam stays covered (the trousers' long hems need the last step).
+   - Textures are baked from a 2×-subdivided copy painted finely: prints, stripes, camo, cuffs.
+
+Patterns are procedural and original: an indigo / mustard / terracotta wax-style print, blocky urban camo, the jersey's zig-zag bands.
+
+Triangles (each garment / the body triangles it hides):
+
+| Garment | Rookie LOD0 | Rookie LOD1 | Her LOD0 | Her LOD1 |
+|---|---|---|---|---|
+| Field Tee | 809 / 910 | 218 / 325 | 764 / 806 | 284 / 342 |
+| Street Hoodie | 555 / 910 | 310 / 325 | 558 / 806 | 306 / 342 |
+| Street Jersey | 809 / 910 | 218 / 325 | 764 / 806 | 284 / 342 |
+| Print Shirt | 737 / 910 | 222 / 325 | 714 / 806 | 256 / 342 |
+| Bomber Jacket | 549 / 910 | 296 / 325 | 564 / 806 | 292 / 342 |
+| Plate Carrier | 611 / 910 | 258 / 325 | 618 / 806 | 252 / 342 |
+| Field Jacket | 575 / 910 | 286 / 325 | 514 / 806 | 280 / 342 |
+| Combat Trousers | 415 / 594 | 196 / 265 | 310 / 438 | 179 / 198 |
+| Street Joggers | 493 / 594 | 172 / 265 | 330 / 438 | 155 / 198 |
+| Long Cargos | 479 / 594 | 198 / 265 | 314 / 438 | 179 / 198 |
+
+**Known:** a hem follows the body's region border, which zigzags at the waist and cuffs where the skin weights hand over from bone to bone, so close up a hem looks ragged. On his back the cloth smooths over his moulded pack, so the hem crumples most there (the jetpack covers it in play). Smoother region borders (and a hem cut along them) are a follow-up.
+
+### Generated boots
+
+Concept sheets (GPT Image 2.5 high 2k, jobs `75bd4fbd…` high-tops, `cc83bec1…` desert) → Tripo H3.1 multiview (`89d50d80…`, `2cd39515…`), then `build_cosmetics.py`'s generated-source path (fitted into the procedural boot's box, envelope, LODs, bake, dye rules).
+
+### Body regions, whole (`build_character.py`)
+A garment replaces its region and hems the region's border, so a region with holes gave a shirt with hem rings across it and the body showing through, and trousers that stopped at the knee. Two fixes, for both bodies:
+- **The torso and legs are always clothed on these soldiers** (the bare skin is forearms, hands, neck and face). Their sand cloth read as skin to the texel test, so the test now only applies to the neck and arms.
+- **`fill_regions`:** a small patch (up to 40 vertices, no hand or head in it) that the top and legs surround joins them. Region specks under 12 vertices inside skin are dropped. Hair is left alone: its holes are ears.
+
+**His body** now carries `_REGION`, so his garments can hide his own: top 910 / 325 and legs 594 / 265 triangles at LOD0 / LOD1. His skeleton, landmarks and clips are unchanged, and his body differs only by float noise.
+
+**Hers** (#203): top 806 / 342 and legs 438 / 198 (hair unchanged at 479 / 129). Only `_REGION` changes: her positions, normals, UVs and LOD0 weights are byte-identical, and her LOD1 weights are within 0.009.
 
 ![Before / after](screenshots/hero-cosmetics.png)
 *Top: the procedural items from #8. Bottom: the same item ids rebuilt from Higgsfield-generated models, in the Rookie's painted vinyl style.*
@@ -1216,7 +1325,8 @@ What it checks:
 | Weapons Forge 12, batch 2b: the 5 specials from generated images: 5 concept sheets (1.0 each) + 5 Tripo H3.1 multiview models (9 each) | **50.00** |
 | The female soldier (22 Oct): 3 concept sheets + 1 edit (GPT Image 2.5 high 2k, 2.75 each) + 1 Tripo H3.1 multiview model (9) | **20.00** |
 | Her hairstyles (22 Oct): 1 concept sheet (GPT Image 2.5 high 2k) | **2.75** |
-| **Total so far** | **376.00** (the Forge's 400-credit cap: 298.25 used, counting PR 3's concepts and boots and both key arts, each in its own PR) |
+| Outfits (22 Oct): 4 concept sheets (GPT Image 2.5 medium 2k, 1 each) + 2 boot turnarounds (high 2k, 2.75 each) + 2 Tripo H3.1 multiview boots (9 each) | **27.50** |
+| **Total so far** | **403.50** (the Forge's 400-credit cap: 320.50 used, counting both key arts and the VS plates, each in its own PR) |
 
 Phase 0 Higgsfield job IDs: concepts A `160eb90e-41ab-4ecc-a917-1e76c0563b40`, B `b40714aa-ec2f-4d2a-a522-ff5a4ebe57cc`, C `3e234313-6c57-4cd7-9946-22e6cd62b4b3`; 3D `75fc7390-163d-4c95-869c-58e8544bd654`.
 

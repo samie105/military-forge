@@ -1,0 +1,66 @@
+{
+  "id": "eyewear_goggles",
+  "slot": "eyewear",
+  "name": "Ballistic Goggles",
+  "skeleton": "shared-v1",
+  "default": false,
+  "lods": {
+    "lod0": "eyewear_goggles.glb",
+    "lod1": "eyewear_goggles_lod1.glb"
+  },
+  "dye": {
+    "lod0": {
+      "mask": "textures/eyewear_goggles_dye_mask.png",
+      "albedo": "textures/eyewear_goggles_dye_albedo.webp",
+      "defaults": {
+        "secondary": "#687345",
+        "accent": "#fba92c"
+      }
+    },
+    "lod1": {
+      "mask": "textures/eyewear_goggles_lod1_dye_mask.png",
+      "albedo": "textures/eyewear_goggles_lod1_dye_albedo.webp",
+      "defaults": {
+        "secondary": "#697345",
+        "accent": "#fba92c"
+      }
+    }
+  },
+  "tris": {
+    "lod0": 150,
+    "lod1": 68
+  },
+  "source": "procedural",
+  "attachBone": "head",
+  "socket": "socket_hat",
+  "bodies": {
+    "female": {
+      "lods": {
+        "lod0": "eyewear_goggles_female.glb",
+        "lod1": "eyewear_goggles_female_lod1.glb"
+      },
+      "dye": {
+        "lod0": {
+          "mask": "textures/eyewear_goggles_female_dye_mask.png",
+          "albedo": "textures/eyewear_goggles_female_dye_albedo.webp",
+          "defaults": {
+            "secondary": "#687345",
+            "accent": "#fba92c"
+          }
+        },
+        "lod1": {
+          "mask": "textures/eyewear_goggles_female_lod1_dye_mask.png",
+          "albedo": "textures/eyewear_goggles_female_lod1_dye_albedo.webp",
+          "defaults": {
+            "secondary": "#697345",
+            "accent": "#fba92c"
+          }
+        }
+      },
+      "tris": {
+        "lod0": 150,
+        "lod1": 68
+      }
+    }
+  }
+}

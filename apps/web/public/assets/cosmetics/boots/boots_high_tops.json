@@ -1,0 +1,36 @@
+{
+  "id": "boots_high_tops",
+  "slot": "boots",
+  "name": "High-Tops",
+  "skeleton": "shared-v1",
+  "default": false,
+  "lods": {
+    "lod0": "boots_high_tops.glb",
+    "lod1": "boots_high_tops_lod1.glb"
+  },
+  "dye": {
+    "lod0": {
+      "mask": "textures/boots_high_tops_dye_mask.png",
+      "albedo": "textures/boots_high_tops_dye_albedo.webp",
+      "defaults": {
+        "primary": "#fbdbae",
+        "secondary": "#ffd387",
+        "accent": "#d8b072"
+      }
+    },
+    "lod1": {
+      "mask": "textures/boots_high_tops_lod1_dye_mask.png",
+      "albedo": "textures/boots_high_tops_lod1_dye_albedo.webp",
+      "defaults": {
+        "primary": "#fdd5a7",
+        "secondary": "#ffcf86",
+        "accent": "#a28051"
+      }
+    }
+  },
+  "tris": {
+    "lod0": 300,
+    "lod1": 130
+  },
+  "source": "generated"
+}

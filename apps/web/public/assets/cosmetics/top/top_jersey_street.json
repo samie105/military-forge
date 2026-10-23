@@ -1,0 +1,71 @@
+{
+  "id": "top_jersey_street",
+  "slot": "top",
+  "name": "Street Jersey",
+  "skeleton": "shared-v1",
+  "default": false,
+  "lods": {
+    "lod0": "top_jersey_street.glb",
+    "lod1": "top_jersey_street_lod1.glb"
+  },
+  "dye": {
+    "lod0": {
+      "mask": "textures/top_jersey_street_dye_mask.png",
+      "albedo": "textures/top_jersey_street_dye_albedo.webp",
+      "defaults": {
+        "primary": "#e5dbc2",
+        "secondary": "#ff764b",
+        "accent": "#2fc0c0"
+      }
+    },
+    "lod1": {
+      "mask": "textures/top_jersey_street_lod1_dye_mask.png",
+      "albedo": "textures/top_jersey_street_lod1_dye_albedo.webp",
+      "defaults": {
+        "primary": "#e5dbc2",
+        "secondary": "#ff764b",
+        "accent": "#31c7c7"
+      }
+    }
+  },
+  "tris": {
+    "lod0": 809,
+    "lod1": 218
+  },
+  "source": "procedural",
+  "hidesBody": [
+    "top"
+  ],
+  "bodies": {
+    "female": {
+      "lods": {
+        "lod0": "top_jersey_street_female.glb",
+        "lod1": "top_jersey_street_female_lod1.glb"
+      },
+      "dye": {
+        "lod0": {
+          "mask": "textures/top_jersey_street_female_dye_mask.png",
+          "albedo": "textures/top_jersey_street_female_dye_albedo.webp",
+          "defaults": {
+            "primary": "#e5dbc2",
+            "secondary": "#ff7449",
+            "accent": "#31c7c7"
+          }
+        },
+        "lod1": {
+          "mask": "textures/top_jersey_street_female_lod1_dye_mask.png",
+          "albedo": "textures/top_jersey_street_female_lod1_dye_albedo.webp",
+          "defaults": {
+            "primary": "#e5dbc2",
+            "secondary": "#ff764a",
+            "accent": "#2fc3c3"
+          }
+        }
+      },
+      "tris": {
+        "lod0": 764,
+        "lod1": 284
+      }
+    }
+  }
+}

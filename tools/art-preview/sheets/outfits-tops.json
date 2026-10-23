@@ -1,0 +1,290 @@
+{
+ "title": "Tops and jackets on both bodies (each replaces the body's own top: hidesBody top)",
+ "cols": 8,
+ "cell": [
+  240,
+  330
+ ],
+ "cells": [
+  {
+   "label": "Field Tee: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 25,
+   "parts": {
+    "top": "top_tee_field",
+    "headgear": null,
+    "jetpack": "jetpack_twin_tank"
+   }
+  },
+  {
+   "label": "Field Tee: her, back",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 155,
+   "parts": {
+    "top": "top_tee_field",
+    "headgear": null,
+    "jetpack": null
+   }
+  },
+  {
+   "label": "Field Tee: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 25,
+   "parts": {
+    "top": "top_tee_field",
+    "headgear": null,
+    "jetpack": "jetpack_twin_tank"
+   }
+  },
+  {
+   "label": "Field Tee: him, back",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 155,
+   "parts": {
+    "top": "top_tee_field",
+    "headgear": null,
+    "jetpack": null
+   }
+  },
+  {
+   "label": "Street Hoodie: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 25,
+   "parts": {
+    "top": "top_hoodie_street",
+    "headgear": null,
+    "jetpack": "jetpack_twin_tank"
+   }
+  },
+  {
+   "label": "Street Hoodie: her, back",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 155,
+   "parts": {
+    "top": "top_hoodie_street",
+    "headgear": null,
+    "jetpack": null
+   }
+  },
+  {
+   "label": "Street Hoodie: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 25,
+   "parts": {
+    "top": "top_hoodie_street",
+    "headgear": null,
+    "jetpack": "jetpack_twin_tank"
+   }
+  },
+  {
+   "label": "Street Hoodie: him, back",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 155,
+   "parts": {
+    "top": "top_hoodie_street",
+    "headgear": null,
+    "jetpack": null
+   }
+  },
+  {
+   "label": "Street Jersey: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 25,
+   "parts": {
+    "top": "top_jersey_street",
+    "headgear": null,
+    "jetpack": "jetpack_twin_tank"
+   }
+  },
+  {
+   "label": "Street Jersey: her, back",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 155,
+   "parts": {
+    "top": "top_jersey_street",
+    "headgear": null,
+    "jetpack": null
+   }
+  },
+  {
+   "label": "Street Jersey: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 25,
+   "parts": {
+    "top": "top_jersey_street",
+    "headgear": null,
+    "jetpack": "jetpack_twin_tank"
+   }
+  },
+  {
+   "label": "Street Jersey: him, back",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 155,
+   "parts": {
+    "top": "top_jersey_street",
+    "headgear": null,
+    "jetpack": null
+   }
+  },
+  {
+   "label": "Print Shirt: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 25,
+   "parts": {
+    "top": "top_print_shirt",
+    "headgear": null,
+    "jetpack": "jetpack_twin_tank"
+   }
+  },
+  {
+   "label": "Print Shirt: her, back",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 155,
+   "parts": {
+    "top": "top_print_shirt",
+    "headgear": null,
+    "jetpack": null
+   }
+  },
+  {
+   "label": "Print Shirt: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 25,
+   "parts": {
+    "top": "top_print_shirt",
+    "headgear": null,
+    "jetpack": "jetpack_twin_tank"
+   }
+  },
+  {
+   "label": "Print Shirt: him, back",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 155,
+   "parts": {
+    "top": "top_print_shirt",
+    "headgear": null,
+    "jetpack": null
+   }
+  },
+  {
+   "label": "Bomber Jacket: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 25,
+   "parts": {
+    "top": "top_bomber",
+    "headgear": null,
+    "jetpack": "jetpack_twin_tank"
+   }
+  },
+  {
+   "label": "Bomber Jacket: her, back",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 155,
+   "parts": {
+    "top": "top_bomber",
+    "headgear": null,
+    "jetpack": null
+   }
+  },
+  {
+   "label": "Bomber Jacket: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 25,
+   "parts": {
+    "top": "top_bomber",
+    "headgear": null,
+    "jetpack": "jetpack_twin_tank"
+   }
+  },
+  {
+   "label": "Bomber Jacket: him, back",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 155,
+   "parts": {
+    "top": "top_bomber",
+    "headgear": null,
+    "jetpack": null
+   }
+  },
+  {
+   "label": "Plate Carrier: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 25,
+   "parts": {
+    "top": "top_plate_carrier",
+    "headgear": null,
+    "jetpack": "jetpack_twin_tank"
+   }
+  },
+  {
+   "label": "Plate Carrier: her, back",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 155,
+   "parts": {
+    "top": "top_plate_carrier",
+    "headgear": null,
+    "jetpack": null
+   }
+  },
+  {
+   "label": "Plate Carrier: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 25,
+   "parts": {
+    "top": "top_plate_carrier",
+    "headgear": null,
+    "jetpack": "jetpack_twin_tank"
+   }
+  },
+  {
+   "label": "Plate Carrier: him, back",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 155,
+   "parts": {
+    "top": "top_plate_carrier",
+    "headgear": null,
+    "jetpack": null
+   }
+  },
+  {
+   "label": "Field Jacket: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 25,
+   "parts": {
+    "top": "top_field_jacket",
+    "headgear": null,
+    "jetpack": "jetpack_twin_tank"
+   }
+  },
+  {
+   "label": "Field Jacket: her, back",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 155,
+   "parts": {
+    "top": "top_field_jacket",
+    "headgear": null,
+    "jetpack": null
+   }
+  },
+  {
+   "label": "Field Jacket: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 25,
+   "parts": {
+    "top": "top_field_jacket",
+    "headgear": null,
+    "jetpack": "jetpack_twin_tank"
+   }
+  },
+  {
+   "label": "Field Jacket: him, back",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 155,
+   "parts": {
+    "top": "top_field_jacket",
+    "headgear": null,
+    "jetpack": null
+   }
+  }
+ ]
+}
