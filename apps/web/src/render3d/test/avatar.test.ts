@@ -98,7 +98,10 @@ describe('Avatar', () => {
     a.update(playerView({ x: 20, y: 4, grounded: false }), 1 / 60, world, true);
     expect(a.blob.position.y).toBeCloseTo(0.015, 6);
     expect((a.blob.material as { opacity: number }).opacity).toBeLessThan(near);
-    a.update(playerView({ x: 20, y: 0, alive: false }), 1 / 60, world, true);
+    // dead: the death beat (death.ts) shows the collapse and its shadow, then hides both
+    a.update(playerView({ x: 20, y: 0, alive: false, deaths: 1 }), 1 / 60, world, true);
+    expect(a.pivot.visible).toBe(true);
+    for (let i = 0; i < 45; i++) a.update(playerView({ x: 20, y: 0, alive: false, deaths: 1 }), 1 / 60, world, true);
     expect(a.pivot.visible).toBe(false);
     expect(a.blob.visible).toBe(false);
   });

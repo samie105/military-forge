@@ -113,6 +113,12 @@ export const SCENARIOS: Readonly<Record<string, Scenario>> = {
     shots: [[-0.03, 'before'], [0.02, '+20 ms'], [0.04, '+40 ms'], [0.06, '+60 ms'], [0.08, '+80 ms'], [0.11, '+110 ms'], [0.15, '+150 ms'], [0.3, '+300 ms']],
     script: (t) => ({ aim: t < 1 ? aimRight : aimLeft, weapons: belt(K47.index, HAMMER.index) }),
   },
+  'turn-sweep': {
+    title: 'Facing turn, aiming across the top (the facing flips as the aim passes straight up)',
+    lead: 1,
+    shots: [[-0.03, 'before'], [0.05, '+50 ms'], [0.08, '+80 ms'], [0.1, '+100 ms'], [0.12, '+120 ms'], [0.15, '+150 ms'], [0.2, '+200 ms'], [0.35, '+350 ms']],
+    script: (t) => ({ aim: 1.2 + 0.75 * Math.min(1, Math.max(0, (t - 1) / 0.2)), weapons: belt(K47.index, HAMMER.index) }),
+  },
   takeoff: {
     title: "Jet take-off at the sim's thrust (38 m/s², kick 1.35×)",
     lead: 1,

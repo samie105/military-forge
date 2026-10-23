@@ -1,0 +1,43 @@
+{
+  "walk": {
+    "source": "100style",
+    "file": "Neutral/Neutral_FW.bvh",
+    "frames": [
+      1168,
+      1250
+    ],
+    "speed": 1.2,
+    "stance": 0.55,
+    "frames_out": 13,
+    "fps": 30,
+    "name": "100STYLE dataset (Mason, Starke, Komura, 2022)",
+    "licence": "CC BY 4.0",
+    "url": "https://www.ianxmason.com/100style/"
+  },
+  "idle_shift": {
+    "source": "cmu",
+    "file": "140_07.amc",
+    "seconds": [
+      0.0,
+      4.0
+    ],
+    "frames_out": 121,
+    "fps": 30.0,
+    "name": "CMU Graphics Lab Motion Capture Database",
+    "licence": "free for all uses; not for resale as data",
+    "url": "http://mocap.cs.cmu.edu/"
+  },
+  "idle_look": {
+    "source": "cmu",
+    "file": "140_06.amc",
+    "seconds": [
+      6.0,
+      10.0
+    ],
+    "frames_out": 121,
+    "fps": 30.0,
+    "name": "CMU Graphics Lab Motion Capture Database",
+    "licence": "free for all uses; not for resale as data",
+    "url": "http://mocap.cs.cmu.edu/"
+  }
+}

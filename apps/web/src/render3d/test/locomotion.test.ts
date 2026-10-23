@@ -8,6 +8,7 @@ import {
   RUN_ENTER,
   Spring,
   TURN_RATE,
+  TurnClock,
   aimElevation,
   deltaClip,
   facingOf,
@@ -190,6 +191,25 @@ describe('facing and aim', () => {
     }
     expect(passedCamera).toBe(true);
     expect(t).toBeCloseTo((2 * facingYaw(1)) / TURN_RATE, 2); // 120° → 80 ms
+  });
+
+  it('TurnClock eases the 120° turn over 0.1 s through facing the camera, starting and stopping at rest', () => {
+    const turn = new TurnClock();
+    turn.update(facingYaw(1), 1 / 60);
+    const yaws: number[] = [];
+    for (let i = 0; i < 10; i++) yaws.push(turn.update(facingYaw(-1), 1 / 60));
+    expect(yaws[5]).toBeCloseTo(facingYaw(-1), 9); // 6 frames
+    expect(yaws.some((y) => Math.abs(y) < 0.05 || (y > 0 && yaws[yaws.indexOf(y) + 1]! < 0))).toBe(true);
+    const steps = [facingYaw(1), ...yaws].slice(1).map((y, i) => Math.abs(y - [facingYaw(1), ...yaws][i]!));
+    expect(steps[0]! * (180 / Math.PI)).toBeLessThan(5); // eases in
+    expect(steps[5]! * (180 / Math.PI)).toBeLessThan(5); // and out
+    expect(Math.max(...steps) * (180 / Math.PI)).toBeLessThan(40);
+    expect(turn.turning).toBe(false);
+    // turning back mid-turn starts from where the body is
+    turn.update(facingYaw(1), 1 / 60);
+    const mid = turn.update(facingYaw(1), 1 / 60);
+    turn.update(facingYaw(-1), 1 / 60);
+    expect(Math.abs(turn.yaw! - mid)).toBeLessThan(0.2);
   });
 
   it('measures elevation on the facing side', () => {

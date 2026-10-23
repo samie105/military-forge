@@ -1345,3 +1345,34 @@ Spec: docs/design/character-feel-research.md §3.3, §5.1 A, §9. Animation only
   | Dual on | 134° (`hand_L`) | ≤ 16° |
 
   Every switch in the test matrix (7 weapon pairs × level, up, down and facing left × standing and running) stays under 20°/frame and settles within 0.3 s of its end. Frame strips: docs/screenshots/anim-feel/ (`switch`, `switch-back`, `pickup`, `shield`; the lab scenarios of the same names).
+- **Reloads and throws show (`render3d/actions.ts`):** the Forge's `reload_rifle` (two-handed guns), `reload_pistol` (one-handed, dual) and `throw` clips, never played before, now play as overrides sampled straight onto their bones after the mixer. Inertialization eases in and out of them, so there's no cross-fade.
+  - **Reload timing:** a reload plays while the gun in hand reloads (remote players: while the snapshot's reloading flag shows), timed to the weapon's reload at 0.75–1.6× speed. A longer reload plays the clip's ends at 0.75× and goes back and forth through its middle.
+  - **The throw:** it plays on the sim's throw event (`Avatar.threw()`, wired in `Renderer3D.toVfx`). It's the authored right-arm throw mirrored onto the left arm and the spine (the rig's left and right frames mirror as x, −y, −z, w), so the gun hand stays on the aim. It starts 0.12 s into its clip because the event is the release.
+  - **Measured:** the upper body moves ≥ 15° (up to 150°) during every reload, and the barrel is back within 2° of the aim 0.15 s after.
+- **The death beat (`render3d/death.ts`):** a soldier no longer vanishes on its death frame.
+  - **The collapse:** 0.4 s. The knees give first (the hips drop 17 cm over planted feet), then the torso folds and the head trails, with a small settle. The gun dips muzzle-down. A soldier killed in the air drops to the floor under it.
+  - **The fade:** then a 0.25 s ordered-dither dissolve, and it's hidden until the respawn.
+  - **The dissolve** is a uniform branch compiled into the dye and outline shaders (`dyeDissolve`), so no new shader program links. A dying soldier gets its own outline copy, which shares the program.
+  - **One setting:** `AvatarKit.deathStyle` (`'collapse'` by default, the doc's option (a); `'vanish'` brings back the old instant hide). The owner's call (§6 ask 2) is still open.
+  - **Respawns:** the motion and inertia now start afresh at the respawn (`revive()`), not at the death frame.
+- **Motion capture (`art/pipeline/mocap.py`, `mocap_clips.py`; the owner approved the free sources on 23 Oct):** a numpy pipeline, not Blender.
+  - **Read** BVH, ASF/AMC and glTF.
+  - **Retarget** onto shared-v1 by matching each bone's direction and twist frame against the rig's rest.
+  - **Plant** the feet by IK (held, or marching like `clips.gait`).
+  - **Stylize:** stand the spine and head up, and push arms and spine ×1.3.
+  - **Append** LINEAR clips to `rookie_anims.glb`, keeping the other 36 byte for byte.
+  - **The clips:** a planted `walk` replaces W8's unplanted one (100STYLE's neutral walk on a 0.4 s cycle, feet down 55% at 1.2 m/s), plus `idle_shift` and `idle_look` (CMU 140_07 and 140_06) for the idle variants.
+  - **Licences:** raw data stays out of the repo; sources are in `art/README.md` "Motion capture" and the credits at `/licenses/motion-data.txt`.
+  - **Walk-band skate** (contact foot speed / ground speed): 1.0 m/s 81% → 8%, 1.5 m/s 76% → 3%. 2–5 m/s is the run blend, left for the foot-skate PR.
+- **The turn step (`locomotion.ts` `TurnClock`, `FootPlanter` step, `motion.ts` `TURN_LEAD`, `inertia.ts` `RollEase`):**
+  - **The yaw** eases in and out (smootherstep) over 0.1 s for the full 120° through facing the camera, instead of a constant 1,500°/s. Turning back mid-turn starts from wherever the body is.
+  - **The feet, standing (below 0.3 m/s):** each foot steps from where it stood to its new spot within 0.2 s, lifted 4 cm. The foot already toward the new facing stays down while the other steps first, then it steps. The hips dip 1.5 cm.
+  - **The chest and head lead the hips:** an underdamped spring on the facing yaw (ω 42, ζ 0.7) gives about 3% overshoot. In the air there's no step, but a roll of up to 6° into the turn.
+  - **The gun's roll:** when the facing flips, the gun's top flips side. It now rolls over about the barrel under 20° a frame, while the barrel stays on the aim.
+  - **Measured (standing turn):** each foot slid 0.34 m on the floor before; now 0 cm on the floor, each foot moving only while lifted, both down within 0.2 s. The yaw changes 4°/frame at both ends; it was 25°/frame flat out. Aiming across the top, `hand_R` flipped 156° in a frame; now ≤ 17°.
+- **Stylized timing (`motion.ts` `TIMING`, `landingDip`, `takeoffDip`; `locomotion.ts` `TAKEOFF`):** anticipation and follow-through on the procedural signals, never on the aim.
+  - **Take-off:** a jet take-off dips the hips 3.5 cm over its first 0.1 s as it pushes off. The climb pose then comes in on a fast spring.
+  - **The landing attack:** the hips reach the dip over 3 frames at one rate (no knee over 15° a frame), then come up on an underdamped spring (ζ 0.67) with a ~6% rebound. The land clip ramps in over the same 3 frames at up to 0.6 weight.
+  - **Follow-through:** the lean settles on an underdamped spring (ζ 0.72), and the head trails the lean and swings through it. A dash coils against its direction for 35 ms, then stretches past its pose and settles (ζ 0.62).
+  - **Measured:** the climb pose at 90% came 417 ms after leaving the ground; now 183 ms. A 10 m/s landing's knee turned 31° in one frame; now ≤ 14° a frame, at the bottom in 3 frames, with a 6% rebound.
+  - **Trade-off:** that rate limit makes the landing shallower than main's: the hips drop at most 9% of the head's height (main: 14%).

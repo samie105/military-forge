@@ -1,0 +1,68 @@
+asset-check: art/character/rookie_female/rookie_female_body_lod1.glb,art/cosmetics/hair/hair_bun_lod1.glb,art/cosmetics/headgear/headgear_beret_female_lod1.glb,art/cosmetics/eyewear/eyewear_gas_mask_female_lod1.glb,art/cosmetics/gloves/gloves_tactical_female_lod1.glb,art/cosmetics/boots/boots_jungle_lod1.glb,art/cosmetics/jetpack/jetpack_rocket_female_lod1.glb  [character]
+-------------------------------------------------------------------------------------------------------------------
+INFO  file size                                                366 KB over 7 files
+INFO  body triangles hidden by parts                           129 (hair)
+PASS  triangles (LOD1)                                         1682 of 1800
+PASS  draw calls after part merge (docs/04 §5.3)               1 of 3 (7 before merging)
+PASS  texture size: boots_jungle_lod1_albedo                   128x128 (max 1024)
+PASS  texture POT: boots_jungle_lod1_albedo                    power of two
+PASS  texture size: eyewear_gas_mask_female_lod1_albedo        128x128 (max 1024)
+PASS  texture POT: eyewear_gas_mask_female_lod1_albedo         power of two
+PASS  texture size: gloves_tactical_female_lod1_albedo         128x128 (max 1024)
+PASS  texture POT: gloves_tactical_female_lod1_albedo          power of two
+PASS  texture size: hair_bun_lod1_albedo                       128x128 (max 1024)
+PASS  texture POT: hair_bun_lod1_albedo                        power of two
+PASS  texture size: headgear_beret_female_lod1_albedo          128x128 (max 1024)
+PASS  texture POT: headgear_beret_female_lod1_albedo           power of two
+PASS  texture size: jetpack_rocket_female_lod1_albedo          128x128 (max 1024)
+PASS  texture POT: jetpack_rocket_female_lod1_albedo           power of two
+PASS  texture size: rookie_female_body_lod1_albedo             256x256 (max 1024)
+PASS  texture POT: rookie_female_body_lod1_albedo              power of two
+PASS  texture size: rookie_female_body_lod1_dye_mask.png       256x256 (max 1024)
+PASS  texture POT: rookie_female_body_lod1_dye_mask.png        power of two
+PASS  texture size: hair_bun_lod1_dye_mask.png                 128x128 (max 1024)
+PASS  texture POT: hair_bun_lod1_dye_mask.png                  power of two
+PASS  texture size: headgear_beret_female_lod1_dye_mask.png    128x128 (max 1024)
+PASS  texture POT: headgear_beret_female_lod1_dye_mask.png     power of two
+PASS  texture size: eyewear_gas_mask_female_lod1_dye_mask.png  128x128 (max 1024)
+PASS  texture POT: eyewear_gas_mask_female_lod1_dye_mask.png   power of two
+PASS  texture size: gloves_tactical_female_lod1_dye_mask.png   128x128 (max 1024)
+PASS  texture POT: gloves_tactical_female_lod1_dye_mask.png    power of two
+PASS  texture size: boots_jungle_lod1_dye_mask.png             128x128 (max 1024)
+PASS  texture POT: boots_jungle_lod1_dye_mask.png              power of two
+PASS  texture size: jetpack_rocket_female_lod1_dye_mask.png    128x128 (max 1024)
+PASS  texture POT: jetpack_rocket_female_lod1_dye_mask.png     power of two
+PASS  GPU texture memory (KTX2 est.)                           0.31 MB of 1.50 MB, 14 image(s)
+PASS  dye round trip: rookie_female_body_lod1                  dyed 71%: mean 0.004 p95 0.007 (max 0.012/0.04); undyed 29%: mean 0.0 p95 0.0/255 (max 5/16)
+PASS  dye round trip: hair_bun_lod1                            undyed 99%: mean 0.0 p95 0.0/255 (max 8/32)
+PASS  dye round trip: headgear_beret_lod1                      dyed 99%: mean 0.006 p95 0.022 (max 0.015/0.06)
+PASS  dye round trip: eyewear_gas_mask_lod1                    dyed 26%: mean 0.001 p95 0.004 (max 0.015/0.06); undyed 74%: mean 0.0 p95 0.0/255 (max 8/32)
+PASS  dye round trip: gloves_tactical_lod1                     dyed 96%: mean 0.000 p95 0.001 (max 0.015/0.06); undyed 4%: mean 0.0 p95 0.0/255 (max 8/32)
+PASS  dye round trip: boots_jungle_lod1                        dyed 100%: mean 0.003 p95 0.003 (max 0.015/0.06)
+PASS  dye round trip: jetpack_rocket_lod1                      dyed 66%: mean 0.004 p95 0.005 (max 0.015/0.06); undyed 34%: mean 0.0 p95 0.0/255 (max 8/32)
+PASS  armature                                                 7 armature(s) with identical bones (assembled parts)
+PASS  deform bones (docs/04 §4.1)                              all 25 present
+PASS  sockets (docs/04 §4.1)                                   all 7 present
+PASS  no unexpected bones                                      none
+PASS  meshes skinned to the armature                           7/7
+PASS  every vertex weighted                                    0 unweighted of 2942
+PASS  ≤ 4 influences per vertex                                0 vertices over
+PASS  weights normalised                                       0 vertices off by > 2%
+PASS  sockets are non-deform (no weights)                      none weighted
+PASS  weights only on skeleton bones                           ok
+PASS  same bind pose in every file                             worst toe_R: 0.0 mm, 0.00°
+INFO  bounds (m)                                               x -0.48..+0.47  depth(y) -0.24..+0.35  z +0.01..+1.48
+PASS  feet on the ground (min z = 0)                           min z +0.014 m
+PASS  height vs hitbox top                                     1.476 m, hitbox top 1.48 m (allowed 1.41-1.63)
+PASS  faces glTF +Z (toes ahead of ankles)                     ok
+PASS  head centre vs head hitbox                               1.199 m vs 1.24 m (±0.08); head height 0.55 m vs 0.48 m
+PASS  chibi head ≈ ⅓ of height                                 head 38% of height
+INFO  hitbox source                                            packages/content/src/hitboxes.ts
+PASS  silhouette covers hitboxes (no tiny skins)               64% of the hitbox area is drawn (min 60%)
+PASS  silhouette within hitbox envelope                        3% of the silhouette is outside hitboxes x1.10 (max 25%; jetpack/arms)
+INFO  base bbox (cosmetics may grow it ≤ x1.10)                {"min": [-0.478, -0.235, 0.014], "max": [0.474, 0.35, 1.476]}
+INFO  animation clips                                          none
+PASS  custom properties (docs/04 §8)                           bodyTypes, envelopeOk, slot
+-------------------------------------------------------------------------------------------------------------------
+RESULT: PASS  (57 pass, 0 warn, 0 fail)
+

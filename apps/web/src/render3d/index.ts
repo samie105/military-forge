@@ -333,6 +333,8 @@ export class Renderer3D {
     for (const r of hitReactions(events, this.chestOf)) this.avatars.get(r.target)?.hit(r.dirX, r.dirY, r.size, r.zone, this.reducedMotion ? HIT.reduced : 1);
     // a melee hit: the attacker's swing plays from the strike where its swing wasn't sent (a remote player online)
     for (const e of events) if (e.type === 'hit' && e.source === DamageSource.Melee) this.avatars.get(e.attacker)?.struck();
+    // animation: a grenade thrown plays the thrower's throw (actions.ts)
+    for (const e of events) if (e.type === 'throw') this.avatars.get(e.owner)?.threw();
   };
 
   /** a drawn player's chest (hit directions), or null */

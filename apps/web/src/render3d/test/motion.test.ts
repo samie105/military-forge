@@ -4,7 +4,7 @@ import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { Avatar, AvatarKit } from '../avatar';
 import { toonRamp } from '../character';
-import { HIT, LEAN, MotionLayer, SQUASH, airLean, groundLean, hitReactions, hitSize, squashDepth, type MotionInput } from '../motion';
+import { HIT, LEAN, MotionLayer, SQUASH, TURN_LEAD, Wobble, airLean, groundLean, hitReactions, hitSize, squashDepth, type MotionInput } from '../motion';
 import type { PlayerView } from '../../view';
 import { playerView } from './helpers';
 import { rookieRig } from './rookieRig';
@@ -138,7 +138,8 @@ describe('landing squash', SLOW, () => {
         deepest = Math.max(deepest, a.motion.drop);
         for (const s of ['L', 'R']) lowestFoot = Math.min(lowestFoot, inst.bone(`foot_${s}`)!.getWorldPosition(new Vector3()).y);
       }
-      expect(deepest, 'hip drop at a 16 m/s landing (m)').toBeGreaterThan(0.1);
+      // (5–6 cm, attacked over 3 frames: deep enough to read, shallow enough that no knee turns more than 15° a frame)
+      expect(deepest, 'hip drop at a 16 m/s landing (m)').toBeGreaterThan(0.05);
       expect(worst / DEG, `aim ${aim}`).toBeLessThan(0.5); // the scaled squash skewed it by up to 9.2°
       expect(lowestFoot, 'feet stay on the floor').toBeGreaterThan(rest - 0.01);
     }
@@ -387,5 +388,15 @@ describe('hit reactions (the owner: "the movement when receiving bullets")', SLO
     const full = await reaction('spine2', (a) => a.hit(-1, 0, 1, HitZone.Torso));
     const reduced = await reaction('spine2', (a) => a.hit(-1, 0, 1, HitZone.Torso, HIT.reduced));
     expect(peak(reduced)).toBeLessThan(0.4 * peak(full));
+  });
+
+  it('Wobble: an underdamped spring overshoots a little and settles (the spine leading a turn: TURN_LEAD)', () => {
+    const w = new Wobble(TURN_LEAD.omega, TURN_LEAD.damping, 0);
+    let peak = 0;
+    for (let i = 0; i < 60; i++) peak = Math.max(peak, w.step(1, 1 / 60));
+    // ζ = 0.7: e^(−πζ/√(1−ζ²)) ≈ 4.6 % past the target in theory, ~3 % stepped at 60 Hz: 3–5° on a 120° turn
+    expect(peak).toBeGreaterThan(1.02);
+    expect(peak).toBeLessThan(1.07);
+    expect(w.x).toBeCloseTo(1, 3);
   });
 });

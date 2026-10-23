@@ -5,6 +5,7 @@
  * soldier; the colour is a uniform (team colours later: docs/04 §1.4).
  */
 import { BackSide, Color, MeshBasicMaterial, Vector2, type ColorRepresentation } from 'three';
+import { DISSOLVE_GLSL, dissolveTest } from './dyeMaterial';
 
 /** Warm near-black: reads against sky and ground without the harshness of pure black. */
 export const OUTLINE_COLOUR = '#1d1712';
@@ -16,13 +17,18 @@ export class OutlineMaterial extends MeshBasicMaterial {
   readonly back = { value: 0.03 };
   /** drawing-buffer size of the viewport this material is drawn into (its renderer keeps it current) */
   readonly viewport = { value: new Vector2(1280, 720) };
+  /** how far the soldier has dissolved (DyeMaterial.dissolve): a dying soldier's outline is its own copy (dying()) */
+  readonly dissolve = { value: 0 };
 
   constructor(colour: ColorRepresentation = OUTLINE_COLOUR, widthPx = 2) {
     super({ color: new Color(colour), side: BackSide });
     this.name = 'character-outline';
     this.width = { value: widthPx };
     this.onBeforeCompile = (shader) => {
-      Object.assign(shader.uniforms, { outlineWidth: this.width, outlineViewport: this.viewport, outlineBack: this.back });
+      Object.assign(shader.uniforms, { outlineWidth: this.width, outlineViewport: this.viewport, outlineBack: this.back, dyeDissolve: this.dissolve });
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', `#include <common>\n${DISSOLVE_GLSL}`)
+        .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>\n${dissolveTest('dyeDissolve')}`);
       shader.vertexShader = shader.vertexShader
         .replace('#include <common>', '#include <common>\nuniform float outlineWidth, outlineBack;\nuniform vec2 outlineViewport;')
         .replace(
@@ -47,7 +53,18 @@ export class OutlineMaterial extends MeshBasicMaterial {
   }
 
   override customProgramCacheKey(): string {
-    return 'character-outline-v2';
+    return 'character-outline-v3';
+  }
+
+  /**
+   * A copy that draws with the same program and follows this one's width and viewport, with a dissolve of its own:
+   * a dying soldier's (the outline is shared by every soldier).
+   */
+  dissolving(): OutlineMaterial {
+    const m = new OutlineMaterial(this.color, this.width.value);
+    (m as { width: { value: number } }).width = this.width;
+    (m as { viewport: { value: Vector2 } }).viewport = this.viewport;
+    return m;
   }
 
   /** Outline width in drawing-buffer pixels (CSS px × device pixel ratio). */

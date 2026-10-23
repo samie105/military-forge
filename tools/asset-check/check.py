@@ -74,7 +74,7 @@ DYE_SMALL = (0.015, 0.06, 8 / 255, 32 / 255)  # the same for ≤ 128² textures,
 FIREARMS = {"pistol", "dual", "rifle", "shotgun", "sniper", "launcher", "heavy"}  # docs/04 §4.2
 FAMILIES = FIREARMS | {"melee", "thrown", "shield"}  # docs/04 §9.5 (+ shield: the off-hand riot shield)
 AIM_POSES = {"pistol", "dual", "rifle"}  # the aim sets the clips provide (rookie.json aimPoseFallback)
-PART_SLOTS = {"headgear", "eyewear", "top", "gloves", "legs", "boots", "jetpack"}  # docs/04 §3
+PART_SLOTS = {"headgear", "eyewear", "top", "gloves", "legs", "boots", "jetpack", "hair"}  # docs/04 §3
 PART_TEX = {0: 256, 1: 128}             # max texture edge per part LOD (albedo and dye mask)
 REST_TOL = (0.001, 0.1)                 # m, degrees: a part's bind pose must match the body's
 # docs/04 §1.2 locality: the body bones a slot is worn on. A part must also stay inside the box of
@@ -87,6 +87,7 @@ REGION_BONES = {
     "jetpack": {"spine1", "spine2"},
     "top": {"pelvis", "spine1", "spine2", "clavicle_L", "clavicle_R", "upperarm_L", "upperarm_R", "forearm_L", "forearm_R"},
     "legs": {"pelvis", "thigh_L", "thigh_R", "calf_L", "calf_R"},
+    "hair": {"head", "jaw", "eye_L", "eye_R", "neck"},
 }
 HEAD_SLOTS = {"headgear", "eyewear"}  # eyewear's region also counts the default headgear
 LOCAL_MARGIN = 0.03                     # m added to the region box on every side
@@ -532,7 +533,12 @@ def check_character(r: Report, objs, args):
     meshes = [o for o in objs if o.type == "MESH"]
     tris = world_tris(meshes)
     budget = args["max_tris"] or CHAR_TRIS[args["lod"]]
-    r.ok(len(tris) <= budget, f"triangles (LOD{args['lod']})", f"{len(tris)} of {budget}")
+    # parts that replace a stretch of the body (`hidesBody`) take its triangles' place: the assembler drops them
+    hides = sorted({h for o in meshes for h in o.get("hidesBody", [])})
+    hidden = region_tris([o for o in meshes if o.get("slot", "body") == "body"], hides) if hides else 0
+    if hides:
+        r.info("body triangles hidden by parts", f"{hidden} ({', '.join(hides)})")
+    r.ok(len(tris) - hidden <= budget, f"triangles (LOD{args['lod']})", f"{len(tris) - hidden} of {budget}")
     # docs/04 §5.3: parts sharing the skeleton merge into one SkinnedMesh with one material
     # (texture array), so an assembled character costs one draw call; anything not skinned to the
     # shared skeleton stays separate.
@@ -606,9 +612,30 @@ def check_character(r: Report, objs, args):
 SLOT_TRIS = {"headgear": (450, 200), "eyewear": (150, 70), "boots": (300, 130), "gloves": (150, 70),
              "jetpack": (550, 250)}
 BODY_TRIS = (2350, 1000)
+# Slots whose parts replace a stretch of the body (`hidesBody`: hair, a top, trousers): such a part may spend the
+# triangles of the body it hides, plus this allowance (LOD0, LOD1), shared so that a body wearing all of them
+# plus one item in every other slot stays inside docs/04 §5.6.
+REPLACES = {"hair": (50, 40), "top": (0, 0), "legs": (0, 0)}
+REGION_CODES = {"hair": 1, "top": 2, "legs": 3}  # build_character.py REGIONS
 # the body plus one item in every slot must fit a character (docs/04 §5.6); top/legs/back get budgets
 # only when the slots are re-balanced to keep this true
-assert all(BODY_TRIS[i] + sum(t[i] for t in SLOT_TRIS.values()) <= CHAR_TRIS[i] for i in (0, 1)), "slot budgets exceed CHAR_TRIS"
+assert all(BODY_TRIS[i] + sum(t[i] for t in SLOT_TRIS.values()) + sum(a[i] for a in REPLACES.values()) <= CHAR_TRIS[i]
+           for i in (0, 1)), "slot budgets exceed CHAR_TRIS"
+
+
+def region_tris(objs, regions):
+    """Body triangles whose three vertices all carry one of `regions`' codes (the body's _REGION attribute and
+    its manifest's `regions` map, build_character.py 6b): what a part with `hidesBody` replaces."""
+    codes = {REGION_CODES[r] for r in regions if r in REGION_CODES}
+    n = 0
+    for o in objs:
+        attr = o.data.attributes.get("_REGION") if o.type == "MESH" else None
+        if attr is None or not codes:
+            continue
+        vals = [round(d.value) for d in attr.data]
+        o.data.calc_loop_triangles()
+        n += sum(1 for t in o.data.loop_triangles if all(vals[k] in codes for k in t.vertices))
+    return n
 
 
 def check_part(r: Report, objs, args):
@@ -622,6 +649,26 @@ def check_part(r: Report, objs, args):
          slot if slot in PART_SLOTS else f"{slot!r}: missing or not a part slot (extras exported?)")
     # no fallback budget: a part without a known slot already FAILs above
     budget = args["max_tris"] or SLOT_TRIS.get(slot, (0, 0))[args["lod"]]
+    hides = list(pmap.get("hidesBody", []))
+    if slot in REPLACES and not args["max_tris"]:
+        # the triangles of the body it hides, on the body it is fitted to at this LOD (--base names LOD0; LOD1 is
+        # the `<name>_body_lod1.glb` beside it), plus the allowance
+        hidden = 0
+        if args["base"]:
+            body_path = args["base"].split(",")[0]
+            if args["lod"] == 1 and Path(body_path.replace("_body.glb", "_body_lod1.glb")).exists():
+                body_path = body_path.replace("_body.glb", "_body_lod1.glb")
+            before = (set(bpy.data.meshes), set(bpy.data.materials), set(bpy.data.images))
+            added = import_glb(body_path, reset=False)
+            hidden = region_tris(added, hides)
+            for o in added:
+                bpy.data.objects.remove(o, do_unlink=True)
+            # and its data: the body's textures are not the part's (image_report reads every image)
+            for coll, old in zip((bpy.data.meshes, bpy.data.materials, bpy.data.images), before):
+                for d in [d for d in coll if d not in old]:
+                    coll.remove(d)
+        budget = hidden + REPLACES[slot][args["lod"]]
+        r.ok(hidden > 0, f"hides the body's {', '.join(hides) or '?'}", f"{hidden} body triangles hidden (hidesBody {hides})")
     r.ok(len(tris) <= budget, f"triangles (slot {slot}, LOD{args['lod']})", f"{len(tris)} of {budget}")
     dc = draw_calls(meshes)
     r.ok(len(meshes) == 1 and dc == 1, "one mesh, one material (docs/04 §5.3)", f"{len(meshes)} mesh(es), {dc} draw call(s)")

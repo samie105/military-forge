@@ -1,0 +1,36 @@
+{
+  "id": "hair_crop",
+  "slot": "hair",
+  "name": "Short Crop",
+  "skeleton": "shared-v1",
+  "default": false,
+  "lods": {
+    "lod0": "hair_crop.glb",
+    "lod1": "hair_crop_lod1.glb"
+  },
+  "dye": {
+    "lod0": {
+      "mask": "textures/hair_crop_dye_mask.png",
+      "albedo": "textures/hair_crop_dye_albedo.webp",
+      "defaults": {}
+    },
+    "lod1": {
+      "mask": "textures/hair_crop_lod1_dye_mask.png",
+      "albedo": "textures/hair_crop_lod1_dye_albedo.webp",
+      "defaults": {}
+    }
+  },
+  "tris": {
+    "lod0": 479,
+    "lod1": 129
+  },
+  "source": "procedural",
+  "hidesBody": [
+    "hair"
+  ],
+  "fits": [
+    "female"
+  ],
+  "attachBone": "head",
+  "socket": "socket_hat"
+}

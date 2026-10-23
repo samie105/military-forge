@@ -1,0 +1,221 @@
+{
+ "title": "Her hairstyles: Natural (her body's own), Field Bun, Cornrow Braids, Short Crop",
+ "cols": 6,
+ "cell": [
+  280,
+  330
+ ],
+ "frame": {
+  "width": 0.9,
+  "bottom": 0.55,
+  "top": 1.62
+ },
+ "defaults": {
+  "body": "characters/rookie_female/rookie_female.json"
+ },
+ "cells": [
+  {
+   "label": "Natural (her own hair): front",
+   "yaw": 0,
+   "parts": {
+    "headgear": null,
+    "hair": null
+   }
+  },
+  {
+   "label": "Natural (her own hair): 3/4",
+   "yaw": 35,
+   "parts": {
+    "headgear": null,
+    "hair": null
+   }
+  },
+  {
+   "label": "Natural (her own hair): side",
+   "yaw": 90,
+   "parts": {
+    "headgear": null,
+    "hair": null
+   }
+  },
+  {
+   "label": "Natural (her own hair): back",
+   "yaw": 180,
+   "parts": {
+    "headgear": null,
+    "hair": null
+   }
+  },
+  {
+   "label": "Natural under the Brim Helmet",
+   "yaw": 30,
+   "parts": {
+    "headgear": "headgear_brim_helmet"
+   }
+  },
+  {
+   "label": "Natural, skin_10 Cocoa",
+   "yaw": 30,
+   "parts": {
+    "headgear": null
+   },
+   "skin": "#53311f"
+  },
+  {
+   "label": "Field Bun: front",
+   "yaw": 0,
+   "parts": {
+    "headgear": null,
+    "hair": "hair_bun"
+   }
+  },
+  {
+   "label": "Field Bun: 3/4",
+   "yaw": 35,
+   "parts": {
+    "headgear": null,
+    "hair": "hair_bun"
+   }
+  },
+  {
+   "label": "Field Bun: side",
+   "yaw": 90,
+   "parts": {
+    "headgear": null,
+    "hair": "hair_bun"
+   }
+  },
+  {
+   "label": "Field Bun: back",
+   "yaw": 180,
+   "parts": {
+    "headgear": null,
+    "hair": "hair_bun"
+   }
+  },
+  {
+   "label": "Field Bun under the Beret",
+   "yaw": 30,
+   "parts": {
+    "hair": "hair_bun",
+    "headgear": "headgear_beret"
+   }
+  },
+  {
+   "label": "Field Bun, skin_10 Cocoa, rifle",
+   "yaw": 60,
+   "parts": {
+    "hair": "hair_bun",
+    "headgear": null
+   },
+   "skin": "#53311f",
+   "loco": "idle",
+   "aim": "aim_rifle_level",
+   "weapon": "k47"
+  },
+  {
+   "label": "Cornrow Braids: front",
+   "yaw": 0,
+   "parts": {
+    "headgear": null,
+    "hair": "hair_braids"
+   }
+  },
+  {
+   "label": "Cornrow Braids: 3/4",
+   "yaw": 35,
+   "parts": {
+    "headgear": null,
+    "hair": "hair_braids"
+   }
+  },
+  {
+   "label": "Cornrow Braids: side",
+   "yaw": 90,
+   "parts": {
+    "headgear": null,
+    "hair": "hair_braids"
+   }
+  },
+  {
+   "label": "Cornrow Braids: back",
+   "yaw": 180,
+   "parts": {
+    "headgear": null,
+    "hair": "hair_braids"
+   }
+  },
+  {
+   "label": "Cornrow Braids under the Beret",
+   "yaw": 30,
+   "parts": {
+    "hair": "hair_braids",
+    "headgear": "headgear_beret"
+   }
+  },
+  {
+   "label": "Cornrow Braids, skin_10 Cocoa, rifle",
+   "yaw": 60,
+   "parts": {
+    "hair": "hair_braids",
+    "headgear": null
+   },
+   "skin": "#53311f",
+   "loco": "idle",
+   "aim": "aim_rifle_level",
+   "weapon": "k47"
+  },
+  {
+   "label": "Short Crop: front",
+   "yaw": 0,
+   "parts": {
+    "headgear": null,
+    "hair": "hair_crop"
+   }
+  },
+  {
+   "label": "Short Crop: 3/4",
+   "yaw": 35,
+   "parts": {
+    "headgear": null,
+    "hair": "hair_crop"
+   }
+  },
+  {
+   "label": "Short Crop: side",
+   "yaw": 90,
+   "parts": {
+    "headgear": null,
+    "hair": "hair_crop"
+   }
+  },
+  {
+   "label": "Short Crop: back",
+   "yaw": 180,
+   "parts": {
+    "headgear": null,
+    "hair": "hair_crop"
+   }
+  },
+  {
+   "label": "Short Crop under the Beret",
+   "yaw": 30,
+   "parts": {
+    "hair": "hair_crop",
+    "headgear": "headgear_beret"
+   }
+  },
+  {
+   "label": "Short Crop, skin_10 Cocoa, rifle",
+   "yaw": 60,
+   "parts": {
+    "hair": "hair_crop",
+    "headgear": null
+   },
+   "skin": "#53311f",
+   "loco": "idle",
+   "aim": "aim_rifle_level",
+   "weapon": "k47"
+  }
+ ]
+}

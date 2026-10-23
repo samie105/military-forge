@@ -57,6 +57,19 @@ export interface DyeColours {
 
 const samplers = (prefix: string) => Array.from({ length: DYE_LAYERS }, (_, i) => `${prefix}${i}`);
 
+/** A 4×4 ordered-dither threshold (Bayer) per screen pixel, for the dissolve. */
+export const DISSOLVE_GLSL = `uniform float dyeDissolve;
+float dyeBayer( vec2 p ) {
+  const float m[ 16 ] = float[ 16 ]( 0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0 );
+  ivec2 i = ivec2( mod( p, 4.0 ) );
+  return ( m[ i.x + i.y * 4 ] + 0.5 ) / 16.0;
+}`;
+
+/** The dissolve's test at the top of a fragment shader (a uniform branch: whole soldiers never take it). */
+export function dissolveTest(uniform: string): string {
+  return `if ( ${uniform} > 0.0 && dyeBayer( gl_FragCoord.xy ) < ${uniform} ) discard;`;
+}
+
 export class DyeMaterial extends MeshToonMaterial {
   readonly dye: DyeColours = { primary: new Color(1, 1, 1), secondary: new Color(1, 1, 1), accent: new Color(1, 1, 1), skin: new Color(1, 1, 1), team: new Color(0, 0, 0) };
   /** primary, secondary, accent per layer (layer × 3 + channel): the colours the shader multiplies in */
@@ -69,6 +82,11 @@ export class DyeMaterial extends MeshToonMaterial {
    * (render3d/lighting.ts picks colour and strength per map). Strength 0 = off.
    */
   readonly rim = { colour: new Color(0x7fb8ff), strength: { value: 0 } };
+  /**
+   * How far the soldier has dissolved (0 whole … 1 gone): an ordered-dither screen door, so a dying soldier fades
+   * without turning transparent (that would be another shader program) (render3d/death.ts).
+   */
+  readonly dissolve = { value: 0 };
   private readonly albedos: { value: Texture }[];
   private readonly masks: { value: Texture }[];
 
@@ -85,6 +103,7 @@ export class DyeMaterial extends MeshToonMaterial {
       dyeRimStrength: this.rim.strength,
       dyeSkin: { value: this.dye.skin },
       dyeTeam: { value: this.dye.team },
+      dyeDissolve: this.dissolve,
     };
     // layer 0's albedo is `map` itself (so three sets up vMapUv); the others get their own samplers
     samplers('dyeAlbedo').forEach((name, i) => i > 0 && (uniforms[name] = this.albedos[i]!));
@@ -106,8 +125,10 @@ export class DyeMaterial extends MeshToonMaterial {
           uniform vec3 dyeColours[ ${DYE_LAYERS * 3} ], dyeBodyDefaults[ 3 ];
           uniform vec3 dyeSkin, dyeTeam, dyeRimColour;
           uniform float dyeRimStrength;
-          varying float vTexLayer;`,
+          varying float vTexLayer;
+          ${DISSOLVE_GLSL}`,
         )
+        .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>\n${dissolveTest('dyeDissolve')}`)
         .replace(
           '#include <map_fragment>',
           // gradients from outside the branches: a 2×2 quad can straddle two parts
@@ -134,7 +155,7 @@ export class DyeMaterial extends MeshToonMaterial {
   }
 
   override customProgramCacheKey(): string {
-    return 'character-dye-v4';
+    return 'character-dye-v5';
   }
 
   /** The dye albedo + mask of one layer; null = unused (white, undyed). */

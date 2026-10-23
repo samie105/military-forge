@@ -1,0 +1,40 @@
+{
+  "id": "hair_bun",
+  "slot": "hair",
+  "name": "Field Bun",
+  "skeleton": "shared-v1",
+  "default": false,
+  "lods": {
+    "lod0": "hair_bun.glb",
+    "lod1": "hair_bun_lod1.glb"
+  },
+  "dye": {
+    "lod0": {
+      "mask": "textures/hair_bun_dye_mask.png",
+      "albedo": "textures/hair_bun_dye_albedo.webp",
+      "defaults": {
+        "secondary": "#687345"
+      }
+    },
+    "lod1": {
+      "mask": "textures/hair_bun_lod1_dye_mask.png",
+      "albedo": "textures/hair_bun_lod1_dye_albedo.webp",
+      "defaults": {
+        "secondary": "#687345"
+      }
+    }
+  },
+  "tris": {
+    "lod0": 467,
+    "lod1": 117
+  },
+  "source": "procedural",
+  "hidesBody": [
+    "hair"
+  ],
+  "fits": [
+    "female"
+  ],
+  "attachBone": "head",
+  "socket": "socket_hat"
+}

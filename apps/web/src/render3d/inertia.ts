@@ -255,3 +255,59 @@ export class WorldEase {
     this.live = false;
   }
 }
+
+const _ru = new Vector3();
+const _rc = new Vector3();
+
+/**
+ * An aimed gun's roll about its own barrel, eased (the barrel itself stays exact). Turning to face the other way
+ * flips which side of the gun is its top (the aim layer keeps the top toward the sky for the facing): instead of a
+ * half turn in one frame, the gun rolls over at under 20° a frame (quickestHalflife).
+ */
+export class RollEase {
+  private angle = 0;
+  private rate = 0;
+  private readonly last = new Vector3(0, 1, 0);
+  private has = false;
+  private changed = false;
+  private halflife = INERTIA.halflife;
+
+  trigger(): void {
+    this.changed = true;
+  }
+
+  reset(): void {
+    this.angle = this.rate = 0;
+    this.has = this.changed = false;
+  }
+
+  /** `up` (in/out): the gun's top as the aim layer wants it, turned back about `barrel` by what's left of a roll. */
+  apply(barrel: Vector3, up: Vector3, dt: number): Vector3 {
+    if (dt > INERTIA.maxDt) this.reset();
+    if (this.changed && this.has) {
+      // the old top, carried onto the new barrel, against the new top: the signed angle about the barrel
+      _ru.copy(this.last).addScaledVector(barrel, -this.last.dot(barrel));
+      if (_ru.lengthSq() > 1e-8) {
+        _ru.normalize();
+        const c = Math.min(1, Math.max(-1, _ru.dot(up)));
+        const s = _rc.crossVectors(up, _ru).dot(barrel);
+        this.angle = Math.atan2(s, c);
+        this.rate = 0;
+        this.halflife = quickestHalflife(Math.abs(this.angle));
+      }
+    }
+    this.changed = false;
+    if (this.angle !== 0) {
+      const y = halflifeRate(this.halflife);
+      const e = Math.exp(-y * dt);
+      const j1 = this.rate + this.angle * y;
+      this.angle = e * (this.angle + j1 * dt);
+      this.rate = e * (this.rate - j1 * y * dt);
+      if (Math.abs(this.angle) < 1e-3 && Math.abs(this.rate) < 1e-2) this.angle = this.rate = 0;
+      else up.applyAxisAngle(barrel, this.angle);
+    }
+    this.last.copy(up);
+    this.has = true;
+    return up;
+  }
+}

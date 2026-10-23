@@ -42,8 +42,11 @@ import shutil
 import sys
 from pathlib import Path
 
+import heapq
+
 import bmesh
 import bpy
+import mathutils
 import numpy as np
 from mathutils import Matrix, Vector
 from mathutils.bvhtree import BVHTree
@@ -67,7 +70,10 @@ BODY_BLEND = Path(argv[argv.index("--body-blend") + 1]) if "--body-blend" in arg
 BODY_FITS = {"jetpack": "back", "eyewear": "face", "headgear": "head", "gloves": "rebuild"}
 
 # LOD0 / LOD1 triangle budgets per slot. Body 2,350 + one item per slot ≤ 3,950 tris (LOD1 1,720).
-SLOT_TRIS = {"headgear": (450, 200), "eyewear": (150, 70), "boots": (300, 130), "gloves": (150, 70), "jetpack": (550, 250)}
+SLOT_TRIS = {"headgear": (450, 200), "eyewear": (150, 70), "boots": (300, 130), "gloves": (150, 70), "jetpack": (550, 250),
+             # a hairstyle replaces the body's own hair (`hidesBody`): its budget is those triangles plus
+             # HAIR_ALLOWANCE (hair_lod; tools/asset-check/check.py REPLACES)
+             }
 TEX = (256, 128)
 P, S, A, G, N = (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1), (0, 0, 0, 0)
 
@@ -344,8 +350,8 @@ class Item:
             bpy.ops.mesh.primitive_cone_add(vertices=verts, radius1=r, radius2=r2, depth=depth, location=c, rotation=ang)
         return self._add(bpy.context.active_object, col, ch, bevel)
 
-    def torus(self, c, major, minor, col, ch, scale=(1, 1, 1), rot=(0, 0, 0), segs=16):
-        bpy.ops.mesh.primitive_torus_add(major_radius=major, minor_radius=minor, major_segments=segs, minor_segments=6,
+    def torus(self, c, major, minor, col, ch, scale=(1, 1, 1), rot=(0, 0, 0), segs=16, minor_segs=6):
+        bpy.ops.mesh.primitive_torus_add(major_radius=major, minor_radius=minor, major_segments=segs, minor_segments=minor_segs,
                                          location=c, rotation=[math.radians(a) for a in rot])
         o = bpy.context.active_object
         o.scale = scale
@@ -551,8 +557,215 @@ ITEMS = [
     ("boots_jungle", "boots", "Jungle Boots", jungle_boots),
     ("gloves_tactical", "gloves", "Tactical Gloves", tactical_gloves),
 ]
-RIGID = {"headgear": "head", "eyewear": "head", "jetpack": "spine2"}
-SOCKET = {"headgear": "socket_hat", "eyewear": "socket_hat", "jetpack": "socket_jetpack"}
+RIGID = {"headgear": "head", "eyewear": "head", "jetpack": "spine2", "hair": "head"}
+SOCKET = {"headgear": "socket_hat", "eyewear": "socket_hat", "jetpack": "socket_jetpack", "hair": "socket_hat"}
+
+
+# ------------------------------------------------------------------ hair (the female body's styles, docs/04 §3)
+# A hairstyle replaces the body's own hair (`hidesBody: ["hair"]`: the body triangles whose vertices carry the
+# _REGION hair code, build_character.py 6b). Each LOD is built from that body LOD's own hair faces, deflated toward
+# the skull away from the hairline and styled: at the hairline it stays exactly on the body's vertices, so it meets
+# the face, ears and nape that stay with no seam. Hair is painted, not dyed (a primary dye would recolour it with
+# the uniform); bands take the secondary or accent dye. Concept: art/cosmetics/source/concepts/hair_styles.jpg.
+
+HAIR, HAIR_D, HAIR_L, HAIR_S = (0.15, 0.095, 0.065), (0.055, 0.035, 0.025), (0.30, 0.19, 0.12), (0.22, 0.15, 0.11)
+REGION_HAIR = 1  # build_character.py REGIONS
+HAIR_ALLOWANCE = {False: 50, True: 40}  # tris over the hair a style hides (LOD0, LOD1): check.py REPLACES
+SKULL_DEPTH, HAIRLINE = 0.018, 0.035  # m: how far the afro deflates, over how far from the hairline
+
+
+def smoothstep(e0, e1, x):
+    t = min(max((x - e0) / (e1 - e0), 0.0), 1.0)
+    return t * t * (3 - 2 * t)
+
+
+def hair_region(src):
+    """`src`'s hair faces as a bmesh, each vertex's outward normal (the generated head has flipped ones, so they
+    point away from the hair cap's centre) and its distance along the surface from the hairline: the ring of
+    vertices shared with the body faces that stay."""
+    me = src.data
+    hair = [abs(d.value - REGION_HAIR) < 0.5 for d in me.attributes["_REGION"].data]
+    faces = [p for p in me.polygons if all(hair[i] for i in p.vertices)]
+    stays = {i for p in me.polygons if not all(hair[i] for i in p.vertices) for i in p.vertices}
+    bm = bmesh.new()
+    vmap = {}
+    for p in faces:
+        for i in p.vertices:
+            if i not in vmap:
+                vmap[i] = bm.verts.new(src.matrix_world @ me.vertices[i].co)
+        try:
+            bm.faces.new([vmap[i] for i in p.vertices])
+        except ValueError:
+            pass
+    bm.verts.ensure_lookup_table()
+    bm.normal_update()
+    normal = {}
+    for i, bv in vmap.items():
+        n = me.vertices[i].normal.copy()
+        normal[bv.index] = n if n.dot(bv.co - CAP_C) >= 0 else -n
+    dist = {bv.index: (0.0 if i in stays else 9.0) for i, bv in vmap.items()}
+    heap = [(0.0, bv.index) for i, bv in vmap.items() if i in stays]
+    heapq.heapify(heap)
+    while heap:
+        d, k = heapq.heappop(heap)
+        if d > dist[k]:
+            continue
+        for e in bm.verts[k].link_edges:
+            o = e.other_vert(bm.verts[k])
+            nd = d + e.calc_length()
+            if nd < dist[o.index]:
+                dist[o.index] = nd
+                heapq.heappush(heap, (nd, o.index))
+    return bm, normal, dist
+
+
+def scalp(src, thick):
+    """The styled hair surface: `src`'s hair faces deflated toward the skull and pushed back out by the style's
+    `thick(p)` (m), both easing in from zero at the hairline. Returns the object and each vertex's distance from
+    the hairline."""
+    bm, normal, dist = hair_region(src)
+    for v in bm.verts:
+        w = smoothstep(0.0, HAIRLINE, dist[v.index])
+        n = normal[v.index]
+        v.co -= n * SKULL_DEPTH * w
+        v.co += n * thick(v.co) * w
+    me = bpy.data.meshes.new("scalp")
+    bm.to_mesh(me)
+    bm.free()
+    o = bpy.data.objects.new("scalp", me)
+    scene.collection.objects.link(o)
+    return o, dist
+
+
+def paint(obj, colour):
+    """Col + Dye corner colours from `colour(centre, normal) -> (rgb, dye channel)`, like paint_join."""
+    me = obj.data
+    c_attr = me.color_attributes.new("Col", "BYTE_COLOR", "CORNER")
+    d_attr = me.color_attributes.new("Dye", "BYTE_COLOR", "CORNER")
+    for poly in me.polygons:
+        col, ch = colour(poly.center, poly.normal)
+        c = [srgb_to_linear(min(1.0, x)) for x in col]
+        for li in poly.loop_indices:
+            c_attr.data[li].color = (*c, 1.0)
+            d_attr.data[li].color = tuple(float(v) for v in (list(ch) + [0, 0, 0, 0])[:4])
+
+
+def back_of_head(z):
+    """The deepest y of the hair cap at height z (its back surface)."""
+    t = max(-1.0, min(1.0, (z - CAP_C.z) / CAP_R.z))
+    return CAP_C.y + CAP_R.y * math.sqrt(1 - t * t)
+
+
+def bun(it, lod1):
+    """Field Bun: smooth hair drawn back to one compact bun low at the nape, in an olive band. It stands out from this
+    body's own head (not the Rookie's hair cap, which her head sits well inside) as far as the envelope allows, so
+    the strict envelope (docs/04 §1.2) never has to flatten it."""
+    z = NECK_Z + 0.11
+    back = max((body.matrix_world @ v.co).y for v in body.data.vertices
+               if abs((body.matrix_world @ v.co).x) < 0.04 and abs((body.matrix_world @ v.co).z - z) < 0.015)
+    room = ENV_CHECK[1][1] - envelope.MARGIN - 0.002 - back  # behind her head at the bun, inside the envelope
+    ry = max(0.03, min(0.05, room + 0.012))  # the bun's depth: about 1.2 cm of it sunk into the head
+    c = Vector((0, back + room - ry, z))
+    log(f"  {it.iid}: the bun stands {room * 100:.1f} cm off her head, {ry * 200:.1f} cm deep")
+    n = (6, 4, 3) if lod1 else (10, 6, 4)
+    it.ellipsoid(c, (0.062, ry, 0.056), HAIR, N, segs=n[0], rings=n[1])
+    it.torus(c + Vector((0, -ry * 0.1, 0.0)), 0.058, 0.008, OLIVE, S, scale=(1, 0.9, 1), rot=(90, 0, 0), segs=n[0],
+             minor_segs=n[2])  # the band round its middle
+
+
+def braid_tails(it, lod1):
+    """Cornrow Braids: two short braids from behind the ears to the nape, each in a teal band (LOD1: one tapered
+    plait each, too small at that distance for a band)."""
+    for side in (-1, 1):
+        top = Vector((side * 0.15, back_of_head(NECK_Z + 0.12) - 0.07, NECK_Z + 0.12))
+        if lod1:
+            it.ellipsoid(top + Vector((-side * 0.008, 0.012, -0.034)), (0.021, 0.021, 0.06), HAIR, N, segs=6, rings=3)
+            continue
+        k = 3
+        for i in range(k):
+            c = top + Vector((-side * 0.008 * i, 0.012 * i, -0.034 * i))
+            it.ellipsoid(c, (0.021, 0.021, 0.026), HAIR if i % 2 else HAIR_S, N, segs=6, rings=3,
+                         rot=(0, side * 25 * (1 if i % 2 else -1), 0))
+        it.torus(top + Vector((-side * 0.008 * k, 0.012 * k, -0.034 * k + 0.02)), 0.02, 0.006, TEAL, A, segs=6, minor_segs=3)
+
+
+HAIR_STYLES = {
+    # Field Bun: drawn back sleek, a few raised strands toward the bun
+    "hair_bun": {"thick": lambda p: 0.004, "addons": bun,
+                 "colour": lambda c, n: ((HAIR_L if abs(math.sin(math.atan2(c.x, c.z - CAP_C.z) * 9)) > 0.93 else HAIR), N)},
+    # Cornrow Braids: rows straight back from the hairline, eight across the head, the parting lines between them
+    "hair_braids": {"thick": lambda p: 0.006, "addons": braid_tails,
+                    "colour": lambda c, n: ((HAIR_D if abs(math.sin(math.atan2(c.x, c.z - CAP_C.z) * 8)) < 0.22 else
+                                             HAIR_L if abs(math.sin(math.atan2(c.x, c.z - CAP_C.z) * 8)) > 0.9 else HAIR), N)},
+    # Short Crop: a soft top with a little height at the front, the sides and back faded short, one side part
+    "hair_crop": {"thick": lambda p: 0.003 + 0.017 * smoothstep(NECK_Z + 0.27, NECK_Z + 0.36, p.z)
+                  + 0.006 * smoothstep(HEAD_Y, HEAD_Y - 0.12, p.y) * smoothstep(NECK_Z + 0.30, NECK_Z + 0.38, p.z)
+                  + 0.003 * mathutils.noise.noise(p * 60),
+                  "addons": None,
+                  "colour": lambda c, n: (((0.44, 0.30, 0.22) if 0.075 < c.x < 0.09 and c.y < HEAD_Y and c.z > NECK_Z + 0.3 else
+                                           HAIR_S if c.z < NECK_Z + 0.27 else HAIR), N)},
+}
+
+
+def hair_lod(iid, src, size, lod1):
+    """One LOD of a hairstyle on body LOD `src`: the styled scalp plus its pieces, and a 3×-subdivided copy painted
+    with the style's fine detail (rows, partings), which the LOD's textures are baked from."""
+    style = HAIR_STYLES[iid]
+    lo, _ = scalp(src, style["thick"])
+    n_scalp = len(lo.data.vertices)  # joining keeps the active object's vertices first: the add-ons come after
+    fine = lo.copy()
+    fine.data = lo.data.copy()
+    scene.collection.objects.link(fine)
+    bm = bmesh.new()
+    bm.from_mesh(fine.data)
+    bmesh.ops.subdivide_edges(bm, edges=bm.edges[:], cuts=3, use_grid_fill=True)
+    bm.to_mesh(fine.data)
+    bm.free()
+    for o in (lo, fine):
+        paint(o, style["colour"])
+    if style["addons"]:
+        for target in (lo, fine):
+            it = Item(iid, "hair", iid)
+            style["addons"](it, lod1)
+            extra = paint_join(it)
+            for o in scene.objects:
+                o.select_set(o in (target, extra))
+            bpy.context.view_layer.objects.active = target
+            bpy.ops.object.join()
+    lo.name = f"{iid}{'_lod1' if lod1 else ''}"
+    # the budget: the body's hair it hides plus the allowance (tools/asset-check/check.py REPLACES). Only the scalp
+    # is decimated: the hairline ring, where it meets the body, and the add-ons stay whole (decimation would crush a
+    # small closed bun or plait first)
+    code = [round(d.value) for d in src.data.attributes["_REGION"].data]
+    src.data.calc_loop_triangles()
+    budget = sum(1 for t in src.data.loop_triangles if all(code[i] == REGION_HAIR for i in t.vertices)) + HAIR_ALLOWANCE[lod1]
+    ring = {tuple(round(c, 5) for c in src.matrix_world @ src.data.vertices[i].co) for p in src.data.polygons
+            if not all(code[i] == REGION_HAIR for i in p.vertices) for i in p.vertices if code[i] == REGION_HAIR}
+    free = lo.vertex_groups.new(name="_free")
+    free.add([v.index for v in lo.data.vertices if v.index < n_scalp and tuple(round(c, 5) for c in v.co) not in ring],
+             1.0, "REPLACE")
+    t = decimate_free(lo, budget)
+    lo.vertex_groups.remove(lo.vertex_groups["_free"])
+    if t > budget:
+        raise RuntimeError(f"{lo.name}: {t} tris, over its budget {budget} (the hair it hides + {HAIR_ALLOWANCE[lod1]})")
+    for o in scene.objects:
+        o.select_set(o == lo)
+    bpy.context.view_layer.objects.active = lo
+    bpy.ops.object.shade_smooth()
+    unwrap(lo)
+    stem = f"{iid}{'_lod1' if lod1 else ''}"
+    alb = bake_attr(lo, fine, "Col", size, f"{stem}_albedo", data=False)
+    msk = bake_attr(lo, fine, "Dye", size, f"{stem}_mask", data=True)
+    bpy.data.objects.remove(fine, do_unlink=True)
+    return lo, tri_count(lo.data), alb, msk
+
+
+# (id, slot, name, None): built by hair_lod on the female body only (fits: female)
+HAIR_ITEMS = [
+    ("hair_bun", "hair", "Field Bun", None),
+    ("hair_braids", "hair", "Cornrow Braids", None),
+    ("hair_crop", "hair", "Short Crop", None),
+]
 
 
 # ------------------------------------------------------------------ generated sources (Higgsfield)
@@ -807,6 +1020,25 @@ def paint_join(it):
 def tri_count(m):
     m.calc_loop_triangles()
     return len(m.loop_triangles)
+
+
+def decimate_free(obj, target):
+    """Collapse-decimate only the vertices in the `_free` group down to `target` triangles: a part's edge that must
+    stay on the body's vertices (a hairline, a hem) is left out of the group."""
+    for k in (1.0, 0.97, 0.92, 0.85, 0.75, 0.6, 0.45):
+        n = tri_count(obj.data)
+        if n <= target:
+            break
+        gi = obj.vertex_groups["_free"].index
+        share = sum(1 for v in obj.data.vertices if any(g.group == gi for g in v.groups)) / max(1, len(obj.data.vertices))
+        bpy.context.view_layer.objects.active = obj
+        mod = obj.modifiers.new("decimate", "DECIMATE")
+        mod.use_collapse_triangulate = True
+        mod.vertex_group = "_free"
+        # only the free share shrinks: ask it for what the pinned share leaves of the budget
+        mod.ratio = max(0.05, min(1.0, (target - n * (1 - share)) / max(1.0, n * share) * k))
+        bpy.ops.object.modifier_apply(modifier=mod.name)
+    return tri_count(obj.data)
 
 
 def decimate(obj, target):
@@ -1119,8 +1351,15 @@ def finish(iid, slot, name, lods, gen, extras, own=False):
 body.hide_set(True)
 index = {}
 OWN = set()  # items made for this body only: their manifest's top level is this body's
-for iid, slot, name, build in ITEMS:
-    if ONLY and iid not in ONLY or BODY != "male" and slot not in BODY_FITS:
+for iid, slot, name, build in ITEMS + (HAIR_ITEMS if BODY == "female" else []):
+    if ONLY and iid not in ONLY or BODY != "male" and slot not in BODY_FITS and slot != "hair":
+        continue
+    if slot == "hair":
+        lods = {suffix: hair_lod(iid, src, TEX[k], bool(suffix)) for k, (suffix, src) in enumerate((("", body), ("_lod1", body_lod1)))}
+        for suffix, (lo, t, _, _) in lods.items():
+            envelope.clamp(lo, ENV_CHECK)
+        OWN.add(iid)
+        finish(iid, slot, name, lods, None, {"hidesBody": ["hair"], "fits": [BODY]}, own=True)
         continue
     it = Item(iid, slot, name)
     build(it)

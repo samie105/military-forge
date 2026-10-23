@@ -41,6 +41,26 @@
       "manifest": "gloves/gloves_tactical.json"
     }
   ],
+  "hair": [
+    {
+      "id": "hair_braids",
+      "name": "Cornrow Braids",
+      "default": false,
+      "manifest": "hair/hair_braids.json"
+    },
+    {
+      "id": "hair_bun",
+      "name": "Field Bun",
+      "default": false,
+      "manifest": "hair/hair_bun.json"
+    },
+    {
+      "id": "hair_crop",
+      "name": "Short Crop",
+      "default": false,
+      "manifest": "hair/hair_crop.json"
+    }
+  ],
   "headgear": [
     {
       "id": "headgear_bandana",

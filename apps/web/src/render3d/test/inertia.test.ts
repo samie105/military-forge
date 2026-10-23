@@ -139,3 +139,23 @@ describe('WorldEase (an aimed gun’s hand)', () => {
     }
   });
 });
+
+describe('RollEase (a gun rolling over when the facing flips)', () => {
+  it('turns the top about the barrel from where it was, the barrel untouched, under 20° a frame, settling within 0.5 s', async () => {
+    const { RollEase } = await import('../inertia');
+    const roll = new RollEase();
+    const barrel = new Vector3(0, 1, 0); // aiming straight up
+    roll.apply(barrel, new Vector3(-1, 0, 0), 1 / 60); // facing right: the top toward the body (−x)
+    roll.trigger();
+    let last = new Vector3(-1, 0, 0);
+    let frames = 0;
+    for (let i = 0; i < 40; i++) {
+      const up = roll.apply(barrel, new Vector3(1, 0, 0), 1 / 60); // facing left: +x
+      expect(Math.abs(up.dot(barrel))).toBeLessThan(1e-9);
+      expect((up.angleTo(last) * 180) / Math.PI).toBeLessThan(20);
+      if (up.angleTo(new Vector3(1, 0, 0)) > 0.01) frames = i + 1;
+      last = up.clone();
+    }
+    expect(frames / 60).toBeLessThan(0.5);
+  });
+});

@@ -9,7 +9,8 @@ Sources and authoring scripts for the game's art: the Rookie (base soldier), its
 | B: starter cosmetics + 5 weapons | weapons: 11 models (#5); cosmetics: 11 items + 3 default parts (#8) |
 | Done: Street Market kit | #10: 24-piece kit + compiled 128 × 62 m map (120 m of play between edge walls), collision from the kit's extras, 6 ad surfaces |
 | Hero cosmetics from Higgsfield | 5 of the 11 starter items rebuilt from generated models |
-| **The female soldier** | **this branch**: a second base body on the Rookie's skeleton, her fits of the shared items, body regions |
+| The female soldier | #203: a second base body on the Rookie's skeleton, her fits of the shared items, body regions |
+| **Her hairstyles** | **this branch**: Field Bun, Cornrow Braids, Short Crop, each replacing her own hair |
 
 ## The female soldier (`rookie_female`, 22 Oct 2026)
 
@@ -112,6 +113,35 @@ Each item is built exactly as for the Rookie, then fitted to her. The fits ship 
 - **Gloves (`poke_sweep`):** a skin vertex now counts as poking through only if a ray-parity test agrees it is outside the glove. The nearest glove face alone misread her LOD1 wrist: in the reload and idle poses the nearest face there is a folded or overlapping one, which read the skin as up to 10.7 mm outside, while rays from it cross the glove an odd number of times (inside). A real poke still fails the build; the parity test only drops these false readings, so the Rookie's gloves pass as before.
 - **Asset check:** [her checks](character/rookie_female/checks/).
 
+
+## Her hairstyles (22 Oct 2026)
+
+![Hairstyles](screenshots/rookie-f-hair.png)
+*Natural (her own hair), Field Bun, Cornrow Braids and Short Crop: four views each, under a Beret, and with another skin tone and a rifle held.*
+
+Each style replaces her own hair. She wears a short natural afro, part of her mesh; that is `hair_body`, "Natural".
+- **Hiding:** the style's manifest says `hidesBody: ["hair"]`, and the assembler drops the body triangles whose vertices all carry the `_REGION` hair code (479 / 129 at LOD0 / LOD1).
+- **Under headgear:** a hat with `hidesHair` (the Brim Helmet, the Combat Helmet) hides the style instead, and her own hair shows under it. The Field Cap, Beret and Bandana sit over a style.
+- **No hat:** content adds `headgear_none` "None" (wire 46, starter), so a style can be seen in full.
+
+**Concept:** one sheet (GPT Image 2.5 high 2k, 4:3, her concept as the reference): job `a39c2d25…`, [concepts/hair_styles.jpg](cosmetics/source/concepts/hair_styles.jpg).
+
+<details><summary>Prompt (exact text)</summary>
+
+"Hairstyle reference sheet for a 3D game character: the same female soldier as in the reference image (same vinyl designer-toy style, same chibi head and face, same warm apricot skin, same sand uniform collar), shown as head-and-shoulders busts on a plain flat light-grey background. Three rows, one hairstyle per row, and in each row three views of the same head side by side with clear gaps: front, left side profile, back. Row 1, FIELD BUN: her black natural hair pulled back smooth and neat over the head into one round, compact bun low at the nape, held by a thin olive-green band; a neat practical military look. Row 2, CORNROW BRAIDS: neat straight cornrows running from the hairline straight back over the head, about seven raised rows, ending in two short thick braids that hang just to the nape, each tied with a small teal band. Row 3, SHORT CROP: a short tapered natural crop, about two centimetres of soft tight curls on top with a little more height at the front, the sides and back faded very short, with one clean shaved side part line. All three are original, practical, tidy hairstyles for a capable soldier; feminine but never glamorous. Hair is dark brown-black with soft toy-like sculpted volume, chunky readable shapes, no fine strands. No text, no labels, no logos, no extra people."
+
+</details>
+
+**Built in Blender** (`build_cosmetics.py --body female`, `hair_lod`), each LOD from that body LOD's own hair faces:
+1. **Deflated toward the skull:** 1.8 cm, easing in over 3.5 cm from the hairline, where it stays exactly on the body's vertices. It meets her forehead, ears and nape with no seam.
+2. **Styled:**
+   - **Field Bun:** sleek, a few raised strands, one compact bun low at the nape with an olive band round it (secondary dye). The bun is placed from her own head, out as far as the strict envelope allows (7 cm), so the envelope never has to flatten it.
+   - **Cornrow Braids:** eight rows straight back from the hairline, partings baked from a 3×-subdivided copy, and two short three-plait braids from behind the ears to the nape in teal bands (accent dye). At LOD1 each braid is one tapered plait with no band.
+   - **Short Crop:** a soft top with a little height at the front, the sides and back faded short, one shaved side-part line.
+3. **Decimated** to the hair it hides plus 50 / 40 triangles (`check.py` `REPLACES`). Only the scalp is decimated: the hairline stays on the body's vertices, and the bun and braids stay whole (a first build crushed the small closed bun to a sliver). Rigid to `head` like a hat.
+   - LOD0 / LOD1 triangles: Field Bun 488 / 146, Cornrow Braids 450 / 163, Short Crop 494 / 129 (budgets 529 / 169).
+
+Hair is painted, not dyed: a primary dye would recolour it with the uniform.
 
 ![Before / after](screenshots/hero-cosmetics.png)
 *Top: the procedural items from #8. Bottom: the same item ids rebuilt from Higgsfield-generated models, in the Rookie's painted vinyl style.*
@@ -246,7 +276,7 @@ characters/rookie/
   rookie.json              manifest: LODs, anims, dye textures + default dyes, clip list, upper-body bones, aim angles
   rookie_body.glb          LOD0 body: 3,300 tris, 512² albedo; no jetpack, no clips
   rookie_body_lod1.glb     LOD1 body: 1,450 tris, 256²
-  rookie_anims.glb         shared skeleton + 30 clips (no mesh)
+  rookie_anims.glb         shared skeleton + 39 clips (no mesh; 3 from motion capture, see "Motion capture")
   textures/                rookie_body[_lod1]_dye_mask.png, _dye_albedo.webp
 cosmetics/jetpack/
   jetpack_twin_tank.json   slot jetpack, attachBone spine2, socket_jetpack
@@ -279,6 +309,29 @@ Aim poses and actions are **solved, not hand-keyed**: each key says where the gr
   - `build_character.py` asserts the reach in every rifle pose and fails the build if it breaks. Worst margins today: 1.2 cm to `socket_offhand_IK`, and 2.7–3.4 cm to the offhand nodes of the K-47, Breacher, Widow, Thumper and Shredder.
   - The review measured the old poses 3.4–7.5 cm out of reach, with the left arm locked straight.
 - **W1:** the guns sit at ~0.76 m (chest) while the sim's aim pivot is 1.08 m (docs/02 §6). Draw tracers from the weapon's `muzzle` node to the hit point.
+
+### Motion capture (23 Oct 2026, the animation agent; docs/design/character-feel-research.md §5.2, §5.3)
+
+The owner approved the free sources on 23 Oct: the CC0 sets, the CMU database and 100STYLE. Mixamo, the Rokoko form and anything paid are not approved.
+
+- **The pipeline:** [pipeline/mocap.py](pipeline/mocap.py) and the recipes in [pipeline/mocap_clips.py](pipeline/mocap_clips.py). They're plain Python with numpy, not Blender.
+  1. **Read:** BVH, ASF/AMC or glTF.
+  2. **Retarget onto shared-v1:** each bone takes its source bone's direction and twist, matched as whole frames against the rig's rest, so a T-pose source lands right on the A-pose rig. The hips' height is scaled by leg length.
+  3. **Plant the feet:** two-bone IK, either held where they come down or marching (a planted stance like `clips.gait`).
+  4. **Stylize:** stand the spine and head up, and push arms and spine ×1.3 (§5.3).
+  5. **Bake:** append LINEAR, sign-continuous 30 fps clips to `rookie_anims.glb`. Every other clip stays byte for byte; `test_mocap.py` checks that and the maths.
+- **Run it after `build_character.py`:** `python3 -I art/pipeline/mocap_clips.py --data <dir>`. It replaces the clips it makes and rewrites the runtime copy and `rookie.json`'s clip list. Both bodies share this library: the female rig has the same skeleton, and her manifest has no `anims`.
+- **Raw data never enters the repo.** Each pack is downloaded into its own directory outside it. The repo keeps the recipes, the clips they make, the provenance (`character/rookie_mocap.json`) and the licences below.
+
+| Clip | What | Source | Licence |
+|---|---|---|---|
+| `walk` (replaces W8's unplanted walk) | 100STYLE's neutral walk, one straight cycle (frames 1168–1250): the hips, spine and arms, and its timing. The feet are planted: down 55% of a 0.4 s cycle, sliding back at 1.2 m/s, with 5 cm of lift. The toes stay out of the floor. | 100STYLE `Neutral/Neutral_FW.bvh` | CC BY 4.0: credit line in the game |
+| `idle_shift` | weight shifting from foot to foot; 4 s loop, feet planted | CMU `140_07` (Idle), 0–4 s | CMU: free for all uses, not to be resold as data |
+| `idle_look` | looking around; 4 s loop, feet planted | CMU `140_06` (Idle), 6–10 s | as above |
+
+**Credits** (also served at `/licenses/motion-data.txt`):
+- "100STYLE dataset by Ian Mason, Sebastian Starke and Taku Komura, licensed under CC BY 4.0 (https://www.ianxmason.com/100style/)."
+- "The data used in this project was obtained from mocap.cs.cmu.edu. The database was created with funding from NSF EIA-0196217."
 
 ### Clips for the animation stream (18 Oct 2026, animation-clip-asks.md)
 
@@ -1162,7 +1215,8 @@ What it checks:
 | Weapons Forge 12, batch 2a: the other 8 originals from generated images: 8 concept sheets (1.0 each) + 8 Tripo H3.1 multiview models (9 each) | **80.00** |
 | Weapons Forge 12, batch 2b: the 5 specials from generated images: 5 concept sheets (1.0 each) + 5 Tripo H3.1 multiview models (9 each) | **50.00** |
 | The female soldier (22 Oct): 3 concept sheets + 1 edit (GPT Image 2.5 high 2k, 2.75 each) + 1 Tripo H3.1 multiview model (9) | **20.00** |
-| **Total so far** | **373.25** (the Forge's 400-credit cap: 289.75 used, counting PR 2 and PR 3's concepts and boots and both key arts, each in its own PR) |
+| Her hairstyles (22 Oct): 1 concept sheet (GPT Image 2.5 high 2k) | **2.75** |
+| **Total so far** | **376.00** (the Forge's 400-credit cap: 298.25 used, counting PR 3's concepts and boots and both key arts, each in its own PR) |
 
 Phase 0 Higgsfield job IDs: concepts A `160eb90e-41ab-4ecc-a917-1e76c0563b40`, B `b40714aa-ec2f-4d2a-a522-ff5a4ebe57cc`, C `3e234313-6c57-4cd7-9946-22e6cd62b4b3`; 3D `75fc7390-163d-4c95-869c-58e8544bd654`.
 

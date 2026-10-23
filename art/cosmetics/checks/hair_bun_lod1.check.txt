@@ -1,0 +1,33 @@
+asset-check: art/cosmetics/hair/hair_bun_lod1.glb  [part]
+-------------------------------------------------------------------------------------------------------
+INFO  file size                                    34 KB
+PASS  slot extra (docs/04 §3, §9.5)                hair
+PASS  hides the body's hair                        129 body triangles hidden (hidesBody ['hair'])
+PASS  triangles (slot hair, LOD1)                  117 of 169
+PASS  one mesh, one material (docs/04 §5.3)        1 mesh(es), 1 draw call(s)
+PASS  texture size: hair_bun_lod1_albedo           128x128 (max 128)
+PASS  texture POT: hair_bun_lod1_albedo            power of two
+PASS  texture size: hair_bun_lod1_dye_mask.png     128x128 (max 128)
+PASS  texture POT: hair_bun_lod1_dye_mask.png      power of two
+INFO  GPU texture memory (KTX2 est.)               0.03 MB, 2 image(s)
+PASS  required extras (docs/04 §9.5)               ok
+PASS  cosmeticId in packages/content               hair_bun
+PASS  dye round trip: hair_bun_lod1                undyed 99%: mean 0.0 p95 0.0/255 (max 8/32)
+PASS  skinned in character space (docs/04 §9.3)    every vertex weighted to the shared skeleton
+PASS  armature                                     1 armature(s)
+PASS  deform bones (docs/04 §4.1)                  all 25 present
+PASS  sockets (docs/04 §4.1)                       all 7 present
+PASS  no unexpected bones                          none
+PASS  meshes skinned to the armature               1/1
+PASS  every vertex weighted                        0 unweighted of 161
+PASS  ≤ 4 influences per vertex                    0 vertices over
+PASS  weights normalised                           0 vertices off by > 2%
+PASS  sockets are non-deform (no weights)          none weighted
+PASS  weights only on skeleton bones               ok
+PASS  rigid to head (attachBone)                   100% one bone
+PASS  bind pose = the base body's                  worst -: 0.0 mm, 0.00° (max 1 mm, 0.1°)
+PASS  near its hair bones (docs/04 §1.2 locality)  part (-0.22, -0.17, 1.01)..(0.22, 0.35, 1.43) vs region (-0.29, -0.26, 0.8)..(0.29, 0.36, 1.48)
+PASS  cosmetic envelope (hair: base x1.10)         part (-0.22, -0.17, 1.01)..(0.22, 0.35, 1.43) vs envelope (-0.51, -0.26, 0.0)..(0.51, 0.36, 1.48)
+-------------------------------------------------------------------------------------------------------
+RESULT: PASS  (26 pass, 0 warn, 0 fail)
+

@@ -1,0 +1,13 @@
+Military Forge: motion data credits
+
+Some of the soldiers' animations are made from motion capture, retargeted and restyled for the game's characters.
+
+100STYLE
+  100STYLE dataset by Ian Mason, Sebastian Starke and Taku Komura, licensed under CC BY 4.0
+  (https://creativecommons.org/licenses/by/4.0/). https://www.ianxmason.com/100style/
+  Used for: the walk (changed: retargeted, restyled, re-timed, feet re-planted).
+
+CMU Graphics Lab Motion Capture Database
+  The data used in this project was obtained from mocap.cs.cmu.edu.
+  The database was created with funding from NSF EIA-0196217.
+  Used for: the idles (changed: retargeted, restyled, looped, feet re-planted).

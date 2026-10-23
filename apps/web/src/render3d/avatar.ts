@@ -34,8 +34,11 @@ import { AimClips, HOLDS, holdFamily, type AimPose, type HoldProfile } from './h
 import { KICK_MAX, recoilOf } from './recoil';
 import { DEFAULT_OFFHAND, bakeGltfMesh, loadWeaponModels, type GltfSource, type GunMaterials, type WeaponModel } from './weaponModels';
 import { orientSocket, rotateWorld, solveTwoBone } from './ik';
-import { Inertializer, WorldEase } from './inertia';
-import { FootPlanter, LocoLayer, UPPER_BODY, aimElevation, facingOf, facingYaw, stepYaw } from './locomotion';
+import { ActionLayer, reloadClip, type ActionName } from './actions';
+import { OutlineMaterial } from '../character/outline';
+import { DEATH, collapseAt, deathSeconds, type CollapsePose, type DeathStyle } from './death';
+import { Inertializer, RollEase, WorldEase } from './inertia';
+import { FootPlanter, LocoLayer, TurnClock, UPPER_BODY, aimElevation, facingOf, facingYaw } from './locomotion';
 import { MotionLayer } from './motion';
 import { ShieldKit, ShieldRig } from './shield';
 import { Handoff, SlingRig, slingPointFor, switchPhase, switchSeconds, type SlingPoint, type SwitchPose } from './sling';
@@ -129,6 +132,8 @@ export class AvatarKit {
   // --- render3d-b: recoil (recoil.ts) ---
   /** every avatar's kick size: reduced motion halves it (and the camera kick is off) */
   recoilScale = 1;
+  /** animation: how soldiers die (death.ts): the one setting for the death presentation */
+  deathStyle: DeathStyle = DEATH.style;
   // --- end render3d-b: recoil ---
 
   // --- render3d-b: gun mechanisms (gunParts.ts) ---
@@ -187,7 +192,12 @@ interface Arm {
   inertiaIndex: number;
   aimed: Quaternion;
   handEase: WorldEase;
+  /** the gun's roll about its barrel, eased when the facing flips which side is its top */
+  roll: RollEase;
 }
+
+/** poseKey's numbering of the actions (actions.ts) */
+const ACTION_KEYS: readonly (ActionName | null)[] = ['reload_rifle', 'reload_pistol', 'throw'];
 
 /** The bones inertialization eases (inertia.ts): every bone the clips and the procedural layers turn. */
 const INERTIA_BONES = ['root', 'pelvis', 'spine1', 'spine2', 'neck', 'head', 'clavicle_L', 'clavicle_R', 'upperarm_L', 'upperarm_R', 'forearm_L', 'forearm_R', 'hand_L', 'hand_R', 'thigh_L', 'thigh_R', 'calf_L', 'calf_R', 'foot_L', 'foot_R'];
@@ -259,15 +269,37 @@ export class Avatar {
   readonly loco: LocoLayer;
   readonly motion: MotionLayer;
   readonly feet: FootPlanter;
+  /** the Forge's reloads and throw on the upper body (actions.ts) */
+  readonly actions: ActionLayer;
+  /** a throw event arrived (threw()); a reload under way on the gun in hand last frame */
+  private throwNext = false;
+  private reloadSeen = false;
   /** inertialization (inertia.ts): every discrete pose change eases out over ~0.25 s instead of popping */
   readonly inertia: Inertializer;
   /** the inertia bones the upper-body changes (weapon, hold, aim poses, shield, switch, swing) ease */
   private readonly upperBody: number[];
   /** what the upper body was doing last frame (poseKey); −1: nothing drawn yet */
   private lastKey = -1;
-  private deaths = -1;
+  /** the death beat: seconds since death (Infinity: over, hidden), or null while alive (death.ts) */
+  private deadT: number | null = null;
+  /** PlayerView.deaths while alive: the motion layer starts afresh when it changes (the respawn) */
+  private lifeDeaths = 0;
+  /** a dying soldier's own outline (the shared one can't dissolve per soldier), and the view it's posed from */
+  private dyingOutline: OutlineMaterial | null = null;
+  private sharedOutline: Material | null = null;
+  private readonly deadView = {} as PlayerView;
+  private fallY = 0;
+  private fallVy = 0;
+  private readonly collapse: CollapsePose = { kneel: 0, slump: 0, head: 0, arms: 0, fade: 0 };
+  /** the gun hand's turn in the world on the death frame: the gun dips from there as the body goes down */
+  private readonly gunAtDeath = new Quaternion();
+  private armedAtDeath = false;
   // --- end animation ---
   private yaw: number | null = null;
+  /** animation: the facing turn, eased, with a step (locomotion.ts TurnClock); the facing last frame; this frame's dt */
+  private readonly turn = new TurnClock();
+  private lastFacing: 1 | -1 | 0 = 0;
+  private dt = 0;
   private readonly right: Arm | null;
   private readonly left: Arm | null;
   private readonly spine: Object3D[];
@@ -300,6 +332,7 @@ export class Avatar {
     // --- end animation ---
     this.spine = ['spine1', 'spine2', 'head'].map((n) => inst.bone(n)).filter((b): b is NonNullable<typeof b> => !!b);
     this.aimClips = new AimClips(this.mixer, inst.clips);
+    this.actions = new ActionLayer(inst.clips, (n) => inst.bone(n));
     this.right = this.arm('R');
     this.left = this.arm('L');
     const armBones = [this.right, this.left].flatMap((a) => (a ? [a.upper, a.lower, a.hand, a.socket] : []));
@@ -336,15 +369,26 @@ export class Avatar {
     gun.visible = false;
     socket.add(gun);
     const length = lower.position.length() + hand.position.length();
-    return { upper, lower, hand, socket, gun, def: NO_WEAPON, length, kick: 0, kickNext: 0, parts: new GunParts(gun), shotAge: Infinity, inertiaIndex: -1, aimed: new Quaternion(), handEase: new WorldEase() };
+    return { upper, lower, hand, socket, gun, def: NO_WEAPON, length, kick: 0, kickNext: 0, parts: new GunParts(gun), shotAge: Infinity, inertiaIndex: -1, aimed: new Quaternion(), handEase: new WorldEase(), roll: new RollEase() };
   }
 
   update(p: PlayerView, dt: number, world: CollisionWorld, blobShadows: boolean): void {
-    this.pivot.visible = p.alive;
-    this.blob.visible = p.alive && blobShadows;
-    if (!p.alive) return;
+    // --- animation: the death beat (death.ts), and a fresh start at the respawn ---
+    if (!p.alive) {
+      this.dying(p, dt, world, blobShadows);
+      return;
+    }
+    if (this.deadT !== null) this.revive();
+    this.lifeDeaths = p.deaths;
+    // --- end animation ---
+    this.pivot.visible = true;
+    this.blob.visible = blobShadows;
     this.time += dt;
+    this.dt = dt;
     for (const b of this.posed) b.bone.quaternion.copy(b.anim); // undo last frame's aim, lean and planted legs
+    // --- animation: a reload or a throw owns the upper body while it plays (actions.ts) ---
+    const acting = this.watchActions(p, dt);
+    // --- end animation ---
     this.blendAimPose(p);
     // --- animation: clip weights and gait phase for this frame; W8's aim poses own the upper body while shown ---
     this.loco.facing = facingOf(p.aim);
@@ -353,10 +397,15 @@ export class Avatar {
     // --- end animation ---
     this.mixer.update(dt);
     for (const b of this.posed) b.anim.copy(b.bone.quaternion);
+    // --- animation: the action's pose over the clips (after the save: every bone it turns is put back next frame) ---
+    if (acting) this.actions.apply();
+    // --- end animation ---
 
     const facing = facingOf(p.aim);
     const target = facingYaw(facing);
-    this.yaw = this.yaw === null ? target : stepYaw(this.yaw, target, dt);
+    // --- animation: the facing turn eases in and out (TurnClock); the feet step round and the spine leads ---
+    this.yaw = this.turn.update(target, dt);
+    // --- end animation ---
     this.pivot.position.set(p.x, p.y, 0);
     this.pivot.rotation.set(0, this.yaw, 0);
     this.pivot.updateMatrixWorld(true);
@@ -366,8 +415,8 @@ export class Avatar {
     // the arms the aim layer holds (aim()): the gun arm, and the left one for a second gun, a two-handed grip or the shield
     const leftHeld = p.dual || (active !== NO_WEAPON && weapons[active]?.hands === 2) || p.shield === 'front' || p.shield === 'raising';
     const held: ('L' | 'R')[] = [...(active !== NO_WEAPON || p.dual ? (['R'] as const) : []), ...(leftHeld ? (['L'] as const) : [])];
-    this.motion.update(p, dt, this.yaw, this.loco, this.holdOf(active, p.dual).lean, held);
-    this.feet.update(p, this.yaw, this.loco, dt, world, this.motion.drop);
+    this.motion.update(p, dt, this.yaw, this.loco, this.holdOf(active, p.dual).lean, held, target);
+    this.feet.update(p, this.yaw, this.loco, dt, world, this.motion.drop, this.turn.turning ? target : null);
     // --- end animation ---
     this.watchSwitch(p, dt);
     this.swing.update(p.meleeTicks, dt);
@@ -398,20 +447,13 @@ export class Avatar {
     const posed = pose === null ? 0 : pose === 'pistol' ? 1 : pose === 'dual' ? 2 : 3;
     const shield = p.shield === 'front' ? 1 : p.shield === 'raising' ? 2 : p.shield === 'back' ? 3 : 0;
     const swinging = this.swing.t >= 0 ? 1 : 0;
-    return ((((this.inHand * 8 + this.leftJob) * 4 + posed) * 4 + shield) * 2 + swinging) * 2 + (this.switching ? 1 : 0);
+    const action = ACTION_KEYS.indexOf(this.actions.current) + 1;
+    return (((((this.inHand * 8 + this.leftJob) * 4 + posed) * 4 + shield) * 2 + swinging) * 2 + (this.switching ? 1 : 0)) * 4 + action;
   }
 
   /** After the aim layer: start an ease on a change of what the upper body does, decay the offsets, keep aimed guns exact. */
   private ease(p: PlayerView, dt: number): void {
     const arms = [this.right, this.left];
-    if (p.deaths !== this.deaths) {
-      // a respawn is a teleport: shown as it is
-      if (this.deaths >= 0) {
-        this.inertia.reset();
-        for (const arm of arms) arm?.handEase.reset();
-      }
-      this.deaths = p.deaths;
-    }
     const key = this.poseKey(p);
     if (this.lastKey >= 0 && key !== this.lastKey) {
       this.inertia.trigger(this.upperBody);
@@ -442,6 +484,151 @@ export class Avatar {
     this.inertia.record();
   }
   // --- end animation: inertialization ---
+
+  // --- animation: the death beat (death.ts) ---
+  /**
+   * Dead: the collapse (knees, then torso and head, a settle) over what the body was doing, then the dissolve, then
+   * hidden until the respawn. The vanish style, or a soldier first drawn dead, hides at once. The body stops where it
+   * died; killed in the air, it drops to the floor under it.
+   */
+  private dying(p: PlayerView, dt: number, world: CollisionWorld, blobShadows: boolean): void {
+    const style = this.kit.deathStyle;
+    if (this.deadT === null) {
+      // the death frame
+      if (style === 'vanish' || this.lastKey < 0 || !this.pivot.visible) this.deadT = Infinity;
+      else {
+        this.deadT = 0;
+        this.fallY = p.y;
+        this.fallVy = Math.min(0, p.vy);
+        this.actions.stop();
+        this.right?.hand.getWorldQuaternion(this.gunAtDeath);
+        this.armedAtDeath = !!this.right?.gun.visible;
+        this.inertia.trigger();
+        for (const arm of [this.right, this.left]) arm?.handEase.trigger();
+        // its own outline, so it dissolves with the body (same program as the shared one)
+        const shared = this.inst.outline?.material;
+        if (shared instanceof OutlineMaterial) {
+          this.sharedOutline = shared;
+          this.dyingOutline ??= shared.dissolving();
+          this.inst.setOutline?.(this.dyingOutline);
+        }
+      }
+    } else this.deadT += dt;
+    if (this.deadT >= deathSeconds(style)) {
+      this.pivot.visible = false;
+      this.blob.visible = false;
+      return;
+    }
+    const t = this.deadT;
+    collapseAt(t, this.collapse);
+    // the body where it died, dropping to the floor if it died in the air
+    if (world.raycast(p.x, this.fallY + 0.05, 0, -1, 30, 0, _hit) && this.fallY > _hit.y + 1e-3) {
+      this.fallVy -= DEATH.gravity * dt;
+      this.fallY = Math.max(_hit.y, this.fallY + this.fallVy * dt);
+    }
+    const v = Object.assign(this.deadView, p, { y: this.fallY, vx: 0, vy: 0, grounded: true, crouched: false, jetting: false, dashing: false, meleeTicks: 0, deaths: this.lifeDeaths });
+    this.time += dt;
+    for (const b of this.posed) b.bone.quaternion.copy(b.anim);
+    // the arms let go of the aim: the unarmed pose under the collapse
+    this.aimClips.update(null, 0);
+    this.loco.facing = facingOf(p.aim);
+    this.loco.setUpperBody(true);
+    this.loco.update(v, dt);
+    this.mixer.update(dt);
+    for (const b of this.posed) b.anim.copy(b.bone.quaternion);
+    this.pivot.position.set(p.x, this.fallY, 0);
+    this.pivot.rotation.set(0, this.yaw ?? facingYaw(facingOf(p.aim)), 0);
+    this.pivot.updateMatrixWorld(true);
+    this.motion.update(v, dt, this.yaw ?? 0, this.loco, 0, []);
+    this.slump();
+    this.feet.update(v, this.yaw ?? 0, this.loco, dt, world, this.motion.drop + this.collapse.kneel * DEATH.kneel);
+    // the guns stay in the hands they were in, along for the fall
+    this.exact.length = 0;
+    this.ease(v, dt);
+    this.shield.update(p.shield, this.pivot);
+    this.updateFlame(v, dt);
+    // the dissolve: the body and its outline by a screen door; the guns, shield and flame (shared materials) go at half
+    const fade = this.collapse.fade;
+    if (this.inst.material) this.inst.material.dissolve.value = fade;
+    if (this.dyingOutline) this.dyingOutline.dissolve.value = fade;
+    const half = fade < 0.5;
+    for (const arm of [this.right, this.left]) if (arm && !half) arm.gun.visible = false;
+    if (!half) {
+      this.sling.hide(0);
+      this.sling.hide(1);
+      this.flame.visible = false;
+      this.shield.update(undefined, this.pivot);
+    }
+    for (const m of this.inst.meshes) m.castShadow = half;
+    this.blob.visible = blobShadows;
+    if (blobShadows) {
+      this.updateBlob(v, world);
+      (this.blob.material as MeshBasicMaterial).opacity *= 1 - fade;
+    }
+  }
+
+  /** The torso and head fold forward, the arms hang (the knees are the planted-feet pass's: dying()). */
+  private slump(): void {
+    const c = this.collapse;
+    _lat.set(1, 0, 0).applyAxisAngle(UP, this.yaw ?? 0); // the body's left: + about it flexes forward
+    const spine = this.spine;
+    if (spine[0]) rotateWorld(spine[0], _q.setFromAxisAngle(_lat, DEATH.slump * 0.45 * c.slump));
+    if (spine[1]) rotateWorld(spine[1], _q.setFromAxisAngle(_lat, DEATH.slump * 0.55 * c.slump));
+    if (spine[2]) rotateWorld(spine[2], _q.setFromAxisAngle(_lat, DEATH.head * c.head));
+    for (const arm of [this.right, this.left]) if (arm) rotateWorld(arm.upper, _q.setFromAxisAngle(_lat, DEATH.arms * c.arms));
+    // the gun in hand dips muzzle down from where it pointed, rather than swinging with the limp wrist
+    const arm = this.right;
+    if (arm && this.armedAtDeath) {
+      const facing = Math.sin(this.yaw ?? 1) >= 0 ? 1 : -1;
+      _q.setFromAxisAngle(_h.set(0, 0, 1), -facing * DEATH.gunDip * c.arms).multiply(this.gunAtDeath);
+      arm.hand.parent!.getWorldQuaternion(_qa).invert();
+      arm.hand.quaternion.copy(_qa.multiply(_q));
+      arm.hand.updateMatrixWorld(true);
+    }
+  }
+
+  /** Alive again (a respawn: a teleport): every layer starts afresh, whole and opaque, with its shared outline back. */
+  private revive(): void {
+    this.deadT = null;
+    this.inertia.reset();
+    for (const arm of [this.right, this.left]) arm?.handEase.reset();
+    this.actions.stop();
+    this.lastKey = -1;
+    if (this.inst.material) this.inst.material.dissolve.value = 0;
+    for (const m of this.inst.meshes) m.castShadow = true;
+    if (this.sharedOutline && this.inst.outline?.material === this.dyingOutline) this.inst.setOutline?.(this.sharedOutline);
+    if (this.dyingOutline) this.dyingOutline.dissolve.value = 0;
+  }
+  // --- end animation: the death beat ---
+
+  // --- animation: upper-body actions (actions.ts) ---
+  /** The sim's throw event for this player: the throw plays from the next frame. */
+  threw(): void {
+    if (this.pivot.visible) this.throwNext = true;
+  }
+
+  /**
+   * Before the mixer: a throw starts on its event; a reload plays while the gun in hand reloads (a dual pair: either
+   * gun), timed to the weapon's reload, and stops when the reload does (done, or cut short by a switch). Online, a
+   * remote player's reload is a flag: it plays from the frame the flag shows, for the weapon's reload time.
+   */
+  private watchActions(p: PlayerView, dt: number): ActionName | null {
+    const active = p.weapons[p.active];
+    const other = p.weapons[p.active === 0 ? 1 : 0];
+    const reloading = !this.switching && ((active?.reloadTicks ?? 0) > 0 || (p.dual && (other?.reloadTicks ?? 0) > 0));
+    const current = this.actions.current;
+    if (this.throwNext) {
+      this.throwNext = false;
+      this.actions.play('throw');
+    } else if (reloading && !this.reloadSeen && current !== 'throw') {
+      const def = active?.def ?? NO_WEAPON;
+      const w = weapons[def];
+      if (w && w.reload > 0) this.actions.play(reloadClip(p.dual ? 1 : w.hands), w.reload);
+    } else if (!reloading && (current === 'reload_rifle' || current === 'reload_pistol')) this.actions.stop();
+    this.reloadSeen = reloading;
+    return this.actions.update(dt);
+  }
+  // --- end animation: upper-body actions ---
 
   // --- render3d-b: melee swings (swing.ts) ---
   private readonly swing = new SwingClock();
@@ -537,16 +724,36 @@ export class Avatar {
     const hold = this.holdOf(active, p.dual);
     const posed = this.aimClips.pose !== null;
     _lat.set(1, 0, 0).applyAxisAngle(UP, this.yaw!); // the body's left, in world space
+    // animation: a reload (actions.ts) poses the upper body; the guns ride their hands
+    if (this.actions.gunArm) {
+      this.inHand = active;
+      this.leftJob = 0;
+      this.exact.length = 0;
+      if (this.right) this.mount(this.right, active);
+      if (this.left) {
+        this.mount(this.left, leftDef);
+        if (leftDef !== NO_WEAPON) this.leftJob = 1;
+        else if (p.shield === 'front' || p.shield === 'raising') {
+          this.holdShield(this.left);
+          this.leftJob = 2;
+        }
+      }
+      return;
+    }
     // +X flexes a vertical bone forward (art/README.md), so looking up is a negative turn; the
     // hold leans in, the head tips to the sights, and a recoil jolt throws the torso back
     const jolt = this.jolt * this.joltRad;
-    for (let i = 0; i < this.spine.length; i++) {
+    // (a throw poses the spine: actions.ts)
+    for (let i = 0; i < this.spine.length && this.actions.current === null; i++) {
       const lean = (i < 2 ? hold.lean * 0.5 : hold.head) - jolt * JOLT_SHARE[i]!;
       rotateWorld(this.spine[i]!, _q.setFromAxisAngle(_lat, (posed ? 0 : -elevation * AIM_SHARE[i]!) + lean));
     }
 
     _dir.set(Math.cos(p.aim), Math.sin(p.aim), 0);
     _gunUp.set(-Math.sin(p.aim) * facing, Math.cos(p.aim) * facing, 0);
+    // animation: a new facing flips which side is a gun's top: it rolls over, eased (RollEase), not in one frame
+    if (this.lastFacing !== 0 && facing !== this.lastFacing) for (const arm of [this.right, this.left]) arm?.roll.trigger();
+    this.lastFacing = facing;
     // mid-switch the gun hand holds the old gun, then nothing, then the new one (sling.ts)
     const switching = this.switching ? switchPhase(this.swT / this.swDur, _sw) : null;
     const inHand = switching ? (switching.holdingOld ? this.swFrom : switching.holdingNew ? this.swTo : NO_WEAPON) : active;
@@ -570,7 +777,7 @@ export class Avatar {
       } else if (p.shield === 'front' || p.shield === 'raising') {
         this.holdShield(this.left);
         this.leftJob = 2;
-      } else if (!switching && active !== NO_WEAPON && weapons[active]?.hands === 2 && this.right) {
+      } else if (!switching && active !== NO_WEAPON && weapons[active]?.hands === 2 && this.right && this.actions.current === null) {
         this.leftJob = 3;
         // two-handed: the support hand on the weapon's offhand socket (sockets.json), else where its
         // family holds it; a shotgun's slides forward to the pump
@@ -600,8 +807,8 @@ export class Avatar {
     solveTwoBone(arm.upper, arm.lower, arm.hand, _t, _p);
   }
 
-  /** side: +1 right arm, −1 left arm. `posed`: W8's aim pose placed the arm; only aim the gun. */
-  private aimArm(arm: Arm, def: number, side: 1 | -1, hold: HoldProfile, posed: boolean): void {
+  /** Weapon `def` (or none) in `arm`'s hand, held on its socket. */
+  private mount(arm: Arm, def: number): void {
     arm.gun.visible = def !== NO_WEAPON;
     arm.def = def;
     if (def === NO_WEAPON) return;
@@ -612,6 +819,12 @@ export class Avatar {
     arm.gun.geometry = moving || !model.solid ? model.geometry : model.solid;
     arm.gun.material = model.material;
     arm.parts.set(moving ? model.parts : undefined, model.material, weapons[def]?.interval ?? 1);
+  }
+
+  /** side: +1 right arm, −1 left arm. `posed`: W8's aim pose placed the arm; only aim the gun. */
+  private aimArm(arm: Arm, def: number, side: 1 | -1, hold: HoldProfile, posed: boolean): void {
+    this.mount(arm, def);
+    if (def === NO_WEAPON) return;
     const recoil = recoilOf(def);
     const kick = recoil.kick * arm.kick;
     if (!posed) {
@@ -627,10 +840,12 @@ export class Avatar {
       _p.copy(_s).addScaledVector(UP, -hold.elbowDown).addScaledVector(_lat, -hold.elbowOut * side).addScaledVector(_dir, -hold.elbowBack);
       solveTwoBone(arm.upper, arm.lower, arm.hand, _t, _p);
     }
-    // the gun along the aim (a raised blade pitches up from it; a kick makes the muzzle climb)
+    // the gun along the aim (a raised blade pitches up from it; a kick makes the muzzle climb), its roll eased
     const pitch = hold.pitch + recoil.rise * arm.kick;
     _gunDir.copy(_dir).multiplyScalar(Math.cos(pitch)).addScaledVector(_gunUp, Math.sin(pitch));
-    orientSocket(arm.hand, arm.socket, _gunDir, _gunUp);
+    _su.copy(_gunUp).multiplyScalar(Math.cos(pitch)).addScaledVector(_dir, -Math.sin(pitch));
+    arm.roll.apply(_gunDir, _su, this.dt);
+    orientSocket(arm.hand, arm.socket, _gunDir, _su);
     // a bolt gun: after each shot the trigger hand leaves the grip and works the bolt (gunParts.ts)
     if (side === 1) {
       const cycle = this.kit.cycleOf(def);

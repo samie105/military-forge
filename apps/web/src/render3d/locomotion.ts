@@ -90,7 +90,7 @@ export function facingOf(aim: number): 1 | -1 {
 
 /** Yaw that shows the side view turned this far toward the camera (docs/04 §4.2 "3/4 view"). */
 export const TOWARD_CAMERA = (30 * Math.PI) / 180;
-/** docs/04 §4.2: a full 180° turn takes 120 ms */
+/** docs/04 §4.2: a full 180° turn takes 120 ms (the old constant-rate turn; TurnClock eases it instead) */
 export const TURN_RATE = Math.PI / 0.12;
 
 export function facingYaw(facing: 1 | -1): number {
@@ -101,6 +101,62 @@ export function facingYaw(facing: 1 | -1): number {
 export function stepYaw(yaw: number, target: number, dt: number): number {
   const step = TURN_RATE * dt;
   return Math.abs(target - yaw) <= step ? target : yaw + Math.sign(target - yaw) * step;
+}
+
+/**
+ * The facing turn with a step (docs/design/character-feel-research.md §3.4, §5.1 C): the yaw eases in and out (a
+ * smootherstep, so it starts and stops at rest) over TURN.seconds for the full 120° through facing the camera, still
+ * under 6 frames; standing, the feet step to their new spots over TURN.stepSeconds (FootPlanter), the hips dip
+ * TURN.dip, and the spine and head lead the hips with a little overshoot (MotionLayer).
+ */
+export const TURN = {
+  seconds: 0.1,
+  /** standing, the feet step within this long after the turn starts (s), each lifted this high (m) at mid-step */
+  stepSeconds: 0.2,
+  lift: 0.04,
+  /** and the hips dip this much (m) over the steps */
+  dip: 0.015,
+  /** a turn on the spot: below this ground speed (m/s); faster, the gait's planting carries the feet round */
+  standing: 0.3,
+};
+
+export const smootherstep = (u: number): number => {
+  const t = Math.min(1, Math.max(0, u));
+  return t * t * t * (t * (6 * t - 15) + 10);
+};
+
+/** The eased facing turn: `update` each frame with the yaw the facing wants; `yaw` is what the body shows. */
+export class TurnClock {
+  yaw: number | null = null;
+  /** the turn under way: from, to, and how far through it (0…1; 1 = none) */
+  from = 0;
+  to = 0;
+  t = 1;
+  private seconds = TURN.seconds;
+
+  update(target: number, dt: number): number {
+    if (this.yaw === null) {
+      this.yaw = this.from = this.to = target;
+      return target;
+    }
+    if (target !== this.to) {
+      // a new turn (or a turn back mid-turn) from wherever the body is, its length in proportion to the angle
+      this.from = this.yaw;
+      this.to = target;
+      this.t = 0;
+      this.seconds = TURN.seconds * Math.max(0.4, Math.abs(target - this.from) / (2 * facingYaw(1)));
+    }
+    if (this.t < 1) {
+      this.t = Math.min(1, this.t + dt / this.seconds);
+      this.yaw = this.from + (this.to - this.from) * smootherstep(this.t);
+    }
+    return this.yaw;
+  }
+
+  /** A turn is under way. */
+  get turning(): boolean {
+    return this.t < 1;
+  }
 }
 
 /** Aim angle above the horizontal on the side the player faces, −π/2…π/2. */
@@ -378,6 +434,9 @@ interface Layer {
   duration: number;
 }
 
+/** A jet take-off: for this long (s) the climb pose comes in on a fast spring (rad/s), full at this climb speed (m/s). */
+export const TAKEOFF = { seconds: 0.35, omega: 30, full: 1.2 };
+
 /** Ground clips that may be missing from a clip set, with what stands in for them. */
 const BASE_CLIPS = {
   idle: ['idle'],
@@ -449,6 +508,8 @@ export class LocoLayer {
   private landWeight = 0;
   private wasGrounded = true;
   private lastVy = 0;
+  /** seconds since a jet take-off (Infinity on the ground) */
+  private sinceTakeoff = Infinity;
 
   constructor(
     private readonly mixer: AnimationMixer,
@@ -518,8 +579,12 @@ export class LocoLayer {
     const dir = p.vx === 0 ? 0 : Math.sign(p.vx) * (this.facing ?? Math.sign(p.vx));
     this.phase = (((this.phase + this.gait.cadence * dt * dir) % 1) + 1) % 1;
 
-    // air: ascend while thrusting up, fall when dropping, hover in between
-    const up = this.ascend.step(p.jetting ? smoothstep(0.2, 2.5, p.vy) : 0, dt);
+    // air: ascend while thrusting up, fall when dropping, hover in between. Off the ground on the jet the climb pose
+    // comes in fast (TAKEOFF): it's there within ~0.2 s, not after the body is already flying
+    this.sinceTakeoff = p.grounded ? Infinity : this.wasGrounded && p.jetting ? 0 : this.sinceTakeoff + dt;
+    const takingOff = this.sinceTakeoff < TAKEOFF.seconds;
+    this.ascend.omega = takingOff ? TAKEOFF.omega : 10;
+    const up = this.ascend.step(p.jetting ? smoothstep(takingOff ? 0.05 : 0.2, takingOff ? TAKEOFF.full : 2.5, p.vy) : 0, dt);
     const down = this.fallW.step(p.jetting ? 0 : smoothstep(0.5, -2.5, p.vy), dt);
     const hover = Math.max(0, 1 - up - down);
 
@@ -527,7 +592,7 @@ export class LocoLayer {
     this.landing = p.grounded && !this.wasGrounded ? Math.max(0, -this.lastVy) : 0;
     if (this.landing > 0) {
       this.landT = 0;
-      this.landWeight = Math.min(1, 0.35 + this.landing / 14);
+      this.landWeight = Math.min(0.6, 0.35 + this.landing / 14);
     }
     this.wasGrounded = p.grounded;
     this.lastVy = p.vy;
@@ -557,7 +622,8 @@ export class LocoLayer {
     this.drive(L.slow, step * upright * (1 - this.gait.run) * careful, this.phase * (L.slow?.duration ?? 0));
     this.drive(L.crouchStep, step * (1 - upright), this.phase * (L.crouchStep?.duration ?? 0));
     // the land clip is a dip from and back to its first frame: a constant weight, faded out over its last frames
-    const land = L.land && this.landT < L.land.duration ? this.landWeight * (1 - smoothstep(0.8 * L.land.duration, L.land.duration, this.landT)) : 0;
+    // (it comes in over the landing's attack, 3 frames, so the knees don't snap: motion.ts SQUASH.attack)
+    const land = L.land && this.landT < L.land.duration ? this.landWeight * Math.min(1, this.landT / 0.05) * (1 - smoothstep(0.8 * L.land.duration, L.land.duration, this.landT)) : 0;
     this.drive(L.land, land, Math.min(this.landT, L.land?.duration ?? 0));
     for (const [action, slot] of this.slots) {
       action.setEffectiveWeight(slot.w);
@@ -782,6 +848,7 @@ const _fwd = new Vector3();
 const _up = new Vector3(0, 1, 0);
 const _qi = new Quaternion();
 const _ray = createRayHit();
+const _to = new Vector3();
 
 export class FootPlanter {
   /** bones it turns (the avatar restores them to the animation pose every frame) */
@@ -814,6 +881,11 @@ export class FootPlanter {
   private lastY = NaN;
   /** the body's yaw last frame: it only changes while turning to face the other way */
   private lastYaw = NaN;
+  /** a facing turn on the spot: each foot steps from where it stood to its new spot (TURN); `first` steps first */
+  private step: { t: number; from: [Vector3, Vector3]; first: number } | null = null;
+  /** where each ankle ended up last frame (world) */
+  private readonly lastAnkle = [new Vector3(), new Vector3()];
+  private hasLast = false;
 
   constructor(private readonly inst: Pick<CharacterInstance, 'root' | 'bone'>) {
     const legs = (['L', 'R'] as const).map((s) => [inst.bone(`thigh_${s}`), inst.bone(`calf_${s}`), inst.bone(`foot_${s}`)] as const);
@@ -846,6 +918,7 @@ export class FootPlanter {
     dt: number,
     world: GroundWorld | null = null,
     drop = 0,
+    toYaw: number | null = null,
   ): void {
     if (!this.legs.length) return;
     const root = this.inst.root;
@@ -876,11 +949,35 @@ export class FootPlanter {
     // crouch foot held down would be left a body length behind in one stance
     const turning = Math.abs(yaw - this.lastYaw) > 1e-4;
     this.lastYaw = yaw;
+    // a facing turn on the spot steps the feet round (TURN): the one already toward the new facing stays down while
+    // the other steps, then it steps too, each lifted, so neither slides
+    const standing = (p.grounded ?? true) && grounded > 0.5 && Math.abs(p.vx) < TURN.standing && !p.dashing;
+    if (this.step) {
+      this.step.t += dt;
+      if (this.step.t >= TURN.stepSeconds || !standing) {
+        this.step = null;
+        for (const plant of this.plants) plant.locked = false;
+      }
+    }
+    if (!this.step && toYaw !== null && standing && this.hasLast && Math.abs(toYaw - yaw) > 0.3) {
+      const toward = Math.sin(toYaw) >= 0 ? 1 : -1; // +x for a body turning to face right
+      const first = (this.lastAnkle[0].x - this.lastAnkle[1].x) * toward > 0 ? 1 : 0;
+      this.step = { t: 0, from: [this.lastAnkle[0].clone(), this.lastAnkle[1].clone()], first };
+    }
+    const step = this.step;
     const moving = grounded * smoothstep(0.02, 0.1, Math.abs(p.vx)) * loco.plantable * (p.dashing || turning ? 0 : 1);
     const strength = 1 - (1 - FEET.sprint[2]) * smoothstep(FEET.sprint[0], FEET.sprint[1], loco.gait.cadence);
     let dip = 0;
     this.legs.forEach(([thigh, calf, foot], k) => {
       const plant = this.plants[k]!;
+      if (step) {
+        // stepping round: nothing is held by the gait (the step places the feet; the plants start afresh after)
+        plant.locked = false;
+        plant.held = 0;
+        plant.weight.x = plant.weight.v = 0;
+        plant.swingX = NaN;
+        return;
+      }
       const s = stanceAt(loco.phase, loco.touchDown + k * 0.5, stance);
       foot.getWorldPosition(_ankle);
       thigh.getWorldPosition(_hip);
@@ -936,6 +1033,7 @@ export class FootPlanter {
       } else plant.swingX = NaN;
     });
     dip = Math.max(0, dip);
+    if (step) dip = TURN.dip * Math.sin(Math.PI * Math.min(1, step.t / TURN.stepSeconds));
     root.position.y = settle - drop - dip;
     root.updateMatrixWorld(true);
     _fwd.set(Math.sin(yaw), 0, Math.cos(yaw));
@@ -951,8 +1049,21 @@ export class FootPlanter {
       plant.push = Math.min(FEET.maxLift, push >= plant.push ? Math.min(push, plant.push + dt * FEET.liftRate) : Math.max(push, plant.push - dt * FEET.letDown));
       const free = clip + plant.push;
       _target.set(plant.tx, free + (plant.ty - free) * held, _ankle.z);
+      if (step) {
+        // this foot's window in the step: the first foot early, the second late, overlapping a little
+        const span = TURN.stepSeconds;
+        const [a, b] = k === step.first ? [0, 0.5 * span] : [0.3 * span, span];
+        const u = Math.min(1, Math.max(0, (step.t - a) / (b - a)));
+        // its new spot: where the clip has it now, turned on round the pivot to the turn's end, on the floor
+        root.parent!.getWorldPosition(_pole);
+        _to.copy(_ankle).sub(_pole).applyAxisAngle(_up, (toYaw ?? yaw) - yaw).add(_pole);
+        _to.y = Math.max(clip, floor + this.ankleHeight);
+        _target.copy(step.from[k]!).lerp(_to, smootherstep(u));
+        _target.y += TURN.lift * Math.sin(Math.PI * u);
+        this.planted[k] = u <= 0 || u >= 1 ? 1 : 0;
+      }
       // nothing to do where the target is where the clip has the ankle (a swing over flat ground)
-      if (held <= 0 && _target.distanceToSquared(_ankle) < 1e-8) return;
+      if (held <= 0 && !step && _target.distanceToSquared(_ankle) < 1e-8) return;
       // out of reach (the dip is capped): pull the target in instead of straightening the leg
       thigh.getWorldPosition(_hip);
       const d = _target.distanceTo(_hip);
@@ -966,10 +1077,14 @@ export class FootPlanter {
       foot.quaternion.copy(_q3.multiply(_q2));
       thigh.updateMatrixWorld(true);
     });
+    this.legs.forEach(([, , foot], k) => foot.getWorldPosition(this.lastAnkle[k]!));
+    this.hasLast = true;
   }
 
   /** Nothing held, nothing settled or lifted: a fresh start (a teleport, a respawn; review L4, L5). */
   reset(): void {
+    this.step = null;
+    this.hasLast = false;
     for (const plant of this.plants) {
       plant.locked = false;
       plant.held = plant.weight.x = plant.weight.v = plant.push = 0;

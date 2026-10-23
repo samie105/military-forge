@@ -9,7 +9,7 @@
  *   by player id, so a room isn't a row of clones.
  */
 import { DEFAULT_COSMETIC_LOADOUT, type CosmeticLoadout } from '@military-forge/content';
-import type { AnimationClip, Bone, Object3D, SkinnedMesh } from 'three';
+import type { AnimationClip, Bone, Material, Object3D, SkinnedMesh } from 'three';
 import { LocalLoadoutStore, ownedOnly, starterInventory, type LoadoutStore } from '../locker/loadouts';
 
 export type { CharacterLod } from '../character';
@@ -25,6 +25,11 @@ export interface CharacterInstance {
   bone(name: string): Bone | null;
   readonly clips: readonly AnimationClip[];
   dispose(): void;
+  /** the dye material's dissolve (a dying soldier fades: death.ts); absent on test rigs */
+  readonly material?: { readonly dissolve: { value: number } };
+  /** the outline hull and how to swap its material (a dying soldier's dissolves on its own) */
+  readonly outline?: { material: Material | Material[] } | null;
+  setOutline?(material: Material | null): void;
 }
 
 /**

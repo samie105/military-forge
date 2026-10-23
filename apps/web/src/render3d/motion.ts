@@ -54,15 +54,71 @@ export const LEAN = {
   velocityOmega: 9,
 };
 
+/** The upper body leading a facing turn (docs/design/character-feel-research.md §5.1 C). */
+export const TURN_LEAD = {
+  /** an underdamped spring on the facing yaw (rad/s, damping ratio): ~5% overshoot (3–5° of a 120° turn) */
+  omega: 42,
+  damping: 0.7,
+  /** how much of the lead the chest (spine2) and the head take, and the most it twists (rad) */
+  shares: [0.55, 0.45] as const,
+  max: 40 * DEG,
+  /** in the air: a roll into the turn, per rad/s of yaw, capped (rad) */
+  airRollPer: 0.004,
+  airRoll: 6 * DEG,
+};
+
 export const SQUASH = {
   /** impact speed (m/s) below which a landing doesn't squash, and the speed of the deepest squash */
   from: 2.5,
   to: 16,
-  /** deepest squash: the body's height shrinks by this share, its width grows to keep the volume */
-  max: 0.14,
-  omega: 26,
-  damping: 0.38,
+  /** deepest squash: the hips drop by this share of the head's height (the knees take it) */
+  max: 0.09,
+  /** the attack: the dip reaches its depth over this long (s, 3 frames) at one rate from the impact, so no knee turns
+   *  more than 15° a frame (a smoothstep wastes that budget on its slow start) */
+  attack: 0.05,
+  /** then it comes back up on an underdamped spring (rad/s, damping ratio): a ~6% rebound past standing, then rest */
+  omega: 22,
+  damping: 0.67,
 };
+
+/**
+ * Stylized timing (docs/design/character-feel-research.md §3.1, §5.1 E/§4 gap 6): anticipation and follow-through on
+ * the procedural signals, never on the aim. The springs that were critically damped (no overshoot, which reads
+ * mechanical) are slightly underdamped here (ζ 0.6–0.75: 3–10% overshoot).
+ */
+export const TIMING = {
+  /** a jet take-off: the hips dip this far (m) and come back up over this long (s): a 2–3 frame crouch as it pushes off */
+  takeoffDip: 0.035,
+  takeoffSeconds: 0.1,
+  /** the lean settles on an underdamped spring (ζ): a run's lean, braking, turning round */
+  leanDamping: 0.72,
+  /** the head lags the body's tilt and swings through it (rad/s, ζ, share of the lag shown) */
+  headOmega: 13,
+  headDamping: 0.6,
+  headShare: 0.5,
+  /** a dash coils against its direction for this long (s) at this share of its pose, then stretches past and settles (ζ) */
+  dashCoil: 0.035,
+  dashCoilShare: 0.2,
+  dashDamping: 0.62,
+};
+
+/** The landing dip at `t` s after touch-down (0 standing … 1 at its depth, a little below 0 on the rebound). */
+export function landingDip(t: number): number {
+  if (!(t >= 0)) return 0;
+  const a = SQUASH.attack;
+  if (t <= a) return t / a; // linear: the knees give at one rate from the impact, the most each frame can take
+  // the step response of an underdamped spring from 1 back to 0, starting at rest
+  const s = t - a;
+  const w = SQUASH.omega;
+  const z = SQUASH.damping;
+  const wd = w * Math.sqrt(1 - z * z);
+  return Math.exp(-z * w * s) * (Math.cos(wd * s) + ((z * w) / wd) * Math.sin(wd * s));
+}
+
+/** The take-off dip at `t` s after leaving the ground (m): down over the first half, back up over the second. */
+export function takeoffDip(t: number): number {
+  return t >= 0 && t < TIMING.takeoffSeconds ? TIMING.takeoffDip * Math.sin((Math.PI * t) / TIMING.takeoffSeconds) : 0;
+}
 
 export const FLAIL = {
   /** hysteresis: flailing stops in the air once the speed drops below this share of launchSpeedX */
@@ -215,19 +271,22 @@ export interface MotionInput {
 }
 
 
-/** Underdamped spring (the squash bounce): semi-implicit Euler in ≤ 4 ms steps. */
-class Bounce {
-  x = 0;
+/**
+ * An underdamped spring chasing a target (follow-through: it overshoots a little and settles), exact for any step
+ * (semi-implicit Euler in ≤ 4 ms sub-steps).
+ */
+export class Wobble {
   v = 0;
   constructor(
-    readonly omega: number,
-    readonly damping: number,
+    public omega: number,
+    public damping: number,
+    public x = 0,
   ) {}
 
-  step(dt: number): number {
+  step(target: number, dt: number): number {
     for (let left = dt; left > 1e-6; left -= 0.004) {
       const h = Math.min(0.004, left);
-      this.v += (-this.omega * this.omega * this.x - 2 * this.damping * this.omega * this.v) * h;
+      this.v += (-this.omega * this.omega * (this.x - target) - 2 * this.damping * this.omega * this.v) * h;
       this.x += this.v * h;
     }
     return this.x;
@@ -279,11 +338,17 @@ export class MotionLayer {
 
   private readonly b: Record<string, Object3D | null>;
   private readonly velocity = new Spring(0, LEAN.velocityOmega);
-  private readonly leanSpring = new Spring(0, LEAN.omega);
+  private readonly leanSpring = new Wobble(LEAN.omega, TIMING.leanDamping, 0);
+  /** the head's lag behind the body's tilt (follow-through) */
+  private readonly headLag = new Wobble(TIMING.headOmega, TIMING.headDamping, 0);
   private readonly bank = new Spring(0, 10);
   private readonly flailSpring = new Spring(0, FLAIL.omega);
-  private readonly dashSpring = new Spring(0, DASH.omegaIn);
-  private readonly bounce = new Bounce(SQUASH.omega, SQUASH.damping);
+  private readonly dashSpring = new Wobble(DASH.omegaIn, TIMING.dashDamping, 0);
+  /** since the last touch-down and the last jet take-off (s) */
+  private landT = Infinity;
+  private landDepth = 0;
+  private takeoffT = Infinity;
+  private wasGrounded = true;
   /** hit reactions: the flinch (rad, + top toward +x), the head's snap and the torso's twist (rad), the knees giving (m) */
   private readonly flinch = new Spring(0, HIT.omega);
   private readonly headSnap = new Spring(0, HIT.omega);
@@ -300,6 +365,10 @@ export class MotionLayer {
   private first = true;
   private sinceDash = Infinity;
   private deaths: number | undefined;
+  /** the facing the spine and head lead the hips toward (an underdamped spring on the facing yaw), and the twist
+   *  that puts on them now (rad) */
+  private lead: Wobble | null = null;
+  turnTwist = 0;
   /** the head's rest height (m): a squash lowers it by `squash` of this */
   private readonly height: number;
 
@@ -322,7 +391,8 @@ export class MotionLayer {
    * bend and the feet stay on the ground. A squash used to scale the whole body, which skewed the aim (review M1).
    */
   get drop(): number {
-    return Math.max(0, -this.squash) * this.height + Math.max(0, this.buckle.x);
+    // (the rebound past standing lifts the hips a little: at most 1 cm)
+    return Math.max(-0.01, -this.squash * this.height) + Math.max(0, this.buckle.x) + takeoffDip(this.takeoffT);
   }
 
   /**
@@ -346,15 +416,18 @@ export class MotionLayer {
 
   /** Everything at rest: no lean, squash, flail or dash (a respawn; review L5). */
   reset(): void {
-    for (const spring of [this.velocity, this.leanSpring, this.bank, this.flailSpring, this.dashSpring, this.flinch, this.headSnap, this.twist, this.buckle]) spring.x = spring.v = 0;
+    for (const spring of [this.velocity, this.leanSpring, this.headLag, this.bank, this.flailSpring, this.dashSpring, this.flinch, this.headSnap, this.twist, this.buckle]) spring.x = spring.v = 0;
+    this.landT = this.takeoffT = Infinity;
+    this.wasGrounded = true;
     this.pending.size = 0;
-    this.bounce.x = this.bounce.v = 0;
     this.lean = this.flail = this.squash = this.tumble = 0;
     this.flailing = false;
     this.dash.active = false;
     this.sinceDash = Infinity;
     this.lastYaw = null;
     this.first = true;
+    this.lead = null;
+    this.turnTwist = 0;
   }
 
   /**
@@ -364,7 +437,7 @@ export class MotionLayer {
    * the pose the aim layer gave them, pointing the same way in the world however the body leans, tumbles or dashes,
    * so the gun stays at the hand the aim pose put it in (and the muzzle with it).
    */
-  update(p: MotionInput, dt: number, yaw: number, loco: Pick<LocoLayer, 'landing'>, holdLean = 0, held: readonly ('L' | 'R')[] = []): void {
+  update(p: MotionInput, dt: number, yaw: number, loco: Pick<LocoLayer, 'landing'>, holdLean = 0, held: readonly ('L' | 'R')[] = [], facingYaw: number = yaw): void {
     if (p.deaths !== undefined && this.deaths !== undefined && p.deaths !== this.deaths) this.reset();
     this.deaths = p.deaths;
     this.time += dt;
@@ -378,18 +451,29 @@ export class MotionLayer {
     const ax = this.velocity.v;
     const target = p.grounded ? groundLean(p.vx, ax, facing) : airLean(p.vx, p.jetting);
     this.lean = this.leanSpring.step(target, dt);
+    this.headLag.step(this.lean, dt);
     const yawRate = this.lastYaw === null || dt <= 0 ? 0 : (yaw - this.lastYaw) / dt;
     this.lastYaw = yaw;
-    const bank = this.bank.step(p.grounded ? clamp(yawRate * Math.abs(p.vx) * LEAN.bankPer, -LEAN.bankMax, LEAN.bankMax) : 0, dt);
+    // banking into a facing turn: with speed on the ground; in the air (no step to take), a roll into it
+    const bank = this.bank.step(
+      p.grounded ? clamp(yawRate * Math.abs(p.vx) * LEAN.bankPer, -LEAN.bankMax, LEAN.bankMax) : clamp(yawRate * TURN_LEAD.airRollPer, -TURN_LEAD.airRoll, TURN_LEAD.airRoll),
+      dt,
+    );
+    // the spine and head lead a facing turn: they chase the facing a little faster than the hips and overshoot it
+    if (this.lead === null) this.lead = new Wobble(TURN_LEAD.omega, TURN_LEAD.damping, facingYaw);
+    this.lead.step(facingYaw, dt);
+    this.turnTwist = clamp(this.lead.x - yaw, -TURN_LEAD.max, TURN_LEAD.max);
 
-    // landing squash: kick the bounce down in proportion to the impact
+    // landing squash in proportion to the impact: an attack over 3 frames, then up with a small rebound (landingDip)
     if (loco.landing > 0) {
-      const depth = squashDepth(loco.landing);
-      // from rest, the deepest point of the bounce is 0.615 v/ω at this damping: kick so it reaches `depth`
-      if (depth > 0) this.bounce.v = (-depth * SQUASH.omega) / 0.615;
-    }
-    this.squash = this.bounce.step(dt);
-    if (Math.abs(this.squash) < 1e-4 && Math.abs(this.bounce.v) < 1e-3) this.squash = this.bounce.x = this.bounce.v = 0;
+      this.landT = 0;
+      this.landDepth = squashDepth(loco.landing);
+    } else this.landT += dt;
+    this.squash = this.landT < 1 ? -this.landDepth * landingDip(this.landT) : 0;
+    // a jet take-off: a quick crouch as it pushes off (takeoffDip), the legs then stretching into the climb
+    if (this.wasGrounded && !p.grounded && (p.jetting || p.vy > 1) && !p.dashing) this.takeoffT = 0;
+    else this.takeoffT += dt;
+    this.wasGrounded = p.grounded;
 
     // blast launch: flail above launchSpeedX in the air, until landing (or the flight slows right down). A dash
     // is faster still, but it's the player's own move: not during one, nor on its way out
@@ -413,8 +497,10 @@ export class MotionLayer {
     this.dash.active = dashing;
     this.dashTime += dt;
     this.dash.t = Math.min(1, this.dashTime / DASH.seconds);
+    // the dash pose: a coil against the burst for a moment, then a stretch past the pose that settles (Wobble)
+    const coiling = dashing && this.dashTime < TIMING.dashCoil;
     this.dashSpring.omega = dashing ? DASH.omegaIn : DASH.omegaOut;
-    const dashW = this.dashSpring.step(dashing ? 1 : 0, dt);
+    const dashW = this.dashSpring.step(dashing ? (coiling ? -TIMING.dashCoilShare : 1) : 0, dt);
 
     // hit reactions: the frame's hits kick critically damped springs (a quick rise, gone in a quarter of a second)
     const q = this.pending;
@@ -473,6 +559,8 @@ export class MotionLayer {
     if (b.spine1) rotateWorld(b.spine1, _q.setFromAxisAngle(Z, -tilt * lower * spine));
     if (b.spine2) rotateWorld(b.spine2, _q.setFromAxisAngle(Z, -tilt * upper * spine));
     if (b.neck) rotateWorld(b.neck, _q.setFromAxisAngle(Z, tilt * (lower + upper) * spine * LEAN.neckCounter));
+    // the head trails the body's lean and swings through it (follow-through on the big head; the aim is the arms')
+    if (b.head) rotateWorld(b.head, _q.setFromAxisAngle(Z, -(this.headLag.x - this.lean) * TIMING.headShare));
     // curl the spine into an up-dash tuck (+ about the body's left flexes forward, docs/04 §9.2)
     if (up && b.spine1) rotateWorld(b.spine1, _q.setFromAxisAngle(lat, 14 * DEG * up));
     // hit reactions: the flinch in the gameplay plane (in the air the whole body turns with it), the twist about the
@@ -488,6 +576,11 @@ export class MotionLayer {
       if (b.spine2) rotateWorld(b.spine2, _q.setFromAxisAngle(_up, this.twist.x * 0.55));
     }
     if (this.headSnap.x && b.head) rotateWorld(b.head, _q.setFromAxisAngle(lat, this.headSnap.x));
+    // a facing turn: the chest and head lead the hips round (the arms the aim layer holds keep their aim)
+    if (this.turnTwist) {
+      if (b.spine2) rotateWorld(b.spine2, _q.setFromAxisAngle(_up, this.turnTwist * TURN_LEAD.shares[0]));
+      if (b.head) rotateWorld(b.head, _q.setFromAxisAngle(_up, this.turnTwist * TURN_LEAD.shares[1]));
+    }
 
     // legs (local axes: +X flexes a thigh forward; a calf bends back with −X)
     const kick = Math.sin(this.time * FLAIL.kickRate);

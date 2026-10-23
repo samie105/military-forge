@@ -159,6 +159,8 @@ export const cosmetics: readonly CosmeticDef[] = [
   item(43, 'headgear_beret', 'headgear', 'Beret', 'uncommon', { kind: 'level', level: 10 }, { art: true }),
   item(44, 'headgear_combat_helmet', 'headgear', 'Combat Helmet', 'rare', STORE, { art: true }),
   item(45, 'headgear_crown', 'headgear', 'Paper Crown', 'legendary', { kind: 'achievement', label: '100 headshots' }),
+  // a bare head (22 Oct): the hair shows in full; every other hat hides it or sits over it (its `hidesHair` extra)
+  item(46, 'headgear_none', 'headgear', 'None', 'common', STARTER, { dyeable: false }),
 
   item(60, 'eyewear_none', 'eyewear', 'None', 'common', STARTER, { dyeable: false }),
   item(61, 'eyewear_aviators', 'eyewear', 'Aviators', 'common', STARTER, { art: true }),
@@ -202,8 +204,9 @@ export const cosmetics: readonly CosmeticDef[] = [
     ['dye_wine', 'Wine', '#5c1e2b', 'uncommon', { kind: 'level', level: 8 }], ['dye_denim', 'Denim', '#4b6080', 'uncommon', { kind: 'level', level: 12 }],
   ]),
 
-  // hair (22 Oct): `hair_body` is the body's own hair (the male body's is part of its mesh; the female body
-  // shows her default style); the styles are made for the female body (`fits`)
+  // hair (22 Oct): `hair_body` is the body's own hair, part of each body's mesh (his short crop under the helmet, her
+  // natural afro). The styles are made for the female body (`fits`) and replace hers (`hidesBody: hair` in their
+  // manifests, cosmetics/hair/<id>.json); they get `art` once the assembler draws the hair slot.
   item(260, 'hair_body', 'hair', 'Natural', 'common', STARTER, { dyeable: false }),
   item(261, 'hair_bun', 'hair', 'Field Bun', 'common', STARTER, { fits: ['female'] }),
   item(262, 'hair_braids', 'hair', 'Cornrow Braids', 'common', STARTER, { fits: ['female'] }),

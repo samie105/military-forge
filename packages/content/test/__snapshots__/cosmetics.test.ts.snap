@@ -53,6 +53,7 @@ exports[`cosmetics: data > wire ids are frozen: saved and networked loadouts sto
   "headgear_combat_helmet": 44,
   "headgear_crown": 45,
   "headgear_field_cap": 41,
+  "headgear_none": 46,
   "jetpack_drum": 161,
   "jetpack_rocket": 162,
   "jetpack_twin_tank": 160,
