@@ -23,6 +23,7 @@ import { reasonChip, winnerOf, type ResultsExtras } from '../Results';
 import { PhoneScreen, rise } from './layout';
 import { Roll, ShareChip, shareData, useShareChip } from './parts';
 import { SavedAdsList } from '../../../ads/SavedAds';
+import { DebriefLines } from '../../../tour/DebriefLines';
 import { TeamStandings, teamWinner } from '../../../teams/TeamResults';
 
 /** The words a shared result says: who won the match, where, and how you did. */
@@ -99,6 +100,8 @@ export function PhoneResults({ view, results, actions, room, training, code }: {
               </span>
             </div>
           )}
+          {/* the first few matches: what you did, one thing to try, the next order (the onboarding tour) */}
+          <DebriefLines />
           <div className="ticket pm-result m-p3" style={rise(2)}>
             <span className="label">
               <Icon name={chip.icon} size="sm" />

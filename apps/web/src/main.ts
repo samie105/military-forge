@@ -60,7 +60,8 @@ import { applyTeamPalette, teamColour } from './teams/palette';
 import { TeamStrip } from './teams/hudStrip';
 import { posterUp } from './presentation/state';
 import { countFrame, framesPerSecond, recordNet } from './stats';
-import { getTouchSettings, isTouchDevice, mountTouch, touchActive, touchControlRect } from './touch';
+import { getTouchSettings, isTouchDevice, mountTouch, onTouchAction, onTouchHintsReset, touchActive, touchControlRect, touchDrillRunning, touchHintsDoneBy, touchHintsPossible, touchHintsSeen, type ControlId } from './touch';
+import type { HintId, TouchHintId } from './tour/hints';
 import { applyPadSettings, currentDevice, isPadCode, mountGamepad, onInputDevice } from './gamepad';
 import { mountAdClicks } from './ads';
 import { padShownBindings } from './gamepad/prompts';
@@ -746,9 +747,16 @@ if (appMode && tourMemory) {
     cap: (code) => (isPadCode(code) ? capText(code) : keyLabel(code, keyLayout)),
     quiet: () => {
       const s = shell.store.getState();
-      return !!flight || s.overlay !== null || s.route !== null || s.tips;
+      return !!flight || s.overlay !== null || s.route !== null || s.tips || touchDrillRunning();
     },
+    // the touch controls' gesture hints are hints here too: one at a time with the rest (§3.6)
+    touch: { possible: () => touchHintsPossible() as TouchHintId[], rect: (c) => touchControlRect(c as ControlId) },
   });
+  hints.seenBefore(touchHintsSeen());
+  onTouchAction((a) => {
+    for (const id of touchHintsDoneBy(a)) hints?.done(id as HintId);
+  });
+  onTouchHintsReset(() => hints?.resetTouch());
   // Home's three stops (§3.5): once, the first time on Home after a match (or a veteran's first Home),
   // when Home has settled; leaving Home or opening anything over it ends the pass
   let stopStops: (() => void) | null = null;

@@ -17,7 +17,7 @@ import type { ThrowLatch } from '../input';
 import type { TouchController, TouchFrame } from './controller';
 import { PRESET_SETTINGS, clearLayout, clearMoves, loadSettings, saveSettings, sanitizeSettings, type KeyValueStore, type PresetId, type TouchSettings } from './settings';
 import type { ControlId } from './layout';
-import { drillSeen, markDrillSeen, saveSeen, type TouchAction } from './teach';
+import { HINT_DONE_BY, drillSeen, loadSeen, markDrillSeen, saveSeen, type TouchAction } from './teach';
 import type { Box } from '../ui/landscape';
 
 export type { FireMode, Handed, PresetId, TouchMode, TouchSettings } from './settings';
@@ -259,6 +259,39 @@ export function resetTouchHints(): void {
   controller?.resetHints();
   if (!controller) saveSeen(storage(), new Set());
   markDrillSeen(storage(), false);
+  for (const fn of hintResetListeners) fn();
+}
+
+// ---- the gesture hints, shown by the onboarding's hint engine (tour/hints.ts, tour/hintsRun.ts) ----
+
+const hintResetListeners = new Set<() => void>();
+
+/** The gesture hints possible right now, in order (none until the controls are up and in play). */
+export function touchHintsPossible(): string[] {
+  return controller?.isActive ? controller.hintsPossible() : [];
+}
+
+/** The hints this device saw before they moved to the hint engine (counted as shown there). */
+export function touchHintsSeen(): string[] {
+  return [...loadSeen(storage())];
+}
+
+/** The hints a touch action answers (a swipe dash answers "Swipe to dash"). */
+export function touchHintsDoneBy(a: TouchAction): string[] {
+  return Object.entries(HINT_DONE_BY)
+    .filter(([, acts]) => acts.includes(a))
+    .map(([id]) => id);
+}
+
+/** "Show hints again" (Settings → Touch): the hint engine clears its touch counts. Returns an unsubscribe. */
+export function onTouchHintsReset(fn: () => void): () => void {
+  hintResetListeners.add(fn);
+  return () => hintResetListeners.delete(fn);
+}
+
+/** "Learn the controls" is running or waiting to (the hint engine stays quiet meanwhile). */
+export function touchDrillRunning(): boolean {
+  return controller?.drillRunning ?? false;
 }
 
 /** The touch controls are on screen (or would be, outside the menus). */

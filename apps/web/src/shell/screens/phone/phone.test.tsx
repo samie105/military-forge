@@ -125,7 +125,7 @@ describe('m-home', () => {
     const store = createShellStore({ profile: { nickname: 'Ade', changeableAt: null, offline: true } as never });
     const html = withCtl(ctl(), <PhoneHome store={store} />);
     expect(html).toContain('Offline');
-    expect(html).toMatch(/<button type="button" class="btn btn--ink pm-create m-p8" disabled="">/);
+    expect(html).toMatch(/<button type="button" class="btn btn--ink pm-create m-p8" data-tour="create" disabled="">/);
     expect(html).toMatch(/<button type="button" class="ticket rivets pm-tk m-p3 m-p8" style="--i:3">/); // Training, enabled
   });
 });

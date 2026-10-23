@@ -60,9 +60,9 @@ export interface HintState {
   shield: boolean;
 }
 
-/** The first hint that's possible now and not yet seen (null: none). */
-export function nextHint(s: HintState, seen: ReadonlySet<string>): Hint | null {
-  if (!s.alive) return null;
+/** Every hint possible now, in order (the onboarding's hint engine picks, tour/hints.ts). */
+export function possibleHints(s: HintState): Hint[] {
+  if (!s.alive) return [];
   const possible: Record<string, boolean> = {
     'dash-swipe': true,
     'grenade-types': s.grenadeTypes >= 2,
@@ -70,7 +70,12 @@ export function nextHint(s: HintState, seen: ReadonlySet<string>): Hint | null {
     take: s.nearCrate,
     'shield-hold': s.shield,
   };
-  return HINTS.find((h) => possible[h.id] && !seen.has(h.id)) ?? null;
+  return HINTS.filter((h) => possible[h.id]);
+}
+
+/** The first hint that's possible now and not yet seen (null: none). */
+export function nextHint(s: HintState, seen: ReadonlySet<string>): Hint | null {
+  return possibleHints(s).find((h) => !seen.has(h.id)) ?? null;
 }
 
 /** The hint a player's action answers (it stops showing once they've done it). */

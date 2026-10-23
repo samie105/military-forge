@@ -336,7 +336,12 @@ export class Spotlight {
 
   private resolve(t: SpotTarget): Element | null {
     if (t.kind === 'element') return typeof t.el === 'function' ? t.el() : t.el;
-    if (t.kind === 'selector') return document.querySelector(t.selector);
+    // the first one on screen: both HUDs' plates are in the page (the desktop's hidden on a phone, and the
+    // phone's vitals ride the touch controls there), so the first match may be one nobody can see
+    if (t.kind === 'selector') {
+      const all = document.querySelectorAll(t.selector);
+      return [...all].find((e) => e.getClientRects().length > 0) ?? all[0] ?? null;
+    }
     return null;
   }
 

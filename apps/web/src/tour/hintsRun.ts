@@ -8,7 +8,8 @@ import { MatchPhase, type SimEvent } from '@military-forge/sim';
 import type { ActionId, Bindings } from '../shell/controls';
 import type { ShellStore } from '../shell/store';
 import { Spotlight } from '../ui/spotlight';
-import { HINT_SHOW_MS, HintEngine, loadHintMemory, saveHintMemory, type HintDef, type HintId } from './hints';
+import type { Box } from '../ui/landscape';
+import { HINT_SHOW_MS, HintEngine, TOUCH_HINTS, loadHintMemory, saveHintMemory, type HintDef, type HintId, type TouchHintId } from './hints';
 import type { TourMemory } from './index';
 import { deathCause } from './track';
 
@@ -24,6 +25,14 @@ export interface HintDeps {
   quiet(): boolean;
   clock?: () => number;
   spotlight?: Spotlight;
+  /**
+   * The touch controls (on phones): which gesture hints are possible now, and a control's box to ring
+   * (touch/index.ts). Absent or null: no touch hints.
+   */
+  touch?: {
+    possible(): readonly TouchHintId[];
+    rect(control: string): Box | null;
+  } | null;
 }
 
 export class HintRunner {
@@ -45,6 +54,30 @@ export class HintRunner {
       saveHintMemory(this.d.storage, this.engine.memory);
       this.hide();
     };
+  }
+
+  /** A move was done (a sim event here, or a touch gesture: main.ts relays them): its hint goes. */
+  done(id: HintId): void {
+    this.did(id);
+  }
+
+  /**
+   * Hints learnt before they lived here (the touch controls' own "seen" list) count as shown; and
+   * "Show hints again" (Settings → Touch) clears the touch ones.
+   */
+  seenBefore(ids: readonly string[]): void {
+    let changed = false;
+    for (const id of TOUCH_HINTS)
+      if (ids.includes(id) && this.engine.memory.counts[id] === undefined) {
+        this.engine.memory.counts[id] = 1;
+        changed = true;
+      }
+    if (changed) saveHintMemory(this.d.storage, this.engine.memory);
+  }
+
+  resetTouch(): void {
+    for (const id of TOUCH_HINTS) delete this.engine.memory.counts[id];
+    saveHintMemory(this.d.storage, this.engine.memory);
   }
 
   private t(): number {
@@ -78,6 +111,7 @@ export class HintRunner {
       return;
     }
     if (this.d.quiet() || this.phase !== MatchPhase.InProgress) return;
+    this.engine.offer(this.d.touch?.possible() ?? []);
     const def = this.engine.next(t);
     if (def) this.show(def);
   }
@@ -108,9 +142,12 @@ export class HintRunner {
     this.d.memory.record({ t: 'hint.shown', hint: def.id });
     const b = this.d.bindings();
     const keys = def.keys.flatMap((a: ActionId) => (b[a][0] ? [this.d.cap(b[a][0])] : []));
+    const touch = this.d.touch;
+    const control = def.control;
     this.spot.show({
       id: `hint:${def.id}`,
-      target: def.hud ? { kind: 'selector', selector: `[data-tour="${def.hud}"]` } : [],
+      // a touch hint rings its control (as First flight does); the rest, their HUD plate
+      target: control && touch ? { kind: 'rect', rect: () => touch.rect(control), shape: 'circle' } : def.hud ? { kind: 'selector', selector: `[data-tour="${def.hud}"]` } : [],
       eyebrow: 'Tip',
       title: def.title,
       body: def.body,

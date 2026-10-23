@@ -58,7 +58,7 @@ export function skinHtml(id: ControlId): string {
   <span class="dial__hint dial__hint--up">${ic('jet', 'ic--sm')}</span><span class="dial__hint dial__hint--down">${ic('chev-down', 'ic--sm')}</span>
   <span class="dial__knob mf-knob"></span>
   <span class="dial__lbl dial__lbl--hp" data-state="alive">${ic('hp', 'ic--sm')}<b class="num" data-bind="player.hp"></b></span>
-  <span class="dial__lbl dial__lbl--fuel" data-state="alive"><b class="num" data-bind="player.fuel"></b>${ic('fuel', 'ic--sm')}</span>
+  <span class="dial__lbl dial__lbl--fuel" data-state="alive" data-tour="fuel"><b class="num" data-bind="player.fuel"></b>${ic('fuel', 'ic--sm')}</span>
 </div>`;
     case 'aim':
       return `<div class="mf-skin dial dial--aim">
@@ -66,7 +66,7 @@ export function skinHtml(id: ControlId): string {
   <span class="dial__base"></span><span class="dial__groove"></span>
   <span class="dial__fireline" aria-hidden="true"></span><span class="dial__cancel" aria-hidden="true"></span><span class="dial__tag" aria-hidden="true">Auto</span>
   <span class="dial__knob dial__knob--aim mf-knob">${ic('target', 'ic--sm')}</span>
-  <span class="dial__lbl dial__lbl--ammo" data-state="gun"><b class="num" data-bind="player.slot.0.mag"></b><span>/<span data-bind="player.slot.0.magSize"></span></span></span>
+  <span class="dial__lbl dial__lbl--ammo" data-state="gun" data-tour="ammo"><b class="num" data-bind="player.slot.0.mag"></b><span>/<span data-bind="player.slot.0.magSize"></span></span></span>
   <span class="dial__mode" data-state="grenade-aim">Aim the arc</span>
 </div>`;
     case 'shield':
@@ -75,9 +75,9 @@ export function skinHtml(id: ControlId): string {
     case 'reload':
       return `<div class="mf-skin dial-btn dial-btn--reload">${ic('reload')}<b class="num tb__sub" data-state="gun" data-bind="player.slot.0.mag"></b><span data-state="reloading">${ring(27)}</span></div>`;
     case 'dash':
-      return `<div class="mf-skin dial-btn dial-btn--dash">${ic('dash')}${ring(27)}</div>`;
+      return `<div class="mf-skin dial-btn dial-btn--dash" data-tour="dash">${ic('dash')}${ring(27)}</div>`;
     case 'grenade':
-      return `<div class="mf-skin dial-btn dial-btn--grenade"><svg class="ic ic--fill ic--sm" aria-hidden="true"><use data-bind-attr="href: touch.grenade.icon"/></svg><b class="num tb__sub" data-bind="touch.grenade.count"></b><span class="mf-quick" aria-hidden="true">Quick</span></div>`;
+      return `<div class="mf-skin dial-btn dial-btn--grenade" data-tour="belt"><svg class="ic ic--fill ic--sm" aria-hidden="true"><use data-bind-attr="href: touch.grenade.icon"/></svg><b class="num tb__sub" data-bind="touch.grenade.count"></b><span class="mf-quick" aria-hidden="true">Quick</span></div>`;
     case 'melee':
       return `<div class="mf-skin dial-btn dial-btn--melee">${ic('melee')}</div>`;
     case 'cycleGrenade':

@@ -8,7 +8,7 @@
  *   - dash: a swipe dashes; two quick ones chain;
  *   - shield: a hold raises it, lifting slings it;
  *   - camera: two fingers on one side pinch; a two-finger double tap recentres;
- *   - first-time hints show beside their control;
+ *   - a first-time gesture hint shows as a tip (the onboarding's hint engine), ringing its control;
  *   - the Frost glass and its solid fallback;
  *   - Settings → Touch with the new rows, at 150 % text.
  * Shots go to `out`; exits 1 on a failed check, a page error, a console error or a missing #icon-*.
@@ -274,10 +274,17 @@ async function gestures(where) {
 try {
   await page.goto(`${base}/?app&time=900`, { waitUntil: 'load' });
   await page.evaluate(() => {
-    localStorage.setItem('mf.touch.settings.v1', JSON.stringify({ mode: 'on' }));
+    // the fire mode chosen (the first-run chooser, #204, would hold play), Pull as before
+    localStorage.setItem('mf.touch.settings.v1', JSON.stringify({ mode: 'on', fire: 'pull', fireChosen: true }));
     localStorage.removeItem('mf.touch.layout.v1');
     localStorage.removeItem('mf.touch.drill.v1');
     localStorage.removeItem('mf.touch.hints.v1');
+    localStorage.removeItem('mf.hints.v1');
+    // a returning player (the soldier made, the Briefing answered, First flight and Home's stops done):
+    // the name goes straight to Home, as this check needs
+    localStorage.setItem('mf-creator-seen', '1');
+    const now = Date.now();
+    localStorage.setItem('mf.facts.v1', JSON.stringify({ v: 1, firstSeen: now, lastSession: now, sessions: 2, experience: 'veteran', tours: { 'first-flight': { done: [], finished: true, skipped: false }, 'home-stops': { done: [], finished: true, skipped: false } } }));
   });
   await page.reload({ waitUntil: 'load' });
   await page.waitForSelector('input[aria-label="Your name"]', { timeout: 60_000 });
@@ -300,7 +307,7 @@ try {
   await shot('v3-settings-touch-text150', 500);
   await page.evaluate(() => document.documentElement.style.setProperty('--text-scale', '1'));
   const rows = await page.$$eval('.pm-set__text b', (bs) => bs.map((b) => b.textContent));
-  for (const r of ['Learn the controls', 'Button gestures', 'Auto-fire', 'Button haptics', 'Pinch to zoom', 'Look-ahead', 'Camera shake']) check(rows.includes(r), `Settings → Touch has "${r}"`);
+  for (const r of ['Learn the controls', 'Button gestures', 'Fire', 'Button haptics', 'Pinch to zoom', 'Look-ahead', 'Camera shake']) check(rows.includes(r), `Settings → Touch has "${r}"`);
   // Learn the controls → Training
   await (await page.waitForSelector('xpath/.//button[normalize-space(.)="Start"]')).click();
   await page.waitForFunction(() => window.__game?.mode?.update && document.querySelector('.mf-touch:not([hidden])'), { timeout: 60_000 });
@@ -339,10 +346,15 @@ try {
   await page.$eval('.mf-drill [data-drill="close"]', (b) => b.click());
   await sleep(300);
 
-  // a first-time hint, a few seconds into play: "Swipe to dash any way" by the dash button
-  await page.waitForSelector('.mf-hintchip:not([hidden])', { timeout: 15_000 }).catch(() => null);
+  // a first-time gesture hint, a few seconds into play (the onboarding's hint engine shows it, one tip at
+  // a time with the rest: tour/hints.ts): "Dash. Swipe the button to dash any way", ringing the dash button
+  // the drill just used every gesture, and a gesture the player uses is never taught: Settings' "Show
+  // hints again", as a player would
+  await page.evaluate(() => window.__touch.resetTouchHints());
+  await page.waitForFunction(() => /Tip/i.test(document.querySelector('.mf-spot__eyebrow')?.textContent ?? '') && !!document.querySelector('.mf-spot__ring'), { timeout: 20_000 }).catch(() => null);
   await shot('l-hint', 200);
-  check(!!(await page.$('.mf-hintchip:not([hidden])')), `a first-time hint shows beside its control (${await page.$eval('.mf-hintchip', (e) => e.textContent).catch(() => '')})`);
+  const tip = await page.evaluate(() => ({ title: document.querySelector('.mf-spot__title')?.textContent ?? '', body: document.querySelector('.mf-spot__body')?.textContent ?? '', rings: document.querySelectorAll('.mf-spot__ring').length }));
+  check(/Dash/.test(tip.title) && /Swipe/.test(tip.body) && tip.rings > 0, `a first-time gesture hint shows as a tip, ringing its control (${tip.title} ${tip.body}; ${tip.rings} ring)`);
 
   // a strip: the belt fanning out under a swipe
   await me(() => {

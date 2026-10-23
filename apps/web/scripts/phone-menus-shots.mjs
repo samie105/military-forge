@@ -37,6 +37,21 @@ page.on('console', (m) => {
   // the API isn't running in this check: its fetches fail by design (the name check, the server ping)
   if (m.type() === 'error' && !/Failed to load resource|ERR_CONNECTION_REFUSED|\/api\//.test(m.text())) problems.push(`console error: ${m.text()}`);
 });
+// a returning player: the soldier made, the Briefing answered (veteran), First flight and Home's stops
+// done, so the name screen goes straight to Home (a first visit goes to the creator, then the Briefing,
+// and Home's spotlight would sit over its shots). The onboarding screens have their own checks.
+await page.evaluateOnNewDocument(() => {
+  try {
+    const now = Date.now();
+    localStorage.setItem('mf-creator-seen', '1');
+    localStorage.setItem(
+      'mf.facts.v1',
+      JSON.stringify({ v: 1, firstSeen: now, lastSession: now, sessions: 2, experience: 'veteran', tours: { 'first-flight': { done: [], finished: true, skipped: false }, 'home-stops': { done: [], finished: true, skipped: false } } }),
+    );
+  } catch {
+    /* no storage: the run shows whatever comes */
+  }
+});
 const cdp = await page.createCDPSession();
 await page.emulate({
   viewport: { width: 812, height: 375, deviceScaleFactor: 2, isMobile: true, hasTouch: true, isLandscape: true },
@@ -232,9 +247,12 @@ try {
   await targets('tips');
   const clear = async (where) => {
     const hits = await page.evaluate(() => {
-      const card = document.querySelector('.pm-tips').getBoundingClientRect();
+      // the card may have gone by itself on a slow run: nothing to cover then
+      const el = document.querySelector('.pm-tips');
+      if (!el) return [];
+      const card = el.getBoundingClientRect();
       return [...document.querySelectorAll('.mf-touch [class*="mf-ctl-"]')]
-        .filter((el) => el.offsetParent && !el.closest('[hidden]'))
+        .filter((el) => el.offsetParent && !el.closest('[hidden]') && getComputedStyle(el).visibility !== 'hidden')
         .map((el) => ({ c: [...el.classList].find((k) => k.startsWith('mf-ctl-')), r: el.getBoundingClientRect() }))
         .filter(({ r }) => r.width && r.left < card.right && r.right > card.left && r.top < card.bottom && r.bottom > card.top)
         .map(({ c }) => c);
@@ -339,6 +357,13 @@ try {
   await sleep(500);
 
   // ---- m-results ----
+  // the match runs first (GO), so the onboarding's tracker sees one end: the Debrief shows (the first few matches)
+  await store(() => {
+    const s = window.__game.shell.store;
+    s.setState({ match: { ...s.getState().match, phase: 2 } });
+    return 0;
+  });
+  await sleep(400);
   const ended = (votes, voted) => `window.__game.shell.store.setState({ match: { ...window.__game.shell.store.getState().match, phase: 3, votes: ${votes}, humans: 4, voted: ${voted}, myScore: 6, leaderScore: 10, leaderName: 'Kemi', results: ${RESULTS} } }); return 0;`;
   await strip('results-in', () => store(new Function(ended(1, false))), 26);
   await page.waitForSelector('[data-screen="m-results"]', { timeout: 10_000 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { newFacts, reduceFacts, type Facts } from '../../src/tour/facts';
-import { DAMAGE_QUIET_S, HINTS, HintEngine, SPAWN_QUIET_S, loadHintMemory, saveHintMemory } from '../../src/tour/hints';
+import { DAMAGE_QUIET_S, HINTS, HintEngine, SPAWN_QUIET_S, TOUCH_HINTS, loadHintMemory, saveHintMemory } from '../../src/tour/hints';
 
 const played = (n: number, moves: ('dash' | 'grenade')[] = []): Facts => {
   let f = newFacts(0);
@@ -91,5 +91,42 @@ describe('the hints engine (§3.6 rules)', () => {
       expect(h.body.split(' ').length).toBeLessThanOrEqual(12);
       expect(`${h.title} ${h.body}`).not.toMatch(/!|you keep|again/i);
     }
+  });
+
+  it('the touch gesture hints follow the same rules: one per life, quiet after a spawn, each once, the event ones first', () => {
+    const e = new HintEngine();
+    e.matchStart(newFacts(0));
+    e.offer(['dash-swipe', 'swap-radial']);
+    e.spawn(0);
+    expect(e.next(1)).toBeNull(); // the spawn's quiet
+    expect(e.next(SPAWN_QUIET_S + 0.1)?.id).toBe('dash-swipe');
+    expect(e.next(SPAWN_QUIET_S + 30)).toBeNull(); // one per life
+    e.death('gun');
+    e.spawn(100);
+    expect(e.next(100 + SPAWN_QUIET_S + 0.1)?.id).toBe('swap-radial'); // dash-swipe was shown once: done
+    // an event-driven hint waits in front of the offered ones
+    e.death('self');
+    e.spawn(200);
+    e.offer(['take']);
+    expect(e.next(200 + SPAWN_QUIET_S + 0.1)?.id).toBe('own-grenade');
+    e.death('gun');
+    e.spawn(300);
+    expect(e.next(300 + SPAWN_QUIET_S + 0.1)?.id).toBe('take');
+  });
+
+  it('a gesture the player already uses is never taught; none offered, none shown; off is off', () => {
+    const e = new HintEngine();
+    e.used('grenade-types');
+    e.offer(['grenade-types']);
+    e.spawn(0);
+    expect(e.next(SPAWN_QUIET_S + 1)).toBeNull();
+    e.offer([]);
+    expect(e.next(SPAWN_QUIET_S + 2)).toBeNull();
+    const off = new HintEngine({ counts: {}, off: true });
+    off.offer(['take']);
+    off.spawn(0);
+    expect(off.next(SPAWN_QUIET_S + 1)).toBeNull();
+    // every touch hint has its control and shows once
+    for (const id of TOUCH_HINTS) expect([HINTS[id].control !== undefined, HINTS[id].max]).toEqual([true, 1]);
   });
 });

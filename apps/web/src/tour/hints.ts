@@ -7,12 +7,22 @@
  * - each hint at most its Max, ever on this device (the counts persist: `mf.hints.v1`);
  * - "Don't show tips" turns them all off.
  * Hints never blame: "The middle kills", not "You keep dying to gas". The runtime is tour/hintsRun.ts.
+ *
+ * The touch controls' gesture hints are hints here too (they had their own timer: tips could double up).
+ * They're offered while the touch layer says they're possible now (`offer`: a second gun, two grenade
+ * types, a crate underfoot, a shield), under the same rules, after the event-driven ones; each shows
+ * once, and a gesture the player already uses is never taught (`used`).
  */
 import type { ActionId } from '../shell/controls';
 import type { Facts } from './facts';
 import type { DeathCause } from './log';
 
-export type HintId = 'gas' | 'fuel' | 'dash' | 'grenade' | 'own-grenade';
+export type TouchHintId = 'dash-swipe' | 'grenade-types' | 'swap-radial' | 'take' | 'shield-hold';
+export type HintId = 'gas' | 'fuel' | 'dash' | 'grenade' | 'own-grenade' | TouchHintId;
+
+/** The touch gesture hints, in the order they're taught. */
+export const TOUCH_HINTS: readonly TouchHintId[] = ['dash-swipe', 'grenade-types', 'swap-radial', 'take', 'shield-hold'];
+export const isTouchHint = (id: HintId): id is TouchHintId => (TOUCH_HINTS as readonly string[]).includes(id);
 
 export interface HintDef {
   id: HintId;
@@ -22,6 +32,8 @@ export interface HintDef {
   keys: readonly ActionId[];
   /** the HUD plate it rings (`data-tour`), if any */
   hud: 'fuel' | 'dash' | 'belt' | null;
+  /** a touch control it rings instead (touch hints: touch/layout.ts ControlId) */
+  control?: 'dash' | 'grenade' | 'swap' | 'take' | 'shield';
   /** at most this many times, ever */
   max: number;
 }
@@ -32,6 +44,12 @@ export const HINTS: Readonly<Record<HintId, HintDef>> = {
   dash: { id: 'dash', title: 'Dash.', body: 'Dodges fire. Costs fuel.', keys: ['dash'], hud: 'dash', max: 2 },
   grenade: { id: 'grenade', title: 'Grenade.', body: 'Tap to throw, hold to aim.', keys: ['grenade'], hud: 'belt', max: 2 },
   'own-grenade': { id: 'own-grenade', title: 'Hold to aim.', body: 'The arc shows where it lands.', keys: ['grenade'], hud: 'belt', max: 1 },
+  // touch (the words the controls' chips had)
+  'dash-swipe': { id: 'dash-swipe', title: 'Dash.', body: 'Swipe the button to dash any way.', keys: [], hud: null, control: 'dash', max: 1 },
+  'grenade-types': { id: 'grenade-types', title: 'Grenades.', body: 'Swipe ↑↓ on the button to change type.', keys: [], hud: null, control: 'grenade', max: 1 },
+  'swap-radial': { id: 'swap-radial', title: 'Guns.', body: 'Hold the gun button for both guns and melee.', keys: [], hud: null, control: 'swap', max: 1 },
+  take: { id: 'take', title: 'A gun underfoot.', body: 'Tap to take it.', keys: [], hud: null, control: 'take', max: 1 },
+  'shield-hold': { id: 'shield-hold', title: 'Shield.', body: 'Hold to keep it raised.', keys: [], hud: null, control: 'shield', max: 1 },
 };
 
 export const SPAWN_QUIET_S = 5;
@@ -47,6 +65,8 @@ export interface HintMemory {
 
 export class HintEngine {
   private pending: HintId[] = [];
+  /** the touch hints possible right now (the touch layer's say, each frame) */
+  private offered: readonly TouchHintId[] = [];
   private spawnAt = -Infinity;
   private damageAt = -Infinity;
   private shownThisLife = false;
@@ -96,16 +116,23 @@ export class HintEngine {
     if (++this.fuelFalls >= 2) this.want('fuel');
   }
 
-  /** A move was used: a hint about it is no longer wanted. */
+  /** A move was used: a hint about it is no longer wanted (a touch gesture: never, it's known). */
   used(id: HintId): void {
     this.pending = this.pending.filter((p) => p !== id);
+    if (isTouchHint(id)) this.memory.counts[id] = Math.max(this.memory.counts[id] ?? 0, HINTS[id].max);
+  }
+
+  /** The touch hints possible now (none off touch); they wait behind the event-driven ones. */
+  offer(ids: readonly TouchHintId[]): void {
+    this.offered = ids;
   }
 
   /** The hint to show now (and counted as shown), or null. */
   next(t: number): HintDef | null {
-    if (this.memory.off || !this.pending.length || !this.alive || this.countdown || this.shownThisLife) return null;
+    if (this.memory.off || (!this.pending.length && !this.offered.length) || !this.alive || this.countdown || this.shownThisLife) return null;
     if (t - this.spawnAt < SPAWN_QUIET_S || t - this.damageAt < DAMAGE_QUIET_S) return null;
-    const id = this.pending.shift()!;
+    const id = this.pending.shift() ?? this.offered.find((o) => (this.memory.counts[o] ?? 0) < HINTS[o].max);
+    if (!id) return null;
     this.shownThisLife = true;
     this.memory.counts[id] = (this.memory.counts[id] ?? 0) + 1;
     return HINTS[id];

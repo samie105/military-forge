@@ -22,7 +22,7 @@ import { BackToPause, WakeLockKeeper, canVibrate, inEdgeBand } from './platform'
 import { cross, drawIn, glideHome, growIn, settleNow, shrinkOut, stamp } from './fx';
 import { GESTURE, beltAfter, beltOf, beltSteps, cyclePresses, dashButtons, isQuickSwipe, nearestPick, radialAngles, radialSpots, type Vec } from './gestures';
 import { TouchOverlays, type RadialItem } from './overlays';
-import { CHAIN_MS, Drill, HINTS, HINT_DONE_BY, drillControl, loadSeen, markDrillSeen, nextHint, saveSeen, type Hint, type TouchAction } from './teach';
+import { CHAIN_MS, Drill, drillControl, loadSeen, markDrillSeen, possibleHints, saveSeen, type TouchAction } from './teach';
 import {
   CONTEXT_PRIORITY,
   OFF_HUD,
@@ -147,6 +147,8 @@ export class TouchController {
   /** fingers down in the editor (a second one on the screen pinches the control the first drags) */
   private readonly pointers = new Map<number, { x: number; y: number }>();
   private readonly state = createTouchState();
+  /** the local player is alive (the frame's; the hints possible now need it) */
+  private aliveNow = false;
   /** enemies in sight (no wall, no smoke between: input/sight.ts), for Auto fire and the aim assist */
   private readonly visible: AssistTarget[] = [];
   /** the shared aim assist core (input/assist.ts; the pad has its own): its sticky target and Strong's lock */
@@ -209,8 +211,6 @@ export class TouchController {
   private lastTwoTapAt = -Infinity;
   /** first-time hints already shown on this phone (teach.ts) */
   private readonly seen: Set<string>;
-  private hint: Hint | null = null;
-  private hintNextAt = 0;
   private drill: Drill | null = null;
   private drillWanted = false;
   private teachTarget: ControlId | null = null;
@@ -349,7 +349,6 @@ export class TouchController {
       this.touchOwnsAim = true;
       this.host.camera.lookAhead = this.settings.lookAhead ? 1 : 0;
       this.host.camera.viewScale = this.settings.view;
-      this.hintNextAt = performance.now() + 4000;
       // the controls come up lit, then fade once left alone
       this.fade.wakeAll(this.els.keys(), performance.now());
       this.place();
@@ -1385,10 +1384,6 @@ export class TouchController {
 
   /** What the player did: the drill ticks, a hint it answers goes. */
   private act(a: TouchAction): void {
-    if (this.hint && HINT_DONE_BY[this.hint.id]?.includes(a)) {
-      this.overlays.hideHint();
-      this.hint = null;
-    }
     if (this.drill && !this.drill.finished && this.drill.act(a, this.can())) {
       this.buzz(10);
       this.renderDrill();
@@ -1418,35 +1413,31 @@ export class TouchController {
     return () => this.actionListeners.delete(fn);
   }
 
-  /** Once a frame: the drill starts when asked and the player is alive; otherwise, a first-time hint. */
+  /** Once a frame: the drill starts when asked and the player is alive. */
   private teachTick(alive: boolean): void {
     if (!this.playing) return; // (the fire chooser first: playing is false while it's up)
+    this.aliveNow = alive;
     if (this.drillWanted && alive) {
       this.drillWanted = false;
       this.drill = new Drill();
       this.drill.autoSkip(this.can());
-      this.overlays.hideHint();
-      this.hint = null;
       this.renderDrill();
     }
-    if (this.drill) return;
-    const now = performance.now();
-    if (this.hint || now < this.hintNextAt) return;
+  }
+
+  /**
+   * The gesture hints possible now, in their order (teach.ts HINTS): the onboarding's hint engine
+   * (tour/hints.ts) shows them, one at a time with every other tip, under its rules. None while the
+   * drill runs or out of play; with gestures off, only Take (a tap) is left to teach.
+   */
+  hintsPossible(): string[] {
+    if (!this.playing || this.drill || this.drillWanted) return [];
     const guns = (this.guns.held !== NO_WEAPON ? 1 : 0) + (this.guns.slung !== NO_WEAPON ? 1 : 0);
-    const seen = this.settings.gestures ? this.seen : new Set([...this.seen, ...HINTS.filter((h) => h.id !== 'take').map((h) => h.id)]);
-    const h = nextHint({ alive, grenadeTypes: this.belt.types.length, guns, nearCrate: this.tokensBefore.has('near-crate'), shield: this.canShield() }, seen);
-    if (!h) return;
-    const c = this.centres.get(h.control);
-    const el = this.els.get(h.control);
-    if (!c || !el || el.classList.contains('mf-off')) return;
-    this.hint = h;
-    this.seen.add(h.id);
-    saveSeen(this.store, this.seen);
-    this.overlays.showHint(h, c, (this.sizes.get(h.control)?.px ?? 52) / 2);
-    window.setTimeout(() => {
-      if (this.hint === h) this.hint = null;
-    }, 6000);
-    this.hintNextAt = now + 9000;
+    const state = { alive: this.aliveNow, grenadeTypes: this.belt.types.length, guns, nearCrate: this.tokensBefore.has('near-crate'), shield: this.canShield() };
+    return possibleHints(state)
+      .filter((h) => this.settings.gestures || h.id === 'take')
+      .filter((h) => !this.els.get(h.control)?.classList.contains('mf-off'))
+      .map((h) => h.id);
   }
 
   /** Starts "Learn the controls" (Settings, the controls card, Training's first time): once playing and alive. */
@@ -1458,11 +1449,10 @@ export class TouchController {
     return !!this.drill || this.drillWanted;
   }
 
-  /** The hints show again (Settings → Touch → Show hints again). */
+  /** The hints show again (Settings → Touch → Show hints again): the old list too (index.ts tells the engine). */
   resetHints(): void {
     this.seen.clear();
     saveSeen(this.store, this.seen);
-    this.hintNextAt = performance.now() + 1500;
   }
 
   private renderDrill(): void {

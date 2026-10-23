@@ -46,6 +46,18 @@ export function PhonePause({ store }: { store: ShellStore }) {
           <Icon name="play" />
           Resume
         </button>
+        {/* First flight runs (the onboarding tour): Restart it, or Skip training (as the desktop's Pause) */}
+        {screen.name === 'training' && !!screen.tour && (
+          <div className="pm-pause__tour m-p3" style={rise(1)}>
+            <button type="button" className="btn btn--ink btn--sm m-p8" onClick={blurAfter(() => ctl.restartTour())}>
+              <Icon name="rotate" />
+              Restart First flight
+            </button>
+            <button type="button" className="btn btn--ghost btn--sm m-p8" onClick={blurAfter(() => ctl.skipTour())}>
+              Skip training
+            </button>
+          </div>
+        )}
         {room && (
           <button
             type="button"

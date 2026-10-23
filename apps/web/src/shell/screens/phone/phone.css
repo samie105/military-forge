@@ -346,3 +346,29 @@ html.reduce-motion .pm-turn__card .ic { animation: none; }
 /* Copy as text → Copy: the paper card is narrower than the words at large text */
 .is-text-lg .pm-lan__copy .mf-copy__more { display: none; }
 .is-text-lg .pm-lan__card > .label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---- the onboarding on phones (tour/: Next orders, the Debrief, First flight's pause buttons) ---- */
+/* Next orders take the soldier's column on Home while there's a card: the top card only, compact */
+.pm-home > .mf-orders { min-width: 0; min-height: 0; margin: 0; padding: 10px 12px; gap: 6px; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain; }
+.pm-home > .mf-orders .mf-orders__top { padding: 10px 12px; }
+.pm-home > .mf-orders .mf-orders__title { font-size: 22px; }
+.pm-home > .mf-orders .mf-orders__why { font-size: 12px; letter-spacing: .04em; }
+.pm-home > .mf-orders :is(.mf-orders__line, .mf-orders__more, .mf-manual) { display: none; }
+.pm-home > .mf-orders .mf-orders__act { flex-wrap: wrap; gap: 4px 10px; margin-top: 4px; }
+.pm-home > .mf-orders :is(.btn, .mf-orders__later) { min-height: var(--touch-min, 48px); }
+/* large text: the column goes (as the soldier's stage does); the cards wait for Home at a smaller size */
+.is-text-lg .pm-home > .mf-orders { display: none; }
+/* the Debrief under your own line on Results: compact, its button a full target */
+.pm-res .mf-debrief { margin: 0; padding: 6px 10px; gap: 4px; }
+.pm-res .mf-debrief p { font-size: 14px; }
+.pm-res .mf-debrief .ic { width: 16px; height: 16px; }
+.pm-res .mf-debrief .btn { min-height: var(--touch-min, 48px); flex: none; }
+/* a 375 px phone holds two of its lines (what you did, the next order); meanwhile the eyebrow (the Debrief
+   says it) and the winner's reason line (the MVP card says it) step aside; a taller one may still scroll */
+.pm-res .mf-debrief > p:not(:first-child):not(.mf-debrief__next) { display: none; }
+.pm-res:has(.mf-debrief) > .eyebrow,
+.pm-res:has(.mf-debrief) .pm-result .label { display: none; }
+.pm-res:has(.mf-debrief) { overflow-y: auto; min-height: 0; scrollbar-width: none; overscroll-behavior: contain; }
+/* First flight: Restart it, or Skip training, side by side under Resume */
+.pm-pause__tour { display: flex; gap: 8px; }
+.pm-pause__tour .btn { flex: 1; min-height: var(--touch-min, 48px); }
