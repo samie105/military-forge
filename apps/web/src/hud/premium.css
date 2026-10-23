@@ -340,15 +340,15 @@ html:is(.mf-glass-off, .gfx-low) #hud .mf-evfx > i { animation: none; }
 
 /* the kill confirm: TAKEN OUT, the name stamped (again on each kill), a headshot and the streak */
 #hud .mf-kc { position: absolute; left: 50%; top: 70%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 2px; text-shadow: var(--ts-hud); animation: m-rise var(--m-fast) var(--ease-arrive) both; }
-#hud .mf-kc__tag { display: inline-flex; align-items: center; gap: 6px; color: var(--c-volt); font-size: var(--fs-14); font-weight: var(--fw-black); letter-spacing: .26em; text-transform: uppercase; }
-#hud .mf-kc__name { font-size: var(--fs-64); color: var(--c-text); white-space: nowrap; }
+#hud .mf-kc__tag { display: inline-flex; align-items: center; gap: 6px; color: var(--c-volt); font-size: var(--fs-18); font-weight: var(--fw-black); letter-spacing: .26em; text-transform: uppercase; }
+#hud .mf-kc__name { font-size: var(--fs-88); color: var(--c-text); white-space: nowrap; }
 #hud .mf-kc__name--a { animation: mf-kc-a 260ms var(--ease-settle) both; }
 #hud .mf-kc__name--b { animation: mf-kc-b 260ms var(--ease-settle) both; }
 @keyframes mf-kc-a { from { scale: 1.3; opacity: 0; } 40% { opacity: 1; } to { scale: 1; opacity: 1; } }
 @keyframes mf-kc-b { from { scale: 1.3; opacity: 0; } 40% { opacity: 1; } to { scale: 1; opacity: 1; } }
 #hud .mf-kc__more { display: flex; align-items: center; gap: var(--sp-2); }
-#hud .mf-kc__head { display: inline-flex; align-items: center; gap: 4px; color: var(--c-brass); font-size: var(--fs-14); font-weight: var(--fw-black); letter-spacing: .14em; text-transform: uppercase; }
-#hud .mf-kc__streak { padding: 2px 10px; border-radius: var(--r-xs); background: var(--c-volt); color: var(--c-volt-ink); font: var(--fw-display) var(--fs-20)/1.1 var(--f-display); letter-spacing: .06em; text-transform: uppercase; text-shadow: none; }
+#hud .mf-kc__head { display: inline-flex; align-items: center; gap: 4px; color: var(--c-brass); font-size: var(--fs-18); font-weight: var(--fw-black); letter-spacing: .14em; text-transform: uppercase; }
+#hud .mf-kc__streak { padding: 3px 14px; border-radius: var(--r-xs); background: var(--c-volt); color: var(--c-volt-ink); font: var(--fw-display) var(--fs-28)/1.1 var(--f-display); letter-spacing: .06em; text-transform: uppercase; text-shadow: none; }
 #hud .mf-kc__streak:not([hidden]) { animation: m-stamp var(--m-fast) var(--ease-settle) both; }
 #hud[data-active-state~="kill-confirm-leaving"] .mf-kc { animation: m-leave var(--m-fast) var(--ease-leave) both; }
 
@@ -363,3 +363,88 @@ html:is(.mf-glass-off, .gfx-low) #hud .mf-evfx > i { animation: none; }
 #hud .mf-spec__who { display: flex; flex-direction: column; align-items: center; min-width: 220px; }
 #hud .mf-spec__who .display { font-size: var(--fs-36); }
 #hud .mf-spec__join { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: var(--r-xs); background: var(--c-volt); color: var(--c-volt-ink); font-weight: var(--fw-black); letter-spacing: .06em; text-transform: uppercase; text-shadow: none; }
+
+/* ======================================================= 5. the swap, unmistakable (owner, 23 Oct, again) */
+
+/* the draw card: over the bottom of play while a gun comes out, the gun big, its name stamped, its ammo,
+   the equip bar timed to the sim; it rises in, the gun slides in behind a volt ghost, and on landing
+   (drawn) the name stamps; then it drops away (drawn-leaving) */
+#hud .mf-drawcard { position: absolute; left: 50%; bottom: calc(var(--hud-m) + var(--safe-b) + 210px); transform: translateX(-50%); z-index: var(--z-local-2); display: grid; grid-template-columns: 300px minmax(0, 1fr); grid-template-areas: "kick kick" "art id" "art ammo" "foot foot"; column-gap: var(--sp-5); row-gap: 2px; width: 600px; padding: var(--sp-3) var(--sp-5) var(--sp-4); border: var(--bw-chunky) solid var(--c-volt); animation: mf-drawcard-in var(--m-base) var(--ease-arrive) both; }
+@keyframes mf-drawcard-in { from { opacity: 0; translate: 0 26px; scale: .94; } }
+#hud[data-active-state~="drawn-leaving"] .mf-drawcard { animation: m-edge-out var(--m-fast) var(--ease-leave) both; --m-from: 0 var(--m-edge); }
+#hud .mf-drawcard__kick { grid-area: kick; display: flex; align-items: center; gap: var(--sp-3); font-size: var(--fs-14); font-weight: var(--fw-black); letter-spacing: .24em; text-transform: uppercase; color: var(--c-volt); }
+#hud .mf-drawcard__ready { color: var(--c-ok); }
+#hud .mf-drawcard__slot { margin-left: auto; color: var(--c-muted); letter-spacing: .14em; }
+#hud .mf-drawcard__art { grid-area: art; position: relative; display: block; width: 300px; height: 112px; align-self: center; }
+#hud .mf-drawcard__art svg { position: absolute; left: 0; top: 0; width: 300px; height: 112px; }
+#hud .mf-drawcard__gun { color: var(--c-text); animation: mf-draw-in var(--equip-ms, 400ms) var(--ease-arrive) both; }
+#hud .mf-drawcard__ghost { color: var(--c-volt); --c-tip: var(--c-volt); opacity: 0; animation: mf-ghost var(--equip-ms, 400ms) var(--ease-arrive) both; }
+#hud .mf-drawcard__id { grid-area: id; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 4px; min-width: 0; }
+#hud .mf-drawcard__name { font-size: var(--fs-64); line-height: .9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+#hud .mf-drawcard__ammo { grid-area: ammo; display: flex; align-items: baseline; gap: var(--sp-2); }
+#hud .mf-drawcard__ammo .display { font-size: var(--fs-48); line-height: 1; }
+#hud .mf-drawcard__ammo > .num { font: var(--fw-display) var(--fs-24)/1 var(--f-display); color: var(--c-muted); }
+#hud .mf-drawcard__res { display: inline-flex; align-items: baseline; gap: 6px; margin-left: var(--sp-3); }
+#hud .mf-drawcard__res b { font-size: var(--fs-20); font-weight: var(--fw-black); }
+#hud .mf-drawcard__foot { grid-area: foot; display: flex; align-items: center; gap: var(--sp-3); margin-top: 6px; padding-top: 6px; border-top: var(--bw) solid var(--c-line); color: var(--c-muted); font-size: var(--fs-14); font-weight: var(--fw-semi); white-space: nowrap; }
+#hud .mf-drawcard__foot > span + span { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
+#hud .mf-drawcard__foot b { color: var(--c-text); }
+#hud .mf-drawcard__bar { position: absolute; left: 14px; right: 14px; top: -2px; height: 5px; border-radius: var(--r-xxs); background: var(--c-volt); transform-origin: 0 50%; transform: scaleX(var(--equip, 0)); }
+#hud:not([data-active-state~="switching"]) .mf-drawcard__bar { transform: none; background: var(--c-ok); }
+#hud[data-active-state~="drawn"] .mf-drawcard :is(.mf-drawcard__name, .mf-chip, .mf-drawcard__ammo .display) { animation: m-stamp var(--m-fast) var(--ease-settle) both; }
+#hud[data-active-state~="drawn"] .mf-drawcard__gun { animation: mf-land var(--m-base) var(--ease-settle) both; }
+/* the crate cards wait while a gun comes out */
+#hud:is([data-active-state~="switching"], [data-active-state~="drawn"]) .mf-hud-desktop .pickup { visibility: hidden; }
+
+/* the loadout bar: bottom centre, in the gap between the vitals and the weapon cards; both guns with
+   their slot numbers (the one in hand in volt, the one coming out filling with the equip clock) and
+   the grenades carried (the selected one in brass) */
+#hud .mf-loadout { overflow: hidden; position: absolute; left: calc((100% + var(--safe-l) - var(--safe-r) - 80px) / 2); bottom: calc(var(--hud-m) + var(--safe-b)); transform: translateX(-50%); display: flex; align-items: stretch; gap: var(--sp-2); max-width: calc(100% - 2 * var(--hud-m) - var(--safe-l) - var(--safe-r) - 1296px); padding: 6px; border-radius: var(--r-xs) var(--r-md) var(--r-xs) var(--r-md); background: var(--c-plate); border: var(--bw) solid var(--c-plate-line); text-shadow: var(--ts-hud); }
+#hud .mf-loadout ol { display: flex; gap: 4px; }
+#hud .mf-loadout__gun { position: relative; display: flex; align-items: center; gap: 6px; padding: 4px 10px 4px 6px; border-radius: var(--r-xs); border: var(--bw) solid var(--c-line); background: var(--c-ink-850); color: var(--c-muted); white-space: nowrap; overflow: hidden; }
+#hud .mf-loadout__gun .ic--kf { color: currentColor; --c-tip: currentColor; }
+#hud .mf-loadout__n { display: grid; place-items: center; width: 22px; height: 22px; border-radius: var(--r-xxs); border: 2px solid currentColor; font-size: var(--fs-14); font-weight: var(--fw-black); }
+#hud .mf-loadout__name { font-size: var(--fs-14); font-weight: var(--fw-black); letter-spacing: .04em; text-transform: uppercase; }
+#hud .mf-loadout__gun.is-active { border-color: var(--c-volt); background: var(--c-volt-soft); color: var(--c-text); animation: m-stamp var(--m-fast) var(--ease-settle) both; }
+#hud .mf-loadout__gun.is-active .mf-loadout__n { color: var(--c-volt); }
+#hud .mf-loadout__gun.is-active .ic--kf { --c-tip: var(--c-tip); }
+#hud .mf-loadout__equip { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--c-volt); transform-origin: 0 50%; transform: scaleX(var(--equip, 0)); opacity: 0; }
+#hud[data-active-state~="switching"] .mf-loadout__gun.is-active .mf-loadout__equip { opacity: 1; }
+#hud .mf-loadout__nades { padding-left: var(--sp-2); border-left: var(--bw) solid var(--c-line); }
+#hud .mf-loadout__nade { position: relative; display: grid; place-items: center; width: 24px; color: var(--c-muted); --c-cut: var(--c-plate); }
+#hud .mf-loadout__nade .ic { width: 22px; height: 22px; }
+#hud .mf-loadout__nade.is-selected { color: var(--c-brass); }
+#hud .mf-loadout__count { position: absolute; right: 0; bottom: -2px; font-size: var(--fs-14); font-weight: var(--fw-black); color: var(--c-text); }
+/* wide: the guns by name; narrower: by glyph (the bar stays in the gap between the vitals and the weapon cards) */
+#hud .mf-loadout__gun .ic--kf { display: none; }
+@container (max-width: 1800px) {
+  #hud .mf-loadout__name { display: none; }
+  #hud .mf-loadout__gun .ic--kf { display: block; }
+}
+/* the crate cards at full size, not the narrow layout's 0.8 (they're read up close), and a touch bigger text */
+@container (max-width: 1927px) {
+  #hud .mf-hud-desktop .pickup.mf-cmpcard, #hud .mf-hud-desktop .pickup.mf-pickup-item { scale: 1; }
+}
+#hud .mf-cmpcard .cmp { font-size: var(--fs-16); }
+#hud .mf-cmpcard .cmp thead th { font-size: var(--fs-14); }
+
+/* the quick-select: hold the swap key; a ring of the loadout round where the reticle was, the hub
+   naming what it points at, a volt pointer; point, wheel or click, let go to take */
+#hud .mf-qs { position: absolute; left: 0; top: 0; z-index: var(--z-panel); width: 0; height: 0; }
+#hud .mf-qs__ring { position: absolute; left: -330px; top: -255px; width: 660px; height: 510px; border-radius: 50%; background: radial-gradient(closest-side, color-mix(in srgb, var(--c-ink-950) 62%, transparent) 60%, color-mix(in srgb, var(--c-ink-950) 30%, transparent) 88%, transparent 100%); border: var(--bw) dashed var(--c-plate-line); animation: mf-qs-ring var(--m-fast) var(--ease-arrive) both; }
+@keyframes mf-qs-ring { from { opacity: 0; scale: .86; } }
+#hud .mf-qs__pointer { position: absolute; left: calc(50% - 3px); top: calc(50% - 128px); width: 6px; height: 128px; border-radius: 3px; background: linear-gradient(var(--c-volt), transparent); transform-origin: 50% 100%; transition: transform var(--m-fast) var(--ease-arrive); }
+#hud .mf-qs__items { position: absolute; left: 0; top: 0; }
+#hud .mf-qs__item { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; width: 150px; padding: 8px 10px; transform: translate(calc(var(--qx) - 50%), calc(var(--qy) - 50%)); border-radius: var(--r-xs) var(--r-md) var(--r-xs) var(--r-md); background: var(--c-plate-strong); border: var(--bw) solid var(--c-plate-line); color: var(--c-text); text-shadow: var(--ts-hud); white-space: nowrap; transition: scale var(--m-fast) var(--ease-settle), border-color var(--m-fast); animation: mf-qs-item var(--m-fast) var(--ease-arrive) both; animation-delay: calc(var(--i, 0) * 18ms); --c-cut: var(--c-plate-strong); }
+@keyframes mf-qs-item { from { opacity: 0; scale: .7; } }
+#hud .mf-qs__item .ic--wpn { width: 110px; height: 41px; color: var(--c-text); }
+#hud .mf-qs__item .ic--lg { color: var(--c-brass); }
+#hud .mf-qs__item b { font-size: var(--fs-16); font-weight: var(--fw-black); letter-spacing: .04em; text-transform: uppercase; }
+#hud .mf-qs__item span { font-size: var(--fs-14); font-weight: var(--fw-bold); color: var(--c-muted); }
+#hud .mf-qs__item.is-hi { scale: 1.14; border-color: var(--c-volt); background: color-mix(in srgb, var(--c-volt) 16%, var(--c-plate-strong)); --c-cut: var(--c-ink-850); }
+#hud .mf-qs__item.is-hi span { color: var(--c-volt); }
+#hud .mf-qs__hub { position: absolute; left: -125px; top: -62px; display: flex; flex-direction: column; align-items: center; gap: 2px; width: 250px; padding: 10px 12px; border-color: var(--c-volt); text-align: center; animation: m-pull var(--m-fast) var(--ease-arrive) both; }
+#hud .mf-qs__name { font-size: var(--fs-36); line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+#hud .mf-qs__line { font-size: var(--fs-14); font-weight: var(--fw-semi); color: var(--c-muted); white-space: nowrap; }
+#hud .mf-qs__how { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; font-size: var(--fs-14); color: var(--c-muted); white-space: nowrap; }
+html[data-input="pad"] #hud .mf-qs__mouse, html:not([data-input="pad"]) #hud .mf-qs__pad { display: none; }

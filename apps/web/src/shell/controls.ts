@@ -58,7 +58,7 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'melee', label: 'Melee', group: 'Combat', bit: Btn.Melee, defaults: ['KeyC', 'Mouse3'] },
   { id: 'grenade', label: 'Throw grenade', group: 'Combat', bit: Btn.Grenade, defaults: ['KeyG'], hint: 'Tap: quick throw · hold: aim the arc, release to throw' },
   { id: 'cycleGrenade', label: 'Next grenade', group: 'Combat', bit: Btn.CycleGrenade, defaults: ['KeyT', 'Mouse4'] },
-  { id: 'swap', label: 'Swap weapon', group: 'Weapons', bit: Btn.Swap, defaults: ['KeyQ'] },
+  { id: 'swap', label: 'Swap weapon (hold: quick-select)', group: 'Weapons', bit: Btn.Swap, defaults: ['KeyQ'] },
   { id: 'slot1', label: 'Weapon 1', group: 'Weapons', slot: 1, defaults: ['Digit1'] },
   { id: 'slot2', label: 'Weapon 2', group: 'Weapons', slot: 2, defaults: ['Digit2'] },
   { id: 'dual', label: 'Dual wield', group: 'Weapons', bit: Btn.Dual, defaults: ['KeyF'] },

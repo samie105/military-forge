@@ -19,7 +19,7 @@ import { avatarElement } from '../presentation/domAvatar';
 import { DamageSource, MatchPhase, type SimEvent } from '@military-forge/sim';
 import { SpectateQueue } from '@military-forge/protocol';
 import type { SpectateView } from '../spectate/director';
-import { DRAGON, GAS, HitZone, POWER_WEAPONS, defaultTuning, weapons, type Tuning } from '@military-forge/content';
+import { DRAGON, GAS, HitZone, NO_WEAPON, POWER_WEAPONS, defaultTuning, grenades, weapons, type Tuning } from '@military-forge/content';
 import type { MatchView } from '../shell/matchView';
 import { formatClock, playerName } from '../shell/matchView';
 import { capText, iconHref, weaponIcon } from '../ui/icons';
@@ -71,6 +71,7 @@ import {
 import { StateTokens } from './state';
 import { HUD_VARS, hudTemplate } from './template';
 import { feedTouchHud } from '../touch';
+import { itemAngle, quickSelect, type QuickItem, type QuickPlayer } from '../quickSelect';
 import './hud.css';
 import './premium.css';
 import '../spectate/spectate.css';
@@ -171,6 +172,8 @@ export interface HudMemory {
   swapHint?: boolean;
   /** our last kill, to confirm (who, our streak, a headshot); `n` counts them so a new one restamps */
   kill?: { victim: string; streak: number; headshot: boolean; n: number } | null;
+  /** the quick-select (hold the swap key): open, and the item it points at */
+  quick?: { open: boolean; item: QuickItem | null };
 }
 
 export interface HudFrame {
@@ -196,7 +199,7 @@ const LAUNCH_MS = 2500;
 const DASH_HINT_MS = 600;
 const QUICK_MS = 450;
 /** the gun now in hand lands (stamps) this long after its draw ends */
-const DRAWN_MS = 450;
+const DRAWN_MS = 650;
 /** the draw cue keeps naming the swap-back key this long after the draw */
 const SWAP_HINT_MS = 1200;
 /** a kill's confirmation stays up this long */
@@ -565,6 +568,24 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
   v['kill.victim'] = kc?.victim ?? '';
   v['kill.class'] = `display mf-kc__name mf-kc__name--${(kc?.n ?? 0) % 2 ? 'a' : 'b'}`;
   v['kill.streak'] = kc ? streakWords(kc.streak) : '';
+  // the quick-select's hub: what it points at
+  const q = me.alive && mem.quick?.open ? mem.quick : null;
+  on('quick-open', !!q);
+  const qi = q?.item ?? null;
+  if (qi?.kind === 'gun') {
+    const w = me.weapons[qi.slot];
+    const def = weapons[qi.def];
+    v['quick.name'] = def?.name ?? '';
+    const ammo = def && def.fireMode !== 'melee' && w ? ` · ${w.mag}/${w.reserve}` : '';
+    v['quick.line'] = `${qi.slot === me.active ? 'In hand' : 'On your back'} · ${weaponFamily(def)}${ammo}`;
+  } else if (qi?.kind === 'grenade') {
+    v['quick.name'] = grenades[qi.type]?.name ?? '';
+    v['quick.line'] = `Grenades · ${qi.count} carried${qi.type === ((me as HudPlayer).grenadeType ?? 0) ? ' · selected' : ''}`;
+  } else {
+    v['quick.name'] = '';
+    v['quick.line'] = '';
+  }
+
 
   // the reticle and its markers
   on('reticle', !!input.pointer && me.alive);
@@ -813,6 +834,9 @@ export class Hud {
   private kills = 0;
   /** the world tags on the phone screen (the nearest few, smaller) */
   private readonly phoneTags: WorldTags;
+  /** the loadout bar (both guns, the grenades carried) and the quick-select wheel, drawn when they change */
+  private readonly loadout: { guns: HTMLElement; nades: HTMLElement; key: string; state: string };
+  private readonly quick: { root: HTMLElement; items: HTMLElement; pointer: HTMLElement; key: string; hi: number; at: string };
   private lastActive = -1;
   private death: DeathInfo | null = null;
   private keys: HudKeys = {};
@@ -863,6 +887,8 @@ export class Hud {
     this.phoneArcs = one<SVGSVGElement>('.mf-hud-phone .dmg-arcs');
     this.worldTags = new WorldTags(one<HTMLElement>(`${desk} .mf-world`));
     this.phoneTags = new WorldTags(one<HTMLElement>('.mf-hud-phone .mf-world'), PHONE_TAGS);
+    this.loadout = { guns: one<HTMLElement>(`${desk} .mf-loadout__guns`), nades: one<HTMLElement>(`${desk} .mf-loadout__nades`), key: '', state: '' };
+    this.quick = { root: one<HTMLElement>(`${desk} .mf-qs`), items: one<HTMLElement>(`${desk} .mf-qs__items`), pointer: one<HTMLElement>(`${desk} .mf-qs__pointer`), key: '', hi: -1, at: '' };
     this.reticles = [one<HTMLElement>(`${desk} .reticle`), one<HTMLElement>('.mf-hud-phone .reticle')];
     this.markers = [...this.root.querySelectorAll<HTMLElement>(`${desk} .mf-mk`)];
     this.beltList = one<HTMLElement>(`${desk} .belt__list`);
@@ -980,6 +1006,8 @@ export class Hud {
       this.netDetail = netGraph(frame.net);
     }
     const hpFill = this.me ? Math.max(0, Math.min(1, this.me.hp / input.tuning.healthMax)) : 1;
+    // the quick-select (hold the swap key) lists this loadout
+    quickSelect.observe(this.me as QuickPlayer | null);
     const swap = Math.max(0, this.me?.swapTicks ?? 0);
     if (swap > this.lastSwap) this.swapTotal = swap;
     // a draw just ended: the gun lands, and the cue says which key swaps back a moment longer
@@ -1014,6 +1042,7 @@ export class Hud {
       drawn: now < this.drawnUntil,
       swapHint: now < this.swapHintUntil,
       kill: this.kill,
+      quick: { open: quickSelect.open, item: quickSelect.view.items[quickSelect.view.highlight] ?? null },
     });
     this.binder.update(values);
     this.states.set(this.linger.apply(tokens, now));
@@ -1024,6 +1053,8 @@ export class Hud {
       this.pulse();
     }
     this.drawBelt();
+    this.drawLoadout();
+    this.drawQuick();
     feedTouchHud(values, tokens); // the phone's thumb dials wear these too (touch/skin.ts)
     this.place(input);
     // the world tags of the screen that shows (the desktop's, or the phone's while the touch controls are up)
@@ -1230,6 +1261,113 @@ export class Hud {
     // the slung card, sliding back from where the held one was
     const sx = (a.left - b.left) / zoom;
     slung.animate([{ transform: `translateX(${(sx * 0.5).toFixed(1)}px)`, opacity: 0 }], { duration, easing }); // to its own place and opacity
+  }
+
+  /**
+   * The loadout bar (desktop, bottom centre): both guns with their slot numbers and the grenade
+   * types carried. Built when the loadout changes; the volt marker slides to the gun in hand (CSS,
+   * --lo-active) and the gun being drawn fills with the equip clock (--equip).
+   */
+  private drawLoadout(): void {
+    const me = this.me as HudPlayer | null;
+    const lo = this.loadout;
+    const guns = me ? me.weapons.map((w, slot) => ({ slot, def: w.def })).filter((g) => g.def !== NO_WEAPON && weapons[g.def]) : [];
+    const nades = me ? grenadeBelt(me).filter((g) => g.present && g.count > 0) : [];
+    const key = `${guns.map((g) => `${g.slot}:${g.def}`).join(',')}|${nades.map((g) => g.id).join(',')}`;
+    if (key !== lo.key) {
+      lo.key = key;
+      lo.state = '';
+      lo.guns.replaceChildren(
+        ...guns.map((g) => {
+          const li = el('li', 'mf-loadout__gun');
+          li.dataset.slot = String(g.slot);
+          el('b', 'mf-loadout__n num', li).textContent = String(g.slot + 1);
+          const icon = weaponIcon(weapons[g.def]?.id);
+          if (icon) li.appendChild(svgIcon('ic--kf', iconHref(icon)));
+          el('span', 'mf-loadout__name', li).textContent = weapons[g.def]?.name ?? '';
+          el('i', 'mf-loadout__equip', li);
+          return li;
+        }),
+      );
+      lo.nades.replaceChildren(
+        ...nades.map((g) => {
+          const li = el('li', 'mf-loadout__nade');
+          li.dataset.id = g.id;
+          li.appendChild(svgIcon('ic ic--fill', iconHref(`g-${g.id}`), g.name));
+          el('b', 'mf-loadout__count num', li);
+          return li;
+        }),
+      );
+      lo.nades.hidden = nades.length === 0;
+    }
+    const state = me ? `${me.active}:${me.dual ? 1 : 0}:${nades.map((g) => `${g.count}${g.selected ? '*' : ''}`).join(',')}` : '';
+    if (state === lo.state || !me) return;
+    lo.state = state;
+    for (const li of lo.guns.children as HTMLCollectionOf<HTMLElement>) li.classList.toggle('is-active', me.dual || Number(li.dataset.slot) === me.active);
+    lo.guns.parentElement!.style.setProperty('--lo-active', String(guns.findIndex((g) => g.slot === me.active)));
+    for (const li of lo.nades.children as HTMLCollectionOf<HTMLElement>) {
+      const g = nades.find((n) => n.id === li.dataset.id);
+      li.classList.toggle('is-selected', !!g?.selected);
+      const count = li.querySelector<HTMLElement>('.mf-loadout__count');
+      if (count && g) rollText(count, String(g.count));
+    }
+  }
+
+  /**
+   * The quick-select wheel (quickSelect.ts): its items round the ring where it opened (the reticle
+   * then), built once per opening; the highlight and the pointer follow what it points at.
+   */
+  private drawQuick(): void {
+    const q = this.quick;
+    const view = quickSelect.view;
+    if (!view.open) {
+      q.key = '';
+      return;
+    }
+    const me = this.me;
+    const key = view.items.map((i) => (i.kind === 'gun' ? `g${i.slot}:${i.def}` : `n${i.type}:${i.count}`)).join(',');
+    if (key !== q.key) {
+      q.key = key;
+      q.hi = -1;
+      const n = view.items.length;
+      q.items.replaceChildren(
+        ...view.items.map((item, i) => {
+          const a = itemAngle(i, n);
+          const cell = el('div', `mf-qs__item mf-qs__item--${item.kind}`);
+          cell.style.setProperty('--qx', `${(Math.cos(a) * 250).toFixed(1)}px`);
+          cell.style.setProperty('--qy', `${(Math.sin(a) * 180).toFixed(1)}px`);
+          cell.style.setProperty('--i', String(i));
+          if (item.kind === 'gun') {
+            const def = weapons[item.def];
+            const icon = weaponIcon(def?.id);
+            if (icon) cell.appendChild(svgIcon('ic--wpn', iconHref(icon)));
+            el('b', '', cell).textContent = def?.name ?? '';
+            const w = me?.weapons[item.slot];
+            el('span', 'num', cell).textContent = item.slot === me?.active ? 'In hand' : def && def.fireMode !== 'melee' && w ? `${w.mag}/${w.reserve}` : `Slot ${item.slot + 1}`;
+          } else {
+            const g = grenades[item.type];
+            cell.appendChild(svgIcon('ic ic--fill ic--lg', iconHref(`g-${g?.id ?? 'frag'}`)));
+            el('b', '', cell).textContent = g?.name ?? '';
+            el('span', 'num', cell).textContent = `×${item.count}`;
+          }
+          return cell;
+        }),
+      );
+    }
+    if (view.highlight !== q.hi) {
+      q.hi = view.highlight;
+      [...q.items.children].forEach((c, i) => c.classList.toggle('is-hi', i === view.highlight));
+      q.pointer.style.transform = `rotate(${((itemAngle(view.highlight, view.items.length) * 180) / Math.PI + 90).toFixed(1)}deg)`;
+    }
+    const fit = Number(getComputedStyleValue('--hud-fit')) || 1;
+    // kept whole on screen (it opens at the reticle, which may be near an edge)
+    const x = Math.max(340 * fit, Math.min(window.innerWidth - 340 * fit, view.at.x));
+    const y = Math.max(270 * fit, Math.min(window.innerHeight - 270 * fit, view.at.y));
+    const at = `translate(${(x / fit).toFixed(1)}px, ${(y / fit).toFixed(1)}px)`;
+    if (at !== q.at) {
+      q.at = at;
+      q.root.style.transform = at;
+    }
   }
 
   /**

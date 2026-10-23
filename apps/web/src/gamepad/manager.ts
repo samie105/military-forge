@@ -15,6 +15,7 @@ import { AimAssist, onTarget, type AssistTarget } from '../input/assist';
 import { Sight, sightPoints, type SightCloud } from '../input/sight';
 import { wrapAngle } from '../touch/stick';
 import { currentDevice, noteKeys, notePad, onInputDevice } from './device';
+import { quickSelect } from '../quickSelect';
 import { AIM_MIN_PUSH, MOVE_ZONES, createAimState, createMoveState, dashDirection, heldBits, moveStep, navRepeats, padDashStrength, padThrowStrength, reticleDistance, shapeAxes, stepAim, stickNavDirection, triggerHeld, type NavDir, type StickVector } from './mapping';
 import { activate, findScroller, focusFirst, focusedIn, focusables, hasTabs, moveFocus, rememberFocus, restoreFocus, switchTab, type FocusAnchor } from './menus';
 import { rumbleFor, scaleRumble, type Rumble } from './rumble';
@@ -438,7 +439,9 @@ export class PadManager {
       }
       if (this.pressed(i)) {
         this.tookOnHold[i] = false;
-        this.pulses |= m.bits[i]! & ~Btn.Grenade;
+        this.pulses |= m.bits[i]! & ~Btn.Grenade & ~Btn.Swap;
+        // the swap button: a tap swaps on its release, a hold opens the quick-select (the aim stick points)
+        if (m.bits[i]! & Btn.Swap) quickSelect.press('pad', now, { x: this.host.sampler?.mouseX ?? 0, y: this.host.sampler?.mouseY ?? 0 });
         if (m.grenade.has(i)) this.host.sampler?.throwLatch?.press(now);
         if (m.dash.has(i)) {
           const first = this.flick[0];
@@ -454,6 +457,7 @@ export class PadManager {
         }
         if (i === B.Start) this.host.pause();
       } else if (this.released(i)) {
+        if (m.bits[i]! & Btn.Swap) quickSelect.release(now);
         if (m.grenade.has(i)) {
           // the throw goes as hard as the aim stick says (the keyboard's sample aimed it by the mouse just before)
           const latch = this.host.sampler?.throwLatch;
@@ -531,14 +535,17 @@ export class PadManager {
       if ('dashStrength' in out) (out as Input & { dashStrength: number }).dashStrength = this.dash.strength;
       this.dash = null;
     }
-    out.buttons |= b;
+    // the swap button never reaches the sim held: the quick-select sends its tap or its pick (quickSelect.ts)
+    out.buttons |= b & ~Btn.Swap;
     this.pulses = 0;
 
     // the aim: toward the stick (only past AIM_MIN_PUSH of raw push: no wobble near the dead zone), at
     // its turn speed, a flip past 90° within 3 ticks, with the touch controls' light friction on a target
     this.shoulder = { x: sx, y: sy };
     const assist = { level: s.assist, pullMinPush: PAD_PULL_MIN, sx, sy, range: this.range, targets: this.targets };
-    if (this.aim.mag > 0 && this.aimRaw >= AIM_MIN_PUSH) {
+    // the quick-select open: the aim stick points at its items instead of aiming
+    if (quickSelect.open) quickSelect.stick(this.aim.x, -this.aim.y); // the stick's y is up, the screen's down
+    else if (this.aim.mag > 0 && this.aimRaw >= AIM_MIN_PUSH) {
       const want = Math.atan2(this.aim.y, this.aim.x);
       if (!this.ownsAim) this.aimAngle = want;
       // a turnaround isn't slowed (or pulled back) by a target behind it

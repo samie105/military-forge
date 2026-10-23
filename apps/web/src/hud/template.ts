@@ -158,6 +158,18 @@ function desktop(): string {
       </div>
     </div>
 
+    <div class="mf-drawcard plate" data-state="switching+!dual drawn+!dual" role="status" aria-label="Drawing">
+      <span class="mf-drawcard__kick"><b data-state="switching">Drawing</b><b class="mf-drawcard__ready" data-state="!switching">Ready</b><span class="mf-drawcard__slot">Slot <span data-bind="player.slot.0.idx"></span></span></span>
+      <span class="mf-drawcard__art">${wpn('player.slot.0.icon', 'ic--wpn-lg mf-drawcard__ghost')}${wpn('player.slot.0.icon', 'ic--wpn-lg mf-drawcard__gun')}</span>
+      <span class="mf-drawcard__id"><b class="display mf-drawcard__name" data-bind="player.slot.0.name"></b><span class="mf-chip" data-bind="player.slot.0.family"></span></span>
+      <span class="mf-drawcard__ammo" data-state="gun"><b class="display num" data-bind="player.slot.0.mag"></b><span class="num">/<span data-bind="player.slot.0.magSize"></span></span><span class="mf-drawcard__res"><span class="hud-label">Spare</span><b class="num" data-bind="player.slot.0.reserve"></b></span></span>
+      <span class="mf-drawcard__ammo" data-state="melee"><b class="display">Blade</b></span>
+      <span class="mf-drawcard__foot"><span data-bind="player.slot.0.fire"></span><span data-state="slung-item"><kbd class="kbd" data-bind="bind.swap.0"></kbd> tap: back to <b data-bind="player.slot.1.name"></b> · hold: quick-select</span></span>
+      <i class="mf-drawcard__bar" aria-hidden="true"></i>
+    </div>
+
+    <div class="mf-loadout" data-state="weapon+!spectating" aria-label="Loadout"><ol class="mf-loadout__guns"></ol><ol class="mf-loadout__nades"></ol></div>
+
     <div class="pickup plate m-p9 m-p9--bottom mf-cmpcard" data-state="pickup-crate" role="status" data-bind-attr="data-power: pickup.weapon.power">
       <div class="pickup__head mf-cmpcard__head">
         <span class="pickup__key"><svg class="mf-keyring" viewBox="0 0 60 60" aria-hidden="true"><circle cx="30" cy="30" r="27"/></svg><kbd class="kbd kbd--lg" data-bind="bind.interact.0"></kbd></span>
@@ -203,6 +215,12 @@ function desktop(): string {
   </div>
 
   ${eventTemplate()}
+
+  <div class="mf-qs" data-state="quick-open" role="dialog" aria-label="Quick-select: point and let go">
+    <div class="mf-qs__ring" aria-hidden="true"><i class="mf-qs__pointer"></i></div>
+    <div class="mf-qs__items"></div>
+    <div class="mf-qs__hub plate"><span class="hud-label">Quick-select</span><b class="display mf-qs__name" data-bind="quick.name"></b><span class="mf-qs__line" data-bind="quick.line"></span><span class="mf-qs__how"><kbd class="kbd" data-bind="bind.swap.0"></kbd> let go to take<span class="mf-qs__mouse"> · wheel steps · click takes it</span><span class="mf-qs__pad"> · the aim stick points</span></span></div>
+  </div>
 
   <div class="feedback" aria-hidden="true">
     <svg class="dmg" viewBox="-400 -400 800 800"></svg>

@@ -89,6 +89,7 @@ export function TipsCard({ bindings, doubleTapDash = true }: { bindings: Setting
           <li>Tap the grenade key for a quick throw; hold it to aim the arc, and let go to throw.</li>
           <li>A raised riot shield stops you dashing: sling it first.</li>
           <li>Guns lie around the map: stand on one and press {bindings.interact[0] ? capText(bindings.interact[0], layout) : 'E'} to swap it for the one in your hand.</li>
+          <li>Tap {bindings.swap[0] ? capText(bindings.swap[0], layout) : 'Q'} to swap guns; hold it for the quick-select: point at a gun or a grenade and let go.</li>
         </ul>
         <div className="mf-tips__actions">
           {/* no autoFocus: the card sits over live play, where Space and the arrows are the game's */}

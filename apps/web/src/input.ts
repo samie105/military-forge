@@ -7,6 +7,7 @@
 import { angleToU16 } from '@military-forge/shared';
 import { Btn, createInput, type Input } from '@military-forge/sim';
 import type { Camera } from './camera';
+import { quickSelect } from './quickSelect';
 
 const KEY_BINDINGS: Record<string, number> = {
   KeyA: Btn.Left,
@@ -225,12 +226,15 @@ export class InputSampler {
       if (!e.repeat) {
         this.pressedOnce.add(e.code);
         this.notePress(this.bindings.keys[e.code] ?? 0, e.timeStamp);
+        // the swap key: a tap swaps on its release, a hold opens the quick-select (quickSelect.ts)
+        if ((this.bindings.keys[e.code] ?? 0) & Btn.Swap && !this.blocked) quickSelect.press('key', performance.now(), { x: this.mouseX, y: this.mouseY });
       }
       this.keys.add(e.code);
     });
     window.addEventListener('keyup', (e) => {
       // letting go of the grenade key throws (the latch: a tap is a quick throw)
       if ((this.bindings.keys[e.code] ?? 0) & Btn.Grenade && this.keys.has(e.code)) this.throwLatch.release(performance.now());
+      if ((this.bindings.keys[e.code] ?? 0) & Btn.Swap && this.keys.has(e.code)) quickSelect.release(performance.now());
       this.keys.delete(e.code);
     });
     window.addEventListener('blur', () => this.releaseAll());
@@ -240,8 +244,15 @@ export class InputSampler {
     target.addEventListener('mousemove', (e) => {
       this.mouseX = e.offsetX;
       this.mouseY = e.offsetY;
+      quickSelect.point(e.offsetX, e.offsetY);
     });
     target.addEventListener('mousedown', (e) => {
+      // a click while the quick-select is open takes the highlighted item (and doesn't fire)
+      if (e.button === 0 && quickSelect.click()) {
+        e.preventDefault();
+        return;
+      }
+      if ((this.bindings.mouse[e.button] ?? 0) & Btn.Swap && !this.blocked) quickSelect.press('key', performance.now(), { x: this.mouseX, y: this.mouseY });
       this.notePress(this.bindings.mouse[e.button] ?? 0, e.timeStamp);
       this.mouseButtons |= 1 << e.button;
       e.preventDefault();
@@ -251,13 +262,15 @@ export class InputSampler {
       // navigate on release in Chrome: not when the press was ours
       if ((e.button === 3 || e.button === 4) && this.mouseButtons & (1 << e.button)) e.preventDefault();
       if ((this.bindings.mouse[e.button] ?? 0) & Btn.Grenade && this.mouseButtons & (1 << e.button)) this.throwLatch.release(performance.now());
+      if ((this.bindings.mouse[e.button] ?? 0) & Btn.Swap && this.mouseButtons & (1 << e.button)) quickSelect.release(performance.now());
       this.mouseButtons &= ~(1 << e.button);
     });
     target.addEventListener('contextmenu', (e) => e.preventDefault());
     target.addEventListener(
       'wheel',
       (e) => {
-        this.wheelSteps += Math.sign(e.deltaY);
+        // the quick-select, while open, steps through its items with the wheel; otherwise it zooms
+        if (!quickSelect.step(Math.sign(e.deltaY))) this.wheelSteps += Math.sign(e.deltaY);
         e.preventDefault();
       },
       { passive: false },
@@ -301,6 +314,7 @@ export class InputSampler {
     this.mouseButtons = 0;
     this.dashLatched = false;
     this.throwLatch.cancel(); // focus lost while aiming: no throw
+    quickSelect.cancel();
   }
 
   /** A key held now (spectating's free camera pans with it). */
@@ -363,6 +377,9 @@ export class InputSampler {
     out.aim = angleToU16(Math.atan2(dy, dx));
     out.weaponSelect = slot;
     this.throwLatch.take(out);
+    // the swap button: its tap, or what the quick-select picked (never Btn.Swap held)
+    quickSelect.tick(now);
+    quickSelect.take(out);
     return out;
   }
 
