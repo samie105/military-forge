@@ -12,7 +12,8 @@ Sources and authoring scripts for the game's art: the Rookie (base soldier), its
 | The female soldier | #203: a second base body on the Rookie's skeleton, her fits of the shared items, body regions |
 | Her hairstyles | #210: Field Bun, Cornrow Braids, Short Crop, each replacing her own hair |
 | Outfits for both bodies | #247: 7 tops and jackets, 3 trousers, 2 boots, 3 hats, 3 face pieces; whole body regions |
-| **The creator's close-up textures** | **this branch**: both bodies at 1024² (`dye.lod0.heroAlbedo` / `heroMask`); wrist and toe checks for the animation stream |
+| The creator's close-up textures | #249: both bodies at 1024² (`dye.lod0.heroAlbedo` / `heroMask`); wrist and toe checks for the animation stream |
+| **Eyes: a texture blink** | **this branch**: each body's painted eyes in its manifest (`eyes`), for a shader blink and eye looks with no triangles |
 
 ## The female soldier (`rookie_female`, 22 Oct 2026)
 
@@ -163,7 +164,56 @@ Hair is painted, not dyed: a primary dye would recolour it with the uniform.
   - Reloads stay under 36°, and no clip twists the elbow.
   - Spreading weights toward the elbow can't lift that minimum. The fix is to split the twist between the forearm and the hand at runtime, or a twist bone (a skeleton change).
 - **Toes:** no clip bends `toe_L`/`toe_R` (under 1°), and the boots are rigid to the feet by design, so the toe bones carry no weight.
-- **Eyes and jaw:** the bones sit on the painted eyes and at mouth height. A blink needs a ring of vertices round each eye (about 40 triangles at LOD0), and both bodies are at their 2,350 / 1,000 budget, so it waits on a budget decision.
+- **Eyes and jaw:** a blink by weights would need a ring of vertices round each eye (about 40 triangles at LOD0), and both bodies are at their 2,350 / 1,000 budget. So the eyes blink in the shader instead (next section). The jaw is skipped for now.
+
+## Eyes: a texture blink and eye looks (23 Oct 2026)
+
+![Blinks and looks, simulated](screenshots/eye-blink.png)
+*The shader below, run in Python (`eyes.simulate`) on a front render of each face.*
+
+**Why a shader and no mask texture:**
+- Each face is a few large triangles (2–4 per painted eye), so lids can't be weighted.
+- At 512² an eye is about five texels across, so a painted lid mask would be blocky.
+- The dye mask's four channels and the albedo's alpha are all in use.
+
+So the eyes are numbers in each body's manifest. `art/pipeline/eyes.py` measures them from the painted albedo, and `build_character.py` writes them. Example (his left eye):
+
+```json
+"eyes": { "front": 0.1, "lookMax": 0.3, "eraseDot": 1.15, "lineRest": -0.35, "sag": 0.25, "lash": 0.07,
+  "L": { "centre": [0.0914, 1.1382], "radius": [0.0225, 0.0318],
+         "iris": { "centre": [0.0, 0.0], "radius": [0.943, 0.943] },
+         "irisColour": "#161411", "whiteColour": null, "erase": 1.15, "skin": "#b7b7b5" },
+  "R": { "…": "…" } }
+```
+
+**Eye-local position:**
+- Take the vertex's bind-pose `position`. That's the GLB's own; the assembler copies it unchanged. Axes are glTF in metres: X toward the body's left, Y up, Z forward.
+- Compute e = ((X − centre[0]) / radius[0], (Y − centre[1]) / radius[1]).
+- e is affine in `position`, so it can pass as a varying and is exact at every fragment, at any texture size.
+- Apply it only on the body's texture layer (`texLayer` 0) and where Z > `front` (the face, not the back of the head).
+- The painted eye is the unit circle, |e| < 1.
+
+**The shader:** per soldier, `blink` b runs from 0 (open) to 1 (shut), and `look` l is in eye-local units with |l| ≤ `lookMax`. While b = 0 and l = 0, draw nothing, so the painting shows. Otherwise, for each eye:
+1. **The moved eye:** s = e − l for a dot eye (`whiteColour` null: his, the whole eye moves). For an eye with a white (hers, only the iris moves), s = e.
+2. **Redraw:** inside the painted area (|e| < `erase`) or the moved eye (|s| < 1), the colour is:
+   - inside the moved eye (|s| < 1): `irisColour` where (e − iris.centre − l) / iris.radius is inside the unit circle, and `whiteColour` elsewhere (skin for a dot eye);
+   - elsewhere in that area: skin.
+3. **The lid:**
+   - Let sag = `sag` · b · (1 − sₓ²).
+   - Inside the moved eye, everything above sᵧ = 1 − 2.2·b − sag is skin.
+   - The lash line is the band |sᵧ − (max(1 − 2.2·b, `lineRest`) − sag)| < `lash`, inside |s| < 1.08, in `irisColour`.
+   - When shut, the eye is skin with a lash arc across its lower third.
+
+**Colours:**
+- `irisColour` and `whiteColour` are sRGB as painted. Draw them untoned: skin weight 0, no dye.
+- Skin is `skin`, drawn as skin: it's the albedo for the dye material's skin path, at skin weight 1, so `lerp(1, 2 × skinTone, 1)` gives the lid the soldier's tone.
+- A soft edge (a smoothstep over about 0.05 eye-local) hides the seam where the flat lid meets the painted shading.
+
+**Measuring:** an orthographic front render per eye at 0.25 mm per pixel, flat, with the 1024² albedo:
+- The iris is the largest dark blob after an opening that removes lashes thinner than about 10 mm.
+- The white is the part brighter and greyer than the skin around it (hers is a pale beige).
+- The eye is the moment ellipse of the iris and white, ×1.06.
+- His painted edge is soft, so his dot eyes are cleared out to 1.15 while they move or shut. Hers keep their painted outline and the lashes above it.
 
 ## Outfits for both bodies (22 Oct 2026)
 

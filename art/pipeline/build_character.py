@@ -49,6 +49,7 @@ import guard  # noqa: E402,F401  (a crash exits 1, not 0)
 import clips  # noqa: E402
 import dye  # noqa: E402
 import envelope  # noqa: E402
+import eyes  # noqa: E402
 import nozzles  # noqa: E402
 
 argv = sys.argv[sys.argv.index("--") + 1:]
@@ -79,6 +80,7 @@ LODS = {
 # baked again at 1024² on the same UVs, with the same dye rules. Only the creator loads them, never a match.
 HERO_TEX = 1024
 HERO = {}  # (part, suffix) -> the hero albedo image
+EYES = {}  # side -> the painted eye (eyes.measure)
 PART_IDS = {"body": f"{NAME}_body", "headgear": "headgear_brim_helmet", "boots": "boots_combat", "jetpack": "jetpack_twin_tank"}
 PART_IDS = {k: v for k, v in PART_IDS.items() if k == "body" or k in WANT_PARTS}
 # file stems: another body's fit of a shared item gets the body's suffix (boots_combat_female.glb)
@@ -995,6 +997,11 @@ for (part, suffix), (obj, tris, img) in parts.items():
         _, hero_cover = dye.make_masks(obj, hero, TEXDIR, f"{tex_name}_hero", rules, skin_rule=SKIN.get(part))
         hero.use_fake_user = False  # not kept in the .blend
         log(f"{tex_name}_hero: coverage {hero_cover}")
+        if part == "body":  # the painted eyes for the texture blink: shapes as painted, the lid as the shader samples
+            # (both from the saved 8-bit files, so a measure of the committed textures gives the same numbers)
+            EYES.update(eyes.measure(obj, arm, bpy.data.images.load(str(TEXDIR / f"{tex_name}_hero_albedo.png")),
+                                     bpy.data.images.load(str(TEXDIR / f"{tex_name}_hero_dye_albedo.png")))[0])
+            log("eyes:", EYES)
 
 # ------------------------------------------------------------------ 6b. body regions
 # Parts that replace a stretch of the body (a top, trousers, a hairstyle) name it in their manifest
@@ -1285,6 +1292,8 @@ if RUNTIME:
         "dye": {"lod0": dye_entry("body", ""), "lod1": dye_entry("body", "_lod1")},
         # the body's _REGION codes: a part's `hidesBody` names the regions it replaces (6b)
         "regions": REGIONS,
+        # the painted eyes, for a texture blink and eye looks (eyes.py; README)
+        **({"eyes": eyes.manifest(EYES)} if EYES else {}),
         # every slot's default: the shared items (this body's fits where it has its own), as the Rookie's
         "defaultParts": {"headgear": "headgear_brim_helmet", "boots": "boots_combat", "jetpack": "jetpack_twin_tank",
                          **{part: PART_IDS[part] for part in SLOT_PARTS}},

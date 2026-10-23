@@ -40,6 +40,62 @@
     "top": 2,
     "legs": 3
   },
+  "eyes": {
+    "front": 0.1,
+    "lookMax": 0.3,
+    "eraseDot": 1.15,
+    "lineRest": -0.35,
+    "sag": 0.25,
+    "lash": 0.07,
+    "L": {
+      "centre": [
+        0.0876,
+        1.1209
+      ],
+      "radius": [
+        0.0257,
+        0.029
+      ],
+      "iris": {
+        "centre": [
+          -0.111,
+          -0.0
+        ],
+        "radius": [
+          0.76,
+          0.986
+        ]
+      },
+      "irisColour": "#242423",
+      "whiteColour": "#f2c3a1",
+      "erase": 1.0,
+      "skin": "#d1c2b2"
+    },
+    "R": {
+      "centre": [
+        -0.0868,
+        1.1206
+      ],
+      "radius": [
+        0.0277,
+        0.0287
+      ],
+      "iris": {
+        "centre": [
+          0.146,
+          0.001
+        ],
+        "radius": [
+          0.715,
+          0.996
+        ]
+      },
+      "irisColour": "#232322",
+      "whiteColour": "#f1c19e",
+      "erase": 1.0,
+      "skin": "#d1c4b3"
+    }
+  },
   "defaultParts": {
     "headgear": "headgear_brim_helmet",
     "boots": "boots_combat",
