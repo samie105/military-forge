@@ -270,13 +270,13 @@ export function ReconnectBanner({ connection }: { connection: ConnectionView }) 
           <span className="spinner"></span>
           <span className="mf-reconnect__body">
             <span>
-              <b>Connection dropped.</b> Reconnecting · try <RollNum value={Math.min(now, of || now)} />
+              <b>{connection.code === 1012 ? 'The server updated.' : 'Connection dropped.'}</b> {connection.code === 1012 ? 'Rejoining' : 'Reconnecting'} · try <RollNum value={Math.min(now, of || now)} />
               {of > 0 && <> of {of}</>}
               {left > 0 ? ` · ${left} s left` : ''}
             </span>
             {of > 0 && <TryPips made={Math.min(now, of)} of={of} />}
           </span>
-          <span className="reconnect__sub">The match keeps running</span>
+          <span className="reconnect__sub">{connection.code === 1012 ? 'Back in the same room in a moment' : 'The match keeps running'}</span>
         </div>
       )}
     </Screen>

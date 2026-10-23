@@ -1724,3 +1724,27 @@ This is docs/design/onboarding-research.md §3.6.
   - the 14-day refresher;
   - a Settings → Accessibility → Tips switch (the link stands in);
   - the touch HINTS (`touch/teach.ts`) folding into this engine (asked of the phone agent).
+
+## 57. Late inputs are held for, then caught up: no rubber band on 4G (23 Oct 2026, the owner on a phone: "keeps returning and returning")
+
+On mobile data, a phone's uplink stalls for up to a second: the MTN profile has +1 s upload spikes. Its inputs reach the server late. The server used to run the player on a guess: the last input for 0.5 s, then no keys. The late real inputs were dropped (but for their presses), and the client was pulled back to where the guess had put it: 218 corrections a minute and 12.8 jumps of 2 m or more on netfeel's MTN profile.
+
+- **Hold:** when a player's next input hasn't come and nothing newer has either (a stall, not a loss), the room holds the player (`PlayerState.held`: Game.step leaves it alone) for up to `HOLD_TICKS`, 1 s.
+- **Catch up:** when the inputs come, the player runs through them in order, two extra ticks a tick (`Game.catchUp`, `stepPlayer`: its movement, shield, weapons, burning, regen and status, as step does).
+  - Snapshots acknowledge the input its state stands at (`ackInputTick`), so the client's prediction is exactly right and nothing is corrected.
+  - Each catch-up tick's shots test targets as that input's frame showed them (`Game.beforeCatchUp` sets the view).
+  - Shots and hits happen once.
+- **Give up:** a hold that runs out gives the missing ticks stand-ins (the last input; no keys once the client has been silent `MAX_REPEAT_TICKS`), runs them at once, and the real ones count as late. A lost input (newer ones here) is replaced the same way at once, as before.
+- **Measured** (netfeel, 3 × 60 s):
+
+  | profile | corrections/min | 2 m+ jumps/min | visible correction p99 | presses lost (shot · dash · throw) |
+  |---|---|---|---|---|
+  | MTN 4G (500 ms, +1 s spikes) | 218 → **0.8** | 12.8 → **0.4** | 118 → **0** cm | 20 · 4 · 3 → **1 · 1 · 1** |
+  | Lagos est., same spikes | 238 → **2.4** | 8.0 → **0.4** | 100 → **1** cm | 27 · 2 · 2 → **0 · 0 · 1** |
+  | 150 ms ±40, WS | 3.6 → **0.8** | 0.8 → 0.8 | 1.1 → 0 cm | 2 · 0 · 0 → 0 · 0 · 0 |
+  | 250 ms bursts, WS | 7.2 → **0.4** | 1.6 → 1.2 | 1.3 → 0 cm | 2 · 0 · 0 → 0 · 0 · 0 |
+
+  Holding 250 ms gave 20 corrections and 12.8 jumps a minute on MTN, and 500 ms gave 7.6 and 9.2: the spikes are a second long.
+- **The cost:**
+  - Others see a stalled player stand still, then hurry on (other-player pops on the 250 ms WS profile: 0 → 6.4 a minute).
+  - On MTN a shooter's shots fire after the catch-up, so they need longer rewinds: hits on a walking target at the 450 ms cap went 23% → 9% (92% at the old 900 ms). On the Lagos spike profile they went 82% → 92%.

@@ -192,12 +192,16 @@ export function mountCreator(container: HTMLElement, options: CreatorOptions = {
   /** the soldier on the stage is a stand-in: the draft's body has no 3D art yet */
   const standIn = () => artPending.has(body);
 
+  /** picking a hairstyle: the stage shows the head bare (most helmets cover the hair); the look keeps its headgear */
+  const bareHead = () => step === 'look' && lookTabs(body)[tab]?.id === 'hair' && !!getCosmetic('headgear_none');
   const preview = (): CosmeticLoadout => {
     const item = trying ? getCosmetic(trying.id) : null;
-    if (!item) return draft;
-    if (item.slot === 'dye') return withDye(draft, trying!.channel ?? 'primary', item.id);
-    if (item.slot === 'bodyType') return withBody(draft, body, item.id);
-    return sanitizeCosmeticLoadout(withItem(draft, item.slot, item.id));
+    const look =
+      !item ? draft
+      : item.slot === 'dye' ? withDye(draft, trying!.channel ?? 'primary', item.id)
+      : item.slot === 'bodyType' ? withBody(draft, body, item.id)
+      : sanitizeCosmeticLoadout(withItem(draft, item.slot, item.id));
+    return bareHead() ? withItem(look, 'headgear', 'headgear_none') : look;
   };
 
   const show = () => {
@@ -343,13 +347,18 @@ export function mountCreator(container: HTMLElement, options: CreatorOptions = {
     } else if (d.action === 'next' || d.goto === 'look') {
       step = 'look';
       render();
+      show();
     } else if (d.action === 'prev' || d.goto === 'body') {
       step = 'body';
       render();
+      show();
     } else if (d.body) pickBody(d.body as Body);
     else if (d.tab !== undefined) {
+      const wasBare = bareHead();
       tab = Number(d.tab);
       render();
+      if (bareHead() !== wasBare) show();
+      if (bareHead()) detail.textContent = 'Headwear off while you pick a hairstyle';
       // the stage frames the tab (locker/stage.ts shots; the animation agent's)
       turntable.frameTab(lookTabs(body)[tab]?.id ?? '');
     } else if (d.focus) {

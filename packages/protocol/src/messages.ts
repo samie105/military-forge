@@ -171,6 +171,12 @@ export const CloseCode = {
   TicketInvalid: 4007,
   /** v20: a spectator for a room that already has all the spectators it takes (the admin's spectate.cap) */
   SpectatorsFull: 4008,
+  /**
+   * The game server is restarting for an update (the standard WebSocket "service restart"): rejoin the
+   * room with a fresh ticket once it's back (docs/net-trial.md §5). Clients before it reconnected and
+   * met "ticket expired" (23 Oct 2026).
+   */
+  ServerUpdating: 1012,
 } as const;
 
 export const CmdKind = {

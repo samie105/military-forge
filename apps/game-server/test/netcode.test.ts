@@ -150,7 +150,9 @@ describe('netcode end to end (simulated network)', () => {
     expect(udp.interpStallPct).toBeLessThan(0.5);
     expect(tcp.interpStallPct).toBeGreaterThan(2);
     expect(udp.corrections).toBe(0);
-    expect(tcp.corrections).toBeGreaterThan(2); // inputs stuck behind a retransmit arrive too late (fewer since the pacer's cushion)
+    // inputs stuck behind a retransmit come late: the server holds the player for them and catches up
+    // (it used to run on a guess and correct the client: > 2 a run before the late-input catch-up)
+    expect(tcp.corrections).toBeLessThanOrEqual(1);
   });
 });
 

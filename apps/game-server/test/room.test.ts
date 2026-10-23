@@ -17,7 +17,7 @@ import {
 } from '@military-forge/protocol';
 import { Btn, createHitPose, createInput } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
-import { Room, type ClientConn } from '../src/room';
+import { HOLD_TICKS, Room, type ClientConn } from '../src/room';
 
 class FakeConn implements ClientConn {
   readonly sent: Uint8Array[] = [];
@@ -148,24 +148,30 @@ describe('Room', () => {
     expect(a.conn.sent.at(-1)!.length).toBeLessThan(40);
   });
 
-  it('uses each input on its own tick, ignores redundant copies, repeats the last input when one is missing', () => {
+  it('uses each input on its own tick, ignores redundant copies; a silent client is held, then lets go', () => {
     const room = new Room({ dummies: false });
     const a = join(room, 'A');
     const id = a.welcome.playerId;
     sendInput(room, a.client, 1, Btn.Right);
     sendInput(room, a.client, 2, Btn.Right); // carries ticks 2 and 1
     expect([a.client.inputs.has(0), a.client.inputs.has(1), a.client.inputs.has(2)]).toEqual([false, true, true]);
-    room.tick(); // tick 0: nothing for it yet → repeat (idle)
+    room.tick(); // tick 0: nothing for it, but newer ones are here (lost, not late): the last input (idle)
     expect(room.game.players[id]!.vx).toBe(0);
     room.tick(); // tick 1
     room.tick(); // tick 2
     expect(a.client.inputs.used).toBe(2);
-    for (let i = 0; i < 30; i++) room.tick(); // no new inputs: keeps walking right
-    expect(room.game.players[id]!.vx).toBeGreaterThan(4);
-    expect(a.client.inputs.missed).toBe(31);
+    expect(room.game.players[id]!.vx).toBeGreaterThan(0);
+    // no new inputs: the player is held (they may yet come) and keeps its speed…
+    const vx = room.game.players[id]!.vx;
+    for (let i = 0; i < HOLD_TICKS - 1; i++) room.tick();
+    expect(room.game.players[id]!.vx).toBe(vx);
+    // …then the hold runs out: the missing ticks run with no keys (silent longer than MAX_REPEAT_TICKS)
+    for (let i = 0; i < 40; i++) room.tick();
+    expect(room.game.players[id]!.vx).toBe(0);
+    expect(a.client.inputs.missed).toBeGreaterThan(HOLD_TICKS);
   });
 
-  it('reports how early inputs arrive (min over the snapshot interval) and drops late ones', () => {
+  it('reports how early inputs arrive (min over the snapshot interval); late ones run, in order, behind (the catch-up)', () => {
     const room = new Room({ dummies: false });
     const a = join(room, 'A');
     const health = () => (a.conn.last(MsgType.Snapshot) as SnapshotMsg).inputBufferHealth;
@@ -178,8 +184,12 @@ describe('Room', () => {
       sendInput(room, a.client, room.game.tick - 2, Btn.Left); // late: already simulated
       room.tick();
     }
-    expect(health()).toBe(-2);
-    expect(room.game.players[a.welcome.playerId]!.vx).toBeGreaterThan(0); // the late "left" inputs never ran
+    expect(health()).toBeLessThanOrEqual(-2);
+    // the late "left" inputs ran (the player held for them, then caught up), and the snapshot says
+    // which input its state stands at: behind the room's tick
+    expect(room.game.players[a.welcome.playerId]!.vx).toBeLessThan(0);
+    const snap = a.conn.last(MsgType.Snapshot) as SnapshotMsg;
+    expect(snap.ackInputTick).toBeLessThan(snap.serverTick - 1);
   });
 
   it('INPUT decode is pooled: oversized or truncated packets are strikes', () => {

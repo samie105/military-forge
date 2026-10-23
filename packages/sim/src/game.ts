@@ -73,6 +73,15 @@ export class Game {
   mech: MapMechanics | null;
   /** set by Match.step outside the warm-up and the match: bots keep their aim, press nothing */
   inputsFrozen = false;
+  /**
+   * Extra ticks of their own for players catching up (the server: a client's inputs arrived late, the
+   * player stood held while they were missing; room.ts): after this tick's step, each player runs
+   * these inputs in order, as its own simulation would have (stepPlayer), at this tick's time. Emptied
+   * by each step.
+   */
+  readonly catchUp: Input[][] = [];
+  /** called before each catch-up tick of a player (its `k`th): the server sets that input's view for lag compensation */
+  beforeCatchUp: ((p: PlayerState, k: number) => void) | null = null;
   private readonly ids = new IdAllocator(MAX_PLAYERS);
 
   constructor(options: GameOptions = {}) {
@@ -350,17 +359,17 @@ export class Game {
     }
 
     for (const p of this.players) {
-      if (!p?.alive) continue;
+      if (!p?.alive || p.held) continue;
       const x0 = p.x;
       const y0 = p.y;
       if (stepMovement(this.world, p, t, mech ? mech.bodyEnv(p, t, bodyEnv) : null)) this.events.push({ type: 'dash', player: p.id, x: x0, y: y0, dir: p.dashDir, chain: p.dashChain });
     }
     // the shield key and carry modes, before anyone fires: every shot this tick meets the same shields
-    for (const p of this.players) if (p?.alive) stepShield(p);
-    for (const p of this.players) if (p?.alive) stepWeapons(this, p);
+    for (const p of this.players) if (p?.alive && !p.held) stepShield(p);
+    for (const p of this.players) if (p?.alive && !p.held) stepWeapons(this, p);
     for (const g of this.grenades) if (g.alive) stepGrenade(this, g);
     stepClouds(this);
-    for (const p of this.players) if (p?.alive) stepBurn(this, p);
+    for (const p of this.players) if (p?.alive && !p.held) stepBurn(this, p);
 
     // hazards: falling out of the map (KILL zone below the bounds)
     for (const p of this.players) {
@@ -371,7 +380,7 @@ export class Game {
     stepPickups(this);
 
     for (const p of this.players) {
-      if (!p) continue;
+      if (!p || p.held) continue;
       if (p.alive) {
         stepRegen(this, p);
         stepStatus(p);
@@ -381,6 +390,50 @@ export class Game {
       }
       p.prevButtons = p.input.buttons;
     }
+    for (const p of this.players) {
+      const extra = p ? this.catchUp[p.id] : undefined;
+      if (!p || !extra?.length) continue;
+      for (let k = 0; k < extra.length; k++) {
+        this.beforeCatchUp?.(p, k);
+        this.stepPlayer(p, extra[k]!);
+      }
+      extra.length = 0;
+    }
     this.tick++;
+  }
+
+  /**
+   * One tick of one player's own simulation (the server catching a late client up, Game.catchUp):
+   * its input, movement, shield, weapons, burning, the kill line, regen and status, as step() does
+   * for everyone. Its shots and throws land in this tick (scored and sent with it); grenades, clouds
+   * and pickups move with everyone's next step.
+   */
+  private stepPlayer(p: PlayerState, input: Readonly<Input>): void {
+    copyInput(p.input, input);
+    if (this.inputsFrozen) {
+      p.input.buttons = 0;
+      p.input.weaponSelect = 0;
+    }
+    if (p.alive) {
+      const x0 = p.x;
+      const y0 = p.y;
+      const mech = this.mech;
+      if (stepMovement(this.world, p, this.tuning, mech ? mech.bodyEnv(p, this.tuning, bodyEnv) : null)) this.events.push({ type: 'dash', player: p.id, x: x0, y: y0, dir: p.dashDir, chain: p.dashChain });
+      stepShield(p);
+      stepWeapons(this, p);
+      stepBurn(this, p);
+      if (p.alive && p.y <= this.map.bounds.minY + 0.5) {
+        const credited = p.lastAttacker >= 0 && this.tick - p.lastAttackTick <= ENVIRONMENT_CREDIT_TICKS;
+        this.kill(p, credited ? p.lastAttacker : p.id, DamageSource.World);
+      }
+    }
+    if (p.alive) {
+      stepRegen(this, p);
+      stepStatus(p);
+      quantizeMovement(p);
+    } else if (--p.respawnTicks <= 0) {
+      this.respawn(p);
+    }
+    p.prevButtons = p.input.buttons;
   }
 }

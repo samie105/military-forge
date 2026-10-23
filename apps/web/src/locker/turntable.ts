@@ -226,6 +226,8 @@ export class Turntable {
   /** the look last frame, an equip reaction playing, and the slot it frames */
   private lastLook: CosmeticLoadout | null = null;
   private lastHash = 0;
+  /** the soldier's geometry last frame: new parts (or a new body) arrive after the look changed, once loaded */
+  private lastGeometry: unknown = null;
   private reaction: { kind: Reaction; t: number } | null = null;
   private lightPreset: LightPreset = 'lobby';
 
@@ -391,7 +393,14 @@ export class Turntable {
   /** A change of look: frame the slot it touched and play its reaction. */
   private watchLook(): void {
     const c = this.character;
-    if (!c || c.loadoutHash === this.lastHash) return;
+    if (!c) return;
+    // the parts land later than the look (a phone on a slow network: seconds), when the stage may be at rest
+    const geometry = c.meshes[0]?.geometry ?? null;
+    if (geometry !== this.lastGeometry) {
+      this.lastGeometry = geometry;
+      this.wake();
+    }
+    if (c.loadoutHash === this.lastHash) return;
     const slots = changedSlots(this.lastLook, c.loadout);
     this.lastLook = c.loadout;
     this.lastHash = c.loadoutHash;

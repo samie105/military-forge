@@ -46,13 +46,17 @@ import {
 } from '@military-forge/content';
 import { assetSource, type CharacterSource, type LoadedGltf } from './assets';
 import { repairClips } from './clipRepair';
-import { DYE_LAYERS, DyeMaterial } from './dyeMaterial';
+import { DYE_LAYERS, DyeMaterial, GARMENT_LAYERS } from './dyeMaterial';
 import { bodyAlbedoWithSkin } from './skinMask';
 
 export type CharacterLod = 0 | 1;
 
-/** Part slots W8 makes art for, in texture-layer order (layer 0 is the body). Top and legs are body textures. */
-export const ART_SLOTS = ['headgear', 'eyewear', 'gloves', 'boots', 'jetpack'] as const satisfies readonly PartSlot[];
+/**
+ * Part slots W8 makes art for, in texture-layer order (layer 0 is the body). The last three (hair, top, legs) are
+ * drawn by the garment material (dyeMaterial.ts GARMENT_LAYERS), and replace a stretch of the body while worn
+ * (`hidesBody`: the body's own fatigues and hair show when the slot has no art).
+ */
+export const ART_SLOTS = ['headgear', 'eyewear', 'gloves', 'boots', 'jetpack', 'hair', 'top', 'legs'] as const satisfies readonly PartSlot[];
 export type ArtSlot = (typeof ART_SLOTS)[number];
 
 /**
@@ -132,6 +136,10 @@ interface Manifest {
   nozzles?: [number, number, number][];
   /** a part fitted to each body separately: that body's files (creator-interfaces.md §3); absent = the top-level ones */
   bodies?: Partial<Record<Body, { lods: Record<LodKey, string>; dye: Record<LodKey, DyeEntry> }>>;
+  /** a body: its region codes (the body GLB's `_REGION` vertex attribute), e.g. `{ hair: 1, top: 2, legs: 3 }` */
+  regions?: Record<string, number>;
+  /** a part: the body regions it replaces while worn (forge-female-art.md §3) */
+  hidesBody?: string[];
 }
 
 /** One textured piece of the soldier at one LOD: geometry in the canonical joint order + its dye textures. */
@@ -142,6 +150,8 @@ interface Layer {
   mask: Texture;
   /** default dye per channel (primary, secondary, accent); null = the player's dye */
   defaults: (Color | null)[];
+  /** a body layer: each vertex's region code (0 = always drawn); null = no regions */
+  region?: Uint8Array | null;
 }
 
 interface BaseRig {
@@ -163,6 +173,8 @@ interface BaseRig {
   bonePositions: Map<string, Vector3>;
   /** the LOD0 body's close-up textures, loaded on first ask; null when the manifest lists none */
   hero: (() => Promise<{ albedo: Texture; mask: Texture }>) | null;
+  /** region name → the code its body vertices carry */
+  regions: Readonly<Record<string, number>>;
 }
 
 interface Part {
@@ -173,6 +185,10 @@ interface Part {
   lods: [Layer, Layer];
   /** jetpack nozzle exits, glTF character space (W8 `nozzles`) */
   nozzles: readonly (readonly [number, number, number])[];
+  /** the body regions it replaces while worn (`hidesBody`) */
+  hides: readonly string[];
+  /** headgear that covers the hair: no hairstyle under it (the GLB's extras, `hidesHair`) */
+  hidesHair: boolean;
 }
 
 export interface CharacterAssemblerOptions {
@@ -187,7 +203,7 @@ export interface CharacterAssemblerOptions {
 export interface CharacterInstance {
   /** glTF +Z forward, +Y up, feet at y = 0, 1.5 m tall */
   readonly root: Object3D;
-  /** exactly one: body + parts merged, one material */
+  /** exactly one: body + parts merged, drawn by `material` and its garments (two geometry groups) */
   readonly meshes: readonly SkinnedMesh[];
   /** W8's shared clip library (locomotion, aim poses, actions) */
   readonly clips: readonly AnimationClip[];
@@ -279,6 +295,23 @@ function canonicalGeometry(mesh: SkinnedMesh, joints: readonly string[], layer: 
 }
 
 const dirOf = (path: string) => path.slice(0, path.lastIndexOf('/') + 1);
+
+/** The body's triangles less those whose three vertices all lie in a hidden region (the attributes are shared). */
+function withoutRegions(body: BufferGeometry, region: Uint8Array, hidden: ReadonlySet<number>): BufferGeometry {
+  const index = body.getIndex()!;
+  const kept: number[] = [];
+  for (let t = 0; t < index.count; t += 3) {
+    const a = index.getX(t);
+    const b = index.getX(t + 1);
+    const c = index.getX(t + 2);
+    if (hidden.has(region[a]!) && hidden.has(region[b]!) && hidden.has(region[c]!)) continue;
+    kept.push(a, b, c);
+  }
+  const g = new BufferGeometry();
+  for (const [name, attr] of Object.entries(body.attributes)) g.setAttribute(name, attr);
+  g.setIndex(kept);
+  return g;
+}
 
 function dyeDefaults(entry: DyeEntry): (Color | null)[] {
   return DYE_CHANNELS.map((ch) => (entry.defaults?.[ch] ? new Color(entry.defaults[ch]) : null));
@@ -372,11 +405,13 @@ export class CharacterAssembler {
   /** @internal the part per art slot for a loadout on `rig`'s body: its item, else the slot default, else none */
   async resolveParts(loadout: CosmeticLoadout, rig: BaseRig = this.rig()): Promise<(Part | null)[]> {
     const base = rig;
-    return Promise.all(
+    const parts = await Promise.all(
       ART_SLOTS.map(async (slot) => {
         const id = loadout.items[slot];
+        // "None" (headgear_none, eyewear_none, …) is nothing at all, not the slot default
+        if (id.endsWith('_none')) return null;
         const fallback = base.defaultParts[slot] ?? null;
-        // an item without art keeps the slot default ("none" items have no default to keep)
+        // an item without art (not made yet) keeps the slot default
         const wanted = getCosmetic(id)?.assets.manifest ? id : fallback;
         for (const candidate of new Set([wanted, fallback])) {
           if (!candidate) continue;
@@ -389,6 +424,9 @@ export class CharacterAssembler {
         return null;
       }),
     );
+    // a helmet that covers the hair: no hairstyle under it (the body's own hair, its region, shows again)
+    if (parts[ART_SLOTS.indexOf('headgear')]?.hidesHair) parts[ART_SLOTS.indexOf('hair')] = null;
+    return parts;
   }
 
   /** @internal merged geometry for a parts key, from the cache when possible; pair with release() */
@@ -420,16 +458,28 @@ export class CharacterAssembler {
 
   /** @internal body + parts → one geometry (body vertices first), fitted to the body type */
   build(parts: readonly (Part | null)[], widthMul: number, lod: CharacterLod, rig: BaseRig = this.rig()): BufferGeometry {
-    const body = rig.lods[lod].geometry;
+    // the body less the regions worn parts replace (a top hides the torso, trousers the legs, a hairstyle the hair)
+    const hidden = new Set(parts.flatMap((p) => p?.hides ?? []).map((r) => rig.regions[r] ?? 0).filter((code) => code > 0));
+    const layer = rig.lods[lod];
+    const body = hidden.size && layer.region ? withoutRegions(layer.geometry, layer.region, hidden) : layer.geometry;
     const fitted: BufferGeometry[] = [];
+    /** index count drawn by the main material: the body and the parts before the garments (group 0) */
+    let mainCount = body.getIndex()!.count;
     for (const part of parts) {
       if (!part) continue;
       const g = part.lods[lod].geometry;
       fitted.push(widthMul === 1 ? g : part.rigid ? fitPieceToBody(g.clone(), widthMul) : this.fitSkinnedPart(g.clone(), widthMul, rig));
+      if (!GARMENT_LAYERS.includes(1 + ART_SLOTS.indexOf(part.slot))) mainCount += g.getIndex()!.count;
     }
     const merged = mergeGeometries([body, ...fitted]);
     if (widthMul !== 1) for (const g of fitted) g.dispose(); // the clones; the parts' own geometry stays cached
     if (!merged) throw new Error('Character part attributes do not match the body');
+    // ART_SLOTS order puts the garments last: one group per material (DyeMaterial.all); none for no garments, so a
+    // soldier in the body's own fatigues stays one draw call
+    const total = merged.getIndex()!.count;
+    merged.clearGroups();
+    merged.addGroup(0, mainCount, 0);
+    if (total > mainCount) merged.addGroup(mainCount, total - mainCount, 1);
     if (widthMul !== 1) {
       // only the body's own vertices (merged first) scale; parts were fitted above
       const pos = merged.getAttribute('position') as BufferAttribute;
@@ -439,6 +489,7 @@ export class CharacterAssembler {
         pos.setXYZ(i, p.x, p.y, p.z);
       }
     }
+    if (body !== layer.geometry) body.dispose(); // the filtered index (its attributes are the body's)
     merged.computeBoundingBox();
     merged.computeBoundingSphere();
     return merged;
@@ -477,8 +528,13 @@ export class CharacterAssembler {
     const layer = async (gltf: LoadedGltf, key: LodKey): Promise<Layer> => {
       const entry = manifest.dye[key];
       const [albedo, mask] = await Promise.all([s.texture(dir + entry.albedo, true), s.texture(dir + entry.mask, false)]);
+      const mesh = findSkinnedMesh(gltf.scene);
+      // GLTFLoader reads the custom `_REGION` attribute as `_region`
+      const regionAttr = mesh.geometry.getAttribute('_region') as AnyAttribute | undefined;
+      const region = regionAttr ? Uint8Array.from({ length: regionAttr.count }, (_, i) => Math.round(regionAttr.getX(i))) : null;
       return {
-        geometry: canonicalGeometry(findSkinnedMesh(gltf.scene), joints, 0),
+        region,
+        geometry: canonicalGeometry(mesh, joints, 0),
         albedo: entry.skin === 'alpha' ? albedo : bodyAlbedoWithSkin(albedo, skin),
         mask,
         defaults: dyeDefaults(entry),
@@ -516,6 +572,7 @@ export class CharacterAssembler {
       upperBodyBones: manifest.upperBodyBones ?? [],
       bonePositions,
       hero: heroOf(),
+      regions: manifest.regions ?? {},
     };
   }
 
@@ -541,14 +598,18 @@ export class CharacterAssembler {
     const dir = dirOf(path);
     const files = manifest.bodies?.[rig.body] ?? manifest;
     const layerIndex = 1 + ART_SLOTS.indexOf(slot);
+    let hidesHair = false;
     const lods = (await Promise.all(
       LOD_KEYS.map(async (key): Promise<Layer> => {
         const entry = files.dye[key];
         const [gltf, albedo, mask] = await Promise.all([s.gltf(dir + files.lods[key]), s.texture(dir + entry.albedo, true), s.texture(dir + entry.mask, false)]);
-        return { geometry: canonicalGeometry(findSkinnedMesh(gltf.scene), rig.joints, layerIndex), albedo, mask, defaults: dyeDefaults(entry) };
+        const mesh = findSkinnedMesh(gltf.scene);
+        // the GLB's extras (forge-female-art.md §4): a helmet that covers the hair
+        if (key === 'lod0') gltf.scene.traverse((o) => (hidesHair ||= o.userData?.hidesHair === true));
+        return { geometry: canonicalGeometry(mesh, rig.joints, layerIndex), albedo, mask, defaults: dyeDefaults(entry) };
       }),
     )) as [Layer, Layer];
-    return { id, slot, rigid: !!manifest.attachBone, lods, nozzles: manifest.nozzles ?? [] };
+    return { id, slot, rigid: !!manifest.attachBone, lods, nozzles: manifest.nozzles ?? [], hides: manifest.hidesBody ?? [], hidesHair };
   }
 }
 
@@ -588,7 +649,8 @@ class Instance implements CharacterInstance {
     this.root = cloneSkinned(rig.scene);
     this.mesh = findSkinnedMesh(this.root);
     for (const b of this.mesh.skeleton.bones) this.bones.set(b.name, b);
-    this.mesh.material = this.material;
+    // the body and parts, then the garments (hair, top, legs): one geometry group each (build())
+    this.mesh.material = this.material.all;
     // bind-pose bounds don't follow the animated skeleton (jet poses, flailing): never cull a soldier
     this.mesh.frustumCulled = false;
     this.meshes = [this.mesh];

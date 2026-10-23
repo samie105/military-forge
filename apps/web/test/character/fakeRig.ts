@@ -19,16 +19,21 @@ const BONE_AT: Record<string, [number, number, number]> = {
   hand_L: [0.374, 0.578, -0.024], hand_R: [-0.374, 0.578, -0.024], foot_L: [0.186, 0.12, -0.06], foot_R: [-0.186, 0.12, -0.06],
 };
 
-/** [bone, centroid x, y, z] per body triangle */
-export const BODY: readonly [string, number, number, number][] = [
-  ['spine2', 0.1, 0.7, 0.05], // uniform
-  ['spine2', -0.1, 0.75, 0.1], // webbing
+/** [bone, centroid x, y, z, region] per body triangle (region: the body's `_REGION` code, 0 = always drawn) */
+export const BODY: readonly [string, number, number, number, number?][] = [
+  ['spine2', 0.1, 0.7, 0.05, 2], // uniform (top)
+  ['spine2', -0.1, 0.75, 0.1, 2], // webbing (top)
   ['head', 0, 1.1, 0.2], // face
   ['hand_L', 0.37, 0.56, 0], // hand
+  ['head', 0, 1.25, -0.05, 1], // hair
+  ['thigh_L', 0.1, 0.35, 0.02, 3], // trouser leg (legs)
 ];
 
-/** [bone, centroid] of each part's single triangle; rigid parts name their attachBone */
-export const PARTS: Record<string, { slot: string; bone: string; at: [number, number, number]; rigid: boolean; defaults: Record<string, string> }> = {
+/** the bodies' region codes (rookie.json `regions`) */
+export const REGIONS = { hair: 1, top: 2, legs: 3 };
+
+/** [bone, centroid] of each part's single triangle; rigid parts name their attachBone; garments the regions they replace */
+export const PARTS: Record<string, { slot: string; bone: string; at: [number, number, number]; rigid: boolean; defaults: Record<string, string>; hidesBody?: string[]; hidesHair?: boolean }> = {
   headgear_brim_helmet: { slot: 'headgear', bone: 'head', at: [0, 1.35, 0], rigid: true, defaults: { primary: '#b2925f', accent: '#1a7a79' } },
   headgear_field_cap: { slot: 'headgear', bone: 'head', at: [0, 1.3, 0.05], rigid: true, defaults: { primary: '#556b2f' } },
   eyewear_aviators: { slot: 'eyewear', bone: 'head', at: [0, 1.12, 0.24], rigid: true, defaults: { secondary: '#ebba42' } },
@@ -37,6 +42,12 @@ export const PARTS: Record<string, { slot: string; bone: string; at: [number, nu
   boots_jungle: { slot: 'boots', bone: 'foot_L', at: [0.19, 0.07, 0.02], rigid: false, defaults: { secondary: '#4a5a2a' } },
   jetpack_twin_tank: { slot: 'jetpack', bone: 'spine2', at: [0, 0.7, -0.3], rigid: true, defaults: { secondary: '#70623d' } },
   jetpack_drum: { slot: 'jetpack', bone: 'spine2', at: [0, 0.72, -0.31], rigid: true, defaults: {} },
+  headgear_beanie: { slot: 'headgear', bone: 'head', at: [0, 1.3, -0.02], rigid: true, defaults: { primary: '#687344' }, hidesHair: true },
+  top_bomber: { slot: 'top', bone: 'spine2', at: [0, 0.72, 0.08], rigid: false, defaults: { primary: '#61663d' }, hidesBody: ['top'] },
+  top_hoodie_street: { slot: 'top', bone: 'spine2', at: [0, 0.73, 0.09], rigid: false, defaults: {}, hidesBody: ['top'] },
+  legs_joggers: { slot: 'legs', bone: 'thigh_L', at: [0.1, 0.35, 0.03], rigid: false, defaults: {}, hidesBody: ['legs'] },
+  hair_bun: { slot: 'hair', bone: 'head', at: [0, 1.27, -0.08], rigid: true, defaults: { secondary: '#687345' }, hidesBody: ['hair'] },
+  hair_braids: { slot: 'hair', bone: 'head', at: [0, 1.26, -0.07], rigid: true, defaults: {}, hidesBody: ['hair'] },
 };
 
 export const BODY_DEFAULTS = { primary: '#b99664', secondary: '#665b2c', accent: '#239090' };
@@ -47,7 +58,7 @@ export const BODY_TEXELS = [
   [218, 159, 117, 255],
 ];
 
-function rig(order: readonly string[], triangles: readonly [string, number, number, number][], height = 1): Group {
+function rig(order: readonly string[], triangles: readonly [string, number, number, number, number?][], height = 1, extras: Record<string, unknown> = {}): Group {
   const bones = order.map((name) => Object.assign(new Bone(), { name }));
   const byName = new Map(bones.map((b) => [b.name, b]));
   const root = byName.get('root')!;
@@ -62,9 +73,11 @@ function rig(order: readonly string[], triangles: readonly [string, number, numb
   const uv: number[] = [];
   const skinIndex: number[] = [];
   const skinWeight: number[] = [];
-  for (const [bone, x, y, z] of triangles) {
+  const region: number[] = [];
+  for (const [bone, x, y, z, code = 0] of triangles) {
     for (const [dx, dy] of [[-0.02, -0.02], [0.02, -0.02], [0, 0.03]]) {
       pos.push(x + dx!, y + dy!, z);
+      region.push(code);
       uv.push(0.25, 0.5);
       skinIndex.push(order.indexOf(bone), 0, 0, 0);
       skinWeight.push(1, 0, 0, 0);
@@ -77,7 +90,10 @@ function rig(order: readonly string[], triangles: readonly [string, number, numb
   geometry.setAttribute('skinIndex', new Uint16BufferAttribute(skinIndex, 4));
   geometry.setAttribute('skinWeight', new Float32BufferAttribute(skinWeight, 4));
   geometry.setIndex(Array.from({ length: pos.length / 3 }, (_, i) => i));
+  // GLTFLoader reads a body's `_REGION` as `_region`
+  if (region.some((r) => r > 0)) geometry.setAttribute('_region', new Float32BufferAttribute(region, 1));
   const mesh = new SkinnedMesh(geometry, new MeshStandardMaterial());
+  Object.assign(mesh.userData, extras); // the node's glTF extras
   mesh.add(root);
   mesh.bind(new Skeleton(bones, bones.map((b) => new Matrix4().copy(b.matrixWorld).invert())));
   const scene = new Group();
@@ -134,6 +150,7 @@ export function fakeSource(female: FakeBody | null = null): FakeSource {
           dye: dye('rookie_body', BODY_DEFAULTS),
           defaultParts: { headgear: 'headgear_brim_helmet', boots: 'boots_combat', jetpack: 'jetpack_twin_tank' },
           upperBodyBones: ['spine1', 'spine2', 'neck', 'head'],
+          regions: REGIONS,
         };
       }
       if (path === FEMALE_MANIFEST) {
@@ -144,6 +161,7 @@ export function fakeSource(female: FakeBody | null = null): FakeSource {
           dye: dye('rookie_female_body', BODY_DEFAULTS),
           defaultParts: { headgear: 'headgear_brim_helmet', boots: 'boots_combat', jetpack: 'jetpack_twin_tank' },
           upperBodyBones: ['spine1', 'spine2', 'neck', 'head'],
+          regions: REGIONS,
         };
       }
       const id = path.slice(path.lastIndexOf('/') + 1, -'.json'.length);
@@ -155,6 +173,7 @@ export function fakeSource(female: FakeBody | null = null): FakeSource {
         lods: lods(id),
         dye: dye(id, part.defaults),
         ...(part.rigid ? { attachBone: part.bone } : {}),
+        ...(part.hidesBody ? { hidesBody: part.hidesBody } : {}),
         ...(id === 'jetpack_twin_tank' ? { nozzles: [[-0.06, 0.54, -0.3], [0.07, 0.54, -0.23]] } : id === 'jetpack_drum' ? { nozzles: [[0, 0.5, -0.31]] } : {}),
       };
     },
@@ -170,7 +189,7 @@ export function fakeSource(female: FakeBody | null = null): FakeSource {
       if (path.includes('rookie_body')) return { scene: rig(order, BODY), animations: [] };
       const id = path.slice(path.lastIndexOf('/') + 1).replace(/(_lod1)?\.glb$/, '');
       const part = PARTS[id]!;
-      return { scene: rig(order, [[part.bone, ...part.at]]), animations: [] };
+      return { scene: rig(order, [[part.bone, ...part.at]], 1, part.hidesHair !== undefined ? { hidesHair: part.hidesHair } : {}), animations: [] };
     },
     async texture(path, colour) {
       requests.push(path);

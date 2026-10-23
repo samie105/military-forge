@@ -4,7 +4,7 @@ import { Color, Vector3, type BufferAttribute, type BufferGeometry } from 'three
 import { describe, expect, it } from 'vitest';
 import { BODIES, DEFAULT_COSMETIC_LOADOUT, cosmetics, getCosmetic, type CosmeticLoadout } from '@military-forge/content';
 import { ART_SLOTS, BODY_MANIFESTS, CharacterAssembler, DyeMaterial, OutlineMaterial, ROOKIE_MANIFEST, selectLod } from '../../src/character';
-import { BODY, BODY_DEFAULTS, JOINTS, PARTS, fakeSource, type FakeSource } from './fakeRig';
+import { BODY, BODY_DEFAULTS, JOINTS, PARTS, REGIONS, fakeSource, type FakeSource } from './fakeRig';
 
 const assembler = (source: FakeSource = fakeSource()) => new CharacterAssembler({ source });
 const wearing = (items: Partial<CosmeticLoadout['items']>, dyes: Partial<CosmeticLoadout['dyes']> = {}): CosmeticLoadout => ({
@@ -32,13 +32,15 @@ describe('CharacterAssembler (W8 rig)', () => {
   it('builds one skinned mesh: the body plus the default parts, each on its own texture layer and bone', async () => {
     const c = await assembler().create(null);
     expect(c.meshes).toHaveLength(1);
-    expect(c.meshes[0]!.material).toBeInstanceOf(DyeMaterial);
+    // the body and parts, then the garments: two materials sharing the dyes, one geometry group each
+    expect(c.meshes[0]!.material).toEqual([c.material, c.material.garments]);
+    expect(c.material.garments).toBeInstanceOf(DyeMaterial);
     expect(c.bone('socket_jetpack')?.name).toBe('socket_jetpack');
     expect(c.bone('nope')).toBeNull();
     expect(c.clips.map((clip) => clip.name)).toEqual(['idle', 'walk']); // the shared clip library, not the body GLB's
     expect(triangles(c)).toBe(BODY.length + 3); // helmet, boots, jetpack
     const layers = layerBones(geometryOf(c));
-    expect(layers.get(0)).toEqual(new Set(['spine2', 'head', 'hand_L']));
+    expect(layers.get(0)).toEqual(new Set(['spine2', 'head', 'hand_L', 'thigh_L']));
     expect(layers.get(layerOf('headgear'))).toEqual(new Set(['head']));
     expect(layers.get(layerOf('boots'))).toEqual(new Set(['foot_L']));
     expect(layers.get(layerOf('jetpack'))).toEqual(new Set(['spine2']));
@@ -208,7 +210,7 @@ describe('CharacterAssembler (W8 rig)', () => {
 
   it('close-up textures (the creator stage): none listed, setHero keeps the body as it is', async () => {
     const c = await assembler().create(null);
-    const material = c.meshes[0]!.material as DyeMaterial;
+    const material = c.material;
     const body = material.map;
     await expect(c.setHero(true)).resolves.toBe(false);
     expect(material.map).toBe(body);
@@ -225,6 +227,97 @@ describe('CharacterAssembler (W8 rig)', () => {
     expect(c.meshes).toHaveLength(1);
     expect(a.upperBodyBones).toContain('spine2');
   });
+});
+
+describe('CharacterAssembler: the garments (hair, top, legs) and "None"', () => {
+  const female = (items: Partial<CosmeticLoadout['items']> = {}) => wearing({ bodyType: 'body_female', ...items });
+  /** the body's triangles still drawn, by region code */
+  const bodyRegions = (c: { meshes: readonly { geometry: BufferGeometry }[] }) => {
+    const g = geometryOf(c);
+    const layer = g.getAttribute('texLayer');
+    const pos = g.getAttribute('position');
+    const index = g.getIndex()!;
+    const out: number[] = [];
+    for (let t = 0; t < index.count; t += 3) {
+      const v = index.getX(t);
+      if (layer.getX(v) !== 0) continue;
+      // the fake body's triangles in order: find which one by its first corner
+      const i = BODY.findIndex(([, x, y, z]) => Math.abs(pos.getX(v) - (x - 0.02)) < 1e-6 && Math.abs(pos.getY(v) - (y - 0.02)) < 1e-6 && Math.abs(pos.getZ(v) - z) < 1e-6);
+      out.push(BODY[i]?.[4] ?? 0);
+    }
+    return out.sort();
+  };
+
+  it('draws a top and trousers on the garment material, in place of the body regions they replace', async () => {
+    const c = await assembler().create(wearing({ top: 'top_bomber', legs: 'legs_joggers' }));
+    const layers = layerBones(geometryOf(c));
+    expect(layers.get(layerOf('top'))).toEqual(new Set(['spine2']));
+    expect(layers.get(layerOf('legs'))).toEqual(new Set(['thigh_L']));
+    expect(bodyRegions(c)).toEqual([0, 0, REGIONS.hair]); // the torso and the leg are the garments'
+    // group 0 (body and parts) on the main material, group 1 (the garments) on the garments'
+    const groups = geometryOf(c).groups;
+    expect(groups.map((g) => g.materialIndex)).toEqual([0, 1]);
+    expect(groups[1]!.count).toBe(6); // two garment triangles
+    expect(c.material.layerAlbedo(layerOf('top'))).not.toBeNull();
+    expect(c.material.garments!.layerAlbedo(layerOf('top'))).toBe(c.material.layerAlbedo(layerOf('top')));
+    // the garments share every dye uniform with the main material
+    expect(c.material.garments!.layerColours).toBe(c.material.layerColours);
+    expect(c.material.garments!.dissolve).toBe(c.material.dissolve);
+    expect(c.material.garments!.rim).toBe(c.material.rim);
+    expect(colourAt(c.material, layerOf('top'), 0).equals(new Color(PARTS.top_bomber!.defaults.primary))).toBe(true);
+    // the body's own fatigues come back with them off
+    await c.setLoadout(wearing({}));
+    expect(bodyRegions(c)).toEqual([0, 0, REGIONS.hair, REGIONS.top, REGIONS.top, REGIONS.legs]);
+    expect(geometryOf(c).groups.map((g) => g.materialIndex)).toEqual([0]); // no garments: one draw call
+  });
+
+  it('a hairstyle replaces her own hair; a helmet that covers the hair hides the style, and "None" is no hat at all', async () => {
+    const a = assembler(fakeSource({}));
+    const c = await a.create(female({ hair: 'hair_bun', headgear: 'headgear_none' }));
+    expect(c.body).toBe('female');
+    expect(layerBones(geometryOf(c)).get(layerOf('hair'))).toEqual(new Set(['head']));
+    expect(layerBones(geometryOf(c)).has(layerOf('headgear'))).toBe(false); // None: not the default helmet
+    expect(bodyRegions(c)).not.toContain(REGIONS.hair);
+    await c.setLoadout(female({ hair: 'hair_bun', headgear: 'headgear_beanie' }));
+    expect(layerBones(geometryOf(c)).has(layerOf('hair'))).toBe(false);
+    expect(bodyRegions(c)).toContain(REGIONS.hair);
+    expect(layerBones(geometryOf(c)).get(layerOf('headgear'))).toEqual(new Set(['head']));
+  });
+
+  // the owner (23 Oct): "when selecting the clothes it wasn't updating the characters at all"
+  for (const body of ['male', 'female'] as const) {
+    it(`every slot the creator dresses changes the ${body} soldier`, async () => {
+      const a = assembler(fakeSource({}));
+      const look = (items: Partial<CosmeticLoadout['items']> = {}, dyes: Partial<CosmeticLoadout['dyes']> = {}) =>
+        wearing({ ...(body === 'female' ? { bodyType: 'body_female' } : {}), headgear: 'headgear_none', ...items }, dyes);
+      const c = await a.create(look());
+      expect(c.body).toBe(body);
+      const picks: Partial<CosmeticLoadout['items']>[] = [
+        { headgear: 'headgear_field_cap' },
+        { eyewear: 'eyewear_aviators' },
+        { top: 'top_bomber' },
+        { legs: 'legs_joggers' },
+        { gloves: 'gloves_tactical' },
+        { boots: 'boots_jungle' },
+        { jetpack: 'jetpack_drum' },
+        ...(body === 'female' ? [{ hair: 'hair_braids' }] : []),
+      ];
+      for (const pick of picks) {
+        const before = geometryOf(c);
+        await c.setLoadout(look(pick));
+        expect(geometryOf(c), JSON.stringify(pick)).not.toBe(before);
+        expect(c.loadout.items).toMatchObject(pick);
+        await c.setLoadout(look());
+      }
+      // a colourway is a uniform: the colours change at once, the geometry stays
+      const before = geometryOf(c);
+      const hash = c.loadoutHash;
+      await c.setLoadout(look({}, { primary: 'dye_red' }));
+      expect(geometryOf(c)).toBe(before);
+      expect(c.loadoutHash).not.toBe(hash);
+      expect(c.material.dye.primary.equals(new Color(getCosmetic('dye_red')!.colour!))).toBe(true);
+    });
+  }
 });
 
 describe('selectLod', () => {

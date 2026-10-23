@@ -169,6 +169,16 @@ Measured on 23 Oct 2026 (NOTES §43): no gap lined up with a server stall.
     cd /opt/military-forge/src && sudo -u mf git fetch -q --depth 1 origin main && sudo -u mf git reset -q --hard FETCH_HEAD
     sudo bash scripts/net-trial/cloud-init.sh
     ```
+- **Deploys keep live matches** (23 Oct 2026; `scripts/net-trial/restart.sh`):
+  - **Web-only changes** leave the game server running. It restarts only when `apps/game-server`, `packages/`, the lockfile or the root `package.json` changed; the deployed tree's hash is kept in `/var/lib/military-forge/game-tree`.
+  - **The gateway** (`mf-wt`) restarts only when its binary or service changed, and **Caddy** only when its config did. Either restart drops every connection through it.
+  - **When the game server must restart, it drains first** (SIGUSR2):
+    - no new rooms open, and their players are told to try again in a moment (close 1012);
+    - running rooms play on and still take joiners;
+    - once no match is counting down, being played or showing its scoreboard, everyone is told "the server updated" (1012) and the server stops;
+    - systemd starts the new code, and pages rejoin the same room with a fresh ticket ("The server updated. Rejoining…"), never "ticket expired".
+    - The cap is 10 minutes (`DRAIN_MAX_MS` in `game.env`). `mf-trial-setup` waits for it, so a deploy can take that long; it says so while it waits.
+  - **A plain stop** (`systemctl restart mf-game`, a reboot) also tells everyone the server updated first.
 - **Database:**
   - Look inside: `sudo -u postgres psql mf`, and `sudo bash -c '. /etc/military-forge/db; REDISCLI_AUTH=$KV_PASS valkey-cli'`.
   - A backup now: `sudo -u postgres mf-backup`.

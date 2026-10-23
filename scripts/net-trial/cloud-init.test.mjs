@@ -51,8 +51,13 @@ describe('cloud-init.sh', () => {
   it('sets the game server up for the gateway before it starts, and the gateway after the box is ready', () => {
     const env = text.indexOf('bash "$W" env');
     const gateway = text.indexOf('bash "$W" gateway');
-    assert.ok(env > 0 && env < text.indexOf('systemctl restart $services'), 'wt-setup.sh env before the services start');
+    assert.ok(env > 0 && env < text.indexOf('restart.sh" $services'), 'wt-setup.sh env before the services start');
     assert.ok(gateway > text.indexOf('phase ready'), 'wt-setup.sh gateway after ready (WebSocket works meanwhile)');
+  });
+  it('restarts the services through restart.sh (no match is dropped by a deploy), and Caddy only when its config changed', () => {
+    assert.match(text, /^bash "\$SRC\/scripts\/net-trial\/restart\.sh" \$services /m);
+    assert.ok(!/systemctl restart \$services/.test(text), 'no plain restart of the game server');
+    assert.match(text, /^cmp -s \/etc\/caddy\/Caddyfile\{\.new,\} && rm /m);
   });
   it('never prints the owner secrets to the public status page', () => {
     const status = text.slice(text.indexOf('status() {'), text.indexOf('[ -n "${OWNER:-}" ] || return 0'));

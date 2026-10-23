@@ -12,6 +12,16 @@ vi.mock('three', async (importOriginal) => {
     setPixelRatio(): void {}
     setSize(): void {}
     render(): void {}
+    // the contact shadow's passes
+    getRenderTarget(): null {
+      return null;
+    }
+    setRenderTarget(): void {}
+    getClearAlpha(): number {
+      return 1;
+    }
+    setClearAlpha(): void {}
+    clear(): void {}
     dispose(): void {
       this.calls.push('dispose');
     }
@@ -139,6 +149,36 @@ describe('Turntable: the creator stage', () => {
     state.touch = true;
     run(1);
     expect(run(2)).toBeLessThanOrEqual(60);
+    t.dispose();
+  });
+  it('draws again when new parts land after the look changed, even at rest (a phone on a slow network)', async () => {
+    const { t, run } = await make();
+    const { BufferGeometry, Color, Group } = await import('three');
+    const { DEFAULT_COSMETIC_LOADOUT } = await import('@military-forge/content');
+    const mesh = { geometry: new BufferGeometry() };
+    const soldier = {
+      root: new Group(),
+      meshes: [mesh],
+      clips: [],
+      loadout: DEFAULT_COSMETIC_LOADOUT,
+      loadoutHash: 1,
+      exhaustColour: new Color(),
+      outline: null,
+      bone: () => null,
+      setOutline() {},
+      setHero: () => Promise.resolve(false),
+    };
+    t.setCharacter(soldier as never);
+    t.setReducedMotion(true);
+    run(4);
+    expect(run(2)).toBe(0); // at rest
+    // the look changed (the dyes at once), then its parts arrive a few seconds later: the stage draws them
+    soldier.loadout = { ...DEFAULT_COSMETIC_LOADOUT, items: { ...DEFAULT_COSMETIC_LOADOUT.items, top: 'top_bomber' } };
+    soldier.loadoutHash = 2;
+    run(5);
+    expect(run(2)).toBe(0);
+    mesh.geometry = new BufferGeometry();
+    expect(run(0.5)).toBeGreaterThan(0);
     t.dispose();
   });
 });

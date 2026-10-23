@@ -177,23 +177,23 @@ export const cosmetics: readonly CosmeticDef[] = [
   item(80, 'top_fatigues', 'top', 'Rookie Fatigues', 'common', STARTER),
   item(81, 'top_track_jacket', 'top', 'Track Jacket', 'epic', STORE),
   // tops and trousers (22 Oct): each replaces the body's own (`hidesBody` in cosmetics/<slot>/<id>.json) with a fit
-  // per body; they get `art` once the assembler draws the top and legs slots (forge-female-art.md)
-  item(82, 'top_tee_field', 'top', 'Field Tee', 'common', STARTER),
-  item(83, 'top_hoodie_street', 'top', 'Street Hoodie', 'common', STARTER),
-  item(84, 'top_jersey_street', 'top', 'Street Jersey', 'common', STARTER),
-  item(85, 'top_print_shirt', 'top', 'Print Shirt', 'uncommon', { kind: 'level', level: 5 }),
-  item(86, 'top_bomber', 'top', 'Bomber Jacket', 'uncommon', { kind: 'level', level: 8 }),
-  item(87, 'top_plate_carrier', 'top', 'Plate Carrier', 'rare', { kind: 'level', level: 12 }),
-  item(88, 'top_field_jacket', 'top', 'Field Jacket', 'common', STARTER),
+  // per body (forge-female-art.md); the two without a manifest yet (Track Jacket, Cargo Shorts) draw the body's own
+  item(82, 'top_tee_field', 'top', 'Field Tee', 'common', STARTER, { art: true }),
+  item(83, 'top_hoodie_street', 'top', 'Street Hoodie', 'common', STARTER, { art: true }),
+  item(84, 'top_jersey_street', 'top', 'Street Jersey', 'common', STARTER, { art: true }),
+  item(85, 'top_print_shirt', 'top', 'Print Shirt', 'uncommon', { kind: 'level', level: 5 }, { art: true }),
+  item(86, 'top_bomber', 'top', 'Bomber Jacket', 'uncommon', { kind: 'level', level: 8 }, { art: true }),
+  item(87, 'top_plate_carrier', 'top', 'Plate Carrier', 'rare', { kind: 'level', level: 12 }, { art: true }),
+  item(88, 'top_field_jacket', 'top', 'Field Jacket', 'common', STARTER, { art: true }),
 
   item(100, 'gloves_none', 'gloves', 'None', 'common', STARTER, { dyeable: false }),
   item(101, 'gloves_tactical', 'gloves', 'Tactical Gloves', 'common', STARTER, { art: true }),
 
   item(120, 'legs_fatigues', 'legs', 'Rookie Fatigues', 'common', STARTER),
   item(121, 'legs_cargo_shorts', 'legs', 'Cargo Shorts', 'uncommon', { kind: 'level', level: 15 }),
-  item(122, 'legs_combat_trousers', 'legs', 'Combat Trousers', 'common', STARTER),
-  item(123, 'legs_joggers', 'legs', 'Street Joggers', 'common', STARTER),
-  item(124, 'legs_cargo_long', 'legs', 'Long Cargos', 'uncommon', { kind: 'level', level: 6 }),
+  item(122, 'legs_combat_trousers', 'legs', 'Combat Trousers', 'common', STARTER, { art: true }),
+  item(123, 'legs_joggers', 'legs', 'Street Joggers', 'common', STARTER, { art: true }),
+  item(124, 'legs_cargo_long', 'legs', 'Long Cargos', 'uncommon', { kind: 'level', level: 6 }, { art: true }),
 
   item(140, 'boots_combat', 'boots', 'Combat Boots', 'common', STARTER, { art: true }),
   item(141, 'boots_jungle', 'boots', 'Jungle Boots', 'common', STARTER, { art: true }),
@@ -228,11 +228,11 @@ export const cosmetics: readonly CosmeticDef[] = [
 
   // hair (22 Oct): `hair_body` is the body's own hair, part of each body's mesh (his short crop under the helmet, her
   // natural afro). The styles are made for the female body (`fits`) and replace hers (`hidesBody: hair` in their
-  // manifests, cosmetics/hair/<id>.json); they get `art` once the assembler draws the hair slot.
+  // manifests, cosmetics/hair/<id>.json); a helmet that covers the hair (`hidesHair`) hides the style under it.
   item(260, 'hair_body', 'hair', 'Natural', 'common', STARTER, { dyeable: false }),
-  item(261, 'hair_bun', 'hair', 'Field Bun', 'common', STARTER, { fits: ['female'] }),
-  item(262, 'hair_braids', 'hair', 'Cornrow Braids', 'common', STARTER, { fits: ['female'] }),
-  item(263, 'hair_crop', 'hair', 'Short Crop', 'uncommon', { kind: 'level', level: 6 }, { fits: ['female'] }),
+  item(261, 'hair_bun', 'hair', 'Field Bun', 'common', STARTER, { fits: ['female'], art: true }),
+  item(262, 'hair_braids', 'hair', 'Cornrow Braids', 'common', STARTER, { fits: ['female'], art: true }),
+  item(263, 'hair_crop', 'hair', 'Short Crop', 'uncommon', { kind: 'level', level: 6 }, { fits: ['female'], art: true }),
 ];
 
 const byId = new Map(cosmetics.map((c) => [c.id, c]));

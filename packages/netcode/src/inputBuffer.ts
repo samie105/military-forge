@@ -41,6 +41,8 @@ export class InputBuffer {
   private readonly inputs: Input[] = Array.from({ length: INPUT_RING }, createInput);
   /** the server tick the client was rendering remote players at when it sampled each input */
   private readonly renderTicks = new Float64Array(INPUT_RING).fill(Number.NaN);
+  /** an entry the room filled in itself (fillMissing): the client's real one replaces it if it comes in time */
+  private readonly synthetic = new Uint8Array(INPUT_RING);
   private lastRenderTick = Number.NaN;
   private lastRenderFor = 0;
   /** full tick of the newest input in the most recent packet, −1 before the first */
@@ -57,6 +59,12 @@ export class InputBuffer {
   missedRun = 0;
   /** ticks simulated with a neutral input after the repeat ran out */
   neutral = 0;
+  /**
+   * The next input tick the player's simulation takes (the late-input catch-up, room.ts): the room's
+   * tick normally; behind it while the room holds the player for a late input, and catching up after.
+   * −1 until the first takeNext.
+   */
+  next = -1;
   private readonly idleInput = createInput();
 
   // late presses (docs/05 §13): what the client sent and what the sim used, per tick
@@ -82,7 +90,8 @@ export class InputBuffer {
    * already simulated are ignored (redundant copies, or late); returns whether it was stored.
    */
   push(tick: number, input: Readonly<Input>, current: number, renderTick = Number.NaN): boolean {
-    if (tick < current) {
+    // an input still to be taken (the room holds the player for it) isn't late, whatever the room's tick
+    if (tick < (this.next >= 0 ? Math.min(current, this.next) : current)) {
       // too late for its tick: remember what it held, so a press in it isn't lost (forSim)
       const j = tick & (PRESS_RING - 1);
       if (current - tick <= MAX_LATCH_TICKS && this.sentTick[j] !== tick) {
@@ -97,12 +106,67 @@ export class InputBuffer {
     }
     const i = tick & (INPUT_RING - 1);
     // a redundant copy of an input we already have: keep the first (its render tick is exact)
-    if (this.ticks[i] === tick) return true;
+    if (this.ticks[i] === tick && !this.synthetic[i]) return true;
+    this.synthetic[i] = 0;
     this.ticks[i] = tick;
     this.noteSent(tick, input);
     copyInput(this.inputs[i]!, input);
     this.renderTicks[i] = renderTick;
     return true;
+  }
+
+  /**
+   * The late-input catch-up's take: copies the input for `next` into `out` and moves on (true), or
+   * false (out untouched) if it hasn't come. `current` starts `next` on the first call.
+   */
+  takeNext(current: number, out: Input): boolean {
+    if (this.next < 0) this.next = current;
+    if (!this.take(this.next, out)) return false;
+    this.next++;
+    return true;
+  }
+
+  /**
+   * The client's inputs are held up on the way: it has sent some, but none for `next` or later has
+   * come (a lost one leaves newer ones behind it; a stalled path brings nothing).
+   */
+  get stalled(): boolean {
+    return this.newestSeen >= 0 && this.next >= 0 && this.newestSeen < this.next;
+  }
+
+  /** The input for `tick` is a stand-in (fillMissing). */
+  standIn(tick: number): boolean {
+    const i = tick & (INPUT_RING - 1);
+    return this.ticks[i] === tick && this.synthetic[i] === 1;
+  }
+
+  /** Gives up waiting for the inputs before `tick` (they count as late when they come). */
+  skipTo(tick: number): void {
+    this.next = tick;
+  }
+
+  /**
+   * Gives up waiting: every tick from `next` up to (not including) `end` that has no input gets
+   * `input` (the last one: docs/05 §13), or no keys held once the client has been silent for
+   * MAX_REPEAT_TICKS. They're taken in order like real ones; a real input that comes before its
+   * stand-in is taken replaces it.
+   */
+  fillMissing(end: number, input: Readonly<Input>): void {
+    if (this.next < 0) return;
+    for (let t = this.next; t < end; t++) {
+      const i = t & (INPUT_RING - 1);
+      if (this.ticks[i] === t) continue;
+      this.ticks[i] = t;
+      this.synthetic[i] = 1;
+      this.renderTicks[i] = Number.NaN;
+      const stored = this.inputs[i]!;
+      copyInput(stored, input);
+      if (this.missedRun > MAX_REPEAT_TICKS) {
+        stored.buttons = 0;
+        stored.weaponSelect = 0;
+        this.neutral++;
+      }
+    }
   }
 
   /** Copies the input for `tick` into `out`. False (out untouched: repeat last) if it never arrived. */
@@ -115,10 +179,13 @@ export class InputBuffer {
       }
       return false;
     }
-    this.missedRun = 0;
+    if (this.synthetic[i]) this.synthetic[i] = 0; // a stand-in: the miss was counted when it was made
+    else {
+      this.missedRun = 0;
+      this.used++;
+    }
     copyInput(out, this.inputs[i]!);
     this.ticks[i] = -1;
-    this.used++;
     if (!Number.isNaN(this.renderTicks[i]!)) {
       this.lastRenderTick = this.renderTicks[i]!;
       this.lastRenderFor = tick;

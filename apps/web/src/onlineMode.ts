@@ -55,6 +55,16 @@ const WT_SILENCE_MS = 3000;
 const WS_SILENCE_MS = 4000;
 /** A HELLO that gets no WELCOME in this long: the connection is as good as silent. */
 const JOIN_SILENCE_MS = 8000;
+/**
+ * A reconnect this quick stays out of sight (the owner on a phone, 23 Oct 2026: "keeps returning
+ * and returning"): the banner shows only once an outage has lasted this long while the page was in
+ * view. Phones drop and resume all the time (an app switch, the notification shade, a 4G stall),
+ * and a resume takes ~1–2 s; a banner and a "Back" chip for each read as the game falling over.
+ */
+export const QUIET_OUTAGE_MS = 3000;
+
+/** a server that said it's updating is back in a few seconds (systemd restarts it at once): the first rejoin waits this long */
+const SERVER_UPDATE_WAIT_MS = 3000;
 /** how often the watchdog looks (a timer: it runs behind the lobby and in a hidden tab too) */
 const WATCHDOG_MS = 500;
 /** close codes that mean "don't come back" */
@@ -95,6 +105,8 @@ export interface ConnectionInfo {
 }
 
 const FRESH: Pick<ConnectionInfo, 'since' | 'until' | 'attempt' | 'lastPingMs' | 'lossPct'> = { since: 0, until: 0, attempt: 0, lastPingMs: -1, lossPct: 0 };
+/** a quick reconnect, as the shell sees it: still connected (OnlineMode.connection) */
+const QUIET_CONNECTED: ConnectionInfo = Object.freeze({ state: 'connected', detail: '', code: 0, ...FRESH });
 
 export interface OnlineOptions {
   /** a room by code: its MATCH_STATE drives the shell, and the session survives a page reload */
@@ -171,8 +183,16 @@ export class OnlineMode {
   private watchdogTimer = 0;
   /** when the transport last delivered anything (the silence watchdog) */
   private lastMessageAt = 0;
-  /** the next attempt goes straight to WebSocket (WebTransport just went silent on us) */
-  private skipWebTransport = false;
+  /**
+   * WebTransport failed us in view (went silent, or couldn't connect and fell back): WebSocket from
+   * then on, for the rest of this room. It used to be for the next attempt only, so a phone whose
+   * WebTransport kept failing went back and forth between the two on every reconnect.
+   */
+  private stickyWebSocket = false;
+  /** when the page last came into view (an outage before that, in the background, wasn't seen) */
+  private visibleAt = 0;
+  private readonly onVisibility = () => this.visibilityChanged();
+  private readonly onOnline = () => this.retryNow('back online');
   readonly net: NetClient;
   private readonly up: ConditionedLink;
   private readonly down: ConditionedLink;
@@ -253,6 +273,11 @@ export class OnlineMode {
 
     this.open();
     this.watchdogTimer = window.setInterval(() => this.checkSilence(performance.now()), WATCHDOG_MS);
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', this.onVisibility);
+      window.addEventListener('pageshow', this.onVisibility);
+      window.addEventListener('online', this.onOnline);
+    }
   }
 
   /** The room code this mode plays in ('' = the dev room). */
@@ -265,8 +290,36 @@ export class OnlineMode {
     return this.options.local === true;
   }
 
+  /**
+   * What the shell shows: a reconnect stays "connected" until it has lasted QUIET_OUTAGE_MS in view
+   * (no banner, no "Back" chip for a quick one); after that, the reconnect as it is.
+   */
   get connection(): ConnectionInfo {
-    return this.conn;
+    const c = this.conn;
+    if (c.state !== 'reconnecting' || !this.everConnected) return c;
+    const seen = Math.max(c.since, this.visibleAt);
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return QUIET_CONNECTED;
+    return performance.now() - seen < QUIET_OUTAGE_MS ? QUIET_CONNECTED : c;
+  }
+
+  /** a WELCOME came on some connection of this mode: a drop now is a reconnect, not a first join */
+  private everConnected = false;
+
+  /** Back in view: whatever went wrong in the background is retried now, and silence counted from now. */
+  private visibilityChanged(): void {
+    if (document.visibilityState !== 'visible') return;
+    this.visibleAt = performance.now();
+    // a frozen or throttled page heard nothing: that's no evidence against the connection
+    this.lastMessageAt = Math.max(this.lastMessageAt, this.visibleAt);
+    this.retryNow('back in view');
+  }
+
+  /** A reconnect waiting out its backoff tries now (the page is back in view, the network is back). */
+  private retryNow(_why: string): void {
+    if (this.disposed || this.transport || !this.droppedAt || this.conn.state !== 'reconnecting' || !this.reconnectTimer) return;
+    window.clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = 0;
+    this.open();
   }
 
   get localId(): number {
@@ -409,8 +462,7 @@ export class OnlineMode {
   private open(): void {
     const attempt = {};
     this.currentAttempt = attempt;
-    const prefer = this.skipWebTransport && this.preferTransport === 'auto' ? 'ws' : this.preferTransport;
-    this.skipWebTransport = false;
+    const prefer = this.stickyWebSocket && this.preferTransport === 'auto' ? 'ws' : this.preferTransport;
     const handlers: TransportHandlers = {
       onMessage: (bytes) => {
         if (this.currentAttempt !== attempt) return;
@@ -429,6 +481,8 @@ export class OnlineMode {
     ).then(
       ({ transport, fallbackReason }) => {
         if (this.currentAttempt !== attempt || this.disposed) return transport.close();
+        // WebTransport was tried and failed (fell back): don't try it again on every reconnect
+        if (fallbackReason !== null && prefer === 'auto' && transport.kind === 'ws' && !/not supported|no WebTransport gateway|default room only/.test(fallbackReason)) this.stickyWebSocket = true;
         this.transport = transport;
         this.lastMessageAt = performance.now();
         // the conditioner models what loss does to this transport: retransmit stalls on TCP
@@ -453,6 +507,16 @@ export class OnlineMode {
     const why = `${code}${reason ? `: ${reason}` : ''}`;
     const now = performance.now();
     if (!this.droppedAt) this.droppedAt = now;
+    // the server is updating (a deploy): its rooms go with it. Rejoin with a fresh ticket once it's
+    // back (it takes a few seconds), not a resume it can't know about ("ticket expired", 23 Oct 2026)
+    const updating = code === CloseCode.ServerUpdating || (code === 1001 && /restart/i.test(reason));
+    if (updating && this.net.sessionToken !== '' && this.options.refreshTicket && now - this.droppedAt < RECONNECT_WINDOW_MS) {
+      this.net.onClose();
+      this.conn = { ...FRESH, state: 'reconnecting', detail: 'the server updated', code: CloseCode.ServerUpdating, since: this.droppedAt, until: this.droppedAt + RECONNECT_WINDOW_MS, attempt: 1 };
+      this.status = 'the server updated: rejoining…';
+      this.reconnectTimer = window.setTimeout(() => this.rejoinWithFreshTicket(why, CloseCode.ServerUpdating), SERVER_UPDATE_WAIT_MS);
+      return;
+    }
     // back after the room let our player go: rejoin as a new player with a fresh ticket
     if (code === CloseCode.TicketInvalid && this.net.sessionToken !== '' && this.options.refreshTicket && now - this.droppedAt < RECONNECT_WINDOW_MS) {
       this.rejoinWithFreshTicket(why);
@@ -467,7 +531,10 @@ export class OnlineMode {
       this.net.onClose();
       const delay = reconnectDelay(this.reconnectAttempt++);
       this.conn = { ...FRESH, state: 'reconnecting', detail: why, code, since: this.droppedAt, until: this.droppedAt + RECONNECT_WINDOW_MS, attempt: this.reconnectAttempt };
-      this.reconnectTimer = window.setTimeout(() => this.open(), delay);
+      this.reconnectTimer = window.setTimeout(() => {
+        this.reconnectTimer = 0;
+        this.open();
+      }, delay);
       return;
     }
     // never welcomed, kicked, refused, or out of time: give up
@@ -480,7 +547,10 @@ export class OnlineMode {
     const delay = reconnectDelay(this.reconnectAttempt++);
     this.status = `reconnecting… (${why}; retry in ${(delay / 1000).toFixed(2)} s)`;
     this.conn = { ...FRESH, state: 'reconnecting', detail: why, code, since: this.droppedAt, until: this.droppedAt + RECONNECT_WINDOW_MS, attempt: this.reconnectAttempt };
-    this.reconnectTimer = window.setTimeout(() => this.open(), delay);
+    this.reconnectTimer = window.setTimeout(() => {
+      this.reconnectTimer = 0;
+      this.open();
+    }, delay);
   }
 
   private giveUp(code: number, reason: string): void {
@@ -501,9 +571,9 @@ export class OnlineMode {
     this.onFatal(`${this.status} — is the game server running? (pnpm dev)`);
   }
 
-  private rejoinWithFreshTicket(why: string): void {
+  private rejoinWithFreshTicket(why: string, code: number = CloseCode.TicketInvalid): void {
     this.net.onClose();
-    this.conn = { ...FRESH, state: 'reconnecting', detail: why, code: CloseCode.TicketInvalid, since: this.droppedAt, until: this.droppedAt + RECONNECT_WINDOW_MS, attempt: Math.max(1, this.reconnectAttempt) };
+    this.conn = { ...FRESH, state: 'reconnecting', detail: why, code, since: this.droppedAt, until: this.droppedAt + RECONNECT_WINDOW_MS, attempt: Math.max(1, this.reconnectAttempt) };
     this.status = `rejoining… (${why})`;
     const retry = () => {
       if (this.disposed) return;
@@ -549,6 +619,7 @@ export class OnlineMode {
       case MsgType.Welcome: {
         this.status = msg.resumed ? `connected (resumed after ${((performance.now() - this.droppedAt) / 1000).toFixed(1)} s)` : 'connected';
         this.conn = { ...FRESH, state: 'connected', detail: '', code: 0 };
+        this.everConnected = true;
         this.droppedAt = 0;
         this.reconnectAttempt = 0;
         // a spectator has no session (''): nothing to resume on a reload
@@ -670,6 +741,11 @@ export class OnlineMode {
     this.net.clearOverrides();
     window.clearTimeout(this.reconnectTimer);
     window.clearInterval(this.watchdogTimer);
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', this.onVisibility);
+      window.removeEventListener('pageshow', this.onVisibility);
+      window.removeEventListener('online', this.onOnline);
+    }
     this.currentAttempt = null;
     this.up.dispose();
     this.down.dispose();
@@ -685,12 +761,18 @@ export class OnlineMode {
   private checkSilence(now: number): void {
     const t = this.transport;
     if (!t || this.disposed) return;
+    // a hidden page's timers and messages are held back (or frozen): its silence means nothing; a
+    // connection that really died says so with its close
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
     const limit = !this.net.isConnected ? JOIN_SILENCE_MS : t.kind === 'ws' ? WS_SILENCE_MS : WT_SILENCE_MS;
     if (now - this.lastMessageAt < limit) return;
     this.currentAttempt = null; // its close is ours, not a drop to handle twice
     this.transport = null;
     t.close(4000, 'no traffic');
-    if (t.kind === 'wt') this.skipWebTransport = true;
+    // in view and silent: WebTransport isn't working on this network; WebSocket from now on
+    if (t.kind === 'wt' && this.preferTransport === 'auto') this.stickyWebSocket = true;
+    // the outage began when the traffic stopped
+    if (!this.droppedAt) this.droppedAt = this.lastMessageAt;
     this.dropped(1006, `no traffic for ${Math.round(limit / 1000)} s`);
   }
 

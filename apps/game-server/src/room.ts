@@ -102,6 +102,7 @@ import {
   Match,
   MatchPhase,
   TEAM_MODES,
+  copyInput,
   createInput,
   type Input,
   type MatchRules,
@@ -115,6 +116,8 @@ export interface ClientConn {
   close(code: number, reason: string): void;
   /** bytes queued but not yet written to the socket */
   bufferedAmount(): number;
+  /** the transport, for the room's connection log */
+  kind?: 'ws' | 'wt' | 'lan';
 }
 
 export interface RoomOptions {
@@ -170,6 +173,9 @@ export interface Session {
   client: Client | null;
   /** tick at which a detached session is given up */
   expiresAt: number;
+  /** the connection log: when this connection began, and when the last one dropped (−1: it didn't) */
+  connectedTick: number;
+  droppedTick: number;
   /** what the player does while detached: nothing, facing the same way */
   readonly idle: Input;
   /**
@@ -229,6 +235,18 @@ const CMD_BURST = 20;
  */
 const LOW_BW_WARMUP_TICKS = 60;
 /**
+ * The late-input catch-up (owner, 23 Oct 2026: on 4G the player "keeps returning"). When a client's
+ * inputs stop coming (its uplink stalled: nothing newer has come either), its player is held still
+ * for up to HOLD_TICKS instead of running on a guess; when they come, it catches up through them,
+ * CATCH_UP_PER_TICK extra ticks a tick, and ends where the client predicted it: no correction. A
+ * hold that runs out gives the missing ticks stand-ins (the last input, then no keys: docs/05 §13)
+ * and runs them at once; the next stall may be held again. 1 s covers a phone's upload-queue spikes
+ * (netfeel MTN: corrections 218 → 0.8 a minute, 2 m+ jumps 12.8 → 0.4; at 250 ms: 20 and 12.8;
+ * at 500 ms: 7.6 and 9.2). Others see a stalled player stand still, then hurry on.
+ */
+export const HOLD_TICKS = 60;
+export const CATCH_UP_PER_TICK = 2;
+/**
  * A host gone this long (disconnected, or its connection silent: a stall the server can't see as a
  * close) hands the room to the longest-present player still here (docs/07 §5.3), so nobody waits
  * out the 20 s reconnect grace to start the match. 5 s: longer than a reconnect after a blip.
@@ -262,6 +280,17 @@ export class Client {
   readonly inputs = new InputBuffer();
   /** what the sim uses: the input for the current tick, or the last one repeated */
   readonly lastInput: Input = createInput();
+  /** the late-input catch-up: the view each input was aimed at (lag compensation), the main one's and the extras' */
+  mainView = Number.NaN;
+  readonly catchUpViews: number[] = [];
+  viewEvery = 2;
+  viewDelayMs = 0;
+  /** the late-input catch-up: this tick's first input (lastInput is the newest taken) */
+  readonly mainInput: Input = createInput();
+  /** the late-input catch-up: a hold ran out; none again until an input comes */
+  holdSpent = false;
+  /** the late-input catch-up's inputs for this tick (Game.catchUp) */
+  readonly catchUp: Input[] = Array.from({ length: HOLD_TICKS + CATCH_UP_PER_TICK + 1 }, createInput);
   /** lowest buffer health since the last snapshot */
   healthMin = Infinity;
   /** snapshots sent to this client recently: delta baselines (docs/05 §11; a spectator's ring fits its delay) */
@@ -463,6 +492,8 @@ export class Room {
   private readonly hostTuning: boolean;
   private readonly aoi: boolean;
   private readonly graceTicks: number;
+  /** the room's code, for its log lines ('' for the dev room) */
+  private readonly code: string;
   /** every player's session by token, connected or waiting for a reconnect */
   readonly sessions = new Map<string, Session>();
   /** tokens presented on a resume whose new token isn't confirmed yet (aliases, not counted) */
@@ -519,11 +550,21 @@ export class Room {
     this.armory = options.armory ?? false;
     this.hostTuning = options.hostTuning ?? false;
     this.aoi = options.aoi ?? true;
+    this.code = options.code ?? '';
     this.graceTicks = Math.round(((options.reconnectGraceMs ?? 20_000) / 1000) * 60);
     this.netSim = options.netSim;
     const lc = options.lagComp ?? true;
     this.lagComp = lc === false ? null : new LagCompensator({ snapshotEvery: this.snapshotEvery, log: this.dev, ...(lc === true ? {} : lc) });
     this.game.rewind = this.lagComp;
+    // a catch-up tick's shots test targets as that input's frame showed them (the late-input catch-up)
+    this.game.beforeCatchUp = (p, k) => {
+      if (!this.lagComp) return;
+      for (const c of this.clients) {
+        if (c.playerId !== p.id) continue;
+        this.lagComp.setView(p.id, c.catchUpViews[k] ?? Number.NaN, c.viewEvery, c.viewDelayMs);
+        return;
+      }
+    };
     this.lagComp?.record(this.game.tick, this.game.players);
     this.match = options.match ? new Match(this.game, options.match) : null;
     // team modes: party mates (the join ticket's party, social) are dealt onto one team
@@ -666,7 +707,7 @@ export class Room {
    * The connection is gone. Its player waits `reconnectGraceMs` for the session to come back
    * (`resumable`), or leaves now (kicked, or grace disabled).
    */
-  disconnect(client: Client, resumable = true): void {
+  disconnect(client: Client, resumable = true, why = ''): void {
     client.closed = true;
     client.up?.dispose();
     client.down?.dispose();
@@ -677,6 +718,12 @@ export class Room {
     client.playerId = -1;
     if (!s) return;
     this.voice.changed();
+    // the connection log (owner, 23 Oct 2026: phones "keep returning"; the box couldn't say why)
+    const p = this.game.players[s.playerId];
+    const held = ((this.game.tick - s.connectedTick) / 60).toFixed(0);
+    const net = s.pingMs >= 0 ? `, ping ${s.pingMs} ms` : '';
+    this.log(`[room ${this.code}] ${p?.name ?? '?'}'s ${client.conn.kind ?? ''} connection closed (${why || 'no code'}) after ${held} s${net}${resumable && this.graceTicks > 0 ? `; its place is kept ${Math.round(this.graceTicks / 60)} s` : ''}`);
+    s.droppedTick = this.game.tick;
     if (resumable && this.graceTicks > 0) {
       s.client = null;
       s.expiresAt = this.game.tick + this.graceTicks;
@@ -886,7 +933,7 @@ export class Room {
     if (client.accountId) this.recorder?.setAccount(p, client.accountId);
     // the guns they chose (their account's loadout): every spawn until a death keeps others (#125)
     if (client.guns) this.game.setLoadout(p, client.guns);
-    const session: Session = { token: newToken(), playerId: p.id, client: null, expiresAt: Infinity, idle: createInput(), prevToken: null, joinSeq: this.joins++, pingMs: -1, party: client.party, vouch: client.lookVouch };
+    const session: Session = { token: newToken(), playerId: p.id, client: null, expiresAt: Infinity, idle: createInput(), prevToken: null, joinSeq: this.joins++, pingMs: -1, party: client.party, vouch: client.lookVouch, connectedTick: this.game.tick, droppedTick: -1 };
     // v19: the look the page asked for, else the one the API vouched for (the ticket's), held to what the player owns
     const worn = admitLook(look, session.vouch) ?? admitLook(session.vouch.ids, session.vouch);
     if (worn) this.looks.set(p, cosmeticLoadoutWireIds(worn));
@@ -922,6 +969,10 @@ export class Room {
   }
 
   private attach(client: Client, s: Session, resumed: boolean): void {
+    const away = resumed && s.droppedTick >= 0 ? ` after ${((this.game.tick - s.droppedTick) / 60).toFixed(1)} s away` : '';
+    this.log(`[room ${this.code}] ${this.game.players[s.playerId]?.name ?? '?'} ${resumed ? 'resumed' : 'joined'} over ${client.conn.kind ?? '?'}${away}`);
+    s.connectedTick = this.game.tick;
+    s.droppedTick = -1;
     s.client = client;
     s.expiresAt = Infinity;
     client.session = s;
@@ -1547,21 +1598,64 @@ export class Room {
       }
       const health = c.inputs.health(current);
       if (health !== HEALTH_UNKNOWN && health < c.healthMin) c.healthMin = health;
-      // this tick's input, or the last one repeated (docs/05 §13)
-      c.inputs.take(current, c.lastInput);
-      // plus any press that arrived too late for its own tick (late, not lost: docs/05 §13)
-      this.inputs[c.playerId] = c.inputs.forSim(current, c.lastInput);
+      const me = this.game.players[c.playerId];
+      let applied = current;
+      // the main input lands in its own object: lastInput is the newest taken (the repeat's base)
+      const main = c.mainInput;
+      let took = c.inputs.takeNext(current, main);
+      const hold = !took && !!me?.alive && !c.holdSpent && (!this.match || this.match.live) && c.inputs.stalled && current - c.inputs.next < HOLD_TICKS;
+      if (!took && !hold) {
+        // waiting no longer (lost on the way, the hold ran out, or the player can't be held): the
+        // missing ticks get stand-ins (the last input, no keys after MAX_REPEAT_TICKS: docs/05 §13)
+        // and run now, in order; the real ones count as late
+        if (c.inputs.stalled) c.holdSpent = true;
+        c.inputs.fillMissing(current + 1, c.lastInput);
+        took = c.inputs.takeNext(current, main);
+      }
+      if (took) {
+        // the next input in its own order: this tick's, or (after a hold) an older one
+        c.holdSpent = false;
+        applied = c.inputs.next - 1;
+        this.inputs[c.playerId] = c.inputs.forSim(applied, main);
+        copyInput(c.lastInput, main);
+        const mainView = c.inputs.renderTickFor(applied);
+        // behind after a hold: catch up through the inputs that have come, a few a tick; stand-ins
+        // (a hold given up) all at once, as the old way ran those ticks in real time (spread out,
+        // they cost the player more corrections on MTN: 162/min against 125)
+        const extra = (this.game.catchUp[c.playerId] ??= []);
+        extra.length = 0;
+        let real = 0;
+        while (c.inputs.next <= current && c.inputs.has(c.inputs.next) && (c.inputs.standIn(c.inputs.next) || real++ < CATCH_UP_PER_TICK)) {
+          const input = c.catchUp[extra.length]!;
+          c.inputs.takeNext(current, input);
+          c.catchUpViews[extra.length] = c.inputs.renderTickFor(c.inputs.next - 1);
+          extra.push(c.inputs.forSim(c.inputs.next - 1, input) as Input);
+          copyInput(c.lastInput, input);
+        }
+        c.mainView = mainView;
+      } else if (hold) {
+        // not here yet, and nothing newer either (the client's inputs are held up on the way, not
+        // lost): hold the player (it doesn't move, shoot or regenerate this tick) until they come
+        me!.held = true;
+        this.inputs[c.playerId] = undefined;
+        applied = c.inputs.next - 1;
+      }
       // the rewind cap allows for this client's view delay: interpolation (+ input batching when
       // slim, once it has been slim for LOW_BW_WARMUP_TICKS)
       const lowBandwidth = c.lowBwSince >= 0 && current - c.lowBwSince >= LOW_BW_WARMUP_TICKS;
       const viewDelayMs = lowBandwidth ? Math.max(LOW_BANDWIDTH_INTERP_DELAY_MS, MAX_VIEW_DELAY_MS) + TICK_MS : MAX_VIEW_DELAY_MS;
-      lagComp?.setView(c.playerId, c.inputs.renderTickFor(current), lowBandwidth ? c.snapshotEvery : this.snapshotEvery, viewDelayMs);
+      c.viewEvery = lowBandwidth ? c.snapshotEvery : this.snapshotEvery;
+      c.viewDelayMs = viewDelayMs;
+      lagComp?.setView(c.playerId, c.inputs.renderTickFor(applied), c.viewEvery, viewDelayMs);
     }
     this.checkHost();
     // players waiting for a reconnect stand idle; give up on them after the grace
     for (const s of this.sessions.values()) {
       if (s.client) continue;
-      if (current >= s.expiresAt) this.endSession(s);
+      if (current >= s.expiresAt) {
+        this.log(`[room ${this.code}] ${this.game.players[s.playerId]?.name ?? '?'} didn't come back in time; its place is given up`);
+        this.endSession(s);
+      }
       else this.inputs[s.playerId] = s.idle;
     }
     this.seatPlayers();
@@ -1577,6 +1671,7 @@ export class Room {
         }
       }
     } else this.game.step(this.inputs);
+    for (const p of this.game.players) if (p) p.held = false;
     this.trackDeaths();
     lagComp?.record(this.game.tick, this.game.players);
     if (lagComp && lagComp.log.length > 0) this.sendRewindDebug(lagComp, current);
@@ -1619,7 +1714,8 @@ export class Room {
         c.conn.send(
           this.snapshots.encodeFor({
             baselines: c.baselines,
-            ackInputTick: current & 0xffff,
+            // the input the player's state stands at (behind this tick while held: the catch-up)
+            ackInputTick: (c.inputs.next >= 0 ? c.inputs.next - 1 : current) & 0xffff,
             inputBufferHealth: health,
             local: me,
             view: this.aoi && eye ? aoiRect(eye, this.game.map, c.view) : null,

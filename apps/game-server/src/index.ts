@@ -4,6 +4,7 @@ import { BOT_LEVELS, queueNavGraphs, warmNavGraphs, type BotLevelId } from '@mil
 import { ADMIN_BOT_LEVELS, adminTuning, adminValue, maps, setAdminDefault } from '@military-forge/content';
 import { adminValues, loadAdminDefaults, setAdminValues, startAdminServer } from './admin';
 import { describeNetSim, parseNetSim } from '@military-forge/netcode';
+import { CloseCode } from '@military-forge/protocol';
 import { ResultsReporter, resultsPrivateKey } from './results';
 import { createServer, nodeScheduler } from './server';
 import { TicketVerifier, ticketPublicKey } from './tickets';
@@ -170,10 +171,32 @@ const admin =
     : null;
 if (admin) console.log(`[admin] admin API on 127.0.0.1:${admin.port} (the playtest's /admin; defaults save to ${adminDefaults})`);
 
-for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-  process.on(signal, () => {
+/** Everyone is told the server is updating (they rejoin when it's back), then it stops. */
+function stop(): void {
+  server.rooms.closeEveryone(CloseCode.ServerUpdating, 'server updated: rejoin');
+  // let the closes go out
+  setTimeout(() => {
     admin?.close();
     server.close();
     process.exit(0);
-  });
+  }, 300);
 }
+for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, stop);
+
+// An update without dropping live matches (scripts/net-trial/restart.sh): SIGUSR2 drains: no new
+// rooms; once no match is counting down, being played or showing results (DRAIN_MAX_MS at most,
+// default 10 min), everyone is told to rejoin and the server stops (systemd starts the new code).
+const drainMaxMs = Number(process.env.DRAIN_MAX_MS ?? 600_000);
+process.on('SIGUSR2', () => {
+  if (server.rooms.draining) return;
+  server.rooms.draining = true;
+  const since = Date.now();
+  console.log(`[game-server] draining for an update: no new rooms; stopping when no match is running (${Math.round(drainMaxMs / 60_000)} min at most)`);
+  const wait = setInterval(() => {
+    const over = Date.now() - since >= drainMaxMs;
+    if (server.rooms.matchRunning && !over) return;
+    clearInterval(wait);
+    console.log(`[game-server] drained after ${((Date.now() - since) / 1000).toFixed(0)} s${over ? ' (the cap: matches still running were ended)' : ''}: stopping for the update`);
+    stop();
+  }, 1000);
+});

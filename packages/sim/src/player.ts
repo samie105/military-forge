@@ -150,6 +150,12 @@ export class PlayerState {
 
   input: Input = createInput();
   prevButtons = 0;
+  /**
+   * This tick the player stands still in time (the server, waiting for a client's late input: its
+   * input for the tick hasn't come, Game.step leaves it alone). Never on the wire; the room sets it
+   * each tick (game-server room.ts, the late-input catch-up).
+   */
+  held = false;
 
   constructor(readonly id: number) {}
 

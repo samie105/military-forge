@@ -148,8 +148,9 @@ for k in access ticket; do [ -s "$ETC/$k.key" ] || openssl genpkey -algorithm ed
 EOF
 } >/etc/caddy/Caddyfile.new
 caddy validate --adapter caddyfile --config /etc/caddy/Caddyfile.new >/dev/null 2>"$DATA/caddy-validate.log" || { cat "$DATA/caddy-validate.log"; fail 'the Caddy config'; }
-mv /etc/caddy/Caddyfile.new /etc/caddy/Caddyfile
-systemctl enable --quiet caddy && systemctl restart caddy || fail 'starting Caddy'
+# unchanged: no restart (it would drop every WebSocket)
+cmp -s /etc/caddy/Caddyfile{.new,} && rm /etc/caddy/Caddyfile.new || { mv /etc/caddy/Caddyfile{.new,} && systemctl restart caddy || fail 'starting Caddy'; }
+systemctl enable --quiet --now caddy || fail 'starting Caddy'
 log "Caddy up (Let's Encrypt needs ports 80 and 443 open)"
 
 # -- the code
@@ -272,27 +273,7 @@ unit mf-api 'Military Forge API' "$SRC/apps/api" "$NODE_DIR/bin/node --import ts
 unit mf-game 'Military Forge game server' "$SRC/apps/game-server" "$NODE_DIR/bin/node --max-semi-space-size=64 --import tsx $SRC/apps/game-server/src/index.ts"
 unit mf-probe 'Military Forge ping probe' "$SRC" "$NODE_DIR/bin/node $SRC/scripts/net-trial/probe-server/server.mjs"
 
-cat >/usr/local/sbin/mf-room <<'EOF'
-#!/bin/bash
-API=http://127.0.0.1:8787 ETC=/etc/military-forge
-up() { for i in $(seq 120); do curl -fs -o /dev/null -m 3 $API/health && return 0; sleep 1; done; return 1; }
-call() { printf 'header = "Authorization: Bearer %s"\n' "$3" | curl -sS -K - -X "$1" -H 'content-type: application/json' -d '{}' -o /tmp/mf-room.json -w '%{http_code}' -m 10 "$API$2"; }
-guest() { curl -fsS -X POST -H 'content-type: application/json' -d '{}' -m 10 $API/auth/guest | jq -r .accessToken; }
-up || exit 1
-code=$(tr -dc A-Z 2>/dev/null <$ETC/room-code)
-if [ -n "$code" ]; then
-  [ "$(call POST /rooms/$code/join "$(guest)")" = 200 ] && exit 0
-  systemctl restart mf-api; up
-  [ "$(call POST /rooms/$code/join "$(guest)")" = 200 ]; exit
-fi
-[ "$(call POST /rooms "$(guest)")" = 201 ] || exit 1
-code=$(jq -r .code /tmp/mf-room.json)
-[[ $code =~ ^[A-Z]{6}$ ]] || exit 1
-echo "$code" >$ETC/room-code
-sed -i "s/^KEEP_ROOMS=.*/KEEP_ROOMS='$code'/" $ETC/api.env
-echo "made room $code"
-EOF
-chmod 0755 /usr/local/sbin/mf-room
+install -m 0755 "$SRC/scripts/net-trial/mf-room.sh" /usr/local/sbin/mf-room
 printf '[Unit]\nDescription=Military Forge: keep the trial room open\nAfter=mf-api.service\n[Service]\nType=oneshot\nExecStart=/usr/local/sbin/mf-room\n' >/etc/systemd/system/mf-room.service
 printf '[Unit]\nDescription=Military Forge: keep the trial room open\n[Timer]\nOnBootSec=5min\nOnUnitActiveSec=2h\n[Install]\nWantedBy=timers.target\n' >/etc/systemd/system/mf-room.timer
 
@@ -302,7 +283,7 @@ systemctl daemon-reload
 services='mf-api mf-game'
 [ "$PROBE" = 1 ] && services="$services mf-probe"
 systemctl enable --quiet $services mf-room.timer
-systemctl restart $services && systemctl start mf-room.timer || fail 'starting the services'
+bash "$SRC/scripts/net-trial/restart.sh" $services && systemctl start mf-room.timer || fail 'starting the services'
 [ "$PROBE" = 1 ] || systemctl disable --now --quiet mf-probe 2>/dev/null
 wait_up() { for _ in $(seq 300); do curl -fs -o /dev/null -m 3 "$2" && return 0; sleep 1; done; journalctl -u "$3" -n 20 --no-pager; fail "$1 did not start"; }
 wait_up 'the API' http://127.0.0.1:8787/health mf-api

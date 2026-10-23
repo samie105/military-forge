@@ -73,7 +73,7 @@ export interface RoomTarget {
 /** A connection straight into `room` (no door: tests, tools and the WebTransport bridge's dev room). */
 export function roomConnection(room: Room, conn: ClientConn): Connection {
   const client = room.connect(conn);
-  return { receive: (bytes) => room.receive(client, bytes), closed: (resumable = true) => room.disconnect(client, resumable) };
+  return { receive: (bytes) => room.receive(client, bytes), closed: (resumable = true, why = '') => room.disconnect(client, resumable, why) };
 }
 
 function roomTarget(target: Room | RoomTarget): RoomTarget {
@@ -179,7 +179,7 @@ interface UwsApp {
       upgrade: (res: UwsResponse, req: UwsRequest, context: unknown) => void;
       open: (ws: UwsSocket) => void;
       message: (ws: UwsSocket, message: ArrayBuffer, isBinary: boolean) => void;
-      close: (ws: UwsSocket) => void;
+      close: (ws: UwsSocket, code: number, message: ArrayBuffer) => void;
     },
   ): UwsApp;
   get(pattern: string, handler: (res: UwsResponse) => void): UwsApp;
@@ -247,6 +247,7 @@ export function startUws(mod: UwsModule, port: number, rooms: Room | RoomTarget,
                 if (!data.gone) ws.end(code, reason);
               },
               bufferedAmount: () => (data.gone ? 0 : ws.getBufferedAmount()),
+              kind: 'ws',
             },
             data.ip,
           );
@@ -258,12 +259,13 @@ export function startUws(mod: UwsModule, port: number, rooms: Room | RoomTarget,
         // uWS reuses `message` after this callback returns: copy it
         if (connection && isBinary && !data.gone) guard(log, 'a message handler', () => ws.end(1011, 'server error'), () => connection.receive(new Uint8Array(message.slice(0))));
       },
-      close: (ws) => {
+      close: (ws, code, message) => {
         const data = ws.getUserData();
         data.gone = true;
         const connection = data.connection;
         data.connection = null;
-        if (connection) guard(log, 'closing a connection', () => {}, () => connection.closed());
+        const why = `${code}${message.byteLength ? ` ${Buffer.from(message).toString().slice(0, 60)}` : ''}`;
+        if (connection) guard(log, 'closing a connection', () => {}, () => connection.closed(true, why));
       },
     })
     .get('/health', (res) => {
@@ -312,6 +314,7 @@ export function startWs(port: number, rooms: Room | RoomTarget, options: Transpo
           },
           close: (code, reason) => socket.close(code, reason),
           bufferedAmount: () => socket.bufferedAmount,
+          kind: 'ws',
         },
         ip,
       );
@@ -321,10 +324,11 @@ export function startWs(port: number, rooms: Room | RoomTarget, options: Transpo
       if (!c || !isBinary || !Buffer.isBuffer(data)) return;
       guard(log, 'a message handler', () => socket.close(1011, 'server error'), () => c.receive(new Uint8Array(data.buffer, data.byteOffset, data.byteLength).slice()));
     });
-    socket.on('close', () => {
+    socket.on('close', (code, reason) => {
       const c = connection;
       connection = null;
-      if (c) guard(log, 'closing a connection', () => {}, () => c.closed());
+      const why = `${code}${reason.length ? ` ${reason.toString().slice(0, 60)}` : ''}`;
+      if (c) guard(log, 'closing a connection', () => {}, () => c.closed(true, why));
     });
     socket.on('error', () => socket.terminate());
   });
@@ -592,6 +596,7 @@ export function startGatewayBridge(
                   clients.delete(session);
                 },
                 bufferedAmount: () => socket.writableLength,
+                kind: 'wt',
               },
               ip,
             );
@@ -623,7 +628,8 @@ export function startGatewayBridge(
           clients.delete(session);
           // the gateway's own 4003 (oversized message) ends the player like a kick; anything else may resume
           const code = payload.length >= 2 ? new DataView(payload.buffer, payload.byteOffset).getUint16(0, true) : 1000;
-          connection?.closed(code !== CloseCode.BadMessage);
+          const reason = payload.length > 2 ? Buffer.from(payload.subarray(2)).toString().slice(0, 60) : '';
+          connection?.closed(code !== CloseCode.BadMessage, `${code}${reason ? ` ${reason}` : ''}`);
           break;
         }
         default:

@@ -55,10 +55,14 @@ PUBLIC="https://$HOST${MF_ORIGIN_PORT:+:$MF_ORIGIN_PORT}/wt"
 dl() { curl -fsSL --retry 6 --retry-all-errors --retry-delay 5 -m 600 "$@"; }
 
 # ---------- the gateway binary: download a prebuilt one, or build it here ----------
+# A deploy restarts the gateway only when its binary or service changed: a restart drops every
+# WebTransport session (players come back over a fresh one, but mid-match)
+changed=0
+put() { cmp -s "$1" "$2" && rm -f "$1" || { mv "$1" "$2" && changed=1; }; }
 if [ -n "${MF_WT_URL:-}" ]; then
   tmp=$(mktemp -d)
   dl -o "$tmp/gw" "$MF_WT_URL" && echo "${MF_WT_SHA256:-none}  $tmp/gw" | sha256sum -c --quiet - &&
-    install -m 0755 "$tmp/gw" "$BIN" || {
+    install -m 0755 "$tmp/gw" "$BIN.new" && put "$BIN.new" "$BIN" || {
     log "the prebuilt gateway didn't download or match MF_WT_SHA256: WebSocket only"
     rm -rf "$tmp"
     exit 1
@@ -96,7 +100,7 @@ else
     exit 1
   }
   log "built in $(($(date +%s) - t0)) s"
-  install -m 0755 "$TARGET/release/wt-gateway" "$BIN.new" && mv "$BIN.new" "$BIN"
+  install -m 0755 "$TARGET/release/wt-gateway" "$BIN.new" && put "$BIN.new" "$BIN"
   install -m 0755 "$TARGET/release/wt-probe" "$PROBE" 2>/dev/null || true
 fi
 
@@ -126,7 +130,7 @@ for _ in $(seq 60); do /usr/local/sbin/mf-wt-cert && got=1 && break; sleep 5; do
 }
 
 # ---------- the service ----------
-cat >/etc/systemd/system/mf-wt.service <<EOF
+cat >/etc/systemd/system/mf-wt.service.new <<EOF
 [Unit]
 Description=Military Forge WebTransport gateway (UDP 443)
 After=network-online.target mf-game.service
@@ -156,9 +160,16 @@ LimitNOFILE=65536
 [Install]
 WantedBy=multi-user.target
 EOF
+put /etc/systemd/system/mf-wt.service{.new,}
 systemctl daemon-reload
 systemctl enable --quiet mf-wt.service mf-wt-cert.timer
-systemctl restart mf-wt.service && systemctl start mf-wt-cert.timer || {
+if [ $changed = 0 ] && systemctl is-active -q mf-wt.service; then
+  log "the gateway is unchanged: not restarted (its sessions carry on)"
+  start=(start)
+else
+  start=(restart)
+fi
+systemctl "${start[@]}" mf-wt.service && systemctl start mf-wt-cert.timer || {
   journalctl -u mf-wt -n 20 --no-pager
   log "the gateway didn't start: WebSocket only"
   exit 1

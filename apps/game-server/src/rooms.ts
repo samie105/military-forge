@@ -16,7 +16,7 @@
 import { loadoutGunIndices, type LookVouch } from '@military-forge/content';
 import { CONTENT_HASH, CloseCode, HelloFlag, MsgType, decodeMessage, encodeHello, encodePong, protocolSupported, type HelloMsg, type Message } from '@military-forge/protocol';
 import { isRoomCode } from '@military-forge/shared';
-import { createMatchRules, type MatchRules } from '@military-forge/sim';
+import { MatchPhase, createMatchRules, type MatchRules } from '@military-forge/sim';
 import { LanSignal } from './lanSignal';
 import { Room, type Client, type ClientConn, type RoomOptions } from './room';
 import { TICKET_FAILURE_TEXT, type TicketVerifier } from './tickets';
@@ -33,7 +33,7 @@ const MAX_MESSAGES_BEFORE_HELLO = 32;
 export interface Connection {
   receive(bytes: Uint8Array): void;
   /** the transport closed; `resumable` (default true): the player may come back within the reconnect grace */
-  closed(resumable?: boolean): void;
+  closed(resumable?: boolean, why?: string): void;
 }
 
 export interface DoorLimits {
@@ -118,6 +118,8 @@ export class RoomRegistry {
   private readonly atDoorByRoom = new Map<string, number>();
   private seed = 1;
   private ticks = 0;
+  /** an update is waiting (drain): no new rooms; running ones play on */
+  draining = false;
 
   constructor(options: RoomRegistryOptions = {}) {
     this.log = options.log ?? (() => {});
@@ -160,8 +162,8 @@ export class RoomRegistry {
         if (v.client) v.room!.receive(v.client, bytes);
         else if (!v.done) this.beforeHello(v, bytes);
       },
-      closed: (resumable = true) => {
-        if (v.client) v.room!.disconnect(v.client, resumable);
+      closed: (resumable = true, why = '') => {
+        if (v.client) v.room!.disconnect(v.client, resumable, why);
         v.done = true;
         this.leaveDoor(v);
       },
@@ -195,6 +197,7 @@ export class RoomRegistry {
     // v20: spectators watch rooms that are open; they never open one (nothing to watch)
     if (msg.spectate && !resuming && !room) return this.turnAway(v, CloseCode.NoRoom, 'nobody is playing in this room');
     if (!room && this.rooms.size >= this.maxRooms) return this.turnAway(v, CloseCode.NoRoom, 'server full: too many rooms, try again soon');
+    if (!room && this.draining) return this.turnAway(v, CloseCode.ServerUpdating, 'the server is updating: back in a minute');
     let hello = bytes;
     let accountId: string | null = null;
     let guns: [number, number] | null = null;
@@ -305,6 +308,25 @@ export class RoomRegistry {
 
   resetRateLimits(): void {
     for (const [, room] of this.all()) room.resetRateLimits();
+  }
+
+  /**
+   * A match is counting down, being played or showing its scoreboard somewhere (with people in the
+   * room): an update waits for it. A lobby or a rematch vote doesn't hold one up.
+   */
+  get matchRunning(): boolean {
+    for (const [, room] of this.all()) {
+      const phase = room.match?.phase;
+      if (room.humanCount > 0 && (phase === MatchPhase.Countdown || phase === MatchPhase.InProgress || phase === MatchPhase.Ending)) return true;
+    }
+    return false;
+  }
+
+  /** Everyone out (a restart): they rejoin once the server is back. */
+  closeEveryone(closeCode: number, reason: string): void {
+    for (const code of [...this.rooms.keys()]) this.close(code, closeCode, reason);
+    this.defaultRoom?.closeAll(closeCode, reason);
+    for (const v of [...this.visitors]) this.turnAway(v, closeCode, reason);
   }
 
   close(code: string, closeCode: number, reason: string): void {

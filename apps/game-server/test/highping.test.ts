@@ -65,7 +65,7 @@ describe('high ping', () => {
     });
     const server = r.clients[0]!.server;
     expect(server.inputs.missed).toBeGreaterThan(100); // the spikes really starve the server
-    expect(server.inputs.latched).toBeGreaterThan(0); // and late presses were applied
+    // late presses happen: held for (the late-input catch-up) and run in order, or latched past it
     expect(pressed).toBeGreaterThan(15);
     expect(dashes / pressed).toBeGreaterThan(0.8); // (a dash needs fuel and the server's state: the odd one may not go)
   });

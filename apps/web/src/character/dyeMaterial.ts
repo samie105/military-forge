@@ -1,5 +1,5 @@
 /**
- * The character material (docs/04 §5.4): one toon material for the whole merged soldier. Each vertex carries
+ * The character material (docs/04 §5.4): one toon material for the merged soldier. Each vertex carries
  * the texture layer of the part it came from (`texLayer`: 0 = body, then one per art slot), and each layer has
  * its own dye albedo + mask from W8 (body 512², parts 256², so they can't share an array texture):
  *   color = albedo × lerp(1, primary, mask.r) × lerp(1, secondary, mask.g) × lerp(1, accent, mask.b)
@@ -13,7 +13,16 @@ import { Color, DataTexture, DoubleSide, MeshToonMaterial, NearestFilter, RGBAFo
 import { SKIN_HEADROOM } from './skinMask';
 
 /** Texture layers: 0 = body, 1… = W8's art slots (assembler.ts ART_SLOTS). */
-export const DYE_LAYERS = 6;
+export const DYE_LAYERS = 9;
+
+/**
+ * The layers one material samples. Two samplers a layer, plus the toon ramp, must stay within WebGL2's 16 fragment
+ * samplers (phones have exactly 16), so the soldier is drawn by two materials sharing every dye uniform: the body and
+ * the first five art slots (13 samplers), and the garments, hair, top and legs (7). The merged geometry has one group
+ * per material (assembler.ts build()).
+ */
+export const MAIN_LAYERS: readonly number[] = [0, 1, 2, 3, 4, 5];
+export const GARMENT_LAYERS: readonly number[] = [6, 7, 8];
 
 let toonRamp: DataTexture | null = null;
 
@@ -55,7 +64,6 @@ export interface DyeColours {
   readonly team: Color;
 }
 
-const samplers = (prefix: string) => Array.from({ length: DYE_LAYERS }, (_, i) => `${prefix}${i}`);
 
 /** A 4×4 ordered-dither threshold (Bayer) per screen pixel, for the dissolve. */
 export const DISSOLVE_GLSL = `uniform float dyeDissolve;
@@ -87,15 +95,27 @@ export class DyeMaterial extends MeshToonMaterial {
    * without turning transparent (that would be another shader program) (render3d/death.ts).
    */
   readonly dissolve = { value: 0 };
+  /** the garment layers' material (hair, top, legs): the same dyes, rim and dissolve; set its layers through this one */
+  readonly garments: DyeMaterial | null;
+  /** the layers this material samples; the first is `map` (so three sets up vMapUv) */
+  readonly layers: readonly number[];
   private readonly albedos: { value: Texture }[];
   private readonly masks: { value: Texture }[];
 
-  constructor() {
+  /** `of`: the main material whose dye uniforms a garment material shares (internal: `garments` makes it) */
+  constructor(of?: DyeMaterial) {
     // Double-sided: the generated meshes have a few flipped faces (art/README.md).
     super({ map: blankLayer().albedo, gradientMap: characterToonRamp(), side: DoubleSide });
-    this.name = 'character-dye';
+    this.name = of ? 'character-dye-garments' : 'character-dye';
+    this.layers = of ? GARMENT_LAYERS : MAIN_LAYERS;
+    if (of) {
+      // one set of colours for both: whatever recolours, rims or dissolves the soldier reaches the garments too
+      Object.assign(this, { dye: of.dye, layerColours: of.layerColours, bodyDefaults: of.bodyDefaults, rim: of.rim, dissolve: of.dissolve });
+    }
     this.albedos = Array.from({ length: DYE_LAYERS }, () => ({ value: blankLayer().albedo as Texture }));
     this.masks = Array.from({ length: DYE_LAYERS }, () => ({ value: blankLayer().mask as Texture }));
+    this.garments = of ? null : new DyeMaterial(this);
+    const [first, ...rest] = this.layers as [number, ...number[]];
     const uniforms: Record<string, { value: unknown }> = {
       dyeColours: { value: this.layerColours },
       dyeBodyDefaults: { value: this.bodyDefaults },
@@ -105,13 +125,14 @@ export class DyeMaterial extends MeshToonMaterial {
       dyeTeam: { value: this.dye.team },
       dyeDissolve: this.dissolve,
     };
-    // layer 0's albedo is `map` itself (so three sets up vMapUv); the others get their own samplers
-    samplers('dyeAlbedo').forEach((name, i) => i > 0 && (uniforms[name] = this.albedos[i]!));
-    samplers('dyeMask').forEach((name, i) => (uniforms[name] = this.masks[i]!));
+    // the first layer's albedo is `map` itself (so three sets up vMapUv); the others get their own samplers
+    for (const i of rest) uniforms[`dyeAlbedo${i}`] = this.albedos[i]!;
+    for (const i of this.layers) uniforms[`dyeMask${i}`] = this.masks[i]!;
+    const declared = [...rest.map((i) => `dyeAlbedo${i}`), ...this.layers.map((i) => `dyeMask${i}`)];
     const fetch = (i: number) =>
-      `{ dyeAlb = textureGrad( ${i === 0 ? 'map' : `dyeAlbedo${i}`}, vMapUv, dyeDx, dyeDy ); dyeM = textureGrad( dyeMask${i}, vMapUv, dyeDx, dyeDy ); }`;
-    // samplers can't be indexed by a varying in GLSL ES 3.0: branch per layer (layer 0, the body, last)
-    const branches = Array.from({ length: DYE_LAYERS - 1 }, (_, i) => `if ( dyeLayer == ${i + 1} ) ${fetch(i + 1)}\n          else `).join('') + fetch(0);
+      `{ dyeAlb = textureGrad( ${i === first ? 'map' : `dyeAlbedo${i}`}, vMapUv, dyeDx, dyeDy ); dyeM = textureGrad( dyeMask${i}, vMapUv, dyeDx, dyeDy ); }`;
+    // samplers can't be indexed by a varying in GLSL ES 3.0: branch per layer (the first, the body for the main one, last)
+    const branches = rest.map((i) => `if ( dyeLayer == ${i} ) ${fetch(i)}\n          else `).join('') + fetch(first);
     this.onBeforeCompile = (shader) => {
       Object.assign(shader.uniforms, uniforms);
       shader.vertexShader = shader.vertexShader
@@ -121,7 +142,7 @@ export class DyeMaterial extends MeshToonMaterial {
         .replace(
           '#include <common>',
           `#include <common>
-          uniform sampler2D ${[...samplers('dyeAlbedo').slice(1), ...samplers('dyeMask')].join(', ')};
+          uniform sampler2D ${declared.join(', ')};
           uniform vec3 dyeColours[ ${DYE_LAYERS * 3} ], dyeBodyDefaults[ 3 ];
           uniform vec3 dyeSkin, dyeTeam, dyeRimColour;
           uniform float dyeRimStrength;
@@ -155,20 +176,37 @@ export class DyeMaterial extends MeshToonMaterial {
   }
 
   override customProgramCacheKey(): string {
-    return 'character-dye-v5';
+    return `character-dye-v6-${this.layers.join('.')}`;
   }
 
-  /** The dye albedo + mask of one layer; null = unused (white, undyed). */
+  /** The material that draws `layer` (this one, or its garments'). */
+  private owner(layer: number): DyeMaterial {
+    return this.layers.includes(layer) || !this.garments ? this : this.garments;
+  }
+
+  /** The dye albedo + mask of one layer (either material's); null = unused (white, undyed). */
   setLayer(layer: number, albedo: Texture | null, mask: Texture | null): void {
+    const m = this.owner(layer);
     const b = blankLayer();
-    if (layer === 0) this.map = albedo ?? b.albedo;
-    else this.albedos[layer]!.value = albedo ?? b.albedo;
-    this.masks[layer]!.value = mask ?? b.mask;
+    if (layer === m.layers[0]) m.map = albedo ?? b.albedo;
+    else m.albedos[layer]!.value = albedo ?? b.albedo;
+    m.masks[layer]!.value = mask ?? b.mask;
   }
 
   /** Current albedo of a layer (tests, tooling). */
   layerAlbedo(layer: number): Texture | null {
-    const t = layer === 0 ? this.map : this.albedos[layer]!.value;
+    const m = this.owner(layer);
+    const t = layer === m.layers[0] ? m.map : m.albedos[layer]!.value;
     return t === blankLayer().albedo ? null : t;
+  }
+
+  /** Both materials, in the merged geometry's group order (mesh.material). */
+  get all(): DyeMaterial[] {
+    return this.garments ? [this, this.garments] : [this];
+  }
+
+  override dispose(): void {
+    this.garments?.dispose();
+    super.dispose();
   }
 }
