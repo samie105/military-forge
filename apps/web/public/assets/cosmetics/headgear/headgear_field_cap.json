@@ -34,5 +34,37 @@
   },
   "source": "generated",
   "attachBone": "head",
-  "socket": "socket_hat"
+  "socket": "socket_hat",
+  "bodies": {
+    "female": {
+      "lods": {
+        "lod0": "headgear_field_cap_female.glb",
+        "lod1": "headgear_field_cap_female_lod1.glb"
+      },
+      "dye": {
+        "lod0": {
+          "mask": "textures/headgear_field_cap_female_dye_mask.png",
+          "albedo": "textures/headgear_field_cap_female_dye_albedo.webp",
+          "defaults": {
+            "primary": "#7a7142",
+            "secondary": "#5e5642",
+            "accent": "#ceb16e"
+          }
+        },
+        "lod1": {
+          "mask": "textures/headgear_field_cap_female_lod1_dye_mask.png",
+          "albedo": "textures/headgear_field_cap_female_lod1_dye_albedo.webp",
+          "defaults": {
+            "primary": "#797042",
+            "secondary": "#5c5441",
+            "accent": "#caae6f"
+          }
+        }
+      },
+      "tris": {
+        "lod0": 450,
+        "lod1": 200
+      }
+    }
+  }
 }

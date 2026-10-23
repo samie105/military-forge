@@ -31,5 +31,35 @@
     "lod1": 70
   },
   "attachBone": "head",
-  "socket": "socket_hat"
+  "socket": "socket_hat",
+  "bodies": {
+    "female": {
+      "lods": {
+        "lod0": "eyewear_aviators_female.glb",
+        "lod1": "eyewear_aviators_female_lod1.glb"
+      },
+      "dye": {
+        "lod0": {
+          "mask": "textures/eyewear_aviators_female_dye_mask.png",
+          "albedo": "textures/eyewear_aviators_female_dye_albedo.webp",
+          "defaults": {
+            "secondary": "#ebba42",
+            "accent": "#2c3742"
+          }
+        },
+        "lod1": {
+          "mask": "textures/eyewear_aviators_female_lod1_dye_mask.png",
+          "albedo": "textures/eyewear_aviators_female_lod1_dye_albedo.webp",
+          "defaults": {
+            "secondary": "#ebba42",
+            "accent": "#566b80"
+          }
+        }
+      },
+      "tris": {
+        "lod0": 150,
+        "lod1": 70
+      }
+    }
+  }
 }

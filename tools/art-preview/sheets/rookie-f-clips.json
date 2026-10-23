@@ -1,0 +1,120 @@
+{
+ "title": "Female soldier: the Rookie's clips and weapon holds (same skeleton, same sockets)",
+ "cols": 6,
+ "cell": [
+  300,
+  420
+ ],
+ "defaults": {
+  "body": "characters/rookie_female/rookie_female.json",
+  "yaw": 70
+ },
+ "cells": [
+  {
+   "label": "idle",
+   "loco": "idle",
+   "t": 0.5
+  },
+  {
+   "label": "run",
+   "loco": "run",
+   "t": 0.1
+  },
+  {
+   "label": "crouch_walk",
+   "loco": "crouch_walk",
+   "t": 0.1
+  },
+  {
+   "label": "jet_hover",
+   "loco": "jet_hover",
+   "t": 0.3
+  },
+  {
+   "label": "flail",
+   "loco": "flail",
+   "t": 0.2
+  },
+  {
+   "label": "dash_side",
+   "loco": "dash_side"
+  },
+  {
+   "label": "K-47 aim level",
+   "loco": "idle",
+   "aim": "aim_rifle_level",
+   "weapon": "k47"
+  },
+  {
+   "label": "K-47 aim up 45",
+   "loco": "idle",
+   "aim": "aim_rifle_up45",
+   "weapon": "k47"
+  },
+  {
+   "label": "K-47 aim down 45",
+   "loco": "idle",
+   "aim": "aim_rifle_down45",
+   "weapon": "k47"
+  },
+  {
+   "label": "Longbow aim level",
+   "loco": "idle",
+   "aim": "aim_rifle_level",
+   "weapon": "longbow"
+  },
+  {
+   "label": "Hammer pistol level",
+   "loco": "idle",
+   "aim": "aim_pistol_level",
+   "weapon": "hammer44"
+  },
+  {
+   "label": "dual: Hammer + Buzz",
+   "loco": "idle",
+   "aim": "aim_dual_level",
+   "weapon": "hammer44",
+   "weaponL": "buzz"
+  },
+  {
+   "label": "reload_rifle",
+   "loco": "idle",
+   "action": "reload_rifle",
+   "weapon": "k47",
+   "t": 0.6
+  },
+  {
+   "label": "throw (release)",
+   "loco": "idle",
+   "action": "throw",
+   "t": 0.33
+  },
+  {
+   "label": "melee (hit), machete",
+   "loco": "idle",
+   "action": "melee",
+   "weapon": "machete",
+   "t": 0.21
+  },
+  {
+   "label": "slung K-47 + holstered Hammer",
+   "yaw": 150,
+   "slung": "k47",
+   "holster": "hammer44"
+  },
+  {
+   "label": "Rookie: K-47 level",
+   "body": "characters/rookie/rookie.json",
+   "loco": "idle",
+   "aim": "aim_rifle_level",
+   "weapon": "k47"
+  },
+  {
+   "label": "Rookie: slung + holster",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 150,
+   "slung": "k47",
+   "holster": "hammer44"
+  }
+ ]
+}

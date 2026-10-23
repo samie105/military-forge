@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Art sheet</title>
+  <style>
+    html, body { margin: 0; background: #d9dfe5; font: 13px/1.4 system-ui, -apple-system, Segoe UI, sans-serif; color: #1b2733; }
+    #status { position: fixed; left: 12px; bottom: 12px; font-weight: 600; }
+    canvas { display: block; max-width: 100%; height: auto; }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="status">loading…</div>
+  <script type="module" src="./sheet.js"></script>
+</body>
+</html>

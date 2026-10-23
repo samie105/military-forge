@@ -56,9 +56,9 @@ export const ART_SLOTS = ['headgear', 'eyewear', 'gloves', 'boots', 'jetpack'] a
 export type ArtSlot = (typeof ART_SLOTS)[number];
 
 /**
- * Each base body's rig manifest (content BODIES: every body type is built on one). The female rig's
- * path is where the Forge's art will land (creator-interfaces.md); until then it 404s and she is
- * drawn on the male rig (instance.body says so).
+ * Each base body's rig manifest (content BODIES: every body type is built on one). The female rig is
+ * the Forge's (art/README.md, "The female soldier"): on the male skeleton, sharing his clips. A
+ * manifest that 404s draws that body on the male rig (instance.body says so).
  */
 export const BODY_MANIFESTS: Readonly<Record<Body, string>> = {
   male: 'characters/rookie/rookie.json',

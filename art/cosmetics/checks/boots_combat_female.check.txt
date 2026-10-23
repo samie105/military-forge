@@ -1,0 +1,31 @@
+asset-check: art/character/rookie_female/parts/boots_combat_female.glb  [part]
+----------------------------------------------------------------------------------------------------------
+INFO  file size                                       44 KB
+PASS  slot extra (docs/04 §3, §9.5)                   boots
+PASS  triangles (slot boots, LOD0)                    299 of 300
+PASS  one mesh, one material (docs/04 §5.3)           1 mesh(es), 1 draw call(s)
+PASS  texture size: boots_combat_female_albedo        256x256 (max 256)
+PASS  texture POT: boots_combat_female_albedo         power of two
+PASS  texture size: boots_combat_female_dye_mask.png  256x256 (max 256)
+PASS  texture POT: boots_combat_female_dye_mask.png   power of two
+INFO  GPU texture memory (KTX2 est.)                  0.12 MB, 2 image(s)
+PASS  required extras (docs/04 §9.5)                  ok
+PASS  cosmeticId in packages/content                  boots_combat
+PASS  dye round trip: rookie_female_boots             undyed 100%: mean 0.0 p95 0.0/255 (max 5/16)
+PASS  skinned in character space (docs/04 §9.3)       every vertex weighted to the shared skeleton
+PASS  armature                                        1 armature(s)
+PASS  deform bones (docs/04 §4.1)                     all 25 present
+PASS  sockets (docs/04 §4.1)                          all 7 present
+PASS  no unexpected bones                             none
+PASS  meshes skinned to the armature                  1/1
+PASS  every vertex weighted                           0 unweighted of 363
+PASS  ≤ 4 influences per vertex                       0 vertices over
+PASS  weights normalised                              0 vertices off by > 2%
+PASS  sockets are non-deform (no weights)             none weighted
+PASS  weights only on skeleton bones                  ok
+PASS  bind pose = the base body's                     worst -: 0.0 mm, 0.00° (max 1 mm, 0.1°)
+PASS  near its boots bones (docs/04 §1.2 locality)    part (-0.31, -0.21, 0.0)..(0.31, 0.15, 0.23) vs region (-0.37, -0.25, 0.0)..(0.37, 0.2, 0.33)
+PASS  cosmetic envelope (boots: base x1.10)           part (-0.31, -0.21, 0.0)..(0.31, 0.15, 0.23) vs envelope (-0.51, -0.26, 0.0)..(0.51, 0.36, 1.48)
+----------------------------------------------------------------------------------------------------------
+RESULT: PASS  (24 pass, 0 warn, 0 fail)
+

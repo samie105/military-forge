@@ -33,5 +33,36 @@
   },
   "source": "generated",
   "attachBone": "head",
-  "socket": "socket_hat"
+  "socket": "socket_hat",
+  "bodies": {
+    "female": {
+      "lods": {
+        "lod0": "headgear_beret_female.glb",
+        "lod1": "headgear_beret_female_lod1.glb"
+      },
+      "dye": {
+        "lod0": {
+          "mask": "textures/headgear_beret_female_dye_mask.png",
+          "albedo": "textures/headgear_beret_female_dye_albedo.webp",
+          "defaults": {
+            "primary": "#873d41",
+            "secondary": "#5d564e",
+            "accent": "#e9b46d"
+          }
+        },
+        "lod1": {
+          "mask": "textures/headgear_beret_female_lod1_dye_mask.png",
+          "albedo": "textures/headgear_beret_female_lod1_dye_albedo.webp",
+          "defaults": {
+            "primary": "#833b3f",
+            "secondary": "#504a44"
+          }
+        }
+      },
+      "tris": {
+        "lod0": 449,
+        "lod1": 200
+      }
+    }
+  }
 }

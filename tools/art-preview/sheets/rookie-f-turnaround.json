@@ -1,0 +1,98 @@
+{
+ "title": "Female soldier (rookie_female) on the Rookie's skeleton: turnaround, default kit, LOD1, skin tones and dyes",
+ "cols": 6,
+ "cell": [
+  300,
+  420
+ ],
+ "defaults": {
+  "body": "characters/rookie_female/rookie_female.json"
+ },
+ "cells": [
+  {
+   "label": "front",
+   "yaw": 0,
+   "parts": {
+    "headgear": null
+   }
+  },
+  {
+   "label": "three-quarter",
+   "yaw": 35,
+   "parts": {
+    "headgear": null
+   }
+  },
+  {
+   "label": "left side",
+   "yaw": 90,
+   "parts": {
+    "headgear": null
+   }
+  },
+  {
+   "label": "back",
+   "yaw": 180,
+   "parts": {
+    "headgear": null
+   }
+  },
+  {
+   "label": "right side",
+   "yaw": -90,
+   "parts": {
+    "headgear": null
+   }
+  },
+  {
+   "label": "default kit (helmet, twin tank)",
+   "yaw": 25
+  },
+  {
+   "label": "Rookie, same frame",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 0
+  },
+  {
+   "label": "her, same frame",
+   "yaw": 0
+  },
+  {
+   "label": "LOD1",
+   "lod": "lod1",
+   "yaw": 0,
+   "parts": {
+    "headgear": null
+   }
+  },
+  {
+   "label": "skin_02 Ivory",
+   "yaw": 0,
+   "skin": "#edc5a9",
+   "parts": {
+    "headgear": null
+   }
+  },
+  {
+   "label": "skin_09 Mocha",
+   "yaw": 0,
+   "skin": "#673e26",
+   "parts": {
+    "headgear": null
+   }
+  },
+  {
+   "label": "skin_12 Ebony, olive/black/red",
+   "yaw": 0,
+   "skin": "#2f1c12",
+   "parts": {
+    "headgear": null
+   },
+   "dyes": {
+    "primary": "#736234",
+    "secondary": "#2b2d31",
+    "accent": "#c8332b"
+   }
+  }
+ ]
+}

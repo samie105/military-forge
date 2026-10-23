@@ -1,0 +1,252 @@
+{
+ "title": "Every starter item on both bodies (her own fit where she has one: hats, boots_combat, jetpacks, eyewear, gloves)",
+ "cols": 8,
+ "cell": [
+  240,
+  340
+ ],
+ "cells": [
+  {
+   "label": "brim helmet: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 30,
+   "parts": {
+    "headgear": "headgear_brim_helmet"
+   }
+  },
+  {
+   "label": "brim helmet: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 30,
+   "parts": {
+    "headgear": "headgear_brim_helmet"
+   }
+  },
+  {
+   "label": "field cap: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 30,
+   "parts": {
+    "headgear": "headgear_field_cap"
+   }
+  },
+  {
+   "label": "field cap: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 30,
+   "parts": {
+    "headgear": "headgear_field_cap"
+   }
+  },
+  {
+   "label": "beret: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 30,
+   "parts": {
+    "headgear": "headgear_beret"
+   }
+  },
+  {
+   "label": "beret: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 30,
+   "parts": {
+    "headgear": "headgear_beret"
+   }
+  },
+  {
+   "label": "bandana: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 30,
+   "parts": {
+    "headgear": "headgear_bandana"
+   }
+  },
+  {
+   "label": "bandana: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 30,
+   "parts": {
+    "headgear": "headgear_bandana"
+   }
+  },
+  {
+   "label": "combat helmet: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 30,
+   "parts": {
+    "headgear": "headgear_combat_helmet"
+   }
+  },
+  {
+   "label": "combat helmet: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 30,
+   "parts": {
+    "headgear": "headgear_combat_helmet"
+   }
+  },
+  {
+   "label": "aviators: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 30,
+   "parts": {
+    "eyewear": "eyewear_aviators",
+    "headgear": null
+   }
+  },
+  {
+   "label": "aviators: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 30,
+   "parts": {
+    "eyewear": "eyewear_aviators",
+    "headgear": null
+   }
+  },
+  {
+   "label": "gas mask: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 30,
+   "parts": {
+    "eyewear": "eyewear_gas_mask",
+    "headgear": null
+   }
+  },
+  {
+   "label": "gas mask: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 30,
+   "parts": {
+    "eyewear": "eyewear_gas_mask",
+    "headgear": null
+   }
+  },
+  {
+   "label": "tactical: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 30,
+   "parts": {
+    "gloves": "gloves_tactical",
+    "headgear": null
+   }
+  },
+  {
+   "label": "tactical: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 30,
+   "parts": {
+    "gloves": "gloves_tactical",
+    "headgear": null
+   }
+  },
+  {
+   "label": "combat: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 30,
+   "parts": {
+    "boots": "boots_combat",
+    "headgear": null
+   }
+  },
+  {
+   "label": "combat: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 30,
+   "parts": {
+    "boots": "boots_combat",
+    "headgear": null
+   }
+  },
+  {
+   "label": "jungle: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 30,
+   "parts": {
+    "boots": "boots_jungle",
+    "headgear": null
+   }
+  },
+  {
+   "label": "jungle: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 30,
+   "parts": {
+    "boots": "boots_jungle",
+    "headgear": null
+   }
+  },
+  {
+   "label": "sneakers: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 30,
+   "parts": {
+    "boots": "boots_sneakers",
+    "headgear": null
+   }
+  },
+  {
+   "label": "sneakers: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 30,
+   "parts": {
+    "boots": "boots_sneakers",
+    "headgear": null
+   }
+  },
+  {
+   "label": "twin tank: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 55,
+   "parts": {
+    "jetpack": "jetpack_twin_tank",
+    "headgear": null
+   }
+  },
+  {
+   "label": "twin tank: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 55,
+   "parts": {
+    "jetpack": "jetpack_twin_tank",
+    "headgear": null
+   }
+  },
+  {
+   "label": "drum: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 55,
+   "parts": {
+    "jetpack": "jetpack_drum",
+    "headgear": null
+   }
+  },
+  {
+   "label": "drum: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 55,
+   "parts": {
+    "jetpack": "jetpack_drum",
+    "headgear": null
+   }
+  },
+  {
+   "label": "rocket: her",
+   "body": "characters/rookie_female/rookie_female.json",
+   "yaw": 55,
+   "parts": {
+    "jetpack": "jetpack_rocket",
+    "headgear": null
+   }
+  },
+  {
+   "label": "rocket: him",
+   "body": "characters/rookie/rookie.json",
+   "yaw": 55,
+   "parts": {
+    "jetpack": "jetpack_rocket",
+    "headgear": null
+   }
+  }
+ ]
+}

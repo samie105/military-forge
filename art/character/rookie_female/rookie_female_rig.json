@@ -1,0 +1,260 @@
+{
+  "name": "rookie_female",
+  "body": "female",
+  "height_m": 1.44,
+  "source": "rookie_female_tripo_raw.glb",
+  "skeleton": "shared-v1",
+  "parts": {
+    "body": "rookie_female_body",
+    "boots": "boots_combat"
+  },
+  "tris": {
+    "raw": 28546,
+    "body_lod0": 2349,
+    "boots_lod0": 299,
+    "body_lod1": 999,
+    "boots_lod1": 130
+  },
+  "textures": {
+    "body_lod0": 512,
+    "boots_lod0": 256,
+    "body_lod1": 256,
+    "boots_lod1": 128
+  },
+  "dyeDefaults": {
+    "body_lod0": {
+      "primary": "#d8b07a",
+      "secondary": "#6d6236",
+      "accent": "#4aabb8"
+    },
+    "boots_lod0": {},
+    "body_lod1": {
+      "primary": "#d9b07a",
+      "secondary": "#726637",
+      "accent": "#48adb4"
+    },
+    "boots_lod1": {}
+  },
+  "dyeCoverage": {
+    "body_lod0": {
+      "primary": 0.415,
+      "secondary": 0.091,
+      "accent": 0.024,
+      "emissive": 0.013,
+      "skin": 0.309
+    },
+    "boots_lod0": {
+      "primary": 0.0,
+      "secondary": 0.0,
+      "accent": 0.0,
+      "emissive": 0.0
+    },
+    "body_lod1": {
+      "primary": 0.432,
+      "secondary": 0.083,
+      "accent": 0.023,
+      "emissive": 0.011,
+      "skin": 0.271
+    },
+    "boots_lod1": {
+      "primary": 0.0,
+      "secondary": 0.0,
+      "accent": 0.0,
+      "emissive": 0.0
+    }
+  },
+  "clips": [
+    "idle",
+    "walk",
+    "slide",
+    "jet_ascend",
+    "jet_hover",
+    "fall",
+    "land",
+    "aim_pistol_down90",
+    "aim_pistol_down45",
+    "aim_pistol_level",
+    "aim_pistol_up45",
+    "aim_pistol_up90",
+    "aim_dual_down90",
+    "aim_dual_down45",
+    "aim_dual_level",
+    "aim_dual_up45",
+    "aim_dual_up90",
+    "aim_rifle_down90",
+    "aim_rifle_down45",
+    "aim_rifle_level",
+    "aim_rifle_up45",
+    "aim_rifle_up90",
+    "reload_rifle",
+    "reload_pistol",
+    "swap",
+    "throw",
+    "melee",
+    "crouch_idle",
+    "walk_slow",
+    "run",
+    "crouch_walk",
+    "flail",
+    "dash_side",
+    "dash_up",
+    "dash_down",
+    "land_hard",
+    "brake"
+  ],
+  "upperBodyBones": [
+    "spine1",
+    "spine2",
+    "neck",
+    "head",
+    "clavicle_L",
+    "clavicle_R",
+    "upperarm_L",
+    "upperarm_R",
+    "forearm_L",
+    "forearm_R",
+    "hand_L",
+    "hand_R"
+  ],
+  "aimAngles": {
+    "down90": -90,
+    "down45": -45,
+    "level": 0,
+    "up45": 45,
+    "up90": 90
+  },
+  "landmarks_blender_zup": {
+    "neck_z": 0.96,
+    "crotch_z": 0.42,
+    "hip_half": 0.2124,
+    "chest_half": 0.1707,
+    "armpit_z": 0.76,
+    "spine_y": 0.0157,
+    "back_y": 0.164,
+    "shoulder_L": [
+      0.2227,
+      0.0493,
+      0.8
+    ],
+    "elbow_L": [
+      0.3137,
+      0.0339,
+      0.6668
+    ],
+    "wrist_L": [
+      0.3744,
+      0.0236,
+      0.578
+    ],
+    "hand_end_L": [
+      0.4394,
+      0.0125,
+      0.4829
+    ],
+    "hip_L": [
+      0.1436,
+      0.0157,
+      0.46
+    ],
+    "knee_L": [
+      0.1648,
+      0.018,
+      0.29
+    ],
+    "ankle_L": [
+      0.186,
+      0.0603,
+      0.12
+    ],
+    "ball_L": [
+      0.186,
+      -0.1189,
+      0.03
+    ],
+    "toe_L": [
+      0.186,
+      -0.1989,
+      0.03
+    ],
+    "face_y": -0.2446,
+    "jetpack_back_y": 0.1641,
+    "jetpack_mid_z": 0.7302
+  },
+  "regions": {
+    "hair": 1,
+    "top": 2,
+    "legs": 3
+  },
+  "regionTris": {
+    "_lod0": {
+      "hair": 479,
+      "top": 673,
+      "legs": 400
+    },
+    "_lod1": {
+      "hair": 129,
+      "top": 259,
+      "legs": 167
+    }
+  },
+  "fittedTo": "rookie",
+  "headScale": 0.9582,
+  "sharedAnims": "rookie_anims.glb",
+  "ownLandmarks_blender_zup": {
+    "neck_z": 0.97,
+    "crotch_z": 0.41,
+    "hip_half": 0.2124,
+    "chest_half": 0.1721,
+    "armpit_z": 0.67,
+    "spine_y": 0.0353,
+    "back_y": 0.1692,
+    "shoulder_L": [
+      0.1779,
+      0.0568,
+      0.71
+    ],
+    "elbow_L": [
+      0.2721,
+      0.0567,
+      0.6156
+    ],
+    "wrist_L": [
+      0.3349,
+      0.0567,
+      0.5527
+    ],
+    "hand_end_L": [
+      0.4022,
+      0.0566,
+      0.4853
+    ],
+    "hip_L": [
+      0.1348,
+      0.0353,
+      0.45
+    ],
+    "knee_L": [
+      0.1593,
+      0.0324,
+      0.2826
+    ],
+    "ankle_L": [
+      0.1838,
+      0.0695,
+      0.1152
+    ],
+    "ball_L": [
+      0.1838,
+      -0.1015,
+      0.03
+    ],
+    "toe_L": [
+      0.1838,
+      -0.1815,
+      0.03
+    ],
+    "face_y": -0.1922,
+    "jetpack_back_y": 0.1692,
+    "jetpack_mid_z": 0.67
+  }
+}

@@ -23,6 +23,18 @@ its bounding box is where the generated model is fitted, so a generated source k
 passes the cosmetic envelope. The generated texture is baked onto the decimated LODs like the
 Rookie's body, and the dye mask comes from per-item colour rules (dye.make_masks).
 `--procedural` ignores the generated sources.
+
+Another base body (docs/04 §3) gets its own fit of the items that need one:
+
+    blender -b --factory-startup --python art/pipeline/build_cosmetics.py -- \
+        art/character/source/rookie.blend art/cosmetics --body female \
+        --body-blend art/character/rookie_female/source/rookie_female.blend [--runtime <assets_dir>] [--only ids]
+
+Each item is built exactly as for the Rookie (the same geometry), then fitted to that body (BODY_FITS):
+rigid parts that rest on its surface move by how far its back (jetpacks) or face (eyewear) sits from the
+Rookie's, hats narrow with its head into its envelope, and gloves are rebuilt from its own hands. Both bodies share one skeleton, so the parts keep it.
+The fits ship as `<id>_<body>[_lod1].glb` with their own textures, listed in the item manifest's
+`bodies.<body>`; the Rookie's fit stays the manifest's top level, and a Rookie rebuild keeps `bodies`.
 """
 import json
 import math
@@ -35,6 +47,7 @@ import bpy
 import numpy as np
 from mathutils import Matrix, Vector
 from mathutils.bvhtree import BVHTree
+from mathutils.geometry import intersect_point_line
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -47,6 +60,11 @@ argv = sys.argv[sys.argv.index("--") + 1:]
 BLEND, OUT = Path(argv[0]), Path(argv[1])
 RUNTIME = Path(argv[argv.index("--runtime") + 1]) if "--runtime" in argv else None
 ONLY = set(argv[argv.index("--only") + 1].split(",")) if "--only" in argv else None  # rebuild just these ids
+BODY = argv[argv.index("--body") + 1] if "--body" in argv else "male"
+BODY_BLEND = Path(argv[argv.index("--body-blend") + 1]) if "--body-blend" in argv else None
+# How each slot is fitted to another body: by its surface (back, face), with its head (headgear: a smaller head has a
+# smaller envelope) or rebuilt on it (gloves). Boots sit on the shared feet: they need no second fit.
+BODY_FITS = {"jetpack": "back", "eyewear": "face", "headgear": "head", "gloves": "rebuild"}
 
 # LOD0 / LOD1 triangle budgets per slot. Body 2,350 + one item per slot ≤ 3,950 tris (LOD1 1,720).
 SLOT_TRIS = {"headgear": (450, 200), "eyewear": (150, 70), "boots": (300, 130), "gloves": (150, 70), "jetpack": (550, 250)}
@@ -79,7 +97,7 @@ DEFAULT_BOX = {_slot: envelope.bbox(bpy.data.objects[f"rookie_{_slot}"])
 
 
 def envelope_ok(obj, slot):
-    return envelope.inside(obj, ENV)
+    return envelope.inside(obj, ENV_CHECK)
 
 
 def fit_envelope(obj, slot):
@@ -96,11 +114,13 @@ def fit_envelope(obj, slot):
 
 
 body_lod1 = bpy.data.objects.get("rookie_body_lod1")  # gloves are built against each body LOD
+# another body keeps the Rookie's default jetpack and helmet, to fit them (default_part_fit)
+KEEP = {"rookie_jetpack", "rookie_jetpack_lod1", "rookie_headgear", "rookie_headgear_lod1"} if BODY != "male" else set()
 for o in list(scene.objects):
-    if o not in (arm, body, body_lod1):
+    if o not in (arm, body, body_lod1) and o.name not in KEEP:
         bpy.data.objects.remove(o, do_unlink=True)
 bones = arm.data.bones
-rig = json.loads((BLEND.parent.parent / "rookie_rig.json").read_text())
+rig = json.loads((BLEND.parent.parent / f"{BLEND.stem}_rig.json").read_text())
 marks = rig["landmarks_blender_zup"]
 NECK_Z = marks["neck_z"]
 HEAD_Y = bones["head"].head_local.y
@@ -111,6 +131,161 @@ EYE_X = bones["eye_L"].head_local.x
 FACE_Y = marks["face_y"]
 JET = bones["socket_jetpack"].head_local
 FOOT_X = bones["foot_L"].head_local.x
+ENV_CHECK = ENV  # the envelope a part is measured against: the body it is fitted to
+
+
+# ------------------------------------------------------------------ another body (--body)
+
+def surface_y(obj, xs, zs, back, body=True):
+    """The surface depth (y) on a 1 cm grid over xs × zs: a ray from behind (back) or in front. On a body a ray that
+    comes out on the wrong side is dropped: the Rookie's back is open where the generator put his jetpack."""
+    me = obj.data
+    bvh = BVHTree.FromPolygons([obj.matrix_world @ v.co for v in me.vertices], [tuple(p.vertices) for p in me.polygons])
+    out = {}
+    for x in np.arange(xs[0], xs[1] + 1e-6, 0.01):
+        for z in np.arange(zs[0], zs[1] + 1e-6, 0.01):
+            hit = bvh.ray_cast(Vector((x, 1.0 if back else -1.0, z)), Vector((0, -1.0 if back else 1.0, 0)), 2.0)[0]
+            if hit is not None and (not body or (hit.y > 0.02 if back else hit.y < -0.02)):
+                out[(round(x, 2), round(z, 2))] = hit.y
+    return out
+
+
+def contact_gaps(part, own, back):
+    """The gap along y between a part and the body surface it rests on, per 1 cm cell of the part's footprint: from
+    the body's surface (its back, or its face) a ray out to the part's inner face, or, where the part sinks into
+    the body, a short ray in to it (negative). A gas mask's strap behind the head never counts."""
+    lo, hi = envelope.bbox(part)
+    b = surface_y(own, (lo[0], hi[0]), (lo[2], hi[2]), back)
+    me = part.data
+    tree = BVHTree.FromPolygons([part.matrix_world @ v.co for v in me.vertices], [tuple(q.vertices) for q in me.polygons])
+    out = Vector((0, 1.0 if back else -1.0, 0))
+    gaps = {}
+    for (x, z), y in b.items():
+        o = Vector((x, y, z))
+        sunk = tree.ray_cast(o, -out, 0.05)
+        if sunk[0] is not None:
+            gaps[(x, z)] = -sunk[3]
+            continue
+        hit = tree.ray_cast(o, out, 0.3)
+        if hit[0] is not None:
+            gaps[(x, z)] = hit[3]
+    return gaps
+
+
+def head_box(obj):
+    """The box of the vertices mostly skinned to the head: face, hair or hair cap, ears."""
+    names = {g.index: g.name for g in obj.vertex_groups}
+    pts = np.array([tuple(obj.matrix_world @ v.co) for v in obj.data.vertices
+                    if v.groups and names[max(v.groups, key=lambda g: g.weight).group] in ("head", "jaw", "eye_L", "eye_R")])
+    return pts.min(axis=0), pts.max(axis=0)
+
+
+def fit_head(lods, iid):
+    """This body's fit of a hat: the Rookie's head box mapped onto this body's (the crown stays where both crowns are).
+    It narrows with the head; front to back it shortens only as far as this body's envelope needs (his head box
+    counts his hair cap, so the head ratio alone would cut the hat into her hair at the back), not past the head
+    ratio. Then it is squeezed into the envelope like any hat into the Rookie's, and wherever this body's own hair
+    comes through it, it is pushed back out."""
+    (rlo, rhi), (olo, ohi) = head_box(ref_body), head_box(body)
+    sx, sy_head = (ohi[0] - olo[0]) / (rhi[0] - rlo[0]), (ohi[1] - olo[1]) / (rhi[1] - rlo[1])
+    hlo, hhi = envelope.bbox(lods[""][0])
+    room = ENV_CHECK[1][1] - ENV_CHECK[0][1] - 2 * envelope.MARGIN
+    sy = max(sy_head, min(1.0, room / (hhi[1] - hlo[1]) * 1.03))  # the last 3 % is the squeeze's (brims)
+    rc = Vector(((rlo[0] + rhi[0]) / 2, (rlo[1] + rhi[1]) / 2, 0))
+    oc = Vector(((olo[0] + ohi[0]) / 2, (olo[1] + ohi[1]) / 2, 0))
+    m = Matrix.Translation(oc) @ Matrix.Diagonal((sx, sy, 1, 1)) @ Matrix.Translation(-rc)
+    centre = Vector((oc.x, oc.y, (olo[2] + ohi[2]) / 2))
+    for suffix, (lo, *_) in lods.items():
+        lo.data.transform(m)
+        squeezed = envelope.squeeze(lo, ENV_CHECK)
+        own = body_lod1 if suffix and body_lod1 else body
+        me = own.data
+        bvh = BVHTree.FromPolygons([own.matrix_world @ v.co for v in me.vertices], [tuple(q.vertices) for q in me.polygons])
+        lo.data.update()
+        pushed = 0
+        for v in lo.data.vertices:
+            d = v.co - centre
+            # only the shell, facing out, down to below the ears (as clear_head): the underside stays hidden in the head
+            if d.z < -0.06 or v.normal.dot(d.normalized()) < 0.2 or not inside(bvh, v.co):
+                continue
+            u = d.normalized()
+            for _ in range(40):
+                v.co += u * 0.002
+                if not inside(bvh, v.co):
+                    break
+            v.co += u * 0.002
+            pushed += 1
+        lo.data.update()
+        # a low-poly hat's big faces can pass through the hair between their vertices: wherever a head vertex of the
+        # body stands outside the hat's shell, push that shell face out past it (3 mm)
+        names = {g.index: g.name for g in own.vertex_groups}
+        head = [own.matrix_world @ v.co for v in me.vertices if v.groups and
+                names[max(v.groups, key=lambda g: g.weight).group] in ("head", "jaw", "eye_L", "eye_R")]
+        faced = 0
+        for _ in range(3):
+            tree = BVHTree.FromPolygons([v.co for v in lo.data.vertices], [tuple(q.vertices) for q in lo.data.polygons])
+            moves = {}
+            for p in head:
+                hit, nrm, fi, dist = tree.find_nearest(p)
+                if hit is None or (p - hit).dot(nrm) <= 0 or nrm.dot((hit - centre).normalized()) < 0.2 or dist > 0.03:
+                    continue
+                for i in lo.data.polygons[fi].vertices:
+                    moves[i] = max(moves.get(i, 0.0), dist + 0.003)
+            if not moves:
+                break
+            for i, step in moves.items():
+                v = lo.data.vertices[i]
+                v.co += (v.co - centre).normalized() * step
+            faced += len(moves)
+            lo.data.update()
+        envelope.clamp(lo, ENV_CHECK)
+        log(f"  {iid}{suffix}: ×{sx:.3f} wide, ×{sy:.3f} deep (head ×{sy_head:.3f}); squeezed {squeezed or 'nowhere'} cm; "
+            f"{pushed} vertices pushed out of her hair, {faced} more where it came through a face")
+
+
+def fit_to_body(lods, slot, iid):
+    """This body's fit of a rigid part that rests on it (BODY_FITS), from the Rookie's: eyewear first narrows and
+    flattens with the head about its centre (straps, arms and rims meet a smaller head). Then the part moves along y
+    until, where it sits closest on the Rookie (its contact: the quarter of its footprint nearest his surface), it
+    stands off this body by what it stands off him there, measured the same way on the same cells (contact_gaps)."""
+    if slot == "headgear":
+        fit_head(lods, iid)
+        return
+    lo0 = lods[""][0]
+    back = slot == "jetpack"
+    ref = contact_gaps(lo0, ref_body, back)
+    if slot == "eyewear":
+        (rlo, rhi), (olo, ohi) = head_box(ref_body), head_box(body)
+        sx, sy = (ohi[0] - olo[0]) / (rhi[0] - rlo[0]), (ohi[1] - olo[1]) / (rhi[1] - rlo[1])
+        c = Vector(((rlo[0] + rhi[0]) / 2, (rlo[1] + rhi[1]) / 2, 0))
+        m = Matrix.Translation(c) @ Matrix.Diagonal((sx, sy, 1, 1)) @ Matrix.Translation(-c)
+        for lo, *_ in lods.values():
+            lo.data.transform(m)
+    own = contact_gaps(lo0, body, back)
+    near = float(np.percentile(list(ref.values()), 25))
+    cells = [k for k, g in ref.items() if g <= near and k in own]
+    ref_gap = float(np.median([ref[k] for k in cells]))
+    own_gap = float(np.median([own[k] for k in cells]))
+    move = Vector((0, (own_gap - ref_gap) * (-1 if back else 1), 0))
+    for lo, *_ in lods.values():
+        lo.data.transform(Matrix.Translation(move))
+        envelope.clamp(lo, ENV_CHECK)
+    log(f"  {iid}: at its contact ({len(cells)} cells) it stands off the Rookie {ref_gap * 100:+.1f} cm and the {BODY} body "
+        f"{own_gap * 100:+.1f} cm{' after the head scale' if slot == 'eyewear' else ''}: moved {move.y * 100:+.1f} cm")
+
+
+if BODY != "male":
+    with bpy.data.libraries.load(str(BODY_BLEND)) as (_src, _dst):
+        _dst.objects = [n for n in _src.objects if n.endswith(("_body", "_body_lod1"))]
+    _own = {}
+    for o in _dst.objects:
+        scene.collection.objects.link(o)
+        o.parent = arm
+        o.modifiers["skeleton"].object = arm  # the Rookie's skeleton, which it was fitted to (build_character --skeleton)
+        _own["lod1" if o.name.endswith("_lod1") else "lod0"] = o
+    ref_body, body, body_lod1 = body, _own["lod0"], _own.get("lod1")
+    ENV_CHECK = envelope.of_body([body])
+    ref_body.hide_set(True)
 
 
 # ------------------------------------------------------------------ modelling helpers
@@ -305,17 +480,45 @@ def tactical_gloves(it, src=None, offset=0.010):
             dom[v.index] = groups[g.group]
     for side in "LR":
         faces = [p for p in me.polygons if all(dom.get(i) == f"hand_{side}" for i in p.vertices)]
+        bone = arm.data.bones[f"hand_{side}"]
         bm = bmesh.new()
         vmap = {}
         for p in faces:
             for i in p.vertices:
                 if i not in vmap:
-                    v = me.vertices[i]
-                    vmap[i] = bm.verts.new(src.matrix_world @ v.co + v.normal * offset)
+                    vmap[i] = bm.verts.new(src.matrix_world @ me.vertices[i].co)
             try:
                 bm.faces.new([vmap[i] for i in p.vertices])
             except ValueError:
                 pass
+        # Inflate along the vertex normal where it points away from the hand bone; a generated hand can have
+        # locally flipped faces (the female body's fingertips), and there the glove grows straight out from the bone.
+        bm.normal_update()
+        for v in bm.verts:
+            q, t = intersect_point_line(v.co, bone.head_local, bone.tail_local)
+            away = (v.co - bone.head_local.lerp(bone.tail_local, min(max(t, 0.0), 1.0))).normalized()
+            n = v.normal if v.normal.dot(away) > 0.3 else away
+            v.co = v.co + n * offset
+        # and its faces outward, shell by shell, so the glove's own normals say which side is out (poke_sweep)
+        bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+        seen = set()
+        for f0 in bm.faces:
+            if f0 in seen:
+                continue
+            shell, stack = [], [f0]
+            seen.add(f0)
+            while stack:
+                f = stack.pop()
+                shell.append(f)
+                for e in f.edges:
+                    for g in e.link_faces:
+                        if g not in seen:
+                            seen.add(g)
+                            stack.append(g)
+            c = [f.calc_center_median() for f in shell]
+            away = sum(f.normal.dot(q - intersect_point_line(q, bone.head_local, bone.tail_local)[0]) for f, q in zip(shell, c))
+            if away < 0:
+                bmesh.ops.reverse_faces(bm, faces=shell)
         order = {bv: n for n, bv in enumerate(bm.verts)}
         src_of = {order[bv]: i for i, bv in vmap.items()}
         m = bpy.data.meshes.new(f"glove_{side}")
@@ -354,7 +557,7 @@ SOCKET = {"headgear": "socket_hat", "eyewear": "socket_hat", "jetpack": "socket_
 
 # ------------------------------------------------------------------ generated sources (Higgsfield)
 
-SRC = BLEND.parents[2] / "cosmetics" / "source"
+SRC = Path(__file__).resolve().parents[1] / "cosmetics" / "source"
 USE_GENERATED = "--procedural" not in argv
 
 
@@ -708,6 +911,25 @@ POSE_SWEEP = [("idle", 0), ("idle", 30), ("walk", 8), ("run", 4), ("aim_rifle_le
 # by up to ~5.5 mm across the wrist's hand/forearm blend in strong bends (the review measured
 # 22-39 mm before). Tighter needs a denser glove than the 150-tri slot budget allows.
 POKE_MAX = 0.006
+# Ray directions for the inside test (a Fibonacci sphere, odd so a vote can't tie).
+PARITY_DIRS = [Vector((math.cos(2.39996 * i) * math.sqrt(1 - (1 - (2 * i + 1) / 13) ** 2),
+                       math.sin(2.39996 * i) * math.sqrt(1 - (1 - (2 * i + 1) / 13) ** 2), 1 - (2 * i + 1) / 13))
+               for i in range(13)]
+
+
+def inside(bvh, co):
+    """Whether `co` is inside the part's volume: most rays from it cross the part an odd number of times. Unlike the
+    nearest face's side, this holds where a decimated glove folds a face over or a finger's glove passes the palm."""
+    votes = 0
+    for d in PARITY_DIRS:
+        o, n = co, 0
+        for _ in range(16):
+            hit = bvh.ray_cast(o, d)
+            if hit[0] is None:
+                break
+            n, o = n + 1, hit[0] + d * 1e-5
+        votes += n % 2
+    return votes > len(PARITY_DIRS) // 2
 
 
 def poke_sweep(part, src, prefixes):
@@ -733,6 +955,7 @@ def poke_sweep(part, src, prefixes):
     saved = arm.animation_data.action
     worst, where = 0.0, "rest"
     rest_worst = 0.0
+    covered_by_parity = 0  # vertices the nearest face called outside that the ray parity puts inside
     for clip, frame in [(None, 0)] + POSE_SWEEP:
         if clip and clip not in bpy.data.actions:
             continue
@@ -750,16 +973,22 @@ def poke_sweep(part, src, prefixes):
         for i in idx:
             co = inv @ (src.matrix_world @ me.vertices[i].co)
             hit, nrm, face, dist = bvh.find_nearest(co)
-            if hit is not None and face not in rim and (co - hit).dot(nrm) > 0 and not clip:
+            if hit is None or face in rim or (co - hit).dot(nrm) <= 0 or dist < 1e-4:
+                continue
+            if inside(bvh, co):
+                covered_by_parity += 1
+                continue
+            if not clip:
                 rest_worst = max(rest_worst, dist)
-            if hit is not None and face not in rim and (co - hit).dot(nrm) > 0 and dist > worst:
-                worst, where = dist, f"{clip or 'rest'}@{frame}"
+            if dist > worst:
+                worst, where = dist, f"{clip or 'rest'}@{frame}, body vertex {i} at rest {tuple(round(c, 3) for c in src.data.vertices[i].co)}"
         ev.to_mesh_clear()
     arm.animation_data.action = saved
     for pb in arm.pose.bones:
         pb.matrix_basis = Matrix()
     scene.frame_set(0)
-    log(f"  {part.name}: worst skin outside the part over {len(POSE_SWEEP) + 1} poses: {worst * 1000:.1f} mm ({where}); at rest {rest_worst * 1000:.1f} mm")
+    log(f"  {part.name}: worst skin outside the part over {len(POSE_SWEEP) + 1} poses: {worst * 1000:.1f} mm ({where}); at rest "
+        f"{rest_worst * 1000:.1f} mm; {covered_by_parity} vertex-poses beside a folded or overlapping face, inside by ray parity")
     if worst > POKE_MAX:
         raise RuntimeError(f"{part.name}: the body pokes {worst * 1000:.1f} mm through it at {where} (max {POKE_MAX * 1000:.0f} mm)")
 
@@ -779,10 +1008,119 @@ def export(path, obj, runtime, quality=90):
     )
 
 
+def finish(iid, slot, name, lods, gen, extras, own=False):
+    """Textures, dye masks, skin, extras and export of an item's LODs, then its manifest. `own`: an item made for
+    this body only (a hairstyle): its files and the manifest's top level are this body's, with no suffix."""
+    tex_dir = OUT / slot / "textures"
+    tex_dir.mkdir(parents=True, exist_ok=True)
+    # the same schema as build_character's default parts; `name` is a placeholder (cosmetics.ts names it)
+    entry = {"id": iid, "slot": slot, "name": name, "skeleton": "shared-v1", "default": False, "lods": {}, "dye": {}, "tris": {},
+             "source": "generated" if gen else "procedural",
+             **({k: extras[k] for k in ("hidesBody", "fits") if k in extras}),
+             **({"attachBone": RIGID[slot], "socket": SOCKET[slot]} if slot in RIGID else {})}
+    for suffix, (lo, t, alb, msk) in lods.items():
+        stem = f"{iid}{'' if BODY == 'male' or own else '_' + BODY}{suffix}"
+        size = alb.size[0]
+        if msk is None:
+            def rules(h, s, v, pos, base=gen["rules"]):  # never dye texels the bake didn't reach
+                return tuple(m & (v > 0.02) for m in base(h, s, v, pos))
+            defaults, cover = dye.make_masks(lo, alb, tex_dir, stem, rules)
+            log(f"  {stem} dye cover {cover}")
+            if gen.get("dyes"):
+                # new default dyes: repaint the albedo so it still equals dyeAlbedo × lerp(1, dye, mask)
+                defaults.update({k: v for k, v in gen["dyes"].items() if k in defaults})
+                px = {}
+                for kind in ("dye_albedo", "dye_mask"):
+                    im = bpy.data.images.load(str(tex_dir / f"{stem}_{kind}.png"))
+                    px[kind] = np.array(im.pixels[:], dtype=np.float32).reshape(size, size, 4)
+                    bpy.data.images.remove(im)
+                # in linear space, like the shader (dye.finish)
+                tint = np.ones((size, size, 3), dtype=np.float32)
+                for i, key in enumerate(("primary", "secondary", "accent")):
+                    if key in defaults:
+                        rgb = np.array([int(defaults[key][j:j + 2], 16) / 255 for j in (1, 3, 5)], dtype=np.float32)
+                        tint *= 1 + px["dye_mask"][..., i:i + 1] * (dye._to_linear(rgb) - 1)
+                lin = dye._to_linear(px["dye_albedo"][..., :3]) * tint
+                out = np.concatenate([dye._to_srgb(lin), np.ones((size, size, 1), np.float32)], -1)
+                alb.pixels[:] = out.ravel()
+        else:
+            col = np.array(alb.pixels[:], dtype=np.float32).reshape(size, size, 4)[..., :3]
+            mask = np.array(msk.pixels[:], dtype=np.float32).reshape(size, size, 4)
+            covered = np.ones(col.shape[:2], dtype=bool)
+            defaults = dye.finish(col, mask, covered, tex_dir, stem)
+        alb.filepath_raw = str(tex_dir / f"{stem}_albedo.png")
+        alb.file_format = "PNG"
+        alb.save()
+        alb.pack()
+        final_material(lo, alb)
+        for layer in ("Col", "Dye"):
+            if layer in lo.data.color_attributes:
+                lo.data.color_attributes.remove(lo.data.color_attributes[layer])
+        skin(lo, slot, body_lod1 if suffix and body_lod1 else body)
+        if slot == "gloves":
+            poke_sweep(lo, body_lod1 if suffix and body_lod1 else body, ("hand_",))
+        lo["slot"] = slot
+        lo["cosmeticId"] = iid  # display names live in packages/content/src/cosmetics.ts (W2's catalogue)
+        lo["hidesHair"] = False
+        lo["bodyTypes"] = ["standard" if BODY == "male" else BODY]
+        lo["envelopeOk"] = envelope_ok(lo, slot)
+        lo["dyeDefaults"] = defaults
+        lo["dyeMask"] = f"{stem}_dye_mask.png"
+        lo["dyeAlbedo"] = f"{stem}_dye_albedo"
+        for k, v in extras.items():
+            if k != "nozzleCount":  # build-only
+                lo[k] = v
+        if slot in RIGID:
+            lo["attachBone"] = RIGID[slot]
+            lo["socket"] = SOCKET[slot]
+        if slot == "jetpack":
+            nz = nozzles.find(lo, extras.get("nozzleCount", 1))
+            lo["nozzles"] = nz
+            entry.setdefault("nozzles", nz)  # the LOD0 positions
+        export(OUT / slot / f"{stem}.glb", lo, runtime=False)
+        lod = "lod0" if not suffix else "lod1"
+        entry["lods"][lod] = f"{stem}.glb"
+        entry["dye"][lod] = {"mask": f"textures/{stem}_dye_mask.png", "albedo": f"textures/{stem}_dye_albedo.webp",
+                             "defaults": defaults}
+        entry["tris"][lod] = t
+        if RUNTIME:
+            # 128² LOD1 textures go lossless (WebP quality 100): lossy WebP smears their tiny
+            # islands, and they cost only a few KB more
+            q = 100 if size <= 128 else 90
+            export(RUNTIME / "cosmetics" / slot / f"{stem}.glb", lo, runtime=True, quality=q)
+            rt_tex = RUNTIME / "cosmetics" / slot / "textures"
+            rt_tex.mkdir(parents=True, exist_ok=True)
+            shutil.copy(tex_dir / f"{stem}_dye_mask.png", rt_tex / f"{stem}_dye_mask.png")
+            img = bpy.data.images.load(str(tex_dir / f"{stem}_dye_albedo.png"))
+            # save_render applies the view transform: AgX would tone-map the albedo
+            scene.view_settings.view_transform = "Standard"
+            scene.view_settings.look = "None"
+            scene.view_settings.exposure = 0.0
+            scene.view_settings.gamma = 1.0
+            st = scene.render.image_settings
+            st.file_format, st.color_mode, st.quality = "WEBP", "RGB", q
+            img.save_render(str(rt_tex / f"{stem}_dye_albedo.webp"), scene=scene)
+            bpy.data.images.remove(img)
+        log(f"{stem}: {t} tris, {size}² textures, dyes {defaults}")
+    for x in [lods[s][0] for s in lods]:
+        bpy.data.objects.remove(x, do_unlink=True)
+    index[iid] = entry
+    if RUNTIME:
+        path = RUNTIME / "cosmetics" / slot / f"{iid}.json"
+        old = json.loads(path.read_text()) if path.exists() else {}
+        if BODY == "male" or own:  # keep the other bodies' fits, written by their own runs
+            entry = {**entry, **({"bodies": old["bodies"]} if "bodies" in old else {})}
+        else:  # this body's fit of the item, beside the Rookie's
+            own_fit = {k: entry[k] for k in ("lods", "dye", "tris", "nozzles") if k in entry}
+            entry = {**old, "bodies": {**old.get("bodies", {}), BODY: own_fit}}
+        path.write_text(json.dumps(entry, indent=2))
+
+
 body.hide_set(True)
 index = {}
+OWN = set()  # items made for this body only: their manifest's top level is this body's
 for iid, slot, name, build in ITEMS:
-    if ONLY and iid not in ONLY:
+    if ONLY and iid not in ONLY or BODY != "male" and slot not in BODY_FITS:
         continue
     it = Item(iid, slot, name)
     build(it)
@@ -847,104 +1185,66 @@ for iid, slot, name, build in ITEMS:
         alb = bake_attr(lo, src, "Col", size, f"{iid}{suffix}_albedo", data=False)
         msk = bake_attr(lo, src, "Dye", size, f"{iid}{suffix}_mask", data=True)
         lods[suffix] = (lo, t, alb, msk)
-    tex_dir = OUT / slot / "textures"
-    tex_dir.mkdir(parents=True, exist_ok=True)
-    # the same schema as build_character's default parts; `name` is a placeholder (cosmetics.ts names it)
-    entry = {"id": iid, "slot": slot, "name": name, "skeleton": "shared-v1", "default": False, "lods": {}, "dye": {}, "tris": {},
-             "source": "generated" if gen else "procedural",
-             **({"attachBone": RIGID[slot], "socket": SOCKET[slot]} if slot in RIGID else {})}
-    for suffix, (lo, t, alb, msk) in lods.items():
-        stem = f"{iid}{suffix}"
-        size = alb.size[0]
-        if msk is None:
-            def rules(h, s, v, pos, base=gen["rules"]):  # never dye texels the bake didn't reach
-                return tuple(m & (v > 0.02) for m in base(h, s, v, pos))
-            defaults, cover = dye.make_masks(lo, alb, tex_dir, stem, rules)
-            log(f"  {stem} dye cover {cover}")
-            if gen.get("dyes"):
-                # new default dyes: repaint the albedo so it still equals dyeAlbedo × lerp(1, dye, mask)
-                defaults.update({k: v for k, v in gen["dyes"].items() if k in defaults})
-                px = {}
-                for kind in ("dye_albedo", "dye_mask"):
-                    im = bpy.data.images.load(str(tex_dir / f"{stem}_{kind}.png"))
-                    px[kind] = np.array(im.pixels[:], dtype=np.float32).reshape(size, size, 4)
-                    bpy.data.images.remove(im)
-                # in linear space, like the shader (dye.finish)
-                tint = np.ones((size, size, 3), dtype=np.float32)
-                for i, key in enumerate(("primary", "secondary", "accent")):
-                    if key in defaults:
-                        rgb = np.array([int(defaults[key][j:j + 2], 16) / 255 for j in (1, 3, 5)], dtype=np.float32)
-                        tint *= 1 + px["dye_mask"][..., i:i + 1] * (dye._to_linear(rgb) - 1)
-                lin = dye._to_linear(px["dye_albedo"][..., :3]) * tint
-                out = np.concatenate([dye._to_srgb(lin), np.ones((size, size, 1), np.float32)], -1)
-                alb.pixels[:] = out.ravel()
-        else:
-            col = np.array(alb.pixels[:], dtype=np.float32).reshape(size, size, 4)[..., :3]
-            mask = np.array(msk.pixels[:], dtype=np.float32).reshape(size, size, 4)
-            covered = np.ones(col.shape[:2], dtype=bool)
-            defaults = dye.finish(col, mask, covered, tex_dir, stem)
-        alb.filepath_raw = str(tex_dir / f"{stem}_albedo.png")
-        alb.file_format = "PNG"
-        alb.save()
-        alb.pack()
-        final_material(lo, alb)
-        for layer in ("Col", "Dye"):
-            if layer in lo.data.color_attributes:
-                lo.data.color_attributes.remove(lo.data.color_attributes[layer])
-        skin(lo, slot, body_lod1 if suffix and body_lod1 else body)
-        if slot == "gloves":
-            poke_sweep(lo, body_lod1 if suffix and body_lod1 else body, ("hand_",))
-        lo["slot"] = slot
-        lo["cosmeticId"] = iid  # display names live in packages/content/src/cosmetics.ts (W2's catalogue)
-        lo["hidesHair"] = False
-        lo["bodyTypes"] = ["standard"]
-        lo["envelopeOk"] = envelope_ok(lo, slot)
-        lo["dyeDefaults"] = defaults
-        lo["dyeMask"] = f"{stem}_dye_mask.png"
-        lo["dyeAlbedo"] = f"{stem}_dye_albedo"
-        for k, v in it.extras.items():
-            if k != "nozzleCount":  # build-only
-                lo[k] = v
-        if slot in RIGID:
-            lo["attachBone"] = RIGID[slot]
-            lo["socket"] = SOCKET[slot]
-        if slot == "jetpack":
-            nz = nozzles.find(lo, it.extras.get("nozzleCount", 1))
-            lo["nozzles"] = nz
-            entry.setdefault("nozzles", nz)  # the LOD0 positions
-        export(OUT / slot / f"{stem}.glb", lo, runtime=False)
-        lod = "lod0" if not suffix else "lod1"
-        entry["lods"][lod] = f"{stem}.glb"
-        entry["dye"][lod] = {"mask": f"textures/{stem}_dye_mask.png", "albedo": f"textures/{stem}_dye_albedo.webp",
-                             "defaults": defaults}
-        entry["tris"][lod] = t
-        if RUNTIME:
-            # 128² LOD1 textures go lossless (WebP quality 100): lossy WebP smears their tiny
-            # islands, and they cost only a few KB more
-            q = 100 if size <= 128 else 90
-            export(RUNTIME / "cosmetics" / slot / f"{stem}.glb", lo, runtime=True, quality=q)
-            rt_tex = RUNTIME / "cosmetics" / slot / "textures"
-            rt_tex.mkdir(parents=True, exist_ok=True)
-            shutil.copy(tex_dir / f"{stem}_dye_mask.png", rt_tex / f"{stem}_dye_mask.png")
-            img = bpy.data.images.load(str(tex_dir / f"{stem}_dye_albedo.png"))
-            # save_render applies the view transform: AgX would tone-map the albedo
-            scene.view_settings.view_transform = "Standard"
-            scene.view_settings.look = "None"
-            scene.view_settings.exposure = 0.0
-            scene.view_settings.gamma = 1.0
-            st = scene.render.image_settings
-            st.file_format, st.color_mode, st.quality = "WEBP", "RGB", q
-            img.save_render(str(rt_tex / f"{stem}_dye_albedo.webp"), scene=scene)
-            bpy.data.images.remove(img)
-        log(f"{stem}: {t} tris, {size}² textures, dyes {defaults}")
-    for x in [hi] + [lods[s][0] for s in lods]:
-        bpy.data.objects.remove(x, do_unlink=True)
-    index[iid] = entry
-    if RUNTIME:
-        (RUNTIME / "cosmetics" / slot / f"{iid}.json").write_text(json.dumps(entry, indent=2))
+    if BODY != "male" and BODY_FITS.get(slot) in ("back", "face", "head"):  # the same part, set on this body
+        fit_to_body(lods, slot, iid)
+    finish(iid, slot, name, lods, gen, it.extras)
+    bpy.data.objects.remove(hi, do_unlink=True)
 
-if ONLY and (OUT / "cosmetics.json").exists():
-    index = {**json.loads((OUT / "cosmetics.json").read_text()), **index}
+
+
+def default_part_fit(slot, iid):
+    """This body's fit of a Rookie default part kept from his .blend (the Twin Tank and the Brim Helmet, built by
+    build_character.py):
+    the same mesh and textures, set on this body by fit_to_body. Its art GLBs sit beside the Rookie's in
+    art/character/parts/ and the manifest's `bodies.<body>` shares his dye textures (the UVs are his)."""
+    lods = {}
+    for suffix in ("", "_lod1"):
+        src = bpy.data.objects[f"rookie_{slot}{suffix}"]
+        lo = src.copy()
+        lo.data = src.data.copy()
+        scene.collection.objects.link(lo)
+        lods[suffix] = (lo, tri_count(lo.data), None, None)
+    fit_to_body(lods, slot, iid)
+    path = RUNTIME / "cosmetics" / slot / f"{iid}.json" if RUNTIME else None
+    male = json.loads(path.read_text()) if path and path.exists() else {}
+    own_fit = {"lods": {}, "dye": male.get("dye", {}), "tris": {}}
+    for suffix, (lo, t, _, _) in lods.items():
+        stem, lod = f"{iid}_{BODY}{suffix}", "lod1" if suffix else "lod0"
+        lo["bodyTypes"] = [BODY]
+        lo["envelopeOk"] = envelope_ok(lo, slot)
+        if slot == "jetpack":
+            nz = nozzles.find(lo, 2)
+            lo["nozzles"] = nz
+            own_fit.setdefault("nozzles", nz)  # the LOD0 positions
+        if slot == "headgear":
+            lo["hidesHair"] = True  # the Brim Helmet (build_character.py)
+        export(BLEND.parent.parent / "parts" / f"{stem}.glb", lo, runtime=False)
+        if RUNTIME:
+            export(RUNTIME / "cosmetics" / slot / f"{stem}.glb", lo, runtime=True, quality=100 if suffix else 90)
+        own_fit["lods"][lod], own_fit["tris"][lod] = f"{stem}.glb", t
+        bpy.data.objects.remove(lo, do_unlink=True)
+    if path:
+        path.write_text(json.dumps({**male, "bodies": {**male.get("bodies", {}), BODY: own_fit}}, indent=2))
+
+
+if BODY != "male" and (not ONLY or "jetpack_twin_tank" in ONLY):
+    default_part_fit("jetpack", "jetpack_twin_tank")
+if BODY != "male" and (not ONLY or "headgear_brim_helmet" in ONLY):
+    default_part_fit("headgear", "headgear_brim_helmet")
+
+old_index = json.loads((OUT / "cosmetics.json").read_text()) if (OUT / "cosmetics.json").exists() else {}
+if BODY != "male":
+    for iid, e in index.items():
+        if iid in OWN:
+            continue
+        own_fit = {k: e[k] for k in ("lods", "dye", "tris", "nozzles") if k in e}
+        index[iid] = {**old_index.get(iid, {}), "bodies": {**old_index.get(iid, {}).get("bodies", {}), BODY: own_fit}}
+else:
+    for iid, e in index.items():
+        if "bodies" in old_index.get(iid, {}):
+            e["bodies"] = old_index[iid]["bodies"]
+if (ONLY or BODY != "male") and old_index:
+    index = {**old_index, **index}
 (OUT / "cosmetics.json").write_text(json.dumps(index, indent=2))
 if RUNTIME:
     # the full catalogue: the Rookie's default parts + these starter items, by slot

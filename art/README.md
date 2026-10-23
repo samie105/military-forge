@@ -8,9 +8,110 @@ Sources and authoring scripts for the game's art: the Rookie (base soldier), its
 | A: clips + dye masks | #3: 30 clips incl. aim poses for 3 weapon families, jetpack as its own part, dye masks |
 | B: starter cosmetics + 5 weapons | weapons: 11 models (#5); cosmetics: 11 items + 3 default parts (#8) |
 | Done: Street Market kit | #10: 24-piece kit + compiled 128 × 62 m map (120 m of play between edge walls), collision from the kit's extras, 6 ad surfaces |
-| **Hero cosmetics from Higgsfield** | **this branch**: 5 of the 11 starter items rebuilt from generated models (3 more drafted, waiting for 3D) |
+| Hero cosmetics from Higgsfield | 5 of the 11 starter items rebuilt from generated models |
+| **The female soldier** | **this branch**: a second base body on the Rookie's skeleton, her fits of the shared items, body regions |
 
-## Hero cosmetics from Higgsfield
+## The female soldier (`rookie_female`, 22 Oct 2026)
+
+![Turnaround](screenshots/rookie-f-turnaround.png)
+*Her turnaround with the Rookie at the same scale, her default kit, LOD1, three skin tones and a dye change.*
+
+![Clips and holds](screenshots/rookie-f-clips.png)
+*The Rookie's clips and weapon holds on her: locomotion, jet, flail, dash, rifle aims at −45° / level / +45°, Longbow, pistol, dual, reload, throw, melee, and a slung rifle with a holstered pistol.*
+
+![Every item on both bodies](screenshots/rookie-f-items.png)
+*Every starter item on her and on him. Her own fits: the five hats, the combat boots, the three jetpacks, both eyewear pieces and the gloves.*
+
+The owner's 22 Oct ask: a female soldier players can pick, feminine but clearly a soldier, never sexualised, in the Rookie's style. She is a second base body on **the Rookie's exact skeleton**:
+- the same bones, rest pose and sockets, so the same hitbox and every clip and weapon hold;
+- her manifest, `characters/rookie_female/rookie_female.json`, shares his clips (it has no `anims`);
+- content's `body_female`; the creator's assembler (`BODY_MANIFESTS.female` in `apps/web/src/character/assembler.ts`, #175) loads her manifest.
+
+**Concept** (GPT Image 2.5 high 2k, 16:9; the Rookie's sheet A as the style reference):
+- three variants of the prompt below: jobs `58a20fb0…`, `1fd29637…`, `24b131bc…`. All read as a boy with lashes.
+- One edit of the third: job `66d25aef…`, [concepts/rookie_female_sheet.jpg](character/rookie_female/source/concepts/rookie_female_sheet.jpg). It gave her a softer face, longer lashes, lips, a slimmer neck and a belted waist, in the same modest uniform.
+
+<details><summary>Prompts (exact text)</summary>
+
+Sheet: "Character turnaround reference sheet for a 3D game model: a companion to the soldier in the reference image, in exactly the same art style (stylised 3D render, soft vinyl designer-toy look, light toon-shaded ramp, subtle hand-painted texture detail), the same chibi proportions, the same head size and height, the same A-pose and the same field uniform. This one is an original FEMALE soldier: clearly a capable, serious soldier, feminine but never glamorous or sexualised. A modest, loose-fitting uniform on a natural chibi body with slightly narrower shoulders and a belted waist; no curves emphasised. Big round face with a soft rounded jaw, simple dark dot eyes with short upper lashes, gentle determined eyebrows, a small calm confident smile, a small button nose, warm apricot skin exactly like the reference. Hair: short natural black hair cropped close to the scalp, neat and tight to the head, with a clean hairline; no bun, no ponytail, no braids, nothing sticking out from the head. BARE HEAD: no helmet, no hat, no goggles. Sand-khaki fatigues with the sleeves rolled above the elbow, a dark brown belt, olive chest webbing with three chunky pouches, a bright teal armband on the left upper arm, sand cargo trousers with the cuffs rolled once, dark brown lace-up boots. NO jetpack and NO backpack: her back shows only the shirt and the webbing straps. Palette: sand, olive, warm brown, with teal as the only saturated accent (the armband).
+
+Layout: the SAME character shown three times side by side at identical scale and height, with wide empty gaps between them: front view, left side view (profile), back view. Orthographic, full body, neutral A-pose with arms angled about 30 degrees down and away from the body, feet shoulder-width apart, empty hands (no weapon, holding nothing). Chibi proportions like the reference: the head is about one third of the total height; short stubby limbs; chunky mitten hands with a separate thumb; big boots. Bold, simple, instantly readable silhouette. Clean flat light-grey background, soft even studio lighting, no cast shadows, no text, no labels, no logos, no watermarks, no insignia or national flags."
+
+Edit (the third sheet as the reference): "Edit this character turnaround sheet. Keep EVERYTHING the same (the three views, their positions, scale and spacing, the A-pose, the vinyl toy style and texture, the sand uniform with rolled sleeves, the olive chest webbing with three pouches, the teal armband on the left upper arm, the brown belt, the rolled cargo trousers, the brown boots, the plain light-grey background, no jetpack, no helmet) but make the soldier read clearly as a young WOMAN, a capable serious soldier, never glamorous or sexualised: a softer, rounder, more feminine face with fuller cheeks and a slightly smaller chin, longer dark upper eyelashes on the dot eyes, gently arched eyebrows that still look determined, small soft rose-brown lips with a calm confident smile, a slightly slimmer neck, slightly narrower shoulders and a gently defined waist above the belt with a slightly fuller hip line, the uniform still loose and modest. Her hair stays short natural black hair close to the head, but with a soft rounded feminine shape and a neat curved hairline at the temples. Warm apricot skin as before. No text, no labels, no logos."
+
+</details>
+
+**3D:** `tripo_h3_1_multiview_to_3d` from the split views (`face_limit 30000`, texture on, PBR off), job `14f3e390…`. The output is [character/source/rookie_female_tripo_raw.glb](character/source/rookie_female_tripo_raw.glb), 28,546 tris.
+
+### On the Rookie's skeleton (`build_character.py --skeleton`)
+
+```bash
+blender -b --factory-startup --python art/pipeline/build_character.py -- \
+  art/character/source/rookie_female_tripo_raw.glb art/character/rookie_female --name rookie_female --body female --parts boots \
+  --skeleton art/character/source/rookie.blend --height 1.44 --depth 1.14 --back-depth 1.6 --head-depth 1.2 \
+  --runtime apps/web/public/assets
+```
+
+1. **Register her onto the Rookie** before rigging, so his skeleton fits her and she keeps her own build. Both arm axes are measured the same way on both raw meshes.
+   - The hips line up front to back (2.0 cm).
+   - Each arm turns and stretches about where it joins the torso onto his arm axis (11.9°, 0.277 → 0.283 m; girth kept), so her hands meet his grip sockets.
+   - Her head scales (×0.958) to fit inside his hair cap with its crown at his.
+   - The 1.5 % under the tightest fit keeps her nape hair clear of the long guns' stocks in the −45° holds.
+   - **Her side silhouette fills the shared hitbox like his** (docs/04 §1.2, "no tiny skins"; the orchestrator's call, 23 Oct). On the same hitbox her first build covered 54–60% of it, against his 61–68% and the 60% floor. She was as tall as him, but flatter in the back and shallower in the head. Three depth-only steps fix that, leaving height and the front view as they were:
+     - `--depth 1.14`: the whole body, front to back, from the knees to the neck. The arms keep theirs (thickened, her coarse hands fold at the wrist, and the gloves are built from them), and below the knees it fades out (the shared boots' shafts).
+     - `--back-depth 1.6`: the upper back behind the spine, from the waist up (a push from the seat up made the hips bulge).
+     - `--head-depth 1.2`: the head, backwards: the face stays where the guns' holds pass it, and the back of the head stays inside his (0.1 cm spare).
+2. **Bind to his armature**, loaded from `rookie.blend` without its clips. Her landmarks give the skinning its girth; the joints are his.
+3. **The rest is the Rookie's path:**
+   - her generated boots split off as `boots_combat`'s female fit;
+   - LOD0 / LOD1 at 2,349 / 999 tris with 512² / 256² bakes;
+   - his dye rules (sand / olive / teal + the armband's team glow) and the skin weight in the dye albedo's alpha;
+   - the strict envelope.
+4. **Clips:** `clips.build_all` on his armature comes out key for key the same as `rookie_anims.glb` (all 34 bones' rest TRS and 444 tracks). The build fails if not. Her manifest has no `anims`, so the creator's assembler shares his clip library: one download for both bodies.
+5. **Body regions** (6b, every body): a `_REGION` vertex attribute.
+   - Hair (1) is the dark head texels above the brows or behind the ears. Top (2) and legs (3) are cloth that mostly follows the torso and arm bones, or the pelvis and leg bones. Skin stays 0.
+   - Hairstyles, tops and trousers replace these (`hidesBody`); the manifest lists the codes.
+   - Hers: 479 / 673 / 400 triangles at LOD0, 129 / 259 / 167 at LOD1.
+
+**Coverage of the shared hitbox** (`check.py`'s side silhouette, the 60% floor; LOD0 / LOD1):
+
+| Outfit | Rookie | Her first build | Her now |
+|---|---|---|---|
+| default kit (Brim Helmet, Combat Boots, Twin Tank) | 67 / 68 | 60 / 60 | 66 / 67 |
+| Combat Helmet, Gas Mask, gloves, Jungle Boots, Rocket Pack | 66 / 65 | 58 / 57 | 66 / 64 |
+| Bandana, Sneakers, Drum Pack | 66 / 65 | 58 / 57 | 66 / 64 |
+| bare head, Combat Boots, Twin Tank | 64 / 64 | 56 / 56 | 63 / 63 |
+| bare head, Sneakers, Rocket Pack | 62 / 61 | 55 / 54 | 62 / 61 |
+| bare head, Sneakers, Drum Pack | 62 / 62 | 55 / 54 | 62 / 61 |
+
+### Her fits of the shared items (`build_cosmetics.py --body female`)
+
+```bash
+blender -b --factory-startup --python art/pipeline/build_cosmetics.py -- \
+  art/character/source/rookie.blend art/cosmetics --body female \
+  --body-blend art/character/rookie_female/source/rookie_female.blend --runtime apps/web/public/assets
+```
+
+Each item is built exactly as for the Rookie, then fitted to her. The fits ship as `<id>_female[_lod1].glb` and the item manifest's `bodies.female`, and a Rookie rebuild keeps `bodies`.
+
+| Item | Her fit | How |
+|---|---|---|
+| Combat Boots (default) | her own generated boots | split off her model |
+| Twin Tank (default), Drum Pack, Rocket Pack | set on her back | where a pack sits closest to his back, it stands off hers by the same gap: −1.6 cm (twin tank), +0.5 cm (drum), −1.3 cm (rocket); the nozzles move with it |
+| Aviators, Gas Mask | narrowed and flattened with her head about its centre (straps and arms meet a smaller head), then set on her face the same way | lenses +1.7 cm, mask plate +1.8 cm |
+| Tactical Gloves | rebuilt from her hands, at each LOD | inflated along the normal, or straight out from the hand bone where her generated hand's faces are flipped; each shell's faces then turned outward. Over the pose sweep her skin stays inside: 4.8 mm worst at LOD0, 0 at LOD1 (6 mm allowed) |
+| Brim Helmet (default), Field Cap, Beret, Bandana, Combat Helmet | narrowed with her head | scaled with her head box about its centre (×0.882 wide; front to back only as far as her envelope needs, never past the head ratio: ×1.000 now that her head is as deep as his; the crown stays at both crowns), squeezed into her envelope, then pushed out wherever her own hair comes through, at a vertex or through a face. On his head they overhung her first build's envelope by 3–4 cm front and back |
+| Jungle Boots, Sneakers | none needed | the feet are shared |
+
+### Checks
+- **Web tests** (`apps/web/test/character/assembler.test.ts`):
+  - every base body's manifest files exist;
+  - her joints, their order and every bone's rest TRS equal the Rookie's (1e-4), and her manifest shares his clips (no `anims`);
+  - every `bodies.<body>` fit names its files and sits on the same skeleton.
+- **Head clearance:** `python3 tools/asset-check/head_clearance.py --body art/character/rookie_female/rookie_female_body.glb` passes 19/19 scanned weapons, like the Rookie.
+- **Gloves (`poke_sweep`):** a skin vertex now counts as poking through only if a ray-parity test agrees it is outside the glove. The nearest glove face alone misread her LOD1 wrist: in the reload and idle poses the nearest face there is a folded or overlapping one, which read the skin as up to 10.7 mm outside, while rays from it cross the glove an odd number of times (inside). A real poke still fails the build; the parity test only drops these false readings, so the Rookie's gloves pass as before.
+- **Asset check:** [her checks](character/rookie_female/checks/).
+
 
 ![Before / after](screenshots/hero-cosmetics.png)
 *Top: the procedural items from #8. Bottom: the same item ids rebuilt from Higgsfield-generated models, in the Rookie's painted vinyl style.*
@@ -1060,7 +1161,8 @@ What it checks:
 | Weapons Forge 12, batch 1: the core 6 guns from generated images: 6 concept sheets (GPT Image 2.5 medium 2k, 1.0 each) + 6 Tripo H3.1 multiview models (9 each) | **60.00** |
 | Weapons Forge 12, batch 2a: the other 8 originals from generated images: 8 concept sheets (1.0 each) + 8 Tripo H3.1 multiview models (9 each) | **80.00** |
 | Weapons Forge 12, batch 2b: the 5 specials from generated images: 5 concept sheets (1.0 each) + 5 Tripo H3.1 multiview models (9 each) | **50.00** |
-| **Total so far** | **353.25** |
+| The female soldier (22 Oct): 3 concept sheets + 1 edit (GPT Image 2.5 high 2k, 2.75 each) + 1 Tripo H3.1 multiview model (9) | **20.00** |
+| **Total so far** | **373.25** (the Forge's 400-credit cap: 289.75 used, counting PR 2 and PR 3's concepts and boots and both key arts, each in its own PR) |
 
 Phase 0 Higgsfield job IDs: concepts A `160eb90e-41ab-4ecc-a917-1e76c0563b40`, B `b40714aa-ec2f-4d2a-a522-ff5a4ebe57cc`, C `3e234313-6c57-4cd7-9946-22e6cd62b4b3`; 3D `75fc7390-163d-4c95-869c-58e8544bd654`.
 

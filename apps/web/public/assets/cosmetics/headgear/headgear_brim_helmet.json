@@ -31,5 +31,35 @@
   "tris": {
     "lod0": 450,
     "lod1": 200
+  },
+  "bodies": {
+    "female": {
+      "lods": {
+        "lod0": "headgear_brim_helmet_female.glb",
+        "lod1": "headgear_brim_helmet_female_lod1.glb"
+      },
+      "dye": {
+        "lod0": {
+          "mask": "textures/headgear_brim_helmet_dye_mask.png",
+          "albedo": "textures/headgear_brim_helmet_dye_albedo.webp",
+          "defaults": {
+            "primary": "#b2925f",
+            "accent": "#1a7a79"
+          }
+        },
+        "lod1": {
+          "mask": "textures/headgear_brim_helmet_lod1_dye_mask.png",
+          "albedo": "textures/headgear_brim_helmet_lod1_dye_albedo.webp",
+          "defaults": {
+            "primary": "#b39260",
+            "accent": "#1a7a79"
+          }
+        }
+      },
+      "tris": {
+        "lod0": 450,
+        "lod1": 200
+      }
+    }
   }
 }

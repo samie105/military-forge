@@ -27,5 +27,33 @@
   "tris": {
     "lod0": 143,
     "lod1": 49
+  },
+  "bodies": {
+    "female": {
+      "lods": {
+        "lod0": "gloves_tactical_female.glb",
+        "lod1": "gloves_tactical_female_lod1.glb"
+      },
+      "dye": {
+        "lod0": {
+          "mask": "textures/gloves_tactical_female_dye_mask.png",
+          "albedo": "textures/gloves_tactical_female_dye_albedo.webp",
+          "defaults": {
+            "primary": "#171719"
+          }
+        },
+        "lod1": {
+          "mask": "textures/gloves_tactical_female_lod1_dye_mask.png",
+          "albedo": "textures/gloves_tactical_female_lod1_dye_albedo.webp",
+          "defaults": {
+            "primary": "#171719"
+          }
+        }
+      },
+      "tris": {
+        "lod0": 123,
+        "lod1": 52
+      }
+    }
   }
 }

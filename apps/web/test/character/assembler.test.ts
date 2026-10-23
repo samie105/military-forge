@@ -2,8 +2,8 @@ import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { Color, Vector3, type BufferAttribute, type BufferGeometry } from 'three';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_COSMETIC_LOADOUT, cosmetics, getCosmetic, type CosmeticLoadout } from '@military-forge/content';
-import { ART_SLOTS, CharacterAssembler, DyeMaterial, OutlineMaterial, ROOKIE_MANIFEST, selectLod } from '../../src/character';
+import { BODIES, DEFAULT_COSMETIC_LOADOUT, cosmetics, getCosmetic, type CosmeticLoadout } from '@military-forge/content';
+import { ART_SLOTS, BODY_MANIFESTS, CharacterAssembler, DyeMaterial, OutlineMaterial, ROOKIE_MANIFEST, selectLod } from '../../src/character';
 import { BODY, BODY_DEFAULTS, JOINTS, PARTS, fakeSource, type FakeSource } from './fakeRig';
 
 const assembler = (source: FakeSource = fakeSource()) => new CharacterAssembler({ source });
@@ -270,5 +270,69 @@ describe('the shipped W8 character art (apps/web/public/assets)', () => {
       }
     }
     expect(glbJoints(`characters/rookie/${manifest.lods.lod1}`)).toEqual(joints);
+  });
+
+  /** Each joint's rest transform (glTF node TRS): the bind pose a body or part is skinned in. */
+  const restPose = (path: string) => {
+    const buf = readFileSync(assets(path));
+    const json = JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString()) as {
+      nodes: { name: string; translation?: number[]; rotation?: number[]; scale?: number[] }[];
+      skins: { joints: number[] }[];
+    };
+    return new Map(json.skins[0]!.joints.map((j) => {
+      const n = json.nodes[j]!;
+      return [n.name, [...(n.translation ?? [0, 0, 0]), ...(n.rotation ?? [0, 0, 0, 1]), ...(n.scale ?? [1, 1, 1])]];
+    }));
+  };
+  const expectSamePose = (path: string, ref: Map<string, number[]>) => {
+    const pose = restPose(path);
+    for (const [bone, trs] of pose) {
+      const want = ref.get(bone);
+      expect(want, `${path}: ${bone}`).toBeDefined();
+      trs.forEach((v, k) => expect(Math.abs(v - want![k]!), `${path}: ${bone}[${k}]`).toBeLessThan(1e-4));
+    }
+  };
+
+  it('every base body is on the Rookie\'s skeleton: the same joints and rest pose, and his clips', () => {
+    const rookiePose = restPose(`characters/rookie/${manifest.lods.lod0}`);
+    for (const body of BODIES) {
+      const path = BODY_MANIFESTS[body];
+      const dir = path.slice(0, path.lastIndexOf('/') + 1);
+      const m = JSON.parse(readFileSync(assets(path), 'utf8')) as typeof manifest & { body?: string };
+      expect(m.body ?? 'male', path).toBe(body);
+      for (const file of [...Object.values(m.lods), ...Object.values(m.dye).flatMap((d) => [d.mask, d.albedo])]) {
+        expect(existsSync(assets(dir + file)), `${body}: ${file}`).toBe(true);
+      }
+      // one clip library for every body (the bones they key are the same bones): a body manifest without `anims`
+      // shares the male one
+      if (body !== 'male') expect(m.anims, body).toBeUndefined();
+      for (const lod of ['lod0', 'lod1']) {
+        expect(glbJoints(dir + m.lods[lod]), `${body} ${lod}`).toEqual(joints);
+        expectSamePose(dir + m.lods[lod]!, rookiePose);
+      }
+      for (const [slot, id] of Object.entries(m.defaultParts)) expect(getCosmetic(id)?.slot, `${body}: ${id}`).toBe(slot);
+    }
+  });
+
+  it('a part\'s fit for another body (`bodies.<body>`) names its files and is on the same skeleton', () => {
+    const rookiePose = restPose(`characters/rookie/${manifest.lods.lod0}`);
+    let fits = 0;
+    for (const item of cosmetics.filter((c) => c.assets.manifest)) {
+      const path = item.assets.manifest!;
+      const dir = path.slice(0, path.lastIndexOf('/') + 1);
+      const m = JSON.parse(readFileSync(assets(path), 'utf8')) as {
+        bodies?: Record<string, { lods: Record<string, string>; dye: Record<string, { mask: string; albedo: string }> }>;
+      };
+      for (const [body, fit] of Object.entries(m.bodies ?? {})) {
+        expect(BODIES as readonly string[], `${item.id}: ${body}`).toContain(body);
+        for (const lod of ['lod0', 'lod1']) {
+          expect(glbJoints(dir + fit.lods[lod]).filter((j) => !BODY_ONLY_SOCKETS.has(j)), `${item.id} ${body} ${lod}`).toEqual(joints.filter((j) => !BODY_ONLY_SOCKETS.has(j)));
+          expectSamePose(dir + fit.lods[lod]!, rookiePose);
+          for (const file of [fit.dye[lod]!.mask, fit.dye[lod]!.albedo]) expect(existsSync(assets(dir + file)), `${item.id} ${body}: ${file}`).toBe(true);
+        }
+        fits++;
+      }
+    }
+    expect(fits).toBeGreaterThanOrEqual(1);
   });
 });

@@ -46,5 +46,49 @@
       0.554,
       -0.284
     ]
-  ]
+  ],
+  "bodies": {
+    "female": {
+      "lods": {
+        "lod0": "jetpack_rocket_female.glb",
+        "lod1": "jetpack_rocket_female_lod1.glb"
+      },
+      "dye": {
+        "lod0": {
+          "mask": "textures/jetpack_rocket_female_dye_mask.png",
+          "albedo": "textures/jetpack_rocket_female_dye_albedo.webp",
+          "defaults": {
+            "primary": "#cdbea1",
+            "secondary": "#486077",
+            "accent": "#79663e"
+          }
+        },
+        "lod1": {
+          "mask": "textures/jetpack_rocket_female_lod1_dye_mask.png",
+          "albedo": "textures/jetpack_rocket_female_lod1_dye_albedo.webp",
+          "defaults": {
+            "primary": "#c9ba9f",
+            "secondary": "#465c73",
+            "accent": "#77643c"
+          }
+        }
+      },
+      "tris": {
+        "lod0": 550,
+        "lod1": 250
+      },
+      "nozzles": [
+        [
+          -0.066,
+          0.554,
+          -0.27
+        ],
+        [
+          0.069,
+          0.554,
+          -0.272
+        ]
+      ]
+    }
+  }
 }

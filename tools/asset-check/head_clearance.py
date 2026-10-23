@@ -1,6 +1,10 @@
 """Head clearance: does a weapon held in the aim poses pass through the Rookie's head?
 
     python3 tools/asset-check/head_clearance.py [ids...] [--weapons art/weapons] [--character art/character]
+        [--body art/character/rookie_female/rookie_female_body.glb]
+
+--body checks another base body's head (the female soldier's, on the Rookie's skeleton and clips) instead of the
+Rookie's <character>/rookie_body.glb.
 
 For each weapon (default: every art/weapons/<id>.glb whose family has an aim pose), and each aim clip of its
 pose family (aim_<pose>_level, _up45, _down45, and the ±90s for the record):
@@ -150,9 +154,9 @@ def weapon_vertices(path):
 
 
 class Head:
-    def __init__(self, character):
+    def __init__(self, character, body=None):
         self.ag, self.ab = read_glb(Path(character) / "rookie_anims.glb")
-        self.HP, self.HN = head_region(Path(character) / "rookie_body.glb")
+        self.HP, self.HN = head_region(body or Path(character) / "rookie_body.glb")
         self.lo, self.hi = self.HP.min(0), self.HP.max(0)
         self.bind = fk(self.ag, {})["head"]
         self.clips = {a["name"]: a for a in self.ag["animations"]}
@@ -180,11 +184,12 @@ def main():
     argv = sys.argv[1:]
     opt = lambda k, d: Path(argv[argv.index(k) + 1]) if k in argv else REPO / d  # noqa: E731
     wdir, cdir = opt("--weapons", "art/weapons"), opt("--character", "art/character")
-    skip = {argv[argv.index(k) + 1] for k in ("--weapons", "--character") if k in argv}
+    body = Path(argv[argv.index("--body") + 1]) if "--body" in argv else None
+    skip = {argv[argv.index(k) + 1] for k in ("--weapons", "--character", "--body") if k in argv}
     ids = [a for a in argv if not a.startswith("--") and a not in skip]
     sockets = json.loads((wdir / "sockets.json").read_text())["weapons"]
     scanned = {w for w, m in json.loads((wdir / "weapons.json").read_text()).items() if isinstance(m, dict) and m.get("source") == "scan"}
-    head = Head(cdir)
+    head = Head(cdir, body)
     poses = {p.split("_")[1] for p in head.clips if p.startswith("aim_")}
     ids = ids or [w for w, s in sockets.items() if s.get("aimPose") in poses and s.get("frame") != "shield"
                   and s.get("family") != "thrown"]

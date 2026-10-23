@@ -15,6 +15,19 @@ Steps (docs/04 §4-§5 and §9, NOTES.md §8):
   8. export art sources (plain GLB) and, with --runtime, the web build (meshopt GLB + WebP).
 
 --facing is the axis the raw model faces in Blender after import (Tripo multiview exports +x).
+
+A second base body (the female soldier, docs/04 §3) is built on the first one's skeleton:
+
+    blender -b --factory-startup --python art/pipeline/build_character.py -- \
+        <raw.glb> art/character/rookie_female --name rookie_female --body female --parts boots \
+        --skeleton art/character/source/rookie.blend --height 1.44 --depth 1.08 --back-depth 1.6 --head-depth 1.2 \
+        [--runtime <dir>]
+
+--skeleton fits the body onto that rig (step 4b): every vertex follows its skin weights from this body's
+own measured bones onto the rig's, so both bodies share bones, rest pose, sockets, hitbox and clips. Its
+default parts (--parts: which ones the generated model wears) ship as that body's fit of the shared items
+(`<id>_<body>.glb`, the item manifest's `bodies.<body>`). Without a helmet the generator modelled the head
+and hair, so no hair cap is added.
 """
 import colorsys
 import json
@@ -45,6 +58,14 @@ NAME = opt.get("name", "rookie")
 RUNTIME = Path(opt["runtime"]) if "runtime" in opt else None
 FACING = opt.get("facing", "+x")
 HEIGHT = float(opt.get("height", 1.5))
+BODY = opt.get("body", "male")  # docs/04 §3 base body: content BODIES
+SKELETON = Path(opt["skeleton"]) if "skeleton" in opt else None  # fit onto this .blend's rig (step 4b)
+# --skeleton: deepen the torso behind the spine and the head front to back (docs/04 §1.2: a body's side silhouette
+# must cover the shared hitbox like the reference's; a flat back and a shallow head read small on it)
+DEPTH = float(opt.get("depth", 1.0))  # the whole body front to back, knees to neck
+BACK_DEPTH = float(opt.get("back-depth", 1.0))
+HEAD_DEPTH = float(opt.get("head-depth", 1.0))
+WANT_PARTS = opt.get("parts", "headgear,boots,jetpack").split(",")  # default parts the generated model wears
 # (body, jetpack) budgets: LOD0 sums to 3,900 of 4,000 tris, LOD1 to 1,750 of 1,800 (docs/04 §5.6)
 # Parts: the generated soldier is split into body + the default headgear, boots and jetpack, so
 # each slot can be swapped for a cosmetic (docs/04 §3). With the cosmetic slot budgets in
@@ -55,6 +76,9 @@ LODS = {
     "_lod1": {"body": (1000, 256), "headgear": (200, 128), "boots": (130, 128), "jetpack": (250, 128)},
 }
 PART_IDS = {"body": f"{NAME}_body", "headgear": "headgear_brim_helmet", "boots": "boots_combat", "jetpack": "jetpack_twin_tank"}
+PART_IDS = {k: v for k, v in PART_IDS.items() if k == "body" or k in WANT_PARTS}
+# file stems: another body's fit of a shared item gets the body's suffix (boots_combat_female.glb)
+FILE_IDS = {k: v if k == "body" or BODY == "male" else f"{v}_{BODY}" for k, v in PART_IDS.items()}
 PART_SLOTS = {"headgear": ("socket_hat", "head"), "boots": (None, None), "jetpack": ("socket_jetpack", "spine2")}
 PART_NAMES = {"headgear": "Brim Helmet", "boots": "Combat Boots", "jetpack": "Twin Tank"}
 OUT.mkdir(parents=True, exist_ok=True)
@@ -68,37 +92,47 @@ def log(*a):
 
 # ------------------------------------------------------------------ 1. import + normalise
 
-bpy.ops.wm.read_homefile(use_empty=True)
-bpy.ops.import_scene.gltf(filepath=str(RAW))
-meshes = [o for o in bpy.context.scene.objects if o.type == "MESH"]
-for o in bpy.context.scene.objects:
-    o.select_set(o.type == "MESH")
-bpy.context.view_layer.objects.active = meshes[0]
-if len(meshes) > 1:
-    bpy.ops.object.join()
-body = bpy.context.view_layer.objects.active
-body.name = f"{NAME}_body"
-# Unparent from any import empties, keeping the transform, then drop the empties.
-mw = body.matrix_world.copy()
-body.parent = None
-body.matrix_world = mw
-for o in list(bpy.context.scene.objects):
-    if o is not body:
-        bpy.data.objects.remove(o, do_unlink=True)
 
+def import_normalised(path, name, height, facing):
+    """A generated GLB as one mesh object facing glTF +Z (Blender -Y), `height` tall with the feet on z = 0 and
+    centred on its legs (the jetpack would skew a bbox centre). Returns the object and the scale applied."""
+    before = {o.name for o in bpy.context.scene.objects}
+    bpy.ops.import_scene.gltf(filepath=str(path))
+    new = [o.name for o in bpy.context.scene.objects if o.name not in before]
+    meshes = [bpy.data.objects[n] for n in new if bpy.data.objects[n].type == "MESH"]
+    for o in bpy.context.scene.objects:
+        o.select_set(o in meshes)
+    bpy.context.view_layer.objects.active = meshes[0]
+    if len(meshes) > 1:
+        bpy.ops.object.join()
+    obj = bpy.context.view_layer.objects.active
+    obj.name = name
+    # Unparent from any import empties, keeping the transform, then drop the empties.
+    mw = obj.matrix_world.copy()
+    obj.parent = None
+    obj.matrix_world = mw
+    for n in new:
+        o = bpy.data.objects.get(n)
+        if o is not None and o is not obj:
+            bpy.data.objects.remove(o, do_unlink=True)
+    me = obj.data
+    me.transform(Matrix.Rotation(YAW_TO_FRONT[facing], 4, "Z") @ obj.matrix_world)
+    obj.matrix_world = Matrix.Identity(4)
+    zs = [v.co.z for v in me.vertices]
+    zmin, zmax = min(zs), max(zs)
+    s = height / (zmax - zmin)
+    me.transform(Matrix.Scale(s, 4) @ Matrix.Translation((0, 0, -zmin)))
+    legs = [v.co for v in me.vertices if v.co.z < 0.25 * height]
+    cx = (min(p.x for p in legs) + max(p.x for p in legs)) / 2
+    cy = sum(p.y for p in legs) / len(legs)
+    me.transform(Matrix.Translation((-cx, -cy, 0)))
+    me.update()
+    return obj, s
+
+
+bpy.ops.wm.read_homefile(use_empty=True)
+body, s = import_normalised(RAW, f"{NAME}_body", HEIGHT, FACING)
 me = body.data
-me.transform(Matrix.Rotation(YAW_TO_FRONT[FACING], 4, "Z") @ body.matrix_world)
-body.matrix_world = Matrix.Identity(4)
-zs = [v.co.z for v in me.vertices]
-zmin, zmax = min(zs), max(zs)
-s = HEIGHT / (zmax - zmin)
-me.transform(Matrix.Scale(s, 4) @ Matrix.Translation((0, 0, -zmin)))
-# Centre x/y on the legs (the jetpack would skew a bbox centre).
-legs = [v.co for v in me.vertices if v.co.z < 0.25 * HEIGHT]
-cx = (min(p.x for p in legs) + max(p.x for p in legs)) / 2
-cy = sum(p.y for p in legs) / len(legs)
-me.transform(Matrix.Translation((-cx, -cy, 0)))
-me.update()
 log(f"normalised: scale {s:.3f}, {len(me.polygons)} faces")
 
 # ------------------------------------------------------------------ 2. landmarks + skeleton
@@ -134,57 +168,226 @@ def slice_x(z, half=0.012):
     return clusters([p.x for p in band(z - half, z + half)])
 
 
-# Neck: narrowest slice (full width, so separate chin straps count) between 55% and 75% of the height.
-neck_z = min((z / 100 for z in range(int(0.55 * H * 100), int(0.75 * H * 100))),
-             key=lambda z: max((abs(p.x) for p in band(z - 0.012, z + 0.012)), default=9))
-# Crotch: going up from the ankles, the first slice with geometry at x = 0.
-crotch_z = next(z / 100 for z in range(int(0.1 * H * 100), int(neck_z * 100))
-                if any(abs(p.x) < 0.012 for p in band(z / 100 - 0.01, z / 100 + 0.01)))
-# Body depth centre (exclude the jetpack: the back half beyond the hips' depth).
-# (the hands hang at hip height in an A-pose, so only take the cluster around x = 0)
-hip_half = next(max(-a, b) for a, b in slice_x(crotch_z + 0.03) if a <= 0.01 and b >= -0.01)
-hips = band(crotch_z, crotch_z + 0.05, lambda p: abs(p.x) <= hip_half)
-back_y = max(p.y for p in hips) + 0.03
-spine_y = mean(hips).y
-# Arms: highest slice below the neck with a separate cluster beyond the hips' half width.
-armpit_z = max(z / 100 for z in range(int((crotch_z + 0.1) * 100), int((neck_z - 0.08) * 100))
-               if any(a > hip_half * 0.9 for a, b in slice_x(z / 100)))
-arm_pts = [p for p in V if p.x > hip_half * 1.25 and crotch_z < p.z < armpit_z]
-tip_z = min(p.z for p in arm_pts)
-hand_end = mean([p for p in arm_pts if p.z < tip_z + 0.04])
-shoulder_cluster = [c for c in slice_x(armpit_z) if c[0] > hip_half * 0.9]
-shoulder = Vector((shoulder_cluster[0][0] - 0.02, spine_y, armpit_z + 0.04))
-shoulder.y = mean(band(armpit_z - 0.03, armpit_z + 0.03, lambda p: p.x > shoulder.x)).y
-chest_half = next(max(-a, b) for a, b in slice_x((crotch_z + armpit_z) / 2) if a <= 0.01 and b >= -0.01)
-elbow = shoulder.lerp(hand_end, 0.42)
-wrist = shoulder.lerp(hand_end, 0.70)
-# Legs and feet.
-leg_pts = band(crotch_z - 0.12, crotch_z - 0.04, lambda p: p.x > 0)
-hip_j = Vector((mean(leg_pts).x, spine_y, crotch_z + 0.04))
-foot_pts = band(0, 0.06 * H, lambda p: p.x > 0)
-toe_y = min(p.y for p in foot_pts)
-heel_y = max(p.y for p in foot_pts)
-foot_x = mean(foot_pts).x
-ankle = Vector((foot_x, heel_y - 0.10, 0.08 * H))
-ball = Vector((foot_x, toe_y + 0.09, 0.03))
-toe_tip = Vector((foot_x, toe_y + 0.01, 0.03))
-knee = hip_j.lerp(ankle, 0.5) + Vector((0, -0.02, 0))
-# Head.
-top_z = H
-face_z = neck_z + 0.27 * (top_z - neck_z)
-face_y = min(p.y for p in band(face_z - 0.02, face_z + 0.02, lambda p: abs(p.x) < 0.08))
-head_y = mean(band(neck_z + 0.02, neck_z + 0.10)).y
-jet_pts = [p for p in V if p.y > back_y and crotch_z < p.z < neck_z]
-jet_back = min(p.y for p in jet_pts) if jet_pts else back_y
-jet_mid_z = (min(p.z for p in jet_pts) + max(p.z for p in jet_pts)) / 2 if jet_pts else armpit_z
-jet_far = max(p.y for p in jet_pts) if jet_pts else back_y
+def measure():
+    """The landmarks of the mesh in V: the joints the skeleton is built on and the girth the skinning reads."""
+    # Neck: narrowest slice (full width, so separate chin straps count) between 55% and 75% of the height.
+    neck_z = min((z / 100 for z in range(int(0.55 * H * 100), int(0.75 * H * 100))),
+                 key=lambda z: max((abs(p.x) for p in band(z - 0.012, z + 0.012)), default=9))
+    # Crotch: going up from the ankles, the first slice with geometry at x = 0.
+    crotch_z = next(z / 100 for z in range(int(0.1 * H * 100), int(neck_z * 100))
+                    if any(abs(p.x) < 0.012 for p in band(z / 100 - 0.01, z / 100 + 0.01)))
+    # Body depth centre (exclude the jetpack: the back half beyond the hips' depth).
+    # (the hands hang at hip height in an A-pose, so only take the cluster around x = 0)
+    hip_half = next(max(-a, b) for a, b in slice_x(crotch_z + 0.03) if a <= 0.01 and b >= -0.01)
+    hips = band(crotch_z, crotch_z + 0.05, lambda p: abs(p.x) <= hip_half)
+    back_y = max(p.y for p in hips) + 0.03
+    spine_y = mean(hips).y
+    # Arms: highest slice below the neck with a separate cluster beyond the hips' half width.
+    armpit_z = max(z / 100 for z in range(int((crotch_z + 0.1) * 100), int((neck_z - 0.08) * 100))
+                   if any(a > hip_half * 0.9 for a, b in slice_x(z / 100)))
+    arm_pts = [p for p in V if p.x > hip_half * 1.25 and crotch_z < p.z < armpit_z]
+    tip_z = min(p.z for p in arm_pts)
+    hand_end = mean([p for p in arm_pts if p.z < tip_z + 0.04])
+    shoulder_cluster = [c for c in slice_x(armpit_z) if c[0] > hip_half * 0.9]
+    shoulder = Vector((shoulder_cluster[0][0] - 0.02, spine_y, armpit_z + 0.04))
+    shoulder.y = mean(band(armpit_z - 0.03, armpit_z + 0.03, lambda p: p.x > shoulder.x)).y
+    chest_half = next(max(-a, b) for a, b in slice_x((crotch_z + armpit_z) / 2) if a <= 0.01 and b >= -0.01)
+    # Legs and feet.
+    leg_pts = band(crotch_z - 0.12, crotch_z - 0.04, lambda p: p.x > 0)
+    hip_j = Vector((mean(leg_pts).x, spine_y, crotch_z + 0.04))
+    foot_pts = band(0, 0.06 * H, lambda p: p.x > 0)
+    toe_y = min(p.y for p in foot_pts)
+    heel_y = max(p.y for p in foot_pts)
+    foot_x = mean(foot_pts).x
+    ankle = Vector((foot_x, heel_y - 0.10, 0.08 * H))
+    # Head.
+    face_z = neck_z + 0.27 * (H - neck_z)
+    jet_pts = [p for p in V if p.y > back_y and crotch_z < p.z < neck_z]
+    return {
+        "neck_z": neck_z, "crotch_z": crotch_z, "hip_half": hip_half, "chest_half": chest_half, "armpit_z": armpit_z,
+        "spine_y": spine_y, "back_y": back_y, "tip_z": tip_z,
+        "shoulder": shoulder, "elbow": shoulder.lerp(hand_end, 0.42), "wrist": shoulder.lerp(hand_end, 0.70), "hand_end": hand_end,
+        "hip_j": hip_j, "knee": hip_j.lerp(ankle, 0.5) + Vector((0, -0.02, 0)), "ankle": ankle,
+        "ball": Vector((foot_x, toe_y + 0.09, 0.03)), "toe_tip": Vector((foot_x, toe_y + 0.01, 0.03)),
+        "top_z": H, "face_z": face_z,
+        "face_y": min(p.y for p in band(face_z - 0.02, face_z + 0.02, lambda p: abs(p.x) < 0.08)),
+        "head_y": mean(band(neck_z + 0.02, neck_z + 0.10)).y,
+        "jet_back": min(p.y for p in jet_pts) if jet_pts else back_y,
+        "jet_mid_z": (min(p.z for p in jet_pts) + max(p.z for p in jet_pts)) / 2 if jet_pts else armpit_z,
+        "jet_far": max(p.y for p in jet_pts) if jet_pts else back_y,
+    }
 
-marks = {k: [round(c, 4) for c in v] if isinstance(v, Vector) else round(v, 4) for k, v in {
-    "neck_z": neck_z, "crotch_z": crotch_z, "hip_half": hip_half, "chest_half": chest_half, "armpit_z": armpit_z, "spine_y": spine_y, "back_y": back_y,
-    "shoulder_L": shoulder, "elbow_L": elbow, "wrist_L": wrist, "hand_end_L": hand_end,
-    "hip_L": hip_j, "knee_L": knee, "ankle_L": ankle, "ball_L": ball, "toe_L": toe_tip,
-    "face_y": face_y, "jetpack_back_y": jet_back, "jetpack_mid_z": jet_mid_z,
-}.items()}
+
+def marks_of(L):
+    """The landmarks as rookie_rig.json records them."""
+    return {k: [round(c, 4) for c in v] if isinstance(v, Vector) else round(v, 4) for k, v in {
+        "neck_z": L["neck_z"], "crotch_z": L["crotch_z"], "hip_half": L["hip_half"], "chest_half": L["chest_half"],
+        "armpit_z": L["armpit_z"], "spine_y": L["spine_y"], "back_y": L["back_y"],
+        "shoulder_L": L["shoulder"], "elbow_L": L["elbow"], "wrist_L": L["wrist"], "hand_end_L": L["hand_end"],
+        "hip_L": L["hip_j"], "knee_L": L["knee"], "ankle_L": L["ankle"], "ball_L": L["ball"], "toe_L": L["toe_tip"],
+        "face_y": L["face_y"], "jetpack_back_y": L["jet_back"], "jetpack_mid_z": L["jet_mid_z"],
+    }.items()}
+
+
+def smoothstep(e0, e1, x):
+    t = min(max((x - e0) / (e1 - e0), 0.0), 1.0)
+    return t * t * (3 - 2 * t)
+
+
+def arm_axis(L):
+    """The left arm's axis where it hangs clear of the torso (A-pose): a line through the middle of the outermost
+    cluster of each 2 cm slice, from the fingertips up to where the arm joins the torso. Returns the axis's points
+    at that join (`top`) and at the fingertips (`tip`), the join's height, and the arm's inner edge per slice."""
+    pts, inner, z, top_z = [], {}, L["tip_z"] + 0.03, None
+    while z < L["neck_z"] - 0.1:
+        side = [c for c in slice_x(z) if c[0] > 0 and c[1] - c[0] >= 0.04]  # the torso's cluster straddles x = 0
+        if not side or max(side, key=lambda c: c[1])[1] - max(side, key=lambda c: c[1])[0] > 0.2:
+            break  # the arm has merged with the torso
+        a, b = max(side, key=lambda c: c[1])
+        pts.append(mean(band(z - 0.012, z + 0.012, lambda p: a <= p.x <= b)))
+        inner[round(z, 2)] = a
+        top_z = z
+        z += 0.02
+    c = mean(pts)
+    d = Vector(np.linalg.svd(np.array([p - c for p in pts]))[2][0])
+    d = -d if d.z > 0 else d  # down the arm, towards the hand
+
+    def at(zz):
+        return c + d * ((zz - c.z) / d.z)
+
+    return at(top_z), at(L["tip_z"]), top_z, inner
+
+
+def register(ref_raw, ref_height, ref_rig, ref_body):
+    """--skeleton: before rigging, move this body onto the reference body's proportions so the reference's skeleton
+    fits it, keeping its own build. (1) Shift it front to back so the hips line up. (2) Turn and stretch each arm
+    about where it joins the torso onto the reference's arm axis (girth kept), so the hands meet the reference's
+    grip sockets; the shoulder blends over 10 cm. (3) Scale the head about the neck so it fits inside the
+    reference's head (the hair cap every hat and pair of eyewear was fitted to), then put it on the reference's
+    neck with its crown at the reference's. Both arms' axes are measured the same way on both raw meshes, so the reference's own skeleton
+    measurements never enter it. (4) Deepen the body front to back (DEPTH, knees to neck), the upper back behind the
+    spine (BACK_DEPTH) and the head (HEAD_DEPTH, backwards, still inside the reference's head), so its side silhouette
+    covers the shared hitbox like the reference's (docs/04 §1.2). Returns the head scale."""
+    global V
+    own = measure()
+    ref_obj, _ = import_normalised(ref_raw, "reference", ref_height, FACING)
+    keep = V
+    V = [v.co.copy() for v in ref_obj.data.vertices]
+    ref = measure()
+    ref_top, ref_tip, _, _ = arm_axis(ref)
+    V = keep
+    bpy.data.objects.remove(ref_obj, do_unlink=True)
+
+    dy = ref["spine_y"] - own["spine_y"]
+    me.transform(Matrix.Translation((0, dy, 0)))
+    V = [v.co.copy() for v in me.vertices]
+    own = measure()
+    top, tip, join_z, inner = arm_axis(own)
+    d0, d1 = tip - top, ref_tip - ref_top
+    turn = d0.normalized().rotation_difference(d1.normalized()).to_matrix()
+    keys = sorted(inner)
+
+    def arm_weight(q):
+        if q.z > join_z + 0.10:
+            return 0.0
+        edge = inner[min(keys, key=lambda k: abs(k - min(q.z, join_z)))] - 0.01
+        if q.x < edge:
+            return 0.0
+        return 1.0 - smoothstep(join_z, join_z + 0.10, q.z)
+
+    # the head: scale about the neck so every extent fits the reference's head, then onto the reference's neck
+    def head_box(verts, neck):
+        pts = np.array([tuple(p) for p in verts if p.z > neck + 0.015])
+        return pts.min(axis=0), pts.max(axis=0)
+
+    ref_lo, ref_hi = head_box([v.co for v in ref_body.data.vertices], ref["neck_z"])
+    own_lo, own_hi = head_box(V, own["neck_z"])
+    ratios = (ref_hi - ref_lo) / (own_hi - own_lo)
+    # 1.5 % under the tightest fit, with the crown on the reference's: her nape hair then clears the long guns'
+    # stocks in the -45° holds by 6 mm (tools/asset-check/head_clearance.py), and every hat still sits the same
+    s_head = float(min(ratios)) * 0.985
+    pivot = Vector((0, own["head_y"], own["neck_z"] + 0.03))
+    onto = ref_rig.data.bones["head"].head_local.copy()
+    # up or down so the scaled head's crown meets the reference's (aligning necks left her chin 1 cm low, in the
+    # way of the pistol and rifle holds: tools/asset-check/head_clearance.py)
+    onto.z = float(ref_hi[2]) - (float(own_hi[2]) - pivot.z) * s_head
+    log(f"register: hips moved {dy * 100:+.1f} cm deep; arm {d0.length:.3f} -> {d1.length:.3f} m, turned "
+        f"{math.degrees(d0.angle(d1)):.1f} deg about z {join_z:.2f}; head x{s_head:.3f} (per axis {np.round(ratios, 3).tolist()})")
+    head_s = Vector((s_head, s_head * HEAD_DEPTH, s_head))
+    if HEAD_DEPTH * s_head > float(ratios[1]) * 0.985:
+        raise RuntimeError(f"--head-depth {HEAD_DEPTH}: the head would come out of the reference's ({ratios[1]:.3f} deep)")
+    # the face stays where the plain scale puts it (the guns' holds pass close to it); the head deepens backwards
+    onto.y += (float(own_lo[1]) - pivot.y) * s_head * (1 - HEAD_DEPTH)
+    spine = own["spine_y"]
+    worst = 0.0
+    for v in me.vertices:
+        p = v.co.copy()
+        side = 1.0 if p.x >= 0 else -1.0
+        q = Vector((abs(p.x), p.y, p.z))  # the right arm mirrors the left
+        w = arm_weight(q)
+        if w > 0:
+            r = q - top
+            t = r.dot(d0) / d0.length_squared
+            q = q.lerp(ref_top + d1 * t + turn @ (r - d0 * t), w)
+        q.x *= side
+        wh = smoothstep(own["neck_z"] - 0.02, own["neck_z"] + 0.03, q.z)
+        if wh > 0:
+            q = q.lerp(onto + (q - pivot) * head_s, wh)
+        if DEPTH != 1.0:
+            # below the knees it fades out (the shared boots' shafts fit the trouser cuffs as they are), and the arms
+            # keep theirs (her coarse hands fold at the wrist when thickened, and gloves are built from them)
+            wd = smoothstep(0.30, 0.42, q.z) * (1 - wh) * (1 - w)
+            q.y = spine + (q.y - spine) * (1 + (DEPTH - 1) * wd)
+        if BACK_DEPTH != 1.0 and q.y > spine:
+            # the upper back, from the waist (fading in over the belt line, so the seat and hips keep their shape) to
+            # the neck, not the arms: a soldier's back and shoulder blades, where the pack sits
+            wt = smoothstep(own["crotch_z"] + 0.10, own["crotch_z"] + 0.24, q.z) * (1 - wh) * (1 - w)
+            q.y = spine + (q.y - spine) * (1 + (BACK_DEPTH - 1) * wt)
+        worst = max(worst, (q - p).length)
+        v.co = q
+    me.update()
+    log(f"register: largest vertex move {worst * 100:.1f} cm")
+    V = [v.co.copy() for v in me.vertices]
+    lo, hi = head_box(V, ref["neck_z"])
+    log(f"register: head depth x{HEAD_DEPTH} (in the reference's head: {(lo[1] - ref_lo[1]) * 100:+.1f} cm at the face, "
+        f"{(ref_hi[1] - hi[1]) * 100:+.1f} cm at the back); depth x{DEPTH}, back depth x{BACK_DEPTH}")
+    return s_head
+
+
+def load_rig(path):
+    """The reference rig's skeleton (bones, rest pose, sockets) without its clips, and its LOD0 body."""
+    with bpy.data.libraries.load(str(path)) as (src, dst):
+        dst.armatures = list(src.armatures)
+        dst.objects = [n for n in src.objects if n.endswith("_body")]
+    data = dst.armatures[0]
+    data.name = f"{NAME}_skeleton"
+    obj = bpy.data.objects.new(NAME, data)
+    bpy.context.scene.collection.objects.link(obj)
+    bpy.context.view_layer.update()  # a new armature object has no pose until the depsgraph evaluates it
+    return obj, data, dst.objects[0]
+
+
+if SKELETON:
+    REF_RIG_JSON = json.loads((SKELETON.parent.parent / f"{SKELETON.stem}_rig.json").read_text())
+    REF_MARKS = REF_RIG_JSON["landmarks_blender_zup"]
+    arm, arm_data, ref_body = load_rig(SKELETON)
+    own_marks = marks_of(measure())
+    log("own landmarks", json.dumps(own_marks))
+    fit_scale = register(SKELETON.parent / f"{SKELETON.stem}_tripo_raw.glb", REF_RIG_JSON["height_m"], arm, ref_body)
+    bpy.data.objects.remove(ref_body, do_unlink=True)
+L = measure()
+if SKELETON:  # the rig's joints; this body's own girth (hip_half, chest_half, back_y, tip_z)
+    for k in ("neck_z", "crotch_z", "armpit_z", "spine_y", "face_y"):
+        L[k] = REF_MARKS[k]
+    for k in ("shoulder", "elbow", "wrist", "hand_end", "ankle", "ball"):
+        L[k] = Vector(REF_MARKS[f"{k}_L"])
+    L["hip_j"], L["knee"], L["toe_tip"] = (Vector(REF_MARKS[k]) for k in ("hip_L", "knee_L", "toe_L"))
+(neck_z, crotch_z, hip_half, chest_half, armpit_z, spine_y, back_y, tip_z, shoulder, elbow, wrist, hand_end,
+ hip_j, knee, ankle, ball, toe_tip, top_z, face_z, face_y, head_y, jet_back, jet_mid_z, jet_far) = (L[k] for k in (
+    "neck_z", "crotch_z", "hip_half", "chest_half", "armpit_z", "spine_y", "back_y", "tip_z", "shoulder", "elbow",
+    "wrist", "hand_end", "hip_j", "knee", "ankle", "ball", "toe_tip", "top_z", "face_z", "face_y", "head_y",
+    "jet_back", "jet_mid_z", "jet_far"))
+marks = marks_of(L)
 log("landmarks", json.dumps(marks))
 
 
@@ -192,73 +395,78 @@ def mirror(v):
     return Vector((-v.x, v.y, v.z))
 
 
-arm_data = bpy.data.armatures.new(f"{NAME}_skeleton")
-arm = bpy.data.objects.new(f"{NAME}", arm_data)
-bpy.context.scene.collection.objects.link(arm)
-bpy.context.view_layer.objects.active = arm
-bpy.ops.object.mode_set(mode="EDIT")
-eb = arm_data.edit_bones
-FWD = Vector((0, -1, 0))
+def build_skeleton():
+    """The shared skeleton (docs/04 §4.1) on the landmarks, with its sockets."""
+    arm_data = bpy.data.armatures.new(f"{NAME}_skeleton")
+    arm = bpy.data.objects.new(f"{NAME}", arm_data)
+    bpy.context.scene.collection.objects.link(arm)
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode="EDIT")
+    eb = arm_data.edit_bones
+    FWD = Vector((0, -1, 0))
+
+    def bone(name, head, tail, parent=None, deform=True, connect=False, roll_ref=FWD):
+        b = eb.new(name)
+        b.head, b.tail = Vector(head), Vector(tail)
+        if parent:
+            b.parent = eb[parent]
+            b.use_connect = connect
+        b.use_deform = deform
+        # Bone Z axis points forward (or up for bones that already point forward), so local +X is
+        # "flex forward" for every vertical bone; the clips below rely on that.
+        d = (b.tail - b.head).normalized()
+        b.align_roll(Vector((0, 0, 1)) if abs(d.dot(roll_ref)) > 0.9 else roll_ref)
+        return b
+
+    P = lambda x, y, z: Vector((x, y, z))  # noqa: E731
+    bone("root", P(0, 0, 0), P(0, 0, 0.12))
+    pelvis_z = crotch_z + 0.05
+    spine_top = neck_z - 0.10
+    bone("pelvis", P(0, spine_y, pelvis_z), P(0, spine_y, pelvis_z + 0.10), "root")
+    bone("spine1", P(0, spine_y, pelvis_z + 0.10), P(0, spine_y, (pelvis_z + 0.10 + spine_top) / 2), "pelvis", connect=True)
+    bone("spine2", P(0, spine_y, (pelvis_z + 0.10 + spine_top) / 2), P(0, spine_y, spine_top), "spine1", connect=True)
+    bone("neck", P(0, spine_y, spine_top), P(0, head_y, neck_z + 0.03), "spine2", connect=True)
+    bone("head", P(0, head_y, neck_z + 0.03), P(0, head_y, top_z), "neck", connect=True)
+    bone("jaw", P(0, head_y - 0.02, neck_z + 0.08), P(0, face_y + 0.03, neck_z + 0.05), "head")
+    for side, m in (("L", lambda v: v), ("R", mirror)):
+        bone(f"eye_{side}", m(P(0.075, face_y + 0.04, face_z)), m(P(0.075, face_y - 0.01, face_z)), "head")
+        bone(f"clavicle_{side}", m(P(0.03, spine_y, spine_top - 0.02)), m(shoulder), "spine2")
+        bone(f"upperarm_{side}", m(shoulder), m(elbow), f"clavicle_{side}", connect=True)
+        bone(f"forearm_{side}", m(elbow), m(wrist), f"upperarm_{side}", connect=True)
+        bone(f"hand_{side}", m(wrist), m(hand_end), f"forearm_{side}", connect=True)
+        bone(f"thigh_{side}", m(hip_j), m(knee), "pelvis")
+        bone(f"calf_{side}", m(knee), m(ankle), f"thigh_{side}", connect=True)
+        bone(f"foot_{side}", m(ankle), m(ball), f"calf_{side}", connect=True)
+        bone(f"toe_{side}", m(ball), m(toe_tip), f"foot_{side}", connect=True)
+
+    # Sockets (non-deform). Weapon sockets point forward: their +Y is the muzzle direction.
+    grip_R = mirror(wrist.lerp(hand_end, 0.45))
+    bone("socket_weapon_R", grip_R, grip_R + Vector((0, -0.08, 0)), "hand_R", deform=False)
+    grip_L = wrist.lerp(hand_end, 0.45)
+    bone("socket_weapon_L", grip_L, grip_L + Vector((0, -0.08, 0)), "hand_L", deform=False)
+    # 0.07 m ahead of the grip: chibi arms reach ~0.10 m past it at most (docs/04 §9.4)
+    off = grip_R + Vector((0, -0.07, 0.02))
+    bone("socket_offhand_IK", off, off + Vector((0, -0.05, 0)), "socket_weapon_R", deform=False)
+    bone("socket_jetpack", P(0, jet_back, jet_mid_z), P(0, jet_back, jet_mid_z + 0.08), "spine2", deform=False)
+    bone("socket_back", P(0, jet_far, spine_top), P(0, jet_far, spine_top + 0.08), "spine2", deform=False)
+    # Slung and holstered weapons (the owner, 18 Oct: the unused gun hangs on the soldier). A weapon mounts here
+    # with an identity transform, grip on the socket, like socket_weapon_R: bone +Y is the muzzle, +Z the gun's top.
+    # sling_back: diagonally across the back just behind the jetpack (its back face is jet_far), in front of the
+    # slung riot shield (render3d's socket_shield_back), lying on its side: the muzzle up over the left shoulder, the
+    # gun's right side against the back, its top towards the right shoulder. holster_thigh: on the outer right
+    # thigh, the muzzle down, the slide forward, the right side out.
+    sling = P(0, jet_far + 0.021, spine_top - 0.06)
+    bone("sling_back", sling, sling + Vector((0.57, 0, 0.82)) * 0.08, "spine2", deform=False, roll_ref=Vector((-0.82, 0, 0.57)))
+    holster = mirror(hip_j) + Vector((-0.166, 0.0, -0.04))
+    bone("holster_thigh", holster, holster + Vector((0, 0, -0.08)), "thigh_R", deform=False)
+    bone("socket_hat", P(0, head_y, top_z - 0.08), P(0, head_y, top_z), "head", deform=False)
+    bone("socket_nameplate", P(0, 0, H + 0.25), P(0, 0, H + 0.33), "root", deform=False)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    return arm, arm_data
 
 
-def bone(name, head, tail, parent=None, deform=True, connect=False, roll_ref=FWD):
-    b = eb.new(name)
-    b.head, b.tail = Vector(head), Vector(tail)
-    if parent:
-        b.parent = eb[parent]
-        b.use_connect = connect
-    b.use_deform = deform
-    # Bone Z axis points forward (or up for bones that already point forward), so local +X is
-    # "flex forward" for every vertical bone; the clips below rely on that.
-    d = (b.tail - b.head).normalized()
-    b.align_roll(Vector((0, 0, 1)) if abs(d.dot(roll_ref)) > 0.9 else roll_ref)
-    return b
-
-
-P = lambda x, y, z: Vector((x, y, z))  # noqa: E731
-bone("root", P(0, 0, 0), P(0, 0, 0.12))
-pelvis_z = crotch_z + 0.05
-spine_top = neck_z - 0.10
-bone("pelvis", P(0, spine_y, pelvis_z), P(0, spine_y, pelvis_z + 0.10), "root")
-bone("spine1", P(0, spine_y, pelvis_z + 0.10), P(0, spine_y, (pelvis_z + 0.10 + spine_top) / 2), "pelvis", connect=True)
-bone("spine2", P(0, spine_y, (pelvis_z + 0.10 + spine_top) / 2), P(0, spine_y, spine_top), "spine1", connect=True)
-bone("neck", P(0, spine_y, spine_top), P(0, head_y, neck_z + 0.03), "spine2", connect=True)
-bone("head", P(0, head_y, neck_z + 0.03), P(0, head_y, top_z), "neck", connect=True)
-bone("jaw", P(0, head_y - 0.02, neck_z + 0.08), P(0, face_y + 0.03, neck_z + 0.05), "head")
-for side, m in (("L", lambda v: v), ("R", mirror)):
-    bone(f"eye_{side}", m(P(0.075, face_y + 0.04, face_z)), m(P(0.075, face_y - 0.01, face_z)), "head")
-    bone(f"clavicle_{side}", m(P(0.03, spine_y, spine_top - 0.02)), m(shoulder), "spine2")
-    bone(f"upperarm_{side}", m(shoulder), m(elbow), f"clavicle_{side}", connect=True)
-    bone(f"forearm_{side}", m(elbow), m(wrist), f"upperarm_{side}", connect=True)
-    bone(f"hand_{side}", m(wrist), m(hand_end), f"forearm_{side}", connect=True)
-    bone(f"thigh_{side}", m(hip_j), m(knee), "pelvis")
-    bone(f"calf_{side}", m(knee), m(ankle), f"thigh_{side}", connect=True)
-    bone(f"foot_{side}", m(ankle), m(ball), f"calf_{side}", connect=True)
-    bone(f"toe_{side}", m(ball), m(toe_tip), f"foot_{side}", connect=True)
-
-# Sockets (non-deform). Weapon sockets point forward: their +Y is the muzzle direction.
-grip_R = mirror(wrist.lerp(hand_end, 0.45))
-bone("socket_weapon_R", grip_R, grip_R + Vector((0, -0.08, 0)), "hand_R", deform=False)
-grip_L = wrist.lerp(hand_end, 0.45)
-bone("socket_weapon_L", grip_L, grip_L + Vector((0, -0.08, 0)), "hand_L", deform=False)
-# 0.07 m ahead of the grip: chibi arms reach ~0.10 m past it at most (docs/04 §9.4)
-off = grip_R + Vector((0, -0.07, 0.02))
-bone("socket_offhand_IK", off, off + Vector((0, -0.05, 0)), "socket_weapon_R", deform=False)
-bone("socket_jetpack", P(0, jet_back, jet_mid_z), P(0, jet_back, jet_mid_z + 0.08), "spine2", deform=False)
-bone("socket_back", P(0, jet_far, spine_top), P(0, jet_far, spine_top + 0.08), "spine2", deform=False)
-# Slung and holstered weapons (the owner, 18 Oct: the unused gun hangs on the soldier). A weapon mounts here
-# with an identity transform, grip on the socket, like socket_weapon_R: bone +Y is the muzzle, +Z the gun's top.
-# sling_back: diagonally across the back just behind the jetpack (its back face is jet_far), in front of the
-# slung riot shield (render3d's socket_shield_back), lying on its side: the muzzle up over the left shoulder, the
-# gun's right side against the back, its top towards the right shoulder. holster_thigh: on the outer right
-# thigh, the muzzle down, the slide forward, the right side out.
-sling = P(0, jet_far + 0.021, spine_top - 0.06)
-bone("sling_back", sling, sling + Vector((0.57, 0, 0.82)) * 0.08, "spine2", deform=False, roll_ref=Vector((-0.82, 0, 0.57)))
-holster = mirror(hip_j) + Vector((-0.166, 0.0, -0.04))
-bone("holster_thigh", holster, holster + Vector((0, 0, -0.08)), "thigh_R", deform=False)
-bone("socket_hat", P(0, head_y, top_z - 0.08), P(0, head_y, top_z), "head", deform=False)
-bone("socket_nameplate", P(0, 0, H + 0.25), P(0, 0, H + 0.33), "root", deform=False)
-bpy.ops.object.mode_set(mode="OBJECT")
+if not SKELETON:
+    arm, arm_data = build_skeleton()
 arm["skeleton"] = "shared-v1"  # docs/04 §4.1 + §9.3
 
 # ------------------------------------------------------------------ 3. split the default parts + LODs
@@ -407,7 +615,7 @@ def classify_parts(obj):
     return out
 
 
-split = classify_parts(hi)
+split = {k: v for k, v in classify_parts(hi).items() if k in PART_IDS}  # a part it doesn't wear stays body
 TAGS = {"jetpack": 1, "headgear": 2, "boots": 3}
 tag_attr = hi.data.attributes.new("part", "INT", "FACE")
 for part, faces in split.items():
@@ -440,11 +648,12 @@ def hair_cap(head_c):
     return cap
 
 
-cap = hair_cap(Vector((0, head_y + 0.03, neck_z + 0.21)))
-for o in scene.objects:
-    o.select_set(o in (hi, cap))
-bpy.context.view_layer.objects.active = hi
-bpy.ops.object.join()
+if "headgear" in PART_IDS:  # bare-headed, the generator modelled the head and its hair
+    cap = hair_cap(Vector((0, head_y + 0.03, neck_z + 0.21)))
+    for o in scene.objects:
+        o.select_set(o in (hi, cap))
+    bpy.context.view_layer.objects.active = hi
+    bpy.ops.object.join()
 
 
 def weld(obj):
@@ -664,11 +873,11 @@ def skin_rigid(obj, bone):
     log("skinned", obj.name, "rigidly to", bone)
 
 
-for suffix in LODS:
-    skin(parts[("body", suffix)][0])
-    skin(parts[("boots", suffix)][0])  # the boot zone is rigid per foot; shafts follow the calves
-    skin_rigid(parts[("headgear", suffix)][0], "head")
-    skin_rigid(parts[("jetpack", suffix)][0], "spine2")
+for (part, suffix), (obj, _, _) in parts.items():
+    if part in ("body", "boots"):
+        skin(obj)  # the boot zone is rigid per foot; shafts follow the calves
+    else:
+        skin_rigid(obj, PART_SLOTS[part][1])
 
 # ------------------------------------------------------------------ 5. clips
 
@@ -681,7 +890,7 @@ def assert_offhand_reach():
     """docs/04 §4.2/§9.4: W1 IKs the left hand to socket_offhand_IK, or to a two-handed weapon's
     `offhand` node, on top of the rifle aim poses. Every target must be inside the left arm's reach
     (shoulder -> wrist <= upperarm + forearm) in every rifle pose, or the hand floats off the gun."""
-    weapons_json = OUT.parent / "weapons" / "weapons.json"
+    weapons_json = Path(__file__).resolve().parents[1] / "weapons" / "weapons.json"
     nodes = {}
     if weapons_json.exists():
         for wid, w in json.loads(weapons_json.read_text()).items():
@@ -737,14 +946,14 @@ def envelope_ok(obj, part):
 dyes, NOZZLES = {}, {}
 for (part, suffix), (obj, tris, img) in parts.items():
     slot, rules = part, RULES[part]
-    tex_name = f"{PART_IDS[part]}{suffix}"
+    tex_name = f"{FILE_IDS[part]}{suffix}"
     img.filepath_raw = str(TEXDIR / f"{tex_name}_albedo.png")
     img.file_format = "PNG"
     img.save()
     defaults, cover = dye.make_masks(obj, img, TEXDIR, tex_name, rules, skin_rule=SKIN.get(part))
     dyes[(part, suffix)] = (defaults, cover)
     obj["slot"] = slot
-    obj["bodyTypes"] = ["standard"]
+    obj["bodyTypes"] = ["standard" if BODY == "male" else BODY]
     if part != "body":  # the same part schema as build_cosmetics (round-2 review)
         obj["cosmeticId"] = PART_IDS[part]
         obj["hidesHair"] = part == "headgear"
@@ -765,6 +974,64 @@ for (part, suffix), (obj, tris, img) in parts.items():
     if bone:
         obj["attachBone"] = bone
     log(f"{tex_name}: dye defaults {defaults}, coverage {cover}")
+
+# ------------------------------------------------------------------ 6b. body regions
+# Parts that replace a stretch of the body (a top, trousers, a hairstyle) name it in their manifest
+# (`hidesBody`), and the assembler drops the body triangles whose three vertices all carry its code: the
+# glTF attribute _REGION (0 = always drawn). Skin always stays (a top's open neck, rolled sleeves); hair is
+# the dark head texels above the brows or behind the ears, so brows and eyes stay; the rest goes by the bone
+# a vertex mostly follows.
+REGIONS = {"hair": 1, "top": 2, "legs": 3}
+REGION_BONES = {
+    "top": {"spine1", "spine2", "neck"} | {f"{p}_{s}" for p in ("clavicle", "upperarm", "forearm") for s in "LR"},
+    "legs": {"pelvis"} | {f"{p}_{s}" for p in ("thigh", "calf") for s in "LR"},
+}
+HEAD = {"head", "jaw", "eye_L", "eye_R"}
+
+
+def tag_regions(obj, stem):
+    """Write _REGION on the body's vertices from its skin weights, its skin texels and its albedo."""
+    def load(name):
+        img = bpy.data.images.load(str(TEXDIR / name))
+        px = np.array(img.pixels[:], dtype=np.float32).reshape(img.size[1], img.size[0], 4)
+        bpy.data.images.remove(img)
+        return px
+
+    albedo, skin_px = load(f"{stem}_albedo.png"), load(f"{stem}_dye_albedo.png")
+    h, w = albedo.shape[:2]
+    me = obj.data
+    uv = me.uv_layers.active.data
+    skin = np.zeros(len(me.vertices))
+    dark = np.ones(len(me.vertices))
+    for lp in me.loops:
+        x, y = uv[lp.index].uv
+        px, py = min(w - 1, int(x * w)), min(h - 1, int(y * h))
+        skin[lp.vertex_index] = max(skin[lp.vertex_index], skin_px[py, px, 3] if "body" in SKIN else 0.0)
+        dark[lp.vertex_index] = min(dark[lp.vertex_index], float(albedo[py, px, :3].max()))
+    names = {g.index: g.name for g in obj.vertex_groups}
+    eye_z = arm_data.bones["eye_L"].head_local.z
+    head_y = arm_data.bones["head"].head_local.y
+    codes = np.zeros(len(me.vertices), dtype=np.float32)
+    for v in me.vertices:
+        dom = names[max(v.groups, key=lambda g: g.weight).group] if v.groups else "root"
+        if skin[v.index] > 0.4:
+            continue
+        if dom in HEAD:
+            if dark[v.index] < 0.3 and (v.co.z > eye_z + 0.07 or v.co.y > head_y):
+                codes[v.index] = REGIONS["hair"]
+            continue
+        for region, bones in REGION_BONES.items():
+            if dom in bones:
+                codes[v.index] = REGIONS[region]
+    attr = me.attributes.new("_REGION", "FLOAT", "POINT")
+    attr.data.foreach_set("value", codes)
+    me.calc_loop_triangles()
+    tris = {name: sum(1 for t in me.loop_triangles if all(codes[i] == code for i in t.vertices)) for name, code in REGIONS.items()}
+    log(f"{stem}: region triangles {tris}")
+    return tris
+
+
+REGION_TRIS = {suffix or "_lod0": tag_regions(parts[("body", suffix)][0], f"{FILE_IDS['body']}{suffix}") for suffix in LODS}
 
 # ------------------------------------------------------------------ 7. export
 
@@ -820,6 +1087,7 @@ def export(path, objs, animations=False, runtime=False):
         export_meshopt_compression_enable=runtime and not animations,
         export_materials="EXPORT", export_normals=True, export_texcoords=True,
         export_tangents=False, export_morph=False, export_cameras=False, export_lights=False,
+        export_attributes=True,  # the body's _REGION (6b)
     )
     if animations:
         sign_continuous_rotations(path)
@@ -827,6 +1095,9 @@ def export(path, objs, animations=False, runtime=False):
 
 
 SLOT_PARTS = [p for p in PART_IDS if p != "body"]
+# --skeleton: the rig's own clip file, when this body's clips come out byte-identical to it (same skeleton)
+REF_ANIMS = SKELETON.parent.parent / f"{SKELETON.stem}_anims.glb" if SKELETON else None
+shared_anims = False
 
 
 def write_set(char_dir, part_dir, runtime):
@@ -834,8 +1105,9 @@ def write_set(char_dir, part_dir, runtime):
     for suffix in LODS:
         export(char_dir / f"{NAME}_body{suffix}.glb", [arm, parts[("body", suffix)][0]], runtime=runtime)
         for part in SLOT_PARTS:
-            export(part_dir(part) / f"{PART_IDS[part]}{suffix}.glb", [arm, parts[(part, suffix)][0]], runtime=runtime)
-    export(char_dir / f"{NAME}_anims.glb", [arm], animations=True, runtime=runtime)
+            export(part_dir(part) / f"{FILE_IDS[part]}{suffix}.glb", [arm, parts[(part, suffix)][0]], runtime=runtime)
+    if not shared_anims:
+        export(char_dir / f"{NAME}_anims.glb", [arm], animations=True, runtime=runtime)
 
 
 def runtime_textures(src_names, dest, alpha=False):
@@ -859,12 +1131,43 @@ def runtime_textures(src_names, dest, alpha=False):
         bpy.data.images.remove(img)
 
 
+def clip_data(path):
+    """A clip GLB's bones (rest TRS) and keys (sampler bytes per animation, node and path), ignoring the
+    armature's own node name, which is the body's."""
+    b = path.read_bytes()
+    jl = struct.unpack_from("<I", b, 12)[0]
+    g = json.loads(b[20:20 + jl])
+    data = b[20 + jl + 8:]
+
+    def raw(i):
+        a = g["accessors"][i]
+        bv = g["bufferViews"][a["bufferView"]]
+        off = bv.get("byteOffset", 0) + a.get("byteOffset", 0)
+        return data[off:off + bv["byteLength"] - a.get("byteOffset", 0)]
+
+    top = set(g["scenes"][g.get("scene", 0)]["nodes"])  # the armature object itself
+    bones = {n["name"]: (n.get("translation"), n.get("rotation"), n.get("scale")) for i, n in enumerate(g["nodes"]) if i not in top}
+    keys = {(an["name"], g["nodes"][ch["target"]["node"]]["name"], ch["target"]["path"]):
+            (raw(an["samplers"][ch["sampler"]]["input"]), raw(an["samplers"][ch["sampler"]]["output"]),
+             an["samplers"][ch["sampler"]].get("interpolation", "LINEAR"))
+            for an in g.get("animations", []) for ch in an["channels"]}
+    return bones, keys
+
+
 write_set(OUT, lambda part: OUT / "parts", runtime=False)
+if REF_ANIMS:
+    # Same skeleton, same clips.build_all: every bone's rest pose and every key must come out identical to the
+    # rig's. Then this body ships no clip file of its own and its manifest points at the rig's (one download).
+    if clip_data(OUT / f"{NAME}_anims.glb") != clip_data(REF_ANIMS):
+        raise RuntimeError(f"{NAME}_anims.glb differs from {REF_ANIMS.name}: the skeletons don't match")
+    (OUT / f"{NAME}_anims.glb").unlink()
+    shared_anims = True
+    log(f"clips: identical to {REF_ANIMS.name}; {NAME} shares them")
 # One-file preview of the default outfit with every clip (render_views, quick looks; not shipped).
 export(OUT / f"{NAME}_preview.glb", [arm] + [parts[(p, "")][0] for p in PART_IDS], animations=True)
 
 summary = {
-    "name": NAME, "height_m": HEIGHT, "source": RAW.name, "skeleton": "shared-v1",
+    "name": NAME, "body": BODY, "height_m": HEIGHT, "source": RAW.name, "skeleton": "shared-v1",
     "parts": PART_IDS,
     "tris": {"raw": raw_tris, **{f"{p}{s or '_lod0'}": t for (p, s), (_, t, _) in parts.items()}},
     "textures": {f"{p}{s or '_lod0'}": img.size[0] for (p, s), (_, _, img) in parts.items()},
@@ -874,6 +1177,9 @@ summary = {
     "upperBodyBones": clips.UPPER_BODY,
     "aimAngles": clips.AIM_ANGLES,
     "landmarks_blender_zup": marks,
+    "regions": REGIONS, "regionTris": REGION_TRIS,
+    **({"fittedTo": SKELETON.stem, "headScale": round(fit_scale, 4), "sharedAnims": f"{SKELETON.stem}_anims.glb",
+        "ownLandmarks_blender_zup": own_marks} if SKELETON else {}),
 }
 (OUT / f"{NAME}_rig.json").write_text(json.dumps(summary, indent=2))
 
@@ -884,20 +1190,25 @@ if RUNTIME:
     write_set(char_dir, slot_dir, runtime=True)
     runtime_textures([f"{NAME}_body{s}" for s in LODS], char_dir / "textures", alpha="body" in SKIN)
     for part in SLOT_PARTS:
-        runtime_textures([f"{PART_IDS[part]}{s}" for s in LODS], slot_dir(part) / "textures")
+        runtime_textures([f"{FILE_IDS[part]}{s}" for s in LODS], slot_dir(part) / "textures")
 
     def dye_entry(part, suffix):
-        stem = f"{PART_IDS[part]}{suffix}"
+        stem = f"{FILE_IDS[part]}{suffix}"
         return {"mask": f"textures/{stem}_dye_mask.png", "albedo": f"textures/{stem}_dye_albedo.webp",
                 "defaults": dyes[(part, suffix)][0],
                 **({"skin": "alpha", "skinNeutral": dye.SKIN_NEUTRAL, "skinHeadroom": dye.SKIN_HEADROOM} if part in SKIN else {})}
 
     (char_dir / f"{NAME}.json").write_text(json.dumps({
-        "id": NAME, "skeleton": "shared-v1", "heightM": HEIGHT,
+        "id": NAME, "body": BODY, "skeleton": "shared-v1", "heightM": HEIGHT if not SKELETON else 1.5,
         "lods": {"lod0": f"{NAME}_body.glb", "lod1": f"{NAME}_body_lod1.glb"},
-        "anims": f"{NAME}_anims.glb",
+        # no `anims`: the body shares the reference's clip library (apps/web character/assembler.ts loadBase)
+        **({} if shared_anims else {"anims": f"{NAME}_anims.glb"}),
         "dye": {"lod0": dye_entry("body", ""), "lod1": dye_entry("body", "_lod1")},
-        "defaultParts": {part: PART_IDS[part] for part in SLOT_PARTS},
+        # the body's _REGION codes: a part's `hidesBody` names the regions it replaces (6b)
+        "regions": REGIONS,
+        # every slot's default: the shared items (this body's fits where it has its own), as the Rookie's
+        "defaultParts": {"headgear": "headgear_brim_helmet", "boots": "boots_combat", "jetpack": "jetpack_twin_tank",
+                         **{part: PART_IDS[part] for part in SLOT_PARTS}},
         "clips": clip_names, "upperBodyBones": clips.UPPER_BODY, "aimAngles": clips.AIM_ANGLES,
         # docs/04 §4.2 family -> the aim-pose set these clips provide (until each family has its own)
         "aimPoseFallback": clips.AIM_POSE_FALLBACK,
@@ -905,13 +1216,22 @@ if RUNTIME:
     }, indent=2))
     for part in SLOT_PARTS:
         socket, bone = PART_SLOTS[part]
-        (slot_dir(part) / f"{PART_IDS[part]}.json").write_text(json.dumps({
-            "id": PART_IDS[part], "slot": part, "name": PART_NAMES[part], "skeleton": "shared-v1", "default": True,
-            **({"socket": socket} if socket else {}), **({"attachBone": bone} if bone else {}),
-            "lods": {"lod0": f"{PART_IDS[part]}.glb", "lod1": f"{PART_IDS[part]}_lod1.glb"},
+        path = slot_dir(part) / f"{PART_IDS[part]}.json"
+        old = json.loads(path.read_text()) if path.exists() else {}
+        fit = {
+            "lods": {"lod0": f"{FILE_IDS[part]}.glb", "lod1": f"{FILE_IDS[part]}_lod1.glb"},
             "dye": {"lod0": dye_entry(part, ""), "lod1": dye_entry(part, "_lod1")},
             "tris": {"lod0": parts[(part, "")][1], "lod1": parts[(part, "_lod1")][1]},
+        }
+        if BODY != "male":  # this body's fit of a shared item: the manifest's bodies.<body> (the male fit stays on top)
+            path.write_text(json.dumps({**old, "bodies": {**old.get("bodies", {}), BODY: fit}}, indent=2))
+            continue
+        path.write_text(json.dumps({
+            "id": PART_IDS[part], "slot": part, "name": PART_NAMES[part], "skeleton": "shared-v1", "default": True,
+            **({"socket": socket} if socket else {}), **({"attachBone": bone} if bone else {}),
+            **fit,
             **({"nozzles": NOZZLES[part]} if part in NOZZLES else {}),
+            **({"bodies": old["bodies"]} if "bodies" in old else {}),  # other bodies' fits, from their own builds
         }, indent=2))
     log("runtime set in", RUNTIME)
 
