@@ -26,10 +26,9 @@ The owner, 23 Oct, on #185:
 | `key-art-phone.{webp,avif}` | 2340×1080 | 19.5:9: its own camera, a little wider, over the map's middle rows |
 | `poster-portrait.{webp,avif}`, `poster-portrait-phone.{webp,avif}` | 1600×2400, 1080×1620 | 2:3 poster: its own camera over the map's 2:3 crop |
 | `key-art-desktop-fg.{webp,avif}`, `key-art-phone-fg.{webp,avif}` | as their frames | the soldiers alone (alpha), pixel-aligned with their frame, for the parallax layer |
+| `key-art-desktop-loop.{mp4,webm}` | 1280×720, 5 s, 24 fps, silent; 198 / 398 KB | the ambient loop: the hover's bob and the flames' flicker over the still plate. Its first frame is the desktop frame's pose, and it loops seamlessly (its last frame is one step from its first). Use `key-art-desktop.webp` as its poster. |
 
 Every phone file is under 400 KB: the phone frame is 111–153 KB, the poster 55–77 KB and the phone foreground 43–78 KB (AVIF / WebP). Serve AVIF with WebP as the fallback.
-
-**The ambient loop** (`key-art-desktop-loop.*`) follows in a small second PR, rendered from the same scene (`render_key_art.py --frames`). #185's photoreal loop is removed here, so the desktop title shows the still until then (the screen plays a loop only when its files exist).
 
 ## How it is made
 1. **Map plate** (Higgsfield GPT Image 2.5, high, 4k, 16:9; 2 variants, the second picked): jobs `f3d3ed33…`, `eb4bbd06…`.
