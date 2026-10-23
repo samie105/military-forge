@@ -13,9 +13,10 @@ import {
   cosmeticSourceLabel,
   cosmeticsForSlot,
   getCosmetic,
+  fitsBody,
   isLoadoutGun,
+  loadoutBody,
   weapons,
-  type CosmeticDef,
   type CosmeticLoadout,
   type CosmeticSlot,
   type DyeChannel,
@@ -29,9 +30,11 @@ import { moveIndicator } from '../ui/motion';
 import { mountSprite } from '../ui/sprite';
 import css from './locker.css?inline';
 import { LocalLoadoutStore, ownedOnly, randomLoadout, starterInventory, withDye, withItem, type Inventory, type LoadoutStore } from './loadouts';
+import { escapeHtml, ic, tileHtml } from './tiles';
 import { Turntable, type FocusPreset, type LightPreset } from './turntable';
 
 export { LocalLoadoutStore, ownedOnly, starterInventory, type Inventory, type LoadoutStore } from './loadouts';
+export { tileHtml } from './tiles';
 
 export interface LockerOptions {
   store?: LoadoutStore;
@@ -44,6 +47,8 @@ export interface LockerOptions {
   onChange?: (loadout: CosmeticLoadout) => void;
   /** the two guns to spawn with (the Guns tab); default: this device's (locker/accountSync.ts) */
   guns?: GunStore;
+  /** "Create your soldier": the character creator (body first, then the look); omitted = no button */
+  onCreator?: () => void;
 }
 
 export interface LockerHandle {
@@ -78,45 +83,6 @@ const SLOT_GLYPH: Partial<Record<CosmeticSlot, string>> = {
   top: 'shirt', legs: 'shirt', gloves: 'hand', boots: 'shirt', headgear: 'helmet', eyewear: 'eye',
   bodyType: 'user', jetpack: 'backpack', exhaust: 'flame', trail: 'sparkle',
 };
-
-const SHAPES: Record<string, string> = {
-  circle: '<circle cx="6" cy="6" r="4.6"/>',
-  triangle: '<path d="M6 1.2 11 10.4H1z"/>',
-  diamond: '<path d="M6 .8 11.2 6 6 11.2.8 6z"/>',
-  pentagon: '<path d="M6 .9 11.2 4.7 9.2 10.9H2.8L.8 4.7z"/>',
-  star: '<path d="m6 .6 1.6 3.6 3.9.4-2.9 2.6.8 3.9L6 9.1l-3.4 2 .8-3.9L.5 4.6l3.9-.4z"/>',
-};
-
-const ic = (name: string, cls = 'ic') => `<svg class="${cls}" aria-hidden="true"><use href="#icon-${name}"/></svg>`;
-
-function escapeHtml(text: string): string {
-  return text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-}
-
-/**
- * One item in the kit's look (.item): its art (a colour's swatch, or the section's glyph on its
- * rarity's tint), its rarity's shape (colour-blind safe), its name, and On / Owned / how to get it.
- * `picked`: the one being tried on.
- */
-export function tileHtml(item: CosmeticDef, equipped: boolean, owned: boolean, channel?: DyeChannel, picked = false, glyph = 'shirt'): string {
-  const r = RARITY_STYLE[item.rarity];
-  const how = owned ? '' : cosmeticSourceLabel(item.source);
-  const title = `${item.name} · ${r.label}${how ? ` · Locked: ${how}` : ''}`;
-  const art = item.colour
-    ? `<span class="item__sw" style="--sw:${item.colour}"></span>`
-    : `<span class="mf-item__glyph" style="--rarity:${r.colour}">${ic(glyph)}</span>`;
-  const tag = equipped
-    ? `<span class="tag tag--you">${ic('check')}On</span>`
-    : owned
-      ? '<span class="tag tag--ghost">Owned</span>'
-      : `<span class="tag tag--ghost mm-how">${ic('lock')}${escapeHtml(how)}</span>`;
-  const cls = ['item', 'mm-tile', equipped ? 'is-on' : '', owned ? '' : 'is-locked mm-locked', picked ? 'is-picked' : ''].filter(Boolean).join(' ');
-  return `<button type="button" class="${cls}" role="radio" aria-checked="${picked}" aria-pressed="${equipped}" style="--rarity:${r.colour}" data-id="${item.id}"${channel ? ` data-channel="${channel}"` : ''} title="${escapeHtml(title)}">
-    <span class="item__art">${art}<svg class="mm-rarity" viewBox="0 0 12 12" role="img" aria-label="${r.label}">${SHAPES[r.shape]}</svg></span>
-    <b class="item__name mm-name">${escapeHtml(item.name)}</b>
-    ${tag}
-  </button>`;
-}
 
 /** The guns a player may choose, in the game's order. */
 const LOADOUT_GUN_DEFS: readonly WeaponDef[] = weapons.filter((w) => isLoadoutGun(w.id));
@@ -169,6 +135,7 @@ export function mountLocker(container: HTMLElement, options: LockerOptions = {})
         <div class="lk__disc" aria-hidden="true"></div>
         <canvas aria-label="Your soldier. Drag to turn, scroll to zoom."></canvas>
         <div class="mm-overlay">Loading soldier…</div>
+        ${options.onCreator ? `<button type="button" class="btn btn--volt btn--sm m-p8 mf-lk__creator" data-action="creator">${ic('user')}Create your soldier</button>` : ''}
         <div class="mf-lk__fits">
           <span class="stamp stamp--volt stamp--lg lk__fits m-p7">${ic('fits')}Fits the body</span>
           <p class="lk__rule">Nothing you wear sticks out past the body, so every outfit hides and hits the same.</p>
@@ -247,8 +214,10 @@ export function mountLocker(container: HTMLElement, options: LockerOptions = {})
       renderWear();
       return;
     }
+    const body = loadoutBody(loadout);
     const section = (slot: CosmeticSlot, label: string, multi: boolean) => {
-      const list = cosmeticsForSlot(slot);
+      // what fits the soldier's body (the creator switches body)
+      const list = cosmeticsForSlot(slot).filter((c) => fitsBody(c, body));
       const tiles = (channel?: DyeChannel) =>
         list
           .map((c) =>
@@ -294,7 +263,8 @@ export function mountLocker(container: HTMLElement, options: LockerOptions = {})
     if (!target) return;
     const d = target.dataset;
     if (d.action === 'exit') options.onExit?.();
-    else if (d.action === 'random') apply(randomLoadout(inventory));
+    else if (d.action === 'creator') options.onCreator?.();
+    else if (d.action === 'random') apply(randomLoadout(inventory, Math.random, loadoutBody(loadout)));
     else if (d.action === 'wear') {
       const next = preview();
       if (trying && inventory.owns(trying.id)) apply(next);

@@ -42,4 +42,45 @@ describe('Turntable', () => {
     expect(renderers).toHaveLength(1);
     expect(renderers[0]!.calls).toEqual(['dispose', 'forceContextLoss']);
   });
+
+  it('turns with one finger and zooms with a pinch (two fingers apart = closer)', async () => {
+    vi.stubGlobal('window', { devicePixelRatio: 1 });
+    vi.stubGlobal('innerWidth', 800);
+    vi.stubGlobal('requestAnimationFrame', () => 1);
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe(): void {}
+        disconnect(): void {}
+      },
+    );
+    const { Turntable } = await import('../../src/locker/turntable');
+    const on: Record<string, (e: Partial<PointerEvent>) => void> = {};
+    const canvas = {
+      clientWidth: 320,
+      clientHeight: 240,
+      addEventListener: (type: string, fn: (e: Partial<PointerEvent>) => void) => (on[type] = fn),
+      removeEventListener() {},
+      setPointerCapture() {},
+      hasPointerCapture: () => false,
+      releasePointerCapture() {},
+    } as unknown as HTMLCanvasElement;
+    const t = new Turntable(canvas);
+    const state = t as unknown as { yaw: number; zoom: number };
+    const yaw = state.yaw;
+    on.pointerdown!({ pointerId: 1, clientX: 100, clientY: 100 });
+    on.pointermove!({ pointerId: 1, clientX: 150, clientY: 100 });
+    expect(state.yaw).toBeCloseTo(yaw + 0.5, 5);
+    on.pointerdown!({ pointerId: 2, clientX: 200, clientY: 100 });
+    on.pointermove!({ pointerId: 2, clientX: 250, clientY: 100 }); // the fingers spread: 50 → 100 px
+    expect(state.zoom).toBeCloseTo(0.55, 5); // 1 × 50/100, held at the closest
+    expect(state.yaw).toBeCloseTo(yaw + 0.5, 5); // a pinch doesn't turn
+    on.pointerup!({ pointerId: 2 });
+    on.pointermove!({ pointerId: 1, clientX: 160, clientY: 100 }); // the finger left turns on from where it is
+    expect(state.yaw).toBeCloseTo(yaw + 0.6, 5);
+    t.zoomBy(10);
+    expect(state.zoom).toBe(1.6);
+    t.dispose();
+  });
 });

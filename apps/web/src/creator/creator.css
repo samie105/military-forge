@@ -1,0 +1,192 @@
+/*
+ * The character creator (data-screen="creator"): Field Print's kit (stencil, volt, olive, the item
+ * tiles) with Frost's glass on the panel and the stage's plates (ui/frost.css's tokens; solid under
+ * Reduce transparency and Low graphics). Desktop: the menus' 1920×1080 box, zoomed to the window
+ * (ui/fit.ts). A phone (html.mf-phone, held sideways or upright and turned): its own layout at its
+ * own size, 812×375 and up. mountCreator injects this sheet and removes it. Tokens only.
+ */
+.mf-cr-fit { position: fixed; inset: 0; overflow: hidden; z-index: 1; }
+.mf-cr-fit > .screen { width: var(--fit-w, 1920px); height: var(--fit-h, 1080px); zoom: var(--fit, 1); }
+
+:where(.mf-cr-fit) .mf-cr {
+  display: grid;
+  grid-template: auto minmax(0, 1fr) / minmax(0, 1fr) 780px;
+  grid-template-areas: 'head head' 'stage panel';
+  column-gap: var(--sp-7);
+  padding-bottom: var(--sp-7);
+}
+
+/* ---- the head: title, the two steps, Skip ---- */
+:where(.mf-cr-fit) .mf-cr__head { grid-area: head; gap: var(--sp-6); }
+:where(.mf-cr-fit) .mf-cr__title { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+:where(.mf-cr-fit) .mf-cr__title .menu-top__title { white-space: nowrap; }
+:where(.mf-cr-fit) .mf-cr__steps { display: flex; gap: var(--sp-3); margin: 0 0 0 auto; padding: 0; list-style: none; }
+:where(.mf-cr-fit) .mf-cr__steps button {
+  display: inline-flex; align-items: center; gap: var(--sp-2); min-height: 48px; padding: 0 var(--sp-5) 0 var(--sp-2);
+  border: var(--bw) solid var(--c-line); border-radius: var(--r-pill); background: transparent; color: var(--c-muted);
+  font: inherit; font-size: var(--fs-18); font-weight: var(--fw-bold); text-transform: uppercase; letter-spacing: .06em; cursor: pointer;
+}
+:where(.mf-cr-fit) .mf-cr__steps .num { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--c-ink-950); color: var(--c-text); }
+:where(.mf-cr-fit) .mf-cr__steps li.is-on button { color: var(--c-volt-ink); background: var(--c-volt); border-color: var(--c-volt); }
+:where(.mf-cr-fit) .mf-cr__steps li.is-on .num { background: var(--c-volt-ink); color: var(--c-volt); }
+:where(.mf-cr-fit) .mf-cr__status { font-size: var(--fs-14); color: var(--c-muted); white-space: nowrap; }
+
+/* ---- the stage: the 3D turntable, large, with glass plates over it ---- */
+:where(.mf-cr-fit) .mf-cr__stage { grid-area: stage; position: relative; min-width: 0; min-height: 0; }
+:where(.mf-cr-fit) .mf-cr__stage canvas {
+  position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab;
+  border-radius: var(--r-lg); box-shadow: inset 0 0 0 var(--bw) var(--c-line);
+}
+:where(.mf-cr-fit) .mf-cr__stage canvas:active { cursor: grabbing; }
+:where(.mf-cr-fit) .mf-cr__overlay { position: absolute; inset: 0; display: grid; place-items: center; color: var(--c-muted); font-size: var(--fs-20); pointer-events: none; }
+:where(.mf-cr-fit) .mf-cr__overlay[hidden], :where(.mf-cr-fit) .mf-cr__placeholder[hidden] { display: none; }
+:where(.mf-cr-fit) .mf-cr__placeholder {
+  position: absolute; left: var(--sp-5); top: var(--sp-5); z-index: 1; display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-3);
+  max-width: 440px; padding: var(--sp-4) var(--sp-5); pointer-events: none;
+}
+:where(.mf-cr-fit) .mf-cr__placeholder p { margin: 0; font-size: var(--fs-16); color: var(--c-text); }
+:where(.mf-cr-fit) .mf-cr__placeholder-short { display: none; }
+:where(.mf-cr-fit) .mf-cr__view {
+  position: absolute; left: 50%; bottom: var(--sp-5); translate: -50% 0; z-index: 1; display: flex; align-items: center; gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4); white-space: nowrap;
+}
+:where(.mf-cr-fit) .mf-cr__view .seg { flex-wrap: nowrap; }
+:where(.mf-cr-fit) .mf-cr__view .seg__opt { min-height: 40px; font-size: var(--fs-14); }
+:where(.mf-cr-fit) .mf-cr__zoom { display: flex; gap: var(--sp-2); }
+:where(.mf-cr-fit) .mf-cr__hint {
+  position: absolute; right: var(--sp-5); top: var(--sp-5); z-index: 1; display: inline-flex; align-items: center; gap: 6px;
+  color: var(--c-text); text-shadow: var(--ts-hud); pointer-events: none;
+}
+
+/* ---- the panel: the body step or the look's tabs, the items, the actions ---- */
+:where(.mf-cr-fit) .mf-cr__panel { grid-area: panel; display: flex; flex-direction: column; gap: var(--sp-4); min-height: 0; padding: var(--sp-6) var(--sp-7); }
+:where(.mf-cr-fit) .mf-cr__panel .tabs { position: relative; flex-wrap: nowrap; gap: var(--sp-1); overflow-x: auto; scrollbar-width: none; flex-shrink: 0; }
+:where(.mf-cr-fit) .mf-cr__panel .tab { padding-inline: var(--sp-3); font-size: var(--fs-16); white-space: nowrap; }
+:where(.mf-cr-fit) .mf-cr__panel .tabs[hidden], :where(.mf-cr-fit) .mf-cr__body-step[hidden] { display: none; }
+:where(.mf-cr-fit) .mf-cr__panel .tabs .m-p5 { bottom: -8px; height: 4px; background: var(--c-volt); border-radius: var(--r-pill); }
+:where(.mf-cr-fit) .mf-cr__h { margin: 0 0 var(--sp-3); font-size: var(--fs-64); }
+:where(.mf-cr-fit) .mf-cr__bodies { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4); }
+:where(.mf-cr-fit) .mf-cr__body {
+  display: grid; grid-template: 'art name' auto 'art tag' auto 'art note' 1fr / 96px minmax(0, 1fr); column-gap: var(--sp-4); row-gap: var(--sp-1);
+  align-items: start; justify-items: start; padding: var(--sp-4); text-align: left; cursor: pointer;
+  background: var(--c-ink-850); color: var(--c-text); border: var(--bw-chunky) solid var(--c-line); border-radius: var(--r-md); font: inherit;
+}
+:where(.mf-cr-fit) .mf-cr__body.is-on { border-color: var(--c-volt); box-shadow: var(--sh-card-sm); }
+:where(.mf-cr-fit) .mf-cr__body:disabled { opacity: .5; cursor: not-allowed; }
+:where(.mf-cr-fit) .mf-cr__body-art { grid-area: art; display: grid; place-items: center; width: 96px; height: 120px; border-radius: var(--r-sm); color: var(--c-volt); background: color-mix(in srgb, var(--c-volt) 14%, var(--c-ink-950)); }
+:where(.mf-cr-fit) .mf-cr__body-art .ic { width: 64px; height: 64px; stroke-width: 1.4; }
+:where(.mf-cr-fit) .mf-cr__body.is-pending .mf-cr__body-art { color: var(--c-warn); background: color-mix(in srgb, var(--c-warn) 12%, var(--c-ink-950)); }
+:where(.mf-cr-fit) .mf-cr__body-name { grid-area: name; font: var(--fw-display) var(--fs-28)/1.05 var(--f-display); text-transform: uppercase; }
+:where(.mf-cr-fit) .mf-cr__body .tag { grid-area: tag; }
+:where(.mf-cr-fit) .mf-cr__body-note { grid-area: note; font-size: var(--fs-14); color: var(--c-muted); }
+:where(.mf-cr-fit) .mf-cr__list { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; padding: 4px; margin: -4px; }
+:where(.mf-cr-fit) .mf-cr__sub { margin: var(--sp-4) 0 var(--sp-2); }
+:where(.mf-cr-fit) .mf-cr__list > .mf-cr__sub:first-child { margin-top: 0; }
+:where(.mf-cr-fit) .mf-cr__detail { min-height: 1.4em; margin: 0; font-size: var(--fs-16); color: var(--c-muted); }
+:where(.mf-cr-fit) .mf-cr__act { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); }
+:where(.mf-cr-fit) .mf-cr__act [hidden] { display: none; }
+:where(.mf-cr-fit) .mf-cr__act-gap { flex: 1; }
+:where(.mf-cr-fit) .mf-cr__act [data-action="save"] { flex: 1 1 100%; justify-content: center; }
+
+/* the item tiles (the Locker's kit .item; locker.css isn't loaded here) */
+:where(.mf-cr-fit) .items { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-3); }
+:where(.mf-cr-fit) .item { position: relative; min-width: 0; color: var(--c-text); font: inherit; cursor: pointer; }
+:where(.mf-cr-fit) .item__art { position: relative; height: 104px; }
+:where(.mf-cr-fit) .item__name { font-size: var(--fs-16); }
+:where(.mf-cr-fit) .item.is-picked { outline: var(--bw-chunky) dashed var(--c-volt); outline-offset: 3px; }
+:where(.mf-cr-fit) .item .tag { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:where(.mf-cr-fit) .mm-rarity { position: absolute; top: 8px; right: 8px; width: 16px; height: 16px; fill: var(--rarity); }
+:where(.mf-cr-fit) .mf-item__glyph { display: grid; place-items: center; width: 100%; height: 100%; background: color-mix(in srgb, var(--rarity) 22%, var(--c-ink-950)); color: var(--rarity); }
+:where(.mf-cr-fit) .mf-item__glyph .ic { width: 56px; height: 56px; stroke-width: 1.4; }
+:where(.mf-cr-fit) .mf-items--sw { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+:where(.mf-cr-fit) .mf-items--sw .item__art { height: 76px; }
+:where(.mf-cr-fit) .mf-items--sw .item__sw { width: 56px; height: 56px; }
+:where(.mf-cr-fit) .mf-items--sw .item__name { font-size: var(--fs-14); }
+
+/* ---- Frost's glass on the panel and the stage's plates (solid fallback first) ---- */
+:where(.mf-cr-fit) :is(.mf-cr__panel, .mf-cr__view, .mf-cr__placeholder) {
+  background: var(--c-ink-900); border: var(--bw) solid var(--c-line); box-shadow: var(--sh-card-sm);
+}
+:where(.mf-cr-fit) .mf-cr__panel { border-radius: var(--r-frost, var(--r-lg)); }
+:where(.mf-cr-fit) :is(.mf-cr__view, .mf-cr__placeholder) { border-radius: var(--r-frost-sm, var(--r-md)); }
+@supports (backdrop-filter: blur(1px)) {
+  html:not(.reduce-transparency):not(.gfx-low) :where(.mf-cr-fit) :is(.mf-cr__panel, .mf-cr__view, .mf-cr__placeholder) {
+    background: var(--frost-fill, var(--c-ink-900));
+    background-image: radial-gradient(120% 90% at 0% 0%, var(--frost-hi, transparent), transparent 60%);
+    border-color: var(--frost-line, var(--c-line));
+    box-shadow: inset 0 1px 0 var(--frost-hi, transparent), var(--frost-shadow, var(--sh-card-sm));
+    backdrop-filter: blur(var(--blur-frost, 20px)) saturate(1.15);
+  }
+}
+
+/* ---- a laptop's smaller box (ui/fit.ts), not on a phone ---- */
+html.mf-narrow:where(:not(.mf-phone)) :where(.mf-cr-fit) .mf-cr { grid-template-columns: minmax(0, 1fr) 680px; column-gap: var(--sp-6); }
+html.mf-narrow:where(:not(.mf-phone)) :where(.mf-cr-fit) .items { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+html.mf-narrow:where(:not(.mf-phone)) :where(.mf-cr-fit) .mf-cr__panel .tab { padding-inline: var(--sp-2); font-size: var(--fs-14); }
+html.mf-narrow:where(:not(.mf-phone)) :where(.mf-cr-fit) .mf-cr__panel .tab .ic { display: none; }
+html.mf-narrow:where(:not(.mf-phone)) :where(.mf-cr-fit) .mf-items--sw { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+html:is(.mf-short, .mf-big-text):where(:not(.mf-phone)) :where(.mf-cr-fit) .mf-cr__h { font-size: var(--fs-48); }
+html:is(.mf-short, .mf-big-text):where(:not(.mf-phone)) :where(.mf-cr-fit) .mf-cr__act .btn--xl { min-height: var(--btn-h); font-size: var(--fs-20); padding-inline: var(--sp-5); }
+html.mf-short:where(:not(.mf-phone)) :where(.mf-cr-fit) .menu-top { height: 96px; }
+/* a laptop's box with big text: the body cards keep to their name (the stage's note says why she looks
+   like him), Randomise is its icon, so the list keeps its room */
+html.mf-short.mf-big-text:where(:not(.mf-phone)) :where(.mf-cr-fit) .mf-cr__body-note { display: none; }
+html.mf-short.mf-big-text:where(:not(.mf-phone)) :where(.mf-cr-fit) .mf-cr__body-art { height: 72px; width: 64px; }
+html.mf-short.mf-big-text:where(:not(.mf-phone)) :where(.mf-cr-fit) .mf-cr__body { grid-template-columns: 64px minmax(0, 1fr); }
+html.mf-big-text:where(:not(.mf-phone)) :where(.mf-cr-fit) .mf-cr__act [data-action="random"] .mf-cr__label { display: none; }
+/* in a laptop's box the stand-in note takes the stage's top; the drag hint gives way */
+html:is(.mf-narrow, .mf-big-text):where(:not(.mf-phone)) .mf-cr-fit [data-active-state~="stand-in"] .mf-cr__hint { display: none; }
+
+/* ---- a phone (812×375 and up, held sideways or upright and turned): unzoomed, stage left, panel right ---- */
+:where(html.mf-phone) .mf-cr-fit > .screen { zoom: 1; width: 100%; height: 100%; }
+:where(html.mf-phone) :where(.mf-cr-fit) .bg__word { display: none; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr {
+  grid-template: auto minmax(0, 1fr) / minmax(0, 1fr) minmax(0, 1.15fr); grid-template-areas: 'head head' 'stage panel'; column-gap: var(--sp-2);
+  padding: 0 max(var(--sp-2), env(safe-area-inset-right)) var(--sp-2) max(var(--sp-2), env(safe-area-inset-left));
+}
+:where(html.mf-phone) :where(.mf-cr-fit) .menu-top { height: auto; min-height: 44px; padding: var(--sp-1) 0; gap: var(--sp-2); }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__title .eyebrow { display: none; }
+:where(html.mf-phone) :where(.mf-cr-fit) .menu-top__title { font-size: var(--fs-24); }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__steps { gap: var(--sp-1); }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__steps button { min-height: 36px; padding: 0 var(--sp-3) 0 4px; font-size: var(--fs-14); }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__steps .num { width: 26px; height: 26px; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__status { display: none; }
+:where(html.mf-phone) :where(.mf-cr-fit) .menu-top .btn--sm { min-height: 36px; padding: 0 var(--sp-3); font-size: var(--fs-14); }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__view { left: var(--sp-1); right: var(--sp-1); bottom: var(--sp-1); translate: none; gap: var(--sp-2); padding: 4px; justify-content: space-between; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__view .seg__opt { min-height: 32px; padding: 0 8px; font-size: var(--fs-14); }
+:where(html.mf-phone) :where(.mf-cr-fit) :is(.mf-cr__hint, .mf-cr__zoom, [data-group="light"]) { display: none; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__placeholder { left: 4px; top: 4px; right: 4px; max-width: none; padding: var(--sp-2) var(--sp-3); gap: 4px; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__placeholder .stamp { font-size: var(--fs-14); padding: 2px 8px; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__placeholder { right: auto; flex-direction: row; align-items: center; gap: var(--sp-2); }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__placeholder p { display: none; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__placeholder-short { display: inline; font-size: 12px; color: var(--c-text); }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__view { right: auto; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__panel { padding: var(--sp-2) var(--sp-3); gap: var(--sp-2); }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__panel .tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__panel .tab { min-height: 36px; padding: 0 var(--sp-2); font-size: var(--fs-14); white-space: nowrap; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__panel .tabs .m-p5 { display: none; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__h { font-size: var(--fs-24); margin-bottom: var(--sp-1); }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__bodies { gap: var(--sp-2); }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__body { grid-template-columns: 44px minmax(0, 1fr); column-gap: var(--sp-2); padding: var(--sp-2); }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__body-art { width: 44px; height: 56px; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__body-art .ic { width: 32px; height: 32px; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__body-name { font-size: var(--fs-16); }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__body-note { display: none; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__sub { margin: var(--sp-2) 0 var(--sp-1); }
+:where(html.mf-phone) :where(.mf-cr-fit) .items { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); }
+:where(html.mf-phone) :where(.mf-cr-fit) .item { padding: 6px; gap: 4px; }
+:where(html.mf-phone) :where(.mf-cr-fit) .item__art { height: 52px; }
+:where(html.mf-phone) :where(.mf-cr-fit) .item__name { font-size: var(--fs-14); }
+:where(html.mf-phone) :where(.mf-cr-fit) .item .tag { font-size: 11px; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-item__glyph .ic { width: 30px; height: 30px; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-items--sw { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-items--sw .item__art { height: 44px; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-items--sw .item__sw { width: 34px; height: 34px; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__detail { display: none; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__act { flex-wrap: nowrap; gap: var(--sp-2); }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__act .btn { min-height: 44px; padding: 0 var(--sp-3); font-size: var(--fs-14); white-space: nowrap; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__act .btn .ic { width: 18px; height: 18px; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__act [data-action="random"] .mf-cr__label { display: none; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__act-gap { display: none; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__act [data-action="save"] { flex: 1 1 auto; min-width: 0; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__act [data-action="save"] .mf-cr__save { overflow: hidden; text-overflow: ellipsis; }

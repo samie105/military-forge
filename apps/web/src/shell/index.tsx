@@ -52,6 +52,8 @@ export interface ShellOptions {
   /** the app: the shell drives navigation and game modes */
   host?: GameHost;
   api?: Api;
+  /** open on the title screen (the app's front door; not for invite links or the debug client) */
+  title?: boolean;
 }
 
 const sameConnection = (a: ConnectionView | null, b: ConnectionView | null) =>
@@ -65,7 +67,7 @@ export function mountShell(parent: HTMLElement = document.body, options: ShellOp
   mountSprite();
   startFitting();
 
-  const store = createShellStore();
+  const store = createShellStore(options.title ? { title: 'on' } : {});
   const host = options.host ?? null;
   const controller = host ? new ShellController(store, host, options.api) : null;
   let local: MatchSource | null = null;

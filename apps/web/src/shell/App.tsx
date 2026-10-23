@@ -30,6 +30,7 @@ import { Pause } from './screens/Pause';
 import { Results } from './screens/Results';
 import { SettingsScreen } from './screens/Settings';
 import { TipsCard } from './screens/Tips';
+import { TitleScreen } from './screens/Title';
 import { TuneToast } from './screens/Tune';
 import { releaseShellFocus } from './focus';
 import { PhoneHome, PhoneLobby, PhoneNameEntry, PhonePause, PhoneResults, PhoneSettings, PhoneTips, usePhoneLayout } from './screens/phone';
@@ -120,6 +121,7 @@ function AppScreens({ store }: { store: ShellStore }) {
       {overlay === 'lan-join' && <LanJoin />}
       {overlay === 'name' && (phone ? <PhoneNameEntry store={store} first={false} /> : <NameEntry store={store} first={false} />)}
       <TuneToast note={tuneNote} />
+      <TitleScreen store={store} />
       {notice && (
         <div className="mf-fit mf-toast kit-v2">
           <div className="mf-notice" role="status">

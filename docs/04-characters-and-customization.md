@@ -123,6 +123,26 @@ Budget per character on screen: ≤ 4k tris, 1–3 draw calls, ≤ 1.5 MB GPU te
 - "Try on": store items preview on your current loadout, and you can play a **sandbox** to see kill effects/emotes on a dummy.
 - Changes are saved to the server (`PUT /me/loadout/{slot}`) and validated against `inventory`.
 
+### 6.1 The character creator (owner, 22 Oct: "the 3D setup")
+- **Where:** `#/creator` (`apps/web/src/creator`).
+  - First-time players get it once, after the name screen ("Skip for now" counts).
+  - The Locker's **Create your soldier** opens it again.
+- **Step 1, the body:**
+  - Male soldier or female soldier;
+  - then the body's builds (body types with that `body`) and the skin tone.
+- **Step 2, the look:** tabs of what fits the body, read from content at run time.
+  - **Which slots show:** a slot shows when at least two of its items fit.
+  - **The tabs:** Hair (the female body's hairstyles), Headwear, Outfit, Gear and Colourways.
+  - New slots and items appear as content adds them.
+- **The turntable:** large and live. Drag to turn, scroll or pinch to zoom, with view and light presets.
+- **Actions:**
+  - Randomise keeps the body.
+  - Save writes the look to the account.
+  - Locked items try on and say how to get them.
+- **Assembly:** each base body has its own rig, `BODY_MANIFESTS` in `character/assembler.ts`.
+  - A loadout on another body swaps the instance's bind pose in place: the same bones, mesh and mixer.
+  - A body whose art isn't in yet is drawn on the male rig, and the creator says so ("Stand-in body").
+
 ---
 
 ## 7. VFX & effect budgets for cosmetics

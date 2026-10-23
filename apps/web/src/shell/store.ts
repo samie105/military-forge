@@ -200,7 +200,17 @@ export interface ShellState {
   tips: boolean;
   /** the Settings section open (Home's "Change keys" opens Controls) */
   settingsTab: SettingsTab;
+  /**
+   * The title screen (Title.tsx; the owner, 23 Oct: "tap anywhere to continue"): on until the first
+   * press; `pressed` while the app is still getting ready (the prompt becomes a loading line); then
+   * `leaving` (the camera push into the next screen) and off.
+   */
+  title: TitleState;
+  /** performance.now() of the press that left the title (0 = none yet): the audio's war-tone hit */
+  titleHit: number;
 }
+
+export type TitleState = 'on' | 'pressed' | 'leaving' | 'off';
 
 export type ShellStore = StoreApi<ShellState>;
 
@@ -230,6 +240,8 @@ export function createShellStore(initial: Partial<ShellState> = {}): ShellStore 
     mapEvent: null,
     tips: false,
     settingsTab: 'graphics',
+    title: 'off',
+    titleHit: 0,
     ...initial,
   }));
 }

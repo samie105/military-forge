@@ -87,11 +87,14 @@ export function ownedOnly(loadout: CosmeticLoadout, inventory: Inventory): Cosme
   return out;
 }
 
-/** A random look from owned items only (docs/04 §6 "randomise"): the body first, then parts that fit it. */
-export function randomLoadout(inventory: Inventory, random: () => number = Math.random): CosmeticLoadout {
-  let body: Body = 'male';
+/**
+ * A random look from owned items only (docs/04 §6 "randomise"): the body first, then parts that fit it.
+ * `keep`: stay on that body (the creator and the Locker randomise the look, not the body).
+ */
+export function randomLoadout(inventory: Inventory, random: () => number = Math.random, keep?: Body): CosmeticLoadout {
+  let body: Body = keep ?? 'male';
   const pick = (slot: LoadoutSlot | 'dye') => {
-    const owned = cosmeticsForSlot(slot).filter((c) => inventory.owns(c.id) && fitsBody(c, body));
+    const owned = cosmeticsForSlot(slot).filter((c) => inventory.owns(c.id) && fitsBody(c, body) && (slot !== 'bodyType' || !keep || (c.body ?? 'male') === keep));
     const chosen = owned[Math.floor(random() * owned.length)]!;
     if (slot === 'bodyType') body = chosen.body ?? 'male';
     return chosen.id;

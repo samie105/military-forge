@@ -4,10 +4,12 @@
  */
 export {
   ART_SLOTS,
+  BODY_MANIFESTS,
   CharacterAssembler,
   LOD0_ABOVE_PX,
   LOD1_BELOW_PX,
   ROOKIE_MANIFEST,
+  bodyOfLoadout,
   partsKey,
   selectLod,
   type ArtSlot,

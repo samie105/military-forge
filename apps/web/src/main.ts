@@ -56,6 +56,8 @@ import { startMultiTouchTaps } from './ui/multiTouchTap';
 import type { Frame } from './view';
 import { DefaultLoadingManager } from 'three';
 import { assetLoad } from './assetLoad';
+import { creatorSeen } from './creator/model';
+import { titleWanted } from './shell/title';
 
 const params = new URLSearchParams(location.search);
 /** the player-facing app, or (dev builds at `/`) the Phase 0 debug client */
@@ -405,7 +407,50 @@ registerRoute({
     let cleanup: (() => void) | null = null;
     let closed = false;
     void import('./locker/route').then(({ mountLockerRoute }) => {
-      if (!closed) cleanup = mountLockerRoute(el, { onExit: close, ...(loadoutSync ? { store: loadoutSync.store, guns: loadoutSync.guns } : {}) });
+      if (!closed)
+        cleanup = mountLockerRoute(el, {
+          onExit: close,
+          onCreator: () => openCreator('locker'),
+          ...(loadoutSync ? { store: loadoutSync.store, guns: loadoutSync.guns } : {}),
+        });
+    });
+    return () => {
+      closed = true;
+      cleanup?.();
+    };
+  },
+});
+
+// The character creator (#/creator; owner, 22 Oct): body first, then the look. It follows the name
+// screen once on this device (first: "Skip for now"), and the Locker opens it again (Back returns there).
+let creatorFrom: 'first' | 'locker' | null = null;
+function storageOrNull(): Storage | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+function openCreator(from: 'first' | 'locker'): void {
+  creatorFrom = from;
+  location.hash = '#/creator';
+}
+registerRoute({
+  id: 'creator',
+  title: 'Create your soldier',
+  ownExit: true,
+  mount: (el, close) => {
+    let cleanup: (() => void) | null = null;
+    let closed = false;
+    const from = creatorFrom;
+    creatorFrom = null;
+    void import('./creator/route').then(({ mountCreatorRoute }) => {
+      if (!closed)
+        cleanup = mountCreatorRoute(el, {
+          first: from === 'first',
+          onExit: () => (from === 'locker' ? (location.hash = '#/locker') : close()),
+          ...(loadoutSync ? { store: loadoutSync.store } : {}),
+        });
     });
     return () => {
       closed = true;
@@ -416,7 +461,8 @@ registerRoute({
 
 // App shell (W4): screens over the canvas. Other workstreams plug in with one line each, e.g.
 // registerRoute({ id: 'locker', title: 'Locker', mount }) from './shell' (opens at #/locker).
-const shell = mountShell(document.body, appMode ? { host } : {});
+// the title screen opens the app (not for invite links, the debug client or automation: shell/title.ts)
+const shell = mountShell(document.body, appMode ? { host, title: titleWanted({ appMode, path: location.pathname, params, webdriver: navigator.webdriver === true }) } : {});
 // sound starts on the first tap or key (browsers allow it only then); the shell's store drives the
 // interface cues and the music
 startAudio(shell.store);
@@ -425,6 +471,12 @@ const loadoutSync = shell.controller ? new LoadoutSync(shell.controller.api) : n
 // "here" to the API every 30 s while visible, with the room when in an online match (presence.ts)
 presence = shell.controller ? new PresenceBeat(shell.controller.api, () => onlineRoom) : null;
 if (loadoutSync) document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && void loadoutSync.flush());
+// first time here: the name screen, then "Create your soldier" (once on this device; Skip counts), unless
+// the name was for a room link (then the room comes first)
+if (appMode)
+  shell.store.subscribe((now, before) => {
+    if (before.screen.name === 'name' && now.screen.name === 'home' && !creatorSeen(storageOrNull())) openCreator('first');
+  });
 
 // the HTML loading screen (index.html) stays until the shell has its first real screen (the API
 // answered or gave up), so nothing flashes in between
@@ -434,7 +486,8 @@ if (splash) {
     splash.classList.add('gone');
     setTimeout(() => splash.remove(), 400);
   };
-  if (!appMode || shell.store.getState().screen.name !== 'boot') hide();
+  // the title screen covers the wait itself (its prompt turns into a loading line if pressed early)
+  if (!appMode || shell.store.getState().screen.name !== 'boot' || shell.store.getState().title !== 'off') hide();
   else {
     const stop = shell.store.subscribe((s) => {
       if (s.screen.name === 'boot') return;

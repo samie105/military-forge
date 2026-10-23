@@ -1,3 +1,6 @@
+import { execSync } from 'node:child_process';
+import { existsSync, readdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin, type ProxyOptions } from 'vite';
 // the brand lives in one place (packages/shared/src/brand.ts): pages get it at build time
 import { GAME_NAME } from '../../packages/shared/src/brand';
@@ -30,8 +33,42 @@ const brand: Plugin = {
   },
 };
 
+/**
+ * `virtual:title-info` (the title screen, shell/screens/Title.tsx): this build's id (git's short hash,
+ * 'dev' without git) and the key art the Forge has dropped in public/art/key-art/
+ * (key-art-desktop.*, key-art-phone.*, optional *-fg.* parallax layers): known at build time, so the
+ * page never probes for files that aren't there. New art needs a dev-server restart or a build.
+ */
+const TITLE_INFO = 'virtual:title-info';
+const titleInfo: Plugin = {
+  name: 'title-info',
+  resolveId: (id) => (id === TITLE_INFO ? `\0${TITLE_INFO}` : null),
+  load(id) {
+    if (id !== `\0${TITLE_INFO}`) return null;
+    let build = 'dev';
+    try {
+      build = execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim() || 'dev';
+    } catch {
+      /* no git: a build from an export */
+    }
+    const dir = fileURLToPath(new URL('./public/art/key-art/', import.meta.url));
+    const files = existsSync(dir) ? readdirSync(dir) : [];
+    // every format a picture comes in, best first (AVIF, then WebP as the fallback: art/key-art/README.md)
+    const all = (stem: string, exts: readonly string[]) => exts.map((ext) => `${stem}.${ext}`).filter((f) => files.includes(f));
+    const IMG = ['avif', 'webp', 'jpg', 'jpeg', 'png'];
+    const art = {
+      desktop: all('key-art-desktop', IMG),
+      phone: all('key-art-phone', IMG),
+      desktopFg: all('key-art-desktop-fg', IMG),
+      phoneFg: all('key-art-phone-fg', IMG),
+      desktopLoop: all('key-art-desktop-loop', ['webm', 'mp4']),
+    };
+    return `export const buildId = ${JSON.stringify(build)};\nexport const keyArt = ${JSON.stringify(art)};\n`;
+  },
+};
+
 export default defineConfig({
-  plugins: [brand],
+  plugins: [brand, titleInfo],
   server: { port: 5173, proxy },
   preview: { proxy },
   build: {

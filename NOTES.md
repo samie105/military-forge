@@ -1231,3 +1231,25 @@ QA measured two effects of latency spikes in netfeel. Remote players froze 18.9%
   "Other player held still" is past the newest snapshot and past the extrapolation. Before, every frame past the newest snapshot was held.
 - **Hits** on the shooting range are unchanged at every profile (100% up to 250 ms, 22% on MTN at the default cap): the shooter aims where its screen draws the target, carried on or not.
 - **The trade-off and the knobs:** on the spike profiles, the 2–3 m corrections that used to be quick drags (up to 32 m/s) are now jumps, 13.6 a minute on MTN instead of 6. Smaller ones slide at no more than 8 m/s. A higher `CORRECTION_SNAP` gives fewer jumps and longer drags: at 2.5 m, MTN had 10 jumps a minute and the drawn player trailed 151 cm at p99. A lower one gives the reverse: at 1.5 m, 18 jumps a minute and 85 cm.
+
+## 41. The title screen and the way in (23 Oct 2026, owner request)
+The owner, 23 Oct: "when it's opened, it has an opened screen with a tap anywhere to continue … to enter the game and have a nice experience". The design is card 01 on the Pen file's AGENT BRIDGE board, drawn on the "TITLE SCREEN · tap anywhere" board.
+- **The title** (`apps/web/src/shell/screens/Title.tsx`, `title.css`, rules in `shell/title.ts`):
+  - **Key art:** the Forge's key art (#185), full-bleed: `apps/web/public/art/key-art/key-art-{desktop,phone}` and their `-fg` soldier layers, served as AVIF with WebP as the fallback. Vite's `virtual:title-info` finds the files at build time, so the page never probes for missing ones; new art needs a rebuild or a dev-server restart. A dark olive fallback shows if the art is missing.
+  - **Layout:** the frame is drawn 4 % oversize, with the soldiers' layer on top moving a little more. The lockup sits in the calm smoke of the upper third and the prompt on the dark rubble at the bottom (art/key-art/README.md).
+  - **The ambient loop** (`key-art-desktop-loop.{webm,mp4}`) plays on desktop only, with the still as its poster: never on a phone, on Low graphics, with Reduce motion or on a data saver.
+  - **Over the art:** the lockup, slow smoke and a light sweep. On desktop the art follows the pointer.
+  - **The prompt:** "Press any key · click" on desktop, "Tap anywhere to continue" on phones; any controller button works too. The prompt breathes.
+  - **The corners:** the build (git's short hash), and the server's region (the box's `/probe-config.json`, "This computer" in dev) with the live ping. "Sound starts on your first press" sits under the prompt.
+- **The press:**
+  - It unlocks the sound: the menu music starts with a war-tone hit (`sting.start`, audio/ui.ts).
+  - The camera then pushes through the smoke into the screen already drawn underneath: your name the first time, then "Create your soldier" (the creator, docs/04 §6.1), then Home. A returning player goes straight to Home.
+  - A press while the app is still booting turns the prompt into a loading line.
+  - The key or tap never reaches the screen underneath.
+- **When there's no title:**
+  - invite links (`/r/CODE`) and local-room joins go straight to the room;
+  - the debug client and `?notitle` skip it;
+  - so does a browser under automation (`navigator.webdriver`), unless it asks with `?title`, so the end-to-end scripts still start at the name screen.
+- **Cheap on phones, gentle on motion:**
+  - Phones: one layer drifts, with no sweep and no blur.
+  - Reduce motion: nothing drifts or breathes, and leaving is a 220 ms cross-fade.

@@ -1,6 +1,7 @@
 /**
- * The Locker's 3D preview (docs/04 §6): the soldier on a turntable with drag-to-rotate, wheel
- * zoom, focus presets (full body, face, jetpack) and lighting presets matching the maps.
+ * The Locker's 3D preview (docs/04 §6): the soldier on a turntable with drag-to-rotate, wheel or
+ * pinch zoom, focus presets (full body, face, jetpack) and lighting presets matching the maps. The
+ * character creator uses it too.
  */
 import {
   AnimationMixer,
@@ -65,6 +66,9 @@ export class Turntable {
   private zoom = 1;
   private targetY = FOCUS.full.y;
   private dragX: number | null = null;
+  /** the pointers down on the canvas (two: a pinch zooms) */
+  private readonly pointers = new Map<number, { x: number; y: number }>();
+  private pinch = 0;
   private frame = 0;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
@@ -182,29 +186,59 @@ export class Turntable {
     this.renderer.render(this.scene, this.camera);
   };
 
+  /** Zoom by `factor` (>1 = farther), within the turntable's range. */
+  zoomBy(factor: number): void {
+    this.zoom = Math.min(1.6, Math.max(0.55, this.zoom * factor));
+  }
+
+  private pinchSpan(): number {
+    const [a, b] = [...this.pointers.values()];
+    return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+  }
+
   private readonly onPointerDown = (e: PointerEvent): void => {
-    this.dragX = logicalPoint(e).x; // the page's axes (an upright phone plays turned: ui/landscape.ts)
+    const p = logicalPoint(e); // the page's axes (an upright phone plays turned: ui/landscape.ts)
+    this.pointers.set(e.pointerId, { x: p.x, y: p.y });
+    this.canvas.setPointerCapture(e.pointerId);
     this.yawVelocity = 0;
     this.yawTarget = null;
-    this.canvas.setPointerCapture(e.pointerId);
+    if (this.pointers.size === 2) {
+      // two fingers: a pinch zooms, and the turn stops
+      this.dragX = null;
+      this.pinch = this.pinchSpan();
+    } else if (this.pointers.size === 1) this.dragX = p.x;
   };
 
   private readonly onPointerMove = (e: PointerEvent): void => {
+    const at = this.pointers.get(e.pointerId);
+    if (!at) return;
+    const p = logicalPoint(e);
+    at.x = p.x;
+    at.y = p.y;
+    if (this.pointers.size >= 2) {
+      const span = this.pinchSpan();
+      if (this.pinch > 0 && span > 0) this.zoomBy(this.pinch / span);
+      this.pinch = span;
+      return;
+    }
     if (this.dragX === null) return;
-    const x = logicalPoint(e).x;
-    const dx = x - this.dragX;
-    this.dragX = x;
+    const dx = p.x - this.dragX;
+    this.dragX = p.x;
     this.yaw += dx * 0.01;
     this.yawVelocity = dx * 0.6;
   };
 
   private readonly onPointerUp = (e: PointerEvent): void => {
-    this.dragX = null;
+    this.pointers.delete(e.pointerId);
+    this.pinch = 0;
+    // the finger left on the glass carries on turning from where it is
+    const rest = [...this.pointers.values()][0];
+    this.dragX = rest ? rest.x : null;
     if (this.canvas.hasPointerCapture(e.pointerId)) this.canvas.releasePointerCapture(e.pointerId);
   };
 
   private readonly onWheel = (e: WheelEvent): void => {
     e.preventDefault();
-    this.zoom = Math.min(1.6, Math.max(0.55, this.zoom * Math.exp(e.deltaY * 0.0015)));
+    this.zoomBy(Math.exp(e.deltaY * 0.0015));
   };
 }

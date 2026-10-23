@@ -6,6 +6,9 @@
  * Parts are merged into the body's geometry (one draw call; each vertex keeps its part's texture layer),
  * dyes are material uniforms, and merged geometries are cached by body type + parts + LOD, so equal outfits
  * share one build. The Locker and the in-game renderer both draw soldiers through this.
+ * Bodies (the character creator): each base body (content BODIES: male, female) has its own rig, loaded on
+ * first use; an instance swaps body in place on setLoadout (same bones, the new rig's bind pose), so whoever
+ * animates or attaches to it keeps working (creator-interfaces.md).
  * Interface notes: w2-character-interface.md (and animation-avatar-split.md) in the shared notes folder.
  */
 import {
@@ -14,6 +17,7 @@ import {
   Color,
   Float32BufferAttribute,
   Matrix4,
+  Skeleton,
   SkinnedMesh,
   Uint16BufferAttribute,
   Vector3,
@@ -35,6 +39,7 @@ import {
   cosmeticLoadoutHash,
   getCosmetic,
   sanitizeCosmeticLoadout,
+  type Body,
   type CosmeticLoadout,
   type DyeChannel,
   type PartSlot,
@@ -50,8 +55,23 @@ export type CharacterLod = 0 | 1;
 export const ART_SLOTS = ['headgear', 'eyewear', 'gloves', 'boots', 'jetpack'] as const satisfies readonly PartSlot[];
 export type ArtSlot = (typeof ART_SLOTS)[number];
 
-/** The base character's manifest (W8: `rookie.json`). */
-export const ROOKIE_MANIFEST = 'characters/rookie/rookie.json';
+/**
+ * Each base body's rig manifest (content BODIES: every body type is built on one). The female rig's
+ * path is where the Forge's art will land (creator-interfaces.md); until then it 404s and she is
+ * drawn on the male rig (instance.body says so).
+ */
+export const BODY_MANIFESTS: Readonly<Record<Body, string>> = {
+  male: 'characters/rookie/rookie.json',
+  female: 'characters/rookie_female/rookie_female.json',
+};
+
+/** The base character's manifest (W8: `rookie.json`): the male body's. */
+export const ROOKIE_MANIFEST = BODY_MANIFESTS.male;
+
+/** The body a loadout is built on: its body type's (content `body`, male when absent). */
+export function bodyOfLoadout(loadout: Pick<CosmeticLoadout, 'items'>): Body {
+  return getCosmetic(loadout.items.bodyType)?.body ?? 'male';
+}
 
 /** Below this many pixels tall a character switches to LOD1; above LOD0_ABOVE_PX it switches back. */
 export const LOD1_BELOW_PX = 40;
@@ -106,6 +126,8 @@ interface Manifest {
   upperBodyBones?: string[];
   attachBone?: string;
   nozzles?: [number, number, number][];
+  /** a part fitted to each body separately: that body's files (creator-interfaces.md §3); absent = the top-level ones */
+  bodies?: Partial<Record<Body, { lods: Record<LodKey, string>; dye: Record<LodKey, DyeEntry> }>>;
 }
 
 /** One textured piece of the soldier at one LOD: geometry in the canonical joint order + its dye textures. */
@@ -119,6 +141,14 @@ interface Layer {
 }
 
 interface BaseRig {
+  /** the body this rig draws */
+  body: Body;
+  /** LOD0 joint names: the canonical skinIndex order of this rig's geometry (and its parts') */
+  joints: string[];
+  /** bind pose: each joint's inverse bind matrix (canonical order), the mesh's bind matrix, each bone's rest transform */
+  boneInverses: Matrix4[];
+  bindMatrix: Matrix4;
+  rest: Map<string, { position: Vector3; quaternion: Object3D['quaternion']; scale: Vector3 }>;
   /** LOD0 template scene: cloned per instance for its own bones, never rendered */
   scene: Object3D;
   lods: [Layer, Layer];
@@ -159,12 +189,17 @@ export interface CharacterInstance {
   readonly loadout: CosmeticLoadout;
   readonly loadoutHash: number;
   readonly lod: CharacterLod;
+  /** the body drawn: the loadout's, or male while that body's art isn't available */
+  readonly body: Body;
   /** colour of the equipped exhaust, for the jet flame */
   readonly exhaustColour: Color;
   /** nozzle exits of the equipped jetpack, glTF character space (empty: no jetpack art) */
   readonly nozzles: readonly (readonly [number, number, number])[];
   bone(name: string): Bone | null;
-  /** Dyes, skin and exhaust apply at once; new parts once they have loaded (the promise). A newer call wins. */
+  /**
+   * Dyes, skin and exhaust apply at once; new parts (and a new body) once they have loaded (the promise).
+   * A newer call wins. A body swap keeps this instance's root, bones and mesh (the new rig's bind pose).
+   */
   setLoadout(loadout: CosmeticLoadout): Promise<void>;
   setLod(lod: CharacterLod): void;
   /** Team colour for the dye mask's A channel (armband glow, docs/04 §1.4); null = off. */
@@ -246,10 +281,10 @@ export function partsKey(bodyType: string, parts: readonly (Part | null)[], lod:
 export class CharacterAssembler {
   readonly stats = { builds: 0, hits: 0 };
   private readonly source: CharacterSource;
-  private loading: Promise<BaseRig> | null = null;
-  private base: BaseRig | null = null;
-  /** LOD0 joint names: the canonical skinIndex order */
-  private joints: string[] = [];
+  /** each body's rig, loading or loaded (a body whose art fails resolves to the male rig) */
+  private readonly loading = new Map<Body, Promise<BaseRig>>();
+  private readonly bases = new Map<Body, BaseRig>();
+  /** parts per body (`body:id`): each rig's joint order and the part's files for that body */
   private readonly parts = new Map<string, Promise<Part>>();
   private readonly cache = new Map<string, CacheEntry>();
   private readonly idle = new Set<string>();
@@ -258,50 +293,74 @@ export class CharacterAssembler {
     this.source = options.source ?? assetSource(options.assetBase ?? `${import.meta.env.BASE_URL}assets/`, options.loader);
   }
 
-  /** Loads the body (both LODs), its dye textures and the clip library once; create() calls it for you. */
+  /** Loads the male body (both LODs), its dye textures and the clip library once; create() calls it for you. */
   preload(): Promise<void> {
-    this.loading ??= this.loadBase().then(
-      (base) => (this.base = base),
-      (error: unknown) => {
-        this.loading = null; // let a later create() retry
-        throw error;
-      },
-    );
-    return this.loading.then(() => undefined);
+    return this.rigFor('male').then(() => undefined);
+  }
+
+  /**
+   * A body's rig, loaded once. The male rig rejects when it can't load (a later call tries again); any
+   * other body whose art can't load (not made yet, a 404) resolves to the male rig, with a warning.
+   */
+  rigFor(body: Body): Promise<BaseRig> {
+    let p = this.loading.get(body);
+    if (!p) {
+      p = this.loadBase(body).then(
+        (rig) => {
+          this.bases.set(body, rig);
+          return rig;
+        },
+        (error: unknown) => {
+          if (body === 'male') {
+            this.loading.delete(body); // let a later create() retry
+            throw error;
+          }
+          console.warn(`character: the ${body} body's art isn't available, drawing the male body`, error);
+          return this.rigFor('male');
+        },
+      );
+      this.loading.set(body, p);
+    }
+    return p;
+  }
+
+  /** Whether a body's own art is in the game (false: it is drawn on the male rig). */
+  hasBodyArt(body: Body): Promise<boolean> {
+    return this.rigFor(body).then((rig) => rig.body === body);
   }
 
   /** `rookie.json` upperBodyBones: the bones the aim poses and upper-body actions own. */
   get upperBodyBones(): readonly string[] {
-    return this.base?.upperBodyBones ?? [];
+    return this.bases.get('male')?.upperBodyBones ?? [];
   }
 
-  /** loadout null = the default Rookie. Never rejects for a missing part (uses the slot default); only for the body. */
+  /** loadout null = the default Rookie. Never rejects for a missing part (uses the slot default); only for the base body. */
   async create(loadout: CosmeticLoadout | null, lod: CharacterLod = 0): Promise<CharacterInstance> {
     await this.preload();
     const clean = sanitizeCosmeticLoadout(loadout ?? DEFAULT_COSMETIC_LOADOUT);
-    return new Instance(this, clean, await this.resolveParts(clean), lod);
+    const rig = await this.rigFor(bodyOfLoadout(clean));
+    return new Instance(this, rig, clean, await this.resolveParts(clean, rig), lod);
   }
 
   dispose(): void {
     for (const { geometry } of this.cache.values()) geometry.dispose();
     this.cache.clear();
     this.idle.clear();
-    const layers = [...(this.base?.lods ?? [])];
     for (const p of this.parts.values()) void p.then((part) => part.lods.forEach((l) => disposeLayer(l)), () => {});
-    for (const l of layers) disposeLayer(l);
+    for (const base of new Set(this.bases.values())) for (const l of base.lods) disposeLayer(l);
     this.parts.clear();
-    this.base = null;
-    this.loading = null;
+    this.bases.clear();
+    this.loading.clear();
   }
 
-  /** @internal */
+  /** @internal the male rig (loaded: after preload()) */
   rig(): BaseRig {
-    return this.base!;
+    return this.bases.get('male')!;
   }
 
-  /** @internal the part per art slot for a loadout: its item, else the slot default, else none */
-  async resolveParts(loadout: CosmeticLoadout): Promise<(Part | null)[]> {
-    const base = this.rig();
+  /** @internal the part per art slot for a loadout on `rig`'s body: its item, else the slot default, else none */
+  async resolveParts(loadout: CosmeticLoadout, rig: BaseRig = this.rig()): Promise<(Part | null)[]> {
+    const base = rig;
     return Promise.all(
       ART_SLOTS.map(async (slot) => {
         const id = loadout.items[slot];
@@ -311,7 +370,7 @@ export class CharacterAssembler {
         for (const candidate of new Set([wanted, fallback])) {
           if (!candidate) continue;
           try {
-            return await this.part(candidate, slot);
+            return await this.part(candidate, slot, base);
           } catch (error) {
             console.warn(`character: no art for ${candidate}, using the ${slot} default`, error);
           }
@@ -349,13 +408,13 @@ export class CharacterAssembler {
   }
 
   /** @internal body + parts → one geometry (body vertices first), fitted to the body type */
-  build(parts: readonly (Part | null)[], widthMul: number, lod: CharacterLod): BufferGeometry {
-    const body = this.rig().lods[lod].geometry;
+  build(parts: readonly (Part | null)[], widthMul: number, lod: CharacterLod, rig: BaseRig = this.rig()): BufferGeometry {
+    const body = rig.lods[lod].geometry;
     const fitted: BufferGeometry[] = [];
     for (const part of parts) {
       if (!part) continue;
       const g = part.lods[lod].geometry;
-      fitted.push(widthMul === 1 ? g : part.rigid ? fitPieceToBody(g.clone(), widthMul) : this.fitSkinnedPart(g.clone(), widthMul));
+      fitted.push(widthMul === 1 ? g : part.rigid ? fitPieceToBody(g.clone(), widthMul) : this.fitSkinnedPart(g.clone(), widthMul, rig));
     }
     const merged = mergeGeometries([body, ...fitted]);
     if (widthMul !== 1) for (const g of fitted) g.dispose(); // the clones; the parts' own geometry stays cached
@@ -375,12 +434,12 @@ export class CharacterAssembler {
   }
 
   /** Boots and gloves move with the bone each vertex mostly follows (a foot, a hand) without scaling. */
-  private fitSkinnedPart(geometry: BufferGeometry, widthMul: number): BufferGeometry {
-    const positions = this.rig().bonePositions;
+  private fitSkinnedPart(geometry: BufferGeometry, widthMul: number, rig: BaseRig): BufferGeometry {
+    const positions = rig.bonePositions;
     const pos = geometry.getAttribute('position') as BufferAttribute;
     const joint = geometry.getAttribute('skinIndex') as BufferAttribute;
     const weight = geometry.getAttribute('skinWeight') as BufferAttribute;
-    const offsets = this.joints.map((name) => {
+    const offsets = rig.joints.map((name) => {
       const at = positions.get(name);
       return at ? widenPoint(at.clone(), widthMul).sub(at) : new Vector3();
     });
@@ -393,19 +452,22 @@ export class CharacterAssembler {
     return geometry;
   }
 
-  private async loadBase(): Promise<BaseRig> {
+  private async loadBase(body: Body): Promise<BaseRig> {
     const s = this.source;
-    const manifest = (await s.json(ROOKIE_MANIFEST)) as Manifest;
-    const dir = dirOf(ROOKIE_MANIFEST);
-    const [lod0, lod1, anims] = await Promise.all([s.gltf(dir + manifest.lods.lod0), s.gltf(dir + manifest.lods.lod1), s.gltf(dir + (manifest.anims ?? 'rookie_anims.glb'))]);
+    const path = BODY_MANIFESTS[body];
+    const manifest = (await s.json(path)) as Manifest;
+    const dir = dirOf(path);
+    // another body without its own clip library shares the male one (same bone names)
+    const animsFrom = manifest.anims || body === 'male' ? s.gltf(dir + (manifest.anims ?? 'rookie_anims.glb')).then((g) => repairClips(g.animations)) : this.rigFor('male').then((m) => m.clips);
+    const [lod0, lod1, clips] = await Promise.all([s.gltf(dir + manifest.lods.lod0), s.gltf(dir + manifest.lods.lod1), animsFrom]);
     const mesh0 = findSkinnedMesh(lod0.scene);
-    this.joints = mesh0.skeleton.bones.map((b) => b.name);
+    const joints = mesh0.skeleton.bones.map((b) => b.name);
     const skin = getCosmetic(DEFAULT_COSMETIC_LOADOUT.items.skinTone)?.colour ?? '#da9f75';
     const layer = async (gltf: LoadedGltf, key: LodKey): Promise<Layer> => {
       const entry = manifest.dye[key];
       const [albedo, mask] = await Promise.all([s.texture(dir + entry.albedo, true), s.texture(dir + entry.mask, false)]);
       return {
-        geometry: canonicalGeometry(findSkinnedMesh(gltf.scene), this.joints, 0),
+        geometry: canonicalGeometry(findSkinnedMesh(gltf.scene), joints, 0),
         albedo: entry.skin === 'alpha' ? albedo : bodyAlbedoWithSkin(albedo, skin),
         mask,
         defaults: dyeDefaults(entry),
@@ -417,35 +479,51 @@ export class CharacterAssembler {
     mesh0.skeleton.bones.forEach((b, i) => bonePositions.set(b.name, new Vector3().setFromMatrixPosition(m.copy(mesh0.skeleton.boneInverses[i]!).invert())));
     const defaultParts: Partial<Record<ArtSlot, string>> = {};
     for (const slot of ART_SLOTS) if (manifest.defaultParts?.[slot]) defaultParts[slot] = manifest.defaultParts[slot];
+    const rest = new Map<string, { position: Vector3; quaternion: Object3D['quaternion']; scale: Vector3 }>();
+    for (const b of mesh0.skeleton.bones) rest.set(b.name, { position: b.position.clone(), quaternion: b.quaternion.clone(), scale: b.scale.clone() });
     // W8's export garbles quaternion tangents: rebuild them (clipRepair.ts) so every clip plays as authored
-    return { scene: lod0.scene, lods, clips: repairClips(anims.animations), defaultParts, upperBodyBones: manifest.upperBodyBones ?? [], bonePositions };
+    return {
+      body,
+      joints,
+      boneInverses: mesh0.skeleton.boneInverses.map((m) => m.clone()),
+      bindMatrix: mesh0.bindMatrix.clone(),
+      rest,
+      scene: lod0.scene,
+      lods,
+      clips,
+      defaultParts,
+      upperBodyBones: manifest.upperBodyBones ?? [],
+      bonePositions,
+    };
   }
 
-  /** One cosmetic part, both LODs (cached; a failed load is not, so a later look tries again). */
-  private part(id: string, slot: ArtSlot): Promise<Part> {
-    let p = this.parts.get(id);
+  /** One cosmetic part on one body's rig, both LODs (cached; a failed load is not, so a later look tries again). */
+  private part(id: string, slot: ArtSlot, rig: BaseRig): Promise<Part> {
+    const key = `${rig.body}:${id}`;
+    let p = this.parts.get(key);
     if (!p) {
-      p = this.loadPart(id, slot);
-      this.parts.set(id, p);
+      p = this.loadPart(id, slot, rig);
+      this.parts.set(key, p);
       const failed = p;
       p.catch(() => {
-        if (this.parts.get(id) === failed) this.parts.delete(id);
+        if (this.parts.get(key) === failed) this.parts.delete(key);
       });
     }
     return p;
   }
 
-  private async loadPart(id: string, slot: ArtSlot): Promise<Part> {
+  private async loadPart(id: string, slot: ArtSlot, rig: BaseRig): Promise<Part> {
     const s = this.source;
     const path = getCosmetic(id)?.assets.manifest ?? `cosmetics/${slot}/${id}.json`;
     const manifest = (await s.json(path)) as Manifest;
     const dir = dirOf(path);
+    const files = manifest.bodies?.[rig.body] ?? manifest;
     const layerIndex = 1 + ART_SLOTS.indexOf(slot);
     const lods = (await Promise.all(
       LOD_KEYS.map(async (key): Promise<Layer> => {
-        const entry = manifest.dye[key];
-        const [gltf, albedo, mask] = await Promise.all([s.gltf(dir + manifest.lods[key]), s.texture(dir + entry.albedo, true), s.texture(dir + entry.mask, false)]);
-        return { geometry: canonicalGeometry(findSkinnedMesh(gltf.scene), this.joints, layerIndex), albedo, mask, defaults: dyeDefaults(entry) };
+        const entry = files.dye[key];
+        const [gltf, albedo, mask] = await Promise.all([s.gltf(dir + files.lods[key]), s.texture(dir + entry.albedo, true), s.texture(dir + entry.mask, false)]);
+        return { geometry: canonicalGeometry(findSkinnedMesh(gltf.scene), rig.joints, layerIndex), albedo, mask, defaults: dyeDefaults(entry) };
       }),
     )) as [Layer, Layer];
     return { id, slot, rigid: !!manifest.attachBone, lods, nozzles: manifest.nozzles ?? [] };
@@ -469,6 +547,7 @@ class Instance implements CharacterInstance {
   lod: CharacterLod;
   private parts: (Part | null)[];
   private key: string;
+  private rig: BaseRig;
   outline: SkinnedMesh | null = null;
   private readonly mesh: SkinnedMesh;
   private readonly bones = new Map<string, Bone>();
@@ -478,11 +557,12 @@ class Instance implements CharacterInstance {
 
   constructor(
     private readonly assembler: CharacterAssembler,
+    rig: BaseRig,
     loadout: CosmeticLoadout,
     parts: (Part | null)[],
     lod: CharacterLod,
   ) {
-    const rig = assembler.rig();
+    this.rig = rig;
     this.root = cloneSkinned(rig.scene);
     this.mesh = findSkinnedMesh(this.root);
     for (const b of this.mesh.skeleton.bones) this.bones.set(b.name, b);
@@ -500,6 +580,10 @@ class Instance implements CharacterInstance {
     this.applyColours();
   }
 
+  get body(): Body {
+    return this.rig.body;
+  }
+
   get nozzles(): readonly (readonly [number, number, number])[] {
     return this.parts[ART_SLOTS.indexOf('jetpack')]?.nozzles ?? [];
   }
@@ -513,10 +597,45 @@ class Instance implements CharacterInstance {
     const seq = ++this.pending;
     this.loadout = next;
     this.applyColours();
-    const parts = await this.assembler.resolveParts(next);
+    const wanted = await this.assembler.rigFor(bodyOfLoadout(next));
+    const rig = wanted === this.rig || this.fitsSkeleton(wanted) ? wanted : this.rig;
+    const parts = await this.assembler.resolveParts(next, rig);
     if (seq !== this.pending || this.disposed) return;
+    if (rig !== this.rig) this.rebind(rig);
     this.swap(parts, this.lod);
     this.applyColours();
+  }
+
+  /** Whether this instance's bones can take `rig`'s bind pose: every joint it skins to is one of ours. */
+  private fitsSkeleton(rig: BaseRig): boolean {
+    const missing = rig.joints.filter((n) => !this.bones.has(n));
+    if (missing.length) console.warn(`character: the ${rig.body} rig has bones this soldier lacks (${missing.join(', ')}); keeping the ${this.rig.body} body`);
+    return missing.length === 0;
+  }
+
+  /**
+   * Another body's bind pose on the same bones: rest transforms, inverse bind matrices (in that rig's
+   * joint order, which its geometry is skinned in) and bind matrix. The root, the bones (sockets,
+   * attachments) and the mesh stay, so an AnimationMixer on the root keeps playing.
+   */
+  private rebind(rig: BaseRig): void {
+    for (const [name, rest] of rig.rest) {
+      const bone = this.bones.get(name);
+      if (!bone) continue;
+      bone.position.copy(rest.position);
+      bone.quaternion.copy(rest.quaternion);
+      bone.scale.copy(rest.scale);
+    }
+    const old = this.mesh.skeleton;
+    const skeleton = new Skeleton(
+      rig.joints.map((n) => this.bones.get(n)!),
+      rig.boneInverses.map((m) => m.clone()),
+    );
+    this.mesh.bind(skeleton, rig.bindMatrix);
+    this.outline?.bind(skeleton, rig.bindMatrix);
+    old.dispose();
+    // the old rig's geometry key no longer applies: swap() acquires the new body's
+    this.rig = rig;
   }
 
   setLod(lod: CharacterLod): void {
@@ -561,12 +680,14 @@ class Instance implements CharacterInstance {
   }
 
   private keyFor(parts: readonly (Part | null)[], lod: CharacterLod): string {
-    return partsKey(this.loadout.items.bodyType, parts, lod);
+    // the rig drawn, too: a body whose art isn't in yet draws (and caches) on the male rig
+    return partsKey(`${this.rig.body}/${this.loadout.items.bodyType}`, parts, lod);
   }
 
   private acquire(key: string, parts: readonly (Part | null)[], lod: CharacterLod): BufferGeometry {
     const widthMul = getCosmetic(this.loadout.items.bodyType)?.widthMul ?? 1;
-    return this.assembler.acquire(key, () => this.assembler.build(parts, widthMul, lod));
+    const rig = this.rig;
+    return this.assembler.acquire(key, () => this.assembler.build(parts, widthMul, lod, rig));
   }
 
   private swap(parts: (Part | null)[], lod: CharacterLod): void {
@@ -584,7 +705,7 @@ class Instance implements CharacterInstance {
   }
 
   private applyTextures(): void {
-    const base = this.assembler.rig().lods[this.lod];
+    const base = this.rig.lods[this.lod];
     this.material.setLayer(0, base.albedo, base.mask);
     ART_SLOTS.forEach((_, i) => {
       const layer = this.parts[i]?.lods[this.lod];
@@ -602,7 +723,7 @@ class Instance implements CharacterInstance {
     d.accent.set(colour(dyes.accent));
     d.skin.set(colour(items.skinTone));
     const chosen = [d.primary, d.secondary, d.accent];
-    const body = this.assembler.rig().lods[this.lod];
+    const body = this.rig.lods[this.lod];
     body.defaults.forEach((own, c) => this.material.bodyDefaults[c]!.copy(own ?? chosen[c]!));
     const layers = [body, ...this.parts.map((p) => p?.lods[this.lod])];
     for (let layer = 0; layer < DYE_LAYERS; layer++) {

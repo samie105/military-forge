@@ -51,7 +51,7 @@ export function mountUiSounds(play: (id: SoundId) => void, root: Document = docu
   };
 }
 
-type ShellSlice = Pick<ShellState, 'notice' | 'tuneNote' | 'screen' | 'match' | 'lobby'>;
+type ShellSlice = Pick<ShellState, 'notice' | 'tuneNote' | 'screen' | 'match' | 'lobby'> & Partial<Pick<ShellState, 'titleHit'>>;
 
 /** The sounds the shell's change from `a` to `b` calls for (pure: tests drive it). */
 export function shellCues(a: ShellSlice | null, b: ShellSlice): SoundId[] {
@@ -60,6 +60,8 @@ export function shellCues(a: ShellSlice | null, b: ShellSlice): SoundId[] {
   if (b.notice && b.notice !== a.notice) out.push('ui.toast');
   if (b.tuneNote && b.tuneNote !== a.tuneNote) out.push('ui.toast');
   if (b.screen.name === 'error' && a.screen.name !== 'error') out.push('ui.error');
+  // the title screen's press: the war-tone hit as the music starts (shell/screens/Title.tsx)
+  if (b.titleHit && b.titleHit !== a.titleHit) out.push('sting.start');
   // the lobby: players joining and leaving, your Ready
   if (a.lobby && b.lobby && a.lobby.code === b.lobby.code) {
     const n0 = a.lobby.players.length;

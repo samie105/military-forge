@@ -92,6 +92,9 @@ export class AudioRuntime {
         }),
       );
       this.music.setMode(musicFor(false, this.lastShell));
+      // the title's press is the gesture that made this context: its hit, if it was just now
+      const hit = this.lastShell.titleHit;
+      if (hit && performance.now() - hit < 1500) this.engine.play('sting.start');
     }
   }
 

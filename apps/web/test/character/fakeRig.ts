@@ -47,7 +47,7 @@ export const BODY_TEXELS = [
   [218, 159, 117, 255],
 ];
 
-function rig(order: readonly string[], triangles: readonly [string, number, number, number][]): Group {
+function rig(order: readonly string[], triangles: readonly [string, number, number, number][], height = 1): Group {
   const bones = order.map((name) => Object.assign(new Bone(), { name }));
   const byName = new Map(bones.map((b) => [b.name, b]));
   const root = byName.get('root')!;
@@ -55,6 +55,7 @@ function rig(order: readonly string[], triangles: readonly [string, number, numb
     if (b === root) continue;
     root.add(b); // flat hierarchy: enough for skinning maths
     b.position.fromArray(BONE_AT[b.name] ?? [0, 0, 0]);
+    b.position.y *= height;
   }
   root.updateMatrixWorld(true);
   const pos: number[] = [];
@@ -96,6 +97,17 @@ const dye = (stem: string, defaults: Record<string, string>) => ({
   lod1: { mask: `textures/${stem}_lod1_dye_mask.png`, albedo: `textures/${stem}_lod1_dye_albedo.webp`, defaults },
 });
 
+/** A second body (the character creator): its rig's joint order, height (bone y scale) and bones it lacks. */
+export interface FakeBody {
+  joints?: readonly string[];
+  height?: number;
+  missing?: readonly string[];
+  /** its own clip library (else it shares the male one) */
+  anims?: boolean;
+}
+
+export const FEMALE_MANIFEST = 'characters/rookie_female/rookie_female.json';
+
 export interface FakeSource extends CharacterSource {
   /** paths requested so far */
   readonly requests: string[];
@@ -105,7 +117,7 @@ export interface FakeSource extends CharacterSource {
   failBase: number;
 }
 
-export function fakeSource(): FakeSource {
+export function fakeSource(female: FakeBody | null = null): FakeSource {
   const requests: string[] = [];
   const broken = new Set<string>();
   const src: FakeSource = {
@@ -120,6 +132,16 @@ export function fakeSource(): FakeSource {
           lods: lods('rookie_body'),
           anims: 'rookie_anims.glb',
           dye: dye('rookie_body', BODY_DEFAULTS),
+          defaultParts: { headgear: 'headgear_brim_helmet', boots: 'boots_combat', jetpack: 'jetpack_twin_tank' },
+          upperBodyBones: ['spine1', 'spine2', 'neck', 'head'],
+        };
+      }
+      if (path === FEMALE_MANIFEST) {
+        if (!female) throw new Error(`${path}: HTTP 404`);
+        return {
+          lods: lods('rookie_female_body'),
+          ...(female.anims ? { anims: 'rookie_female_anims.glb' } : {}),
+          dye: dye('rookie_female_body', BODY_DEFAULTS),
           defaultParts: { headgear: 'headgear_brim_helmet', boots: 'boots_combat', jetpack: 'jetpack_twin_tank' },
           upperBodyBones: ['spine1', 'spine2', 'neck', 'head'],
         };
@@ -140,6 +162,11 @@ export function fakeSource(): FakeSource {
       requests.push(path);
       const order = path.includes('_lod1') ? [...JOINTS].reverse() : JOINTS;
       if (path.endsWith('rookie_anims.glb')) return { scene: rig(order, []), animations: [new AnimationClip('idle', 1, []), new AnimationClip('walk', 1, [])] };
+      if (path.endsWith('rookie_female_anims.glb')) return { scene: rig(order, []), animations: [new AnimationClip('idle_f', 1, [])] };
+      if (path.includes('rookie_female_body') && female) {
+        const joints = (female.joints ?? JOINTS).filter((j) => !female.missing?.includes(j));
+        return { scene: rig(path.includes('_lod1') ? [...joints].reverse() : joints, BODY, female.height ?? 1), animations: [] };
+      }
       if (path.includes('rookie_body')) return { scene: rig(order, BODY), animations: [] };
       const id = path.slice(path.lastIndexOf('/') + 1).replace(/(_lod1)?\.glb$/, '');
       const part = PARTS[id]!;
