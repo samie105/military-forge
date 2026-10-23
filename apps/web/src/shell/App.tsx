@@ -57,6 +57,7 @@ function AppScreens({ store }: { store: ShellStore }) {
   const ctl = useCtl();
   const screen = useStore(store, (s) => s.screen);
   const overlay = useStore(store, (s) => s.overlay);
+  const titleOff = useStore(store, (s) => s.title !== 'on');
   const notice = useStore(store, (s) => s.notice);
   const tuneNote = useStore(store, (s) => s.tuneNote);
   const tips = useStore(store, (s) => s.tips);
@@ -125,7 +126,8 @@ function AppScreens({ store }: { store: ShellStore }) {
       {overlay === 'lan-join' && (phone ? <PhoneLanJoin /> : <LanJoin />)}
       {overlay === 'name' && (phone ? <PhoneNameEntry store={store} first={false} /> : <NameEntry store={store} first={false} />)}
       {/* friends (social/): the panel, over the menus and the in-match menu */}
-      <SocialLayer />
+      {/* not under the title: its push channel and panels start once the player is in (mobile audit P1-17) */}
+      {titleOff && <SocialLayer />}
       <TuneToast note={tuneNote} />
       <TitleScreen store={store} />
       {notice && (

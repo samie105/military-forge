@@ -26,9 +26,15 @@ const load = () => (loader ??= import('./runtime'));
 export function startAudio(store: StoreApi<ShellState> | null): void {
   if (started || typeof window === 'undefined') return;
   started = true;
-  // fetch the code early, quietly; nothing plays until a gesture
+  // fetch the code early, quietly; nothing plays until a gesture. Not on a phone or the data saver:
+  // the runtime and the score are ~0.5 MB, which the title's first seconds on 4G need for the game
+  // itself (mobile audit P1-17); there the first tap fetches it
+  const nav = navigator as Navigator & { connection?: { saveData?: boolean } };
+  const frugal = nav.connection?.saveData === true || (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches);
   const idle = (window as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback;
-  if (idle) idle(() => void load());
+  if (frugal) {
+    // nothing until the gesture (onContext below)
+  } else if (idle) idle(() => void load());
   else setTimeout(() => void load(), 1500);
   createUnlocker({
     target: window,

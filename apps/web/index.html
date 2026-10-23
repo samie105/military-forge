@@ -73,6 +73,8 @@
     <link rel="stylesheet" href="/src/ui/kit.css" />
     <!-- Frost's feel in Field Print's colours: frosted panels and HUD plates, solid under Reduce transparency -->
     <link rel="stylesheet" href="/src/ui/frost.css" />
+    <!-- the title screen's look: the landing draws its first frame with it (the rest of the app's CSS comes with the game chunk) -->
+    <link rel="stylesheet" href="/src/shell/screens/title.css" />
     <style>
       /* the game is the page: no scrolling, no rubber-band or pull-to-refresh, no double-tap zoom in the
          menus (a pinch still zooms them), so the browser's bars have nothing to come back on (full
@@ -146,7 +148,7 @@
         font-size: 20px; font-weight: var(--fw-black); letter-spacing: .14em; text-transform: uppercase; text-decoration: none;
         color: var(--c-text); background: rgb(14 16 11 / .8); border: var(--bw) solid var(--c-line-strong); border-radius: var(--r-sm);
       }
-      .mf-title.is-phone .mf-title__about { left: 70px; bottom: 120px; min-height: 112px; padding: 0 40px; font-size: 32px; }
+      .mf-title.is-phone .mf-title__about { left: 70px; bottom: 214px; min-height: 112px; padding: 0 40px; font-size: 32px; }
       /* once the app is up, nothing of the landing animates (it's under the game) */
       html.mf-app :is(.mf-land__run i, .mf-land__hero *) { animation: none !important; }
       html.mf-app .mf-land__hero .mf-title__world { will-change: auto; }
@@ -325,6 +327,6 @@
     <div id="bar"></div>
     <div id="panel"></div>
     <div id="toast"></div>
-    <script type="module" src="/src/main.ts"></script>
+    <script type="module" src="/src/boot.ts"></script>
   </body>
 </html>

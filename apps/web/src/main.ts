@@ -264,7 +264,15 @@ class GameRenderer extends Renderer {
 }
 
 const renderer = new GameRenderer(canvas, camera, map, () => mode?.tuning() ?? defaultTuning);
-void view3d?.load(map.spawns[0]!);
+// the 3D view's characters, guns and effects, and compiling their shaders (the heaviest work a phone
+// does at the start), wait while the title shows: they start on the press, or once the page has been
+// idle a while (below, after the shell); the debug client and room links load at once
+let loading3d = false;
+const load3d = () => {
+  if (loading3d) return;
+  loading3d = true;
+  void view3d?.load(map.spawns[0]!);
+};
 view3d?.attach(renderer, () => (mode instanceof OnlineMode ? mode.net : null)); // sim events → 3D effects; online: remotePose (render3d)
 // phones and tablets: twin sticks + buttons (apps/web/src/touch); the app's Settings → Touch has "Edit layout"
 mountTouch({ sampler, camera, renderer, view3d, editButton: !appMode, tuning: () => mode?.tuning() ?? null, map: () => map, inGame: () => mode !== null });
@@ -601,6 +609,16 @@ registerRoute({
 // registerRoute({ id: 'locker', title: 'Locker', mount }) from './shell' (opens at #/locker).
 // the title screen opens the app (not for invite links, the debug client or automation: shell/title.ts)
 const shell = mountShell(document.body, appMode ? { host, title: titleWanted({ appMode, path: location.pathname, params, webdriver: navigator.webdriver === true }) } : {});
+if (shell.store.getState().title !== 'on') load3d();
+else {
+  const stopTitleWatch = shell.store.subscribe((s) => {
+    if (s.title === 'on') return;
+    stopTitleWatch();
+    load3d();
+  });
+  const idle = (window as Window & { requestIdleCallback?: (fn: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+  window.setTimeout(() => (idle ? idle(load3d, { timeout: 4000 }) : load3d()), 6000);
+}
 // sound starts on the first tap or key (browsers allow it only then); the shell's store drives the
 // interface cues and the music
 startAudio(shell.store);

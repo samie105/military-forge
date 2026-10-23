@@ -56,8 +56,8 @@ describe('the title screen: what continues', () => {
 describe('the title screen: the corners and the prompt', () => {
   it("names the server's region: the box's probe config, this computer in dev, else the host", () => {
     expect(regionLabel('40-123-240-224.sslip.io', { regions: [{ name: 'Johannesburg' }] })).toBe('Johannesburg');
-    expect(regionLabel('localhost', null)).toBe('This computer');
-    expect(regionLabel('127.0.0.1', null)).toBe('This computer');
+    expect(regionLabel('localhost', null)).toBe('Local server');
+    expect(regionLabel('127.0.0.1', null)).toBe('Local server');
     expect(regionLabel('play.example.org', {})).toBe('play.example.org');
   });
 

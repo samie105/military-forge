@@ -8,7 +8,7 @@
  * next screen, already drawn underneath: your name the first time, else Home. Phones keep it cheap:
  * one layer moves, no blur. Reduce motion: no drift, a short cross-fade out.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useStore } from 'zustand';
 import { GAME_NAME } from '@military-forge/shared';
 import { buildId, keyArt } from 'virtual:title-info';
@@ -83,7 +83,12 @@ export function TitleScreen({ store }: { store: ShellStore }) {
   const [region, setRegion] = useState<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
 
-  // the server's region (the box's probe config), else "This computer" / the host
+  // the ping's first sample is taken while the page still loads (807 ms on a phone, mobile audit
+  // P1-16): the chip shows a number from the second one on
+  const [samples, setSamples] = useState(0);
+  useEffect(() => setSamples((n) => n + 1), [ping]);
+
+  // the server's region (the box's probe config), else "Local server" / the host
   useEffect(() => {
     let live = true;
     fetch(`${import.meta.env.BASE_URL}probe-config.json`)
@@ -139,6 +144,15 @@ export function TitleScreen({ store }: { store: ShellStore }) {
       cancelAnimationFrame(frame);
     };
   }, [state, store]);
+
+  // while the title is up, the screen waiting under it isn't painted (it shows as the title leaves):
+  // its giant background word was the page's largest paint, seconds after the landing's (mobile audit)
+  // (a layout effect: set before the first commit paints, or that commit could paint the screen)
+  useLayoutEffect(() => {
+    const up = state === 'on' || state === 'pressed';
+    document.documentElement.classList.toggle('mf-title-up', up);
+    return () => document.documentElement.classList.remove('mf-title-up');
+  }, [state]);
 
   // the landing's Play now (index.html): pressed while the page loaded, or on the About sheet
   useEffect(() => (state === 'on' ? onPlay(() => pressTitle(store)) : undefined), [state, store]);
@@ -248,11 +262,14 @@ export function TitleScreen({ store }: { store: ShellStore }) {
           About the game
         </a>
         <span className="mf-title__corner mf-title__corner--build">build {buildId}</span>
-        <span className="mf-title__corner mf-title__corner--net">
-          <i className={ping >= 0 ? 'is-live' : ''} aria-hidden="true" />
-          {region ?? 'Server'}
-          {ping >= 0 ? ` · ${Math.round(ping)} ms` : ' · …'}
-        </span>
+        {/* the server and its ping (not on a phone: the title there is the key art and one line) */}
+        {!phone && (
+          <span className="mf-title__corner mf-title__corner--net">
+            <i className={ping >= 0 ? 'is-live' : ''} aria-hidden="true" />
+            Server: {region ?? '…'}
+            {ping >= 0 && samples > 2 ? ` · ${Math.round(ping)} ms` : ''}
+          </span>
+        )}
       </Screen>
     </div>
   );

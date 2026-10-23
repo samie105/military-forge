@@ -26,11 +26,11 @@ interface ProbeConfig {
   regions?: { name?: string }[];
 }
 
-/** Where the server is, for the corner: the box's region, "This computer" in dev, else the host. */
+/** Where the server is, for the corner: the box's region, "Local server" in dev, else the host. */
 export function regionLabel(hostname: string, probe: ProbeConfig | null): string {
   const named = probe?.regions?.[0]?.name;
   if (named) return named;
-  if (/^(localhost|127\.|\[::1\]|0\.0\.0\.0)/.test(hostname) || hostname.endsWith('.local')) return 'This computer';
+  if (/^(localhost|127\.|\[::1\]|0\.0\.0\.0)/.test(hostname) || hostname.endsWith('.local')) return 'Local server';
   return hostname;
 }
 
