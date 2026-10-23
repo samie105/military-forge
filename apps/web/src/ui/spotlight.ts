@@ -25,7 +25,8 @@ import './spotlight.css';
 export type SpotTarget =
   | { kind: 'element'; el: Element | (() => Element | null) }
   | { kind: 'selector'; selector: string }
-  | { kind: 'rect'; rect: () => Box | null }
+  /** a box the caller measures (a touch control's: touch/index.ts touchControlRect); `shape` overrides the step's */
+  | { kind: 'rect'; rect: () => Box | null; shape?: SpotShape }
   /** logical px of the page, null = off screen; `size` is the ring's diameter (default 56) */
   | { kind: 'world'; point: () => { x: number; y: number } | null; size?: number };
 
@@ -49,11 +50,18 @@ export interface SpotStep {
   place?: SpotPlace;
   /** 'outside': menus (the dim blocks, the hole passes); 'none' (default): play, nothing is blocked */
   block?: 'outside' | 'none';
+  /**
+   * What the callout keeps clear of: 'all' (default) its targets; 'none' only `place` (in play, where a
+   * world marker moves every frame, the callout holds still)
+   */
+  anchor?: 'all' | 'none';
   /** 0..1: default 0.28 ('none') or 0.6 ('outside') */
   dim?: number;
   primary?: { label: string };
   /** default true */
   skippable?: boolean;
+  /** the skip link's words (default "Skip", or "Skip this" with a time-out): e.g. "Later" */
+  skipLabel?: string;
   /** "Skip training" beside Skip (the whole tour, not just this step) */
   skipAll?: boolean;
   /** after this long without the step being done, the callout offers Skip (never auto-advances) */
@@ -237,10 +245,14 @@ export class Spotlight {
     return this.step;
   }
 
-  /** Shows a step, or moves to it from the one shown (the same overlay: the ring travels, the path morphs). */
+  /**
+   * Shows a step, or moves to it from the one shown (the same overlay: the ring travels, the path morphs).
+   * The same step again (its id) updates it in place: no travel, and its time-out keeps running.
+   */
   show(step: SpotStep): void {
     window.clearTimeout(this.hideTimer);
-    window.clearTimeout(this.timer);
+    const same = !!this.step && this.step.id === step.id && !this.el.hidden;
+    if (!same) window.clearTimeout(this.timer);
     const first = !this.step || this.el.hidden;
     this.step = step;
     const blocking = step.block === 'outside';
@@ -248,21 +260,36 @@ export class Spotlight {
     this.el.classList.toggle('is-blocking', blocking);
     this.el.classList.toggle('is-phone', this.phone());
     this.el.classList.toggle('is-reduced', this.reducedMotion());
-    this.el.classList.remove('is-leaving', 'is-timeout');
+    this.el.classList.remove('is-leaving');
+    if (!same) this.el.classList.remove('is-timeout');
     this.el.style.setProperty('--spot-dim', String(step.dim ?? (blocking ? 0.6 : 0.28)));
     this.renderCallout(step);
     this.live.textContent = step.announce ?? [step.eyebrow, step.title, step.body].filter(Boolean).join('. ');
     this.watch(step);
     // between steps in play (and on phones): fade the dim, move, fade back; menus on desktop morph the path
-    if (!first && !blocking) this.el.classList.add('is-moving');
+    const moving = !first && !blocking && !same;
+    if (moving) this.el.classList.add('is-moving');
     this.holes = [];
     this.measure(true);
-    if (!first && !blocking) requestAnimationFrame(() => this.el.classList.remove('is-moving'));
-    if (step.timeoutMs) this.timer = window.setTimeout(() => this.el.classList.add('is-timeout'), step.timeoutMs);
+    if (moving) requestAnimationFrame(() => this.el.classList.remove('is-moving'));
+    if (step.timeoutMs && !same) this.timer = window.setTimeout(() => this.el.classList.add('is-timeout'), step.timeoutMs);
     if (blocking) {
       document.addEventListener('keydown', this.onKey, true);
-      this.focusTarget();
+      if (!same) this.focusTarget();
     } else document.removeEventListener('keydown', this.onKey, true);
+  }
+
+  /** A P7 stamp on the callout ("Confirmed"), until the next step is shown. The caller announces it. */
+  stamp(text: string): void {
+    const row = this.step ? this.callout.querySelector('.mf-spot__actions') : null;
+    if (!row) return;
+    row.querySelector('.mf-spot__stamp')?.remove();
+    const s = document.createElement('span');
+    s.className = 'stamp stamp--volt m-p7 mf-spot__stamp';
+    s.setAttribute('aria-hidden', 'true');
+    s.textContent = text;
+    row.prepend(s);
+    this.measure(true); // the callout may have grown: place it again
   }
 
   /** The game loop calls this when a world target may have moved (cheap when nothing did). */
@@ -337,7 +364,7 @@ export class Spotlight {
         }
       }
       if (!b) continue;
-      out.push(holeFor(inflate(b, pad), step.shape ?? 'auto', radius + pad));
+      out.push(holeFor(inflate(b, pad), (t.kind === 'rect' ? t.shape : undefined) ?? step.shape ?? 'auto', radius + pad));
     }
     return out;
   }
@@ -381,7 +408,7 @@ export class Spotlight {
     const c = this.callout;
     const size = { width: c.offsetWidth, height: c.offsetHeight };
     const place = this.phone() ? 'top-centre' : (step.place ?? 'auto');
-    const at = placeCallout(unionBox(holes), size, this.safeBox(), place);
+    const at = placeCallout(step.anchor === 'none' ? null : unionBox(holes), size, this.safeBox(), place);
     c.style.transform = `translate3d(${n(at.left)}px, ${n(at.top)}px, 0)`;
     c.dataset.side = at.side;
   }
@@ -401,7 +428,7 @@ export class Spotlight {
       <span class="mf-spot__body" id="mf-spot-body">${step.body ? esc(step.body) : ''}${keys ? ` <span class="mf-spot__keys">${keys}</span>` : ''}</span>
       ${step.help ? `<span class="mf-spot__help">${esc(step.help)}</span>` : ''}
       <span class="mf-spot__actions">
-        ${skippable ? `<button type="button" class="mf-spot__skip" data-spot="skip">${step.timeoutMs ? 'Skip this' : 'Skip'}</button>` : ''}
+        ${skippable ? `<button type="button" class="mf-spot__skip" data-spot="skip">${esc(step.skipLabel ?? (step.timeoutMs ? 'Skip this' : 'Skip'))}</button>` : ''}
         ${step.skipAll ? '<button type="button" class="mf-spot__skip" data-spot="skip-all">Skip training</button>' : ''}
         ${step.primary ? `<button type="button" class="btn btn--volt btn--sm mf-spot__primary" data-spot="primary">${esc(step.primary.label)}</button>` : ''}
       </span>`;

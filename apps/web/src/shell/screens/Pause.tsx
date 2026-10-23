@@ -32,6 +32,8 @@ export function Pause({ store }: { store: ShellStore }) {
   const lobby = useStore(store, (s) => s.lobby);
   const [confirm, setConfirm] = useState(false);
   const room = screen.name === 'room' ? screen.code : null;
+  // First flight runs (the onboarding tour): Restart it, or Skip training
+  const tour = screen.name === 'training' && !!screen.tour;
   const playing = match?.phase === MatchPhase.InProgress;
   const what = room ? (playing ? 'match' : 'room') : 'training';
   const open = lobby ? Math.max(0, ROOM_SLOTS - lobby.players.length) : 0;
@@ -62,6 +64,17 @@ export function Pause({ store }: { store: ShellStore }) {
           <Icon name="play" />
           Resume
         </button>
+        {tour && (
+          <div className="pause__tour m-p3" style={row(1)}>
+            <button className="btn btn--ink btn--block pause__btn m-p8" type="button" onClick={blurAfter(() => ctl.restartTour())}>
+              <Icon name="rotate" />
+              Restart First flight
+            </button>
+            <button className="btn btn--ghost btn--block pause__btn m-p8" type="button" onClick={blurAfter(() => ctl.skipTour())}>
+              Skip training
+            </button>
+          </div>
+        )}
         {room && (
           <button className="btn btn--volt btn--xl btn--block pause__btn m-p3 m-p8" style={row(1)} type="button" onClick={blurAfter(() => inviteFriends(ctl, () => void ctl.shareLink(room)))}>
             <Icon name="users-plus" />

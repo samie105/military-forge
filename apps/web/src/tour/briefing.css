@@ -1,0 +1,68 @@
+/*
+ * The Briefing (data-screen="briefing"; tour/briefing.ts): one question on the menus' ink, two answer
+ * cards (the recruit's in volt, the veteran's in ink), the device line and Skip all training. Desktop:
+ * the menus' 1920×1080 box zoomed to the window (ui/fit.ts). A phone (html.mf-phone): its own layout at
+ * its own size. mountBriefing injects this sheet and removes it. Tokens only.
+ */
+.mf-br-fit { position: fixed; inset: 0; overflow: hidden; z-index: 1; }
+.mf-br-fit > .screen { width: var(--fit-w, 1920px); height: var(--fit-h, 1080px); zoom: var(--fit, 1); }
+
+:where(.mf-br-fit) .mf-br {
+  position: relative; z-index: 1; height: 100%; box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--sp-6);
+  padding: var(--sp-9) var(--sp-9) var(--sp-8); text-align: center;
+}
+:where(.mf-br-fit) .mf-br__eyebrow { color: var(--c-brass); }
+:where(.mf-br-fit) .mf-br__q { margin: 0; font-size: var(--fs-88); color: var(--c-paper); max-width: 1500px; }
+
+/* ---- the answers ---- */
+:where(.mf-br-fit) .mf-br__answers { display: grid; grid-template-columns: repeat(2, minmax(0, 660px)); gap: var(--sp-6); margin-top: var(--sp-4); }
+:where(.mf-br-fit) .mf-br__answer {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: var(--sp-3);
+  min-height: 300px; padding: var(--sp-7) var(--sp-8) var(--sp-7) var(--sp-7); box-sizing: border-box; text-align: left;
+  border: var(--bw) solid var(--c-line); border-radius: var(--r-frost, 0 28px 0 28px); background: var(--c-ink-900); color: var(--c-paper);
+  font: inherit; cursor: pointer; box-shadow: var(--sh-card);
+  transition: transform var(--m-fast) var(--ease-settle), border-color var(--m-fast) linear;
+}
+:where(.mf-br-fit) .mf-br__answer.is-recruit { background: var(--c-volt); color: var(--c-volt-ink); border-color: var(--c-volt); }
+:where(.mf-br-fit) .mf-br__answer:hover { transform: translateY(-4px); border-color: var(--c-paper); }
+:where(.mf-br-fit) .mf-br__answer.is-recruit:hover { border-color: var(--c-volt-ink); }
+:where(.mf-br-fit) .mf-br__t { font-size: var(--fs-64); line-height: .95; }
+:where(.mf-br-fit) .mf-br__s { font-size: var(--fs-18); font-weight: var(--fw-bold); opacity: .86; }
+:where(.mf-br-fit) .mf-br__go { position: absolute; right: var(--sp-6); top: var(--sp-6); width: 40px; height: 40px; stroke-width: 2.5; }
+
+/* ---- the device line and Skip all training ---- */
+:where(.mf-br-fit) .mf-br__device { margin: var(--sp-3) 0 0; font-size: var(--fs-20); color: var(--c-muted); }
+:where(.mf-br-fit) .mf-br__device b { color: var(--c-paper); }
+:where(.mf-br-fit) .mf-br__link {
+  min-height: 44px; padding: 0 var(--sp-2); border: 0; background: none; cursor: pointer;
+  font: inherit; font-weight: var(--fw-bold); color: var(--c-volt); text-decoration: underline; text-underline-offset: 4px;
+}
+:where(.mf-br-fit) .mf-br__skip { font-size: var(--fs-18); color: var(--c-muted); }
+:where(.mf-br-fit) .mf-br__link:hover { color: var(--c-paper); }
+
+/* a laptop's smaller box, or big text */
+html:is(.mf-short, .mf-big-text):where(:not(.mf-phone)) :where(.mf-br-fit) .mf-br__q { font-size: var(--fs-64); }
+html:is(.mf-short, .mf-big-text):where(:not(.mf-phone)) :where(.mf-br-fit) .mf-br__answer { min-height: 240px; }
+html:is(.mf-short, .mf-big-text):where(:not(.mf-phone)) :where(.mf-br-fit) .mf-br__t { font-size: var(--fs-48); }
+
+/* ---- a phone: its own size; two cards side by side, the question above ---- */
+:where(html.mf-phone) .mf-br-fit > .screen { zoom: 1; width: 100%; height: 100%; }
+:where(html.mf-phone) :where(.mf-br-fit) .bg__word { display: none; }
+:where(html.mf-phone) :where(.mf-br-fit) .mf-br {
+  gap: var(--sp-3);
+  padding: max(var(--sp-3), env(safe-area-inset-top)) max(var(--sp-5), env(safe-area-inset-right)) max(var(--sp-3), env(safe-area-inset-bottom)) max(var(--sp-5), env(safe-area-inset-left));
+}
+:where(html.mf-phone) :where(.mf-br-fit) .mf-br__eyebrow { display: none; }
+:where(html.mf-phone) :where(.mf-br-fit) .mf-br__q { font-size: 32px; }
+:where(html.mf-phone) :where(.mf-br-fit) .mf-br__answers { grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; max-width: 720px; gap: var(--sp-3); margin-top: 0; }
+:where(html.mf-phone) :where(.mf-br-fit) .mf-br__answer { min-height: 132px; padding: var(--sp-4) var(--sp-6) var(--sp-4) var(--sp-4); gap: var(--sp-1); border-radius: var(--r-frost-sm, 0 18px 0 18px); }
+:where(html.mf-phone) :where(.mf-br-fit) .mf-br__t { font-size: 26px; }
+:where(html.mf-phone) :where(.mf-br-fit) .mf-br__s { font-size: 13px; }
+:where(html.mf-phone) :where(.mf-br-fit) .mf-br__go { right: var(--sp-3); top: var(--sp-3); width: 24px; height: 24px; }
+:where(html.mf-phone) :where(.mf-br-fit) .mf-br__device { margin: 0; font-size: 14px; }
+:where(html.mf-phone) :where(.mf-br-fit) .mf-br__skip { font-size: 14px; }
+
+/* Reduce motion: no lift */
+html.reduce-motion :where(.mf-br-fit) .mf-br__answer:hover { transform: none; }
+@media (prefers-reduced-motion: reduce) { :where(.mf-br-fit) .mf-br__answer:hover { transform: none; } }

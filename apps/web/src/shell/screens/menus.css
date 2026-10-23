@@ -187,6 +187,9 @@ html.mf-narrow .kit-v2 .mf-standings :is(th, td) { padding-inline: var(--sp-1); 
    widens and the labels step down so they stay on one or two lines */
 :where(.kit-v2) .pause { overflow-y: auto; scrollbar-width: thin; }
 :where(.kit-v2) .pause__btn { flex: none; }
+/* First flight's two (the onboarding tour): Restart it, Skip training, side by side */
+:where(.kit-v2) .pause__tour { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); flex: none; }
+:where(.kit-v2) .pause__tour .btn { white-space: normal; }
 html.mf-big-text .kit-v2 .pause { width: 700px; }
 html.mf-big-text .kit-v2 .pause__btn { font-size: var(--fs-20); }
 html.mf-big-text .kit-v2 .pause__confirm { left: 820px; }

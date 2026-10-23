@@ -33,7 +33,7 @@ import { autoPreset, deviceHints, gpuRenderer } from './gfxAuto';
 import { createHostTuning, tuningOffered } from './hostTuning';
 import { splitTuneChange, tuneChanges, tuneToastParts } from './shell/tune';
 import { InputSampler } from './input';
-import { localBots } from './localBots';
+import { LIVE_FIRE_BOTS, localBots } from './localBots';
 import { warmNavGraph } from './navWarm';
 import { Minimap } from './minimap/minimap';
 import { capText } from './ui/icons';
@@ -48,7 +48,8 @@ import { Renderer, type RenderOptions } from './render';
 import { localMatchRules, mountShell, registerRoute, type GameHost, type Settings } from './shell';
 import { loadSettings } from './shell/controller';
 import type { GraphicsSetting } from './shell/store';
-import { toKeyBindings, uiCodes } from './shell/controls';
+import { defaultBindings, keyLabel, toKeyBindings, uiCodes } from './shell/controls';
+import { LIVE_FIRE_RULES } from './shell/localMatch';
 import { PlaneCamera, create3d, online3d, parsePreset, softwareGl, type PresetName } from './render3d';
 import { LoadoutDirectory } from './render3d/character';
 import { followLooks, lookBook } from './looks/book';
@@ -57,8 +58,8 @@ import { getAvatar, getPortrait, installPortraits, portraits, setPortraitPolicy,
 import { warmRoomPortraits } from './presentation/warm';
 import { posterUp } from './presentation/state';
 import { countFrame, framesPerSecond, recordNet } from './stats';
-import { isTouchDevice, mountTouch } from './touch';
-import { applyPadSettings, currentDevice, mountGamepad, onInputDevice } from './gamepad';
+import { getTouchSettings, isTouchDevice, mountTouch, touchActive, touchControlRect } from './touch';
+import { applyPadSettings, currentDevice, isPadCode, mountGamepad, onInputDevice } from './gamepad';
 import { mountAdClicks } from './ads';
 import { padShownBindings } from './gamepad/prompts';
 import { startLandscape } from './ui/landscape';
@@ -69,6 +70,9 @@ import { assetLoad } from './assetLoad';
 import { creatorSeen } from './creator/model';
 import { titleWanted } from './shell/title';
 import { startTourMemory, type TourMemory } from './tour';
+import { FirstFlight, flightWasOpen } from './tour/firstFlight';
+import { FIRST_FLIGHT } from './tour/flight';
+import type { Device } from './tour/log';
 import { mountTourReadout } from './tour/readout';
 import { BackdropPacer } from './ui/backdrop';
 import { releaseLanding } from './ui/landing';
@@ -213,6 +217,8 @@ if (import.meta.env.DEV) Object.assign(window, { __spectate: spectate });
 
 /** The onboarding's memory (tour/): on-device facts and the event log; the app only (set once the shell is up). */
 let tourMemory: TourMemory | null = null;
+/** First flight (tour/firstFlight.ts), while training runs it */
+let flight: FirstFlight | null = null;
 
 /** The 2D renderer, also feeding the HUD the events and names every mode already reports. */
 class GameRenderer extends Renderer {
@@ -221,6 +227,7 @@ class GameRenderer extends Renderer {
     hud?.onEvents(events, localId);
     minimap?.onEvents(events, localId);
     tourMemory?.onEvents(events, localId);
+    flight?.onEvents(events, localId);
     audio.onEvents(events, localId); // the game's sound (apps/web/src/audio): lazy, after the first tap or key
   }
   override onSounds(sounds: readonly { x: number; y: number }[]): void {
@@ -318,16 +325,34 @@ const host: GameHost = {
   get online() {
     return mode instanceof OnlineMode ? mode : null;
   },
-  startTraining(nickname) {
-    // training: a deathmatch against three Normal bots (?bots= / ?botlevel=, ?sandbox for the range dummies)
-    const rules = localMatchRules(params);
-    const local = new LocalMode(sampler, camera, renderer, nickname, rules, localMapId, localBots(params, rules !== null));
+  startTraining(nickname, kind = 'match') {
+    // training: a deathmatch against three Normal bots (?bots= / ?botlevel=, ?sandbox for the range dummies);
+    // First flight: the range's targets, no match; Live fire: a recruit's first match, 3 Easy bots
+    const rules = kind === 'flight' ? null : kind === 'live-fire' ? LIVE_FIRE_RULES : localMatchRules(params);
+    const bots = kind === 'flight' ? null : kind === 'live-fire' ? LIVE_FIRE_BOTS : localBots(params, rules !== null);
+    const local = new LocalMode(sampler, camera, renderer, nickname, rules, localMapId, bots);
     setMode(local);
     // the Armory's "Try it in training": that gun in your hand (the second slot as usual), once
     const tryGun = tryWeapon;
     tryWeapon = null;
     if (tryGun) local.setLoadout([tryGun.index, tryGun.index === DEFAULT_LOADOUT[1] ? DEFAULT_LOADOUT[0] : DEFAULT_LOADOUT[1]]);
     else if (loadoutSync) local.setLoadout(loadoutSync.savedGunIndices()); // the player's saved pair (the default until they pick one)
+    if (kind === 'flight') {
+      local.toRange();
+      camera.recentre();
+    }
+  },
+  get tour() {
+    return flight
+      ? {
+          restart: () => {
+            flight?.restart();
+            host.local?.toRange();
+            camera.recentre();
+          },
+          skip: () => flight?.skip(true),
+        }
+      : null;
   },
   startOnline(url, nickname, room, ticket, refreshTicket, opts) {
     try {
@@ -530,6 +555,8 @@ registerRoute({
           onExit: (how) => {
             if (how === 'saved') tourMemory?.fact({ k: 'soldier-saved' });
             if (from === 'locker') location.hash = '#/locker';
+            // the first time: the Briefing's one question next (the onboarding tour)
+            else if (from === 'first' && briefingWanted()) location.hash = '#/briefing';
             else close();
           },
           ...(loadoutSync ? { store: loadoutSync.store } : {}),
@@ -574,6 +601,123 @@ loadoutSync?.onLook((look) => {
   loadouts3d.setLocal(look);
   if (mode instanceof OnlineMode) mode.setLook(cosmeticLoadoutWireIds(look));
 });
+
+// ---- the onboarding tour (docs/design/onboarding-research.md §3): the Briefing, then First flight
+
+/** The device the tour's prompts are for: what the player said in the Briefing until their hands switch. */
+let statedDevice: Device | null = null;
+onInputDevice(() => (statedDevice = null));
+function tourDevice(): Device {
+  if (statedDevice) return statedDevice;
+  const kind = currentDevice().kind;
+  return kind === 'pad' ? 'pad' : kind === 'touch' || touchActive() ? 'touch' : 'keyboard';
+}
+/** what the player's keyboard prints (navigator.keyboard, Chromium), for the tour's key caps */
+let keyLayout: ReadonlyMap<string, string> | null = null;
+void (navigator as Navigator & { keyboard?: { getLayoutMap?: () => Promise<ReadonlyMap<string, string>> } }).keyboard
+  ?.getLayoutMap?.()
+  .then((m) => (keyLayout = m))
+  .catch(() => {});
+
+/** The Briefing follows "Create your soldier" once: nobody answered it here, and no First flight ran. */
+function briefingWanted(): boolean {
+  const f = tourMemory?.facts.get();
+  return !!f && f.experience === null && !f.tours[FIRST_FLIGHT];
+}
+
+// #/briefing: one question (tour/briefing.ts). Recruit: First flight. Veteran: Home. Skip all training (or
+// closing it): Home, the flight marked skipped.
+registerRoute({
+  id: 'briefing',
+  title: 'Briefing',
+  ownExit: true,
+  mount: (el, close) => {
+    let cleanup: (() => void) | null = null;
+    let closed = false;
+    void import('./tour/briefingRoute').then(({ mountBriefing }) => {
+      if (closed) return;
+      const h = mountBriefing(el, {
+        device: tourDevice(),
+        onAnswer: (answer, device, changed) => {
+          tourMemory?.record({ t: 'briefing.answer', answer, device, changed });
+          tourMemory?.fact({ k: 'answer', experience: answer === 'skipped' ? null : answer });
+          if (changed) {
+            statedDevice = device;
+            tourMemory?.setDevice(device);
+          }
+          if (answer === 'skipped') tourMemory?.fact({ k: 'tour', tour: FIRST_FLIGHT, skipped: true });
+          if (closed) return; // closed under it (Escape): that was the skip
+          close();
+          if (answer === 'recruit') shell.controller?.startFlight();
+        },
+      });
+      cleanup = () => h.unmount();
+    });
+    return () => {
+      closed = true;
+      cleanup?.();
+    };
+  },
+});
+
+/** First flight's runner, reading the range, the camera, the device and its bindings live. */
+function newFlight(memory: TourMemory): FirstFlight {
+  let chooser: HTMLElement | null = null;
+  return new FirstFlight({
+    memory,
+    storage: storageOrNull(),
+    world: () => {
+      const local = host.local;
+      if (!local) return null;
+      const me = local.me;
+      const targets: { id: number; x: number; y: number }[] = [];
+      for (const p of local.game.players) if (p?.script && p.alive) targets.push({ id: p.id, x: p.x, y: p.y });
+      return {
+        me: { id: me.id, x: me.x, y: me.y, grounded: me.grounded, alive: me.alive, grenades: me.grenadeCounts.reduce((a, b) => a + b, 0) },
+        targets,
+        isTarget: (id) => !!local.game.players[id]?.script,
+      };
+    },
+    toScreen: (x, y) => ({ x: camera.toScreenX(x), y: camera.toScreenY(y) }),
+    device: tourDevice,
+    bindings: () => (tourDevice() === 'pad' && settings ? padShownBindings(settings.pad) : (settings?.bindings ?? defaultBindings())),
+    cap: (code) => (isPadCode(code) ? capText(code) : keyLabel(code, keyLayout)),
+    touchWords: () => {
+      const t = getTouchSettings();
+      return { moveSide: t.handed === 'left' ? 'right' : 'left', fire: t.fire };
+    },
+    touchRect: (id) => touchControlRect(id),
+    // a menu, a route, the controls card or the phone's first-run fire chooser: the tour waits
+    covered: () => {
+      const s = shell.store.getState();
+      chooser ??= document.querySelector<HTMLElement>('.mf-choose');
+      return s.overlay !== null || s.route !== null || s.tips || (!!chooser && !chooser.hidden);
+    },
+    liveFire: () => shell.controller?.startLiveFire(),
+    home: () => shell.controller?.go({ to: 'home' }),
+  });
+}
+
+if (appMode && tourMemory) {
+  const memory = tourMemory;
+  // the runner lives while training says First flight
+  shell.store.subscribe((s) => {
+    const want = s.screen.name === 'training' && s.screen.tour === FIRST_FLIGHT;
+    if (want && !flight) flight = newFlight(memory);
+    else if (!want && flight) {
+      flight.dispose();
+      flight = null;
+    }
+  });
+  // a reload during First flight goes straight back in at the next goal (and ?flight starts it: playtests)
+  let checked = false;
+  const stopResume = shell.store.subscribe((s) => {
+    if (checked || s.screen.name !== 'home' || s.title !== 'off' || s.route !== null) return;
+    checked = true;
+    queueMicrotask(stopResume);
+    if (params.has('flight') || flightWasOpen(storageOrNull())) shell.controller?.startFlight();
+  });
+}
 
 // dev builds: the spotlight for checks and tinkering (scripts/spotlight-check.mjs)
 if (import.meta.env.DEV) Object.assign(window, { __Spotlight: Spotlight });
@@ -837,6 +981,7 @@ function frame(now: number): void {
   renderer.mouse.x = sampler.mouseX;
   renderer.mouse.y = sampler.mouseY;
   shell.update(mode instanceof LocalMode ? mode : null);
+  flight?.frame(); // First flight: its goals tick, its markers follow the camera
   shell.setMapEvent(f.mapEvent);
   if (minimap) {
     minimap.setVisible(!covered && shell.store.getState().overlay === null);

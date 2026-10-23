@@ -13,12 +13,20 @@ import { sanitizePadSettings } from '../gamepad/settings';
 import { sanitizeBindings } from './controls';
 import { DEFAULT_SETTINGS, type AudioSettings, type GraphicsPreset, type Intent, type Overlay, type Profile, type Settings, type SettingsTab, type ShellState, type ShellStore, type TuneNote } from './store';
 
+/**
+ * What training plays: a local match against bots (the default), First flight (the onboarding's range:
+ * the map's targets, no match) or Live fire (a recruit's first match: 3 Easy bots, first to 5).
+ */
+export type TrainingKind = 'match' | 'flight' | 'live-fire';
+
 /** What main.ts gives the shell: the running game mode and how to swap it. */
 export interface GameHost {
   readonly local: LocalMode | null;
   readonly online: OnlineMode | null;
-  /** training: a local match against bots */
-  startTraining(name: string): void;
+  /** training: a local match against bots, First flight or Live fire */
+  startTraining(name: string, kind?: TrainingKind): void;
+  /** the onboarding tour running in training (First flight): the pause menu's Restart and Skip training */
+  readonly tour?: { restart(): void; skip(): void } | null;
   /**
    * A room by code on the game server at `url`, admitted with the API's join ticket (null: the server
    * checks none). `refreshTicket` asks the API for a new one when a long drop outlasted the player.
@@ -474,6 +482,36 @@ export class ShellController {
     if (!this.canTune()) return;
     this.closeOverlay();
     this.host.tuning!.open();
+  }
+
+  /** First flight (the onboarding tour, tour/firstFlight.ts): the range and its targets, no match. */
+  startFlight(): void {
+    this.closeOverlay();
+    this.host.stop();
+    this.setUrl('/');
+    this.host.startTraining(this.profile?.nickname ?? 'You', 'flight');
+    this.set({ screen: { name: 'training', tour: 'first-flight' }, lobby: null, connection: null, tips: false });
+  }
+
+  /** Live fire: a recruit's first match, against 3 Easy bots (first to 5 kills, or 3 minutes). */
+  startLiveFire(): void {
+    this.closeOverlay();
+    this.host.stop();
+    this.setUrl('/');
+    this.host.startTraining(this.profile?.nickname ?? 'You', 'live-fire');
+    this.set({ screen: { name: 'training' }, lobby: null, connection: null, tips: false });
+  }
+
+  /** The pause menu's Restart First flight. */
+  restartTour(): void {
+    this.closeOverlay();
+    this.host.tour?.restart();
+  }
+
+  /** The pause menu's Skip training (the tour ends; back to Home). */
+  skipTour(): void {
+    this.closeOverlay();
+    this.host.tour?.skip();
   }
 
   /** Leave the room or the training match for the home screen. */

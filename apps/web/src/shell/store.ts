@@ -55,7 +55,8 @@ export type Screen =
   | { name: 'finding'; code: string | null; creating: boolean }
   /** `local`: a local room (same Wi-Fi), hosted here or joined; `watch`: we asked to watch it (a retry watches again) */
   | { name: 'room'; code: string; local?: boolean; watch?: boolean }
-  | { name: 'training' }
+  /** `tour`: the onboarding's First flight runs in it (tour/firstFlight.ts): the range, no match */
+  | { name: 'training'; tour?: 'first-flight' }
   | { name: 'error'; alert: AlertInfo; retry: Intent | null };
 
 /** `lan-add`: the host adds a player by QR codes; `lan-join`: join a local room by the host's QR code (no internet) */

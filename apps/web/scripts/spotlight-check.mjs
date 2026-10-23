@@ -148,7 +148,8 @@ try {
       const c = document.querySelector('.mf-spot__callout').getBoundingClientRect();
       const r = document.querySelector('.mf-spot__ring').getBoundingClientRect();
       const overlap = !(c.right <= r.left || c.left >= r.right || c.bottom <= r.top || c.top >= r.bottom);
-      return { overlap, inside: c.left >= -1 && c.top >= -1 && c.right <= innerWidth + 1 && c.bottom <= innerHeight + 1 };
+      const r4 = (b) => [b.left, b.top, b.right, b.bottom].map((v) => Math.round(v));
+      return { overlap, inside: c.left >= -1 && c.top >= -1 && c.right <= innerWidth + 1 && c.bottom <= innerHeight + 1, ...(overlap ? { callout: r4(c), ring: r4(r) } : {}) };
     });
     check(`${label}: at 150 % text the callout is on screen and clear of the hole`, !big.overlap && big.inside, JSON.stringify(big));
     if (out) await page.screenshot({ path: join(out, `${label}-big-text.png`) });

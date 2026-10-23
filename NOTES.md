@@ -1605,3 +1605,40 @@ Protocol v20 (docs/05 §18; the protocol registry has the exact wire). Pen board
     - Low: 9.9 → 5.4 ms mean (p90 12.2 → 6.8).
     - Medium: 11.6 → 6.3 ms (p90 15.4 → 7.5).
     - Frame p90 on Medium: 22.8 → 18.4 ms.
+
+## 52. Onboarding, phase 3: the Briefing and First flight (23 Oct 2026, owner request)
+This is docs/design/onboarding-research.md §3.2–§3.4 and §7 phase 3; the design is the Pen board "ONBOARDING · tour and spotlight" (D2, D3, P1, P3). It builds on phase 1 (§44, the facts and the log) and phase 2 (§45, the spotlight).
+- **The way in:** title → name → "Create your soldier" → **the Briefing** (`#/briefing`, `tour/briefing.ts`), the first time on a device only (no answer yet and no First flight on record).
+  - It asks one question, "First time in a firefight?": **Show me the ropes** (recruit, which starts First flight) or **I know shooters** (veteran, which goes to Home).
+  - The line under it says which device was detected, with Change (Touch → Keyboard and mouse → Controller). What the player picks drives the prompts until their hands switch device.
+  - **Skip all training**, Escape or Back: Home, with the flight marked skipped.
+  - On phones the fire-mode card is the phone agent's first-run chooser (#204). It comes up at the first play, so First flight waits under it.
+- **First flight** (`tour/flight.ts` is pure and unit-tested; `tour/firstFlight.ts` runs it):
+  - It's training with `screen.tour = 'first-flight'`: the map's range (its dummies), no match (`LocalMode.toRange`). The player starts at the spawn nearest the targets, the targets stand still, and the nearest one stands in the open 4 m away. On the movement-test range it otherwise strafes behind cover taller than its chest, which took a bot dozens of shots.
+  - Five goals, each ticked by doing it, read from the sim, so every device ticks the same way:
+    - **Run:** 3 m either way;
+    - **Fly:** 3.5 m above the lowest ground stood on;
+    - **Fire:** 3 hits on a target;
+    - **Dash:** a dash;
+    - **Throw:** a throw (skipped by itself with no grenades on the belt).
+  - **The spotlight never blocks play:** a ring on the HUD plate (`data-tour`) or the touch control (`touchControlRect`, #198) the goal uses, and a ring on a world marker: the run's end (4 m away from the targets, so they're in front at range for Fire and the grenade lands clear), 4 m up, or the nearest target's chest. The callout holds still top-centre (`anchor: 'none'`), with the player's own key caps (`padShownBindings` while a pad plays) or, on touch, the dial or button by name, following the hand and the fire mode.
+  - Each goal stamps "Confirmed" (P7) for 600 ms. Nothing moves on by itself: after 20 s the callout adds a help line and "Skip this". Skip training is on every callout and in the pause menu, beside Restart First flight.
+  - **The tour waits** under the menu, a route, the controls card and the phone's fire chooser.
+  - **Progress is saved per goal** (`mf.tour.v1`, `tour/tour.ts`). A reload during the flight goes straight back in at the next goal. Leaving from the menu doesn't.
+  - **The finish card:** "Flight complete" with the time, then **Live fire** (3 Easy bots, first to 5 kills or 3 minutes; the owner's default) or **Later** (Home). Live fire doesn't start by itself.
+  - A flight under 40 s promotes the player (a fact and a log line). Every step is logged as `tour.step` (shown, done, skipped, timeout-offered, abandoned) and the end as `tour.end`; `?tourlog` shows the funnel.
+  - `?flight` starts it from Home (playtests).
+- **Copy:** all of it is in `tour/copy.ts`: titles 1–3 words, bodies ≤ 12, no exclamation marks; a unit test holds every device, hand and fire mode to that.
+- **Checks:** `apps/web/scripts/flight-check.mjs <dev server> [dir]` runs in headless Chrome. It covers:
+  - the Briefing;
+  - the five goals by keyboard and mouse;
+  - 21 s idle (help, nothing advances);
+  - reload and resume;
+  - Skip training;
+  - the phone: the chooser first, then the ring on the move dial within 1 px.
+- **Not yet:**
+  - the median ≤ 75 s and the "line hidden" playtests (people needed);
+  - the invited friend's 3-goal flight in the lobby (phase 4);
+  - Home stops, the Debrief and Next orders (phase 4);
+  - the hints engine (phase 5);
+  - the phone pause menu's Restart and Skip training (asked of the phone agent).

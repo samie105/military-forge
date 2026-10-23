@@ -15,6 +15,9 @@ const LIMITS: Record<'time' | 'kills' | 'countdown', [keyof MatchRules, number]>
   countdown: ['countdown', DEATHMATCH_RULES.countdown * 2],
 };
 
+/** Live fire (the onboarding's first match for a recruit, §3.2): first to 5 kills, or 3 minutes. */
+export const LIVE_FIRE_RULES: Partial<MatchRules> = { ...LOCAL_MATCH_RULES, timeLimit: 180, killLimit: 5 };
+
 export function localMatchRules(params: URLSearchParams): Partial<MatchRules> | null {
   if (params.has('sandbox')) return null;
   const rules: Partial<MatchRules> = { ...LOCAL_MATCH_RULES };

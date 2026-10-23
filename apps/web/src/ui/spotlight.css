@@ -20,10 +20,12 @@
 .mf-spot__ring {
   position: absolute; left: 0; top: 0; box-sizing: border-box;
   border: 2px solid var(--c-volt); box-shadow: 0 0 8px color-mix(in srgb, var(--c-volt) 30%, transparent), inset 0 0 6px color-mix(in srgb, var(--c-volt) 18%, transparent);
-  transition: transform var(--m-scene) var(--ease-travel);
   animation: mf-spot-pulse 1.4s ease-in-out 3;
   will-change: transform;
 }
+/* menus: the ring travels to the next stop; in play it follows its target frame by frame (a world marker
+   moves with the camera), so it never eases there, and between steps it fades instead (is-moving) */
+.mf-spot.is-blocking .mf-spot__ring { transition: transform var(--m-scene) var(--ease-travel); }
 .mf-spot__ring i { position: absolute; width: 12px; height: 12px; border: 3px solid var(--c-brass); }
 .mf-spot__ring i:nth-child(1) { left: -10px; top: -10px; border-right: 0; border-bottom: 0; }
 .mf-spot__ring i:nth-child(2) { right: -10px; top: -10px; border-left: 0; border-bottom: 0; }
@@ -70,6 +72,8 @@
 }
 .mf-spot__skip:hover, .mf-spot__skip:focus-visible { color: var(--c-text); }
 .mf-spot__primary { margin-left: 4px; }
+/* "Confirmed" (P7), at the actions row's left end (in the flow: it never covers a button) */
+.mf-spot__stamp { margin-right: auto; pointer-events: none; }
 .mf-spot__live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 /* a phone: top-centre, smaller, ≥ 44 px targets */
@@ -77,6 +81,7 @@
 .mf-spot.is-phone .mf-spot__title { font-size: 26px; }
 .mf-spot.is-phone .mf-spot__body { font-size: 14px; }
 .mf-spot.is-phone .mf-spot__skip { min-height: 44px; }
+.mf-spot.is-phone .mf-spot__stamp { font-size: 16px; padding: 2px var(--sp-2); }
 
 /* leaving (P9's exit) */
 .mf-spot.is-leaving { opacity: 0; transition: opacity 200ms var(--ease-leave); }

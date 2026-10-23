@@ -34,6 +34,8 @@ import type { Renderer } from './render';
 import { mobilityView, shieldView, type CloudView, type Frame, type PlayerView } from './view';
 
 const MAX_CATCHUP = 5;
+/** First flight: the nearest target this far from the start (LocalMode.toRange) */
+const RANGE_TARGET_M = 4;
 const SEED = 1234;
 
 export class LocalMode {
@@ -146,6 +148,29 @@ export class LocalMode {
 
   respawn(): void {
     this.me.spawn(this.me.x, this.me.y + 0.3, this.game.tuning);
+  }
+
+  /**
+   * First flight (the onboarding tour): the local player at the spawn nearest the range's targets (the
+   * map's dummies). For a recruit's first shots the targets stand still, and the nearest stands in the
+   * open RANGE_TARGET_M from the start, on its ground (the movement test's is otherwise behind low cover).
+   */
+  toRange(): void {
+    const target = this.map.dummies[0];
+    let best = this.map.spawns[0];
+    if (!target || !best) return;
+    for (const s of this.map.spawns) if (Math.abs(s.x - target.x) < Math.abs(best.x - target.x)) best = s;
+    this.me.spawn(best.x, best.y, this.game.tuning);
+    let near: PlayerState | null = null;
+    for (const p of this.game.players) {
+      if (!p?.script) continue;
+      p.script = { kind: 'idle' };
+      if (!near || Math.abs(p.x - best.x) < Math.abs(near.x - best.x)) near = p;
+    }
+    if (!near) return;
+    near.x = near.homeX = best.x + RANGE_TARGET_M * (Math.sign(near.x - best.x) || 1);
+    near.y = near.homeY = best.y;
+    near.vx = near.vy = 0;
   }
 
   /**
