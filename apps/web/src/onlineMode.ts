@@ -24,6 +24,7 @@ import { CloseCode, CmdKind, MsgType, encodeCmd, isUnreliableMessage, type Match
 import { u16ToAngle } from '@military-forge/shared';
 import { MatchPhase, TICK_RATE, blindIntensity, type PlayerState, type SimEvent } from '@military-forge/sim';
 import { audio } from './audio';
+import { lookBook, looksFromWire, savedLookIds } from './looks/book';
 import type { Camera } from './camera';
 import { cloudView, statusView } from './grenadeViews';
 import type { InputSampler } from './input';
@@ -112,6 +113,8 @@ export interface OnlineOptions {
   connect?: (handlers: TransportHandlers, reconnect: boolean) => Promise<GameTransport>;
   /** a local room (the lobby says so: same Wi-Fi only) */
   local?: boolean;
+  /** v19: the look to wear (the saved look as cosmetic wire ids); the room holds it to what we own */
+  look?: readonly number[];
 }
 
 const sessionKey = (room: string) => `room.session.${room}`;
@@ -222,9 +225,12 @@ export class OnlineMode {
     const seed = (Math.random() * 0xffffffff) >>> 0;
     this.up = new ConditionedLink(netSim.up, () => netSim.enabled, browserScheduler, (b) => this.rawSend(b), isUnreliableMessage, seed);
     this.down = new ConditionedLink(netSim.down, () => netSim.enabled, browserScheduler, (b) => this.onMessage(b), isUnreliableMessage, seed ^ 0x9e3779b9);
+    // v19: the look we wear (the saved one unless the caller says); the room holds it to what we own
+    const look = options.look ?? savedLookIds();
     this.net = new NetClient({
       name,
       ...(options.ticket ? { ticket: options.ticket } : {}),
+      ...(look ? { look } : {}),
       now: () => performance.now(),
       send: (bytes) => {
         this.bytesOut += bytes.length;
@@ -518,6 +524,8 @@ export class OnlineMode {
       case MsgType.Roster:
         // the roster knows every bot; the snapshots only those in view
         this.renderer.setNames(this.net.names, new Set(msg.entries.filter((e) => e.isBot).map((e) => e.id)));
+        // v19: everyone's look, ours included (what the others see us in)
+        lookBook.replace(looksFromWire(this.net.looks));
         break;
       case MsgType.Tuning: {
         const before = this.lastTuning ?? defaultTuning;
@@ -591,8 +599,14 @@ export class OnlineMode {
     return me.dual ? Math.min(...ws) : (weapons[me.weapons[me.active]!.def]?.zoomMax ?? 1);
   }
 
+  /** v19: wear another look (a Locker or creator save while in the room); everyone sees it in the next ROSTER. */
+  setLook(look: readonly number[]): void {
+    this.net.setLook(look);
+  }
+
   dispose(): void {
     this.disposed = true;
+    lookBook.clear();
     this.net.clearOverrides();
     window.clearTimeout(this.reconnectTimer);
     window.clearInterval(this.watchdogTimer);

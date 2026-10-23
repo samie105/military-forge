@@ -4,7 +4,7 @@
  * both guns must be real, different, non-melee weapons. Nothing is fixed up silently: a bad id is
  * a 400 naming the field, so a client bug shows instead of a look quietly changing.
  */
-import { DEFAULT_COSMETIC_LOADOUT, DYE_CHANNELS, LOADOUT_SLOTS, fitsBody, getCosmetic, isLoadoutGun, weapons, type CosmeticDef, type LoadoutSlot } from '@military-forge/content';
+import { DEFAULT_COSMETIC_LOADOUT, DYE_CHANNELS, LOADOUT_SLOTS, cosmeticUnlocked, fitsBody, getCosmetic, isLoadoutGun, weapons, type CosmeticDef, type LoadoutSlot } from '@military-forge/content';
 import { z } from 'zod';
 import type { LoadoutData } from '../db/schema';
 
@@ -23,14 +23,12 @@ export const LoadoutBody = z.strictObject({
 export type LoadoutBody = z.infer<typeof LoadoutBody>;
 
 /**
- * Who owns what, until the inventory table exists (docs/06 §7): everyone owns the starter items,
- * and a level item once the profile reaches that level. Store, battle-pass, achievement and event
- * items need the inventory, so nobody can wear them yet (the Locker shows them locked).
+ * Who owns what, until the inventory table exists (docs/06 §7): content's `cosmeticUnlocked` (starter
+ * items for everyone, a level item from its level). The game server holds looks on the wire to the same
+ * rule (protocol v19), so a look the API stores is a look a room lets the player wear.
  */
 export function owns(def: CosmeticDef, level: number): boolean {
-  if (def.source.kind === 'starter') return true;
-  if (def.source.kind === 'level') return level >= def.source.level;
-  return false;
+  return cosmeticUnlocked(def, level);
 }
 
 /** The guns a loadout may hold: every weapon but the melee ones. */

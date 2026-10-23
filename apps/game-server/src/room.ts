@@ -27,7 +27,22 @@ import { adminJson, adminValues, onAdminValues } from './adminState';
 import { VoiceRelay } from './voice';
 import { MatchRecorder, type ResultsSink } from './matchRecorder';
 import { addBot, latestNavGraph, removeBot, requestNavGraph, type BotLevelId, type NavGraph } from '@military-forge/bots';
-import { ADMIN_BOT_LEVELS, adminTuning, adminValue, createTuning, defaultTuning, limitTuning, maps, type AdminValues, type Tuning } from '@military-forge/content';
+import {
+  ADMIN_BOT_LEVELS,
+  admitLook,
+  adminTuning,
+  adminValue,
+  botLook,
+  cosmeticLoadoutWireIds,
+  createTuning,
+  defaultTuning,
+  limitTuning,
+  lookSeed,
+  maps,
+  type AdminValues,
+  type LookVouch,
+  type Tuning,
+} from '@military-forge/content';
 import {
   BOT_LEVELS_WIRE,
   CONTENT_HASH,
@@ -50,13 +65,14 @@ import {
   encodeTuning,
   encodeWelcome,
   isUnreliableMessage,
+  parseLookCmd,
+  protocolSupported,
   ROOM_SETTING_LIMITS,
   type ClientMessage,
   type MatchStandingWire,
   type RewindTarget,
   type ViewRect,
   type VoiceSettingsCmd,
-  protocolSupported,
 } from '@military-forge/protocol';
 import {
   ConditionedLink,
@@ -156,6 +172,8 @@ export interface Session {
   pingMs: number;
   /** the player's party (the join ticket's `party`), kept across reconnects for party voice */
   party: string | null;
+  /** v19: what the player may wear (the join ticket's level and look), kept across reconnects */
+  vouch: LookVouch;
 }
 
 /** 18 random bytes, base64url (Web Crypto: a room runs in Node and, for a local room's host, in a browser) */
@@ -225,6 +243,8 @@ export class Client {
   voiceTokens?: number;
   voiceTokensAt?: number;
   voiceActive?: Map<number, [number, number]>;
+  /** v19: what the join ticket says the player may wear (rooms.ts); no ticket: starter items only */
+  lookVouch: LookVouch = { level: 0 };
   name = '';
   closed = false;
   /** this client's inputs, by server tick */
@@ -305,6 +325,8 @@ export function sanitizeName(raw: string, fallback: string): string {
 const MATCH_STATE_REFRESH_TICKS = 120;
 /** Lobby commands and kills batch into at most one MATCH_STATE per this many ticks; phase changes go at once. */
 const MATCH_STATE_MIN_TICKS = 6;
+/** v19: look changes batch into at most one ROSTER per this many ticks (½ s) per room */
+const LOOK_ROSTER_TICKS = 30;
 
 /** Host settings from a MatchSettings CMD: whole values inside ROOM_SETTING_LIMITS (0 = off), at least one limit on. */
 export function parseMatchSettings(payload: string, current: Pick<MatchRules, 'timeLimit' | 'killLimit'>, mapId: string): { timeLimit: number; killLimit: number; mapId: string } | null {
@@ -705,7 +727,7 @@ export class Room {
 
     switch (msg.type) {
       case MsgType.Hello:
-        this.onHello(client, msg.protocolVersion, msg.contentHash, msg.name, msg.resumeToken);
+        this.onHello(client, msg.protocolVersion, msg.contentHash, msg.name, msg.resumeToken, msg.look);
         break;
       case MsgType.Ping:
         this.confirmToken(client);
@@ -750,16 +772,19 @@ export class Room {
     for (let i = 0; i < m.count; i++) client.inputs.push(newest - i, m.inputs[i]!, current, renderTick - m.renderLags[i]!);
   }
 
-  private onHello(client: Client, version: number, contentHash: number, rawName: string, resumeToken: string): void {
+  private onHello(client: Client, version: number, contentHash: number, rawName: string, resumeToken: string, look: number[] | null = null): void {
     if (client.joined) return;
-    client.protocolVersion = version;
+    // v17 and v18 pages still play (no looks, no voice): MIN_PROTOCOL_VERSION
     if (!protocolSupported(version) || contentHash !== CONTENT_HASH) {
       this.kick(client, CloseCode.VersionMismatch, 'version mismatch: refresh to update');
       return;
     }
+    client.protocolVersion ||= version; // rooms.ts already set the page's own (its HELLO may be re-encoded)
     const resumed = resumeToken ? (this.sessions.get(resumeToken) ?? this.unconfirmed.get(resumeToken)) : undefined;
     if (resumed) {
       this.resume(client, resumed, resumeToken);
+      // the page's look may have changed while it was away (v19)
+      if (look) this.wear(resumed, look);
       return;
     }
     if (this.humanCount >= this.maxHumans) {
@@ -770,7 +795,10 @@ export class Room {
     if (client.accountId) this.recorder?.setAccount(p, client.accountId);
     // the guns they chose (their account's loadout): every spawn until a death keeps others (#125)
     if (client.guns) this.game.setLoadout(p, client.guns);
-    const session: Session = { token: newToken(), playerId: p.id, client: null, expiresAt: Infinity, idle: createInput(), prevToken: null, joinSeq: this.joins++, pingMs: -1, party: client.party };
+    const session: Session = { token: newToken(), playerId: p.id, client: null, expiresAt: Infinity, idle: createInput(), prevToken: null, joinSeq: this.joins++, pingMs: -1, party: client.party, vouch: client.lookVouch };
+    // v19: the look the page asked for, else the one the API vouched for (the ticket's), held to what the player owns
+    const worn = admitLook(look, session.vouch) ?? admitLook(session.vouch.ids, session.vouch);
+    if (worn) this.looks.set(p, cosmeticLoadoutWireIds(worn));
     this.sessions.set(session.token, session);
     if (this.match && !this.host) this.host = session;
     this.attach(client, session, false);
@@ -835,6 +863,13 @@ export class Room {
     }
     if (kind >= CmdKind.Ready && kind <= CmdKind.Leave) {
       this.onMatchCmd(client, kind, payload);
+      return;
+    }
+    if (kind === CmdKind.SetLook) {
+      // v19, any room and phase: a malformed list is a strike, a look with things they don't own is fixed up
+      const ids = parseLookCmd(payload);
+      if (ids && client.session) this.wear(client.session, ids);
+      else client.strikes++;
       return;
     }
     if (kind === CmdKind.SetTuning) {
@@ -1053,6 +1088,29 @@ export class Room {
 
   /** When each player first shows in snapshots (ROSTER `since`: ids are reused). */
   private readonly shownSince = new WeakMap<PlayerState, number>();
+  /** v19: each player's look as the room lets them wear it (cosmetic wire ids); absent = none known */
+  private readonly looks = new WeakMap<PlayerState, number[]>();
+  /** a look changed: the ROSTER goes out again (look changes: at most one ROSTER every LOOK_ROSTER_TICKS) */
+  private lookRosterDirty = false;
+  private lookRosterAt = -Infinity;
+
+  /** v19: a session's player puts on a look (held to what it may wear); everyone hears of it in the ROSTER */
+  private wear(s: Session, ids: readonly number[]): void {
+    const p = this.game.players[s.playerId];
+    const worn = p ? admitLook(ids, s.vouch) : null;
+    if (!p || !worn) return;
+    const next = cosmeticLoadoutWireIds(worn);
+    const now = this.looks.get(p);
+    if (now && now.length === next.length && now.every((id, i) => id === next[i])) return;
+    this.looks.set(p, next);
+    this.lookRosterDirty = true;
+  }
+
+  /** A player's look (v19 ROSTER), for the room's own uses (tests, results); null = none known. */
+  lookOf(playerId: number): readonly number[] | null {
+    const p = this.game.players[playerId];
+    return (p && this.looks.get(p)) ?? null;
+  }
 
   private rosterEntries(): RosterEntry[] {
     return this.game.players
@@ -1064,13 +1122,15 @@ export class Room {
           since = this.game.tick + 1;
           this.shownSince.set(p, since);
         }
-        return { id: p.id, name: p.name, isBot: p.isBot, since };
+        return { id: p.id, name: p.name, isBot: p.isBot, since, look: this.looks.get(p) ?? null };
       });
   }
 
   private broadcastRoster(): void {
     const bytes = encodeRoster(this.rosterEntries());
     for (const c of this.clients) if (c.joined) c.conn.send(bytes);
+    // a ROSTER carries every look: a look change waiting for its own goes with this one
+    this.lookRosterDirty = false;
   }
 
   /**
@@ -1100,7 +1160,10 @@ export class Room {
     while (fill && this.bots.length < want && this.game.players.some((p) => !p)) {
       const graph = this.botGraph();
       if (!graph) break; // being built between ticks: the bot comes in when it's ready
-      this.bots.push(addBot(this.game, { level: fill.level, graph }));
+      const bot = addBot(this.game, { level: fill.level, graph });
+      // v19: a seeded look of its own (both bodies, earnable items), the same for this bot all room long
+      this.looks.set(bot, cosmeticLoadoutWireIds(botLook(lookSeed(this.game.seed, bot.name))));
+      this.bots.push(bot);
       changed = true;
     }
     if (!changed) return;
@@ -1218,5 +1281,9 @@ export class Room {
       if (this.matchUrgent || (this.matchDirty && since >= MATCH_STATE_MIN_TICKS) || since >= MATCH_STATE_REFRESH_TICKS) this.sendMatchState();
     }
     this.voice.tick();
+    if (this.lookRosterDirty && this.game.tick - this.lookRosterAt >= LOOK_ROSTER_TICKS) {
+      this.lookRosterAt = this.game.tick;
+      this.broadcastRoster();
+    }
   }
 }

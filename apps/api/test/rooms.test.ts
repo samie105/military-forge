@@ -1,5 +1,5 @@
 /** /rooms: minting codes, joining by code, the miss limit and the game-server address. */
-import { DEFAULT_COSMETIC_LOADOUT } from '@military-forge/content';
+import { DEFAULT_COSMETIC_LOADOUT, cosmeticLoadoutFromWireIds } from '@military-forge/content';
 import { isRoomCode } from '@military-forge/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -145,6 +145,43 @@ describe('join tickets (docs/06 §6)', () => {
       // a row that no longer fits the content (written before a change) is left out, not passed on
       await signed.database.db.update(loadouts).set({ data: { look: DEFAULT_COSMETIC_LOADOUT, guns: ['widow', 'machete'] } }).where(eq(loadouts.userId, s.user.id));
       expect(claims(await room()).guns).toBeUndefined();
+    } finally {
+      await signed.close();
+    }
+  });
+
+  it("carries the player's saved look (v19) as wire ids, held to what they own now, and their level", async () => {
+    const ticketKey = generateSigningKey();
+    const signed = await createTestApi({}, { ticketKey });
+    try {
+      const s = await createGuest(signed);
+      const room = async () => (await (await signed.app.request('/rooms', json({}, { ...bearer(s.accessToken), 'x-forwarded-for': signed.ip() }))).json()) as RoomJoin;
+      const claims = (r: RoomJoin) => {
+        const v = verifyJwt<JoinTicketClaims>(r.ticket!, ticketKey.publicKey, { iss: TICKET_ISSUER, aud: TICKET_AUDIENCE, nowSeconds: Math.floor(signed.clock.now() / 1000) });
+        if (!v.ok) throw new Error(v.reason);
+        return v.claims;
+      };
+      // nothing saved: no look (the client's own look, or a placeholder), and the level
+      const before = claims(await room());
+      expect(before.look).toBeUndefined();
+      expect(before.lvl).toBe(1);
+
+      const hers = { ...DEFAULT_COSMETIC_LOADOUT, items: { ...DEFAULT_COSMETIC_LOADOUT.items, bodyType: 'body_female', hair: 'hair_braids' }, dyes: { ...DEFAULT_COSMETIC_LOADOUT.dyes, primary: 'dye_khaki' } };
+      const put = await signed.app.request('/me/loadout/0', {
+        method: 'PUT',
+        headers: { ...bearer(s.accessToken), 'content-type': 'application/json' },
+        body: JSON.stringify({ look: hers, guns: ['widow', 'k47'] }),
+      });
+      expect(put.status).toBe(200);
+      const look = claims(await room()).look!;
+      expect(cosmeticLoadoutFromWireIds(look)).toEqual(hers);
+
+      // a row with an item the player doesn't own (a store helmet, written around the API's check): that slot falls back
+      await signed.database.db
+        .update(loadouts)
+        .set({ data: { look: { ...hers, items: { ...hers.items, headgear: 'headgear_combat_helmet' } }, guns: ['widow', 'k47'] } })
+        .where(eq(loadouts.userId, s.user.id));
+      expect(cosmeticLoadoutFromWireIds(claims(await room()).look!)).toEqual(hers);
     } finally {
       await signed.close();
     }

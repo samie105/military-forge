@@ -1,0 +1,6 @@
+/* the pause menu's quick Button fade (ButtonFade.tsx): a label, the slider, its value on one line */
+.mf-fadequick { display: flex; align-items: center; gap: 10px; min-height: var(--touch-min, 48px); }
+.mf-fadequick .label { flex: none; }
+.mf-fadequick .slider, .mf-fadequick > :nth-child(2) { flex: 1; min-width: 0; }
+.mf-fadequick output { flex: none; min-width: 3.2em; text-align: right; font-weight: var(--fw-bold); }
+.pm-fadequick .label { font-size: var(--fs-14); }

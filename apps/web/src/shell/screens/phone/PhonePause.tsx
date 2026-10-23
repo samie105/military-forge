@@ -11,6 +11,7 @@ import { MatchPhase } from '@military-forge/sim';
 import { useState } from 'react';
 import { useStore } from 'zustand';
 import { Icon } from '../../../ui/Icon';
+import { ButtonFadeQuick } from '../ButtonFade';
 import { blurAfter } from '../../../ui/Screen';
 import { useCtl } from '../../context';
 import { formatClock } from '../../matchView';
@@ -81,6 +82,8 @@ export function PhonePause({ store }: { store: ShellStore }) {
             Leave
           </button>
         </div>
+        {/* the buttons' fade, right here (the owner, 23 Oct: "a way to fade the buttons") */}
+        <ButtonFadeQuick className="pm-fadequick m-p3" />
         <ShareChip outcome={chip} />
       </nav>
 

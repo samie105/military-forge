@@ -1,4 +1,4 @@
-import { BLADE, BREACHER, FRAG, GAS, GRENADE_TYPES, MACHETE, PROJECTILE_TYPE_BASE, RIPPER, ROCKET, SHREDDER, SMOKE, TRIDENT, WIDOW } from '@military-forge/content';
+import { BLADE, BREACHER, DEFAULT_COSMETIC_LOADOUT, FRAG, GAS, GRENADE_TYPES, MACHETE, MAX_LOOK_IDS, PROJECTILE_TYPE_BASE, RIPPER, ROCKET, SHREDDER, SMOKE, TRIDENT, WIDOW, cosmeticLoadoutFromWireIds, cosmeticLoadoutWireIds } from '@military-forge/content';
 import { Btn, Game, PlayerState, createInput, spawnCloud, type SimEvent } from '@military-forge/sim';
 import type { MapDef } from '@military-forge/content';
 import { describe, expect, it } from 'vitest';
@@ -38,6 +38,13 @@ import {
   decodeFullSnapshot,
   isUnreliableMessage,
   localStatesEqual,
+  CmdKind,
+  MIN_PROTOCOL_VERSION,
+  encodeLookCmd,
+  parseLookCmd,
+  protocolSupported,
+  type HelloMsg,
+  type RosterMsg,
   type SnapshotMsg,
   type ViewRect,
 } from '../src';
@@ -96,7 +103,7 @@ describe('bitstream', () => {
 
 describe('messages', () => {
   it('hello / welcome / ping / pong / cmd / roster round-trip', () => {
-    expect(decodeMessage(encodeHello('Ade'))).toEqual({ type: MsgType.Hello, protocolVersion: PROTOCOL_VERSION, contentHash: CONTENT_HASH, name: 'Ade', resumeToken: '', ticket: '' });
+    expect(decodeMessage(encodeHello('Ade'))).toEqual({ type: MsgType.Hello, protocolVersion: PROTOCOL_VERSION, contentHash: CONTENT_HASH, name: 'Ade', resumeToken: '', ticket: '', look: null });
     expect(decodeMessage(encodeHello('Ade', 'tok-123'))).toMatchObject({ name: 'Ade', resumeToken: 'tok-123', ticket: '' });
     // a join ticket (a JWT: longer than a u8-length string) follows the token
     const ticket = `eyJhbGciOiJFZERTQSJ9.${'x'.repeat(400)}.sig`;
@@ -113,7 +120,7 @@ describe('messages', () => {
       { id: 0, name: 'Strafer', isBot: true, since: 1 },
       { id: 4, name: 'Kemi', isBot: false, since: 4_000_000_000 },
     ];
-    expect(decodeMessage(encodeRoster(entries))).toEqual({ type: MsgType.Roster, entries });
+    expect(decodeMessage(encodeRoster(entries))).toEqual({ type: MsgType.Roster, entries: entries.map((e) => ({ ...e, look: null })) });
     expect(decodeMessage(encodeTuning('{"walkMax":6}'))).toEqual({ type: MsgType.Tuning, tuningJson: '{"walkMax":6}' });
     const rewind = {
       tick: 123456,
@@ -1211,5 +1218,89 @@ describe('remote melee swings (v16)', () => {
     }
     expect(swinging).toBeGreaterThan(40);
     expect(deltas).toBeGreaterThan(200);
+  });
+});
+
+describe('looks on the wire (v19)', () => {
+  const hers = cosmeticLoadoutWireIds({
+    items: { ...DEFAULT_COSMETIC_LOADOUT.items, bodyType: 'body_female', hair: 'hair_braids' },
+    dyes: { ...DEFAULT_COSMETIC_LOADOUT.dyes, primary: 'dye_khaki' },
+  });
+  const his = cosmeticLoadoutWireIds(DEFAULT_COSMETIC_LOADOUT);
+
+  /** a v17/v18 client's ROSTER decoder, as it shipped */
+  function oldRosterDecode(bytes: Uint8Array) {
+    const r = new BitReader(bytes);
+    r.u8();
+    const n = r.bits(6);
+    const entries = [];
+    for (let i = 0; i < n; i++) entries.push({ id: r.bits(5), isBot: r.bool(), since: r.u32(), name: r.string() });
+    return entries;
+  }
+
+  /** a v17 server's ROSTER, as it shipped (no looks section) */
+  function oldRosterEncode(entries: { id: number; isBot: boolean; since: number; name: string }[]) {
+    const w = new BitWriter(1024).u8(MsgType.Roster).unsigned(entries.length, 6);
+    for (const e of entries) w.unsigned(e.id, 5).bool(e.isBot).u32(e.since).string(e.name);
+    return w.finish().slice();
+  }
+
+  it('ROSTER carries each entry\'s look (15 wire ids), none for a player whose look is unknown', () => {
+    const entries = [
+      { id: 0, name: 'Strafer', isBot: true, since: 1, look: his },
+      { id: 3, name: 'Kemi', isBot: false, since: 4_000_000_000, look: hers },
+      { id: 7, name: 'Old page', isBot: false, since: 9, look: null },
+    ];
+    const msg = decodeMessage(encodeRoster(entries)) as RosterMsg;
+    expect(msg.entries).toEqual(entries);
+    expect(hers).toHaveLength(15);
+    expect(cosmeticLoadoutFromWireIds(msg.entries[1]!.look!).items.bodyType).toBe('body_female');
+  });
+
+  it('every name length and entry count: the looks section never confuses the padding (exhaustive over 0–7 bits)', () => {
+    for (let n = 0; n <= 4; n++) {
+      for (let len = 0; len < 9; len++) {
+        const entries = Array.from({ length: n }, (_, i) => ({ id: i, name: 'x'.repeat(len), isBot: i % 2 === 0, since: i, look: i % 3 === 1 ? null : hers }));
+        expect((decodeMessage(encodeRoster(entries)) as RosterMsg).entries).toEqual(entries);
+        // an older server's ROSTER: no section, so no looks (never garbage from the padding)
+        const old = entries.map(({ look: _look, ...e }) => e);
+        expect((decodeMessage(oldRosterEncode(old)) as RosterMsg).entries).toEqual(old.map((e) => ({ ...e, look: null })));
+      }
+    }
+  });
+
+  it('a v17/v18 client reads a v19 ROSTER\'s entries and never sees the looks', () => {
+    const entries = [
+      { id: 2, name: 'Ade', isBot: false, since: 12, look: hers },
+      { id: 5, name: '[BOT] Kolo', isBot: true, since: 13, look: his },
+    ];
+    expect(oldRosterDecode(encodeRoster(entries))).toEqual(entries.map(({ look: _look, ...e }) => e));
+  });
+
+  it('HELLO: an optional look after the ticket; the ticket is written (empty) when only a look follows', () => {
+    const ticket = `eyJhbGciOiJFZERTQSJ9.${'x'.repeat(300)}.sig`;
+    expect(decodeMessage(encodeHello('Ade', '', '', hers))).toMatchObject({ name: 'Ade', ticket: '', look: hers });
+    expect(decodeMessage(encodeHello('Ade', 'tok', ticket, hers))).toMatchObject({ resumeToken: 'tok', ticket, look: hers });
+    expect(decodeMessage(encodeHello('Ade', 'tok', ticket))).toMatchObject({ ticket, look: null });
+    expect(decodeMessage(encodeHello('Ade', '', '', []))).toMatchObject({ ticket: '', look: null });
+    // padding never reads as a look, whatever the name length
+    for (let len = 1; len < 10; len++) expect(decodeMessage(encodeHello('n'.repeat(len), 't'.repeat(len)))).toMatchObject({ look: null });
+    // too many ids: capped at the u5 count
+    const long = Array.from({ length: 40 }, (_, i) => i + 1);
+    expect((decodeMessage(encodeHello('Ade', '', '', long)) as HelloMsg).look).toEqual(long.slice(0, MAX_LOOK_IDS));
+  });
+
+  it('SetLook (CMD 12): a JSON list of wire ids; anything else is refused', () => {
+    const cmd = decodeMessage(encodeLookCmd(hers));
+    expect(cmd).toEqual({ type: MsgType.Cmd, kind: CmdKind.SetLook, payload: JSON.stringify(hers) });
+    expect(parseLookCmd((cmd as { payload: string }).payload)).toEqual(hers);
+    for (const bad of ['', 'nope', '{}', '[]', '[1.5]', '[-1]', '[65536]', '["1"]', JSON.stringify(Array(32).fill(1)), `[${'1,'.repeat(300)}1]`]) expect(parseLookCmd(bad), bad).toBeNull();
+  });
+
+  it('v17 and v18 clients are still admitted; nothing newer or older', () => {
+    expect(PROTOCOL_VERSION).toBe(19);
+    expect(MIN_PROTOCOL_VERSION).toBe(17);
+    expect([16, 17, 18, 19, 20].map(protocolSupported)).toEqual([false, true, true, true, false]);
+    expect(CmdKind.SetLook).toBe(12);
   });
 });

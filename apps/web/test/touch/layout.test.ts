@@ -142,9 +142,9 @@ describe('touch HUD layout', () => {
     expect(loadSettings(store)).toEqual({ ...DEFAULT_TOUCH_SETTINGS, opacity: LIMITS.opacityMax });
   });
 
-  it("a save from round one keeps its choices, but its default opacity becomes the kit's look", () => {
+  it('a save from round one keeps its choices, but its default opacity becomes the default (now Button fade\'s)', () => {
     const old = memoryStore({ [SETTINGS_KEY]: JSON.stringify({ mode: 'on', fire: 'release', opacity: 0.55 }) });
-    expect(loadSettings(old)).toMatchObject({ mode: 'on', fire: 'release', opacity: 1 });
+    expect(loadSettings(old)).toMatchObject({ mode: 'on', fire: 'release', opacity: DEFAULT_TOUCH_SETTINGS.opacity });
     const chosen = memoryStore({ [SETTINGS_KEY]: JSON.stringify({ opacity: 0.4 }) });
     expect(loadSettings(chosen).opacity).toBe(0.4);
     // saved again (rev 2), 0.55 is a choice like any other

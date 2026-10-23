@@ -22,13 +22,13 @@ import {
 const bytes = (n: number, v = 7) => new Uint8Array(n).fill(v);
 
 describe('voice on the wire (v18)', () => {
-  it('v18, and v17 pages still admitted', () => {
-    expect(PROTOCOL_VERSION).toBe(18);
+  it('v18 or later (v19 added looks), and v17 pages still admitted', () => {
+    expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(18);
     expect(MIN_PROTOCOL_VERSION).toBe(17);
     expect(protocolSupported(17)).toBe(true);
     expect(protocolSupported(18)).toBe(true);
     expect(protocolSupported(16)).toBe(false);
-    expect(protocolSupported(19)).toBe(false);
+    expect(protocolSupported(PROTOCOL_VERSION + 1)).toBe(false);
   });
 
   it('VOICE_UP round-trips its header and frames, with and without the redundant copy', () => {

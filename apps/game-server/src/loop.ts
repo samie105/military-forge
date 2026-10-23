@@ -24,7 +24,7 @@ export function startTickLoop(
   rateHz: number,
   onTick: () => void,
   maxCatchUp = 5,
-  /** work for spare time: given a budget (ms), it stops near it; true while it has more */
+  /** work for spare time: given a budget (ms), it stops near it; true if it had any to do */
   onIdle?: (budgetMs: number) => boolean,
 ): { stop(): void; stats: TickLoopStats } {
   const tickNs = BigInt(Math.round(1e9 / rateHz));
@@ -55,10 +55,12 @@ export function startTickLoop(
     }
     const spareMs = Number(next - now) / 1e6 - IDLE_MARGIN_MS;
     if (onIdle && spareMs > 0.5) {
-      onIdle(Math.min(spareMs, IDLE_MAX_MS));
-      const after = process.hrtime.bigint();
-      stats.idleWorkMs += Number(after - now) / 1e6;
-      now = after;
+      if (onIdle(Math.min(spareMs, IDLE_MAX_MS))) {
+        // only time spent working: the report shows "nav builds" only while there are some
+        const after = process.hrtime.bigint();
+        stats.idleWorkMs += Number(after - now) / 1e6;
+        now = after;
+      }
     }
     const waitMs = Number(next - now) / 1e6;
     timer = setTimeout(run, Math.max(0, waitMs - 0.5));

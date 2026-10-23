@@ -19,7 +19,7 @@
  * changes, local or remote, and the hand carries the guns between hand and body.
  */
 import { weapons, type WeaponDef } from '@military-forge/content';
-import { Matrix4, Mesh, Object3D, Vector3, type BufferGeometry, type Material } from 'three';
+import { Matrix4, Mesh, Object3D, Quaternion, Vector3, type BufferGeometry, type Material } from 'three';
 
 export type SlingPoint = 'back' | 'thigh' | 'hip' | 'side';
 
@@ -57,10 +57,10 @@ export function slingPointFor(def: WeaponDef | undefined, family: string | null 
   return shieldOnBack ? 'side' : 'back';
 }
 
-/** smooth 0 → 1 */
+/** smooth 0 → 1, and gentle at both ends (smootherstep: no jolt where the arm leaves or reaches the aim) */
 function smooth(k: number): number {
   const c = Math.min(1, Math.max(0, k));
-  return c * c * (3 - 2 * c);
+  return c * c * c * (c * (6 * c - 15) + 10);
 }
 
 /** Where a switch is at `phase` (0…1 of its time). */
@@ -75,8 +75,8 @@ export interface SwitchPose {
 }
 
 /** stow the old gun until here, move across until here, then draw the new one */
-export const STOW_END = 0.4;
-export const DRAW_START = 0.6;
+export const STOW_END = 0.47;
+export const DRAW_START = 0.53;
 
 /**
  * The switch at `phase`: the hand carries the old gun to its point (to STOW_END), crosses to the
@@ -86,8 +86,10 @@ export function switchPhase(phase: number, out: SwitchPose): SwitchPose {
   out.holdingOld = phase < STOW_END;
   out.holdingNew = phase >= DRAW_START;
   out.across = 0;
-  if (out.holdingOld) out.away = smooth(phase / STOW_END);
-  else if (out.holdingNew) out.away = 1 - smooth((phase - DRAW_START) / (1 - DRAW_START));
+  // the arm is near straight at the aim, where a little reach is a lot of elbow: it leaves and reaches the aim
+  // slowly, and moves fastest bent, near the dip
+  if (out.holdingOld) out.away = smooth((phase / STOW_END) ** 1.3);
+  else if (out.holdingNew) out.away = 1 - smooth(1 - (1 - (phase - DRAW_START) / (1 - DRAW_START)) ** 1.3);
   else {
     out.away = 1;
     out.across = smooth((phase - STOW_END) / (DRAW_START - STOW_END));
@@ -162,5 +164,52 @@ export class SlingRig {
 
   hide(slot: 0 | 1): void {
     this.meshes[slot].visible = false;
+  }
+}
+
+/** how long (s) a gun takes to fly the last bit between the hand and its point on the body at a switch's handover */
+export const HANDOFF_S = 0.1;
+const _hm = new Matrix4();
+const _hp = new Vector3();
+const _hq = new Quaternion();
+const _hs = new Vector3();
+const _hi = new Quaternion();
+
+/**
+ * A gun changing hands mid-switch (the old one onto the body, the new one into the hand): chibi arms stop short of the
+ * back and the thigh, so the gun makes the rest of the trip itself, from where it was to its new mount, in HANDOFF_S,
+ * instead of appearing there.
+ */
+export class Handoff {
+  private t = Infinity;
+  private readonly from = new Matrix4();
+
+  /** The gun leaves `world` (its world matrix there) for its new mount now. */
+  start(world: Matrix4): void {
+    this.from.copy(world);
+    this.t = 0;
+  }
+
+  get active(): boolean {
+    return this.t < HANDOFF_S;
+  }
+
+  /** `mesh` (mounted at identity on its new parent) between where it was and its mount; at rest once done. */
+  apply(mesh: Object3D, dt: number): void {
+    this.t += dt;
+    const parent = mesh.parent;
+    if (!this.active || !parent) {
+      mesh.position.set(0, 0, 0);
+      mesh.quaternion.identity();
+      mesh.scale.set(1, 1, 1);
+      return;
+    }
+    const k = smooth(this.t / HANDOFF_S);
+    parent.updateWorldMatrix(true, false);
+    _hm.copy(parent.matrixWorld).invert().multiply(this.from).decompose(_hp, _hq, _hs);
+    mesh.position.copy(_hp).multiplyScalar(1 - k);
+    mesh.quaternion.copy(_hq).slerp(_hi.identity(), k);
+    mesh.scale.set(1, 1, 1);
+    mesh.updateMatrixWorld(true);
   }
 }

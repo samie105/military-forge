@@ -7,8 +7,12 @@ export type KeyValueStore = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 export const LAYOUT_KEY = 'mf.touch.layout.v1';
 export const SETTINGS_KEY = 'mf.touch.settings.v1';
-/** Saved with the settings: 2 = the round-two kit's controls (opacity 1 is its look); 3 = the four fire modes. */
-export const SETTINGS_REV = 3;
+/**
+ * Saved with the settings: 2 = the round-two kit's controls (opacity 1 is its look); 3 = the four fire
+ * modes; 4 = Button fade and Auto-fade (the owner, 23 Oct: an opacity of 1 saved before is the old
+ * default, and loads as the new one).
+ */
+export const SETTINGS_REV = 4;
 
 export const LIMITS = { min: 0.03, max: 0.97, sizeMin: 0.08, sizeMax: 0.7, opacityMin: 0.15, opacityMax: 1 };
 
@@ -60,10 +64,13 @@ export interface TouchSettings {
   /** back on the aim stick within 0.7 s of a button: the same aim and push carry on (and Pull keeps firing) */
   keepAim: boolean;
   /**
-   * overall opacity of the controls' plates (each control's own opacity multiplies it); the vitals they
-   * carry (HP, fuel, the ammo ring) stay readable whatever it is. 1 = the kit's look, already translucent
+   * Button fade (the owner, 23 Oct): how far the controls' plates fade, 0.15–1 (each control's own
+   * opacity multiplies it). With Auto-fade they sit at this level only while idle, and light up to full
+   * under a thumb; without, always. The vitals they carry (HP, fuel, the ammo ring, counts) never fade.
    */
   opacity: number;
+  /** Auto-fade: controls left alone for AUTO_FADE_MS ease down to the Button fade level; a thumb on or near one lights it up */
+  autoFade: boolean;
   /** swipes and holds on the buttons (touch-controls-v3.md); off: every button is a plain tap, as before */
   gestures: boolean;
   /** short buzzes on a throw, a swap, a dash swipe, a radial pick (where the phone can vibrate) */
@@ -89,7 +96,8 @@ export const DEFAULT_TOUCH_SETTINGS: Readonly<TouchSettings> = {
   vibrate: true,
   swipeDash: true,
   keepAim: true,
-  opacity: 1,
+  opacity: 0.5,
+  autoFade: true,
   gestures: true,
   haptics: true,
   lookAhead: true,
@@ -115,7 +123,7 @@ export function sanitizeSettings(raw: unknown): TouchSettings {
   if (r.fire === 'hold') s.fire = r.autoFire === true ? 'auto' : 'pull';
   else if (typeof r.fire === 'string' && (FIRE_MODES as readonly string[]).includes(r.fire)) s.fire = r.fire as FireMode;
   if (r.handed === 'right' || r.handed === 'left') s.handed = r.handed;
-  for (const k of ['aimAssist', 'vibrate', 'swipeDash', 'keepAim', 'gestures', 'haptics', 'lookAhead', 'pinchZoom', 'fireChosen', 'precisionRelease', 'leftFire'] as const) if (typeof r[k] === 'boolean') s[k] = r[k];
+  for (const k of ['aimAssist', 'vibrate', 'swipeDash', 'keepAim', 'gestures', 'haptics', 'lookAhead', 'pinchZoom', 'fireChosen', 'precisionRelease', 'leftFire', 'autoFade'] as const) if (typeof r[k] === 'boolean') s[k] = r[k];
   if (isFiniteNumber(r.opacity)) s.opacity = clamp(r.opacity, LIMITS.opacityMin, LIMITS.opacityMax);
   if (isFiniteNumber(r.shake)) s.shake = clamp(r.shake, 0, 1);
   if (isFiniteNumber(r.view)) s.view = clamp(r.view, VIEW_LIMITS.min, VIEW_LIMITS.max);
@@ -127,6 +135,8 @@ export function loadSettings(store: KeyValueStore | null): TouchSettings {
     const raw = JSON.parse(store?.getItem(SETTINGS_KEY) ?? 'null') as Record<string, unknown> | null;
     const s = sanitizeSettings(raw);
     if (raw && raw.rev === undefined && raw.opacity === ROUND_ONE_OPACITY) s.opacity = DEFAULT_TOUCH_SETTINGS.opacity;
+    // before Button fade, 1 was the default everyone had: the new default fades the idle controls
+    if (raw && (typeof raw.rev !== 'number' || raw.rev < 4) && raw.opacity === 1) s.opacity = DEFAULT_TOUCH_SETTINGS.opacity;
     return s;
   } catch {
     return { ...DEFAULT_TOUCH_SETTINGS };

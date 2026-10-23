@@ -62,8 +62,8 @@ function desktop(): string {
     </div>
 
     <div class="hud-match">
-      <div class="hud-clock plate" data-state="match"><span class="hud-label" data-bind="match.mode"></span><b class="hud-clock__time num" data-bind-roll="match.timeLeft"></b><span class="hud-label" data-bind="match.limit"></span></div>
-      <div class="hud-score" data-state="match">
+      <div class="hud-clock plate" data-state="match" data-tour="clock"><span class="hud-label" data-bind="match.mode"></span><b class="hud-clock__time num" data-bind-roll="match.timeLeft"></b><span class="hud-label" data-bind="match.limit"></span></div>
+      <div class="hud-score" data-state="match" data-tour="scores">
         <div class="hud-score__cell plate is-you"><span class="hud-label">You</span><b class="num" data-bind-roll="match.myScore"></b></div>
         <div class="hud-score__cell plate"><span class="hud-label">Lead · <span data-bind="match.leaderShort"></span></span><b class="num" data-bind-roll="match.leaderScore"></b></div>
       </div>
@@ -90,10 +90,10 @@ function desktop(): string {
         <div class="vitals plate">
           <div class="vital vital--hp">${ic('hp')}<b class="vital__num num" data-bind="player.hp"></b>
             <div class="bar bar--hp" role="meter" aria-label="Health" aria-valuemin="0" aria-valuemax="100" data-bind-attr="aria-valuenow: player.hp"><i class="bar__ghost"></i><i class="bar__fill"></i><span class="bar__ticks"></span></div></div>
-          <div class="vital vital--fuel">${ic('fuel')}<b class="vital__num num" data-bind="player.fuel"></b>
+          <div class="vital vital--fuel" data-tour="fuel">${ic('fuel')}<b class="vital__num num" data-bind="player.fuel"></b>
             <div class="vital__stack"><div class="bar bar--fuel" role="meter" aria-label="Jet fuel" aria-valuemin="0" aria-valuemax="100" data-bind-attr="aria-valuenow: player.fuel"><i></i><span class="mf-fuel__cost" aria-hidden="true"></span><span class="mf-fuel__tick" aria-hidden="true"></span></div><div class="bar bar--delay" aria-hidden="true"><i></i></div></div></div>
         </div>
-        <div class="dash plate" aria-label="Dash">
+        <div class="dash plate" aria-label="Dash" data-tour="dash">
           <svg class="dash__ring" viewBox="0 0 100 100" aria-hidden="true">
             <g class="dash__rose">${[0, 45, 90, 135, 180, 225, 270, 315].map((a) => `<path transform="rotate(${a} 50 50)" d="M50 2v6"/>`).join('')}</g>
             <path class="dash__dir" data-state="dash-hint" data-bind-attr="transform: dash.hintRotate" d="M50 0v10"/>
@@ -106,7 +106,7 @@ function desktop(): string {
     </div>
 
     <div class="hud-br">
-      <div class="belt plate" aria-label="Grenade belt" data-state="belt">
+      <div class="belt plate" aria-label="Grenade belt" data-state="belt" data-tour="belt">
         <div class="belt__head"><span class="belt__sel"><b data-bind="grenades.selected"></b> <span class="num"><span data-bind-roll="grenades.count"></span>/<span data-bind="grenades.max"></span></span></span>
           <span class="belt__keys"><kbd class="kbd" data-bind="bind.grenade.0"></kbd><span>tap · hold aims</span><kbd class="kbd" data-state="belt-many" data-bind="bind.cycleGrenade.0"></kbd><span data-state="belt-many">next</span></span></div>
         <div class="mf-belt"><ul class="belt__list"></ul><i class="m-p5 mf-belt__sel" aria-hidden="true"></i></div>
@@ -119,7 +119,7 @@ function desktop(): string {
           <span class="num slot__mini" data-state="slung-gun"><span data-bind="player.slot.1.mag"></span>/<span data-bind="player.slot.1.reserve"></span></span>
           <kbd class="kbd" data-bind="bind.swap.0"></kbd>
         </div>
-        <div class="slot slot--held plate" data-state="weapon">
+        <div class="slot slot--held plate" data-state="weapon" data-tour="ammo">
           <i class="mf-drawbar" data-state="switching" aria-hidden="true"></i>
           <div class="slot__top">
             <span class="slot__idx" data-bind="player.slot.0.idx"></span>

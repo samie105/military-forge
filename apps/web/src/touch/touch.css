@@ -57,12 +57,21 @@
 .mf-ctl.mf-down:not(.mf-stick) { scale: var(--m-press); transition-duration: var(--m-instant); }
 .mf-ctl.mf-down :is(.dial-btn, .tb) { border-color: var(--c-volt); }
 
-/* the opacity setting fades the controls' plates, never the vitals they carry (HP, fuel, the ammo ring) */
+/*
+ * Button fade (settings.opacity) fades the controls' plates, never the vitals they carry (HP, fuel,
+ * the ammo ring, the counts). Auto-fade (fade.ts; .mf-autofade on the root): a control is at full while
+ * lit (.mf-awake: under or near a thumb, held, or a critical cue) and eases down to the fade level
+ * once left alone. Lighting up is instant; fading takes 400 ms. Opacity only: the plates are their own
+ * layers, nothing is laid out again. Reduce motion: no easing (the kit stops transitions).
+ */
 .mf-ctl :is(.dial__base, .dial__groove, .dial__track, .dial__hint, .dial__knob),
-.mf-ctl .mf-skin:is(.dial-btn, .tb) { opacity: var(--o, 1); transition: opacity var(--m-fast) var(--ease-arrive); }
-.mf-ctl .pt-swap { opacity: max(var(--o, 1), 0.8); transition: opacity var(--m-fast) var(--ease-arrive); }
-/* a thumb down on a control: its plates fade to full */
+.mf-ctl .mf-skin:is(.dial-btn, .tb) { opacity: var(--o, 1); transition: opacity 400ms ease-out; }
+.mf-ctl .pt-swap { opacity: max(var(--o, 1), 0.8); transition: opacity 400ms ease-out; }
+.mf-touch.mf-autofade .mf-ctl.mf-awake { --o: var(--o-awake, 1) !important; }
+.mf-touch.mf-autofade .mf-ctl.mf-awake :is(.dial__base, .dial__groove, .dial__track, .dial__hint, .dial__knob, .mf-skin, .pt-swap) { transition-duration: 0s; }
+/* a thumb down on a control: its plates fade to full, at once */
 .mf-ctl.mf-down { --o: 1 !important; }
+.mf-ctl.mf-down :is(.dial__base, .dial__groove, .dial__track, .dial__hint, .dial__knob, .mf-skin, .pt-swap) { transition-duration: 0s; }
 
 /* ---- the thumb dials (sticks): grabbed through their half of the screen; the knob follows the thumb raw ---- */
 .mf-stick { pointer-events: none; }

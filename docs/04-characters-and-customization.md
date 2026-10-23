@@ -95,6 +95,7 @@ These are **original IPs**. Design them for the core audience (India, Nigeria, S
 ## 5. Runtime character assembly (performance)
 
 1. The player's loadout is a compact list of item ids (in the join ticket and spawn records).
+   - As built (protocol v19, 23 Oct): a look travels as its cosmetic wire ids (`cosmeticLoadoutWireIds`, 15 u16 today) in the join ticket (`look`, with the player's level `lvl`), the HELLO, the SetLook CMD and every ROSTER entry, never per snapshot. The game server holds each look to the body's fit and to what the player has unlocked (content `admitLook`, `cosmeticUnlocked`); a slot that fails falls back to its default. Bots wear seeded looks (content `botLook`: both bodies, earnable items, curated colourways). The client keeps everyone's look in `apps/web/src/looks/book.ts`; the 3D view draws each soldier in it (render3d `LoadoutDirectory.setLooks`). docs/05 §6 has the bits.
 2. **Lazy loading:** the client fetches each part's GLB (meshopt-compressed) + KTX2 textures from the CDN. Until loaded, it shows the **default part** and never blocks gameplay.
 3. **Merge:** all parts share the skeleton, so merge them into **one `SkinnedMesh`** with one material:
    - textures packed in a **texture array** (WebGL2) or an atlas;

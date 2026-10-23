@@ -2,6 +2,7 @@
 //! gateway with it: apps/game-server/test/gateway.e2e.test.ts).
 //!
 //!   wt-probe <url> <cert-sha256-hex>
+//!   wt-probe <url> system      (a server with a real certificate: the system's roots)
 //!
 //! Opens a session and its one bidirectional stream, then prints `READY`. Commands on stdin:
 //!   R <hex>   send a reliable message (u16 LE length + message on the stream)
@@ -27,9 +28,13 @@ fn unhex(s: &str) -> Result<Vec<u8>> {
 async fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
     let [_, url, hash] = &args[..] else {
-        return Err(anyhow!("usage: wt-probe <url> <cert-sha256-hex>"));
+        return Err(anyhow!("usage: wt-probe <url> <cert-sha256-hex | system>"));
     };
-    let client = ClientBuilder::new().with_server_certificate_hashes(vec![unhex(hash)?])?;
+    let client = if hash == "system" {
+        ClientBuilder::new().with_system_roots()?
+    } else {
+        ClientBuilder::new().with_server_certificate_hashes(vec![unhex(hash)?])?
+    };
     let session = client.connect(url::Url::parse(url)?).await?;
     // a session the server refuses at once (no such room) can close before its stream opens
     let (mut send, mut recv) = match session.open_bi().await {

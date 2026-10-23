@@ -43,6 +43,7 @@ import { Sight, sightPoints } from '../input/sight';
 import { EquipClock, SKIN_BASE, TouchSkin, controlValues, localView, phoneTokens, skinHtml, type LocalView } from './skin';
 import { iconHref, weaponIcon } from '../ui/icons';
 import { AIM_STICK, FLICK, GRENADE_STICK, MOVE_STICK, followOrigin, isFlick, knobOffset, moveButtons, shapeStick, zeroStick, type StickVector } from './stick';
+import { FadeClock, cueLit, nearControls, type FadeControl } from './fade';
 import './touch.css';
 
 /** Where the reticle (and the camera's look-ahead) sits along the touch aim, in metres. */
@@ -120,6 +121,10 @@ export class TouchController {
   /** each control's size on screen (px) and its skin's zoom, from the last place() */
   private readonly sizes = new Map<ControlId, { px: number; k: number }>();
   private readonly grabs = new Map<number, Grab>();
+  /** Auto-fade (fade.ts): when each control was last woken, and the classes as last set */
+  private readonly fade = new FadeClock<ControlId>();
+  private readonly awake = new Set<ControlId>();
+  private beltTotal = -1;
   /** each grab's finger: when it last sent anything, the element it started on, whether its capture was lost */
   private readonly grabSeen = new Map<number, { at: number; from: Element | null; lost: boolean }>();
   /** fingers down in the editor (a second one on the screen pinches the control the first drags) */
@@ -226,6 +231,7 @@ export class TouchController {
       (e) => {
         this.onDown(e);
         if (this.grabs.has(e.pointerId)) this.grabSeen.set(e.pointerId, { at: e.timeStamp, from: e.target as Element | null, lost: false });
+        this.wakeNear(e);
       },
       { capture: true, passive: false },
     );
@@ -300,6 +306,8 @@ export class TouchController {
       this.host.camera.lookAhead = this.settings.lookAhead ? 1 : 0;
       this.host.camera.viewScale = this.settings.view;
       this.hintNextAt = performance.now() + 4000;
+      // the controls come up lit, then fade once left alone
+      this.fade.wakeAll(this.els.keys(), performance.now());
       this.place();
       this.raf = requestAnimationFrame(this.frame);
     } else {
@@ -413,6 +421,10 @@ export class TouchController {
     // v3: the belt (the grenade fan), the shield (its hold), the guns (the radial), the hints
     const counts = me?.grenadeCounts ?? [];
     this.belt = { ...beltOf(counts, me?.grenadeType ?? 0), counts };
+    // a grenade became ready (picked up, or the belt refilled): the button lights up (Auto-fade)
+    const total = counts.reduce((a, b) => a + b, 0);
+    if (this.beltTotal >= 0 && total > this.beltTotal) this.fade.wake('grenade', performance.now());
+    this.beltTotal = total;
     this.shieldNow = me?.shield;
     this.guns = { held: def, slung: other?.def ?? NO_WEAPON, alive: !!me?.alive };
     this.teachTick(me?.alive ?? false);
@@ -542,6 +554,7 @@ export class TouchController {
     }
     this.maybeChoose();
     this.reapStale(performance.now());
+    this.fadeTick(performance.now());
     // large text (Settings → Accessibility, 125 % and up): the pills drop their extra words (touch.css)
     const scale = Number(document.documentElement.style.getPropertyValue('--text-scale')) || 1;
     if (scale >= 1.25 !== this.root.classList.contains('mf-text-lg')) this.root.classList.toggle('mf-text-lg', scale >= 1.25);
@@ -581,6 +594,43 @@ export class TouchController {
       }
       const lostWay = seen.lost || (seen.from !== null && !seen.from.isConnected);
       if (lostWay && now - seen.at >= STALE_MS) this.letGo(id, now);
+    }
+  }
+
+  /**
+   * Auto-fade: a touch lights up the controls under it and near it (a thumb heading there), and the
+   * stick it grabbed. Not while the controls are behind the menus or in the editor.
+   */
+  private wakeNear(e: PointerEvent): void {
+    if (!this.playing || !this.settings.autoFade) return;
+    const now = performance.now();
+    const at = logicalPoint(e);
+    const rect = logicalRect(this.safe);
+    const controls = new Map<ControlId, FadeControl>();
+    for (const [id, c] of this.centres) {
+      if (this.els.get(id)?.classList.contains('mf-off')) continue;
+      controls.set(id, { x: rect.left + c.x, y: rect.top + c.y, r: (this.sizes.get(id)?.px ?? 52) / 2 });
+    }
+    for (const id of nearControls(at.x, at.y, controls)) this.fade.wake(id, now);
+    const g = this.grabs.get(e.pointerId);
+    if (g?.kind === 'stick') this.fade.wake(g.id, now);
+  }
+
+  /**
+   * Auto-fade, once a frame: a control is lit while a thumb holds it, for AUTO_FADE_MS after it was
+   * woken, or while a critical cue says so (fade.ts cueLit); the rest sit at the Button fade level.
+   * One class per control, set only when it changes (touch.css does the fading: opacity, no layout).
+   */
+  private fadeTick(now: number): void {
+    const on = this.settings.autoFade && this.active;
+    if (on !== this.root.classList.contains('mf-autofade')) this.root.classList.toggle('mf-autofade', on);
+    if (!on) return;
+    for (const [id, el] of this.els) {
+      const lit = this.editing || el.classList.contains('mf-down') || this.fade.lit(id, now) || cueLit(id, this.tokensBefore);
+      if (lit === this.awake.has(id)) continue;
+      if (lit) this.awake.add(id);
+      else this.awake.delete(id);
+      el.classList.toggle('mf-awake', lit);
     }
   }
 
@@ -1389,6 +1439,8 @@ export class TouchController {
       this.centres.set(id, { x: p.x * w, y: p.y * h });
       el.style.setProperty('--k', k.toFixed(4));
       el.style.setProperty('--o', String(Math.min(1, p.opacity * this.settings.opacity * (this.editing && this.selected === id ? 1.6 : 1))));
+      // lit (Auto-fade): the control's own opacity, without the Button fade
+      el.style.setProperty('--o-awake', String(Math.min(1, p.opacity * (this.editing && this.selected === id ? 1.6 : 1))));
       const grabbed = [...this.grabs.values()].some((g) => g.kind === 'stick' && g.id === id);
       if (!grabbed) {
         el.style.left = `${(p.x * w).toFixed(1)}px`;

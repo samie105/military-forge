@@ -27,6 +27,7 @@ import { cloudView, fullBelt, statusView } from './grenadeViews';
 import type { InputSampler } from './input';
 import type { LocalBots } from './localBots';
 import { mapEventView } from './mapEvent';
+import { botLooks, lookBook } from './looks/book';
 import { ThrowPreview } from './throwPreview';
 import type { Renderer } from './render';
 import { mobilityView, shieldView, type CloudView, type Frame, type PlayerView } from './view';
@@ -97,6 +98,8 @@ export class LocalMode {
       if (p.isBot) bots.add(p.id);
     }
     this.renderer.setNames(names, bots);
+    // v19: the bots wear the seeded looks a room would give them (the local player: the saved look)
+    lookBook.replace(botLooks(SEED, this.game.players.filter((p): p is PlayerState => p !== null && p.isBot)));
   }
 
   tuning(): Tuning {

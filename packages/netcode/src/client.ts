@@ -14,6 +14,7 @@ import {
   decodeMessage,
   encodeCmd,
   encodeHello,
+  encodeLookCmd,
   encodeInputInto,
   encodePing,
   type RewindDebugMsg,
@@ -35,6 +36,11 @@ export interface NetClientOptions {
    * new player only: a resume is admitted by the session token, so a used or expired ticket is fine then.
    */
   ticket?: string;
+  /**
+   * v19: the look this player wears (cosmetic wire ids, content's cosmeticLoadoutWireIds), sent in every
+   * HELLO; the room holds it to what the player owns and tells everyone in the ROSTER (NetClient.looks).
+   */
+  look?: readonly number[];
   /** hands bytes to the transport (through the conditioner, if any) */
   send(bytes: Uint8Array): void;
   /**
@@ -187,6 +193,14 @@ export class NetClient {
   private readonly snapshotDecoder = new SnapshotDecoder();
   readonly names = new Map<number, string>();
   /**
+   * v19: everyone's look as the room lets them wear it (player id → cosmetic wire ids; decode with
+   * content's cosmeticLoadoutFromWireIds), from the latest ROSTER. A player missing here has none known
+   * (an older page): draw a placeholder. Ours is here too: what everyone else sees us in.
+   */
+  readonly looks = new Map<number, readonly number[]>();
+  /** the look every HELLO carries (NetClientOptions.look; setLook changes it) */
+  look: readonly number[] | null;
+  /**
    * Per id: the first server tick whose snapshots show its current holder (ROSTER `since`). Older
    * snapshots show whoever had the id before, so a joiner is never drawn at a leaver's old poses
    * (lag comp tests its current pose), whatever order ROSTER and snapshots arrive in.
@@ -245,6 +259,7 @@ export class NetClient {
     this.interpDelayMs = this.baseInterpDelayMs = this.interpTarget = options.interpDelayMs ?? START_INTERP_DELAY_MS;
     this.pacer = new InputPacer(options.pacer);
     this.ticket = options.ticket ?? '';
+    this.look = options.look ?? null;
   }
 
   get joined(): boolean {
@@ -258,7 +273,7 @@ export class NetClient {
   onOpen(): void {
     this.status = this.sessionToken ? 'resuming…' : 'joining…';
     this.helloAt = this.lastHeardAt = this.options.now();
-    this.options.send(encodeHello(this.options.name, this.sessionToken, this.ticket));
+    this.options.send(encodeHello(this.options.name, this.sessionToken, this.ticket, this.look));
   }
 
   /** The transport dropped (not a kick): freeze until a new one is open (call onOpen again). */
@@ -340,6 +355,15 @@ export class NetClient {
   }
 
   /**
+   * v19: wear another look (cosmetic wire ids): the room checks it and sends everyone the new ROSTER
+   * (`looks`). Remembered for the HELLO of a reconnect; sent now when connected.
+   */
+  setLook(look: readonly number[]): void {
+    this.look = [...look];
+    if (this.connected) this.options.send(encodeLookCmd(look));
+  }
+
+  /**
    * Handles one server message; returns it so the UI can react (roster, events, kicks), or null
    * for a delta snapshot we can't use.
    */
@@ -373,6 +397,7 @@ export class NetClient {
             this.snapshots.length = 0;
             this.arrivals.length = 0;
             this.names.clear();
+            this.looks.clear();
             this.heldSince.fill(-Infinity);
           }
         }
@@ -418,6 +443,8 @@ export class NetClient {
         for (const e of msg.entries) if (e.id >= 0 && e.id < MAX_PLAYERS) this.heldSince[e.id] = e.since;
         this.names.clear();
         for (const e of msg.entries) this.names.set(e.id, e.id === this.myId ? 'You' : e.name);
+        this.looks.clear();
+        for (const e of msg.entries) if (e.look) this.looks.set(e.id, e.look);
         break;
       }
       case MsgType.Tuning:

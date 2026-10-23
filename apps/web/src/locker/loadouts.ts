@@ -51,6 +51,11 @@ export class LocalLoadoutStore implements LoadoutStore {
   ) {}
 
   async load(): Promise<CosmeticLoadout | null> {
+    return this.peek();
+  }
+
+  /** The saved look now, without the promise (null: nothing saved, or unreadable): a room's HELLO carries it. */
+  peek(): CosmeticLoadout | null {
     try {
       const raw = this.storage?.getItem(this.key);
       const saved = raw ? (JSON.parse(raw) as { version?: number; loadout?: unknown }) : null;

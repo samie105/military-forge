@@ -5,7 +5,7 @@
  * scenario at 60 Hz and returns a labelled frame strip (PNG data URL); scripts/animation-shots.mjs saves them.
  * Nothing here ships in the game bundle (it isn't imported by main.ts).
  */
-import { BREACHER, HAMMER, HitZone, K47, WIDOW, getMap } from '@military-forge/content';
+import { BREACHER, HAMMER, HitZone, K47, NO_WEAPON, WIDOW, getMap } from '@military-forge/content';
 import type { SimEvent } from '@military-forge/sim';
 import type { Frame, PlayerView } from '../view';
 import { PlaneCamera, Renderer3D, softwareGl } from './index';
@@ -58,10 +58,111 @@ function flight(t: number, t0: number, vx: number, vy: number, drag = 0.3): Part
 const aimRight = 0.15;
 const aimLeft = Math.PI - 0.15;
 
+/** a two-slot belt (slot 0, slot 1), each reloading for `reload0` / `reload1` ticks */
+const belt = (a: number, b: number, reload0 = 0, reload1 = 0): PlayerView['weapons'] => [
+  { def: a, mag: 6, reserve: 30, reloadTicks: reload0 },
+  { def: b, mag: 6, reserve: 30, reloadTicks: reload1 },
+];
+/** captures through a quick change landing at t = 0 (a switch, a pick-up) */
+const CHANGE = [[-0.03, 'before'], [0.02, '+20 ms'], [0.05, '+50 ms'], [0.08, '+80 ms'], [0.12, '+120 ms'], [0.16, '+160 ms'], [0.21, '+210 ms'], [0.3, '+300 ms']] as const;
+/** the sim's jet take-off from the ground at t0: thrust 38 m/s² against gravity 20, a 1.35× kick for 6 ticks, top climb 6.5 m/s */
+function takeoff(t: number, t0: number): Partial<PlayerView> {
+  if (t < t0) return { grounded: true };
+  let y = 0;
+  let vy = 0;
+  for (let s = 0; s < t - t0; s += 1 / 60) {
+    const kick = s < 6 / 60 ? 1.35 : 1;
+    vy = Math.min(6.5, vy + (38 * kick - 20) / 60);
+    y += vy / 60;
+  }
+  return { grounded: false, jetting: true, y, vy };
+}
+
 /** One gait cycle, sampled evenly: captures at cycle fractions. */
 const cycle = (seconds: number, n = 8) => Array.from({ length: n }, (_, i) => [(i * seconds) / n, `${Math.round((i * 100) / n)}%`] as const);
 
 export const SCENARIOS: Readonly<Record<string, Scenario>> = {
+  // --- character feel (docs/design/character-feel-research.md §9): the same scenarios before and after ---
+  switch: {
+    title: 'Switch: K-47 → Hammer .44 (0.25 s), standing',
+    lead: 1,
+    shots: CHANGE,
+    script: (t) => ({ aim: aimRight, weapons: belt(K47.index, HAMMER.index), active: t < 1 ? 0 : 1 }),
+  },
+  'switch-back': {
+    title: 'Switch: Hammer .44 → K-47 (0.35 s), standing, aiming up',
+    lead: 1,
+    shots: [[-0.03, 'before'], [0.04, '+40 ms'], [0.09, '+90 ms'], [0.14, '+140 ms'], [0.19, '+190 ms'], [0.25, '+250 ms'], [0.32, '+320 ms'], [0.45, '+450 ms']],
+    script: (t) => ({ aim: 0.8, weapons: belt(K47.index, HAMMER.index), active: t < 1 ? 1 : 0 }),
+  },
+  pickup: {
+    title: 'Pick-up: empty hands → K-47 (the support hand to the foregrip)',
+    lead: 1,
+    shots: CHANGE,
+    script: (t) => ({ aim: aimRight, weapons: belt(t < 1 ? NO_WEAPON : K47.index, NO_WEAPON) }),
+  },
+  shield: {
+    title: 'Riot shield up, then down',
+    lead: 1,
+    shots: [[-0.03, 'slung'], [0.03, 'up +30 ms'], [0.08, '+80 ms'], [0.15, '+150 ms'], [0.5, 'up'], [0.53, 'down +30 ms'], [0.58, '+80 ms'], [0.7, '+200 ms']],
+    script: (t) => ({ aim: aimRight, weapons: belt(HAMMER.index, NO_WEAPON), shield: t < 1 || t >= 1.5 ? 'back' : t < 1.25 ? 'raising' : 'front' }),
+  },
+  turn: {
+    title: 'Facing turn, standing: aim from right to left',
+    lead: 1,
+    shots: [[-0.03, 'before'], [0.02, '+20 ms'], [0.04, '+40 ms'], [0.06, '+60 ms'], [0.08, '+80 ms'], [0.11, '+110 ms'], [0.15, '+150 ms'], [0.3, '+300 ms']],
+    script: (t) => ({ aim: t < 1 ? aimRight : aimLeft, weapons: belt(K47.index, HAMMER.index) }),
+  },
+  takeoff: {
+    title: "Jet take-off at the sim's thrust (38 m/s², kick 1.35×)",
+    lead: 1,
+    shots: [[-0.1, 'standing'], [-0.03, '-30 ms'], [0.03, '+30 ms'], [0.08, '+80 ms'], [0.13, '+130 ms'], [0.2, '+200 ms'], [0.3, '+300 ms'], [0.5, '+500 ms']],
+    script: (t) => ({ aim: aimRight, ...takeoff(t, 1) }),
+    crop: 2.4,
+  },
+  'land-hard': {
+    title: 'Hard landing at 10 m/s (a 2.5 m drop)',
+    // touch-down at t = √(2·2.5/20) = 0.5 s
+    lead: 0.5,
+    shots: [[-0.05, 'falling'], [0.0, 'touch'], [0.017, '+1 frame'], [0.033, '+2 frames'], [0.05, '+3 frames'], [0.1, '+100 ms'], [0.2, '+200 ms'], [0.4, '+400 ms']],
+    script: (t) => {
+      const h = 2.5 - (GRAVITY * t * t) / 2;
+      return h > 0 ? { grounded: false, y: h, vy: -GRAVITY * t, aim: aimRight } : { grounded: true, y: 0, vy: 0, aim: aimRight };
+    },
+  },
+  'walk-band': { title: 'Walk band: 1.5 m/s (one cycle)', lead: 1.5, shots: cycle(0.5), script: () => ({ vx: 1.5, aim: aimRight }) },
+  'reload-rifle': {
+    title: 'Reload: K-47 (2.0 s), standing',
+    lead: 1,
+    shots: [[-0.05, 'before'], [0.2, '0.2 s'], [0.5, '0.5 s'], [0.8, '0.8 s'], [1.1, '1.1 s'], [1.4, '1.4 s'], [1.8, '1.8 s'], [2.1, 'done']],
+    script: (t) => ({ aim: aimRight, weapons: belt(K47.index, HAMMER.index, t >= 1 && t < 3 ? Math.ceil((3 - t) * 60) : 0) }),
+  },
+  'reload-pistol': {
+    title: 'Reload: Hammer .44 (2.0 s), standing',
+    lead: 1,
+    shots: [[-0.05, 'before'], [0.2, '0.2 s'], [0.5, '0.5 s'], [0.8, '0.8 s'], [1.1, '1.1 s'], [1.4, '1.4 s'], [1.8, '1.8 s'], [2.1, 'done']],
+    script: (t) => ({ aim: aimRight, weapons: belt(HAMMER.index, K47.index, t >= 1 && t < 3 ? Math.ceil((3 - t) * 60) : 0) }),
+  },
+  throw: {
+    title: 'Grenade throw (the throw event at 0 s)',
+    lead: 1,
+    shots: [[-0.05, 'before'], [0.05, '+50 ms'], [0.12, '+120 ms'], [0.2, '+200 ms'], [0.3, '+300 ms'], [0.4, '+400 ms'], [0.55, '+550 ms'], [0.75, '+750 ms']],
+    script: () => ({ aim: 0.5, weapons: belt(K47.index, HAMMER.index) }),
+    events: [[0, (p) => [{ type: 'throw', owner: p.id, grenade: 1 }]]],
+  },
+  death: {
+    title: 'Death (the death frame at 0 s)',
+    lead: 1,
+    shots: [[-0.03, 'alive'], [0.03, '+30 ms'], [0.1, '+100 ms'], [0.2, '+200 ms'], [0.3, '+300 ms'], [0.4, '+400 ms'], [0.5, '+500 ms'], [0.65, '+650 ms']],
+    script: (t) => ({ aim: aimRight, weapons: belt(K47.index, HAMMER.index), alive: t < 1, respawnTicks: t < 1 ? 0 : 180 }),
+    events: [[0, (p) => [{ type: 'death', victim: p.id, killer: SHOOTER, source: K47.index }]]],
+  },
+  'idle-armed': {
+    title: 'Armed idle (K-47): 3 s, every 0.4 s',
+    lead: 1,
+    shots: Array.from({ length: 8 }, (_, i) => [i * 0.4, `${(i * 0.4).toFixed(1)} s`] as const),
+    script: () => ({ aim: aimRight, weapons: belt(K47.index, HAMMER.index) }),
+  },
   'hit-pistol': {
     title: 'Hit: Hammer .44 to the chest, from the front (a twitch)',
     lead: 1,

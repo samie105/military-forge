@@ -513,6 +513,28 @@ function Touch() {
           <Seg value={t.mode} label="Touch controls" options={[['auto', 'Auto'], ['on', 'On'], ['off', 'Off']]} onChange={(mode) => set({ mode })} />
         </div>
       </div>
+      {/* the owner, 23 Oct: "a way to fade the buttons" (touch/fade.ts); the pause menu has the slider too */}
+      <div className="srow">
+        <div className="srow__txt">
+          <b>Button fade</b>
+          <span>How visible the touch buttons stay when they fade: lower is fainter. Your HP, fuel and ammo never fade.</span>
+        </div>
+        <div className="srow__ctrl">
+          <div className="volrow">
+            <Slider value={(t.opacity - 0.15) / 0.85} onChange={(v) => set({ opacity: Math.round((0.15 + v * 0.85) * 100) / 100 })} label="Button fade" valueText={pct(t.opacity)} min={15} max={100} />
+            <output className="volrow__val num">{pct(t.opacity)}</output>
+          </div>
+        </div>
+      </div>
+      <div className="srow">
+        <div className="srow__txt">
+          <b>Auto-fade</b>
+          <span>Buttons you haven't touched for a moment fade to that level, and light up the moment your thumb gets near. Off: always at it.</span>
+        </div>
+        <div className="srow__ctrl">
+          <Switch on={t.autoFade} onChange={(autoFade) => set({ autoFade })} label="Auto-fade" />
+        </div>
+      </div>
       <div className="srow mf-srow--block">
         <div className="srow__txt">
           <b>Fire</b>
@@ -583,18 +605,6 @@ function Touch() {
         </div>
         <div className="srow__ctrl">
           <Switch on={t.keepAim} onChange={(keepAim) => set({ keepAim })} label="Keep aiming after a button" />
-        </div>
-      </div>
-      <div className="srow">
-        <div className="srow__txt">
-          <b>Opacity</b>
-          <span>How solid the controls look.</span>
-        </div>
-        <div className="srow__ctrl">
-          <div className="volrow">
-            <Slider value={(t.opacity - 0.15) / 0.85} onChange={(v) => set({ opacity: Math.round((0.15 + v * 0.85) * 100) / 100 })} label="Touch controls opacity" valueText={pct(t.opacity)} min={15} max={100} />
-            <output className="volrow__val num">{pct(t.opacity)}</output>
-          </div>
         </div>
       </div>
       <div className="srow">

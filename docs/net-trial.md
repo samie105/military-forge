@@ -146,6 +146,20 @@ scripts/net-trial/results.sh --links-file ~/.military-forge/net-trial/links
 - The last section lists the ASNs behind each network the testers typed, which catches mislabelled runs.
 - Each download is kept in `~/.military-forge/net-trial/results/`.
 
+### 4.1 Snapshot gaps in a live room
+
+`apps/game-server/scripts/live-gaps.ts` joins a fresh room by code as a headless player over WebTransport, and the server's bots fill the room. It logs every snapshot's arrival, its seq and its server tick, then leaves the room. It needs `wt-probe` built (`cargo build --release --bin wt-probe` in `apps/wt-gateway`).
+
+```sh
+pnpm --filter @military-forge/game-server exec tsx scripts/live-gaps.ts https://<host> <path/to/wt-probe> 5 out.json
+```
+
+It lists every gap of 250 ms or more, with how many snapshots were lost in it and how late it arrived beyond the server ticks it spans:
+- **Lost snapshots** are the path.
+- **Nothing lost but late** is a delay on the path, or a server stall. The box's room log tells which: `journalctl -u mf-game` prints a line every 10 s with the tick count (600 is on time), `max` tick ms, `dropped` ticks, and `nav builds … between ticks` while bots' graphs build.
+
+Measured on 23 Oct 2026 (NOTES §43): no gap lined up with a server stall.
+
 ## 5. Update, stop, delete
 
 - **New code:** user data runs only on the first boot.

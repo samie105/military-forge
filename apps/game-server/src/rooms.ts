@@ -13,7 +13,7 @@
  * the API approved; a resume needs its session token instead. Connections still at the door are
  * capped per IP, per room and overall, so idle sockets can't hold the server's room slots.
  */
-import { loadoutGunIndices } from '@military-forge/content';
+import { loadoutGunIndices, type LookVouch } from '@military-forge/content';
 import { CONTENT_HASH, CloseCode, MsgType, decodeMessage, encodeHello, encodePong, protocolSupported, type HelloMsg, type Message } from '@military-forge/protocol';
 import { isRoomCode } from '@military-forge/shared';
 import { createMatchRules, type MatchRules } from '@military-forge/sim';
@@ -185,7 +185,7 @@ export class RoomRegistry {
   }
 
   private hello(v: Visitor, msg: HelloMsg, bytes: Uint8Array): void {
-    // v17 pages still play (no voice for them): MIN_PROTOCOL_VERSION
+    // v17 and v18 pages still play (no looks, no voice): MIN_PROTOCOL_VERSION
     if (!protocolSupported(msg.protocolVersion) || msg.contentHash !== CONTENT_HASH) {
       return this.turnAway(v, CloseCode.VersionMismatch, 'version mismatch: refresh to update');
     }
@@ -197,17 +197,20 @@ export class RoomRegistry {
     let accountId: string | null = null;
     let guns: [number, number] | null = null;
     let party: string | null = null;
+    let vouch: LookVouch = { level: 0 };
     if (!resuming && v.code !== '' && this.tickets) {
       const verdict = this.tickets.admit(msg.ticket, v.code);
       if (!verdict.ok) {
         this.log(`[rooms] refused a player for ${v.code}: ticket ${verdict.reason}`);
         return this.turnAway(v, CloseCode.TicketInvalid, TICKET_FAILURE_TEXT[verdict.reason]);
       }
-      // a new player, under the name the API approved (nickname rules, reserved names)
-      hello = encodeHello(verdict.claims.nick, '');
+      // a new player, under the name the API approved (nickname rules, reserved names), wearing the look
+      // their page asked for (v19; room.ts holds it to what the ticket says they own)
+      hello = encodeHello(verdict.claims.nick, '', '', msg.look);
       accountId = verdict.claims.sub;
       guns = loadoutGunIndices(verdict.claims.guns); // null: not a pair a player may choose (the default pair then)
       party = verdict.claims.party ?? null;
+      vouch = { level: verdict.claims.lvl ?? 0, ...(verdict.claims.look ? { ids: verdict.claims.look } : {}) };
     }
     room ??= this.openRoom(v.code);
     this.leaveDoor(v);
@@ -216,6 +219,9 @@ export class RoomRegistry {
     v.client.accountId = accountId;
     v.client.guns = guns;
     v.client.party = party;
+    v.client.lookVouch = vouch;
+    // the page's own version: a re-encoded HELLO (above) carries this server's
+    v.client.protocolVersion = msg.protocolVersion;
     room.receive(v.client, hello);
   }
 

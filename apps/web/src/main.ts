@@ -22,7 +22,7 @@
  *   /?online&lowbw                      low-bandwidth mode (30 Hz inputs, 15 Hz snapshots)
  *   /?online&transport=ws|wt            force WebSocket / WebTransport (default: WT when the server has a gateway)
  */
-import { DEFAULT_LOADOUT, DEMO_MAPS, defaultTuning, getMap, maps, weapons, type MapDef } from '@military-forge/content';
+import { DEFAULT_LOADOUT, DEMO_MAPS, cosmeticLoadoutWireIds, defaultTuning, getMap, maps, weapons, type MapDef } from '@military-forge/content';
 import { createConditionerSettings, parseNetSim } from '@military-forge/netcode';
 import { GAME_NAME } from '@military-forge/shared';
 import { Btn, type Input, type SimEvent } from '@military-forge/sim';
@@ -47,6 +47,8 @@ import { loadSettings } from './shell/controller';
 import type { GraphicsSetting } from './shell/store';
 import { toKeyBindings, uiCodes } from './shell/controls';
 import { PlaneCamera, create3d, online3d, parsePreset, softwareGl, type PresetName } from './render3d';
+import { LoadoutDirectory } from './render3d/character';
+import { followLooks, lookBook } from './looks/book';
 import { countFrame, framesPerSecond, recordNet } from './stats';
 import { isTouchDevice, mountTouch } from './touch';
 import { applyPadSettings, currentDevice, mountGamepad, onInputDevice } from './gamepad';
@@ -58,6 +60,9 @@ import { DefaultLoadingManager } from 'three';
 import { assetLoad } from './assetLoad';
 import { creatorSeen } from './creator/model';
 import { titleWanted } from './shell/title';
+import { startTourMemory, type TourMemory } from './tour';
+import { mountTourReadout } from './tour/readout';
+import { Spotlight } from './ui/spotlight';
 import { voiceChat } from './voice';
 
 const params = new URLSearchParams(location.search);
@@ -146,8 +151,11 @@ function applyGraphics(setting: GraphicsSetting): void {
 // (?gfx= overrides): antialiasing is fixed when the WebGL context is made.
 const planeCamera = online3d(params) ? new PlaneCamera() : null;
 const firstPreset = parsePreset(params.get('gfx') ?? graphicsPreset(appMode ? loadSettings().graphics : 'auto'));
+// who wears what in 3D (v19): the room's looks from the look book, the saved look for us until the room says
+const loadouts3d = new LoadoutDirectory();
+followLooks(lookBook, loadouts3d);
 const view3d = planeCamera
-  ? create3d(view3dCanvas, planeCamera, map, firstPreset, (import.meta.env.DEV && !appMode) || params.has('perf'), undefined, softwareGl(params))
+  ? create3d(view3dCanvas, planeCamera, map, firstPreset, (import.meta.env.DEV && !appMode) || params.has('perf'), undefined, softwareGl(params), loadouts3d)
   : null;
 const use3d = view3d !== null;
 if (view3d) {
@@ -166,11 +174,15 @@ const options: RenderOptions = { showHitboxes: false, showGrid: !use3d, showNet:
 if (appMode) Object.assign(options, { showGrid: false, hud: 'none', reticle: false });
 const hud = appMode ? mountHud() : null;
 
+/** The onboarding's memory (tour/): on-device facts and the event log; the app only (set once the shell is up). */
+let tourMemory: TourMemory | null = null;
+
 /** The 2D renderer, also feeding the HUD the events and names every mode already reports. */
 class GameRenderer extends Renderer {
   override onEvents(events: readonly SimEvent[], localId: number): void {
     super.onEvents(events, localId);
     hud?.onEvents(events, localId);
+    tourMemory?.onEvents(events, localId);
     audio.onEvents(events, localId); // the game's sound (apps/web/src/audio): lazy, after the first tap or key
   }
   override setNames(names: Map<number, string>, bots: ReadonlySet<number> = new Set()): void {
@@ -453,7 +465,11 @@ registerRoute({
       if (!closed)
         cleanup = mountCreatorRoute(el, {
           first: from === 'first',
-          onExit: () => (from === 'locker' ? (location.hash = '#/locker') : close()),
+          onExit: (how) => {
+            if (how === 'saved') tourMemory?.fact({ k: 'soldier-saved' });
+            if (from === 'locker') location.hash = '#/locker';
+            else close();
+          },
           ...(loadoutSync ? { store: loadoutSync.store } : {}),
         });
     });
@@ -476,12 +492,29 @@ const loadoutSync = shell.controller ? new LoadoutSync(shell.controller.api) : n
 // "here" to the API every 30 s while visible, with the room when in an online match (presence.ts)
 presence = shell.controller ? new PresenceBeat(shell.controller.api, () => onlineRoom) : null;
 if (loadoutSync) document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && void loadoutSync.flush());
+// the onboarding's memory (docs/design/onboarding-research.md phase 1): facts and the event log, on this
+// device only; ?tourlog shows them on the page
+if (appMode) {
+  tourMemory = startTourMemory({ store: shell.store, storage: storageOrNull(), invited: location.pathname.startsWith('/r/') });
+  tourMemory.setDevice(isTouchDevice() ? 'touch' : 'keyboard');
+  onInputDevice((d) => tourMemory?.setDevice(d.kind === 'pad' ? 'pad' : d.kind === 'touch' ? 'touch' : 'keyboard'));
+  if (params.has('tourlog')) mountTourReadout(tourMemory);
+  if (import.meta.env.DEV) Object.assign(window, { __tour: tourMemory });
+}
 // first time here: the name screen, then "Create your soldier" (once on this device; Skip counts), unless
 // the name was for a room link (then the room comes first)
 if (appMode)
   shell.store.subscribe((now, before) => {
     if (before.screen.name === 'name' && now.screen.name === 'home' && !creatorSeen(storageOrNull())) openCreator('first');
   });
+// v19: a look saved while playing (the Locker, the creator) reaches the 3D view and the room we're in at once
+loadoutSync?.onLook((look) => {
+  loadouts3d.setLocal(look);
+  if (mode instanceof OnlineMode) mode.setLook(cosmeticLoadoutWireIds(look));
+});
+
+// dev builds: the spotlight for checks and tinkering (scripts/spotlight-check.mjs)
+if (import.meta.env.DEV) Object.assign(window, { __Spotlight: Spotlight });
 
 // the HTML loading screen (index.html) stays until the shell has its first real screen (the API
 // answered or gave up), so nothing flashes in between

@@ -4,7 +4,7 @@
  * on top as the HUD and the toggleable debug overlay (RenderOptions.overlay). Sim events reach the
  * effects through `onEvents` (main.ts forwards the 2D renderer's events here).
  */
-import type { MapDef } from '@military-forge/content';
+import { cosmeticLoadoutHash, type MapDef } from '@military-forge/content';
 import { CollisionWorld, DamageSource, type SimEvent } from '@military-forge/sim';
 import {
   BufferGeometry,
@@ -239,7 +239,11 @@ export class Renderer3D {
     this.assembler = assembler ?? new CharacterAssembler();
     this.loadouts = loadouts ?? new LoadoutDirectory();
     this.loadouts.onChange = () => {
-      for (const [id, look] of this.looks) if (id === this.localId) void look.setLoadout(this.loadouts.for({ id, isLocal: true }));
+      // re-dress whoever's look changed (v19: the ROSTER's looks; the local player's saved look)
+      for (const [id, look] of this.looks) {
+        const next = this.loadouts.for({ id, isLocal: id === this.localId });
+        if (cosmeticLoadoutHash(next) !== look.loadoutHash) void look.setLoadout(next);
+      }
     };
     this.kit = new AvatarKit(ramp);
 

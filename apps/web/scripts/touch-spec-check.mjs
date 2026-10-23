@@ -64,6 +64,7 @@ await page.evaluate(() => {
   s.sample = (...a) => {
     const out = orig(...a);
     window.__samples.push({ t: performance.now(), b: out.buttons, aim: out.aim });
+    window.__sampleCount = (window.__sampleCount ?? 0) + 1;
     if (window.__samples.length > 4000) window.__samples.splice(0, 2000);
     return out;
   };
@@ -83,8 +84,9 @@ const since = (t) => page.evaluate((t) => window.__samples.filter((s) => s.t >= 
 const now = () => page.evaluate(() => performance.now());
 /** Waits for a fresh sim sample, so each step is seen. */
 const tick = async () => {
-  const n = await page.evaluate(() => window.__samples.length);
-  await page.waitForFunction((n) => window.__samples.length > n + 1, { timeout: 30_000, polling: 25 }, n).catch(async (e) => {
+  // a count that only grows (the sample list itself is trimmed now and then)
+  const n = await page.evaluate(() => window.__sampleCount ?? 0);
+  await page.waitForFunction((n) => (window.__sampleCount ?? 0) > n + 1, { timeout: 30_000, polling: 25 }, n).catch(async (e) => {
     const why = await page.evaluate(() => ({ samples: window.__samples.length, hidden: document.hidden, alive: window.__game?.mode?.me?.alive, screen: document.querySelector('[data-screen]')?.getAttribute('data-screen'), blocked: document.querySelector('.mf-touch')?.classList.contains('mf-touch-menus') }));
     console.error('no new sim samples:', JSON.stringify(why));
     throw e;
@@ -410,8 +412,11 @@ try {
       const firstFire = on.find((x) => x.b & BTN.Fire);
       const lastFire = [...off].reverse().find((x) => x.b & BTN.Fire);
       const stopAfter = lastFire ? lastFire.t - t1 : 0;
+      // the linger is 150 ms; the turn reaches the sim a frame or two late on a busy headless page
+      const gaps = off.slice(1).map((x, i) => x.t - off[i].t).filter((g) => g > 1).sort((a, b) => a - b);
+      const frame = gaps[Math.floor(gaps.length / 2)] ?? 17;
       check('Auto: aimed at a dummy in range it fires by itself (after the 100 ms dwell)', !!firstFire && firstFire.t - on[0].t >= 80, firstFire ? `first shot ${(firstFire.t - on[0].t).toFixed(0)} ms after aiming (dummy ${dm.d.toFixed(1)} m)` : `no shot (dummy ${dm.d.toFixed(1)} m at ${((dm.a * 180) / Math.PI).toFixed(0)}°; ${JSON.stringify({ fire: dbg?.fire, visible: dbg?.visible, range: dbg?.range, aim: dbg?.aim })})`);
-      check('Auto: aimed 10° off, it stops within the 150 ms linger (plus a frame)', off.slice(-3).every((x) => !(x.b & BTN.Fire)) && stopAfter <= 150 + 120, `last shot ${stopAfter.toFixed(0)} ms after turning away`);
+      check('Auto: aimed 10° off, it stops within the 150 ms linger (plus two frames)', off.slice(-3).every((x) => !(x.b & BTN.Fire)) && stopAfter <= 150 + 2 * Math.max(frame, 60), `last shot ${stopAfter.toFixed(0)} ms after turning away; a frame here ${frame.toFixed(0)} ms`);
     } else check('Auto: a dummy to aim at', false, 'no dummy');
   }
   {

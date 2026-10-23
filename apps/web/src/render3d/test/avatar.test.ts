@@ -74,6 +74,8 @@ describe('Avatar', () => {
     expect(leftGun.visible).toBe(false);
     a.update(playerView({ dual: true, aim: 0.2 }), 1 / 60, world, true);
     expect(leftGun.visible).toBe(true);
+    // the left hand turns onto the aim over a few frames (inertia.ts WorldEase), then stays exact
+    for (let i = 0; i < 40; i++) a.update(playerView({ dual: true, aim: 0.2 }), 1 / 60, world, true);
     const dir = new Vector3(0, 1, 0).applyQuaternion(inst.bone('socket_weapon_L')!.getWorldQuaternion(new Quaternion()));
     expect(dir.dot(new Vector3(Math.cos(0.2), Math.sin(0.2), 0))).toBeCloseTo(1, 6);
   });

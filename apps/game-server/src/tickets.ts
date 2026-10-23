@@ -9,6 +9,7 @@
  * issuer with an audience of its own, so an access token can never pass for a ticket or the reverse.
  */
 import { createPublicKey, verify, type KeyObject } from 'node:crypto';
+import { MAX_LOOK_IDS } from '@military-forge/content';
 
 export const TICKET_ISSUER = 'api';
 export const TICKET_AUDIENCE = 'game-server';
@@ -30,6 +31,10 @@ export interface TicketClaims {
   guns?: [string, string];
   /** the player's party (the API's invites/party): party voice reaches its other members */
   party?: string;
+  /** v19: the player's saved look, cosmetic wire ids the API checked (absent = none saved); room.ts checks it again */
+  look?: number[];
+  /** v19: the player's level (absent = 0: starter items only): what they may wear */
+  lvl?: number;
 }
 
 export type TicketFailure = 'missing' | 'malformed' | 'bad_signature' | 'wrong_audience' | 'expired' | 'wrong_room' | 'used';
@@ -53,6 +58,7 @@ export function ticketPublicKey(pem: string): KeyObject {
 }
 
 const shortString = (v: unknown): v is string => typeof v === 'string' && v.length > 0 && v.length <= MAX_CLAIM_CHARS;
+const wireId = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 0xffff;
 
 export class TicketVerifier {
   /** jti → when it can be forgotten (s): the ticket has expired by then */
@@ -99,7 +105,9 @@ export class TicketVerifier {
     this.used.set(jti, exp + CLOCK_SKEW_S);
     const guns = Array.isArray(claims.guns) && claims.guns.length === 2 && claims.guns.every(shortString) ? (claims.guns as [string, string]) : undefined;
     const party = shortString(claims.party) ? (claims.party as string) : undefined;
-    return { ok: true, claims: { sub, nick, room: claims.room, exp, jti, ...(guns ? { guns } : {}), ...(party ? { party } : {}) } };
+    const look = Array.isArray(claims.look) && claims.look.length > 0 && claims.look.length <= MAX_LOOK_IDS && claims.look.every(wireId) ? (claims.look as number[]) : undefined;
+    const lvl = Number.isInteger(claims.lvl) && (claims.lvl as number) >= 0 && (claims.lvl as number) <= 10_000 ? (claims.lvl as number) : undefined;
+    return { ok: true, claims: { sub, nick, room: claims.room, exp, jti, ...(guns ? { guns } : {}), ...(party ? { party } : {}), ...(look ? { look } : {}), ...(lvl !== undefined ? { lvl } : {}) } };
   }
 
   /** tickets remembered as used (tests) */

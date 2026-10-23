@@ -124,6 +124,16 @@ function Touch() {
       <Row i={1} label="Touch controls" desc="Auto: on phones and tablets, or once you touch the screen.">
         <Seg value={t.mode} label="Touch controls" options={[['auto', 'Auto'], ['on', 'On'], ['off', 'Off']]} onChange={(mode) => set({ mode })} />
       </Row>
+      {/* the owner, 23 Oct: "a way to fade the buttons" (touch/fade.ts); the pause menu has the slider too */}
+      <Row i={1} label="Button fade" desc="How faded the buttons get. HP, fuel and ammo never fade.">
+        <div className="pm-set__slider">
+          <Slider value={(t.opacity - 0.15) / 0.85} onChange={(v) => set({ opacity: Math.round((0.15 + v * 0.85) * 100) / 100 })} label="Button fade" valueText={pct(t.opacity)} min={15} max={100} />
+          <output className="num">{pct(t.opacity)}</output>
+        </div>
+      </Row>
+      <Row i={1} label="Auto-fade" desc="Untouched buttons fade; a thumb near one lights it up.">
+        <Switch on={t.autoFade} onChange={(autoFade) => set({ autoFade })} label="Auto-fade" />
+      </Row>
       <div className="pm-set pm-set--block m-p3">
         <span className="pm-set__text">
           <b>Fire</b>
@@ -176,12 +186,6 @@ function Touch() {
         <div className="pm-set__slider">
           <Slider value={t.shake} onChange={(v) => set({ shake: Math.round(v * 20) / 20 })} label="Camera shake" valueText={pct(t.shake)} min={0} max={100} />
           <output className="num">{pct(t.shake)}</output>
-        </div>
-      </Row>
-      <Row i={10} label="Opacity" desc="How solid the controls' plates look.">
-        <div className="pm-set__slider">
-          <Slider value={(t.opacity - 0.15) / 0.85} onChange={(v) => set({ opacity: Math.round((0.15 + v * 0.85) * 100) / 100 })} label="Touch controls opacity" valueText={pct(t.opacity)} min={15} max={100} />
-          <output className="num">{pct(t.opacity)}</output>
         </div>
       </Row>
     </>

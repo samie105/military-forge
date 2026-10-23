@@ -135,6 +135,8 @@ export class LoadoutSync {
   readonly store: LoadoutStore;
   /** the gun pair: cache first, then the account */
   readonly guns: GunStore;
+  /** v19: who hears of a new look (the 3D view, the room we're in) */
+  private readonly lookListeners = new Set<(look: CosmeticLoadout) => void>();
 
   constructor(
     private readonly api: LoadoutApi,
@@ -151,6 +153,7 @@ export class LoadoutSync {
       save: async (look) => {
         await this.local.save(look);
         this.changed('look');
+        this.lookChanged(look);
       },
     };
     this.guns = { get: () => this.savedGunIndices(), set: (pair) => this.saveGuns(pair) };
@@ -158,6 +161,19 @@ export class LoadoutSync {
     api.beforeRoom?.(() => this.flush());
     api.onSignIn(() => void this.sync());
     if (api.me) void this.sync();
+  }
+
+  /**
+   * v19: `listener` hears every new look: a Locker or creator save, and the account's look replacing
+   * this device's at sign-in. Returns the unsubscribe.
+   */
+  onLook(listener: (look: CosmeticLoadout) => void): () => void {
+    this.lookListeners.add(listener);
+    return () => this.lookListeners.delete(listener);
+  }
+
+  private lookChanged(look: CosmeticLoadout): void {
+    for (const l of [...this.lookListeners]) l(look);
   }
 
   /** The guns to spawn with, as weapon indices (the default pair when nothing is saved). */
@@ -213,7 +229,11 @@ export class LoadoutSync {
       if (this.api.me?.id !== me.id) return; // another player signed in meanwhile
       if (remote) {
         // the account wins, except for what was changed here since
-        if (!st.dirty.includes('look')) await this.local.save(sanitizeCosmeticLoadout(remote.look)).catch(() => {});
+        if (!st.dirty.includes('look')) {
+          const look = sanitizeCosmeticLoadout(remote.look);
+          await this.local.save(look).catch(() => {});
+          this.lookChanged(look);
+        }
         if (!st.dirty.includes('guns')) this.write(GUNS_KEY, { version: 1, guns: remote.guns });
       } else {
         // the account's first device: what's here becomes the account's

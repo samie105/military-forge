@@ -1271,3 +1271,77 @@ The owner, 23 Oct: "when it's opened, it has an opened screen with a tap anywher
   | this branch, air 20 | 0.05% · 0.49% · 0 | 0.04% · 0.36% · 0 |
 
 - **Goldens:** at air 20, every sim and bot golden and both closed-loop replays are bit-identical with all three fixes, so what moved comes from air control alone. At 32: 19 of 20 sim goldens (shield has no airborne steering), the regenerated `mech-events` and `mech-zones` replays (closed-loop scenarios), and the 3 bot goldens. Replays with dummies diverge at tick 0: the strafing dummy spawns airborne and steers.
+
+## 43. The live box's snapshot gaps after the fixes (23 Oct 2026, QA: "bullets, lag, touch", L)
+
+QA had measured gaps over 250 ms in the live box's WebTransport datagrams 2–8 times a minute, and a 471–539 ms gap mid-match in each of 3 sessions. After §38–§40 went live (01:54), a headless player (`scripts/live-gaps.ts`, docs/net-trial.md §4.1) joined three fresh rooms on the box from the dev Mac (RTT ~100 ms), with the box's bots, for 5 minutes each. Run 2 was cut short at 3.8 minutes when `mf-game` restarted (a deploy).
+- **Server:** every 10 s report across all three windows shows 599–601 ticks, a `max` tick of 8.7 ms at most and no dropped ticks. The gateway logged nothing. **No gap lines up with a server stall.**
+- **Gaps of 250 ms or more:** 10 in 13.7 minutes (0.73 a minute).
+  - **5 were loss bursts** (runs 1 and 2): 11, 14, 15, 20 and 22 snapshots lost in a row (0.4–0.9 s), arriving on time either side. Loss was 1.83% and 1.03% in those runs, mostly in such bursts; run 3 lost 0.07%. That is the path.
+  - **5 arrived late with nothing lost** (run 3): 0.26–0.54 s, four of them within 2 s. After each, the held snapshots came in a burst within a few ms, which is a queue on the path (Wi-Fi or radio retransmissions, bufferbloat) or the measuring Mac pausing. The server's ticks ran on time throughout.
+- **The startup nav build** (1.1–1.2 s for Street Market) runs before the server accepts players. A restart's other maps then build between ticks: "nav builds 2045 ms between ticks" in the first 10 s, with the tick log unaffected.
+- **Fixed with this:** the 10 s report said "nav builds 2 ms between ticks" with nothing to build: it counted the idle hook's own overhead. It now counts only time spent building.
+
+## 44. Onboarding, phase 1: on-device facts and the event log (23 Oct 2026, owner request)
+The owner, 23 Oct: "curate an onboarding tour experience per user". The spec is docs/design/onboarding-research.md, and this is its phase 1 (§5 facts, §6.1 events). The design is the Pen board "ONBOARDING · tour and spotlight" plus card 09 on AGENT BRIDGE.
+- **`apps/web/src/tour/log.ts`:** an on-device ring buffer of every §6.1 event (`mf.log.v1`, ≤ 50 KB; the oldest are dropped first). Failing storage, as in private mode, keeps the log for the session. `funnel()` gives per-step counts and the median time.
+  - **No upload:** `UPLOAD_ENABLED` is false and there's no endpoint. Sending onboarding events to our API is the owner's opt-in decision (§8.2), and there is no holdout.
+- **`apps/web/src/tour/facts.ts`:** what Next orders and the hints will read (`mf.facts.v1`): devices, the Briefing answer, tour progress, matches, kills, deaths by cause, moves used, screens visited, rooms, the creator saved, touch counters and cards. `reduceFacts` is pure.
+- **`apps/web/src/tour/track.ts` and `tour/index.ts`:** the shell's store and the sim events feed them:
+  - a session;
+  - each match from GO to its end or a leave (kills, deaths by cause, dash, grenade, melee and gun pickups);
+  - the first kill ever, timed from the title press;
+  - rooms made, joined or local;
+  - the Locker, the Creator, the Armory and Settings tabs;
+  - the device (a pad from its first button);
+  - "Create your soldier" saved.
+- **`?tourlog`:** shows the First flight funnel, the facts and the last events on the page (`tour/readout.ts`). In dev, `window.__tour` holds the memory.
+
+## 45. Onboarding, phase 2: the spotlight (23 Oct 2026, owner request)
+The owner's "button clip-paths that circle things and tell you what to use". This is docs/design/onboarding-research.md §4 and §7 phase 2; the design is the Pen board "ONBOARDING · tour and spotlight".
+- **What it is:** `apps/web/src/ui/spotlight.ts` (the `Spotlight` class), `ui/spotlight.css` and `ui/useSpotlight.ts` (for React).
+- **The dim:** a full-screen layer with an **even-odd `clip-path: path()` hole** per target. The clipped-out hole isn't hit-tested, so:
+  - with `block: 'outside'` (menus), the dim blocks every click except in the hole, which reaches the target; focus goes to the target, Tab cycles it and the callout, and Escape skips the pass;
+  - with `block: 'none'` (play), the dim takes no pointer at all.
+- **The volt range-finder ring:** brass corner ticks, moved by transform, and a 1.4 s pulse that plays 3 times.
+- **The Frost callout:**
+  - its content: an eyebrow with progress pips, a title, a body line, the player's own key caps, Skip, Skip training and an optional primary;
+  - it's placed beside the target and clear of it, flipped and shifted to stay inside the safe box; on phones it prefers top-centre;
+  - a polite live region announces each step.
+- **Every hole uses the same command list** (`M H A V A H A V A Z`), so the menus' clip-path transition interpolates.
+- **Performance:**
+  - the path is rewritten only when a hole moves more than 2 px;
+  - there's no animation loop: DOM targets re-measure on their ResizeObserver, on window resize or scroll, and when a transition on the target or an ancestor ends; world targets re-measure on `update()` from the game loop.
+- **Accessibility:**
+  - Reduce motion is opacity only;
+  - Reduce transparency and Low graphics get a solid callout;
+  - the dim never blurs.
+- **Hooks:** the desktop HUD's plates carry `data-tour="fuel|dash|belt|ammo|clock|scores"`.
+- **Asked of the phone agent** in touch-interfaces.md: `touchControlRect(id)`, `onTouchAction`, and the phone HUD's `data-tour` hooks.
+- **Checks:** `apps/web/scripts/spotlight-check.mjs <dev server> [dir]` runs in headless Chrome on the real app at 1280×720, 2560×1440, 812×375 and on the turned upright phone. It checks:
+  - the ring lines up with the target within 1 px;
+  - blocking, a click outside reaches nothing and a click inside reaches the target (elementFromPoint and real clicks); not blocking, everything is reachable;
+  - no animation frames are requested while it stands still;
+  - focus, Tab, Escape and the live region;
+  - Reduce motion;
+  - at 150 % text the callout stays clear of the hole.
+
+## 46. Character feel: no pose pops, and a switch that dips instead of reaching (23 Oct 2026, the owner: "the 3D rigging … smoother")
+
+Spec: docs/design/character-feel-research.md §3.3, §5.1 A, §9. Animation only: the sim, its goldens and the wire are untouched.
+
+- **Inertialization (`render3d/inertia.ts`):** when what the upper body does changes (the gun in hand, the dual toggle, the aim poses' set, the shield, a melee swing, a switch's phases: `Avatar.poseKey`), every upper-body bone keeps the rotation it had and eases onto its new pose: a spring offset (Holden's critically damped spring, half-life 80 ms) decaying on the final local rotation. A respawn is a teleport and isn't eased. All eased bones are in the avatar's `posed` restore list (the mixer skips unchanged values).
+- **An aimed gun stays on the aim.** Its hand eases in world space instead (`WorldEase`), as fast as a 13°-a-frame turn allows (half-life 30–80 ms), then is exact: the barrel within 0.5° of the aim from about 0.3 s after a change.
+- **The switch, rebuilt (`Avatar.carry`, `sling.ts`):** chibi arms can't reach the back sling (0.49 m from the shoulder) or the thigh holster (0.39 m; the arm reaches 0.27 m), so the old carry stretched the arm at points it couldn't reach and flipped the elbow (110°+ in one frame). Now the whole gun arm, as the aim layer holds it, turns down about the shoulder in the aim's plane (40° for a 0.25 s pistol draw, up to 65° for slower switches, never below low ready), the guns change over at the dip, and each gun flies the last bit between the hand and the body in 0.1 s (`Handoff`) instead of appearing there. The hand leaves and reaches the aim slowly (smootherstep, biased toward the bent arm).
+- **Measured** (`render3d/test/feel.test.ts`; the largest change of any bone's local rotation in one frame at 60 Hz):
+
+  | Change | main | now |
+  |---|---|---|
+  | K-47 → Hammer switch | `hand_L` 150° in one frame; the carry 40–110°/frame | ≤ 18° (`hand_L` easing off the foregrip) |
+  | Hammer → K-47 switch | 150°; carry up to 71°/frame | ≤ 17° |
+  | Rifle dropped / picked up | 150° (`hand_L`) | ≤ 17° |
+  | Pistol dropped | 99° (`upperarm_R`) | ≤ 11° |
+  | Shield up or down | 64° (`upperarm_L`) | ≤ 7° |
+  | Dual on | 134° (`hand_L`) | ≤ 16° |
+
+  Every switch in the test matrix (7 weapon pairs × level, up, down and facing left × standing and running) stays under 20°/frame and settles within 0.3 s of its end. Frame strips: docs/screenshots/anim-feel/ (`switch`, `switch-back`, `pickup`, `shield`; the lab scenarios of the same names).

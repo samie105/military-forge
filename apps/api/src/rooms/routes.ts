@@ -9,7 +9,7 @@
  * with the public key alone (apps/game-server tickets.ts). Without a ticket key (dev) it's null.
  */
 import { randomBytes } from 'node:crypto';
-import { loadoutGunIndices } from '@military-forge/content';
+import { allowedLook, cosmeticLoadoutWireIds, cosmeticUnlocked, loadoutGunIndices, sanitizeCosmeticLoadout } from '@military-forge/content';
 import { normalizeRoomCode, roomCodeFromBytes } from '@military-forge/shared';
 import { and, eq } from 'drizzle-orm';
 import { Hono, type Context } from 'hono';
@@ -79,17 +79,31 @@ export interface JoinTicketClaims extends StandardClaims {
   guns?: [string, string];
   /** the player's party (invites/party.ts): party voice reaches party mates anywhere in the room; absent = none */
   party?: string;
+  /**
+   * protocol v19: the player's saved look (slot 0) as cosmetic wire ids, held to content and to what
+   * they own when minted; the room draws them in it until their client sends its own. Absent: none saved.
+   */
+  look?: number[];
+  /** the player's level: the room lets them wear what they've unlocked (content `cosmeticUnlocked`) */
+  lvl?: number;
 }
 
-/** The guns of the player's saved loadout (slot 0), when they're a pair a player may choose now. */
-async function savedGuns(db: Db, userId: string): Promise<[string, string] | null> {
+/**
+ * The player's saved loadout (slot 0) as a ticket carries it: the guns when they're a pair a player may
+ * choose now, and the look held to content and to what a player at `level` owns.
+ */
+async function savedLoadout(db: Db, userId: string, level: number): Promise<{ guns: [string, string] | null; look: number[] | null }> {
   const [row] = await db
     .select({ data: loadouts.data })
     .from(loadouts)
     .where(and(eq(loadouts.userId, userId), eq(loadouts.slot, 0)));
   const guns = row?.data.guns;
-  // content can change after a save (a gun renamed or made melee): check again, never trust the row
-  return guns && loadoutGunIndices(guns) ? [guns[0], guns[1]] : null;
+  const look = row?.data.look;
+  // content can change after a save (a gun renamed or made melee, an item moved to the store): check again, never trust the row
+  return {
+    guns: guns && loadoutGunIndices(guns) ? [guns[0], guns[1]] : null,
+    look: look ? cosmeticLoadoutWireIds(allowedLook(sanitizeCosmeticLoadout(look), (def) => cosmeticUnlocked(def, level))) : null,
+  };
 }
 
 export function roomRoutes(deps: {
@@ -112,7 +126,7 @@ export function roomRoutes(deps: {
     const me = await profiles.me(userId);
     if (!me) throw new ApiError(401, 'no_session', 'Sign in again');
     const iat = Math.floor(now() / 1000);
-    const guns = db ? await savedGuns(db, userId) : null;
+    const { guns, look } = db ? await savedLoadout(db, userId, me.level) : { guns: null, look: null };
     const partyId = party ? await party.partyOf(userId) : null;
     const claims: JoinTicketClaims = {
       iss: TICKET_ISSUER,
@@ -125,6 +139,8 @@ export function roomRoutes(deps: {
       jti: randomBytes(16).toString('base64url'),
       ...(guns ? { guns } : {}),
       ...(partyId ? { party: partyId } : {}),
+      ...(look ? { look } : {}),
+      lvl: me.level,
     };
     return signJwt(claims, ticketKey.privateKey);
   }

@@ -8,6 +8,7 @@ import { MatchPhase } from '@military-forge/sim';
 import { useState, type CSSProperties } from 'react';
 import { useStore } from 'zustand';
 import { Icon } from '../../ui/Icon';
+import { ButtonFadeQuick } from './ButtonFade';
 import { Cap } from '../../ui/Kbd';
 import { Screen, blurAfter } from '../../ui/Screen';
 import { useCtl } from '../context';
@@ -91,6 +92,8 @@ export function Pause({ store }: { store: ShellStore }) {
           <Icon name="gear" />
           Settings
         </button>
+        {/* a touch screen (a tablet): the buttons' fade, right here (the owner, 23 Oct) */}
+        <ButtonFadeQuick className="m-p3" />
         <button className="btn btn--ink btn--xl btn--block pause__btn m-p3 m-p8" style={row(4)} type="button" onClick={blurAfter(() => ctl.showTips())}>
           <Icon name="keyboard" />
           <span className="btn__stack">

@@ -1,7 +1,8 @@
 /**
  * One player's 3D body: the assembled character, its AnimationMixer and locomotion (locomotion.ts: the clip blend
  * and planted feet; motion.ts: lean, squash, flail, dash pose), the facing turn, procedural aim (spine/head pitch + IK arms that point the gun along the sim's
- * aim), weapons on the hand sockets, the jet flame and a blob shadow (docs/04 §4, docs/11 §2/§4).
+ * aim), weapons on the hand sockets, the jet flame and a blob shadow (docs/04 §4, docs/11 §2/§4). Any discrete change
+ * in the pose eases out instead of popping (inertia.ts).
  */
 import { NO_WEAPON, weapons, type WeaponDef } from '@military-forge/content';
 import { createRayHit, type CollisionWorld } from '@military-forge/sim';
@@ -33,10 +34,11 @@ import { AimClips, HOLDS, holdFamily, type AimPose, type HoldProfile } from './h
 import { KICK_MAX, recoilOf } from './recoil';
 import { DEFAULT_OFFHAND, bakeGltfMesh, loadWeaponModels, type GltfSource, type GunMaterials, type WeaponModel } from './weaponModels';
 import { orientSocket, rotateWorld, solveTwoBone } from './ik';
-import { FootPlanter, LocoLayer, aimElevation, facingOf, facingYaw, stepYaw } from './locomotion';
+import { Inertializer, WorldEase } from './inertia';
+import { FootPlanter, LocoLayer, UPPER_BODY, aimElevation, facingOf, facingYaw, stepYaw } from './locomotion';
 import { MotionLayer } from './motion';
 import { ShieldKit, ShieldRig } from './shield';
-import { SlingRig, slingPointFor, switchPhase, switchSeconds, type SlingPoint, type SwitchPose } from './sling';
+import { Handoff, SlingRig, slingPointFor, switchPhase, switchSeconds, type SlingPoint, type SwitchPose } from './sling';
 import { SwingClock, swingPose, type SwingPose } from './swing';
 
 /** GPU resources shared by every avatar. */
@@ -181,7 +183,14 @@ interface Arm {
   parts: GunParts;
   /** seconds since this hand's gun last fired (the hands work its pump or bolt) */
   shotAge: number;
+  /** animation: the hand's place in the inertia bones, and its world turn as the aim layer left it (ease()) */
+  inertiaIndex: number;
+  aimed: Quaternion;
+  handEase: WorldEase;
 }
+
+/** The bones inertialization eases (inertia.ts): every bone the clips and the procedural layers turn. */
+const INERTIA_BONES = ['root', 'pelvis', 'spine1', 'spine2', 'neck', 'head', 'clavicle_L', 'clavicle_R', 'upperarm_L', 'upperarm_R', 'forearm_L', 'forearm_R', 'hand_L', 'hand_R', 'thigh_L', 'thigh_R', 'calf_L', 'calf_R', 'foot_L', 'foot_R'];
 
 const UP = new Vector3(0, 1, 0);
 const _q = new Quaternion();
@@ -211,6 +220,30 @@ const _sd = new Vector3();
 const _su = new Vector3();
 const EJECT_DIR = new Vector3(0.8, -0.25, 0.55).normalize();
 
+/**
+ * Mid-switch, the gun arm's pitch at the dip (rad, from the horizontal on the aim's side): lowered from the aim
+ * `elevation` by 40° for the quickest switch (a 0.25 s pistol draw) up to 65° for a slower one, never below low ready
+ * (−55°), never raised.
+ */
+export function switchDip(seconds: number, elevation: number): number {
+  const k = Math.min(1, Math.max(0, (seconds - 0.25) / 0.1));
+  const drop = ((40 + 25 * k * k * (3 - 2 * k)) * Math.PI) / 180;
+  return Math.min(elevation, Math.max(elevation - drop, -SWITCH_LOW));
+}
+/** low ready: how far below the horizontal (rad) a switch takes the arm at most */
+const SWITCH_LOW = (55 * Math.PI) / 180;
+const _ox = new Vector3();
+const _oy = new Vector3();
+const _oz = new Vector3();
+const _om = new Matrix4();
+/** The world turn of a socket pointing +Y along `forward` with +Z toward `up` (as orientSocket turns it). */
+function orientFrom(out: Quaternion, forward: Vector3, up: Vector3): Quaternion {
+  _oy.copy(forward).normalize();
+  _oz.copy(up).addScaledVector(_oy, -up.dot(_oy)).normalize();
+  _ox.crossVectors(_oy, _oz);
+  return out.setFromRotationMatrix(_om.makeBasis(_ox, _oy, _oz));
+}
+
 /** recoil.ts: an arm's kick settles at its weapon's rate, then takes the shots that just landed. */
 function settleArm(arm: Arm, dt: number): void {
   arm.kick = Math.min(KICK_MAX, arm.kick * Math.exp(-recoilOf(arm.def).recover * dt) + arm.kickNext);
@@ -226,6 +259,13 @@ export class Avatar {
   readonly loco: LocoLayer;
   readonly motion: MotionLayer;
   readonly feet: FootPlanter;
+  /** inertialization (inertia.ts): every discrete pose change eases out over ~0.25 s instead of popping */
+  readonly inertia: Inertializer;
+  /** the inertia bones the upper-body changes (weapon, hold, aim poses, shield, switch, swing) ease */
+  private readonly upperBody: number[];
+  /** what the upper body was doing last frame (poseKey); −1: nothing drawn yet */
+  private lastKey = -1;
+  private deaths = -1;
   // --- end animation ---
   private yaw: number | null = null;
   private readonly right: Arm | null;
@@ -263,7 +303,13 @@ export class Avatar {
     this.right = this.arm('R');
     this.left = this.arm('L');
     const armBones = [this.right, this.left].flatMap((a) => (a ? [a.upper, a.lower, a.hand, a.socket] : []));
-    this.posed = [...new Set([...this.spine, ...armBones, ...this.motion.bones, ...this.feet.bones])].map((bone) => ({ bone, anim: bone.quaternion.clone() }));
+    // --- animation: the bones inertialization eases (all of them are put back to the animation pose every frame) ---
+    const inertiaBones: Object3D[] = INERTIA_BONES.map((n) => inst.bone(n)).filter((b): b is NonNullable<typeof b> => !!b);
+    this.inertia = new Inertializer(inertiaBones);
+    this.upperBody = inertiaBones.flatMap((b, i) => (UPPER_BODY.includes(b.name) ? [i] : []));
+    for (const arm of [this.right, this.left]) if (arm) arm.inertiaIndex = inertiaBones.indexOf(arm.hand);
+    // --- end animation ---
+    this.posed = [...new Set([...this.spine, ...armBones, ...this.motion.bones, ...this.feet.bones, ...inertiaBones])].map((bone) => ({ bone, anim: bone.quaternion.clone() }));
 
     const outer = new Mesh(kit.flameOuterGeo, kit.flameOuter);
     const inner = new Mesh(kit.flameInnerGeo, kit.flameInner);
@@ -290,7 +336,7 @@ export class Avatar {
     gun.visible = false;
     socket.add(gun);
     const length = lower.position.length() + hand.position.length();
-    return { upper, lower, hand, socket, gun, def: NO_WEAPON, length, kick: 0, kickNext: 0, parts: new GunParts(gun), shotAge: Infinity };
+    return { upper, lower, hand, socket, gun, def: NO_WEAPON, length, kick: 0, kickNext: 0, parts: new GunParts(gun), shotAge: Infinity, inertiaIndex: -1, aimed: new Quaternion(), handEase: new WorldEase() };
   }
 
   update(p: PlayerView, dt: number, world: CollisionWorld, blobShadows: boolean): void {
@@ -326,12 +372,76 @@ export class Avatar {
     this.watchSwitch(p, dt);
     this.swing.update(p.meleeTicks, dt);
     this.aim(p, facing);
-    this.hangGuns(p);
+    // --- animation: a discrete change in what the upper body does eases out (inertia.ts); an aimed gun stays exact ---
+    this.ease(p, dt);
+    // --- end animation ---
+    this.hangGuns(p, dt);
     this.shield.update(p.shield, this.pivot);
     this.settleRecoil(dt);
     this.updateFlame(p, dt);
     if (blobShadows) this.updateBlob(p, world);
   }
+
+  // --- animation: inertialization (inertia.ts) ---
+  /** what the aim layer did with each hand this frame (aim()): the gun hand's weapon, the left hand's job */
+  private inHand = NO_WEAPON;
+  private leftJob = 0;
+  /** the hands whose gun points along the aim this frame: their world turn is kept through the easing */
+  private readonly exact: Arm[] = [];
+
+  /**
+   * Everything the upper body's pose switches on, as one number: a change starts an ease (a weapon switch, a
+   * pick-up or drop, the dual toggle, the aim poses' set, the shield, a melee swing, a switch's phases).
+   */
+  private poseKey(p: PlayerView): number {
+    const pose = this.aimClips.pose;
+    const posed = pose === null ? 0 : pose === 'pistol' ? 1 : pose === 'dual' ? 2 : 3;
+    const shield = p.shield === 'front' ? 1 : p.shield === 'raising' ? 2 : p.shield === 'back' ? 3 : 0;
+    const swinging = this.swing.t >= 0 ? 1 : 0;
+    return ((((this.inHand * 8 + this.leftJob) * 4 + posed) * 4 + shield) * 2 + swinging) * 2 + (this.switching ? 1 : 0);
+  }
+
+  /** After the aim layer: start an ease on a change of what the upper body does, decay the offsets, keep aimed guns exact. */
+  private ease(p: PlayerView, dt: number): void {
+    const arms = [this.right, this.left];
+    if (p.deaths !== this.deaths) {
+      // a respawn is a teleport: shown as it is
+      if (this.deaths >= 0) {
+        this.inertia.reset();
+        for (const arm of arms) arm?.handEase.reset();
+      }
+      this.deaths = p.deaths;
+    }
+    const key = this.poseKey(p);
+    if (this.lastKey >= 0 && key !== this.lastKey) {
+      this.inertia.trigger(this.upperBody);
+      for (const arm of arms) arm?.handEase.trigger();
+    }
+    this.lastKey = key;
+    // an aimed gun's hand turns in the world from where it was straight onto the aim, whatever its arm eases through
+    for (const arm of this.exact) arm.hand.getWorldQuaternion(arm.aimed);
+    const easing = this.inertia.active > 0 || this.inertia.pending;
+    if (easing) {
+      this.inertia.apply(dt);
+      this.inst.root.updateMatrixWorld(true);
+    }
+    for (const arm of arms) {
+      if (!arm) continue;
+      if (!this.exact.includes(arm)) {
+        arm.handEase.record(arm.hand.getWorldQuaternion(_qb));
+        continue;
+      }
+      this.inertia.pin(arm.inertiaIndex);
+      const turning = arm.handEase.active || arm.handEase.pending;
+      arm.handEase.apply(arm.aimed, dt);
+      if (!easing && !turning) continue;
+      arm.hand.parent!.getWorldQuaternion(_qa).invert();
+      arm.hand.quaternion.copy(_qa.multiply(arm.aimed));
+      arm.hand.updateMatrixWorld(true);
+    }
+    this.inertia.record();
+  }
+  // --- end animation: inertialization ---
 
   // --- render3d-b: melee swings (swing.ts) ---
   private readonly swing = new SwingClock();
@@ -440,17 +550,28 @@ export class Avatar {
     // mid-switch the gun hand holds the old gun, then nothing, then the new one (sling.ts)
     const switching = this.switching ? switchPhase(this.swT / this.swDur, _sw) : null;
     const inHand = switching ? (switching.holdingOld ? this.swFrom : switching.holdingNew ? this.swTo : NO_WEAPON) : active;
+    // animation (ease()): what each hand does, and which guns point along the aim
+    this.inHand = inHand;
+    this.leftJob = 0;
+    this.exact.length = 0;
+    if (this.right && inHand !== NO_WEAPON && !switching && this.swing.t < 0) this.exact.push(this.right);
     if (this.right) {
       this.aimArm(this.right, inHand, 1, switching ? this.holdOf(inHand, false) : hold, posed);
-      if (switching) this.carry(this.right, switching, p.shield === 'back');
+      if (switching) this.carry(this.right, switching, facing, elevation);
       else this.swingArm(this.right, p, facing, inHand);
     }
     if (this.left) {
       this.left.gun.visible = false;
       this.left.def = NO_WEAPON;
-      if (leftDef !== NO_WEAPON) this.aimArm(this.left, leftDef, -1, HOLDS.pistol, posed);
-      else if (p.shield === 'front' || p.shield === 'raising') this.holdShield(this.left);
-      else if (!switching && active !== NO_WEAPON && weapons[active]?.hands === 2 && this.right) {
+      if (leftDef !== NO_WEAPON) {
+        this.aimArm(this.left, leftDef, -1, HOLDS.pistol, posed);
+        this.leftJob = 1;
+        this.exact.push(this.left);
+      } else if (p.shield === 'front' || p.shield === 'raising') {
+        this.holdShield(this.left);
+        this.leftJob = 2;
+      } else if (!switching && active !== NO_WEAPON && weapons[active]?.hands === 2 && this.right) {
+        this.leftJob = 3;
         // two-handed: the support hand on the weapon's offhand socket (sockets.json), else where its
         // family holds it; a shotgun's slides forward to the pump
         const model = this.kit.weapon(active);
@@ -561,6 +682,10 @@ export class Avatar {
   private swT = 0;
   /** the switch's length (s; 0: none under way) */
   private swDur = 0;
+  /** animation: each slot's gun was in a hand last frame; the guns flying between the hand and the body (Handoff) */
+  private readonly slungInHand = [true, true];
+  private readonly stowed = [new Handoff(), new Handoff()] as const;
+  private readonly drawn = new Handoff();
 
   private get switching(): boolean {
     return this.swDur > 0;
@@ -596,7 +721,7 @@ export class Avatar {
    * Every gun not in a hand hangs on the body; dual guns are both in hand. Low draws remote
    * soldiers at LOD1 and keeps its draw calls down: they carry no slung gun (+1 draw each).
    */
-  private hangGuns(p: PlayerView): void {
+  private hangGuns(p: PlayerView, dt: number): void {
     if (this.lod === 1) {
       this.sling.hide(0);
       this.sling.hide(1);
@@ -608,41 +733,57 @@ export class Avatar {
       let inHand = p.dual || slot === p.active;
       if (pose && def === this.swFrom && slot !== p.active) inHand = pose.holdingOld; // on its way to the body
       if (pose && slot === p.active) inHand = pose.holdingNew; // still on the body until the hand takes it
+      // animation: at a switch's handover the gun flies the last bit between the hand and the body (sling.ts Handoff)
+      const handover = pose && def !== NO_WEAPON && inHand !== this.slungInHand[slot];
+      this.slungInHand[slot] = inHand;
       if (def === NO_WEAPON || inHand) {
+        if (handover && this.right) {
+          // into the hand: from where it hung (its point, as the body is now)
+          const at = this.sling.points[this.pointOf(def, p.shield === 'back') ?? 'back'];
+          if (at) {
+            at.updateWorldMatrix(true, false);
+            this.drawn.start(at.matrixWorld);
+          }
+        }
         this.sling.hide(slot);
         continue;
       }
       const model = this.kit.weapon(def);
       this.sling.hang(slot, this.pointOf(def, p.shield === 'back'), model.solid ?? model.geometry, model.material);
+      // onto the body: from the hand (the gun mesh still where the hand holds it)
+      if (handover && this.right) {
+        this.right.gun.updateWorldMatrix(true, false);
+        this.stowed[slot].start(this.right.gun.matrixWorld);
+      }
+      this.stowed[slot].apply(this.sling.meshes[slot], dt);
     }
+    if (this.right?.gun.visible && this.drawn.active) this.drawn.apply(this.right.gun, dt);
   }
 
   /**
-   * Mid-switch: the hand takes the gun it holds toward that gun's point on the body (or, empty,
-   * crosses from the old gun's point to the new one's), turning it to lie as it will hang.
+   * Mid-switch: a low-ready dip. The whole gun arm, as the aim layer holds it, turns down about the shoulder in the
+   * aim's plane (switchDip: further for a slower switch, never past low ready) and holds there while the guns change
+   * over (the old one onto the body, the new one into the hand; chibi arms don't reach the back or the thigh, so the
+   * guns fly that last bit themselves, see hangGuns), then the new gun comes up onto the aim. The arm turns as one
+   * piece, so no bone turns faster than the dip itself (a 0.25 s pistol draw: ≤ ~15° a frame).
    */
-  private carry(arm: Arm, pose: SwitchPose, shieldOnBack: boolean): void {
-    const from = this.sling.points[this.pointOf(this.swFrom, shieldOnBack) ?? 'back'];
-    const to = this.sling.points[this.pointOf(this.swTo, shieldOnBack) ?? 'back'];
-    const point = pose.holdingNew ? to : from;
-    if (!point || !to) return;
-    point.updateWorldMatrix(true, false);
-    _c.setFromMatrixPosition(point.matrixWorld);
-    if (!pose.holdingOld && !pose.holdingNew) _c.lerp(_t.setFromMatrixPosition(to.matrixWorld), pose.across);
-    // the wrist goes where it puts the grip (the socket) on the point
-    arm.hand.getWorldPosition(_s);
-    arm.socket.getWorldPosition(_t);
-    _c.sub(_t).add(_s);
-    _t.copy(_s).lerp(_c, pose.away);
+  private carry(arm: Arm, pose: SwitchPose, facing: 1 | -1, elevation: number): void {
+    const hold = this.holdOf(pose.holdingNew ? this.swTo : this.swFrom, false);
+    _q.setFromAxisAngle(_h.set(0, 0, 1), -facing * pose.away * (elevation - switchDip(this.swDur, elevation)));
+    // the shoulder; the grip and the elbow as the aim layer has them now, turned down about it
     arm.upper.getWorldPosition(_s);
-    _p.copy(_s).addScaledVector(UP, -0.5).addScaledVector(_dir, -0.2);
-    solveTwoBone(arm.upper, arm.lower, arm.hand, _t, _p);
-    if (!arm.gun.visible) return;
-    // the gun turns from the aim toward how it hangs
-    arm.socket.getWorldQuaternion(_qa);
-    point.getWorldQuaternion(_qb);
-    _qa.slerp(_qb, pose.away);
-    orientSocket(arm.hand, arm.socket, _gunDir.set(0, 1, 0).applyQuaternion(_qa), _gunUp.set(0, 0, 1).applyQuaternion(_qa));
+    arm.socket.getWorldPosition(_c).sub(_s).applyQuaternion(_q).add(_s);
+    arm.lower.getWorldPosition(_p).sub(_s).applyQuaternion(_q).add(_s);
+    // the gun as the hold has it (along the aim, a blade raised), turned down with the arm
+    _sd.copy(_dir).multiplyScalar(Math.cos(hold.pitch)).addScaledVector(_gunUp, Math.sin(hold.pitch)).applyQuaternion(_q); // (_gunUp: the aim's up)
+    _su.copy(_gunUp).multiplyScalar(Math.cos(hold.pitch)).addScaledVector(_dir, -Math.sin(hold.pitch)).applyQuaternion(_q);
+    orientFrom(_qa, _sd, _su);
+    // the wrist for that grip (the socket sits at socket.position in the hand, turned by socket.quaternion); the elbow
+    // bends toward where it was, turned down
+    _qb.copy(arm.socket.quaternion).invert().premultiply(_qa);
+    _c.sub(_t.copy(arm.socket.position).applyQuaternion(_qb));
+    solveTwoBone(arm.upper, arm.lower, arm.hand, _c, _p);
+    orientSocket(arm.hand, arm.socket, _sd, _su);
   }
   // --- end render3d-b: guns on the body and the switch ---
 

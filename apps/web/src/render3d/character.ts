@@ -2,9 +2,11 @@
  * The in-game side of character assembly. Soldiers are built by the same CharacterAssembler as the Locker
  * (apps/web/src/character: W8's rig, parts, dye masks and clip library, one toon ramp), so the player in
  * game looks exactly like the Locker preview. This file decides which look each player wears:
- * - the local player: the look saved in the Locker (LocalLoadoutStore, owned items only);
- * - everyone else: PLACEHOLDER until loadouts travel over the wire (W6 reserves 0x27 LOADOUTS, w6 notes):
- *   the default Rookie with dyes picked by player id, so a room isn't a row of clones.
+ * - anyone whose look the room sent (protocol v19 ROSTER, `setLooks`): that look, the local player's too
+ *   (online, what everyone else sees us in), and training's bots (their seeded looks);
+ * - the local player otherwise: the look saved in the Locker (LocalLoadoutStore, owned items only);
+ * - everyone else: PLACEHOLDER (an older page that sends no look): the default Rookie with dyes picked
+ *   by player id, so a room isn't a row of clones.
  */
 import { DEFAULT_COSMETIC_LOADOUT, type CosmeticLoadout } from '@military-forge/content';
 import type { AnimationClip, Bone, Object3D, SkinnedMesh } from 'three';
@@ -46,9 +48,11 @@ export function placeholderLoadout(playerId: number): CosmeticLoadout {
   return { items: DEFAULT_COSMETIC_LOADOUT.items, dyes: { primary, secondary, accent } };
 }
 
-/** Which look each player wears; `onChange` fires when the local player's saved look has loaded. */
+/** Which look each player wears; `onChange` fires whenever any of it changes (the saved look loading, `setLooks`, `setLocal`). */
 export class LoadoutDirectory {
   private local: CosmeticLoadout = DEFAULT_COSMETIC_LOADOUT;
+  /** v19: looks from the wire (or training's bots), by player id */
+  private looks: ReadonlyMap<number, CosmeticLoadout> = new Map();
   onChange: (() => void) | null = null;
 
   constructor(store: LoadoutStore | null = new LocalLoadoutStore()) {
@@ -62,7 +66,19 @@ export class LoadoutDirectory {
       .catch(() => {}); // the default look; the Locker reports storage problems itself
   }
 
+  /** v19: everyone's look the room sent (apps/web/src/looks); a player missing here wears the fallback. */
+  setLooks(looks: ReadonlyMap<number, CosmeticLoadout>): void {
+    this.looks = looks;
+    this.onChange?.();
+  }
+
+  /** The local player's look changed (a Locker or creator save): owned items only, as at load. */
+  setLocal(look: CosmeticLoadout): void {
+    this.local = ownedOnly(look, starterInventory);
+    this.onChange?.();
+  }
+
   for(p: { id: number; isLocal: boolean }): CosmeticLoadout {
-    return p.isLocal ? this.local : placeholderLoadout(p.id);
+    return this.looks.get(p.id) ?? (p.isLocal ? this.local : placeholderLoadout(p.id));
   }
 }

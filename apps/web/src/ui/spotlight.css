@@ -1,0 +1,89 @@
+/*
+ * The spotlight (ui/spotlight.ts; docs/design/onboarding-research.md §3.8, §4): a dim with an even-odd
+ * clip-path hole per target, a volt range-finder ring with brass corner ticks, a Frost callout. The
+ * dim never gets a backdrop-filter; only the small callout blurs (none under Reduce transparency or
+ * on Low). Reduce motion: opacity only. Tokens only.
+ */
+.mf-spot { position: fixed; inset: 0; z-index: 2147482000; pointer-events: none; font-family: var(--f-ui); color: var(--c-text); }
+.mf-spot[hidden] { display: none; }
+
+/* ---- the dim: the hole passes clicks (clip-path hit-testing); it blocks only in menus ---- */
+.mf-spot__dim {
+  position: absolute; inset: 0; pointer-events: none;
+  background: color-mix(in srgb, var(--c-ink-950) calc(var(--spot-dim, .28) * 100%), transparent);
+  transition: opacity var(--m-fast) linear;
+}
+.mf-spot.is-blocking .mf-spot__dim { pointer-events: auto; transition: clip-path var(--m-slow) var(--ease-travel), opacity var(--m-fast) linear; }
+
+/* ---- the range-finder ring ---- */
+.mf-spot__rings { position: absolute; inset: 0; transition: opacity var(--m-fast) linear; }
+.mf-spot__ring {
+  position: absolute; left: 0; top: 0; box-sizing: border-box;
+  border: 2px solid var(--c-volt); box-shadow: 0 0 8px color-mix(in srgb, var(--c-volt) 30%, transparent), inset 0 0 6px color-mix(in srgb, var(--c-volt) 18%, transparent);
+  transition: transform var(--m-scene) var(--ease-travel);
+  animation: mf-spot-pulse 1.4s ease-in-out 3;
+  will-change: transform;
+}
+.mf-spot__ring i { position: absolute; width: 12px; height: 12px; border: 3px solid var(--c-brass); }
+.mf-spot__ring i:nth-child(1) { left: -10px; top: -10px; border-right: 0; border-bottom: 0; }
+.mf-spot__ring i:nth-child(2) { right: -10px; top: -10px; border-left: 0; border-bottom: 0; }
+.mf-spot__ring i:nth-child(3) { left: -10px; bottom: -10px; border-right: 0; border-top: 0; }
+.mf-spot__ring i:nth-child(4) { right: -10px; bottom: -10px; border-left: 0; border-top: 0; }
+@keyframes mf-spot-pulse { 50% { scale: 1.06; opacity: .6; } }
+
+/* between steps in play: the dim and the ring fade out while they move, then back */
+.mf-spot.is-moving :is(.mf-spot__dim, .mf-spot__rings) { opacity: 0; transition: none; }
+.mf-spot.is-lost .mf-spot__rings { opacity: 0; }
+
+/* ---- the Frost callout ---- */
+.mf-spot__callout {
+  position: absolute; left: 0; top: 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px;
+  width: max-content; max-width: min(440px, calc(100% - 24px)); padding: 16px 20px; pointer-events: auto;
+  background: var(--c-ink-900); border: var(--bw, 2px) solid var(--c-line); border-radius: var(--r-frost-sm, 0 18px 0 18px);
+  box-shadow: 0 12px 32px color-mix(in srgb, #000 55%, transparent);
+  transition: transform var(--m-scene) var(--ease-travel);
+  animation: mf-spot-in var(--m-slow) var(--ease-arrive) both;
+  outline: none;
+}
+@supports (backdrop-filter: blur(1px)) {
+  html:not(.reduce-transparency):not(.gfx-low) .mf-spot__callout {
+    background: var(--frost-fill, var(--c-ink-900)); border-color: var(--frost-line, var(--c-line));
+    backdrop-filter: blur(var(--blur-frost, 20px)) saturate(1.15);
+  }
+}
+@keyframes mf-spot-in { from { opacity: 0; filter: blur(6px); } }
+.mf-spot__eyebrow { display: flex; align-items: center; gap: 12px; font-size: var(--fs-14); font-weight: var(--fw-black); letter-spacing: .3em; text-transform: uppercase; color: var(--c-brass); }
+.mf-spot__pips { display: inline-flex; gap: 4px; margin-left: auto; }
+.mf-spot__pips i { width: 18px; height: 5px; background: color-mix(in srgb, var(--c-text) 25%, transparent); }
+.mf-spot__pips i.is-done { background: var(--c-volt); }
+.mf-spot__pips i.is-now { background: var(--c-text); }
+.mf-spot__title { font: var(--fw-display) var(--fs-36)/1 var(--f-display); text-transform: uppercase; color: var(--c-text); }
+.mf-spot__body { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: var(--fs-16); color: var(--c-text); }
+.mf-spot__keys { display: inline-flex; gap: 6px; }
+.mf-spot__help { display: none; font-size: var(--fs-14); color: var(--c-muted); }
+.mf-spot.is-timeout .mf-spot__help { display: block; }
+.mf-spot__actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 4px; }
+.mf-spot__actions:empty { display: none; }
+.mf-spot__skip {
+  min-height: 32px; padding: 0 4px; border: 0; background: none; color: var(--c-muted); cursor: pointer;
+  font: inherit; font-size: var(--fs-14); font-weight: var(--fw-bold); text-decoration: underline; text-underline-offset: 3px;
+}
+.mf-spot__skip:hover, .mf-spot__skip:focus-visible { color: var(--c-text); }
+.mf-spot__primary { margin-left: 4px; }
+.mf-spot__live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* a phone: top-centre, smaller, ≥ 44 px targets */
+.mf-spot.is-phone .mf-spot__callout { max-width: min(360px, calc(100% - 24px)); padding: 10px 14px; gap: 4px; }
+.mf-spot.is-phone .mf-spot__title { font-size: 26px; }
+.mf-spot.is-phone .mf-spot__body { font-size: 14px; }
+.mf-spot.is-phone .mf-spot__skip { min-height: 44px; }
+
+/* leaving (P9's exit) */
+.mf-spot.is-leaving { opacity: 0; transition: opacity 200ms var(--ease-leave); }
+
+/* Reduce motion: no travel, no pulse, no focus pull: opacity only */
+.mf-spot.is-reduced :is(.mf-spot__ring, .mf-spot__callout, .mf-spot__dim) { transition: opacity 120ms linear; animation: none; }
+html.reduce-motion .mf-spot :is(.mf-spot__ring, .mf-spot__callout, .mf-spot__dim) { transition: opacity 120ms linear; animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .mf-spot :is(.mf-spot__ring, .mf-spot__callout, .mf-spot__dim) { transition: opacity 120ms linear; animation: none; }
+}

@@ -58,6 +58,9 @@ describe('where each gun hangs', () => {
     expect(at(0)).toMatchObject({ holdingOld: true, holdingNew: false, away: 0 });
     expect(at(STOW_END - 0.01)).toMatchObject({ holdingOld: true, away: expect.closeTo(1, 1) });
     expect(at((STOW_END + DRAW_START) / 2)).toMatchObject({ holdingOld: false, holdingNew: false, away: 1, across: expect.closeTo(0.5, 2) });
+    // the hand leaves and comes back to the aim gently (no jolt), fastest at the dip
+    expect(at(0.02).away).toBeLessThan(0.01);
+    expect(at(1 - 0.02).away).toBeLessThan(0.01);
     expect(at(DRAW_START + 0.01).holdingNew).toBe(true);
     expect(at(0.999).away).toBeLessThan(0.01);
     expect(switchSeconds(K47.index)).toBe(K47.equip);
@@ -75,14 +78,13 @@ describe('Avatar: guns on the body and the switch', () => {
     expect(slung(inst)).toEqual({ holster_thigh: 1 }); // the Hammer, holstered
     const handGun = () => inst.bone('socket_weapon_R')!.children.find((c) => (c as Mesh).isMesh && c.name !== 'gun-part') as Mesh;
     const dur = switchSeconds(HAMMER.index);
-    // the switch to the Hammer: the K-47 goes to the back first, still in hand
+    // the switch to the Hammer: the K-47 goes down to the hip first, still in hand
     step(loadout(1), dur * 0.2);
     expect(handGun().visible).toBe(true);
     expect(slung(inst)).toEqual({ holster_thigh: 1 });
-    // halfway: both on the body, the hand empty between them
-    step(loadout(1), dur * 0.3);
-    expect(handGun().visible).toBe(false);
-    expect(slung(inst)).toEqual({ sling_back: 1, holster_thigh: 1 });
+    // at the dip the guns change over: the K-47 onto the back, the Hammer out of the holster
+    step(loadout(1), dur * 0.35);
+    expect(slung(inst)).toEqual({ sling_back: 1 });
     // the Hammer comes up; the K-47 stays on the back
     step(loadout(1), dur * 0.6);
     expect(handGun().visible).toBe(true);

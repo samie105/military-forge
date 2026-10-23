@@ -2,7 +2,7 @@
  * Game server = rooms (the default dev room + rooms by code, rooms.ts) + one tick loop + a WebSocket
  * transport (uWebSockets.js, or `ws` as fallback). The WebTransport gateway feeds the default room.
  */
-import { workNavBuilds } from '@military-forge/bots';
+import { navBuildsQueued, workNavBuilds } from '@military-forge/bots';
 import type { Scheduler } from '@military-forge/netcode';
 import { TICK_RATE } from '@military-forge/sim';
 import { startTickLoop } from './loop';
@@ -96,8 +96,10 @@ export async function createServer(
 
   // the bots' nav graphs build in the spare time between ticks, never on one (bots/nav/cache.ts)
   const loop = startTickLoop(TICK_RATE, () => rooms.tick(), undefined, (budgetMs) => {
+    if (navBuildsQueued() === 0) return false;
     const end = performance.now() + budgetMs;
-    return workNavBuilds(() => performance.now() >= end);
+    workNavBuilds(() => performance.now() >= end);
+    return true;
   });
   const rateTimer = setInterval(() => rooms.resetRateLimits(), 1000);
   const reportTimer = setInterval(() => {

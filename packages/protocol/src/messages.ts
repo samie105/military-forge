@@ -5,6 +5,7 @@
 import {
   CROUCHED_HITBOXES,
   EVENT_KINDS,
+  MAX_LOOK_IDS,
   RIOT_SHIELD,
   SPAWN_POOLS,
   STANDING_HITBOXES,
@@ -71,11 +72,17 @@ export { MsgType } from './wire';
  * v18 (social, voice chat): VOICE_UP 0x29 (C→S, unreliable) · VOICE_DOWN 0x2A (S→C, unreliable) ·
  *     VOICE_STATE 0x2B (S→C) · CMD kind 11 Voice (JSON) (voice.ts). Nothing else changes, so a v17
  *     client still joins (MIN_PROTOCOL_VERSION) and simply never gets voice.
+ * v19 (match presentation, looks on the wire): a look is u5 count + count × u16 cosmetic wire ids
+ *     (content's cosmeticLoadoutWireIds order; 0 = none known). ROSTER gains a trailing looks section
+ *     (u8 n, then one look per entry) that v17/v18 decoders never read, HELLO a trailing optional look
+ *     after the ticket (the ticket is then always written), and CMD kind 12 SetLook (JSON array of the
+ *     ids). The join ticket gains `look` and `lvl` (API → game server, not the wire). Nothing else changes,
+ *     so v17 and v18 clients still join (MIN_PROTOCOL_VERSION); they never send a look.
  */
-export const PROTOCOL_VERSION = 18;
+export const PROTOCOL_VERSION = 19;
 /**
- * The oldest client a server still admits. v18 only added messages a v17 client never receives
- * (the server sends voice only to clients that said v18 and asked for it), so v17 pages still play.
+ * The oldest client a server still admits. v18 and v19 only added messages and trailing fields an
+ * older client never reads or sends, so v17 pages still play (without voice, without looks).
  */
 export const MIN_PROTOCOL_VERSION = 17;
 
@@ -181,7 +188,10 @@ export const CmdKind = {
   Leave: 10,
   /** v18: voice chat settings (JSON VoiceSettingsCmd, voice.ts), the whole state each time */
   Voice: 11,
+  /** v19: wear this look (a JSON array of cosmetic wire ids, encodeLookCmd); the room re-sends the ROSTER */
+  SetLook: 12,
 } as const;
+
 
 export const MAX_INPUTS_PER_PACKET = 4;
 
@@ -216,6 +226,8 @@ export interface HelloMsg {
    * code needs one when the server checks tickets. '' = none (dev rooms, resumes).
    */
   ticket: string;
+  /** v19: the look the player wants to wear (cosmetic wire ids); null = none sent (older clients) */
+  look: number[] | null;
 }
 
 export interface WelcomeMsg {
@@ -289,6 +301,12 @@ export interface RosterEntry {
    * this show whoever had the id before (clients don't draw them as this player).
    */
   since: number;
+  /**
+   * v19: the look the room lets this player wear (cosmetic wire ids, content's
+   * cosmeticLoadoutWireIds order; decode with cosmeticLoadoutFromWireIds). null / absent: none known
+   * (a v17/v18 client, or a ROSTER from before v19): draw a placeholder.
+   */
+  look?: readonly number[] | null;
 }
 
 export interface RosterMsg {
@@ -349,11 +367,49 @@ export type Message = ServerMessage | ClientMessage;
 
 const w = new BitWriter(4096);
 
-/** Trailing fields are optional on decode: the join ticket (u16-length string) is sent only when there is one. */
-export function encodeHello(name: string, resumeToken = '', ticket = ''): Uint8Array {
+/**
+ * Trailing fields are optional on decode: the join ticket (u16-length string) is sent when there is one
+ * or a look follows it; the look (v19) when there is one.
+ */
+export function encodeHello(name: string, resumeToken = '', ticket = '', look: readonly number[] | null = null): Uint8Array {
   w.reset().u8(MsgType.Hello).u16(PROTOCOL_VERSION).u32(CONTENT_HASH).string(name).string(resumeToken);
-  if (ticket) w.string(ticket, 16);
+  const withLook = look !== null && look.length > 0;
+  if (ticket || withLook) w.string(ticket, 16);
+  if (withLook) writeLook(w, look);
   return w.finish().slice();
+}
+
+/** v19: a look on the wire: u5 count + count × u16 cosmetic wire ids (count 0 = none). */
+function writeLook(writer: BitWriter, look: readonly number[] | null | undefined): void {
+  const n = Math.min(MAX_LOOK_IDS, look?.length ?? 0);
+  writer.unsigned(n, 5);
+  for (let i = 0; i < n; i++) writer.u16(look![i]! & 0xffff);
+}
+
+function readLook(r: BitReader): number[] | null {
+  const n = r.bits(5);
+  if (n === 0) return null;
+  const ids: number[] = [];
+  for (let i = 0; i < n; i++) ids.push(r.u16());
+  return ids;
+}
+
+/** v19: the SetLook CMD (C→S): the look to wear, as a JSON array of cosmetic wire ids. */
+export function encodeLookCmd(look: readonly number[]): Uint8Array {
+  return encodeCmd(CmdKind.SetLook, JSON.stringify(look.slice(0, MAX_LOOK_IDS)));
+}
+
+/** A SetLook CMD's payload → its wire ids; null when it isn't a list of 1..31 whole numbers in u16 range. */
+export function parseLookCmd(payload: string): number[] | null {
+  if (payload.length > 512) return null;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(payload);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_LOOK_IDS) return null;
+  return raw.every((v) => Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 0xffff) ? (raw as number[]) : null;
 }
 
 export function encodeWelcome(m: Omit<WelcomeMsg, 'type'>): Uint8Array {
@@ -403,9 +459,15 @@ export function encodeCmd(kind: number, payload: string): Uint8Array {
   return w.reset().u8(MsgType.Cmd).u8(kind).string(payload, 16).finish().slice();
 }
 
+/**
+ * v19: the entries, then a looks section (u8 n, one look per entry in order). A v17/v18 decoder stops
+ * after the entries, so every client gets the same ROSTER.
+ */
 export function encodeRoster(entries: readonly RosterEntry[]): Uint8Array {
   w.reset().u8(MsgType.Roster).unsigned(entries.length, 6);
   for (const e of entries) w.unsigned(e.id, 5).bool(e.isBot).u32(e.since).string(e.name);
+  w.u8(entries.length);
+  for (const e of entries) writeLook(w, e.look);
   return w.finish().slice();
 }
 
@@ -462,7 +524,9 @@ export function decodeMessage(bytes: Uint8Array): Message {
       const name = r.string();
       const resumeToken = r.remainingBits >= 8 ? r.string() : '';
       const ticket = r.remainingBits >= 16 ? r.string(16) : '';
-      return { type, protocolVersion, contentHash, name, resumeToken, ticket };
+      // v19: a look after the ticket (5 bits at least: anything shorter is the last byte's padding)
+      const look = r.remainingBits >= 8 ? readLook(r) : null;
+      return { type, protocolVersion, contentHash, name, resumeToken, ticket, look };
     }
     case MsgType.Welcome:
       return {
@@ -508,7 +572,15 @@ export function decodeMessage(bytes: Uint8Array): Message {
     case MsgType.Roster: {
       const n = r.bits(6);
       const entries: RosterMsg['entries'] = [];
-      for (let i = 0; i < n; i++) entries.push({ id: r.bits(5), isBot: r.bool(), since: r.u32(), name: r.string() });
+      for (let i = 0; i < n; i++) entries.push({ id: r.bits(5), isBot: r.bool(), since: r.u32(), name: r.string(), look: null });
+      // v19's looks section; a ROSTER from an older server ends here (its padding is < 8 bits)
+      if (r.remainingBits >= 8) {
+        const looks = r.u8();
+        for (let i = 0; i < looks; i++) {
+          const look = readLook(r);
+          if (i < n) entries[i]!.look = look;
+        }
+      }
       return { type, entries };
     }
     case MsgType.Kick:
