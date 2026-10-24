@@ -60,3 +60,15 @@ html.reduce-motion .mf-install { animation: none; }
 .mf-install--ios .mf-install__steps { gap: 6px; font-size: 13px; }
 .mf-install--ios .mf-install__go { min-height: 44px; padding: 0 14px; font-size: 14px; }
 .mf-install--top { top: var(--safe-t, 10px); bottom: auto; width: auto; max-width: 600px; }
+
+/* Install app (InstallButton.tsx): the kit's small ghost button, its icon in volt, a volt edge so it
+   reads as the one thing to do in a top bar of status pills (Pen: PWA board · Install app) */
+.mf-install-btn { border-color: color-mix(in srgb, var(--c-volt) 70%, transparent); white-space: nowrap; }
+.mf-install-btn .ic { color: var(--c-volt); }
+/* PwaHost: the guide a button opened, and the installed confirmation, over any screen */
+.mf-pwa-host .mf-install { pointer-events: auto; position: absolute; left: 50%; translate: -50% 0; width: max-content; max-width: calc(100vw - 32px); }
+/* outside the phone screens' zoom: the same size as on them (a phone's --phone-fit; 1 on a desktop) */
+.mf-pwa-host .mf-install--ios { zoom: min(1, var(--phone-fit, 1)); }
+.mf-pwa-host .mf-install--top { top: max(10px, var(--sa-t, 0px)); }
+.mf-install--done .mf-install__line { white-space: normal; }
+.is-text-lg .mf-install--done .mf-install__line { display: block; }

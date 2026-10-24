@@ -23,6 +23,7 @@ import { SavedAdsList } from '../../ads/SavedAds';
 import { NextOrders } from '../../tour/NextOrders';
 import { currentDevice } from '../../gamepad';
 import { drillDone, isTouchDevice } from '../../touch';
+import { InstallButton } from '../../pwa/InstallButton';
 
 /** The brand: the emblem and the name, once in the whole UI (round two's .brand on Home). */
 export function Brand() {
@@ -104,6 +105,7 @@ export function Home({ store }: { store: ShellStore }) {
             </button>
           </nav>
           <span className="menu-top__spacer"></span>
+          <InstallButton />
           <FriendsButton />
           <NetPill offline={offline} />
           <span ref={chip} className="me-chip">

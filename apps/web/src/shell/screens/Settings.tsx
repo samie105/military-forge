@@ -23,6 +23,7 @@ import { ACTIONS, MAX_BINDINGS, defaultBindings, keyLabel, rebind, unbind, type 
 import { VoiceSettingsSection } from '../../voice/VoiceHud';
 import { DEFAULT_AUDIO, DEFAULT_SETTINGS, type AudioSettings, type GraphicsPreset, type Settings, type SettingsTab, type ShellStore } from '../store';
 import { Backdrop } from './frame';
+import { InstallButton } from '../../pwa/InstallButton';
 
 export const TABS: readonly { id: SettingsTab; label: string; icon: string }[] = [
   { id: 'graphics', label: 'Graphics', icon: 'monitor' },
@@ -715,6 +716,7 @@ export function SettingsScreen({ store }: { store: ShellStore }) {
           </button>
           <h1 className="menu-top__title">Settings</h1>
           <span className="menu-top__spacer"></span>
+          <InstallButton />
           <span className="label">Saved on this device</span>
         </header>
         <div className="menu-body set">

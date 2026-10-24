@@ -15,6 +15,8 @@
  *   play-now    Home's hero is Play now: one tap to a fight (offline here: training against bots).
  *   creator     the creator on a phone: every target 44 px or more, Save whole, every tab on screen, a tap on a
  *               part-shown card picks it (never Back), and items show their own pictures.
+ *   cards-once  "How to play" shows once per device: dismissed by leaving, by starting play, by Escape or by
+ *               Got it, then a reload and more games: it never comes back by itself (the menu still opens it).
  *   invite      a new player from an invite link (/r/CODE): the name screen says whose room it is and its
  *               button says Join room (the API's GET /rooms/:code is stubbed: no API runs here).
  *   match-end   a match that ends while the pause menu (or Settings) is open: they close and Results shows;
@@ -495,7 +497,60 @@ async function iphoneStrip(profile) {
   await page.close();
 }
 
-const SCENARIOS = { 'no-popups': noPopups, 'home-taps': homeTaps, 'slim-cards': slimCards, armory, 'match-end': matchEnd, invite, 'play-now': playNow, creator, 'iphone-strip': iphoneStrip };
+// ---- the owner, 24 Oct: "why is it always showing how to play": once per device, however it closes
+async function cardsOnce(profile) {
+  const tipsUp = (page) => page.evaluate(() => !!document.querySelector('[data-screen="tips"], [data-screen="m-tips"]'));
+  const playOnceAndHome = async (page) => {
+    // (a page that reloaded itself, e.g. the service worker's update on Home: wait for the app again)
+    await until(page, () => !!window.__game?.shell?.controller, 60_000);
+    await page.evaluate(() => window.__game.shell.controller.go({ to: 'training' }));
+    await sleep(2500);
+    await page.evaluate(() => window.__game.shell.controller.leave());
+    await until(page, () => !!document.querySelector('[data-screen="home"], [data-screen="m-home"]'), 15_000);
+    await sleep(1500);
+  };
+  for (const how of ['leave', 'start-play', 'escape', 'got-it']) {
+    const page = await phone(profile);
+    await page.evaluate((f) => {
+      localStorage.setItem('mf-creator-seen', '1');
+      localStorage.setItem('mf.facts.v1', f);
+    }, FACTS({ tours: { 'home-stops': { done: [], finished: true, skipped: false } } }));
+    await newPlayerToHome(page, profile);
+    await playOnceAndHome(page);
+    const first = await until(page, () => !!document.querySelector('[data-screen="tips"], [data-screen="m-tips"]'), 10_000);
+    if (how === 'leave') await page.evaluate(() => window.__game.shell.controller.go({ to: 'training' }));
+    else if (how === 'start-play') await page.evaluate(() => window.__game.shell.controller.startFlight());
+    else if (how === 'escape') await page.keyboard.press('Escape');
+    else await tap(page, '[data-screen="tips"] button, [data-screen="m-tips"] button', 'got it');
+    await sleep(1200);
+    // reload, then two more games and Home each time: it must not come back
+    await page.goto(`${base}/?app`, { waitUntil: 'load' }).catch(() => {});
+    await until(page, () => !!document.querySelector('[data-screen="home"], [data-screen="m-home"]'), 60_000);
+    let again = false;
+    for (let i = 0; i < 2; i++) {
+      try {
+        await playOnceAndHome(page);
+        again ||= await tipsUp(page);
+      } catch {
+        await sleep(3000); // the page reloaded under us: the next round looks again
+      }
+    }
+    check(`${profile}: "How to play" shown once, closed by ${how}, never back after a reload`, first && !again, JSON.stringify({ first, again }));
+    // the menu still opens it on request
+    if (how === 'got-it') {
+      await page.evaluate(() => window.__game.shell.controller.go({ to: 'training' }));
+      await sleep(2000);
+      await page.evaluate(() => window.__game.shell.controller.showTips());
+      await sleep(800);
+      const asked = await tipsUp(page);
+      await page.screenshot({ path: join(out, `cards-once-${profile}-asked.png`) });
+      check(`${profile}: the menu's Controls still opens it on request`, asked);
+    }
+    await page.close();
+  }
+}
+
+const SCENARIOS = { 'no-popups': noPopups, 'home-taps': homeTaps, 'slim-cards': slimCards, armory, 'match-end': matchEnd, invite, 'play-now': playNow, creator, 'iphone-strip': iphoneStrip, 'cards-once': cardsOnce };
 try {
   for (const [name, run] of Object.entries(SCENARIOS)) {
     if (only.length && !only.includes(name)) continue;

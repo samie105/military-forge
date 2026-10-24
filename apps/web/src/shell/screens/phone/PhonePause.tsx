@@ -21,6 +21,7 @@ import { PhoneScreen, rise } from './layout';
 import { inviteFriends } from '../../../social/SocialLayer';
 import { VoicePauseCard } from '../../../voice/VoiceHud';
 import { Roll, ShareChip, Sheet, shareRoom, useShareChip } from './parts';
+import { InstallButton } from '../../../pwa/InstallButton';
 
 export function PhonePause({ store }: { store: ShellStore }) {
   const ctl = useCtl();
@@ -89,6 +90,7 @@ export function PhonePause({ store }: { store: ShellStore }) {
             <Icon name="gear" />
             Settings
           </button>
+          <InstallButton />
           <button type="button" className="btn btn--ghost btn--sm m-p8" onClick={blurAfter(() => setConfirm(true))}>
             <Icon name="door-out" />
             Leave

@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { serviceWorkerSource } from '../../pwa';
-import { AGAIN_AFTER_SESSIONS, freshMemory, isIosSafari, launchedInstalled, loadInstallMemory, saveInstallMemory, shouldOffer, type InstallMemory } from '../../src/pwa/install';
+import { AGAIN_AFTER_SESSIONS, counted, freshMemory, freshStats, isIosSafari, launchedInstalled, loadInstallMemory, saveInstallMemory, shouldOffer, type InstallMemory } from '../../src/pwa/install';
 
 const ctx = (p: Partial<Parameters<typeof shouldOffer>[1]> = {}) => ({ kind: 'prompt' as const, installed: false, matchesFinished: 1, shownThisSession: false, ...p });
 const mem = (p: Partial<InstallMemory> = {}) => ({ ...freshMemory(), sessions: 1, ...p });
 
 describe('the install toast: when it may show', () => {
-  it('first after a finished match (iPhone Safari: on the first Home visit), only where the browser can install us, never once installed', () => {
-    expect(shouldOffer(mem(), ctx({ matchesFinished: 0 }))).toBe(false);
+  it('first on the first Home visit (Android and iPhone alike), only where the browser can install us, never once installed', () => {
+    expect(shouldOffer(mem(), ctx({ matchesFinished: 0 }))).toBe(true);
+    expect(shouldOffer(mem({ dismissedAt: 1 }), ctx({ matchesFinished: 0 }))).toBe(false);
     expect(shouldOffer(mem(), ctx())).toBe(true);
     expect(shouldOffer(mem(), ctx({ kind: null }))).toBe(false);
     expect(shouldOffer(mem(), ctx({ kind: 'ios' }))).toBe(true);
@@ -46,10 +47,24 @@ describe('the install toast: when it may show', () => {
   it('its memory round-trips and survives junk', () => {
     const data: Record<string, string> = {};
     const store = { getItem: (k: string) => data[k] ?? null, setItem: (k: string, v: string) => void (data[k] = v) };
-    saveInstallMemory(store, mem({ sessions: 7, dismissedAt: 5, matchesAtDismiss: 2 }));
-    expect(loadInstallMemory(store)).toEqual({ sessions: 7, dismissedAt: 5, matchesAtDismiss: 2, accepted: false });
+    const stats = { offered: 3, prompted: 2, accepted: 1, dismissed: 1 };
+    saveInstallMemory(store, mem({ sessions: 7, dismissedAt: 5, matchesAtDismiss: 2, stats }));
+    expect(loadInstallMemory(store)).toEqual({ sessions: 7, dismissedAt: 5, matchesAtDismiss: 2, accepted: false, stats });
+    // a memory from before the counts: they start at 0
+    data['mf.install.v1'] = '{"sessions":4,"dismissedAt":null,"matchesAtDismiss":0,"accepted":false}';
+    expect(loadInstallMemory(store).stats).toEqual(freshStats());
     data['mf.install.v1'] = '{"sessions":"x","dismissedAt":"y"}';
     expect(loadInstallMemory(store)).toEqual(freshMemory());
+  });
+});
+
+describe('the install counts (on the device only)', () => {
+  it('counts one at a time, never changing the memory in place', () => {
+    const m = mem();
+    const once = counted(m, 'offered');
+    expect(once.stats).toEqual({ ...freshStats(), offered: 1 });
+    expect(m.stats.offered).toBe(0);
+    expect(counted(counted(once, 'prompted'), 'accepted').stats).toEqual({ offered: 1, prompted: 1, accepted: 1, dismissed: 0 });
   });
 });
 

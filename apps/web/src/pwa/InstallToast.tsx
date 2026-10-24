@@ -7,7 +7,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Icon } from '../ui/Icon';
 import { useTourFacts } from '../tour/live';
-import { install, markShown, notNow, pwaStore } from './index';
+import { closeGuide, closeInstalled, install, markShown, notNow, pwaStore, toastDone } from './index';
 import { shouldOffer } from './install';
 import './pwa.css';
 
@@ -16,7 +16,8 @@ export function InstallToast({ where }: { where: 'home' | 'results' }) {
   const facts = useTourFacts();
   const matches = facts?.matches.finished ?? 0;
   // decided once per screen visit: the toast doesn't pop in under a thumb mid-tap
-  const [open, setOpen] = useState(() => shouldOffer(s.memory, { kind: s.kind, installed: s.installed, matchesFinished: matches, shownThisSession: s.shown }));
+  // (still up from a moment ago: Home laid out again, under a tour say, keeps it)
+  const [open, setOpen] = useState(() => s.toastUp || shouldOffer(s.memory, { kind: s.kind, installed: s.installed, matchesFinished: matches, shownThisSession: s.shown }));
   // Android's prompt arrives a moment after load: Home may already be up
   useEffect(() => {
     if (!open && s.kind === 'prompt' && shouldOffer(s.memory, { kind: s.kind, installed: s.installed, matchesFinished: matches, shownThisSession: s.shown })) setOpen(true);
@@ -26,9 +27,11 @@ export function InstallToast({ where }: { where: 'home' | 'results' }) {
   }, [open]);
   // iPhone Safari's guide on Home: in the top bar's empty middle when the box is wide enough (pwa.css)
   const [top] = useState(() => where === 'home' && s.kind === 'ios' && wideBox());
-  if (!open || !s.kind) return null;
+  // a button opened the guide, or it's installed: PwaHost has the screen
+  if (!open || !s.kind || s.guide || s.justInstalled) return null;
   const close = () => {
     notNow(matches);
+    toastDone();
     setOpen(false);
   };
   return (
@@ -37,24 +40,7 @@ export function InstallToast({ where }: { where: 'home' | 'results' }) {
         {s.kind === 'ios' ? <Icon name="share" /> : <Icon name="download" />}
       </span>
       {s.kind === 'ios' ? (
-        <>
-          <span className="mf-install__words">
-            <span className="mf-install__eyebrow">Full screen on iPhone</span>
-            <b className="mf-install__title display">Add to Home Screen</b>
-            <span className="mf-install__steps">
-              <span className="mf-install__step">
-                <i>1</i>Tap <Icon name="share" size="sm" /> <b>Share</b>
-              </span>
-              <Icon name="chev-right" size="sm" className="mf-install__then" />
-              <span className="mf-install__step">
-                <i>2</i>Tap <b>Add to Home Screen</b>
-              </span>
-            </span>
-          </span>
-          <button type="button" className="mf-install__go m-p8" onClick={close}>
-            Got it
-          </button>
-        </>
+        <IosGuideBody onDone={close} />
       ) : (
         <>
           <span className="mf-install__words">
@@ -70,6 +56,7 @@ export function InstallToast({ where }: { where: 'home' | 'results' }) {
             className="mf-install__go m-p8"
             onClick={() => {
               setOpen(false);
+              toastDone();
               void install(matches);
             }}
           >
@@ -88,4 +75,72 @@ export const TOP_BAR_ROOM = 1000;
 function wideBox(): boolean {
   if (typeof document === 'undefined') return false;
   return (parseFloat(document.documentElement.style.getPropertyValue('--phone-w')) || 0) >= TOP_BAR_ROOM;
+}
+
+/** The iPhone's two taps (Share, Add to Home Screen) and Got it: the toast's, and the guide a button opens. */
+function IosGuideBody({ onDone }: { onDone: () => void }) {
+  return (
+    <>
+      <span className="mf-install__words">
+        <span className="mf-install__eyebrow">Full screen on iPhone</span>
+        <b className="mf-install__title display">Add to Home Screen</b>
+        <span className="mf-install__steps">
+          <span className="mf-install__step">
+            <i>1</i>Tap <Icon name="share" size="sm" /> <b>Share</b>
+          </span>
+          <Icon name="chev-right" size="sm" className="mf-install__then" />
+          <span className="mf-install__step">
+            <i>2</i>Tap <b>Add to Home Screen</b>
+          </span>
+        </span>
+      </span>
+      <button type="button" className="mf-install__go m-p8" onClick={onDone}>
+        Got it
+      </button>
+    </>
+  );
+}
+
+/** How long the installed confirmation stays (it has its own OK too). */
+export const INSTALLED_MS = 8000;
+
+/**
+ * Over every screen (App.tsx): the iPhone guide an Install app button opened (Home, Settings, the pause
+ * menu), and, once installed, "Installed: open Military Forge from your home screen for full screen".
+ */
+export function PwaHost() {
+  const s = useSyncExternalStore(pwaStore.subscribe, pwaStore.getState, pwaStore.getState);
+  const facts = useTourFacts();
+  const matches = facts?.matches.finished ?? 0;
+  useEffect(() => {
+    if (!s.justInstalled) return;
+    const t = setTimeout(closeInstalled, INSTALLED_MS);
+    return () => clearTimeout(t);
+  }, [s.justInstalled]);
+  if (!s.guide && !s.justInstalled) return null;
+  return (
+    <div className="mf-fit mf-toast kit-v2 mf-pwa-host">
+      {s.justInstalled ? (
+        <aside className="mf-install mf-install--ios mf-install--top mf-install--done" role="status">
+          <span className="mf-install__tile" aria-hidden="true">
+            <Icon name="check" />
+          </span>
+          <span className="mf-install__words">
+            <b className="mf-install__title display">Installed</b>
+            <span className="mf-install__line">Open Military Forge from your home screen for full screen.</span>
+          </span>
+          <button type="button" className="mf-install__later" onClick={closeInstalled}>
+            OK
+          </button>
+        </aside>
+      ) : (
+        <aside className="mf-install mf-install--ios mf-install--top" role="dialog" aria-label="Add Military Forge to your Home Screen">
+          <span className="mf-install__tile" aria-hidden="true">
+            <Icon name="share" />
+          </span>
+          <IosGuideBody onDone={() => closeGuide(matches)} />
+        </aside>
+      )}
+    </div>
+  );
 }

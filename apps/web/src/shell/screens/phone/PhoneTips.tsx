@@ -12,7 +12,7 @@
 import { useEffect, useState } from 'react';
 import { Icon } from '../../../ui/Icon';
 import { blurAfter } from '../../../ui/Screen';
-import { drillDone, getTouchSettings, onTouchChange, requestDrill, type TouchSettings } from '../../../touch';
+import { getTouchSettings, onTouchChange, requestDrill, type TouchSettings } from '../../../touch';
 import { useCtl } from '../../context';
 import { PhoneScreen, rise } from './layout';
 
@@ -46,14 +46,9 @@ export function PhoneTips() {
   const ctl = useCtl();
   const [s, setS] = useState(getTouchSettings);
   useEffect(() => onTouchChange(() => setS(getTouchSettings())), []);
-  // the first time in Training on a phone, the drill teaches instead (touch-controls-v3.md §3)
-  const drill = ctl.store?.getState().screen.name === 'training' && !drillDone();
-  useEffect(() => {
-    if (!drill) return;
-    requestDrill();
-    ctl.closeTips();
-  }, [drill, ctl]);
-  if (drill) return null;
+  // No drill by itself any more (the owner, 24 Oct: "why is it always showing how to play"): opening this
+  // card in Training used to start the 16-step drill over play until it was finished. First flight
+  // teaches now; the drill is on request (Learn, here and in Settings → Touch).
   return (
     <PhoneScreen name="m-tips" kind="game" label="How to play" states={[s.handed === 'left' ? 'left-handed' : 'right-handed']}>
       <aside className={`pm-tips plate m-p3${s.handed === 'left' ? ' is-left' : ''}`} style={rise(0)} aria-label="How to play">

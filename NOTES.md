@@ -1637,7 +1637,7 @@ This is docs/design/onboarding-research.md §3.2–§3.4 and §7 phase 3; the de
   - **The spotlight never blocks play:** a ring on the HUD plate (`data-tour`) or the touch control (`touchControlRect`, #198) the goal uses, and a ring on a world marker: the run's end (4 m away from the targets, so they're in front at range for Fire and the grenade lands clear), 4 m up, or the nearest target's chest. The callout holds still top-centre (`anchor: 'none'`), with the player's own key caps (`padShownBindings` while a pad plays) or, on touch, the dial or button by name, following the hand and the fire mode.
   - Each goal stamps "Confirmed" (P7) for 600 ms. Nothing moves on by itself: after 20 s the callout adds a help line and "Skip this". Skip training is on every callout and in the pause menu, beside Restart First flight.
   - **The tour waits** under the menu, a route, the controls card and the phone's fire chooser.
-  - **Progress is saved per goal** (`mf.tour.v1`, `tour/tour.ts`). A reload during the flight goes straight back in at the next goal. Leaving from the menu doesn't.
+  - **Progress is saved per goal** (`mf.tour.v1`, `tour/tour.ts`). A reload doesn't force it back (24 Oct: tours reopen only on request); Home's "Finish First flight" card resumes at the next goal.
   - **The finish card:** "Flight complete" with the time, then **Live fire** (3 Easy bots, first to 5 kills or 3 minutes; the owner's default) or **Later** (Home). Live fire doesn't start by itself.
   - A flight under 40 s promotes the player (a fact and a log line). Every step is logged as `tour.step` (shown, done, skipped, timeout-offered, abandoned) and the end as `tour.end`; `?tourlog` shows the funnel.
   - `?flight` starts it from Home (playtests).
@@ -1748,3 +1748,25 @@ On mobile data, a phone's uplink stalls for up to a second: the MTN profile has 
 - **The cost:**
   - Others see a stalled player stand still, then hurry on (other-player pops on the 250 ms WS profile: 0 → 6.4 a minute).
   - On MTN a shooter's shots fire after the catch-up, so they need longer rewinds: hits on a walking target at the 450 ms cap went 23% → 9% (92% at the old 900 ms). On the Lagos spike profile they went 82% → 92%.
+
+## First-run cards show once per device (24 Oct 2026, the owner: "why is it always showing how to play")
+- **"How to play"** (the controls card: desktop TipsCard, phone PhoneTips). The decision is saved the moment the queued first-run card opens (`controller.releaseTips` → `tips.seen.v1`), not only on Got it. Before, every close that wasn't Got it left it unsaved, so it came back in the next game:
+  - leaving the match;
+  - starting play or First flight;
+  - Escape;
+  - a route change;
+  - the lobby folding it.
+
+  Where storage fails (Safari private mode), a session flag keeps it to once per session. It opens again only on request (the menu's Controls).
+- **The phone's 16-step drill no longer starts by itself.** PhoneTips used to start it whenever the card opened in Training, until the drill was finished, and that card showed over play. The drill is now only on request (Learn, Settings → Touch).
+- **Home's stops** are on record the moment they start (a reload mid-pass doesn't repeat them).
+- **First flight:** a reload no longer drops the player back into it; Home's "Finish First flight" card resumes it.
+- **The others were already once:**
+  - the Briefing (its answer, or skipped, is a fact);
+  - the hints (per-hint lifetime caps);
+  - the fire chooser (gone, #259).
+
+  The install toast asks again after a few sessions by design (phone agent's, `pwa/install.ts`).
+- **No server copy:** the API's profile has no settings blob, so these stay on the device.
+- **Check:** `mobile-walk.mjs cards-once` closes the card four ways (Got it, Escape, leaving, starting play), then reloads and plays two more games: it never comes back, and the menu still opens it.
+

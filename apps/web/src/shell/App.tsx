@@ -36,6 +36,7 @@ import { releaseShellFocus } from './focus';
 import { PhoneHome, PhoneJoin, PhoneLanAddPlayer, PhoneLanJoin, PhoneLobby, PhoneNameEntry, PhonePause, PhoneResults, PhoneSettings, PhoneTips, usePhoneLayout } from './screens/phone';
 import { closeRoute, runCleanup, type ShellActions, type ShellRoute, type ShellStore } from './store';
 import { SocialLayer } from '../social/SocialLayer';
+import { PwaHost } from '../pwa/InstallToast';
 
 export { ControllerContext };
 export { TipsCard, tipsRows } from './screens/Tips';
@@ -129,6 +130,7 @@ function AppScreens({ store }: { store: ShellStore }) {
       {/* not under the title: its push channel and panels start once the player is in (mobile audit P1-17) */}
       {titleOff && <SocialLayer />}
       <TuneToast note={tuneNote} />
+      <PwaHost />
       <TitleScreen store={store} />
       {notice && (
         <div className="mf-fit mf-toast kit-v2">

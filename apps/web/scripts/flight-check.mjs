@@ -10,7 +10,7 @@
  *   then the finish card offers Live fire.
  * - Nothing moves on by itself: 21 s idle on a goal leaves it there, with help and "Skip this" offered.
  * - A reload part-way resumes at the next goal; Skip training ends it for good.
- * - A phone held sideways: the fire-mode chooser comes first, then the ring sits on the move dial
+ * - A phone held sideways: the ring sits on the move stick
  *   (touchControlRect) within 1 px.
  * Exits 1 on any failure.
  */
@@ -163,8 +163,14 @@ try {
     await shot(page, 'd7-help');
     await page.goto(`${base}/?app`, { waitUntil: 'load' });
     await pastName(page);
-    const resumed = await until(page, 'Fly.', 90_000);
-    check('a reload resumes at the next goal', resumed === 'Fly.', resumed);
+    // a reload doesn't force First flight back (tours reopen on request: the owner, 24 Oct); Home offers
+    // Finish First flight, which resumes at the next goal
+    await page.waitForSelector('.mf-orders, [data-screen="home"]', { timeout: 60_000 });
+    await sleep(1500);
+    check('a reload does not force the flight back', (await title(page)) === '', await title(page));
+    await page.evaluate(() => [...document.querySelectorAll('.mf-orders button')].find((b) => /Resume/.test(b.textContent ?? ''))?.click());
+    const resumed = await until(page, 'Fly.', 30_000);
+    check('Finish First flight on Home resumes at the next goal', resumed === 'Fly.', resumed);
     await sleep(500);
     await page.evaluate(() => [...document.querySelectorAll('.mf-spot__skip')].find((b) => b.textContent === 'Skip training')?.click());
     await sleep(1200);
@@ -208,16 +214,11 @@ try {
     await page.close();
   }
 
-  // ---- a phone held sideways: the fire chooser first, then the ring on the move dial
+  // ---- a phone held sideways: Run with the ring on the move stick (no fire chooser since #259)
   {
     const page = await appPage({ width: 812, height: 375, isMobile: true, hasTouch: true, deviceScaleFactor: 2, isLandscape: true }, '&flight');
-    const chooser = await page.waitForSelector('.mf-choose:not([hidden])', { timeout: 90_000 }).catch(() => null);
-    check('phone: the fire-mode chooser comes first', !!chooser);
-    check('phone: the tour waits under it', (await title(page)) === '', await title(page));
-    if (out) await shot(page, 'p0-chooser');
-    await page.evaluate(() => document.querySelector('.mf-choose [data-fire="auto"]')?.click());
-    const t = await until(page, 'Run.', 15_000);
-    check('phone: Run after the chooser', t === 'Run.', t);
+    const t = await until(page, 'Run.', 90_000);
+    check('phone: Run first', t === 'Run.', t);
     await sleep(900);
     const geo = await page.evaluate(() => {
       document.querySelectorAll('.mf-spot__ring').forEach((r) => r.getAnimations().forEach((a) => a.finish()));

@@ -361,9 +361,10 @@ describe('touch tips (the first-run card on a phone)', () => {
     expect(html).not.toContain('autofocus');
   });
 
-  it('the first time in Training the drill teaches instead: the card steps aside', () => {
+  it('in Training the card shows too: the drill never starts by itself (the owner, 24 Oct), only from Learn', () => {
     const html = withCtl(ctl({ closeTips: vi.fn(), store: createShellStore({ screen: { name: 'training' } }) }), <PhoneTips />);
-    expect(html).toBe('');
+    expect(html).toContain('data-screen="m-tips"');
+    expect(html).toContain('aria-label="Learn the controls"');
   });
 });
 

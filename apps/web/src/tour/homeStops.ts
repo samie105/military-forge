@@ -101,6 +101,8 @@ export function runHomeStops(memory: TourMemory, device: () => Device, spotlight
   };
   const spotEl = () => document.querySelector('.mf-spot');
   document.addEventListener('click', onTargetClick, true);
+  // once per device: on record the moment it starts, however it ends (or if the page goes under it)
+  memory.fact({ k: 'tour', tour: HOME_STOPS });
   spot.onPrimary = () => next('done');
   spot.onSkip = (_id, all) => {
     if (!all) return next('skipped');

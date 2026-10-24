@@ -18,6 +18,7 @@ import { useState } from "react";
 import { NextOrders } from "../../../tour/NextOrders";
 import { currentDevice } from "../../../gamepad";
 import { drillDone, isTouchDevice } from "../../../touch";
+import { InstallButton } from "../../../pwa/InstallButton";
 
 export function PhoneHome({ store }: { store: ShellStore }) {
   const ctl = useCtl();
@@ -51,6 +52,7 @@ export function PhoneHome({ store }: { store: ShellStore }) {
             </b>
           </span>
           <span className="menu-top__spacer"></span>
+          <InstallButton inTopBar />
           <FriendsButton phone />
           {offline ? (
             <span className="status status--warn pm-pill">

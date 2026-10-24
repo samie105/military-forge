@@ -24,6 +24,7 @@ import { TEXT_SIZES, autoText, resetPatch } from '../Settings';
 import { PhoneScreen, rise } from './layout';
 import { PadControls } from '../../../gamepad/PadSettings';
 import { useInputDevice } from '../../../gamepad/react';
+import { InstallButton } from '../../../pwa/InstallButton';
 
 /** The phone's sections: Touch first; no key bindings (Controls) on a phone. */
 export const PHONE_TABS: readonly { id: SettingsTab; label: string; icon: string }[] = [
@@ -363,6 +364,7 @@ export function PhoneSettings({ store }: { store: ShellStore }) {
           </button>
           <b className="display pm-h">Settings</b>
           <span className="menu-top__spacer"></span>
+          <InstallButton />
           <button type="button" className="btn btn--ghost btn--sm" onClick={blurAfter(reset)}>
             <Icon name="refresh" />
             Reset {label}

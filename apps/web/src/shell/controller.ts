@@ -78,7 +78,11 @@ export const SETTINGS_REV = 3;
 const OFFLINE_NAME_KEY = 'profile.offlineName.v1';
 const TIPS_SEEN_KEY = 'tips.seen.v1';
 
+/** Flags set this session: where storage fails (Safari private mode), a card still shows once per session. */
+const sessionFlags = new Set<string>();
+
 function flagged(key: string, storage: () => Storage): boolean {
+  if (sessionFlags.has(key)) return true;
   try {
     return storage().getItem(key) === '1';
   } catch {
@@ -87,6 +91,7 @@ function flagged(key: string, storage: () => Storage): boolean {
 }
 
 function flag(key: string, storage: () => Storage): void {
+  sessionFlags.add(key);
   try {
     storage().setItem(key, '1');
   } catch {
@@ -472,14 +477,23 @@ export class ShellController {
    * warm-up, with nothing else open and no other card up (the phone's fire chooser).
    */
   private firstTips(): void {
-    if (!flagged(TIPS_SEEN_KEY, () => localStorage)) this.tipsQueued = true;
+    if (!this.tipsQueued && !flagged(TIPS_SEEN_KEY, () => localStorage)) this.tipsQueued = true;
     this.releaseTips();
+  }
+
+  /** The first-run controls card has been shown on this device (tests, checks). */
+  get tipsSeen(): boolean {
+    return flagged(TIPS_SEEN_KEY, () => localStorage);
   }
 
   /** Every frame (shell.update) and on queueing: opens the queued controls card when it's calm. */
   releaseTips(): void {
     if (!this.tipsQueued || !tipsCalm(this.store.getState()) || this.host.cardUp?.()) return;
     this.tipsQueued = false;
+    // shown once per device: the decision is saved the moment it opens, so however it then closes (Got
+    // it, starting a match, leaving, Escape, a route, the lobby folding it) it never comes back by
+    // itself; the menu's Controls opens it on request (the owner, 24 Oct: "always showing how to play")
+    flag(TIPS_SEEN_KEY, () => localStorage);
     this.set({ tips: true, tipsAsked: false });
   }
 

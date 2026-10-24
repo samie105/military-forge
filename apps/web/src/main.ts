@@ -73,7 +73,7 @@ import { assetLoad } from './assetLoad';
 import { creatorSeen } from './creator/model';
 import { titleWanted } from './shell/title';
 import { startTourMemory, type TourMemory } from './tour';
-import { FirstFlight, flightWasOpen } from './tour/firstFlight';
+import { FirstFlight } from './tour/firstFlight';
 import { FIRST_FLIGHT } from './tour/flight';
 import { homeStopsDue, homeStopsWanted, runHomeStops } from './tour/homeStops';
 import { HintRunner } from './tour/hintsRun';
@@ -853,7 +853,9 @@ if (appMode && tourMemory) {
     if (checked || s.screen.name !== 'home' || s.title !== 'off' || s.route !== null) return;
     checked = true;
     queueMicrotask(stopResume);
-    if (params.has('flight') || flightWasOpen(storageOrNull())) shell.controller?.startFlight();
+    // a reload no longer drops the player back into First flight (the owner, 24 Oct: tours reopen only on
+    // request); Home's Next orders offer "Finish First flight" instead. ?flight still starts it (playtests).
+    if (params.has('flight')) shell.controller?.startFlight();
   });
 }
 

@@ -5,7 +5,7 @@
  */
 import { createStore } from 'zustand/vanilla';
 import type { ShellStore } from '../shell/store';
-import { isIosSafari, launchedInstalled, loadInstallMemory, saveInstallMemory, type InstallKind, type InstallMemory } from './install';
+import { counted, isIosSafari, launchedInstalled, loadInstallMemory, saveInstallMemory, type InstallKind, type InstallMemory, type InstallStats } from './install';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -19,12 +19,36 @@ export interface PwaState {
   memory: InstallMemory;
   /** the toast showed in this session */
   shown: boolean;
+  /** the toast is up now (it stays up when Home is laid out again, e.g. under a tour) */
+  toastUp: boolean;
+  /** the iPhone guide is open on request (an Install app button), wherever the player is (PwaHost) */
+  guide: boolean;
+  /** installed a moment ago: the "open it from your home screen" confirmation is up (PwaHost) */
+  justInstalled: boolean;
 }
 
 let deferred: BeforeInstallPromptEvent | null = null;
 let storage: Pick<Storage, 'getItem' | 'setItem'> | null = null;
 
-export const pwaStore = createStore<PwaState>(() => ({ kind: null, installed: false, memory: loadInstallMemory(null), shown: false }));
+export const pwaStore = createStore<PwaState>(() => ({ kind: null, installed: false, memory: loadInstallMemory(null), shown: false, toastUp: false, guide: false, justInstalled: false }));
+
+/** The memory with one more of `what`, saved and in the store. */
+function count(what: keyof InstallStats, patch: Partial<InstallMemory> = {}): void {
+  const m = { ...counted(pwaStore.getState().memory, what), ...patch };
+  saveInstallMemory(storage, m);
+  pwaStore.setState({ memory: m });
+}
+
+/** this session's install was counted already (the prompt's accept, then the browser's appinstalled) */
+let acceptCounted = false;
+
+/** Installed: the buttons go, the confirmation shows (once), the memory says so. */
+function installedNow(): void {
+  if (acceptCounted) return;
+  acceptCounted = true;
+  count('accepted', { accepted: true });
+  pwaStore.setState({ kind: null, guide: false, justInstalled: true });
+}
 
 const matches = (q: string) => typeof matchMedia === 'function' && matchMedia(q).matches;
 
@@ -46,23 +70,47 @@ export function startPwa(store: ShellStore, store0: Pick<Storage, 'getItem' | 's
   });
   window.addEventListener('appinstalled', () => {
     deferred = null;
-    const m = { ...pwaStore.getState().memory, accepted: true };
-    saveInstallMemory(storage, m);
-    pwaStore.setState({ kind: null, memory: m });
+    installedNow();
   });
   if (import.meta.env.PROD && 'serviceWorker' in navigator) registerWorker(store);
 }
 
 /** The toast was put on screen (once per session). */
 export function markShown(): void {
-  pwaStore.setState({ shown: true });
+  if (pwaStore.getState().toastUp) return;
+  pwaStore.setState({ shown: true, toastUp: true });
+  count('offered');
+}
+
+/** The toast was answered (Not now, Got it, Install). */
+export function toastDone(): void {
+  pwaStore.setState({ toastUp: false });
+}
+
+/** An Install app button: the browser's prompt where there is one, the two-step guide on an iPhone. */
+export function askInstall(matchesFinished: number): void {
+  const kind = pwaStore.getState().kind;
+  if (kind === 'prompt') void install(matchesFinished);
+  else if (kind === 'ios' && !pwaStore.getState().guide) {
+    pwaStore.setState({ guide: true });
+    count('offered');
+  }
+}
+
+/** The guide opened from a button is closed (Got it): as Not now. */
+export function closeGuide(matchesFinished: number): void {
+  pwaStore.setState({ guide: false });
+  notNow(matchesFinished);
+}
+
+/** The installed confirmation is done (its button, or its time). */
+export function closeInstalled(): void {
+  pwaStore.setState({ justInstalled: false });
 }
 
 /** "Not now" (or the iPhone guide's "Got it"): it comes back after 3 sessions or another match. */
 export function notNow(matchesFinished: number): void {
-  const m = { ...pwaStore.getState().memory, dismissedAt: pwaStore.getState().memory.sessions, matchesAtDismiss: matchesFinished };
-  saveInstallMemory(storage, m);
-  pwaStore.setState({ memory: m });
+  count('dismissed', { dismissedAt: pwaStore.getState().memory.sessions, matchesAtDismiss: matchesFinished });
 }
 
 /** Install: the browser's own prompt. Accepted: never offered again; dismissed there: as Not now. */
@@ -70,14 +118,12 @@ export async function install(matchesFinished: number): Promise<void> {
   const e = deferred;
   if (!e) return;
   deferred = null;
+  count('prompted');
   try {
     await e.prompt();
     const choice = await e.userChoice;
-    if (choice.outcome === 'accepted') {
-      const m = { ...pwaStore.getState().memory, accepted: true };
-      saveInstallMemory(storage, m);
-      pwaStore.setState({ memory: m, kind: null });
-    } else {
+    if (choice.outcome === 'accepted') installedNow();
+    else {
       notNow(matchesFinished);
       // the prompt can't be shown twice: until the browser offers it again, there's nothing to ask with
       pwaStore.setState({ kind: null });
