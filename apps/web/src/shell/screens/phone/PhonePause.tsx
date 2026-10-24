@@ -22,6 +22,7 @@ import { inviteFriends } from '../../../social/SocialLayer';
 import { VoicePauseCard } from '../../../voice/VoiceHud';
 import { Roll, ShareChip, Sheet, shareRoom, useShareChip } from './parts';
 import { InstallButton } from '../../../pwa/InstallButton';
+import { SendReport } from '../../../diag/SendReport';
 
 export function PhonePause({ store }: { store: ShellStore }) {
   const ctl = useCtl();
@@ -98,6 +99,8 @@ export function PhonePause({ store }: { store: ShellStore }) {
         </div>
         {/* the buttons' fade, right here (the owner, 23 Oct: "a way to fade the buttons") */}
         <ButtonFadeQuick className="pm-fadequick m-p3" />
+        {/* something went wrong: what happened on this phone, to us (diag/) */}
+        <SendReport context={room !== null ? 'pause: in a room' : 'pause: training'} className="pm-report m-p3" />
         <ShareChip outcome={chip} />
       </nav>
 

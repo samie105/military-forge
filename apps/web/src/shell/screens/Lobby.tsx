@@ -440,8 +440,8 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
               </span>
             </button>
             )}
-            {/* a local room's guests type its code (LocalRoomNote): the link's ticket is for rooms online */}
-            {!lobby.local && (
+            {/* a local room's link works too (the room link falls back to the relay): the QR is the quickest way in */}
+            {lobby.code !== '' && (
             <div className="ticket linkt">
               <span className="qr linkt__qr" role="img" aria-label="QR code for the room link">
                 <svg viewBox={qr.viewBox} shapeRendering="crispEdges" aria-hidden="true">
@@ -450,13 +450,13 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
               </span>
               <div className="linkt__body">
                 <span className="label">
-                  <Icon name="globe" size="sm" />
-                  Room link
+                  <Icon name={lobby.local ? 'wifi' : 'globe'} size="sm" />
+                  {lobby.local ? 'Scan to join · same Wi-Fi' : 'Room link'}
                 </span>
                 <b className="linkt__url" data-bind="room.link">
                   {shownLink}
                 </b>
-                <span className="linkt__sub">A friend next to you can scan the code</span>
+                <span className="linkt__sub">{lobby.local ? 'Their phone camera at the code: they land in the room' : 'A friend next to you can scan the code'}</span>
                 <span className="mf-linkt__acts">
                   {copied ? (
                     <button className="btn btn--paper btn--sm linkt__done m-p8 mf-swap-in" type="button" key="copied" onClick={blurAfter(() => void copy())}>

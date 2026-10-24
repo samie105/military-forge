@@ -24,6 +24,7 @@ import { VoiceSettingsSection } from '../../voice/VoiceHud';
 import { DEFAULT_AUDIO, DEFAULT_SETTINGS, type AudioSettings, type GraphicsPreset, type Settings, type SettingsTab, type ShellStore } from '../store';
 import { Backdrop } from './frame';
 import { InstallButton } from '../../pwa/InstallButton';
+import { SendReport } from '../../diag/SendReport';
 
 export const TABS: readonly { id: SettingsTab; label: string; icon: string }[] = [
   { id: 'graphics', label: 'Graphics', icon: 'monitor' },
@@ -432,6 +433,15 @@ function Network({ settings, inRoom }: { settings: Settings; inRoom: boolean }) 
         </div>
         <div className="srow__ctrl">
           <Switch on={settings.netGraph} onChange={(netGraph) => ctl.updateSettings({ netGraph })} label="Net graph" />
+        </div>
+      </div>
+      <div className="srow">
+        <div className="srow__txt">
+          <b>Something went wrong?</b>
+          <span>Send us what happened on this device, so we can fix it. A failed room connection sends one by itself.</span>
+        </div>
+        <div className="srow__ctrl">
+          <SendReport context="settings" />
         </div>
       </div>
       <div className="netcard">

@@ -57,6 +57,11 @@ export interface Config {
    * the game server's own Ed25519 results key (PEM). null = the route is off (no results recorded).
    */
   resultsPublicKeyPem: string | null;
+  /**
+   * The owner's admin token (ADMIN_TOKEN, the same secret as the game server's admin page): reads
+   * the problem reports players send (GET /v1/admin/reports). null = those routes are off.
+   */
+  adminToken: string | null;
 }
 
 export class ConfigError extends Error {
@@ -99,6 +104,7 @@ const EnvSchema = z.object({
   JOIN_TICKET_TTL_SECONDS: z.coerce.number().int().min(5).max(120).default(30),
   KEEP_ROOMS: list.default([]),
   RESULTS_PUBLIC_KEY: z.string().min(1).optional(),
+  ADMIN_TOKEN: z.string().min(16).optional(),
 });
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
@@ -150,5 +156,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     joinTicket: { privateKeyPem: e.JOIN_TICKET_PRIVATE_KEY?.replaceAll('\\n', '\n') ?? null, ttlSeconds: e.JOIN_TICKET_TTL_SECONDS },
     keepRooms: [...new Set(keepRooms)],
     resultsPublicKeyPem: e.RESULTS_PUBLIC_KEY?.replaceAll('\\n', '\n') ?? null,
+    adminToken: e.ADMIN_TOKEN ?? null,
   };
 }

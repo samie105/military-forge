@@ -91,6 +91,11 @@ import { voiceChat } from './voice';
 import { SpectateDirector, ZOOM_LEVELS, type SpectateView } from './spectate/director';
 import { SpectateInput } from './spectate/input';
 import { SpectatePicker } from './spectate/picker';
+import { hookDiagErrors } from './diag/log';
+import { setReportSources } from './diag/report';
+
+// the device's event log for problem reports (diag/): script errors from the first moment
+hookDiagErrors();
 
 const params = new URLSearchParams(location.search);
 /** the player-facing app, or (dev builds at `/`) the Phase 0 debug client */
@@ -420,6 +425,7 @@ const host: GameHost = {
     const online = new OnlineMode(`lan://${code || 'local'}`, nickname, sampler, camera, renderer, () => {}, createConditionerSettings(false), 'auto', {
       room: code,
       local: true,
+      host: true,
       connect: (h) => lan.hostTransport(h),
     });
     setMode(online);
@@ -664,6 +670,19 @@ if (appMode) {
   tourMemory = startTourMemory({ store: shell.store, storage: storageOrNull(), invited: location.pathname.startsWith('/r/') });
   // the installable app: the install prompt caught, the worker registered, updates on Home only (src/pwa)
   startPwa(shell.store, storageOrNull());
+  // problem reports (diag/): the in-game name and the tour's last steps go with one
+  const memory = tourMemory;
+  setReportSources({
+    nickname: () => shell.store.getState().profile?.nickname ?? '',
+    tour: () =>
+      memory.log
+        .entries()
+        .slice(-30)
+        .map((e) => {
+          const { t, at, ...rest } = e;
+          return `${new Date(at).toISOString().slice(11, 19)} ${t} ${JSON.stringify(rest)}`;
+        }),
+  });
   provideTourMemory(tourMemory); // Home's Next orders read the facts live
   tourMemory.setDevice(isTouchDevice() ? 'touch' : 'keyboard');
   onInputDevice((d) => tourMemory?.setDevice(d.kind === 'pad' ? 'pad' : d.kind === 'touch' ? 'touch' : 'keyboard'));

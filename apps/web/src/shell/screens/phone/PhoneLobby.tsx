@@ -57,39 +57,60 @@ function Row({ p, i }: { p: LobbyPlayer; i: number }) {
 }
 
 /**
- * A local room's half of the share poster (P2 on the Pen board): the code to type on the same Wi-Fi,
- * on paper (or, with no internet at all, that friends join by QR), and for the host the QR way in.
+ * A local room's half of the share poster (the Pen board's S1, 24 Oct): ONE QR, the room link, which a
+ * friend's phone camera opens straight into the room (the link finds the local room through the relay),
+ * with the code beside it for Join. The QR swap (no internet at all) is the host's fallback link under
+ * it; with no internet there's no code, so it's the way in.
  */
-function PhoneLocalShare({ lobby }: { lobby: LobbyView }) {
+function PhoneLocalShare({ lobby, qr }: { lobby: LobbyView; qr: { viewBox: string; path: string } }) {
   const ctl = useCtl();
+  const swap = (
+    <button type="button" className={lobby.code ? 'pm-lan__swap m-p8' : 'btn btn--ink btn--block m-p8 pm-lan__add'} onClick={blurAfter(() => ctl.openOverlay('lan-add'))}>
+      <Icon name="qr" size={lobby.code ? 'sm' : undefined} />
+      {lobby.code ? (
+        <span>
+          <span className="pm-more">No internet? </span>Swap QR codes
+        </span>
+      ) : (
+        <span>
+          Add<span className="pm-more"> a player</span> by QR
+        </span>
+      )}
+    </button>
+  );
+  if (!lobby.code) {
+    return (
+      <>
+        <div className="paper pm-lan__how">
+          <span className="label">
+            <Icon name="wifi" size="sm" />
+            Local room · no internet
+          </span>
+          <b className="display pm-lan__how-t">Friends join by QR</b>
+        </div>
+        {lobby.isHost ? swap : null}
+        <span className="pm-lan__hint">{lobby.isHost ? 'One QR swap per friend.' : 'The host adds each friend with a QR swap.'}</span>
+      </>
+    );
+  }
   return (
     <>
-      <div className="paper pm-lan__how">
-        <span className="label">
-          <Icon name="wifi" size="sm" />
-          {lobby.code ? (
-            <span>
-              <span className="pm-more">On this Wi-Fi · </span>Join with code
-            </span>
-          ) : (
-            'Local room · no internet'
-          )}
+      <div className="paper pm-lan__scan">
+        <span className="qr pm-lan__qr" role="img" aria-label={`QR code for room ${lobby.code}: a phone's camera opens it straight into the room`}>
+          <svg viewBox={qr.viewBox} shapeRendering="crispEdges" aria-hidden="true">
+            <path fill="var(--c-qr-dark)" d={qr.path} />
+          </svg>
         </span>
-        {lobby.code ? <b className="display pm-lan__how-code num">{lobby.code}</b> : <b className="display pm-lan__how-t">Friends join by QR</b>}
+        <span className="pm-lan__scan-t">
+          <span className="label">
+            <Icon name="wifi" size="sm" />
+            Scan to join
+          </span>
+          <b className="display pm-lan__how-code num">{lobby.code}</b>
+          <span className="pm-lan__scan-line">Same Wi-Fi: phone camera at the code, or type it in Join.</span>
+        </span>
       </div>
-      {lobby.isHost ? (
-        <>
-          <button type="button" className="btn btn--ink btn--block m-p8 pm-lan__add" onClick={blurAfter(() => ctl.openOverlay('lan-add'))}>
-            <Icon name="qr" />
-            <span>
-              Add<span className="pm-more"> a player</span> by QR
-            </span>
-          </button>
-          <span className="pm-lan__hint">{lobby.code ? 'No internet? Swap QR codes instead.' : 'One QR swap per friend.'}</span>
-        </>
-      ) : (
-        <span className="pm-lan__hint">{lobby.code ? 'Same Wi-Fi only: friends type this code in Join.' : 'The host adds each friend with a QR swap.'}</span>
-      )}
+      {lobby.isHost && swap}
     </>
   );
 }
@@ -289,7 +310,7 @@ export function PhoneLobby({ lobby, tips = null }: { lobby: LobbyView; tips?: Bi
         </header>
 
         <div className="pm-lobby">
-          <section className={`poster halftone-ink pm-share m-p3${lobby.local ? ' pm-share--local' : ''}`} style={rise(0)} aria-label="Invite friends">
+          <section className={`poster halftone-ink pm-share m-p3${lobby.local ? ' pm-share--local' : ''}${lobby.local && lobby.code ? ' pm-share--scan' : ''}`} style={rise(0)} aria-label="Invite friends">
             <b className="display pm-share__t">Rally your squad</b>
             {lobby.code !== '' && (
               <button
@@ -306,7 +327,7 @@ export function PhoneLobby({ lobby, tips = null }: { lobby: LobbyView; tips?: Bi
               </button>
             )}
             {lobby.local ? (
-              <PhoneLocalShare lobby={lobby} />
+              <PhoneLocalShare lobby={lobby} qr={qr} />
             ) : (
               <div className="pm-qrs">
                 <div className="ticket pm-qr pm-qr--wide">

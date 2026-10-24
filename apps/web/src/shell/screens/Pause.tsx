@@ -17,6 +17,7 @@ import type { ShellStore } from '../store';
 import { ROOM_SLOTS } from './Lobby';
 import { inviteFriends } from '../../social/SocialLayer';
 import { VoicePauseCard } from '../../voice/VoiceHud';
+import { SendReport } from '../../diag/SendReport';
 
 /** What leaving costs, in the confirm dialog's words. */
 export function leaveCost(match: MatchView | null, inRoom: boolean): string {
@@ -107,6 +108,7 @@ export function Pause({ store }: { store: ShellStore }) {
         </button>
         {/* a touch screen (a tablet): the buttons' fade, right here (the owner, 23 Oct) */}
         <ButtonFadeQuick className="m-p3" />
+        <SendReport context={room !== null ? 'pause: in a room' : 'pause: training'} className="m-p3" />
         <button className="btn btn--ink btn--xl btn--block pause__btn m-p3 m-p8" style={row(4)} type="button" onClick={blurAfter(() => ctl.showTips())}>
           <Icon name="keyboard" />
           <span className="btn__stack">

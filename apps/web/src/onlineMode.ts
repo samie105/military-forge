@@ -17,6 +17,8 @@
  * so a page reload resumes the same player within the room's reconnect grace.
  */
 import { adminTuning, createTuning, defaultTuning, weapons, NO_WEAPON, type AdminValues, type MapDef, type Tuning } from '@military-forge/content';
+import { diag } from './diag/log';
+import { autoReport } from './diag/report';
 import { RECONNECT_WINDOW_MS, reconnectDelay } from './shell/reconnect';
 import { adminTuningKeys } from './shell/tune';
 import { ConditionedLink, NetClient, TICK_MS, describeNetSim, type ConditionerSettings, type RemotePose, type Scheduler } from '@military-forge/netcode';
@@ -132,6 +134,8 @@ export interface OnlineOptions {
   connect?: (handlers: TransportHandlers, reconnect: boolean) => Promise<GameTransport>;
   /** a local room (the lobby says so: same Wi-Fi only) */
   local?: boolean;
+  /** this page hosts the room (a local room's host plays through a link in the page): its own room closing is no failure to report */
+  host?: boolean;
   /** v19: the look to wear (the saved look as cosmetic wire ids); the room holds it to what we own */
   look?: readonly number[];
   /**
@@ -523,11 +527,13 @@ export class OnlineMode {
         this.netSim.up.stream = this.netSim.down.stream = transport.kind === 'ws';
         this.transportNote = transport.kind === 'wt' ? 'WebTransport (UDP)' : transport.kind === 'lan' ? 'local room (Wi-Fi)' : `WebSocket${fallbackReason ? ` (${fallbackReason})` : ''}`;
         this.status = this.droppedAt ? 'resuming…' : 'joining…';
+        diag('net', `${this.transportNote} open${this.droppedAt ? `, resuming (try ${this.reconnectAttempt})` : ''}`);
         if (!this.droppedAt) this.conn = { ...FRESH, state: 'joining', detail: '', code: 0 };
         this.net.onOpen();
       },
       (e: Error & { code?: number }) => {
         // a local room's connector says why with a close code (4006: the room is gone)
+        if (this.currentAttempt === attempt) diag('net', `connect failed: ${typeof e.code === 'number' ? e.code : 1006} ${e.message}`);
         if (this.currentAttempt === attempt) this.dropped(typeof e.code === 'number' ? e.code : 1006, e.message);
       },
     );
@@ -570,6 +576,7 @@ export class OnlineMode {
     this.transport = null;
     const why = `${code}${reason ? `: ${reason}` : ''}`;
     const now = performance.now();
+    diag('net', `closed ${why}${this.droppedAt ? ` (outage ${Math.round(now - this.droppedAt)} ms)` : ''}`);
     if (!this.droppedAt) this.droppedAt = now;
     // the server is updating (a deploy): its rooms go with it. Rejoin with a fresh ticket once it's
     // back (it takes a few seconds), not a resume it can't know about ("ticket expired", 23 Oct 2026)
@@ -632,6 +639,9 @@ export class OnlineMode {
       lossPct: heard ? stats.snapshotLossPct : 0,
     };
     if (code === CloseCode.DuplicateSession || code === 1000) saveToken(this.options.room, null);
+    diag('net', `gave up: ${this.conn.detail} (code ${code}, ${this.reconnectAttempt} tries, ${heard ? 'had joined' : 'never joined'})`);
+    // the owner can read what happened on this phone (diag/report.ts): a report goes by itself; leaving isn't a failure
+    if (code !== 1000 && code !== CloseCode.DuplicateSession && !this.options.host) autoReport(`${this.options.local ? 'local room' : 'room'} ${this.options.room || ''}: ${this.conn.detail} (${code})`);
     this.onFatal(`${this.status} — is the game server running? (pnpm dev)`);
   }
 
@@ -682,6 +692,7 @@ export class OnlineMode {
     switch (msg.type) {
       case MsgType.Welcome: {
         this.status = msg.resumed ? `connected (resumed after ${((performance.now() - this.droppedAt) / 1000).toFixed(1)} s)` : 'connected';
+        diag('net', `welcomed: ${this.status}`);
         this.conn = { ...FRESH, state: 'connected', detail: '', code: 0 };
         this.everConnected = true;
         this.closeSpare(); // back without it

@@ -64,6 +64,9 @@ function AppScreens({ store }: { store: ShellStore }) {
   const tips = useStore(store, (s) => s.tips);
   const tipsAsked = useStore(store, (s) => s.tipsAsked === true);
   const match = useStore(store, (s) => s.match);
+  // a room still connecting (its Connecting card, then the map loading): the controls card waits, it
+  // would sit over the steps (a local room's guest on an iPhone, 24 Oct)
+  const inRoomYet = useStore(store, (s) => s.screen.name !== 'room' || (s.connection?.state === 'connected' && s.match !== null));
   const phone = usePhoneLayout();
   // the keyboard's keys, or a controller's buttons while one plays (gamepad/)
   const shown = useShownControls(store);
@@ -119,7 +122,7 @@ function AppScreens({ store }: { store: ShellStore }) {
   return (
     <>
       {body}
-      {tips && playing && !overlay && !inLobby && (!live || tipsAsked) && (phone ? <PhoneTips /> : <TipsCard bindings={shown.bindings} doubleTapDash={shown.doubleTapDash} />)}
+      {tips && playing && inRoomYet && !overlay && !inLobby && (!live || tipsAsked) && (phone ? <PhoneTips /> : <TipsCard bindings={shown.bindings} doubleTapDash={shown.doubleTapDash} />)}
       {overlay === 'menu' && (phone ? <PhonePause store={store} /> : <Pause store={store} />)}
       {overlay === 'settings' && (phone ? <PhoneSettings store={store} /> : <SettingsScreen store={store} />)}
       {overlay === 'join' && (phone ? <PhoneJoin /> : <Join />)}
@@ -159,15 +162,17 @@ function RoomScreen({ store, code }: { store: ShellStore; code: string }) {
   const phone = usePhoneLayout();
   // we came to watch (v20): a refused or dropped watcher's alert says so, and its retry watches again
   const watching = useStore(store, (s) => s.screen.name === 'room' && s.screen.watch === true);
+  // a local room (same Wi-Fi): its alerts speak of the host's phone and the Wi-Fi, not a server
+  const local = useStore(store, (s) => s.screen.name === 'room' && s.screen.local === true);
 
   const loading = useLoadingHold(connection?.state === 'connected', !!match, match?.phase === MatchPhase.Waiting);
   if (!connection || connection.state === 'connecting' || connection.state === 'joining') {
-    return <Connecting code={code} step={connectStep(connection, !!match)} onCancel={() => ctl.leave()} />;
+    return <Connecting code={code} step={connectStep(connection, !!match)} local={local} onCancel={() => ctl.leave()} />;
   }
   if (loading) {
     return <MapLoading code={code} lobby={lobby} mapName={lobby?.mapName || match?.mapName || ''} haveMatch={!!match} load={loading} bindings={bindings} onCancel={() => ctl.leave()} />;
   }
-  if (connection.state === 'failed') return <Alert alert={alertFromConnection(connection, code, watching)} onRejoin={() => ctl.rejoin()} />;
+  if (connection.state === 'failed') return <Alert alert={alertFromConnection(connection, code, watching, local)} onRejoin={() => ctl.rejoin()} />;
   const host = lobby?.players.find((p) => p.host);
   return (
     <>

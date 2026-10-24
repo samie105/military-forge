@@ -341,6 +341,17 @@ describe('join, names, connection, pause and settings', () => {
     expect(reconnectSecondsLeft(60_000, 70_000)).toBe(0);
   });
 
+  it('alerts: a local room speaks of the host and the Wi-Fi, never a server, and offers the QR swap when unreachable', () => {
+    const local = (code: number, room = 'KMTXRA') => alertFromConnection({ code, detail: '', attempt: 3, lastPingMs: -1, lossPct: 0 }, room, false, true);
+    expect(local(1006)).toMatchObject({ kind: 'connection-lost', title: 'Can’t reach the room', action: 'rejoin', qrSwap: true, code: 'LOCAL_UNREACHABLE · 3 tries · room KMTXRA' });
+    expect(local(1006).message).toContain('same Wi-Fi as the host');
+    expect(local(4006)).toMatchObject({ kind: 'room-not-found', title: 'The room has closed', action: 'rejoin' });
+    expect(local(4006, '')).toMatchObject({ kind: 'room-not-found', action: null });
+    expect(local(4002)).toMatchObject({ kind: 'room-full', action: 'rejoin' });
+    expect(local(4001)).toMatchObject({ kind: 'new-version', action: 'reload' });
+    for (const c of [1006, 4006, 4002, 4001]) expect(local(c).message).not.toMatch(/server/i);
+  });
+
   it("alerts: API errors and close codes in the kit's words", () => {
     expect(alertFromApiError(new ApiError(404, 'room_not_found', 'x'), 'KMTXRA')).toMatchObject({ kind: 'room-not-found', code: 'ROOM_NOT_FOUND · room KMTXRA', action: 'rejoin' });
     expect(alertFromApiError(new ApiError(0, 'network', 'down'))).toMatchObject({ kind: 'offline', action: 'rejoin' });

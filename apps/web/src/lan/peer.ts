@@ -14,6 +14,7 @@
  */
 import { CloseCode, isUnreliableMessage } from '@military-forge/protocol';
 import type { GameTransport, TransportHandlers } from '../transport';
+import { diag } from '../diag/log';
 import { packSdp, unpackSdp, type SdpKind } from './sdp';
 
 /** gathering waits this long at most (a STUN server that doesn't answer, offline) */
@@ -42,22 +43,72 @@ export function newPeer(online = typeof navigator !== 'undefined' && navigator.o
   const reliable = pc.createDataChannel('r', { negotiated: true, id: 0, ordered: true });
   const unreliable = pc.createDataChannel('u', { negotiated: true, id: 1, ordered: false, maxRetransmits: 0 });
   reliable.binaryType = unreliable.binaryType = 'arraybuffer';
+  watchPeer(pc, reliable, online);
   return { pc, reliable, unreliable };
 }
 
+let peers = 0;
+/**
+ * A peer's life in the device's event log (diag/log.ts), for problem reports: the candidates it found
+ * by kind, its ICE and connection states with the time since it was made, and its channel closing.
+ */
+function watchPeer(pc: RTCPeerConnection, reliable: RTCDataChannel, online: boolean): void {
+  const id = ++peers;
+  const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
+  const since = () => `${Math.round(performance.now() - t0)} ms`;
+  const kinds: Record<string, number> = {};
+  diag('rtc', `peer ${id}: made (${online ? 'with STUN' : 'no STUN: offline'})`);
+  pc.addEventListener('icecandidate', (e) => {
+    const kind = e.candidate ? (/ typ (\w+)/.exec(e.candidate.candidate)?.[1] ?? '?') : null;
+    if (kind) kinds[kind] = (kinds[kind] ?? 0) + 1;
+    else diag('rtc', `peer ${id}: candidates ${Object.entries(kinds).map(([k, n]) => `${k} ${n}`).join(', ') || 'none'} at ${since()}`);
+  });
+  pc.addEventListener('iceconnectionstatechange', () => diag('rtc', `peer ${id}: ice ${pc.iceConnectionState} at ${since()}`));
+  pc.addEventListener('connectionstatechange', () => diag('rtc', `peer ${id}: connection ${pc.connectionState} at ${since()}`));
+  reliable.addEventListener('open', () => diag('rtc', `peer ${id}: channel open at ${since()}`));
+  reliable.addEventListener('close', () => diag('rtc', `peer ${id}: channel closed at ${since()}`));
+}
+
+/** with a candidate in hand and no public one yet, gathering stops waiting this long after it began */
+const GATHER_ENOUGH_MS = 1200;
+
+/**
+ * The candidates are in: gathering complete, or (a STUN server that answers slowly or not at all)
+ * enough to connect on: the network's public address (srflx) as soon as it comes, else whatever was
+ * found by GATHER_ENOUGH_MS, else GATHER_TIMEOUT_MS. On a LAN the device's own (mDNS) candidates come
+ * in milliseconds, so a guest no longer waits the full timeout for a STUN reply (24 Oct: an offer took
+ * 3.3 s of a 3.6 s join).
+ */
 function gathered(pc: RTCPeerConnection): Promise<void> {
   if (pc.iceGatheringState === 'complete') return Promise.resolve();
   return new Promise((resolve) => {
+    let found = 0;
+    const started = Date.now();
     const done = () => {
       pc.removeEventListener('icegatheringstatechange', check);
+      pc.removeEventListener('icecandidate', onCandidate);
       clearTimeout(timer);
+      clearTimeout(enough);
       resolve();
     };
     const check = () => {
       if (pc.iceGatheringState === 'complete') done();
     };
+    const onCandidate = (e: RTCPeerConnectionIceEvent) => {
+      if (!e.candidate) return;
+      found++;
+      // a public address: what mDNS-blocking networks need; the description has it now
+      if (/ typ srflx/.test(e.candidate.candidate)) setTimeout(done, 30);
+    };
     const timer = setTimeout(done, GATHER_TIMEOUT_MS);
+    const enough = setTimeout(
+      () => {
+        if (found > 0) done();
+      },
+      Math.max(0, GATHER_ENOUGH_MS - (Date.now() - started)),
+    );
     pc.addEventListener('icegatheringstatechange', check);
+    pc.addEventListener('icecandidate', onCandidate);
   });
 }
 

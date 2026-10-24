@@ -31,8 +31,10 @@ describe('local room signaling', () => {
     const g = new Conn();
     const guest = lan.open(`/ws/lan/join/${code}`, g, '10.0.0.3')!;
     expect(h.got[1]).toEqual({ t: 'join', peer: 1 });
+    // the guest hears at once that the room is there, before the host's offer
+    expect(g.got[0]).toEqual({ t: 'here' });
     host.receive(frame({ t: 'offer', peer: 1, sdp: 'OFFER' }));
-    expect(g.got[0]).toEqual({ t: 'offer', sdp: 'OFFER' });
+    expect(g.got[1]).toEqual({ t: 'offer', sdp: 'OFFER' });
     guest.receive(frame({ t: 'answer', sdp: 'ANSWER' }));
     expect(h.got[2]).toEqual({ t: 'answer', peer: 1, sdp: 'ANSWER' });
     guest.closed();
@@ -49,13 +51,29 @@ describe('local room signaling', () => {
     const g = new Conn();
     lan.open(`/ws/lan/join/${h.got[0]!.code as string}`, g, null);
     host.receive(frame({ t: 'offer', peer: 1, sdp: 'x'.repeat(5000) }));
-    expect(g.got).toEqual([]); // too big: not relayed
+    expect(g.got).toEqual([{ t: 'here' }]); // too big: not relayed
     for (let i = 0; i < 12; i++) host.receive(frame({ t: 'noise' }));
     expect(h.closed?.code).toBe(CloseCode.RateLimited);
     const many = [1, 2, 3, 4, 5].map(() => new Conn());
     const opened = many.map((c) => lan.open('/ws/lan/host', c, '10.0.0.9'));
     expect(opened.filter(Boolean).length).toBe(4);
     expect(many[4]!.closed?.code).toBe(CloseCode.RateLimited);
+  });
+
+  it('a probe says whether the room is there in one message, and the host never hears of it', () => {
+    const lan = new LanSignal();
+    const h = new Conn();
+    lan.open('/ws/lan/host', h, null);
+    const code = h.got[0]!.code as string;
+    const p = new Conn();
+    expect(lan.open(`/ws/lan/join/${code}?probe`, p, null)).toBeNull();
+    expect(p.got).toEqual([{ t: 'here' }]);
+    expect(p.closed?.code).toBe(1000);
+    expect(h.got).toHaveLength(1); // no join, no offer made for it
+    const none = new Conn();
+    expect(lan.open('/ws/lan/join/ZZZZZZ?probe', none, null)).toBeNull();
+    expect(none.got).toEqual([]);
+    expect(none.closed?.code).toBe(CloseCode.NoRoom);
   });
 
   it('the host leaving closes the room for its guests, and frees the code', () => {

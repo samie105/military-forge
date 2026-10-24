@@ -7,6 +7,7 @@
 import { GAME_NAME, normalizeRoomCode } from '@military-forge/shared';
 import { MatchPhase } from '@military-forge/sim';
 import type { OnlineMode } from '../onlineMode';
+import { diag } from '../diag/log';
 import type { LocalMode } from '../localMode';
 import { alertFromApiError } from './alerts';
 import { Api, ApiError, NICKNAME_REASONS, type Me, type NicknameCheck, type RoomJoin } from './api';
@@ -348,7 +349,9 @@ export class ShellController {
     if (!this.host.startLocalHost) return;
     this.host.stop();
     this.set({ screen: { name: 'finding', code: null, creating: true }, match: null, lobby: null });
+    diag('room', 'host a local room');
     const code = await this.host.startLocalHost(this.profile!.nickname);
+    diag('room', code ? `local room ${code} up` : 'local room up with no code (no relay: QR codes only)');
     this.setUrl(code ? `/r/${code}` : '/');
     this.set({ screen: { name: 'room', code, local: true } });
     this.firstTips();
@@ -357,6 +360,7 @@ export class ShellController {
   /** Join a local room by its code (the relay), or by the host's QR code (`answered`, no internet). */
   joinLocal(code: string, answered?: import('../lan/peer').Peer): void {
     if (!this.host.startLocalJoin || !this.profile) return;
+    diag('room', `join local room ${code || 'by QR codes'}`);
     this.closeOverlay();
     this.host.stop();
     this.set({ match: null, lobby: null });
@@ -370,11 +374,21 @@ export class ShellController {
     this.host.stop();
     const code = intent.to === 'create' ? null : intent.code;
     this.set({ screen: { name: 'finding', code, creating: intent.to === 'create' }, match: null, lobby: null });
+    // a local room's link: the relay is asked alongside the API (one round trip, the host never hears)
+    const local = intent.to === 'join' && code ? this.localRoomExists(code).catch(() => false) : null;
     try {
       // a watcher's ticket is the same join ticket: the HELLO says "as a spectator"
       const room = code === null ? await this.api.createRoom() : await this.api.joinRoom(code);
       this.enterRoom(room, intent.to === 'watch');
     } catch (e) {
+      diag('room', `${intent.to} ${code ?? ''}: the API said ${e instanceof ApiError ? `${e.code} (${e.status})` : (e as Error)?.message}`);
+      // not one of the server's rooms: a local room's link (its QR, Share room link) lands here, so
+      // ask the relay before saying there's no room (the owner, 24 Oct: "the local room flow is
+      // terrible": a local room's link said Room not found)
+      if (local && code && e instanceof ApiError && e.code === 'room_not_found' && (await local)) {
+        this.joinLocal(code);
+        return;
+      }
       if (e instanceof ApiError && (e.code === 'no_session' || e.status === 401)) {
         // the saved session is gone (expired, revoked): pick a name again
         this.set({ profile: null, screen: { name: 'name', then: intent } });

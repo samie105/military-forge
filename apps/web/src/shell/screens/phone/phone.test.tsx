@@ -238,22 +238,24 @@ describe('local rooms (the Pen board P0–P5)', () => {
     expect(html).toContain('Scan host&#x27;s QR');
   });
 
-  it('P2 · lobby: the code to type on the same Wi-Fi, the host\'s QR way in, the LAN ping (real: the lobby\'s own)', () => {
+  it("P2 · lobby: ONE QR (the room link: a phone's camera lands in the room) and the code; the QR swap a fallback; the LAN ping (real: the lobby's own)", () => {
     const host = withCtl(ctl(), <PhoneLobby lobby={local(true)} />);
-    expect(textOf(host)).toContain('On this Wi-Fi · Join with code');
+    expect(textOf(host)).toContain('Scan to join');
     expect(host).toMatch(/pm-lan__how-code[^>]*>KMTXRA</);
-    expect(textOf(host)).toContain('Add a player by QR');
+    expect(host).toMatch(/class="qr pm-lan__qr"[^>]*aria-label="QR code for room KMTXRA/);
+    expect(textOf(host)).toContain('Same Wi-Fi: phone camera at the code, or type it in Join.');
+    expect(textOf(host)).toContain('No internet? Swap QR codes');
     expect(textOf(host)).toContain('Share room link');
-    expect(host).not.toContain('Scan to join');
     expect(host).toMatch(/LAN<\/span><span class="num">1 ms/);
     const guest = withCtl(ctl(), <PhoneLobby lobby={local(false)} />);
-    expect(textOf(guest)).not.toContain('Add a player by QR');
-    expect(textOf(guest)).toContain('Same Wi-Fi only: friends type this code in Join.');
+    expect(textOf(guest)).toContain('Scan to join');
+    expect(textOf(guest)).not.toContain('Swap QR codes');
     // no internet at all: no code to type or share, friends join by QR
     const offline = withCtl(ctl(), <PhoneLobby lobby={local(true, '')} />);
     expect(textOf(offline)).not.toContain('Share room link');
-    expect(offline).not.toContain('pm-code');
+    expect(offline).not.toContain('pm-lan__qr');
     expect(offline).toContain('Friends join by QR');
+    expect(textOf(offline)).toContain('Add a player by QR');
   });
 
   it('P3 · add a player: the code on paper, their reply (no camera here: the paste row says why), 48 px targets', () => {

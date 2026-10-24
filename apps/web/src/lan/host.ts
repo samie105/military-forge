@@ -19,6 +19,7 @@
  */
 import { CloseCode } from '@military-forge/protocol';
 import type { GameTransport, TransportHandlers } from '../transport';
+import { diag } from '../diag/log';
 import { MAX_PEER_MESSAGE, acceptAnswer, channelsOpen, closeFrame, makeOffer, newPeer, sendOn, type Peer } from './peer';
 
 export { LOCAL_ROOM_RULES } from './rules';
@@ -207,9 +208,11 @@ export class LanHost {
       await acceptAnswer(guest.peer, packedAnswer);
       await channelsOpen(guest.peer);
     } catch (e) {
+      diag('lan', `host: guest ${id} didn't connect: ${(e as Error).message}`);
       this.drop(guest, (e as Error).message);
       throw e;
     }
+    diag('lan', `host: guest ${id} connected`);
     if (this.closed) return;
     this.attach(guest);
   }
@@ -248,6 +251,7 @@ export class LanHost {
     peer.unreliable.addEventListener('message', onMessage);
     const gone = () => {
       if (guest.state === 'gone') return;
+      diag('lan', `host: guest ${guest.id} gone (${peer.pc.connectionState})`);
       open = false;
       guest.state = 'gone';
       this.room.disconnect(client); // resumable: a guest whose Wi-Fi blinked comes back as itself
@@ -294,23 +298,28 @@ export class LanHost {
         return;
       }
       if (msg.t === 'code' && typeof msg.code === 'string') {
+        diag('lan', `host: the relay gave code ${msg.code}`);
         this.code = msg.code;
         this.changed();
       } else if (msg.t === 'join' && typeof msg.peer === 'number') {
         const peer = msg.peer;
+        diag('lan', `host: guest ${peer} asks to join`);
         void this.newOffer(peer).then((g) => {
           if (g.offer) send({ t: 'offer', peer, sdp: g.offer });
         });
       } else if (msg.t === 'answer' && typeof msg.peer === 'number' && typeof msg.sdp === 'string') {
+        diag('lan', `host: guest ${msg.peer} answered`);
         this.acceptAnswer(msg.peer, msg.sdp).catch(() => {});
       } else if (msg.t === 'leave' && typeof msg.peer === 'number') {
         // the guest's signaling socket closed: fine once connected; before that, it gave up
         const g = this.guests.get(msg.peer);
+        diag('lan', `host: guest ${msg.peer} left the relay (${g?.state ?? 'unknown'})`);
         if (g && g.state !== 'connected') this.drop(g, 'left');
       }
     };
     ws.onclose = (ev) => {
       if (this.closed) return;
+      diag('lan', `host: relay closed ${ev.code}${ev.reason ? ` ${ev.reason}` : ''}`);
       this.signal = null;
       this.signalError = ev.code === CloseCode.RateLimited ? ev.reason || 'too many local rooms on this network' : 'no connection to the game server: players can still join by code';
       this.code = '';
@@ -324,6 +333,7 @@ export class LanHost {
   close(): void {
     if (this.closed) return;
     this.closed = true;
+    diag('lan', 'host: closed the room');
     window.removeEventListener('pagehide', this.onPageHide);
     this.signal?.close();
     this.room.closeAll(CloseCode.NoRoom, 'the host closed the local room');

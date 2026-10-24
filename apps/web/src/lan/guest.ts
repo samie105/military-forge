@@ -10,6 +10,7 @@
 import { CloseCode } from '@military-forge/protocol';
 import { normalizeRoomCode } from '@military-forge/shared';
 import type { GameTransport, TransportHandlers } from '../transport';
+import { diag } from '../diag/log';
 import { LanError, answerOffer, channelsOpen, newPeer, peerTransport, type Peer } from './peer';
 
 /** the relay must hand over an offer within this long */
@@ -21,14 +22,15 @@ export function normalizeLanCode(typed: string): string | null {
 }
 
 /**
- * Whether the relay has a local room with `code`: a join socket either gets the host's offer
- * (yes; the socket closes and the host drops that offer) or is refused (no). 3 s at most.
+ * Whether the relay has a local room with `code`: a probe socket gets {t:'here'} (yes) or is refused
+ * (no), in one round trip; the host never hears of it. (A relay from before the probe treats it as a
+ * join and answers with the host's offer: any message is a yes.) 3 s at most.
  */
 export function lanRoomExists(code: string, WebSocketImpl: typeof WebSocket = WebSocket): Promise<boolean> {
   return new Promise((resolve) => {
     let ws: WebSocket;
     try {
-      ws = new WebSocketImpl(lanSignalUrl(`join/${code}`));
+      ws = new WebSocketImpl(lanSignalUrl(`join/${code}?probe`));
     } catch {
       return resolve(false);
     }
@@ -87,12 +89,25 @@ function offerFromRelay(code: string, WebSocketImpl: typeof WebSocket = WebSocke
 
 /** Connect to a local room by its code, through the relay (OnlineOptions.connect). */
 export async function joinByCode(code: string, handlers: TransportHandlers, WebSocketImpl?: typeof WebSocket): Promise<GameTransport> {
-  const relay = await offerFromRelay(code, WebSocketImpl);
+  const t0 = performance.now();
+  const ms = () => `${Math.round(performance.now() - t0)} ms`;
+  diag('lan', `guest: joining ${code} through the relay`);
+  let relay: Awaited<ReturnType<typeof offerFromRelay>>;
+  try {
+    relay = await offerFromRelay(code, WebSocketImpl);
+  } catch (e) {
+    diag('lan', `guest: no offer for ${code}: ${(e as Error).message} (${ms()})`);
+    throw e;
+  }
+  diag('lan', `guest: got the host's offer (${ms()})`);
   const peer = newPeer();
   try {
     relay.reply(await answerOffer(peer, relay.offer));
+    diag('lan', `guest: answered (${ms()})`);
     await channelsOpen(peer);
+    diag('lan', `guest: connected to the host (${ms()})`);
   } catch (e) {
+    diag('lan', `guest: couldn't connect: ${(e as Error).message} (${ms()})`);
     peer.pc.close();
     throw e;
   } finally {

@@ -44,6 +44,8 @@ export const LIMITS = {
   inviteSend: { name: 'invite', limit: 40, windowMs: 10 * 60_000 },
   /** push-channel connects per user (GET /events; one per tab every ~15 min, more on a bad network) */
   eventsConnect: { name: 'events', limit: 30, windowMs: 60_000 },
+  /** problem reports per IP (Send a report, and the automatic one a failed connection sends) */
+  report: { name: 'report', limit: 6, windowMs: 10 * 60_000 },
 } as const satisfies Record<string, RateRule>;
 
 export async function enforceRateLimit(kv: Kv, rule: RateRule, key: string): Promise<void> {

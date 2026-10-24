@@ -34,7 +34,8 @@ export function alertFromApiError(e: unknown, room?: string): AlertInfo {
  * A room connection that ended for good (onlineMode gave up, or the server refused or kicked us).
  * `watching`: we came to watch (v20), so a retry watches again and a room nobody is in says so.
  */
-export function alertFromConnection(c: Pick<ConnectionView, 'code' | 'detail' | 'attempt' | 'lastPingMs' | 'lossPct'>, room: string, watching = false): AlertInfo {
+export function alertFromConnection(c: Pick<ConnectionView, 'code' | 'detail' | 'attempt' | 'lastPingMs' | 'lossPct'>, room: string, watching = false, local = false): AlertInfo {
+  if (local) return alertFromLocal(c, room);
   switch (c.code) {
     case CloseCode.VersionMismatch:
       return { kind: 'new-version', title: 'New version available', message: 'The game was updated. Reload to get the latest version, then rejoin with the same link.', code: 'VERSION_MISMATCH', action: 'reload' };
@@ -76,6 +77,34 @@ export function alertFromConnection(c: Pick<ConnectionView, 'code' | 'detail' | 
         ...(c.attempt > 0 ? { tries: { made: c.attempt, of } } : {}),
       };
     }
+  }
+}
+
+/**
+ * A local room (same Wi-Fi, lan/) that didn't work out: no server is involved, so the words are about
+ * the host's phone and the Wi-Fi, each with the way on (the owner, 24 Oct: "the local room flow is
+ * terrible"). `qrSwap`: the no-internet way in is offered beside Try again.
+ */
+function alertFromLocal(c: Pick<ConnectionView, 'code' | 'detail' | 'attempt'>, room: string): AlertInfo {
+  const code = (name: string) => codeLine(`LOCAL_${name}`, room || undefined);
+  switch (c.code) {
+    case CloseCode.VersionMismatch:
+      return { kind: 'new-version', title: 'Different versions', message: 'You and the host have different versions of the game. Both reload the page, then try again.', code: code('VERSION_MISMATCH'), action: 'reload' };
+    case CloseCode.RoomFull:
+      return { kind: 'room-full', title: 'This room is full', message: 'Every slot in the host’s room is taken. Ask the host to turn a bot off, then try again.', code: code('ROOM_FULL'), action: 'rejoin' };
+    case CloseCode.NoRoom:
+      return { kind: 'room-not-found', title: 'The room has closed', message: room ? 'The host closed it, or their phone left the game. Ask them to open Local room again and send the new code.' : 'This room’s link is gone. Ask the host to add you again.', code: code('NO_ROOM'), action: room ? 'rejoin' : null };
+    case CloseCode.DuplicateSession:
+      return { kind: 'replaced', title: 'Opened somewhere else', message: 'You joined this room from another tab. Carry on there, or rejoin here.', code: code('DUPLICATE_SESSION'), action: 'rejoin' };
+    default:
+      return {
+        kind: 'connection-lost',
+        title: 'Can’t reach the room',
+        message: 'Are you on the same Wi-Fi as the host? A phone hotspot works too. Some guest and office Wi-Fi blocks phones from seeing each other: then swap QR codes with the host.',
+        code: code(c.attempt > 0 ? `UNREACHABLE · ${c.attempt} tries` : 'UNREACHABLE'),
+        action: room ? 'rejoin' : null,
+        qrSwap: true,
+      };
   }
 }
 

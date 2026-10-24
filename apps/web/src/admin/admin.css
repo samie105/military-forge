@@ -227,3 +227,15 @@ body {
     padding: 0 var(--sp-3);
   }
 }
+
+/* Reports (reports.ts): one line per report, opened to its whole text */
+.admin__note { margin: 0 0 10px; color: var(--muted, #b5b9a2); font-size: 14px; }
+.admin__note.is-error { color: #ff7a6e; }
+.admin__report { border-top: 1px solid rgb(255 255 255 / .1); }
+.admin__report > summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 8px 0; cursor: pointer; font-size: 14px; }
+.admin__report-when { font-variant-numeric: tabular-nums; opacity: .7; }
+.admin__report-why { padding: 0 6px; border-radius: 4px; background: rgb(255 255 255 / .1); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+.admin__report-why.is-auto { background: #d6ff3b; color: #15170f; }
+.admin__report-problem { flex-basis: 100%; opacity: .8; font-family: ui-monospace, Menlo, monospace; font-size: 12px; overflow-wrap: anywhere; }
+.admin__report-text { margin: 0 0 10px; padding: 10px; max-height: 60vh; overflow: auto; background: rgb(0 0 0 / .35); border-radius: 6px; font: 12px/1.45 ui-monospace, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.admin__group--reports .admin__sections { display: block; }

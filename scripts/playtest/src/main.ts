@@ -566,6 +566,8 @@ async function main(): Promise<void> {
       ACCESS_TOKEN_PRIVATE_KEY: accessKey.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
       JOIN_TICKET_PRIVATE_KEY: ticketKey.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
       RESULTS_PUBLIC_KEY: resultsKey.publicKey.export({ type: 'spki', format: 'pem' }).toString(),
+      // the owner's token also reads the players' problem reports (/api/reports, the admin page's Reports)
+      ...(admin ? { ADMIN_TOKEN: admin.token } : {}),
       // the API trusts only this local origin; the proxy vouches for the tunnel's current one (CSRF)
       CORS_ORIGINS: localOrigins.join(','),
       COOKIE_SECURE: local ? 'false' : 'true',

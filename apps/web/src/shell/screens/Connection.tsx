@@ -15,6 +15,7 @@ import type { LobbyView } from '../onlineView';
 import type { AlertInfo, ConnectionView, Settings } from '../store';
 import { reconnectTries } from '../reconnect';
 import { Backdrop, RollNum } from './frame';
+import { ReportSentNote } from '../../diag/SendReport';
 
 /** 0: the API is finding (or making) the room; 1: the game server is letting us in; 2: the first world update. */
 export type ConnectStep = 0 | 1 | 2;
@@ -28,6 +29,12 @@ export function connectStep(connection: ConnectionView | null, haveMatch: boolea
 const STEPS: readonly [now: string, done: string][] = [
   ['Finding the server', 'Found the server'],
   ['Joining the room', 'Joined the room'],
+  ['Loading the map', 'Map loaded'],
+];
+/** A local room's (same Wi-Fi): no server, the host's phone. */
+const LOCAL_STEPS: readonly [now: string, done: string][] = [
+  ['Finding the room', 'Found the room'],
+  ['Connecting to the host’s phone', 'Connected to the host'],
   ['Loading the map', 'Map loaded'],
 ];
 
@@ -60,7 +67,7 @@ function ConnFrame({ states, label, children }: { states: string[]; label: strin
   );
 }
 
-export function Connecting({ code, step, creating = false, onCancel }: { code: string | null; step: ConnectStep; creating?: boolean; onCancel: () => void }) {
+export function Connecting({ code, step, creating = false, local = false, onCancel }: { code: string | null; step: ConnectStep; creating?: boolean; local?: boolean; onCancel: () => void }) {
   return (
     <ConnFrame states={['connecting']} label="Connecting">
       <div className="conn ticket m-p1" role="alertdialog" aria-labelledby="conn-connecting">
@@ -70,9 +77,9 @@ export function Connecting({ code, step, creating = false, onCancel }: { code: s
         <h1 id="conn-connecting" className="display conn__title">
           {creating && !code ? 'Making your room' : code ? `Joining room ${code}` : 'Finding the room'}
         </h1>
-        <p className="conn__body">{creating && !code ? 'A room of your own, with a link to send your friends.' : 'Getting you in: a few seconds.'}</p>
+        <p className="conn__body">{creating && !code ? 'A room of your own, with a link to send your friends.' : local ? 'Straight to the host’s phone over the Wi-Fi: a few seconds.' : 'Getting you in: a few seconds.'}</p>
         <ol className="conn__steps">
-          {STEPS.map(([now, done], i) =>
+          {(local ? LOCAL_STEPS : STEPS).map(([now, done], i) =>
             i < step ? (
               <li key={i} className="is-done">
                 <Icon name="check" size="sm" />
@@ -306,6 +313,7 @@ export function Alert({ alert, onRejoin }: { alert: AlertInfo; onRejoin: (() => 
           </p>
         )}
         <p className="conn__body mf-conn__code num">Code {alert.code}</p>
+        <ReportSentNote />
         <div className="conn__actions">
           {alert.action === 'reload' ? (
             <button className="btn btn--volt btn--xl m-p8" type="button" onClick={() => location.reload()}>
@@ -337,6 +345,13 @@ export function Alert({ alert, onRejoin }: { alert: AlertInfo; onRejoin: (() => 
               Type a code
             </button>
           ) : null}
+          {alert.qrSwap && (
+            // a local room the Wi-Fi won't let us see: the host's QR, and ours back (no network needed)
+            <button className="btn btn--paper btn--xl m-p8" type="button" onClick={blurAfter(() => ctl.openOverlay('lan-join'))}>
+              <Icon name="qr" />
+              Swap QR codes
+            </button>
+          )}
           <button className="btn btn--ghost btn--xl m-p8" type="button" onClick={blurAfter(() => ctl.go({ to: 'home' }))}>
             <Icon name="back" />
             Home

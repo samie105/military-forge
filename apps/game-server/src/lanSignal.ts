@@ -6,7 +6,10 @@
  *
  *   /ws/lan/host          a host: gets {t:'code', code}, then {t:'join', peer} per guest and
  *                         {t:'answer', peer, sdp} / {t:'leave', peer}; sends {t:'offer', peer, sdp}
- *   /ws/lan/join/<CODE>   a guest: gets {t:'offer', sdp}; sends {t:'answer', sdp}
+ *   /ws/lan/join/<CODE>   a guest: gets {t:'here'} at once (the room exists), then {t:'offer', sdp};
+ *                         sends {t:'answer', sdp}
+ *   /ws/lan/join/<CODE>?probe   only asks whether the room exists: {t:'here'} and closed, or refused;
+ *                         the host never hears of it (a room link checks this before joining)
  *
  * Frames are binary (UTF-8 JSON), like every other message here. Limits: a description ≤ 2 KB
  * (the packed form, apps/web/src/lan/sdp.ts, is ~200 B), 10 messages a second, 4 hosts per
@@ -96,7 +99,7 @@ export class LanSignal {
     if (path === 'host') return this.openHost(conn, ip ?? '');
     const m = /^join\/([A-Z]{6})$/.exec(path);
     // (any six capitals: an unknown code is refused below like a wrong one)
-    if (m) return this.openGuest(m[1]!, conn);
+    if (m) return /[?&]probe(=|&|$)/.test(url) ? this.probe(m[1]!, conn) : this.openGuest(m[1]!, conn);
     conn.close(CloseCode.NoRoom, 'not a local room path');
     return null;
   }
@@ -147,6 +150,17 @@ export class LanSignal {
     };
   }
 
+  /** Whether a local room with `code` is open: {t:'here'} then closed, or refused like a join. */
+  private probe(code: string, conn: ClientConn): Connection | null {
+    if (!this.hosts.has(code)) {
+      conn.close(CloseCode.NoRoom, 'no local room with that code');
+      return null;
+    }
+    send(conn, { t: 'here' });
+    conn.close(1000, 'the room is there');
+    return null;
+  }
+
   private openGuest(code: string, conn: ClientConn): Connection | null {
     const host = this.hosts.get(code);
     if (!host) {
@@ -159,6 +173,8 @@ export class LanSignal {
     }
     const guest: Guest = { peer: host.nextPeer++, conn, host };
     host.guests.set(guest.peer, guest);
+    // the guest hears at once that the room is there (the offer follows once the host has made it)
+    send(conn, { t: 'here' });
     send(host.conn, { t: 'join', peer: guest.peer });
     const ok = limiter(this.now);
     let gone = false;

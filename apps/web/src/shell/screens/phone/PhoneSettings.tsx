@@ -25,6 +25,7 @@ import { PhoneScreen, rise } from './layout';
 import { PadControls } from '../../../gamepad/PadSettings';
 import { useInputDevice } from '../../../gamepad/react';
 import { InstallButton } from '../../../pwa/InstallButton';
+import { SendReport } from '../../../diag/SendReport';
 
 /** The phone's sections: Touch first; no key bindings (Controls) on a phone. */
 export const PHONE_TABS: readonly { id: SettingsTab; label: string; icon: string }[] = [
@@ -338,6 +339,13 @@ function Network({ settings }: { settings: Settings }) {
       <Row i={1} label="Net graph" desc="Ping and loss in the corner.">
         <Switch on={settings.netGraph} onChange={(netGraph) => ctl.updateSettings({ netGraph })} label="Net graph" />
       </Row>
+      <div className="pm-set pm-set--block m-p3" style={rise(2)}>
+        <span className="pm-set__text">
+          <b>Something went wrong?</b>
+          <span>Send us what happened on this phone, so we can fix it. A failed room connection sends one by itself.</span>
+        </span>
+        <SendReport context="settings" />
+      </div>
     </>
   );
 }

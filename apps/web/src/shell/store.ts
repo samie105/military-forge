@@ -83,6 +83,8 @@ export interface AlertInfo {
    * with Try again beside it), or none (Home only).
    */
   action: 'rejoin' | 'reload' | 'watch' | null;
+  /** a local room that couldn't be reached: "Swap QR codes" (the no-internet way in) beside the action */
+  qrSwap?: boolean;
 }
 
 export interface Profile {

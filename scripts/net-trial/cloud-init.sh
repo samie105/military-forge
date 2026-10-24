@@ -214,6 +214,7 @@ COOKIE_SECURE='true'
 TRUST_PROXY='xff'
 LOG_LEVEL='warn'
 KEEP_ROOMS='$ROOM'
+ADMIN_TOKEN='$ADMIN_TOKEN'
 EOF
 envfile game.env <<EOF
 NODE_ENV='production'

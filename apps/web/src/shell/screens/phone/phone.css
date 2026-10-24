@@ -385,3 +385,27 @@ html.reduce-motion .pm-turn__card .ic { animation: none; }
 /* Play now is the hero (mobile audit P1-6); Create room sits under it, smaller, on the volt poster */
 .pm-poster .pm-create-room { align-self: flex-start; min-height: 44px; padding: 0 10px; color: var(--c-volt-ink); border-color: color-mix(in srgb, var(--c-volt-ink) 40%, transparent); font-size: var(--fs-14); }
 .pm-poster .pm-create-room:disabled { opacity: 0.55; }
+
+/* a local room's one QR (Pen: LOCAL ROOMS · S1, 24 Oct): the room link, which a phone's camera opens
+   straight into the room; the code beside it for Join; the QR swap a quiet link under it */
+.pm-share--scan .pm-share__t { display: none; }
+.pm-lan__scan { display: flex; align-items: center; gap: 10px; padding: 8px; border: var(--bw-chunky) solid var(--c-ink-950); border-radius: var(--r-sm); }
+.pm-lan__qr { flex: none; width: 112px; height: 112px; padding: 4px; background: #fff; border-radius: var(--r-xs); }
+.pm-lan__qr svg { display: block; width: 100%; height: 100%; }
+.pm-lan__scan-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pm-lan__scan-t .label { display: inline-flex; align-items: center; gap: 4px; font-size: calc(12px * var(--text-scale, 1)); color: var(--c-paper-muted); opacity: 1; }
+.pm-lan__scan-line { font-size: calc(12px * var(--text-scale, 1)); font-weight: var(--fw-bold); line-height: 1.25; color: var(--c-paper-text); }
+.pm-lan__swap { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; min-height: 40px; padding: 0 2px; border: 0; background: none; color: var(--c-volt-ink); font: inherit; font-size: calc(13px * var(--text-scale, 1)); font-weight: var(--fw-black); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.pm-lan__swap::after { content: ''; position: absolute; inset: -4px; }
+.pm-lan__swap { position: relative; margin-top: auto; }
+.is-text-lg .pm-lan__qr { width: 92px; height: 92px; }
+.is-text-lg .pm-lan__scan-line { display: none; }
+/* the roster's title stays on one line beside the Talk pill (a guest's lobby: it wrapped, and the last
+   player's row slid out of sight) */
+.pm-roster__h .display { white-space: nowrap; }
+.pm-roster__h { gap: 6px; }
+.is-text-lg .pm-lan__scan .pm-lan__how-code { font-size: calc(26px * var(--pm-head)); letter-spacing: 0.06em; }
+.pm-lan__scan .pm-lan__how-code { font-size: calc(34px * var(--pm-head)); }
+/* the pause menu scrolls when Send a report opens at its foot (diag/SendReport.tsx) */
+.pm-pause { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.pm-pause .pm-report.mf-report-btn { align-self: flex-start; }
