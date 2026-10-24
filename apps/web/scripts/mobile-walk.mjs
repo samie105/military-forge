@@ -61,6 +61,10 @@ async function phone(profile) {
   await page.setViewport(PROFILES[profile]);
   await page.emulateCPUThrottling(4);
   page.setDefaultNavigationTimeout(120_000); // a loaded machine and 4× CPU: the dev server's first load is slow
+  // a phone has no controller: one paired with the machine running the walk would reach headless Chrome
+  await page.evaluateOnNewDocument(() => {
+    if (typeof navigator.getGamepads === 'function') navigator.getGamepads = () => [];
+  });
   page.on('pageerror', (e) => check(`${profile}: no page error`, false, e.message));
   await page.goto(`${base}/?app`, { waitUntil: 'domcontentloaded' });
   await page.evaluate(() => localStorage.clear());

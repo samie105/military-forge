@@ -89,6 +89,12 @@ export class PadManager {
   /** a held reload button already took the gun underfoot (hold to take) */
   private readonly tookOnHold = new Array<boolean>(BUTTON_COUNT).fill(false);
   private axes = [0, 0, 0, 0];
+  /**
+   * Where the playing pad's axes rest. The standard mapping rests at 0; a pad without it can rest
+   * elsewhere (a trigger read as an axis sits at −1), and a pad that's only plugged in must never turn
+   * the prompts to its glyphs. Taken at the pad's first reading.
+   */
+  private rest: number[] | null = null;
   /** the aim stick's raw push (its angle holds under AIM_MIN_PUSH) */
   private aimRaw = 0;
   private readonly moveState = createMoveState();
@@ -256,12 +262,14 @@ export class PadManager {
         this.dualSense = isDualSense(p.id);
         this.held.fill(false);
         this.prevHeld.fill(false);
+        this.rest = null;
       }
     }
     let pad = pads.find((p) => p.index === this.index) ?? null;
     if (!pad && pads.length) {
       pad = pads[0]!;
       this.index = pad.index;
+      this.rest = null;
       this.family = padFamily(pad.id);
       this.dualSense = isDualSense(pad.id);
     }
@@ -285,7 +293,8 @@ export class PadManager {
       if (this.held[i] && !this.prevHeld[i]) this.downAt[i] = now;
       active ||= this.held[i]!;
     }
-    active ||= this.axes.some((a) => Math.abs(a) > 0.5);
+    const rest = this.rest!;
+    active ||= this.axes.some((a, i) => Math.abs(a - rest[i]!) > 0.5);
     if (active) notePad(this.family, this.dualSense);
 
     // sticks (the left moves and the right aims, or swapped)
@@ -330,6 +339,7 @@ export class PadManager {
   private read(pad: Gamepad): void {
     for (let i = 0; i < BUTTON_COUNT; i++) this.raw[i] = pad.buttons[i]?.value ?? 0;
     this.axes = [pad.axes[AXIS.LX] ?? 0, pad.axes[AXIS.LY] ?? 0, pad.axes[AXIS.RX] ?? 0, pad.axes[AXIS.RY] ?? 0];
+    this.rest ??= pad.mapping === 'standard' ? [0, 0, 0, 0] : [...this.axes];
   }
 
   private pressed(i: number): boolean {

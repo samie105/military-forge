@@ -3,7 +3,7 @@ import { Btn, createInput } from '@military-forge/sim';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ThrowLatch } from '../../src/input';
 import { PadManager } from '../../src/gamepad/manager';
-import { currentDevice } from '../../src/gamepad/device';
+import { currentDevice, noteKeys } from '../../src/gamepad/device';
 import { B } from '../../src/gamepad/standard';
 import { DEFAULT_PAD_SETTINGS, applyPadPreset } from '../../src/gamepad/settings';
 
@@ -283,6 +283,28 @@ describe('menus and play', () => {
     expect(sample().buttons).toBe(0);
     expect(m.state.connected).toBe(false);
     expect(currentDevice().kind).toBe('keys');
+  });
+
+  it('a pad only plugged in keeps the keyboard prompts, even one whose axes rest off-centre', () => {
+    noteKeys();
+    // no standard mapping: the triggers read as axes 2 and 3, resting at −1
+    pad = { ...pad, id: 'Generic USB Joystick', mapping: '', axes: [0, 0, -1, -1] };
+    const { sample } = setup();
+    for (let i = 0; i < 10; i++) sample();
+    expect(currentDevice().kind).toBe('keys');
+    pad.axes = [0.9, 0, -1, -1];
+    sample();
+    expect(currentDevice().kind).toBe('pad');
+  });
+
+  it('a standard pad rests at the centre: a stick past half-way is the pad', () => {
+    noteKeys();
+    const { sample } = setup();
+    sample();
+    expect(currentDevice().kind).toBe('keys');
+    pad.axes = [0, 0, 0, -0.7];
+    sample();
+    expect(currentDevice().kind).toBe('pad');
   });
 
   it('a rebind listens for the next button and keeps it from the menus', () => {

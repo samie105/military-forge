@@ -8,8 +8,9 @@
  *   First flight.
  * - Each of the five goals ticks by doing it with the keyboard and mouse (the player's default keys),
  *   then the finish card offers Live fire.
- * - Nothing moves on by itself: 21 s idle on a goal leaves it there, with help and "Skip this" offered.
- * - A reload part-way resumes at the next goal; Skip training ends it for good.
+ * - Nothing moves on by itself: 21 s idle on a goal leaves it there, the time-out marked, Skip offered.
+ * - A reload doesn't force it back; Home's Finish First flight resumes at the next goal; Skip training
+ *   ends it for good.
  * - A phone held sideways: the ring sits on the move stick
  *   (touchControlRect) within 1 px.
  * Exits 1 on any failure.
@@ -35,6 +36,19 @@ const shot = async (page, name) => out && page.screenshot({ path: join(out, `${n
 
 const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new', userDataDir: mkdtempSync(join(tmpdir(), 'flight-')), args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required'] });
 
+/**
+ * A fresh page with no controllers in sight. The Gamepad API is system-wide: a controller paired with the
+ * machine running the checks (this Mac has a DUALSHOCK 4) reaches headless Chrome too, and a press on it
+ * turns the prompts to pad glyphs mid-check. The checks drive keys, the mouse and touch only.
+ */
+async function newPage() {
+  const page = await browser.newPage();
+  await page.evaluateOnNewDocument(() => {
+    if (typeof navigator.getGamepads === 'function') navigator.getGamepads = () => [];
+  });
+  return page;
+}
+
 /** The callout's title now ('' when none shows). */
 const title = (page) => page.evaluate(() => (document.querySelector('.mf-spot:not([hidden]) .mf-spot__title')?.textContent ?? '').trim());
 /** Waits until the callout's title is `want` (or one of them). */
@@ -52,7 +66,7 @@ async function until(page, want, ms = 30_000) {
 /** The centre of the last ring (the world marker's) in page px. */
 const lastRing = (page) =>
   page.evaluate(() => {
-    const rings = [...document.querySelectorAll('.mf-spot__ring')];
+    const rings = [...document.querySelectorAll('.mf-spot:not([hidden]) .mf-spot__ring')];
     const r = rings[rings.length - 1]?.getBoundingClientRect();
     return r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null;
   });
@@ -66,17 +80,29 @@ async function pastName(page) {
   await page.keyboard.press('Enter');
 }
 
+/** Navigates, again when the dev server reloads the page under it (its dependency scan, a worker update). */
+async function go(page, url, waitUntil) {
+  for (let i = 0; ; i++) {
+    try {
+      return await page.goto(url, { waitUntil, timeout: 120_000 });
+    } catch (e) {
+      if (i >= 2 || !/ERR_ABORTED|detached|Execution context was destroyed/.test(String(e))) throw e;
+      await sleep(1000);
+    }
+  }
+}
+
 /** A fresh page in the app (the creator already seen), past the name screen. */
 async function appPage(viewport, query = '') {
-  const page = await browser.newPage();
+  const page = await newPage();
   await page.setViewport(viewport);
   page.on('pageerror', (e) => check('no page error', false, e.message));
-  await page.goto(`${base}/?app`, { waitUntil: 'domcontentloaded' });
+  await go(page, `${base}/?app`, 'domcontentloaded');
   await page.evaluate(() => {
     localStorage.clear();
     localStorage.setItem('mf-creator-seen', '1');
   });
-  await page.goto(`${base}/?app${query}`, { waitUntil: 'load' });
+  await go(page, `${base}/?app${query}`, 'load');
   await pastName(page);
   return page;
 }
@@ -87,7 +113,7 @@ try {
     const page = await appPage({ width: 1280, height: 720 }, '&flight');
     check('First flight starts (?flight): Run', (await until(page, 'Run.', 90_000)) === 'Run.');
     await sleep(600);
-    const caps = await page.evaluate(() => [...document.querySelectorAll('.mf-spot__keys kbd')].map((k) => k.textContent));
+    const caps = await page.evaluate(() => [...document.querySelectorAll('.mf-spot:not([hidden]) .mf-spot__keys kbd')].map((k) => k.textContent));
     check('Run shows the player\'s own keys', caps.join(' ') === 'A D', caps.join(' '));
     await shot(page, 'd1-run');
     await page.keyboard.down('KeyA');
@@ -95,7 +121,7 @@ try {
     await page.keyboard.up('KeyA');
     check('Run ticks by running 3 m', t1 === 'Fly.', t1);
     await sleep(400);
-    const fly = await page.evaluate(() => ({ rings: document.querySelectorAll('.mf-spot__ring').length, fuel: !!document.querySelector('[data-tour="fuel"]') }));
+    const fly = await page.evaluate(() => ({ rings: document.querySelectorAll('.mf-spot:not([hidden]) .mf-spot__ring').length, fuel: !!document.querySelector('[data-tour="fuel"]') }));
     check('Fly rings the fuel plate and the marker', fly.rings === 2 && fly.fuel, JSON.stringify(fly));
     await shot(page, 'd2-fly');
     await page.keyboard.down('KeyW');
@@ -135,9 +161,9 @@ try {
     check('Throw ticks on a throw; the finish card follows', t5 === 'Flight complete', t5);
     await sleep(400);
     const done = await page.evaluate(() => ({
-      primary: document.querySelector('.mf-spot__primary')?.textContent,
-      later: document.querySelector('.mf-spot__skip')?.textContent,
-      stamp: document.querySelector('.mf-spot__stamp')?.textContent,
+      primary: document.querySelector('.mf-spot:not([hidden]) .mf-spot__primary')?.textContent,
+      later: document.querySelector('.mf-spot:not([hidden]) .mf-spot__skip')?.textContent,
+      stamp: document.querySelector('.mf-spot:not([hidden]) .mf-spot__stamp')?.textContent,
       log: JSON.parse(localStorage.getItem('mf.log.v1') ?? '[]').filter((e) => e.t === 'tour.end').map((e) => e.result),
     }));
     check('the finish card: Live fire and Later, stamped Confirmed', done.primary === 'Live fire' && done.later === 'Later' && done.stamp === 'Confirmed', JSON.stringify(done));
@@ -155,13 +181,13 @@ try {
     await page.keyboard.up('KeyA');
     await sleep(21_000);
     const idle = await page.evaluate(() => {
-      const help = document.querySelector('.mf-spot__help');
-      return { title: document.querySelector('.mf-spot__title')?.textContent, timeout: document.querySelector('.mf-spot')?.classList.contains('is-timeout'), skip: document.querySelector('.mf-spot__skip')?.textContent, help: help ? getComputedStyle(help).display : 'missing' };
+      const help = document.querySelector('.mf-spot:not([hidden]) .mf-spot__help');
+      return { title: document.querySelector('.mf-spot:not([hidden]) .mf-spot__title')?.textContent, timeout: document.querySelector('.mf-spot:not([hidden])')?.classList.contains('is-timeout'), skip: document.querySelector('.mf-spot:not([hidden]) .mf-spot__skip')?.textContent, input: document.documentElement.dataset.input, help: help ? getComputedStyle(help).display : 'missing' };
     });
     // the strip (mobile audit P1-1) keeps one line: the time-out marks it, Skip stays its one link
-    check('21 s idle: still on Fly, the time-out marked, Skip offered', idle.title === 'Fly.' && idle.timeout && idle.skip === 'Skip', JSON.stringify(idle));
+    check('21 s idle: still on Fly, the time-out marked, Skip offered, the keys still shown', idle.title === 'Fly.' && idle.timeout && idle.skip === 'Skip' && idle.input === 'keys', JSON.stringify(idle));
     await shot(page, 'd7-help');
-    await page.goto(`${base}/?app`, { waitUntil: 'load' });
+    await go(page, `${base}/?app`, 'load');
     await pastName(page);
     // a reload doesn't force First flight back (tours reopen on request: the owner, 24 Oct); Home offers
     // Finish First flight, which resumes at the next goal
@@ -172,11 +198,11 @@ try {
     const resumed = await until(page, 'Fly.', 30_000);
     check('Finish First flight on Home resumes at the next goal', resumed === 'Fly.', resumed);
     await sleep(500);
-    await page.evaluate(() => [...document.querySelectorAll('.mf-spot__skip')].find((b) => b.textContent === 'Skip training')?.click());
+    await page.evaluate(() => [...document.querySelectorAll('.mf-spot:not([hidden]) .mf-spot__skip')].find((b) => b.textContent === 'Skip training')?.click());
     await sleep(1200);
     const after = await page.evaluate(() => ({ home: !!document.querySelector('[data-screen="home"]'), tour: JSON.parse(localStorage.getItem('mf.tour.v1') ?? '{}')['first-flight'] }));
     check('Skip training: Home, the tour closed for good', after.home && after.tour?.skippedAll === true && after.tour?.open === false, JSON.stringify(after));
-    await page.goto(`${base}/?app`, { waitUntil: 'load' });
+    await go(page, `${base}/?app`, 'load');
     await sleep(4000);
     check('…and a reload stays on Home', (await title(page)) === '', await title(page));
     await page.close();
@@ -184,12 +210,12 @@ try {
 
   // ---- the Briefing after "Create your soldier" (first time on this device)
   {
-    const page = await browser.newPage();
+    const page = await newPage();
     await page.setViewport({ width: 1280, height: 720 });
     page.on('pageerror', (e) => check('no page error', false, e.message));
-    await page.goto(`${base}/?app`, { waitUntil: 'domcontentloaded' });
+    await go(page, `${base}/?app`, 'domcontentloaded');
     await page.evaluate(() => localStorage.clear());
-    await page.goto(`${base}/?app`, { waitUntil: 'load' });
+    await go(page, `${base}/?app`, 'load');
     await page.waitForSelector('input[aria-label="Your name"]', { timeout: 90_000 });
     await page.type('input[aria-label="Your name"]', 'Recruit7');
     await page.keyboard.press('Enter');
@@ -221,10 +247,10 @@ try {
     check('phone: Run first', t === 'Run.', t);
     await sleep(900);
     const geo = await page.evaluate(() => {
-      document.querySelectorAll('.mf-spot__ring').forEach((r) => r.getAnimations().forEach((a) => a.finish()));
+      document.querySelectorAll('.mf-spot:not([hidden]) .mf-spot__ring').forEach((r) => r.getAnimations().forEach((a) => a.finish()));
       const dial = window.__touch?.touchControlRect('move');
-      const ring = document.querySelector('.mf-spot__ring')?.getBoundingClientRect();
-      const body = document.querySelector('.mf-spot__body')?.textContent;
+      const ring = document.querySelector('.mf-spot:not([hidden]) .mf-spot__ring')?.getBoundingClientRect();
+      const body = document.querySelector('.mf-spot:not([hidden]) .mf-spot__body')?.textContent;
       return { dial, ring: ring && { left: ring.left, top: ring.top, w: ring.width, h: ring.height }, body, rotated: document.documentElement.classList.contains('mf-rotated') };
     });
     const off = geo.dial && geo.ring ? Math.max(Math.abs(geo.ring.left - (geo.dial.left - 6)), Math.abs(geo.ring.top - (geo.dial.top - 6))) : Infinity;
