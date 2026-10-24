@@ -18,6 +18,7 @@ export class RedisKv implements Kv {
     // Fail fast instead of queueing commands forever while Redis is down: a rate-limit check
     // must not hang a request.
     this.redis = new Redis(url, { maxRetriesPerRequest: 1, connectTimeout: 5_000, lazyConnect: true, ...(opts.keyPrefix ? { keyPrefix: opts.keyPrefix } : {}) });
+    quietRedisErrors(this.redis, 'kv');
   }
 
   /** Connects and checks the server answers; throws if it doesn't. */
@@ -96,4 +97,23 @@ export class RedisKv implements Kv {
   async close(): Promise<void> {
     await this.redis.quit().catch(() => this.redis.disconnect());
   }
+}
+
+/**
+ * Valkey going away and coming back (a restart: the box's deploy restarted it, 24 Oct 2026) is
+ * routine: ioredis reconnects by itself. Without a listener every failed try printed an "Unhandled
+ * error event" stack. One line when it goes, one when it's back.
+ */
+export function quietRedisErrors(redis: Redis, name: string, log: (msg: string) => void = console.warn): void {
+  let down = false;
+  redis.on('error', (e: Error) => {
+    if (down) return;
+    down = true;
+    log(`[valkey] ${name}: ${e.message}; reconnecting`);
+  });
+  redis.on('ready', () => {
+    if (!down) return;
+    down = false;
+    log(`[valkey] ${name}: back`);
+  });
 }

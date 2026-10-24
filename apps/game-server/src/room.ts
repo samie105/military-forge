@@ -148,7 +148,7 @@ export interface RoomOptions {
   lagComp?: boolean | { maxRewindMs?: number; latencyCapMs?: number };
   /** send each client only what its camera can show (default on, docs/05 §9) */
   aoi?: boolean;
-  /** how long a dropped player waits for its session to reconnect (rooms 20 s, BR 60 s; 0 = never) */
+  /** how long a dropped player waits for its session to reconnect (default RECONNECT_GRACE_MS, 60 s; 0 = never) */
   reconnectGraceMs?: number;
   /** run a match (lobby, countdown, scoring, results, rematch) with these rules; absent = free play */
   match?: Partial<MatchRules>;
@@ -235,6 +235,12 @@ const CMD_BURST = 20;
  */
 const LOW_BW_WARMUP_TICKS = 60;
 /**
+ * How long a dropped player keeps its place (RoomOptions.reconnectGraceMs): 60 s, the page's own
+ * reconnect window. It was 20 s, shorter than a phone's app switch (24 Oct 2026: a player lost its
+ * place twice in one match).
+ */
+export const RECONNECT_GRACE_MS = 60_000;
+/**
  * The late-input catch-up (owner, 23 Oct 2026: on 4G the player "keeps returning"). When a client's
  * inputs stop coming (its uplink stalled: nothing newer has come either), its player is held still
  * for up to HOLD_TICKS instead of running on a guess; when they come, it catches up through them,
@@ -249,7 +255,7 @@ export const CATCH_UP_PER_TICK = 2;
 /**
  * A host gone this long (disconnected, or its connection silent: a stall the server can't see as a
  * close) hands the room to the longest-present player still here (docs/07 §5.3), so nobody waits
- * out the 20 s reconnect grace to start the match. 5 s: longer than a reconnect after a blip.
+ * out the 60 s reconnect grace to start the match. 5 s: longer than a reconnect after a blip.
  */
 export const HOST_AWAY_TICKS = 5 * 60;
 const BACKPRESSURE_LIMIT = 16 * 1024;
@@ -260,6 +266,8 @@ export class Client {
   playerId = -1;
   /** the API account this connection's join ticket named (rooms.ts); null = a guest without one, or a dev room */
   accountId: string | null = null;
+  /** why this page isn't on WebTransport, as it said (the connection log; '' unknown or on it) */
+  noWebTransport = '';
   /** the player's saved gun pair from the join ticket (weapon indices, checked against content); null = the default pair */
   guns: [number, number] | null = null;
   /** the protocol version its HELLO said (v17 clients play on, without voice: MIN_PROTOCOL_VERSION) */
@@ -551,7 +559,7 @@ export class Room {
     this.hostTuning = options.hostTuning ?? false;
     this.aoi = options.aoi ?? true;
     this.code = options.code ?? '';
-    this.graceTicks = Math.round(((options.reconnectGraceMs ?? 20_000) / 1000) * 60);
+    this.graceTicks = Math.round(((options.reconnectGraceMs ?? RECONNECT_GRACE_MS) / 1000) * 60);
     this.netSim = options.netSim;
     const lc = options.lagComp ?? true;
     this.lagComp = lc === false ? null : new LagCompensator({ snapshotEvery: this.snapshotEvery, log: this.dev, ...(lc === true ? {} : lc) });
@@ -970,7 +978,7 @@ export class Room {
 
   private attach(client: Client, s: Session, resumed: boolean): void {
     const away = resumed && s.droppedTick >= 0 ? ` after ${((this.game.tick - s.droppedTick) / 60).toFixed(1)} s away` : '';
-    this.log(`[room ${this.code}] ${this.game.players[s.playerId]?.name ?? '?'} ${resumed ? 'resumed' : 'joined'} over ${client.conn.kind ?? '?'}${away}`);
+    this.log(`[room ${this.code}] ${this.game.players[s.playerId]?.name ?? '?'} ${resumed ? 'resumed' : 'joined'} over ${client.conn.kind ?? '?'}${client.noWebTransport ? ` (not WebTransport: ${client.noWebTransport})` : ''}${away}`);
     s.connectedTick = this.game.tick;
     s.droppedTick = -1;
     s.client = client;

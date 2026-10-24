@@ -28,12 +28,14 @@ class FakeWebTransport {
 
 class FakeWebSocket {
   static readonly OPEN = 1;
+  static lastUrl = '';
   readyState = 1;
   binaryType = '';
   onopen: (() => void) | null = null;
   onmessage: unknown = null;
   onclose: unknown = null;
-  constructor() {
+  constructor(url: string) {
+    FakeWebSocket.lastUrl = url;
     queueMicrotask(() => this.onopen?.());
   }
   send() {}
@@ -42,6 +44,7 @@ class FakeWebSocket {
 
 const handlers = { onMessage: () => {}, onClose: () => {} };
 let serverRoutesRooms = false;
+let healthAsked = 0;
 
 async function connect(reconnect = false, wsUrl = 'ws://gs.example.com:9001') {
   const pending = connectGame(wsUrl, 'auto', handlers, reconnect);
@@ -56,8 +59,9 @@ beforeEach(() => {
   vi.stubGlobal('WebTransport', FakeWebTransport);
   vi.stubGlobal('WebSocket', FakeWebSocket);
   vi.stubGlobal('localStorage', { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v), removeItem: (k: string) => store.delete(k) });
-  vi.stubGlobal('fetch', async () => ({ json: async () => ({ webtransport: { url: 'https://gs.example.com:4433/wt', certHashes: [], rooms: serverRoutesRooms } }) }));
+  vi.stubGlobal('fetch', async () => (healthAsked++, { json: async () => ({ webtransport: { url: 'https://gs.example.com:4433/wt', certHashes: [], rooms: serverRoutesRooms } }) }));
   FakeWebTransport.created = 0;
+  healthAsked = 0;
 });
 
 afterEach(() => {
@@ -118,6 +122,31 @@ describe('transport selection', () => {
     expect(FakeWebTransport.lastUrl).toBe('https://gs.example.com:4433/wt?room=KQMZPT');
     await connect(); // the default room: the plain URL
     expect(FakeWebTransport.lastUrl).toBe('https://gs.example.com:4433/wt');
+  });
+});
+
+describe('browsers without WebTransport (iPhones)', () => {
+  it('go straight to the WebSocket, without asking /health, and say why in its URL', async () => {
+    vi.stubGlobal('WebTransport', undefined);
+    delete (globalThis as { WebTransport?: unknown }).WebTransport;
+    const { transport, fallbackReason } = await connect(true);
+    expect(transport.kind).toBe('ws');
+    expect(fallbackReason).toBe('browser has no WebTransport');
+    expect(healthAsked).toBe(0);
+    expect(new URL(FakeWebSocket.lastUrl).searchParams.get('nowt')).toBe('browser has no WebTransport');
+  });
+});
+
+describe('reconnects', () => {
+  it("reuse what /health said: the page's pooled HTTP connection may be as dead as its socket", async () => {
+    const url = 'ws://reuse.example.com:9001';
+    await connect(false, url);
+    const asked = healthAsked;
+    FakeWebTransport.mode = 'refuse';
+    expect((await connect(true, url)).transport.kind).toBe('ws');
+    expect(healthAsked).toBe(asked);
+    await connect(false, url); // a fresh join asks again
+    expect(healthAsked).toBe(asked + 1);
   });
 });
 

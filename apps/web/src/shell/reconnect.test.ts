@@ -9,15 +9,15 @@ import { Alert, ReconnectBanner, TryPips } from './screens/Connection';
 import type { ConnectionView } from './store';
 
 describe('the reconnect counter', () => {
-  it("follows onlineMode's backoff: 250 ms doubling to 2 s", () => {
-    expect([0, 1, 2, 3, 4, 9].map(reconnectDelay)).toEqual([250, 500, 1000, 2000, 2000, 2000]);
+  it("follows onlineMode's backoff: at once, then 250 ms doubling to 2 s", () => {
+    expect([0, 1, 2, 3, 4, 9].map(reconnectDelay)).toEqual([0, 250, 500, 1000, 2000, 2000]);
   });
 
   it('counts the tries a window holds', () => {
-    // 0.25 + 0.5 + 1 + 2 = 3.75 s for the first four, then one every 2 s
-    expect(reconnectTries(3750)).toBe(4);
-    expect(reconnectTries(5750)).toBe(5);
-    expect(reconnectTries(RECONNECT_WINDOW_MS)).toBe(32);
+    // 0 + 0.25 + 0.5 + 1 + 2 = 3.75 s for the first five, then one every 2 s
+    expect(reconnectTries(3750)).toBe(5);
+    expect(reconnectTries(5750)).toBe(6);
+    expect(reconnectTries(RECONNECT_WINDOW_MS)).toBe(33);
     expect(reconnectTries(0)).toBe(1);
   });
 
@@ -32,17 +32,17 @@ describe('the reconnect counter', () => {
     const since = performance.now();
     const c: ConnectionView = { state: 'reconnecting', detail: 'closed', code: 1006, since, until: since + RECONNECT_WINDOW_MS, attempt: 3, lastPingMs: -1, lossPct: 0 };
     const html = renderToStaticMarkup(createElement(ReconnectBanner, { connection: c }));
-    expect(html).toContain(' of 32');
+    expect(html).toContain(' of 33');
     expect(html.match(/<i class="is-done"><\/i>/g)).toHaveLength(2);
     expect(html).toContain('class="is-now"');
   });
 
   it('the lost card counts the failed tries, shows the code and says Rejoin', () => {
-    const alert = alertFromConnection({ code: 1006, detail: '', attempt: 32, lastPingMs: 412, lossPct: 18.2 }, 'KMTXRA');
-    expect(alert.tries).toEqual({ made: 32, of: 32 });
+    const alert = alertFromConnection({ code: 1006, detail: '', attempt: 33, lastPingMs: 412, lossPct: 18.2 }, 'KMTXRA');
+    expect(alert.tries).toEqual({ made: 33, of: 33 });
     const ctl = {} as ShellController;
     const html = renderToStaticMarkup(createElement(ControllerContext.Provider, { value: ctl }, createElement(Alert, { alert, onRejoin: () => {} })));
-    expect(html).toMatch(/<span class="num">32 of 32<\/span> tries failed/);
+    expect(html).toMatch(/<span class="num">33 of 33<\/span> tries failed/);
     expect(html).toContain('Code CONNECTION_LOST');
     expect(html).toContain('Rejoin');
     // never heard back at all: no pips

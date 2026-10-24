@@ -1,7 +1,9 @@
+import { EventEmitter } from 'node:events';
+import type { Redis } from 'ioredis';
 import { afterAll, describe, expect, it } from 'vitest';
 import { newId } from '../src/ids';
 import { MemoryKv, type Kv } from '../src/kv/kv';
-import { RedisKv } from '../src/kv/redis';
+import { RedisKv, quietRedisErrors } from '../src/kv/redis';
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -101,5 +103,22 @@ describe('MemoryKv', () => {
     kv.sweep();
     expect(kv.size).toBe(1);
     await kv.close();
+  });
+});
+
+describe('quietRedisErrors', () => {
+  it('logs one line when Valkey goes away and one when it is back, however many errors in between', () => {
+    const conn = new EventEmitter();
+    const lines: string[] = [];
+    quietRedisErrors(conn as unknown as Redis, 'kv', (l) => lines.push(l));
+    for (let i = 0; i < 5; i++) conn.emit('error', new Error('connect ECONNREFUSED 127.0.0.1:6379'));
+    conn.emit('ready');
+    conn.emit('ready');
+    conn.emit('error', new Error('read ECONNRESET'));
+    expect(lines).toEqual([
+      '[valkey] kv: connect ECONNREFUSED 127.0.0.1:6379; reconnecting',
+      '[valkey] kv: back',
+      '[valkey] kv: read ECONNRESET; reconnecting',
+    ]);
   });
 });

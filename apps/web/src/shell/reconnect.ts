@@ -1,12 +1,12 @@
 /**
- * The reconnect's schedule (onlineMode.ts): a dropped connection tries again after 250 ms, doubling
- * to 2 s, until the room's reconnect window runs out. The banner and the lost card count the tries
+ * The reconnect's schedule (onlineMode.ts): a dropped connection tries again at once, then after
+ * 250 ms, doubling to 2 s, until the room's reconnect window runs out. The banner and the lost card count the tries
  * against it ("Try 3 of 32", docs/design/pen-diff.md N3).
  */
 
 /** The wait before try `n + 1` (n tries made). */
 export function reconnectDelay(n: number): number {
-  return Math.min(2000, 250 * 2 ** n);
+  return n === 0 ? 0 : Math.min(2000, 250 * 2 ** (n - 1));
 }
 
 /** The tries a window of `windowMs` holds at that schedule, when each fails at once: the most there can be. */

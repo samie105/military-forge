@@ -66,7 +66,13 @@ export const QUIET_OUTAGE_MS = 3000;
 /** a server that said it's updating is back in a few seconds (systemd restarts it at once): the first rejoin waits this long */
 const SERVER_UPDATE_WAIT_MS = 3000;
 /** how often the watchdog looks (a timer: it runs behind the lobby and in a hidden tab too) */
-const WATCHDOG_MS = 500;
+const WATCHDOG_MS = 100;
+/**
+ * In play, a connection quiet this long gets a spare opened beside it, and one quiet HEDGE_SWITCH_MS
+ * is swapped for the spare (snapshots come 15–30 a second: 0.8 s of nothing is already odd).
+ */
+const HEDGE_OPEN_MS = 800;
+const HEDGE_SWITCH_MS = 1300;
 /** close codes that mean "don't come back" */
 const FATAL_CLOSE = new Set<number>([
   CloseCode.VersionMismatch,
@@ -183,6 +189,8 @@ export class OnlineMode {
   private watchdogTimer = 0;
   /** when the transport last delivered anything (the silence watchdog) */
   private lastMessageAt = 0;
+  /** when the watchdog last looked */
+  private watchdogAt = 0;
   /**
    * WebTransport failed us in view (went silent, or couldn't connect and fell back): WebSocket from
    * then on, for the rest of this room. It used to be for the next attempt only, so a phone whose
@@ -476,10 +484,11 @@ export class OnlineMode {
     }
   }
 
-  private open(): void {
-    const attempt = {};
-    this.currentAttempt = attempt;
-    const prefer = this.stickyWebSocket && this.preferTransport === 'auto' ? 'ws' : this.preferTransport;
+  /**
+   * Starts a connection for `attempt` (its messages count only once it's the current one). The
+   * transport, or why it failed.
+   */
+  private connectFor(attempt: object, prefer: 'auto' | 'wt' | 'ws', reconnect: boolean): Promise<{ transport: GameTransport; fallbackReason: string | null }> {
     const handlers: TransportHandlers = {
       onMessage: (bytes) => {
         if (this.currentAttempt !== attempt) return;
@@ -488,14 +497,22 @@ export class OnlineMode {
         this.down.send(bytes);
       },
       onClose: (code, reason) => {
+        if (this.spare?.attempt === attempt) this.spare = null;
         if (this.currentAttempt === attempt) this.dropped(code, reason);
       },
     };
     const connect = this.options.connect;
-    (connect
-      ? connect(handlers, this.droppedAt !== 0).then((transport) => ({ transport, fallbackReason: null as string | null }))
-      : connectGame(this.url, prefer, handlers, this.droppedAt !== 0)
-    ).then(
+    return connect ? connect(handlers, reconnect).then((transport) => ({ transport, fallbackReason: null as string | null })) : connectGame(this.url, prefer, handlers, reconnect);
+  }
+
+  private open(): void {
+    const prefer = this.stickyWebSocket && this.preferTransport === 'auto' ? 'ws' : this.preferTransport;
+    // a spare connection opened while this one went quiet (checkSilence): take it, ready or not
+    const spare = this.spare;
+    this.spare = null;
+    const attempt = spare?.attempt ?? {};
+    this.currentAttempt = attempt;
+    (spare?.ready ?? this.connectFor(attempt, prefer, this.droppedAt !== 0)).then(
       ({ transport, fallbackReason }) => {
         if (this.currentAttempt !== attempt || this.disposed) return transport.close();
         // WebTransport was tried and failed (fell back): don't try it again on every reconnect
@@ -514,6 +531,36 @@ export class OnlineMode {
         if (this.currentAttempt === attempt) this.dropped(typeof e.code === 'number' ? e.code : 1006, e.message);
       },
     );
+  }
+
+  /**
+   * A second connection, opened while the current one has gone quiet for HEDGE_OPEN_MS, ready to
+   * take over at HEDGE_SWITCH_MS (the resume then costs one round trip, not a whole connection).
+   */
+  private spare: { attempt: object; ready: Promise<{ transport: GameTransport; fallbackReason: string | null }>; transport: GameTransport | null } | null = null;
+
+  private openSpare(): void {
+    const prefer = this.stickyWebSocket && this.preferTransport === 'auto' ? 'ws' : this.preferTransport;
+    const attempt = {};
+    // a reconnect: what /health said before stands (the page's pooled HTTP connection may be dead too)
+    const ready = this.connectFor(attempt, prefer, true);
+    const spare = { attempt, ready, transport: null as GameTransport | null };
+    this.spare = spare;
+    ready.then(
+      (r) => {
+        if (this.spare === spare) spare.transport = r.transport;
+        else if (this.currentAttempt !== attempt) r.transport.close();
+      },
+      () => {
+        if (this.spare === spare) this.spare = null;
+      },
+    );
+  }
+
+  private closeSpare(): void {
+    const spare = this.spare;
+    this.spare = null;
+    spare?.transport?.close();
   }
 
   private currentAttempt: object | null = null;
@@ -637,6 +684,7 @@ export class OnlineMode {
         this.status = msg.resumed ? `connected (resumed after ${((performance.now() - this.droppedAt) / 1000).toFixed(1)} s)` : 'connected';
         this.conn = { ...FRESH, state: 'connected', detail: '', code: 0 };
         this.everConnected = true;
+        this.closeSpare(); // back without it
         this.droppedAt = 0;
         this.reconnectAttempt = 0;
         // a spectator has no session (''): nothing to resume on a reload
@@ -758,6 +806,7 @@ export class OnlineMode {
     this.net.clearOverrides();
     window.clearTimeout(this.reconnectTimer);
     window.clearInterval(this.watchdogTimer);
+    this.closeSpare();
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', this.onVisibility);
       window.removeEventListener('pageshow', this.onPageShow);
@@ -781,6 +830,31 @@ export class OnlineMode {
     // a hidden page's timers and messages are held back (or frozen): its silence means nothing; a
     // connection that really died says so with its close
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    // a watchdog that ran late had a busy page (loading, a long frame): its messages may be queued
+    // behind this check, so this look doesn't hedge
+    const late = now - this.watchdogAt > 3 * WATCHDOG_MS;
+    this.watchdogAt = now;
+    const quiet = now - this.lastMessageAt;
+    // in play, a quiet connection gets a spare at HEDGE_OPEN_MS and is swapped for it at
+    // HEDGE_SWITCH_MS (owner's phones, 24 Oct: a carrier dropped their sockets every few minutes
+    // without telling the phone; a resume took 5.5 s, 4 of them waiting out the silence)
+    if (this.net.isConnected && t.kind !== 'lan' && !late) {
+      if (quiet < HEDGE_OPEN_MS) {
+        if (this.spare) this.closeSpare();
+      } else if (!this.spare) this.openSpare();
+      if (quiet >= HEDGE_SWITCH_MS) {
+        this.currentAttempt = null; // its close is ours
+        this.transport = null;
+        t.close(4000, 'quiet: switching to a fresh connection');
+        if (!this.droppedAt) this.droppedAt = this.lastMessageAt;
+        this.net.onClose();
+        this.reconnectAttempt = 1;
+        this.status = 'resuming on a fresh connection…';
+        this.conn = { ...FRESH, state: 'reconnecting', detail: 'the connection went quiet', code: 1006, since: this.droppedAt, until: this.droppedAt + RECONNECT_WINDOW_MS, attempt: 1 };
+        this.open();
+        return;
+      }
+    }
     const limit = !this.net.isConnected ? JOIN_SILENCE_MS : t.kind === 'ws' ? WS_SILENCE_MS : WT_SILENCE_MS;
     if (now - this.lastMessageAt < limit) return;
     this.currentAttempt = null; // its close is ours, not a drop to handle twice

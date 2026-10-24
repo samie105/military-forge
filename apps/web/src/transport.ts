@@ -290,12 +290,36 @@ export function healthUrl(wsUrl: string): string {
   return u.toString();
 }
 
-/** Asks the game server whether a WebTransport gateway is attached. */
-export async function discoverWebTransport(wsUrl: string): Promise<WebTransportEndpoint | null> {
+/**
+ * The WebSocket URL with why WebTransport wasn't used (`?nowt=`), for the server's connection log:
+ * phones that play over WebSocket, and why (owner's phones, 24 Oct 2026, were all on WebSocket).
+ */
+function withNote(wsUrl: string, why: string): string {
+  try {
+    const u = new URL(wsUrl);
+    u.searchParams.set('nowt', why.replace(/[^\w .,:()-]/g, '').slice(0, 60));
+    return u.toString();
+  } catch {
+    return wsUrl;
+  }
+}
+
+/** what each server's /health said about WebTransport, by its /health URL (a reconnect reuses it) */
+const discovered = new Map<string, WebTransportEndpoint | null>();
+
+/**
+ * Asks the game server whether a WebTransport gateway is attached. `reconnect`: the answer it gave
+ * before, without asking again: after a carrier cut the page's pooled HTTP connection is often dead
+ * too, and the fetch waited out its 4 s timeout before the WebSocket even started (24 Oct 2026).
+ */
+export async function discoverWebTransport(wsUrl: string, reconnect = false): Promise<WebTransportEndpoint | null> {
+  const key = healthUrl(wsUrl);
+  if (reconnect && discovered.has(key)) return discovered.get(key) ?? null;
   try {
     // 4 s: a fresh TLS connection is ~3 round trips, ~1.5 s at the 500 ms phones measured (19 Oct)
-    const res = await fetch(healthUrl(wsUrl), { signal: AbortSignal.timeout(4000) });
+    const res = await fetch(key, { signal: AbortSignal.timeout(4000) });
     const body = (await res.json()) as { webtransport?: WebTransportEndpoint | null };
+    discovered.set(key, body.webtransport ?? null);
     return body.webtransport ?? null;
   } catch {
     return null;
@@ -316,11 +340,13 @@ export interface ConnectResult {
  */
 export async function connectGame(wsUrl: string, prefer: 'auto' | 'wt' | 'ws', handlers: TransportHandlers, reconnect = false): Promise<ConnectResult> {
   let fallbackReason: string | null = null;
-  if (prefer !== 'ws') {
-    const endpoint = await discoverWebTransport(wsUrl);
+  // a browser without WebTransport (iPhones, 24 Oct 2026) goes straight to the WebSocket: asking
+  // /health first cost every connect and every resume a round trip for nothing
+  if (prefer !== 'ws' && !('WebTransport' in window)) fallbackReason = 'browser has no WebTransport';
+  else if (prefer !== 'ws') {
+    const endpoint = await discoverWebTransport(wsUrl, reconnect);
     const room = roomOfUrl(wsUrl);
     if (!endpoint) fallbackReason = 'no WebTransport gateway on this server';
-    else if (!('WebTransport' in window)) fallbackReason = 'browser has no WebTransport';
     else if (room && !endpoint.rooms) fallbackReason = "this server's WebTransport serves its default room only";
     else if (prefer === 'auto' && rememberedFailure(endpoint)) fallbackReason = 'this network blocked WebTransport recently';
     else {
@@ -336,5 +362,6 @@ export async function connectGame(wsUrl: string, prefer: 'auto' | 'wt' | 'ws', h
     }
     if (prefer === 'wt') throw new Error(fallbackReason);
   }
-  return { transport: await openWebSocket(wsUrl, handlers), fallbackReason };
+  const note = fallbackReason ?? (prefer === 'ws' ? 'WebSocket chosen (an earlier WebTransport failure, or the page)' : null);
+  return { transport: await openWebSocket(note ? withNote(wsUrl, note) : wsUrl, handlers), fallbackReason };
 }

@@ -8,6 +8,7 @@
  * Events are fire-and-forget: a player with no stream open misses them and catches up from the
  * REST routes (GET /friends, GET /invites) when they next look.
  */
+import { quietRedisErrors } from '../kv/redis';
 import { Redis } from 'ioredis';
 
 /** What travels to the browser (JSON, one SSE `event:` per type). */
@@ -94,6 +95,8 @@ export class RedisBus implements EventBus {
     this.prefix = `${prefix}ev:`;
     this.pub = new Redis(url, { maxRetriesPerRequest: 1, connectTimeout: 5_000, lazyConnect: true });
     this.sub = new Redis(url, { connectTimeout: 5_000, lazyConnect: true });
+    quietRedisErrors(this.pub, 'events (publish)');
+    quietRedisErrors(this.sub, 'events (subscribe)');
     this.sub.on('pmessage', (_pattern: string, channel: string, message: string) => {
       let event: SocialEvent;
       try {

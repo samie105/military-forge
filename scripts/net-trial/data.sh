@@ -21,11 +21,18 @@ KV_URL="redis://:$KV_PASS@127.0.0.1:6379"
 # Ubuntu's cluster 16/main already listens on localhost only and asks for a password over TCP (scram);
 # saying so here keeps it that way. Valkey: localhost, a password, and every write in the append-only
 # file so room codes and rate limits survive a restart; never evict keys silently.
-printf "listen_addresses = 'localhost'\n" >/etc/postgresql/16/main/conf.d/military-forge.conf
-(umask 027 && printf 'bind 127.0.0.1 -::1\nprotected-mode yes\nport 6379\nrequirepass %s\nappendonly yes\nmaxmemory-policy noeviction\n' "$KV_PASS" >/etc/valkey/military-forge.conf)
-chown valkey:valkey /etc/valkey/military-forge.conf
-grep -qx 'include /etc/valkey/military-forge.conf' /etc/valkey/valkey.conf || echo 'include /etc/valkey/military-forge.conf' >>/etc/valkey/valkey.conf
-systemctl enable --quiet postgresql valkey-server && systemctl restart postgresql valkey-server || fail 'starting Postgres and Valkey'
+# A deploy restarts them only when their settings changed: a restart drops the API's connections
+# (24 Oct 2026: every deploy restarted Valkey, and the API logged ECONNREFUSED until it was back)
+data_changed=''
+put_conf() { cmp -s "$1.new" "$1" && rm -f "$1.new" || { mv "$1.new" "$1" && data_changed="$data_changed $2"; }; }
+printf "listen_addresses = 'localhost'\n" >/etc/postgresql/16/main/conf.d/military-forge.conf.new
+put_conf /etc/postgresql/16/main/conf.d/military-forge.conf postgresql
+(umask 027 && printf 'bind 127.0.0.1 -::1\nprotected-mode yes\nport 6379\nrequirepass %s\nappendonly yes\nmaxmemory-policy noeviction\n' "$KV_PASS" >/etc/valkey/military-forge.conf.new)
+chown valkey:valkey /etc/valkey/military-forge.conf.new
+put_conf /etc/valkey/military-forge.conf valkey-server
+grep -qx 'include /etc/valkey/military-forge.conf' /etc/valkey/valkey.conf || { echo 'include /etc/valkey/military-forge.conf' >>/etc/valkey/valkey.conf && data_changed="$data_changed valkey-server"; }
+# shellcheck disable=SC2086 # $data_changed is a list of unit names
+systemctl enable --quiet --now postgresql valkey-server && { [ -z "$data_changed" ] || systemctl restart $data_changed; } || fail 'starting Postgres and Valkey'
 for _ in $(seq 60); do pg_isready -q -h /var/run/postgresql && break; sleep 1; done
 
 # the API's role and database (the password goes in on stdin, not the command line)

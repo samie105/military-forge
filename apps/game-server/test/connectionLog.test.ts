@@ -42,4 +42,13 @@ describe('the connection log', () => {
       "[room ABCDEF] Ade didn't come back in time; its place is given up",
     ]);
   });
+
+  it("says why a page is on WebSocket when it said (?nowt=, 24 Oct 2026: the owner's phones)", () => {
+    const lines: string[] = [];
+    const room = new Room({ dummies: false, dev: false, code: 'ABCDEF', log: (l) => lines.push(l) });
+    const c = room.connect(conn('ws'));
+    c.noWebTransport = 'browser has no WebTransport';
+    room.receive(c, encodeHello('Ade', ''));
+    expect(lines).toContain('[room ABCDEF] Ade joined over ws (not WebTransport: browser has no WebTransport)');
+  });
 });

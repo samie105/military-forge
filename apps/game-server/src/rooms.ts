@@ -96,6 +96,8 @@ interface Visitor {
   /** admitted: where its messages go from now on */
   room: Room | null;
   client: Client | null;
+  /** the page's word on why it isn't on WebTransport (?nowt=), for the connection log */
+  noWebTransport: string;
 }
 
 export class RoomRegistry {
@@ -153,7 +155,7 @@ export class RoomRegistry {
     if (from && (this.atDoorByIp.get(from) ?? 0) >= this.door.perIp) return refuse(conn, CloseCode.RateLimited, 'too many connections from your network');
     if ((this.atDoorByRoom.get(code) ?? 0) >= this.door.perRoom) return refuse(conn, CloseCode.RateLimited, 'too many players joining this room at once');
 
-    const v: Visitor = { conn, code, ip: from, openedAt: this.now(), messages: 0, waiting: true, done: false, room: null, client: null };
+    const v: Visitor = { conn, code, ip: from, openedAt: this.now(), messages: 0, waiting: true, done: false, room: null, client: null, noWebTransport: noteFromUrl(url) };
     this.visitors.add(v);
     bump(this.atDoorByIp, from, 1);
     bump(this.atDoorByRoom, code, 1);
@@ -221,6 +223,8 @@ export class RoomRegistry {
     this.leaveDoor(v);
     v.room = room;
     v.client = room.connect(v.conn);
+    // why a page plays over WebSocket (the connection log): the page says (?nowt=)
+    v.client.noWebTransport = v.noWebTransport;
     v.client.accountId = accountId;
     v.client.guns = guns;
     v.client.party = party;
@@ -336,6 +340,15 @@ export class RoomRegistry {
     this.emptyFor.delete(room);
     room.closeAll(closeCode, reason);
     this.log(`[rooms] closed ${code} (${this.rooms.size} open)`);
+  }
+}
+
+/** The page's `?nowt=` note (why it isn't on WebTransport), cleaned for the log. */
+function noteFromUrl(url: string): string {
+  try {
+    return (new URL(url, 'ws://x').searchParams.get('nowt') ?? '').replace(/[^\w .,:()-]/g, '').slice(0, 60);
+  } catch {
+    return '';
   }
 }
 
