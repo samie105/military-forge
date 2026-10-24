@@ -6,11 +6,14 @@ const ctx = (p: Partial<Parameters<typeof shouldOffer>[1]> = {}) => ({ kind: 'pr
 const mem = (p: Partial<InstallMemory> = {}) => ({ ...freshMemory(), sessions: 1, ...p });
 
 describe('the install toast: when it may show', () => {
-  it('first after a finished match, only where the browser can install us, never once installed', () => {
+  it('first after a finished match (iPhone Safari: on the first Home visit), only where the browser can install us, never once installed', () => {
     expect(shouldOffer(mem(), ctx({ matchesFinished: 0 }))).toBe(false);
     expect(shouldOffer(mem(), ctx())).toBe(true);
     expect(shouldOffer(mem(), ctx({ kind: null }))).toBe(false);
     expect(shouldOffer(mem(), ctx({ kind: 'ios' }))).toBe(true);
+    // iPhone Safari: from the first Home visit, before any match (only a home-screen launch drops the bars)
+    expect(shouldOffer(mem(), ctx({ kind: 'ios', matchesFinished: 0 }))).toBe(true);
+    expect(shouldOffer(mem({ dismissedAt: 1 }), ctx({ kind: 'ios', matchesFinished: 0 }))).toBe(false);
     expect(shouldOffer(mem(), ctx({ installed: true }))).toBe(false);
     expect(shouldOffer(mem({ accepted: true }), ctx())).toBe(false);
     expect(shouldOffer(mem(), ctx({ shownThisSession: true }))).toBe(false);

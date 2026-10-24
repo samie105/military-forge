@@ -95,6 +95,8 @@
 .mf-ctl-aim[data-fire='release'].mf-down .dial__cancel { display: block; }
 .dial__tag { left: 50%; bottom: 20px; translate: -50% 0; padding: 1px 6px; border-radius: var(--r-xs); background: var(--c-volt); color: var(--c-volt-ink); font-size: 11px; font-weight: var(--fw-black); letter-spacing: 0.08em; text-transform: uppercase; }
 .mf-ctl-aim[data-fire='auto'] .dial__tag { display: block; }
+/* once the stick has aimed (controller.ts aimLearned) the tag has done its job: it fades off the ring */
+.mf-ctl-aim.mf-aimed .dial__tag { opacity: 0; visibility: hidden; transition: opacity 600ms ease-out, visibility 0s linear 600ms; }
 .mf-touch:not(.mf-touch-editing) .mf-ctl-aim[data-fire='button']:not(.mf-down) { opacity: 0; }
 /* FIRE (Fire button mode): the loudest button on the right, volt, the magazine on it */
 .dial-btn--fire { width: 84px; height: 84px; align-content: center; gap: 1px; }
@@ -338,21 +340,15 @@ html.reduce-motion .mf-ctl.mf-teach::before { animation: none; opacity: 0.9; }
 .mf-touch .mf-cap {
   position: absolute; left: 50%; top: calc(100% + 3px); translate: -50% 0;
   font: var(--fw-black, 900) 10px/1 var(--f-ui, inherit); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap;
-  color: var(--c-paper); text-shadow: 0 1px 2px rgb(0 0 0 / .85), 0 0 6px rgb(0 0 0 / .6); pointer-events: none;
+  color: var(--c-paper); text-shadow: 0 1px 2px rgb(0 0 0 / .85); pointer-events: none;
+  /* on a plate of its own: a soldier's name tag behind a button can't read as its word (the owner's iPhone,
+     24 Oct: SWAP over "Jetter") */
+  padding: 2px 5px; border-radius: var(--r-xs, 4px); background: rgb(0 0 0 / .62);
 }
 .mf-touch .pt-swap .mf-cap { top: calc(100% + 4px); }
 /* the aim stick's "Aim to shoot" tag: wider words than "Auto" */
 .mf-touch .dial__tag { white-space: nowrap; }
 
-/* ---- what each button is, in a word under it (the owner, 23 Oct: "would a new player understand
-   this in 10 seconds"); it rides the skin's zoom, and fades with the plate ---- */
-.mf-touch .mf-cap {
-  position: absolute; left: 50%; top: calc(100% + 3px); translate: -50% 0;
-  font: var(--fw-black, 900) 10px/1 var(--f-ui, inherit); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap;
-  color: var(--c-paper); text-shadow: 0 1px 2px rgb(0 0 0 / .85), 0 0 6px rgb(0 0 0 / .6); pointer-events: none;
-}
-/* the aim stick's "Aim to shoot" tag: wider words than "Auto" */
-.mf-touch .dial__tag { white-space: nowrap; }
 
 /* swap: a round button like the rest (the owner's essentials, 23 Oct): the held gun's silhouette, the
    word under it. As a pill, a gun's name made it ~200 px wide, under reload and JET; the name shows on
@@ -371,3 +367,9 @@ html.reduce-motion .mf-ctl.mf-teach::before { animation: none; opacity: 0.9; }
    sat on the HP and fuel arcs (the mobile audit, P1-10) */
 .mf-touch .dial--move .dial__lbl--hp { left: auto; right: calc(50% + 3px); top: -30px; }
 .mf-touch .dial--move .dial__lbl--fuel { right: auto; left: calc(50% + 3px); top: -30px; }
+
+/* the dials' arcs turn about their own centre, not about "84px 84px": inside the skin's zoom (--k)
+   Safari scales a px transform-origin but not the SVG's user space, so on an iPhone the HP, fuel and
+   throw arcs swung off the dial (the owner's iPhone, 24 Oct 2026). fill-box's centre is the circle's
+   centre in every engine. */
+.mf-touch .dial__arcs :is(.dial__track, .dial__hp, .dial__fuel, .dial__throw) { transform-box: fill-box; transform-origin: center; }

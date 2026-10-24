@@ -4,8 +4,10 @@
  * - only where it can be installed: a caught `beforeinstallprompt` (Android Chrome, Samsung Internet),
  *   or iPhone/iPad Safari (no prompt exists there: a two-step guide instead);
  * - never once installed (launched from the home screen), never after an accepted install;
- * - the first time after the first finished match; after "Not now", again every 3rd session or after
- *   another match; never twice in one session.
+ * - Android: the first time after the first finished match. iPhone Safari: on the first Home visit (the
+ *   owner's iPhone, 24 Oct: Safari's address and tab bars eat a quarter of a landscape screen, and only
+ *   a home-screen launch removes them, so the guide can't wait for a match). After "Not now", again
+ *   every 3rd session or after another match; never twice in one session.
  * The toast itself shows on Home and Results only (src/pwa/InstallToast.tsx), never in a match.
  */
 export const INSTALL_KEY = 'mf.install.v1';
@@ -38,7 +40,7 @@ export interface OfferContext {
 
 export function shouldOffer(m: InstallMemory, c: OfferContext): boolean {
   if (!c.kind || c.installed || m.accepted || c.shownThisSession) return false;
-  if (m.dismissedAt === null) return c.matchesFinished >= 1;
+  if (m.dismissedAt === null) return c.kind === 'ios' || c.matchesFinished >= 1;
   return m.sessions - m.dismissedAt >= AGAIN_AFTER_SESSIONS || c.matchesFinished > m.matchesAtDismiss;
 }
 

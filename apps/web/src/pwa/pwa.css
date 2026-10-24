@@ -48,3 +48,15 @@ html.reduce-motion .mf-install { animation: none; }
 /* large text: the line goes, the title steps down */
 .is-text-lg .mf-install__line { display: none; }
 .is-text-lg .mf-install__title { font-size: 22px; }
+
+/* iPhone Safari's guide shows on the first Home visit (install.ts), before any match, so it keeps out of
+   the way: compact, one block of words, and where the box is wide (Safari's bars always make it so in
+   landscape: the owner's iPhone, 24 Oct) it sits in the top bar's empty middle, clear of every card */
+.mf-install--ios { gap: 10px; padding: 4px 6px 4px 0; }
+.mf-install--ios .mf-install__tile { width: 36px; height: 36px; margin-left: 10px; }
+.mf-install--ios .mf-install__tile .ic { width: 20px; height: 20px; }
+.mf-install--ios .mf-install__eyebrow { display: none; }
+.mf-install--ios .mf-install__title { font-size: 18px; }
+.mf-install--ios .mf-install__steps { gap: 6px; font-size: 13px; }
+.mf-install--ios .mf-install__go { min-height: 44px; padding: 0 14px; font-size: 14px; }
+.mf-install--top { top: var(--safe-t, 10px); bottom: auto; width: auto; max-width: 600px; }

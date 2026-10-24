@@ -24,13 +24,15 @@ export function InstallToast({ where }: { where: 'home' | 'results' }) {
   useEffect(() => {
     if (open) markShown();
   }, [open]);
+  // iPhone Safari's guide on Home: in the top bar's empty middle when the box is wide enough (pwa.css)
+  const [top] = useState(() => where === 'home' && s.kind === 'ios' && wideBox());
   if (!open || !s.kind) return null;
   const close = () => {
     notNow(matches);
     setOpen(false);
   };
   return (
-    <aside className={`mf-install mf-install--${where}`} role="dialog" aria-label={s.kind === 'ios' ? 'Add Military Forge to your Home Screen' : 'Install Military Forge'}>
+    <aside className={`mf-install mf-install--${where}${s.kind === 'ios' ? ' mf-install--ios' : ''}${top ? ' mf-install--top' : ''}`} role="dialog" aria-label={s.kind === 'ios' ? 'Add Military Forge to your Home Screen' : 'Install Military Forge'}>
       <span className="mf-install__tile" aria-hidden="true">
         {s.kind === 'ios' ? <Icon name="share" /> : <Icon name="download" />}
       </span>
@@ -78,4 +80,12 @@ export function InstallToast({ where }: { where: 'home' | 'results' }) {
       )}
     </aside>
   );
+}
+
+/** The phone screens' box (ui/fit.ts --phone-w, design px) leaves the top bar a free middle wide enough for the guide. */
+export const TOP_BAR_ROOM = 1000;
+
+function wideBox(): boolean {
+  if (typeof document === 'undefined') return false;
+  return (parseFloat(document.documentElement.style.getPropertyValue('--phone-w')) || 0) >= TOP_BAR_ROOM;
 }

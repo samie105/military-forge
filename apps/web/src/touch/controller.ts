@@ -91,6 +91,8 @@ const PINCH_MIN_PX = 120;
 const MELEE_REACH = 2.5;
 /** Reload comes into the context slot with the magazine this low (its share; spec §4.2). */
 const RELOAD_SHOWS_AT = 0.4;
+/** The aim stick's "Aim to shoot" tag was learned (the first real aim) this visit: it stays off across matches. */
+let aimTagLearned = false;
 
 type Grab =
   // a stick: (cx, cy) is its origin, exactly where the thumb landed (§4.3; it follows a thumb past
@@ -1303,6 +1305,12 @@ export class TouchController {
     this.state.aimActive = this.state.aim.mag > 0;
   }
 
+  /** The aim stick has been used: its "Aim to shoot" tag fades (touch.css .mf-aimed), for the rest of the visit. */
+  private aimLearned(): void {
+    aimTagLearned = true;
+    this.els.get('aim')?.classList.add('mf-aimed');
+  }
+
   /** FIRE shows in Fire button mode (the left one if asked for); the aim dial wears the mode (touch.css: AUTO, Pull's ring, Release's cancel ring). */
   private modeClass(): void {
     const aim = this.els.get('aim');
@@ -1621,6 +1629,8 @@ export class TouchController {
     } else {
       s.aimActive = true;
       s.aimFire = pullFires(v.mag, s.aimFire);
+      // the first real aim (a push past half) has taught the "Aim to shoot" tag: it fades for this visit
+      if (v.mag >= 0.5 && !aimTagLearned) this.aimLearned();
       this.els.get(id)!.classList.toggle('mf-fire', this.fireNow === 'pull' && s.aimFire && !s.grenadeActive); // aiming a throw: no fire
     }
   }
@@ -1662,6 +1672,7 @@ export class TouchController {
       delete el.dataset.mfControl;
       el.dataset.mfStick = def.id;
       this.knobs.set(def.id as 'move' | 'aim', el.querySelector<HTMLElement>('.mf-knob')!);
+      if (def.id === 'aim' && aimTagLearned) el.classList.add('mf-aimed');
     }
     if (SOMETIMES.has(def.id) || def.id === 'fire' || def.id === 'fireLeft' || def.id === 'jet') el.classList.add('mf-off');
     this.els.set(def.id, el);
