@@ -158,7 +158,8 @@ try {
       const help = document.querySelector('.mf-spot__help');
       return { title: document.querySelector('.mf-spot__title')?.textContent, timeout: document.querySelector('.mf-spot')?.classList.contains('is-timeout'), skip: document.querySelector('.mf-spot__skip')?.textContent, help: help ? getComputedStyle(help).display : 'missing' };
     });
-    check('21 s idle: still on Fly, help and "Skip this" offered', idle.title === 'Fly.' && idle.timeout && idle.skip === 'Skip this' && idle.help !== 'none', JSON.stringify(idle));
+    // the strip (mobile audit P1-1) keeps one line: the time-out marks it, Skip stays its one link
+    check('21 s idle: still on Fly, the time-out marked, Skip offered', idle.title === 'Fly.' && idle.timeout && idle.skip === 'Skip', JSON.stringify(idle));
     await shot(page, 'd7-help');
     await page.goto(`${base}/?app`, { waitUntil: 'load' });
     await pastName(page);
@@ -227,7 +228,7 @@ try {
     });
     const off = geo.dial && geo.ring ? Math.max(Math.abs(geo.ring.left - (geo.dial.left - 6)), Math.abs(geo.ring.top - (geo.dial.top - 6))) : Infinity;
     check('phone: the ring sits on the move dial within 1 px', off <= 1, `off by ${off.toFixed?.(2) ?? off}`);
-    check('phone: the words name the dial', /left dial/.test(geo.body ?? ''), geo.body);
+    check('phone: the words name the stick', /left stick/.test(geo.body ?? ''), geo.body);
     await shot(page, 'p1-run');
     await page.close();
   }

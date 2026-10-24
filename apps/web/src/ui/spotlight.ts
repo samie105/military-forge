@@ -437,12 +437,12 @@ export class Spotlight {
     const place = this.phone() || step.variant === 'strip' ? 'top-centre' : (step.place ?? 'auto');
     let safe = this.safeBox();
     if (step.variant === 'strip') {
-      // the strip sits under the match clock (it never hides the score), and on a phone between the top
-      // bar's corner buttons (🏆 and pause: 96 px each side)
+      // the strip sits under the match clock (it never hides the score), and between whatever sits along
+      // the top edge: the corner buttons (🏆, pause) and the minimap chip (the owner's iPhone, 24 Oct)
       const top = Math.max(safe.top, this.stripTop());
       this.stripAt = this.stripTop();
-      const side = this.phone() ? 96 : 0;
-      safe = box(safe.left + side, top, safe.width - 2 * side, safe.bottom - top);
+      const [left, right] = stripSides(safe.left, safe.right, top, top + 48);
+      safe = box(left, top, right - left, safe.bottom - top);
     }
     const at = placeCallout(step.anchor === 'none' ? null : unionBox(holes), size, safe, place);
     c.style.transform = `translate3d(${n(at.left)}px, ${n(at.top)}px, 0)`;
@@ -464,7 +464,7 @@ export class Spotlight {
       <span class="mf-spot__body" id="mf-spot-body">${step.body ? esc(step.body) : ''}${keys ? ` <span class="mf-spot__keys">${keys}</span>` : ''}</span>
       ${step.help ? `<span class="mf-spot__help">${esc(step.help)}</span>` : ''}
       <span class="mf-spot__actions">
-        ${skippable ? `<button type="button" class="mf-spot__skip" data-spot="skip">${esc(step.skipLabel ?? (step.timeoutMs ? 'Skip this' : 'Skip'))}</button>` : ''}
+        ${skippable ? `<button type="button" class="mf-spot__skip" data-spot="skip">${esc(step.skipLabel ?? (step.timeoutMs && step.variant !== 'strip' ? 'Skip this' : 'Skip'))}</button>` : ''}
         ${step.skipAll ? '<button type="button" class="mf-spot__skip" data-spot="skip-all">Skip training</button>' : ''}
         ${step.primary ? `<button type="button" class="btn btn--volt btn--sm mf-spot__primary" data-spot="primary">${esc(step.primary.label)}</button>` : ''}
       </span>`;
@@ -563,4 +563,24 @@ export class Spotlight {
     this.schedule = null;
     this.moved = null;
   }
+}
+
+/** What a strip must stay clear of along the top edge: the phone's corner buttons and the minimap chip. */
+const TOP_EDGE = '.mf-mm, .mf-ctl-pause, .mf-ctl-scores, [data-mf-control="pause"], [data-mf-control="scores"]';
+
+/**
+ * The strip's left and right limits between the top edge's things (each side's nearest, 8 px off), for
+ * a band from `top` to `bottom` (logical px). With nothing there, the safe box's own sides.
+ */
+function stripSides(left: number, right: number, top: number, bottom: number): [number, number] {
+  const mid = (left + right) / 2;
+  let l = left;
+  let r = right;
+  for (const e of document.querySelectorAll(TOP_EDGE)) {
+    const b = logicalRect(e);
+    if (!b.width || !b.height || b.bottom <= top || b.top >= bottom || getComputedStyle(e).visibility === 'hidden') continue;
+    if (b.left + b.width / 2 < mid) l = Math.max(l, b.right + 8);
+    else r = Math.min(r, b.left - 8);
+  }
+  return r - l >= 220 ? [l, r] : [left, right]; // too tight between them: the full width (rare)
 }

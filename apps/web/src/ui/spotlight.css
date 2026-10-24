@@ -100,15 +100,19 @@
 .mf-spot.is-strip .mf-spot__keys { display: inline-flex; vertical-align: middle; }
 .mf-spot.is-strip .mf-spot__keys .kbd { font-size: 12px; min-height: 22px; padding: 0 6px; }
 .mf-spot.is-strip .mf-spot__help { display: none; }
-.mf-spot.is-strip.is-timeout .mf-spot__body { display: none; }
-.mf-spot.is-strip.is-timeout .mf-spot__help { display: block; flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+/* one small Skip on a strip (Skip training is in the pause menu) */
+.mf-spot.is-strip [data-spot="skip-all"] { display: none; }
 .mf-spot.is-strip .mf-spot__actions { flex: none; margin: 0; gap: 2px; }
 .mf-spot.is-strip .mf-spot__skip { min-height: 40px; padding: 0 8px; font-size: 12px; white-space: nowrap; }
 .mf-spot.is-strip .mf-spot__primary { min-height: 34px; padding: 0 12px; font-size: 13px; }
 .mf-spot.is-strip .mf-spot__stamp { font-size: 13px; padding: 1px 6px; border-width: 2px; outline-offset: 2px; }
-/* a phone: between the top bar's corner buttons (🏆, pause) */
-.mf-spot.is-phone.is-strip .mf-spot__callout { max-width: calc(100% - 192px); border-radius: 0 0 12px 12px; }
-.mf-spot.is-phone.is-strip .mf-spot__title { font-size: 18px; }
+/* a phone: compact (it sits between the top edge's buttons and the minimap: ui/spotlight.ts stripSides) */
+.mf-spot.is-phone.is-strip .mf-spot__callout { max-width: min(460px, calc(100% - 24px)); min-height: 36px; max-height: 40px; gap: 8px; padding: 0 2px 0 10px; border-radius: 0 0 12px 12px; }
+.mf-spot.is-phone.is-strip .mf-spot__eyebrow { font-size: 0; gap: 0; }
+.mf-spot.is-phone.is-strip .mf-spot__eyebrow .mf-spot__pips { margin: 0; }
+.mf-spot.is-phone.is-strip .mf-spot__title { font-size: 17px; }
+.mf-spot.is-phone.is-strip .mf-spot__body { font-size: 13px; }
+.mf-spot.is-phone.is-strip .mf-spot__skip { min-height: 36px; padding: 0 8px; }
 /* a narrow screen: the eyebrow's words go (the pips stay) */
 @media (max-width: 700px) { .mf-spot.is-strip .mf-spot__eyebrow { font-size: 0; } .mf-spot.is-strip .mf-spot__eyebrow .mf-spot__pips { margin: 0; } }
 

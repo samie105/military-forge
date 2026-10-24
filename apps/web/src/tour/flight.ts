@@ -99,7 +99,9 @@ export function goalView(goal: FlightGoalId, device: Device, touch: TouchWords =
     // Fly on Classic: the JET button; Dash without a pinned button: the move dial's flick (#259)
     const control =
       goal === 'hit' && touch.fire === 'button' ? 'fire' : goal === 'fly' && touch.jetButton ? 'jet' : goal === 'dash' && !touch.dashButton ? 'move' : shape.touch;
-    return { ...copy, keys: [], hud: goal === 'fly' ? 'fuel' : null, touch: control, marker: shape.marker };
+    // Run on touch: the stick's ring says it all; its world marker fell beside the stick (the owner's
+    // iPhone, 24 Oct) and read as a second, misplaced ring
+    return { ...copy, keys: [], hud: goal === 'fly' ? 'fuel' : null, touch: control, marker: goal === 'run' ? null : shape.marker };
   }
   // a pad's move stick has one code (left and right are the same stick)
   return { ...copy, keys: device === 'pad' && goal === 'run' ? ['left'] : shape.keys, hud: shape.hud, touch: null, marker: shape.marker };

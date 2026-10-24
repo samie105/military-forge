@@ -46,6 +46,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export const PROFILES = {
   sideways: { width: 780, height: 360, isMobile: true, hasTouch: true, deviceScaleFactor: 3, isLandscape: true },
   upright: { width: 360, height: 780, isMobile: true, hasTouch: true, deviceScaleFactor: 3, isLandscape: false },
+  // the owner's iPhone in Safari, sideways, with the address and tab bars showing: about 844×300 visible
+  iphone: { width: 844, height: 300, isMobile: true, hasTouch: true, deviceScaleFactor: 3, isLandscape: true },
 };
 
 const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new', userDataDir: mkdtempSync(join(tmpdir(), 'walk-')), args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required'] });
@@ -56,6 +58,7 @@ async function phone(profile) {
   await page.setUserAgent(UA);
   await page.setViewport(PROFILES[profile]);
   await page.emulateCPUThrottling(4);
+  page.setDefaultNavigationTimeout(120_000); // a loaded machine and 4× CPU: the dev server's first load is slow
   page.on('pageerror', (e) => check(`${profile}: no page error`, false, e.message));
   await page.goto(`${base}/?app`, { waitUntil: 'domcontentloaded' });
   await page.evaluate(() => localStorage.clear());
@@ -441,7 +444,58 @@ async function creator(profile) {
   await page.close();
 }
 
-const SCENARIOS = { 'no-popups': noPopups, 'home-taps': homeTaps, 'slim-cards': slimCards, armory, 'match-end': matchEnd, invite, 'play-now': playNow, creator };
+// ---- the owner's iPhone (24 Oct): First flight's strip at 844×300 (Safari's bars showing)
+async function iphoneStrip(profile) {
+  const page = await phone(profile);
+  await page.evaluate((f) => {
+    localStorage.setItem('mf-creator-seen', '1');
+    localStorage.setItem('tips.seen.v1', '1');
+    localStorage.setItem('mf.facts.v1', f);
+  }, FACTS({ tours: { 'home-stops': { done: [], finished: true, skipped: false } } }));
+  await newPlayerToHome(page, profile);
+  await page.evaluate(() => window.__game.shell.controller.startFlight());
+  await until(page, () => !!document.querySelector('.mf-spot:not([hidden]) .mf-spot__callout'), 30_000);
+  await sleep(2500);
+  const r = await page.evaluate(() => {
+    const c = document.querySelector('.mf-spot:not([hidden]) .mf-spot__callout');
+    const cb = c.getBoundingClientRect();
+    const over = (sel) => [...document.querySelectorAll(sel)].filter((e) => {
+      const b = e.getBoundingClientRect();
+      return b.width && !(b.right <= cb.left || b.left >= cb.right || b.bottom <= cb.top || b.top >= cb.bottom);
+    }).length;
+    const body = c.querySelector('.mf-spot__body');
+    const skips = [...c.querySelectorAll('.mf-spot__skip')].filter((s) => s.getClientRects().length && getComputedStyle(s).display !== 'none').map((s) => s.textContent);
+    // measured at rest (the ring's pulse scales it for 4 s)
+    document.querySelectorAll('.mf-spot__ring').forEach((e) => e.getAnimations().forEach((a) => a.finish()));
+    // in the page's own (logical) px: the turned upright page's rects are the screen's, rotated
+    const turned = document.documentElement.classList.contains('mf-rotated');
+    const logical = (e) => {
+      const m = new DOMMatrixReadOnly(getComputedStyle(e).transform);
+      return { left: m.e, top: m.f, width: e.offsetWidth, height: e.offsetHeight };
+    };
+    const rings = [...document.querySelectorAll('.mf-spot__ring')].map((e) => (turned ? logical(e) : e.getBoundingClientRect()));
+    const dial = window.__touch?.touchControlRect('move');
+    const ring = rings[0];
+    return {
+      text: `${c.querySelector('.mf-spot__title')?.textContent} ${body?.textContent}`,
+      height: Math.round(turned ? Math.min(cb.width, cb.height) : cb.height),
+      truncated: !!body && body.scrollWidth > body.clientWidth + 1,
+      overMinimap: over('.mf-mm'),
+      overButtons: over('.mf-ctl-pause, .mf-ctl-scores'),
+      skips,
+      rings: rings.length,
+      ringOff: dial && ring ? Math.round(Math.max(Math.abs(ring.left - (dial.left - 6)), Math.abs(ring.top - (dial.top - 6)))) : null,
+    };
+  });
+  await page.screenshot({ path: join(out, `iphone-${profile}-first-flight.png`) });
+  check(`${profile}: the order reads whole in one line, compact`, !r.truncated && r.height <= 44, JSON.stringify(r));
+  check(`${profile}: clear of the minimap and the corner buttons`, r.overMinimap === 0 && r.overButtons === 0, JSON.stringify(r));
+  check(`${profile}: one small Skip`, r.skips.length === 1 && r.skips[0] === 'Skip', JSON.stringify(r.skips));
+  check(`${profile}: one ring, on the move stick`, r.rings === 1 && r.ringOff !== null && r.ringOff <= 1, JSON.stringify(r));
+  await page.close();
+}
+
+const SCENARIOS = { 'no-popups': noPopups, 'home-taps': homeTaps, 'slim-cards': slimCards, armory, 'match-end': matchEnd, invite, 'play-now': playNow, creator, 'iphone-strip': iphoneStrip };
 try {
   for (const [name, run] of Object.entries(SCENARIOS)) {
     if (only.length && !only.includes(name)) continue;

@@ -178,7 +178,7 @@ export class HintRunner {
 
 /** The keyboard hints' words on touch (the dials have no keys to show). */
 const TOUCH_BODY: Partial<Record<HintId, string>> = {
-  dash: 'Flick the move dial any way. Dodges fire.',
+  dash: 'Flick the move stick. Dodges fire.',
   grenade: 'Tap the grenade button. Hold it to aim.',
   'own-grenade': 'Hold the grenade button: the arc shows where it lands.',
 };

@@ -122,13 +122,14 @@ describe('First flight: the goals', () => {
             expect(words(c.body)).toBeLessThanOrEqual(12);
             expect(`${c.title} ${c.body} ${c.help}`).not.toMatch(/!|awesome|great job|let's/i);
           }
-    expect(goalView('run', 'touch', { moveSide: 'right', fire: 'hold' }).body).toContain('right dial');
+    expect(goalView('run', 'touch', { moveSide: 'right', fire: 'hold' }).body).toContain('right stick');
+    expect(goalView('run', 'touch').marker).toBeNull(); // the stick's ring, no world marker beside it
     expect(goalView('hit', 'touch', { moveSide: 'left', fire: 'release' }).body).toContain('lift to fire');
-    expect(goalView('hit', 'touch', { moveSide: 'right', fire: 'pull' }).body).toContain('left dial');
-    expect(goalView('hit', 'touch', { moveSide: 'left', fire: 'auto' }).body).toContain('fires itself');
+    expect(goalView('hit', 'touch', { moveSide: 'right', fire: 'pull' }).body).toContain('left stick');
+    expect(goalView('hit', 'touch', { moveSide: 'left', fire: 'auto' }).body).toContain('Aim the right stick');
     expect(goalView('hit', 'touch', { moveSide: 'left', fire: 'button' })).toMatchObject({ touch: 'fire' });
     // #259: no DASH button by default, so Dash teaches the flick on the move dial; Classic's JET for Fly
-    expect(goalView('dash', 'touch', { moveSide: 'left', fire: 'auto' })).toMatchObject({ touch: 'move', body: 'Flick the left dial any way, then let go.' });
+    expect(goalView('dash', 'touch', { moveSide: 'left', fire: 'auto' })).toMatchObject({ touch: 'move', body: 'Flick the left stick.' });
     expect(goalView('dash', 'touch', { moveSide: 'left', fire: 'auto', dashButton: true }).touch).toBe('dash');
     expect(goalView('fly', 'touch', { moveSide: 'left', fire: 'auto', jetButton: true })).toMatchObject({ touch: 'jet' });
     expect(goalView('fly', 'touch', { moveSide: 'left', fire: 'auto', jetButton: true }).body).toContain('Hold JET');
@@ -282,7 +283,7 @@ describe('First flight: the runner', () => {
     expect(h.last()).toMatchObject({ id: 'first-flight:run', keys: ['PadLS'] });
     h.setDevice('touch');
     h.tick();
-    expect(h.last()).toMatchObject({ id: 'first-flight:run', keys: [], body: 'Drag the left dial. Reach the marker.' });
+    expect(h.last()).toMatchObject({ id: 'first-flight:run', keys: [], body: 'Drag the left stick.' });
     expect(h.steps()).toEqual(['run:shown']);
   });
 
