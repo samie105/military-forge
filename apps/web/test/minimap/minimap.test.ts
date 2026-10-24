@@ -6,7 +6,7 @@ import { getMap, maps, pickups, POWER_WEAPONS, weapons } from '@military-forge/c
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PALETTE, drawDots, drawSilhouette, fitMap, itemKind, paletteFor, toBoxX, toBoxY, toWorldX, toWorldY } from '../../src/minimap/draw';
 import { EnemyIntel, HEARD_CELL, HEARD_MS, LAST_SEEN_MS, type ViewBox } from '../../src/minimap/intel';
-import { BIG_PHONE, bigPhonePlace, phonePlace, widthFor } from '../../src/minimap/place';
+import { BIG_PHONE, TAP_AWAY_MS, TAP_AWAY_SLOP_PX, bigPhonePlace, isTapAway, phonePlace, widthFor } from '../../src/minimap/place';
 
 const VIEW: ViewBox = { minX: 0, minY: 0, maxX: 36, maxY: 20 };
 const at = (id: number, x: number, y: number, alive = true) => ({ id, x, y, alive });
@@ -171,5 +171,14 @@ describe('drawing', () => {
     expect(itemKind(0)).toBe('item');
     expect(paletteFor('deutan').enemy).not.toBe(DEFAULT_PALETTE.enemy);
     expect(paletteFor('deutan').you).toBe(DEFAULT_PALETTE.you);
+  });
+});
+
+describe('the big map closes on a tap outside it (the owner, 24 Oct)', () => {
+  it('a quick, still touch closes it; a hold or a drag (a thumb on a dial) does not', () => {
+    const down = { x: 100, y: 200, t: 0 };
+    expect(isTapAway(down, { x: 104, y: 203, t: 120 })).toBe(true);
+    expect(isTapAway(down, { x: 100, y: 200, t: TAP_AWAY_MS + 1 })).toBe(false);
+    expect(isTapAway(down, { x: 100 + TAP_AWAY_SLOP_PX + 4, y: 200, t: 80 })).toBe(false);
   });
 });

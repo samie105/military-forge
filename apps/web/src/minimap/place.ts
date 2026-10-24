@@ -85,3 +85,18 @@ export function bigPhonePlace(controls: readonly Box[], margin = 6): { x: number
   }
   return { x: BIG_PHONE.x, y: BIG_PHONE.y, w: right - BIG_PHONE.x, h: bottom - BIG_PHONE.y };
 }
+
+/** A tap away from the big map closes it (the owner, 24 Oct 2026: "tapping outside should close the map"): quick and still, so a thumb working a dial never does. */
+export const TAP_AWAY_MS = 300;
+export const TAP_AWAY_SLOP_PX = 12;
+
+export interface TouchMark {
+  x: number;
+  y: number;
+  t: number;
+}
+
+/** Whether a press and its release outside the big map were a tap (close it), not a hold or a drag. */
+export function isTapAway(down: TouchMark, up: TouchMark): boolean {
+  return up.t - down.t <= TAP_AWAY_MS && Math.hypot(up.x - down.x, up.y - down.y) <= TAP_AWAY_SLOP_PX;
+}

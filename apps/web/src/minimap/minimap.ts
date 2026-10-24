@@ -20,7 +20,7 @@ import type { SimEvent } from '@military-forge/sim';
 import type { Frame } from '../view';
 import { DEFAULT_PALETTE, drawDots, drawSilhouette, fitMap, paletteFor, toBoxY, toWorldX, toWorldY, type Fit, type Palette } from './draw';
 import { EnemyIntel, type IntelMark, type ViewBox } from './intel';
-import { BIG_PHONE, HEAD, PHONE, bigPhonePlace, phonePlace, widthFor } from './place';
+import { BIG_PHONE, HEAD, PHONE, bigPhonePlace, isTapAway, phonePlace, widthFor, type TouchMark } from './place';
 import './minimap.css';
 
 /** desktop: the kit's 1920 × 1080 design px; phone: 812 × 375 */
@@ -165,6 +165,11 @@ export class Minimap {
     body.addEventListener('pointercancel', this.onBigUp);
     body.addEventListener('wheel', this.onWheel, { passive: false });
     body.addEventListener('dblclick', () => this.resetView());
+    // a tap anywhere else closes the big map; on a phone the shade lets touches through to the dials,
+    // so this listens on the window, before the touch controls see the press
+    window.addEventListener('pointerdown', this.onAwayDown, true);
+    window.addEventListener('pointerup', this.onAwayUp, true);
+    window.addEventListener('pointercancel', this.onAwayCancel, true);
     this.applyVisibility();
   }
 
@@ -279,6 +284,9 @@ export class Minimap {
   }
 
   dispose(): void {
+    window.removeEventListener('pointerdown', this.onAwayDown, true);
+    window.removeEventListener('pointerup', this.onAwayUp, true);
+    window.removeEventListener('pointercancel', this.onAwayCancel, true);
     this.small.root.remove();
     this.big.root.remove();
     this.bigShade.remove();
@@ -467,6 +475,26 @@ export class Minimap {
     const r = this.big.dots.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   }
+
+  /** presses that started away from the big map, the minimap and the touch controls, by pointer */
+  private readonly away = new Map<number, TouchMark>();
+
+  private readonly onAwayDown = (e: PointerEvent): void => {
+    if (!this.bigOpen) return;
+    const target = e.target instanceof Element ? e.target : null;
+    if (target && (this.big.root.contains(target) || this.small.root.contains(target) || target.closest('[data-mf-control]'))) return;
+    this.away.set(e.pointerId, { x: e.clientX, y: e.clientY, t: e.timeStamp });
+  };
+
+  private readonly onAwayUp = (e: PointerEvent): void => {
+    const down = this.away.get(e.pointerId);
+    this.away.delete(e.pointerId);
+    if (down && this.bigOpen && isTapAway(down, { x: e.clientX, y: e.clientY, t: e.timeStamp })) this.setBig(false);
+  };
+
+  private readonly onAwayCancel = (e: PointerEvent): void => {
+    this.away.delete(e.pointerId);
+  };
 
   private readonly onBigDown = (e: PointerEvent): void => {
     e.stopPropagation();
