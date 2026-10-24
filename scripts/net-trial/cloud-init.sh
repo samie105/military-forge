@@ -121,6 +121,14 @@ for k in access ticket; do [ -s "$ETC/$k.key" ] || openssl genpkey -algorithm ed
 	@game path /ws/* /health
 	@probe path /echo /probe-api/*
 	@pub path /trial-status /trial-status/* /owner-* /probe-config.json
+	# Vite's hashed files sit right under /assets/ (name-xxxxxxxx.ext): a year, immutable. Everything else
+	# there (public/: maps, kits, billboard pools and art) keeps its name when it changes: revalidate
+	# (ETag), never a stale week (24 Oct: a cached house.json kept the deleted billboard art on screen)
+	@hashed path_regexp hashed ^/assets/[^/]+-[A-Za-z0-9_-]{8}\.[a-z0-9]+
+	@unhashed {
+		path /assets/*
+		not path_regexp ^/assets/[^/]+-[A-Za-z0-9_-]{8}\.[a-z0-9]+
+	}
 	route {
 		respond @foreign 403
 		respond /api/internal/* 404
@@ -134,7 +142,8 @@ for k in access ticket; do [ -s "$ETC/$k.key" ] || openssl genpkey -algorithm ed
 		file_server @pub {
 			root $PUB
 		}
-		header /assets/* Cache-Control "public, max-age=604800"
+		header @hashed Cache-Control "public, max-age=31536000, immutable"
+		header @unhashed Cache-Control "no-cache"
 		header /r/* X-Robots-Tag noindex
 		rewrite / /index.html
 		rewrite /r/* /index.html

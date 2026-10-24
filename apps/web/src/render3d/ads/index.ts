@@ -1,12 +1,14 @@
 /**
  * In-world billboard ads (docs/14), house art only: no ad sales, network or backend yet. See
  * manifest.ts (slots, manifests, the paid-flow stub), rotation.ts (the shared beat), visibility.ts
- * (≤ 2 lit on screen) and boards.ts (the ≤ 2-draw renderer). The map environment owns the boards
+ * (which surfaces are lit: every one in view since 24 Oct) and boards.ts (the ≤ 2-draw renderer). The map environment owns the boards
  * of a map with ad slots (environment/index.ts, `EnvironmentDef.ads`).
  */
+import { buildId } from 'virtual:title-info';
+
 export { AD_POOL_BUDGET, AdBoards, drawnBoards, type SavedPick, CREATIVE_Z, FORMATS, keyframeLayers, layerBytes, layerTable, plannedGpuBytes, referencedCreatives, rotationState, type FormatSpec, type InstanceState } from './boards';
 export { FINANCE_NOTE, LIT_TO_SAVE, checkClick, creativeAt, visitUrl, type AdClick, type Advertiser, type BoardHit } from './click';
-export { DEFAULT_HOUSE_OPTIONS, checkManifest, sponsorTurns, clickOf, fetchAdManifest, houseManifest, poolEntries, type AdFrame, type HouseOptions, type AdManifest, type AdSlot, type HouseEntry, type HousePool } from './manifest';
+export { DEFAULT_HOUSE_OPTIONS, checkManifest, sponsorTurns, clickOf, fetchAdManifest, houseManifest, poolEntries, sponsoredOf, type AdFrame, type HouseOptions, type AdManifest, type AdSlot, type HouseEntry, type HousePool } from './manifest';
 export { CROSSFADE_MS, DWELL_MS, KEY_FADE_MS, KEY_MS, MAX_KEYS, TICK_MS, crossfade, frameIndex, keyFade, keySegment, lastKeySegment, previousFrame } from './rotation';
 export { LitLimiter, MAX_LIT, ON_SCREEN, slotInView } from './visibility';
 
@@ -18,4 +20,14 @@ export interface AdsDef {
   pool: string;
   /** folder the pool's files are in, ending in '/' */
   base: string;
+}
+
+/**
+ * A map's slot list or house pool, under this build's id. They aren't content-hashed, and the live
+ * server sent `/assets/*` with a week's max-age and no revalidation, so a returning player kept the
+ * old pool for days: after the 23 Oct change, one naming deleted creatives (blank boards) and none of
+ * the sponsors'. A new build asks for a new URL; the creatives' own files get new names when they change.
+ */
+export function adsUrl(url: string, build: string = buildId): string {
+  return `${url}${url.includes('?') ? '&' : '?'}v=${encodeURIComponent(build)}`;
 }

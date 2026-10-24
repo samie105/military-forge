@@ -36,7 +36,7 @@ import {
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { AdBoards, TICK_MS, type AdSlot, type AdsDef, type HousePool } from '../ads';
+import { AdBoards, TICK_MS, adsUrl, type AdSlot, type AdsDef, type HousePool } from '../ads';
 import { buildDepthLayers, coversPlayer, projectToPlane, type DepthLayers, type ForegroundProp, type Rect } from '../layers';
 import { PLANE_BACK_Z } from '../mapGeometry';
 import type { PlanePose } from '../planeCamera';
@@ -225,7 +225,8 @@ export class MapEnvironment {
   /** The map's ad slots and house pool → the billboard renderer (≤ 2 draws). */
   private async loadAds(ads: AdsDef, baseUrl: string, fetchJson: (url: string) => Promise<unknown>): Promise<void> {
     try {
-      const [slots, pool] = (await Promise.all([fetchJson(baseUrl + ads.slots), fetchJson(baseUrl + ads.pool)])) as [AdSlot[], HousePool];
+      // per build (adsUrl): a week-old cached pool must never outlive the art it names
+      const [slots, pool] = (await Promise.all([fetchJson(adsUrl(baseUrl + ads.slots)), fetchJson(adsUrl(baseUrl + ads.pool))])) as [AdSlot[], HousePool];
       if (this.disposed) return;
       // the house set follows the match (Frame.matchSeed, in update): the paid flow will send a signed manifest
       this.boards = new AdBoards(this.def.mapId, slots, pool, baseUrl + ads.base, this.look.adTint, this.ktx2);

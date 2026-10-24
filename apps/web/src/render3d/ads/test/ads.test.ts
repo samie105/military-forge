@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { streetMarketMap } from '@military-forge/content';
 import { VIEW_ZOOM_MULTIPLIERS } from '@military-forge/netcode';
 import { describe, expect, it } from 'vitest';
@@ -9,6 +9,7 @@ import { planePose, type PlanePose } from '../../planeCamera';
 import {
   AD_POOL_BUDGET,
   AdBoards,
+  adsUrl,
   DEFAULT_HOUSE_OPTIONS,
   FORMATS,
   KEY_FADE_MS,
@@ -47,12 +48,12 @@ const pool = json<Omit<HousePool, 'screens' | 'hoardings' | 'sponsored'> & { scr
 const studio = [...pool.sponsored.screens, ...pool.sponsored.hoardings];
 
 /** Camera poses across the Street Market at every zoom: x and y across the clamp range. */
-function poses(): { zoom: number; pose: PlanePose }[] {
+function poses(width = 1280, height = 720): { zoom: number; pose: PlanePose }[] {
   const b = streetMarketMap.bounds;
   const out: { zoom: number; pose: PlanePose }[] = [];
   for (let zoom = 0; zoom < VIEW_ZOOM_MULTIPLIERS.length; zoom++) {
     const cam = new Camera();
-    cam.resize(1280, 720);
+    cam.resize(width, height);
     cam.setZoom(zoom, VIEW_ZOOM_MULTIPLIERS.length);
     const { halfW, halfH } = cam.halfExtents;
     for (let fx = 0; fx <= 1.0001; fx += 0.05) {
@@ -128,16 +129,20 @@ describe('rotation (docs/14 §4.4)', () => {
 });
 
 describe('readability (docs/14 §1.3)', () => {
-  it('never more than two surfaces show a creative on screen, at any camera position and zoom', () => {
+  it('every surface in view shows its creative, at any camera position and zoom, laptop or phone (the owner, 24 Oct)', () => {
     let maxVisible = 0;
-    for (const { pose } of poses()) {
-      const limiter = new LitLimiter(slots);
-      for (let i = 0; i < 40; i++) limiter.update(pose, 1 / 60);
-      expect(limiter.litOnScreen(pose)).toBeLessThanOrEqual(MAX_LIT);
-      maxVisible = Math.max(maxVisible, slots.filter((s) => slotInView(s, pose).visible >= ON_SCREEN).length);
+    for (const size of [[1280, 720], [812, 375]] as const) {
+      for (const { pose } of poses(...size)) {
+        const limiter = new LitLimiter(slots);
+        for (let i = 0; i < 40; i++) limiter.update(pose, 1 / 60);
+        const inView = slots.filter((s) => slotInView(s, pose).visible >= ON_SCREEN).length;
+        expect(limiter.litOnScreen(pose)).toBe(inView);
+        maxVisible = Math.max(maxVisible, inView);
+      }
     }
-    // the wide zooms do see more than two surfaces: the limiter is what keeps it to two
-    expect(maxVisible).toBeGreaterThan(MAX_LIT);
+    // the wide zooms see more than two: once switched off past two, now all lit
+    expect(maxVisible).toBeGreaterThan(2);
+    expect(MAX_LIT).toBe(Number.POSITIVE_INFINITY);
   });
 
   it('lights the surfaces taking most of the view, and keeps them while panning (no flicker)', () => {
@@ -213,6 +218,40 @@ describe('sponsored creatives (Deet Studios, WorldStreet) and Motion keyframes (
       }
       for (const s of m.slots.slice(0, 4)) expect(s.frames).toEqual(m.slots[0]!.frames); // one shared set
     }
+  });
+
+  it('every board on the Street Market shows a sponsor’s creative, whose files ship: 4 Screens and 2 Hoardings, at every moment', () => {
+    expect(slots.filter((s) => s.format === '4:3')).toHaveLength(4);
+    expect(slots.filter((s) => s.format === '6:1')).toHaveLength(2);
+    const ads = new URL('public/assets/ads/street_market/', WEB);
+    let deet = 0;
+    let shown = 0;
+    for (let seed = 0; seed < 30; seed++) {
+      const m = houseManifest('street-market', slots, pool, seed);
+      expect(m.slots.map((s) => s.slot)).toEqual(slots.map((s) => s.slotId));
+      for (let t = 0; t < 60_000; t += 2_500) {
+        slots.forEach((slot, i) => {
+          const f = m.slots[i]!.frames[frameIndex(slot, t)];
+          expect(f, `${slot.slotId} seed ${seed} at ${t}`).toBeDefined();
+          const e = studio.find((x) => x.id === f!.c)!;
+          expect(e, f!.c).toBeDefined();
+          for (const file of [e.file, e.ktx2!, ...(e.keys ?? []).flatMap((k) => [k.file, k.ktx2!])]) expect(existsSync(new URL(file, ads)), file).toBe(true);
+          shown++;
+          if (e.advertiser === 'deet') deet++;
+        });
+      }
+    }
+    expect(deet / shown).toBeGreaterThan(0.6);
+    expect(deet / shown).toBeLessThan(0.72);
+  });
+
+  it('a pool cached from before 23 Oct (its sponsors under `studio`, local art beside them) still shows only sponsors', () => {
+    const old = { ...pool, sponsored: undefined, studio: pool.sponsored, screens: [{ id: 'house:sm-bakery', file: 'sm-bakery.webp', title: 'gone' }], hoardings: [{ id: 'house:sm-trees', file: 'sm-trees.webp', title: 'gone' }] } as unknown as HousePool;
+    for (let seed = 0; seed < 10; seed++) {
+      const m = houseManifest('street-market', slots, old, seed);
+      for (const f of m.slots.flatMap((s) => s.frames)) expect(advOf.has(f.c), f.c).toBe(true);
+    }
+    expect(adsUrl('/assets/ads/street_market/house.json', 'abc123')).toBe('/assets/ads/street_market/house.json?v=abc123');
   });
 
   it('Deet gets two thirds of the boards and WorldStreet a third, spread out, on Screens and Hoardings alike', () => {

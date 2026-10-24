@@ -6,8 +6,8 @@
  *   each instance picking its layers by attribute: every ad on the map costs ≤ 2 draw calls;
  * - unlit and non-emissive (a plain texture times the look's tint), flagged `noBloom` for the
  *   High post pass when it lands;
- * - rotation on the shared 10 s beat with a 0.5 s crossfade (rotation.ts), at most two surfaces lit
- *   on screen (visibility.ts), and an "AD" chip on paid frames only;
+ * - rotation on the shared 10 s beat with a 0.5 s crossfade (rotation.ts), every surface in view lit
+ *   (visibility.ts), and an "AD" chip on paid frames only;
  * - Motion creatives (docs/14 §3.3) as extra layers `${id}#k`, their keyframes on the same clock, so
  *   the one fade uniform serves both the beat and the keyframes. Only the KTX2 path uploads them
  *   (≈ 74 KB each on the GPU); the decoded fallback shows a Motion creative's first keyframe as a

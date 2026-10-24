@@ -88,13 +88,21 @@ export interface HousePool {
    * not shown (the Street Market's is empty since 23 Oct: the owner removed the dummy ads).
    */
   sponsored?: { screens: HouseEntry[]; hoardings: HouseEntry[] };
+  /** the sponsored lists' name before 23 Oct (a pool cached from then): read as `sponsored` */
+  studio?: { screens: HouseEntry[]; hoardings: HouseEntry[] };
   /** who the sponsored creatives are for: name, default destination, UTM tag (house-ads.py ADVERTISERS) */
   advertisers?: Record<string, Advertiser>;
 }
 
 /** Every entry of a pool, the sponsored ones included. */
 export function poolEntries(pool: HousePool): HouseEntry[] {
-  return [...pool.screens, ...pool.hoardings, ...(pool.sponsored?.screens ?? []), ...(pool.sponsored?.hoardings ?? [])];
+  const sponsored = sponsoredOf(pool);
+  return [...pool.screens, ...pool.hoardings, ...(sponsored?.screens ?? []), ...(sponsored?.hoardings ?? [])];
+}
+
+/** A pool's sponsored lists, under either name (`studio` before 23 Oct). */
+export function sponsoredOf(pool: Pick<HousePool, 'sponsored' | 'studio'>): HousePool['sponsored'] {
+  return pool.sponsored ?? pool.studio;
 }
 
 /** Which sponsored creatives a match may show (a region or audience without finance ads, later). */
@@ -197,8 +205,9 @@ export function houseManifest(mapId: string, slots: readonly AdSlot[], pool: Hou
         return list[mod(before, list.length)]!;
       });
   };
-  const screens = pool.sponsored?.screens.some(allowed) ? sponsorsOf(pool.sponsored.screens) : null;
-  const banners = pool.sponsored?.hoardings.some(allowed) ? sponsorsOf(pool.sponsored.hoardings) : null;
+  const sponsored = sponsoredOf(pool);
+  const screens = sponsored?.screens.some(allowed) ? sponsorsOf(sponsored.screens) : null;
+  const banners = sponsored?.hoardings.some(allowed) ? sponsorsOf(sponsored.hoardings) : null;
   const hoardingCount = slots.filter((s) => s.frames <= 1).length;
   let hoarding = 0;
   return {

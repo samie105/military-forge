@@ -1,16 +1,16 @@
 /**
- * Readability (docs/14 §1.3 rule 3): at most two ad surfaces show a creative on screen at once, at
- * every zoom. The map's layout already keeps it to two at 1× (W8's compile_map lint 4); at wider
- * zooms a third or fourth surface can come into view, and this limiter dims the extra ones to a
- * switched-off screen until one of the lit two leaves. The lit ones are those taking the most of
- * the view, with a little hysteresis so a pair at equal size doesn't flicker; changes fade over
- * 0.5 s like the rotation.
+ * Which ad surfaces show their creative. docs/14 §1.3 rule 3 once kept it to two on screen at once,
+ * switching a third or fourth (wider zooms, phones) to a dark screen; the owner overruled that on
+ * 24 Oct 2026 ("some billboards aren't even showing"): every board in view shows its ad, so MAX_LIT
+ * is unbounded. The limiter still fades a surface in as it enters the view, over 0.5 s like the
+ * rotation, and a map's layout still keeps it to two at 1× (W8's compile_map lint 4).
  */
 import type { PlanePose } from '../planeCamera';
 import { viewAtDepth, type Rect3 } from '../environment/backdrop';
 import type { AdSlot } from './manifest';
 
-export const MAX_LIT = 2;
+/** every surface in view (the owner, 24 Oct: no board stays dark) */
+export const MAX_LIT = Number.POSITIVE_INFINITY;
 /** a surface counts as on screen once this much of it is in view */
 export const ON_SCREEN = 0.05;
 /** score bonus for staying lit */
