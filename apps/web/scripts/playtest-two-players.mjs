@@ -57,7 +57,7 @@ async function enter(p, url, name) {
   await p.page.click('button[type=submit]');
 }
 
-/** One net-graph reading (the HUD's net plate carries the full graph): "ping 42 ms ±3 · loss 0.4% · 30 snap/s", "↓ 8.1 KB/s · ↑ 4.0 KB/s · …", "buffer … corrections …" */
+/** One net-graph reading (the HUD's net plate carries the full graph): "ping 42 ms ±3 · loss 0.4% · 30 updates/s", "↓ 8.1 KB/s · ↑ 4.0 KB/s · …", "input queue … corrections …" */
 async function netSample(p) {
   const text = await p.page.$eval('.hud-net[data-detail]', (e) => e.getAttribute('data-detail') ?? '').catch(() => '');
   const num = (re) => Number(re.exec(text)?.[1] ?? NaN);
@@ -65,11 +65,11 @@ async function netSample(p) {
     ping: num(/ping (\d+) ms/),
     jitter: num(/±(\d+)/),
     loss: num(/loss ([\d.]+)%/),
-    snaps: num(/(\d+) snap\/s/),
+    snaps: num(/(\d+) updates\/s/),
     kbIn: num(/↓ ([\d.]+) KB\/s/),
     kbOut: num(/↑ ([\d.]+) KB\/s/),
     corrections: num(/corrections ([\d.]+)\/min/),
-    transport: /WebSocket|WebTransport/.exec(text)?.[0] ?? '?',
+    transport: /standard connection|fast connection|local room/.exec(text)?.[0] ?? '?',
   };
 }
 

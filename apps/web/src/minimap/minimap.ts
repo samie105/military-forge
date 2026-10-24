@@ -145,9 +145,9 @@ export class Minimap {
       ['power', 'Power weapon'],
       ['gun', 'Gun'],
       ['item', 'Item'],
-      ['slab', 'Slab: fly up, drop through'],
+      ['slab', 'Platform: fly up, drop through'],
       ['updraft', 'Updraft'],
-      ['thin', 'Thin air: jets cut out'],
+      ['thin', 'Thin air: jetpacks cut out'],
     ]
       .map(([k, t]) => `<span class="mf-mm__lg mf-mm__lg--${k}"><i aria-hidden="true"></i>${t}</span>`)
       .join('');

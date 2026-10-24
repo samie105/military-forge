@@ -132,7 +132,7 @@ describe('First flight: the goals', () => {
     expect(goalView('dash', 'touch', { moveSide: 'left', fire: 'auto' })).toMatchObject({ touch: 'move', body: 'Flick the left stick.' });
     expect(goalView('dash', 'touch', { moveSide: 'left', fire: 'auto', dashButton: true }).touch).toBe('dash');
     expect(goalView('fly', 'touch', { moveSide: 'left', fire: 'auto', jetButton: true })).toMatchObject({ touch: 'jet' });
-    expect(goalView('fly', 'touch', { moveSide: 'left', fire: 'auto', jetButton: true }).body).toContain('Hold JET');
+    expect(goalView('fly', 'touch', { moveSide: 'left', fire: 'auto', jetButton: true }).body).toContain('Hold Jet');
   });
 
   it('the Briefing\'s Change cycles Touch, Keyboard and mouse, Controller', () => {

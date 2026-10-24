@@ -177,7 +177,7 @@ export function Home({ store }: { store: ShellStore }) {
             </div>
             <div className="home__soon m-p3" style={row(4)} aria-disabled="true">
               <span className="label">04</span>
-              <b className="display">Quick play</b>
+              <b className="display">Matchmaking</b>
               <span>Match with anyone</span>
               <span className="tag tag--soon">Coming soon</span>
             </div>

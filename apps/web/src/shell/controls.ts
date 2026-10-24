@@ -49,9 +49,9 @@ export interface ActionDef {
 export const ACTIONS: readonly ActionDef[] = [
   { id: 'left', label: 'Move left', group: 'Move', bit: Btn.Left, defaults: ['KeyA', 'ArrowLeft'] },
   { id: 'right', label: 'Move right', group: 'Move', bit: Btn.Right, defaults: ['KeyD', 'ArrowRight'] },
-  { id: 'jet', label: 'Jet (hold)', group: 'Move', bit: Btn.Jet, defaults: ['KeyW', 'Space'], hint: 'The ↑ arrow jets too, unless you bind it to something else' },
+  { id: 'jet', label: 'Jet (hold)', group: 'Move', bit: Btn.Jet, defaults: ['KeyW', 'Space'], hint: 'The ↑ arrow flies too, unless you bind it to something else' },
   { id: 'down', label: 'Crouch / drop', group: 'Move', bit: Btn.Down, defaults: ['KeyS', 'ArrowDown'] },
-  { id: 'dash', label: 'Dash', group: 'Move', bit: Btn.Dash, defaults: ['ShiftLeft', 'ShiftRight'], hint: 'Alone: the way you face. With a direction held: 8 ways, up (jet) and down included' },
+  { id: 'dash', label: 'Dash', group: 'Move', bit: Btn.Dash, defaults: ['ShiftLeft', 'ShiftRight'], hint: 'Alone: the way you face. With a direction held: 8 ways, up and down included' },
   { id: 'fire', label: 'Fire', group: 'Combat', bit: Btn.Fire, defaults: ['Mouse0'] },
   { id: 'fire2', label: 'Alt fire / scope', group: 'Combat', bit: Btn.Fire2, defaults: ['Mouse2'] },
   { id: 'reload', label: 'Reload', group: 'Combat', bit: Btn.Reload, defaults: ['KeyR'] },
@@ -65,7 +65,7 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'interact', label: 'Pick up / use', group: 'Weapons', bit: Btn.Interact, defaults: ['KeyE'] },
   { id: 'shield', label: 'Shield up / sling', group: 'Weapons', bit: Btn.Shield, defaults: ['KeyX'] },
   { id: 'scoreboard', label: 'Scoreboard (hold)', group: 'Interface', ui: true, defaults: ['Tab'] },
-  { id: 'netGraph', label: 'Net graph', group: 'Interface', ui: true, defaults: ['KeyN'] },
+  { id: 'netGraph', label: 'Connection stats', group: 'Interface', ui: true, defaults: ['KeyN'] },
   // voice chat (voice/): V, as the owner asked; melee moved to C (settings rev 3 moves saved ones too)
   { id: 'talk', label: 'Push to talk (hold)', group: 'Interface', ui: true, defaults: ['KeyV'], hint: 'Voice chat: soldiers near you hear you. B talks to your party' },
   // the big map (minimap/): pans and zooms; a pad double-taps View / Share, a phone taps the minimap

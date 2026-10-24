@@ -169,7 +169,7 @@ function Touch() {
       <Row i={8} label="Look-ahead" desc="The view leans toward where you aim.">
         <Switch on={t.lookAhead} onChange={(lookAhead) => set({ lookAhead })} label="Look-ahead" />
       </Row>
-      <Row i={9} label="Camera shake" desc="Blasts and recoil in the 3D view.">
+      <Row i={9} label="Camera shake" desc="Blasts and recoil shake the view.">
         <div className="pm-set__slider">
           <Slider value={t.shake} onChange={(v) => set({ shake: Math.round(v * 20) / 20 })} label="Camera shake" valueText={pct(t.shake)} min={0} max={100} />
           <output className="num">{pct(t.shake)}</output>
@@ -193,8 +193,8 @@ function Touch() {
           <Switch on={t.precisionRelease} onChange={(precisionRelease) => set({ precisionRelease })} label="Precision weapons fire on release" />
         </Row>
         {t.fire === 'button' && (
-          <Row i={2} label="A second FIRE on the left" desc="Top left, for your left index finger.">
-            <Switch on={t.leftFire} onChange={(leftFire) => set({ leftFire })} label="A second FIRE on the left" />
+          <Row i={2} label="A second Fire button on the left" desc="Top left, for your left index finger.">
+            <Switch on={t.leftFire} onChange={(leftFire) => set({ leftFire })} label="A second Fire button on the left" />
           </Row>
         )}
         {/* controls spec §4.2 (item 7): the presets; moving a control in the editor makes it "My layout" there */}
@@ -205,8 +205,8 @@ function Touch() {
           </span>
           <Seg value={t.preset} label="Preset" options={PRESET_IDS.map((id) => [id, id === 'oneThumb' ? 'One-thumb' : PRESET_NAMES[id]] as [PresetId, string])} onChange={(preset) => setTouchPreset(preset)} />
         </div>
-        <Row i={4} label="Push up to jet" desc="The move stick flies. Off in Claw: JET is a button.">
-          <Switch on={t.stickJet} onChange={(stickJet) => set({ stickJet })} label="Push up to jet" />
+        <Row i={4} label="Push up to fly" desc="The move stick flies. Off in Claw: Jet is a button.">
+          <Switch on={t.stickJet} onChange={(stickJet) => set({ stickJet })} label="Push up to fly" />
         </Row>
         <Row i={4} label="Extra finger fires" desc="A second finger on the right fires while it's down.">
           <Switch on={t.tapFire} onChange={(tapFire) => set({ tapFire })} label="Extra finger fires" />
@@ -217,7 +217,7 @@ function Touch() {
         <Row i={6} label="Keep aiming after a button" desc="Back on the aim stick soon after a button: your aim and fire carry on.">
           <Switch on={t.keepAim} onChange={(keepAim) => set({ keepAim })} label="Keep aiming after a button" />
         </Row>
-        <Row i={6} label="Button gestures" desc="Swipe the grenade to change it, hold the gun pill for a radial, swipe the dash. Off: plain taps.">
+        <Row i={6} label="Button gestures" desc="Swipe Grenade to change it, hold the gun button for quick-select, swipe Dash. Off: plain taps.">
           <Switch on={t.gestures} onChange={(gestures) => set({ gestures })} label="Button gestures" />
         </Row>
         {canVibrate() && (
@@ -333,11 +333,11 @@ function Network({ settings }: { settings: Settings }) {
   const ctl = useCtl();
   return (
     <>
-      <Row i={0} label="Low-bandwidth mode" desc="Fewer updates for a weak connection.">
-        <Switch on={settings.lowBandwidth} onChange={(lowBandwidth) => ctl.updateSettings({ lowBandwidth })} label="Low-bandwidth mode" />
+      <Row i={0} label="Data saver" desc="Fewer updates for a weak connection.">
+        <Switch on={settings.lowBandwidth} onChange={(lowBandwidth) => ctl.updateSettings({ lowBandwidth })} label="Data saver" />
       </Row>
-      <Row i={1} label="Net graph" desc="Ping and loss in the corner.">
-        <Switch on={settings.netGraph} onChange={(netGraph) => ctl.updateSettings({ netGraph })} label="Net graph" />
+      <Row i={1} label="Connection stats" desc="Ping and loss in the corner.">
+        <Switch on={settings.netGraph} onChange={(netGraph) => ctl.updateSettings({ netGraph })} label="Connection stats" />
       </Row>
       <div className="pm-set pm-set--block m-p3" style={rise(2)}>
         <span className="pm-set__text">

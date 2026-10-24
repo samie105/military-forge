@@ -83,8 +83,8 @@ export function TipsCard({ bindings, doubleTapDash = true }: { bindings: Setting
           </div>
         </dl>
         <ul className="mf-tips__list">
-          <li>Hold jet to fly. Fuel refills on the ground, faster than in the air.</li>
-          <li>Hold crouch on a yellow platform to drop through it.</li>
+          <li>Hold Jet to fly. Fuel refills on the ground, faster than in the air.</li>
+          <li>Hold Crouch on a yellow platform to drop through it.</li>
           <li>{dashTip(bindings, doubleTapDash, layout)}</li>
           <li>Tap the grenade key for a quick throw; hold it to aim the arc, and let go to throw.</li>
           <li>A raised riot shield stops you dashing: sling it first.</li>

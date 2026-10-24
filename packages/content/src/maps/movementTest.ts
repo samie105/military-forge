@@ -89,7 +89,7 @@ for (let i = top.length - 2; i >= 0; i -= 2) terrain.push(top[i]!, top[i + 1]!);
 labels.push(
   { x: 92, y: 2.0, text: 'crouch corridor 1.25 m' },
   { x: 104, y: 2.8, text: 'corridor 2 m' },
-  { x: 114, y: 5.8, text: 'overhang (corner correction)' },
+  { x: 114, y: 5.8, text: 'overhang' },
   { x: 127, y: 8.6, text: 'one-way platforms' },
   { x: 137, y: 5.2, text: 'solid platform' },
   { x: 164, y: 7, text: 'shooting range' },
@@ -97,7 +97,7 @@ labels.push(
 
 export const movementTestMap: MapDef = {
   id: 'movement-test',
-  name: 'Movement Test',
+  name: 'Proving Ground',
   bounds: { minX: -2, minY: FLOOR_BOTTOM, maxX: WIDTH + 2, maxY: CEILING + 2 },
   solids: [
     { points: terrain, material: Material.Dirt },

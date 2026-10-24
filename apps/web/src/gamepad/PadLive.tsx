@@ -152,7 +152,7 @@ export function PadLive({ pad }: { pad: PadSettings }) {
         <ul className="mf-padlive__legend" aria-label="What the zones mean">
           <li><i className="mf-padlive__key mf-padlive__key--dead"></i>Dead zone ({Math.round(pad.moveDeadzone * 100)}%): nothing</li>
           <li><i className="mf-padlive__key mf-padlive__key--run"></i>Run past the lines (≈ {Math.round(rawAt(MOVE_ZONES.runOn, pad.moveDeadzone) * 100)}%)</li>
-          {pad.stickJet && <li><i className="mf-padlive__key mf-padlive__key--jet"></i>Jet starts in the steep cone (55°–125°), keeps going in the wide one</li>}
+          {pad.stickJet && <li><i className="mf-padlive__key mf-padlive__key--jet"></i>Flight starts in the steep cone (55°–125°), keeps going in the wide one</li>}
           <li><i className="mf-padlive__key mf-padlive__key--crouch"></i>Crouch: straight down (±30°)</li>
           <li><i className="mf-padlive__key mf-padlive__key--ring"></i>Aim turns past {Math.round(AIM_MIN_PUSH * 100)}%; assist pulls past {Math.round(PAD_PULL_MIN * 100)}%</li>
         </ul>

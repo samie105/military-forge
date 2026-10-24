@@ -221,7 +221,7 @@ function PickerBody({ social, room, phone }: { social: SocialController; room: s
               <Icon name="close" />
             </button>
           </header>
-          {!phone && <p className="sx-note">Friends get a toast wherever they are, in the menus or mid-match. An invite lasts 2 minutes.</p>}
+          {!phone && <p className="sx-note">Friends get your invite wherever they are, in the menus or mid-match. An invite lasts 2 minutes.</p>}
           <div className="sx-list sx-picker__list">
             {!list && <p className="status status--busy sx-note">Loading your friends…</p>}
             {list && friends.length === 0 && (
@@ -291,7 +291,7 @@ export function InviteFriendsBlock({ social, phone = false }: { social: SocialCo
       <Icon name="sx-friends" size={phone ? undefined : 'lg'} />
       <span className="sx-invblock__text">
         <b>Invite friends</b>
-        {!phone && <span>{list ? `${on} online · they get a toast` : 'They get a toast, anywhere'}</span>}
+        {!phone && <span>{list ? `${on} online · they're alerted anywhere` : "They're alerted anywhere"}</span>}
       </span>
       <Icon name="chev-right" />
     </button>

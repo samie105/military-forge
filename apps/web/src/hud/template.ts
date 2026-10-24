@@ -57,7 +57,7 @@ function desktop(): string {
     <div class="hud-tl">
       <div class="hud-net plate" data-state="fps"><span class="num" data-bind="fps.value"></span><span class="hud-net__loss">fps</span></div>
       <div class="hud-net plate" data-state="net" data-bind-attr="title: net.detail; data-detail: net.detail; data-tone: net.tone"><span class="sig" data-bind-attr="class: net.sig" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="num" data-bind="net.ping"></span><span class="hud-net__jit num" data-bind="net.jitter"></span><span class="hud-net__loss num"><span data-bind="net.loss"></span> loss</span><span class="hud-net__via" data-bind="net.via" data-bind-attr="title: net.viaTitle"></span></div>
-      <div class="tuned plate mf-hud-admin" data-state="admin" title="The owner changed gameplay numbers on this server (the admin page)">${ic('sliders', 'ic--sm')}<b>Tuned by admin</b></div>
+      <div class="tuned plate mf-hud-admin" data-state="admin" title="This server runs its own gameplay settings">${ic('sliders', 'ic--sm')}<b>Tuned by admin</b></div>
       <div class="tuned plate m-p7" data-state="tuned">${ic('sliders', 'ic--sm')}<b>Tuned by host</b><span data-bind="match.tunedSummary"></span></div>
     </div>
 
@@ -77,7 +77,7 @@ function desktop(): string {
       <div class="cue cue--gas plate" data-state="gas">${ic('b-gas')}<span><b>Toxic gas</b> · <span data-bind="player.gasCue"></span></span></div>
       <div class="cue cue--emp plate" data-state="emp">${ic('ev-emp')}<span><b>Jetpack offline</b> · <span data-bind="player.empCause"></span></span><b class="num" data-bind="player.jetDisabled"></b></div>
       <div class="cue cue--burn plate" data-state="burning">${ic('flame')}<span><b>On fire</b> · <span data-bind="player.burnCue"></span></span></div>
-      <div class="cue cue--launch plate" data-state="launched">${ic('b-launch')}<span><b>Launched</b> by <span data-bind="hit.by"></span> · jet to recover</span></div>
+      <div class="cue cue--launch plate" data-state="launched">${ic('b-launch')}<span><b>Launched</b> by <span data-bind="hit.by"></span> · fly to recover</span></div>
       <div class="shieldbox plate" data-state="shield">
         <svg class="ic ic--lg ic--fill" aria-hidden="true"><use href="#icon-wpn-shield"/></svg>
         <div class="shieldbox__body">
@@ -91,7 +91,7 @@ function desktop(): string {
           <div class="vital vital--hp">${ic('hp')}<b class="vital__num num" data-bind="player.hp"></b>
             <div class="bar bar--hp" role="meter" aria-label="Health" aria-valuemin="0" aria-valuemax="100" data-bind-attr="aria-valuenow: player.hp"><i class="bar__ghost"></i><i class="bar__fill"></i><span class="bar__ticks"></span></div></div>
           <div class="vital vital--fuel" data-tour="fuel">${ic('fuel')}<b class="vital__num num" data-bind="player.fuel"></b>
-            <div class="vital__stack"><div class="bar bar--fuel" role="meter" aria-label="Jet fuel" aria-valuemin="0" aria-valuemax="100" data-bind-attr="aria-valuenow: player.fuel"><i></i><span class="mf-fuel__cost" aria-hidden="true"></span><span class="mf-fuel__tick" aria-hidden="true"></span></div><div class="bar bar--delay" aria-hidden="true"><i></i></div></div></div>
+            <div class="vital__stack"><div class="bar bar--fuel" role="meter" aria-label="Fuel" aria-valuemin="0" aria-valuemax="100" data-bind-attr="aria-valuenow: player.fuel"><i></i><span class="mf-fuel__cost" aria-hidden="true"></span><span class="mf-fuel__tick" aria-hidden="true"></span></div><div class="bar bar--delay" aria-hidden="true"><i></i></div></div></div>
         </div>
         <div class="dash plate" aria-label="Dash" data-tour="dash">
           <svg class="dash__ring" viewBox="0 0 100 100" aria-hidden="true">

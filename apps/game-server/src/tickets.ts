@@ -41,13 +41,13 @@ export type TicketFailure = 'missing' | 'malformed' | 'bad_signature' | 'wrong_a
 
 /** What the player is told (the close reason) for each failure. */
 export const TICKET_FAILURE_TEXT: Record<TicketFailure, string> = {
-  missing: 'this room needs an invite from the game: open the room link again',
-  malformed: 'invalid join ticket: open the room link again',
-  bad_signature: 'invalid join ticket: open the room link again',
-  wrong_audience: 'invalid join ticket: open the room link again',
-  expired: 'join ticket expired: open the room link again',
-  wrong_room: 'that ticket is for another room: open the room link again',
-  used: 'join ticket already used: open the room link again',
+  missing: 'this room takes players from its link only: open the room link again',
+  malformed: "your pass for this room didn't check out: open the room link again",
+  bad_signature: "your pass for this room didn't check out: open the room link again",
+  wrong_audience: "your pass for this room didn't check out: open the room link again",
+  expired: 'your pass for this room expired: open the room link again',
+  wrong_room: 'that pass is for another room: open the room link again',
+  used: 'that pass was already used: open the room link again',
 };
 
 /** An Ed25519 public key from PEM; keys pasted into one-line env vars arrive with literal "\n". */

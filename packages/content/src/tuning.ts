@@ -205,7 +205,7 @@ export const TUNING_GROUPS: readonly { title: string; fields: readonly TuningFie
     fields: [
       { key: 'jetThrust', label: 'Thrust (m/s²)', min: 10, max: 80, step: 0.5 },
       { key: 'jetKick', label: 'Take-off kick (×)', min: 1, max: 3, step: 0.05 },
-      { key: 'jetKickTicks', label: 'Kick length (ticks)', min: 0, max: 30, step: 1 },
+      { key: 'jetKickTicks', label: 'Kick length (1/60 s)', min: 0, max: 30, step: 1 },
       { key: 'jetMaxVy', label: 'Top climb speed (m/s)', min: 2, max: 15, step: 0.1 },
       { key: 'jetTaperBand', label: 'Thrust fade near top speed (m/s)', min: 0.1, max: 5, step: 0.1 },
       { key: 'jetAirMaxX', label: 'Top sideways speed, flying (m/s)', min: 1, max: 15, step: 0.1 },
@@ -237,7 +237,7 @@ export const TUNING_GROUPS: readonly { title: string; fields: readonly TuningFie
     title: 'Dash',
     fields: [
       { key: 'dashSpeed', label: 'Speed (m/s)', min: 4, max: 30, step: 0.5 },
-      { key: 'dashBurstTicks', label: 'Length (ticks)', min: 1, max: 30, step: 1 },
+      { key: 'dashBurstTicks', label: 'Length (1/60 s)', min: 1, max: 30, step: 1 },
       { key: 'dashFuelCost', label: 'Fuel per dash', min: 0, max: 60, step: 1 },
       { key: 'dashGap', label: 'Gap before the next dash (s)', min: 0, max: 1, step: 0.01 },
       { key: 'dashChainWindow', label: 'Chain window (s)', min: 0, max: 2, step: 0.05 },

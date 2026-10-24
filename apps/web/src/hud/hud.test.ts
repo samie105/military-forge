@@ -120,7 +120,7 @@ describe('weapon cards', () => {
 
 describe('net graph', () => {
   it('ping, loss, bandwidth and the transport in four short lines', () => {
-    expect(netGraph(undefined)).toBe('local match · no network');
+    expect(netGraph(undefined)).toBe('local match · no connection');
     const text = netGraph({
       rttMs: 41.6,
       snapshotsPerSec: 30,
@@ -144,9 +144,9 @@ describe('net graph', () => {
       },
     });
     expect(text.split('\n')).toEqual([
-      'ping 42 ms ±3 · loss 0.4% · 30 snap/s',
-      '↓ 8.1 KB/s · ↑ 4.0 KB/s · interp 100 ms',
-      'buffer 2 · ×1.000 · corrections 0.0/min',
+      'ping 42 ms ±3 · loss 0.4% · 30 updates/s',
+      '↓ 8.1 KB/s · ↑ 4.0 KB/s · smoothing 100 ms',
+      'input queue 2 · clock ×1.000 · corrections 0.0/min',
       'connected · WebSocket',
     ]);
   });
@@ -308,12 +308,12 @@ describe('hudFrame', () => {
     expect(v['net.ping']).toBe('152 ms');
     expect(v['net.jitter']).toBe('±18');
     expect(v['net.loss']).toBe('2.0%');
-    expect(v['net.via']).toBe('WT');
-    expect(v['net.viaTitle']).toBe('WebTransport (UDP)');
-    expect(v['net.short']).toBe('±18 · 2.0% · WT');
-    expect(netGraph(net)).toMatch(/WebTransport/);
+    expect(v['net.via']).toBe('UDP');
+    expect(v['net.viaTitle']).toBe('Fast connection (UDP)');
+    expect(v['net.short']).toBe('±18 · 2.0% · UDP');
+    expect(netGraph(net)).toMatch(/fast connection/);
     const ws = hudFrame(input({ frame: { ...input().frame, net: { ...net, transport: 'ws', prediction: { ...prediction, snapshotLossPct: 12.6 } } } }), memory).values;
-    expect(ws['net.short']).toBe('±18 · 13% · WS');
+    expect(ws['net.short']).toBe('±18 · 13% · TCP');
     const none = hudFrame(input({ frame: { ...input().frame, net: { ...net, transport: undefined, prediction: undefined } } }), memory).values;
     expect(none['net.short']).toBe('0.0%');
     expect(none['net.via']).toBe('');

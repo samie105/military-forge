@@ -331,12 +331,12 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
     v['net.ping'] = `${ping} ms`;
     const loss = net.prediction?.snapshotLossPct ?? 0;
     const jitter = net.prediction ? `±${Math.round(net.prediction.rttJitterMs)}` : '';
-    const via = net.transport === 'wt' ? 'WT' : net.transport === 'ws' ? 'WS' : net.transport === 'lan' ? 'LAN' : '';
+    const via = net.transport === 'wt' ? 'UDP' : net.transport === 'ws' ? 'TCP' : net.transport === 'lan' ? 'LAN' : '';
     v['net.loss'] = `${loss.toFixed(1)}%`;
     // the readout the owner reports from (19 Oct 2026): jitter and the transport next to ping and loss
     v['net.jitter'] = jitter;
     v['net.via'] = via;
-    v['net.viaTitle'] = via === 'WT' ? 'WebTransport (UDP)' : via === 'WS' ? 'WebSocket (TCP)' : via === 'LAN' ? 'Local room: straight to the host over your Wi-Fi' : '';
+    v['net.viaTitle'] = via === 'UDP' ? 'Fast connection (UDP)' : via === 'TCP' ? 'Standard connection (TCP)' : via === 'LAN' ? 'Local room: straight to the host over your Wi-Fi' : '';
     // phones: one compact line after the ping
     v['net.short'] = [jitter, `${loss < 10 ? loss.toFixed(1) : Math.round(loss)}%`, via].filter(Boolean).join(' · ');
     v['net.detail'] = mem.netDetail;
@@ -1533,14 +1533,14 @@ function getComputedStyleValue(name: string): string {
 
 /** The net plate's detail (its title, and the two-player script's numbers): the full net graph. */
 export function netGraph(n: NetStats | undefined): string {
-  if (!n) return 'local match · no network';
+  if (!n) return 'local match · no connection';
   const p = n.prediction;
   const lines = [
-    `ping ${n.rttMs.toFixed(0)} ms${p ? ` ±${p.rttJitterMs.toFixed(0)}` : ''} · loss ${p ? p.snapshotLossPct.toFixed(1) : '0.0'}% · ${n.snapshotsPerSec.toFixed(0)} snap/s${n.transport ? ` · ${n.transport === 'wt' ? 'WebTransport' : n.transport === 'ws' ? 'WebSocket' : 'local room'}` : ''}`,
-    `↓ ${n.kbInPerSec.toFixed(1)} KB/s · ↑ ${n.kbOutPerSec.toFixed(1)} KB/s · interp ${n.interpDelayMs} ms`,
+    `ping ${n.rttMs.toFixed(0)} ms${p ? ` ±${p.rttJitterMs.toFixed(0)}` : ''} · loss ${p ? p.snapshotLossPct.toFixed(1) : '0.0'}% · ${n.snapshotsPerSec.toFixed(0)} updates/s${n.transport ? ` · ${n.transport === 'wt' ? 'fast connection' : n.transport === 'ws' ? 'standard connection' : 'local room'}` : ''}`,
+    `↓ ${n.kbInPerSec.toFixed(1)} KB/s · ↑ ${n.kbOutPerSec.toFixed(1)} KB/s · smoothing ${n.interpDelayMs} ms`,
   ];
-  if (p) lines.push(`buffer ${Number.isNaN(p.inputBufferHealth) ? '–' : p.inputBufferHealth} · ×${p.timeScale.toFixed(3)} · corrections ${p.correctionsPerMin.toFixed(1)}/min`);
+  if (p) lines.push(`input queue ${Number.isNaN(p.inputBufferHealth) ? '–' : p.inputBufferHealth} · clock ×${p.timeScale.toFixed(3)} · corrections ${p.correctionsPerMin.toFixed(1)}/min`);
   lines.push(n.status);
-  if (p?.suggestLowBandwidth) lines.push('heavy packet loss: try Low-bandwidth mode (Settings)');
+  if (p?.suggestLowBandwidth) lines.push('heavy packet loss: turn on Data saver (Settings → Network)');
   return lines.join('\n');
 }

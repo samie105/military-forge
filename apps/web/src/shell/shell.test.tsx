@@ -235,7 +235,7 @@ describe('lobby (screen 4)', () => {
     timeLimit: 300,
     killLimit: 10,
     mapId: 'movement-test',
-    mapName: 'Movement Test',
+    mapName: 'Proving Ground',
     bots: 4,
     botLevel: 'normal',
   });
@@ -365,7 +365,7 @@ describe('join, names, connection, pause and settings', () => {
     // a watcher never opens a room: no room means nobody is playing in it
     expect(alertFromConnection({ code: 4006, detail: '', attempt: 0, lastPingMs: -1, lossPct: 0 }, 'KMTXRA', true)).toMatchObject({ kind: 'room-not-found', title: 'Nothing to watch', message: expect.stringContaining('Nobody is playing in this room right now') as string, action: 'rejoin' });
     expect(closed(4007, 'the room has closed')).toMatchObject({ kind: 'room-not-found', action: null });
-    expect(closed(4007, 'join ticket expired')).toMatchObject({ kind: 'refused', action: 'rejoin' });
+    expect(closed(4007, 'your pass for this room expired: open the room link again')).toMatchObject({ kind: 'refused', action: 'rejoin' });
     expect(closed(1006)).toMatchObject({ kind: 'connection-lost', code: 'CONNECTION_LOST · last ping 412 ms, 18% loss' });
     expect(closed(1006).message).toContain('after 7 tries');
     // no HELLO within 5 s (the room's door): its own alert, not "Connection lost" (review L7)
@@ -515,7 +515,7 @@ describe("the host's tuning panel (pnpm playtest --tune)", () => {
     timeLimit: 300,
     killLimit: 10,
     mapId: 'movement-test',
-    mapName: 'Movement Test',
+    mapName: 'Proving Ground',
     bots: 4,
     botLevel: 'normal',
   });

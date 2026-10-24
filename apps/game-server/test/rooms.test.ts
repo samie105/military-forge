@@ -237,13 +237,13 @@ describe('join tickets (docs/06 §6)', () => {
       expect(p.conn.closed?.code, t.slice(-12)).toBe(CloseCode.TicketInvalid);
       return p.conn.closed!.reason;
     };
-    expect(refused('')).toMatch(/needs an invite/);
-    expect(refused(ticket({}, other.privateKey))).toMatch(/invalid join ticket/);
+    expect(refused('')).toMatch(/from its link only/);
+    expect(refused(ticket({}, other.privateKey))).toMatch(/didn't check out/);
     expect(refused(ticket({ room: 'BBBBBB' }))).toMatch(/another room/);
     expect(refused(ticket({ exp: nowS - 10, iat: nowS - 40 }))).toMatch(/expired/);
-    expect(refused(ticket({ aud: 'api' }))).toMatch(/invalid join ticket/); // an access token isn't a ticket
+    expect(refused(ticket({ aud: 'api' }))).toMatch(/didn't check out/); // an access token isn't a ticket
     expect(refused(ticket({ exp: nowS + 3600 }))).toMatch(/expired/); // nothing lives that long
-    expect(refused('a.b.c')).toMatch(/invalid join ticket/);
+    expect(refused('a.b.c')).toMatch(/didn't check out/);
     expect(rooms.rooms.size).toBe(0); // no room for any of them
 
     const good = ticket({ nick: 'Kemi' });

@@ -72,10 +72,10 @@ const dashDistance: TuneRow = (() => {
 
 /** The kit's rows, in its order. */
 export const TUNE_ROWS: readonly TuneRow[] = [
-  plain('fuelMax', 'Jet fuel · max', 'fuelMax', ''),
-  plain('fuelBurn', 'Jet fuel · burn', 'fuelBurn', '/s'),
-  plain('fuelRegen', 'Jet fuel · regen', 'fuelRegenGround', '/s'),
-  plain('jetThrust', 'Jet thrust', 'jetThrust', ''),
+  plain('fuelMax', 'Fuel · max', 'fuelMax', ''),
+  plain('fuelBurn', 'Fuel · burn', 'fuelBurn', '/s'),
+  plain('fuelRegen', 'Fuel · refill', 'fuelRegenGround', '/s'),
+  plain('jetThrust', 'Jetpack thrust', 'jetThrust', ''),
   plain('gravity', 'Gravity', 'gravity', 'm/s²'),
   plain('runSpeed', 'Run speed', 'walkMax', 'm/s'),
   dashDistance,

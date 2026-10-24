@@ -259,7 +259,7 @@ export class WorldTags {
       this.sign.innerHTML = '';
       const b = document.createElement('b');
       b.className = 'display';
-      b.textContent = 'Test armory';
+      b.textContent = 'Weapon rack';
       const line = document.createElement('span');
       line.append('Walk up to any gun · ');
       const kbd = document.createElement('kbd');

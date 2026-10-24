@@ -28,7 +28,7 @@ const mb = (bytes: number) => `${(bytes / 1e6).toFixed(1)} MB`;
 
 /** The line beside the percentage. */
 export function loadLine(haveMatch: boolean, load: AssetLoad): string {
-  if (load.done < load.files) return `Loading the map's art · ${load.done} of ${load.files} files${load.bytes > 0 ? ` · ${mb(load.bytes)}` : ''}`;
+  if (load.done < load.files) return `Loading the map · ${load.done} of ${load.files}${load.bytes > 0 ? ` · ${mb(load.bytes)}` : ''}`;
   if (!haveMatch) return 'Getting the battlefield from the server';
   return 'Map loaded';
 }

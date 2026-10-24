@@ -25,7 +25,7 @@ const other = (side: 'left' | 'right') => (side === 'left' ? 'right' : 'left');
 const TOUCH_FIRE = {
   auto: (aim: string) => `Aim the ${aim} stick at the target.`,
   pull: (aim: string) => `Push the ${aim} stick past its ring.`,
-  button: () => 'Hold FIRE, drag to aim.',
+  button: () => 'Hold Fire, drag to aim.',
   release: (aim: string) => `Aim the ${aim} stick, lift to fire.`,
 } as const;
 
@@ -38,7 +38,7 @@ export const FLIGHT_COPY: Record<'run' | 'fly' | 'hit' | 'dash' | 'throw', (devi
   fly: (d, t) =>
     d === 'touch'
       ? t.jetButton
-        ? { title: 'Fly.', body: 'Hold JET.', help: `Or push the ${t.moveSide} stick up.` }
+        ? { title: 'Fly.', body: 'Hold Jet.', help: `Or push the ${t.moveSide} stick up.` }
         : { title: 'Fly.', body: `Push the ${t.moveSide} stick up.`, help: 'Hold it up to climb.' }
       : { title: 'Fly.', body: 'Hold to fly. Watch the fuel.', help: 'Up to the marker. Fuel refills on the ground.' },
   hit: (d, t) =>
@@ -48,7 +48,7 @@ export const FLIGHT_COPY: Record<'run' | 'fly' | 'hit' | 'dash' | 'throw', (devi
   dash: (d, t) =>
     d === 'touch'
       ? t.dashButton
-        ? { title: 'Dash.', body: 'Tap DASH.', help: `Or flick the ${t.moveSide} stick.` }
+        ? { title: 'Dash.', body: 'Tap Dash.', help: `Or flick the ${t.moveSide} stick.` }
         : { title: 'Dash.', body: `Flick the ${t.moveSide} stick.`, help: 'Push to the rim fast, let go.' }
       : { title: 'Dash.', body: 'Dodges fire. Any direction.', help: 'Hold a direction, then dash.' },
   throw: (d) =>

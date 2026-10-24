@@ -18,7 +18,7 @@ export function seoFiles(name: string, date: string): SeoFiles {
     id: '/',
     name,
     short_name: name,
-    description: `${name}: a free 2.5D multiplayer jetpack shooter you play in your browser.`,
+    description: `${name}: a free multiplayer jetpack shooter you play in your browser.`,
     lang: 'en',
     start_url: '/',
     scope: '/',

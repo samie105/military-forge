@@ -165,7 +165,7 @@ export function TunePanel({ online, getTuning, setTuning, subscribe, onClose, co
           {copied === 'shown' && (
             <label className="mf-tune__out">
               <span>{changed === 0 ? 'Nothing changed yet (the defaults)' : 'No clipboard here: press Ctrl+C (⌘C on a Mac)'}</span>
-              <textarea readOnly value={json} rows={4} ref={(el) => el?.select()} aria-label="The changed values as JSON" />
+              <textarea readOnly value={json} rows={4} ref={(el) => el?.select()} aria-label="The changed values, as text" />
             </label>
           )}
         </footer>

@@ -67,8 +67,8 @@ describe('the map loading screen', () => {
     expect(loadPercent(false, busy)).toBe(40);
     expect(loadPercent(true, busy)).toBe(55);
     expect(loadPercent(true, idle)).toBe(100);
-    expect(loadLine(true, busy)).toBe("Loading the map's art · 1 of 4 files · 1.5 MB");
-    expect(loadLine(true, { files: 2, done: 1, bytes: 0 })).toBe("Loading the map's art · 1 of 2 files");
+    expect(loadLine(true, busy)).toBe("Loading the map · 1 of 4 · 1.5 MB");
+    expect(loadLine(true, { files: 2, done: 1, bytes: 0 })).toBe("Loading the map · 1 of 2");
     expect(loadLine(false, idle)).toBe('Getting the battlefield from the server');
   });
 

@@ -173,7 +173,7 @@ describe('online match and lobby views', () => {
       ['Ade', true, false, true, 40],
       ['Kemi', false, true, false, -1],
     ]);
-    expect(view).toMatchObject({ isHost: false, ready: false, timeLimit: 300, killLimit: 20, mapName: 'Movement Test', code: 'KQXMZP' });
+    expect(view).toMatchObject({ isHost: false, ready: false, timeLimit: 300, killLimit: 20, mapName: 'Proving Ground', code: 'KQXMZP' });
     expect(lobbyView(source(state(), 2))!.isHost).toBe(true);
     expect(sameLobby(view, lobbyView(source(state())))).toBe(true);
     expect(sameLobby(view, lobbyView(source(state({ hostId: 5 }))))).toBe(false);

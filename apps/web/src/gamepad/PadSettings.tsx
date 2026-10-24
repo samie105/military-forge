@@ -34,8 +34,8 @@ type Capture = { action: PadActionId; index: number } | null;
 const ASSIST_NAME: Record<AssistLevel, string> = { off: 'Off', light: 'Light', standard: 'Standard', strong: 'Strong' };
 const ASSIST_TEXT: Record<AssistLevel, string> = {
   off: 'No help: the aim goes exactly where the stick points.',
-  light: 'The aim slows a little on an enemy, so a sweep lingers on him. It never pulls.',
-  standard: 'Light, plus a gentle pull toward an enemy near your aim line while you aim (at most 3° a tick, within your gun’s range). You always win a disagreement.',
+  light: 'The aim slows a little on an enemy, so a sweep lingers on them. It never pulls.',
+  standard: 'Light, plus a gentle pull toward an enemy near your aim line while you aim, within your gun’s range. The stick always wins.',
   strong: 'Standard, plus the aim stays on your target when you let the stick go.',
 };
 
@@ -285,8 +285,8 @@ export function PadControls({ pad, onChange, reduceFlashes = false, phone = fals
       <Row phone={phone} label="Swap sticks" desc="Move with the right stick, aim with the left.">
         <Switch on={pad.swapSticks} onChange={(swapSticks) => set({ swapSticks })} label="Swap sticks" />
       </Row>
-      <Row phone={phone} label="Push up to jet" desc="Pushing the move stick steeply up jets, as the jet buttons do. A run that drifts up doesn't take off.">
-        <Switch on={pad.stickJet} onChange={(stickJet) => set({ stickJet })} label="Push up to jet" />
+      <Row phone={phone} label="Push up to fly" desc="Pushing the move stick steeply up flies, as Jet does. A run that drifts up doesn't take off.">
+        <Switch on={pad.stickJet} onChange={(stickJet) => set({ stickJet })} label="Push up to fly" />
       </Row>
       <Row phone={phone} label="Aim for me" desc="The aim follows the nearest enemy you can see, in your gun's range; otherwise the way you move. Push the aim stick to take over. (One-stick)">
         <Switch on={pad.autoAim} onChange={(autoAim) => set({ autoAim })} label="Aim for me" />

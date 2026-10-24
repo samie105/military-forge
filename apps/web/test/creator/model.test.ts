@@ -72,13 +72,13 @@ describe('the creator: body cards and the first-run flag', () => {
   it('marks the chosen body, and a body whose 3D art is still coming', () => {
     const html = bodyCardsHtml(bodyCards(), 'male', new Set(['female']));
     expect(html).toMatch(/aria-checked="true" data-body="male"/);
-    expect(html).toContain('Art coming');
-    expect(html).toContain('Her 3D art is being made: shown on the male body for now');
+    expect(html).toContain('Soon');
+    expect(html).toContain('Deploys on the standard body for now');
     expect(html).toContain('3 builds');
     // chosen, she's On, and her card still says why she looks like him
     const chosen = bodyCardsHtml(bodyCards(), 'female', new Set(['female']));
     expect(chosen).toMatch(/aria-checked="true" data-body="female"/);
-    expect(chosen).toContain('shown on the male body for now');
+    expect(chosen).toContain('on the standard body for now');
   });
 
   it('shows once per device, after Save or Skip', () => {

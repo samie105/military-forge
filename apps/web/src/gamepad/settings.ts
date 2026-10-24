@@ -44,7 +44,7 @@ export interface PadActionDef {
  */
 export const PAD_ACTIONS: readonly PadActionDef[] = [
   { id: 'fire', label: 'Fire', bit: Btn.Fire, defaults: [B.R2] },
-  { id: 'jet', label: 'Jet (hold)', bit: Btn.Jet, defaults: [B.L2, B.South], hint: 'Pushing the move stick steeply up jets too (unless you turn that off below)' },
+  { id: 'jet', label: 'Jet (hold)', bit: Btn.Jet, defaults: [B.L2, B.South], hint: 'Pushing the move stick steeply up flies too (unless you turn that off below)' },
   { id: 'dash', label: 'Dash', bit: Btn.Dash, defaults: [B.L1], hint: 'The move stick picks the way (8 ways); a quick flick dashes harder' },
   { id: 'grenade', label: 'Throw grenade', bit: Btn.Grenade, defaults: [B.R1], hint: 'Tap: quick throw · hold: aim the arc with the aim stick, let go to throw' },
   { id: 'fire2', label: 'Spin-up / alt fire', bit: Btn.Fire2, defaults: [B.R3], hint: 'Held on a gun that zooms, it also pulls the view out' },
@@ -203,14 +203,14 @@ export const PAD_PRESETS: Readonly<Record<PadPresetId, PadPreset>> = {
   standard: {
     id: 'standard',
     name: 'Standard',
-    blurb: 'Jet, fire, dash and grenade on the shoulders: your thumbs stay on the sticks.',
+    blurb: 'Jet, Fire, Dash and Grenade on the shoulders: your thumbs stay on the sticks.',
     bindings: defaultPadBindings(),
     ...flags,
   },
   classic: {
     id: 'classic',
     name: 'Classic',
-    blurb: 'The first layout: A jets, LT is alt fire, B swaps, Y takes, R3 melees.',
+    blurb: 'The original layout: A is Jet, LT alt fire, B swaps, Y takes, R3 strikes.',
     bindings: B_({ jet: [B.South], fire2: [B.L2], melee: [B.R3], swap: [B.East], interact: [B.North] }),
     ...flags,
     holdTake: false,
@@ -218,7 +218,7 @@ export const PAD_PRESETS: Readonly<Record<PadPresetId, PadPreset>> = {
   bumperJet: {
     id: 'bumperJet',
     name: 'Bumper Jet',
-    blurb: 'LB jets, LT dashes, and the move stick never jets: no take-offs you didn’t mean.',
+    blurb: 'LB is Jet, LT dashes, and the move stick never flies: no take-offs you didn’t mean.',
     bindings: B_({ jet: [B.L1, B.South], dash: [B.L2] }),
     ...flags,
     stickJet: false,

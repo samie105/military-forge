@@ -72,7 +72,7 @@ export function mountArmoryRoute(container: HTMLElement, options: ArmoryOptions 
 }
 
 const SOCKET_NOTES: Record<string, string> = {
-  grip: 'main hand', muzzle: 'flash, tracer, suppressor', offhand: 'left-hand IK', eject: 'casings',
+  grip: 'main hand', muzzle: 'flash, tracer, suppressor', offhand: 'support hand', eject: 'casings',
   mag: 'reload', rail_top: 'scope / sight', rail_bottom: 'foregrip / laser', backblast: 'exhaust',
   tip: 'blade tip', pin: 'pin ring', light: 'status light', ground: 'rest frame',
   pilot: 'pilot light', charge: 'charge wind-up', face: 'blocks bullets',
@@ -155,14 +155,14 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
             <button type="button" class="btn btn--volt btn--sm m-p8 mf-toggle" data-action="fire">${ic('target')}Fire</button>
             <div class="seg" data-group="focus" role="radiogroup" aria-label="View"><button type="button" class="seg__opt" role="radio" data-focus="whole">Whole</button><button type="button" class="seg__opt" role="radio" data-focus="muzzle">Muzzle</button></div>
             <div class="seg" data-group="light" role="radiogroup" aria-label="Light"><button type="button" class="seg__opt" role="radio" data-light="lobby">Lobby</button><button type="button" class="seg__opt" role="radio" data-light="night">Night</button><button type="button" class="seg__opt" role="radio" data-light="desert">Desert</button></div>
-            <button type="button" class="btn btn--ghost btn--sm m-p8 mf-toggle" data-action="sockets" aria-pressed="true">${ic('eye')}Sockets</button>
+            <button type="button" class="btn btn--ghost btn--sm m-p8 mf-toggle" data-action="sockets" aria-pressed="true">${ic('eye')}Mounts</button>
           </div>
           <div class="ar__ctrl mf-camo"></div>
         </div>
         <aside class="ar__side mf-side">
           <section class="ticket ar__stats mf-card" aria-live="polite"></section>
           <section class="card ar__att mf-attach"></section>
-          <details class="card mf-sockets-box"><summary class="label">Sockets · where parts and effects attach</summary><div class="mf-sockets"></div></details>
+          <details class="card mf-sockets-box"><summary class="label">Mounts · where attachments and effects sit</summary><div class="mf-sockets"></div></details>
           <section class="card mf-equip" aria-label="Equip">
             <span class="label">Your guns · you spawn with these</span>
             <p class="mf-equip__now"></p>
@@ -309,7 +309,7 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
       ? `<span class="label">Stat card</span><ul>${c.rows
           .map((r) => `<li><span>${escapeHtml(r.label)}</span><b class="num">${escapeHtml(r.value)}</b>${r.bar === undefined ? '' : `<span class="bar" style="--x:${r.bar.toFixed(3)}"><i></i></span>`}</li>`)
           .join('')}</ul>`
-      : '<span class="label">Stat card</span><p class="mf-ar__note">Art only so far: the model is ready, its stats come with the arsenal.</p>';
+      : '<span class="label">Stat card</span><p class="mf-ar__note">Not issued in matches yet: no stats to show.</p>';
     tryBtn.hidden = !c || !weaponDef(id);
     renderEquip();
     const ss = sockets[id]?.sockets ?? {};
@@ -317,7 +317,7 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
     socketPanel.innerHTML = `<ul>${Object.keys(ss)
       .map(
         (name) =>
-          `<li><button type="button" data-socket="${name}"><span class="mf-dot" style="background:${SOCKET_COLOURS[name] ?? 'var(--c-text)'}"></span>${name}<small>${name === 'grip' && offHand ? 'off hand' : (SOCKET_NOTES[name] ?? '')}${ss[name]!.occupied ? ` · ${escapeHtml(ss[name]!.occupied!)} built in` : ''}</small></button></li>`,
+          `<li><button type="button" data-socket="${name}"><span class="mf-dot" style="background:${SOCKET_COLOURS[name] ?? 'var(--c-text)'}"></span>${name.replaceAll('_', ' ')}<small>${name === 'grip' && offHand ? 'off hand' : (SOCKET_NOTES[name] ?? '')}${ss[name]!.occupied ? ` · ${escapeHtml(ss[name]!.occupied!)} built in` : ''}</small></button></li>`,
       )
       .join('')}</ul>`;
   };

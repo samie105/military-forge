@@ -87,7 +87,7 @@ export const ZONE_KINDS: Readonly<Record<ZoneKind, ZoneKindInfo>> = {
     color: 0xf778ba,
     defaults: { gravityMul: -0.6, dive: 30, drag: 1.5 },
   },
-  longFlight: { label: 'Long flight', description: 'Jet fuel burns at 40%: flights last 2.5× longer.', color: 0x3fb950, defaults: { fuelBurnMul: 0.4 } },
+  longFlight: { label: 'Long flight', description: 'Fuel burns at 40%: flights last 2.5× longer.', color: 0x3fb950, defaults: { fuelBurnMul: 0.4 } },
   damping: { label: 'Bullet fog', description: 'Bullets crossing it use up their range 3× faster.', color: 0xb1bac4, defaults: { bulletRangeMul: 0.35 } },
   wind: { label: 'Wind', description: 'A steady push on fliers and grenades.', color: 0x79c0ff, defaults: { wind: [12, 0] } },
   slow: { label: 'Mud', description: 'Slow going: speed caps at 45%, heavy drag.', color: 0x9e6a03, defaults: { moveSpeedMul: 0.45, drag: 3 } },
@@ -131,7 +131,7 @@ export const EVENT_KINDS: Readonly<Record<MapEventKind, EventKindInfo>> = {
   gravitySurge: {
     label: 'Gravity surge',
     color: 0xff7b72,
-    defaults: { name: 'GRAVITY SURGE', description: 'Everything is heavier: jets climb slowly', duration: 15, warning: 3, gravityMul: 1.8 },
+    defaults: { name: 'GRAVITY SURGE', description: 'Everything is heavier: jetpacks climb slowly', duration: 15, warning: 3, gravityMul: 1.8 },
   },
   lowGravity: {
     label: 'Low gravity',

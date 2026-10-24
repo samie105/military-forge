@@ -88,8 +88,8 @@ export function bodyCardsHtml(cards: readonly BodyCard[], body: Body, artPending
       const on = c.body === body;
       const absent = c.builds === 0;
       const pending = artPending.has(c.body);
-      const note = absent ? 'Not in the game yet' : pending ? 'Her 3D art is being made: shown on the male body for now' : `${c.builds} ${c.builds === 1 ? 'build' : 'builds'}`;
-      const tag = on ? `<span class="tag tag--you">${ic('check')}On</span>` : pending ? '<span class="tag tag--soon">Art coming</span>' : '';
+      const note = absent ? 'Not available yet' : pending ? 'Deploys on the standard body for now' : `${c.builds} ${c.builds === 1 ? 'build' : 'builds'}`;
+      const tag = on ? `<span class="tag tag--you">${ic('check')}On</span>` : pending ? '<span class="tag tag--soon">Soon</span>' : '';
       return `<button type="button" class="mf-cr__body${on ? ' is-on' : ''}${pending ? ' is-pending' : ''}" role="radio" aria-checked="${on}" data-body="${c.body}"${absent ? ' disabled' : ''}>
         <span class="mf-cr__body-art" aria-hidden="true">${ic('user')}</span>
         <b class="mf-cr__body-name">${escapeHtml(c.name)}</b>
@@ -133,9 +133,9 @@ export function mountCreator(container: HTMLElement, options: CreatorOptions = {
         <canvas aria-label="Your soldier. Drag to turn; scroll or pinch to zoom."></canvas>
         <div class="mf-cr__overlay">Loading soldier…</div>
         <div class="mf-cr__placeholder" role="note" hidden>
-          <span class="stamp stamp--warn stamp--lg">Stand-in body</span>
+          <span class="stamp stamp--warn stamp--lg">Standard body</span>
           <p></p>
-          <span class="mf-cr__placeholder-short">On the male body until her art lands</span>
+          <span class="mf-cr__placeholder-short">Deploys on the standard body for now</span>
         </div>
         <div class="mf-cr__view">
           <div class="seg" data-group="focus" role="radiogroup" aria-label="View"><button type="button" class="seg__opt" role="radio" data-focus="full">Full</button><button type="button" class="seg__opt" role="radio" data-focus="face">Face</button><button type="button" class="seg__opt" role="radio" data-focus="jetpack">Back</button></div>
@@ -251,7 +251,7 @@ export function mountCreator(container: HTMLElement, options: CreatorOptions = {
       li.querySelector('button')!.setAttribute('aria-current', on ? 'step' : 'false');
     }
     placeholderNote.hidden = !isStandIn;
-    placeholderNote.querySelector('p')!.textContent = `${BODY_NAMES[body]}: her 3D art is being made. Until it lands she is shown, and plays, on the male body.`;
+    placeholderNote.querySelector('p')!.textContent = `${BODY_NAMES[body]}: arriving soon. Until then she deploys on the standard body.`;
     if (step === 'body') {
       tabsEl.hidden = true;
       bodyStep.hidden = false;

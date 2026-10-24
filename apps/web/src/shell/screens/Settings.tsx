@@ -359,7 +359,7 @@ function Accessibility({ settings }: { settings: Settings }) {
           <b id="cb-label">
             Colour-blind team colours
           </b>
-          <span>Teams also get a shape on their name tags, so colour is never the only clue. Team modes aren't in the game yet: your choice is kept for them.</span>
+          <span>Teams also get a shape on their name tags, so colour is never the only clue.</span>
         </div>
         <div className="srow__ctrl">
           <div className="cb" role="radiogroup" aria-labelledby="cb-label">
@@ -419,20 +419,20 @@ function Network({ settings, inRoom }: { settings: Settings; inRoom: boolean }) 
       <h2 className="display set__h">Network</h2>
       <div className="srow">
         <div className="srow__txt">
-          <b>Low-bandwidth mode</b>
+          <b>Data saver</b>
           <span>Sends fewer updates to save data. Good on mobile data. Other players may move a little less smoothly.</span>
         </div>
         <div className="srow__ctrl">
-          <Switch on={settings.lowBandwidth} onChange={(lowBandwidth) => ctl.updateSettings({ lowBandwidth })} label="Low-bandwidth mode" />
+          <Switch on={settings.lowBandwidth} onChange={(lowBandwidth) => ctl.updateSettings({ lowBandwidth })} label="Data saver" />
         </div>
       </div>
       <div className="srow">
         <div className="srow__txt">
-          <b>Net graph</b>
+          <b>Connection stats</b>
           <span>Shows ping and packet loss in the top-left corner during a match.</span>
         </div>
         <div className="srow__ctrl">
-          <Switch on={settings.netGraph} onChange={(netGraph) => ctl.updateSettings({ netGraph })} label="Net graph" />
+          <Switch on={settings.netGraph} onChange={(netGraph) => ctl.updateSettings({ netGraph })} label="Connection stats" />
         </div>
       </div>
       <div className="srow">
@@ -575,11 +575,11 @@ function Touch() {
       {t.fire === 'button' && (
         <div className="srow">
           <div className="srow__txt">
-            <b>A second FIRE on the left</b>
+            <b>A second Fire button on the left</b>
             <span>For your left index finger, top left: shoot while your right thumb aims.</span>
           </div>
           <div className="srow__ctrl">
-            <Switch on={t.leftFire} onChange={(leftFire) => set({ leftFire })} label="A second FIRE on the left" />
+            <Switch on={t.leftFire} onChange={(leftFire) => set({ leftFire })} label="A second Fire button on the left" />
           </div>
         </div>
       )}
@@ -603,11 +603,11 @@ function Touch() {
       </div>
       <div className="srow">
         <div className="srow__txt">
-          <b>Push up to jet</b>
-          <span>Push the move stick up to fly. Claw turns it off: your left index finger has a JET button.</span>
+          <b>Push up to fly</b>
+          <span>Push the move stick up to fly. Claw turns it off: your left index finger has a Jet button.</span>
         </div>
         <div className="srow__ctrl">
-          <Switch on={t.stickJet} onChange={(stickJet) => set({ stickJet })} label="Push up to jet" />
+          <Switch on={t.stickJet} onChange={(stickJet) => set({ stickJet })} label="Push up to fly" />
         </div>
       </div>
       <div className="srow">
