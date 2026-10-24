@@ -20,12 +20,14 @@
 :where(.kit-v2) button.ticket:disabled, :where(.kit-v2) .home__create:disabled { opacity: .55; cursor: not-allowed; }
 
 /*
- * Home's stage: the rookie's helmet stands in for the kit's preview art, above the nameplate in the
- * middle column; the helmet shrinks (to nothing) before the nameplate runs into it, and a long name
+ * Home's stage: the player's own soldier (the helmet until the render lands), above the nameplate in the
+ * middle column; it shrinks (to nothing) before the nameplate runs into it, and a long name
  * steps down so it fits the column (--chars: its length).
  */
 .kit-v2 .mf-home__stage { container-type: inline-size; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: var(--sp-5); min-width: 0; min-height: 0; padding: var(--sp-8) 0 var(--sp-11) var(--sp-8); }
-.kit-v2 .mf-home__helmet { position: static; flex: 0 1 280px; min-height: 0; width: auto; height: auto; aspect-ratio: 1; align-self: center; color: var(--c-volt); stroke-width: 1.2; opacity: .9; }
+/* the player's soldier (presentation/HomeSoldier.tsx) fills the stage above the nameplate; the helmet holds its place */
+.kit-v2 .mf-home__soldier { flex: 1 1 0; align-self: stretch; }
+.kit-v2 .mf-home__helmet { position: static; width: min(280px, 100%); height: min(280px, 100%); color: var(--c-volt); stroke-width: 1.2; opacity: .9; }
 .kit-v2 .mf-home__nameplate { position: static; max-width: 100%; }
 .kit-v2 .mf-home__nameplate .display { font-size: min(var(--fs-120), calc(100cqi / (var(--chars, 6) * 0.62))); white-space: nowrap; }
 .kit-v2 .mf-home__nameplate .home__loadout { flex-wrap: wrap; border-radius: var(--r-md); row-gap: 0; }

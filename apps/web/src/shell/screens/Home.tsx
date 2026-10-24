@@ -24,6 +24,7 @@ import { NextOrders } from '../../tour/NextOrders';
 import { currentDevice } from '../../gamepad';
 import { drillDone, isTouchDevice } from '../../touch';
 import { InstallButton } from '../../pwa/InstallButton';
+import { HomeSoldier } from '../../presentation/HomeSoldier';
 
 /** The brand: the emblem and the name, once in the whole UI (round two's .brand on Home). */
 export function Brand() {
@@ -182,7 +183,7 @@ export function Home({ store }: { store: ShellStore }) {
             </div>
           </div>
 
-          {/* the helmet stands in for the kit's soldier (a gap): it gives way first when the nameplate needs the room */}
+          {/* the player's own soldier (presentation/HomeSoldier.tsx; the helmet until it lands): it gives way first when the nameplate needs the room */}
           <div className="home__stage mf-home__stage">
             <span className="brackets" style={{ inset: '20px 40px 120px 90px' }} aria-hidden="true">
               <i></i>
@@ -190,7 +191,9 @@ export function Home({ store }: { store: ShellStore }) {
               <i></i>
               <i></i>
             </span>
-            <Icon name="helmet" className="mf-home__helmet" />
+            <HomeSoldier store={store} name={name} className="mf-home__soldier">
+              <Icon name="helmet" className="mf-home__helmet" />
+            </HomeSoldier>
             <div className="home__nameplate mf-home__nameplate" style={{ '--chars': Math.max(4, name.length) } as CSSProperties}>
               <span className="stamp stamp--volt m-p7">Ready</span>
               <b className="display" data-bind="player.name">

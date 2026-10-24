@@ -19,6 +19,7 @@ import { NextOrders } from "../../../tour/NextOrders";
 import { currentDevice } from "../../../gamepad";
 import { drillDone, isTouchDevice } from "../../../touch";
 import { InstallButton } from "../../../pwa/InstallButton";
+import { HomeSoldier } from "../../../presentation/HomeSoldier";
 
 export function PhoneHome({ store }: { store: ShellStore }) {
   const ctl = useCtl();
@@ -172,9 +173,10 @@ export function PhoneHome({ store }: { store: ShellStore }) {
                   <i></i>
                   <i></i>
                 </span>
-                <span className="pm-stage__mark" aria-hidden="true">
+                {/* the player's own soldier (presentation/HomeSoldier.tsx), the helmet until it lands */}
+                <HomeSoldier store={store} name={name} className="pm-stage__mark" decorative>
                   <Icon name="helmet" />
-                </span>
+                </HomeSoldier>
                 <span className="pm-name display">{name}</span>
               </div>
             }

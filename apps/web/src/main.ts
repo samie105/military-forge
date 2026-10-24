@@ -53,6 +53,7 @@ import { LIVE_FIRE_RULES } from './shell/localMatch';
 import { PlaneCamera, create3d, online3d, parsePreset, softwareGl, type PresetName } from './render3d';
 import { LoadoutDirectory } from './render3d/character';
 import { followLooks, lookBook } from './looks/book';
+import { setMyLook } from './looks/mine';
 import { CharacterAssembler } from './character';
 import { getAvatar, getPortrait, installPortraits, portraits, setPortraitPolicy, type PortraitPolicy } from './portrait';
 import { warmRoomPortraits } from './presentation/warm';
@@ -68,7 +69,7 @@ import { padShownBindings } from './gamepad/prompts';
 import { startLandscape } from './ui/landscape';
 import { startMultiTouchTaps } from './ui/multiTouchTap';
 import type { Frame } from './view';
-import { DefaultLoadingManager } from 'three';
+import { DefaultLoadingManager, WebGLRenderer } from 'three';
 import { assetLoad } from './assetLoad';
 import { creatorSeen } from './creator/model';
 import { titleWanted } from './shell/title';
@@ -189,7 +190,9 @@ const view3d = planeCamera
   : null;
 // avatars and the VS poster's renders: the players' real soldiers, through the game's own WebGL context
 // (portrait/, research §7); a page without 3D shows silhouettes
+// (a page drawing in 2D: a context of their own, made on the first picture, for Home's soldier and the avatars)
 if (view3d) installPortraits(view3d.renderer, soldiers);
+else if (webgl2Starts()) installPortraits(() => new WebGLRenderer({ antialias: false, alpha: true }), soldiers);
 // team modes (v21): each soldier's team colour (the armband glow), from the look book's teams
 if (view3d) view3d.teamColourOf = (id) => teamColour(lookBook.teamOf(id));
 setPortraitPolicy(portraitPolicy);
@@ -679,6 +682,7 @@ shell.store.subscribe((now) => teamStrip.update(now.match));
 // v19: a look saved while playing (the Locker, the creator) reaches the 3D view and the room we're in at once
 loadoutSync?.onLook((look) => {
   loadouts3d.setLocal(look);
+  setMyLook(look); // Home's soldier (presentation/HomeSoldier.tsx)
   if (mode instanceof OnlineMode) mode.setLook(cosmeticLoadoutWireIds(look));
 });
 
@@ -1187,3 +1191,12 @@ setInterval(() => {
   // in the menus there's nothing to keep alive while hidden (the backdrop, the shell): only a mode
   if (now - lastRaf > 100 && mode) frame(now);
 }, 16);
+
+/** Whether WebGL 2 starts here at all, software included (a page drawing in 2D still renders portraits). */
+function webgl2Starts(): boolean {
+  try {
+    return !!document.createElement('canvas').getContext('webgl2');
+  } catch {
+    return false;
+  }
+}

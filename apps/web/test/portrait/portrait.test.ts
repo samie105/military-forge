@@ -165,6 +165,32 @@ describe('the portrait service', () => {
     expect(img.height).toBe(768);
     expect(svc.peek({ look: RED, size: 64 })).toBeNull();
   });
+
+  it('a view that asked before the renderer was installed hears when it is (Home, while the game still loads)', async () => {
+    const svc = new PortraitService({ get: async () => null, put: async () => {}, prune: async () => {} });
+    let heard = 0;
+    const waiting = svc.whenInstalled().then(() => heard++);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(heard).toBe(0);
+    svc.install({ render: async (_l, _p, w, h) => ({ blob: new Blob(['x']), width: w, height: h }) }, 'art1');
+    await waiting;
+    expect(heard).toBe(1);
+    await svc.whenInstalled(); // at once now
+  });
+});
+
+describe("the player's own look (Home's soldier)", () => {
+  it("starts from this device's saved look, else the default, and hears every new one", async () => {
+    const { myLook, onMyLook, setMyLook } = await import('../../src/looks/mine');
+    expect(myLook().items.bodyType).toBe(DEFAULT_COSMETIC_LOADOUT.items.bodyType);
+    let heard = 0;
+    const off = onMyLook(() => heard++);
+    setMyLook(RED);
+    expect(myLook()).toBe(RED);
+    setMyLook(RED);
+    expect(heard).toBe(1);
+    off();
+  });
 });
 
 describe('the silhouette', () => {

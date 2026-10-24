@@ -1,0 +1,9 @@
+/* Home's soldier (HomeSoldier.tsx): the player's own render over the helmet that holds its place. Tokens only. */
+:where(.mf-soldier) { position: relative; display: block; min-width: 0; min-height: 0; }
+.mf-soldier__mark { position: absolute; inset: 0; display: grid; place-items: center; transition: opacity 160ms linear; }
+.mf-soldier .pt { position: absolute; inset: 0; overflow: visible; }
+/* the helmet is the placeholder here, not the portrait's silhouette */
+.mf-soldier .pt__base { display: none; }
+.mf-soldier .pt > img { object-fit: contain; object-position: 50% 100%; }
+.mf-soldier:has(.pt__img) .mf-soldier__mark { opacity: 0; }
+html.reduce-motion .mf-soldier__mark { transition: none; }

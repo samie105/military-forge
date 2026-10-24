@@ -11,7 +11,7 @@ import { cosmeticLoadoutHash, type CosmeticLoadout } from '@military-forge/conte
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { lookBook } from '../looks/book';
 import { silhouetteUrl, type PortraitTint } from './fallback';
-import { getPortrait, peekPortrait, type PortraitImage } from './index';
+import { getPortrait, peekPortrait, portraits, type PortraitImage } from './index';
 import type { PortraitPose, PortraitSize } from './key';
 import './portrait.css';
 
@@ -44,9 +44,14 @@ export function Portrait({ look, size = 64, pose = 'portrait', name = '', tint =
     }
     setImg(null);
     let live = true;
-    void getPortrait(request, 'now').then((image) => {
-      if (live && !image.fallback) setImg({ image, cached: false });
-    });
+    // asked before the renderer is installed (the game's 3D still loading): the silhouette until it is
+    void portraits.whenInstalled().then(() =>
+      live
+        ? getPortrait(request, 'now').then((image) => {
+            if (live && !image.fallback) setImg({ image, cached: false });
+          })
+        : undefined,
+    );
     return () => {
       live = false;
     };

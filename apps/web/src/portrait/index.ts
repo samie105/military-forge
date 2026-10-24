@@ -55,6 +55,7 @@ export class PortraitService {
   private pumping = false;
   private readonly failed = new Map<string, number>();
   private readonly listeners = new Set<(key: string) => void>();
+  private readonly installWaiters = new Set<() => void>();
   policy: () => PortraitPolicy = () => 'menus';
   /** renders done (tests, the perf readout) */
   renders = 0;
@@ -82,6 +83,19 @@ export class PortraitService {
       () => (this.art = 'a0'),
     );
     this.pump();
+    // a picture asked for before the renderer was here got the silhouette: its view asks again now
+    for (const w of [...this.installWaiters]) w();
+    this.installWaiters.clear();
+  }
+
+  /**
+   * Resolves once a renderer is installed (at once if it is): a view that got the silhouette because it
+   * asked first (the game's chunk, or its 3D, still loading) asks again then. Never resolves on a page
+   * without WebGL.
+   */
+  whenInstalled(): Promise<void> {
+    if (this.backend) return Promise.resolve();
+    return new Promise((resolve) => this.installWaiters.add(resolve));
   }
 
   get installed(): boolean {
@@ -219,15 +233,16 @@ export async function artVersion(base: string): Promise<string> {
 
 /**
  * Starts portraits on this page (main.ts): the game's renderer and assembler (one WebGL context, shared
- * caches). Loads the renderer's code lazily, so a page that never shows a portrait never pays for it.
+ * caches), or, on a page drawing in 2D, a function making a renderer of their own on the first picture. Loads the renderer's code lazily, so a page that never shows a portrait never pays for it.
  */
-export function installPortraits(renderer: WebGLRenderer, assembler: CharacterAssembler, assetBase = `${import.meta.env.BASE_URL}assets/`): void {
+export function installPortraits(renderer: WebGLRenderer | (() => WebGLRenderer), assembler: CharacterAssembler, assetBase = `${import.meta.env.BASE_URL}assets/`): void {
   let made: PortraitRenderer | null = null;
   const lazy: PortraitBackend = {
     render: async (look, pose, w, h) => {
       if (!made) {
         const { PortraitRenderer } = await import('./render');
-        made = new PortraitRenderer(renderer, assembler);
+        // a page drawing in 2D (no 3D view) passes a maker: a context of its own, made on the first picture
+        made = new PortraitRenderer(typeof renderer === 'function' ? renderer() : renderer, assembler);
       }
       return made.render(look, pose, w, h);
     },
