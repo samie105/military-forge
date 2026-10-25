@@ -162,9 +162,9 @@ function desktop(): string {
       <span class="mf-drawcard__kick"><b data-state="switching">Drawing</b><b class="mf-drawcard__ready" data-state="!switching">Ready</b><span class="mf-drawcard__slot">Slot <span data-bind="player.slot.0.idx"></span></span></span>
       <span class="mf-drawcard__art">${wpn('player.slot.0.icon', 'ic--wpn-lg mf-drawcard__ghost')}${wpn('player.slot.0.icon', 'ic--wpn-lg mf-drawcard__gun')}</span>
       <span class="mf-drawcard__id"><b class="display mf-drawcard__name" data-bind="player.slot.0.name"></b><span class="mf-chip" data-bind="player.slot.0.family"></span></span>
-      <span class="mf-drawcard__ammo" data-state="gun"><b class="display num" data-bind="player.slot.0.mag"></b><span class="num">/<span data-bind="player.slot.0.magSize"></span></span><span class="mf-drawcard__res"><span class="hud-label">Spare</span><b class="num" data-bind="player.slot.0.reserve"></b></span></span>
-      <span class="mf-drawcard__ammo" data-state="melee"><b class="display">Blade</b></span>
-      <span class="mf-drawcard__foot"><span data-bind="player.slot.0.fire"></span><span data-state="slung-item"><kbd class="kbd" data-bind="bind.swap.0"></kbd> tap: back to <b data-bind="player.slot.1.name"></b> · hold: quick-select</span></span>
+      <span class="mf-drawcard__ammo" data-state="gun+stats-open"><b class="display num" data-bind="player.slot.0.mag"></b><span class="num">/<span data-bind="player.slot.0.magSize"></span></span><span class="mf-drawcard__res"><span class="hud-label">Spare</span><b class="num" data-bind="player.slot.0.reserve"></b></span></span>
+      <span class="mf-drawcard__ammo" data-state="melee+stats-open"><b class="display">Blade</b></span>
+      <span class="mf-drawcard__foot"><button type="button" class="mf-statsbtn" data-hud-stats tabindex="-1" aria-label="Show or hide the gun's stats"><kbd class="kbd" data-bind="bind.stats.0"></kbd><span data-state="!stats-open">Stats</span><span data-state="stats-open">Hide stats</span></button><span data-state="stats-open" data-bind="player.slot.0.fire"></span><span data-state="slung-item"><kbd class="kbd" data-bind="bind.swap.0"></kbd> tap: back to <b data-bind="player.slot.1.name"></b> · hold: quick-select</span></span>
       <i class="mf-drawcard__bar" aria-hidden="true"></i>
     </div>
 
@@ -176,8 +176,9 @@ function desktop(): string {
         <span class="mf-cmpcard__title"><span class="mf-cmpcard__verb" data-bind="pickup.verb"></span><span class="mf-cmpcard__name"><b class="display" data-bind="pickup.weapon.name"></b><span class="mf-chip m-p7" data-bind="pickup.weapon.family"></span></span></span>
         <span class="mf-cmpcard__gun m-p7">${wpn('pickup.weapon.icon', 'ic--wpn mf-cmpcard__wpn')}</span>
       </div>
-      <p class="mf-cmpcard__sub"><span class="mf-cmpcard__for" data-state="pickup-swaps">${ic('swap', 'ic--sm')}for your <b data-bind="pickup.held.name"></b></span><span data-bind="pickup.weapon.fire"></span><span data-bind="pickup.weapon.magWords"></span></p>
-      <table class="cmp" data-state="pickup-cmp" aria-label="The gun in your hand against the one here">
+      <p class="mf-cmpcard__swap"><span class="mf-cmpcard__for" data-state="pickup-swaps">${ic('swap', 'ic--sm')}for your <b data-bind="pickup.held.name"></b></span><button type="button" class="mf-statsbtn" data-hud-stats tabindex="-1" aria-label="Show or hide the gun's stats"><kbd class="kbd" data-bind="bind.stats.0"></kbd><span data-state="!stats-open">Stats</span><span data-state="stats-open">Hide stats</span></button></p>
+      <p class="mf-cmpcard__sub" data-state="stats-open"><span data-bind="pickup.weapon.fire"></span><span data-bind="pickup.weapon.magWords"></span></p>
+      <table class="cmp" data-state="pickup-cmp+stats-open" aria-label="The gun in your hand against the one here">
         <thead><tr><th class="vh">Stat</th><th data-bind="pickup.held.name"></th><th class="vh">Bars</th><th data-bind="pickup.weapon.name"></th><th class="vh">Change</th></tr></thead>
         <tbody>${cmp}</tbody>
       </table>

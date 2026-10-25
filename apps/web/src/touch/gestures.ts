@@ -130,6 +130,16 @@ export function nearestPick(at: Vec, centre: Vec, spots: readonly Vec[], dead: n
   return best;
 }
 
+/**
+ * The radial's pick for a finger at `page` (the page's coordinates, logicalPoint): the radial is
+ * drawn in the safe box (its centre and spots are the safe box's), so the finger is moved into it
+ * first (`safe`: the safe box's top-left on the page). Without that the pick was off by the notch
+ * inset (44 px or more) and the top inset.
+ */
+export function radialPickOnPage(page: Vec, safe: Vec, centre: Vec, spots: readonly Vec[], dead: number = GESTURE.radialDead): number {
+  return nearestPick({ x: page.x - safe.x, y: page.y - safe.y }, centre, spots, dead);
+}
+
 /** Where the radial's choices sit round a pill `halfW` × `halfH` (px): clear of it, on an ellipse. */
 export function radialSpots(centre: Vec, choices: readonly RadialChoice[], halfW: number, halfH: number, gap = 60): Vec[] {
   return choices.map((c) => ({ x: centre.x + Math.cos(c.angle) * (halfW + gap), y: centre.y + Math.sin(c.angle) * (halfH + gap) }));

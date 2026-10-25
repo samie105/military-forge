@@ -35,6 +35,7 @@ export function padShownBindings(pad: PadSettings): Bindings {
     talk: codes('talk'),
     // the big map: a double tap of the scoreboard's button (no keycap of its own)
     map: [],
+    stats: [], // no pad button for the gun stats yet (every pad button is taken); keys and taps open them
   };
   return out;
 }

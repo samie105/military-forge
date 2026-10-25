@@ -56,6 +56,35 @@ export function itemAt(angle: number, count: number): number {
   return Math.floor(((fromTop + slice / 2) % (2 * Math.PI)) / slice) % count;
 }
 
+/**
+ * The item a direction picks, by where the items are drawn: the one whose direction from the wheel's
+ * centre is nearest `angle` (radians, screen). The wheel is an ellipse, so a drawn item's direction
+ * isn't its slot's angle; picking by the drawn directions keeps what you point at and what lights up
+ * the same.
+ */
+export function pickByAngle(angle: number, angles: readonly number[]): number {
+  let best = -1;
+  let bestD = Infinity;
+  angles.forEach((a, i) => {
+    const d = Math.abs(Math.atan2(Math.sin(angle - a), Math.cos(angle - a)));
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  });
+  return best;
+}
+
+/** The wheel's drawn radii in the HUD's design px (hud.ts places each item at itemAngle on this ellipse). */
+export const WHEEL_RX = 250;
+export const WHEEL_RY = 180;
+
+/** Where the wheel draws item `i` of `count`, from its centre, in design px (× the HUD's fit for page px). */
+export function itemSpot(i: number, count: number): { x: number; y: number } {
+  const a = itemAngle(i, count);
+  return { x: Math.cos(a) * WHEEL_RX, y: Math.sin(a) * WHEEL_RY };
+}
+
 /** Where item `i` of `count` sits round the wheel (radians, screen), the middle of its slice. */
 export function itemAngle(i: number, count: number): number {
   return -Math.PI / 2 + (i * 2 * Math.PI) / Math.max(1, count);
@@ -100,6 +129,8 @@ export class QuickSelect {
   private items: QuickItem[] = [];
   private highlight = 0;
   private at = { x: 0, y: 0 };
+  /** where the wheel is drawn (its centre, page px, after the HUD keeps it on screen) and its items' directions from there */
+  private drawn: { x: number; y: number; angles: number[] } | null = null;
   private player: QuickPlayer | null = null;
   /** the next samples' pulses: one Btn.Swap, a weapon slot, CycleGrenade presses (on, off, on…) */
   private swapPulse = false;
@@ -121,6 +152,7 @@ export class QuickSelect {
     this.downAt = now;
     this.by = by;
     this.at = { ...at };
+    this.drawn = null;
   }
 
   /** Called every sample while it's down: past HOLD_MS the wheel opens. */
@@ -158,16 +190,30 @@ export class QuickSelect {
   /** The pointer at (x, y), CSS px: past the dead zone it highlights the item that way. */
   point(x: number, y: number): void {
     if (!this.openNow) return;
-    const dx = x - this.at.x;
-    const dy = y - this.at.y;
+    const c = this.drawn ?? this.at;
+    const dx = x - c.x;
+    const dy = y - c.y;
     if (Math.hypot(dx, dy) < POINT_DEADZONE) return;
-    this.highlight = itemAt(Math.atan2(dy, dx), this.items.length);
+    this.highlight = this.pickAt(Math.atan2(dy, dx));
+  }
+
+  /**
+   * The HUD, each frame the wheel shows: where it drew it (its centre, page px: the reticle's place
+   * kept on screen) and its items (page px). Pointing is measured from there, toward them.
+   */
+  layout(centre: { x: number; y: number }, spots: readonly { x: number; y: number }[]): void {
+    if (!this.openNow || spots.length !== this.items.length) return;
+    this.drawn = { x: centre.x, y: centre.y, angles: spots.map((p) => Math.atan2(p.y - centre.y, p.x - centre.x)) };
+  }
+
+  private pickAt(angle: number): number {
+    return this.drawn ? pickByAngle(angle, this.drawn.angles) : itemAt(angle, this.items.length);
   }
 
   /** The pad's stick (a unit-ish vector, screen axes): past half-way it highlights that way. */
   stick(x: number, y: number): void {
     if (!this.openNow || Math.hypot(x, y) < 0.5) return;
-    this.highlight = itemAt(Math.atan2(y, x), this.items.length);
+    this.highlight = this.pickAt(Math.atan2(y, x));
   }
 
   /** Mouse-wheel steps while open: the next or previous item. Returns whether it took them. */

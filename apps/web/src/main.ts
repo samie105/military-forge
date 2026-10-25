@@ -313,7 +313,7 @@ function applyHudKeys(): void {
   if (!settings || !hud) return;
   const b = currentDevice().kind === 'pad' ? padShownBindings(settings.pad) : settings.bindings;
   const key = (action: keyof typeof b) => b[action][0];
-  hud.setKeys({ dash: key('dash'), grenade: key('grenade'), cycleGrenade: key('cycleGrenade'), shield: key('shield'), swap: key('swap'), reload: key('reload'), scoreboard: key('scoreboard'), interact: key('interact'), fire: key('fire') });
+  hud.setKeys({ dash: key('dash'), grenade: key('grenade'), cycleGrenade: key('cycleGrenade'), shield: key('shield'), swap: key('swap'), reload: key('reload'), scoreboard: key('scoreboard'), interact: key('interact'), fire: key('fire'), stats: settings.bindings.stats?.[0] });
 }
 onInputDevice(applyHudKeys);
 
@@ -464,6 +464,7 @@ const host: GameHost = {
     sampler.doubleTapDash = next.doubleTapDash;
     netGraphKeys = uiCodes(next.bindings, 'netGraph');
     scoreboardKeys = uiCodes(next.bindings, 'scoreboard');
+    hud?.setStatsKeys(uiCodes(next.bindings, 'stats'));
     hud?.setScoreboardKeys(scoreboardKeys);
     mapKeys = uiCodes(next.bindings, 'map');
     minimap?.setKey(mapKeys[0] ? capText(mapKeys[0]) : null);

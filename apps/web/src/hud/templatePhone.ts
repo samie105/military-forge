@@ -39,7 +39,7 @@ const PHONE_CMP = (
 )
   .map(
     ([label, k]) =>
-      `<div class="pt-cmp__row" data-state="pickup-cmp" data-bind-var="--a: pickup.bar.${k}.a; --b: pickup.bar.${k}.b"><span class="hud-label">${label}</span><span class="cmp__bars"><i class="cmp__a"></i><i class="cmp__b"></i></span><span data-bind-attr="class: pickup.delta.${k}.class" data-bind="pickup.delta.${k}.text"></span></div>`,
+      `<div class="pt-cmp__row" data-state="pickup-cmp+stats-open" data-bind-var="--a: pickup.bar.${k}.a; --b: pickup.bar.${k}.b"><span class="hud-label">${label}</span><span class="cmp__bars"><i class="cmp__a"></i><i class="cmp__b"></i></span><span data-bind-attr="class: pickup.delta.${k}.class" data-bind="pickup.delta.${k}.text"></span></div>`,
   )
   .join('');
 
@@ -67,6 +67,7 @@ export function phoneHudTemplate(): string {
     </div>
     <div class="pt-cmp plate" data-state="pickup-crate+!switching+!drawn" role="status">
       <div class="pt-cmp__head"><svg class="ic--kf" aria-hidden="true"><use data-bind-attr="href: pickup.weapon.icon"/></svg><b class="display" data-bind="pickup.weapon.name"></b><span class="mf-chip" data-bind="pickup.weapon.family"></span><span class="pt-cmp__for" data-state="pickup-swaps">for your <span data-bind="pickup.held.name"></span></span></div>
+      <button type="button" class="mf-statsbtn pt-cmp__stats" data-hud-stats tabindex="-1" aria-label="Show or hide the gun's stats">${ic('sliders', 'ic--sm')}<span data-state="!stats-open">Stats</span><span data-state="stats-open">Hide</span></button>
       ${PHONE_CMP}
     </div>
     <div class="mf-spec mf-spec--phone" data-state="spectate-bar" role="group" aria-label="Spectating">

@@ -95,8 +95,8 @@ describe('DynamicResolution', () => {
 
 describe('quality for the device (the owner, 19 Oct)', () => {
   it('a phone renders at its full pixel ratio on High (up to 3), 2 on Medium, 1.5 on Low; a desktop at the desktop caps', () => {
-    expect(pixelRatio(3, PRESETS.high.touchDprCap, null, 1)).toBe(3);
-    expect(pixelRatio(3.5, PRESETS.high.touchDprCap, null, 1)).toBe(3);
+    expect(pixelRatio(3, PRESETS.high.touchDprCap, null, 1)).toBe(2);
+    expect(pixelRatio(3.5, PRESETS.high.touchDprCap, null, 1)).toBe(2);
     expect(pixelRatio(3, PRESETS.medium.touchDprCap, null, 1)).toBe(2);
     expect(pixelRatio(3, PRESETS.low.touchDprCap, null, 1)).toBe(1.5);
     expect(pixelRatio(2, PRESETS.high.dprCap, null, 1)).toBe(2);

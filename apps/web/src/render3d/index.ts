@@ -72,11 +72,25 @@ export function online3d(params: URLSearchParams): boolean {
 }
 
 /**
- * The render pixel ratio: the device's, capped by the preset (its touchDprCap on a phone or tablet)
- * and by an override, the lower cap winning; then the dynamic scale.
+ * A phone's picture never drops below this pixel ratio (0.85 × 1.5): under it a soldier 40 CSS px tall
+ * is drawn from about 50 device pixels and upscaled 2–3×, which is what read as "too blurry" in a match
+ * (the owner, 25 Oct). The dynamic scale and the tiers still cut the cost above it.
  */
-export function pixelRatio(device: number, presetCap: number, override: number | null, scale: number): number {
-  return Math.min(device, presetCap, override ?? Infinity) * scale;
+export const TOUCH_MIN_DPR = 1.275;
+/**
+ * A phone's dynamic scale never goes under this (of its tier's cap): High and Medium keep at least 1.7×,
+ * Low 1.275× (TOUCH_MIN_DPR). Past it, Auto steps the tier down instead: shadows, effect lights and
+ * particles go before sharpness does.
+ */
+export const TOUCH_MIN_SCALE = 0.85;
+
+/**
+ * The render pixel ratio: the device's, capped by the preset (its touchDprCap on a phone or tablet)
+ * and by an override, the lower cap winning; then the dynamic scale; never under `floor` (a phone's
+ * TOUCH_MIN_DPR) where the device has those pixels.
+ */
+export function pixelRatio(device: number, presetCap: number, override: number | null, scale: number, floor = 0): number {
+  return Math.max(Math.min(device, floor), Math.min(device, presetCap, override ?? Infinity) * scale);
 }
 
 /**
@@ -217,7 +231,9 @@ export class Renderer3D {
     this.preset = preset;
     this.dynres = new DynamicResolution(preset.minScale);
     // throws when no context can be had (create3d falls back to 2D)
-    this.renderer = new WebGLRenderer({ canvas, antialias: preset.antialias, powerPreference: 'high-performance', failIfMajorPerformanceCaveat: !allowSoftware });
+    // MSAA (fixed when the context is made): the preset's, and always on a phone or tablet, where a tiled
+    // GPU resolves it almost for free and a Low start would otherwise have jagged soldiers for good
+    this.renderer = new WebGLRenderer({ canvas, antialias: preset.antialias || isTouchDevice(), powerPreference: 'high-performance', failIfMajorPerformanceCaveat: !allowSoftware });
     // map art (backdrops, billboards) as KTX2 only where GPU memory matters: phones, touch, Low (environment/ktx2.ts)
     this.ktx2For = ktx2Gate(() => createKtx2(this.renderer, import.meta.env.BASE_URL));
     canvas.addEventListener('webglcontextlost', (e) => {
@@ -545,11 +561,11 @@ export class Renderer3D {
    * (compileTiers). Resolution, effects and shadows follow at once.
    */
   setPreset(name: PresetName, auto = false): void {
-    const lodChanged = PRESETS[name].remoteLod1 !== this.preset.remoteLod1 && !auto;
+    // a phone keeps every soldier on LOD0 (remoteLod1 is off there): its 256² LOD1 textures blur at phone zoom
+    const lodChanged = PRESETS[name].remoteLod1 !== this.preset.remoteLod1 && !auto && !this.touch;
     this.preset = PRESETS[name];
     if (!auto) this.filtering = this.preset;
-    this.dynres.minScale = this.preset.minScale;
-    this.dynres.scale = Math.max(this.dynres.scale, this.preset.minScale);
+    this.applyScaleFloor();
     this.sun.castShadow = this.preset.shadows === 'map';
     this.env?.setShadowMap(this.sun.castShadow);
     this.vfx.setPreset(this.preset);
@@ -561,6 +577,12 @@ export class Renderer3D {
     }
     this.resize();
     if (this.ready && !auto) this.applyAnisotropy();
+  }
+
+  /** The dynamic scale's floor: the preset's, and on a phone never under TOUCH_MIN_SCALE. */
+  private applyScaleFloor(): void {
+    this.dynres.minScale = this.touch ? Math.max(this.preset.minScale, TOUCH_MIN_SCALE) : this.preset.minScale;
+    this.dynres.scale = Math.max(this.dynres.scale, this.dynres.minScale);
   }
 
   /** Pins the render scale (null = dynamic again): repeatable screenshots and measurements. */
@@ -583,9 +605,10 @@ export class Renderer3D {
   /** Auto stepped to another tier (main.ts: Settings shows it) */
   onAutoTier: ((tier: PresetName) => void) | null = null;
 
-  /** A phone or tablet: render at the presets' touch caps (up to 3× on High) instead of the desktop ones. */
+  /** A phone or tablet: the presets' touch caps (2× at most), MSAA, LOD0 soldiers and a scale that keeps 0.85 (TOUCH_MIN_SCALE). */
   setTouchDevice(on: boolean): void {
     this.touch = on;
+    this.applyScaleFloor();
     this.resize();
   }
 
@@ -604,7 +627,7 @@ export class Renderer3D {
   private governTier(): void {
     if (!this.governor || this.dynres.windows === this.judged) return;
     this.judged = this.dynres.windows;
-    const next = this.governor.judge(this.dynres.lastMissed, this.dynres.scale <= this.preset.minScale + 1e-6, this.dynres.scale >= 1);
+    const next = this.governor.judge(this.dynres.lastMissed, this.dynres.scale <= this.dynres.minScale + 1e-6, this.dynres.scale >= 1);
     if (!next) return;
     this.setPreset(next, true);
     this.onAutoTier?.(next);
@@ -649,7 +672,7 @@ export class Renderer3D {
 
   resize(): void {
     const canvas = this.renderer.domElement;
-    const dpr = pixelRatio(window.devicePixelRatio || 1, this.touch ? this.preset.touchDprCap : this.preset.dprCap, this.dprCapOverride, this.dynres.scale);
+    const dpr = pixelRatio(window.devicePixelRatio || 1, this.touch ? this.preset.touchDprCap : this.preset.dprCap, this.dprCapOverride, this.dynres.scale, this.touch ? TOUCH_MIN_DPR : 0);
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
     // 2 CSS px at full resolution, whatever the render scale
@@ -751,7 +774,7 @@ export class Renderer3D {
       }
       if (this.pending.has(p.id)) continue;
       // characters stream in without blocking the frame (docs/04 §5.2)
-      const lod: CharacterLod = !p.isLocal && this.preset.remoteLod1 ? 1 : 0;
+      const lod: CharacterLod = !p.isLocal && this.preset.remoteLod1 && !this.touch ? 1 : 0;
       this.pending.add(p.id);
       this.assembler.create(this.loadouts.for(p), lod).then(
         (inst) => {

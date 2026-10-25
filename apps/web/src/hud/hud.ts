@@ -72,7 +72,7 @@ import {
 import { StateTokens } from './state';
 import { HUD_VARS, hudTemplate } from './template';
 import { feedTouchHud } from '../touch';
-import { itemAngle, quickSelect, type QuickItem, type QuickPlayer } from '../quickSelect';
+import { itemSpot, quickSelect, type QuickItem, type QuickPlayer } from '../quickSelect';
 import './hud.css';
 import './premium.css';
 import '../spectate/spectate.css';
@@ -123,7 +123,7 @@ export interface HudInput {
 }
 
 /** Keycap text for the actions the HUD names, from Settings → Controls. */
-export type HudKeys = Partial<Record<'dash' | 'grenade' | 'cycleGrenade' | 'shield' | 'swap' | 'reload' | 'scoreboard' | 'interact' | 'fire', string>>;
+export type HudKeys = Partial<Record<'dash' | 'grenade' | 'cycleGrenade' | 'shield' | 'swap' | 'reload' | 'scoreboard' | 'interact' | 'fire' | 'stats', string>>;
 
 /** How the local player last died, for the respawn card. */
 export interface DeathInfo {
@@ -175,6 +175,8 @@ export interface HudMemory {
   kill?: { victim: string; streak: number; headshot: boolean; n: number } | null;
   /** the quick-select (hold the swap key): open, and the item it points at */
   quick?: { open: boolean; item: QuickItem | null };
+  /** the gun's stats asked for (the Stats key or button on the crate card or the draw card) */
+  statsOpen?: boolean;
 }
 
 export interface HudFrame {
@@ -258,6 +260,7 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
   };
 
   for (const [k, text] of Object.entries(mem.keys) as [keyof HudKeys, string][]) v[`bind.${k}.0`] = text;
+  v['bind.stats.0'] ??= '';
 
   // match clock and score, and what the room's host tuned
   const m = input.match;
@@ -572,6 +575,9 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
   v['kill.victim'] = kc?.victim ?? '';
   v['kill.class'] = `display mf-kc__name mf-kc__name--${(kc?.n ?? 0) % 2 ? 'a' : 'b'}`;
   v['kill.streak'] = kc ? streakWords(kc.streak) : '';
+  // a card's stats, on request
+  on('stats-open', !!mem.statsOpen);
+
   // the quick-select's hub: what it points at
   const q = me.alive && mem.quick?.open ? mem.quick : null;
   on('quick-open', !!q);
@@ -871,6 +877,21 @@ export class Hud {
     this.setScoreboard(e.type === 'keydown' && !this.blocked);
   };
   private readonly onBlur = () => this.setScoreboard(false);
+  /** the crate card and the draw card show the swap only; their stats open on request (owner, 25 Oct) */
+  private statsOpen = false;
+  private statsCodes: readonly string[] = ['KeyI'];
+  /** a crate card or the draw card is up (the Stats key does something) */
+  private cardUp = false;
+  private readonly onStatsKey = (e: KeyboardEvent) => {
+    if (e.repeat || this.blocked || !this.cardUp || !this.statsCodes.includes(e.code)) return;
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
+    this.statsOpen = !this.statsOpen;
+  };
+  private readonly onStatsClick = (e: MouseEvent) => {
+    if (!(e.target as Element | null)?.closest?.('#hud [data-hud-stats]')) return;
+    e.preventDefault();
+    this.statsOpen = !this.statsOpen;
+  };
 
   constructor(parent: HTMLElement = document.body) {
     this.root = el('div', 'mf mf-hud');
@@ -904,9 +925,16 @@ export class Hud {
     window.addEventListener('keydown', this.onKey);
     window.addEventListener('keyup', this.onKey);
     window.addEventListener('blur', this.onBlur);
+    window.addEventListener('keydown', this.onStatsKey);
+    document.addEventListener('click', this.onStatsClick);
   }
 
   /** The keys that hold the scoreboard open (Settings → Controls). */
+  /** The keys that open a card's stats (Settings → Controls, "Gun stats"). */
+  setStatsKeys(codes: readonly string[]): void {
+    this.statsCodes = codes;
+  }
+
   setScoreboardKeys(codes: readonly string[]): void {
     this.scoreboardCodes = codes;
   }
@@ -1056,8 +1084,12 @@ export class Hud {
       swapHint: now < this.swapHintUntil,
       kill: this.kill,
       quick: { open: quickSelect.open, item: quickSelect.view.items[quickSelect.view.highlight] ?? null },
+      statsOpen: this.statsOpen,
     });
     this.binder.update(values);
+    // the stats close with the cards: each new crate or draw starts with the swap only
+    this.cardUp = tokens.includes('pickup-crate') || tokens.includes('switching') || tokens.includes('drawn');
+    if (!this.cardUp) this.statsOpen = false;
     this.states.set(this.linger.apply(tokens, now));
     if (this.me?.alive) this.death = null;
     this.crossSlots(swap);
@@ -1110,6 +1142,8 @@ export class Hud {
     window.removeEventListener('keydown', this.onKey);
     window.removeEventListener('keyup', this.onKey);
     window.removeEventListener('blur', this.onBlur);
+    window.removeEventListener('keydown', this.onStatsKey);
+    document.removeEventListener('click', this.onStatsClick);
     this.worldTags.dispose();
     this.phoneTags.dispose();
     this.root.remove();
@@ -1345,10 +1379,10 @@ export class Hud {
       const n = view.items.length;
       q.items.replaceChildren(
         ...view.items.map((item, i) => {
-          const a = itemAngle(i, n);
+          const spot = itemSpot(i, n);
           const cell = el('div', `mf-qs__item mf-qs__item--${item.kind}`);
-          cell.style.setProperty('--qx', `${(Math.cos(a) * 250).toFixed(1)}px`);
-          cell.style.setProperty('--qy', `${(Math.sin(a) * 180).toFixed(1)}px`);
+          cell.style.setProperty('--qx', `${spot.x.toFixed(1)}px`);
+          cell.style.setProperty('--qy', `${spot.y.toFixed(1)}px`);
           cell.style.setProperty('--i', String(i));
           if (item.kind === 'gun') {
             const def = weapons[item.def];
@@ -1370,7 +1404,9 @@ export class Hud {
     if (view.highlight !== q.hi) {
       q.hi = view.highlight;
       [...q.items.children].forEach((c, i) => c.classList.toggle('is-hi', i === view.highlight));
-      q.pointer.style.transform = `rotate(${((itemAngle(view.highlight, view.items.length) * 180) / Math.PI + 90).toFixed(1)}deg)`;
+      // the pointer toward the item as drawn (the ring is an ellipse: not the slot's own angle)
+      const spot = itemSpot(view.highlight, view.items.length);
+      q.pointer.style.transform = `rotate(${((Math.atan2(spot.y, spot.x) * 180) / Math.PI + 90).toFixed(1)}deg)`;
     }
     const fit = Number(getComputedStyleValue('--hud-fit')) || 1;
     // kept whole on screen (it opens at the reticle, which may be near an edge)
@@ -1381,6 +1417,8 @@ export class Hud {
       q.at = at;
       q.root.style.transform = at;
     }
+    // pointing is measured from where it's drawn, toward its items as drawn (page px)
+    quickSelect.layout({ x, y }, view.items.map((_, i) => wheelSpotOnPage(x, y, i, view.items.length, fit)));
   }
 
   /**
@@ -1531,6 +1569,12 @@ function leave(node: HTMLElement): void {
   if (!node.isConnected) return;
   node.classList.add('is-leaving');
   window.setTimeout(() => node.remove(), reduced() ? 0 : LEAVE_MS);
+}
+
+/** Item `i` of the quick-select wheel drawn round (cx, cy) (page px) at the HUD's `fit`: where it lands on the page. */
+export function wheelSpotOnPage(cx: number, cy: number, i: number, count: number, fit: number): { x: number; y: number } {
+  const s = itemSpot(i, count);
+  return { x: cx + s.x * fit, y: cy + s.y * fit };
 }
 
 /** A CSS variable on <html> (fit.ts writes the HUD's zoom there). */

@@ -1,7 +1,7 @@
 /** Touch controls v3 (touch-controls-v3.md): the gestures, the hints and the drill, pure. */
 import { Btn } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
-import { GESTURE, beltAfter, beltOf, beltSteps, cyclePresses, dashButtons, isQuickSwipe, nearestPick, pinchSteps, radialAngles, radialPick, radialSpots, swipeAxis } from '../../src/touch/gestures';
+import { GESTURE, beltAfter, beltOf, beltSteps, cyclePresses, dashButtons, isQuickSwipe, nearestPick, pinchSteps, radialAngles, radialPick, radialPickOnPage, radialSpots, swipeAxis } from '../../src/touch/gestures';
 import { DEFAULT_TOUCH_SETTINGS, sanitizeSettings } from '../../src/touch/settings';
 import { DRILL, Drill, FIRE_HOW, HINTS, drillControl, drillHow, loadSeen, nextHint, saveSeen } from '../../src/touch/teach';
 
@@ -174,4 +174,27 @@ describe('the drill', () => {
     expect(drillControl(step('fire'), one)).toBe('aim');
     expect(drillHow(step('dash'), claw)).toBe(step('dash').how);
   });
+});
+
+describe('the gun pill radial lands where it is drawn (owner, 25 Oct)', () => {
+  // the radial is drawn in the safe box; fingers come in the page's coordinates
+  const phones = [
+    { name: '780×360', w: 780, h: 360, safe: { x: 44, y: 10 } },
+    { name: '844×300', w: 844, h: 300, safe: { x: 59, y: 10 } },
+    { name: '812×375 with a notch', w: 812, h: 375, safe: { x: 47, y: 10 } },
+  ];
+  for (const p of phones) {
+    it(`a finger on each drawn choice picks it (${p.name})`, () => {
+      const box = { w: p.w - 2 * p.safe.x, h: p.h - p.safe.y - 21 };
+      // the pill top right (the default) and bottom left (moved)
+      for (const centre of [{ x: box.w * 0.79, y: 26 }, { x: box.w * 0.2, y: box.h - 40 }]) {
+        const choices = radialAngles(centre.x, centre.y, box.w, box.h);
+        const spots = radialSpots(centre, choices, 70, 24);
+        spots.forEach((s, i) => {
+          expect(radialPickOnPage({ x: s.x + p.safe.x, y: s.y + p.safe.y }, p.safe, centre, spots, 24)).toBe(i);
+        });
+        expect(radialPickOnPage({ x: centre.x + p.safe.x, y: centre.y + p.safe.y }, p.safe, centre, spots, 24)).toBe(-1);
+      }
+    });
+  }
 });

@@ -21,7 +21,7 @@ import type { Frame } from '../view';
 import { enterLandscape, logicalPoint, logicalRect, type Box } from '../ui/landscape';
 import { BackToPause, WakeLockKeeper, canVibrate, inEdgeBand } from './platform';
 import { cross, drawIn, glideHome, growIn, settleNow, shrinkOut, stamp } from './fx';
-import { GESTURE, beltAfter, beltOf, beltSteps, cyclePresses, dashButtons, isQuickSwipe, nearestPick, radialAngles, radialSpots, type Vec } from './gestures';
+import { GESTURE, beltAfter, beltOf, beltSteps, cyclePresses, dashButtons, isQuickSwipe, radialAngles, radialPickOnPage, radialSpots, type Vec } from './gestures';
 import { TouchOverlays, type RadialItem } from './overlays';
 import { CHAIN_MS, Drill, drillControl, loadSeen, markDrillSeen, possibleHints, saveSeen, type TouchAction } from './teach';
 import {
@@ -1239,7 +1239,9 @@ export class TouchController {
     const dy = at.y - g.y0;
     if (g.radial) {
       const c = this.radialCentre();
-      const pick = c ? nearestPick(at, c, g.spots, g.dead) : -1;
+      // the radial is drawn in the safe box; the finger is on the page (radialPickOnPage moves it in)
+      const safe = logicalRect(this.safe);
+      const pick = c ? radialPickOnPage(at, { x: safe.left, y: safe.top }, c, g.spots, g.dead) : -1;
       if (pick !== g.pick) {
         g.pick = pick;
         this.overlays.pickRadial(pick);

@@ -448,3 +448,20 @@ html:is(.mf-glass-off, .gfx-low) #hud .mf-evfx > i { animation: none; }
 #hud .mf-qs__line { font-size: var(--fs-14); font-weight: var(--fw-semi); color: var(--c-muted); white-space: nowrap; }
 #hud .mf-qs__how { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; font-size: var(--fs-14); color: var(--c-muted); white-space: nowrap; }
 html[data-input="pad"] #hud .mf-qs__mouse, html:not([data-input="pad"]) #hud .mf-qs__pad { display: none; }
+
+/* ======================================================= 6. stats on request (owner, 25 Oct: "no need to start showing the stats,
+   just the gun swap only, maybe another button to see the stats alongside") */
+
+/* the Stats button (and key, Settings → Controls "Gun stats", I by default) on the crate card and the draw card */
+#hud .mf-statsbtn { pointer-events: auto; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; margin-left: auto; padding: 3px 10px 3px 4px; border: var(--bw) solid var(--c-line-strong); border-radius: var(--r-xs); background: var(--c-ink-850); color: var(--c-text); font: inherit; font-size: var(--fs-14); font-weight: var(--fw-black); letter-spacing: .1em; text-transform: uppercase; text-shadow: none; white-space: nowrap; -webkit-tap-highlight-color: transparent; }
+#hud .mf-statsbtn kbd:empty { display: none; }
+#hud[data-active-state~="stats-open"] .mf-statsbtn { border-color: var(--c-volt); color: var(--c-volt); }
+/* the crate card, compact: key, verb, name and class, the art; what it replaces and the Stats button */
+#hud .mf-cmpcard__swap { display: flex; align-items: center; gap: var(--sp-2); color: var(--c-muted); font-size: var(--fs-14); font-weight: var(--fw-semi); white-space: nowrap; }
+#hud .mf-cmpcard__sub { border-top: var(--bw) solid var(--c-line); padding-top: 6px; border-bottom: 0; padding-bottom: 0; }
+#hud .mf-hud-desktop .mf-cmpcard { min-width: 460px; }
+/* the draw card's foot: the Stats button first */
+#hud .mf-drawcard__foot .mf-statsbtn { margin-left: 0; }
+/* the phone: a thumb-sized Stats button on the compare chip (44 px on the glass at least: the phone HUD is zoomed by --phone-fit) */
+.ph .pt-cmp__stats { align-self: stretch; min-height: max(44px, calc(46px / var(--phone-fit, 1))); margin: 2px 0 0; padding: 0 12px; gap: 8px; font-size: var(--fs-14); }
+.ph .pt-cmp__stats .ic { width: 18px; height: 18px; color: var(--c-volt); }

@@ -27,6 +27,7 @@ export type ActionId =
   | 'shield'
   | 'scoreboard'
   | 'netGraph'
+  | 'stats'
   | 'talk'
   | 'map';
 
@@ -66,6 +67,8 @@ export const ACTIONS: readonly ActionDef[] = [
   { id: 'shield', label: 'Shield up / sling', group: 'Weapons', bit: Btn.Shield, defaults: ['KeyX'] },
   { id: 'scoreboard', label: 'Scoreboard (hold)', group: 'Interface', ui: true, defaults: ['Tab'] },
   { id: 'netGraph', label: 'Connection stats', group: 'Interface', ui: true, defaults: ['KeyN'] },
+  // the crate card and the draw card show the swap only; this opens a gun's stats on them (owner, 25 Oct)
+  { id: 'stats', label: 'Gun stats (on a gun)', group: 'Interface', ui: true, defaults: ['KeyI'], hint: 'Standing on a gun, or drawing one: its damage, rate, range, weight and mag against yours' },
   // voice chat (voice/): V, as the owner asked; melee moved to C (settings rev 3 moves saved ones too)
   { id: 'talk', label: 'Push to talk (hold)', group: 'Interface', ui: true, defaults: ['KeyV'], hint: 'Voice chat: soldiers near you hear you. B talks to your party' },
   // the big map (minimap/): pans and zooms; a pad double-taps View / Share, a phone taps the minimap
@@ -157,7 +160,7 @@ export function toKeyBindings(bindings: Bindings): KeyBindings {
 }
 
 /** The keyboard codes of a page-level action (scoreboard, net graph). */
-export function uiCodes(bindings: Bindings, action: 'scoreboard' | 'netGraph' | 'talk' | 'map'): readonly string[] {
+export function uiCodes(bindings: Bindings, action: 'scoreboard' | 'netGraph' | 'talk' | 'map' | 'stats'): readonly string[] {
   return bindings[action].filter((c) => !c.startsWith('Mouse'));
 }
 

@@ -2,7 +2,8 @@
 import { HAMMER, K47, NO_WEAPON } from '@military-forge/content';
 import { Btn, createInput } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
-import { HOLD_MS, QuickSelect, cyclesTo, itemAt, itemAngle, quickItems, type QuickPlayer } from '../src/quickSelect';
+import { wheelSpotOnPage } from '../src/hud/hud';
+import { HOLD_MS, QuickSelect, cyclesTo, itemAt, itemAngle, itemSpot, pickByAngle, quickItems, type QuickPlayer } from '../src/quickSelect';
 
 const me = (over: Partial<QuickPlayer> = {}): QuickPlayer => ({ alive: true, active: 0, dual: false, weapons: [{ def: HAMMER.index }, { def: K47.index }], grenadeType: 0, grenadeCounts: [2, 0, 1, 1, 0, 0], ...over });
 const sample = (q: QuickSelect, now: number, buttons = 0) => {
@@ -105,5 +106,63 @@ describe('the quick-select', () => {
     expect(q.view.highlight).toBe(0);
     q.observe({ ...me(), alive: false });
     expect(q.open).toBe(false);
+  });
+});
+
+describe('the quick-select lands where it is drawn (owner, 25 Oct: "isn\'t mapped properly")', () => {
+  // hud.ts draws item i at itemSpot(i, n) × the HUD's fit round the wheel's centre (the reticle kept on screen)
+  const opened = (n: number) => {
+    const q = new QuickSelect();
+    const grenadeCounts = [1, 1, 1, 1, 1, 1].map((c, i) => (i < n - 2 ? c : 0));
+    q.observe(me({ grenadeCounts, grenadeType: 5 })); // a type not carried: taking any grenade cycles
+    q.press('key', 0, { x: 30, y: 20 }); // near the corner: the HUD draws it pulled on screen
+    sample(q, HOLD_MS);
+    expect(q.view.items.length).toBe(n);
+    return q;
+  };
+
+  for (const fit of [0.667, 0.75, 1, 1.5]) {
+    for (const n of [3, 5, 8]) {
+      it(`pointing at each drawn item takes that item (fit ${fit}, ${n} items, the wheel moved on screen)`, () => {
+        const q = opened(n);
+        // where the HUD drew it: not where it opened (it keeps the wheel on screen)
+        const centre = { x: 340 * fit, y: 270 * fit };
+        const spots = q.view.items.map((_, i) => wheelSpotOnPage(centre.x, centre.y, i, n, fit));
+        q.layout(centre, spots);
+        spots.forEach((s, i) => {
+          q.point(s.x, s.y);
+          expect(q.view.highlight).toBe(i);
+          // and on the way there: 40 % of the way out, past the dead zone
+          q.point(centre.x + (s.x - centre.x) * 0.4, centre.y + (s.y - centre.y) * 0.4);
+          expect(q.view.highlight).toBe(i);
+        });
+        // letting go on the first grenade takes it (frags: one cycle from the type selected, not carried)
+        q.point(spots[2]!.x, spots[2]!.y);
+        q.release(HOLD_MS + 500);
+        const outs = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map((k) => sample(q, 1000 + k * 16));
+        expect(outs.some((o) => o.buttons & Btn.CycleGrenade)).toBe(true);
+      });
+    }
+  }
+
+  it("the pad's stick toward each drawn item takes that item", () => {
+    const q = opened(8);
+    const centre = { x: 960, y: 540 };
+    const spots = q.view.items.map((_, i) => wheelSpotOnPage(centre.x, centre.y, i, 8, 1));
+    q.layout(centre, spots);
+    spots.forEach((s, i) => {
+      const dx = s.x - centre.x;
+      const dy = s.y - centre.y;
+      const len = Math.hypot(dx, dy);
+      q.stick(dx / len, dy / len);
+      expect(q.view.highlight).toBe(i);
+    });
+  });
+
+  it('the drawn directions, not equal slices: the ellipse moves the diagonal items off their slot angles', () => {
+    // with 8 items on a 250 × 180 ellipse, item 1 is drawn at about −35.8°, not −45°
+    const s = itemSpot(1, 8);
+    expect((Math.atan2(s.y, s.x) * 180) / Math.PI).toBeCloseTo(-35.8, 0);
+    expect(pickByAngle(Math.atan2(s.y, s.x), [0, 1, 2, 3, 4, 5, 6, 7].map((i) => Math.atan2(itemSpot(i, 8).y, itemSpot(i, 8).x)))).toBe(1);
   });
 });
