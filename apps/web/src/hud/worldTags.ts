@@ -17,7 +17,7 @@
  * position, size or strength changes, and the elements are pooled (reused, never rebuilt per item).
  * The phone (PHONE_TAGS) shows the nearest few only, and keeps them off the touch controls too.
  */
-import { POWER_WEAPONS, grenades, pickups as pickupDefs, weapons, type PickupDef } from '@military-forge/content';
+import { GRENADE_PICKUP_COUNT, POWER_WEAPONS, grenades, pickups as pickupDefs, weapons, type PickupDef } from '@military-forge/content';
 import { iconHref, weaponIcon } from '../ui/icons';
 import { drawButtonCap } from '../gamepad/caps';
 import { currentPadFamily } from '../gamepad/device';
@@ -114,15 +114,15 @@ export function planTags(items: readonly PickupView[], me: { x: number; y: numbe
   return { tags: [...near, ...rackTags], sign: options.rack && signL <= signR ? { x: (signL + signR) / 2, y: signY } : null };
 }
 
-/** The tag's words: the gun's name, family and mag ("30 rd"), or the item's name (a shield, a grenade pair). */
+/** The tag's words: the gun's name (its family and mag ("30 rd") for the cards; the tag shows the name only), a grenade pair's count ("×2", by its type's icon), "Shield". */
 export function tagWords(def: PickupDef): { name: string; family: string; icon: string; ammo: string; power: boolean; kind: 'gun' | 'grenades' | 'shield' } {
   if (def.kind === 'weapon' && def.weapon !== undefined) {
     const w = weapons[def.weapon];
     const melee = w?.fireMode === 'melee';
     return { name: w?.name ?? def.name, family: weaponFamily(w), icon: iconHref(weaponIcon(w?.id) ?? 'armory'), ammo: w && !melee ? `${w.mag} rd` : '', power: !!w && POWER_WEAPONS.has(w.id), kind: 'gun' };
   }
-  if (def.kind === 'grenades' && def.grenade !== undefined) return { name: def.name, family: 'Grenades', icon: iconHref(`g-${grenades[def.grenade]?.id ?? 'frag'}`), ammo: '', power: false, kind: 'grenades' };
-  return { name: def.name, family: 'Item', icon: iconHref('shield'), ammo: '', power: false, kind: 'shield' };
+  if (def.kind === 'grenades' && def.grenade !== undefined) return { name: `×${GRENADE_PICKUP_COUNT}`, family: 'Grenades', icon: iconHref(`g-${grenades[def.grenade]?.id ?? 'frag'}`), ammo: '', power: false, kind: 'grenades' };
+  return { name: 'Shield', family: 'Item', icon: iconHref('shield'), ammo: '', power: false, kind: 'shield' };
 }
 
 const SVG = 'http://www.w3.org/2000/svg';
@@ -193,7 +193,10 @@ export class WorldTags {
     const { w, h } = viewport(); // the page's own size (an upright phone plays turned: ui/landscape.ts)
     const plates = plan.tags.length || plan.sign ? this.plateRects() : [];
     const seen = new Set<number>();
-    for (const t of plan.tags) {
+    // nearest first: a tag that would sit on a nearer one's hides (no two tags in a pile)
+    const order = [...plan.tags].sort((a, b) => a.distance - b.distance);
+    const placed: Box[] = [];
+    for (const t of order) {
       const fade = t.kind === 'crate' ? tagFade(t.distance) : { scale: 1, opacity: 1 };
       if (!fade) continue;
       const s = toScreen(t.x, t.y + LIFT);
@@ -229,7 +232,9 @@ export class WorldTags {
       const tw = shown.w * fade.scale;
       const th = shown.h * fade.scale;
       const box = { l: (x - tw / 2) * fit, r: (x + tw / 2) * fit, t: (y - th) * fit, b: y * fit };
-      const clear = !plates.some((p) => box.l < p.right && box.r > p.left && box.t < p.bottom && box.b > p.top);
+      const hits = (p: Box) => box.l < p.right && box.r > p.left && box.t < p.bottom && box.b > p.top;
+      const clear = !plates.some(hits) && (t.kind === 'rack' || !placed.some(hits));
+      if (clear && t.kind === 'crate') placed.push({ left: box.l, right: box.r, top: box.t, bottom: box.b, width: box.r - box.l, height: box.b - box.t });
       const at = clear ? `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)${fade.scale !== 1 ? ` scale(${fade.scale})` : ''}` : 'hidden';
       if (at !== shown.at) {
         shown.at = at;

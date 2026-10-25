@@ -6,7 +6,7 @@ import { DRAGON, GRENADE_PICKUP_COUNT, HitZone, NO_WEAPON, RIOT_SHIELD, TUNING_G
 import { DamageSource, type SimEvent } from '@military-forge/sim';
 import { iconHref, weaponIcon } from '../ui/icons';
 import type { MapEventView, PickupView, PlayerView, WeaponView } from '../view';
-import { nearbyWeaponPrompt, takePrompt, weaponUnderfoot } from '../weaponItems';
+import { weaponUnderfoot } from '../weaponItems';
 
 /**
  * What arsenal-b's PlayerView adds (#40 grenade belt, #44 flashbang, #47 EMP grenade; see
@@ -346,20 +346,63 @@ export function pickupNear(me: Pick<PlayerView, 'x' | 'y' | 'alive'>, items: rea
   return (best && pickupDefs[best.def]) ?? null;
 }
 
+// ---- the take control: what the prompts name (owner, 25 Oct: "it says hold square … if it's square, let it be square") ----
+
 /**
- * "Riot Shield: walk over to take" when an item lies close by, the nearest first; '' when none.
- * Weapon crates (more guns): standing on a gun you don't hold, `[E] take Widow (swaps your
- * Hammer .44)`; close by, how to take it, or that walking over it is ammo for one you hold. `key`:
- * the take key's cap; null on a phone (touch wording: the Take button).
+ * The word on the phone's Take button (touch/skin.ts draws it under the button: cap('Take'); the
+ * editor calls the control "Take a gun", touch/layout.ts). Every touch prompt names the button by
+ * this word, and a test fails if the button's word and this one ever part.
  */
-export function pickupPrompt(me: Pick<PlayerView, 'x' | 'y' | 'alive'> & Partial<Pick<PlayerView, 'weapons' | 'active'>>, items: readonly PickupView[] | undefined, key: string | null = 'E'): string {
+export const TAKE_WORD = 'Take';
+
+/** The device the player takes guns with: the phone's Take button, a key, or a controller's button. */
+export type TakeDevice = 'touch' | 'keys' | 'pad';
+
+/** The one control every take prompt names (the crate card's key, the phone's chip, the lines). */
+export interface TakeControl {
+  device: TakeDevice;
+  /** what the player presses, as they see it: 'Take' (the on-screen button), 'E' (the key), '□' or 'X' (the pad's button) */
+  name: string;
+  /** held, not tapped (a controller's "hold reload to take") */
+  hold: boolean;
+  /** the binding's code for drawButtonCap ('KeyE', 'PadHold2'); '' on touch */
+  code: string;
+  /** the instruction in two words: 'Tap Take', 'Press E', 'Hold □' */
+  say: string;
+}
+
+/**
+ * The take control for the device in play. `cap`: the binding's cap as the HUD writes it
+ * (ui/icons.ts capText: 'E', or a pad's 'Hold □' / '△'); `code`: the binding's code ('KeyE',
+ * 'PadHold2', 'Pad3'). Touch ignores both: the button on screen says TAKE_WORD.
+ */
+export function takeControl(device: TakeDevice, cap = 'E', code = ''): TakeControl {
+  if (device === 'touch') return { device, name: TAKE_WORD, hold: false, code: '', say: `Tap ${TAKE_WORD}` };
+  const held = /^Hold\s+/i.exec(cap);
+  const hold = device === 'pad' && (/^PadHold\d/.test(code) || !!held);
+  const name = (held ? cap.slice(held[0].length) : cap).trim() || 'E';
+  return { device, name, hold, code, say: `${hold ? 'Hold' : 'Press'} ${name}` };
+}
+
+const asTake = (take: TakeControl | string | null): TakeControl => (take === null ? takeControl('touch') : typeof take === 'string' ? takeControl('keys', take, '') : take);
+
+/**
+ * One short line for what lies close by, the nearest first; '' when none. A gun underfoot you don't
+ * hold: `Press E · Widow` (the take control, then the gun); a gun a step away: `Widow · stand on it`,
+ * or `Widow · walk over for ammo` when you hold one; grenades and the shield: `Riot Shield · walk over`.
+ * `take`: the take control (takeControl); a string is a key's cap, null the phone's Take button.
+ */
+export function pickupPrompt(me: Pick<PlayerView, 'x' | 'y' | 'alive'> & Partial<Pick<PlayerView, 'weapons' | 'active'>>, items: readonly PickupView[] | undefined, take: TakeControl | string | null = 'E'): string {
   if (!me.alive || !items?.length) return '';
-  const held = { weapons: me.weapons ?? [], active: me.active ?? 0 };
-  const under = weaponUnderfoot(items, { x: me.x, y: me.y, weapons: held.weapons });
-  if (under && !under.held) return takePrompt(under, held, key);
+  const weaponsHeld = me.weapons ?? [];
+  const under = weaponUnderfoot(items, { x: me.x, y: me.y, weapons: weaponsHeld });
+  if (under && !under.held) return `${asTake(take).say} · ${under.weapon.name}`;
   const def = pickupNear(me, items);
-  if (def?.kind === 'weapon') return nearbyWeaponPrompt(def, held, key);
-  return def ? `${def.name}: walk over to take` : '';
+  if (def?.kind === 'weapon') {
+    const held = def.weapon !== undefined && weaponsHeld.some((w) => w.def === def.weapon);
+    return `${def.name} · ${held ? 'walk over for ammo' : 'stand on it'}`;
+  }
+  return def ? `${def.name} · walk over` : '';
 }
 
 /** An item's glyph: the shield, or the grenade type of a pair. */
@@ -519,27 +562,28 @@ export interface ItemCard {
 }
 
 /**
- * The card for an item close by that isn't a gun underfoot (that one gets the compare card): a
- * grenade pair with what it does to your belt, the riot shield with its HP, a gun a step away.
- * `key`: the take key's cap; null on a phone (the Take button).
+ * The one-line card for an item close by that isn't a gun underfoot (that one gets the compare
+ * card), icon first, a few words after (owner, 25 Oct: "make them minimal"): a grenade pair and what
+ * it does to your count (`3 → 5`, or `Full`), the riot shield's HP, a gun a step away (`Stand on it`,
+ * or `Ammo` when you hold one). Grenades and the shield are taken by walking over them, so no
+ * control is named; a gun's line names none either: standing on it, the compare card names the take
+ * control.
  */
-export function itemCard(def: PickupDef, me: Partial<Pick<PlayerView, 'weapons'>> & Partial<Pick<ArsenalFields, 'grenadeCounts'>>, key: string | null = 'E'): ItemCard {
+export function itemCard(def: PickupDef, me: Partial<Pick<PlayerView, 'weapons'>> & Partial<Pick<ArsenalFields, 'grenadeCounts'>>): ItemCard {
   const icon = pickupIcon(def);
   if (def.kind === 'grenades' && def.grenade !== undefined) {
     const g = grenades[def.grenade];
     const max = g?.maxCount ?? 0;
     const have = me.grenadeCounts?.[def.grenade] ?? 0;
-    const after = Math.min(max, have + GRENADE_PICKUP_COUNT);
-    const line = have >= max ? 'Belt full · walk over to take' : `Walk over to take · belt ${have}/${max} → ${after}/${max}`;
-    return { title: def.name, line, icon, tone: 'grenades' };
+    const after = Math.min(Math.max(max, have), have + GRENADE_PICKUP_COUNT);
+    return { title: g?.name ?? def.name, line: have >= max ? 'Full' : `${have} → ${after}`, icon, tone: 'grenades' };
   }
   if (def.kind === 'weapon' && def.weapon !== undefined) {
     const w = weapons[def.weapon];
     const held = (me.weapons ?? []).some((s) => s.def === def.weapon);
-    const line = held ? 'Walk over it for ammo' : key === null ? 'Stand on it, then tap Take' : `Stand on it · ${key} to take`;
-    return { title: w?.name ?? def.name, line: `${weaponFamily(w)} · ${line}`, icon, tone: 'gun' };
+    return { title: w?.name ?? def.name, line: held ? 'Ammo' : 'Stand on it', icon, tone: 'gun' };
   }
-  return { title: def.name, line: `${RIOT_SHIELD.hp} HP · walk over to take`, icon, tone: 'shield' };
+  return { title: def.name, line: `${RIOT_SHIELD.hp} HP`, icon, tone: 'shield' };
 }
 
 /** How far (m) a world tag stays full size; it is smallest and faintest from TAG_FAR on, gone past TAG_GONE. */

@@ -107,8 +107,8 @@ function desktop(): string {
 
     <div class="hud-br">
       <div class="belt plate" aria-label="Grenade belt" data-state="belt" data-tour="belt">
-        <div class="belt__head"><span class="belt__sel"><b data-bind="grenades.selected"></b> <span class="num"><span data-bind-roll="grenades.count"></span>/<span data-bind="grenades.max"></span></span></span>
-          <span class="belt__keys"><kbd class="kbd" data-bind="bind.grenade.0"></kbd><span>tap · hold aims</span><kbd class="kbd" data-state="belt-many" data-bind="bind.cycleGrenade.0"></kbd><span data-state="belt-many">next</span></span></div>
+        <div class="belt__head"><span class="belt__sel"><b data-bind="grenades.selected"></b> <span class="num" data-bind-roll="grenades.count"></span></span>
+          <span class="belt__keys"><kbd class="kbd" data-bind="bind.grenade.0"></kbd><kbd class="kbd" data-state="belt-many" data-bind="bind.cycleGrenade.0"></kbd><span data-state="belt-many">next</span></span></div>
         <div class="mf-belt"><ul class="belt__list"></ul><i class="m-p5 mf-belt__sel" aria-hidden="true"></i></div>
       </div>
       <div class="slots">
@@ -172,7 +172,7 @@ function desktop(): string {
 
     <div class="pickup plate m-p9 m-p9--bottom mf-cmpcard" data-state="pickup-crate" role="status" data-bind-attr="data-power: pickup.weapon.power">
       <div class="pickup__head mf-cmpcard__head">
-        <span class="pickup__key"><svg class="mf-keyring" viewBox="0 0 60 60" aria-hidden="true"><circle cx="30" cy="30" r="27"/></svg><kbd class="kbd kbd--lg" data-bind="bind.interact.0"></kbd></span>
+        <span class="pickup__key mf-takekey"><kbd class="kbd kbd--lg" data-take-cap data-bind="bind.interact.0"></kbd></span>
         <span class="mf-cmpcard__title"><span class="mf-cmpcard__verb" data-bind="pickup.verb"></span><span class="mf-cmpcard__name"><b class="display" data-bind="pickup.weapon.name"></b><span class="mf-chip m-p7" data-bind="pickup.weapon.family"></span></span></span>
         <span class="mf-cmpcard__gun m-p7">${wpn('pickup.weapon.icon', 'ic--wpn mf-cmpcard__wpn')}</span>
       </div>
@@ -220,7 +220,7 @@ function desktop(): string {
   <div class="mf-qs" data-state="quick-open" role="dialog" aria-label="Quick-select: point and let go">
     <div class="mf-qs__ring" aria-hidden="true"><i class="mf-qs__pointer"></i></div>
     <div class="mf-qs__items"></div>
-    <div class="mf-qs__hub plate"><span class="hud-label">Quick-select</span><b class="display mf-qs__name" data-bind="quick.name"></b><span class="mf-qs__line" data-bind="quick.line"></span><span class="mf-qs__how"><kbd class="kbd" data-bind="bind.swap.0"></kbd> let go to take<span class="mf-qs__mouse"> · wheel steps · click takes it</span><span class="mf-qs__pad"> · the aim stick points</span></span></div>
+    <div class="mf-qs__hub plate"><span class="hud-label">Quick-select</span><b class="display mf-qs__name" data-bind="quick.name"></b><span class="mf-qs__line" data-bind="quick.line"></span><span class="mf-qs__how"><kbd class="kbd" data-bind="bind.swap.0"></kbd> let go to take</span></div>
   </div>
 
   <div class="feedback" aria-hidden="true">

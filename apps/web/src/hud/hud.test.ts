@@ -3,7 +3,7 @@ import { BUZZ, DRAGON, HAMMER, HitZone, K47, NO_WEAPON, SHREDDER, THUMPER, WIDOW
 import { DamageSource, MatchPhase } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
 import { Linger, blastName, hudFrame, netGraph, pingLook, type HudInput, type HudMemory } from './hud';
-import { conditions, leaderLine, crateCompare, damageArc, dashHint, dashStatus, eventLook, feedFromEvents, fuelView, grenadeBelt, healthView, isBlastSource, isBurnTick, pickupIcon, pickupNear, pickupPrompt, screenAngle, shieldStatus, tunedSummary, weaponCards, weaponFamily, weightWords, type HudPlayer, type ScoreRow } from './model';
+import { conditions, leaderLine, crateCompare, damageArc, dashHint, dashStatus, eventLook, feedFromEvents, fuelView, grenadeBelt, healthView, isBlastSource, isBurnTick, pickupIcon, pickupNear, pickupPrompt, screenAngle, takeControl, shieldStatus, tunedSummary, weaponCards, weaponFamily, weightWords, type HudPlayer, type ScoreRow } from './model';
 import { StateTokens, stateMatches } from './state';
 import { HUD_VARS, hudTemplate } from './template';
 import type { NetStats } from '../view';
@@ -189,9 +189,9 @@ describe('riot shield, dash, conditions, grenade belt, pickups (UI brief fields)
     expect(belt.map((g) => g.count)).toEqual([2, 1, 0, 2, 1, 0]);
   });
 
-  it('a pickup close by says how to take it; far away or dead, nothing', () => {
+  it('a pickup close by says how to take it, in a few words; far away or dead, nothing', () => {
     const shield = { id: 1, def: 0, x: 11.5, y: 2 };
-    expect(pickupPrompt({ x: 10, y: 2, alive: true }, [shield])).toBe('Riot Shield: walk over to take');
+    expect(pickupPrompt({ x: 10, y: 2, alive: true }, [shield])).toBe('Riot Shield · walk over');
     expect(pickupPrompt({ x: 20, y: 2, alive: true }, [shield])).toBe('');
     expect(pickupPrompt({ x: 10, y: 2, alive: false }, [shield])).toBe('');
     expect(pickupPrompt({ x: 10, y: 2, alive: true }, undefined)).toBe('');
@@ -207,13 +207,15 @@ describe('riot shield, dash, conditions, grenade belt, pickups (UI brief fields)
     expect(eventLook('custom')).toEqual({ color: 'var(--c-ev-gravity)', icon: 'warn' });
   });
 
-  it('a weapon crate: E to take it (naming the gun it swaps), or ammo for a gun you hold', () => {
+  it('a weapon crate: the take control, then the gun; a step away, stand on it; ammo for a gun you hold', () => {
     const widow = { id: 2, def: weaponPickup(WIDOW.index)!.index, x: 10, y: 2 };
     const holding = (def: number) => ({ x: 10, y: 2, alive: true, active: 0, weapons: [{ def, mag: 6, reserve: 30, reloadTicks: 0 }] });
-    expect(pickupPrompt(holding(HAMMER.index), [widow])).toBe('[E] take Widow (swaps your Hammer .44)');
-    expect(pickupPrompt({ ...holding(HAMMER.index), x: 12 }, [widow])).toBe('Widow: stand on it, E to take');
-    expect(pickupPrompt({ ...holding(WIDOW.index), x: 12 }, [widow])).toBe('Widow: walk over for ammo');
-    expect(pickupPrompt(holding(WIDOW.index), [widow])).toBe('Widow: walk over for ammo');
+    expect(pickupPrompt(holding(HAMMER.index), [widow])).toBe('Press E · Widow');
+    expect(pickupPrompt(holding(HAMMER.index), [widow], null)).toBe('Tap Take · Widow');
+    expect(pickupPrompt(holding(HAMMER.index), [widow], takeControl('pad', 'Hold □', 'PadHold2'))).toBe('Hold □ · Widow');
+    expect(pickupPrompt({ ...holding(HAMMER.index), x: 12 }, [widow])).toBe('Widow · stand on it');
+    expect(pickupPrompt({ ...holding(WIDOW.index), x: 12 }, [widow])).toBe('Widow · walk over for ammo');
+    expect(pickupPrompt(holding(WIDOW.index), [widow])).toBe('Widow · walk over for ammo');
   });
 });
 
@@ -354,7 +356,7 @@ describe('hudFrame', () => {
       'event.startsIn': '3',
       'event.timeLeft': '',
       'pickup.icon': '#icon-shield',
-      'pickup.text': 'Riot Shield: walk over to take',
+      'pickup.text': 'Riot Shield · walk over',
       'bind.dash.0': 'Shift',
       'fps.value': '60',
     });
@@ -365,11 +367,12 @@ describe('hudFrame', () => {
     expect(hudFrame(input({ adminTuned: true }), memory).tokens).toContain('admin');
   });
 
-  it('a weapon crate underfoot shows its whole take line and the gun icon, not "walk over to take"', () => {
+  it('a weapon crate underfoot names the take control and the gun, with the gun icon', () => {
     const crate = { id: 4, def: weaponPickup(WIDOW.index)!.index, x: me.x, y: me.y };
     const { values: v, tokens } = hudFrame(input({ frame: { tick: 1, localId: 0, players: [me], grenades: [], pickups: [crate], mapEvent: null } }), memory);
     expect(tokens).toContain('pickup');
-    expect(v['pickup.text']).toBe('[E] take Widow (swaps your Hammer .44)');
+    expect(v['pickup.text']).toBe('Press E · Widow');
+    expect(v['take.say']).toBe('Press E');
     expect(v['pickup.icon']).not.toBe('#icon-shield');
   });
 

@@ -172,10 +172,14 @@ async function crate(page, tag, phone, cdp) {
   await shot(page, `${tag}-crate-swap-only`);
   if (phone) {
     const b = await page.evaluate(() => {
-      const r = document.querySelector('#hud .mf-hud-phone .pt-cmp__stats').getBoundingClientRect();
-      return { x: r.left + r.width / 2, y: r.top + r.height / 2, h: r.height, w: r.width };
+      const el = document.querySelector('#hud .mf-hud-phone .pt-cmp__stats');
+      const r = el.getBoundingClientRect();
+      // its hit area: the button, or the larger ::after round it (drawn small, 44 px to the finger), on the glass
+      const zoom = r.height / (parseFloat(getComputedStyle(el).height) || r.height);
+      const hit = Math.max(r.height, (parseFloat(getComputedStyle(el, '::after').height) || 0) * zoom);
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2, h: hit, w: r.width };
     });
-    if (b.h < 44) problems.push(`${tag}: the Stats button is ${b.h.toFixed(0)} px tall (44 at least)`);
+    if (b.h < 44) problems.push(`${tag}: the Stats button's hit area is ${b.h.toFixed(0)} px tall (44 at least)`);
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: b.x, y: b.y, radiusX: 8, radiusY: 8, force: 1, id: 7 }] });
     await sleep(60);
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });

@@ -57,17 +57,17 @@ export function phoneHudTemplate(): string {
     <span class="pt-ping" data-state="net"><span data-bind-attr="class: net.phoneClass"><span class="sig" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span data-bind="net.ping"></span></span><span class="pt-ping__more num" data-bind="net.short"></span></span>
     <span class="pt-arcwarn mf-arcwarn" data-state="arc-warning" role="status">${ic('warn', 'ic--sm')}Arc bends<span data-bind-show="event.name"> · <span data-bind="event.name"></span></span></span>
     <div class="pickup plate pt-pickup" data-state="pickup" role="status" data-bind-attr="data-tone: pickup.item.tone"><svg class="ic ic--sm" aria-hidden="true"><use data-bind-attr="href: pickup.icon"/></svg><span data-state="pickup-item"><b data-bind="pickup.item.title"></b> <span class="pt-pickup__line" data-bind="pickup.item.line"></span></span><span data-state="!pickup-item" data-bind="pickup.text"></span></div>
-    <div class="pt-draw plate" data-state="switching+alive drawn+alive" role="status">
-      <b class="pt-draw__kick" data-state="switching">Drawing</b>
+    <div class="pt-draw plate" data-state="switching+alive drawn+alive" role="status" aria-label="Drawing">
       <svg class="ic--kf" aria-hidden="true"><use data-bind-attr="href: player.slot.0.icon"/></svg>
       <b class="display pt-draw__name" data-bind="player.slot.0.name"></b>
-      <span class="mf-chip" data-bind="player.slot.0.family"></span>
-      <span class="num pt-draw__ammo" data-state="gun"><span data-bind="player.slot.0.mag"></span>/<span data-bind="player.slot.0.reserve"></span></span>
       <i class="pt-draw__bar" data-state="switching" aria-hidden="true"></i>
     </div>
     <div class="pt-cmp plate" data-state="pickup-crate+!switching+!drawn" role="status">
-      <div class="pt-cmp__head"><svg class="ic--kf" aria-hidden="true"><use data-bind-attr="href: pickup.weapon.icon"/></svg><b class="display" data-bind="pickup.weapon.name"></b><span class="mf-chip" data-bind="pickup.weapon.family"></span><span class="pt-cmp__for" data-state="pickup-swaps">for your <span data-bind="pickup.held.name"></span></span></div>
-      <button type="button" class="mf-statsbtn pt-cmp__stats" data-hud-stats tabindex="-1" aria-label="Show or hide the gun's stats">${ic('sliders', 'ic--sm')}<span data-state="!stats-open">Stats</span><span data-state="stats-open">Hide</span></button>
+      <div class="pt-cmp__head">
+        <b class="pt-cmp__cap" data-state="take-touch" data-take-cap data-bind="take.word"></b><kbd class="kbd pt-cmp__key" data-state="!take-touch" data-take-cap data-bind="bind.interact.0"></kbd>
+        <svg class="ic--kf" aria-hidden="true"><use data-bind-attr="href: pickup.weapon.icon"/></svg><b class="display pt-cmp__name" data-bind="pickup.weapon.name"></b>
+        <button type="button" class="mf-statsbtn pt-cmp__stats" data-hud-stats tabindex="-1" aria-label="Show or hide the gun's stats">${ic('sliders', 'ic--sm')}</button>
+      </div>
       ${PHONE_CMP}
     </div>
     <div class="mf-spec mf-spec--phone" data-state="spectate-bar" role="group" aria-label="Spectating">

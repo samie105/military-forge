@@ -120,7 +120,7 @@ describe('guns and items on the ground', () => {
     expect(tagWords(weaponPickup(K47.index)!)).toMatchObject({ name: 'K-47', family: 'Rifle', ammo: `${K47.mag} rd`, power: false, kind: 'gun' });
     expect(tagWords(weaponPickup(BREACHER.index)!)).toMatchObject({ power: true });
     const frags = pickups.find((p) => p.kind === 'grenades' && grenades[p.grenade!]?.id === 'frag')!;
-    expect(tagWords(frags)).toMatchObject({ family: 'Grenades', ammo: '', kind: 'grenades', icon: '#icon-g-frag' });
+    expect(tagWords(frags)).toMatchObject({ name: '×2', family: 'Grenades', ammo: '', kind: 'grenades', icon: '#icon-g-frag' });
   });
 
   it('the phone tags the nearest four only, and a rack gun near you as a plain tag', () => {
@@ -135,17 +135,16 @@ describe('guns and items on the ground', () => {
     expect(near.tags.every((t) => t.kind === 'crate' && Number.isFinite(t.distance))).toBe(true);
   });
 
-  it('the item card: what a grenade pair does for your belt, the shield, a gun a step away', () => {
+  it('the item card, one short line: what a grenade pair does to your count, the shield, a gun a step away', () => {
     const frags = pickups.find((p) => p.kind === 'grenades' && grenades[p.grenade!]?.id === 'frag')!;
     const max = grenades[frags.grenade!]!.maxCount;
-    expect(itemCard(frags, { grenadeCounts: [1, 0, 0, 0, 0, 0] })).toMatchObject({ tone: 'grenades', title: frags.name, line: `Walk over to take · belt 1/${max} → 3/${max}` });
-    expect(itemCard(frags, { grenadeCounts: [max, 0, 0, 0, 0, 0] }).line).toBe('Belt full · walk over to take');
+    expect(itemCard(frags, { grenadeCounts: [1, 0, 0, 0, 0, 0] })).toMatchObject({ tone: 'grenades', title: 'Frag', line: `1 → ${Math.min(max, 3)}` });
+    expect(itemCard(frags, { grenadeCounts: [max, 0, 0, 0, 0, 0] }).line).toBe('Full');
     const shield = pickups.find((p) => p.kind === 'shield')!;
-    expect(itemCard(shield, {})).toMatchObject({ tone: 'shield', line: `${RIOT_SHIELD.hp} HP · walk over to take` });
+    expect(itemCard(shield, {})).toMatchObject({ tone: 'shield', line: `${RIOT_SHIELD.hp} HP` });
     const k47 = weaponPickup(K47.index)!;
-    expect(itemCard(k47, { weapons: [gun(HAMMER.index)] }).line).toBe('Rifle · Stand on it · E to take');
-    expect(itemCard(k47, { weapons: [gun(HAMMER.index)] }, null).line).toBe('Rifle · Stand on it, then tap Take');
-    expect(itemCard(k47, { weapons: [gun(K47.index)] }).line).toBe('Rifle · Walk over it for ammo');
+    expect(itemCard(k47, { weapons: [gun(HAMMER.index)] })).toMatchObject({ title: 'K-47', line: 'Stand on it' });
+    expect(itemCard(k47, { weapons: [gun(K47.index)] }).line).toBe('Ammo');
   });
 
   it("the compare card: the new gun's class, fire mode and mag, a power weapon in brass; the item card for a pair close by", () => {
@@ -157,7 +156,7 @@ describe('guns and items on the ground', () => {
     const frags = pickups.find((p) => p.kind === 'grenades' && grenades[p.grenade!]?.id === 'frag')!;
     const near = hudFrame(input({ ...me, grenadeCounts: [2, 0, 0, 0, 0, 0] }, { pickups: [{ id: 5, def: frags.index, x: me.x + 1.5, y: me.y }] }), mem);
     expect(near.tokens).toContain('pickup-item');
-    expect(near.values).toMatchObject({ 'pickup.item.title': frags.name, 'pickup.item.tone': 'grenades' });
+    expect(near.values).toMatchObject({ 'pickup.item.title': 'Frag', 'pickup.item.line': '2 → 4', 'pickup.item.tone': 'grenades' });
     expect(fireWords(K47)).toBe('Full auto');
     expect(fireWords(HAMMER)).toBe('Semi-auto');
   });

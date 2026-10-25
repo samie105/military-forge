@@ -25,6 +25,7 @@ import type { MatchView } from '../shell/matchView';
 import { formatClock, playerName } from '../shell/matchView';
 import { capText, iconHref, weaponIcon } from '../ui/icons';
 import { drawButtonCap } from '../gamepad/caps';
+import { isPadCode } from '../gamepad/glyphs';
 import { pingQuality } from '../ui/ping';
 import { logicalRect } from '../ui/landscape';
 import { PHONE_TAGS, WorldTags } from './worldTags';
@@ -57,6 +58,8 @@ import {
   pickupIcon,
   pickupNear,
   pickupPrompt,
+  takeControl,
+  TAKE_WORD,
   screenAngle,
   shieldStatus,
   streakWords,
@@ -177,6 +180,8 @@ export interface HudMemory {
   quick?: { open: boolean; item: QuickItem | null };
   /** the gun's stats asked for (the Stats key or button on the crate card or the draw card) */
   statsOpen?: boolean;
+  /** the take binding's code ('KeyE', a pad's 'PadHold2'): with it, a pad's prompts name its button */
+  takeCode?: string;
 }
 
 export interface HudFrame {
@@ -506,7 +511,14 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
   // the item underfoot or close by: a weapon crate you stand on gets the quick compare; the rest,
   // pickupPrompt's line ("Riot Shield: walk over to take")
   const item = pickupNear(me, frame.pickups);
-  const prompt = pickupPrompt(me, frame.pickups, mem.touch ? null : mem.keys.interact || 'E');
+  // the take control, one for every prompt: the phone's Take button, the key, or the pad's button
+  const take = takeControl(mem.touch ? 'touch' : mem.takeCode && isPadCode(mem.takeCode) ? 'pad' : 'keys', mem.keys.interact || 'E', mem.takeCode ?? '');
+  v['take.say'] = take.say;
+  v['take.name'] = take.name;
+  v['take.word'] = TAKE_WORD;
+  on('take-touch', take.device === 'touch');
+  on('take-hold', take.hold);
+  const prompt = pickupPrompt(me, frame.pickups, take);
   const under = me.alive ? weaponUnderfoot(frame.pickups, me) : null;
   const crate = under && !under.held ? under : null;
   on('pickup', !!prompt);
@@ -518,7 +530,7 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
     v['pickup.icon'] = item ? pickupIcon(item) : crate ? href(weaponIcon(crate.weapon.id)) : '';
     // the item card: what it is and what it does for you (a grenade pair on your belt, the shield's HP)
     if (item && !crate) {
-      const card = itemCard(item, me, mem.touch ? null : mem.keys.interact || 'E');
+      const card = itemCard(item, me);
       v['pickup.item.title'] = card.title;
       v['pickup.item.line'] = card.line;
       v['pickup.item.tone'] = card.tone;
@@ -879,6 +891,9 @@ export class Hud {
   private readonly onBlur = () => this.setScoreboard(false);
   /** the crate card and the draw card show the swap only; their stats open on request (owner, 25 Oct) */
   private statsOpen = false;
+  /** the touch layer's gun ring, and its choices' places when last measured (fitRing) */
+  private ring: HTMLElement | null = null;
+  private ringKey = '';
   private statsCodes: readonly string[] = ['KeyI'];
   /** a crate card or the draw card is up (the Stats key does something) */
   private cardUp = false;
@@ -1085,6 +1100,7 @@ export class Hud {
       kill: this.kill,
       quick: { open: quickSelect.open, item: quickSelect.view.items[quickSelect.view.highlight] ?? null },
       statsOpen: this.statsOpen,
+      takeCode: this.keyCodes.interact ?? '',
     });
     this.binder.update(values);
     // the stats close with the cards: each new crate or draw starts with the swap only
@@ -1101,6 +1117,7 @@ export class Hud {
     this.drawLoadout();
     this.drawQuick();
     feedTouchHud(values, tokens); // the phone's thumb dials wear these too (touch/skin.ts)
+    this.fitRing();
     this.place(input);
     // the world tags of the screen that shows (the desktop's, or the phone's while the touch controls are up)
     const phone = typeof document !== 'undefined' && document.documentElement.hasAttribute('data-touch-controls');
@@ -1358,6 +1375,28 @@ export class Hud {
       const count = li.querySelector<HTMLElement>('.mf-loadout__count');
       if (count && g) rollText(count, String(g.count));
     }
+  }
+
+  /**
+   * The phone's gun ring (the touch layer's radial, hold the swap button): premium.css draws its ring
+   * round the swap button's centre and needs how far out the choices sit (they're placed from the
+   * button's own size, which the HUD editor can change). Measured once per opening, from the choices'
+   * offsets; nothing is read while the ring is shut.
+   */
+  private fitRing(): void {
+    if (typeof document === 'undefined' || !document.documentElement.hasAttribute('data-touch-controls')) return;
+    if (!this.ring?.isConnected) this.ring = document.querySelector<HTMLElement>('.mf-touch-fx .mf-radial');
+    const ring = this.ring;
+    if (!ring || ring.hidden) {
+      this.ringKey = '';
+      return;
+    }
+    const items = [...ring.children].filter((c): c is HTMLElement => c instanceof HTMLElement && c.classList.contains('mf-radial__it'));
+    const key = items.map((c) => `${c.style.left},${c.style.top}`).join(';');
+    if (key === this.ringKey) return;
+    this.ringKey = key;
+    const r = Math.max(0, ...items.map((c) => Math.hypot(parseFloat(c.style.left) || 0, parseFloat(c.style.top) || 0)));
+    if (r > 0) ring.style.setProperty('--ring-r', `${Math.round(r)}px`);
   }
 
   /**

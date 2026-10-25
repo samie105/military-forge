@@ -57,17 +57,13 @@
 #hud .mf-drawcue__back { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; color: var(--c-muted); white-space: nowrap; }
 #hud .mf-drawcue__back b { color: var(--c-text); }
 
-/* the phone: a draw toast above the bottom centre (the swap pill's guns cross in the touch layer) */
-.ph .pt-draw { position: absolute; left: 42%; bottom: calc(var(--safe-b) + 58px); transform: translateX(-50%); display: grid; grid-template-columns: auto auto auto; align-items: center; column-gap: 8px; row-gap: 0; max-width: 236px; padding: 3px 10px 7px; border-color: var(--c-volt); font-size: var(--fs-14); white-space: nowrap; animation: m-rise var(--m-fast) var(--ease-arrive) both; }
-.ph .pt-draw > .pt-draw__kick { grid-column: 1 / 3; }
-.ph .pt-draw > .pt-draw__ammo { grid-column: 3; grid-row: 1; justify-self: end; }
-.ph .pt-draw > :is(.ic--kf, .pt-draw__name, .mf-chip) { grid-row: 2; }
-.ph .pt-draw__kick { color: var(--c-volt); font-weight: var(--fw-black); letter-spacing: .12em; text-transform: uppercase; }
-.ph .pt-draw .ic--kf { width: 44px; height: 16.5px; color: var(--c-text); }
-.ph .pt-draw__name { font-size: var(--fs-24); line-height: 1; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.ph .pt-draw__ammo { color: var(--c-muted); font-weight: var(--fw-bold); }
-.ph .pt-draw__bar { position: absolute; left: 10px; right: 10px; bottom: 2px; height: 3px; border-radius: var(--r-xxs); background: var(--c-volt); transform-origin: 0 50%; transform: scaleX(var(--equip, 0)); }
-#hud[data-active-state~="drawn"] .ph :is(.pt-draw__name, .pt-draw .mf-chip) { animation: m-stamp var(--m-fast) var(--ease-settle) both; }
+/* the phone: a draw toast above the bottom centre, one row: the gun and its name over the equip bar
+   (the swap button's own gun changes in the touch layer) */
+.ph .pt-draw { position: absolute; left: 42%; bottom: calc(var(--safe-b) + 58px); transform: translateX(-50%); display: flex; align-items: center; gap: 6px; max-width: 200px; padding: 2px 9px 5px; border-color: var(--c-volt); font-size: var(--fs-14); white-space: nowrap; animation: m-rise var(--m-fast) var(--ease-arrive) both; }
+.ph .pt-draw .ic--kf { flex: none; width: 34px; height: 13px; color: var(--c-text); }
+.ph .pt-draw__name { font-size: var(--fs-16); line-height: 1.1; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.ph .pt-draw__bar { position: absolute; left: 8px; right: 8px; bottom: 2px; height: 2px; border-radius: var(--r-xxs); background: var(--c-volt); transform-origin: 0 50%; transform: scaleX(var(--equip, 0)); }
+#hud[data-active-state~="drawn"] .ph .pt-draw__name { animation: m-stamp var(--m-fast) var(--ease-settle) both; }
 #hud[data-active-state~="drawn-leaving"] .ph .pt-draw { animation: m-leave var(--m-fast) var(--ease-leave) both; }
 /* the swap pill (touch layer) during a draw: a volt edge and a bar along its foot that fills with the equip ring */
 .mf-touch [data-active-state~="swap"] .pt-swap { border-color: var(--c-volt); }
@@ -86,21 +82,25 @@
 #hud .mf-world > .mf-wtag--power { --tag: var(--c-brass); }
 #hud .mf-world > .mf-wtag--grenades { --tag: var(--c-paper-3); }
 #hud .mf-world > .mf-wtag--shield { --tag: var(--c-shield); }
-#hud .mf-wtag__plate { display: flex; align-items: center; gap: 8px; padding: 5px 10px; background: var(--c-plate-strong); border: var(--bw) solid var(--tag); border-radius: var(--r-xs) var(--r-md) var(--r-xs) var(--r-md); color: var(--c-text); text-shadow: var(--ts-hud); white-space: nowrap; }
-#hud .mf-wtag__plate .ic--kf { width: 52px; height: 19.5px; color: var(--c-text); }
+#hud .mf-wtag__plate { display: flex; align-items: center; gap: 6px; padding: 3px 8px; background: var(--c-plate-strong); border: var(--bw) solid var(--tag); border-radius: var(--r-xs) var(--r-md) var(--r-xs) var(--r-md); color: var(--c-text); text-shadow: var(--ts-hud); white-space: nowrap; }
+#hud .mf-wtag__plate .ic--kf { width: 44px; height: 16.5px; color: var(--c-text); }
 #hud .mf-wtag__plate .ic--sm { color: var(--tag); --c-cut: var(--c-plate-strong); }
-#hud .mf-wtag__name { font-size: var(--fs-18); font-weight: var(--fw-black); letter-spacing: .03em; text-transform: uppercase; }
+#hud .mf-wtag__name { font-size: var(--fs-16); font-weight: var(--fw-black); letter-spacing: .03em; text-transform: uppercase; }
 #hud .mf-wtag__cls { padding: 0 6px; border-radius: var(--r-xxs); background: var(--c-paper); color: var(--c-paper-text); font-size: var(--fs-14); font-weight: var(--fw-black); letter-spacing: .06em; text-transform: uppercase; text-shadow: none; }
 #hud .mf-wtag--power .mf-wtag__cls { background: var(--c-brass); color: var(--c-brass-ink); }
 #hud .mf-wtag__meta { color: var(--c-muted); font-size: var(--fs-14); font-weight: var(--fw-bold); }
-#hud .mf-wtag__stem { width: 2px; height: 44px; background: linear-gradient(var(--tag), transparent); }
+/* the icon and its word only (owner, 25 Oct: "the other things that float, make them more minimal"):
+   the class, the mag and the distance were more to read than to see; the compare card names the
+   class up close, and the tag's fade says how far */
+#hud :is(.mf-wtag__cls, .mf-wtag__meta) { display: none; }
+#hud .mf-wtag__stem { width: 2px; height: 28px; background: linear-gradient(var(--tag), transparent); }
 /* the phone's: smaller, on the phone's plate (no blur on a phone) */
 #hud .mf-hud-phone .mf-world { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
-#hud .mf-hud-phone .mf-wtag__plate { gap: 5px; padding: 2px 7px; }
-#hud .mf-hud-phone .mf-wtag__plate .ic--kf { width: 34px; height: 13px; }
-#hud .mf-hud-phone .mf-wtag__name { font-size: var(--fs-14); }
-#hud .mf-hud-phone :is(.mf-wtag__cls, .mf-wtag__meta) { display: none; }
-#hud .mf-hud-phone .mf-wtag__stem { height: 20px; }
+#hud .mf-hud-phone .mf-wtag__plate { gap: 4px; padding: 1px 6px; border-width: 1.5px; }
+#hud .mf-hud-phone .mf-wtag__plate .ic--kf { width: 28px; height: 10.5px; }
+#hud .mf-hud-phone .mf-wtag__plate .ic--sm { width: 14px; height: 14px; }
+#hud .mf-hud-phone .mf-wtag__name { font-size: calc(12px * var(--text-scale, 1)); }
+#hud .mf-hud-phone .mf-wtag__stem { height: 12px; }
 
 /* the compare card (compact, it sits over the bottom of play): the key in a ring, the verb over the new
    gun's name and class, its art; what it replaces, how it fires, its mag; the five bars (they fill in
@@ -108,10 +108,11 @@
 #hud .mf-hud-desktop .mf-cmpcard { width: max-content; min-width: 500px; max-width: 640px; gap: 6px; padding-top: var(--sp-2); }
 #hud .mf-cmpcard[data-power="power"] { border-color: var(--c-brass); }
 #hud .mf-cmpcard__head { gap: var(--sp-3); }
-#hud .mf-cmpcard .pickup__key { position: relative; flex: none; }
-#hud .mf-keyring { position: absolute; inset: 0; width: 60px; height: 60px; overflow: visible; }
-#hud .mf-keyring circle { fill: none; stroke: var(--c-volt); stroke-width: 3; }
-#hud .mf-cmpcard[data-power="power"] .mf-keyring circle { stroke: var(--c-brass); }
+/* the take control in a ring that fits it (owner, 25 Oct: "the X is outside the circle"): a key is a
+   circle round its cap; a pad's HOLD and button stretch it to a pill round both, never spill out */
+#hud .mf-cmpcard .pickup__key.mf-takekey { position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; width: auto; min-width: 60px; height: 60px; padding: 0 5px; border: 3px solid var(--c-volt); border-radius: 999px; }
+#hud .mf-cmpcard[data-power="power"] .mf-takekey { border-color: var(--c-brass); }
+#hud .mf-takekey .kbd--pad { padding: 0 6px; }
 #hud .mf-cmpcard__title { display: flex; flex-direction: column; min-width: 0; }
 #hud .mf-cmpcard__verb { color: var(--c-volt); font-size: var(--fs-14); font-weight: var(--fw-black); letter-spacing: .2em; text-transform: uppercase; }
 #hud .mf-cmpcard[data-power="power"] .mf-cmpcard__verb { color: var(--c-brass); }
@@ -136,22 +137,30 @@
 #hud .mf-hud-desktop .mf-pickup-item { width: max-content; min-width: 0; max-width: 680px; }
 #hud .mf-pickup-item[data-tone="grenades"] { border-color: var(--c-brass); }
 #hud .mf-pickup-item[data-tone="shield"] { border-color: var(--c-shield); }
-#hud .mf-item__ic { display: grid; place-items: center; flex: none; width: 52px; height: 52px; border-radius: var(--r-xs); background: var(--c-volt); color: var(--c-ink-950); text-shadow: none; --c-cut: var(--c-volt); }
+#hud .mf-item__ic { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: var(--r-xs); background: var(--c-volt); color: var(--c-ink-950); text-shadow: none; --c-cut: var(--c-volt); }
 #hud .mf-pickup-item[data-tone="grenades"] .mf-item__ic { background: var(--c-brass); --c-cut: var(--c-brass); }
 #hud .mf-pickup-item[data-tone="shield"] .mf-item__ic { background: var(--c-shield); --c-cut: var(--c-shield); }
 #hud .mf-pickup-item:is([data-tone="grenades"], [data-tone="gun"]) .mf-item__ic .ic { fill: currentColor; stroke: none; }
-#hud .mf-pickup-item[data-tone="gun"] .mf-item__ic { width: 96px; }
-#hud .mf-pickup-item[data-tone="gun"] .mf-item__ic .ic { width: 80px; height: 30px; }
-#hud .mf-item__text { display: flex; flex-direction: column; gap: 2px; }
-#hud .mf-item__text b { font-size: var(--fs-20); font-weight: var(--fw-black); letter-spacing: .04em; text-transform: uppercase; }
+#hud .mf-pickup-item[data-tone="gun"] .mf-item__ic { width: 76px; }
+#hud .mf-pickup-item[data-tone="gun"] .mf-item__ic .ic { width: 62px; height: 23px; }
+/* one line: what it is, then what it does for you */
+#hud .mf-item__text { display: flex; align-items: baseline; gap: 10px; white-space: nowrap; }
+#hud .mf-item__text b { font-size: var(--fs-18); font-weight: var(--fw-black); letter-spacing: .04em; text-transform: uppercase; }
 #hud .mf-item__text span { color: var(--c-muted); font-size: var(--fs-16); font-weight: var(--fw-semi); }
 
-/* the phone: the compare chip above the Take button (the touch layer's), and the item line's words */
-.ph .pt-cmp { position: absolute; left: 42%; bottom: calc(var(--safe-b) + 58px); transform: translateX(-50%); display: flex; flex-direction: column; gap: 3px; width: 236px; padding: 5px 10px 7px; border-color: var(--c-volt); font-size: var(--fs-14); animation: m-rise var(--m-fast) var(--ease-arrive) both; }
-.ph .pt-cmp__head { display: flex; flex-wrap: wrap; align-items: center; column-gap: 6px; }
-.ph .pt-cmp__head .ic--kf { width: 40px; height: 15px; color: var(--c-text); }
-.ph .pt-cmp__head .display { font-size: var(--fs-20); line-height: 1.05; }
-.ph .pt-cmp__for { flex-basis: 100%; color: var(--c-muted); font-weight: var(--fw-semi); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* the phone: the compare chip, one line (owner, 25 Oct: "those gun stuffs, just make them minimal"):
+   the take control (the Take button's own word, or the pad's button), the gun, a stats button; the
+   bars only on request. The gun it replaces is the one on the swap button, so the chip doesn't say it */
+.ph .pt-cmp { position: absolute; left: 42%; bottom: calc(var(--safe-b) + 58px); transform: translateX(-50%); display: flex; flex-direction: column; gap: 3px; width: max-content; max-width: 240px; padding: 3px 3px 3px 6px; border-color: var(--c-volt); font-size: var(--fs-14); animation: m-rise var(--m-fast) var(--ease-arrive) both; }
+.ph .pt-cmp__head { display: flex; flex-wrap: nowrap; align-items: center; column-gap: 6px; white-space: nowrap; }
+.ph .pt-cmp__head .ic--kf { flex: none; width: 34px; height: 13px; color: var(--c-text); }
+.ph .pt-cmp__name { font-size: var(--fs-16); line-height: 1.1; }
+/* the Take button's word as the button wears it (touch.css .mf-cap): the prompt and the button read alike */
+.ph .pt-cmp__cap { flex: none; padding: 2px 5px; border-radius: var(--r-xs); background: rgb(0 0 0 / .62); color: var(--c-paper); font: var(--fw-black) 10px/1 var(--f-ui, inherit); letter-spacing: .08em; text-transform: uppercase; text-shadow: none; }
+.ph .pt-cmp__key { flex: none; }
+.ph .pt-cmp__key.kbd--pad > .mf-padglyph__svg { height: 22px; }
+/* the bars, asked for: the chip widens to hold them */
+#hud[data-active-state~="stats-open"] .ph .pt-cmp { width: 220px; }
 .ph .pt-cmp__row { display: grid; grid-template-columns: 3.2em minmax(0, 1fr) 4em; align-items: center; gap: 6px; }
 .ph .pt-cmp__row .cmp__bars i { display: block; height: 4px; margin: 1px 0; border-radius: var(--r-xxs); transform-origin: 0 50%; }
 .ph .pt-cmp__row .cmp__a { background: var(--c-muted-2); transform: scaleX(var(--a)); }
@@ -443,11 +452,10 @@ html:is(.mf-glass-off, .gfx-low) #hud .mf-evfx > i { animation: none; }
 #hud .mf-qs__item span { font-size: var(--fs-14); font-weight: var(--fw-bold); color: var(--c-muted); }
 #hud .mf-qs__item.is-hi { scale: 1.14; border-color: var(--c-volt); background: color-mix(in srgb, var(--c-volt) 16%, var(--c-plate-strong)); --c-cut: var(--c-ink-850); }
 #hud .mf-qs__item.is-hi span { color: var(--c-volt); }
-#hud .mf-qs__hub { position: absolute; left: -125px; top: -62px; display: flex; flex-direction: column; align-items: center; gap: 2px; width: 250px; padding: 10px 12px; border-color: var(--c-volt); text-align: center; animation: m-pull var(--m-fast) var(--ease-arrive) both; }
+#hud .mf-qs__hub { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 2px; box-sizing: border-box; width: max-content; min-width: 250px; max-width: 320px; padding: 10px 12px; border-color: var(--c-volt); text-align: center; animation: m-pull var(--m-fast) var(--ease-arrive) both; }
 #hud .mf-qs__name { font-size: var(--fs-36); line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 #hud .mf-qs__line { font-size: var(--fs-14); font-weight: var(--fw-semi); color: var(--c-muted); white-space: nowrap; }
 #hud .mf-qs__how { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; font-size: var(--fs-14); color: var(--c-muted); white-space: nowrap; }
-html[data-input="pad"] #hud .mf-qs__mouse, html:not([data-input="pad"]) #hud .mf-qs__pad { display: none; }
 
 /* ======================================================= 6. stats on request (owner, 25 Oct: "no need to start showing the stats,
    just the gun swap only, maybe another button to see the stats alongside") */
@@ -463,5 +471,55 @@ html[data-input="pad"] #hud .mf-qs__mouse, html:not([data-input="pad"]) #hud .mf
 /* the draw card's foot: the Stats button first */
 #hud .mf-drawcard__foot .mf-statsbtn { margin-left: 0; }
 /* the phone: a thumb-sized Stats button on the compare chip (44 px on the glass at least: the phone HUD is zoomed by --phone-fit) */
-.ph .pt-cmp__stats { align-self: stretch; min-height: max(44px, calc(46px / var(--phone-fit, 1))); margin: 2px 0 0; padding: 0 12px; gap: 8px; font-size: var(--fs-14); }
-.ph .pt-cmp__stats .ic { width: 18px; height: 18px; color: var(--c-volt); }
+.ph .pt-cmp__stats { position: relative; flex: none; width: 28px; height: 28px; margin: 0 0 0 2px; padding: 0; gap: 0; }
+/* its hit area: 44 px on the glass at least (the phone HUD is zoomed by --phone-fit); the button is drawn small */
+.ph .pt-cmp__stats::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(44px, calc(46px / var(--phone-fit, 1))); height: max(44px, calc(46px / var(--phone-fit, 1))); translate: -50% -50%; }
+.ph .pt-cmp__stats .ic { width: 16px; height: 16px; color: var(--c-volt); }
+
+/* ======================================================= 7. minimal (owner, 25 Oct, on a phone: "those things that pop up, those gun
+   stuffs, just make them minimal … the other things that float, make them more minimal"; "if it's square,
+   let it be square"; "the X is outside the circle") */
+
+/* a controller's face buttons as the shapes printed on them: a PlayStation square is a square, not a
+   square in a ring that reads as Circle (gamepad/glyphs.ts draws each in a ring; the HUD drops the ring
+   and draws the shape bigger). Xbox and Nintendo buttons keep their letter in its ring: that's their face */
+#hud .kbd--pad svg[class*="mf-padglyph__ps"] > circle:first-child { display: none; }
+#hud .kbd--pad svg[class*="mf-padglyph__ps"] > :not(:first-child) { transform: scale(1.7); transform-origin: 12px 12px; stroke-width: 1.5; }
+
+/* the grenade belt: three of every type from the spawn on, so each type is a small tile and its count;
+   the selected one's name and count head it (no "of max": the count is what you throw) */
+#hud .mf-hud-desktop .belt { padding: var(--sp-2) var(--sp-3); gap: 6px; }
+#hud .mf-hud-desktop .belt__list { gap: 4px; }
+#hud .mf-hud-desktop .belt__item { width: 40px; height: 44px; }
+#hud .mf-hud-desktop .belt__item .ic { width: 22px; height: 22px; }
+#hud .mf-hud-desktop .belt__count { right: 3px; bottom: 1px; font-size: var(--fs-16); }
+#hud .mf-hud-desktop .belt__item.is-selected { transform: translateY(-3px); }
+#hud .mf-hud-desktop .belt__head { gap: var(--sp-3); font-size: var(--fs-14); }
+/* the loadout bar names the guns; the belt beside it already shows the grenades */
+#hud .mf-loadout ol.mf-loadout__nades { display: none; }
+
+/* the phone's kill line and item line: one short line each, a size down */
+.ph .pt-feed .kf { gap: 5px; padding: 2px 8px; font-size: calc(13px * var(--text-scale, 1)); }
+.ph .pt-feed .kf .ic { width: 15px; height: 15px; }
+.ph .pt-feed .kf .ic--wpn, .ph .pt-feed .kf [href^='#icon-wpn-'] { width: 32px; height: 12px; }
+#hud .ph .pt-pickup { max-width: 220px; padding: 2px 8px; gap: 5px; font-size: calc(13px * var(--text-scale, 1)); white-space: nowrap; }
+#hud .ph .pt-pickup > span { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+#hud .ph .pt-pickup .ic { flex: none; width: 15px; height: 15px; }
+
+/* the grenade belt fanned from the grenade button (touch layer, swipe it): the icons and counts, the name
+   only on the one the swipe lands on */
+.mf-touch-fx .mf-fan__row { height: 26px; margin-bottom: 3px; padding: 0 8px; gap: 5px; font-size: calc(13px * var(--text-scale, 1)); }
+.mf-touch-fx .mf-fan__row:not(.is-landing) span { display: none; }
+
+/* the gun ring (touch layer: hold the swap button): a ring round the swap button, the choices on its
+   track, and an X in its middle, on the button, where letting go keeps what you hold. --ring-r is the
+   choices' distance from the middle (hud.ts measures it when the ring opens: the swap button's size
+   sets it); the ring reaches --ring-pad past the track so each choice sits inside it */
+.mf-touch-fx .mf-radial { --ring-r: 90px; --ring-pad: 46px; }
+/* the ring: a dark glass disc, its rim, and the track the choices sit on (a thin volt circle at --ring-r) */
+.mf-touch-fx .mf-radial::before { content: ""; position: absolute; left: 0; top: 0; width: calc(2 * (var(--ring-r) + var(--ring-pad))); height: calc(2 * (var(--ring-r) + var(--ring-pad))); translate: -50% -50%; box-sizing: border-box; border-radius: 50%; border: 1.5px solid var(--glass-rim, rgb(255 255 255 / .22)); background: radial-gradient(circle, transparent calc(var(--ring-r) - 1px), rgb(214 255 59 / .32) calc(var(--ring-r) - 1px) calc(var(--ring-r) + 1px), transparent calc(var(--ring-r) + 1px)), radial-gradient(circle closest-side, rgb(10 12 8 / .42), rgb(10 12 8 / .26) 78%, rgb(10 12 8 / .12)); pointer-events: none; animation: mf-fan-in var(--m-fast) var(--ease-arrive) both; }
+.mf-touch-fx .mf-radial::after { content: ""; position: absolute; left: 0; top: 0; width: 24px; height: 24px; translate: -50% -50%; box-sizing: border-box; border-radius: 50%; border: 1.5px solid rgb(255 255 255 / .35); background: linear-gradient(45deg, transparent calc(50% - 1.2px), var(--c-paper) calc(50% - 1.2px) calc(50% + 1.2px), transparent calc(50% + 1.2px)) center / 11px 11px no-repeat, linear-gradient(-45deg, transparent calc(50% - 1.2px), var(--c-paper) calc(50% - 1.2px) calc(50% + 1.2px), transparent calc(50% + 1.2px)) center / 11px 11px no-repeat, rgb(0 0 0 / .66); pointer-events: none; }
+.mf-touch-fx .mf-radial__it { z-index: 1; min-width: 56px; max-width: 76px; padding: 4px 6px; gap: 1px; font-size: calc(12px * var(--text-scale, 1)); }
+.mf-touch-fx .mf-radial__it b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.mf-touch-fx .mf-radial__it .ic { width: 18px; height: 18px; }
+.mf-touch-fx .mf-radial__it .ic--kf { width: 40px; height: 15px; }
