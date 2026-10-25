@@ -209,3 +209,11 @@ html:is(.mf-narrow, .mf-big-text):where(:not(.mf-phone)) .mf-cr-fit [data-active
 /* each item's own picture (P1-8): the soldier wearing it, in the tile's art box */
 :where(.mf-cr-fit) .mf-item__glyph.has-thumb { padding: 0; overflow: hidden; }
 :where(.mf-cr-fit) .mf-item__thumb { width: 100%; height: 100%; object-fit: cover; object-position: 50% 20%; display: block; }
+
+/* the soldier whole on a phone (24 Oct: "can't see the 3D character properly"): the Full · Face ·
+   Back switch stands in a column at the stage's left edge, not across the soldier's legs, and the
+   picture is drawn in the room to its right */
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__view { left: 4px; right: auto; top: 50%; bottom: auto; translate: 0 -50%; flex-direction: column; align-items: stretch; padding: 4px; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__view .seg { flex-direction: column; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__view .seg__opt { min-height: 44px; min-width: 64px; }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__stage canvas { left: 76px; width: calc(100% - 76px); }

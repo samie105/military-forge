@@ -278,7 +278,8 @@ html.reduce-motion .mf-ctl.mf-teach::before { animation: none; opacity: 0.9; }
 /* Claw puts menu and scores at the top centre, DASH and GRENADE below them: the ✎ (only outside the app) goes under all four */
 .mf-touch[data-preset='claw'] .mf-touch-edit { top: 172px; }
 /* One-thumb assist: the aim is automatic, so its dial shows only under a finger that takes it over */
-.mf-touch[data-preset='oneThumb']:not(.mf-touch-editing) .mf-ctl-aim:not(.mf-down) { opacity: 0; }
+/* One-thumb's aim floats (a drag on empty space): no resting dial, in play or in the editor */
+.mf-touch[data-preset='oneThumb'] .mf-ctl-aim:not(.mf-down) { opacity: 0; pointer-events: none; }
 /* Claw: the move stick doesn't jet (JET is the left index finger's) */
 .mf-touch.mf-nostickjet .dial__hint--up { display: none; }
 /* JET (Claw's left index finger): the jet icon with the fuel left */

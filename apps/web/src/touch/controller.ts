@@ -406,6 +406,7 @@ export class TouchController {
       this.host.camera.lookAhead = 1;
       this.host.camera.viewScale = 1;
       this.host.camera.edgeOverrun = { x: 0, down: 0 };
+      this.host.camera.soldierBand = null;
       this.overlays.clear();
       document.documentElement.removeAttribute('data-touch-crate');
     }
@@ -1771,6 +1772,35 @@ export class TouchController {
       el.classList.toggle('mf-selected', this.editing && this.selected === id);
     }
     if (this.editing) this.bay.sync();
+    this.host.camera.soldierBand = this.soldierBand(w, h);
+  }
+
+  /**
+   * Where on the screen (shares of its width) the soldier can stand without a thumb's controls over it:
+   * between the controls of the lower half on the left (the move stick) and those on the right (the
+   * arc, the aim stick). The soldier stands at about 70 % of the height, so only controls reaching that
+   * low count. null when there's no clear stretch (an edited layout that fills the middle).
+   */
+  private soldierBand(w: number, h: number): { left: number; right: number } | null {
+    const rect = this.safe.getBoundingClientRect();
+    const screenW = window.innerWidth;
+    if (!(screenW > 0) || !(w > 0)) return null;
+    const MARGIN = 14; // px: half a soldier and a little air
+    let left = 0;
+    let right = screenW;
+    for (const [id, el] of this.els) {
+      if (el.classList.contains('mf-off') || (id === 'aim' && this.settings.preset === 'oneThumb')) continue;
+      const c = this.centres.get(id);
+      const z = this.sizes.get(id);
+      if (!c || !z) continue;
+      const r = z.px / 2;
+      // only what reaches the soldier's row (the lower part of the screen)
+      if (c.y + r < h * 0.5) continue;
+      const x = rect.left + c.x;
+      if (c.x < w / 2) left = Math.max(left, x + r + MARGIN);
+      else right = Math.min(right, x - r - MARGIN);
+    }
+    return right - left > screenW * 0.12 ? { left: left / screenW, right: right / screenW } : null;
   }
 
   // ---------- editor ----------
@@ -1950,6 +1980,10 @@ export class TouchController {
         const out: { id: ControlId; x: number; y: number; r: number }[] = [];
         for (const [id, el] of this.els) {
           if (el.classList.contains('mf-off') || el.hidden) continue;
+          // a context control on its way out (the slot changed: it shrinks away) is no longer in its place
+          if (SOMETIMES.has(id) && !this.shown.has(id)) continue;
+          // One-thumb's aim floats: it comes up under a drag on empty space, so it has no place to clash with
+          if (id === 'aim' && this.settings.preset === 'oneThumb') continue;
           const c = this.centres.get(id);
           const z = this.sizes.get(id);
           if (c && z) out.push({ id, x: c.x, y: c.y, r: z.px / 2 });

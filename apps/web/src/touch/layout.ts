@@ -62,6 +62,9 @@ export function availableControls(): readonly ControlDef[] {
   return CONTROLS.filter((c) => c.id !== 'shield' || SHIELD_BIT !== 0);
 }
 
+/** No touch target smaller than this (CSS px), whatever the layout says (the kit's --touch-min). */
+export const MIN_TARGET_PX = 48;
+
 /** CSS px per mm on a phone (controls spec §0: an iPhone is 6.0, a Pixel 7 6.2): the layout's anchors are in mm. */
 export const PX_PER_MM = 6;
 
@@ -219,8 +222,11 @@ export function anchorPlacement(a: Anchor, w: number, h: number): Placement {
   const mm = PX_PER_MM * layoutScale(h);
   const px = a.dx * mm;
   const py = a.dy * mm;
-  const x = a.corner === 'TC' ? w / 2 + px : a.corner === 'BL' || a.corner === 'TL' ? px : w - px;
-  const y = a.corner === 'TL' || a.corner === 'TR' || a.corner === 'TC' ? py : h - py;
+  // a control drawn smaller than MIN_TARGET_PX is shown at that size (sizePx): it stays whole inside
+  // the box (the menu and scores buttons ran off its top on an iPhone with Safari's bars showing)
+  const r = Math.max(MIN_TARGET_PX, a.hit * mm) / 2;
+  const x = Math.min(w - r, Math.max(r, a.corner === 'TC' ? w / 2 + px : a.corner === 'BL' || a.corner === 'TL' ? px : w - px));
+  const y = Math.min(h - r, Math.max(r, a.corner === 'TL' || a.corner === 'TR' || a.corner === 'TC' ? py : h - py));
   return { x: x / w, y: y / h, size: (a.hit * mm) / Math.min(w, h), opacity: 1 };
 }
 
@@ -235,8 +241,6 @@ export const DEFAULT_PLACEMENTS: Readonly<Record<ControlId, Placement>> = Object
  */
 export const SAFE_INSETS = { left: 44, right: 44, top: 10, bottom: 21 } as const;
 
-/** No touch target smaller than this (CSS px), whatever the layout says (the kit's --touch-min). */
-export const MIN_TARGET_PX = 48;
 
 /** Controls that are wide pills (their size is the height; the width follows the content). */
 export const PILLS: ReadonlySet<ControlId> = new Set([]);

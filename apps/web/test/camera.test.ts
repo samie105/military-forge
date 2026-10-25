@@ -188,6 +188,26 @@ describe('tall maps: the view leans the way you fly (maps-vertical)', () => {
     }
   });
 
+  it("on touch the look-ahead never leans the soldier under a thumb's controls (soldierBand)", () => {
+    const map = getMap('street-market');
+    const x = (map.bounds.minX + map.bounds.maxX) / 2;
+    const at = (aimX: number, band: Camera['soldierBand']) => {
+      const cam = new Camera();
+      cam.resize(780, 360);
+      cam.viewScale = 0.8;
+      cam.soldierBand = band;
+      for (let i = 0; i < 120; i++) cam.follow(x, 20, aimX, 20.9, 1 / 60, map);
+      return cam.toScreenX(x) / 780;
+    };
+    // aiming far left: the view leans left, the soldier slides right, under the button arc (~68 %)
+    expect(at(x - 30, null)).toBeGreaterThan(0.65);
+    // with the band, it stops at the arc's edge; aiming right, at the move stick's
+    expect(at(x - 30, { left: 0.3, right: 0.56 })).toBeCloseTo(0.56, 2);
+    expect(at(x + 30, { left: 0.3, right: 0.56 })).toBeGreaterThanOrEqual(0.3 - 1e-6);
+    // inside the band the look-ahead is as before
+    expect(at(x - 3, { left: 0.3, right: 0.56 })).toBeCloseTo(at(x - 3, null), 3);
+  });
+
   it('look-ahead off keeps the view on the soldier', () => {
     const cam = new Camera();
     cam.resize(812, 375);

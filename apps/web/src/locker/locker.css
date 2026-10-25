@@ -123,3 +123,10 @@ html.mf-short:where(:not(.mf-phone)) :where(.mf-gear-fit) .menu-top { height: 88
   :where(html.mf-phone) :where(.mf-gear-fit) .mf-item__glyph .ic { width: 30px; height: 30px; }
   :where(html.mf-phone) :where(.mf-gear-fit) .mf-lk__sub { margin-top: 0; }
 }
+
+/* the soldier whole on a phone (24 Oct: "can't see the 3D character properly"): Create your soldier
+   stood on his helmet and the Full · Face · Jetpack switch across his legs. The picture is drawn in
+   the room between them: under the button, above the switch */
+:where(html.mf-phone) :where(.mf-gear-fit) .mm-stage canvas { inset: 54px 0 50px; height: calc(100% - 104px); }
+:where(html.mf-phone) :where(.mf-gear-fit) .mm-controls { bottom: 2px; }
+:where(html.mf-phone) :where(.mf-gear-fit) .mm-controls .seg__opt { min-height: 44px; padding: 0 8px; }

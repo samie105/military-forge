@@ -59,6 +59,13 @@ export class Camera {
    */
   edgeOverrun = { x: 0, down: 0 };
   /**
+   * On touch, the share of the screen's width the soldier stays inside (left, right; 0–1), between
+   * the move stick's column and the button arc (touch/controller.ts soldierBand): the look-ahead never
+   * leans the soldier under a thumb's controls (24 Oct: "can't see the 3D character properly": on a
+   * Galaxy S23 the soldier stood under JET and the grenade at the start of Street Market). null: anywhere.
+   */
+  soldierBand: { left: number; right: number } | null = null;
+  /**
    * The soldier's vertical speed (m/s), set before `follow`: the view leans the way it flies. 0 (or
    * never set) keeps the plain follow.
    */
@@ -148,6 +155,12 @@ export class Camera {
     const lx = Math.max(-halfW * la, Math.min(halfW * la, (mouseWorldX - cx) * la));
     const ly = Math.max(-halfH * la, Math.min(halfH * la, (mouseWorldY - cy) * la));
     let tx = cx + lx;
+    // the soldier stays between the thumbs' controls: the view leans no further than that
+    const band = this.soldierBand;
+    if (band && band.right > band.left) {
+      const w = 2 * halfW;
+      tx = Math.max(px - (band.right - 0.5) * w, Math.min(px - (band.left - 0.5) * w, tx));
+    }
     const reach = Math.min(budget, Math.max(0, halfH - KEEP_ON_SCREEN));
     let ty = cy + Math.max(-reach, Math.min(reach, ly + this.flightLean));
     const b = map.bounds;
