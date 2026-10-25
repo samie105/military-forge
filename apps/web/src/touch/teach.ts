@@ -152,7 +152,7 @@ export const DRILL: readonly DrillStep[] = [
   { id: 'move', goal: 'Run', how: 'Push the left dial left or right.', control: 'move', done: ['move'] },
   { id: 'jet', goal: 'Fly', how: 'Push the left dial up to fly. The green arc is its fuel: it refills on the ground.', control: 'move', done: ['jet'] },
   { id: 'fire', goal: 'Aim and fire', how: FIRE_HOW.pull, control: 'aim', done: ['fire'] },
-  { id: 'dash', goal: 'Dash', how: 'Swipe the dash button any way, or flick the left dial. Each dash costs fuel.', control: 'dash', done: ['dash'] },
+  { id: 'dash', goal: 'Dash', how: 'Tap Dash, or swipe it any way. A flick of the left dial works too. Each dash costs fuel.', control: 'dash', done: ['dash'] },
   { id: 'chain', goal: 'Chain dashes', how: 'Dash again straight after a dash: the second goes faster.', control: 'dash', done: ['chain'] },
   { id: 'cycle', goal: 'Change grenade', how: 'Swipe ↑ on the grenade button.', control: 'grenade', done: ['cycle'] },
   { id: 'throw', goal: 'Aim a throw', how: 'Hold the grenade, drag to aim the arc, let go.', control: 'grenade', done: ['aimed-throw'] },

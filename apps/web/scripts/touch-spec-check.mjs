@@ -35,15 +35,6 @@ page.on('pageerror', (e) => console.error('page error:', e.message));
 const cdp = await page.createCDPSession();
 await page.emulate({ viewport: VIEW, userAgent: PHONE_UA });
 await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'pointer', value: 'coarse' }, { name: 'any-pointer', value: 'coarse' }, { name: 'hover', value: 'none' }] });
-// Classic has no dash button since the owner's essentials (23 Oct): these checks pin it, as a player can
-// in the editor (only on a fresh layout, so an edited one survives a reload)
-await page.evaluateOnNewDocument(() => {
-  try {
-    if (!localStorage.getItem('mf.touch.layout.v3')) localStorage.setItem('mf.touch.layout.v3', JSON.stringify({ placements: {}, pinned: ['dash'] }));
-  } catch {
-    /* no storage */
-  }
-});
 await page.goto(`${base}/?sandbox&render=2d`);
 await page.waitForFunction(() => window.__game?.mode?.me && document.querySelector('.mf-touch') && !document.querySelector('.mf-touch').hidden, { timeout: 300_000 });
 await sleep(800);
@@ -53,7 +44,9 @@ await sleep(800);
   await sleep(2500);
   const st = await page.evaluate(() => ({ card: !!document.querySelector('.mf-choose:not([hidden])'), s: window.__touch.getTouchSettings(), fireBtn: !!document.querySelector('.mf-ctl-fire:not(.mf-off)') }));
   check('first run: no "How do you want to shoot?" card; Auto, and no FIRE button', !st.card && st.s.fire === 'auto' && !st.fireBtn, `card ${st.card}; fire ${st.s.fire}; FIRE button ${st.fireBtn}`);
-  await page.evaluate(() => window.__touch.setTouchSettings({ fire: 'pull' }));
+  // these rows are the floating sticks' (§4.3: the origin where the thumb lands, follow, the flick):
+  // Follow thumb. The fixed sticks (the default since 25 Oct) have their own check: touch-fixed-check.mjs
+  await page.evaluate(() => window.__touch.setTouchSettings({ fire: 'pull', sticks: 'follow' }));
 }
 
 // every sim tick's sampled Input (touch included), newest last; and when each finger went down

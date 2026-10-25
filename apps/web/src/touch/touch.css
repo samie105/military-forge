@@ -91,6 +91,8 @@
 .dial__fireline, .dial__cancel, .dial__tag { display: none; position: absolute; pointer-events: none; }
 .dial__fireline { inset: 56px; border-radius: 50%; border: 2px dashed color-mix(in srgb, var(--c-hp) 70%, transparent); }
 .mf-ctl-aim[data-fire='pull'] .dial__fireline { display: block; }
+/* fixed sticks (data-sticks): Pull fires further out, at 0.55 of the radius (mapping.ts FIRE_FIXED; 37 of the base's 68) */
+.mf-touch[data-sticks='fixed'] .mf-ctl-aim .dial__fireline { inset: 47px; }
 .dial__cancel { inset: 74px; border-radius: 50%; border: 2px solid var(--c-paper); }
 .mf-ctl-aim[data-fire='release'].mf-down .dial__cancel { display: block; }
 .dial__tag { left: 50%; bottom: 20px; translate: -50% 0; padding: 1px 6px; border-radius: var(--r-xs); background: var(--c-volt); color: var(--c-volt-ink); font-size: 11px; font-weight: var(--fw-black); letter-spacing: 0.08em; text-transform: uppercase; }

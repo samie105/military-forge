@@ -49,17 +49,20 @@ const belt = (...pairs: [number, number][]): number[] => {
 };
 
 describe('grenade belt: carrying and cycling (docs/02 §14)', () => {
-  it('spawns with frag ×3 selected', () => {
+  it('spawns with 3 of every type, frag selected', () => {
     const { p } = makeGame(flatMap());
-    expect(p.grenadeCounts).toEqual(belt([FRAG.index, 3]));
+    expect(p.grenadeCounts).toEqual(new Array<number>(GRENADE_TYPES).fill(3));
     expect(p.grenadeType).toBe(FRAG.index);
     expect(p.frags).toBe(3);
   });
 
   it('addGrenades caps at the type’s maximum and says how many it took', () => {
-    const { p } = makeGame(flatMap());
+    const { p } = belted(belt([FRAG.index, 3]));
     expect(addGrenades(p, SMOKE.index, 2)).toBe(2);
+    expect(addGrenades(p, SMOKE.index, 2)).toBe(2);
+    expect(addGrenades(p, SMOKE.index, 2)).toBe(1);
     expect(addGrenades(p, SMOKE.index, 2)).toBe(0); // full: a pickup stays on the floor
+    expect(p.grenadeCounts[SMOKE.index]).toBe(SMOKE.maxCount);
     expect(addGrenades(p, FRAG.index, 2)).toBe(2);
     expect(addGrenades(p, FRAG.index, 2)).toBe(0);
     expect(p.frags).toBe(FRAG.maxCount);

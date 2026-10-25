@@ -25,6 +25,19 @@ export const LIMITS = { min: 0.03, max: 0.97, sizeMin: 0.08, sizeMax: 0.7, opaci
 export const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 
 export type Handed = 'right' | 'left';
+
+/**
+ * Where the sticks sit (the owner, 25 Oct: "make them static, with a setting for people who want them
+ * to move"): fixed, where they're drawn, reading the thumb from their centre (the default); or follow,
+ * coming to wherever the thumb lands (the floating sticks of before).
+ */
+export type StickMode = 'fixed' | 'follow';
+export const STICK_MODES: readonly StickMode[] = ['fixed', 'follow'];
+export const STICK_MODE_NAMES: Readonly<Record<StickMode, string>> = { fixed: 'Fixed', follow: 'Follow thumb' };
+export const STICK_MODE_HELP: Readonly<Record<StickMode, string>> = {
+  fixed: 'The sticks stay put. Press where you want to go or aim.',
+  follow: 'A stick comes to wherever your thumb lands.',
+};
 /**
  * How the gun fires on a phone (controls spec §4.4; the owner's "shooting styles", 23 Oct):
  * - auto: the aim stick aims; the gun fires by itself while the aim lies on an enemy in sight and in
@@ -111,6 +124,8 @@ export interface TouchSettings {
    */
   assist: AssistLevel;
   handed: Handed;
+  /** fixed sticks (the default) or sticks that come to the thumb (StickMode) */
+  sticks: StickMode;
   /** buzz when you're hit (where the browser allows vibration) */
   vibrate: boolean;
   /** flick and lift the move stick to dash */
@@ -159,6 +174,7 @@ export const DEFAULT_TOUCH_SETTINGS: Readonly<TouchSettings> = {
   leftFire: false,
   assist: 'standard',
   handed: 'right',
+  sticks: 'fixed',
   vibrate: true,
   swipeDash: true,
   preset: 'classic',
@@ -207,6 +223,8 @@ export function sanitizeSettings(raw: unknown): TouchSettings {
   if (r.fire === 'hold') s.fire = r.autoFire === true ? 'auto' : 'pull';
   else if (typeof r.fire === 'string' && (FIRE_MODES as readonly string[]).includes(r.fire)) s.fire = r.fire as FireMode;
   if (r.handed === 'right' || r.handed === 'left') s.handed = r.handed;
+  // saves from before the setting have none: fixed, the new default (nobody chose the floating sticks)
+  if (r.sticks === 'fixed' || r.sticks === 'follow') s.sticks = r.sticks;
   if (isPresetId(r.preset)) s.preset = r.preset;
   for (const k of ['viewAuto', 'vibrate', 'swipeDash', 'stickJet', 'tapFire', 'keepAim', 'gestures', 'haptics', 'lookAhead', 'pinchZoom', 'fireChosen', 'precisionRelease', 'leftFire', 'autoFade'] as const) if (typeof r[k] === 'boolean') s[k] = r[k];
   // the old switch: off stays off; on (the default everyone had) is the new default, Standard

@@ -1,6 +1,6 @@
 import { Btn } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
-import { AIM_STICK, FLICK, MOVE_STICK, STICK_FOLLOW, TOUCH_MOVE, followOrigin, isFlick, knobOffset, moveButtons, shapeStick, stickAngle, touchMoveButtons, wrapAngle, type StickVector } from '../../src/touch/stick';
+import { AIM_FIXED, AIM_STICK, FIXED_FLICK, FIXED_GRAB, FLICK, MOVE_FIXED, MOVE_STICK, STICK_FOLLOW, TOUCH_MOVE, followOrigin, isFixedFlick, isFlick, knobOffset, moveButtons, shapeStick, stickAngle, touchMoveButtons, wrapAngle, type StickVector } from '../../src/touch/stick';
 
 const R = 100;
 
@@ -126,5 +126,43 @@ describe('the touch move stick (§4.3): thresholds, cones, hysteresis', () => {
     const thumb = o.x - 17;
     expect(touchMoveButtons(px(thumb - o.x, 0), Btn.Right)).toBe(Btn.Left);
     expect(120 - thumb).toBeCloseTo(STICK_FOLLOW * r + 17, 9);
+  });
+});
+
+describe('fixed sticks (the owner, 25 Oct: "make them static")', () => {
+  /** px from the centre (on the 66 px stick) where a fixed shape's push reaches `push` */
+  const reach = (shape: typeof MOVE_FIXED, push: number) => (shape.deadZone + push * (shape.outer - shape.deadZone)) * 66;
+
+  it('wider dead zones than the floating sticks (a resting thumb lands off the centre), full a little sooner, linear', () => {
+    expect(MOVE_FIXED).toEqual({ deadZone: 0.12, outer: 0.85, curve: 1 });
+    expect(AIM_FIXED).toEqual({ deadZone: 0.15, outer: 0.85, curve: 1 });
+    expect(shapeStick(7, 0, 66, MOVE_FIXED).mag).toBe(0); // 8 px: a landing near the centre is a rest
+    expect(shapeStick(9, 0, 66, AIM_FIXED).mag).toBe(0); // 10 px
+    expect(shapeStick(0.85 * 66, 0, 66, AIM_FIXED).mag).toBeCloseTo(1, 9);
+  });
+
+  it('move: runs at 18 ± 1 px, jets at 30 ± 1 px straight up, crouches at 37 ± 1 px down (the floating stick: 16, 30, 38)', () => {
+    expect(reach(MOVE_FIXED, TOUCH_MOVE.runOn)).toBeCloseTo(17.6, 0);
+    expect(reach(MOVE_FIXED, TOUCH_MOVE.jetOn)).toBeCloseTo(29.6, 0);
+    expect(reach(MOVE_FIXED, TOUCH_MOVE.downOn)).toBeCloseTo(36.8, 0);
+    const v = (dx: number, dy: number) => shapeStick(dx, dy, 66, MOVE_FIXED);
+    expect(touchMoveButtons(v(17, 0), 0)).toBe(0);
+    expect(touchMoveButtons(v(19, 0), 0)).toBe(Btn.Right);
+    expect(touchMoveButtons(v(0, -29), 0)).toBe(0);
+    expect(touchMoveButtons(v(0, -31), 0)).toBe(Btn.Jet);
+  });
+
+  it('a thumb landing within 1.6 radii of the drawn centre grabs the stick (6–7 mm off the ring still counts)', () => {
+    expect(FIXED_GRAB).toBe(1.6);
+  });
+
+  it('a flick is measured from where the thumb landed, not the centre: 0.6 radii in 220 ms, still going at the lift', () => {
+    const flick = { durationMs: 150, travel: 0.7, outSpeed: 0.9 };
+    expect(isFixedFlick(flick)).toBe(true);
+    expect(isFixedFlick({ ...flick, durationMs: FIXED_FLICK.maxMs })).toBe(true); // 40 ms more than the floating stick's
+    expect(isFixedFlick({ ...flick, durationMs: FIXED_FLICK.maxMs + 1 })).toBe(false); // held: a run
+    expect(isFixedFlick({ ...flick, travel: 0.55 })).toBe(false); // a nudge
+    expect(isFixedFlick({ ...flick, outSpeed: 0.2 })).toBe(false); // swiped, stopped, lifted
+    expect(FIXED_FLICK.maxMs).toBeGreaterThan(FLICK.maxMs);
   });
 });

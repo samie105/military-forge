@@ -45,12 +45,12 @@ import {
   type TouchLayout,
 } from './layout';
 import { autoView, PRESET_SETTINGS, VIEW_LIMITS, type FireMode, type KeyValueStore as Store, type PresetId, type TouchSettings } from './settings';
-import { AutoTrigger, TOUCH_PULL_MIN, assistPush, autoRange, createTouchState, dashStrength, desiredAim, effectiveFire, flickRate, grenadeStrength, pullFires, touchButtons, updateMove } from './mapping';
+import { AutoTrigger, FIRE_FIXED, LAND_ARM, TOUCH_PULL_MIN, assistPush, autoRange, createTouchState, dashStrength, desiredAim, effectiveFire, flickRate, grenadeStrength, landSettled, pullFires, touchButtons, updateMove } from './mapping';
 import { AimAssist, onTarget as onAutoTarget, type AssistLevel, type AssistTarget } from '../input/assist';
 import { Sight, sightPoints } from '../input/sight';
 import { EquipClock, SKIN_BASE, TouchSkin, controlValues, localView, phoneTokens, skinHtml, type LocalView } from './skin';
 import { iconHref, weaponIcon } from '../ui/icons';
-import { AIM_STICK, FLICK, GRENADE_STICK, MOVE_STICK, followOrigin, isFlick, knobOffset, moveButtons, shapeStick, zeroStick, type StickVector } from './stick';
+import { AIM_FIXED, AIM_STICK, FIXED_GRAB, FLICK, GRENADE_STICK, MOVE_FIXED, MOVE_STICK, followOrigin, isFixedFlick, isFlick, knobOffset, moveButtons, shapeStick, zeroStick, type StickVector } from './stick';
 import { FadeClock, cueLit, nearControls, type FadeControl } from './fade';
 import { diag } from '../diag/log';
 import { LayoutBay, type BayHost } from './editor/bay';
@@ -86,6 +86,12 @@ const STALE_MS = 1000;
 const RESUME_MS = 700;
 /** The dash button with the move stick idle decides this soon (or at a swipe's 22 px), not at the lift (§4.6). */
 const DASH_DECIDE_MS = 90;
+/**
+ * DASH by the left thumb (Classic, 25 Oct): the thumb hops off the move stick to tap it, so a tap within
+ * `ms` of the stick letting go dashes the way the stick read `lookBackMs` before the lift (the hop's own
+ * wobble doesn't count), not the way the soldier faces.
+ */
+const DASH_CARRY = { ms: 300, lookBackMs: 60 } as const;
 /** A second finger on a stick's side pinches the camera only this far from the first (20 mm), with the first still in its dead zone (§4.6). */
 const PINCH_MIN_PX = 120;
 /** Controls only in play some of the time: the take button near a crate, zoom with a gun that zooms. */
@@ -97,10 +103,14 @@ const RELOAD_SHOWS_AT = 0.4;
 let aimTagLearned = false;
 
 type Grab =
-  // a stick: (cx, cy) is its origin, exactly where the thumb landed (§4.3; it follows a thumb past
-  // 1.2 radii); the base is drawn clamped inside the safe box. For the flick test: the peak push, when
-  // it was reached and from when (the last moment under 0.3), and the thumb's last few points
-  | { kind: 'stick'; id: 'move' | 'aim'; cx: number; cy: number; radius: number; startAt: number; peak: number; peakDir: number; peakAt: number; lowAt: number; riseFrom: number; lastMag: number; lastAt: number; trail: { t: number; x: number; y: number }[]; dx: number; dy: number }
+  // a stick: (cx, cy) is its origin. Follow thumb: exactly where the thumb landed (§4.3; it follows a
+  // thumb past 1.2 radii), the base drawn there, clamped inside the safe box. Fixed (`fixed`, the
+  // default): the base stays where it's drawn; a thumb landing within FIXED_GRAB radii reads from its
+  // drawn centre (`centred`), one further out from where it landed. For the flick test: the peak push,
+  // when it was reached and from when (the last moment under 0.3), where the thumb landed (x0, y0),
+  // whether it has moved off that point, and its last few points. For a fixed aim stick's landing
+  // (LAND_ARM): when it landed and last moved, on the page's clock (apply() runs between events)
+  | { kind: 'stick'; id: 'move' | 'aim'; cx: number; cy: number; radius: number; fixed: boolean; centred: boolean; x0: number; y0: number; moved: boolean; landedAt: number; movedAt: number; startAt: number; peak: number; peakDir: number; peakAt: number; lowAt: number; riseFrom: number; lastMag: number; lastAt: number; trail: { t: number; x: number; y: number }[]; dx: number; dy: number }
   | { kind: 'grenade'; cx: number; cy: number; radius: number; downAt: number; x0: number; y0: number; mode: 'pending' | 'aim' | 'cycle'; steps: number; moving?: boolean }
   | { kind: 'button'; def: ControlDef }
   // Fire button mode's FIRE (§4.4): the trigger held while it's down; on the right one, a drag from it
@@ -456,6 +466,12 @@ export class TouchController {
     s.autoFiring = this.fireNow === 'auto' && this.touchOwnsAim && this.autoTrigger.step(onAutoTarget(this.aimAngle, sx, sy, this.visible, autoRange(this.weaponDef)), performance.now());
     if (this.fireNow !== 'auto') this.autoTrigger.reset();
     s.chargeHold = this.fireNow === 'release' && this.weaponDef?.fireMode === 'charge' && s.aimActive && s.aim.mag > 0;
+    // a fixed aim stick that landed past its fire line fires once the landing has settled (LAND_ARM)
+    if (!s.aimArmed) {
+      const g = this.aimGrab();
+      const now = performance.now();
+      if (!g || landSettled(now - g.landedAt, inSpeed(g, now))) this.setArmed(true);
+    }
     this.modeClass();
     const buttons = touchButtons(s, this.fireNow);
     out.buttons |= buttons;
@@ -893,9 +909,10 @@ export class TouchController {
     if (same) {
       // a second finger on the same side: the camera (pinch to zoom, two-finger taps) only when it lands
       // soon, well apart (20 mm), and the first thumb hasn't moved; otherwise a stray finger (a claw
-      // grip's) never takes a thumb's stick away (§4.6)
+      // grip's) never takes a thumb's stick away (§4.6). A fixed stick's thumb is pushing from the
+      // landing on, so "still" there is not having moved off where it landed
       const first = this.pointers.get(same[0]);
-      const still = same[1].peak === 0;
+      const still = same[1].fixed ? !same[1].moved : same[1].peak === 0;
       if (this.settings.pinchZoom && still && e.timeStamp - same[1].startAt <= GESTURE.pinchMs && (!first || Math.hypot(at.x - first.x, at.y - first.y) >= PINCH_MIN_PX)) {
         this.startCamera(same[0], same[1], e.pointerId, at, e.timeStamp);
         return;
@@ -907,29 +924,73 @@ export class TouchController {
     }
     const el = this.els.get(id)!;
     const radius = (this.sizes.get(id)?.px ?? 96) / 2;
-    // the origin is exactly where the thumb landed, never clamped: a thumb near an edge starts at rest
-    // (§4.3, problem 1). Back on the aim stick soon after a button, it carries on where it left off.
-    let cx = at.x;
-    let cy = at.y;
+    // Follow thumb: the origin is exactly where the thumb landed, never clamped: a thumb near an edge
+    // starts at rest (§4.3, problem 1). Fixed: the drawn centre, for a thumb landing on or near the dial
+    // (FIXED_GRAB), so the landing already pushes; a thumb that missed by more reads from where it
+    // landed, by its drag, and the dial still stays put. Back on the aim stick soon after a button, it
+    // carries on where it left off (a fixed stick from its centre: the thumb's place is the aim).
+    const fixed = this.stickFixed(id);
+    const home = this.centres.get(id);
+    const centred = fixed && !!home && Math.hypot(at.x - (rect.left + home.x), at.y - (rect.top + home.y)) <= FIXED_GRAB * radius;
+    let cx = centred ? rect.left + home!.x : at.x;
+    let cy = centred ? rect.top + home!.y : at.y;
     const back = id === 'aim' ? this.resumeAim(e.timeStamp) : null;
     if (back) {
-      cx = at.x - back.dx;
-      cy = at.y - back.dy;
+      if (!centred) {
+        cx = at.x - back.dx;
+        cy = at.y - back.dy;
+      }
       this.state.aimFire = back.firing;
     }
     settleNow(el);
-    this.drawBase(el, cx, cy, radius, rect);
+    if (!fixed) this.drawBase(el, cx, cy, radius, rect);
     el.classList.add('mf-down');
-    const grab: Grab = { kind: 'stick', id, cx, cy, radius, startAt: e.timeStamp, peak: 0, peakDir: 0, peakAt: e.timeStamp, lowAt: e.timeStamp, riseFrom: e.timeStamp, lastMag: 0, lastAt: e.timeStamp, trail: [{ t: e.timeStamp, x: at.x, y: at.y }], dx: 0, dy: 0 };
+    const grab: Grab = { kind: 'stick', id, cx, cy, radius, fixed, centred, x0: at.x, y0: at.y, moved: false, landedAt: performance.now(), movedAt: performance.now(), startAt: e.timeStamp, peak: 0, peakDir: 0, peakAt: e.timeStamp, lowAt: e.timeStamp, riseFrom: e.timeStamp, lastMag: 0, lastAt: e.timeStamp, trail: [{ t: e.timeStamp, x: at.x, y: at.y }], dx: 0, dy: 0 };
     this.grabs.set(e.pointerId, grab);
     this.pointers.set(e.pointerId, at);
+    // a fixed aim stick landing past the fire line aims at once, and fires once the landing settles
+    // (LAND_ARM; apply()); one that lands inside it fires as soon as a drag takes it past
+    if (id === 'aim') this.state.aimArmed = true;
     this.moveStick(id, at.x - cx, at.y - cy, grab, e.timeStamp);
+    if (id === 'aim' && centred && !back && this.state.aim.mag >= FIRE_FIXED.on) this.setArmed(false);
+  }
+
+  /**
+   * Does this stick stay where it's drawn (settings.sticks 'fixed')? The aim stick only where its dial
+   * is drawn at rest: not One-thumb's (it comes up under a drag) nor Fire button mode's (FIRE sits on
+   * its rest and the dial hides there), which keep following the thumb.
+   */
+  private stickFixed(id: 'move' | 'aim'): boolean {
+    if (this.settings.sticks !== 'fixed') return false;
+    return id === 'move' || (this.settings.preset !== 'oneThumb' && this.settings.fire !== 'button');
+  }
+
+  /** The aim stick may fire (or not, while a fixed stick's landing settles): the dial's fire ring follows. */
+  private setArmed(on: boolean): void {
+    const s = this.state;
+    s.aimArmed = on;
+    this.els.get('aim')?.classList.toggle('mf-fire', this.fireNow === 'pull' && s.aimFire && on && !s.grenadeActive);
+  }
+
+  /** The aim stick's grab, while a thumb is on it. */
+  private aimGrab(): Extract<Grab, { kind: 'stick' }> | null {
+    for (const g of this.grabs.values()) if (g.kind === 'stick' && g.id === 'aim') return g;
+    return null;
   }
 
   /** The dial's base, drawn at the origin but kept inside the safe box (the knob shows the true push). */
   private drawBase(el: HTMLElement, cx: number, cy: number, radius: number, rect = logicalRect(this.safe)): void {
     el.style.left = `${clamp(cx, rect.left + radius, rect.right - radius) - rect.left}px`;
     el.style.top = `${clamp(cy, rect.top + radius, rect.bottom - radius) - rect.top}px`;
+  }
+
+  /** The left thumb's last lift from the move stick, and the way the stick was going then (DASH_CARRY). */
+  private moveLift: { at: number; bits: number } | null = null;
+
+  /** The way a dash tapped now goes without a swipe: the move stick's, if it let go just now (DASH_CARRY), else none (the way you face). */
+  private carriedDash(now: number): number {
+    const l = this.moveLift;
+    return l && now - l.at <= DASH_CARRY.ms ? l.bits : 0;
   }
 
   /** The right thumb's last lift from the aim stick: the offset and fire it carries back (§4.6). */
@@ -972,7 +1033,7 @@ export class TouchController {
       s.held |= def.bit;
       s.pulses |= def.bit;
       if (def.bit === Btn.Dash) {
-        s.dashDir = s.moveActive ? moveButtons(s.move) : 0;
+        s.dashDir = s.moveActive ? moveButtons(s.move) : this.carriedDash(e.timeStamp);
         const stick = this.moveGrab();
         s.dashStrength = s.moveActive && stick ? dashStrength(s.move.mag, flickRate(stick.peak, stick.startAt, stick.peakAt), this.host.dashFlickFull()) : 7;
         this.dashed(false);
@@ -1049,12 +1110,17 @@ export class TouchController {
       this.knobs.get(g.id)!.style.transform = '';
       this.stickValue(g.id, null);
       if (g.id === 'move') {
-        if (lifted && this.settings.swipeDash && isFlick({ durationMs: at - g.startAt, peak: g.peak, riseMs: g.peakAt - g.riseFrom, outSpeed: outSpeed(g) })) {
+        // a flick dashes: on a fixed stick measured from where the thumb landed, and the way it swiped
+        // (stick.ts FIXED_FLICK); following the thumb, the stick's own push (FLICK)
+        const flick = !lifted || !this.settings.swipeDash ? null : g.fixed ? fixedFlick(g, at) : isFlick({ durationMs: at - g.startAt, peak: g.peak, riseMs: g.peakAt - g.riseFrom, outSpeed: outSpeed(g) }) ? { dir: g.peakDir, rate: flickRate(g.peak, g.startAt, g.peakAt), peak: g.peak } : null;
+        if (flick) {
           s.pulses |= Btn.Dash;
-          s.dashDir = g.peakDir;
-          s.dashStrength = dashStrength(g.peak, flickRate(g.peak, g.startAt, g.peakAt), this.host.dashFlickFull());
+          s.dashDir = flick.dir;
+          s.dashStrength = dashStrength('peak' in flick ? flick.peak : 1, flick.rate, this.host.dashFlickFull());
           this.dashed(false, at); // on the events' clock, as the dash button's swipe
         }
+        // the left thumb may be hopping to DASH: a tap soon after dashes the way the stick was going
+        this.moveLift = lifted ? { at, bits: carriedBits(g, at) } : null;
         s.moveActive = false;
         s.moveBits = 0;
         Object.assign(s.move, zeroStick());
@@ -1063,10 +1129,12 @@ export class TouchController {
         this.aimLift = lifted ? { at, dx: g.dx, dy: g.dy, firing: s.aimFire, button: false } : null;
         // release-to-fire: lifting a pushed stick fires once (back to the centre first = no shot),
         // unless it was aiming a grenade
-        if (lifted && this.fireNow === 'release' && this.weaponDef?.fireMode !== 'charge' && s.aim.mag > 0 && !s.grenadeActive) s.pulses |= Btn.Fire;
+        // (a fixed stick: only after LAND_ARM.ms down; a brush of the dial isn't a shot)
+        if (lifted && this.fireNow === 'release' && this.weaponDef?.fireMode !== 'charge' && s.aim.mag > 0 && !s.grenadeActive && (!g.centred || at - g.startAt >= LAND_ARM.ms)) s.pulses |= Btn.Fire;
         s.chargeHold = false;
         s.aimActive = false;
         s.aimFire = false;
+        s.aimArmed = true;
         Object.assign(s.aim, zeroStick());
       }
       // the dial glides home from where the thumb took it
@@ -1341,6 +1409,8 @@ export class TouchController {
   /** The preset on the root (touch.css: One-thumb's aim dial shows only under a finger; no jet hint on a stick that doesn't jet). */
   private presetClass(): void {
     if (this.root.dataset.preset !== this.settings.preset) this.root.dataset.preset = this.settings.preset;
+    // fixed sticks draw Pull's fire line further out (touch.css; mapping.ts FIRE_FIXED)
+    if (this.root.dataset.sticks !== this.settings.sticks) this.root.dataset.sticks = this.settings.sticks;
     this.root.classList.toggle('mf-nostickjet', !this.settings.stickJet);
   }
 
@@ -1360,12 +1430,15 @@ export class TouchController {
     saveLayout(this.store, this.layout);
   }
 
-  /** The dash button's tap: the full dash the way you face (the keyboard's), once. */
+  /**
+   * The dash button's tap: a full dash, once, the way the move stick was going if the thumb just hopped
+   * off it (DASH_CARRY), else the way you face (the keyboard's).
+   */
   private dashFaced(g: Extract<Grab, { kind: 'dash' }>, at = performance.now()): void {
     g.fired = true;
     const s = this.state;
     s.pulses |= Btn.Dash;
-    s.dashDir = 0;
+    s.dashDir = this.carriedDash(g.downAt);
     s.dashStrength = 7;
     this.dashed(false, at);
   }
@@ -1373,13 +1446,18 @@ export class TouchController {
   /** A stick's thumb moved: its trail (for the flick test) and the origin following it past 1.2 radii (§4.3). */
   private followStick(g: Extract<Grab, { kind: 'stick' }>, at: Vec, t: number): void {
     g.trail.push({ t, x: at.x, y: at.y });
+    g.movedAt = performance.now();
     // a short history is enough: the flick looks back FLICK.windowMs and more
     while (g.trail.length > 2 && t - g.trail[1]!.t >= FLICK.windowMs * 3) g.trail.shift();
+    if (!g.moved && Math.hypot(at.x - g.x0, at.y - g.y0) > GESTURE.stillPx) g.moved = true;
+    // read from the drawn centre: the origin never moves
+    if (g.centred) return;
     const o = followOrigin(g.cx, g.cy, at.x, at.y, g.radius);
     if (o.x === g.cx && o.y === g.cy) return;
     g.cx = o.x;
     g.cy = o.y;
-    this.drawBase(this.els.get(g.id)!, o.x, o.y, g.radius);
+    // a fixed dial stays drawn where it is (a thumb that missed it still reads by its drag)
+    if (!g.fixed) this.drawBase(this.els.get(g.id)!, o.x, o.y, g.radius);
   }
 
   /** The dash button: the first swipe dashes that way (8 directions). */
@@ -1610,7 +1688,8 @@ export class TouchController {
     this.knobs.get(id)!.style.transform = `translate(${(off.x / k).toFixed(1)}px, ${(off.y / k).toFixed(1)}px)`;
     const s = this.state;
     const v: StickVector = id === 'move' ? s.move : s.aim;
-    shapeStick(dx, dy, radius, id === 'move' ? MOVE_STICK : AIM_STICK, v);
+    // a stick read from its drawn centre has the fixed shapes (stick.ts: wider dead zones)
+    shapeStick(dx, dy, radius, id === 'move' ? (g?.centred ? MOVE_FIXED : MOVE_STICK) : g?.centred ? AIM_FIXED : AIM_STICK, v);
     this.stickValue(id, v);
     if (g) {
       // when the push left 0.3 (a flick's rise starts there): between two readings, where the line
@@ -1637,10 +1716,10 @@ export class TouchController {
       }
     } else {
       s.aimActive = true;
-      s.aimFire = pullFires(v.mag, s.aimFire);
+      s.aimFire = pullFires(v.mag, s.aimFire, g?.centred ? FIRE_FIXED : undefined);
       // the first real aim (a push past half) has taught the "Aim to shoot" tag: it fades for this visit
       if (v.mag >= 0.5 && !aimTagLearned) this.aimLearned();
-      this.els.get(id)!.classList.toggle('mf-fire', this.fireNow === 'pull' && s.aimFire && !s.grenadeActive); // aiming a throw: no fire
+      this.els.get(id)!.classList.toggle('mf-fire', this.fireNow === 'pull' && s.aimFire && s.aimArmed && !s.grenadeActive); // aiming a throw: no fire
     }
   }
 
@@ -1681,6 +1760,7 @@ export class TouchController {
     if (!aim) {
       s.aimActive = false;
       s.aimFire = false;
+      s.aimArmed = true;
       Object.assign(s.aim, zeroStick());
     }
     if (!grenade && s.grenadeActive) {
@@ -1761,8 +1841,15 @@ export class TouchController {
       el.style.setProperty('--o', String(Math.min(1, p.opacity * this.settings.opacity * (this.editing && this.selected === id ? 1.6 : 1))));
       // lit (Auto-fade): the control's own opacity, without the Button fade
       el.style.setProperty('--o-awake', String(Math.min(1, p.opacity * (this.editing && this.selected === id ? 1.6 : 1))));
-      const grabbed = [...this.grabs.values()].some((g) => g.kind === 'stick' && g.id === id);
-      if (!grabbed) {
+      const grab = [...this.grabs.values()].find((g): g is Extract<Grab, { kind: 'stick' }> => g.kind === 'stick' && g.id === id);
+      // a fixed stick under a thumb (the phone turned, the window resized): the dial keeps its place,
+      // and a thumb reading from its centre reads from the new one
+      if (grab?.centred) {
+        const rect = logicalRect(this.safe);
+        grab.cx = rect.left + p.x * w;
+        grab.cy = rect.top + p.y * h;
+      }
+      if (!grab || grab.fixed) {
         el.style.left = `${(p.x * w).toFixed(1)}px`;
         // a pill grows with its text (a gun's name, large text): it hangs from its top edge in the upper
         // half and stands on its bottom edge in the lower, so it grows away from the screen's edge
@@ -2030,9 +2117,9 @@ export class TouchController {
   }
 
   /** The sticks right now (dev builds' automated checks: the dials' input on a turned phone). */
-  debugState(): { move: StickVector; aim: StickVector; moveActive: boolean; aimActive: boolean; aimFire: boolean; resume: { at: number; button: boolean } | null; fire: FireMode; visible: number; range: number; shoulder: { x: number; y: number }; targets: { x: number; y: number }[]; preset: PresetId; assist: AssistLevel; locked: number | null; enemyNear: boolean; lowMag: boolean } {
+  debugState(): { move: StickVector; aim: StickVector; moveActive: boolean; aimActive: boolean; aimFire: boolean; aimArmed: boolean; sticks: TouchSettings['sticks']; resume: { at: number; button: boolean } | null; fire: FireMode; visible: number; range: number; shoulder: { x: number; y: number }; targets: { x: number; y: number }[]; preset: PresetId; assist: AssistLevel; locked: number | null; enemyNear: boolean; lowMag: boolean } {
     const s = this.state;
-    return { move: { ...s.move }, aim: { ...s.aim }, moveActive: s.moveActive, aimActive: s.aimActive, aimFire: s.aimFire, resume: this.aimLift && { at: this.aimLift.at, button: this.aimLift.button }, fire: this.fireNow, visible: this.visible.length, range: this.weaponDef?.range ?? 0, shoulder: { ...this.shoulder }, targets: this.visible.map((t) => ({ x: t.x, y: t.y })), preset: this.settings.preset, assist: this.settings.assist, locked: this.aimAssist.target, enemyNear: this.enemyNear, lowMag: this.lowMag };
+    return { move: { ...s.move }, aim: { ...s.aim }, moveActive: s.moveActive, aimActive: s.aimActive, aimFire: s.aimFire, aimArmed: s.aimArmed, sticks: this.settings.sticks, resume: this.aimLift && { at: this.aimLift.at, button: this.aimLift.button }, fire: this.fireNow, visible: this.visible.length, range: this.weaponDef?.range ?? 0, shoulder: { ...this.shoulder }, targets: this.visible.map((t) => ({ x: t.x, y: t.y })), preset: this.settings.preset, assist: this.settings.assist, locked: this.aimAssist.target, enemyNear: this.enemyNear, lowMag: this.lowMag };
   }
 
   /** The skins' bound keys (tests). */
@@ -2065,19 +2152,48 @@ function key(type: 'keydown' | 'keyup', code: string): void {
 }
 
 /**
- * How fast the thumb was moving away from the stick's origin at the lift (px/ms): its last point
- * against the latest one at least FLICK.windowMs earlier (or the landing, for a shorter stroke),
- * along the line from the origin.
+ * How fast the thumb was moving away from the stick's origin (or from (ox, oy): where a fixed stick's
+ * thumb landed) at its last point (px/ms): that point against the latest one at least FLICK.windowMs
+ * earlier (or the landing, for a shorter stroke), along the line from the origin.
  */
-function outSpeed(g: Extract<Grab, { kind: 'stick' }>): number {
+function outSpeed(g: Extract<Grab, { kind: 'stick' }>, ox = g.cx, oy = g.cy): number {
   const last = g.trail[g.trail.length - 1];
   if (!last) return 0;
   let then = g.trail[0]!;
   for (const p of g.trail) if (last.t - p.t >= FLICK.windowMs) then = p;
   const dt = last.t - then.t;
-  const ux = last.x - g.cx;
-  const uy = last.y - g.cy;
+  const ux = last.x - ox;
+  const uy = last.y - oy;
   const len = Math.hypot(ux, uy);
   if (dt <= 0 || len === 0) return 0;
   return ((last.x - then.x) * ux + (last.y - then.y) * uy) / len / dt;
+}
+
+/**
+ * How fast a stick's thumb is heading in toward its centre now (px/ms; 0 for a thumb that has sent
+ * nothing for 40 ms: a still thumb sends no moves). A fixed aim stick's landing settles once this drops.
+ */
+function inSpeed(g: Extract<Grab, { kind: 'stick' }>, now: number): number {
+  if (now - g.movedAt > 40) return 0;
+  return Math.max(0, -outSpeed(g));
+}
+
+/** A fixed move stick's flick (stick.ts isFixedFlick), measured from where the thumb landed to its lift. */
+function fixedFlick(g: Extract<Grab, { kind: 'stick' }>, at: number): { dir: number; rate: number } | null {
+  const last = g.trail[g.trail.length - 1];
+  if (!last) return null;
+  const dx = last.x - g.x0;
+  const dy = last.y - g.y0;
+  const travel = Math.hypot(dx, dy) / Math.max(1, g.radius);
+  if (!isFixedFlick({ durationMs: at - g.startAt, travel, outSpeed: outSpeed(g, g.x0, g.y0) })) return null;
+  // a full flick (FIXED_FLICK.minTravel or more), as quick as the stroke was
+  return { dir: dashButtons(dx, dy), rate: flickRate(1, g.startAt, at) };
+}
+
+/** The way a move stick read DASH_CARRY.lookBackMs before its lift (its last point that long before, else its landing). */
+function carriedBits(g: Extract<Grab, { kind: 'stick' }>, at: number): number {
+  let p = g.trail[0];
+  for (const q of g.trail) if (q.t <= at - DASH_CARRY.lookBackMs) p = q;
+  if (!p) return 0;
+  return moveButtons(shapeStick(p.x - g.cx, p.y - g.cy, g.radius, g.centred ? MOVE_FIXED : MOVE_STICK));
 }

@@ -39,7 +39,7 @@ describe('touch HUD layout', () => {
     };
   };
   // what the HUD shows by default (the context slot drawn by Take, where it will be)
-  const ON_HUD: ControlId[] = ['move', 'aim', 'grenade', 'jet', 'swap', 'reload', 'take', 'scores', 'pause'];
+  const ON_HUD: ControlId[] = ['move', 'aim', 'dash', 'grenade', 'jet', 'swap', 'reload', 'take', 'scores', 'pause'];
 
   it('at 812×375 the controls sit where the spec puts them (±1 px)', () => {
     const at = lay(812, 375);
@@ -52,6 +52,8 @@ describe('touch HUD layout', () => {
       ['swap', 620, 150],
       ['reload', 703, 110],
       ['take', 528, 90],
+      // DASH by the left thumb (the owner, 25 Oct), 37 mm in and 9 up
+      ['dash', 266, 300],
       ['scores', 68, 34],
       ['pause', 744, 34],
     ];
@@ -65,7 +67,7 @@ describe('touch HUD layout', () => {
     for (const [W, H] of PHONES) {
       const at = lay(W, H);
       for (const id of ON_HUD) {
-        const min = id === 'scores' || id === 'pause' ? 48 : id === 'jet' || id === 'grenade' ? 72 : 60;
+        const min = id === 'scores' || id === 'pause' ? 48 : id === 'jet' || id === 'grenade' || id === 'dash' ? 72 : 60;
         expect(at(id).d, `${W}: ${id} size`).toBeGreaterThanOrEqual(min);
       }
       for (const a of ON_HUD)
@@ -168,8 +170,8 @@ describe('touch HUD layout', () => {
     expect(withPinned({ placements: {}, pinned: ['reload'] }, 'reload', false).pinned).toEqual([]);
   });
 
-  it('the HUD carries the arc (grenade, JET, swap, reload); Take, melee, zoom and the shield come by the context slot; dash and next grenade by a pin', () => {
-    expect([...OFF_HUD].sort()).toEqual(['cycleGrenade', 'dash', 'melee', 'shield', 'take', 'zoom']);
+  it('the HUD carries the arc (grenade, JET, swap, reload) and DASH; Take, melee, zoom and the shield come by the context slot; next grenade by a pin', () => {
+    expect([...OFF_HUD].sort()).toEqual(['cycleGrenade', 'melee', 'shield', 'take', 'zoom']);
     expect(CONTEXT_PRIORITY).toEqual(['take', 'melee', 'shield', 'zoom']);
     expect(LAYOUT_KEY).toBe('mf.touch.layout.v3');
   });
@@ -262,6 +264,16 @@ describe('touch HUD layout', () => {
     const store = memoryStore();
     saveSettings(store, { ...DEFAULT_TOUCH_SETTINGS, opacity: 0.55 });
     expect(loadSettings(store).opacity).toBe(0.55);
+  });
+
+  it('sticks are fixed by default, for a save from before the setting too; Follow thumb loads as saved', () => {
+    expect(DEFAULT_TOUCH_SETTINGS.sticks).toBe('fixed');
+    // every player so far had the floating sticks without choosing them: fixed it is
+    expect(loadSettings(memoryStore({ [SETTINGS_KEY]: JSON.stringify({ rev: 5, handed: 'left', fire: 'pull' }) }))).toMatchObject({ sticks: 'fixed', handed: 'left', fire: 'pull' });
+    const store = memoryStore();
+    saveSettings(store, { ...DEFAULT_TOUCH_SETTINGS, sticks: 'follow' });
+    expect(loadSettings(store).sticks).toBe('follow');
+    expect(loadSettings(memoryStore({ [SETTINGS_KEY]: JSON.stringify({ sticks: 'floating' }) })).sticks).toBe('fixed');
   });
 
   it('the old aim assist switch carries over: off stays Off, on becomes Standard; a level loads as saved', () => {

@@ -146,9 +146,10 @@ try {
     await ready(page, `${base}/?sandbox&render=2d`);
     check('touch layout on a phone, no keyboard needed', await page.evaluate(() => document.documentElement.hasAttribute('data-touch-controls')));
     const W = LANDSCAPE.width;
-    const H = LANDSCAPE.height;
-    const L = { x: W * 0.18, y: H * 0.68 };
-    const R = { x: W * 0.8, y: H * 0.62 };
+    // the thumbs land on the dials' centres: the sticks are fixed (the default since 25 Oct), so
+    // where a thumb lands is already a push (touch-fixed-check.mjs checks that; here, the strokes)
+    const L = await centre(page, '.mf-ctl-move');
+    const R = await centre(page, '.mf-ctl-aim');
 
     let s0 = await settle(page);
     await f.drag(1, L.x, L.y, 70, 0);

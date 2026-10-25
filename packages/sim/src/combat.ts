@@ -265,6 +265,63 @@ function fireShot(game: Game, p: PlayerState, slot: WeaponSlot, def: WeaponDef):
   recoilPush(game, p, def);
 }
 
+/** Where a shot fired now would go, before its spread (aimRay). */
+export interface AimRay {
+  /** the sim muzzle: on the ray, where a tracer starts (the wall's face when the muzzle is in one) */
+  ox: number;
+  oy: number;
+  /** where the bullet stops: the first solid it meets, else the end of its reach */
+  ex: number;
+  ey: number;
+  /** a solid stops it (false: it flies to its full reach) */
+  hit: boolean;
+  /** ± degrees the shot may stray from this line now (0: it goes exactly here) */
+  spread: number;
+}
+
+export function createAimRay(): AimRay {
+  return { ox: 0, oy: 0, ex: 0, ey: 0, hit: false, spread: 0 };
+}
+
+const rayDir = { x: 0, y: 0 };
+const rayHit = createRayHit();
+const rayGuard = createRayHit();
+
+/**
+ * The line a bullet from `slot` would fly if `p` fired now, cut at the first solid: fireShot's own
+ * steps (the shoulder, the muzzle-in-wall guard, the map's bullet reach, the bullet raycast), without
+ * the spread, the players or the mines. For the sniper's aim line (apps/web aimLine.ts). Reads the
+ * game, never changes it (the map's ray scratch is set again by every shot), so it's safe between
+ * ticks, on the server's game or a client's predicted one.
+ */
+export function aimRay(game: Game, p: PlayerState, slot: WeaponSlot, def: WeaponDef, out: AimRay): AimRay {
+  const t = game.tuning;
+  const world = game.world;
+  const sx = p.shoulderX(t);
+  const sy = p.shoulderY(t);
+  simCosSin(p.aim, rayDir);
+  out.spread = currentSpread(p, slot, def);
+  if (world.raycastBullet(sx, sy, rayDir.x, rayDir.y, def.muzzleLength, SegFlag.BulletPass, rayGuard)) {
+    out.ox = out.ex = rayGuard.x;
+    out.oy = out.ey = rayGuard.y;
+    out.hit = true;
+    return out;
+  }
+  out.ox = sx + rayDir.x * def.muzzleLength;
+  out.oy = sy + rayDir.y * def.muzzleLength;
+  let endT = def.range;
+  const mech = game.mech;
+  if (mech) {
+    mech.castBullet(sx, sy, rayDir.x, rayDir.y);
+    endT = mech.bulletReach(def.range);
+  }
+  out.hit = world.raycastBullet(sx, sy, rayDir.x, rayDir.y, endT, SegFlag.BulletPass, rayHit);
+  if (out.hit) endT = rayHit.t;
+  out.ex = sx + rayDir.x * endT;
+  out.ey = sy + rayDir.y * endT;
+  return out;
+}
+
 /**
  * A launcher's or the flamethrower's shot (docs/03 §11): a projectile instead of a bullet
  * (projectiles.ts), the same seeded spread, bloom and kick, and a `shot` event at the muzzle for the
@@ -499,6 +556,19 @@ function landMelee(game: Game, p: PlayerState): void {
   }
 }
 
+/**
+ * A semi weapon with `holdRepeat`, its trigger held: has it been long enough since its last shot for
+ * the next? The clock is the slot's ticksSinceShot (the local block carries it, so prediction agrees),
+ * and the cooldown still applies on top. A held trigger fires at once on a gun that hasn't fired in a
+ * while (just swapped to, reloaded, picked up), like an automatic's.
+ */
+export function repeatsHeld(slot: Pick<WeaponSlot, 'ticksSinceShot'>, def: Pick<WeaponDef, 'holdRepeat'>): boolean {
+  return def.holdRepeat !== undefined && slot.ticksSinceShot >= Math.min(HOLD_REPEAT_MAX_TICKS, ticks(def.holdRepeat));
+}
+
+/** ticksSinceShot rides the local block as 7 bits: a longer hold-repeat could never be reached on a client. */
+export const HOLD_REPEAT_MAX_TICKS = 127;
+
 /** Timers, commands and firing for one player (after movement). */
 export function stepWeapons(game: Game, p: PlayerState): void {
   const buttons = p.input.buttons;
@@ -592,8 +662,9 @@ export function stepWeapons(game: Game, p: PlayerState): void {
       slot.spin = canCharge && firing && (slot.spin > 0 || pressed) ? Math.min(255, slot.spin + 1) : 0;
     }
     if (!inHand || !ready || def.fireMode === 'melee') continue;
-    // a burst under way carries on by itself; a charge fires when full; held modes fire while held, semi on a press
-    const trigger = def.charge ? slot.spin >= ticks(def.charge) : slot.burst > 0 || (heldTrigger(def) ? firing : pressed);
+    // a burst under way carries on by itself; a charge fires when full; held modes fire while held,
+    // semi on a press, and held again once `holdRepeat` has passed since its last shot (repeatsHeld)
+    const trigger = def.charge ? slot.spin >= ticks(def.charge) : slot.burst > 0 || (heldTrigger(def) ? firing : pressed || (firing && repeatsHeld(slot, def)));
     if (!trigger || slot.reloadTicks > 0 || slot.cooldown > 1e-6) continue;
     if (def.spin && slot.spin < SPIN_FULL) continue;
     if (slot.mag <= 0) {

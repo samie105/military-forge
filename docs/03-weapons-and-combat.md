@@ -37,6 +37,7 @@ interface WeaponDef {
   hands: 1 | 2;                  // 1 = dual-wield capable
   fire: { mode: 'semi'|'auto'|'burst'|'beam'|'charge'|'spinup';
           interval: number;      // s between shots (or bursts)
+          holdRepeat?: number;   // semi: s between shots while the trigger stays held (as built: §5)
           burstCount?: number; burstInterval?: number;
           chargeTime?: number;   // saw/EMP
           spinUp?: number; spinDown?: number; };
@@ -88,7 +89,20 @@ The schema is zod-validated and lint-checked (e.g. a `dps` sanity range per clas
 | **Machete** | melee pickup | melee | 1 | **100** (one-hit) | 0.55 swing | — | — | 1.2 | — | 1× | 100 | 1.05 | L |
 | **Riot Shield** | off-hand pickup | special | off-hand | blocks frontal bullets (±60°), 300 HP | — | — | — | — | — | — | 25 (bash) | 0.75 | L |
 
-**Default spawn loadout** (core modes; host-configurable): Hammer .44 + Hawk .50 + 3 frags. Everything else is picked up from map spawners. **Respawns keep your guns** (owner's playtest: "remember gun choice in case of respawn"): a player comes back with the two guns they died holding, crate and armory picks included, with full ammo; grenades come back as the default belt. A new match starts everyone on their loadout again, and bots keep their own (NOTES §27).
+**Default spawn loadout** (core modes; host-configurable): Hammer .44 + Hawk .50 + **3 of every grenade type** (frag, smoke, gas, flashbang, mine, EMP; docs/02 §14). Everything else is picked up from map spawners. **Respawns keep your guns** (owner's playtest: "remember gun choice in case of respawn"): a player comes back with the two guns they died holding, crate and armory picks included, with full ammo; grenades come back as the default belt. A new match starts everyone on their loadout again, and bots keep their own (NOTES §27).
+
+**Held semi-automatics** (the owner's phone playtest, 25 Oct 2026: "if the user is holding fire, it should just keep on shooting, maybe after some delay"). A semi gun fires on the press, and while the trigger stays held it fires again every `holdRepeat` seconds: a little slower than its cooldown, so tapping stays the faster way. It's a sim rule (combat.ts `repeatsHeld`, on ticksSinceShot), so desktop, pads, touch and the server agree.
+
+| Gun | Tapping (interval) | Held (`holdRepeat`) | Why |
+|---|---|---|---|
+| Hammer .44 | 0.6 s | 0.7 s | the pistol the owner meant |
+| Hawk .50 | 0.25 s | 0.3 s | a fast pistol: held ≈ 3.3 shots/s, tapped 4/s |
+| Breacher | 0.75 s | 0.85 s | a close-range panic gun: holding it on a phone should keep pumping |
+| Longbow | 0.55 s | 0.65 s | a self-loading marksman rifle: follow-up shots |
+| Widow | 0.8 s | none | a bolt action: one deliberate round per press (3 in the mag) |
+| Thumper, Popper | 1.25 s, 0.25 s | none | their blast hurts you: each rocket or shell is a fresh press (touch already fires them on release) |
+
+**The sniper's aim line** (the same playtest: "for snipers, show … the line the bullet is going to go"). With a Widow or a Longbow in hand, the local player sees a thin red line along the shot's real path, cut at the first solid it meets, with a dot there: the sim's own ray (`aimRay`: fireShot's shoulder, muzzle guard, the map's bullet reach and the bullet raycast, without the spread), from the local or predicted game, so it's truthful. It fades with distance, dims while the gun can't fire (reloading, swapping, the bolt), and dims and loses its dot while the shot may stray (airborne, bloom). Nobody else's line is drawn: it would give a sniper away. 3D: `render3d/vfx/aimLine.ts` (a few quads in the glow layer, no extra draw call); 2D: render.ts.
 
 **Cosmetic variants, not stat upgrades:** genre classics sold golden guns with extra power. Ours is a **gold skin** for the Hawk with no stat change.
 

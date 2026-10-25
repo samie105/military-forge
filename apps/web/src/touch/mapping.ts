@@ -67,9 +67,35 @@ export class AutoTrigger {
   }
 }
 
-/** Pull's fire line with hysteresis: is the stick firing now, given whether it was? */
-export function pullFires(push: number, was: boolean): boolean {
-  return was ? push >= FIRE_OFF : push >= FIRE_ON;
+/**
+ * Pull's fire line on a fixed aim stick (stick.ts AIM_FIXED): 0.57 of the push (36 px on a 66 px
+ * stick, 6 mm) and off under 0.43 (30 px). Further out than the floating stick's 27 px: a thumb lands
+ * on a fixed stick off its centre, and a small push there should only aim (the owner, 25 Oct). The
+ * ring between 17 px (the aim follows) and 36 px is 3 mm wide, about a thumb's landing error.
+ */
+export const FIRE_FIXED = { on: 0.57, off: 0.43 } as const;
+
+/** Pull's fire line with hysteresis: is the stick firing now, given whether it was? (`line`: FIRE_FIXED on a fixed stick) */
+export function pullFires(push: number, was: boolean, line: { on: number; off: number } = { on: FIRE_ON, off: FIRE_OFF }): boolean {
+  return was ? push >= line.off : push >= line.on;
+}
+
+/**
+ * A fixed aim stick whose thumb lands past the fire line (Pull's, or Auto's rim) aims at once but holds
+ * its fire until the landing has settled: 80 ms down, and not still heading in toward the centre faster
+ * than 0.15 px/ms (a thumb that landed on the wrong side and is dragging across: once it passes the
+ * centre it heads out again), or 200 ms down whatever it does. A thumb that lands inside the line fires
+ * as soon as a drag takes it past: the drag says which way. 80 ms (five sim ticks) is about the time a
+ * thumb takes to land and start a swing across (the swing itself, 100 px, takes another 100–150 ms,
+ * which the heading-in test covers); a thumb landing where it means to waits only those five ticks. A
+ * resting thumb's wobble is under 0.05 px/ms, so it never holds the fire. Release fires on a lift only
+ * after 80 ms down (a brush of the stick isn't a shot).
+ */
+export const LAND_ARM = { ms: 80, maxMs: 200, inPxPerMs: 0.15 } as const;
+
+/** Has a fixed aim stick's landing settled (LAND_ARM), `ageMs` after the thumb landed, moving in toward the centre at `inSpeed` px/ms? */
+export function landSettled(ageMs: number, inSpeed: number): boolean {
+  return ageMs >= LAND_ARM.maxMs || (ageMs >= LAND_ARM.ms && inSpeed < LAND_ARM.inPxPerMs);
 }
 
 /** The move stick's buttons now, from its reading and the last ones (thresholds with hysteresis, stick.ts). */
@@ -87,8 +113,10 @@ export interface TouchState {
   moveBits: number;
   aim: StickVector;
   aimActive: boolean;
-  /** the aim stick past Pull's fire line (FIRE_ON, held down to FIRE_OFF) */
+  /** the aim stick past Pull's fire line (FIRE_ON, held down to FIRE_OFF; FIRE_FIXED on a fixed stick) */
   aimFire: boolean;
+  /** the aim stick may fire (Pull, Auto's rim): false while a fixed stick's landing settles (LAND_ARM) */
+  aimArmed: boolean;
   /** Auto's trigger this sample (AutoTrigger: an enemy under the aim) */
   autoFiring: boolean;
   /** Release with a charged gun: the trigger held while the aim stick is pushed (a lift lets go, the charge fires when full) */
@@ -111,7 +139,7 @@ export interface TouchState {
 }
 
 export function createTouchState(): TouchState {
-  return { move: zeroStick(), moveActive: false, moveBits: 0, aim: zeroStick(), aimActive: false, aimFire: false, autoFiring: false, chargeHold: false, held: 0, pulses: 0, dashDir: 0, dashStrength: 7, grenadeActive: false, grenade: zeroStick() };
+  return { move: zeroStick(), moveActive: false, moveBits: 0, aim: zeroStick(), aimActive: false, aimFire: false, aimArmed: true, autoFiring: false, chargeHold: false, held: 0, pulses: 0, dashDir: 0, dashStrength: 7, grenadeActive: false, grenade: zeroStick() };
 }
 
 /**
@@ -125,8 +153,8 @@ export function touchButtons(s: TouchState, fire: FireMode): number {
   // aiming a throw with the right stick doesn't fire the gun; the grenade itself goes through the
   // throw latch on release, never held (the sim would throw on the finger going down)
   if (!s.grenadeActive) {
-    if (fire === 'pull' && s.aimActive && s.aimFire) b |= Btn.Fire;
-    if (fire === 'auto' && (s.autoFiring || (s.aimActive && s.aim.mag >= FIRE_RIM))) b |= Btn.Fire;
+    if (fire === 'pull' && s.aimActive && s.aimArmed && s.aimFire) b |= Btn.Fire;
+    if (fire === 'auto' && (s.autoFiring || (s.aimActive && s.aimArmed && s.aim.mag >= FIRE_RIM))) b |= Btn.Fire;
     if (fire === 'release' && s.chargeHold) b |= Btn.Fire;
   }
   // a dash goes the way the stick pointed when it was asked for, even if the thumb has moved on

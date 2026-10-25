@@ -1,8 +1,8 @@
 import { weapons } from '@military-forge/content';
 import { Btn } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
-import { AIM_MIN, AUTO_FIRE, AutoTrigger, FIRE_OFF, FIRE_ON, FIRE_RIM, TOUCH_PULL_MIN, assistPush, autoRange, createTouchState, effectiveFire, dashStrength, desiredAim, flickRate, grenadeStrength, pullFires, throwStrength, touchButtons, updateMove } from '../../src/touch/mapping';
-import { AIM_STICK, GRENADE_STICK, MOVE_STICK, shapeStick } from '../../src/touch/stick';
+import { AIM_MIN, AUTO_FIRE, AutoTrigger, FIRE_FIXED, FIRE_OFF, FIRE_ON, FIRE_RIM, LAND_ARM, TOUCH_PULL_MIN, assistPush, autoRange, createTouchState, effectiveFire, dashStrength, desiredAim, flickRate, grenadeStrength, landSettled, pullFires, throwStrength, touchButtons, updateMove } from '../../src/touch/mapping';
+import { AIM_FIXED, AIM_STICK, GRENADE_STICK, MOVE_STICK, shapeStick } from '../../src/touch/stick';
 
 describe('touch → Input mapping', () => {
   it('the move stick gives the keyboard\'s movement bits', () => {
@@ -185,6 +185,45 @@ describe('fire modes (controls spec §4.4; the owner\'s shooting styles)', () =>
     // a shotgun auto-fires only to 0.6 of its range (the assist core's test takes 0.8 of what it's given)
     expect(autoRange(gun('breacher')) * 0.8).toBeCloseTo(gun('breacher').range * 0.6, 9);
     expect(autoRange(gun('k47'))).toBe(gun('k47').range);
+  });
+
+  it('a fixed aim stick: a small push only aims; Pull fires from 36 px (0.57) and stops under 30 px (0.43)', () => {
+    const s = createTouchState();
+    s.aimActive = true;
+    const push = (px: number) => {
+      shapeStick(px, 0, 66, AIM_FIXED, s.aim);
+      s.aimFire = pullFires(s.aim.mag, s.aimFire, FIRE_FIXED);
+      return touchButtons(s, 'pull') & Btn.Fire;
+    };
+    expect(push(16)).toBe(0);
+    expect(desiredAim(s)).toBeNull(); // under 17 px it doesn't even turn the aim
+    expect(push(18)).toBe(0);
+    expect(desiredAim(s)).toBeCloseTo(0, 9); // aims right, no shot
+    expect(push(35)).toBe(0); // the floating stick would be firing from 27 px
+    expect(push(37)).toBe(Btn.Fire);
+    expect(push(31)).toBe(Btn.Fire); // the line has some give
+    expect(push(29)).toBe(0);
+  });
+
+  it("a fixed aim stick that lands past the fire line holds Pull's and Auto's rim fire until the landing settles", () => {
+    const s = createTouchState();
+    s.aimActive = true;
+    shapeStick(60, 0, 66, AIM_FIXED, s.aim);
+    s.aimFire = pullFires(s.aim.mag, false, FIRE_FIXED);
+    s.aimArmed = false;
+    expect(touchButtons(s, 'pull') & Btn.Fire).toBe(0);
+    expect(touchButtons(s, 'auto') & Btn.Fire).toBe(0); // the rim too
+    s.autoFiring = true;
+    expect(touchButtons(s, 'auto') & Btn.Fire).toBe(Btn.Fire); // Auto on a target in sight needs no push
+    s.autoFiring = false;
+    s.aimArmed = true;
+    expect(touchButtons(s, 'pull') & Btn.Fire).toBe(Btn.Fire);
+    expect(touchButtons(s, 'auto') & Btn.Fire).toBe(Btn.Fire);
+    // settled: 80 ms down and not swinging in across the centre, or 160 ms whatever it does
+    expect(landSettled(LAND_ARM.ms - 1, 0)).toBe(false);
+    expect(landSettled(LAND_ARM.ms, 0)).toBe(true);
+    expect(landSettled(LAND_ARM.ms + 40, 0.8)).toBe(false); // a thumb dragging across from the wrong side
+    expect(landSettled(LAND_ARM.maxMs, 0.8)).toBe(true);
   });
 
   it("Auto's trigger: the first shot after 100 ms on target, on for 150 ms after it leaves", () => {

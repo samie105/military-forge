@@ -7,7 +7,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from
 import { useStore } from 'zustand';
 import { framesPerSecond, netHistory, NET_HISTORY } from '../../stats';
 import { getTouchSettings, onTouchChange, openTouchEditor, resetTouchLayout, setTouchPreset, setTouchSettings, type TouchSettings } from '../../touch';
-import { ASSIST_HELP, ASSIST_NAMES, DEFAULT_TOUCH_SETTINGS, PRESET_HELP, PRESET_IDS, PRESET_NAMES, type PresetId } from '../../touch/settings';
+import { ASSIST_HELP, ASSIST_NAMES, DEFAULT_TOUCH_SETTINGS, PRESET_HELP, PRESET_IDS, PRESET_NAMES, STICK_MODES, STICK_MODE_HELP, STICK_MODE_NAMES, type PresetId, type StickMode } from '../../touch/settings';
 import { ASSIST_LEVELS, type AssistLevel } from '../../input/assist';
 import { canVibrate } from '../../touch/platform';
 import { PadControls } from '../../gamepad/PadSettings';
@@ -590,6 +590,15 @@ function Touch() {
         </div>
         <div className="srow__ctrl">
           <Seg value={t.assist} label="Aim assist" options={ASSIST_LEVELS.map((l) => [l, ASSIST_NAMES[l]] as [AssistLevel, string])} onChange={(assist) => set({ assist })} />
+        </div>
+      </div>
+      <div className="srow">
+        <div className="srow__txt">
+          <b>Sticks</b>
+          <span>{STICK_MODE_HELP[t.sticks]}</span>
+        </div>
+        <div className="srow__ctrl">
+          <Seg value={t.sticks} label="Sticks" options={STICK_MODES.map((m) => [m, STICK_MODE_NAMES[m]] as [StickMode, string])} onChange={(sticks) => set({ sticks })} />
         </div>
       </div>
       <div className="srow">

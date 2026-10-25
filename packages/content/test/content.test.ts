@@ -135,6 +135,17 @@ describe('weapons', () => {
     for (const w of weapons) expect(w.fireMode === 'charge', w.id).toBe(w.charge !== undefined);
   });
 
+  it('held semi triggers: the pistols, the pump and the marksman rifle repeat, a little slower than tapping', () => {
+    const repeats = weapons.filter((w) => w.holdRepeat !== undefined).map((w) => w.id);
+    expect(repeats.sort()).toEqual(['breacher', 'hammer44', 'hawk50', 'longbow']);
+    for (const w of weapons) {
+      if (w.holdRepeat === undefined) continue;
+      expect(w.fireMode, w.id).toBe('semi');
+      expect(w.holdRepeat, w.id).toBeGreaterThan(w.interval);
+      expect(Math.round(w.holdRepeat * 60), `${w.id}: ticksSinceShot is u7`).toBeLessThanOrEqual(127);
+    }
+  });
+
   it('time-to-kill matches the docs/03 §6 sheet', () => {
     for (const w of weapons) {
       const sheet = TTK_SHEET[w.id];
@@ -222,16 +233,17 @@ describe('grenades', () => {
     expect(new Set(grenades.map((g) => g.id)).size).toBe(grenades.length);
   });
 
-  it('carry limits fit the local block (u3) and the spawn loadout is frag ×3', () => {
+  it('carry limits fit the local block (u3) and the spawn loadout is 3 of every type', () => {
     for (const g of grenades) {
-      expect(g.spawnCount, g.id).toBeLessThanOrEqual(g.maxCount);
+      expect(g.spawnCount, g.id).toBe(3);
+      // a map pair still adds to a fresh belt
+      expect(g.spawnCount, g.id).toBeLessThan(g.maxCount);
       expect(g.maxCount, g.id).toBeLessThanOrEqual(7);
       expect(g.fuse, g.id).toBeGreaterThan(0);
     }
     const belt = spawnGrenades();
     expect(belt).toHaveLength(GRENADE_TYPES);
-    expect(belt[FRAG.index]).toBe(3);
-    expect(belt.reduce((a, b) => a + b, 0)).toBe(3);
+    expect(belt).toEqual(grenades.map(() => 3));
   });
 
   it('clouds grow, hold and fade inside their life, and gas is worst at the core', () => {

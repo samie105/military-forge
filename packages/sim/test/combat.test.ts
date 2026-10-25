@@ -1,6 +1,6 @@
-import { BUZZ, FRAG, HAMMER, createTuning, defaultTuning as T } from '@military-forge/content';
+import { BUZZ, FRAG, HAMMER, WIDOW, createTuning, defaultTuning as T } from '@military-forge/content';
 import { describe, expect, it } from 'vitest';
-import { Btn, DamageSource, Game, hashGame, type SimEvent } from '../src';
+import { Btn, DamageSource, Game, aimRay, createAimRay, hashGame, ticks, type SimEvent } from '../src';
 import { dummyAt, flatMap, hold, makeGame, placeOnGround, rect } from './helpers';
 
 /** Aim from the player's shoulder at a point. */
@@ -47,15 +47,21 @@ describe('hitscan', () => {
     expect(100 - d.hp).toBeLessThan(30);
   });
 
-  it('semi-auto fires once per press; auto fires every interval while held', () => {
+  it('semi-auto fires on a press, then every holdRepeat while held; auto fires every interval while held', () => {
     const { game, p } = makeGame(flatMap());
     placeOnGround(game, p, 5);
     let fired = 0;
+    const at: number[] = [];
     for (let i = 0; i < 120; i++) {
       hold(game, p, Btn.Fire, 1);
+      if (shots(game).length) at.push(i);
       fired += shots(game).length;
     }
-    expect(fired).toBe(1);
+    // the press fires at once, the held trigger again every holdRepeat (0.7 s), not every interval (0.6 s)
+    const repeat = ticks(HAMMER.holdRepeat!);
+    expect(repeat).toBeGreaterThan(ticks(HAMMER.interval));
+    expect(at).toEqual([0, repeat, 2 * repeat]);
+    expect(fired).toBe(3);
 
     hold(game, p, Btn.Swap, 1);
     hold(game, p, 0, 20);
@@ -66,6 +72,59 @@ describe('hitscan', () => {
       fired += shots(game).length;
     }
     expect(fired).toBe(Math.round(1 / BUZZ.interval));
+  });
+
+  it('tapping a semi stays faster than holding it', () => {
+    const fire = (tap: boolean): number => {
+      const { game, p } = makeGame(flatMap());
+      placeOnGround(game, p, 5);
+      let n = 0;
+      // a mag (6) is 6 shots either way: in 200 ticks the tapper gets all 6 off (0.6 s apart), the holder 5
+      for (let i = 0; i < 200; i++) {
+        // a fast tapper: down one tick, up the next
+        hold(game, p, tap && i % 2 === 1 ? 0 : Btn.Fire, 1);
+        n += shots(game).length;
+      }
+      return n;
+    };
+    expect([fire(true), fire(false)]).toEqual([6, 5]);
+  });
+
+  it('a semi without holdRepeat (the bolt sniper, the launchers) fires once per press', () => {
+    const { game, p } = makeGame(flatMap());
+    game.setLoadout(p, [WIDOW.index, HAMMER.index]);
+    placeOnGround(game, p, 5);
+    hold(game, p, 0, 30);
+    let fired = 0;
+    for (let i = 0; i < 180; i++) {
+      hold(game, p, Btn.Fire, 1);
+      fired += shots(game).length;
+    }
+    expect(WIDOW.holdRepeat).toBeUndefined();
+    expect(fired).toBe(1);
+  });
+
+  it('the aim ray is where an unspread shot goes, cut at the first wall', () => {
+    const { game, p } = makeGame(flatMap([rect(20, 0, 21, 4)]));
+    game.setLoadout(p, [WIDOW.index, HAMMER.index]);
+    placeOnGround(game, p, 5);
+    hold(game, p, 0, 30);
+    const ray = aimRay(game, p, p.weapons[0], WIDOW, createAimRay());
+    expect(ray.spread).toBe(0); // planted: the Widow goes exactly down the line
+    expect(ray.hit).toBe(true);
+    expect(ray.ex).toBeCloseTo(20, 3);
+    hold(game, p, Btn.Fire, 1);
+    const [shot] = shots(game);
+    expect(shot).toBeDefined();
+    // (the event's coordinates are quantised)
+    for (const [a, b] of [[shot!.ox, ray.ox], [shot!.oy, ray.oy], [shot!.ex, ray.ex], [shot!.ey, ray.ey]] as const) expect(a).toBeCloseTo(b, 2);
+    // no wall within reach: the line runs to the gun's range
+    const open = makeGame(flatMap([], [], 200));
+    open.game.setLoadout(open.p, [WIDOW.index, HAMMER.index]);
+    placeOnGround(open.game, open.p, 5);
+    const far = aimRay(open.game, open.p, open.p.weapons[0], WIDOW, createAimRay());
+    expect(far.hit).toBe(false);
+    expect(Math.hypot(far.ex - far.ox, far.ey - far.oy)).toBeCloseTo(WIDOW.range - WIDOW.muzzleLength, 3);
   });
 
   it('spread is deterministic for a seed and varies across seeds', () => {

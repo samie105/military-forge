@@ -127,7 +127,11 @@ interface GrenadeBase {
   /** below this normal speed on near-flat ground the grenade stops bouncing and rolls */
   restNormalSpeed: number;
   fuse: number;
-  /** carried at spawn (the default spawn loadout: frag ×3) */
+  /**
+   * carried at spawn: 3 of every type (the owner's phone playtest, 25 Oct: "let everyone start with
+   * frags, flashbangs and all, 3 of each"); maxCount stays above it so a map pair still adds to a
+   * fresh belt
+   */
   spawnCount: number;
   maxCount: number;
   throwCooldown: number;
@@ -185,8 +189,8 @@ export const SMOKE = {
   rollFriction: 6,
   restNormalSpeed: 1.0,
   fuse: 1.6,
-  spawnCount: 0,
-  maxCount: 2,
+  spawnCount: 3,
+  maxCount: 5,
   throwCooldown: 0.5,
   effect: 'cloud',
   cloud: {
@@ -222,8 +226,8 @@ export const GAS = {
   rollFriction: 6,
   restNormalSpeed: 1.0,
   fuse: 1.6,
-  spawnCount: 0,
-  maxCount: 2,
+  spawnCount: 3,
+  maxCount: 5,
   throwCooldown: 0.5,
   effect: 'cloud',
   cloud: {
@@ -259,8 +263,8 @@ export const FLASHBANG = {
   rollFriction: 6,
   restNormalSpeed: 1.0,
   fuse: 1.7,
-  spawnCount: 0,
-  maxCount: 2,
+  spawnCount: 3,
+  maxCount: 5,
   throwCooldown: 0.5,
   effect: 'flash',
   flash: {
@@ -296,8 +300,8 @@ export const MINE = {
   rollFriction: 0,
   restNormalSpeed: 0,
   fuse: 1.0,
-  spawnCount: 0,
-  maxCount: 2,
+  spawnCount: 3,
+  maxCount: 5,
   throwCooldown: 0.5,
   effect: 'mine',
   mine: {
@@ -338,8 +342,8 @@ export const EMP = {
   rollFriction: 6,
   restNormalSpeed: 1.0,
   fuse: 1.35,
-  spawnCount: 0,
-  maxCount: 2,
+  spawnCount: 3,
+  maxCount: 5,
   throwCooldown: 0.5,
   effect: 'emp',
   emp: { radius: 4, jetDisable: 3 },
@@ -354,7 +358,7 @@ export const GRENADE_TYPES = 6;
 /** A map pickup's grenades come in pairs (docs/02 §14, a genre convention). */
 export const GRENADE_PICKUP_COUNT = 2;
 
-/** The default spawn loadout: each type's spawnCount (frag ×3). */
+/** The default spawn loadout: each type's spawnCount (3 of every type, frag selected). */
 export function spawnGrenades(): number[] {
   const out = new Array<number>(GRENADE_TYPES).fill(0);
   for (const g of grenades) out[g.index] = g.spawnCount;

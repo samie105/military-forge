@@ -45,6 +45,7 @@ import { eachKick, recoilOf } from './recoil';
 import { PickupMeshes, RicochetSparks } from './shield';
 import { WeaponItems } from './weaponItems';
 import { Vfx } from './vfx';
+import { AimLine } from './vfx/aimLine';
 import { isTouchDevice } from '../touch';
 import type { EjectLookup } from './vfx/casings';
 import type { SwingLookup } from './vfx/melee';
@@ -294,6 +295,10 @@ export class Renderer3D {
     this.vfx.register(this.sparks);
     // smoke, gas and the other grenades, the flashbang's pop and the EMP's ring (arsenal B)
     this.vfx.register(this.clouds);
+    // the sniper's aim line (Frame.aimLine, the local player's only)
+    const aimLine = new AimLine(this.muzzleOf);
+    this.scene.add(aimLine.layer.mesh);
+    this.vfx.register(aimLine);
     this.setPreset(preset.name);
   }
 

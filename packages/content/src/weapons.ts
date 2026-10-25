@@ -46,7 +46,7 @@ export interface WeaponDef {
   class: WeaponClass;
   hands: 1 | 2;
   /**
-   * 'semi': one shot per press · 'auto': fires while held · 'burst': each press (or held) fires a
+   * 'semi': one shot per press, and while held another every `holdRepeat` s when it has one · 'auto': fires while held · 'burst': each press (or held) fires a
    * burst of `burst.count` rounds `burst.interval` apart · 'spinup': fires while held once spun up
    * (`spin`; the second fire button spins it without firing) · 'beam': fires while held, its cell
    * refills by itself (`regen`) · 'charge': a press starts a charge, held for `charge` s it fires
@@ -55,6 +55,14 @@ export interface WeaponDef {
   fireMode: FireMode;
   /** seconds between shots (burst: from one burst's first round to the next's; melee: between swings) */
   interval: number;
+  /**
+   * 'semi' weapons that keep firing while the trigger is held (the owner's phone playtest, 25 Oct:
+   * "if the user is holding fire, it should just keep on shooting, maybe after some delay"): seconds
+   * from one shot to the next while held, a little slower than `interval` so tapping stays the faster
+   * way to fire. Absent: one shot per press (the bolt sniper, the launchers). At most 2 s: the clock
+   * is the slot's ticksSinceShot, which the local block carries up to 127 ticks.
+   */
+  holdRepeat?: number;
   /** 'burst' weapons: rounds per burst and seconds between them */
   burst?: { count: number; interval: number };
   /** 'spinup' weapons: seconds to spin up from rest, and to spin down from full */
@@ -117,6 +125,7 @@ export const HAMMER: WeaponDef = {
   hands: 1,
   fireMode: 'semi',
   interval: 0.6,
+  holdRepeat: 0.7, // held: a shot every 0.7 s (tapping: every 0.6 s)
   damage: 30,
   pellets: 1,
   hitImpulse: 0,
@@ -207,6 +216,7 @@ export const BREACHER: WeaponDef = {
   hands: 2,
   fireMode: 'semi',
   interval: 0.75,
+  holdRepeat: 0.85, // held: a pump every 0.85 s (pumping by hand: 0.75 s)
   damage: 20,
   pellets: 5,
   hitImpulse: 0.6,
@@ -234,7 +244,7 @@ export const WIDOW: WeaponDef = {
   name: 'Widow',
   class: 'sniper',
   hands: 2,
-  fireMode: 'semi',
+  fireMode: 'semi', // no holdRepeat: a bolt action, one deliberate round per press (3 in the mag)
   interval: 0.8,
   damage: 75,
   pellets: 1,
@@ -300,6 +310,7 @@ export const HAWK50: WeaponDef = {
   hands: 1,
   fireMode: 'semi',
   interval: 0.25,
+  holdRepeat: 0.3, // held: 3.3 shots/s (tapping: 4/s)
   // docs/03 says 8 (13 shots, 3.0 s): 9 is 12 shots, 2.75 s, a sidearm you can still win with
   damage: 9,
   pellets: 1,
@@ -452,6 +463,7 @@ export const LONGBOW: WeaponDef = {
   hands: 2,
   fireMode: 'semi',
   interval: 0.55,
+  holdRepeat: 0.65, // a self-loading marksman rifle: held, a shot every 0.65 s (tapping: 0.55 s)
   damage: 36,
   pellets: 1,
   hitImpulse: 0,
@@ -554,7 +566,7 @@ export const THUMPER: WeaponDef = {
   name: 'Thumper',
   class: 'heavy',
   hands: 2,
-  fireMode: 'semi',
+  fireMode: 'semi', // no holdRepeat: its blast hurts you, so each rocket is a fresh press
   interval: 1.25,
   projectile: ROCKET,
   damage: ROCKET.damage,
@@ -584,7 +596,7 @@ export const POPPER: WeaponDef = {
   name: 'Popper',
   class: 'heavy',
   hands: 2,
-  fireMode: 'semi',
+  fireMode: 'semi', // no holdRepeat: its splash hurts you, so each shell is a fresh press
   interval: 0.25,
   projectile: SHELL,
   damage: SHELL.explosion!.maxDamage,

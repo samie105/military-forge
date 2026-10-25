@@ -32,6 +32,7 @@ import type { Camera } from './camera';
 import { cloudView, statusView } from './grenadeViews';
 import type { InputSampler } from './input';
 import { mapEventView } from './mapEvent';
+import { AimLinePreview } from './aimLine';
 import { ThrowPreview } from './throwPreview';
 import type { Renderer } from './render';
 import { connectGame, type GameTransport, type TransportHandlers } from './transport';
@@ -182,6 +183,7 @@ export type TuningListener = (before: Tuning, after: Tuning, live: boolean, admi
 export class OnlineMode {
   /** the throw arc while a grenade throw is aimed (both views draw it) */
   private readonly throwPreview = new ThrowPreview();
+  private readonly aimLine = new AimLinePreview();
   private transport: GameTransport | null = null;
   /** how the current/last connection was made, for the net graph */
   private transportNote = '';
@@ -989,6 +991,8 @@ export class OnlineMode {
       mapEvent: pred?.started ? mapEventView(pred.game) : null,
       // the throw arc runs on the predicted game too, from our predicted state
       throwArc: pred?.started ? this.throwPreview.update(pred.game, pred.player, this.sampler.throwAim) : null,
+      // the sniper's aim line, on the predicted game too: where our shot would go now
+      aimLine: pred?.started ? this.aimLine.update(pred.game, pred.player) : null,
       matchSeed: (this.net.seed + (this.matchState?.number ?? 0)) >>> 0,
     };
   }

@@ -24,7 +24,8 @@ describe('grenade variety online (protocol v8)', () => {
         out.aim = DOWN;
         out.buttons = 0;
         if (k !== 0) return;
-        if (now >= 6000 && now < 6100) out.buttons = Btn.CycleGrenade; // frag → gas
+        if (now >= 6000 && now < 6100) out.buttons = Btn.CycleGrenade; // frag → smoke
+        if (now >= 6400 && now < 6500) out.buttons = Btn.CycleGrenade; // smoke → gas
         if (now >= 7000 && now < 7100) out.buttons = Btn.Grenade; // gas at our feet
       },
       beforeTick: (room, nets) => {
@@ -55,8 +56,8 @@ describe('grenade variety online (protocol v8)', () => {
     const [c0] = r.clients;
     const me = c0!.net.predictor!.player;
     const onServer = serverPlayers[me.id]!;
-    // the belt the client predicted is the server's: frag x3, then gas x2 given, one thrown
-    expect(onServer.grenadeCounts[GAS.index]).toBe(1);
+    // the belt the client predicted is the server's: 3 of each, then gas x2 given (3 → 5, its cap), one thrown
+    expect(onServer.grenadeCounts[GAS.index]).toBe(GAS.maxCount - 1);
     expect(onServer.grenadeType).toBe(GAS.index);
     expect(me.grenadeCounts).toEqual(onServer.grenadeCounts);
     expect(me.grenadeType).toBe(onServer.grenadeType);

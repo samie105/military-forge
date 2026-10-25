@@ -9,7 +9,7 @@
 import { useEffect, useState } from 'react';
 import { useStore } from 'zustand';
 import { getTouchSettings, onTouchChange, openTouchEditor, requestDrill, resetTouchHints, resetTouchLayout, setTouchPreset, setTouchSettings, type TouchSettings } from '../../../touch';
-import { ASSIST_HELP, ASSIST_NAMES, DEFAULT_TOUCH_SETTINGS, autoView, PRESET_HELP, PRESET_IDS, PRESET_NAMES, type PresetId } from '../../../touch/settings';
+import { ASSIST_HELP, ASSIST_NAMES, DEFAULT_TOUCH_SETTINGS, autoView, PRESET_HELP, PRESET_IDS, PRESET_NAMES, STICK_MODES, STICK_MODE_HELP, STICK_MODE_NAMES, type PresetId, type StickMode } from '../../../touch/settings';
 import { ASSIST_LEVELS, type AssistLevel } from '../../../input/assist';
 import { canVibrate } from '../../../touch/platform';
 import { Icon } from '../../../ui/Icon';
@@ -148,6 +148,10 @@ function Touch() {
         </span>
         <Seg value={t.assist} label="Aim assist" options={ASSIST_LEVELS.map((l) => [l, ASSIST_NAMES[l]] as [AssistLevel, string])} onChange={(assist) => set({ assist })} />
       </div>
+      {/* the owner, 25 Oct: fixed sticks by default; "Follow thumb" for players who want them to move */}
+      <Row i={4} label="Sticks" desc={STICK_MODE_HELP[t.sticks]}>
+        <Seg value={t.sticks} label="Sticks" options={STICK_MODES.map((m) => [m, STICK_MODE_NAMES[m]] as [StickMode, string])} onChange={(sticks) => set({ sticks })} />
+      </Row>
       <Row i={4} label="Left-handed" desc="Mirrors the whole layout.">
         <Switch on={t.handed === 'left'} onChange={(on) => set({ handed: on ? 'left' : 'right' })} label="Left-handed" />
       </Row>

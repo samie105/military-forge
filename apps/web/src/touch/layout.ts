@@ -83,8 +83,8 @@ export interface Anchor {
  * Two sticks (the left moves and jets, the right aims and fires: Auto, no FIRE button) and four
  * buttons in an arc 42 mm from the bottom-right corner: grenade, JET, the swap pill, reload. The
  * context slot, left of the arc, shows Take, melee, the shield or zoom when one is in play (one at a
- * time); dash (a flick of the move stick) and next grenade (a swipe on the grenade) are off the HUD.
- * The editor can pin any of them back (TouchLayout.pinned): pinned, a control has its own place
+ * time). DASH sits by the left thumb (25 Oct; a flick of the move stick dashes too); next grenade (a
+ * swipe on the grenade) is off the HUD. The editor can pin it back (TouchLayout.pinned): pinned, a control has its own place
  * (PINNED_ANCHORS). Primaries are 12 mm, secondaries 10, the top bar 8; the sticks' bases 22 mm.
  */
 export const CLASSIC: Readonly<Record<ControlId, Anchor>> = {
@@ -102,8 +102,11 @@ export const CLASSIC: Readonly<Record<ControlId, Anchor>> = {
   melee: { corner: 'BR', dx: 40, dy: 44, hit: 10 },
   shield: { corner: 'BR', dx: 40, dy: 44, hit: 10 },
   zoom: { corner: 'BR', dx: 40, dy: 44, hit: 10 },
-  // off the HUD unless pinned (a flick of the move stick dashes; a swipe on the grenade changes type)
-  dash: { corner: 'BR', dx: 58, dy: 9, hit: 12 },
+  // DASH by the left thumb (the owner, 25 Oct: "I can't dash easily"): the right arc has no room left on
+  // its 42 mm ring, and the right thumb is the one aiming. Low, right of the move stick, 5 mm clear of
+  // its dial: the left thumb hops to it (a tap dashes the way the stick was going, a swipe picks the way)
+  dash: { corner: 'BL', dx: 37, dy: 9, hit: 12 },
+  // off the HUD unless pinned (a swipe on the grenade changes type)
   cycleGrenade: { corner: 'BR', dx: 58, dy: 22, hit: 10 },
   scores: { corner: 'TL', dx: 4, dy: 4, hit: 8 },
   pause: { corner: 'TR', dx: 4, dy: 4, hit: 8 },
@@ -184,9 +187,9 @@ export const CONTEXT_BY_PRESET: Readonly<Record<PresetId, readonly ControlId[]>>
   claw: ['take', 'melee', 'shield', 'reload', 'zoom'],
   oneThumb: ['take', 'melee', 'shield', 'reload', 'zoom'],
 };
-/** Controls off a preset's HUD unless pinned (Classic: dash too; a flick of the move stick dashes). */
+/** Controls off a preset's HUD unless pinned. */
 const PINNED_ONLY: Readonly<Record<PresetId, readonly ControlId[]>> = {
-  classic: ['cycleGrenade', 'dash'],
+  classic: ['cycleGrenade'],
   claw: ['cycleGrenade'],
   oneThumb: ['cycleGrenade'],
 };

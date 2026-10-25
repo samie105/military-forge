@@ -48,6 +48,7 @@ describe('admin fields', () => {
       expect(max(`weapon.${w.id}.equip`) * 60, w.id).toBeLessThanOrEqual(255); // swapTicks u8
       // a swing's ticks: meleeTicks u6; a gun's cooldown: 18 bits of 1/1024 tick
       expect(max(`weapon.${w.id}.interval`) * 60, w.id).toBeLessThanOrEqual(w.fireMode === 'melee' ? 63 : 255);
+      if (adminField(`weapon.${w.id}.holdRepeat`)) expect(max(`weapon.${w.id}.holdRepeat`) * 60).toBeLessThanOrEqual(127); // ticksSinceShot u7
       if (adminField(`weapon.${w.id}.charge`)) expect(max(`weapon.${w.id}.charge`) * 60).toBeLessThanOrEqual(255); // spin u8
       if (adminField(`weapon.${w.id}.projectileLife`)) expect(max(`weapon.${w.id}.projectileLife`) * 60).toBeLessThanOrEqual(511); // fuse u9
     }

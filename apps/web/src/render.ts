@@ -34,6 +34,7 @@ import { reduceFlashes } from './fx';
 import { REACH_RAYS, cloudReach, inSmoke } from './grenadeViews';
 import { crateColor, takePrompt, weaponUnderfoot } from './weaponItems';
 import { arcDots, type ThrowArcView } from './throwPreview';
+import { AIM_SURE_SPREAD, aimLineStrength, type AimLineView } from './aimLine';
 import type { CloudView, Frame, GrenadeView, PickupView, PlayerView, RewindView } from './view';
 
 interface Tracer {
@@ -504,6 +505,7 @@ export class Renderer {
     // clouds over the players: smoke hides whoever is inside it
     if (frame.clouds) for (const c of frame.clouds) this.drawCloud(c);
     if (frame.throwArc) this.drawThrowArc(frame.throwArc);
+    else if (frame.aimLine) this.drawAimLine(frame.aimLine);
     this.drawEffects(dt, byId, true);
     ctx.globalAlpha = 1;
     this.drawLetterbox();
@@ -554,6 +556,41 @@ export class Renderer {
       ctx.stroke();
     }
     arcDots(view, 0, this.arcDot);
+  }
+
+  /**
+   * The sniper's aim line (aimLine.ts; render3d draws its own): a thin red line along the shot's
+   * ray, fading with distance, and a dot where it meets a wall when the shot is sure to go there.
+   */
+  private drawAimLine(view: AimLineView): void {
+    const ctx = this.ctx;
+    const cam = this.camera;
+    const k = aimLineStrength(view);
+    const x0 = cam.toScreenX(view.ox);
+    const y0 = cam.toScreenY(view.oy);
+    const x1 = cam.toScreenX(view.ex);
+    const y1 = cam.toScreenY(view.ey);
+    // a faint dark rim under a red core: it reads on sky and on walls
+    for (const [width, rgb, near, far] of [
+      [4, '0,0,0', 0.25, 0.06],
+      [1.5, '255,40,25', 0.85, 0.2],
+    ] as const) {
+      const grad = ctx.createLinearGradient(x0, y0, x1, y1);
+      grad.addColorStop(0, `rgba(${rgb},${(near * k).toFixed(3)})`);
+      grad.addColorStop(1, `rgba(${rgb},${(far * k).toFixed(3)})`);
+      ctx.lineWidth = width;
+      ctx.strokeStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
+    }
+    if (view.hit && view.spread <= AIM_SURE_SPREAD) {
+      ctx.fillStyle = `rgba(255,80,60,${view.ready ? 0.95 : 0.4})`;
+      ctx.beginPath();
+      ctx.arc(x1, y1, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   /** Overlay without the debug world layers: head-level health, damage numbers, HUD and reticle. */

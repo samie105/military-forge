@@ -30,6 +30,7 @@ import type { LocalBots } from './localBots';
 import { mapEventView } from './mapEvent';
 import { LocalLoadoutStore, ownedOnly, starterInventory } from './locker/loadouts';
 import { botLooks, lookBook } from './looks/book';
+import { AimLinePreview } from './aimLine';
 import { ThrowPreview } from './throwPreview';
 import type { Renderer } from './render';
 import { mobilityView, shieldView, type CloudView, type Frame, type PlayerView } from './view';
@@ -47,6 +48,7 @@ export class LocalMode {
   me: PlayerState;
   /** the throw arc while a grenade throw is aimed (both views draw it) */
   private readonly throwPreview = new ThrowPreview();
+  private readonly aimLine = new AimLinePreview();
   match: Match | null = null;
   private acc = 0;
   private readonly prev = new Map<number, { x: number; y: number }>();
@@ -331,6 +333,7 @@ export class LocalMode {
       mapEvent: mapEventView(this.game),
       pickups: this.game.pickups.filter((k) => k.alive).map((k) => ({ id: k.id, def: k.def, x: k.x, y: k.y })),
       throwArc: this.throwPreview.update(this.game, this.me, this.sampler.throwAim),
+      aimLine: this.aimLine.update(this.game, this.me),
       matchSeed: (this.game.seed + (this.match?.number ?? 0)) >>> 0,
       ...(this.recorder ? { recording: this.recorder.length } : {}),
     };

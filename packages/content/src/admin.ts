@@ -105,6 +105,8 @@ for (const w of weapons) {
   // a gun's is its cooldown, 18 bits of 1/1024 tick (255 ticks): at most 3 s
   if (w.fireMode === 'melee') prop(g, s, k('interval'), 'Seconds between swings', w, 'interval', 0.2, 1, 0.01);
   else prop(g, s, k('interval'), w.burst ? 'Seconds between bursts' : 'Seconds between shots', w, 'interval', 0.05, 3, 0.01);
+  // a semi gun's held trigger: its clock is ticksSinceShot, 7 bits on the wire (127 ticks): at most 2 s
+  if (w.holdRepeat !== undefined) prop(g, s, k('holdRepeat'), 'Trigger held: seconds between shots', w, 'holdRepeat', 0.05, 2, 0.01);
   if (w.fireMode !== 'melee') {
     if (!w.projectile || w.spread.base > 0) prop(g, s, k('spread'), 'Spread (± degrees)', w.spread, 'base', 0, 30, 0.1);
     if (!w.projectile) {
