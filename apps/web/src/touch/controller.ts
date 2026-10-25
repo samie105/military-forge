@@ -8,8 +8,9 @@
  *   Every touch on the game is claimed here, so none turns into mouse clicks or browser gestures.
  * - A thumb anywhere on its half of the screen grabs that stick there (big hit areas); the buttons
  *   sit above the halves.
- * - The editor drags (snapping to guides), pinches or steps the size of, and fades each control; the
- *   layout is saved on this device as fractions of the safe box, and no target is under 48 px.
+ * - The HUD editor (the layout bay, editor/bay.ts) drags (snapping to guides) and pinches each control
+ *   here; its bar, cards, tray and bases are the bay's. The layout is saved on this device as fractions
+ *   of the safe box, and no target is under 48 px.
  */
 import { angleToU16 } from '@military-forge/shared';
 import { Btn, type Input, type SimEvent } from '@military-forge/sim';
@@ -31,7 +32,6 @@ import {
   PINNABLE,
   SHIELD_BIT,
   availableControls,
-  isCustomLayout,
   placementFor,
   saveLayout,
   sizePx,
@@ -44,15 +44,16 @@ import {
   type Placement,
   type TouchLayout,
 } from './layout';
-import { ASSIST_NAMES, autoView, PRESET_HELP, PRESET_IDS, PRESET_NAMES, PRESET_SETTINGS, VIEW_LIMITS, type FireMode, type KeyValueStore as Store, type PresetId, type TouchSettings } from './settings';
+import { autoView, PRESET_SETTINGS, VIEW_LIMITS, type FireMode, type KeyValueStore as Store, type PresetId, type TouchSettings } from './settings';
 import { AutoTrigger, TOUCH_PULL_MIN, assistPush, autoRange, createTouchState, dashStrength, desiredAim, effectiveFire, flickRate, grenadeStrength, pullFires, touchButtons, updateMove } from './mapping';
-import { ASSIST_LEVELS, AimAssist, onTarget as onAutoTarget, type AssistLevel, type AssistTarget } from '../input/assist';
+import { AimAssist, onTarget as onAutoTarget, type AssistLevel, type AssistTarget } from '../input/assist';
 import { Sight, sightPoints } from '../input/sight';
 import { EquipClock, SKIN_BASE, TouchSkin, controlValues, localView, phoneTokens, skinHtml, type LocalView } from './skin';
 import { iconHref, weaponIcon } from '../ui/icons';
 import { AIM_STICK, FLICK, GRENADE_STICK, MOVE_STICK, followOrigin, isFlick, knobOffset, moveButtons, shapeStick, zeroStick, type StickVector } from './stick';
 import { FadeClock, cueLit, nearControls, type FadeControl } from './fade';
 import { diag } from '../diag/log';
+import { LayoutBay, type BayHost } from './editor/bay';
 import './touch.css';
 
 /** Where the reticle (and the camera's look-ahead) sits along the touch aim, in metres. */
@@ -139,7 +140,8 @@ export type TouchFrame = Pick<Frame, 'localId' | 'players' | 'pickups' | 'clouds
 export class TouchController {
   readonly root: HTMLDivElement;
   private readonly safe: HTMLDivElement;
-  private readonly editor: HTMLDivElement;
+  /** the HUD editor's panels (editor/bay.ts): this controller keeps the drag, snap and pinch */
+  private readonly bay: LayoutBay;
   private readonly guides: { x: HTMLDivElement; y: HTMLDivElement };
   private readonly els = new Map<ControlId, HTMLDivElement>();
   private readonly knobs = new Map<'move' | 'aim', HTMLElement>();
@@ -252,7 +254,7 @@ export class TouchController {
       edit.dataset.mfEdit = '';
     }
     this.skin = new TouchSkin(this.root);
-    this.editor = this.buildEditor();
+    this.bay = new LayoutBay(this.bayHost());
     this.overlays = new TouchOverlays(
       this.safe,
       () => this.drillSkip(),
@@ -843,16 +845,17 @@ export class TouchController {
   }
 
   private onDown(e: PointerEvent): void {
-    if (!this.active || this.hiddenForMenus) return;
+    // the editor opens over the menus too (Settings on Home): its touches count there
+    if (!this.active || (this.hiddenForMenus && !this.editing)) return;
     const target = e.target as Element | null;
     // a mouse only uses the on-screen buttons; on the game it keeps aiming and firing as usual
-    if (e.pointerType === 'mouse' && !target?.closest('[data-mf-control], [data-mf-edit], .mf-touch-editor')) return;
+    if (e.pointerType === 'mouse' && !target?.closest('[data-mf-control], [data-mf-edit], .mf-bay-ui, .mf-bay-back')) return;
     if (e.pointerType !== 'mouse') {
       this.lastTouchAt = e.timeStamp;
       this.claimPlatform();
     }
     if (this.editing) {
-      if (!target?.closest('.mf-touch-editor')) this.editDown(e, target);
+      if (!target?.closest('.mf-bay-ui')) this.editDown(e, target);
       return;
     }
     const ctl = target?.closest<HTMLElement>('[data-mf-control]');
@@ -1343,17 +1346,9 @@ export class TouchController {
     this.layout = withoutMoves(this.layout);
     saveLayout(this.store, this.layout);
     this.onSettingsEdited({ preset, ...PRESET_SETTINGS[preset] });
-    this.dockEditor(preset === 'claw');
     this.refreshContext(this.tokensBefore);
     this.place();
     this.syncEditor();
-  }
-
-  /** The editor panel at the top (by default) or the bottom (⌄; Claw's default). */
-  private dockEditor(bottom: boolean): void {
-    this.editor.classList.toggle('mf-touch-editor-bottom', bottom);
-    const dock = this.editor.querySelector('[data-ed="dock"]');
-    if (dock) dock.innerHTML = `<svg class="ic ic--sm" aria-hidden="true"><use href="#icon-${bottom ? 'chev-up' : 'chev-down'}"/></svg>`;
   }
 
   /** Another preset was picked in Settings: the moves made on the old one's places go (the pins stay). */
@@ -1775,6 +1770,7 @@ export class TouchController {
       }
       el.classList.toggle('mf-selected', this.editing && this.selected === id);
     }
+    if (this.editing) this.bay.sync();
   }
 
   // ---------- editor ----------
@@ -1793,14 +1789,16 @@ export class TouchController {
     this.syncPlaying();
     this.selected = null;
     this.root.classList.toggle('mf-touch-editing', on);
-    this.editor.hidden = !on;
-    // Claw's index-finger controls live up top, under the panel's usual place: it opens at the bottom
-    if (on) this.dockEditor(this.settings.preset === 'claw');
-    if (!on) saveLayout(this.store, this.layout);
+    // tips and coach cards wait while the HUD is being set (editor.css)
+    document.documentElement.toggleAttribute('data-touch-editing', on);
+    if (!on) {
+      saveLayout(this.store, this.layout);
+      this.bay.hide();
+    }
     // while it's being placed: the context slot (shown by Take) and the pinned controls
     this.refreshContext(this.tokensBefore);
-    this.syncEditor();
     this.place();
+    if (on) this.bay.show();
   }
 
   private editDown(e: PointerEvent, target: Element | null): void {
@@ -1828,6 +1826,8 @@ export class TouchController {
     }
     const id = (el.dataset.mfControl ?? el.dataset.mfStick) as ControlId;
     this.selected = id;
+    // one undo step per drag (none if it only picked the control)
+    this.bay.willChange();
     // the finger's offset from the control's place (its centre; a pill's nominal centre)
     const box = logicalRect(this.safe);
     const at = this.at(id);
@@ -1835,7 +1835,7 @@ export class TouchController {
     // the control lifts and follows the finger raw
     settleNow(el);
     el.classList.add('mf-lifted');
-    this.editor.classList.add('mf-touch-editor-dragging');
+    this.bay.dragging(true);
     this.syncEditor();
     this.place();
   }
@@ -1878,9 +1878,10 @@ export class TouchController {
   /** The finger lifted: the control settles back down (--ease-settle) where it snapped. */
   private drop(id: ControlId): void {
     this.els.get(id)?.classList.remove('mf-lifted');
-    this.editor.classList.remove('mf-touch-editor-dragging');
+    this.bay.dragging(false);
     this.showGuides([]);
     saveLayout(this.store, this.layout);
+    this.bay.changed();
     this.syncEditor();
   }
 
@@ -1893,122 +1894,72 @@ export class TouchController {
     }
   }
 
-  private editSelected(change: (p: Placement) => Placement): void {
-    if (!this.selected) return;
-    const cur = this.at(this.selected);
-    this.layout = withPlacement(this.layout, this.selected, change(cur), this.settings.handed);
-    saveLayout(this.store, this.layout);
-    this.place();
-    this.syncEditor();
+  /** The bay redraws (its card follows the picked control, the tray its free stretch, red for overlaps). */
+  private syncEditor(): void {
+    this.bay.sync();
   }
 
-  private buildEditor(): HTMLDivElement {
-    const ed = div('mf-touch-editor plate', this.root);
-    ed.hidden = true;
-    // a small panel of 48 px buttons in the gap the kit's layout leaves left of centre (it must not hide
-    // the controls it edits; ⌄ docks it at the bottom); the rest opens on demand
-    const icon = (name: string) => `<svg class="ic ic--sm" aria-hidden="true"><use href="#icon-${name}"/></svg>`;
-    ed.innerHTML = `
-      <div class="mf-touch-editor-row">
-        <span class="mf-touch-editor-title">${icon('drag')}<b data-ed="title"></b></span>
-        <button type="button" class="btn btn--volt btn--sm" data-ed="done">${icon('check')}Done</button>
-      </div>
-      <div class="mf-touch-editor-presets" role="radiogroup" aria-label="Preset">
-        ${PRESET_IDS.map((id) => `<button type="button" role="radio" data-preset="${id}" title="${PRESET_HELP[id]}" aria-label="${PRESET_NAMES[id]}">${id === 'oneThumb' ? 'One-thumb' : PRESET_NAMES[id]}</button>`).join('')}
-        <button type="button" role="radio" data-preset="mine" disabled title="Your moves on top of a preset: drag or resize any control">My layout</button>
-      </div>
-      <div class="mf-touch-editor-row">
-        <span class="mf-touch-editor-sel" data-ed="sel">
-          <button type="button" class="btn btn--ink btn--sm btn--icon" data-ed="smaller" aria-label="Smaller">${icon('minus')}</button>
-          <button type="button" class="btn btn--ink btn--sm btn--icon" data-ed="bigger" aria-label="Bigger">${icon('plus')}</button>
-        </span>
-        <button type="button" class="btn btn--ghost btn--sm btn--icon" data-ed="options" aria-expanded="false" aria-label="Options">${icon('sliders')}</button>
-        <button type="button" class="btn btn--ghost btn--sm btn--icon" data-ed="dock" aria-label="Move this panel up or down">${icon('chev-down')}</button>
-        <button type="button" class="btn btn--paper btn--sm btn--icon" data-ed="reset" aria-label="Reset the layout">${icon('refresh')}</button>
-      </div>
-      <div class="mf-touch-editor-row mf-touch-editor-more" data-ed="more" hidden>
-        <label data-ed="sel-opacity">This control <input type="range" min="15" max="100" step="5" data-ed="opacity" /></label>
-        <label>All controls <input type="range" min="15" max="100" step="5" data-ed="all" /></label>
-        <label><input type="checkbox" data-ed="left" /> Left-handed</label>
-        <label>Fire <select data-ed="fire"><option value="auto">Auto</option><option value="pull">Pull</option><option value="button">Fire button</option><option value="release">Release</option></select></label>
-        <label>Aim assist <select data-ed="assist">${ASSIST_LEVELS.map((l) => `<option value="${l}">${ASSIST_NAMES[l]}</option>`).join('')}</select></label>
-        ${canVibrate() ? '<label><input type="checkbox" data-ed="vibrate" /> Vibrate</label>' : ''}
-        <label><input type="checkbox" data-ed="swipe" /> Flick to dash</label>
-      </div>
-      <div class="mf-touch-editor-row mf-touch-editor-pins" data-ed="pins" hidden>
-        <span class="label">On the HUD too</span>
-        ${PINNABLE.filter((id) => availableControls().some((c) => c.id === id))
-          .map((id) => `<label><input type="checkbox" data-pin="${id}" /> ${availableControls().find((c) => c.id === id)!.label}</label>`)
-          .join('')}
-      </div>`;
-    const q = <T extends HTMLElement>(name: string) => ed.querySelector<T>(`[data-ed="${name}"]`)!;
-    q('smaller').addEventListener('click', () => this.editSelected((p) => ({ ...p, size: p.size / 1.12 })));
-    q('bigger').addEventListener('click', () => this.editSelected((p) => ({ ...p, size: p.size * 1.12 })));
-    q<HTMLInputElement>('opacity').addEventListener('input', (e) => this.editSelected((p) => ({ ...p, opacity: Number((e.target as HTMLInputElement).value) / 100 })));
-    const toggle = (name: string, patch: (on: boolean) => Partial<TouchSettings>) =>
-      q<HTMLInputElement>(name).addEventListener('change', (e) => this.onSettingsEdited(patch((e.target as HTMLInputElement).checked)));
-    toggle('left', (on) => ({ handed: on ? 'left' : 'right' }));
-    q<HTMLSelectElement>('fire').addEventListener('change', (e) => this.onSettingsEdited({ fire: (e.target as HTMLSelectElement).value as FireMode, fireChosen: true }));
-    q<HTMLSelectElement>('assist').addEventListener('change', (e) => this.onSettingsEdited({ assist: (e.target as HTMLSelectElement).value as AssistLevel }));
-    if (canVibrate()) toggle('vibrate', (on) => ({ vibrate: on }));
-    toggle('swipe', (on) => ({ swipeDash: on }));
-    q<HTMLInputElement>('all').addEventListener('input', (e) => this.onSettingsEdited({ opacity: Number((e.target as HTMLInputElement).value) / 100 }));
-    q('reset').addEventListener('click', () => {
-      this.layout = { placements: {} };
-      saveLayout(this.store, this.layout);
-      this.refreshContext(this.tokensBefore);
-      this.place();
-      this.syncEditor();
-    });
-    q('done').addEventListener('click', () => this.setEditing(false));
-    ed.querySelectorAll<HTMLButtonElement>('[data-preset]').forEach((b) =>
-      b.addEventListener('click', () => {
-        const id = b.dataset.preset as PresetId | 'mine';
-        if (id !== 'mine') this.pickPreset(id);
-      }),
-    );
-    // pinning a control the HUD doesn't carry by default (next grenade, melee, reload, shield, zoom): its own place
-    ed.querySelectorAll<HTMLInputElement>('[data-pin]').forEach((box) =>
-      box.addEventListener('change', () => {
-        this.layout = withPinned(this.layout, box.dataset.pin as ControlId, box.checked);
+  /** What the layout bay (editor/bay.ts) reads and changes here. */
+  private bayHost(): BayHost {
+    const settingsOf = (s: TouchSettings) => ({ fire: s.fire, fireChosen: s.fireChosen, stickJet: s.stickJet, tapFire: s.tapFire, leftFire: s.leftFire });
+    return {
+      root: this.root,
+      safe: this.safe,
+      snapshot: () => ({ layout: this.layout, preset: this.settings.preset, handed: this.settings.handed, settings: settingsOf(this.settings) }),
+      restore: (s) => {
+        this.layout = s.layout;
+        saveLayout(this.store, this.layout);
+        this.onSettingsEdited({ preset: s.preset, handed: s.handed, ...s.settings });
+        this.refreshContext(this.tokensBefore);
+        this.place();
+      },
+      pickPreset: (p) => this.pickPreset(p),
+      setHanded: (handed) => this.onSettingsEdited({ handed }),
+      selected: () => this.selected,
+      select: (id) => {
+        this.selected = id;
+        this.place();
+      },
+      placement: (id) => this.at(id),
+      baseSize: (id) => placementFor({ placements: {}, pinned: this.layout.pinned ?? [] }, id, this.settings.handed, this.box, this.settings.preset).size,
+      setPlacement: (id, p) => {
+        this.layout = withPlacement(this.layout, id, p, this.settings.handed);
+        saveLayout(this.store, this.layout);
+        this.place();
+      },
+      reset: () => {
+        this.layout = withoutMoves(this.layout);
+        saveLayout(this.store, this.layout);
+        this.selected = null;
+        this.refreshContext(this.tokensBefore);
+        this.place();
+      },
+      setPinned: (id, on) => {
+        this.layout = withPinned(this.layout, id, on);
         saveLayout(this.store, this.layout);
         this.refreshContext(this.tokensBefore);
         this.place();
-      }),
-    );
-    q('options').addEventListener('click', () => {
-      const more = q('more');
-      more.hidden = !more.hidden;
-      q('pins').hidden = more.hidden;
-      q('options').setAttribute('aria-expanded', String(!more.hidden));
-    });
-    q('dock').addEventListener('click', () => this.dockEditor(!ed.classList.contains('mf-touch-editor-bottom')));
-    return ed;
-  }
-
-  private syncEditor(): void {
-    const q = <T extends HTMLElement>(name: string) => this.editor.querySelector<T>(`[data-ed="${name}"]`)!;
-    const def = this.selected ? availableControls().find((c) => c.id === this.selected) : null;
-    q('title').textContent = def ? def.label : 'Drag · pinch';
-    q('sel').hidden = !def;
-    q('sel-opacity').hidden = !def;
-    if (this.selected) q<HTMLInputElement>('opacity').value = String(Math.round(this.at(this.selected).opacity * 100));
-    q<HTMLInputElement>('left').checked = this.settings.handed === 'left';
-    q<HTMLSelectElement>('fire').value = this.settings.fire;
-    q<HTMLSelectElement>('assist').value = this.settings.assist;
-    const vibrate = this.editor.querySelector<HTMLInputElement>('[data-ed="vibrate"]');
-    if (vibrate) vibrate.checked = this.settings.vibrate;
-    q<HTMLInputElement>('swipe').checked = this.settings.swipeDash;
-    q<HTMLInputElement>('all').value = String(Math.round(this.settings.opacity * 100));
-    // the preset row: "My layout" once a control was moved or resized (the editor forks the preset)
-    const mine = isCustomLayout(this.layout);
-    this.editor.querySelectorAll<HTMLButtonElement>('[data-preset]').forEach((b) => {
-      const on = b.dataset.preset === (mine ? 'mine' : this.settings.preset);
-      b.setAttribute('aria-checked', String(on));
-      if (b.dataset.preset === 'mine') b.disabled = !mine;
-    });
-    const pinned = new Set(this.layout.pinned ?? []);
-    this.editor.querySelectorAll<HTMLInputElement>('[data-pin]').forEach((box) => (box.checked = pinned.has(box.dataset.pin as ControlId)));
+      },
+      tray: () => {
+        const off = offHud(this.settings.preset);
+        const pinned = this.layout.pinned ?? [];
+        return PINNABLE.filter((id) => off.has(id) && !pinned.includes(id) && this.els.has(id));
+      },
+      pinned: () => (this.layout.pinned ?? []).filter((id) => offHud(this.settings.preset).has(id)),
+      discs: () => {
+        const out: { id: ControlId; x: number; y: number; r: number }[] = [];
+        for (const [id, el] of this.els) {
+          if (el.classList.contains('mf-off') || el.hidden) continue;
+          const c = this.centres.get(id);
+          const z = this.sizes.get(id);
+          if (c && z) out.push({ id, x: c.x, y: c.y, r: z.px / 2 });
+        }
+        return out;
+      },
+      leave: () => this.setEditing(false),
+      inGame: () => this.inGame,
+      matchLive: () => this.matchLive,
+    };
   }
 
   // ---------- page ----------
@@ -2055,6 +2006,7 @@ export class TouchController {
 
   destroy(): void {
     this.setActive(false);
+    this.bay.destroy();
     for (const c of this.cleanups) c();
     this.root.remove();
   }

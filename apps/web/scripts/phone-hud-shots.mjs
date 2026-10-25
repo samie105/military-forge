@@ -281,7 +281,7 @@ try {
     if (!(after > before * 1.3)) problems.push(`pinch didn't resize the melee button (${before.toFixed(0)} → ${after.toFixed(0)} px)`);
     else console.log(`pinch: melee ${before.toFixed(0)} → ${after.toFixed(0)} px`);
     await page.evaluate(() => window.__touch.resetTouchLayout());
-    await page.$eval('[data-ed="done"]', (b) => b.click());
+    await page.$eval('[data-bay="save"]', (b) => b.click());
     await sleep(400);
   }
   await iconsResolve('end');

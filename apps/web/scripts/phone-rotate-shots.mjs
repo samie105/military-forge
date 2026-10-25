@@ -278,7 +278,7 @@ try {
   const s1 = await size();
   check(s1 > s0 * 1.3, `the editor: a pinch grows the melee button (${s0} → ${s1} px)`);
   await page.evaluate(() => window.__touch.resetTouchLayout());
-  await page.$eval('[data-ed="done"]', (b) => b.click());
+  await page.$eval('[data-bay="save"]', (b) => b.click());
   await sleep(500);
 
   // the pause menu over the turned game, and at 150 % text

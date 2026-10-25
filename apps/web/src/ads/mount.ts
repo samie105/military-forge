@@ -160,7 +160,7 @@ export function mountAdClicks(d: AdClickDeps): AdClicks | null {
   const eligible = (t: EventTarget | null) => {
     const el = t as Element | null;
     if (!document.documentElement.hasAttribute('data-touch-playing')) return false;
-    if (el?.closest?.('[data-mf-control], [data-mf-edit], .mf-touch-editor, button, a[href], [role="button"], input, #shell')) return false;
+    if (el?.closest?.('[data-mf-control], [data-mf-edit], .mf-bay-ui, .mf-bay-back, button, a[href], [role="button"], input, #shell')) return false;
     return el === document.documentElement || el === document.body || el instanceof HTMLCanvasElement || !!el?.closest?.('.mf-touch');
   };
   window.addEventListener(

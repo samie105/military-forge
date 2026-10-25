@@ -19,7 +19,6 @@ import type { ShellStore } from '../../store';
 import { leaveCost } from '../Pause';
 import { PhoneScreen, rise } from './layout';
 import { inviteFriends } from '../../../social/SocialLayer';
-import { VoicePauseCard } from '../../../voice/VoiceHud';
 import { Roll, ShareChip, Sheet, shareRoom, useShareChip } from './parts';
 import { InstallButton } from '../../../pwa/InstallButton';
 import { SendReport } from '../../../diag/SendReport';
@@ -127,8 +126,6 @@ export function PhonePause({ store }: { store: ShellStore }) {
           </span>
         </div>
       </aside>
-      {/* voice chat (voice/): mute a player, Mute all opponents (under the sitrep) */}
-      {room && <VoicePauseCard shell={store} />}
 
       <Sheet open={confirm} onClose={() => setConfirm(false)} label={what === 'training' ? 'Quit training?' : `Leave this ${what}?`}>
         <div className="pm-sheet__head">

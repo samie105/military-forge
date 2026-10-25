@@ -31,6 +31,7 @@ import { Backdrop, RollNum, remember } from './frame';
 import { BotSettings, botsLine, type BotLevel } from '../roomBots';
 import { TipsCard } from './Tips';
 import { PlayerAvatar } from '../../presentation/PlayerAvatar';
+import { LobbyRadio } from '../../voice/Radio';
 import { TeamModePicker, TeamRoster, modeName } from '../../teams/TeamRoster';
 
 /** Players a room takes (the game server's default maxHumans: MATCH_STATE doesn't carry it). */
@@ -270,6 +271,7 @@ function LobbyStrip({ lobby, onOpen }: { lobby: LobbyView; onOpen: () => void })
             Ready
           </button>
         )}
+        <LobbyRadio players={lobby.players} />
         <button className="btn btn--ghost m-p8" type="button" onClick={blurAfter(onOpen)}>
           <Icon name="users-plus" />
           Lobby
@@ -406,6 +408,8 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
             </button>
           )}
           <span className="menu-top__spacer"></span>
+          {/* voice (voice/Radio.tsx): the room's one radio */}
+          <LobbyRadio players={lobby.players} />
           {me && !me.isBot && me.pingMs >= 0 && (
             <span className="net-pill" title={lobby.local ? 'Your round trip to the host, over the Wi-Fi' : 'Your round trip to the room'}>
               <span className={me.pingMs <= 100 ? 'dot' : me.pingMs <= 200 ? 'dot dot--warn' : 'dot dot--bad'}></span>

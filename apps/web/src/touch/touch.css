@@ -133,47 +133,7 @@
 /* the dev client's ✎ (app mode edits from Settings) */
 .mf-touch-edit { left: 50%; top: 28px; }
 
-/* ---- the editor: every control shows, dashed; the picked one in volt; the one under the finger lifts ---- */
-.mf-touch-editing .mf-ctl { pointer-events: auto; transition: scale var(--m-base) var(--ease-settle), filter var(--m-base) var(--ease-settle); }
-.mf-touch-editing .mf-ctl::after { content: ''; position: absolute; inset: -6px; border: 2px dashed var(--c-paper); border-radius: 50%; pointer-events: none; }
-.mf-touch-editing .mf-pill::after { border-radius: var(--r-md); }
-.mf-touch-editing .mf-stick::after { inset: calc(16px * var(--k, 1) - 6px); }
-.mf-touch-editing .mf-ctl.mf-selected::after { border-style: solid; border-color: var(--c-volt); box-shadow: var(--sh-ring) var(--c-volt-soft); }
-.mf-touch-editing .mf-ctl.mf-lifted { scale: 1.06; filter: drop-shadow(6px 6px 0 var(--c-ink-950)); transition: scale var(--m-fast) var(--ease-arrive); }
-.mf-touch-editing .mf-touch-edit { display: none; }
-/* snapping guides: a line across the safe box where the dragged control lines up */
-.mf-guide { position: absolute; background: var(--c-volt); opacity: 0; pointer-events: none; transition: opacity var(--m-fast) var(--ease-arrive); }
-.mf-guide--x { top: 0; bottom: 0; width: 2px; left: var(--at, 50%); translate: -1px 0; }
-.mf-guide--y { left: 0; right: 0; height: 2px; top: var(--at, 50%); translate: 0 -1px; }
-.mf-guide.is-on { opacity: 0.7; }
-.mf-touch-editor {
-  position: absolute;
-  left: 50%;
-  top: calc(max(10px, var(--sa-t)) + 56px);
-  translate: calc(-50% - 44px) 0;
-  z-index: 2;
-  width: 296px;
-  display: grid;
-  gap: 6px;
-  padding: 6px;
-  pointer-events: auto;
-  font-size: var(--fs-14);
-  font-weight: var(--fw-bold);
-  transition: opacity var(--m-fast) var(--ease-arrive);
-}
-.mf-touch-editor[hidden], .mf-touch-editor-row[hidden], .mf-touch-editor [hidden] { display: none; }
-.mf-touch-editor-bottom { top: auto; bottom: max(8px, var(--sa-b)); }
-.mf-touch-editor-dragging { opacity: 0.15; pointer-events: none; }
-.mf-touch-editor-row { display: flex; flex-wrap: nowrap; gap: 6px; align-items: center; }
-.mf-touch-editor-more { flex-wrap: wrap; gap: 0 12px; padding: 0 4px 2px; }
-.mf-touch-editor-sel { display: inline-flex; gap: 6px; }
-.mf-touch-editor-title { flex: 1; min-width: 0; display: inline-flex; align-items: center; gap: 6px; padding-left: 6px; color: var(--c-muted); }
-.mf-touch-editor-title b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--c-text); }
-.mf-touch-editor .btn--sm { min-height: var(--touch-min); box-shadow: none; }
-.mf-touch-editor .btn--sm:not(.btn--icon) { padding: 0 14px; }
-.mf-touch-editor label { display: inline-flex; gap: 6px; align-items: center; min-height: var(--touch-min); }
-.mf-touch-editor input[type='checkbox'] { width: 20px; height: 20px; accent-color: var(--c-volt); }
-.mf-touch-editor input[type='range'] { width: 110px; accent-color: var(--c-volt); }
+/* ---- the HUD editor: editor/editor.css (the layout bay) ---- */
 
 /* while playing with touch: the page never scrolls, zooms or selects, and the dev panel steps aside */
 html[data-touch-playing], html[data-touch-playing] body {
@@ -315,17 +275,6 @@ html.reduce-motion .mf-ctl.mf-teach::before { animation: none; opacity: 0.9; }
 /* next grenade (pinned only, controls spec §4.2): the belt's grenade and an arrow, distinct from reload's circular arrow */
 .dial-btn--next { grid-auto-flow: column; gap: 0; }
 .dial-btn--next .mf-next-arrow { width: 12px; height: 12px; margin-left: -3px; }
-/* the editor's "On the HUD too" row (pinning the context slot's controls) */
-.mf-touch-editor-pins { flex-wrap: wrap; gap: 4px 12px; }
-.mf-touch-editor-pins .label { width: 100%; font-size: var(--fs-14); }
-
-/* ---------- presets (controls spec §4.2, item 7) ---------- */
-/* the editor's first row: Classic, Claw, One-thumb, My layout, as one segmented row (the panel stays
-   short: it sits over controls whichever way it docks) */
-.mf-touch-editor-presets { display: flex; padding: 3px; gap: 2px; background: var(--c-ink-900); border-radius: 10px; }
-.mf-touch-editor-presets button { flex: auto; min-height: var(--touch-min); padding: 0 4px; border: 0; border-radius: 8px; background: none; color: var(--c-muted); font: inherit; font-size: var(--fs-12, 12px); white-space: nowrap; }
-.mf-touch-editor-presets button[aria-checked='true'] { background: var(--c-volt); color: var(--c-volt-ink); }
-.mf-touch-editor-presets button:disabled { opacity: 0.45; }
 /* Claw puts menu and scores at the top centre, DASH and GRENADE below them: the ✎ (only outside the app) goes under all four */
 .mf-touch[data-preset='claw'] .mf-touch-edit { top: 172px; }
 /* One-thumb assist: the aim is automatic, so its dial shows only under a finger that takes it over */

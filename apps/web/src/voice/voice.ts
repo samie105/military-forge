@@ -312,7 +312,17 @@ export class VoiceChat {
     this.updateTalking();
   }
 
-  /** The phone's mic button: down / up; a slide up locks it on until the next tap. */
+  /**
+   * The radio's finger landed (press.ts): ask for the mic now, inside the tap, so a hold that turns
+   * into talking a moment later already has it (browsers only ask on a user gesture).
+   */
+  warmMic(): void {
+    if (!this.link || !this.settings.enabled) return;
+    const mic = this.state.mic;
+    if (mic === 'off') void this.mic.start(this.settings.micVolume).then(() => this.sendSettings());
+  }
+
+  /** The radio's push to talk: down / up; a slide down onto the lock keeps it on until the next tap. */
   touchDown(): void {
     if (this.state.locked) {
       this.set({ locked: false });

@@ -29,8 +29,7 @@ import { PhoneTips } from './PhoneTips';
 import { PlayerAvatar } from '../../../presentation/PlayerAvatar';
 import { TeamRoster } from '../../../teams/TeamRoster';
 import { BOT_LEVELS, BOT_LEVEL_NAMES, botFillChoices, botsLine, type BotLevel } from '../../roomBots';
-import { PhoneMic, useVoice } from '../../../voice/VoiceHud';
-import { voiceChat } from '../../../voice';
+import { LobbyRadio } from '../../../voice/Radio';
 
 function Row({ p, i }: { p: LobbyPlayer; i: number }) {
   const ready = p.ready || p.isBot;
@@ -129,6 +128,7 @@ function PhoneLobbyStrip({ lobby, onOpen }: { lobby: LobbyView; onOpen: () => vo
         <button type="button" className={`btn btn--sm btn--icon m-p8 ${lobby.ready ? 'btn--ghost' : 'btn--volt'}`} aria-pressed={lobby.ready} aria-label={lobby.ready ? 'Ready (tap to wait)' : 'Ready up'} onClick={blurAfter(() => ctl.host.online?.setReady(!lobby.ready))}>
           <Icon name={lobby.ready ? 'check' : 'clock'} />
         </button>
+        <LobbyRadio players={lobby.players} phone />
         <button type="button" className="btn btn--ghost btn--sm btn--icon m-p8" aria-label="Open the lobby" onClick={blurAfter(onOpen)}>
           <Icon name="users-plus" />
         </button>
@@ -262,7 +262,6 @@ export function PhoneLobby({ lobby, tips = null }: { lobby: LobbyView; tips?: Bi
   const [folded, setFolded] = useState(false);
   const [rules, setRules] = useState(false);
   const [chip, showChip] = useShareChip();
-  const voiceOn = useVoice((v) => v.active);
   const link = roomLink(lobby.code);
   const qr = useMemo(() => qrSvgPath(encodeQr(link), 1), [link]);
   if (folded)
@@ -301,6 +300,8 @@ export function PhoneLobby({ lobby, tips = null }: { lobby: LobbyView; tips?: Bi
               <span className="num">{Math.round(me.pingMs)} ms</span>
             </span>
           )}
+          {/* voice (voice/Radio.tsx): the room's one radio, here in the lobby */}
+          <LobbyRadio players={lobby.players} phone />
           {!spectating && (
             <button type="button" className="tag tag--ok pm-warm m-p8" title="Fold the lobby away and move around while you wait" onClick={blurAfter(() => setFolded(true))}>
               <Icon name="play" />
@@ -357,8 +358,6 @@ export function PhoneLobby({ lobby, tips = null }: { lobby: LobbyView; tips?: Bi
               <b className="display" id="pm-roster-t">
                 Roster <Roll value={lobby.players.length} />/{ROOM_SLOTS}
               </b>
-              {/* push to talk, with someone to talk to (the mobile audit: here, not over the room link) */}
-              {voiceOn && lobby.players.some((p) => !p.isBot && !p.you) && <PhoneMic chat={voiceChat} inline />}
               <span className={`status ${readyCount === people.length ? 'status--ok' : 'status--busy'}`}>
                 <Icon name={readyCount === people.length ? 'ok' : 'clock'} size="sm" />
                 <Roll value={readyCount} /> ready

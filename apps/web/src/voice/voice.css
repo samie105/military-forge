@@ -1,111 +1,133 @@
 /*
- * Voice chat on screen (board "SOCIAL · friends, invites, voice", S4/S5/S6/P3/P4): the push-to-talk
- * plate, the phone's mic button, who's talking, the speaking tags over soldiers, the scoreboard's
- * talking rows, the settings rows and the pause menu's comms card. Field Print tokens only; volt =
- * talking, brass = last words, red = blocked or muted.
+ * Voice chat on screen (board "VOICE + HUD EDITOR · landscape-first"): the radio (the one voice control),
+ * the chips of who's talking beside it, the comms sheet, the speaking tags over soldiers, the
+ * scoreboard's talking rows and the settings rows. Field Print tokens only; volt = talking, brass =
+ * last words or a blocked mic, red = muted, green = party, team-a = team radio.
  */
 
-/* ---- the layer: the HUD's own fit, so the plate lines up with the vitals ---- */
+/* ---- the layer: the HUD's own fit, so the radio lines up with the vitals (desktop) ---- */
 .mf-voice { z-index: var(--z-hud); }
 .mf-voice:not(.mf-fit--phone) > .screen { width: var(--hud-w, 1920px); height: var(--hud-h, 1080px); zoom: var(--hud-fit, 1); }
 .vc-screen { position: relative; pointer-events: none; }
+.vc-screen.is-covered .vc-radio { visibility: hidden; }
 
-/* who's talking: left edge, middle (desktop); on phones right of the scoreboard button, under the
-   ping and the "Tuned by admin" tag and clear of the vitals (two at most there) */
-.vc-strip { position: absolute; left: calc(var(--safe-l) + var(--hud-m)); top: calc(var(--safe-t) + 430px); display: flex; flex-direction: column; gap: var(--sp-2); pointer-events: none; }
-.vc-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-3);
-  width: max-content;
-  padding: 6px 16px 6px 6px;
-  background: var(--frost-fill-hud, var(--c-plate));
-  border: 1.5px solid color-mix(in srgb, var(--c-paper) 20%, transparent);
-  border-radius: 0 14px 0 14px;
-  color: var(--c-text);
-  font-size: var(--fs-16);
-  text-shadow: var(--ts-hud);
-}
-.vc-chip--talk { border-color: var(--c-volt); box-shadow: 0 0 calc(4px + var(--lvl, 0) * 18px) var(--c-volt-glow); }
-.vc-chip--talk.is-last { border-color: var(--c-brass); box-shadow: none; }
-.vc-chip--warn { color: var(--c-danger-text); border-color: color-mix(in srgb, var(--c-hp) 60%, transparent); padding: 8px 14px; }
-.vc-chip__who { display: flex; flex-direction: column; line-height: 1.1; }
-.vc-chip__who b { font-weight: var(--fw-bold); }
-.vc-chip__who span { font-size: var(--fs-14); font-weight: var(--fw-black); letter-spacing: .12em; text-transform: uppercase; color: var(--c-volt); }
-.vc-chip--talk.is-last .vc-chip__who span { color: var(--c-brass); }
-.vc-chip--talk.is-party .vc-chip__who span { color: var(--c-ok); }
-.vc-av { width: 36px; height: 36px; font-size: var(--fs-20); box-shadow: 0 0 0 calc(2px + var(--lvl, 0) * 4px) var(--c-volt); }
-.is-last .vc-av { box-shadow: 0 0 0 2px var(--c-brass); opacity: .8; }
-/* three bars that follow the voice's level */
-.vc-bars { display: inline-flex; align-items: flex-end; gap: 3px; height: 20px; }
-.vc-bars i { width: 4px; border-radius: 2px; background: var(--c-volt); height: calc(4px + var(--lvl, 0) * 16px); transition: height var(--m-fast, .16s) linear; }
-.vc-bars i:nth-child(2) { height: calc(6px + var(--lvl, 0) * 14px); }
-.vc-bars i:nth-child(3) { height: calc(3px + var(--lvl, 0) * 10px); }
-.is-last .vc-bars i { background: var(--c-brass); }
-
-/* ---- desktop: push to talk, bottom left over the vitals ---- */
-.vc-ptt {
-  position: absolute;
-  left: calc(var(--safe-l) + var(--hud-m));
-  bottom: calc(var(--safe-b) + 214px);
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  padding: 8px 18px 8px 8px;
-  background: var(--frost-fill-hud, var(--c-plate));
-  border: 1.5px solid color-mix(in srgb, var(--c-paper) 20%, transparent);
-  border-radius: 0 16px 0 16px;
-  color: var(--c-text);
-  text-shadow: var(--ts-hud);
-  pointer-events: none;
-  opacity: .85;
-}
-.vc-ptt__mic { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--c-ink-700); color: var(--c-muted); }
-.vc-ptt__text { display: flex; flex-direction: column; line-height: 1.15; }
-.vc-ptt__text b { font-size: var(--fs-16); font-weight: var(--fw-black); letter-spacing: .08em; text-transform: uppercase; }
-.vc-ptt__text span { font-size: var(--fs-14); color: var(--c-muted); }
-.vc-ptt.is-on { opacity: 1; background: color-mix(in srgb, var(--c-volt-ink) 90%, transparent); border-color: var(--c-volt); box-shadow: 0 0 calc(8px + var(--lvl, 0) * 20px) var(--c-volt-glow); }
-.vc-ptt.is-on .vc-ptt__mic { background: var(--c-volt); color: var(--c-volt-ink); }
-.vc-ptt.is-on .vc-ptt__text b { color: var(--c-volt); }
-
-/* ---- phone: the mic button, above-right of the move dial (clear of the action arc) ---- */
-.vc-screen--phone .vc-strip { left: calc(var(--safe-l) + 56px); top: calc(var(--safe-t) + 92px); gap: 4px; }
-.vc-screen--phone .vc-chip { padding: 3px 10px 3px 3px; gap: 6px; font-size: 12px; }
-.vc-screen--phone .vc-chip__who span { font-size: 9px; }
-.vc-screen--phone .vc-av { width: 24px; height: 24px; font-size: 12px; }
-.vc-screen--phone .vc-bars { height: 14px; }
-/* the mic: a "Talk" pill on the top bar, just left of the menu button (the touch layer's pause, TR 4 mm),
-   clear of both thumbs (the owner, 23 Oct; mobile audit P0-4). Only with another human in the room;
-   never over a dialog (a tap meant for a card can't land on it) */
-.vc-mic { position: absolute; right: calc(var(--safe-r) + 60px); top: calc(var(--safe-t) + 2px); display: flex; flex-direction: column; align-items: flex-end; gap: 4px; pointer-events: none; }
-.vc-mic__btn {
+/* ---- the radio: one round control; who's talking pops out beside it ---- */
+.vc-radio { --rd: 56px; display: inline-flex; align-items: flex-start; gap: var(--sp-3); pointer-events: none; }
+.vc-screen .vc-radio { position: absolute; }
+/* desktop: bottom left over the vitals (the push-to-talk plate's old place), voices to its right */
+.vc-screen:not(.vc-screen--phone) .vc-radio { left: calc(var(--safe-l) + var(--hud-m)); bottom: calc(var(--safe-b) + 214px); flex-direction: row-reverse; align-items: center; }
+/* phones: on the top bar, left of the menu button (TR 4 mm), voices to its left */
+/* (in screen px, whatever the phone frame's zoom: the menu button it sits beside isn't zoomed) */
+.vc-screen--phone .vc-radio { --rd: max(46px, calc(44px / var(--phone-fit, 1))); right: calc(var(--safe-r) + 62px / var(--phone-fit, 1)); top: calc(var(--safe-t) + 2px); gap: 6px; }
+/* on air it swells leftward, away from the menu button */
+.vc-screen--phone .vc-radio__btn { transform-origin: 100% 50%; }
+.vc-radio--inline { --rd: var(--touch-min, 48px); position: relative; align-items: center; gap: 6px; }
+.vc-radio__stack { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.vc-radio__btn {
   position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 44px;
-  padding: 0 14px 0 10px;
-  border-radius: 22px;
-  background: var(--c-touch, var(--c-plate));
-  border: 2px solid color-mix(in srgb, var(--c-paper) 35%, transparent);
+  display: grid;
+  place-items: center;
+  width: var(--rd);
+  height: var(--rd);
+  padding: 0;
+  border-radius: 50%;
+  background: var(--frost-fill-hud, var(--c-plate));
+  border: 2px solid color-mix(in srgb, var(--c-paper) 40%, transparent);
   color: var(--c-text);
   pointer-events: auto;
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;
-  white-space: nowrap;
+  -webkit-touch-callout: none;
+  cursor: pointer;
+  transition: scale 90ms var(--ease-arrive), background var(--m-fast) var(--ease-arrive), border-color var(--m-fast) var(--ease-arrive);
+  animation: vc-radio-in 180ms var(--ease-arrive) both;
 }
-.vc-mic__btn .ic { width: 22px; height: 22px; flex: none; }
-.vc-mic__word { font-size: 13px; line-height: 1; font-weight: var(--fw-black); letter-spacing: .06em; text-transform: uppercase; }
-.vc-mic.is-talking .vc-mic__btn, .vc-mic.is-locked .vc-mic__btn { background: var(--c-volt); color: var(--c-volt-ink); border-color: var(--c-ink-950); box-shadow: 0 0 18px var(--c-volt-glow); }
-/* blocked or missing: a slash through the mic, the warn colour; a tap says how to fix it */
-.vc-mic.is-blocked .vc-mic__btn { color: var(--c-warn, #ffb347); border-color: color-mix(in srgb, var(--c-warn, #ffb347) 60%, transparent); }
-.vc-mic.is-blocked .vc-mic__btn .ic { position: relative; }
-.vc-mic.is-blocked .vc-mic__btn::before { content: ''; position: absolute; left: 9px; width: 26px; height: 2.5px; border-radius: 2px; background: currentColor; rotate: -45deg; }
-/* slide down to lock: the lock waits below the pill */
-.vc-mic__lock { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px; margin-right: 12px; border-radius: 22px; background: color-mix(in srgb, var(--c-ink-950) 80%, transparent); border: 1.5px solid var(--c-volt-line); color: var(--c-volt); }
-.vc-mic.is-sliding .vc-mic__lock { background: var(--c-volt); color: var(--c-volt-ink); }
-.vc-mic__help { width: 240px; padding: 8px 10px; border-radius: 0 10px 0 10px; background: color-mix(in srgb, var(--c-ink-950) 92%, transparent); border: 1.5px solid var(--c-warn, #ffb347); color: var(--c-text); font-size: 12px; line-height: 1.3; }
+@supports (backdrop-filter: blur(1px)) {
+  html:not(.reduce-transparency):not(.gfx-low) .vc-radio__btn { backdrop-filter: blur(10px); }
+}
+.vc-radio__btn .ic { width: calc(var(--rd) * 0.46); height: calc(var(--rd) * 0.46); }
+.vc-radio__btn:focus-visible { outline: 3px solid var(--c-volt); outline-offset: 3px; }
+@keyframes vc-radio-in { from { scale: 0.6; opacity: 0; } }
+/* how many others are on voice */
+.vc-radio__n { position: absolute; right: -4px; top: -4px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--c-volt); color: var(--c-volt-ink); font: var(--fw-black) 11px/20px var(--f-ui); text-align: center; }
+/* on air: volt, a touch bigger, the ring breathing with your voice */
+.vc-radio.is-talking .vc-radio__btn, .vc-radio.is-locked .vc-radio__btn {
+  scale: 1.15;
+  background: var(--c-volt);
+  color: var(--c-volt-ink);
+  border-color: var(--c-ink-950);
+  box-shadow: 0 0 0 calc(3px + var(--lvl, 0) * 7px) var(--c-volt-glow), 0 0 18px var(--c-volt-glow);
+}
+.vc-radio.is-holding:not(.is-talking):not(.is-locked) .vc-radio__btn { scale: 1.06; border-color: var(--c-volt); }
+.vc-radio.is-open .vc-radio__btn { border-color: var(--c-volt-line, var(--c-volt)); }
+.vc-radio.is-blocked .vc-radio__btn { color: var(--c-brass); border-color: color-mix(in srgb, var(--c-brass) 70%, transparent); }
+.vc-radio__badge { position: absolute; right: -6px; bottom: -6px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--c-ink-950); border: 2px solid var(--c-volt); color: var(--c-volt); }
+.vc-radio__badge .ic { width: 12px; height: 12px; }
+/* slide down onto the lock: it waits under the radio while you hold */
+.vc-radio__lock { position: absolute; top: calc(var(--rd) + 12px); display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px; border-radius: 20px; background: color-mix(in srgb, var(--c-ink-950) 88%, transparent); border: 1.5px solid var(--c-volt-line, var(--c-volt)); color: var(--c-volt); translate: 0 calc(var(--slide, 0) * 8px); animation: vc-drop 140ms var(--ease-arrive) both; }
+.vc-radio.is-sliding .vc-radio__lock { background: color-mix(in srgb, var(--c-volt) calc(var(--slide, 0) * 100%), var(--c-ink-950)); color: var(--c-volt-ink); }
+.vc-screen:not(.vc-screen--phone) .vc-radio:not(.is-holding) .vc-radio__lock { display: none; }
+@keyframes vc-drop { from { opacity: 0; translate: 0 -12px; } }
+.vc-radio__key { min-width: 28px; padding: 2px 6px; border-radius: 6px; background: var(--c-ink-850, var(--c-plate)); border: 1.5px solid var(--c-line-strong); color: var(--c-text); font: var(--fw-black) 14px/1.2 var(--f-ui); text-align: center; text-shadow: none; }
+.vc-radio__cap { padding: 1px 6px; border-radius: 4px; background: color-mix(in srgb, var(--c-ink-950) 80%, transparent); color: var(--c-text); font: var(--fw-black) 10px/1.3 var(--f-ui); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+.vc-radio--inline .vc-radio__cap { display: none; }
+/* ON AIR / LIVE: under the radio on a phone (beside it in the lobbies, on desktop) */
+.vc-radio__air { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 14px; background: color-mix(in srgb, var(--c-ink-950) 85%, transparent); border: 1.5px solid var(--c-volt); color: var(--c-volt); font: var(--fw-black) 12px/1 var(--f-ui); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; align-self: center; }
+.vc-radio__air i { width: 8px; height: 8px; border-radius: 50%; background: var(--c-hp); animation: vc-blink 1s steps(2, start) infinite; }
+@keyframes vc-blink { to { visibility: hidden; } }
+.vc-screen--phone .vc-radio__air { position: absolute; right: calc(var(--rd) + 8px); top: calc(var(--rd) / 2 - 14px); }
+.vc-screen--phone .vc-radio.is-talking .vc-chips, .vc-screen--phone .vc-radio.is-locked .vc-chips { display: none; }
+
+/* who's talking: a chip each, sliding out of the radio; a long press mutes */
+.vc-chips { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.vc-screen:not(.vc-screen--phone) .vc-chips { align-items: flex-start; }
+.vc-radio--inline .vc-chips { flex-direction: row; }
+.vc-chips__more { padding: 2px 8px; border-radius: 10px; background: var(--c-volt); color: var(--c-volt-ink); font: var(--fw-black) 12px/1.4 var(--f-ui); }
+.vc-chip {
+  --ring: var(--c-volt);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 10px 0 3px;
+  border-radius: 18px;
+  background: var(--frost-fill-hud, var(--c-plate));
+  border: 2px solid var(--ring);
+  color: var(--c-text);
+  font: var(--fw-bold) 14px/1 var(--f-ui);
+  pointer-events: auto;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  white-space: nowrap;
+  box-shadow: 0 0 calc(2px + var(--lvl, 0) * 14px) color-mix(in srgb, var(--ring) 45%, transparent);
+  animation: vc-chip-in 160ms var(--ease-arrive) both;
+}
+.vc-chip b { max-width: 9ch; overflow: hidden; text-overflow: ellipsis; font-weight: var(--fw-black); letter-spacing: .04em; text-transform: uppercase; }
+.vc-chip.is-party { --ring: var(--c-ok); }
+.vc-chip.is-team { --ring: var(--c-team-a); }
+.vc-chip.is-last { --ring: var(--c-brass); }
+@keyframes vc-chip-in { from { opacity: 0; translate: 16px 0; } }
+.vc-screen:not(.vc-screen--phone) .vc-chip { animation-name: vc-chip-in-r; }
+@keyframes vc-chip-in-r { from { opacity: 0; translate: -16px 0; } }
+/* holding to mute: a red ring fills round the avatar in 500 ms */
+.vc-chip.is-muting { --ring: var(--c-hp); }
+.vc-chip.is-muting .vc-av { box-shadow: none; background: conic-gradient(var(--c-hp) 0 var(--fill, 0%), var(--c-paper) 0); animation: vc-mute-fill 500ms linear both; }
+@property --fill { syntax: '<percentage>'; inherits: false; initial-value: 0%; }
+@keyframes vc-mute-fill { to { --fill: 100%; } }
+.vc-av { width: 28px; height: 28px; font-size: 14px; box-shadow: 0 0 0 calc(2px + var(--lvl, 0) * 3px) var(--ring, var(--c-volt)); }
+.vc-screen--phone .vc-chip { height: 32px; font-size: 12px; }
+.vc-screen--phone .vc-av { width: 24px; height: 24px; font-size: 12px; }
+/* three bars that follow the voice's level */
+.vc-bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 16px; }
+.vc-bars i { width: 3px; border-radius: 2px; background: var(--ring, var(--c-volt)); height: calc(3px + var(--lvl, 0) * 13px); transition: height var(--m-fast, .16s) linear; }
+.vc-bars i:nth-child(2) { height: calc(5px + var(--lvl, 0) * 11px); }
+.vc-bars i:nth-child(3) { height: calc(2px + var(--lvl, 0) * 8px); }
+@media (prefers-reduced-motion: reduce) { .vc-radio__btn, .vc-chip, .vc-radio__lock { animation: none; } .vc-radio__air i { animation: none; } }
+html.reduce-motion :is(.vc-radio__btn, .vc-chip, .vc-radio__lock) { animation: none; }
 
 /* ---- speaking tags over soldiers (window pixels, moved by transform) ---- */
 .vc-tags { position: fixed; inset: 0; z-index: var(--z-hud); pointer-events: none; overflow: hidden; }
@@ -143,45 +165,76 @@ html.reduce-motion .vc-tag__ring, html.reduce-motion .vc-bars i { transition: no
 .vc-meter::after { content: ""; position: absolute; top: -2px; bottom: -2px; left: calc(var(--gate, 0.3) * 100%); width: 2px; background: var(--c-volt); }
 .vc-note { color: var(--c-muted); font-size: var(--fs-14); }
 
-/* ---- the pause menu's comms card: mute, Mute all opponents, Report (soon) ---- */
-.vc-pause {
+
+/* ---- the comms sheet: from the right edge (landscape: a side sheet), its list scrolls inside ---- */
+.mf-voice--sheet { z-index: var(--z-modal); }
+.vc-sheetwrap { position: relative; pointer-events: auto !important; }
+.vc-scrim { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: color-mix(in srgb, var(--c-ink-950) 60%, transparent); cursor: default; animation: vc-fade 160ms var(--ease-arrive) both; }
+@keyframes vc-fade { from { opacity: 0; } }
+.vc-sheet {
   position: absolute;
-  right: calc(var(--safe-r) + 72px);
-  top: calc(var(--safe-t) + 120px);
-  width: 520px;
-  max-height: calc(100% - 240px);
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: calc(560px + var(--safe-r));
+  display: flex;
+  flex-direction: column;
+  padding: calc(var(--safe-t) + var(--sp-5)) calc(var(--safe-r) + var(--sp-6)) calc(var(--safe-b) + var(--sp-4)) var(--sp-6);
+  background: var(--c-plate-strong);
+  border-left: 2px solid var(--c-line-strong);
+  border-radius: var(--r-lg) 0 0 var(--r-lg);
+  color: var(--c-text);
+  animation: vc-sheet-in 220ms var(--ease-arrive) both;
+}
+@keyframes vc-sheet-in { from { translate: 100% 0; } }
+@supports (backdrop-filter: blur(1px)) {
+  html:not(.reduce-transparency):not(.gfx-low) .vc-sheet { background: color-mix(in srgb, var(--c-ink-950) 86%, transparent); border-color: var(--frost-line); backdrop-filter: blur(var(--blur-frost)); }
+}
+.vc-sheet__head { display: flex; align-items: center; gap: var(--sp-3); padding-bottom: var(--sp-3); }
+.vc-sheet__head > .ic { color: var(--c-volt); width: 28px; height: 28px; }
+.vc-sheet__t { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.05; }
+.vc-sheet__t b { font-size: var(--fs-32, 32px); text-transform: uppercase; }
+.vc-sheet__t span { font-size: var(--fs-14); font-weight: var(--fw-black); letter-spacing: .1em; text-transform: uppercase; color: var(--c-volt); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vc-sheet__body {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);
-  padding: var(--sp-5) var(--sp-6);
-  background: var(--c-plate-strong);
-  border: 1.5px solid var(--c-line-strong);
-  border-radius: 0 var(--r-lg) 0 var(--r-lg);
-  color: var(--c-text);
-  pointer-events: auto;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  padding-bottom: var(--sp-6);
+  /* more below: the list fades out at the sheet's edge */
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
 }
-@supports (backdrop-filter: blur(1px)) {
-  html:not(.reduce-transparency):not(.gfx-low) .vc-pause {
-    background: color-mix(in srgb, var(--c-ink-950) 80%, transparent);
-    border-color: var(--frost-line);
-    backdrop-filter: blur(var(--blur-frost));
-  }
-}
-.vc-pause__head { display: flex; align-items: center; gap: var(--sp-3); }
-.vc-pause__list { display: flex; flex-direction: column; gap: var(--sp-2); }
-.vc-pause__row { display: flex; align-items: center; gap: var(--sp-3); padding: 6px 8px; border-radius: var(--r-xs); background: var(--c-ink-850); }
-.vc-pause__row .vc-chip__who { flex: 1; min-width: 0; }
-.vc-pause__row .vc-chip__who span { color: var(--c-muted); }
-.vc-pause__row.is-talking .vc-av { box-shadow: 0 0 0 3px var(--c-volt); }
-.vc-pause--phone { right: var(--safe-r); top: calc(var(--safe-t) + 132px); bottom: max(10px, var(--safe-b)); width: 330px; max-height: none; padding: 8px 12px; gap: 6px; border-radius: 0 var(--r-md) 0 var(--r-md); }
-.vc-pause--phone .vc-pause__row { padding: 4px 6px; }
-.vc-pause--phone .btn--icon { width: var(--touch-min); min-height: var(--touch-min); }
-.vc-pause--phone .switch { font-size: 13px; gap: 8px; }
-
-/* the lobby's Talk pill: in the roster's header, not on the top bar (the lobby's own buttons are there) */
-.vc-mic.vc-mic--inline { position: static; flex-direction: row; align-items: center; gap: 8px; pointer-events: auto; }
-.vc-mic--inline .vc-mic__lock, .vc-mic--inline .vc-mic__help { position: absolute; z-index: 5; }
-/* the pause card's "My mic" row */
-.vc-pause__me { display: flex; align-items: center; gap: 10px; padding: 6px 0 8px; border-bottom: 1px solid var(--c-line); }
-.vc-pause__me .vc-chip__who { flex: 1; min-width: 0; }
+.vc-sheet__mode { display: flex; flex-direction: column; gap: var(--sp-2); }
+.vc-seg { display: flex; width: 100%; }
+.vc-seg .seg__opt { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: var(--touch-min, 48px); }
+.vc-sheet .vc-meter { width: 100%; }
+.vc-sheet__row { display: flex; align-items: center; gap: var(--sp-3); min-height: var(--touch-min, 48px); }
+.vc-sheet__row > .slider, .vc-sheet__row > [role='slider'] { flex: 1; }
+.vc-sheet__row .switch { min-height: var(--touch-min, 48px); }
+.vc-fix { display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border-radius: var(--r-sm, 10px); background: color-mix(in srgb, var(--c-brass) 14%, transparent); border: 2px solid var(--c-brass); }
+.vc-fix__t { color: var(--c-brass); font: var(--fw-black) var(--fs-14)/1.2 var(--f-ui); letter-spacing: .1em; text-transform: uppercase; }
+.vc-fix__steps { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; color: var(--c-muted); }
+.vc-fix__step { display: inline-flex; align-items: center; gap: 4px; height: 32px; padding: 0 10px; border-radius: 8px; background: color-mix(in srgb, var(--c-paper) 10%, transparent); color: var(--c-text); font-weight: var(--fw-bold); }
+.vc-people { display: flex; flex-direction: column; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.vc-person { --ring: transparent; display: flex; align-items: center; gap: var(--sp-3); min-height: 52px; padding: 2px 4px 2px 6px; border-radius: var(--r-xs); background: var(--c-ink-850); }
+.vc-person.is-talking { --ring: var(--c-volt); }
+.vc-person__who { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.15; }
+.vc-person__who b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vc-person__who span { font-size: var(--fs-12, 12px); font-weight: var(--fw-black); letter-spacing: .1em; text-transform: uppercase; color: var(--c-muted); }
+.vc-person.is-talking .vc-person__who span { color: var(--c-volt); }
+.vc-person.is-muted .vc-person__who span { color: var(--c-danger-text); }
+.vc-person .btn--icon { width: var(--touch-min, 48px); min-height: var(--touch-min, 48px); }
+/* phones: the 812×375 frame; the sheet a third of it, the safe area on the right */
+.vc-sheetwrap.screen--phone .vc-sheet { width: calc(340px + var(--safe-r)); padding: calc(var(--safe-t) + 8px) calc(var(--safe-r) + 12px) calc(var(--safe-b) + 6px) 14px; border-radius: 22px 0 0 22px; }
+.vc-sheetwrap.screen--phone .vc-sheet__t b { font-size: 26px; }
+.vc-sheetwrap.screen--phone .vc-sheet__t span { font-size: 11px; }
+.vc-sheetwrap.screen--phone .vc-sheet__body { gap: 8px; }
+.vc-sheetwrap.screen--phone .vc-seg .seg__opt { font-size: 13px; }
+.vc-sheetwrap.screen--phone .vc-person { min-height: 48px; }
+.vc-sheetwrap.screen--phone .switch { font-size: 14px; }
+@media (prefers-reduced-motion: reduce) { .vc-sheet, .vc-scrim { animation-name: vc-fade; } }

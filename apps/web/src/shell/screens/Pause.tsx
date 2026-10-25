@@ -16,7 +16,7 @@ import { formatClock, type MatchView } from '../matchView';
 import type { ShellStore } from '../store';
 import { ROOM_SLOTS } from './Lobby';
 import { inviteFriends } from '../../social/SocialLayer';
-import { VoicePauseCard } from '../../voice/VoiceHud';
+import { CommsButton } from '../../voice/Radio';
 import { SendReport } from '../../diag/SendReport';
 
 /** What leaving costs, in the confirm dialog's words. */
@@ -47,7 +47,7 @@ export function Pause({ store }: { store: ShellStore }) {
     <Screen name="pause" kind="game" states={[tune ? 'host' : 'guest', confirm ? 'confirm-leave' : 'menu']} label="Menu" modal dialog>
       <div className="pause__dim mf-pause__dim" aria-hidden="true"></div>
       <nav className="pause plate m-p1" aria-label="Menu">
-        <span className="eyebrow">{room ? 'Comms · the match keeps running' : 'Training keeps running'}</span>
+        <span className="eyebrow">{room ? 'The match keeps running' : 'Training keeps running'}</span>
         <b className="display pause__title">Paused</b>
         {playing && match && (
           <p className="mf-pause__score">
@@ -102,6 +102,8 @@ export function Pause({ store }: { store: ShellStore }) {
             )}
           </button>
         )}
+        {/* voice (voice/Radio.tsx): the comms sheet, for the mouse, the keyboard and a controller */}
+        {room && <CommsButton className="btn btn--ink btn--xl btn--block pause__btn m-p3 m-p8" />}
         <button className="btn btn--ink btn--xl btn--block pause__btn m-p3 m-p8" style={row(3)} type="button" onClick={blurAfter(() => ctl.openSettings())}>
           <Icon name="gear" />
           Settings
@@ -124,8 +126,6 @@ export function Pause({ store }: { store: ShellStore }) {
           <Cap>Esc</Cap> back to the fight
         </p>
       </nav>
-      {/* voice chat (voice/): mute a player, Mute all opponents */}
-      {room && !confirm && <VoicePauseCard shell={store} />}
       {confirm && (
         <div className="pause__confirm ticket m-p1" role="alertdialog" aria-labelledby="leave-t" aria-describedby="leave-desc">
           <h2 id="leave-t" className="display">

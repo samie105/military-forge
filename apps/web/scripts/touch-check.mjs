@@ -268,16 +268,16 @@ try {
     await f.touch(6, edit.x, edit.y);
     await f.lift(6);
     await sleep(200);
-    check('the ✎ button opens the HUD editor', await page.evaluate(() => !document.querySelector('.mf-touch-editor').hidden));
+    check('the ✎ button opens the HUD editor', await page.evaluate(() => !document.querySelector('.mf-bay').hidden));
     const before = await centre(page, '.mf-ctl-dash');
     await f.drag(6, before.x, before.y, -150, -60, 8); // up: the pinned dash sits near the bottom edge
     await f.lift(6);
     await sleep(100);
     await page.screenshot({ path: join(outDir, 'editor-landscape.png') });
-    const done = await centre(page, '[data-ed="done"]');
+    const done = await centre(page, '[data-bay="save"]');
     await f.touch(6, done.x, done.y);
     await f.lift(6);
-    await page.evaluate(() => document.querySelector('[data-ed="done"]').click()); // the tap may land as a click only
+    await page.evaluate(() => document.querySelector('[data-bay="save"]').click()); // the tap may land as a click only
     await sleep(200);
     await ready(page, `${base}/?sandbox&render=2d`);
     const after = await centre(page, '.mf-ctl-dash');

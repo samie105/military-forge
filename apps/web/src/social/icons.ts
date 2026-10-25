@@ -13,6 +13,9 @@ const SYMBOLS: Record<string, string> = {
   flag: '<path d="M5 21.5V3.5M5 4h12l-2.5 4.5L17 13H5"/>',
   dots: '<circle cx="5" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.7" fill="currentColor" stroke="none"/>',
   'user-check': '<circle cx="9" cy="8" r="4"/><path d="M1.5 21c.8-4 3.6-6 7.5-6s6.7 2 7.5 6M15.5 10l2.5 2.5 4.5-5"/>',
+  // the radio (voice/Radio.tsx): on air (talking), and the comms sheet's "Hold to talk"
+  onair: '<path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/>',
+  hand: '<path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12M11 11V4a1.5 1.5 0 0 1 3 0v7M14 11V5.5a1.5 1.5 0 0 1 3 0V13M17 9.5a1.5 1.5 0 0 1 3 0V15a6.5 6.5 0 0 1-6.5 6.5h-1A6.5 6.5 0 0 1 7 18.4L4.6 14.6a1.5 1.5 0 0 1 2.5-1.7L8 14"/>',
   hourglass: '<path d="M6 2.5h12M6 21.5h12M7.5 2.5c0 5 9 5 9 9.5s-9 4.5-9 9.5M16.5 2.5c0 5-9 5-9 9.5s9 4.5 9 9.5"/>',
 };
 

@@ -2,8 +2,8 @@
  * Voice chat end to end (v18), in headless Chrome with its fake microphone (a beeping tone): two
  * players in one room, one holds V, the other must hear them: frames through the game server's
  * relay, decoded (Opus through WebCodecs where Chrome has it), and played. Then a match with bots,
- * the same again mid-match, with screenshots of both screens (the push-to-talk plate, who's
- * talking, the speaking tag) and of the comms card in the pause menu.
+ * the same again mid-match, with screenshots of both screens (the radio, who's talking, the
+ * speaking tag) and of the comms sheet.
  *
  * Needs the dev API (8895), a v18 game server and the dev web server pointed at both:
  *   lockf -k /tmp/military-forge-heavy.lock node apps/web/scripts/voice-e2e.mjs http://127.0.0.1:5196 [out dir]
@@ -140,15 +140,17 @@ await a.page.keyboard.up('KeyV');
 console.log('match:', JSON.stringify(match));
 if (apart < radius - 2 && match.heard < 5) problems.push(`mid-match B heard ${match.heard} frames from A ${match.apart} m away (voices carry ${radius} m)`);
 
-// the comms card in the pause menu (B mutes A from it)
+// the comms sheet from the pause menu's Comms button (B mutes A from it)
 await b.page.keyboard.press('Escape');
-await b.page.waitForSelector('.vc-pause', { timeout: 15_000 });
+await (await b.page.waitForSelector('xpath/.//button[contains(normalize-space(.), "Comms")]', { visible: true, timeout: 15_000 })).click();
+await b.page.waitForSelector('.vc-sheet', { timeout: 15_000 });
 await sleep(600);
-await b.page.screenshot({ path: join(out, 'd14-pause-comms.png') });
-await b.page.click('.vc-pause__row .btn--ghost');
+await b.page.screenshot({ path: join(out, 'd14-comms-sheet.png') });
+await b.page.click('.vc-person .btn--icon');
 await sleep(300);
 const muted = await b.page.evaluate(() => window.__voice.state.mutes.length);
-if (muted !== 1) problems.push(`muting from the pause menu left ${muted} mutes`);
+if (muted !== 1) problems.push(`muting from the comms sheet left ${muted} mutes`);
+await b.page.keyboard.press('Escape');
 await b.page.keyboard.press('Escape');
 
 // Settings › Audio › Voice chat
@@ -212,20 +214,21 @@ for (let attempt = 0; attempt < 4; attempt++) {
   if (hearing) break;
   await sleep(1000);
 }
-// hold the mic button (a touch held down)
-const mic = await c.page.waitForSelector('.vc-mic__btn', { visible: true, timeout: 15_000 });
+// hold the radio (a touch held down)
+const mic = await c.page.waitForSelector('[data-voice="talk"]', { visible: true, timeout: 15_000 });
 const box = await mic.boundingBox();
 await c.page.touchscreen.touchStart(box.x + box.width / 2, box.y + box.height / 2);
 await sleep(1200);
 await c.page.screenshot({ path: join(out, 'p8-voice-talking.png') });
 const cTalking = await c.page.evaluate(() => window.__voice.state.talking);
 await c.page.touchscreen.touchEnd();
-if (!cTalking) problems.push('holding the phone mic button did not talk');
-// the phone's pause menu: the comms card
-await c.page.evaluate(() => window.__game?.shell?.controller?.openOverlay('menu'));
-await c.page.waitForSelector('.vc-pause', { timeout: 15_000 });
+if (!cTalking) problems.push('holding the radio did not talk');
+// a tap on the radio: the comms sheet
+await sleep(400);
+await c.page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+await c.page.waitForSelector('.vc-sheet', { timeout: 15_000 });
 await sleep(600);
-await c.page.screenshot({ path: join(out, 'p9-pause-comms.png') });
+await c.page.screenshot({ path: join(out, 'p9-comms-sheet.png') });
 
 await browser.close();
 if (problems.length) {
