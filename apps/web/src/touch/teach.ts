@@ -124,7 +124,7 @@ export interface DrillStep {
 export const FIRE_HOW: Readonly<Record<FireMode, string>> = {
   auto: 'Point the right dial at a target: you fire by yourself. Push it to the rim to fire anyway.',
   pull: 'Push the right dial past its ring.',
-  button: 'Hold FIRE. Drag it to aim while you shoot.',
+  button: 'Hold Fire. Drag it to aim while you shoot.',
   release: 'Drag the right dial to aim, then lift to fire.',
 };
 
@@ -137,7 +137,7 @@ const jetShown = (c: DrillContext): boolean => c.preset !== 'oneThumb' || !c.sti
 /** A step's words for this layout: the fire step per fire mode (One-thumb: automatic), the jet step on JET when the stick doesn't jet. */
 export function drillHow(s: Pick<DrillStep, 'id' | 'how'>, c: DrillContext): string {
   if (s.id === 'fire') return c.preset === 'oneThumb' ? 'Aim and fire are automatic: face a target and you shoot. Drag on the right half to aim yourself.' : FIRE_HOW[c.fire];
-  if (s.id === 'jet' && jetShown(c)) return c.stickJet ? 'Hold JET (or push the left stick up) to fly. The number is the fuel left: it refills on the ground.' : 'Hold JET to fly. The number is the fuel left: it refills on the ground.';
+  if (s.id === 'jet' && jetShown(c)) return c.stickJet ? 'Hold Jet (or push the left stick up) to fly. The number is the fuel left: it refills on the ground.' : 'Hold Jet to fly. The number is the fuel left: it refills on the ground.';
   return s.how;
 }
 
@@ -150,16 +150,16 @@ export function drillControl(s: Pick<DrillStep, 'id' | 'control'>, c: DrillConte
 
 export const DRILL: readonly DrillStep[] = [
   { id: 'move', goal: 'Run', how: 'Push the left dial left or right.', control: 'move', done: ['move'] },
-  { id: 'jet', goal: 'Fly', how: 'Push the left dial up to fire the jetpack. The green arc is its fuel: it refills on the ground.', control: 'move', done: ['jet'] },
+  { id: 'jet', goal: 'Fly', how: 'Push the left dial up to fly. The green arc is its fuel: it refills on the ground.', control: 'move', done: ['jet'] },
   { id: 'fire', goal: 'Aim and fire', how: FIRE_HOW.pull, control: 'aim', done: ['fire'] },
   { id: 'dash', goal: 'Dash', how: 'Swipe the dash button any way, or flick the left dial. Each dash costs fuel.', control: 'dash', done: ['dash'] },
   { id: 'chain', goal: 'Chain dashes', how: 'Dash again straight after a dash: the second goes faster.', control: 'dash', done: ['chain'] },
   { id: 'cycle', goal: 'Change grenade', how: 'Swipe ↑ on the grenade button.', control: 'grenade', done: ['cycle'] },
   { id: 'throw', goal: 'Aim a throw', how: 'Hold the grenade, drag to aim the arc, let go.', control: 'grenade', done: ['aimed-throw'] },
-  { id: 'swap', goal: 'Swap guns', how: 'Tap or swipe the gun pill.', control: 'swap', done: ['swap', 'radial'] },
-  { id: 'radial', goal: 'Pick from the radial', how: 'Hold the gun pill, slide to melee, let go.', control: 'swap', done: ['radial'] },
+  { id: 'swap', goal: 'Swap guns', how: 'Tap or swipe the gun button.', control: 'swap', done: ['swap', 'radial'] },
+  { id: 'radial', goal: 'Pick from quick-select', how: 'Hold the gun button, slide to melee, let go.', control: 'swap', done: ['radial'] },
   { id: 'reload', goal: 'Reload', how: 'When the magazine runs low, reload comes into the corner slot: tap it. (It reloads by itself when empty.)', control: 'reload', done: ['reload'] },
-  { id: 'melee', goal: 'Strike', how: 'Close to an enemy, the blade comes into the corner slot: tap it. Or hold the gun pill and slide to melee.', control: 'melee', done: ['melee', 'radial'] },
+  { id: 'melee', goal: 'Strike', how: 'Close to an enemy, the blade comes into the corner slot: tap it. Or hold the gun button and slide to melee.', control: 'melee', done: ['melee', 'radial'] },
   { id: 'shield', goal: 'Guard', how: 'Carrying a shield, its button is in the corner slot: hold it to guard, let go to sling it.', control: 'shield', done: ['shield'], needs: 'shield' },
   { id: 'zoom', goal: 'Zoom', how: 'With a scoped gun, the magnifier is in the corner slot: tap it to see further.', control: 'zoom', done: ['zoom', 'pinch'], needs: 'zoom' },
   { id: 'take', goal: 'Take a gun', how: 'Guns lie on the map: stand on one and tap Take to swap it in.', control: 'take', done: ['take'] },

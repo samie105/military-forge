@@ -141,7 +141,7 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
         <span class="serial mf-status" aria-live="polite">Weapons bench</span>
       </header>
       <div class="menu-body ar">
-        <nav class="ar__list mf-list" aria-label="Weapons"></nav>
+        <nav class="ar__list mf-list" aria-label="Weapons" data-scroll-x></nav>
         <div class="ar__stage mf-stage">
           <span class="label label--volt mf-ar__kind"></span>
           <h2 class="display display--print ar__name m-p1"></h2>
@@ -157,7 +157,7 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
             <div class="seg" data-group="light" role="radiogroup" aria-label="Light"><button type="button" class="seg__opt" role="radio" data-light="lobby">Lobby</button><button type="button" class="seg__opt" role="radio" data-light="night">Night</button><button type="button" class="seg__opt" role="radio" data-light="desert">Desert</button></div>
             <button type="button" class="btn btn--ghost btn--sm m-p8 mf-toggle" data-action="sockets" aria-pressed="true">${ic('eye')}Mounts</button>
           </div>
-          <div class="ar__ctrl mf-camo"></div>
+          <div class="ar__ctrl mf-camo" data-scroll-x></div>
         </div>
         <aside class="ar__side mf-side">
           <section class="ticket ar__stats mf-card" aria-live="polite"></section>

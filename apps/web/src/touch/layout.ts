@@ -35,14 +35,14 @@ export interface Placement {
 export const SHIELD_BIT: number = (Btn as Record<string, number>).Shield ?? 0;
 
 export const CONTROLS: readonly ControlDef[] = [
-  { id: 'move', kind: 'stick', label: 'Move', bit: 0, title: 'Move: push up to jet, down to crouch; swipe and lift to dash' },
+  { id: 'move', kind: 'stick', label: 'Move', bit: 0, title: 'Move: push up to fly, down to crouch; swipe and lift to dash' },
   { id: 'aim', kind: 'stick', label: 'Aim and fire', bit: 0, title: 'Aim (and fire)' },
   { id: 'grenade', kind: 'drag', label: 'Grenade', bit: Btn.Grenade, title: 'Grenade: tap to throw; swipe up or down to change the type; hold and drag to aim the arc, release to throw' },
   { id: 'cycleGrenade', kind: 'tap', label: 'Next grenade', bit: Btn.CycleGrenade, title: 'Next grenade type' },
   { id: 'dash', kind: 'tap', label: 'Dash', bit: Btn.Dash, title: 'Dash: swipe it any way to dash that way; a tap dashes the way the move stick points (or the way you face)' },
   { id: 'melee', kind: 'tap', label: 'Melee', bit: Btn.Melee, title: 'Melee' },
   { id: 'reload', kind: 'tap', label: 'Reload', bit: Btn.Reload, title: 'Reload (tap, or swipe down)' },
-  { id: 'swap', kind: 'tap', label: 'Swap guns', bit: Btn.Swap, title: 'Swap guns: tap or swipe; hold for a radial with both guns and melee' },
+  { id: 'swap', kind: 'tap', label: 'Swap guns', bit: Btn.Swap, title: 'Swap guns: tap or swipe; hold for quick-select: both guns and melee' },
   { id: 'zoom', kind: 'tap', label: 'Zoom', bit: 0, title: 'Zoom (scoped weapons)' },
   { id: 'shield', kind: 'tap', label: 'Shield', bit: SHIELD_BIT, title: 'Shield: tap to raise or sling; hold to keep it up while held' },
   { id: 'take', kind: 'tap', label: 'Take a gun', bit: Btn.Interact, title: 'Take the weapon you stand on (it swaps the gun in hand)' },

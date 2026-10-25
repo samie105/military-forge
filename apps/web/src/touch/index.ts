@@ -308,6 +308,16 @@ export function setTouchMatchLive(live: boolean): void {
   controller?.setMatchLive(live);
 }
 
+/** A match's countdown begins, or GO: the controls start clean (TouchController.rearm). */
+export function rearmTouch(why: string): void {
+  controller?.rearm(why);
+}
+
+/** The touch controls' state in one line, for the event log; '' with no touch controls. */
+export function touchSnapshot(): string {
+  return controller?.snapshot() ?? '';
+}
+
 /** The first-run fire chooser is up: other cards wait for it (no stacking). */
 export function touchChoosing(): boolean {
   return controller?.isChoosing ?? false;

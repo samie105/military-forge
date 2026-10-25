@@ -5,7 +5,7 @@
  * right is the step on Frost glass, one big action (64 px) and the paste row (48 px targets).
  *
  * The guest's panel opens the camera straight away where the browser can read QR codes (they came
- * here by tapping "Scan host's QR"); elsewhere it's the paste row. A stepper says where they are:
+ * here by tapping "Swap QR codes"); elsewhere it's the paste row. A stepper says where they are:
  * Scan → Reply → In.
  */
 import { useCallback, useState } from 'react';
@@ -89,7 +89,7 @@ export function PhoneLanAddPlayer() {
                   <b id="pm-lan-2" className="display pm-lan__h">
                     {status === 'joined' ? "They're in" : 'Scan their reply'}
                   </b>
-                  {status === 'offer' && <p className="pm-lan__sub">On their phone: Join → No internet? → Scan host's QR. Then they show you a reply.</p>}
+                  {status === 'offer' && <p className="pm-lan__sub">On their phone: Join → No internet? → Swap QR codes. Then they show you a reply.</p>}
                 </>
               )}
               {status === 'offer' &&
@@ -156,7 +156,7 @@ export function PhoneLanAddPlayer() {
 export function PhoneLanJoin() {
   const { reply, status, error, take, retry } = useLanJoin();
   const scan = canScan();
-  // they tapped "Scan host's QR" to get here: the camera opens with the panel (Stop closes it)
+  // they tapped "Swap QR codes" to get here: the camera opens with the panel (Stop closes it)
   const [camera, setCamera] = useState(scan);
   const at = status === 'connecting' ? 3 : status === 'reply' ? 2 : 1;
   const scanStep = status === 'scan' || status === 'error';

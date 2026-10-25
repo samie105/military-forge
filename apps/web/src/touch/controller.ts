@@ -52,6 +52,7 @@ import { EquipClock, SKIN_BASE, TouchSkin, controlValues, localView, phoneTokens
 import { iconHref, weaponIcon } from '../ui/icons';
 import { AIM_STICK, FLICK, GRENADE_STICK, MOVE_STICK, followOrigin, isFlick, knobOffset, moveButtons, shapeStick, zeroStick, type StickVector } from './stick';
 import { FadeClock, cueLit, nearControls, type FadeControl } from './fade';
+import { diag } from '../diag/log';
 import './touch.css';
 
 /** Where the reticle (and the camera's look-ahead) sits along the touch aim, in metres. */
@@ -341,6 +342,8 @@ export class TouchController {
 
   /** The first-run fire chooser is up (the controls wait under it). */
   private choosing = false;
+  /** when the log last said the stick asked to fly while the controls weren't playing */
+  private idleJetAt = -Infinity;
   /** A match's countdown or clock runs: no card may open over it (mobile audit P0-3) */
   private matchLive = false;
 
@@ -707,6 +710,11 @@ export class TouchController {
       this.syncPlaying();
     }
     this.maybeChoose();
+    // the stick asks to fly while the controls don't play (under the menus, the editor…): the log says so
+    if (!this.playing && this.state.moveBits & Btn.Jet && this.moveGrab() && performance.now() - this.idleJetAt > 10_000) {
+      this.idleJetAt = performance.now();
+      diag('input', `touch: the stick asks to fly but the controls aren't playing: ${this.snapshot()}`);
+    }
     this.reapStale(performance.now());
     this.fadeTick(performance.now());
     // large text (Settings → Accessibility, 125 % and up): the pills drop their extra words (touch.css)
@@ -735,6 +743,9 @@ export class TouchController {
 
   /** The pause menu, as the menu button opens it (the Escape key). */
   private openPause(): void {
+    // what the controls held the moment the player paused (a report sent from this menu carries it:
+    // the owner, 24 Oct, "flying doesn't work until someone pauses and unpauses")
+    diag('input', `touch at pause: ${this.snapshot()}`);
     this.releaseAll();
     key('keydown', 'Escape');
     key('keyup', 'Escape');
@@ -1633,6 +1644,57 @@ export class TouchController {
       if (v.mag >= 0.5 && !aimTagLearned) this.aimLearned();
       this.els.get(id)!.classList.toggle('mf-fire', this.fireNow === 'pull' && s.aimFire && !s.grenadeActive); // aiming a throw: no fire
     }
+  }
+
+  /** The controls' state in one line, for the device's event log (diag/log.ts). */
+  snapshot(): string {
+    const s = this.state;
+    const grabs = [...this.grabs.values()].map((g) => (g.kind === 'stick' ? `${g.id} stick` : g.kind === 'button' ? `${g.def.id} button` : g.kind)).join(', ') || 'none';
+    const flags = [this.active ? '' : 'inactive', this.hiddenForMenus ? 'under menus' : '', this.editing ? 'editing' : '', this.choosing ? 'choosing' : '', this.inGame ? '' : 'no game'].filter(Boolean).join(', ');
+    return `grabs ${grabs}; held ${s.held}; move ${s.moveActive ? `${s.move.x.toFixed(2)},${s.move.y.toFixed(2)} bits ${s.moveBits}` : 'off'}; grenade ${s.grenadeActive ? 'held' : 'no'}; ${flags || 'playing'}`;
+  }
+
+  /**
+   * A match's countdown begins, or GO (main.ts): the controls start clean. Whatever no finger holds
+   * any more (a held bit, the move or aim stick, a grenade latch, left over from the lobby, the VS
+   * poster or warm-up) lets go; a thumb still down keeps its stick. The layout is measured again (the
+   * lobby and the poster came and went; Safari's bars may have moved) and the controls light up.
+   */
+  rearm(why: string): void {
+    const before = this.snapshot();
+    const s = this.state;
+    let backed = 0;
+    let move = false;
+    let aim = false;
+    let grenade = false;
+    for (const g of this.grabs.values()) {
+      if (g.kind === 'button' && g.def.bit) backed |= g.def.bit;
+      if (g.kind === 'fire') backed |= Btn.Fire;
+      if (g.kind === 'stick' && g.id === 'move') move = true;
+      if (g.kind === 'stick' && g.id === 'aim') aim = true;
+      if (g.kind === 'grenade') grenade = true;
+    }
+    s.held &= backed;
+    if (!move) {
+      s.moveActive = false;
+      s.moveBits = 0;
+      Object.assign(s.move, zeroStick());
+    }
+    if (!aim) {
+      s.aimActive = false;
+      s.aimFire = false;
+      Object.assign(s.aim, zeroStick());
+    }
+    if (!grenade && s.grenadeActive) {
+      s.grenadeActive = false;
+      this.host.throwLatch?.cancel();
+    }
+    if (this.active) {
+      this.place();
+      this.fade.wakeAll(this.els.keys(), performance.now());
+    }
+    this.syncPlaying();
+    diag('input', `touch ${why}: ${before}${before === this.snapshot() ? '' : ` → ${this.snapshot()}`}`);
   }
 
   releaseAll(): void {

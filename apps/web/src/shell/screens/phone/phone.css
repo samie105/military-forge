@@ -409,3 +409,29 @@ html.reduce-motion .pm-turn__card .ic { animation: none; }
 /* the pause menu scrolls when Send a report opens at its foot (diag/SendReport.tsx) */
 .pm-pause { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
 .pm-pause .pm-report.mf-report-btn { align-self: flex-start; }
+
+/* ---- one clear scroll area on a short landscape screen (the owner, 24 Oct: "on landscape … some
+   things need to be scrolling properly"; scripts/landscape-overflow.mjs checks every screen) ----
+   A sheet taller than the window scrolls inside itself: its head stays at the top and its buttons at
+   the bottom, each with an edge shadow while there's more beyond it (scroll-driven where the browser
+   has it; plain where not). Momentum is the browser's own; the page under it never scrolls. */
+.pm-sheet { max-height: calc(100% - max(8px, var(--safe-t, 0px))); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.pm-sheet > .pm-sheet__head { position: sticky; top: -14px; z-index: 1; margin: -14px -16px 0; padding: 14px 16px 6px; background: inherit; background-color: var(--c-ink-900, #15170f); }
+.pm-sheet > .pm-bar { position: sticky; bottom: calc(-1 * (var(--safe-b) + 6px)); z-index: 1; margin: 0 -16px calc(-1 * (var(--safe-b) + 6px)); padding: 8px 16px calc(var(--safe-b) + 6px); background-color: var(--c-ink-900, #15170f); }
+@supports (animation-timeline: scroll()) {
+  .pm-sheet > .pm-sheet__head { animation: pm-edge-top linear both; animation-timeline: scroll(nearest); animation-range: 0 24px; }
+  .pm-sheet > .pm-bar { animation: pm-edge-bottom linear both; animation-timeline: scroll(nearest); animation-range: calc(100% - 24px) 100%; }
+  @keyframes pm-edge-top { from { box-shadow: none; } to { box-shadow: 0 8px 12px -6px rgb(0 0 0 / .7); } }
+  @keyframes pm-edge-bottom { from { box-shadow: 0 -8px 12px -6px rgb(0 0 0 / .7); } to { box-shadow: none; } }
+}
+/* the pause menu's quick row wraps (Settings, Install app, Leave: three don't fit 336 px side by side) */
+.pm-pause__row { flex-wrap: wrap; }
+.pm-pause__row .btn { flex: 1 1 auto; }
+.pm-pause { overflow-x: hidden; }
+/* the sheet's foot fades while there's more below it (its head is sticky, so only the foot fades) */
+@property --pm-fade-b { syntax: '<length>'; inherits: false; initial-value: 0px; }
+@supports (animation-timeline: scroll()) {
+  .pm-sheet { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--pm-fade-b)), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - var(--pm-fade-b)), transparent); animation: pm-sheet-in var(--m-base) var(--ease-arrive) both, pm-fade-foot linear both; animation-timeline: auto, scroll(self); }
+  .pm-sheet:has(> .pm-bar) { -webkit-mask-image: none; mask-image: none; }
+  @keyframes pm-fade-foot { from { --pm-fade-b: 28px; } 90% { --pm-fade-b: 28px; } to { --pm-fade-b: 0px; } }
+}

@@ -94,7 +94,7 @@ export function PhoneJoin() {
             <p>On the same Wi-Fi as the host? Swap two QR codes and you're in.</p>
             <button type="button" className="btn btn--paper btn--block m-p8 pm-join__scan" onClick={blurAfter(() => ctl.openOverlay('lan-join'))}>
               <Icon name="qr" />
-              Scan host's QR
+              Swap QR codes
             </button>
           </aside>
         </div>

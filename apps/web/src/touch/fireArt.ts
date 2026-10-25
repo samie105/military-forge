@@ -11,7 +11,7 @@ import './fireArt.css';
 export const FIRE_MODE_TEXT: Readonly<Record<FireMode, { name: string; line: string }>> = {
   auto: { name: 'Auto', line: 'Aim at someone: you fire by yourself. Push to the rim to fire anyway.' },
   pull: { name: 'Pull', line: 'Push the aim stick past its ring to fire.' },
-  button: { name: 'Fire button', line: 'The stick only aims. Hold FIRE to shoot; drag it to aim while you shoot.' },
+  button: { name: 'Fire button', line: 'The stick only aims. Hold Fire to shoot; drag it to aim while you shoot.' },
   release: { name: 'Release', line: 'Drag to aim, lift to fire one shot. Back to the middle and lift: no shot.' },
 };
 

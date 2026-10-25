@@ -23,7 +23,6 @@ import { reasonChip, winnerOf, type ResultsExtras } from '../Results';
 import { PhoneScreen, rise } from './layout';
 import { Roll, ShareChip, shareData, useShareChip } from './parts';
 import { SavedAdsList } from '../../../ads/SavedAds';
-import { InstallToast } from '../../../pwa/InstallToast';
 import { DebriefLines } from '../../../tour/DebriefLines';
 import { TeamStandings, teamWinner } from '../../../teams/TeamResults';
 
@@ -159,7 +158,6 @@ export function PhoneResults({ view, results, actions, room, training, code }: {
           <ShareChip outcome={shared} />
         </div>
       </div>
-      <InstallToast where="results" />
     </PhoneScreen>
   );
 }

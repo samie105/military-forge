@@ -235,7 +235,7 @@ describe('local rooms (the Pen board P0–P5)', () => {
     // Watch beside Join: the same code as a spectator, waiting for the same six letters
     expect(html).toMatch(/<button type="button" class="btn btn--ghost m-p8 pm-join__paste pm-join__watch" data-hook="watch" disabled=""/);
     expect(html).toContain('No internet?');
-    expect(html).toContain('Scan host&#x27;s QR');
+    expect(html).toContain('Swap QR codes');
   });
 
   it("P2 · lobby: ONE QR (the room link: a phone's camera lands in the room) and the code; the QR swap a fallback; the LAN ping (real: the lobby's own)", () => {
@@ -346,7 +346,7 @@ describe('touch tips (the first-run card on a phone)', () => {
     expect(right[0].how).toBe('Move. Up flies, down crouches, a flick dashes.');
     expect(right[1].how).toBe('Aim. Push past the ring to fire.');
     expect(touchTips({ handed: 'right', fire: 'auto', swipeDash: true })[1]!.how).toBe('Aim. It fires by itself at someone in your sights.');
-    expect(touchTips({ handed: 'right', fire: 'button', swipeDash: true })[1]!.how).toBe('Aim. Hold FIRE to shoot.');
+    expect(touchTips({ handed: 'right', fire: 'button', swipeDash: true })[1]!.how).toBe('Aim. Hold Fire to shoot.');
     expect(right[2].how).toBe('Tap: throw. Swipe ↑↓: switch. Hold and drag: aim.');
     expect(touchTips({ handed: 'right', fire: 'pull', swipeDash: true, gestures: false })[2]!.how).toBe('Hold to aim, let go to throw.');
     const left = touchTips({ handed: 'left', fire: 'release', swipeDash: false });

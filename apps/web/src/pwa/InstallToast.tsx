@@ -1,6 +1,6 @@
 /**
  * "Install Military Forge, play full screen" (the owner, 23 Oct; Pen: PWA · INSTALL TOAST · phones):
- * a Field Print toast on a Frost plate, on Home and Results only. Android Chrome and Samsung Internet:
+ * a Field Print toast on a Frost plate, on Home only (on Results it sat over the Lobby button: scripts/landscape-overflow.mjs). Android Chrome and Samsung Internet:
  * Install opens the browser's own prompt. iPhone Safari: the two taps (Share, Add to Home Screen).
  * When it shows is install.ts's call (shouldOffer); it never shows once installed.
  */

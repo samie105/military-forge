@@ -167,7 +167,7 @@ describe('the drill', () => {
     expect(drillControl(step('jet'), classic)).toBe('jet'); // Classic has a JET button now
     expect(drillControl(step('jet'), one)).toBe('move');
     expect(drillControl(step('jet'), claw)).toBe('jet');
-    expect(drillHow(step('jet'), claw)).toMatch(/Hold JET/);
+    expect(drillHow(step('jet'), claw)).toMatch(/Hold Jet/);
     expect(drillControl(step('fire'), claw)).toBe('fire');
     expect(drillHow(step('fire'), claw)).toBe(FIRE_HOW.button);
     expect(drillHow(step('fire'), one)).toMatch(/automatic/);

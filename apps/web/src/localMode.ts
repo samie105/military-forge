@@ -24,6 +24,7 @@ import {
 } from '@military-forge/sim';
 import type { Camera } from './camera';
 import { cloudView, fullBelt, statusView } from './grenadeViews';
+import { JetWatch } from './diag/jetWatch';
 import type { InputSampler } from './input';
 import type { LocalBots } from './localBots';
 import { mapEventView } from './mapEvent';
@@ -39,6 +40,8 @@ const RANGE_TARGET_M = 4;
 const SEED = 1234;
 
 export class LocalMode {
+  /** jet held without flying: the event log hears why (diag/jetWatch.ts) */
+  private readonly jetWatch = new JetWatch();
   readonly map: MapDef;
   game: Game;
   me: PlayerState;
@@ -253,6 +256,7 @@ export class LocalMode {
         } else this.prev.set(p.id, { x: p.x, y: p.y });
       }
       this.sampler.sample(this.camera, this.me.shoulderX(t), this.me.shoulderY(t), this.input);
+      this.jetWatch.step(this.me, this.input.buttons, performance.now(), () => `training${this.match ? `, phase ${this.match.phase}` : ''}${this.game.inputsFrozen ? ', frozen' : ''}`);
       this.inputs[this.me.id] = this.input;
       if (this.match) this.match.step(this.inputs);
       else this.game.step(this.inputs);

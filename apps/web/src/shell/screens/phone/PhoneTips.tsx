@@ -28,7 +28,7 @@ export interface TouchTip {
 const AIM_HOW: Readonly<Record<TouchSettings['fire'], string>> = {
   auto: 'Aim. It fires by itself at someone in your sights.',
   pull: 'Aim. Push past the ring to fire.',
-  button: 'Aim. Hold FIRE to shoot.',
+  button: 'Aim. Hold Fire to shoot.',
   release: 'Aim, then lift to fire.',
 };
 

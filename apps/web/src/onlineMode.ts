@@ -18,6 +18,7 @@
  */
 import { adminTuning, createTuning, defaultTuning, weapons, NO_WEAPON, type AdminValues, type MapDef, type Tuning } from '@military-forge/content';
 import { diag } from './diag/log';
+import { JetWatch } from './diag/jetWatch';
 import { autoReport } from './diag/report';
 import { RECONNECT_WINDOW_MS, reconnectDelay } from './shell/reconnect';
 import { adminTuningKeys } from './shell/tune';
@@ -470,6 +471,16 @@ export class OnlineMode {
     this.dispose();
   }
 
+  /** jet held without flying: the event log hears why (diag/jetWatch.ts) */
+  private readonly jetWatch = new JetWatch();
+
+  private watchJet(me: PlayerState | null, buttons: number, now: number): void {
+    this.jetWatch.step(me, buttons, now, () => {
+      const tick = this.net.predictor?.tick;
+      return `${tick !== undefined && this.frozenAt(tick) ? 'frozen (countdown)' : 'not frozen'}, phase ${this.matchState?.phase ?? '?'}`;
+    });
+  }
+
   /**
    * The server freezes buttons outside WAITING and IN_PROGRESS (docs/06 §5.2); the prediction must
    * too, or the countdown would mispredict. GO is at a known tick, so it unfreezes on time.
@@ -892,6 +903,7 @@ export class OnlineMode {
         out.buttons = 0;
         out.weaponSelect = 0;
       }
+      this.watchJet(me, out.buttons, now);
     });
     if (this.net.isConnected && now >= this.nextPingReportAt && this.net.rtt.count > 0) {
       this.nextPingReportAt = now + PING_REPORT_MS;

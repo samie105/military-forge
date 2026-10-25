@@ -64,7 +64,7 @@ export const ASSIST_NAMES: Readonly<Record<AssistLevel, string>> = { off: 'Off',
 /** What each level does, in the player's words (controls spec §4.5). */
 export const ASSIST_HELP: Readonly<Record<AssistLevel, string>> = {
   off: 'No help: the aim goes exactly where your thumb points.',
-  light: 'The aim slows a little on an enemy, so a sweep lingers on him. It never pulls.',
+  light: 'The aim slows a little on an enemy, so a sweep lingers on them. It never pulls.',
   standard: 'Light, plus a gentle pull toward an enemy near your aim line while you aim, or while Auto fires. Your thumb always wins.',
   strong: 'Standard, plus the aim stays on your target when you lift your thumb.',
 };

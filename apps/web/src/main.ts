@@ -32,7 +32,7 @@ import { fxFrame, fxState, setReduceFlashes } from './fx';
 import { autoPreset, deviceHints, gpuRenderer } from './gfxAuto';
 import { createHostTuning, tuningOffered } from './hostTuning';
 import { splitTuneChange, tuneChanges, tuneToastParts } from './shell/tune';
-import { InputSampler } from './input';
+import { InputSampler, typingInto } from './input';
 import { LIVE_FIRE_BOTS, localBots } from './localBots';
 import { warmNavGraph } from './navWarm';
 import { Minimap } from './minimap/minimap';
@@ -61,7 +61,7 @@ import { applyTeamPalette, teamColour } from './teams/palette';
 import { TeamStrip } from './teams/hudStrip';
 import { posterUp } from './presentation/state';
 import { countFrame, framesPerSecond, recordNet } from './stats';
-import { getTouchSettings, isTouchDevice, mountTouch, onTouchAction, onTouchHintsReset, setTouchMatchLive, touchActive, touchChoosing, touchControlRect, touchDrillRunning, touchHintsDoneBy, touchHintsPossible, touchHintsSeen, type ControlId } from './touch';
+import { getTouchSettings, isTouchDevice, mountTouch, onTouchAction, onTouchHintsReset, rearmTouch, setTouchMatchLive, touchActive, touchChoosing, touchControlRect, touchDrillRunning, touchHintsDoneBy, touchHintsPossible, touchHintsSeen, type ControlId } from './touch';
 import type { HintId, TouchHintId } from './tour/hints';
 import { applyPadSettings, currentDevice, isPadCode, mountGamepad, onInputDevice } from './gamepad';
 import { mountAdClicks } from './ads';
@@ -91,7 +91,7 @@ import { voiceChat } from './voice';
 import { SpectateDirector, ZOOM_LEVELS, type SpectateView } from './spectate/director';
 import { SpectateInput } from './spectate/input';
 import { SpectatePicker } from './spectate/picker';
-import { hookDiagErrors } from './diag/log';
+import { diag, hookDiagErrors } from './diag/log';
 import { setReportSources } from './diag/report';
 
 // the device's event log for problem reports (diag/): script errors from the first moment
@@ -134,9 +134,15 @@ function showToast(message: string): void {
 class GameInput extends InputSampler {
   /** the buttons of the last sample (the empty click listens for Fire) */
   lastButtons = 0;
+  private blockedJetAt = -Infinity;
   override sample(camera: Camera, sx: number, sy: number, out?: Input): Input {
     const input = super.sample(camera, sx, sy, out);
     if (this.blocked) {
+      // jet asked for while the menus hold the input: the log says so (once in 10 s)
+      if (input.buttons & Btn.Jet && performance.now() - this.blockedJetAt > 10_000) {
+        this.blockedJetAt = performance.now();
+        diag('input', `jet asked while the menus hold the input (${describeFocus()}; overlay ${shell.store.getState().overlay ?? 'none'}, route ${shell.store.getState().route ? 'open' : 'none'})`);
+      }
       input.buttons = 0;
       input.weaponSelect = 0;
     }
@@ -706,11 +712,35 @@ loadoutSync?.onLook((look) => {
 });
 
 // no card over a running match (mobile audit P0-3): the phone's fire chooser waits out the countdown and the clock
+let phaseBefore: MatchPhase | null = null;
 if (appMode)
   shell.store.subscribe((s) => {
     const phase = s.match?.phase;
-    setTouchMatchLive((s.screen.name === 'room' || s.screen.name === 'training') && (phase === MatchPhase.Countdown || phase === MatchPhase.InProgress));
+    const playing = s.screen.name === 'room' || s.screen.name === 'training';
+    setTouchMatchLive(playing && (phase === MatchPhase.Countdown || phase === MatchPhase.InProgress));
+    // the countdown begins, then GO: the controls start clean, whatever the lobby, the VS poster or a
+    // lost finger left behind (the owner, 24 Oct: "sometimes someone can't fly as the game starts …
+    // until someone pauses and unpauses"); what was held goes in the event log for a report
+    const now = playing ? (phase ?? null) : null;
+    if (now !== phaseBefore && (now === MatchPhase.Countdown || now === MatchPhase.InProgress)) startClean(now === MatchPhase.Countdown ? 'at the countdown' : 'at GO');
+    phaseBefore = now;
   });
+
+/** The countdown or GO: input starts clean on every device, and the log says what it found. */
+function startClean(why: string): void {
+  const board = hud?.closeScoreboard() ?? false;
+  diag('input', `keys ${why}: ${sampler.heldSummary()}; focus ${describeFocus()}${board ? '; the scoreboard was open: closed' : ''}`);
+  rearmTouch(why);
+  // a text field keeps the game's keys from the game (input.ts typingInto): nobody types into one at GO
+  const el = document.activeElement as HTMLElement | null;
+  if (el && el !== document.body && typingInto(el)) el.blur();
+}
+
+function describeFocus(): string {
+  const el = document.activeElement as HTMLElement | null;
+  if (!el || el === document.body) return 'the page';
+  return `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ''}${el.className && typeof el.className === 'string' ? `.${el.className.split(' ')[0]}` : ''}`;
+}
 
 // ---- the onboarding tour (docs/design/onboarding-research.md §3): the Briefing, then First flight
 

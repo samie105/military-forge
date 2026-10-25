@@ -153,3 +153,28 @@ html.mf-short .lobby .roomcode span { height: 80px; }
   --touch-min: max(48px, calc(44px / var(--phone-fit, 1)));
   --btn-h-sm: max(48px, calc(44px / var(--phone-fit, 1)));
 }
+
+/*
+ * Fade edges on the phone's scroll areas (the owner, 24 Oct: "some things need to be scrolling
+ * properly"): a list that runs past its box fades at the edge where there's more, top or bottom, so
+ * a player sees it scrolls; at rest at the top only the foot fades, at the end only the head. Driven by
+ * the area’s own scroll (where the browser has scroll timelines: Chrome, Safari 26); elsewhere no fade.
+ * A box that doesn't overflow has no scroll timeline: no fade, nothing changes.
+ */
+@property --mf-fade-t { syntax: '<length>'; inherits: false; initial-value: 0px; }
+@property --mf-fade-b { syntax: '<length>'; inherits: false; initial-value: 0px; }
+@supports (animation-timeline: scroll()) {
+  .mf-fit--phone :is(.pm-roster ol, .pm-rail, .pm-set-panel, .pm-tips__list),
+  html.mf-phone :is(.ar__stage, .ar__side, .mm-panel__body, .sx-list) {
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--mf-fade-t), #000 calc(100% - var(--mf-fade-b)), transparent);
+    mask-image: linear-gradient(to bottom, transparent, #000 var(--mf-fade-t), #000 calc(100% - var(--mf-fade-b)), transparent);
+    animation: mf-fade-edges linear both;
+    animation-timeline: scroll(self);
+  }
+  @keyframes mf-fade-edges {
+    from { --mf-fade-t: 0px; --mf-fade-b: 22px; }
+    10% { --mf-fade-t: 22px; --mf-fade-b: 22px; }
+    90% { --mf-fade-t: 22px; --mf-fade-b: 22px; }
+    to { --mf-fade-t: 22px; --mf-fade-b: 0px; }
+  }
+}

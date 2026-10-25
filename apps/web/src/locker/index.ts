@@ -129,7 +129,7 @@ export function mountLocker(container: HTMLElement, options: LockerOptions = {})
         <h1 class="menu-top__title">Locker</h1><span class="serial">Quartermaster</span>
         <span class="mm-status" aria-live="polite"></span>
       </header>
-      <nav class="tabs lk__tabs mm-tabs" role="tablist" aria-label="Locker sections">${TABS.map((t, i) => `<button type="button" class="tab m-p8" role="tab" data-tab="${i}">${ic(t.icon)}${t.label}</button>`).join('')}<span class="m-p5" aria-hidden="true"></span></nav>
+      <nav class="tabs lk__tabs mm-tabs" role="tablist" aria-label="Locker sections" data-scroll-x>${TABS.map((t, i) => `<button type="button" class="tab m-p8" role="tab" data-tab="${i}">${ic(t.icon)}${t.label}</button>`).join('')}<span class="m-p5" aria-hidden="true"></span></nav>
       <div class="lk__stage mm-stage">
         <span class="brackets" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
         <div class="lk__disc" aria-hidden="true"></div>

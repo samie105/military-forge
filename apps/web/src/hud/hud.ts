@@ -924,6 +924,13 @@ export class Hud {
   }
 
   /** Menus over the game: no scoreboard on Tab. */
+  /** The countdown or GO (main.ts startClean): a scoreboard left open (its key's release lost) closes, as pausing closes it. Whether it was open. */
+  closeScoreboard(): boolean {
+    const was = this.scoreboardOpen;
+    this.setScoreboard(false);
+    return was;
+  }
+
   setBlocked(blocked: boolean): void {
     this.blocked = blocked;
     if (blocked) this.setScoreboard(false);

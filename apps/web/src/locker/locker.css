@@ -114,3 +114,12 @@ html.mf-short:where(:not(.mf-phone)) :where(.mf-gear-fit) .menu-top { height: 88
 /* the character creator's way in (#/creator): the stage's top-right corner */
 :where(.mf-gear-fit) .mf-lk__creator { position: absolute; right: 20px; top: 30px; z-index: 2; }
 :where(html.mf-phone) :where(.mf-gear-fit) .mf-lk__creator { right: 6px; top: 6px; min-height: 48px; padding: 0 var(--sp-3); font-size: var(--fs-14); white-space: nowrap; }
+
+/* a short landscape window (an iPhone in Safari, its bars showing: about 300 px): the section's title
+   repeats the tab, so it goes, and the tiles get the room; a full row shows above Wear it */
+@media (max-height: 330px) {
+  :where(html.mf-phone) :where(.mf-gear-fit) .lk__h { display: none; }
+  :where(html.mf-phone) :where(.mf-gear-fit) .item__art { height: 48px; }
+  :where(html.mf-phone) :where(.mf-gear-fit) .mf-item__glyph .ic { width: 30px; height: 30px; }
+  :where(html.mf-phone) :where(.mf-gear-fit) .mf-lk__sub { margin-top: 0; }
+}

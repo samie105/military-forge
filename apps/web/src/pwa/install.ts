@@ -9,7 +9,7 @@
  *   only a home-screen launch removes them). After "Not now", again every 3rd session or after another
  *   match; never twice in one session. Home's top bar, Settings and the pause menu carry a permanent
  *   Install app button besides (InstallButton.tsx).
- * The toast itself shows on Home and Results only (src/pwa/InstallToast.tsx), never in a match.
+ * The toast itself shows on Home only (src/pwa/InstallToast.tsx), never in a match.
  */
 export const INSTALL_KEY = 'mf.install.v1';
 /** "Not now" comes back after this many sessions (or a finished match). */

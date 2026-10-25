@@ -317,6 +317,12 @@ export class InputSampler {
     quickSelect.cancel();
   }
 
+  /** The keys and mouse buttons held now, for the device's event log (diag/log.ts). */
+  heldSummary(): string {
+    const keys = [...this.keys].join(' ') || 'no keys';
+    return `${keys}${this.mouseButtons ? `, mouse ${this.mouseButtons}` : ''}${this.blocked ? ', blocked (menus)' : ''}${this.throwLatch.holding ? ', grenade held' : ''}`;
+  }
+
   /** A key held now (spectating's free camera pans with it). */
   isDown(code: string): boolean {
     return this.keys.has(code);
