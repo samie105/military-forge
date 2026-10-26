@@ -19,9 +19,9 @@ describe("who's who (marking.ts)", () => {
     expect(relationOf(3, 0, teamOf)).toBe('enemy');
   });
 
-  it('free-for-all: everyone else is an enemy', () => {
+  it('free-for-all: no sides, everyone else is drawn plain', () => {
     expect(relationOf(4, 4, noTeams)).toBe('self');
-    for (const id of [0, 1, 2, 3]) expect(relationOf(id, 4, noTeams)).toBe('enemy');
+    for (const id of [0, 1, 2, 3]) expect(relationOf(id, 4, noTeams)).toBe('neutral');
   });
 
   it("watching someone: the picture is theirs (their team are the allies)", () => {
@@ -33,7 +33,8 @@ describe("who's who (marking.ts)", () => {
 
   it('a player not yet on a team never reads as an ally', () => {
     expect(relationOf(9, 0, teamOf)).toBe('enemy');
-    expect(relationOf(2, 9, teamOf)).toBe('enemy');
+    // a viewer with no team yet sees no sides
+    expect(relationOf(2, 9, teamOf)).toBe('neutral');
   });
 
   it('enemies red, allies teal, you volt; the minimap uses the same colours in every colour-blind mode', () => {
@@ -48,7 +49,7 @@ describe("who's who (marking.ts)", () => {
     expect(DEFAULT_PALETTE.you).toBe(MARK_COLOURS.standard.self);
   });
 
-  it('every relation has its own shape (colour is never the only cue)', () => {
-    expect(new Set(Object.values(MARK_SHAPES)).size).toBe(3);
+  it('allies and enemies have their own shapes (colour is never the only cue)', () => {
+    expect(new Set(Object.values(MARK_SHAPES)).size).toBe(2);
   });
 });

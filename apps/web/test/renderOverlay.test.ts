@@ -71,14 +71,24 @@ describe('2D overlay over the 3D view', () => {
     expect(rects.some((rect) => rect.color === '#ff4d5e')).toBe(false);
   });
 
-  it("colours each bar by who's who: you volt, an ally teal, an enemy red", () => {
+  it("team modes colour each bar by side (an ally teal, an enemy red); yours is plain, by health", () => {
     const { r, rects, frame } = setup();
     frame.players.push(playerView({ id: 1, isLocal: false, x: 20, hp: 50 }), playerView({ id: 2, isLocal: false, x: 22, hp: 25 }));
     r.relationOf = (id) => (id === 0 ? 'self' : id === 1 ? 'ally' : 'enemy');
     r.render(frame, 1 / 60, opts({ hud: 'none' }), '');
-    expect(rects).toContainEqual({ color: '#d6ff3b', width: 54, height: 6 });
+    expect(rects).toContainEqual({ color: '#56d364', width: 54, height: 6 });
     expect(rects).toContainEqual({ color: '#3fd0c9', width: 54 * 0.5, height: 6 });
     expect(rects).toContainEqual({ color: '#ff4d5e', width: 54 * 0.25, height: 6 });
+  });
+
+  it('a free-for-all draws everyone plain: bars by health left, no side colours', () => {
+    const { r, rects, frame } = setup();
+    frame.players.push(playerView({ id: 1, isLocal: false, x: 20, hp: 50 }), playerView({ id: 2, isLocal: false, x: 22, hp: 20 }));
+    r.relationOf = (id) => (id === 0 ? 'self' : 'neutral');
+    r.render(frame, 1 / 60, opts({ hud: 'none' }), '');
+    expect(rects).toContainEqual({ color: '#e3b341', width: 54 * 0.5, height: 6 });
+    expect(rects).toContainEqual({ color: '#f85149', width: 54 * 0.2, height: 6 });
+    expect(rects.some((rect) => rect.color === '#ff4d5e' || rect.color === '#3fd0c9')).toBe(false);
   });
 
   it('leaves grenades, tracers, ricochets, blasts and dashes to render3d', () => {

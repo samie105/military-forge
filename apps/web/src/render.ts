@@ -200,8 +200,8 @@ const COLORS = {
 };
 
 /** Shield colour by the HP left (local mode and the local player online know it). */
-/** The relation's shape (teams/marking.ts MARK_SHAPES), centred at x, y: ● an ally, ◆ an enemy, ▲ you. */
-function relationShape(ctx: CanvasRenderingContext2D, rel: Relation, x: number, y: number, colour: string): void {
+/** The side's shape (teams/marking.ts MARK_SHAPES), centred at x, y: ● an ally, ◆ an enemy. */
+function relationShape(ctx: CanvasRenderingContext2D, rel: 'ally' | 'enemy', x: number, y: number, colour: string): void {
   ctx.fillStyle = colour;
   ctx.strokeStyle = 'rgba(5,8,8,0.9)';
   ctx.lineWidth = 1.5;
@@ -212,13 +212,7 @@ function relationShape(ctx: CanvasRenderingContext2D, rel: Relation, x: number, 
     ctx.lineTo(x, y + 5);
     ctx.lineTo(x - 4.5, y);
     ctx.closePath();
-  } else if (rel === 'ally') ctx.arc(x, y, 4, 0, Math.PI * 2);
-  else {
-    ctx.moveTo(x, y - 5);
-    ctx.lineTo(x + 5, y + 4);
-    ctx.lineTo(x - 5, y + 4);
-    ctx.closePath();
-  }
+  } else ctx.arc(x, y, 4, 0, Math.PI * 2);
   ctx.stroke();
   ctx.fill();
 }
@@ -913,10 +907,10 @@ export class Renderer {
   }
 
   /**
-   * Screen-space bar follows the head in both 2D and the transparent overlay over 3D. Who's who (teams/marking.ts):
-   * the bar, its frame and the name take the soldier's relation colour (you volt, allies teal, enemies red), a shape
-   * beside the name says the same without colour (● ally, ◆ enemy), and your own soldier stands on a chevron marked
-   * "YOU" (below the feet: it never covers the soldier).
+   * Screen-space bar follows the head in both 2D and the transparent overlay over 3D. Who's who in team modes
+   * (teams/marking.ts): the bar, its frame and the name take the soldier's side colour (allies teal, enemies red)
+   * and a shape beside the name says the same without colour (● ally, ◆ enemy). In a free-for-all, and over your
+   * own head, it's plain: the bar by health left, the name in bone, no marker (the owner: "just show the player").
    */
   private drawPlayerHealth(p: PlayerView, clouds?: readonly CloudView[]): void {
     if (!p.alive) return;
@@ -927,8 +921,8 @@ export class Renderer {
     const r = t.capsuleRadius;
     const rel = this.relation(p);
     if (rel !== 'self' && inSmoke(clouds, p.x, p.y + h - r)) return;
+    const sided = rel === 'ally' || rel === 'enemy';
     const colour = markColourCss(rel);
-    if (rel === 'self') this.drawSelfMarker(p, colour);
     const sx = cam.toScreenX(p.x);
     const sy = cam.toScreenY(p.y + h + 0.32);
     if (sx < -40 || sx > cam.width + 40 || sy < cam.band.top + 18 || sy > cam.band.bottom - 8) return;
@@ -937,7 +931,7 @@ export class Renderer {
     // the frame: dark, edged in the relation colour for the others (yours is the HUD's)
     ctx.fillStyle = 'rgba(5,8,8,0.82)';
     ctx.fillRect(sx - width / 2 - 2, sy - 2, width + 4, 10);
-    if (rel !== 'self') {
+    if (sided) {
       ctx.strokeStyle = colour;
       ctx.globalAlpha = 0.85;
       ctx.lineWidth = 1;
@@ -946,8 +940,8 @@ export class Renderer {
     }
     ctx.fillStyle = 'rgba(255,255,255,0.14)';
     ctx.fillRect(sx - width / 2, sy, width, 6);
-    // the fill in the relation colour; low health still shows, as a darker, shorter bar
-    ctx.fillStyle = colour;
+    // the fill: the side colour in team modes (low health still shows, as a darker, shorter bar), else by health left
+    ctx.fillStyle = sided ? colour : amount > 0.5 ? '#56d364' : amount > 0.25 ? '#e3b341' : '#f85149';
     ctx.globalAlpha = amount > 0.3 ? 1 : 0.7;
     ctx.fillRect(sx - width / 2, sy, width * amount, 6);
     ctx.globalAlpha = 1;
@@ -956,11 +950,11 @@ export class Renderer {
     ctx.font = 'bold 11px ui-monospace, monospace';
     ctx.shadowColor = 'rgba(0,0,0,0.9)';
     ctx.shadowBlur = 4;
-    // yours: no name over your head (YOU stands under your feet)
+    // yours: no name over your head
     const name = rel === 'self' ? '' : (this.names.get(p.id) ?? p.name);
     if (name) ctx.fillText(name, sx, sy - 7, 110);
     ctx.shadowBlur = 0;
-    if (rel !== 'self') {
+    if ((rel === 'ally' || rel === 'enemy') && name) {
       // the shape, left of the name: colour is never the only cue
       const half = Math.min(110, ctx.measureText(name).width) / 2;
       relationShape(ctx, rel, sx - half - 9, sy - 11, colour);
@@ -972,42 +966,6 @@ export class Renderer {
       ctx.font = 'bold 10px ui-monospace, monospace';
       ctx.fillText(status, sx, sy - 19);
     }
-  }
-
-  /** Your soldier: a flat ring on the ground round the feet, a chevron under it pointing up at you, and "YOU". */
-  private drawSelfMarker(p: PlayerView, colour: string): void {
-    const ctx = this.ctx;
-    const cam = this.camera;
-    const sx = cam.toScreenX(p.x);
-    const fy = cam.toScreenY(p.y);
-    if (sx < -60 || sx > cam.width + 60 || fy < cam.band.top || fy > cam.band.bottom + 30) return;
-    const rx = Math.max(10, 0.42 * cam.ppm);
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.85)';
-    ctx.shadowBlur = 3;
-    ctx.strokeStyle = colour;
-    ctx.globalAlpha = 0.9;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.ellipse(sx, fy + 1, rx, rx * 0.22, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    // the chevron, under the ring, pointing up at the soldier
-    const cy = fy + rx * 0.22 + 9;
-    ctx.fillStyle = colour;
-    ctx.beginPath();
-    ctx.moveTo(sx, cy - 5);
-    ctx.lineTo(sx + 7, cy + 3);
-    ctx.lineTo(sx + 3, cy + 3);
-    ctx.lineTo(sx, cy - 0.5);
-    ctx.lineTo(sx - 3, cy + 3);
-    ctx.lineTo(sx - 7, cy + 3);
-    ctx.closePath();
-    ctx.fill();
-    ctx.font = 'bold 10px ui-monospace, monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.fillText('YOU', sx, cy + 5);
-    ctx.restore();
   }
 
   /**
