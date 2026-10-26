@@ -100,25 +100,25 @@ WS_SOCIAL = "https://social.worldstreetgold.com"
 WS_XTREAM = "https://xtream.worldstreetgold.com"
 SPONSORS = {
     "street_market": [
-        ad("house:deet-wordmark", "deet", ("s0_deet_wordmark.png",), "4:3", "DEET Studios: Products. Worlds. Games."),
-        ad("house:deet-we-build-motion", "deet", ("m0_deet_we_build_k0.png", "m0_deet_we_build_k1.png"), "4:3", "DEET Studios: We build / The whole thing."),
-        ad("house:deet-one-studio", "deet", ("s1_deet_one_studio.png",), "4:3", "DEET Studios: One studio, brand through to backend."),
-        ad("house:deet-products-motion", "deet", ("m1_deet_products_k0.png", "m1_deet_products_k1.png"), "4:3", "DEET Studios: Products. Worlds. Games. / Your idea, built whole."),
-        ad("house:deet-we-build", "deet", ("s2_deet_we_build.png",), "4:3", "DEET Studios: We build products that scale."),
-        # billboard set v2 (Deet's Pen file, board n8HYKf)
-        ad("house:deet-napkin-motion", "deet", ("m2_deet_napkin_k0.png", "m2_deet_napkin_k1.png"), "4:3", "DEET Studios: Napkin to live URL. / In weeks, not quarters."),
-        ad("house:deet-friday-motion", "deet", ("m3_deet_friday_k0.png", "m3_deet_friday_k1.png"), "4:3", "DEET Studios: Launch isn't the finish. / It's Friday one."),
-        ad("house:deet-phones-motion", "deet", ("m4_deet_phones_k0.png", "m4_deet_phones_k1.png"), "4:3", "DEET Studios: Tested on real phones. / Slow networks. Busy hours."),
-        # its VARIATIONS row (stills): headline swaps and colourways
-        ad("house:deet-keep-dates", "deet", ("s3_deet_keep_dates.png",), "4:3", "DEET Studios: We keep dates the way we keep promises."),
-        ad("house:deet-week-one", "deet", ("s4_deet_week_one.png",), "4:3", "DEET Studios: Something real in week one."),
-        ad("house:deet-products-worlds", "deet", ("s5_deet_products_worlds.png",), "4:3", "DEET Studios: Products. Worlds. Games."),
-        ad("house:deet-friday-lime", "deet", ("s6_deet_friday_lime.png",), "4:3", "DEET Studios: Launch isn't the finish."),
-        ad("house:deet-phones-ink", "deet", ("s7_deet_phones_ink.png",), "4:3", "DEET Studios: Tested on real phones."),
-        ad("house:deet-wordmark-wide", "deet", ("h0_deet_wordmark.png",), "6:1", "DEET Studios: Products. Worlds. Games."),
-        ad("house:deet-one-studio-wide", "deet", ("h1_deet_one_studio.png",), "6:1", "DEET Studios: One studio, brand to backend."),
-        ad("house:deet-release-wide-motion", "deet", ("h2_deet_release_k0.png", "h2_deet_release_k1.png"), "6:1", "DEET Studios: A release every Friday. / Napkin to live URL."),
-        ad("house:deet-whole-wide-motion", "deet", ("h3_deet_whole_k0.png", "h3_deet_whole_k1.png"), "6:1", "DEET Studios: The whole thing. / Brand through to backend."),
+        # DEET's copy (26 Oct 2026; art/ads/deet/README.md): masters drawn by deet-ads-masters.mjs from
+        # the brand book. Motion creatives show the headline, then its answer
+        ad("house:deet-three-motion", "deet", ("m0_deet_three_k0.png", "m0_deet_three_k1.png"), "4:3", "DEET Studios: The brand, the app, the AI. / One studio makes all three."),
+        ad("house:deet-taste", "deet", ("s0_deet_taste.png",), "4:3", "DEET Studios: AI with taste. A design studio that builds AI."),
+        ad("house:deet-worlds-motion", "deet", ("m1_deet_worlds_k0.png", "m1_deet_worlds_k1.png"), "4:3", "DEET Studios: We build worlds too. / You're standing in one."),
+        ad("house:deet-grind", "deet", ("s1_deet_grind.png",), "4:3", "DEET Studios: Let agents do the grind. AI that handles the busywork."),
+        ad("house:deet-clickable-motion", "deet", ("m2_deet_clickable_k0.png", "m2_deet_clickable_k1.png"), "4:3", "DEET Studios: Clickable by Friday. / Not a deck. Not a document."),
+        ad("house:deet-rush", "deet", ("s2_deet_rush.png",), "4:3", "DEET Studios: Built for the rush. Quick on any phone, any network."),
+        ad("house:deet-alma-motion", "deet", ("m3_deet_alma_k0.png", "m3_deet_alma_k1.png"), "4:3", "DEET Studios: Every project starts with Alma. / Our AI listens. Our team builds."),
+        ad("house:deet-sharper-motion", "deet", ("m4_deet_sharper_k0.png", "m4_deet_sharper_k1.png"), "4:3", "DEET Studios: Shipped Friday. Sharper by Monday. / We stay on after launch."),
+        # the ash colourway (stills)
+        ad("house:deet-taste-ash", "deet", ("s3_deet_taste_ash.png",), "4:3", "DEET Studios: AI with taste. A design studio that builds AI."),
+        ad("house:deet-worlds-ash", "deet", ("s4_deet_worlds_ash.png",), "4:3", "DEET Studios: We build worlds too. You're standing in one."),
+        ad("house:deet-clickable-ash", "deet", ("s5_deet_clickable_ash.png",), "4:3", "DEET Studios: Clickable by Friday. Not a deck. Not a document."),
+        ad("house:deet-grind-ash", "deet", ("s6_deet_grind_ash.png",), "4:3", "DEET Studios: Let agents do the grind. AI that handles the busywork."),
+        ad("house:deet-worlds-wide-motion", "deet", ("h0_deet_worlds_k0.png", "h0_deet_worlds_k1.png"), "6:1", "DEET Studios: We build worlds too. / You're standing in one."),
+        ad("house:deet-taste-wide", "deet", ("h1_deet_taste.png",), "6:1", "DEET Studios: AI with taste. A design studio that builds AI."),
+        ad("house:deet-clickable-wide-motion", "deet", ("h2_deet_clickable_k0.png", "h2_deet_clickable_k1.png"), "6:1", "DEET Studios: Clickable by Friday. / Not a deck. Not a document."),
+        ad("house:deet-grind-wide", "deet", ("h3_deet_grind.png",), "6:1", "DEET Studios: Let agents do the grind. AI that handles the busywork."),
         ad("house:ws-academy-motion", "worldstreet", ("m0_ws_academy_k0.png", "m0_ws_academy_k1.png"), "4:3", "WorldStreet Academy: Learn the markets. / Start with the basics.", url=WS_ACADEMY),
         ad("house:ws-worldspace-motion", "worldstreet", ("m1_ws_worldspace_k0.png", "m1_ws_worldspace_k1.png"), "4:3", "WorldSpace: Your people. / Your signals.", url=WS_SOCIAL),
         ad("house:ws-xtream-motion", "worldstreet", ("m2_ws_xtream_k0.png", "m2_ws_xtream_k1.png"), "4:3", "Xtream: Go live. / Your stage. Go live.", url=WS_XTREAM),

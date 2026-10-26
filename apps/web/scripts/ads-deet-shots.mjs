@@ -5,10 +5,10 @@
  *   cd apps/web && pnpm exec vite --port 5287 --strictPort        # in another shell
  *   node apps/web/scripts/ads-deet-shots.mjs [--base http://localhost:5287] [--out docs/screenshots/ads-deet]
  *
- * The house rotation shows two studio Screens per match; to see every creative in a few shots the
- * boards are given a manifest (AdBoards.setManifest, the paid flow's entry point) that puts one
- * studio creative on each surface, unpaid, so the boards look exactly as they do in the rotation.
- * The Motion creatives are shot on both keyframes (1 s and 2.4 s into a beat).
+ * To see every DEET creative (three passes), the boards are given a manifest (AdBoards.setManifest,
+ * the paid flow's entry point) that puts one studio creative on each surface, unpaid, so the boards look exactly as they do in the rotation.
+ * The Motion creatives are shot on both keyframes (1 s and 2.4 s into a beat), on the centre and
+ * gantry views.
  */
 import { mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -167,31 +167,35 @@ const VIEWS = [
   { name: 'gantry', at: [56, 12.05], aim: [2, 10], keys: true },
 ];
 
-for (const [label, viewport] of [
-  ['laptop', { width: 1280, height: 720 }],
-  ['phone', { width: 812, height: 375 }],
-]) {
-  const page = await open(viewport);
-  console.log(label);
-  // pass 1: the wordmark, One studio, the We build Motion piece, the Products Motion piece; both Hoardings
-  await showStudio(page, ['house:deet-wordmark', 'house:deet-one-studio', 'house:deet-we-build-motion', 'house:deet-products-motion'], ['house:deet-wordmark-wide', 'house:deet-one-studio-wide']);
-  for (const v of VIEWS) {
-    await place(page, ...v.at);
-    await aimAt(page, ...v.aim);
-    await toBeat(page, 1000);
-    await shot(page, `${label}-${v.name}`);
-    if (v.keys) {
-      await toBeat(page, 2400);
-      await shot(page, `${label}-${v.name}-k1`);
+// every DEET creative, four Screens and two Hoardings a pass
+const PASSES = [
+  { screens: ['house:deet-three-motion', 'house:deet-taste', 'house:deet-worlds-motion', 'house:deet-grind'], hoardings: ['house:deet-worlds-wide-motion', 'house:deet-taste-wide'] },
+  { screens: ['house:deet-clickable-motion', 'house:deet-rush', 'house:deet-alma-motion', 'house:deet-sharper-motion'], hoardings: ['house:deet-clickable-wide-motion', 'house:deet-grind-wide'] },
+  { screens: ['house:deet-taste-ash', 'house:deet-worlds-ash', 'house:deet-clickable-ash', 'house:deet-grind-ash'], hoardings: ['house:deet-taste-wide', 'house:deet-worlds-wide-motion'] },
+];
+
+try {
+  for (const [label, viewport] of [
+    ['laptop', { width: 1280, height: 720 }],
+    ['phone', { width: 812, height: 375 }],
+  ]) {
+    const page = await open(viewport);
+    console.log(label);
+    for (const [p, pass] of PASSES.entries()) {
+      await showStudio(page, pass.screens, pass.hoardings);
+      for (const v of VIEWS) {
+        await place(page, ...v.at);
+        await aimAt(page, ...v.aim);
+        await toBeat(page, 1000);
+        await shot(page, `${label}-p${p + 1}-${v.name}`);
+        if (v.keys && p < 2) {
+          await toBeat(page, 2400);
+          await shot(page, `${label}-p${p + 1}-${v.name}-k1`);
+        }
+      }
     }
+    await page.close();
   }
-  // pass 2: We build (still) on the danfo-park Screen
-  await showStudio(page, ['house:deet-wordmark', 'house:deet-one-studio', 'house:deet-we-build', 'house:deet-products-motion'], ['house:deet-wordmark-wide', 'house:deet-one-studio-wide']);
-  const v = VIEWS[2];
-  await place(page, ...v.at);
-  await aimAt(page, ...v.aim);
-  await toBeat(page, 1000);
-  await shot(page, `${label}-centre-still`);
-  await page.close();
+} finally {
+  await browser.close();
 }
-await browser.close();

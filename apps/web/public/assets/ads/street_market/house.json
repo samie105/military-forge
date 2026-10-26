@@ -30,86 +30,72 @@
  "sponsored": {
   "screens": [
    {
-    "id": "house:deet-wordmark",
-    "file": "deet-wordmark.webp",
-    "ktx2": "deet-wordmark.ktx2",
-    "title": "DEET Studios: Products. Worlds. Games.",
-    "advertiser": "deet",
-    "signalHues": {
-     "teamBlue": 0.001,
-     "teamOrange": 0.037,
-     "damageRed": 0.0
-    },
-    "saturation": 0.8,
-    "luminance": 0.1119
-   },
-   {
-    "id": "house:deet-we-build-motion",
-    "file": "deet-we-build-motion.webp",
-    "ktx2": "deet-we-build-motion.ktx2",
+    "id": "house:deet-three-motion",
+    "file": "deet-three-motion.webp",
+    "ktx2": "deet-three-motion.ktx2",
     "keys": [
      {
-      "file": "deet-we-build-motion-k1.webp",
-      "ktx2": "deet-we-build-motion-k1.ktx2"
+      "file": "deet-three-motion-k1.webp",
+      "ktx2": "deet-three-motion-k1.ktx2"
      }
     ],
-    "title": "DEET Studios: We build / The whole thing.",
+    "title": "DEET Studios: The brand, the app, the AI. / One studio makes all three.",
     "advertiser": "deet",
     "signalHues": {
      "teamBlue": 0.0,
-     "teamOrange": 0.005,
+     "teamOrange": 0.0,
      "damageRed": 0.0
     },
     "saturation": 0.8,
-    "luminance": 0.1249,
+    "luminance": 0.0942,
     "keyLuminance": [
-     0.1058,
-     0.1249
+     0.0942,
+     0.0807
     ]
    },
    {
-    "id": "house:deet-one-studio",
-    "file": "deet-one-studio.webp",
-    "ktx2": "deet-one-studio.ktx2",
-    "title": "DEET Studios: One studio, brand through to backend.",
+    "id": "house:deet-taste",
+    "file": "deet-taste.webp",
+    "ktx2": "deet-taste.ktx2",
+    "title": "DEET Studios: AI with taste. A design studio that builds AI.",
     "advertiser": "deet",
     "signalHues": {
      "teamBlue": 0.0,
-     "teamOrange": 0.022,
+     "teamOrange": 0.0,
      "damageRed": 0.0
     },
     "saturation": 0.8,
-    "luminance": 0.2917
+    "luminance": 0.0762
    },
    {
-    "id": "house:deet-products-motion",
-    "file": "deet-products-motion.webp",
-    "ktx2": "deet-products-motion.ktx2",
+    "id": "house:deet-worlds-motion",
+    "file": "deet-worlds-motion.webp",
+    "ktx2": "deet-worlds-motion.ktx2",
     "keys": [
      {
-      "file": "deet-products-motion-k1.webp",
-      "ktx2": "deet-products-motion-k1.ktx2"
+      "file": "deet-worlds-motion-k1.webp",
+      "ktx2": "deet-worlds-motion-k1.ktx2"
      }
     ],
-    "title": "DEET Studios: Products. Worlds. Games. / Your idea, built whole.",
+    "title": "DEET Studios: We build worlds too. / You're standing in one.",
     "advertiser": "deet",
     "signalHues": {
      "teamBlue": 0.0,
-     "teamOrange": 0.018,
+     "teamOrange": 0.0,
      "damageRed": 0.0
     },
     "saturation": 0.8,
-    "luminance": 0.2983,
+    "luminance": 0.0841,
     "keyLuminance": [
-     0.2929,
-     0.2983
+     0.0841,
+     0.0716
     ]
    },
    {
-    "id": "house:deet-we-build",
-    "file": "deet-we-build.webp",
-    "ktx2": "deet-we-build.ktx2",
-    "title": "DEET Studios: We build products that scale.",
+    "id": "house:deet-grind",
+    "file": "deet-grind.webp",
+    "ktx2": "deet-grind.ktx2",
+    "title": "DEET Studios: Let agents do the grind. AI that handles the busywork.",
     "advertiser": "deet",
     "signalHues": {
      "teamBlue": 0.0,
@@ -117,43 +103,37 @@
      "damageRed": 0.0
     },
     "saturation": 0.8,
-    "luminance": 0.3006
+    "luminance": 0.1003
    },
    {
-    "id": "house:deet-napkin-motion",
-    "file": "deet-napkin-motion.webp",
-    "ktx2": "deet-napkin-motion.ktx2",
+    "id": "house:deet-clickable-motion",
+    "file": "deet-clickable-motion.webp",
+    "ktx2": "deet-clickable-motion.ktx2",
     "keys": [
      {
-      "file": "deet-napkin-motion-k1.webp",
-      "ktx2": "deet-napkin-motion-k1.ktx2"
+      "file": "deet-clickable-motion-k1.webp",
+      "ktx2": "deet-clickable-motion-k1.ktx2"
      }
     ],
-    "title": "DEET Studios: Napkin to live URL. / In weeks, not quarters.",
+    "title": "DEET Studios: Clickable by Friday. / Not a deck. Not a document.",
     "advertiser": "deet",
     "signalHues": {
      "teamBlue": 0.0,
-     "teamOrange": 0.005,
+     "teamOrange": 0.0,
      "damageRed": 0.0
     },
     "saturation": 0.8,
-    "luminance": 0.0891,
+    "luminance": 0.0845,
     "keyLuminance": [
-     0.0822,
-     0.0891
+     0.0845,
+     0.076
     ]
    },
    {
-    "id": "house:deet-friday-motion",
-    "file": "deet-friday-motion.webp",
-    "ktx2": "deet-friday-motion.ktx2",
-    "keys": [
-     {
-      "file": "deet-friday-motion-k1.webp",
-      "ktx2": "deet-friday-motion-k1.ktx2"
-     }
-    ],
-    "title": "DEET Studios: Launch isn't the finish. / It's Friday one.",
+    "id": "house:deet-rush",
+    "file": "deet-rush.webp",
+    "ktx2": "deet-rush.ktx2",
+    "title": "DEET Studios: Built for the rush. Quick on any phone, any network.",
     "advertiser": "deet",
     "signalHues": {
      "teamBlue": 0.0,
@@ -161,23 +141,43 @@
      "damageRed": 0.0
     },
     "saturation": 0.8,
-    "luminance": 0.2169,
+    "luminance": 0.0861
+   },
+   {
+    "id": "house:deet-alma-motion",
+    "file": "deet-alma-motion.webp",
+    "ktx2": "deet-alma-motion.ktx2",
+    "keys": [
+     {
+      "file": "deet-alma-motion-k1.webp",
+      "ktx2": "deet-alma-motion-k1.ktx2"
+     }
+    ],
+    "title": "DEET Studios: Every project starts with Alma. / Our AI listens. Our team builds.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.0,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.0815,
     "keyLuminance": [
-     0.2115,
-     0.2169
+     0.08,
+     0.0815
     ]
    },
    {
-    "id": "house:deet-phones-motion",
-    "file": "deet-phones-motion.webp",
-    "ktx2": "deet-phones-motion.ktx2",
+    "id": "house:deet-sharper-motion",
+    "file": "deet-sharper-motion.webp",
+    "ktx2": "deet-sharper-motion.ktx2",
     "keys": [
      {
-      "file": "deet-phones-motion-k1.webp",
-      "ktx2": "deet-phones-motion-k1.ktx2"
+      "file": "deet-sharper-motion-k1.webp",
+      "ktx2": "deet-sharper-motion-k1.ktx2"
      }
     ],
-    "title": "DEET Studios: Tested on real phones. / Slow networks. Busy hours.",
+    "title": "DEET Studios: Shipped Friday. Sharper by Monday. / We stay on after launch.",
     "advertiser": "deet",
     "signalHues": {
      "teamBlue": 0.0,
@@ -185,31 +185,17 @@
      "damageRed": 0.0
     },
     "saturation": 0.8,
-    "luminance": 0.305,
+    "luminance": 0.0912,
     "keyLuminance": [
-     0.305,
-     0.2991
+     0.0735,
+     0.0912
     ]
    },
    {
-    "id": "house:deet-keep-dates",
-    "file": "deet-keep-dates.webp",
-    "ktx2": "deet-keep-dates.ktx2",
-    "title": "DEET Studios: We keep dates the way we keep promises.",
-    "advertiser": "deet",
-    "signalHues": {
-     "teamBlue": 0.0,
-     "teamOrange": 0.005,
-     "damageRed": 0.0
-    },
-    "saturation": 0.8,
-    "luminance": 0.1076
-   },
-   {
-    "id": "house:deet-week-one",
-    "file": "deet-week-one.webp",
-    "ktx2": "deet-week-one.ktx2",
-    "title": "DEET Studios: Something real in week one.",
+    "id": "house:deet-taste-ash",
+    "file": "deet-taste-ash.webp",
+    "ktx2": "deet-taste-ash.ktx2",
+    "title": "DEET Studios: AI with taste. A design studio that builds AI.",
     "advertiser": "deet",
     "signalHues": {
      "teamBlue": 0.0,
@@ -217,13 +203,13 @@
      "damageRed": 0.0
     },
     "saturation": 0.8,
-    "luminance": 0.2074
+    "luminance": 0.2483
    },
    {
-    "id": "house:deet-products-worlds",
-    "file": "deet-products-worlds.webp",
-    "ktx2": "deet-products-worlds.ktx2",
-    "title": "DEET Studios: Products. Worlds. Games.",
+    "id": "house:deet-worlds-ash",
+    "file": "deet-worlds-ash.webp",
+    "ktx2": "deet-worlds-ash.ktx2",
+    "title": "DEET Studios: We build worlds too. You're standing in one.",
     "advertiser": "deet",
     "signalHues": {
      "teamBlue": 0.0,
@@ -231,13 +217,13 @@
      "damageRed": 0.0
     },
     "saturation": 0.8,
-    "luminance": 0.3013
+    "luminance": 0.2469
    },
    {
-    "id": "house:deet-friday-lime",
-    "file": "deet-friday-lime.webp",
-    "ktx2": "deet-friday-lime.ktx2",
-    "title": "DEET Studios: Launch isn't the finish.",
+    "id": "house:deet-clickable-ash",
+    "file": "deet-clickable-ash.webp",
+    "ktx2": "deet-clickable-ash.ktx2",
+    "title": "DEET Studios: Clickable by Friday. Not a deck. Not a document.",
     "advertiser": "deet",
     "signalHues": {
      "teamBlue": 0.0,
@@ -245,21 +231,21 @@
      "damageRed": 0.0
     },
     "saturation": 0.8,
-    "luminance": 0.3178
+    "luminance": 0.2425
    },
    {
-    "id": "house:deet-phones-ink",
-    "file": "deet-phones-ink.webp",
-    "ktx2": "deet-phones-ink.ktx2",
-    "title": "DEET Studios: Tested on real phones.",
+    "id": "house:deet-grind-ash",
+    "file": "deet-grind-ash.webp",
+    "ktx2": "deet-grind-ash.ktx2",
+    "title": "DEET Studios: Let agents do the grind. AI that handles the busywork.",
     "advertiser": "deet",
     "signalHues": {
      "teamBlue": 0.0,
-     "teamOrange": 0.005,
+     "teamOrange": 0.0,
      "damageRed": 0.0
     },
     "saturation": 0.8,
-    "luminance": 0.0897
+    "luminance": 0.2392
    },
    {
     "id": "house:ws-academy-motion",
@@ -364,68 +350,16 @@
   ],
   "hoardings": [
    {
-    "id": "house:deet-wordmark-wide",
-    "file": "deet-wordmark-wide.webp",
-    "ktx2": "deet-wordmark-wide.ktx2",
-    "title": "DEET Studios: Products. Worlds. Games.",
-    "advertiser": "deet",
-    "signalHues": {
-     "teamBlue": 0.0,
-     "teamOrange": 0.016,
-     "damageRed": 0.0
-    },
-    "saturation": 0.8,
-    "luminance": 0.0932
-   },
-   {
-    "id": "house:deet-one-studio-wide",
-    "file": "deet-one-studio-wide.webp",
-    "ktx2": "deet-one-studio-wide.ktx2",
-    "title": "DEET Studios: One studio, brand to backend.",
-    "advertiser": "deet",
-    "signalHues": {
-     "teamBlue": 0.0,
-     "teamOrange": 0.015,
-     "damageRed": 0.0
-    },
-    "saturation": 0.8,
-    "luminance": 0.2968
-   },
-   {
-    "id": "house:deet-release-wide-motion",
-    "file": "deet-release-wide-motion.webp",
-    "ktx2": "deet-release-wide-motion.ktx2",
+    "id": "house:deet-worlds-wide-motion",
+    "file": "deet-worlds-wide-motion.webp",
+    "ktx2": "deet-worlds-wide-motion.ktx2",
     "keys": [
      {
-      "file": "deet-release-wide-motion-k1.webp",
-      "ktx2": "deet-release-wide-motion-k1.ktx2"
+      "file": "deet-worlds-wide-motion-k1.webp",
+      "ktx2": "deet-worlds-wide-motion-k1.ktx2"
      }
     ],
-    "title": "DEET Studios: A release every Friday. / Napkin to live URL.",
-    "advertiser": "deet",
-    "signalHues": {
-     "teamBlue": 0.0,
-     "teamOrange": 0.016,
-     "damageRed": 0.0
-    },
-    "saturation": 0.8,
-    "luminance": 0.094,
-    "keyLuminance": [
-     0.094,
-     0.0882
-    ]
-   },
-   {
-    "id": "house:deet-whole-wide-motion",
-    "file": "deet-whole-wide-motion.webp",
-    "ktx2": "deet-whole-wide-motion.ktx2",
-    "keys": [
-     {
-      "file": "deet-whole-wide-motion-k1.webp",
-      "ktx2": "deet-whole-wide-motion-k1.ktx2"
-     }
-    ],
-    "title": "DEET Studios: The whole thing. / Brand through to backend.",
+    "title": "DEET Studios: We build worlds too. / You're standing in one.",
     "advertiser": "deet",
     "signalHues": {
      "teamBlue": 0.0,
@@ -433,11 +367,63 @@
      "damageRed": 0.0
     },
     "saturation": 0.8,
-    "luminance": 0.3083,
+    "luminance": 0.0902,
     "keyLuminance": [
-     0.3083,
-     0.3002
+     0.0883,
+     0.0902
     ]
+   },
+   {
+    "id": "house:deet-taste-wide",
+    "file": "deet-taste-wide.webp",
+    "ktx2": "deet-taste-wide.ktx2",
+    "title": "DEET Studios: AI with taste. A design studio that builds AI.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.0,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.0846
+   },
+   {
+    "id": "house:deet-clickable-wide-motion",
+    "file": "deet-clickable-wide-motion.webp",
+    "ktx2": "deet-clickable-wide-motion.ktx2",
+    "keys": [
+     {
+      "file": "deet-clickable-wide-motion-k1.webp",
+      "ktx2": "deet-clickable-wide-motion-k1.ktx2"
+     }
+    ],
+    "title": "DEET Studios: Clickable by Friday. / Not a deck. Not a document.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.0,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.0886,
+    "keyLuminance": [
+     0.0886,
+     0.0839
+    ]
+   },
+   {
+    "id": "house:deet-grind-wide",
+    "file": "deet-grind-wide.webp",
+    "ktx2": "deet-grind-wide.ktx2",
+    "title": "DEET Studios: Let agents do the grind. AI that handles the busywork.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.0,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.104
    },
    {
     "id": "house:ws-brand-wide-motion",
