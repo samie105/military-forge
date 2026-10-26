@@ -98,9 +98,24 @@ export function landSettled(ageMs: number, inSpeed: number): boolean {
   return ageMs >= LAND_ARM.maxMs || (ageMs >= LAND_ARM.ms && inSpeed < LAND_ARM.inPxPerMs);
 }
 
+/**
+ * The move stick's buttons from its readings (thresholds with hysteresis, stick.ts touchMoveButtons).
+ * `drag`: a fixed stick read from its drawn centre also reads the thumb's drag from where it landed
+ * (as Follow thumb does), and a push up from the landing jets. The owner, 26 Oct ("I'm only flying if
+ * I press JET"): a thumb comes onto the dial from below and lands low on it, where the centre reads it
+ * as pushed down; read from the centre alone it had to climb past the centre and 30 px more (90 px
+ * from a landing 35 px low, more than a thumb's push) before it jetted. Running and crouching still
+ * read from the centre (the landing is a push: "press where you want to go").
+ */
+export function stickMoveButtons(centre: StickVector, drag: StickVector | null, prev: number): number {
+  let b = touchMoveButtons(centre, prev);
+  if (drag && !(b & Btn.Jet) && touchMoveButtons(drag, prev) & Btn.Jet) b = (b & ~Btn.Down) | Btn.Jet;
+  return b;
+}
+
 /** The move stick's buttons now, from its reading and the last ones (thresholds with hysteresis, stick.ts). */
 export function updateMove(s: TouchState, stickJet = true): number {
-  s.moveBits = s.moveActive ? touchMoveButtons(s.move, s.moveBits) : 0;
+  s.moveBits = s.moveActive ? stickMoveButtons(s.move, s.moveDragOn ? s.moveDrag : null, s.moveBits) : 0;
   // Claw: the stick doesn't jet (JET is the left index finger's); pushed up, it only walks
   if (!stickJet) s.moveBits &= ~Btn.Jet;
   return s.moveBits;
@@ -111,6 +126,9 @@ export interface TouchState {
   moveActive: boolean;
   /** the move stick's buttons (Left/Right/Jet/Down), kept between readings for the thresholds' hysteresis */
   moveBits: number;
+  /** a fixed move stick read from its drawn centre: the thumb's drag from where it landed (the Follow thumb reading; it jets too: stickMoveButtons) */
+  moveDrag: StickVector;
+  moveDragOn: boolean;
   aim: StickVector;
   aimActive: boolean;
   /** the aim stick past Pull's fire line (FIRE_ON, held down to FIRE_OFF; FIRE_FIXED on a fixed stick) */
@@ -139,7 +157,7 @@ export interface TouchState {
 }
 
 export function createTouchState(): TouchState {
-  return { move: zeroStick(), moveActive: false, moveBits: 0, aim: zeroStick(), aimActive: false, aimFire: false, aimArmed: true, autoFiring: false, chargeHold: false, held: 0, pulses: 0, dashDir: 0, dashStrength: 7, grenadeActive: false, grenade: zeroStick() };
+  return { move: zeroStick(), moveActive: false, moveBits: 0, moveDrag: zeroStick(), moveDragOn: false, aim: zeroStick(), aimActive: false, aimFire: false, aimArmed: true, autoFiring: false, chargeHold: false, held: 0, pulses: 0, dashDir: 0, dashStrength: 7, grenadeActive: false, grenade: zeroStick() };
 }
 
 /**

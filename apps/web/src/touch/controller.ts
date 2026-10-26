@@ -110,7 +110,7 @@ type Grab =
   // when it was reached and from when (the last moment under 0.3), where the thumb landed (x0, y0),
   // whether it has moved off that point, and its last few points. For a fixed aim stick's landing
   // (LAND_ARM): when it landed and last moved, on the page's clock (apply() runs between events)
-  | { kind: 'stick'; id: 'move' | 'aim'; cx: number; cy: number; radius: number; fixed: boolean; centred: boolean; x0: number; y0: number; moved: boolean; landedAt: number; movedAt: number; startAt: number; peak: number; peakDir: number; peakAt: number; lowAt: number; riseFrom: number; lastMag: number; lastAt: number; trail: { t: number; x: number; y: number }[]; dx: number; dy: number }
+  | { kind: 'stick'; id: 'move' | 'aim'; cx: number; cy: number; radius: number; fixed: boolean; centred: boolean; x0: number; y0: number; ox: number; oy: number; moved: boolean; landedAt: number; movedAt: number; startAt: number; peak: number; peakDir: number; peakAt: number; lowAt: number; riseFrom: number; lastMag: number; lastAt: number; trail: { t: number; x: number; y: number }[]; dx: number; dy: number }
   | { kind: 'grenade'; cx: number; cy: number; radius: number; downAt: number; x0: number; y0: number; mode: 'pending' | 'aim' | 'cycle'; steps: number; moving?: boolean }
   | { kind: 'button'; def: ControlDef }
   // Fire button mode's FIRE (§4.4): the trigger held while it's down; on the right one, a drag from it
@@ -945,7 +945,7 @@ export class TouchController {
     settleNow(el);
     if (!fixed) this.drawBase(el, cx, cy, radius, rect);
     el.classList.add('mf-down');
-    const grab: Grab = { kind: 'stick', id, cx, cy, radius, fixed, centred, x0: at.x, y0: at.y, moved: false, landedAt: performance.now(), movedAt: performance.now(), startAt: e.timeStamp, peak: 0, peakDir: 0, peakAt: e.timeStamp, lowAt: e.timeStamp, riseFrom: e.timeStamp, lastMag: 0, lastAt: e.timeStamp, trail: [{ t: e.timeStamp, x: at.x, y: at.y }], dx: 0, dy: 0 };
+    const grab: Grab = { kind: 'stick', id, cx, cy, radius, fixed, centred, x0: at.x, y0: at.y, ox: at.x, oy: at.y, moved: false, landedAt: performance.now(), movedAt: performance.now(), startAt: e.timeStamp, peak: 0, peakDir: 0, peakAt: e.timeStamp, lowAt: e.timeStamp, riseFrom: e.timeStamp, lastMag: 0, lastAt: e.timeStamp, trail: [{ t: e.timeStamp, x: at.x, y: at.y }], dx: 0, dy: 0 };
     this.grabs.set(e.pointerId, grab);
     this.pointers.set(e.pointerId, at);
     // a fixed aim stick landing past the fire line aims at once, and fires once the landing settles
@@ -1123,6 +1123,7 @@ export class TouchController {
         this.moveLift = lifted ? { at, bits: carriedBits(g, at) } : null;
         s.moveActive = false;
         s.moveBits = 0;
+        s.moveDragOn = false;
         Object.assign(s.move, zeroStick());
       } else {
         // remembered for a quick hop to a button and back (§4.6: resumeAim)
@@ -1450,8 +1451,13 @@ export class TouchController {
     // a short history is enough: the flick looks back FLICK.windowMs and more
     while (g.trail.length > 2 && t - g.trail[1]!.t >= FLICK.windowMs * 3) g.trail.shift();
     if (!g.moved && Math.hypot(at.x - g.x0, at.y - g.y0) > GESTURE.stillPx) g.moved = true;
-    // read from the drawn centre: the origin never moves
-    if (g.centred) return;
+    // read from the drawn centre: the origin never moves (the drag's own origin, which jets, follows the thumb past 1.2 radii as Follow thumb's does)
+    if (g.centred) {
+      const d = followOrigin(g.ox, g.oy, at.x, at.y, g.radius);
+      g.ox = d.x;
+      g.oy = d.y;
+      return;
+    }
     const o = followOrigin(g.cx, g.cy, at.x, at.y, g.radius);
     if (o.x === g.cx && o.y === g.cy) return;
     g.cx = o.x;
@@ -1703,6 +1709,9 @@ export class TouchController {
     }
     if (id === 'move') {
       s.moveActive = true;
+      // a fixed stick also reads the drag from where the thumb landed: a push up from there jets (mapping.ts stickMoveButtons)
+      s.moveDragOn = !!g?.centred;
+      if (g?.centred) shapeStick(g.cx + dx - g.ox, g.cy + dy - g.oy, radius, MOVE_STICK, s.moveDrag);
       updateMove(s, this.settings.stickJet);
       if (g && v.mag >= g.peak) {
         // the flick's rise is timed to the first moment it reached its peak (a stick held at the rim
@@ -1755,6 +1764,7 @@ export class TouchController {
     if (!move) {
       s.moveActive = false;
       s.moveBits = 0;
+      s.moveDragOn = false;
       Object.assign(s.move, zeroStick());
     }
     if (!aim) {
