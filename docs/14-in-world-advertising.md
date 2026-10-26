@@ -74,7 +74,7 @@ Interstitial or video ads during play (rewarded ads stay opt-in, 01 §10) · per
 
 House-only surfaces are danfo side panels, stall posters, shop signs, awnings and anything on or near the play plane. They're dressed with **fictional local businesses** ("Mama Put", "Iya Basira's Buka", a Dadar chai stall), community notices and safety tips. They never carry our own store promos either: "buy the pass now" aimed at kids is a direct exhortation (§7.3).
 
-**Studio creatives (Deet Studios, who make the game).** The studio's own brand art runs as house art on the Street Market's ad surfaces: never paid, never chipped, never a store promo, and held to every rule in §3. They sit in the pool's `studio` lists, outside the local pool's ≤ 8 per format (lint 6). Every match's six-creative Screen set takes **2 studio Screens** (frames 0 and 3, so they're spread across the loop) and 4 local ones. The first Hoarding (H1) shows a studio banner, and H2 shows local art. The masters live in `art/ads/deet` (designed in Pen, in the Deet document's "DEET × Military Forge — Street Market billboards" board). `apps/web/scripts/house-ads.py <map> --studio-only <out>` rebuilds them. A paid booking replaces them like any house frame.
+**Studio creatives (Deet Studios, who make the game).** The studio's own brand art runs as house art on the Street Market's ad surfaces (and Fog Stair's: its pool, `assets/ads/fog_stair/house.json`, names the same files with its own UTM tag, `house-ads.py fog_stair --reuse street_market`): never paid, never chipped, never a store promo, and held to every rule in §3. They sit in the pool's `studio` lists, outside the local pool's ≤ 8 per format (lint 6). Every match's six-creative Screen set takes **2 studio Screens** (frames 0 and 3, so they're spread across the loop) and 4 local ones. The first Hoarding (H1) shows a studio banner, and H2 shows local art. The masters live in `art/ads/deet` (designed in Pen, in the Deet document's "DEET × Military Forge — Street Market billboards" board). `apps/web/scripts/house-ads.py <map> --studio-only <out>` rebuilds them. A paid booking replaces them like any house frame.
 
 Share of the screen by zoom level (03 §10; FOV 35°, 16:9):
 
@@ -96,6 +96,7 @@ City maps only, where billboards belong in the fiction:
 | Map | Ads | Ship |
 |---|---|---|
 | Street Market (the Lagos map) | yes (the home map for Nigerian advertisers) | Launch (pilot map) |
+| Fog Stair (the river city, south-west China) | yes (towers, stairs and the monorail: a city's own boards; the owner, 26 Oct 2026) | Now (house art: the sponsors) |
 | Drop Zone Strip | yes (surface POIs, metro, warm-up yard) | Launch (pilot map) |
 | Mumbai Local | yes | Launch (after the pilot) |
 | Highrise | yes (rooftop LED towers) | Post |
@@ -118,6 +119,15 @@ Custom rooms on ad maps show ads (counted only with ≥ 2 humans, §4.8). **Rank
 | street-market/H1 | Hoarding | flyover across the upper background (scaled to 21 × 3.5 m for its depth) | z −8 |
 | street-market/H2 | Hoarding | rooftop sign spanning two east buildings | z −6 |
 | house | — | danfos, stall posters, awnings (breakable one-way platforms), shop signs | play plane / near |
+
+**Fog Stair** (the river city; 244 × 108 m, four tiers; mirrored about the river, so its boards are too). The owner asked for boards that look native to the place (26 Oct 2026): neon-framed cabinets, LED boards over the stairs, a hoarding on the viaduct. Every slot keeps §2.6's lints (compile_map.py's kit check: ≤ 1 surface in any 1× view, ≤ 4 and ≤ 3.4% of the screen at 7×; S 4.2–4.9% and H 5.5% at 1×) and nothing of the kit stands in front of a board from any camera (`ads/test/fogStairAds.test.ts`: ≤ 2% covered).
+
+| Slot | Type | Where | Depth |
+|---|---|---|---|
+| fog-stair/S1, S2 | Screen | a vertical neon-framed cabinet on a tower in the gorge, behind the river (x 109 and 131, y 21.8–27.8): the Screen on top, a neon blade under it (茶馆, "teahouse"), clear of the arch bridge and the towers' balconies | z −8 |
+| fog-stair/S3, S4 | Screen | an LED Screen on a steel gantry high over each lower stair (x 72.5 and 167.5, y 18.3–24.3), clear of the viaduct's pillars and the lanterns | z −5 |
+| fog-stair/H1, H2 | Hoarding | hung under the monorail's other track over the terrace and the upper stair (x 42 and 198, y 31.75–34.75) | z −5 |
+| house | — | shop boards and neon blades in Simplified Chinese (火锅 hotpot, 面馆 noodle shop, 药房 pharmacy, 小卖部 corner shop, 旅馆 inn, 小面 small noodles, 茶馆 teahouse), an LED panel, lanterns | play plane / near |
 
 **Mumbai Local** (train yard; the gameplay train passes every 45 s):
 
@@ -150,10 +160,11 @@ The deploy plane, its path, supply drops (crate, canopy, flare, minimap marker) 
 | Map | Screens | Units on sale at launch | Pilot (Phase 3, premium only) |
 |---|---|---|---|
 | Street Market | 4 | 24 frames + 2 Hoardings | 12 frames (3 per Screen; the rest show house art) + 2 Hoardings |
+| Fog Stair | 4 | 24 frames + 2 Hoardings | — (house art: the Street Market's sponsors) |
 | Mumbai Local | 3 | 18 frames + 2 Hoardings + 1 Wrap | — (from launch) |
 | Strip | 16 | 6 Strip Packs (one per frame index: the same creative on all 16 Screens) + 4 Hoardings | 3 Strip Packs |
 | BR warm-up yard | 4 | Drop Sponsor | — (house art; its delivery is measured to build the forecast) |
-| **Total** | 23 (+4 yard) | **42 frames + 6 Strip Packs + 9 single-owner surfaces + Drop Sponsor** | **12 frames + 3 Strip Packs + 2 Hoardings** |
+| **Total** | 27 (+4 yard) | **66 frames + 6 Strip Packs + 11 single-owner surfaces + Drop Sponsor** | **12 frames + 3 Strip Packs + 2 Hoardings** |
 
 - **Strip Screens aren't sold one at a time.** 96 separate Strip creatives would blow the texture and download budgets (§4.9). Strip Packs cap unique Strip creatives at 6 per geo-week.
 - **Scarcity in the pilot.** At realistic demand most inventory would show house art, which signals abundance to buyers. So the pilot puts only premium units on sale, and a demand rule raises the index when a map fills (§5.2).

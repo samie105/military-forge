@@ -8,7 +8,7 @@
  * All maths is in linear RGB (glTF vertex colours and three's working space).
  */
 import { Color } from 'three';
-import type { KitLayer } from './layout';
+import type { GradedLayer } from './layout';
 
 export interface LayerGrade {
   /** 1 = as authored, 0 = grey */
@@ -27,7 +27,7 @@ export interface MapGrade {
   hazeColor: Color;
   /** a gentle colour cast over the whole kit (multiplied in), e.g. warm sunlight in the dust */
   tint: Color;
-  layers: Record<KitLayer, LayerGrade>;
+  layers: Record<GradedLayer, LayerGrade>;
   /**
    * Baked ambient occlusion on walls: vertical faces darken toward their foot over this height (m),
    * down to `aoFloor` at y = 0. Upward faces (floors, roofs) get contact shadows instead.
@@ -58,7 +58,7 @@ const smooth = (t: number) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
  * The graded colour of one vertex. `y`/`z` are its world height and depth, `ny` the up component
  * of its normal (for wall AO).
  */
-export function gradeVertex(c: Color, grade: MapGrade, layer: KitLayer, y: number, z: number, ny: number): Color {
+export function gradeVertex(c: Color, grade: MapGrade, layer: GradedLayer, y: number, z: number, ny: number): Color {
   const g = grade.layers[layer];
   saturate(c, layer === 'gameplay' && ny > 0.7 && y < 0.05 ? g.saturation * grade.floorSaturation : g.saturation);
   c.multiply(grade.tint).multiplyScalar(g.gain);

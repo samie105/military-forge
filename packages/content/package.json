@@ -9,6 +9,7 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json",
-    "schema": "tsx scripts/write-schema.ts"
+    "schema": "tsx scripts/write-schema.ts",
+    "export-map": "tsx scripts/export-map.ts"
   }
 }

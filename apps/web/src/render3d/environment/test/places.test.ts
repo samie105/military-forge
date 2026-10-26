@@ -46,11 +46,20 @@ describe('map environments without a kit (the mechanics demos)', () => {
         folders.add(def.backdrop.base);
       }
       if (def.mapId === 'street-market') continue;
-      expect(def.kitUrl, def.mapId).toBeUndefined();
-      expect(def.layoutUrl, def.mapId).toBeUndefined();
+      // a kit of its own (Fog Stair's, 26 Oct), never the market's
+      const kits = `assets/kits/${def.mapId.replace(/-/g, '_')}/`;
+      if (def.kitUrl) expect(def.kitUrl.startsWith(kits), def.mapId).toBe(true);
+      if (def.layoutUrl) expect(def.layoutUrl.startsWith(kits), def.mapId).toBe(true);
       expect(def.lamps, def.mapId).toBeUndefined();
       expect(def.dressing, def.mapId).toBeUndefined();
-      expect(def.ads, def.mapId).toBeUndefined();
+      if (def.ads) {
+        // its own slots and pool; the pool may show the sponsors' creatives (Deet Studios, WorldStreet:
+        // the owner's own, not Lagos art), never the market's local house art
+        expect(def.ads.slots.startsWith(kits), def.mapId).toBe(true);
+        expect(def.ads.pool, def.mapId).toBe(`assets/ads/${def.mapId.replace(/-/g, '_')}/house.json`);
+        const pool = JSON.parse(readFileSync(new URL(`public/${def.ads.pool}`, WEB), 'utf8')) as { screens: unknown[]; hoardings: unknown[] };
+        expect([...pool.screens, ...pool.hoardings], def.mapId).toEqual([]);
+      }
       // and none of its painted files is a copy of a Street Market one
       const files = [...Object.values(def.backdrop?.skies ?? {}), ...(def.backdrop?.layers ?? []).flatMap((l) => l.panels.map((p) => p.file))];
       for (const f of files) expect(marketArt.has(digest(new URL(`public/${own}${f}`, WEB))), `${def.mapId} ${f}`).toBe(false);

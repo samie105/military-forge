@@ -21,7 +21,7 @@ export interface KitPiece {
   extras: Record<string, unknown>;
 }
 
-const LAYERS: readonly KitLayer[] = ['gameplay', 'mid', 'far'];
+const LAYERS: readonly KitLayer[] = ['gameplay', 'mid', 'far', 'glow'];
 
 /**
  * The pieces of a loaded kit GLB, by node name. Each top-level node is one piece (W8's kit
@@ -105,7 +105,7 @@ export function mergeLayer(pieces: ReadonlyMap<string, KitPiece>, items: readonl
       else n.set(0, 0, 1);
       if (gc) c.setRGB(gc.getX(i), gc.getY(i), gc.getZ(i));
       else c.setRGB(1, 1, 1);
-      if (opts.grade) gradeVertex(c, opts.grade, layer, p.y, p.z, n.y);
+      if (opts.grade && layer !== 'glow') gradeVertex(c, opts.grade, layer, p.y, p.z, n.y);
       const o = (v0 + i) * 3;
       pos[o] = p.x;
       pos[o + 1] = p.y;

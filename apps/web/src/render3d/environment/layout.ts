@@ -7,7 +7,10 @@
  */
 import { Matrix4 } from 'three';
 
-export type KitLayer = 'gameplay' | 'mid' | 'far';
+/** the depth layers the map's grade applies to (grade.ts) */
+export type GradedLayer = 'gameplay' | 'mid' | 'far';
+/** `glow`: unlit and ungraded, drawn as authored (neon tubes, LED panels: Fog Stair's signs) */
+export type KitLayer = GradedLayer | 'glow';
 
 export interface LayoutItem {
   piece: string;

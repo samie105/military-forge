@@ -1,0 +1,175 @@
+asset-check: art/kits/fog_stair/kit_fog_stair.glb  [kit]
+---------------------------------------------------------------------------------------------------------------------
+INFO  file size                                                  1517 KB
+PASS  triangles: fs_ad_tower                                     416 of 4000
+PASS  pivot: fs_ad_tower                                         y +0.00..+42.00 m: top or bottom on the origin
+PASS  triangles: fs_balcony                                      209 of 4000
+PASS  pivot: fs_balcony                                          y -1.30..+1.98 m: walkable top on the origin
+PASS  collision on a 0.05 m grid: fs_balcony                     4 coordinates
+PASS  render = collision on the gameplay plane: fs_balcony       nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: fs_balcony                           blue ΔE 60, orange ΔE 61 (min 25)
+PASS  triangles: fs_barge                                        80 of 4000
+PASS  pivot: fs_barge                                            y +0.00..+7.80 m: top or bottom on the origin
+PASS  triangles: fs_blade_cabinet                                70 of 4000
+PASS  pivot: fs_blade_cabinet                                    y +0.00..+3.30 m: top or bottom on the origin
+WARN  0.25 m grid: fs_blade_cabinet                              1.60 x 3.30 m (w x h), depth 0.76 m
+PASS  team-colour contrast: fs_blade_cabinet                     blue ΔE 71, orange ΔE 88 (min 25)
+PASS  triangles: fs_board_chaguan                                106 of 4000
+PASS  pivot: fs_board_chaguan                                    y +0.00..+0.80 m: top or bottom on the origin
+PASS  triangles: fs_board_huoguo                                 96 of 4000
+PASS  pivot: fs_board_huoguo                                     y +0.00..+0.90 m: top or bottom on the origin
+WARN  0.25 m grid: fs_board_huoguo                               3.00 x 0.90 m (w x h), depth 0.08 m
+PASS  team-colour contrast: fs_board_huoguo                      blue ΔE 92, orange ΔE 52 (min 25)
+PASS  triangles: fs_board_mianguan                               102 of 4000
+PASS  pivot: fs_board_mianguan                                   y +0.00..+0.78 m: top or bottom on the origin
+WARN  0.25 m grid: fs_board_mianguan                             2.80 x 0.78 m (w x h), depth 0.08 m
+PASS  team-colour contrast: fs_board_mianguan                    blue ΔE 93, orange ΔE 52 (min 25)
+PASS  triangles: fs_board_xiaomaibu                              110 of 4000
+PASS  pivot: fs_board_xiaomaibu                                  y +0.00..+0.85 m: top or bottom on the origin
+WARN  0.25 m grid: fs_board_xiaomaibu                            3.40 x 0.85 m (w x h), depth 0.08 m
+PASS  team-colour contrast: fs_board_xiaomaibu                   blue ΔE 81, orange ΔE 76 (min 25)
+PASS  triangles: fs_board_xiaomian                               78 of 4000
+PASS  pivot: fs_board_xiaomian                                   y +0.00..+0.60 m: top or bottom on the origin
+PASS  triangles: fs_board_yaofang                                104 of 4000
+PASS  pivot: fs_board_yaofang                                    y +0.00..+0.98 m: top or bottom on the origin
+WARN  0.25 m grid: fs_board_yaofang                              3.40 x 0.98 m (w x h), depth 0.08 m
+PASS  team-colour contrast: fs_board_yaofang                     blue ΔE 83, orange ΔE 78 (min 25)
+PASS  triangles: fs_bridge                                       430 of 4000
+PASS  pivot: fs_bridge                                           y -13.35..+1.00 m: walkable top on the origin
+PASS  collision on a 0.05 m grid: fs_bridge                      4 coordinates
+PASS  render = collision on the gameplay plane: fs_bridge        nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: fs_bridge                            blue ΔE 71, orange ΔE 80 (min 25)
+PASS  triangles: fs_edge_wall                                    382 of 4000
+PASS  pivot: fs_edge_wall                                        y +0.00..+106.75 m: top or bottom on the origin
+PASS  collision on a 0.05 m grid: fs_edge_wall                   8 coordinates
+PASS  render = collision on the gameplay plane: fs_edge_wall     nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: fs_edge_wall                         blue ΔE 76, orange ΔE 59 (min 25)
+PASS  triangles: fs_footbridge                                   810 of 4000
+PASS  pivot: fs_footbridge                                       y -1.00..+1.42 m: walkable top on the origin
+PASS  collision on a 0.05 m grid: fs_footbridge                  4 coordinates
+PASS  render = collision on the gameplay plane: fs_footbridge    nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: fs_footbridge                        blue ΔE 78, orange ΔE 87 (min 25)
+PASS  triangles: fs_hill                                         1870 of 4000
+PASS  pivot: fs_hill                                             y -54.00..+0.00 m: top or bottom on the origin
+PASS  collision on a 0.05 m grid: fs_hill                        8 coordinates
+PASS  render = collision on the gameplay plane: fs_hill          nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: fs_hill                              blue ΔE 60, orange ΔE 58 (min 25)
+PASS  triangles: fs_hoarding_18x3                                60 of 4000
+PASS  pivot: fs_hoarding_18x3                                    y +0.00..+3.50 m: top or bottom on the origin
+PASS  ad surface off the gameplay plane: fs_hoarding_18x3        hoarding 6:1 18 x 3 m, layer mid
+PASS  triangles: fs_hoarding_frame_18                            70 of 4000
+PASS  pivot: fs_hoarding_frame_18                                y -3.70..+0.00 m: top or bottom on the origin
+PASS  triangles: fs_lane_houses                                  1122 of 4000
+PASS  pivot: fs_lane_houses                                      y +0.00..+8.86 m: top or bottom on the origin
+PASS  triangles: fs_led_gantry                                   100 of 4000
+PASS  pivot: fs_led_gantry                                       y +0.00..+20.80 m: top or bottom on the origin
+PASS  triangles: fs_led_panel                                    310 of 4000
+PASS  pivot: fs_led_panel                                        y +0.00..+3.40 m: top or bottom on the origin
+PASS  triangles: fs_lights_arcade                                40 of 4000
+PASS  pivot: fs_lights_arcade                                    y -0.06..+0.00 m: top or bottom on the origin
+PASS  triangles: fs_lights_station                               50 of 4000
+PASS  pivot: fs_lights_station                                   y -0.06..+0.00 m: top or bottom on the origin
+PASS  triangles: fs_monorail_car                                 140 of 4000
+PASS  pivot: fs_monorail_car                                     y +0.00..+3.20 m: top or bottom on the origin
+PASS  collision on a 0.05 m grid: fs_monorail_car                8 coordinates
+PASS  render = collision on the gameplay plane: fs_monorail_car  nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: fs_monorail_car                      blue ΔE 76, orange ΔE 79 (min 25)
+PASS  triangles: fs_neon_chaguan_tall                            360 of 4000
+PASS  pivot: fs_neon_chaguan_tall                                y +0.00..+4.45 m: top or bottom on the origin
+PASS  triangles: fs_neon_frame_hoarding                          80 of 4000
+PASS  pivot: fs_neon_frame_hoarding                              y +0.00..+3.57 m: top or bottom on the origin
+PASS  triangles: fs_neon_frame_screen                            80 of 4000
+PASS  pivot: fs_neon_frame_screen                                y +0.00..+6.67 m: top or bottom on the origin
+PASS  triangles: fs_neon_huoguo                                  310 of 4000
+PASS  pivot: fs_neon_huoguo                                      y +0.00..+3.20 m: top or bottom on the origin
+PASS  triangles: fs_neon_lvguan                                  390 of 4000
+PASS  pivot: fs_neon_lvguan                                      y +0.00..+3.20 m: top or bottom on the originBlender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+PASS  triangles: fs_noodle_stall                                 283 of 4000
+PASS  pivot: fs_noodle_stall                                     y +0.00..+3.24 m: top or bottom on the origin
+PASS  triangles: fs_pavilion                                     932 of 4000
+PASS  pivot: fs_pavilion                                         y +0.00..+24.84 m: top or bottom on the origin
+PASS  collision on a 0.05 m grid: fs_pavilion                    4 coordinates
+PASS  render = collision on the gameplay plane: fs_pavilion      nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: fs_pavilion                          blue ΔE 75, orange ΔE 52 (min 25)
+PASS  triangles: fs_perch                                        572 of 4000
+PASS  pivot: fs_perch                                            y -12.00..+2.82 m: walkable top on the origin
+PASS  collision on a 0.05 m grid: fs_perch                       4 coordinates
+PASS  render = collision on the gameplay plane: fs_perch         nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: fs_perch                             blue ΔE 75, orange ΔE 52 (min 25)
+PASS  triangles: fs_quay                                         662 of 4000
+PASS  pivot: fs_quay                                             y -16.00..+0.72 m: walkable top on the origin
+PASS  collision on a 0.05 m grid: fs_quay                        8 coordinates
+PASS  render = collision on the gameplay plane: fs_quay          nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: fs_quay                              blue ΔE 76, orange ΔE 74 (min 25)
+PASS  triangles: fs_quay_cargo                                   82 of 4000
+PASS  pivot: fs_quay_cargo                                       y +0.00..+1.20 m: top or bottom on the origin
+PASS  collision on a 0.05 m grid: fs_quay_cargo                  8 coordinates
+PASS  render = collision on the gameplay plane: fs_quay_cargo    nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: fs_quay_cargo                        blue ΔE 78, orange ΔE 61 (min 25)
+PASS  triangles: fs_river                                        30 of 4000
+PASS  pivot: fs_river                                            y +0.00..+0.01 m: top or bottom on the origin
+PASS  0.25 m grid: fs_river                                      32.00 x 0.01 m (w x h), depth 41.00 m
+PASS  team-colour contrast: fs_river                             blue ΔE 82, orange ΔE 84 (min 25)
+PASS  triangles: fs_riverbed                                     98 of 4000
+PASS  pivot: fs_riverbed                                         y -12.00..+0.00 m: top or bottom on the origin
+PASS  collision on a 0.05 m grid: fs_riverbed                    8 coordinates
+PASS  render = collision on the gameplay plane: fs_riverbed      nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: fs_riverbed                          blue ΔE 80, orange ΔE 81 (min 25)
+PASS  triangles: fs_roof_back                                    228 of 4000
+PASS  pivot: fs_roof_back                                        y +0.00..+3.45 m: top or bottom on the origin
+PASS  triangles: fs_roof_mast                                    234 of 4000
+PASS  pivot: fs_roof_mast                                        y -0.01..+8.10 m: top or bottom on the origin
+WARN  0.25 m grid: fs_roof_mast                                  4.43 x 8.11 m (w x h), depth 3.16 m
+PASS  render = collision on the gameplay plane: fs_roof_mast     nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: fs_roof_mast                         blue ΔE 71, orange ΔE 81 (min 25)
+PASS  triangles: fs_roof_tank                                    160 of 4000
+PASS  pivot: fs_roof_tank                                        y +0.00..+2.50 m: top or bottom on the origin
+PASS  collision on a 0.05 m grid: fs_roof_tank                   8 coordinates
+PASS  render = collision on the gameplay plane: fs_roof_tank     nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: fs_roof_tank                         blue ΔE 71, orange ΔE 82 (min 25)
+PASS  triangles: fs_sampan                                       72 of 4000
+PASS  pivot: fs_sampan                                           y +0.00..+3.67 m: top or bottom on the origin
+PASS  triangles: fs_screen_8x6                                   60 of 4000
+PASS  pivot: fs_screen_8x6                                       y +0.00..+6.60 m: top or bottom on the origin
+PASS  ad surface off the gameplay plane: fs_screen_8x6           screen 4:3 8 x 6 m, layer mid
+PASS  triangles: fs_shophouse                                    891 of 4000
+PASS  pivot: fs_shophouse                                        y +0.00..+6.57 m: top or bottom on the origin
+PASS  collision on a 0.05 m grid: fs_shophouse                   8 coordinates
+PASS  render = collision on the gameplay plane: fs_shophouse     nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: fs_shophouse                         blue ΔE 72, orange ΔE 51 (min 25)
+PASS  triangles: fs_stair_lower                                  1886 of 4000
+PASS  pivot: fs_stair_lower                                      y -36.00..+1.80 m: walkable top on the origin
+PASS  collision on a 0.05 m grid: fs_stair_lower                 8 coordinates
+PASS  render = collision on the gameplay plane: fs_stair_lower   nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: fs_stair_lower                       blue ΔE 72, orange ΔE 51 (min 25)
+PASS  triangles: fs_stair_upper                                  2034 of 4000
+PASS  pivot: fs_stair_upper                                      y -54.00..+1.80 m: walkable top on the origin
+PASS  collision on a 0.05 m grid: fs_stair_upper                 8 coordinates
+PASS  render = collision on the gameplay plane: fs_stair_upper   nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: fs_stair_upper                       blue ΔE 65, orange ΔE 51 (min 25)
+PASS  triangles: fs_stilt_house                                  480 of 4000
+PASS  pivot: fs_stilt_house                                      y +0.00..+15.36 m: top or bottom on the origin
+PASS  triangles: fs_temple_gate                                  824 of 4000
+PASS  pivot: fs_temple_gate                                      y +0.00..+7.52 m: top or bottom on the origin
+PASS  triangles: fs_terrace                                      960 of 4000
+PASS  pivot: fs_terrace                                          y -36.00..+0.00 m: top or bottom on the origin
+PASS  collision on a 0.05 m grid: fs_terrace                     8 coordinates
+PASS  render = collision on the gameplay plane: fs_terrace       nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: fs_terrace                           blue ΔE 60, orange ΔE 58 (min 25)
+PASS  triangles: fs_tower                                        2565 of 4000
+PASS  pivot: fs_tower                                            y +0.00..+62.00 m: top or bottom on the origin
+PASS  collision on a 0.05 m grid: fs_tower                       16 coordinates
+PASS  render = collision on the gameplay plane: fs_tower         nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: fs_tower                             blue ΔE 60, orange ΔE 43 (min 25)
+PASS  triangles: fs_viaduct                                      310 of 4000
+PASS  pivot: fs_viaduct                                          y -28.00..+1.00 m: walkable top on the origin
+PASS  collision on a 0.05 m grid: fs_viaduct                     4 coordinates
+PASS  render = collision on the gameplay plane: fs_viaduct       nothing drawn within 0.35 m of the plane outside the collision
+PASS  team-colour contrast: fs_viaduct                           blue ΔE 71, orange ΔE 80 (min 25)
+PASS  triangles: fs_viaduct_twin                                 80 of 4000
+PASS  pivot: fs_viaduct_twin                                     y -28.60..+0.00 m: top or bottom on the origin
+INFO  kit total triangles                                        21418
+PASS  materials per piece                                        48 draw calls total
+INFO  GPU texture memory (KTX2 est.)                             0.00 MB, 0 image(s)
+---------------------------------------------------------------------------------------------------------------------
+RESULT: PASS  (162 pass, 6 warn, 0 fail)

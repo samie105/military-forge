@@ -1,0 +1,862 @@
+{
+  "file": "art/kits/fog_stair/kit_fog_stair.glb",
+  "kind": "kit",
+  "pass": true,
+  "rows": [
+    {
+      "status": "INFO",
+      "check": "file size",
+      "detail": "1517 KB"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_ad_tower",
+      "detail": "416 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_ad_tower",
+      "detail": "y +0.00..+42.00 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_balcony",
+      "detail": "209 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_balcony",
+      "detail": "y -1.30..+1.98 m: walkable top on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "collision on a 0.05 m grid: fs_balcony",
+      "detail": "4 coordinates"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: fs_balcony",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: fs_balcony",
+      "detail": "blue \u0394E 60, orange \u0394E 61 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_barge",
+      "detail": "80 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_barge",
+      "detail": "y +0.00..+7.80 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_blade_cabinet",
+      "detail": "70 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_blade_cabinet",
+      "detail": "y +0.00..+3.30 m: top or bottom on the origin"
+    },
+    {
+      "status": "WARN",
+      "check": "0.25 m grid: fs_blade_cabinet",
+      "detail": "1.60 x 3.30 m (w x h), depth 0.76 m"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: fs_blade_cabinet",
+      "detail": "blue \u0394E 71, orange \u0394E 88 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_board_chaguan",
+      "detail": "106 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_board_chaguan",
+      "detail": "y +0.00..+0.80 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_board_huoguo",
+      "detail": "96 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_board_huoguo",
+      "detail": "y +0.00..+0.90 m: top or bottom on the origin"
+    },
+    {
+      "status": "WARN",
+      "check": "0.25 m grid: fs_board_huoguo",
+      "detail": "3.00 x 0.90 m (w x h), depth 0.08 m"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: fs_board_huoguo",
+      "detail": "blue \u0394E 92, orange \u0394E 52 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_board_mianguan",
+      "detail": "102 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_board_mianguan",
+      "detail": "y +0.00..+0.78 m: top or bottom on the origin"
+    },
+    {
+      "status": "WARN",
+      "check": "0.25 m grid: fs_board_mianguan",
+      "detail": "2.80 x 0.78 m (w x h), depth 0.08 m"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: fs_board_mianguan",
+      "detail": "blue \u0394E 93, orange \u0394E 52 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_board_xiaomaibu",
+      "detail": "110 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_board_xiaomaibu",
+      "detail": "y +0.00..+0.85 m: top or bottom on the origin"
+    },
+    {
+      "status": "WARN",
+      "check": "0.25 m grid: fs_board_xiaomaibu",
+      "detail": "3.40 x 0.85 m (w x h), depth 0.08 m"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: fs_board_xiaomaibu",
+      "detail": "blue \u0394E 81, orange \u0394E 76 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_board_xiaomian",
+      "detail": "78 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_board_xiaomian",
+      "detail": "y +0.00..+0.60 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_board_yaofang",
+      "detail": "104 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_board_yaofang",
+      "detail": "y +0.00..+0.98 m: top or bottom on the origin"
+    },
+    {
+      "status": "WARN",
+      "check": "0.25 m grid: fs_board_yaofang",
+      "detail": "3.40 x 0.98 m (w x h), depth 0.08 m"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: fs_board_yaofang",
+      "detail": "blue \u0394E 83, orange \u0394E 78 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_bridge",
+      "detail": "430 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_bridge",
+      "detail": "y -13.35..+1.00 m: walkable top on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "collision on a 0.05 m grid: fs_bridge",
+      "detail": "4 coordinates"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: fs_bridge",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: fs_bridge",
+      "detail": "blue \u0394E 71, orange \u0394E 80 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_edge_wall",
+      "detail": "382 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_edge_wall",
+      "detail": "y +0.00..+106.75 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "collision on a 0.05 m grid: fs_edge_wall",
+      "detail": "8 coordinates"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: fs_edge_wall",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: fs_edge_wall",
+      "detail": "blue \u0394E 76, orange \u0394E 59 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_footbridge",
+      "detail": "810 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_footbridge",
+      "detail": "y -1.00..+1.42 m: walkable top on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "collision on a 0.05 m grid: fs_footbridge",
+      "detail": "4 coordinates"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: fs_footbridge",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: fs_footbridge",
+      "detail": "blue \u0394E 78, orange \u0394E 87 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_hill",
+      "detail": "1870 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_hill",
+      "detail": "y -54.00..+0.00 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "collision on a 0.05 m grid: fs_hill",
+      "detail": "8 coordinates"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: fs_hill",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: fs_hill",
+      "detail": "blue \u0394E 60, orange \u0394E 58 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_hoarding_18x3",
+      "detail": "60 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_hoarding_18x3",
+      "detail": "y +0.00..+3.50 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "ad surface off the gameplay plane: fs_hoarding_18x3",
+      "detail": "hoarding 6:1 18 x 3 m, layer mid"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_hoarding_frame_18",
+      "detail": "70 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_hoarding_frame_18",
+      "detail": "y -3.70..+0.00 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_lane_houses",
+      "detail": "1122 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_lane_houses",
+      "detail": "y +0.00..+8.86 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_led_gantry",
+      "detail": "100 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_led_gantry",
+      "detail": "y +0.00..+20.80 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_led_panel",
+      "detail": "310 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_led_panel",
+      "detail": "y +0.00..+3.40 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_lights_arcade",
+      "detail": "40 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_lights_arcade",
+      "detail": "y -0.06..+0.00 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_lights_station",
+      "detail": "50 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_lights_station",
+      "detail": "y -0.06..+0.00 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_monorail_car",
+      "detail": "140 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_monorail_car",
+      "detail": "y +0.00..+3.20 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "collision on a 0.05 m grid: fs_monorail_car",
+      "detail": "8 coordinates"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: fs_monorail_car",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: fs_monorail_car",
+      "detail": "blue \u0394E 76, orange \u0394E 79 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_neon_chaguan_tall",
+      "detail": "360 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_neon_chaguan_tall",
+      "detail": "y +0.00..+4.45 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_neon_frame_hoarding",
+      "detail": "80 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_neon_frame_hoarding",
+      "detail": "y +0.00..+3.57 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_neon_frame_screen",
+      "detail": "80 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_neon_frame_screen",
+      "detail": "y +0.00..+6.67 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_neon_huoguo",
+      "detail": "310 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_neon_huoguo",
+      "detail": "y +0.00..+3.20 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_neon_lvguan",
+      "detail": "390 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_neon_lvguan",
+      "detail": "y +0.00..+3.20 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_noodle_stall",
+      "detail": "283 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_noodle_stall",
+      "detail": "y +0.00..+3.24 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_pavilion",
+      "detail": "932 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_pavilion",
+      "detail": "y +0.00..+24.84 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "collision on a 0.05 m grid: fs_pavilion",
+      "detail": "4 coordinates"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: fs_pavilion",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: fs_pavilion",
+      "detail": "blue \u0394E 75, orange \u0394E 52 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_perch",
+      "detail": "572 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_perch",
+      "detail": "y -12.00..+2.82 m: walkable top on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "collision on a 0.05 m grid: fs_perch",
+      "detail": "4 coordinates"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: fs_perch",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: fs_perch",
+      "detail": "blue \u0394E 75, orange \u0394E 52 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_quay",
+      "detail": "662 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_quay",
+      "detail": "y -16.00..+0.72 m: walkable top on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "collision on a 0.05 m grid: fs_quay",
+      "detail": "8 coordinates"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: fs_quay",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: fs_quay",
+      "detail": "blue \u0394E 76, orange \u0394E 74 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_quay_cargo",
+      "detail": "82 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_quay_cargo",
+      "detail": "y +0.00..+1.20 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "collision on a 0.05 m grid: fs_quay_cargo",
+      "detail": "8 coordinates"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: fs_quay_cargo",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: fs_quay_cargo",
+      "detail": "blue \u0394E 78, orange \u0394E 61 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_river",
+      "detail": "30 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_river",
+      "detail": "y +0.00..+0.01 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "0.25 m grid: fs_river",
+      "detail": "32.00 x 0.01 m (w x h), depth 41.00 m"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: fs_river",
+      "detail": "blue \u0394E 82, orange \u0394E 84 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_riverbed",
+      "detail": "98 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_riverbed",
+      "detail": "y -12.00..+0.00 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "collision on a 0.05 m grid: fs_riverbed",
+      "detail": "8 coordinates"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: fs_riverbed",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: fs_riverbed",
+      "detail": "blue \u0394E 80, orange \u0394E 81 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_roof_back",
+      "detail": "228 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_roof_back",
+      "detail": "y +0.00..+3.45 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_roof_mast",
+      "detail": "234 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_roof_mast",
+      "detail": "y -0.01..+8.10 m: top or bottom on the origin"
+    },
+    {
+      "status": "WARN",
+      "check": "0.25 m grid: fs_roof_mast",
+      "detail": "4.43 x 8.11 m (w x h), depth 3.16 m"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: fs_roof_mast",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: fs_roof_mast",
+      "detail": "blue \u0394E 71, orange \u0394E 81 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_roof_tank",
+      "detail": "160 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_roof_tank",
+      "detail": "y +0.00..+2.50 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "collision on a 0.05 m grid: fs_roof_tank",
+      "detail": "8 coordinates"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: fs_roof_tank",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: fs_roof_tank",
+      "detail": "blue \u0394E 71, orange \u0394E 82 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_sampan",
+      "detail": "72 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_sampan",
+      "detail": "y +0.00..+3.67 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_screen_8x6",
+      "detail": "60 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_screen_8x6",
+      "detail": "y +0.00..+6.60 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "ad surface off the gameplay plane: fs_screen_8x6",
+      "detail": "screen 4:3 8 x 6 m, layer mid"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_shophouse",
+      "detail": "891 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_shophouse",
+      "detail": "y +0.00..+6.57 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "collision on a 0.05 m grid: fs_shophouse",
+      "detail": "8 coordinates"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: fs_shophouse",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: fs_shophouse",
+      "detail": "blue \u0394E 72, orange \u0394E 51 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_stair_lower",
+      "detail": "1886 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_stair_lower",
+      "detail": "y -36.00..+1.80 m: walkable top on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "collision on a 0.05 m grid: fs_stair_lower",
+      "detail": "8 coordinates"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: fs_stair_lower",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: fs_stair_lower",
+      "detail": "blue \u0394E 72, orange \u0394E 51 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_stair_upper",
+      "detail": "2034 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_stair_upper",
+      "detail": "y -54.00..+1.80 m: walkable top on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "collision on a 0.05 m grid: fs_stair_upper",
+      "detail": "8 coordinates"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: fs_stair_upper",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: fs_stair_upper",
+      "detail": "blue \u0394E 65, orange \u0394E 51 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_stilt_house",
+      "detail": "480 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_stilt_house",
+      "detail": "y +0.00..+15.36 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_temple_gate",
+      "detail": "824 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_temple_gate",
+      "detail": "y +0.00..+7.52 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_terrace",
+      "detail": "960 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_terrace",
+      "detail": "y -36.00..+0.00 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "collision on a 0.05 m grid: fs_terrace",
+      "detail": "8 coordinates"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: fs_terrace",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: fs_terrace",
+      "detail": "blue \u0394E 60, orange \u0394E 58 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_tower",
+      "detail": "2565 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_tower",
+      "detail": "y +0.00..+62.00 m: top or bottom on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "collision on a 0.05 m grid: fs_tower",
+      "detail": "16 coordinates"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: fs_tower",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: fs_tower",
+      "detail": "blue \u0394E 60, orange \u0394E 43 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_viaduct",
+      "detail": "310 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_viaduct",
+      "detail": "y -28.00..+1.00 m: walkable top on the origin"
+    },
+    {
+      "status": "PASS",
+      "check": "collision on a 0.05 m grid: fs_viaduct",
+      "detail": "4 coordinates"
+    },
+    {
+      "status": "PASS",
+      "check": "render = collision on the gameplay plane: fs_viaduct",
+      "detail": "nothing drawn within 0.35 m of the plane outside the collision"
+    },
+    {
+      "status": "PASS",
+      "check": "team-colour contrast: fs_viaduct",
+      "detail": "blue \u0394E 71, orange \u0394E 80 (min 25)"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles: fs_viaduct_twin",
+      "detail": "80 of 4000"
+    },
+    {
+      "status": "PASS",
+      "check": "pivot: fs_viaduct_twin",
+      "detail": "y -28.60..+0.00 m: top or bottom on the origin"
+    },
+    {
+      "status": "INFO",
+      "check": "kit total triangles",
+      "detail": "21418"
+    },
+    {
+      "status": "PASS",
+      "check": "materials per piece",
+      "detail": "48 draw calls total"
+    },
+    {
+      "status": "INFO",
+      "check": "GPU texture memory (KTX2 est.)",
+      "detail": "0.00 MB, 0 image(s)"
+    }
+  ]
+}

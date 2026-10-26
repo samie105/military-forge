@@ -27,26 +27,41 @@ import type { AdSlot } from '..';
 const WEB = new URL('../../../../', import.meta.url);
 const read = (p: string) => readFileSync(new URL(p, WEB));
 const json = <T>(p: string) => JSON.parse(read(p).toString()) as T;
-const slots = json<AdSlot[]>('public/assets/kits/street_market/street_market.adslots.json');
-const layout = json<KitLayout>('public/assets/kits/street_market/street_market.layout.json');
 type Lum = { luminance: number };
-const pool = json<{ screens: Lum[]; hoardings: Lum[]; sponsored?: { screens: Lum[]; hoardings: Lum[] } }>('public/assets/ads/street_market/house.json');
-/** the local house art and the sponsored creatives (Deet Studios, WorldStreet) */
-const creatives = [...pool.screens, ...pool.hoardings, ...(pool.sponsored?.screens ?? []), ...(pool.sponsored?.hoardings ?? [])];
 /** the weathering map's mean (textures.ts grimeTexture: ≈ 0.92) */
 const GRIME_MEAN = 0.92;
 
 const lum = (c: Color) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
 
-let pieces: Map<string, KitPiece>;
-beforeAll(async () => {
-  const buf = read('public/assets/kits/street_market/kit_street_market.glb');
+/** A map's kit, layout and ad slots, and its pool's creatives (local house art and sponsored). */
+interface Scene {
+  pieces: Map<string, KitPiece>;
+  layout: KitLayout;
+  slots: AdSlot[];
+  creatives: Lum[];
+}
+
+async function scene(folder: string, pool: string): Promise<Scene> {
+  const buf = read(`public/assets/kits/${folder}/kit_${folder}.glb`);
   const gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).parseAsync(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), '');
-  pieces = kitPieces(gltf.scene);
+  const p = json<{ screens: Lum[]; hoardings: Lum[]; sponsored?: { screens: Lum[]; hoardings: Lum[] } }>(`public/assets/ads/${pool}/house.json`);
+  return {
+    pieces: kitPieces(gltf.scene),
+    layout: json<KitLayout>(`public/assets/kits/${folder}/${folder}.layout.json`),
+    slots: json<AdSlot[]>(`public/assets/kits/${folder}/${folder}.adslots.json`),
+    creatives: [...p.screens, ...p.hoardings, ...(p.sponsored?.screens ?? []), ...(p.sponsored?.hoardings ?? [])],
+  };
+}
+
+let market: Scene;
+let fog: Scene;
+beforeAll(async () => {
+  market = await scene('street_market', 'street_market');
+  fog = await scene('fog_stair', 'fog_stair');
 });
 
 /** board / kit-p95 per slot under `look`. */
-function ratios(look: EnvironmentLook): number[] {
+function ratios(look: EnvironmentLook, { pieces, layout, slots, creatives }: Scene = market): number[] {
   const grade = mapGrade(look);
   const items = layoutItems(layout);
   const sky = new Color(look.hemi.sky);
@@ -100,8 +115,15 @@ describe('billboard brightness per look (docs/14 §3.4)', () => {
     }
   });
 
+  it('Fog Stair’s boards sit in its fog as the market’s sit in daylight: no brighter against the kit around them, nor faded out', () => {
+    const day = median(ratios(environmentFor('street-market')!.looks.day!));
+    const m = median(ratios(environmentFor('fog-stair')!.looks.fog!, fog));
+    expect(m, `fog: median board/kit ${m.toFixed(2)} vs the market's day ${day.toFixed(2)}`).toBeLessThanOrEqual(day * 1.03);
+    expect(m, `fog: median board/kit ${m.toFixed(2)} vs the market's day ${day.toFixed(2)}`).toBeGreaterThanOrEqual(day * 0.8);
+  });
+
   it('the house art records its luminance (house-ads.py), so the model reads the real creatives', () => {
-    for (const e of creatives) {
+    for (const e of market.creatives) {
       // real pixels, not a missing value: the darkest is Deet's ink-black Hoarding (≈ 0.09)
       expect(e.luminance).toBeGreaterThan(0.05);
       expect(e.luminance).toBeLessThan(0.9);
@@ -110,6 +132,6 @@ describe('billboard brightness per look (docs/14 §3.4)', () => {
 
   it('no creative is brighter than the street’s old house art was (0.48: an advertiser never outshines the street)', () => {
     // the brightest local house art before the owner removed it (23 Oct): Harbour Fish Market, 0.4797
-    for (const e of creatives) expect(e.luminance).toBeLessThanOrEqual(0.48);
+    for (const e of market.creatives) expect(e.luminance).toBeLessThanOrEqual(0.48);
   });
 });

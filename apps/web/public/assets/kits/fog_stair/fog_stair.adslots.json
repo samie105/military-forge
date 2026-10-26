@@ -1,0 +1,122 @@
+[
+ {
+  "slotId": "fog-stair/S1",
+  "kind": "screen",
+  "format": "4:3",
+  "frames": 6,
+  "dwellMs": 10000,
+  "phaseIdx": 0,
+  "pos": [
+   109.0,
+   24.8,
+   -8.0
+  ],
+  "size": [
+   8.0,
+   6.0
+  ],
+  "yawDeg": 0,
+  "houseSet": [],
+  "tags": []
+ },
+ {
+  "slotId": "fog-stair/S2",
+  "kind": "screen",
+  "format": "4:3",
+  "frames": 6,
+  "dwellMs": 10000,
+  "phaseIdx": 3,
+  "pos": [
+   131.0,
+   24.8,
+   -8.0
+  ],
+  "size": [
+   8.0,
+   6.0
+  ],
+  "yawDeg": 0,
+  "houseSet": [],
+  "tags": []
+ },
+ {
+  "slotId": "fog-stair/S3",
+  "kind": "screen",
+  "format": "4:3",
+  "frames": 6,
+  "dwellMs": 10000,
+  "phaseIdx": 1,
+  "pos": [
+   72.5,
+   21.3,
+   -5.0
+  ],
+  "size": [
+   8.0,
+   6.0
+  ],
+  "yawDeg": 0,
+  "houseSet": [],
+  "tags": []
+ },
+ {
+  "slotId": "fog-stair/S4",
+  "kind": "screen",
+  "format": "4:3",
+  "frames": 6,
+  "dwellMs": 10000,
+  "phaseIdx": 4,
+  "pos": [
+   167.5,
+   21.3,
+   -5.0
+  ],
+  "size": [
+   8.0,
+   6.0
+  ],
+  "yawDeg": 0,
+  "houseSet": [],
+  "tags": []
+ },
+ {
+  "slotId": "fog-stair/H1",
+  "kind": "hoarding",
+  "format": "6:1",
+  "frames": 1,
+  "dwellMs": 10000,
+  "phaseIdx": 0,
+  "pos": [
+   42.0,
+   33.25,
+   -5.0
+  ],
+  "size": [
+   18.0,
+   3.0
+  ],
+  "yawDeg": 0,
+  "houseSet": [],
+  "tags": []
+ },
+ {
+  "slotId": "fog-stair/H2",
+  "kind": "hoarding",
+  "format": "6:1",
+  "frames": 1,
+  "dwellMs": 10000,
+  "phaseIdx": 0,
+  "pos": [
+   198.0,
+   33.25,
+   -5.0
+  ],
+  "size": [
+   18.0,
+   3.0
+  ],
+  "yawDeg": 0,
+  "houseSet": [],
+  "tags": []
+ }
+]

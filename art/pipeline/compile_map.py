@@ -125,6 +125,240 @@ def segs_cross(p, q, a, b):
     return (d1 > 0) != (d2 > 0) and (d3 > 0) != (d4 > 0)
 
 
+def ad_lints(layout, kit, map_id, spots, b, errors, notes):
+    """The map's AdSlots from the layout's decor bezels, and docs/14 §2.6's lints 1, 2 and 4 on them
+    from every standing spot."""
+    ad_slots, seen = [], set()
+    for item in layout.get("decor", []):
+        pc = kit.get(item["piece"])
+        if pc is None:
+            errors.append(f"unknown decor piece {item['piece']}")
+            continue
+        if pc.get("layer", "gameplay") == "gameplay":
+            errors.append(f"{item['piece']} is a gameplay piece in decor: it would draw without collision")
+        ad = pc.get("adSlot")
+        if not ad:
+            if item.get("slotId"):
+                errors.append(f"{item['slotId']}: {item['piece']} is not an ad surface")
+            continue
+        sid, z = item.get("slotId"), item.get("z", 0.0)
+        if not sid or not sid.startswith(f"{map_id}/") or sid in seen:
+            errors.append(f"{item['piece']} at x {item['x']}: slotId {sid!r} must be a unique '{map_id}/<slot>'")
+        seen.add(sid)
+        if not (AD_Z[0] <= z <= AD_Z[1]):
+            errors.append(f"{sid}: z {z} is outside the mid-depth band {AD_Z} (docs/14 §2.6 lint 1)")
+        if any(pc.get(k) for k in ("terrain", "solids", "oneWays")):
+            errors.append(f"{sid}: an ad surface may not carry collision")
+        if item.get("flip"):
+            errors.append(f"{sid}: ad surfaces are never mirrored")
+        cx, cy, cz = ad["centre"]
+        ad_slots.append({
+            "slotId": sid, "kind": ad["kind"], "format": ad["format"], "frames": ad["frames"],
+            "dwellMs": 10000, "phaseIdx": item.get("phaseIdx", 0),
+            "pos": [round(item["x"] + cx, 3), round(item.get("y", 0.0) + cy, 3), round(z + cz, 3)], "size": ad["size"],
+            "yawDeg": 0, "houseSet": [], "tags": item.get("tags", []),
+        })
+
+    # lint 2: screen share of each surface (perspective: a surface at depth z draws CAM_D / (CAM_D − z)
+    # times its size); the camera at zoom k sees k × the 1× view
+    for sl in ad_slots:
+        s = CAM_D / (CAM_D - sl["pos"][2])
+        share = sl["size"][0] * sl["size"][1] * s * s / (VIEW_W * VIEW_H)
+        if not (0.025 <= share <= 0.08) or share / ZOOM_4X ** 2 < 0.015:
+            errors.append(f"{sl['slotId']}: {share:.1%} of the screen at 1×, {share / ZOOM_4X ** 2:.1%} at 4× "
+                          "(docs/14 §2.6 lint 2: 2.5–8%, ≥ 1.5%)")
+
+    # lint 4: the camera centred on a standing player's torso, clamped so the view never leaves the
+    # bounds (the game camera stops at them); a surface counts when ≥ 50% of it is on screen (the IAB
+    # viewability share docs/14 §4.6 measures with)
+    def visible_area(slot, px, py, zoom):
+        s = CAM_D / (CAM_D - slot["pos"][2])
+        (x, y, _), (w, h) = slot["pos"], slot["size"]
+        vw, vh = VIEW_W * zoom, VIEW_H * zoom
+        cx = min(max(px, b["minX"] + vw / 2), b["maxX"] - vw / 2)
+        cy = min(max(py + 0.9, b["minY"] + vh / 2), b["maxY"] - vh / 2)
+        x0, y0 = cx + (x - w / 2 - cx) * s, cy + (y - h / 2 - cy) * s
+        x1, y1 = cx + (x + w / 2 - cx) * s, cy + (y + h / 2 - cy) * s
+        ov = max(0.0, min(x1, cx + vw / 2) - max(x0, cx - vw / 2)) * max(0.0, min(y1, cy + vh / 2) - max(y0, cy - vh / 2))
+        return ov if ov >= 0.5 * (x1 - x0) * (y1 - y0) else 0.0
+
+    worst1, worst7, area7, worst_at, seen_ever = 0, 0, 0.0, None, set()
+    for px, py in spots:
+        vis = [sl["slotId"] for sl in ad_slots if visible_area(sl, px, py, 1.0)]
+        seen_ever |= set(vis)
+        if len(vis) > worst1:
+            worst1, worst_at = len(vis), (px, py, vis)
+        a7 = [visible_area(sl, px, py, ZOOM_MAX) for sl in ad_slots]
+        worst7 = max(worst7, sum(1 for a in a7 if a))
+        area7 = max(area7, sum(a7) / (VIEW_W * VIEW_H * ZOOM_MAX ** 2))
+    if ad_slots:
+        if worst1 > 2:
+            errors.append(f"{worst1} ad surfaces in one 1× view at ({worst_at[0]:.1f}, {worst_at[1]:.1f}): "
+                          f"{', '.join(worst_at[2])} (docs/14 §2.6 lint 4: ≤ 2)")
+        if worst7 > 4 or area7 > 0.08:
+            errors.append(f"7× view: up to {worst7} ad surfaces, {area7:.1%} ad area (docs/14 §2.6 lint 4: ≤ 4, ≤ 8%)")
+        for sl in ad_slots:
+            if sl["slotId"] not in seen_ever:
+                errors.append(f"{sl['slotId']} is never on screen from a standing spot")
+        notes.append(f"ad surfaces per view: ≤ {worst1} at 1×; ≤ {worst7} and ≤ {area7:.1%} of the screen at 7×")
+
+    return ad_slots
+
+
+def poly_area(pts):
+    return abs(signed_area(pts))
+
+
+def grid_in(box, step):
+    """Sample points on a `step` grid inside a box, offset so they never sit on a 0.05 m grid line."""
+    x0, y0, x1, y1 = box
+    y = y0 + 0.137
+    while y < y1:
+        x = x0 + 0.061
+        while x < x1:
+            yield x, y
+            x += step
+        y += step
+
+
+def placed_collision(layout, kit, errors):
+    """What the layout's gameplay pieces collide with, placed: solids (points, material, piece),
+    one-ways (ax, ay, bx, by, blocksBullets) and bullet-only polygons (points, material)."""
+    solids, one_ways, bullet_only = [], [], []
+    for item in layout["pieces"]:
+        pc = kit.get(item["piece"])
+        if pc is None:
+            errors.append(f"unknown piece {item['piece']}")
+            continue
+        if pc.get("layer", "gameplay") != "gameplay":
+            errors.append(f"{item['piece']} is a {pc['layer']} piece: put it in decor")
+            continue
+        x, y, flip = item["x"], item.get("y", 0.0), item.get("flip", False)
+        for poly in pc.get("solids", []):
+            solids.append((place_poly(poly, x, y, flip), pc.get("material", 0), item["piece"]))
+        for ax, ay, bx, by in pc.get("oneWays", []):
+            pa, pb = (x + (-ax if flip else ax), y + ay), (x + (-bx if flip else bx), y + by)
+            ow = tuple(pa + pb) if pa[0] <= pb[0] else tuple(pb + pa)
+            one_ways.append((*ow, pc.get("blocksBullets") is True))
+        for poly in pc.get("bulletOnly", []):
+            bullet_only.append((place_poly(poly, x, y, flip), pc.get("bulletOnlyMaterial", pc.get("material", 0))))
+    return solids, one_ways, bullet_only
+
+
+def check_kit(layout_path, layout, kit):
+    """A layout over a map whose collision is authored elsewhere (Fog Stair: packages/content's
+    fogStair.ts, exported to `collision` with `pnpm --filter @military-forge/content export-map`):
+    the placed kit must collide exactly like the map (render = collision, docs/11 §2); then the ad
+    lints run from the map's standing spots, and only the AdSlot list is written."""
+    errors, notes = [], []
+    b = layout["bounds"]
+    map_id = layout["id"]
+    stem = layout_path.parent.name
+    mapdef = json.loads((layout_path.parent / layout["collision"]).read_text())
+    if mapdef["id"] != map_id or mapdef["bounds"] != b:
+        errors.append(f"{layout['collision']} is map {mapdef['id']} with bounds {mapdef['bounds']}, not this layout's")
+    for item in layout["pieces"] + layout.get("decor", []):
+        if item.get("flip") and kit.get(item["piece"], {}).get("noFlip"):
+            errors.append(f"{item['piece']} at x {item['x']} is flipped, but it carries lettering (noFlip)")
+    for item in layout.get("decor", []):
+        if kit.get(item["piece"], {}).get("layer", "gameplay") == "gameplay":
+            errors.append(f"{item['piece']} is a gameplay piece in decor: it would draw without collision")
+    solids, one_ways, bullet_only = placed_collision(layout, kit, errors)
+
+    # the map's solids: the ceiling slab along the top (bounds.maxY) is left undrawn, like the Street Market's
+    def is_ceiling(pts):
+        x0, _, x1, y1 = bbox(pts)
+        return abs(y1 - b["maxY"]) < EPS and x0 <= b["minX"] + EPS and x1 >= b["maxX"] - EPS
+
+    map_solids = [(list(zip(s["points"][0::2], s["points"][1::2])), s.get("material", 0)) for s in mapdef["solids"]]
+    drawn = [(pts, mat) for pts, mat in map_solids if not is_ceiling(pts)]
+    notes.append(f"{len(map_solids) - len(drawn)} ceiling slab left undrawn (as the Street Market's)")
+
+    # solids: the same area, no two kit solids overlapping, the same material at every 0.5 m sample
+    kit_area = sum(poly_area(pts) for pts, _, _ in solids)
+    map_area = sum(poly_area(pts) for pts, _ in drawn)
+    if abs(kit_area - map_area) > 1e-3:
+        errors.append(f"the kit's solids cover {kit_area:.3f} m², the map's {map_area:.3f} m²")
+    for i, (pts, _, name) in enumerate(solids):
+        u0, v0, u1, v1 = bbox(pts)
+        for other, _, name2 in solids[i + 1:]:
+            a0, c0, a1, c1 = bbox(other)
+            if u0 < a1 - EPS and a0 < u1 - EPS and v0 < c1 - EPS and c0 < v1 - EPS:
+                if any(point_in_poly(px, py, pts) and point_in_poly(px, py, other) for px, py in grid_in((max(u0, a0), max(v0, c0), min(u1, a1), min(v1, c1)), 0.1)):
+                    errors.append(f"kit solids {name} and {name2} overlap")
+
+    def material_at(px, py, polys):
+        for pts, mat in polys:
+            x0, y0, x1, y1 = bbox(pts)
+            if x0 <= px <= x1 and y0 <= py <= y1 and point_in_poly(px, py, pts):
+                return mat
+        return None
+
+    kit_polys = [(pts, mat) for pts, mat, _ in solids]
+    bad = [(px, py, u, v) for px, py in grid_in((b["minX"], b["minY"], b["maxX"], b["maxY"]), 0.5)
+           if (u := material_at(px, py, drawn)) != (v := material_at(px, py, kit_polys))]
+    if bad:
+        x, y, u, v = bad[0]
+        errors.append(f"{len(bad)} samples collide differently from the map; first at ({x:.2f}, {y:.2f}): map {u}, kit {v}")
+
+    def key(v):
+        return round(v, 3)
+
+    ow_map = sorted((key(o["ax"]), key(o["ay"]), key(o["bx"]), key(o["by"]), o.get("blocksBullets") is True) for o in mapdef["oneWays"])
+    ow_kit = sorted((key(ax), key(ay), key(bx), key(by), bb) for ax, ay, bx, by, bb in one_ways)
+    if ow_map != ow_kit:
+        errors.append(f"one-ways differ: map only {sorted(set(ow_map) - set(ow_kit))[:4]}, kit only {sorted(set(ow_kit) - set(ow_map))[:4]}")
+
+    def norm(pts):
+        pts = [(key(x), key(y)) for x, y in pts]
+        if signed_area(pts) < 0:
+            pts.reverse()
+        k = pts.index(min(pts))
+        return tuple(pts[k:] + pts[:k])
+
+    bo_map = sorted((norm(list(zip(s["points"][0::2], s["points"][1::2]))), s.get("material", 1)) for s in mapdef.get("bulletOnly", []))
+    bo_kit = sorted((norm(pts), mat) for pts, mat in bullet_only)
+    if bo_map != bo_kit:
+        errors.append(f"bullet-only parts differ: map only {sorted(set(bo_map) - set(bo_kit))[:3]}, kit only {sorted(set(bo_kit) - set(bo_map))[:3]}")
+
+    # standing spots every ~1 m on the map's walkable surfaces: the ad lints' camera positions
+    walk_segs = []
+    for pts, _ in map_solids:
+        walk_segs += walkable_edges(pts)
+    walk_segs += [(o["ax"], o["ay"], o["bx"], o["by"]) for o in mapdef["oneWays"]]
+
+    def blocked(px, py):
+        return any(point_in_poly(px, py, pts) for pts, _ in map_solids)
+
+    def capsule_clear(px, py):
+        w, h = CAPSULE
+        return not any(blocked(px + dx, py + dy) for dx in (-w / 2, 0, w / 2) for dy in (0.05, h / 2, h - 0.02))
+
+    spots = []
+    for ax, ay, bx, by in walk_segs:
+        n = max(1, round(bx - ax))
+        for k in range(n + 1):
+            px, py = ax + (bx - ax) * k / n, ay + (by - ay) * k / n
+            if b["minX"] < px < b["maxX"] and capsule_clear(px, py):
+                spots.append((px, py))
+    ad_slots = ad_lints(layout, kit, map_id, spots, b, errors, notes)
+
+    print(f"compile_map (kit check): {layout['name']} ({map_id}) against {layout['collision']}")
+    print(f"  pieces {len(layout['pieces'])} + {len(layout.get('decor', []))} decor; ad slots {len(ad_slots)}")
+    print(f"  solids {len(solids)} kit / {len(drawn)} map ({map_area:.1f} m²); one-ways {len(one_ways)} / {len(ow_map)}; "
+          f"bullet-only {len(bullet_only)} / {len(bo_map)}; standing spots {len(spots)}")
+    for n in notes:
+        print("  note:", n)
+    for e in errors:
+        print("  ERROR:", e)
+    if errors:
+        print("  FAILED")
+        sys.exit(1)
+    ads = layout_path.with_name(f"{stem}.adslots.json")
+    ads.write_text(json.dumps(ad_slots, indent=1))
+    print(f"  the kit collides exactly like the map; wrote {ads.name}")
+
+
 def main():
     layout_path = Path(sys.argv[1])
     layout = json.loads(layout_path.read_text())
@@ -134,6 +368,8 @@ def main():
     map_id = layout["id"]
     stem = layout_path.parent.name
     errors, notes = [], []
+    if layout.get("collision"):
+        return check_kit(layout_path, layout, kit)
 
     # ---- mirrored lettering (pieces and decor)
     for item in layout["pieces"] + layout.get("decor", []):
@@ -279,80 +515,7 @@ def main():
         errors.append(f"{len(clear_long)} clear sightlines ≥ {WIDOW_RANGE:.0f} m; longest {d:.1f} m from "
                       f"({p[0]:.1f}, {p[1]:.1f}) to ({q[0]:.1f}, {q[1]:.1f}) (docs/01 §7: ≤ the Widow's range)")
 
-    # ---- AdSlots (docs/14 §2.6, §4.2)
-    ad_slots, seen = [], set()
-    for item in layout.get("decor", []):
-        pc = kit.get(item["piece"])
-        if pc is None:
-            errors.append(f"unknown decor piece {item['piece']}")
-            continue
-        if pc.get("layer", "gameplay") == "gameplay":
-            errors.append(f"{item['piece']} is a gameplay piece in decor: it would draw without collision")
-        ad = pc.get("adSlot")
-        if not ad:
-            if item.get("slotId"):
-                errors.append(f"{item['slotId']}: {item['piece']} is not an ad surface")
-            continue
-        sid, z = item.get("slotId"), item.get("z", 0.0)
-        if not sid or not sid.startswith(f"{map_id}/") or sid in seen:
-            errors.append(f"{item['piece']} at x {item['x']}: slotId {sid!r} must be a unique '{map_id}/<slot>'")
-        seen.add(sid)
-        if not (AD_Z[0] <= z <= AD_Z[1]):
-            errors.append(f"{sid}: z {z} is outside the mid-depth band {AD_Z} (docs/14 §2.6 lint 1)")
-        if any(pc.get(k) for k in ("terrain", "solids", "oneWays")):
-            errors.append(f"{sid}: an ad surface may not carry collision")
-        if item.get("flip"):
-            errors.append(f"{sid}: ad surfaces are never mirrored")
-        cx, cy, cz = ad["centre"]
-        ad_slots.append({
-            "slotId": sid, "kind": ad["kind"], "format": ad["format"], "frames": ad["frames"],
-            "dwellMs": 10000, "phaseIdx": item.get("phaseIdx", 0),
-            "pos": [item["x"] + cx, item.get("y", 0.0) + cy, z + cz], "size": ad["size"],
-            "yawDeg": 0, "houseSet": [], "tags": item.get("tags", []),
-        })
-
-    # lint 2: screen share of each surface (perspective: a surface at depth z draws CAM_D / (CAM_D − z)
-    # times its size); the camera at zoom k sees k × the 1× view
-    for sl in ad_slots:
-        s = CAM_D / (CAM_D - sl["pos"][2])
-        share = sl["size"][0] * sl["size"][1] * s * s / (VIEW_W * VIEW_H)
-        if not (0.025 <= share <= 0.08) or share / ZOOM_4X ** 2 < 0.015:
-            errors.append(f"{sl['slotId']}: {share:.1%} of the screen at 1×, {share / ZOOM_4X ** 2:.1%} at 4× "
-                          "(docs/14 §2.6 lint 2: 2.5–8%, ≥ 1.5%)")
-
-    # lint 4: the camera centred on a standing player's torso, clamped so the view never leaves the
-    # bounds (the game camera stops at them); a surface counts when ≥ 50% of it is on screen (the IAB
-    # viewability share docs/14 §4.6 measures with)
-    def visible_area(slot, px, py, zoom):
-        s = CAM_D / (CAM_D - slot["pos"][2])
-        (x, y, _), (w, h) = slot["pos"], slot["size"]
-        vw, vh = VIEW_W * zoom, VIEW_H * zoom
-        cx = min(max(px, b["minX"] + vw / 2), b["maxX"] - vw / 2)
-        cy = min(max(py + 0.9, b["minY"] + vh / 2), b["maxY"] - vh / 2)
-        x0, y0 = cx + (x - w / 2 - cx) * s, cy + (y - h / 2 - cy) * s
-        x1, y1 = cx + (x + w / 2 - cx) * s, cy + (y + h / 2 - cy) * s
-        ov = max(0.0, min(x1, cx + vw / 2) - max(x0, cx - vw / 2)) * max(0.0, min(y1, cy + vh / 2) - max(y0, cy - vh / 2))
-        return ov if ov >= 0.5 * (x1 - x0) * (y1 - y0) else 0.0
-
-    worst1, worst7, area7, worst_at, seen_ever = 0, 0, 0.0, None, set()
-    for px, py in spots:
-        vis = [sl["slotId"] for sl in ad_slots if visible_area(sl, px, py, 1.0)]
-        seen_ever |= set(vis)
-        if len(vis) > worst1:
-            worst1, worst_at = len(vis), (px, py, vis)
-        a7 = [visible_area(sl, px, py, ZOOM_MAX) for sl in ad_slots]
-        worst7 = max(worst7, sum(1 for a in a7 if a))
-        area7 = max(area7, sum(a7) / (VIEW_W * VIEW_H * ZOOM_MAX ** 2))
-    if ad_slots:
-        if worst1 > 2:
-            errors.append(f"{worst1} ad surfaces in one 1× view at ({worst_at[0]:.1f}, {worst_at[1]:.1f}): "
-                          f"{', '.join(worst_at[2])} (docs/14 §2.6 lint 4: ≤ 2)")
-        if worst7 > 4 or area7 > 0.08:
-            errors.append(f"7× view: up to {worst7} ad surfaces, {area7:.1%} ad area (docs/14 §2.6 lint 4: ≤ 4, ≤ 8%)")
-        for sl in ad_slots:
-            if sl["slotId"] not in seen_ever:
-                errors.append(f"{sl['slotId']} is never on screen from a standing spot")
-        notes.append(f"ad surfaces per view: ≤ {worst1} at 1×; ≤ {worst7} and ≤ {area7:.1%} of the screen at 7×")
+    ad_slots = ad_lints(layout, kit, map_id, spots, b, errors, notes)
 
     mapdef = {
         "id": map_id, "name": layout["name"], "bounds": b,

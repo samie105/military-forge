@@ -38,6 +38,10 @@ graded alike; the first is its `file` (and the still where keyframes don't play)
 `keys`. Each keyframe's mean luminance is recorded, so the tests can hold the change between them
 far under a flash.
 
+Another map can show the same creatives without copies (Fog Stair: the owner, 26 Oct):
+
+    python3 -I apps/web/scripts/house-ads.py fog_stair --reuse street_market apps/web/public/assets/ads
+
 Click-through (the owner's tap-to-save, 23 Oct): each sponsored creative names its advertiser
 (ADVERTISERS: display name, default https destination, optional UTM campaign tag) and may set its
 own destination and a category ("finance" for anything about trading, so it can be switched off per
@@ -75,6 +79,8 @@ SIGNAL_LIMIT = 0.10
 # sponsors would list its own house art here again.
 POOLS = {
     "street_market": ("street-market", []),
+    # Fog Stair shows the Street Market's sponsored creatives (`--reuse street_market`): the same files
+    "fog_stair": ("fog-stair", []),
 }
 
 # Advertisers whose creatives a player can save (tap-to-save): name, default destination (https only)
@@ -310,7 +316,30 @@ def write_pool(dest, pool):
     print(json.dumps({"total_bytes": sum((dest / w).stat().st_size for w, _ in files), "ktx2_bytes": sum((dest / k).stat().st_size for _, k in files)}))
 
 
+def reuse(key, src, out):
+    """A map whose boards show another map's house art: writes only <out>/<key>/house.json, naming the
+    other map's files (its environment's `ads.base` points at that folder, so nothing is copied and a
+    player who has played one map has the creatives cached for the other), under its own map id and
+    UTM campaign tag. Re-run after the other map's pool changes."""
+    pool = json.loads((Path(out) / src / "house.json").read_text())
+    map_id = POOLS[key][0]
+    pool["map"] = map_id
+    pool["files"] = f"../{src}/"
+    for adv in pool.get("advertisers", {}).values():
+        if adv.get("utm"):
+            adv["utm"] = map_id
+    dest = Path(out) / key
+    dest.mkdir(parents=True, exist_ok=True)
+    (dest / "house.json").write_text(json.dumps(pool, indent=1) + "\n")
+    n = sum(len(pool.get("sponsored", {}).get(f, [])) for f in ("screens", "hoardings"))
+    print(f"wrote {dest / 'house.json'}: {n} sponsored creatives from {src}")
+
+
 def main():
+    if "--reuse" in sys.argv:
+        key, src, out = [a for a in sys.argv[1:] if a != "--reuse"]
+        reuse(key, src, out)
+        return
     for flag in ("--sponsored-only", "--clicks-only"):
         if flag in sys.argv:
             key, out = [a for a in sys.argv[1:] if a != flag]

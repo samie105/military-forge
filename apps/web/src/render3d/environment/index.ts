@@ -83,6 +83,11 @@ export interface EnvironmentDef {
   ads?: AdsDef;
   /** world x of each foreground street lamp (kit maps) */
   lamps?: number[];
+  /**
+   * The street in front of the gameplay band and the yard behind it (kit maps; default true). A kit
+   * that draws its own ground at every height (Fog Stair: quays, stairs, a hill) leaves them out.
+   */
+  street?: boolean;
   dressing?: DressingDef;
 }
 
@@ -310,6 +315,7 @@ export class MapEnvironment {
       this.background.add(glow);
     }
 
+    if (this.def.street === false) return;
     const lit = this.material(new MeshLambertMaterial({ vertexColors: true, map: this.grime }));
     const street = new Mesh(buildStreet(look, x0, x1).build(), lit);
     street.name = 'street';
@@ -391,6 +397,8 @@ export class MapEnvironment {
     const gameplay = mergeLayer(pieces, items, 'gameplay', { grade, uvTile: UV_TILE }, missing);
     const mid = mergeLayer(pieces, items, 'mid', { grade, uvTile: UV_TILE }, missing);
     const far = mergeLayer(pieces, items, 'far', { grade });
+    // neon tubes and LED panels: unlit, as authored (they glow through the fog)
+    const glow = mergeLayer(pieces, items, 'glow');
     if (missing.size) console.warn(`environment ${this.def.mapId}: the kit has no ${[...missing].join(', ')}`);
     if (gameplay) {
       const mesh = new Mesh(gameplay, this.material(new MeshLambertMaterial({ vertexColors: true, map: this.grime })));
@@ -411,6 +419,11 @@ export class MapEnvironment {
       mesh.name = 'kit-far';
       this.kit.add(mesh);
     }
+    if (glow) {
+      const mesh = new Mesh(glow, this.material(new MeshBasicMaterial({ vertexColors: true })));
+      mesh.name = 'kit-glow';
+      this.kit.add(mesh);
+    }
     const m = new Matrix4();
     for (const item of items) {
       const piece = pieces.get(item.piece);
@@ -423,7 +436,7 @@ export class MapEnvironment {
     const footprints: ContactShadow[] = [];
     for (const item of items) {
       const piece = pieces.get(item.piece);
-      if (!piece || piece.layer === 'far') continue;
+      if (!piece || piece.layer === 'far' || piece.layer === 'glow') continue;
       for (const f of contactFootprints(piece, item)) footprints.push({ ...f, z1: Math.min(f.z1, KERB_Z - 0.3) });
     }
     if (footprints.length) {
@@ -474,7 +487,8 @@ export class MapEnvironment {
 
   /** Power lines, bunting, trees, palms and the mid-depth city: one merged mesh. */
   private buildDressing(layout: KitLayout): BufferGeometry | null {
-    const d = this.def.dressing ?? {};
+    if (!this.def.dressing) return null; // a kit that dresses itself (Fog Stair): no empty mesh
+    const d = this.def.dressing;
     const look = this.look;
     const g = look.grade;
     const fade: Fade = { haze: new Color(g.haze), base: g.mid[2], perM: g.mid[3] };

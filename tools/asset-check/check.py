@@ -1000,7 +1000,8 @@ def _shapes(o, key):
 
 def uncovered_blobs(o):
     """Regions drawn on the gameplay plane that the piece's collision doesn't account for: not
-    inside a solid or the terrain and not on a one-way, within RVC_TOL. Blobs thinner than 3 cells
+    inside a solid, the terrain or a bullet-only part (it stops bullets: Fog Stair's 0.4–0.6 m arcade
+    legs, viaduct pillars and pavilion columns) and not on a one-way, within RVC_TOL. Blobs thinner than 3 cells
     (0.15 m) either way are ignored (rims, bevels), and so are thin posts that are also shallow in
     depth (a pole, not an end plate across the walkway)."""
     x, y, z = plane_samples(o)
@@ -1009,7 +1010,7 @@ def uncovered_blobs(o):
     cov = np.zeros(x.shape, dtype=bool)
     for x0, x1, h in _shapes(o, "terrain"):
         cov |= (x >= x0 - RVC_TOL) & (x <= x1 + RVC_TOL) & (z <= h + RVC_TOL)
-    for poly in _shapes(o, "solids"):
+    for poly in _shapes(o, "solids") + _shapes(o, "bulletOnly"):
         pts = list(zip(poly[0::2], poly[1::2]))
         for dx, dz in ((0, 0), (0, RVC_TOL), (0, -RVC_TOL), (RVC_TOL, 0), (-RVC_TOL, 0)):
             cov |= _in_poly(x + dx, z + dz, pts)
@@ -1106,10 +1107,16 @@ def check_kit(r: Report, objs, args):
         lo, hi = bbox([p for t in tris for p in t])
         size = hi - lo
         r.ok(len(tris) <= budget, f"triangles: {o.name}", f"{len(tris)} of {budget}")
-        pivot = abs(lo.z) <= 0.01 or abs(hi.z) <= 0.01
+        # the walkable top: the highest point of the piece's collision (a one-way, a solid's top), when
+        # things are drawn above it (Fog Stair: a balcony's rail, a stair's balustrade, a quay's bollards)
+        tops = [y for w in _shapes(o, "oneWays") for y in (w[1], w[3])] + [y for poly in _shapes(o, "solids") for y in poly[1::2]]
+        walk_top = bool(tops) and abs(max(tops)) <= 0.01
+        pivot = abs(lo.z) <= 0.01 or abs(hi.z) <= 0.01 or walk_top
         r.ok(pivot, f"pivot: {o.name}", f"y {lo.z:+.2f}..{hi.z:+.2f} m: "
-             + ("top or bottom on the origin" if pivot else "neither the walkable top nor the bottom is at y = 0"))
+             + (("walkable top" if walk_top and abs(hi.z) > 0.01 else "top or bottom") + " on the origin" if pivot else "neither the walkable top nor the bottom is at y = 0"))
         coll = [c for key in ("terrain", "solids", "oneWays") for shape in o.get(key, []) for c in shape]
+        # a piece whose only collision is bullet-only (a mast) is still drawn on the plane: check it too
+        drawn_coll = coll or o.get("bulletOnly")
         if coll:
             # map kits: the collision is what must snap (render = collision, docs/11 §2)
             off = [c for c in coll if abs(round(c / 0.05) * 0.05 - c) > 1e-3]
@@ -1119,7 +1126,7 @@ def check_kit(r: Report, objs, args):
             on_grid = all(abs(round(s / 0.25) * 0.25 - s) <= 0.02 for s in (size.x, size.z))
             r.ok(on_grid, f"0.25 m grid: {o.name}", f"{size.x:.2f} x {size.z:.2f} m (w x h), depth {size.y:.2f} m",
                  warn_only=True)
-        if coll and o.get("layer", "gameplay") == "gameplay":
+        if drawn_coll and o.get("layer", "gameplay") == "gameplay":
             blobs = uncovered_blobs(o)
             r.ok(not blobs, f"render = collision on the gameplay plane: {o.name}",
                  "nothing drawn within 0.35 m of the plane outside the collision" if not blobs else

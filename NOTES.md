@@ -1528,7 +1528,7 @@ Tick avg 0.05 ms on all four.
 
 ## 50. Fog Stair: the first big real map (23 Oct 2026, the owner's pick)
 
-The owner picked **FOG STAIR** from the four places offered (Cloudline, Tin Terraces, Fog Stair, Steel Mirage). It's a mountain city on a river gorge in south-west China: streets where one road's ground floor is the next road's twentieth, long public stairs, a monorail through a tower, rooftop footbridges, and river fog. It's an original place with no real skyline and no lettering; nothing in it is Lagos.
+The owner picked **FOG STAIR** from the four places offered (Cloudline, Tin Terraces, Fog Stair, Steel Mirage). It's a mountain city on a river gorge in south-west China: streets where one road's ground floor is the next road's twentieth, long public stairs, a monorail through a tower, rooftop footbridges, and river fog. It's an original place with no real skyline; nothing in it is Lagos. ("No lettering" held until 26 Oct: the owner's direction since then is real, simple Simplified Chinese on the shop signs; see "Fog Stair's kit" below.)
 
 - **The map** (`packages/content/src/maps/fogStair.ts`, 244 × 108 m) is mirrored about the river (x 120), so neither bank holds the high ground.
 - **Its four tiers:**
@@ -1549,7 +1549,7 @@ The owner picked **FOG STAIR** from the four places offered (Cloudline, Tin Terr
   - shields in the stations, grenades on the hilltops and the monorail car;
   - power weapons on the roof bridge and the pavilions.
 - **Its event:** RIVER FOG (`fog`: bullets fall short for 20 s), on a random 75 s cycle at a 60% chance, from 45 s in.
-- **Its look** (render3d/environment/places.ts `FOG`, `FOG_STAIR`): kit-less for now (the extruded collision is the play plane, recoloured).
+- **Its look** (render3d/environment/places.ts `FOG`, `FOG_STAIR`): kit-less until 26 Oct (the extruded collision was the play plane, recoloured); now its own kit draws it ("Fog Stair's kit" below).
   - Morning overcast from the upper left, weathered concrete, faded tile and brick, green-grey paint, and a dense blue-grey fog.
   - The painted layers come from **the art pipeline at no Forge credit:** `art/pipeline/build_fog_stair_backdrops.py` (Blender, Cycles) renders the far bank (stacked towers up a ridge, a monorail viaduct with a train, a few warm windows) and the near towers (balcony bands, tanks, masts, blank sign boards), both fading into the river fog. `art/pipeline/fog_stair_sky.py` paints the sky. `apps/web/scripts/backdrops.py` grades all three into `assets/backdrops/fog_stair/`.
   - Re-run: render to a raw dir, then `python3 -I apps/web/scripts/backdrops.py apps/web/public/assets/backdrops <raw dir>`.
@@ -1574,7 +1574,7 @@ The owner picked **FOG STAIR** from the four places offered (Cloudline, Tin Terr
     - One 906 ms long task about 10 s in, during Auto's tier changes.
   - **Snapshots:** 2.3 KB/s per client with 12 humans (Street Market: 3.9). The ticks average 0.05 ms.
   - Screenshots: `docs/screenshots/maps-vertical/fog-stair-*`.
-- **Next, the art:** a Blender kit for the play plane (the towers, stairs, monorail, station and bridges, like the Street Market's kit) and painted Higgsfield versions of the three layers. Both are asked of the Forge session in the shared notes (`maps-vertical.md`).
+- **Next, the art:** a Blender kit for the play plane (done 26 Oct: "Fog Stair's kit" below) and painted Higgsfield versions of the three layers (still open; the rendered ones now carry the kit's old quarter and pagoda).
 
 
 ## 51. Spectating: the death cam, watching a room, a free camera (23 Oct 2026, the owner: "spectating too will bang")
@@ -1826,3 +1826,35 @@ No protocol change: the teams come from v21's MATCH_STATE (`lookBook.teamOf`).
 - **2D overlay (`render.ts drawPlayerHealth`):** the name, the bar and its frame in the relation colour, the shape left of the name, and your soldier standing on a ring and a chevron marked YOU, below the feet (it never covers the soldier).
 - **Frame cost (the phone at 812×375, `?perf`, Low, SwiftShader in headless Chrome; `team-marking-check.mjs` reads `Renderer3D.stats()` over 8 s with the marking on, off, on):** render CPU 1.06 / 0.98 / 0.91 ms; frame p50 16.8 / 16.9 / 16.8 ms; draw calls track the soldiers on screen (31 with 4, 29 with 3, 36 with 5), so the marking adds none.
 - **Shots:** `docs/screenshots/team-marking/` (desktop 1600×900 and phone 812×375; team deathmatch with an ally and with enemies, free-for-all, and two zooms).
+
+## Fog Stair's kit: a river city in south-west China, bespoke (26 Oct 2026, the owner: "The China stuff doesn't look Chinese. It should look bespoke — even the things they land on")
+
+Fog Stair was its collision extruded in front of painted layers. It now has a kit of its own, built like the Street Market's in the free Blender pipeline (no Forge credits), fitted to the collision that was already there: **the map's collision is unchanged** (`fogStair.ts` is byte-identical), so no bot golden, nav graph or soak moved.
+
+- **The place:** a stacked hillside river city, original (no real skyline, no real businesses).
+  - Concrete towers on the quays with balcony bands, steel window grilles, air-con units, laundry poles and pot plants; bamboo scaffolding and safety netting over half of each tower's upper floors; an LED panel and vertical neon blades on their faces.
+  - Long public stone stairs (45°; each tread at the slope's height mid-step, ±0.125 m) with a stone balustrade and steel handrail on the back edge, red lanterns strung over them from lamp posts behind the plane, stilted wooden houses (diaojiaolou) stepping down the hill's face.
+  - The old noodle shop on the terrace: a grey-tiled pitched roof whose ridge is the walkable top, its eaves turned up at the corners, a tiled waist eave over a wooden front.
+  - The hill pavilion: oxblood-lacquered columns, bracket blocks, a flat-topped tiled roof (盝顶) whose paved top is the rooftop deck. The perch: a timber lookout on stilts with a small tiled canopy.
+  - The monorail: a straddle-beam viaduct (its body and the pillars' hammerheads behind the plane), the station inside each tower (track, platform, screen doors, ceiling lights), an arch bridge over the gorge with the parked car; a steel footbridge between the roofs (its Warren truss on the back edge).
+  - The quays: sandstone slabs, bollards and steps on the back edge, moored sampans and a barge behind the plane, an arcade with a hotpot restaurant (steam), shutters and a corner shop, noodle stalls with plastic stools, a small temple gate, old shop-houses with tiled roofs behind the hilltop lane.
+- **What players land on is all kit:** every balcony, the perch, the terraces, the shop-house roof, both stairs, the viaduct deck, the bridges, the car, the tanks and masts, the pavilion. Slabs read as slabs (0.25 m on the plane), the posts that are bullet-only (arcade legs, pillars, pavilion columns, the mast) are drawn exactly as wide as their colliders, and nothing without collision stands within 0.35 m of the plane (rails, laundry and pots on back edges; the arch, beams and trusses behind).
+- **Render = collision, checked:** each piece carries the collision it stands for; `compile_map.py` (a layout with `collision`) checks the placed kit against the exported map (one-ways and slabs, bullet-only parts, solids by area and at every 0.5 m), and `fogStair.test.ts` does the same against the registered map. asset-check: 0 fail.
+- **Signage, in Simplified Chinese** (this overrides §50's "no lettering" for shop signs, the owner's direction): drawn as strokes in `art/pipeline/hanzi_strokes.py` (no font file), bent into neon or brushed on boards. 火锅 hotpot, 面馆 noodle shop, 小面 "small noodles" (the region's spicy breakfast noodles), 茶馆 teahouse, 药房 pharmacy, 旅馆 inn, 小卖部 corner shop. Nothing political, no brands, no names. Lettered pieces are never mirrored; the east bank's blades swap their words.
+- **Colour rules near the play plane:** gameplay colours stay ≥ 25 ΔE from both team colours (asset-check). The lacquer (oxblood) and the lanterns (dark matte crimson) are far darker than the damage red and the enemy marking, and the lanterns hang behind the plane. Neon is pink, warm white and a soft violet. On the shots, pixels within ±15° of the damage red or the enemy marking (S > 0.4): 0–0.2% of a tier view, 0.7–2% in the closest pavilion views (the two front columns); the docs/14 §3.5 line for creatives is 15%.
+- **Billboards (docs/14 §2.3):** `fog-stair/S1`, `S2`, vertical neon-framed cabinets on towers in the gorge (z −8, a 茶馆 blade under each Screen); `S3`, `S4`, LED Screens on gantries high over the lower stairs (z −5); `H1`, `H2`, Hoardings hung under the monorail's other track (z −5). Lints: ≤ 1 surface per 1× view, ≤ 4 and ≤ 3.4% at 7×; nothing of the kit covers a board from any camera (`fogStairAds.test.ts`). No new format: the vertical read comes from the cabinet, so the boards stay ≤ 2 draws and no vertical cuts were needed. The pool (`assets/ads/fog_stair/house.json`, `house-ads.py fog_stair --reuse street_market`) names the Street Market's sponsored creatives (no copies) with its own UTM tag. The boards' tint is dimmed into the fog: `brightness.test.ts` holds their median board/kit ratio to the market's daylight one.
+- **Renderer (small, render3d-b's API):** a `glow` kit layer (unlit, ungraded: the neon), `EnvironmentDef.street: false` (no street or yard in front of a tall map), no empty dressing mesh. The backdrops: the far layer now has the old quarter's tiled roofs, a pagoda and a pavilion on its ridge; the near towers neon blades and the old quarter at their feet; the far and mid layers draw in 2 and 3 panels (were 3 and 4).
+- **Budgets** (`tall-map-shots.mjs --map fog-stair --hw`, 6 bots; phone 812×375, CPU ×4; map art from the page's resource timings):
+
+| | Fog Stair before (no kit) | Fog Stair after | Street Market (the budget) |
+|---|---|---|---|
+| Desktop 1920×1080 (High): frames p50 / p90 | 16.6–16.7 / 18.0–18.3 ms | 16.7 / 17.1–17.5 ms | 16.6–16.7 / 17.2–18.4 ms |
+| Desktop: draws, triangles | 64–76, 72–92K | 63–77, 146–167K | 80–105, 151–183K |
+| Phone 812×375, CPU ×4 (Low, from 10 s): frames p50 / p90 | 16.6–16.7 / 18.3–18.8 ms | 16.6–16.7 / 17.8–18.1 ms | 16.6–26 / 19–42 ms |
+| Phone: draws, triangles | 57–60, 56–59K | 55–59, 99–103K | 35–52, 81–102K |
+| Map art on first load (desktop / phone) | 111 / 108 KB | 972 / 1,063 KB (kit 727 KB) | 843 / 973 KB (kit 458 KB) |
+
+  The kit is 44.2K triangles placed (gameplay 31.8K, mid 9.0K, neon 3.4K), three draws; the phone's frames are no slower than before (its p90 a little better). Fog Stair's phone draws were above the Street Market's before the kit (its zones: four updrafts, the river and thin air) and stay where they were; the backdrops lost two panels. The extra first-load cost is the kit (727 KB, meshopt), in line with the Street Market's per metre of map (Fog Stair is twice as wide and twice as tall).
+
+- **Screenshots:** `docs/screenshots/fog-stair-kit/` (before/after of each tier and the wide views on a desktop and a phone, close-ups of the landing pieces and signs). Re-shoot: `apps/web/scripts/fog-stair-shots.mjs`.
+- **For the owner:** the screens are 4:3 in tall neon cabinets rather than portrait screens (a third format would be a third draw and new cuts of every creative); the lanterns and lacquer are kept dark; the kit's first download is 727 KB (map art ≈ 1 MB in all, the Street Market's ≈ 0.9 MB); painted Higgsfield backdrops are still the open option (Forge credits, not spent).

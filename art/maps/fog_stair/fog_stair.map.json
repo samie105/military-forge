@@ -1,0 +1,956 @@
+{
+ "id": "fog-stair",
+ "name": "Fog Stair",
+ "bounds": {
+  "minX": -2,
+  "minY": -6,
+  "maxX": 242,
+  "maxY": 102
+ },
+ "solids": [
+  {
+   "points": [
+    0,
+    -6,
+    240,
+    -6,
+    240,
+    38,
+    218,
+    38,
+    200,
+    20,
+    184,
+    20,
+    164,
+    0,
+    136,
+    0,
+    136,
+    -4,
+    104,
+    -4,
+    104,
+    0,
+    76,
+    0,
+    56,
+    20,
+    40,
+    20,
+    22,
+    38,
+    0,
+    38
+   ],
+   "material": 0
+  },
+  {
+   "points": [
+    -2,
+    -6,
+    0,
+    -6,
+    0,
+    100,
+    -2,
+    100
+   ],
+   "material": 0
+  },
+  {
+   "points": [
+    240,
+    -6,
+    242,
+    -6,
+    242,
+    100,
+    240,
+    100
+   ],
+   "material": 0
+  },
+  {
+   "points": [
+    -2,
+    100,
+    242,
+    100,
+    242,
+    102,
+    -2,
+    102
+   ],
+   "material": 0
+  },
+  {
+   "points": [
+    80,
+    4,
+    98,
+    4,
+    98,
+    38,
+    80,
+    38
+   ],
+   "material": 0
+  },
+  {
+   "points": [
+    80,
+    43.5,
+    98,
+    43.5,
+    98,
+    62,
+    80,
+    62
+   ],
+   "material": 0
+  },
+  {
+   "points": [
+    44,
+    20,
+    50,
+    20,
+    50,
+    26.5,
+    44,
+    26.5
+   ],
+   "material": 0
+  },
+  {
+   "points": [
+    83,
+    62,
+    86,
+    62,
+    86,
+    64.5,
+    83,
+    64.5
+   ],
+   "material": 1
+  },
+  {
+   "points": [
+    100.5,
+    0,
+    102,
+    0,
+    102,
+    1.2,
+    100.5,
+    1.2
+   ],
+   "material": 1
+  },
+  {
+   "points": [
+    142,
+    4,
+    160,
+    4,
+    160,
+    38,
+    142,
+    38
+   ],
+   "material": 0
+  },
+  {
+   "points": [
+    142,
+    43.5,
+    160,
+    43.5,
+    160,
+    62,
+    142,
+    62
+   ],
+   "material": 0
+  },
+  {
+   "points": [
+    190,
+    20,
+    196,
+    20,
+    196,
+    26.5,
+    190,
+    26.5
+   ],
+   "material": 0
+  },
+  {
+   "points": [
+    154,
+    62,
+    157,
+    62,
+    157,
+    64.5,
+    154,
+    64.5
+   ],
+   "material": 1
+  },
+  {
+   "points": [
+    138,
+    0,
+    139.5,
+    0,
+    139.5,
+    1.2,
+    138,
+    1.2
+   ],
+   "material": 1
+  },
+  {
+   "points": [
+    116,
+    38,
+    124,
+    38,
+    124,
+    41.2,
+    116,
+    41.2
+   ],
+   "material": 1
+  }
+ ],
+ "oneWays": [
+  {
+   "ax": 22.5,
+   "ay": 38,
+   "bx": 80,
+   "by": 38,
+   "blocksBullets": true
+  },
+  {
+   "ax": 76,
+   "ay": 10,
+   "bx": 80,
+   "by": 10,
+   "blocksBullets": true
+  },
+  {
+   "ax": 98,
+   "ay": 14,
+   "bx": 102,
+   "by": 14,
+   "blocksBullets": true
+  },
+  {
+   "ax": 98,
+   "ay": 26,
+   "bx": 102,
+   "by": 26,
+   "blocksBullets": true
+  },
+  {
+   "ax": 76,
+   "ay": 50,
+   "bx": 80,
+   "by": 50,
+   "blocksBullets": true
+  },
+  {
+   "ax": 98,
+   "ay": 50,
+   "bx": 102,
+   "by": 50,
+   "blocksBullets": true
+  },
+  {
+   "ax": 18,
+   "ay": 50,
+   "bx": 22,
+   "by": 50,
+   "blocksBullets": true
+  },
+  {
+   "ax": 2,
+   "ay": 62,
+   "bx": 18,
+   "by": 62,
+   "blocksBullets": true
+  },
+  {
+   "ax": 160,
+   "ay": 38,
+   "bx": 217.5,
+   "by": 38,
+   "blocksBullets": true
+  },
+  {
+   "ax": 160,
+   "ay": 10,
+   "bx": 164,
+   "by": 10,
+   "blocksBullets": true
+  },
+  {
+   "ax": 138,
+   "ay": 14,
+   "bx": 142,
+   "by": 14,
+   "blocksBullets": true
+  },
+  {
+   "ax": 138,
+   "ay": 26,
+   "bx": 142,
+   "by": 26,
+   "blocksBullets": true
+  },
+  {
+   "ax": 160,
+   "ay": 50,
+   "bx": 164,
+   "by": 50,
+   "blocksBullets": true
+  },
+  {
+   "ax": 138,
+   "ay": 50,
+   "bx": 142,
+   "by": 50,
+   "blocksBullets": true
+  },
+  {
+   "ax": 218,
+   "ay": 50,
+   "bx": 222,
+   "by": 50,
+   "blocksBullets": true
+  },
+  {
+   "ax": 222,
+   "ay": 62,
+   "bx": 238,
+   "by": 62,
+   "blocksBullets": true
+  },
+  {
+   "ax": 98,
+   "ay": 38,
+   "bx": 142,
+   "by": 38,
+   "blocksBullets": true
+  },
+  {
+   "ax": 98,
+   "ay": 62,
+   "bx": 142,
+   "by": 62,
+   "blocksBullets": true
+  }
+ ],
+ "bulletOnly": [
+  {
+   "points": [
+    80.39999999999999,
+    0,
+    80.8,
+    0,
+    80.8,
+    4,
+    80.39999999999999,
+    4
+   ],
+   "material": 1
+  },
+  {
+   "points": [
+    88.8,
+    0,
+    89.2,
+    0,
+    89.2,
+    4,
+    88.8,
+    4
+   ],
+   "material": 1
+  },
+  {
+   "points": [
+    97.2,
+    0,
+    97.60000000000001,
+    0,
+    97.60000000000001,
+    4,
+    97.2,
+    4
+   ],
+   "material": 1
+  },
+  {
+   "points": [
+    30.7,
+    29,
+    31.3,
+    29,
+    31.3,
+    38,
+    30.7,
+    38
+   ],
+   "material": 1
+  },
+  {
+   "points": [
+    52.7,
+    20,
+    53.3,
+    20,
+    53.3,
+    38,
+    52.7,
+    38
+   ],
+   "material": 1
+  },
+  {
+   "points": [
+    65.7,
+    10,
+    66.3,
+    10,
+    66.3,
+    38,
+    65.7,
+    38
+   ],
+   "material": 1
+  },
+  {
+   "points": [
+    3.8,
+    38,
+    4.2,
+    38,
+    4.2,
+    62,
+    3.8,
+    62
+   ],
+   "material": 1
+  },
+  {
+   "points": [
+    15.8,
+    38,
+    16.2,
+    38,
+    16.2,
+    62,
+    15.8,
+    62
+   ],
+   "material": 1
+  },
+  {
+   "points": [
+    94.85,
+    62,
+    95.15,
+    62,
+    95.15,
+    70,
+    94.85,
+    70
+   ],
+   "material": 1
+  },
+  {
+   "points": [
+    159.20000000000002,
+    0,
+    159.6,
+    0,
+    159.6,
+    4,
+    159.20000000000002,
+    4
+   ],
+   "material": 1
+  },
+  {
+   "points": [
+    150.8,
+    0,
+    151.2,
+    0,
+    151.2,
+    4,
+    150.8,
+    4
+   ],
+   "material": 1
+  },
+  {
+   "points": [
+    142.4,
+    0,
+    142.79999999999998,
+    0,
+    142.79999999999998,
+    4,
+    142.4,
+    4
+   ],
+   "material": 1
+  },
+  {
+   "points": [
+    208.7,
+    29,
+    209.3,
+    29,
+    209.3,
+    38,
+    208.7,
+    38
+   ],
+   "material": 1
+  },
+  {
+   "points": [
+    186.7,
+    20,
+    187.3,
+    20,
+    187.3,
+    38,
+    186.7,
+    38
+   ],
+   "material": 1
+  },
+  {
+   "points": [
+    173.7,
+    10,
+    174.3,
+    10,
+    174.3,
+    38,
+    173.7,
+    38
+   ],
+   "material": 1
+  },
+  {
+   "points": [
+    235.8,
+    38,
+    236.2,
+    38,
+    236.2,
+    62,
+    235.8,
+    62
+   ],
+   "material": 1
+  },
+  {
+   "points": [
+    223.8,
+    38,
+    224.2,
+    38,
+    224.2,
+    62,
+    223.8,
+    62
+   ],
+   "material": 1
+  },
+  {
+   "points": [
+    144.85,
+    62,
+    145.15,
+    62,
+    145.15,
+    70,
+    144.85,
+    70
+   ],
+   "material": 1
+  }
+ ],
+ "spawns": [
+  {
+   "x": 103,
+   "y": 0
+  },
+  {
+   "x": 89,
+   "y": 0
+  },
+  {
+   "x": 42,
+   "y": 20
+  },
+  {
+   "x": 53,
+   "y": 20
+  },
+  {
+   "x": 16,
+   "y": 38
+  },
+  {
+   "x": 89,
+   "y": 38
+  },
+  {
+   "x": 91,
+   "y": 62
+  },
+  {
+   "x": 137,
+   "y": 0
+  },
+  {
+   "x": 151,
+   "y": 0
+  },
+  {
+   "x": 198,
+   "y": 20
+  },
+  {
+   "x": 187,
+   "y": 20
+  },
+  {
+   "x": 224,
+   "y": 38
+  },
+  {
+   "x": 151,
+   "y": 38
+  },
+  {
+   "x": 149,
+   "y": 62
+  }
+ ],
+ "dummies": [],
+ "labels": [
+  {
+   "x": 120,
+   "y": -2.5,
+   "text": "RIVER"
+  },
+  {
+   "x": 90,
+   "y": 5.5,
+   "text": "QUAY"
+  },
+  {
+   "x": 66,
+   "y": 12,
+   "text": "LOWER STAIR"
+  },
+  {
+   "x": 31,
+   "y": 31,
+   "text": "UPPER STAIR"
+  },
+  {
+   "x": 89,
+   "y": 40.5,
+   "text": "STATION"
+  },
+  {
+   "x": 120,
+   "y": 65,
+   "text": "ROOF BRIDGE"
+  },
+  {
+   "x": 10,
+   "y": 65,
+   "text": "PAVILION"
+  }
+ ],
+ "zones": [
+  {
+   "id": "river",
+   "kind": "water",
+   "rect": [
+    104,
+    -4,
+    136,
+    -1
+   ],
+   "label": "river"
+  },
+  {
+   "id": "updraft-river-west",
+   "kind": "updraft",
+   "rect": [
+    109,
+    -3.5,
+    114,
+    41
+   ],
+   "label": "updraft"
+  },
+  {
+   "id": "updraft-river-east",
+   "kind": "updraft",
+   "rect": [
+    126,
+    -3.5,
+    131,
+    41
+   ],
+   "label": "updraft"
+  },
+  {
+   "id": "updraft-hill-west",
+   "kind": "updraft",
+   "rect": [
+    8,
+    38.5,
+    12,
+    66
+   ],
+   "label": "updraft"
+  },
+  {
+   "id": "updraft-hill-east",
+   "kind": "updraft",
+   "rect": [
+    228,
+    38.5,
+    232,
+    66
+   ],
+   "label": "updraft"
+  },
+  {
+   "id": "thin-air",
+   "kind": "thinAir",
+   "rect": [
+    0,
+    82,
+    240,
+    100
+   ],
+   "label": "thin air"
+  }
+ ],
+ "events": {
+  "defs": [
+   {
+    "id": "river-fog",
+    "kind": "fog",
+    "name": "RIVER FOG",
+    "description": "Fog rolls up the gorge: bullets fall short"
+   }
+  ],
+  "schedule": {
+   "kind": "random",
+   "start": 45,
+   "cycle": 75,
+   "chance": 0.6
+  }
+ },
+ "tiers": [
+  {
+   "id": "riverside",
+   "name": "Riverside",
+   "y": 0
+  },
+  {
+   "id": "stairs",
+   "name": "The Stairs",
+   "y": 20
+  },
+  {
+   "id": "monorail",
+   "name": "Monorail",
+   "y": 38
+  },
+  {
+   "id": "rooftops",
+   "name": "Rooftops",
+   "y": 62
+  }
+ ],
+ "spawners": [
+  {
+   "id": "riverside-grenades",
+   "pool": "grenades",
+   "spots": [
+    {
+     "x": 84,
+     "y": 0
+    },
+    {
+     "x": 156,
+     "y": 0
+    }
+   ],
+   "first": [
+    2,
+    5
+   ],
+   "respawn": [
+    16,
+    22
+   ],
+   "maxActive": 1
+  },
+  {
+   "id": "riverside-guns",
+   "pool": "common",
+   "spots": [
+    {
+     "x": 79,
+     "y": 0
+    },
+    {
+     "x": 161,
+     "y": 0
+    }
+   ],
+   "first": [
+    3,
+    6
+   ],
+   "respawn": [
+    12,
+    18
+   ]
+  },
+  {
+   "id": "terrace-guns",
+   "pool": "common",
+   "spots": [
+    {
+     "x": 47,
+     "y": 26.5
+    },
+    {
+     "x": 55,
+     "y": 20
+    },
+    {
+     "x": 193,
+     "y": 26.5
+    },
+    {
+     "x": 185,
+     "y": 20
+    }
+   ],
+   "first": [
+    4,
+    8
+   ],
+   "respawn": [
+    12,
+    18
+   ],
+   "maxActive": 2
+  },
+  {
+   "id": "station-shields",
+   "pool": "shield",
+   "spots": [
+    {
+     "x": 93,
+     "y": 38
+    },
+    {
+     "x": 147,
+     "y": 38
+    }
+   ],
+   "first": [
+    8,
+    12
+   ],
+   "respawn": [
+    18,
+    26
+   ]
+  },
+  {
+   "id": "monorail-grenades",
+   "pool": "grenades",
+   "spots": [
+    {
+     "x": 120,
+     "y": 41.2
+    },
+    {
+     "x": 6,
+     "y": 38
+    },
+    {
+     "x": 234,
+     "y": 38
+    }
+   ],
+   "first": [
+    6,
+    10
+   ],
+   "respawn": [
+    18,
+    24
+   ],
+   "maxActive": 2
+  },
+  {
+   "id": "rooftop-power",
+   "pool": "power",
+   "spots": [
+    {
+     "x": 120,
+     "y": 62
+    },
+    {
+     "x": 6,
+     "y": 62
+    },
+    {
+     "x": 234,
+     "y": 62
+    }
+   ],
+   "first": [
+    12,
+    18
+   ],
+   "respawn": [
+    24,
+    34
+   ],
+   "maxActive": 1
+  }
+ ],
+ "armory": {
+  "x": 77,
+  "y": 1.5,
+  "dir": 1
+ }
+}

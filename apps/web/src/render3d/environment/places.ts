@@ -9,7 +9,7 @@
  * art/README.md's cost table.
  */
 import type { EnvironmentDef } from './index';
-import { MARKET_DAY, type EnvironmentLook } from './looks';
+import { MARKET_DAY, dimmed, type EnvironmentLook } from './looks';
 
 const NO_GLOW = { ...MARKET_DAY.sunGlow, strength: 0 };
 
@@ -203,11 +203,40 @@ export const FOG: EnvironmentLook = {
   backdropTint: { sky: 0xffffff, far: 0xe8ecec, mid: 0xe2e6e6 },
   // fog: the near towers stay well back (they must never read as walls that stop bullets)
   backdropHaze: { color: 0xa9b1b4, amount: { far: 0.25, mid: 0.5 } },
+  // the kit (build_fog_stair_kit.py): the play plane a touch cooler and quieter than the market's, and
+  // everything behind it sinking into the river fog fast (≥ 40% from the nearest decor, at z −1.5)
+  grade: {
+    ...MARKET_DAY.grade,
+    haze: 0xa9b1b4,
+    tint: 0xf6f7f4,
+    aoHeight: 2.2,
+    aoFloor: 0.7,
+    gameplay: [0.86, 1.0],
+    mid: [0.5, 0.96, 0.36, 0.035],
+    far: [0.36, 0.95, 0.4, 0.012],
+  },
+  contact: { color: 0x2a2d2c, opacity: 0.45, opacityShadowMap: 0.3 },
+  midLift: 0.12,
   lampGlow: null,
+  // the (unlit) boards dimmed and cooled into the fog: against the darker hillside kit around them they
+  // sit as the market's do in its daylight (ads/test/brightness.test.ts: the median board/kit ratio)
+  adTint: dimmed(0xe6eae9, 0.56),
 };
 
 export const FOG_STAIR: EnvironmentDef = {
   mapId: 'fog-stair',
+  // the kit draws the play plane (render = collision: compile_map.py checks it against fogStair.ts)
+  kitUrl: 'assets/kits/fog_stair/kit_fog_stair.glb',
+  layoutUrl: 'assets/kits/fog_stair/fog_stair.layout.json',
+  // its own ground at every height: no street in front, no yard behind
+  street: false,
+  // docs/14: vertical neon-framed Screens in the gorge, LED Screens over the lower stairs, a Hoarding on
+  // the monorail's other track; the Street Market's sponsored creatives (house-ads.py --reuse)
+  ads: {
+    slots: 'assets/kits/fog_stair/fog_stair.adslots.json',
+    pool: 'assets/ads/fog_stair/house.json',
+    base: 'assets/ads/street_market/',
+  },
   looks: { fog: FOG },
   defaultLook: 'fog',
   backdrop: {
@@ -218,10 +247,10 @@ export const FOG_STAIR: EnvironmentDef = {
         name: 'far',
         z: -40,
         y: -4,
+        // two wide panels (a draw each): fewer draws than three, the same reach
         panels: [
-          { file: 'far.webp', x: 10, width: 120 },
-          { file: 'far.webp', x: 120, width: 120, flip: true },
-          { file: 'far.webp', x: 230, width: 120 },
+          { file: 'far.webp', x: 45, width: 150 },
+          { file: 'far.webp', x: 195, width: 150, flip: true },
         ],
       },
       {
@@ -229,10 +258,9 @@ export const FOG_STAIR: EnvironmentDef = {
         z: -14,
         y: -5,
         panels: [
-          { file: 'mid.webp', x: 20, width: 90 },
-          { file: 'mid.webp', x: 100, width: 90, flip: true },
-          { file: 'mid.webp', x: 180, width: 90 },
-          { file: 'mid.webp', x: 250, width: 90, flip: true },
+          { file: 'mid.webp', x: 15, width: 110 },
+          { file: 'mid.webp', x: 120, width: 110, flip: true },
+          { file: 'mid.webp', x: 225, width: 110 },
         ],
       },
     ],

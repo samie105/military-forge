@@ -1,0 +1,729 @@
+{
+ "id": "fog-stair",
+ "name": "Fog Stair",
+ "kit": "kits/fog_stair/kit_fog_stair.glb",
+ "collision": "fog_stair.map.json",
+ "bounds": {
+  "minX": -2,
+  "minY": -6,
+  "maxX": 242,
+  "maxY": 102
+ },
+ "pieces": [
+  {
+   "piece": "fs_edge_wall",
+   "x": -1.0,
+   "y": -6.0
+  },
+  {
+   "piece": "fs_edge_wall",
+   "x": 241.0,
+   "y": -6.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_hill",
+   "x": 0.0,
+   "y": 38.0
+  },
+  {
+   "piece": "fs_hill",
+   "x": 240.0,
+   "y": 38.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_stair_upper",
+   "x": 22.0,
+   "y": 38.0
+  },
+  {
+   "piece": "fs_stair_upper",
+   "x": 218.0,
+   "y": 38.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_terrace",
+   "x": 40.0,
+   "y": 20.0
+  },
+  {
+   "piece": "fs_terrace",
+   "x": 200.0,
+   "y": 20.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_stair_lower",
+   "x": 56.0,
+   "y": 20.0
+  },
+  {
+   "piece": "fs_stair_lower",
+   "x": 184.0,
+   "y": 20.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_quay",
+   "x": 76.0,
+   "y": 0.0
+  },
+  {
+   "piece": "fs_quay",
+   "x": 164.0,
+   "y": 0.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_tower",
+   "x": 89.0,
+   "y": 0.0
+  },
+  {
+   "piece": "fs_tower",
+   "x": 151.0,
+   "y": 0.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_shophouse",
+   "x": 47.0,
+   "y": 20.0
+  },
+  {
+   "piece": "fs_shophouse",
+   "x": 193.0,
+   "y": 20.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_roof_tank",
+   "x": 84.5,
+   "y": 62.0
+  },
+  {
+   "piece": "fs_roof_tank",
+   "x": 155.5,
+   "y": 62.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_roof_mast",
+   "x": 95.0,
+   "y": 62.0
+  },
+  {
+   "piece": "fs_roof_mast",
+   "x": 145.0,
+   "y": 62.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_quay_cargo",
+   "x": 101.25,
+   "y": 0.0
+  },
+  {
+   "piece": "fs_quay_cargo",
+   "x": 138.75,
+   "y": 0.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_viaduct",
+   "x": 22.5,
+   "y": 38.0
+  },
+  {
+   "piece": "fs_viaduct",
+   "x": 217.5,
+   "y": 38.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_pavilion",
+   "x": 10.0,
+   "y": 38.0
+  },
+  {
+   "piece": "fs_pavilion",
+   "x": 230.0,
+   "y": 38.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_perch",
+   "x": 18.0,
+   "y": 50.0
+  },
+  {
+   "piece": "fs_perch",
+   "x": 222.0,
+   "y": 50.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_balcony",
+   "x": 80.0,
+   "y": 10.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_balcony",
+   "x": 160.0,
+   "y": 10.0
+  },
+  {
+   "piece": "fs_balcony",
+   "x": 98.0,
+   "y": 14.0
+  },
+  {
+   "piece": "fs_balcony",
+   "x": 142.0,
+   "y": 14.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_balcony",
+   "x": 98.0,
+   "y": 26.0
+  },
+  {
+   "piece": "fs_balcony",
+   "x": 142.0,
+   "y": 26.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_balcony",
+   "x": 80.0,
+   "y": 50.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_balcony",
+   "x": 160.0,
+   "y": 50.0
+  },
+  {
+   "piece": "fs_balcony",
+   "x": 98.0,
+   "y": 50.0
+  },
+  {
+   "piece": "fs_balcony",
+   "x": 142.0,
+   "y": 50.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_blade_cabinet",
+   "x": 84.5,
+   "y": 11.0
+  },
+  {
+   "piece": "fs_blade_cabinet",
+   "x": 155.5,
+   "y": 11.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_blade_cabinet",
+   "x": 93.5,
+   "y": 50.4
+  },
+  {
+   "piece": "fs_blade_cabinet",
+   "x": 146.5,
+   "y": 50.4,
+   "flip": true
+  },
+  {
+   "piece": "fs_board_huoguo",
+   "x": 82.7,
+   "y": 2.85
+  },
+  {
+   "piece": "fs_board_xiaomaibu",
+   "x": 157.3,
+   "y": 2.85
+  },
+  {
+   "piece": "fs_board_xiaomaibu",
+   "x": 91.3,
+   "y": 2.85
+  },
+  {
+   "piece": "fs_board_huoguo",
+   "x": 148.7,
+   "y": 2.85
+  },
+  {
+   "piece": "fs_board_yaofang",
+   "x": 93.5,
+   "y": 4.1
+  },
+  {
+   "piece": "fs_board_yaofang",
+   "x": 146.5,
+   "y": 4.1
+  },
+  {
+   "piece": "fs_board_mianguan",
+   "x": 47.0,
+   "y": 23.3
+  },
+  {
+   "piece": "fs_board_mianguan",
+   "x": 193.0,
+   "y": 23.3
+  },
+  {
+   "piece": "fs_riverbed",
+   "x": 120.0,
+   "y": -4.0
+  },
+  {
+   "piece": "fs_river",
+   "x": 120.0,
+   "y": -1.0
+  },
+  {
+   "piece": "fs_bridge",
+   "x": 120.0,
+   "y": 38.0
+  },
+  {
+   "piece": "fs_footbridge",
+   "x": 120.0,
+   "y": 62.0
+  },
+  {
+   "piece": "fs_monorail_car",
+   "x": 120.0,
+   "y": 38.0
+  }
+ ],
+ "decor": [
+  {
+   "piece": "fs_lights_arcade",
+   "x": 89.0,
+   "y": 4.0,
+   "z": 0.0
+  },
+  {
+   "piece": "fs_lights_arcade",
+   "x": 151.0,
+   "y": 4.0,
+   "z": 0.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_lights_station",
+   "x": 89.0,
+   "y": 43.5,
+   "z": 0.0
+  },
+  {
+   "piece": "fs_lights_station",
+   "x": 151.0,
+   "y": 43.5,
+   "z": 0.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_lane_houses",
+   "x": 11.0,
+   "y": 38.0,
+   "z": -5.0
+  },
+  {
+   "piece": "fs_lane_houses",
+   "x": 229.0,
+   "y": 38.0,
+   "z": -5.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_noodle_stall",
+   "x": 1.6,
+   "y": 38.0,
+   "z": -2.2
+  },
+  {
+   "piece": "fs_noodle_stall",
+   "x": 238.4,
+   "y": 38.0,
+   "z": -2.2,
+   "flip": true
+  },
+  {
+   "piece": "fs_noodle_stall",
+   "x": 77.4,
+   "y": 0.0,
+   "z": -2.7
+  },
+  {
+   "piece": "fs_noodle_stall",
+   "x": 162.6,
+   "y": 0.0,
+   "z": -2.7,
+   "flip": true
+  },
+  {
+   "piece": "fs_temple_gate",
+   "x": 53.4,
+   "y": 18.5,
+   "z": -2.6
+  },
+  {
+   "piece": "fs_temple_gate",
+   "x": 186.6,
+   "y": 18.5,
+   "z": -2.6,
+   "flip": true
+  },
+  {
+   "piece": "fs_stilt_house",
+   "x": 61.0,
+   "y": 6.0,
+   "z": -4.6,
+   "flip": true
+  },
+  {
+   "piece": "fs_stilt_house",
+   "x": 179.0,
+   "y": 6.0,
+   "z": -4.6
+  },
+  {
+   "piece": "fs_roof_back",
+   "x": 89.0,
+   "y": 62.0,
+   "z": -2.2
+  },
+  {
+   "piece": "fs_roof_back",
+   "x": 151.0,
+   "y": 62.0,
+   "z": -2.2,
+   "flip": true
+  },
+  {
+   "piece": "fs_sampan",
+   "x": 107.5,
+   "y": -1.25,
+   "z": -3.0
+  },
+  {
+   "piece": "fs_sampan",
+   "x": 132.5,
+   "y": -1.25,
+   "z": -3.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_sampan",
+   "x": 113.5,
+   "y": -1.25,
+   "z": -5.6,
+   "flip": true
+  },
+  {
+   "piece": "fs_sampan",
+   "x": 126.5,
+   "y": -1.25,
+   "z": -5.6
+  },
+  {
+   "piece": "fs_viaduct_twin",
+   "x": 22.5,
+   "y": 38.0,
+   "z": -5.0
+  },
+  {
+   "piece": "fs_viaduct_twin",
+   "x": 217.5,
+   "y": 38.0,
+   "z": -5.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_hoarding_frame_18",
+   "x": 42.0,
+   "y": 36.1,
+   "z": -5.0
+  },
+  {
+   "piece": "fs_hoarding_frame_18",
+   "x": 198.0,
+   "y": 36.1,
+   "z": -5.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_ad_tower",
+   "x": 109.0,
+   "y": -1.0,
+   "z": -8.0
+  },
+  {
+   "piece": "fs_ad_tower",
+   "x": 131.0,
+   "y": -1.0,
+   "z": -8.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_led_gantry",
+   "x": 72.5,
+   "y": 4.0,
+   "z": -5.0
+  },
+  {
+   "piece": "fs_led_gantry",
+   "x": 167.5,
+   "y": 4.0,
+   "z": -5.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_neon_frame_screen",
+   "x": 109.0,
+   "y": 21.5,
+   "z": -8.0
+  },
+  {
+   "piece": "fs_neon_frame_screen",
+   "x": 131.0,
+   "y": 21.5,
+   "z": -8.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_neon_frame_screen",
+   "x": 72.5,
+   "y": 18.0,
+   "z": -5.0
+  },
+  {
+   "piece": "fs_neon_frame_screen",
+   "x": 167.5,
+   "y": 18.0,
+   "z": -5.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_neon_frame_hoarding",
+   "x": 42.0,
+   "y": 31.5,
+   "z": -5.0
+  },
+  {
+   "piece": "fs_neon_frame_hoarding",
+   "x": 198.0,
+   "y": 31.5,
+   "z": -5.0,
+   "flip": true
+  },
+  {
+   "piece": "fs_neon_huoguo",
+   "x": 84.5,
+   "y": 11.0,
+   "z": 0.0
+  },
+  {
+   "piece": "fs_neon_lvguan",
+   "x": 155.5,
+   "y": 11.0,
+   "z": 0.0
+  },
+  {
+   "piece": "fs_neon_lvguan",
+   "x": 93.5,
+   "y": 50.4,
+   "z": 0.0
+  },
+  {
+   "piece": "fs_neon_huoguo",
+   "x": 146.5,
+   "y": 50.4,
+   "z": 0.0
+  },
+  {
+   "piece": "fs_led_panel",
+   "x": 93.6,
+   "y": 27.3,
+   "z": 0.0
+  },
+  {
+   "piece": "fs_led_panel",
+   "x": 146.4,
+   "y": 27.3,
+   "z": 0.0
+  },
+  {
+   "piece": "fs_neon_chaguan_tall",
+   "x": 109.0,
+   "y": 16.6,
+   "z": -8.0
+  },
+  {
+   "piece": "fs_neon_chaguan_tall",
+   "x": 131.0,
+   "y": 16.6,
+   "z": -8.0
+  },
+  {
+   "piece": "fs_board_chaguan",
+   "x": 11.0,
+   "y": 40.9,
+   "z": -5.0
+  },
+  {
+   "piece": "fs_board_chaguan",
+   "x": 229.0,
+   "y": 40.9,
+   "z": -5.0
+  },
+  {
+   "piece": "fs_board_xiaomian",
+   "x": 1.6,
+   "y": 39.75,
+   "z": -2.2
+  },
+  {
+   "piece": "fs_board_xiaomian",
+   "x": 238.4,
+   "y": 39.75,
+   "z": -2.2
+  },
+  {
+   "piece": "fs_board_xiaomian",
+   "x": 77.4,
+   "y": 1.75,
+   "z": -2.7
+  },
+  {
+   "piece": "fs_board_xiaomian",
+   "x": 162.6,
+   "y": 1.75,
+   "z": -2.7
+  },
+  {
+   "piece": "fs_screen_8x6",
+   "x": 109.0,
+   "y": 21.5,
+   "z": -8.0,
+   "slotId": "fog-stair/S1",
+   "phaseIdx": 0
+  },
+  {
+   "piece": "fs_screen_8x6",
+   "x": 131.0,
+   "y": 21.5,
+   "z": -8.0,
+   "slotId": "fog-stair/S2",
+   "phaseIdx": 3
+  },
+  {
+   "piece": "fs_screen_8x6",
+   "x": 72.5,
+   "y": 18.0,
+   "z": -5.0,
+   "slotId": "fog-stair/S3",
+   "phaseIdx": 1
+  },
+  {
+   "piece": "fs_screen_8x6",
+   "x": 167.5,
+   "y": 18.0,
+   "z": -5.0,
+   "slotId": "fog-stair/S4",
+   "phaseIdx": 4
+  },
+  {
+   "piece": "fs_hoarding_18x3",
+   "x": 42.0,
+   "y": 31.5,
+   "z": -5.0,
+   "slotId": "fog-stair/H1",
+   "phaseIdx": 0
+  },
+  {
+   "piece": "fs_hoarding_18x3",
+   "x": 198.0,
+   "y": 31.5,
+   "z": -5.0,
+   "slotId": "fog-stair/H2",
+   "phaseIdx": 0
+  },
+  {
+   "piece": "fs_barge",
+   "x": 120.0,
+   "y": -1.6,
+   "z": -12.0
+  }
+ ],
+ "spawns": [
+  {
+   "x": 103.0,
+   "y": 0.0
+  },
+  {
+   "x": 89.0,
+   "y": 0.0
+  },
+  {
+   "x": 42.0,
+   "y": 20.0
+  },
+  {
+   "x": 53.0,
+   "y": 20.0
+  },
+  {
+   "x": 16.0,
+   "y": 38.0
+  },
+  {
+   "x": 89.0,
+   "y": 38.0
+  },
+  {
+   "x": 91.0,
+   "y": 62.0
+  },
+  {
+   "x": 137.0,
+   "y": 0.0
+  },
+  {
+   "x": 151.0,
+   "y": 0.0
+  },
+  {
+   "x": 198.0,
+   "y": 20.0
+  },
+  {
+   "x": 187.0,
+   "y": 20.0
+  },
+  {
+   "x": 224.0,
+   "y": 38.0
+  },
+  {
+   "x": 151.0,
+   "y": 38.0
+  },
+  {
+   "x": 149.0,
+   "y": 62.0
+  }
+ ]
+}

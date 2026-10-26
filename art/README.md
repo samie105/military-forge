@@ -8,6 +8,7 @@ Sources and authoring scripts for the game's art: the Rookie (base soldier), its
 | A: clips + dye masks | #3: 30 clips incl. aim poses for 3 weapon families, jetpack as its own part, dye masks |
 | B: starter cosmetics + 5 weapons | weapons: 11 models (#5); cosmetics: 11 items + 3 default parts (#8) |
 | Done: Street Market kit | #10: 24-piece kit + compiled 128 × 62 m map (120 m of play between edge walls), collision from the kit's extras, 6 ad surfaces |
+| Done: Fog Stair kit | 48-piece kit fitted to `fogStair.ts`'s collision (checked, not compiled), Chinese shop signs drawn as strokes, 6 ad surfaces, the backdrops' old quarter |
 | Hero cosmetics from Higgsfield | 5 of the 11 starter items rebuilt from generated models |
 | The female soldier | #203: a second base body on the Rookie's skeleton, her fits of the shared items, body regions |
 | Her hairstyles | #210: Field Bun, Cornrow Braids, Short Crop, each replacing her own hair |
@@ -410,6 +411,59 @@ Gaps:
 - **Breakable awnings** (docs/01 §7) need a sim feature; the awning one-ways are separate segments, so they can be removed individually once there is one.
 - The ad bezels show a grey placeholder where the creative goes; the house pool and the array-texture renderer are W1's (docs/14 §4.5). Lint 3 (facing) holds by construction (every slot faces the camera); lints 5–8 need the playtest heatmap and other systems.
 - No props pass yet (bunting, generators, crowd cut-outs); the decor layer has room for them.
+
+## Fog Stair: map kit (NOTES §50 and "Fog Stair's kit")
+
+A stacked hillside river city in south-west China, original (no real skyline, no real businesses), built for the owner's 26 Oct ask: "it should look bespoke … Chinese surroundings, the billboards and all". Before it, the map was its collision extruded in front of painted layers.
+
+**Collision first.** Fog Stair's collision is `packages/content/src/maps/fogStair.ts` (it came first, and the bots' nav and soaks were tuned on it), so here the kit is fitted to it instead of compiled into it:
+
+- Every gameplay piece carries the collision it stands for in glTF extras (`build_market_kit.py`'s keys). The ground is sloped, so the hill, the two stairs, the terrace, the quay and the river bed carry it as `solids` (columns down to the floor) that add up to the map's one terrain polygon.
+- `art/pipeline/fog_stair_layout.py` writes `maps/fog_stair/layout.json`: the west bank, mirrored about the river (x 120) into the east; lettered pieces (`noFlip`) are placed unflipped at the mirrored spot, and the east bank's blades swap their words.
+- The layout names `collision: fog_stair.map.json`, the map exported with `pnpm --filter @military-forge/content export-map fog-stair …`. `compile_map.py` then **checks** instead of compiling: the same one-ways (and slabs), the same bullet-only parts, solids of the same area with no overlaps and the same material at every 0.5 m sample (100K+ points); the ceiling slab is left undrawn, like the Street Market's. Then the docs/14 lints run from the map's 780 standing spots, and only `fog_stair.adslots.json` is written.
+- apps/web's `fogStair.test.ts` repeats the collision check in TypeScript against the registered map, checks the exported copy still matches `fogStairMap`, and that whatever has no collision and stands within 0.35 m of the plane (the station's and the arcade's lights) lies on a solid's face.
+
+**Kit** (`art/pipeline/build_fog_stair_kit.py` → [kits/fog_stair/kit_fog_stair.glb](kits/fog_stair/), runtime with meshopt in `apps/web/public/assets/kits/fog_stair/`): 48 pieces, one vertex-colour material, low-poly boxes written straight to one mesh per piece (no bevels; faces turned away from the camera are left out). Nothing without collision stands within 0.35 m of the plane: rails, laundry and pots stand on the back edges, the viaduct's beam body and the pillars' hammerheads behind the plane, the arch bridge's arch behind it, the footbridge's truss on its back edge.
+
+| Piece | What players land on / what it shows | Collision |
+|---|---|---|
+| `fs_hill` | the hilltop lane: paving, a sandstone retaining wall, old houses stacked down the cliff | solid column 22 × 44 m |
+| `fs_stair_upper`, `fs_stair_lower` | long public stone stairs at 45° (each step's tread at the slope's height mid-step: ±0.125 m), the stone balustrade and steel handrail on the back edge, red lanterns strung from lamp posts behind, stilted houses (diaojiaolou) stepping down the face | the stair's ground column (slope on top) |
+| `fs_terrace` | the terrace between the stairs | solid column 16 × 26 m |
+| `fs_quay`, `fs_riverbed`, `fs_river` | sandstone quay slabs, a kerb, bollards and steps on the back edge; the silt bed; the river's surface (the water zone's top, no collision) | solid columns |
+| `fs_tower` | the quay towers: an arcade (legs bullet-only) with a hotpot restaurant (steam), shutters and a corner shop at its back, ten storeys of balcony bands, steel window grilles, air-con units, laundry poles and pot plants, the monorail station (track, platform, screen doors, lights), six more storeys with bamboo scaffolding and safety netting over half | two solids, three legs |
+| `fs_shophouse` | the old noodle shop on the terrace: a wooden front, a tiled waist eave, lattice windows, a grey-tiled pitched roof whose ridge is the walkable top (6.5 m), its eaves turned up at the corners | solid 6 × 6.5 m |
+| `fs_balcony` (×10) | cantilevered concrete perches: a painted fascia, a steel grille rail, pots, an air-con unit and a laundry pole on the back edge | slab 4 m |
+| `fs_perch` | the hill's lookout: a timber deck on stilts that stand behind the plane, a lattice rail, a small tiled canopy | slab 4 m |
+| `fs_pavilion` | the hill pavilion: red-lacquered (oxblood) columns, bracket blocks, a flat-topped tiled roof (盝顶) whose paved top is the rooftop deck, corners turned up | slab 16 m, two columns bullet-only |
+| `fs_viaduct` | the monorail's straddle-beam viaduct | slab 57.5 m, three pillars bullet-only |
+| `fs_bridge`, `fs_footbridge`, `fs_monorail_car` | the arch bridge over the gorge, the steel footbridge between the roofs (Warren truss on the back edge), the parked car (cream, a dark window band, a muted jade stripe) | slabs 44 m; the car solid 8 × 3.2 m |
+| `fs_roof_tank`, `fs_roof_mast`, `fs_quay_cargo`, `fs_edge_wall` | a sectional steel water tank, a lattice radio mast with its guy wires behind, a steel cargo box, the map's side walls | as fogStair.ts |
+| signs: `fs_blade_cabinet` + `fs_neon_huoguo` / `fs_neon_lvguan`, `fs_led_panel`, `fs_board_*` | vertical neon blades (layer `glow`) on the tower, an LED panel, painted shop boards | none: on solids' faces |
+| mid: `fs_lane_houses`, `fs_temple_gate`, `fs_noodle_stall`, `fs_stilt_house`, `fs_sampan`, `fs_barge`, `fs_roof_back`, `fs_viaduct_twin`, `fs_ad_tower`, `fs_led_gantry`, `fs_hoarding_frame_18` | old shop-houses with tiled roofs behind the lane, a small temple gate on the terrace, noodle stalls with plastic stools (yellow, jade, pink: no red, no blue), stilted houses behind the stairs, moored sampans and a barge, solar water heaters, the monorail's other track, the towers and gantries the boards hang on | none (hazed ≥ 40%) |
+| ads: `fs_screen_8x6`, `fs_hoarding_18x3`, `fs_neon_frame_screen`, `fs_neon_frame_hoarding`, `fs_neon_chaguan_tall` | the bezels (`adSlot`), their neon frames (dimmer than the shop signs), the gorge cabinets' blades | none |
+
+Placed: about 56K triangles (gameplay 38.6K, mid 14.4K, glow 3.4K) in 3 draws; runtime GLB 0.87 MB (meshopt).
+
+**Signs** (`art/pipeline/hanzi_strokes.py`). No font is read or shipped: each character is drawn there as polylines on a 10 × 10 grid, stroke by stroke in the usual order, and the kit bends them into neon tubes (`glow`) or brushes them on boards. Proof sheet: `python3 -I art/pipeline/hanzi_strokes.py out.png`. The strings and their meanings: 火锅 hotpot, 面馆 noodle shop, 小面 "small noodles" (the region's spicy breakfast noodles), 茶馆 teahouse, 药房 pharmacy, 旅馆 inn, 小卖部 corner shop. No names of businesses, nothing political, no brands.
+
+**Palette.** Weathered concrete, cream tile, grey-brown sandstone, dark timber, grey roof tile; gameplay colours ≥ 25 ΔE from both team colours (asset-check). The lacquer is oxblood (0.44, 0.15, 0.12) and the lanterns a dark matte crimson (0.50, 0.12, 0.15), both far darker than the damage red and the enemy marking; the lanterns hang behind the plane, never on it. Neon is pink, warm white and a soft violet, away from every signal hue.
+
+```bash
+B=/Applications/Blender.app/Contents/MacOS/Blender
+$B -b --factory-startup --python-exit-code 1 --python art/pipeline/build_fog_stair_kit.py -- \
+   art/kits/fog_stair/kit_fog_stair.glb --runtime apps/web/public/assets/kits/fog_stair/kit_fog_stair.glb
+pnpm --filter @military-forge/content export-map fog-stair ../../art/maps/fog_stair/fog_stair.map.json
+python3 -I art/pipeline/fog_stair_layout.py art/maps/fog_stair/layout.json
+python3 -I art/pipeline/compile_map.py art/maps/fog_stair/layout.json
+cp art/maps/fog_stair/layout.json apps/web/public/assets/kits/fog_stair/fog_stair.layout.json
+cp art/maps/fog_stair/fog_stair.adslots.json apps/web/public/assets/kits/fog_stair/
+python3 -I apps/web/scripts/house-ads.py fog_stair --reuse street_market apps/web/public/assets/ads
+$B -b --factory-startup --python-exit-code 1 --python tools/asset-check/check.py -- art/kits/fog_stair/kit_fog_stair.glb --kind kit --max-tris 4000
+```
+
+- **asset-check `--kind kit --max-tris 4000`** ([report](kits/fog_stair/kit_fog_stair.check.txt)): 0 fail; the warnings are the sign boards' sizes off the 0.25 m grid. The tower (3.5K triangles, 18 × 62 m) needs the higher per-piece limit. Two rules learned what Fog Stair needs, without changing the Street Market's report: bullet-only parts count as drawn collision (its arcade legs, pillars and pavilion columns are 0.4–0.6 m wide), and a piece's pivot may be its walkable top (the highest point of its collision) when rails or balustrades stand above it.
+- **Backdrops** (`build_fog_stair_backdrops.py [far|mid]`, then `apps/web/scripts/backdrops.py`): the same renders with the kit's vernacular added: the old quarter's gable-front houses under tiled roofs turned up at the eaves, a pagoda and a pavilion on the far ridge, neon blades on the near towers (light, not words, at that distance).
 
 ## Milestone A: clips, aim poses, jetpack part, dye masks
 
@@ -1358,6 +1412,7 @@ What it checks:
 | Milestone B part 1: weapons (Blender only) | **0** |
 | Milestone B part 2: cosmetics (Blender only) | **0** |
 | Street Market kit + map (Blender only) | **0** |
+| Fog Stair kit, signs, backdrops (Blender only) | **0** |
 | Hero cosmetics: 9 concept images + 5 multiview 3D models | **69.75** |
 | Weapons Forge 2: 8 muzzle-flash sheets (7 used + 1 test), GPT Image 2.5 medium | **4.00** |
 | Weapons Forge 3: 6 impact sheets + 1 decal sheet, GPT Image 2.5 medium | **3.50** |

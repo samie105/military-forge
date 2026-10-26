@@ -1,0 +1,480 @@
+{
+ "version": 1,
+ "map": "fog-stair",
+ "ktx2Size": {
+  "4:3": [
+   384,
+   288
+  ],
+  "6:1": [
+   864,
+   144
+  ]
+ },
+ "screens": [],
+ "hoardings": [],
+ "advertisers": {
+  "deet": {
+   "name": "Deet Studios",
+   "url": "https://deet.studio",
+   "utm": "fog-stair",
+   "weight": 2
+  },
+  "worldstreet": {
+   "name": "WorldStreet",
+   "url": "https://worldstreetgold.com",
+   "utm": "fog-stair",
+   "weight": 1
+  }
+ },
+ "sponsored": {
+  "screens": [
+   {
+    "id": "house:deet-three-motion",
+    "file": "deet-three-motion.webp",
+    "ktx2": "deet-three-motion.ktx2",
+    "keys": [
+     {
+      "file": "deet-three-motion-k1.webp",
+      "ktx2": "deet-three-motion-k1.ktx2"
+     }
+    ],
+    "title": "DEET Studios: The brand, the app, the AI. / One studio makes all three.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.0,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.0942,
+    "keyLuminance": [
+     0.0942,
+     0.0807
+    ]
+   },
+   {
+    "id": "house:deet-taste",
+    "file": "deet-taste.webp",
+    "ktx2": "deet-taste.ktx2",
+    "title": "DEET Studios: AI with taste. A design studio that builds AI.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.0,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.0762
+   },
+   {
+    "id": "house:deet-worlds-motion",
+    "file": "deet-worlds-motion.webp",
+    "ktx2": "deet-worlds-motion.ktx2",
+    "keys": [
+     {
+      "file": "deet-worlds-motion-k1.webp",
+      "ktx2": "deet-worlds-motion-k1.ktx2"
+     }
+    ],
+    "title": "DEET Studios: We build worlds too. / You're standing in one.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.0,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.0841,
+    "keyLuminance": [
+     0.0841,
+     0.0716
+    ]
+   },
+   {
+    "id": "house:deet-grind",
+    "file": "deet-grind.webp",
+    "ktx2": "deet-grind.ktx2",
+    "title": "DEET Studios: Let agents do the grind. AI that handles the busywork.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.0,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.1003
+   },
+   {
+    "id": "house:deet-clickable-motion",
+    "file": "deet-clickable-motion.webp",
+    "ktx2": "deet-clickable-motion.ktx2",
+    "keys": [
+     {
+      "file": "deet-clickable-motion-k1.webp",
+      "ktx2": "deet-clickable-motion-k1.ktx2"
+     }
+    ],
+    "title": "DEET Studios: Clickable by Friday. / Not a deck. Not a document.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.0,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.0845,
+    "keyLuminance": [
+     0.0845,
+     0.076
+    ]
+   },
+   {
+    "id": "house:deet-rush",
+    "file": "deet-rush.webp",
+    "ktx2": "deet-rush.ktx2",
+    "title": "DEET Studios: Built for the rush. Quick on any phone, any network.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.0,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.0861
+   },
+   {
+    "id": "house:deet-alma-motion",
+    "file": "deet-alma-motion.webp",
+    "ktx2": "deet-alma-motion.ktx2",
+    "keys": [
+     {
+      "file": "deet-alma-motion-k1.webp",
+      "ktx2": "deet-alma-motion-k1.ktx2"
+     }
+    ],
+    "title": "DEET Studios: Every project starts with Alma. / Our AI listens. Our team builds.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.0,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.0815,
+    "keyLuminance": [
+     0.08,
+     0.0815
+    ]
+   },
+   {
+    "id": "house:deet-sharper-motion",
+    "file": "deet-sharper-motion.webp",
+    "ktx2": "deet-sharper-motion.ktx2",
+    "keys": [
+     {
+      "file": "deet-sharper-motion-k1.webp",
+      "ktx2": "deet-sharper-motion-k1.ktx2"
+     }
+    ],
+    "title": "DEET Studios: Shipped Friday. Sharper by Monday. / We stay on after launch.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.0,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.0912,
+    "keyLuminance": [
+     0.0735,
+     0.0912
+    ]
+   },
+   {
+    "id": "house:deet-taste-ash",
+    "file": "deet-taste-ash.webp",
+    "ktx2": "deet-taste-ash.ktx2",
+    "title": "DEET Studios: AI with taste. A design studio that builds AI.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.0,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.2483
+   },
+   {
+    "id": "house:deet-worlds-ash",
+    "file": "deet-worlds-ash.webp",
+    "ktx2": "deet-worlds-ash.ktx2",
+    "title": "DEET Studios: We build worlds too. You're standing in one.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.0,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.2469
+   },
+   {
+    "id": "house:deet-clickable-ash",
+    "file": "deet-clickable-ash.webp",
+    "ktx2": "deet-clickable-ash.ktx2",
+    "title": "DEET Studios: Clickable by Friday. Not a deck. Not a document.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.0,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.2425
+   },
+   {
+    "id": "house:deet-grind-ash",
+    "file": "deet-grind-ash.webp",
+    "ktx2": "deet-grind-ash.ktx2",
+    "title": "DEET Studios: Let agents do the grind. AI that handles the busywork.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.0,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.2392
+   },
+   {
+    "id": "house:ws-academy-motion",
+    "file": "ws-academy-motion.webp",
+    "ktx2": "ws-academy-motion.ktx2",
+    "keys": [
+     {
+      "file": "ws-academy-motion-k1.webp",
+      "ktx2": "ws-academy-motion-k1.ktx2"
+     }
+    ],
+    "title": "WorldStreet Academy: Learn the markets. / Start with the basics.",
+    "advertiser": "worldstreet",
+    "url": "https://academy.worldstreetgold.com",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.002,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.1028,
+    "keyLuminance": [
+     0.0935,
+     0.1028
+    ]
+   },
+   {
+    "id": "house:ws-worldspace-motion",
+    "file": "ws-worldspace-motion.webp",
+    "ktx2": "ws-worldspace-motion.ktx2",
+    "keys": [
+     {
+      "file": "ws-worldspace-motion-k1.webp",
+      "ktx2": "ws-worldspace-motion-k1.ktx2"
+     }
+    ],
+    "title": "WorldSpace: Your people. / Your signals.",
+    "advertiser": "worldstreet",
+    "url": "https://social.worldstreetgold.com",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.001,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.0871,
+    "keyLuminance": [
+     0.0857,
+     0.0871
+    ]
+   },
+   {
+    "id": "house:ws-xtream-motion",
+    "file": "ws-xtream-motion.webp",
+    "ktx2": "ws-xtream-motion.ktx2",
+    "keys": [
+     {
+      "file": "ws-xtream-motion-k1.webp",
+      "ktx2": "ws-xtream-motion-k1.ktx2"
+     }
+    ],
+    "title": "Xtream: Go live. / Your stage. Go live.",
+    "advertiser": "worldstreet",
+    "url": "https://xtream.worldstreetgold.com",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.001,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.0916,
+    "keyLuminance": [
+     0.0773,
+     0.0916
+    ]
+   },
+   {
+    "id": "house:ws-brand-motion",
+    "file": "ws-brand-motion.webp",
+    "ktx2": "ws-brand-motion.ktx2",
+    "keys": [
+     {
+      "file": "ws-brand-motion-k1.webp",
+      "ktx2": "ws-brand-motion-k1.ktx2"
+     }
+    ],
+    "title": "WorldStreet: Trade the world. / Own your future.",
+    "advertiser": "worldstreet",
+    "category": "finance",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.001,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.0884,
+    "keyLuminance": [
+     0.0884,
+     0.0878
+    ]
+   }
+  ],
+  "hoardings": [
+   {
+    "id": "house:deet-worlds-wide-motion",
+    "file": "deet-worlds-wide-motion.webp",
+    "ktx2": "deet-worlds-wide-motion.ktx2",
+    "keys": [
+     {
+      "file": "deet-worlds-wide-motion-k1.webp",
+      "ktx2": "deet-worlds-wide-motion-k1.ktx2"
+     }
+    ],
+    "title": "DEET Studios: We build worlds too. / You're standing in one.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.0,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.0902,
+    "keyLuminance": [
+     0.0883,
+     0.0902
+    ]
+   },
+   {
+    "id": "house:deet-taste-wide",
+    "file": "deet-taste-wide.webp",
+    "ktx2": "deet-taste-wide.ktx2",
+    "title": "DEET Studios: AI with taste. A design studio that builds AI.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.0,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.0846
+   },
+   {
+    "id": "house:deet-clickable-wide-motion",
+    "file": "deet-clickable-wide-motion.webp",
+    "ktx2": "deet-clickable-wide-motion.ktx2",
+    "keys": [
+     {
+      "file": "deet-clickable-wide-motion-k1.webp",
+      "ktx2": "deet-clickable-wide-motion-k1.ktx2"
+     }
+    ],
+    "title": "DEET Studios: Clickable by Friday. / Not a deck. Not a document.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.0,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.0886,
+    "keyLuminance": [
+     0.0886,
+     0.0839
+    ]
+   },
+   {
+    "id": "house:deet-grind-wide",
+    "file": "deet-grind-wide.webp",
+    "ktx2": "deet-grind-wide.ktx2",
+    "title": "DEET Studios: Let agents do the grind. AI that handles the busywork.",
+    "advertiser": "deet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.0,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.104
+   },
+   {
+    "id": "house:ws-brand-wide-motion",
+    "file": "ws-brand-wide-motion.webp",
+    "ktx2": "ws-brand-wide-motion.ktx2",
+    "keys": [
+     {
+      "file": "ws-brand-wide-motion-k1.webp",
+      "ktx2": "ws-brand-wide-motion-k1.ktx2"
+     }
+    ],
+    "title": "WorldStreet: Trade the world. / Own your future.",
+    "advertiser": "worldstreet",
+    "category": "finance",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.001,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.071,
+    "keyLuminance": [
+     0.071,
+     0.0708
+    ]
+   },
+   {
+    "id": "house:ws-ecosystem-wide-motion",
+    "file": "ws-ecosystem-wide-motion.webp",
+    "ktx2": "ws-ecosystem-wide-motion.ktx2",
+    "keys": [
+     {
+      "file": "ws-ecosystem-wide-motion-k1.webp",
+      "ktx2": "ws-ecosystem-wide-motion-k1.ktx2"
+     }
+    ],
+    "title": "WorldStreet: Academy \u00b7 WorldSpace / Xtream \u00b7 WorldShop",
+    "advertiser": "worldstreet",
+    "signalHues": {
+     "teamBlue": 0.0,
+     "teamOrange": 0.001,
+     "damageRed": 0.0
+    },
+    "saturation": 0.8,
+    "luminance": 0.0686,
+    "keyLuminance": [
+     0.0686,
+     0.0645
+    ]
+   }
+  ]
+ },
+ "files": "../street_market/"
+}
