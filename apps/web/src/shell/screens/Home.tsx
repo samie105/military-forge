@@ -24,6 +24,7 @@ import { NextOrders } from '../../tour/NextOrders';
 import { currentDevice } from '../../gamepad';
 import { drillDone, isTouchDevice } from '../../touch';
 import { InstallButton } from '../../pwa/InstallButton';
+import { ConsentCard } from '../../metrics/ConsentCard';
 import { HomeSoldier } from '../../presentation/HomeSoldier';
 
 /** The brand: the emblem and the name, once in the whole UI (round two's .brand on Home). */
@@ -281,6 +282,8 @@ export function Home({ store }: { store: ShellStore }) {
           <Hint keys={<Cap>Esc</Cap>}>Menu</Hint>
         </Hints>
       </div>
+      {/* play stats: the one-time choice (docs/16 §6.2) */}
+      <ConsentCard where="home" />
     </Screen>
   );
 }

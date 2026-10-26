@@ -161,6 +161,15 @@
       /* no storage: no quiet reload (it could repeat), the button below */
     }
     root.classList.add('mf-boot-failed');
+    // an anonymous count for the owner's dashboard (docs/16 §3.1): no id, no session, nothing stored;
+    // not when the browser asks sites not to track it
+    try {
+      if (navigator.sendBeacon && navigator.globalPrivacyControl !== true && navigator.doNotTrack !== '1') {
+        navigator.sendBeacon('/api/analytics/batch', JSON.stringify({ v: 1, consent: 'none', sid: null, build: 'boot', events: [{ k: 'error', t: Date.now(), e: 'boot-failed', where: location.pathname.indexOf('/r/') === 0 ? 'room-link' : 'landing' }] }));
+      }
+    } catch {
+      /* fine */
+    }
     var text = "The game didn't load. Check your connection, then try again.";
     if (line) line.textContent = text;
     var failLine = document.getElementById('boot-fail-line');

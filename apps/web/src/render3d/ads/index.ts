@@ -11,6 +11,7 @@ export { FINANCE_NOTE, LIT_TO_SAVE, checkClick, creativeAt, visitUrl, type AdCli
 export { DEFAULT_HOUSE_OPTIONS, checkManifest, sponsorTurns, clickOf, fetchAdManifest, houseManifest, poolEntries, sponsoredOf, type AdFrame, type HouseOptions, type AdManifest, type AdSlot, type HouseEntry, type HousePool } from './manifest';
 export { CROSSFADE_MS, DWELL_MS, KEY_FADE_MS, KEY_MS, MAX_KEYS, TICK_MS, crossfade, frameIndex, keyFade, keySegment, lastKeySegment, previousFrame } from './rotation';
 export { LitLimiter, MAX_LIT, ON_SCREEN, slotInView } from './visibility';
+export { MAX_AFFINITY, adContext, affinity, contextTags, setAdContext, type AdContext } from './audience';
 
 /** Where a map's slots and house pool are, under BASE_URL. */
 export interface AdsDef {

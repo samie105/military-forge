@@ -8,6 +8,7 @@
  * manifest from the CDN, §4.3) and always answers null. Nothing here talks to a server.
  */
 import { checkClick, type AdClick, type Advertiser } from './click';
+import { MAX_AFFINITY, affinity } from './audience';
 import { MAX_KEYS } from './rotation';
 
 /** docs/14 §4.2: one ad surface in the compiled map. */
@@ -73,6 +74,12 @@ export interface HouseEntry {
   url?: string;
   /** e.g. "finance" (trading, forex, crypto): such creatives can be switched off per region or audience */
   category?: string;
+  /**
+   * The audiences it suits (audience.ts: "device:touch", "time:evening", "mode:team", "tenure:new",
+   * "session:short"…): with the segments flag on and the player's yes, each match gives it an extra
+   * turn within its advertiser's share. Absent: one turn, whoever is watching.
+   */
+  prefer?: string[];
 }
 
 /** The map's shared house pool (apps/web/scripts/house-ads.py writes it next to the art). */
@@ -109,6 +116,8 @@ export function sponsoredOf(pool: Pick<HousePool, 'sponsored' | 'studio'>): Hous
 export interface HouseOptions {
   /** categories left off the boards, e.g. new Set(['finance']) */
   blockedCategories?: ReadonlySet<string>;
+  /** a creative's turns within its advertiser's share (audience.ts; default: the viewer's context, else 1 each) */
+  affinity?: (e: HouseEntry) => number;
 }
 
 /**
@@ -190,8 +199,14 @@ export function houseManifest(mapId: string, slots: readonly AdSlot[], pool: Hou
   const allowed = (e: HouseEntry) => !e.category || !opts.blockedCategories?.has(e.category);
   const weightOf = (g: HouseEntry[]) => Math.max(1, Math.round(pool.advertisers?.[g[0]!.advertiser ?? '']?.weight ?? 1));
   /** A format's sponsored creatives by advertiser and their turns: `count(n)` turns this match from turn `from`. */
+  const turnsOf = opts.affinity ?? ((e: HouseEntry) => affinity(e));
+  /** An advertiser's creatives with their turns spread out (all 1: the list as it is). */
+  const spread = (g: HouseEntry[]): HouseEntry[] => {
+    const w = g.map((e) => Math.max(1, Math.min(MAX_AFFINITY, Math.round(turnsOf(e)))));
+    return w.every((x) => x === 1) ? g : sponsorTurns(w, w.reduce((a, x) => a + x, 0)).map((i) => g[i]!);
+  };
   const sponsorsOf = (list: readonly HouseEntry[]) => {
-    const groups = byAdvertiser(list.filter(allowed));
+    const groups = byAdvertiser(list.filter(allowed)).map(spread);
     const weights = groups.map(weightOf);
     const period = weights.reduce((a, w) => a + w, 0);
     const cycle = sponsorTurns(weights, period);

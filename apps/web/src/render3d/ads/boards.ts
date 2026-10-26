@@ -45,7 +45,7 @@ import type { PlanePose } from '../planeCamera';
 import { houseManifest, poolEntries, type AdFrame, type AdManifest, type AdSlot, type HouseEntry, type HousePool } from './manifest';
 import { CROSSFADE_MS, crossfade, frameIndex, keyFade, keySegment, lastKeySegment, previousFrame } from './rotation';
 import { creativeAt, type BoardHit } from './click';
-import { LitLimiter } from './visibility';
+import { LitLimiter, slotInView } from './visibility';
 
 export interface FormatSpec {
   format: AdSlot['format'];
@@ -307,6 +307,8 @@ export class AdBoards {
   private readonly pose: PlanePose = { x: 0, y: 0, z: 1, shift: 0, aspect: 1 };
   private matchTimeMs = 0;
   private readonly titles: Map<string, string>;
+  /** creative id → its advertiser ('house' for the game's own art) */
+  private readonly advertisers: Map<string, string>;
 
   constructor(
     readonly mapId: string,
@@ -324,6 +326,7 @@ export class AdBoards {
     this.ktx2Files = new Map(files.filter((f): f is readonly [string, string] => !!f[1]));
     this.keyCount = new Map(entries.map((e) => [e.id, (e.keys?.length ?? 0) + 1]));
     this.titles = new Map(entries.map((e) => [e.id, e.title]));
+    this.advertisers = new Map(entries.map((e) => [e.id, e.advertiser ?? 'house']));
     live.add(this);
     this.manifest = houseManifest(mapId, slots, pool, 0);
     const m = new Matrix4();
@@ -473,6 +476,26 @@ export class AdBoards {
           return !!frames[frameIndex(slot, this.matchTimeMs)]?.click;
         }),
     );
+  }
+
+  /**
+   * The play-stats hook (apps/web/src/metrics/adViews.ts, docs/16 §3.1): each lit surface in view
+   * as last drawn, with its creative and advertiser, how much of the surface is in view (0…1) and
+   * how much of the view it takes (0…1). Read-only: nothing here changes what the boards show.
+   */
+  inView(): { creative: string; advertiser: string; visible: number; share: number }[] {
+    const out: { creative: string; advertiser: string; visible: number; share: number }[] = [];
+    for (const f of this.formats) {
+      if (f.layers.size === 0) continue;
+      f.slots.forEach((slot, k) => {
+        if (this.limiter.lit[f.index[k]!]! <= 0.5) return;
+        const frame = this.manifest.slots.find((s) => s.slot === slot.slotId)?.frames[frameIndex(slot, this.matchTimeMs)];
+        if (!frame) return;
+        const { visible, share } = slotInView(slot, this.pose);
+        if (visible > 0) out.push({ creative: frame.c, advertiser: frame.click?.advertiser ?? this.advertisers.get(frame.c) ?? 'house', visible, share });
+      });
+    }
+    return out;
   }
 
   /** On-screen surfaces showing a creative right now (≤ 2 by construction). */

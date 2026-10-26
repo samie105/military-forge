@@ -1,6 +1,7 @@
 /** API process: config → logger → Postgres/PGlite + Redis/memory KV → HTTP server. */
 import { serve } from '@hono/node-server';
 import { fileURLToPath } from 'node:url';
+import { AnalyticsService } from './analytics/service';
 import { createApp } from './app';
 import { loadOrCreateDevKey, signingKeyFromPem } from './auth/keys';
 import { ConfigError, loadConfig, type Config } from './config';
@@ -36,7 +37,10 @@ const signingKey = config.accessToken.privateKeyPem
 // join tickets for the game server (docs/06 §6): none without a key (dev: its rooms are open)
 const ticketKey = config.joinTicket.privateKeyPem ? signingKeyFromPem(config.joinTicket.privateKeyPem) : null;
 
-const app = createApp({ config, database, kv, signingKey, ticketKey, log, bus });
+// play stats (docs/16): batched writes, day partitions, rollups, deletions; its timers run here
+const analytics = new AnalyticsService(database.db, kv, config.analytics, log);
+analytics.start();
+const app = createApp({ config, database, kv, signingKey, ticketKey, log, bus, analytics });
 const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
   log.info(
     { port: info.port, db: database.kind, kv: kv.kind, env: config.env },
@@ -54,6 +58,8 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     closing = true;
     log.info({ signal }, 'shutting down');
     server.close(async () => {
+      // what's queued is written before the database closes
+      await analytics.stop().catch(() => {});
       await Promise.allSettled([database.close(), kv.close(), bus.close()]);
       process.exit(0);
     });

@@ -145,7 +145,8 @@ const server = await createServer(
     defaultRoom,
     ...(maxRooms !== undefined && Number.isInteger(maxRooms) && maxRooms >= 0 ? { maxRooms } : {}),
     // rooms by code play the same map (one map per room until rooms can switch)
-    roomOptions: { mapId, hostTuning, ...(fillBots ? { fillBots } : {}), ...(armory ? { armory } : {}), ...lagComp, results },
+    // results and play stats (docs/16) go to the API through one signed reporter
+    roomOptions: { mapId, hostTuning, ...(fillBots ? { fillBots } : {}), ...(armory ? { armory } : {}), ...lagComp, results, stats: results },
     tickets,
     trustProxy,
   },

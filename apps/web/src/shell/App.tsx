@@ -38,6 +38,7 @@ import { afterPaint, loadRoute, retryRoute } from './routeLoad';
 import { closeRoute, runCleanup, type RouteCleanup, type RouteMount, type ShellActions, type ShellRoute, type ShellStore } from './store';
 import { SocialLayer } from '../social/SocialLayer';
 import { PwaHost } from '../pwa/InstallToast';
+import { metricsError } from '../metrics/hooks';
 
 export { ControllerContext };
 export { TipsCard, tipsRows } from './screens/Tips';
@@ -286,7 +287,9 @@ function RouteView({ route }: { route: ShellRoute }) {
       void afterPaint()
         .then(() => (gone ? new Promise<never>(() => {}) : loadRoute(route)))
         .then(show, () => {
-          if (!gone) setState('failed');
+          if (gone) return;
+          setState('failed');
+          metricsError('route-failed', route.id); // play stats (docs/16): which routes fail to load
         });
     } else if (route.mount) show((target, close) => route.mount!(target, close));
     return () => {

@@ -4,6 +4,7 @@
  * Changes go to the game server as they're made (debounced) and reach every room and every player
  * at once; presets, "Copy JSON" and "Save as defaults" sit in the bar. model.ts has the logic.
  */
+import { analyticsGroup } from './analytics';
 import { reportsGroup } from './reports';
 import { AdminApiError, adminCall, clampValue, formatValue, grouped, matches, readToken, withValue, type AdminFieldView, type AdminStateView } from './model';
 
@@ -217,7 +218,9 @@ function render(s: AdminStateView): void {
   }
   // the players' problem reports (reports.ts): the API's, under the same token
   groups.push(reportsGroup(token!, el));
-  root.replaceChildren(bar, ...groups);
+  // play stats (analytics.ts, docs/16): the dashboard first, open
+  for (const g of groups) g.removeAttribute('open');
+  root.replaceChildren(bar, analyticsGroup(token!, el), ...groups);
   root.removeAttribute('aria-busy');
   showValues();
 }

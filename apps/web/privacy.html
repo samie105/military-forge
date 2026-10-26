@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="What %GAME_NAME% collects when you play, why, how long it is kept, and how to delete it." />
+    <title>Privacy · %GAME_NAME%</title>
+    <link rel="stylesheet" href="/src/ui/fonts.css" />
+    <link rel="stylesheet" href="/src/ui/kit.css" />
+    <!-- docs/16-player-metrics.md §6–§8: keep this page and the doc saying the same thing -->
+    <style>
+      html, body { margin: 0; background: var(--c-ink-900); color: var(--c-text); }
+      .pv { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; font-family: var(--f-ui); font-size: 17px; line-height: 1.55; }
+      .pv__eyebrow { margin: 0; font-size: 13px; font-weight: 800; letter-spacing: .24em; text-transform: uppercase; color: var(--c-volt); }
+      .pv h1 { margin: 8px 0 4px; font-family: var(--f-display); font-weight: 900; font-size: clamp(36px, 8vw, 60px); line-height: .95; text-transform: uppercase; }
+      .pv h2 { margin: 36px 0 8px; font-size: 15px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--c-brass); }
+      .pv p, .pv li { color: var(--c-text); }
+      .pv small, .pv .pv__muted { color: var(--c-muted-2); }
+      .pv a { color: var(--c-volt); text-underline-offset: 3px; }
+      .pv table { width: 100%; border-collapse: collapse; font-size: 15px; }
+      .pv th, .pv td { padding: 8px 10px 8px 0; text-align: left; vertical-align: top; border-bottom: 1px solid var(--c-line); }
+      .pv th { color: var(--c-muted-2); font-weight: 700; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+      .pv__box { padding: 14px 16px; border: 1.5px solid var(--c-line-strong); border-left: 5px solid var(--c-volt); border-radius: 0 14px 0 14px; background: var(--c-ink-800); }
+      .pv__scroll { overflow-x: auto; }
+    </style>
+  </head>
+  <body class="mf">
+    <main class="pv">
+      <p class="pv__eyebrow">%GAME_NAME%</p>
+      <h1>Privacy</h1>
+      <p class="pv__muted">Updated 26 October 2026 · plain words first, details below</p>
+
+      <div class="pv__box">
+        <p><b>In short.</b> We keep what the game needs to run matches, and, only if you say yes, how you play so we can make the game better and choose which of our own billboard ads you see. We never keep your IP address, never use third-party trackers, never fingerprint your device and never sell or share your data. You can say no, change your mind, or delete your data in <b>Settings → Privacy</b>.</p>
+      </div>
+
+      <h2>What we collect, and why</h2>
+      <div class="pv__scroll">
+        <table>
+          <thead>
+            <tr><th>What</th><th>Why</th><th>When</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><b>Your player</b>: the name you pick, a random player id, your level and XP, your saved look and guns, your friends</td>
+              <td>To let you play, keep your progress and find friends</td>
+              <td>Always (you can delete your player)</td>
+            </tr>
+            <tr>
+              <td><b>Match stats</b>: in online matches, your kills, deaths, damage, the guns you used, how long you lived and played, when you left, your ping band and reconnects, with your player id</td>
+              <td>To run matches, keep your level and the leaderboards, and balance the weapons and maps</td>
+              <td>Always: the game needs them</td>
+            </tr>
+            <tr>
+              <td><b>Play stats</b>: when you play and for how long, the screens you reach, the features you use, your device type (phone, tablet or computer; touch, keys or a controller; the graphics level) and your time zone's offset, tied to a random id that lasts one visit and to your player id</td>
+              <td>To see where the game confuses or loses people, fix it, and let our own house ads on the billboards suit how you play (for example touch players, or evening players)</td>
+              <td><b>Only if you say yes</b> (in Europe, and wherever we ask). You can turn it off any time</td>
+            </tr>
+            <tr>
+              <td><b>Counts with no id at all</b>: errors on your device (a screen that didn't load) and which billboard ads were on screen, saved and visited</td>
+              <td>To fix bugs and report to advertisers how often their ads were seen, never who saw them</td>
+              <td>Unless your browser sends Global Privacy Control or Do Not Track (and in Europe, ad counts only with your yes)</td>
+            </tr>
+            <tr>
+              <td><b>Your country</b>, worked out from the connection or your time zone</td>
+              <td>To follow each country's rules and see where players come from</td>
+              <td>With the stats above. The address itself is looked up and dropped, never stored</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>We don't collect your real name, email (unless you add one to your account), messages, contacts, location beyond your country, or anything about you from other sites. Billboard ads in the game never open anything during a match, and the ads we show are never chosen from what other companies know about you.</p>
+
+      <h2>How long we keep it</h2>
+      <ul>
+        <li><b>Single events</b> (one match, one visit): 90 days, then deleted.</li>
+        <li><b>Your daily summary</b> (days you played, matches, the device you used most): 13 months, then deleted.</li>
+        <li><b>Totals</b> with no player in them (for example "1,240 matches on Fog Stair this week"): kept to see trends.</li>
+        <li><b>Your player</b>: until you delete it. A guest player nobody has used for a long time is removed.</li>
+        <li><b>Problem reports</b> you send: 7 days.</li>
+      </ul>
+
+      <h2>Your choices and rights</h2>
+      <ul>
+        <li><b>Say no or yes</b> to play stats: the card on Home the first time, then <b>Settings → Privacy</b>.</li>
+        <li><b>Delete my data</b> (Settings → Privacy): deletes your play stats from our servers (single events within minutes) and this device's event log. Tick "Also delete my player" to delete your name, level, friends and match history too.</li>
+        <li>You can also ask to see, correct or move your data, or object to how we use it. Contact: %PRIVACY_CONTACT%.</li>
+        <li>If you think we got something wrong you can complain to your data protection authority: the Nigeria Data Protection Commission, South Africa's Information Regulator, or the authority where you live in the EU or UK.</li>
+      </ul>
+
+      <h2>Under 18?</h2>
+      <p>Many players are young. Play stats stay off unless you turn them on, and if you're under 18 please ask a parent or guardian before you do. We never use the stats to show paid ads aimed at you, and ads in the game are never about gambling, alcohol, tobacco or other adult products, except where marked 18+ and switched off in places that require it.</p>
+
+      <h2>Who sees it, and where it is</h2>
+      <p>Only the people who make %GAME_NAME% can see the stats, as totals on a private page. They are stored on our own server (Microsoft Azure, South Africa North, in Johannesburg). No analytics company, ad network or data broker receives them. We protect it with encrypted connections and keep access to our team.</p>
+
+      <h2>Changes</h2>
+      <p>If we change what we collect, we'll update this page and ask again where your yes is needed.</p>
+      <p><a href="/">Back to the game</a></p>
+    </main>
+  </body>
+</html>

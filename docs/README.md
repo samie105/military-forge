@@ -43,6 +43,7 @@ This folder is the full pre-production plan, researched on **16 Oct 2026**, down
 | 13 | [Master checklist](13-master-checklist.md) | **739 tagged items** (MVP / Launch / Post-launch) across 25 areas, ready to paste into a tracker |
 | 14 | [In-world advertising](14-in-world-advertising.md) | billboard ads on city maps (the Lagos Life model): hard readability and child-safety rules, surfaces and placements, creative spec, renderer and IAB/MRC measurement, account-free reporting, ad ops, the "500 per screen" pricing analysis and rate card, ARCON/DPDP/NDPA compliance, the thin Nigeria pilot |
 | – | [Net trial](net-trial.md) | a hosted game server in the AWS Lagos Local Zone from one pasted cloud-init script: console clicks, links, the ping probe, results, costs |
+| 16 | [Player metrics](16-player-metrics.md) | first-party play stats: the versioned event vocabulary, client batching and the game server's signed match stats, day-partitioned storage and rollups with measured cost, the owner's dashboard on /admin, consent (opt-in, GPC), Delete my data, ad segments, NDPA/POPIA/GDPR notes |
 | 99 | [Sources](99-sources.md) | research links by topic |
 
 ---

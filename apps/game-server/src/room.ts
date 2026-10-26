@@ -26,6 +26,7 @@
 import { adminJson, adminValues, onAdminValues } from './adminState';
 import { VoiceRelay } from './voice';
 import { MatchRecorder, type ResultsSink } from './matchRecorder';
+import { MatchStats, type MatchStatsSink, type NetInfo } from './matchStats';
 import { addBot, latestNavGraph, removeBot, requestNavGraph, type BotLevelId, type NavGraph } from '@military-forge/bots';
 import {
   ADMIN_BOT_LEVELS,
@@ -161,6 +162,8 @@ export interface RoomOptions {
   log?: (msg: string) => void;
   /** match rooms: each finished match's results go here (results.ts; the API records them) */
   results?: ResultsSink | null;
+  /** match rooms: each match's play stats go here (matchStats.ts; the owner's dashboard, docs/16) */
+  stats?: MatchStatsSink | null;
   /** the room's code, for the results ('' = the default room) */
   code?: string;
 }
@@ -544,6 +547,8 @@ export class Room {
   readonly bots: PlayerState[] = [];
   /** reports each finished match (match rooms with a results sink) */
   private readonly recorder: MatchRecorder | null;
+  /** play stats of each match (match rooms with a stats sink) */
+  private readonly stats: MatchStats | null;
   /** voice chat's relay (v18): who hears whom, frame by frame */
   readonly voice: VoiceRelay;
 
@@ -578,6 +583,7 @@ export class Room {
     // team modes: party mates (the join ticket's party, social) are dealt onto one team
     if (this.match) this.match.groupOf = (id) => this.partyOf(id);
     this.recorder = this.match && options.results ? new MatchRecorder(options.results, options.code ?? '') : null;
+    this.stats = this.match && options.stats ? new MatchStats(options.stats, options.code ? 'code' : 'default') : null;
     const fill = options.fillBots;
     this.fill = this.baseFill = fill && fill.target > 0 ? { target: Math.min(fill.target, MAX_PLAYERS), level: fill.level } : null;
     this.baseLimits = this.match ? { timeLimit: this.match.rules.timeLimit, killLimit: this.match.rules.killLimit } : null;
@@ -745,6 +751,8 @@ export class Room {
     this.voice.remove(s.playerId);
     this.sessions.delete(s.token);
     if (s.prevToken) this.unconfirmed.delete(s.prevToken);
+    const gone = this.game.players[s.playerId];
+    if (gone && this.match) this.stats?.left(gone, this.match.phase, this.game.tick, { pingMs: s.pingMs, transport: s.client?.conn.kind });
     this.game.removePlayer(s.playerId);
     if (this.host === s) this.host = this.longestPresent();
     this.matchDirty = true;
@@ -941,6 +949,7 @@ export class Room {
     if (client.accountId) this.recorder?.setAccount(p, client.accountId);
     // the guns they chose (their account's loadout): every spawn until a death keeps others (#125)
     if (client.guns) this.game.setLoadout(p, client.guns);
+    this.stats?.joined(p, client.accountId, client.guns, this.game.tick);
     const session: Session = { token: newToken(), playerId: p.id, client: null, expiresAt: Infinity, idle: createInput(), prevToken: null, joinSeq: this.joins++, pingMs: -1, party: client.party, vouch: client.lookVouch, connectedTick: this.game.tick, droppedTick: -1 };
     // v19: the look the page asked for, else the one the API vouched for (the ticket's), held to what the player owns
     const worn = admitLook(look, session.vouch) ?? admitLook(session.vouch.ids, session.vouch);
@@ -971,6 +980,8 @@ export class Room {
     s.token = newToken();
     this.sessions.set(s.token, s);
     this.attach(client, s, true);
+    const back = this.game.players[s.playerId];
+    if (back) this.stats?.reconnected(back);
     // only this client missed anything: it gets a full snapshot (fresh baselines), the roster and the match
     client.conn.send(encodeRoster(this.rosterEntries()));
     if (this.match) client.conn.send(this.encodeMatchState());
@@ -1590,6 +1601,12 @@ export class Room {
     return this.bots.splice(pick, 1)[0]!;
   }
 
+  /** A player's ping and transport (the stats read it once, at a match's end). */
+  private readonly netOf = (p: PlayerState): NetInfo | null => {
+    for (const s of this.sessions.values()) if (this.game.players[s.playerId] === p) return { pingMs: s.pingMs, transport: s.client?.conn.kind };
+    return null;
+  };
+
   /** Advances the room by one 60 Hz tick. */
   tick(): void {
     const current = this.game.tick;
@@ -1671,6 +1688,7 @@ export class Room {
     if (this.match) {
       this.match.step(this.inputs);
       this.recorder?.onMatchEvents(this.match, this.game.map.id);
+      this.stats?.onMatchEvents(this.match, this.game.map.id, this.game.tick, this.game.tuning.respawnDelay, this.netOf);
       for (const e of this.match.events) {
         this.matchDirty = true;
         if (e.type === 'phase') {

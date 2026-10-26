@@ -7,6 +7,7 @@
 import { buildId } from 'virtual:title-info';
 import { createStore } from 'zustand/vanilla';
 import { diag, diagErrors, diagEvents } from './log';
+import { metricsFeature } from '../metrics/hooks';
 
 /** The words under every Send a report: what leaves the device. */
 export const WHAT_IS_SENT =
@@ -73,6 +74,7 @@ export async function sendReport(reason: ReportReason, context: string, note = '
     if (!res.ok) return { ok: false, why: 'error' };
     const { id } = (await res.json()) as { id: string };
     reportStore.setState({ last: { id, at: Date.now(), reason } });
+    if (reason === 'manual') metricsFeature('report-sent'); // play stats (docs/16): a player sent one
     return { ok: true, id };
   } catch {
     return { ok: false, why: 'offline' };

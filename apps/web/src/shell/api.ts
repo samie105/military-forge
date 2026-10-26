@@ -188,6 +188,34 @@ export class Api {
     return () => this.signInListeners.delete(listener);
   }
 
+  /** The access token if one is live now (no refresh): play stats attach it to a batch when they can. */
+  currentToken(): string | null {
+    return this.access && this.access.expiresAt - EARLY_MS > Date.now() ? this.access.token : null;
+  }
+
+  /** Delete my data (Settings → Privacy, docs/16 §6.4): the player's play stats on the API. */
+  async deletePlayStats(): Promise<void> {
+    await this.request<unknown>('DELETE', '/analytics/me', undefined, true);
+  }
+
+  /**
+   * Deletes the player itself (DELETE /me: name, level, friends, saved look, match history; their
+   * play stats follow by the database's trigger) and forgets the session on this device.
+   */
+  async deleteAccount(): Promise<void> {
+    await this.request<unknown>('DELETE', '/me', undefined, true);
+    storeRefreshToken(null);
+    this.refreshFallback = null;
+    this.access = null;
+    this.me = null;
+  }
+
+  /** The house ads' segments for this player (docs/16 §7), or null (off, none yet, no session). */
+  async segments(): Promise<Record<string, string | null> | null> {
+    const r = await this.request<{ enabled: boolean; segments: Record<string, string | null> | null }>('GET', '/analytics/segments/me', undefined, true);
+    return r.enabled ? r.segments : null;
+  }
+
   /** A live access token: refreshes with the stored refresh token when needed. */
   private async accessToken(): Promise<string> {
     if (this.access && this.access.expiresAt - EARLY_MS > Date.now()) return this.access.token;

@@ -61,6 +61,8 @@ export const LIMITS = {
   forgot: { name: 'forgot', limit: 5, windowMs: 10 * 60_000 },
   /** an emailed link opened (reset, confirm) per IP */
   emailLink: { name: 'emaillink', limit: 20, windowMs: 10 * 60_000 },
+  /** play-stats batches per IP (a page sends one every 30 s or so, plus one as it closes; a busy NAT has many players) */
+  analytics: { name: 'analytics', limit: 600, windowMs: 10 * 60_000 },
 } as const satisfies Record<string, RateRule>;
 
 export async function enforceRateLimit(kv: Kv, rule: RateRule, key: string): Promise<void> {

@@ -13,7 +13,9 @@
  * bots, and guests on a dev server without tickets, never are.
  */
 import { createHash, createPrivateKey, randomUUID, sign, type KeyObject } from 'node:crypto';
+import type { MatchStatsReport } from '@military-forge/shared';
 import type { MatchReport, ResultsSink } from './matchRecorder';
+import type { MatchStatsSink } from './matchStats';
 
 export const RESULTS_ISSUER = 'game-server';
 export const RESULTS_AUDIENCE = 'api-results';
@@ -21,6 +23,7 @@ const HEADER = Buffer.from(JSON.stringify({ alg: 'EdDSA', typ: 'JWT' })).toStrin
 const TOKEN_LIFETIME_S = 60;
 
 export { MatchRecorder, killSourceName, newMatchId, type MatchReport, type MatchReportPlayer, type ResultsSink } from './matchRecorder';
+export { MatchStats, type MatchStatsSink, type NetInfo } from './matchStats';
 
 export function resultsPrivateKey(pem: string): KeyObject {
   const key = createPrivateKey(pem.replaceAll('\\n', '\n'));
@@ -49,7 +52,7 @@ export function signReport(body: string, matchId: string, key: KeyObject, nowSec
  * busy for a while loses nothing. A 4xx other than 429 is final (the report is wrong; logged).
  * Reports live in memory only, so a game server restart drops the ones still waiting.
  */
-export class ResultsReporter implements ResultsSink {
+export class ResultsReporter implements ResultsSink, MatchStatsSink {
   private readonly pending = new Set<Promise<void>>();
 
   constructor(
@@ -62,7 +65,21 @@ export class ResultsReporter implements ResultsSink {
 
   report(r: MatchReport): void {
     if (r.players.length === 0) return; // only bots or ticketless guests: nothing to record
-    const p = this.send(r).finally(() => this.pending.delete(p));
+    this.track(this.send('/internal/matches', JSON.stringify(r), r.matchId));
+  }
+
+  /**
+   * A match's play stats (matchStats.ts, docs/16 §3.2): every match with a person in it, guests and
+   * bots included (no account needed: the stats carry no XP). Same key, same retries; the API
+   * answers 503 when its queue is full, and the retry brings it back later.
+   */
+  reportStats(r: MatchStatsReport): void {
+    if (r.humans === 0) return;
+    this.track(this.send('/internal/analytics/match', JSON.stringify(r), r.matchId));
+  }
+
+  private track(send: Promise<void>): void {
+    const p = send.finally(() => this.pending.delete(p));
     this.pending.add(p);
   }
 
@@ -71,30 +88,29 @@ export class ResultsReporter implements ResultsSink {
     while (this.pending.size) await Promise.all([...this.pending]);
   }
 
-  private async send(r: MatchReport): Promise<void> {
-    const body = JSON.stringify(r);
+  private async send(path: string, body: string, matchId: string): Promise<void> {
     for (let attempt = 0; ; attempt++) {
       let status: number;
       try {
-        const res = await this.fetchImpl(`${this.apiUrl}/internal/matches`, {
+        const res = await this.fetchImpl(`${this.apiUrl}${path}`, {
           method: 'POST',
-          headers: { 'content-type': 'application/json', authorization: `GameServer ${signReport(body, r.matchId, this.key)}` },
+          headers: { 'content-type': 'application/json', authorization: `GameServer ${signReport(body, matchId, this.key)}` },
           body,
           signal: AbortSignal.timeout(10_000),
         });
         status = res.status;
         if (res.ok) return;
         if (status >= 400 && status < 500 && status !== 429) {
-          this.log(`[results] the API refused match ${r.matchId}: ${status} ${(await res.text()).slice(0, 200)}`);
+          this.log(`[results] the API refused ${path} for match ${matchId}: ${status} ${(await res.text()).slice(0, 200)}`);
           return;
         }
       } catch (e) {
         status = -1;
-        if (attempt === 0) this.log(`[results] match ${r.matchId}: ${(e as Error).message}; retrying`);
+        if (attempt === 0) this.log(`[results] match ${matchId}: ${(e as Error).message}; retrying`);
       }
       const wait = this.delaysMs[attempt];
       if (wait === undefined) {
-        this.log(`[results] gave up on match ${r.matchId} (last status ${status})`);
+        this.log(`[results] gave up on match ${matchId} (last status ${status})`);
         return;
       }
       await new Promise((done) => setTimeout(done, wait).unref?.());

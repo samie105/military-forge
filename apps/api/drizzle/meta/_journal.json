@@ -36,6 +36,13 @@
       "when": 1793018608065,
       "tag": "0004_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793018668065,
+      "tag": "0005_analytics",
+      "breakpoints": true
     }
   ]
 }

@@ -7,3 +7,4 @@ export * from './roomCode';
 export * from './simMath';
 export * from './utf8';
 export * from './progression';
+export * from './analytics';

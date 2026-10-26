@@ -4,6 +4,8 @@
  * against real Postgres and Valkey (the database's tables are emptied first).
  */
 import { sql } from 'drizzle-orm';
+import type { IngestOptions } from '../src/analytics/ingest';
+import { AnalyticsService } from '../src/analytics/service';
 import { createApp } from '../src/app';
 import { generateSigningKey, type SigningKey } from '../src/auth/keys';
 import { loadConfig } from '../src/config';
@@ -23,6 +25,8 @@ export interface TestApiOptions {
   email?: EmailSender | null;
   /** a logger of the test's own (to read the audit trail) */
   log?: Logger;
+  /** play stats' ingest queue (back-pressure tests) */
+  ingest?: IngestOptions;
 }
 
 export async function createTestApi(env: Record<string, string> = {}, options: TestApiOptions = {}) {
@@ -41,11 +45,17 @@ export async function createTestApi(env: Record<string, string> = {}, options: T
     ...env,
   });
   const database = await openDatabase(config);
-  if (database.kind === 'postgres') await database.db.execute(sql`truncate table users cascade`);
+  if (database.kind === 'postgres') {
+    await database.db.execute(sql`truncate table users cascade`);
+    await database.db.execute(sql`truncate table analytics_events, analytics_daily, analytics_hourly, analytics_player_days, analytics_players, analytics_forget`);
+  }
   // on a shared Valkey each test API gets keys of its own, so runs and files don't share rate-limit buckets
   const keyPrefix = `test:${randomUUID()}:`;
   const kv: Kv = process.env.TEST_REDIS_URL ? await new RedisKv(process.env.TEST_REDIS_URL, { keyPrefix }).connect() : new MemoryKv(clock.now);
   const bus: EventBus = process.env.TEST_REDIS_URL ? await new RedisBus(process.env.TEST_REDIS_URL, keyPrefix).connect() : new MemoryBus();
+  const log = options.log ?? createLogger(config);
+  // play stats: the tests drive its queue and maintenance by hand (no timers)
+  const analytics = new AnalyticsService(database.db, kv, config.analytics, log, clock.now, options.ingest);
   // work the API does after answering (account emails): collected, so a test can wait for it
   const deferred: Promise<void>[] = [];
   const defer = (task: () => Promise<void>) => void deferred.push(task());
@@ -56,8 +66,9 @@ export async function createTestApi(env: Record<string, string> = {}, options: T
     bus,
     signingKey: generateSigningKey(),
     ticketKey: options.ticketKey ?? null,
-    log: options.log ?? createLogger(config),
+    log,
     now: clock.now,
+    analytics,
     email: options.email ?? null,
     defer,
   };
@@ -79,6 +90,8 @@ export async function createTestApi(env: Record<string, string> = {}, options: T
     },
     clock,
     config,
+    /** play stats (analytics/service.ts) */
+    analytics,
     database,
     kv,
     /** the push channel's fan-out (events/bus.ts) */

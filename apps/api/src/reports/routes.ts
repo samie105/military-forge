@@ -64,7 +64,8 @@ function newId(): string {
   return id;
 }
 
-function ownerOnly(c: Context<AppEnv>, token: string | null): void {
+/** 401 unless the request carries the owner's admin token (also the play-stats dashboard's guard). */
+export function ownerOnly(c: Context<AppEnv>, token: string | null): void {
   const got = /^Bearer (.+)$/.exec(c.req.header('authorization') ?? '')?.[1] ?? '';
   const a = Buffer.from(got);
   const b = Buffer.from(token ?? '');

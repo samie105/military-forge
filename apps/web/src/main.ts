@@ -81,6 +81,9 @@ import { HintRunner } from './tour/hintsRun';
 import type { Device } from './tour/log';
 import { provideTourMemory } from './tour/live';
 import { startPwa } from './pwa';
+import { launchedInstalled } from './pwa/install';
+import { startMetrics } from './metrics';
+import { buildId } from 'virtual:title-info';
 import { mountTourReadout } from './tour/readout';
 import { BackdropPacer } from './ui/backdrop';
 import { releaseLanding } from './ui/landing';
@@ -686,6 +689,17 @@ if (appMode) {
   tourMemory.setDevice(isTouchDevice() ? 'touch' : 'keyboard');
   onInputDevice((d) => tourMemory?.setDevice(d.kind === 'pad' ? 'pad' : d.kind === 'touch' ? 'touch' : 'keyboard'));
   if (params.has('tourlog')) mountTourReadout(tourMemory);
+  // play stats (docs/16-player-metrics.md): the consent, batched events, ad delivery; essential match stats are the server's
+  startMetrics({
+    store: shell.store,
+    api: shell.controller?.api ?? null,
+    memory: tourMemory,
+    storage: storageOrNull(),
+    tier: () => graphicsPreset(shell.store.getState().settings.graphics),
+    input: () => (currentDevice().kind === 'pad' ? 'pad' : isTouchDevice() ? 'touch' : 'keyboard'),
+    build: buildId,
+    installed: launchedInstalled((q) => matchMedia(q).matches, (navigator as Navigator & { standalone?: boolean }).standalone),
+  });
   if (import.meta.env.DEV) Object.assign(window, { __tour: tourMemory });
 }
 // first time here: the name screen, then "Create your soldier" (once on this device; Skip counts), unless

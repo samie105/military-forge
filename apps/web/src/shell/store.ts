@@ -75,7 +75,7 @@ export type Screen =
 export type Overlay = 'menu' | 'settings' | 'join' | 'name' | 'lan-add' | 'lan-join' | null;
 
 /** Settings sections (the kit's five tabs, and Touch for the phone controls). */
-export type SettingsTab = 'graphics' | 'audio' | 'controls' | 'controller' | 'accessibility' | 'network' | 'touch' | 'account';
+export type SettingsTab = 'graphics' | 'audio' | 'controls' | 'controller' | 'accessibility' | 'network' | 'touch' | 'account' | 'privacy';
 
 /**
  * What Settings → Account opens on: the sign-in form (the name screen's "Sign in"), or an emailed

@@ -14,6 +14,7 @@
 import { DEFAULT_COSMETIC_LOADOUT, DEFAULT_GUN_IDS, DEFAULT_LOADOUT, loadoutGunIndices, sanitizeCosmeticLoadout, weapons, type CosmeticLoadout } from '@military-forge/content';
 import { ApiError } from '../shell/api';
 import { LocalLoadoutStore, type LoadoutStore } from './loadouts';
+import { metricsFeature } from '../metrics/hooks';
 
 type KeyValueStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
@@ -154,6 +155,7 @@ export class LoadoutSync {
         await this.local.save(look);
         this.changed('look');
         this.lookChanged(look);
+        metricsFeature('outfit-saved'); // play stats (docs/16): a Locker or creator save
       },
     };
     this.guns = { get: () => this.savedGunIndices(), set: (pair) => this.saveGuns(pair) };

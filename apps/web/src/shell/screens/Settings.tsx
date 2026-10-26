@@ -27,6 +27,7 @@ import { Backdrop } from './frame';
 import { InstallButton } from '../../pwa/InstallButton';
 import { SendReport } from '../../diag/SendReport';
 import { AccountPanel } from '../account/AccountPanel';
+import { PrivacySettings } from '../../metrics/PrivacySettings';
 
 export const TABS: readonly { id: SettingsTab; label: string; icon: string }[] = [
   { id: 'graphics', label: 'Graphics', icon: 'monitor' },
@@ -37,6 +38,7 @@ export const TABS: readonly { id: SettingsTab; label: string; icon: string }[] =
   { id: 'network', label: 'Network', icon: 'globe' },
   { id: 'touch', label: 'Touch', icon: 'target' },
   { id: 'account', label: 'Account', icon: 'user' },
+  { id: 'privacy', label: 'Privacy', icon: 'eye' },
 ];
 
 /** What each preset changes (render3d/presets.ts), in words. */
@@ -708,6 +710,7 @@ export function resetPatch(tab: SettingsTab): Partial<Settings> | null {
       return { lowBandwidth: DEFAULT_SETTINGS.lowBandwidth, netGraph: DEFAULT_SETTINGS.netGraph };
     case 'touch':
     case 'account':
+    case 'privacy':
       return null;
   }
 }
@@ -770,6 +773,7 @@ export function SettingsScreen({ store }: { store: ShellStore }) {
                 <AccountPanel store={store} variant="desktop" />
               </div>
             )}
+            {tab === 'privacy' && <PrivacySettings />}
           </div>
         </div>
         <footer className="menu-hints">

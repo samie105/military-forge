@@ -1,0 +1,158 @@
+/* The play-stats choice on Home (ConsentCard.tsx): the install toast's Field Print on a Frost plate
+   (pwa.css), with a paper edge instead of volt (it isn't an offer), and two buttons of the same weight:
+   saying no is exactly as easy as saying yes. Desktop: bottom left of Home's 1920×1080 box, clear of
+   the play poster; phones: above the bottom nav, where the install toast would sit (it waits). */
+.mf-consent {
+  position: absolute;
+  z-index: var(--z-panel, 60);
+  left: 50%;
+  bottom: calc(var(--safe-b, 21px) + 64px);
+  translate: -50% 0;
+  width: min(760px, calc(100% - 2 * var(--safe-l, 44px)));
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px 12px 0;
+  background: color-mix(in srgb, #0e100b 94%, transparent);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border: 1.5px solid color-mix(in srgb, var(--c-paper) 22%, transparent);
+  border-left: 5px solid var(--c-paper);
+  border-radius: 0 18px 0 18px;
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.5);
+  color: var(--c-paper);
+  animation: mf-consent-in 240ms var(--ease-arrive, ease-out) both;
+}
+.mf-consent--home {
+  left: 64px;
+  translate: none;
+  bottom: 48px;
+  width: 820px;
+  padding: 18px 20px 18px 0;
+}
+@keyframes mf-consent-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+html.reduce-motion .mf-consent {
+  animation: none;
+}
+html.reduce-transparency .mf-consent {
+  background: #0e100b;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.mf-consent__tile {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 48px;
+  height: 48px;
+  margin-left: 14px;
+  background: var(--c-paper);
+  color: #15170f;
+  border-radius: 0 10px 0 10px;
+}
+.mf-consent__tile .ic {
+  width: 26px;
+  height: 26px;
+}
+.mf-consent__words {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+.mf-consent__eyebrow {
+  font-size: 11px;
+  font-weight: var(--fw-black, 800);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--c-volt);
+}
+.mf-consent__title {
+  font-size: 26px;
+  line-height: 1;
+  text-transform: uppercase;
+  color: var(--c-paper);
+}
+.mf-consent__line {
+  font-size: 13px;
+  font-weight: var(--fw-semi, 600);
+  color: #b5b9a2;
+}
+.mf-consent--home .mf-consent__line {
+  font-size: 15px;
+}
+.mf-consent__link {
+  color: var(--c-paper);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.mf-consent__buttons {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+.mf-consent__btn {
+  min-height: 48px;
+  min-width: 112px;
+  padding: 0 16px;
+  border: 2px solid color-mix(in srgb, var(--c-paper) 70%, transparent);
+  border-radius: 0 10px 0 10px;
+  background: color-mix(in srgb, var(--c-paper) 8%, transparent);
+  color: var(--c-paper);
+  font: inherit;
+  font-size: 15px;
+  font-weight: var(--fw-black, 800);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.mf-consent__btn:hover,
+.mf-consent__btn:focus-visible {
+  background: var(--c-paper);
+  color: #15170f;
+}
+/* large text: the line goes, the title steps down */
+.is-text-lg .mf-consent__line {
+  display: none;
+}
+.is-text-lg .mf-consent__title {
+  font-size: 22px;
+}
+
+/* Settings → Privacy (PrivacySettings.tsx) */
+.mf-privacy__list {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  color: var(--c-muted-2, #b5b9a2);
+  font-size: var(--fs-14, 14px);
+  line-height: 1.45;
+}
+.mf-privacy__note {
+  color: var(--c-muted-2, #b5b9a2);
+  font-size: var(--fs-14, 14px);
+}
+.mf-privacy__confirm {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  margin-top: 8px;
+  border: 1.5px solid var(--c-danger-text, #ff7a6b);
+  border-radius: 0 12px 0 12px;
+}
+.mf-privacy__confirm label {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: var(--fs-14, 14px);
+}
+.mf-privacy__row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}

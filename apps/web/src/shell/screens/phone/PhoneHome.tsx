@@ -14,6 +14,7 @@ import { initial } from "./parts";
 import { FriendsButton, PhoneSquad } from "../../../social/SocialLayer";
 import { SavedAdsList } from "../../../ads/SavedAds";
 import { InstallToast } from "../../../pwa/InstallToast";
+import { ConsentCard, useConsentDue } from "../../../metrics/ConsentCard";
 import { useState } from "react";
 import { NextOrders } from "../../../tour/NextOrders";
 import { currentDevice } from "../../../gamepad";
@@ -23,6 +24,7 @@ import { HomeSoldier } from "../../../presentation/HomeSoldier";
 
 export function PhoneHome({ store }: { store: ShellStore }) {
   const ctl = useCtl();
+  const consentDue = useConsentDue();
   const profile = useStore(store, (s) => s.profile);
   const ping = useServerPing();
   const offline = !!profile?.offline;
@@ -220,7 +222,8 @@ export function PhoneHome({ store }: { store: ShellStore }) {
         </nav>
       </div>
       {/* install the game, play full screen (the owner, 23 Oct): Android's prompt, or iPhone's two taps */}
-      <InstallToast where="home" />
+      {/* play stats: the one-time choice (docs/16 §6.2); the install toast waits while it's up */}
+      {consentDue ? <ConsentCard where="phone" /> : <InstallToast where="home" />}
     </PhoneScreen>
   );
 }

@@ -27,6 +27,7 @@ import { useInputDevice } from '../../../gamepad/react';
 import { InstallButton } from '../../../pwa/InstallButton';
 import { SendReport } from '../../../diag/SendReport';
 import { AccountPanel } from '../../account/AccountPanel';
+import { PrivacySettings } from '../../../metrics/PrivacySettings';
 
 /** The phone's sections: Touch first; no key bindings (Controls) on a phone. */
 export const PHONE_TABS: readonly { id: SettingsTab; label: string; icon: string }[] = [
@@ -36,6 +37,7 @@ export const PHONE_TABS: readonly { id: SettingsTab; label: string; icon: string
   { id: 'accessibility', label: 'Access', icon: 'access' },
   { id: 'network', label: 'Network', icon: 'globe' },
   { id: 'account', label: 'Account', icon: 'user' },
+  { id: 'privacy', label: 'Privacy', icon: 'eye' },
 ];
 
 /** A controller's section ("Pad"), once a pad has been used on this phone (gamepad/). */
@@ -407,6 +409,7 @@ export function PhoneSettings({ store }: { store: ShellStore }) {
             {tab === 'accessibility' && <Accessibility settings={settings} />}
             {tab === 'network' && <Network settings={settings} />}
             {tab === 'account' && <AccountPanel store={store} variant="phone" />}
+            {tab === 'privacy' && <PrivacySettings phone />}
             {tab === 'controller' && <PadControls phone pad={settings.pad} onChange={(pad) => ctl.updateSettings({ pad })} reduceFlashes={settings.reduceFlashes} />}
           </section>
         </div>

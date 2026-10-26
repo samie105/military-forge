@@ -74,6 +74,19 @@ export interface Config {
    * null = off (EMAIL_PROVIDER unset): "Forgot password?" is hidden and a saved email links at once.
    */
   email: { provider: 'resend'; apiUrl: string; apiKey: string; from: string } | { provider: 'log' } | null;
+  /** play stats (docs/16-player-metrics.md) */
+  analytics: AnalyticsConfig;
+}
+
+export interface AnalyticsConfig {
+  /** days the raw events are kept (ANALYTICS_RAW_DAYS, default 90); the rollups outlive them */
+  rawDays: number;
+  /** the "Help improve the game" default outside Europe (ANALYTICS_CONSENT); Europe is always opt-in */
+  consentDefault: 'opt-in' | 'opt-out';
+  /** house-ad rotation may weight on the player's segments (ANALYTICS_AD_SEGMENTS; off by default) */
+  adSegments: boolean;
+  /** an IP-range → country CSV (ANALYTICS_GEOIP_CSV); none = country from the device's time zone */
+  geoipCsv: string | null;
 }
 
 export class ConfigError extends Error {
@@ -122,6 +135,10 @@ const EnvSchema = z.object({
   EMAIL_API_URL: z.url({ protocol: /^https?$/, error: 'must be an http(s):// URL' }).optional(),
   EMAIL_API_KEY: z.string().min(8).optional(),
   EMAIL_FROM: z.string().min(3).max(200).optional(),
+  ANALYTICS_RAW_DAYS: z.coerce.number().int().min(7).max(400).default(90),
+  ANALYTICS_CONSENT: z.enum(['opt-in', 'opt-out']).default('opt-in'),
+  ANALYTICS_AD_SEGMENTS: bool.default(false),
+  ANALYTICS_GEOIP_CSV: z.string().min(1).optional(),
 });
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
@@ -189,5 +206,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
         : e.EMAIL_PROVIDER === 'log'
           ? { provider: 'log' }
           : null,
+    analytics: { rawDays: e.ANALYTICS_RAW_DAYS, consentDefault: e.ANALYTICS_CONSENT, adSegments: e.ANALYTICS_AD_SEGMENTS, geoipCsv: e.ANALYTICS_GEOIP_CSV ?? null },
   };
 }

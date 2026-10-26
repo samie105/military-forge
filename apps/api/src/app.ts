@@ -19,6 +19,8 @@ import { AccountService } from './auth/accounts';
 import { createAudit } from './auth/audit';
 import { emailSenderFor, type EmailSender } from './auth/email';
 import { PasswordHasher } from './auth/passwords';
+import { analyticsRoutes, internalAnalyticsRoutes } from './analytics/routes';
+import { AnalyticsService } from './analytics/service';
 import { authRoutes } from './auth/routes';
 import { Throttle } from './auth/throttle';
 import { MemoryBus, type EventBus } from './events/bus';
@@ -66,6 +68,8 @@ export interface AppDeps {
   hasher?: PasswordHasher;
   /** work done after an answer has gone (account emails); default: run it, log a failure */
   defer?: (task: () => Promise<void>) => void;
+  /** play stats (analytics/service.ts); index.ts makes one and starts its timers, tests make their own */
+  analytics?: AnalyticsService;
 }
 
 const LOCAL_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
@@ -191,7 +195,15 @@ export function createApp(deps: AppDeps) {
   app.route('/party', partyRoutes({ kv, auth, party }));
   app.route('/players', playerPresenceRoute({ auth, presence, areFriends: (a, b) => friends.areFriends(a, b) }));
   // the game server's match results: on only with its public key (RESULTS_PUBLIC_KEY)
-  if (config.resultsPublicKeyPem) app.route('/internal', matchRoutes({ db, key: resultsPublicKey(config.resultsPublicKeyPem), leaderboards, now }));
+  const analytics = deps.analytics ?? new AnalyticsService(db, kv, config.analytics, log, now);
+  if (config.resultsPublicKeyPem) {
+    const key = resultsPublicKey(config.resultsPublicKeyPem);
+    app.route('/internal', matchRoutes({ db, key, leaderboards, now }));
+    // the game server's per-match play stats (docs/16 §3.2), signed with the same key
+    app.route('/internal/analytics', internalAnalyticsRoutes({ key, analytics, now }));
+  }
+  // play stats: the pages' batches, Delete my data, the segments and the owner's dashboard (docs/16)
+  app.route('/analytics', analyticsRoutes({ config, kv, auth, analytics }));
   app.route('/me', meRoutes({ config, db, kv, auth, profiles }));
   app.route('/nicknames', nicknameRoutes({ config, kv, auth, profiles }));
   // problem reports (Send a report, and a failed connection's own): kept 7 days, read by the owner

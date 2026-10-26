@@ -29,10 +29,16 @@ const proxy: Record<string, ProxyOptions> = {
  * previews need absolute image URLs) is the site's public address: the playtest proxy fills it in
  * per request, so the build keeps it; in dev the URLs stay relative.
  */
+/**
+ * `%PRIVACY_CONTACT%` (privacy.html): where privacy requests go. PRIVACY_CONTACT at build time (an
+ * email address, docs/16 §8); until the owner sets one, the in-game report, which reaches the owner.
+ */
+const PRIVACY_CONTACT = process.env.PRIVACY_CONTACT?.trim();
+const contactHtml = PRIVACY_CONTACT && /^[^\s<>"@]+@[^\s<>"@]+\.[a-z]{2,}$/i.test(PRIVACY_CONTACT) ? `<a href="mailto:${PRIVACY_CONTACT}">${PRIVACY_CONTACT}</a>` : 'Settings → Network → <b>Send a report</b> in the game (write your request in the note)';
 const brand: Plugin = {
   name: 'brand',
   transformIndexHtml: (html, ctx) => {
-    const named = html.replaceAll('%GAME_NAME%', GAME_NAME);
+    const named = html.replaceAll('%GAME_NAME%', GAME_NAME).replaceAll('%PRIVACY_CONTACT%', contactHtml);
     return ctx.server ? named.replaceAll('%ORIGIN%', '') : named;
   },
 };
@@ -81,7 +87,8 @@ export default defineConfig({
     // Pages: the game (index.html), the Locker (locker.html, also a route inside the game), the Armory (armory.html)
     // the owner's admin page (admin.html: /admin on pnpm playtest) and the net trial's ping probe
     // (probe.html: /probe on the trial boxes, docs/net-trial.md), the controller check (gamepad.html: every axis and button, live)
-    // and the sound board (sounds.html: every sound with a play button, docs/audio.md).
-    rolldownOptions: { input: { main: 'index.html', locker: 'locker.html', armory: 'armory.html', admin: 'admin.html', probe: 'probe.html', gamepad: 'gamepad.html', sounds: 'sounds.html' } },
+    // and the sound board (sounds.html: every sound with a play button, docs/audio.md), and the privacy
+    // note (privacy.html: what play stats keep and why, docs/16).
+    rolldownOptions: { input: { main: 'index.html', locker: 'locker.html', armory: 'armory.html', admin: 'admin.html', probe: 'probe.html', gamepad: 'gamepad.html', sounds: 'sounds.html', privacy: 'privacy.html' } },
   },
 });

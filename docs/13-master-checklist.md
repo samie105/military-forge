@@ -706,7 +706,7 @@
 
 ## U. Analytics & live ops
 
-- [ ] `612` **MVP** Versioned telemetry event schema
+- [x] `612` **MVP** Versioned telemetry event schema (docs/16 §2, 26 Oct 2026)
 - [ ] `613` **MVP** Session start/end, match start/end, kill/death events
 - [ ] `614` **MVP** Client performance samples (FPS, frame time, GPU tier, RAM)
 - [ ] `615` **MVP** Network samples (RTT, loss, transport type, corrections)
