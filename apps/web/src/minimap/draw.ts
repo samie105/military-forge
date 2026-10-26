@@ -5,6 +5,7 @@
  * dots on top (`drawDots`): you and the way you aim, what's on screen, pickups, allies, and the
  * enemy marks EnemyIntel allows.
  */
+import { MARK_COLOURS } from '../teams/marking';
 import { ZONE_KINDS, mapTiers, pickups, POWER_WEAPONS, weapons, zonePoints, type MapDef } from '@military-forge/content';
 import type { IntelMark } from './intel';
 
@@ -67,9 +68,10 @@ export const DEFAULT_PALETTE: Palette = {
   solid: '#a3ad78',
   slab: '#ece3c8',
   line: 'rgba(236,227,200,.28)',
-  you: '#d6ff3b',
-  enemy: '#ff4d5e',
-  ally: '#3d8bff',
+  // who's who: the soldiers' own marking colours (teams/marking.ts)
+  you: MARK_COLOURS.standard.self,
+  enemy: MARK_COLOURS.standard.enemy,
+  ally: MARK_COLOURS.standard.ally,
   power: '#d9b25f',
   item: '#ece3c8',
   updraft: '#d6ff3b',
@@ -83,9 +85,9 @@ export const DEFAULT_PALETTE: Palette = {
  * allies circles, sounds rings), so no mark depends on its colour alone.
  */
 export function paletteFor(mode: 'standard' | 'deutan' | 'tritan', base: Palette = DEFAULT_PALETTE): Palette {
-  if (mode === 'deutan') return { ...base, enemy: '#ffc53d', ally: '#3d8bff' };
-  if (mode === 'tritan') return { ...base, enemy: '#ff4d5e', ally: '#4fd1c5' };
-  return base;
+  if (mode === 'standard') return base;
+  const m = MARK_COLOURS[mode];
+  return { ...base, enemy: m.enemy, ally: m.ally };
 }
 
 function polygon(ctx: CanvasRenderingContext2D, f: Fit, pts: readonly number[]): void {

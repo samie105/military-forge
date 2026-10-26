@@ -1802,3 +1802,24 @@ The contract is docs/16-player-metrics.md; the player-facing note is `/privacy.h
 - **Segments for house ads** (`GET /analytics/segments/me`, behind `ANALYTICS_AD_SEGMENTS`, off): device, session band, time of day, mode preference, new/returning, from consented days only. House creatives may list `prefer` tags; a match gives a matching one up to 3 turns within its advertiser's share. Paid and finance creatives are never weighted.
 - **Deletion:** `DELETE /analytics/me`; account deletion queues the same by a trigger on `users`. A recount never rebuilds a player waiting to be forgotten.
 - **Not done (owner):** a privacy contact email (`PRIVACY_CONTACT` at build), an age question before a minor's yes, counsel on NDPA registration and children's consent, the GeoIP table (optional), and the Pen board for the consent card and Privacy tab (the pen.dev plan's limit was reached, so the tools were blocked).
+
+## Who's who, and the frozen ghosts (26 Oct 2026, the owner on a phone in team deathmatch: "how should I know which one is me?", "the shooting models are just hanging in the air … the ones that are moving are not visible")
+
+No protocol change: the teams come from v21's MATCH_STATE (`lookBook.teamOf`).
+
+### The ghosts: a soldier built for one player landed on another (`render3d/roster.ts`)
+- **Cause:** `Renderer3D.syncAvatars` built each soldier asynchronously and read `p.id` in the build's callback. Online, the frame's PlayerViews are pooled (`render3d/online.ts` reuses one object per slot every frame), so a slow build (a phone on 4G, a new bot's look) that landed after its slot changed hands:
+  - replaced another player's soldier in the map, leaving the old one in the scene, frozen where it last stood (the "models hanging in the air");
+  - cleared the wrong pending entry, so the player it was built for stayed pending for ever: never drawn, only the 2D overlay's health bar (the "invisible" players).
+- **Reproduced** with a dev page on a local playtest (2 teams, 6–8 bots, a desktop host and a phone at 812×375 with `?netsim=rtt=500,jitter=40,loss=3`, look changes and bots filling and leaving): after a look change the phone had player 2's old soldier in the scene at (14.8, 7.7) owned by nobody, and player 3 "loading" for 120 s while it ran about.
+- **Fix:** `SoldierRoster` keys every build by the id taken when it starts (a token per request), drops a build whose player left or that a LOD change overtook, never keeps two soldiers for one player, and resets a new soldier's team colour. Same run after: no ownerless soldier, no stuck build.
+- **Tests:** `render3d/test/roster.test.ts` (pooled views reshuffled over 400 frames with builds landing in any order; the two-slot swap; a player who leaves; `clear()`; the retry). 4 of its 6 fail on the old callback.
+- **Browser check:** `apps/web/scripts/team-marking-check.mjs` (header has the commands; needs the dev hooks `__view3d`, `__mfMode`, `__lookBook`, so a dev server with `DEV_PROXY_ORIGIN` on a local playtest's services). Every half second, right after a drawn frame, it fails on a soldier nobody owns, a living player with no soldier for 5 s, a living player's soldier hidden or dissolved, or a soldier over 1 m from its player twice running.
+
+### Who's who (`teams/marking.ts`)
+- **Relations:** you, an ally (your team, team modes) or an enemy (everyone else; in a free-for-all, everyone but you). Watching a room, "you" is the soldier watched; the death cam keeps your own side (`main.ts markViewer`).
+- **Colours and shapes:** you volt ▲, allies teal ●, enemies red ◆; red-green safe: amber enemies, blue allies; blue-yellow safe: red and teal. The minimap's `paletteFor` takes the same colours.
+- **3D (`Renderer3D.applyMarking`):** an enemy wears a red outline and a red glow round its silhouette, an ally teal ones, you the plain dark outline. The outlines are `OutlineMaterial.tinted()` copies (same program, width and viewport); the glow is `DyeMaterial.mark`, a fresnel uniform in the dye shader (`character-dye-v7`). No draw call or shader switch is added. A dying soldier dissolves in its relation's outline colour.
+- **2D overlay (`render.ts drawPlayerHealth`):** the name, the bar and its frame in the relation colour, the shape left of the name, and your soldier standing on a ring and a chevron marked YOU, below the feet (it never covers the soldier).
+- **Frame cost (the phone at 812×375, `?perf`, Low, SwiftShader in headless Chrome; `team-marking-check.mjs` reads `Renderer3D.stats()` over 8 s with the marking on, off, on):** render CPU 1.06 / 0.98 / 0.91 ms; frame p50 16.8 / 16.9 / 16.8 ms; draw calls track the soldiers on screen (31 with 4, 29 with 3, 36 with 5), so the marking adds none.
+- **Shots:** `docs/screenshots/team-marking/` (desktop 1600×900 and phone 812×375; team deathmatch with an ally and with enemies, free-for-all, and two zooms).

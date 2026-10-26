@@ -553,6 +553,7 @@ export class Avatar {
         if (shared instanceof OutlineMaterial) {
           this.sharedOutline = shared;
           this.dyingOutline ??= shared.dissolving();
+          this.dyingOutline.color.copy(shared.color); // the relation's outline colour (teams/marking.ts) as it dissolves
           this.inst.setOutline?.(this.dyingOutline);
         }
       }

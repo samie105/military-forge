@@ -19,6 +19,7 @@ function recordingCanvas() {
       if (prop === 'fill') return () => fills.push(String(target.fillStyle));
       if (prop === 'fillRect') return (_x: number, _y: number, width: number, height: number) => rects.push({ color: String(target.fillStyle), width, height });
       if (prop === 'stroke') return () => strokes.push(String(target.strokeStyle));
+      if (prop === 'measureText') return (text: string) => ({ width: text.length * 6 });
       return () => {};
     },
     set(target, prop: string, value) {
@@ -62,11 +63,22 @@ describe('2D overlay over the 3D view', () => {
     const rival = playerView({ id: 1, name: 'Rival', isLocal: false, x: 20, hp: 45 });
     frame.players.push(rival);
     r.render(frame, 1 / 60, opts({ hud: 'none' }), '');
-    expect(rects).toContainEqual({ color: '#f3b64a', width: 54 * 0.45, height: 6 });
+    // who's who (teams/marking.ts): an enemy's bar is red, as long as its health
+    expect(rects).toContainEqual({ color: '#ff4d5e', width: 54 * 0.45, height: 6 });
     rects.length = 0;
     frame.clouds = [{ id: 0, type: 0, x: rival.x, y: rival.y + 1, radius: 3, density: 1, opaque: 3, age: 0 }];
     r.render(frame, 1 / 60, opts({ hud: 'none' }), '');
-    expect(rects.some((rect) => rect.color === '#f3b64a')).toBe(false);
+    expect(rects.some((rect) => rect.color === '#ff4d5e')).toBe(false);
+  });
+
+  it("colours each bar by who's who: you volt, an ally teal, an enemy red", () => {
+    const { r, rects, frame } = setup();
+    frame.players.push(playerView({ id: 1, isLocal: false, x: 20, hp: 50 }), playerView({ id: 2, isLocal: false, x: 22, hp: 25 }));
+    r.relationOf = (id) => (id === 0 ? 'self' : id === 1 ? 'ally' : 'enemy');
+    r.render(frame, 1 / 60, opts({ hud: 'none' }), '');
+    expect(rects).toContainEqual({ color: '#d6ff3b', width: 54, height: 6 });
+    expect(rects).toContainEqual({ color: '#3fd0c9', width: 54 * 0.5, height: 6 });
+    expect(rects).toContainEqual({ color: '#ff4d5e', width: 54 * 0.25, height: 6 });
   });
 
   it('leaves grenades, tracers, ricochets, blasts and dashes to render3d', () => {

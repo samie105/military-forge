@@ -40,6 +40,8 @@ import { buildMapGeometry } from './mapGeometry';
 import { OnlineView, type RemoteView } from './online';
 import { FOV_DEG, PlaneCamera, applyPlanePose, planePose } from './planeCamera';
 import { ZoneVolumes } from './zones';
+import { SoldierRoster } from './roster';
+import { markColour, type Relation } from '../teams/marking';
 import { DynamicResolution, PRESETS, SampleWindow, TierGovernor, parsePreset, type GraphicsPreset, type PresetName } from './presets';
 import { eachKick, recoilOf } from './recoil';
 import { PickupMeshes, RicochetSparks } from './shield';
@@ -173,7 +175,38 @@ export class Renderer3D {
   private readonly assembler: CharacterAssembler;
   /** who wears what: the Locker's saved look for the local player, placeholders for the rest */
   private readonly loadouts: LoadoutDirectory;
-  private readonly avatars = new Map<number, Avatar>();
+  /** each player's drawn soldier, built as it streams in (roster.ts: keyed by the id the build started for) */
+  private readonly roster = new SoldierRoster<Avatar>({
+    build: (id, p) => {
+      // read the view now: online it's a pooled object that another player may hold by the time this resolves
+      const lod: CharacterLod = !p.isLocal && this.preset.remoteLod1 && !this.touch ? 1 : 0;
+      return this.assembler.create(this.loadouts.for(p), lod).then((inst) => {
+        const a = new Avatar(inst, lod, this.kit, id);
+        a.pivot.traverse((o) => (o.castShadow = true));
+        this.dress(inst); // after the shadow flags: the outline casts none
+        this.characterOf.set(a, inst);
+        return a;
+      });
+    },
+    attach: (id, a) => {
+      const inst = this.characterOf.get(a);
+      if (inst) this.looks.set(id, inst);
+      this.teamColours.delete(id); // a fresh soldier: its team colour (and marking) is applied on its first update
+      this.scene.add(a.pivot, a.blob);
+    },
+    detach: (id, a) => {
+      a.dispose();
+      if (this.looks.get(id) === this.characterOf.get(a)) this.looks.delete(id);
+      this.teamColours.delete(id);
+    },
+    // retried with backoff (the assembler doesn't cache a failed load); the 2D overlay (H) shows the player meanwhile
+    failed: (id, err, retryMs) => console.error(`render3d: no character for player ${id}, retrying in ${retryMs} ms`, err),
+  });
+  /** each built soldier's character (the assembler's side: look and team colour changes) */
+  private readonly characterOf = new WeakMap<Avatar, CharacterInstance>();
+  private get avatars(): ReadonlyMap<number, Avatar> {
+    return this.roster.live;
+  }
   /** each avatar's character, for look changes (Avatar only sees the skeleton side) */
   private readonly looks = new Map<number, CharacterInstance>();
   /** riot shields lying on the map, and ricochet sparks (shield.ts) */
@@ -188,10 +221,6 @@ export class Renderer3D {
   private rim: LightingPreset['rim'] = { color: 0x7fb8ff, strength: 0 };
   /** the shader warm-up's soldiers, kept off the scene and never disposed so their programs stay linked */
   readonly warmedUp: Avatar[] = [];
-  private readonly pending = new Set<number>();
-  /** after a failed character load, wait this long before trying again (doubles, ≤ 30 s) */
-  private retryMs = 1000;
-  private readonly seen = new Set<number>();
   private readonly statsEl: HTMLElement | null = null;
   private lastFrameAt = 0;
   private frames = 0;
@@ -576,8 +605,8 @@ export class Renderer3D {
     this.vfx.setPreset(this.preset);
     this.kit.animateParts = this.preset.name !== 'low'; // Low: guns' parts stand still, merged in (no draws)
     if (lodChanged) {
-      for (const a of this.avatars.values()) a.dispose();
-      this.avatars.clear();
+      // every soldier is rebuilt at the new LOD; builds in flight (the old LOD) are dropped as they land
+      this.roster.clear();
       this.looks.clear();
     }
     this.resize();
@@ -765,47 +794,43 @@ export class Renderer3D {
 
   private syncAvatars(frame: Frame, dt: number): void {
     const blob = this.preset.shadows === 'blob';
-    this.seen.clear();
     this.localId = -1;
-    for (const p of frame.players) {
-      this.seen.add(p.id);
-      if (p.isLocal) this.localId = p.id;
-      const avatar = this.avatars.get(p.id);
-      if (avatar) {
-        // animation LOD (animLod.ts, the animation agent's): off screen, small or LOD1 soldiers are posed less
-        avatar.update(p, dt, this.world, blob, animDetail(p.x, p.y, p.isLocal, avatar.lod, this.camera));
-        this.applyTeamColour(p.id);
-        continue;
-      }
-      if (this.pending.has(p.id)) continue;
-      // characters stream in without blocking the frame (docs/04 §5.2)
-      const lod: CharacterLod = !p.isLocal && this.preset.remoteLod1 && !this.touch ? 1 : 0;
-      this.pending.add(p.id);
-      this.assembler.create(this.loadouts.for(p), lod).then(
-        (inst) => {
-          this.pending.delete(p.id);
-          this.retryMs = 1000;
-          const a = new Avatar(inst, lod, this.kit, p.id);
-          a.pivot.traverse((o) => (o.castShadow = true));
-          this.dress(inst); // after the shadow flags: the outline casts none
-          this.avatars.set(p.id, a);
-          this.looks.set(p.id, inst);
-          this.scene.add(a.pivot, a.blob);
-        },
-        // retried with backoff (the assembler doesn't cache a failed load); the 2D overlay (H) shows the player meanwhile
-        (err: unknown) => {
-          console.error(`render3d: no character for player ${p.id}, retrying in ${this.retryMs} ms`, err);
-          setTimeout(() => this.pending.delete(p.id), this.retryMs);
-          this.retryMs = Math.min(30_000, this.retryMs * 2);
-        },
-      );
-    }
-    for (const [id, a] of this.avatars) {
-      if (this.seen.has(id)) continue;
-      a.dispose();
-      this.avatars.delete(id);
-      this.looks.delete(id);
-    }
+    for (const p of frame.players) if (p.isLocal) this.localId = p.id;
+    // who's who (teams/marking.ts): this frame's relation colours (they follow the colour-blind setting)
+    this.allyOutline.color.setHex(markColour('ally'));
+    this.enemyOutline.color.setHex(markColour('enemy'));
+    this.roster.sync(frame.players, (avatar, p) => {
+      // animation LOD (animLod.ts, the animation agent's): off screen, small or LOD1 soldiers are posed less
+      avatar.update(p, dt, this.world, blob, animDetail(p.x, p.y, p.isLocal, avatar.lod, this.camera));
+      this.applyTeamColour(p.id);
+      this.applyMarking(p.id, p.alive);
+    });
+  }
+
+  /**
+   * Who's who (the owner, 26 Oct: "I don't know who is an enemy, who's a friend"): how each soldier stands to
+   * the viewer (you, or the soldier being watched), from main.ts's teams; null = no marking.
+   */
+  relationOf: ((id: number) => Relation) | null = null;
+  /** the relation outlines: copies of the shared one (same program, width and viewport), recoloured each frame */
+  private readonly allyOutline = this.outline.tinted(0x3fd0c9);
+  private readonly enemyOutline = this.outline.tinted(0xff4d5e);
+
+  /**
+   * An enemy wears a red outline and a red glow round its silhouette, an ally teal ones; you keep the plain dark
+   * outline (your marker is the chevron under your feet: render.ts). No extra draw call or shader: the outline
+   * copies share the outline's program, and the glow is a uniform on the soldier's own material.
+   */
+  private applyMarking(id: number, alive: boolean): void {
+    const look = this.looks.get(id);
+    if (!look) return;
+    const rel = this.relationOf?.(id) ?? null;
+    const glow = rel === 'enemy' ? MARK_GLOW.enemy : rel === 'ally' ? MARK_GLOW.ally : 0;
+    look.material.mark.strength.value = glow;
+    if (glow > 0) look.material.mark.colour.copy(rel === 'enemy' ? this.enemyOutline.color : this.allyOutline.color);
+    // a dying soldier dissolves with its own outline copy (avatar.ts dying()); it gets its relation's back on revive
+    const want = rel === 'enemy' ? this.enemyOutline : rel === 'ally' ? this.allyOutline : this.outline;
+    if (alive && look.outline && look.outline.material !== want) look.setOutline(want);
   }
 
   /**
@@ -846,7 +871,9 @@ export class Renderer3D {
   }
 }
 
-/** Frees the geometries and materials under `root` (textures shared with other meshes stay). */
+/** How strongly the relation colour glows round a soldier's silhouette (DyeMaterial.mark): enemies loudest. */
+export const MARK_GLOW = { enemy: 0.6, ally: 0.38 };
+
 /** The OS asks for less motion (prefers-reduced-motion). */
 function osPrefersReducedMotion(): boolean {
   try {

@@ -36,6 +36,7 @@ import { crateColor, takePrompt, weaponUnderfoot } from './weaponItems';
 import { arcDots, type ThrowArcView } from './throwPreview';
 import { AIM_SURE_SPREAD, aimLineStrength, type AimLineView } from './aimLine';
 import type { CloudView, Frame, GrenadeView, PickupView, PlayerView, RewindView } from './view';
+import { markColourCss, type Relation } from './teams/marking';
 
 interface Tracer {
   ox: number;
@@ -199,6 +200,29 @@ const COLORS = {
 };
 
 /** Shield colour by the HP left (local mode and the local player online know it). */
+/** The relation's shape (teams/marking.ts MARK_SHAPES), centred at x, y: ● an ally, ◆ an enemy, ▲ you. */
+function relationShape(ctx: CanvasRenderingContext2D, rel: Relation, x: number, y: number, colour: string): void {
+  ctx.fillStyle = colour;
+  ctx.strokeStyle = 'rgba(5,8,8,0.9)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  if (rel === 'enemy') {
+    ctx.moveTo(x, y - 5);
+    ctx.lineTo(x + 4.5, y);
+    ctx.lineTo(x, y + 5);
+    ctx.lineTo(x - 4.5, y);
+    ctx.closePath();
+  } else if (rel === 'ally') ctx.arc(x, y, 4, 0, Math.PI * 2);
+  else {
+    ctx.moveTo(x, y - 5);
+    ctx.lineTo(x + 5, y + 4);
+    ctx.lineTo(x - 5, y + 4);
+    ctx.closePath();
+  }
+  ctx.stroke();
+  ctx.fill();
+}
+
 function shieldColor(hp: number | undefined): string {
   if (hp === undefined) return COLORS.shield;
   const k = hp / RIOT_SHIELD.hp;
@@ -311,6 +335,14 @@ export class Renderer {
   private world: CollisionWorld | null = null;
   /** per cloud slot: where it popped and how far it reaches past the walls (null: the whole disc) */
   private readonly reach = new Map<number, { x: number; y: number; type: number; rays: Float32Array | null }>();
+  /**
+   * Who's who (teams/marking.ts): how each soldier stands to the viewer. main.ts sets it; unset, you are
+   * yourself and everyone else an enemy.
+   */
+  relationOf: ((id: number) => Relation) | null = null;
+  private relation(p: PlayerView): Relation {
+    return this.relationOf?.(p.id) ?? (p.isLocal ? 'self' : 'enemy');
+  }
   /** Also handed every event batch when set: main.ts points it at the 3D view's effects. */
   forwardEvents: ((events: readonly SimEvent[], localId: number) => void) | null = null;
   /**
@@ -797,7 +829,7 @@ export class Renderer {
     }
     const r = t.capsuleRadius;
     const h = p.crouched ? t.crouchHeight : t.standHeight;
-    const color = p.isLocal ? COLORS.local : p.isBot ? COLORS.bot : COLORS.enemy;
+    const color = markColourCss(this.relation(p));
 
     // jet flame
     if (p.jetting) {
@@ -880,7 +912,12 @@ export class Renderer {
     this.drawPlayerHealth(p, clouds);
   }
 
-  /** Screen-space bar follows the head in both 2D and the transparent overlay over 3D. */
+  /**
+   * Screen-space bar follows the head in both 2D and the transparent overlay over 3D. Who's who (teams/marking.ts):
+   * the bar, its frame and the name take the soldier's relation colour (you volt, allies teal, enemies red), a shape
+   * beside the name says the same without colour (● ally, ◆ enemy), and your own soldier stands on a chevron marked
+   * "YOU" (below the feet: it never covers the soldier).
+   */
   private drawPlayerHealth(p: PlayerView, clouds?: readonly CloudView[]): void {
     if (!p.alive) return;
     const ctx = this.ctx;
@@ -888,25 +925,46 @@ export class Renderer {
     const t = this.tuningRef();
     const h = p.crouched ? t.crouchHeight : t.standHeight;
     const r = t.capsuleRadius;
-    if (!p.isLocal && inSmoke(clouds, p.x, p.y + h - r)) return;
+    const rel = this.relation(p);
+    if (rel !== 'self' && inSmoke(clouds, p.x, p.y + h - r)) return;
+    const colour = markColourCss(rel);
+    if (rel === 'self') this.drawSelfMarker(p, colour);
     const sx = cam.toScreenX(p.x);
     const sy = cam.toScreenY(p.y + h + 0.32);
     if (sx < -40 || sx > cam.width + 40 || sy < cam.band.top + 18 || sy > cam.band.bottom - 8) return;
     const amount = Math.max(0, Math.min(1, p.hp / t.healthMax));
     const width = 54;
+    // the frame: dark, edged in the relation colour for the others (yours is the HUD's)
     ctx.fillStyle = 'rgba(5,8,8,0.82)';
     ctx.fillRect(sx - width / 2 - 2, sy - 2, width + 4, 10);
+    if (rel !== 'self') {
+      ctx.strokeStyle = colour;
+      ctx.globalAlpha = 0.85;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(sx - width / 2 - 2.5, sy - 2.5, width + 5, 11);
+      ctx.globalAlpha = 1;
+    }
     ctx.fillStyle = 'rgba(255,255,255,0.14)';
     ctx.fillRect(sx - width / 2, sy, width, 6);
-    ctx.fillStyle = amount > 0.6 ? '#9bd95b' : amount > 0.3 ? '#f3b64a' : '#ef665d';
+    // the fill in the relation colour; low health still shows, as a darker, shorter bar
+    ctx.fillStyle = colour;
+    ctx.globalAlpha = amount > 0.3 ? 1 : 0.7;
     ctx.fillRect(sx - width / 2, sy, width * amount, 6);
-    ctx.fillStyle = p.isLocal ? COLORS.local : p.isBot ? COLORS.bot : COLORS.enemy;
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = colour;
     ctx.textAlign = 'center';
     ctx.font = 'bold 11px ui-monospace, monospace';
     ctx.shadowColor = 'rgba(0,0,0,0.9)';
     ctx.shadowBlur = 4;
-    ctx.fillText(this.names.get(p.id) ?? p.name, sx, sy - 7, 110);
+    // yours: no name over your head (YOU stands under your feet)
+    const name = rel === 'self' ? '' : (this.names.get(p.id) ?? p.name);
+    if (name) ctx.fillText(name, sx, sy - 7, 110);
     ctx.shadowBlur = 0;
+    if (rel !== 'self') {
+      // the shape, left of the name: colour is never the only cue
+      const half = Math.min(110, ctx.measureText(name).width) / 2;
+      relationShape(ctx, rel, sx - half - 9, sy - 11, colour);
+    }
     // status effects (players whose state we hold: everyone locally, ourselves online)
     const status = statusTags(p);
     if (status) {
@@ -914,6 +972,42 @@ export class Renderer {
       ctx.font = 'bold 10px ui-monospace, monospace';
       ctx.fillText(status, sx, sy - 19);
     }
+  }
+
+  /** Your soldier: a flat ring on the ground round the feet, a chevron under it pointing up at you, and "YOU". */
+  private drawSelfMarker(p: PlayerView, colour: string): void {
+    const ctx = this.ctx;
+    const cam = this.camera;
+    const sx = cam.toScreenX(p.x);
+    const fy = cam.toScreenY(p.y);
+    if (sx < -60 || sx > cam.width + 60 || fy < cam.band.top || fy > cam.band.bottom + 30) return;
+    const rx = Math.max(10, 0.42 * cam.ppm);
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.85)';
+    ctx.shadowBlur = 3;
+    ctx.strokeStyle = colour;
+    ctx.globalAlpha = 0.9;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(sx, fy + 1, rx, rx * 0.22, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    // the chevron, under the ring, pointing up at the soldier
+    const cy = fy + rx * 0.22 + 9;
+    ctx.fillStyle = colour;
+    ctx.beginPath();
+    ctx.moveTo(sx, cy - 5);
+    ctx.lineTo(sx + 7, cy + 3);
+    ctx.lineTo(sx + 3, cy + 3);
+    ctx.lineTo(sx, cy - 0.5);
+    ctx.lineTo(sx - 3, cy + 3);
+    ctx.lineTo(sx - 7, cy + 3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.font = 'bold 10px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('YOU', sx, cy + 5);
+    ctx.restore();
   }
 
   /**

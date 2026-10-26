@@ -12,15 +12,25 @@ import { pwa } from './pwa';
 /**
  * The app reaches the API at /api and rooms at /ws/<code> on its own origin (the playtest proxy,
  * scripts/playtest, does the same in production). In dev, Vite forwards them:
- * DEV_API (default http://localhost:8787) and DEV_GAME_SERVER (default http://localhost:9001).
+ * DEV_API (default http://localhost:8787) and DEV_GAME_SERVER (default http://localhost:9001); see
+ * DEV_PROXY_ORIGIN below for a local playtest's services.
  */
 const api = process.env.DEV_API ?? 'http://localhost:8787';
 const gameServer = process.env.DEV_GAME_SERVER ?? 'http://localhost:9001';
 // the admin page's API: a game server run with ADMIN_TOKEN and ADMIN_PORT (default 9002 here)
 const adminApi = process.env.DEV_ADMIN ?? 'http://localhost:9002';
+/**
+ * DEV_PROXY_ORIGIN: the Origin the dev proxy presents to the API and the game server, for a dev page on a
+ * local playtest's services (they allow only the playtest's own origin), e.g. http://127.0.0.1:5471.
+ */
+const devOrigin = process.env.DEV_PROXY_ORIGIN;
 const proxy: Record<string, ProxyOptions> = {
-  '/api': { target: api, rewrite: (path) => path.replace(/^\/api/, '') },
-  '/ws': { target: gameServer, ws: true },
+  '/api': {
+    target: api,
+    rewrite: (path) => path.replace(/^\/api/, ''),
+    ...(devOrigin ? { configure: (p) => p.on('proxyReq', (req) => req.setHeader('origin', devOrigin)) } : {}),
+  },
+  '/ws': { target: gameServer, ws: true, ...(devOrigin ? { configure: (p) => p.on('proxyReqWs', (req) => req.setHeader('origin', devOrigin)) } : {}) },
   '/admin/api': { target: adminApi },
 };
 

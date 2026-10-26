@@ -58,6 +58,7 @@ import { CharacterAssembler } from './character';
 import { getAvatar, getPortrait, installPortraits, portraits, setPortraitPolicy, type PortraitPolicy } from './portrait';
 import { warmRoomPortraits } from './presentation/warm';
 import { applyTeamPalette, teamColour } from './teams/palette';
+import { relationOf } from './teams/marking';
 import { TeamStrip } from './teams/hudStrip';
 import { posterUp } from './presentation/state';
 import { countFrame, framesPerSecond, recordNet } from './stats';
@@ -212,6 +213,11 @@ if (view3d) installPortraits(view3d.renderer, soldiers);
 else if (webgl2Starts()) installPortraits(() => new WebGLRenderer({ antialias: false, alpha: true }), soldiers);
 // team modes (v21): each soldier's team colour (the armband glow), from the look book's teams
 if (view3d) view3d.teamColourOf = (id) => teamColour(lookBook.teamOf(id));
+// who's who (teams/marking.ts): you, allies and enemies as seen by the viewer, the local player or the
+// soldier being watched (spectating shows their picture); set each frame before drawing
+let markViewer = -1;
+const markOf = (id: number) => relationOf(id, markViewer, (who) => lookBook.teamOf(who));
+if (view3d) view3d.relationOf = markOf;
 setPortraitPolicy(portraitPolicy);
 // the room's avatars and VS poster renders, warmed whenever its looks change (the countdown only shows pictures)
 if (view3d) warmRoomPortraits(lookBook);
@@ -242,7 +248,7 @@ const minimap = appMode ? new Minimap() : null;
 const spectate = new SpectateDirector();
 const spectateInput = new SpectateInput(sampler, canvas);
 const spectatePicker = hud ? new SpectatePicker(document.querySelector('#hud .mf-hud-desktop .hud') ?? document.body) : null;
-if (import.meta.env.DEV) Object.assign(window, { __spectate: spectate });
+if (import.meta.env.DEV) Object.assign(window, { __spectate: spectate, __view3d: view3d, __lookBook: lookBook });
 
 /** The onboarding's memory (tour/): on-device facts and the event log; the app only (set once the shell is up). */
 let tourMemory: TourMemory | null = null;
@@ -284,6 +290,7 @@ class GameRenderer extends Renderer {
 }
 
 const renderer = new GameRenderer(canvas, camera, map, () => mode?.tuning() ?? defaultTuning);
+renderer.relationOf = markOf;
 // the 3D view's characters, guns and effects, and compiling their shaders (the heaviest work a phone
 // does at the start), wait while the title shows: they start on the press, or once the page has been
 // idle a while (below, after the shell); the debug client and room links load at once
@@ -1170,6 +1177,8 @@ function frame(now: number): void {
   document.documentElement.classList.toggle('mf-spectating', spec !== null);
   document.documentElement.classList.toggle('mf-spec-free', spec?.free === true);
   spectatePicker?.update(spec);
+  // who's who: your own side, or (watching) the side of the soldier watched; the death cam keeps yours
+  markViewer = spec?.kind === 'watch' ? (spec.followId >= 0 ? spec.followId : markViewer) : f.localId;
   if (spec) {
     camera.flightVy = 0;
     camera.setZoom(spec.zoom, ZOOM_LEVELS);

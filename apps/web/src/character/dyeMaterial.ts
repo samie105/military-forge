@@ -91,6 +91,12 @@ export class DyeMaterial extends MeshToonMaterial {
    */
   readonly rim = { colour: new Color(0x7fb8ff), strength: { value: 0 } };
   /**
+   * Who's who (teams/marking.ts): a glow round the whole silhouette in the soldier's relation colour (red
+   * for enemies, teal for allies), a fresnel term on the same program, so marking a soldier costs no draw
+   * call and no shader switch. Strength 0 = off (the Locker, portraits).
+   */
+  readonly mark = { colour: new Color(0, 0, 0), strength: { value: 0 } };
+  /**
    * How far the soldier has dissolved (0 whole … 1 gone): an ordered-dither screen door, so a dying soldier fades
    * without turning transparent (that would be another shader program) (render3d/death.ts).
    */
@@ -110,7 +116,7 @@ export class DyeMaterial extends MeshToonMaterial {
     this.layers = of ? GARMENT_LAYERS : MAIN_LAYERS;
     if (of) {
       // one set of colours for both: whatever recolours, rims or dissolves the soldier reaches the garments too
-      Object.assign(this, { dye: of.dye, layerColours: of.layerColours, bodyDefaults: of.bodyDefaults, rim: of.rim, dissolve: of.dissolve });
+      Object.assign(this, { dye: of.dye, layerColours: of.layerColours, bodyDefaults: of.bodyDefaults, rim: of.rim, mark: of.mark, dissolve: of.dissolve });
     }
     this.albedos = Array.from({ length: DYE_LAYERS }, () => ({ value: blankLayer().albedo as Texture }));
     this.masks = Array.from({ length: DYE_LAYERS }, () => ({ value: blankLayer().mask as Texture }));
@@ -121,6 +127,8 @@ export class DyeMaterial extends MeshToonMaterial {
       dyeBodyDefaults: { value: this.bodyDefaults },
       dyeRimColour: { value: this.rim.colour },
       dyeRimStrength: this.rim.strength,
+      dyeMarkColour: { value: this.mark.colour },
+      dyeMarkStrength: this.mark.strength,
       dyeSkin: { value: this.dye.skin },
       dyeTeam: { value: this.dye.team },
       dyeDissolve: this.dissolve,
@@ -144,8 +152,8 @@ export class DyeMaterial extends MeshToonMaterial {
           `#include <common>
           uniform sampler2D ${declared.join(', ')};
           uniform vec3 dyeColours[ ${DYE_LAYERS * 3} ], dyeBodyDefaults[ 3 ];
-          uniform vec3 dyeSkin, dyeTeam, dyeRimColour;
-          uniform float dyeRimStrength;
+          uniform vec3 dyeSkin, dyeTeam, dyeRimColour, dyeMarkColour;
+          uniform float dyeRimStrength, dyeMarkStrength;
           varying float vTexLayer;
           ${DISSOLVE_GLSL}`,
         )
@@ -170,13 +178,15 @@ export class DyeMaterial extends MeshToonMaterial {
           // a band where the surface turns away from the camera, weighted to the upper edges (lit from above-behind)
           `float dyeRimF = 1.0 - saturate( dot( normal, normalize( vViewPosition ) ) );
           outgoingLight += diffuseColor.rgb * dyeRimColour * dyeRimStrength * smoothstep( 0.62, 0.72, dyeRimF ) * smoothstep( -0.3, 0.5, normal.y );
+          // the relation glow: all round the silhouette, emissive (it reads in shade and fog), fading in toward the middle
+          outgoingLight = mix( outgoingLight, dyeMarkColour, dyeMarkStrength * smoothstep( 0.35, 0.85, dyeRimF ) );
           #include <opaque_fragment>`,
         );
     };
   }
 
   override customProgramCacheKey(): string {
-    return `character-dye-v6-${this.layers.join('.')}`;
+    return `character-dye-v7-${this.layers.join('.')}`;
   }
 
   /** The material that draws `layer` (this one, or its garments'). */

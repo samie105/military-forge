@@ -67,6 +67,16 @@ export class OutlineMaterial extends MeshBasicMaterial {
     return m;
   }
 
+  /**
+   * A copy in another colour that draws with the same program and follows this one's width and viewport: the
+   * relation outlines (teams/marking.ts: red enemies, teal allies) cost no shader switch.
+   */
+  tinted(colour: ColorRepresentation): OutlineMaterial {
+    const m = this.dissolving();
+    m.color.set(colour);
+    return m;
+  }
+
   /** Outline width in drawing-buffer pixels (CSS px × device pixel ratio). */
   setWidth(px: number): void {
     this.width.value = px;
