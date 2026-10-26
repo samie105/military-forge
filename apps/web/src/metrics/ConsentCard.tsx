@@ -40,10 +40,10 @@ export function ConsentCard({ where }: { where: 'home' | 'phone' }) {
       <span className="mf-consent__words">
         <span className="mf-consent__eyebrow">{due === 'ask' ? 'Your call' : 'Play stats are on'}</span>
         <b id="mf-consent-title" className="mf-consent__title display">
-          {due === 'ask' ? 'Help improve the game?' : 'Helping improve the game'}
+          {due === 'ask' ? 'Can we use your play data?' : 'Helping improve the game'}
         </b>
         <span id="mf-consent-line" className="mf-consent__line">
-          {due === 'ask' ? 'Share how you play: sessions, screens, features. Never your name. It fixes what breaks, balances the guns and picks the house ads you see.' : 'We count how you play (never your name) to fix what breaks, balance the guns and pick house ads.'}{' '}
+          {due === 'ask' ? 'We use how you play to improve the game and to pick the ads you see. Never your name. You can change this in Settings.' : 'We count how you play (never your name) to fix what breaks, balance the guns and pick house ads.'}{' '}
           <a href={PRIVACY_URL} target="_blank" rel="noopener" className="mf-consent__link">
             Privacy
           </a>
@@ -56,7 +56,7 @@ export function ConsentCard({ where }: { where: 'home' | 'phone' }) {
               No thanks
             </button>
             <button type="button" className="mf-consent__btn m-p8" onClick={() => answer(true)}>
-              Yes, share
+              Yes, that's fine
             </button>
           </>
         ) : (
