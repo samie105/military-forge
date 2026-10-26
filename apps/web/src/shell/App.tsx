@@ -34,7 +34,8 @@ import { TitleScreen } from './screens/Title';
 import { TuneToast } from './screens/Tune';
 import { releaseShellFocus } from './focus';
 import { PhoneHome, PhoneJoin, PhoneLanAddPlayer, PhoneLanJoin, PhoneLobby, PhoneNameEntry, PhonePause, PhoneResults, PhoneSettings, PhoneTips, usePhoneLayout } from './screens/phone';
-import { closeRoute, runCleanup, type ShellActions, type ShellRoute, type ShellStore } from './store';
+import { afterPaint, loadRoute, retryRoute } from './routeLoad';
+import { closeRoute, runCleanup, type RouteCleanup, type RouteMount, type ShellActions, type ShellRoute, type ShellStore } from './store';
 import { SocialLayer } from '../social/SocialLayer';
 import { PwaHost } from '../pwa/InstallToast';
 
@@ -260,23 +261,45 @@ export function WarmupBar({ view, actions }: { view: MatchView; actions: ShellAc
 
 // ---------------------------------------------------------------- routes (the Locker)
 
+/** A route's code: still on its way, in and drawn, or not fetched (Try again). */
+export type RouteState = 'loading' | 'ready' | 'failed';
+
 function RouteView({ route }: { route: ShellRoute }) {
   const el = useRef<HTMLDivElement>(null);
+  const [state, setState] = useState<RouteState>(route.load ? 'loading' : 'ready');
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.code === 'Escape') closeRoute();
     };
     window.addEventListener('keydown', onKey);
-    const cleanup = route.mount(el.current!, closeRoute);
+    let gone = false;
+    let cleanup: RouteCleanup;
+    const show = (mount: RouteMount) => {
+      if (gone) return;
+      cleanup = mount(el.current!, closeRoute);
+      setState('ready');
+    };
+    if (route.load) {
+      setState('loading');
+      // the frame paints first: running the route's code (and its mount: the Armory's and the Locker's
+      // 3D views start there) can hold the page for a moment, and the tap must already show something
+      void afterPaint()
+        .then(() => (gone ? new Promise<never>(() => {}) : loadRoute(route)))
+        .then(show, () => {
+          if (!gone) setState('failed');
+        });
+    } else if (route.mount) show((target, close) => route.mount!(target, close));
     return () => {
+      gone = true;
       window.removeEventListener('keydown', onKey);
       runCleanup(cleanup);
     };
   }, [route]);
   return (
     // a full-screen page of its own (the Locker, the creator): a named region (a div can't carry aria-label)
-    <section className="mf-route kit-v2" aria-label={route.title}>
+    <section className="mf-route kit-v2" aria-label={route.title} aria-busy={state === 'loading'}>
       <div ref={el} className="mf-route__body" />
+      {state !== 'ready' && <RouteFrame route={route} failed={state === 'failed'} />}
       {!route.ownExit && (
         <button className="btn btn--ghost btn--sm mf-route__back" onClick={closeRoute}>
           <Icon name="back" />
@@ -284,6 +307,64 @@ function RouteView({ route }: { route: ShellRoute }) {
         </button>
       )}
     </section>
+  );
+}
+
+/**
+ * A route's frame while its code is on the way (shell/routeLoad.ts): the same screen the route draws
+ * (the kit's menu: its word behind, Back and the title where the route puts them), with a loading line,
+ * so the tap shows something at once and the route's own screen takes over without a jump. If the code
+ * couldn't be fetched: what happened and Try again (a fresh page: a new version of the game brings new
+ * files), or Back.
+ */
+export function RouteFrame({ route, failed }: { route: Pick<ShellRoute, 'title' | 'word' | 'ownExit'>; failed: boolean }) {
+  return (
+    <div className="mf-fit kit-v2 mf-route__wait">
+      <section className="screen screen--menu" data-screen="route-wait" data-active-state={failed ? 'failed' : 'loading'} aria-label={route.title}>
+        <div className="bg" aria-hidden="true">
+          <div className="bg__scrim"></div>
+          <div className="bg__camo"></div>
+          <div className="bg__grid"></div>
+          <div className="bg__dots"></div>
+          <div className="bg__slash"></div>
+          <div className="bg__word">{(route.word ?? route.title).toUpperCase()}</div>
+        </div>
+        <div className="menu">
+          <header className="menu-top">
+            {route.ownExit && (
+              <button type="button" className="btn btn--ghost btn--icon btn--sm m-p8" aria-label="Back" onClick={closeRoute}>
+                <Icon name="back" />
+              </button>
+            )}
+            <h1 className="menu-top__title">{route.title}</h1>
+          </header>
+          {failed ? (
+            <div className="mf-route__state mf-route__fail" role="alert">
+              <Icon name="unplug" size="lg" />
+              <p className="display mf-route__head">Couldn&apos;t load this screen</p>
+              <p className="mf-route__line">Check your connection, then try again. If the game was just updated, this gets the new version.</p>
+              <div className="mf-route__acts">
+                <button type="button" className="btn btn--volt m-p8" onClick={retryRoute}>
+                  <Icon name="refresh" />
+                  Try again
+                </button>
+                <button type="button" className="btn btn--ghost m-p8" onClick={closeRoute}>
+                  <Icon name="back" />
+                  Back
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mf-route__state" role="status">
+              <span className="mf-route__run" aria-hidden="true">
+                <i></i>
+              </span>
+              <p className="mf-route__line">Loading…</p>
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
   );
 }
 

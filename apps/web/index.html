@@ -149,6 +149,16 @@
         color: var(--c-text); background: rgb(14 16 11 / .8); border: var(--bw) solid var(--c-line-strong); border-radius: var(--r-sm);
       }
       .mf-title.is-phone .mf-title__about { left: 70px; bottom: 214px; min-height: 112px; padding: 0 40px; font-size: 32px; }
+      /* until the app is up the foot's links are on top (the game's canvases come later in the page and
+         would take their taps); once it's up the foot goes: its Play now, About and loading line would
+         only confuse through a see-through screen (the hero's art stays as the backdrop, the words stay
+         in the page) */
+      html:not(.mf-app) .mf-land__foot { z-index: 1; }
+      html.mf-app #land-foot { visibility: hidden; }
+      /* the game's code didn't load (boot.js): the line says so, Try again under it, nothing runs */
+      html.mf-boot-failed .mf-land__run, html.mf-boot-failed .mf-boot__bar, html.mf-boot-failed .mf-boot__slow { display: none; }
+      .mf-land__retry[hidden], #boot-fail[hidden] { display: none; }
+      #boot-fail { gap: 24px; }
       /* once the app is up, nothing of the landing animates (it's under the game) */
       html.mf-app :is(.mf-land__run i, .mf-land__hero *) { animation: none !important; }
       html.mf-app .mf-land__hero .mf-title__world { will-change: auto; }
@@ -247,6 +257,7 @@
           <a id="land-play" class="btn btn--volt mf-land__play" href="#play"><svg class="ic ic--fill" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15l12.5-7.5z" /></svg>Play now</a>
         </div>
         <p class="mf-land__status" role="status"><span class="mf-land__run" aria-hidden="true"><i></i></span><span id="land-line">Loading the game…</span></p>
+        <button type="button" class="btn btn--volt mf-land__retry" hidden>Try again</button>
         <noscript><p class="mf-land__status">%GAME_NAME% needs JavaScript turned on to play.</p></noscript>
       </div>
 
@@ -307,6 +318,7 @@
               <div class="load__row"><span>Loading the game…</span></div>
               <div class="bar load__bar mf-boot__bar" aria-hidden="true"><i></i></div>
               <div class="load__row mf-boot__slow" id="boot-slow"><span>Still loading: a slow connection? Keep this tab open, or reload.</span></div>
+              <div class="load__row" id="boot-fail" role="alert" hidden><span id="boot-fail-line"></span><button type="button" class="btn btn--volt btn--sm mf-land__retry" hidden>Try again</button></div>
               <noscript><div class="load__row"><span>This game needs JavaScript turned on.</span></div></noscript>
             </div>
           </div>

@@ -26,7 +26,7 @@ import '../ui/app.css';
 export { useMapEventBanner } from './App';
 export { localMatchRules } from './localMatch';
 export { bannerOf, type MapEventBanner } from './mapEventBanner';
-export { registerRoute, type ShellRoute, type Settings } from './store';
+export { registerRoute, type RouteMount, type ShellRoute, type Settings } from './store';
 export type { GameHost } from './controller';
 
 /** What the shell needs from a local game mode. */

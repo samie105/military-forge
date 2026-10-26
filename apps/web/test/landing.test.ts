@@ -40,6 +40,26 @@ describe('the landing page (index.html)', () => {
     expect(html).not.toMatch(/Military Forge/);
   });
 
+  it('its links take taps while the game loads, and it never shows through the app once that is up (26 Oct: no blank page)', () => {
+    // the game's canvases come later in the page: until the app is up, the foot is above them
+    expect(html).toMatch(/html:not\(\.mf-app\) \.mf-land__foot \{ z-index: 1; \}/);
+    expect(html.indexOf('id="land-foot"')).toBeLessThan(html.indexOf('<canvas id="view3d"'));
+    // once it's up, the foot (Play now, About, the loading line) stops painting; its words stay in the page
+    expect(html).toMatch(/html\.mf-app #land-foot \{ visibility: hidden; \}/);
+  });
+
+  it("the game's code not loading says so and offers Try again, never \"Loading\" forever", () => {
+    const boot = read('../public/boot.js');
+    const entry = read('../src/boot.ts');
+    expect(entry).toMatch(/import\('\.\/main'\)\.catch\(/);
+    expect(entry).toContain("new Event('mf:boot-failed')");
+    expect(boot).toContain("addEventListener('mf:boot-failed', bootFailed)");
+    expect(boot).toContain('location.reload()');
+    // the landing's and the loading screen's Try again, hidden until then
+    expect(all(/<button type="button" class="btn btn--volt[^"]*mf-land__retry" hidden>Try again<\/button>/g)).toHaveLength(2);
+    expect(html).toContain('id="boot-fail"');
+  });
+
   it("draws with the title screen's own classes, so the title takes over without a seam", () => {
     const titleCss = read('../src/shell/screens/title.css');
     for (const cls of ['mf-title__world', 'mf-title__art', 'mf-title__fg', 'mf-title__smoke--a', 'mf-title__sweep', 'mf-title__vignette', 'mf-title__lockup', 'mf-title__name', 'mf-title__emblem', 'mf-title__sub']) {

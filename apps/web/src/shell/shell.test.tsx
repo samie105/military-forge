@@ -3,7 +3,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ApiError } from './api';
 import { alertFromApiError, alertFromConnection } from './alerts';
-import { App, ControllerContext, MapEventBanner, TipsCard, WarmupBar, tipsRows } from './App';
+import { App, ControllerContext, MapEventBanner, RouteFrame, TipsCard, WarmupBar, tipsRows } from './App';
+import { ROUTE_RETRY_MS, loadRoute } from './routeLoad';
 import type { Api } from './api';
 import { defaultBindings, rebind } from './controls';
 import { ShellController, type GameHost } from './controller';
@@ -435,6 +436,44 @@ describe('first-run controls card, warm-up, routes', () => {
 });
 
 describe('routes', () => {
+  it('a route whose code loads shows its frame at once: its word, Back, the title and a loading line (no blank screen)', () => {
+    const store = createShellStore({ route: { id: 'locker', title: 'Locker', ownExit: true, load: () => new Promise<never>(() => {}) } });
+    const html = renderToStaticMarkup(<App store={store} />);
+    expect(html).toContain('data-screen="route-wait"');
+    expect(html).toContain('aria-busy="true"');
+    expect(html).toMatch(/<div class="bg__word">LOCKER<\/div>/);
+    expect(html).toMatch(/aria-label="Back"/);
+    expect(html).toMatch(/<h1 class="menu-top__title">Locker<\/h1>/);
+    expect(html).toContain('Loading…');
+    // the route draws its own Back once it's in: the shell's isn't added on top
+    expect(html).not.toContain('mf-route__back');
+  });
+
+  it("a route's frame when its code couldn't be fetched: what happened, Try again and Back", () => {
+    const html = renderToStaticMarkup(<RouteFrame route={{ title: 'Create your soldier', word: 'Soldier', ownExit: true }} failed />);
+    expect(html).toContain('role="alert"');
+    expect(html).toContain('Couldn&#x27;t load this screen');
+    expect(html).toMatch(/Try again<\/button>/);
+    expect(html).toMatch(/Back<\/button>/);
+    expect(html).toMatch(/<div class="bg__word">SOLDIER<\/div>/);
+    // a route without its own exit has the shell's Back: none in the frame's header
+    expect(renderToStaticMarkup(<RouteFrame route={{ title: 'Tour' }} failed={false} />)).not.toMatch(/<header class="menu-top"><button/);
+  });
+
+  it("a route's code gets one quiet second try, then fails", async () => {
+    const mount = () => {};
+    const wait = vi.fn(() => Promise.resolve());
+    let calls = 0;
+    const flaky = { load: () => (++calls === 1 ? Promise.reject(new Error('dropped')) : Promise.resolve(mount)) };
+    await expect(loadRoute(flaky, wait)).resolves.toBe(mount);
+    expect(calls).toBe(2);
+    expect(wait).toHaveBeenCalledWith(ROUTE_RETRY_MS);
+    const gone = { load: vi.fn(() => Promise.reject(new Error('404'))) };
+    await expect(loadRoute(gone, wait)).rejects.toThrow('404');
+    expect(gone.load).toHaveBeenCalledTimes(2);
+    await expect(loadRoute({ load: () => Promise.resolve(mount) }, wait)).resolves.toBe(mount);
+  });
+
   it('a mount may return a cleanup function or a handle with unmount() (W2 mountLocker)', () => {
     const fn = vi.fn();
     const handle = { loadout: null, unmount: vi.fn() };

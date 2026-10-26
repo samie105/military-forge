@@ -44,6 +44,11 @@ Since 19 Oct 2026 the box also runs the WebTransport gateway (`apps/wt-gateway`,
   - **The self-test said "no WebTransport session" on the live box (19 Oct) while browsers connected fine.** The cause was the check itself: under `pipefail`, `grep -q` stopping at READY made the probe's pipe fail. It now reads the probe's whole output. It connects to 127.0.0.1 (Azure doesn't hairpin to the VM's own public address) with the certificate pinned by hash, and prints the probe's last lines when it does fail.
 - **Firewall:** allow **UDP 443 inbound from anywhere** (Azure: an inbound rule in the VM's network security group, protocol UDP, destination port 443, source Any; AWS: the security group rule above), next to TCP 80 and 443. Ubuntu's own firewall is off.
 - **Checking it from a phone:** the HUD's net readout says WT or WS. `https://<host>/health` shows the advertised gateway.
+- **Caching (Caddy):**
+  - Vite's hashed files right under `/assets/` (`name-xxxxxxxx.ext`) are kept a year, immutable.
+  - Everything else under `/assets/` (public/: maps, kits, billboard pools and art) keeps its name when it changes, so it revalidates (`no-cache`, ETag). On 24 Oct a week-old cached `house.json` kept deleted billboard art on screen.
+  - The pages, `sw.js` and the manifest are `no-cache` too (26 Oct). With no header, a browser kept an old page, and that page asked for the previous build's files.
+  - Each deploy also carries the last 14 days of hashed `.js`/`.css` into the new build, never over its own files. An open tab or installed app from before the deploy still finds the Locker's or the Armory's code instead of showing a blank screen.
 
 ## 2. AWS console: exact clicks
 

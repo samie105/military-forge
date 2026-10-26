@@ -145,6 +145,36 @@
     true,
   );
 
+  // ---- the game's code didn't load (src/boot.ts sends mf:boot-failed): no connection, or this page is
+  // from before a new version of the game and asks for files that are gone. One quiet reload first (it
+  // fetches the new page); if that fails too, say so and offer Try again, never "Loading" forever.
+  function bootFailed() {
+    if (root.classList.contains('mf-app')) return; // the app is up: its own screens handle the rest
+    try {
+      var last = Number(sessionStorage.getItem('mf-boot-retry')) || 0;
+      if (Date.now() - last > 60000 && navigator.onLine !== false) {
+        sessionStorage.setItem('mf-boot-retry', String(Date.now()));
+        location.reload();
+        return;
+      }
+    } catch {
+      /* no storage: no quiet reload (it could repeat), the button below */
+    }
+    root.classList.add('mf-boot-failed');
+    var text = "The game didn't load. Check your connection, then try again.";
+    if (line) line.textContent = text;
+    var failLine = document.getElementById('boot-fail-line');
+    if (failLine) failLine.textContent = text;
+    var buttons = document.querySelectorAll('.mf-land__retry');
+    for (var i = 0; i < buttons.length; i++) buttons[i].hidden = false;
+    var fail = document.getElementById('boot-fail');
+    if (fail) fail.hidden = false;
+  }
+  window.addEventListener('mf:boot-failed', bootFailed);
+  document.addEventListener('click', function (e) {
+    if (e.target.closest && e.target.closest('.mf-land__retry')) location.reload();
+  });
+
   // ---- the loading screen (room links)
   var slow = document.getElementById('boot-slow');
   if (slow) setTimeout(function () { slow.classList.add('is-on'); }, 20000);

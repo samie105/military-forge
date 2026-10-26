@@ -51,7 +51,13 @@ real dialog: focus moves in, Tab stays inside, Escape and Close shut it, and foc
 When the app is up, the landing stays in the page under the game (`ui/landing.ts`). Search engines index the rendered
 page, so removing it would remove the words. The game makes the landing inert, so it takes no focus and screen readers
 skip it, and none of it animates. It uses the title's own classes, so the title takes over with no seam. Room links
-(`/r/CODE`) show the loading screen instead.
+(`/r/CODE`) show the loading screen instead. Once the app is up the foot (the pitch, Play now, About and the loading
+line) stops painting (`visibility: hidden`, still in the page): seen through a see-through game screen before the 3D
+view draws, it looked like the landing had come back, with buttons that did nothing. The hero's art stays as the
+backdrop. Before the app is up the foot sits above the game's canvases, so Play now and About work while it loads.
+
+If the game's code can't be fetched (no connection, or a page from before a deploy asking for files that are gone),
+`src/boot.ts` tells `public/boot.js`: one quiet reload, then the line says so with **Try again**.
 
 ### Head tags
 - **On `/`:**

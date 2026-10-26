@@ -358,6 +358,7 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
     if (!t) return;
     const d = t.dataset;
     if (d.action === 'exit') options.onExit?.();
+    else if (d.action === 'reload-rack') void loadRack();
     else if (d.action === 'try') (options.onTry ?? tryInTraining)(current);
     else if (d.action === 'equip') {
       // this gun in that slot; if it was already the other one, the two swap
@@ -406,7 +407,10 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
   });
   press('light', 'light', 'lobby');
 
-  void (async () => {
+  /** The rack: the manifests (small, in parallel), then the first gun; the camo patterns come after. */
+  const loadRack = async () => {
+    overlay.hidden = false;
+    overlay.textContent = 'Loading…';
     try {
       const [w, s, v, cs, att, sp] = await Promise.all([
         fetch(`${assets}weapons/weapons.json`).then((r) => r.json() as Promise<{ weapons: Record<string, WeaponEntry> }>),
@@ -425,7 +429,16 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
       specials = sp;
       attachIndex = att?.attachments ?? {};
       camoSheet = cs;
-      if (cs) camoTex = prepareCamoPatterns(await new TextureLoader().loadAsync(`${assets}weapons/${cs.patterns}`));
+      // the camo patterns (a texture) don't hold up the rack: the camos apply once it's in
+      if (cs)
+        void new TextureLoader()
+          .loadAsync(`${assets}weapons/${cs.patterns}`)
+          .then((tex) => {
+            if (!alive) return;
+            camoTex = prepareCamoPatterns(tex);
+            if (camo) applyCamo();
+          })
+          .catch(() => {});
       if (options.camo && cs?.camos[options.camo]) camo = options.camo;
       if (options.fireTint && v?.fireTints?.tints[options.fireTint]) fireTint = options.fireTint;
       renderCamo();
@@ -438,9 +451,12 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
       if (options.focus && options.focus !== 'whole') root.querySelector<HTMLElement>(`[data-focus="${options.focus}"], [data-socket="${options.focus}"]`)?.click();
       if (options.fire) root.querySelector<HTMLElement>('[data-action="fire"]')?.click();
     } catch {
-      if (alive) overlay.textContent = "Couldn't load the arsenal.";
+      if (!alive) return;
+      // never a dead end: what happened, and a way to try again (Back is in the header)
+      overlay.innerHTML = `<span class="mf-ar__fail">Couldn't load the arsenal. Check your connection.<button type="button" class="btn btn--volt btn--sm m-p8" data-action="reload-rack">${ic('refresh')}Try again</button></span>`;
     }
-  })();
+  };
+  void loadRack();
 
   return {
     select,

@@ -121,14 +121,14 @@ for k in access ticket; do [ -s "$ETC/$k.key" ] || openssl genpkey -algorithm ed
 	@game path /ws/* /health
 	@probe path /echo /probe-api/*
 	@pub path /trial-status /trial-status/* /owner-* /probe-config.json
-	# Vite's hashed files sit right under /assets/ (name-xxxxxxxx.ext): a year, immutable. Everything else
-	# there (public/: maps, kits, billboard pools and art) keeps its name when it changes: revalidate
-	# (ETag), never a stale week (24 Oct: a cached house.json kept the deleted billboard art on screen)
+	# hashed /assets: a year; the rest: no-cache
 	@hashed path_regexp hashed ^/assets/[^/]+-[A-Za-z0-9_-]{8}\.[a-z0-9]+
 	@unhashed {
 		path /assets/*
 		not path_regexp ^/assets/[^/]+-[A-Za-z0-9_-]{8}\.[a-z0-9]+
 	}
+	# pages revalidate (old pages ask for removed files)
+	@page path / /r/* /admin /probe *.html /sw.js /manifest.webmanifest
 	route {
 		respond @foreign 403
 		respond /api/internal/* 404
@@ -144,6 +144,7 @@ for k in access ticket; do [ -s "$ETC/$k.key" ] || openssl genpkey -algorithm ed
 		}
 		header @hashed Cache-Control "public, max-age=31536000, immutable"
 		header @unhashed Cache-Control "no-cache"
+		header @page Cache-Control "no-cache"
 		header /r/* X-Robots-Tag noindex
 		rewrite / /index.html
 		rewrite /r/* /index.html
@@ -200,7 +201,14 @@ phase 'installing dependencies'
 phase 'building the web app'
 (cd "$SRC/apps/web" && as_mf env NODE_ENV=production NODE_OPTIONS=--max-old-space-size=2560 node_modules/.bin/vite build) >"$DATA/build.log" 2>&1 ||
   { tail -20 "$DATA/build.log"; fail 'the web build'; }
-rm -rf "$WEB.new" && cp -a "$SRC/apps/web/dist" "$WEB.new" && rm -rf "$WEB" && mv "$WEB.new" "$WEB" || fail 'copying the build'
+rm -rf "$WEB.new" && cp -a "$SRC/apps/web/dist" "$WEB.new" || fail 'copying the build'
+# keep 14 days of old hashed js/css (open pages)
+if [ -d "$WEB/assets" ]; then
+  find "$WEB/assets" -maxdepth 1 -type f \( -name '*-????????.js' -o -name '*-????????.css' \) -mtime -14 \
+    -exec sh -c 'for f; do [ -e "$0/${f##*/}" ] || cp -p "$f" "$0/"; done' "$WEB.new/assets" {} + ||
+    log "keeping old files failed"
+fi
+rm -rf "$WEB" && mv "$WEB.new" "$WEB" || fail 'copying the build'
 sed -i "s#%ORIGIN%#$ORIGIN#g; s#</head>#<meta name=\"mf-tune\" content=\"host\" /></head>#" "$WEB"/{index.html,robots.txt,sitemap.xml}
 [ -f "$WEB/probe.html" ] && [ -f "$SRC/scripts/net-trial/probe-server/server.mjs" ] && PROBE=1
 

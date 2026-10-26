@@ -45,7 +45,7 @@ import { mountHud, type ScoreRow } from './hud';
 import { LanHost } from './lan/host';
 import { connectAnswered, joinByCode, lanSignalUrl, normalizeLanCode } from './lan/guest';
 import { Renderer, type RenderOptions } from './render';
-import { localMatchRules, mountShell, registerRoute, type GameHost, type Settings } from './shell';
+import { localMatchRules, mountShell, registerRoute, type GameHost, type RouteMount, type Settings } from './shell';
 import { loadSettings } from './shell/controller';
 import type { GraphicsSetting } from './shell/store';
 import { defaultBindings, keyLabel, toKeyBindings, uiCodes } from './shell/controls';
@@ -554,27 +554,21 @@ if (appMode && !online) {
   });
 }
 
-// The Locker as a shell route (#/locker); loaded on first use.
+// The Locker as a shell route (#/locker); loaded on first use (the shell draws its frame meanwhile).
 registerRoute({
   id: 'locker',
   title: 'Locker',
   ownExit: true, // the Locker has its own Back button
-  mount: (el, close) => {
-    let cleanup: (() => void) | null = null;
-    let closed = false;
-    void import('./locker/route').then(({ mountLockerRoute }) => {
-      if (!closed)
-        cleanup = mountLockerRoute(el, {
-          onExit: close,
-          onCreator: () => openCreator('locker'),
-          ...(loadoutSync ? { store: loadoutSync.store, guns: loadoutSync.guns } : {}),
-        });
-    });
-    return () => {
-      closed = true;
-      cleanup?.();
-    };
-  },
+  load: () =>
+    import('./locker/route').then(
+      ({ mountLockerRoute }): RouteMount =>
+        (el, close) =>
+          mountLockerRoute(el, {
+            onExit: close,
+            onCreator: () => openCreator('locker'),
+            ...(loadoutSync ? { store: loadoutSync.store, guns: loadoutSync.guns } : {}),
+          }),
+    ),
 });
 
 // The Armory as a shell route (#/armory; mobile audit P0-6): no page load, so full screen and the app's
@@ -583,26 +577,20 @@ registerRoute({
   id: 'armory',
   title: 'Armory',
   ownExit: true,
-  mount: (el, close) => {
-    let cleanup: (() => void) | null = null;
-    let closed = false;
-    void import('./armory/route').then(({ mountArmoryRoute }) => {
-      if (!closed)
-        cleanup = mountArmoryRoute(el, {
-          onExit: close,
-          onTry: (id) => {
-            tryWeapon = weapons.find((w) => w.id === id) ?? null;
-            close();
-            shell.controller?.go({ to: 'training' });
-          },
-          ...(loadoutSync ? { guns: loadoutSync.guns } : {}),
-        });
-    });
-    return () => {
-      closed = true;
-      cleanup?.();
-    };
-  },
+  load: () =>
+    import('./armory/route').then(
+      ({ mountArmoryRoute }): RouteMount =>
+        (el, close) =>
+          mountArmoryRoute(el, {
+            onExit: close,
+            onTry: (id) => {
+              tryWeapon = weapons.find((w) => w.id === id) ?? null;
+              close();
+              shell.controller?.go({ to: 'training' });
+            },
+            ...(loadoutSync ? { guns: loadoutSync.guns } : {}),
+          }),
+    ),
 });
 
 // The character creator (#/creator; owner, 22 Oct): body first, then the look. It follows the name
@@ -622,30 +610,31 @@ function openCreator(from: 'first' | 'locker'): void {
 registerRoute({
   id: 'creator',
   title: 'Create your soldier',
+  word: 'Soldier',
   ownExit: true,
-  mount: (el, close) => {
-    let cleanup: (() => void) | null = null;
-    let closed = false;
+  load: () => {
+    // who opened it, read at the tap (the quiet second try reads the same); forgotten when it closes
     const from = creatorFrom;
-    creatorFrom = null;
-    void import('./creator/route').then(({ mountCreatorRoute }) => {
-      if (!closed)
-        cleanup = mountCreatorRoute(el, {
-          first: from === 'first',
-          onExit: (how) => {
-            if (how === 'saved') tourMemory?.fact({ k: 'soldier-saved' });
-            if (from === 'locker') location.hash = '#/locker';
-            // the first time: the Briefing's one question next (the onboarding tour)
-            else if (from === 'first' && briefingWanted()) location.hash = '#/briefing';
-            else close();
-          },
-          ...(loadoutSync ? { store: loadoutSync.store } : {}),
-        });
-    });
-    return () => {
-      closed = true;
-      cleanup?.();
-    };
+    return import('./creator/route').then(
+      ({ mountCreatorRoute }): RouteMount =>
+        (el, close) => {
+          const unmount = mountCreatorRoute(el, {
+            first: from === 'first',
+            onExit: (how) => {
+              if (how === 'saved') tourMemory?.fact({ k: 'soldier-saved' });
+              if (from === 'locker') location.hash = '#/locker';
+              // the first time: the Briefing's one question next (the onboarding tour)
+              else if (from === 'first' && briefingWanted()) location.hash = '#/briefing';
+              else close();
+            },
+            ...(loadoutSync ? { store: loadoutSync.store } : {}),
+          });
+          return () => {
+            creatorFrom = null;
+            unmount();
+          };
+        },
+    );
   },
 });
 
@@ -772,33 +761,32 @@ registerRoute({
   id: 'briefing',
   title: 'Briefing',
   ownExit: true,
-  mount: (el, close) => {
-    let cleanup: (() => void) | null = null;
-    let closed = false;
-    void import('./tour/briefingRoute').then(({ mountBriefing }) => {
-      if (closed) return;
-      const h = mountBriefing(el, {
-        device: tourDevice(),
-        onAnswer: (answer, device, changed) => {
-          tourMemory?.record({ t: 'briefing.answer', answer, device, changed });
-          tourMemory?.fact({ k: 'answer', experience: answer === 'skipped' ? null : answer });
-          if (changed) {
-            statedDevice = device;
-            tourMemory?.setDevice(device);
-          }
-          if (answer === 'skipped') tourMemory?.fact({ k: 'tour', tour: FIRST_FLIGHT, skipped: true });
-          if (closed) return; // closed under it (Escape): that was the skip
-          close();
-          if (answer === 'recruit') shell.controller?.startFlight();
+  load: () =>
+    import('./tour/briefingRoute').then(
+      ({ mountBriefing }): RouteMount =>
+        (el, close) => {
+          let closed = false;
+          const h = mountBriefing(el, {
+            device: tourDevice(),
+            onAnswer: (answer, device, changed) => {
+              tourMemory?.record({ t: 'briefing.answer', answer, device, changed });
+              tourMemory?.fact({ k: 'answer', experience: answer === 'skipped' ? null : answer });
+              if (changed) {
+                statedDevice = device;
+                tourMemory?.setDevice(device);
+              }
+              if (answer === 'skipped') tourMemory?.fact({ k: 'tour', tour: FIRST_FLIGHT, skipped: true });
+              if (closed) return; // closed under it (Escape): that was the skip
+              close();
+              if (answer === 'recruit') shell.controller?.startFlight();
+            },
+          });
+          return () => {
+            closed = true;
+            h.unmount();
+          };
         },
-      });
-      cleanup = () => h.unmount();
-    });
-    return () => {
-      closed = true;
-      cleanup?.();
-    };
-  },
+    ),
 });
 
 /** First flight's runner, reading the range, the camera, the device and its bindings live. */

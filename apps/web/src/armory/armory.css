@@ -19,6 +19,7 @@
 :where(.mf-gear-fit) .ar__table canvas:active { cursor: grabbing; }
 :where(.mf-gear-fit) .mf-overlay { position: absolute; inset: 0; display: grid; place-items: center; color: var(--c-muted); font-size: var(--fs-20); pointer-events: none; }
 :where(.mf-gear-fit) .mf-overlay[hidden] { display: none; }
+:where(.mf-gear-fit) .mf-ar__fail { display: grid; justify-items: center; gap: var(--sp-4); text-align: center; pointer-events: auto; }
 :where(.mf-gear-fit) .mf-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--sp-4); }
 :where(.mf-gear-fit) .mf-controls .seg__opt { min-height: 40px; font-size: var(--fs-14); }
 :where(.mf-gear-fit) .ar__ctrl { gap: var(--sp-5); margin-top: var(--sp-3); }

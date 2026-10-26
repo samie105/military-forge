@@ -25,12 +25,24 @@ export interface ShellRoute {
   title: string;
   /** the route draws its own Back/Exit control (the shell's back button is left out) */
   ownExit?: boolean;
+  /** the big word behind the route's frame while it loads (default: the title) */
+  word?: string;
   /**
    * Render into an empty full-screen element. `close()` leaves the route (wire it to your own
    * Back/Exit button); Escape and the shell's back button also close it, then the cleanup runs.
    */
-  mount(el: HTMLElement, close: () => void): RouteCleanup;
+  mount?(el: HTMLElement, close: () => void): RouteCleanup;
+  /**
+   * A route whose code loads when it opens (a lazy chunk): resolves to its mount. Until then the shell
+   * draws the route's frame at once (its title, Back, a loading line), so a tap never shows an empty
+   * screen; if the code can't be fetched (no connection, or a new version of the game replaced it
+   * under an open page), the frame says so and offers Try again.
+   */
+  load?(): Promise<RouteMount>;
 }
+
+/** A route's mount, as `load()` resolves it. */
+export type RouteMount = (el: HTMLElement, close: () => void) => RouteCleanup;
 
 /** Leaves the open route. */
 export function closeRoute(): void {
