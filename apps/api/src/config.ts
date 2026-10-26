@@ -8,6 +8,8 @@
  */
 import { normalizeRoomCode } from '@military-forge/shared';
 import { z } from 'zod';
+/** Resend's endpoint (auth/email.ts has the sender); a plain constant, so config stays free of app imports */
+const RESEND_API_URL = 'https://api.resend.com/emails';
 
 export type NodeEnv = 'development' | 'test' | 'production';
 export type TrustProxy = 'none' | 'cloudflare' | 'xff';
@@ -62,6 +64,16 @@ export interface Config {
    * the problem reports players send (GET /v1/admin/reports). null = those routes are off.
    */
   adminToken: string | null;
+  /**
+   * The game's public address (APP_URL; default: the first CORS origin, or Vite's dev address):
+   * the links in account emails open it.
+   */
+  appUrl: string;
+  /**
+   * Account emails (auth/email.ts): forgot password and confirming a saved account's email.
+   * null = off (EMAIL_PROVIDER unset): "Forgot password?" is hidden and a saved email links at once.
+   */
+  email: { provider: 'resend'; apiUrl: string; apiKey: string; from: string } | { provider: 'log' } | null;
 }
 
 export class ConfigError extends Error {
@@ -105,6 +117,11 @@ const EnvSchema = z.object({
   KEEP_ROOMS: list.default([]),
   RESULTS_PUBLIC_KEY: z.string().min(1).optional(),
   ADMIN_TOKEN: z.string().min(16).optional(),
+  APP_URL: z.url({ protocol: /^https?$/, error: 'must be an http(s):// URL' }).optional(),
+  EMAIL_PROVIDER: z.enum(['resend', 'log']).optional(),
+  EMAIL_API_URL: z.url({ protocol: /^https?$/, error: 'must be an http(s):// URL' }).optional(),
+  EMAIL_API_KEY: z.string().min(8).optional(),
+  EMAIL_FROM: z.string().min(3).max(200).optional(),
 });
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
@@ -131,6 +148,14 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     if (code) keepRooms.push(code);
     else issues.push(`KEEP_ROOMS: "${raw}" is not a room code`);
   }
+  if (e.EMAIL_PROVIDER === 'resend') {
+    if (!e.EMAIL_API_KEY) issues.push('EMAIL_API_KEY: required with EMAIL_PROVIDER=resend');
+    if (!e.EMAIL_FROM) issues.push('EMAIL_FROM: required with EMAIL_PROVIDER=resend (e.g. "Military Forge <no-reply@example.com>")');
+  }
+  if (e.EMAIL_PROVIDER === 'log' && production) issues.push('EMAIL_PROVIDER: log writes reset links to the log; not in production');
+  if (e.EMAIL_PROVIDER === 'resend' && production && e.EMAIL_API_URL && !e.EMAIL_API_URL.startsWith('https://')) issues.push('EMAIL_API_URL: must be https:// in production');
+  const appUrl = (e.APP_URL ?? e.CORS_ORIGINS?.[0] ?? 'http://localhost:5173').replace(/\/+$/, '');
+  if (production && e.EMAIL_PROVIDER && !appUrl.startsWith('https://')) issues.push('APP_URL: the links in emails must be https:// in production (set APP_URL or CORS_ORIGINS)');
   if (issues.length) throw new ConfigError(issues);
 
   return {
@@ -157,5 +182,12 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     keepRooms: [...new Set(keepRooms)],
     resultsPublicKeyPem: e.RESULTS_PUBLIC_KEY?.replaceAll('\\n', '\n') ?? null,
     adminToken: e.ADMIN_TOKEN ?? null,
+    appUrl,
+    email:
+      e.EMAIL_PROVIDER === 'resend'
+        ? { provider: 'resend', apiUrl: e.EMAIL_API_URL ?? RESEND_API_URL, apiKey: e.EMAIL_API_KEY!, from: e.EMAIL_FROM! }
+        : e.EMAIL_PROVIDER === 'log'
+          ? { provider: 'log' }
+          : null,
   };
 }

@@ -12,11 +12,20 @@ import { MemoryBus, RedisBus, type EventBus } from '../src/events/bus';
 import { MemoryKv, type Kv } from '../src/kv/kv';
 import { RedisKv } from '../src/kv/redis';
 import { randomUUID } from 'node:crypto';
-import { createLogger } from '../src/log';
+import type { EmailMessage, EmailSender } from '../src/auth/email';
+import { createLogger, type Logger } from '../src/log';
 
 export const START = Date.parse('2026-10-17T12:00:00Z');
 
-export async function createTestApi(env: Record<string, string> = {}, options: { ticketKey?: SigningKey } = {}) {
+export interface TestApiOptions {
+  ticketKey?: SigningKey;
+  /** account emails: a FakeEmail's sender (fakeEmail()), or null/undefined for none */
+  email?: EmailSender | null;
+  /** a logger of the test's own (to read the audit trail) */
+  log?: Logger;
+}
+
+export async function createTestApi(env: Record<string, string> = {}, options: TestApiOptions = {}) {
   const clock = {
     t: START,
     now: () => clock.t,
@@ -37,7 +46,21 @@ export async function createTestApi(env: Record<string, string> = {}, options: {
   const keyPrefix = `test:${randomUUID()}:`;
   const kv: Kv = process.env.TEST_REDIS_URL ? await new RedisKv(process.env.TEST_REDIS_URL, { keyPrefix }).connect() : new MemoryKv(clock.now);
   const bus: EventBus = process.env.TEST_REDIS_URL ? await new RedisBus(process.env.TEST_REDIS_URL, keyPrefix).connect() : new MemoryBus();
-  const deps = { config, database, kv, bus, signingKey: generateSigningKey(), ticketKey: options.ticketKey ?? null, log: createLogger(config), now: clock.now };
+  // work the API does after answering (account emails): collected, so a test can wait for it
+  const deferred: Promise<void>[] = [];
+  const defer = (task: () => Promise<void>) => void deferred.push(task());
+  const deps = {
+    config,
+    database,
+    kv,
+    bus,
+    signingKey: generateSigningKey(),
+    ticketKey: options.ticketKey ?? null,
+    log: options.log ?? createLogger(config),
+    now: clock.now,
+    email: options.email ?? null,
+    defer,
+  };
   const app = createApp(deps);
   let ipCounter = 0;
   const reconnected: Kv[] = [];
@@ -60,6 +83,10 @@ export async function createTestApi(env: Record<string, string> = {}, options: {
     kv,
     /** the push channel's fan-out (events/bus.ts) */
     bus,
+    /** waits for the work the API deferred until after its answers (account emails) */
+    async settle() {
+      while (deferred.length) await deferred.shift();
+    },
     /** a fresh client IP, so tests don't share rate-limit buckets */
     ip: () => `203.0.113.${++ipCounter % 250}`,
     async close() {
@@ -107,4 +134,17 @@ export async function befriend(app: TestApi['app'], a: SessionBody, b: SessionBo
   if (asked.status !== 200) throw new Error(`friend request failed: ${asked.status} ${await asked.text()}`);
   const accepted = await app.request(`/friends/requests/${a.user.id}/accept`, json({}, bearer(b.accessToken)));
   if (accepted.status !== 200) throw new Error(`accept failed: ${accepted.status} ${await accepted.text()}`);
+}
+
+/** An email "provider" that keeps what it was given. */
+export function fakeEmail() {
+  const sent: EmailMessage[] = [];
+  return {
+    sender: { send: async (m: EmailMessage) => void sent.push(m) } satisfies EmailSender,
+    sent,
+    /** the token in a message's link (#reset=… or #confirm=…), or null */
+    token(m: EmailMessage | undefined, kind: 'reset' | 'confirm'): string | null {
+      return (m && new RegExp(`#${kind}=([A-Za-z0-9_.-]+)`).exec(m.text)?.[1]) ?? null;
+    },
+  };
 }

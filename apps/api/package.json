@@ -18,6 +18,7 @@
     "@military-forge/content": "workspace:*",
     "@military-forge/protocol": "workspace:*",
     "@military-forge/shared": "workspace:*",
+    "@node-rs/argon2": "2.2.2",
     "drizzle-orm": "0.45.4",
     "hono": "4.13.13",
     "ioredis": "6.0.0",

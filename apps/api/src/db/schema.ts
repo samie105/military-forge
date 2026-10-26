@@ -11,7 +11,11 @@ import { boolean, check, index, integer, jsonb, pgTable, primaryKey, smallint, t
 export const USER_STATUSES = ['active', 'banned', 'deleted'] as const;
 export type UserStatus = (typeof USER_STATUSES)[number];
 
-/** guest now; linked providers arrive with account linking (docs/07 §3) */
+/**
+ * How a player signs in (docs/07 §3). Every account starts as a guest; `email` is a saved account
+ * (email + password, auth/accounts.ts): its `provider_uid` is the normalised email (trimmed,
+ * lowercase), so the primary key keeps each email on one account.
+ */
 export const IDENTITY_PROVIDERS = ['guest', 'google', 'discord', 'apple', 'email'] as const;
 export type IdentityProvider = (typeof IDENTITY_PROVIDERS)[number];
 
@@ -87,6 +91,50 @@ export const sessions = pgTable(
     ipPrefix: text('ip_prefix'),
   },
   (t) => [index('sessions_user_id_idx').on(t.userId)],
+);
+
+/**
+ * A saved account's password (auth/passwords.ts): Argon2id, PHC string with its own salt and
+ * parameters. One per user; the email it goes with is the user's `identities` row (provider 'email').
+ */
+export const passwordCredentials = pgTable('password_credentials', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  passwordHash: text('password_hash').notNull(),
+  createdAt: timestamp('created_at', tz).notNull(),
+  /** the last change (save, change, reset) */
+  updatedAt: timestamp('updated_at', tz).notNull(),
+});
+
+export const EMAIL_TOKEN_PURPOSES = ['reset', 'save'] as const;
+export type EmailTokenPurpose = (typeof EMAIL_TOKEN_PURPOSES)[number];
+
+/**
+ * Single-use links sent by email (auth/accounts.ts): `reset` (forgot password, 30 minutes) and
+ * `save` (confirm the email a guest is saving their account with, 24 hours). The link carries
+ * `<id>.<secret>`; only sha256 of the secret is kept. A `save` row also holds the email and the
+ * Argon2id hash of the password chosen, which become the account's once the link is opened.
+ */
+export const emailTokens = pgTable(
+  'email_tokens',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    purpose: text('purpose', { enum: EMAIL_TOKEN_PURPOSES }).notNull(),
+    tokenHash: text('token_hash').notNull(),
+    /** save: the normalised email being confirmed */
+    email: text('email'),
+    /** save: the password's Argon2id hash */
+    passwordHash: text('password_hash'),
+    createdAt: timestamp('created_at', tz).notNull(),
+    expiresAt: timestamp('expires_at', tz).notNull(),
+    /** set once: used, or replaced by a newer link, or cancelled by a password change */
+    usedAt: timestamp('used_at', tz),
+  },
+  (t) => [index('email_tokens_user_id_idx').on(t.userId), check('email_tokens_purpose_check', sql`${t.purpose} in ('reset', 'save')`)],
 );
 
 /** How many saved loadouts a player has (docs/04 §6: three presets); the game uses slot 0 for now. */

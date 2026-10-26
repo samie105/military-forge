@@ -1,7 +1,7 @@
 /**
  * /auth: guest-first identity (docs/07 §3, §11). `POST /auth/guest` creates users +
  * identities(provider='guest') + profiles + a session in one transaction and returns tokens.
- * Linking Google/Discord/etc. to the same user id comes later (`POST /auth/link/{provider}`).
+ * Saving the account with an email and password, and signing in with it, are auth/accountRoutes.ts.
  */
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
@@ -18,6 +18,7 @@ import type { ProfileService } from '../me/profiles';
 import { randomGuestNickname } from '../nickname/rules';
 import { clearRefreshCookie, readRefreshCookie, setRefreshCookie } from './cookie';
 import { optionalAuth, requireAuth } from './middleware';
+import type { Audit } from './audit';
 import type { AuthService, DeviceInfo, IssuedRefresh } from './sessions';
 
 export interface AuthRouteDeps {
@@ -27,6 +28,8 @@ export interface AuthRouteDeps {
   auth: AuthService;
   profiles: ProfileService;
   now: () => number;
+  /** the audit trail (auth/audit.ts) */
+  audit?: Audit;
 }
 
 const GuestBody = z.object({ nickname: z.string().max(64).optional() });
@@ -34,17 +37,14 @@ const RefreshBody = z.object({ refreshToken: z.string().max(256).optional() });
 /** retries when a generated guest name collides at insert time */
 const GUEST_INSERT_ATTEMPTS = 5;
 
-export function authRoutes(deps: AuthRouteDeps): Hono<AppEnv> {
-  const { config, db, kv, auth, profiles, now } = deps;
-  const app = new Hono<AppEnv>();
+/** Where a request comes from, as a session keeps it (no raw IP or User-Agent). */
+export function deviceOf(c: Context<AppEnv>, config: Config): DeviceInfo {
+  return { userAgent: c.req.header('user-agent') ?? null, ipPrefix: ipPrefix(clientIp(c, config)) };
+}
 
-  const device = (c: Context<AppEnv>): DeviceInfo => ({
-    userAgent: c.req.header('user-agent') ?? null,
-    ipPrefix: ipPrefix(clientIp(c, config)),
-  });
-
-  /** The `Session` response: tokens + the user, and the refresh cookie. */
-  async function sessionResponse(c: Context<AppEnv>, issued: IssuedRefresh, status: 200 | 201) {
+/** The `Session` response: tokens + the user (+ `extra`), and the refresh cookie. */
+export function sessionResponder(config: Config, auth: AuthService, profiles: ProfileService) {
+  return async (c: Context<AppEnv>, issued: IssuedRefresh, status: 200 | 201, extra: Record<string, unknown> = {}) => {
     const me = await profiles.me(issued.userId);
     if (!me) throw new ApiError(500, 'internal_error', 'Session user has no profile');
     setRefreshCookie(c, config.cookie, issued.refreshToken, issued.refreshTokenExpiresAt);
@@ -56,10 +56,19 @@ export function authRoutes(deps: AuthRouteDeps): Hono<AppEnv> {
         refreshToken: issued.refreshToken,
         refreshTokenExpiresAt: issued.refreshTokenExpiresAt.toISOString(),
         user: me,
+        ...extra,
       },
       status,
     );
-  }
+  };
+}
+
+export function authRoutes(deps: AuthRouteDeps): Hono<AppEnv> {
+  const { config, db, kv, auth, profiles, now } = deps;
+  const app = new Hono<AppEnv>();
+
+  const device = (c: Context<AppEnv>) => deviceOf(c, config);
+  const sessionResponse = sessionResponder(config, auth, profiles);
 
   /** A generated name that is free right now (a collision at insert time just retries). */
   async function freeGuestNickname(): Promise<{ nickname: string; norm: string }> {
@@ -122,7 +131,9 @@ export function authRoutes(deps: AuthRouteDeps): Hono<AppEnv> {
   });
 
   app.post('/logout-all', requireAuth(auth), async (c) => {
-    await auth.revokeAllSessions(c.get('auth')!.userId);
+    const { userId } = c.get('auth')!;
+    await auth.revokeAllSessions(userId);
+    deps.audit?.(c, 'logout_everywhere', { userId });
     clearRefreshCookie(c, config.cookie);
     return c.body(null, 204);
   });

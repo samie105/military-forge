@@ -275,10 +275,17 @@ export function NameEntry({ store, first }: { store: ShellStore; first: boolean 
                 <Icon name="arrow-right" />
               </button>
               {first ? (
-                <button type="button" className="btn btn--ghost btn--xl m-p8" disabled={busy} onClick={() => void submit(null)}>
-                  <Icon name="dice" />
-                  Pick one for me
-                </button>
+                <>
+                  <button type="button" className="btn btn--ghost btn--xl m-p8" disabled={busy} onClick={() => void submit(null)}>
+                    <Icon name="dice" />
+                    Pick one for me
+                  </button>
+                  {/* a saved account on a new computer: sign in instead of starting over */}
+                  <button type="button" className="btn btn--ghost btn--xl m-p8" data-act="sign-in" disabled={busy} onClick={() => ctl.openAccount({ mode: 'signin' })}>
+                    <Icon name="user" />
+                    Sign in
+                  </button>
+                </>
               ) : (
                 <button type="button" className="btn btn--ghost btn--xl m-p8" onClick={() => ctl.closeOverlay()}>
                   Cancel

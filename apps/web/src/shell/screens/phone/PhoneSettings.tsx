@@ -1,7 +1,7 @@
 /**
  * Phone Settings (the kit has no phone frame for it; built from its phone menus' parts): the same
  * settings as the desktop screen at phone sizes, Touch first (the controls, Edit layout, Reset
- * layout), then Graphics, Audio, Accessibility and Network. Key bindings stay on the desktop screen:
+ * layout), then Graphics, Audio, Accessibility, Network and Account (save this soldier, sign in). Key bindings stay on the desktop screen:
  * a phone has no keyboard. Everything saves on this device as it changes; Back and Done close it.
  *
  * Motion: the rail's rows and each section's rows rise in a stagger (P3); presses are P8.
@@ -26,6 +26,7 @@ import { PadControls } from '../../../gamepad/PadSettings';
 import { useInputDevice } from '../../../gamepad/react';
 import { InstallButton } from '../../../pwa/InstallButton';
 import { SendReport } from '../../../diag/SendReport';
+import { AccountPanel } from '../../account/AccountPanel';
 
 /** The phone's sections: Touch first; no key bindings (Controls) on a phone. */
 export const PHONE_TABS: readonly { id: SettingsTab; label: string; icon: string }[] = [
@@ -34,6 +35,7 @@ export const PHONE_TABS: readonly { id: SettingsTab; label: string; icon: string
   { id: 'audio', label: 'Audio', icon: 'speaker' },
   { id: 'accessibility', label: 'Access', icon: 'access' },
   { id: 'network', label: 'Network', icon: 'globe' },
+  { id: 'account', label: 'Account', icon: 'user' },
 ];
 
 /** A controller's section ("Pad"), once a pad has been used on this phone (gamepad/). */
@@ -364,7 +366,7 @@ export function PhoneSettings({ store }: { store: ShellStore }) {
   const reset = () => {
     const patch = resetPatch(tab);
     if (patch) ctl.updateSettings(patch);
-    else setTouchSettings(DEFAULT_TOUCH_SETTINGS);
+    else if (tab === 'touch') setTouchSettings(DEFAULT_TOUCH_SETTINGS);
   };
   const label = tabs.find((t) => t.id === tab)!.label;
   return (
@@ -377,10 +379,12 @@ export function PhoneSettings({ store }: { store: ShellStore }) {
           <b className="display pm-h">Settings</b>
           <span className="menu-top__spacer"></span>
           <InstallButton />
-          <button type="button" className="btn btn--ghost btn--sm" onClick={blurAfter(reset)}>
-            <Icon name="refresh" />
-            Reset {label}
-          </button>
+          {tab !== 'account' && (
+            <button type="button" className="btn btn--ghost btn--sm" onClick={blurAfter(reset)}>
+              <Icon name="refresh" />
+              Reset {label}
+            </button>
+          )}
           <button type="button" className="btn btn--volt btn--sm" onClick={blurAfter(() => ctl.back())}>
             <Icon name="check" />
             Done
@@ -402,6 +406,7 @@ export function PhoneSettings({ store }: { store: ShellStore }) {
             {tab === 'audio' && <Audio settings={settings} />}
             {tab === 'accessibility' && <Accessibility settings={settings} />}
             {tab === 'network' && <Network settings={settings} />}
+            {tab === 'account' && <AccountPanel store={store} variant="phone" />}
             {tab === 'controller' && <PadControls phone pad={settings.pad} onChange={(pad) => ctl.updateSettings({ pad })} reduceFlashes={settings.reduceFlashes} />}
           </section>
         </div>

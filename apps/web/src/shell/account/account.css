@@ -1,0 +1,43 @@
+/* Settings → Account (AccountPanel.tsx): the forms sit inside the Settings panel, desktop and phone */
+.acct { display: flex; flex-direction: column; gap: var(--sp-2); }
+.acct-form { display: flex; flex-direction: column; gap: var(--sp-3); max-width: 560px; }
+.acct-field { display: flex; flex-direction: column; gap: var(--sp-1); }
+.acct-field label { font-size: var(--fs-16); font-weight: var(--fw-bold); }
+.acct-field__row { display: flex; align-items: center; gap: var(--sp-2); }
+.acct-field input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 var(--sp-3);
+  background: var(--c-ink-950);
+  color: var(--c-text);
+  border: var(--bw) solid var(--c-line);
+  border-radius: var(--r-sm);
+  font: var(--fw-bold) var(--fs-18) / 1.2 var(--f-ui);
+}
+.acct-field input:focus-visible { outline: none; border-color: var(--c-volt); box-shadow: 0 0 0 2px var(--c-volt-soft); }
+.acct-field__hint { font-size: var(--fs-14); color: var(--c-muted); }
+.acct-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.acct-msg { display: flex; align-items: flex-start; gap: var(--sp-2); margin: 0; font-size: var(--fs-16); }
+.acct-msg .ic { flex: none; margin-top: 2px; }
+.acct-msg--bad { color: var(--c-danger-text); }
+.acct-msg--ok { color: var(--c-ok); }
+.acct-msg--warn { color: var(--c-warn); }
+.acct-link {
+  align-self: flex-start;
+  min-height: 32px;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--c-volt);
+  font: var(--fw-bold) var(--fs-16) / 1.2 var(--f-ui);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.acct-link:disabled { opacity: 0.5; cursor: default; }
+.acct-note { margin: 0; font-size: var(--fs-14); color: var(--c-muted); }
+.acct-email { color: var(--c-text); overflow-wrap: anywhere; }
+/* phone: the panel is short and the keyboard takes half of it; keep the fields compact */
+.acct--phone .acct-form { gap: var(--sp-2); max-width: none; }
+.acct--phone .acct-field input { min-height: 44px; font-size: 16px; } /* 16px: iOS doesn't zoom into the field */

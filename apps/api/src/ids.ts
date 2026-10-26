@@ -5,7 +5,8 @@
  */
 import { randomBytes } from 'node:crypto';
 
-export type IdPrefix = 'u' | 's';
+/** u: user, s: session, t: an emailed link (email_tokens) */
+export type IdPrefix = 'u' | 's' | 't';
 
 const ALPHABET = '0123456789abcdefghjkmnpqrstvwxyz';
 

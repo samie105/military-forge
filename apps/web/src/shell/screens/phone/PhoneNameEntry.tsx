@@ -265,10 +265,17 @@ export function PhoneNameEntry({ store, first }: { store: ShellStore; first: boo
 
           <div className="pm-ne__more m-p3" style={rise(4)}>
             {first ? (
-              <button type="button" className="btn btn--ghost btn--sm m-p8" disabled={busy} onClick={blurAfter(() => void submit(null))}>
-                <Icon name="dice" />
-                Pick one for me
-              </button>
+              <>
+                <button type="button" className="btn btn--ghost btn--sm m-p8" disabled={busy} onClick={blurAfter(() => void submit(null))}>
+                  <Icon name="dice" />
+                  Pick one for me
+                </button>
+                {/* a saved account on a new phone: sign in instead of starting over */}
+                <button type="button" className="btn btn--ghost btn--sm m-p8" data-act="sign-in" disabled={busy} onClick={blurAfter(() => ctl.openAccount({ mode: 'signin' }))}>
+                  <Icon name="user" />
+                  Sign in
+                </button>
+              </>
             ) : (
               <button type="button" className="btn btn--ghost btn--sm m-p8" onClick={blurAfter(() => ctl.closeOverlay())}>
                 Cancel

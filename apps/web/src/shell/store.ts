@@ -75,7 +75,13 @@ export type Screen =
 export type Overlay = 'menu' | 'settings' | 'join' | 'name' | 'lan-add' | 'lan-join' | null;
 
 /** Settings sections (the kit's five tabs, and Touch for the phone controls). */
-export type SettingsTab = 'graphics' | 'audio' | 'controls' | 'controller' | 'accessibility' | 'network' | 'touch';
+export type SettingsTab = 'graphics' | 'audio' | 'controls' | 'controller' | 'accessibility' | 'network' | 'touch' | 'account';
+
+/**
+ * What Settings → Account opens on: the sign-in form (the name screen's "Sign in"), or an emailed
+ * link's form (`#reset=…`: a new password; `#confirm=…`: finish saving the account).
+ */
+export type AccountIntent = { mode: 'signin' } | { mode: 'reset'; token: string } | { mode: 'confirm'; token: string };
 
 /**
  * Why the player can't get into (or stay in) a room, as the kit's connection screen shows it: the
@@ -233,6 +239,8 @@ export interface ShellState {
   spectating: boolean;
   /** a spectator's wish to play (SPECTATE's queue): 0 watching, 1 the moment a slot is free, 2 next round */
   spectateQueue: SpectateQueueId;
+  /** Settings → Account's opening form, taken (and cleared) by the panel */
+  accountIntent: AccountIntent | null;
 }
 
 export type TitleState = 'on' | 'pressed' | 'leaving' | 'off';
@@ -269,6 +277,7 @@ export function createShellStore(initial: Partial<ShellState> = {}): ShellStore 
     titleHit: 0,
     spectating: false,
     spectateQueue: 0,
+    accountIntent: null,
     ...initial,
   }));
 }

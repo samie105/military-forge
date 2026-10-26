@@ -405,12 +405,12 @@
 - [ ] `335` **MVP** Nickname rules + profanity/impersonation filter + normalisation
 - [ ] `336` **L** Better Auth integration (anonymous plugin + linking)
 - [ ] `337` **L** Google, Discord OAuth linking (Apple for iOS later)
-- [ ] `338` **L** Email magic link and/or passkeys
+- [ ] `338` **L** Email magic link and/or passkeys (email + password built 26 Oct 2026: 07 §3; reset links need EMAIL_PROVIDER)
 - [ ] `339` **L** Account merge flow (choose progress to keep; never merge purchases silently)
 - [ ] `340` **L** Portal identity adapters (CrazyGames, Poki) verified server-side
 - [ ] `341` **L** Guest cleanup policy (30 days inactive, no purchases)
 - [ ] `342` **L** Nickname change cooldown (7 days)
-- [ ] `343` **L** Session list + log out everywhere
+- [ ] `343` **L** Session list + log out everywhere (log out everywhere built: Settings → Account; the session list isn't)
 - [ ] `344` **L** New-device login alerts (linked accounts)
 - [ ] `345` **L** Neutral age gate before chat / account linking
 - [ ] `346` **P** 2FA for accounts with purchases

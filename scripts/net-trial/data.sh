@@ -74,6 +74,14 @@ for u in game api; do
   printf '[Service]\nEnvironmentFile=%s/%s-results.env\n' "$ETC" "$u" >"/etc/systemd/system/mf-$u.service.d/results.conf"
 done
 
+# account emails ("Forgot password?", confirming a saved account's email; apps/api auth/email.ts):
+# off until the owner writes $ETC/email.env (0640 root:mf) with EMAIL_PROVIDER, EMAIL_API_KEY and
+# EMAIL_FROM (docs/net-trial.md §6). The links open CORS_ORIGINS' address. A drop-in reads the file;
+# the leading '-' lets the API start without it.
+mkdir -p /etc/systemd/system/mf-api.service.d
+printf '[Service]\nEnvironmentFile=-%s/email.env\n' "$ETC" >/etc/systemd/system/mf-api.service.d/email.conf
+if [ -f "$ETC/email.env" ]; then chown root:mf "$ETC/email.env" && chmod 0640 "$ETC/email.env"; fi
+
 # once: PGlite's rows into Postgres. The API stops first (PGlite has one writer); cloud-init.sh starts it again.
 if [ -f "$DATA/pglite/PG_VERSION" ]; then
   phase 'moving the PGlite data into Postgres'

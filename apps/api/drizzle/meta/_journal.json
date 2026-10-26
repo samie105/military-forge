@@ -29,6 +29,13 @@
       "when": 1792712901974,
       "tag": "0003_friends",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793018608065,
+      "tag": "0004_accounts",
+      "breakpoints": true
     }
   ]
 }

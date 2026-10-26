@@ -197,6 +197,27 @@ Measured on 23 Oct 2026 (NOTES §43): no gap lined up with a server stall.
   3. Then delete the `mf-trial-lagos` security group and the Lagos subnet.
   4. The region and zone opt-ins cost nothing and can stay.
 
+### 5.1 Account emails ("Forgot password?")
+
+Saved accounts (email + password, Settings → Account) work without this. Until it is set up, "Forgot password?" is hidden and "Save your account" links the email at once. With it, a forgotten password can be reset by an emailed link, and a new email is confirmed by a link before it is saved.
+
+What the owner sets up (nothing here is created for you):
+1. **An email-sending account** with a Resend-style HTTP API. With [Resend](https://resend.com): sign up, **Domains → Add domain** (a domain you own), add the DNS records it shows (SPF and DKIM) at your DNS provider, and wait until it says *Verified*.
+2. **An API key:** Resend **API Keys → Create**, permission *Sending access*, limited to that domain. It starts with `re_`. Keep it secret.
+3. **On the box**, put the three values in `/etc/military-forge/email.env` (read only by root and the `mf` group):
+   ```sh
+   sudo install -m 0640 -o root -g mf /dev/null /etc/military-forge/email.env
+   sudo nano /etc/military-forge/email.env
+   ```
+   ```sh
+   EMAIL_PROVIDER='resend'
+   EMAIL_API_KEY='re_...'
+   EMAIL_FROM='Military Forge <no-reply@your-domain.com>'
+   ```
+   Optional: `EMAIL_API_URL` for another provider with the same API (default `https://api.resend.com/emails`), and `APP_URL` if the links should open an address other than the box's own (`CORS_ORIGINS`).
+4. **Restart the API:** `sudo systemctl daemon-reload && sudo systemctl restart mf-api`. The setup script (`scripts/net-trial/data.sh`) adds the drop-in that reads the file at the next deploy; it is not in `cloud-init.sh`, which is at EC2's 16 KB limit.
+5. **Check:** `curl -s https://<your address>/api/auth/options` says `{"resetByEmail":true}`, and Settings → Account → Sign in shows "Forgot password?". A bad setting stops the API at start with the reason in `journalctl -u mf-api`.
+
 ## 6. Expected costs (Oct 2026; check the EC2 pricing page's Local Zones tab)
 
 | Item | Rate | 3 days |

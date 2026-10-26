@@ -46,6 +46,21 @@ export const LIMITS = {
   eventsConnect: { name: 'events', limit: 30, windowMs: 60_000 },
   /** problem reports per IP (Send a report, and the automatic one a failed connection sends) */
   report: { name: 'report', limit: 6, windowMs: 10 * 60_000 },
+  /**
+   * Saved accounts (auth/accountRoutes.ts). Wrong passwords also back off per account and per IP
+   * (auth/throttle.ts); these cap the requests themselves, right or wrong.
+   */
+  /** sign-ins per IP */
+  login: { name: 'login', limit: 30, windowMs: 10 * 60_000 },
+  /** "Save your account" tries, per user and per IP */
+  accountSave: { name: 'acctsave', limit: 5, windowMs: 60 * 60_000 },
+  accountSaveIp: { name: 'acctsaveip', limit: 20, windowMs: 60 * 60_000 },
+  /** password changes per user */
+  passwordChange: { name: 'pwchange', limit: 10, windowMs: 60 * 60_000 },
+  /** "Forgot password?" per IP (per email: at most 3 emails an hour, silently) */
+  forgot: { name: 'forgot', limit: 5, windowMs: 10 * 60_000 },
+  /** an emailed link opened (reset, confirm) per IP */
+  emailLink: { name: 'emaillink', limit: 20, windowMs: 10 * 60_000 },
 } as const satisfies Record<string, RateRule>;
 
 export async function enforceRateLimit(kv: Kv, rule: RateRule, key: string): Promise<void> {

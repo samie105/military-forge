@@ -45,6 +45,13 @@ Portal rule (CrazyGames/Poki): a first-time visitor must reach gameplay quickly.
 - **Upgrade, don't migrate:** linking Google/Discord/Apple/email-magic-link/passkey adds an `identities` row to the **same** user id. If the credential already belongs to another account, show a merge flow: pick which progress to keep. Never silently merge purchases.
 - **Portal identity adapters:** CrazyGames/Poki user tokens are verified server-side and linked as `identities(provider='crazygames')`. Portals require that guests can play and reject games that force their own login.
 - Guest accounts with no progress are cleaned up after 30 days of inactivity. Guests with purchases are prompted to link (and never auto-deleted).
+- **Saved accounts: email + password (built, 26 Oct 2026; `apps/api/src/auth/accountRoutes.ts`).** The owner's decision: a player can sign in on a new phone or computer and get their name, soldier, loadouts, friends and stats back; the data stays in our Postgres.
+  - **Save your account** (Settings → Account): a signed-in guest adds an email and password to the account they already have. Same user id, so nothing moves. The email is an `identities` row (provider `email`, trimmed and lowercased, unique); the password is an Argon2id hash in `password_credentials` (19 MiB, 2 passes, 1 lane).
+  - **Sign in** (Settings → Account, or "Sign in" on the first-visit name screen): a new session for that account on this device.
+  - **The guest already on the device (the rule):** a guest with no progress is discarded (nothing is lost). A guest with progress (a chosen name, XP, a match, a friend or request, a saved look) is kept, untouched, and the client keeps its refresh token aside for 30 days; signing out of the saved account switches back to it. Before signing in over such a guest, the form says so and its button reads "Use the saved account". Nothing is ever merged. A device signed in to another saved account is signed out of it.
+  - **Sign out** (this device), **change password** (every session ends, this device gets a new one), **sign out everywhere** (`/auth/logout-all`).
+  - **Security:** 10–128 characters, no common or repetitive passwords, not the email; one answer for a wrong password and an unknown email (after a dummy Argon2id check); wrong passwords back off per account and per IP in Valkey (5 and 20 free misses, then 1 s doubling to 15 min); "Forgot password?" answers the same for any email; CSRF by the origin guard; an audit log line per event with no password, email or token.
+  - **Forgot password** (only when `EMAIL_PROVIDER` is set; hidden otherwise): a single-use link, sha256 at rest, 30 minutes; using it ends every session. With email on, saving an email is confirmed by a link first (24 hours), so "save" answers the same whether or not the email is taken. Without email, a taken email gets "That email can't be used" (the one place an email's use shows; rate-limited). Owner setup: docs/net-trial.md §5.1.
 - **Nicknames:** 3–16 chars, Unicode letters allowed but confusables normalised (`nickname_norm`), profanity + impersonation filter ("admin", "mod", staff names), 7-day change cooldown, and a `#1234` discriminator only if duplicates are allowed.
 
 ---
@@ -188,7 +195,10 @@ Create (level 10+, cost soft currency), tag `[ABC]` shown before names, roles le
 
 ```
 POST   /auth/guest                    → {accessToken, refreshToken, user}
-POST   /auth/link/{provider}          → link identity to current user
+POST   /auth/link/{provider}          → link identity to current user (later: Google, Discord…)
+POST   /auth/save {email,password}    → save this guest (built)  ·  POST /auth/confirm {token}
+POST   /auth/login {email,password}   → Session + previousGuest  ·  POST /auth/password  ·  GET /auth/account  ·  GET /auth/options
+POST   /auth/forgot {email}  ·  POST /auth/reset {token,password}   (only with EMAIL_PROVIDER)
 POST   /auth/refresh  ·  POST /auth/logout  ·  POST /auth/logout-all
 GET    /me  ·  PATCH /me (nickname, settings, privacy)  ·  DELETE /me (GDPR/DPDP deletion)
 GET    /me/inventory  ·  GET|PUT /me/loadout/{slot}   (built: slots 0–2, look + two guns)

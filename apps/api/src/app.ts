@@ -14,7 +14,13 @@ import { requestId } from 'hono/request-id';
 import { secureHeaders } from 'hono/secure-headers';
 import pkg from '../package.json' with { type: 'json' };
 import type { SigningKey } from './auth/keys';
+import { accountRoutes, safeError } from './auth/accountRoutes';
+import { AccountService } from './auth/accounts';
+import { createAudit } from './auth/audit';
+import { emailSenderFor, type EmailSender } from './auth/email';
+import { PasswordHasher } from './auth/passwords';
 import { authRoutes } from './auth/routes';
+import { Throttle } from './auth/throttle';
 import { MemoryBus, type EventBus } from './events/bus';
 import { eventRoutes } from './events/routes';
 import { friendRoutes } from './friends/routes';
@@ -54,6 +60,12 @@ export interface AppDeps {
   bus?: EventBus;
   /** injectable clock (ms) for tests */
   now?: () => number;
+  /** account emails; undefined = from config (EMAIL_PROVIDER), null = off */
+  email?: EmailSender | null;
+  /** Argon2id with the production parameters unless a test passes cheaper ones */
+  hasher?: PasswordHasher;
+  /** work done after an answer has gone (account emails); default: run it, log a failure */
+  defer?: (task: () => Promise<void>) => void;
 }
 
 const LOCAL_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
@@ -130,7 +142,33 @@ export function createApp(deps: AppDeps) {
     }),
   );
 
-  app.route('/auth', authRoutes({ config, db, kv, auth, profiles, now }));
+  const audit = createAudit(log, config);
+  app.route('/auth', authRoutes({ config, db, kv, auth, profiles, now, audit }));
+  // saved accounts: email + password (auth/accountRoutes.ts)
+  const hasher = deps.hasher ?? new PasswordHasher();
+  void hasher.warm();
+  const defer =
+    deps.defer ??
+    ((task: () => Promise<void>) => {
+      void task().catch((err: unknown) => log.error({ err: safeError(err) }, 'account email work failed'));
+    });
+  app.route(
+    '/auth',
+    accountRoutes({
+      config,
+      db,
+      kv,
+      auth,
+      profiles,
+      accounts: new AccountService(db, now),
+      hasher,
+      throttle: new Throttle(kv, now),
+      email: deps.email !== undefined ? deps.email : emailSenderFor(config, log),
+      audit,
+      defer,
+      now,
+    }),
+  );
   const presence = new PresenceService(kv, now);
   app.route('/me/loadout', loadoutRoutes({ db, kv, auth, now }));
   app.route('/me/presence', mePresenceRoutes({ auth, kv, presence }));

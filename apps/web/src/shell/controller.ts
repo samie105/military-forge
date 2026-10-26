@@ -13,7 +13,7 @@ import { alertFromApiError } from './alerts';
 import { Api, ApiError, NICKNAME_REASONS, type Me, type NicknameCheck, type RoomJoin } from './api';
 import { sanitizePadSettings } from '../gamepad/settings';
 import { sanitizeBindings } from './controls';
-import { DEFAULT_SETTINGS, type AudioSettings, type GraphicsPreset, type Intent, type Overlay, type Profile, type Settings, type SettingsTab, type ShellState, type ShellStore, type TuneNote } from './store';
+import { DEFAULT_SETTINGS, type AccountIntent, type AudioSettings, type GraphicsPreset, type Intent, type Overlay, type Profile, type Settings, type SettingsTab, type ShellState, type ShellStore, type TuneNote } from './store';
 
 /**
  * What training plays: a local match against bots (the default), First flight (the onboarding's range:
@@ -191,6 +191,29 @@ function saveSettings(s: Settings): void {
 }
 
 /** `/r/CODE` or `?room=CODE` → join it; anything else → home. */
+/**
+ * An emailed account link in the address (`#reset=<token>` / `#confirm=<token>`): taken off the
+ * address bar at once, so the token isn't left in history or a shared screenshot. The token rides in
+ * the #fragment, which browsers never send to a server.
+ */
+export function accountLinkFrom(hash: string): AccountIntent | null {
+  const m = /^#(reset|confirm)=([A-Za-z0-9_.-]{10,200})$/.exec(hash);
+  return m ? { mode: m[1] as 'reset' | 'confirm', token: m[2]! } : null;
+}
+
+function takeAccountLink(): AccountIntent | null {
+  if (typeof location === 'undefined') return null;
+  const link = accountLinkFrom(location.hash);
+  if (link) {
+    try {
+      history.replaceState(history.state, '', location.pathname + location.search);
+    } catch {
+      /* fine */
+    }
+  }
+  return link;
+}
+
 export function intentFromLocation(loc: Pick<Location, 'pathname' | 'search'>): Intent {
   // the Armory's "Try it in training" (?try=<weapon id>): straight to training
   if (/^[a-z0-9_-]{1,32}$/.test(new URLSearchParams(loc.search).get('try') ?? '')) return { to: 'training' };
@@ -275,8 +298,17 @@ export class ShellController {
     return this.store.getState().profile;
   }
 
-  /** First screen: restore the session, then follow the link (a room) or show home. */
+  /**
+   * First screen: restore the session, then follow the link (a room) or show home. An emailed
+   * account link (#reset=… / #confirm=…) then opens Settings → Account on its form.
+   */
   async boot(): Promise<void> {
+    const link = takeAccountLink();
+    await this.bootSession();
+    if (link) this.openAccount(link);
+  }
+
+  private async bootSession(): Promise<void> {
     this.set({ screen: { name: 'boot' } });
     const intent = intentFromLocation(location);
     let me: Me | null;
@@ -645,6 +677,65 @@ export class ShellController {
     if (screen.name === 'name') this.go(screen.then);
     else this.closeOverlay();
     return { ok: true };
+  }
+
+  // ---- saved accounts: Settings → Account (account/AccountPanel.tsx) ----
+
+  /** Settings → Account, on a form (`intent`) or its summary. */
+  openAccount(intent: AccountIntent | null = null): void {
+    this.set({ accountIntent: intent });
+    this.openSettings('account');
+  }
+
+  /** "Save your account": this account gets an email and password; 'check_email' when a link confirms it first. */
+  async saveAccount(email: string, password: string): Promise<'saved' | 'check_email'> {
+    const result = await this.api.saveAccount(email, password);
+    if (this.api.me) this.set({ profile: profileOf(this.api.me) });
+    return result;
+  }
+
+  /** Switching players mid-room would leave the room's player behind under the old name. */
+  get accountSwitchBlocked(): boolean {
+    const screen = this.store.getState().screen.name;
+    return screen === 'room' || screen === 'finding';
+  }
+
+  /** Signs this device in to a saved account (the guest-on-this-device rule is the API's: Api.signIn). */
+  async signIn(email: string, password: string): Promise<{ me: Me; previousGuest: 'kept' | 'discarded' | null }> {
+    if (this.accountSwitchBlocked) throw new ApiError(409, 'in_room', 'Leave the room first');
+    const result = await this.api.signIn(email, password);
+    this.set({ profile: profileOf(result.me) });
+    // signed in from the first visit's name screen: carry on where it was going
+    const screen = this.store.getState().screen;
+    if (screen.name === 'name') {
+      this.closeOverlay();
+      this.go(screen.then);
+    }
+    return result;
+  }
+
+  /**
+   * Signs out (`everywhere`: every device). The guest a sign-in kept on this device comes back if
+   * there is one; otherwise this device starts over at the name screen, like a first visit.
+   */
+  async signOut(everywhere = false): Promise<Me | null> {
+    if (this.accountSwitchBlocked) throw new ApiError(409, 'in_room', 'Leave the room first');
+    const me = await this.api.signOut(everywhere);
+    if (me) {
+      this.set({ profile: profileOf(me) });
+      return me;
+    }
+    this.closeOverlay();
+    this.host.stop();
+    this.setUrl('/');
+    this.set({ profile: null, screen: { name: 'name', then: { to: 'home' } }, match: null, lobby: null, connection: null });
+    return null;
+  }
+
+  /** A new password: every other device is signed out, this one carries on. */
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    const me = await this.api.changePassword(currentPassword, newPassword);
+    this.set({ profile: profileOf(me) });
   }
 
   // ---- overlays and settings ----

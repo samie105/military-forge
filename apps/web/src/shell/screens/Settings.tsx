@@ -1,6 +1,7 @@
 /**
  * 11 · Settings (the kit's data-screen="settings"): Graphics, Audio, Controls (two keys per action,
- * click then press), Accessibility, Network, and Touch for the phone controls (touch-interfaces.md).
+ * click then press), Accessibility, Network, Touch for the phone controls (touch-interfaces.md), and
+ * Account (save this soldier with an email and password, sign in, sign out: account/AccountPanel.tsx).
  * Everything saves on this device as it changes; Back (Esc) and Done close it.
  */
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
@@ -25,6 +26,7 @@ import { DEFAULT_AUDIO, DEFAULT_SETTINGS, type AudioSettings, type GraphicsPrese
 import { Backdrop } from './frame';
 import { InstallButton } from '../../pwa/InstallButton';
 import { SendReport } from '../../diag/SendReport';
+import { AccountPanel } from '../account/AccountPanel';
 
 export const TABS: readonly { id: SettingsTab; label: string; icon: string }[] = [
   { id: 'graphics', label: 'Graphics', icon: 'monitor' },
@@ -34,6 +36,7 @@ export const TABS: readonly { id: SettingsTab; label: string; icon: string }[] =
   { id: 'accessibility', label: 'Accessibility', icon: 'access' },
   { id: 'network', label: 'Network', icon: 'globe' },
   { id: 'touch', label: 'Touch', icon: 'target' },
+  { id: 'account', label: 'Account', icon: 'user' },
 ];
 
 /** What each preset changes (render3d/presets.ts), in words. */
@@ -704,6 +707,7 @@ export function resetPatch(tab: SettingsTab): Partial<Settings> | null {
     case 'network':
       return { lowBandwidth: DEFAULT_SETTINGS.lowBandwidth, netGraph: DEFAULT_SETTINGS.netGraph };
     case 'touch':
+    case 'account':
       return null;
   }
 }
@@ -716,7 +720,7 @@ export function SettingsScreen({ store }: { store: ShellStore }) {
   const reset = () => {
     const patch = resetPatch(tab);
     if (patch) ctl.updateSettings(patch);
-    else setTouchSettings(DEFAULT_TOUCH_SETTINGS);
+    else if (tab === 'touch') setTouchSettings(DEFAULT_TOUCH_SETTINGS);
   };
   // the tab indicator slides to the picked tab (P5, vertical)
   const nav = useRef<HTMLElement>(null);
@@ -760,13 +764,21 @@ export function SettingsScreen({ store }: { store: ShellStore }) {
             {tab === 'accessibility' && <Accessibility settings={settings} />}
             {tab === 'network' && <Network settings={settings} inRoom={inRoom} />}
             {tab === 'touch' && <Touch />}
+            {tab === 'account' && (
+              <div className="tabpanel mf-tabpanel" role="tabpanel" aria-label="Account">
+                <h2 className="display set__h">Account</h2>
+                <AccountPanel store={store} variant="desktop" />
+              </div>
+            )}
           </div>
         </div>
         <footer className="menu-hints">
-          <button className="btn btn--ghost btn--sm m-p8" type="button" onClick={blurAfter(reset)}>
-            <Icon name="refresh" />
-            Reset this tab
-          </button>
+          {tab !== 'account' && (
+            <button className="btn btn--ghost btn--sm m-p8" type="button" onClick={blurAfter(reset)}>
+              <Icon name="refresh" />
+              Reset this tab
+            </button>
+          )}
           <span>
             <Cap>Esc</Cap> Back
           </span>
