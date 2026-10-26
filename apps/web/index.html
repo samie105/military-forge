@@ -206,7 +206,7 @@
     <!--
       The landing (docs/seo.md): what search engines, link previews and a visitor without scripts see,
       and the title screen's first frame for everyone else. Keep: one h1 (the name), the pitch as text,
-      Play now first, About the game second. The hero's classes are the title screen's (title.css).
+      Play now, and nothing else beside it (owner, 26 Oct; the About sheet stays for a #about link). The hero's classes are the title screen's (title.css).
     -->
     <main id="landing" class="mf mf-land">
       <div id="land-hero" class="mf-title mf-land__hero has-art">
@@ -245,7 +245,6 @@
         <p class="mf-land__pitch">A free jetpack shooter you play in a browser tab. Fly, dash and fight across city rooftops with your friends: send a link and they're in your room.</p>
         <div class="mf-land__acts">
           <a id="land-play" class="btn btn--volt mf-land__play" href="#play"><svg class="ic ic--fill" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4.5v15l12.5-7.5z" /></svg>Play now</a>
-          <a class="btn btn--ghost mf-land__about-link" href="#about">About the game</a>
         </div>
         <p class="mf-land__status" role="status"><span class="mf-land__run" aria-hidden="true"><i></i></span><span id="land-line">Loading the game…</span></p>
         <noscript><p class="mf-land__status">%GAME_NAME% needs JavaScript turned on to play.</p></noscript>

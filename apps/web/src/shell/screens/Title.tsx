@@ -245,7 +245,6 @@ export function TitleScreen({ store }: { store: ShellStore }) {
           ) : phone ? (
             <>
               <span className="mf-title__press">Tap anywhere to continue</span>
-              <small>Sound starts with your tap</small>
             </>
           ) : (
             <>
@@ -253,14 +252,10 @@ export function TitleScreen({ store }: { store: ShellStore }) {
                 <kbd className="kbd kbd--lg">Any key</kbd>
                 Press any key · click
               </span>
-              <small>or any controller button · sound starts on your first press</small>
+              <small>or any controller button</small>
             </>
           )}
         </div>
-        {/* the landing's About sheet (index.html, public/boot.js): what the game is, for anyone curious */}
-        <a className="mf-title__about" href="#about">
-          About the game
-        </a>
         <span className="mf-title__corner mf-title__corner--build">build {buildId}</span>
         {/* the server and its ping (not on a phone: the title there is the key art and one line) */}
         {!phone && (
