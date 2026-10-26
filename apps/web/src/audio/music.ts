@@ -85,7 +85,8 @@ export class MusicBed {
       this.timer = 0;
       return;
     }
-    if (ctx.state !== 'running') return;
+    // not running (or its clock stopped): nothing is scheduled into a clock that doesn't move
+    if (!this.engine.running) return;
     // behind (the tab slept): pick up again from now
     if (this.next < now - 0.2) this.next = now + 0.05;
     while (this.next < now + LOOKAHEAD) {

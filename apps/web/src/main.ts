@@ -26,7 +26,7 @@ import { DEFAULT_LOADOUT, DEMO_MAPS, cosmeticLoadoutWireIds, defaultTuning, getM
 import { createConditionerSettings, parseNetSim } from '@military-forge/netcode';
 import { GAME_NAME } from '@military-forge/shared';
 import { Btn, MatchPhase, type Input, type SimEvent } from '@military-forge/sim';
-import { audio, startAudio } from './audio';
+import { armAudio, audio, startAudio } from './audio';
 import { Camera } from './camera';
 import { fxFrame, fxState, setReduceFlashes } from './fx';
 import { autoPreset, deviceHints, gpuRenderer } from './gfxAuto';
@@ -112,6 +112,9 @@ const shorthand = ['rtt', 'loss', 'jitter', 'dup']
   .join(',');
 const netSim = parseNetSim(params.get('netsim') ?? shorthand) ?? createConditionerSettings(false);
 
+// the sound's gesture listeners first of all: a phone's finger lift is the gesture the browser starts
+// sound on, and the full-screen request below (on that same lift) would use it up (audio/unlock.ts)
+armAudio();
 // phones play in landscape whichever way they're held: before anything measures the window
 startLandscape();
 // the low-end tier (ui/lowEnd.ts): a device that can't afford the interface's decoration drops it

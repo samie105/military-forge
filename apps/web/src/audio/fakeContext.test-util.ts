@@ -150,14 +150,27 @@ export class FakeContext {
     n.detune = new FakeParam(0);
     return n;
   }
+  /** resume() refuses (a browser that wants a gesture first) while this is set */
+  refuseResume = false;
+  private readonly changeListeners: (() => void)[] = [];
+  addEventListener(type: string, fn: () => void) {
+    if (type === 'statechange') this.changeListeners.push(fn);
+  }
+  /** the state moves (the system's doing, or ours): 'statechange' fires */
+  setState(s: FakeContext['state']) {
+    if (s === this.state) return;
+    this.state = s;
+    for (const fn of this.changeListeners) fn();
+  }
   resume() {
     this.resumes++;
-    if (this.state !== 'closed') this.state = 'running';
+    if (this.refuseResume) return Promise.reject(new Error('not allowed to start'));
+    if (this.state !== 'closed') this.setState('running');
     return Promise.resolve();
   }
   suspend() {
     this.suspends++;
-    this.state = 'suspended';
+    this.setState('suspended');
     return Promise.resolve();
   }
   /** what the started sources were connected through to (kinds along the first path) */

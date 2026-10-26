@@ -116,6 +116,32 @@ export interface EngineOptions {
   render?: (id: SoundId, variant: number, sr: number) => Float32Array[];
   /** 0…1 random source for variant and pitch picks (tests fix it) */
   random?: () => number;
+  /** wall clock, ms: how long a held sound has waited (tests drive it) */
+  clock?: () => number;
+}
+
+/**
+ * Sounds asked for while the context isn't running yet (a phone's first finger: the browser starts
+ * the sound only when it lifts; resuming takes a moment; the output restarting) wait, and play once
+ * it runs, still in time: a sound later than this (s) past when it was due is dropped, so a burst
+ * of stale shots never lands at once.
+ */
+export const PENDING_LATE = 0.25;
+/** at most this many wait (the oldest go first) */
+export const MAX_PENDING = 32;
+
+interface Pending {
+  id: SoundId;
+  o: PlayOptions;
+  /** wall clock (ms) when it was asked for */
+  at: number;
+  voice: HeldVoice;
+}
+
+/** A sound waiting for the context: stopping it before it plays cancels it. */
+interface HeldVoice extends Voice {
+  cancelled: boolean;
+  real: Voice | null;
 }
 
 interface VoiceRec extends Voice {
@@ -165,6 +191,10 @@ export class AudioEngine {
   private warmQueue: [SoundId, number][] = [];
   private warmTimer = 0;
   private hidden = false;
+  /** the context says running but its clock has stopped (unlock.ts's watchdog): sounds wait */
+  private stalled = false;
+  private pending: Pending[] = [];
+  private readonly clock: () => number;
   private suspendTimer: ReturnType<typeof setTimeout> | 0 = 0;
 
   /** the listener (the local player), m; null in the menus: world sounds play centred */
@@ -180,13 +210,14 @@ export class AudioEngine {
   /** the volumes last applied (Settings → Audio) */
   volumes: Volumes = { master: 1, sfx: 1, music: 1, ui: 1, voice: 1 };
   /** voices refused (limits) and stolen since the start: the board shows them */
-  readonly counters = { played: 0, refused: 0, stolen: 0, cooled: 0 };
+  readonly counters = { played: 0, refused: 0, stolen: 0, cooled: 0, held: 0, late: 0 };
 
   constructor(ctx: AudioContext, options: EngineOptions = {}) {
     this.ctx = ctx;
     this.maxVoices = options.maxVoices ?? 40;
     this.render = options.render ?? renderSound;
     this.random = options.random ?? Math.random;
+    this.clock = options.clock ?? (() => performance.now());
     const gain = (v = 1): GainNode => {
       const g = ctx.createGain();
       g.gain.value = v;
@@ -241,8 +272,65 @@ export class AudioEngine {
     return this.ctx.currentTime;
   }
 
+  /** the context runs and its clock moves: a sound started now is heard */
   get running(): boolean {
-    return this.ctx.state === 'running';
+    return this.ctx.state === 'running' && !this.stalled;
+  }
+
+  /** The watchdog's word on the output (unlock.ts): stopped while "running", or going again. */
+  setStalled(stalled: boolean): void {
+    this.stalled = stalled;
+    if (!stalled) this.wake();
+  }
+
+  /** Sounds waiting for the context (they play when it runs). */
+  get waiting(): number {
+    return this.pending.length;
+  }
+
+  /**
+   * The context runs again (or for the first time): what was asked for meanwhile plays now, each
+   * at the moment it was due (a reload's later steps keep their places), unless it's too late.
+   */
+  wake(): void {
+    if (!this.running || this.pending.length === 0) return;
+    const list = this.pending;
+    this.pending = [];
+    const now = this.clock();
+    for (const p of list) {
+      if (p.voice.cancelled) continue;
+      const waited = Math.max(0, (now - p.at) / 1000);
+      const due = (p.o.delay ?? 0) - waited;
+      if (due < -PENDING_LATE) {
+        this.counters.late++;
+        continue;
+      }
+      p.voice.real = this.start(p.id, { ...p.o, delay: Math.max(0, due) }, null);
+    }
+  }
+
+  /** Holds a sound until the context runs (null: it won't: closed, or the tab is hidden). */
+  private hold(id: SoundId, o: PlayOptions): Voice | null {
+    if (this.hidden || this.ctx.state === 'closed') return null;
+    const def = SOUNDS[id];
+    const voice: HeldVoice = {
+      id,
+      priority: (def.priority ?? 50) + (o.priority ?? 0),
+      startedAt: this.now + Math.max(0, o.delay ?? 0),
+      cancelled: false,
+      real: null,
+      get ended() {
+        return voice.cancelled || (voice.real?.ended ?? false);
+      },
+      stop: (fade?: number) => {
+        voice.cancelled = true;
+        voice.real?.stop(fade);
+      },
+    };
+    this.pending.push({ id, o, at: this.clock(), voice });
+    if (this.pending.length > MAX_PENDING) this.pending.shift();
+    this.counters.held++;
+    return voice;
   }
 
   /** Where a bus's voices connect (the music scheduler's oscillators use it). */
@@ -285,6 +373,8 @@ export class AudioEngine {
     g.setTargetAtTime(hidden ? 0 : 1, t, hidden ? 0.03 : 0.05);
     if (this.suspendTimer) clearTimeout(this.suspendTimer);
     this.suspendTimer = 0;
+    // nothing held for the background plays when the player comes back
+    if (hidden) this.pending = [];
     if (hidden) {
       this.suspendTimer = setTimeout(() => {
         this.suspendTimer = 0;
@@ -353,8 +443,13 @@ export class AudioEngine {
 
   // ---------------------------------------------------------------- voices
 
-  /** Plays a sound once. Returns its voice, or null when it wasn't played (too far, a limit, a cooldown, not running). */
+  /**
+   * Plays a sound once. Returns its voice, or null when it wasn't played (too far, a limit, a
+   * cooldown, a hidden tab). While the context isn't running yet it waits, and plays when it does.
+   */
   play(id: SoundId, o: PlayOptions = {}): Voice | null {
+    if (this.pending.length) this.wake();
+    if (!this.running) return this.hold(id, o);
     return this.start(id, o, null);
   }
 
@@ -391,6 +486,8 @@ export class AudioEngine {
   }
 
   stopAll(fade = 0.1): void {
+    for (const p of this.pending) p.voice.cancelled = true;
+    this.pending = [];
     for (const key of [...this.loops.keys()]) this.stopLoop(key, fade);
     for (const v of [...this.voices]) v.stop(fade);
   }

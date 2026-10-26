@@ -1,7 +1,7 @@
 /** The engine: bus volumes, voice limits, cooldowns, positional sound, ducking, the hidden tab, loops. */
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_AUDIO } from '../shell/store';
-import { AudioEngine, PAN_SPAN, distanceGain, volumeToGain } from './engine';
+import { AudioEngine, MAX_PENDING, PAN_SPAN, distanceGain, volumeToGain } from './engine';
 import { FakeContext, type FakeGain, type FakeNode, type FakeParam, type FakeSource } from './fakeContext.test-util';
 import { volumesFrom } from './runtime';
 import { SOUNDS } from './sounds';
@@ -270,3 +270,104 @@ describe('spatial: distance, occlusion, headphones, threats', () => {
   });
 });
 
+
+describe('before the context runs (the first tap, a resume, a stopped output)', () => {
+  /** an engine whose context hasn't started yet, with a wall clock the test moves */
+  function waiting() {
+    const ctx = new FakeContext();
+    ctx.state = 'suspended';
+    let wall = 0;
+    const engine = new AudioEngine(ctx.asAudioContext(), { render: () => [new Float32Array(64000).fill(0.1)], random: () => 0.5, clock: () => wall });
+    return { ctx, engine, later: (ms: number) => (wall += ms) };
+  }
+  /** the sounds started (not the convolvers' or the unlock's one-sample buffers) */
+  const ids = (ctx: FakeContext) => ctx.started.filter((s) => s.buffer && s.buffer.length > 1);
+
+  it('a sound asked for while it starts waits, and plays the moment it runs', () => {
+    const { ctx, engine, later } = waiting();
+    const v = engine.play('rifle.magout');
+    expect(v).not.toBeNull();
+    expect(ids(ctx)).toHaveLength(0);
+    expect(engine.waiting).toBe(1);
+    later(80);
+    ctx.state = 'running';
+    engine.wake();
+    expect(ids(ctx)).toHaveLength(1);
+    expect(engine.waiting).toBe(0);
+  });
+
+  it('a delayed step keeps its place: the time it waited comes off its delay', () => {
+    const { ctx, engine, later } = waiting();
+    engine.play('rifle.magin', { delay: 1.1 });
+    later(300);
+    ctx.state = 'running';
+    engine.wake();
+    expect(ids(ctx)[0]!.startedAt).toBeCloseTo(0.8, 3);
+  });
+
+  it('too late is dropped: no burst of stale shots when it finally runs', () => {
+    const { ctx, engine, later } = waiting();
+    engine.play('rifle.fire');
+    engine.play('rifle.bolt', { delay: 2 });
+    later(1000);
+    ctx.state = 'running';
+    engine.wake();
+    // the shot was due a second ago; the bolt is still a second ahead
+    expect(ids(ctx)).toHaveLength(1);
+    expect(engine.counters.late).toBe(1);
+  });
+
+  it('stopped before it played (a reload cut short by a swap): it never plays', () => {
+    const { ctx, engine } = waiting();
+    const v = engine.play('rifle.bolt', { delay: 1 })!;
+    v.stop();
+    ctx.state = 'running';
+    engine.wake();
+    expect(ids(ctx)).toHaveLength(0);
+  });
+
+  it('the next play after it runs flushes what waited, even if nobody called wake', () => {
+    const { ctx, engine } = waiting();
+    engine.play('pistol.magout');
+    ctx.state = 'running';
+    engine.play('ui.click');
+    expect(ids(ctx)).toHaveLength(2);
+  });
+
+  it('a hidden tab holds nothing; going hidden forgets what waited', () => {
+    const { ctx, engine } = waiting();
+    engine.play('rifle.fire');
+    engine.setHidden(true);
+    expect(engine.waiting).toBe(0);
+    expect(engine.play('rifle.fire')).toBeNull();
+    engine.setHidden(false);
+    ctx.state = 'running';
+    engine.wake();
+    expect(ids(ctx)).toHaveLength(0);
+  });
+
+  it('a stalled output (running, clock stopped) holds sounds rather than scheduling into a clock that doesn\'t move', () => {
+    const { ctx, engine } = waiting();
+    ctx.state = 'running';
+    engine.setStalled(true);
+    expect(engine.running).toBe(false);
+    engine.play('smg.fire');
+    expect(ids(ctx)).toHaveLength(0);
+    engine.setStalled(false);
+    expect(ids(ctx)).toHaveLength(1);
+  });
+
+  it('loops aren\'t held (the director asks for them every frame); a closed context holds nothing', () => {
+    const { ctx, engine } = waiting();
+    engine.loop('jet:0', 'jet.loop');
+    expect(engine.waiting).toBe(0);
+    ctx.state = 'closed';
+    expect(engine.play('rifle.fire')).toBeNull();
+  });
+
+  it('holds at most MAX_PENDING (the oldest go)', () => {
+    const { engine } = waiting();
+    for (let i = 0; i < MAX_PENDING + 5; i++) engine.play('step');
+    expect(engine.waiting).toBe(MAX_PENDING);
+  });
+});

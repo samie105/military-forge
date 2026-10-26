@@ -10,6 +10,7 @@ import type { MapDef } from '@military-forge/content';
 import { Acoustics } from './acoustics';
 import { AudioDirector, type AudioEvent, type FrameExtras } from './director';
 import { AudioEngine, type Volumes } from './engine';
+import { weaponSoundIds, weaponSounds } from './families';
 import { MusicBed } from './music';
 import { SOUNDS, type SoundId } from './sounds';
 import { mountUiSounds, musicFor, shellCues } from './ui';
@@ -68,6 +69,8 @@ export class AudioRuntime {
   private map: MapDef | null = null;
   private acoustics: Acoustics | null = null;
   private enclosureAt = 0;
+  /** the guns in the local player's hands last warmed (their defs) */
+  private armed = '';
   private readonly cleanups: (() => void)[] = [];
 
   constructor(ctx: AudioContext, store: StoreApi<ShellState> | null) {
@@ -128,6 +131,8 @@ export class AudioRuntime {
   }
 
   onFrame(frame: Frame | null, dt: number, extras: FrameExtras | null): void {
+    // sounds asked for before the context ran play now, if it does
+    if (this.engine.waiting) this.engine.wake();
     const inGame = frame !== null;
     if (inGame !== this.inGame) {
       this.inGame = inGame;
@@ -141,8 +146,26 @@ export class AudioRuntime {
       if (this.lastShell) this.music.setMode(musicFor(inGame, this.lastShell));
     }
     if (frame && extras && !this.engine.isHidden) {
+      this.warmHands(frame);
       this.director.onFrame(frame, dt, extras);
       this.listen(extras.map ?? null);
+    }
+  }
+
+  /**
+   * The guns in your hands: their shots, reload steps, draw and empty click rendered ahead, in idle
+   * time, so the first reload of a gun (the steps start the frame it begins) has its takes ready.
+   */
+  private warmHands(frame: Frame): void {
+    const me = frame.players.find((p) => p.id === frame.localId);
+    if (!me) return;
+    let key = '';
+    for (const w of me.weapons) key += `${w.def},`;
+    if (key === this.armed) return;
+    this.armed = key;
+    for (const w of me.weapons) {
+      const ws = weaponSounds(w.def);
+      if (ws) this.engine.warm(weaponSoundIds(ws));
     }
   }
 
