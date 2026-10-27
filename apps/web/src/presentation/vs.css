@@ -2,8 +2,10 @@
    teams, VS"). Desktop is drawn at 1920×1080 (the Screen's fit), the phone at 812×375 (PhoneScreen's).
    Tokens only; motion from the kit's tokens; Reduce motion keeps a plain fade. */
 
+/* touches go through to the game: a thumb put on a stick in the countdown holds it at GO (the owner, 27
+   Oct: "I can't hold the joystick up to fly"); a tap still skips (VsPoster's window listener) */
 .vs-screen { pointer-events: none; }
-.vs { position: absolute; inset: 0; overflow: hidden; z-index: var(--z-banner); color: var(--c-text); pointer-events: auto;
+.vs { position: absolute; inset: 0; overflow: hidden; z-index: var(--z-banner); color: var(--c-text); pointer-events: none;
   background: radial-gradient(130% 130% at 50% 55%, var(--c-olive-800) 0%, var(--c-ink-950) 100%);
   animation: vs-in var(--m-scene, 520ms) var(--ease-arrive) both; }
 .vs.is-held { visibility: hidden; animation-play-state: paused; }

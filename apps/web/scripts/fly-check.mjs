@@ -4,7 +4,7 @@
  * fly", "I'm only flying if I press JET"). A phone-sized headless Chrome (812×375, touch, real CDP
  * touches) starts Training from Home for each layout (Classic, Claw, One-thumb assist; Fire button mode
  * on Classic) with Fixed and Follow thumb sticks, and from the countdown through GO:
- * - a thumb landed low on the move dial during the countdown pushes up 36 px at GO;
+ * - a thumb landed low on the move dial during the countdown (over the VS poster) pushes up 36 px at GO;
  * - a fresh thumb landing low and left of the centre, then one on the centre, push up 36 px;
  * - the JET button, where it's shown, is held;
  * then a reload mid-match and a new Training, and the keyboard (Space, ↑) on a desktop page.
@@ -151,7 +151,9 @@ async function run(layout, sticks, reload = false) {
     await page.waitForFunction(() => window.__game.mode.match?.phase === 1, { timeout: 60_000, polling: 16 }).catch(() => {});
     const wasCountdown = (await phase(page)) === 1;
     const D = await dial(page);
-    // a thumb resting low on the dial through the countdown
+    // a thumb resting low on the dial through the countdown, put down while the VS poster is up (the
+    // owner, 27 Oct: the poster took the touch, and the thumb never became the stick)
+    if (wasCountdown) await page.waitForSelector('.vs:not(.is-held):not(.is-leaving)', { timeout: 4000 }).catch(() => {});
     const low = { x: D.x, y: D.y + 0.6 * D.r };
     if (wasCountdown) await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pt(low.x, low.y)] });
     await page.waitForFunction(() => window.__game.mode.match?.phase === 2, { timeout: 60_000, polling: 16 });

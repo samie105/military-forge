@@ -171,6 +171,14 @@ export class TouchController {
   private readonly grabSeen = new Map<number, { at: number; from: Element | null; lost: boolean }>();
   /** fingers down in the editor (a second one on the screen pinches the control the first drags) */
   private readonly pointers = new Map<number, { x: number; y: number }>();
+  /**
+   * Thumbs that landed on the game while the controls stood aside (the death cam: spectate.css), where
+   * they are now. The hidden layout can't say which stick a thumb means, so it waits; when the controls
+   * come back (the respawn) a thumb still down takes its stick from there (the owner, 27 Oct: "I can't
+   * hold the joystick up to fly": a thumb put down on the death cam was read as the aim stick, and stayed
+   * it after the respawn until it was lifted).
+   */
+  private readonly waiting = new Map<number, { x: number; y: number }>();
   private readonly state = createTouchState();
   /** the local player is alive (the frame's; the hints possible now need it) */
   private aliveNow = false;
@@ -729,6 +737,7 @@ export class TouchController {
       this.syncPlaying();
     }
     this.maybeChoose();
+    if (this.waiting.size && this.playing && this.onScreen()) this.takeWaiting();
     // the stick asks to fly while the controls don't play (under the menus, the editor…): the log says so
     if (!this.playing && this.state.moveBits & Btn.Jet && this.moveGrab() && performance.now() - this.idleJetAt > 10_000) {
       this.idleJetAt = performance.now();
@@ -891,13 +900,40 @@ export class TouchController {
     // the game itself (either canvas, or nothing but the page): a stick for that half of the screen
     if (!(target === document.documentElement || target === document.body || target instanceof HTMLCanvasElement || target?.closest('.mf-touch'))) return;
     e.preventDefault(); // no mouse emulation, no scrolling, no text selection
-    // the page's own coordinates: an upright phone plays turned onto its side (ui/landscape.ts)
-    const at = logicalPoint(e);
+    // the controls stand aside (the death cam): the world takes the drag, and the thumb waits for its stick
+    if (!this.onScreen()) {
+      this.waiting.set(e.pointerId, logicalPoint(e));
+      return;
+    }
+    this.grabStick(e.pointerId, logicalPoint(e), e.timeStamp, e);
+  }
+
+  /** The controls are on screen (not stood aside for the death cam: their safe box has a size). */
+  private onScreen(): boolean {
+    return this.safe.getClientRects().length > 0;
+  }
+
+  /** The controls are back (the respawn): each thumb that waited and is still down takes its stick where it is now. */
+  private takeWaiting(): void {
+    const now = performance.now();
+    for (const [id, at] of this.waiting) {
+      this.waiting.delete(id);
+      this.grabStick(id, at, now, null);
+      if (this.grabs.has(id)) this.grabSeen.set(id, { at: now, from: null, lost: false });
+    }
+  }
+
+  /**
+   * A thumb on the game (`at`: the page's own coordinates, ui/landscape.ts: an upright phone plays
+   * turned onto its side) takes the stick for its half of the screen. `e`: the touch's pointerdown, or
+   * null for a thumb that waited (takeWaiting: it never fires Claw's tap or starts a pinch).
+   */
+  private grabStick(pointerId: number, at: { x: number; y: number }, timeStamp: number, e: PointerEvent | null): void {
     const rect = logicalRect(this.safe);
     const leftHalf = at.x < rect.left + rect.width / 2;
     const id = leftHalf === (this.settings.handed === 'right') ? 'move' : 'aim';
     const same = [...this.grabs.entries()].find(([, g]) => g.kind === 'stick' && g.id === id) as [number, Extract<Grab, { kind: 'stick' }>] | undefined;
-    if (same && id === 'aim' && this.settings.tapFire) {
+    if (same && e && id === 'aim' && this.settings.tapFire) {
       // Claw: an extra finger on empty aim-side space fires while it's down ("tap anywhere to fire";
       // no pinch on this side then: a still thumb plus a finger is how claw players shoot)
       const fire = availableControls().find((c) => c.id === 'fire');
@@ -907,20 +943,21 @@ export class TouchController {
       }
     }
     if (same) {
+      if (!e) return;
       // a second finger on the same side: the camera (pinch to zoom, two-finger taps) only when it lands
       // soon, well apart (20 mm), and the first thumb hasn't moved; otherwise a stray finger (a claw
       // grip's) never takes a thumb's stick away (§4.6). A fixed stick's thumb is pushing from the
       // landing on, so "still" there is not having moved off where it landed
       const first = this.pointers.get(same[0]);
       const still = same[1].fixed ? !same[1].moved : same[1].peak === 0;
-      if (this.settings.pinchZoom && still && e.timeStamp - same[1].startAt <= GESTURE.pinchMs && (!first || Math.hypot(at.x - first.x, at.y - first.y) >= PINCH_MIN_PX)) {
-        this.startCamera(same[0], same[1], e.pointerId, at, e.timeStamp);
+      if (this.settings.pinchZoom && still && timeStamp - same[1].startAt <= GESTURE.pinchMs && (!first || Math.hypot(at.x - first.x, at.y - first.y) >= PINCH_MIN_PX)) {
+        this.startCamera(same[0], same[1], pointerId, at, timeStamp);
         return;
       }
       // one thumb per stick, unless the old grab's finger has gone quiet: its lift may never come
       // (WebKit), and a new thumb on the dial means the old one is gone
-      if (e.timeStamp - (this.grabSeen.get(same[0])?.at ?? e.timeStamp) < STALE_MS) return;
-      this.letGo(same[0], e.timeStamp);
+      if (timeStamp - (this.grabSeen.get(same[0])?.at ?? timeStamp) < STALE_MS) return;
+      this.letGo(same[0], timeStamp);
     }
     const el = this.els.get(id)!;
     const radius = (this.sizes.get(id)?.px ?? 96) / 2;
@@ -934,7 +971,7 @@ export class TouchController {
     const centred = fixed && !!home && Math.hypot(at.x - (rect.left + home.x), at.y - (rect.top + home.y)) <= FIXED_GRAB * radius;
     let cx = centred ? rect.left + home!.x : at.x;
     let cy = centred ? rect.top + home!.y : at.y;
-    const back = id === 'aim' ? this.resumeAim(e.timeStamp) : null;
+    const back = id === 'aim' ? this.resumeAim(timeStamp) : null;
     if (back) {
       if (!centred) {
         cx = at.x - back.dx;
@@ -945,13 +982,13 @@ export class TouchController {
     settleNow(el);
     if (!fixed) this.drawBase(el, cx, cy, radius, rect);
     el.classList.add('mf-down');
-    const grab: Grab = { kind: 'stick', id, cx, cy, radius, fixed, centred, x0: at.x, y0: at.y, ox: at.x, oy: at.y, moved: false, landedAt: performance.now(), movedAt: performance.now(), startAt: e.timeStamp, peak: 0, peakDir: 0, peakAt: e.timeStamp, lowAt: e.timeStamp, riseFrom: e.timeStamp, lastMag: 0, lastAt: e.timeStamp, trail: [{ t: e.timeStamp, x: at.x, y: at.y }], dx: 0, dy: 0 };
-    this.grabs.set(e.pointerId, grab);
-    this.pointers.set(e.pointerId, at);
+    const grab: Grab = { kind: 'stick', id, cx, cy, radius, fixed, centred, x0: at.x, y0: at.y, ox: at.x, oy: at.y, moved: false, landedAt: performance.now(), movedAt: performance.now(), startAt: timeStamp, peak: 0, peakDir: 0, peakAt: timeStamp, lowAt: timeStamp, riseFrom: timeStamp, lastMag: 0, lastAt: timeStamp, trail: [{ t: timeStamp, x: at.x, y: at.y }], dx: 0, dy: 0 };
+    this.grabs.set(pointerId, grab);
+    this.pointers.set(pointerId, at);
     // a fixed aim stick landing past the fire line aims at once, and fires once the landing settles
     // (LAND_ARM; apply()); one that lands inside it fires as soon as a drag takes it past
     if (id === 'aim') this.state.aimArmed = true;
-    this.moveStick(id, at.x - cx, at.y - cy, grab, e.timeStamp);
+    this.moveStick(id, at.x - cx, at.y - cy, grab, timeStamp);
     if (id === 'aim' && centred && !back && this.state.aim.mag >= FIRE_FIXED.on) this.setArmed(false);
   }
 
@@ -1052,6 +1089,11 @@ export class TouchController {
 
   private onMove(e: PointerEvent): void {
     if (e.pointerType !== 'mouse') this.lastTouchAt = e.timeStamp;
+    const waiting = this.waiting.get(e.pointerId);
+    if (waiting) {
+      Object.assign(waiting, logicalPoint(e));
+      return;
+    }
     const g = this.grabs.get(e.pointerId);
     if (!g) {
       // a pinch's second finger moves without a grab of its own (the editor's, the camera's)
@@ -1077,6 +1119,7 @@ export class TouchController {
   }
 
   private onUp(e: PointerEvent): void {
+    this.waiting.delete(e.pointerId);
     const g = this.grabs.get(e.pointerId);
     this.pointers.delete(e.pointerId);
     this.grabSeen.delete(e.pointerId);
@@ -1792,6 +1835,7 @@ export class TouchController {
     }
     this.pointers.clear();
     this.grabSeen.clear();
+    this.waiting.clear();
     this.overlays?.hideRadial();
     this.overlays?.hideFan();
     const s = this.state;
