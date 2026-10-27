@@ -177,8 +177,15 @@ export class TouchController {
    * come back (the respawn) a thumb still down takes its stick from there (the owner, 27 Oct: "I can't
    * hold the joystick up to fly": a thumb put down on the death cam was read as the aim stick, and stayed
    * it after the respawn until it was lifted).
+   *
+   * A thumb on a screen over the game (the results, the lobby between rounds) waits too, its touch the
+   * screen's meanwhile (a tap, a scroll); once the screen has gone from under it and play is on, it
+   * takes its stick (the owner, 27 Oct: "fix the lobby one too": a thumb held from the results was
+   * nobody's after the next GO). `client`: where it is on the page, for what lies under it now.
    */
-  private readonly waiting = new Map<number, { x: number; y: number }>();
+  private readonly waiting = new Map<number, { x: number; y: number; client?: { x: number; y: number } }>();
+  /** a thumb that landed on a screen: its touchmove listener there (that screen's node may leave the page) */
+  private readonly screenHolds = new Map<number, () => void>();
   private readonly state = createTouchState();
   /** the local player is alive (the frame's; the hints possible now need it) */
   private aliveNow = false;
@@ -332,7 +339,11 @@ export class TouchController {
       if (this.playing || this.editing) e.preventDefault();
     };
     for (const type of ['gesturestart', 'gesturechange', 'contextmenu', 'dblclick'] as const) on(type as keyof WindowEventMap, stop, { passive: false });
-    on('touchmove', stop, { passive: false });
+    // a drag that started on a screen over the game (the lobby, its match rules, the results) scrolls it
+    // (the owner, 27 Oct: "you can't scroll down… for every other section too")
+    on('touchmove', (e) => {
+      if (this.editing || (this.playing && !onScreenOverGame(e.target))) e.preventDefault();
+    }, { passive: false });
     // iOS edge swipes (back and forward) start within 24 px of a physical side edge: not while playing
     // (§4.9.1). Pointer events still arrive; only the browser's own gesture (and synthetic clicks) go
     on('touchstart', (e) => {
@@ -895,10 +906,15 @@ export class TouchController {
       this.pressControl(e, ctl.dataset.mfControl as ControlId, ctl);
       return;
     }
+    // a screen over the game (the results, the lobby): its touch; a thumb held there waits for the game
+    if (e.pointerType === 'touch' && onScreenOverGame(target) && !target!.closest('input, textarea, select, [contenteditable]')) {
+      this.holdOnScreen(e, target!);
+      return;
+    }
     // a button over the game (the drill's Skip and Close): a tap for it, not a stick
     if (target?.closest('button, a[href], [role="button"]')) return;
     // the game itself (either canvas, or nothing but the page): a stick for that half of the screen
-    if (!(target === document.documentElement || target === document.body || target instanceof HTMLCanvasElement || target?.closest('.mf-touch'))) return;
+    if (!onGame(target)) return;
     e.preventDefault(); // no mouse emulation, no scrolling, no text selection
     // the controls stand aside (the death cam): the world takes the drag, and the thumb waits for its stick
     if (!this.onScreen()) {
@@ -908,15 +924,33 @@ export class TouchController {
     this.grabStick(e.pointerId, logicalPoint(e), e.timeStamp, e);
   }
 
+  /**
+   * A thumb landed on a screen over the game: it waits (takeWaiting), and once that screen has left the
+   * page under it the browser never scrolls it (its touchmoves go to the node that left, not the window).
+   */
+  private holdOnScreen(e: PointerEvent, target: Element): void {
+    this.waiting.set(e.pointerId, { ...logicalPoint(e), client: { x: e.clientX, y: e.clientY } });
+    const block = (t: Event) => {
+      if (!target.isConnected && this.playing) t.preventDefault();
+    };
+    target.addEventListener('touchmove', block, { passive: false });
+    this.screenHolds.get(e.pointerId)?.();
+    this.screenHolds.set(e.pointerId, () => target.removeEventListener('touchmove', block));
+  }
+
   /** The controls are on screen (not stood aside for the death cam: their safe box has a size). */
   private onScreen(): boolean {
     return this.safe.getClientRects().length > 0;
   }
 
-  /** The controls are back (the respawn): each thumb that waited and is still down takes its stick where it is now. */
+  /**
+   * The controls are back (the respawn), or a screen left (the results, the lobby): each thumb that
+   * waited and is still down takes its stick where it is now, a thumb on a screen once the game is under it.
+   */
   private takeWaiting(): void {
     const now = performance.now();
     for (const [id, at] of this.waiting) {
+      if (at.client && !onGame(document.elementFromPoint(at.client.x, at.client.y))) continue;
       this.waiting.delete(id);
       this.grabStick(id, at, now, null);
       if (this.grabs.has(id)) this.grabSeen.set(id, { at: now, from: null, lost: false });
@@ -1092,6 +1126,7 @@ export class TouchController {
     const waiting = this.waiting.get(e.pointerId);
     if (waiting) {
       Object.assign(waiting, logicalPoint(e));
+      if (waiting.client) waiting.client = { x: e.clientX, y: e.clientY };
       return;
     }
     const g = this.grabs.get(e.pointerId);
@@ -1120,6 +1155,8 @@ export class TouchController {
 
   private onUp(e: PointerEvent): void {
     this.waiting.delete(e.pointerId);
+    this.screenHolds.get(e.pointerId)?.();
+    this.screenHolds.delete(e.pointerId);
     const g = this.grabs.get(e.pointerId);
     this.pointers.delete(e.pointerId);
     this.grabSeen.delete(e.pointerId);
@@ -1836,6 +1873,8 @@ export class TouchController {
     this.pointers.clear();
     this.grabSeen.clear();
     this.waiting.clear();
+    for (const off of this.screenHolds.values()) off();
+    this.screenHolds.clear();
     this.overlays?.hideRadial();
     this.overlays?.hideFan();
     const s = this.state;
@@ -2187,6 +2226,16 @@ export class TouchController {
     for (const c of this.cleanups) c();
     this.root.remove();
   }
+}
+
+/** The game itself under a touch: either canvas, the controls' layer, or nothing but the page. */
+function onGame(target: EventTarget | null): boolean {
+  return target === document.documentElement || target === document.body || target instanceof HTMLCanvasElement || (target instanceof Element && !!target.closest('.mf-touch'));
+}
+
+/** A screen over the game under a touch (the lobby, the results, a sheet): an element on the page that isn't the game. */
+function onScreenOverGame(target: EventTarget | null): target is Element {
+  return target instanceof Element && target.isConnected && !onGame(target);
 }
 
 function div(className: string, parent: HTMLElement): HTMLDivElement {

@@ -66,7 +66,9 @@ try {
       const btns = [...document.querySelectorAll('button')];
       const input = document.querySelector('input[type=text], input:not([type])');
       if (input && !input.value) btns.find((b) => /pick one for me/i.test(b.textContent))?.click();
-      btns.find((b) => /^\s*start\s*$|join room|join next round/i.test(b.textContent) && !b.disabled)?.click();
+      // Start first: the death cam's hidden Join next round sits before it on the page
+      const start = btns.find((b) => /^\s*start\s*$/i.test(b.textContent) && !b.disabled);
+      (start ?? btns.find((b) => /join room|join next round/i.test(b.textContent) && !b.disabled))?.click();
     });
     await sleep(1000);
   }
