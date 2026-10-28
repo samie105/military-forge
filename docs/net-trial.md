@@ -218,6 +218,24 @@ What the owner sets up (nothing here is created for you):
 4. **Restart the API:** `sudo systemctl daemon-reload && sudo systemctl restart mf-api`. The setup script (`scripts/net-trial/data.sh`) adds the drop-in that reads the file at the next deploy; it is not in `cloud-init.sh`, which is at EC2's 16 KB limit.
 5. **Check:** `curl -s https://<your address>/api/auth/options` says `{"resetByEmail":true}`, and Settings → Account → Sign in shows "Forgot password?". A bad setting stops the API at start with the reason in `journalctl -u mf-api`.
 
+### 5.2 The store (the launch gift and Flutterwave)
+
+The store (docs/17, `apps/api` store/) is off until `/etc/military-forge/store.env` exists. Like `email.env`, a drop-in reads it (`scripts/net-trial/data.sh`) and a deploy never rewrites it.
+```sh
+sudo install -m 0640 -o root -g mf /dev/null /etc/military-forge/store.env
+sudo nano /etc/military-forge/store.env
+```
+```sh
+# the launch gift: items anyone 18+ can claim free, once per account; optional end date
+STORE_CLAIMABLE='skin_k47_galaxy_relic_fx'
+# STORE_CLAIM_UNTIL='2026-12-31'
+# payments (test keys first; never in the repo): Flutterwave → Settings → API Keys and Webhooks
+# FLUTTERWAVE_SECRET_KEY='FLWSECK_TEST-...'
+# FLUTTERWAVE_PUBLIC_KEY='FLWPUBK_TEST-...'
+# FLUTTERWAVE_WEBHOOK_HASH='a long random string, the same as the dashboard's secret hash'
+```
+Then `sudo systemctl daemon-reload && sudo systemctl restart mf-api`. **Check:** `curl -s https://<your address>/api/store` says `"enabled":true`; a bad value stops the API at start with the reason in `journalctl -u mf-api`. The Flutterwave dashboard's webhook URL is `https://<your address>/api/webhooks/flutterwave`.
+
 ## 6. Expected costs (Oct 2026; check the EC2 pricing page's Local Zones tab)
 
 | Item | Rate | 3 days |

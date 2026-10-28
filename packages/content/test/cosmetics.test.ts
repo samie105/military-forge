@@ -26,7 +26,7 @@ import {
 /** The only fields an item may carry. Anything gameplay-shaped (hitbox, speed, scale, loudness...) fails here. */
 const ALLOWED_KEYS = new Set(['id', 'wireId', 'slot', 'name', 'rarity', 'assets', 'dyeable', 'source', 'releaseSeason', 'tags', 'colour', 'widthMul', 'body', 'fits',
   // weapon skins (docs/17 §3.3): which gun, the tier, a tracer hue (V5: hue only), the kill effect, what owning it includes
-  'weaponId', 'tier', 'tracerGlow', 'killEffect', 'includes']);
+  'weaponId', 'tier', 'tracerGlow', 'sounds', 'inspectSound', 'killEffect', 'includes']);
 const COLOUR_SLOTS = new Set(['skinTone', 'exhaust', 'dye']);
 
 function withItem(slot: string, id: string): CosmeticLoadout {

@@ -5,6 +5,7 @@ import { BANK_RATE, renderSound, variantsOf } from './bank';
 import { Rng, hashSeed, peak, rms, seamless, svf, noise } from './dsp';
 import { PROJECTILE, blastSound, familyOf, weaponSoundIds, weaponSounds } from './families';
 import { SOUNDS, SOUND_IDS, type SoundId } from './sounds';
+import { SKIN_SOUND_IDS } from './sounds/skins';
 
 describe('every sound', () => {
   it('renders finite samples at its peak, with sound in it, at a sane length', () => {
@@ -44,10 +45,16 @@ describe('every sound', () => {
 
   // Memory, not download: this is the decoded audio a page holds
   // if it plays every take of every sound (a match renders only what it hears, a few MB)
-  it('fits the memory budget: everything rendered at once stays under 20 MB', () => {
-    let bytes = 0;
-    for (const id of SOUND_IDS) for (let v = 0; v < variantsOf(id); v++) bytes += renderSound(id, v).reduce((n, c) => n + c.length * 4, 0);
-    expect(bytes).toBeLessThan(20 * 1024 * 1024);
+  it('fits the memory budget: everything rendered at once stays under 20 MB, and each skin line\'s own sounds under 1.25 MB', () => {
+    const bytesOf = (ids: readonly SoundId[]) => {
+      let bytes = 0;
+      for (const id of ids) for (let v = 0; v < variantsOf(id); v++) bytes += renderSound(id, v).reduce((n, c) => n + c.length * 4, 0);
+      return bytes;
+    };
+    const skins = new Set<SoundId>(SKIN_SOUND_IDS);
+    expect(bytesOf(SOUND_IDS.filter((id) => !skins.has(id)))).toBeLessThan(20 * 1024 * 1024);
+    // a skin line's sounds render only when someone in the match wears it (sounds/skins.ts): one line today
+    expect(bytesOf(SKIN_SOUND_IDS)).toBeLessThan(1.25 * 1024 * 1024);
   });
 });
 

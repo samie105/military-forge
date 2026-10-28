@@ -46,7 +46,7 @@ export interface KillEffectDef {
   dissolveS: readonly [number, number];
   /** Reduce flashes / Reduce motion / the Low preset / a fifth at once: a flat tint fade, no particles */
   still: { tint: string; durationS: number };
-  /** a sound id (≤ 1 s, no louder than the base death); null = the base death sound */
+  /** a sound id that plays with the full effect (≤ its duration, no louder than the base death voice, above the footstep and jet bands); null = none (the base death voice plays either way) */
   sound: string | null;
 }
 

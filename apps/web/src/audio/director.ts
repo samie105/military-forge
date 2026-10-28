@@ -8,11 +8,11 @@
  * riot shield going up, fire, grenades bouncing, mines arming, projectiles in flight, smoke and gas
  * hissing, and the local player's flashbang deafness, gas cough and low fuel.
  */
-import { HitZone, NO_WEAPON, pickups, weapons, type MapDef } from '@military-forge/content';
+import { HitZone, NO_WEAPON, pickups, weaponSkinOf, weapons, type CosmeticLoadout, type MapDef } from '@military-forge/content';
 import { DamageSource, type SimEvent } from '@military-forge/sim';
 import type { Frame, GrenadeView, PlayerView } from '../view';
 import type { PlayOptions, Voice } from './engine';
-import { GRENADE, PROJECTILE, blastSound, flightLoop, launcherOf, weaponSounds, type WeaponSounds } from './families';
+import { GRENADE, PROJECTILE, blastSound, flightLoop, launcherOf, skinnedWeaponSounds, weaponSounds, type WeaponSounds } from './families';
 import { distanceGain } from './engine';
 import type { SoundId } from './sounds';
 
@@ -139,7 +139,20 @@ export class AudioDirector {
   private coughAt = -Infinity;
   private blindPeak = 0;
 
+  /**
+   * A player's look (the room's: the ROSTER's, the local player's own), so a weapon skin's own sounds play for
+   * everyone who hears that gun (docs/17 V11). Null: every gun sounds as its base.
+   */
+  lookOf: ((id: number, isLocal: boolean) => CosmeticLoadout | null) | null = null;
+
   constructor(private readonly sink: Sink) {}
+
+  /** The sounds `player`'s weapon `weapon` makes: its skin's, if the player's look wears one that swaps them. */
+  soundsFor(player: number, weapon: number): WeaponSounds | null {
+    const def = weapons[weapon];
+    const skin = def && this.lookOf ? weaponSkinOf(this.lookOf(player, player === this.localId), def.id) : null;
+    return skin?.sounds ? skinnedWeaponSounds(weapon, skin.id, skin.sounds) : weaponSounds(weapon);
+  }
 
   /** Forget everything (a new mode, a new map). */
   reset(): void {
@@ -208,7 +221,7 @@ export class AudioDirector {
         const def = weapons[e.weapon];
         const type = def?.projectile ? def.projectile.index + PROJECTILE.rocket : -1;
         if (e.owner === me && type >= 0) this.ownLaunches.push([type, s.now]);
-        const ws = weaponSounds(e.weapon);
+        const ws = this.soundsFor(e.owner, e.weapon);
         if (ws) this.fire(e.owner, ws, this.pos.get(e.owner));
         break;
       }
@@ -268,7 +281,7 @@ export class AudioDirector {
     const s = this.sink;
     const me = this.localId;
     const own = e.shooter === me;
-    const ws = weaponSounds(e.weapon);
+    const ws = this.soundsFor(e.shooter, e.weapon);
     if (ws && ws.family !== 'melee') {
       const last = this.lastShot.get(e.shooter) ?? -Infinity;
       if (s.now - last > 0.025 || ws.fireLoop) this.fire(e.shooter, ws, own ? undefined : { x: e.ox, y: e.oy - 1 });
@@ -464,7 +477,7 @@ export class AudioDirector {
     if (m.jetting) s.loop(key('jet'), 'jet.loop', { ...where, gain: (own ? 1 : 0.85 * cue) * (0.45 + 0.55 * m.jetDuty), priority: cuePriority });
 
     // ---- the gun in hand: draw, reload, wind-up, swing
-    const ws = def !== NO_WEAPON ? weaponSounds(def) : null;
+    const ws = def !== NO_WEAPON ? this.soundsFor(p.id, def) : null;
     if (!spawned && (p.active !== m.active || def !== m.def || p.dual !== m.dual) && ws) {
       this.cancelReload(m);
       this.stopWindup(p.id, m, null);
@@ -532,7 +545,7 @@ export class AudioDirector {
     }
     // the dry click: the trigger pulled on an empty gun that isn't reloading
     const w = me.weapons[me.active];
-    const ws = w && w.def !== NO_WEAPON ? weaponSounds(w.def) : null;
+    const ws = w && w.def !== NO_WEAPON ? this.soundsFor(me.id, w.def) : null;
     if (x.fireHeld && !this.fireWasHeld && w && ws && ws.family !== 'melee' && w.mag === 0 && w.reloadTicks === 0) {
       s.play(ws.empty);
     }
@@ -668,7 +681,7 @@ export class AudioDirector {
       const d = Math.hypot(m.x - x, m.y + 1 - y);
       if (d < 4 && (!best || d < best.d)) best = { id: pid, d, def: m.def };
     }
-    const ws = best ? weaponSounds(best.def) : null;
+    const ws = best ? this.soundsFor(best.id, best.def) : null;
     if (best && ws) this.fire(best.id, ws, { x, y: y - 1 });
   }
 

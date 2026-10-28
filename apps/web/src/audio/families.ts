@@ -3,7 +3,7 @@
  * and level of their own (the Hawk .50 is a deeper pistol, the Bullpup a brighter rifle).
  */
 import { PROJECTILE_TYPE_BASE, weapons, type WeaponDef } from '@military-forge/content';
-import type { SoundId } from './sounds';
+import { isSoundId, type SoundId } from './sounds';
 
 export type Family = 'pistol' | 'smg' | 'rifle' | 'shotgun' | 'sniper' | 'lmg' | 'beam' | 'rocket' | 'popper' | 'flame' | 'ripper' | 'pulse' | 'melee';
 
@@ -123,6 +123,35 @@ export function weaponSounds(index: number): WeaponSounds | null {
   const out: WeaponSounds = { ...base, rate: t.rate ?? 1, gain: t.gain ?? 1 };
   if (t.noCycle) delete out.cycle;
   cache.set(index, out);
+  return out;
+}
+
+const skinned = new Map<string, WeaponSounds>();
+
+/**
+ * Weapon `index`'s sounds as a skin swaps them (`swaps`: base sound id → the skin's own, packages/content
+ * weapon-skins.json `sounds`; docs/17 V11): the same steps, timings, pitch and level, other takes. An id the bank
+ * doesn't have stays the base's. `key` names the skin (the cache).
+ */
+export function skinnedWeaponSounds(index: number, key: string, swaps: Readonly<Record<string, string>>): WeaponSounds | null {
+  const ws = weaponSounds(index);
+  if (!ws) return null;
+  const k = `${index}|${key}`;
+  const hit = skinned.get(k);
+  if (hit) return hit;
+  const swap = (id: SoundId): SoundId => {
+    const to = swaps[id];
+    return to !== undefined && isSoundId(to) ? to : id;
+  };
+  const out: WeaponSounds = {
+    ...ws,
+    fire: ws.fire && swap(ws.fire),
+    reload: ws.reload.map((step) => ({ ...step, id: swap(step.id) })),
+    empty: swap(ws.empty),
+    draw: swap(ws.draw),
+    ...(ws.cycle ? { cycle: { ...ws.cycle, id: swap(ws.cycle.id) } } : {}),
+  };
+  skinned.set(k, out);
   return out;
 }
 

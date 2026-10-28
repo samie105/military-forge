@@ -587,6 +587,8 @@ registerRoute({
           mountLockerRoute(el, {
             onExit: close,
             onCreator: () => openCreator('locker'),
+            // the Store (its header button, and "Get it in the Store" on a locked store skin)
+            onStore: () => (location.hash = '#/store'),
             ...(loadoutSync ? { store: loadoutSync.store, guns: loadoutSync.guns } : {}),
           }),
     ),
@@ -639,8 +641,9 @@ registerRoute({
                 buy: (itemId, expectedPrice, key) => api.authed('POST', '/store/buy', { itemId, expectedPrice }, { 'idempotency-key': key }),
                 history: () => api.authed('GET', '/store/history'),
                 refund: (txRef) => api.authed('POST', `/store/payments/${encodeURIComponent(txRef)}/refund`, {}),
+                claim: (itemId, birthYear) => api.authed('POST', '/store/claim', birthYear === null ? { itemId } : { itemId, birthYear, adult: true }),
               }
-            : { load: offline, checkout: offline, confirm: offline, buy: offline, history: offline, refund: offline };
+            : { load: offline, checkout: offline, confirm: offline, buy: offline, history: offline, refund: offline, claim: offline };
           const back = storeBack;
           storeBack = null;
           return mountStore(el, {
@@ -724,6 +727,10 @@ else {
 // sound starts on the first tap or key (browsers allow it only then); the shell's store drives the
 // interface cues and the music
 startAudio(shell.store);
+// weapon skins' own sounds (docs/17 V11, §3.7): who wears which skin (every player's look, ours too), and a kill
+// effect's sound where its victim fell (only when the effect itself plays)
+audio.setLookOf((id, isLocal) => loadouts3d.for({ id, isLocal }));
+if (view3d) view3d.killEffects.onSound = (id, x, y) => audio.playAt(id, x, y);
 // the saved loadout (look + guns) follows the account: read at sign-in, kept on this device as the offline cache
 const loadoutSync = shell.controller ? new LoadoutSync(shell.controller.api) : null;
 // "here" to the API every 30 s while visible, with the room when in an online match (presence.ts)

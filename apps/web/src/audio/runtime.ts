@@ -10,7 +10,7 @@ import type { MapDef } from '@military-forge/content';
 import { Acoustics } from './acoustics';
 import { AudioDirector, type AudioEvent, type FrameExtras } from './director';
 import { AudioEngine, type Volumes } from './engine';
-import { weaponSoundIds, weaponSounds } from './families';
+import { weaponSoundIds } from './families';
 import { MusicBed } from './music';
 import { SOUNDS, type SoundId } from './sounds';
 import { mountUiSounds, musicFor, shellCues } from './ui';
@@ -164,7 +164,7 @@ export class AudioRuntime {
     if (key === this.armed) return;
     this.armed = key;
     for (const w of me.weapons) {
-      const ws = weaponSounds(w.def);
+      const ws = this.director.soundsFor(me.id, w.def);
       if (ws) this.engine.warm(weaponSoundIds(ws));
     }
   }
@@ -194,9 +194,14 @@ export class AudioRuntime {
     this.engine.stopAll(0.1);
   }
 
-  /** Plays one sound by id (the board, and console poking). */
+  /** Plays one sound by id (the board, the Locker's inspect chime, and console poking). */
   play(id: string): void {
     if (id in SOUNDS) this.engine.play(id as SoundId);
+  }
+
+  /** Plays a world sound by id at (x, y) (a kill effect's sound, where the victim fell). */
+  playAt(id: string, x: number, y: number): void {
+    if (id in SOUNDS && !this.engine.isHidden) this.engine.play(id as SoundId, { x, y });
   }
 
   dispose(): void {

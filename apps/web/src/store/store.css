@@ -98,7 +98,7 @@ html.reduce-motion :where(.mf-st-fit) .mf-st__fx-win img { animation: none; tran
 :where(.mf-st-fit) .mf-st__tier-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); min-height: 28px; }
 :where(.mf-st-fit) .mf-st__tier-name { font-size: var(--fs-28); color: var(--c-paper); }
 :where(.mf-st-fit) .mf-st__tier-line { margin: var(--sp-1) 0 0; color: var(--c-muted); font-size: var(--fs-18); line-height: 1.4; }
-:where(.mf-st-fit) .mf-st__tier-buy { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'price acts' 'money acts'; align-items: center; gap: 0 var(--sp-3); }
+:where(.mf-st-fit) .mf-st__tier-buy { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'price acts' 'money money'; align-items: center; gap: var(--sp-1) var(--sp-3); }
 :where(.mf-st-fit) .mf-st__tier-buy .mf-st__price { grid-area: price; }
 :where(.mf-st-fit) .mf-st__tier-buy .mf-st__money { grid-area: money; }
 :where(.mf-st-fit) .mf-st__tier-buy .mf-st__acts { grid-area: acts; margin-top: 0; }
@@ -107,6 +107,17 @@ html.reduce-motion :where(.mf-st-fit) .mf-st__fx-win img { animation: none; tran
 :where(.mf-st-fit) .mf-st__was { color: var(--c-muted); font-size: var(--fs-18); }
 :where(.mf-st-fit) .mf-st__money { margin: 0; color: var(--c-muted); font-size: var(--fs-16); font-variant-numeric: tabular-nums; }
 :where(.mf-st-fit) .mf-st__acts { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-2); }
+
+/* ---- the launch gift (docs/17 §9): Claim free on the cards, its dialog's 18+ question ---- */
+:where(.mf-st-fit) .mf-st__gift { background: var(--c-volt); color: var(--c-volt-ink); border-color: var(--c-volt); }
+:where(.mf-st-fit) .mf-st__tier.is-gift { border-color: color-mix(in srgb, var(--c-volt) 70%, var(--c-line)); }
+:where(.mf-st-fit) .mf-st__price--free b { color: var(--c-volt); text-transform: uppercase; letter-spacing: .04em; }
+:where(.mf-st-fit) .mf-st__age { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); margin-top: var(--sp-2); }
+:where(.mf-st-fit) .mf-st__age-l { font-size: var(--fs-16); font-weight: var(--fw-bold); color: var(--c-paper); }
+:where(.mf-st-fit) .mf-st__age select { min-height: 44px; padding: 0 var(--sp-3); font: inherit; font-size: var(--fs-18); color: var(--c-paper); background: var(--c-ink-800); border: var(--bw) solid var(--c-line); border-radius: var(--r-sm, 6px); }
+:where(.mf-st-fit) .mf-st__age-c { display: inline-flex; align-items: center; gap: var(--sp-2); min-height: 44px; font-size: var(--fs-16); color: var(--c-paper); }
+:where(.mf-st-fit) .mf-st__age-c input { width: 22px; height: 22px; accent-color: var(--c-volt); }
+:where(.mf-st-fit) .mf-st__get--soon { align-items: flex-start; }
 
 /* ---- Get Brass ---- */
 :where(.mf-st-fit) .mf-st__get {
@@ -205,3 +216,5 @@ html.mf-phone :where(.mf-st-fit) .mf-st .mf-st__acts .btn { min-height: 36px; fo
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__dlg-t { font-size: 26px; }
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__dlg-price { font-size: 22px; }
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__dlg-line { font-size: 14px; }
+html.mf-phone :where(.mf-st-fit) .mf-st .mf-st__age select { min-height: 36px; font-size: 14px; }
+html.mf-phone :where(.mf-st-fit) .mf-st .mf-st__age-l, html.mf-phone :where(.mf-st-fit) .mf-st .mf-st__age-c { font-size: 13px; min-height: 36px; }

@@ -31,21 +31,30 @@ export interface StoreItemView {
   /** the cheapest bundle that covers the price: the money shown next to it (≈) */
   money: { bundleId: string; price: Record<Money, number> } | null;
   owned: boolean;
+  /** the launch gift: free to claim now (STORE_CLAIMABLE) */
+  claimable: boolean;
 }
 
 export interface StoreAccount {
   canBuy: boolean;
   reason: 'guest' | 'age' | 'banned' | null;
+  /** the account gave its 18+ answer (saved with it, or with a claim): a claim needs no birth year */
+  adult: boolean;
   balance: { paid: number; earned: number; total: number };
   owned: string[];
-  limits: { monthlyCapCents: number; spentCents: number; leftCents: number; pendingRaise: { capCents: number; at: string } | null; coolOffUntil: string | null };
+  /** the spending limit; null while payments are off */
+  limits: { monthlyCapCents: number; spentCents: number; leftCents: number; pendingRaise: { capCents: number; at: string } | null; coolOffUntil: string | null } | null;
 }
 
 export type StoreView =
   | { enabled: false }
   | {
       enabled: true;
-      mode: 'test' | 'live';
+      /** Flutterwave's keys are set: currency can be bought */
+      payments: boolean;
+      mode: 'test' | 'live' | null;
+      /** the launch gift is open (until: its end, or null) */
+      claim: { until: string | null } | null;
       currency: { name: string; walletCap: number };
       bundles: StoreBundle[];
       items: StoreItemView[];
@@ -98,7 +107,8 @@ export function tierLine(item: Pick<StoreItemView, 'tier' | 'killEffect' | 'upgr
 
 /** Why the player can't buy, in their words (and what to do), or null when they can. */
 export function blockedText(view: StoreView): { title: string; line: string; action: 'save' | null } | null {
-  if (!view.enabled) return null;
+  // nothing to buy while payments are off: the launch gift has its own rule (claimRule)
+  if (!view.enabled || !view.payments) return null;
   const a = view.account;
   if (!a) return { title: 'Sign in to buy', line: 'The store needs your account. Check your connection, then open the store again.', action: null };
   if (a.reason === 'guest') return { title: 'Save your account to buy', line: 'Purchases belong to a saved account, so they’re never lost with a device. It takes a minute.', action: 'save' };
@@ -134,6 +144,15 @@ export function errorText(code: string, extra: Record<string, unknown> = {}): st
       return 'Refunds are for 14 days after a purchase.';
     case 'refund_failed':
       return 'The refund didn’t go through. Your Brass is back. Try again later.';
+    case 'not_claimable':
+      return 'That item isn’t part of the launch gift.';
+    case 'claim_ended':
+      return 'The launch gift has ended.';
+    case 'age_required':
+    case 'invalid_birth_year':
+      return 'Pick the year you were born to claim it.';
+    case 'underage':
+      return 'Military Forge is for players 18 and older.';
     case 'store_off':
       return 'The store isn’t open yet.';
     case 'password_required':
@@ -171,7 +190,7 @@ export function withoutReturn(href: string): string {
 }
 
 /** The limit line: `$50.02 of $100 left this month`. */
-export function limitLine(l: StoreAccount['limits']): string {
+export function limitLine(l: NonNullable<StoreAccount['limits']>): string {
   const left = formatMoney(l.leftCents, 'USD');
   const cap = formatMoney(l.monthlyCapCents, 'USD').replace(/\.00$/, '');
   return `${left} of ${cap} left in your monthly limit`;
@@ -179,7 +198,7 @@ export function limitLine(l: StoreAccount['limits']): string {
 
 /** A bundle the limit or the wallet cap would refuse now (shown disabled, with why). */
 export function bundleBlocked(b: StoreBundle, account: StoreAccount | null, walletCap: number): string | null {
-  if (!account) return null;
+  if (!account?.limits) return null;
   if (account.limits.coolOffUntil && Date.parse(account.limits.coolOffUntil) > Date.now()) return 'Store break: back within the hour';
   if (b.price.USD > account.limits.leftCents) return 'Over your monthly limit';
   if (account.balance.total + b.brass > walletCap) return 'Your wallet would be full';
@@ -208,4 +227,25 @@ export function storeArt(itemId: string, base: string = import.meta.env.BASE_URL
     gun: gun ? `${base}assets/${gun.image}` : null,
     fx: effect && def?.killEffect ? { ...effect, image: `${base}assets/${effect.image}`, name: getKillEffect(def.killEffect)?.name ?? def.killEffect } : null,
   };
+}
+
+/**
+ * The launch gift for `item` (docs/17 §9): the item itself when it's claimable, or the claimable tier that includes it
+ * (the Forged skin comes with "+ Stardust"); null when there's nothing to claim for it.
+ */
+export function giftFor(item: Pick<StoreItemView, 'itemId' | 'claimable' | 'owned'>, items: readonly StoreItemView[]): StoreItemView | null {
+  if (item.owned) return null;
+  if (item.claimable) return items.find((i) => i.itemId === item.itemId) ?? null;
+  return items.find((i) => i.claimable && !i.owned && i.includes.includes(item.itemId)) ?? null;
+}
+
+/**
+ * What stands between this player and a claim: nothing ('ok'), the 18+ question still to answer on this device
+ * ('ask'), or an under-18 answer ('minor'). An account that answered (saved, or claimed before) needs nothing more.
+ */
+export function claimRule(account: StoreAccount | null, device: 'adult' | 'minor' | null): 'ok' | 'ask' | 'minor' | 'signin' {
+  if (!account) return 'signin';
+  if (account.adult) return 'ok';
+  if (device === 'minor') return 'minor';
+  return device === 'adult' ? 'ok' : 'ask';
 }

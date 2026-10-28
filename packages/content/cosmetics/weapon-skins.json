@@ -1,5 +1,5 @@
 {
-  "$comment": "Weapon skins (docs/17 §3.3, docs/04 §8.7). Each item is worn in its gun's loadout slot `skin_<weaponId>` and rides the look's wire ids, so everyone in a match draws it. `tier`: base (the gun as it ships, every player's default), wrap, skin, forged (a blueprint: reshaped parts in one GLB, §3.6) or forged_kill_effect (forged plus the line's kill effect, §3.7: its own wire id, so a player can wear the plain Forged skin with the effect off). Skins carry no stats and no FX parameters. `tracerGlow` colours only the glow around the bolt and its path line, a gradient from the bolt's head back to the muzzle (violet → magenta → aquamarine); the bolt's bright core keeps the base tracer's colour, width, length, speed and brightness exactly (V5, owner 28 Oct; V7: each stop ΔE ≥ 15 from the reserved colours, saturated and dimmer than the core, test/weaponSkins.test.ts), and the muzzle flash stays the base's. `includes`: owning this item also unlocks those (the kill-effect tier includes its plain Forged skin). `model`: the GLB under /assets/.",
+  "$comment": "Weapon skins (docs/17 §3.3, docs/04 §8.7). Each item is worn in its gun's loadout slot `skin_<weaponId>` and rides the look's wire ids, so everyone in a match draws it. `tier`: base (the gun as it ships, every player's default), wrap, skin, forged (a blueprint: reshaped parts in one GLB, §3.6) or forged_kill_effect (forged plus the line's kill effect, §3.7: its own wire id, so a player can wear the plain Forged skin with the effect off). Skins carry no stats and no FX parameters. `tracerGlow` colours only the glow around the bolt and its path line, a gradient from the bolt's head back to the muzzle (violet → magenta → aquamarine); the bolt's bright core keeps the base tracer's colour, width, length, speed and brightness exactly (V5, owner 28 Oct; V7: each stop ΔE ≥ 15 from the reserved colours, saturated and dimmer than the core, test/weaponSkins.test.ts), and the muzzle flash stays the base's. `sounds` swaps the gun's sounds by id (base → the skin's own, apps/web/src/audio/sounds/skins.ts): each starts from the base's exact take and only changes its timbre, at the base's loudness (±1 LU), peak (±1 dB), frequency band, length and timing (V11, docs/17 §3.6; apps/web audio/skins.test.ts); everyone in the match hears them. `inspectSound`: the Locker's chime when it's tried on. `includes`: owning this item also unlocks those (the kill-effect tier includes its plain Forged skin). `model`: the GLB under /assets/.",
   "items": [
     {
       "id": "skin_k47_standard",
@@ -22,6 +22,8 @@
       "source": { "kind": "store" },
       "assets": { "model": "weapons/skins/k47_galaxy_relic.glb" },
       "tracerGlow": ["#7c4dff", "#d63cf0", "#4cf5c8"],
+      "sounds": { "rifle.fire": "relic.fire", "rifle.magout": "relic.magout", "rifle.magin": "relic.magin", "rifle.bolt": "relic.bolt", "rifle.draw": "relic.draw" },
+      "inspectSound": "relic.inspect",
       "tags": ["galaxy_relic"]
     },
     {
@@ -35,6 +37,8 @@
       "source": { "kind": "store" },
       "assets": { "model": "weapons/skins/k47_galaxy_relic.glb" },
       "tracerGlow": ["#7c4dff", "#d63cf0", "#4cf5c8"],
+      "sounds": { "rifle.fire": "relic.fire", "rifle.magout": "relic.magout", "rifle.magin": "relic.magin", "rifle.bolt": "relic.bolt", "rifle.draw": "relic.draw" },
+      "inspectSound": "relic.inspect",
       "killEffect": "stardust",
       "includes": ["skin_k47_galaxy_relic"],
       "tags": ["galaxy_relic"]

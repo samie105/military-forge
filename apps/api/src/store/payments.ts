@@ -46,6 +46,22 @@ export interface PaymentView {
 
 type PaymentRow = typeof payments.$inferSelect;
 
+/** Whether an account may buy (a saved account that passed the 18+ step, not banned), and its email for the provider. */
+export async function accountEligibility(db: Db, userId: string): Promise<Eligibility> {
+  const [u] = await db
+    .select({
+      status: users.status,
+      adult: users.adultConfirmedAt,
+      email: sql<string | null>`(select ${identities.providerUid} from ${identities} where ${identities.userId} = ${users.id} and ${identities.provider} = 'email' limit 1)`,
+    })
+    .from(users)
+    .where(eq(users.id, userId));
+  if (!u || u.status !== 'active') return { canBuy: false, reason: 'banned', email: null };
+  if (!u.email) return { canBuy: false, reason: 'guest', email: null };
+  if (!u.adult) return { canBuy: false, reason: 'age', email: u.email };
+  return { canBuy: true, reason: null, email: u.email };
+}
+
 /** How long a `created` payment waits for its redirect or webhook before the sweep asks Flutterwave itself. */
 const SWEEP_AFTER_MS = 2 * 60_000;
 /** After this, a payment Flutterwave never saw is closed as failed. */
@@ -61,19 +77,8 @@ export class PaymentService {
   ) {}
 
   /** The store is for saved accounts that passed the 18+ step (docs/17 §2.6, red line 9). */
-  async eligibility(userId: string): Promise<Eligibility> {
-    const [u] = await this.db
-      .select({
-        status: users.status,
-        adult: users.adultConfirmedAt,
-        email: sql<string | null>`(select ${identities.providerUid} from ${identities} where ${identities.userId} = ${users.id} and ${identities.provider} = 'email' limit 1)`,
-      })
-      .from(users)
-      .where(eq(users.id, userId));
-    if (!u || u.status !== 'active') return { canBuy: false, reason: 'banned', email: null };
-    if (!u.email) return { canBuy: false, reason: 'guest', email: null };
-    if (!u.adult) return { canBuy: false, reason: 'age', email: u.email };
-    return { canBuy: true, reason: null, email: u.email };
+  eligibility(userId: string): Promise<Eligibility> {
+    return accountEligibility(this.db, userId);
   }
 
   async requireEligible(userId: string): Promise<Eligibility & { email: string }> {

@@ -130,3 +130,7 @@ html.mf-short:where(:not(.mf-phone)) :where(.mf-gear-fit) .menu-top { height: 88
 :where(html.mf-phone) :where(.mf-gear-fit) .mm-stage canvas { inset: 54px 0 50px; height: calc(100% - 104px); }
 :where(html.mf-phone) :where(.mf-gear-fit) .mm-controls { bottom: 2px; }
 :where(html.mf-phone) :where(.mf-gear-fit) .mm-controls .seg__opt { min-height: 44px; padding: 0 8px; }
+
+/* the Store: its header button, and "Get it in the Store" after a locked store item's detail */
+:where(.mf-gear-fit) .mf-lk__store { margin-left: auto; }
+:where(.mf-gear-fit) .mf-lk__get { margin-left: var(--sp-2); vertical-align: middle; }

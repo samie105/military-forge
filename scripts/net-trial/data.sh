@@ -82,6 +82,13 @@ mkdir -p /etc/systemd/system/mf-api.service.d
 printf '[Service]\nEnvironmentFile=-%s/email.env\n' "$ETC" >/etc/systemd/system/mf-api.service.d/email.conf
 if [ -f "$ETC/email.env" ]; then chown root:mf "$ETC/email.env" && chmod 0640 "$ETC/email.env"; fi
 
+# the store (docs/17, apps/api store/): off until the owner writes $ETC/store.env (0640 root:mf) with
+# STORE_CLAIMABLE / STORE_CLAIM_UNTIL (the launch gift) and, for payments, FLUTTERWAVE_SECRET_KEY,
+# FLUTTERWAVE_PUBLIC_KEY and FLUTTERWAVE_WEBHOOK_HASH. Like email.env, a drop-in reads it and a deploy
+# never rewrites it.
+printf '[Service]\nEnvironmentFile=-%s/store.env\n' "$ETC" >/etc/systemd/system/mf-api.service.d/store.conf
+if [ -f "$ETC/store.env" ]; then chown root:mf "$ETC/store.env" && chmod 0640 "$ETC/store.env"; fi
+
 # once: PGlite's rows into Postgres. The API stops first (PGlite has one writer); cloud-init.sh starts it again.
 if [ -f "$DATA/pglite/PG_VERSION" ]; then
   phase 'moving the PGlite data into Postgres'

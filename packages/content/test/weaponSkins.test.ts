@@ -142,7 +142,8 @@ describe('kill effects (docs/17 §3.7, docs/04 §7)', () => {
       expect(e.shards.burstMps, `${e.id}: a crumble, not a blast`).toBeLessThanOrEqual(0.5);
       // no quad bigger than a fist: the shatter reads as the body breaking up, never a cloud over the spot
       for (const p of [e.shards, e.sparkles, e.swirl]) expect(p.sizeM[1], e.id).toBeLessThanOrEqual(0.14);
-      expect(e.sound, `${e.id}: no sound until one is checked for loudness and band`).toBeNull();
+      // a sound id the web's sound bank defines, held to the death voice's loudness and out of the footstep/jet bands there
+      if (e.sound !== null) expect(e.sound, e.id).toMatch(/^[a-z]+\.[a-z]+$/);
     }
   });
 

@@ -47,3 +47,14 @@ Master → Effects (the world through the duck and the flashbang muffler, your o
 ## 6. What the music does
 
 The bed plays in the menus and the lobby only, and fades out when a match counts down; the match-start sting takes over. It never plays during a fight.
+
+## 7. Weapon skins' own sounds
+
+A skin line can swap its gun's sounds (packages/content `weapon-skins.json` → `sounds`: base id → its own; the recipes are `sounds/skins.ts`). The K-47 Galaxy Relic swaps the fire, the three reload steps and the draw, and has a Locker inspect chime; its kill effect (Stardust Shatter) has its own sound.
+
+- **Built on the base:** each skin sound renders the base sound's own take (the same seed, through the bank's path), adds its timbre after the base's first 4 ms (the crack), is cut to the base's exact length and levelled to the base's loudness (BS.1770, `analysis.ts`), never above the base's peak. It plays with the base's range, far layer, voices, priority, pitch and level, so it's heard exactly as far and reads as the same gun (docs/17 V11; `skins.test.ts` holds every take to it).
+- **Who hears it:** everyone. The director looks up the shooter's look (main.ts hands it the look directory every player's soldier is drawn from), so a skinned K-47 fires its own sound for the shooter and every listener, and only on that gun.
+- **The kill effect's sound** plays at the victim with the full effect only (the renderer's kill-effect module calls it), on top of the death voice, quieter than it at its loudest, within the effect's time, and above 2.8 kHz, out of the footsteps' and the jetpack's way (docs/17 §3.7).
+- **Memory:** a line's sounds render only when someone in the match wears it; they have their own budget (1.25 MB per line, `bank.test.ts`) beside the bank's 20 MB.
+- **Audition:** the sound board's "Skins" group; before/after clips and spectrograms in `docs/audio/galaxy-relic/` (`apps/web/scripts/skin-sound-clips.ts` renders them).
+

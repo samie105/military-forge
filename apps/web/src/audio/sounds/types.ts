@@ -51,4 +51,9 @@ export interface SoundDef {
   farTo?: number;
   /** ± playback-rate jitter per play (default 0.03; 0 for musical sounds) */
   pitchJitter?: number;
+  /**
+   * The render is final: levelled and cut already (a skin's sound, matched to its base sound's loudness
+   * and length: sounds/skins.ts), so the bank neither normalises its peak nor trims its tail.
+   */
+  asRendered?: boolean;
 }

@@ -117,6 +117,10 @@ export interface CosmeticDef {
   tier?: WeaponSkinTier;
   /** the tracer's glow and path line, a gradient from the bolt's head back to the muzzle (2–3 stops, #rrggbb) */
   tracerGlow?: readonly string[];
+  /** the gun's sounds this skin swaps: base sound id → its own (same loudness, band, length and timing: V11) */
+  sounds?: Readonly<Record<string, string>>;
+  /** the Locker's chime when the skin is tried on */
+  inspectSound?: string;
   killEffect?: string;
   includes?: readonly string[];
 }
@@ -168,6 +172,8 @@ interface WeaponSkinJson {
   source: CosmeticSource;
   assets?: CosmeticAssets;
   tracerGlow?: readonly string[];
+  sounds?: Readonly<Record<string, string>>;
+  inspectSound?: string;
   killEffect?: string;
   includes?: readonly string[];
   tags?: readonly string[];
@@ -192,6 +198,8 @@ function weaponSkinItems(list: readonly WeaponSkinJson[]): CosmeticDef[] {
       weaponId: j.weaponId,
       tier: j.tier as WeaponSkinTier,
       ...(j.tracerGlow ? { tracerGlow: Object.freeze([...j.tracerGlow]) } : {}),
+      ...(j.sounds ? { sounds: Object.freeze({ ...j.sounds }) } : {}),
+      ...(j.inspectSound ? { inspectSound: j.inspectSound } : {}),
       ...(j.killEffect ? { killEffect: j.killEffect } : {}),
       ...(j.includes ? { includes: j.includes } : {}),
       ...(j.tags ? { tags: j.tags } : {}),

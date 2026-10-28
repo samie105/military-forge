@@ -2,7 +2,9 @@
  * The store's routes (docs/17 §6). Prices and balances come from here only; the client never states either
  * (a buy names the price it was shown, and a stale one is refused).
  *
- *   GET  /store                              optional Bearer: { enabled, mode, currency, bundles, items, account }
+ *   GET  /store                              optional Bearer: { enabled, payments, mode, claim, currency, bundles, items, account }
+ *                                            (enabled: payments or the launch gift; payments: Flutterwave's keys are set)
+ *   POST /store/claim {itemId, birthYear?, adult?}   Bearer, 18+: the launch gift, once per account → { owned, already }
  *   POST /store/checkout {bundleId, currency} Bearer, saved 18+: { txRef, link } (Flutterwave's hosted page)
  *   POST /store/checkout/:txRef/confirm {transactionId?}   back from the page: { status, balance }
  *   POST /store/buy {itemId, expectedPrice}  Bearer, saved 18+, Idempotency-Key header: { balance, owned }
@@ -36,8 +38,9 @@ import { LIMITS, enforceRateLimit } from '../http/rateLimit';
 import type { Kv } from '../kv/kv';
 import { ownerOnly } from '../reports/routes';
 import { BUNDLES, CURRENCY_NAME, MAX_CAP_CENTS, MONEY, STORE_ITEMS, WALLET_CAP, moneyFor, priceFor } from './catalog';
+import type { ClaimService } from './claims';
 import type { Flutterwave } from './flutterwave';
-import type { PaymentService } from './payments';
+import { accountEligibility, type PaymentService } from './payments';
 import type { WalletService } from './wallet';
 
 export interface StoreDeps {
@@ -49,6 +52,8 @@ export interface StoreDeps {
   /** null: Flutterwave's keys are unset and the store is off */
   payments: PaymentService | null;
   flutterwave: Flutterwave | null;
+  /** the launch gift (STORE_CLAIMABLE): open with or without payments */
+  claims: ClaimService;
   /** the account's password, for raising the spending limit */
   checkPassword(userId: string, password: string): Promise<boolean>;
 }
@@ -58,9 +63,10 @@ const Confirm = z.object({ transactionId: z.union([z.string().max(24), z.number(
 const Buy = z.object({ itemId: z.string().max(64), expectedPrice: z.number().int().nonnegative() });
 const SetLimits = z.object({ monthlyCapCents: z.number().int().min(0).max(MAX_CAP_CENTS), password: z.string().max(200).optional() });
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9_-]{8,64}$/;
+const Claim = z.object({ itemId: z.string().max(64), birthYear: z.number().int().optional(), adult: z.boolean().optional() });
 
 export function storeRoutes(deps: StoreDeps): Hono<AppEnv> {
-  const { config, kv, auth, wallet, payments: pay, flutterwave } = deps;
+  const { config, db, kv, auth, wallet, payments: pay, flutterwave, claims } = deps;
   const app = new Hono<AppEnv>();
   const need = (): PaymentService => {
     if (!pay) throw new ApiError(503, 'store_off', 'The store is not open');
@@ -68,7 +74,9 @@ export function storeRoutes(deps: StoreDeps): Hono<AppEnv> {
   };
 
   app.get('/', optionalAuth(auth), async (c) => {
-    if (!pay || !flutterwave) return c.json({ enabled: false });
+    const claimsOpen = claims.open();
+    // nothing to buy and nothing to claim: the store is off
+    if (!pay && !claimsOpen) return c.json({ enabled: false });
     const userId = c.get('auth')?.userId ?? null;
     // a token from a session that has ended still reads the catalogue, never an account
     const live = userId && (await auth.sessionActive(c.get('auth')!.sessionId, userId));
@@ -76,19 +84,27 @@ export function storeRoutes(deps: StoreDeps): Hono<AppEnv> {
     const has = grantedItems(owned);
     let account = null;
     if (live) {
-      const [eligibility, balance, limits, spentCents] = await Promise.all([pay.eligibility(userId), wallet.balance(userId), wallet.limits(userId), pay.spentCents(userId)]);
-      const until = await pay.coolOffUntil(userId);
+      const [eligibility, balance] = await Promise.all([accountEligibility(db, userId), wallet.balance(userId)]);
+      let limits = null;
+      if (pay) {
+        const [l, spentCents, until] = await Promise.all([wallet.limits(userId), pay.spentCents(userId), pay.coolOffUntil(userId)]);
+        limits = { ...l, spentCents, leftCents: Math.max(0, l.monthlyCapCents - spentCents), coolOffUntil: until ? new Date(until).toISOString() : null };
+      }
       account = {
-        canBuy: eligibility.canBuy,
+        canBuy: !!pay && eligibility.canBuy,
         reason: eligibility.reason,
+        // the account gave its 18+ answer: a claim needs no birth year from the device
+        adult: eligibility.reason !== 'age' && (eligibility.reason !== 'guest' || (await adultOnAccount(db, userId))),
         balance,
         owned,
-        limits: { ...limits, spentCents, leftCents: Math.max(0, limits.monthlyCapCents - spentCents), coolOffUntil: until ? new Date(until).toISOString() : null },
+        limits,
       };
     }
     return c.json({
       enabled: true,
-      mode: flutterwave.mode,
+      payments: !!pay,
+      mode: flutterwave?.mode ?? null,
+      claim: claimsOpen ? { until: claims.until() } : null,
       currency: { name: CURRENCY_NAME, walletCap: WALLET_CAP },
       bundles: BUNDLES.map((b) => ({ id: b.id, brass: b.brass, bonusPct: b.bonusPct, price: b.price })),
       items: STORE_ITEMS.map((i) => {
@@ -107,6 +123,7 @@ export function storeRoutes(deps: StoreDeps): Hono<AppEnv> {
           upgrade: price !== i.price,
           money: moneyFor(price),
           owned: has.has(i.itemId),
+          claimable: claims.claimable(i.itemId),
         };
       }),
       account,
@@ -115,6 +132,16 @@ export function storeRoutes(deps: StoreDeps): Hono<AppEnv> {
 
   const authed = new Hono<AppEnv>();
   authed.use(requireAuth(auth));
+
+  // the launch gift: free, once per account, guests included (their device's 18+ answer), never currency
+  authed.post('/claim', async (c) => {
+    const { userId } = c.get('auth')!;
+    await enforceRateLimit(kv, LIMITS.storeWrite, userId);
+    const body = await readJson(c, Claim);
+    const r = await claims.claim(userId, body.itemId, body);
+    c.get('log').info({ store: 'claim', userId, itemId: body.itemId, already: r.already }, 'launch gift claimed');
+    return c.json(r);
+  });
 
   authed.post('/checkout', async (c) => {
     const { userId } = c.get('auth')!;
@@ -325,4 +352,10 @@ export function adminStoreRoutes(deps: { config: Config; db: Db; wallet: WalletS
   });
 
   return app;
+}
+
+/** A guest's 18+ answer kept on its account (a claim records it: store/claims.ts). */
+async function adultOnAccount(db: Db, userId: string): Promise<boolean> {
+  const [u] = await db.select({ adult: users.adultConfirmedAt }).from(users).where(eq(users.id, userId));
+  return !!u?.adult;
 }

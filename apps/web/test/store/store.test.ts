@@ -6,13 +6,13 @@
 import { DEFAULT_COSMETIC_LOADOUT, type CosmeticLoadout } from '@military-forge/content';
 import { describe, expect, it } from 'vitest';
 import { GRANTABLE, ledgerLine, money, signed, storeAdmin, StoreAdminError } from '../../src/admin/store';
-import { blockedText, bundleBlocked, errorText, formatMoney, limitLine, moneyLine, readReturn, withoutReturn, type StoreAccount, type StoreView } from '../../src/store/model';
+import { blockedText, bundleBlocked, claimRule, errorText, giftFor, formatMoney, limitLine, moneyLine, readReturn, withoutReturn, type StoreAccount, type StoreView } from '../../src/store/model';
 import { wearItem } from '../../src/store/route';
 import { balanceChip, storeBody, type StoreState } from '../../src/store/screen';
 
 const ITEMS = [
-  { itemId: 'skin_k47_galaxy_relic', line: 'k47_galaxy_relic', name: 'Galaxy Relic', tier: 'forged', weaponId: 'k47', killEffect: null, includes: [], price: 1050, fullPrice: 1050, upgrade: false, money: { bundleId: 'brass_1050', price: { NGN: 990_000, USD: 999 } }, owned: false },
-  { itemId: 'skin_k47_galaxy_relic_fx', line: 'k47_galaxy_relic', name: 'Galaxy Relic + Stardust', tier: 'forged_kill_effect', weaponId: 'k47', killEffect: 'stardust', includes: ['skin_k47_galaxy_relic'], price: 2200, fullPrice: 2200, upgrade: false, money: { bundleId: 'brass_2200', price: { NGN: 1_990_000, USD: 1999 } }, owned: false },
+  { itemId: 'skin_k47_galaxy_relic', line: 'k47_galaxy_relic', name: 'Galaxy Relic', tier: 'forged', weaponId: 'k47', killEffect: null, includes: [], price: 1050, fullPrice: 1050, upgrade: false, money: { bundleId: 'brass_1050', price: { NGN: 990_000, USD: 999 } }, owned: false, claimable: false },
+  { itemId: 'skin_k47_galaxy_relic_fx', line: 'k47_galaxy_relic', name: 'Galaxy Relic + Stardust', tier: 'forged_kill_effect', weaponId: 'k47', killEffect: 'stardust', includes: ['skin_k47_galaxy_relic'], price: 2200, fullPrice: 2200, upgrade: false, money: { bundleId: 'brass_2200', price: { NGN: 1_990_000, USD: 1999 } }, owned: false, claimable: false },
 ];
 const BUNDLES = [
   { id: 'brass_250', brass: 250, bonusPct: 0, price: { NGN: 250_000, USD: 249 } },
@@ -22,13 +22,14 @@ const BUNDLES = [
 const account = (over: Partial<StoreAccount> = {}): StoreAccount => ({
   canBuy: true,
   reason: null,
+  adult: true,
   balance: { paid: 1200, earned: 50, total: 1250 },
   owned: [],
   limits: { monthlyCapCents: 10_000, spentCents: 999, leftCents: 9001, pendingRaise: null, coolOffUntil: null },
   ...over,
 });
-const view = (acc: StoreAccount | null, items = ITEMS): StoreView => ({ enabled: true, mode: 'test', currency: { name: 'Brass', walletCap: 20_000 }, bundles: BUNDLES, items, account: acc });
-const state = (v: StoreView | null, over: Partial<StoreState> = {}): StoreState => ({ view: v, failed: null, notice: null, confirm: null, busy: false, payments: null, ...over });
+const view = (acc: StoreAccount | null, items = ITEMS): StoreView => ({ enabled: true, payments: true, mode: 'test', claim: null, currency: { name: 'Brass', walletCap: 20_000 }, bundles: BUNDLES, items, account: acc });
+const state = (v: StoreView | null, over: Partial<StoreState> = {}): StoreState => ({ view: v, failed: null, notice: null, confirm: null, busy: false, payments: null, deviceAge: null, ...over });
 
 describe('the Store screen', () => {
   it('shows the line in Brass with the money beside it, and the bundles at their naira and dollar prices', () => {
@@ -88,11 +89,11 @@ describe('the Store screen', () => {
   });
 
   it('a bundle the limit, the cool-off or the wallet cap would refuse is shown off, with why', () => {
-    expect(bundleBlocked(BUNDLES[1]!, account({ limits: { ...account().limits, leftCents: 4000 } }), 20_000)).toBe('Over your monthly limit');
+    expect(bundleBlocked(BUNDLES[1]!, account({ limits: { ...account().limits!, leftCents: 4000 } }), 20_000)).toBe('Over your monthly limit');
     expect(bundleBlocked(BUNDLES[0]!, account({ balance: { paid: 19_900, earned: 0, total: 19_900 } }), 20_000)).toBe('Your wallet would be full');
-    expect(bundleBlocked(BUNDLES[0]!, account({ limits: { ...account().limits, coolOffUntil: new Date(Date.now() + 60_000).toISOString() } }), 20_000)).toMatch(/break/);
+    expect(bundleBlocked(BUNDLES[0]!, account({ limits: { ...account().limits!, coolOffUntil: new Date(Date.now() + 60_000).toISOString() } }), 20_000)).toMatch(/break/);
     expect(bundleBlocked(BUNDLES[0]!, account(), 20_000)).toBeNull();
-    expect(limitLine({ ...account().limits, leftCents: 0 })).toBe('$0.00 of $100 left in your monthly limit');
+    expect(limitLine({ ...account().limits!, leftCents: 0 })).toBe('$0.00 of $100 left in your monthly limit');
   });
 
   it('the API’s answers in words; money formats', () => {
@@ -119,6 +120,67 @@ describe('the Store screen', () => {
     await wearItem(store, 'skin_k47_galaxy_relic_fx');
     expect(saved!.items.skin_k47).toBe('skin_k47_galaxy_relic_fx');
     expect(saved!.items.bodyType).toBe(DEFAULT_COSMETIC_LOADOUT.items.bodyType);
+  });
+});
+
+describe('the launch gift on the Store screen (docs/17 §9)', () => {
+  const gift = (over: Partial<Extract<StoreView, { enabled: true }>> = {}, items = ITEMS.map((i) => ({ ...i, claimable: i.itemId === 'skin_k47_galaxy_relic_fx' }))): StoreView => ({
+    ...(view(account({ canBuy: false, reason: 'guest', adult: false, limits: null, balance: { paid: 0, earned: 0, total: 0 } }), items) as Extract<StoreView, { enabled: true }>),
+    payments: false,
+    mode: null,
+    claim: { until: null },
+    ...over,
+  });
+
+  it('payments off: both cards offer "Claim free" (the Forged skin comes with + Stardust), Get Brass is coming soon, no gate for a guest', () => {
+    const html = storeBody(state(gift()));
+    expect(html.match(/data-claim="skin_k47_galaxy_relic_fx"/g)).toHaveLength(2);
+    expect(html).toContain('Launch gift');
+    expect(html).toContain('<b>Free</b>');
+    expect(html).toContain('For now: a launch gift, yours to keep');
+    expect(html).toContain('For now: comes free with Galaxy Relic + Stardust');
+    expect(html).not.toContain('data-buy=');
+    expect(html).not.toContain('data-bundle=');
+    expect(html).toContain('Coming soon');
+    expect(html).not.toContain('Save your account to buy');
+    expect(balanceChip(state(gift()))).toBe('');
+  });
+
+  it('the claim dialog asks the 18+ question only when neither the account nor the device answered; under 18 can’t claim', () => {
+    const item = { ...ITEMS[1]!, claimable: true };
+    let html = storeBody(state(gift(), { confirm: { kind: 'claim', item } }));
+    expect(html).toContain('Claim Galaxy Relic + Stardust');
+    expect(html).toContain('data-age-year');
+    expect(html).toContain('I am 18 or older');
+    expect(html).toContain('Save your account to keep it on every device');
+    html = storeBody(state(gift(), { confirm: { kind: 'claim', item }, deviceAge: 'adult' }));
+    expect(html).not.toContain('data-age-year');
+    expect(html).toContain('data-action="confirm"');
+    html = storeBody(state(gift(), { confirm: { kind: 'claim', item }, deviceAge: 'minor' }));
+    expect(html).toContain('for players 18 and older');
+    expect(html).not.toContain('data-action="confirm"');
+    expect(claimRule(account({ adult: true }), null)).toBe('ok');
+    expect(claimRule(account({ adult: false }), 'adult')).toBe('ok');
+    expect(claimRule(account({ adult: false }), null)).toBe('ask');
+    expect(claimRule(null, 'adult')).toBe('signin');
+  });
+
+  it('claimed: Owned and Wear it; payments on: the paid path is back and the gift still shows Claim', () => {
+    const owned = ITEMS.map((i) => ({ ...i, claimable: i.itemId === 'skin_k47_galaxy_relic_fx', owned: true }));
+    let html = storeBody(state(gift({}, owned)));
+    expect(html.match(/data-wear=/g)).toHaveLength(2);
+    expect(html).toContain('In your Locker');
+    expect(html).not.toContain('<b>1,050</b> Brass');
+    expect(html).not.toContain('data-claim=');
+    expect(giftFor(owned[0]!, owned)).toBeNull();
+
+    const on = gift({ payments: true, mode: 'test', account: account() });
+    html = storeBody(state(on));
+    expect(html).toContain('data-claim="skin_k47_galaxy_relic_fx"');
+    expect(html).toContain('data-bundle="brass_250"');
+    expect(html).toContain('left in your monthly limit');
+    expect(errorText('claim_ended')).toBe('The launch gift has ended.');
+    expect(errorText('underage')).toContain('18 and older');
   });
 });
 

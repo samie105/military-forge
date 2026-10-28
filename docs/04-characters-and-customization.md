@@ -17,7 +17,7 @@
    `tools/asset-check --kind part` measures this (§9.7), and the part's `envelopeOk` extra records the measured result.
 3. **Visibility floor:** skins must pass an automated contrast check against each map's palette (§8). There are no full-camo skins.
 4. **Team readability:** in team modes an **outline + armband/visor glow** uses the team colour (or the player's chosen enemy-highlight colour), regardless of skin.
-5. **Audio parity:** cosmetic footstep/jetpack sounds keep the same loudness and frequency band. Only the timbre changes.
+5. **Audio parity:** cosmetic footstep/jetpack sounds, and a weapon skin's own gun sounds, keep the same loudness, peak, frequency band, length and timing. Only the timbre changes (the measured limits are [17 V11](17-store-currency-and-forge.md#34-the-visual-advantage-review-checklist)).
 6. **Paid looks read the same** (owner, 28 Oct 2026): everything sold, and every Forge look, passes the visual-advantage review in [17 §3.4](17-store-currency-and-forge.md#34-the-visual-advantage-review-checklist), and the dark-look check runs on the **worst-case dye** a player could pick, not just the defaults. A look that fails in the wild is fixed for everyone and its buyers may refund it (17 §2.5).
 
 ---

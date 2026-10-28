@@ -22,6 +22,7 @@ import {
   type DyeChannel,
   type WeaponDef,
 } from '@military-forge/content';
+import { audio } from '../audio';
 import { CharacterAssembler, type CharacterInstance } from '../character';
 import { weaponIcon } from '../ui/icons';
 import { localGunStore, type GunStore } from './accountSync';
@@ -49,6 +50,11 @@ export interface LockerOptions {
   guns?: GunStore;
   /** "Create your soldier": the character creator (body first, then the look); omitted = no button */
   onCreator?: () => void;
+  /**
+   * The Store (#/store): a Store button in the header, and "Get it in the Store" on a locked store item (the
+   * Galaxy Relic, a launch gift for now: docs/17 §9); omitted = neither
+   */
+  onStore?: () => void;
 }
 
 export interface LockerHandle {
@@ -136,6 +142,7 @@ export function mountLocker(container: HTMLElement, options: LockerOptions = {})
         ${options.onExit ? `<button type="button" class="btn btn--ghost btn--icon btn--sm m-p8 mm-button" data-action="exit" aria-label="Back">${ic('back')}</button>` : ''}
         <h1 class="menu-top__title">Locker</h1><span class="serial">Quartermaster</span>
         <span class="mm-status" aria-live="polite"></span>
+        ${options.onStore ? `<button type="button" class="btn btn--ghost btn--sm m-p8 mm-button mf-lk__store" data-action="store">${ic('gem')}Store</button>` : ''}
       </header>
       <nav class="tabs lk__tabs mm-tabs" role="tablist" aria-label="Locker sections" data-scroll-x>${TABS.map((t, i) => `<button type="button" class="tab m-p8" role="tab" data-tab="${i}">${ic(t.icon)}${t.label}</button>`).join('')}<span class="m-p5" aria-hidden="true"></span></nav>
       <div class="lk__stage mm-stage">
@@ -272,6 +279,7 @@ export function mountLocker(container: HTMLElement, options: LockerOptions = {})
     const d = target.dataset;
     if (d.action === 'exit') options.onExit?.();
     else if (d.action === 'creator') options.onCreator?.();
+    else if (d.action === 'store') options.onStore?.();
     else if (d.action === 'random') apply(randomLoadout(inventory, Math.random, loadoutBody(loadout)));
     else if (d.action === 'wear') {
       const next = preview();
@@ -304,8 +312,14 @@ export function mountLocker(container: HTMLElement, options: LockerOptions = {})
       const how = cosmeticSourceLabel(item.source);
       const owned = inventory.owns(item.id);
       detail.textContent = `${item.name} · ${RARITY_STYLE[item.rarity].label}${owned ? '' : ` · Locked. How to get it: ${how}`}`;
+      // a store item: the way to it, one tap away
+      if (!owned && item.source.kind === 'store' && options.onStore) {
+        detail.insertAdjacentHTML('beforeend', ` <button type="button" class="btn btn--volt btn--sm m-p8 mf-lk__get" data-action="store">${ic('gem')}Get it in the Store</button>`);
+      }
       trying = { id: item.id, ...(d.channel ? { channel: d.channel as DyeChannel } : {}) };
       showOnSoldier();
+      // a weapon skin's inspect chime as it goes on the stand (the Galaxy Relic's; skins: docs/17 §3.6)
+      if (item.inspectSound) audio.play(item.inspectSound);
       render();
     }
   });

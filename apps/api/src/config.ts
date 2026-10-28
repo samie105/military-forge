@@ -96,6 +96,11 @@ export interface Config {
    * (…_TEST-…) take no real money. The money path is store/payments.ts.
    */
   flutterwave: { secretKey: string; publicKey: string; webhookHash: string; apiUrl: string } | null;
+  /**
+   * The launch gift (STORE_CLAIMABLE, STORE_CLAIM_UNTIL; docs/17 §9): store items any 18+ player may claim once,
+   * free, with or without Flutterwave's keys (store/claims.ts), until the end date (ms; null = no end). Empty = none.
+   */
+  claims: { items: string[]; until: number | null };
 }
 
 export interface AnalyticsConfig {
@@ -165,6 +170,8 @@ const EnvSchema = z.object({
   FLUTTERWAVE_PUBLIC_KEY: z.string().regex(/^FLWPUBK(_TEST)?-[A-Za-z0-9-]{8,}$/, 'must be a Flutterwave public key (FLWPUBK-… or FLWPUBK_TEST-…)').optional(),
   FLUTTERWAVE_WEBHOOK_HASH: z.string().min(16, 'at least 16 characters (a long random string)').max(200).optional(),
   FLUTTERWAVE_API_URL: z.url({ protocol: /^https?$/, error: 'must be an http(s):// URL' }).optional(),
+  STORE_CLAIMABLE: list.default([]),
+  STORE_CLAIM_UNTIL: z.string().min(1).optional(),
 });
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
@@ -210,6 +217,11 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   if (flw.some(Boolean) && !flw.every(Boolean)) issues.push('FLUTTERWAVE_*: set FLUTTERWAVE_SECRET_KEY, FLUTTERWAVE_PUBLIC_KEY and FLUTTERWAVE_WEBHOOK_HASH together (or none: the store is off)');
   if (e.FLUTTERWAVE_SECRET_KEY && e.FLUTTERWAVE_PUBLIC_KEY && e.FLUTTERWAVE_SECRET_KEY.includes('_TEST-') !== e.FLUTTERWAVE_PUBLIC_KEY.includes('_TEST-')) issues.push('FLUTTERWAVE_*: the secret and public keys must both be test keys or both live keys');
   if (production && e.FLUTTERWAVE_API_URL && !e.FLUTTERWAVE_API_URL.startsWith('https://')) issues.push('FLUTTERWAVE_API_URL: must be https:// in production');
+  for (const id of e.STORE_CLAIMABLE) {
+    if (getCosmetic(id)?.source.kind !== 'store') issues.push(`STORE_CLAIMABLE: "${id}" is not a store item`);
+  }
+  const claimUntil = e.STORE_CLAIM_UNTIL === undefined ? null : Date.parse(e.STORE_CLAIM_UNTIL);
+  if (claimUntil !== null && !Number.isFinite(claimUntil)) issues.push(`STORE_CLAIM_UNTIL: "${e.STORE_CLAIM_UNTIL}" is not a date (e.g. 2026-12-31T23:59:59Z)`);
   if (issues.length) throw new ConfigError(issues);
 
   return {
@@ -250,5 +262,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       e.FLUTTERWAVE_SECRET_KEY && e.FLUTTERWAVE_PUBLIC_KEY && e.FLUTTERWAVE_WEBHOOK_HASH
         ? { secretKey: e.FLUTTERWAVE_SECRET_KEY, publicKey: e.FLUTTERWAVE_PUBLIC_KEY, webhookHash: e.FLUTTERWAVE_WEBHOOK_HASH, apiUrl: (e.FLUTTERWAVE_API_URL ?? FLUTTERWAVE_API_URL).replace(/\/+$/, '') }
         : null,
+    claims: { items: [...new Set(e.STORE_CLAIMABLE)], until: claimUntil },
   };
 }

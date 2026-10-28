@@ -92,6 +92,11 @@ export class KillEffects implements VfxModule {
   showOthers = true;
   /** the Low preset plays the still variant */
   low = false;
+  /**
+   * skins: a full effect's sound (its `sound` id) at where the victim fell, feet + 1 m (main.ts plays it through
+   * the game's audio). The still variant and a skipped effect play none: the sound never comes without the effect.
+   */
+  onSound: ((id: string, x: number, y: number) => void) | null = null;
   private readonly pool = new ParticlePool(KILL_EFFECT_LIMITS.maxParticles * KILL_EFFECT_LIMITS.maxLive, true);
   private layer: ParticleLayer | null = null;
   private readonly live: Live[] = [];
@@ -142,6 +147,7 @@ export class KillEffects implements VfxModule {
       else body.killEffect(this.colour(effect.bodyTint), effect.durationS, effect.dissolveS);
       this.live.push({ until: this.time + effect.durationS, particles: !still });
       if (still) continue;
+      if (effect.sound) this.onSound?.(effect.sound, body.x, body.y + 1);
       this.ensureLayer(fx);
       this.shards(effect, body.x, body.y);
       this.sparkles(effect, body.x, body.y, Math.ceil(effect.sparkles.count / 2));

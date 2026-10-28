@@ -1,5 +1,5 @@
 /** The director: which sounds the game's events and frames call for, and from where. */
-import { BREACHER, BUZZ, HitZone, K47, NO_WEAPON, PROJECTILE_TYPE_BASE, THUMPER, weapons } from '@military-forge/content';
+import { BREACHER, BUZZ, DEFAULT_COSMETIC_LOADOUT, HitZone, K47, NO_WEAPON, PROJECTILE_TYPE_BASE, THUMPER, weapons, type CosmeticLoadout } from '@military-forge/content';
 import { MatchPhase, type SimEvent } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
 import type { MatchView } from '../shell/matchView';
@@ -402,5 +402,51 @@ describe('the shell', () => {
     expect(clickSound(fake)).toBe('ui.click');
     fake = el({ disabled: '1' }, 'Play');
     expect(clickSound(fake)).toBeNull();
+  });
+});
+
+describe('weapon skins\' own sounds (docs/17 V11)', () => {
+  const RELIC = 'skin_k47_galaxy_relic';
+  const look = (skin: string): CosmeticLoadout => ({ ...DEFAULT_COSMETIC_LOADOUT, items: { ...DEFAULT_COSMETIC_LOADOUT.items, skin_k47: skin } });
+  const skinned = (wearers: number[]) => {
+    const s = setup();
+    s.d.lookOf = (id) => look(wearers.includes(id) ? RELIC : 'skin_k47_standard');
+    return s;
+  };
+
+  it('a skinned K-47 fires its own sound for everyone who hears it, at the base\'s pitch and level; others fire the base', () => {
+    const { sink, events } = skinned([FOE]);
+    events([shot(FOE, K47.index), shot(2, K47.index)]);
+    const fires = sink.plays.filter((p) => p.id.endsWith('.fire'));
+    expect(fires.map((p) => p.id)).toEqual(['relic.fire', 'rifle.fire']);
+    expect(fires[0]!.o.rate).toBe(fires[1]!.o.rate);
+    expect(fires[0]!.o.gain).toBe(fires[1]!.o.gain);
+  });
+
+  it('our own skin too, and only on its gun (the Buzz sounds as ever)', () => {
+    const { sink, events } = skinned([ME]);
+    events([shot(ME, K47.index)]);
+    sink.now += 0.2; // a shooter's shots in one tick are one sound (a shotgun's pellets)
+    events([shot(ME, BUZZ.index)]);
+    expect(sink.ids().filter((id) => id.endsWith('.fire'))).toEqual(['relic.fire', 'smg.fire']);
+  });
+
+  it('the reload steps and the draw swap at the base\'s times', () => {
+    const { sink, step } = skinned([ME]);
+    const base = player(ME, { active: 1 });
+    step(frame([base]));
+    step(frame([{ ...base, active: 0 }]));
+    expect(sink.ids()).toContain('relic.draw');
+    const reloading = { ...base, active: 0, weapons: [{ ...base.weapons[0]!, mag: 0, reloadTicks: 100 }, base.weapons[1]!] };
+    step(frame([reloading]));
+    const steps = sink.plays.filter((p) => p.id.startsWith('relic.') && p.id !== 'relic.draw');
+    expect(steps.map((p) => p.id)).toEqual(['relic.magout', 'relic.magin', 'relic.bolt']);
+    expect(steps[2]!.o.delay).toBeCloseTo(K47.reload * 0.82);
+  });
+
+  it('no look directory: every gun sounds as its base', () => {
+    const { sink, events } = setup();
+    events([shot(FOE, K47.index)]);
+    expect(sink.ids()).toContain('rifle.fire');
   });
 });

@@ -3,17 +3,23 @@
  * at its Brass prices with the money next to them. Buy → a confirm with the price in Brass and naira → owned →
  * Wear it (the Locker). Bundles go through Flutterwave's page and come back here (`?store=return`), where the API
  * verifies the payment before anything is credited. Only saved 18+ accounts buy; everyone else sees why and how.
+ * The launch gift (docs/17 §9): claimable items show "Claim free" instead of Buy, for guests too (the device's 18+
+ * answer, asked in the claim's dialog if this device hasn't given one), and work with payments off, when "Get Brass"
+ * says it's coming soon.
  * No countdowns, no "only N left", no random items (docs/17 red line 8).
  *
  * Plain DOM like the Briefing: storeMarkup() is the whole screen as a string for a state (tested without a DOM),
  * mountStore() keeps the state and wires the buttons.
  */
 import { escapeHtml, ic } from '../locker/tiles';
+import { ageOnDevice, answerAge, birthYears } from '../shell/age';
 import { startFitting } from '../ui/fit';
 import { mountSprite } from '../ui/sprite';
 import {
   blockedText,
   bundleBlocked,
+  claimRule,
+  giftFor,
   errorText,
   formatBrass,
   formatMoney,
@@ -39,6 +45,8 @@ export interface StoreApi {
   buy(itemId: string, expectedPrice: number, key: string): Promise<{ owned: string[] }>;
   history(): Promise<{ payments: PaymentView[] }>;
   refund(txRef: string): Promise<{ status: string }>;
+  /** the launch gift; `birthYear`: the device's 18+ answer, when the account has none yet */
+  claim(itemId: string, birthYear: number | null): Promise<{ owned: string[]; already: boolean }>;
 }
 
 export interface StoreOptions {
@@ -56,7 +64,7 @@ export interface StoreOptions {
   go(url: string): void;
 }
 
-export type Confirm = { kind: 'item'; item: StoreItemView } | { kind: 'bundle'; bundle: StoreBundle; currency: Money };
+export type Confirm = { kind: 'item'; item: StoreItemView } | { kind: 'bundle'; bundle: StoreBundle; currency: Money } | { kind: 'claim'; item: StoreItemView };
 
 export interface StoreState {
   view: StoreView | null;
@@ -69,18 +77,38 @@ export interface StoreState {
   busy: boolean;
   /** Purchases & refunds, when open */
   payments: PaymentView[] | null;
+  /** this device's 18+ answer (shell/age.ts): what a guest's claim sends */
+  deviceAge: 'adult' | 'minor' | null;
 }
 
 const casing = (cls = 'ic mf-st__casing') => ic('mech-casing', cls);
 
-function itemCard(item: StoreItemView, blocked: boolean, busy: boolean): string {
+function itemCard(item: StoreItemView, view: Extract<StoreView, { enabled: true }>, blocked: boolean, busy: boolean): string {
+  const gift = giftFor(item, view.items);
   const action = item.owned
     ? `<button type="button" class="btn btn--paper btn--sm m-p8" data-wear="${escapeHtml(item.itemId)}">${ic('shirt')} Wear it</button>`
-    : `<button type="button" class="btn btn--volt m-p8" data-buy="${escapeHtml(item.itemId)}"${blocked || busy ? ' disabled' : ''}>Buy</button>`;
-  const tag = item.owned ? `<span class="tag tag--ok">${ic('check')} Owned</span>` : item.upgrade ? '<span class="tag tag--brass">Owner’s price</span>' : '';
-  const was = item.upgrade && !item.owned ? `<s class="mf-st__was">${formatBrass(item.fullPrice)}</s>` : '';
+    : gift
+      ? `<button type="button" class="btn btn--volt m-p8" data-claim="${escapeHtml(gift.itemId)}"${busy ? ' disabled' : ''}>${ic('gem')} Claim free</button>`
+      : view.payments
+        ? `<button type="button" class="btn btn--volt m-p8" data-buy="${escapeHtml(item.itemId)}"${blocked || busy ? ' disabled' : ''}>Buy</button>`
+        : '<button type="button" class="btn btn--ghost btn--sm m-p8" disabled>Coming soon</button>';
+  const tag = item.owned
+    ? `<span class="tag tag--ok">${ic('check')} Owned</span>`
+    : gift
+      ? '<span class="tag mf-st__gift">Launch gift</span>'
+      : item.upgrade
+        ? '<span class="tag tag--brass">Owner’s price</span>'
+        : '';
+  const was = item.upgrade && !item.owned && !gift ? `<s class="mf-st__was">${formatBrass(item.fullPrice)}</s>` : '';
+  const price = item.owned
+    ? `<p class="mf-st__price">${ic('check')} In your Locker</p><p class="mf-st__money"></p>`
+    : gift
+    ? `<p class="mf-st__price mf-st__price--free"><b>Free</b></p>
+        <p class="mf-st__money">${gift.itemId === item.itemId ? 'For now: a launch gift, yours to keep' : `For now: comes free with ${escapeHtml(gift.name)}`}</p>`
+    : `<p class="mf-st__price">${casing()}${was}<b>${formatBrass(item.price)}</b> Brass</p>
+        <p class="mf-st__money">${escapeHtml(view.payments ? moneyLine(item) : '')}</p>`;
   return `
-    <li class="mf-st__tier${item.owned ? ' is-owned' : ''}${item.killEffect ? ' is-fx' : ''}">
+    <li class="mf-st__tier${item.owned ? ' is-owned' : ''}${item.killEffect ? ' is-fx' : ''}${gift ? ' is-gift' : ''}">
       ${tierArt(item)}
       <div class="mf-st__tier-head">
         <span class="mf-st__tier-top"><span class="eyebrow">${escapeHtml(tierLabel(item))}</span>${tag}</span>
@@ -88,8 +116,7 @@ function itemCard(item: StoreItemView, blocked: boolean, busy: boolean): string 
         <p class="mf-st__tier-line">${escapeHtml(tierLine(item))}</p>
       </div>
       <div class="mf-st__tier-buy">
-        <p class="mf-st__price">${casing()}${was}<b>${formatBrass(item.price)}</b> Brass</p>
-        <p class="mf-st__money">${escapeHtml(moneyLine(item))}</p>
+        ${price}
         <div class="mf-st__acts">${action}</div>
       </div>
     </li>`;
@@ -129,7 +156,41 @@ function bundleRow(b: StoreBundle, why: string | null, blocked: boolean, busy: b
     </li>`;
 }
 
-function confirmMarkup(c: Confirm, view: Extract<StoreView, { enabled: true }>, busy: boolean): string {
+/** The claim's dialog: what it is, and the 18+ question when neither the account nor this device has answered it. */
+function claimMarkup(item: StoreItemView, view: Extract<StoreView, { enabled: true }>, device: StoreState['deviceAge'], busy: boolean): string {
+  const rule = claimRule(view.account, device);
+  const until = view.claim?.until ? ` The gift is open until ${new Date(view.claim.until).toLocaleDateString()}.` : '';
+  const guest = view.account?.reason === 'guest' ? '<p class="mf-st__dlg-line">It stays on this account. Save your account to keep it on every device.</p>' : '';
+  const ask =
+    rule === 'ask'
+      ? `<div class="mf-st__age">
+          <label class="mf-st__age-l" for="mf-st-year">Year you were born</label>
+          <select id="mf-st-year" data-age-year><option value="">Choose…</option>${birthYears().map((y) => `<option value="${y}">${y}</option>`).join('')}</select>
+          <label class="mf-st__age-c"><input type="checkbox" data-age-adult> I am 18 or older</label>
+        </div>`
+      : '';
+  const body =
+    rule === 'minor'
+      ? '<p class="mf-st__dlg-line"><b>Military Forge is for players 18 and older.</b> This device’s answer says otherwise, so the gift can’t be claimed here.</p>'
+      : rule === 'signin'
+        ? '<p class="mf-st__dlg-line">The gift needs your account: check your connection, then open the store again.</p>'
+        : `<p class="mf-st__dlg-line">A launch gift: free for now, and yours to keep after the gift ends.${until} It changes the look only: the same gun, the same stats.</p>${guest}${ask}`;
+  const canClaim = rule === 'ok' || rule === 'ask';
+  return `
+    <div class="mf-st__scrim" data-action="cancel"></div>
+    <div class="mf-st__dlg" role="dialog" aria-modal="true" aria-labelledby="mf-st-dlg-t">
+      <h2 class="display mf-st__dlg-t" id="mf-st-dlg-t">Claim ${escapeHtml(item.name)}</h2>
+      <p class="mf-st__dlg-price mf-st__price--free"><b>Free</b>${item.includes.length ? ` · includes ${item.includes.length === 1 ? 'the Forged skin' : `${item.includes.length} items`}` : ''}</p>
+      ${body}
+      <div class="mf-st__dlg-acts">
+        ${canClaim ? `<button type="button" class="btn btn--volt m-p8" data-action="confirm"${busy ? ' disabled' : ''}>${busy ? 'Claiming…' : 'Claim it'}</button>` : ''}
+        <button type="button" class="btn btn--ghost m-p8" data-action="cancel">${canClaim ? 'Cancel' : 'Close'}</button>
+      </div>
+    </div>`;
+}
+
+function confirmMarkup(c: Confirm, view: Extract<StoreView, { enabled: true }>, device: StoreState['deviceAge'], busy: boolean): string {
+  if (c.kind === 'claim') return claimMarkup(c.item, view, device, busy);
   const balance = view.account?.balance.total ?? 0;
   if (c.kind === 'item') {
     const short = c.item.price - balance;
@@ -209,18 +270,26 @@ export function storeBody(s: StoreState): string {
           <h2 class="display mf-st__line-name" id="mf-st-relic">Galaxy Relic</h2>
           <p class="mf-st__note">Looks only: the K-47 shoots exactly the same whatever it wears.</p>
         </div>
-        <ul class="mf-st__tiers">${relic.map((i) => itemCard(i, !!blocked, s.busy)).join('')}</ul>
+        <ul class="mf-st__tiers">${relic.map((i) => itemCard(i, v, !!blocked, s.busy)).join('')}</ul>
       </article>
-      <section class="mf-st__get" aria-labelledby="mf-st-get">
+      ${
+        v.payments
+          ? `<section class="mf-st__get" aria-labelledby="mf-st-get">
         <h2 class="display mf-st__get-t" id="mf-st-get">Get Brass</h2>
         <p class="mf-st__note">Pay in naira or dollars. Brass never expires; it can’t be cashed out or traded.</p>
         <ul class="mf-st__bundles">${v.bundles.map((b) => bundleRow(b, bundleBlocked(b, a, v.currency.walletCap), !!blocked, s.busy)).join('')}</ul>
-        ${a && !blocked ? `<p class="mf-st__limit">${escapeHtml(limitLine(a.limits))}</p>` : ''}
+        ${a?.limits && !blocked ? `<p class="mf-st__limit">${escapeHtml(limitLine(a.limits))}</p>` : ''}
         ${a && !blocked ? `<button type="button" class="mf-st__link" data-action="history" aria-expanded="${s.payments !== null}">Purchases &amp; refunds</button>` : ''}
         ${s.payments ? paymentsMarkup(s.payments, s.busy) : ''}
-      </section>
+      </section>`
+          : `<section class="mf-st__get mf-st__get--soon" aria-labelledby="mf-st-get">
+        <h2 class="display mf-st__get-t" id="mf-st-get">Get Brass</h2>
+        <span class="tag tag--soon">Coming soon</span>
+        <p class="mf-st__note">Buying Brass opens soon, in naira and dollars. Until then, the Galaxy Relic is a launch gift: claim it free.</p>
+      </section>`
+      }
     </div>
-    ${s.confirm ? confirmMarkup(s.confirm, v, s.busy) : ''}`;
+    ${s.confirm ? confirmMarkup(s.confirm, v, s.deviceAge, s.busy) : ''}`;
 }
 
 /** The balance chip in the header ('' before the store has loaded, or for nobody). */
@@ -228,7 +297,8 @@ export function balanceChip(s: StoreState): string {
   const v = s.view;
   if (!v?.enabled) return '';
   const test = v.mode === 'test' ? '<span class="tag tag--warn" title="Flutterwave test keys: no real money">Test mode</span>' : '';
-  if (!v.account) return test;
+  // no payments: a balance only if the owner gave some
+  if (!v.account || (!v.payments && v.account.balance.total === 0)) return test;
   return `${test}<span class="mf-st__bal" aria-label="Your balance">${casing()}<b>${formatBrass(v.account.balance.total)}</b> Brass</span>`;
 }
 
@@ -264,7 +334,11 @@ export function mountStore(container: HTMLElement, o: StoreOptions): { unmount()
   container.append(style, fit);
   const body = fit.querySelector<HTMLElement>('[data-body]')!;
   const chip = fit.querySelector<HTMLElement>('[data-chip]')!;
-  const s: StoreState = { view: null, failed: null, notice: null, confirm: null, busy: false, payments: null };
+  const deviceAge = (): StoreState['deviceAge'] => {
+    const a = ageOnDevice();
+    return a ? (a.adult ? 'adult' : 'minor') : null;
+  };
+  const s: StoreState = { view: null, failed: null, notice: null, confirm: null, busy: false, payments: null, deviceAge: deviceAge() };
   let gone = false;
   // the buy that's open: one key per confirm, so a double tap or a retry after a lost answer charges once
   let buyKey = newKey();
@@ -319,9 +393,41 @@ export function mountStore(container: HTMLElement, o: StoreOptions): { unmount()
     const c = s.confirm;
     const v = s.view;
     if (!c || !v?.enabled || s.busy) return;
+    let birthYear: number | null = null;
+    if (c.kind === 'claim' && !v.account?.adult) {
+      // the 18+ answer: this device's, or the one just picked in the dialog (kept on the device as the 18+ step keeps it)
+      const kept = ageOnDevice();
+      if (kept?.adult) birthYear = kept.birthYear;
+      else {
+        const year = Number(body.querySelector<HTMLSelectElement>('[data-age-year]')?.value ?? '');
+        const adult = body.querySelector<HTMLInputElement>('[data-age-adult]')?.checked === true;
+        if (!year || !adult) {
+          s.notice = { text: 'Pick the year you were born and confirm you’re 18 or older.', tone: 'warn' };
+          paint();
+          return;
+        }
+        const answer = answerAge(year);
+        s.deviceAge = deviceAge();
+        if (answer === 'invalid' || !answer.adult) {
+          s.notice = answer === 'invalid' ? { text: 'That year doesn’t look right.', tone: 'warn' } : null;
+          paint();
+          return;
+        }
+        birthYear = answer.birthYear;
+      }
+    }
     s.busy = true;
     paint();
     try {
+      if (c.kind === 'claim') {
+        const r = await o.api.claim(c.item.itemId, birthYear);
+        o.onOwned(r.owned);
+        s.confirm = null;
+        s.notice = { text: r.already ? `You already have ${c.item.name}.` : `${c.item.name} is yours: a launch gift.`, tone: 'ok', wear: c.item.itemId };
+        s.busy = false;
+        await load();
+        return;
+      }
       if (c.kind === 'bundle') {
         const { link } = await o.api.checkout(c.bundle.id, c.currency);
         o.go(link);
@@ -367,6 +473,15 @@ export function mountStore(container: HTMLElement, o: StoreOptions): { unmount()
         paint();
       } else void loadPayments().then(paint);
     } else if (b.dataset.wear) o.onWear(b.dataset.wear);
+    else if (b.dataset.claim && v) {
+      const item = v.items.find((i) => i.itemId === b.dataset.claim);
+      if (item) {
+        s.confirm = { kind: 'claim', item };
+        s.notice = null;
+        s.deviceAge = deviceAge();
+        paint();
+      }
+    }
     else if (b.dataset.buy && v) {
       const item = v.items.find((i) => i.itemId === b.dataset.buy);
       if (item) {

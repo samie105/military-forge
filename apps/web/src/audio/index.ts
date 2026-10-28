@@ -7,6 +7,7 @@
  * Everything it hears comes from the render side: events the renderer already gets, the drawn
  * frame, the shell's store. Nothing runs inside the 60 Hz sim.
  */
+import type { CosmeticLoadout } from '@military-forge/content';
 import type { StoreApi } from 'zustand/vanilla';
 import { diag } from '../diag/log';
 import type { AudioSettings, ShellState } from '../shell/store';
@@ -17,6 +18,8 @@ import type { AudioRuntime } from './runtime';
 import { createUnlocker, makeAudioContext, type AudioHealth, type Unlocker } from './unlock';
 
 let runtime: AudioRuntime | null = null;
+/** who wears what (main.ts's look directory): weapon skins' own sounds (AudioDirector.lookOf) */
+let lookOf: ((id: number, isLocal: boolean) => CosmeticLoadout | null) | null = null;
 let settings: [AudioSettings, boolean] | null = null;
 let unlocker: Unlocker | null = null;
 /** the shell's store once startAudio has it (undefined: not yet; null: the page has none) */
@@ -41,6 +44,7 @@ function build(): void {
   const ctx = unlocker?.ctx;
   if (runtime || !ctx || !mod || shellStore === undefined) return;
   runtime = new mod.AudioRuntime(ctx, shellStore);
+  runtime.director.lookOf = lookOf;
   if (settings) runtime.applySettings(...settings);
   runtime.engine.setStalled(unlocker?.health === 'stalled');
   if (import.meta.env.DEV) Object.assign(window, { __audio: runtime, __unlock: unlocker });
@@ -116,6 +120,19 @@ export const audio = {
   /** each drawn frame while a game runs; null in the menus */
   onFrame(frame: Frame | null, dt: number, extras: FrameExtras | null): void {
     runtime?.onFrame(frame, dt, extras);
+  },
+  /** who wears what, so weapon skins' own sounds play for every shooter wearing one (docs/17 V11) */
+  setLookOf(fn: ((id: number, isLocal: boolean) => CosmeticLoadout | null) | null): void {
+    lookOf = fn;
+    if (runtime) runtime.director.lookOf = fn;
+  },
+  /** one sound by id (the Locker's inspect chime); dropped before the first tap */
+  play(id: string): void {
+    runtime?.play(id);
+  },
+  /** one world sound by id at (x, y) (a kill effect's sound at the victim); dropped before the first tap */
+  playAt(id: string, x: number, y: number): void {
+    runtime?.playAt(id, x, y);
   },
   /** a new game mode (or none): forget the last one's loops */
   reset(): void {

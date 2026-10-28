@@ -224,7 +224,7 @@ export function createApp(deps: AppDeps) {
     const cred = await accounts.credentialOf(userId);
     return !!cred && (await hasher.verify(cred.passwordHash, password));
   };
-  app.route('/store', storeRoutes({ config, db, kv, auth, wallet: store.wallet, payments: store.payments, flutterwave: store.flutterwave, checkPassword }));
+  app.route('/store', storeRoutes({ config, db, kv, auth, wallet: store.wallet, payments: store.payments, flutterwave: store.flutterwave, claims: store.claims, checkPassword }));
   if (store.payments && store.flutterwave) app.route('/webhooks', flutterwaveWebhook({ payments: store.payments, flutterwave: store.flutterwave }));
   app.route('/admin/store', adminStoreRoutes({ config, db, wallet: store.wallet, payments: store.payments }));
   app.route('/rooms', roomRoutes({ config, db, kv, auth, profiles, presence, party, ticketKey: deps.ticketKey ?? null, now }));

@@ -60,14 +60,15 @@ describe('the Store’s baked art', () => {
     expect(storeArt('skin_k47_galaxy_relic_fx')).toMatchObject({ gun: '/assets/store/k47_galaxy_relic.webp', fx: { image: '/assets/store/stardust.webp', name: 'Stardust Shatter', frames: fx.stardust!.frames, still: fx.stardust!.still } });
     expect(storeArt('skin_unknown')).toEqual({ gun: null, fx: null });
 
-    const item = (itemId: string, name: string, tier: string, killEffect: string | null) => ({ itemId, line: 'k47_galaxy_relic', name, tier, weaponId: 'k47', killEffect, includes: [], price: 1050, fullPrice: 1050, upgrade: false, money: null, owned: false });
+    const item = (itemId: string, name: string, tier: string, killEffect: string | null) => ({ itemId, line: 'k47_galaxy_relic', name, tier, weaponId: 'k47', killEffect, includes: [], price: 1050, fullPrice: 1050, upgrade: false, money: null, owned: false, claimable: false });
     const state: StoreState = {
-      view: { enabled: true, mode: 'test', currency: { name: 'Brass', walletCap: 20_000 }, bundles: [], items: [item('skin_k47_galaxy_relic', 'Galaxy Relic', 'forged', null), item('skin_k47_galaxy_relic_fx', 'Galaxy Relic + Stardust', 'forged_kill_effect', 'stardust')], account: null },
+      view: { enabled: true, payments: true, mode: 'test', claim: null, currency: { name: 'Brass', walletCap: 20_000 }, bundles: [], items: [item('skin_k47_galaxy_relic', 'Galaxy Relic', 'forged', null), item('skin_k47_galaxy_relic_fx', 'Galaxy Relic + Stardust', 'forged_kill_effect', 'stardust')], account: null },
       failed: null,
       notice: null,
       confirm: null,
       busy: false,
       payments: null,
+      deviceAge: null,
     };
     const html = storeBody(state);
     expect(html.match(/<img class="mf-st__gun" src="\/assets\/store\/k47_galaxy_relic\.webp"/g)).toHaveLength(2);

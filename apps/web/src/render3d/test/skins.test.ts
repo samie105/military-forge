@@ -239,6 +239,31 @@ describe('kill effects (docs/17 §3.7)', () => {
     expect(cells().filter((c) => c === Cell.Dot).length).toBeGreaterThan(0);
   });
 
+  it('the effect\'s sound plays with the full effect only, where the victim fell: never with the still variant or when it\'s off', () => {
+    const heard = (fx: KillEffects) => {
+      const calls: [string, number, number][] = [];
+      fx.onSound = (id, x, y) => calls.push([id, x, y]);
+      return calls;
+    };
+    const full = setup();
+    const a = heard(full.fx);
+    full.fx.onEvents([death()], full.ctx);
+    expect(a).toEqual([[getKillEffect('stardust')!.sound!, 10, 3]]);
+    const reduced = setup();
+    const b = heard(reduced.fx);
+    reduced.fx.onEvents([death()], { ...reduced.ctx, reducedMotion: true });
+    expect(b).toEqual([]);
+    const off = setup({ viewer: 7 });
+    off.fx.showOthers = false;
+    const c = heard(off.fx);
+    off.fx.onEvents([death()], off.ctx);
+    expect(c).toEqual([]);
+    const plain = setup({ killerLook: wearing('skin_k47_galaxy_relic') });
+    const d = heard(plain.fx);
+    plain.fx.onEvents([death()], plain.ctx);
+    expect(d).toEqual([]);
+  });
+
   it('"Show other players\' kill effects" off: only your own kills play one', () => {
     const others = setup({ viewer: 7 });
     others.fx.showOthers = false;

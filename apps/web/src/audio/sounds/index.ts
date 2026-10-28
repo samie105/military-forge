@@ -1,10 +1,11 @@
 /** Every sound in the game, by id: the bank renders from here, the board lists it. */
+import { skinSounds } from './skins';
 import { uiSounds } from './ui';
 import { weaponSounds } from './weapons';
 import { worldSounds } from './world';
 import type { SoundDef } from './types';
 
-const ALL = { ...weaponSounds, ...worldSounds, ...uiSounds };
+const ALL = { ...weaponSounds, ...skinSounds, ...worldSounds, ...uiSounds };
 
 export type SoundId = keyof typeof ALL;
 

@@ -55,6 +55,13 @@ describe('loadConfig', () => {
     expect(issues({ ...keys, FLUTTERWAVE_WEBHOOK_HASH: 'short' })[0]).toMatch(/^FLUTTERWAVE_WEBHOOK_HASH: at least 16/);
   });
 
+  it('STORE_CLAIMABLE / STORE_CLAIM_UNTIL: store items only, a real date', () => {
+    expect(loadConfig({}).claims).toEqual({ items: [], until: null });
+    expect(loadConfig({ STORE_CLAIMABLE: 'skin_k47_galaxy_relic_fx', STORE_CLAIM_UNTIL: '2026-12-31T23:59:59Z' }).claims).toEqual({ items: ['skin_k47_galaxy_relic_fx'], until: Date.parse('2026-12-31T23:59:59Z') });
+    expect(issues({ STORE_CLAIMABLE: 'skin_k47_standard' })).toEqual(['STORE_CLAIMABLE: "skin_k47_standard" is not a store item']);
+    expect(issues({ STORE_CLAIMABLE: 'skin_k47_galaxy_relic_fx', STORE_CLAIM_UNTIL: 'soon' })[0]).toMatch(/^STORE_CLAIM_UNTIL: "soon" is not a date/);
+  });
+
   it('treats empty values (FOO= in a .env file) as unset', () => {
     expect(loadConfig({ DATABASE_URL: '', REDIS_URL: '  ', API_PORT: '' }).db.kind).toBe('pglite');
   });
