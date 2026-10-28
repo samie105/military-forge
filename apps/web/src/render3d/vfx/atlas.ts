@@ -25,6 +25,10 @@ export const Cell = {
   Line: 12,
   /** a splat: a ragged blob with a few drops thrown off it (blood.ts) */
   Splat: 13,
+  /** a crystal cube seen corner-on: a light top face, a mid left and a dark right one, a faint halo (kill effects) */
+  Shard: 14,
+  /** a hollow glow around a line, empty down its middle, soft at both ends: a skin's tracer glow around the core */
+  Sheath: 15,
 } as const;
 
 export const ATLAS_GRID = 4;
@@ -121,7 +125,23 @@ const SHAPES: Record<number, Shape> = {
     const rays = Math.exp(-Math.abs(u * v) * 40) * smooth(1, 0, d);
     return [1, clamp01(rays + Math.exp(-14 * d * d))];
   },
+  [Cell.Shard]: (u, v) => {
+    // a pointy-top hexagon of radius 0.8: 1 on its outline
+    const d = Math.max(Math.abs(u) / (0.8 * 0.866), (Math.abs(v) + Math.abs(u) * 0.577) / 0.8);
+    // the cube's faces meet on a Y from the centre: up to the two upper corners, and straight down
+    const top = v > Math.abs(u) * 0.577;
+    const shade = top ? 1 : u < 0 ? 0.72 : 0.48;
+    const edge = Math.min(Math.abs(v - Math.abs(u) * 0.577), v < 0 ? Math.abs(u) : 1);
+    const lum = d > 0.86 ? 1 : Math.max(shade, smooth(0.07, 0, edge));
+    return [lum, d <= 1 ? smooth(1, 0.94, d) : 0.28 * smooth(1.22, 1, d)];
+  },
+  [Cell.Sheath]: (u, v) => [1, smooth(1, 0.55, Math.abs(u)) * Math.exp(-(v * v) / 0.2) * (1 - Math.exp(-(v * v) / 0.016))],
 };
+
+/** A cell's [luminance, alpha] at (u, v) in −1…1 (tests). */
+export function cellShape(cell: number, u: number, v: number): readonly [number, number] {
+  return SHAPES[cell]?.(u, v) ?? [0, 0];
+}
 
 let atlas: DataTexture | null = null;
 

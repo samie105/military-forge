@@ -50,6 +50,8 @@ import { NicknamePolicy } from './nickname/rules';
 import { nicknameRoutes } from './nickname/routes';
 import { reportRoutes } from './reports/routes';
 import { roomRoutes } from './rooms/routes';
+import { createStore, type Store } from './store';
+import { adminStoreRoutes, flutterwaveWebhook, storeRoutes } from './store/routes';
 
 export interface AppDeps {
   config: Config;
@@ -73,6 +75,8 @@ export interface AppDeps {
   defer?: (task: () => Promise<void>) => void;
   /** play stats (analytics/service.ts); index.ts makes one and starts its timers, tests make their own */
   analytics?: AnalyticsService;
+  /** the store's wallet and payments (store/index.ts); index.ts makes them and runs the sweep, tests pass a fake Flutterwave */
+  store?: Store;
 }
 
 const LOCAL_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
@@ -84,7 +88,9 @@ export function createApp(deps: AppDeps) {
   const now = deps.now ?? Date.now;
   const db = database.db;
   const auth = new AuthService(db, deps.signingKey, config, now);
-  const profiles = new ProfileService(db, new NicknamePolicy(config.reservedNicknames), now, config.cosmeticGrants);
+  const store = deps.store ?? createStore(config, db, now, log);
+  // what an account owns: the store's inventory plus the owner's COSMETIC_GRANTS (store/wallet.ts)
+  const profiles = new ProfileService(db, new NicknamePolicy(config.reservedNicknames), now, (userId) => store.wallet.owned(userId));
 
   const originAllowed = (origin: string) => (config.corsOrigins === 'localhost' ? LOCAL_ORIGIN.test(origin) : config.corsOrigins.includes(origin));
   const app = new Hono<AppEnv>();
@@ -154,6 +160,7 @@ export function createApp(deps: AppDeps) {
   // saved accounts: email + password (auth/accountRoutes.ts)
   const hasher = deps.hasher ?? new PasswordHasher();
   void hasher.warm();
+  const accounts = new AccountService(db, now);
   const defer =
     deps.defer ??
     ((task: () => Promise<void>) => {
@@ -167,7 +174,7 @@ export function createApp(deps: AppDeps) {
       kv,
       auth,
       profiles,
-      accounts: new AccountService(db, now),
+      accounts,
       hasher,
       throttle: new Throttle(kv, now),
       email: deps.email !== undefined ? deps.email : emailSenderFor(config, log),
@@ -178,7 +185,7 @@ export function createApp(deps: AppDeps) {
     }),
   );
   const presence = new PresenceService(kv, now);
-  app.route('/me/loadout', loadoutRoutes({ db, kv, auth, now, grants: (userId) => profiles.grantsOf(userId) }));
+  app.route('/me/loadout', loadoutRoutes({ db, kv, auth, now, grants: (userId) => profiles.ownedOf(userId) }));
   app.route('/me/presence', mePresenceRoutes({ auth, kv, presence }));
   const leaderboards = new Leaderboards(db, kv, now);
   app.route('/leaderboards', leaderboardRoutes({ auth, leaderboards }));
@@ -212,6 +219,14 @@ export function createApp(deps: AppDeps) {
   app.route('/nicknames', nicknameRoutes({ config, kv, auth, profiles }));
   // problem reports (Send a report, and a failed connection's own): kept 7 days, read by the owner
   app.route('/reports', reportRoutes({ config, kv, now }));
+  // the store (docs/17): off without Flutterwave's keys, but the owner's tools and ownership work either way
+  const checkPassword = async (userId: string, password: string) => {
+    const cred = await accounts.credentialOf(userId);
+    return !!cred && (await hasher.verify(cred.passwordHash, password));
+  };
+  app.route('/store', storeRoutes({ config, db, kv, auth, wallet: store.wallet, payments: store.payments, flutterwave: store.flutterwave, checkPassword }));
+  if (store.payments && store.flutterwave) app.route('/webhooks', flutterwaveWebhook({ payments: store.payments, flutterwave: store.flutterwave }));
+  app.route('/admin/store', adminStoreRoutes({ config, db, wallet: store.wallet, payments: store.payments }));
   app.route('/rooms', roomRoutes({ config, db, kv, auth, profiles, presence, party, ticketKey: deps.ticketKey ?? null, now }));
 
   app.notFound((c) => errorResponse(c, 404, 'not_found', `No route for ${c.req.method} ${c.req.path}`));

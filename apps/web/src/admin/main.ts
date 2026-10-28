@@ -6,6 +6,7 @@
  */
 import { analyticsGroup } from './analytics';
 import { reportsGroup } from './reports';
+import { storeGroup } from './store';
 import { AdminApiError, adminCall, clampValue, formatValue, grouped, matches, readToken, withValue, type AdminFieldView, type AdminStateView } from './model';
 
 const root = document.getElementById('admin')!;
@@ -218,6 +219,8 @@ function render(s: AdminStateView): void {
   }
   // the players' problem reports (reports.ts): the API's, under the same token
   groups.push(reportsGroup(token!, el));
+  // the store's wallets, ledger and payments (store.ts, docs/17): the API's, under the same token
+  groups.push(storeGroup(token!, el));
   // play stats (analytics.ts, docs/16): the dashboard first, open
   for (const g of groups) g.removeAttribute('open');
   root.replaceChildren(bar, analyticsGroup(token!, el), ...groups);

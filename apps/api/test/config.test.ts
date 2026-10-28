@@ -45,6 +45,16 @@ describe('loadConfig', () => {
     expect(issues({ COSMETIC_GRANTS: 'u_owner:skin_nope' })).toEqual(['COSMETIC_GRANTS: "skin_nope" is not a cosmetic item']);
   });
 
+  it('FLUTTERWAVE_*: all three keys turn the store on (test or live, not mixed); none leaves it off; some is an error', () => {
+    const keys = { FLUTTERWAVE_SECRET_KEY: 'FLWSECK_TEST-abcdef0123456789-X', FLUTTERWAVE_PUBLIC_KEY: 'FLWPUBK_TEST-abcdef0123456789-X', FLUTTERWAVE_WEBHOOK_HASH: 'a-long-random-webhook-hash' };
+    expect(loadConfig({}).flutterwave).toBeNull();
+    expect(loadConfig(keys).flutterwave).toEqual({ secretKey: keys.FLUTTERWAVE_SECRET_KEY, publicKey: keys.FLUTTERWAVE_PUBLIC_KEY, webhookHash: keys.FLUTTERWAVE_WEBHOOK_HASH, apiUrl: 'https://api.flutterwave.com' });
+    expect(issues({ FLUTTERWAVE_SECRET_KEY: keys.FLUTTERWAVE_SECRET_KEY })).toEqual([expect.stringMatching(/^FLUTTERWAVE_\*: set FLUTTERWAVE_SECRET_KEY, FLUTTERWAVE_PUBLIC_KEY and FLUTTERWAVE_WEBHOOK_HASH together/)]);
+    expect(issues({ ...keys, FLUTTERWAVE_PUBLIC_KEY: 'FLWPUBK-abcdef0123456789-X' })).toEqual(['FLUTTERWAVE_*: the secret and public keys must both be test keys or both live keys']);
+    expect(issues({ ...keys, FLUTTERWAVE_SECRET_KEY: 'sk_live_123456789' })[0]).toMatch(/^FLUTTERWAVE_SECRET_KEY: must be a Flutterwave secret key/);
+    expect(issues({ ...keys, FLUTTERWAVE_WEBHOOK_HASH: 'short' })[0]).toMatch(/^FLUTTERWAVE_WEBHOOK_HASH: at least 16/);
+  });
+
   it('treats empty values (FOO= in a .env file) as unset', () => {
     expect(loadConfig({ DATABASE_URL: '', REDIS_URL: '  ', API_PORT: '' }).db.kind).toBe('pglite');
   });

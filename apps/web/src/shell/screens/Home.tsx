@@ -101,6 +101,10 @@ export function Home({ store }: { store: ShellStore }) {
               <Icon name="rack" />
               Armory
             </button>
+            <button type="button" className="tab m-p8" onClick={() => (location.hash = '#/store')}>
+              <Icon name="gem" />
+              Store
+            </button>
             <button type="button" className="tab m-p8" onClick={() => ctl.openSettings()}>
               <Icon name="gear" />
               Settings

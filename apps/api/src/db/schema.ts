@@ -6,7 +6,7 @@
  * move time.
  */
 import { sql } from 'drizzle-orm';
-import { boolean, check, index, integer, jsonb, pgTable, primaryKey, smallint, text, timestamp } from 'drizzle-orm/pg-core';
+import { bigserial, boolean, check, index, integer, jsonb, pgTable, primaryKey, smallint, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 export const USER_STATUSES = ['active', 'banned', 'deleted'] as const;
 export type UserStatus = (typeof USER_STATUSES)[number];
@@ -292,4 +292,153 @@ export const blocks = pgTable(
     createdAt: timestamp('created_at', tz).notNull(),
   },
   (t) => [primaryKey({ columns: [t.userId, t.blockedId] }), index('blocks_blocked_id_idx').on(t.blockedId), check('blocks_not_self', sql`${t.userId} <> ${t.blockedId}`)],
+);
+
+// ---------------------------------------------------------------- the store (docs/17 §2, docs/06 §7)
+
+/** The currency's two pools (docs/17 §2.5): bought with money, or given (grants). Kept apart for refunds and revenue. */
+export const LEDGER_POOLS = ['paid', 'earned'] as const;
+export type LedgerPool = (typeof LEDGER_POOLS)[number];
+
+/**
+ * Why currency moved: `purchase` (money in, paid pool, ref = the payment), `grant` (given, earned pool), `spend`
+ * (an item bought, ref = the order), `refund` (paid currency taken back as its money goes back, ref = the payment's
+ * refund attempt), `reversal` (undoes an earlier row: a refund the provider refused), `adjust` (the owner, with a reason).
+ */
+export const LEDGER_KINDS = ['purchase', 'grant', 'spend', 'refund', 'reversal', 'adjust'] as const;
+export type LedgerKind = (typeof LEDGER_KINDS)[number];
+
+/**
+ * One row per account with its balance per pool: a cache of the ledger, written in the same transaction as the
+ * ledger rows and locked (`for update`) while they're written. Never negative (checks). `monthly_cap_cents` is the
+ * spending limit in USD-tier cents (docs/17 §2.6); a raise waits in `cap_raise_*` until `cap_raise_at`.
+ * `flagged_*`: a mint alarm (store/wallet.ts) for the owner to look at.
+ */
+export const wallets = pgTable(
+  'wallets',
+  {
+    userId: text('user_id')
+      .primaryKey()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    paid: integer('paid').notNull().default(0),
+    earned: integer('earned').notNull().default(0),
+    version: integer('version').notNull().default(0),
+    monthlyCapCents: integer('monthly_cap_cents').notNull().default(10_000),
+    capRaiseCents: integer('cap_raise_cents'),
+    capRaiseAt: timestamp('cap_raise_at', tz),
+    flaggedAt: timestamp('flagged_at', tz),
+    flagReason: text('flag_reason'),
+    updatedAt: timestamp('updated_at', tz).notNull(),
+  },
+  (t) => [check('wallets_paid_check', sql`${t.paid} >= 0`), check('wallets_earned_check', sql`${t.earned} >= 0`), index('wallets_flagged_at_idx').on(t.flaggedAt)],
+);
+
+/**
+ * The currency ledger (docs/17 §2.5): append-only (a trigger refuses UPDATE, and DELETE except the cascade of an
+ * account's deletion). `balance_after` is the pool's balance after the row, so the latest row per pool equals the
+ * wallet and the rows sum to it (store/wallet.ts reconcile). `ref` is unique per kind and pool: a replayed webhook,
+ * a double redirect or a retried buy can't move currency twice.
+ */
+export const ledger = pgTable(
+  'ledger',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    pool: text('pool', { enum: LEDGER_POOLS }).notNull(),
+    kind: text('kind', { enum: LEDGER_KINDS }).notNull(),
+    delta: integer('delta').notNull(),
+    balanceAfter: integer('balance_after').notNull(),
+    ref: text('ref').notNull(),
+    /** the item bought, the bundle, or the owner's reason */
+    note: text('note'),
+    /** who moved it: player, flutterwave, owner, system */
+    actor: text('actor').notNull(),
+    createdAt: timestamp('created_at', tz).notNull(),
+  },
+  (t) => [
+    uniqueIndex('ledger_kind_pool_ref_idx').on(t.kind, t.pool, t.ref),
+    index('ledger_user_id_idx').on(t.userId, t.id),
+    check('ledger_pool_check', sql`${t.pool} in ('paid', 'earned')`),
+    check('ledger_kind_check', sql`${t.kind} in ('purchase', 'grant', 'spend', 'refund', 'reversal', 'adjust')`),
+    check('ledger_delta_check', sql`${t.delta} <> 0`),
+    check('ledger_balance_after_check', sql`${t.balanceAfter} >= 0`),
+  ],
+);
+
+export const PAYMENT_STATUSES = ['created', 'paid', 'failed', 'refund_pending', 'refunded'] as const;
+export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
+
+/**
+ * Money in (docs/06 §7 `purchases`): one row per checkout. Its id is the provider's `tx_ref`, made here, so a
+ * payment is only ever matched to the checkout the server opened. `amount_minor` and `currency` are what the
+ * provider must report before anything is credited; `cap_cents` is the bundle's USD-tier price, what the
+ * spending limit counts. Kept when the account is deleted (user_id goes null): the money record outlives it.
+ */
+export const payments = pgTable(
+  'payments',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
+    provider: text('provider').notNull(),
+    bundleId: text('bundle_id').notNull(),
+    brass: integer('brass').notNull(),
+    amountMinor: integer('amount_minor').notNull(),
+    currency: text('currency').notNull(),
+    capCents: integer('cap_cents').notNull(),
+    status: text('status', { enum: PAYMENT_STATUSES }).notNull(),
+    /** the provider's transaction id, once it reported one */
+    providerTxId: text('provider_tx_id').unique(),
+    createdAt: timestamp('created_at', tz).notNull(),
+    paidAt: timestamp('paid_at', tz),
+    refundedAt: timestamp('refunded_at', tz),
+    refundAttempts: smallint('refund_attempts').notNull().default(0),
+    /** the provider's refund id */
+    refundRef: text('refund_ref'),
+  },
+  (t) => [
+    index('payments_user_id_idx').on(t.userId, t.createdAt),
+    index('payments_status_idx').on(t.status, t.createdAt),
+    check('payments_status_check', sql`${t.status} in ('created', 'paid', 'failed', 'refund_pending', 'refunded')`),
+    check('payments_amount_check', sql`${t.amountMinor} > 0 and ${t.brass} > 0`),
+  ],
+);
+
+/**
+ * What an account owns (docs/06 §7 `inventory`): store items bought or granted. Unlocks exactly like the owner's
+ * COSMETIC_GRANTS (content's cosmeticUnlocked with the ids, `includes` and all): the Locker, the saved loadout
+ * and the join ticket read the two together (store/wallet.ts owned()).
+ */
+export const inventory = pgTable(
+  'inventory',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    itemId: text('item_id').notNull(),
+    /** purchase (ref = the order) or grant (ref = the owner's action) */
+    source: text('source').notNull(),
+    ref: text('ref').notNull(),
+    acquiredAt: timestamp('acquired_at', tz).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.itemId] })],
+);
+
+/**
+ * The owner's store actions (grants, adjustments, refunds, cleared flags), each with its reason: append-only like
+ * the ledger, and kept when the account goes (user_id is plain text, no foreign key).
+ */
+export const storeAudit = pgTable(
+  'store_audit',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    at: timestamp('at', tz).notNull(),
+    actor: text('actor').notNull(),
+    action: text('action').notNull(),
+    userId: text('user_id'),
+    reason: text('reason').notNull(),
+    detail: jsonb('detail').$type<Record<string, unknown>>().notNull(),
+  },
+  (t) => [index('store_audit_user_id_idx').on(t.userId, t.id)],
 );

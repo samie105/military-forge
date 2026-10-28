@@ -4,7 +4,7 @@
  * on top as the HUD and the toggleable debug overlay (RenderOptions.overlay). Sim events reach the
  * effects through `onEvents` (main.ts forwards the 2D renderer's events here).
  */
-import { cosmeticLoadoutHash, tracerTintOf, weapons, type MapDef } from '@military-forge/content';
+import { cosmeticLoadoutHash, tracerGlowOf, weapons, type MapDef } from '@military-forge/content';
 import { CollisionWorld, DamageSource, type SimEvent } from '@military-forge/sim';
 import {
   BufferGeometry,
@@ -54,7 +54,7 @@ import type { EjectLookup } from './vfx/casings';
 import type { SwingLookup } from './vfx/melee';
 import type { GunPointLookup } from './vfx/projectiles';
 import type { BodyLookup } from './vfx/dash';
-import type { MuzzleLookup, TracerTints } from './vfx/gunfire';
+import type { MuzzleLookup, TracerGlow } from './vfx/gunfire';
 import { KillEffects } from './vfx/killEffects';
 
 export { PlaneCamera, parsePreset, type PresetName, type RemoteView };
@@ -334,14 +334,14 @@ export class Renderer3D {
     this.scene.add(aimLine.layer.mesh);
     this.vfx.register(aimLine);
     // weapon skins (docs/17 §3.6–3.7): the shooter's tracer hue, and the killer's kill effect where the victim falls
-    this.vfx.gunfire.tracerTintOf = this.tracerTintOf;
+    this.vfx.gunfire.tracerGlowOf = this.tracerGlowOf;
     this.killEffects = new KillEffects({
       lookOf: (id) => this.loadouts.for({ id, isLocal: id === this.localId }),
       teamOf: (id) => this.teamOf?.(id) ?? -1,
       viewer: () => this.localId,
       body: (id) => {
         const a = this.avatars.get(id);
-        return a ? { x: a.pivot.position.x, y: a.pivot.position.y, killEffect: (colour, seconds) => a.killEffect(colour, seconds) } : null;
+        return a ? { x: a.pivot.position.x, y: a.pivot.position.y, killEffect: (colour, seconds, dissolve) => a.killEffect(colour, seconds, dissolve) } : null;
       },
     });
     this.vfx.register(this.killEffects);
@@ -352,24 +352,23 @@ export class Renderer3D {
   readonly killEffects: KillEffects;
   /** a player's team, −1 for none (main.ts, from the look book): a team kill plays no kill effect */
   teamOf: ((id: number) => number) | null = null;
-  /** skin tracer hues, as linear RGB, by their #rrggbb pair */
-  private readonly tracerTints = new Map<string, TracerTints>();
+  /** skin tracer glows, as linear RGB, by their content stops (one array per skin: a WeakMap on it) */
+  private readonly tracerGlows = new WeakMap<readonly string[], TracerGlow>();
 
-  /** A shooter's skin on the gun it fired: its tracer hues (linear RGB), or null for the base tracer (docs/17 V5). */
-  private readonly tracerTintOf = (shooter: number, weapon: number): TracerTints | null => {
+  /** A shooter's skin on the gun it fired: its tracer glow (linear RGB), or null for the base tracer (docs/17 V5). */
+  private readonly tracerGlowOf = (shooter: number, weapon: number): TracerGlow | null => {
     const gun = weapons[weapon];
-    const hues = gun ? tracerTintOf(this.loadouts.for({ id: shooter, isLocal: shooter === this.localId }), gun.id) : null;
-    if (!hues) return null;
-    const key = `${hues.bolt}${hues.trail}`;
-    let tints = this.tracerTints.get(key);
-    if (!tints) {
-      const linear = (hex: string): readonly [number, number, number] => {
+    const stops = gun ? tracerGlowOf(this.loadouts.for({ id: shooter, isLocal: shooter === this.localId }), gun.id) : null;
+    if (!stops) return null;
+    let glow = this.tracerGlows.get(stops);
+    if (!glow) {
+      glow = stops.map((hex): readonly [number, number, number] => {
         const c = new Color(hex); // linear, as the Forge's tracer tints are
         return [c.r, c.g, c.b];
-      };
-      this.tracerTints.set(key, (tints = { bolt: linear(hues.bolt), trail: linear(hues.trail) }));
+      });
+      this.tracerGlows.set(stops, glow);
     }
-    return tints;
+    return glow;
   };
 
   /** Settings → Graphics → "Show other players' kill effects" (docs/17 §3.7): off, only your own kills play one. */

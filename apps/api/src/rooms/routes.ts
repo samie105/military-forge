@@ -150,7 +150,7 @@ export function roomRoutes(deps: {
     const me = await profiles.me(userId);
     if (!me) throw new ApiError(401, 'no_session', 'Sign in again');
     const iat = Math.floor(now() / 1000);
-    const { guns, look } = db ? await savedLoadout(db, userId, me.level, profiles.grantsOf(userId)) : { guns: null, look: null };
+    const { guns, look } = db ? await savedLoadout(db, userId, me.level, await profiles.ownedOf(userId)) : { guns: null, look: null };
     const partyId = party ? await party.partyOf(userId) : null;
     const claims: JoinTicketClaims = {
       iss: TICKET_ISSUER,

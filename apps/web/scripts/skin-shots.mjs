@@ -6,8 +6,8 @@
  * Shots (the K-47 Galaxy Relic, docs/17 §3.6–3.7):
  *   locker        the Locker's Gun skins tab with the Galaxy Relic on the stand (a dev build's ?grant= unlocks it)
  *   held          the skinned K-47 in the hand next to the base K-47, in the animation lab's real renderer
- *   tracers       both firing: the skin's hues above, the base tracer below, mid-flight
- *   kill-effect   the stardust kill effect, frame by frame; kill-effect-still: its Reduce motion variant
+ *   tracers       both firing: the skin's glow round the base core above, the base tracer below, mid-flight
+ *   kill-effect   the Stardust Shatter kill effect, frame by frame; kill-effect-still: its Reduce motion variant
  */
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -51,7 +51,8 @@ try {
     await p.waitForSelector('[data-tab]', { timeout: 120_000 });
     await p.evaluate(() => [...document.querySelectorAll('[data-tab]')].find((b) => /Gun skins/.test(b.textContent ?? ''))?.click());
     await p.waitForSelector('[data-id="skin_k47_galaxy_relic_fx"]', { timeout: 60_000 });
-    await p.click('[data-id="skin_k47_galaxy_relic_fx"]');
+    await sleep(500); // the tab re-renders its cards once the inventory arrives: click the settled one
+    await p.evaluate(() => document.querySelector('[data-id="skin_k47_galaxy_relic_fx"]')?.click());
     await sleep(6000); // the soldier, then the gun GLB, then a few drawn frames
     await p.screenshot({ path: join(out, 'locker.png') });
     console.log('  locker.png');
@@ -160,10 +161,10 @@ try {
     c.imageSmoothingEnabled = false;
     c.drawImage(top, 0, full.height + 10, o.width, top.height * k);
     c.drawImage(bottom, 0, full.height + 20 + top.height * k, o.width, bottom.height * k);
-    return label(o, ['Tracers mid-flight: Galaxy Relic (above: violet bolt, aquamarine trail), base K-47 (below); magnified below', 'Same width, length, speed and brightness (±10%): only the hues move (docs/17 V5)']).toDataURL('image/png');
+    return label(o, ['Tracers mid-flight: Galaxy Relic (above: the base core in a violet → magenta → aquamarine glow), base K-47 (below)', 'The core is the base\'s exactly (colour, width, length, speed, brightness); only the glow and path line take the gradient (docs/17 V5)']).toDataURL('image/png');
   }));
 
-  // the kill effect: a strip from the kill to 0.9 s (the killer, off screen, wears the Galaxy Relic + Stardust)
+  // the kill effect: a strip from the kill to 0.85 s (the killer, off screen, wears the Galaxy Relic + Stardust)
   const strip = async (reduced) =>
     lab.evaluate(async (reduced) => {
       const { view, camera, pv, width, look, settle, crop, frame, DT } = window.__sk;
@@ -176,7 +177,7 @@ try {
       view.loadouts.setLooks(new Map([[50, look('skin_k47_galaxy_relic_fx')], [victim, look('skin_k47_standard')]]));
       const alive = pv(victim, x, 0, { aim: Math.PI - 0.1 });
       await settle([alive], 0.6);
-      const times = [-0.02, 0.1, 0.2, 0.3, 0.4, 0.5, 0.65, 0.9];
+      const times = [-0.02, 0.08, 0.18, 0.3, 0.42, 0.55, 0.7, 0.85];
       const cells = [];
       let t = -0.04;
       let fired = false;
@@ -201,7 +202,7 @@ try {
       c.fillRect(0, 0, o.width, o.height);
       c.fillStyle = '#e6edf3';
       c.font = 'bold 18px system-ui, sans-serif';
-      c.fillText(reduced ? 'Stardust, the still variant (Reduce motion / Reduce flashes / Low): a flat tint fade, no particles' : 'Stardust kill effect: a kill with the Galaxy Relic K-47, 0.8 s, inside the body envelope', 10, 22);
+      c.fillText(reduced ? 'Stardust Shatter, the still variant (Reduce motion / Reduce flashes / Low): a flat tint fade, no particles' : 'Stardust Shatter: a kill with the Galaxy Relic K-47: crystal shards, sparkles, a stardust swirl; 0.9 s, inside the body envelope', 10, 22);
       c.font = '16px system-ui, sans-serif';
       cells.forEach(([cell, cap], i) => {
         c.drawImage(cell, i * w, 30);

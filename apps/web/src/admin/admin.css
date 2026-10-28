@@ -285,3 +285,15 @@ body {
 .stats__bar.is-zero { min-width: 0; width: 0; }
 .stats__numbers > summary { cursor: pointer; color: var(--c-muted-2); font-size: var(--fs-14); padding: 4px 0; }
 .stats__bar-value { font-variant-numeric: tabular-nums; color: var(--c-text); }
+
+/* ---- Store (store.ts): find an account, then its wallet, actions and history ---- */
+.admin__store { grid-column: 1 / -1; min-width: 0; max-width: 1100px; }
+.admin__store-find { display: flex; gap: 8px; margin: 8px 0; max-width: 560px; }
+.admin__store-results { display: flex; flex-wrap: wrap; gap: 6px; }
+.admin__store-flags { margin: 6px 0; padding-left: 18px; }
+.admin__store-balance { font-size: 18px; }
+.admin__store-action { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+.admin__store-action input, .admin__store-action select, .admin__store-account > input { min-height: 36px; padding: 0 8px; font: inherit; }
+.admin__store-action input[type='text'], .admin__store-account > input { flex: 1; min-width: 200px; }
+.admin__store-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.admin__store-table td { padding: 4px 6px; border-bottom: 1px solid var(--c-line, #333); }

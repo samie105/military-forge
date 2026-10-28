@@ -11,6 +11,7 @@ import { RedisKv } from './kv/redis';
 import { MemoryBus, RedisBus, type EventBus } from './events/bus';
 import { createLogger } from './log';
 import { keepRooms } from './rooms/routes';
+import { SWEEP_EVERY_MS, createStore } from './store';
 
 /** apps/api: relative paths (PGlite data, dev keys) resolve from here, whatever the cwd */
 const PACKAGE_DIR = fileURLToPath(new URL('..', import.meta.url));
@@ -40,7 +41,19 @@ const ticketKey = config.joinTicket.privateKeyPem ? signingKeyFromPem(config.joi
 // play stats (docs/16): batched writes, day partitions, rollups, deletions; its timers run here
 const analytics = new AnalyticsService(database.db, kv, config.analytics, log);
 analytics.start();
-const app = createApp({ config, database, kv, signingKey, ticketKey, log, bus, analytics });
+// the store (docs/17): the sweep credits payments that were paid but never confirmed (≤ 15 min, §2.5's make-good)
+const store = createStore(config, database.db, Date.now, log);
+if (store.payments) {
+  log.info({ mode: store.flutterwave!.mode }, `store on: Flutterwave ${store.flutterwave!.mode} keys`);
+  const payments = store.payments;
+  setInterval(() => {
+    void payments.sweep().then(
+      (r) => r.looked && log.info({ store: 'sweep', ...r }, 'payments swept'),
+      (err: unknown) => log.error({ err }, 'payments sweep failed'),
+    );
+  }, SWEEP_EVERY_MS).unref();
+} else log.info('store off: no FLUTTERWAVE_* keys');
+const app = createApp({ config, database, kv, signingKey, ticketKey, log, bus, analytics, store });
 const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
   log.info(
     { port: info.port, db: database.kind, kv: kv.kind, env: config.env },

@@ -77,7 +77,6 @@ const CLASS_FX: Record<WeaponClass, ClassFx | null> = {
 const TRACER_TINT: [number, number, number] = [1, 0.92, 0.66];
 /** a ricochet's tracer: the cold cyan the 2D view uses for them */
 const RICOCHET_TINT: [number, number, number] = [0.6, 0.93, 1];
-const RICOCHET_TINTS: TracerTints = { bolt: RICOCHET_TINT, trail: RICOCHET_TINT };
 const SNIPER_TRAIL = { tint: [0.62, 0.62, 0.6] as [number, number, number], widthM: 0.05, seconds: 0.45 };
 const FLASH_TINT: [number, number, number] = [1, 0.85, 0.5];
 /** hitscan: the hit is already decided, so a tracer reaches its end within this */
@@ -101,27 +100,32 @@ const CHIP_WOOD = [0.45, 0.33, 0.2] as const;
 const LIGHT_PEAK = 22;
 const QUEUE_MAX = 256;
 
-/** A skin's tracer hues (linear RGB): the bolt's, and its path line's (docs/17 V5: hues only). */
-export interface TracerTints {
-  bolt: readonly [number, number, number];
-  trail: readonly [number, number, number];
-}
+/**
+ * A skin's tracer glow (linear RGB): a gradient from the bolt's head back to the muzzle, 2–3 stops (docs/17 V5,
+ * owner 28 Oct: the bolt's core stays the base's; only the glow around it and its path line take the skin's colours).
+ */
+export type TracerGlow = readonly (readonly [number, number, number])[];
+/** the glow's quad, as tall as this × the core's: a thin sheath around it, empty down its middle (atlas Cell.Sheath) */
+export const SHEATH_WIDTH = 2.5;
+/** the glow's peak alpha around the core; its path line's (the base path line is 0.45, in the bright core tint) */
+export const SHEATH_ALPHA = 0.75;
+export const GLOW_PATH_ALPHA = 0.6;
 
 /**
- * A tracer's look: its bolt's and path line's tints, width, bolt length and speed, from the weapon's Forge style
- * (else its class) over a shot of `dist` metres. A skin's hues (`tintOver`) change the tints only (docs/17 V5;
- * test/skins.test.ts).
+ * A tracer's look: its core's tint, width, bolt length and speed, from the weapon's Forge style (else its class) over
+ * a shot of `dist` metres, and the skin's glow (null: the base tracer). A skin never changes the core (docs/17 V5;
+ * test/skins.test.ts); `core` is a ricochet's cold tint.
  */
 export function tracerLook(
   style: { tint: readonly [number, number, number]; widthM: number; lengthM: number; speedMps: number } | undefined,
   cls: { width: number; length: number },
   dist: number,
-  tintOver: TracerTints | null = null,
-): { tint: readonly [number, number, number]; trail: readonly [number, number, number]; width: number; len: number; speed: number } {
-  const base = style?.tint ?? TRACER_TINT;
+  glow: TracerGlow | null = null,
+  core: readonly [number, number, number] | null = null,
+): { tint: readonly [number, number, number]; glow: TracerGlow | null; width: number; len: number; speed: number } {
   return {
-    tint: tintOver?.bolt ?? base,
-    trail: tintOver?.trail ?? base,
+    tint: core ?? style?.tint ?? TRACER_TINT,
+    glow: glow && glow.length > 0 ? glow : null,
     width: (style?.widthM ?? cls.width) * TRACER_THIN,
     len: Math.min((style?.lengthM ?? cls.length) * TRACER_BOLT, dist),
     speed: Math.max(style?.speedMps ?? 0, MIN_SPEED, dist / MAX_FLIGHT),
@@ -212,10 +216,10 @@ export class Gunfire {
   }
 
   /**
-   * skins: the tracer tint (linear RGB) a shooter's skin gives a weapon's shots, or null for the base (Renderer3D sets
-   * it from the looks; docs/17 V5: a hue only, so it replaces the tint and nothing else: see tracerLook).
+   * skins: the tracer glow (linear RGB) a shooter's skin gives a weapon's shots, or null for the base (Renderer3D sets
+   * it from the looks; docs/17 V5: the core stays the base's, the glow is drawn around it: see tracerLook).
    */
-  tracerTintOf: ((shooter: number, weapon: number) => TracerTints | null) | null = null;
+  tracerGlowOf: ((shooter: number, weapon: number) => TracerGlow | null) | null = null;
 
   /** One batch of sim events: shots wait for the frame's avatar poses. */
   onEvents(events: readonly SimEvent[]): void {
@@ -304,16 +308,16 @@ export class Gunfire {
     const entry = this.art?.weapons[def.id];
     if (first) this.flash(fx, fxX, fxY, oz, drawn ? Math.atan2(_d.y, _d.x) : Math.atan2(uy, ux), cls, entry?.flash ?? null, entry?.flashScale ?? 1, drawn ? e : null);
     if (tracer && dist > 0.3) {
-      // a skin's tracer hue (docs/17 V5): the shooter's skin on this gun; shape, speed and brightness stay the base's
-      const tint = this.tracerTintOf?.(e.shooter, e.weapon) ?? null;
-      this.tracer(fx, e.ox, e.oy, oz, ux, uy, dist, cls, entry?.tracer ?? null, tint);
-      if (drawn) this.joiner(fx, fxX, fxY, e.ox, e.oy, oz, cls, entry?.tracer ?? null, tint);
+      // a skin's tracer glow (docs/17 V5): the shooter's skin on this gun; the core, shape and speed stay the base's
+      const glow = this.tracerGlowOf?.(e.shooter, e.weapon) ?? null;
+      this.tracer(fx, e.ox, e.oy, oz, ux, uy, dist, cls, entry?.tracer ?? null, glow);
+      if (drawn) this.joiner(fx, fxX, fxY, e.ox, e.oy, oz, cls, entry?.tracer ?? null, glow);
     }
     if (e.hit) this.impact(fx, e, ux, uy);
   }
 
-  /** The drawn muzzle to the start of the sim's ray: a short line in the tracer's tint, gone with its path line. */
-  private joiner(fx: GunfireTargets, x0: number, y0: number, x1: number, y1: number, z: number, cls: ClassFx, styleName: string | null, tintOver: TracerTints | null = null): void {
+  /** The drawn muzzle to the start of the sim's ray: a short line in the path line's colour (a glow's muzzle end). */
+  private joiner(fx: GunfireTargets, x0: number, y0: number, x1: number, y1: number, z: number, cls: ClassFx, styleName: string | null, glow: TracerGlow | null = null): void {
     const dx = x1 - x0;
     const dy = y1 - y0;
     const len = Math.sqrt(dx * dx + dy * dy);
@@ -327,10 +331,10 @@ export class Gunfire {
     p.size0 = p.size1 = len;
     p.aspect = ((style?.widthM ?? cls.width) * TRACER_THIN * 1.4) / len;
     p.rot = Math.atan2(dy, dx);
-    p.alpha = 0.45;
+    p.alpha = glow ? GLOW_PATH_ALPHA : 0.45;
     p.ramp = Ramp.Tracer;
     p.cell = Cell.Line;
-    [p.tr, p.tg, p.tb] = tintOver?.trail ?? style?.tint ?? TRACER_TINT;
+    [p.tr, p.tg, p.tb] = glow?.[glow.length - 1] ?? style?.tint ?? TRACER_TINT;
     fx.glow.emit(p);
   }
 
@@ -491,9 +495,9 @@ export class Gunfire {
     }
   }
 
-  private tracer(fx: GunfireTargets, x: number, y: number, z: number, ux: number, uy: number, dist: number, cls: ClassFx, styleName: string | null, tintOver: TracerTints | null = null): void {
+  private tracer(fx: GunfireTargets, x: number, y: number, z: number, ux: number, uy: number, dist: number, cls: ClassFx, styleName: string | null, glowOver: TracerGlow | null = null, core: readonly [number, number, number] | null = null): void {
     const style = styleName ? this.art?.tracers[styleName] : undefined;
-    const { tint, trail: pathTint, width, len, speed } = tracerLook(style, cls, dist, tintOver);
+    const { tint, glow, width, len, speed } = tracerLook(style, cls, dist, glowOver, core);
     const angle = Math.atan2(uy, ux);
     // the bolt: a bright streak racing from the muzzle to the end, its head at +U
     let p = reset();
@@ -510,20 +514,23 @@ export class Gunfire {
     p.cell = Cell.Tracer;
     [p.tr, p.tg, p.tb] = tint;
     fx.glow.emit(p);
-    // the path: a thin line from muzzle to end, gone in ~0.1 s
-    p = reset();
-    p.x = x + ux * dist * 0.5;
-    p.y = y + uy * dist * 0.5;
-    p.z = z;
-    p.life = 0.06;
-    p.size0 = p.size1 = dist;
-    p.aspect = (width * 1.4) / dist;
-    p.rot = angle;
-    p.alpha = 0.45;
-    p.ramp = Ramp.Tracer;
-    p.cell = Cell.Line;
-    [p.tr, p.tg, p.tb] = pathTint;
-    fx.glow.emit(p);
+    if (glow) this.glow(fx, x, y, z, ux, uy, dist, width, len, speed, glow);
+    else {
+      // the path: a thin line from muzzle to end, gone in ~0.1 s
+      p = reset();
+      p.x = x + ux * dist * 0.5;
+      p.y = y + uy * dist * 0.5;
+      p.z = z;
+      p.life = 0.06;
+      p.size0 = p.size1 = dist;
+      p.aspect = (width * 1.4) / dist;
+      p.rot = angle;
+      p.alpha = 0.45;
+      p.ramp = Ramp.Tracer;
+      p.cell = Cell.Line;
+      [p.tr, p.tg, p.tb] = tint;
+      fx.glow.emit(p);
+    }
     // snipers leave a smoke line that hangs a moment
     const trail = style?.trail ?? (cls.width >= 0.06 ? SNIPER_TRAIL : null);
     if (trail) {
@@ -540,6 +547,53 @@ export class Gunfire {
       p.cell = Cell.Line;
       [p.tr, p.tg, p.tb] = trail.tint;
       fx.smoke.emit(p);
+    }
+  }
+
+  /**
+   * A skin's glow (docs/17 V5): a sheath around the core in the gradient's stops, head first, riding with the bolt
+   * (same length, speed and life; empty down its middle, so the core draws as the base's), and the path line in the
+   * same stops, the head's colour at the far end and the last at the muzzle. Additive, like the core.
+   */
+  private glow(fx: GunfireTargets, x: number, y: number, z: number, ux: number, uy: number, dist: number, width: number, len: number, speed: number, glow: TracerGlow): void {
+    const n = glow.length;
+    const angle = Math.atan2(uy, ux);
+    const seg = len / n;
+    for (let i = 0; i < n; i++) {
+      // segment i's centre, back from the head; each a third longer than its share, so the soft ends overlap
+      const back = len - seg * (i + 0.5);
+      const p = reset();
+      p.x = x + ux * back;
+      p.y = y + uy * back;
+      p.z = z;
+      p.vx = ux * speed;
+      p.vy = uy * speed;
+      p.life = Math.max(1 / 120, (dist - len) / speed);
+      p.size0 = p.size1 = seg * 1.35;
+      p.aspect = (width * 2.2 * SHEATH_WIDTH) / p.size0;
+      p.rot = angle;
+      p.alpha = SHEATH_ALPHA;
+      p.ramp = Ramp.Book;
+      p.cell = Cell.Sheath;
+      [p.tr, p.tg, p.tb] = glow[i]!;
+      fx.glow.emit(p);
+    }
+    const pathSeg = dist / n;
+    for (let i = 0; i < n; i++) {
+      const along = dist - pathSeg * (i + 0.5);
+      const p = reset();
+      p.x = x + ux * along;
+      p.y = y + uy * along;
+      p.z = z;
+      p.life = 0.06;
+      p.size0 = p.size1 = pathSeg * 1.04;
+      p.aspect = (width * 1.4) / p.size0;
+      p.rot = angle;
+      p.alpha = GLOW_PATH_ALPHA;
+      p.ramp = Ramp.Tracer;
+      p.cell = Cell.Line;
+      [p.tr, p.tg, p.tb] = glow[i]!;
+      fx.glow.emit(p);
     }
   }
 
@@ -576,7 +630,7 @@ export class Gunfire {
       p.cell = Cell.Streak;
       fx.glow.emit(p);
     }
-    if (dist > 0.3) this.tracer(fx, e.x, e.y, 0.5, ux, uy, dist, cls, def ? (this.art?.weapons[def.id]?.tracer ?? null) : null, RICOCHET_TINTS);
+    if (dist > 0.3) this.tracer(fx, e.x, e.y, 0.5, ux, uy, dist, cls, def ? (this.art?.weapons[def.id]?.tracer ?? null) : null, null, RICOCHET_TINT);
     if (e.hit) this.impact(fx, e, ux, uy);
   }
 

@@ -2,9 +2,10 @@
  * Copies every table of the schema from one database into another, parents before children
  * (foreign keys), skipping rows the target already has. It moves a PGlite directory into real
  * Postgres once (scripts/import-pglite.ts, run by the trial server's setup): both sides are
- * migrated to the same schema first, so the rows fit as they are. Safe to run twice.
+ * migrated to the same schema first, so the rows fit as they are, and serial ids' sequences are moved past the
+ * copied rows (the ledger's, the store audit's). Safe to run twice.
  */
-import { getTableName, is } from 'drizzle-orm';
+import { getTableName, is, sql } from 'drizzle-orm';
 import { getTableConfig, PgTable } from 'drizzle-orm/pg-core';
 import type { Db } from './client';
 import * as schema from './schema';
@@ -51,6 +52,12 @@ export async function copyAllTables(from: Db, to: Db): Promise<Record<string, { 
       }
     });
     counts[getTableName(table)] = { read: rows.length, added };
+    // rows came with their ids: a serial column's sequence moves past them, or the next insert would collide
+    for (const col of getTableConfig(table).columns) {
+      if (!col.columnType.startsWith('PgBigSerial') && !col.columnType.startsWith('PgSerial')) continue;
+      const name = getTableName(table);
+      await to.execute(sql`select setval(pg_get_serial_sequence(${name}, ${col.name}), coalesce((select max(${sql.identifier(col.name)}) from ${sql.identifier(name)}), 0) + 1, false)`);
+    }
   }
   return counts;
 }

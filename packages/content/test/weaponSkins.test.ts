@@ -1,7 +1,7 @@
 /**
  * Weapon skins and kill effects against docs/17 §3.3–3.7: the automated rows of the visual-advantage
- * checklist that content can hold on its own (V1, V5's hue, V7, V13's limits). The tracer's width, length,
- * speed and brightness in the renderer are apps/web's test/skins/tracer.test.ts.
+ * checklist that content can hold on its own (V1, V5's glow colours, V7, V13's limits). The tracer's core, width,
+ * length and speed in the renderer are apps/web's render3d/test/skins.test.ts.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -15,12 +15,13 @@ import {
   deltaE,
   getCosmetic,
   getKillEffect,
+  killEffectColours,
   killEffectOf,
   killEffects,
   luminance,
   nearestReserved,
   sanitizeCosmeticLoadout,
-  tracerTintOf,
+  tracerGlowOf,
   weaponSkinOf,
   weaponSkinSlot,
   weapons,
@@ -75,39 +76,45 @@ describe('weapon skins (docs/17 §3.3)', () => {
     expect(killEffectOf(wearing('skin_k47_galaxy_relic'), 'k47')).toBeNull();
     expect(killEffectOf(wearing('skin_k47_galaxy_relic_fx'), 'k47')?.id).toBe('stardust');
     expect(killEffectOf(wearing('skin_k47_galaxy_relic_fx'), 'widow')).toBeNull();
-    const hues = tracerTintOf(wearing('skin_k47_galaxy_relic'), 'k47')!;
-    expect(hues.bolt).toMatch(/^#[0-9a-f]{6}$/);
-    expect(hues.trail).toMatch(/^#[0-9a-f]{6}$/);
-    expect(tracerTintOf(null, 'k47')).toBeNull();
+    const glow = tracerGlowOf(wearing('skin_k47_galaxy_relic'), 'k47')!;
+    for (const hex of glow) expect(hex).toMatch(/^#[0-9a-f]{6}$/);
+    expect(tracerGlowOf(null, 'k47')).toBeNull();
+    expect(tracerGlowOf(DEFAULT_COSMETIC_LOADOUT, 'k47')).toBeNull();
   });
 });
 
-describe('tracer hue (V5, V7)', () => {
+describe('tracer glow (V5, V7; owner, 28 Oct: "yes upgrade it")', () => {
   // the base rifle tracer's tint (apps/web/public/assets/vfx/weapons.vfx.json `tracer.styles.rifle.tint`; the web's
-  // tracer test reads the file itself and checks this copy)
+  // tracer test reads the file itself and checks this copy). The bolt's core always draws in it.
   const BASE_TRACER = '#ffe9a0';
-  /** every tracer hue a skin sets: the bolt's and its path line's */
-  const hues = skins.flatMap((c) => [c.tracerTint, c.tracerTrail].filter((h): h is string => !!h).map((hex) => ({ id: c.id, hex })));
+  /** every glow stop a skin sets */
+  const stops = skins.flatMap((c) => (c.tracerGlow ?? []).map((hex) => ({ id: c.id, hex })));
 
-  it('a hue only: each tint\'s luminance within ±10% of the base tracer\'s', () => {
-    expect(hues.length).toBeGreaterThan(0);
-    for (const { id, hex } of hues) {
-      const ratio = luminance(hex) / luminance(BASE_TRACER);
-      expect(ratio, `${id} ${hex}`).toBeGreaterThanOrEqual(0.9);
-      expect(ratio, `${id} ${hex}`).toBeLessThanOrEqual(1.1);
+  it('a glow is a gradient of 2–3 stops, and only paid skins carry one', () => {
+    expect(stops.length).toBeGreaterThan(0);
+    for (const s of skins) {
+      if (!s.tracerGlow) continue;
+      expect(s.tier, s.id).not.toBe('base');
+      expect(s.tracerGlow.length, s.id).toBeGreaterThanOrEqual(2);
+      expect(s.tracerGlow.length, s.id).toBeLessThanOrEqual(3);
     }
   });
 
-  it('every tracer hue ≥ ΔE 15 from every reserved colour (teams, marks, HP, grenades, EMP, events, zones)', () => {
+  it('every stop is a saturated colour, dimmer than the base core (the core stays the brightest part)', () => {
+    for (const { id, hex } of stops) {
+      const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255) as [number, number, number];
+      const max = Math.max(r, g, b);
+      expect((max - Math.min(r, g, b)) / max, `${id} ${hex}: saturated`).toBeGreaterThanOrEqual(0.5);
+      expect(luminance(hex), `${id} ${hex}`).toBeLessThan(luminance(BASE_TRACER));
+    }
+  });
+
+  it('every stop ≥ ΔE 15 from every reserved colour (teams, marks, HP, grenades, EMP, events, zones)', () => {
     expect(RESERVED_COLOURS.length).toBeGreaterThan(20);
-    for (const { id, hex } of hues) {
+    for (const { id, hex } of stops) {
       const near = nearestReserved(hex);
       expect(near.deltaE, `${id}: ${hex} is ΔE ${near.deltaE.toFixed(1)} from ${near.name}`).toBeGreaterThanOrEqual(RESERVED_DELTA_E);
     }
-  });
-
-  it('a trail hue only with a bolt hue (a skin never recolours half a tracer)', () => {
-    for (const s of skins) if (s.tracerTrail) expect(s.tracerTint, s.id).toBeDefined();
   });
 
   it('the ΔE helper agrees with known values', () => {
@@ -123,15 +130,25 @@ describe('kill effects (docs/17 §3.7, docs/04 §7)', () => {
       expect(e.durationS, e.id).toBeGreaterThan(0);
       expect(e.durationS, e.id).toBeLessThanOrEqual(KILL_EFFECT_LIMITS.maxDurationS);
       expect(e.particles, e.id).toBeLessThanOrEqual(KILL_EFFECT_LIMITS.maxParticles);
+      expect(e.shards.count + e.sparkles.count + e.swirl.count, e.id).toBe(e.particles);
       expect(e.still.durationS, e.id).toBeLessThanOrEqual(KILL_EFFECT_LIMITS.maxDurationS);
-      expect(e.rise, `${e.id}: drifts, never flies off`).toBeLessThanOrEqual(0.5);
+      // every quad is gone by the end: the late phases start early enough for their longest life
+      expect(e.shards.lifeS[1], e.id).toBeLessThanOrEqual(e.durationS);
+      expect(e.sparkles.secondWaveS + e.sparkles.lifeS[1], e.id).toBeLessThanOrEqual(e.durationS);
+      expect(e.swirl.atS + e.swirl.lifeS[1], e.id).toBeLessThanOrEqual(e.durationS);
+      expect(e.swirl.riseM, `${e.id}: drifts, never flies off`).toBeLessThanOrEqual(0.5);
+      expect(e.dissolveS[0], e.id).toBeLessThan(e.dissolveS[1]);
+      expect(e.dissolveS[1], `${e.id}: the body goes before the shards do`).toBeLessThanOrEqual(e.shards.lifeS[0]);
+      expect(e.shards.burstMps, `${e.id}: a crumble, not a blast`).toBeLessThanOrEqual(0.5);
+      // no quad bigger than a fist: the shatter reads as the body breaking up, never a cloud over the spot
+      for (const p of [e.shards, e.sparkles, e.swirl]) expect(p.sizeM[1], e.id).toBeLessThanOrEqual(0.14);
       expect(e.sound, `${e.id}: no sound until one is checked for loudness and band`).toBeNull();
     }
   });
 
   it('never brighter than a lit body, and clear of the reserved colours (never a hit marker, damage or team cue)', () => {
     for (const e of killEffects) {
-      for (const c of [...e.palette, e.bodyTint, e.still.tint]) {
+      for (const c of killEffectColours(e)) {
         expect(luminance(c), `${e.id} ${c}: no glare`).toBeLessThanOrEqual(0.9);
         const near = nearestReserved(c);
         expect(near.deltaE, `${e.id}: ${c} is ΔE ${near.deltaE.toFixed(1)} from ${near.name}`).toBeGreaterThanOrEqual(RESERVED_DELTA_E);

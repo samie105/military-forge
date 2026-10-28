@@ -82,6 +82,8 @@ import { HintRunner } from './tour/hintsRun';
 import type { Device } from './tour/log';
 import { provideTourMemory } from './tour/live';
 import { startPwa } from './pwa';
+import { readReturn, withoutReturn, type StoreView } from './store/model';
+import type { StoreApi } from './store/screen';
 import { launchedInstalled } from './pwa/install';
 import { startMetrics } from './metrics';
 import { buildId } from 'virtual:title-info';
@@ -103,7 +105,9 @@ hookDiagErrors();
 
 const params = new URLSearchParams(location.search);
 /** the player-facing app, or (dev builds at `/`) the Phase 0 debug client */
-const appMode = !import.meta.env.DEV || params.has('app') || params.has('room') || location.pathname.startsWith('/r/');
+// Flutterwave's checkout page sends the player back to /?store=return&… (store/model.ts): the app, at the Store
+const storeReturn = readReturn(location.search);
+const appMode = !import.meta.env.DEV || params.has('app') || params.has('room') || location.pathname.startsWith('/r/') || storeReturn !== null;
 /** the debug client in a local room (lan/): `?lanhost` hosts one, `?lanjoin=CODE` joins one (the app has its own screens) */
 const lanHostParam = !appMode && params.has('lanhost');
 const lanJoinParam = appMode ? null : params.get('lanjoin');
@@ -607,6 +611,54 @@ registerRoute({
             },
             ...(loadoutSync ? { guns: loadoutSync.guns } : {}),
           }),
+    ),
+});
+
+// The Store as a shell route (#/store; docs/17). Back from Flutterwave's page, the address carries the payment: it's
+// taken off the address (a reload mustn't ask again) and handed to the Store, whose API verifies it before crediting.
+if (storeReturn) {
+  history.replaceState(null, '', withoutReturn(location.href));
+  location.hash = '#/store';
+}
+let storeBack = storeReturn;
+registerRoute({
+  id: 'store',
+  title: 'Store',
+  ownExit: true,
+  load: () =>
+    import('./store/route').then(
+      ({ mountStore, wearItem }): RouteMount =>
+        (el, close) => {
+          const api = shell.controller?.api ?? null;
+          const offline = () => Promise.reject(Object.assign(new Error('offline'), { code: 'network' }));
+          const store: StoreApi = api
+            ? {
+                load: () => api.maybeAuthed<StoreView>('GET', '/store'),
+                checkout: (bundleId, currency) => api.authed('POST', '/store/checkout', { bundleId, currency }),
+                confirm: (txRef, transactionId) => api.authed('POST', `/store/checkout/${encodeURIComponent(txRef)}/confirm`, transactionId ? { transactionId } : {}),
+                buy: (itemId, expectedPrice, key) => api.authed('POST', '/store/buy', { itemId, expectedPrice }, { 'idempotency-key': key }),
+                history: () => api.authed('GET', '/store/history'),
+                refund: (txRef) => api.authed('POST', `/store/payments/${encodeURIComponent(txRef)}/refund`, {}),
+              }
+            : { load: offline, checkout: offline, confirm: offline, buy: offline, history: offline, refund: offline };
+          const back = storeBack;
+          storeBack = null;
+          return mountStore(el, {
+            api: store,
+            back,
+            onExit: close,
+            onSaveAccount: () => {
+              close();
+              shell.controller?.openSettings('account');
+            },
+            onWear: (itemId) => void wearItem(loadoutSync?.store ?? null, itemId).then(() => (location.hash = '#/locker')),
+            // what the account owns reaches the Locker and the look at once (looks/grants.ts)
+            onOwned: (owned) => {
+              if (api?.me) api.me = { ...api.me, grants: owned };
+            },
+            go: (url) => location.assign(url),
+          });
+        },
     ),
 });
 

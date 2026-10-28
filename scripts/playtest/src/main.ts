@@ -570,6 +570,8 @@ async function main(): Promise<void> {
       ...(admin ? { ADMIN_TOKEN: admin.token } : {}),
       // the owner's cosmetic grants (docs/17 §9: the K-47 Galaxy Relic until the store exists), from this shell
       ...(process.env.COSMETIC_GRANTS ? { COSMETIC_GRANTS: process.env.COSMETIC_GRANTS } : {}),
+      // the store (docs/17): Flutterwave's keys, when the shell running the playtest has them (all three, or the store is off)
+      ...Object.fromEntries(['FLUTTERWAVE_SECRET_KEY', 'FLUTTERWAVE_PUBLIC_KEY', 'FLUTTERWAVE_WEBHOOK_HASH', 'FLUTTERWAVE_API_URL'].flatMap((k) => (process.env[k] ? [[k, process.env[k]!]] : []))),
       // the API trusts only this local origin; the proxy vouches for the tunnel's current one (CSRF)
       CORS_ORIGINS: localOrigins.join(','),
       COOKIE_SECURE: local ? 'false' : 'true',

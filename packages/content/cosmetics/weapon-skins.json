@@ -1,5 +1,5 @@
 {
-  "$comment": "Weapon skins (docs/17 §3.3, docs/04 §8.7). Each item is worn in its gun's loadout slot `skin_<weaponId>` and rides the look's wire ids, so everyone in a match draws it. `tier`: base (the gun as it ships, every player's default), wrap, skin, forged (a blueprint: reshaped parts in one GLB, §3.6) or forged_kill_effect (forged plus the line's kill effect, §3.7: its own wire id, so a player can wear the plain Forged skin with the effect off). Skins carry no stats and no FX parameters: `tracerTint` (the bolt) and `tracerTrail` (its path line) are hues only (V5, V7; test/weaponSkins.test.ts holds each to the base tracer's luminance ±10% and ΔE ≥ 15 from the reserved colours), and the muzzle flash stays the base's. `includes`: owning this item also unlocks those (the kill-effect tier includes its plain Forged skin). `model`: the GLB under /assets/.",
+  "$comment": "Weapon skins (docs/17 §3.3, docs/04 §8.7). Each item is worn in its gun's loadout slot `skin_<weaponId>` and rides the look's wire ids, so everyone in a match draws it. `tier`: base (the gun as it ships, every player's default), wrap, skin, forged (a blueprint: reshaped parts in one GLB, §3.6) or forged_kill_effect (forged plus the line's kill effect, §3.7: its own wire id, so a player can wear the plain Forged skin with the effect off). Skins carry no stats and no FX parameters. `tracerGlow` colours only the glow around the bolt and its path line, a gradient from the bolt's head back to the muzzle (violet → magenta → aquamarine); the bolt's bright core keeps the base tracer's colour, width, length, speed and brightness exactly (V5, owner 28 Oct; V7: each stop ΔE ≥ 15 from the reserved colours, saturated and dimmer than the core, test/weaponSkins.test.ts), and the muzzle flash stays the base's. `includes`: owning this item also unlocks those (the kill-effect tier includes its plain Forged skin). `model`: the GLB under /assets/.",
   "items": [
     {
       "id": "skin_k47_standard",
@@ -21,8 +21,7 @@
       "rarity": "legendary",
       "source": { "kind": "store" },
       "assets": { "model": "weapons/skins/k47_galaxy_relic.glb" },
-      "tracerTint": "#fad8ff",
-      "tracerTrail": "#80fcd4",
+      "tracerGlow": ["#7c4dff", "#d63cf0", "#4cf5c8"],
       "tags": ["galaxy_relic"]
     },
     {
@@ -35,8 +34,7 @@
       "rarity": "legendary",
       "source": { "kind": "store" },
       "assets": { "model": "weapons/skins/k47_galaxy_relic.glb" },
-      "tracerTint": "#fad8ff",
-      "tracerTrail": "#80fcd4",
+      "tracerGlow": ["#7c4dff", "#d63cf0", "#4cf5c8"],
       "killEffect": "stardust",
       "includes": ["skin_k47_galaxy_relic"],
       "tags": ["galaxy_relic"]

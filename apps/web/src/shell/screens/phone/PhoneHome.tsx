@@ -214,6 +214,14 @@ export function PhoneHome({ store }: { store: ShellStore }) {
           <button
             type="button"
             className="pm-nav__i m-p8"
+            onClick={() => (location.hash = "#/store")}
+          >
+            <Icon name="gem" />
+            <span>Store</span>
+          </button>
+          <button
+            type="button"
+            className="pm-nav__i m-p8"
             onClick={() => ctl.openSettings()}
           >
             <Icon name="gear" />

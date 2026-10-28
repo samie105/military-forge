@@ -11,6 +11,7 @@ import { normalizeRoomCode } from '@military-forge/shared';
 import { z } from 'zod';
 /** Resend's endpoint (auth/email.ts has the sender); a plain constant, so config stays free of app imports */
 const RESEND_API_URL = 'https://api.resend.com/emails';
+const FLUTTERWAVE_API_URL = 'https://api.flutterwave.com';
 
 export type NodeEnv = 'development' | 'test' | 'production';
 export type TrustProxy = 'none' | 'cloudflare' | 'xff';
@@ -66,8 +67,8 @@ export interface Config {
    */
   adminToken: string | null;
   /**
-   * Cosmetics the owner has granted accounts (COSMETIC_GRANTS="<accountId>:<itemId>,..."), until the store and
-   * the inventory exist (docs/17 §9): the only way to unlock a store item such as the K-47 Galaxy Relic. The
+   * Cosmetics the owner has granted accounts (COSMETIC_GRANTS="<accountId>:<itemId>,..."): owned like items bought
+   * in the store or granted from the admin page (the inventory table; store/wallet.ts owned() reads both). The
    * loadout check, the join ticket's vouched look and GET /me read it. Empty = none.
    */
   cosmeticGrants: ReadonlyMap<string, readonly string[]>;
@@ -89,6 +90,12 @@ export interface Config {
   turnstileSecret: string | null;
   /** play stats (docs/16-player-metrics.md) */
   analytics: AnalyticsConfig;
+  /**
+   * Flutterwave's keys (FLUTTERWAVE_SECRET_KEY, FLUTTERWAVE_PUBLIC_KEY, FLUTTERWAVE_WEBHOOK_HASH; the dashboard →
+   * Settings → API keys and Webhooks). null = all unset: the whole store is off (GET /store says so). Test keys
+   * (…_TEST-…) take no real money. The money path is store/payments.ts.
+   */
+  flutterwave: { secretKey: string; publicKey: string; webhookHash: string; apiUrl: string } | null;
 }
 
 export interface AnalyticsConfig {
@@ -154,6 +161,10 @@ const EnvSchema = z.object({
   ANALYTICS_CONSENT: z.enum(['opt-in', 'opt-out']).default('opt-in'),
   ANALYTICS_AD_SEGMENTS: bool.default(false),
   ANALYTICS_GEOIP_CSV: z.string().min(1).optional(),
+  FLUTTERWAVE_SECRET_KEY: z.string().regex(/^FLWSECK(_TEST)?-[A-Za-z0-9-]{8,}$/, 'must be a Flutterwave secret key (FLWSECK-… or FLWSECK_TEST-…)').optional(),
+  FLUTTERWAVE_PUBLIC_KEY: z.string().regex(/^FLWPUBK(_TEST)?-[A-Za-z0-9-]{8,}$/, 'must be a Flutterwave public key (FLWPUBK-… or FLWPUBK_TEST-…)').optional(),
+  FLUTTERWAVE_WEBHOOK_HASH: z.string().min(16, 'at least 16 characters (a long random string)').max(200).optional(),
+  FLUTTERWAVE_API_URL: z.url({ protocol: /^https?$/, error: 'must be an http(s):// URL' }).optional(),
 });
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
@@ -195,6 +206,10 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   if (e.EMAIL_PROVIDER === 'resend' && production && e.EMAIL_API_URL && !e.EMAIL_API_URL.startsWith('https://')) issues.push('EMAIL_API_URL: must be https:// in production');
   const appUrl = (e.APP_URL ?? e.CORS_ORIGINS?.[0] ?? 'http://localhost:5173').replace(/\/+$/, '');
   if (production && e.EMAIL_PROVIDER && !appUrl.startsWith('https://')) issues.push('APP_URL: the links in emails must be https:// in production (set APP_URL or CORS_ORIGINS)');
+  const flw = [e.FLUTTERWAVE_SECRET_KEY, e.FLUTTERWAVE_PUBLIC_KEY, e.FLUTTERWAVE_WEBHOOK_HASH];
+  if (flw.some(Boolean) && !flw.every(Boolean)) issues.push('FLUTTERWAVE_*: set FLUTTERWAVE_SECRET_KEY, FLUTTERWAVE_PUBLIC_KEY and FLUTTERWAVE_WEBHOOK_HASH together (or none: the store is off)');
+  if (e.FLUTTERWAVE_SECRET_KEY && e.FLUTTERWAVE_PUBLIC_KEY && e.FLUTTERWAVE_SECRET_KEY.includes('_TEST-') !== e.FLUTTERWAVE_PUBLIC_KEY.includes('_TEST-')) issues.push('FLUTTERWAVE_*: the secret and public keys must both be test keys or both live keys');
+  if (production && e.FLUTTERWAVE_API_URL && !e.FLUTTERWAVE_API_URL.startsWith('https://')) issues.push('FLUTTERWAVE_API_URL: must be https:// in production');
   if (issues.length) throw new ConfigError(issues);
 
   return {
@@ -231,5 +246,9 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
           : null,
     turnstileSecret: e.TURNSTILE_SECRET ?? null,
     analytics: { rawDays: e.ANALYTICS_RAW_DAYS, consentDefault: e.ANALYTICS_CONSENT, adSegments: e.ANALYTICS_AD_SEGMENTS, geoipCsv: e.ANALYTICS_GEOIP_CSV ?? null },
+    flutterwave:
+      e.FLUTTERWAVE_SECRET_KEY && e.FLUTTERWAVE_PUBLIC_KEY && e.FLUTTERWAVE_WEBHOOK_HASH
+        ? { secretKey: e.FLUTTERWAVE_SECRET_KEY, publicKey: e.FLUTTERWAVE_PUBLIC_KEY, webhookHash: e.FLUTTERWAVE_WEBHOOK_HASH, apiUrl: (e.FLUTTERWAVE_API_URL ?? FLUTTERWAVE_API_URL).replace(/\/+$/, '') }
+        : null,
   };
 }

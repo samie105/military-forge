@@ -1,6 +1,6 @@
 /**
- * What a weapon skin changes in a match besides the gun's mesh (docs/17 §3.6–3.7): the tracer's hue, and the
- * kill effect its top tier carries. Both are looked up from the killer's (or shooter's) look, which every
+ * What a weapon skin changes in a match besides the gun's mesh (docs/17 §3.6–3.7): the tracer's glow, and
+ * the kill effect its top tier carries. Both are looked up from the killer's (or shooter's) look, which every
  * client already has from the ROSTER, and the weapon the sim names in the event: nothing extra on the wire,
  * and the game server never knows about effects (it only checks the look is owned, `admitLook`).
  */
@@ -19,29 +19,58 @@ export const KILL_EFFECT_LIMITS = {
   envelopeMul: COSMETIC_ENVELOPE_MUL,
 } as const;
 
+/** One phase's quads: how many, their size and life ranges, and their colours (#rrggbb, picked per quad). */
+export interface KillEffectPhase {
+  count: number;
+  /** quad width, min and max (m) */
+  sizeM: readonly [number, number];
+  lifeS: readonly [number, number];
+  palette: readonly string[];
+}
+
 export interface KillEffectDef {
   id: string;
   name: string;
   durationS: number;
-  /** stardust quads at most (≤ maxParticles) */
+  /** quads at most over the whole effect: shards + sparkles + swirl (≤ maxParticles) */
   particles: number;
-  /** the shared atlas's cell the quads draw ("star" or "dot") */
-  atlasCell: 'star' | 'dot';
-  /** the quads' colours (#rrggbb), picked per quad */
-  palette: readonly string[];
-  /** the colour the victim's body takes as it dissolves: mixed into its toon colour, never added as light */
+  /** crystal cubes where the body stood: they burst out at up to this speed, tumble and shrink away */
+  shards: KillEffectPhase & { burstMps: number };
+  /** star sparkles in two waves, the second this long after the kill */
+  sparkles: KillEffectPhase & { secondWaveS: number };
+  /** the stardust swirl: from `atS`, a two-strand spiral of `radiusM`, `turns` times round, rising `riseM` */
+  swirl: KillEffectPhase & { atS: number; radiusM: number; turns: number; riseM: number };
+  /** the colour the victim's body takes as it shatters: mixed into its toon colour, never added as light */
   bodyTint: string;
-  /** metres the dust drifts up over the effect, clamped to the envelope's top */
-  rise: number;
+  /** when the body dissolves (seconds after the kill, from–to), leaving its shards where it stood */
+  dissolveS: readonly [number, number];
   /** Reduce flashes / Reduce motion / the Low preset / a fifth at once: a flat tint fade, no particles */
   still: { tint: string; durationS: number };
   /** a sound id (≤ 1 s, no louder than the base death); null = the base death sound */
   sound: string | null;
 }
 
+/** Every colour an effect draws (its phases' palettes, the body tint, the still tint). */
+export function killEffectColours(e: KillEffectDef): string[] {
+  return [...e.shards.palette, ...e.sparkles.palette, ...e.swirl.palette, e.bodyTint, e.still.tint];
+}
+
+const phase = <P extends KillEffectPhase>(id: string, name: string, p: P): P => {
+  if (!p || !(p.count >= 0) || !p.palette?.length || p.sizeM[0] > p.sizeM[1] || p.lifeS[0] > p.lifeS[1]) throw new Error(`kill-effects.json: ${id} has a malformed ${name}`);
+  return Object.freeze({ ...p, sizeM: Object.freeze([...p.sizeM]), lifeS: Object.freeze([...p.lifeS]), palette: Object.freeze([...p.palette]) }) as P;
+};
+
 export const killEffects: readonly KillEffectDef[] = (killEffectsJson.effects as unknown as KillEffectDef[]).map((e) => {
-  if (e.atlasCell !== 'star' && e.atlasCell !== 'dot') throw new Error(`kill-effects.json: ${e.id} has an unknown atlas cell`);
-  return Object.freeze({ ...e, palette: Object.freeze([...e.palette]), still: Object.freeze({ ...e.still }) });
+  const def = {
+    ...e,
+    shards: phase(e.id, 'shards', e.shards),
+    sparkles: phase(e.id, 'sparkles', e.sparkles),
+    swirl: phase(e.id, 'swirl', e.swirl),
+    dissolveS: Object.freeze([e.dissolveS[0], e.dissolveS[1]] as const),
+    still: Object.freeze({ ...e.still }),
+  };
+  if (def.shards.count + def.sparkles.count + def.swirl.count !== def.particles) throw new Error(`kill-effects.json: ${e.id}'s phases don't add up to its particles`);
+  return Object.freeze(def);
 });
 
 const byId = new Map(killEffects.map((e) => [e.id, e]));
@@ -59,12 +88,11 @@ export function weaponSkinOf(look: CosmeticLoadout | null | undefined, weaponId:
 }
 
 /**
- * The tracer hues (#rrggbb) a look's skin gives `weaponId`'s shots: the bolt's, and its path line's (the bolt's
- * when the skin gives the path none); null = the base tracer.
+ * The glow gradient (#rrggbb, from the bolt's head back to the muzzle) a look's skin gives `weaponId`'s tracers:
+ * the glow around the bolt and its path line. The bolt's core is always the base's. null = the base tracer.
  */
-export function tracerTintOf(look: CosmeticLoadout | null | undefined, weaponId: string): { bolt: string; trail: string } | null {
-  const skin = weaponSkinOf(look, weaponId);
-  return skin?.tracerTint ? { bolt: skin.tracerTint, trail: skin.tracerTrail ?? skin.tracerTint } : null;
+export function tracerGlowOf(look: CosmeticLoadout | null | undefined, weaponId: string): readonly string[] | null {
+  return weaponSkinOf(look, weaponId)?.tracerGlow ?? null;
 }
 
 /** The kill effect that plays on a kill with `weaponId` by a killer wearing `look`; null = the default death. */

@@ -1,6 +1,6 @@
 /**
- * Weapon skins in the 3D view (docs/17 §3.6–3.7): the tracer hue (V5, V7), the kill effect's trigger and limits
- * (V13), and the gun a soldier holds. The content-side rules are packages/content's test/weaponSkins.test.ts.
+ * Weapon skins in the 3D view (docs/17 §3.6–3.7): the tracer's glow around the base core (V5, V7), the kill
+ * effect's trigger and limits (V13), and the gun a soldier holds. The content-side rules are packages/content's test/weaponSkins.test.ts.
  */
 import { readFileSync } from 'node:fs';
 import {
@@ -12,7 +12,9 @@ import {
   getCosmetic,
   movementTestMap,
   nearestReserved,
-  tracerTintOf,
+  getKillEffect,
+  killEffectColours,
+  tracerGlowOf,
   weapons,
   type CosmeticLoadout,
 } from '@military-forge/content';
@@ -23,11 +25,11 @@ import { AvatarKit } from '../avatar';
 import type { GltfSource } from '../weaponModels';
 import { describe, expect, it } from 'vitest';
 import { MARK_COLOURS } from '../../teams/marking';
-import { Gunfire, tracerClass, tracerLook } from '../vfx/gunfire';
+import { Cell, cellShape } from '../vfx/atlas';
+import { Gunfire, SHEATH_WIDTH, tracerClass, tracerLook, type TracerGlow } from '../vfx/gunfire';
 import { KillEffects, killEffectFor, type KillEffectHost } from '../vfx/killEffects';
 import { parseWeaponVfx } from '../vfx/manifest';
 import { F, ParticlePool, STRIDE } from '../vfx/pool';
-import { Ramp } from '../vfx/ramps';
 import type { VfxContext } from '../vfx';
 
 const world = new CollisionWorld(movementTestMap);
@@ -36,70 +38,84 @@ const linear = (hex: string): [number, number, number] => {
   const c = new Color(hex);
   return [c.r, c.g, c.b];
 };
-const lum = ([r, g, b]: readonly number[]) => 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
 const shipped = parseWeaponVfx(JSON.parse(readFileSync(new URL('../../../public/assets/vfx/weapons.vfx.json', import.meta.url), 'utf8')))!;
 
-describe('a skin\'s tracer (docs/17 V5, V7)', () => {
+describe('a skin\'s tracer: the base core, the skin\'s glow around it (docs/17 V5, V7; owner, 28 Oct)', () => {
   const styleName = shipped.weapons.k47!.tracer!;
   const style = shipped.tracers[styleName]!;
   const def = getCosmetic('skin_k47_galaxy_relic')!;
-  const skin = { bolt: linear(def.tracerTint!), trail: linear(def.tracerTrail ?? def.tracerTint!) };
+  const glow: TracerGlow = def.tracerGlow!.map(linear);
 
   it('the content keeps its copy of the base tracer tint in step with the shipped art', () => {
-    // packages/content's test holds the hue to ±10% of this tint by luminance
+    // packages/content's test holds the glow dimmer than this tint
     expect(style.tint.map((c) => +c.toFixed(4))).toEqual(linear('#ffe9a0').map((c) => +c.toFixed(4)));
   });
 
-  it('width, length and speed are the base\'s exactly; brightness within ±10%; only the hue moves', () => {
+  it('the core\'s colour, width, length and speed are the base\'s exactly; only a glow is added', () => {
     for (const dist of [0.5, 4, 25, 80]) {
       const base = tracerLook(style, tracerClass(K47.class)!, dist);
-      const skinned = tracerLook(style, tracerClass(K47.class)!, dist, skin);
+      const skinned = tracerLook(style, tracerClass(K47.class)!, dist, glow);
+      expect(skinned.tint).toEqual(base.tint);
       expect(skinned.width).toBe(base.width);
       expect(skinned.len).toBe(base.len);
       expect(skinned.speed).toBe(base.speed);
-      for (const hue of [skinned.tint, skinned.trail]) expect(Math.abs(lum(hue) / lum(base.tint) - 1)).toBeLessThanOrEqual(0.1);
-      expect(skinned.tint).not.toEqual(base.tint);
-      expect(base.trail).toEqual(base.tint); // the base tracer is one colour
+      expect(base.glow).toBeNull();
+      expect(skinned.glow).toBe(glow);
     }
   });
 
-  it('both hues stay ΔE ≥ 15 from every reserved colour', () => {
-    for (const hue of [skin.bolt, skin.trail]) {
-      const near = nearestReserved(hue);
-      expect(near.deltaE, `${near.name}`).toBeGreaterThanOrEqual(RESERVED_DELTA_E);
+  it('the glow\'s sheath is empty down its middle, so it adds nothing where the core draws', () => {
+    for (const u of [-0.5, -0.2, 0, 0.3, 0.5]) expect(cellShape(Cell.Sheath, u, 0)[1]).toBe(0);
+    // the core's own half-alpha line (Cell.Tracer at its head: v ≈ 0.24 of its quad) sits at 0.24 / SHEATH_WIDTH of the sheath's
+    expect(cellShape(Cell.Sheath, 0, 0.24 / SHEATH_WIDTH)[1]).toBeLessThan(0.5);
+    expect(cellShape(Cell.Sheath, 0, 0.3)[1]).toBeGreaterThan(0.3);
+  });
+
+  it('every glow stop stays ΔE ≥ 15 from every reserved colour', () => {
+    for (const hex of def.tracerGlow!) {
+      const near = nearestReserved(hex);
+      expect(near.deltaE, `${hex} vs ${near.name}`).toBeGreaterThanOrEqual(RESERVED_DELTA_E);
     }
   });
 
-  it('Gunfire draws a skinned shooter\'s K-47 shots in the hue, everything else as the base', () => {
-    const run = (tintOf: Gunfire['tracerTintOf']) => {
+  it('Gunfire draws a skinned shooter\'s K-47 shots with the base core and the gradient around it; everything else as the base', () => {
+    const run = (glowOf: Gunfire['tracerGlowOf']) => {
       const g = new Gunfire(world);
       g.setArt(shipped, new Texture(), new Scene());
-      g.tracerTintOf = tintOf;
-      const glow = new ParticlePool(500);
+      g.tracerGlowOf = glowOf;
+      const pool = new ParticlePool(500);
       g.onEvents([{ type: 'shot', shooter: 3, weapon: K47.index, ox: 150, oy: 1.2, ex: 170, ey: 1.2, hit: 0, target: -1, zone: 0 } as SimEvent]);
-      g.update(1 / 60, { glow, smoke: new ParticlePool(500) }, () => false);
-      const find = (ramp: number) => Array.from({ length: glow.count }, (_, i) => i).find((i) => glow.data[i * STRIDE + F.ramp] === ramp)!;
-      const bolt = find(Ramp.Book);
-      const path = find(Ramp.Tracer);
-      const at = (i: number, f: number) => glow.data[i * STRIDE + f]!;
-      return {
-        size: at(bolt, F.size0), aspect: at(bolt, F.aspect), vx: at(bolt, F.vx), life: at(bolt, F.life), pathAspect: at(path, F.aspect),
-        tint: [at(bolt, F.tr), at(bolt, F.tg), at(bolt, F.tb)], trail: [at(path, F.tr), at(path, F.tg), at(path, F.tb)],
-      };
+      g.update(1 / 60, { glow: pool, smoke: new ParticlePool(500) }, () => false);
+      const at = (i: number, f: number) => pool.data[i * STRIDE + f]!;
+      const all = Array.from({ length: pool.count }, (_, i) => i);
+      const of = (cell: number) => all.filter((i) => at(i, F.cell) === cell);
+      const bolt = of(Cell.Tracer)[0]!;
+      const quad = (i: number) => ({ x: at(i, F.x), size: at(i, F.size0), height: at(i, F.size0) * at(i, F.aspect), vx: at(i, F.vx), life: at(i, F.life), tint: [at(i, F.tr), at(i, F.tg), at(i, F.tb)].map((c) => +c.toFixed(4)) });
+      return { bolt: quad(bolt), sheath: of(Cell.Sheath).map(quad), path: of(Cell.Line).map(quad) };
     };
     const lookOf = (id: number) => (id === 3 ? wearing('skin_k47_galaxy_relic') : DEFAULT_COSMETIC_LOADOUT);
     const base = run(null);
-    const skinned = run((shooter, weapon) => {
-      const hues = tracerTintOf(lookOf(shooter), weapons[weapon]!.id);
-      return hues ? { bolt: linear(hues.bolt), trail: linear(hues.trail) } : null;
-    });
-    expect(skinned.size).toBe(base.size);
-    expect(skinned.aspect).toBe(base.aspect);
-    expect(skinned.vx).toBe(base.vx);
-    expect(skinned.life).toBe(base.life);
-    expect(skinned.pathAspect).toBe(base.pathAspect);
-    expect(skinned.tint.map((c) => +c.toFixed(4))).toEqual(skin.bolt.map((c) => +c.toFixed(4)));
-    expect(skinned.trail.map((c) => +c.toFixed(4))).toEqual(skin.trail.map((c) => +c.toFixed(4)));
+    const skinned = run((shooter, weapon) => tracerGlowOf(lookOf(shooter), weapons[weapon]!.id)?.map(linear) ?? null);
+    const unskinned = run((shooter, weapon) => tracerGlowOf(lookOf(shooter + 1), weapons[weapon]!.id)?.map(linear) ?? null);
+    // the core: the base's, to the float
+    expect(skinned.bolt).toEqual(base.bolt);
+    expect(unskinned).toEqual(base);
+    expect(base.sheath).toHaveLength(0);
+    expect(base.path).toHaveLength(1);
+    // the sheath: one quad per stop riding with the core, at most SHEATH_WIDTH × its height, head (+x) first
+    expect(skinned.sheath).toHaveLength(glow.length);
+    for (const q of skinned.sheath) {
+      expect(q.vx).toBe(base.bolt.vx);
+      expect(q.life).toBe(base.bolt.life);
+      expect(q.height).toBeCloseTo(base.bolt.height * SHEATH_WIDTH, 6);
+    }
+    const byX = (a: { x: number }, b: { x: number }) => b.x - a.x;
+    expect([...skinned.sheath].sort(byX).map((q) => q.tint)).toEqual(glow.map((c) => c.map((v) => +v.toFixed(4))));
+    // the path line: the same stops from the far end back to the muzzle, as thin as the base's, covering the shot
+    expect(skinned.path).toHaveLength(glow.length);
+    expect([...skinned.path].sort(byX).map((q) => q.tint)).toEqual(glow.map((c) => c.map((v) => +v.toFixed(4))));
+    for (const q of skinned.path) expect(q.height).toBeCloseTo(base.path[0]!.height, 6);
+    expect(skinned.path.reduce((n, q) => n + q.size, 0)).toBeGreaterThanOrEqual(base.path[0]!.size);
   });
 });
 
@@ -113,13 +129,13 @@ describe('the reserved colours (V7) match what the client draws', () => {
 describe('kill effects (docs/17 §3.7)', () => {
   const KILLER = 1;
   const VICTIM = 2;
-  type Body = { x: number; y: number; tinted: { colour: Color; seconds: number } | null; killEffect(c: Color, s: number): void };
+  type Body = { x: number; y: number; tinted: { colour: Color; seconds: number; dissolve: readonly [number, number] | null } | null; killEffect(c: Color, s: number, d?: readonly [number, number] | null): void };
   const setup = (opts: { killerLook?: CosmeticLoadout; teams?: Record<number, number>; viewer?: number } = {}) => {
     const bodies = new Map<number, Body>();
     const body = (id: number): Body => {
       let b = bodies.get(id);
       if (!b) {
-        const made: Body = { x: 10, y: 2, tinted: null, killEffect: (colour, seconds) => (made.tinted = { colour, seconds }) };
+        const made: Body = { x: 10, y: 2, tinted: null, killEffect: (colour, seconds, dissolve = null) => (made.tinted = { colour, seconds, dissolve }) };
         bodies.set(id, (b = made));
       }
       return b;
@@ -155,15 +171,18 @@ describe('kill effects (docs/17 §3.7)', () => {
     const { fx, ctx, scene } = setup();
     fx.onEvents([death()], ctx);
     expect(fx.particles).toBeGreaterThan(0);
-    expect(fx.particles).toBeLessThanOrEqual(KILL_EFFECT_LIMITS.maxParticles);
     const layer = scene.getObjectByName('vfx-kill-effects')!;
     expect(layer).toBeDefined();
     // under the glow layer's tracers (12) and depth-tested: the dropped gun, pickups and players draw over it
     expect(layer.renderOrder).toBeLessThan(12);
     const env = KILL_EFFECT_LIMITS.envelopeMul;
     const pool = (fx as unknown as { pool: ParticlePool }).pool;
+    let most = 0;
+    let swirled = false;
     for (let t = 0; t < 1.05; t += 1 / 60) {
+      most = Math.max(most, pool.count);
       for (let i = 0; i < pool.count; i++) {
+        if (pool.data[i * STRIDE + F.cell] === Cell.Dot) swirled = true;
         const o = i * STRIDE;
         const half = pool.data[o + F.size0]! / 2;
         expect(Math.abs(pool.data[o + F.x]! - 10) + half).toBeLessThanOrEqual(0.3 * env + 0.02);
@@ -173,6 +192,8 @@ describe('kill effects (docs/17 §3.7)', () => {
       }
       fx.update({} as never, 1 / 60);
     }
+    expect(most).toBeLessThanOrEqual(KILL_EFFECT_LIMITS.maxParticles);
+    expect(swirled).toBe(true); // the swirl played
     expect(fx.particles).toBe(0);
     expect(fx.playing).toBe(0);
   });
@@ -181,10 +202,13 @@ describe('kill effects (docs/17 §3.7)', () => {
     const a = setup();
     a.fx.onEvents([death()], a.ctx);
     expect(a.body(VICTIM).tinted!.seconds).toBeLessThanOrEqual(KILL_EFFECT_LIMITS.maxDurationS);
+    // the shatter takes the body away as its shards appear; the still variant keeps a plain death's fade
+    expect(a.body(VICTIM).tinted!.dissolve).toEqual(getKillEffect('stardust')!.dissolveS);
     const reduced = setup();
     reduced.fx.onEvents([death()], { ...reduced.ctx, reducedMotion: true });
     expect(reduced.fx.particles).toBe(0);
     expect(reduced.body(VICTIM).tinted).not.toBeNull();
+    expect(reduced.body(VICTIM).tinted!.dissolve).toBeNull();
     const low = setup();
     low.fx.low = true;
     low.fx.onEvents([death()], low.ctx);
@@ -193,7 +217,26 @@ describe('kill effects (docs/17 §3.7)', () => {
     many.fx.onEvents([1, 2, 3, 4, 5].map((v) => death({ victim: 10 + v })), many.ctx);
     expect(many.fx.playing).toBe(5);
     expect(many.fx.particles).toBeLessThanOrEqual(4 * KILL_EFFECT_LIMITS.maxParticles);
-    expect(many.fx.particles).toBe(4 * getKillParticles());
+    expect(many.fx.particles).toBe(4 * firstWave());
+  });
+
+  it('the shatter: crystal shards where the body stood, star sparkles, then the swirl; every quad in the effect\'s palettes', () => {
+    const { fx, ctx } = setup();
+    const effect = getKillEffect('stardust')!;
+    fx.onEvents([death()], ctx);
+    const pool = (fx as unknown as { pool: ParticlePool }).pool;
+    const cells = () => Array.from({ length: pool.count }, (_, i) => pool.data[i * STRIDE + F.cell]!);
+    expect(cells().filter((c) => c === Cell.Shard)).toHaveLength(effect.shards.count);
+    expect(cells().filter((c) => c === Cell.Star)).toHaveLength(Math.ceil(effect.sparkles.count / 2));
+    const palette = new Set(killEffectColours(effect).map((h) => linear(h).map((c) => c.toFixed(4)).join()));
+    const colour = (i: number) => [F.tr, F.tg, F.tb].map((f) => pool.data[i * STRIDE + f]!.toFixed(4)).join();
+    for (let i = 0; i < pool.count; i++) expect(palette.has(colour(i))).toBe(true);
+    // shards cover the body from its feet to its head
+    const ys = Array.from({ length: pool.count }, (_, i) => i).filter((i) => cells()[i] === Cell.Shard).map((i) => pool.data[i * STRIDE + F.y]! - 2);
+    expect(Math.min(...ys)).toBeLessThan(0.3);
+    expect(Math.max(...ys)).toBeGreaterThan(1.2);
+    for (let t = 0; t < effect.swirl.atS + 0.02; t += 1 / 60) fx.update({} as never, 1 / 60);
+    expect(cells().filter((c) => c === Cell.Dot).length).toBeGreaterThan(0);
   });
 
   it('"Show other players\' kill effects" off: only your own kills play one', () => {
@@ -209,8 +252,10 @@ describe('kill effects (docs/17 §3.7)', () => {
   });
 });
 
-function getKillParticles(): number {
-  return Math.min(KILL_EFFECT_LIMITS.maxParticles, 64);
+/** the quads an effect starts with: its shards and the first wave of sparkles (the rest come later) */
+function firstWave(): number {
+  const e = getKillEffect('stardust')!;
+  return e.shards.count + Math.ceil(e.sparkles.count / 2);
 }
 
 describe('the skinned gun in the hand (docs/17 §3.6)', () => {

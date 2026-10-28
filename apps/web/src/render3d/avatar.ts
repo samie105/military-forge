@@ -377,8 +377,11 @@ export class Avatar {
   private readonly sling: SlingRig;
   /** skins: the weapon skins this soldier's look wears, as GLB paths by weapon def (setLook) */
   private readonly skins = new Map<number, string>();
-  /** skins: a kill effect playing on this body (docs/17 §3.7; vfx/killEffects.ts): its tint and how long it takes */
-  private killTint: { colour: Color; seconds: number } | null = null;
+  /**
+   * skins: a kill effect playing on this body (docs/17 §3.7; vfx/killEffects.ts): its tint, how long it takes, and
+   * when a shatter dissolves the body (from, to: seconds after the death), sooner than the collapse's own fade
+   */
+  private killTint: { colour: Color; seconds: number; dissolve: readonly [number, number] | null } | null = null;
 
   constructor(
     readonly inst: CharacterInstance,
@@ -643,7 +646,9 @@ export class Avatar {
     this.shield.update(p.shield, this.pivot);
     this.updateFlame(v, dt);
     // the dissolve: the body and its outline by a screen door; the guns, shield and flame (shared materials) go at half
-    const fade = this.collapse.fade;
+    // skins: a shatter takes the body away sooner, as its shards take its place (docs/17 §3.7)
+    const shatter = this.killTint?.dissolve;
+    const fade = shatter ? Math.max(this.collapse.fade, Math.min(1, Math.max(0, (t - shatter[0]) / (shatter[1] - shatter[0])))) : this.collapse.fade;
     if (this.inst.material) this.inst.material.dissolve.value = fade;
     // skins: a kill effect's tint comes in over its first quarter (docs/17 §3.7)
     const tint = this.inst.material?.tint;
@@ -929,10 +934,11 @@ export class Avatar {
 
   /**
    * A kill effect claims this body (vfx/killEffects.ts): as it collapses it takes `colour` (mixed into its toon
-   * colour, never added as light), dissolving as ever. Cleared on the respawn.
+   * colour, never added as light), dissolving as ever or, for a shatter, over `dissolve` (seconds after the death).
+   * Cleared on the respawn.
    */
-  killEffect(colour: Color, seconds: number): void {
-    this.killTint = { colour, seconds };
+  killEffect(colour: Color, seconds: number, dissolve: readonly [number, number] | null = null): void {
+    this.killTint = { colour, seconds, dissolve };
   }
   // --- end skins ---
 

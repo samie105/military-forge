@@ -21,7 +21,7 @@ describe('tablesInCopyOrder', () => {
     const names = tablesInCopyOrder().map(getTableName);
     expect(names[0]).toBe('users');
     expect(names.indexOf('matches')).toBeLessThan(names.indexOf('match_players'));
-    expect(new Set(names)).toEqual(new Set(['users', 'identities', 'profiles', 'sessions', 'loadouts', 'matches', 'match_players', 'stats_lifetime', 'friendships', 'friend_requests', 'blocks', 'password_credentials', 'email_tokens']));
+    expect(new Set(names)).toEqual(new Set(['users', 'identities', 'profiles', 'sessions', 'loadouts', 'matches', 'match_players', 'stats_lifetime', 'friendships', 'friend_requests', 'blocks', 'password_credentials', 'email_tokens', 'wallets', 'ledger', 'payments', 'inventory', 'store_audit']));
   });
 });
 
@@ -44,6 +44,12 @@ describe('copyAllTables', () => {
     const res = await to.app.request('/auth/refresh', json({ refreshToken: guests[0]!.refreshToken }, { 'x-forwarded-for': to.ip() }));
     expect(res.status).toBe(200);
     expect(((await res.json()) as SessionBody).user).toMatchObject({ id: guests[0]!.user.id, nickname: 'Kemi' });
+
+    // the ledger's ids came over with their rows: the next movement in the new database gets a fresh one
+    await from.store.wallet.locked(guests[1]!.user.id, (tx, w) => from.store.wallet.write(tx, w, [{ pool: 'earned', delta: 5, kind: 'grant', ref: 'copy-test-1', actor: 'owner' }]));
+    await copyAllTables(from.database.db, to.database.db);
+    await to.store.wallet.locked(guests[1]!.user.id, (tx, w) => to.store.wallet.write(tx, w, [{ pool: 'earned', delta: 5, kind: 'grant', ref: 'copy-test-2', actor: 'owner' }]));
+    expect(await to.store.wallet.balance(guests[1]!.user.id)).toEqual({ paid: 0, earned: 10, total: 10 });
 
     const again = await copyAllTables(from.database.db, to.database.db);
     for (const c of Object.values(again)) expect(c.added).toBe(0);

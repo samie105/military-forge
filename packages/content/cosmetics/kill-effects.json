@@ -1,15 +1,37 @@
 {
-  "$comment": "Kill effects (docs/17 §3.7, docs/04 §7 and §8.7): what plays where a victim falls when the killer's equipped skin line carries one, on kills with that gun. Everyone who can see the spot sees it; it starts on the kill event and nothing waits for it. Limits (test/killEffects.test.ts): durationS ≤ 1.0, particles ≤ 80 (one instanced draw call from the shared atlas), the dissolve runs in the victim's own draw call, everything inside the body envelope (base body box +10%), no light past it and nothing brighter than the victim's lit body (`bodyTint` mixes into the toon colour, it never adds light). `palette`: picked per quad, so a colour listed twice comes up twice as often (the Galaxy Relic's violet, magenta and teal, a touch of gold). `still`: the variant for Reduce flashes, Reduce motion, the Low preset and a fifth effect at once: the body fades with a flat tint over the same time, no particles. `sound`: none yet (the base death sound plays).",
+  "$comment": "Kill effects (docs/17 §3.7, docs/04 §7 and §8.7): what plays where a victim falls when the killer's equipped skin line carries one, on kills with that gun. Everyone who can see the spot sees it; it starts on the kill event and nothing waits for it. Limits (test/weaponSkins.test.ts, apps/web render3d/test/skins.test.ts): durationS ≤ 1.0; `particles` (shards + sparkles + swirl) ≤ 80, all quads from the shared VFX atlas in one instanced draw call; the body's tint runs in the victim's own draw call; everything inside the body envelope (base body box +10%); no light past it and nothing brighter than the victim's lit body (`bodyTint` mixes into the toon colour, it never adds light). `dissolveS`: the body dissolves over this window (seconds after the kill), sooner than a plain death's fade (0.4–0.65 s), so its shards take its place. The phases: `shards` (crystal cubes, the atlas's Shard cell) hang where the body stood as it tints and collapses, burst out a little, tumble and shrink away; `sparkles` (the Star cell) twinkle in two waves, the second at `secondWaveS`; `swirl` (Dot and Star motes) starts at `atS` and rises in a two-strand spiral of `radiusM`, `turns` times round over its life, `riseM` up. `palette`s are picked per quad, so a colour listed twice comes up twice as often (the Galaxy Relic's violet, magenta and teal, a touch of gold). `still`: the variant for Reduce flashes, Reduce motion, the Low preset and a fifth effect at once: the body fades with a flat tint over the same time, no particles. `sound`: none yet (the base death sound plays).",
   "effects": [
     {
       "id": "stardust",
-      "name": "Stardust",
-      "durationS": 0.8,
-      "particles": 64,
-      "atlasCell": "star",
-      "palette": ["#7a4dff", "#d05cff", "#7a4dff", "#1f9e8a", "#d05cff", "#1f9e8a", "#e8d08a"],
+      "name": "Stardust Shatter",
+      "durationS": 0.9,
+      "particles": 80,
+      "shards": {
+        "count": 48,
+        "sizeM": [0.075, 0.13],
+        "burstMps": 0.35,
+        "lifeS": [0.55, 0.78],
+        "palette": ["#7c4dff", "#8040ff", "#c040ff", "#d63cf0", "#7c4dff", "#1f9e8a", "#4cf5c8", "#c040ff", "#8040ff", "#d63cf0", "#4cf5c8", "#e8d08a"]
+      },
+      "sparkles": {
+        "count": 10,
+        "sizeM": [0.06, 0.11],
+        "lifeS": [0.2, 0.35],
+        "secondWaveS": 0.3,
+        "palette": ["#f8e4ff", "#e8d08a", "#f8e4ff", "#c8f5ec"]
+      },
+      "swirl": {
+        "count": 22,
+        "atS": 0.3,
+        "sizeM": [0.025, 0.05],
+        "lifeS": [0.45, 0.6],
+        "radiusM": 0.12,
+        "turns": 0.75,
+        "riseM": 0.35,
+        "palette": ["#7c4dff", "#c040ff", "#d63cf0", "#4cf5c8", "#1f9e8a", "#7c4dff", "#e8d08a"]
+      },
       "bodyTint": "#3a2470",
-      "rise": 0.35,
+      "dissolveS": [0.1, 0.32],
       "still": { "tint": "#2e2050", "durationS": 0.8 },
       "sound": null
     }

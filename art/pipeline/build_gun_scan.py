@@ -180,15 +180,17 @@ def decimate(obj, budget):
 
 # ------------------------------------------------------------------ 3–4. bake and flatten
 
-def bake_albedo(low, high, size=512):
-    """Bake the raw model's base colour onto the low-poly's fresh UVs (Cycles, selected to active)."""
+def bake_albedo(low, high, size=512, island_margin=0.02):
+    """Bake the raw model's base colour onto the low-poly's fresh UVs (Cycles, selected to active). A skin's spec
+    may bake at `bakePx` (1024: a 4×4 box down to the 256² albedo, so thin gold trim stays a clean edge) with a
+    tighter `uvMargin` (bigger islands, more texels on the panels)."""
     bpy.context.view_layer.objects.active = low
     for o in bpy.context.scene.objects:
         o.select_set(False)
     low.select_set(True)
     bpy.ops.object.mode_set(mode="EDIT")
     bpy.ops.mesh.select_all(action="SELECT")
-    bpy.ops.uv.smart_project(angle_limit=math.radians(60), island_margin=0.02)
+    bpy.ops.uv.smart_project(angle_limit=math.radians(60), island_margin=island_margin)
     bpy.ops.object.mode_set(mode="OBJECT")
     img = bpy.data.images.new("bake", size, size, alpha=False, float_buffer=True)  # linear floats
     mat = bpy.data.materials.new("bake_target")
@@ -209,7 +211,7 @@ def bake_albedo(low, high, size=512):
     bake.use_selected_to_active = True
     bake.cage_extrusion = 0.01
     bake.max_ray_distance = 0.05
-    bake.margin = 4
+    bake.margin = 4 * size // 512
     high.select_set(True)
     low.select_set(True)
     bpy.context.view_layer.objects.active = low
@@ -699,7 +701,7 @@ def scan_mesh(wid, spec, camo=True):
             low.data = high.data.copy()
             tris = decimate(low, target)
         log(f"{wid}: decimated to {tris} so the gun, its parts and their cut caps come to {total} tris")
-    srgb, img = bake_albedo(low, high)
+    srgb, img = bake_albedo(low, high, spec.get("bakePx", 512), spec.get("uvMargin", 0.02))
     flat, ids, cent = flatten(srgb, spec)
     # team colours stay off the finish (the kit rule)
     for j, c in enumerate(cent):
@@ -715,7 +717,7 @@ def scan_mesh(wid, spec, camo=True):
     camo_share, glow_share = vertex_masks(low, ids, cls, spec, bounds)
     # the 256² albedo (sRGB bytes), on a plain material like the scripted weapons'
     k = flat.shape[0] // TEX
-    small = flat.reshape(TEX, k, TEX, k, 3).mean(axis=(1, 3))  # 512² → 256², a box filter
+    small = flat.reshape(TEX, k, TEX, k, 3).mean(axis=(1, 3))  # 512² (or 1024²) → 256², a box filter
     covered = (srgb.reshape(TEX, k, TEX, k, 3).sum(-1) > 0.02).all(axis=(1, 3))
     # a byte image holds sRGB values as they are (dye.py's albedos too); its colorspace is set before
     # the pixels, since changing it afterwards regenerates the image (black)

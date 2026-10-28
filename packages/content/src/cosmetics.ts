@@ -109,14 +109,14 @@ export interface CosmeticDef {
   body?: Body;
   /** parts made for some bodies only (e.g. the female body's hairstyles); absent = every body */
   fits?: readonly Body[];
-  /** weapon skins (cosmetics/weapon-skins.json): the gun it skins, its tier, the tracer's hue (V5: a hue only;
-   *  width, length, speed and brightness stay the base's), the kill effect it carries (cosmetics/kill-effects.json),
-   *  and the items owning it unlocks too (the kill-effect tier includes its plain Forged skin) */
+  /** weapon skins (cosmetics/weapon-skins.json): the gun it skins, its tier, the tracer's glow (V5: the bolt's core
+   *  keeps the base's colour, width, length, speed and brightness; only the glow around it and its path line take
+   *  the skin's gradient), the kill effect it carries (cosmetics/kill-effects.json), and the items owning it unlocks
+   *  too (the kill-effect tier includes its plain Forged skin) */
   weaponId?: string;
   tier?: WeaponSkinTier;
-  tracerTint?: string;
-  /** the tracer's path line, when the skin gives it its own hue (the bolt keeps `tracerTint`) */
-  tracerTrail?: string;
+  /** the tracer's glow and path line, a gradient from the bolt's head back to the muzzle (2–3 stops, #rrggbb) */
+  tracerGlow?: readonly string[];
   killEffect?: string;
   includes?: readonly string[];
 }
@@ -167,8 +167,7 @@ interface WeaponSkinJson {
   rarity: string;
   source: CosmeticSource;
   assets?: CosmeticAssets;
-  tracerTint?: string;
-  tracerTrail?: string;
+  tracerGlow?: readonly string[];
   killEffect?: string;
   includes?: readonly string[];
   tags?: readonly string[];
@@ -192,8 +191,7 @@ function weaponSkinItems(list: readonly WeaponSkinJson[]): CosmeticDef[] {
       source: j.source,
       weaponId: j.weaponId,
       tier: j.tier as WeaponSkinTier,
-      ...(j.tracerTint ? { tracerTint: j.tracerTint } : {}),
-      ...(j.tracerTrail ? { tracerTrail: j.tracerTrail } : {}),
+      ...(j.tracerGlow ? { tracerGlow: Object.freeze([...j.tracerGlow]) } : {}),
       ...(j.killEffect ? { killEffect: j.killEffect } : {}),
       ...(j.includes ? { includes: j.includes } : {}),
       ...(j.tags ? { tags: j.tags } : {}),

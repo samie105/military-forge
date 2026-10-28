@@ -1,0 +1,188 @@
+/*
+ * The Store (data-screen="store"; store/screen.ts): the menus' ink, the Galaxy Relic line on the left (its art panel
+ * and name, then its two tiers side by side), Get Brass on the right (the bundles with their naira and dollar prices, the monthly limit,
+ * Purchases & refunds), and a confirm dialog over both. Desktop: the menus' 1920×1080 box zoomed to the window
+ * (ui/fit.ts). A phone (html.mf-phone): one column at its own size, scrolling. mountStore injects this sheet and
+ * removes it. Tokens only, but for the Galaxy Relic's own hues (content's tracer colours) in its art panel.
+ */
+.mf-st-fit { position: fixed; inset: 0; overflow: hidden; z-index: 1; }
+.mf-st-fit > .screen { width: var(--fit-w, 1920px); height: var(--fit-h, 1080px); zoom: var(--fit, 1); }
+
+:where(.mf-st-fit) .mf-st { position: relative; z-index: 1; height: 100%; display: flex; flex-direction: column; box-sizing: border-box; }
+:where(.mf-st-fit) .mf-st__chip { display: inline-flex; align-items: center; gap: var(--sp-3); }
+:where(.mf-st-fit) .mf-st__bal {
+  display: inline-flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-4);
+  border: var(--bw) solid var(--c-brass); border-radius: 999px; background: var(--c-ink-900); color: var(--c-paper); font-size: var(--fs-20);
+}
+:where(.mf-st-fit) .mf-st__bal b { font-variant-numeric: tabular-nums; font-size: var(--fs-24); }
+:where(.mf-st-fit) .mf-st__casing { width: 1.1em; height: 1.1em; color: var(--c-brass); flex: none; }
+
+:where(.mf-st-fit) .mf-st__body {
+  flex: 1; min-height: 0; overflow: auto; box-sizing: border-box;
+  display: flex; flex-direction: column; gap: var(--sp-5); padding: var(--sp-4) var(--sp-9) var(--sp-8);
+}
+:where(.mf-st-fit) .mf-st__note { margin: 0; color: var(--c-muted); font-size: var(--fs-18); line-height: 1.4; }
+:where(.mf-st-fit) .mf-st__state { margin: auto; display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); text-align: center; max-width: 720px; }
+:where(.mf-st-fit) .mf-st__head { margin: 0; font-size: var(--fs-48); color: var(--c-paper); }
+
+/* ---- the line at the top, and the account gate ---- */
+:where(.mf-st-fit) .mf-st__notice,
+:where(.mf-st-fit) .mf-st__gate {
+  display: flex; align-items: center; gap: var(--sp-4); padding: var(--sp-4) var(--sp-5);
+  border: var(--bw) solid var(--c-line); border-radius: var(--r-frost-sm, 0 18px 0 18px); background: var(--c-ink-900); color: var(--c-paper); font-size: var(--fs-20);
+}
+:where(.mf-st-fit) .mf-st__notice.is-ok { border-color: var(--c-ok); }
+:where(.mf-st-fit) .mf-st__notice.is-warn { border-color: var(--c-warn); }
+:where(.mf-st-fit) .mf-st__notice > span { flex: 1; }
+:where(.mf-st-fit) .mf-st__gate { border-color: var(--c-brass); }
+:where(.mf-st-fit) .mf-st__gate > div { flex: 1; }
+:where(.mf-st-fit) .mf-st__gate p { margin: var(--sp-1) 0 0; color: var(--c-muted); font-size: var(--fs-18); }
+:where(.mf-st-fit) .mf-st__notice > .ic, :where(.mf-st-fit) .mf-st__gate > .ic { width: 28px; height: 28px; flex: none; }
+
+/* ---- the grid: the line, Get Brass ---- */
+:where(.mf-st-fit) .mf-st__grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: var(--sp-6); align-items: start; }
+
+:where(.mf-st-fit) .mf-st__line {
+  display: grid; grid-template-columns: 400px minmax(0, 1fr); grid-template-areas: 'art text' 'tiers tiers'; gap: var(--sp-5) var(--sp-6); align-items: end;
+  padding: var(--sp-6); border: var(--bw) solid var(--c-line); border-radius: var(--r-frost, 0 28px 0 28px); background: var(--c-ink-900); box-shadow: var(--sh-card);
+}
+:where(.mf-st-fit) .mf-st__art {
+  grid-area: art; position: relative; min-height: 230px; border-radius: var(--r-frost-sm, 0 18px 0 18px); overflow: hidden;
+  display: grid; place-items: center;
+  /* the Galaxy Relic's palette (content: tracer #fad8ff, trail #80fcd4) on the menus' ink */
+  background:
+    radial-gradient(circle at 30% 25%, color-mix(in srgb, #fad8ff 38%, transparent), transparent 42%),
+    radial-gradient(circle at 75% 70%, color-mix(in srgb, #80fcd4 30%, transparent), transparent 46%),
+    radial-gradient(circle at 60% 15%, color-mix(in srgb, #6b3fd6 55%, transparent), transparent 55%),
+    var(--c-ink-950);
+}
+:where(.mf-st-fit) .mf-st__art::after {
+  content: ''; position: absolute; inset: 0; opacity: .5;
+  background-image: radial-gradient(1px 1px at 20% 30%, #fff, transparent), radial-gradient(1px 1px at 70% 20%, #fff, transparent), radial-gradient(1.5px 1.5px at 40% 80%, #fff, transparent), radial-gradient(1px 1px at 85% 60%, #fff, transparent), radial-gradient(1px 1px at 10% 75%, #fff, transparent);
+}
+:where(.mf-st-fit) .mf-st__gun { width: 82%; height: 50%; color: var(--c-paper); filter: drop-shadow(0 0 18px color-mix(in srgb, #80fcd4 55%, transparent)); position: relative; z-index: 1; }
+:where(.mf-st-fit) .mf-st__art-tag { position: absolute; left: var(--sp-4); bottom: var(--sp-3); z-index: 1; font-weight: var(--fw-bold); letter-spacing: .12em; color: var(--c-paper); opacity: .8; }
+:where(.mf-st-fit) .mf-st__line-text { grid-area: text; display: flex; flex-direction: column; gap: var(--sp-2); }
+:where(.mf-st-fit) .mf-st__line-text .eyebrow, :where(.mf-st-fit) .mf-st__tier .eyebrow { color: var(--c-brass); }
+:where(.mf-st-fit) .mf-st__line-name { margin: 0; font-size: var(--fs-64); line-height: .95; color: var(--c-paper); }
+
+:where(.mf-st-fit) .mf-st__tiers { grid-area: tiers; list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4); }
+:where(.mf-st-fit) .mf-st__tier {
+  display: flex; flex-direction: column; justify-content: space-between; gap: var(--sp-4);
+  padding: var(--sp-5); border: var(--bw) solid var(--c-line); border-radius: var(--r-frost-sm, 0 18px 0 18px); background: var(--c-ink-800);
+}
+:where(.mf-st-fit) .mf-st__tier.is-fx { border-color: color-mix(in srgb, #80fcd4 55%, var(--c-line)); }
+:where(.mf-st-fit) .mf-st__tier.is-owned { border-color: var(--c-ok); }
+:where(.mf-st-fit) .mf-st__tier-head { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; }
+:where(.mf-st-fit) .mf-st__tier-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); min-height: 28px; }
+:where(.mf-st-fit) .mf-st__tier-name { font-size: var(--fs-28); color: var(--c-paper); }
+:where(.mf-st-fit) .mf-st__tier-line { margin: var(--sp-1) 0 0; color: var(--c-muted); font-size: var(--fs-18); line-height: 1.4; }
+:where(.mf-st-fit) .mf-st__tier-buy { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'price acts' 'money acts'; align-items: center; gap: 0 var(--sp-3); }
+:where(.mf-st-fit) .mf-st__tier-buy .mf-st__price { grid-area: price; }
+:where(.mf-st-fit) .mf-st__tier-buy .mf-st__money { grid-area: money; }
+:where(.mf-st-fit) .mf-st__tier-buy .mf-st__acts { grid-area: acts; margin-top: 0; }
+:where(.mf-st-fit) .mf-st__price { margin: 0; display: inline-flex; align-items: center; gap: var(--sp-2); color: var(--c-paper); font-size: var(--fs-20); white-space: nowrap; }
+:where(.mf-st-fit) .mf-st__price b { font-size: var(--fs-28); font-variant-numeric: tabular-nums; }
+:where(.mf-st-fit) .mf-st__was { color: var(--c-muted); font-size: var(--fs-18); }
+:where(.mf-st-fit) .mf-st__money { margin: 0; color: var(--c-muted); font-size: var(--fs-16); font-variant-numeric: tabular-nums; }
+:where(.mf-st-fit) .mf-st__acts { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-2); }
+
+/* ---- Get Brass ---- */
+:where(.mf-st-fit) .mf-st__get {
+  display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-6);
+  border: var(--bw) solid var(--c-line); border-radius: var(--r-frost, 0 28px 0 28px); background: var(--c-ink-900); box-shadow: var(--sh-card);
+}
+:where(.mf-st-fit) .mf-st__get-t { margin: 0; font-size: var(--fs-48); color: var(--c-paper); }
+:where(.mf-st-fit) .mf-st__bundles { list-style: none; margin: var(--sp-2) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+:where(.mf-st-fit) .mf-st__bundle {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4); border: var(--bw) solid var(--c-line); border-radius: var(--r-frost-sm, 0 18px 0 18px); background: var(--c-ink-800);
+}
+:where(.mf-st-fit) .mf-st__what { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; }
+:where(.mf-st-fit) .mf-st__amount { display: inline-flex; align-items: center; gap: var(--sp-2); color: var(--c-paper); font-size: var(--fs-24); }
+:where(.mf-st-fit) .mf-st__amount b { font-variant-numeric: tabular-nums; }
+:where(.mf-st-fit) .mf-st__why { color: var(--c-warn); font-size: var(--fs-14); }
+:where(.mf-st-fit) .mf-st__pay { display: inline-flex; gap: var(--sp-2); }
+:where(.mf-st-fit) .mf-st__pay .btn { min-width: 112px; font-variant-numeric: tabular-nums; }
+:where(.mf-st-fit) .mf-st__limit { margin: var(--sp-2) 0 0; color: var(--c-paper); font-size: var(--fs-18); }
+:where(.mf-st-fit) .mf-st__link {
+  align-self: flex-start; min-height: 44px; padding: 0; border: 0; background: none; cursor: pointer;
+  font: inherit; font-weight: var(--fw-bold); color: var(--c-volt); text-decoration: underline; text-underline-offset: 4px;
+}
+:where(.mf-st-fit) .mf-st__link:hover { color: var(--c-paper); }
+:where(.mf-st-fit) .mf-st__pays { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-1); }
+:where(.mf-st-fit) .mf-st__pays li {
+  display: grid; grid-template-columns: 1fr 1fr 1fr 1.2fr auto; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-2) 0; border-bottom: 1px solid var(--c-line); color: var(--c-paper); font-size: var(--fs-16); font-variant-numeric: tabular-nums;
+}
+:where(.mf-st-fit) .mf-st__status { color: var(--c-muted); }
+
+/* ---- the confirm ---- */
+:where(.mf-st-fit) .mf-st__scrim { position: fixed; inset: 0; z-index: 4; background: var(--c-scrim-strong); }
+:where(.mf-st-fit) .mf-st__dlg {
+  position: fixed; z-index: 5; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(760px, calc(100% - 2 * var(--sp-6))); box-sizing: border-box;
+  display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-7);
+  border: var(--bw) solid var(--c-brass); border-radius: var(--r-frost, 0 28px 0 28px); background: var(--c-ink-900); color: var(--c-paper); box-shadow: var(--sh-card);
+}
+:where(.mf-st-fit) .mf-st__dlg-t { margin: 0; font-size: var(--fs-48); line-height: 1; }
+:where(.mf-st-fit) .mf-st__dlg-price { margin: var(--sp-2) 0 0; display: inline-flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-36); }
+:where(.mf-st-fit) .mf-st__dlg-line { margin: 0; color: var(--c-muted); font-size: var(--fs-18); line-height: 1.45; }
+:where(.mf-st-fit) .mf-st__dlg-line b { color: var(--c-paper); }
+:where(.mf-st-fit) .mf-st__dlg-acts { display: flex; gap: var(--sp-3); margin-top: var(--sp-4); flex-wrap: wrap; }
+
+/* a laptop's smaller box, or big text */
+html:is(.mf-short, .mf-big-text):where(:not(.mf-phone)) :where(.mf-st-fit) .mf-st__line { grid-template-columns: 320px minmax(0, 1fr); }
+html:is(.mf-short, .mf-big-text):where(:not(.mf-phone)) :where(.mf-st-fit) .mf-st__art { min-height: 190px; }
+html:is(.mf-short, .mf-big-text):where(:not(.mf-phone)) :where(.mf-st-fit) .mf-st__line-name { font-size: var(--fs-48); }
+
+/* ---- a phone: its own size, one column, the page scrolls ---- */
+:where(html.mf-phone) .mf-st-fit > .screen { zoom: 1; width: 100%; height: 100%; }
+:where(html.mf-phone) :where(.mf-st-fit) .bg__word { display: none; }
+/* the kit's menu box is the desktop's (a 112 px header, wide gutters): the phone's own, like the Armory's */
+html.mf-phone :where(.mf-st-fit) .mf-st { padding: 0; }
+html.mf-phone :where(.mf-st-fit) .mf-st .menu-top {
+  height: auto; min-height: 48px; gap: var(--sp-3);
+  padding: max(var(--sp-1), env(safe-area-inset-top)) max(var(--sp-4), env(safe-area-inset-right)) var(--sp-1) max(var(--sp-4), env(safe-area-inset-left));
+}
+html.mf-phone :where(.mf-st-fit) .mf-st .menu-top__title { font-size: var(--fs-28); }
+html.mf-phone :where(.mf-st-fit) .mf-st .menu-top .btn--icon { min-width: 44px; min-height: 44px; }
+html.mf-phone :where(.mf-st-fit) .mf-st .eyebrow { font-size: 11px; gap: var(--sp-2); }
+html.mf-phone :where(.mf-st-fit) .mf-st .eyebrow::before { width: 14px; }
+html.mf-phone :where(.mf-st-fit) .mf-st .tag { font-size: 10px; padding: 2px 6px; }
+html.mf-phone :where(.mf-st-fit) .mf-st .btn--volt:not(.btn--sm) { min-height: 40px; padding-inline: var(--sp-4); }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__bal { font-size: 14px; padding: 4px 10px; }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__bal b { font-size: 16px; }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__body {
+  gap: var(--sp-3);
+  padding: var(--sp-2) max(var(--sp-4), env(safe-area-inset-right)) max(var(--sp-5), env(safe-area-inset-bottom)) max(var(--sp-4), env(safe-area-inset-left));
+}
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__note { font-size: 14px; }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__notice, :where(html.mf-phone) :where(.mf-st-fit) .mf-st__gate { font-size: 15px; padding: var(--sp-3); gap: var(--sp-2); flex-wrap: wrap; }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__gate p { font-size: 13px; }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__grid { grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__line { grid-template-columns: 150px minmax(0, 1fr); padding: var(--sp-3); gap: var(--sp-2) var(--sp-3); border-radius: var(--r-frost-sm, 0 18px 0 18px); }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__art { min-height: 84px; }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__art-tag { display: none; }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__line-name { font-size: 34px; }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__tiers { gap: var(--sp-2); }
+/* a narrow phone (or big text): the tiers one under the other */
+@media (max-width: 560px) { :where(html.mf-phone:not(.mf-rotated)) :where(.mf-st-fit) .mf-st__tiers { grid-template-columns: minmax(0, 1fr); } }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__tier { padding: var(--sp-3); gap: var(--sp-2); }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__tier-name { font-size: 20px; }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__tier-line { font-size: 13px; }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__price { font-size: 15px; }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__price b { font-size: 20px; }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__money { font-size: 13px; }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__acts { margin-top: 0; }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__get { padding: var(--sp-3); border-radius: var(--r-frost-sm, 0 18px 0 18px); }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__get-t { font-size: 28px; }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__bundle { padding: var(--sp-2) var(--sp-3); }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__amount { font-size: 17px; flex-wrap: wrap; }
+html.mf-phone :where(.mf-st-fit) .mf-st .mf-st__pay .btn { min-width: 84px; min-height: 36px; padding: 0 var(--sp-3); font-size: 13px; }
+html.mf-phone :where(.mf-st-fit) .mf-st .mf-st__acts .btn { min-height: 36px; font-size: 13px; }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__limit { font-size: 14px; }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__pays li { grid-template-columns: 1fr 1fr 1fr; font-size: 13px; }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__dlg { padding: var(--sp-5); width: calc(100% - 2 * var(--sp-4)); border-radius: var(--r-frost-sm, 0 18px 0 18px); }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__dlg-t { font-size: 26px; }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__dlg-price { font-size: 22px; }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__dlg-line { font-size: 14px; }

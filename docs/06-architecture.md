@@ -239,6 +239,7 @@ On a box with Valkey all four outlive an API restart; the trial box's Valkey als
 - The identity tables.
 - `loadouts` (slots 0–2 of `{look, guns}`).
 - `matches`, `match_players` and `stats_lifetime` (the totals in a `*` row, plus kills per source).
+- The store (docs/17): `wallets` (paid and earned pools, the spending limit, the mint flag), `ledger` (append-only, `UNIQUE(kind, pool, ref)`), `payments` (Flutterwave; the id is the `tx_ref`), `inventory` (items bought or granted) and `store_audit` (the owner's grants, adjustments and refunds). apps/api/README.md "The store".
 
 ---
 

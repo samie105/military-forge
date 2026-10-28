@@ -20,7 +20,7 @@ export interface Me {
   nicknameChangeableAt: string | null;
   level: number;
   xp: number;
-  /** cosmetics the owner granted this account (the API's COSMETIC_GRANTS); absent = none */
+  /** store items this account owns: bought in the Store, or granted (the API's COSMETIC_GRANTS, the admin page); absent = none */
   grants?: string[];
 }
 
@@ -431,8 +431,19 @@ export class Api {
    * A signed-in call for the modules beside the shell (social/: friends, invites): the same base,
    * session refresh and `{ error }` contract as everything here.
    */
-  authed<T>(method: string, path: string, body?: unknown): Promise<T> {
-    return this.request<T>(method, path, body, true);
+  authed<T>(method: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<T> {
+    return this.request<T>(method, path, body, true, headers);
+  }
+
+  /** A call that works signed in or not (GET /store: the catalogue for anyone, the account's part when signed in). */
+  async maybeAuthed<T>(method: string, path: string): Promise<T> {
+    let headers: Record<string, string> = {};
+    try {
+      headers = { authorization: `Bearer ${await this.accessToken()}` };
+    } catch (e) {
+      if (!(e instanceof ApiError) || e.offline) throw e;
+    }
+    return this.request<T>(method, path, undefined, false, headers);
   }
 
   /**

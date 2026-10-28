@@ -22,7 +22,7 @@ export interface Me {
   nicknameChangeableAt: string | null;
   level: number;
   xp: number;
-  /** cosmetics the owner granted this account (config COSMETIC_GRANTS); absent = none */
+  /** store items this account owns: bought, or granted (config COSMETIC_GRANTS, the admin page); absent = none */
   grants?: string[];
 }
 
@@ -39,12 +39,13 @@ export class ProfileService {
     private readonly db: Db,
     readonly policy: NicknamePolicy,
     private readonly now: () => number,
-    private readonly grants: ReadonlyMap<string, readonly string[]> = new Map(),
+    /** store items an account owns, bought or granted (store/wallet.ts owned()) */
+    private readonly owned: (userId: string) => Promise<readonly string[]> = async () => [],
   ) {}
 
-  /** The cosmetics the owner granted an account (config COSMETIC_GRANTS). */
-  grantsOf(userId: string): readonly string[] {
-    return this.grants.get(userId) ?? [];
+  /** The store items an account owns: bought, or granted (COSMETIC_GRANTS, the admin page). */
+  ownedOf(userId: string): Promise<readonly string[]> {
+    return this.owned(userId);
   }
 
   async me(userId: string): Promise<Me | null> {
@@ -62,6 +63,7 @@ export class ProfileService {
       .innerJoin(profiles, eq(profiles.userId, users.id))
       .where(eq(users.id, userId));
     if (!row) return null;
+    const owned = await this.owned(row.id);
     return {
       id: row.id,
       nickname: row.nickname,
@@ -70,7 +72,7 @@ export class ProfileService {
       nicknameChangeableAt: this.changeableAt(row.nicknameChangedAt)?.toISOString() ?? null,
       level: row.level,
       xp: row.xp,
-      ...(this.grantsOf(row.id).length ? { grants: [...this.grantsOf(row.id)] } : {}),
+      ...(owned.length ? { grants: [...owned] } : {}),
     };
   }
 

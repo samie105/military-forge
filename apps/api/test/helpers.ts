@@ -17,6 +17,7 @@ import { randomUUID } from 'node:crypto';
 import type { BotCheck } from '../src/auth/botCheck';
 import type { EmailMessage, EmailSender } from '../src/auth/email';
 import { createLogger, type Logger } from '../src/log';
+import { createStore } from '../src/store';
 
 export const START = Date.parse('2026-10-17T12:00:00Z');
 
@@ -30,6 +31,8 @@ export interface TestApiOptions {
   ingest?: IngestOptions;
   /** the bot check (auth/botCheck.ts): undefined = from the env (TURNSTILE_SECRET), null = off */
   botCheck?: BotCheck | null;
+  /** what the store talks to instead of Flutterwave (test/fakeFlutterwave.ts) */
+  flutterwaveFetch?: typeof fetch;
 }
 
 export async function createTestApi(env: Record<string, string> = {}, options: TestApiOptions = {}) {
@@ -62,7 +65,10 @@ export async function createTestApi(env: Record<string, string> = {}, options: T
   // work the API does after answering (account emails): collected, so a test can wait for it
   const deferred: Promise<void>[] = [];
   const defer = (task: () => Promise<void>) => void deferred.push(task());
+  // the store's wallet and payments, on the test clock (and a fake Flutterwave when the test brings one)
+  const store = createStore(config, database.db, clock.now, log, options.flutterwaveFetch);
   const deps = {
+    store,
     config,
     database,
     kv,
@@ -96,6 +102,8 @@ export async function createTestApi(env: Record<string, string> = {}, options: T
     config,
     /** play stats (analytics/service.ts) */
     analytics,
+    /** the store's services (store/index.ts): the payments sweep, the wallet */
+    store,
     database,
     kv,
     /** the push channel's fan-out (events/bus.ts) */

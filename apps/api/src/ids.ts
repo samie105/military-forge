@@ -5,8 +5,8 @@
  */
 import { randomBytes } from 'node:crypto';
 
-/** u: user, s: session, t: an emailed link (email_tokens) */
-export type IdPrefix = 'u' | 's' | 't';
+/** u: user, s: session, t: an emailed link (email_tokens), pay: a checkout (the provider's tx_ref), ord: an item bought */
+export type IdPrefix = 'u' | 's' | 't' | 'pay' | 'ord';
 
 const ALPHABET = '0123456789abcdefghjkmnpqrstvwxyz';
 

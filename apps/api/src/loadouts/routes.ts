@@ -29,8 +29,8 @@ function slotParam(raw: string): number {
   return slot;
 }
 
-export function loadoutRoutes(deps: { db: Db; kv: Kv; auth: AuthService; now: () => number; grants?: (userId: string) => readonly string[] }): Hono<AppEnv> {
-  const { db, kv, auth, now, grants = () => [] } = deps;
+export function loadoutRoutes(deps: { db: Db; kv: Kv; auth: AuthService; now: () => number; grants?: (userId: string) => Promise<readonly string[]> }): Hono<AppEnv> {
+  const { db, kv, auth, now, grants = async () => [] } = deps;
   const app = new Hono<AppEnv>();
   app.use(requireAuth(auth));
 
@@ -51,7 +51,7 @@ export function loadoutRoutes(deps: { db: Db; kv: Kv; auth: AuthService; now: ()
     const body = await readJson(c, LoadoutBody);
     const [profile] = await db.select({ level: profiles.level }).from(profiles).where(eq(profiles.userId, userId));
     if (!profile) throw new ApiError(404, 'not_found', 'Account not found');
-    const issues = loadoutIssues(body, profile.level, grants(userId));
+    const issues = loadoutIssues(body, profile.level, await grants(userId));
     if (issues.length) throw new ApiError(400, 'invalid_loadout', 'The loadout has items that are unknown, misplaced or locked', { issues });
     const data = toLoadoutData(body);
     const updatedAt = new Date(now());
