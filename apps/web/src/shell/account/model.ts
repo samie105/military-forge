@@ -22,6 +22,8 @@ const PASSWORD_REASONS: Record<string, string> = {
 /** What to tell the player when an account call fails. */
 export function accountErrorText(e: unknown): string {
   if (!(e instanceof ApiError)) return 'Something went wrong. Try again.';
+  // a 503 of its own: the server is up, Cloudflare's check isn't
+  if (e.code === 'bot_check_unavailable') return "Couldn't check you're not a bot just now. Try again in a moment.";
   if (e.offline) return "Can't reach the server. Check your connection and try again.";
   switch (e.code) {
     case 'invalid_credentials':
@@ -50,6 +52,16 @@ export function accountErrorText(e: unknown): string {
       return 'Leave the room first.';
     case 'not_available':
       return 'Password reset by email is not available yet.';
+    case 'age_required':
+      return 'Confirm you are 18 or older, with the year you were born.';
+    case 'invalid_birth_year':
+      return "That year doesn't look right.";
+    case 'underage':
+      return 'Military Forge is for players 18 and over, so this account can’t be saved.';
+    case 'bot_check_required':
+      return "Finish the check that you're not a bot, then try again.";
+    case 'bot_check_failed':
+      return "The check that you're not a bot didn't pass. Try it again.";
     default:
       return e.message || 'Something went wrong. Try again.';
   }

@@ -180,6 +180,7 @@ async function homeTaps(profile) {
     localStorage.setItem('mf-creator-seen', '1');
     localStorage.setItem('tips.seen.v1', '1');
     localStorage.setItem('mf.facts.v1', f);
+    localStorage.setItem('mf.age.v1', JSON.stringify({ adult: true, birthYear: 1990, at: Date.now() })); // the 18+ step, answered
   }, FACTS({}));
   check(`${profile}: to Home`, await newPlayerToHome(page, profile));
   // busy on Home (a tap every 2 s on the brand, which does nothing): no pass
@@ -223,6 +224,7 @@ async function homeTaps(profile) {
     localStorage.setItem('mf-creator-seen', '1');
     localStorage.setItem('tips.seen.v1', '1');
     localStorage.setItem('mf.facts.v1', f);
+    localStorage.setItem('mf.age.v1', JSON.stringify({ adult: true, birthYear: 1990, at: Date.now() })); // the 18+ step, answered
   }, FACTS({}));
   await newPlayerToHome(p2, profile);
   await until(p2, () => !!document.querySelector('.mf-spot:not([hidden]) .mf-spot__skip'), 20_000);
@@ -241,6 +243,7 @@ async function homeTaps(profile) {
     localStorage.setItem('mf-creator-seen', '1');
     localStorage.setItem('tips.seen.v1', '1');
     localStorage.setItem('mf.facts.v1', f);
+    localStorage.setItem('mf.age.v1', JSON.stringify({ adult: true, birthYear: 1990, at: Date.now() })); // the 18+ step, answered
   }, FACTS({}));
   await newPlayerToHome(p3, profile);
   await p3.evaluate(() => window.__game.shell.controller.go({ to: 'training' }));
@@ -276,6 +279,7 @@ async function slimCards(profile) {
     localStorage.setItem('mf-creator-seen', '1');
     localStorage.setItem('tips.seen.v1', '1');
     localStorage.setItem('mf.facts.v1', f);
+    localStorage.setItem('mf.age.v1', JSON.stringify({ adult: true, birthYear: 1990, at: Date.now() })); // the 18+ step, answered
   }, FACTS({ matches: { local: 3, online: 0, finished: 3, wonInARow: 0 }, tours: { 'home-stops': { done: [], finished: true, skipped: false } } }));
   await newPlayerToHome(page, profile);
   await page.evaluate(() => window.__game.shell.controller.startFlight());
@@ -311,6 +315,7 @@ async function armory(profile) {
     localStorage.setItem('mf-creator-seen', '1');
     localStorage.setItem('tips.seen.v1', '1');
     localStorage.setItem('mf.facts.v1', f);
+    localStorage.setItem('mf.age.v1', JSON.stringify({ adult: true, birthYear: 1990, at: Date.now() })); // the 18+ step, answered
   }, FACTS({ tours: { 'home-stops': { done: [], finished: true, skipped: false } } }));
   await newPlayerToHome(page, profile);
   await page.evaluate(() => (window.__sameDocument = true));
@@ -339,6 +344,7 @@ async function matchEnd(profile) {
     localStorage.setItem('mf-creator-seen', '1');
     localStorage.setItem('tips.seen.v1', '1');
     localStorage.setItem('mf.facts.v1', f);
+    localStorage.setItem('mf.age.v1', JSON.stringify({ adult: true, birthYear: 1990, at: Date.now() })); // the 18+ step, answered
   }, FACTS({ tours: { 'home-stops': { done: [], finished: true, skipped: false } } }));
   // a 12 s match
   await newPlayerToHome(page, profile, '&time=12&countdown=1');
@@ -384,6 +390,7 @@ async function playNow(profile) {
     localStorage.setItem('mf-creator-seen', '1');
     localStorage.setItem('tips.seen.v1', '1');
     localStorage.setItem('mf.facts.v1', f);
+    localStorage.setItem('mf.age.v1', JSON.stringify({ adult: true, birthYear: 1990, at: Date.now() })); // the 18+ step, answered
   }, FACTS({ tours: { 'home-stops': { done: [], finished: true, skipped: false } } }));
   await newPlayerToHome(page, profile);
   await sleep(1200);
@@ -457,6 +464,7 @@ async function iphoneStrip(profile) {
     localStorage.setItem('mf-creator-seen', '1');
     localStorage.setItem('tips.seen.v1', '1');
     localStorage.setItem('mf.facts.v1', f);
+    localStorage.setItem('mf.age.v1', JSON.stringify({ adult: true, birthYear: 1990, at: Date.now() })); // the 18+ step, answered
   }, FACTS({ tours: { 'home-stops': { done: [], finished: true, skipped: false } } }));
   await newPlayerToHome(page, profile);
   await page.evaluate(() => window.__game.shell.controller.startFlight());
@@ -518,6 +526,7 @@ async function cardsOnce(profile) {
     await page.evaluate((f) => {
       localStorage.setItem('mf-creator-seen', '1');
       localStorage.setItem('mf.facts.v1', f);
+      localStorage.setItem('mf.age.v1', JSON.stringify({ adult: true, birthYear: 1990, at: Date.now() })); // the 18+ step, answered
     }, FACTS({ tours: { 'home-stops': { done: [], finished: true, skipped: false } } }));
     await newPlayerToHome(page, profile);
     await playOnceAndHome(page);

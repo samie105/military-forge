@@ -141,7 +141,9 @@ The client sets them as the ad context (`render3d/ads/audience.ts`, `setAdContex
 
 **Minors everywhere.** Assume they play (docs/10 §7). No profiling for paid ads (docs/14 rule 6 is unchanged for paid ads); the segments weight house art only, only with a yes, behind a flag.
 
-**Still to do (owner):** a privacy contact email (`PRIVACY_CONTACT` at build time fills the note; until then it points to the in-game report), a record of processing and a short legitimate-interest assessment for the essential tier, the age question (*), counsel on NDPA registration and children's consent (*), and the GeoIP table's licence credit if one is installed.
+**Still to do (owner):** a privacy contact email (`PRIVACY_CONTACT` at build time fills the note; until then it points to the in-game report), a record of processing and a short legitimate-interest assessment for the essential tier, counsel on NDPA registration and children's consent (*), and the GeoIP table's licence credit if one is installed.
+
+**Adults only (28 Oct 2026).** The owner made the game 18+. The age question is the 18+ step before a device's first online room and on saving an account (docs/10 §7; apps/web `shell/age.ts`, apps/api `auth/accountRoutes.ts`): the birth year and when, never a date of birth. The privacy note says so and no longer asks under-18s to ask a parent.
 
 ## 9. Operating it
 

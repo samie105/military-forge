@@ -19,6 +19,7 @@ import type { ShellController } from './controller';
 import type { MapEventBanner as MapEventBannerView } from './mapEventBanner';
 import { holdLoading } from './mapLoading';
 import { formatClock, type MatchView } from './matchView';
+import { AgeGate } from './screens/AgeGate';
 import { Alert, Connecting, MapLoading, ReconnectBanner, connectStep } from './screens/Connection';
 import { Countdown, useCountdown } from './screens/Countdown';
 import { Home } from './screens/Home';
@@ -98,6 +99,9 @@ function AppScreens({ store }: { store: ShellStore }) {
       break;
     case 'name':
       body = phone ? <PhoneNameEntry store={store} first /> : <NameEntry store={store} first />;
+      break;
+    case 'age':
+      body = <AgeGate refused={screen.refused === true} phone={phone} />;
       break;
     case 'home':
       body = phone ? <PhoneHome store={store} /> : <Home store={store} />;

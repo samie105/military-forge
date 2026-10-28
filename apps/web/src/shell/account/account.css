@@ -41,3 +41,19 @@
 /* phone: the panel is short and the keyboard takes half of it; keep the fields compact */
 .acct--phone .acct-form { gap: var(--sp-2); max-width: none; }
 .acct--phone .acct-field input { min-height: 44px; font-size: 16px; } /* 16px: iOS doesn't zoom into the field */
+/* the save form's 18+ question (AgeFields) and the bot check's widget (BotCheck.tsx) */
+.acct-field select {
+  min-height: 44px;
+  padding: 0 var(--sp-3);
+  background: var(--c-ink-950);
+  color: var(--c-text);
+  border: var(--bw) solid var(--c-line);
+  border-radius: var(--r-sm);
+  font: var(--fw-bold) var(--fs-18) / 1.2 var(--f-ui);
+}
+.acct-field select:focus-visible { outline: none; border-color: var(--c-volt); box-shadow: 0 0 0 2px var(--c-volt-soft); }
+.acct-check { display: flex; align-items: center; gap: var(--sp-2); min-height: 44px; font-size: var(--fs-16); font-weight: var(--fw-bold); cursor: pointer; }
+.acct-check input { width: 20px; height: 20px; accent-color: var(--c-volt); }
+.acct-inline { color: var(--c-volt); text-underline-offset: 3px; }
+.acct-bot { min-height: 65px; } /* Turnstile's widget is 65 px tall: no jump when it arrives */
+.acct--phone .acct-field select { font-size: 16px; }

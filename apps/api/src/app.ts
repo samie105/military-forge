@@ -17,6 +17,7 @@ import type { SigningKey } from './auth/keys';
 import { accountRoutes, safeError } from './auth/accountRoutes';
 import { AccountService } from './auth/accounts';
 import { createAudit } from './auth/audit';
+import { botCheckFor, type BotCheck } from './auth/botCheck';
 import { emailSenderFor, type EmailSender } from './auth/email';
 import { PasswordHasher } from './auth/passwords';
 import { analyticsRoutes, internalAnalyticsRoutes } from './analytics/routes';
@@ -66,6 +67,8 @@ export interface AppDeps {
   email?: EmailSender | null;
   /** Argon2id with the production parameters unless a test passes cheaper ones */
   hasher?: PasswordHasher;
+  /** the bot check on account saves and "Forgot password?"; undefined = from config (TURNSTILE_SECRET), null = off */
+  botCheck?: BotCheck | null;
   /** work done after an answer has gone (account emails); default: run it, log a failure */
   defer?: (task: () => Promise<void>) => void;
   /** play stats (analytics/service.ts); index.ts makes one and starts its timers, tests make their own */
@@ -169,6 +172,7 @@ export function createApp(deps: AppDeps) {
       throttle: new Throttle(kv, now),
       email: deps.email !== undefined ? deps.email : emailSenderFor(config, log),
       audit,
+      botCheck: deps.botCheck !== undefined ? deps.botCheck : botCheckFor(config, log),
       defer,
       now,
     }),

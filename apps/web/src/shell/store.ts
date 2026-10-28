@@ -62,6 +62,8 @@ export type Screen =
   | { name: 'boot' }
   /** choose a name, then carry on to `then` */
   | { name: 'name'; then: Intent }
+  /** the 18+ step before the first online room (age.ts), then `then`; `refused`: this device said under 18 */
+  | { name: 'age'; then: Intent; refused?: boolean }
   | { name: 'home' }
   /** creating (code null) or looking up a room (API), before the game connects */
   | { name: 'finding'; code: string | null; creating: boolean }

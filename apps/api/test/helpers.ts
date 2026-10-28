@@ -14,6 +14,7 @@ import { MemoryBus, RedisBus, type EventBus } from '../src/events/bus';
 import { MemoryKv, type Kv } from '../src/kv/kv';
 import { RedisKv } from '../src/kv/redis';
 import { randomUUID } from 'node:crypto';
+import type { BotCheck } from '../src/auth/botCheck';
 import type { EmailMessage, EmailSender } from '../src/auth/email';
 import { createLogger, type Logger } from '../src/log';
 
@@ -27,6 +28,8 @@ export interface TestApiOptions {
   log?: Logger;
   /** play stats' ingest queue (back-pressure tests) */
   ingest?: IngestOptions;
+  /** the bot check (auth/botCheck.ts): undefined = from the env (TURNSTILE_SECRET), null = off */
+  botCheck?: BotCheck | null;
 }
 
 export async function createTestApi(env: Record<string, string> = {}, options: TestApiOptions = {}) {
@@ -70,6 +73,7 @@ export async function createTestApi(env: Record<string, string> = {}, options: T
     now: clock.now,
     analytics,
     email: options.email ?? null,
+    ...(options.botCheck !== undefined ? { botCheck: options.botCheck } : {}),
     defer,
   };
   const app = createApp(deps);

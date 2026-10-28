@@ -137,12 +137,12 @@ const PREVENT_DEFAULT = new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', '
 
 /**
  * The menus have the keyboard: a key pressed on one of their controls (#shell), or any key while a
- * menu screen shows (Home, the lobby, results: the shell's .screen--menu, or a modal over the game).
+ * menu screen shows (Home, the lobby, results: the shell's .screen--menu, the 18+ step, or a modal over the game).
  * Tab then moves focus and Space presses buttons, as on any page.
  */
 function menusHaveKeys(target: EventTarget | null): boolean {
   if (typeof Element !== 'undefined' && target instanceof Element && target.closest('#shell') !== null) return true;
-  return typeof document !== 'undefined' && typeof document.querySelector === 'function' && document.querySelector('#shell .screen--menu, #shell .mf-fit--modal') !== null;
+  return typeof document !== 'undefined' && typeof document.querySelector === 'function' && document.querySelector('#shell .screen--menu, #shell .age-gate, #shell .mf-fit--modal') !== null;
 }
 
 /** What every key and mouse button does. */

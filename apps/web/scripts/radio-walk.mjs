@@ -82,6 +82,7 @@ async function player(name, profile) {
       localStorage.setItem('tips.seen.v1', '1');
       localStorage.setItem('mf-creator-seen', '1');
       localStorage.setItem('mf.facts.v1', facts);
+      localStorage.setItem('mf.age.v1', JSON.stringify({ adult: true, birthYear: 1990, at: Date.now() })); // the 18+ step, answered
       localStorage.setItem('mf.touch.drill.v1', 'done');
       localStorage.setItem('mf.touch.hints.v1', JSON.stringify(['move', 'jet', 'fire', 'dash', 'chain', 'cycle', 'throw', 'swap', 'radial', 'reload', 'melee', 'shield', 'zoom', 'scores', 'camera', 'dash-swipe', 'grenade-types', 'swap-radial', 'take', 'shield-hold']));
       localStorage.setItem('mf.install.v1', JSON.stringify({ dismissedAt: Date.now(), stats: {} }));

@@ -4,11 +4,12 @@
  * ```
  * GET  /auth/options     → {resetByEmail}                        no session needed (the sign-in form)
  * GET  /auth/account     → {email, saved, hasProgress, resetByEmail}
- * POST /auth/save        {email, password} → 200 {status:'saved', user} | 202 {status:'check_email'}
+ * POST /auth/save        {email, password, birthYear, adult: true, turnstileToken?}
+ *                        → 200 {status:'saved', user} | 202 {status:'check_email'}
  * POST /auth/confirm     {token} → {status:'saved'}               the emailed "Save my account" link
  * POST /auth/login       {email, password} → Session + previousGuest
  * POST /auth/password    {currentPassword, newPassword} → Session (this device, new session)
- * POST /auth/forgot      {email} → 202 {status:'check_email'}      only with EMAIL_PROVIDER
+ * POST /auth/forgot      {email, turnstileToken?} → 202 {status:'check_email'}   only with EMAIL_PROVIDER
  * POST /auth/reset       {token, password} → 204
  * ```
  * Sign out and "sign out everywhere" are the existing /auth/logout and /auth/logout-all.
@@ -26,6 +27,12 @@
  * - Sessions: a sign-in always makes a new session (never reuses the device's old one); a
  *   password change ends every session and gives this device a new one; a reset ends them all.
  * - Emailed links: single use, sha256 at rest, 30 minutes (reset) or 24 hours (save).
+ * - 18+ only (shared/age.ts): a save needs the player's "I am 18 or older" and their birth year;
+ *   a year that makes them a minor is refused (403 `underage`). The account keeps when they said
+ *   so and the year, never a full date of birth.
+ * - Bot check (auth/botCheck.ts): with TURNSTILE_SECRET set, a save and "Forgot password?" need a
+ *   Turnstile token that passes; off without it. It runs after the cheap checks, so a typo
+ *   doesn't burn the token.
  * - CSRF: the app's origin guard refuses state changes from other sites (app.ts); the refresh
  *   cookie is httpOnly, Secure in production, SameSite=Lax.
  *
@@ -37,13 +44,14 @@
  * - the device was signed in to another saved account → that session ends.
  * `previousGuest` in the answer says which: 'kept' | 'discarded' | null.
  */
+import { birthYearAnswer } from '@military-forge/shared';
 import { eq } from 'drizzle-orm';
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import type { Config } from '../config';
 import { isUniqueViolation, type Db } from '../db/client';
 import { users } from '../db/schema';
-import { clientRateLimitKey } from '../http/clientIp';
+import { clientIp, clientRateLimitKey } from '../http/clientIp';
 import type { AppEnv } from '../http/context';
 import { ApiError, errorResponse, readJson } from '../http/errors';
 import { LIMITS, enforceRateLimit } from '../http/rateLimit';
@@ -51,6 +59,7 @@ import type { Kv } from '../kv/kv';
 import type { ProfileService } from '../me/profiles';
 import { RESET_TTL_MS, SAVE_TTL_MS, type AccountService } from './accounts';
 import type { Audit } from './audit';
+import type { BotCheck } from './botCheck';
 import { EMAILS, confirmLink, resetLink, type EmailSender } from './email';
 import { requireAuth } from './middleware';
 import { PASSWORD_REASON_TEXT, parseEmail, normalizeEmail, passwordProblem, type PasswordHasher } from './passwords';
@@ -70,6 +79,8 @@ export interface AccountRouteDeps {
   /** null = no email provider (EMAIL_PROVIDER unset) */
   email: EmailSender | null;
   audit: Audit;
+  /** the Turnstile check on save and forgot (auth/botCheck.ts); null = off */
+  botCheck: BotCheck | null;
   /** runs work after the answer has gone (sending email), so its time never shows in the answer's */
   defer: (task: () => Promise<void>) => void;
   now: () => number;
@@ -80,6 +91,9 @@ const EmailField = z.string().max(320);
 const PasswordField = z.string().max(1024);
 const Credentials = z.object({ email: EmailField, password: PasswordField });
 const TokenField = z.string().max(200);
+/** Turnstile's tokens are up to 2048 characters */
+const BotToken = z.string().max(2048).optional();
+const SaveBody = Credentials.extend({ birthYear: z.number().optional(), adult: z.boolean().optional(), turnstileToken: BotToken });
 const ChangeBody = z.object({ currentPassword: PasswordField, newPassword: PasswordField });
 
 const WRONG = 'The email or password is wrong';
@@ -92,11 +106,33 @@ export function safeError(err: unknown): { name: string; code?: string } {
 }
 
 export function accountRoutes(deps: AccountRouteDeps): Hono<AppEnv> {
-  const { config, db, kv, auth, profiles, accounts, hasher, throttle, email: sender, audit, defer, now } = deps;
+  const { config, db, kv, auth, profiles, accounts, hasher, throttle, email: sender, audit, botCheck, defer, now } = deps;
   const app = new Hono<AppEnv>();
   const sessionResponse = sessionResponder(config, auth, profiles);
   const ipKey = (c: Context<AppEnv>) => clientRateLimitKey(c, config);
   const ipSubject = (c: Context<AppEnv>): Subject => ({ key: `ip:${ipKey(c)}`, rule: BACKOFF.ip });
+
+  /** The 18+ rule (see the file comment): returns the birth year to keep. */
+  function requireAdult(c: Context<AppEnv>, userId: string, body: { birthYear?: number; adult?: boolean }): number {
+    if (body.adult !== true || body.birthYear === undefined) throw new ApiError(400, 'age_required', 'Confirm you are 18 or older, with the year you were born');
+    const answer = birthYearAnswer(body.birthYear, new Date(now()).getUTCFullYear());
+    if (answer === 'invalid') throw new ApiError(400, 'invalid_birth_year', "That year doesn't look right");
+    if (answer === 'minor') {
+      audit(c, 'save_refused_underage', { userId });
+      throw new ApiError(403, 'underage', 'Military Forge is for players 18 and over');
+    }
+    return body.birthYear;
+  }
+
+  const checkBot = async (c: Context<AppEnv>, token: string | undefined, action: 'save' | 'forgot') => {
+    if (!botCheck) return;
+    try {
+      await botCheck(token, clientIp(c, config), action);
+    } catch (err) {
+      if (err instanceof ApiError && err.status < 500) audit(c, 'bot_check_failed', { action, code: err.code });
+      throw err;
+    }
+  };
 
   function requirePassword(password: string, email?: string): void {
     const reason = passwordProblem(password, email);
@@ -136,11 +172,14 @@ export function accountRoutes(deps: AccountRouteDeps): Hono<AppEnv> {
     const { userId } = c.get('auth')!;
     await enforceRateLimit(kv, LIMITS.accountSave, userId);
     await enforceRateLimit(kv, LIMITS.accountSaveIp, ipKey(c));
-    const body = await readJson(c, Credentials);
+    const body = await readJson(c, SaveBody);
+    const birthYear = requireAdult(c, userId, body);
     const email = parseEmail(body.email);
     if (!email) throw new ApiError(400, 'invalid_email', "That doesn't look like an email address");
     requirePassword(body.password, email);
     if (await accounts.credentialOf(userId)) throw new ApiError(409, 'already_saved', 'This account is saved already');
+    await checkBot(c, body.turnstileToken, 'save');
+    await accounts.confirmAdult(userId, birthYear);
 
     if (sender) {
       // the same answer whether or not the email is free; the work happens after it
@@ -271,7 +310,8 @@ export function accountRoutes(deps: AccountRouteDeps): Hono<AppEnv> {
   app.post('/forgot', async (c) => {
     if (!sender) throw new ApiError(404, 'not_available', 'Password reset by email is not available');
     await enforceRateLimit(kv, LIMITS.forgot, ipKey(c));
-    const body = await readJson(c, z.object({ email: EmailField }));
+    const body = await readJson(c, z.object({ email: EmailField, turnstileToken: BotToken }));
+    await checkBot(c, body.turnstileToken, 'forgot');
     const email = parseEmail(body.email);
     const appUrl = config.appUrl;
     if (email) {

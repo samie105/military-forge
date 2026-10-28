@@ -18,6 +18,7 @@
 3. **Visibility floor:** skins must pass an automated contrast check against each map's palette (§8). There are no full-camo skins.
 4. **Team readability:** in team modes an **outline + armband/visor glow** uses the team colour (or the player's chosen enemy-highlight colour), regardless of skin.
 5. **Audio parity:** cosmetic footstep/jetpack sounds keep the same loudness and frequency band. Only the timbre changes.
+6. **Paid looks read the same** (owner, 28 Oct 2026): everything sold, and every Forge look, passes the visual-advantage review in [17 §3.4](17-store-currency-and-forge.md#34-the-visual-advantage-review-checklist), and the dark-look check runs on the **worst-case dye** a player could pick, not just the defaults. A look that fails in the wild is fixed for everyone and its buyers may refund it (17 §2.5).
 
 ---
 
@@ -55,7 +56,8 @@ These are **original IPs**. Design them for the core audience (India, Nigeria, S
 | Top / Gloves / Legs / Boots | outfits | |
 | **Jetpack** | model + **exhaust colour** + **trail** | big expressive slot: it's on screen all the time |
 | Backpack / accessory | radio, flag pole, plushie | within the envelope |
-| Weapon skins | per weapon + "universal wraps" | wraps are material-only (cheap to make) |
+| Weapon skins | per weapon + "universal wraps" | wraps are material-only (cheap to make). Paid lines on six guns only, in three tiers (Wrap, Skin, Forged), 17 §3.2–3.3; mastery skins are earned, never sold |
+| **Forge look** | a player-designed gun look (parts, dyes, decals, FX) | a JSON spec in a Forge slot: 1 slot free, more bought (17 §4) |
 | Melee skin | knife, bat, machete, frying pan | |
 | Grenade skin | | |
 | Emotes (6 slots) | dances, taunts, sprays, stickers | |
@@ -120,7 +122,7 @@ Budget per character on screen: ≤ 4k tris, 1–3 draw calls, ≤ 1.5 MB GPU te
 - 3D turntable preview with drag-rotate, zoom to face/jetpack, and lighting presets (lobby, night map, desert map).
 - Slot tabs on the left, a grid of owned items (rarity frame + **shape** for colour-blind players), and locked items shown with how to get them ("Battle pass tier 34", "Store", "Achievement: 100 headshots").
 - **Dye picker** per channel (owned dyes) + randomise + "copy from character".
-- **3 loadout presets**, plus per-mode overrides (e.g. a BR look).
+- **3 loadout presets**, plus per-mode overrides (e.g. a BR look). A Forge look (17 §4.6) is equipped on its gun in any preset without using another Forge slot.
 - "Try on": store items preview on your current loadout, and you can play a **sandbox** to see kill effects/emotes on a dummy.
 - Changes are saved to the server (`PUT /me/loadout/{slot}`) and validated against `inventory`.
 
@@ -175,6 +177,8 @@ Each effect is authored with a **low-quality variant** for the graphics "Low" pr
 4. **Readability lint:** renders the character silhouette over each map's background palette and computes luminance contrast. It fails below a threshold.
 5. Items are defined in `content/cosmetics/*.json` (`id`, `slot`, `rarity`, `assets`, `dyeable`, `source`, `releaseSeason`, `tags`).
 6. Store and battle pass reference item ids, so new cosmetics ship as content-only deploys (CDN assets + content.bin) without touching the game server.
+7. **Weapon skins** are items with `slot: "weapon_skin"`, the base `weaponId` and a `tier`; their GLB keeps the base gun's `muzzle`, `offhand` and `eject` nodes within 1 cm (17 §3.3).
+8. **Forge looks are not content items:** they're player data (a `ForgeLook` JSON per slot), validated by the API and an isolated render worker, and reviewed when they carry uploads or a new name (17 §4.3–4.4). The Forge part library is content, built and checked like any part.
 
 ---
 

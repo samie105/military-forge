@@ -20,7 +20,8 @@ This folder is the full pre-production plan, researched on **16 Oct 2026**, down
 | Transport | WebSocket (uWebSockets.js) now; WebTransport datagrams in Phase 2 (all browsers since Safari 26.4) |
 | Backend | Hono API + Postgres (Neon) + Redis/Valkey + own matchmaker + social WebSocket gateway |
 | Hosting | Cloudflare (CDN/R2) + own allocator on flat-bandwidth VMs: FRA + Mumbai + Johannesburg first |
-| Monetisation | cosmetics only; no paid random boxes; regional pricing |
+| Audience | **18+** (owner, 28 Oct 2026) |
+| Monetisation | cosmetics only, same stats always; one premium currency (no cash-out or trading); gun skins on six guns; player-designed gun looks in the Forge with paid loadout slots; no paid random items; regional pricing ([17](17-store-currency-and-forge.md)) |
 
 ---
 
@@ -40,10 +41,11 @@ This folder is the full pre-production plan, researched on **16 Oct 2026**, down
 | 10 | [Security & anti-cheat](10-security-and-anticheat.md) | threat model (incl. mod-APK cheats), architectural defences, statistical detection, sanctions, web security checklist |
 | 11 | [Rendering, art & audio](11-rendering-art-audio.md) | engine picks + rejections, scene layers, performance and download budgets, art direction, asset pipeline, VFX catalogue, audio graph, boot sequence, build targets |
 | 12 | [Roadmap](12-roadmap.md) | team shape, phases with go/no-go gates, open decisions, risk register, **first two weeks task list** |
-| 13 | [Master checklist](13-master-checklist.md) | **739 tagged items** (MVP / Launch / Post-launch) across 25 areas, ready to paste into a tracker |
+| 13 | [Master checklist](13-master-checklist.md) | **778 tagged items** (MVP / Launch / Post-launch) across 26 areas, ready to paste into a tracker |
 | 14 | [In-world advertising](14-in-world-advertising.md) | billboard ads on city maps (the Lagos Life model): hard readability and child-safety rules, surfaces and placements, creative spec, renderer and IAB/MRC measurement, account-free reporting, ad ops, the "500 per screen" pricing analysis and rate card, ARCON/DPDP/NDPA compliance, the thin Nigeria pilot |
 | – | [Net trial](net-trial.md) | a hosted game server in the AWS Lagos Local Zone from one pasted cloud-init script: console clicks, links, the ping probe, results, costs |
 | 16 | [Player metrics](16-player-metrics.md) | first-party play stats: the versioned event vocabulary, client batching and the game server's signed match stats, day-partitioned storage and rollups with measured cost, the owner's dashboard on /admin, consent (opt-in, GPC), Delete my data, ad segments, NDPA/POPIA/GDPR notes |
+| 17 | [Store, currency & the Forge](17-store-currency-and-forge.md) | the owner's 28 Oct decisions: 18+, one premium currency (ledger, refunds, spend limits), which guns get paid skins, the visual-advantage review checklist with cited cases, the Forge (look spec, validation, review queue, SDK/CLI + MCP server for AI-made looks, paid loadout slots), the battleground playlist, red lines, open questions, the K-47 pilot rollout |
 | 99 | [Sources](99-sources.md) | research links by topic |
 
 ---

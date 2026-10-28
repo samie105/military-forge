@@ -1,6 +1,7 @@
 import { Game, MatchEndReason, MatchPhase, Match, ticks, type MatchResults } from '@military-forge/sim';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { AGE_KEY } from './age';
 import { ApiError } from './api';
 import { alertFromApiError, alertFromConnection } from './alerts';
 import { App, ControllerContext, MapEventBanner, RouteFrame, TipsCard, WarmupBar, tipsRows } from './App';
@@ -606,7 +607,8 @@ describe('watching a room (v20 spectators)', () => {
     vi.stubGlobal('window', Object.assign(new EventTarget(), { setTimeout, clearTimeout }));
     vi.stubGlobal('history', { pushState: () => {}, replaceState: () => {}, state: null });
     vi.stubGlobal('location', { origin: 'https://abc.example', host: 'abc.example', protocol: 'https:', pathname: '/', search: '' });
-    vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => {}, removeItem: () => {} });
+    // this device answered the 18+ step (shell/age.ts): online rooms open
+    vi.stubGlobal('localStorage', { getItem: (k: string) => (k === AGE_KEY ? JSON.stringify({ adult: true, birthYear: 1995, at: 0 }) : null), setItem: () => {}, removeItem: () => {} });
   });
   afterAll(() => vi.unstubAllGlobals());
 

@@ -28,7 +28,8 @@ function client(api: TestApi) {
   const post = (path: string, body: unknown, headers: Record<string, string> = {}) => api.app.request(path, json(body, { 'x-forwarded-for': api.ip(), ...headers }));
   return {
     post,
-    save: (s: { accessToken: string }, email: string, password = PW) => post('/auth/save', { email, password }, bearer(s.accessToken)),
+    // an adult's save (the 18+ rule: test/safeguards.test.ts)
+    save: (s: { accessToken: string }, email: string, password = PW) => post('/auth/save', { email, password, birthYear: 1995, adult: true }, bearer(s.accessToken)),
     login: (email: string, password = PW, headers: Record<string, string> = {}) => post('/auth/login', { email, password }, headers),
     refresh: (token: string) => post('/auth/refresh', { refreshToken: token }),
     me: (token: string) => api.app.request('/me', { headers: bearer(token) }),

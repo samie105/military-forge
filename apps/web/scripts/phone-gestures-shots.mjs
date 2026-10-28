@@ -288,6 +288,7 @@ try {
     localStorage.setItem('mf-creator-seen', '1');
     const now = Date.now();
     localStorage.setItem('mf.facts.v1', JSON.stringify({ v: 1, firstSeen: now, lastSession: now, sessions: 2, experience: 'veteran', tours: { 'first-flight': { done: [], finished: true, skipped: false }, 'home-stops': { done: [], finished: true, skipped: false } } }));
+    localStorage.setItem('mf.age.v1', JSON.stringify({ adult: true, birthYear: 1990, at: Date.now() })); // the 18+ step, answered
   });
   await page.reload({ waitUntil: 'load' });
   await page.waitForSelector('input[aria-label="Your name"]', { timeout: 60_000 });

@@ -44,6 +44,7 @@ await page.evaluateOnNewDocument(() => {
   try {
     const now = Date.now();
     localStorage.setItem('mf-creator-seen', '1');
+    localStorage.setItem('mf.age.v1', JSON.stringify({ adult: true, birthYear: 1990, at: now })); // the 18+ step, answered
     localStorage.setItem(
       'mf.facts.v1',
       JSON.stringify({ v: 1, firstSeen: now, lastSession: now, sessions: 2, experience: 'veteran', tours: { 'first-flight': { done: [], finished: true, skipped: false }, 'home-stops': { done: [], finished: true, skipped: false } } }),

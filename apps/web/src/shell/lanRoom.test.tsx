@@ -1,6 +1,7 @@
 /** Local rooms (same Wi-Fi, lan/) in the shell: the flows, the lobby's note, the QR panels. */
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { AGE_KEY } from './age';
 import { ApiError, type Api } from './api';
 import { ControllerContext } from './App';
 import { ShellController, type GameHost } from './controller';
@@ -53,7 +54,8 @@ describe('local rooms in the shell', () => {
     vi.stubGlobal('window', win);
     vi.stubGlobal('history', { pushState: () => {}, replaceState: () => {}, state: null });
     vi.stubGlobal('location', { origin: 'https://abc.example', host: 'abc.example', protocol: 'https:', pathname: '/', search: '' });
-    vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => {}, removeItem: () => {} });
+    // this device answered the 18+ step (shell/age.ts): online rooms open
+    vi.stubGlobal('localStorage', { getItem: (k: string) => (k === AGE_KEY ? JSON.stringify({ adult: true, birthYear: 1995, at: 0 }) : null), setItem: () => {}, removeItem: () => {} });
   });
   afterAll(() => vi.unstubAllGlobals());
 

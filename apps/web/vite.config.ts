@@ -40,7 +40,7 @@ const proxy: Record<string, ProxyOptions> = {
  * per request, so the build keeps it; in dev the URLs stay relative.
  */
 /**
- * `%PRIVACY_CONTACT%` (privacy.html): where privacy requests go. PRIVACY_CONTACT at build time (an
+ * `%PRIVACY_CONTACT%` (privacy.html, terms.html, official.html): where privacy requests and reports go. PRIVACY_CONTACT at build time (an
  * email address, docs/16 §8); until the owner sets one, the in-game report, which reaches the owner.
  */
 const PRIVACY_CONTACT = process.env.PRIVACY_CONTACT?.trim();
@@ -98,7 +98,8 @@ export default defineConfig({
     // the owner's admin page (admin.html: /admin on pnpm playtest) and the net trial's ping probe
     // (probe.html: /probe on the trial boxes, docs/net-trial.md), the controller check (gamepad.html: every axis and button, live)
     // and the sound board (sounds.html: every sound with a play button, docs/audio.md), and the privacy
-    // note (privacy.html: what play stats keep and why, docs/16).
-    rolldownOptions: { input: { main: 'index.html', locker: 'locker.html', armory: 'armory.html', admin: 'admin.html', probe: 'probe.html', gamepad: 'gamepad.html', sounds: 'sounds.html', privacy: 'privacy.html' } },
+    // note (privacy.html: what play stats keep and why, docs/16), the Terms (terms.html, a draft for
+    // the owner's lawyer) and the official links against fakes (official.html).
+    rolldownOptions: { input: { main: 'index.html', locker: 'locker.html', armory: 'armory.html', admin: 'admin.html', probe: 'probe.html', gamepad: 'gamepad.html', sounds: 'sounds.html', privacy: 'privacy.html', terms: 'terms.html', official: 'official.html' } },
   },
 });

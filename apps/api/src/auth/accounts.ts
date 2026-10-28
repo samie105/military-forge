@@ -107,6 +107,11 @@ export class AccountService {
     });
   }
 
+  /** The player said they are 18 or older (shared/age.ts), with their birth year: kept on the account. */
+  async confirmAdult(userId: string, birthYear: number): Promise<void> {
+    await this.db.update(users).set({ adultConfirmedAt: new Date(this.now()), birthYear }).where(eq(users.id, userId));
+  }
+
   async setPassword(userId: string, passwordHash: string): Promise<void> {
     await this.db.update(passwordCredentials).set({ passwordHash, updatedAt: new Date(this.now()) }).where(eq(passwordCredentials.userId, userId));
   }

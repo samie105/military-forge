@@ -66,6 +66,7 @@
 **Goal:** all **L** items. The game is ready for strangers at scale.
 
 - Drop Zone BR (solo), CTF, 7 maps, launch weapons, characters + Locker, store + battle pass S1 (cosmetics only).
+- **Store and currency, K-47 pilot first** (17 §9, owner 28 Oct 2026): the ledger, bundles with money prices, spending limits and the 18+ store gate, then **one paid K-47 skin line** (Wrap, Skin, Forged) with the visual-advantage review (17 §3.4) automated for weapons. The other five skin-line guns, character looks, battle pass S1 (with its free track) and the Founder's Pack follow once the pilot's gate holds (ledger reconciles for 4 weeks, no V-check failures in the wild, refunds < 5%, no owner/non-owner K/D gap).
 - Payments (Xsolla + regional methods), portal builds (CrazyGames first), compliance pack, 5 languages.
 - Anti-cheat detection pipeline + admin review, reports, sanctions.
 - Regions + SIN + IAD. Load test 5k bots. Status page.
@@ -87,9 +88,9 @@ Billboard ads at launch (14 §8.1): hand-selling continues with a published nair
 
 | Season | Headline | Also |
 |---|---|---|
-| S1 (launch) | Drop Zone solo, ranked DM | Founder's Pack |
-| S2 | **Touch controls + mobile web** (the core audience!) + HUD editor | duos/squads with knock/revive |
-| S3 | Voice chat, clans | Gun Game, VIP |
+| S1 (launch) | Drop Zone solo, ranked DM | Founder's Pack; skin lines on six guns (17 §3.2) |
+| S2 | **Touch controls + mobile web** (the core audience!) + HUD editor | duos/squads with knock/revive; **Forge v1** (K-47 library, SDK/CLI + MCP server, 1 free slot + slot sales, 17 §9) |
+| S3 | Voice chat, clans | Gun Game, VIP; Forge uploads through review, then share codes and character looks; the battleground playlist if the owner wants it (17 §5) |
 | S4 | Public map editor + community maps | WebTransport (UDP) |
 | S5 | Capacitor apps (Play Store first) | Survival co-op, Plant the Bomb |
 
@@ -115,6 +116,9 @@ Billboard ads in the seasons (14 §8.1): mobile-web ads arrive with S2 touch con
 | 8 | Launch languages | EN, HI, PT-BR, ES-LATAM, ID; then Nigerian languages + Pidgin |
 | 9 | Company entity/jurisdiction for payments (affects Paystack/Flutterwave, EU rep) | consult an accountant before Phase 3; a Nigerian entity + bank account is also the entry gate for the billboard ads pilot (14 §5.4) |
 | 10 | Billboard ads: is the owner's "500 per screen" ₦500, ₦500k or $500? Per week or per month? Per frame or per whole screen? | the index rate card (14 §6.3): ₦500 is rejected; read as ₦500k or $500 per whole screen per month, it matches the card at ~1.3k / ~1.8k average web CCU (14 §6.2). Decide before the pilot's first sales call |
+| 11 | The premium currency's name: Brass, Ingots or Tags (17 §2.1) | Brass, after a trademark screen with the game name |
+| 12 | Store economics: naira tier, battle pass payback, tier skips, spend cap, premium Forge parts, Armoury creator rewards, the daily spin (17 §8 Q2–Q12) | the 17 §8 defaults; decide before the K-47 pilot opens |
+| 13 | Build the battleground playlist (17 §5)? | not before ≥ 2,000 saved Forge looks or 10% of weekly players using one |
 
 ---
 
@@ -133,7 +137,10 @@ Billboard ads in the seasons (14 §8.1): mobile-web ads arrive with S2 touch con
 | Portal rule changes / rejection | M | M | own site first; SDK adapter layer; meet the requirements list |
 | Scope creep (500+ items!) | **H** | High | strict MVP/L/P tags; every new idea goes to P unless it blocks a gate |
 | Small-team burnout | M | High | seasons every 8–10 weeks, not 4; automate testing/deploys early |
-| Child safety / compliance gaps | M | High | safe defaults (quick chat only, voice off, contextual ads), compliance pack before monetisation |
+| Child safety / compliance gaps | M | High | the game is 18+ (owner, 28 Oct 2026) with a gate before the store; safe defaults (quick chat only, voice off, contextual ads), compliance pack before monetisation |
+| A paid look reads as pay-to-win (dark, glowing, camouflaged, quieter) | M | High | the 17 §3.4 review (automated + human), worst-case dye checks, owner/non-owner K/D parity telemetry, fix-for-everyone + refund rule (17 §2.5) |
+| Forge abuse: hateful, trademarked or sexual decals, rude names | H | M–High | uploads always human-reviewed, F-code rejects, pending looks shown to others without uploads, report-to-hide, upload bans (17 §4.4) |
+| Currency treated as money (gambling, payments or gaming-act rules) | L–M | High | no randomness for money, no cash-out, transfer or trading, an append-only ledger, refunds and spend limits, counsel review before the pilot (17 §2) |
 | A harmful billboard ad reaches players (the Lagos Life failure) | M | High | human review of every creative before exposure, coded-term lists per language, automatic suspension on reports, kill switch, post-mortems (14 §5.5) |
 | ARCON enforcement against in-game ads | M | M | ARCON certificate required for every Nigeria-targeted creative; counsel opinion before the pilot; flights end before approvals expire (14 §7.1) |
 

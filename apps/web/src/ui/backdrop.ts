@@ -11,10 +11,10 @@
  */
 
 /**
- * What's opaque in front of the backdrop: the title, the menus (not the see-through game screens), a
- * full-screen route, and while the app boots the loading screen or the landing.
+ * What's opaque in front of the backdrop: the title, the menus (not the see-through game screens), the
+ * 18+ step, a full-screen route, and while the app boots the loading screen or the landing.
  */
-export const COVERING = '#shell .mf-title, #shell .mf-fit > .screen--menu, .mf-route, #boot-splash, html.mf-boot-landing:not(.mf-app) #land-hero';
+export const COVERING = '#shell .mf-title, #shell .mf-fit > .screen--menu, #shell .age-gate, .mf-route, #boot-splash, html.mf-boot-landing:not(.mf-app) #land-hero';
 
 export const COVERED_DRAW_MS = 1000;
 /** A covered backdrop's first draw waits this long: the page's first picture (the landing's key art) paints first. */

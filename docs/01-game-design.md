@@ -33,7 +33,7 @@ We keep the first list and design against the second.
 |---|---|---|---|
 | 1 | **Feel first** | movement and gunfeel tuned for the classic genre feel; 60 Hz sim; prediction that never rubber-bands | realism, slow tactical play |
 | 2 | **Instant in, instant again** | a link opens straight into a room; ≤ 10 s to the first spawn on broadband; "Play again" keeps the group together | long lobbies, mandatory sign-up |
-| 3 | **Fair, always** | server-authoritative everything; cosmetics-only monetisation; same hitbox for everyone | pay-to-win, perks for money |
+| 3 | **Fair, always** | server-authoritative everything; cosmetics-only monetisation; same hitbox for everyone; looks that read the same (17 §3.4) | pay-to-win, perks for money, paid looks that hide you |
 | 4 | **Friends make it** | groups, room codes, custom rules, a room browser, clan tags | solo-only design |
 | 5 | **Readable chaos** | 2.5D side-view; strong silhouettes; team outlines; colour + shape coding | realistic camo, screen-filling VFX |
 
@@ -186,7 +186,7 @@ Elements:
 
 ## 9. Progression (overview, details in 13-master-checklist §R)
 
-- **Account level** from XP (match completion, kills, wins, missions). There are 100 levels, and each level grants a cosmetic or currency drop.
+- **Account level** from XP (match completion, kills, wins, missions). There are 100 levels, and each level grants a cosmetic, with a small currency drop every 5 levels (17 §2.3).
 - **Ranks** are a separate competitive ladder, with seasonal soft resets.
 - **Missions:** 3 dailies + weekly challenges (never require custom rooms).
 - **Battle pass:** 8–10 week seasons, free + premium tracks, finishable in ~45 min/day, retroactive unlocks on late purchase.
@@ -197,13 +197,19 @@ Elements:
 
 ## 10. Monetisation (cosmetics only)
 
-- **Soft currency** (Coins) is earned by playing. **Hard currency** (Gems) is bought, and every Gems price is also shown in local real money.
-- **Store:** a rotating daily/featured shop, bundles, character packs, and the battle pass. **No paid random boxes** (Belgium bans them, Brazil bans them for under-18s from 2026, and Australia rates them M or higher).
-- **Rewarded ads** (opt-in only): a free daily spin, double XP for a match, a store reroll. Never mid-match, never in ranked queues.
+> The owner, 28 Oct 2026: the game is **18+**; it has **its own premium currency** (no cash-out, no trading for money); gun skins and looks are sold on some guns, **always with the same stats as the base gun**; players design custom gun looks (with their own AI if they like) and we sell **loadout space**: one custom look free, more slots bought. The full spec is [17](17-store-currency-and-forge.md).
+
+- **18+.** The game is for adults. The store, the currency and the Forge need an account that passed the 18+ gate (17 §2.6); guests can play. 18+ relaxes none of the rules below.
+- **One premium currency** (name to pick: Brass, Ingots or Tags, 17 §2.1). It's bought in bundles sized to item prices and earned in small fixed amounts (battle pass tracks, levels). It never leaves the game: no cash-out, no transfers, no trading. Every price is also shown in local money (naira, USD). This replaces the earlier Coins + Gems plan.
+- **What's sold:** gun skins on six guns (K-47, Hammer .44, Hawk .50, Widow, Breacher, Hornet; never on power weapons, the machete, the shield or grenades), character looks, named characters, the battle pass (with a **free track**), Forge slots, and the Founder's Pack. Every look passes the visual-advantage review (17 §3.4): no darker, glowier, quieter or smaller-than-base looks.
+- **The Forge:** custom gun looks from our part library, dyes, decals and FX, as a JSON spec validated on the server; never player code (17 §4).
+- **Store:** a rotating daily/featured shop, bundles, character packs, and the battle pass. **No paid random items of any kind** (Belgium bans them, Brazil bans them for under-18s from 17 Mar 2026, and Australia rates them M or higher).
+- **Spending limits** on by default, refunds, and an append-only ledger (17 §2.5–2.6).
+- **Rewarded ads** (opt-in only): a free daily spin, double XP for a match, a store reroll. Never mid-match, never in ranked queues. They never grant currency; whether the spin becomes a fixed daily reward is open (17 Q9).
 - **Portal builds** (CrazyGames/Poki) use their SDKs for ads, user identity and purchases where supported.
 - **In-world billboard ads** (city maps only; see [14](14-in-world-advertising.md)): businesses buy frames on rotating mid-depth billboard screens, the way Lagos Life sells them. They're direct-sold, and a human reviews every creative before anyone sees it. Targeting is contextual only (country, map, mode, week), never personal. Readability rules keep ads off the gameplay plane and off every gameplay signal, cap them at ≤ 2 surfaces in view, and grade them into the map's background palette so players stay the highest-contrast thing on screen. No purchase changes what billboards show. Portal builds show house art. It starts as a hand-sold Nigeria pilot at soft launch.
 - **Regional pricing** + local payment methods (UPI in India; Paystack/Flutterwave in Nigeria; Xsolla as the global merchant of record).
-- Supporter pack ("Founder's Pack", a one-time ~$2.99): a cosmetic set + a profile badge. Players in this genre love a small one-time unlock; ours never gates gameplay.
+- Supporter pack ("Founder's Pack", a one-time ~$2.99, launch season only): a cosmetic set, a profile badge and an extra Forge slot. Players in this genre love a small one-time unlock; ours never gates gameplay.
 
 ---
 

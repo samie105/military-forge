@@ -270,8 +270,9 @@ export class Api {
    * Adds an email and password to this account ("Save your account"). 'saved' at once, or
    * 'check_email' when the server confirms the email by a link first.
    */
-  async saveAccount(email: string, password: string): Promise<'saved' | 'check_email'> {
-    const r = await this.request<{ status: 'saved' | 'check_email'; user?: Me }>('POST', '/auth/save', { email, password }, true);
+  /** `birthYear`: the 18+ answer the API checks (shell/age.ts); `turnstileToken`: the bot check's, when it's on */
+  async saveAccount(email: string, password: string, birthYear: number, turnstileToken?: string): Promise<'saved' | 'check_email'> {
+    const r = await this.request<{ status: 'saved' | 'check_email'; user?: Me }>('POST', '/auth/save', { email, password, birthYear, adult: true, ...(turnstileToken ? { turnstileToken } : {}) }, true);
     if (r.user) this.me = r.user;
     return r.status;
   }
@@ -340,8 +341,8 @@ export class Api {
   }
 
   /** "Forgot password?": the server emails a link if the email has an account (it answers the same either way). */
-  async forgotPassword(email: string): Promise<void> {
-    await this.request<unknown>('POST', '/auth/forgot', { email });
+  async forgotPassword(email: string, turnstileToken?: string): Promise<void> {
+    await this.request<unknown>('POST', '/auth/forgot', { email, ...(turnstileToken ? { turnstileToken } : {}) });
   }
 
   /** The emailed reset link: a new password, and every session of the account ends. */

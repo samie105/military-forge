@@ -9,6 +9,7 @@ import { MatchPhase } from '@military-forge/sim';
 import type { OnlineMode } from '../onlineMode';
 import { diag } from '../diag/log';
 import type { LocalMode } from '../localMode';
+import { adultOnDevice, ageOnDevice, answerAge } from './age';
 import { alertFromApiError } from './alerts';
 import { Api, ApiError, NICKNAME_REASONS, type Me, type NicknameCheck, type RoomJoin } from './api';
 import { sanitizePadSettings } from '../gamepad/settings';
@@ -239,6 +240,9 @@ export function whatsAppLink(code: string, origin = location.origin): string {
   return `https://wa.me/?text=${encodeURIComponent(`${inviteText()} ${roomLink(code, origin)}`)}`;
 }
 
+/** Where the 18+ step (age.ts) comes first: a room with other players, online or local. */
+const onlineIntent = (i: Intent): boolean => i.to === 'create' || i.to === 'join' || i.to === 'watch' || i.to === 'local';
+
 /** Where a room's game server is: the API's gsUrl, or this site's own /ws/<code>. */
 export function roomSocketUrl(room: Pick<RoomJoin, 'code' | 'gsUrl'>, loc?: Pick<Location, 'protocol' | 'host'>): string {
   if (room.gsUrl) return room.gsUrl;
@@ -327,6 +331,8 @@ export class ShellController {
       return;
     }
     if (!me) {
+      // a room link on a first visit: the 18+ step before the name (age.ts)
+      if (onlineIntent(intent) && this.ageGate(intent)) return;
       this.set({ screen: { name: 'name', then: intent } });
       return;
     }
@@ -334,9 +340,38 @@ export class ShellController {
     this.go(intent);
   }
 
-  /** Navigation. Anything that needs the API waits for a name first. */
+  /**
+   * The 18+ step (age.ts) before an online room: true when it's in the way (its screen is up, and
+   * carries on to `then` once answered).
+   */
+  private ageGate(then: Intent): boolean {
+    const age = ageOnDevice();
+    if (age?.adult) return false;
+    this.closeOverlay();
+    this.host.stop();
+    this.set({ screen: { name: 'age', then, ...(age ? { refused: true } : {}) }, match: null, lobby: null, connection: null });
+    return true;
+  }
+
+  /** The 18+ step's answer: an adult carries on where they were going; an under-18 sees the refusal. */
+  answerAge(birthYear: number): 'ok' | 'refused' | 'invalid' {
+    const record = answerAge(birthYear);
+    if (record === 'invalid') return 'invalid';
+    const screen = this.store.getState().screen;
+    const then = screen.name === 'age' ? screen.then : ({ to: 'home' } as const);
+    if (!record.adult) {
+      diag('age', 'under 18: no online play');
+      this.set({ screen: { name: 'age', then, refused: true } });
+      return 'refused';
+    }
+    this.go(then);
+    return 'ok';
+  }
+
+  /** Navigation. Anything that needs the API waits for a name first; an online room, for the 18+ step. */
   go(intent: Intent): void {
     this.closeOverlay();
+    if (onlineIntent(intent) && this.ageGate(intent)) return;
     switch (intent.to) {
       case 'home':
         this.host.stop();
@@ -392,6 +427,8 @@ export class ShellController {
   /** Join a local room by its code (the relay), or by the host's QR code (`answered`, no internet). */
   joinLocal(code: string, answered?: import('../lan/peer').Peer): void {
     if (!this.host.startLocalJoin || !this.profile) return;
+    // by QR codes the answer can't wait for the step: after it, Home (scan again)
+    if (this.ageGate(code ? { to: 'join', code } : { to: 'home' })) return;
     diag('room', `join local room ${code || 'by QR codes'}`);
     this.closeOverlay();
     this.host.stop();
@@ -437,7 +474,7 @@ export class ShellController {
    */
   async joinByCode(code: string, watch = false): Promise<JoinResult> {
     const intent: Intent = watch ? { to: 'watch', code } : { to: 'join', code };
-    if (!this.profile || this.profile.offline) {
+    if (!this.profile || this.profile.offline || !adultOnDevice()) {
       this.go(intent);
       return 'error';
     }
@@ -687,9 +724,12 @@ export class ShellController {
     this.openSettings('account');
   }
 
-  /** "Save your account": this account gets an email and password; 'check_email' when a link confirms it first. */
-  async saveAccount(email: string, password: string): Promise<'saved' | 'check_email'> {
-    const result = await this.api.saveAccount(email, password);
+  /**
+   * "Save your account": this account gets an email and password; 'check_email' when a link
+   * confirms it first. `birthYear`: the 18+ answer (the device's, or the form's: age.ts).
+   */
+  async saveAccount(email: string, password: string, birthYear: number, turnstileToken?: string): Promise<'saved' | 'check_email'> {
+    const result = await this.api.saveAccount(email, password, birthYear, turnstileToken);
     if (this.api.me) this.set({ profile: profileOf(this.api.me) });
     return result;
   }

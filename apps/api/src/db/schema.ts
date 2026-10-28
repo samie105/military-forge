@@ -29,6 +29,13 @@ export const users = pgTable(
     createdAt: timestamp('created_at', tz).notNull(),
     /** bumped on every token refresh; drives the 30-day cleanup of idle guests (docs/07 §3) */
     lastSeenAt: timestamp('last_seen_at', tz).notNull(),
+    /**
+     * The game is 18+ (shared/age.ts): when the player said they are 18 or older, saving the
+     * account (auth/accountRoutes.ts). null = not asked yet (a guest: the web asks on the device).
+     */
+    adultConfirmedAt: timestamp('adult_confirmed_at', tz),
+    /** the birth year they gave with it: never a full date of birth (data minimisation) */
+    birthYear: smallint('birth_year'),
   },
   (t) => [
     check('users_status_check', sql`${t.status} in ('active', 'banned', 'deleted')`),

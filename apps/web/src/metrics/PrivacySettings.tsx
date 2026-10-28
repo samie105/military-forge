@@ -1,9 +1,10 @@
 /**
  * Settings → Privacy (docs/16-player-metrics.md §6): the play-stats switch, what is always kept and
- * why, how long, the privacy note, and Delete my data. The desktop's Settings and the phone's share
+ * why, how long, the privacy note, the Terms and the official links, and Delete my data. The desktop's Settings and the phone's share
  * it (`phone` picks the phone's row style).
  */
 import { useState, type ReactNode } from 'react';
+import { OFFICIAL_URL, TERMS_URL } from '../shell/pages';
 import { Switch } from '../ui/Screen';
 import { analyticsOn } from './consent';
 import { PRIVACY_URL, useConsent } from './ConsentCard';
@@ -80,6 +81,16 @@ export function PrivacySettings({ phone = false }: { phone?: boolean }) {
       >
         <a className="btn btn--ghost btn--sm" href={PRIVACY_URL} target="_blank" rel="noopener">
           Read it
+        </a>
+      </Row>
+      <Row phone={phone} label="Terms" desc="The rules for playing: 18 and over, what the in-game currency is and isn't, account safety, and what gets an account banned.">
+        <a className="btn btn--ghost btn--sm" href={TERMS_URL} target="_blank" rel="noopener">
+          Read them
+        </a>
+      </Row>
+      <Row phone={phone} label="Official links" desc="Our only website and accounts. There is no app-store app yet, and we never sell currency on other sites or by DM.">
+        <a className="btn btn--ghost btn--sm" href={OFFICIAL_URL} target="_blank" rel="noopener">
+          See them
         </a>
       </Row>
       <Row phone={phone} label="Delete my data" desc="Deletes your play stats from our servers and this device's event log, and turns sharing off. Match stats already counted stay only as totals.">

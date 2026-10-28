@@ -74,6 +74,12 @@ export interface Config {
    * null = off (EMAIL_PROVIDER unset): "Forgot password?" is hidden and a saved email links at once.
    */
   email: { provider: 'resend'; apiUrl: string; apiKey: string; from: string } | { provider: 'log' } | null;
+  /**
+   * Cloudflare Turnstile's secret (TURNSTILE_SECRET): the bot check on saving an account and
+   * "Forgot password?" (auth/botCheck.ts). null = off (dev, tests). The web build's
+   * VITE_TURNSTILE_SITEKEY shows the widget; set both together.
+   */
+  turnstileSecret: string | null;
   /** play stats (docs/16-player-metrics.md) */
   analytics: AnalyticsConfig;
 }
@@ -135,6 +141,7 @@ const EnvSchema = z.object({
   EMAIL_API_URL: z.url({ protocol: /^https?$/, error: 'must be an http(s):// URL' }).optional(),
   EMAIL_API_KEY: z.string().min(8).optional(),
   EMAIL_FROM: z.string().min(3).max(200).optional(),
+  TURNSTILE_SECRET: z.string().min(8).max(200).optional(),
   ANALYTICS_RAW_DAYS: z.coerce.number().int().min(7).max(400).default(90),
   ANALYTICS_CONSENT: z.enum(['opt-in', 'opt-out']).default('opt-in'),
   ANALYTICS_AD_SEGMENTS: bool.default(false),
@@ -206,6 +213,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
         : e.EMAIL_PROVIDER === 'log'
           ? { provider: 'log' }
           : null,
+    turnstileSecret: e.TURNSTILE_SECRET ?? null,
     analytics: { rawDays: e.ANALYTICS_RAW_DAYS, consentDefault: e.ANALYTICS_CONSENT, adSegments: e.ANALYTICS_AD_SEGMENTS, geoipCsv: e.ANALYTICS_GEOIP_CSV ?? null },
   };
 }

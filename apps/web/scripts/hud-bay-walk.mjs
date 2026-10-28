@@ -59,6 +59,7 @@ async function phone(profile) {
     localStorage.setItem('tips.seen.v1', '1');
     localStorage.setItem('mf-creator-seen', '1');
     localStorage.setItem('mf.facts.v1', facts);
+    localStorage.setItem('mf.age.v1', JSON.stringify({ adult: true, birthYear: 1990, at: Date.now() })); // the 18+ step, answered
     localStorage.setItem('mf.touch.drill.v1', 'done');
     localStorage.setItem('mf.install.v1', JSON.stringify({ dismissedAt: Date.now(), stats: {} }));
     localStorage.setItem('profile.name.v1', 'Ade');

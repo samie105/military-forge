@@ -1,9 +1,9 @@
 # 13 — Master Checklist
 
 > Everything we need to build, decide or check, so nothing gets missed. Tags: **MVP** = first playable / closed alpha · **L** = public launch · **P** = post-launch.
-> Each item links back to the spec that details it (01–14). Copy sections into your issue tracker as epics.
+> Each item links back to the spec that details it (01–17). Copy sections into your issue tracker as epics.
 
-**Totals: 739 items** — MVP 257 · Launch 362 · Post-launch 120
+**Totals: 778 items** — MVP 257 · Launch 383 · Post-launch 138
 
 | Section | Items |
 |---|---|
@@ -32,6 +32,7 @@
 | W. QA & testing (06 §9) | 20 |
 | X. Launch, distribution, community & marketing | 26 |
 | Y. In-world advertising (14) | 36 |
+| Z. Store, currency & the Forge (17) | 39 |
 
 ## A. Foundations & repository
 
@@ -609,17 +610,17 @@
 - [ ] `521` **L** First win of the day bonus
 - [ ] `522` **L** Daily missions (3) + weekly challenges; reroll; stockpile up to 3
 - [ ] `523` **L** Achievements with tiers
-- [ ] `524` **L** Soft currency (Coins) earn rates + sinks
-- [ ] `525` **L** Hard currency (Gems) packs with local prices; buy-what-you-need amounts
+- [ ] `524` **L** Premium currency earn amounts: fixed and published (battle pass tracks, every 5 levels); no soft currency (17 §2.1, §2.3)
+- [ ] `525` **L** Premium currency bundles with local prices, sized to item prices (buy-what-you-need, 17 §2.3)
 - [ ] `526` **L** Rotating store (daily, featured, bundles)
 - [ ] `527` **L** Battle pass: free + premium, 8–10 weeks, retroactive unlocks, catch-up XP
-- [ ] `528` **L** Founder's Pack (cosmetic supporter pack)
+- [ ] `528` **L** Founder's Pack (cosmetic supporter pack + badge + 1 Forge slot; launch season only, never resold)
 - [ ] `529` **L** No paid random boxes (legal) — enforce in content lint
 - [ ] `530` **L** Payment providers: Xsolla (global MoR) + Stripe; evaluate Razorpay (UPI) and Paystack/Flutterwave (NG) approvals for virtual goods
 - [ ] `531` **L** Regional price tiers (not FX conversions)
 - [ ] `532` **L** Purchase confirmation with real price, seller identity, consumer rights
 - [ ] `533` **L** EU 14-day withdrawal/refund policy flow
-- [ ] `534` **L** Spend limits and parental controls for minors
+- [ ] `534` **L** Spending limits on by default: monthly cap, 72 h to raise it, purchase cool-off, spend history, self-exclusion (17 §2.6)
 - [ ] `535` **L** Rewarded ads: opt-in, server-side grant with nonce, daily caps
 - [ ] `536` **L** Portal SDK adapter (CrazyGames, Poki, GameDistribution)
 - [ ] `537` **L** gameplayStart/Stop, commercialBreak only between matches, mute during ads
@@ -627,7 +628,7 @@
 - [ ] `539` **L** Seasonal ranked rewards
 - [ ] `540` **L** Economy dashboards (sources/sinks, inflation, conversion)
 - [ ] `541` **P** Weapon mastery skins
-- [ ] `542` **P** Gifting
+- [ ] `542` **P** Gifting (an item paid at the time, to a friend of ≥ 30 days; never a balance transfer, 17 §2.4)
 - [ ] `543` **P** Creator codes (support-a-creator)
 - [ ] `544` **P** Clan cosmetics
 - [ ] `545` **P** Limited-time event shops and event currencies
@@ -734,7 +735,7 @@
 - [ ] `634` **L** Lawyer IP review of marketing copy ("inspired by")
 - [ ] `635` **L** Terms of Service + Privacy Policy (versioned, localised, re-accept on change)
 - [ ] `636` **L** Cookie/consent banner with equal "Reject all"; TCF v2.2 if programmatic ads
-- [ ] `637` **L** Neutral age gate; under-13/16/18 branches
+- [ ] `637` **L** 18+ age gate (owner, 28 Oct 2026); the store, currency and Forge need a passed gate (17 §2.6)
 - [ ] `638` **L** COPPA compliance (separate parental consent for 3rd-party sharing; retention schedule; security programme)
 - [ ] `639` **L** India DPDP readiness (parental consent < 18; no tracking/targeted ads at children; 72 h breach notice; log retention)
 - [ ] `640` **L** Nigeria NDPA (parental consent, child-friendly notices, registration if designated)
@@ -846,3 +847,45 @@
 - [ ] `737` **P** Motion creatives (IAB 2 s rule) and the Drop Sponsor sky airship
 - [ ] `738` **P** Highrise ad inventory; mobile-web ads (the touch HUD's rects feed the mask)
 - [ ] `739` **P** Independent measurement-methodology review before agency and brand sales at scale
+
+## Z. Store, currency & the Forge (17)
+
+- [ ] `740` **L** Append-only double-entry ledger, `paid`/`earned` pools, unique on (kind, ref) so webhook replays can't double-grant (17 §2.5)
+- [ ] `741` **L** Nightly reconciliation against provider settlements; a mismatch pages the on-call
+- [ ] `742` **L** Server-only spending in one transaction with the grant; earned-then-paid spend order; 20,000 wallet cap
+- [ ] `743` **L** Every price shows currency + local money (≈ cheapest covering bundle); buy refuses a stale price (17 §2.2, §6)
+- [ ] `744` **L** Refunds: unspent paid currency within 14 days; item Return within 48 h if unused (3 a year); chargebacks lock the items, not the account (17 §2.6)
+- [ ] `745` **L** Make-goods: auto-grant undelivered purchases ≤ 15 min; 30-day refund window when a sold look is changed after failing review (17 §2.5)
+- [ ] `746` **L** Store gate: guests and accounts without a passed 18+ gate can see but not buy
+- [ ] `747` **L** Settings → Spending: monthly cap, raise delay, cool-off, history CSV, self-exclusion (30/90/365 days)
+- [ ] `748` **L** Pick the currency name (Brass, Ingots or Tags) + trademark screen (17 Q1)
+- [ ] `749` **L** Naira and other regional bundle tiers from local price research (17 Q3)
+- [ ] `750` **L** **K-47 pilot skin line**: one Wrap, one Skin, one Forged ("fictionistic and magical", 17 §9)
+- [ ] `751` **L** Weapon skin items (`slot: "weapon_skin"`, base `weaponId`, `tier`); asset-check matches the base gun's `muzzle`/`offhand`/`eject` within 1 cm (17 §3.3)
+- [ ] `752` **L** Automated visual-advantage checks for gun skins: V1, V2, V4, V5, V7, V9, V12, V14 (17 §3.4)
+- [ ] `753` **L** Worst-case dye readability lint (V8) and per-map camouflage lint (V10), for guns and characters
+- [ ] `754` **L** Sound parity check (V11): ±1 LU, same band and tail as the base
+- [ ] `755` **L** Human review checklist for every paid look (V6, V10, V11, V13) in `apps/admin`
+- [ ] `756` **L** Owner vs non-owner K/D and win-rate parity per skin and skill band (V15, 16 metrics); > 3% for two weeks reopens review
+- [ ] `757` **L** Skin lines on the Hammer .44, Hawk .50 (gold stays mastery-only), Widow, Breacher and Hornet (17 §3.2)
+- [ ] `758` **L** Battle pass economy: ~250 currency on the free track, ~700 on premium (17 §2.3, Q4)
+- [ ] `759` **L** Content lint: no currency from random or ad rewards; mastery, rank, event and Founder's items flagged never-sellable (17 §7)
+- [ ] `760` **L** Counsel review before the pilot: currency terms (a licence, no money value), gambling and India 2025 gaming-act screen, EU CPC currency principles
+- [ ] `761` **P** `ForgeLook` zod schema + generated JSON Schema in `packages/content` (17 §4.1)
+- [ ] `762` **P** K-47 Forge part library (~6 options per slot), every part passing asset-check against the base box (17 §4.2)
+- [ ] `763` **P** Forge screen in the Locker: parts, finish, dyes, library decals, FX, with a live budget meter
+- [ ] `764` **P** API validation + isolated render worker: worst-case renders over every map palette, PASS/FAIL per check (17 §4.3)
+- [ ] `765` **P** Forge slots: 1 free, buy 1 or 3, cap 30, refundable while empty (17 §4.6)
+- [ ] `766` **P** Forge looks on the wire: slot id with the look's wire ids, spec fetched by hash from the CDN, server checks ownership and state (17 §6)
+- [ ] `767` **P** `@military-forge/forge-sdk` on npm (schema, budget, the API's own validator)
+- [ ] `768` **P** `forge` CLI: `init`, `parts`, `validate`, `preview` (local turntable with lint overlays), `submit`
+- [ ] `769` **P** `@military-forge/forge-mcp` server: `list_bases`, `list_parts`, `get_budget`, `validate_look`, `render_preview`, `upload_decal`, `submit_look` (17 §4.5)
+- [ ] `770` **P** `forge:*`-scoped personal tokens: no wallet or account access, 90-day expiry, rate limits, revoke in Settings
+- [ ] `771` **P** Decal and texture uploads: re-encode, OCR, logo and hate-symbol hashes, classifiers, AI-generated flag, rights attestation
+- [ ] `772` **P** Forge review queue in `apps/admin`: F01–F12 reasons, ≤ 2 business days, language coverage (17 §4.4)
+- [ ] `773` **P** Pending looks drawn for others without their uploads; 3 reports in 30 min hide uploads; upload bans after repeat rejections
+- [ ] `774` **P** Forge part libraries for the other five skin-line guns
+- [ ] `775` **P** Share codes: copy a look into your own slot (17 §4.7)
+- [ ] `776` **P** Character looks in the Forge (17 Q11)
+- [ ] `777` **P** Battleground playlist: showcase FX budget, same readability rules, "Plain looks" setting (only if 17 Q6 says yes)
+- [ ] `778` **P** The Armoury: curated creator looks sold in the store, creator credit and reward per 17 Q8

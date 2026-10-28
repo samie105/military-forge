@@ -25,7 +25,7 @@ Mod APKs of mobile genre classics were the cheats players knew best: unlimited n
 | XP farming in custom rooms | AFK rooms with friends/bots | custom rooms give no ranked/missions credit and capped XP; AFK detection | ✅ |
 | Win trading / teaming in solos | collusion | heuristics (08-battle-royale §12) + reports | ⚠️ detect |
 | Multi-accounting / smurfing | new guest accounts | ranked gating (level 15 + 10 wins), fast MMR correction | ⚠️ mitigate |
-| Bot farms (rewarded ads, sign-ups) | scripted clients | Cloudflare Turnstile on risky endpoints; reward grants are server-side with a nonce + daily caps | ✅ |
+| Bot farms (rewarded ads, sign-ups) | scripted clients | Cloudflare Turnstile on risky endpoints (built: saving an account and "Forgot password?", §6); reward grants are server-side with a nonce + daily caps | ✅ |
 | Account takeover | credential stuffing, phishing | passkeys/OAuth preferred, breached-password check, new-device alerts, rate limits, session revoke-all | ✅ |
 | DDoS on game servers | UDP/TCP floods | provider DDoS protection + per-IP connection limits + allocation behind tickets (server IPs aren't discoverable without one) | ✅ (see 09-infra) |
 
@@ -110,7 +110,8 @@ Never ban on a single heuristic event, and never reveal which signal triggered (
 - [ ] Admin: SSO + 2FA, IP allow-list or Zero Trust (Cloudflare Access), every action audit-logged
 - [ ] Secrets in a manager (Doppler/1Password/SOPS); rotation runbook; no secrets in CI logs
 - [ ] Rate limits at the edge (Cloudflare) + in-app (Redis buckets)
-- [ ] Turnstile on: account linking, purchases with risk flags, rewarded-ad claims, report spam
+- [x] Turnstile on account creation (saving an account, `POST /auth/save`) and password reset (`POST /auth/forgot`): `apps/api/src/auth/botCheck.ts`, on only when the API has `TURNSTILE_SECRET`; the web shows the widget when its build has `VITE_TURNSTILE_SITEKEY` (set both together; `apps/api/.env.example`). It fails closed (503 when Cloudflare can't be reached). Sign-in isn't asked: its own backoff covers guessing (auth/throttle.ts)
+- [ ] Turnstile on: account linking (OAuth), purchases with risk flags, rewarded-ad claims, report spam
 - [ ] Webhook signature verification (Stripe/Paystack/Razorpay/Xsolla), idempotency by provider ref
 - [ ] Security headers test in CI (e.g. Mozilla Observatory grade A)
 - [ ] Incident response runbook: who's on call, how to put the game in maintenance mode, how to rotate keys, breach notification timelines (GDPR 72 h; India DPDP 72 h; NDPA 72 h)
@@ -121,8 +122,21 @@ Never ban on a single heuristic event, and never reveal which signal triggered (
 
 ## 7. Privacy & children (overlaps with the compliance list in 13-master-checklist §V)
 
-- Assume minors play. Defaults: quick-chat only, voice off, contextual (non-personalised) ads until age + consent are known.
-- Neutral age gate (date-of-birth picker with no default) on account linking and before enabling text chat.
+- **The game is 18+** (the owner, 28 Oct 2026). Minors may still try, so the defaults stay safe: quick-chat only, voice off, contextual (non-personalised) paid ads.
+- [x] Neutral 18+ step: the birth year (a picker with no default that lists young years too) and "I am 18 or older", before a device's first online room (create, join, watch, a local room; training isn't asked) and on saving an account. The client keeps the answer on the device (`apps/web/src/shell/age.ts`), an under-18 answer included, so the step can't simply be retried; the API refuses a save without it (`age_required`) or with a minor's year (403 `underage`) and keeps only `users.adult_confirmed_at` + `users.birth_year` (migration 0006), never a full date of birth (NDPA data minimisation). A guest's answer stays on the device: the server only sees it when the account is saved.
+- [ ] Ask the same before enabling text chat and on account linking (OAuth), when those ship.
+- [x] Terms (`apps/web/terms.html`, a draft for the owner's lawyer) and official links (`apps/web/official.html`), linked from Settings → Privacy, the save form, the 18+ step and the privacy note.
 - Data minimisation: no real names, no precise location (country from IP only), no contacts upload.
 - Data rights: export + delete from the account page; guest data auto-expires.
 - Fingerprinting and telemetry are disclosed; analytics consent where required (EU/UK).
+
+---
+
+## 8. Economy and impersonation safeguards (pre-launch, 28 Oct 2026)
+
+Lessons from a viral browser game in our market: a money exploit, accounts taken over because sign-up never checked the email, bot traffic, copy sites and fake APKs selling fake "top-ups", an unofficial crypto token, game cash sold for real money, and an 18+ rule that existed only on paper.
+
+- **The premium currency is closed-loop.** No cash-out, no player-to-player transfer, no trading for money (`terms.html` §3). Every grant goes through the append-only ledger (§2.6); we may reverse balances that bugs or fraud created.
+- **Never compensate an outage or bug by minting currency into every account; grant targeted, capped make-goods through the ledger.** A make-good goes only to the accounts the problem touched (from the logs or match records), is capped per account, carries a reason and an idempotency key, and can be reversed like any other ledger entry. A blanket grant inflates the economy, rewards farm accounts, and is exactly the money-printing bug an exploiter looks for.
+- **One official site, said loudly.** `official.html` lists the only site and accounts (the owner fills in the TODO(owner) rows), says there is no app-store app yet (every APK is fake), that we never sell on other sites, by DM or to a personal account, that there is no official token, and how to report a fake. It is in the sitemap so it outranks copy sites.
+- **Accounts:** an emailed link confirms a saved account's email when email is on (auth/accountRoutes.ts), Argon2id, sign-in backoff, sign out everywhere, and the bot check above.

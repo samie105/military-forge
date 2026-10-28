@@ -6,13 +6,20 @@
  * The rule for a device that already has an unsaved soldier (apps/api auth/accountRoutes.ts): one
  * with nothing to lose is replaced; one with progress is kept on this device for 30 days, and
  * signing out of the saved account switches back to it. Nothing is ever merged.
+ *
+ * Saving asks the 18+ question when this device hasn't answered it yet (shell/age.ts; the API
+ * checks it), says the Terms apply, and shows the bot check when the build has one (BotCheck.tsx).
  */
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useStore } from 'zustand';
 import { Icon } from '../../ui/Icon';
 import { blurAfter } from '../../ui/Screen';
-import type { AccountInfo, ParkedGuest } from '../api';
+import { PRIVACY_URL } from '../../metrics/ConsentCard';
+import { ageOnDevice, answerAge, birthYears } from '../age';
+import { ApiError, type AccountInfo, type ParkedGuest } from '../api';
 import { useCtl } from '../context';
+import { TERMS_URL } from '../pages';
+import { BotCheck, botCheckOn } from './BotCheck';
 import type { ShellStore } from '../store';
 import { accountErrorText, parkedUntil, passwordHint, passwordLooksOk, signInNotice, startMode, type AccountMode } from './model';
 import './account.css';
@@ -73,6 +80,29 @@ function PasswordField({ label, value, onChange, autoComplete, hint, id }: { lab
   );
 }
 
+/** The 18+ question inside the save form (this device hasn't answered it): the age step's, smaller. */
+function AgeFields({ id, year, onYear, adult, onAdult }: { id: (k: string) => string; year: string; onYear: (v: string) => void; adult: boolean; onAdult: (v: boolean) => void }) {
+  return (
+    <>
+      <div className="acct-field">
+        <label htmlFor={id('year')}>Year you were born</label>
+        <select id={id('year')} value={year} onChange={(e) => onYear(e.target.value)} required>
+          <option value="">Choose…</option>
+          {birthYears().map((y) => (
+            <option key={y} value={y}>
+              {y}
+            </option>
+          ))}
+        </select>
+      </div>
+      <label className="acct-check">
+        <input type="checkbox" checked={adult} onChange={(e) => onAdult(e.target.checked)} />
+        <span>I am 18 or older</span>
+      </label>
+    </>
+  );
+}
+
 function EmailField({ value, onChange, id }: { value: string; onChange: (v: string) => void; id: string }) {
   return (
     <div className="acct-field">
@@ -102,6 +132,18 @@ export function AccountPanel({ store, variant, preset }: { store: ShellStore; va
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [next, setNext] = useState('');
+  // the 18+ answer this device gave (age.ts), or the save form's own
+  const [age, setAge] = useState(() => ageOnDevice());
+  const [year, setYear] = useState('');
+  const [adult, setAdult] = useState(false);
+  // the bot check's token (BotCheck.tsx), and its round: each token is good for one try
+  const [bot, setBot] = useState<string | null>(null);
+  const [botRound, setBotRound] = useState(0);
+  const needBot = botCheckOn && !bot;
+  const spendBot = () => {
+    setBot(null);
+    setBotRound((r) => r + 1);
+  };
 
   // what the server says about this account (and whether it can send email)
   const signedIn = profile !== null && !profile.offline;
@@ -179,21 +221,56 @@ export function AccountPanel({ store, variant, preset }: { store: ShellStore; va
 
   let body: ReactNode;
   switch (mode) {
-    case 'save':
+    case 'save': {
+      if (age && !age.adult) {
+        body = (
+          <>
+            <Row variant={variant} label="Save your account" desc="Military Forge is for players 18 and over, so accounts can’t be saved on this device." block />
+            <div className="acct-actions">{cancel}</div>
+          </>
+        );
+        break;
+      }
+      const ageReady = age?.adult === true || (year !== '' && adult);
       body = (
         <form className="acct-form" onSubmit={run(async () => {
-          const r = await ctl.saveAccount(email, password);
-          if (r === 'check_email') setSentTo(email.trim());
-          else setDone('Saved. Sign in with this email on any phone or computer.');
+          let birthYear = age?.adult ? age.birthYear : null;
+          if (birthYear === null) {
+            const a = answerAge(Number(year));
+            if (a === 'invalid') throw new ApiError(400, 'invalid_birth_year', 'bad year');
+            setAge(a);
+            if (!a.adult) throw new ApiError(403, 'underage', 'under 18');
+            birthYear = a.birthYear;
+          }
+          try {
+            const r = await ctl.saveAccount(email, password, birthYear, bot ?? undefined);
+            if (r === 'check_email') setSentTo(email.trim());
+            else setDone('Saved. Sign in with this email on any phone or computer.');
+          } finally {
+            spendBot();
+          }
           await refreshInfo();
           go('summary');
         })} noValidate>
           <Row variant={variant} label="Save your account" desc="Sign in on another phone or computer and keep your soldier." block />
           <EmailField id={id('email')} value={email} onChange={setEmail} />
           <PasswordField id={id('pw')} label="Password" value={password} onChange={setPassword} autoComplete="new-password" hint={passwordHint(password, email)} />
+          {age?.adult ? <p className="acct-note">18 or older: confirmed on this device (born {age.birthYear}).</p> : <AgeFields id={id} year={year} onYear={setYear} adult={adult} onAdult={setAdult} />}
+          <BotCheck action="save" round={botRound} onToken={setBot} />
+          <p className="acct-note">
+            Saving means you agree to the{' '}
+            <a className="acct-inline" href={TERMS_URL} target="_blank" rel="noopener">
+              Terms
+            </a>{' '}
+            and have read the{' '}
+            <a className="acct-inline" href={PRIVACY_URL} target="_blank" rel="noopener">
+              privacy note
+            </a>
+            .
+          </p>
           {errorLine}
           <div className="acct-actions">
-            <button type="submit" className="btn btn--volt btn--sm" disabled={busy || !email.trim() || !passwordLooksOk(password, email)}>
+            <button type="submit" className="btn btn--volt btn--sm" disabled={busy || !email.trim() || !passwordLooksOk(password, email) || !ageReady || needBot}>
               <Icon name="lock" />
               Save account
             </button>
@@ -202,6 +279,7 @@ export function AccountPanel({ store, variant, preset }: { store: ShellStore; va
         </form>
       );
       break;
+    }
 
     case 'signin': {
       const notice = signInNotice(info, name);
@@ -244,15 +322,20 @@ export function AccountPanel({ store, variant, preset }: { store: ShellStore; va
     case 'forgot':
       body = (
         <form className="acct-form" onSubmit={run(async () => {
-          await ctl.api.forgotPassword(email);
+          try {
+            await ctl.api.forgotPassword(email, bot ?? undefined);
+          } finally {
+            spendBot();
+          }
           setDone(`If ${email.trim()} has a saved account, we've sent it a link. It works for 30 minutes.`);
           go('summary');
         })} noValidate>
           <Row variant={variant} label="Forgot password?" desc="We'll email you a link to choose a new one." block />
           <EmailField id={id('email')} value={email} onChange={setEmail} />
+          <BotCheck action="forgot" round={botRound} onToken={setBot} />
           {errorLine}
           <div className="acct-actions">
-            <button type="submit" className="btn btn--volt btn--sm" disabled={busy || !email.trim()}>
+            <button type="submit" className="btn btn--volt btn--sm" disabled={busy || !email.trim() || needBot}>
               <Icon name="send" />
               Send link
             </button>

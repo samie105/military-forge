@@ -195,8 +195,10 @@ users(id, created_at, status[active|banned|deleted], age_band, country, locale)
 identities(user_id, provider[guest|google|discord|apple|email], provider_uid, created_at)   -- guest → link later
 profiles(user_id, nickname, nickname_norm UNIQUE, level, xp, avatar_loadout jsonb, title, banner, privacy jsonb)
 sessions(id, user_id, created_at, expires_at, ua_hash, ip_prefix)                          -- refresh tokens
-wallets(user_id, soft_currency, hard_currency, version)                                     -- optimistic locking
-ledger(id, user_id, delta_soft, delta_hard, reason, ref_id, created_at)                     -- append-only economy audit
+wallets(user_id, paid, earned, monthly_cap, cap_raise_at, store_locked_until, version)     -- one currency in two pools (17 §2.5); optimistic locking
+ledger(id, user_id, pool[paid|earned], delta, balance_after, kind, ref_id, created_at)      -- append-only, double-entry; UNIQUE(kind, ref_id)
+forge_slots(user_id, n, look jsonb, look_hash, state[valid|pending|rejected], reasons, updated_at)  PK(user_id,n)   -- 17 §4
+forge_uploads(id, user_id, sha256, ai_generated bool, state, reviewer, reason, created_at)
 items(id, kind[skin|head|hat|weapon_skin|emote|trail|banner|title|spray], rarity, data jsonb, released_at)
 inventory(user_id, item_id, acquired_at, source)  PK(user_id,item_id)
 loadouts(user_id, slot, data jsonb)

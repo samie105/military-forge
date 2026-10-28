@@ -21,6 +21,8 @@ export type AuditEvent =
   | 'account_saved'
   | 'save_requested'
   | 'save_refused'
+  | 'save_refused_underage'
+  | 'bot_check_failed'
   | 'password_changed'
   | 'password_change_failed'
   | 'reset_requested'

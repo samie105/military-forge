@@ -54,6 +54,7 @@ async function open(touch, settings) {
     localStorage.setItem('mf.touch.drill.v1', 'done');
     localStorage.setItem('mf.install.v1', JSON.stringify({ sessions: 1, dismissedAt: 1, matchesAtDismiss: 0, accepted: false }));
     localStorage.setItem('mf.facts.v1', JSON.stringify({ v: 1, firstSeen: now, lastSession: now, sessions: 2, experience: 'veteran', tours: { 'first-flight': { done: [], finished: true, skipped: false }, 'home-stops': { done: [], finished: true, skipped: false } } }));
+    localStorage.setItem('mf.age.v1', JSON.stringify({ adult: true, birthYear: 1990, at: Date.now() })); // the 18+ step, answered
     if (settings && !sessionStorage.getItem('fly-check-set')) {
       sessionStorage.setItem('fly-check-set', '1');
       localStorage.setItem('mf.touch.settings.v1', JSON.stringify({ ...settings, fireChosen: true, rev: 5 }));

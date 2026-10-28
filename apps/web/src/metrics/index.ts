@@ -72,7 +72,9 @@ export function screenOf(s: Pick<ShellState, 'screen' | 'route' | 'overlay' | 't
   switch (s.screen.name) {
     case 'boot':
       return landing ? 'landing' : 'title';
+    // the 18+ step is part of enlisting (the vocabulary has no word of its own for it)
     case 'name':
+    case 'age':
       return 'name';
     case 'home':
       return 'home';

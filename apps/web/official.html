@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="The only official %GAME_NAME% website and accounts, and how to spot and report fakes." />
+    <title>Official links · %GAME_NAME%</title>
+    <link rel="stylesheet" href="/src/ui/fonts.css" />
+    <link rel="stylesheet" href="/src/ui/kit.css" />
+    <!--
+      TODO(owner), before launch: fill in every dashed TODO(owner) box below, or delete the row of an
+      account you don't have.
+        1. the official website's address (type it out: never %ORIGIN%, which a copy site would fill in with its own)
+        2. each social account's handle and link (X, Instagram, TikTok, YouTube, Facebook)
+        3. the community link (Discord or a WhatsApp channel), if there is one
+        4. the support email (PRIVACY_CONTACT at build time fills the contact line already)
+        5. the payment provider players will see at checkout, once payments open
+      Keep it in step with terms.html §4. Styled like privacy.html.
+    -->
+    <style>
+      html, body { margin: 0; background: var(--c-ink-900); color: var(--c-text); }
+      .pv { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; font-family: var(--f-ui); font-size: 17px; line-height: 1.55; }
+      .pv__eyebrow { margin: 0; font-size: 13px; font-weight: 800; letter-spacing: .24em; text-transform: uppercase; color: var(--c-volt); }
+      .pv h1 { margin: 8px 0 4px; font-family: var(--f-display); font-weight: 900; font-size: clamp(36px, 8vw, 60px); line-height: .95; text-transform: uppercase; }
+      .pv h2 { margin: 36px 0 8px; font-size: 15px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--c-brass); }
+      .pv p, .pv li { color: var(--c-text); }
+      .pv small, .pv .pv__muted { color: var(--c-muted-2); }
+      .pv a { color: var(--c-volt); text-underline-offset: 3px; }
+      .pv table { width: 100%; border-collapse: collapse; font-size: 15px; }
+      .pv th, .pv td { padding: 8px 10px 8px 0; text-align: left; vertical-align: top; border-bottom: 1px solid var(--c-line); }
+      .pv th { color: var(--c-muted-2); font-weight: 700; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+      .pv__box { padding: 14px 16px; border: 1.5px solid var(--c-line-strong); border-left: 5px solid var(--c-volt); border-radius: 0 14px 0 14px; background: var(--c-ink-800); }
+      .pv__warn { border-left-color: var(--c-warn); }
+      .pv__scroll { overflow-x: auto; }
+      .pv__todo { padding: 1px 6px; border: 1.5px dashed var(--c-warn); border-radius: 6px; color: var(--c-warn); font-weight: 700; }
+      .pv__links { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 36px; }
+    </style>
+  </head>
+  <body class="mf">
+    <main class="pv">
+      <p class="pv__eyebrow">%GAME_NAME%</p>
+      <h1>Official links</h1>
+      <p class="pv__muted">Updated 28 October 2026 · if it isn't on this list, it isn't us</p>
+
+      <div class="pv__box">
+        <p><b>In short.</b> %GAME_NAME% plays in your web browser on one official site. We have <b>no app in any app store yet</b>, so any APK or "mod" is fake. We <b>never sell</b> Gems or anything else on other sites, by DM or through agents, and never ask you to pay a personal account.</p>
+      </div>
+
+      <h2>The only official places</h2>
+      <div class="pv__scroll">
+        <table>
+          <thead>
+            <tr><th>Where</th><th>Official address</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><b>The game</b> (the only place to play and to buy)</td><td><span class="pv__todo">TODO(owner): https://…</span></td></tr>
+            <tr><td>X (Twitter)</td><td><span class="pv__todo">TODO(owner): @…</span></td></tr>
+            <tr><td>Instagram</td><td><span class="pv__todo">TODO(owner): @…</span></td></tr>
+            <tr><td>TikTok</td><td><span class="pv__todo">TODO(owner): @…</span></td></tr>
+            <tr><td>YouTube</td><td><span class="pv__todo">TODO(owner): @…</span></td></tr>
+            <tr><td>Facebook</td><td><span class="pv__todo">TODO(owner): …</span></td></tr>
+            <tr><td>Community (Discord or WhatsApp channel)</td><td><span class="pv__todo">TODO(owner): …</span></td></tr>
+            <tr><td>Support</td><td>%PRIVACY_CONTACT%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Check the address bar: a copy site can look exactly like ours, but its address is different. Bookmark the game, or add it to your home screen from your browser's menu, and open it from there.</p>
+
+      <h2>No app store app yet: every APK is fake</h2>
+      <ul>
+        <li>There is no %GAME_NAME% app on Google Play, the App Store or any other store, and no APK to download. The game runs in your browser.</li>
+        <li>An APK, "mod", "hack" or "unlimited Gems" version is not ours. It can steal your account, your passwords or your money. Don't install it.</li>
+        <li>If we ever release an app, we'll announce it in the game and list it on this page first.</li>
+      </ul>
+
+      <h2>We never sell outside the game</h2>
+      <ul>
+        <li>Gems are only sold inside the game on the official site, through the checkout it shows you.</li>
+        <li>We never sell by DM, WhatsApp, Telegram, Instagram or on other websites, and we have no resellers, agents or "top-up" vendors.</li>
+        <li>We never ask you to pay a personal bank account, a mobile money number, a gift card or a crypto wallet.</li>
+        <li>Our staff never ask for your password, and never message you first to sell you something.</li>
+        <li>There is no official %GAME_NAME% coin, token or crypto. Gems have no cash value and can't be sold or cashed out (<a href="/terms.html">Terms</a> §3), so anyone offering to buy them from you, or to sell you cheap ones, is running a scam.</li>
+      </ul>
+
+      <div class="pv__box pv__warn">
+        <p><b>Found a fake?</b> Tell us, and don't pay or sign in there.</p>
+        <ol>
+          <li>Copy its address (the site, the app's name, or the account's handle) and take a screenshot.</li>
+          <li>Send it to us, with the link: %PRIVACY_CONTACT%.</li>
+          <li>Report it where you found it too (the app store, the social network, or the site's host): they can take it down.</li>
+          <li>Paid a fake seller, or typed your password into a fake site? Change your password on the real game and use <b>Sign out everywhere</b> (Settings → Account), then call your bank, and report the fraud to the police (in Nigeria, the EFCC).</li>
+        </ol>
+      </div>
+
+      <p class="pv__links"><a href="/">Back to the game</a> <a href="/terms.html">Terms</a> <a href="/privacy.html">Privacy</a></p>
+    </main>
+  </body>
+</html>

@@ -47,6 +47,8 @@ export function seoFiles(name: string, date: string): SeoFiles {
     `  <url><loc>%ORIGIN%/</loc><lastmod>${date}</lastmod></url>`,
     `  <url><loc>%ORIGIN%/armory.html</loc><lastmod>${date}</lastmod></url>`,
     `  <url><loc>%ORIGIN%/gamepad.html</loc><lastmod>${date}</lastmod></url>`,
+    // the official links rank above copy sites when players search for fakes
+    `  <url><loc>%ORIGIN%/official.html</loc><lastmod>${date}</lastmod></url>`,
     '</urlset>',
     '',
   ].join('\n');

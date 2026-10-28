@@ -11,13 +11,13 @@
 2. **Every weapon has a job:** close (shotgun, flamer, machete), mid (SMGs, rifles), long (DMR, sniper, laser), area/denial (rockets, grenades, gas, mines, saw).
 3. **Dual wielding is a power fantasy and a skill.** It doubles damage output but makes aim harder and limits zoom.
 4. **Movement is the defence.** There's no armour in core modes. Jetpack, crouch and cover do the job. Battle royale adds armour (08).
-5. **All weapons are available to everyone.** Genre classics gated dual wield and power weapons behind paid unlocks, and later sold weapon upgrades in crates. Players hated the pay-to-win. **We only sell cosmetics.**
+5. **All weapons are available to everyone.** Genre classics gated dual wield and power weapons behind paid unlocks, and later sold weapon upgrades in crates. Players hated the pay-to-win. **We only sell cosmetics.** Paid skins exist on six guns (owner, 28 Oct 2026, 17 §3.2), and a skinned or Forge-designed gun has **exactly the base gun's stats**: the sim never reads a cosmetic id.
 
 ---
 
 ## 2. Naming & legal note
 
-Real gun names like Desert Eagle, Uzi, Tavor and MP5 are manufacturer trademarks, and other games' names and weapon names belong to their owners. **We ship original names**, so weapons stay recognisable by role and silhouette rather than by brand. The "Archetype" column below is internal only.
+Real gun names like Desert Eagle, Uzi, Tavor and MP5 are manufacturer trademarks, and other games' names and weapon names belong to their owners. **We ship original names**, so weapons stay recognisable by role and silhouette rather than by brand. The "Archetype" column below is internal only. The same rule binds every skin, Forge part and approved upload: no maker names, model names, logos or markings (17 §4.4, reason F01).
 
 ---
 
@@ -104,7 +104,12 @@ The schema is zod-validated and lint-checked (e.g. a `dps` sanity range per clas
 
 **The sniper's aim line** (the same playtest: "for snipers, show … the line the bullet is going to go"). With a Widow or a Longbow in hand, the local player sees a thin red line along the shot's real path, cut at the first solid it meets, with a dot there: the sim's own ray (`aimRay`: fireShot's shoulder, muzzle guard, the map's bullet reach and the bullet raycast, without the spread), from the local or predicted game, so it's truthful. It fades with distance, dims while the gun can't fire (reloading, swapping, the bolt), and dims and loses its dot while the shot may stray (airborne, bloom). Nobody else's line is drawn: it would give a sniper away. 3D: `render3d/vfx/aimLine.ts` (a few quads in the glow layer, no extra draw call); 2D: render.ts.
 
-**Cosmetic variants, not stat upgrades:** genre classics sold golden guns with extra power. Ours is a **gold skin** for the Hawk with no stat change.
+**Cosmetic variants, not stat upgrades:** genre classics sold golden guns with extra power. Ours is a **gold skin** for the Hawk with no stat change, and it's **earned by mastery, never sold** (17 §3.1).
+
+**Skins and custom looks** (owner, 28 Oct 2026; the spec is [17](17-store-currency-and-forge.md)):
+- **Paid skin lines** on the K-47 (the pilot), Hammer .44, Hawk .50, Widow, Breacher and Hornet, in three tiers: Wrap, Skin and Forged (17 §3.3). None on the power and special weapons, the Machete, the Riot Shield or grenades: their look is the warning (17 §3.2).
+- **The Forge:** players design a gun's look from our part library, dyes, decals and FX, as a JSON spec checked on the server (17 §4). Same `WeaponDef`, same numbers.
+- **What a look can't change** (17 §3.4): the gun's silhouette box and muzzle node (V2), the muzzle flash's shape and size (V4), the tracer's shape and brightness (V5), the reticle, zoom and aim line (V6), fire and reload loudness (V11), animation timing (V12) and the kill-feed icon (V14). A skin overrides only the hue of `presentation.muzzle` and `presentation.tracer`, from an allowed set.
 
 **As built** (`packages/content/src/weapons.ts`; owner's playtest, 18 Oct 2026: "add more guns I can test"). Every gun in the table with a W8 model and no projectile is in the game: Hammer, Buzz, K-47, Breacher, Widow and Machete (indices 0–5), then **Hawk .50, Rattler, Hornet, Trident, Bullpup, Longbow, Shredder and Arc** (6–13). They are on the maps in weapon crates and on the playtest's test armory rack (§12), not in the spawn loadout. The numbers are this table's, except where the feel report (packages/sim `pnpm feel`, WEAPON_TARGETS) showed a gun leaving its role:
 
@@ -317,7 +322,7 @@ Zoom makes the camera pull **out** so you see more of the map (1×–7×). In 2.
 | Impact | decals + particles per material (concrete dust, metal sparks, wood splinters, dirt puffs, glass shards) |
 | Melee | hit-stop of 2 frames (client-only visual pause), whoosh + thud |
 
-All of it is client-side and cosmetic, and can be scaled down by the graphics preset and the reduced-motion setting.
+All of it is client-side and cosmetic, and can be scaled down by the graphics preset and the reduced-motion setting. Skins and Forge looks may tint the muzzle flash and tracer but never change their shape, size or brightness, nor the fire sound's loudness (17 §3.4).
 
 ---
 
