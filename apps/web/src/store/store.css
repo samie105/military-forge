@@ -98,10 +98,15 @@ html.reduce-motion :where(.mf-st-fit) .mf-st__fx-win img { animation: none; tran
 :where(.mf-st-fit) .mf-st__tier-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); min-height: 28px; }
 :where(.mf-st-fit) .mf-st__tier-name { font-size: var(--fs-28); color: var(--c-paper); }
 :where(.mf-st-fit) .mf-st__tier-line { margin: var(--sp-1) 0 0; color: var(--c-muted); font-size: var(--fs-18); line-height: 1.4; }
-:where(.mf-st-fit) .mf-st__tier-buy { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'price acts' 'money money'; align-items: center; gap: var(--sp-1) var(--sp-3); }
-:where(.mf-st-fit) .mf-st__tier-buy .mf-st__price { grid-area: price; }
-:where(.mf-st-fit) .mf-st__tier-buy .mf-st__money { grid-area: money; }
-:where(.mf-st-fit) .mf-st__tier-buy .mf-st__acts { grid-area: acts; margin-top: 0; }
+/*
+ * The price and the button share a row while both fit; on a narrower card the button wraps onto a row of its own
+ * (the price never shrinks under it: scripts/store-layout.mjs checks every width), and the money line runs below.
+ */
+:where(.mf-st-fit) .mf-st__tier-buy { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+:where(.mf-st-fit) .mf-st__tier-buy .mf-st__price { order: 1; flex: 0 0 auto; }
+:where(.mf-st-fit) .mf-st__tier-buy .mf-st__acts { order: 2; flex: 0 1 auto; max-width: 100%; margin: 0 0 0 auto; }
+:where(.mf-st-fit) .mf-st__tier-buy .mf-st__acts .btn { max-width: 100%; }
+:where(.mf-st-fit) .mf-st__tier-buy .mf-st__money { order: 3; flex: 1 0 100%; }
 :where(.mf-st-fit) .mf-st__price { margin: 0; display: inline-flex; align-items: center; gap: var(--sp-2); color: var(--c-paper); font-size: var(--fs-20); white-space: nowrap; }
 :where(.mf-st-fit) .mf-st__price b { font-size: var(--fs-28); font-variant-numeric: tabular-nums; }
 :where(.mf-st-fit) .mf-st__was { color: var(--c-muted); font-size: var(--fs-18); }
@@ -126,15 +131,17 @@ html.reduce-motion :where(.mf-st-fit) .mf-st__fx-win img { animation: none; tran
 }
 :where(.mf-st-fit) .mf-st__get-t { margin: 0; font-size: var(--fs-48); color: var(--c-paper); }
 :where(.mf-st-fit) .mf-st__bundles { list-style: none; margin: var(--sp-2) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+/* the amount (its bonus tag wrapping under it when tight) and the price buttons share a row; the buttons wrap below
+   rather than run over the amount (scripts/store-layout.mjs) */
 :where(.mf-st-fit) .mf-st__bundle {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--sp-3);
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3);
   padding: var(--sp-3) var(--sp-4); border: var(--bw) solid var(--c-line); border-radius: var(--r-frost-sm, 0 18px 0 18px); background: var(--c-ink-800);
 }
-:where(.mf-st-fit) .mf-st__what { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; }
-:where(.mf-st-fit) .mf-st__amount { display: inline-flex; align-items: center; gap: var(--sp-2); color: var(--c-paper); font-size: var(--fs-24); }
+:where(.mf-st-fit) .mf-st__what { flex: 1 0 auto; display: flex; flex-direction: column; gap: var(--sp-1); }
+:where(.mf-st-fit) .mf-st__amount { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); color: var(--c-paper); font-size: var(--fs-24); }
 :where(.mf-st-fit) .mf-st__amount b { font-variant-numeric: tabular-nums; }
 :where(.mf-st-fit) .mf-st__why { color: var(--c-warn); font-size: var(--fs-14); }
-:where(.mf-st-fit) .mf-st__pay { display: inline-flex; gap: var(--sp-2); }
+:where(.mf-st-fit) .mf-st__pay { display: inline-flex; gap: var(--sp-2); margin-left: auto; }
 :where(.mf-st-fit) .mf-st__pay .btn { min-width: 112px; font-variant-numeric: tabular-nums; }
 :where(.mf-st-fit) .mf-st__limit { margin: var(--sp-2) 0 0; color: var(--c-paper); font-size: var(--fs-18); }
 :where(.mf-st-fit) .mf-st__link {
