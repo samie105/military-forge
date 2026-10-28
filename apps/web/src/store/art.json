@@ -1,0 +1,20 @@
+{
+  "$comment": "Baked by apps/web/scripts/store-art.mjs: re-run it when a store skin's GLB or its kill effect changes (test/store/art.test.ts checks the hashes).",
+  "guns": {
+    "weapons/skins/k47_galaxy_relic.glb": {
+      "image": "store/k47_galaxy_relic.webp",
+      "sha256": "b9e4f0ee83b8f28a16658ebeba26ec2f0ef3bc6b07ee0588a5a6bef6b68aafb0"
+    }
+  },
+  "killEffects": {
+    "stardust": {
+      "image": "store/stardust.webp",
+      "frames": 16,
+      "still": 7,
+      "frameW": 200,
+      "frameH": 250,
+      "ms": 1700,
+      "sha256": "2183f47c60cf0a12c838e3a349165be28a5816cccfc407b48e02c7498b839bec"
+    }
+  }
+}

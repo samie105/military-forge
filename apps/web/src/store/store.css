@@ -43,26 +43,46 @@
 :where(.mf-st-fit) .mf-st__grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: var(--sp-6); align-items: start; }
 
 :where(.mf-st-fit) .mf-st__line {
-  display: grid; grid-template-columns: 400px minmax(0, 1fr); grid-template-areas: 'art text' 'tiers tiers'; gap: var(--sp-5) var(--sp-6); align-items: end;
+  display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: 'text' 'tiers'; gap: var(--sp-5);
   padding: var(--sp-6); border: var(--bw) solid var(--c-line); border-radius: var(--r-frost, 0 28px 0 28px); background: var(--c-ink-900); box-shadow: var(--sh-card);
 }
-:where(.mf-st-fit) .mf-st__art {
-  grid-area: art; position: relative; min-height: 230px; border-radius: var(--r-frost-sm, 0 18px 0 18px); overflow: hidden;
+/* a tier's picture: the gun baked from the game's renderer (scripts/store-art.mjs) on the line's galaxy */
+:where(.mf-st-fit) .mf-st__tier-art {
+  position: relative; aspect-ratio: 16 / 7; margin: calc(-1 * var(--sp-5)) calc(-1 * var(--sp-5)) 0; overflow: hidden;
   display: grid; place-items: center;
-  /* the Galaxy Relic's palette (content: tracer #fad8ff, trail #80fcd4) on the menus' ink */
+  /* the Galaxy Relic's palette (content: its tracer glow) on the menus' ink */
   background:
-    radial-gradient(circle at 30% 25%, color-mix(in srgb, #fad8ff 38%, transparent), transparent 42%),
-    radial-gradient(circle at 75% 70%, color-mix(in srgb, #80fcd4 30%, transparent), transparent 46%),
-    radial-gradient(circle at 60% 15%, color-mix(in srgb, #6b3fd6 55%, transparent), transparent 55%),
+    radial-gradient(circle at 25% 25%, color-mix(in srgb, #fad8ff 34%, transparent), transparent 42%),
+    radial-gradient(circle at 78% 72%, color-mix(in srgb, #80fcd4 26%, transparent), transparent 46%),
+    radial-gradient(circle at 60% 10%, color-mix(in srgb, #6b3fd6 55%, transparent), transparent 55%),
     var(--c-ink-950);
 }
-:where(.mf-st-fit) .mf-st__art::after {
-  content: ''; position: absolute; inset: 0; opacity: .5;
+:where(.mf-st-fit) .mf-st__tier-art::after {
+  content: ''; position: absolute; inset: 0; opacity: .5; pointer-events: none;
   background-image: radial-gradient(1px 1px at 20% 30%, #fff, transparent), radial-gradient(1px 1px at 70% 20%, #fff, transparent), radial-gradient(1.5px 1.5px at 40% 80%, #fff, transparent), radial-gradient(1px 1px at 85% 60%, #fff, transparent), radial-gradient(1px 1px at 10% 75%, #fff, transparent);
 }
-:where(.mf-st-fit) .mf-st__gun { width: 82%; height: 50%; color: var(--c-paper); filter: drop-shadow(0 0 18px color-mix(in srgb, #80fcd4 55%, transparent)); position: relative; z-index: 1; }
-:where(.mf-st-fit) .mf-st__art-tag { position: absolute; left: var(--sp-4); bottom: var(--sp-3); z-index: 1; font-weight: var(--fw-bold); letter-spacing: .12em; color: var(--c-paper); opacity: .8; }
+:where(.mf-st-fit) .mf-st__gun { position: relative; z-index: 1; width: 92%; height: auto; filter: drop-shadow(0 6px 10px rgb(0 0 0 / .45)); }
+:where(.mf-st-fit) .mf-st__gun--glyph { width: 70%; height: 50%; color: var(--c-paper); }
+/* the kill-effect tier: the gun to the left, the effect's window to the right */
+:where(.mf-st-fit) .mf-st__tier-art.has-fx { grid-template-columns: minmax(0, 1fr) 31%; gap: var(--sp-2); padding: 0 var(--sp-3) 0 var(--sp-2); }
+:where(.mf-st-fit) .mf-st__tier-art.has-fx .mf-st__gun { width: 100%; }
+:where(.mf-st-fit) .mf-st__fx { position: relative; z-index: 1; margin: 0; width: 100%; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+:where(.mf-st-fit) .mf-st__fx-win {
+  position: relative; width: 100%; aspect-ratio: 4 / 5; overflow: hidden; display: block;
+  border: 2px solid color-mix(in srgb, #80fcd4 60%, transparent); border-radius: var(--r-sm, 8px); background: var(--c-ink-950);
+}
+/* the strip of frames, stepped through as a loop (one frame per step) */
+:where(.mf-st-fit) .mf-st__fx-win img {
+  position: absolute; left: 0; top: 0; display: block; height: 100%; width: calc(var(--fx-frames) * 100%); max-width: none;
+  animation: mf-st-fx var(--fx-ms) steps(var(--fx-frames)) infinite;
+}
+@keyframes mf-st-fx { to { transform: translateX(-100%); } }
+:where(.mf-st-fit) .mf-st__fx figcaption { font-size: var(--fs-14); font-weight: var(--fw-bold); color: var(--c-paper); white-space: nowrap; text-shadow: 0 1px 2px rgb(0 0 0 / .8); }
+/* Reduce motion: the frame where the shards are out, held still */
+html.reduce-motion :where(.mf-st-fit) .mf-st__fx-win img { animation: none; transform: translateX(calc(-100% * var(--fx-still) / var(--fx-frames))); }
+@media (prefers-reduced-motion: reduce) { :where(.mf-st-fit) .mf-st__fx-win img { animation: none; transform: translateX(calc(-100% * var(--fx-still) / var(--fx-frames))); } }
 :where(.mf-st-fit) .mf-st__line-text { grid-area: text; display: flex; flex-direction: column; gap: var(--sp-2); }
+:where(.mf-st-fit) .mf-st__line-text .mf-st__note { max-width: 640px; }
 :where(.mf-st-fit) .mf-st__line-text .eyebrow, :where(.mf-st-fit) .mf-st__tier .eyebrow { color: var(--c-brass); }
 :where(.mf-st-fit) .mf-st__line-name { margin: 0; font-size: var(--fs-64); line-height: .95; color: var(--c-paper); }
 
@@ -70,6 +90,7 @@
 :where(.mf-st-fit) .mf-st__tier {
   display: flex; flex-direction: column; justify-content: space-between; gap: var(--sp-4);
   padding: var(--sp-5); border: var(--bw) solid var(--c-line); border-radius: var(--r-frost-sm, 0 18px 0 18px); background: var(--c-ink-800);
+  overflow: hidden; /* the picture bleeds to the card's edges and corners */
 }
 :where(.mf-st-fit) .mf-st__tier.is-fx { border-color: color-mix(in srgb, #80fcd4 55%, var(--c-line)); }
 :where(.mf-st-fit) .mf-st__tier.is-owned { border-color: var(--c-ok); }
@@ -131,8 +152,6 @@
 :where(.mf-st-fit) .mf-st__dlg-acts { display: flex; gap: var(--sp-3); margin-top: var(--sp-4); flex-wrap: wrap; }
 
 /* a laptop's smaller box, or big text */
-html:is(.mf-short, .mf-big-text):where(:not(.mf-phone)) :where(.mf-st-fit) .mf-st__line { grid-template-columns: 320px minmax(0, 1fr); }
-html:is(.mf-short, .mf-big-text):where(:not(.mf-phone)) :where(.mf-st-fit) .mf-st__art { min-height: 190px; }
 html:is(.mf-short, .mf-big-text):where(:not(.mf-phone)) :where(.mf-st-fit) .mf-st__line-name { font-size: var(--fs-48); }
 
 /* ---- a phone: its own size, one column, the page scrolls ---- */
@@ -160,9 +179,9 @@ html.mf-phone :where(.mf-st-fit) .mf-st .btn--volt:not(.btn--sm) { min-height: 4
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__notice, :where(html.mf-phone) :where(.mf-st-fit) .mf-st__gate { font-size: 15px; padding: var(--sp-3); gap: var(--sp-2); flex-wrap: wrap; }
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__gate p { font-size: 13px; }
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__grid { grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
-:where(html.mf-phone) :where(.mf-st-fit) .mf-st__line { grid-template-columns: 150px minmax(0, 1fr); padding: var(--sp-3); gap: var(--sp-2) var(--sp-3); border-radius: var(--r-frost-sm, 0 18px 0 18px); }
-:where(html.mf-phone) :where(.mf-st-fit) .mf-st__art { min-height: 84px; }
-:where(html.mf-phone) :where(.mf-st-fit) .mf-st__art-tag { display: none; }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__line { padding: var(--sp-3); gap: var(--sp-2); border-radius: var(--r-frost-sm, 0 18px 0 18px); }
+html.mf-phone :where(.mf-st-fit) .mf-st .mf-st__tier-art { margin: calc(-1 * var(--sp-3)) calc(-1 * var(--sp-3)) 0; }
+html.mf-phone :where(.mf-st-fit) .mf-st .mf-st__fx figcaption { font-size: 10px; }
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__line-name { font-size: 34px; }
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__tiers { gap: var(--sp-2); }
 /* a narrow phone (or big text): the tiers one under the other */

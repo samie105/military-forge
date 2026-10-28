@@ -3,6 +3,8 @@
  * currency in words, what each answer means to the player, and the way back from Flutterwave's page. Every price
  * and balance comes from the API; nothing here makes one up.
  */
+import { getCosmetic, getKillEffect } from '@military-forge/content';
+import art from './art.json';
 
 export type Money = 'NGN' | 'USD';
 
@@ -182,4 +184,28 @@ export function bundleBlocked(b: StoreBundle, account: StoreAccount | null, wall
   if (b.price.USD > account.limits.leftCents) return 'Over your monthly limit';
   if (account.balance.total + b.brass > walletCap) return 'Your wallet would be full';
   return null;
+}
+
+/** A kill effect's baked frame strip (scripts/store-art.mjs): the loop and the frame shown still. */
+export interface EffectArt {
+  image: string;
+  frames: number;
+  still: number;
+  ms: number;
+  name: string;
+}
+
+/**
+ * What a store item looks like on its card: its gun rendered side on, and the kill effect it carries as a looping
+ * strip, both baked from the game's renderer (scripts/store-art.mjs → src/store/art.json, the images under
+ * /assets/store/). null where nothing was baked (the card shows the gun's glyph).
+ */
+export function storeArt(itemId: string, base: string = import.meta.env.BASE_URL): { gun: string | null; fx: EffectArt | null } {
+  const def = getCosmetic(itemId);
+  const gun = def?.assets.model ? (art.guns as Record<string, { image: string } | undefined>)[def.assets.model] : undefined;
+  const effect = def?.killEffect ? (art.killEffects as Record<string, Omit<EffectArt, 'name'> | undefined>)[def.killEffect] : undefined;
+  return {
+    gun: gun ? `${base}assets/${gun.image}` : null,
+    fx: effect && def?.killEffect ? { ...effect, image: `${base}assets/${effect.image}`, name: getKillEffect(def.killEffect)?.name ?? def.killEffect } : null,
+  };
 }

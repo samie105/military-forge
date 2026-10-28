@@ -19,6 +19,7 @@ import {
   formatMoney,
   limitLine,
   moneyLine,
+  storeArt,
   tierLabel,
   tierLine,
   type CheckoutReturn,
@@ -80,6 +81,7 @@ function itemCard(item: StoreItemView, blocked: boolean, busy: boolean): string 
   const was = item.upgrade && !item.owned ? `<s class="mf-st__was">${formatBrass(item.fullPrice)}</s>` : '';
   return `
     <li class="mf-st__tier${item.owned ? ' is-owned' : ''}${item.killEffect ? ' is-fx' : ''}">
+      ${tierArt(item)}
       <div class="mf-st__tier-head">
         <span class="mf-st__tier-top"><span class="eyebrow">${escapeHtml(tierLabel(item))}</span>${tag}</span>
         <b class="display mf-st__tier-name">${escapeHtml(item.name)}</b>
@@ -91,6 +93,25 @@ function itemCard(item: StoreItemView, blocked: boolean, busy: boolean): string 
         <div class="mf-st__acts">${action}</div>
       </div>
     </li>`;
+}
+
+/**
+ * The card's picture: the skin's gun, baked from the game's renderer, and on the kill-effect tier a small window
+ * looping the effect as it plays in a match (a still frame under Reduce motion). Images, not a 3D view: phones
+ * draw two small pictures, never a second WebGL context.
+ */
+function tierArt(item: StoreItemView): string {
+  const art = storeArt(item.itemId);
+  const gun = art.gun
+    ? `<img class="mf-st__gun" src="${escapeHtml(art.gun)}" alt="" width="480" height="180" decoding="async">`
+    : ic(item.weaponId ? `wpn-${item.weaponId}` : 'gem', 'ic mf-st__gun mf-st__gun--glyph');
+  const fx = art.fx
+    ? `<figure class="mf-st__fx" style="--fx-frames:${art.fx.frames};--fx-still:${art.fx.still};--fx-ms:${art.fx.ms}ms">
+        <span class="mf-st__fx-win"><img src="${escapeHtml(art.fx.image)}" alt="" decoding="async" loading="lazy"></span>
+        <figcaption>${escapeHtml(art.fx.name)}</figcaption>
+      </figure>`
+    : '';
+  return `<div class="mf-st__tier-art${art.fx ? ' has-fx' : ''}" aria-hidden="true">${gun}${fx}</div>`;
 }
 
 function bundleRow(b: StoreBundle, why: string | null, blocked: boolean, busy: boolean): string {
@@ -183,7 +204,6 @@ export function storeBody(s: StoreState): string {
     ${notice}${gate}
     <div class="mf-st__grid">
       <article class="mf-st__line" aria-labelledby="mf-st-relic">
-        <div class="mf-st__art" aria-hidden="true">${ic('wpn-k47', 'ic mf-st__gun')}<span class="mf-st__art-tag">K-47</span></div>
         <div class="mf-st__line-text">
           <span class="eyebrow">K-47 skin line</span>
           <h2 class="display mf-st__line-name" id="mf-st-relic">Galaxy Relic</h2>
