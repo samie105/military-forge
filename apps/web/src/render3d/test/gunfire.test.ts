@@ -62,11 +62,11 @@ describe('Gunfire', () => {
     expect(t2.glow.data[ramps(t2.glow).indexOf(Ramp.Flash) * STRIDE + F.x]).toBeCloseTo(140);
   });
 
-  it('the tracer flies the sim ray, never the drawn muzzle\'s line to the end (23 Oct QA); a joiner meets the gun', () => {
+  it('the tracer leaves the drawn barrel and bends onto the sim ray 3 m out, as the aim line does; the ray past it is exact (23 Oct QA, owner 28 Oct)', () => {
     const g = new Gunfire(world);
     const t = targets();
-    // the drawn gun sits 0.3 m under the sim's line: a streak from it would cut through a crate the
-    // shot cleared
+    // the drawn gun sits 0.3 m under the sim's line: a streak from it to the end would cut through a
+    // crate the shot cleared, and one from the sim's line leaves the air above the barrel
     const muzzle: MuzzleLookup = (_id, _w, out, dir) => {
       out.set(150.2, 0.9, 0.15);
       dir.set(1, 0, 0);
@@ -75,17 +75,44 @@ describe('Gunfire', () => {
     g.onEvents([shot({ ox: 150.3, oy: 1.2, ex: 159.3, ey: 1.2, hit: 0 })]);
     g.update(1 / 60, t, muzzle);
     const r = ramps(t.glow);
-    const bolt = r.indexOf(Ramp.Book);
-    expect(field(t.glow, bolt, F.y)).toBeCloseTo(1.2, 6); // on the sim line, not drifting up from 0.9
-    expect(field(t.glow, bolt, F.vy)).toBeCloseTo(0, 6);
-    const lines = r.map((x, i) => (x === Ramp.Tracer ? i : -1)).filter((i) => i >= 0);
-    expect(lines).toHaveLength(2); // the path and the joiner
+    const of = (ramp: number) => r.map((x, i) => (x === ramp ? i : -1)).filter((i) => i >= 0);
+    // positions to the millimetre: the pool keeps float32
+    const tail = (i: number) => {
+      const half = field(t.glow, i, F.size0) / 2;
+      const a = field(t.glow, i, F.rot);
+      return [field(t.glow, i, F.x) - Math.cos(a) * half, field(t.glow, i, F.y) - Math.sin(a) * half];
+    };
+    const bolts = of(Ramp.Book);
+    expect(bolts).toHaveLength(2);
+    const [bend, ray] = [...bolts].sort((a, b) => field(t.glow, a, F.fadeIn) - field(t.glow, b, F.fadeIn));
+    // the first frame's bolt: its tail in the barrel, heading for the ray 3 m along it, gone by the next frame
+    expect(tail(bend!)[0]).toBeCloseTo(150.2, 3);
+    expect(tail(bend!)[1]).toBeCloseTo(0.9, 3);
+    expect(field(t.glow, bend!, F.fadeIn)).toBe(0);
+    expect(Math.atan2(field(t.glow, bend!, F.vy), field(t.glow, bend!, F.vx))).toBeCloseTo(Math.atan2(1.2 - 0.9, 153.3 - 150.2), 6);
+    expect(field(t.glow, bend!, F.life)).toBeLessThan(1 / 60);
+    // the ray's bolt: on the sim line (not drifting up from 0.9), hidden at first and faded in as the bend's hands on
+    expect(field(t.glow, ray!, F.y)).toBeCloseTo(1.2, 6);
+    expect(field(t.glow, ray!, F.vy)).toBeCloseTo(0, 6);
+    expect(field(t.glow, ray!, F.fadeIn) * field(t.glow, ray!, F.life)).toBeLessThan(1 / 60);
+    expect(field(t.glow, ray!, F.fadeIn)).toBeGreaterThan(0);
+    // the path: the bend from the barrel to 3 m along the ray, then the ray to the end; nothing above the barrel
+    const lines = of(Ramp.Tracer);
+    expect(lines).toHaveLength(2);
     const path = lines.find((i) => field(t.glow, i, F.size0) > 5)!;
     expect(field(t.glow, path, F.y)).toBeCloseTo(1.2, 6);
-    expect(field(t.glow, path, F.size0)).toBeCloseTo(9, 6);
-    const join = lines.find((i) => i !== path)!;
-    expect(field(t.glow, join, F.x)).toBeCloseTo(150.25, 6);
-    expect(field(t.glow, join, F.y)).toBeCloseTo(1.05, 6);
+    expect(tail(path)[0]).toBeCloseTo(153.3, 3);
+    expect(field(t.glow, path, F.size0)).toBeCloseTo(6, 3);
+    const bendLine = lines.find((i) => i !== path)!;
+    expect(tail(bendLine)[0]).toBeCloseTo(150.2, 3);
+    expect(tail(bendLine)[1]).toBeCloseTo(0.9, 3);
+    expect(field(t.glow, bendLine, F.size0)).toBeCloseTo(Math.hypot(3.1, 0.3), 6);
+    // a shot no longer than the bend is all bend: one bolt, one line, barrel to end
+    const t2 = targets();
+    g.onEvents([shot({ ox: 150.3, oy: 1.2, ex: 152.3, ey: 1.2, hit: 0 })]);
+    g.update(1 / 60, t2, muzzle);
+    expect(ramps(t2.glow).filter((x) => x === Ramp.Book)).toHaveLength(1);
+    expect(ramps(t2.glow).filter((x) => x === Ramp.Tracer)).toHaveLength(1);
   });
 
   it('a shotgun blast: one flash for the shot, a tracer per pellet', () => {
