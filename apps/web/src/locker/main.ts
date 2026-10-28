@@ -1,11 +1,10 @@
 /** Standalone Locker page (/locker.html); the app hosts the Locker as its #/locker route too. */
-import { GAME_NAME } from '@military-forge/shared';
 import { mountPadMenus } from '../gamepad';
 import { applyPageSettings } from '../ui/pageSettings';
 import { mountLocker } from '.';
 
 applyPageSettings();
-document.title = `${GAME_NAME} · Locker`;
+// the title is locker.html's (the one search results show)
 const locker = mountLocker(document.getElementById('locker')!, { onExit: () => location.assign('/') });
 // a controller drives the page like a menu (D-pad / stick moves, Cross / A presses, Circle / B: Back)
 mountPadMenus();

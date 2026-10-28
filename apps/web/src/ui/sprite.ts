@@ -72,6 +72,10 @@ const SPRITE = `<svg xmlns="http://www.w3.org/2000/svg" style="position:absolute
   <symbol id="icon-crate" viewBox="0 0 24 24"><path d="M3 7.5L12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5l9 4.5 9-4.5M12 12v9M7.5 5.2l9 4.6"/></symbol>
   <symbol id="icon-rack" viewBox="0 0 24 24"><path d="M3 3.5h18M3 20.5h18M5 3.5v17M19 3.5v17"/><path d="M8 7.5h8M8 12h6M8 16.5h8"/></symbol>
   <symbol id="icon-shirt" viewBox="0 0 24 24"><path d="M8.5 3l-5 3 2 4.5 2-1V21h9V9.5l2 1 2-4.5-5-3c-.5 1.6-1.8 2.5-3.5 2.5S9 4.6 8.5 3z"/></symbol>
+  <symbol id="icon-trousers" viewBox="0 0 24 24"><path d="M6 2.5h12l1.2 19h-5L12 9.5l-2.2 12h-5z"/><path d="M6.2 6h11.6M12 6v3.5"/></symbol>
+  <symbol id="icon-boot" viewBox="0 0 24 24"><path d="M7 2.5h6.5V13l5.3 2.3c1.4.6 2.2 1.9 2.2 3.4V20H3v-3.5L4.5 13 7 11.5z"/><path d="M3 20.5h18M7 6.5h6.5M13.5 9.5h-3"/></symbol>
+  <symbol id="icon-glasses" viewBox="0 0 24 24"><path d="M2 9.5h20M3 9.5l1 5.5c.3 1.6 1.4 2.5 3 2.5h1.5c1.6 0 2.6-1 3-2.5L12 13l.5 2c.4 1.5 1.4 2.5 3 2.5H17c1.6 0 2.7-.9 3-2.5l1-5.5"/></symbol>
+  <symbol id="icon-hair" viewBox="0 0 24 24"><path d="M5 14.5C4 8 7.5 3.5 12.5 3.5S20.5 8 19 14.5"/><path d="M5 14.5c2.2-.5 4.4-2.6 5.5-5.5 1.5 2.6 4.5 4.6 8.5 5.5M7 18.5c1.2 1.7 3 2.6 5 2.6s3.8-.9 5-2.6"/></symbol>
   <symbol id="icon-helmet" viewBox="0 0 24 24"><path d="M3 15.5a9 9 0 0 1 18 0z"/><path d="M1.5 15.5h21v2.5h-21zM12 6.5v9M8 9l1.5 6.5M16 9l-1.5 6.5"/></symbol>
   <symbol id="icon-palette" viewBox="0 0 24 24"><path d="M12 2.5a9.5 9.5 0 0 0 0 19c1.4 0 2-.9 2-1.9 0-1.4-1.2-1.6-1.2-2.9 0-1 .8-1.7 1.9-1.7H17a4.5 4.5 0 0 0 4.5-4.5c0-4.6-4.3-8-9.5-8z"/><circle cx="7.5" cy="11" r="1.4" fill="currentColor"/><circle cx="10.5" cy="7" r="1.4" fill="currentColor"/><circle cx="15.5" cy="7.5" r="1.4" fill="currentColor"/></symbol>
   <symbol id="icon-gem" viewBox="0 0 24 24"><path d="M6.5 3.5h11l4 5.5-9.5 12.5L2.5 9z"/><path d="M2.5 9h19M9.5 3.5L8 9l4 12.5L16 9l-1.5-5.5"/></symbol>

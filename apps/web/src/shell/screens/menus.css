@@ -11,8 +11,9 @@
 /* the ID card's photo: the rookie's helmet stands in for the kit's preview art */
 .kit-v2 .mf-idcard__helmet { position: absolute; margin: 0; left: 50%; top: 50%; width: 260px; height: 260px; translate: -50% -50%; color: var(--c-ink-950); stroke-width: 1.4; }
 
-/* name taken: the box nudges once, two frames each way (the only shake menus get is Join's "no") */
-:where(.kit-v2) [data-active-state~="taken"] .input { animation: mf-nudge 50ms linear 1; }
+/* name taken: the box nudges once, ±3 px (the only shake menus get is Join's "no"); long enough to see
+   (it was 50 ms, three frames: audit 28 Oct) */
+:where(.kit-v2) [data-active-state~="taken"] .input { animation: mf-nudge 160ms var(--ease-settle) 1; }
 @keyframes mf-nudge { 0% { translate: 3px 0; } 50% { translate: -3px 0; } 100% { translate: 0 0; } }
 
 /* the kit's links as buttons (tickets, tabs): the kit's own alignment */
@@ -74,6 +75,10 @@
 .kit-v2 .mf-cd__ring .cd__fill { animation: mf-count 1s linear forwards; }
 html.reduce-motion .kit-v2 .mf-cd__ring .cd__fill { animation: none; }
 .kit-v2 .cd__go.m-p7 { animation: m-stamp var(--m-fast) var(--ease-settle) both; }
+/* GO leaves rather than cutting out: it fades and shrinks a touch, accelerating away (audit 28 Oct) */
+.kit-v2 .cd__go.m-p7.is-leaving { animation: mf-go-out var(--m-fast) var(--ease-leave) both; }
+@keyframes mf-go-out { from { opacity: 1; scale: 1; } to { opacity: 0; scale: .92; } }
+html.reduce-motion .kit-v2 .cd__go.m-p7.is-leaving { animation: m-fade-out 120ms linear both !important; }
 .kit-v2 .cd__num .display.m-p1 { animation: m-pull var(--m-slow) var(--ease-arrive) both; }
 
 /* Results: the winner's poster holds the trophy (the kit's preview art isn't the game's); the standings
@@ -90,6 +95,16 @@ html.reduce-motion .kit-v2 .mf-cd__ring .cd__fill { animation: none; }
 .kit-v2 .set__panel { overflow-y: auto; scrollbar-width: thin; }
 .kit-v2 .mf-tabpanel { animation: mf-tab-in var(--m-base) var(--ease-arrive) both; }
 @keyframes mf-tab-in { from { opacity: 0; translate: 8px 0; } to { opacity: 1; translate: 0 0; } }
+/* the outgoing section (a copy, Settings.tsx) leaves 8 px left over --m-fast, accelerating; the
+   incoming one waits half of that, so what leaves goes first (audit 28 Oct) */
+.kit-v2 .set__panel { position: relative; }
+.kit-v2 .mf-tabghost { position: absolute; left: 0; right: 0; top: 0; z-index: 1; padding: var(--sp-6) var(--sp-8); pointer-events: none; }
+.kit-v2 .mf-tabghost:empty { display: none; }
+.kit-v2 .mf-tabpanel.mf-tabpanel--leaving { animation: mf-tab-out var(--m-fast) var(--ease-leave) forwards; }
+.kit-v2 .mf-tabghost:not(:empty) ~ .mf-tabpanel { animation-delay: calc(var(--m-fast) * .5); }
+@keyframes mf-tab-out { from { opacity: 1; translate: 0 0; } to { opacity: 0; translate: -8px 0; } }
+html.reduce-motion .kit-v2 .mf-tabpanel { animation: m-fade 120ms linear both !important; }
+html.reduce-motion .kit-v2 .mf-tabpanel.mf-tabpanel--leaving { animation: m-fade-out 120ms linear forwards !important; }
 .kit-v2 .mf-set__tabs { position: relative; }
 .kit-v2 .mf-set__bar { left: -14px; top: 0; width: 5px; height: 1px; background: var(--c-volt); border-radius: var(--r-xxs); }
 .m-p5--y { transform-origin: 50% 0; transform: translateY(calc(var(--m5-l) * 1px)) scaleY(calc(var(--m5-r) - var(--m5-l))); }
@@ -127,11 +142,14 @@ html.reduce-motion .kit-v2 .mf-cd__ring .cd__fill { animation: none; }
 }
 :where(.kit-v2) .net-pill, :where(.kit-v2) .brand__words { white-space: nowrap; }
 html.mf-narrow .kit-v2 .home { grid-template-columns: 640px minmax(0, 1fr) 340px; gap: var(--sp-7); }
-/* big text in the laptop's box: the top bar keeps every tab and the chip (the pill keeps its ms) */
-html.mf-narrow.mf-big-text .kit-v2 .home__top { gap: var(--sp-4); }
+/* the laptop's box: the top bar keeps every tab and the player chip in view (audit 28 Oct: at 1280×800
+   the chip ran off the right edge); big text also drops the pill's word (it keeps its ms) */
+html.mf-narrow .kit-v2 .home__top { gap: var(--sp-4); }
+html.mf-narrow .kit-v2 .home__top .tab { padding: 0 var(--sp-3); }
 html.mf-narrow.mf-big-text .kit-v2 .net-pill__word { display: none; }
 /* the stage's corner brackets frame the helmet; in a short box the nameplate climbs into them */
-html:is(.mf-short, .mf-big-text) .kit-v2 .mf-home__stage .brackets { display: none; }
+/* lighter Home (audit 28 Oct): the stage's corner brackets crossed the nameplate's loadout below 1920 wide; they go */
+.kit-v2 .mf-home__stage .brackets { display: none; }
 html.mf-narrow .kit-v2 .home__poster-title, html.mf-narrow .kit-v2 .home__poster-no { font-size: var(--fs-88); }
 html:is(.mf-short, .mf-big-text) .kit-v2 .home__poster { padding: var(--sp-6) var(--sp-7); }
 html:is(.mf-short, .mf-big-text) .kit-v2 .home__poster-title, html:is(.mf-short, .mf-big-text) .kit-v2 .home__poster-no { font-size: var(--fs-64); }
@@ -186,10 +204,17 @@ html.mf-narrow.mf-big-text .kit-v2 .mf-col-dmg { display: none; }
 .kit-v2 .mf-standings th, .kit-v2 .mf-standings td { white-space: nowrap; }
 html.mf-narrow .kit-v2 .mf-standings :is(th, td) { padding-inline: var(--sp-1); }
 
-/* Pause: the items keep their height (the list scrolls when it can't fit); with big text the plate
-   widens and the labels step down so they stay on one or two lines */
-:where(.kit-v2) .pause { overflow-y: auto; scrollbar-width: thin; }
+/* Pause: the head and Resume stay at the top and Leave at the foot, always in view (audit 28 Oct:
+   Leave was below the fold); the items between keep their height and scroll when the plate can't hold
+   them, their lower edge fading while there's more below. With big text the plate widens and the
+   labels step down so they stay on one or two lines */
+:where(.kit-v2) .pause { overflow: hidden; }
 :where(.kit-v2) .pause__btn { flex: none; }
+:where(.kit-v2) .pause__list { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; gap: inherit; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; margin-inline: calc(var(--sp-2) * -1); padding-inline: var(--sp-2); }
+:where(.kit-v2) .pause__list.has-more { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 48px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 48px), transparent); }
+:where(.kit-v2) .pause__end { flex: 1 0 auto; display: flex; flex-direction: column; gap: inherit; }
+/* "Match continues" (online: it can't pause) on one line, leaving the list its room */
+.kit-v2 .pause__title--long { font-size: var(--fs-64); white-space: nowrap; }
 /* First flight's two (the onboarding tour): Restart it, Skip training, side by side */
 :where(.kit-v2) .pause__tour { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); flex: none; }
 :where(.kit-v2) .pause__tour .btn { white-space: normal; }
@@ -198,6 +223,7 @@ html.mf-big-text .kit-v2 .pause__btn { font-size: var(--fs-20); }
 html.mf-big-text .kit-v2 .pause__confirm { left: 820px; }
 html.mf-short .kit-v2 .pause { top: var(--sp-8); bottom: var(--sp-8); gap: var(--sp-3); padding: var(--sp-6) var(--sp-7); }
 html.mf-short .kit-v2 .pause__title { font-size: var(--fs-88); margin-bottom: 0; }
+html.mf-short .kit-v2 .pause__title--long { font-size: var(--fs-64); }
 html.mf-short .kit-v2 .pause__btn { min-height: var(--btn-h); padding-block: var(--sp-2); }
 html.mf-short.mf-big-text .kit-v2 .pause__btn { min-height: var(--btn-h-sm); font-size: var(--fs-18); }
 html.mf-short.mf-big-text .kit-v2 .pause__btn .btn__sub { display: none; }
@@ -229,7 +255,8 @@ html.mf-short.mf-big-text .kit-v2 .pause__btn .btn__sub { display: none; }
    dots and the next tips, and a way out under the bar */
 :where(.kit-v2) .mf-load__tiphead { display: flex; align-items: center; gap: var(--sp-2); }
 .kit-v2 .mf-load__dots { display: flex; gap: 6px; margin-left: auto; }
-.kit-v2 .mf-load__dots i { width: 8px; height: 8px; border-radius: 4px; background: var(--c-paper-line); transition: width var(--m-fast) var(--ease-out); }
+/* the lit dot is wider; it changes colour on --m-fast, its width at once (no layout animation: audit 28 Oct) */
+.kit-v2 .mf-load__dots i { width: 8px; height: 8px; border-radius: 4px; background: var(--c-paper-line); transition: background-color var(--m-fast) var(--ease-out); }
 .kit-v2 .mf-load__dots i.is-on { width: 22px; background: var(--c-paper-text); }
 .kit-v2 .mf-load__next { margin: 0; padding-top: var(--sp-3); border-top: 2px dashed var(--c-paper-line); font-size: var(--fs-14); color: var(--c-paper-muted); }
 .kit-v2 .mf-load__cancel { align-self: flex-start; margin-top: var(--sp-2); }

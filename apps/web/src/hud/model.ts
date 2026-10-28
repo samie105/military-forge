@@ -433,7 +433,8 @@ export function eventLook(kind: string): { color: string; icon: string } {
 // ---- round two's desktop HUD (docs/design/military-forge-ui-v2.html, data-screen="hud") ----
 
 /** The held slot's family line, by the gun's class. */
-const FAMILY: Readonly<Record<string, string>> = { sidearm: 'Pistol', smg: 'SMG', rifle: 'Rifle', dmr: 'Marksman', sniper: 'Sniper', shotgun: 'Shotgun', heavy: 'Heavy', special: 'Special', melee: 'Blade' };
+// the content's class names (weapons.ts WeaponClass), as the Locker says them: one word per slot everywhere (audit 28 Oct)
+const FAMILY: Readonly<Record<string, string>> = { sidearm: 'Sidearm', smg: 'SMG', rifle: 'Rifle', dmr: 'Marksman', sniper: 'Sniper', shotgun: 'Shotgun', heavy: 'Heavy', special: 'Special', melee: 'Melee' };
 
 export function weaponFamily(def: Pick<WeaponDef, 'class'> | undefined): string {
   return def ? (FAMILY[def.class] ?? def.class) : '';

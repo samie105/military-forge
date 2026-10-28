@@ -65,4 +65,3 @@ html:is(.mf-short, .mf-big-text):where(:not(.mf-phone)) :where(.mf-br-fit) .mf-b
 
 /* Reduce motion: no lift */
 html.reduce-motion :where(.mf-br-fit) .mf-br__answer:hover { transform: none; }
-@media (prefers-reduced-motion: reduce) { :where(.mf-br-fit) .mf-br__answer:hover { transform: none; } }

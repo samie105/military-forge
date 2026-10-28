@@ -50,6 +50,42 @@ describe('MatchRecorder in a room', () => {
     expect(sink.reports).toHaveLength(1); // the scoreboard ticking on doesn't report again
   });
 
+  it('a player who leaves and rejoins mid-match is one row; places count the players here at the end (audit 28 Oct)', () => {
+    const sink = sinkOf();
+    const room = new Room({ dummies: false, dev: false, match: { ...quick, timeLimit: 4 }, results: sink, code: 'CCCCCC', fillBots: { target: 4, level: 'easy' } });
+    const enter = (name: string, account: string | null) => {
+      const c = room.connect(conn());
+      c.accountId = account;
+      room.receive(c, encodeHello(name));
+      return c;
+    };
+    const ade = enter('Ade', 'u_ade');
+    const kemi = enter('Kemi', null);
+    for (const c of [ade, kemi]) room.receive(c, encodeCmd(CmdKind.Ready, '1'));
+    for (let i = 0; i < ticks(1) + 30; i++) room.tick();
+    expect(room.match!.phase).toBe(MatchPhase.InProgress);
+    const before = room.match!.players.find((m) => m?.name === 'Ade')!;
+    before.score = 3; // Ade has scored before the drop
+    before.kills = 3;
+    // Ade leaves for good (no resume), and comes back on the room link with a new connection
+    room.receive(ade, encodeCmd(CmdKind.Leave, ''));
+    for (let i = 0; i < 30; i++) room.tick();
+    const back = enter('Ade', 'u_ade');
+    for (let i = 0; i < ticks(4); i++) room.tick();
+    expect(room.match!.phase).toBe(MatchPhase.Ending);
+    const standings = room.match!.results!.standings;
+    const ades = standings.filter((s) => s.name === 'Ade');
+    expect(ades).toHaveLength(1);
+    expect(ades[0]).toMatchObject({ left: false, kills: 3, score: 3, id: back.playerId });
+    // no bot that stood aside for a human has a row; the places are those still here, 1 to n
+    expect(standings.filter((s) => s.isBot && s.left)).toEqual([]);
+    const here = standings.filter((s) => !s.left);
+    expect(here.map((s) => s.placement)).toEqual(here.map((_, i) => i + 1));
+    expect(here.length).toBeLessThanOrEqual(4);
+    expect(ades[0]!.placement).toBe(1);
+    expect(kemi.playerId).toBeGreaterThanOrEqual(0);
+  });
+
   it('counts kills by what made them, and keeps a leaver', () => {
     const sink = sinkOf();
     const recorder = new MatchRecorder(sink, 'BBBBBB', () => 1_000_000);

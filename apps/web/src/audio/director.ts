@@ -50,6 +50,11 @@ export interface FrameExtras {
   fireHeld: boolean;
   /** the map being played (acoustics: walls between you and a sound, open or under cover) */
   map?: MapDef;
+  /**
+   * The game holds still (training's pause, LocalMode.paused): the loops (jet, burn, held fire, hiss)
+   * go quiet and nothing new starts; on resume the frames that follow bring back what still runs.
+   */
+  paused?: boolean;
 }
 
 interface PlayerMemo {
@@ -358,6 +363,11 @@ export class AudioDirector {
 
   onFrame(f: Frame, dt: number, extras: FrameExtras): void {
     const s = this.sink;
+    if (extras.paused) {
+      // the memos stay as they are (a jet held at the pause sounds again on resume, with no new start)
+      for (const key of s.loopKeys()) s.stopLoop(key, 0.1);
+      return;
+    }
     this.localId = f.localId;
     this.frameNo++;
     const me = f.players.find((p) => p.id === f.localId) ?? null;

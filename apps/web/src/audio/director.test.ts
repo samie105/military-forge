@@ -302,6 +302,21 @@ describe('the gun in hand', () => {
     expect(sink.ids().filter((i) => i === 'melee.swing')).toHaveLength(2);
   });
 
+  it("training's pause hushes the loops and starts nothing; resuming brings the jet back without a new start (audit 28 Oct)", () => {
+    const { sink, step } = setup();
+    const jetting = frame([player(ME, { jetting: true, grounded: false, y: 2 })]);
+    step(jetting);
+    expect(sink.loops.get('jet:0')).toBe('jet.loop');
+    sink.clear();
+    for (let i = 0; i < 30; i++) step(jetting, { ...X, paused: true });
+    expect(sink.loops.size).toBe(0);
+    expect(sink.stoppedLoops).toContain('jet:0');
+    expect(sink.ids()).toEqual([]);
+    step(jetting);
+    expect(sink.loops.get('jet:0')).toBe('jet.loop');
+    expect(sink.ids()).not.toContain('jet.start');
+  });
+
   it('a feathered jet key is one jetpack sound, not a stutter', () => {
     const { sink, step } = setup();
     for (let i = 0; i < 60; i++) step(frame([player(ME, { jetting: i % 3 === 0, grounded: false })]));

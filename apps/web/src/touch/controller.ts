@@ -770,6 +770,12 @@ export class TouchController {
    */
   private syncPlaying(): void {
     document.documentElement.toggleAttribute('data-touch-playing', this.playing);
+    // outside a match (the menus, Home) the controls are neither reachable nor read out: inert and
+    // hidden from screen readers (audit 28 Oct); the HUD editor works on them anywhere
+    const exposed = this.editing || (this.active && this.inGame && !this.hiddenForMenus);
+    this.root.inert = !exposed;
+    if (exposed) this.root.removeAttribute('aria-hidden');
+    else this.root.setAttribute('aria-hidden', 'true');
     // no pinch zoom only over a game (the editor and the first-run card included): the title and every
     // menu keep the browser's zoom (WCAG 1.4.4; the web-quality audit, 23 Oct)
     this.setViewport(this.active && this.inGame && !this.hiddenForMenus);

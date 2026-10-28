@@ -1,7 +1,7 @@
 #!/bin/bash
 # Military Forge trial server, Ubuntu 24.04: cloud-init user data (docs/net-trial.md).
 # Re-run: sudo /usr/local/sbin/mf-trial-setup
-# shellcheck disable=SC2015,SC2016,SC2019,SC2086,SC1091
+# shellcheck disable=SC2015,SC2016,SC2019,SC2086,SC1090,SC1091
 
 # -- settings
 REPO="${MF_REPO:-https://github.com/samie105/military-forge}"
@@ -99,67 +99,16 @@ r() { openssl rand -hex "$1"; }
 . "$ETC/secrets"
 for k in access ticket; do [ -s "$ETC/$k.key" ] || openssl genpkey -algorithm ed25519 -out "$ETC/$k.key"; chown root:mf "$ETC/$k.key"; chmod 0640 "$ETC/$k.key"; done
 
-# -- Caddy first (status page during setup)
+# -- Caddy first (status page during setup). Its config is site.sh's (from the code): a re-run uses the
+# last deploy's (unchanged: no restart); a new box serves the status page until the code is in
+S=$SRC/scripts/net-trial/site.sh
 [ -f "$WEB/index.html" ] || page "$WEB/index.html" 'Setting up' 1 "<p>Setting up: <a href=\"/trial-status/\">status</a></p>"
-{
-  # no h3: UDP 443 is WebTransport's
-  printf '{\n\tservers {\n\t\tprotocols h1 h2\n\t}\n%s}\n\n%s {\n' "${ACME_EMAIL:+	email $ACME_EMAIL
-}" "$HOST"
-  [ "$TLS" = internal ] && printf '\ttls internal\n'
-  cat <<EOF
-	encode zstd gzip
-	header {
-		Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' data: blob: https://$HOST${ORIGIN_PORT:+:$ORIGIN_PORT} wss://$HOST${ORIGIN_PORT:+:$ORIGIN_PORT} https://*.amazonaws.com https://speed.cloudflare.com https://ixpn.ng https://nobus.io; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
-		X-Content-Type-Options nosniff
-		Referrer-Policy same-origin
-	}
-	@foreign {
-		path /ws/* /echo
-		header Origin *
-		not header_regexp Origin ^https://${HOST//./\\.}(:[0-9]+)?$
-	}
-	@game path /ws/* /health
-	@probe path /echo /probe-api/*
-	@pub path /trial-status /trial-status/* /owner-* /probe-config.json
-	# hashed /assets: a year; the rest: no-cache
-	@hashed path_regexp hashed ^/assets/[^/]+-[A-Za-z0-9_-]{8}\.[a-z0-9]+
-	@unhashed {
-		path /assets/*
-		not path_regexp ^/assets/[^/]+-[A-Za-z0-9_-]{8}\.[a-z0-9]+
-	}
-	# pages revalidate (old pages ask for removed files)
-	@page path / /r/* /admin /probe *.html /sw.js /manifest.webmanifest
-	route {
-		respond @foreign 403
-		respond /api/internal/* 404
-		handle_path /api/* {
-			reverse_proxy 127.0.0.1:8787
-		}
-		reverse_proxy @game 127.0.0.1:9001
-		reverse_proxy /admin/api/* 127.0.0.1:9002
-		reverse_proxy @probe 127.0.0.1:9300
-		header @pub Cache-Control no-store
-		file_server @pub {
-			root $PUB
-		}
-		header @hashed Cache-Control "public, max-age=31536000, immutable"
-		header @unhashed Cache-Control "no-cache"
-		header @page Cache-Control "no-cache"
-		header /r/* X-Robots-Tag noindex
-		rewrite / /index.html
-		rewrite /r/* /index.html
-		rewrite /admin /admin.html
-		rewrite /probe /probe.html
-		file_server {
-			root $WEB
-		}
-	}
-}
-EOF
-} >/etc/caddy/Caddyfile.new
-caddy validate --adapter caddyfile --config /etc/caddy/Caddyfile.new >/dev/null 2>"$DATA/caddy-validate.log" || { cat "$DATA/caddy-validate.log"; fail 'the Caddy config'; }
-# unchanged: no restart (it would drop every WebSocket)
-cmp -s /etc/caddy/Caddyfile{.new,} && rm /etc/caddy/Caddyfile.new || { mv /etc/caddy/Caddyfile{.new,} && systemctl restart caddy || fail 'starting Caddy'; }
+if [ -f "$S" ]; then . "$S"; site_caddy || fail 'the Caddy config'
+elif ! grep -qs "^$HOST {" /etc/caddy/Caddyfile; then
+  t=''; [ "$TLS" = internal ] && t=$'\ttls internal\n'
+  printf '{\n\tservers {\n\t\tprotocols h1 h2\n\t}\n%s}\n\n%s {\n%s\tredir / /trial-status/\n\theader Cache-Control no-store\n\troot * %s\n\tfile_server\n}\n' "${ACME_EMAIL:+	email $ACME_EMAIL
+}" "$HOST" "$t" "$PUB" >/etc/caddy/Caddyfile && systemctl restart caddy || fail 'starting Caddy'
+fi
 systemctl enable --quiet --now caddy || fail 'starting Caddy'
 log "Caddy up (Let's Encrypt needs ports 80 and 443 open)"
 
@@ -173,6 +122,8 @@ else
 fi
 COMMIT=$(as_mf git -C "$SRC" log -1 --format='%h %cs')
 log "commit $COMMIT"
+# this commit's Caddy config (headers, caching, compression): Caddy restarts only if it changed
+[ -f "$S" ] && . "$S" && { site_caddy || log "Caddy refused the new config: kept the old one"; }
 IFS='|' read -r PID pn pp < <(bash "$SRC/scripts/net-trial/where.sh" 2>/dev/null); PID=${PID:-box}
 PROBE_NAME=${PROBE_NAME:-${pn:-this box}} PROBE_PROVIDER=${PROBE_PROVIDER:-$pp}
 
@@ -209,7 +160,7 @@ if [ -d "$WEB/assets" ]; then
     log "keeping old files failed"
 fi
 rm -rf "$WEB" && mv "$WEB.new" "$WEB" || fail 'copying the build'
-sed -i "s#%ORIGIN%#$ORIGIN#g; s#</head>#<meta name=\"mf-tune\" content=\"host\" /></head>#" "$WEB"/{index.html,robots.txt,sitemap.xml}
+site_fill
 [ -f "$WEB/probe.html" ] && [ -f "$SRC/scripts/net-trial/probe-server/server.mjs" ] && PROBE=1
 
 # -- services

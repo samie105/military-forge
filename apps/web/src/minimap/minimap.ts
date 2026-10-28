@@ -21,10 +21,13 @@ import type { Frame } from '../view';
 import { DEFAULT_PALETTE, drawDots, drawSilhouette, fitMap, paletteFor, toBoxY, toWorldX, toWorldY, type Fit, type Palette } from './draw';
 import { EnemyIntel, type IntelMark, type ViewBox } from './intel';
 import { BIG_PHONE, HEAD, PHONE, bigPhonePlace, isTapAway, phonePlace, widthFor, type TouchMark } from './place';
+import { logicalPoint, logicalRect, viewport } from '../ui/landscape';
 import './minimap.css';
 
 /** desktop: the kit's 1920 × 1080 design px; phone: 812 × 375 */
 const DESK = { w: 1920, h: 1080, width: 300, minH: 96, maxH: 168, x: 32, y: 28 } as const;
+/** the smallest head the minimap draws, in page px: its label is 0.52 of it, so never under 12 px */
+const MIN_HEAD_PX = 23;
 /** the big map, design px: centred; on a phone, between the thumb dials */
 const BIG_DESK = { w: 1180, h: 660 } as const;
 /** the phone feed moves only when the minimap is at the top; its new left clears the scoreboard button (design px) */
@@ -212,6 +215,7 @@ export class Minimap {
     this.visible = on;
     if (!on) this.bigOpen = false;
     if (!on) this.moveFeed(null);
+    if (!on) this.clearHud(null);
     else this.lastPlace = -Infinity;
     this.applyVisibility();
   }
@@ -306,8 +310,9 @@ export class Minimap {
     const map = this.map!;
     const b = map.bounds;
     const aspect = (b.maxX - b.minX) / (b.maxY - b.minY);
-    const W = window.innerWidth;
-    const H = window.innerHeight;
+    // the page's own size: an upright phone plays turned onto its side (ui/landscape.ts), where the
+    // window's width is the short side (audit 28 Oct: it sized the map for 390 px wide, a sliver)
+    const { w: W, h: H } = viewport();
     let x: number;
     let y: number;
     let w: number;
@@ -319,7 +324,7 @@ export class Minimap {
         this.lastPlace = now;
         const controls: { left: number; top: number; right: number; bottom: number }[] = [];
         for (const c of document.querySelectorAll<HTMLElement>('.mf-touch .mf-ctl:not(.mf-off)')) {
-          const r = c.getBoundingClientRect();
+          const r = logicalRect(c);
           if (r.width > 0) controls.push({ left: r.left / scale, top: r.top / scale, right: r.right / scale, bottom: r.bottom / scale });
         }
         const p = phonePlace(controls, aspect);
@@ -335,8 +340,10 @@ export class Minimap {
       x = DESK.x;
       y = DESK.y;
     }
-    const head = this.phone ? HEAD.phone : HEAD.desk;
-    this.size(this.small, x * scale, y * scale, w * scale, h * scale, head * scale);
+    // the head's label stays readable (≥ 12 px type: 23 px of head) however small the window
+    const head = Math.max(MIN_HEAD_PX, (this.phone ? HEAD.phone : HEAD.desk) * scale);
+    this.size(this.small, x * scale, y * scale, w * scale, Math.max(h * scale, head + 40), head);
+    this.clearHud(this.phone ? null : (y * scale + Math.max(h * scale, head + 40)));
     if (this.bigOpen) {
       const big = this.phone ? this.bigPlace : BIG_DESK;
       const bw = big.w * scale;
@@ -472,9 +479,26 @@ export class Minimap {
   }
 
   private local(e: PointerEvent | WheelEvent): { x: number; y: number } {
-    const r = this.big.dots.getBoundingClientRect();
-    return { x: e.clientX - r.left, y: e.clientY - r.top };
+    const r = logicalRect(this.big.dots);
+    const p = logicalPoint(e);
+    return { x: p.x - r.left, y: p.y - r.top };
   }
+
+  /**
+   * Desktop: the HUD's top-left pills (fps, connection, Tuned by host) sit under the minimap, so they
+   * start below it (audit 28 Oct: the map covered them). `bottom`: the map's foot in page px; null: no map there.
+   */
+  private clearHud(bottom: number | null): void {
+    const html = document.documentElement;
+    const on = bottom !== null && this.visible;
+    const fit = Number(html.style.getPropertyValue('--hud-fit')) || 1;
+    const value = on ? `${Math.ceil(bottom / fit)}px` : '';
+    if (value === this.hudClear) return;
+    this.hudClear = value;
+    html.classList.toggle('mf-mm-desk', on);
+    if (on) html.style.setProperty('--mm-desk-clear', value);
+  }
+  private hudClear = '';
 
   /** presses that started away from the big map, the minimap and the touch controls, by pointer */
   private readonly away = new Map<number, TouchMark>();

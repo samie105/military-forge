@@ -7,7 +7,6 @@
 .pt:has(> .pt__img) > .pt__base { opacity: 0; transition: opacity 120ms linear; }
 @keyframes pt-in { from { opacity: 0; } }
 html.reduce-motion .pt__img { animation: none; }
-@media (prefers-reduced-motion: reduce) { .pt__img { animation: none; } }
 
 /* the kit's .avatar disc holding a portrait instead of an initial (lobby rows, results, scoreboard) */
 .avatar.avatar--portrait { padding: 0; overflow: hidden; background: var(--c-olive-800); position: relative; }

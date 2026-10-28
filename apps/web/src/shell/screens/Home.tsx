@@ -16,8 +16,8 @@ import { sharedElement } from '../../ui/motion';
 import { Screen } from '../../ui/Screen';
 import { useCtl } from '../context';
 import type { ShellStore } from '../store';
-import { Backdrop, Hint, Hints, NetPill, takeCard } from './frame';
-import { MAP_CARDS, ROOM_SLOTS, lobbyMaps } from './Lobby';
+import { Backdrop, Hint, Hints, NetPill, OFFLINE_LINE, takeCard } from './frame';
+import { MAP_CARDS, lobbyMaps } from './Lobby';
 import { FriendsButton, SquadCard } from '../../social/SocialLayer';
 import { SavedAdsList } from '../../ads/SavedAds';
 import { NextOrders } from '../../tour/NextOrders';
@@ -128,15 +128,15 @@ export function Home({ store }: { store: ShellStore }) {
               Ops briefing · Deathmatch with friends
             </span>
             <article className="poster halftone-ink home__poster m-p3" style={row(1)}>
-              <span className="btn__sticker" style={{ top: -16, right: 40 }}>
-                The host can tune the game
-              </span>
               <b className="home__poster-no display" aria-hidden="true">
                 01
               </b>
               <span className="serial">Op 01 · Quick match</span>
               <h2 className="display home__poster-title">Play now</h2>
-              <p className="home__poster-sub">{offline ? 'The game server is out of reach: a training match against bots.' : 'A room of your own, bots fill it, the fight starts at once. Friends join by its code.'}</p>
+              {/* offline: the one place Home says so (audit 28 Oct: it said it four ways) */}
+              <p className={offline ? 'home__poster-sub home__poster-sub--off' : 'home__poster-sub'} role={offline ? 'status' : undefined}>
+                {offline ? OFFLINE_LINE : 'A room of your own, bots fill it, the fight starts at once. Friends join by its code.'}
+              </p>
               <div className="home__poster-cta">
                 {/* one tap to a fight (mobile audit P1-6); Create room is the friends' way in */}
                 <button className="btn btn--ink btn--xl home__create m-p8" type="button" data-tour="play" onClick={() => ctl.playNow()}>
@@ -156,35 +156,22 @@ export function Home({ store }: { store: ShellStore }) {
                     <span className="btn__sub">Same Wi-Fi · works offline</span>
                   </span>
                 </button>
-                <span className="home__poster-meta">Up to {ROOM_SLOTS} · link + QR</span>
               </div>
               <span className="hazard" aria-hidden="true"></span>
             </article>
-            {offline && (
-              <p className="status status--warn">
-                <Icon name="warn" />
-                The game server can't be reached right now: Training and Local room still work.
-              </p>
-            )}
             <div className="home__row">
               <button type="button" className="ticket rivets home__ticket m-p3" style={row(2)} data-tour="join" onClick={() => ctl.openOverlay('join')}>
                 <Icon name="link" className="home__ghost" />
-                <span className="label">02 — Got a code?</span>
+                <span className="label">02 · Got a code?</span>
                 <b className="display">Join with code</b>
                 <span className="home__ticket-sub">6 letters, or paste the link</span>
               </button>
               <button type="button" className="ticket rivets home__ticket m-p3" style={row(3)} onClick={() => ctl.go({ to: 'training' })}>
                 <Icon name="target" className="home__ghost" />
-                <span className="label">03 — Solo</span>
+                <span className="label">03 · Solo</span>
                 <b className="display">Training</b>
                 <span className="home__ticket-sub">Practice against bots</span>
               </button>
-            </div>
-            <div className="home__soon m-p3" style={row(4)} aria-disabled="true">
-              <span className="label">04</span>
-              <b className="display">Matchmaking</b>
-              <span>Match with anyone</span>
-              <span className="tag tag--soon">Coming soon</span>
             </div>
           </div>
 

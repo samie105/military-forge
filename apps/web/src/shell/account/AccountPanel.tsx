@@ -18,6 +18,7 @@ import { PRIVACY_URL } from '../../metrics/ConsentCard';
 import { ageOnDevice, answerAge, birthYears } from '../age';
 import { ApiError, type AccountInfo, type ParkedGuest } from '../api';
 import { useCtl } from '../context';
+import { OFFLINE_TITLE, STILL_WORKS } from '../offline';
 import { TERMS_URL } from '../pages';
 import { BotCheck, botCheckOn } from './BotCheck';
 import type { ShellStore } from '../store';
@@ -424,7 +425,7 @@ export function AccountPanel({ store, variant, preset }: { store: ShellStore; va
           </>
         );
       } else if (!info) {
-        body = <Row variant={variant} label="Account" desc={unreachable ? "Can't reach the server. Check your connection, then open Account again." : 'Checking your account…'} />;
+        body = <Row variant={variant} label="Account" desc={unreachable ? `${OFFLINE_TITLE}. Check your connection, then open Account again. ${STILL_WORKS}` : 'Checking your account…'} />;
       } else if (info.saved) {
         body = (
           <>

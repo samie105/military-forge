@@ -62,7 +62,7 @@ describe('the Store’s baked art', () => {
 
     const item = (itemId: string, name: string, tier: string, killEffect: string | null) => ({ itemId, line: 'k47_galaxy_relic', name, tier, weaponId: 'k47', killEffect, includes: [], price: 1050, fullPrice: 1050, upgrade: false, money: null, owned: false, claimable: false });
     const state: StoreState = {
-      view: { enabled: true, payments: true, mode: 'test', claim: null, currency: { name: 'Brass', walletCap: 20_000 }, bundles: [], items: [item('skin_k47_galaxy_relic', 'Galaxy Relic', 'forged', null), item('skin_k47_galaxy_relic_fx', 'Galaxy Relic + Stardust', 'forged_kill_effect', 'stardust')], account: null },
+      view: { enabled: true, payments: true, mode: 'test', claim: null, currency: { name: 'Brass', walletCap: 20_000 }, bundles: [], items: [item('skin_k47_galaxy_relic', 'Galaxy Relic', 'forged', null), item('skin_k47_galaxy_relic_fx', 'Galaxy Relic + Stardust Shatter', 'forged_kill_effect', 'stardust')], account: null },
       failed: null,
       notice: null,
       confirm: null,

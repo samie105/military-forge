@@ -63,8 +63,8 @@
 .mf-route__fail > .ic { width: 96px; height: 96px; color: var(--c-warn); }
 .mf-route__acts { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--sp-5); }
 .mf-route__acts .btn { min-height: 112px; padding: 0 56px; font-size: var(--fs-36); }
-@media (prefers-reduced-motion: reduce) { .mf-route__run i { animation: none; width: 100%; opacity: .6; } }
-html.reduce-motion .mf-route__run i { animation: none; width: 100%; opacity: .6; }
+/* Reduce motion: the bar fills the track and breathes (kit.css m-wait), so the wait never looks frozen */
+html.reduce-motion .mf-route__run i { width: 100%; transform: none; animation: m-wait 1.2s ease-in-out infinite alternate !important; }
 
 /* the room lobby folded away for warm-up, and the local warm-up: a strip at the top centre */
 .mf-lobby-strip {

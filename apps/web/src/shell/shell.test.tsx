@@ -18,8 +18,8 @@ import { Alert, connectStep, reconnectSecondsLeft } from './screens/Connection';
 import { Countdown, countdownState, rulesLine } from './screens/Countdown';
 import { codeLetters, joinState } from './screens/Join';
 import { Lobby, killsLabel, lobbyMaps, minutesLabel } from './screens/Lobby';
-import { enterSubmits, nameState } from './screens/NameEntry';
-import { Pause, leaveCost } from './screens/Pause';
+import { enterAction, nameState } from './screens/NameEntry';
+import { Pause, leaveCost, pauseHeading } from './screens/Pause';
 import { Results, reasonChip, winnerOf } from './screens/Results';
 import { NameTagPreview, autoText, resetPatch } from './screens/Settings';
 import { dashTip } from './screens/Tips';
@@ -190,6 +190,33 @@ describe("results (the kit's screen 10)", () => {
     // a bot's own "[BOT]" tag never shows: its name, as next to the Bot badge (review M3)
     expect(winnerOf([p('[BOT] Kestrel', 5, true), p('Kemi', 2)])).toEqual({ name: 'Kestrel', draw: false });
     expect(reasonChip({ reason: MatchEndReason.TimeLimit, durationTicks: ticks(300) }, 10)).toMatchObject({ text: "Time's up · 5:00", state: 'time-up' });
+    // one who left keeps their row, not the win (audit 28 Oct)
+    expect(winnerOf([{ ...p('Gone', 9), left: true }, p('A', 3), p('B', 2)])).toEqual({ name: 'A', draw: false });
+  });
+
+  it('a player who left has no place number (audit 28 Oct)', () => {
+    const html = renderToStaticMarkup(<Results view={view({ results })} results={results} actions={actions} room={{ isHost: true, hostId: 4, leave: vi.fn() }} />);
+    expect(html).toMatch(/<td class="num">–<\/td><th scope="row">.*?Kemi/);
+  });
+
+  it('training (solo): the player is the headline, plurals are right, no vote and no lobby: Play again or Leave (audit 28 Oct)', () => {
+    const solo: MatchResults = {
+      ...results,
+      standings: [standing(0, 'Mantis', 1, { isBot: true, score: 5, kills: 5, deaths: 1, rating: 500, mvp: true }), standing(4, 'Ade', 2, { score: 1, kills: 1, deaths: 1 })],
+    };
+    const html = renderToStaticMarkup(<Results view={view({ humans: 1 })} results={solo} actions={actions} training={{ leave: vi.fn() }} />);
+    expect(html).toMatch(/res__name[^>]*>2nd place</);
+    expect(html).toContain('Mantis won · ');
+    expect(html).toMatch(/results\.me\.kills">1<\/span> kill · <span class="num" data-bind="results\.me\.deaths">1<\/span> death ·/);
+    expect(html).not.toContain('Play again?');
+    expect(html).not.toContain('results.votes');
+    expect(html).not.toContain('Back to lobby');
+    expect(html).toContain('Play again');
+    expect(html).toMatch(/door-out.*Leave</);
+    const won = renderToStaticMarkup(
+      <Results view={view({ humans: 1 })} results={{ ...solo, standings: [standing(4, 'Ade', 1, { score: 5, kills: 5 }), standing(0, 'Mantis', 2, { isBot: true })] }} actions={actions} training={{ leave: vi.fn() }} />,
+    );
+    expect(won).toMatch(/res__name[^>]*>Victory</);
   });
 });
 
@@ -219,6 +246,15 @@ describe('countdown (screen 6)', () => {
     expect(html).toMatch(/hold <kbd[^>]*>Tab<\/kbd> to see who&#x27;s in/);
     const go = renderToStaticMarkup(<Countdown view={view({ phase: MatchPhase.InProgress, number: 2 })} state="go" />);
     expect(go).toContain('<li class="is-now">GO</li>');
+  });
+
+  it('GO says Go without an exclamation mark, and leaves instead of cutting out (audit 28 Oct)', () => {
+    const go = renderToStaticMarkup(<Countdown view={view({ phase: MatchPhase.InProgress, number: 1 })} state="go" />);
+    expect(go).toContain('class="display cd__go m-p7">Go</b>');
+    expect(go).not.toContain('Go!');
+    const leaving = renderToStaticMarkup(<Countdown view={view({ phase: MatchPhase.InProgress, number: 1 })} state="go-leaving" />);
+    expect(leaving).toContain('class="display cd__go m-p7 is-leaving">Go</b>');
+    expect(leaving).toContain('<li class="is-now">GO</li>');
   });
 });
 
@@ -325,14 +361,15 @@ describe('join, names, connection, pause and settings', () => {
     expect(nameState('Ade_07', null, null, true, true)).toBe('checking');
   });
 
-  it('name entry: Enter submits when Continue would, and while the name is still being checked (audit L1)', () => {
-    expect(enterSubmits('available', true, false)).toBe(true);
-    // typed, then Enter at once: the API decides (a taken name comes back with suggestions)
-    expect(enterSubmits('checking', false, false)).toBe(true);
-    expect(enterSubmits('checking', false, true)).toBe(false);
-    expect(enterSubmits('too-short', false, false)).toBe(false);
-    expect(enterSubmits('taken', false, false)).toBe(false);
-    expect(enterSubmits('empty', false, false)).toBe(false);
+  it('name entry: Enter submits when Continue would; mid-check it waits for the check, never sending a name it refuses (audit L1; audit 28 Oct)', () => {
+    expect(enterAction('available', true, false)).toBe('submit');
+    // typed, then Enter at once: it waits for the check, and goes only if the name passes
+    expect(enterAction('checking', false, false)).toBe('after-check');
+    expect(enterAction('checking', false, true)).toBe('none');
+    expect(enterAction('too-short', false, false)).toBe('none');
+    expect(enterAction('taken', false, false)).toBe('none');
+    expect(enterAction('invalid', false, false)).toBe('none');
+    expect(enterAction('empty', false, false)).toBe('none');
   });
 
   it('connection: the steps, and the reconnect countdown', () => {
@@ -599,6 +636,24 @@ describe("the host's tuning panel (pnpm playtest --tune)", () => {
     };
     expect(menu(true)).toContain('Tune the game');
     expect(menu(false)).not.toContain('Tune the game');
+  });
+
+  it('the menu never claims to pause an online match; training really pauses (audit 28 Oct)', () => {
+    expect(pauseHeading(false, MatchPhase.InProgress)).toEqual({ eyebrow: 'Training on hold', title: 'Paused' });
+    expect(pauseHeading(true, MatchPhase.InProgress)).toEqual({ eyebrow: "Online play can't pause", title: 'Match continues' });
+    expect(pauseHeading(true, MatchPhase.Countdown).title).toBe('Match continues');
+    expect(pauseHeading(true, MatchPhase.Waiting)).toEqual({ eyebrow: 'Room', title: 'Menu' });
+    // a static render reads the store's first state: the room is in it from the start
+    const store = createShellStore({ screen: { name: 'room', code: 'KMTXRA' }, lobby: roomLobby(true), match: view({ phase: MatchPhase.InProgress }) });
+    const { ctl } = setup(true);
+    const html = renderToStaticMarkup(
+      <ControllerContext.Provider value={ctl}>
+        <Pause store={store} />
+      </ControllerContext.Provider>,
+    );
+    expect(html).toMatch(/pause__title pause__title--long">Match continues</);
+    // Leave sits under the scrolling list, always in view
+    expect(html).toMatch(/pause__list.*<\/div><div class="pause__end"><button[^>]*>.*Leave match/);
   });
 });
 

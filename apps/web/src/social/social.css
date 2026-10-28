@@ -286,7 +286,7 @@
 .sx-toast__sub { color: var(--c-muted); font-size: var(--fs-16); }
 .sx-toast__clock { flex: none; color: var(--c-brass); font: var(--fw-bold) var(--fs-24)/1 var(--f-ui); }
 .sx-toast__bar { display: block; height: 6px; border-radius: 3px; background: var(--c-line); overflow: hidden; }
-.sx-toast__bar i { display: block; height: 100%; width: calc(var(--left, 1) * 100%); background: var(--c-brass); transition: width 1s linear; }
+.sx-toast__bar i { display: block; height: 100%; width: 100%; background: var(--c-brass); transform-origin: 0 50%; transform: scaleX(var(--left, 1)); transition: transform 1s linear; }
 html.reduce-motion .sx-toast__bar i { transition: none; }
 .sx-toast__acts { display: flex; align-items: center; gap: var(--sp-3); }
 .sx-toast__acts .sx-act { min-height: 48px; font-size: var(--fs-16); }

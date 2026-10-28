@@ -79,12 +79,17 @@ JSON-LD on `/`:
   - allows everything except `/api/` and `/ws/`;
   - names the sitemap.
   - It doesn't block `/r/`: a crawler has to fetch a room page to see its `noindex`.
-- `/sitemap.xml`: `/`, `/armory.html` and `/gamepad.html`.
+- `/sitemap.xml`: `/`, `/privacy.html` and `/terms.html`, the pages with words in their HTML. Each `lastmod` is
+  the page file's last commit; the server's shallow clone has no history, so it lists them undated rather than
+  dating every page to every deploy. `/official.html` joins once the owner fills in its accounts (noindex until then).
+- `/llms.txt`: a short plain summary of the game and its pages for AI assistants (llmstxt.org).
 - `/manifest.webmanifest`: installs as a full-screen, landscape app with the emblem icons (any and maskable).
+  Its `short_name` is "Forge" (the full name is cut short under a phone's icon); the owner may pick another.
 
-`%ORIGIN%` in these files and in the page is filled in where the site is served:
+`%ORIGIN%` in these files, in the page and in the text pages (privacy, terms, official: canonical and link
+previews) is filled in where the site is served:
 - the playtest proxy does it per request;
-- `scripts/net-trial/cloud-init.sh` does it on deploy.
+- `scripts/net-trial/site.sh` (sourced by `cloud-init.sh`) does it on deploy.
 
 ### Room pages are noindex
 - Caddy and the playtest proxy send `X-Robots-Tag: noindex` on `/r/*`.
@@ -97,10 +102,12 @@ JSON-LD on `/`:
 - The menus' 3D backdrop no longer renders 60 times a second behind opaque screens (`ui/backdrop.ts`). It was the
   largest source of long tasks while the title and menus showed.
 - On the server:
-  - Caddy compresses with zstd and gzip, and the playtest proxy with brotli and gzip.
-  - Hashed `/assets/*` are cached: a week on the box, a year (immutable) through the playtest.
-  - `/art/*` gets ETag revalidation. A day of caching would need about 40 more bytes in cloud-init.sh, which is
-    at its size limit.
+  - Caddy compresses with zstd and gzip (GLB models and sound banks too, since 28 Oct), and the playtest proxy with
+    brotli and gzip.
+  - Hashed `/assets/*` are cached a year (immutable). Everything else, `/art/*` included, revalidates (ETag), and
+    the service worker keeps a copy for offline play (`scripts/net-trial/site.sh`, `apps/web/pwa.ts`).
+  - The 3D view's soldiers, guns and effects wait until the player heads for play (28 Oct audit: 4.3-4.8 MB came
+    before the first tap).
 
 ## 3. What's left
 
@@ -123,7 +130,6 @@ JSON-LD on `/`:
   - a page per map ("Street Market, Lagos") with screenshots;
   - a "how to play" page with the controls;
   - a changelog.
-- **`/art/*` caching**: a day of caching, if the owner frees room in cloud-init.sh.
 
 ## 4. The domain: why it matters, options and costs
 

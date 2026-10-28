@@ -12,6 +12,18 @@ export const SHAPES: Record<string, string> = {
   star: '<path d="m6 .6 1.6 3.6 3.9.4-2.9 2.6.8 3.9L6 9.1l-3.4 2 .8-3.9L.5 4.6l3.9-.4z"/>',
 };
 
+/**
+ * The glyph each item type wears until its own picture is in (and on a page without 3D): one per type, so
+ * a top, trousers and boots never share a shirt (audit 28 Oct). The Locker and the creator both use it.
+ */
+export const SLOT_GLYPH: Readonly<Partial<Record<string, string>>> = {
+  top: 'shirt', jacket: 'shirt', legs: 'trousers', gloves: 'hand', boots: 'boot', headgear: 'helmet', eyewear: 'glasses', hair: 'hair',
+  bodyType: 'user', jetpack: 'backpack', exhaust: 'flame', trail: 'sparkle', accessory: 'star', skin_k47: 'wpn-k47',
+};
+
+/** Which strip of the soldier's full-body picture shows an item best (object-position y, %): the head items use the head-and-shoulders portrait. */
+export const THUMB_FOCUS: Readonly<Partial<Record<string, number>>> = { top: 47, jacket: 47, gloves: 57, legs: 82, boots: 100, jetpack: 47, exhaust: 75, trail: 75 };
+
 export const ic = (name: string, cls = 'ic') => `<svg class="${cls}" aria-hidden="true"><use href="#icon-${name}"/></svg>`;
 
 export function escapeHtml(text: string): string {

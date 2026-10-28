@@ -18,7 +18,7 @@ import { NICKNAME_REASONS, type NicknameCheck } from '../../api';
 import { useCtl } from '../../context';
 import type { ShellStore } from '../../store';
 import { joiningLine, useJoining } from '../joining';
-import { NAME_MAX, NAME_MIN, enterSubmits, nameState } from '../NameEntry';
+import { NAME_MAX, NAME_MIN, nameState, useEnterKey } from '../NameEntry';
 import { PhoneScreen, rise, useRotated } from './layout';
 
 /** The upright-phone tip on the name screen was seen (once a phone). */
@@ -112,6 +112,7 @@ export function PhoneNameEntry({ store, first }: { store: ShellStore; first: boo
   const state = error ? 'invalid' : nameState(name, check, current, pending, failed);
   const shown = suggestions.length ? suggestions : (check?.suggestions ?? []);
   const canContinue = !busy && (state === 'available' || state === 'unchecked' || (state === 'checking' && !!profile?.offline) || (!first && state === 'same'));
+  const enter = useEnterKey(name, state, canContinue, busy, () => void submit(name.trim()));
   const length = [...name.trim()].length;
   const changeable = profile?.changeableAt ? new Date(profile.changeableAt) : null;
   const preview = name.trim() || '—';
@@ -139,7 +140,7 @@ export function PhoneNameEntry({ store, first }: { store: ShellStore; first: boo
         className="pm pm-ne"
         onSubmit={(e) => {
           e.preventDefault();
-          if (enterSubmits(state, canContinue, busy)) void submit(name.trim());
+          enter();
         }}
       >
         <div className="pm-ne__card m-p1" aria-hidden="true">
@@ -181,11 +182,11 @@ export function PhoneNameEntry({ store, first }: { store: ShellStore; first: boo
                 aria-label="Your name"
                 aria-describedby="pm-ne-check"
                 // the keyboard's Go while the name is still being checked: the browser skips a form whose
-                // submit button is disabled, so the field submits itself (NameEntry's enterSubmits; #167)
+                // submit button is disabled, so the field handles it (NameEntry's useEnterKey: it waits for the check)
                 onKeyDown={(e) => {
                   if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
                   e.preventDefault();
-                  if (enterSubmits(state, canContinue, busy)) void submit(name.trim());
+                  enter();
                 }}
                 onChange={(e) => {
                   setName(e.target.value);

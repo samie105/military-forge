@@ -13,6 +13,8 @@ export const DEBRIEF_MATCHES = 5;
 
 export interface Debrief {
   done: string;
+  /** the match got a kill: the done line earns its check mark (a 0-kill match gets no tick) */
+  scored: boolean;
   /** null when there's nothing to suggest */
   tryNext: string | null;
   next: { title: string; reason: string } | null;
@@ -22,7 +24,7 @@ const MOVE_NAMES: Partial<Record<Move, string>> = { dash: 'dash', grenade: 'gren
 
 export function debrief(m: MatchSummary, f: Facts, top: Card | null): Debrief {
   const used = [...new Set(m.moves)].map((x) => MOVE_NAMES[x]).filter((x): x is string => !!x);
-  const kills = `${m.kills} ${m.kills === 1 ? 'kill' : 'kills'}`;
+  const kills = m.kills === 0 ? 'No kills this time' : `${m.kills} ${m.kills === 1 ? 'kill' : 'kills'}`;
   const done = used.length ? `${kills} · ${used.slice(0, 3).join(', ')}` : kills;
   const deaths = Object.values(m.deaths).reduce((a, b) => a + (b ?? 0), 0);
   let tryNext: string | null = null;
@@ -32,5 +34,5 @@ export function debrief(m: MatchSummary, f: Facts, top: Card | null): Debrief {
   else if (!m.moves.includes('dash')) tryNext = "You didn't dash: dashes dodge fire.";
   else if (!m.moves.includes('grenade')) tryNext = 'No grenades: tap to throw, hold to aim.';
   else if (!m.moves.includes('take') && f.moves.take === 0) tryNext = 'No guns taken: walk over one to take it.';
-  return { done, tryNext, next: top ? { title: top.title, reason: top.reason } : null };
+  return { done, scored: m.kills > 0, tryNext, next: top ? { title: top.title, reason: top.reason } : null };
 }

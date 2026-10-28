@@ -82,7 +82,7 @@ const ic = (name: string, cls = 'ic') => `<svg class="${cls}" aria-hidden="true"
 
 /** The rack's families in the kit's order, and their words. */
 const FAMILIES: readonly [string, string][] = [
-  ['pistol', 'Pistol'], ['rifle', 'Rifle'], ['shotgun', 'Shotgun'], ['sniper', 'Sniper'], ['launcher', 'Launcher'],
+  ['pistol', 'Sidearm'], ['rifle', 'Rifle'], ['shotgun', 'Shotgun'], ['sniper', 'Sniper'], ['launcher', 'Launcher'],
   ['heavy', 'Heavy'], ['shield', 'Shield'], ['melee', 'Melee'], ['thrown', 'Thrown'],
 ];
 
@@ -155,7 +155,7 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
             <button type="button" class="btn btn--volt btn--sm m-p8 mf-toggle" data-action="fire">${ic('target')}Fire</button>
             <div class="seg" data-group="focus" role="radiogroup" aria-label="View"><button type="button" class="seg__opt" role="radio" data-focus="whole">Whole</button><button type="button" class="seg__opt" role="radio" data-focus="muzzle">Muzzle</button></div>
             <div class="seg" data-group="light" role="radiogroup" aria-label="Light"><button type="button" class="seg__opt" role="radio" data-light="lobby">Lobby</button><button type="button" class="seg__opt" role="radio" data-light="night">Night</button><button type="button" class="seg__opt" role="radio" data-light="desert">Desert</button></div>
-            <button type="button" class="btn btn--ghost btn--sm m-p8 mf-toggle" data-action="sockets" aria-pressed="true">${ic('eye')}Mounts</button>
+            <button type="button" class="btn btn--ghost btn--sm m-p8 mf-toggle" data-action="sockets" aria-pressed="false">${ic('eye')}Mounts</button>
           </div>
           <div class="ar__ctrl mf-camo" data-scroll-x></div>
         </div>
@@ -203,6 +203,7 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
   const status = $<HTMLElement>('.mf-status');
   const overlay = $<HTMLElement>('.mf-overlay');
   const viewer = new ArmoryViewer($<HTMLCanvasElement>('canvas'));
+  viewer.setSocketsVisible(false);
   let alive = true;
   let current = '';
   let weapons: Record<string, WeaponEntry> = {};
@@ -210,7 +211,8 @@ export function mountArmory(container: HTMLElement, options: ArmoryOptions = {})
   let sockets: Record<string, { attach?: string; frame?: ModelFrame; sockets: Record<string, Socket> }> = {};
   let vfx: VfxManifest | null = null;
   let specials: SpecialsManifest | null = null;
-  let socketsOn = true;
+  // the mount markers are a tool for looking closer, not the gun's look: off until Mounts is pressed (audit 28 Oct)
+  let socketsOn = false;
   let camoSheet: CamoSheet | null = null;
   let camoTex: Texture | null = null;
   let camo = '';

@@ -21,6 +21,7 @@ import { currentDevice } from "../../../gamepad";
 import { drillDone, isTouchDevice } from "../../../touch";
 import { InstallButton } from "../../../pwa/InstallButton";
 import { HomeSoldier } from "../../../presentation/HomeSoldier";
+import { OFFLINE_LINE } from "../frame";
 
 export function PhoneHome({ store }: { store: ShellStore }) {
   const ctl = useCtl();
@@ -106,7 +107,7 @@ export function PhoneHome({ store }: { store: ShellStore }) {
               Play now
             </button>
             <span className="pm-poster__note">
-              {offline ? "Offline: training against bots · Local room works without it" : "Bots fill the room · friends join by code"}
+              {offline ? OFFLINE_LINE : "Bots fill the room · friends join by code"}
             </span>
             <button
               type="button"

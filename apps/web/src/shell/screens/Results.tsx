@@ -1,7 +1,8 @@
 /**
  * 10 · Results (round two's data-screen="results"): the winner and why the match ended, your place
  * and numbers, the final standings, the MVP card and the rematch vote. Local matches (training) and
- * rooms share it; rooms add the host's "Back to lobby", sharing and leaving. Motion: the screen
+ * rooms share it; rooms add the host's "Back to lobby", sharing and leaving. Training is the player's own: they are the
+ * headline (Victory, 2nd place…), and it ends with Play again or Leave (no vote, no lobby). Motion: the screen
  * floods from the clock (P6), the winner focus-pulls in (P1), the MVP card stamps (P7), the standings
  * rise in turn (P3), and each vote pip stamps as its vote lands (P7).
  *
@@ -17,7 +18,7 @@ import { viewport } from '../../ui/landscape';
 import { flood } from '../../ui/motion';
 import { Screen, blurAfter } from '../../ui/Screen';
 import { ControllerContext } from '../context';
-import { formatClock, ordinal, playerName, type MatchView } from '../matchView';
+import { formatClock, noun, ordinal, playerName, resultHeadline, type MatchView } from '../matchView';
 import type { ShellActions } from '../store';
 import { Backdrop, NetPill } from './frame';
 import { PlayerAvatar } from '../../presentation/PlayerAvatar';
@@ -41,8 +42,13 @@ export interface Winner {
   draw: boolean;
 }
 
-/** Who won: the best score alone, else a draw (a 0–0 time-out too). */
-export function winnerOf(standings: readonly Pick<MatchStanding, 'name' | 'score' | 'isBot'>[]): Winner {
+/**
+ * Who won: the best score alone, else a draw (a 0–0 time-out too). Among the players still here at
+ * the end: one who left keeps their row, not the win.
+ */
+export function winnerOf(all: readonly (Pick<MatchStanding, 'name' | 'score' | 'isBot'> & { left?: boolean })[]): Winner {
+  const stayed = all.filter((s) => !s.left);
+  const standings = stayed.length ? stayed : all;
   if (!standings.length) return { name: '–', draw: false };
   const top = Math.max(...standings.map((s) => s.score));
   const best = standings.filter((s) => s.score === top);
@@ -72,6 +78,10 @@ export function Results({ view, results, actions, room, training }: { view: Matc
   const closed = view.phase === MatchPhase.Closed;
   const humans = Math.max(view.humans, view.votes);
   const host = !room || room.isHost;
+  // training (solo): the player is the headline, and it ends with Play again or Leave
+  const solo = !!training && !room;
+  const present = results.standings.filter((s) => !s.left);
+  const headline = solo && me && !teamMode ? resultHeadline(me, present) : null;
   const states = [chip.state === 'time-up' ? 'time-up' : 'kill-limit', host ? 'host' : 'guest', view.voted ? 'voted' : 'not-voted'];
   const code = room?.code;
   const ctl = useContext(ControllerContext);
@@ -101,15 +111,16 @@ export function Results({ view, results, actions, room, training }: { view: Matc
           <section className="res__win" aria-labelledby="res-title">
             <div className="res__poster">
               <Icon name="trophy" className="mf-res__trophy" />
-              <span className="stamp stamp--ink stamp--lg res__stamp m-p7">{winner.draw ? 'Draw' : 'Winner'}</span>
+              <span className="stamp stamp--ink stamp--lg res__stamp m-p7">{headline ? (headline.win ? 'Winner' : headline.text === 'Draw' ? 'Draw' : 'Debrief') : winner.draw ? 'Draw' : 'Winner'}</span>
             </div>
             <h1 id="res-title" className="display res__name m-p1" data-bind="results.winner">
-              {winner.name}
+              {headline ? headline.text : winner.name}
             </h1>
             {teamMode && <TeamStandings results={results} myTeam={view.myTeam ?? -1} />}
-            {top && !winner.draw && !teamMode && (
+            {top && !winner.draw && !teamMode && !(headline && top === me) && (
               <p className="res__line">
-                <b className="num">{top.kills}</b> kills · <b className="num">{top.deaths}</b> deaths · <b className="num">{thousands(top.damageDealt)}</b> damage
+                {headline && <>{winner.name} won · </>}
+                <b className="num">{top.kills}</b> {noun(top.kills, 'kill')} · <b className="num">{top.deaths}</b> {noun(top.deaths, 'death')} · <b className="num">{thousands(top.damageDealt)}</b> damage
               </p>
             )}
             {me && (
@@ -121,7 +132,7 @@ export function Results({ view, results, actions, room, training }: { view: Matc
                   {ordinal(me.placement)}
                 </span>
                 <span>
-                  <b>You</b> · <span className="num" data-bind="results.me.kills">{me.kills}</span> kills · <span className="num" data-bind="results.me.deaths">{me.deaths}</span> deaths ·{' '}
+                  <b>You</b> · <span className="num" data-bind="results.me.kills">{me.kills}</span> {noun(me.kills, 'kill')} · <span className="num" data-bind="results.me.deaths">{me.deaths}</span> {noun(me.deaths, 'death')} ·{' '}
                   <span className="num" data-bind="results.me.damage">
                     {thousands(me.damageDealt)}
                   </span>{' '}
@@ -156,7 +167,8 @@ export function Results({ view, results, actions, room, training }: { view: Matc
                     const cls = ['m-p3', 'm-p3--tight', won ? 'is-winner' : '', you ? 'is-you' : '', s.isBot ? 'is-bot' : ''].filter(Boolean).join(' ');
                     return (
                       <tr key={s.key} className={cls} style={{ '--i': i } as CSSProperties}>
-                        <td className="num">{won ? <Icon name="trophy" label="Winner" /> : s.placement}</td>
+                        {/* a player who left has no place: places count the players still here at the end */}
+                        <td className="num">{won ? <Icon name="trophy" label="Winner" /> : s.left ? '–' : s.placement}</td>
                         <th scope="row">
                           <span className="mf-standings__who">
                             {/* their soldier as their avatar (presentation/); a player who left: the silhouette (ids are reused) */}
@@ -208,10 +220,12 @@ export function Results({ view, results, actions, room, training }: { view: Matc
                   </b>
                   <div className="mvp__stats">
                     <span>
-                      <b className="num">{mvp.kills}</b>kills
+                      <b className="num">{mvp.kills}</b>
+                      {noun(mvp.kills, 'kill')}
                     </span>
                     <span>
-                      <b className="num">{mvp.deaths}</b>deaths
+                      <b className="num">{mvp.deaths}</b>
+                      {noun(mvp.deaths, 'death')}
                     </span>
                     <span>
                       <b className="num">{thousands(mvp.damageDealt)}</b>damage
@@ -234,18 +248,20 @@ export function Results({ view, results, actions, room, training }: { view: Matc
                 </span>
               </button>
             )}
-            <div className="votes card" aria-label="Play again votes">
-              <div className="votes__top">
-                <b>Play again?</b>
-                <span className="pips votes__pips" aria-hidden="true">
-                  {Array.from({ length: humans }, (_, i) => (
-                    <i key={i} className={i < view.votes ? 'on m-p7' : undefined}></i>
-                  ))}
-                </span>
-                <span className="num" data-bind="results.votes">
-                  {closed ? 'Room closed' : `${view.votes}/${humans}${view.phase === MatchPhase.Postgame ? ` · ${view.secondsLeft} s` : ''}`}
-                </span>
-              </div>
+            <div className="votes card" aria-label={solo ? 'Play again' : 'Play again votes'}>
+              {!solo && (
+                <div className="votes__top">
+                  <b>Play again?</b>
+                  <span className="pips votes__pips" aria-hidden="true">
+                    {Array.from({ length: humans }, (_, i) => (
+                      <i key={i} className={i < view.votes ? 'on m-p7' : undefined}></i>
+                    ))}
+                  </span>
+                  <span className="num" data-bind="results.votes">
+                    {closed ? 'Room closed' : `${view.votes}/${humans}${view.phase === MatchPhase.Postgame ? ` · ${view.secondsLeft} s` : ''}`}
+                  </span>
+                </div>
+              )}
               <div className="votes__act">
                 {view.voted ? (
                   <button className="btn btn--ghost m-p8" type="button" aria-pressed="true" disabled>
@@ -258,7 +274,8 @@ export function Results({ view, results, actions, room, training }: { view: Matc
                     Play again
                   </button>
                 )}
-                {host && (
+                {/* a room's host: everyone back to the lobby (training has no lobby) */}
+                {host && !solo && (
                   <button className="btn btn--ghost m-p8" type="button" disabled={closed} onClick={blurAfter(actions.backToLobby)}>
                     <Icon name="users-plus" />
                     Back to lobby
@@ -266,8 +283,8 @@ export function Results({ view, results, actions, room, training }: { view: Matc
                 )}
                 {(room ?? training) && (
                   <button className="btn btn--ghost m-p8" type="button" onClick={blurAfter(() => (room ?? training)!.leave())}>
-                    <Icon name={room ? 'door-out' : 'back'} />
-                    {room ? 'Leave room' : 'Home'}
+                    <Icon name="door-out" />
+                    {room ? 'Leave room' : 'Leave'}
                   </button>
                 )}
               </div>

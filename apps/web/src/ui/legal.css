@@ -1,0 +1,40 @@
+/*
+ * The site's text pages (privacy.html, terms.html, official.html): the few kit tokens they use and
+ * their one layout, so they don't wait for the game's whole kit (kit.css, ~150 KB) before drawing
+ * (audit 28 Oct). The colours are kit.css's own values; keep them in step if the kit changes.
+ * The two type families come from fonts.css (font-display: swap: text shows at once).
+ */
+@import './fonts.css';
+
+:root {
+  --c-ink-900: #0e100b;
+  --c-ink-800: #1a1e14;
+  --c-line: #3c4430;
+  --c-line-strong: #5d6749;
+  --c-text: #f2eedf;
+  --c-muted-2: #959a80;
+  --c-volt: #d6ff3b;
+  --c-brass: #d9b25f;
+  --c-warn: #ffc53d;
+  --f-display: 'Big Shoulders Stencil Display', 'Big Shoulders Stencil', Impact, 'Arial Narrow Bold', 'Roboto Condensed', sans-serif;
+  --f-ui: 'Archivo', system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
+  color-scheme: dark;
+}
+
+html, body { margin: 0; background: var(--c-ink-900); color: var(--c-text); -webkit-font-smoothing: antialiased; }
+.pv { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; font-family: var(--f-ui); font-size: 17px; line-height: 1.55; }
+.pv__eyebrow { margin: 0; font-size: 13px; font-weight: 800; letter-spacing: .24em; text-transform: uppercase; color: var(--c-volt); }
+.pv h1 { margin: 8px 0 4px; font-family: var(--f-display); font-weight: 900; font-size: clamp(36px, 8vw, 60px); line-height: .95; text-transform: uppercase; }
+.pv h2 { margin: 36px 0 8px; font-size: 15px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--c-brass); }
+.pv p, .pv li { color: var(--c-text); }
+.pv small, .pv .pv__muted { color: var(--c-muted-2); }
+.pv a { color: var(--c-volt); text-underline-offset: 3px; }
+.pv a:focus-visible { outline: 3px solid var(--c-volt); outline-offset: 3px; }
+.pv table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.pv th, .pv td { padding: 8px 10px 8px 0; text-align: left; vertical-align: top; border-bottom: 1px solid var(--c-line); }
+.pv th { color: var(--c-muted-2); font-weight: 700; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+.pv__box { padding: 14px 16px; border: 1.5px solid var(--c-line-strong); border-left: 5px solid var(--c-volt); border-radius: 0 14px 0 14px; background: var(--c-ink-800); }
+.pv__warn { border-left-color: var(--c-warn); }
+.pv__status { margin: 16px 0; padding: 12px 16px; border: 1.5px solid var(--c-line-strong); border-left: 5px solid var(--c-brass); border-radius: 0 14px 0 14px; font-size: 15px; }
+.pv__scroll { overflow-x: auto; }
+.pv__links { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 36px; }

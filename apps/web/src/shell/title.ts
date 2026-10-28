@@ -34,6 +34,6 @@ export function regionLabel(hostname: string, probe: ProbeConfig | null): string
   return hostname;
 }
 
-/** How long the push into the next screen takes (reduce motion: a short cross-fade). */
-export const TITLE_LEAVE_MS = 760;
-export const TITLE_LEAVE_REDUCED_MS = 220;
+/** How long the push into the next screen takes: one scene (--m-scene); Reduce motion: a 120 ms fade. */
+export const TITLE_LEAVE_MS = 520;
+export const TITLE_LEAVE_REDUCED_MS = 120;

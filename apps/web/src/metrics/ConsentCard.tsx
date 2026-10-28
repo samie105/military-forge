@@ -38,7 +38,7 @@ export function ConsentCard({ where }: { where: 'home' | 'phone' }) {
         <Icon name="eye" />
       </span>
       <span className="mf-consent__words">
-        <span className="mf-consent__eyebrow">{due === 'ask' ? 'Your call' : 'Play stats are on'}</span>
+        <span className="mf-consent__eyebrow">{due === 'ask' ? 'Your call' : 'Play data is on'}</span>
         <b id="mf-consent-title" className="mf-consent__title display">
           {due === 'ask' ? 'Can we use your play data?' : 'Helping improve the game'}
         </b>

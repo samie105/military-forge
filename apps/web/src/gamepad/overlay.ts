@@ -8,9 +8,9 @@ import { isDualSense, padFamily } from './standard';
 /** A photo shell with scalable input targets; these coordinates belong to the three local assets. */
 function photoDiagram(family: GlyphFamily): string {
   const specs = {
-    playstation: { image: 'controller-dualsense.png', face: [[1250, 401], [1353, 301], [1145, 302], [1250, 201]], dpad: [[281, 214], [281, 374], [208, 301], [355, 301]], sticks: [[512, 488], [1024, 488]], centre: [[404, 154], [1132, 154], [768, 560], [768, 250]], shoulder: [[298, 38], [1238, 38], [298, 10], [1238, 10]] },
-    xbox: { image: 'controller-xbox.png', face: [[1145, 430], [1235, 335], [1045, 335], [1145, 239]], dpad: [[572, 476], [572, 592], [514, 534], [630, 534]], sticks: [[394, 322], [972, 534]], centre: [[669, 325], [872, 325], [768, 224], [768, 406]], shoulder: [[330, 78], [1205, 78], [330, 30], [1205, 30]] },
-    nintendo: { image: 'controller-switch.png', face: [[1173, 396], [1273, 309], [1068, 309], [1173, 207]], dpad: [[577, 471], [577, 589], [519, 531], [635, 531]], sticks: [[372, 284], [958, 506]], centre: [[619, 229], [918, 229], [768, 330], [768, 448]], shoulder: [[330, 78], [1205, 78], [330, 30], [1205, 30]] },
+    playstation: { image: 'controller-dualsense.webp', face: [[1250, 401], [1353, 301], [1145, 302], [1250, 201]], dpad: [[281, 214], [281, 374], [208, 301], [355, 301]], sticks: [[512, 488], [1024, 488]], centre: [[404, 154], [1132, 154], [768, 560], [768, 250]], shoulder: [[298, 38], [1238, 38], [298, 10], [1238, 10]] },
+    xbox: { image: 'controller-xbox.webp', face: [[1145, 430], [1235, 335], [1045, 335], [1145, 239]], dpad: [[572, 476], [572, 592], [514, 534], [630, 534]], sticks: [[394, 322], [972, 534]], centre: [[669, 325], [872, 325], [768, 224], [768, 406]], shoulder: [[330, 78], [1205, 78], [330, 30], [1205, 30]] },
+    nintendo: { image: 'controller-switch.webp', face: [[1173, 396], [1273, 309], [1068, 309], [1173, 207]], dpad: [[577, 471], [577, 589], [519, 531], [635, 531]], sticks: [[372, 284], [958, 506]], centre: [[619, 229], [918, 229], [768, 330], [768, 448]], shoulder: [[330, 78], [1205, 78], [330, 30], [1205, 30]] },
   } as const;
   const spec = specs[family];
   const face = (b: number, x: number, y: number, shape: string) => `<g class="mf-dualsense__face mf-dualsense__face--${b}" data-pad-button="${b}" transform="translate(${x} ${y})"><circle r="49"/><path d="${shape}"/></g>`;

@@ -110,7 +110,8 @@ describe('reference pings', () => {
   });
 
   it("are all allowed by the trial box's Content-Security-Policy", () => {
-    const script = readFileSync(new URL('../../../scripts/net-trial/cloud-init.sh', import.meta.url), 'utf8');
+    // the box's Caddy config lives in site.sh (cloud-init.sh sources it)
+    const script = readFileSync(new URL('../../../scripts/net-trial/site.sh', import.meta.url), 'utf8');
     const csp = /connect-src ([^;]*);/.exec(script)?.[1] ?? '';
     const allowed = csp.split(/\s+/).filter((s) => s.startsWith('https://'));
     for (const r of REFERENCES) {

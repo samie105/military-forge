@@ -32,7 +32,7 @@ export interface AdminAccountView {
 /** The store items the owner can grant from the page (the API checks any id against content anyway). */
 export const GRANTABLE = [
   ['skin_k47_galaxy_relic', 'K-47 Galaxy Relic (Forged)'],
-  ['skin_k47_galaxy_relic_fx', 'K-47 Galaxy Relic + Stardust (includes the Forged skin)'],
+  ['skin_k47_galaxy_relic_fx', 'K-47 Galaxy Relic + Stardust Shatter (includes the Forged skin)'],
 ] as const;
 
 export class StoreAdminError extends Error {

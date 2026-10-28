@@ -384,7 +384,7 @@ describe('rematch and lobby', () => {
 });
 
 describe('roster changes', () => {
-  it('keeps leavers in the standings, gives joiners a fresh entry, and cancels a countdown below minPlayers', () => {
+  it('keeps leavers in the standings (after those still here: a leaver no longer takes 1st, audit 28 Oct), gives joiners a fresh entry, and cancels a countdown below minPlayers', () => {
     const { game, match, players } = setup(3, { ...RULES, timeLimit: 2, killLimit: 0 });
     const [a, b] = players as [PlayerState, PlayerState];
     startMatch(match);
@@ -398,13 +398,15 @@ describe('roster changes', () => {
     expect(match.players[d.id]!.kills).toBe(0);
     run(match, ticks(2));
     const standings = match.results!.standings;
-    expect(standings[0]).toMatchObject({ id: b.id, name: 'H2', left: true, kills: 1 });
+    const leaver = standings[standings.length - 1]!;
+    expect(leaver).toMatchObject({ id: b.id, name: 'H2', left: true, kills: 1, placement: 4 });
     expect(standings.map((s) => s.name).sort()).toEqual(['H1', 'H2', 'H3', 'late']);
     expect(standings.find((s) => s.name === 'late')!.left).toBe(false);
-    // the leaver and the joiner share a slot id but not a key; 1st place is the leaver
+    // the leaver and the joiner share a slot id but not a key; 1st place is someone still here
     const late = standings.find((s) => s.name === 'late')!;
-    expect(late.id).toBe(standings[0]!.id);
-    expect(late.key).not.toBe(standings[0]!.key);
+    expect(late.id).toBe(leaver.id);
+    expect(late.key).not.toBe(leaver.key);
+    expect(standings[0]!.left).toBe(false);
     expect(match.results!.winnerKey).toBe(standings[0]!.key);
     expect(new Set(standings.map((s) => s.key)).size).toBe(standings.length);
 
@@ -420,6 +422,47 @@ describe('roster changes', () => {
     for (const m of s.match.players) if (m) s.match.setReady(m.id);
     startMatch(s.match);
     expect(s.match.number).toBe(1);
+  });
+});
+
+describe('leaving and coming back (audit 28 Oct)', () => {
+  it('a human back in the match they left is one row, carrying on with their score; a bot that left has no row', () => {
+    const { game, match, players } = setup(2, { ...RULES, timeLimit: 2, killLimit: 0 });
+    const ids = new Map<PlayerState, string>(players.map((p) => [p, `account:${p.name}`]));
+    match.identityOf = (id) => {
+      const p = game.players[id];
+      return p ? (ids.get(p) ?? null) : null;
+    };
+    const [a, b] = players as [PlayerState, PlayerState];
+    const bot = game.addDummy({ name: 'Bot', x: 40, y: 0, script: { kind: 'idle' } });
+    run(match, 1);
+    startMatch(match);
+    kill(match, b, a);
+    run(match, 1);
+    game.removePlayer(a.id);
+    game.removePlayer(bot.id);
+    run(match, 1);
+    const again = game.addPlayer('H1');
+    ids.set(again, 'account:H1');
+    run(match, 1);
+    expect(match.players[again.id]!.kills).toBe(1);
+    run(match, ticks(2));
+    const standings = match.results!.standings;
+    expect(standings.filter((s) => s.name === 'H1')).toHaveLength(1);
+    expect(standings.map((s) => [s.name, s.left, s.placement])).toEqual([
+      ['H1', false, 1],
+      ['H2', false, 2],
+    ]);
+  });
+
+  it('local play (no identities) never merges two players', () => {
+    const { game, match, players } = setup(2, { ...RULES, timeLimit: 2, killLimit: 0 });
+    startMatch(match);
+    game.removePlayer(players[0]!.id);
+    run(match, 1);
+    game.addPlayer('H1');
+    run(match, ticks(2));
+    expect(match.results!.standings.filter((s) => s.name === 'H1').map((s) => s.left)).toEqual([false, true]);
   });
 });
 

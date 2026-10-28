@@ -11,6 +11,10 @@ import { centroid, loudness, momentaryMax, octaveShares, peakDb, shareBelow } fr
 import { BANK_RATE, renderSound, variantsOf } from './bank';
 import { familyOf, skinnedWeaponSounds, weaponSoundIds, weaponSounds } from './families';
 import { SOUNDS, isSoundId, type SoundId } from './sounds';
+import { loadRecordingsFromDisk } from './recordings.test-util';
+
+// the recorded takes (the app fetches their banks before the sound starts: recordings/banks.ts)
+loadRecordingsFromDisk();
 
 const sr = BANK_RATE;
 const skins = cosmetics.filter((c) => c.sounds);

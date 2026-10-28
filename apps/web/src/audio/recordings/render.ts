@@ -1,3 +1,4 @@
+import { takeBytes, type BankName, type Take } from './banks';
 import { RECORDED_VOICE_RATE, RECORDED_VOICES } from './voices';
 import { FOLEY, FOLEY_RATE } from './foley';
 import { RICOCHETS, RICOCHET_RATE } from './ricochet';
@@ -5,20 +6,20 @@ import { WORLD_RECORDINGS, WORLD_RECORDING_RATE } from './world';
 
 const decoded = new Map<string, Float32Array>();
 
-/** Decode a recorded cue once, then resample for the sound bank. */
-function recorded(key: string, take: string, sourceRate: number, sr: number, muLaw = false): Float32Array {
+/** Decode a recorded cue once (from its bank: banks.ts), then resample for the sound bank. */
+function recorded(key: string, bank: BankName, take: Take, sourceRate: number, sr: number, muLaw = false): Float32Array {
   let source = decoded.get(key);
   if (!source) {
-    const bytes = atob(take);
+    const bytes = takeBytes(bank, take);
     source = new Float32Array(bytes.length / (muLaw ? 1 : 2));
     for (let i = 0; i < source.length; i++) {
       if (muLaw) {
-        const code = (~bytes.charCodeAt(i)) & 0xff;
+        const code = (~bytes[i]!) & 0xff;
         const magnitude = (((code & 15) << 3) + 0x84) << ((code >> 4) & 7);
         source[i] = ((code & 0x80) ? -(magnitude - 0x84) : magnitude - 0x84) / 32768;
         continue;
       }
-      let value = bytes.charCodeAt(i * 2) | (bytes.charCodeAt(i * 2 + 1) << 8);
+      let value = bytes[i * 2]! | (bytes[i * 2 + 1]! << 8);
       if (value >= 0x8000) value -= 0x10000;
       source[i] = value / 32768;
     }
@@ -37,18 +38,18 @@ function recorded(key: string, take: string, sourceRate: number, sr: number, muL
 export function recordedVoice(kind: keyof typeof RECORDED_VOICES, variant: number, sr: number): Float32Array {
   const takes = RECORDED_VOICES[kind];
   const index = ((variant % takes.length) + takes.length) % takes.length;
-  return recorded(`${kind}:${index}`, takes[index]!, RECORDED_VOICE_RATE, sr);
+  return recorded(`${kind}:${index}`, 'voices', takes[index]!, RECORDED_VOICE_RATE, sr);
 }
 
 export function recordedFoley(kind: keyof typeof FOLEY, sr: number): Float32Array {
-  return recorded(`foley:${kind}`, FOLEY[kind], FOLEY_RATE, sr);
+  return recorded(`foley:${kind}`, 'foley', FOLEY[kind], FOLEY_RATE, sr);
 }
 
 export function recordedRicochet(variant: number, sr: number): Float32Array {
   const index = ((variant % RICOCHETS.length) + RICOCHETS.length) % RICOCHETS.length;
-  return recorded(`ricochet:${index}`, RICOCHETS[index]!, RICOCHET_RATE, sr);
+  return recorded(`ricochet:${index}`, 'ricochet', RICOCHETS[index]!, RICOCHET_RATE, sr);
 }
 
 export function recordedWorld(kind: keyof typeof WORLD_RECORDINGS, sr: number): Float32Array {
-  return recorded(`world:${kind}`, WORLD_RECORDINGS[kind], WORLD_RECORDING_RATE, sr, true);
+  return recorded(`world:${kind}`, 'world', WORLD_RECORDINGS[kind], WORLD_RECORDING_RATE, sr, true);
 }

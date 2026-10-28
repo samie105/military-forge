@@ -23,7 +23,10 @@ const errorOf = async (res: Response) => ((await res.json()) as { error: { code:
 describe('GET/PUT /me/loadout/:slot', () => {
   it('stores a look and two guns per account, and reads them back on another device', async () => {
     const s = await createGuest(api);
-    expect(await errorOf(await get(s.accessToken))).toMatchObject({ code: 'no_loadout' });
+    // nothing saved yet: an empty answer, not an error (audit 28 Oct)
+    const empty = await get(s.accessToken);
+    expect(empty.status).toBe(204);
+    expect(await empty.text()).toBe('');
 
     const body = valid();
     body.look.items.headgear = 'headgear_bandana';
@@ -42,8 +45,8 @@ describe('GET/PUT /me/loadout/:slot', () => {
     api.clock.advance(1000);
     expect((await put(token, valid())).status).toBe(200);
     expect(await (await get(token)).json()).toMatchObject({ guns: [...gunIds], updatedAt: new Date(api.clock.now()).toISOString() });
-    expect((await get(token, 2)).status).toBe(404);
-    expect((await get((await createGuest(api)).accessToken)).status).toBe(404);
+    expect((await get(token, 2)).status).toBe(204);
+    expect((await get((await createGuest(api)).accessToken)).status).toBe(204);
   });
 
   it('refuses ids the game does not know, items in the wrong slot, locked items and bad gun pairs', async () => {
@@ -63,7 +66,7 @@ describe('GET/PUT /me/loadout/:slot', () => {
     const same = valid();
     same.guns = ['k47', 'k47'];
     expect((await errorOf(await put(s.accessToken, same))).issues).toEqual([{ path: 'guns.1', message: 'the two guns must differ' }]);
-    expect((await get(s.accessToken)).status).toBe(404); // nothing was stored
+    expect((await get(s.accessToken)).status).toBe(204); // nothing was stored (an empty answer)
   });
 
   it('takes a look saved before the hair slot (it stores the body\'s own hair), and refuses a part made for another body', async () => {
@@ -145,7 +148,7 @@ describe('GET/PUT /me/loadout/:slot', () => {
 
     expect((await api.app.request('/me', { method: 'DELETE', headers: bearer(s.accessToken) })).status).toBe(204);
     const fresh = await createGuest(api);
-    expect((await get(fresh.accessToken)).status).toBe(404);
+    expect((await get(fresh.accessToken)).status).toBe(204);
   });
 
   it('allows every non-melee gun and no melee one', () => {

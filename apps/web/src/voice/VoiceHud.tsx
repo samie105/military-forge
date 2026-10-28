@@ -174,12 +174,12 @@ export function VoiceSettingsSection({ chat = voiceChat }: { chat?: VoiceChat })
           )}
         </span>
       </Row>
-      <Row phone={phone} label="How you talk" desc="Push to talk sends only while you hold the key (V), the controller's talk button or the radio. Open mic sends when you're louder than the gate.">
+      <Row phone={phone} label="How you talk" desc="Push to talk sends only while you hold the key (V), the controller's talk button or the radio. Open mic sends whenever you're louder than the mic level you set.">
         <Seg phone={phone} label="How you talk" value={s.mode} options={[['ptt', phone ? 'Hold mic' : 'Push to talk'], ['open', 'Open mic']]} onChange={(mode) => setVoiceSettings({ mode })} />
       </Row>
       {s.mode === 'open' && (
-        <Row phone={phone} label="Open-mic gate" desc="Sound under the line never leaves your device (the bar is your mic, live).">
-          <Slider value={(s.gateDb + 70) / 55} onChange={(v) => setVoiceSettings({ gateDb: Math.round(v * 55 - 70) })} label="Open-mic gate" valueText={`${s.gateDb} dB`} />
+        <Row phone={phone} label="Open-mic level" desc="Your mic sends only when you're louder than this line. Anything quieter never leaves your device (the bar is your mic, live).">
+          <Slider value={(s.gateDb + 70) / 55} onChange={(v) => setVoiceSettings({ gateDb: Math.round(v * 55 - 70) })} label="Open-mic level" valueText={`${s.gateDb} dB`} />
         </Row>
       )}
       <Row phone={phone} label="Mic volume" desc="How loud you are to others.">

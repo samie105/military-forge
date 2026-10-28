@@ -28,8 +28,15 @@ let started = false;
 let mod: typeof import('./runtime') | null = null;
 let loader: Promise<typeof import('./runtime')> | null = null;
 
+/**
+ * The sound code and the recorded takes' banks (recordings/banks.ts), fetched side by side: the
+ * runtime starts only once both are in, so no recorded cue renders without its samples.
+ */
+export const loadSound = (): Promise<typeof import('./runtime')> =>
+  Promise.all([import('./runtime'), import('./recordings/banks').then((b) => b.loadRecordings())]).then(([m]) => m);
+
 const load = () =>
-  (loader ??= import('./runtime').then(
+  (loader ??= loadSound().then(
     (m) => (mod = m),
     (e: unknown) => {
       // a failed fetch (a dropped connection) is tried again on the next gesture

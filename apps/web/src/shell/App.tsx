@@ -120,10 +120,11 @@ function AppScreens({ store }: { store: ShellStore }) {
       break;
   }
   // the controls card: in a room's lobby it's the lobby's own panel; as a card it opens on Home or in
-  // play, but never over the countdown or a running match unless the player asked for it (the menu's
-  // Controls): the first-run card is queued for a calm moment (controller.releaseTips; mobile audit P0-3)
+  // play, but never over a room's countdown or running match unless the player asked for it (the menu's
+  // Controls): the first-run card is queued for a calm moment (controller.releaseTips; mobile audit P0-3).
+  // Training holds still under the card (trainingPaused), so there it shows before the first fight.
   const inLobby = screen.name === 'room' && match?.phase === MatchPhase.Waiting;
-  const live = match?.phase === MatchPhase.Countdown || match?.phase === MatchPhase.InProgress;
+  const live = screen.name !== 'training' && (match?.phase === MatchPhase.Countdown || match?.phase === MatchPhase.InProgress);
   const playing = screen.name === 'room' || screen.name === 'training' || screen.name === 'home';
   return (
     <>

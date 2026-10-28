@@ -26,7 +26,7 @@ export function DebriefLines() {
   return (
     <section className="mf-debrief m-p3" aria-label="Debrief">
       <p>
-        <Icon name="check" />
+        <Icon name={d.scored ? 'check' : 'info'} />
         <b>{d.done}</b>
       </p>
       {d.tryNext && (

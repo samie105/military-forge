@@ -15,6 +15,7 @@
 import { useSyncExternalStore } from 'react';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { ApiError, type Api } from '../shell/api';
+import { OFFLINE_TITLE } from '../shell/offline';
 import type { Intent, ShellStore } from '../shell/store';
 import { FriendsApi, asFriendCode, type Friend, type FriendsList, type Invite, type Party, type Person } from './api';
 import { EventStream } from './events';
@@ -107,7 +108,7 @@ export function friendErrorText(e: unknown): string {
     case 'not_friends':
       return 'You can invite friends only: send them the room link';
     default:
-      return e.offline ? "Can't reach the server: try again in a moment" : e.message;
+      return e.offline ? `${OFFLINE_TITLE}. Try again in a moment` : e.message;
   }
 }
 

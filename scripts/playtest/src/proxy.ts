@@ -237,8 +237,18 @@ export function isRoomPage(url: string): boolean {
   return /^\/r\/[^/?#]+\/?(?:[?#]|$)/.test(url);
 }
 
-/** The crawl files (apps/web/seo.ts) carry `%ORIGIN%` like the page: filled in per request. */
-export const ORIGIN_FILES: Readonly<Record<string, string>> = { '/robots.txt': MIME['.txt']!, '/sitemap.xml': 'application/xml; charset=utf-8' };
+/**
+ * The crawl files (apps/web/seo.ts) and the text pages' canonical and link previews carry `%ORIGIN%`
+ * like the app's page: filled in per request (cloud-init.sh's deploy sed covers the same files).
+ */
+export const ORIGIN_FILES: Readonly<Record<string, string>> = {
+  '/robots.txt': MIME['.txt']!,
+  '/sitemap.xml': 'application/xml; charset=utf-8',
+  '/llms.txt': MIME['.txt']!,
+  '/privacy.html': MIME['.html']!,
+  '/terms.html': MIME['.html']!,
+  '/official.html': MIME['.html']!,
+};
 
 function serveOriginFile(req: IncomingMessage, res: ServerResponse, file: string, type: string, allowed: readonly string[]): void {
   let text: string;

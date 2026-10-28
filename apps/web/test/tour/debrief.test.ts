@@ -11,6 +11,13 @@ describe('the Debrief', () => {
   it('what was done: kills and the moves used', () => {
     expect(debrief(m({ kills: 6, moves: ['dash', 'grenade', 'dash'] }), f0, null).done).toBe('6 kills · dash, grenades');
     expect(debrief(m({ kills: 1 }), f0, null).done).toBe('1 kill');
+    expect(debrief(m({ kills: 1 }), f0, null).scored).toBe(true);
+  });
+
+  it('a match without a kill earns no tick and no "0 kills" (audit 28 Oct)', () => {
+    const d = debrief(m({ kills: 0, moves: ['dash'] }), f0, null);
+    expect(d.done).toBe('No kills this time · dash');
+    expect(d.scored).toBe(false);
   });
 
   it('one thing to try, most pressing first, never blaming', () => {

@@ -60,6 +60,12 @@ export class LocalMode {
   /** the most blinded we were over this frame's ticks (a flashbang inside a hitch still shows) */
   private peakBlind = 0;
   lastReplay: ReplayFile | null = null;
+  /**
+   * Training holds still (the pause menu, Settings from it, the controls card): no ticks run, so
+   * nothing moves, nobody shoots and the clock stops; the picture stays where it was. Training is
+   * this device's alone, so it can really pause (an online room can't). main.ts sets it every frame.
+   */
+  paused = false;
   /** dev give-weapon: the local player's [slot 1, slot 2] weapons, kept across resets and recorded in replays */
   loadout: [number, number] = [DEFAULT_LOADOUT[0], DEFAULT_LOADOUT[1]];
   /** the test armory (a rack of one of every gun near the spawns): on in local play, off with ?armory=0 */
@@ -246,9 +252,10 @@ export class LocalMode {
 
   update(dt: number): Frame {
     const t = this.game.tuning;
-    this.acc += Math.min(dt, 0.25);
+    // paused: no time passes (the part-tick already banked stays, so the picture doesn't jump)
+    if (!this.paused) this.acc += Math.min(dt, 0.25);
     let steps = 0;
-    while (this.acc >= DT && steps < MAX_CATCHUP) {
+    while (!this.paused && this.acc >= DT && steps < MAX_CATCHUP) {
       for (const p of this.game.players) {
         if (!p) continue;
         const prev = this.prev.get(p.id);

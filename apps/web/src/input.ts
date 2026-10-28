@@ -44,6 +44,14 @@ const DOUBLE_TAP_BITS = Btn.Left | Btn.Right | Btn.Down;
 /** The buttons that give a dash its direction (docs/02 §21). */
 const DASH_DIRECTION_BITS = Btn.Left | Btn.Right | Btn.Jet | Btn.Down;
 
+/**
+ * Presses latched until the next sample (audit 28 Oct: a quick tap of R, 1 or 2 between two ticks was
+ * lost): a key or button pressed and let go before the sim sampled it still reaches the sim for one
+ * tick. Not the grenade (its own latch throws on release), the swap (the quick-select times it) or
+ * the dash (its own latch carries the direction).
+ */
+const LATCHED_BITS = ~(Btn.Grenade | Btn.Swap | Btn.Dash);
+
 /** Hold-to-aim (docs/02 §14): the cursor this far from the shoulder (m) throws at 70 %, this far at 100 %. */
 export const THROW_NEAR = 2;
 export const THROW_FAR = 10;
@@ -183,6 +191,10 @@ export class InputSampler {
    * turns it off. The dash key with no direction held dashes the way the soldier faces (the sim).
    */
   doubleTapDash = true;
+  /** buttons pressed since the last sample (LATCHED_BITS): a tap shorter than a tick still counts */
+  private latchedBits = 0;
+  /** a weapon slot key pressed since the last sample (0: none) */
+  private latchedSlot = 0;
   /** a dash press seen since the last sample: a tap shorter than a tick still dashes */
   private dashLatched = false;
   /** the direction buttons held (or double-tapped) at that press, kept for its sample */
@@ -225,6 +237,7 @@ export class InputSampler {
       if (PREVENT_DEFAULT.has(e.code) && !this.blocked && !menusHaveKeys(e.target)) e.preventDefault();
       if (!e.repeat) {
         this.pressedOnce.add(e.code);
+        this.latchPress(this.bindings.keys[e.code] ?? 0, this.bindings.slots[e.code] ?? 0);
         this.notePress(this.bindings.keys[e.code] ?? 0, e.timeStamp);
         // the swap key: a tap swaps on its release, a hold opens the quick-select (quickSelect.ts)
         if ((this.bindings.keys[e.code] ?? 0) & Btn.Swap && !this.blocked) quickSelect.press('key', performance.now(), { x: this.mouseX, y: this.mouseY });
@@ -253,6 +266,7 @@ export class InputSampler {
         return;
       }
       if ((this.bindings.mouse[e.button] ?? 0) & Btn.Swap && !this.blocked) quickSelect.press('key', performance.now(), { x: this.mouseX, y: this.mouseY });
+      this.latchPress(this.bindings.mouse[e.button] ?? 0, 0);
       this.notePress(this.bindings.mouse[e.button] ?? 0, e.timeStamp);
       this.mouseButtons |= 1 << e.button;
       e.preventDefault();
@@ -275,6 +289,13 @@ export class InputSampler {
       },
       { passive: false },
     );
+  }
+
+  /** A fresh press (not a key repeat) while playing: held for the next sample even if let go before it. */
+  private latchPress(bits: number, slot: number): void {
+    if (this.blocked) return; // the menus' keys stay theirs, and nothing fires when they close
+    this.latchedBits |= bits & LATCHED_BITS;
+    if (slot) this.latchedSlot = slot;
   }
 
   /** A fresh press of a key or mouse button doing `bits`: the dash latch and double-tap directions. */
@@ -313,6 +334,8 @@ export class InputSampler {
     this.keys.clear();
     this.mouseButtons = 0;
     this.dashLatched = false;
+    this.latchedBits = 0;
+    this.latchedSlot = 0;
     this.throwLatch.cancel(); // focus lost while aiming: no throw
     quickSelect.cancel();
   }
@@ -362,6 +385,14 @@ export class InputSampler {
       slot ||= b.slots[code] ?? 0;
     }
     for (let button = 0; button < 5; button++) if (this.mouseButtons & (1 << button)) buttons |= b.mouse[button] ?? 0;
+    // a press since the last sample counts even if it's already let go (held keys are unchanged: their
+    // bits are there anyway); the sim sees its edge on this tick
+    if (!this.blocked) {
+      buttons |= this.latchedBits;
+      slot ||= this.latchedSlot;
+    }
+    this.latchedBits = 0;
+    this.latchedSlot = 0;
     if (this.dashLatched) {
       // held for at least one sample (with the direction it was pressed with), so the sim sees the
       // press even for a tap shorter than a tick

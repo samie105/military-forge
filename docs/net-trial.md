@@ -44,11 +44,13 @@ Since 19 Oct 2026 the box also runs the WebTransport gateway (`apps/wt-gateway`,
   - **The self-test said "no WebTransport session" on the live box (19 Oct) while browsers connected fine.** The cause was the check itself: under `pipefail`, `grep -q` stopping at READY made the probe's pipe fail. It now reads the probe's whole output. It connects to 127.0.0.1 (Azure doesn't hairpin to the VM's own public address) with the certificate pinned by hash, and prints the probe's last lines when it does fail.
 - **Firewall:** allow **UDP 443 inbound from anywhere** (Azure: an inbound rule in the VM's network security group, protocol UDP, destination port 443, source Any; AWS: the security group rule above), next to TCP 80 and 443. Ubuntu's own firewall is off.
 - **Checking it from a phone:** the HUD's net readout says WT or WS. `https://<host>/health` shows the advertised gateway.
+- **Caddy's config lives in [`scripts/net-trial/site.sh`](../scripts/net-trial/site.sh)** (28 Oct), not in `cloud-init.sh`, which is at the 16 KB limit. The setup sources it from the code twice: before the fetch (the last deploy's config, so nothing restarts) and after it (this commit's; Caddy restarts only if it changed). A new box serves just the status page until the code is in. So a header or caching change reaches the box with the next `mf-trial-setup`, like any other code.
 - **Caching (Caddy):**
-  - Vite's hashed files right under `/assets/` (`name-xxxxxxxx.ext`) are kept a year, immutable.
-  - Everything else under `/assets/` (public/: maps, kits, billboard pools and art) keeps its name when it changes, so it revalidates (`no-cache`, ETag). On 24 Oct a week-old cached `house.json` kept deleted billboard art on screen.
-  - The pages, `sw.js` and the manifest are `no-cache` too (26 Oct). With no header, a browser kept an old page, and that page asked for the previous build's files.
+  - Vite's hashed files right under `/assets/` (`name-xxxxxxxx.ext`, the sound banks included) are kept a year, immutable.
+  - Everything else (pages, `sw.js`, the manifest, `/art/`, and public/'s models, textures and maps under `/assets/`) keeps its name when it changes, so it revalidates (`no-cache`, ETag). On 24 Oct a week-old cached `house.json` kept deleted billboard art on screen; with no header, a browser kept an old page that asked for the previous build's files.
+  - The service worker keeps a copy of each of those it fetched, for offline training, and asks the network first (apps/web/pwa.ts).
   - Each deploy also carries the last 14 days of hashed `.js`/`.css` into the new build, never over its own files. An open tab or installed app from before the deploy still finds the Locker's or the Armory's code instead of showing a blank screen.
+- **Compression and headers (Caddy):** zstd or gzip for text, JSON, scripts, the manifest, GLB models and the sound banks (Caddy's default list skips models, about half their size). HSTS (a year, this host only), a Permissions-Policy (microphone for voice chat only), the CSP, `nosniff` and `same-origin` referrers. The manifest goes out as `application/manifest+json`.
 
 ## 2. AWS console: exact clicks
 
@@ -126,7 +128,7 @@ You need an AWS account with billing set up. Pick the region from the region men
 
 AWS's Lagos Local Zone has no public endpoint, and no big cloud has a Nigerian region, so Lagos is the two Nigerian sites above. The results table puts each reference next to our server (as `ref:<id>`). The page's privacy line says that these public sites see a visit, as any website would; nothing more about the tester is stored than before. The box's Content-Security-Policy lists these hosts (`apps/web/test/probe.test.ts` checks that).
 
-The probe's own region is named from where the box is (`scripts/net-trial/where.sh`, from the cloud's metadata: Azure `southafricanorth` → `jnb`, Johannesburg; the AWS Lagos zone → `los`; anything else → its zone name). `PROBE_NAME` and `PROBE_PROVIDER` at the top of `cloud-init.sh` override it.
+The probe's own region is named from where the box is (`scripts/net-trial/where.sh`, from the cloud's metadata: Azure `southafricanorth` (any case: Azure can answer `SouthAfricaNorth`) → `jnb`, Johannesburg; the AWS Lagos zone → `los`; anything else → its zone name). `PROBE_NAME` and `PROBE_PROVIDER` at the top of `cloud-init.sh` override it.
 
 What the probe stores, in `/var/lib/military-forge/probe/results.jsonl`:
 
@@ -174,6 +176,7 @@ Measured on 23 Oct 2026 (NOTES §43): no gap lined up with a server stall.
     cd /opt/military-forge/src && sudo -u mf git fetch -q --depth 1 origin main && sudo -u mf git reset -q --hard FETCH_HEAD
     sudo bash scripts/net-trial/cloud-init.sh
     ```
+  - A box set up before 28 Oct has the old `mf-trial-setup`, with Caddy's config inside it. Run the new script that way once; from then on Caddy's config comes from the code on every deploy.
 - **Deploys keep live matches** (23 Oct 2026; `scripts/net-trial/restart.sh`):
   - **Web-only changes** leave the game server running. It restarts only when `apps/game-server`, `packages/`, the lockfile or the root `package.json` changed; the deployed tree's hash is kept in `/var/lib/military-forge/game-tree`.
   - **The gateway** (`mf-wt`) restarts only when its binary or service changed, and **Caddy** only when its config did. Either restart drops every connection through it.

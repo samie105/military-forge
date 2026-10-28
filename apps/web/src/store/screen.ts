@@ -97,7 +97,7 @@ function itemCard(item: StoreItemView, view: Extract<StoreView, { enabled: true 
     : gift
       ? '<span class="tag mf-st__gift">Launch gift</span>'
       : item.upgrade
-        ? '<span class="tag tag--brass">Owner’s price</span>'
+        ? '<span class="tag tag--brass">Upgrade price</span>'
         : '';
   const was = item.upgrade && !item.owned && !gift ? `<s class="mf-st__was">${formatBrass(item.fullPrice)}</s>` : '';
   const price = item.owned
@@ -379,7 +379,7 @@ export function mountStore(container: HTMLElement, o: StoreOptions): { unmount()
       const out = await o.api.confirm(r.txRef, r.transactionId);
       s.notice =
         out.status === 'paid'
-          ? { text: `${formatBrass(out.brass)} Brass added. Thanks!`, tone: 'ok' }
+          ? { text: `${formatBrass(out.brass)} Brass added to your wallet.`, tone: 'ok' }
           : r.status === 'cancelled' || r.status === 'failed'
             ? { text: 'The payment wasn’t finished. Nothing was charged.', tone: 'warn' }
             : { text: 'Your payment is still being confirmed. Brass is added as soon as it is (usually within minutes).', tone: 'warn' };

@@ -102,6 +102,11 @@ export function formatClock(seconds: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
+/** A noun for a count: 'kill' for 1, 'kills' otherwise ("1 death", "0 deaths", "3 kills"). */
+export function noun(n: number, one: string, many = `${one}s`): string {
+  return n === 1 ? one : many;
+}
+
 export function ordinal(n: number): string {
   const tens = n % 100;
   const suffix = tens >= 11 && tens <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th');

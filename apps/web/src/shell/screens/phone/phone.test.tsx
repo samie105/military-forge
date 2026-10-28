@@ -216,14 +216,16 @@ describe('local rooms (the Pen board P0–P5)', () => {
     botLevel: 'normal',
   });
 
-  it('P0 · home: the Local room ticket, lit up offline (Create room says Local works without internet)', () => {
+  it('P0 · home: the Local room ticket, lit up offline; the poster says the one offline line (audit 28 Oct)', () => {
     const online = withCtl(ctl(), <PhoneHome store={createShellStore({ profile: { nickname: 'Ade', changeableAt: null, offline: false } as never })} />);
     expect(online).toContain('Local room');
     expect(online).toContain('Works with no internet');
     expect(online).not.toContain('is-hot');
     const offline = withCtl(ctl(), <PhoneHome store={createShellStore({ profile: { nickname: 'Ade', changeableAt: null, offline: true } as never })} />);
     expect(offline).toContain('pm-tk--local m-p3 m-p8 is-hot');
-    expect(offline).toContain('Local room works without it');
+    // one offline line on Home (audit 28 Oct); the local room's ticket says it works with no internet
+    expect(offline).toContain("Can&#x27;t reach the server. Training with bots still works.");
+    expect(offline).toContain('Works with no internet');
   });
 
   it('P1 · Join with code: six boxes the keyboard Go submits, none focused on arrival; the no-internet card', () => {
@@ -291,10 +293,19 @@ describe('m-pause', () => {
     expect(withCtl(ctl({ canTune: () => true }), <PhonePause store={store(true)} />)).toContain('Tune the game');
   });
 
-  it('training: no invitation, "Training still running"', () => {
+  it('training: no invitation; it really pauses, so it says "Paused" (audit 28 Oct)', () => {
     const html = withCtl(ctl(), <PhonePause store={store(false)} />);
     expect(html).not.toContain('Invite friends');
-    expect(html).toContain('Training still running');
+    expect(html).toContain('Training on hold');
+    expect(html).toMatch(/pm-pause__t[^>]*>Paused</);
+  });
+
+  it("an online match can't pause: it says so, and Leave sits under the list, outside its scroll (audit 28 Oct)", () => {
+    const html = withCtl(ctl(), <PhonePause store={store(true)} />);
+    expect(html).toContain('Online play can&#x27;t pause');
+    expect(html).toMatch(/pm-pause__t[^>]*>Match continues</);
+    expect(html).not.toContain('>Paused<');
+    expect(html).toMatch(/pm-pause__list.*<\/div><button[^>]*pm-pause__leave[^>]*>.*Leave match/);
   });
 });
 
@@ -321,6 +332,16 @@ describe('m-results', () => {
     expect(guest).not.toContain('>Lobby<');
     const noMvp: MatchResults = { ...results, mvpKey: -1, standings: results.standings.map((s) => ({ ...s, mvp: false })) };
     expect(renderToStaticMarkup(<PhoneResults view={view()} results={noMvp} actions={actions} training={{ leave: vi.fn() }} />)).not.toContain('pm-mvp');
+  });
+
+  it("training (solo): no vote, Play again beside Leave, and a bot's MVP card doesn't take the screen (audit 28 Oct)", () => {
+    const html = renderToStaticMarkup(<PhoneResults view={view({ humans: 1 })} results={results} actions={actions} training={{ leave: vi.fn() }} />);
+    expect(html).not.toContain('Play again?');
+    expect(html).not.toContain('results.votes');
+    expect(html).toMatch(/pm-res__more.*Play again.*Leave/);
+    expect(html).not.toContain('>Lobby<');
+    expect(html).not.toContain('pm-mvp');
+    expect(html).toMatch(/results\.winner">2nd place · Kemi won</);
   });
 });
 

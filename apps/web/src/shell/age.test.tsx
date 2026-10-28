@@ -153,18 +153,23 @@ describe('the step on screen', () => {
       </ControllerContext.Provider>,
     );
 
-  it('asks the year and "18 or older", with nothing picked or ticked, and links the Terms', () => {
+  it('asks the year once (no second "18 or older" box: audit 28 Oct), nothing picked, and links the Terms', () => {
     const html = render(false);
     const t = textOf(html);
     expect(t).toContain('Online play is 18+');
     expect(t).toContain('Year you were born');
-    expect(t).toContain('I am 18 or older');
+    expect(t).not.toContain('I am 18 or older');
+    expect(html).not.toContain('type="checkbox"');
     expect(html).toMatch(/<option value="" selected="">Choose…<\/option>/);
-    expect(html).toMatch(/<input id="age-adult" type="checkbox"\/>/);
-    expect(html).toContain('<label for="age-adult">I am 18 or older</label>');
     expect(html).toContain('href="/terms.html"');
     expect(html).toContain('href="/privacy.html"');
     expect(html).toMatch(/<button type="submit"[^>]*disabled=""/);
+  });
+
+  it('is a dialog that holds a form, not a form playing a dialog (audit 28 Oct)', () => {
+    const html = render(false);
+    expect(html).toMatch(/<section[^>]*class="age-card"[^>]*role="dialog"[^>]*>.*<form class="age-card__form"/s);
+    expect(html).not.toMatch(/<form[^>]*role="dialog"/);
   });
 
   it('the refusal is polite and has no way to answer again', () => {

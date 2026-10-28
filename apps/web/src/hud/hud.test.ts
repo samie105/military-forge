@@ -338,7 +338,7 @@ describe('hudFrame', () => {
       'weapon.0.mag': '2',
       'player.slot.0.idx': '1',
       'player.slot.0.name': 'Hammer .44',
-      'player.slot.0.family': 'Pistol',
+      'player.slot.0.family': 'Sidearm',
       'player.slot.0.icon': '#icon-wpn-hammer',
       'player.slot.0.mag': '2',
       'player.slot.0.magSize': '6',

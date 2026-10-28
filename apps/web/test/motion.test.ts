@@ -5,13 +5,15 @@ import { flipTransform, floodRadius, reduced, rollPlan, stagger, staggerIndex } 
 afterEach(() => vi.unstubAllGlobals());
 
 describe('motion helpers', () => {
-  it('reduced(): the Settings switch or the system preference', () => {
+  it('reduced(): the game\'s switch wins over the system preference both ways (the OS is only its default; audit 28 Oct)', () => {
     const doc = (on: boolean) => ({ documentElement: { classList: { contains: (c: string) => on && c === 'reduce-motion' } } }) as unknown as Document;
     vi.stubGlobal('matchMedia', () => ({ matches: false }));
     expect(reduced(doc(true))).toBe(true);
     expect(reduced(doc(false))).toBe(false);
+    // the system asks for less motion, but the player switched Reduce motion off in Settings
     vi.stubGlobal('matchMedia', (q: string) => ({ matches: q.includes('prefers-reduced-motion') }));
-    expect(reduced(doc(false))).toBe(true);
+    expect(reduced(doc(false))).toBe(false);
+    expect(reduced(doc(true))).toBe(true);
   });
 
   it('P3 stagger: the row index sets --i, capped at 10 so the last row lands within 300 ms', () => {

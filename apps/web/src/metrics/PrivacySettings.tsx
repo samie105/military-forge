@@ -1,5 +1,5 @@
 /**
- * Settings → Privacy (docs/16-player-metrics.md §6): the play-stats switch, what is always kept and
+ * Settings → Privacy (docs/16-player-metrics.md §6): the play-data switch, what is always kept and
  * why, how long, the privacy note, the Terms and the official links, and Delete my data. The desktop's Settings and the phone's share
  * it (`phone` picks the phone's row style).
  */
@@ -39,7 +39,6 @@ export function PrivacySettings({ phone = false }: { phone?: boolean }) {
   const on = analyticsOn(s);
   const [del, setDel] = useState<Deleting>('idle');
   const [player, setPlayer] = useState(false);
-  const [error, setError] = useState('');
   const run = async () => {
     if (!m) return;
     setDel('busy');
@@ -52,7 +51,8 @@ export function PrivacySettings({ phone = false }: { phone?: boolean }) {
       }
       setDel('done');
     } catch (e) {
-      setError((e as Error).message);
+      // the detail is for the console; the player gets a plain line
+      console.warn('privacy: delete my data failed', e);
       setDel('failed');
     }
   };
@@ -61,15 +61,15 @@ export function PrivacySettings({ phone = false }: { phone?: boolean }) {
       {!phone && <h2 className="display set__h">Privacy</h2>}
       <Row
         phone={phone}
-        label="Help improve the game"
+        label="Share play data"
         desc={
           <>
-            Shares how you play: sessions and how long they last, the screens you reach, the features you use, and your device type (phone or computer, touch, keys or pad). It also lets our own house ads on the billboards suit how you play. Never your name, your messages or where you are beyond your country.
+            How you play: sessions and how long they last, the screens you reach, the features you use, and your device type (phone or computer, touch, keys or pad). We use it to improve the game and to pick the ads you see on the billboards, which today are all our own. Never your name, your messages or where you are beyond your country.
             {s.browserNo && !s.choice ? ' Your browser asks sites not to track you, so this is off unless you turn it on here.' : ''}
           </>
         }
       >
-        <Switch on={on} onChange={(v) => m?.consent.set(v, 'settings')} label="Help improve the game" />
+        <Switch on={on} onChange={(v) => m?.consent.set(v, 'settings')} label="Share play data" />
       </Row>
       <Row phone={phone} label="Always kept: match stats" desc="What happens in an online match: kills, deaths, the guns you used, how long you played and when you left, with your player id. The game needs them to run matches, keep your level and the leaderboards, and balance the weapons." />
       <Row phone={phone} label="Counted without any id" desc="Errors on this device, and which billboard ads were on screen, saved and visited: totals that can’t be tied to you. Off when your browser sends Global Privacy Control." />
@@ -93,7 +93,12 @@ export function PrivacySettings({ phone = false }: { phone?: boolean }) {
           See them
         </a>
       </Row>
-      <Row phone={phone} label="Delete my data" desc="Deletes your play stats from our servers and this device's event log, and turns sharing off. Match stats already counted stay only as totals.">
+      <Row phone={phone} label="About the game" desc="What the game is, what you get, and answers to common questions.">
+        <a className="btn btn--ghost btn--sm" href="#about">
+          Read it
+        </a>
+      </Row>
+      <Row phone={phone} label="Delete my data" desc="Deletes your play data from our servers and this device's event log, and turns sharing off. Match stats already counted stay only as totals.">
         {del === 'idle' || del === 'done' || del === 'failed' ? (
           <button type="button" className="btn btn--ghost btn--sm" onClick={() => setDel('confirm')} disabled={!m}>
             {del === 'done' ? 'Deleted' : 'Delete…'}
@@ -102,7 +107,7 @@ export function PrivacySettings({ phone = false }: { phone?: boolean }) {
       </Row>
       {(del === 'confirm' || del === 'busy') && (
         <div className="mf-privacy__confirm" role="group" aria-label="Delete my data">
-          <b>Delete your play stats?</b>
+          <b>Delete your play data?</b>
           <label>
             <input type="checkbox" checked={player} onChange={(e) => setPlayer(e.target.checked)} />
             <span>Also delete my player: name, level, XP, friends, saved look and match history. You start again as a new player.</span>
@@ -117,10 +122,10 @@ export function PrivacySettings({ phone = false }: { phone?: boolean }) {
           </div>
         </div>
       )}
-      {del === 'done' && <p className="mf-privacy__note" role="status">Done: your play stats are deleted (single events within minutes) and sharing is off.</p>}
+      {del === 'done' && <p className="mf-privacy__note" role="status">Done: your play data is deleted (single events within minutes) and sharing is off.</p>}
       {del === 'failed' && (
         <p className="mf-privacy__note is-error" role="alert">
-          Couldn’t delete just now ({error}). Check the connection and try again.
+          Couldn’t delete just now. Check your connection and try again.
         </p>
       )}
     </>

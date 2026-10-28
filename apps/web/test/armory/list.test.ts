@@ -5,7 +5,8 @@ describe('Armory list (round two)', () => {
   it('groups the weapons by family in the kit order, each with its glyph', () => {
     const html = weaponList({ k47: { name: 'K-47', family: 'rifle' }, hawk50: { name: 'Hawk .50', family: 'pistol' }, odd: { name: 'Odd', family: 'prop' } });
     const labels = [...html.matchAll(/<span class="label">([^<]+)<\/span>/g)].map((m) => m[1]);
-    expect(labels).toEqual(['Pistol', 'Rifle', 'prop']);
+    // the content's slot name, as the HUD and the Locker say it (audit 28 Oct)
+    expect(labels).toEqual(['Sidearm', 'Rifle', 'prop']);
     expect(html).toContain('data-weapon="k47"');
     expect(html).toContain('#icon-wpn-k47');
   });

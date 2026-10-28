@@ -47,8 +47,11 @@
 .age-card__check input { width: 22px; height: 22px; accent-color: var(--c-volt); }
 .age-card__error { display: flex; align-items: center; gap: var(--sp-2); margin: 0; color: var(--c-danger-text); font-size: var(--fs-16); }
 .age-card__actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
-.age-card__small { margin: 0; font-size: var(--fs-14); color: var(--c-muted-2); }
-.age-card__small a { color: var(--c-volt); text-underline-offset: 3px; }
+.age-card__form { display: flex; flex-direction: column; gap: inherit; }
+.age-card:focus { outline: none; }
+/* the Terms and Privacy: body-size links with a finger's room each (they were 14 px, muted: audit 28 Oct) */
+.age-card__links { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-5); margin: 0; }
+.age-card__links a { display: inline-flex; align-items: center; min-height: 44px; font-size: var(--fs-16); font-weight: var(--fw-bold); color: var(--c-volt); text-decoration: underline; text-underline-offset: 3px; }
 /* a landscape phone is about 375 px tall: tighter, so Continue shows without a scroll */
 .age-gate--phone { padding: 12px 16px; }
 .age-gate--phone .age-card { gap: var(--sp-2); padding: 16px 18px 14px; }

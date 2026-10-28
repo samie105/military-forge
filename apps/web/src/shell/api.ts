@@ -167,7 +167,9 @@ export class Api {
     try {
       res = await this.fetchImpl(`${this.base}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), credentials: 'same-origin' });
     } catch (e) {
-      throw new ApiError(0, 'network', `Can't reach the server (${(e as Error).message})`);
+      // the browser's reason ("Failed to fetch", "Load failed") is for the console, never the player (audit 28 Oct)
+      console.warn(`api: ${method} ${path}: no answer`, e);
+      throw new ApiError(0, 'network', "Can't reach the server.");
     }
     if (res.status === 204) return undefined as T;
     let json: unknown = null;
@@ -403,10 +405,10 @@ export class Api {
     return this.request<RoomJoin>('POST', `/rooms/${encodeURIComponent(code)}/join`, {}, true);
   }
 
-  /** The account's saved loadout in `slot`, or null when nothing is saved there yet. */
+  /** The account's saved loadout in `slot`, or null when nothing is saved there yet (204; an older API: 404 no_loadout). */
   async getLoadout(slot: number): Promise<SavedLoadout | null> {
     try {
-      return await this.request<SavedLoadout>('GET', `/me/loadout/${slot}`, undefined, true);
+      return (await this.request<SavedLoadout | undefined>('GET', `/me/loadout/${slot}`, undefined, true)) ?? null;
     } catch (e) {
       if (e instanceof ApiError && e.code === 'no_loadout') return null;
       throw e;
@@ -470,7 +472,7 @@ export const NICKNAME_REASONS: Record<string, string> = {
   invalid_characters: 'Letters, digits, spaces and _ - . only',
   mixed_scripts: 'Stick to one alphabet',
   no_letters: 'Needs at least one letter',
-  profanity: "Let's keep it friendly",
+  profanity: "That name isn't allowed. Pick another",
   reserved: 'That name is reserved',
   taken: 'Someone already has that name',
 };

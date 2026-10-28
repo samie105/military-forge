@@ -425,7 +425,8 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
         <div className="menu-body lobby">
           {/* A · share: the loudest thing on the screen, and the first to arrive */}
           <section className="poster halftone-ink lobby__share m-p3" style={row(0)} aria-labelledby="share-title">
-            <span className="btn__sticker" style={{ right: 24, top: -16 }}>
+            {/* inside the card's corner: overhanging, the header's room code covered it (audit 28 Oct) */}
+            <span className="btn__sticker" style={{ right: 18, top: 14 }}>
               <span data-bind="room.slotsLeft">{open}</span> {open === 1 ? 'slot' : 'slots'} left
             </span>
             <span className="serial">Call in your squad</span>

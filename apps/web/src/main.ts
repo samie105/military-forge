@@ -46,7 +46,7 @@ import { LanHost } from './lan/host';
 import { connectAnswered, joinByCode, lanSignalUrl, normalizeLanCode } from './lan/guest';
 import { Renderer, type RenderOptions } from './render';
 import { localMatchRules, mountShell, registerRoute, type GameHost, type RouteMount, type Settings } from './shell';
-import { loadSettings } from './shell/controller';
+import { loadSettings, trainingPaused } from './shell/controller';
 import type { GraphicsSetting } from './shell/store';
 import { defaultBindings, keyLabel, toKeyBindings, uiCodes } from './shell/controls';
 import { LIVE_FIRE_RULES } from './shell/localMatch';
@@ -81,7 +81,7 @@ import { homeStopsDue, homeStopsWanted, runHomeStops } from './tour/homeStops';
 import { HintRunner } from './tour/hintsRun';
 import type { Device } from './tour/log';
 import { provideTourMemory } from './tour/live';
-import { startPwa } from './pwa';
+import { keepForOffline, startPwa } from './pwa';
 import { readReturn, withoutReturn, type StoreView } from './store/model';
 import type { StoreApi } from './store/screen';
 import { launchedInstalled } from './pwa/install';
@@ -298,14 +298,34 @@ class GameRenderer extends Renderer {
 const renderer = new GameRenderer(canvas, camera, map, () => mode?.tuning() ?? defaultTuning);
 renderer.relationOf = markOf;
 // the 3D view's characters, guns and effects, and compiling their shaders (the heaviest work a phone
-// does at the start), wait while the title shows: they start on the press, or once the page has been
-// idle a while (below, after the shell); the debug client and room links load at once
+// does at the start), wait until the player heads for play (prepareForPlay); the debug
+// client and room links load at once
 let loading3d = false;
 const load3d = () => {
   if (loading3d) return;
   loading3d = true;
   void view3d?.load(map.spawns[0]!);
 };
+/** a page left alone this long gets ready for play anyway (an installed app's offline training) */
+const PREPARE_IDLE_MS = 20_000;
+let prepared = false;
+let navWarmed = false;
+/**
+ * What play needs and the menus don't: the 3D view's soldiers, guns and effects (about 3 MB, and their
+ * shaders) and training's nav graph. Until 28 Oct they came 6 s into the title, or at once without it:
+ * 4.3-4.8 MB before the first tap (audit). Now they start when the player heads for play: the first
+ * tap, click or key (the title's press among them), a screen or menu opened (a controller's too), a
+ * match starting, or the page left alone a long while, so an installed app has them for training
+ * offline. The debug client and room links (a match comes next) load at once.
+ */
+function prepareForPlay(): void {
+  if (prepared) return;
+  prepared = true;
+  load3d();
+  warmTrainingNav();
+  // and the installed app's offline copy of the game's code (the service worker, src/pwa)
+  keepForOffline();
+}
 view3d?.attach(renderer, () => (mode instanceof OnlineMode ? mode.net : null)); // sim events → 3D effects; online: remotePose (render3d)
 // phones and tablets: twin sticks + buttons (apps/web/src/touch); the app's Settings → Touch has "Edit layout"
 mountTouch({ sampler, camera, renderer, view3d, editButton: !appMode, tuning: () => mode?.tuning() ?? null, map: () => map, inGame: () => mode !== null });
@@ -350,6 +370,8 @@ function setMode(next: LocalMode | OnlineMode | null): void {
   lanHost?.close();
   lanHost = null;
   mode = next;
+  // a match: its soldiers and guns now, if the menus didn't start them (prepareForPlay)
+  if (next) prepareForPlay();
   audio.reset();
   if (!(next instanceof OnlineMode)) onlineRoom = null;
   // voice chat (v18): in online rooms only
@@ -510,6 +532,8 @@ const host: GameHost = {
     html.classList.toggle('gfx-low', graphicsPreset(next.graphics) === 'low');
     // …and the 3D view's: no camera shake or kick, a softer gun kick, a dimmer blast light (render3d)
     view3d?.setReducedMotion(next.reduceMotion);
+    // …and the 2D view's (it read the system's setting only: audit 28 Oct)
+    renderer.reducedMotion = next.reduceMotion;
     // team modes (v21): the team palette for the chosen colour-blind mode (DOM, 3D, minimap)
     applyTeamPalette(next.colorBlind);
     html.style.setProperty('--text-scale', String(next.textScale));
@@ -528,7 +552,7 @@ const host: GameHost = {
 };
 
 if (appMode) {
-  document.title = GAME_NAME;
+  // the page keeps index.html's title, the one search results and tabs show (audit 28 Oct)
   bar.remove();
   panelEl.remove();
 } else {
@@ -567,9 +591,12 @@ if (appMode) {
   }
 }
 
-// training's bots need the map's nav graph: build it in idle time while the player is in the menus
-// (navWarm.ts), not on training's first frame. Dev builds log how long it took (tall-map perf script).
-if (appMode && !online) {
+// training's bots need the map's nav graph: built in a worker while the player is in the menus
+// (navWarm.ts), not on training's first frame; it starts with the 3D view's loading (prepareForPlay).
+// Dev builds log how long it took (tall-map perf script).
+function warmTrainingNav(): void {
+  if (navWarmed || !appMode || online) return;
+  navWarmed = true;
   void warmNavGraph(getMap(localMapId)).then((r) => {
     if (import.meta.env.DEV) (window as unknown as { __navWarm: typeof r }).__navWarm = r;
   });
@@ -714,15 +741,25 @@ registerRoute({
 // registerRoute({ id: 'locker', title: 'Locker', mount }) from './shell' (opens at #/locker).
 // the title screen opens the app (not for invite links, the debug client or automation: shell/title.ts)
 const shell = mountShell(document.body, appMode ? { host, title: titleWanted({ appMode, path: location.pathname, params, webdriver: navigator.webdriver === true }) } : {});
-if (shell.store.getState().title !== 'on') load3d();
+if (!appMode || location.pathname.startsWith('/r/') || params.has('room') || params.has('lan')) prepareForPlay();
 else {
-  const stopTitleWatch = shell.store.subscribe((s) => {
-    if (s.title === 'on') return;
-    stopTitleWatch();
-    load3d();
+  const gesture = () => {
+    window.removeEventListener('pointerdown', gesture, true);
+    window.removeEventListener('keydown', gesture, true);
+    prepareForPlay();
+  };
+  window.addEventListener('pointerdown', gesture, { capture: true, passive: true });
+  window.addEventListener('keydown', gesture, { capture: true, passive: true });
+  const stopWatch = shell.store.subscribe((s, before) => {
+    const left = s.title !== 'on' && before.title === 'on';
+    const opened = (s.route !== null && before.route === null) || (s.overlay !== null && before.overlay === null);
+    const going = s.screen.name !== before.screen.name && ['training', 'finding', 'room'].includes(s.screen.name);
+    if (!left && !opened && !going) return;
+    stopWatch();
+    prepareForPlay();
   });
   const idle = (window as Window & { requestIdleCallback?: (fn: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
-  window.setTimeout(() => (idle ? idle(load3d, { timeout: 4000 }) : load3d()), 6000);
+  window.setTimeout(() => (idle ? idle(prepareForPlay, { timeout: 5000 }) : prepareForPlay()), PREPARE_IDLE_MS);
 }
 // sound starts on the first tap or key (browsers allow it only then); the shell's store drives the
 // interface cues and the music
@@ -1215,6 +1252,8 @@ function frame(now: number): void {
   if (wheel !== 0) camera.setZoom(camera.zoom + wheel, mode.zoomMax());
   else camera.setZoom(camera.zoom, mode.zoomMax());
 
+  // training really pauses under its menu, Settings or the controls card (an online room can't)
+  if (mode instanceof LocalMode) mode.paused = appMode && trainingPaused(shell.store.getState());
   const f = mode.update(dt);
   if (mode.map !== map) {
     map = mode.map;
@@ -1267,7 +1306,8 @@ function frame(now: number): void {
   }
   if (covered) return; // the mode keeps running (online: inputs and heartbeats), nothing is drawn
   renderer.render(f, dt, options, appMode ? '' : HELP);
-  audio.onFrame(f, dt, { fuelMax: mode.tuning().fuelMax, fireHeld: (sampler.lastButtons & Btn.Fire) !== 0, map });
+  // training's pause: the loops (the jet, held fire) go quiet until it resumes (the music plays on)
+  audio.onFrame(f, dt, { fuelMax: mode.tuning().fuelMax, fireHeld: (sampler.lastButtons & Btn.Fire) !== 0, map, paused: mode instanceof LocalMode && mode.paused });
   // voice chat: voices follow their soldiers; menus over the game take push to talk's key
   voiceChat.blocked = shell.store.getState().overlay !== null;
   voiceChat.frame(f, toScreen);

@@ -37,7 +37,44 @@
   }
 }
 html.reduce-motion .mf-consent {
-  animation: none;
+  animation: m-fade 120ms linear both !important;
+}
+/*
+ * Phones (audit 28 Oct): the card sat across the middle of Home, over Play now, and took the first tap
+ * meant for it. It now docks over the right-hand columns (the tickets and Next orders, which wait a
+ * moment), between the top bar and the bottom nav: Play now stays in view and takes its tap at once.
+ * The words stack over the two buttons; the eye tile goes.
+ */
+.mf-consent--phone {
+  left: calc(var(--safe-l, 44px) + 342px);
+  right: var(--safe-r, 44px);
+  top: calc(var(--safe-t, 10px) + 56px);
+  bottom: calc(var(--safe-b, 21px) + 60px);
+  translate: none;
+  width: auto;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 14px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+.mf-consent--phone .mf-consent__words {
+  flex: none;
+}
+.mf-consent--phone .mf-consent__tile {
+  display: none;
+}
+.mf-consent--phone .mf-consent__title {
+  font-size: 22px;
+}
+.mf-consent--phone .mf-consent__buttons > .mf-consent__btn {
+  flex: 1;
+  min-width: 0;
+  padding: 0 10px;
+  font-size: 14px;
 }
 html.reduce-transparency .mf-consent {
   background: #0e100b;

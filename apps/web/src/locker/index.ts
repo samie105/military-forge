@@ -20,6 +20,7 @@ import {
   type CosmeticLoadout,
   type CosmeticSlot,
   type DyeChannel,
+  type LoadoutSlot,
   type WeaponDef,
 } from '@military-forge/content';
 import { audio } from '../audio';
@@ -31,7 +32,8 @@ import { moveIndicator } from '../ui/motion';
 import { mountSprite } from '../ui/sprite';
 import css from './locker.css?inline';
 import { LocalLoadoutStore, accountInventory, ownedOnly, randomLoadout, withDye, withItem, type Inventory, type LoadoutStore } from './loadouts';
-import { escapeHtml, ic, tileHtml } from './tiles';
+import { SLOT_GLYPH, THUMB_FOCUS, escapeHtml, ic, tileHtml } from './tiles';
+import { getPortrait, peekPortrait, type PortraitRequest } from '../portrait';
 import { Turntable, type FocusPreset, type LightPreset } from './turntable';
 
 export { LocalLoadoutStore, accountInventory, ownedOnly, starterInventory, type Inventory, type LoadoutStore } from './loadouts';
@@ -87,10 +89,6 @@ const TABS: readonly { id: string; label: string; icon: string; slots: readonly 
 ];
 const CHANNEL_LABEL: Readonly<Record<DyeChannel, string>> = { primary: 'Main', secondary: 'Trim', accent: 'Accent' };
 /** Each slot's glyph on an item without a colour (no item art yet). */
-const SLOT_GLYPH: Partial<Record<CosmeticSlot, string>> = {
-  top: 'shirt', legs: 'shirt', gloves: 'hand', boots: 'shirt', headgear: 'helmet', eyewear: 'eye',
-  bodyType: 'user', jetpack: 'backpack', exhaust: 'flame', trail: 'sparkle', skin_k47: 'rack',
-};
 
 /** The gun the Gun skins tab shows for a look: the K-47 in its skin (the model under /assets/), else as it ships. */
 function skinStageUrl(look: CosmeticLoadout): string {
@@ -251,7 +249,32 @@ export function mountLocker(container: HTMLElement, options: LockerOptions = {})
       return `${multi ? `<h3 class="label mf-lk__sub">${label}</h3>` : ''}<div class="items${sw} mm-grid" role="radiogroup" aria-label="${label}">${tiles()}</div>`;
     };
     panel.innerHTML = `<h2 class="display lk__h">${t.label}</h2>${t.slots.map((x) => section(x.slot, x.label, t.slots.length > 1)).join('')}`;
+    paintThumbs();
     renderWear();
+  };
+
+  /**
+   * Each item's own picture (audit 28 Oct; the creator's way, mobile audit P1-8): the soldier's look with
+   * that item, drawn by the portrait service and cached, in the tile's art box, framed on the part it
+   * changes. The type's glyph stays until a picture is in, and where 3D isn't available.
+   */
+  const HEAD_SLOTS: ReadonlySet<string> = new Set(['headgear', 'eyewear', 'hair']);
+  const paintThumbs = () => {
+    for (const tile of panel.querySelectorAll<HTMLElement>('.item[data-id]:not([data-channel])')) {
+      const glyph = tile.querySelector<HTMLElement>('.mf-item__glyph');
+      const def = getCosmetic(tile.dataset.id ?? '');
+      if (!glyph || !def || def.slot === 'dye' || def.slot === 'bodyType' || def.slot.startsWith('skin_')) continue;
+      const req: PortraitRequest = { look: withItem(loadout, def.slot as LoadoutSlot, def.id), size: 128, pose: HEAD_SLOTS.has(def.slot) ? 'portrait' : 'poster-1' };
+      const y = THUMB_FOCUS[def.slot];
+      const put = (img: { url: string; fallback?: boolean } | null) => {
+        if (!img || img.fallback || !glyph.isConnected) return;
+        glyph.innerHTML = `<img class="mf-item__thumb" src="${img.url}" alt="" draggable="false"${y === undefined ? '' : ` style="object-position:50% ${y}%"`}>`;
+        glyph.classList.add('has-thumb');
+      };
+      const cached = peekPortrait(req);
+      if (cached) put(cached);
+      else void getPortrait(req, 'idle').then(put, () => {});
+    }
   };
 
   const showOnSoldier = () => character?.setLoadout(preview());
@@ -268,7 +291,11 @@ export function mountLocker(container: HTMLElement, options: LockerOptions = {})
     };
     store.save(loadout).then(
       () => report(store.label),
-      (error: unknown) => report(`Not saved: ${error instanceof Error ? error.message : String(error)}`),
+      (error: unknown) => {
+        // the reason is for the console; the player gets a plain line (audit 28 Oct)
+        console.warn('locker: save failed', error);
+        report('Not saved. Check your connection and try again.');
+      },
     );
     options.onChange?.(loadout);
   };
@@ -343,7 +370,8 @@ export function mountLocker(container: HTMLElement, options: LockerOptions = {})
       overlay.hidden = true;
       render();
     } catch (error) {
-      overlay.textContent = `Could not load the soldier: ${error instanceof Error ? error.message : String(error)}`;
+      console.warn('locker: the soldier did not load', error);
+      overlay.textContent = 'Couldn’t load the soldier. Reload the page to try again.';
     }
   })();
 

@@ -23,6 +23,8 @@ writeFileSync(join(root, 'assets', 'index-abC12_34.js'), 'console.log(1)');
 writeFileSync(join(root, 'locker.html'), '<!doctype html><title>locker</title>');
 writeFileSync(join(root, 'robots.txt'), 'User-agent: *\nSitemap: %ORIGIN%/sitemap.xml\n');
 writeFileSync(join(root, 'sitemap.xml'), '<urlset><url><loc>%ORIGIN%/</loc></url></urlset>');
+writeFileSync(join(root, 'terms.html'), '<!doctype html><title>terms</title><link rel="canonical" href="%ORIGIN%/terms.html" />');
+writeFileSync(join(root, 'llms.txt'), '# game\n\n- [Terms](%ORIGIN%/terms.html)\n');
 const BIG_JS = `export const data = ${JSON.stringify(Array.from({ length: 400 }, (_, i) => ({ i, name: 'player', ok: true })))};`;
 writeFileSync(join(root, 'assets', 'chunk-Zq9_xY12.js'), BIG_JS);
 // a secret next to the build must stay unreachable
@@ -174,6 +176,11 @@ describe('static files and app routes', () => {
     const sitemap = await fetch(`${base}/sitemap.xml`);
     expect(sitemap.headers.get('content-type')).toMatch(/^application\/xml/);
     expect(await sitemap.text()).toContain(`<loc>http://127.0.0.1:${port(proxy)}/</loc>`);
+    // the text pages' canonical and llms.txt too (audit 28 Oct)
+    const terms = await fetch(`${base}/terms.html`);
+    expect(terms.headers.get('content-type')).toMatch(/^text\/html/);
+    expect(await terms.text()).toContain(`href="http://127.0.0.1:${port(proxy)}/terms.html"`);
+    expect(await (await fetch(`${base}/llms.txt`)).text()).toContain(`(http://127.0.0.1:${port(proxy)}/terms.html)`);
   });
 
   it("answers the client's /health probe: no WebTransport through the tunnel (WebSocket at once, no 404)", async () => {

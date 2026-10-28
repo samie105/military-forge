@@ -20,7 +20,7 @@ import { granted } from '../looks/grants';
 export interface LoadoutStore {
   /** null when nothing is saved yet; may reject (offline, signed out): the Locker then starts from the default look */
   load(): Promise<CosmeticLoadout | null>;
-  /** resolves once the look is stored; rejects when it was not (the Locker shows "Not saved: <message>") */
+  /** resolves once the look is stored; rejects when it was not (the Locker says "Not saved" and logs the reason) */
   save(loadout: CosmeticLoadout): Promise<void>;
   /** where saves go, for the Locker header ("Saved on this device") */
   readonly label: string;

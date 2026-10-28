@@ -219,9 +219,10 @@
   --z-panel:50; --z-modal:60; --z-toast:70; --z-flash:90; --z-dev:100;
 
   /* ---- motion (menus) ---- */
-  --dur-fast:120ms; --dur:220ms; --dur-slow:600ms; --dur-idle:24s;
+  --dur-fast:120ms; --dur:220ms; --dur-slow:360ms; --dur-idle:24s; /* slow = --m-slow: the spec's panel and card time (it was 600 ms: audit 28 Oct) */
   --ease-out:cubic-bezier(.2,.8,.2,1);
-  --ease-pop:cubic-bezier(.3,1.55,.5,1);
+  /* a pop settles with a hair of overshoot, as the motion spec allows (≤ 2%; it was 9.5%: audit 28 Oct) */
+  --ease-pop:linear(0, 0.42 12%, 0.78 26%, 0.96 42%, 1.015 58%, 1.004 76%, 1);
   /* ---- the motion system (docs/design/ui-motion-spec.md §2): one for desktop and phone ---- */
   /* durations */
   --m-instant:90ms;    /* press feedback, hit markers */
@@ -245,7 +246,9 @@
   --m-roll-blur:2px;   /* P4 roll counter */
   --m-edge:24px;       /* P9 edge banner's travel */
 }
-@media (prefers-reduced-motion:reduce){ :root{ --dur-fast:0ms; --dur:0ms; --dur-slow:0ms; } }
+/* Reduce motion is the game's own switch (html.reduce-motion), which starts from the system's setting
+   (shell/controller.ts loadSettings; boot.js before the app): the kit's durations become short fades */
+html.reduce-motion{ --dur-fast:120ms; --dur:120ms; --dur-slow:120ms; }
 /* =========================================================================
    BASE
    ========================================================================= */
@@ -258,7 +261,10 @@
 :where(.mf) :is(img,svg){ display:block; }
 :where(.mf) [hidden]{ display:none !important; }
 :where(.mf) :focus{ outline:none; }
-:where(.mf) :focus-visible{ outline:none; box-shadow:var(--sh-focus); }
+:where(.mf) :focus-visible{ outline:3px solid var(--c-focus); outline-offset:4px; box-shadow:var(--sh-focus); }
+/* the keyboard ring is an outline too, drawn exactly over --sh-focus's outer band: components that set
+   their own box-shadow (every .btn variant, a picked tab, a pressed seg) replace the shadow ring, never
+   the outline, so the ring survives on all of them (audit 28 Oct) */
 
 
 
@@ -436,9 +442,20 @@
 /* slider · track + fill from ONE number --v (0..1) + default tick --d */
 .slider{ position:relative; display:block; height:28px; flex:1; min-width:120px; }
 .slider__track{ position:absolute; left:0; right:0; top:10px; height:8px; border-radius:var(--r-pill); background:var(--c-ink-950); box-shadow:inset 0 0 0 var(--bw) var(--c-line); overflow:hidden; }
-.slider__track > i{ position:absolute; inset:0; background:var(--c-volt); transform-origin:0 50%; transform:scaleX(var(--v,.5)); }
+.slider__track > :is(i, .slider__fill){ position:absolute; inset:0; background:var(--c-volt); transform-origin:0 50%; transform:scaleX(var(--v,.5)); }
 .slider__def{ position:absolute; top:4px; width:3px; height:20px; left:calc(var(--d,.5) * 100% - 1px); background:var(--c-paper); border-radius:var(--r-xxs); opacity:.6; }
 .slider__thumb{ position:absolute; top:0; left:calc(var(--v,.5) * 100% - 14px); width:28px; height:28px; border-radius:var(--r-xs); background:var(--c-paper); border:var(--bw-chunky) solid var(--c-ink-950); transform:rotate(45deg) scale(.85); }
+/* the labels under a stepped slider (Text size): each sits under its own stop, the end ones flush with
+   the track's ends, so they never run together (audit 28 Oct) */
+.slider--ticks{ height:56px; }
+.slider__ticks{ position:absolute; left:0; right:0; top:34px; height:20px; color:var(--c-muted); font-size:var(--fs-14); font-weight:var(--fw-bold); font-variant-numeric:tabular-nums; pointer-events:none; }
+.slider__ticks > span{ position:absolute; top:0; left:calc(var(--t) * 100%); translate:calc(var(--t) * -100%) 0; white-space:nowrap; }
+.slider__ticks > span.is-on{ color:var(--c-text); }
+/* a settings slider with its mute button and value on one line */
+.volrow{ display:flex; align-items:center; gap:var(--sp-4); flex:1; min-width:0; max-width:520px; }
+.volrow .slider{ min-width:200px; }
+.volrow--text .slider{ min-width:320px; }
+.volrow__val{ min-width:3.5em; text-align:right; font-weight:var(--fw-black); }
 
 /* stepper */
 .stepper{ display:inline-flex; align-items:center; gap:var(--sp-2); }
@@ -492,9 +509,23 @@
 .ticker__run span::after{ content:"✦"; margin-left:var(--sp-7); }
 @keyframes ticker{ to{ transform:translateX(-50%); } }
 
-/* reduce motion: menus stop idling */
-html.reduce-motion *,html.reduce-motion *::before,html.reduce-motion *::after{ animation:none !important; transition:none !important; }
-@media (prefers-reduced-motion:reduce){ *,*::before,*::after{ animation:none !important; transition:none !important; } }
+/* Reduce motion (Settings → Accessibility; html.reduce-motion, which starts from the system's setting and
+   the player's switch then wins either way): nothing travels, scales, spins or idles. What moved fades
+   instead, 120 ms at most, so a change still reads as a change rather than a hard cut:
+   - transitions keep only their fades and colour changes;
+   - keyframe animations stop, except the motion patterns (.m-p1/3/7/9, .m-leave, .m-fade; their
+     distances are zero here, MOTION below), which become a plain fade, and the waits (.spinner, .m-wait:
+     a loading bar), which breathe in place so a wait never looks frozen.
+   A component opts a keyframe fade of its own back in with an !important rule under html.reduce-motion. */
+html.reduce-motion *,html.reduce-motion *::before,html.reduce-motion *::after{ transition-property:opacity, color, background-color, border-color, outline-color, fill, stroke, visibility !important; }
+html.reduce-motion :not(.m-p1, .m-p3, .m-p7, .m-p9, .m-leave, .m-fade, .m-fade-out, .m-wait, .spinner),html.reduce-motion ::before,html.reduce-motion ::after{ animation:none !important; }
+html.reduce-motion :is(.m-p1, .m-p3, .m-p7, .m-p9, .m-fade){ animation-name:m-fade !important; animation-duration:120ms !important; animation-timing-function:linear !important; }
+html.reduce-motion :is(.m-leave, .m-p9.is-leaving, .m-fade-out){ animation-name:m-fade-out !important; animation-duration:120ms !important; animation-timing-function:linear !important; }
+html.reduce-motion :is(.spinner, .m-wait){ animation:m-wait 1.2s ease-in-out infinite alternate !important; }
+html.reduce-motion .spinner{ border-color:var(--c-volt); }
+@keyframes m-fade{ from{ opacity:0; } }
+@keyframes m-fade-out{ to{ opacity:0; } }
+@keyframes m-wait{ from{ opacity:.35; } to{ opacity:1; } }
 /* =========================================================================
    NAME ENTRY
    ========================================================================= */
@@ -574,8 +605,9 @@ a.ticket{ color:var(--c-paper-text); }
 .codebox__cell.is-caret{ border-color:var(--c-volt); box-shadow:var(--sh-ring) var(--c-volt-soft); background-image:linear-gradient(var(--c-volt),var(--c-volt)); background-size:6px 96px; background-position:center; background-repeat:no-repeat; }
 [data-active-state~="pasted"] .codebox__cell{ box-shadow:var(--sh-off-sm) var(--c-ok); }
 [data-active-state~="error"] .codebox__cell{ background:var(--c-hp); color:var(--c-hp-ink); box-shadow:var(--sh-off-sm) var(--c-ink-950); }
-[data-active-state~="error"] .codebox{ animation:shake 320ms var(--ease-out) 1; }
-@keyframes shake{ 25%{ transform:translateX(-10px); } 75%{ transform:translateX(10px); } }
+[data-active-state~="error"] .codebox{ animation:shake 240ms var(--ease-settle) 1; }
+/* a wrong code: the boxes shake ±4 px once (the only shake menus get; it was ±10 px: audit 28 Oct) */
+@keyframes shake{ 20%{ transform:translateX(-4px); } 45%{ transform:translateX(4px); } 70%{ transform:translateX(-2px); } 100%{ transform:none; } }
 .join__status{ min-height:32px; }
 .join__actions{ display:flex; flex-wrap:wrap; gap:var(--sp-5); }
 .join__help{ padding:var(--sp-7); display:flex; flex-direction:column; gap:var(--sp-4); transform:rotate(1.5deg); }
@@ -724,7 +756,7 @@ a.ticket{ color:var(--c-paper-text); }
 @keyframes pop{ from{ transform:scale(1.5); opacity:0; } }
 .cd__hint{ position:absolute; z-index:var(--z-banner); bottom:72px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:var(--sp-2); padding:var(--sp-3) var(--sp-5); font-weight:var(--fw-semi); }
 .intro{ position:absolute; inset:0; z-index:var(--z-banner); display:flex; align-items:flex-end; }
-.intro__band{ position:absolute; left:-80px; right:-80px; bottom:150px; height:440px; background:var(--c-volt); border-block:6px solid var(--c-ink-950); transform:rotate(-3deg); animation:band-in var(--dur-slow) var(--ease-out); background-image:radial-gradient(var(--c-halftone-volt) 1.6px, transparent 1.9px); background-size:10px 10px; }
+.intro__band{ position:absolute; left:-80px; right:-80px; bottom:150px; height:440px; background:var(--c-volt); border-block:6px solid var(--c-ink-950); transform:rotate(-3deg); animation:band-in var(--m-slow) var(--ease-arrive); background-image:radial-gradient(var(--c-halftone-volt) 1.6px, transparent 1.9px); background-size:10px 10px; }
 @keyframes band-in{ from{ transform:rotate(-3deg) translateX(-110%); } }
 .intro__inner{ position:relative; display:flex; flex-direction:column; gap:var(--sp-3); padding:0 160px 210px; color:var(--c-volt-ink); transform:rotate(-3deg); }
 .intro__place{ align-self:flex-start; font-size:var(--fs-36); background:var(--c-paper); color:var(--c-paper-text); }
@@ -1716,6 +1748,5 @@ html.canvas .ticker__run{ animation:none; }
 
 /* Reduce motion: no scale, blur, rolls or travel; opacity only, 120 ms at most */
 html.reduce-motion{ --m-instant:0ms; --m-fast:120ms; --m-base:120ms; --m-slow:120ms; --m-scene:120ms; --m-stagger:0ms; --m-rise:0px; --m-pull-blur:0px; --m-press:1; --m-pull-scale:1; --m-stamp-scale:1; --m-roll-blur:0px; --m-edge:0px; }
-@media (prefers-reduced-motion:reduce){ :root{ --m-instant:0ms; --m-fast:120ms; --m-base:120ms; --m-slow:120ms; --m-scene:120ms; --m-stagger:0ms; --m-rise:0px; --m-pull-blur:0px; --m-press:1; --m-pull-scale:1; --m-stamp-scale:1; --m-roll-blur:0px; --m-edge:0px; } }
 /* Reduce flashes: the flood never steps the screen's brightness by more than ~20 % */
 html.reduce-flashes .m-p6{ opacity:.2; }

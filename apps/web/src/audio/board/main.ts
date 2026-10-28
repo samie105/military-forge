@@ -12,6 +12,7 @@ import { AudioEngine, type Volumes } from '../engine';
 import { MusicBed, type MusicMode } from '../music';
 import { SOUNDS, SOUND_IDS, type SoundId } from '../sounds';
 import { makeAudioContext, playSilence } from '../unlock';
+import { loadRecordings } from '../recordings/banks';
 
 const root = document.getElementById('board')!;
 let engine: AudioEngine | null = null;
@@ -238,4 +239,8 @@ function render(): void {
   }, 200);
 }
 
-render();
+// the recorded takes' banks first (recordings/banks.ts): every sound that uses one renders from them
+loadRecordings().then(render, (e: unknown) => {
+  root.textContent = `The recorded sounds didn't load (${(e as Error)?.message ?? e}). Reload to try again.`;
+  root.removeAttribute('aria-busy');
+});

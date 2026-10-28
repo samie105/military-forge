@@ -3,7 +3,7 @@
  * and a gun pair follow the player to every device. The web client keeps a copy on the device as
  * an offline cache and syncs it at sign-in (apps/web/src/locker/accountSync.ts).
  *
- *   GET /me/loadout/0 → { slot, look, guns, updatedAt }   (404 no_loadout: nothing saved yet)
+ *   GET /me/loadout/0 → { slot, look, guns, updatedAt }   (204, no body: nothing saved yet)
  *   PUT /me/loadout/0 { look, guns } → the same           (400 invalid_loadout names each bad field)
  */
 import { and, eq } from 'drizzle-orm';
@@ -40,7 +40,9 @@ export function loadoutRoutes(deps: { db: Db; kv: Kv; auth: AuthService; now: ()
       .select()
       .from(loadouts)
       .where(and(eq(loadouts.userId, c.get('auth')!.userId), eq(loadouts.slot, slot)));
-    if (!row) throw new ApiError(404, 'no_loadout', 'Nothing saved in this slot yet');
+    // nothing saved yet is an expected answer, not an error (a 404 filled every new player's console:
+    // audit 28 Oct); pages from before read the empty answer as "nothing saved" too
+    if (!row) return c.body(null, 204);
     return c.json({ slot, ...row.data, updatedAt: row.updatedAt.toISOString() } satisfies SavedLoadout);
   });
 

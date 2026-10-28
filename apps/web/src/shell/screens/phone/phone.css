@@ -125,7 +125,7 @@ html.reduce-motion .pm-sheet.is-leaving { animation-name: pm-fade-out; }
 .is-text-lg .pm-mvp { width: 220px; height: auto; align-self: stretch; }
 .is-text-lg .pm-mvp .mvp__big { display: none; }
 .is-text-lg .pm-res__more .btn, .is-text-lg .pm-bar .btn { padding-inline: 8px; }
-.is-text-lg .pm-pause { width: 380px; overflow-y: auto; }
+.is-text-lg .pm-pause { width: 380px; }
 .is-text-lg .pm-pause__row { flex-wrap: wrap; }
 .is-text-lg .pm-score { width: 300px; }
 .is-text-lg .pm-score__row { flex-wrap: wrap; gap: 6px 14px; }
@@ -202,7 +202,7 @@ html.reduce-motion .pm-sheet.is-leaving { animation-name: pm-fade-out; }
 .pm-ne__row { display: flex; align-items: stretch; gap: 8px; }
 :where(.kit-v2) .pm-ne__input { flex: 1; min-width: 0; min-height: 56px; padding: 0 12px; gap: 8px; font-size: calc(28px * var(--pm-head)); cursor: text; }
 .pm-ne__field { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; padding: 0; background: transparent; color: inherit; font: inherit; font-stretch: inherit; }
-.pm-ne__field:focus-visible { box-shadow: none; }
+.pm-ne__field:focus-visible { box-shadow: none; outline: none; }
 .pm-ne__field::placeholder { color: var(--c-paper-muted); opacity: 1; }
 .pm-ne__input:focus-within { outline: 3px solid var(--c-volt); outline-offset: 2px; }
 .pm-ne__input .input__count { font-size: var(--fs-14); }
@@ -212,7 +212,9 @@ html.reduce-motion .pm-sheet.is-leaving { animation-name: pm-fade-out; }
 .pm-ne__help { color: var(--c-muted); font-size: var(--fs-14); }
 .pm-ne__sugg { display: flex; flex-wrap: wrap; gap: 6px; }
 .pm-ne__sugg .btn { min-height: var(--touch-min); }
-.pm-ne__more { display: flex; align-items: center; gap: 12px; }
+.pm-ne__more { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+/* the help line takes its own row under the buttons rather than a one-word column beside them (audit 28 Oct) */
+.pm-ne__more .pm-ne__help { flex: 1 0 100%; min-width: 0; }
 .pm-ne__more .btn { flex: none; min-height: var(--touch-min); }
 .is-text-lg .pm-tips__ic { display: none; }
 .is-text-lg .pm-tips .eyebrow { display: none; }
@@ -264,7 +266,7 @@ html.reduce-motion .pm-turn__card .ic { animation: none; }
 .pm-codebox__cell.is-empty { background: var(--c-ink-800); border-color: var(--c-line-strong); box-shadow: none; }
 .pm-codebox__cell:focus { outline: none; border-color: var(--c-volt); box-shadow: 0 0 0 3px var(--c-volt-soft); }
 .pm-codebox__cell.is-bad { background: var(--c-hp); color: var(--c-hp-ink); }
-[data-active-state~="error"] .pm-codebox { animation: shake 320ms var(--ease-out) 1; }
+[data-active-state~="error"] .pm-codebox { animation: shake 240ms var(--ease-settle) 1; }
 .pm-join__status { display: flex; align-items: center; gap: 4px; min-height: 20px; margin: 0; font-size: var(--fs-14); font-weight: var(--fw-bold); color: var(--c-muted); }
 .pm-join__status.is-ok { color: var(--c-ok); }
 .pm-join__status.is-bad { color: var(--c-danger-text); }
@@ -384,7 +386,8 @@ html.reduce-motion .pm-turn__card .ic { animation: none; }
 
 /* Play now is the hero (mobile audit P1-6); Create room sits under it, smaller, on the volt poster */
 .pm-poster .pm-create-room { align-self: flex-start; min-height: 44px; padding: 0 10px; color: var(--c-volt-ink); border-color: color-mix(in srgb, var(--c-volt-ink) 40%, transparent); font-size: var(--fs-14); }
-.pm-poster .pm-create-room:disabled { opacity: 0.55; }
+/* offline, Create room can't work: it reads as off (dashed, no fill) but stays legible on the volt poster (audit 28 Oct: the kit's grey fill made it a blank blob) */
+.pm-poster .pm-create-room:disabled { opacity: 1; background: transparent; color: color-mix(in srgb, var(--c-volt-ink) 72%, transparent); border-style: dashed; border-color: color-mix(in srgb, var(--c-volt-ink) 45%, transparent); box-shadow: none; }
 
 /* a local room's one QR (Pen: LOCAL ROOMS · S1, 24 Oct): the room link, which a phone's camera opens
    straight into the room; the code beside it for Join; the QR swap a quiet link under it */
@@ -406,8 +409,16 @@ html.reduce-motion .pm-turn__card .ic { animation: none; }
 .pm-roster__h { gap: 6px; }
 .is-text-lg .pm-lan__scan .pm-lan__how-code { font-size: calc(26px * var(--pm-head)); letter-spacing: 0.06em; }
 .pm-lan__scan .pm-lan__how-code { font-size: calc(34px * var(--pm-head)); }
-/* the pause menu scrolls when Send a report opens at its foot (diag/SendReport.tsx) */
-.pm-pause { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+/* the pause menu: its head and Resume at the top, Leave at the foot, always in view (audit 28 Oct); the
+   items between scroll (Send a report opening at their foot too: diag/SendReport.tsx), their lower edge
+   fading while there's more below */
+.pm-pause { overflow: hidden; }
+.pm-pause > * { flex: none; }
+.pm-pause > .pm-pause__list { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; margin-inline: -4px; padding-inline: 4px; }
+.pm-pause__list > * { flex: none; }
+/* "Match continues" (online: it can't pause) on one line */
+.mf-fit--phone .pm-pause__t--long, .pm-pause__t--long { font-size: calc(32px * var(--pm-head, 1)); white-space: nowrap; }
+.pm-pause__list.has-more { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent); }
 .pm-pause .pm-report.mf-report-btn { align-self: flex-start; }
 
 /* ---- one clear scroll area on a short landscape screen (the owner, 24 Oct: "on landscape … some
@@ -424,10 +435,9 @@ html.reduce-motion .pm-turn__card .ic { animation: none; }
   @keyframes pm-edge-top { from { box-shadow: none; } to { box-shadow: 0 8px 12px -6px rgb(0 0 0 / .7); } }
   @keyframes pm-edge-bottom { from { box-shadow: 0 -8px 12px -6px rgb(0 0 0 / .7); } to { box-shadow: none; } }
 }
-/* the pause menu's quick row wraps (Settings, Install app, Leave: three don't fit 336 px side by side) */
+/* the pause menu's quick row wraps (Settings and Install app) */
 .pm-pause__row { flex-wrap: wrap; }
 .pm-pause__row .btn { flex: 1 1 auto; }
-.pm-pause { overflow-x: hidden; }
 /* the sheet's foot fades while there's more below it (its head is sticky, so only the foot fades) */
 @property --pm-fade-b { syntax: '<length>'; inherits: false; initial-value: 0px; }
 @supports (animation-timeline: scroll()) {
@@ -435,3 +445,16 @@ html.reduce-motion .pm-turn__card .ic { animation: none; }
   .pm-sheet:has(> .pm-bar) { -webkit-mask-image: none; mask-image: none; }
   @keyframes pm-fade-foot { from { --pm-fade-b: 28px; } 90% { --pm-fade-b: 28px; } to { --pm-fade-b: 0px; } }
 }
+
+/*
+ * Home in a short phone box (844×390 is 812×375 design px: 228 px between the top bar and the nav): the
+ * poster and the three tickets ran under the bottom nav (audit 28 Oct). The poster drops its serial and
+ * a little padding; the tickets their padding and the local room's sub-line (its label says Same Wi-Fi),
+ * so both columns end above the nav.
+ */
+.mf-fit--phone .pm-home .pm-poster { padding: 12px 14px 22px; gap: 4px; }
+.mf-fit--phone .pm-home .pm-poster > .serial { display: none; }
+.mf-fit--phone .pm-home .pm-poster .pm-create { min-height: 50px; }
+.mf-fit--phone .pm-home .pm-col { gap: 8px; }
+.mf-fit--phone .pm-home .pm-tk { padding: 8px 12px; }
+.mf-fit--phone .pm-home .pm-tk__sub { display: none; }

@@ -41,6 +41,17 @@
   fit();
   window.addEventListener('resize', fit);
 
+  // Reduce motion: the player's own switch (Settings → Accessibility, saved as settings.v1) wins either
+  // way; the system's setting is only the default (the app keeps the class up after: main.ts)
+  var reduce = matches('(prefers-reduced-motion: reduce)');
+  try {
+    var saved = JSON.parse(localStorage.getItem('settings.v1') || 'null');
+    if (saved && typeof saved.reduceMotion === 'boolean') reduce = saved.reduceMotion;
+  } catch {
+    // storage blocked: the system's setting stands
+  }
+  root.classList.toggle('reduce-motion', reduce);
+
   var room = /^\/r\/([A-Za-z]{6})\/?$/.exec(location.pathname);
   var roomish = !!room || /[?&]lan(=|&|$)/.test(location.search);
   root.classList.add(roomish ? 'mf-boot-room' : 'mf-boot-landing');

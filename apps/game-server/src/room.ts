@@ -582,6 +582,8 @@ export class Room {
     this.match = options.match ? new Match(this.game, options.match) : null;
     // team modes: party mates (the join ticket's party, social) are dealt onto one team
     if (this.match) this.match.groupOf = (id) => this.partyOf(id);
+    // a player who leaves and comes back in the same match is one row in its results (their account, else their name)
+    if (this.match) this.match.identityOf = (id) => this.identityOf(id);
     this.recorder = this.match && options.results ? new MatchRecorder(options.results, options.code ?? '') : null;
     this.stats = this.match && options.stats ? new MatchStats(options.stats, options.code ? 'code' : 'default') : null;
     const fill = options.fillBots;
@@ -946,6 +948,7 @@ export class Room {
   /** A new player for this connection: its soldier, its session, its look; everyone hears of it. */
   private addHuman(client: Client, name: string, look: number[] | null): void {
     const p = this.game.addPlayer(name);
+    this.identities.set(p, client.accountId ? `account:${client.accountId}` : `name:${p.name}`);
     if (client.accountId) this.recorder?.setAccount(p, client.accountId);
     // the guns they chose (their account's loadout): every spawn until a death keeps others (#125)
     if (client.guns) this.game.setLoadout(p, client.guns);
@@ -1496,6 +1499,14 @@ export class Room {
   private readonly shownSince = new WeakMap<PlayerState, number>();
   /** v19: each player's look as the room lets them wear it (cosmetic wire ids); absent = none known */
   private readonly looks = new WeakMap<PlayerState, number[]>();
+  /** who each human is beyond their slot (Match.identityOf): the join's account, else the name */
+  private readonly identities = new WeakMap<PlayerState, string>();
+
+  private identityOf(id: number): string | null {
+    const p = this.game.players[id];
+    return p && !p.isBot ? (this.identities.get(p) ?? null) : null;
+  }
+
   /** a look changed: the ROSTER goes out again (look changes: at most one ROSTER every LOOK_ROSTER_TICKS) */
   private lookRosterDirty = false;
   private lookRosterAt = -Infinity;

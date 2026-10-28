@@ -32,7 +32,7 @@
       "slot": "weapon_skin",
       "weaponId": "k47",
       "tier": "forged_kill_effect",
-      "name": "Galaxy Relic + Stardust",
+      "name": "Galaxy Relic + Stardust Shatter",
       "rarity": "legendary",
       "source": { "kind": "store" },
       "assets": { "model": "weapons/skins/k47_galaxy_relic.glb" },

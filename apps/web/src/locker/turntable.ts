@@ -45,6 +45,7 @@ import { OutlineMaterial, characterGltfLoader, characterToonRamp, type Character
 import { SKIN_GLOW, weaponFromGltf } from '../render3d/weaponModels';
 import { rotateWorld, solveTwoBone } from '../render3d/ik';
 import { logicalPoint } from '../ui/landscape';
+import { reduced } from '../ui/motion';
 import { DRAW, REACTION_SECONDS, SHOTS, SHOT_SECONDS, changedSlots, easeTravel, reactionFor, reactionWeight, shotForSlot, shotForTab, shouldDraw, type Reaction, type Shot, type ShotName } from './stage';
 
 export type FocusPreset = 'full' | 'face' | 'jetpack';
@@ -215,6 +216,7 @@ export class Turntable {
   private readonly dpr: number;
   private readonly touch: boolean;
   private reduced: boolean;
+  private motionWatch: MutationObserver | null = null;
   /** drawing: the clock now, when it last drew, and until when it draws whatever (input, moves, reactions) */
   private now = 0;
   private lastDraw = -Infinity;
@@ -234,7 +236,16 @@ export class Turntable {
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
-    this.reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // Reduce motion: the game's switch (html.reduce-motion; the system's setting is its default), followed
+    // live, so flipping it in Settings settles the stage at once (audit 28 Oct: it read the OS only)
+    this.reduced = reduced();
+    if (typeof MutationObserver === 'function' && typeof document !== 'undefined') {
+      this.motionWatch = new MutationObserver(() => {
+        const on = reduced();
+        if (on !== this.reduced) this.setReducedMotion(on);
+      });
+      this.motionWatch.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    }
     this.renderer = new WebGLRenderer({ canvas, antialias: true });
     // sharper close-ups: up to 2 on a phone, 3 on desktop
     this.dpr = Math.min(this.touch ? 2 : 3, window.devicePixelRatio || 1);
@@ -352,7 +363,7 @@ export class Turntable {
     this.to(SHOTS[shotForSlot(slot)]);
   }
 
-  /** Reduce motion: the stage rests (draws nothing) a few seconds after the last input. Defaults to the OS setting. */
+  /** Reduce motion: the stage rests (draws nothing) a few seconds after the last input. Follows html.reduce-motion by itself. */
   setReducedMotion(on: boolean): void {
     this.reduced = on;
     this.wake();
@@ -381,6 +392,7 @@ export class Turntable {
   dispose(): void {
     cancelAnimationFrame(this.frame);
     this.observer.disconnect();
+    this.motionWatch?.disconnect();
     this.timer.dispose();
     this.canvas.removeEventListener('pointerdown', this.onPointerDown);
     this.canvas.removeEventListener('pointermove', this.onPointerMove);

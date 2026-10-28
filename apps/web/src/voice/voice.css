@@ -126,8 +126,7 @@
 .vc-bars i { width: 3px; border-radius: 2px; background: var(--ring, var(--c-volt)); height: calc(3px + var(--lvl, 0) * 13px); transition: height var(--m-fast, .16s) linear; }
 .vc-bars i:nth-child(2) { height: calc(5px + var(--lvl, 0) * 11px); }
 .vc-bars i:nth-child(3) { height: calc(2px + var(--lvl, 0) * 8px); }
-@media (prefers-reduced-motion: reduce) { .vc-radio__btn, .vc-chip, .vc-radio__lock { animation: none; } .vc-radio__air i { animation: none; } }
-html.reduce-motion :is(.vc-radio__btn, .vc-chip, .vc-radio__lock) { animation: none; }
+html.reduce-motion :is(.vc-radio__btn, .vc-chip, .vc-radio__lock), html.reduce-motion .vc-radio__air i { animation: none; }
 
 /* ---- speaking tags over soldiers (window pixels, moved by transform) ---- */
 .vc-tags { position: fixed; inset: 0; z-index: var(--z-hud); pointer-events: none; overflow: hidden; }
@@ -237,4 +236,4 @@ html.reduce-motion .vc-tag__ring, html.reduce-motion .vc-bars i { transition: no
 .vc-sheetwrap.screen--phone .vc-seg .seg__opt { font-size: 13px; }
 .vc-sheetwrap.screen--phone .vc-person { min-height: 48px; }
 .vc-sheetwrap.screen--phone .switch { font-size: 14px; }
-@media (prefers-reduced-motion: reduce) { .vc-sheet, .vc-scrim { animation-name: vc-fade; } }
+html.reduce-motion :is(.vc-sheet, .vc-scrim) { animation-name: vc-fade !important; animation-duration: 120ms !important; }

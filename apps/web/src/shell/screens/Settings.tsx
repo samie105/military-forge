@@ -4,7 +4,7 @@
  * Account (save this soldier with an email and password, sign in, sign out: account/AccountPanel.tsx).
  * Everything saves on this device as it changes; Back (Esc) and Done close it.
  */
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useStore } from 'zustand';
 import { framesPerSecond, netHistory, NET_HISTORY } from '../../stats';
 import { getTouchSettings, onTouchChange, openTouchEditor, resetTouchLayout, setTouchPreset, setTouchSettings, type TouchSettings } from '../../touch';
@@ -137,7 +137,7 @@ function Volume({ audio, k, label, desc }: { audio: AudioSettings; k: 'master' |
           <button className={muted ? 'iconbtn is-on' : 'iconbtn'} aria-label={muted ? `Unmute ${label.toLowerCase()}` : `Mute ${label.toLowerCase()}`} aria-pressed={muted} onClick={() => set({ [`${k}Muted`]: !muted })}>
             <Icon name="speaker" />
           </button>
-          <Slider value={audio[k]} onChange={(v) => set({ [k]: v })} label={`${label} volume`} valueText={pct(audio[k])} />
+          <Slider value={audio[k]} onChange={(v) => set({ [k]: v })} label={/volume$/i.test(label) ? label : `${label} volume`} valueText={pct(audio[k])} />
           <output className="volrow__val num" data-bind={`settings.audio.${k}`}>
             {pct(audio[k])}
           </output>
@@ -326,6 +326,25 @@ export function NameTagPreview({ mode }: { mode: Settings['colorBlind'] }) {
   );
 }
 
+/** Camera shake: the same setting as the phone's (touch settings' shake), on desktop too (audit 28 Oct). */
+function CameraShake({ reduceMotion }: { reduceMotion: boolean }) {
+  const t = useTouchSettings();
+  return (
+    <div className="srow">
+      <div className="srow__txt">
+        <b>Camera shake</b>
+        <span>{reduceMotion ? 'Off while Reduce motion is on.' : 'How hard blasts and recoil shake the view.'}</span>
+      </div>
+      <div className="srow__ctrl">
+        <div className="volrow">
+          <Slider value={t.shake} onChange={(v) => setTouchSettings({ shake: Math.round(v * 20) / 20 })} label="Camera shake" valueText={pct(t.shake)} disabled={reduceMotion} />
+          <output className="volrow__val num">{reduceMotion ? 'Off' : pct(t.shake)}</output>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Accessibility({ settings }: { settings: Settings }) {
   const ctl = useCtl();
   const i = Math.max(0, TEXT_SIZES.findIndex((t) => Math.abs(t - settings.textScale) < 0.01));
@@ -362,12 +381,13 @@ function Accessibility({ settings }: { settings: Settings }) {
       <div className="srow">
         <div className="srow__txt">
           <b>Reduce motion</b>
-          <span>No screen shake, no zooming numbers, no pulsing warnings.</span>
+          <span>Movement becomes short fades: no screen shake, no zooming numbers, no pulsing warnings.</span>
         </div>
         <div className="srow__ctrl">
           <Switch on={settings.reduceMotion} onChange={(reduceMotion) => ctl.updateSettings({ reduceMotion })} label="Reduce motion" />
         </div>
       </div>
+      <CameraShake reduceMotion={settings.reduceMotion} />
       <div className="srow mf-srow--stack">
         <div className="srow__txt">
           <b id="cb-label">
@@ -733,6 +753,8 @@ export function SettingsScreen({ store }: { store: ShellStore }) {
     const patch = resetPatch(tab);
     if (patch) ctl.updateSettings(patch);
     else if (tab === 'touch') setTouchSettings(DEFAULT_TOUCH_SETTINGS);
+    // Camera shake lives with the touch settings (one setting on phone and desktop)
+    if (tab === 'accessibility') setTouchSettings({ shake: DEFAULT_TOUCH_SETTINGS.shake });
   };
   // the tab indicator slides to the picked tab (P5, vertical)
   const nav = useRef<HTMLElement>(null);
@@ -741,6 +763,53 @@ export function SettingsScreen({ store }: { store: ShellStore }) {
     const el = nav.current?.querySelector<HTMLElement>('[aria-selected="true"]');
     if (el && bar.current) moveIndicator(bar.current, el.offsetTop, el.offsetHeight);
   }, [tab]);
+  // a tab change: the outgoing section leaves first (8 px left, accelerating out) while the incoming one
+  // arrives from the right (menus.css). The old section's DOM is copied the moment the tab changes (the
+  // store's listener runs before React re-renders) and shown, inert, over the new one for --m-fast.
+  const panel = useRef<HTMLDivElement>(null);
+  const ghostHost = useRef<HTMLDivElement>(null);
+  const ghost = useRef<{ el: HTMLElement; scroll: number } | null>(null);
+  useEffect(
+    () =>
+      store.subscribe((s, prev) => {
+        if (s.settingsTab === prev.settingsTab || !panel.current) return;
+        const live = panel.current.querySelector<HTMLElement>(':scope > .mf-tabpanel');
+        if (!live) return;
+        const el = live.cloneNode(true) as HTMLElement;
+        el.classList.add('mf-tabpanel--leaving');
+        el.removeAttribute('role');
+        el.removeAttribute('aria-label');
+        el.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
+        ghost.current = { el, scroll: panel.current.scrollTop };
+      }),
+    [store],
+  );
+  useLayoutEffect(() => {
+    const g = ghost.current;
+    const host = ghostHost.current;
+    ghost.current = null;
+    if (!g || !host || !panel.current) return undefined;
+    host.replaceChildren(g.el);
+    host.style.top = `${panel.current.scrollTop - g.scroll}px`;
+    const t = window.setTimeout(() => host.replaceChildren(), 240);
+    return () => {
+      window.clearTimeout(t);
+      host.replaceChildren();
+    };
+  }, [tab]);
+  // the tab list: arrow keys move between sections (one tab stop: roving tabindex), Home and End jump
+  const onTabKey = (e: ReactKeyboardEvent<HTMLElement>) => {
+    const i = TABS.findIndex((t) => t.id === tab);
+    const step: Record<string, number> = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 };
+    let next = -1;
+    if (e.key in step) next = (i + step[e.key]! + TABS.length) % TABS.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = TABS.length - 1;
+    if (next < 0) return;
+    e.preventDefault();
+    ctl.setSettingsTab(TABS[next]!.id);
+    nav.current?.querySelector<HTMLElement>(`[data-tab="${TABS[next]!.id}"]`)?.focus();
+  };
   return (
     <Screen name="settings" kind="menu" states={[tab]} label="Settings" modal dialog>
       <Backdrop word="SET" />
@@ -755,16 +824,17 @@ export function SettingsScreen({ store }: { store: ShellStore }) {
           <span className="label">Saved on this device</span>
         </header>
         <div className="menu-body set">
-          <nav ref={nav} className="tabs tabs--v set__tabs mf-set__tabs" role="tablist" aria-orientation="vertical" aria-label="Settings sections">
+          <nav ref={nav} className="tabs tabs--v set__tabs mf-set__tabs" role="tablist" aria-orientation="vertical" aria-label="Settings sections" onKeyDown={onTabKey}>
             <span ref={bar} className="m-p5 m-p5--y mf-set__bar" aria-hidden="true"></span>
             {TABS.map((t) => (
-              <button key={t.id} type="button" className="tab" role="tab" data-tab={t.id} aria-selected={tab === t.id} onClick={() => ctl.setSettingsTab(t.id)}>
+              <button key={t.id} type="button" className="tab" role="tab" data-tab={t.id} aria-selected={tab === t.id} tabIndex={tab === t.id ? 0 : -1} onClick={() => ctl.setSettingsTab(t.id)}>
                 <Icon name={t.icon} />
                 {t.label}
               </button>
             ))}
           </nav>
-          <div className="set__panel card card--print">
+          <div ref={panel} className="set__panel card card--print">
+            <div ref={ghostHost} className="mf-tabghost" aria-hidden="true" inert></div>
             {tab === 'graphics' && <Graphics settings={settings} />}
             {tab === 'audio' && <Audio settings={settings} />}
             {tab === 'controls' && <Controls settings={settings} />}

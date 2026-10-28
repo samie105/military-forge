@@ -1,26 +1,50 @@
 import { MatchPhase } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
-import { tipsCalm } from '../src/shell/controller';
+import { offlineName, tipsCalm, trainingPaused } from '../src/shell/controller';
 import { createShellStore, type ShellState } from '../src/shell/store';
 import type { MatchView } from '../src/shell/matchView';
 
 const state = (over: Partial<ShellState>): ShellState => ({ ...createShellStore().getState(), title: 'off', ...over });
 const match = (phase: number) => ({ phase }) as unknown as MatchView;
 
-describe('no card over a running match (mobile audit P0-3)', () => {
-  it('Home and a room\'s lobby or warm-up are calm', () => {
-    expect(tipsCalm(state({ screen: { name: 'home' } }))).toBe(true);
+describe('no card over a running match (mobile audit P0-3), and only before play (audit 28 Oct)', () => {
+  it("a room's lobby or warm-up, and training (it holds still under the card), are calm; Home is not (after a match: too late)", () => {
+    expect(tipsCalm(state({ screen: { name: 'home' } }))).toBe(false);
+    expect(tipsCalm(state({ screen: { name: 'training' }, match: match(MatchPhase.Countdown) }))).toBe(true);
     expect(tipsCalm(state({ screen: { name: 'room', code: 'ABCDEF' }, match: null }))).toBe(true);
     expect(tipsCalm(state({ screen: { name: 'room', code: 'ABCDEF' }, match: match(MatchPhase.Waiting) }))).toBe(true);
   });
 
-  it('the countdown, the clock, training, First flight and any open overlay are not', () => {
+  it("a room's countdown and clock, First flight and any open overlay are not", () => {
     for (const phase of [MatchPhase.Countdown, MatchPhase.InProgress, MatchPhase.Ending]) expect(tipsCalm(state({ screen: { name: 'room', code: 'ABCDEF' }, match: match(phase) }))).toBe(false);
-    expect(tipsCalm(state({ screen: { name: 'training' }, match: match(MatchPhase.InProgress) }))).toBe(false);
     expect(tipsCalm(state({ screen: { name: 'training', tour: 'first-flight' }, match: null }))).toBe(false);
+    expect(tipsCalm(state({ screen: { name: 'training' }, overlay: 'menu' }))).toBe(false);
     expect(tipsCalm(state({ screen: { name: 'home' }, overlay: 'menu' }))).toBe(false);
     expect(tipsCalm(state({ screen: { name: 'home' }, title: 'on' }))).toBe(false);
     expect(tipsCalm(state({ screen: { name: 'home' }, tips: true }))).toBe(false);
+  });
+});
+
+describe('training really pauses (audit 28 Oct: "PAUSED" while you could die behind the menu)', () => {
+  it('under the menu, Settings, a route or the controls card; a room never', () => {
+    expect(trainingPaused(state({ screen: { name: 'training' } }))).toBe(false);
+    expect(trainingPaused(state({ screen: { name: 'training' }, overlay: 'menu' }))).toBe(true);
+    expect(trainingPaused(state({ screen: { name: 'training' }, overlay: 'settings' }))).toBe(true);
+    expect(trainingPaused(state({ screen: { name: 'training' }, tips: true }))).toBe(true);
+    expect(trainingPaused(state({ screen: { name: 'training', tour: 'first-flight' }, overlay: 'menu' }))).toBe(true);
+    expect(trainingPaused(state({ screen: { name: 'room', code: 'ABCDEF' }, overlay: 'menu' }))).toBe(false);
+  });
+});
+
+describe('the offline name (audit 28 Oct: a new random name on every load)', () => {
+  it('is generated once and kept; a chosen one replaces it', () => {
+    const data = new Map<string, string>();
+    const storage = () => ({ getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v) }) as unknown as Storage;
+    const first = offlineName(null, storage);
+    expect(first).toMatch(/^Pilot\d{3}$/);
+    expect(offlineName(null, storage)).toBe(first);
+    expect(offlineName('  Kemi ', storage)).toBe('Kemi');
+    expect(offlineName(undefined, storage)).toBe('Kemi');
   });
 });
 

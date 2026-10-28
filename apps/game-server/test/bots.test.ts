@@ -93,7 +93,7 @@ describe('bots fill rooms', () => {
     expect(state.lobby.map((p) => p.id).sort()).toEqual(state.standings.filter((s) => !s.left).map((s) => s.id).sort());
   });
 
-  it('mid-match, a joiner takes the lowest-scoring bot’s place (not its stats); a human leaving for good brings a bot back', () => {
+  it('mid-match, a joiner takes the lowest-scoring bot’s place (not its stats, and the bot leaves no row: audit 28 Oct); a human leaving for good brings a bot back', () => {
     const room = matchRoom();
     const ade = join(room, 'Ade');
     run(room, 2);
@@ -109,9 +109,9 @@ describe('bots fill rooms', () => {
     const left = before.filter((b) => !room.bots.some((p) => p.name === b.name));
     expect(left).toHaveLength(1);
     expect(left[0]!.score).toBe(lowest);
-    // the leaver keeps its line in the standings; Kemi starts from nothing
+    // the bot that made room has no row (it would push the players' places down); Kemi starts from nothing
     const standings = room.match!.standings();
-    expect(standings.find((s) => s.name === left[0]!.name)?.left).toBe(true);
+    expect(standings.find((s) => s.name === left[0]!.name)).toBeUndefined();
     expect(standings.find((s) => s.name === 'Kemi')?.score).toBe(0);
 
     leave(room, kemi);
@@ -201,7 +201,7 @@ describe("the host's bots", () => {
     expect((kemi.conn.last(MsgType.MatchState) as MatchStateMsg).standings.every((s) => !s.isBot)).toBe(true);
   });
 
-  it('switched off mid-match: the bots go, keep their lines as leavers, and the match still ends with results', () => {
+  it('switched off mid-match: the bots go, with no rows left behind (audit 28 Oct), and the match still ends with results', () => {
     const room = new Room({ dummies: false, dev: false, seed: 3, match: { ...CUSTOM_ROOM_RULES, countdown: 1, timeLimit: 20 }, fillBots: { target: 4, level: 'normal' } });
     const ade = join(room, 'Ade');
     run(room, 2);
@@ -214,7 +214,7 @@ describe("the host's bots", () => {
     expect(room.bots).toHaveLength(0);
     expect(room.match!.phase).toBe(MatchPhase.InProgress);
     const standings = room.match!.standings();
-    for (const name of bots) expect(standings.find((s) => s.name === name)?.left).toBe(true);
+    for (const name of bots) expect(standings.find((s) => s.name === name)).toBeUndefined();
     run(room, 14 * 60);
     expect(room.match!.phase).toBeGreaterThanOrEqual(MatchPhase.Ending);
     const end = ade.conn.last(MsgType.MatchState) as MatchStateMsg;

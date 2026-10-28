@@ -12,12 +12,17 @@ elif z=$(md -H Metadata:true 'http://169.254.169.254/metadata/instance/compute/l
 elif z=$(md -H 'Metadata-Flavor: Google' http://169.254.169.254/computeMetadata/v1/instance/zone); then
   p=GCE z=${z##*/}
 fi
-z=$(printf %s "$z" | tr -dc 'a-z0-9-' | cut -c1-40)
+# lower case first: Azure can say "SouthAfricaNorth" (filtered first, that was "outhfricaorth")
+z=$(printf %s "$z" | tr '[:upper:]' '[:lower:]' | tr -dc 'a-z0-9-' | cut -c1-40)
 case $z in
   *-los-*) id=los name=Lagos ;;
   southafricanorth | africa-south1*) id=jnb name=Johannesburg ;;
   southafricawest | af-south-1*) id=cpt name='Cape Town' ;;
-  uksouth | eu-west-2*) id=lon name=London ;;
+  uksouth | eu-west-2* | europe-west2*) id=lon name=London ;;
+  westeurope) id=ams name=Amsterdam ;;
+  northeurope | eu-west-1*) id=dub name=Dublin ;;
+  francecentral | eu-west-3* | europe-west9*) id=par name=Paris ;;
+  germanywestcentral | eu-central-1* | europe-west3*) id=fra name=Frankfurt ;;
   '') id=box name='this box' ;;
   *) id=$(printf %s "$z" | cut -c1-16) name=$z ;;
 esac

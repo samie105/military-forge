@@ -932,7 +932,8 @@ export class Hud {
     this.loadout = { guns: one<HTMLElement>(`${desk} .mf-loadout__guns`), nades: one<HTMLElement>(`${desk} .mf-loadout__nades`), key: '', state: '' };
     this.quick = { root: one<HTMLElement>(`${desk} .mf-qs`), items: one<HTMLElement>(`${desk} .mf-qs__items`), pointer: one<HTMLElement>(`${desk} .mf-qs__pointer`), key: '', hi: -1, at: '' };
     this.reticles = [one<HTMLElement>(`${desk} .reticle`), one<HTMLElement>('.mf-hud-phone .reticle')];
-    this.markers = [...this.root.querySelectorAll<HTMLElement>(`${desk} .mf-mk`)];
+    // the desktop's markers and the phone's (audit 28 Oct: the phone's never pulsed)
+    this.markers = [...this.root.querySelectorAll<HTMLElement>(`${desk} .mf-mk, .mf-hud-phone .mf-mk`)];
     this.beltList = one<HTMLElement>(`${desk} .belt__list`);
     this.beltSel = one<HTMLElement>(`${desk} .mf-belt__sel`);
     this.board = one<HTMLElement>(`${desk} .sb`);
@@ -1222,12 +1223,21 @@ export class Hud {
   }
 
   private addFeed(entry: FeedEntry): void {
+    const calm = reduced();
     for (const feed of this.feeds) {
       const li = feed.row(entry);
       li.style.setProperty('--feed-ms', `${feed.ms}ms`);
+      const older = [...feed.list.children] as HTMLElement[];
       feed.list.prepend(li);
       while (feed.list.children.length > feed.max) feed.list.lastElementChild?.remove();
       window.setTimeout(() => leave(li), feed.ms);
+      // the rows already there slide down one place (from where they were) instead of jumping: the new
+      // row's height plus the list's 6 px gap, over --m-fast on --ease-arrive (audit 28 Oct)
+      if (calm) continue;
+      for (const row of older) {
+        if (!row.isConnected || row.classList.contains('is-leaving') || typeof row.animate !== 'function') continue;
+        row.animate([{ transform: 'translateY(calc(-100% - 6px))' }, { transform: 'none' }], { duration: 160, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' });
+      }
     }
   }
 
@@ -1287,12 +1297,21 @@ export class Hud {
   }
 
   /** A hit marker: scale 1.3 → 1 in --m-instant, then it fades (motion spec §4.1); each hit restarts it. */
+  /**
+   * A hit: the marker that shows (desktop or phone) punches in from 1.3× to its size in --m-instant on
+   * --ease-arrive, holds, then fades out (motion spec §4.1, HUD: hit marker). Under Reduce motion it
+   * only fades. A new hit restarts it from the top.
+   */
   private pulse(): void {
-    if (reduced()) return;
-    const shown = this.markers.find((m) => !m.hasAttribute('hidden'));
-    if (!shown || typeof shown.animate !== 'function') return;
-    for (const a of shown.getAnimations()) a.cancel();
-    shown.animate([{ scale: '1.3', opacity: 1 }, { scale: '1', opacity: 1, offset: 0.5 }, { scale: '1', opacity: 0 }], { duration: HIT_MARKER_MS, easing: 'ease-out' });
+    const calm = reduced();
+    for (const m of this.markers) {
+      if (m.hasAttribute('hidden') || typeof m.animate !== 'function' || m.getClientRects().length === 0) continue;
+      for (const a of m.getAnimations()) a.cancel();
+      const frames: Keyframe[] = calm
+        ? [{ opacity: 1 }, { opacity: 1, offset: 0.55 }, { opacity: 0 }]
+        : [{ scale: '1.3', opacity: 1, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' }, { scale: '1', opacity: 1, offset: 0.5 }, { scale: '1', opacity: 0 }];
+      m.animate(frames, { duration: HIT_MARKER_MS, easing: 'linear' });
+    }
   }
 
   /**

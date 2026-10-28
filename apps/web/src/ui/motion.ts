@@ -3,7 +3,7 @@
  * phone UI. CSS does what it can (kit.css: .m-p1 … .m-p10 and the --m-* tokens); this does what needs
  * measuring or per-character work, with the Web Animations API and no library:
  *
- *   reduced()                  Reduce motion is on (the setting's html.reduce-motion, or the OS)
+ *   reduced()                  Reduce motion is on (the setting's html.reduce-motion; the OS is its default)
  *   stagger(el, i)             P3: sets --i (capped at 10) for .m-p3's delay
  *   sharedElement(from, to)    P2: FLIP: `to` starts where `from` was and travels to its own place
  *   rollText(el, next)         P4: a number's changed digits roll (old up and out, new up from below)
@@ -18,10 +18,13 @@ import { logicalRect, viewport } from './landscape';
 
 const STAGGER_CAP = 10;
 
-/** Reduce motion: the Settings switch (html.reduce-motion) or the system's preference. */
+/**
+ * Reduce motion: the game's own switch (html.reduce-motion). The system's preference is only its default
+ * (shell/controller.ts loadSettings; public/boot.js before the app), so the player's choice wins either
+ * way: on with the system's off, and off with the system's on.
+ */
 export function reduced(doc: Document | undefined = globalThis.document): boolean {
-  if (doc?.documentElement?.classList.contains('reduce-motion')) return true;
-  return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  return !!doc?.documentElement?.classList.contains('reduce-motion');
 }
 
 /** A token's value in milliseconds ('240ms' → 240), with a fallback when it isn't set. */

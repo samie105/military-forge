@@ -26,14 +26,17 @@ export function Backdrop({ word }: { word: string }) {
 }
 
 /** The server's round trip in the top bar (the API's, every 10 s); "Offline" when it can't be reached. */
+/** What Home says when the game server can't be reached: once, in the Play now poster (desktop and phone). */
+export const OFFLINE_LINE = "Can't reach the server. Training with bots still works.";
+
 export function NetPill({ offline = false }: { offline?: boolean }) {
   const ping = useServerPing();
   if (offline)
     return (
-      <span className="net-pill">
+      <span className="net-pill" aria-label="Offline: can't reach the server">
         <span className="dot dot--bad"></span>
         <Icon name="unplug" size="sm" />
-        Server offline
+        Offline
       </span>
     );
   if (!(ping >= 0)) return null;

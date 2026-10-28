@@ -2,7 +2,8 @@
  * M5 · Phone debrief (the kit's data-screen="m-results"): the MVP card (the match's most valuable
  * player, their kills and best streak), your place and numbers, who won and why, sharing the result,
  * and the rematch vote; in a room, the host's Lobby (back to it) and Leave. Same data and actions as the
- * desktop Results.
+ * desktop Results. Training is the player's own: their result is the headline (the MVP card only when
+ * it's theirs), and it ends with Play again or Leave (no vote).
  *
  * Not faked: the kit's three highlight tiles (longest shot, blast launch, dash kills) need numbers the
  * sim doesn't keep yet, so they stay out; the MVP card has no soldier render (the kit's is a preview
@@ -17,7 +18,7 @@ import { MatchPhase, type MatchResults } from '@military-forge/sim';
 import { Icon } from '../../../ui/Icon';
 import { blurAfter } from '../../../ui/Screen';
 import { roomLink } from '../../controller';
-import { ordinal, playerName, type MatchView } from '../../matchView';
+import { noun, ordinal, playerName, resultHeadline, type MatchView } from '../../matchView';
 import type { ShellActions } from '../../store';
 import { reasonChip, winnerOf, type ResultsExtras } from '../Results';
 import { PhoneScreen, rise } from './layout';
@@ -31,7 +32,7 @@ export function resultText(view: Pick<MatchView, 'mapName'>, results: MatchResul
   const winner = (results.teamScores?.length ?? 0) > 0 ? teamWinner(results) : winnerOf(results.standings);
   const me = results.standings.find((s) => s.id === localId && !s.left);
   const top = winner.draw ? `A draw on ${view.mapName}` : `${winner.name} won on ${view.mapName}`;
-  const mine = me ? `: I came ${ordinal(me.placement)} with ${me.kills} ${me.kills === 1 ? 'kill' : 'kills'}` : '';
+  const mine = me ? `: I came ${ordinal(me.placement)} with ${me.kills} ${noun(me.kills, 'kill')}` : '';
   return `${top} in ${GAME_NAME}${mine}.`;
 }
 
@@ -41,7 +42,11 @@ export function PhoneResults({ view, results, actions, room, training, code }: {
   const teamMode = (results.teamScores?.length ?? 0) > 0;
   const winner = teamMode ? teamWinner(results) : winnerOf(results.standings);
   const chip = reasonChip(results, view.killLimit);
-  const mvp = results.standings.find((s) => s.mvp);
+  // training (solo): the player is the headline; a bot's MVP card doesn't take the screen
+  const solo = !!training && !room;
+  const headline = solo && me && !teamMode ? resultHeadline(me, results.standings.filter((s) => !s.left)) : null;
+  const best = results.standings.find((s) => s.mvp);
+  const mvp = solo && best !== me ? undefined : best;
   const voting = view.phase === MatchPhase.Ending || view.phase === MatchPhase.Postgame;
   const closed = view.phase === MatchPhase.Closed;
   const humans = Math.max(1, view.humans, view.votes);
@@ -73,7 +78,7 @@ export function PhoneResults({ view, results, actions, room, training, code }: {
               <div className="mvp__stats">
                 <span>
                   <b className="num">{mvp.kills}</b>
-                  kills
+                  {noun(mvp.kills, 'kill')}
                 </span>
                 <span>
                   <b className="num">{mvp.bestStreak}</b>
@@ -108,7 +113,7 @@ export function PhoneResults({ view, results, actions, room, training, code }: {
               {chip.text}
             </span>
             <b className="display" data-bind="results.winner">
-              {winner.draw ? (teamMode ? 'Teams level: a draw' : 'Top score shared') : `${winner.name} wins`}
+              {headline ? (headline.win ? 'You win' : winner.draw ? headline.text : `${headline.text} · ${winner.name} won`) : winner.draw ? (teamMode ? 'Teams level: a draw' : 'Top score shared') : `${winner.name} wins`}
             </b>
             {teamMode && <TeamStandings results={results} myTeam={view.myTeam ?? -1} compact />}
           </div>
@@ -116,31 +121,40 @@ export function PhoneResults({ view, results, actions, room, training, code }: {
             <Icon name="share" />
             Share the result
           </button>
-          <div className="pm-vote m-p3" style={rise(4)}>
-            <b>Play again?</b>
-            <span className="pips votes__pips" aria-hidden="true">
-              {Array.from({ length: humans }, (_, i) => (
-                // keyed by the vote, so a pip turning on stamps in (P7)
-                <i key={`${i}-${i < view.votes ? 'on' : 'off'}`} className={i < view.votes ? 'on m-p7' : undefined}></i>
-              ))}
-            </span>
-            <span className="num" data-bind="results.votes" aria-label={`${view.votes} of ${humans} voted to play again`}>
-              <Roll value={view.votes} />/{humans}
-            </span>
-            {view.voted ? (
-              <span className="stamp stamp--ok pm-voted m-p7">
-                <Icon name="check" />
-                Voted
+          {!solo && (
+            <div className="pm-vote m-p3" style={rise(4)}>
+              <b>Play again?</b>
+              <span className="pips votes__pips" aria-hidden="true">
+                {Array.from({ length: humans }, (_, i) => (
+                  // keyed by the vote, so a pip turning on stamps in (P7)
+                  <i key={`${i}-${i < view.votes ? 'on' : 'off'}`} className={i < view.votes ? 'on m-p7' : undefined}></i>
+                ))}
               </span>
-            ) : (
-              <button type="button" className="btn btn--paper btn--sm" disabled={!voting} onClick={blurAfter(actions.playAgain)}>
-                <Icon name="refresh" />
-                Vote
-              </button>
-            )}
-          </div>
+              <span className="num" data-bind="results.votes" aria-label={`${view.votes} of ${humans} voted to play again`}>
+                <Roll value={view.votes} />/{humans}
+              </span>
+              {view.voted ? (
+                <span className="stamp stamp--ok pm-voted m-p7">
+                  <Icon name="check" />
+                  Voted
+                </span>
+              ) : (
+                <button type="button" className="btn btn--paper btn--sm" disabled={!voting} onClick={blurAfter(actions.playAgain)}>
+                  <Icon name="refresh" />
+                  Vote
+                </button>
+              )}
+            </div>
+          )}
           {(room || training) && (
             <div className="pm-res__more m-p3" style={rise(5)}>
+              {/* training (solo): Play again (no vote to count) beside Leave */}
+              {solo && (
+                <button type="button" className="btn btn--paper btn--sm" disabled={!voting || view.voted} onClick={blurAfter(actions.playAgain)}>
+                  <Icon name="refresh" />
+                  Play again
+                </button>
+              )}
               {room?.isHost && (
                 <button type="button" className="btn btn--ghost btn--sm" disabled={closed} onClick={blurAfter(actions.backToLobby)}>
                   <Icon name="back" />
@@ -149,7 +163,7 @@ export function PhoneResults({ view, results, actions, room, training, code }: {
               )}
               <button type="button" className="btn btn--ghost btn--sm" onClick={blurAfter(() => (room ?? training)!.leave())}>
                 <Icon name="door-out" />
-                {training ? 'Quit' : 'Leave'}
+                Leave
               </button>
             </div>
           )}

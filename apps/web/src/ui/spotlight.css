@@ -123,6 +123,3 @@
 /* Reduce motion: no travel, no pulse, no focus pull: opacity only */
 .mf-spot.is-reduced :is(.mf-spot__ring, .mf-spot__callout, .mf-spot__dim) { transition: opacity 120ms linear; animation: none; }
 html.reduce-motion .mf-spot :is(.mf-spot__ring, .mf-spot__callout, .mf-spot__dim) { transition: opacity 120ms linear; animation: none; }
-@media (prefers-reduced-motion: reduce) {
-  .mf-spot :is(.mf-spot__ring, .mf-spot__callout, .mf-spot__dim) { transition: opacity 120ms linear; animation: none; }
-}

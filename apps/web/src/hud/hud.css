@@ -36,6 +36,15 @@ html[data-touch-controls] #hud .mf-hud-fit:not(.mf-hud-fit--phone) { display: no
   /* …a little smaller, so it stays low and off the middle of the screen */
   #hud .mf-hud-desktop .pickup { bottom: calc(var(--hud-m) + var(--safe-b) + 232px); scale: 0.8; transform-origin: 50% 100%; }
 }
+/* a small window (900×600: the HUD's design is 1200 wide at its 0.75 floor): the weapon cards and the
+   vitals met in the middle and the slung card covered the dash ring (audit 28 Oct). The slung card
+   stacks over the held one, at the right edge, so the bottom row keeps its gaps. */
+@container (max-width: 1500px) {
+  #hud .mf-hud-desktop .slots { flex-direction: column; align-items: flex-end; }
+  #hud .mf-hud-desktop .slot--slung { width: auto; min-width: 188px; }
+  /* the loadout strip has no room left between them (its sliver sat on the dash ring); the cards name both guns */
+  #hud .mf-hud-desktop .mf-loadout { display: none; }
+}
 /* the net plate's signal in the ping's colour */
 #hud .hud-net[data-tone="warn"] { color: var(--c-warn); }
 #hud .hud-net[data-tone="bad"] { color: var(--c-hp); }

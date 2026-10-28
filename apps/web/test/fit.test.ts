@@ -1,6 +1,6 @@
 /** The screens' fit to the window (ui/fit.ts): the menus' readable floor on small laptops (review L4). */
 import { describe, expect, it } from 'vitest';
-import { menuFit } from '../src/ui/fit';
+import { menuFit, menuShape } from '../src/ui/fit';
 
 describe('menuFit', () => {
   it('fills a 1920×1080 window or bigger as designed', () => {
@@ -23,5 +23,13 @@ describe('menuFit', () => {
     const phone = menuFit(812, 375);
     expect(phone.h).toBeCloseTo(900, 6);
     expect(phone.w).toBeGreaterThanOrEqual(1600);
+  });
+
+  it('the short reflow starts below the full 1080 (1280×800 was 1600×1000: neither full height nor reflowed; audit 28 Oct)', () => {
+    expect(menuShape(menuFit(1280, 800))).toEqual({ narrow: true, short: true });
+    expect(menuShape(menuFit(900, 600))).toEqual({ narrow: true, short: true });
+    expect(menuShape(menuFit(1440, 900))).toEqual({ narrow: false, short: false });
+    expect(menuShape(menuFit(1920, 1080))).toEqual({ narrow: false, short: false });
+    expect(menuShape(menuFit(1366, 768)).short).toBe(true);
   });
 });

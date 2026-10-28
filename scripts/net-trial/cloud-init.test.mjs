@@ -16,6 +16,8 @@ const script = join(here, 'cloud-init.sh');
 const text = readFileSync(script, 'utf8');
 const dataScript = join(here, 'data.sh');
 const data = readFileSync(dataScript, 'utf8');
+const siteScript = join(here, 'site.sh');
+const site = readFileSync(siteScript, 'utf8');
 const has = (bin) => {
   try {
     execFileSync('sh', ['-c', `command -v ${bin}`], { stdio: 'ignore' });
@@ -45,8 +47,18 @@ describe('cloud-init.sh', () => {
     assert.match(text, /^MAP="street-market"$/m);
     assert.match(text, /^BOTS="4"$/m);
   });
-  it('leaves UDP 443 to the WebTransport gateway: Caddy serves no HTTP/3', () => {
+  it('leaves UDP 443 to the WebTransport gateway: Caddy serves no HTTP/3 (the first config and site.sh\'s)', () => {
     assert.match(text, /servers \{\\n\\t\\tprotocols h1 h2\\n/);
+    assert.match(site, /servers \{\\n\\t\\tprotocols h1 h2\\n/);
+  });
+  it("takes Caddy's config from the code's site.sh, before and after the fetch, so a deploy brings its changes", () => {
+    const fetch = text.indexOf('# -- the code');
+    const first = text.indexOf('. "$S"; site_caddy');
+    const after = text.indexOf('[ -f "$S" ] && . "$S" && { site_caddy');
+    assert.ok(first > 0 && first < fetch, 'the last deploy\'s config before the fetch');
+    assert.ok(after > fetch && after < text.indexOf("phase 'installing Node"), "this commit's config after it");
+    assert.match(text, /elif ! grep -qs "\^\$HOST \{" \/etc\/caddy\/Caddyfile; then/, 'a new box only: never replaces a working config with the first one');
+    assert.match(text, /^site_fill$/m);
   });
   it('sets the game server up for the gateway before it starts, and the gateway after the box is ready', () => {
     const env = text.indexOf('bash "$W" env');
@@ -57,7 +69,7 @@ describe('cloud-init.sh', () => {
   it('restarts the services through restart.sh (no match is dropped by a deploy), and Caddy only when its config changed', () => {
     assert.match(text, /^bash "\$SRC\/scripts\/net-trial\/restart\.sh" \$services /m);
     assert.ok(!/systemctl restart \$services/.test(text), 'no plain restart of the game server');
-    assert.match(text, /^cmp -s \/etc\/caddy\/Caddyfile\{\.new,\} && rm /m);
+    assert.match(site, /if cmp -s "\$new" \/etc\/caddy\/Caddyfile; then rm "\$new"; else mv /);
   });
   it('never prints the owner secrets to the public status page', () => {
     const status = text.slice(text.indexOf('status() {'), text.indexOf('[ -n "${OWNER:-}" ] || return 0'));
@@ -99,7 +111,7 @@ describe('data.sh', () => {
     assert.match(data, /openssl genpkey -algorithm ed25519 -out "\$ETC\/results\.key"/);
     assert.match(data, /RESULTS_PRIVATE_KEY=.*API_URL='http:\/\/127\.0\.0\.1:8787'/);
     assert.match(data, /RESULTS_PUBLIC_KEY=.*openssl pkey -in "\$ETC\/results\.key" -pubout/);
-    assert.match(text, /respond \/api\/internal\/\* 404/);
+    assert.match(site, /respond \/api\/internal\/\* 404/);
   });
   it('backs up nightly into /var/backups/military-forge and keeps 7', () => {
     assert.match(data, /OnCalendar=\*-\*-\* 02:30:00 UTC/);
@@ -107,7 +119,7 @@ describe('data.sh', () => {
   });
 });
 
-for (const name of ['wt-setup.sh', 'where.sh']) {
+for (const name of ['wt-setup.sh', 'where.sh', 'site.sh']) {
   describe(name, () => {
     const file = join(here, name);
     it('is a bash script that parses', () => {
@@ -132,5 +144,92 @@ describe('wt-setup.sh', () => {
     assert.match(wt, /dl -o "\$tmp\/sum" "\$u\.sha256"/);
     assert.match(wt, /sha256sum -c --quiet/);
     assert.match(wt, /cargo build -q --release --locked/);
+  });
+});
+
+/** site.sh's functions run in bash with cloud-init.sh's settings; prints what they made. */
+function runSite(body, env = {}) {
+  return execFileSync('bash', ['-c', `set -u; . "${siteScript}"; ${body}`], {
+    encoding: 'utf8',
+    env: { PATH: process.env.PATH, HOST: 'a-b.sslip.io', TLS: 'auto', ORIGIN_PORT: '', ACME_EMAIL: '', WEB: '/srv/web', PUB: '/srv/pub', DATA: '/tmp', ORIGIN: 'https://a-b.sslip.io', ...env },
+  });
+}
+
+describe('site.sh (audit 28 Oct)', () => {
+  const caddyfile = runSite('site_caddyfile');
+  it('serves the site by name at column 0 (wt-setup.sh reads the name from there)', () => {
+    assert.match(caddyfile, /^a-b\.sslip\.io \{$/m);
+    assert.doesNotMatch(caddyfile, /tls internal/);
+    assert.match(runSite('site_caddyfile', { TLS: 'internal' }), /^\ttls internal$/m);
+  });
+  it('compresses models, sound banks and the manifest too (Caddy\'s default skips them)', () => {
+    for (const type of ['text/*', 'application/javascript*', 'application/json*', 'model/gltf-binary*', 'application/octet-stream*', 'application/manifest+json*']) {
+      assert.ok(caddyfile.includes(`header Content-Type ${type}\n`), type);
+    }
+    assert.match(caddyfile, /\tencode zstd gzip \{\n\t\tmatch \{/);
+  });
+  it('sends HSTS, a Permissions-Policy, the CSP and the manifest\'s own type', () => {
+    assert.match(caddyfile, /Strict-Transport-Security "max-age=31536000"/);
+    assert.match(caddyfile, /Permissions-Policy "camera=\(\), microphone=\(self\), geolocation=\(\), payment=\(\), usb=\(\)"/);
+    assert.match(caddyfile, /connect-src 'self' data: blob: https:\/\/a-b\.sslip\.io wss:\/\/a-b\.sslip\.io /);
+    assert.match(caddyfile, /frame-ancestors 'none'/);
+    assert.match(caddyfile, /header \/manifest\.webmanifest Content-Type application\/manifest\+json/);
+  });
+  it('caches only the build\'s hashed files for a year; everything else revalidates', () => {
+    const re = /@hashed path_regexp (\S+)/.exec(caddyfile)?.[1];
+    assert.ok(re);
+    assert.ok(caddyfile.includes(`@fresh not path_regexp ${re}\n`));
+    const hashed = new RegExp(re);
+    assert.ok(hashed.test('/assets/main-DmMYxFY-.js'));
+    assert.ok(hashed.test('/assets/voices-AbC_12-x.bin'));
+    for (const p of ['/assets/weapons/k47.glb', '/assets/characters/rookie/textures/rookie_body_dye_mask.png', '/art/key-art/key-art-phone.avif', '/sw.js', '/index.html']) assert.ok(!hashed.test(p), p);
+    assert.match(caddyfile, /header @fresh Cache-Control no-cache\n/);
+    assert.match(caddyfile, /header @hashed Cache-Control "public, max-age=31536000, immutable"\n/);
+    // the status and owner pages: never stored (after the no-cache, so it wins)
+    assert.ok(caddyfile.indexOf('header @pub Cache-Control no-store') > caddyfile.indexOf('header @fresh'));
+  });
+  it('fills %ORIGIN% in the pages and crawl files, legal pages and llms.txt included, skipping files the build lacks', async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const web = mkdtempSync(join(tmpdir(), 'mf-site-'));
+    try {
+      for (const f of ['index.html', 'robots.txt', 'sitemap.xml', 'privacy.html', 'terms.html', 'official.html']) writeFileSync(join(web, f), '<head><link href="%ORIGIN%/x"></head>');
+      // GNU sed (the box) takes -i alone; BSD sed (a Mac) needs a suffix: a shim keeps the test portable
+      runSite('sed() { if [ "$1" = -i ] && [ "$(uname)" = Darwin ]; then shift; command sed -i "" "$@"; else command sed "$@"; fi; }; site_fill', { WEB: web });
+      for (const f of ['index.html', 'robots.txt', 'sitemap.xml', 'privacy.html', 'terms.html', 'official.html']) {
+        const out = readFileSync(join(web, f), 'utf8');
+        assert.ok(out.includes('https://a-b.sslip.io/x') && !out.includes('%ORIGIN%'), f);
+        assert.equal(out.includes('mf-tune'), f === 'index.html', f);
+      }
+    } finally {
+      rmSync(web, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('where.sh (audit 28 Oct)', () => {
+  /** where.sh with a fake curl answering as one cloud's metadata service */
+  async function whereOn(answer) {
+    const { mkdtempSync, writeFileSync, rmSync, chmodSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const bin = mkdtempSync(join(tmpdir(), 'mf-where-'));
+    try {
+      writeFileSync(join(bin, 'curl'), `#!/bin/bash\n${answer}\nexit 22\n`);
+      chmodSync(join(bin, 'curl'), 0o755);
+      return execFileSync('bash', [join(here, 'where.sh')], { encoding: 'utf8', env: { PATH: `${bin}:${process.env.PATH}` } }).trim();
+    } finally {
+      rmSync(bin, { recursive: true, force: true });
+    }
+  }
+  it('names an Azure box in South Africa North Johannesburg, whatever the case Azure answers in', async () => {
+    const azure = (loc) => `case "$*" in *Metadata:true*) printf ${loc}; exit 0 ;; esac`;
+    assert.equal(await whereOn(azure('SouthAfricaNorth')), 'jnb|Johannesburg|Azure southafricanorth');
+    assert.equal(await whereOn(azure('southafricanorth')), 'jnb|Johannesburg|Azure southafricanorth');
+    assert.equal(await whereOn(azure('WestEurope')), 'ams|Amsterdam|Azure westeurope');
+  });
+  it('names the AWS Lagos zone, and a box with no metadata "this box"', async () => {
+    const aws = `case "$*" in *api/token*) printf tok; exit 0 ;; *availability-zone*) printf af-south-1-los-1a; exit 0 ;; esac`;
+    assert.equal(await whereOn(aws), 'los|Lagos|AWS af-south-1-los-1a');
+    assert.equal(await whereOn(''), 'box|this box|');
   });
 });

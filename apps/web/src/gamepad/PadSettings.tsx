@@ -24,9 +24,9 @@ const CAPTURE_S = 6;
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 const FAMILY_NAME = { playstation: 'PlayStation', xbox: 'Xbox', nintendo: 'Nintendo', generic: 'Controller' } as const;
 const STYLE_CARDS = [
-  { id: 'playstation', name: 'PlayStation', image: '/assets/controller-dualsense.png', buttons: '△ ○ □ ✕' },
-  { id: 'xbox', name: 'Xbox', image: '/assets/controller-xbox.png', buttons: 'Y B X A' },
-  { id: 'nintendo', name: 'Nintendo', image: '/assets/controller-switch.png', buttons: 'X A Y B' },
+  { id: 'playstation', name: 'PlayStation', image: '/assets/controller-dualsense.webp', buttons: '△ ○ □ ✕' },
+  { id: 'xbox', name: 'Xbox', image: '/assets/controller-xbox.webp', buttons: 'Y B X A' },
+  { id: 'nintendo', name: 'Nintendo', image: '/assets/controller-switch.webp', buttons: 'X A Y B' },
 ] as const;
 
 type Capture = { action: PadActionId; index: number } | null;

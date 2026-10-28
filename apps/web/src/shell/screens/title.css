@@ -97,10 +97,11 @@
   }
 }
 
-/* ---- leaving: the camera pushes through the smoke into the next screen ---- */
-.mf-title.is-leaving .screen { animation: mf-title-out 760ms cubic-bezier(.55, 0, .45, 1) forwards; }
-.mf-title.is-leaving .mf-title__world { transform: scale(1.32); transition: transform 760ms cubic-bezier(.55, 0, .45, 1); }
-.mf-title.is-leaving .mf-title__fg { transform: scale(1.5); opacity: 0; transition: transform 760ms cubic-bezier(.55, 0, .45, 1), opacity 500ms ease-in; }
+/* ---- leaving: the camera pushes through the smoke into the next screen, in one scene's time
+   (--m-scene, 520 ms: the motion spec's longest move; title.ts TITLE_LEAVE_MS) ---- */
+.mf-title.is-leaving .screen { animation: mf-title-out var(--m-scene) var(--ease-travel) forwards; }
+.mf-title.is-leaving .mf-title__world { transform: scale(1.32); transition: transform var(--m-scene) var(--ease-travel); }
+.mf-title.is-leaving .mf-title__fg { transform: scale(1.5); opacity: 0; transition: transform var(--m-scene) var(--ease-travel), opacity var(--m-slow) var(--ease-leave); }
 .mf-title.is-leaving .mf-title__lockup { transform: translateY(-70px) scale(.9); opacity: 0; }
 .mf-title.is-leaving :is(.mf-title__prompt, .mf-title__corner) { opacity: 0; }
 @keyframes mf-title-out { 0%, 55% { opacity: 1; } 100% { opacity: 0; } }
@@ -118,21 +119,19 @@
 .mf-title.is-phone .mf-title__press { font-size: 54px; }
 .mf-title.is-phone .mf-title__prompt small { font-size: 34px; }
 .mf-title.is-phone .mf-title__corner { font-size: 30px; }
-.mf-title.is-phone .mf-title__corner--build { left: 70px; bottom: 60px; }
-.mf-title.is-phone .mf-title__corner--net { right: 70px; bottom: 50px; padding: 12px 24px; font-size: 32px; }
+/* the corners sit under the prompt's line, not on it (audit 28 Oct: the build stamp ran into "Tap anywhere") */
+.mf-title.is-phone .mf-title__corner--build { left: 70px; bottom: 14px; font-size: 22px; }
+.mf-title.is-phone .mf-title__corner--net { right: 70px; bottom: 10px; padding: 6px 18px; font-size: 26px; }
 .mf-title.is-phone .mf-title__corner--net i { width: 18px; height: 18px; }
 .mf-title.is-phone.is-leaving .mf-title__world { animation: none; }
 
-/* ---- reduce motion: nothing drifts or breathes; a short cross-fade out ---- */
-html.reduce-motion .mf-title :is(.mf-title__world, .mf-title__smoke, .mf-title__sweep, .mf-title__press, .mf-title__loading i) { animation: none !important; transition: none !important; }
+/* ---- reduce motion (the game's switch; it starts from the system's): nothing drifts or pushes; the
+   loading bar fills its track and breathes, so it never looks frozen; leaving is a 120 ms fade ---- */
+html.reduce-motion .mf-title :is(.mf-title__world, .mf-title__smoke, .mf-title__sweep, .mf-title__press) { animation: none !important; }
 html.reduce-motion .mf-title .mf-title__sweep { display: none; }
-html.reduce-motion .mf-title.is-leaving .screen { animation: mf-title-fade 220ms linear forwards; }
+html.reduce-motion .mf-title .mf-title__loading i { width: 100%; transform: none; animation: m-wait 1.2s ease-in-out infinite alternate !important; }
+html.reduce-motion .mf-title.is-leaving .screen { animation: mf-title-fade 120ms linear forwards !important; }
 html.reduce-motion .mf-title.is-leaving :is(.mf-title__world, .mf-title__fg, .mf-title__lockup) { transform: none; }
-@media (prefers-reduced-motion: reduce) {
-  .mf-title :is(.mf-title__world, .mf-title__smoke, .mf-title__sweep, .mf-title__press, .mf-title__loading i) { animation: none !important; transition: none !important; }
-  .mf-title.is-leaving .screen { animation: mf-title-fade 220ms linear forwards; }
-  .mf-title.is-leaving :is(.mf-title__world, .mf-title__fg, .mf-title__lockup) { transform: none; }
-}
 @keyframes mf-title-fade { to { opacity: 0; } }
 
 /* the screen waiting under the title isn't painted until the title leaves (Title.tsx: html.mf-title-up) */

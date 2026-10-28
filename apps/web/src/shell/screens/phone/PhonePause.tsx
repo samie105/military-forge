@@ -1,14 +1,16 @@
 /**
- * M4 · Phone pause (the kit's data-screen="m-pause"): the match keeps running, dimmed behind. The menu
- * plate on the left (Resume, Invite friends in a room, Tune the game for the host where the page offers
- * it, Settings, Leave) and the sitrep on the right (the clock, your score, the leader's). Leaving asks
- * once more in a bottom sheet. Same actions as the desktop Pause.
+ * M4 · Phone pause (the kit's data-screen="m-pause"). Training really pauses behind it; an online match
+ * can't, and the plate says so ("Match continues"). The menu plate on the left (Resume, Invite friends
+ * in a room, Tune the game for the host where the page offers it, Settings, Leave) and the sitrep on
+ * the right (the clock, your score, the leader's). Resume stays at the top and Leave at the foot, always
+ * in view; the items between scroll, their lower edge fading while there's more. Leaving asks once
+ * more in a bottom sheet. Same actions as the desktop Pause.
  *
- * Motion: the game dims over --m-fast; the plate comes in from the left edge (P9), "Paused" focus-pulls
- * (P1), its buttons rise in a stagger (P3) and press P8; the sitrep arrives from the right.
+ * Motion: the game dims over --m-fast; the plate comes in from the left edge (P9), the title
+ * focus-pulls (P1), its buttons rise in a stagger (P3) and press P8; the sitrep arrives from the right.
  */
 import { MatchPhase } from '@military-forge/sim';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useStore } from 'zustand';
 import { Icon } from '../../../ui/Icon';
 import { ButtonFadeQuick } from '../ButtonFade';
@@ -16,7 +18,7 @@ import { blurAfter } from '../../../ui/Screen';
 import { useCtl } from '../../context';
 import { formatClock } from '../../matchView';
 import type { ShellStore } from '../../store';
-import { leaveCost } from '../Pause';
+import { leaveCost, pauseHeading, useMoreBelow } from '../Pause';
 import { PhoneScreen, rise } from './layout';
 import { inviteFriends } from '../../../social/SocialLayer';
 import { Roll, ShareChip, Sheet, shareRoom, useShareChip } from './parts';
@@ -36,70 +38,76 @@ export function PhonePause({ store }: { store: ShellStore }) {
   const tune = ctl.canTune();
   const host = lobby?.isHost ?? !room;
   const leaveWord = what === 'training' ? 'Quit training' : what === 'match' ? 'Leave match' : 'Leave room';
+  const heading = pauseHeading(!!room, match?.phase);
+  const list = useRef<HTMLDivElement>(null);
+  useMoreBelow(list);
 
   return (
-    <PhoneScreen name="m-pause" kind="game" modal dialog label="Menu" states={[host ? 'host' : 'guest', confirm ? 'confirm-leave' : 'menu']}>
+    <PhoneScreen name="m-pause" kind="game" modal dialog label="Menu" states={[host ? 'host' : 'guest', confirm ? 'confirm-leave' : 'menu', room ? 'online' : 'paused']}>
       <div className="pause__dim pm-dim" aria-hidden="true"></div>
       <nav className="pm-pause plate m-p9 m-p9--left" aria-label="Menu">
-        <span className="eyebrow">{room ? 'Match still running' : 'Training still running'}</span>
-        <b className="display pm-pause__t m-p1">Paused</b>
+        <span className="eyebrow">{heading.eyebrow}</span>
+        <b className={heading.title.length > 8 ? 'display pm-pause__t pm-pause__t--long m-p1' : 'display pm-pause__t m-p1'}>{heading.title}</b>
         <button type="button" className="btn btn--paper btn--sm btn--block m-p3 m-p8" style={rise(0)} autoFocus onClick={blurAfter(() => ctl.closeOverlay())}>
           <Icon name="play" />
           Resume
         </button>
-        {/* First flight runs (the onboarding tour): Restart it, or Skip training (as the desktop's Pause) */}
-        {screen.name === 'training' && !!screen.tour && (
-          <div className="pm-pause__tour m-p3" style={rise(1)}>
-            <button type="button" className="btn btn--ink btn--sm m-p8" onClick={blurAfter(() => ctl.restartTour())}>
-              <Icon name="rotate" />
-              Restart First flight
+        {/* the items between Resume and Leave: they scroll when the plate can't hold them all */}
+        <div ref={list} className="pm-pause__list">
+          {/* First flight runs (the onboarding tour): Restart it, or Skip training (as the desktop's Pause) */}
+          {screen.name === 'training' && !!screen.tour && (
+            <div className="pm-pause__tour m-p3" style={rise(1)}>
+              <button type="button" className="btn btn--ink btn--sm m-p8" onClick={blurAfter(() => ctl.restartTour())}>
+                <Icon name="rotate" />
+                Restart First flight
+              </button>
+              <button type="button" className="btn btn--ghost btn--sm m-p8" onClick={blurAfter(() => ctl.skipTour())}>
+                Skip training
+              </button>
+            </div>
+          )}
+          {room && (
+            <button
+              type="button"
+              className="btn btn--volt btn--sm btn--block m-p3 m-p8"
+              style={rise(1)}
+              onClick={blurAfter(() => {
+                // friends: the invite picker (it has the link too); otherwise the share sheet
+                inviteFriends(ctl, () => void shareRoom(room).then(showChip));
+              })}
+            >
+              <Icon name="users-plus" />
+              Invite friends
             </button>
-            <button type="button" className="btn btn--ghost btn--sm m-p8" onClick={blurAfter(() => ctl.skipTour())}>
-              Skip training
+          )}
+          {tune && (
+            <button type="button" className="btn btn--ink btn--sm btn--block m-p3 m-p8" style={rise(2)} onClick={blurAfter(() => ctl.openTuning())}>
+              <Icon name="sliders" />
+              Tune the game
+              {room && (
+                <span className="tag tag--host pm-pause__tag">
+                  <Icon name="crown" />
+                  Host
+                </span>
+              )}
             </button>
+          )}
+          <div className="pm-pause__row m-p3" style={rise(3)}>
+            <button type="button" className="btn btn--ink btn--sm m-p8" onClick={blurAfter(() => ctl.openSettings())}>
+              <Icon name="gear" />
+              Settings
+            </button>
+            <InstallButton />
           </div>
-        )}
-        {room && (
-          <button
-            type="button"
-            className="btn btn--volt btn--sm btn--block m-p3 m-p8"
-            style={rise(1)}
-            onClick={blurAfter(() => {
-              // friends: the invite picker (it has the link too); otherwise the share sheet
-              inviteFriends(ctl, () => void shareRoom(room).then(showChip));
-            })}
-          >
-            <Icon name="users-plus" />
-            Invite friends
-          </button>
-        )}
-        {tune && (
-          <button type="button" className="btn btn--ink btn--sm btn--block m-p3 m-p8" style={rise(2)} onClick={blurAfter(() => ctl.openTuning())}>
-            <Icon name="sliders" />
-            Tune the game
-            {room && (
-              <span className="tag tag--host pm-pause__tag">
-                <Icon name="crown" />
-                Host
-              </span>
-            )}
-          </button>
-        )}
-        <div className="pm-pause__row m-p3" style={rise(3)}>
-          <button type="button" className="btn btn--ink btn--sm m-p8" onClick={blurAfter(() => ctl.openSettings())}>
-            <Icon name="gear" />
-            Settings
-          </button>
-          <InstallButton />
-          <button type="button" className="btn btn--ghost btn--sm m-p8" onClick={blurAfter(() => setConfirm(true))}>
-            <Icon name="door-out" />
-            Leave
-          </button>
+          {/* the buttons' fade, right here (the owner, 23 Oct: "a way to fade the buttons") */}
+          <ButtonFadeQuick className="pm-fadequick m-p3" />
+          {/* something went wrong: what happened on this phone, to us (diag/) */}
+          <SendReport context={room !== null ? 'pause: in a room' : 'pause: training'} className="pm-report m-p3" />
         </div>
-        {/* the buttons' fade, right here (the owner, 23 Oct: "a way to fade the buttons") */}
-        <ButtonFadeQuick className="pm-fadequick m-p3" />
-        {/* something went wrong: what happened on this phone, to us (diag/) */}
-        <SendReport context={room !== null ? 'pause: in a room' : 'pause: training'} className="pm-report m-p3" />
+        <button type="button" className="btn btn--ghost btn--sm btn--block pm-pause__leave m-p3 m-p8" style={rise(4)} onClick={blurAfter(() => setConfirm(true))}>
+          <Icon name="door-out" />
+          {leaveWord}
+        </button>
         <ShareChip outcome={chip} />
       </nav>
 

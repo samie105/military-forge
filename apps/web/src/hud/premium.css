@@ -209,7 +209,8 @@
 #hud .mf-evi__line { display: block; width: 100%; height: 4px; background: var(--ev); animation: mf-shock 520ms var(--ease-arrive) both; }
 #hud .mf-evi__name { font-size: var(--fs-120); color: var(--c-text); text-shadow: var(--ts-hud); }
 #hud .mf-evi__now { padding: 4px 16px; border-radius: var(--r-xs); background: var(--ev); color: var(--c-ink-950); font-size: var(--fs-18); font-weight: var(--fw-black); letter-spacing: .25em; text-transform: uppercase; }
-@keyframes mf-impact { 0% { opacity: 0; scale: 1.14; } 12% { opacity: 1; scale: 1; } 70% { opacity: 1; translate: 0 0; scale: 1; } 100% { opacity: 0; translate: 0 -110px; scale: .6; } }
+/* each leg on its own curve (it ran linear end to end: audit 28 Oct): the stamp lands decelerating, holds, and lifts away accelerating */
+@keyframes mf-impact { 0% { opacity: 0; scale: 1.14; animation-timing-function: var(--ease-arrive); } 12% { opacity: 1; scale: 1; animation-timing-function: linear; } 70% { opacity: 1; translate: 0 0; scale: 1; animation-timing-function: var(--ease-leave); } 100% { opacity: 0; translate: 0 -110px; scale: .6; } }
 @keyframes mf-shock { from { scale: 0 1; } to { scale: 1 1; } }
 
 /* the active strip: icon, name, the effect in a few words, the seconds left and a bar that drains */
@@ -294,13 +295,12 @@
 @keyframes mf-fall { from { translate: 0 0; } to { translate: 0 100px; } }
 #hud .mf-evfx[data-kind="gravitySurge"] .mf-evfx__x { display: none; }
 
-/* low gravity: motes rising at the edges, the floor lit; the corners' plates float a few px */
+/* low gravity: motes rising at the edges, the floor lit; the HUD's plates stay put (the battlefield
+   comes first: nothing on the HUD drifts; audit 28 Oct) */
 #hud .mf-evfx[data-kind="lowGravity"]:not([data-stage="warning"]) :is(.mf-evfx__tint, .mf-evfx__l, .mf-evfx__r) { display: block; }
 #hud .mf-evfx[data-kind="lowGravity"] .mf-evfx__tint { background: linear-gradient(0deg, color-mix(in srgb, var(--c-ev-gravity) 22%, transparent) 0%, transparent 32%); }
 #hud .mf-evfx[data-kind="lowGravity"] :is(.mf-evfx__l, .mf-evfx__r) { background: radial-gradient(circle, color-mix(in srgb, var(--c-ev-gravity) 75%, transparent) 0 3px, transparent 4px) 0 0 / 20px 120px repeat-y; animation: mf-rise-up 2400ms linear infinite; }
 @keyframes mf-rise-up { from { translate: 0 0; } to { translate: 0 -120px; } }
-#hud[data-active-state~="ev-fx-lowGravity"] .mf-hud-desktop :is(.hud-bl, .hud-br) { animation: mf-float 1500ms ease-in-out infinite alternate; }
-@keyframes mf-float { to { translate: 0 -6px; } }
 
 /* EMP storm: static over the screen, a magenta edge; the HUD flickers (two dips a second, never bright) */
 #hud .mf-evfx[data-kind="emp"]:not([data-stage="warning"]) :is(.mf-evfx__tint, .mf-evfx__x) { display: block; }

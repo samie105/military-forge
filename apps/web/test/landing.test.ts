@@ -70,10 +70,12 @@ describe('the landing page (index.html)', () => {
 });
 
 describe('the crawl and install files (seo.ts)', () => {
-  const files = seoFiles('Military Forge', '2026-10-23');
-  it('a web app manifest that installs the game sideways, with icons', () => {
-    const m = JSON.parse(files['manifest.webmanifest']) as { name: string; orientation: string; start_url: string; icons: { sizes: string; purpose: string }[] };
+  const files = seoFiles('Military Forge', { '/': '2026-10-23', '/terms.html': '2026-10-28' });
+  it('a web app manifest that installs the game sideways, with icons and a short name that fits under the icon (audit 28 Oct)', () => {
+    const m = JSON.parse(files['manifest.webmanifest']) as { name: string; short_name: string; orientation: string; start_url: string; icons: { sizes: string; purpose: string }[] };
     expect(m.name).toBe('Military Forge');
+    expect(m.short_name).toBe('Forge');
+    expect(m.short_name.length).toBeLessThanOrEqual(12);
     expect(m.orientation).toBe('landscape');
     expect(m.start_url).toBe('/');
     expect(m.icons.map((i) => `${i.sizes} ${i.purpose}`)).toEqual(expect.arrayContaining(['192x192 any', '512x512 any', '512x512 maskable']));
@@ -83,6 +85,51 @@ describe('the crawl and install files (seo.ts)', () => {
     expect(files['robots.txt']).toContain('Disallow: /api/');
     expect(files['robots.txt']).not.toContain('Disallow: /r/'); // rooms must be crawled to see their noindex
     expect(files['sitemap.xml']).toContain('<loc>%ORIGIN%/</loc><lastmod>2026-10-23</lastmod>');
+  });
+  it('the sitemap lists only pages with words in their HTML, each dated by its own last change or not at all (audit 28 Oct)', () => {
+    const sitemap = files['sitemap.xml'];
+    expect([...sitemap.matchAll(/<loc>%ORIGIN%([^<]*)<\/loc>/g)].map((m) => m[1])).toEqual(['/', '/privacy.html', '/terms.html']);
+    // script-only pages and the unfinished official links stay out
+    for (const page of ['armory.html', 'gamepad.html', 'official.html']) expect(sitemap).not.toContain(page);
+    expect(sitemap).toContain('<loc>%ORIGIN%/terms.html</loc><lastmod>2026-10-28</lastmod>');
+    expect(sitemap).toContain('<url><loc>%ORIGIN%/privacy.html</loc></url>');
+  });
+  it('llms.txt: a title, a one-line summary and absolute links to the pages', () => {
+    const llms = files['llms.txt'];
+    expect(llms.startsWith('# Military Forge\n\n> ')).toBe(true);
+    expect(llms).toContain('](%ORIGIN%/privacy.html)');
+    expect(llms).not.toMatch(/\u2014/); // no em dashes
+  });
+});
+
+describe('the text pages (privacy.html, terms.html, official.html)', () => {
+  const pages = ['privacy', 'terms', 'official'].map((p) => [p, read(`../${p}.html`)] as const);
+  it("show no unfinished markers, say Brass (the store's currency), and don't wait for the game's kit to draw (audit 28 Oct)", () => {
+    for (const [p, page] of pages) {
+      const shown = page.replace(/<!--[\s\S]*?-->/g, '');
+      expect(shown, p).not.toMatch(/TODO|Draft|\bGems?\b/);
+      expect(shown, p).not.toMatch(/\u2014/);
+      expect(page, p).not.toContain('kit.css');
+      expect(page, p).toContain('<link rel="stylesheet" href="/src/ui/legal.css" />');
+    }
+  });
+  it('each has one h1, an icon, a canonical and link previews, and links back to the game and its About', () => {
+    for (const [p, page] of pages) {
+      expect([...page.matchAll(/<h1\b/g)], p).toHaveLength(1);
+      expect(page, p).toContain('<link rel="icon" href="/favicon.svg"');
+      expect(page, p).toContain(`<link rel="canonical" href="%ORIGIN%/${p}.html" />`);
+      expect(page, p).toContain('property="og:image" content="%ORIGIN%/og-image.jpg"');
+      expect(page, p).toContain('<a href="/#about">About the game</a>');
+    }
+  });
+  it('the official links stay out of search until the owner lists the accounts', () => {
+    expect(read('../official.html')).toContain('<meta name="robots" content="noindex, follow" />');
+  });
+  it('the terms match the store: a 14-day refund of unspent Brass', () => {
+    const terms = read('../terms.html');
+    expect(terms).toMatch(/14 days/);
+    expect(terms).toMatch(/still unspent/);
+    expect(terms).not.toMatch(/Purchases are final unless/);
   });
 });
 

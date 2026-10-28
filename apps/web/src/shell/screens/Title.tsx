@@ -88,11 +88,14 @@ export function TitleScreen({ store }: { store: ShellStore }) {
   const [samples, setSamples] = useState(0);
   useEffect(() => setSamples((n) => n + 1), [ping]);
 
-  // the server's region (the box's probe config), else "Local server" / the host
+  // the server's region (the box's probe config), else "Local server" / the host. Only the HTTPS boxes
+  // serve a probe config: a local or LAN playtest (plain http) has none, so it isn't asked for (a 404 in
+  // the console otherwise: audit 28 Oct)
   useEffect(() => {
     let live = true;
-    fetch(`${import.meta.env.BASE_URL}probe-config.json`)
-      .then((r) => (r.ok && r.headers.get('content-type')?.includes('json') ? r.json() : null))
+    const probe = location.protocol === 'https:' ? fetch(`${import.meta.env.BASE_URL}probe-config.json`) : Promise.resolve(null);
+    probe
+      .then((r) => (r?.ok && r.headers.get('content-type')?.includes('json') ? r.json() : null))
       .catch(() => null)
       .then((c: unknown) => live && setRegion(regionLabel(location.hostname, c as { regions?: { name?: string }[] } | null)));
     return () => {

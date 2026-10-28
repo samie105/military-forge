@@ -100,7 +100,7 @@ export function tierLabel(item: Pick<StoreItemView, 'tier' | 'killEffect'>): str
 
 /** What each tier is, in one line (docs/17 §3.3, §3.7): same gun, same stats, said plainly. */
 export function tierLine(item: Pick<StoreItemView, 'tier' | 'killEffect' | 'upgrade'>): string {
-  if (item.tier === 'forged_kill_effect') return item.upgrade ? 'Adds the stardust kill effect to the Galaxy Relic you own. Same gun, same stats.' : 'The Galaxy Relic plus its stardust kill effect, seen by everyone. Same gun, same stats.';
+  if (item.tier === 'forged_kill_effect') return item.upgrade ? 'Adds the Stardust Shatter kill effect to the Galaxy Relic you own. Same gun, same stats.' : 'The Galaxy Relic plus its Stardust Shatter kill effect, seen by everyone. Same gun, same stats.';
   if (item.tier === 'forged') return 'A reshaped K-47, blueprint style: carved parts and a subtle glow. Same gun, same stats.';
   return 'A look for your gun. Same gun, same stats.';
 }
@@ -110,10 +110,10 @@ export function blockedText(view: StoreView): { title: string; line: string; act
   // nothing to buy while payments are off: the launch gift has its own rule (claimRule)
   if (!view.enabled || !view.payments) return null;
   const a = view.account;
-  if (!a) return { title: 'Sign in to buy', line: 'The store needs your account. Check your connection, then open the store again.', action: null };
+  if (!a) return { title: 'Your account isn’t connected', line: 'Buying needs your account on the server. Check your connection, then open the store again.', action: null };
   if (a.reason === 'guest') return { title: 'Save your account to buy', line: 'Purchases belong to a saved account, so they’re never lost with a device. It takes a minute.', action: 'save' };
   if (a.reason === 'age') return { title: 'The store is for players 18 and older', line: 'Save your account with your year of birth to use the store.', action: 'save' };
-  if (!a.canBuy) return { title: 'The store is closed for this account', line: 'Contact support if you think this is a mistake.', action: null };
+  if (!a.canBuy) return { title: 'The store is closed for this account', line: 'Think this is a mistake? Send us a report from Settings → Network, and say so in the note.', action: null };
   return null;
 }
 
@@ -160,7 +160,7 @@ export function errorText(code: string, extra: Record<string, unknown> = {}): st
     case 'rate_limited':
       return 'Too many tries. Wait a minute.';
     case 'network':
-      return 'Can’t reach the server. Check your connection.';
+      return 'Can’t reach the server. Check your connection and try again.';
     default:
       return 'Something went wrong. Nothing was charged.';
   }

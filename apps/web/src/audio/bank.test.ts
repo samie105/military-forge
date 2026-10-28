@@ -6,6 +6,10 @@ import { Rng, hashSeed, peak, rms, seamless, svf, noise } from './dsp';
 import { PROJECTILE, blastSound, familyOf, weaponSoundIds, weaponSounds } from './families';
 import { SOUNDS, SOUND_IDS, type SoundId } from './sounds';
 import { SKIN_SOUND_IDS } from './sounds/skins';
+import { loadRecordingsFromDisk } from './recordings.test-util';
+
+// the recorded takes (the app fetches their banks before the sound starts: recordings/banks.ts)
+loadRecordingsFromDisk();
 
 describe('every sound', () => {
   it('renders finite samples at its peak, with sound in it, at a sane length', () => {

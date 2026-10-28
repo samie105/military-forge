@@ -21,10 +21,11 @@ import { useTouchPrompts } from './phone/layout';
 import { MAP_CARDS, eventChip, mapEvents } from './Lobby';
 import { VsPoster, VsStrip, useFighters, useTeamLists } from '../../presentation/VsPoster';
 
-export type CountdownState = 'intro' | 'intro-leaving' | 'match' | '3' | '2' | '1' | 'go';
+export type CountdownState = 'intro' | 'intro-leaving' | 'match' | '3' | '2' | '1' | 'go' | 'go-leaving';
 
-/** How long GO stays up after the match starts, ms. */
+/** How long GO stays up after the match starts, ms; then it leaves over GO_LEAVE_MS (it used to cut out: audit 28 Oct). */
 export const GO_MS = 900;
+export const GO_LEAVE_MS = 160;
 /** How long the map intro shows as the countdown begins, then its exit (ms; motion spec §4.1). */
 export const INTRO_MS = 1600;
 /** the intro's exit: the VS poster folds into its strip over 400 ms (research §8.1: 1.6 → 2.0 s) */
@@ -48,7 +49,7 @@ const STEPS = ['match', '3', '2', '1', 'go'] as const;
 
 /** "Match 1 → 3 → 2 → 1 → GO" under the number: the stops passed dimmed, the one now lit. */
 export function CountdownSteps({ state, number }: { state: CountdownState; number: number }) {
-  const at = STEPS.indexOf(state as (typeof STEPS)[number]);
+  const at = STEPS.indexOf((state === 'go-leaving' ? 'go' : state) as (typeof STEPS)[number]);
   return (
     <ol className="mf-cd__steps" aria-hidden="true">
       {STEPS.map((s, i) => (
@@ -68,6 +69,7 @@ export function CountdownSteps({ state, number }: { state: CountdownState; numbe
  */
 export function useCountdown(view: MatchView | null): { state: CountdownState; view: MatchView; held: boolean } | null {
   const [go, setGo] = useState<MatchView | null>(null);
+  const [goLeaving, setGoLeaving] = useState(false);
   const [intro, setIntro] = useState<'intro' | 'intro-leaving' | null>(null);
   const [held, setHeld] = useState(false);
   const last = useRef<MatchPhase | null>(null);
@@ -95,12 +97,14 @@ export function useCountdown(view: MatchView | null): { state: CountdownState; v
     }
     if (view && was === MatchPhase.Countdown && view.phase === MatchPhase.InProgress) {
       setGo(view);
+      setGoLeaving(false);
       setIntro(null);
       setHeld(false);
-      timers.current.push(window.setTimeout(() => setGo(null), GO_MS));
+      timers.current.push(window.setTimeout(() => setGoLeaving(true), GO_MS));
+      timers.current.push(window.setTimeout(() => setGo(null), GO_MS + GO_LEAVE_MS));
     } else if (view?.phase !== MatchPhase.InProgress) setGo(null);
   }, [view]);
-  if (go) return { state: 'go', view: go, held: false };
+  if (go) return { state: goLeaving ? 'go-leaving' : 'go', view: go, held: false };
   const state = view && countdownState(view);
   if (state === 'match' && view && intro) return { state: intro, view, held };
   return state && view ? { state, view, held } : null;
@@ -197,6 +201,7 @@ export function Countdown({ view, state, held = false, bindings }: { view: Match
     const t = window.setTimeout(() => setSkipped('gone'), LEAVE_MS);
     return () => window.clearTimeout(t);
   }, [skipped]);
+  const goish = state === 'go' || state === 'go-leaving';
   // on a phone the tip says what to swipe and hold, not which key
   const touch = useTouchPrompts();
   const poster = fighters.length > 0;
@@ -243,11 +248,12 @@ export function Countdown({ view, state, held = false, bindings }: { view: Match
                 </b>
               </div>
             )}
-            {state === 'go' && <b className="display cd__go m-p7">Go!</b>}
+            {/* the word in the game's voice (no exclamation mark); it stamps in, then leaves on --m-fast */}
+            {(state === 'go' || state === 'go-leaving') && <b className={`display cd__go m-p7${state === 'go-leaving' ? ' is-leaving' : ''}`}>Go</b>}
             <CountdownSteps state={state} number={view.number} />
           </div>
-          {state !== 'go' && bindings && touch && <p className="cd__hint plate">Tip: swipe the dash button any way · hold the grenade and drag to aim</p>}
-          {state !== 'go' && bindings && !touch && (
+          {!goish && bindings && touch && <p className="cd__hint plate">Tip: swipe the dash button any way · hold the grenade and drag to aim</p>}
+          {!goish && bindings && !touch && (
             <p className="cd__hint plate">
               Tip: <Kbd code={bindings.dash[0]} /> dash · hold <Kbd code={bindings.grenade[0]} /> to aim a grenade
               {bindings.scoreboard[0] && (
@@ -261,7 +267,7 @@ export function Countdown({ view, state, held = false, bindings }: { view: Match
       )}
     </Screen>
     {/* after the countdown's own layers, so its dim doesn't cover the strip */}
-    {poster && !intro && state !== 'go' && <VsStrip view={view} fighters={fighters} teams={teamLists} />}
+    {poster && !intro && !goish && <VsStrip view={view} fighters={fighters} teams={teamLists} />}
     </>
   );
 }

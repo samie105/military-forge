@@ -12,7 +12,10 @@
  *
  * Set on <html> once and on every resize, with two classes for the menus' smaller boxes (app.css
  * reflows the wide screens in them): html.mf-narrow under 1800 design pixels wide, html.mf-short
- * under 1000 high. On an upright phone the page is turned (landscape.ts) and the window's size is
+ * under the design's full 1080 high (SHORT_H). The short reflow must start the moment a screen loses
+ * any of its 1080: a 1280×800 laptop is 1600×1000 at the 0.8 floor, and with the old 1000 line it got
+ * neither its full height nor the reflow, so Home, the Armory, the lobby, the creator and the results
+ * ran off the bottom (audit 28 Oct). On an upright phone the page is turned (landscape.ts) and the window's size is
  * the turned box's.
  */
 import { applyLandscape, viewport } from './landscape';
@@ -27,6 +30,15 @@ export const HUD_MAX_FIT = 1.5;
 export const MENU_MIN_FIT = 0.8;
 export const MENU_MIN_W = 1600;
 export const MENU_MIN_H = 900;
+/** below this many design pixels high the menus take their short layouts (html.mf-short) */
+export const SHORT_H = DESIGN_H;
+/** below this many design pixels wide, their narrow ones (html.mf-narrow) */
+export const NARROW_W = 1800;
+
+/** The menus' reflow classes for a fit: narrow under NARROW_W, short under SHORT_H (rounding slack: 0.5 px). */
+export function menuShape(f: Fit): { narrow: boolean; short: boolean } {
+  return { narrow: f.w < NARROW_W, short: f.h < SHORT_H - 0.5 };
+}
 
 export interface Fit {
   fit: number;
@@ -67,8 +79,9 @@ function apply(root: HTMLElement): void {
   };
   const menus = menuFit(vw, vh);
   set('fit', menus);
-  root.classList.toggle('mf-narrow', menus.w < 1800);
-  root.classList.toggle('mf-short', menus.h < 1000);
+  const shape = menuShape(menus);
+  root.classList.toggle('mf-narrow', shape.narrow);
+  root.classList.toggle('mf-short', shape.short);
   set('hud', fitTo(vw, vh, DESIGN_W, DESIGN_H, HUD_MIN_FIT, HUD_MAX_FIT));
   set('phone', fitTo(vw, vh, PHONE_W, PHONE_H));
 }

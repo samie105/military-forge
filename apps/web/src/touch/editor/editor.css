@@ -137,5 +137,4 @@ html[data-touch-editing] .mf-spot { visibility: hidden !important; }
   .mf-bay__mini { max-height: 22vh; }
   .mf-bay__base-name b { font-size: 18px; }
 }
-@media (prefers-reduced-motion: reduce) { :is(.mf-bay-back, .mf-bay__card, .mf-bay__shelf, .mf-bay__base-card) { animation: none; } }
 html.reduce-motion :is(.mf-bay-back, .mf-bay__card, .mf-bay__shelf, .mf-bay__base-card) { animation: none; }

@@ -139,7 +139,7 @@ describe('SocialController', () => {
     expect(social.store.getState().list?.friends.map((f) => f.id)).not.toContain('u_t');
     expect(await removed).toBe(false);
     expect(social.store.getState().list?.friends.map((f) => f.id)).toContain('u_t');
-    expect(notices).toEqual(["Can't reach the server: try again in a moment"]);
+    expect(notices).toEqual(["Can't reach the server. Try again in a moment"]);
   });
 
   it("blocks: off every list and onto Blocked; join goes to the friend's room by its code", async () => {

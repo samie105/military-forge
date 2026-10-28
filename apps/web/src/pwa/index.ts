@@ -133,6 +133,20 @@ export async function install(matchesFinished: number): Promise<void> {
   }
 }
 
+/** set once the player heads for play (keepForOffline): the worker keeps all the game's code */
+let keepAll = false;
+let tellWorker: (() => void) | null = null;
+
+/**
+ * The player is heading for play (main.ts, with the 3D view's files): the worker keeps every chunk of
+ * the game's code as well as what loaded, so training starts offline later (audit 28 Oct).
+ */
+export function keepForOffline(): void {
+  if (keepAll) return;
+  keepAll = true;
+  tellWorker?.();
+}
+
 /** The worker: a new version installs and waits; on a calm Home it takes over and the page reloads there. */
 function registerWorker(store: ShellStore): void {
   let registration: ServiceWorkerRegistration | null = null;
@@ -147,7 +161,20 @@ function registerWorker(store: ShellStore): void {
     asked = true;
     waiting.postMessage('activate');
   };
+  // what this page loaded (the game's chunks, its art and models), for the worker to keep: on a first
+  // visit it took control after most of it came, and training must still start offline (audit 28 Oct)
+  const tellLoaded = () => {
+    const worker = navigator.serviceWorker.controller;
+    if (!worker || typeof performance === 'undefined') return;
+    const urls = loadedFiles(performance.getEntriesByType('resource').map((e) => e.name), location.origin);
+    // once the player heads for play: the rest of the game's code too (the worker knows its chunks)
+    if (urls.length || keepAll) worker.postMessage({ type: 'keep', urls, all: keepAll });
+  };
+  tellWorker = tellLoaded;
+  // the game loads more files than the browser's default list of 250 holds
+  performance.setResourceTimingBufferSize?.(1500);
   navigator.serviceWorker.addEventListener('controllerchange', () => {
+    tellLoaded();
     // only the take-over we asked for reloads (the very first install's claim doesn't)
     if (asked && calm()) location.reload();
   });
@@ -172,7 +199,15 @@ function registerWorker(store: ShellStore): void {
     if (home && !wasHome) {
       void registration?.update().catch(() => {});
       maybeActivate();
+      tellLoaded();
     }
     wasHome = home;
   });
+}
+
+/** This site's files among the page's loaded URLs (the worker picks which to keep), once each. */
+export function loadedFiles(names: readonly string[], origin: string): string[] {
+  const out = new Set<string>();
+  for (const name of names) if (name.startsWith(`${origin}/`) && !name.includes('#')) out.add(name);
+  return [...out];
 }

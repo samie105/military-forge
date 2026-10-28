@@ -4,6 +4,7 @@
  * (apps/api auth/passwords.ts); the hint here only saves a round trip for the obvious ones.
  */
 import { ApiError, PARKED_GUEST_DAYS, type AccountInfo, type ParkedGuest } from '../api';
+import { OFFLINE_TITLE, STILL_WORKS } from '../offline';
 import type { AccountIntent } from '../store';
 
 export type AccountMode = 'summary' | 'save' | 'signin' | 'forgot' | 'reset' | 'confirm' | 'password';
@@ -24,7 +25,7 @@ export function accountErrorText(e: unknown): string {
   if (!(e instanceof ApiError)) return 'Something went wrong. Try again.';
   // a 503 of its own: the server is up, Cloudflare's check isn't
   if (e.code === 'bot_check_unavailable') return "Couldn't check you're not a bot just now. Try again in a moment.";
-  if (e.offline) return "Can't reach the server. Check your connection and try again.";
+  if (e.offline) return `${OFFLINE_TITLE}. Check your connection and try again. ${STILL_WORKS}`;
   switch (e.code) {
     case 'invalid_credentials':
       return 'The email or password is wrong.';

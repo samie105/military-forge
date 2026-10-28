@@ -80,7 +80,6 @@
 :where(.mf-st-fit) .mf-st__fx figcaption { font-size: var(--fs-14); font-weight: var(--fw-bold); color: var(--c-paper); white-space: nowrap; text-shadow: 0 1px 2px rgb(0 0 0 / .8); }
 /* Reduce motion: the frame where the shards are out, held still */
 html.reduce-motion :where(.mf-st-fit) .mf-st__fx-win img { animation: none; transform: translateX(calc(-100% * var(--fx-still) / var(--fx-frames))); }
-@media (prefers-reduced-motion: reduce) { :where(.mf-st-fit) .mf-st__fx-win img { animation: none; transform: translateX(calc(-100% * var(--fx-still) / var(--fx-frames))); } }
 :where(.mf-st-fit) .mf-st__line-text { grid-area: text; display: flex; flex-direction: column; gap: var(--sp-2); }
 :where(.mf-st-fit) .mf-st__line-text .mf-st__note { max-width: 640px; }
 :where(.mf-st-fit) .mf-st__line-text .eyebrow, :where(.mf-st-fit) .mf-st__tier .eyebrow { color: var(--c-brass); }
@@ -107,6 +106,8 @@ html.reduce-motion :where(.mf-st-fit) .mf-st__fx-win img { animation: none; tran
 :where(.mf-st-fit) .mf-st__tier-buy .mf-st__acts { order: 2; flex: 0 1 auto; max-width: 100%; margin: 0 0 0 auto; }
 :where(.mf-st-fit) .mf-st__tier-buy .mf-st__acts .btn { max-width: 100%; }
 :where(.mf-st-fit) .mf-st__tier-buy .mf-st__money { order: 3; flex: 1 0 100%; }
+/* the line under the button keeps two lines' room, so side-by-side tiers hold their buttons level (audit 28 Oct) */
+:where(.mf-st-fit) .mf-st__tier-buy .mf-st__money { line-height: 1.4; min-height: 2.8em; }
 :where(.mf-st-fit) .mf-st__price { margin: 0; display: inline-flex; align-items: center; gap: var(--sp-2); color: var(--c-paper); font-size: var(--fs-20); white-space: nowrap; }
 :where(.mf-st-fit) .mf-st__price b { font-size: var(--fs-28); font-variant-numeric: tabular-nums; }
 :where(.mf-st-fit) .mf-st__was { color: var(--c-muted); font-size: var(--fs-18); }
@@ -211,6 +212,15 @@ html.mf-phone :where(.mf-st-fit) .mf-st .mf-st__fx figcaption { font-size: 10px;
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__price b { font-size: 20px; }
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__money { font-size: 13px; }
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__acts { margin-top: 0; }
+/*
+ * A phone: each tier is one row, the picture on the left and the name, line and Claim on the right, the
+ * tiers one under the other. Stacked picture-over-words, a tier's button sat under the first screen,
+ * and the two cards' buttons at different heights (audit 28 Oct). The button keeps to the row's foot.
+ */
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__tiers { grid-template-columns: minmax(0, 1fr); }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__tier { display: grid; grid-template-columns: minmax(0, 38%) minmax(0, 1fr); grid-template-rows: auto 1fr; column-gap: var(--sp-3); row-gap: var(--sp-2); }
+html.mf-phone :where(.mf-st-fit) .mf-st .mf-st__tier-art { grid-row: 1 / span 2; aspect-ratio: auto; min-height: 120px; margin: calc(-1 * var(--sp-3)) 0 calc(-1 * var(--sp-3)) calc(-1 * var(--sp-3)); }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__tier-buy { align-self: end; }
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__get { padding: var(--sp-3); border-radius: var(--r-frost-sm, 0 18px 0 18px); }
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__get-t { font-size: 28px; }
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__bundle { padding: var(--sp-2) var(--sp-3); }

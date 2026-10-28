@@ -12,7 +12,7 @@ import { balanceChip, storeBody, type StoreState } from '../../src/store/screen'
 
 const ITEMS = [
   { itemId: 'skin_k47_galaxy_relic', line: 'k47_galaxy_relic', name: 'Galaxy Relic', tier: 'forged', weaponId: 'k47', killEffect: null, includes: [], price: 1050, fullPrice: 1050, upgrade: false, money: { bundleId: 'brass_1050', price: { NGN: 990_000, USD: 999 } }, owned: false, claimable: false },
-  { itemId: 'skin_k47_galaxy_relic_fx', line: 'k47_galaxy_relic', name: 'Galaxy Relic + Stardust', tier: 'forged_kill_effect', weaponId: 'k47', killEffect: 'stardust', includes: ['skin_k47_galaxy_relic'], price: 2200, fullPrice: 2200, upgrade: false, money: { bundleId: 'brass_2200', price: { NGN: 1_990_000, USD: 1999 } }, owned: false, claimable: false },
+  { itemId: 'skin_k47_galaxy_relic_fx', line: 'k47_galaxy_relic', name: 'Galaxy Relic + Stardust Shatter', tier: 'forged_kill_effect', weaponId: 'k47', killEffect: 'stardust', includes: ['skin_k47_galaxy_relic'], price: 2200, fullPrice: 2200, upgrade: false, money: { bundleId: 'brass_2200', price: { NGN: 1_990_000, USD: 1999 } }, owned: false, claimable: false },
 ];
 const BUNDLES = [
   { id: 'brass_250', brass: 250, bonusPct: 0, price: { NGN: 250_000, USD: 249 } },
@@ -57,6 +57,9 @@ describe('the Store screen', () => {
     expect(guest).not.toContain('monthly limit');
     expect(blockedText(view(account({ canBuy: false, reason: 'age' })))?.title).toBe('The store is for players 18 and older');
     expect(blockedText(view(account()))).toBeNull();
+    // no promise of a support contact that doesn't exist: the way to reach us is the in-game report (audit 28 Oct)
+    expect(blockedText(view(account({ canBuy: false, reason: 'banned' })))?.line).toMatch(/Settings → Network/);
+    expect(blockedText(view(null))?.title).not.toMatch(/Sign in/);
     expect(storeBody(state({ enabled: false }))).toContain('The store opens soon');
   });
 
@@ -75,7 +78,7 @@ describe('the Store screen', () => {
     expect(html).toContain('No real money is taken');
   });
 
-  it('owned items say so and offer Wear it; the effect tier at the owner’s price shows what it was', () => {
+  it('owned items say so and offer Wear it; the effect tier at the upgrade price (players own the base, so not "owner’s price": audit 28 Oct) shows what it was', () => {
     const items = [
       { ...ITEMS[0]!, owned: true },
       { ...ITEMS[1]!, price: 1050, upgrade: true, money: ITEMS[0]!.money },
@@ -84,8 +87,10 @@ describe('the Store screen', () => {
     expect(html).toContain('Owned');
     expect(html).toContain('data-wear="skin_k47_galaxy_relic"');
     expect(html).toContain('<s class="mf-st__was">2,200</s>');
-    expect(html).toContain('Owner’s price');
-    expect(html).toContain('Adds the stardust kill effect');
+    expect(html).toContain('Upgrade price');
+    expect(html).not.toContain('Owner’s price');
+    // the effect has one name everywhere: the content's (kill-effects.json)
+    expect(html).toContain('Adds the Stardust Shatter kill effect');
   });
 
   it('a bundle the limit, the cool-off or the wallet cap would refuse is shown off, with why', () => {
@@ -138,7 +143,7 @@ describe('the launch gift on the Store screen (docs/17 §9)', () => {
     expect(html).toContain('Launch gift');
     expect(html).toContain('<b>Free</b>');
     expect(html).toContain('For now: a launch gift, yours to keep');
-    expect(html).toContain('For now: comes free with Galaxy Relic + Stardust');
+    expect(html).toContain('For now: comes free with Galaxy Relic + Stardust Shatter');
     expect(html).not.toContain('data-buy=');
     expect(html).not.toContain('data-bundle=');
     expect(html).toContain('Coming soon');
@@ -149,7 +154,7 @@ describe('the launch gift on the Store screen (docs/17 §9)', () => {
   it('the claim dialog asks the 18+ question only when neither the account nor the device answered; under 18 can’t claim', () => {
     const item = { ...ITEMS[1]!, claimable: true };
     let html = storeBody(state(gift(), { confirm: { kind: 'claim', item } }));
-    expect(html).toContain('Claim Galaxy Relic + Stardust');
+    expect(html).toContain('Claim Galaxy Relic + Stardust Shatter');
     expect(html).toContain('data-age-year');
     expect(html).toContain('I am 18 or older');
     expect(html).toContain('Save your account to keep it on every device');

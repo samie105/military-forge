@@ -56,23 +56,24 @@ describe('InputSampler', () => {
     expect(buttons()).toBe(Btn.Dash); // nothing held: along the facing
   });
 
-  it('double-tap dash is on by default (the owner\'s call); the setting turns it off', () => {
+  // the taps themselves reach the sim for a tick now (latched presses, audit 28 Oct): these check the dash
+  it('double-tap dash is on by default (the owner\'s call); the setting turns it off (the taps still step: latched)', () => {
     const { s, buttons } = setup();
     expect(s.doubleTapDash).toBe(true);
     s.doubleTapDash = false;
     tap('KeyD', 0);
     tap('KeyD', 100);
-    expect(buttons()).toBe(0);
+    expect(buttons()).toBe(Btn.Right);
     s.doubleTapDash = true;
     tap('KeyD', 1000);
     tap('KeyD', 1000 + DOUBLE_TAP_MS - 40);
     expect(buttons()).toBe(Btn.Dash | Btn.Right);
     tap('KeyD', 3000);
     tap('KeyD', 3000 + DOUBLE_TAP_MS + 10); // too slow
-    expect(buttons()).toBe(0);
+    expect(buttons()).toBe(Btn.Right);
   });
 
-  it('double taps go by direction, not by key: A then ← dashes left; the jet key never dashes', () => {
+  it('double taps go by direction, not by key: A then ← dashes left; the jet key never dashes (taps latched)', () => {
     const { s, buttons } = setup();
     s.doubleTapDash = true;
     tap('KeyA', 0);
@@ -81,13 +82,13 @@ describe('InputSampler', () => {
     tap('KeyW', 1000);
     tap('KeyW', 1100); // feathering the jetpack
     tap('Space', 1200);
-    expect(buttons()).toBe(0);
+    expect(buttons()).toBe(Btn.Jet);
     tap('KeyS', 2000);
     tap('ArrowDown', 2100);
     expect(buttons()).toBe(Btn.Dash | Btn.Down);
     tap('KeyA', 3000);
     tap('KeyD', 3100); // two directions: no dash
-    expect(buttons()).toBe(0);
+    expect(buttons()).toBe(Btn.Left | Btn.Right);
   });
 
   it('follows rebinding: dash and directions on other keys or a mouse button', () => {
@@ -173,6 +174,46 @@ describe('InputSampler', () => {
     fire(window, 'keydown', { code: 'KeyW', repeat: false, timeStamp: 20, target: make(Input, { type: 'text', readOnly: false }) });
     expect(buttons() & Btn.Jet).toBe(0);
     s.releaseAll();
+  });
+
+  it('a quick tap between two samples still reaches the sim for one tick: R, 1, 2, a click (audit 28 Oct)', () => {
+    const { s, target, buttons } = setup();
+    tap('KeyR', 0);
+    expect(buttons()).toBe(Btn.Reload);
+    expect(buttons()).toBe(0); // one sample only
+    tap('Digit2', 100);
+    expect(s.sample(camera, 0, 0).weaponSelect).toBe(2);
+    expect(s.sample(camera, 0, 0).weaponSelect).toBe(0);
+    tap('Digit1', 200);
+    expect(s.sample(camera, 0, 0).weaponSelect).toBe(1);
+    fire(target, 'mousedown', { button: 0, timeStamp: 300 });
+    fire(window, 'mouseup', { button: 0, timeStamp: 305 });
+    expect(buttons()).toBe(Btn.Fire);
+    expect(buttons()).toBe(0);
+  });
+
+  it('held keys are unchanged by the latch: held, they stay; let go after a sample, they stop', () => {
+    const { buttons } = setup();
+    down('KeyR', 0);
+    expect(buttons()).toBe(Btn.Reload);
+    expect(buttons()).toBe(Btn.Reload);
+    up('KeyR', 40);
+    expect(buttons()).toBe(0);
+    down('Digit1', 100);
+    down('KeyD', 100);
+    expect(buttons()).toBe(Btn.Right);
+    expect(buttons()).toBe(Btn.Right);
+  });
+
+  it('presses while the menus hold the input never fire once they close', () => {
+    const { s, buttons } = setup();
+    s.blocked = true;
+    tap('KeyR', 0);
+    s.blocked = false;
+    expect(buttons()).toBe(0);
+    tap('KeyR', 100);
+    s.releaseAll();
+    expect(buttons()).toBe(0);
   });
 
   it('dropping input (menus, blur) drops a latched dash too', () => {

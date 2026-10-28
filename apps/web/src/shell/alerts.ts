@@ -4,6 +4,7 @@
  */
 import { CloseCode } from '@military-forge/protocol';
 import { ApiError } from './api';
+import { OFFLINE_TITLE, STILL_WORKS } from './offline';
 import { RECONNECT_WINDOW_MS, reconnectTries } from './reconnect';
 import type { AlertInfo, ConnectionView } from './store';
 
@@ -24,10 +25,12 @@ export function alertFromApiError(e: unknown, room?: string): AlertInfo {
       return { kind: 'slow-down', title: 'Too many tries', message: `Wait ${Number.isFinite(wait) ? wait : 60} s, then try again.`, code: 'RATE_LIMITED', action: 'rejoin' };
     }
     if (e.offline)
-      return { kind: 'offline', title: "Can't reach the server", message: "The game server isn't answering. It may have stopped: ask whoever sent you the link.", code: codeLine('SERVER_OFFLINE', room), action: 'rejoin' };
+      return { kind: 'offline', title: OFFLINE_TITLE, message: `The game server isn't answering. Check your data or Wi-Fi, then try again. ${STILL_WORKS}`, code: codeLine('SERVER_OFFLINE', room), action: 'rejoin' };
     return { kind: 'error', title: 'Something went wrong', message: e.message, code: `${e.code.toUpperCase()} · HTTP ${e.status}`, action: 'rejoin' };
   }
-  return { kind: 'error', title: 'Something went wrong', message: (e as Error)?.message ?? String(e), code: 'ERROR', action: 'rejoin' };
+  // not the API's answer (a bug of ours): the detail is for the console, the player gets a plain line
+  console.warn('room: unexpected error', e);
+  return { kind: 'error', title: 'Something went wrong', message: 'The game hit a problem getting you in. Try again.', code: 'ERROR', action: 'rejoin' };
 }
 
 /**
@@ -71,7 +74,7 @@ export function alertFromConnection(c: Pick<ConnectionView, 'code' | 'detail' | 
       return {
         kind: 'connection-lost',
         title: 'Connection lost',
-        message: `We couldn't reach the server${tries}. Check your data or Wi-Fi, then rejoin.`,
+        message: `${OFFLINE_TITLE}${tries}. Check your data or Wi-Fi, then rejoin. ${STILL_WORKS}`,
         code: `CONNECTION_LOST${last}`,
         action: 'rejoin',
         ...(c.attempt > 0 ? { tries: { made: c.attempt, of } } : {}),

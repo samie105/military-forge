@@ -51,7 +51,7 @@ export function Slider({ value, onChange, label, valueText, step = 0.05, ticks, 
   return (
     <div
       ref={el}
-      className="slider"
+      className={ticks ? 'slider slider--ticks' : 'slider'}
       style={{ '--v': v } as CSSProperties}
       role="slider"
       tabIndex={disabled ? -1 : 0}
@@ -79,9 +79,14 @@ export function Slider({ value, onChange, label, valueText, step = 0.05, ticks, 
       <div className="slider__thumb"></div>
       {ticks && (
         <div className="slider__ticks" aria-hidden="true">
-          {ticks.map((t) => (
-            <span key={t}>{t}</span>
-          ))}
+          {ticks.map((t, i) => {
+            const at = ticks.length > 1 ? i / (ticks.length - 1) : 0;
+            return (
+              <span key={t} className={Math.abs(at - v) < 1e-6 ? 'is-on' : undefined} style={{ '--t': at } as CSSProperties}>
+                {t}
+              </span>
+            );
+          })}
         </div>
       )}
     </div>

@@ -340,7 +340,7 @@ export class Renderer {
   /** Also handed every event batch when set: main.ts points it at the 3D view's effects. */
   forwardEvents: ((events: readonly SimEvent[], localId: number) => void) | null = null;
   /**
-   * Reduce motion (docs/11 §5), as the 3D view takes it: the OS setting unless set. Lights blink 3
+   * Reduce motion (docs/11 §5), as the 3D view takes it: the OS setting until main.ts applies the game's switch. Lights blink 3
    * times a second at most then, as they do under Reduce flashes.
    */
   reducedMotion = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;

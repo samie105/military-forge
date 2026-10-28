@@ -3,41 +3,42 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="description" content="The rules for playing %GAME_NAME%: adults only, what the in-game currency is and is not, account safety and banned conduct." />
     <title>Terms · %GAME_NAME%</title>
-    <link rel="stylesheet" href="/src/ui/fonts.css" />
-    <link rel="stylesheet" href="/src/ui/kit.css" />
+    <meta name="description" content="The rules for playing %GAME_NAME%: adults only, what Brass is and is not, refunds, account safety, billboard ads and banned conduct." />
+    <link rel="canonical" href="%ORIGIN%/terms.html" />
+    <meta name="theme-color" content="#0e100b" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/icons/icon-192.png" type="image/png" sizes="192x192" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="%GAME_NAME%" />
+    <meta property="og:url" content="%ORIGIN%/terms.html" />
+    <meta property="og:title" content="Terms · %GAME_NAME%" />
+    <meta property="og:description" content="The rules for playing %GAME_NAME%, in plain words: adults only, Brass, refunds, account safety and banned conduct." />
+    <meta property="og:image" content="%ORIGIN%/og-image.jpg" />
+    <meta property="og:image:alt" content="Two %GAME_NAME% soldiers with jetpacks, rifles held low, on a sunny city rooftop" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="/src/ui/legal.css" />
     <!--
-      DRAFT for the owner's lawyer (TODO(owner)): have counsel review it, fill in the TODO(owner)
-      parts, then take the draft box out. Styled like privacy.html; docs/10 §8 says why this page
-      must keep saying. TODO(owner): keep the currency's name in step with the store (docs/04).
+      For the owner, before payments open: have counsel review this page and settle (1) which
+      country's law applies (section 9) and (2) the refund wording (section 3), then replace the
+      status line under the heading. The page says only what the game does today: Brass and its
+      14-day refund of unspent Brass are apps/api/src/store (payments.ts refundIssue, catalog.ts),
+      the billboard ads are render3d/ads and docs/14. Keep it in step with privacy.html and
+      official.html; docs/10 §8 says why this page must exist.
     -->
-    <style>
-      html, body { margin: 0; background: var(--c-ink-900); color: var(--c-text); }
-      .pv { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; font-family: var(--f-ui); font-size: 17px; line-height: 1.55; }
-      .pv__eyebrow { margin: 0; font-size: 13px; font-weight: 800; letter-spacing: .24em; text-transform: uppercase; color: var(--c-volt); }
-      .pv h1 { margin: 8px 0 4px; font-family: var(--f-display); font-weight: 900; font-size: clamp(36px, 8vw, 60px); line-height: .95; text-transform: uppercase; }
-      .pv h2 { margin: 36px 0 8px; font-size: 15px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--c-brass); }
-      .pv p, .pv li { color: var(--c-text); }
-      .pv small, .pv .pv__muted { color: var(--c-muted-2); }
-      .pv a { color: var(--c-volt); text-underline-offset: 3px; }
-      .pv__box { padding: 14px 16px; border: 1.5px solid var(--c-line-strong); border-left: 5px solid var(--c-volt); border-radius: 0 14px 0 14px; background: var(--c-ink-800); }
-      .pv__draft { margin: 16px 0; padding: 12px 16px; border: 1.5px dashed var(--c-warn); border-radius: 0 14px 0 14px; color: var(--c-warn); font-size: 15px; }
-      .pv__draft b { color: var(--c-warn); }
-      .pv__todo { padding: 1px 6px; border: 1.5px dashed var(--c-warn); border-radius: 6px; color: var(--c-warn); font-weight: 700; }
-      .pv__links { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 36px; }
-    </style>
   </head>
-  <body class="mf">
+  <body>
     <main class="pv">
       <p class="pv__eyebrow">%GAME_NAME%</p>
       <h1>Terms</h1>
-      <p class="pv__muted">Draft of 28 October 2026 · plain words first</p>
+      <p class="pv__muted">Updated 28 October 2026 · plain words first</p>
 
-      <p class="pv__draft" role="note"><b>Draft.</b> These terms are a draft waiting for our lawyer's review. They say how we mean to run the game; the reviewed version will replace this page before payments open.</p>
+      <p class="pv__status" role="note">These terms are being finalised with a legal review. They say how the game runs today. If the reviewed version changes anything that matters to you, we'll tell you in the game before it applies.</p>
 
       <div class="pv__box">
-        <p><b>In short.</b> %GAME_NAME% is for adults, 18 and over. Gems, the premium currency, have no cash value: you can't cash them out, sell them, trade them or move them to someone else for money, and we fix balances that bugs or fraud created. Keep your account to yourself. No cheating, scams, selling accounts or currency, or pretending to be someone else. We only sell on our official site, inside the game, and never take payment to a personal account.</p>
+        <p><b>In short.</b> %GAME_NAME% is for adults, 18 and over. Brass, the in-game currency, has no cash value: you can't cash it out, sell it, trade it or move it to someone else for money, and we fix balances that bugs or fraud created. Brass you bought and haven't spent can be refunded for 14 days. Keep your account to yourself. No cheating, scams, selling accounts or Brass, or pretending to be someone else. We only sell inside the game on our official site, and never take payment to a personal account.</p>
       </div>
 
       <h2>1. Who can play</h2>
@@ -55,13 +56,15 @@
         <li>We may lock an account, ask you to confirm your email, or end its sessions when we see signs it was taken over.</li>
       </ul>
 
-      <h2>3. Gems, the premium currency</h2>
+      <h2>3. Brass, the in-game currency</h2>
       <ul>
-        <li>Gems are a licence to use features in the game. They are not money, not property you own, and have <b>no cash value</b>.</li>
-        <li>Gems <b>can't be cashed out</b> or exchanged for real money, goods or anything outside the game, by us or anyone else.</li>
-        <li>Gems and items <b>can't be sold, traded, gifted or transferred</b> to another account, and accounts holding them can't be sold. Offers to buy or sell Gems, items or accounts are against these terms and are usually scams.</li>
-        <li>We may <b>adjust balances</b>: remove Gems or items created by a bug, an outage, a refund or chargeback, or fraud, and correct a balance we got wrong. When we make up for a problem, we grant it to the accounts it affected, through our records.</li>
-        <li>Prices, what Gems buy and how they are earned can change. Purchases are final unless the law where you live gives you a right to a refund. <span class="pv__todo">TODO(owner): refund wording with counsel</span></li>
+        <li>Brass is a licence to use features in the game. It is not money, not property you own, and has <b>no cash value</b>.</li>
+        <li>Brass <b>can't be cashed out</b> or exchanged for real money, goods or anything outside the game, by us or anyone else.</li>
+        <li>Brass and items <b>can't be sold, traded, gifted or transferred</b> to another account, and accounts holding them can't be sold. Offers to buy or sell Brass, items or accounts are against these terms and are usually scams.</li>
+        <li><b>Refunds.</b> For <b>14 days</b> after you buy Brass, you can refund that purchase from the Store's list of your purchases, as long as the Brass it gave you is still unspent. The game spends Brass you earned before Brass you bought, so bought Brass stays refundable as long as possible. The money goes back the way you paid and takes 3 to 15 working days to arrive.</li>
+        <li>Items you get with Brass can't be returned for Brass or money. Apart from the refund above, purchases are final, unless the law where you live gives you more rights.</li>
+        <li>We may <b>adjust balances</b>: remove Brass or items created by a bug, an outage, a refund or chargeback, or fraud, and correct a balance we got wrong. When we make up for a problem, we grant it to the accounts it affected, through our records.</li>
+        <li>Prices, what Brass buys and how it is earned can change. A price shown when you confirm a purchase is the price you pay.</li>
         <li>There is <b>no official %GAME_NAME% coin, token or crypto</b>. Anything sold as one is not ours.</li>
       </ul>
 
@@ -69,28 +72,28 @@
       <ul>
         <li>We only sell inside the game on our official site, through the payment provider shown at checkout. The official addresses are on our <a href="/official.html">official links</a> page.</li>
         <li><b>We never take payment to a personal bank account</b>, mobile money number, gift card or crypto wallet, and we never sell by DM, WhatsApp or on other sites. There are no official resellers, agents or "top-up" vendors.</li>
-        <li>Anyone who asks you to pay them for Gems, items or an account is not us. Report them (section 8).</li>
+        <li>Anyone who asks you to pay them for Brass, items or an account is not us. Report them (section 8).</li>
       </ul>
 
       <h2>5. Not allowed</h2>
       <ul>
         <li><b>Cheating</b>: hacks, aimbots, modified clients, scripts, macros, bots, or using a bug to get ahead. Found a bug? Report it instead; reports help.</li>
         <li><b>Scams</b> and phishing: fake giveaways, fake top-ups, links that steal accounts, asking for passwords or payment.</li>
-        <li><b>Selling or buying</b> accounts, Gems, items, boosting or rank services, for money or anything else.</li>
+        <li><b>Selling or buying</b> accounts, Brass, items, boosting or rank services, for money or anything else.</li>
         <li><b>Impersonation</b>: pretending to be our staff, another player, a creator or %GAME_NAME% itself, including copy sites and fake apps.</li>
         <li>Harassment, threats, hate, sexual content, offensive names, and sharing anyone's personal details.</li>
         <li>Attacking or overloading our servers, scripting sign-ups or rewards, and getting around a ban with another account.</li>
       </ul>
 
       <h2>6. What happens if rules are broken</h2>
-      <p>Depending on how serious it is: a warning, a mute, a matchmaking cooldown, a name reset, removing Gems or items gained by breaking the rules, a temporary ban or a permanent one. We tell you the reason, and you can ask for a person to look at it again through the contact below.</p>
+      <p>Depending on how serious it is: a warning, a mute, a matchmaking cooldown, a name reset, removing Brass or items gained by breaking the rules, a temporary ban or a permanent one. We tell you the reason, and you can ask for a person to look at it again through the contact below.</p>
 
       <h2>7. Billboard ads in the maps</h2>
       <ul>
-        <li>Some maps have billboards in the background with ads, ours and other companies'. They are never on anything you fight on, never play sound and never open anything during a match.</li>
-        <li>A person reviews every ad before anyone sees it. Paid ads carry an <b>AD</b> label. Paying never changes the game: no branded guns, stats, spawns or rules.</li>
-        <li>Paid ads are never for betting or gambling, real-money games, alcohol, tobacco or vapes, weapons, adult content or dating, loans, crypto, forex or "earn money" schemes, politics, or game accounts, cheats and currency resellers. Our own ads may show our other products, with any warning their kind needs.</li>
-        <li>Saving an ad to look at after the match is your choice. Nobody can pay us to change what the billboards show you.</li>
+        <li>Some maps have billboards in the background. Today every ad on them is our own: <b>Deet Studios</b>, the studio that makes %GAME_NAME%, and <b>WorldStreet</b>, another of our products. Trading ads carry "Trading involves risk. 18+." and can be switched off where the rules require it.</li>
+        <li>Billboards are never on anything you fight on, never play sound and never open anything during a match. Saving an ad to look at after the match is your choice.</li>
+        <li>If you said yes to sharing your play data, how you play (for example touch or keyboard, or the time of day you play) can decide which of our ads you see more often. It never changes the game. You can say no any time in Settings → Privacy (<a href="/privacy.html">Privacy</a>).</li>
+        <li>If we take paid ads from other companies, a person will review every one before anyone sees it, each will carry an <b>AD</b> label, and none will be aimed at you using your play data. Paying never changes the game: no branded guns, stats, spawns or rules. Paid ads will never be for betting or gambling, real-money games, alcohol, tobacco or vapes, weapons, adult content or dating, loans, crypto, forex or "earn money" schemes, politics, or game accounts, cheats and currency resellers. We'll update this page before the first one runs.</li>
       </ul>
 
       <h2>8. Reporting and contact</h2>
@@ -101,10 +104,10 @@
         <li>We keep improving the game, so modes, maps, items and prices change, and it may sometimes be down for maintenance. We provide it as it is and can't promise it never breaks.</li>
         <li>You can stop playing and delete your player any time (Settings → Privacy). We can close an account that breaks these terms.</li>
         <li>If we change these terms in a way that matters, we'll say so in the game before the change applies.</li>
-        <li>Which country's law applies: <span class="pv__todo">TODO(owner): with counsel (for example Nigeria)</span>.</li>
+        <li>Which country's law governs these terms is being settled in the legal review. This page will name it once it is.</li>
       </ul>
 
-      <p class="pv__links"><a href="/">Back to the game</a> <a href="/privacy.html">Privacy</a> <a href="/official.html">Official links</a></p>
+      <nav class="pv__links" aria-label="More from %GAME_NAME%"><a href="/">Back to the game</a> <a href="/#about">About the game</a> <a href="/privacy.html">Privacy</a> <a href="/official.html">Official links</a></nav>
     </main>
   </body>
 </html>

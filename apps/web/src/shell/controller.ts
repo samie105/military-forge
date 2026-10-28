@@ -80,6 +80,33 @@ export const SETTINGS_REV = 3;
 const OFFLINE_NAME_KEY = 'profile.offlineName.v1';
 const TIPS_SEEN_KEY = 'tips.seen.v1';
 
+/** This session's offline name, where storage fails: the same name all session. */
+let sessionOfflineName: string | null = null;
+
+/**
+ * The name used while the API can't be reached: `chosen` (saved for next time), else the one saved on
+ * this device, else a new PilotNNN saved at once, so it stays the same on every load (audit 28 Oct).
+ */
+export function offlineName(chosen?: string | null, storage: () => Storage = () => localStorage): string {
+  const typed = chosen?.trim();
+  let name = typed || null;
+  if (!name) {
+    try {
+      name = storage().getItem(OFFLINE_NAME_KEY)?.trim() || null;
+    } catch {
+      /* none */
+    }
+  }
+  name ??= sessionOfflineName ?? `Pilot${Math.floor(Math.random() * 900 + 100)}`;
+  sessionOfflineName = name;
+  try {
+    storage().setItem(OFFLINE_NAME_KEY, name);
+  } catch {
+    /* this session only */
+  }
+  return name;
+}
+
 /** Flags set this session: where storage fails (Safari private mode), a card still shows once per session. */
 const sessionFlags = new Set<string>();
 
@@ -320,14 +347,8 @@ export class ShellController {
     try {
       me = await this.api.restore();
     } catch {
-      // the API is down: training still works, with a local name
-      let name = '';
-      try {
-        name = localStorage.getItem(OFFLINE_NAME_KEY) ?? '';
-      } catch {
-        /* none */
-      }
-      this.set({ profile: { nickname: name || `Pilot${Math.floor(Math.random() * 900 + 100)}`, changeableAt: null, offline: true } });
+      // the API is down: training still works, with a local name (the same one on every load)
+      this.set({ profile: { nickname: offlineName(), changeableAt: null, offline: true } });
       this.go(intent.to === 'join' || intent.to === 'training' ? intent : { to: 'home' });
       return;
     }
@@ -375,6 +396,8 @@ export class ShellController {
     if (onlineIntent(intent) && this.ageGate(intent)) return;
     switch (intent.to) {
       case 'home':
+        // the first-run controls card comes before play or not at all: not on the Home a match ended into
+        this.tipsQueued = false;
         this.host.stop();
         this.setUrl('/');
         this.set({ screen: { name: 'home' }, match: null, lobby: null, connection: null, tips: false });
@@ -383,8 +406,8 @@ export class ShellController {
         this.host.stop();
         this.setUrl('/');
         this.host.startTraining(this.profile?.nickname ?? 'You');
-        this.set({ screen: { name: 'training' }, lobby: null, connection: null });
-        this.firstTips();
+        this.set({ screen: { name: 'training' }, lobby: null, connection: null, tips: false });
+        this.firstTips(); // the first time: the controls card, with training held still under it
         return;
       case 'local':
         if (!this.profile) {
@@ -557,8 +580,9 @@ export class ShellController {
 
   /**
    * The controls card the first time a player gets into a game: queued, never over a running match
-   * (mobile audit P0-3). It opens at the next calm moment (releaseTips): Home, or a room's lobby and
-   * warm-up, with nothing else open and no other card up (the phone's fire chooser).
+   * (mobile audit P0-3). It opens at the next calm moment before play (releaseTips): a room's lobby
+   * and warm-up, or training (which holds still under it), with nothing else open and no other card
+   * up (the phone's fire chooser). Going Home drops the queue: the card never shows after a match.
    */
   private firstTips(): void {
     if (!this.tipsQueued && !flagged(TIPS_SEEN_KEY, () => localStorage)) this.tipsQueued = true;
@@ -697,15 +721,8 @@ export class ShellController {
     } catch (e) {
       if (!(e instanceof ApiError)) return { ok: false, error: (e as Error).message };
       if (e.offline) {
-        // no API: keep a local name and let the player train
-        if (nickname) {
-          try {
-            localStorage.setItem(OFFLINE_NAME_KEY, nickname);
-          } catch {
-            /* fine */
-          }
-        }
-        this.set({ profile: { nickname: nickname || 'Pilot', changeableAt: null, offline: true } });
+        // no API: keep a local name (the one typed, else this device's) and let the player train
+        this.set({ profile: { nickname: offlineName(nickname), changeableAt: null, offline: true } });
       } else if (e.code === 'nickname_taken') return { ok: false, error: NICKNAME_REASONS.taken, suggestions: (e.extra.suggestions as string[] | undefined) ?? [] };
       else if (e.code === 'invalid_nickname') return { ok: false, error: NICKNAME_REASONS[String(e.extra.reason)] ?? e.message };
       else if (e.code === 'nickname_cooldown') return { ok: false, error: `You can change your name again on ${new Date(String(e.extra.nicknameChangeableAt)).toLocaleDateString()}` };
@@ -899,13 +916,24 @@ export class ShellController {
 }
 
 /**
- * A moment a card may open in (mobile audit P0-3): Home after the title, or a room's lobby and warm-up
- * (no countdown, no clock); never in training's match or First flight, never over another overlay.
+ * A moment the first-run controls card may open in, before play (mobile audit P0-3; audit 28 Oct: it
+ * must come before the first match, never after it): a room's lobby and warm-up (no countdown, no
+ * clock), or training, which holds still under the card (trainingPaused). Never First flight (it
+ * teaches the controls itself), never over another overlay.
  */
 export function tipsCalm(s: ShellState): boolean {
   if (s.overlay !== null || s.route !== null || s.tips || s.title !== 'off') return false;
-  if (s.screen.name === 'home') return true;
+  if (s.screen.name === 'training') return !s.screen.tour;
   return s.screen.name === 'room' && (s.match === null || s.match.phase === MatchPhase.Waiting);
+}
+
+/**
+ * Training holds still (LocalMode.paused): something is open over it (the pause menu, Settings, a full
+ * screen route) or the controls card is up. Training runs on this device alone, so its pause is real;
+ * an online room keeps playing under its menu.
+ */
+export function trainingPaused(s: Pick<ShellState, 'screen' | 'overlay' | 'route' | 'tips'>): boolean {
+  return s.screen.name === 'training' && (s.overlay !== null || s.route !== null || s.tips);
 }
 
 /** The clock stopped: the match went from its countdown or play to its end (results, the vote, closed). */

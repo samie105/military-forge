@@ -33,13 +33,35 @@ export function nameState(name: string, check: NicknameCheck | null, current: st
 }
 
 /**
- * Enter submits whenever Continue would, and also while the name is still being checked (typing
- * then Enter at once): the server's answer decides, and a taken name comes back with suggestions.
- * The browser's own Enter-to-submit skips a form whose submit button is disabled, so the field
- * handles Enter itself.
+ * What Enter does: submit whenever Continue would; while the name is still being checked (typing then
+ * Enter at once), wait for the check and submit only if the name passes (audit 28 Oct: Enter mid-check
+ * sent a name the check then refused); otherwise nothing. The browser's own Enter-to-submit skips a
+ * form whose submit button is disabled, so the field handles Enter itself.
  */
-export function enterSubmits(state: NameState, canContinue: boolean, busy: boolean): boolean {
-  return canContinue || (!busy && state === 'checking');
+export function enterAction(state: NameState, canContinue: boolean, busy: boolean): 'submit' | 'after-check' | 'none' {
+  if (canContinue) return 'submit';
+  return !busy && state === 'checking' ? 'after-check' : 'none';
+}
+
+/**
+ * Enter on the name screens (enterAction): `go` submits the name. An Enter made while the check runs
+ * waits for its answer; typing again drops it.
+ */
+export function useEnterKey(name: string, state: NameState, canContinue: boolean, busy: boolean, go: () => void): () => void {
+  const [waiting, setWaiting] = useState(false);
+  const goRef = useRef(go);
+  goRef.current = go;
+  useEffect(() => setWaiting(false), [name]);
+  useEffect(() => {
+    if (!waiting || state === 'checking') return;
+    setWaiting(false);
+    if (canContinue) goRef.current();
+  }, [waiting, state, canContinue]);
+  return () => {
+    const act = enterAction(state, canContinue, busy);
+    if (act === 'submit') go();
+    else if (act === 'after-check') setWaiting(true);
+  };
 }
 
 /** A stable "No." for the ID card, from the name (decoration, the same every time for a name). */
@@ -116,6 +138,7 @@ export function NameEntry({ store, first }: { store: ShellStore; first: boolean 
   const state = error ? 'invalid' : nameState(name, check, current, pending, failed);
   const shown = suggestions.length ? suggestions : (check?.suggestions ?? []);
   const canContinue = !busy && (state === 'available' || state === 'unchecked' || (state === 'checking' && !!profile?.offline) || (!first && state === 'same'));
+  const enter = useEnterKey(name, state, canContinue, busy, () => void submit(name.trim()));
   const length = [...name.trim()].length;
   const changeable = profile?.changeableAt ? new Date(profile.changeableAt) : null;
   const preview = name.trim() || '—';
@@ -133,7 +156,7 @@ export function NameEntry({ store, first }: { store: ShellStore; first: boolean 
           className="menu-body ne"
           onSubmit={(e) => {
             e.preventDefault();
-            if (enterSubmits(state, canContinue, busy)) void submit(name.trim());
+            enter();
           }}
         >
           {/* the ID card: a live preview of the name; it focus-pulls in (P1) and stamps once the name is free (P7) */}
@@ -202,7 +225,7 @@ export function NameEntry({ store, first }: { store: ShellStore; first: boolean 
                   onKeyDown={(e) => {
                     if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
                     e.preventDefault();
-                    if (enterSubmits(state, canContinue, busy)) void submit(name.trim());
+                    enter();
                   }}
                 />
                 <span className="input__count num" data-bind="nameEntry.length">

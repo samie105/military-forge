@@ -107,6 +107,8 @@ export class MatchPlayer {
   rematch = false;
   /** left the room during this match; kept for its standings */
   left = false;
+  /** who the player is beyond the slot (Match.identityOf), null when unknown or a bot */
+  identity: string | null = null;
 
   score = 0;
   kills = 0;
@@ -235,6 +237,12 @@ export class Match {
    * Rooms set it; local play leaves it.
    */
   groupOf: ((id: number) => string | null) | null = null;
+  /**
+   * Who a human player is beyond their slot (rooms: the account, else the name). One who leaves and
+   * comes back during the same match is then one row in the standings, carrying on with the score
+   * they had (audit 28 Oct: a rejoin listed the player twice). null (local play): never merged.
+   */
+  identityOf: ((id: number) => string | null) | null = null;
   private startRequested = false;
   private lobbyRequested = false;
   /** next MatchPlayer.key */
@@ -416,12 +424,16 @@ export class Match {
     this.advance();
   }
 
-  /** Current standings, best first (also the scoreboard order). */
+  /**
+   * Current standings, best first (also the scoreboard order). Places count the players here at the
+   * end: those who left follow them, and a bot that left (it made room for a human) has no row
+   * (audit 28 Oct: departed bots pushed a player to "8th" in a room of four).
+   */
   standings(): MatchStanding[] {
     const list: MatchPlayer[] = [];
     for (const m of this.players) if (m) list.push(m);
-    list.push(...this.departed);
     list.sort(compareStandings);
+    list.push(...this.departed.filter((m) => !m.isBot).sort(compareStandings));
     const out = list.map(
       (m, i): MatchStanding => ({
         placement: i + 1,
@@ -444,9 +456,9 @@ export class Match {
         team: this.teams > 0 ? m.state.team : -1,
       }),
     );
-    // highest positive rating; ties go to the better placement
+    // highest positive rating among the players still here; ties go to the better placement
     let mvp: MatchStanding | undefined;
-    for (const s of out) if (s.rating > 0 && (!mvp || s.rating > mvp.rating)) mvp = s;
+    for (const s of out) if (!s.left && s.rating > 0 && (!mvp || s.rating > mvp.rating)) mvp = s;
     if (mvp) mvp.mvp = true;
     return out;
   }
@@ -463,15 +475,45 @@ export class Match {
     for (let id = 0; id < MAX_PLAYERS; id++) {
       const p = players[id] ?? null;
       const m = this.players[id] ?? null;
-      if ((m?.state ?? null) === p) continue;
+      if ((m?.state ?? null) === p) {
+        // who they are can be known only after they joined (the room sets identityOf after a Match is made)
+        if (m && m.identity === null && this.identityOf && !m.isBot) m.identity = this.identityOf(id);
+        continue;
+      }
       if (m) {
         m.left = true;
         if (this.phase === MatchPhase.InProgress) this.departed.push(m);
       }
-      this.players[id] = p ? new MatchPlayer(id, this.joins++, p, this.tick) : null;
+      const next = p ? new MatchPlayer(id, this.joins++, p, this.tick) : null;
+      if (next && !next.isBot) {
+        next.identity = this.identityOf?.(id) ?? null;
+        if (this.phase === MatchPhase.InProgress) this.carryOver(next);
+      }
+      this.players[id] = next;
       // team modes: a newcomer (bots too) is dealt onto a team at once
       if (p && this.teams > 0 && (p.team < 0 || p.team >= this.teams)) p.team = this.pickTeam(p);
     }
+  }
+
+  /** A player back in the match they left: their departed row's numbers (and team) carry on in this one. */
+  private carryOver(m: MatchPlayer): void {
+    if (m.identity === null) return;
+    const i = this.departed.findIndex((d) => !d.isBot && d.identity === m.identity);
+    if (i < 0) return;
+    const d = this.departed.splice(i, 1)[0]!;
+    m.score = d.score;
+    m.kills = d.kills;
+    m.deaths = d.deaths;
+    m.suicides = d.suicides;
+    m.assists = d.assists;
+    m.damageDealt = d.damageDealt;
+    m.damageTaken = d.damageTaken;
+    m.headshots = d.headshots;
+    m.bestStreak = d.bestStreak;
+    m.scoreTick = d.scoreTick;
+    m.state.kills = d.kills;
+    m.state.deaths = d.deaths;
+    if (this.teams > 0 && d.state.team >= 0 && d.state.team < this.teams) m.state.team = d.state.team;
   }
 
   private freeze(inputs: ReadonlyArray<Readonly<Input> | undefined>): ReadonlyArray<Input | undefined> {

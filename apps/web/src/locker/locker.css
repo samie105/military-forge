@@ -20,6 +20,12 @@
 :where(.mf-gear-fit) .mm-header { grid-area: head; gap: var(--sp-5); }
 :where(.mf-gear-fit) .mm-status { font-size: var(--fs-14); color: var(--c-muted); white-space: nowrap; }
 :where(.mf-gear-fit) .mm-tabs { grid-area: tabs; position: relative; align-self: center; flex-wrap: wrap; margin-left: 0; }
+/* tighter tabs, so all eight keep one row beside the title at 1800 design px (1440×900); audit 28 Oct */
+:where(.mf-gear-fit) .mm-tabs { gap: 0; }
+html:not(.mf-phone) :where(.mf-gear-fit) .mm-tabs { flex-wrap: nowrap; }
+/* the head's decorative serial gives the tabs its room (the eight of them didn't fit one row at 1800) */
+:where(.mf-gear-fit) .menu-top .serial { display: none; }
+:where(.mf-gear-fit) .mm-tabs .tab { padding-inline: var(--sp-3); }
 :where(.mf-gear-fit) .mm-tabs .m-p5 { bottom: -8px; height: 4px; background: var(--c-volt); border-radius: var(--r-pill); }
 :where(.mf-gear-fit) .mm-stage { grid-area: stage; min-width: 0; min-height: 0; }
 :where(.mf-gear-fit) .mm-stage .brackets { inset: 20px 80px 150px; }
@@ -113,7 +119,8 @@ html.mf-short:where(:not(.mf-phone)) :where(.mf-gear-fit) .menu-top { height: 88
 
 /* the character creator's way in (#/creator): the stage's top-right corner */
 :where(.mf-gear-fit) .mf-lk__creator { position: absolute; right: 20px; top: 30px; z-index: 2; }
-:where(html.mf-phone) :where(.mf-gear-fit) .mf-lk__creator { right: 6px; top: 6px; min-height: 48px; padding: 0 var(--sp-3); font-size: var(--fs-14); white-space: nowrap; }
+/* across the stage's top, never wider than it (audit 28 Oct: it ran past the stage's left edge) */
+:where(html.mf-phone) :where(.mf-gear-fit) .mf-lk__creator { left: 6px; right: 6px; top: 6px; min-height: 48px; padding: 0 var(--sp-2); gap: 6px; font-size: 13px; font-stretch: 100%; letter-spacing: .02em; white-space: nowrap; overflow: hidden; }
 
 /* a short landscape window (an iPhone in Safari, its bars showing: about 300 px): the section's title
    repeats the tab, so it goes, and the tiles get the room; a full row shows above Wear it */
@@ -134,3 +141,7 @@ html.mf-short:where(:not(.mf-phone)) :where(.mf-gear-fit) .menu-top { height: 88
 /* the Store: its header button, and "Get it in the Store" after a locked store item's detail */
 :where(.mf-gear-fit) .mf-lk__store { margin-left: auto; }
 :where(.mf-gear-fit) .mf-lk__get { margin-left: var(--sp-2); vertical-align: middle; }
+
+/* each item's own picture (audit 28 Oct; the creator's P1-8): the soldier wearing it, in the tile's art box */
+:where(.mf-gear-fit) .mf-item__glyph.has-thumb { position: relative; padding: 0; overflow: hidden; }
+:where(.mf-gear-fit) .mf-item__thumb { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 20%; display: block; }

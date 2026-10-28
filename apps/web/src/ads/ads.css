@@ -16,7 +16,7 @@
 .mf-adtoast::before{ content:""; display:inline-block; width:8px; height:8px; margin-right:var(--sp-2); border-radius:50%; background:var(--c-volt); vertical-align:1px; }
 /* phones: under the clock, a little smaller */
 html[data-touch-controls] .mf-adtoast{ top:calc(var(--safe-t) + 64px); font-size:var(--fs-14); }
-@media (prefers-reduced-motion: reduce){ .mf-adtoast, .mf-adtoast.is-on{ transform:translate(-50%, 0); transition:opacity var(--m-fast) linear, visibility 0s linear var(--m-fast); } }
+html.reduce-motion :is(.mf-adtoast, .mf-adtoast.is-on){ transform:translate(-50%, 0); transition:opacity var(--m-fast) linear, visibility 0s linear var(--m-fast); }
 
 /* ---- "Saved ads": cards the player chose to keep (results screen, Home) ---- */
 .mf-saved{ display:flex; flex-direction:column; gap:var(--sp-2); padding:var(--sp-3) var(--sp-4) var(--sp-4); }

@@ -238,9 +238,9 @@ export function setTouchSettings(patch: Partial<TouchSettings>): void {
   sync();
 }
 
-/** Camera shake (Settings → Touch): the 3D view's, on touch devices only (the desktop keeps its own). */
+/** Camera shake (Settings → Touch on a phone, Accessibility on desktop): the 3D view's, on every device. */
 function applyShake(): void {
-  if (deps && isTouchDevice()) deps.view3d?.setShakeScale?.(settings.shake);
+  deps?.view3d?.setShakeScale?.(settings.shake);
 }
 
 /**

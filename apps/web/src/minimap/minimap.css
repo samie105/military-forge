@@ -124,3 +124,6 @@ html.reduce-motion .mf-mm, html.reduce-motion .mf-mm--big { transition: none; an
 html.mf-mm-feed #hud .ph .pt-feed { top: var(--mm-feed-top); left: var(--mm-feed-left); }
 html[data-touch-controls] .mf-mm__lg:is(.mf-mm__lg--ally, .mf-mm__lg--gun, .mf-mm__lg--item, .mf-mm__lg--slab, .mf-mm__lg--updraft, .mf-mm__lg--thin) { display: none; }
 html.mf-mm-feed #hud .ph .phud-admin { top: calc(var(--mm-feed-top) + 30px); left: calc(var(--mm-feed-left) + 4px); }
+
+/* desktop: the HUD's top-left pills (fps, connection, Tuned by host) start under the minimap (minimap.ts clearHud) */
+html.mf-mm-desk #hud .hud-tl { top: max(calc(var(--hud-m) + var(--safe-t)), calc(var(--mm-desk-clear, 0px) + 10px)); }

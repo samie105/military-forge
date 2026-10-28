@@ -52,20 +52,20 @@ const account = (over = {}) => ({
 });
 const view = (over) => ({ enabled: true, payments: false, mode: null, claim: { until: null }, currency: { name: 'Brass', walletCap: 20000 }, bundles, account: account(), ...over });
 const STATES = {
-  gift: view({ items: [item('skin_k47_galaxy_relic', 'Galaxy Relic', 'forged'), item('skin_k47_galaxy_relic_fx', 'Galaxy Relic + Stardust', 'forged_kill_effect', { claimable: true })] }),
+  gift: view({ items: [item('skin_k47_galaxy_relic', 'Galaxy Relic', 'forged'), item('skin_k47_galaxy_relic_fx', 'Galaxy Relic + Stardust Shatter', 'forged_kill_effect', { claimable: true })] }),
   claimed: view({
-    items: [item('skin_k47_galaxy_relic', 'Galaxy Relic', 'forged', { owned: true }), item('skin_k47_galaxy_relic_fx', 'Galaxy Relic + Stardust', 'forged_kill_effect', { owned: true, claimable: true })],
+    items: [item('skin_k47_galaxy_relic', 'Galaxy Relic', 'forged', { owned: true }), item('skin_k47_galaxy_relic_fx', 'Galaxy Relic + Stardust Shatter', 'forged_kill_effect', { owned: true, claimable: true })],
     account: account({ adult: true, owned: ['skin_k47_galaxy_relic_fx'] }),
   }),
   paid: view({
     payments: true, mode: 'test', claim: null,
-    items: [item('skin_k47_galaxy_relic', 'Galaxy Relic', 'forged'), item('skin_k47_galaxy_relic_fx', 'Galaxy Relic + Stardust', 'forged_kill_effect')],
+    items: [item('skin_k47_galaxy_relic', 'Galaxy Relic', 'forged'), item('skin_k47_galaxy_relic_fx', 'Galaxy Relic + Stardust Shatter', 'forged_kill_effect')],
     account: account({ canBuy: true, reason: null, adult: true, balance: { paid: 18_750, earned: 1200, total: 19_950 }, limits: { monthlyCapCents: 10_000, spentCents: 4999, leftCents: 5001, pendingRaise: null, coolOffUntil: null } }),
   }),
   // the widest price: the owner's upgrade, struck through and new
   upgrade: view({
     payments: true, mode: 'live', claim: null,
-    items: [item('skin_k47_galaxy_relic', 'Galaxy Relic', 'forged', { owned: true }), item('skin_k47_galaxy_relic_fx', 'Galaxy Relic + Stardust', 'forged_kill_effect', { price: 1050, upgrade: true })],
+    items: [item('skin_k47_galaxy_relic', 'Galaxy Relic', 'forged', { owned: true }), item('skin_k47_galaxy_relic_fx', 'Galaxy Relic + Stardust Shatter', 'forged_kill_effect', { price: 1050, upgrade: true })],
     account: account({ canBuy: true, reason: null, adult: true, balance: { paid: 1050, earned: 0, total: 1050 }, owned: ['skin_k47_galaxy_relic'], limits: { monthlyCapCents: 10_000, spentCents: 999, leftCents: 9001, pendingRaise: null, coolOffUntil: null } }),
   }),
 };

@@ -26,7 +26,7 @@ import {
 } from '@military-forge/content';
 import { CharacterAssembler, type CharacterInstance } from '../character';
 import { LocalLoadoutStore, accountInventory, ownedOnly, randomLoadout, withDye, withItem, type Inventory, type LoadoutStore } from '../locker/loadouts';
-import { escapeHtml, ic, tileHtml } from '../locker/tiles';
+import { SLOT_GLYPH, THUMB_FOCUS, escapeHtml, ic, tileHtml } from '../locker/tiles';
 import { Turntable, type FocusPreset, type LightPreset } from '../locker/turntable';
 import { startFitting } from '../ui/fit';
 import { moveIndicator } from '../ui/motion';
@@ -65,10 +65,6 @@ export function mountCreatorRoute(container: HTMLElement, options: CreatorOption
 }
 
 const CHANNEL_LABEL: Readonly<Record<DyeChannel, string>> = { primary: 'Main', secondary: 'Trim', accent: 'Accent' };
-const SLOT_GLYPH: Partial<Record<string, string>> = {
-  top: 'shirt', jacket: 'shirt', legs: 'shirt', gloves: 'hand', boots: 'shirt', headgear: 'helmet', eyewear: 'eye', hair: 'user',
-  bodyType: 'user', jetpack: 'backpack', exhaust: 'flame', trail: 'sparkle', accessory: 'star',
-};
 
 function storageOrNull(): Pick<Storage, 'getItem' | 'setItem'> | null {
   try {
@@ -296,7 +292,8 @@ export function mountCreator(container: HTMLElement, options: CreatorOptions = {
       const req: PortraitRequest = { look: withItem(draft, def.slot as LoadoutSlot, def.id), size: 128, pose: HEAD_SLOTS.has(def.slot) ? 'portrait' : 'poster-1' };
       const put = (img: { url: string; fallback?: boolean } | null) => {
         if (!img || img.fallback || !glyph.isConnected) return;
-        glyph.innerHTML = `<img class="mf-item__thumb" src="${img.url}" alt="" draggable="false">`;
+        const y = THUMB_FOCUS[def.slot];
+        glyph.innerHTML = `<img class="mf-item__thumb" src="${img.url}" alt="" draggable="false"${y === undefined ? '' : ` style="object-position:50% ${y}%"`}>`;
         glyph.classList.add('has-thumb');
       };
       const cached = peekPortrait(req);
@@ -356,7 +353,8 @@ export function mountCreator(container: HTMLElement, options: CreatorOptions = {
       (error: unknown) => {
         if (!alive) return;
         saving = false;
-        status.textContent = `Not saved: ${error instanceof Error ? error.message : String(error)}`;
+        console.warn('creator: save failed', error);
+        status.textContent = 'Not saved. Check your connection and try again.';
         render();
       },
     );
@@ -434,7 +432,8 @@ export function mountCreator(container: HTMLElement, options: CreatorOptions = {
       turntable.setCharacter(character);
       overlay.hidden = true;
     } catch (error) {
-      overlay.textContent = `Could not load the soldier: ${error instanceof Error ? error.message : String(error)}`;
+      console.warn('creator: the soldier did not load', error);
+      overlay.textContent = 'Couldn’t load the soldier. Reload the page to try again.';
     }
   })();
 
