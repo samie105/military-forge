@@ -61,7 +61,8 @@ These are **original IPs**. Design them for the core audience (India, Nigeria, S
 | Melee skin | knife, bat, machete, frying pan | |
 | Grenade skin | | |
 | Emotes (6 slots) | dances, taunts, sprays, stickers | |
-| Victory pose / Kill effect / Death effect / Spawn effect | | effects are VFX-budgeted (§7) |
+| Victory pose / Death effect / Spawn effect | | effects are VFX-budgeted (§7) |
+| Kill effect | comes with a gun skin line's top tier (owner, 28 Oct 2026), plays where the victim falls on kills with that gun, seen by everyone | 17 §3.7; budgeted in §7 |
 | Nameplate / Banner / Title / Avatar frame | profile + kill feed | |
 | Voice pack / Lobby music | post-launch | |
 
@@ -153,7 +154,7 @@ Budget per character on screen: ≤ 4k tris, 1–3 draw calls, ≤ 1.5 MB GPU te
 | Effect type | Max particles | Max duration | Rules |
 |---|---|---|---|
 | Jetpack trail | 60 live per player | continuous | must not hide the player or teammates. Low-quality setting = ribbon only |
-| Kill effect | 120 | 1.2 s | spawns at the victim; no screen-filling effects |
+| Kill effect | 80 (+1 draw call) | 1.0 s | plays at the victim on kills with the skinned gun only, inside the body envelope (§1.2), under dropped items, players and tracers; no flash, shake or light past the envelope; a still variant under Reduce flashes/motion (17 §3.7) |
 | Death effect | 80 | 1.5 s | replaces default gore when chosen |
 | Spawn effect | 80 | 0.8 s | |
 | Emote | — | ≤ 4 s | cancellable by any movement |
@@ -178,6 +179,8 @@ Each effect is authored with a **low-quality variant** for the graphics "Low" pr
 5. Items are defined in `content/cosmetics/*.json` (`id`, `slot`, `rarity`, `assets`, `dyeable`, `source`, `releaseSeason`, `tags`).
 6. Store and battle pass reference item ids, so new cosmetics ship as content-only deploys (CDN assets + content.bin) without touching the game server.
 7. **Weapon skins** are items with `slot: "weapon_skin"`, the base `weaponId` and a `tier`; their GLB keeps the base gun's `muzzle`, `offhand` and `eject` nodes within 1 cm (17 §3.3).
+   - **Forged (blueprint) skins reshape parts** (receiver, stock, handguard, muzzle device, magazine, grip, charm), authored per slot and merged into one GLB. `tools/asset-check --kind weapon --blueprint-of <base.glb>` adds the 17 §3.6 checks: length and height ±3%, side-silhouette IoU ≥ 0.85 at gameplay zoom, `mag` within 2 cm, moving parts unchanged, no part over the head at any aim pose, glow only on allowed areas.
+   - **Kill effects** live in `content/cosmetics/kill-effects.json` (id, flipbook atlas, dissolve params, still variant, sound) and are checked against the §7 row; a skin's top tier names one (`killEffect`).
 8. **Forge looks are not content items:** they're player data (a `ForgeLook` JSON per slot), validated by the API and an isolated render worker, and reviewed when they carry uploads or a new name (17 §4.3–4.4). The Forge part library is content, built and checked like any part.
 
 ---

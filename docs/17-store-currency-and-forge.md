@@ -8,6 +8,10 @@
 > - **No paid random packs. No player code is ever executed. No real gun trademarks.**
 >
 > And the first thing to try: "let's try a gun skin to see if we can, a nice k-47 that looks fictionistic and magical" (owner, 28 Oct 2026).
+>
+> Later the same day, after the first K-47 mock-ups:
+> - **Paid skins can reshape the gun, blueprint style:** "maybe the gun look changes but it's the same gun you know how cod does it". Floating particles and smoke around the gun were "too much"; glow stays subtle (seams, a magazine window). Rules in §3.6.
+> - **Kill effects everyone sees:** "when they kill someone the kill animation too so everyone can see". A skin line's top tier carries a kill effect that plays where the victim falls. Rules in §3.7.
 
 This doc is the spec for all of that. It replaces the two-currency plan (Coins + Gems) in the old 01 §10. **Cosmetics never change stats** (01 §2 pillar 3, 03 §1, 04 §1) is unchanged; this doc adds the rules that keep *looks* fair too.
 
@@ -141,8 +145,8 @@ There is no "spend more" nudging: no fake timers, no "only N left" on items that
 
 | Product | Price (draft) | Where it comes from | Notes |
 |---|---|---|---|
-| **Gun skins** on the skin-line guns (§3.2) | Wrap 250 · Skin 500 · Forged 1,050 | store rotation and bundles | §3.3 tiers; all pass §3.4 |
-| **Character looks**: outfits, headgear, jetpacks + trails, backpacks, emotes, victory poses, kill/death/spawn effects, nameplates, banners | 250–1,050 per item, sets as bundles | store | 04 §3 slots, 04 §7 VFX budgets, §3.4 |
+| **Gun skins** on the skin-line guns (§3.2) | Wrap 250 · Skin 500 · Forged 1,050 · **Forged + kill effect 2,200** (1,050 to add the effect to a Forged skin you own) | store rotation and bundles | §3.3 tiers; Forged reshapes the gun (§3.6); the top tier adds a kill effect (§3.7); all pass §3.4 |
+| **Character looks**: outfits, headgear, jetpacks + trails, backpacks, emotes, victory poses, death and spawn effects, nameplates, banners (kill effects come with gun skin lines, §3.7) | 250–1,050 per item, sets as bundles | store | 04 §3 slots, 04 §7 VFX budgets, §3.4 |
 | **Named characters** sold in the store (04 §2, e.g. Boomer) | 1,050 | store | presets only, no gameplay difference |
 | **Battle pass** (8–10 weeks) | premium 1,050 | season | **free track for everyone** (cosmetics + ~250 Brass); premium track ~70 tiers; retroactive unlocks on a late purchase (01 §9) |
 | **Founder's Pack** | ~$2.99, money only, launch season only | store | a cosmetic set + a profile badge + **1 extra Forge slot** (§4.6). Never sold again |
@@ -177,9 +181,10 @@ Unsold guns still get **free mastery skins** (04 §3 "universal wraps" apply to 
 |---|---|---|---|
 | **Wrap** | the material only: albedo pattern, dye channels, finish (matte, satin, metal, anodised) on the base mesh | mesh, FX | cheap (04 §3) |
 | **Skin** | the texture + dye mask of the base mesh, plus up to 2 decals and a charm | silhouette, nodes, FX | medium |
-| **Forged** | a kitbash from the gun's part library (§4.2) within the silhouette box, emissive strips and a small idle FX within the FX budget, a custom inspect animation, a reload *sound timbre* | muzzle flash shape/size, tracer shape/brightness, fire loudness, reload duration, kill-feed icon | high; the K-47 pilot's "fictionistic and magical" line is Forged |
+| **Forged** (blueprint) | **reshaped parts**, blueprint style: receiver, stock, handguard/barrel shroud, muzzle device, magazine, grip and charm swapped for the line's own (§3.6), inside the base gun's footprint; subtle glow on seams and a magazine window; a custom inspect animation; a reload *sound timbre* | the gun's size and footprint, muzzle, grip and magazine positions, sight read, muzzle flash, tracer shape/brightness, fire loudness, sound and animation timing, kill-feed icon; **no particles or smoke around the gun** | high; the K-47 pilot's "fictionistic and magical" line is Forged |
+| **Forged + kill effect** | everything in Forged, plus the line's **kill effect** (§3.7) on kills with that gun | everything above; the §3.7 limits | Forged + one effect; sold as the line's premium bundle, never on its own |
 
-A skin is content: an item in `content/cosmetics/*.json` with `slot: "weapon_skin"`, the base `weaponId`, `tier`, and its assets, shipped as a content-only deploy (04 §8.6). Its GLB passes `tools/asset-check --kind weapon` against the base gun's nodes (`muzzle`, `offhand`, `eject`: same positions, ≤ 1 cm off).
+A skin is content: an item in `content/cosmetics/*.json` with `slot: "weapon_skin"`, the base `weaponId`, `tier`, and its assets, shipped as a content-only deploy (04 §8.6). Its GLB passes `tools/asset-check --kind weapon` against the base gun's nodes (`muzzle`, `offhand`, `eject`: same positions, ≤ 1 cm off), and a Forged skin also passes the blueprint checks (§3.6, `--blueprint-of`). A kill-effect tier names its effect (`killEffect`, an id in `content/cosmetics/kill-effects.json`).
 
 ### 3.4 The visual-advantage review checklist
 
@@ -188,18 +193,18 @@ Every paid skin, character look and Forge look passes this before it can be sold
 | # | Check | Pass rule | How |
 |---|---|---|---|
 | V1 | **Stats** | the item has no stat fields; the sim build has no cosmetic imports (dependency lint, 13 #003) | Automated |
-| V2 | **Weapon silhouette** | the gun's mesh stays inside the base gun's bounding box +5% on every axis, and fills ≥ 90% of it; the muzzle node is where the base's is (an enemy sees a K-47 as a K-47, and a longer barrel can't poke past cover first) | Automated (`asset-check`) |
+| V2 | **Weapon silhouette** | the gun's mesh stays inside the base gun's bounding box +5% on every axis, and fills ≥ 90% of it; the muzzle node is where the base's is (an enemy sees a K-47 as a K-47, and a longer barrel can't poke past cover first). Forged (reshaped) guns meet the tighter §3.6 footprint | Automated (`asset-check`) |
 | V3 | **Character silhouette** | the 04 §1.2 envelope and locality rules; no shrinking | Automated |
 | V4 | **Muzzle flash** | the base gun's flash shape, scale, light radius and duration. **Hue only** may change, within the allowed set (V7) | Automated (FX params are not in the skin schema) |
 | V5 | **Tracers** | the base tracer's width, length, speed and **luminance ±10%**; hue within the allowed set. A dimmer tracer hides the shooter; a brighter or wider one blinds the target | Automated |
 | V6 | **Sight clutter** | the reticle, zoom view, sniper aim line (03 §5) and HUD can't be skinned. Gun parts can't sit in the line from the shoulder to the reticle at any zoom | Automated (no schema field) + Human |
 | V7 | **Reserved colours** | no emissive, tracer or flash hue within ΔE 15 of the team colours, the player's enemy-highlight options, the low-HP and damage cues, pickup glow, grenade warnings, EMP and storm colours | Automated |
 | V8 | **Dark looks** | the 04 §8 readability lint against every map palette, run on the **worst-case dye** the player could pick, not just the default. No all-black or near-background combinations | Automated |
-| V9 | **Glow** | emissive area ≤ 15% of the gun's (or 10% of the soldier's) screen area at 1× zoom; intensity capped below the bloom threshold that would wash out a nearby soldier; never *less* visible than the base | Automated |
+| V9 | **Glow** | emissive area ≤ 15% of the gun's (or 10% of the soldier's) screen area at 1× zoom, on seams, glyphs and magazine windows only; intensity capped below the bloom threshold that would wash out a nearby soldier; never *less* visible than the base. **No particles, smoke or shimmer around a gun** (owner, 28 Oct) | Automated |
 | V10 | **Camouflage** | no pattern that matches a map palette (foliage greens on Outpost's bushes, snow whites on Snowblind) | Automated per map + Human |
 | V11 | **Sound parity** | fire, reload and footstep timbres within **±1 LU** of the base's loudness, the same frequency band and tail length, and still identifiable as that gun by ear | Automated (loudness/band) + Human (identity) |
 | V12 | **Animation timing** | reload, swap and inspect animations last exactly the sim's time; recoil kick and camera shake are the base gun's | Automated |
-| V13 | **Kill and death effects** | 04 §7 budgets; never hide the victim's drop, loot or a teammate; never look like a hit marker or a damage arc | Human |
+| V13 | **Kill and death effects** | the §3.7 limits and 04 §7 budgets: ≤ 1 s, inside the victim's body envelope, drawn under the dropped weapon, pickups, players and tracers; no full-screen flash, no light past the envelope, no shake; a Reduce flashes / Reduce motion fallback; never looks like a hit marker or a damage arc | Automated (size, time, budget, draw order) + Human |
 | V14 | **Kill feed** | the kill feed always shows the base gun's icon | Automated |
 | V15 | **Live parity** | after release, the K/D and win rate of owners vs non-owners of the same skill band (16 metrics). A gap above 3% for two weeks reopens the review | Telemetry |
 
@@ -219,6 +224,80 @@ Other games are named here only as cited research (01 §12 keeps their names out
 | Fortnite, "Superhero" custom skins (2021) | a player-coloured all-black variant hid in bushes; Epic changed it, then disabled it ([The Loadout](https://www.theloadout.com/fortnite/superhero-skin-nerf), [GGRecon history](https://www.ggrecon.com/articles/pay-to-win-cosmetics-in-fortnite/)) | V8 on the **worst-case dye**: player-picked colours are the risk in the Forge |
 | Valorant's skin rules | Riot keeps the base muzzle flash shape and scale, matches the base silhouette and screen size, keeps sounds no louder or quieter, and lets cosmetic sound yield to gameplay cues ([Riot dev blog](https://playvalorant.com/en-us/news/dev/the-craft-and-fantasy-of-valorant-weapon-skins)) | V2, V4, V11: the model we follow |
 | Valorant, a Vandal skin with a longer muzzle | players reported its barrel showed around corners before the base gun's would ([Gfinity](https://www.gfinityesports.com/article/valorant-players-report-new-vandal-skin-is-causing-them-to-die-pc)) | V2: the muzzle node stays put |
+| Valorant, the Xenohunter Phantom | players said a radar part on the gun model blocked important angles ([ONE Esports](https://www.oneesports.gg/valorant/xenohunter-phantom-blocks-enemies/)) | §3.6: a reshaped part never grows past the base footprint or over the soldier's head |
+| Call of Duty: MW3, bundle death effects (2024) | paid weapon bundles come with death effects; players said one comic-book blurb could be heard "across the map" and that effects blocked the screen, and asked for an off switch ([Dexerto](https://www.dexerto.com/call-of-duty/mw3-players-divided-over-obnoxious-death-effect-animations-2567127/)) | §3.7: inside the body envelope, ≤ 1 s, no louder than the base death sound, a "Show others' kill effects" setting |
+| Valorant, Finisher Cam (Patch 10.11, June 2025) | Riot added a camera for deaths by finisher guns to "help combat visual clutter" and photosensitivity concerns ([patch notes](https://playvalorant.com/en-us/news/game-updates/valorant-patch-notes-10-11)); players had asked for a way to turn skin effects off ([Ask VALORANT #4](https://playvalorant.com/en-us/news/dev/ask-valorant-4)) | §3.7: no full-screen effect, the Reduce flashes fallback, the death cam shows the effect without zooming into it |
+| Call of Duty, finishing moves | executions are long, can't be cancelled and leave the attacker exposed; players asked to cancel them ([Charlie Intel](https://www.charlieintel.com/black-ops-cold-war/black-ops-cold-war-players-call-for-the-ability-to-cancel-finishing-moves-105588/)) | §3.7: no finishing moves or animation locks: a kill effect never takes control of either player |
+| Fortnite, elimination effects | we found no documented complaints; its weapon wraps are material swaps, and elimination effects are a creator tool in custom islands, not a sold cosmetic in the core modes ([UEFN device](https://uefncentral.com/fr/verse-library/manager_eliminations)) *(single secondary source)* | — |
+| Call of Duty: MW3, the Gaia operator | pulled from sale for a time to make it easier to see after complaints ([Hitmarker](https://hitmarker.net/news/modern-warfare-3s-notorious-groot-skin-is-being-removed-temporarily-513794)) | V8, V10 |
+
+### 3.6 Blueprint skins: reshaped parts, the same gun
+
+A Forged skin may **change the gun's parts**, not just repaint them: a carved receiver, a skeleton stock, a sculpted barrel shroud, a new muzzle device, a restyled magazine. It's still the same gun: same stats, same size, and an enemy still reads a K-47 at a glance.
+
+**What can be swapped** (the blueprint slots; the same slots the Forge uses, §4.2):
+
+| Slot | Can be | Must keep |
+|---|---|---|
+| `receiver` | reshaped and re-detailed | the grip origin, the `eject` node (≤ 1 cm), the moving parts' names and motion (`part_bolt`, `part_slide`, … with the same `axis` and `travel`) |
+| `stock` | any shape | inside the base stock's box ±10%; never past the base's rear end |
+| `handguard` (incl. barrel shroud) | any shape | the `offhand` node (≤ 1 cm); the barrel line |
+| `muzzle` device | any shape | the `muzzle` node exactly (≤ 1 cm); no longer than the base muzzle device; never shaped like a suppressor on a gun that isn't one, or a brake that looks like a launcher |
+| `mag` | restyled, with an optional glowing window | the `mag` node (≤ 2 cm) and the base magazine's type and box ±10% (a box stays a box: a drum on a 35-round rifle would misread its ammo) |
+| `grip` | any shape | the grip origin (the attach point) |
+| `charm` | any small hanging piece | ≤ 6 cm, below the barrel line |
+
+**The footprint rules** (stricter than V2, because the shape changes):
+- **Length and height** of the assembled gun: the base's ±3%. Depth (toward the camera): ≤ +10%. Our camera sees the gun from the side, so the side outline is what matters.
+- **Side silhouette:** rendered at 1× gameplay zoom against the base, the outlines overlap ≥ 85% (IoU). A K-47 still reads as a rifle, never as a sniper, launcher or SMG.
+- **No part over the soldier:** at every aim pose (−90° to +90°), no part covers the head or crosses the shoulder-to-reticle line (V6). That's where a tall radar-style part blocks the view (§3.5).
+- **Sights:** a blueprint may add a sight-looking part, flat to the receiver, but **nothing reads clearer than the base gun**: no lens glow, glint, laser, red dot that projects, or forward light. Our aim is the world-space reticle and the zoom (03 §10), which skins never touch, and the sniper's aim line is never skinnable.
+- **Sound and timing:** the same fire, reload and bolt timings (V12) and loudness (V11). A new magazine shape changes the reload *look*, never its length or its sound cues.
+- **Muzzle flash and tracer:** the base's (V4, V5); hue only.
+- **Glow:** subtle only: seams, glyphs, a magazine window (V9). **No floating particles, smoke, embers or shimmer** around the gun (owner, 28 Oct: "too much").
+- **Dropped and slung guns:** a gun on the floor (a crate, a drop, BR loot) always draws the **base** look, so a skin can't disguise a pickup. Slung on the back (04 §9.3) it keeps the skin, inside the same footprint.
+
+**Content pipeline (04 §8):**
+- Blueprint parts are authored in Blender per gun and slot, in the weapon frame (04 §9.4), sharing the gun's one material and atlas. Extras: `weaponId`, `blueprintSlot`, and on moving parts the base's `axis`/`travel`/`cutClean`.
+- A Forged skin ships as **one assembled GLB** (the pipeline merges its parts), so the renderer still draws one mesh and one draw call per gun.
+- `tools/asset-check --kind weapon --blueprint-of <base.glb>` adds the blueprint checks: footprint ±3%, the side-silhouette IoU render, node tolerances (`muzzle`, `offhand`, `eject` ≤ 1 cm, `mag` ≤ 2 cm, grip origin exact), moving-part names and motion unchanged, the no-part-over-the-head sweep over the aim poses, ≤ 1,000 triangles assembled, one material, ≤ 256² texture, the emissive mask only on the allowed areas. It exits 1 on any FAIL, like every other check.
+- The readability lint (04 §8.4) renders the reshaped gun in a soldier's hands over every map palette.
+
+### 3.7 Kill effects (everyone sees them)
+
+A skin line's premium tier carries a **kill effect**: when its owner kills someone **with that skinned gun**, the effect plays where the victim falls, for everyone who can see that spot. Example, the K-47 pilot's **Void Nebula**: the body dissolves into stardust in 0.8 s.
+
+| Rule | |
+|---|---|
+| **Trigger** | the kill event's weapon is the skinned gun, and the killer has that line's kill-effect tier equipped on it. Every other kill (another gun, grenades, melee, blasts, the void, a fall, a suicide, a team kill) plays the default death. In battle royale it plays on the elimination, not on a knock |
+| **Who sees it** | everyone whose view contains the spot: the killer, the victim (in the death cam), both teams, spectators and killcams. It's part of the world, not a screen effect |
+| **Duration** | ≤ **1.0 s**, starting on the kill event: nothing waits for it |
+| **Size** | inside the victim's **body envelope** (04 §1.2, the base body box +10%). It replaces the ragdoll's visuals; it never spreads past the envelope |
+| **Draw order** | under the dropped weapon, pickups, loot, players (incl. teammates), tracers, nameplates and the HUD. Those always draw on top, at full brightness |
+| **Light and flash** | no full-screen flash, no camera shake, no post-processing, no light past the envelope, no more than 3 flashes a second (11 §5: the photosensitivity rule), luminance ≤ the victim's lit body |
+| **Sound** | ≤ 1 s, no louder than the base death sound, the same range (not heard further than a normal death), and outside the footstep and jetpack bands so it never masks them |
+| **Information** | it never hides or delays the dropped weapon, the killer's position or tracer, the kill feed (base icon, V14), the respawn timer or a teammate. There is **no finishing move, hit-stop or slow motion**, and neither player loses control |
+| **Death cam** | the victim's death cam (05 §18) follows the killer, so the victim sees the killer's skin and the effect in the world. The camera never cuts to or zooms into the effect |
+| **Accessibility** | under **Reduce flashes** or **Reduce motion** (13 #507) every kill effect plays its **still** variant: the body fades with a flat tint over the same time, no particles, no light. Settings → Effects → **Show other players' kill effects**: On (default) / Off (Off draws the default death for others' kills) |
+| **Teammates** | a teammate's kill effect follows the same limits; the victim's teammates see the same thing as everyone else: where the body fell, the dropped weapon, the killer |
+
+**Wire cost: nothing per kill.**
+- The killer's look already rides in the join ticket, HELLO, SetLook and every ROSTER entry (04 §5.1, 05 §6). Weapon skins join it as **one wire id per skin-line gun** (6 slots, inside the ≤ 31 limit); the skin item says whether it carries an effect (the "+ kill effect" tier is its own wire id, so a player can equip the plain Forged skin and turn the effect off).
+- The EVENT_R kill event already names the weapon (`{ e: 'kill', killer, victim, weapon, … }`, 05 §6.3). The client looks up the killer's skin for that weapon and plays its effect. Replays and killcams do the same from the recorded roster.
+- The game server never knows about effects; it still checks that the killer owns what they wear (`admitLook`).
+
+**Budgets** (per effect; the 04 §7 kill-effect row now matches):
+
+| Budget | Limit |
+|---|---|
+| Particles | ≤ 80, GPU-instanced |
+| Draw calls | ≤ 1 extra (instanced quads from one shared kill-effect atlas); the dissolve runs in the victim's own draw call (a uniform) |
+| Textures | ≤ 256 KB per effect, in the shared atlas |
+| CPU | ≤ 0.05 ms a frame per live effect |
+| Live at once | ≤ 4; a fifth plays the still variant |
+| Low-quality preset | the still variant |
+
+**Pricing:** a kill effect is never sold on its own. It's the top tier of a skin line: **Forged + kill effect 2,200**, or **1,050** to add it to a Forged skin the player already owns (§3.1).
 
 ---
 
@@ -239,7 +318,7 @@ A Forge look is **one JSON document**, validated by a zod schema in `packages/co
   "parts": {                        // slot → part id from the library; omitted = the base part
     "handguard": "k47.handguard.ribbed",
     "stock": "k47.stock.skeleton",
-    "mag": "k47.mag.drum_short",
+    "mag": "k47.mag.ribbed_window",
     "charm": "charm.lantern"
   },
   "finish": { "body": "anodised", "parts": "satin" },
@@ -249,19 +328,19 @@ A Forge look is **one JSON document**, validated by a zod schema in `packages/co
     { "src": "upl:7f3a…",          "anchor": "stock.left",    "scale": 1.0, "rot": 15 }   // an upload (§4.4)
   ],
   "fx": [                           // "magic": total cost ≤ the FX budget (§4.3)
-    { "kind": "emissive_strip", "on": "handguard", "color": "accent", "intensity": 0.6, "pulse": 1.2 },
-    { "kind": "idle_motes",     "on": "muzzle_shroud", "color": "secondary", "rate": 6 }
+    { "kind": "emissive_seam",   "on": "handguard", "color": "accent", "intensity": 0.6, "pulse": 1.2 },
+    { "kind": "emissive_window", "on": "mag",       "color": "secondary", "intensity": 0.4 }
   ]
 }
 ```
 
 - **Only references, never content:** parts, decals and FX are ids from our library, or `upl:` ids of reviewed uploads. No URLs, no shaders, no scripts, no model files, no free-form numbers outside the schema's ranges.
-- **FX kinds** are ours and few: `emissive_strip`, `emissive_glyphs`, `idle_motes`, `heat_shimmer` (idle only), `trail_on_inspect`. Each is a fixed shader path with parameter ranges. Muzzle flash, tracers and sound are not in the schema at all (V4, V5, V11), apart from hue from the allowed set.
+- **FX kinds** are ours and few, and all of them are subtle glow on the gun itself: `emissive_seam`, `emissive_glyphs`, `emissive_window` (a magazine window). Each is a fixed shader path with parameter ranges. **No particles, smoke or shimmer** around a gun (owner, 28 Oct). Muzzle flash, tracers and sound are not in the schema at all (V4, V5, V11), apart from hue from the allowed set. **Kill effects** aren't in a Forge look: they come only with store skin lines (§3.7), so a player can't design one.
 - The renderer draws a look exactly like a store skin: parts merged into the gun's one mesh, dyes through the 04 §5.4 mask, decals into the gun's 256² atlas, so a Forge look costs the same as any other gun on screen.
 
 ### 4.2 The part library
 
-- Per Forge-enabled gun, we author **visual parts** for named slots (`handguard`, `stock`, `mag`, `grip`, `receiver_plate`, `muzzle_shroud`, `charm`) in Blender, each passing `asset-check` against the base gun's box (V2). A part can look like anything that fits the gun's class: it can't make a K-47 look like a sniper or a launcher.
+- Per Forge-enabled gun, we author **visual parts** for the blueprint slots (`receiver`, `stock`, `handguard`, `muzzle`, `mag`, `grip`, `charm`) in Blender, each passing the §3.6 rules. A look can swap any of them; whatever it picks, the assembled gun must pass the §3.6 footprint, silhouette and node checks, which the validator runs on every save. A part can look like anything that fits the gun's class: it can't make a K-47 look like a sniper or a launcher.
 - Parts that look like optics are allowed only flat to the receiver, below the shoulder-to-reticle line (V6), and never imply a zoom the gun doesn't have.
 - The library starts with the **K-47** (~6 options per slot) and grows to the six skin-line guns (§3.2).
 - **Library parts, dyes, finishes and library decals are free** to every player in the Forge. What's sold is the space to keep looks (§4.6), plus Forged store skins (§3.3). Whether premium library parts are ever sold is Q7.
@@ -278,7 +357,8 @@ The API runs the same code the SDK runs, and **only the API's verdict counts**:
    |---|---|
    | Triangles (base + parts) | ≤ 1,000 (04 §9.4) |
    | Decals | ≤ 4, packed into the 256² atlas |
-   | FX points | ≤ 100: `emissive_strip` 20, `emissive_glyphs` 25, `idle_motes` 30, `heat_shimmer` 35, `trail_on_inspect` 15; × intensity |
+   | FX points | ≤ 100: `emissive_seam` 20, `emissive_glyphs` 25, `emissive_window` 15; × intensity |
+   | Footprint | the assembled gun passes §3.6 (length and height ±3%, side-silhouette IoU ≥ 0.85, nodes, no part over the head) |
    | Emissive area | V9 |
 
 4. **Readability:** an isolated render worker (no network, no secrets, the same container pattern as the ads creative pipeline, 14 §3.1) renders the look on the base soldier over every map palette and runs V2, V5, V7, V8, V9, V10 on the **worst case** (darkest dye picks, strongest pulse frame). It returns PASS/FAIL per check with the rendered frames.
@@ -357,8 +437,9 @@ The owner floated a separate playlist for paid and custom looks. Our proposal:
 | | Core playlists and ranked | **Battleground** (optional playlist) |
 |---|---|---|
 | Stats | identical everywhere | identical |
-| Paid skins and Forge looks | shown, at the **standard FX budget** (100 points) | shown at a **showcase budget** (200 points: more glow, motes, inspect trails) |
+| Paid skins and Forge looks | shown, at the **standard FX budget** (100 points) | shown at a **showcase budget** (200 points: brighter seams, more glyphs; still no particles or smoke) |
 | Readability rules (§3.4) | all | all (V7, V8, V9 still bind: the showcase budget is more *flourish*, not less visibility) |
+| Kill effects (§3.7) | on, with the §3.7 limits | the same: the limits don't loosen |
 | Uploaded decals | shown once approved | shown once approved |
 | Local "Plain looks" setting (everyone else's guns drawn as base) | available | available |
 | Modes | all | TDM and FFA on a rotating map, casual XP |
@@ -391,6 +472,8 @@ It costs a playlist's worth of matchmaking population, so it ships **only when t
 8. **No dark patterns**: real money shown next to every price; no fake scarcity or countdowns; no store pushes during a match; spending limits on by default.
 9. **No store for guests or for anyone who hasn't passed the 18+ gate.**
 10. **No random rewards that grant Brass** from ads or anywhere else.
+11. **No kill effect may hide or delay information:** the dropped weapon, the killer's position and tracer, the kill feed, a teammate, the respawn timer. No finishing moves, hit-stop or slow motion (§3.7).
+12. **No reshaped gun may change its footprint or read:** same size, muzzle, grip and magazine positions, sight read, flash, tracer and sound timing as the base (§3.6).
 
 ---
 
@@ -410,6 +493,9 @@ It costs a playlist's worth of matchmaking population, so it ships **only when t
 | Q10 | Monthly spend cap: $100 default / $500 max right? | yes |
 | Q11 | Character looks in the Forge (Forge v2), or guns only? | guns first; characters after the gun review has run a season |
 | Q12 | Founder's Pack: include the extra Forge slot? | yes |
+| Q13 | Kill effects in ranked: shown, or ranked draws default deaths for everyone? | shown, under the §3.7 limits; revisit with the V15 parity data |
+| Q14 | "Show other players' kill effects" default: On, or On with an Off switch only in Settings? | On, with the switch in Settings → Effects |
+| Q15 | Kill effects on the default guns (Hammer, Hawk): sold like the others, or only on guns you pick up? | sold like the others (the defaults are where they'd be seen most) |
 
 ---
 
@@ -417,7 +503,7 @@ It costs a playlist's worth of matchmaking population, so it ships **only when t
 
 | Step | Ships | Gate to the next step |
 |---|---|---|
-| **1. K-47 pilot** (Phase 3, beta) | the ledger, one payment provider (Xsolla), bundles, the store page with money prices and limits, 18+ store gate, **one paid K-47 skin line**: 1 Wrap, 1 Skin, 1 Forged ("fictionistic and magical"), §3.4 V1–V14 automated for weapons, V15 telemetry | ledger reconciles to the cent for 4 weeks; zero V-check failures in the wild; refund rate < 5%; no parity gap (V15) |
+| **1. K-47 pilot** (Phase 3, beta) | the ledger, one payment provider (Xsolla), bundles, the store page with money prices and limits, 18+ store gate, **one paid K-47 skin line**: 1 Wrap, 1 Skin, 1 Forged blueprint ("fictionistic and magical", reshaped parts, §3.6) and its **Void Nebula** kill-effect bundle (§3.7), the blueprint asset checks, §3.4 V1–V14 automated for weapons, V15 telemetry | ledger reconciles to the cent for 4 weeks; zero V-check failures in the wild; refund rate < 5%; no parity gap (V15) |
 | **2. Launch store** (Phase 3–4) | skin lines on Hammer, Hawk, Widow, Breacher, Hornet; character looks; battle pass S1 with the free track; Founder's Pack; regional tiers + Paystack/Flutterwave, UPI | 13 R items for launch |
 | **3. Forge v1** (S2) | K-47 part library, the Forge screen, `forge-sdk`, CLI and MCP server, 1 free slot + slot sales, library-only looks (no uploads) | ≥ 95% of submits validate on first try with the SDK; render worker p95 < 10 s |
 | **4. Forge v1.1** | decal and texture uploads (incl. AI-generated) through the review queue; libraries for the other five guns | review SLA held for 4 weeks; zero F04 looks live |
