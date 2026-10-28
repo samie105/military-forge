@@ -149,6 +149,7 @@ export function sanitizeSettings(raw: unknown, defaults: Settings = DEFAULT_SETT
     textScale: scale,
     doubleTapDash: flag(s.doubleTapDash, defaults.doubleTapDash),
     blood: flag(s.blood, defaults.blood),
+    showKillEffects: flag(s.showKillEffects, defaults.showKillEffects),
     bindings: sanitizeBindings(s.bindings),
     pad: sanitizePadSettings(s.pad),
   };

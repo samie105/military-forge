@@ -14,6 +14,9 @@ Options:
                                 Pass the LOD0 body for every LOD.
     --max-tris N                override the triangle budget
     --max-tex N                 max texture edge in px (default 1024)
+    --blueprint-of <base.glb>   weapon only: a Forged (blueprint) skin of that gun (docs/17 §3.6): its
+                                footprint, side silhouette, nodes, moving parts, head clearance, sights,
+                                forward light and emissive area against the base
     --json <out.json>           also write the report as JSON
 
 Prints a PASS/WARN/FAIL table and exits 1 if anything FAILs (2 if the check itself crashed), so
@@ -133,7 +136,7 @@ class Report:
 # ---------------------------------------------------------------- helpers
 
 def parse_args(argv):
-    args = {"kind": "character", "lod": 0, "base": None, "max_tris": None, "max_tex": 1024, "json": None}
+    args = {"kind": "character", "lod": 0, "base": None, "max_tris": None, "max_tex": 1024, "json": None, "blueprint_of": None}
     files, i = [], 0
     while i < len(argv):
         a = argv[i]
@@ -147,6 +150,9 @@ def parse_args(argv):
         else:
             files.append(a)
             i += 1
+    if args["blueprint_of"] and args["kind"] != "weapon":
+        print("check.py: --blueprint-of needs --kind weapon")
+        sys.exit(2)
     if len(files) != 1 or args["kind"] not in ("character", "part", "weapon", "kit", "clips"):
         print("usage: blender -b --python-exit-code 1 --python check.py -- <file.glb> [--kind character|part|weapon|kit|clips] ...")
         sys.exit(2)
@@ -814,6 +820,197 @@ def check_weapon(r: Report, objs, args):
     check_sockets(r, objs, family, lo, hi, props.get("casings", True))
     if parts:
         check_parts(r, parts, lo, hi, body)
+    if args.get("blueprint_of"):
+        check_blueprint(r, objs, args)
+
+
+# docs/17 §3.6, the blueprint (Forged skin) rules: stricter than V2 because the parts change shape
+BP_SIZE = 0.03         # length and height: the base's ±3%
+BP_DEPTH = 0.10        # depth (toward the camera): at most +10%
+BP_IOU = 0.85          # side silhouettes overlap at least this much
+BP_CELL = 0.005        # m: the silhouette raster (a gun is ~180 px long at 1× gameplay zoom: ~5 mm a pixel)
+BP_NODE_TOL = {"muzzle": 0.01, "offhand": 0.01, "eject": 0.01, "mag": 0.02, "grip": 0.001}
+BP_GLOW_AREA = 0.15    # V9: emissive at most 15 % of the gun's surface
+BP_FRONT = 0.15        # the front 15 % of the gun: no surface there may glow forward (no forward light)
+BP_HEAD_SLACK = 0.005  # m: the skin may sit no deeper in the head than the base, plus this
+SIGHT_WORDS = ("light", "laser", "lens", "scope", "dot", "flashlight", "glint")
+
+
+def _emission_image(o):
+    for m in o.data.materials:
+        if not m or not m.node_tree:
+            continue
+        for n in m.node_tree.nodes:
+            if n.type == "BSDF_PRINCIPLED" and "Emission Color" in n.inputs and n.inputs["Emission Color"].links:
+                src = n.inputs["Emission Color"].links[0].from_node
+                if src.type == "TEX_IMAGE" and src.image:
+                    return src.image, n.inputs["Emission Strength"].default_value
+    return None, 0.0
+
+
+def _tri_samples(meshes):
+    """Per triangle: glTF-frame corners, area, normal, and the emissive value (max luminance of the emissive
+    texture at the corners and the centre), for meshes that carry one."""
+    out = []
+    for o in meshes:
+        img, strength = _emission_image(o)
+        px = _px(img)[..., :3] if img is not None else None
+        me = o.data
+        me.calc_loop_triangles()
+        uv = me.uv_layers.active.data if me.uv_layers.active else None
+        mw = o.matrix_world
+        for t in me.loop_triangles:
+            P = [_gltf(mw @ me.vertices[i].co) for i in t.vertices]
+            n = (P[1] - P[0]).cross(P[2] - P[0])
+            area = n.length / 2
+            glow = 0.0
+            if px is not None and uv is not None and strength > 0:
+                uvs = [uv[li].uv for li in t.loops]
+                uvs.append(sum(uvs, Vector((0, 0))) / 3)
+                h, w = px.shape[:2]
+                for u, v in uvs:
+                    c = px[min(h - 1, max(0, int(v * h))), min(w - 1, max(0, int(u * w)))]
+                    glow = max(glow, float(c @ np.array([0.2126, 0.7152, 0.0722])) * strength)
+            out.append((P, area, n.normalized() if area > 0 else Vector((0, 0, 0)), glow))
+    return out
+
+
+def _side_cells(tris):
+    """The side silhouette (glTF y along the gun, z up) as raster cells of BP_CELL."""
+    cells = set()
+    for a, b, c in tris:
+        pa, pb, pc = (a.y, a.z), (b.y, b.z), (c.y, c.z)
+        x0, x1 = math.floor(min(pa[0], pb[0], pc[0]) / BP_CELL), math.floor(max(pa[0], pb[0], pc[0]) / BP_CELL)
+        y0, y1 = math.floor(min(pa[1], pb[1], pc[1]) / BP_CELL), math.floor(max(pa[1], pb[1], pc[1]) / BP_CELL)
+        den = (pb[1] - pc[1]) * (pa[0] - pc[0]) + (pc[0] - pb[0]) * (pa[1] - pc[1])
+        if abs(den) < 1e-12:
+            continue
+        for cx in range(x0, x1 + 1):
+            for cy in range(y0, y1 + 1):
+                px, py = (cx + 0.5) * BP_CELL, (cy + 0.5) * BP_CELL
+                w1 = ((pb[1] - pc[1]) * (px - pc[0]) + (pc[0] - pb[0]) * (py - pc[1])) / den
+                w2 = ((pc[1] - pa[1]) * (px - pc[0]) + (pa[0] - pc[0]) * (py - pc[1])) / den
+                if w1 >= -1e-6 and w2 >= -1e-6 and w1 + w2 <= 1 + 1e-6:
+                    cells.add((cx, cy))
+    return cells
+
+
+def _head_depth(path):
+    """Deepest a gun's vertex sits inside the Rookie's (and the female body's) head over the gated aim poses
+    (tools/asset-check/head_clearance.py), in metres."""
+    sys.dont_write_bytecode = True  # no __pycache__ next to the tools
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import head_clearance as hc
+    verts = hc.weapon_vertices(path)
+    deepest = 0.0
+    char = REPO / "art/character"
+    for body in [None, char / "rookie_female/rookie_female_body.glb"]:
+        if body is not None and not body.exists():
+            continue
+        head = hc.Head(char, body)
+        for clip in head.clips:
+            if clip.startswith("aim_rifle_") and clip.split("_", 2)[2] in hc.GATED:
+                deepest = max(deepest, head.inside(verts, clip)[1])
+    return deepest
+
+
+def check_blueprint(r: Report, objs, args):
+    """--blueprint-of: a Forged skin against its base gun (docs/17 §3.6, docs/04 §8.7). The skin's own weapon
+    checks have run; these compare it with the base, imported next to it."""
+    skin = [o for o in objs if o.type == "MESH"]
+    base_path = args["blueprint_of"]
+    if not Path(base_path).exists():
+        r.add("FAIL", "blueprint: base file exists", base_path)
+        return
+    base = import_glb(base_path, reset=False)
+    bmeshes = [o for o in base if o.type == "MESH"]
+    sprops = {k: o[k] for o in skin if not o.name.startswith("part_") for k in o.keys() if not k.startswith("_")}
+    bprops = {k: o[k] for o in bmeshes if not o.name.startswith("part_") for k in o.keys() if not k.startswith("_")}
+    same = all(sprops.get(k) == bprops.get(k) for k in ("weaponId", "family", "aimPose", "hands"))
+    r.ok(same, "blueprint: same gun (weaponId/family/aimPose/hands)",
+         f"{sprops.get('weaponId')} skin of {bprops.get('weaponId')}" if same else
+         f"skin {[sprops.get(k) for k in ('weaponId', 'family', 'aimPose', 'hands')]} vs base {[bprops.get(k) for k in ('weaponId', 'family', 'aimPose', 'hands')]}")
+    st = [tuple(_gltf(p) for p in t) for t in world_tris(skin)]
+    bt = [tuple(_gltf(p) for p in t) for t in world_tris(bmeshes)]
+    slo, shi = bbox([p for t in st for p in t])
+    blo, bhi = bbox([p for t in bt for p in t])
+    ss, bs = shi - slo, bhi - blo
+    dl, dh, dd = ss.y / bs.y - 1, ss.z / bs.z - 1, ss.x / bs.x - 1
+    r.ok(abs(dl) <= BP_SIZE and abs(dh) <= BP_SIZE, f"blueprint: length and height within ±{BP_SIZE:.0%}",
+         f"length {ss.y:.3f} vs {bs.y:.3f} m ({dl:+.1%}), height {ss.z:.3f} vs {bs.z:.3f} m ({dh:+.1%})")
+    r.ok(dd <= BP_DEPTH, f"blueprint: depth at most +{BP_DEPTH:.0%}", f"{ss.x:.3f} vs {bs.x:.3f} m ({dd:+.1%})")
+    r.ok(slo.y >= blo.y - BP_SIZE * bs.y, "blueprint: nothing past the base's rear end",
+         f"rear {slo.y:+.3f} vs {blo.y:+.3f} m")
+    a, b = _side_cells(st), _side_cells(bt)
+    iou = len(a & b) / max(1, len(a | b))
+    r.ok(iou >= BP_IOU, f"blueprint: side silhouette IoU ≥ {BP_IOU}", f"{iou:.3f} at {BP_CELL * 1000:.0f} mm cells")
+    # nodes: every base node, at the base's place
+    sn = {o.name.split(".")[0]: o for o in objs if o.type == "EMPTY"}
+    bn = {o.name.split(".")[0]: o for o in base if o.type == "EMPTY"}
+    missing = sorted(set(bn) - set(sn))
+    r.ok(not missing, "blueprint: the base's nodes", ", ".join(sorted(bn)) + (f"; missing {', '.join(missing)}" if missing else ""))
+    for name, tol in BP_NODE_TOL.items():
+        if name in bn and name in sn:
+            d = (sn[name].matrix_world.translation - bn[name].matrix_world.translation).length
+            r.ok(d <= tol, f"blueprint: {name} node within {tol * 100:g} cm", f"{d * 100:.2f} cm off")
+    moved = [k for k in set(bn) & set(sn) if k not in BP_NODE_TOL
+             and (sn[k].matrix_world.translation - bn[k].matrix_world.translation).length > 0.01]
+    r.ok(not moved, "blueprint: other nodes (rails) within 1 cm", "ok" if not moved else "moved: " + ", ".join(sorted(moved)))
+    extra = sorted(k for k in sn if k not in bn and any(w in k.lower() for w in SIGHT_WORDS))
+    r.ok(not extra, "blueprint: no sight, lens or light nodes", "ok" if not extra else ", ".join(extra))
+    # moving parts: the same names and motion
+    sp = {o.name.split(".")[0]: o for o in skin if o.name.startswith("part_")}
+    bp = {o.name.split(".")[0]: o for o in bmeshes if o.name.startswith("part_")}
+    problems = [f"{k} missing" for k in sorted(set(bp) - set(sp))] + [f"{k} not on the base" for k in sorted(set(sp) - set(bp))]
+    for k in sorted(set(sp) & set(bp)):
+        for key in ("axis", "travel", "angle", "lift", "cutClean"):
+            va, vb = sp[k].get(key), bp[k].get(key)
+            va = list(va) if va is not None and hasattr(va, "__len__") else va
+            vb = list(vb) if vb is not None and hasattr(vb, "__len__") else vb
+            if isinstance(va, list) and isinstance(vb, list):
+                ok = len(va) == len(vb) and all(abs(float(x) - float(y)) < 1e-3 for x, y in zip(va, vb))
+            elif isinstance(va, (int, float)) and isinstance(vb, (int, float)):
+                ok = abs(float(va) - float(vb)) < 1e-4
+            else:
+                ok = va == vb
+            if not ok:
+                problems.append(f"{k}.{key} {va} vs {vb}")
+    r.ok(not problems, "blueprint: moving parts and their motion unchanged",
+         ", ".join(sorted(sp)) or "none" if not problems else "; ".join(problems))
+    # glow (V9) and no forward light (§3.6 sights)
+    samples = _tri_samples(skin)
+    total = sum(s[1] for s in samples) or 1.0
+    lit = sum(s[1] for s in samples if s[3] > 0.05)
+    r.ok(lit / total <= BP_GLOW_AREA, f"blueprint: emissive ≤ {BP_GLOW_AREA:.0%} of the surface (V9)", f"{lit / total:.1%}")
+    strengths = [_emission_image(o)[1] for o in skin]
+    r.ok(max(strengths, default=0) <= 1.0, "blueprint: emission strength ≤ 1 (no bloom)", f"{max(strengths, default=0):.2f}")
+    front = shi.y - BP_FRONT * ss.y
+    forward = [s for s in samples if s[3] > 0.05 and s[2].y > 0.7 and min(p.y for p in s[0]) >= front]
+    r.ok(not forward, "blueprint: no forward light (nothing at the front glows toward the muzzle)",
+         "ok" if not forward else f"{len(forward)} glowing triangles face forward in the front {BP_FRONT:.0%}")
+    if lit:
+        de = []
+        for o in skin:
+            img, _ = _emission_image(o)
+            if img is None:
+                continue
+            c = _px(img)[..., :3].reshape(-1, 3)
+            c = c[c.max(1) > 0.2]
+            if len(c):
+                labs = _lab(_to_linear(c))
+                for team, rgb in TEAM_RGB.items():
+                    t = _lab(_to_linear(np.array([[(rgb >> 16 & 255) / 255, (rgb >> 8 & 255) / 255, (rgb & 255) / 255]])))[0]
+                    de.append((team, float(np.percentile(np.linalg.norm(labs - t, axis=1), 2))))
+        worst = min(de, key=lambda d: d[1]) if de else None
+        r.ok(worst is None or worst[1] >= 15, "blueprint: emissive hues ≥ ΔE 15 from the team colours (V7)",
+             "no emissive texels" if worst is None else f"nearest {worst[0]}: ΔE {worst[1]:.0f} (2nd percentile)")
+    # no part over the soldier's head at the aims (§3.6; the Xenohunter rule)
+    try:
+        sd, bd = _head_depth(args["file"]), _head_depth(base_path)
+        r.ok(sd <= max(bd + BP_HEAD_SLACK, 0.02), "blueprint: no deeper in the head than the base (level, ±45° aims)",
+             f"deepest {sd * 100:.1f} cm vs the base's {bd * 100:.1f} cm")
+    except (SystemExit, FileNotFoundError, KeyError) as e:
+        r.add("FAIL", "blueprint: head clearance", f"couldn't run: {e}")
 
 
 PART_KINDS = {"part_slide", "part_pump", "part_bolt", "part_cylinder", "part_mag"}

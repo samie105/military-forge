@@ -4,14 +4,31 @@
  * item has no hitbox, speed, size or loudness fields; test/cosmetics.test.ts enforces that on
  * every item. Loadouts travel as fixed lists of compact wire ids (docs/04 §5.1).
  */
+import weaponSkinsJson from '../cosmetics/weapon-skins.json';
 
 /** Every slot a loadout fills. `dye` items fill the three dye channels instead. `hair` (22 Oct, the female
- *  body) came after the wire form was fixed, so on the wire it follows the dyes (cosmeticLoadoutWireIds). */
+ *  body) came after the wire form was fixed, so on the wire it follows the dyes (cosmeticLoadoutWireIds), and so
+ *  do the weapon skin slots after it (28 Oct): one per gun with a skin line (docs/17 §3.7, WEAPON_SKIN_GUNS). */
 export const LOADOUT_SLOTS = [
   'bodyType', 'skinTone', 'headgear', 'eyewear', 'top', 'gloves', 'legs', 'boots', 'jetpack', 'exhaust', 'trail', 'hair',
+  'skin_k47',
 ] as const;
 export type LoadoutSlot = (typeof LOADOUT_SLOTS)[number];
 export type CosmeticSlot = LoadoutSlot | 'dye';
+
+/** The guns with a paid skin line (docs/17 §3.2: the K-47 pilot first), each with its own loadout slot. */
+export const WEAPON_SKIN_GUNS = ['k47'] as const;
+export type WeaponSkinGun = (typeof WEAPON_SKIN_GUNS)[number];
+export type WeaponSkinSlot = `skin_${WeaponSkinGun}`;
+
+/** A gun's skin slot (`skin_k47`), or null for a gun without a skin line. */
+export function weaponSkinSlot(weaponId: string): WeaponSkinSlot | null {
+  return (WEAPON_SKIN_GUNS as readonly string[]).includes(weaponId) ? (`skin_${weaponId}` as WeaponSkinSlot) : null;
+}
+
+/** docs/17 §3.3: `base` is the gun as it ships (everyone's default); `forged_kill_effect` adds the line's kill effect. */
+export const WEAPON_SKIN_TIERS = ['base', 'wrap', 'skin', 'forged', 'forged_kill_effect'] as const;
+export type WeaponSkinTier = (typeof WEAPON_SKIN_TIERS)[number];
 
 /** Slots filled by a mesh part merged into the character's single skinned mesh (docs/04 §5.3). */
 export const PART_SLOTS = ['headgear', 'eyewear', 'top', 'gloves', 'legs', 'boots', 'jetpack', 'hair'] as const;
@@ -67,6 +84,8 @@ export interface CosmeticAssets {
   /** W8 manifest under /assets/ (cosmetics/<slot>/<id>.json); absent until the art exists. Until then
    *  the client draws a procedural stand-in or the slot's default (docs/04 §5.2: art never blocks play). */
   manifest?: string;
+  /** weapon skins: the gun's GLB under /assets/ (a Forged skin's assembled blueprint, docs/17 §3.6) */
+  model?: string;
 }
 
 export interface CosmeticDef {
@@ -90,6 +109,16 @@ export interface CosmeticDef {
   body?: Body;
   /** parts made for some bodies only (e.g. the female body's hairstyles); absent = every body */
   fits?: readonly Body[];
+  /** weapon skins (cosmetics/weapon-skins.json): the gun it skins, its tier, the tracer's hue (V5: a hue only;
+   *  width, length, speed and brightness stay the base's), the kill effect it carries (cosmetics/kill-effects.json),
+   *  and the items owning it unlocks too (the kill-effect tier includes its plain Forged skin) */
+  weaponId?: string;
+  tier?: WeaponSkinTier;
+  tracerTint?: string;
+  /** the tracer's path line, when the skin gives it its own hue (the bolt keeps `tracerTint`) */
+  tracerTrail?: string;
+  killEffect?: string;
+  includes?: readonly string[];
 }
 
 /** docs/04 §1.2: parts may grow the base body's bounds by at most 10%... */
@@ -126,6 +155,50 @@ function item(
 
 function colours(slot: CosmeticSlot, firstWireId: number, list: readonly [string, string, string, Rarity?, CosmeticSource?][]): CosmeticDef[] {
   return list.map(([id, name, colour, rarity, source], i) => item(firstWireId + i, id, slot, name, rarity ?? 'common', source ?? STARTER, { colour }));
+}
+
+interface WeaponSkinJson {
+  id: string;
+  wireId: number;
+  slot: string;
+  weaponId: string;
+  tier: string;
+  name: string;
+  rarity: string;
+  source: CosmeticSource;
+  assets?: CosmeticAssets;
+  tracerTint?: string;
+  tracerTrail?: string;
+  killEffect?: string;
+  includes?: readonly string[];
+  tags?: readonly string[];
+}
+
+/** weapon-skins.json → items: a `weapon_skin` worn in its gun's slot (`skin_k47`); a malformed entry throws at load. */
+function weaponSkinItems(list: readonly WeaponSkinJson[]): CosmeticDef[] {
+  return list.map((j) => {
+    const slot = weaponSkinSlot(j.weaponId);
+    if (j.slot !== 'weapon_skin' || !slot) throw new Error(`weapon-skins.json: ${j.id} is not a weapon_skin of a skin-line gun`);
+    if (!(WEAPON_SKIN_TIERS as readonly string[]).includes(j.tier)) throw new Error(`weapon-skins.json: ${j.id} has an unknown tier ${j.tier}`);
+    if (!(RARITIES as readonly string[]).includes(j.rarity)) throw new Error(`weapon-skins.json: ${j.id} has an unknown rarity ${j.rarity}`);
+    return {
+      id: j.id,
+      wireId: j.wireId,
+      slot,
+      name: j.name,
+      rarity: j.rarity as Rarity,
+      assets: { ...j.assets },
+      dyeable: false,
+      source: j.source,
+      weaponId: j.weaponId,
+      tier: j.tier as WeaponSkinTier,
+      ...(j.tracerTint ? { tracerTint: j.tracerTint } : {}),
+      ...(j.tracerTrail ? { tracerTrail: j.tracerTrail } : {}),
+      ...(j.killEffect ? { killEffect: j.killEffect } : {}),
+      ...(j.includes ? { includes: j.includes } : {}),
+      ...(j.tags ? { tags: j.tags } : {}),
+    };
+  });
 }
 
 /**
@@ -233,6 +306,9 @@ export const cosmetics: readonly CosmeticDef[] = [
   item(261, 'hair_bun', 'hair', 'Field Bun', 'common', STARTER, { fits: ['female'], art: true }),
   item(262, 'hair_braids', 'hair', 'Cornrow Braids', 'common', STARTER, { fits: ['female'], art: true }),
   item(263, 'hair_crop', 'hair', 'Short Crop', 'uncommon', { kind: 'level', level: 6 }, { fits: ['female'], art: true }),
+
+  // weapon skins (28 Oct, the K-47 pilot of docs/17 §9): content in cosmetics/weapon-skins.json
+  ...weaponSkinItems(weaponSkinsJson.items as unknown as readonly WeaponSkinJson[]),
 ];
 
 const byId = new Map(cosmetics.map((c) => [c.id, c]));
@@ -270,6 +346,7 @@ export const DEFAULT_COSMETIC_LOADOUT: CosmeticLoadout = Object.freeze({
     exhaust: 'exhaust_flame',
     trail: 'trail_ribbon',
     hair: 'hair_body',
+    skin_k47: 'skin_k47_standard',
   }),
   dyes: Object.freeze({ primary: 'dye_sand', secondary: 'dye_olive', accent: 'dye_teal' }),
 });
@@ -312,8 +389,9 @@ const WIRE_ORDER: readonly ({ slot: LoadoutSlot } | { dye: DyeChannel })[] = [
   ...LOADOUT_SLOTS.slice(WIRE_V1_SLOTS).map((slot) => ({ slot })),
 ];
 
-/** Wire form: one u16 per slot of the first form, one per dye channel, then one per later slot (15 ids:
- *  `hair` last). A 14-id loadout from before `hair` still reads: its hair is the body's own. */
+/** Wire form: one u16 per slot of the first form, one per dye channel, then one per later slot (16 ids: `hair`,
+ *  then `skin_k47`). A 14-id loadout from before `hair` still reads (its hair is the body's own), and a 15-id one
+ *  from before the skins draws the guns as they ship; an older peer reads the ids it knows and skips the rest. */
 export function cosmeticLoadoutWireIds(loadout: CosmeticLoadout): number[] {
   return WIRE_ORDER.map((w) => byId.get('slot' in w ? loadout.items[w.slot] : loadout.dyes[w.dye])?.wireId ?? 0);
 }

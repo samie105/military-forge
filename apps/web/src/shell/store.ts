@@ -164,6 +164,8 @@ export interface Settings {
   doubleTapDash: boolean;
   /** blood when soldiers are hit (the 3D view's setBlood); off by default */
   blood: boolean;
+  /** other players' kill effects (docs/17 §3.7: a skin line's stardust); off draws the default death for their kills */
+  showKillEffects: boolean;
   /** every action's keys and mouse buttons (controls.ts) */
   bindings: Bindings;
   /** game controllers: buttons, sticks, triggers, rumble (Settings → Controls → Controller; gamepad/settings.ts) */
@@ -186,6 +188,7 @@ export const DEFAULT_SETTINGS: Settings = {
   textScale: 1,
   doubleTapDash: true,
   blood: false,
+  showKillEffects: true,
   bindings: defaultBindings(),
   pad: DEFAULT_PAD_SETTINGS,
 };

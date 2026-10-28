@@ -36,6 +36,15 @@ describe('loadConfig', () => {
     expect(c.logLevel).toBe('info');
   });
 
+  it('COSMETIC_GRANTS: the owner grants store items to accounts by id; malformed pairs and unknown items refuse to start', () => {
+    expect(loadConfig({}).cosmeticGrants.size).toBe(0);
+    const c = loadConfig({ COSMETIC_GRANTS: 'u_owner:skin_k47_galaxy_relic_fx, u_owner:headgear_combat_helmet,u_dev:skin_k47_galaxy_relic' });
+    expect(c.cosmeticGrants.get('u_owner')).toEqual(['skin_k47_galaxy_relic_fx', 'headgear_combat_helmet']);
+    expect(c.cosmeticGrants.get('u_dev')).toEqual(['skin_k47_galaxy_relic']);
+    expect(issues({ COSMETIC_GRANTS: 'u_owner' })).toEqual(['COSMETIC_GRANTS: "u_owner" is not <accountId>:<itemId>']);
+    expect(issues({ COSMETIC_GRANTS: 'u_owner:skin_nope' })).toEqual(['COSMETIC_GRANTS: "skin_nope" is not a cosmetic item']);
+  });
+
   it('treats empty values (FOO= in a .env file) as unset', () => {
     expect(loadConfig({ DATABASE_URL: '', REDIS_URL: '  ', API_PORT: '' }).db.kind).toBe('pglite');
   });

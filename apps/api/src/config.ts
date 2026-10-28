@@ -6,6 +6,7 @@
  * embedded Postgres (PGlite), an in-memory KV and a dev signing key, so `pnpm dev` and `pnpm test`
  * work without Docker. The full list with examples is in `.env.example`.
  */
+import { getCosmetic } from '@military-forge/content';
 import { normalizeRoomCode } from '@military-forge/shared';
 import { z } from 'zod';
 /** Resend's endpoint (auth/email.ts has the sender); a plain constant, so config stays free of app imports */
@@ -64,6 +65,12 @@ export interface Config {
    * the problem reports players send (GET /v1/admin/reports). null = those routes are off.
    */
   adminToken: string | null;
+  /**
+   * Cosmetics the owner has granted accounts (COSMETIC_GRANTS="<accountId>:<itemId>,..."), until the store and
+   * the inventory exist (docs/17 §9): the only way to unlock a store item such as the K-47 Galaxy Relic. The
+   * loadout check, the join ticket's vouched look and GET /me read it. Empty = none.
+   */
+  cosmeticGrants: ReadonlyMap<string, readonly string[]>;
   /**
    * The game's public address (APP_URL; default: the first CORS origin, or Vite's dev address):
    * the links in account emails open it.
@@ -136,6 +143,7 @@ const EnvSchema = z.object({
   KEEP_ROOMS: list.default([]),
   RESULTS_PUBLIC_KEY: z.string().min(1).optional(),
   ADMIN_TOKEN: z.string().min(16).optional(),
+  COSMETIC_GRANTS: list.default([]),
   APP_URL: z.url({ protocol: /^https?$/, error: 'must be an http(s):// URL' }).optional(),
   EMAIL_PROVIDER: z.enum(['resend', 'log']).optional(),
   EMAIL_API_URL: z.url({ protocol: /^https?$/, error: 'must be an http(s):// URL' }).optional(),
@@ -172,6 +180,13 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     if (code) keepRooms.push(code);
     else issues.push(`KEEP_ROOMS: "${raw}" is not a room code`);
   }
+  const cosmeticGrants = new Map<string, string[]>();
+  for (const raw of e.COSMETIC_GRANTS) {
+    const [user, item, ...rest] = raw.split(':').map((x) => x.trim());
+    if (!user || !item || rest.length) issues.push(`COSMETIC_GRANTS: "${raw}" is not <accountId>:<itemId>`);
+    else if (!getCosmetic(item)) issues.push(`COSMETIC_GRANTS: "${item}" is not a cosmetic item`);
+    else cosmeticGrants.set(user, [...(cosmeticGrants.get(user) ?? []), item]);
+  }
   if (e.EMAIL_PROVIDER === 'resend') {
     if (!e.EMAIL_API_KEY) issues.push('EMAIL_API_KEY: required with EMAIL_PROVIDER=resend');
     if (!e.EMAIL_FROM) issues.push('EMAIL_FROM: required with EMAIL_PROVIDER=resend (e.g. "Military Forge <no-reply@example.com>")');
@@ -206,6 +221,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     keepRooms: [...new Set(keepRooms)],
     resultsPublicKeyPem: e.RESULTS_PUBLIC_KEY?.replaceAll('\\n', '\n') ?? null,
     adminToken: e.ADMIN_TOKEN ?? null,
+    cosmeticGrants,
     appUrl,
     email:
       e.EMAIL_PROVIDER === 'resend'

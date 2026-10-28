@@ -22,6 +22,8 @@ export interface Me {
   nicknameChangeableAt: string | null;
   level: number;
   xp: number;
+  /** cosmetics the owner granted this account (config COSMETIC_GRANTS); absent = none */
+  grants?: string[];
 }
 
 export interface NicknameAvailability {
@@ -37,7 +39,13 @@ export class ProfileService {
     private readonly db: Db,
     readonly policy: NicknamePolicy,
     private readonly now: () => number,
+    private readonly grants: ReadonlyMap<string, readonly string[]> = new Map(),
   ) {}
+
+  /** The cosmetics the owner granted an account (config COSMETIC_GRANTS). */
+  grantsOf(userId: string): readonly string[] {
+    return this.grants.get(userId) ?? [];
+  }
 
   async me(userId: string): Promise<Me | null> {
     const [row] = await this.db
@@ -62,6 +70,7 @@ export class ProfileService {
       nicknameChangeableAt: this.changeableAt(row.nicknameChangedAt)?.toISOString() ?? null,
       level: row.level,
       xp: row.xp,
+      ...(this.grantsOf(row.id).length ? { grants: [...this.grantsOf(row.id)] } : {}),
     };
   }
 

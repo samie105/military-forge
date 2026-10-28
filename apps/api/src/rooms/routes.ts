@@ -90,9 +90,10 @@ export interface JoinTicketClaims extends StandardClaims {
 
 /**
  * The player's saved loadout (slot 0) as a ticket carries it: the guns when they're a pair a player may
- * choose now, and the look held to content and to what a player at `level` owns.
+ * choose now, and the look held to content and to what a player at `level` with the owner's `grants` owns.
+ * The game server admits the ticket's look as vouched, so a granted skin reaches everyone in the room.
  */
-async function savedLoadout(db: Db, userId: string, level: number): Promise<{ guns: [string, string] | null; look: number[] | null }> {
+async function savedLoadout(db: Db, userId: string, level: number, grants: readonly string[]): Promise<{ guns: [string, string] | null; look: number[] | null }> {
   const [row] = await db
     .select({ data: loadouts.data })
     .from(loadouts)
@@ -102,7 +103,7 @@ async function savedLoadout(db: Db, userId: string, level: number): Promise<{ gu
   // content can change after a save (a gun renamed or made melee, an item moved to the store): check again, never trust the row
   return {
     guns: guns && loadoutGunIndices(guns) ? [guns[0], guns[1]] : null,
-    look: look ? cosmeticLoadoutWireIds(allowedLook(sanitizeCosmeticLoadout(look), (def) => cosmeticUnlocked(def, level))) : null,
+    look: look ? cosmeticLoadoutWireIds(allowedLook(sanitizeCosmeticLoadout(look), (def) => cosmeticUnlocked(def, level, grants))) : null,
   };
 }
 
@@ -149,7 +150,7 @@ export function roomRoutes(deps: {
     const me = await profiles.me(userId);
     if (!me) throw new ApiError(401, 'no_session', 'Sign in again');
     const iat = Math.floor(now() / 1000);
-    const { guns, look } = db ? await savedLoadout(db, userId, me.level) : { guns: null, look: null };
+    const { guns, look } = db ? await savedLoadout(db, userId, me.level, profiles.grantsOf(userId)) : { guns: null, look: null };
     const partyId = party ? await party.partyOf(userId) : null;
     const claims: JoinTicketClaims = {
       iss: TICKET_ISSUER,

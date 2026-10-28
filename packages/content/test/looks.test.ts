@@ -33,6 +33,25 @@ describe('who may wear what (cosmeticUnlocked)', () => {
     expect(cosmeticUnlocked(getCosmetic('headgear_combat_helmet')!, 99)).toBe(false); // store
     expect(cosmeticUnlocked(getCosmetic('skin_chrome')!, 99)).toBe(false); // battle pass
   });
+
+  it('store items only by an owner grant; the kill-effect tier includes its plain Forged skin', () => {
+    const plain = getCosmetic('skin_k47_galaxy_relic')!;
+    const fx = getCosmetic('skin_k47_galaxy_relic_fx')!;
+    expect(cosmeticUnlocked(plain, 999)).toBe(false);
+    expect(cosmeticUnlocked(fx, 999, [])).toBe(false);
+    expect(cosmeticUnlocked(plain, 0, ['skin_k47_galaxy_relic'])).toBe(true);
+    expect(cosmeticUnlocked(fx, 0, ['skin_k47_galaxy_relic'])).toBe(false);
+    expect(cosmeticUnlocked(fx, 0, ['skin_k47_galaxy_relic_fx'])).toBe(true);
+    expect(cosmeticUnlocked(plain, 0, ['skin_k47_galaxy_relic_fx'])).toBe(true);
+    expect(cosmeticUnlocked(getCosmetic('skin_k47_standard')!, 0)).toBe(true); // everyone's default
+    expect(cosmeticUnlocked(plain, 0, ['no_such_item'])).toBe(false);
+  });
+
+  it('a look with an ungranted skin plays with the gun as it ships; a vouched (granted) one keeps it', () => {
+    const skinned = look({ skin_k47: 'skin_k47_galaxy_relic_fx' });
+    expect(admitLook(ids(skinned), { level: 99 })!.items.skin_k47).toBe('skin_k47_standard');
+    expect(admitLook(ids(skinned), { level: 0, ids: ids(skinned) })!.items.skin_k47).toBe('skin_k47_galaxy_relic_fx');
+  });
 });
 
 describe('admitLook: a look from the wire, as the game server takes it (v19)', () => {

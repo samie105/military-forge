@@ -1,0 +1,17 @@
+{
+  "$comment": "Kill effects (docs/17 §3.7, docs/04 §7 and §8.7): what plays where a victim falls when the killer's equipped skin line carries one, on kills with that gun. Everyone who can see the spot sees it; it starts on the kill event and nothing waits for it. Limits (test/killEffects.test.ts): durationS ≤ 1.0, particles ≤ 80 (one instanced draw call from the shared atlas), the dissolve runs in the victim's own draw call, everything inside the body envelope (base body box +10%), no light past it and nothing brighter than the victim's lit body (`bodyTint` mixes into the toon colour, it never adds light). `palette`: picked per quad, so a colour listed twice comes up twice as often (the Galaxy Relic's violet, magenta and teal, a touch of gold). `still`: the variant for Reduce flashes, Reduce motion, the Low preset and a fifth effect at once: the body fades with a flat tint over the same time, no particles. `sound`: none yet (the base death sound plays).",
+  "effects": [
+    {
+      "id": "stardust",
+      "name": "Stardust",
+      "durationS": 0.8,
+      "particles": 64,
+      "atlasCell": "star",
+      "palette": ["#7a4dff", "#d05cff", "#7a4dff", "#1f9e8a", "#d05cff", "#1f9e8a", "#e8d08a"],
+      "bodyTint": "#3a2470",
+      "rise": 0.35,
+      "still": { "tint": "#2e2050", "durationS": 0.8 },
+      "sound": null
+    }
+  ]
+}

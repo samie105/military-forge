@@ -29,11 +29,11 @@ import { startFitting } from '../ui/fit';
 import { moveIndicator } from '../ui/motion';
 import { mountSprite } from '../ui/sprite';
 import css from './locker.css?inline';
-import { LocalLoadoutStore, ownedOnly, randomLoadout, starterInventory, withDye, withItem, type Inventory, type LoadoutStore } from './loadouts';
+import { LocalLoadoutStore, accountInventory, ownedOnly, randomLoadout, withDye, withItem, type Inventory, type LoadoutStore } from './loadouts';
 import { escapeHtml, ic, tileHtml } from './tiles';
 import { Turntable, type FocusPreset, type LightPreset } from './turntable';
 
-export { LocalLoadoutStore, ownedOnly, starterInventory, type Inventory, type LoadoutStore } from './loadouts';
+export { LocalLoadoutStore, accountInventory, ownedOnly, starterInventory, type Inventory, type LoadoutStore } from './loadouts';
 export { tileHtml } from './tiles';
 
 export interface LockerOptions {
@@ -74,6 +74,8 @@ const TABS: readonly { id: string; label: string; icon: string; slots: readonly 
   { id: 'jetpack', label: 'Jetpack', icon: 'backpack', slots: [{ slot: 'jetpack', label: 'Jetpack' }, { slot: 'exhaust', label: 'Exhaust' }] },
   { id: 'dyes', label: 'Dyes', icon: 'palette', slots: [{ slot: 'dye', label: 'Dyes' }] },
   { id: 'trail', label: 'Dash trail', icon: 'sparkle', slots: [{ slot: 'trail', label: 'Dash trail' }] },
+  // weapon skins (docs/17 §3.3): one section per gun with a skin line; the stage shows the gun
+  { id: 'skins', label: 'Gun skins', icon: 'rack', slots: [{ slot: 'skin_k47', label: 'K-47' }] },
   // not a look: the two guns you spawn with (the Armory's Equip sets them too)
   { id: 'guns', label: 'Guns', icon: 'rack', slots: [] },
 ];
@@ -81,8 +83,14 @@ const CHANNEL_LABEL: Readonly<Record<DyeChannel, string>> = { primary: 'Main', s
 /** Each slot's glyph on an item without a colour (no item art yet). */
 const SLOT_GLYPH: Partial<Record<CosmeticSlot, string>> = {
   top: 'shirt', legs: 'shirt', gloves: 'hand', boots: 'shirt', headgear: 'helmet', eyewear: 'eye',
-  bodyType: 'user', jetpack: 'backpack', exhaust: 'flame', trail: 'sparkle',
+  bodyType: 'user', jetpack: 'backpack', exhaust: 'flame', trail: 'sparkle', skin_k47: 'rack',
 };
+
+/** The gun the Gun skins tab shows for a look: the K-47 in its skin (the model under /assets/), else as it ships. */
+function skinStageUrl(look: CosmeticLoadout): string {
+  const model = getCosmetic(look.items.skin_k47)?.assets.model ?? 'weapons/k47.glb';
+  return `${import.meta.env.BASE_URL}assets/${model}`;
+}
 
 /** The guns a player may choose, in the game's order. */
 const LOADOUT_GUN_DEFS: readonly WeaponDef[] = weapons.filter((w) => isLoadoutGun(w.id));
@@ -112,7 +120,7 @@ function gunsHtml(pair: readonly [number, number]): string {
 export function mountLocker(container: HTMLElement, options: LockerOptions = {}): LockerHandle {
   const store = options.store ?? new LocalLoadoutStore();
   const guns = options.guns ?? localGunStore();
-  const inventory = options.inventory ?? starterInventory;
+  const inventory = options.inventory ?? accountInventory;
   const assembler = options.assembler ?? new CharacterAssembler();
   mountSprite();
   startFitting();
@@ -208,6 +216,7 @@ export function mountLocker(container: HTMLElement, options: LockerOptions = {})
     const sel = tabBar.querySelector<HTMLElement>('[aria-selected="true"]');
     if (sel) moveIndicator(tabBar.querySelector<HTMLElement>('.m-p5')!, sel.offsetLeft, sel.offsetWidth);
     const t = TABS[tab]!;
+    turntable.setGun(t.id === 'skins' ? skinStageUrl(preview()) : null);
     if (t.id === 'guns') {
       panel.innerHTML = gunsHtml(guns.get());
       renderWear();

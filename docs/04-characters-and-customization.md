@@ -176,9 +176,9 @@ Each effect is authored with a **low-quality variant** for the graphics "Low" pr
    - generates thumbnails (headless render);
    - writes a manifest entry.
 4. **Readability lint:** renders the character silhouette over each map's background palette and computes luminance contrast. It fails below a threshold.
-5. Items are defined in `content/cosmetics/*.json` (`id`, `slot`, `rarity`, `assets`, `dyeable`, `source`, `releaseSeason`, `tags`).
+5. Items are defined in `content/cosmetics/*.json` (`id`, `slot`, `rarity`, `assets`, `dyeable`, `source`, `releaseSeason`, `tags`). Today that's `packages/content/cosmetics/*.json` for weapon skins and kill effects (28 Oct); the older items are still a TypeScript list in `packages/content/src/cosmetics.ts`, with the same fields.
 6. Store and battle pass reference item ids, so new cosmetics ship as content-only deploys (CDN assets + content.bin) without touching the game server.
-7. **Weapon skins** are items with `slot: "weapon_skin"`, the base `weaponId` and a `tier`; their GLB keeps the base gun's `muzzle`, `offhand` and `eject` nodes within 1 cm (17 §3.3).
+7. **Weapon skins** are items with `slot: "weapon_skin"`, the base `weaponId` and a `tier`; their GLB keeps the base gun's `muzzle`, `offhand` and `eject` nodes within 1 cm (17 §3.3). Each is worn in its gun's own loadout slot (`skin_k47`), which rides the look's wire ids after `hair` (16 ids), so every client in a room draws it.
    - **Forged (blueprint) skins reshape parts** (receiver, stock, handguard, muzzle device, magazine, grip, charm), authored per slot and merged into one GLB. `tools/asset-check --kind weapon --blueprint-of <base.glb>` adds the 17 §3.6 checks: length and height ±3%, side-silhouette IoU ≥ 0.85 at gameplay zoom, `mag` within 2 cm, moving parts unchanged, no part over the head at any aim pose, glow only on allowed areas.
    - **Kill effects** live in `content/cosmetics/kill-effects.json` (id, flipbook atlas, dissolve params, still variant, sound) and are checked against the §7 row; a skin's top tier names one (`killEffect`).
 8. **Forge looks are not content items:** they're player data (a `ForgeLook` JSON per slot), validated by the API and an isolated render worker, and reviewed when they carry uploads or a new name (17 §4.3–4.4). The Forge part library is content, built and checked like any part.

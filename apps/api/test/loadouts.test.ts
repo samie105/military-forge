@@ -107,6 +107,36 @@ describe('GET/PUT /me/loadout/:slot', () => {
     expect((await put(s.accessToken, body)).status).toBe(200);
   });
 
+  it('a store skin only with an owner grant (COSMETIC_GRANTS), which GET /me lists; the kill-effect tier includes the plain skin', async () => {
+    const s = await createGuest(api);
+    const body = valid();
+    body.look.items.skin_k47 = 'skin_k47_galaxy_relic_fx';
+    const refused = await put(s.accessToken, body);
+    expect(refused.status).toBe(400);
+    expect((await errorOf(refused)).issues).toEqual([{ path: 'look.items.skin_k47', message: '"skin_k47_galaxy_relic_fx" isn\'t unlocked' }]);
+    expect(await (await api.app.request('/me', { headers: bearer(s.accessToken) })).json()).not.toHaveProperty('grants');
+
+    (api.config.cosmeticGrants as Map<string, string[]>).set(s.user.id, ['skin_k47_galaxy_relic_fx']);
+    try {
+      expect((await put(s.accessToken, body)).status).toBe(200);
+      body.look.items.skin_k47 = 'skin_k47_galaxy_relic';
+      expect((await put(s.accessToken, body)).status).toBe(200);
+      expect(await (await api.app.request('/me', { headers: bearer(s.accessToken) })).json()).toMatchObject({ grants: ['skin_k47_galaxy_relic_fx'] });
+      // another account is not granted
+      expect((await put((await createGuest(api)).accessToken, body)).status).toBe(400);
+    } finally {
+      (api.config.cosmeticGrants as Map<string, string[]>).delete(s.user.id);
+    }
+  });
+
+  it('takes a look saved before the weapon skin slot (it stores the K-47 as it ships)', async () => {
+    const s = await createGuest(api);
+    const body = valid();
+    delete body.look.items.skin_k47;
+    expect((await put(s.accessToken, body)).status).toBe(200);
+    expect(((await (await get(s.accessToken)).json()) as { look: { items: Record<string, string> } }).look.items.skin_k47).toBe('skin_k47_standard');
+  });
+
   it('needs a signed-in player, is rate limited, and goes with the account', async () => {
     expect((await api.app.request('/me/loadout/0')).status).toBe(401);
     const s = await createGuest(api);

@@ -30,13 +30,27 @@ export const MAX_LOOK_IDS = 31;
 /**
  * Whether a player at `level` has an item (docs/06 §7), until the inventory table exists: everyone has
  * the starter items, and a level item once they reach that level. Store, battle-pass, achievement and
- * event items need the inventory, so nobody wears them yet (the Locker shows them locked). The API's
+ * event items need the inventory, so nobody wears them yet (the Locker shows them locked), except what
+ * the owner has granted an account (`grants`: item ids, the API's COSMETIC_GRANTS; an item's `includes`
+ * come with it, so the K-47 Galaxy Relic kill-effect tier unlocks its plain Forged skin too). The API's
  * loadout check and the game server's look check both use this.
  */
-export function cosmeticUnlocked(def: CosmeticDef, level: number): boolean {
+export function cosmeticUnlocked(def: CosmeticDef, level: number, grants?: Iterable<string>): boolean {
   if (def.source.kind === 'starter') return true;
   if (def.source.kind === 'level') return level >= def.source.level;
-  return false;
+  return grants !== undefined && grantedItems(grants).has(def.id);
+}
+
+/** Granted item ids with what each includes (one level: an included item includes nothing further). */
+export function grantedItems(grants: Iterable<string>): ReadonlySet<string> {
+  const out = new Set<string>();
+  for (const id of grants) {
+    const def = getCosmetic(id);
+    if (!def) continue;
+    out.add(id);
+    for (const inc of def.includes ?? []) out.add(inc);
+  }
+  return out;
 }
 
 /** Items anyone can earn by playing (starter and level unlocks): what bots wear. */

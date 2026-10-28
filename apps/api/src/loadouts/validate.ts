@@ -11,7 +11,7 @@ import type { LoadoutData } from '../db/schema';
 const id = z.string().min(1).max(64);
 
 /** Slots added after clients were saving looks: a body without them is still valid, and stores the default. */
-const LATER_SLOTS: ReadonlySet<LoadoutSlot> = new Set(['hair']);
+const LATER_SLOTS: ReadonlySet<LoadoutSlot> = new Set(['hair', 'skin_k47']);
 
 export const LoadoutBody = z.strictObject({
   look: z.strictObject({
@@ -24,11 +24,12 @@ export type LoadoutBody = z.infer<typeof LoadoutBody>;
 
 /**
  * Who owns what, until the inventory table exists (docs/06 §7): content's `cosmeticUnlocked` (starter
- * items for everyone, a level item from its level). The game server holds looks on the wire to the same
- * rule (protocol v19), so a look the API stores is a look a room lets the player wear.
+ * items for everyone, a level item from its level, and what the owner granted the account: config
+ * COSMETIC_GRANTS). The game server holds looks on the wire to the same rule (protocol v19) and takes a
+ * granted item from the join ticket's vouched look, so a look the API stores is a look a room lets the player wear.
  */
-export function owns(def: CosmeticDef, level: number): boolean {
-  return cosmeticUnlocked(def, level);
+export function owns(def: CosmeticDef, level: number, grants: readonly string[] = []): boolean {
+  return cosmeticUnlocked(def, level, grants);
 }
 
 /** The guns a loadout may hold: every weapon but the melee ones. */
@@ -39,14 +40,14 @@ export interface LoadoutIssue {
   message: string;
 }
 
-/** The problems with a loadout (empty = fine to store), for a player at `level`. */
-export function loadoutIssues(body: LoadoutBody, level: number): LoadoutIssue[] {
+/** The problems with a loadout (empty = fine to store), for a player at `level` with the owner's `grants`. */
+export function loadoutIssues(body: LoadoutBody, level: number, grants: readonly string[] = []): LoadoutIssue[] {
   const issues: LoadoutIssue[] = [];
   const cosmetic = (path: string, value: string, slot: CosmeticDef['slot']) => {
     const def = getCosmetic(value);
     if (!def) issues.push({ path, message: `unknown item "${value}"` });
     else if (def.slot !== slot) issues.push({ path, message: `"${value}" is a ${def.slot} item, not ${slot}` });
-    else if (!owns(def, level)) issues.push({ path, message: `"${value}" isn't unlocked` });
+    else if (!owns(def, level, grants)) issues.push({ path, message: `"${value}" isn't unlocked` });
   };
   const items = withDefaults(body);
   for (const slot of LOADOUT_SLOTS) cosmetic(`look.items.${slot}`, items[slot], slot);

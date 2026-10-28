@@ -4,11 +4,12 @@
  * aim), weapons on the hand sockets, the jet flame and a blob shadow (docs/04 §4, docs/11 §2/§4). Any discrete change
  * in the pose eases out instead of popping (inertia.ts).
  */
-import { NO_WEAPON, weapons, type WeaponDef } from '@military-forge/content';
+import { NO_WEAPON, weaponSkinOf, weapons, type CosmeticLoadout, type WeaponDef } from '@military-forge/content';
 import { createRayHit, type CollisionWorld } from '@military-forge/sim';
 import {
   AnimationMixer,
   BoxGeometry,
+  Color,
   ConeGeometry,
   CylinderGeometry,
   DataTexture,
@@ -32,7 +33,7 @@ import type { CharacterInstance, CharacterLod } from './character';
 import { GunParts, cycleByClass, ease, partPose, type GunCycle, type PartPose } from './gunParts';
 import { AimClips, HOLDS, holdFamily, type AimPose, type HoldProfile } from './holds';
 import { KICK_MAX, recoilOf } from './recoil';
-import { DEFAULT_OFFHAND, bakeGltfMesh, loadWeaponModels, type GltfSource, type GunMaterials, type WeaponModel } from './weaponModels';
+import { DEFAULT_OFFHAND, SKIN_GLOW, bakeGltfMesh, loadSockets, loadWeaponModels, weaponFromGltf, type GltfSource, type GunMaterials, type WeaponModel, type WeaponSockets } from './weaponModels';
 import { orientSocket, rotateWorld, solveTwoBone } from './ik';
 import { ActionLayer, reloadClip, type ActionName } from './actions';
 import { FULL_DETAIL, type AnimDetail } from './animLod';
@@ -46,6 +47,9 @@ import { SLUNG_GUN, SpringChain } from './springs';
 import { Handoff, SlingRig, slingPointFor, switchPhase, switchSeconds, type SlingPoint, type SwitchPose } from './sling';
 import { SwingClock, swingPose, type SwingPose } from './swing';
 
+/** how far a kill effect's tint takes the dissolving body's colour (the rest is its own, so it still reads as that soldier) */
+const KILL_TINT = 0.8;
+
 /** GPU resources shared by every avatar. */
 export class AvatarKit {
   readonly gunMaterial: MeshToonMaterial;
@@ -55,6 +59,8 @@ export class AvatarKit {
   private readonly gunMaterialsMapped = new Map<Texture, MeshToonMaterial>();
   /** a mapped toon material for the warm-up: the scans' shader variant, before any scan loads */
   readonly gunMaterialMapped: MeshToonMaterial;
+  /** the same with an emissive map: a Forged skin's variant (its seams and magazine window glow), for the warm-up */
+  readonly gunMaterialGlow: MeshToonMaterial;
   /** how weapon GLBs are drawn: scans by their own texture, scripted guns by vertex colour */
   readonly gunMaterials: GunMaterials;
   private readonly ramp: Texture;
@@ -73,11 +79,12 @@ export class AvatarKit {
     this.shield = new ShieldKit(ramp);
     this.gunMaterialVC = new MeshToonMaterial({ vertexColors: true, gradientMap: ramp });
     this.ramp = ramp;
-    this.gunMaterials = { vertexColors: this.gunMaterialVC, plain: this.gunMaterial, textured: (map) => this.texturedGun(map) };
+    this.gunMaterials = { vertexColors: this.gunMaterialVC, plain: this.gunMaterial, textured: (map, emissiveMap) => this.texturedGun(map, emissiveMap) };
     const white = new DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
     white.colorSpace = SRGBColorSpace;
     white.needsUpdate = true;
     this.gunMaterialMapped = new MeshToonMaterial({ map: white, gradientMap: ramp });
+    this.gunMaterialGlow = new MeshToonMaterial({ map: white, gradientMap: ramp, emissiveMap: white, emissive: 0xffffff, emissiveIntensity: SKIN_GLOW });
     // twin nozzles ~0.26 m below and 0.1 m behind socket_jetpack (+Y up the back, +Z forward)
     const cones = (r: number, len: number) =>
       mergeGeometries([-0.065, 0.065].map((x) => new ConeGeometry(r, len, 10).rotateX(Math.PI).translate(x, -len / 2, -0.1)))!;
@@ -97,18 +104,58 @@ export class AvatarKit {
         if (geometry) this.shield.setModel(geometry);
       })
       .catch((err: unknown) => console.warn('render3d: riot_shield.glb failed to load, drawing the placeholder shield', err));
+    this.skinSource = { baseUrl, loader };
     return Promise.all([loadWeaponModels(baseUrl, loader, this.gunMaterials, (def, model) => this.models.set(def, model)), shield]).then(() => undefined);
   }
 
-  /** A scanned gun's toon material, one per albedo texture. */
-  private texturedGun(map: Texture): MeshToonMaterial {
+  /** A scanned gun's toon material, one per albedo texture; a Forged skin's adds its emissive map (seams, window). */
+  private texturedGun(map: Texture, emissiveMap: Texture | null = null): MeshToonMaterial {
     let m = this.gunMaterialsMapped.get(map);
     if (!m) {
-      m = new MeshToonMaterial({ map, gradientMap: this.ramp });
+      m = emissiveMap
+        ? new MeshToonMaterial({ map, gradientMap: this.ramp, emissiveMap, emissive: 0xffffff, emissiveIntensity: SKIN_GLOW })
+        : new MeshToonMaterial({ map, gradientMap: this.ramp });
       this.gunMaterialsMapped.set(map, m);
     }
     return m;
   }
+
+  // --- skins: weapon skins in the hand (docs/17 §3.6; content cosmetics/weapon-skins.json) ---
+  /** where loadWeapons found the GLBs: skins load from the same place, on first use */
+  private skinSource: { baseUrl: string; loader: GltfSource } | null = null;
+  private skinSockets: Promise<Map<string, WeaponSockets>> | null = null;
+  /** skin GLBs by asset path: the model, or the load under way / failed (the base gun draws meanwhile) */
+  private readonly skinModels = new Map<string, WeaponModel | 'loading' | 'failed'>();
+  /** a skin model arrived: the next frame's mount draws it (tests, the Locker) */
+  onSkin: ((model: string) => void) | null = null;
+
+  /**
+   * Weapon `def` in skin `model` (its GLB under /assets/): once loaded, the skin's mesh and material with the
+   * base gun's sockets (a blueprint keeps them: asset-check --blueprint-of); until then, or if it fails, the base gun.
+   * A dropped gun never asks for this (docs/17 §3.6: on the floor every gun draws its base look).
+   */
+  skinned(def: number, model: string): WeaponModel {
+    const got = this.skinModels.get(model);
+    if (got !== undefined) return typeof got === 'string' ? this.weapon(def) : got;
+    const source = this.skinSource;
+    const id = weapons[def]?.id;
+    if (!source || !id) return this.weapon(def);
+    this.skinModels.set(model, 'loading');
+    this.skinSockets ??= loadSockets(source.baseUrl);
+    source.loader.loadAsync(`${source.baseUrl}assets/${model}`).then(
+      async (gltf) => {
+        const built = weaponFromGltf(gltf, this.gunMaterials, (await this.skinSockets!).get(id));
+        this.skinModels.set(model, built ?? 'failed');
+        if (built) this.onSkin?.(model);
+      },
+      (err: unknown) => {
+        this.skinModels.set(model, 'failed');
+        console.warn(`render3d: ${model} failed to load, drawing the base gun`, err);
+      },
+    );
+    return this.weapon(def);
+  }
+  // --- end skins ---
 
   /** The model in the hand for weapon `def`: its GLB once loaded, else a placeholder box gun (origin = grip, socket space). */
   weapon(def: number): WeaponModel {
@@ -154,7 +201,7 @@ export class AvatarKit {
   // --- end render3d-b: gun mechanisms ---
 
   materials(): Material[] {
-    return [this.gunMaterial, this.gunMaterialVC, this.gunMaterialMapped, ...this.gunMaterialsMapped.values(), this.flameOuter, this.flameInner];
+    return [this.gunMaterial, this.gunMaterialVC, this.gunMaterialMapped, this.gunMaterialGlow, ...this.gunMaterialsMapped.values(), this.flameOuter, this.flameInner];
   }
 }
 
@@ -328,6 +375,10 @@ export class Avatar {
   private readonly shield: ShieldRig;
   /** render3d-b: the guns on the body and the switch (sling.ts) */
   private readonly sling: SlingRig;
+  /** skins: the weapon skins this soldier's look wears, as GLB paths by weapon def (setLook) */
+  private readonly skins = new Map<number, string>();
+  /** skins: a kill effect playing on this body (docs/17 §3.7; vfx/killEffects.ts): its tint and how long it takes */
+  private killTint: { colour: Color; seconds: number } | null = null;
 
   constructor(
     readonly inst: CharacterInstance,
@@ -594,6 +645,12 @@ export class Avatar {
     // the dissolve: the body and its outline by a screen door; the guns, shield and flame (shared materials) go at half
     const fade = this.collapse.fade;
     if (this.inst.material) this.inst.material.dissolve.value = fade;
+    // skins: a kill effect's tint comes in over its first quarter (docs/17 §3.7)
+    const tint = this.inst.material?.tint;
+    if (this.killTint && tint) {
+      tint.colour.copy(this.killTint.colour);
+      tint.amount.value = Math.min(1, t / (0.25 * this.killTint.seconds)) * KILL_TINT;
+    }
     if (this.dyingOutline) this.dyingOutline.dissolve.value = fade;
     const half = fade < 0.5;
     for (const arm of [this.right, this.left]) if (arm && !half) arm.gun.visible = false;
@@ -634,6 +691,9 @@ export class Avatar {
   /** Alive again (a respawn: a teleport): every layer starts afresh, whole and opaque, with its shared outline back. */
   private revive(): void {
     this.deadT = null;
+    // skins: whole again, in its own colours
+    this.killTint = null;
+    if (this.inst.material?.tint) this.inst.material.tint.amount.value = 0;
     this.inertia.reset();
     for (const arm of [this.right, this.left]) arm?.handEase.reset();
     this.actions.stop();
@@ -851,12 +911,37 @@ export class Avatar {
     solveTwoBone(arm.upper, arm.lower, arm.hand, _t, _p);
   }
 
+  // --- skins: weapon skins and the kill effect on this soldier (docs/17 §3.6–3.7) ---
+  /** The soldier's look (at build and whenever it changes): which guns it holds in a skin. */
+  setLook(look: CosmeticLoadout): void {
+    this.skins.clear();
+    for (const def of weapons) {
+      const model = weaponSkinOf(look, def.id)?.assets.model;
+      if (model) this.skins.set(def.index, model);
+    }
+  }
+
+  /** The model weapon `def` draws in this soldier's hands and on its back: its skin's, else the base gun. */
+  private gunModel(def: number): WeaponModel {
+    const skin = this.skins.get(def);
+    return skin ? this.kit.skinned(def, skin) : this.kit.weapon(def);
+  }
+
+  /**
+   * A kill effect claims this body (vfx/killEffects.ts): as it collapses it takes `colour` (mixed into its toon
+   * colour, never added as light), dissolving as ever. Cleared on the respawn.
+   */
+  killEffect(colour: Color, seconds: number): void {
+    this.killTint = { colour, seconds };
+  }
+  // --- end skins ---
+
   /** Weapon `def` (or none) in `arm`'s hand, held on its socket. */
   private mount(arm: Arm, def: number): void {
     arm.gun.visible = def !== NO_WEAPON;
     arm.def = def;
     if (def === NO_WEAPON) return;
-    const model = this.kit.weapon(def);
+    const model = this.gunModel(def);
     arm.gun.position.set(0, 0, 0); // held in the hand (workBolt moves it off the hand while that works the bolt)
     arm.gun.quaternion.identity();
     const moving = this.kit.animateParts && model.parts !== undefined;
@@ -1009,7 +1094,7 @@ export class Avatar {
         this.sling.hide(slot);
         continue;
       }
-      const model = this.kit.weapon(def);
+      const model = this.gunModel(def);
       this.sling.hang(slot, this.pointOf(def, p.shield === 'back'), model.solid ?? model.geometry, model.material);
       // onto the body: from the hand (the gun mesh still where the hand holds it)
       if (handover && this.right) {

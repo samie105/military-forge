@@ -204,6 +204,18 @@ describe('looks and join tickets (v19)', () => {
     expect(looks.get(c2.all(MsgType.Welcome).at(-1)!.playerId)).toBeNull();
   });
 
+  it('a weapon skin the API vouched for (an owner grant) reaches everyone; an unvouched one plays as the gun ships', () => {
+    const reg = rooms();
+    const skinned = look({ skin_k47: 'skin_k47_galaxy_relic_fx' });
+    const c1 = conn();
+    reg.open('/ws/AAAAAA', c1, null)!.receive(encodeHello('x', '', ticket({ look: ids(skinned), lvl: 1 }), ids(skinned)));
+    const c2 = conn();
+    reg.open('/ws/AAAAAA', c2, null)!.receive(encodeHello('y', '', ticket({ lvl: 99 }), ids(skinned)));
+    const looks = c2.looks();
+    expect(looks.get(c1.all(MsgType.Welcome).at(-1)!.playerId)!.items.skin_k47).toBe('skin_k47_galaxy_relic_fx');
+    expect(looks.get(c2.all(MsgType.Welcome).at(-1)!.playerId)!.items.skin_k47).toBe('skin_k47_standard');
+  });
+
   it('a ticketed join keeps the page\'s own protocol version (its HELLO is re-encoded under the API\'s name)', () => {
     const reg = rooms();
     const old = new BitWriter(2048).u8(MsgType.Hello).u16(18).u32(CONTENT_HASH).string('x').string('').string(ticket(), 16).finish().slice();

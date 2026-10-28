@@ -25,7 +25,7 @@ import {
   type LoadoutSlot,
 } from '@military-forge/content';
 import { CharacterAssembler, type CharacterInstance } from '../character';
-import { LocalLoadoutStore, ownedOnly, randomLoadout, starterInventory, withDye, withItem, type Inventory, type LoadoutStore } from '../locker/loadouts';
+import { LocalLoadoutStore, accountInventory, ownedOnly, randomLoadout, withDye, withItem, type Inventory, type LoadoutStore } from '../locker/loadouts';
 import { escapeHtml, ic, tileHtml } from '../locker/tiles';
 import { Turntable, type FocusPreset, type LightPreset } from '../locker/turntable';
 import { startFitting } from '../ui/fit';
@@ -102,7 +102,7 @@ export function bodyCardsHtml(cards: readonly BodyCard[], body: Body, artPending
 
 export function mountCreator(container: HTMLElement, options: CreatorOptions = {}): CreatorHandle {
   const store = options.store ?? new LocalLoadoutStore();
-  const inventory = options.inventory ?? starterInventory;
+  const inventory = options.inventory ?? accountInventory;
   const assembler = options.assembler ?? new CharacterAssembler();
   const storage = options.storage === undefined ? storageOrNull() : options.storage;
   const first = !!options.first;

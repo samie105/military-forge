@@ -41,7 +41,8 @@ import {
 } from 'three';
 import { HorizontalBlurShader } from 'three/addons/shaders/HorizontalBlurShader.js';
 import { VerticalBlurShader } from 'three/addons/shaders/VerticalBlurShader.js';
-import { OutlineMaterial, characterToonRamp, type CharacterInstance } from '../character';
+import { OutlineMaterial, characterGltfLoader, characterToonRamp, type CharacterInstance } from '../character';
+import { SKIN_GLOW, weaponFromGltf } from '../render3d/weaponModels';
 import { rotateWorld, solveTwoBone } from '../render3d/ik';
 import { logicalPoint } from '../ui/landscape';
 import { DRAW, REACTION_SECONDS, SHOTS, SHOT_SECONDS, changedSlots, easeTravel, reactionFor, reactionWeight, shotForSlot, shotForTab, shouldDraw, type Reaction, type Shot, type ShotName } from './stage';
@@ -286,6 +287,53 @@ export class Turntable {
     this.lastHash = character.loadoutHash;
     this.wake();
   }
+
+  // --- skins: a gun on a stand in front of the soldier (the Locker's Gun skins tab, docs/17 §3.6) ---
+  private gun: { url: string; mesh: Mesh | null } | null = null;
+  private readonly gunMaterials = new Map<unknown, MeshToonMaterial>();
+
+  /**
+   * Shows the gun GLB at `url` (under the site, e.g. `/assets/weapons/skins/k47_galaxy_relic.glb`) on a stand at the
+   * soldier's chest, its right side to the camera, turning with the soldier; null takes it away. Drawn as in a
+   * match: the scan's albedo on the toon ramp, a Forged skin's seams and window through its emissive map.
+   */
+  setGun(url: string | null): void {
+    if (this.gun?.url === url) return;
+    this.gun?.mesh?.removeFromParent();
+    this.gun = url ? { url, mesh: null } : null;
+    this.wake();
+    if (!url) return;
+    const want = this.gun!;
+    characterGltfLoader()
+      .loadAsync(url)
+      .then((gltf) => {
+        const ramp = characterToonRamp();
+        const model = weaponFromGltf(gltf, {
+          plain: new MeshToonMaterial({ color: 0x2d3136, gradientMap: ramp }),
+          vertexColors: new MeshToonMaterial({ vertexColors: true, gradientMap: ramp }),
+          textured: (map, emissiveMap) => {
+            let m = this.gunMaterials.get(map);
+            if (!m) {
+              m = new MeshToonMaterial({ map, gradientMap: ramp, ...(emissiveMap ? { emissiveMap, emissive: 0xffffff, emissiveIntensity: SKIN_GLOW } : {}) });
+              this.gunMaterials.set(map, m);
+            }
+            return m;
+          },
+        });
+        if (!model || this.gun !== want) return;
+        const mesh = new Mesh(model.solid ?? model.geometry, model.material);
+        // the weapon frame (+Y muzzle, +Z up) turned so the muzzle points to the soldier's left and its top up,
+        // held a little larger than life at chest height, in front of the body
+        mesh.rotation.set(-Math.PI / 2, 0, -Math.PI / 2);
+        mesh.scale.setScalar(1.35);
+        mesh.position.set(0.1, 0.78, 0.42);
+        want.mesh = mesh;
+        this.pivot.add(mesh);
+        this.wake();
+      })
+      .catch((err: unknown) => console.warn(`locker: ${url} failed to load`, err));
+  }
+  // --- end skins ---
 
   setFocus(focus: FocusPreset): void {
     this.zoom = 1;

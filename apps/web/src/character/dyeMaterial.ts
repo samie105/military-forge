@@ -101,6 +101,12 @@ export class DyeMaterial extends MeshToonMaterial {
    * without turning transparent (that would be another shader program) (render3d/death.ts).
    */
   readonly dissolve = { value: 0 };
+  /**
+   * A flat colour the soldier's own colour mixes toward (0 own … 1 all tint): a kill effect's body as it dissolves
+   * (docs/17 §3.7, render3d/vfx/killEffects.ts). Applied to the albedo before lighting, so it never adds light: a
+   * tinted body is never brighter than it was lit.
+   */
+  readonly tint = { colour: new Color(1, 1, 1), amount: { value: 0 } };
   /** the garment layers' material (hair, top, legs): the same dyes, rim and dissolve; set its layers through this one */
   readonly garments: DyeMaterial | null;
   /** the layers this material samples; the first is `map` (so three sets up vMapUv) */
@@ -116,7 +122,7 @@ export class DyeMaterial extends MeshToonMaterial {
     this.layers = of ? GARMENT_LAYERS : MAIN_LAYERS;
     if (of) {
       // one set of colours for both: whatever recolours, rims or dissolves the soldier reaches the garments too
-      Object.assign(this, { dye: of.dye, layerColours: of.layerColours, bodyDefaults: of.bodyDefaults, rim: of.rim, mark: of.mark, dissolve: of.dissolve });
+      Object.assign(this, { dye: of.dye, layerColours: of.layerColours, bodyDefaults: of.bodyDefaults, rim: of.rim, mark: of.mark, dissolve: of.dissolve, tint: of.tint });
     }
     this.albedos = Array.from({ length: DYE_LAYERS }, () => ({ value: blankLayer().albedo as Texture }));
     this.masks = Array.from({ length: DYE_LAYERS }, () => ({ value: blankLayer().mask as Texture }));
@@ -132,6 +138,8 @@ export class DyeMaterial extends MeshToonMaterial {
       dyeSkin: { value: this.dye.skin },
       dyeTeam: { value: this.dye.team },
       dyeDissolve: this.dissolve,
+      dyeTintColour: { value: this.tint.colour },
+      dyeTintAmount: this.tint.amount,
     };
     // the first layer's albedo is `map` itself (so three sets up vMapUv); the others get their own samplers
     for (const i of rest) uniforms[`dyeAlbedo${i}`] = this.albedos[i]!;
@@ -152,8 +160,8 @@ export class DyeMaterial extends MeshToonMaterial {
           `#include <common>
           uniform sampler2D ${declared.join(', ')};
           uniform vec3 dyeColours[ ${DYE_LAYERS * 3} ], dyeBodyDefaults[ 3 ];
-          uniform vec3 dyeSkin, dyeTeam, dyeRimColour, dyeMarkColour;
-          uniform float dyeRimStrength, dyeMarkStrength;
+          uniform vec3 dyeSkin, dyeTeam, dyeRimColour, dyeMarkColour, dyeTintColour;
+          uniform float dyeRimStrength, dyeMarkStrength, dyeTintAmount;
           varying float vTexLayer;
           ${DISSOLVE_GLSL}`,
         )
@@ -170,7 +178,8 @@ export class DyeMaterial extends MeshToonMaterial {
           vec3 dyeBy = mix( vec3( 1.0 ), dyeColours[ dyeAt ], dyeM.r ) * mix( vec3( 1.0 ), dyeColours[ dyeAt + 1 ], dyeM.g ) * mix( vec3( 1.0 ), dyeColours[ dyeAt + 2 ], dyeM.b );
           // skin never takes the player's dyes: where the body mask bleeds onto the face it keeps the painted look
           vec3 dyeDef = mix( vec3( 1.0 ), dyeBodyDefaults[ 0 ], dyeM.r ) * mix( vec3( 1.0 ), dyeBodyDefaults[ 1 ], dyeM.g ) * mix( vec3( 1.0 ), dyeBodyDefaults[ 2 ], dyeM.b );
-          diffuseColor.rgb *= dyeAlb.rgb * mix( dyeBy, dyeDef, dyeSkinW ) * mix( vec3( 1.0 ), ${SKIN_HEADROOM.toFixed(1)} * dyeSkin, dyeSkinW );`,
+          diffuseColor.rgb *= dyeAlb.rgb * mix( dyeBy, dyeDef, dyeSkinW ) * mix( vec3( 1.0 ), ${SKIN_HEADROOM.toFixed(1)} * dyeSkin, dyeSkinW );
+          diffuseColor.rgb = mix( diffuseColor.rgb, dyeTintColour, dyeTintAmount );`,
         )
         .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += dyeTeam * dyeM.a;')
         .replace(
@@ -186,7 +195,7 @@ export class DyeMaterial extends MeshToonMaterial {
   }
 
   override customProgramCacheKey(): string {
-    return `character-dye-v7-${this.layers.join('.')}`;
+    return `character-dye-v8-${this.layers.join('.')}`;
   }
 
   /** The material that draws `layer` (this one, or its garments'). */

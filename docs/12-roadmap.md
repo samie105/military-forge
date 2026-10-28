@@ -66,7 +66,7 @@
 **Goal:** all **L** items. The game is ready for strangers at scale.
 
 - Drop Zone BR (solo), CTF, 7 maps, launch weapons, characters + Locker, store + battle pass S1 (cosmetics only).
-- **Store and currency, K-47 pilot first** (17 §9, owner 28 Oct 2026): the ledger, bundles with money prices, spending limits and the 18+ store gate, then **one paid K-47 skin line** (Wrap, Skin, a reshaped Forged blueprint and its Void Nebula kill-effect bundle, 17 §3.6–3.7) with the visual-advantage review (17 §3.4) automated for weapons. The other five skin-line guns, character looks, battle pass S1 (with its free track) and the Founder's Pack follow once the pilot's gate holds (ledger reconciles for 4 weeks, no V-check failures in the wild, refunds < 5%, no owner/non-owner K/D gap).
+- **Store and currency, K-47 pilot first** (17 §9, owner 28 Oct 2026): the ledger, bundles with money prices, spending limits and the 18+ store gate, then **one paid K-47 skin line** (Wrap, Skin, a reshaped Forged blueprint and its Galaxy Relic kill-effect bundle, 17 §3.6–3.7) with the visual-advantage review (17 §3.4) automated for weapons. The other five skin-line guns, character looks, battle pass S1 (with its free track) and the Founder's Pack follow once the pilot's gate holds (ledger reconciles for 4 weeks, no V-check failures in the wild, refunds < 5%, no owner/non-owner K/D gap).
 - Payments (Xsolla + regional methods), portal builds (CrazyGames first), compliance pack, 5 languages.
 - Anti-cheat detection pipeline + admin review, reports, sanctions.
 - Regions + SIN + IAD. Load test 5k bots. Status page.

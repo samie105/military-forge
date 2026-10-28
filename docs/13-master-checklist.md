@@ -860,7 +860,7 @@
 - [ ] `747` **L** Settings → Spending: monthly cap, raise delay, cool-off, history CSV, self-exclusion (30/90/365 days)
 - [ ] `748` **L** Pick the currency name (Brass, Ingots or Tags) + trademark screen (17 Q1)
 - [ ] `749` **L** Naira and other regional bundle tiers from local price research (17 Q3)
-- [ ] `750` **L** **K-47 pilot skin line**: one Wrap, one Skin, one Forged blueprint ("fictionistic and magical", reshaped parts) and its Void Nebula kill-effect bundle (17 §9)
+- [ ] `750` **L** **K-47 pilot skin line**: one Wrap, one Skin, one Forged blueprint ("fictionistic and magical", reshaped parts) and its Galaxy Relic kill-effect bundle (17 §9)
 - [ ] `751` **L** Weapon skin items (`slot: "weapon_skin"`, base `weaponId`, `tier`); asset-check matches the base gun's `muzzle`/`offhand`/`eject` within 1 cm (17 §3.3)
 - [ ] `752` **L** Automated visual-advantage checks for gun skins: V1, V2, V4, V5, V7, V9 (glow on seams, glyphs and magazine windows only; no particles or smoke), V12, V14 (17 §3.4)
 - [ ] `753` **L** Worst-case dye readability lint (V8) and per-map camouflage lint (V10), for guns and characters
@@ -897,5 +897,5 @@
 - [ ] `784` **L** Kill-effect limits enforced in the renderer and the content check: ≤ 1.0 s, inside the body envelope, drawn under dropped items, pickups, players, tracers and nameplates; no flash, shake, post-processing or light past the envelope; ≤ 80 particles, ≤ 1 draw call, ≤ 4 live (04 §7)
 - [ ] `785` **L** Kill-effect still variant under Reduce flashes / Reduce motion (13 #507) and the low preset; Settings → Effects → "Show other players' kill effects"
 - [ ] `786` **L** Kill-effect sound check: ≤ the base death sound's loudness and range, outside the footstep and jetpack bands
-- [ ] `787` **L** Void Nebula (the K-47 pilot's kill effect) + "Forged + kill effect" bundle (2,200) and add-on (1,050) in the store (17 §3.1)
+- [ ] `787` **L** Galaxy Relic + Stardust (the K-47 pilot line's kill effect) + "Forged + kill effect" bundle (2,200) and add-on (1,050) in the store (17 §3.1)
 - [ ] `788` **L** Death cam shows the killer's skin and kill effect in the world, with no cut or zoom to the effect (05 §18, 17 §3.7)

@@ -9,6 +9,8 @@
  * one that counts here.
  */
 
+import { setAccountGrants } from '../looks/grants';
+
 export interface Me {
   id: string;
   nickname: string;
@@ -18,6 +20,8 @@ export interface Me {
   nicknameChangeableAt: string | null;
   level: number;
   xp: number;
+  /** cosmetics the owner granted this account (the API's COSMETIC_GRANTS); absent = none */
+  grants?: string[];
 }
 
 interface SessionBody {
@@ -138,7 +142,15 @@ export class Api {
   private access: { token: string; expiresAt: number } | null = null;
   /** in memory too, for browsers that refuse localStorage */
   private refreshFallback: string | null = null;
-  me: Me | null = null;
+  private current: Me | null = null;
+  /** the signed-in player (null: none); its owner grants reach the Locker and the look (looks/grants.ts) */
+  get me(): Me | null {
+    return this.current;
+  }
+  set me(me: Me | null) {
+    this.current = me;
+    setAccountGrants(me?.grants);
+  }
   private readonly signInListeners = new Set<(me: Me) => void>();
   private readonly roomHooks: (() => Promise<void>)[] = [];
 

@@ -84,7 +84,7 @@ export function createApp(deps: AppDeps) {
   const now = deps.now ?? Date.now;
   const db = database.db;
   const auth = new AuthService(db, deps.signingKey, config, now);
-  const profiles = new ProfileService(db, new NicknamePolicy(config.reservedNicknames), now);
+  const profiles = new ProfileService(db, new NicknamePolicy(config.reservedNicknames), now, config.cosmeticGrants);
 
   const originAllowed = (origin: string) => (config.corsOrigins === 'localhost' ? LOCAL_ORIGIN.test(origin) : config.corsOrigins.includes(origin));
   const app = new Hono<AppEnv>();
@@ -178,7 +178,7 @@ export function createApp(deps: AppDeps) {
     }),
   );
   const presence = new PresenceService(kv, now);
-  app.route('/me/loadout', loadoutRoutes({ db, kv, auth, now }));
+  app.route('/me/loadout', loadoutRoutes({ db, kv, auth, now, grants: (userId) => profiles.grantsOf(userId) }));
   app.route('/me/presence', mePresenceRoutes({ auth, kv, presence }));
   const leaderboards = new Leaderboards(db, kv, now);
   app.route('/leaderboards', leaderboardRoutes({ auth, leaderboards }));

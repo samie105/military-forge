@@ -45,6 +45,7 @@ argv = sys.argv[sys.argv.index("--") + 1:]
 RUNTIME = Path(argv[argv.index("--runtime") + 1]) if "--runtime" in argv else None
 IDS = [a for a in argv if not a.startswith("--") and (RUNTIME is None or a != str(RUNTIME))]
 SPECS = json.loads((ART / "scan_specs.json").read_text())["weapons"]
+SKINS = json.loads((ART / "scan_specs.json").read_text()).get("skins", {})  # Forged (blueprint) skins: docs/17 §3.6
 TEX = 256
 TEAM = {"blue": "#2f7dff", "orange": "#ff7a1a"}
 SAT_CAP = 0.44  # cap_team_hues
@@ -258,7 +259,37 @@ def flatten(rgb, spec):
     lum = flat @ [0.2126, 0.7152, 0.0722]
     line = lum < 0.6 * (cent_rgb[ids] @ [0.2126, 0.7152, 0.0722])
     out[line] = (flat * 0.85)[line]
-    return cap_team_hues(np.clip(out, 0, 1)).reshape(h, w, 3), ids.reshape(h, w), cent_rgb
+    out = rehue(np.clip(out, 0, 1), spec.get("rehue", []))
+    return cap_team_hues(out).reshape(h, w, 3), ids.reshape(h, w), cent_rgb
+
+
+def rehue(rgb, ranges):
+    """Spec `rehue`: [[lo, hi, to_lo, to_hi, value?, saturation?]] maps hues in lo..hi (degrees) linearly onto
+    to_lo..to_hi, their value and saturation scaled by the optional multipliers (default 1). A blueprint skin's
+    nebula blues move to indigo and violet this way, clear of the team blue's band, instead of being washed out by
+    cap_team_hues; the Galaxy Relic's gold moves off the team orange's hues and darkens to an antique gold."""
+    if not ranges:
+        return rgb
+    hue, sat, val = hsv_arrays(rgb)
+    for lo, hi, to_lo, to_hi, *mul in ranges:
+        vm, sm = (*mul, 1.0, 1.0)[:2]
+        m = (hue >= lo) & (hue <= hi)
+        hue = np.where(m, to_lo + (hue - lo) * (to_hi - to_lo) / (hi - lo), hue)
+        val = np.where(m, val * vm, val)
+        sat = np.where(m, np.clip(sat * sm, 0, 1), sat)
+    return rgb_arrays(hue, sat, val)
+
+
+def glow_texels(rgb, cfg):
+    """Spec `glow_texels`: {"hues": [[lo, hi], ...], "value": v, "sat": s} marks the albedo's bright, saturated
+    texels in those hue bands (a skin's light slots, seams and magazine window). Returns the 256² mask (0/1)."""
+    if not cfg:
+        return None
+    hue, sat, val = hsv_arrays(rgb.reshape(-1, 3))
+    band = np.zeros(len(hue), bool)
+    for lo, hi in cfg["hues"]:
+        band |= (hue >= lo) & (hue <= hi)
+    return (band & (sat >= cfg.get("sat", 0.35)) & (val >= cfg.get("value", 0.7))).reshape(rgb.shape[:2]).astype(np.float64)
 
 
 def hsv_arrays(rgb):
@@ -644,9 +675,10 @@ def export(path, obj, runtime):
     )
 
 
-def build(wid, manifest, sockets_doc):
-    spec = SPECS[wid]
-    meta = manifest[wid]
+def scan_mesh(wid, spec, camo=True):
+    """Steps 1–5 for one raw model: import, orient, squash, decimate (with room for the part cuts), bake, flatten,
+    the team-colour checks, the masks and the 256² albedo on a plain material. `camo` false: no `_CAMO` anywhere
+    (a blueprint skin is its own finish). Returns (low, bounds, raw_tris, tris, small, covered, camo_share, glow_share)."""
     high = import_raw(wid)
     raw_tris = tri_count(high)
     orient(high, spec)
@@ -676,6 +708,8 @@ def build(wid, manifest, sockets_doc):
             if d < 25:
                 raise RuntimeError(f"{wid}: colour cluster {c.round(2)} is {d:.0f} ΔE from team {team}")
     cls = classify(cent, spec)
+    if not camo:
+        cls = [(False, g) for _, g in cls]
     log(wid, "clusters", [("#%02x%02x%02x" % tuple(int(round(x * 255)) for x in c), "camo" if cl[0] else ("glow" if cl[1] else "-"))
                          for c, cl in zip(cent, cls)])
     camo_share, glow_share = vertex_masks(low, ids, cls, spec, bounds)
@@ -683,11 +717,6 @@ def build(wid, manifest, sockets_doc):
     k = flat.shape[0] // TEX
     small = flat.reshape(TEX, k, TEX, k, 3).mean(axis=(1, 3))  # 512² → 256², a box filter
     covered = (srgb.reshape(TEX, k, TEX, k, 3).sum(-1) > 0.02).all(axis=(1, 3))
-    shares = team_share(small[covered])
-    for team, (hued, near) in shares.items():
-        if hued > TEAM_SHARE_MAX or near > TEAM_SHARE_MAX:
-            raise RuntimeError(f"{wid}: {hued:.1%} of the albedo reads {team} (hue band) and {near:.1%} is within ΔE 40 of it")
-    log(wid, "team-colour texels", {t: f"{h:.1%} hued, {n:.1%} within ΔE 40" for t, (h, n) in shares.items()})
     # a byte image holds sRGB values as they are (dye.py's albedos too); its colorspace is set before
     # the pixels, since changing it afterwards regenerates the image (black)
     alb = bpy.data.images.new(f"{wid}_albedo", TEX, TEX, alpha=False)
@@ -697,16 +726,43 @@ def build(wid, manifest, sockets_doc):
     alb.file_format = "PNG"
     (ART / "scan").mkdir(parents=True, exist_ok=True)
     alb.save()  # the 256² albedo, for the record next to the raw model
+    shares = team_share(small[covered])
+    for team, (hued, near) in shares.items():
+        if hued > TEAM_SHARE_MAX or near > TEAM_SHARE_MAX:
+            raise RuntimeError(f"{wid}: {hued:.1%} of the albedo reads {team} (hue band) and {near:.1%} is within ΔE 40 of it")
+    log(wid, "team-colour texels", {t: f"{h:.1%} hued, {n:.1%} within ΔE 40" for t, (h, n) in shares.items()})
     mat = bpy.data.materials.new("weapon_toon")
     bsdf = next(n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
     bsdf.inputs["Roughness"].default_value = 0.7
     t = mat.node_tree.nodes.new("ShaderNodeTexImage")
     t.image = alb
     mat.node_tree.links.new(t.outputs["Color"], bsdf.inputs["Base Color"])
+    mask = glow_texels(small, spec.get("glow_texels"))
+    if mask is not None:  # the glTF emissiveTexture: the albedo where it glows, black elsewhere (docs/17 V9)
+        mask = mask * covered
+        em = bpy.data.images.new(f"{wid}_emissive", TEX, TEX, alpha=False)
+        em.colorspace_settings.name = "sRGB"
+        em.pixels[:] = np.concatenate([small * mask[..., None], np.ones((TEX, TEX, 1))], -1).astype(np.float32).ravel()
+        em.filepath_raw = str(ART / "scan" / f"{wid}_emissive.png")
+        em.file_format = "PNG"
+        em.save()
+        et = mat.node_tree.nodes.new("ShaderNodeTexImage")
+        et.image = em
+        mat.node_tree.links.new(et.outputs["Color"], bsdf.inputs["Emission Color"])
+        bsdf.inputs["Emission Strength"].default_value = 1.0
+        glow_share = float(mask.sum() / max(1, covered.sum()))
+        log(wid, f"emissive texels: {glow_share:.1%} of the covered albedo")
     low.data.materials.clear()
     low.data.materials.append(mat)
     bpy.data.objects.remove(high, do_unlink=True)
     bpy.data.images.remove(img)
+    return low, bounds, raw_tris, tris, small, covered, camo_share, glow_share
+
+
+def build(wid, manifest, sockets_doc):
+    spec = SPECS[wid]
+    meta = manifest[wid]
+    low, bounds, raw_tris, tris, small, covered, camo_share, glow_share = scan_mesh(wid, spec)
 
     # sockets: grip at the origin (measured on the whole mesh, before any part is cut off)
     pts = socket_points(low, spec, bounds)
@@ -786,16 +842,225 @@ def build(wid, manifest, sockets_doc):
         + (f"; parts {', '.join(f'{o.name} {len(o.data.loop_triangles)} tris' for o, _ in parts)}" if parts else ""))
 
 
+# ------------------------------------------------------------------ blueprint skins (docs/17 §3.6)
+
+def side_grid(tris, lo, shape, cell=0.005):
+    """Side-silhouette raster (y along the gun, z up) of N×3×3 triangles on a fixed grid (origin `lo`, `shape`
+    cells of `cell` m), by dense barycentric samples: fast enough to search over, and within a cell of the asset
+    check's exact raster."""
+    tri = np.asarray(tris, float)[:, :, 1:]
+    edge = max(np.linalg.norm(tri[:, 0] - tri[:, 1], axis=1).max(), np.linalg.norm(tri[:, 1] - tri[:, 2], axis=1).max(),
+               np.linalg.norm(tri[:, 2] - tri[:, 0], axis=1).max())
+    k = int(min(60, np.ceil(edge / cell * 1.5) + 1))
+    i, j = np.meshgrid(np.arange(k + 1), np.arange(k + 1), indexing="ij")
+    keep = i + j <= k
+    wa, wb = (i[keep] / k), (j[keep] / k)
+    pts = (tri[:, None, 0] * wa[None, :, None] + tri[:, None, 1] * wb[None, :, None]
+           + tri[:, None, 2] * (1 - wa - wb)[None, :, None]).reshape(-1, 2)
+    c = np.floor((pts - lo) / cell).astype(int)
+    ok = (c[:, 0] >= 0) & (c[:, 1] >= 0) & (c[:, 0] < shape[0]) & (c[:, 1] < shape[1])
+    g = np.zeros(shape, bool)
+    g[c[ok, 0], c[ok, 1]] = True
+    return g
+
+
+def mesh_tris(meshes):
+    out = []
+    for o in meshes:
+        o.data.calc_loop_triangles()
+        co = np.array([v.co[:] for v in o.data.vertices])
+        out += [co[list(t.vertices)] for t in o.data.loop_triangles]
+    return np.array(out)
+
+
+def iou(a, b):
+    return float((a & b).sum() / max(1, (a | b).sum()))
+
+
+def fit_slots(meshes, parts, spec, base_tris, blo, bhi, blend=0.02, cell=0.005):
+    """Spec `slots` ({name: [u0, v0, u1, v1]} in the base's side view, u butt→muzzle, v bottom→top): each blueprint
+    slot (stock, grip, mag, handguard…) is moved and scaled in y and z about its box's centre to overlap the base's
+    side silhouette best (docs/17 §3.6: a reshaped part stays in its slot's box and the outline reads as the base's).
+    A coordinate search over the translation (±6 cm) and the scale (0.8–1.2), scored by the whole gun's silhouette
+    IoU. Body vertices in the box move fully and blend out over `blend` metres beyond it; a moving part named
+    like the slot (`part_mag` for `mag`) moves whole, so it stays a closed piece."""
+    lo, hi = np.asarray(blo, float), np.asarray(bhi, float)
+    span = hi - lo
+    glo = lo[1:] - 0.08
+    shape = tuple(np.ceil((span[1:] + 0.16) / cell).astype(int))
+    target = side_grid(base_tris, glo, shape, cell)
+    part_of = {o.name: o for o, _ in parts}
+    cos = {o.name: np.array([v.co[:] for v in o.data.vertices]) for o in meshes}
+    tri_index = {o.name: np.array([list(t.vertices) for t in o.data.loop_triangles]) for o in meshes
+                 if not o.data.calc_loop_triangles()}
+
+    def tris_now():
+        return np.concatenate([cos[n][tri_index[n]] for n in cos])
+
+    for name, box in spec.get("slots", {}).items():
+        u0, v0, u1, v1 = box
+        y0, y1, z0, z1 = lo[1] + u0 * span[1], lo[1] + u1 * span[1], lo[2] + v0 * span[2], lo[2] + v1 * span[2]
+        pivot = np.array([0.0, (y0 + y1) / 2, (z0 + z1) / 2])
+        weights = {}
+        for o in meshes:
+            co = cos[o.name]
+            if part_of.get(f"part_{name}") is o:
+                weights[o.name] = np.ones(len(co))
+            else:
+                dy = np.maximum(0, np.maximum(y0 - co[:, 1], co[:, 1] - y1))
+                dz = np.maximum(0, np.maximum(z0 - co[:, 2], co[:, 2] - z1))
+                weights[o.name] = np.clip(1 - np.hypot(dy, dz) / blend, 0, 1)
+        start = {n: c.copy() for n, c in cos.items()}
+
+        def apply(p):
+            ty, tz, sy, sz = p
+            for n, c in start.items():
+                moved = c.copy()
+                moved[:, 1] = pivot[1] + (c[:, 1] - pivot[1]) * sy + ty
+                moved[:, 2] = pivot[2] + (c[:, 2] - pivot[2]) * sz + tz
+                cos[n] = c + (moved - c) * weights[n][:, None]
+
+        def score(p):
+            apply(p)
+            return iou(side_grid(tris_now(), glo, shape, cell), target)
+
+        best = [0.0, 0.0, 1.0, 1.0]
+        best_s = score(best)
+        before = best_s
+        for step in (0.01, 0.005, 0.0025):
+            improved = True
+            while improved:
+                improved = False
+                for i, d in ((0, step), (0, -step), (1, step), (1, -step), (2, step * 4), (2, -step * 4), (3, step * 4), (3, -step * 4)):
+                    p = list(best)
+                    p[i] += d
+                    if abs(p[0]) > 0.06 or abs(p[1]) > 0.06 or not (0.8 <= p[2] <= 1.2) or not (0.8 <= p[3] <= 1.2):
+                        continue
+                    sc = score(p)
+                    if sc > best_s + 1e-4:
+                        best, best_s, improved = p, sc, True
+        apply(best)
+        log(f"slot {name}: moved ({best[0] * 100:+.1f}, {best[1] * 100:+.1f}) cm, scaled ({best[2]:.2f}, {best[3]:.2f}); IoU {before:.3f} → {best_s:.3f}")
+    for o in meshes:
+        o.data.vertices.foreach_set("co", cos[o.name].ravel())
+        o.data.update()
+    return iou(side_grid(tris_now(), glo, shape, cell), target)
+
+
+def base_triangles(base):
+    """The shipped base gun's triangles (N×3×3) in the weapon frame."""
+    sys.dont_write_bytecode = True  # no __pycache__ next to the tools
+    sys.path.insert(0, str(REPO / "tools/asset-check"))
+    import head_clearance as hc  # noqa: E402
+    g, b = hc.read_glb(ART / f"{base}.glb")
+    out = []
+
+    def walk(i, M):
+        n = g["nodes"][i]
+        L = np.eye(4)
+        x, y, z, w = n.get("rotation", [0, 0, 0, 1])
+        L[:3, :3] = np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+                              [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+                              [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]]) * n.get("scale", [1, 1, 1])
+        L[:3, 3] = n.get("translation", [0, 0, 0])
+        W = M @ L
+        for pr in g["meshes"][n["mesh"]]["primitives"] if "mesh" in n else ():
+            P = hc.accessor(g, b, pr["attributes"]["POSITION"]) @ W[:3, :3].T + W[:3, 3]
+            idx = hc.accessor(g, b, pr["indices"]).reshape(-1, 3)
+            out.append(P[idx])
+        for c in n.get("children", []):
+            walk(c, W)
+
+    for r in g["scenes"][g.get("scene", 0)]["nodes"]:
+        walk(r, np.eye(4))
+    return np.concatenate(out)
+
+
+def build_skin(sid):
+    """A Forged skin: the line's own reshaped parts as one GLB, the same gun underneath (docs/17 §3.6). Steps 1–5
+    as for a gun (no `_CAMO`: the skin is its own finish), then:
+      - fit the mesh's box onto the base gun's (length and height exactly; depth scaled with the length, and
+        never more than the base's), so the footprint, the hold and the head clearance are the base's;
+      - copy every node from the base (sockets.json: position, `dir`, `boreRadius`, rail lengths) rather than
+        placing them again, so muzzle, offhand, eject and grip are where the base's are, to the millimetre;
+      - cut the spec's moving parts with the base's motion (`axis`, `travel`, `angle`, `cutClean`).
+    Writes art/weapons/<sid>.glb and, with --runtime, weapons/skins/<sid>.glb; weapons.json and sockets.json
+    don't change (a skin is not a weapon). Check: tools/asset-check --kind weapon --blueprint-of <base.glb>."""
+    spec = SKINS[sid]
+    base = spec["skinOf"]
+    meta = json.loads((ART / "weapons.json").read_text())[base]
+    bdoc = json.loads((ART / "sockets.json").read_text())["weapons"][base]
+    base_tris = base_triangles(base)
+    blo, bhi = base_tris.reshape(-1, 3).min(0), base_tris.reshape(-1, 3).max(0)
+    low, bounds, raw_tris, _, small, covered, _, glow_share = scan_mesh(sid, spec, camo=False)
+    base_parts = bdoc.get("parts", {})
+    for name, cfg in spec.get("parts", {}).items():
+        if name not in base_parts:
+            raise RuntimeError(f"{sid}: {name} isn't one of {base}'s moving parts ({sorted(base_parts)})")
+        cfg.update({k: v for k, v in base_parts[name].items() if k != "pos"})
+    parts = cut_parts(low, spec, bounds, cap_uv(small, covered))
+    meshes = [low] + [o for o, _ in parts]
+    pts = np.array([v.co[:] for o in meshes for v in o.data.vertices])
+    lo, hi = pts.min(0), pts.max(0)
+    sy, sz = (bhi[1] - blo[1]) / (hi[1] - lo[1]), (bhi[2] - blo[2]) / (hi[2] - lo[2])
+    sx = min(sy, (bhi[0] - blo[0]) / (hi[0] - lo[0]))
+    fit = (Matrix.Translation(Vector(((blo[0] + bhi[0]) / 2, blo[1], blo[2])))
+           @ Matrix.Diagonal((sx, sy, sz, 1.0))
+           @ Matrix.Translation(Vector((-(lo[0] + hi[0]) / 2, -lo[1], -lo[2]))))
+    for o in meshes:
+        o.data.transform(fit)
+    log(f"{sid}: fitted onto {base}'s box: scale x {sx:.3f}, y {sy:.3f}, z {sz:.3f}")
+    final = fit_slots(meshes, parts, spec, base_tris, blo, bhi)
+    log(f"{sid}: side silhouette IoU with {base}: {final:.3f} (sampled; the asset check measures it exactly)")
+    rot = Matrix.Rotation(math.radians(90), 4, "X")  # modelling frame → socket frame, as build()
+    for o in meshes:
+        o.data.transform(rot)
+    for o, cfg in parts:
+        pivot_part(o, cfg, low)
+    bpy.ops.object.select_all(action="DESELECT")
+    for o in meshes:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = low
+    bpy.ops.object.shade_smooth_by_angle(angle=math.radians(35))
+    for name, s in bdoc["sockets"].items():
+        e = bpy.data.objects.new(name, None)
+        e.empty_display_size = 0.02
+        e.location = rot @ Vector(s["pos"])
+        for k, v in s.items():
+            if k != "pos":
+                e[k] = v
+        bpy.context.scene.collection.objects.link(e)
+        e.parent = low
+    for k in ("name", "archetype", "family", "aimPose", "hands", "casings", "attach", "frame"):
+        if k in meta:
+            low[k] = meta[k]
+    low["weaponId"] = base
+    low["skinId"] = sid
+    low["blueprintOf"] = base
+    low["source"] = "scan"
+    tris = sum(tri_count(o) for o in meshes)
+    export(ART / f"{sid}.glb", low, runtime=False)
+    if RUNTIME:
+        export(RUNTIME / "weapons" / "skins" / f"{sid}.glb", low, runtime=True)
+    log(f"{sid}: raw {raw_tris} tris → {tris}; emissive {glow_share:.1%} of the albedo; nodes from {base}"
+        + (f"; parts {', '.join(o.name for o, _ in parts)}" if parts else ""))
+
+
 def main():
     manifest = json.loads((ART / "weapons.json").read_text())
     sockets_doc = json.loads((ART / "sockets.json").read_text())
-    for wid in IDS:
+    for sid in [i for i in IDS if i in SKINS]:
+        build_skin(sid)
+    guns = [i for i in IDS if i not in SKINS]
+    for wid in guns:
         build(wid, manifest, sockets_doc)
+    if not guns:
+        return
     (ART / "weapons.json").write_text(json.dumps(manifest, indent=2))
     (ART / "sockets.json").write_text(json.dumps(sockets_doc, indent=1))
     if RUNTIME:
         rt = json.loads((RUNTIME / "weapons" / "weapons.json").read_text())
-        rt["weapons"].update({wid: manifest[wid] for wid in IDS})
+        rt["weapons"].update({wid: manifest[wid] for wid in guns})
         (RUNTIME / "weapons" / "weapons.json").write_text(json.dumps(rt, indent=2))
         (RUNTIME / "weapons" / "sockets.json").write_text(json.dumps(sockets_doc, indent=1))
 

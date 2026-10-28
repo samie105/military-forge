@@ -265,7 +265,7 @@ A Forged skin may **change the gun's parts**, not just repaint them: a carved re
 
 ### 3.7 Kill effects (everyone sees them)
 
-A skin line's premium tier carries a **kill effect**: when its owner kills someone **with that skinned gun**, the effect plays where the victim falls, for everyone who can see that spot. Example, the K-47 pilot's **Void Nebula**: the body dissolves into stardust in 0.8 s.
+A skin line's premium tier carries a **kill effect**: when its owner kills someone **with that skinned gun**, the effect plays where the victim falls, for everyone who can see that spot. Example, the K-47 pilot's **Galaxy Relic**: the body dissolves into stardust in 0.8 s.
 
 | Rule | |
 |---|---|
@@ -501,9 +501,12 @@ It costs a playlist's worth of matchmaking population, so it ships **only when t
 
 ## 9. Rollout
 
+**Built ahead of the store (28 Oct 2026):** the K-47 Galaxy Relic line's Forged skin (`skin_k47_galaxy_relic`) and its Forged + kill effect tier (`skin_k47_galaxy_relic_fx`, the stardust effect), with the blueprint checks (`--blueprint-of`), the tracer hue and the kill effect in game, and the Settings switch (art/README.md "Weapon skins"). With no store, ledger or inventory yet, the only way to own them is an **owner grant**: the API's `COSMETIC_GRANTS="<accountId>:<itemId>,…"` (an account's id is `id` in `GET /me`). The API then accepts the skin in a saved loadout, lists it in `/me` `grants` (the Locker shows it owned) and vouches for it in the join ticket, so the game server admits it and everyone in the room sees it. A dev build (vite) also takes `?grant=<itemId>` for offline previews; online it unlocks nothing.
+
+
 | Step | Ships | Gate to the next step |
 |---|---|---|
-| **1. K-47 pilot** (Phase 3, beta) | the ledger, one payment provider (Xsolla), bundles, the store page with money prices and limits, 18+ store gate, **one paid K-47 skin line**: 1 Wrap, 1 Skin, 1 Forged blueprint ("fictionistic and magical", reshaped parts, §3.6) and its **Void Nebula** kill-effect bundle (§3.7), the blueprint asset checks, §3.4 V1–V14 automated for weapons, V15 telemetry | ledger reconciles to the cent for 4 weeks; zero V-check failures in the wild; refund rate < 5%; no parity gap (V15) |
+| **1. K-47 pilot** (Phase 3, beta) | the ledger, one payment provider (Xsolla), bundles, the store page with money prices and limits, 18+ store gate, **one paid K-47 skin line**: 1 Wrap, 1 Skin, 1 Forged blueprint ("fictionistic and magical", reshaped parts, §3.6) and its **Galaxy Relic** kill-effect bundle (§3.7), the blueprint asset checks, §3.4 V1–V14 automated for weapons, V15 telemetry | ledger reconciles to the cent for 4 weeks; zero V-check failures in the wild; refund rate < 5%; no parity gap (V15) |
 | **2. Launch store** (Phase 3–4) | skin lines on Hammer, Hawk, Widow, Breacher, Hornet; character looks; battle pass S1 with the free track; Founder's Pack; regional tiers + Paystack/Flutterwave, UPI | 13 R items for launch |
 | **3. Forge v1** (S2) | K-47 part library, the Forge screen, `forge-sdk`, CLI and MCP server, 1 free slot + slot sales, library-only looks (no uploads) | ≥ 95% of submits validate on first try with the SDK; render worker p95 < 10 s |
 | **4. Forge v1.1** | decal and texture uploads (incl. AI-generated) through the review queue; libraries for the other five guns | review SLA held for 4 weeks; zero F04 looks live |

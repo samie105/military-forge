@@ -19,8 +19,8 @@ import { gunCycleFromGltf, gunPartsFromGltf, mergeBaked, withPartsAtRest, type G
 /** The materials a weapon GLB is drawn with: by vertex colour, by its own texture, or plain (neither). */
 export interface GunMaterials {
   vertexColors: Material;
-  /** a toon material with `map` (one per scanned gun's albedo) */
-  textured(map: Texture): Material;
+  /** a toon material with `map` (one per scanned gun's albedo); `emissiveMap`: a Forged skin's seams and window (docs/17 V9) */
+  textured(map: Texture, emissiveMap?: Texture | null): Material;
   plain: Material;
 }
 
@@ -99,6 +99,12 @@ export async function loadSockets(baseUrl: string): Promise<Map<string, WeaponSo
 /** the default support-hand target: docs/04 §4.1 socket_offhand_IK, 0.07 m along +Y and 0.02 m up */
 export const DEFAULT_OFFHAND = new Vector3(0, 0.07, 0.02);
 
+/**
+ * A Forged skin's glow (docs/17 V9: subtle, on its seams and magazine window only, which its emissive map holds):
+ * under 1, so the emissive texels stay at most as bright as the albedo they sit on and never wash out a soldier.
+ */
+export const SKIN_GLOW = 0.85;
+
 /** The GLB's first mesh, with world matrices up to date. */
 function firstMesh(gltf: GLTF): Mesh | null {
   gltf.scene.updateMatrixWorld(true);
@@ -164,8 +170,9 @@ export function nodePosition(root: Object3D, name: string): Vector3 | null {
  * colours (a scripted gun), else plain (never black: no colour attribute reads as 0 in WebGL).
  */
 function gunMaterial(gltf: GLTF, geometry: BufferGeometry, materials: GunMaterials): Material {
-  const map = (firstMesh(gltf)?.material as MeshStandardMaterial | undefined)?.map ?? null;
-  if (map && geometry.getAttribute('uv')) return materials.textured(map);
+  const source = firstMesh(gltf)?.material as MeshStandardMaterial | undefined;
+  const map = source?.map ?? null;
+  if (map && geometry.getAttribute('uv')) return materials.textured(map, source?.emissiveMap ?? null);
   return geometry.getAttribute('color') ? materials.vertexColors : materials.plain;
 }
 

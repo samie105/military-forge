@@ -109,7 +109,8 @@ export function itemsFor(slot: CosmeticSlot, body: Body): CosmeticDef[] {
  */
 export function lookTabs(body: Body): SlotTab[] {
   const named = new Set<string>([...TABS.flatMap((t) => t.slots.map((s) => s.slot)), ...BODY_SLOTS.map((s) => s.slot)]);
-  const extra = LOADOUT_SLOTS.filter((s) => !named.has(s)).map((slot) => ({ slot: slot as CosmeticSlot, label: slot.charAt(0).toUpperCase() + slot.slice(1) }));
+  // weapon skins are the Locker's (its Gun skins tab), not the body's
+  const extra = LOADOUT_SLOTS.filter((s) => !named.has(s) && !s.startsWith('skin_')).map((slot) => ({ slot: slot as CosmeticSlot, label: slot.charAt(0).toUpperCase() + slot.slice(1) }));
   return TABS.map((t) => ({ ...t, slots: [...t.slots, ...(t.id === 'outfit' ? extra : [])].filter((s) => itemsFor(s.slot, body).length > 1) })).filter((t) => t.slots.length > 0);
 }
 

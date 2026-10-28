@@ -182,6 +182,14 @@ describe('join tickets (docs/06 §6)', () => {
         .set({ data: { look: { ...hers, items: { ...hers.items, headgear: 'headgear_combat_helmet' } }, guns: ['widow', 'k47'] } })
         .where(eq(loadouts.userId, s.user.id));
       expect(cosmeticLoadoutFromWireIds(claims(await room()).look!)).toEqual(hers);
+
+      // a granted skin (COSMETIC_GRANTS) rides the ticket, so the game server admits it as vouched and every
+      // client in the room draws it; without the grant the ticket carries the K-47 as it ships
+      const skinned = { ...hers, items: { ...hers.items, skin_k47: 'skin_k47_galaxy_relic_fx' } };
+      await signed.database.db.update(loadouts).set({ data: { look: skinned, guns: ['widow', 'k47'] } }).where(eq(loadouts.userId, s.user.id));
+      expect(cosmeticLoadoutFromWireIds(claims(await room()).look!).items.skin_k47).toBe('skin_k47_standard');
+      (signed.config.cosmeticGrants as Map<string, string[]>).set(s.user.id, ['skin_k47_galaxy_relic_fx']);
+      expect(cosmeticLoadoutFromWireIds(claims(await room()).look!)).toEqual(skinned);
     } finally {
       await signed.close();
     }

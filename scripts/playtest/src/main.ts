@@ -568,6 +568,8 @@ async function main(): Promise<void> {
       RESULTS_PUBLIC_KEY: resultsKey.publicKey.export({ type: 'spki', format: 'pem' }).toString(),
       // the owner's token also reads the players' problem reports (/api/reports, the admin page's Reports)
       ...(admin ? { ADMIN_TOKEN: admin.token } : {}),
+      // the owner's cosmetic grants (docs/17 §9: the K-47 Galaxy Relic until the store exists), from this shell
+      ...(process.env.COSMETIC_GRANTS ? { COSMETIC_GRANTS: process.env.COSMETIC_GRANTS } : {}),
       // the API trusts only this local origin; the proxy vouches for the tunnel's current one (CSRF)
       CORS_ORIGINS: localOrigins.join(','),
       COOKIE_SECURE: local ? 'false' : 'true',

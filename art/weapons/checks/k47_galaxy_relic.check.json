@@ -1,0 +1,227 @@
+{
+  "file": "art/weapons/k47_galaxy_relic.glb",
+  "kind": "weapon",
+  "pass": true,
+  "rows": [
+    {
+      "status": "INFO",
+      "check": "file size",
+      "detail": "170 KB"
+    },
+    {
+      "status": "PASS",
+      "check": "triangles",
+      "detail": "998 of 1000 (body and 1 parts)"
+    },
+    {
+      "status": "PASS",
+      "check": "one mesh, one material",
+      "detail": "1 body + 1 moving part(s), 1 material(s): 2 draw call(s)"
+    },
+    {
+      "status": "PASS",
+      "check": "texture size: k47_galaxy_relic_albedo",
+      "detail": "256x256 (max 256)"
+    },
+    {
+      "status": "PASS",
+      "check": "texture POT: k47_galaxy_relic_albedo",
+      "detail": "power of two"
+    },
+    {
+      "status": "PASS",
+      "check": "texture size: k47_galaxy_relic_emissive",
+      "detail": "256x256 (max 256)"
+    },
+    {
+      "status": "PASS",
+      "check": "texture POT: k47_galaxy_relic_emissive",
+      "detail": "power of two"
+    },
+    {
+      "status": "INFO",
+      "check": "GPU texture memory (KTX2 est.)",
+      "detail": "0.08 MB, 2 image(s)"
+    },
+    {
+      "status": "PASS",
+      "check": "extras weaponId/family/aimPose/hands",
+      "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "weaponId in packages/content",
+      "detail": "k47"
+    },
+    {
+      "status": "PASS",
+      "check": "node names exact (no Blender .001 suffix)",
+      "detail": "ok"
+    },
+    {
+      "status": "INFO",
+      "check": "nodes",
+      "detail": "eject, grip, mag, muzzle, offhand, rail_bottom, rail_top"
+    },
+    {
+      "status": "PASS",
+      "check": "origin on the weapon (the grip)",
+      "detail": "bbox (-0.06, -0.11, -0.28)..(0.06, 0.3, 0.63)"
+    },
+    {
+      "status": "PASS",
+      "check": "family is a docs/04 \u00a74.2 family",
+      "detail": "'rifle'"
+    },
+    {
+      "status": "PASS",
+      "check": "aimPose has clips",
+      "detail": "'rifle'"
+    },
+    {
+      "status": "PASS",
+      "check": "muzzle node ahead of the grip (+Y)",
+      "detail": "muzzle at glTF y +0.63 m"
+    },
+    {
+      "status": "PASS",
+      "check": "offhand node within 0.1 m of the grip",
+      "detail": "0.091 m"
+    },
+    {
+      "status": "PASS",
+      "check": "sockets for the family",
+      "detail": "grip, muzzle, mag, rail_top, eject"
+    },
+    {
+      "status": "PASS",
+      "check": "socket directions (unit `dir`)",
+      "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "sockets on the weapon (within 3 cm)",
+      "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "muzzle fires along +Y with a bore radius",
+      "detail": "dir (0.0, 1.0, 0.0), bore 0.029 m"
+    },
+    {
+      "status": "PASS",
+      "check": "casings eject to the right (+X)",
+      "detail": "at x +0.033, dir x +0.80"
+    },
+    {
+      "status": "PASS",
+      "check": "rail_top above the bore, facing up",
+      "detail": "z +0.097 vs bore +0.011, length 0.24 m"
+    },
+    {
+      "status": "PASS",
+      "check": "rail_bottom below the bore, facing down",
+      "detail": "z -0.058 vs bore +0.011, length 0.14 m"
+    },
+    {
+      "status": "PASS",
+      "check": "moving part part_mag",
+      "detail": "118 tris, axis (0.0, 0.24, -0.97), travel 0.12 m"
+    },
+    {
+      "status": "PASS",
+      "check": "blueprint: same gun (weaponId/family/aimPose/hands)",
+      "detail": "k47 skin of k47"
+    },
+    {
+      "status": "PASS",
+      "check": "blueprint: length and height within \u00b13%",
+      "detail": "length 0.917 vs 0.918 m (-0.1%), height 0.409 vs 0.411 m (-0.4%)"
+    },
+    {
+      "status": "PASS",
+      "check": "blueprint: depth at most +10%",
+      "detail": "0.124 vs 0.124 m (+0.0%)"
+    },
+    {
+      "status": "PASS",
+      "check": "blueprint: nothing past the base's rear end",
+      "detail": "rear -0.285 vs -0.285 m"
+    },
+    {
+      "status": "PASS",
+      "check": "blueprint: side silhouette IoU \u2265 0.85",
+      "detail": "0.886 at 5 mm cells"
+    },
+    {
+      "status": "PASS",
+      "check": "blueprint: the base's nodes",
+      "detail": "eject, grip, mag, muzzle, offhand, rail_bottom, rail_top"
+    },
+    {
+      "status": "PASS",
+      "check": "blueprint: muzzle node within 1 cm",
+      "detail": "0.04 cm off"
+    },
+    {
+      "status": "PASS",
+      "check": "blueprint: offhand node within 1 cm",
+      "detail": "0.00 cm off"
+    },
+    {
+      "status": "PASS",
+      "check": "blueprint: eject node within 1 cm",
+      "detail": "0.06 cm off"
+    },
+    {
+      "status": "PASS",
+      "check": "blueprint: mag node within 2 cm",
+      "detail": "0.02 cm off"
+    },
+    {
+      "status": "PASS",
+      "check": "blueprint: grip node within 0.1 cm",
+      "detail": "0.00 cm off"
+    },
+    {
+      "status": "PASS",
+      "check": "blueprint: other nodes (rails) within 1 cm",
+      "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "blueprint: no sight, lens or light nodes",
+      "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "blueprint: moving parts and their motion unchanged",
+      "detail": "part_mag"
+    },
+    {
+      "status": "PASS",
+      "check": "blueprint: emissive \u2264 15% of the surface (V9)",
+      "detail": "6.3%"
+    },
+    {
+      "status": "PASS",
+      "check": "blueprint: emission strength \u2264 1 (no bloom)",
+      "detail": "1.00"
+    },
+    {
+      "status": "PASS",
+      "check": "blueprint: no forward light (nothing at the front glows toward the muzzle)",
+      "detail": "ok"
+    },
+    {
+      "status": "PASS",
+      "check": "blueprint: emissive hues \u2265 \u0394E 15 from the team colours (V7)",
+      "detail": "nearest blue: \u0394E 32 (2nd percentile)"
+    },
+    {
+      "status": "PASS",
+      "check": "blueprint: no deeper in the head than the base (level, \u00b145\u00b0 aims)",
+      "detail": "deepest 0.0 cm vs the base's 0.0 cm"
+    }
+  ]
+}

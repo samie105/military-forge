@@ -12,6 +12,8 @@ export * from './admin';
 export * from './attachments';
 export * from './cosmetics';
 export * from './looks';
+export * from './killEffects';
+export * from './reservedColours';
 export * from './grenades';
 export * from './hitboxes';
 export * from './maps/mapJson';

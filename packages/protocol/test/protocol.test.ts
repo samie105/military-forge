@@ -1258,7 +1258,7 @@ describe('looks on the wire (v19)', () => {
     return w.finish().slice();
   }
 
-  it('ROSTER carries each entry\'s look (15 wire ids), none for a player whose look is unknown', () => {
+  it('ROSTER carries each entry\'s look (16 wire ids: hair, then the K-47 skin), none for a player whose look is unknown', () => {
     const entries = [
       { id: 0, name: 'Strafer', isBot: true, since: 1, look: his },
       { id: 3, name: 'Kemi', isBot: false, since: 4_000_000_000, look: hers },
@@ -1266,7 +1266,7 @@ describe('looks on the wire (v19)', () => {
     ];
     const msg = decodeMessage(encodeRoster(entries)) as RosterMsg;
     expect(msg.entries).toEqual(entries);
-    expect(hers).toHaveLength(15);
+    expect(hers).toHaveLength(16);
     expect(cosmeticLoadoutFromWireIds(msg.entries[1]!.look!).items.bodyType).toBe('body_female');
   });
 

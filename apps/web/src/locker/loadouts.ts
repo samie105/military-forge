@@ -15,6 +15,7 @@ import {
   type DyeChannel,
   type LoadoutSlot,
 } from '@military-forge/content';
+import { granted } from '../looks/grants';
 
 export interface LoadoutStore {
   /** null when nothing is saved yet; may reject (offline, signed out): the Locker then starts from the default look */
@@ -31,6 +32,9 @@ export interface Inventory {
 }
 
 export const starterInventory: Inventory = { owns: (id) => getCosmetic(id)?.source.kind === 'starter' };
+
+/** The starter items and what the owner granted this account (looks/grants.ts: the K-47 Galaxy Relic until the store exists). */
+export const accountInventory: Inventory = { owns: (id) => starterInventory.owns(id) || granted(id) };
 
 type KeyValueStorage = Pick<Storage, 'getItem' | 'setItem'>;
 

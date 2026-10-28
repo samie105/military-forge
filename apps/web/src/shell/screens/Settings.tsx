@@ -100,6 +100,15 @@ function Graphics({ settings }: { settings: Settings }) {
       </div>
       <div className="srow">
         <div className="srow__txt">
+          <b>Show other players' kill effects</b>
+          <span>Some gun skins play an effect where their victims fall. Off: other players' kills show the normal death.</span>
+        </div>
+        <div className="srow__ctrl" data-bind="settings.showKillEffects">
+          <Switch on={settings.showKillEffects} onChange={(showKillEffects) => ctl.updateSettings({ showKillEffects })} label="Show other players' kill effects" />
+        </div>
+      </div>
+      <div className="srow">
+        <div className="srow__txt">
           <b>Show FPS</b>
           <span>A small frame counter in the top-left corner.</span>
         </div>
@@ -697,7 +706,7 @@ function Touch() {
 export function resetPatch(tab: SettingsTab): Partial<Settings> | null {
   switch (tab) {
     case 'graphics':
-      return { graphics: DEFAULT_SETTINGS.graphics, showFps: DEFAULT_SETTINGS.showFps, blood: DEFAULT_SETTINGS.blood };
+      return { graphics: DEFAULT_SETTINGS.graphics, showFps: DEFAULT_SETTINGS.showFps, blood: DEFAULT_SETTINGS.blood, showKillEffects: DEFAULT_SETTINGS.showKillEffects };
     case 'audio':
       return { audio: DEFAULT_AUDIO };
     case 'controls':

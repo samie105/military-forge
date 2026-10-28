@@ -218,6 +218,8 @@ if (view3d) view3d.teamColourOf = (id) => teamColour(lookBook.teamOf(id));
 let markViewer = -1;
 const markOf = (id: number) => relationOf(id, markViewer, (who) => lookBook.teamOf(who));
 if (view3d) view3d.relationOf = markOf;
+// a team kill plays no kill effect (docs/17 §3.7)
+if (view3d) view3d.teamOf = (id) => lookBook.teamOf(id);
 setPortraitPolicy(portraitPolicy);
 // the room's avatars and VS poster renders, warmed whenever its looks change (the countdown only shows pictures)
 if (view3d) warmRoomPortraits(lookBook);
@@ -472,6 +474,8 @@ const host: GameHost = {
     applyGraphics(next.graphics);
     // blood when soldiers are hit (Settings → Graphics, off by default): render3d's setBlood (#96)
     view3d?.setBlood(next.blood);
+    // other players' kill effects (Settings → Graphics, on by default; docs/17 §3.7)
+    view3d?.setShowKillEffects(next.showKillEffects);
     if (mode instanceof OnlineMode && mode.net.lowBandwidth !== next.lowBandwidth) mode.net.setLowBandwidth(next.lowBandwidth);
     sampler.bindings = toKeyBindings(next.bindings);
     sampler.doubleTapDash = next.doubleTapDash;

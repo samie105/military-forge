@@ -24,7 +24,9 @@ import {
 } from '../src';
 
 /** The only fields an item may carry. Anything gameplay-shaped (hitbox, speed, scale, loudness...) fails here. */
-const ALLOWED_KEYS = new Set(['id', 'wireId', 'slot', 'name', 'rarity', 'assets', 'dyeable', 'source', 'releaseSeason', 'tags', 'colour', 'widthMul', 'body', 'fits']);
+const ALLOWED_KEYS = new Set(['id', 'wireId', 'slot', 'name', 'rarity', 'assets', 'dyeable', 'source', 'releaseSeason', 'tags', 'colour', 'widthMul', 'body', 'fits',
+  // weapon skins (docs/17 §3.3): which gun, the tier, a tracer hue (V5: hue only), the kill effect, what owning it includes
+  'weaponId', 'tier', 'tracerTint', 'tracerTrail', 'killEffect', 'includes']);
 const COLOUR_SLOTS = new Set(['skinTone', 'exhaust', 'dye']);
 
 function withItem(slot: string, id: string): CosmeticLoadout {
@@ -35,7 +37,7 @@ describe('cosmetics: fairness (docs/04 §1)', () => {
   it('items carry no gameplay data: hitboxes, speed, size and loudness are never cosmetic', () => {
     for (const c of cosmetics) {
       for (const key of Object.keys(c)) expect(ALLOWED_KEYS.has(key), `${c.id}.${key}`).toBe(true);
-      for (const key of Object.keys(c.assets)) expect(key, c.id).toBe('manifest');
+      for (const key of Object.keys(c.assets)) expect(key, c.id).toBe(c.weaponId ? 'model' : 'manifest');
     }
   });
 
@@ -174,15 +176,21 @@ describe('cosmetic loadouts', () => {
     expect(cosmeticLoadoutFromWireIds([9999, 0, 40])).toEqual(DEFAULT_COSMETIC_LOADOUT);
   });
 
-  it('the wire form keeps the first 14 ids in place (11 slots, then the 3 dyes); hair follows', () => {
-    const female = { items: { ...DEFAULT_COSMETIC_LOADOUT.items, bodyType: 'body_female', hair: 'hair_bun' }, dyes: { primary: 'dye_red', secondary: 'dye_navy', accent: 'dye_gold' } };
+  it('the wire form keeps the first 14 ids in place (11 slots, then the 3 dyes); hair and the K-47 skin follow', () => {
+    const female = {
+      items: { ...DEFAULT_COSMETIC_LOADOUT.items, bodyType: 'body_female', hair: 'hair_bun', skin_k47: 'skin_k47_galaxy_relic_fx' },
+      dyes: { primary: 'dye_red', secondary: 'dye_navy', accent: 'dye_gold' },
+    };
     const ids = cosmeticLoadoutWireIds(female);
-    expect(ids).toHaveLength(15);
+    expect(ids).toHaveLength(16);
     expect(getCosmeticByWireId(ids[11]!)?.id).toBe('dye_red');
     expect(getCosmeticByWireId(ids[14]!)?.id).toBe('hair_bun');
-    // a 14-id loadout from before `hair`: everything reads as it did, and the hair is the body's own
+    expect(getCosmeticByWireId(ids[15]!)?.id).toBe('skin_k47_galaxy_relic_fx');
+    // a 14-id loadout from before `hair`: everything reads as it did, the hair is the body's own, the K-47 as it ships
     const old = cosmeticLoadoutFromWireIds(ids.slice(0, 14));
-    expect(old).toEqual({ ...female, items: { ...female.items, hair: DEFAULT_COSMETIC_LOADOUT.items.hair } });
+    expect(old).toEqual({ ...female, items: { ...female.items, hair: DEFAULT_COSMETIC_LOADOUT.items.hair, skin_k47: 'skin_k47_standard' } });
+    // a 15-id loadout from before the skins
+    expect(cosmeticLoadoutFromWireIds(ids.slice(0, 15)).items.skin_k47).toBe('skin_k47_standard');
   });
 
   it('hash is stable, a u32, and sensitive to every slot and dye', () => {

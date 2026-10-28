@@ -91,6 +91,18 @@ def k47_edit(path, edit, weapon="k47"):
                               export_vertex_color="ACTIVE")
 
 
+def stretched(objs):
+    """A blueprint 10 % longer than its base (a barrel poking past cover first): every mesh along the bore."""
+    for o in objs.values():
+        if o.type == "MESH" and o.parent is None:
+            o.scale.z *= 1.1  # the bore is Blender +Z after the glTF import (glTF +Y)
+
+
+def muzzle_forward(objs):
+    """A blueprint whose muzzle node moved 3 cm down the barrel."""
+    objs["muzzle"].location.z += 0.03
+
+
 def eject_left(objs):
     """Casings thrown across the player: the eject socket mirrored to the left."""
     e = objs["eject"]
@@ -282,6 +294,8 @@ from_item(tmp / "aviators_panel.glb", COS / "eyewear/eyewear_aviators.glb", add_
 jet_nodye = dye_fixture(tmp / "nodye", with_textures=False)
 k47_edit(tmp / "k47_eject_left.glb", eject_left)
 k47_edit(tmp / "k47_no_rail.glb", no_rail)
+k47_edit(tmp / "k47_long.glb", stretched)
+k47_edit(tmp / "k47_galaxy_relic_muzzle.glb", muzzle_forward, "k47_galaxy_relic")
 k47_edit(tmp / "shield_no_face.glb", no_face, "riot_shield")
 k47_edit(tmp / "dragon_casings.glb", claims_casings, "dragon")
 k47_edit(tmp / "hawk_open_slide.glb", open_slide, "hawk50")
@@ -327,6 +341,15 @@ cases = [
     ("Aviators with a panel down to the shins fail (locality)", "fail", tmp / "aviators_panel.glb", "--kind", "part", "--base", OUTFIT),
     ("K-47 casings ejecting to the left fail", "fail", tmp / "k47_eject_left.glb", "--kind", "weapon"),
     ("K-47 without its top rail fails", "fail", tmp / "k47_no_rail.glb", "--kind", "weapon"),
+    # docs/17 §3.6: blueprint (Forged) skins against their base gun
+    ("K-47 Galaxy Relic is a blueprint of the K-47", "pass", REPO / "art/weapons/k47_galaxy_relic.glb", "--kind", "weapon",
+     "--blueprint-of", REPO / "art/weapons/k47.glb"),
+    ("the K-47 is a blueprint of itself", "pass", REPO / "art/weapons/k47.glb", "--kind", "weapon", "--blueprint-of", REPO / "art/weapons/k47.glb"),
+    ("a K-47 10 % longer is no blueprint of it", "fail", tmp / "k47_long.glb", "--kind", "weapon", "--blueprint-of", REPO / "art/weapons/k47.glb"),
+    ("a blueprint with its muzzle node 3 cm off fails", "fail", tmp / "k47_galaxy_relic_muzzle.glb", "--kind", "weapon",
+     "--blueprint-of", REPO / "art/weapons/k47.glb"),
+    ("the Hammer .44 is no blueprint of the K-47", "fail", REPO / "art/weapons/hammer44.glb", "--kind", "weapon",
+     "--blueprint-of", REPO / "art/weapons/k47.glb"),
     ("Hawk .50 (slide cut clean: a closed shell) passes", "pass", REPO / "art/weapons/hawk50.glb", "--kind", "weapon"),
     ("Hawk .50 with a hole in its cutClean slide fails", "fail", tmp / "hawk_open_slide.glb", "--kind", "weapon"),
     ("Dragon (no casings, no eject socket) passes", "pass", REPO / "art/weapons/dragon.glb", "--kind", "weapon"),

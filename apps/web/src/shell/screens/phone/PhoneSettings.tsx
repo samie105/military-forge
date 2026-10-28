@@ -261,6 +261,9 @@ function Graphics({ settings }: { settings: Settings }) {
       <Row i={2} label="Show FPS" desc="A frame counter in the corner.">
         <Switch on={settings.showFps} onChange={(showFps) => ctl.updateSettings({ showFps })} label="Show FPS" />
       </Row>
+      <Row i={3} label="Others' kill effects" desc="Off: their kills show the normal death.">
+        <Switch on={settings.showKillEffects} onChange={(showKillEffects) => ctl.updateSettings({ showKillEffects })} label="Show other players' kill effects" />
+      </Row>
     </>
   );
 }

@@ -49,7 +49,7 @@ interface Anchor {
 /** guns with a flash on show at once */
 const ANCHORS = 16;
 
-interface ClassFx {
+export interface ClassFx {
   /** muzzle flash length (m) */
   flash: number;
   /** tracer width and bolt length (m) */
@@ -77,6 +77,7 @@ const CLASS_FX: Record<WeaponClass, ClassFx | null> = {
 const TRACER_TINT: [number, number, number] = [1, 0.92, 0.66];
 /** a ricochet's tracer: the cold cyan the 2D view uses for them */
 const RICOCHET_TINT: [number, number, number] = [0.6, 0.93, 1];
+const RICOCHET_TINTS: TracerTints = { bolt: RICOCHET_TINT, trail: RICOCHET_TINT };
 const SNIPER_TRAIL = { tint: [0.62, 0.62, 0.6] as [number, number, number], widthM: 0.05, seconds: 0.45 };
 const FLASH_TINT: [number, number, number] = [1, 0.85, 0.5];
 /** hitscan: the hit is already decided, so a tracer reaches its end within this */
@@ -99,6 +100,38 @@ const CHIP_WOOD = [0.45, 0.33, 0.2] as const;
 /** the light pop's peak (×style intensity) and fade */
 const LIGHT_PEAK = 22;
 const QUEUE_MAX = 256;
+
+/** A skin's tracer hues (linear RGB): the bolt's, and its path line's (docs/17 V5: hues only). */
+export interface TracerTints {
+  bolt: readonly [number, number, number];
+  trail: readonly [number, number, number];
+}
+
+/**
+ * A tracer's look: its bolt's and path line's tints, width, bolt length and speed, from the weapon's Forge style
+ * (else its class) over a shot of `dist` metres. A skin's hues (`tintOver`) change the tints only (docs/17 V5;
+ * test/skins.test.ts).
+ */
+export function tracerLook(
+  style: { tint: readonly [number, number, number]; widthM: number; lengthM: number; speedMps: number } | undefined,
+  cls: { width: number; length: number },
+  dist: number,
+  tintOver: TracerTints | null = null,
+): { tint: readonly [number, number, number]; trail: readonly [number, number, number]; width: number; len: number; speed: number } {
+  const base = style?.tint ?? TRACER_TINT;
+  return {
+    tint: tintOver?.bolt ?? base,
+    trail: tintOver?.trail ?? base,
+    width: (style?.widthM ?? cls.width) * TRACER_THIN,
+    len: Math.min((style?.lengthM ?? cls.length) * TRACER_BOLT, dist),
+    speed: Math.max(style?.speedMps ?? 0, MIN_SPEED, dist / MAX_FLIGHT),
+  };
+}
+
+/** The class look a weapon class's tracer falls back to (tests). */
+export function tracerClass(cls: WeaponClass): ClassFx | null {
+  return CLASS_FX[cls];
+}
 
 const spec: ParticleSpec = particleSpec();
 const base = particleSpec();
@@ -177,6 +210,12 @@ export class Gunfire {
     this.lightLevel = 0;
     this.light.intensity = 0;
   }
+
+  /**
+   * skins: the tracer tint (linear RGB) a shooter's skin gives a weapon's shots, or null for the base (Renderer3D sets
+   * it from the looks; docs/17 V5: a hue only, so it replaces the tint and nothing else: see tracerLook).
+   */
+  tracerTintOf: ((shooter: number, weapon: number) => TracerTints | null) | null = null;
 
   /** One batch of sim events: shots wait for the frame's avatar poses. */
   onEvents(events: readonly SimEvent[]): void {
@@ -265,14 +304,16 @@ export class Gunfire {
     const entry = this.art?.weapons[def.id];
     if (first) this.flash(fx, fxX, fxY, oz, drawn ? Math.atan2(_d.y, _d.x) : Math.atan2(uy, ux), cls, entry?.flash ?? null, entry?.flashScale ?? 1, drawn ? e : null);
     if (tracer && dist > 0.3) {
-      this.tracer(fx, e.ox, e.oy, oz, ux, uy, dist, cls, entry?.tracer ?? null);
-      if (drawn) this.joiner(fx, fxX, fxY, e.ox, e.oy, oz, cls, entry?.tracer ?? null);
+      // a skin's tracer hue (docs/17 V5): the shooter's skin on this gun; shape, speed and brightness stay the base's
+      const tint = this.tracerTintOf?.(e.shooter, e.weapon) ?? null;
+      this.tracer(fx, e.ox, e.oy, oz, ux, uy, dist, cls, entry?.tracer ?? null, tint);
+      if (drawn) this.joiner(fx, fxX, fxY, e.ox, e.oy, oz, cls, entry?.tracer ?? null, tint);
     }
     if (e.hit) this.impact(fx, e, ux, uy);
   }
 
   /** The drawn muzzle to the start of the sim's ray: a short line in the tracer's tint, gone with its path line. */
-  private joiner(fx: GunfireTargets, x0: number, y0: number, x1: number, y1: number, z: number, cls: ClassFx, styleName: string | null): void {
+  private joiner(fx: GunfireTargets, x0: number, y0: number, x1: number, y1: number, z: number, cls: ClassFx, styleName: string | null, tintOver: TracerTints | null = null): void {
     const dx = x1 - x0;
     const dy = y1 - y0;
     const len = Math.sqrt(dx * dx + dy * dy);
@@ -289,7 +330,7 @@ export class Gunfire {
     p.alpha = 0.45;
     p.ramp = Ramp.Tracer;
     p.cell = Cell.Line;
-    [p.tr, p.tg, p.tb] = style?.tint ?? TRACER_TINT;
+    [p.tr, p.tg, p.tb] = tintOver?.trail ?? style?.tint ?? TRACER_TINT;
     fx.glow.emit(p);
   }
 
@@ -450,12 +491,9 @@ export class Gunfire {
     }
   }
 
-  private tracer(fx: GunfireTargets, x: number, y: number, z: number, ux: number, uy: number, dist: number, cls: ClassFx, styleName: string | null, tintOver: readonly [number, number, number] | null = null): void {
+  private tracer(fx: GunfireTargets, x: number, y: number, z: number, ux: number, uy: number, dist: number, cls: ClassFx, styleName: string | null, tintOver: TracerTints | null = null): void {
     const style = styleName ? this.art?.tracers[styleName] : undefined;
-    const tint = tintOver ?? style?.tint ?? TRACER_TINT;
-    const width = (style?.widthM ?? cls.width) * TRACER_THIN;
-    const len = Math.min((style?.lengthM ?? cls.length) * TRACER_BOLT, dist);
-    const speed = Math.max(style?.speedMps ?? 0, MIN_SPEED, dist / MAX_FLIGHT);
+    const { tint, trail: pathTint, width, len, speed } = tracerLook(style, cls, dist, tintOver);
     const angle = Math.atan2(uy, ux);
     // the bolt: a bright streak racing from the muzzle to the end, its head at +U
     let p = reset();
@@ -484,7 +522,7 @@ export class Gunfire {
     p.alpha = 0.45;
     p.ramp = Ramp.Tracer;
     p.cell = Cell.Line;
-    [p.tr, p.tg, p.tb] = tint;
+    [p.tr, p.tg, p.tb] = pathTint;
     fx.glow.emit(p);
     // snipers leave a smoke line that hangs a moment
     const trail = style?.trail ?? (cls.width >= 0.06 ? SNIPER_TRAIL : null);
@@ -538,7 +576,7 @@ export class Gunfire {
       p.cell = Cell.Streak;
       fx.glow.emit(p);
     }
-    if (dist > 0.3) this.tracer(fx, e.x, e.y, 0.5, ux, uy, dist, cls, def ? (this.art?.weapons[def.id]?.tracer ?? null) : null, RICOCHET_TINT);
+    if (dist > 0.3) this.tracer(fx, e.x, e.y, 0.5, ux, uy, dist, cls, def ? (this.art?.weapons[def.id]?.tracer ?? null) : null, RICOCHET_TINTS);
     if (e.hit) this.impact(fx, e, ux, uy);
   }
 

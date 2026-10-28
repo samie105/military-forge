@@ -1,0 +1,48 @@
+asset-check: art/weapons/k47_galaxy_relic.glb  [weapon]
+--------------------------------------------------------------------------------------------------------------------------------------
+INFO  file size                                                                   170 KB
+PASS  triangles                                                                   998 of 1000 (body and 1 parts)
+PASS  one mesh, one material                                                      1 body + 1 moving part(s), 1 material(s): 2 draw call(s)
+PASS  texture size: k47_galaxy_relic_albedo                                       256x256 (max 256)
+PASS  texture POT: k47_galaxy_relic_albedo                                        power of two
+PASS  texture size: k47_galaxy_relic_emissive                                     256x256 (max 256)
+PASS  texture POT: k47_galaxy_relic_emissive                                      power of two
+INFO  GPU texture memory (KTX2 est.)                                              0.08 MB, 2 image(s)
+PASS  extras weaponId/family/aimPose/hands                                        ok
+PASS  weaponId in packages/content                                                k47
+PASS  node names exact (no Blender .001 suffix)                                   ok
+INFO  nodes                                                                       eject, grip, mag, muzzle, offhand, rail_bottom, rail_top
+PASS  origin on the weapon (the grip)                                             bbox (-0.06, -0.11, -0.28)..(0.06, 0.3, 0.63)
+PASS  family is a docs/04 §4.2 family                                             'rifle'
+PASS  aimPose has clips                                                           'rifle'
+PASS  muzzle node ahead of the grip (+Y)                                          muzzle at glTF y +0.63 m
+PASS  offhand node within 0.1 m of the grip                                       0.091 m
+PASS  sockets for the family                                                      grip, muzzle, mag, rail_top, eject
+PASS  socket directions (unit `dir`)                                              ok
+PASS  sockets on the weapon (within 3 cm)                                         ok
+PASS  muzzle fires along +Y with a bore radius                                    dir (0.0, 1.0, 0.0), bore 0.029 m
+PASS  casings eject to the right (+X)                                             at x +0.033, dir x +0.80
+PASS  rail_top above the bore, facing up                                          z +0.097 vs bore +0.011, length 0.24 m
+PASS  rail_bottom below the bore, facing down                                     z -0.058 vs bore +0.011, length 0.14 m
+PASS  moving part part_mag                                                        118 tris, axis (0.0, 0.24, -0.97), travel 0.12 m
+PASS  blueprint: same gun (weaponId/family/aimPose/hands)                         k47 skin of k47
+PASS  blueprint: length and height within ±3%                                     length 0.917 vs 0.918 m (-0.1%), height 0.409 vs 0.411 m (-0.4%)
+PASS  blueprint: depth at most +10%                                               0.124 vs 0.124 m (+0.0%)
+PASS  blueprint: nothing past the base's rear end                                 rear -0.285 vs -0.285 m
+PASS  blueprint: side silhouette IoU ≥ 0.85                                       0.886 at 5 mm cells
+PASS  blueprint: the base's nodes                                                 eject, grip, mag, muzzle, offhand, rail_bottom, rail_top
+PASS  blueprint: muzzle node within 1 cm                                          0.04 cm off
+PASS  blueprint: offhand node within 1 cm                                         0.00 cm off
+PASS  blueprint: eject node within 1 cm                                           0.06 cm off
+PASS  blueprint: mag node within 2 cm                                             0.02 cm off
+PASS  blueprint: grip node within 0.1 cm                                          0.00 cm off
+PASS  blueprint: other nodes (rails) within 1 cm                                  ok
+PASS  blueprint: no sight, lens or light nodes                                    ok
+PASS  blueprint: moving parts and their motion unchanged                          part_mag
+PASS  blueprint: emissive ≤ 15% of the surface (V9)                               6.3%
+PASS  blueprint: emission strength ≤ 1 (no bloom)                                 1.00
+PASS  blueprint: no forward light (nothing at the front glows toward the muzzle)  ok
+PASS  blueprint: emissive hues ≥ ΔE 15 from the team colours (V7)                 nearest blue: ΔE 32 (2nd percentile)
+PASS  blueprint: no deeper in the head than the base (level, ±45° aims)           deepest 0.0 cm vs the base's 0.0 cm
+--------------------------------------------------------------------------------------------------------------------------------------
+RESULT: PASS  (41 pass, 0 warn, 0 fail)

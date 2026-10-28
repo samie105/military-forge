@@ -1203,6 +1203,48 @@ render3d moves a `part_*` node only when it carries `cutClean: true` (gunParts.t
 - **The Bullpup's mag is no longer a part:** it is a panel set into the stock, so no side-view box frees it without the stock's skin. It's baked into the gun, which is how render3d drew it anyway.
 - render3d animates the slide, pump, bolt and cylinder. Mags stay still for now, so the unflagged mags change nothing on screen. The Hammer's cylinder stays still too until it gets a clean cut: probably a modelled cylinder in the scan's colours, rather than a cut from the fused shell.
 
+## Weapon skins: the K-47 Galaxy Relic blueprint (28 Oct 2026)
+
+![The Locker's Gun skins tab](../docs/screenshots/skins/locker.png)
+*The Locker's Gun skins tab with the Galaxy Relic + Stardust tried on: the gun on its stand, drawn as in a match (albedo on the toon ramp, the emissive map on the seams, cracks, shroud slots and magazine window).*
+
+The pilot of docs/17 §9: the K-47 line, top tier Forged + kill effect. The owner first chose a bright sci-fi "Void Nebula" concept, then (the same day) a dark mythic one, **Galaxy Relic** (Higgsfield job `4f1e5fea-fd31-4ab3-8422-b72be40eb2cb`): obsidian armour plates, engraved gold filigree, blade-fin stock, an armoured shroud with glowing slots, and a nebula glowing from the cracks and seams. The gun is built by the same pipeline as the scanned weapons, then fitted to the base K-47 so it passes the blueprint checks (docs/17 §3.6).
+
+**Pipeline** (`art/pipeline/build_gun_scan.py`'s skin mode; spec in `weapons/scan_specs.json` → `skins`):
+1. **Turnaround sheet:** GPT Image 2.5 medium 2k (1 credit, job `06c31d44-99d2-4eee-acdb-5f57b6a1ab8e`) from two references: the earlier Void Nebula sheet (`df26c3b4…`, made on the base K-47's outline, for the shape; the base's own sheet `ae7264dd…` wasn't reachable from this workspace) and the Galaxy Relic concept (for the parts and paint). The prompt is below. `split_sheet.py` cuts the three views.
+2. **Image → 3D:** Tripo H3.1 multiview (9 credits, job `c1773351-41a0-4af0-9779-b07e0d373e3e`), face limit 3,000, textured, no PBR → `weapons/scan/source/k47_galaxy_relic_tripo_raw.glb`.
+3. **Steps 1–5 as for a gun** (orient, decimate with room for the part cut, bake, flatten), with the skin options:
+   - no `_CAMO` anywhere: a skin is its own finish;
+   - `saturation: 1.0`: no lift (the scans' default 1.4 turned the gold lemon-yellow and swamped the black);
+   - `rehue`: `[lo, hi, to_lo, to_hi, value×, saturation×]` per hue band. The gold (18–46°) moves to 40–46° and darkens to 85 % (antique gold, off the team orange's hues: 0.1 % of the albedo in its band, 0 % within ΔE 40); the nebula's blues move to violet (2 bands), clear of the team blue (0 % in its band, 1.8 % within ΔE 40, under the build's 2 % limit). A darker, greyer gold (×0.72 value, ×0.8 saturation) was tried and read as khaki camouflage (V10), so it was dropped;
+   - `glow_texels`: the bright cyan-teal and violet-magenta texels (the cracks, seams, shroud slots and magazine window) become a 256² **emissive map** (2.2 % of the albedo). The glTF material carries it as `emissiveTexture`; the game draws it at 0.85 (`SKIN_GLOW`), below the albedo it sits on.
+4. **Fit to the base:** the mesh's box is mapped onto the shipped K-47's (length and height exact; depth scaled down to the base's), then each blueprint **slot** (`stock`, `grip`, `mag`, `handguard` boxes in the spec) is moved and scaled in the side view to overlap the base's silhouette best (a coordinate search scored by the silhouette IoU; the mag moves as its own part). The stock's fins stay inside the stock's box, nothing passes the base's rear end or top. Side-silhouette IoU: 0.708 as generated (sampled), 0.886 after (exact, 5 mm cells).
+5. **Nodes and moving parts from the base:** every socket (`grip`, `muzzle`, `offhand`, `eject`, `mag`, both rails) is copied from `weapons/sockets.json` rather than placed again, and `part_mag` is cut with the base's `axis` and `travel`. Extras: `weaponId: k47`, `skinId`, `blueprintOf: k47`.
+6. Written to `weapons/k47_galaxy_relic.glb` (and `apps/web/public/assets/weapons/skins/k47_galaxy_relic.glb` with `--runtime`). `weapons.json` and `sockets.json` don't change: a skin is not a weapon. The build is deterministic (a rebuild is byte-identical).
+
+```
+$B -b --factory-startup --python-exit-code 1 --python art/pipeline/build_gun_scan.py -- k47_galaxy_relic --runtime apps/web/public/assets
+$B -b --factory-startup --python-exit-code 1 --python tools/asset-check/check.py -- art/weapons/k47_galaxy_relic.glb --kind weapon --blueprint-of art/weapons/k47.glb
+```
+
+**The blueprint check** (`--blueprint-of`, new; [record](weapons/checks/k47_galaxy_relic.check.txt)): 41 pass, 0 fail. Against the base: the same gun (weaponId, family, aim pose, hands), length and height ±3 % (−0.1 %, −0.4 %), depth ≤ +10 % (0.0 %), nothing past the base's rear end, side-silhouette IoU ≥ 0.85 at 5 mm cells (0.886), every base node present with `muzzle`, `offhand`, `eject` ≤ 1 cm (0.04, 0.00, 0.06 cm), `mag` ≤ 2 cm, the grip ≤ 1 mm, the rails ≤ 1 cm, no sight, lens or light nodes, the moving parts and their motion unchanged, emissive ≤ 15 % of the surface (6.3 %), emission strength ≤ 1, no forward light (nothing in the front 15 % glows toward the muzzle), emissive hues ≥ ΔE 15 from the team colours (32), and no deeper in the Rookie's or the female soldier's head than the base at the level and ±45° aims (0 cm). The weapon checks (≤ 1,000 tris: 998; one material; ≤ 256² textures) pass as for any gun. `selftest.py` gained five blueprint cases.
+
+| Shot | |
+|---|---|
+| ![Held](../docs/screenshots/skins/held.png) | The skin in the hand next to the base K-47 (animation lab, the game's renderer) |
+| ![Tracers](../docs/screenshots/skins/tracers.png) | Tracers: the skin's violet bolt and aquamarine trail above, the base below |
+| ![Kill effect](../docs/screenshots/skins/kill-effect.png) | The stardust kill effect, frame by frame |
+| ![Still](../docs/screenshots/skins/kill-effect-still.png) | Its still variant (Reduce motion, Reduce flashes, Low) |
+
+`apps/web/scripts/skin-shots.mjs` takes these (headless Chrome, under the heavy lock).
+
+**Spend: 20.00 credits** of the task's 40: the superseded Void Nebula (1 sheet `df26c3b4…` + 1 Tripo model `52c7cfea…`, 10.00; its files are gone from the repo) and the Galaxy Relic (1 sheet + 1 Tripo model, 10.00).
+
+<details><summary>Concept prompt (GPT Image 2.5, medium, 2k, 16:9, opaque; references: the Void Nebula sheet for the shape, then the Galaxy Relic concept)</summary>
+
+"Orthographic turnaround sheet of ONE chunky toy assault rifle for a stylised cartoon video game, three views in a single row on a flat plain light grey background, each view separated by wide empty gaps, all at the same scale and the same height, perfectly aligned: (1) left: the right side of the gun, muzzle pointing to the right; (2) middle: the end view looking straight at the muzzle; (3) right: the left side of the gun, muzzle pointing to the left. SHAPE: copy the first reference image exactly: the same three views, the same overall outline, length, height and proportions, the same tall slab-sided receiver, the same short barrel shroud and overall length, the same stock length and depth, the same straight box magazine in the same place and the same length, the same pistol grip position. Do not make it longer, slimmer or taller; nothing sticks out above the receiver or past the stock's end. PARTS AND PAINT: restyle every part like the second reference image (the mythic 'Galaxy Relic' skin): obsidian-black armour plates with sharp layered angular shapes and engraved pale antique gold filigree (a soft yellow champagne gold, never orange or copper), a stock built from blade-like fins that stay inside the stock's outline, a heavy armoured barrel shroud with short glowing slots, a compact muzzle the same length as the original, a gold-trimmed box magazine, a pistol grip with gold edges. A cosmic nebula (violet, magenta and teal swirls with tiny stars) glows from inside thin cracks and seams in the black armour, and in the shroud slots; the armour itself stays black and gold. No scope, no sight glass, no lens, no laser, no lights shining forward, no particles, no smoke, nothing floating. Bevelled chunky toy shapes, clean flat colours with soft cel shading and dark outlines, no text, no logos, no letters, no hands, no background objects."
+</details>
+
 ## Review lows (18 Oct 2026, review-art-stacks.md and the environments review)
 
 - **L4, the shield's LOD1 node names:** `riot_shield_lod1.glb` named its nodes `face.001`, `grip.001` and `ground.001` (LOD0's still held the names in the build scene), which three.js reads as `grip001`. `build_weapons.py` now frees LOD0's names once it's written, and the LOD1 nodes are `face`, `grip` and `ground`. asset-check reads node names straight from the GLB and fails a Blender clash suffix (new selftest case).
@@ -1431,7 +1473,8 @@ What it checks:
 | The female soldier (22 Oct): 3 concept sheets + 1 edit (GPT Image 2.5 high 2k, 2.75 each) + 1 Tripo H3.1 multiview model (9) | **20.00** |
 | Her hairstyles (22 Oct): 1 concept sheet (GPT Image 2.5 high 2k) | **2.75** |
 | Outfits (22 Oct): 4 concept sheets (GPT Image 2.5 medium 2k, 1 each) + 2 boot turnarounds (high 2k, 2.75 each) + 2 Tripo H3.1 multiview boots (9 each) | **27.50** |
-| **Total so far** | **403.50** (the Forge's 400-credit cap: 320.50 used, counting both key arts and the VS plates, each in its own PR) |
+| K-47 skin line (28 Oct): the superseded Void Nebula and the Galaxy Relic, each 1 turnaround sheet (GPT Image 2.5 medium 2k) + 1 Tripo H3.1 multiview model (9) | **20.00** |
+| **Total so far** | **423.50** (the Forge's 400-credit cap: 320.50 used, counting both key arts and the VS plates, each in its own PR) |
 
 Phase 0 Higgsfield job IDs: concepts A `160eb90e-41ab-4ecc-a917-1e76c0563b40`, B `b40714aa-ec2f-4d2a-a522-ff5a4ebe57cc`, C `3e234313-6c57-4cd7-9946-22e6cd62b4b3`; 3D `75fc7390-163d-4c95-869c-58e8544bd654`.
 

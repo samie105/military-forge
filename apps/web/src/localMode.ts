@@ -28,7 +28,7 @@ import { JetWatch } from './diag/jetWatch';
 import type { InputSampler } from './input';
 import type { LocalBots } from './localBots';
 import { mapEventView } from './mapEvent';
-import { LocalLoadoutStore, ownedOnly, starterInventory } from './locker/loadouts';
+import { LocalLoadoutStore, accountInventory, ownedOnly } from './locker/loadouts';
 import { botLooks, lookBook } from './looks/book';
 import { AimLinePreview } from './aimLine';
 import { ThrowPreview } from './throwPreview';
@@ -111,7 +111,7 @@ export class LocalMode {
     lookBook.setRoster(this.me.id, players.map((p) => ({ id: p.id, name: p.name, isBot: p.isBot })));
     lookBook.setTeams(this.match?.teams ?? 0, new Map(players.map((p) => [p.id, p.team] as const)));
     const mine = new LocalLoadoutStore().peek();
-    lookBook.replace([...botLooks(SEED, players.filter((p) => p.isBot)), ...(mine ? [[this.me.id, ownedOnly(mine, starterInventory)] as const] : [])]);
+    lookBook.replace([...botLooks(SEED, players.filter((p) => p.isBot)), ...(mine ? [[this.me.id, ownedOnly(mine, accountInventory)] as const] : [])]);
   }
 
   tuning(): Tuning {

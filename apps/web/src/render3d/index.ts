@@ -4,10 +4,11 @@
  * on top as the HUD and the toggleable debug overlay (RenderOptions.overlay). Sim events reach the
  * effects through `onEvents` (main.ts forwards the 2D renderer's events here).
  */
-import { cosmeticLoadoutHash, type MapDef } from '@military-forge/content';
+import { cosmeticLoadoutHash, tracerTintOf, weapons, type MapDef } from '@military-forge/content';
 import { CollisionWorld, DamageSource, type SimEvent } from '@military-forge/sim';
 import {
   BufferGeometry,
+  Color,
   DirectionalLight,
   Fog,
   Group,
@@ -53,7 +54,8 @@ import type { EjectLookup } from './vfx/casings';
 import type { SwingLookup } from './vfx/melee';
 import type { GunPointLookup } from './vfx/projectiles';
 import type { BodyLookup } from './vfx/dash';
-import type { MuzzleLookup } from './vfx/gunfire';
+import type { MuzzleLookup, TracerTints } from './vfx/gunfire';
+import { KillEffects } from './vfx/killEffects';
 
 export { PlaneCamera, parsePreset, type PresetName, type RemoteView };
 
@@ -180,8 +182,10 @@ export class Renderer3D {
     build: (id, p) => {
       // read the view now: online it's a pooled object that another player may hold by the time this resolves
       const lod: CharacterLod = !p.isLocal && this.preset.remoteLod1 && !this.touch ? 1 : 0;
-      return this.assembler.create(this.loadouts.for(p), lod).then((inst) => {
+      const look = this.loadouts.for(p);
+      return this.assembler.create(look, lod).then((inst) => {
         const a = new Avatar(inst, lod, this.kit, id);
+        a.setLook(look); // its weapon skins (docs/17 §3.6)
         a.pivot.traverse((o) => (o.castShadow = true));
         this.dress(inst); // after the shadow flags: the outline casts none
         this.characterOf.set(a, inst);
@@ -290,6 +294,7 @@ export class Renderer3D {
       for (const [id, look] of this.looks) {
         const next = this.loadouts.for({ id, isLocal: id === this.localId });
         if (cosmeticLoadoutHash(next) !== look.loadoutHash) void look.setLoadout(next);
+        this.avatars.get(id)?.setLook(next);
       }
     };
     this.kit = new AvatarKit(ramp);
@@ -328,7 +333,48 @@ export class Renderer3D {
     const aimLine = new AimLine(this.muzzleOf);
     this.scene.add(aimLine.layer.mesh);
     this.vfx.register(aimLine);
+    // weapon skins (docs/17 §3.6–3.7): the shooter's tracer hue, and the killer's kill effect where the victim falls
+    this.vfx.gunfire.tracerTintOf = this.tracerTintOf;
+    this.killEffects = new KillEffects({
+      lookOf: (id) => this.loadouts.for({ id, isLocal: id === this.localId }),
+      teamOf: (id) => this.teamOf?.(id) ?? -1,
+      viewer: () => this.localId,
+      body: (id) => {
+        const a = this.avatars.get(id);
+        return a ? { x: a.pivot.position.x, y: a.pivot.position.y, killEffect: (colour, seconds) => a.killEffect(colour, seconds) } : null;
+      },
+    });
+    this.vfx.register(this.killEffects);
     this.setPreset(preset.name);
+  }
+
+  /** weapon skins' kill effects (vfx/killEffects.ts) */
+  readonly killEffects: KillEffects;
+  /** a player's team, −1 for none (main.ts, from the look book): a team kill plays no kill effect */
+  teamOf: ((id: number) => number) | null = null;
+  /** skin tracer hues, as linear RGB, by their #rrggbb pair */
+  private readonly tracerTints = new Map<string, TracerTints>();
+
+  /** A shooter's skin on the gun it fired: its tracer hues (linear RGB), or null for the base tracer (docs/17 V5). */
+  private readonly tracerTintOf = (shooter: number, weapon: number): TracerTints | null => {
+    const gun = weapons[weapon];
+    const hues = gun ? tracerTintOf(this.loadouts.for({ id: shooter, isLocal: shooter === this.localId }), gun.id) : null;
+    if (!hues) return null;
+    const key = `${hues.bolt}${hues.trail}`;
+    let tints = this.tracerTints.get(key);
+    if (!tints) {
+      const linear = (hex: string): readonly [number, number, number] => {
+        const c = new Color(hex); // linear, as the Forge's tracer tints are
+        return [c.r, c.g, c.b];
+      };
+      this.tracerTints.set(key, (tints = { bolt: linear(hues.bolt), trail: linear(hues.trail) }));
+    }
+    return tints;
+  };
+
+  /** Settings → Graphics → "Show other players' kill effects" (docs/17 §3.7): off, only your own kills play one. */
+  setShowKillEffects(on: boolean): void {
+    this.killEffects.showOthers = on;
   }
 
   /** A shooter's drawn muzzle, for tracers and flashes (false while its character isn't drawn). */
@@ -473,6 +519,7 @@ export class Renderer3D {
     this.scene.add(this.layers.background, this.layers.foregroundGroup);
     // the effects take the new world and the relit scene (the constructor's first build runs before Vfx exists)
     this.vfx?.setMap(this.world);
+    this.killEffects?.clear();
   }
 
   /** Loads the base character and effect assets, then compiles every material variant (docs/11 §3 shader warm-up). */
@@ -603,6 +650,7 @@ export class Renderer3D {
     this.sun.castShadow = this.preset.shadows === 'map';
     this.env?.setShadowMap(this.sun.castShadow);
     this.vfx.setPreset(this.preset);
+    this.killEffects.low = this.preset.name === 'low'; // Low: kill effects play their still variant
     this.kit.animateParts = this.preset.name !== 'low'; // Low: guns' parts stand still, merged in (no draws)
     if (lodChanged) {
       // every soldier is rebuilt at the new LOD; builds in flight (the old LOD) are dropped as they land

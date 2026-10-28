@@ -505,7 +505,9 @@ export function encodeHello(name: string, resumeToken = '', ticket = '', look: r
   return w.finish().slice();
 }
 
-/** v19: a look on the wire: u5 count + count × u16 cosmetic wire ids (count 0 = none). */
+/** v19: a look on the wire: u5 count + count × u16 cosmetic wire ids (count 0 = none). The count grows with
+ *  content, not with the protocol: 15 ids with `hair`, 16 with the K-47 skin slot (28 Oct, docs/17 §3.7). An
+ *  older peer reads every id, keeps the ones it knows by position and draws the rest as their defaults. */
 function writeLook(writer: BitWriter, look: readonly number[] | null | undefined): void {
   const n = Math.min(MAX_LOOK_IDS, look?.length ?? 0);
   writer.unsigned(n, 5);

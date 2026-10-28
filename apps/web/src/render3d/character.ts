@@ -9,8 +9,9 @@
  *   by player id, so a room isn't a row of clones.
  */
 import { DEFAULT_COSMETIC_LOADOUT, type CosmeticLoadout } from '@military-forge/content';
-import type { AnimationClip, Bone, Material, Object3D, SkinnedMesh } from 'three';
-import { LocalLoadoutStore, ownedOnly, starterInventory, type LoadoutStore } from '../locker/loadouts';
+import type { AnimationClip, Bone, Color, Material, Object3D, SkinnedMesh } from 'three';
+import { LocalLoadoutStore, accountInventory, ownedOnly, type LoadoutStore } from '../locker/loadouts';
+import { onGrants } from '../looks/grants';
 
 export type { CharacterLod } from '../character';
 /** the shared toon ramp (one for soldiers, guns and the map); old name kept for existing callers */
@@ -25,8 +26,8 @@ export interface CharacterInstance {
   bone(name: string): Bone | null;
   readonly clips: readonly AnimationClip[];
   dispose(): void;
-  /** the dye material's dissolve (a dying soldier fades: death.ts); absent on test rigs */
-  readonly material?: { readonly dissolve: { value: number } };
+  /** the dye material's dissolve (a dying soldier fades: death.ts) and tint (a kill effect's colour: docs/17 §3.7); absent on test rigs */
+  readonly material?: { readonly dissolve: { value: number }; readonly tint?: { readonly colour: Color; readonly amount: { value: number } } };
   /** the outline hull and how to swap its material (a dying soldier's dissolves on its own) */
   readonly outline?: { material: Material | Material[] } | null;
   setOutline?(material: Material | null): void;
@@ -60,12 +61,19 @@ export class LoadoutDirectory {
   private looks: ReadonlyMap<number, CosmeticLoadout> = new Map();
   onChange: (() => void) | null = null;
 
+  /** the look as saved, before the owned-only filter: a grant arriving later (sign-in) lets it through */
+  private saved: CosmeticLoadout | null = null;
+
   constructor(store: LoadoutStore | null = new LocalLoadoutStore()) {
+    onGrants(() => {
+      if (this.saved) this.setLocal(this.saved);
+    });
     store
       ?.load()
       .then((saved) => {
         if (!saved) return;
-        this.local = ownedOnly(saved, starterInventory);
+        this.saved = saved;
+        this.local = ownedOnly(saved, accountInventory);
         this.onChange?.();
       })
       .catch(() => {}); // the default look; the Locker reports storage problems itself
@@ -79,7 +87,8 @@ export class LoadoutDirectory {
 
   /** The local player's look changed (a Locker or creator save): owned items only, as at load. */
   setLocal(look: CosmeticLoadout): void {
-    this.local = ownedOnly(look, starterInventory);
+    this.saved = look;
+    this.local = ownedOnly(look, accountInventory);
     this.onChange?.();
   }
 
