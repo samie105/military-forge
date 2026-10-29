@@ -6,7 +6,8 @@
  * - hashed bundles (/assets/name-HASH.ext, right under /assets/): cache first, per version (they never
  *   change under a name);
  * - the game's art, models, maps and sounds (/assets/…/, /art/, /icons/, the manifest): network first,
- *   so a deploy never serves stale files (the server says no-cache: a revalidation, 304 when unchanged),
+ *   so a deploy never serves stale files (each fetch revalidates, 304 when unchanged, even past a copy
+ *   the browser's own cache still counts as fresh),
  *   and the last good copy when offline, so training draws its soldiers and guns with no connection
  *   (audit 28 Oct: they were invisible offline). That cache outlives versions (each fetch refreshes it)
  *   and keeps the newest MAX_ASSETS files;
@@ -96,9 +97,12 @@ async function keepLoaded(urls) {
   }
 }
 
+// assets ask the server every time (cache: 'no-cache'), even where the browser still holds a copy it
+// may reuse: before 28 Oct the server let browsers keep models for 7 days, so a returning player's
+// cached model could name a file a later deploy renamed (29 Oct: the dye masks became .webp)
 async function networkFirst(request, cacheName) {
   try {
-    const response = await fetch(request);
+    const response = await fetch(cacheName === ASSETS ? new Request(request, { cache: 'no-cache' }) : request);
     keep(cacheName, request, response);
     return response;
   } catch (e) {

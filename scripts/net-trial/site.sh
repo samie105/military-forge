@@ -49,6 +49,9 @@ site_caddyfile() {
 	@probe path /echo /probe-api/*
 	@pub path /trial-status /trial-status/* /owner-* /probe-config.json
 	@hashed path_regexp $hashed
+	# the dye masks became .webp on 29 Oct; models a browser cached earlier (for up to 7 days) still
+	# name the .png
+	@oldmask path_regexp oldmask ^(/assets/.+_dye_mask)\.png$
 	@fresh not path_regexp $hashed
 	route {
 		respond @foreign 403
@@ -67,6 +70,7 @@ site_caddyfile() {
 		}
 		header /manifest.webmanifest Content-Type application/manifest+json
 		header /r/* X-Robots-Tag noindex
+		rewrite @oldmask {re.oldmask.1}.webp
 		rewrite / /index.html
 		rewrite /r/* /index.html
 		rewrite /admin /admin.html

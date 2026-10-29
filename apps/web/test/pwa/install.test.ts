@@ -91,10 +91,11 @@ describe('the service worker', () => {
 function runWorker(version = '1', chunks: readonly string[] = []) {
   const listeners = new Map<string, (e: unknown) => void>();
   const stores = new Map<string, Map<string, Response>>();
-  const state = { online: true, files: new Map<string, string>(), fetched: [] as string[] };
+  const state = { online: true, files: new Map<string, string>(), fetched: [] as string[], modes: new Map<string, RequestCache>() };
   const net = async (r: Request | string): Promise<Response> => {
     const path = new URL(typeof r === 'string' ? r : r.url, 'https://mf.test').pathname;
     state.fetched.push(path);
+    if (typeof r !== 'string') state.modes.set(path, r.cache);
     if (!state.online) throw new TypeError('Failed to fetch');
     const body = state.files.get(path);
     return body === undefined ? new Response('no', { status: 404 }) : new Response(body, { status: 200 });
@@ -167,6 +168,14 @@ function runWorker(version = '1', chunks: readonly string[] = []) {
 }
 
 describe('the service worker offline (audit 28 Oct: training drew no soldiers offline)', () => {
+  it("asks the server for every model and texture, past a copy the browser still counts as fresh (29 Oct: models cached for 7 days named the old .png dye masks)", async () => {
+    const w = runWorker();
+    await w.lifecycle();
+    w.state.files.set('/assets/characters/rookie/rookie_body.glb', 'glb');
+    expect(await w.get('/assets/characters/rookie/rookie_body.glb')).toBe('glb');
+    expect(w.state.modes.get('/assets/characters/rookie/rookie_body.glb')).toBe('no-cache');
+  });
+
   it("keeps the game's models, textures and art it fetched, and serves them when the network is gone", async () => {
     const w = runWorker();
     w.state.files.set('/', 'page').set('/assets/weapons/k47.glb', 'gun').set('/assets/characters/rookie/textures/rookie_body_dye_mask.webp', 'mask').set('/art/key-art/key-art-phone.avif', 'art');
