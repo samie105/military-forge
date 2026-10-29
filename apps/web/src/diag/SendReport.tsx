@@ -1,12 +1,14 @@
 /**
  * Send a report (Settings and the pause menu; the owner, 24 Oct: "check the logs if you're logging
- * anything"): one tap opens what will be sent (WHAT_IS_SENT), a second sends it. The id that comes
- * back is the one to quote. ReportSentNote: the line under a failed connection's alert once the
+ * anything"): one tap opens what will be sent (WHAT_IS_SENT) and an optional note, a second sends it.
+ * The id that comes back is the one to quote. The note is how a player reaches us until there is a
+ * support email (privacy.html and terms.html point here for data requests, player reports and appeals:
+ * the legal review, 29 Oct). ReportSentNote: the line under a failed connection's alert once the
  * automatic report has gone.
  */
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Icon } from '../ui/Icon';
-import { WHAT_IS_SENT, reportStore, sendReport } from './report';
+import { MAX_NOTE, WHAT_IS_SENT, reportStore, sendReport } from './report';
 import './report.css';
 
 type Stage = { s: 'idle' } | { s: 'confirm' } | { s: 'sending' } | { s: 'sent'; id: string } | { s: 'failed'; why: 'offline' | 'busy' | 'error' };
@@ -20,6 +22,7 @@ const FAILED: Record<'offline' | 'busy' | 'error', string> = {
 /** `context`: where it's sent from ("settings", "pause"), so the owner knows what the player was doing. */
 export function SendReport({ context, className = '' }: { context: string; className?: string }) {
   const [stage, setStage] = useState<Stage>({ s: 'idle' });
+  const [note, setNote] = useState('');
   const box = useRef<HTMLDivElement>(null);
   // opened at the foot of a short panel (the phone's pause menu): it scrolls into view
   useEffect(() => {
@@ -27,7 +30,8 @@ export function SendReport({ context, className = '' }: { context: string; class
   }, [stage.s]);
   const send = async () => {
     setStage({ s: 'sending' });
-    const r = await sendReport('manual', context);
+    const r = await sendReport('manual', context, note);
+    if (r.ok) setNote('');
     setStage(r.ok ? { s: 'sent', id: r.id } : { s: 'failed', why: r.why });
   };
   if (stage.s === 'idle')
@@ -49,6 +53,16 @@ export function SendReport({ context, className = '' }: { context: string; class
           <p className="mf-report__what">
             <b>Sends:</b> {WHAT_IS_SENT}
           </p>
+          <label className="mf-report__note">
+            <span>Note (optional)</span>
+            <textarea
+              value={note}
+              maxLength={MAX_NOTE}
+              rows={2}
+              placeholder="What went wrong, a player to report, or a request about your data. Add your in-game name."
+              onChange={(e) => setNote(e.target.value)}
+            />
+          </label>
           {stage.s === 'failed' && (
             <p className="mf-report__bad" role="alert">
               <Icon name="bad" size="sm" />

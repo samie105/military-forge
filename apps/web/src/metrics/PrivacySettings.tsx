@@ -98,7 +98,7 @@ export function PrivacySettings({ phone = false }: { phone?: boolean }) {
           Read it
         </a>
       </Row>
-      <Row phone={phone} label="Delete my data" desc="Deletes your play data from our servers and this device's event log, and turns sharing off. Match stats already counted stay only as totals.">
+      <Row phone={phone} label="Delete my data" desc="Deletes your play data from our servers and this device's event log, and turns sharing off. Your player and its match stats stay unless you also delete your player.">
         {del === 'idle' || del === 'done' || del === 'failed' ? (
           <button type="button" className="btn btn--ghost btn--sm" onClick={() => setDel('confirm')} disabled={!m}>
             {del === 'done' ? 'Deleted' : 'Delete…'}
@@ -110,7 +110,7 @@ export function PrivacySettings({ phone = false }: { phone?: boolean }) {
           <b>Delete your play data?</b>
           <label>
             <input type="checkbox" checked={player} onChange={(e) => setPlayer(e.target.checked)} />
-            <span>Also delete my player: name, level, XP, friends, saved look and match history. You start again as a new player.</span>
+            <span>Also delete my player: name, level, XP, friends, saved look, match history and account, with any Brass and items. They can't be refunded or brought back, so refund unspent Brass first. You start again as a new player.</span>
           </label>
           <div className="mf-privacy__row">
             <button type="button" className="btn btn--sm" onClick={() => setDel('idle')} disabled={del === 'busy'}>

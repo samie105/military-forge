@@ -1,7 +1,7 @@
 /** Problem reports on the device (diag/): the log keeps the newest, a report fits the API's limit, a failed connection sends one at most every 10 minutes. */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MAX_EVENTS, MAX_ERRORS, MAX_LINE, clearDiag, diag, diagError, diagErrors, diagEvents } from '../../src/diag/log';
-import { AUTO_EVERY_MS, MAX_REPORT_BYTES, WHAT_IS_SENT, autoReport, buildReport, reportStore, sendReport, setReportSources } from '../../src/diag/report';
+import { AUTO_EVERY_MS, MAX_NOTE, MAX_REPORT_BYTES, WHAT_IS_SENT, autoReport, buildReport, reportStore, sendReport, setReportSources } from '../../src/diag/report';
 
 afterEach(() => {
   clearDiag();
@@ -33,8 +33,14 @@ describe('a report', () => {
     expect(r.events.at(-1)!.m).toMatch(/ 299$/);
   });
 
-  it('says on screen what it sends', () => {
-    for (const word of ['steps', 'errors', 'device', 'browser', 'version', 'in-game name', '7 days']) expect(WHAT_IS_SENT).toContain(word);
+  it('says on screen what it sends, the note included', () => {
+    for (const word of ['steps', 'errors', 'device', 'browser', 'version', 'in-game name', 'note', '7 days']) expect(WHAT_IS_SENT).toContain(word);
+  });
+
+  it("carries the player's note (the legal pages' contact route until there is an email), trimmed and cut to the API's limit", () => {
+    expect(buildReport('manual', 'settings', '  Please send me a copy of my data. Name: Ade  ').note).toBe('Please send me a copy of my data. Name: Ade');
+    expect(buildReport('manual', 'settings', 'x'.repeat(MAX_NOTE + 50)).note).toHaveLength(MAX_NOTE);
+    expect(buildReport('manual', 'settings', '   ')).not.toHaveProperty('note');
   });
 
   it('posts to /api/reports and remembers the id; offline and rate-limited say so', async () => {

@@ -2,7 +2,7 @@
  * Send a report (Settings, the pause menu) and the one a failed room connection sends by itself:
  * the device's event log (log.ts), its last script errors, the tour's last steps, the device, the
  * browser and the build, to the API (POST /api/reports: kept 7 days, read on the owner's admin page).
- * The only personal thing is the in-game name the player picked. WHAT_IS_SENT says so on screen.
+ * The only personal things are the in-game name the player picked and the note they may write. WHAT_IS_SENT says so on screen.
  */
 import { buildId } from 'virtual:title-info';
 import { createStore } from 'zustand/vanilla';
@@ -11,7 +11,9 @@ import { metricsFeature } from '../metrics/hooks';
 
 /** The words under every Send a report: what leaves the device. */
 export const WHAT_IS_SENT =
-  'What happened in the game on this device (its steps, connection states and errors), your device, browser and screen size, the game’s version and your in-game name. Nothing else. Kept 7 days.';
+  'What happened in the game on this device (its steps, connection states and errors), your device, browser and screen size, the game’s version, your in-game name and your note. Nothing else. Kept 7 days.';
+/** the API's limit on the note (reports/routes.ts) */
+export const MAX_NOTE = 500;
 /** the API's body limit is 16 KB: a report is cut to fit under this */
 export const MAX_REPORT_BYTES = 15_000;
 /** a failed connection sends one by itself at most this often */
@@ -57,7 +59,7 @@ export function buildReport(reason: ReportReason, context: string, note = '') {
     events: [...diagEvents()],
     errors: [...diagErrors()],
     tour: tour().slice(-40).map((s) => s.slice(0, 160)),
-    ...(note.trim() ? { note: note.trim().slice(0, 500) } : {}),
+    ...(note.trim() ? { note: note.trim().slice(0, MAX_NOTE) } : {}),
   };
   while (body.events.length > 10 && new TextEncoder().encode(JSON.stringify(body)).length > MAX_REPORT_BYTES) body.events.splice(0, Math.ceil(body.events.length / 10));
   return body;

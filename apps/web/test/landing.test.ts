@@ -125,6 +125,13 @@ describe('the text pages (privacy.html, terms.html, official.html)', () => {
   it('the official links stay out of search until the owner lists the accounts', () => {
     expect(read('../official.html')).toContain('<meta name="robots" content="noindex, follow" />');
   });
+  it('the privacy note says what the code does (the legal review, 29 Oct): no blanket IP promise, no guest clean-up that never runs, the processors named', () => {
+    const privacy = read('../privacy.html').replace(/<!--[\s\S]*?-->/g, '');
+    expect(privacy).not.toMatch(/never keep your IP address/);
+    expect(privacy).not.toMatch(/guest player nobody has used/i);
+    expect(privacy).not.toMatch(/never sell or share your data/);
+    for (const fact of ['90 days', '13 months', 'Problem reports</b>: 7 days', 'last 7 are kept', 'Flutterwave', 'Resend', 'Cloudflare Turnstile', 'Microsoft Azure', 'never recorded', 'Also delete my player']) expect(privacy).toContain(fact);
+  });
   it('the terms match the store: a 14-day refund of unspent Brass', () => {
     const terms = read('../terms.html');
     expect(terms).toMatch(/14 days/);

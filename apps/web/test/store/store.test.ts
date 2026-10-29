@@ -78,6 +78,16 @@ describe('the Store screen', () => {
     expect(html).toContain('No real money is taken');
   });
 
+  it('each confirm says, before the button, what can and can’t be refunded (the legal review, 29 Oct: digital content supplied at once)', () => {
+    let html = storeBody(state(view(account()), { confirm: { kind: 'item', item: ITEMS[0]! } }));
+    expect(html).toContain('can’t be returned for Brass or money');
+    expect(html.indexOf('can’t be returned')).toBeLessThan(html.indexOf('data-action="confirm"'));
+    html = storeBody(state(view(account()), { confirm: { kind: 'bundle', bundle: BUNDLES[0]!, currency: 'NGN' } }));
+    expect(html).toContain('refund this purchase for 14 days while all of its Brass is unspent');
+    expect(html).toContain('Once you spend any of it, this purchase can’t be refunded');
+    expect(html.indexOf('Once you spend any of it')).toBeLessThan(html.indexOf('data-action="confirm"'));
+  });
+
   it('owned items say so and offer Wear it; the effect tier at the upgrade price (players own the base, so not "owner’s price": audit 28 Oct) shows what it was', () => {
     const items = [
       { ...ITEMS[0]!, owned: true },

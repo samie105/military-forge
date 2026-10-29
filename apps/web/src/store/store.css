@@ -170,6 +170,7 @@ html.reduce-motion :where(.mf-st-fit) .mf-st__fx-win img { animation: none; tran
 :where(.mf-st-fit) .mf-st__dlg-price { margin: var(--sp-2) 0 0; display: inline-flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-36); }
 :where(.mf-st-fit) .mf-st__dlg-line { margin: 0; color: var(--c-muted); font-size: var(--fs-18); line-height: 1.45; }
 :where(.mf-st-fit) .mf-st__dlg-line b { color: var(--c-paper); }
+:where(.mf-st-fit) .mf-st__dlg-ack { color: var(--c-paper); }
 :where(.mf-st-fit) .mf-st__dlg-acts { display: flex; gap: var(--sp-3); margin-top: var(--sp-4); flex-wrap: wrap; }
 
 /* a laptop's smaller box, or big text */

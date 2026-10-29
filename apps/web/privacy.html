@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Privacy · %GAME_NAME%</title>
-    <meta name="description" content="What %GAME_NAME% collects when you play, why, how long it is kept, and how to delete it." />
+    <meta name="description" content="What %GAME_NAME% collects when you play, why, who else sees it, how long it is kept, and how to delete it." />
     <link rel="canonical" href="%ORIGIN%/privacy.html" />
     <meta name="theme-color" content="#0e100b" />
     <meta name="color-scheme" content="dark" />
@@ -15,23 +15,35 @@
     <meta property="og:site_name" content="%GAME_NAME%" />
     <meta property="og:url" content="%ORIGIN%/privacy.html" />
     <meta property="og:title" content="Privacy · %GAME_NAME%" />
-    <meta property="og:description" content="What %GAME_NAME% collects when you play, why, how long it is kept, and how to delete it." />
+    <meta property="og:description" content="What %GAME_NAME% collects when you play, why, who else sees it, how long it is kept, and how to delete it." />
     <meta property="og:image" content="%ORIGIN%/og-image.jpg" />
     <meta property="og:image:alt" content="Two %GAME_NAME% soldiers with jetpacks, rifles held low, on a sunny city rooftop" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="stylesheet" href="/src/ui/legal.css" />
-    <!-- docs/16-player-metrics.md §6–§8: keep this page and the doc saying the same thing; the ads lines match
-         render3d/ads (audience.ts: play data only weights our own creatives, never paid ones) and terms.html §7 -->
+    <!--
+      docs/16-player-metrics.md §6–§8 and docs/17 (the store): keep this page and the docs saying the same thing.
+      Every line was checked against the code on 29 Oct 2026 (the legal review): play stats apps/api/src/analytics
+      (raw days 90, player days 400, hourly counts 35 days), the player and account tables apps/api/src/db/schema.ts
+      (sessions keep ip_prefix and ua_hash), the store apps/api/src/store (payments outlive the account), problem
+      reports apps/api/src/reports (7 days), the IP-keyed limits http/rateLimit.ts and auth/throttle.ts (an hour at
+      most), the nightly backups scripts/net-trial/data.sh (7 kept). The ads lines match render3d/ads (audience.ts:
+      play data only weights our own creatives, never paid ones) and terms.html §7. Still for the owner: who the
+      controller is (a legal name and address), a privacy contact email (PRIVACY_CONTACT at build time), and an end
+      date for the server logs.
+    -->
   </head>
   <body>
     <main class="pv">
       <p class="pv__eyebrow">%GAME_NAME%</p>
       <h1>Privacy</h1>
-      <p class="pv__muted">Updated 28 October 2026 · plain words first, details below</p>
+      <p class="pv__muted">Updated 29 October 2026 · plain words first, details below</p>
 
       <div class="pv__box">
-        <p><b>In short.</b> We keep what the game needs to run matches. Only if you say yes, we also use your <b>play data</b> (how you play) to improve the game and to pick the ads you see on the billboards in the maps. Today those ads are all our own: Deet Studios, the studio that makes %GAME_NAME%, and WorldStreet, another of our products. We never keep your IP address, never use third-party trackers, never fingerprint your device and never sell or share your data. You can say no, change your mind, or delete your data in <b>Settings → Privacy</b>.</p>
+        <p><b>In short.</b> We keep what the game needs to run: your player, your matches, your account if you save one, and your purchases if you make any. Only if you say yes, we also use your <b>play data</b> (how you play) to improve the game and to pick the ads you see on the billboards in the maps. Today those ads are all our own: Deet Studios, the studio that makes %GAME_NAME%, and WorldStreet, another of our products. With your player we keep only the first part of your network address, never the whole of it. We don't use advertising or analytics trackers, and we never sell your data. You can say no, change your mind, or delete your data in <b>Settings → Privacy</b>.</p>
       </div>
+
+      <h2>Who we are</h2>
+      <p>%GAME_NAME% is made by Deet Studios. For anything on this page, including a request about your data: %PRIVACY_CONTACT%.</p>
 
       <h2>What we collect, and why</h2>
       <div class="pv__scroll">
@@ -41,62 +53,113 @@
           </thead>
           <tbody>
             <tr>
-              <td><b>Your player</b>: the name you pick, a random player id, your level and XP, your saved look and guns, your friends</td>
-              <td>To let you play, keep your progress and find friends</td>
+              <td><b>Your player</b>: the name you pick, a random player id, your level and XP, your saved look and guns, your friends, the players you block, your friend code, and the devices you play on (when each signed in and was last used, the first part of its network address, which names a network and not your device, and a scrambled code of the browser's name)</td>
+              <td>To let you play, keep your progress, find friends, and show and end your signed-in devices (<b>Sign out everywhere</b>)</td>
               <td>Always (you can delete your player)</td>
             </tr>
             <tr>
-              <td><b>Match stats</b>: in online matches, your kills, deaths, damage, the guns you used, how long you lived and played, when you left, your ping band and reconnects, with your player id</td>
-              <td>To run matches, keep your level and the leaderboards, and balance the weapons and maps</td>
+              <td><b>Your account</b>: your email, and your password stored only as a one-way hash we can't read back</td>
+              <td>To sign you in on any device and keep your progress safe</td>
+              <td>Only if you save an account</td>
+            </tr>
+            <tr>
+              <td><b>Match stats</b>: in online matches, your kills, deaths, damage, the guns you used, how long you lived and played, when you left, your ping band and reconnects, with your player id and the name you played under</td>
+              <td>To run matches, keep your level, your match history and the leaderboards, and balance the weapons and maps</td>
               <td>Always: the game needs them</td>
             </tr>
             <tr>
-              <td><b>Play data</b>: when you play and for how long, the screens you reach, the features you use, your device type (phone, tablet or computer; touch, keys or a controller; the graphics level) and your time zone's offset, tied to a random id that lasts one visit and to your player id</td>
+              <td><b>Purchases</b>: what you bought, the price and currency, when, the payment's status and the payment provider's reference for it, your Brass balance and every change to it, and the items you own</td>
+              <td>To give you what you paid for, handle refunds, stop fraud, and keep a record of the money</td>
+              <td>Only if you buy. Buying needs a saved account</td>
+            </tr>
+            <tr>
+              <td><b>Play data</b>: when you play and for how long, the screens you reach, the features you use, how you arrived (directly, from an invite, or from the installed game), your device type (phone, tablet or computer; touch, keys or a controller; the graphics level) and your time zone, tied to a random id that lasts one visit and to your player id</td>
               <td>To see where the game confuses or loses people and fix it, and to pick which of our billboard ads you see more often (for example ads made for touch players, or for evening players)</td>
               <td><b>Only if you say yes</b>. We ask everyone, and you can turn it off any time</td>
             </tr>
             <tr>
-              <td><b>Counts with no id at all</b>: errors on your device (a screen that didn't load) and which billboard ads were on screen, saved and visited</td>
+              <td><b>Counts with no id at all</b>: errors on your device (a screen that didn't load) and which billboard ads were on screen, saved and visited, with your country</td>
               <td>To fix bugs and report to advertisers how often their ads were seen, never who saw them</td>
               <td>Unless your browser sends Global Privacy Control or Do Not Track (and in Europe, ad counts only with your yes)</td>
             </tr>
             <tr>
               <td><b>Your age answer</b>: that you said you are 18 or older, the year you were born and when you said it (never your birthday)</td>
-              <td>%GAME_NAME% is for adults (<a href="/terms.html">Terms</a> §1): online play and saved accounts need it</td>
-              <td>On your device before your first online match; with your account when you save one</td>
+              <td>%GAME_NAME% is for adults (<a href="/terms.html">Terms</a> §1): online play, saved accounts and the Store need it</td>
+              <td>On your device before your first online match; with your account when you save one or claim a Store gift</td>
             </tr>
             <tr>
-              <td><b>Your country</b>, worked out from the connection or your time zone</td>
+              <td><b>Your country</b>, worked out from your time zone or the connection</td>
               <td>To follow each country's rules and see where players come from</td>
-              <td>With the match stats and play data above. The address itself is looked up and dropped, never stored</td>
+              <td>With the match stats, play data and counts above. When the connection is used, the address is looked up and dropped, never stored</td>
+            </tr>
+            <tr>
+              <td><b>Problem reports</b>: what happened in the game on your device (its steps, connection states and errors), your device, browser, screen size and language, the game's version, your in-game name, and any note you write</td>
+              <td>To find and fix what went wrong, and to read your request if you write one in the note</td>
+              <td>When you tap <b>Send a report</b>, and once by itself (at most every 10 minutes) when a room connection fails</td>
+            </tr>
+            <tr>
+              <td><b>Your full network address, briefly</b>: counters keyed by it</td>
+              <td>To stop password guessing, spam and attacks on the servers</td>
+              <td>Always, for a few minutes and an hour at most</td>
             </tr>
           </tbody>
         </table>
       </div>
-      <p>We don't collect your real name, email (unless you add one to your account), messages, contacts, location beyond your country, or anything about you from other sites. Billboard ads in the game never open anything during a match, and the ads we show are never chosen from what other companies know about you. If we ever show paid ads from other companies, your play data will never be used to aim them at you (<a href="/terms.html">Terms</a> §7).</p>
+      <p><b>Voice chat</b> goes through our game server live, to the players who can hear you, and is never recorded or kept. There is no text chat. We don't collect your real name, contacts, location beyond your country, or anything about you from other sites. Billboard ads in the game never open anything during a match, and the ads we show are never chosen from what other companies know about you. If we ever show paid ads from other companies, your play data will never be used to aim them at you (<a href="/terms.html">Terms</a> §7).</p>
+
+      <h2>Why we're allowed to use it</h2>
+      <ul>
+        <li><b>To give you the game you asked for</b>: your player, account, match stats, purchases and your age answer.</li>
+        <li><b>Because you said yes</b>: play data, and choosing our ads from it. You can take your yes back any time; that doesn't undo what was done before.</li>
+        <li><b>To keep the game safe and working</b>: problem reports, counts with no id, the network-address counters, and server logs.</li>
+        <li><b>To keep the records a business must keep</b>: payments and refunds.</li>
+      </ul>
+
+      <h2>Who else sees it</h2>
+      <ul>
+        <li><b>Other players</b> see your name, level and look in menus and matches, hear you on voice chat, and can open your profile: your level, lifetime stats, kills by gun and recent matches. Leaderboards show your name and scores. Only your friends see whether you're online and which room you're in.</li>
+        <li><b>The people who make %GAME_NAME%</b> see play data and match stats as totals on a private page, and read problem reports.</li>
+        <li><b>Microsoft Azure</b> hosts our server, in South Africa North (Johannesburg). Everything above is stored there.</li>
+        <li><b>Flutterwave</b> takes payments. When you buy Brass, we send it your account email, your in-game name and the amount. You pay on Flutterwave's own page, and it handles your card or bank details under its own privacy policy. We never see them.</li>
+        <li>If we email you about your account (confirming your email, or a password reset), the email goes out through <b>Resend</b>, which gets your email address.</li>
+        <li>If the account forms show a bot check, it is <b>Cloudflare Turnstile</b>: Cloudflare sees your network address and details of your browser.</li>
+        <li>In a <b>local room</b> (players on the same network), your device asks a Google server for your network's public address, so the devices can find each other.</li>
+        <li>No analytics company, ad network or data broker receives your data, and we never sell it.</li>
+      </ul>
+      <p>Some of these companies work outside your country and outside South Africa, including in the United States, so your data can be handled there. We use each one only for the job above.</p>
+
+      <h2>On your device</h2>
+      <p>The game keeps these in your browser's storage: your settings and controls, your sign-in, your age answer, your play-data answer, your progress through the tour and tips with a short log of them (it never leaves your device), voice settings, ads you saved (for a day), how often the "install the game" offer has shown, and copies of the game's files so it loads fast. We set one cookie, to keep you signed in, and no advertising or tracking cookies. Clearing the site's data in your browser removes all of it from your device.</p>
 
       <h2>How long we keep it</h2>
       <ul>
         <li><b>Single events</b> (one match, one visit): 90 days, then deleted.</li>
         <li><b>Your daily summary</b> (days you played, matches, the device you used most): 13 months, then deleted.</li>
-        <li><b>Totals</b> with no player in them (for example "1,240 matches on Fog Stair this week"): kept to see trends.</li>
-        <li><b>Your player</b>: until you delete it. A guest player nobody has used for a long time is removed.</li>
-        <li><b>Problem reports</b> you send: 7 days.</li>
+        <li><b>Totals</b> with no player in them (for example "1,240 matches on Fog Stair this week"): kept to see trends. Hourly totals: 5 weeks.</li>
+        <li><b>Your player and account</b>, with your match history, Brass and items: until you delete your player.</li>
+        <li><b>A finished match's record</b> keeps the name and stats of everyone in it, so the name you played under stays in that record after you delete your player.</li>
+        <li><b>Payment records</b>: kept after you delete your player, without your player attached, as our record of the money. So is any change we make to a balance by hand, with its reason.</li>
+        <li><b>Problem reports</b>: 7 days.</li>
+        <li><b>Network-address counters</b>: an hour at most.</li>
+        <li><b>Server logs</b> can hold the first part of your network address next to account events (signing in, saving an account, changing a password), and the full address when a fast connection fails to start. They have no fixed end date yet.</li>
+        <li><b>Backups</b>: a copy of the database is made every night and the last 7 are kept, so data you delete can stay in a backup for up to 7 days.</li>
       </ul>
 
       <h2>Your choices and rights</h2>
       <ul>
         <li><b>Say no or yes</b> to sharing your play data: the card on Home the first time, then <b>Settings → Privacy</b>.</li>
-        <li><b>Delete my data</b> (Settings → Privacy): deletes your play data from our servers (single events within minutes) and this device's event log. Tick "Also delete my player" to delete your name, level, friends and match history too.</li>
-        <li>You can also ask to see, correct or move your data, or object to how we use it. Contact: %PRIVACY_CONTACT%.</li>
+        <li><b>Delete my data</b> (Settings → Privacy): deletes your play data from our servers (single events within minutes) and this device's event log, and turns sharing off. Your player and match stats stay.</li>
+        <li>Tick <b>Also delete my player</b> to delete your name, level, friends, match history, account, Brass and items too. Brass and items deleted this way can't be refunded or brought back, so refund unspent Brass first if you want the money back.</li>
+        <li><b>Change your name</b> in the game, and end your sessions with <b>Sign out everywhere</b> (Settings → Account).</li>
+        <li>You can also ask to see your data or get a copy of it, correct it, or object to how we use it. Contact: %PRIVACY_CONTACT%. Tell us your in-game name so we can find your player.</li>
         <li>If you think we got something wrong you can complain to your data protection authority: the Nigeria Data Protection Commission, South Africa's Information Regulator, or the authority where you live in the EU or UK.</li>
       </ul>
 
       <h2>Under 18?</h2>
-      <p>%GAME_NAME% is for adults, 18 and over (<a href="/terms.html">Terms</a> §1). If we learn an account belongs to someone under 18, we close it and delete its data; a parent or guardian can tell us through the contact above. We never use play data to aim paid ads at anyone, and ads in the game are never about gambling, alcohol, tobacco or other adult products, except where marked 18+ and switched off in places that require it.</p>
+      <p>%GAME_NAME% is for adults, 18 and over (<a href="/terms.html">Terms</a> §1). If we learn an account belongs to someone under 18, we close it and delete its data; a parent or guardian can tell us through the contact above. We never use play data to aim paid ads at anyone. Our own WorldStreet ads are about trading: they carry "Trading involves risk. 18+." and can be switched off in places that require it.</p>
 
-      <h2>Who sees it, and where it is</h2>
-      <p>Only the people who make %GAME_NAME% can see play data and match stats, as totals on a private page. They are stored on our own server (Microsoft Azure, South Africa North, in Johannesburg). No analytics company, ad network or data broker receives them. We protect it with encrypted connections and keep access to our team.</p>
+      <h2>Keeping it safe</h2>
+      <p>Every connection to the game is encrypted, passwords are kept only as one-way hashes, and access to the server is kept to our team. If a breach puts your data at risk, we'll tell you, and the authorities the law requires us to tell.</p>
 
       <h2>Changes</h2>
       <p>If we change what we collect, we'll update this page and ask again where your yes is needed.</p>

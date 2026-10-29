@@ -3,6 +3,9 @@
 .mf-report__what { flex: 1 1 260px; margin: 0; font-size: var(--fs-14, 14px); line-height: 1.35; color: var(--c-muted, #b5b9a2); }
 .mf-report__what b { color: var(--c-text, #f2eedf); }
 .mf-report__acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.mf-report__note { display: flex; flex-direction: column; gap: 4px; flex: 1 1 100%; font-size: var(--fs-14, 14px); color: var(--c-muted, #b5b9a2); }
+.mf-report__note textarea { width: 100%; box-sizing: border-box; min-height: 56px; resize: vertical; padding: 8px 10px; font: inherit; font-size: 16px; line-height: 1.35; color: var(--c-text, #f2eedf); background: var(--c-ink-950, #0e100b); border: 1.5px solid var(--c-plate-line, rgb(255 255 255 / .2)); border-radius: var(--r-sm, 8px); }
+.mf-report__note textarea:focus-visible { outline: 2px solid var(--c-volt, #c8ff3d); outline-offset: 1px; }
 .mf-report__done, .mf-report__bad, .mf-report__auto { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--fs-14, 14px); }
 .mf-report__done .ic { color: var(--c-ok, #7bd88f); }
 .mf-report__bad .ic { color: var(--c-hp, #ff5a4f); }
@@ -12,3 +15,5 @@
 .mf-fit--phone .mf-report__what { font-size: 13px; }
 /* a phone's settings panel is short: Send and Cancel first, what's sent under them */
 .mf-fit--phone .mf-report__acts { order: -1; }
+/* the note sits above Send, so what you write comes before the button that sends it */
+.mf-fit--phone .mf-report__note { order: -2; }

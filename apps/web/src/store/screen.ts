@@ -205,7 +205,8 @@ function confirmMarkup(c: Confirm, view: Extract<StoreView, { enabled: true }>, 
     const body =
       short > 0
         ? `<p class="mf-st__dlg-line">You have ${formatBrass(balance)} Brass: ${formatBrass(short)} more needed. Get Brass on the right, then come back.</p>`
-        : `<p class="mf-st__dlg-line">Your balance after: <b>${formatBrass(balance - c.item.price)} Brass</b>. It’s yours for good, and it changes the look only.</p>`;
+        : `<p class="mf-st__dlg-line">Your balance after: <b>${formatBrass(balance - c.item.price)} Brass</b>. It’s yours for good, and it changes the look only.</p>
+           <p class="mf-st__dlg-line mf-st__dlg-ack">You get it straight away, so it can’t be returned for Brass or money.</p>`;
     return `
       <div class="mf-st__scrim" data-action="cancel"></div>
       <div class="mf-st__dlg" role="dialog" aria-modal="true" aria-labelledby="mf-st-dlg-t">
@@ -224,7 +225,8 @@ function confirmMarkup(c: Confirm, view: Extract<StoreView, { enabled: true }>, 
     <div class="mf-st__scrim" data-action="cancel"></div>
     <div class="mf-st__dlg" role="dialog" aria-modal="true" aria-labelledby="mf-st-dlg-t">
       <h2 class="display mf-st__dlg-t" id="mf-st-dlg-t">${formatBrass(c.bundle.brass)} Brass for ${price}</h2>
-      <p class="mf-st__dlg-line">You’ll pay on Flutterwave’s secure page, then come back here. Brass is added once the payment is confirmed. It can’t be cashed out or sent to anyone; unspent Brass can be refunded for 14 days.</p>
+      <p class="mf-st__dlg-line">You’ll pay on Flutterwave’s secure page, then come back here. Brass is added as soon as the payment is confirmed. It can’t be cashed out or sent to anyone.</p>
+      <p class="mf-st__dlg-line mf-st__dlg-ack">You can refund this purchase for 14 days while all of its Brass is unspent. Once you spend any of it, this purchase can’t be refunded.</p>
       ${view.mode === 'test' ? '<p class="mf-st__dlg-line"><span class="tag tag--warn">Test mode</span> No real money is taken.</p>' : ''}
       <div class="mf-st__dlg-acts">
         <button type="button" class="btn btn--volt m-p8" data-action="confirm"${busy ? ' disabled' : ''}>${busy ? 'Opening…' : `Continue to pay ${price}`}</button>

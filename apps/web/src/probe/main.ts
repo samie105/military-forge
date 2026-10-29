@@ -350,7 +350,7 @@ function render(config: ProbeConfig): void {
     el(
       'p',
       { class: 'probe__privacy' },
-      'What we keep: what you type above and the timings. Not your name, not your IP address: the server notes only which network (ASN) the test came from. The comparison asks public sites (AWS, Cloudflare, IXPN, Nobus) for a tiny file, so they see a visit as any website would. Run it again at another time of day or on another network: every run helps.',
+      'What we keep: what you type above and the timings. Not your name, not your IP address: the server notes which network (ASN) and country the test came from, and a scrambled code for the network’s address range, and asks a public lookup service (Team Cymru) which network that range belongs to. There is no set date yet for deleting the results. The comparison asks public sites (AWS, Cloudflare, IXPN, Nobus) for a tiny file, so they see a visit as any website would. Run it again at another time of day or on another network: every run helps.',
     ),
   );
   root.removeAttribute('aria-busy');
