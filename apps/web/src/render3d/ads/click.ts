@@ -6,8 +6,7 @@
  * point on screen right now (`creativeAt`). The gesture, the queue and the cards are apps/web/src/ads.
  */
 import { GAME_SLUG } from '@military-forge/shared';
-import { projectToPlane, type Rect } from '../layers';
-import type { PlanePose } from '../planeCamera';
+import { projectToPlane, type PlanePose, type Rect } from '../planeCamera';
 import type { AdFrame, AdManifest, AdSlot } from './manifest';
 import { CROSSFADE_MS, frameIndex, previousFrame } from './rotation';
 

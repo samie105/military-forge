@@ -14,7 +14,9 @@ import { FEATURES, type ErrorKind, type Feature, type FormFactor, type InputKind
 import { MatchPhase } from '@military-forge/sim';
 import { savedAds } from '../ads/saved';
 import { pwaStore } from '../pwa';
-import { drawnBoards, setAdContext, type AdContext } from '../render3d/ads';
+// the three-free parts of render3d/ads: this runs from boot, before the 3D view's chunk (audit 28 Oct)
+import { setAdContext, type AdContext } from '../render3d/ads/audience';
+import { drawnBoards } from '../render3d/ads/drawn';
 import type { Api } from '../shell/api';
 import type { ShellState, ShellStore } from '../shell/store';
 import { daysBetween } from '../tour/facts';

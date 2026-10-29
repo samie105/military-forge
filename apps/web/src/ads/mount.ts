@@ -11,7 +11,9 @@ import { padManager, currentDevice, currentPadFamily } from '../gamepad';
 import { padLabel } from '../gamepad/glyphs';
 import { SELECT_DOUBLE_TAP_MS } from '../gamepad/manager';
 import { typingInto, type KeyBindings } from '../input';
-import { drawnBoards, type SavedPick } from '../render3d/ads';
+import type { SavedPick } from '../render3d/ads';
+// three-free: tap-to-save mounts at boot, before the 3D view's chunk (audit 28 Oct)
+import { drawnBoards } from '../render3d/ads/drawn';
 import { keyLabel } from '../shell/controls';
 import { logicalPoint, logicalRect } from '../ui/landscape';
 import type { Frame } from '../view';

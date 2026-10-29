@@ -82,3 +82,20 @@ export function applyPlanePose(camera3: PerspectiveCamera, pose: PlanePose, fovD
   camera3.setViewOffset(pose.aspect, 1, 0, pose.shift, pose.aspect, 1);
   camera3.updateMatrixWorld();
 }
+
+export interface Rect {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+/** Where a rectangle at depth z appears on the z = 0 plane, seen from a camera at (cx, cy, cz). */
+export function projectToPlane(r: Rect, z: number, cx: number, cy: number, cz: number, out: Rect): Rect {
+  const k = cz / (cz - z);
+  out.x0 = cx + (r.x0 - cx) * k;
+  out.x1 = cx + (r.x1 - cx) * k;
+  out.y0 = cy + (r.y0 - cy) * k;
+  out.y1 = cy + (r.y1 - cy) * k;
+  return out;
+}

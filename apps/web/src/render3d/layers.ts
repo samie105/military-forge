@@ -26,6 +26,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { PlayerView } from '../view';
 import type { LightingPreset } from './lighting';
 import { PLANE_BACK_Z } from './mapGeometry';
+import { projectToPlane, type Rect } from './planeCamera';
 
 /** Deterministic 0…1 hash (dressing layout must not depend on Math.random). */
 export function hash01(i: number, salt: number): number {
@@ -34,22 +35,8 @@ export function hash01(i: number, salt: number): number {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
-export interface Rect {
-  x0: number;
-  y0: number;
-  x1: number;
-  y1: number;
-}
-
-/** Where a rectangle at depth z appears on the z = 0 plane, seen from a camera at (cx, cy, cz). */
-export function projectToPlane(r: Rect, z: number, cx: number, cy: number, cz: number, out: Rect): Rect {
-  const k = cz / (cz - z);
-  out.x0 = cx + (r.x0 - cx) * k;
-  out.x1 = cx + (r.x1 - cx) * k;
-  out.y0 = cy + (r.y0 - cy) * k;
-  out.y1 = cy + (r.y1 - cy) * k;
-  return out;
-}
+// projectToPlane and Rect live in planeCamera.ts (no three: the ads' tap-to-save code runs before the 3D view's chunk); kept here for existing callers
+export { projectToPlane, type Rect } from './planeCamera';
 
 /** True when the on-plane rectangle covers any living player's body (with `pad` metres of slack). */
 export function coversPlayer(r: Rect, players: readonly PlayerView[], pad = 0.25): boolean {

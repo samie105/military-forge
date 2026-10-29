@@ -9,7 +9,7 @@
  *   getAvatar(look) / peekAvatar the 128 px head-and-shoulders portrait: the friends list's (social)
  *   onPortrait(listener)         hears every new picture (DOM views that peek, like the HUD)
  *
- * main.ts installs the renderer (installPortraits) with the game's WebGL renderer and assembler; a page
+ * main.ts installs the renderer (installPortraitsFrom) with the game's WebGL renderer and assembler; a page
  * without 3D gets the silhouettes. setPortraitPolicy says when rendering may run (§7.3.3): freely in
  * menus and lobbies, one job per frame while the player is dead, in the scoreboard or between fights,
  * and not at all mid-fight (jobs wait).
@@ -231,20 +231,37 @@ export async function artVersion(base: string): Promise<string> {
   return textHash(texts.join('\n'));
 }
 
+/** What portraits draw with: a WebGL renderer and the soldiers' assembler (shared caches with the 3D view's). */
+export interface PortraitGl {
+  renderer: WebGLRenderer;
+  assembler: CharacterAssembler;
+}
+
 /**
- * Starts portraits on this page (main.ts): the game's renderer and assembler (one WebGL context, shared
+ * Starts portraits on this page: the game's renderer and assembler (one WebGL context, shared
  * caches), or, on a page drawing in 2D, a function making a renderer of their own on the first picture. Loads the renderer's code lazily, so a page that never shows a portrait never pays for it.
  */
 export function installPortraits(renderer: WebGLRenderer | (() => WebGLRenderer), assembler: CharacterAssembler, assetBase = `${import.meta.env.BASE_URL}assets/`): void {
-  let made: PortraitRenderer | null = null;
+  installPortraitsFrom(() => ({ renderer: typeof renderer === 'function' ? renderer() : renderer, assembler }), assetBase);
+}
+
+/**
+ * Starts portraits now, with what they draw with arriving later (main.ts: the 3D view's chunk, audit 28 Oct):
+ * pictures already on this device show at once, and the first one to render waits for `gl`. A `gl` that
+ * fails (the chunk didn't come) gives the silhouette, and the next render asks again.
+ */
+export function installPortraitsFrom(gl: () => PortraitGl | Promise<PortraitGl>, assetBase = `${import.meta.env.BASE_URL}assets/`): void {
+  let made: Promise<PortraitRenderer> | null = null;
   const lazy: PortraitBackend = {
     render: async (look, pose, w, h) => {
       if (!made) {
-        const { PortraitRenderer } = await import('./render');
-        // a page drawing in 2D (no 3D view) passes a maker: a context of its own, made on the first picture
-        made = new PortraitRenderer(typeof renderer === 'function' ? renderer() : renderer, assembler);
+        const making = Promise.all([import('./render'), gl()]).then(([{ PortraitRenderer }, g]) => new PortraitRenderer(g.renderer, g.assembler));
+        made = making;
+        making.catch(() => {
+          if (made === making) made = null;
+        });
       }
-      return made.render(look, pose, w, h);
+      return (await made).render(look, pose, w, h);
     },
   };
   portraits.install(lazy, artVersion(assetBase));

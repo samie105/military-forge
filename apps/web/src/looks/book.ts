@@ -9,7 +9,7 @@
  */
 import { DEFAULT_COSMETIC_LOADOUT, botLook, cosmeticLoadoutFromWireIds, cosmeticLoadoutHash, cosmeticLoadoutWireIds, lookSeed, type CosmeticLoadout } from '@military-forge/content';
 import { LocalLoadoutStore } from '../locker/loadouts';
-import { placeholderLoadout } from '../render3d/character';
+import { placeholderLoadout } from '../render3d/loadouts';
 
 /** Who is in the room, as the presentation shows them (the VS poster, team cards): the ROSTER's names. */
 export interface Fighter {

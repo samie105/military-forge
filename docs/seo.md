@@ -108,6 +108,12 @@ previews) is filled in where the site is served:
     the service worker keeps a copy for offline play (`scripts/net-trial/site.sh`, `apps/web/pwa.ts`).
   - The 3D view's soldiers, guns and effects wait until the player heads for play (28 Oct audit: 4.3-4.8 MB came
     before the first tap).
+- The 3D view's code (three.js, render3d, the character assembler: about 290 kB gzip) is a chunk of its own
+  (`apps/web/src/view3d/`). The game's first chunk no longer imports three.js, so the landing and the title paint
+  and answer without it: 434 kB gzip of script at boot instead of 726 kB (29 Oct). The chunk comes at the main
+  thread's first free moment after the title is up, on the first tap or key, or at once for a room link.
+  Settings changed before it arrives (quality, Reduce motion, camera shake…) are kept and applied when it does.
+  `apps/web/test/view3d.test.ts` fails if the boot code imports three.js again.
 
 ## 3. What's left
 
@@ -123,9 +129,10 @@ previews) is filled in where the site is served:
   - posts in game communities (r/WebGames, r/IndieGaming, Discord servers);
   - the public GitHub repo's README.
 - **The JavaScript bundle:**
-  - The first visit downloads about 0.55 MB of compressed script (three.js, the game and the shell) before the
-    title answers.
-  - Splitting the 3D view and the creator out of the first chunk would help INP and TBT on slow phones the most.
+  - The first visit downloads about 0.4 MB of compressed script before the title answers (the shell, React,
+    the HUD, the modes); three.js comes after (§2 Speed).
+  - Next candidates, both small: the bots and voice chat (only matches need them), about 80 kB of the first
+    chunk before compression.
 - **More pages worth finding**, each with its own words:
   - a page per map ("Street Market, Lagos") with screenshots;
   - a "how to play" page with the controls;

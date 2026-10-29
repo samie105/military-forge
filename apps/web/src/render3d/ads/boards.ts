@@ -45,6 +45,7 @@ import type { PlanePose } from '../planeCamera';
 import { houseManifest, poolEntries, type AdFrame, type AdManifest, type AdSlot, type HouseEntry, type HousePool } from './manifest';
 import { CROSSFADE_MS, crossfade, frameIndex, keyFade, keySegment, lastKeySegment, previousFrame } from './rotation';
 import { creativeAt, type BoardHit } from './click';
+import { drawnBoards, liveBoards } from './drawn';
 import { LitLimiter, slotInView } from './visibility';
 
 export interface FormatSpec {
@@ -251,15 +252,9 @@ function chipTexture(): CanvasTexture {
   return tex;
 }
 
-/** Boards alive now (one per loaded map with ad slots): tap-to-save asks the one being drawn. */
-const live = new Set<AdBoards>();
-
-/** The boards drawn within the last `withinMs` (the 3D view is up and showing them), or null. */
-export function drawnBoards(now: number = performance.now(), withinMs = 400): AdBoards | null {
-  let best: AdBoards | null = null;
-  for (const b of live) if (now - b.drawnAt <= withinMs && (!best || b.drawnAt > best.drawnAt)) best = b;
-  return best;
-}
+/** Boards alive now and the one being drawn: drawn.ts (no three, so the boot code can ask). */
+const live = liveBoards;
+export { drawnBoards };
 
 /** A board's creative under a point, with its picture (for the saved card). */
 export interface SavedPick extends BoardHit {

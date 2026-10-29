@@ -56,25 +56,12 @@ import type { GunPointLookup } from './vfx/projectiles';
 import type { BodyLookup } from './vfx/dash';
 import type { MuzzleLookup, TracerGlow } from './vfx/gunfire';
 import { KillEffects } from './vfx/killEffects';
+import { supports3d } from './support';
 
 export { PlaneCamera, parsePreset, type PresetName, type RemoteView };
+// three-free, so main.ts can decide on 3D before this chunk arrives (support.ts)
+export { online3d, softwareGl } from './support';
 
-
-/**
- * Software WebGL is accepted for automated browsers (headless tests and screenshot scripts, which
- * run on SwiftShader) and with `?softgl`; a player on a software rasteriser gets the 2D view.
- */
-export function softwareGl(params: URLSearchParams): boolean {
-  return params.has('softgl') || (typeof navigator !== 'undefined' && navigator.webdriver === true);
-}
-
-/**
- * Whether play renders in 3D, online included (the owner's default, 18 Oct): yes, unless
- * `?render=2d`, or WebGL 2 can't start on a real GPU (softwareGl).
- */
-export function online3d(params: URLSearchParams): boolean {
-  return params.get('render') !== '2d' && Renderer3D.supported(softwareGl(params));
-}
 
 /**
  * A phone's picture never drops below this pixel ratio (0.85 × 1.5): under it a soldier 40 CSS px tall
@@ -234,11 +221,7 @@ export class Renderer3D {
    * It is the baseline (docs/11 §1): without it the page keeps the 2D renderer.
    */
   static supported(allowSoftware = false): boolean {
-    try {
-      return !!document.createElement('canvas').getContext('webgl2', { failIfMajorPerformanceCaveat: !allowSoftware });
-    } catch {
-      return false;
-    }
+    return supports3d(allowSoftware);
   }
 
   /** The context was lost (GPU reset, driver update, too many contexts): main.ts draws in 2D until it's back. */

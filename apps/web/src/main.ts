@@ -50,12 +50,15 @@ import { loadSettings, trainingPaused } from './shell/controller';
 import type { GraphicsSetting } from './shell/store';
 import { defaultBindings, keyLabel, toKeyBindings, uiCodes } from './shell/controls';
 import { LIVE_FIRE_RULES } from './shell/localMatch';
-import { PlaneCamera, create3d, online3d, parsePreset, softwareGl, type PresetName } from './render3d';
-import { LoadoutDirectory } from './render3d/character';
+// the 3D view's boot-time parts (no three.js): the view itself is a chunk of its own (view3d/)
+import { PlaneCamera } from './render3d/planeCamera';
+import { parsePreset, type PresetName } from './render3d/presets';
+import { online3d, softwareGl } from './render3d/support';
+import { LoadoutDirectory } from './render3d/loadouts';
+import { View3dSlot } from './view3d';
 import { followLooks, lookBook } from './looks/book';
 import { setMyLook } from './looks/mine';
-import { CharacterAssembler } from './character';
-import { getAvatar, getPortrait, installPortraits, portraits, setPortraitPolicy, type PortraitPolicy } from './portrait';
+import { getAvatar, getPortrait, installPortraitsFrom, portraits, setPortraitPolicy, type PortraitGl, type PortraitPolicy } from './portrait';
 import { warmRoomPortraits } from './presentation/warm';
 import { applyTeamPalette, teamColour } from './teams/palette';
 import { relationOf } from './teams/marking';
@@ -70,8 +73,6 @@ import { padShownBindings } from './gamepad/prompts';
 import { startLandscape } from './ui/landscape';
 import { startMultiTouchTaps } from './ui/multiTouchTap';
 import type { Frame } from './view';
-import { DefaultLoadingManager, WebGLRenderer } from 'three';
-import { assetLoad } from './assetLoad';
 import { creatorSeen } from './creator/model';
 import { titleWanted } from './shell/title';
 import { startTourMemory, type TourMemory } from './tour';
@@ -162,9 +163,6 @@ class GameInput extends InputSampler {
   }
 }
 
-// the map loading screen's real progress: every GLTF, texture and KTX2 the 3D view loads, from the start
-assetLoad.attach(DefaultLoadingManager);
-
 /** local mode's map (the debug client's map links, or `?map=` for training); online, the server's */
 const requestedMap = params.get('map');
 const localMapId = requestedMap && maps[requestedMap] ? requestedMap : 'movement-test';
@@ -187,57 +185,66 @@ const graphicsPreset = (setting: GraphicsSetting): PresetName => (setting === 'a
 let autoAdapting = false;
 function applyGraphics(setting: GraphicsSetting): void {
   if (setting === 'auto') {
-    if (!autoAdapting) view3d?.setAutoTier(autoGraphics());
+    if (!autoAdapting) view3d.setAutoTier(autoGraphics());
     autoAdapting = true;
     return;
   }
   autoAdapting = false;
-  view3d?.setAutoTier(null);
-  view3d?.setPreset(setting);
+  view3d.setAutoTier(null);
+  view3d.setPreset(setting);
 }
 
 // 3D draws the world under the 2D canvas, which becomes the HUD + debug overlay (H/B). Online games
 // too (the owner's decision, 18 Oct): 3D unless ?render=2d, and the 2D view where WebGL can't start
-// (create3d gives null) or, in frame(), while its context is lost. It starts on the saved quality
-// (?gfx= overrides): antialiasing is fixed when the WebGL context is made.
+// (create3d gives null) or, in frame(), while its context is lost. It starts on the quality saved
+// when it's made (?gfx= overrides): antialiasing is fixed when the WebGL context is made.
+// The view's code (three.js, render3d: about 400 kB compressed) is a chunk of its own since 28 Oct
+// (audit): fetched while the title sits idle, on the first tap or key, or at once for a room link
+// (FETCH_3D_AFTER_BOOT_MS), never before the landing and the title can take a tap. Until it's in, the
+// stand-in (view3d/) keeps the settings calls made for it and draws nothing, as the view does before
+// its models load. The plane camera (no three.js) serves the 2D view too should WebGL fail after all.
 const planeCamera = online3d(params) ? new PlaneCamera() : null;
-const firstPreset = parsePreset(params.get('gfx') ?? graphicsPreset(appMode ? loadSettings().graphics : 'auto'));
 // who wears what in 3D (v19): the room's looks from the look book, the saved look for us until the room says
 const loadouts3d = new LoadoutDirectory();
 followLooks(lookBook, loadouts3d);
-// one assembler for the 3D view and the portraits: they share its geometry and part caches
-const soldiers = new CharacterAssembler();
-const view3d = planeCamera
-  ? create3d(view3dCanvas, planeCamera, map, firstPreset, (import.meta.env.DEV && !appMode) || params.has('perf'), soldiers, softwareGl(params), loadouts3d)
-  : null;
+const view3d = new View3dSlot(
+  planeCamera
+    ? () =>
+        import('./view3d/start').then(({ start3d }) =>
+          start3d(
+            view3dCanvas,
+            planeCamera,
+            map,
+            parsePreset(params.get('gfx') ?? graphicsPreset(appMode ? (settings?.graphics ?? loadSettings().graphics) : 'auto')),
+            (import.meta.env.DEV && !appMode) || params.has('perf'),
+            softwareGl(params),
+            loadouts3d,
+          ),
+        )
+    : null,
+);
 // avatars and the VS poster's renders: the players' real soldiers, through the game's own WebGL context
-// (portrait/, research §7); a page without 3D shows silhouettes
-// (a page drawing in 2D: a context of their own, made on the first picture, for Home's soldier and the avatars)
-if (view3d) installPortraits(view3d.renderer, soldiers);
-else if (webgl2Starts()) installPortraits(() => new WebGLRenderer({ antialias: false, alpha: true }), soldiers);
-// team modes (v21): each soldier's team colour (the armband glow), from the look book's teams
-if (view3d) view3d.teamColourOf = (id) => teamColour(lookBook.teamOf(id));
+// (portrait/, research §7). Pictures already on this device show at once; a new one waits for the 3D
+// view (never fetching it for a picture). A page drawing in 2D: a context of their own, made on the
+// first picture (Home's soldier, the avatars); no WebGL at all: silhouettes.
+async function portraitGl(): Promise<PortraitGl> {
+  const view = await view3d.whenSettled();
+  if (!view && view3d.wanted) throw new Error('the 3D view is still on its way'); // the silhouette; asked again later
+  return (await import('./view3d/start')).portraitGl(view);
+}
+if (view3d.wanted || webgl2Starts()) installPortraitsFrom(portraitGl);
 // who's who (teams/marking.ts): you, allies and enemies as seen by the viewer, the local player or the
 // soldier being watched (spectating shows their picture); set each frame before drawing
 let markViewer = -1;
 const markOf = (id: number) => relationOf(id, markViewer, (who) => lookBook.teamOf(who));
-if (view3d) view3d.relationOf = markOf;
-// a team kill plays no kill effect (docs/17 §3.7)
-if (view3d) view3d.teamOf = (id) => lookBook.teamOf(id);
 setPortraitPolicy(portraitPolicy);
 // the room's avatars and VS poster renders, warmed whenever its looks change (the countdown only shows pictures)
-if (view3d) warmRoomPortraits(lookBook);
+if (view3d.wanted) warmRoomPortraits(lookBook);
 if (import.meta.env.DEV) (window as unknown as { __mfPortraits: unknown }).__mfPortraits = { portraits, getAvatar, getPortrait, lookBook };
-const use3d = view3d !== null;
-if (view3d) {
-  view3d.onAutoTier = (tier) => {
-    autoGraphicsNow = tier;
-    lowEnd.noteTier(tier);
-  };
-  // Auto from the start (no ?gfx=): adapting to the frames before Settings is ever opened
-  if (!params.get('gfx') && (!appMode || loadSettings().graphics === 'auto')) applyGraphics('auto');
-}
-const camera = view3d ? planeCamera! : new Camera();
+const use3d = view3d.wanted;
+// Auto from the start (no ?gfx=): adapting to the frames before Settings is ever opened
+if (use3d && !params.get('gfx') && (!appMode || loadSettings().graphics === 'auto')) applyGraphics('auto');
+const camera = planeCamera ?? new Camera();
 const sampler = new GameInput(canvas);
 // double-tap a direction to dash (docs/02 §21), on by default: ?dashtap=0 turns it off in the debug
 // client; the app's Controls settings set it
@@ -254,7 +261,11 @@ const minimap = appMode ? new Minimap() : null;
 const spectate = new SpectateDirector();
 const spectateInput = new SpectateInput(sampler, canvas);
 const spectatePicker = hud ? new SpectatePicker(document.querySelector('#hud .mf-hud-desktop .hud') ?? document.body) : null;
-if (import.meta.env.DEV) Object.assign(window, { __spectate: spectate, __view3d: view3d, __lookBook: lookBook });
+if (import.meta.env.DEV) {
+  Object.assign(window, { __spectate: spectate, __lookBook: lookBook });
+  // the 3D view itself (null until its chunk is in): measuring scripts wait for its `ready`
+  Object.defineProperty(window, '__view3d', { get: () => view3d.view, configurable: true });
+}
 
 /** The onboarding's memory (tour/): on-device facts and the event log; the app only (set once the shell is up). */
 let tourMemory: TourMemory | null = null;
@@ -302,12 +313,14 @@ renderer.relationOf = markOf;
 // client and room links load at once
 let loading3d = false;
 const load3d = () => {
-  if (loading3d) return;
+  if (!loading3d) view3d.load(() => map.spawns[0]!); // when the view is here, on the map of that moment
   loading3d = true;
-  void view3d?.load(map.spawns[0]!);
+  void view3d.start();
 };
 /** a page left alone this long gets ready for play anyway (an installed app's offline training) */
 const PREPARE_IDLE_MS = 20_000;
+/** the 3D view's chunk is fetched this long after the game's code has run (the title up), unless a tap asks first */
+const FETCH_3D_AFTER_BOOT_MS = 250;
 let prepared = false;
 let navWarmed = false;
 /**
@@ -326,14 +339,29 @@ function prepareForPlay(): void {
   // and the installed app's offline copy of the game's code (the service worker, src/pwa)
   keepForOffline();
 }
-view3d?.attach(renderer, () => (mode instanceof OnlineMode ? mode.net : null)); // sim events → 3D effects; online: remotePose (render3d)
+// the 3D view as it arrives: before the settings calls kept for it
+view3d.onReady((view) => {
+  view.attach(renderer, () => (mode instanceof OnlineMode ? mode.net : null)); // sim events → 3D effects; online: remotePose (render3d)
+  // team modes (v21): each soldier's team colour (the armband glow), from the look book's teams
+  view.teamColourOf = (id) => teamColour(lookBook.teamOf(id));
+  view.relationOf = markOf;
+  // a team kill plays no kill effect (docs/17 §3.7)
+  view.teamOf = (id) => lookBook.teamOf(id);
+  view.onAutoTier = (tier) => {
+    autoGraphicsNow = tier;
+    lowEnd.noteTier(tier);
+  };
+  // a kill effect's sound where its victim fell (only when the effect itself plays)
+  view.killEffects.onSound = (id, x, y) => audio.playAt(id, x, y);
+  view.resize();
+});
 // phones and tablets: twin sticks + buttons (apps/web/src/touch); the app's Settings → Touch has "Edit layout"
 mountTouch({ sampler, camera, renderer, view3d, editButton: !appMode, tuning: () => mode?.tuning() ?? null, map: () => map, inGame: () => mode !== null });
 // game controllers (apps/web/src/gamepad): play, the menus, rumble, prompts in the pad's buttons
 // (on a phone the touch buttons step aside while a pad plays: gamepad/pad.css)
 mountGamepad({ sampler, camera, renderer, scoreboardCode: () => scoreboardKeys[0], map: () => map, toggleMap: () => minimap?.toggleBig() });
 // tap-to-save billboard ads (apps/web/src/ads): after touch and the pad, so it sees their shots too
-mountAdClicks({ sampler, camera, canvas, view3d });
+mountAdClicks({ sampler, camera, canvas, view3d: use3d ? view3d : null });
 
 // the room host's live tuning panel (the in-match menu's "Tune the game"), where the page offers it:
 // pnpm playtest --tune flags the page; the game server then lets the host (only) tune the room
@@ -370,8 +398,12 @@ function setMode(next: LocalMode | OnlineMode | null): void {
   lanHost?.close();
   lanHost = null;
   mode = next;
-  // a match: its soldiers and guns now, if the menus didn't start them (prepareForPlay)
-  if (next) prepareForPlay();
+  // a match: its soldiers and guns now, if the menus didn't start them (prepareForPlay), and the 3D
+  // view's chunk again if fetching it failed before
+  if (next) {
+    prepareForPlay();
+    void view3d.start();
+  }
   audio.reset();
   if (!(next instanceof OnlineMode)) onlineRoom = null;
   // voice chat (v18): in online rooms only
@@ -499,9 +531,9 @@ const host: GameHost = {
     options.showNet = next.netGraph;
     applyGraphics(next.graphics);
     // blood when soldiers are hit (Settings → Graphics, off by default): render3d's setBlood (#96)
-    view3d?.setBlood(next.blood);
+    view3d.setBlood(next.blood);
     // other players' kill effects (Settings → Graphics, on by default; docs/17 §3.7)
-    view3d?.setShowKillEffects(next.showKillEffects);
+    view3d.setShowKillEffects(next.showKillEffects);
     if (mode instanceof OnlineMode && mode.net.lowBandwidth !== next.lowBandwidth) mode.net.setLowBandwidth(next.lowBandwidth);
     sampler.bindings = toKeyBindings(next.bindings);
     sampler.doubleTapDash = next.doubleTapDash;
@@ -531,7 +563,7 @@ const host: GameHost = {
     html.classList.toggle('reduce-transparency', next.reduceTransparency);
     html.classList.toggle('gfx-low', graphicsPreset(next.graphics) === 'low');
     // …and the 3D view's: no camera shake or kick, a softer gun kick, a dimmer blast light (render3d)
-    view3d?.setReducedMotion(next.reduceMotion);
+    view3d.setReducedMotion(next.reduceMotion);
     // …and the 2D view's (it read the system's setting only: audit 28 Oct)
     renderer.reducedMotion = next.reduceMotion;
     // team modes (v21): the team palette for the chosen colour-blind mode (DOM, 3D, minimap)
@@ -758,16 +790,26 @@ else {
     stopWatch();
     prepareForPlay();
   });
+  window.setTimeout(() => whenIdle(prepareForPlay, 5000), PREPARE_IDLE_MS);
+  // the 3D view's code (three.js, render3d) while the title sits idle: once the game's code has run and
+  // the title is up and answering, at the main thread's first free moment. Not at the page's load
+  // event: a phone on a slow link reaches it late (the title's art), which left the chunk to the tap,
+  // a second or two in front of the models (measured, 29 Oct)
+  window.setTimeout(() => whenIdle(() => void view3d.start(), 1000), FETCH_3D_AFTER_BOOT_MS);
+}
+
+/** Runs `fn` when the main thread is free (requestIdleCallback), or after `timeout` ms at the latest. */
+function whenIdle(fn: () => void, timeout: number): void {
   const idle = (window as Window & { requestIdleCallback?: (fn: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
-  window.setTimeout(() => (idle ? idle(prepareForPlay, { timeout: 5000 }) : prepareForPlay()), PREPARE_IDLE_MS);
+  if (idle) idle(fn, { timeout });
+  else fn();
 }
 // sound starts on the first tap or key (browsers allow it only then); the shell's store drives the
 // interface cues and the music
 startAudio(shell.store);
-// weapon skins' own sounds (docs/17 V11, §3.7): who wears which skin (every player's look, ours too), and a kill
-// effect's sound where its victim fell (only when the effect itself plays)
+// weapon skins' own sounds (docs/17 V11, §3.7): who wears which skin (every player's look, ours too); a kill
+// effect's own sound: the 3D view's (onReady above)
 audio.setLookOf((id, isLocal) => loadouts3d.for({ id, isLocal }));
-if (view3d) view3d.killEffects.onSound = (id, x, y) => audio.playAt(id, x, y);
 // the saved loadout (look + guns) follows the account: read at sign-in, kept on this device as the offline cache
 const loadoutSync = shell.controller ? new LoadoutSync(shell.controller.api) : null;
 // "here" to the API every 30 s while visible, with the room when in an online match (presence.ts)
@@ -1057,7 +1099,10 @@ if (import.meta.env.DEV) {
       },
       camera,
       options,
-      view3d,
+      // the 3D view itself, null until its chunk is in (scripts wait for its `ready`)
+      get view3d() {
+        return view3d.view;
+      },
       shell,
       hud,
     },
@@ -1111,7 +1156,7 @@ const HELP =
 
 function resize(): void {
   renderer.resize();
-  view3d?.resize();
+  view3d.resize();
 }
 window.addEventListener('resize', resize);
 resize();
@@ -1178,10 +1223,10 @@ function drawMenuBackdrop(now: number, dt: number): void {
   const y = map.spawns[0]!.y + 2;
   camera.flightVy = 0;
   camera.follow(x, y, x, y, dt, map);
-  options.overlay = view3d?.drawing ?? false;
+  options.overlay = view3d.drawing;
   view3dCanvas.style.visibility = options.overlay ? 'visible' : 'hidden';
   renderer.render(EMPTY_FRAME, dt, { ...options, hud: 'none', reticle: false }, '');
-  view3d?.render(EMPTY_FRAME, dt);
+  view3d.render(EMPTY_FRAME, dt);
 }
 
 const pointer = { x: 0, y: 0 };
@@ -1243,7 +1288,7 @@ function frame(now: number): void {
   }
 
   // 3D draws the world, online games too, unless its WebGL context is lost: the 2D view meanwhile
-  if (view3d) {
+  if (use3d) {
     options.overlay = view3d.drawing;
     view3dCanvas.style.visibility = options.overlay ? 'visible' : 'hidden';
   }
@@ -1258,7 +1303,7 @@ function frame(now: number): void {
   if (mode.map !== map) {
     map = mode.map;
     renderer.setMap(map);
-    view3d?.setMap(map);
+    view3d.setMap(map);
   }
   minimap?.setMap(map);
   const me = f.players.find((p) => p.id === f.localId);
@@ -1339,7 +1384,7 @@ function frame(now: number): void {
       spectate: spec,
     });
   }
-  if (options.overlay) view3d?.render(f, dt);
+  if (options.overlay) view3d.render(f, dt);
 }
 
 let lastRaf = performance.now();
