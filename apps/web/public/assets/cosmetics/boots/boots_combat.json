@@ -10,12 +10,12 @@
   },
   "dye": {
     "lod0": {
-      "mask": "textures/boots_combat_dye_mask.png",
+      "mask": "textures/boots_combat_dye_mask.webp",
       "albedo": "textures/boots_combat_dye_albedo.webp",
       "defaults": {}
     },
     "lod1": {
-      "mask": "textures/boots_combat_lod1_dye_mask.png",
+      "mask": "textures/boots_combat_lod1_dye_mask.webp",
       "albedo": "textures/boots_combat_lod1_dye_albedo.webp",
       "defaults": {}
     }
@@ -32,12 +32,12 @@
       },
       "dye": {
         "lod0": {
-          "mask": "textures/boots_combat_female_dye_mask.png",
+          "mask": "textures/boots_combat_female_dye_mask.webp",
           "albedo": "textures/boots_combat_female_dye_albedo.webp",
           "defaults": {}
         },
         "lod1": {
-          "mask": "textures/boots_combat_female_lod1_dye_mask.png",
+          "mask": "textures/boots_combat_female_lod1_dye_mask.webp",
           "albedo": "textures/boots_combat_female_lod1_dye_albedo.webp",
           "defaults": {}
         }

@@ -438,4 +438,52 @@ describe('the shipped W8 character art (apps/web/public/assets)', () => {
     }
     expect(fits).toBeGreaterThanOrEqual(1);
   });
+
+  /** RIFF chunk ids of a WebP file; ['VP8L'] is the simple lossless format (alpha inside, no premultiply). */
+  const webpChunks = (path: string): string[] | null => {
+    const b = readFileSync(path);
+    if (b.toString('latin1', 0, 4) !== 'RIFF' || b.toString('latin1', 8, 12) !== 'WEBP') return null;
+    const out: string[] = [];
+    for (let i = 12; i + 8 <= b.length; ) {
+      const size = b.readUInt32LE(i + 4);
+      out.push(b.toString('latin1', i, i + 4));
+      i += 8 + size + (size & 1);
+    }
+    return out;
+  };
+
+  it('every dye mask ships as lossless WebP, as the manifests and GLB extras name it (audit 29 Oct: PNG was 2.4x the bytes, and Safari dropped the dye weights under zero alpha)', () => {
+    const masks = new Set<string>();
+    const note = (dir: string, dye: Record<string, { mask: string; heroMask?: string }>) => {
+      for (const d of Object.values(dye)) for (const m of [d.mask, d.heroMask]) if (m) masks.add(dir + m);
+    };
+    for (const path of Object.values(BODY_MANIFESTS)) {
+      note(path.slice(0, path.lastIndexOf('/') + 1), (JSON.parse(readFileSync(assets(path), 'utf8')) as typeof manifest).dye);
+    }
+    const glbs: string[] = [];
+    for (const item of cosmetics.filter((c) => c.assets.manifest)) {
+      const path = item.assets.manifest!;
+      const dir = path.slice(0, path.lastIndexOf('/') + 1);
+      type Fit = { lods: Record<string, string>; dye: Record<string, { mask: string }> };
+      const m = JSON.parse(readFileSync(assets(path), 'utf8')) as Fit & { bodies?: Record<string, Fit> };
+      for (const fit of [m, ...Object.values(m.bodies ?? {})]) {
+        note(dir, fit.dye);
+        glbs.push(...Object.values(fit.lods).map((f) => dir + f));
+      }
+    }
+    expect(masks.size).toBeGreaterThanOrEqual(100);
+    for (const mask of masks) {
+      // a .png here is an export from before art/pipeline/dye.py mask_webp (cwebp -lossless -exact)
+      expect(mask, mask).toMatch(/_dye_mask\.webp$/);
+      expect(webpChunks(assets(mask)), mask).toEqual(['VP8L']);
+      expect(existsSync(assets(mask.replace(/\.webp$/, '.png'))), `${mask}: an old PNG beside it`).toBe(false);
+    }
+    // the parts' `dyeMask` extras (tools/asset-check finds the mask by them) name the same files
+    for (const glb of glbs) {
+      const buf = readFileSync(assets(glb));
+      const json = JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString()) as { nodes: { extras?: { dyeMask?: string } }[] };
+      const named = json.nodes.map((n) => n.extras?.dyeMask).filter((m): m is string => !!m);
+      for (const m of named) expect(masks.has(glb.slice(0, glb.lastIndexOf('/') + 1) + 'textures/' + m), `${glb}: ${m}`).toBe(true);
+    }
+  });
 });

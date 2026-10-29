@@ -182,7 +182,7 @@ describe('site.sh (audit 28 Oct)', () => {
     const hashed = new RegExp(re);
     assert.ok(hashed.test('/assets/main-DmMYxFY-.js'));
     assert.ok(hashed.test('/assets/voices-AbC_12-x.bin'));
-    for (const p of ['/assets/weapons/k47.glb', '/assets/characters/rookie/textures/rookie_body_dye_mask.png', '/art/key-art/key-art-phone.avif', '/sw.js', '/index.html']) assert.ok(!hashed.test(p), p);
+    for (const p of ['/assets/weapons/k47.glb', '/assets/characters/rookie/textures/rookie_body_dye_mask.webp', '/art/key-art/key-art-phone.avif', '/sw.js', '/index.html']) assert.ok(!hashed.test(p), p);
     assert.match(caddyfile, /header @fresh Cache-Control no-cache\n/);
     assert.match(caddyfile, /header @hashed Cache-Control "public, max-age=31536000, immutable"\n/);
     // the status and owner pages: never stored (after the no-cache, so it wins)

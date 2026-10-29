@@ -9,7 +9,7 @@
   },
   "dye": {
     "lod0": {
-      "mask": "textures/rookie_female_body_dye_mask.png",
+      "mask": "textures/rookie_female_body_dye_mask.webp",
       "albedo": "textures/rookie_female_body_dye_albedo.webp",
       "defaults": {
         "primary": "#d8b07a",
@@ -20,10 +20,10 @@
       "skinNeutral": "#da9f75",
       "skinHeadroom": 2,
       "heroAlbedo": "textures/rookie_female_body_hero_dye_albedo.webp",
-      "heroMask": "textures/rookie_female_body_hero_dye_mask.png"
+      "heroMask": "textures/rookie_female_body_hero_dye_mask.webp"
     },
     "lod1": {
-      "mask": "textures/rookie_female_body_lod1_dye_mask.png",
+      "mask": "textures/rookie_female_body_lod1_dye_mask.webp",
       "albedo": "textures/rookie_female_body_lod1_dye_albedo.webp",
       "defaults": {
         "primary": "#d9b07a",

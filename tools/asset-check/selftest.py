@@ -24,6 +24,9 @@ OUTFIT = ",".join(str(f) for f in [BODY, *DEFAULTS])
 LOD1 = ",".join(str(f).replace(".glb", "_lod1.glb") for f in [BODY, *DEFAULTS])
 COS = REPO / "art/cosmetics"
 MARKET = REPO / "art/kits/street_market/kit_street_market.glb"
+RT = REPO / "apps/web/public/assets"  # the web build: dye masks as lossless WebP
+RT_OUTFIT = ",".join(str(RT / f) for f in ["characters/rookie/rookie_body.glb", "cosmetics/headgear/headgear_brim_helmet.glb",
+                                           "cosmetics/boots/boots_combat.glb", "cosmetics/jetpack/jetpack_twin_tank.glb"])
 
 
 EXTRAS = {"bodyTypes": ["standard"], "envelopeOk": True, "dyeable": False,  # a valid part, minus dyes
@@ -269,6 +272,31 @@ def clips_edit(src, dst, flip=False, meshopt=False):
     Path(dst).write_bytes(bytes(out))
 
 
+def shipped_jetpack(dst, mask):
+    """The shipped twin-tank jetpack in `dst` with its dye textures, its mask written as `mask`: "png" (the GLB's
+    extras and file back to PNG, as an old export), "noexact" (lossless WebP without cwebp -exact: the dye weights
+    under A = 0 rewritten) or "lossy" (WebP quality 90). Checked with --web-build 1."""
+    import json, shutil, struct
+    dst.mkdir(parents=True)
+    (dst / "textures").mkdir()
+    stem = "jetpack_twin_tank"
+    shutil.copy(RT / f"cosmetics/jetpack/textures/{stem}_dye_albedo.webp", dst / "textures")
+    master = CHAR / f"textures/{stem}_dye_mask.png"
+    b = (RT / f"cosmetics/jetpack/{stem}.glb").read_bytes()
+    if mask == "png":
+        jl = struct.unpack_from("<I", b, 12)[0]
+        js = b[20:20 + jl].rstrip(b" ").replace(b"_dye_mask.webp", b"_dye_mask.png")
+        js += b" " * (-len(js) % 4)
+        b = bytearray(b[:12]) + struct.pack("<II", len(js), 0x4E4F534A) + js + b[20 + jl:]
+        struct.pack_into("<I", b, 8, len(b))
+        shutil.copy(master, dst / "textures")
+    else:
+        flags = {"noexact": ["-lossless", "-z", "9"], "lossy": ["-q", "90"]}[mask]
+        subprocess.run(["cwebp", "-quiet", *flags, str(master), "-o", str(dst / f"textures/{stem}_dye_mask.webp")], check=True)
+    (dst / f"{stem}.glb").write_bytes(bytes(b))
+    return dst / f"{stem}.glb"
+
+
 def run(path, *args):
     """'pass', 'fail' or 'crash' (check.py exits 0 / 1 / anything else)."""
     cmd = [bpy.app.binary_path, "-b", "--factory-startup", "--python-exit-code", "1",
@@ -307,6 +335,7 @@ market_edit(tmp / "kit_sack.glb", sack_on_plane)
 market_edit(tmp / "kit_orange.glb", team_orange)
 clips_edit(CHAR / "rookie_anims.glb", tmp / "clips_flipped.glb", flip=True)
 clips_edit(CHAR / "rookie_anims.glb", tmp / "clips_meshopt.glb", meshopt=True)
+jet_png, jet_noexact, jet_lossy = (shipped_jetpack(tmp / f"jet_{m}", m) for m in ("png", "noexact", "lossy"))
 
 cases = [
     ("Rookie outfit LOD0 passes", "pass", OUTFIT),
@@ -369,6 +398,12 @@ cases = [
     ("runtime clips pass", "pass", REPO / "apps/web/public/assets/characters/rookie/rookie_anims.glb", "--kind", "clips"),
     ("clips with a sign-flipped key fail", "fail", tmp / "clips_flipped.glb", "--kind", "clips"),
     ("clips through meshopt fail", "fail", tmp / "clips_meshopt.glb", "--kind", "clips"),
+    # the web build's dye masks: lossless WebP, the art PNG masters' exact pixels
+    ("shipped outfit passes (dye masks: lossless WebP)", "pass", RT_OUTFIT),
+    ("shipped jetpack passes as a part", "pass", RT / "cosmetics/jetpack/jetpack_twin_tank.glb", "--kind", "part", "--base", RT_OUTFIT),
+    ("shipped jetpack with a PNG dye mask fails", "fail", jet_png, "--kind", "part", "--base", RT_OUTFIT, "--web-build", "1"),
+    ("shipped jetpack mask without cwebp -exact fails", "fail", jet_noexact, "--kind", "part", "--base", RT_OUTFIT, "--web-build", "1"),
+    ("shipped jetpack with a lossy WebP mask fails", "fail", jet_lossy, "--kind", "part", "--base", RT_OUTFIT, "--web-build", "1"),
 ]
 bad = 0
 for name, expect, path, *args in cases:

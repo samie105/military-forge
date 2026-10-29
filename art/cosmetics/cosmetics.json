@@ -11,7 +11,7 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/headgear_field_cap_dye_mask.png",
+        "mask": "textures/headgear_field_cap_dye_mask.webp",
         "albedo": "textures/headgear_field_cap_dye_albedo.webp",
         "defaults": {
           "primary": "#7a7243",
@@ -20,7 +20,7 @@
         }
       },
       "lod1": {
-        "mask": "textures/headgear_field_cap_lod1_dye_mask.png",
+        "mask": "textures/headgear_field_cap_lod1_dye_mask.webp",
         "albedo": "textures/headgear_field_cap_lod1_dye_albedo.webp",
         "defaults": {
           "primary": "#787041",
@@ -44,7 +44,7 @@
         },
         "dye": {
           "lod0": {
-            "mask": "textures/headgear_field_cap_female_dye_mask.png",
+            "mask": "textures/headgear_field_cap_female_dye_mask.webp",
             "albedo": "textures/headgear_field_cap_female_dye_albedo.webp",
             "defaults": {
               "primary": "#7a7142",
@@ -53,7 +53,7 @@
             }
           },
           "lod1": {
-            "mask": "textures/headgear_field_cap_female_lod1_dye_mask.png",
+            "mask": "textures/headgear_field_cap_female_lod1_dye_mask.webp",
             "albedo": "textures/headgear_field_cap_female_lod1_dye_albedo.webp",
             "defaults": {
               "primary": "#797042",
@@ -81,7 +81,7 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/headgear_beret_dye_mask.png",
+        "mask": "textures/headgear_beret_dye_mask.webp",
         "albedo": "textures/headgear_beret_dye_albedo.webp",
         "defaults": {
           "primary": "#873d41",
@@ -90,7 +90,7 @@
         }
       },
       "lod1": {
-        "mask": "textures/headgear_beret_lod1_dye_mask.png",
+        "mask": "textures/headgear_beret_lod1_dye_mask.webp",
         "albedo": "textures/headgear_beret_lod1_dye_albedo.webp",
         "defaults": {
           "primary": "#833b3f",
@@ -113,7 +113,7 @@
         },
         "dye": {
           "lod0": {
-            "mask": "textures/headgear_beret_female_dye_mask.png",
+            "mask": "textures/headgear_beret_female_dye_mask.webp",
             "albedo": "textures/headgear_beret_female_dye_albedo.webp",
             "defaults": {
               "primary": "#873d41",
@@ -122,7 +122,7 @@
             }
           },
           "lod1": {
-            "mask": "textures/headgear_beret_female_lod1_dye_mask.png",
+            "mask": "textures/headgear_beret_female_lod1_dye_mask.webp",
             "albedo": "textures/headgear_beret_female_lod1_dye_albedo.webp",
             "defaults": {
               "primary": "#833b3f",
@@ -149,7 +149,7 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/headgear_bandana_dye_mask.png",
+        "mask": "textures/headgear_bandana_dye_mask.webp",
         "albedo": "textures/headgear_bandana_dye_albedo.webp",
         "defaults": {
           "primary": "#dd483d",
@@ -157,7 +157,7 @@
         }
       },
       "lod1": {
-        "mask": "textures/headgear_bandana_lod1_dye_mask.png",
+        "mask": "textures/headgear_bandana_lod1_dye_mask.webp",
         "albedo": "textures/headgear_bandana_lod1_dye_albedo.webp",
         "defaults": {
           "primary": "#d9473c",
@@ -180,7 +180,7 @@
         },
         "dye": {
           "lod0": {
-            "mask": "textures/headgear_bandana_female_dye_mask.png",
+            "mask": "textures/headgear_bandana_female_dye_mask.webp",
             "albedo": "textures/headgear_bandana_female_dye_albedo.webp",
             "defaults": {
               "primary": "#dd483d",
@@ -188,7 +188,7 @@
             }
           },
           "lod1": {
-            "mask": "textures/headgear_bandana_female_lod1_dye_mask.png",
+            "mask": "textures/headgear_bandana_female_lod1_dye_mask.webp",
             "albedo": "textures/headgear_bandana_female_lod1_dye_albedo.webp",
             "defaults": {
               "primary": "#d9473c",
@@ -215,7 +215,7 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/headgear_combat_helmet_dye_mask.png",
+        "mask": "textures/headgear_combat_helmet_dye_mask.webp",
         "albedo": "textures/headgear_combat_helmet_dye_albedo.webp",
         "defaults": {
           "primary": "#7a7b45",
@@ -224,7 +224,7 @@
         }
       },
       "lod1": {
-        "mask": "textures/headgear_combat_helmet_lod1_dye_mask.png",
+        "mask": "textures/headgear_combat_helmet_lod1_dye_mask.webp",
         "albedo": "textures/headgear_combat_helmet_lod1_dye_albedo.webp",
         "defaults": {
           "primary": "#7a7b45",
@@ -248,7 +248,7 @@
         },
         "dye": {
           "lod0": {
-            "mask": "textures/headgear_combat_helmet_female_dye_mask.png",
+            "mask": "textures/headgear_combat_helmet_female_dye_mask.webp",
             "albedo": "textures/headgear_combat_helmet_female_dye_albedo.webp",
             "defaults": {
               "primary": "#7a7b45",
@@ -257,7 +257,7 @@
             }
           },
           "lod1": {
-            "mask": "textures/headgear_combat_helmet_female_lod1_dye_mask.png",
+            "mask": "textures/headgear_combat_helmet_female_lod1_dye_mask.webp",
             "albedo": "textures/headgear_combat_helmet_female_lod1_dye_albedo.webp",
             "defaults": {
               "primary": "#7a7b45",
@@ -284,7 +284,7 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/eyewear_aviators_dye_mask.png",
+        "mask": "textures/eyewear_aviators_dye_mask.webp",
         "albedo": "textures/eyewear_aviators_dye_albedo.webp",
         "defaults": {
           "secondary": "#ebba42",
@@ -292,7 +292,7 @@
         }
       },
       "lod1": {
-        "mask": "textures/eyewear_aviators_lod1_dye_mask.png",
+        "mask": "textures/eyewear_aviators_lod1_dye_mask.webp",
         "albedo": "textures/eyewear_aviators_lod1_dye_albedo.webp",
         "defaults": {
           "secondary": "#e9b841",
@@ -312,7 +312,7 @@
         },
         "dye": {
           "lod0": {
-            "mask": "textures/eyewear_aviators_female_dye_mask.png",
+            "mask": "textures/eyewear_aviators_female_dye_mask.webp",
             "albedo": "textures/eyewear_aviators_female_dye_albedo.webp",
             "defaults": {
               "secondary": "#ebba42",
@@ -320,7 +320,7 @@
             }
           },
           "lod1": {
-            "mask": "textures/eyewear_aviators_female_lod1_dye_mask.png",
+            "mask": "textures/eyewear_aviators_female_lod1_dye_mask.webp",
             "albedo": "textures/eyewear_aviators_female_lod1_dye_albedo.webp",
             "defaults": {
               "secondary": "#ebba42",
@@ -346,7 +346,7 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/eyewear_gas_mask_dye_mask.png",
+        "mask": "textures/eyewear_gas_mask_dye_mask.webp",
         "albedo": "textures/eyewear_gas_mask_dye_albedo.webp",
         "defaults": {
           "secondary": "#687345",
@@ -354,7 +354,7 @@
         }
       },
       "lod1": {
-        "mask": "textures/eyewear_gas_mask_lod1_dye_mask.png",
+        "mask": "textures/eyewear_gas_mask_lod1_dye_mask.webp",
         "albedo": "textures/eyewear_gas_mask_lod1_dye_albedo.webp",
         "defaults": {
           "secondary": "#677349",
@@ -374,7 +374,7 @@
         },
         "dye": {
           "lod0": {
-            "mask": "textures/eyewear_gas_mask_female_dye_mask.png",
+            "mask": "textures/eyewear_gas_mask_female_dye_mask.webp",
             "albedo": "textures/eyewear_gas_mask_female_dye_albedo.webp",
             "defaults": {
               "secondary": "#687345",
@@ -382,7 +382,7 @@
             }
           },
           "lod1": {
-            "mask": "textures/eyewear_gas_mask_female_lod1_dye_mask.png",
+            "mask": "textures/eyewear_gas_mask_female_lod1_dye_mask.webp",
             "albedo": "textures/eyewear_gas_mask_female_lod1_dye_albedo.webp",
             "defaults": {
               "secondary": "#687346",
@@ -409,7 +409,7 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/jetpack_rocket_dye_mask.png",
+        "mask": "textures/jetpack_rocket_dye_mask.webp",
         "albedo": "textures/jetpack_rocket_dye_albedo.webp",
         "defaults": {
           "primary": "#cdbea1",
@@ -418,7 +418,7 @@
         }
       },
       "lod1": {
-        "mask": "textures/jetpack_rocket_lod1_dye_mask.png",
+        "mask": "textures/jetpack_rocket_lod1_dye_mask.webp",
         "albedo": "textures/jetpack_rocket_lod1_dye_albedo.webp",
         "defaults": {
           "primary": "#c9ba9f",
@@ -454,7 +454,7 @@
         },
         "dye": {
           "lod0": {
-            "mask": "textures/jetpack_rocket_female_dye_mask.png",
+            "mask": "textures/jetpack_rocket_female_dye_mask.webp",
             "albedo": "textures/jetpack_rocket_female_dye_albedo.webp",
             "defaults": {
               "primary": "#cdbea1",
@@ -463,7 +463,7 @@
             }
           },
           "lod1": {
-            "mask": "textures/jetpack_rocket_female_lod1_dye_mask.png",
+            "mask": "textures/jetpack_rocket_female_lod1_dye_mask.webp",
             "albedo": "textures/jetpack_rocket_female_lod1_dye_albedo.webp",
             "defaults": {
               "primary": "#c9ba9f",
@@ -502,7 +502,7 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/jetpack_drum_dye_mask.png",
+        "mask": "textures/jetpack_drum_dye_mask.webp",
         "albedo": "textures/jetpack_drum_dye_albedo.webp",
         "defaults": {
           "primary": "#3162a8",
@@ -511,7 +511,7 @@
         }
       },
       "lod1": {
-        "mask": "textures/jetpack_drum_lod1_dye_mask.png",
+        "mask": "textures/jetpack_drum_lod1_dye_mask.webp",
         "albedo": "textures/jetpack_drum_lod1_dye_albedo.webp",
         "defaults": {
           "primary": "#2e5c9e",
@@ -532,7 +532,7 @@
         },
         "dye": {
           "lod0": {
-            "mask": "textures/jetpack_drum_female_dye_mask.png",
+            "mask": "textures/jetpack_drum_female_dye_mask.webp",
             "albedo": "textures/jetpack_drum_female_dye_albedo.webp",
             "defaults": {
               "primary": "#3162a8",
@@ -541,7 +541,7 @@
             }
           },
           "lod1": {
-            "mask": "textures/jetpack_drum_female_lod1_dye_mask.png",
+            "mask": "textures/jetpack_drum_female_lod1_dye_mask.webp",
             "albedo": "textures/jetpack_drum_female_lod1_dye_albedo.webp",
             "defaults": {
               "primary": "#3162a8",
@@ -575,7 +575,7 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/boots_sneakers_dye_mask.png",
+        "mask": "textures/boots_sneakers_dye_mask.webp",
         "albedo": "textures/boots_sneakers_dye_albedo.webp",
         "defaults": {
           "primary": "#fefef9",
@@ -584,7 +584,7 @@
         }
       },
       "lod1": {
-        "mask": "textures/boots_sneakers_lod1_dye_mask.png",
+        "mask": "textures/boots_sneakers_lod1_dye_mask.webp",
         "albedo": "textures/boots_sneakers_lod1_dye_albedo.webp",
         "defaults": {
           "primary": "#fefef9",
@@ -609,7 +609,7 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/boots_jungle_dye_mask.png",
+        "mask": "textures/boots_jungle_dye_mask.webp",
         "albedo": "textures/boots_jungle_dye_albedo.webp",
         "defaults": {
           "primary": "#687345",
@@ -618,7 +618,7 @@
         }
       },
       "lod1": {
-        "mask": "textures/boots_jungle_lod1_dye_mask.png",
+        "mask": "textures/boots_jungle_lod1_dye_mask.webp",
         "albedo": "textures/boots_jungle_lod1_dye_albedo.webp",
         "defaults": {
           "primary": "#687345",
@@ -643,14 +643,14 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/gloves_tactical_dye_mask.png",
+        "mask": "textures/gloves_tactical_dye_mask.webp",
         "albedo": "textures/gloves_tactical_dye_albedo.webp",
         "defaults": {
           "primary": "#171719"
         }
       },
       "lod1": {
-        "mask": "textures/gloves_tactical_lod1_dye_mask.png",
+        "mask": "textures/gloves_tactical_lod1_dye_mask.webp",
         "albedo": "textures/gloves_tactical_lod1_dye_albedo.webp",
         "defaults": {
           "primary": "#171719"
@@ -669,14 +669,14 @@
         },
         "dye": {
           "lod0": {
-            "mask": "textures/gloves_tactical_female_dye_mask.png",
+            "mask": "textures/gloves_tactical_female_dye_mask.webp",
             "albedo": "textures/gloves_tactical_female_dye_albedo.webp",
             "defaults": {
               "primary": "#171719"
             }
           },
           "lod1": {
-            "mask": "textures/gloves_tactical_female_lod1_dye_mask.png",
+            "mask": "textures/gloves_tactical_female_lod1_dye_mask.webp",
             "albedo": "textures/gloves_tactical_female_lod1_dye_albedo.webp",
             "defaults": {
               "primary": "#171719"
@@ -702,14 +702,14 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/hair_bun_dye_mask.png",
+        "mask": "textures/hair_bun_dye_mask.webp",
         "albedo": "textures/hair_bun_dye_albedo.webp",
         "defaults": {
           "secondary": "#687345"
         }
       },
       "lod1": {
-        "mask": "textures/hair_bun_lod1_dye_mask.png",
+        "mask": "textures/hair_bun_lod1_dye_mask.webp",
         "albedo": "textures/hair_bun_lod1_dye_albedo.webp",
         "defaults": {
           "secondary": "#687345"
@@ -742,14 +742,14 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/hair_braids_dye_mask.png",
+        "mask": "textures/hair_braids_dye_mask.webp",
         "albedo": "textures/hair_braids_dye_albedo.webp",
         "defaults": {
           "accent": "#2cb4b4"
         }
       },
       "lod1": {
-        "mask": "textures/hair_braids_lod1_dye_mask.png",
+        "mask": "textures/hair_braids_lod1_dye_mask.webp",
         "albedo": "textures/hair_braids_lod1_dye_albedo.webp",
         "defaults": {}
       }
@@ -780,12 +780,12 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/hair_crop_dye_mask.png",
+        "mask": "textures/hair_crop_dye_mask.webp",
         "albedo": "textures/hair_crop_dye_albedo.webp",
         "defaults": {}
       },
       "lod1": {
-        "mask": "textures/hair_crop_lod1_dye_mask.png",
+        "mask": "textures/hair_crop_lod1_dye_mask.webp",
         "albedo": "textures/hair_crop_lod1_dye_albedo.webp",
         "defaults": {}
       }
@@ -816,7 +816,7 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/top_bomber_dye_mask.png",
+        "mask": "textures/top_bomber_dye_mask.webp",
         "albedo": "textures/top_bomber_dye_albedo.webp",
         "defaults": {
           "primary": "#61663d",
@@ -825,7 +825,7 @@
         }
       },
       "lod1": {
-        "mask": "textures/top_bomber_lod1_dye_mask.png",
+        "mask": "textures/top_bomber_lod1_dye_mask.webp",
         "albedo": "textures/top_bomber_lod1_dye_albedo.webp",
         "defaults": {
           "primary": "#61663d",
@@ -850,7 +850,7 @@
         },
         "dye": {
           "lod0": {
-            "mask": "textures/top_bomber_female_dye_mask.png",
+            "mask": "textures/top_bomber_female_dye_mask.webp",
             "albedo": "textures/top_bomber_female_dye_albedo.webp",
             "defaults": {
               "primary": "#61663d",
@@ -859,7 +859,7 @@
             }
           },
           "lod1": {
-            "mask": "textures/top_bomber_female_lod1_dye_mask.png",
+            "mask": "textures/top_bomber_female_lod1_dye_mask.webp",
             "albedo": "textures/top_bomber_female_lod1_dye_albedo.webp",
             "defaults": {
               "primary": "#61663d",
@@ -887,7 +887,7 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/top_plate_carrier_dye_mask.png",
+        "mask": "textures/top_plate_carrier_dye_mask.webp",
         "albedo": "textures/top_plate_carrier_dye_albedo.webp",
         "defaults": {
           "primary": "#b89465",
@@ -896,7 +896,7 @@
         }
       },
       "lod1": {
-        "mask": "textures/top_plate_carrier_lod1_dye_mask.png",
+        "mask": "textures/top_plate_carrier_lod1_dye_mask.webp",
         "albedo": "textures/top_plate_carrier_lod1_dye_albedo.webp",
         "defaults": {
           "primary": "#b79365",
@@ -921,7 +921,7 @@
         },
         "dye": {
           "lod0": {
-            "mask": "textures/top_plate_carrier_female_dye_mask.png",
+            "mask": "textures/top_plate_carrier_female_dye_mask.webp",
             "albedo": "textures/top_plate_carrier_female_dye_albedo.webp",
             "defaults": {
               "primary": "#b49163",
@@ -930,7 +930,7 @@
             }
           },
           "lod1": {
-            "mask": "textures/top_plate_carrier_female_lod1_dye_mask.png",
+            "mask": "textures/top_plate_carrier_female_lod1_dye_mask.webp",
             "albedo": "textures/top_plate_carrier_female_lod1_dye_albedo.webp",
             "defaults": {
               "primary": "#ba9566",
@@ -958,7 +958,7 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/legs_combat_trousers_dye_mask.png",
+        "mask": "textures/legs_combat_trousers_dye_mask.webp",
         "albedo": "textures/legs_combat_trousers_dye_albedo.webp",
         "defaults": {
           "primary": "#61663d",
@@ -966,7 +966,7 @@
         }
       },
       "lod1": {
-        "mask": "textures/legs_combat_trousers_lod1_dye_mask.png",
+        "mask": "textures/legs_combat_trousers_lod1_dye_mask.webp",
         "albedo": "textures/legs_combat_trousers_lod1_dye_albedo.webp",
         "defaults": {
           "primary": "#61663d",
@@ -990,7 +990,7 @@
         },
         "dye": {
           "lod0": {
-            "mask": "textures/legs_combat_trousers_female_dye_mask.png",
+            "mask": "textures/legs_combat_trousers_female_dye_mask.webp",
             "albedo": "textures/legs_combat_trousers_female_dye_albedo.webp",
             "defaults": {
               "primary": "#61663d",
@@ -998,7 +998,7 @@
             }
           },
           "lod1": {
-            "mask": "textures/legs_combat_trousers_female_lod1_dye_mask.png",
+            "mask": "textures/legs_combat_trousers_female_lod1_dye_mask.webp",
             "albedo": "textures/legs_combat_trousers_female_lod1_dye_albedo.webp",
             "defaults": {
               "primary": "#61663d",
@@ -1025,7 +1025,7 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/legs_joggers_dye_mask.png",
+        "mask": "textures/legs_joggers_dye_mask.webp",
         "albedo": "textures/legs_joggers_dye_albedo.webp",
         "defaults": {
           "primary": "#484d50",
@@ -1033,7 +1033,7 @@
         }
       },
       "lod1": {
-        "mask": "textures/legs_joggers_lod1_dye_mask.png",
+        "mask": "textures/legs_joggers_lod1_dye_mask.webp",
         "albedo": "textures/legs_joggers_lod1_dye_albedo.webp",
         "defaults": {
           "primary": "#484d50",
@@ -1057,7 +1057,7 @@
         },
         "dye": {
           "lod0": {
-            "mask": "textures/legs_joggers_female_dye_mask.png",
+            "mask": "textures/legs_joggers_female_dye_mask.webp",
             "albedo": "textures/legs_joggers_female_dye_albedo.webp",
             "defaults": {
               "primary": "#4d5255",
@@ -1065,7 +1065,7 @@
             }
           },
           "lod1": {
-            "mask": "textures/legs_joggers_female_lod1_dye_mask.png",
+            "mask": "textures/legs_joggers_female_lod1_dye_mask.webp",
             "albedo": "textures/legs_joggers_female_lod1_dye_albedo.webp",
             "defaults": {
               "primary": "#4d5255",
@@ -1092,7 +1092,7 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/legs_cargo_long_dye_mask.png",
+        "mask": "textures/legs_cargo_long_dye_mask.webp",
         "albedo": "textures/legs_cargo_long_dye_albedo.webp",
         "defaults": {
           "primary": "#949185",
@@ -1100,7 +1100,7 @@
         }
       },
       "lod1": {
-        "mask": "textures/legs_cargo_long_lod1_dye_mask.png",
+        "mask": "textures/legs_cargo_long_lod1_dye_mask.webp",
         "albedo": "textures/legs_cargo_long_lod1_dye_albedo.webp",
         "defaults": {
           "primary": "#949185",
@@ -1124,7 +1124,7 @@
         },
         "dye": {
           "lod0": {
-            "mask": "textures/legs_cargo_long_female_dye_mask.png",
+            "mask": "textures/legs_cargo_long_female_dye_mask.webp",
             "albedo": "textures/legs_cargo_long_female_dye_albedo.webp",
             "defaults": {
               "primary": "#949185",
@@ -1132,7 +1132,7 @@
             }
           },
           "lod1": {
-            "mask": "textures/legs_cargo_long_female_lod1_dye_mask.png",
+            "mask": "textures/legs_cargo_long_female_lod1_dye_mask.webp",
             "albedo": "textures/legs_cargo_long_female_lod1_dye_albedo.webp",
             "defaults": {
               "primary": "#949185",
@@ -1159,7 +1159,7 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/boots_high_tops_dye_mask.png",
+        "mask": "textures/boots_high_tops_dye_mask.webp",
         "albedo": "textures/boots_high_tops_dye_albedo.webp",
         "defaults": {
           "primary": "#fbdbae",
@@ -1168,7 +1168,7 @@
         }
       },
       "lod1": {
-        "mask": "textures/boots_high_tops_lod1_dye_mask.png",
+        "mask": "textures/boots_high_tops_lod1_dye_mask.webp",
         "albedo": "textures/boots_high_tops_lod1_dye_albedo.webp",
         "defaults": {
           "primary": "#fdd5a7",
@@ -1195,7 +1195,7 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/boots_desert_dye_mask.png",
+        "mask": "textures/boots_desert_dye_mask.webp",
         "albedo": "textures/boots_desert_dye_albedo.webp",
         "defaults": {
           "primary": "#c7a06e",
@@ -1204,7 +1204,7 @@
         }
       },
       "lod1": {
-        "mask": "textures/boots_desert_lod1_dye_mask.png",
+        "mask": "textures/boots_desert_lod1_dye_mask.webp",
         "albedo": "textures/boots_desert_lod1_dye_albedo.webp",
         "defaults": {
           "primary": "#c29d6c",
@@ -1231,7 +1231,7 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/headgear_beanie_dye_mask.png",
+        "mask": "textures/headgear_beanie_dye_mask.webp",
         "albedo": "textures/headgear_beanie_dye_albedo.webp",
         "defaults": {
           "primary": "#687344",
@@ -1239,7 +1239,7 @@
         }
       },
       "lod1": {
-        "mask": "textures/headgear_beanie_lod1_dye_mask.png",
+        "mask": "textures/headgear_beanie_lod1_dye_mask.webp",
         "albedo": "textures/headgear_beanie_lod1_dye_albedo.webp",
         "defaults": {
           "primary": "#677346",
@@ -1262,7 +1262,7 @@
         },
         "dye": {
           "lod0": {
-            "mask": "textures/headgear_beanie_female_dye_mask.png",
+            "mask": "textures/headgear_beanie_female_dye_mask.webp",
             "albedo": "textures/headgear_beanie_female_dye_albedo.webp",
             "defaults": {
               "primary": "#687344",
@@ -1270,7 +1270,7 @@
             }
           },
           "lod1": {
-            "mask": "textures/headgear_beanie_female_lod1_dye_mask.png",
+            "mask": "textures/headgear_beanie_female_lod1_dye_mask.webp",
             "albedo": "textures/headgear_beanie_female_lod1_dye_albedo.webp",
             "defaults": {
               "primary": "#677346",
@@ -1297,7 +1297,7 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/headgear_headwrap_dye_mask.png",
+        "mask": "textures/headgear_headwrap_dye_mask.webp",
         "albedo": "textures/headgear_headwrap_dye_albedo.webp",
         "defaults": {
           "primary": "#293469",
@@ -1305,7 +1305,7 @@
         }
       },
       "lod1": {
-        "mask": "textures/headgear_headwrap_lod1_dye_mask.png",
+        "mask": "textures/headgear_headwrap_lod1_dye_mask.webp",
         "albedo": "textures/headgear_headwrap_lod1_dye_albedo.webp",
         "defaults": {
           "primary": "#313e7d",
@@ -1328,7 +1328,7 @@
         },
         "dye": {
           "lod0": {
-            "mask": "textures/headgear_headwrap_female_dye_mask.png",
+            "mask": "textures/headgear_headwrap_female_dye_mask.webp",
             "albedo": "textures/headgear_headwrap_female_dye_albedo.webp",
             "defaults": {
               "primary": "#293469",
@@ -1336,7 +1336,7 @@
             }
           },
           "lod1": {
-            "mask": "textures/headgear_headwrap_female_lod1_dye_mask.png",
+            "mask": "textures/headgear_headwrap_female_lod1_dye_mask.webp",
             "albedo": "textures/headgear_headwrap_female_lod1_dye_albedo.webp",
             "defaults": {
               "primary": "#313e7d",
@@ -1363,7 +1363,7 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/headgear_patrol_cap_dye_mask.png",
+        "mask": "textures/headgear_patrol_cap_dye_mask.webp",
         "albedo": "textures/headgear_patrol_cap_dye_albedo.webp",
         "defaults": {
           "primary": "#687345",
@@ -1371,7 +1371,7 @@
         }
       },
       "lod1": {
-        "mask": "textures/headgear_patrol_cap_lod1_dye_mask.png",
+        "mask": "textures/headgear_patrol_cap_lod1_dye_mask.webp",
         "albedo": "textures/headgear_patrol_cap_lod1_dye_albedo.webp",
         "defaults": {
           "primary": "#687345",
@@ -1394,7 +1394,7 @@
         },
         "dye": {
           "lod0": {
-            "mask": "textures/headgear_patrol_cap_female_dye_mask.png",
+            "mask": "textures/headgear_patrol_cap_female_dye_mask.webp",
             "albedo": "textures/headgear_patrol_cap_female_dye_albedo.webp",
             "defaults": {
               "primary": "#687345",
@@ -1402,7 +1402,7 @@
             }
           },
           "lod1": {
-            "mask": "textures/headgear_patrol_cap_female_lod1_dye_mask.png",
+            "mask": "textures/headgear_patrol_cap_female_lod1_dye_mask.webp",
             "albedo": "textures/headgear_patrol_cap_female_lod1_dye_albedo.webp",
             "defaults": {
               "primary": "#687345",
@@ -1429,7 +1429,7 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/eyewear_shades_dye_mask.png",
+        "mask": "textures/eyewear_shades_dye_mask.webp",
         "albedo": "textures/eyewear_shades_dye_albedo.webp",
         "defaults": {
           "secondary": "#36393b",
@@ -1437,7 +1437,7 @@
         }
       },
       "lod1": {
-        "mask": "textures/eyewear_shades_lod1_dye_mask.png",
+        "mask": "textures/eyewear_shades_lod1_dye_mask.webp",
         "albedo": "textures/eyewear_shades_lod1_dye_albedo.webp",
         "defaults": {
           "secondary": "#36393b",
@@ -1460,7 +1460,7 @@
         },
         "dye": {
           "lod0": {
-            "mask": "textures/eyewear_shades_female_dye_mask.png",
+            "mask": "textures/eyewear_shades_female_dye_mask.webp",
             "albedo": "textures/eyewear_shades_female_dye_albedo.webp",
             "defaults": {
               "secondary": "#36393b",
@@ -1468,7 +1468,7 @@
             }
           },
           "lod1": {
-            "mask": "textures/eyewear_shades_female_lod1_dye_mask.png",
+            "mask": "textures/eyewear_shades_female_lod1_dye_mask.webp",
             "albedo": "textures/eyewear_shades_female_lod1_dye_albedo.webp",
             "defaults": {
               "secondary": "#36393b",
@@ -1495,7 +1495,7 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/eyewear_dust_scarf_dye_mask.png",
+        "mask": "textures/eyewear_dust_scarf_dye_mask.webp",
         "albedo": "textures/eyewear_dust_scarf_dye_albedo.webp",
         "defaults": {
           "primary": "#cfa972",
@@ -1503,7 +1503,7 @@
         }
       },
       "lod1": {
-        "mask": "textures/eyewear_dust_scarf_lod1_dye_mask.png",
+        "mask": "textures/eyewear_dust_scarf_lod1_dye_mask.webp",
         "albedo": "textures/eyewear_dust_scarf_lod1_dye_albedo.webp",
         "defaults": {
           "primary": "#cfa972",
@@ -1526,7 +1526,7 @@
         },
         "dye": {
           "lod0": {
-            "mask": "textures/eyewear_dust_scarf_female_dye_mask.png",
+            "mask": "textures/eyewear_dust_scarf_female_dye_mask.webp",
             "albedo": "textures/eyewear_dust_scarf_female_dye_albedo.webp",
             "defaults": {
               "primary": "#cfa972",
@@ -1534,7 +1534,7 @@
             }
           },
           "lod1": {
-            "mask": "textures/eyewear_dust_scarf_female_lod1_dye_mask.png",
+            "mask": "textures/eyewear_dust_scarf_female_lod1_dye_mask.webp",
             "albedo": "textures/eyewear_dust_scarf_female_lod1_dye_albedo.webp",
             "defaults": {
               "primary": "#cfa972",
@@ -1561,7 +1561,7 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/eyewear_goggles_dye_mask.png",
+        "mask": "textures/eyewear_goggles_dye_mask.webp",
         "albedo": "textures/eyewear_goggles_dye_albedo.webp",
         "defaults": {
           "secondary": "#687345",
@@ -1569,7 +1569,7 @@
         }
       },
       "lod1": {
-        "mask": "textures/eyewear_goggles_lod1_dye_mask.png",
+        "mask": "textures/eyewear_goggles_lod1_dye_mask.webp",
         "albedo": "textures/eyewear_goggles_lod1_dye_albedo.webp",
         "defaults": {
           "secondary": "#697345",
@@ -1592,7 +1592,7 @@
         },
         "dye": {
           "lod0": {
-            "mask": "textures/eyewear_goggles_female_dye_mask.png",
+            "mask": "textures/eyewear_goggles_female_dye_mask.webp",
             "albedo": "textures/eyewear_goggles_female_dye_albedo.webp",
             "defaults": {
               "secondary": "#687345",
@@ -1600,7 +1600,7 @@
             }
           },
           "lod1": {
-            "mask": "textures/eyewear_goggles_female_lod1_dye_mask.png",
+            "mask": "textures/eyewear_goggles_female_lod1_dye_mask.webp",
             "albedo": "textures/eyewear_goggles_female_lod1_dye_albedo.webp",
             "defaults": {
               "secondary": "#697345",
@@ -1627,7 +1627,7 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/top_tee_field_dye_mask.png",
+        "mask": "textures/top_tee_field_dye_mask.webp",
         "albedo": "textures/top_tee_field_dye_albedo.webp",
         "defaults": {
           "primary": "#61663d",
@@ -1636,7 +1636,7 @@
         }
       },
       "lod1": {
-        "mask": "textures/top_tee_field_lod1_dye_mask.png",
+        "mask": "textures/top_tee_field_lod1_dye_mask.webp",
         "albedo": "textures/top_tee_field_lod1_dye_albedo.webp",
         "defaults": {
           "primary": "#61663d",
@@ -1661,7 +1661,7 @@
         },
         "dye": {
           "lod0": {
-            "mask": "textures/top_tee_field_female_dye_mask.png",
+            "mask": "textures/top_tee_field_female_dye_mask.webp",
             "albedo": "textures/top_tee_field_female_dye_albedo.webp",
             "defaults": {
               "primary": "#61663d",
@@ -1670,7 +1670,7 @@
             }
           },
           "lod1": {
-            "mask": "textures/top_tee_field_female_lod1_dye_mask.png",
+            "mask": "textures/top_tee_field_female_lod1_dye_mask.webp",
             "albedo": "textures/top_tee_field_female_lod1_dye_albedo.webp",
             "defaults": {
               "primary": "#61663d",
@@ -1698,7 +1698,7 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/top_hoodie_street_dye_mask.png",
+        "mask": "textures/top_hoodie_street_dye_mask.webp",
         "albedo": "textures/top_hoodie_street_dye_albedo.webp",
         "defaults": {
           "primary": "#4d5255",
@@ -1707,7 +1707,7 @@
         }
       },
       "lod1": {
-        "mask": "textures/top_hoodie_street_lod1_dye_mask.png",
+        "mask": "textures/top_hoodie_street_lod1_dye_mask.webp",
         "albedo": "textures/top_hoodie_street_lod1_dye_albedo.webp",
         "defaults": {
           "primary": "#4f5457",
@@ -1732,7 +1732,7 @@
         },
         "dye": {
           "lod0": {
-            "mask": "textures/top_hoodie_street_female_dye_mask.png",
+            "mask": "textures/top_hoodie_street_female_dye_mask.webp",
             "albedo": "textures/top_hoodie_street_female_dye_albedo.webp",
             "defaults": {
               "primary": "#4d5255",
@@ -1741,7 +1741,7 @@
             }
           },
           "lod1": {
-            "mask": "textures/top_hoodie_street_female_lod1_dye_mask.png",
+            "mask": "textures/top_hoodie_street_female_lod1_dye_mask.webp",
             "albedo": "textures/top_hoodie_street_female_lod1_dye_albedo.webp",
             "defaults": {
               "primary": "#4d5255",
@@ -1769,7 +1769,7 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/top_jersey_street_dye_mask.png",
+        "mask": "textures/top_jersey_street_dye_mask.webp",
         "albedo": "textures/top_jersey_street_dye_albedo.webp",
         "defaults": {
           "primary": "#e5dbc2",
@@ -1778,7 +1778,7 @@
         }
       },
       "lod1": {
-        "mask": "textures/top_jersey_street_lod1_dye_mask.png",
+        "mask": "textures/top_jersey_street_lod1_dye_mask.webp",
         "albedo": "textures/top_jersey_street_lod1_dye_albedo.webp",
         "defaults": {
           "primary": "#e5dbc2",
@@ -1803,7 +1803,7 @@
         },
         "dye": {
           "lod0": {
-            "mask": "textures/top_jersey_street_female_dye_mask.png",
+            "mask": "textures/top_jersey_street_female_dye_mask.webp",
             "albedo": "textures/top_jersey_street_female_dye_albedo.webp",
             "defaults": {
               "primary": "#e5dbc2",
@@ -1812,7 +1812,7 @@
             }
           },
           "lod1": {
-            "mask": "textures/top_jersey_street_female_lod1_dye_mask.png",
+            "mask": "textures/top_jersey_street_female_lod1_dye_mask.webp",
             "albedo": "textures/top_jersey_street_female_lod1_dye_albedo.webp",
             "defaults": {
               "primary": "#e5dbc2",
@@ -1840,14 +1840,14 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/top_print_shirt_dye_mask.png",
+        "mask": "textures/top_print_shirt_dye_mask.webp",
         "albedo": "textures/top_print_shirt_dye_albedo.webp",
         "defaults": {
           "accent": "#2aadad"
         }
       },
       "lod1": {
-        "mask": "textures/top_print_shirt_lod1_dye_mask.png",
+        "mask": "textures/top_print_shirt_lod1_dye_mask.webp",
         "albedo": "textures/top_print_shirt_lod1_dye_albedo.webp",
         "defaults": {
           "accent": "#2aacac"
@@ -1870,14 +1870,14 @@
         },
         "dye": {
           "lod0": {
-            "mask": "textures/top_print_shirt_female_dye_mask.png",
+            "mask": "textures/top_print_shirt_female_dye_mask.webp",
             "albedo": "textures/top_print_shirt_female_dye_albedo.webp",
             "defaults": {
               "accent": "#2aacac"
             }
           },
           "lod1": {
-            "mask": "textures/top_print_shirt_female_lod1_dye_mask.png",
+            "mask": "textures/top_print_shirt_female_lod1_dye_mask.webp",
             "albedo": "textures/top_print_shirt_female_lod1_dye_albedo.webp",
             "defaults": {
               "accent": "#2bafaf"
@@ -1903,7 +1903,7 @@
     },
     "dye": {
       "lod0": {
-        "mask": "textures/top_field_jacket_dye_mask.png",
+        "mask": "textures/top_field_jacket_dye_mask.webp",
         "albedo": "textures/top_field_jacket_dye_albedo.webp",
         "defaults": {
           "primary": "#949185",
@@ -1912,7 +1912,7 @@
         }
       },
       "lod1": {
-        "mask": "textures/top_field_jacket_lod1_dye_mask.png",
+        "mask": "textures/top_field_jacket_lod1_dye_mask.webp",
         "albedo": "textures/top_field_jacket_lod1_dye_albedo.webp",
         "defaults": {
           "primary": "#949185",
@@ -1936,7 +1936,7 @@
         },
         "dye": {
           "lod0": {
-            "mask": "textures/top_field_jacket_female_dye_mask.png",
+            "mask": "textures/top_field_jacket_female_dye_mask.webp",
             "albedo": "textures/top_field_jacket_female_dye_albedo.webp",
             "defaults": {
               "primary": "#969387",
@@ -1945,7 +1945,7 @@
             }
           },
           "lod1": {
-            "mask": "textures/top_field_jacket_female_lod1_dye_mask.png",
+            "mask": "textures/top_field_jacket_female_lod1_dye_mask.webp",
             "albedo": "textures/top_field_jacket_female_lod1_dye_albedo.webp",
             "defaults": {
               "primary": "#949185",

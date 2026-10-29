@@ -18,6 +18,8 @@ Options:
                                 footprint, side silhouette, nodes, moving parts, head clearance, sights,
                                 forward light and emissive area against the base
     --json <out.json>           also write the report as JSON
+    --web-build 1               check dye masks as the web build ships them (lossless WebP), wherever the files
+                                are; GLBs under apps/web/public always are
 
 Prints a PASS/WARN/FAIL table and exits 1 if anything FAILs (2 if the check itself crashed), so
 CI can gate on it. Keep `--python-exit-code 1`: without it Blender exits 0 when a script raises.
@@ -345,6 +347,70 @@ def uv_coverage(o, w, h):
     return cov
 
 
+SHIPPED = REPO / "apps/web/public"  # what the web build serves; art/ holds the masters
+
+
+def _webp_chunks(path):
+    """The RIFF chunk ids of a WebP file (["VP8L"] = simple lossless), or None if it isn't one."""
+    b = Path(path).read_bytes()
+    if b[:4] != b"RIFF" or b[8:12] != b"WEBP":
+        return None
+    out, i = [], 12
+    while i + 8 <= len(b):
+        size = struct.unpack_from("<I", b, i + 4)[0]
+        out.append(b[i:i + 4].decode("latin-1"))
+        i += 8 + size + (size & 1)
+    return out
+
+
+def _bytes(img):
+    """An 8-bit image's RGBA as Blender holds it (straight alpha, no colour transform), 0-255."""
+    return np.round(_px(img) * 255).astype(np.uint8)
+
+
+def dye_mask_format(r: Report, objs, files, web_build=False):
+    """A shipped dye mask (a GLB under apps/web/public) must be lossless WebP: a PNG is an old export
+    (2.4x the download), and lossy or plain lossless WebP rewrites the R/G/B dye weights under the texels
+    whose team-glow A is 0 (art/pipeline/dye.py mask_webp: cwebp -lossless -exact). Where its art/
+    master PNG exists, the WebP must decode to it on all four channels. Art sources keep PNG masters."""
+    for o in objs:
+        name = o.get("dyeMask") if o.type == "MESH" else None
+        if not name:
+            continue
+        stem = Path(name).stem
+        found = next((d for d in (_texture_dir(f"{stem}{ext}", files) for ext in (".webp", ".png")) if d), None)
+        if found is None or not (web_build or SHIPPED in found.resolve().parents):
+            continue  # an art/ source (PNG master), or missing: dye_roundtrip reports that
+        check = f"dye mask ships as lossless WebP: {o.name}"
+        if not name.endswith(".webp"):
+            r.add("FAIL", check, f"{name}: the web build ships masks as lossless WebP (re-export: dye.mask_webp)")
+            continue
+        tex = _texture_dir(name, files)
+        if tex is None:
+            continue  # dye_roundtrip reports the missing file
+        if (tex / name).with_suffix(".png").exists():
+            r.add("FAIL", check, f"{Path(name).with_suffix('.png').name} still beside it: remove the PNG")
+            continue
+        chunks = _webp_chunks(tex / name)
+        if chunks != ["VP8L"]:
+            r.add("FAIL", check, f"{name}: {'not a WebP file' if chunks is None else '+'.join(chunks)}, want lossless VP8L")
+            continue
+        masters = sorted((REPO / "art").glob(f"**/textures/{Path(name).stem}.png"))
+        if not masters:
+            r.add("PASS", check, f"{name}: lossless VP8L (no art/ master to compare)")
+            continue
+        got = _bytes(bpy.data.images.load(str(tex / name), check_existing=True))
+        want = _bytes(bpy.data.images.load(str(masters[0]), check_existing=True))
+        if got.shape != want.shape:
+            r.add("FAIL", check, f"{name}: {got.shape[:2]} vs its master {want.shape[:2]}")
+            continue
+        diff = int((got != want).any(axis=-1).sum())
+        hidden = int(((want[..., 3] == 0) & (want[..., :3].max(axis=-1) > 0)).sum())
+        r.ok(diff == 0, check, f"{name}: lossless VP8L, " + (f"the same RGBA as {masters[0].relative_to(REPO)} "
+             f"({hidden} texels with A = 0 keep their dye weights)" if diff == 0 else
+             f"{diff} texels differ from {masters[0].relative_to(REPO)} (exported without -exact?)"))
+
+
 def dye_roundtrip(r: Report, objs, files):
     """docs/04 §5.4: on every texel the mesh covers, the shader with the default dyes must give back
     the painted albedo. Dyed texels: dyeAlbedo × Π lerp(1, default_i, mask_i) vs the albedo, linear
@@ -367,7 +433,7 @@ def dye_roundtrip(r: Report, objs, files):
             continue
         # the lossless albedo PNG the GLB was made from, when it sits next to the dye files (art/
         # sources embed JPEG); otherwise the embedded albedo (the web build's WebP)
-        png = tex / o["dyeMask"].replace("_dye_mask.png", "_albedo.png")
+        png = tex / re.sub(r"_dye_mask\.(png|webp)$", "_albedo.png", o["dyeMask"])
         a = _px(bpy.data.images.load(str(png), check_existing=True) if png.exists() else albedo)[..., :3]
         d4 = _px(bpy.data.images.load(str(dalb), check_existing=True))
         d = d4[..., :3]
@@ -559,6 +625,7 @@ def check_character(r: Report, objs, args):
     r.ok(merged <= CHAR_DRAW_CALLS, "draw calls after part merge (docs/04 §5.3)",
          f"{merged} of {CHAR_DRAW_CALLS} ({dc} before merging)")
     image_report(r, args["max_tex"], CHAR_GPU_TEX_BYTES, dye_mask_images(meshes, args["files"]))
+    dye_mask_format(r, objs, args["files"], args.get("web_build") not in (None, "0", "no"))
     dye_roundtrip(r, objs, args["files"])
 
     found = check_skeleton(r, objs, meshes)
@@ -690,6 +757,7 @@ def check_part(r: Report, objs, args):
     if known and cid:
         r.ok(cid in known, "cosmeticId in packages/content", cid if cid in known else
              f"{cid} is not in packages/content/src/cosmetics.ts (W2's catalogue names the items)", warn_only=True)
+    dye_mask_format(r, objs, args["files"], args.get("web_build") not in (None, "0", "no"))
     dye_roundtrip(r, objs, args["files"])
     part_rest = {a.name: rest_pose(a) for a in objs if a.type == "ARMATURE"}
     # docs/04 §9.3: parts are skinned to the shared skeleton in character space, never socket-local

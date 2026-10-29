@@ -10,7 +10,7 @@
   },
   "dye": {
     "lod0": {
-      "mask": "textures/headgear_beret_dye_mask.png",
+      "mask": "textures/headgear_beret_dye_mask.webp",
       "albedo": "textures/headgear_beret_dye_albedo.webp",
       "defaults": {
         "primary": "#873d41",
@@ -19,7 +19,7 @@
       }
     },
     "lod1": {
-      "mask": "textures/headgear_beret_lod1_dye_mask.png",
+      "mask": "textures/headgear_beret_lod1_dye_mask.webp",
       "albedo": "textures/headgear_beret_lod1_dye_albedo.webp",
       "defaults": {
         "primary": "#833b3f",
@@ -42,7 +42,7 @@
       },
       "dye": {
         "lod0": {
-          "mask": "textures/headgear_beret_female_dye_mask.png",
+          "mask": "textures/headgear_beret_female_dye_mask.webp",
           "albedo": "textures/headgear_beret_female_dye_albedo.webp",
           "defaults": {
             "primary": "#873d41",
@@ -51,7 +51,7 @@
           }
         },
         "lod1": {
-          "mask": "textures/headgear_beret_female_lod1_dye_mask.png",
+          "mask": "textures/headgear_beret_female_lod1_dye_mask.webp",
           "albedo": "textures/headgear_beret_female_lod1_dye_albedo.webp",
           "defaults": {
             "primary": "#833b3f",

@@ -38,7 +38,6 @@ The fits ship as `<id>_<body>[_lod1].glb` with their own textures, listed in the
 """
 import json
 import math
-import shutil
 import sys
 from pathlib import Path
 
@@ -1449,7 +1448,7 @@ def finish(iid, slot, name, lods, gen, extras, own=False):
                 defaults.update({k: v for k, v in gen["dyes"].items() if k in defaults})
                 px = {}
                 for kind in ("dye_albedo", "dye_mask"):
-                    im = bpy.data.images.load(str(tex_dir / f"{stem}_{kind}.png"))
+                    im = bpy.data.images.load(str(tex_dir / f"{stem}_{kind}.png"))  # the PNG masters
                     px[kind] = np.array(im.pixels[:], dtype=np.float32).reshape(size, size, 4)
                     bpy.data.images.remove(im)
                 # in linear space, like the shader (dye.finish)
@@ -1483,7 +1482,7 @@ def finish(iid, slot, name, lods, gen, extras, own=False):
         lo["bodyTypes"] = ["standard" if BODY == "male" else BODY]
         lo["envelopeOk"] = envelope_ok(lo, slot)
         lo["dyeDefaults"] = defaults
-        lo["dyeMask"] = f"{stem}_dye_mask.png"
+        lo["dyeMask"] = dye.mask_file(stem, runtime=False)  # the web build's GLB names its WebP (below)
         lo["dyeAlbedo"] = f"{stem}_dye_albedo"
         for k, v in extras.items():
             if k != "nozzleCount":  # build-only
@@ -1498,17 +1497,19 @@ def finish(iid, slot, name, lods, gen, extras, own=False):
         export(OUT / slot / f"{stem}.glb", lo, runtime=False)
         lod = "lod0" if not suffix else "lod1"
         entry["lods"][lod] = f"{stem}.glb"
-        entry["dye"][lod] = {"mask": f"textures/{stem}_dye_mask.png", "albedo": f"textures/{stem}_dye_albedo.webp",
+        entry["dye"][lod] = {"mask": f"textures/{dye.mask_file(stem, runtime=True)}", "albedo": f"textures/{stem}_dye_albedo.webp",
                              "defaults": defaults}
         entry["tris"][lod] = t
         if RUNTIME:
             # 128² LOD1 textures go lossless (WebP quality 100): lossy WebP smears their tiny
             # islands, and they cost only a few KB more
             q = 100 if size <= 128 else 90
+            lo["dyeMask"] = dye.mask_file(stem, runtime=True)
             export(RUNTIME / "cosmetics" / slot / f"{stem}.glb", lo, runtime=True, quality=q)
             rt_tex = RUNTIME / "cosmetics" / slot / "textures"
             rt_tex.mkdir(parents=True, exist_ok=True)
-            shutil.copy(tex_dir / f"{stem}_dye_mask.png", rt_tex / f"{stem}_dye_mask.png")
+            # the mask as lossless WebP, checked pixel for pixel against the PNG (dye.mask_webp)
+            dye.mask_webp(tex_dir / dye.mask_file(stem, runtime=False), rt_tex / dye.mask_file(stem, runtime=True))
             img = bpy.data.images.load(str(tex_dir / f"{stem}_dye_albedo.png"))
             # save_render applies the view transform: AgX would tone-map the albedo
             scene.view_settings.view_transform = "Standard"

@@ -243,7 +243,7 @@ Blender custom properties export as glTF `extras` (`export_extras`):
   - `envelopeOk`: the measured result of §1.2;
   - `hidesHair`;
   - `dyeDefaults` {primary, secondary, accent}: §5.4 default dye colours (sRGB hex);
-  - `dyeMask`: the mask texture file name (RGBA = primary/secondary/accent/glow, linear data, same UVs);
+  - `dyeMask`: the mask texture file name (RGBA = primary/secondary/accent/glow, linear data, same UVs): the PNG master in art/, lossless WebP (`cwebp -lossless -exact`, the colour under zero alpha kept) in the web build;
   - `dyeAlbedo`: the stem of the albedo with the dyeable texels turned neutral grey (§5.4). `dyeAlbedo × lerp(1, dyeDefaults, mask)` gives back the painted albedo;
   - `attachBone` and `socket` (§9.3), on rigid parts;
   - the Locker manifest also carries `name` and `cosmeticId`.

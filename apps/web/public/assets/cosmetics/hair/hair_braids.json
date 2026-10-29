@@ -10,14 +10,14 @@
   },
   "dye": {
     "lod0": {
-      "mask": "textures/hair_braids_dye_mask.png",
+      "mask": "textures/hair_braids_dye_mask.webp",
       "albedo": "textures/hair_braids_dye_albedo.webp",
       "defaults": {
         "accent": "#2cb4b4"
       }
     },
     "lod1": {
-      "mask": "textures/hair_braids_lod1_dye_mask.png",
+      "mask": "textures/hair_braids_lod1_dye_mask.webp",
       "albedo": "textures/hair_braids_lod1_dye_albedo.webp",
       "defaults": {}
     }

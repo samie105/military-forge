@@ -10,14 +10,14 @@
   },
   "dye": {
     "lod0": {
-      "mask": "textures/top_print_shirt_dye_mask.png",
+      "mask": "textures/top_print_shirt_dye_mask.webp",
       "albedo": "textures/top_print_shirt_dye_albedo.webp",
       "defaults": {
         "accent": "#2aadad"
       }
     },
     "lod1": {
-      "mask": "textures/top_print_shirt_lod1_dye_mask.png",
+      "mask": "textures/top_print_shirt_lod1_dye_mask.webp",
       "albedo": "textures/top_print_shirt_lod1_dye_albedo.webp",
       "defaults": {
         "accent": "#2aacac"
@@ -40,14 +40,14 @@
       },
       "dye": {
         "lod0": {
-          "mask": "textures/top_print_shirt_female_dye_mask.png",
+          "mask": "textures/top_print_shirt_female_dye_mask.webp",
           "albedo": "textures/top_print_shirt_female_dye_albedo.webp",
           "defaults": {
             "accent": "#2aacac"
           }
         },
         "lod1": {
-          "mask": "textures/top_print_shirt_female_lod1_dye_mask.png",
+          "mask": "textures/top_print_shirt_female_lod1_dye_mask.webp",
           "albedo": "textures/top_print_shirt_female_lod1_dye_albedo.webp",
           "defaults": {
             "accent": "#2bafaf"

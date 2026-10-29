@@ -10,14 +10,14 @@
   },
   "dye": {
     "lod0": {
-      "mask": "textures/gloves_tactical_dye_mask.png",
+      "mask": "textures/gloves_tactical_dye_mask.webp",
       "albedo": "textures/gloves_tactical_dye_albedo.webp",
       "defaults": {
         "primary": "#171719"
       }
     },
     "lod1": {
-      "mask": "textures/gloves_tactical_lod1_dye_mask.png",
+      "mask": "textures/gloves_tactical_lod1_dye_mask.webp",
       "albedo": "textures/gloves_tactical_lod1_dye_albedo.webp",
       "defaults": {
         "primary": "#171719"
@@ -36,14 +36,14 @@
       },
       "dye": {
         "lod0": {
-          "mask": "textures/gloves_tactical_female_dye_mask.png",
+          "mask": "textures/gloves_tactical_female_dye_mask.webp",
           "albedo": "textures/gloves_tactical_female_dye_albedo.webp",
           "defaults": {
             "primary": "#171719"
           }
         },
         "lod1": {
-          "mask": "textures/gloves_tactical_female_lod1_dye_mask.png",
+          "mask": "textures/gloves_tactical_female_lod1_dye_mask.webp",
           "albedo": "textures/gloves_tactical_female_lod1_dye_albedo.webp",
           "defaults": {
             "primary": "#171719"

@@ -129,7 +129,7 @@ const dyeTex = {};
 async function loadDye(dir, stem) {
   const [albedo, mask] = await Promise.all([
     loadTex(`${dir}/textures/${stem}_dye_albedo.webp`, false),
-    loadTex(`${dir}/textures/${stem}_dye_mask.png`, true),
+    loadTex(`${dir}/textures/${stem}_dye_mask.webp`, true),
   ]);
   dyeTex[stem] = { albedo, mask };
 }

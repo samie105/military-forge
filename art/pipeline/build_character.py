@@ -32,7 +32,6 @@ and hair, so no hair cap is added.
 import colorsys
 import json
 import math
-import shutil
 import struct
 import sys
 from pathlib import Path
@@ -977,7 +976,7 @@ for (part, suffix), (obj, tris, img) in parts.items():
         obj["nozzles"] = nozzles.find(obj, 2)
     obj["envelopeOk"] = envelope_ok(obj, part)
     obj["dyeDefaults"] = defaults
-    obj["dyeMask"] = f"{tex_name}_dye_mask.png"
+    obj["dyeMask"] = dye.mask_file(tex_name, runtime=False)  # write_set names the web build's WebP
     obj["dyeAlbedo"] = f"{tex_name}_dye_albedo"  # .png in art/, .webp in the web build
     if part in SKIN:  # skin weight in the dye albedo's alpha, neutralised against skin_04
         obj["dyeSkin"] = "alpha"
@@ -1184,21 +1183,26 @@ shared_anims = False
 
 
 def write_set(char_dir, part_dir, runtime):
-    """char_dir gets the body LODs + anims; part_dir(slot) the default parts."""
+    """char_dir gets the body LODs + anims; part_dir(slot) the default parts. Each part's `dyeMask` extra names the
+    mask file beside it: the PNG master in art/, the lossless WebP in the web build."""
+    for (part, suffix), (obj, _, _) in parts.items():
+        obj["dyeMask"] = dye.mask_file(f"{FILE_IDS[part]}{suffix}", runtime)
     for suffix in LODS:
         export(char_dir / f"{NAME}_body{suffix}.glb", [arm, parts[("body", suffix)][0]], runtime=runtime)
         for part in SLOT_PARTS:
             export(part_dir(part) / f"{FILE_IDS[part]}{suffix}.glb", [arm, parts[(part, suffix)][0]], runtime=runtime)
     if not shared_anims:
         export(char_dir / f"{NAME}_anims.glb", [arm], animations=True, runtime=runtime)
+    for (part, suffix), (obj, _, _) in parts.items():  # the art names again (the preview GLB, the saved .blend)
+        obj["dyeMask"] = dye.mask_file(f"{FILE_IDS[part]}{suffix}", runtime=False)
 
 
 def runtime_textures(src_names, dest, alpha=False):
-    """Dye masks stay lossless PNG (they are data); dye albedos go to WebP for download size, with
-    their alpha when it holds a skin weight (the body)."""
+    """Dye masks go to lossless WebP, checked pixel for pixel against the PNG (they are data: dye.mask_webp);
+    dye albedos to lossy WebP for download size, with their alpha when it holds a skin weight (the body)."""
     dest.mkdir(parents=True, exist_ok=True)
     for stem in src_names:
-        shutil.copy(TEXDIR / f"{stem}_dye_mask.png", dest / f"{stem}_dye_mask.png")
+        dye.mask_webp(TEXDIR / dye.mask_file(stem, runtime=False), dest / dye.mask_file(stem, runtime=True))
         img = bpy.data.images.load(str(TEXDIR / f"{stem}_dye_albedo.png"))
         scene = bpy.context.scene
         # save_render applies the scene's view transform: AgX would tone-map the albedo
@@ -1278,10 +1282,10 @@ if RUNTIME:
 
     def dye_entry(part, suffix):
         stem = f"{FILE_IDS[part]}{suffix}"
-        return {"mask": f"textures/{stem}_dye_mask.png", "albedo": f"textures/{stem}_dye_albedo.webp",
+        return {"mask": f"textures/{dye.mask_file(stem, runtime=True)}", "albedo": f"textures/{stem}_dye_albedo.webp",
                 "defaults": dyes[(part, suffix)][0],
                 **({"skin": "alpha", "skinNeutral": dye.SKIN_NEUTRAL, "skinHeadroom": dye.SKIN_HEADROOM} if part in SKIN else {}),
-                **({"heroAlbedo": f"textures/{stem}_hero_dye_albedo.webp", "heroMask": f"textures/{stem}_hero_dye_mask.png"}
+                **({"heroAlbedo": f"textures/{stem}_hero_dye_albedo.webp", "heroMask": f"textures/{dye.mask_file(stem + '_hero', runtime=True)}"}
                    if (part, suffix) in HERO else {})}
 
     (char_dir / f"{NAME}.json").write_text(json.dumps({

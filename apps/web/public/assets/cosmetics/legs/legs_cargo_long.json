@@ -10,7 +10,7 @@
   },
   "dye": {
     "lod0": {
-      "mask": "textures/legs_cargo_long_dye_mask.png",
+      "mask": "textures/legs_cargo_long_dye_mask.webp",
       "albedo": "textures/legs_cargo_long_dye_albedo.webp",
       "defaults": {
         "primary": "#949185",
@@ -18,7 +18,7 @@
       }
     },
     "lod1": {
-      "mask": "textures/legs_cargo_long_lod1_dye_mask.png",
+      "mask": "textures/legs_cargo_long_lod1_dye_mask.webp",
       "albedo": "textures/legs_cargo_long_lod1_dye_albedo.webp",
       "defaults": {
         "primary": "#949185",
@@ -42,7 +42,7 @@
       },
       "dye": {
         "lod0": {
-          "mask": "textures/legs_cargo_long_female_dye_mask.png",
+          "mask": "textures/legs_cargo_long_female_dye_mask.webp",
           "albedo": "textures/legs_cargo_long_female_dye_albedo.webp",
           "defaults": {
             "primary": "#949185",
@@ -50,7 +50,7 @@
           }
         },
         "lod1": {
-          "mask": "textures/legs_cargo_long_female_lod1_dye_mask.png",
+          "mask": "textures/legs_cargo_long_female_lod1_dye_mask.webp",
           "albedo": "textures/legs_cargo_long_female_lod1_dye_albedo.webp",
           "defaults": {
             "primary": "#949185",

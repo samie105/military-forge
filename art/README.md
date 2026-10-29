@@ -490,16 +490,17 @@ characters/rookie/
   rookie_body.glb          LOD0 body: 3,300 tris, 512² albedo; no jetpack, no clips
   rookie_body_lod1.glb     LOD1 body: 1,450 tris, 256²
   rookie_anims.glb         shared skeleton + 39 clips (no mesh; 3 from motion capture, see "Motion capture")
-  textures/                rookie_body[_lod1]_dye_mask.png, _dye_albedo.webp
+  textures/                rookie_body[_lod1]_dye_mask.webp (lossless), _dye_albedo.webp
 cosmetics/jetpack/
   jetpack_twin_tank.json   slot jetpack, attachBone spine2, socket_jetpack
   jetpack_twin_tank[_lod1].glb   600 / 300 tris, 256² / 128²
   textures/
 ```
 
-- **Compression:** GLBs use `EXT_meshopt_compression` and `EXT_texture_webp` (the loader needs `setMeshoptDecoder`). **KTX2 isn't done:** it needs KTX-Software's `toktx` installed on this machine (a user install), so textures ship as WebP/PNG until then.
+- **Compression:** GLBs use `EXT_meshopt_compression` and `EXT_texture_webp` (the loader needs `setMeshoptDecoder`). **KTX2 isn't done:** it needs KTX-Software's `toktx` installed on this machine (a user install), so textures ship as WebP until then (dye masks as lossless WebP, below).
 - **Parts (docs/04 §9.3):** every part GLB is authored in character space and carries the shared skeleton; it is **not** parented to a socket. Rigid parts (the jetpack now; headgear and eyewear later) are weighted 100% to one bone (`attachBone`), so they bind to the body's skeleton or merge into one SkinnedMesh (docs/04 §5.3). The viewer's `assemble()` is the 10-line reference.
 - **Dye masks (docs/04 §5.4):** R = primary (sand uniform + helmet), G = secondary (olive webbing, pouches, jetpack tanks), B = accent (teal goggles + armband), A = team glow (armband). `*_dye_albedo` has the dyeable texels neutralised so `albedo × lerp(1, dye, mask)` with the default dyes (in the mesh extras and `rookie.json`) gives back the painted look. The GLB's own albedo stays the undyed original. The asset check verifies that round trip on every part (review fix: the first WebP exports went through Blender's AgX view transform, so dyed areas came out ~40% darker). The viewer's `dyeMaterial()` is a 10-line reference shader.
+- **Dye masks ship as lossless WebP (29 Oct):** the PNG in art/ is the master; `--runtime` writes `<stem>_dye_mask.webp` with libwebp's `cwebp -lossless -exact` (`dye.mask_webp`), decodes it back with `dwebp` and stops unless all four channels match the PNG, and the web build's GLB extras and manifests name the `.webp`. The 128 shipped masks went from 2,133 KB to 883 KB. `-exact` matters: the team-glow A is 0 on nearly every texel while R/G/B hold the dye weights, and plain lossless WebP (Blender's own writer too) rewrites the colour under zero alpha, so dyes stop working. It also fixed Safari: WebKit dropped those weights from 87 of the PNG masks on upload, so most cosmetics drew undyed grey there; the WebPs upload exactly in WebKit and Chromium. The export needs `cwebp` and `dwebp` (`brew install webp`).
 
 ### Clips (`rookie_anims.glb`, 30 fps, in place)
 
@@ -604,7 +605,7 @@ The owner approved the free sources on 23 Oct: the CC0 sets, the CMU database an
 | Triangles | ≤ 4,000 / ≤ 1,800 | **3,900** | **1,750** |
 | Draw calls | 1–3 | **2** (body, jetpack) | **2** |
 | GPU textures (KTX2 estimate, albedo + dye masks) | ≤ 1.5 MB | **0.62 MB** | **0.16 MB** |
-| Download (meshopt GLB + WebP + PNG masks) | — | body 461 KB, jetpack 67 KB, anims 176 KB, textures ≈ 0.6 MB | |
+| Download (meshopt GLB + WebP; masks were PNG then) | — | body 461 KB, jetpack 67 KB, anims 176 KB, textures ≈ 0.6 MB | |
 
 Reports: [rookie_outfit.check.txt](character/rookie_outfit.check.txt) (**40/40**), [rookie_outfit_lod1.check.txt](character/rookie_outfit_lod1.check.txt) (**40/40**), [jetpack_twin_tank.check.txt](cosmetics/checks/jetpack_twin_tank.check.txt) (**18/18**). The shipped runtime files pass the same check. `tools/asset-check/selftest.py`: **18/18**.
 
@@ -1443,6 +1444,7 @@ What it checks:
   - one texel in from every UV-island border is skipped, as is a class with fewer than 2% of the texels;
   - art/ sources compare against the lossless `<stem>_albedo.png`;
   - missing dye files FAIL.
+- **Dye mask format** (shipped files: GLBs under `apps/web/public`, or any with `--web-build 1`): the extras must name a `.webp` mask, the file must be lossless (`VP8L`) with no PNG left beside it, and it must decode to its art/ master PNG on all four channels. A PNG mask, a lossy one, or one written without `-exact` FAILs (selftest cases). Art sources keep their PNG masters.
 - Dye masks named in the extras count toward the texture budget at the KTX2 mask rate (docs/11 §4: ETC1S albedo 0.5 B/px, UASTC masks 1 B/px). Images are classified by role, not by name.
 - **Weapons:** `family` must be a §4.2 family (or `thrown`), and `aimPose` one of the clip sets (pistol, dual, rifle).
 

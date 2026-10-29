@@ -10,7 +10,7 @@
   },
   "dye": {
     "lod0": {
-      "mask": "textures/top_tee_field_dye_mask.png",
+      "mask": "textures/top_tee_field_dye_mask.webp",
       "albedo": "textures/top_tee_field_dye_albedo.webp",
       "defaults": {
         "primary": "#61663d",
@@ -19,7 +19,7 @@
       }
     },
     "lod1": {
-      "mask": "textures/top_tee_field_lod1_dye_mask.png",
+      "mask": "textures/top_tee_field_lod1_dye_mask.webp",
       "albedo": "textures/top_tee_field_lod1_dye_albedo.webp",
       "defaults": {
         "primary": "#61663d",
@@ -44,7 +44,7 @@
       },
       "dye": {
         "lod0": {
-          "mask": "textures/top_tee_field_female_dye_mask.png",
+          "mask": "textures/top_tee_field_female_dye_mask.webp",
           "albedo": "textures/top_tee_field_female_dye_albedo.webp",
           "defaults": {
             "primary": "#61663d",
@@ -53,7 +53,7 @@
           }
         },
         "lod1": {
-          "mask": "textures/top_tee_field_female_lod1_dye_mask.png",
+          "mask": "textures/top_tee_field_female_lod1_dye_mask.webp",
           "albedo": "textures/top_tee_field_female_lod1_dye_albedo.webp",
           "defaults": {
             "primary": "#61663d",

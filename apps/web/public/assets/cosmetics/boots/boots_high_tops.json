@@ -10,7 +10,7 @@
   },
   "dye": {
     "lod0": {
-      "mask": "textures/boots_high_tops_dye_mask.png",
+      "mask": "textures/boots_high_tops_dye_mask.webp",
       "albedo": "textures/boots_high_tops_dye_albedo.webp",
       "defaults": {
         "primary": "#fbdbae",
@@ -19,7 +19,7 @@
       }
     },
     "lod1": {
-      "mask": "textures/boots_high_tops_lod1_dye_mask.png",
+      "mask": "textures/boots_high_tops_lod1_dye_mask.webp",
       "albedo": "textures/boots_high_tops_lod1_dye_albedo.webp",
       "defaults": {
         "primary": "#fdd5a7",

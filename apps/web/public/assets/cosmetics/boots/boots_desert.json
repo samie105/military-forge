@@ -10,7 +10,7 @@
   },
   "dye": {
     "lod0": {
-      "mask": "textures/boots_desert_dye_mask.png",
+      "mask": "textures/boots_desert_dye_mask.webp",
       "albedo": "textures/boots_desert_dye_albedo.webp",
       "defaults": {
         "primary": "#c7a06e",
@@ -19,7 +19,7 @@
       }
     },
     "lod1": {
-      "mask": "textures/boots_desert_lod1_dye_mask.png",
+      "mask": "textures/boots_desert_lod1_dye_mask.webp",
       "albedo": "textures/boots_desert_lod1_dye_albedo.webp",
       "defaults": {
         "primary": "#c29d6c",

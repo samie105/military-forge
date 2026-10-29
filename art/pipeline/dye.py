@@ -3,7 +3,8 @@
 Imported by build_character.py (Blender + numpy). For one baked part this writes:
 
 * `<name>_dye_mask.png`: R = primary, G = secondary, B = accent, A = emissive/team glow
-  (linear, non-colour data, same UVs as the albedo);
+  (linear, non-colour data, same UVs as the albedo). This PNG is the art master; the web build ships
+  it as lossless WebP (`mask_webp`, pixel for pixel the same);
 * `<name>_dye_albedo.png`: the albedo with every dyeable texel turned into a neutral grey whose
   brightness is relative to that channel's default dye, so `grey × default` gives back the
   original look and any other dye keeps the painted shading. With a skin rule (the body), skin
@@ -16,6 +17,10 @@ Texels are classified by colour (HSV of the baked albedo) and by where they are 
 from a baked position map: the same "sand" hue is cloth on the legs but skin on the hands.
 """
 import colorsys
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
 
 import bpy
 import numpy as np
@@ -130,6 +135,58 @@ def _save(name, px, path, data):
     bpy.data.images.remove(img)
 
 
+# The web build's dye masks: lossless WebP, about 40 % of the PNG's bytes. `-exact` keeps the colour of
+# fully transparent texels: the mask's A is the team glow, so nearly every texel has A = 0 while its R/G/B
+# hold the dye weights, and without it libwebp rewrites them (the body lost 107,612 texels' weights).
+# Blender's own WebP writer has no `exact`, so the export runs libwebp's cwebp (`brew install webp`).
+CWEBP_MASK = ["-lossless", "-exact", "-z", "9", "-metadata", "none", "-quiet"]
+
+
+def mask_file(stem, runtime):
+    """A part's dye mask file name: the PNG master in art/, lossless WebP in the web build (GLB extras
+    `dyeMask` and the manifests' `mask` / `heroMask` name the file next to them)."""
+    return f"{stem}_dye_mask.{'webp' if runtime else 'png'}"
+
+
+def _pam_rgba(path):
+    """Top-down RGBA bytes (H×W×4) of a PAM file as dwebp writes it."""
+    data = Path(path).read_bytes()
+    end = data.index(b"ENDHDR\n") + len(b"ENDHDR\n")
+    head = dict(line.split(" ", 1) for line in data[:end].decode().splitlines()[1:-1])
+    w, h, depth = int(head["WIDTH"]), int(head["HEIGHT"]), int(head["DEPTH"])
+    if depth != 4 or int(head["MAXVAL"]) != 255:
+        raise RuntimeError(f"{path}: expected 8-bit RGBA, got depth {depth} maxval {head['MAXVAL']}")
+    return np.frombuffer(data[end:end + w * h * 4], dtype=np.uint8).reshape(h, w, 4)
+
+
+def mask_webp(src, dest):
+    """The web build's copy of the PNG mask `src`: lossless WebP at `dest`, decoded back (dwebp) and compared
+    with the PNG on all four channels, including the colour under zero alpha; any difference raises.
+    A PNG left at dest's stem from an older export is removed, so the build never ships both."""
+    src, dest = Path(src), Path(dest)
+    tools = {t: shutil.which(t) for t in ("cwebp", "dwebp")}
+    if not all(tools.values()):
+        raise RuntimeError("dye masks ship as lossless WebP: install libwebp's cwebp and dwebp (brew install webp)")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run([tools["cwebp"], *CWEBP_MASK, str(src), "-o", str(dest)], check=True)
+    img = bpy.data.images.load(str(src))
+    w, h = img.size
+    want = np.round(np.array(img.pixels[:], dtype=np.float32).reshape(h, w, 4)[::-1] * 255).astype(np.uint8)
+    bpy.data.images.remove(img)
+    with tempfile.TemporaryDirectory() as tmp:
+        pam = Path(tmp) / "mask.pam"
+        subprocess.run([tools["dwebp"], "-quiet", "-pam", str(dest), "-o", str(pam)], check=True)
+        got = _pam_rgba(pam)
+    if got.shape != want.shape or (got != want).any():
+        bad = int((got != want).any(-1).sum()) if got.shape == want.shape else f"size {got.shape} vs {want.shape}"
+        dest.unlink()
+        raise RuntimeError(f"{dest.name}: the WebP doesn't decode to {src.name} ({bad} texels differ)")
+    old = dest.with_suffix(".png")
+    if old.resolve() != src.resolve():  # never the master itself
+        old.unlink(missing_ok=True)
+    return dest
+
+
 def make_masks(obj, albedo, out_dir, name, rules, skin_rule=None):
     """rules(h, s, v, pos) -> (primary, secondary, accent, emissive) boolean arrays; skin_rule(h, s,
     v, pos) -> the skin texels (their weight goes in the dye albedo's alpha, and they stay out of
@@ -238,7 +295,7 @@ def finish(col, mask, covered, out_dir, name, skin=None):
         alpha = np.maximum(ws, 1 / 255).astype(np.float32)
     rgba = np.concatenate([dye_albedo, alpha], axis=-1)
     _save(f"{name}_dye_albedo", rgba, out_dir / f"{name}_dye_albedo.png", data=False)
-    _save(f"{name}_dye_mask", mask, out_dir / f"{name}_dye_mask.png", data=True)
+    _save(f"{name}_dye_mask", mask, out_dir / mask_file(name, runtime=False), data=True)
     return defaults
 
 

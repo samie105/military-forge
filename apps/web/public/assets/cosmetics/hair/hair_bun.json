@@ -10,14 +10,14 @@
   },
   "dye": {
     "lod0": {
-      "mask": "textures/hair_bun_dye_mask.png",
+      "mask": "textures/hair_bun_dye_mask.webp",
       "albedo": "textures/hair_bun_dye_albedo.webp",
       "defaults": {
         "secondary": "#687345"
       }
     },
     "lod1": {
-      "mask": "textures/hair_bun_lod1_dye_mask.png",
+      "mask": "textures/hair_bun_lod1_dye_mask.webp",
       "albedo": "textures/hair_bun_lod1_dye_albedo.webp",
       "defaults": {
         "secondary": "#687345"

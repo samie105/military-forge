@@ -169,14 +169,14 @@ function runWorker(version = '1', chunks: readonly string[] = []) {
 describe('the service worker offline (audit 28 Oct: training drew no soldiers offline)', () => {
   it("keeps the game's models, textures and art it fetched, and serves them when the network is gone", async () => {
     const w = runWorker();
-    w.state.files.set('/', 'page').set('/assets/weapons/k47.glb', 'gun').set('/assets/characters/rookie/textures/rookie_body_dye_mask.png', 'mask').set('/art/key-art/key-art-phone.avif', 'art');
+    w.state.files.set('/', 'page').set('/assets/weapons/k47.glb', 'gun').set('/assets/characters/rookie/textures/rookie_body_dye_mask.webp', 'mask').set('/art/key-art/key-art-phone.avif', 'art');
     await w.lifecycle();
     expect(await w.get('/assets/weapons/k47.glb')).toBe('gun');
-    expect(await w.get('/assets/characters/rookie/textures/rookie_body_dye_mask.png')).toBe('mask');
+    expect(await w.get('/assets/characters/rookie/textures/rookie_body_dye_mask.webp')).toBe('mask');
     expect(await w.get('/art/key-art/key-art-phone.avif')).toBe('art');
     w.state.online = false;
     expect(await w.get('/assets/weapons/k47.glb')).toBe('gun');
-    expect(await w.get('/assets/characters/rookie/textures/rookie_body_dye_mask.png')).toBe('mask');
+    expect(await w.get('/assets/characters/rookie/textures/rookie_body_dye_mask.webp')).toBe('mask');
     expect(await w.get('/r/ABCDEF', 'navigate')).toBe('page');
     // never fetched: a network error, as without the worker
     expect(await w.get('/assets/weapons/widow.glb')).toBe('error');

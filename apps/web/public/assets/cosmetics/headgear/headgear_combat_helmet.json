@@ -10,7 +10,7 @@
   },
   "dye": {
     "lod0": {
-      "mask": "textures/headgear_combat_helmet_dye_mask.png",
+      "mask": "textures/headgear_combat_helmet_dye_mask.webp",
       "albedo": "textures/headgear_combat_helmet_dye_albedo.webp",
       "defaults": {
         "primary": "#7a7b45",
@@ -19,7 +19,7 @@
       }
     },
     "lod1": {
-      "mask": "textures/headgear_combat_helmet_lod1_dye_mask.png",
+      "mask": "textures/headgear_combat_helmet_lod1_dye_mask.webp",
       "albedo": "textures/headgear_combat_helmet_lod1_dye_albedo.webp",
       "defaults": {
         "primary": "#7a7b45",
@@ -43,7 +43,7 @@
       },
       "dye": {
         "lod0": {
-          "mask": "textures/headgear_combat_helmet_female_dye_mask.png",
+          "mask": "textures/headgear_combat_helmet_female_dye_mask.webp",
           "albedo": "textures/headgear_combat_helmet_female_dye_albedo.webp",
           "defaults": {
             "primary": "#7a7b45",
@@ -52,7 +52,7 @@
           }
         },
         "lod1": {
-          "mask": "textures/headgear_combat_helmet_female_lod1_dye_mask.png",
+          "mask": "textures/headgear_combat_helmet_female_lod1_dye_mask.webp",
           "albedo": "textures/headgear_combat_helmet_female_lod1_dye_albedo.webp",
           "defaults": {
             "primary": "#7a7b45",

@@ -109,8 +109,8 @@ function texture(texels: number[][]): Texture {
 
 const lods = (stem: string) => ({ lod0: `${stem}.glb`, lod1: `${stem}_lod1.glb` });
 const dye = (stem: string, defaults: Record<string, string>) => ({
-  lod0: { mask: `textures/${stem}_dye_mask.png`, albedo: `textures/${stem}_dye_albedo.webp`, defaults },
-  lod1: { mask: `textures/${stem}_lod1_dye_mask.png`, albedo: `textures/${stem}_lod1_dye_albedo.webp`, defaults },
+  lod0: { mask: `textures/${stem}_dye_mask.webp`, albedo: `textures/${stem}_dye_albedo.webp`, defaults },
+  lod1: { mask: `textures/${stem}_lod1_dye_mask.webp`, albedo: `textures/${stem}_lod1_dye_albedo.webp`, defaults },
 });
 
 /** A second body (the character creator): its rig's joint order, height (bone y scale) and bones it lacks. */

@@ -10,7 +10,7 @@
   },
   "dye": {
     "lod0": {
-      "mask": "textures/jetpack_drum_dye_mask.png",
+      "mask": "textures/jetpack_drum_dye_mask.webp",
       "albedo": "textures/jetpack_drum_dye_albedo.webp",
       "defaults": {
         "primary": "#3162a8",
@@ -19,7 +19,7 @@
       }
     },
     "lod1": {
-      "mask": "textures/jetpack_drum_lod1_dye_mask.png",
+      "mask": "textures/jetpack_drum_lod1_dye_mask.webp",
       "albedo": "textures/jetpack_drum_lod1_dye_albedo.webp",
       "defaults": {
         "primary": "#3162a8",
@@ -49,7 +49,7 @@
       },
       "dye": {
         "lod0": {
-          "mask": "textures/jetpack_drum_female_dye_mask.png",
+          "mask": "textures/jetpack_drum_female_dye_mask.webp",
           "albedo": "textures/jetpack_drum_female_dye_albedo.webp",
           "defaults": {
             "primary": "#3162a8",
@@ -58,7 +58,7 @@
           }
         },
         "lod1": {
-          "mask": "textures/jetpack_drum_female_lod1_dye_mask.png",
+          "mask": "textures/jetpack_drum_female_lod1_dye_mask.webp",
           "albedo": "textures/jetpack_drum_female_lod1_dye_albedo.webp",
           "defaults": {
             "primary": "#3162a8",
