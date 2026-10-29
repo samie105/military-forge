@@ -81,6 +81,9 @@ export interface RoomJoin {
   ticket: string | null;
 }
 
+/** An 18+ answer that lets a save through (shell/age.ts's adult record). */
+export type AdultAnswer = { adult: true; birthYear: number };
+
 /** An `{ error: { code, message } }` answer, or a network failure (`code` 'network'). */
 export class ApiError extends Error {
   constructor(
@@ -284,9 +287,12 @@ export class Api {
    * Adds an email and password to this account ("Save your account"). 'saved' at once, or
    * 'check_email' when the server confirms the email by a link first.
    */
-  /** `birthYear`: the 18+ answer the API checks (shell/age.ts); `turnstileToken`: the bot check's, when it's on */
-  async saveAccount(email: string, password: string, birthYear: number, turnstileToken?: string): Promise<'saved' | 'check_email'> {
-    const r = await this.request<{ status: 'saved' | 'check_email'; user?: Me }>('POST', '/auth/save', { email, password, birthYear, adult: true, ...(turnstileToken ? { turnstileToken } : {}) }, true);
+  /**
+   * `age`: this device's 18+ answer (shell/age.ts: the age step's, never asked again here), sent as
+   * the API checks it, the year and the adult answer; `turnstileToken`: the bot check's, when it's on
+   */
+  async saveAccount(email: string, password: string, age: AdultAnswer, turnstileToken?: string): Promise<'saved' | 'check_email'> {
+    const r = await this.request<{ status: 'saved' | 'check_email'; user?: Me }>('POST', '/auth/save', { email, password, birthYear: age.birthYear, adult: age.adult, ...(turnstileToken ? { turnstileToken } : {}) }, true);
     if (r.user) this.me = r.user;
     return r.status;
   }

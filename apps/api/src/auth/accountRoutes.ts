@@ -27,9 +27,11 @@
  * - Sessions: a sign-in always makes a new session (never reuses the device's old one); a
  *   password change ends every session and gives this device a new one; a reset ends them all.
  * - Emailed links: single use, sha256 at rest, 30 minutes (reset) or 24 hours (save).
- * - 18+ only (shared/age.ts): a save needs the player's "I am 18 or older" and their birth year;
- *   a year that makes them a minor is refused (403 `underage`). The account keeps when they said
- *   so and the year, never a full date of birth.
+ * - 18+ only (shared/age.ts): a save needs the device's answer to the age step, sent with it (the
+ *   web asks it once, at the age gate or in the save form, never again): the birth year and
+ *   `adult: true` (for the year they turn 18, their word that they've had that birthday). A year
+ *   that makes them a minor is refused (403 `underage`). The account keeps when they answered and
+ *   the year, never a full date of birth.
  * - Bot check (auth/botCheck.ts): with TURNSTILE_SECRET set, a save and "Forgot password?" need a
  *   Turnstile token that passes; off without it. It runs after the cheap checks, so a typo
  *   doesn't burn the token.

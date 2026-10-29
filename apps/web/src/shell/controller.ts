@@ -11,7 +11,7 @@ import { diag } from '../diag/log';
 import type { LocalMode } from '../localMode';
 import { adultOnDevice, ageOnDevice, answerAge } from './age';
 import { alertFromApiError } from './alerts';
-import { Api, ApiError, NICKNAME_REASONS, type Me, type NicknameCheck, type RoomJoin } from './api';
+import { Api, ApiError, NICKNAME_REASONS, type AdultAnswer, type Me, type NicknameCheck, type RoomJoin } from './api';
 import { sanitizePadSettings } from '../gamepad/settings';
 import { sanitizeBindings } from './controls';
 import { DEFAULT_SETTINGS, type AccountIntent, type AudioSettings, type GraphicsPreset, type Intent, type Overlay, type Profile, type Settings, type SettingsTab, type ShellState, type ShellStore, type TuneNote } from './store';
@@ -375,9 +375,12 @@ export class ShellController {
     return true;
   }
 
-  /** The 18+ step's answer: an adult carries on where they were going; an under-18 sees the refusal. */
-  answerAge(birthYear: number): 'ok' | 'refused' | 'invalid' {
-    const record = answerAge(birthYear);
+  /**
+   * The 18+ step's answer (`turned18`: only for the year they turn 18): an adult carries on where
+   * they were going; an under-18 sees the refusal.
+   */
+  answerAge(birthYear: number, turned18?: boolean): 'ok' | 'refused' | 'invalid' {
+    const record = answerAge(birthYear, Date.now(), turned18);
     if (record === 'invalid') return 'invalid';
     const screen = this.store.getState().screen;
     const then = screen.name === 'age' ? screen.then : ({ to: 'home' } as const);
@@ -746,8 +749,8 @@ export class ShellController {
    * "Save your account": this account gets an email and password; 'check_email' when a link
    * confirms it first. `birthYear`: the 18+ answer (the device's, or the form's: age.ts).
    */
-  async saveAccount(email: string, password: string, birthYear: number, turnstileToken?: string): Promise<'saved' | 'check_email'> {
-    const result = await this.api.saveAccount(email, password, birthYear, turnstileToken);
+  async saveAccount(email: string, password: string, age: AdultAnswer, turnstileToken?: string): Promise<'saved' | 'check_email'> {
+    const result = await this.api.saveAccount(email, password, age, turnstileToken);
     if (this.api.me) this.set({ profile: profileOf(this.api.me) });
     return result;
   }

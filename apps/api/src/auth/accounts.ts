@@ -107,7 +107,7 @@ export class AccountService {
     });
   }
 
-  /** The player said they are 18 or older (shared/age.ts), with their birth year: kept on the account. */
+  /** The player's 18+ answer (shared/age.ts: the age step's, sent with the save), with their birth year: kept on the account. */
   async confirmAdult(userId: string, birthYear: number): Promise<void> {
     await this.db.update(users).set({ adultConfirmedAt: new Date(this.now()), birthYear }).where(eq(users.id, userId));
   }

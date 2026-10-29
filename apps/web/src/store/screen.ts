@@ -12,7 +12,7 @@
  * mountStore() keeps the state and wires the buttons.
  */
 import { escapeHtml, ic } from '../locker/tiles';
-import { ageOnDevice, answerAge, birthYears } from '../shell/age';
+import { ageOnDevice, answerAge, asksBirthday, birthYears } from '../shell/age';
 import { startFitting } from '../ui/fit';
 import { mountSprite } from '../ui/sprite';
 import {
@@ -156,7 +156,11 @@ function bundleRow(b: StoreBundle, why: string | null, blocked: boolean, busy: b
     </li>`;
 }
 
-/** The claim's dialog: what it is, and the 18+ question when neither the account nor this device has answered it. */
+/**
+ * The claim's dialog: what it is, and the 18+ question when neither the account nor this device has answered it:
+ * the age gate's own (shell/screens/AgeQuestion.tsx), the year and, only for the year a player turns 18, whether
+ * they've had that birthday (shown by the year's change listener in mountStore). Never a separate "18 or older" box.
+ */
 function claimMarkup(item: StoreItemView, view: Extract<StoreView, { enabled: true }>, device: StoreState['deviceAge'], busy: boolean): string {
   const rule = claimRule(view.account, device);
   const until = view.claim?.until ? ` The gift is open until ${new Date(view.claim.until).toLocaleDateString()}.` : '';
@@ -166,7 +170,11 @@ function claimMarkup(item: StoreItemView, view: Extract<StoreView, { enabled: tr
       ? `<div class="mf-st__age">
           <label class="mf-st__age-l" for="mf-st-year">Year you were born</label>
           <select id="mf-st-year" data-age-year><option value="">Choose…</option>${birthYears().map((y) => `<option value="${y}">${y}</option>`).join('')}</select>
-          <label class="mf-st__age-c"><input type="checkbox" data-age-adult> I am 18 or older</label>
+          <div class="mf-st__age-b" role="radiogroup" aria-labelledby="mf-st-bday" data-age-birthday hidden>
+            <span class="mf-st__age-l" id="mf-st-bday">Have you had your 18th birthday yet?</span>
+            <label class="mf-st__age-c"><input type="radio" name="mf-st-bday" value="yes" data-age-turned> Yes</label>
+            <label class="mf-st__age-c"><input type="radio" name="mf-st-bday" value="no" data-age-turned> Not yet</label>
+          </div>
         </div>`
       : '';
   const body =
@@ -400,13 +408,14 @@ export function mountStore(container: HTMLElement, o: StoreOptions): { unmount()
       if (kept?.adult) birthYear = kept.birthYear;
       else {
         const year = Number(body.querySelector<HTMLSelectElement>('[data-age-year]')?.value ?? '');
-        const adult = body.querySelector<HTMLInputElement>('[data-age-adult]')?.checked === true;
-        if (!year || !adult) {
-          s.notice = { text: 'Pick the year you were born and confirm you’re 18 or older.', tone: 'warn' };
+        const turned = body.querySelector<HTMLInputElement>('[data-age-turned]:checked')?.value;
+        const turned18 = turned === undefined ? undefined : turned === 'yes';
+        if (!year || (asksBirthday(year) && turned18 === undefined)) {
+          s.notice = { text: year ? 'Say whether you’ve had your 18th birthday yet.' : 'Pick the year you were born.', tone: 'warn' };
           paint();
           return;
         }
-        const answer = answerAge(year);
+        const answer = answerAge(year, Date.now(), turned18);
         s.deviceAge = deviceAge();
         if (answer === 'invalid' || !answer.adult) {
           s.notice = answer === 'invalid' ? { text: 'That year doesn’t look right.', tone: 'warn' } : null;
@@ -452,6 +461,14 @@ export function mountStore(container: HTMLElement, o: StoreOptions): { unmount()
     paint();
   };
 
+  // the claim's 18+ question: the birthday line shows only for the year a player turns 18
+  fit.addEventListener('change', (e) => {
+    const sel = (e.target as Element).closest<HTMLSelectElement>('[data-age-year]');
+    const birthday = sel && body.querySelector<HTMLElement>('[data-age-birthday]');
+    if (!sel || !birthday) return;
+    birthday.hidden = !(sel.value && asksBirthday(Number(sel.value)));
+    for (const r of birthday.querySelectorAll<HTMLInputElement>('[data-age-turned]')) r.checked = false;
+  });
   fit.addEventListener('click', (e) => {
     const b = (e.target as Element).closest<HTMLElement>('button, [data-action="cancel"]');
     if (!b || (b as HTMLButtonElement).disabled) return;

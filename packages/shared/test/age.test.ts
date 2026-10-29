@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { birthYearAnswer } from '../src';
+import { birthYearAnswer, turns18This } from '../src';
 
 describe('the 18+ rule from a birth year', () => {
   const year = 2026;
@@ -9,10 +9,15 @@ describe('the 18+ rule from a birth year', () => {
     expect(birthYearAnswer(2026, year)).toBe('minor');
   });
 
-  it('the year they turn 18, and before, is an adult (their "18 or older" settles that year)', () => {
+  it('the year they turn 18, and before, is an adult by the year (the birthday question settles that year)', () => {
     expect(birthYearAnswer(2008, year)).toBe('adult');
     expect(birthYearAnswer(1990, year)).toBe('adult');
     expect(birthYearAnswer(1906, year)).toBe('adult');
+  });
+
+  it('only the year they turn 18 needs their word on the birthday', () => {
+    expect(turns18This(2008, year)).toBe(true);
+    for (const y of [2009, 2007, 1990]) expect(turns18This(y, year)).toBe(false);
   });
 
   it('refuses years that are not a player', () => {

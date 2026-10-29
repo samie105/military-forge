@@ -42,9 +42,12 @@
   font: var(--fw-bold) var(--fs-18) / 1.2 var(--f-ui);
 }
 .age-card__field select:focus-visible { outline: none; border-color: var(--c-volt); box-shadow: 0 0 0 2px var(--c-volt-soft); }
-.age-card__check { display: flex; align-items: center; gap: var(--sp-2); min-height: 44px; font-size: var(--fs-18); font-weight: var(--fw-bold); }
-.age-card__check label { cursor: pointer; }
-.age-card__check input { width: 22px; height: 22px; accent-color: var(--c-volt); }
+/* AgeQuestion.tsx's birthday follow-up (only for the year a player turns 18), on the gate and the account form */
+.age-q__birthday { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; margin: 0; padding: 0; border: 0; }
+.age-q__birthday legend { padding: 0; margin-bottom: var(--sp-1); font-size: var(--fs-16); font-weight: var(--fw-bold); }
+.age-q__opts { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-5); }
+.age-q__opts label { display: inline-flex; align-items: center; gap: var(--sp-2); min-height: 44px; font-size: var(--fs-16); font-weight: var(--fw-bold); cursor: pointer; }
+.age-q__opts input { width: 22px; height: 22px; margin: 0; accent-color: var(--c-volt); }
 .age-card__error { display: flex; align-items: center; gap: var(--sp-2); margin: 0; color: var(--c-danger-text); font-size: var(--fs-16); }
 .age-card__actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 .age-card__form { display: flex; flex-direction: column; gap: inherit; }

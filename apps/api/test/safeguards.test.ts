@@ -39,8 +39,8 @@ describe('18+ only: saving an account (the test clock is in 2026)', () => {
   });
   afterAll(() => api.close());
 
-  it('needs "I am 18 or older" and a birth year', async () => {
-    for (const body of [{}, { adult: true }, { birthYear: 1995 }, { birthYear: 1995, adult: false }]) {
+  it('needs the age step\'s answer, sent with the save: a birth year and "adult" (the web asks it once, never a second box)', async () => {
+    for (const body of [{}, { adult: true }, { birthYear: 1995 }, { birthYear: 1995, adult: false }, { birthYear: 2008, adult: false }]) {
       const guest = await createGuest(api);
       const res = await c.save(guest, body);
       expect(res.status).toBe(400);
@@ -72,7 +72,7 @@ describe('18+ only: saving an account (the test clock is in 2026)', () => {
 
   it('keeps when they said so and the year only (no date of birth)', async () => {
     const guest = await createGuest(api);
-    const res = await c.save(guest, { birthYear: 2008, adult: true }); // turns 18 this year: their word counts
+    const res = await c.save(guest, { birthYear: 2008, adult: true }); // turns 18 this year: their word on the birthday counts
     expect(res.status).toBe(200);
     expect(await userRow(api, guest.user.id)).toEqual({ adultConfirmedAt: new Date(api.clock.now()), birthYear: 2008 });
   });

@@ -151,12 +151,16 @@ describe('the launch gift on the Store screen (docs/17 §9)', () => {
     expect(balanceChip(state(gift()))).toBe('');
   });
 
-  it('the claim dialog asks the 18+ question only when neither the account nor the device answered; under 18 can’t claim', () => {
+  it('the claim dialog asks the 18+ question (the age gate’s, no “18 or older” box) only when neither the account nor the device answered; under 18 can’t claim', () => {
     const item = { ...ITEMS[1]!, claimable: true };
     let html = storeBody(state(gift(), { confirm: { kind: 'claim', item } }));
     expect(html).toContain('Claim Galaxy Relic + Stardust Shatter');
     expect(html).toContain('data-age-year');
-    expect(html).toContain('I am 18 or older');
+    expect(html).not.toContain('I am 18 or older');
+    expect(html).not.toContain('type="checkbox"');
+    // the birthday line waits for the year they turn 18 (mountStore's change listener shows it)
+    expect(html).toMatch(/data-age-birthday hidden/);
+    expect(html).toContain('Have you had your 18th birthday yet?');
     expect(html).toContain('Save your account to keep it on every device');
     html = storeBody(state(gift(), { confirm: { kind: 'claim', item }, deviceAge: 'adult' }));
     expect(html).not.toContain('data-age-year');

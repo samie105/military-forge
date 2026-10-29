@@ -123,6 +123,8 @@ html.reduce-motion :where(.mf-st-fit) .mf-st__fx-win img { animation: none; tran
 :where(.mf-st-fit) .mf-st__age select { min-height: 44px; padding: 0 var(--sp-3); font: inherit; font-size: var(--fs-18); color: var(--c-paper); background: var(--c-ink-800); border: var(--bw) solid var(--c-line); border-radius: var(--r-sm, 6px); }
 :where(.mf-st-fit) .mf-st__age-c { display: inline-flex; align-items: center; gap: var(--sp-2); min-height: 44px; font-size: var(--fs-16); color: var(--c-paper); }
 :where(.mf-st-fit) .mf-st__age-c input { width: 22px; height: 22px; accent-color: var(--c-volt); }
+:where(.mf-st-fit) .mf-st__age-b { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); flex-basis: 100%; }
+:where(.mf-st-fit) .mf-st__age-b[hidden] { display: none; }
 :where(.mf-st-fit) .mf-st__get--soon { align-items: flex-start; }
 
 /* ---- Get Brass ---- */

@@ -7,19 +7,22 @@
  * with nothing to lose is replaced; one with progress is kept on this device for 30 days, and
  * signing out of the saved account switches back to it. Nothing is ever merged.
  *
- * Saving asks the 18+ question when this device hasn't answered it yet (shell/age.ts; the API
- * checks it), says the Terms apply, and shows the bot check when the build has one (BotCheck.tsx).
+ * Saving sends this device's 18+ answer (shell/age.ts; the API checks it) without asking again. Only
+ * a device that reached the form without the age gate (a link, cleared storage) is asked, with the
+ * gate's own question (AgeQuestion.tsx), never a separate box. It says the Terms apply, and shows
+ * the bot check when the build has one (BotCheck.tsx).
  */
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useStore } from 'zustand';
 import { Icon } from '../../ui/Icon';
 import { blurAfter } from '../../ui/Screen';
 import { PRIVACY_URL } from '../../metrics/ConsentCard';
-import { ageOnDevice, answerAge, birthYears } from '../age';
+import { ageOnDevice, answerAge } from '../age';
 import { ApiError, type AccountInfo, type ParkedGuest } from '../api';
 import { useCtl } from '../context';
 import { OFFLINE_TITLE, STILL_WORKS } from '../offline';
 import { TERMS_URL } from '../pages';
+import { AgeQuestion, NO_AGE_ANSWER, ageAnswered } from '../screens/AgeQuestion';
 import { BotCheck, botCheckOn } from './BotCheck';
 import type { ShellStore } from '../store';
 import { accountErrorText, parkedUntil, passwordHint, passwordLooksOk, signInNotice, startMode, type AccountMode } from './model';
@@ -81,29 +84,6 @@ function PasswordField({ label, value, onChange, autoComplete, hint, id }: { lab
   );
 }
 
-/** The 18+ question inside the save form (this device hasn't answered it): the age step's, smaller. */
-function AgeFields({ id, year, onYear, adult, onAdult }: { id: (k: string) => string; year: string; onYear: (v: string) => void; adult: boolean; onAdult: (v: boolean) => void }) {
-  return (
-    <>
-      <div className="acct-field">
-        <label htmlFor={id('year')}>Year you were born</label>
-        <select id={id('year')} value={year} onChange={(e) => onYear(e.target.value)} required>
-          <option value="">Choose…</option>
-          {birthYears().map((y) => (
-            <option key={y} value={y}>
-              {y}
-            </option>
-          ))}
-        </select>
-      </div>
-      <label className="acct-check">
-        <input type="checkbox" checked={adult} onChange={(e) => onAdult(e.target.checked)} />
-        <span>I am 18 or older</span>
-      </label>
-    </>
-  );
-}
-
 function EmailField({ value, onChange, id }: { value: string; onChange: (v: string) => void; id: string }) {
   return (
     <div className="acct-field">
@@ -133,10 +113,9 @@ export function AccountPanel({ store, variant, preset }: { store: ShellStore; va
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [next, setNext] = useState('');
-  // the 18+ answer this device gave (age.ts), or the save form's own
+  // the 18+ answer this device gave (age.ts: the age gate's), or the gate's question answered here
   const [age, setAge] = useState(() => ageOnDevice());
-  const [year, setYear] = useState('');
-  const [adult, setAdult] = useState(false);
+  const [ageAnswer, setAgeAnswer] = useState(NO_AGE_ANSWER);
   // the bot check's token (BotCheck.tsx), and its round: each token is good for one try
   const [bot, setBot] = useState<string | null>(null);
   const [botRound, setBotRound] = useState(0);
@@ -232,19 +211,20 @@ export function AccountPanel({ store, variant, preset }: { store: ShellStore; va
         );
         break;
       }
-      const ageReady = age?.adult === true || (year !== '' && adult);
+      const ageReady = age?.adult === true || ageAnswered(ageAnswer);
       body = (
         <form className="acct-form" onSubmit={run(async () => {
-          let birthYear = age?.adult ? age.birthYear : null;
-          if (birthYear === null) {
-            const a = answerAge(Number(year));
+          let adult = age?.adult ? age : null;
+          if (!adult) {
+            // answered here: kept on the device as the gate keeps it, so nothing asks again
+            const a = answerAge(Number(ageAnswer.year), Date.now(), ageAnswer.turned18 ?? undefined);
             if (a === 'invalid') throw new ApiError(400, 'invalid_birth_year', 'bad year');
             setAge(a);
             if (!a.adult) throw new ApiError(403, 'underage', 'under 18');
-            birthYear = a.birthYear;
+            adult = a;
           }
           try {
-            const r = await ctl.saveAccount(email, password, birthYear, bot ?? undefined);
+            const r = await ctl.saveAccount(email, password, adult, bot ?? undefined);
             if (r === 'check_email') setSentTo(email.trim());
             else setDone('Saved. Sign in with this email on any phone or computer.');
           } finally {
@@ -256,7 +236,14 @@ export function AccountPanel({ store, variant, preset }: { store: ShellStore; va
           <Row variant={variant} label="Save your account" desc="Sign in on another phone or computer and keep your soldier." block />
           <EmailField id={id('email')} value={email} onChange={setEmail} />
           <PasswordField id={id('pw')} label="Password" value={password} onChange={setPassword} autoComplete="new-password" hint={passwordHint(password, email)} />
-          {age?.adult ? <p className="acct-note">18 or older: confirmed on this device (born {age.birthYear}).</p> : <AgeFields id={id} year={year} onYear={setYear} adult={adult} onAdult={setAdult} />}
+          {age?.adult ? (
+            <p className="acct-note">18 or older: confirmed on this device (born {age.birthYear}).</p>
+          ) : (
+            <>
+              <p className="acct-note">Accounts are for players 18 and over. We keep the year only, never your birthday.</p>
+              <AgeQuestion idBase={id('age')} fieldClass="acct-field" value={ageAnswer} onChange={setAgeAnswer} />
+            </>
+          )}
           <BotCheck action="save" round={botRound} onToken={setBot} />
           <p className="acct-note">
             Saving means you agree to the{' '}

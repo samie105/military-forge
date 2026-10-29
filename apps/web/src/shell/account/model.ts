@@ -54,7 +54,7 @@ export function accountErrorText(e: unknown): string {
     case 'not_available':
       return 'Password reset by email is not available yet.';
     case 'age_required':
-      return 'Confirm you are 18 or older, with the year you were born.';
+      return 'Pick the year you were born, then try again.';
     case 'invalid_birth_year':
       return "That year doesn't look right.";
     case 'underage':

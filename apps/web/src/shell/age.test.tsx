@@ -1,7 +1,8 @@
 /**
  * The 18+ step (shell/age.ts): what the device keeps, the controller's gate before online rooms
- * (training isn't asked), the step's screen and its refusal, and the save form's own question,
- * Terms line and the API call it makes.
+ * (training isn't asked), the step's screen and its refusal, and the save form: the gate's answer
+ * carried to the API, or the gate's own question when the device skipped the gate (audit 28 Oct:
+ * one age question, never a second "18 or older" box).
  */
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,6 +13,7 @@ import { Api, ApiError, type AccountInfo } from './api';
 import { ControllerContext } from './context';
 import { ShellController, type GameHost } from './controller';
 import { AgeGate } from './screens/AgeGate';
+import { AgeQuestion, ageAnswered } from './screens/AgeQuestion';
 import { createShellStore, type ShellState } from './store';
 
 const NOW = Date.parse('2026-10-28T12:00:00Z');
@@ -54,6 +56,26 @@ describe('what the device keeps', () => {
     expect(ageOnDevice()).toBeNull();
     saved.set(AGE_KEY, JSON.stringify({ adult: true, birthYear: 2015, at: 0 }));
     expect(ageOnDevice()).toBeNull();
+  });
+
+  it('the year they turn 18 also needs their word on the birthday: yes is adult, not yet is under 18', () => {
+    expect(answerAge(2008, NOW)).toBe('invalid');
+    expect(saved.has(AGE_KEY)).toBe(false);
+    expect(answerAge(2008, NOW, false)).toEqual({ adult: false, at: NOW });
+    expect(adultOnDevice()).toBe(false);
+    expect(answerAge(2008, NOW, true)).toEqual({ adult: true, birthYear: 2008, at: NOW, turned18: true });
+    expect(adultOnDevice()).toBe(true);
+    // any other year: the birthday answer is not needed, and not kept
+    expect(answerAge(1995, NOW, false)).toEqual({ adult: true, birthYear: 1995, at: NOW });
+    expect(answerAge(2010, NOW, true)).toEqual({ adult: false, at: NOW });
+  });
+
+  it('a kept answer for the year they turn 18 without the birthday (from before it was asked) asks again', () => {
+    const turns18 = new Date().getUTCFullYear() - 18;
+    saved.set(AGE_KEY, JSON.stringify({ adult: true, birthYear: turns18, at: 0 }));
+    expect(ageOnDevice()).toBeNull();
+    saved.set(AGE_KEY, JSON.stringify({ adult: true, birthYear: turns18, at: 0, turned18: true }));
+    expect(ageOnDevice()).toEqual({ adult: true, birthYear: turns18, at: 0, turned18: true });
   });
 
   it('works where localStorage is refused (this visit only)', () => {
@@ -126,6 +148,17 @@ describe('the gate before online rooms', () => {
     expect(createRoom).not.toHaveBeenCalled();
   });
 
+  it('the year they turn 18 is not an answer until the birthday is', () => {
+    const createRoom = vi.fn(async () => room);
+    const { store, ctl } = setup({ createRoom });
+    const turns18 = new Date().getUTCFullYear() - 18;
+    ctl.go({ to: 'create' });
+    expect(ctl.answerAge(turns18)).toBe('invalid');
+    expect(store.getState().screen).toEqual({ name: 'age', then: { to: 'create' } });
+    expect(ctl.answerAge(turns18, false)).toBe('refused');
+    expect(createRoom).not.toHaveBeenCalled();
+  });
+
   it('a room link on a first visit asks the step before the name', async () => {
     const { store, ctl } = setup({ restore: vi.fn(async () => null) });
     store.setState({ profile: null });
@@ -172,6 +205,21 @@ describe('the step on screen', () => {
     expect(html).not.toMatch(/<form[^>]*role="dialog"/);
   });
 
+  it('the question: only the year they turn 18 adds the birthday, nothing picked', () => {
+    const q = (year: string) => renderToStaticMarkup(<AgeQuestion idBase="q" fieldClass="f" value={{ year, turned18: null }} onChange={() => {}} />);
+    const turns18 = String(new Date().getUTCFullYear() - 18);
+    expect(q('1995')).not.toContain('18th birthday');
+    expect(q('')).not.toContain('18th birthday');
+    const html = q(turns18);
+    expect(textOf(html)).toContain('Have you had your 18th birthday yet? Yes Not yet');
+    expect(html.match(/type="radio"/g)).toHaveLength(2);
+    expect(html).not.toContain('checked');
+    expect(ageAnswered({ year: turns18, turned18: null })).toBe(false);
+    expect(ageAnswered({ year: turns18, turned18: false })).toBe(true);
+    expect(ageAnswered({ year: '1995', turned18: null })).toBe(true);
+    expect(ageAnswered({ year: '', turned18: null })).toBe(false);
+  });
+
   it('the refusal is polite and has no way to answer again', () => {
     const html = render(true);
     expect(textOf(html)).toContain('Sorry, online play is for adults');
@@ -180,7 +228,7 @@ describe('the step on screen', () => {
   });
 });
 
-describe('Save your account: the 18+ question and the Terms', () => {
+describe('Save your account: one 18+ question (the gate\'s), and the Terms', () => {
   const guestInfo: AccountInfo = { email: null, saved: false, hasProgress: false, resetByEmail: false };
   function render(state: Partial<ShellState> = {}) {
     const store = createShellStore({ screen: { name: 'home' }, profile: { nickname: 'Kemi', changeableAt: null, offline: false }, ...state });
@@ -191,18 +239,25 @@ describe('Save your account: the 18+ question and the Terms', () => {
     );
   }
 
-  it('asks the question when this device has not answered it', () => {
-    const t = textOf(render());
+  it('a device that skipped the gate gets the gate\'s question, not a separate "18 or older" box (audit 28 Oct)', () => {
+    const html = render();
+    const t = textOf(html);
     expect(t).toContain('Year you were born');
-    expect(t).toContain('I am 18 or older');
+    expect(t).toContain('Accounts are for players 18 and over.');
+    expect(t).not.toContain('I am 18 or older');
+    expect(html).not.toContain('type="checkbox"');
+    expect(html).toMatch(/<option value="" selected="">Choose…<\/option>/);
     expect(t).toContain('Saving means you agree to the Terms');
   });
 
-  it('says it is confirmed when the device answered it', () => {
+  it('a device that passed the gate is not asked again', () => {
     answerAge(1995);
-    const t = textOf(render());
+    const html = render();
+    const t = textOf(html);
     expect(t).toContain('18 or older: confirmed on this device (born 1995).');
     expect(t).not.toContain('Year you were born');
+    expect(html).not.toContain('<select');
+    expect(html).not.toContain('type="checkbox"');
   });
 
   it('an under-18 device gets no form', () => {
@@ -212,7 +267,7 @@ describe('Save your account: the 18+ question and the Terms', () => {
     expect(html).not.toContain('type="password"');
   });
 
-  it('the API call carries the year, "adult", and the bot check token only when there is one', async () => {
+  it('the API call carries the gate\'s answer (the year, "adult"), and the bot check token only when there is one', async () => {
     const calls: { url: string; body: Record<string, unknown> }[] = [];
     const me = { id: 'u_1', nickname: 'Kemi', isGuest: true, createdAt: '', nicknameChangeableAt: null, level: 1, xp: 0 };
     const fetchImpl = vi.fn(async (url: string, init: RequestInit) => {
@@ -222,7 +277,9 @@ describe('Save your account: the 18+ question and the Terms', () => {
     });
     const api = new Api('/api', fetchImpl as unknown as typeof fetch);
     await api.guest();
-    expect(await api.saveAccount('kemi@example.com', 'jetpack-sunrise-42', 1995)).toBe('check_email');
+    const kept = answerAge(1995);
+    if (kept === 'invalid' || !kept.adult) throw new Error('not an adult answer');
+    expect(await api.saveAccount('kemi@example.com', 'jetpack-sunrise-42', kept)).toBe('check_email');
     await api.forgotPassword('kemi@example.com', 'tok');
     expect(calls.slice(1)).toEqual([
       { url: '/api/auth/save', body: { email: 'kemi@example.com', password: 'jetpack-sunrise-42', birthYear: 1995, adult: true } },
@@ -232,7 +289,7 @@ describe('Save your account: the 18+ question and the Terms', () => {
 
   it("the API's answers in words", () => {
     expect(accountErrorText(new ApiError(403, 'underage', 'x'))).toBe('Military Forge is for players 18 and over, so this account can’t be saved.');
-    expect(accountErrorText(new ApiError(400, 'age_required', 'x'))).toBe('Confirm you are 18 or older, with the year you were born.');
+    expect(accountErrorText(new ApiError(400, 'age_required', 'x'))).toBe('Pick the year you were born, then try again.');
     expect(accountErrorText(new ApiError(400, 'bot_check_required', 'x'))).toBe("Finish the check that you're not a bot, then try again.");
     expect(accountErrorText(new ApiError(403, 'bot_check_failed', 'x'))).toBe("The check that you're not a bot didn't pass. Try it again.");
     expect(accountErrorText(new ApiError(503, 'bot_check_unavailable', 'x'))).toBe("Couldn't check you're not a bot just now. Try again in a moment.");
