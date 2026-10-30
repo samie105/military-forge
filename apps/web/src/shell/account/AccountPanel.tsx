@@ -10,7 +10,8 @@
  * Saving sends this device's 18+ answer (shell/age.ts; the API checks it) without asking again. Only
  * a device that reached the form without the age gate (a link, cleared storage) is asked, with the
  * gate's own question (AgeQuestion.tsx), never a separate box. It says the Terms apply, and shows
- * the bot check when the build has one (BotCheck.tsx).
+ * the bot check when the build has one (BotCheck.tsx). So does Forgot password, and Sign in once the
+ * server asks for it (after a few wrong passwords): from then on it stays for every later try.
  */
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useStore } from 'zustand';
@@ -25,7 +26,7 @@ import { TERMS_URL } from '../pages';
 import { AgeQuestion, NO_AGE_ANSWER, ageAnswered } from '../screens/AgeQuestion';
 import { BotCheck, botCheckOn } from './BotCheck';
 import type { ShellStore } from '../store';
-import { accountErrorText, parkedUntil, passwordHint, passwordLooksOk, signInNotice, startMode, type AccountMode } from './model';
+import { accountErrorText, asksForBotCheck, parkedUntil, passwordHint, passwordLooksOk, signInNotice, startMode, type AccountMode } from './model';
 import './account.css';
 
 export type AccountVariant = 'desktop' | 'phone';
@@ -38,6 +39,8 @@ export interface AccountPreset {
   parked?: ParkedGuest | null;
   /** a save waiting for its emailed link */
   sentTo?: string | null;
+  /** sign-in has been asked for the bot check already */
+  signInBot?: boolean;
   done?: string | null;
 }
 
@@ -124,6 +127,8 @@ export function AccountPanel({ store, variant, preset }: { store: ShellStore; va
     setBot(null);
     setBotRound((r) => r + 1);
   };
+  // sign-in shows the bot check once the server asked for it (a few wrong passwords), and keeps it
+  const [signInBot, setSignInBot] = useState(preset?.signInBot ?? false);
 
   // what the server says about this account (and whether it can send email)
   const signedIn = profile !== null && !profile.offline;
@@ -151,6 +156,7 @@ export function AccountPanel({ store, variant, preset }: { store: ShellStore; va
 
   const go = (m: AccountMode) => {
     setMode(m);
+    setBot(null); // a token is made for one form
     setError(null);
     setPassword('');
     setNext('');
@@ -273,7 +279,15 @@ export function AccountPanel({ store, variant, preset }: { store: ShellStore; va
       const notice = signInNotice(info, name);
       body = (
         <form className="acct-form" onSubmit={run(async () => {
-          const r = await ctl.signIn(email, password);
+          let r: Awaited<ReturnType<typeof ctl.signIn>>;
+          try {
+            r = await ctl.signIn(email, password, bot ?? undefined);
+          } catch (err) {
+            if (botCheckOn && asksForBotCheck(err)) setSignInBot(true);
+            throw err;
+          } finally {
+            if (bot) spendBot();
+          }
           setParked(ctl.api.parkedGuest());
           setDone(r.previousGuest === 'kept' && name ? `Signed in as ${r.me.nickname}. ${name} is kept on this device: sign out to switch back.` : `Signed in as ${r.me.nickname}.`);
           await refreshInfo();
@@ -293,9 +307,10 @@ export function AccountPanel({ store, variant, preset }: { store: ShellStore; va
               Forgot password?
             </button>
           )}
+          {signInBot && <BotCheck action="login" round={botRound} onToken={setBot} />}
           {errorLine}
           <div className="acct-actions">
-            <button type="submit" className="btn btn--volt btn--sm" disabled={busy || blocked || !email.trim() || !password}>
+            <button type="submit" className="btn btn--volt btn--sm" disabled={busy || blocked || !email.trim() || !password || (signInBot && needBot)}>
               <Icon name="user" />
               {notice ? 'Use the saved account' : 'Sign in'}
             </button>

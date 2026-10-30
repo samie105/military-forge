@@ -69,7 +69,7 @@ export interface AppDeps {
   email?: EmailSender | null;
   /** Argon2id with the production parameters unless a test passes cheaper ones */
   hasher?: PasswordHasher;
-  /** the bot check on account saves and "Forgot password?"; undefined = from config (TURNSTILE_SECRET), null = off */
+  /** the bot check (account saves, "Forgot password?", sign-in after wrong passwords, problem reports); undefined = from config (TURNSTILE_SECRET), null = off */
   botCheck?: BotCheck | null;
   /** work done after an answer has gone (account emails); default: run it, log a failure */
   defer?: (task: () => Promise<void>) => void;
@@ -156,6 +156,8 @@ export function createApp(deps: AppDeps) {
   );
 
   const audit = createAudit(log, config);
+  // the Turnstile bot check (auth/botCheck.ts): null = off
+  const botCheck = deps.botCheck !== undefined ? deps.botCheck : botCheckFor(config, log);
   app.route('/auth', authRoutes({ config, db, kv, auth, profiles, now, audit }));
   // saved accounts: email + password (auth/accountRoutes.ts)
   const hasher = deps.hasher ?? new PasswordHasher();
@@ -179,7 +181,7 @@ export function createApp(deps: AppDeps) {
       throttle: new Throttle(kv, now),
       email: deps.email !== undefined ? deps.email : emailSenderFor(config, log),
       audit,
-      botCheck: deps.botCheck !== undefined ? deps.botCheck : botCheckFor(config, log),
+      botCheck,
       defer,
       now,
     }),
@@ -217,8 +219,8 @@ export function createApp(deps: AppDeps) {
   app.route('/analytics', analyticsRoutes({ config, kv, auth, analytics }));
   app.route('/me', meRoutes({ config, db, kv, auth, profiles }));
   app.route('/nicknames', nicknameRoutes({ config, kv, auth, profiles }));
-  // problem reports (Send a report, and a failed connection's own): kept 7 days, read by the owner
-  app.route('/reports', reportRoutes({ config, kv, now }));
+  // problem reports (Send a report, and a failed connection's own): kept 7 days, read by the owner; the bot check when it's on
+  app.route('/reports', reportRoutes({ config, kv, now, botCheck }));
   // the store (docs/17): off without Flutterwave's keys, but the owner's tools and ownership work either way
   const checkPassword = async (userId: string, password: string) => {
     const cred = await accounts.credentialOf(userId);

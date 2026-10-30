@@ -307,8 +307,9 @@ export class Api {
    * Signs this device in to a saved account. The device's current session goes with the request,
    * so the server can tell what to do with it: a guest with nothing to lose is discarded; a guest
    * with progress is kept and parked here ({@link parkedGuest}); another saved account is signed out.
+   * `turnstileToken`: the bot check's, once the server has asked for it (bot_check_required after a few wrong passwords).
    */
-  async signIn(email: string, password: string): Promise<{ me: Me; previousGuest: 'kept' | 'discarded' | null }> {
+  async signIn(email: string, password: string, turnstileToken?: string): Promise<{ me: Me; previousGuest: 'kept' | 'discarded' | null }> {
     const before = this.me;
     const beforeToken = storedRefreshToken() ?? this.refreshFallback;
     let extra: Record<string, string> = {};
@@ -319,7 +320,7 @@ export class Api {
         /* that session is over: sign in without it */
       }
     }
-    const s = await this.request<SessionBody & { previousGuest: 'kept' | 'discarded' | null }>('POST', '/auth/login', { email, password }, false, extra);
+    const s = await this.request<SessionBody & { previousGuest: 'kept' | 'discarded' | null }>('POST', '/auth/login', { email, password, ...(turnstileToken ? { turnstileToken } : {}) }, false, extra);
     if (s.previousGuest === 'kept' && before && beforeToken) writeParked({ refreshToken: beforeToken, nickname: before.nickname, level: before.level, parkedAt: Date.now() });
     return { me: this.adopt(s), previousGuest: s.previousGuest };
   }

@@ -213,6 +213,11 @@ describe('static files and app routes', () => {
     expect(pageForOrigin(page, 'localhost:5191', [])).toBe('<meta content="http://localhost:5191/og-image.jpg">');
     expect(pageForOrigin(page, 'evil.com"><script>', [])).toBe('<meta content="/og-image.jpg">');
     expect(securityHeaders('evil.com; script-src *')['Content-Security-Policy']).not.toContain('evil');
+    // the bot check's script and frame (Turnstile), and only that host (bot check, 30 Oct)
+    const csp = securityHeaders('abc.trycloudflare.com')['Content-Security-Policy'];
+    expect(csp).toContain("script-src 'self' 'wasm-unsafe-eval' https://challenges.cloudflare.com;");
+    expect(csp).toContain("frame-src 'self' https://challenges.cloudflare.com;");
+    expect(csp).toContain('wss://abc.trycloudflare.com ws://abc.trycloudflare.com https://challenges.cloudflare.com;');
   });
 
   it('--tune flags the page for the tuning panel (the head gets the meta); without it the page is as built', () => {

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { AnalyticsService } from './analytics/service';
 import { createApp } from './app';
 import { loadOrCreateDevKey, signingKeyFromPem } from './auth/keys';
+import { startRetentionSweep } from './auth/retention';
 import { ConfigError, loadConfig, type Config } from './config';
 import { openDatabase } from './db/client';
 import { MemoryKv, type Kv } from './kv/kv';
@@ -53,6 +54,8 @@ if (store.payments) {
     );
   }, SWEEP_EVERY_MS).unref();
 } else log.info('store off: no FLUTTERWAVE_* keys');
+// sessions and emailed links that ended over 7 days ago are deleted, hourly (auth/retention.ts)
+startRetentionSweep(database.db, log);
 const app = createApp({ config, database, kv, signingKey, ticketKey, log, bus, analytics, store });
 const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
   log.info(

@@ -1,6 +1,8 @@
 /**
- * The bot check (docs/10 §1 "bot farms", §6): Cloudflare Turnstile on the account routes a script
- * would farm, saving an account and "Forgot password?" (auth/accountRoutes.ts). On only with
+ * The bot check (docs/10 §1 "bot farms", §6): Cloudflare Turnstile where a script would farm or
+ * guess: saving an account and "Forgot password?" (auth/accountRoutes.ts), signing in once that email
+ * or that address has had LOGIN_BOT_CHECK_AFTER wrong passwords (the first tries never need it), and
+ * every problem report, the game's automatic ones included (reports/routes.ts). On only with
  * TURNSTILE_SECRET; off, nothing is asked, so dev and the tests need no widget.
  *
  * The web shows the widget when its build has VITE_TURNSTILE_SITEKEY and sends the token it gets
@@ -15,7 +17,10 @@ export const SITEVERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/si
 const VERIFY_TIMEOUT_MS = 5_000;
 
 /** Which form the token came from: the widget's `action`, matched when Cloudflare reports one. */
-export type BotCheckAction = 'save' | 'forgot';
+export type BotCheckAction = 'save' | 'forgot' | 'login' | 'report';
+
+/** Sign-in asks for the bot check once the email or the address has this many wrong passwords in its window (auth/throttle.ts). */
+export const LOGIN_BOT_CHECK_AFTER = 3;
 
 /** Throws an ApiError unless `token` passes; `ip` is the client's (sent as remoteip when known). */
 export type BotCheck = (token: string | undefined, ip: string, action: BotCheckAction) => Promise<void>;

@@ -6,16 +6,23 @@
  * players' phones, so this is the only way to see what happened on one.
  *
  *   POST /reports           anyone, 6 per 10 minutes per address; kept 7 days in the KV
+ *                           (+ turnstileToken: the bot check, when TURNSTILE_SECRET is set)
  *   GET  /reports           the owner (Authorization: Bearer ADMIN_TOKEN): the newest 200, summarised
  *   GET  /reports/:id       the owner: one report, whole
  *
  * Nothing personal beyond the in-game name the player chose: no account id, no address is stored.
+ *
+ * With the bot check on (auth/botCheck.ts, action 'report'), every report needs a Turnstile token
+ * that passes, the automatic ones too: otherwise a script would just say 'auto'. The web's Send a
+ * report shows the widget; an automatic report gets its token quietly, or isn't sent (diag/report.ts).
+ * The token is checked after the rate limit and the shape, and is never stored.
  */
 import { timingSafeEqual } from 'node:crypto';
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
+import type { BotCheck } from '../auth/botCheck';
 import type { Config } from '../config';
-import { clientRateLimitKey } from '../http/clientIp';
+import { clientIp, clientRateLimitKey } from '../http/clientIp';
 import type { AppEnv } from '../http/context';
 import { ApiError } from '../http/errors';
 import { LIMITS, enforceRateLimit } from '../http/rateLimit';
@@ -50,6 +57,8 @@ export const ReportBody = z.object({
   note: z.string().max(500).optional(),
 });
 export type ReportBody = z.infer<typeof ReportBody>;
+/** what POST /reports takes: a report, and the bot check's token (Turnstile's are up to 2048 characters) */
+const ReportRequest = ReportBody.extend({ turnstileToken: z.string().max(2048).optional() });
 
 export interface StoredReport extends ReportBody {
   id: string;
@@ -72,15 +81,18 @@ export function ownerOnly(c: Context<AppEnv>, token: string | null): void {
   if (!token || a.length !== b.length || !timingSafeEqual(a, b)) throw new ApiError(401, 'unauthorized', 'The admin token is missing or wrong');
 }
 
-export function reportRoutes(deps: { config: Config; kv: Kv; now: () => number }): Hono<AppEnv> {
-  const { config, kv, now } = deps;
+/** `botCheck`: the Turnstile check every report needs (auth/botCheck.ts); null = off (TURNSTILE_SECRET unset) */
+export function reportRoutes(deps: { config: Config; kv: Kv; now: () => number; botCheck: BotCheck | null }): Hono<AppEnv> {
+  const { config, kv, now, botCheck } = deps;
   const app = new Hono<AppEnv>();
 
   app.post('/', async (c) => {
     await enforceRateLimit(kv, LIMITS.report, clientRateLimitKey(c, config));
-    const parsed = ReportBody.safeParse(await c.req.json().catch(() => null));
+    const parsed = ReportRequest.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) throw new ApiError(400, 'invalid_request', 'Not a report');
-    const report: StoredReport = { ...parsed.data, id: newId(), at: now() };
+    const { turnstileToken, ...body } = parsed.data;
+    if (botCheck) await botCheck(turnstileToken, clientIp(c, config), 'report');
+    const report: StoredReport = { ...body, id: newId(), at: now() };
     await kv.set(key(report.id), JSON.stringify(report), { ttlMs: REPORT_TTL_MS });
     await kv.zadd(INDEX, [{ member: report.id, score: report.at }]);
     await kv.expire(INDEX, REPORT_TTL_MS);

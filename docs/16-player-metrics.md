@@ -131,7 +131,7 @@ The client sets them as the ad context (`render3d/ads/audience.ts`, `setAdContex
 
 ## 8. Compliance notes (not legal advice: counsel to confirm the starred items)
 
-**Roles.** The game's operator is the controller. Play stats go to no processor beyond the hosting provider (Azure, South Africa North) and are never shared or sold. The rest of the game uses more processors, each only when switched on: Flutterwave (payments: the account email, the in-game name and the amount), Resend (account emails), Cloudflare Turnstile (the bot check on account forms: the IP and browser signals) and, from the browser, Google's STUN server for local rooms. privacy.html lists them (the legal review, 29 Oct 2026).
+**Roles.** The game's operator is the controller. Play stats go to no processor beyond the hosting provider (Azure, South Africa North) and are never shared or sold. The rest of the game uses more processors, each only when switched on: Flutterwave (payments: the account email, the in-game name and the amount), Resend (account emails), Cloudflare Turnstile (the bot check on account forms, sign-in after wrong passwords and problem reports: the IP and browser signals) and, from the browser, Google's STUN server for local rooms. privacy.html lists them (the legal review, 29 Oct 2026).
 
 **Nigeria (NDPA 2023, GAID 2025).** Lawful bases: contract/legitimate interest for essential match stats and anonymous diagnostics; consent for play stats and personalised house ads (direct-marketing-adjacent). Children: parental consent for minors' data (*whether a game's opt-in toggle needs an age gate*). Registration with the NDPC as a data controller of major importance is likely once accounts grow (docs/14 §7.1). 72 h breach notice.
 

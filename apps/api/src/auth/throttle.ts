@@ -11,6 +11,9 @@
  * A right password clears the account's misses, not the IP's: one attacker signing in to their
  * own account between guesses must not reset the IP's count.
  *
+ * With the bot check on (auth/botCheck.ts), sign-in also needs a Turnstile token once the account or
+ * the IP has LOGIN_BOT_CHECK_AFTER misses in its window (`misses`): long before the backoff bites.
+ *
  * Keys: `af:{subject}` (misses in the window) and `al:{subject}` (locked until, ms since the epoch).
  */
 import { createHash } from 'node:crypto';
@@ -63,6 +66,12 @@ export class Throttle {
       const retryAfter = Math.max(1, Math.ceil(wait / 1000));
       throw new ApiError(429, 'too_many_attempts', 'Too many tries. Wait a moment, then try again.', { retryAfter }, { 'Retry-After': String(retryAfter) });
     }
+  }
+
+  /** The most misses any of `subjects` has in its window now (sign-in asks for the bot check from 3). */
+  async misses(subjects: readonly Subject[]): Promise<number> {
+    const counts = await this.kv.mget(subjects.map((s) => `af:${s.key}`));
+    return Math.max(0, ...counts.map((n) => Number(n) || 0));
   }
 
   /** Counts a miss against each subject and locks the ones past their free misses. */

@@ -25,7 +25,7 @@ Mod APKs of mobile genre classics were the cheats players knew best: unlimited n
 | XP farming in custom rooms | AFK rooms with friends/bots | custom rooms give no ranked/missions credit and capped XP; AFK detection | ✅ |
 | Win trading / teaming in solos | collusion | heuristics (08-battle-royale §12) + reports | ⚠️ detect |
 | Multi-accounting / smurfing | new guest accounts | ranked gating (level 15 + 10 wins), fast MMR correction | ⚠️ mitigate |
-| Bot farms (rewarded ads, sign-ups) | scripted clients | Cloudflare Turnstile on risky endpoints (built: saving an account and "Forgot password?", §6); reward grants are server-side with a nonce + daily caps | ✅ |
+| Bot farms (rewarded ads, sign-ups) | scripted clients | Cloudflare Turnstile on risky endpoints (built: saving an account, "Forgot password?", sign-in after 3 wrong passwords and problem reports, §6); reward grants are server-side with a nonce + daily caps | ✅ |
 | Account takeover | credential stuffing, phishing | passkeys/OAuth preferred, breached-password check, new-device alerts, rate limits, session revoke-all | ✅ |
 | DDoS on game servers | UDP/TCP floods | provider DDoS protection + per-IP connection limits + allocation behind tickets (server IPs aren't discoverable without one) | ✅ (see 09-infra) |
 
@@ -110,8 +110,8 @@ Never ban on a single heuristic event, and never reveal which signal triggered (
 - [ ] Admin: SSO + 2FA, IP allow-list or Zero Trust (Cloudflare Access), every action audit-logged
 - [ ] Secrets in a manager (Doppler/1Password/SOPS); rotation runbook; no secrets in CI logs
 - [ ] Rate limits at the edge (Cloudflare) + in-app (Redis buckets)
-- [x] Turnstile on account creation (saving an account, `POST /auth/save`) and password reset (`POST /auth/forgot`): `apps/api/src/auth/botCheck.ts`, on only when the API has `TURNSTILE_SECRET`; the web shows the widget when its build has `VITE_TURNSTILE_SITEKEY` (set both together; `apps/api/.env.example`). It fails closed (503 when Cloudflare can't be reached). Sign-in isn't asked: its own backoff covers guessing (auth/throttle.ts)
-- [ ] Turnstile on: account linking (OAuth), purchases with risk flags, rewarded-ad claims, report spam
+- [x] Turnstile on account creation (saving an account, `POST /auth/save`) and password reset (`POST /auth/forgot`): `apps/api/src/auth/botCheck.ts`, on only when the API has `TURNSTILE_SECRET`; the web shows the widget when its build has `VITE_TURNSTILE_SITEKEY` (set both together; `apps/api/.env.example`). It fails closed (503 when Cloudflare can't be reached). Sign-in is asked only once that email or that address has 3 wrong passwords in the throttle's window (auth/throttle.ts; its backoff still covers guessing), and every problem report needs it (`POST /reports`, action `report`): the game's automatic reports get a token quietly or aren't sent (30 Oct)
+- [ ] Turnstile on: account linking (OAuth), purchases with risk flags, rewarded-ad claims
 - [ ] Webhook signature verification (Stripe/Paystack/Razorpay/Xsolla), idempotency by provider ref
 - [ ] Security headers test in CI (e.g. Mozilla Observatory grade A)
 - [ ] Incident response runbook: who's on call, how to put the game in maintenance mode, how to rotate keys, breach notification timelines (GDPR 72 h; India DPDP 72 h; NDPA 72 h)

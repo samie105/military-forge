@@ -132,6 +132,13 @@ describe('the text pages (privacy.html, terms.html, official.html)', () => {
     expect(privacy).not.toMatch(/never sell or share your data/);
     for (const fact of ['90 days', '13 months', 'Problem reports</b>: 7 days', 'last 7 are kept', 'Flutterwave', 'Resend', 'Cloudflare Turnstile', 'Microsoft Azure', 'never recorded', 'Also delete my player']) expect(privacy).toContain(fact);
   });
+  it('the privacy note says where the bot check can appear and how long sign-ins and emailed links are kept (bot check, 30 Oct)', () => {
+    const privacy = read('../privacy.html').replace(/<!--[\s\S]*?-->/g, '');
+    for (const where of ['save an account', 'Forgot password', 'sign in after several wrong passwords', 'send a problem report', 'its own problem report']) expect(privacy).toContain(where);
+    expect(privacy).toContain("a device's sign-in is deleted 7 days after it ends");
+    expect(privacy).toContain('deleted 7 days after they are used or run out');
+    expect(privacy).not.toContain('—');
+  });
   it('the terms match the store: a 14-day refund of unspent Brass', () => {
     const terms = read('../terms.html');
     expect(terms).toMatch(/14 days/);

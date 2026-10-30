@@ -33,8 +33,10 @@ site_caddyfile() {
 			header Content-Type model/gltf+json*
 		}
 	}
+	# challenges.cloudflare.com: the bot check's script and its frame (Turnstile: apps/web
+	# shell/account/BotCheck.tsx), loaded only by a build with VITE_TURNSTILE_SITEKEY
 	header {
-		Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' data: blob: https://$hp wss://$hp https://*.amazonaws.com https://speed.cloudflare.com https://ixpn.ng https://nobus.io; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' data: blob: https://$hp wss://$hp https://*.amazonaws.com https://speed.cloudflare.com https://ixpn.ng https://nobus.io https://challenges.cloudflare.com; frame-src 'self' https://challenges.cloudflare.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 		Strict-Transport-Security "max-age=31536000"
 		Permissions-Policy "camera=(), microphone=(self), geolocation=(), payment=(), usb=()"
 		X-Content-Type-Options nosniff

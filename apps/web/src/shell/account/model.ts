@@ -20,6 +20,11 @@ const PASSWORD_REASONS: Record<string, string> = {
   same_as_email: "Don't use your email as the password",
 };
 
+/** Sign-in's answer asks for the bot check (after a few wrong passwords): the form shows it from then on. */
+export function asksForBotCheck(e: unknown): boolean {
+  return e instanceof ApiError && (e.code === 'bot_check_required' || e.code === 'bot_check_failed');
+}
+
 /** What to tell the player when an account call fails. */
 export function accountErrorText(e: unknown): string {
   if (!(e instanceof ApiError)) return 'Something went wrong. Try again.';

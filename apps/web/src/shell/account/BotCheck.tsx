@@ -1,51 +1,20 @@
 /**
- * The bot check on "Save your account" and "Forgot password?" (apps/api auth/botCheck.ts):
- * Cloudflare Turnstile's widget, shown only when the build has VITE_TURNSTILE_SITEKEY (set it
- * together with the API's TURNSTILE_SECRET). Without it nothing loads and the forms send no token.
+ * The bot check's widget (apps/api auth/botCheck.ts): Cloudflare Turnstile on "Save your account",
+ * "Forgot password?", "Sign in" once the server asks for it (after a few wrong passwords) and Send a
+ * report (diag/SendReport.tsx). Shown only when the build has VITE_TURNSTILE_SITEKEY (set it together
+ * with the API's TURNSTILE_SECRET). Without it nothing loads and the forms send no token. The game's
+ * automatic reports get theirs without a widget (turnstile.ts quietToken).
  *
  * Cloudflare's script loads on the first form that needs it, never with the game. Each token is
- * single use: after a refused answer the form bumps `round` and the widget starts over.
+ * single use: after each try the form bumps `round` and the widget starts over.
  */
 import { useEffect, useRef, useState } from 'react';
+import { SITEKEY, loadTurnstile, type BotCheckAction } from './turnstile';
 
-const SITEKEY = (import.meta.env.VITE_TURNSTILE_SITEKEY as string | undefined)?.trim() || null;
-const SCRIPT_URL = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-
-/** The forms ask for a token only when the build has a site key. */
-export const botCheckOn = SITEKEY !== null;
-
-interface Turnstile {
-  render(el: HTMLElement, options: Record<string, unknown>): string;
-  reset(id: string): void;
-  remove(id: string): void;
-}
-declare global {
-  interface Window {
-    turnstile?: Turnstile;
-  }
-}
-
-let loading: Promise<Turnstile> | null = null;
-
-function loadTurnstile(): Promise<Turnstile> {
-  if (window.turnstile) return Promise.resolve(window.turnstile);
-  loading ??= new Promise<Turnstile>((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = SCRIPT_URL;
-    script.async = true;
-    script.onload = () => (window.turnstile ? resolve(window.turnstile) : reject(new Error('no turnstile')));
-    script.onerror = () => {
-      loading = null; // a later form tries again
-      script.remove();
-      reject(new Error('turnstile did not load'));
-    };
-    document.head.append(script);
-  });
-  return loading;
-}
+export { botCheckOn } from './turnstile';
 
 /** The widget; `onToken` gets each token (null when it expires or fails). */
-export function BotCheck({ action, round, onToken }: { action: 'save' | 'forgot'; round: number; onToken: (token: string | null) => void }) {
+export function BotCheck({ action, round, onToken }: { action: BotCheckAction; round: number; onToken: (token: string | null) => void }) {
   const box = useRef<HTMLDivElement>(null);
   const widget = useRef<string | null>(null);
   const [failed, setFailed] = useState(false);

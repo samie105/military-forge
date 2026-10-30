@@ -175,6 +175,15 @@ describe('site.sh (audit 28 Oct)', () => {
     assert.match(caddyfile, /frame-ancestors 'none'/);
     assert.match(caddyfile, /header \/manifest\.webmanifest Content-Type application\/manifest\+json/);
   });
+  it("lets the bot check (Cloudflare Turnstile) load its script and frame, and nothing else of Cloudflare's (bot check, 30 Oct)", () => {
+    const csp = /Content-Security-Policy "([^"]*)"/.exec(caddyfile)?.[1] ?? '';
+    const directive = (name) => csp.split('; ').find((d) => d.startsWith(`${name} `)) ?? '';
+    assert.equal(directive('script-src'), "script-src 'self' 'wasm-unsafe-eval' https://challenges.cloudflare.com");
+    assert.equal(directive('frame-src'), "frame-src 'self' https://challenges.cloudflare.com");
+    assert.ok(directive('connect-src').endsWith(' https://challenges.cloudflare.com'));
+    assert.equal(directive('default-src'), "default-src 'self'");
+    assert.doesNotMatch(csp, /\*\.cloudflare\.com|https:\/\/\*[ ;]|'unsafe-eval'/);
+  });
   it('caches only the build\'s hashed files for a year; everything else revalidates', () => {
     const re = /@hashed path_regexp (\S+)/.exec(caddyfile)?.[1];
     assert.ok(re);

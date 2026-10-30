@@ -57,11 +57,27 @@ describe('a report', () => {
     expect(await sendReport('manual', 'x')).toEqual({ ok: false, why: 'offline' });
   });
 
-  it('a failed connection sends one by itself, at most every 10 minutes', () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ id: 'X' }), { status: 201 })));
+  it('a failed connection sends one by itself, at most every 10 minutes (no bot check in this build: no token)', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ id: 'X' }), { status: 201 }));
+    vi.stubGlobal('fetch', fetchMock);
     const t = 1_000_000_000;
-    expect(autoReport('local room: unreachable', t)).toBe(true);
+    const sent = new Promise<boolean>((resolve) => expect(autoReport('local room: unreachable', t, resolve)).toBe(true));
+    expect(await sent).toBe(true);
+    expect(JSON.parse((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)).not.toHaveProperty('turnstileToken');
     expect(autoReport('local room: unreachable', t + 60_000)).toBe(false);
     expect(autoReport('room: lost', t + AUTO_EVERY_MS)).toBe(true);
+  });
+
+  it("carries the bot check's token when there is one, and still fits under the API limit with Turnstile's longest (bot check, 30 Oct)", async () => {
+    for (let i = 0; i < MAX_EVENTS; i++) diag('net', `${'y'.repeat(200)} ${i}`);
+    const token = 't'.repeat(2048);
+    const r = buildReport('manual', 'settings', 'a note', token);
+    expect(r.turnstileToken).toBe(token);
+    expect(new TextEncoder().encode(JSON.stringify(r)).length).toBeLessThanOrEqual(MAX_REPORT_BYTES);
+    expect(buildReport('manual', 'settings')).not.toHaveProperty('turnstileToken');
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ id: 'ABCD2345' }), { status: 201 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await sendReport('manual', 'settings', '', 'tok');
+    expect(JSON.parse((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)).toMatchObject({ reason: 'manual', turnstileToken: 'tok' });
   });
 });

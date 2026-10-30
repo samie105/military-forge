@@ -3,10 +3,12 @@
  * anything"): one tap opens what will be sent (WHAT_IS_SENT) and an optional note, a second sends it.
  * The id that comes back is the one to quote. The note is how a player reaches us until there is a
  * support email (privacy.html and terms.html point here for data requests, player reports and appeals:
- * the legal review, 29 Oct). ReportSentNote: the line under a failed connection's alert once the
- * automatic report has gone.
+ * the legal review, 29 Oct). With the bot check on (the build has VITE_TURNSTILE_SITEKEY), its widget
+ * sits above Send, and Send waits for it; each token is used once. ReportSentNote: the line under a
+ * failed connection's alert once the automatic report has gone.
  */
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { BotCheck, botCheckOn } from '../shell/account/BotCheck';
 import { Icon } from '../ui/Icon';
 import { MAX_NOTE, WHAT_IS_SENT, reportStore, sendReport } from './report';
 import './report.css';
@@ -23,6 +25,9 @@ const FAILED: Record<'offline' | 'busy' | 'error', string> = {
 export function SendReport({ context, className = '' }: { context: string; className?: string }) {
   const [stage, setStage] = useState<Stage>({ s: 'idle' });
   const [note, setNote] = useState('');
+  // the bot check's token, and its round (each token is good for one send)
+  const [bot, setBot] = useState<string | null>(null);
+  const [botRound, setBotRound] = useState(0);
   const box = useRef<HTMLDivElement>(null);
   // opened at the foot of a short panel (the phone's pause menu): it scrolls into view
   useEffect(() => {
@@ -30,7 +35,11 @@ export function SendReport({ context, className = '' }: { context: string; class
   }, [stage.s]);
   const send = async () => {
     setStage({ s: 'sending' });
-    const r = await sendReport('manual', context, note);
+    const r = await sendReport('manual', context, note, bot ?? undefined);
+    if (bot) {
+      setBot(null);
+      setBotRound((n) => n + 1);
+    }
     if (r.ok) setNote('');
     setStage(r.ok ? { s: 'sent', id: r.id } : { s: 'failed', why: r.why });
   };
@@ -63,6 +72,7 @@ export function SendReport({ context, className = '' }: { context: string; class
               onChange={(e) => setNote(e.target.value)}
             />
           </label>
+          <BotCheck action="report" round={botRound} onToken={setBot} />
           {stage.s === 'failed' && (
             <p className="mf-report__bad" role="alert">
               <Icon name="bad" size="sm" />
@@ -70,7 +80,7 @@ export function SendReport({ context, className = '' }: { context: string; class
             </p>
           )}
           <span className="mf-report__acts">
-            <button type="button" className="btn btn--volt btn--sm m-p8" disabled={stage.s === 'sending'} onClick={() => void send()}>
+            <button type="button" className="btn btn--volt btn--sm m-p8" disabled={stage.s === 'sending' || (botCheckOn && !bot)} onClick={() => void send()}>
               <Icon name="send" />
               {stage.s === 'sending' ? 'Sending…' : stage.s === 'failed' ? 'Try again' : 'Send'}
             </button>

@@ -1,12 +1,12 @@
 /**
  * The pre-launch safeguards on saving an account: the 18+ rule (shared/age.ts, auth/accountRoutes.ts)
- * and the Turnstile bot check on save and "Forgot password?" (auth/botCheck.ts), off without
- * TURNSTILE_SECRET and on with it.
+ * and the Turnstile bot check (auth/botCheck.ts) on save, "Forgot password?", a sign-in after 3 wrong
+ * passwords and problem reports (reports/routes.ts), off without TURNSTILE_SECRET and on with it.
  */
 import { eq, sql } from 'drizzle-orm';
 import pino from 'pino';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { SITEVERIFY_URL, botCheckFor, turnstileCheck, type BotCheck } from '../src/auth/botCheck';
+import { LOGIN_BOT_CHECK_AFTER, SITEVERIFY_URL, botCheckFor, turnstileCheck, type BotCheck } from '../src/auth/botCheck';
 import { loadConfig } from '../src/config';
 import { users } from '../src/db/schema';
 import { bearer, createGuest, createTestApi, fakeEmail, json, type TestApi } from './helpers';
@@ -171,9 +171,141 @@ describe('the bot check is on with TURNSTILE_SECRET', () => {
     expect(site.calls.length).toBe(before);
   });
 
-  it('sign-in and the emailed links are not asked', async () => {
+  it("the first sign-in tries and the emailed links are not asked", async () => {
     expect((await c.post('/auth/login', { email: newEmail(), password: PW })).status).toBe(401);
     expect((await c.post('/auth/reset', { token: 'x', password: PW })).status).toBe(400);
+  });
+});
+
+describe('sign-in after wrong passwords, with the bot check on (bot check, 30 Oct)', () => {
+  // "pass" passes, anything else fails; Cloudflare reports the action the test sets
+  let action = 'login';
+  const site = fakeSiteverify((form) => verdict(form.get('response') === 'pass' ? { success: true, action } : { success: false, 'error-codes': ['invalid-input-response'] }));
+  let api: TestApi;
+  let c: ReturnType<typeof client>;
+  /** a saved account (email off: a save links at once) */
+  let saved: string;
+  beforeAll(async () => {
+    api = await createTestApi({}, { botCheck: turnstileCheck('0x4AAAAAAAtest-secret', silent, site.fetchImpl) });
+    c = client(api);
+    saved = newEmail();
+    action = 'save';
+    expect((await c.save(await createGuest(api), { email: saved, birthYear: 1995, adult: true, turnstileToken: 'pass' })).status).toBe(200);
+    action = 'login';
+  });
+  afterAll(() => api.close());
+
+  const login = (email: string, ip: string, extra: Record<string, unknown> = {}) => c.post('/auth/login', { email, password: PW, ...extra }, { 'x-forwarded-for': ip });
+  const wrong = (email: string, ip: string, extra: Record<string, unknown> = {}) => c.post('/auth/login', { email, password: 'not-my-password-9', ...extra }, { 'x-forwarded-for': ip });
+
+  it('the first 3 tries need no token; then the email needs one, before the password is checked', async () => {
+    expect(LOGIN_BOT_CHECK_AFTER).toBe(3);
+    const before = site.calls.length;
+    for (let i = 0; i < 3; i++) expect((await wrong(saved, `198.51.100.${10 + i}`)).status).toBe(401);
+    expect(site.calls.length).toBe(before);
+    // the right password, from a new address, without a token: still asked
+    const none = await login(saved, '198.51.100.20');
+    expect(none.status).toBe(400);
+    expect((await errorOf(none)).code).toBe('bot_check_required');
+    const bad = await login(saved, '198.51.100.20', { turnstileToken: 'nope' });
+    expect(bad.status).toBe(403);
+    expect((await errorOf(bad)).code).toBe('bot_check_failed');
+    // a token made for another form is refused
+    action = 'report';
+    expect((await login(saved, '198.51.100.20', { turnstileToken: 'pass' })).status).toBe(403);
+    action = 'login';
+    // a passing token and a wrong password: wrong; a passing token and the right one: in
+    expect((await wrong(saved, '198.51.100.21', { turnstileToken: 'pass' })).status).toBe(401);
+    expect((await login(saved, '198.51.100.21', { turnstileToken: 'pass' })).status).toBe(200);
+    // signing in cleared the email's count: the next try needs no token
+    expect((await login(saved, '198.51.100.22')).status).toBe(200);
+  });
+
+  it('refused before the password: a missing token is not a miss (it never locks the account)', async () => {
+    const email = newEmail();
+    for (let i = 0; i < 3; i++) expect((await wrong(email, `198.51.100.${30 + i}`)).status).toBe(401);
+    // many tries without a token: each asks for one, none counts toward the backoff
+    for (let i = 0; i < 6; i++) expect((await (await wrong(email, `198.51.100.${40 + i}`)).json()) as unknown).toMatchObject({ error: { code: 'bot_check_required' } });
+    expect((await wrong(email, '198.51.100.50', { turnstileToken: 'pass' })).status).toBe(401);
+  });
+
+  it('the address counts too: 3 wrong passwords from one address, then any email from it needs a token', async () => {
+    const ip = '198.51.100.60';
+    for (let i = 0; i < 3; i++) expect((await wrong(newEmail(), ip)).status).toBe(401);
+    expect((await errorOf(await login(saved, ip))).code).toBe('bot_check_required');
+    expect((await login(saved, ip, { turnstileToken: 'pass' })).status).toBe(200);
+    // another address is not asked for the saved account
+    expect((await login(saved, '198.51.100.61')).status).toBe(200);
+  });
+});
+
+describe('sign-in with the bot check off (no TURNSTILE_SECRET): no token, ever', () => {
+  it('wrong passwords meet the backoff only, never bot_check_required', async () => {
+    const api = await createTestApi();
+    try {
+      const c = client(api);
+      const email = newEmail();
+      const codes: string[] = [];
+      for (let i = 0; i < 6; i++) {
+        const res = await c.post('/auth/login', { email, password: PW }, { 'x-forwarded-for': `198.51.100.${70 + i}` });
+        codes.push(`${res.status} ${(await errorOf(res)).code}`);
+      }
+      expect(codes).toEqual([...Array(6).fill('401 invalid_credentials')]);
+    } finally {
+      await api.close();
+    }
+  });
+});
+
+describe('problem reports and the bot check (bot check, 30 Oct)', () => {
+  const report = (over: Record<string, unknown> = {}) => ({
+    reason: 'auto',
+    context: 'room: unreachable',
+    build: 'abc1234',
+    device: { ua: 'Mozilla/5.0', w: 844, h: 390, dpr: 3, standalone: false, touch: true },
+    events: [{ t: 10, k: 'rtc', m: 'connection failed' }],
+    errors: [],
+    ...over,
+  });
+  const TOKEN = 'owner-secret-token-1234';
+
+  it('on: manual and automatic reports alike need a passing token, made for reports; the token is not kept', async () => {
+    let action = 'report';
+    const site = fakeSiteverify((form) => verdict(form.get('response') === 'pass' ? { success: true, action } : { success: false }));
+    const api = await createTestApi({ ADMIN_TOKEN: TOKEN }, { botCheck: turnstileCheck('0x4AAAAAAAtest-secret', silent, site.fetchImpl) });
+    try {
+      const send = (body: unknown) => api.app.request('/reports', json(body, { 'x-forwarded-for': api.ip() }));
+      for (const reason of ['auto', 'manual']) {
+        const none = await send(report({ reason }));
+        expect(none.status).toBe(400);
+        expect((await errorOf(none)).code).toBe('bot_check_required');
+        expect((await send(report({ reason, turnstileToken: 'nope' }))).status).toBe(403);
+      }
+      // not a report at all: refused before Cloudflare is asked
+      const before = site.calls.length;
+      expect((await send({ hello: 1, turnstileToken: 'pass' })).status).toBe(400);
+      expect(site.calls.length).toBe(before);
+      action = 'login';
+      expect((await send(report({ turnstileToken: 'pass' }))).status).toBe(403);
+      action = 'report';
+      const sent = await send(report({ turnstileToken: 'pass' }));
+      expect(sent.status).toBe(201);
+      const { id } = (await sent.json()) as { id: string };
+      const stored = (await (await api.app.request(`/reports/${id}`, { headers: { authorization: `Bearer ${TOKEN}` } })).json()) as Record<string, unknown>;
+      expect(stored).toMatchObject({ id, reason: 'auto' });
+      expect(stored).not.toHaveProperty('turnstileToken');
+    } finally {
+      await api.close();
+    }
+  });
+
+  it('off: a report needs no token, as before', async () => {
+    const api = await createTestApi();
+    try {
+      expect((await api.app.request('/reports', json(report(), { 'x-forwarded-for': api.ip() }))).status).toBe(201);
+    } finally {
+      await api.close();
+    }
   });
 });
 

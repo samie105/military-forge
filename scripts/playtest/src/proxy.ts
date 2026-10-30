@@ -112,12 +112,14 @@ export function securityHeaders(host: string | undefined): Record<string, string
     'Content-Security-Policy': [
       "default-src 'self'",
       // WebAssembly: three's meshopt decoder
-      "script-src 'self' 'wasm-unsafe-eval'",
+      // the bot check (Turnstile: apps/web shell/account/BotCheck.tsx) when the build has its site key
+      "script-src 'self' 'wasm-unsafe-eval' https://challenges.cloudflare.com",
+      "frame-src 'self' https://challenges.cloudflare.com",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
       "font-src 'self' data:",
       "media-src 'self' data: blob:",
-      `connect-src 'self' data: blob:${ws}`,
+      `connect-src 'self' data: blob:${ws} https://challenges.cloudflare.com`,
       "worker-src 'self' blob:",
       "object-src 'none'",
       "base-uri 'self'",

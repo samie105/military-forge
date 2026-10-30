@@ -17,3 +17,7 @@
 .mf-fit--phone .mf-report__acts { order: -1; }
 /* the note sits above Send, so what you write comes before the button that sends it */
 .mf-fit--phone .mf-report__note { order: -2; }
+/* the bot check's widget (shell/account/BotCheck.tsx), when the build has one: a full line above Send */
+.mf-report .acct-bot { flex: 1 1 100%; min-height: 65px; }
+.mf-report .acct-bot .acct-note { margin: 0; font-size: var(--fs-14, 14px); color: var(--c-muted, #b5b9a2); }
+.mf-fit--phone .mf-report .acct-bot { order: -2; }

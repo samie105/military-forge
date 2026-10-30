@@ -7,7 +7,7 @@
  * POST /auth/save        {email, password, birthYear, adult: true, turnstileToken?}
  *                        → 200 {status:'saved', user} | 202 {status:'check_email'}
  * POST /auth/confirm     {token} → {status:'saved'}               the emailed "Save my account" link
- * POST /auth/login       {email, password} → Session + previousGuest
+ * POST /auth/login       {email, password, turnstileToken?} → Session + previousGuest
  * POST /auth/password    {currentPassword, newPassword} → Session (this device, new session)
  * POST /auth/forgot      {email, turnstileToken?} → 202 {status:'check_email'}   only with EMAIL_PROVIDER
  * POST /auth/reset       {token, password} → 204
@@ -33,8 +33,10 @@
  *   that makes them a minor is refused (403 `underage`). The account keeps when they answered and
  *   the year, never a full date of birth.
  * - Bot check (auth/botCheck.ts): with TURNSTILE_SECRET set, a save and "Forgot password?" need a
- *   Turnstile token that passes; off without it. It runs after the cheap checks, so a typo
- *   doesn't burn the token.
+ *   Turnstile token that passes, and so does a sign-in once that email or that address has had
+ *   LOGIN_BOT_CHECK_AFTER (3) wrong passwords in the throttle's window (400 `bot_check_required`
+ *   before the password is checked; the first tries never need it). Off without the secret. It runs
+ *   after the cheap checks, so a typo doesn't burn the token.
  * - CSRF: the app's origin guard refuses state changes from other sites (app.ts); the refresh
  *   cookie is httpOnly, Secure in production, SameSite=Lax.
  *
@@ -61,7 +63,7 @@ import type { Kv } from '../kv/kv';
 import type { ProfileService } from '../me/profiles';
 import { RESET_TTL_MS, SAVE_TTL_MS, type AccountService } from './accounts';
 import type { Audit } from './audit';
-import type { BotCheck } from './botCheck';
+import { LOGIN_BOT_CHECK_AFTER, type BotCheck, type BotCheckAction } from './botCheck';
 import { EMAILS, confirmLink, resetLink, type EmailSender } from './email';
 import { requireAuth } from './middleware';
 import { PASSWORD_REASON_TEXT, parseEmail, normalizeEmail, passwordProblem, type PasswordHasher } from './passwords';
@@ -81,7 +83,7 @@ export interface AccountRouteDeps {
   /** null = no email provider (EMAIL_PROVIDER unset) */
   email: EmailSender | null;
   audit: Audit;
-  /** the Turnstile check on save and forgot (auth/botCheck.ts); null = off */
+  /** the Turnstile check on save, forgot and a sign-in after wrong passwords (auth/botCheck.ts); null = off */
   botCheck: BotCheck | null;
   /** runs work after the answer has gone (sending email), so its time never shows in the answer's */
   defer: (task: () => Promise<void>) => void;
@@ -95,6 +97,7 @@ const Credentials = z.object({ email: EmailField, password: PasswordField });
 const TokenField = z.string().max(200);
 /** Turnstile's tokens are up to 2048 characters */
 const BotToken = z.string().max(2048).optional();
+const LoginBody = Credentials.extend({ turnstileToken: BotToken });
 const SaveBody = Credentials.extend({ birthYear: z.number().optional(), adult: z.boolean().optional(), turnstileToken: BotToken });
 const ChangeBody = z.object({ currentPassword: PasswordField, newPassword: PasswordField });
 
@@ -126,7 +129,7 @@ export function accountRoutes(deps: AccountRouteDeps): Hono<AppEnv> {
     return body.birthYear;
   }
 
-  const checkBot = async (c: Context<AppEnv>, token: string | undefined, action: 'save' | 'forgot') => {
+  const checkBot = async (c: Context<AppEnv>, token: string | undefined, action: BotCheckAction) => {
     if (!botCheck) return;
     try {
       await botCheck(token, clientIp(c, config), action);
@@ -238,7 +241,7 @@ export function accountRoutes(deps: AccountRouteDeps): Hono<AppEnv> {
 
   app.post('/login', async (c) => {
     await enforceRateLimit(kv, LIMITS.login, ipKey(c));
-    const body = await readJson(c, Credentials);
+    const body = await readJson(c, LoginBody);
     const email = normalizeEmail(body.email);
     const account: Subject = { key: emailSubject(email), rule: BACKOFF.account };
     const subjects = [account, ipSubject(c)];
@@ -248,6 +251,8 @@ export function accountRoutes(deps: AccountRouteDeps): Hono<AppEnv> {
       audit(c, 'login_locked', { emailHash: account.key });
       throw err;
     }
+    // after a few wrong passwords for this email or from this address: the bot check, before the password
+    if (botCheck && (await throttle.misses(subjects)) >= LOGIN_BOT_CHECK_AFTER) await checkBot(c, body.turnstileToken, 'login');
 
     const found = await accounts.lookup(email);
     const ok = found ? await hasher.verify(found.passwordHash, body.password) : await hasher.verifyDummy(body.password);

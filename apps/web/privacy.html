@@ -24,7 +24,8 @@
       docs/16-player-metrics.md §6–§8 and docs/17 (the store): keep this page and the docs saying the same thing.
       Every line was checked against the code on 29 Oct 2026 (the legal review): play stats apps/api/src/analytics
       (raw days 90, player days 400, hourly counts 35 days), the player and account tables apps/api/src/db/schema.ts
-      (sessions keep ip_prefix and ua_hash), the store apps/api/src/store (payments outlive the account), problem
+      (sessions keep ip_prefix and ua_hash; ended sessions and email links are deleted after 7 days by
+      auth/retention.ts, 30 Oct), the bot check auth/botCheck.ts (save, forgot, sign-in after 3 misses, reports), the store apps/api/src/store (payments outlive the account), problem
       reports apps/api/src/reports (7 days), the IP-keyed limits http/rateLimit.ts and auth/throttle.ts (an hour at
       most), the nightly backups scripts/net-trial/data.sh (7 kept). The ads lines match render3d/ads (audience.ts:
       play data only weights our own creatives, never paid ones) and terms.html §7. Still for the owner: who the
@@ -122,7 +123,7 @@
         <li><b>Microsoft Azure</b> hosts our server, in South Africa North (Johannesburg). Everything above is stored there.</li>
         <li><b>Flutterwave</b> takes payments. When you buy Brass, we send it your account email, your in-game name and the amount. You pay on Flutterwave's own page, and it handles your card or bank details under its own privacy policy. We never see them.</li>
         <li>If we email you about your account (confirming your email, or a password reset), the email goes out through <b>Resend</b>, which gets your email address.</li>
-        <li>If the account forms show a bot check, it is <b>Cloudflare Turnstile</b>: Cloudflare sees your network address and details of your browser.</li>
+        <li>A <b>bot check</b> can appear when you save an account, use Forgot password, sign in after several wrong passwords, or send a problem report. It is <b>Cloudflare Turnstile</b>: Cloudflare sees your network address and details of your browser. When a room connection fails and the game sends its own problem report, it runs the same check in the background first, and sends nothing if the check doesn't pass.</li>
         <li>In a <b>local room</b> (players on the same network), your device asks a Google server for your network's public address, so the devices can find each other.</li>
         <li>No analytics company, ad network or data broker receives your data, and we never sell it.</li>
       </ul>
@@ -139,6 +140,8 @@
         <li><b>Your player and account</b>, with your match history, Brass and items: until you delete your player.</li>
         <li><b>A finished match's record</b> keeps the name and stats of everyone in it, so the name you played under stays in that record after you delete your player.</li>
         <li><b>Payment records</b>: kept after you delete your player, without your player attached, as our record of the money. So is any change we make to a balance by hand, with its reason.</li>
+        <li><b>Signed-in devices</b>: a device's sign-in is deleted 7 days after it ends (you sign out, it runs out, or you use Sign out everywhere).</li>
+        <li><b>Links we email you</b> (confirming your email, resetting your password): deleted 7 days after they are used or run out.</li>
         <li><b>Problem reports</b>: 7 days.</li>
         <li><b>Network-address counters</b>: an hour at most.</li>
         <li><b>Server logs</b> can hold the first part of your network address next to account events (signing in, saving an account, changing a password), and the full address when a fast connection fails to start. They have no fixed end date yet.</li>

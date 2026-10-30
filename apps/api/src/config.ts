@@ -83,8 +83,9 @@ export interface Config {
    */
   email: { provider: 'resend'; apiUrl: string; apiKey: string; from: string } | { provider: 'log' } | null;
   /**
-   * Cloudflare Turnstile's secret (TURNSTILE_SECRET): the bot check on saving an account and
-   * "Forgot password?" (auth/botCheck.ts). null = off (dev, tests). The web build's
+   * Cloudflare Turnstile's secret (TURNSTILE_SECRET): the bot check on saving an account,
+   * "Forgot password?", a sign-in after wrong passwords and problem reports (auth/botCheck.ts).
+   * null = off (dev, tests). The web build's
    * VITE_TURNSTILE_SITEKEY shows the widget; set both together.
    */
   turnstileSecret: string | null;

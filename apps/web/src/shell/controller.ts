@@ -762,9 +762,9 @@ export class ShellController {
   }
 
   /** Signs this device in to a saved account (the guest-on-this-device rule is the API's: Api.signIn). */
-  async signIn(email: string, password: string): Promise<{ me: Me; previousGuest: 'kept' | 'discarded' | null }> {
+  async signIn(email: string, password: string, turnstileToken?: string): Promise<{ me: Me; previousGuest: 'kept' | 'discarded' | null }> {
     if (this.accountSwitchBlocked) throw new ApiError(409, 'in_room', 'Leave the room first');
-    const result = await this.api.signIn(email, password);
+    const result = await this.api.signIn(email, password, turnstileToken);
     this.set({ profile: profileOf(result.me) });
     // signed in from the first visit's name screen: carry on where it was going
     const screen = this.store.getState().screen;
