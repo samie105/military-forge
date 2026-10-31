@@ -22,6 +22,7 @@ import { drillDone, isTouchDevice } from "../../../touch";
 import { InstallButton } from "../../../pwa/InstallButton";
 import { HomeSoldier } from "../../../presentation/HomeSoldier";
 import { OFFLINE_LINE } from "../frame";
+import { PosterImg, QUICK_MATCH_ART } from "../../posters";
 
 export function PhoneHome({ store }: { store: ShellStore }) {
   const ctl = useCtl();
@@ -91,9 +92,18 @@ export function PhoneHome({ store }: { store: ShellStore }) {
 
         <div className="pm-home">
           <article
-            className="poster halftone-ink pm-poster m-p3"
+            className="poster halftone-ink pm-poster mf-qm m-p3"
             style={rise(1)}
           >
+            {/* Quick match's key art (posters.tsx), shaded where the words sit */}
+            <span className="mf-qm__art" aria-hidden="true">
+              <PosterImg
+                poster={QUICK_MATCH_ART}
+                sizes="60vw"
+                className="mf-qm__img"
+              />
+              <span className="mf-qm__shade"></span>
+            </span>
             <span className="serial">Op 01 · Quick match</span>
             <b className="display pm-poster__t m-p1">Play now</b>
             {/* one tap to a fight (mobile audit P1-6): a room that bots fill, its countdown at once; offline: training */}

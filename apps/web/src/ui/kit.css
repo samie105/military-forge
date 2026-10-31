@@ -681,22 +681,14 @@ a.ticket{ color:var(--c-paper-text); }
 .mapcard__events .chip{ min-height:24px; font-size:var(--fs-14); padding:0 8px 0 4px; letter-spacing:0; text-transform:none; }
 .mapcard__events .chip .ic{ width:14px; height:14px; }
 .mapcard__stamp{ position:absolute; right:10px; top:10px; background:var(--c-ink-900); transform:rotate(6deg); font-size:var(--fs-18); }
-/* brass duotone thumbnails · drawn, no baked text */
-.thumb{ position:relative; height:64px; overflow:hidden; flex:none; border-bottom:var(--bw-chunky) solid var(--c-ink-950); }
-.thumb--market{ background:var(--c-volt); }
-.thumb__img{ position:absolute; inset:0; filter:grayscale(1) contrast(1.25); mix-blend-mode:multiply; }
-.thumb--lunar{ background:var(--c-ink-950); background-image:radial-gradient(var(--c-halftone) 1.4px, transparent 1.7px); background-size:9px 9px; }
-.thumb__earth{ position:absolute; right:30px; top:12px; width:52px; height:52px; border-radius:50%; background:var(--c-ev-gravity); box-shadow:inset -12px -6px 0 var(--c-brass); }
-.thumb__ground{ position:absolute; left:-20%; right:-20%; bottom:-120px; height:160px; border-radius:50%; background:var(--c-paper-3); }
-.thumb--storm{ background:var(--c-ink-700); }
-.thumb__rain{ position:absolute; inset:0; background:repeating-linear-gradient(105deg, var(--c-ev-squall) 0 2px, transparent 2px 14px); opacity:.45; }
-.thumb--flux{ background:var(--c-brass); }
-.thumb__blocks{ position:absolute; inset:0; background:
-  linear-gradient(var(--c-ink-950),var(--c-ink-950)) 30px 46px/28px 28px no-repeat,
-  linear-gradient(var(--c-ink-950),var(--c-ink-950)) 90px 14px/20px 20px no-repeat,
-  linear-gradient(var(--c-ink-950),var(--c-ink-950)) 150px 52px/36px 16px no-repeat; transform:rotate(-8deg); }
-.thumb__glyph{ position:absolute; right:-14px; top:-18px; width:120px; height:120px; stroke-width:1.2; color:var(--c-paper); }
-.thumb--flux .thumb__glyph{ color:var(--c-brass-ink); }
+/* map posters · frames from the game itself (shell/posters.tsx; scripts/map-posters.mjs), no baked text */
+.thumb{ position:relative; aspect-ratio:2/1; overflow:hidden; flex:none; border-bottom:var(--bw-chunky) solid var(--c-ink-950); background:var(--c-ink-950); }
+.mapart{ display:block; width:100%; height:100%; object-fit:cover; }
+img.mapart{ transition:transform var(--dur-slow) var(--ease-out, ease); }
+.mapcard:hover img.mapart{ transform:scale(1.04); }
+/* a map with no poster yet: a neutral plate in the kit's ink and halftone, never another map's picture */
+.mapart--plate{ display:grid; place-items:center; width:100%; background:var(--c-ink-850); background-image:radial-gradient(var(--c-halftone) 1.4px, transparent 1.7px); background-size:9px 9px; color:var(--c-olive-300); }
+.mapart__glyph{ width:28%; height:auto; max-height:56%; aspect-ratio:1; opacity:.45; stroke-width:1.2; }
 .maps__test{ display:flex; align-items:center; gap:var(--sp-3); }
 .maps__test .btn{ min-height:44px; font-size:var(--fs-14); }
 .lobby__opts{ display:grid; grid-template-columns:auto 1fr; align-items:center; gap:var(--sp-3) var(--sp-5); }

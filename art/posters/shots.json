@@ -1,0 +1,225 @@
+{
+  "$comment": "The posters' shots (apps/web/scripts/map-posters.mjs): each map in a local match against bots. region: where the camera may stand (m, the map's own coordinates); w: the view's width (m; the game shows 18-36 m, 18 on a phone's closest); at: the match second the frame is taken (find one with --search); cropY: where the 2:1 card crop sits, 0 top to 1 bottom; bias: the camera's offset from the soldiers' centre (m).",
+  "grade": {
+    "contrast": 1.06,
+    "saturate": 1.08,
+    "brightness": 1.02,
+    "vignette": 0.34
+  },
+  "shots": [
+    {
+      "id": "street-market",
+      "map": "street-market",
+      "bots": 10,
+      "w": 26,
+      "region": {
+        "x0": -44,
+        "x1": -15,
+        "y0": -2,
+        "y1": 20
+      },
+      "gatherEvery": 15,
+      "search": [
+        8,
+        80
+      ],
+      "at": 8.6
+    },
+    {
+      "id": "lunar-outpost",
+      "map": "lunar-outpost",
+      "bots": 10,
+      "w": 28,
+      "region": {
+        "x0": 0,
+        "x1": 56,
+        "y0": -4,
+        "y1": 30
+      },
+      "gatherEvery": 15,
+      "search": [
+        8,
+        80
+      ],
+      "at": 9.2,
+      "bias": {
+        "x": 0,
+        "y": 3
+      }
+    },
+    {
+      "id": "storm-front",
+      "map": "storm-front",
+      "bots": 10,
+      "w": 28,
+      "region": {
+        "x0": 0,
+        "x1": 120,
+        "y0": -6,
+        "y1": 26
+      },
+      "gatherEvery": 15,
+      "search": [
+        8,
+        80
+      ],
+      "at": 32.0
+    },
+    {
+      "id": "flux-lab",
+      "map": "flux-lab",
+      "bots": 10,
+      "w": 30,
+      "region": {
+        "x0": 0,
+        "x1": 56,
+        "y0": -2,
+        "y1": 30
+      },
+      "gatherEvery": 15,
+      "search": [
+        8,
+        80
+      ],
+      "at": 21.0
+    },
+    {
+      "id": "fog-stair",
+      "map": "fog-stair",
+      "bots": 10,
+      "w": 36,
+      "region": {
+        "x0": 80,
+        "x1": 124,
+        "y0": 28,
+        "y1": 68
+      },
+      "gatherEvery": 15,
+      "search": [
+        8,
+        90
+      ],
+      "at": 23.2,
+      "gatherAt": [
+        [
+          89,
+          38
+        ],
+        [
+          95,
+          39
+        ],
+        [
+          102,
+          39
+        ],
+        [
+          110,
+          39
+        ],
+        [
+          116,
+          39
+        ],
+        [
+          91,
+          62
+        ]
+      ],
+      "cropY": {
+        "card": 0.45
+      }
+    },
+    {
+      "id": "movement-test",
+      "map": "movement-test",
+      "bots": 8,
+      "w": 24,
+      "region": {
+        "x0": 90,
+        "x1": 170,
+        "y0": -2,
+        "y1": 22
+      },
+      "gatherEvery": 15,
+      "search": [
+        8,
+        80
+      ],
+      "at": 10.4
+    },
+    {
+      "id": "vertical-test",
+      "map": "vertical-test",
+      "bots": 8,
+      "w": 26,
+      "region": {
+        "x0": 42,
+        "x1": 88,
+        "y0": 17,
+        "y1": 70
+      },
+      "gatherEvery": 15,
+      "search": [
+        8,
+        90
+      ],
+      "at": 69.6,
+      "gatherAt": [
+        [
+          53,
+          21
+        ],
+        [
+          60,
+          21
+        ],
+        [
+          66,
+          21
+        ],
+        [
+          74,
+          21
+        ],
+        [
+          50,
+          43
+        ],
+        [
+          70,
+          43
+        ],
+        [
+          80,
+          21
+        ],
+        [
+          46,
+          21
+        ]
+      ]
+    },
+    {
+      "id": "quick-match",
+      "map": "street-market",
+      "bots": 12,
+      "w": 22,
+      "region": {
+        "x0": -24,
+        "x1": 40,
+        "y0": -2,
+        "y1": 22
+      },
+      "gatherEvery": 15,
+      "search": [
+        8,
+        90
+      ],
+      "at": 9.6,
+      "cropY": {
+        "hero": 0.62
+      }
+    }
+  ]
+}

@@ -5,7 +5,6 @@
  * focus-pulls in), and GO stamps (P7) for a moment once play starts. Over the live game; it never
  * takes the mouse.
  */
-import { maps } from '@military-forge/content';
 import { MatchPhase } from '@military-forge/sim';
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { eventLook } from '../../hud/model';
@@ -19,6 +18,7 @@ import { formatClock, type MatchView } from '../matchView';
 import { take } from './frame';
 import { useTouchPrompts } from './phone/layout';
 import { MAP_CARDS, eventChip, mapEvents } from './Lobby';
+import { MapPoster, mapIdByName } from '../posters';
 import { VsPoster, VsStrip, useFighters, useTeamLists } from '../../presentation/VsPoster';
 
 export type CountdownState = 'intro' | 'intro-leaving' | 'match' | '3' | '2' | '1' | 'go' | 'go-leaving';
@@ -110,11 +110,6 @@ export function useCountdown(view: MatchView | null): { state: CountdownState; v
   return state && view ? { state, view, held } : null;
 }
 
-/** The map the match is on, by its name (MatchView carries the name). */
-function mapIdByName(name: string): string | null {
-  return Object.values(maps).find((m) => m.name === name)?.id ?? null;
-}
-
 /**
  * The map intro (round two's data-screen="map-intro"), as the countdown begins: the lobby's picked
  * map card grows into it (P2), the place stamps in (P1), and it leaves to the top edge (P9).
@@ -135,6 +130,12 @@ function MapIntro({ view, leaving, held }: { view: MatchView; leaving: boolean; 
   return (
     <div className={leaving ? 'intro m-p9 is-leaving' : 'intro'} role="status">
       <div className="intro__band" aria-hidden="true"></div>
+      {/* the map's poster, pinned above the band like a print (a frame from the game; the name says which map) */}
+      {id && (
+        <figure className="intro__print" aria-hidden="true">
+          <MapPoster id={id} kind="wide" sizes="560px" />
+        </figure>
+      )}
       <div ref={inner} className="intro__inner">
         {card?.place && (
           <span className="stamp stamp--ink intro__place m-p1">

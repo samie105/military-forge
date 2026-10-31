@@ -26,6 +26,7 @@ import { drillDone, isTouchDevice } from '../../touch';
 import { InstallButton } from '../../pwa/InstallButton';
 import { ConsentCard } from '../../metrics/ConsentCard';
 import { HomeSoldier } from '../../presentation/HomeSoldier';
+import { PosterImg, QUICK_MATCH_ART } from '../posters';
 
 /** The brand: the emblem and the name, once in the whole UI (round two's .brand on Home). */
 export function Brand() {
@@ -127,7 +128,12 @@ export function Home({ store }: { store: ShellStore }) {
             <span className="eyebrow m-p3" style={row(0)}>
               Ops briefing · Deathmatch with friends
             </span>
-            <article className="poster halftone-ink home__poster m-p3" style={row(1)}>
+            <article className="poster halftone-ink home__poster mf-qm m-p3" style={row(1)}>
+              {/* Quick match's key art: a Street Market fight from the game itself (scripts/map-posters.mjs), shaded where the words sit */}
+              <span className="mf-qm__art" aria-hidden="true">
+                <PosterImg poster={QUICK_MATCH_ART} sizes="(max-width: 900px) 70vw, 820px" className="mf-qm__img" />
+                <span className="mf-qm__shade"></span>
+              </span>
               <b className="home__poster-no display" aria-hidden="true">
                 01
               </b>

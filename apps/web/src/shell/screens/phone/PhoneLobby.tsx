@@ -21,6 +21,7 @@ import type { Bindings } from '../../controls';
 import { playerName } from '../../matchView';
 import type { LobbyPlayer, LobbyView } from '../../onlineView';
 import { encodeQr, qrSvgPath } from '../../qr';
+import { MapPoster } from '../../posters';
 import { KILL_STEP, ROOM_SLOTS, TIME_CHOICES, killsLabel, lobbyMaps, minutesLabel, useRoomSetting, useSpectating } from '../Lobby';
 import { PhoneScreen, rise } from './layout';
 import { LobbyInvite } from '../../../social/SocialLayer';
@@ -179,13 +180,15 @@ function RulesSheet({ lobby, open, onClose }: { lobby: LobbyView; open: boolean;
       </div>
       <div className="pm-sheet__row">
         <span className="label">Map</span>
-        <div className="seg pm-seg" role="radiogroup" aria-label="Map">
+        {/* each map by its poster (a frame from the game) and its name */}
+        <div className="pm-maps" role="radiogroup" aria-label="Map">
           {lobbyMaps(lobby.mapId).map((id) => (
-            <button type="button" key={id} role="radio" aria-checked={mapId === id} className="seg__opt m-p8" disabled={!host} onClick={() => {
+            <button type="button" key={id} role="radio" aria-checked={mapId === id} className="pm-map m-p8" disabled={!host} onClick={() => {
               showMap(id);
               online?.setMatchSettings({ mapId: id });
             }}>
-              {maps[id]?.name ?? id}
+              <MapPoster id={id} kind="card" sizes="150px" />
+              <span className="pm-map__name">{maps[id]?.name ?? id}</span>
             </button>
           ))}
         </div>
@@ -377,7 +380,7 @@ export function PhoneLobby({ lobby, tips = null }: { lobby: LobbyView; tips?: Bi
             <div className="pm-roster__foot">
               <div className="pm-mission">
                 <span>
-                  <Icon name="map" size="sm" />
+                  <MapPoster id={lobby.mapId} kind="card" sizes="56px" className="pm-mission__art" />
                   <b data-bind="lobby.map.name">{lobby.mapName}</b>
                 </span>
                 <button type="button" className="pm-rules m-p8" onClick={() => setRules(true)}>

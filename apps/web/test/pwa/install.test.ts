@@ -84,6 +84,9 @@ describe('the service worker', () => {
     expect(HASHED.test('/assets/art/soldier.glb')).toBe(false);
     // a public file whose name ends in a long word isn't a bundle (until 28 Oct it was taken for one)
     expect(HASHED.test('/assets/cosmetics/top/textures/jacket-basecolor.png')).toBe(false);
+    // nor are the map posters (remade under the same names: scripts/map-posters.mjs)
+    expect(HASHED.test('/assets/posters/storm-front-card@2x.webp')).toBe(false);
+    expect(HASHED.test('/assets/posters/quick-match.webp')).toBe(false);
   });
 });
 
@@ -189,6 +192,21 @@ describe('the service worker offline (audit 28 Oct: training drew no soldiers of
     expect(await w.get('/r/ABCDEF', 'navigate')).toBe('page');
     // never fetched: a network error, as without the worker
     expect(await w.get('/assets/weapons/widow.glb')).toBe('error');
+  });
+
+  it('keeps the map posters with the game\'s art: asked for every time (a remade poster keeps its name), served offline (31 Oct)', async () => {
+    const w = runWorker();
+    w.state.files.set('/assets/posters/storm-front-card.webp', 'poster v1').set('/assets/posters/quick-match@2x.webp', 'key art');
+    await w.lifecycle();
+    expect(await w.get('/assets/posters/storm-front-card.webp')).toBe('poster v1');
+    expect(w.state.modes.get('/assets/posters/storm-front-card.webp')).toBe('no-cache');
+    expect(await w.get('/assets/posters/quick-match@2x.webp')).toBe('key art');
+    w.state.files.set('/assets/posters/storm-front-card.webp', 'poster v2');
+    expect(await w.get('/assets/posters/storm-front-card.webp')).toBe('poster v2');
+    w.state.online = false;
+    expect(await w.get('/assets/posters/storm-front-card.webp')).toBe('poster v2');
+    expect(await w.get('/assets/posters/quick-match@2x.webp')).toBe('key art');
+    expect([...w.stores.keys()].filter((k) => [...(w.stores.get(k)?.keys() ?? [])].some((u) => String(u).includes('/posters/')))).toEqual(['mf-assets']);
   });
 
   it('asks the network first while online, so a deploy never serves a stale model', async () => {

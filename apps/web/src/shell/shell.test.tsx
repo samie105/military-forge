@@ -238,6 +238,8 @@ describe('countdown (screen 6)', () => {
     const intro = renderToStaticMarkup(<Countdown view={view({ phase: MatchPhase.Countdown, secondsLeft: 5, number: 1 })} state="intro" />);
     expect(intro).toMatch(/intro__name[^>]*>Lunar Outpost</);
     expect(intro).toContain('The Moon');
+    // the map's poster pinned above the band (owner 31 Oct: real posters, not drawings)
+    expect(intro).toMatch(/<figure class="intro__print" aria-hidden="true"><img class="mapart" src="\/assets\/posters\/lunar-outpost-wide\.webp"/);
   });
 
   it('the stepper: Match N → 3 → 2 → 1 → GO, the stops passed dimmed and the one now lit; Hold Tab', () => {
@@ -307,6 +309,11 @@ describe('lobby (screen 4)', () => {
     expect(html).toMatch(/role="radio" aria-checked="true"[^>]*>Fill to 4</);
     expect(html).toMatch(/role="radio" aria-checked="false"[^>]*>Off</);
     expect(html).toMatch(/role="radio" aria-checked="true"[^>]*>Normal</);
+    // every map card shows the map's poster (owner 31 Oct: "it's using something dummy"), the drawn thumbnails are gone
+    for (const id of lobbyMaps('movement-test')) expect(html).toContain(`<div class="thumb"><img class="mapart" src="/assets/posters/${id}-card.webp"`);
+    expect(html).not.toMatch(/thumb--|thumb__/);
+    // the first rows load at once, the ones further down the list as it scrolls
+    expect(html.match(/loading="eager"/g)).toHaveLength(4);
   });
 
   it('a guest reads the settings, and the highlight follows the guest', () => {

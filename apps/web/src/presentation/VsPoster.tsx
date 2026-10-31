@@ -19,6 +19,7 @@ import { cardName, rulesLine, vsLayout, type VsFighter, type VsLayout } from './
 import { showPoster } from './state';
 import { TeamMark } from '../teams/TeamRoster';
 import { TEAM_NAMES } from '../teams/palette';
+import { PosterImg, mapIdByName, mapPoster } from '../shell/posters';
 import './vs.css';
 
 /** Everyone in the room as the poster shows them (follows ROSTER and MATCH_STATE). */
@@ -147,9 +148,12 @@ export function VsPoster({ view, fighters, leaving, held, onSkip, teams = null }
       window.removeEventListener('pointerdown', skip);
     };
   }, [onSkip, leaving, held]);
+  const art = mapPoster(mapIdByName(view.mapName), 'wide');
   const body = (
     <div className={['vs', `vs--${layout.kind}`, leaving ? 'is-leaving' : '', held ? 'is-held' : ''].filter(Boolean).join(' ')} role="status" aria-label={`Match ${view.number} on ${view.mapName}: ${layout.stamp.toLowerCase()}, ${fighters.length} fighters`}>
       <div className="vs__bg" aria-hidden="true">
+        {/* the map's poster behind the fighters, held back so they lead (shell/posters.tsx) */}
+        {art && <PosterImg poster={art} sizes="100vw" className="vs__art" />}
         <i className="vs__slash"></i>
         <i className="vs__slash vs__slash--brass"></i>
       </div>

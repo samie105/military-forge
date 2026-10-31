@@ -15,6 +15,7 @@ import type { LobbyView } from '../onlineView';
 import type { AlertInfo, ConnectionView, Settings } from '../store';
 import { reconnectTries } from '../reconnect';
 import { Backdrop, RollNum } from './frame';
+import { MapPoster, mapIdByName, mapPoster } from '../posters';
 import { ReportSentNote } from '../../diag/SendReport';
 
 /** 0: the API is finding (or making) the room; 1: the game server is letting us in; 2: the first world update. */
@@ -146,9 +147,13 @@ export function MapLoading({
   const pct = best.current;
   const humans = lobby?.players.filter((p) => !p.isBot).length ?? 0;
   const bots = (lobby?.players.length ?? 0) - humans;
+  const mapId = lobby?.mapId || mapIdByName(mapName);
   return (
     <Screen name="loading" kind="menu" states={[`tip-${page + 1}`]} label="Loading the map">
       <Backdrop word="DEPLOY" />
+      {/* the map's poster behind the wait (a frame from the game itself), under the scrim that keeps the words
+          readable; a map with none yet keeps the plain backdrop */}
+      {mapPoster(mapId, 'wide') && <MapPoster id={mapId} kind="wide" sizes="100vw" className="load__art" />}
       <div className="load__scrim" aria-hidden="true"></div>
       <div className="load" role="status" aria-live="polite">
         <span className="eyebrow">Deploying to</span>

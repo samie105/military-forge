@@ -1,0 +1,58 @@
+/*
+ * The map posters and Quick match's key art where they show (shell/posters.tsx): Home's poster, the map
+ * loading screen, the countdown's map intro. The lobby's card thumbnails are kit.css's .thumb / .mapart.
+ * Tokens only; the art itself is never tinted (one light grade, baked by scripts/map-posters.mjs).
+ */
+
+/* ---- Quick match (Home, phone Home): the art fills the poster, an ink shade under the words ---- */
+.poster.mf-qm { isolation: isolate; background-color: var(--c-ink-950); color: var(--c-text); }
+.poster.mf-qm::after { --c-rivet: var(--c-line-strong); }
+.mf-qm__art { position: absolute; inset: 0; z-index: -1; overflow: hidden; border-radius: inherit; pointer-events: none; }
+.mf-qm__img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 72% 40%; }
+/* the words sit left: the ink comes in from there (and up from the hazard tape), the fight stays clear on the right */
+.mf-qm__shade { position: absolute; inset: 0;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--c-ink-950) 88%, transparent) 0%, color-mix(in srgb, var(--c-ink-950) 70%, transparent) 30%, color-mix(in srgb, var(--c-ink-950) 18%, transparent) 60%, transparent 78%),
+    linear-gradient(0deg, color-mix(in srgb, var(--c-ink-950) 55%, transparent) 0%, transparent 38%); }
+/* the kit's halftone, printed over the shade only */
+.mf-qm__shade::after { content: ''; position: absolute; inset: 0; background-image: radial-gradient(var(--c-halftone) 1.4px, transparent 1.7px); background-size: 10px 10px;
+  -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 35%, transparent 70%); mask-image: linear-gradient(90deg, #000 0%, #000 35%, transparent 70%); }
+.mf-qm > .serial { color: var(--c-volt); opacity: 1; }
+.mf-qm .home__poster-title, .mf-qm .pm-poster__t { color: var(--c-paper); }
+.mf-qm .home__poster-no { display: none; } /* the serial carries "Op 01"; the outline numeral sat on the fight */
+.mf-qm .home__poster-sub { color: var(--c-text); }
+/* the one way in: volt on the dark art */
+.mf-qm :is(.home__create, .pm-create) { background: var(--c-volt); color: var(--c-volt-ink); }
+.mf-qm :is(.home__create, .pm-create):hover { background: var(--c-volt-hi); }
+.mf-qm .pm-poster__note { color: var(--c-text); }
+.mf-qm .pm-create-room { color: var(--c-paper); border-color: color-mix(in srgb, var(--c-paper) 45%, transparent); }
+.mf-qm .pm-create-room:disabled { color: color-mix(in srgb, var(--c-paper) 72%, transparent); border-color: color-mix(in srgb, var(--c-paper) 40%, transparent); }
+
+/* ---- the map loading screen: the map's poster behind the wait, slowly settling ---- */
+.load__art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; animation: load-art-in 9s var(--ease-out) both; }
+@keyframes load-art-in { from { transform: scale(1.06); opacity: 0; } 8% { opacity: 1; } }
+html.reduce-motion .load__art { animation: none; }
+/* the scrim keeps the words readable at the bottom and lets the map show above them */
+.load__art ~ .load__scrim { background: linear-gradient(0deg, var(--c-scrim-strong) 0 28%, color-mix(in srgb, var(--c-ink-950) 30%, transparent) 70%, color-mix(in srgb, var(--c-ink-950) 10%, transparent) 100%); }
+
+/* ---- the countdown's map intro: the poster pinned above the band like a print ---- */
+.intro__print { position: absolute; right: 150px; top: 120px; width: 600px; margin: 0; padding: 10px; background: var(--c-paper); border: 6px solid var(--c-ink-950); box-shadow: var(--sh-card); transform: rotate(2.5deg);
+  animation: intro-print-in var(--m-slow) var(--ease-arrive) 120ms both; }
+.intro__print .mapart { aspect-ratio: 16 / 9; height: auto; }
+@keyframes intro-print-in { from { transform: rotate(8deg) translateY(-40px) scale(1.08); opacity: 0; } }
+.intro.is-leaving .intro__print { animation: none; }
+
+/* ---- the phone lobby: the map choice as posters (the rules sheet), the room's map beside its name ---- */
+.pm-maps { flex: 1 0 100%; display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
+.pm-map { position: relative; display: flex; flex-direction: column; min-height: 48px; padding: 0; overflow: hidden; text-align: left; background: var(--c-ink-850); color: var(--c-text); border: var(--bw-chunky) solid var(--c-line); border-radius: var(--r-sm); font: inherit; cursor: pointer; }
+.pm-map .mapart { aspect-ratio: 2 / 1; height: auto; border-bottom: var(--bw) solid var(--c-ink-950); }
+.pm-map__name { padding: 5px 8px 6px; font-size: calc(13px * var(--text-scale, 1)); font-weight: var(--fw-bold); line-height: 1.15; }
+.pm-map[aria-checked='true'] { border-color: var(--c-volt); box-shadow: var(--sh-card-sm); }
+.pm-map[aria-checked='true'] .pm-map__name { background: var(--c-volt); color: var(--c-volt-ink); }
+.pm-map:disabled { cursor: default; }
+.pm-map:disabled:not([aria-checked='true']) { opacity: .72; }
+.pm-mission__art { width: 52px; height: 26px; flex: none; border: var(--bw) solid var(--c-line-strong); border-radius: var(--r-xxs); object-fit: cover; }
+
+/* ---- the VS poster (presentation/VsPoster.tsx): the map's poster behind the fighters, held back ---- */
+.vs__art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .34; }
+.vs__bg:has(.vs__art)::after { content: ''; position: absolute; inset: 0; background: radial-gradient(120% 120% at 50% 60%, transparent 30%, var(--c-scrim) 100%); }

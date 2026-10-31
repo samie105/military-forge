@@ -119,6 +119,8 @@ describe('m-home', () => {
     expect(html).toContain('mf-fit--phone kit-v2');
     expect(html.match(/data-bind="brand\.name"/g)).toHaveLength(1);
     for (const t of ['Create room', 'Join', 'Training', 'Locker', 'Armory', 'Settings', '>Ade<']) expect(html).toContain(t);
+    // Quick match's key art: a fight from the game itself, decoration only (owner 31 Oct)
+    expect(html).toMatch(/pm-poster mf-qm[^>]*><span class="mf-qm__art" aria-hidden="true"><img class="mf-qm__img" src="\/assets\/posters\/quick-match\.webp" srcSet="[^"]*quick-match@2x\.webp 1520w"/);
   });
 
   it('offline: Create room waits, Play now (training against bots) and Training still work', () => {
@@ -163,6 +165,8 @@ describe('m-lobby', () => {
     expect(html).not.toContain('[BOT]');
     expect(html.match(/prow__ready is-ready/g)).toHaveLength(2); // Kemi, and the bot
     expect(html).toContain('5 min · 20 kills');
+    // the room's map by its poster beside its name
+    expect(html).toMatch(/<img class="mapart pm-mission__art" src="\/assets\/posters\/lunar-outpost-card\.webp"[^>]*><b data-bind="lobby\.map\.name">Lunar Outpost</);
     expect(html).toContain('Start');
     // the LAN link and time of day aren't known to the app: not shown (no fake 192.168…)
     expect(html).not.toContain('Same Wi-Fi');

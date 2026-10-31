@@ -33,6 +33,7 @@ import { TipsCard } from './Tips';
 import { PlayerAvatar } from '../../presentation/PlayerAvatar';
 import { LobbyRadio } from '../../voice/Radio';
 import { TeamModePicker, TeamRoster, modeName } from '../../teams/TeamRoster';
+import { MapPoster } from '../posters';
 
 /** Players a room takes (the game server's default maxHumans: MATCH_STATE doesn't carry it). */
 export const ROOM_SLOTS = 8;
@@ -42,18 +43,18 @@ export const TIME_CHOICES = [1, 2, 3, 5, 8, 10, 15, 20, 0] as const;
 export const KILL_STEP = 5;
 
 /**
- * The kit's words and thumbnail for each map: a short line (`blurb`), where it is (`place`) and a
- * tagline; `thumb` is round one's thumbnail class (the phone lobby), `art` round two's.
+ * The kit's words for each map: a short line (`blurb`), where it is (`place`) and a tagline. Its
+ * picture is the map's poster (posters.tsx), a frame from the game itself.
  */
-export const MAP_CARDS: Readonly<Record<string, { blurb: string; thumb: string; place?: string; tagline?: string; art?: 'market' | 'lunar' | 'storm' | 'flux' }>> = {
-  'street-market': { blurb: 'Rooftops and minibuses', thumb: '', place: 'Lagos, Nigeria', tagline: 'Billboards, minibuses and rooftop fights', art: 'market' },
-  'movement-test': { blurb: 'Learn the jetpack', thumb: 'map-thumb--test', place: 'Training range', tagline: 'Ledges and gaps to learn the jetpack on' },
-  'lunar-outpost': { blurb: 'Low gravity', thumb: 'map-thumb--lunar', place: 'The Moon', tagline: 'Low gravity, with Earth in the sky', art: 'lunar' },
-  'storm-front': { blurb: 'Wind and EMP storms', thumb: 'map-thumb--storm', place: 'A cold port', tagline: 'Rain, cranes and a storm that never stops', art: 'storm' },
-  'flux-lab': { blurb: 'Pads and gravity pockets', thumb: 'map-thumb--flux', place: 'Research hall', tagline: 'A lab hall where gravity misbehaves', art: 'flux' },
+export const MAP_CARDS: Readonly<Record<string, { blurb: string; place?: string; tagline?: string }>> = {
+  'street-market': { blurb: 'Rooftops and minibuses', place: 'Lagos, Nigeria', tagline: 'Billboards, minibuses and rooftop fights' },
+  'movement-test': { blurb: 'Learn the jetpack', place: 'Training range', tagline: 'Ledges and gaps to learn the jetpack on' },
+  'lunar-outpost': { blurb: 'Low gravity', place: 'The Moon', tagline: 'Low gravity, with Earth in the sky' },
+  'storm-front': { blurb: 'Wind and EMP storms', place: 'A cold port', tagline: 'Rain, cranes and a storm that never stops' },
+  'flux-lab': { blurb: 'Pads and gravity pockets', place: 'Research hall', tagline: 'A lab hall where gravity misbehaves' },
   // tall maps (maps-vertical): stacked battle zones, a minimap to find your way
-  'fog-stair': { blurb: 'Four tiers up a river gorge', thumb: '', place: 'A mountain city, south-west China', tagline: 'Long stairs, a monorail and rooftop bridges in the river fog' },
-  'vertical-test': { blurb: 'Learn the tall maps', thumb: 'map-thumb--test', place: 'Training range', tagline: 'Four stacked tiers, updrafts and thin air' },
+  'fog-stair': { blurb: 'Four tiers up a river gorge', place: 'A mountain city, south-west China', tagline: 'Long stairs, a monorail and rooftop bridges in the river fog' },
+  'vertical-test': { blurb: 'Learn the tall maps', place: 'Training range', tagline: 'Four stacked tiers, updrafts and thin air' },
 };
 
 /** A map event's chip class, by kind (the kit's chip--gravity, --emp, --fog, --squall). */
@@ -182,10 +183,9 @@ function PlayerRow({ p, hostView, leaving, i }: { p: LobbyPlayer; hostView: bool
   );
 }
 
-/** A map's card (the kit's .mapcard): its drawn thumbnail, name, place, tagline and what can happen there. */
-function MapCard({ id, picked, disabled, onSelect }: { id: string; picked: boolean; disabled: boolean; onSelect: () => void }) {
+/** A map's card (the kit's .mapcard): its poster, name, place, tagline and what can happen there. */
+function MapCard({ id, picked, disabled, lazy, onSelect }: { id: string; picked: boolean; disabled: boolean; lazy: boolean; onSelect: () => void }) {
   const card = MAP_CARDS[id];
-  const art = card?.art;
   return (
     <button
       type="button"
@@ -196,27 +196,9 @@ function MapCard({ id, picked, disabled, onSelect }: { id: string; picked: boole
       onClick={blurAfter(onSelect)}
       data-map={id}
     >
-      <div className={`thumb thumb--${art ?? 'storm'}`} aria-hidden="true">
-        {art === 'lunar' && (
-          <>
-            <i className="thumb__earth"></i>
-            <i className="thumb__ground"></i>
-          </>
-        )}
-        {art === 'storm' && (
-          <>
-            <i className="thumb__rain"></i>
-            <Icon name="ev-lightning" className="thumb__glyph" />
-          </>
-        )}
-        {art === 'flux' && (
-          <>
-            <i className="thumb__blocks"></i>
-            <Icon name="ev-gravity" className="thumb__glyph" />
-          </>
-        )}
-        {art === 'market' && <Icon name="map" className="thumb__glyph" />}
-        {!art && <Icon name="target" className="thumb__glyph" />}
+      <div className="thumb">
+        {/* the map's poster: a frame from the game (the card's text names the map) */}
+        <MapPoster id={id} kind="card" sizes="(max-width: 900px) 45vw, 240px" lazy={lazy} />
       </div>
       <span className="mapcard__body">
         <b className="display mapcard__name">{maps[id]?.name ?? id}</b>
@@ -637,8 +619,8 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
             )}
             <span className="label">Map</span>
             <div className="maps" role="radiogroup" aria-label="Map" data-bind="room.map">
-              {lobbyMaps(lobby.mapId).map((id) => (
-                <MapCard key={id} id={id} picked={id === mapId} disabled={!host} onSelect={() => {
+              {lobbyMaps(lobby.mapId).map((id, i) => (
+                <MapCard key={id} id={id} picked={id === mapId} disabled={!host} lazy={i >= 4} onSelect={() => {
                   showMap(id);
                   online?.setMatchSettings({ mapId: id });
                 }} />
