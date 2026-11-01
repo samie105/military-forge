@@ -96,7 +96,7 @@ State lives in Redis (`party:{id}`). The social gateway pushes changes to member
 
 ### 5.3 Host controls
 Kick (with optional 10-minute room ban), lock room, transfer host, start match, return everyone to the lobby, change settings between rounds, mute a player in room chat.
-**Host migration:** if the host disconnects, host rights transfer automatically. The *server* is authoritative, so the match continues without interruption (no peer-to-peer hosting, ever).
+**Host migration:** if the host leaves (Leave, or doesn't come back within the 60 s reconnect grace), host rights transfer automatically to the longest-present player still connected; a host that is only quiet or reconnecting (a stalled page, a reload, a phone away sharing the link) keeps them. The *server* is authoritative, so the match continues without interruption (no peer-to-peer hosting, ever).
 
 ### 5.4 Room lifecycle (custom)
 `WAITING` (lobby, settings, ready-up, warm-up yard) → `COUNTDOWN` → `IN_PROGRESS` → `ENDING` → back to `WAITING` with the same players (rematch is one click). A room closes after 10 min idle with no players, or 2 h hard limit (configurable for streamers).

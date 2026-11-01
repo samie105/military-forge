@@ -1,14 +1,14 @@
 /**
  * The onboarding/sockets audit (19 Oct 2026), server side: a stalled client stops moving, admin
- * edits keep the rooms' own match limits, the admin's TUNING comes after its OVERRIDES, a host that
- * left or went quiet hands the room over, and a host's clamped edit comes back to it.
+ * edits keep the rooms' own match limits, the admin's TUNING comes after its OVERRIDES, and a
+ * host's clamped edit comes back to it. Who hosts a room (L4, changed by UX-20): host.test.ts.
  */
 import { MAX_REPEAT_TICKS } from '@military-forge/netcode';
 import { CmdKind, MsgType, decodeMessage, encodeCmd, encodeHello, encodeInput, type Message, type WelcomeMsg } from '@military-forge/protocol';
 import { Btn, MatchPhase, createInput } from '@military-forge/sim';
 import { afterEach, describe, expect, it } from 'vitest';
 import { setAdminValues } from '../src/admin';
-import { HOST_AWAY_TICKS, Room, type ClientConn } from '../src/room';
+import { Room, type ClientConn } from '../src/room';
 
 afterEach(() => {
   setAdminValues({});
@@ -112,41 +112,5 @@ describe("the admin's tuning (M3)", () => {
     setAdminValues({ 'tuning.gravity': 12 });
     const types = b.conn.types().slice(from);
     expect(types).toEqual([MsgType.Overrides, MsgType.Tuning]);
-  });
-});
-
-describe('a host that left or went quiet (L4)', () => {
-  it('hands the room to the longest-present player still here after HOST_AWAY_TICKS', () => {
-    const room = new Room({ dummies: false, dev: false, match: { countdown: 1 } });
-    const a = join(room, 'A');
-    const b = join(room, 'B');
-    join(room, 'C');
-    expect(room.hostId).toBe(a.welcome.playerId);
-    room.disconnect(a.client); // resumable: the 20 s grace
-    const keepTalking = () => {
-      for (const c of room.clients) input(room, c, room.game.tick, 0);
-    };
-    for (let i = 0; i < HOST_AWAY_TICKS - 2; i++) {
-      keepTalking();
-      room.tick();
-    }
-    expect(room.hostId).toBe(a.welcome.playerId); // a blip: still the host
-    for (let i = 0; i < 4; i++) {
-      keepTalking();
-      room.tick();
-    }
-    expect(room.hostId).toBe(b.welcome.playerId);
-  });
-
-  it('a connected host that has gone silent (a stall the server never saw close) hands over too', () => {
-    const room = new Room({ dummies: false, dev: false, match: { countdown: 1 } });
-    const a = join(room, 'A');
-    const b = join(room, 'B');
-    for (let i = 0; i < HOST_AWAY_TICKS + 2; i++) {
-      input(room, b.client, room.game.tick, 0); // only B talks
-      room.tick();
-    }
-    expect(room.hostId).toBe(b.welcome.playerId);
-    expect(a.conn.closed).toBeNull(); // A keeps its player; it just isn't the host
   });
 });

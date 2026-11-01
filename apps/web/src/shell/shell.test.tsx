@@ -492,7 +492,9 @@ describe('join, names, connection, pause and settings', () => {
     expect(closed(1006)).toMatchObject({ kind: 'connection-lost', code: 'CONNECTION_LOST · last ping 412 ms, 18% loss' });
     expect(closed(1006).message).toContain('after 7 tries');
     // no HELLO within 5 s (the room's door): its own alert, not "Connection lost" (review L7)
-    expect(closed(1008)).toMatchObject({ kind: 'connection-lost', title: 'Too slow to join', code: 'HELLO_TIMEOUT · room KMTXRA', action: 'rejoin' });
+    // a late HELLO is a busy device, not the network (UX-20): no Wi-Fi blame, no code
+    expect(closed(1008)).toMatchObject({ title: 'Took too long to load', message: 'Your device took too long to load the room. Try again.', code: '', action: 'rejoin' });
+    expect(closed(1008).message).not.toMatch(/wi-?fi|data|connection/i);
   });
 
   it('pause: what leaving costs', () => {

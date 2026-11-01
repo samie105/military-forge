@@ -102,6 +102,14 @@ const FATAL_CLOSE = new Set<number>([
   1008,
   1011,
 ]);
+/**
+ * The game server's door lets a socket go when its HELLO hasn't come within 5 s (rooms.ts
+ * HELLO_TIMEOUT_MS, close 1008). This page sends HELLO the moment a socket opens, so a late one
+ * means the page itself was busy (a slow device loading the room, UX-20), not a bad network: it
+ * tries again quietly this many times, HELLO_RETRY_MS apart, before saying anything.
+ */
+export const HELLO_RETRIES = 3;
+const HELLO_RETRY_MS = 300;
 /** how often the scoreboard's ping column hears from us */
 const PING_REPORT_MS = 3000;
 
@@ -206,6 +214,8 @@ export class OnlineMode {
   private droppedAt = 0;
   private reconnectAttempt = 0;
   private reconnectTimer = 0;
+  /** quiet retries after the door let a late HELLO go (HELLO_RETRIES), since the last WELCOME */
+  private helloRetries = 0;
   private watchdogTimer = 0;
   /** when the transport last delivered anything (the silence watchdog) */
   private lastMessageAt = 0;
@@ -636,6 +646,10 @@ export class OnlineMode {
       this.reconnectTimer = window.setTimeout(() => this.rejoinWithFreshTicket(why, CloseCode.ServerUpdating), this.everConnected && this.reconnectAttempt === 1 ? SERVER_UPDATE_WAIT_MS : SERVER_UPDATE_RETRY_MS);
       return;
     }
+    if (code === 1008 && !this.kicked && this.helloRetries < HELLO_RETRIES) {
+      this.retryHello(why);
+      return;
+    }
     // back after the room let our player go: rejoin as a new player with a fresh ticket
     if (code === CloseCode.TicketInvalid && this.net.sessionToken !== '' && this.options.refreshTicket && now - this.droppedAt < RECONNECT_WINDOW_MS) {
       this.rejoinWithFreshTicket(why);
@@ -670,6 +684,43 @@ export class OnlineMode {
       this.reconnectTimer = 0;
       this.open();
     }, delay);
+  }
+
+  /**
+   * The door let our socket go before its HELLO landed (1008): the page was busy, so try again
+   * quietly. A first join stays "joining" (no banner, no alert); its ticket may be near the end of
+   * its ~30 s, so a fresh one is asked for when the shell can (the same one otherwise).
+   */
+  private retryHello(why: string): void {
+    this.helloRetries += 1;
+    this.net.onClose();
+    this.status = `joining again (${why}; the page was busy)…`;
+    diag('net', `HELLO came too late (${why}): trying again quietly (${this.helloRetries} of ${HELLO_RETRIES})`);
+    const first = !this.everConnected;
+    if (first) {
+      this.droppedAt = 0;
+      this.conn = { ...FRESH, state: 'joining', detail: '', code: 0 };
+    } else {
+      this.reconnectAttempt += 1;
+      this.conn = { ...FRESH, state: 'reconnecting', detail: why, code: 1008, since: this.droppedAt, until: this.droppedAt + RECONNECT_WINDOW_MS, attempt: this.reconnectAttempt };
+    }
+    const again = () => {
+      this.reconnectTimer = 0;
+      if (!this.disposed) this.open();
+    };
+    const refresh = first && this.net.sessionToken === '' ? this.options.refreshTicket : undefined;
+    this.reconnectTimer = window.setTimeout(() => {
+      if (!refresh) return again();
+      refresh().then(
+        (ticket) => {
+          if (this.disposed) return;
+          if (ticket === null) return this.giveUp(CloseCode.TicketInvalid, 'the room has closed');
+          this.net.ticket = ticket;
+          again();
+        },
+        () => again(),
+      );
+    }, HELLO_RETRY_MS);
   }
 
   private giveUp(code: number, reason: string): void {
@@ -752,6 +803,7 @@ export class OnlineMode {
         this.closeSpare(); // back without it
         this.droppedAt = 0;
         this.reconnectAttempt = 0;
+        this.helloRetries = 0;
         // a spectator has no session (''): nothing to resume on a reload
         saveToken(this.options.room, msg.sessionToken || null);
         for (const fn of this.connectedListeners) fn();
@@ -778,7 +830,7 @@ export class OnlineMode {
         lookBook.setHost(msg.hostId);
         // team modes (v21): who is on which team (the VS poster, team colours)
         lookBook.setTeams(msg.teams ?? 0, new Map(msg.lobby.map((e) => [e.id, e.team ?? -1] as const)));
-        // the host left or went quiet (room.ts HOST_AWAY_TICKS): someone else runs the room now
+        // the host left for good (Leave, or its reconnect grace ran out: room.ts endSession): someone else runs the room now
         if (was >= 0 && msg.hostId >= 0 && msg.hostId !== was) for (const fn of this.hostListeners) fn(was, msg.hostId);
         break;
       }
@@ -830,7 +882,7 @@ export class OnlineMode {
     return this.net.tuning;
   }
 
-  /** Hears the room's host change (the old one left or went quiet): old and new player ids. Returns the way to stop. */
+  /** Hears the room's host change (the old one left for good): old and new player ids. Returns the way to stop. */
   onHostChange(fn: (was: number, now: number) => void): () => void {
     this.hostListeners.add(fn);
     return () => this.hostListeners.delete(fn);
@@ -922,6 +974,9 @@ export class OnlineMode {
         return;
       }
     }
+    // still joining, and the page was busy (loading the room on a slow device): the WELCOME, or the
+    // server's answer to a late HELLO, may be queued behind this look; judge on the next one (UX-20)
+    if (late && !this.net.isConnected) return;
     const limit = !this.net.isConnected ? JOIN_SILENCE_MS : t.kind === 'ws' ? WS_SILENCE_MS : WT_SILENCE_MS;
     if (now - this.lastMessageAt < limit) return;
     this.currentAttempt = null; // its close is ours, not a drop to handle twice

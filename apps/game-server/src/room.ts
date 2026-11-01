@@ -15,8 +15,8 @@
  *
  * Match rooms (`RoomOptions.match`, the rooms by code): the sim's Match runs the lobby → countdown →
  * match → results → rematch lifecycle (docs/06 §5.2), the longest-present player is the host
- * (settings, start, back to lobby; docs/07 §5.3), and MATCH_STATE (0x23) keeps every client's
- * screens and input freeze in step.
+ * (settings, start, back to lobby; docs/07 §5.3) until they really leave (Leave, or the reconnect
+ * grace runs out), and MATCH_STATE (0x23) keeps every client's screens and input freeze in step.
  *
  * Bots (`RoomOptions.fillBots`, packages/bots, docs/08 §9) keep a room with humans in it at a
  * number of players: a human coming in takes the lowest-scoring bot's place (not its stats), one
@@ -261,12 +261,6 @@ export const RECONNECT_GRACE_MS = 60_000;
  */
 export const HOLD_TICKS = 60;
 export const CATCH_UP_PER_TICK = 2;
-/**
- * A host gone this long (disconnected, or its connection silent: a stall the server can't see as a
- * close) hands the room to the longest-present player still here (docs/07 §5.3), so nobody waits
- * out the 60 s reconnect grace to start the match. 5 s: longer than a reconnect after a blip.
- */
-export const HOST_AWAY_TICKS = 5 * 60;
 const BACKPRESSURE_LIMIT = 16 * 1024;
 /** docs/05 §14: INPUT packets are tiny; anything bigger is malformed */
 const MAX_INPUT_BYTES = 64;
@@ -338,7 +332,7 @@ export class Client {
   cmdTokens = CMD_BURST;
   cmdTokensAt = 0;
   snapshotsSkipped = 0;
-  /** server tick of the last message from this connection (a host gone silent hands over: HOST_AWAY_TICKS) */
+  /** server tick of the last message from this connection */
   lastHeardTick = 0;
   /** the player this connection drives (null before WELCOME) */
   session: Session | null = null;
@@ -799,6 +793,8 @@ export class Room {
       s.client = null;
       s.expiresAt = this.game.tick + this.graceTicks;
       s.idle.aim = client.lastInput.aim;
+      // held for a reconnect: the others' everyone-ready start doesn't wait for them (UX-20)
+      this.match?.setAway(s.playerId, true);
       return;
     }
     this.endSession(s);
@@ -811,32 +807,28 @@ export class Room {
     const gone = this.game.players[s.playerId];
     if (gone && this.match) this.stats?.left(gone, this.match.phase, this.game.tick, { pingMs: s.pingMs, transport: s.client?.conn.kind });
     this.game.removePlayer(s.playerId);
-    if (this.host === s) this.host = this.longestPresent();
+    // the host's session is over (Leave, removed, or the reconnect grace ran out): the host role
+    // moves now, and only now. A host that is merely quiet or reconnecting keeps it (UX-20: a page
+    // stalled loading, or a phone away sharing the link, lost the room to the friend who joined)
+    if (this.host === s) {
+      this.host = this.longestPresent();
+      this.matchUrgent = true;
+    }
     this.matchDirty = true;
     this.broadcastRoster();
   }
 
-  /** The host is gone or silent for HOST_AWAY_TICKS: the longest-present player still here takes over. */
-  private checkHost(): void {
-    const h = this.host;
-    if (!this.match || !h) return;
-    const now = this.game.tick;
-    const awaySince = h.client ? h.client.lastHeardTick : h.expiresAt - this.graceTicks;
-    if (now - awaySince < HOST_AWAY_TICKS) return;
-    let best: Session | null = null;
-    for (const s of this.sessions.values()) {
-      if (s === h || !s.client || now - s.client.lastHeardTick >= HOST_AWAY_TICKS) continue;
-      if (!best || s.joinSeq < best.joinSeq) best = s;
-    }
-    if (!best) return;
-    this.host = best;
-    this.matchDirty = this.matchUrgent = true;
-  }
-
-  /** docs/07 §5.3 host migration: the session that joined first among those left. */
+  /**
+   * docs/07 §5.3 host migration: the session that joined first among those left, one that's
+   * connected before one still waiting for its reconnect.
+   */
   private longestPresent(): Session | null {
     let best: Session | null = null;
-    for (const s of this.sessions.values()) if (!best || s.joinSeq < best.joinSeq) best = s;
+    for (const s of this.sessions.values()) {
+      if (!best) best = s;
+      else if (!s.client !== !best.client) best = s.client ? s : best;
+      else if (s.joinSeq < best.joinSeq) best = s;
+    }
     return best;
   }
 
@@ -1058,6 +1050,7 @@ export class Room {
     s.droppedTick = -1;
     s.client = client;
     s.expiresAt = Infinity;
+    this.match?.setAway(s.playerId, false);
     client.session = s;
     client.playerId = s.playerId;
     // a reconnect carries no ticket: the party stays with the session
@@ -1785,7 +1778,6 @@ export class Room {
       c.viewDelayMs = viewDelayMs;
       lagComp?.setView(c.playerId, c.inputs.renderTickFor(applied), c.viewEvery, viewDelayMs);
     }
-    this.checkHost();
     // players waiting for a reconnect stand idle; give up on them after the grace
     for (const s of this.sessions.values()) {
       if (s.client) continue;

@@ -536,3 +536,59 @@ describe('match-dm golden replay', () => {
     expect(second.standings[0]).toMatchObject({ name: 'P4', score: 1 });
   });
 });
+
+describe('players held for a reconnect (away, UX-20)', () => {
+  it("don't hold up an everyone-ready start, and count again once back", () => {
+    const { match, players } = setup(3);
+    const [a, b, c] = players as [PlayerState, PlayerState, PlayerState];
+    match.setAway(a.id, true); // the room is holding A's place (their phone dropped)
+    match.setReady(b.id);
+    run(match, 5);
+    expect(match.phase).toBe(MatchPhase.Waiting); // C isn't ready yet
+    match.setReady(c.id);
+    run(match, 1);
+    expect(match.phase).toBe(MatchPhase.Countdown); // everyone here is ready: A's absence doesn't block it
+
+    // back in the lobby with A back: A counts again
+    const again = setup(3);
+    const [x, y, z] = again.players as [PlayerState, PlayerState, PlayerState];
+    again.match.setAway(x.id, true);
+    again.match.setReady(y.id);
+    again.match.setAway(x.id, false);
+    again.match.setReady(z.id);
+    run(again.match, 5);
+    expect(again.match.phase).toBe(MatchPhase.Waiting); // X is back and not ready
+    again.match.setReady(x.id);
+    run(again.match, 1);
+    expect(again.match.phase).toBe(MatchPhase.Countdown);
+  });
+
+  it('a room where every human is away never starts by itself', () => {
+    const { match, players } = setup(2);
+    for (const p of players) {
+      match.setReady(p.id);
+      match.setAway(p.id, true);
+    }
+    run(match, 30);
+    expect(match.phase).toBe(MatchPhase.Waiting);
+  });
+
+  it("don't hold up a rematch vote either", () => {
+    const s = setup(2, { ...RULES, timeLimit: 1, killLimit: 0 });
+    startMatch(s.match);
+    run(s.match, ticks(1));
+    expect(s.match.phase).toBe(MatchPhase.Ending);
+    const [a, b] = s.players as [PlayerState, PlayerState];
+    s.match.setAway(b.id, true);
+    s.match.voteRematch(a.id);
+    run(s.match, 1);
+    expect(s.match.phase).toBe(MatchPhase.Waiting);
+  });
+
+  it('is room state, not game state: the match hash ignores it', () => {
+    const { game, match, players } = setup(2);
+    const before = hashMatch(match, hashGame(game));
+    match.setAway(players[0]!.id, true);
+    expect(hashMatch(match, hashGame(game))).toBe(before);
+  });
+});

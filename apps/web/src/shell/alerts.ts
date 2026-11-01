@@ -94,8 +94,10 @@ export function alertFromConnection(c: Pick<ConnectionView, 'code' | 'detail' | 
         ? { kind: 'room-not-found', title: 'Room not found', message: 'This room has closed. Rooms close when everyone leaves.', code: codeLine('ROOM_NOT_FOUND', room), action: null }
         : { kind: 'refused', title: 'Couldn’t get in', message: c.detail ? `The server said: ${c.detail}.` : 'The server didn’t accept this join. Open the room link again.', code: codeLine('TICKET_INVALID', room), action: 'rejoin' };
     case 1008:
-      // the room's door closes a connection that doesn't say hello within 5 s (a very slow link)
-      return { kind: 'connection-lost', title: 'Too slow to join', message: 'Your connection took too long to reach the room, so the server let it go. Check your data or Wi-Fi, then rejoin.', code: codeLine('HELLO_TIMEOUT', room), action: 'rejoin' };
+      // the room's door closes a connection that doesn't say hello within 5 s; the page sends it the
+      // moment the socket opens, so it was the device busy loading (after quiet retries: onlineMode
+      // HELLO_RETRIES), not the network (UX-20): no Wi-Fi blame, no code
+      return { kind: 'slow-down', title: 'Took too long to load', message: 'Your device took too long to load the room. Try again.', code: '', action: 'rejoin' };
     case 1011:
       return { kind: 'error', title: 'Match error', message: 'Something went wrong in this room and it was closed.', code: codeLine('SERVER_ERROR', room), action: 'rejoin' };
     default: {

@@ -321,7 +321,7 @@ export function Alert({ alert, onRejoin }: { alert: AlertInfo; onRejoin: (() => 
             tries failed
           </p>
         )}
-        <p className="conn__body mf-conn__code num">Code {alert.code}</p>
+        {alert.code && <p className="conn__body mf-conn__code num">Code {alert.code}</p>}
         <ReportSentNote />
         <div className="conn__actions">
           {alert.action === 'reload' ? (

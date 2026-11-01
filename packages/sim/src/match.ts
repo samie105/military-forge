@@ -107,6 +107,11 @@ export class MatchPlayer {
   rematch = false;
   /** left the room during this match; kept for its standings */
   left = false;
+  /**
+   * The room is holding this player's place while they reconnect (Match.setAway): they don't hold up
+   * an everyone-ready start or a rematch vote. Room state, not game state: not in hashMatch.
+   */
+  away = false;
   /** who the player is beyond the slot (Match.identityOf), null when unknown or a bot */
   identity: string | null = null;
 
@@ -393,6 +398,17 @@ export class Match {
     if (m && this.phase === MatchPhase.Waiting) m.ready = ready;
   }
 
+  /**
+   * The room is holding player `id`'s place while they reconnect (`away`), or they're back. Away
+   * players are left out of the everyone-ready start and the rematch vote, so the others aren't kept
+   * waiting out the reconnect grace (UX-20: a host whose phone dropped held the room for 60 s).
+   */
+  setAway(id: number, away: boolean): void {
+    this.sync();
+    const m = this.players[id];
+    if (m) m.away = away;
+  }
+
   /** Host: start the countdown without waiting for ready-up. Needs minPlayers on the next step, else it is dropped. */
   start(): void {
     if (this.phase === MatchPhase.Waiting) this.startRequested = true;
@@ -616,11 +632,14 @@ export class Match {
     return n;
   }
 
-  /** True when there is at least one human and every human passes. Bot-only rooms need start(). */
+  /**
+   * True when there is at least one human here and every human here passes; a human the room is
+   * holding for a reconnect (`away`) neither passes nor blocks. Bot-only rooms need start().
+   */
   private everyHuman(test: (m: MatchPlayer) => boolean): boolean {
     let humans = 0;
     for (const m of this.players) {
-      if (!m || m.isBot) continue;
+      if (!m || m.isBot || m.away) continue;
       if (!test(m)) return false;
       humans++;
     }

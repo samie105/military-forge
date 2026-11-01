@@ -450,7 +450,7 @@ function watchOnline(online: OnlineMode): void {
       (lobby?.isHost ? null : tuneToastParts(lobby?.players.find((p) => p.host)?.name ?? 'The host', tuneChanges(before, split.host)));
     if (note) shell.controller?.showTuneNote(note);
   });
-  // the host left (or its connection went quiet): say who runs the room now
+  // the host left for good (a quiet or reconnecting host keeps the room: UX-20): say who runs the room now
   online.onHostChange((_was, now) => {
     const name = now === online.localId ? null : (online.net.names.get(now) ?? 'another player');
     shell.controller?.notify(name ? `Host left: ${name} is the host now` : "Host left: you're the host now");
