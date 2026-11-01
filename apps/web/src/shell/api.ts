@@ -22,6 +22,8 @@ export interface Me {
   xp: number;
   /** store items this account owns: bought in the Store, or granted (the API's COSMETIC_GRANTS, the admin page); absent = none */
   grants?: string[];
+  /** the device said under 18 (audit-2 L-03): training only; absent = no */
+  minor?: true;
 }
 
 interface SessionBody {
@@ -29,6 +31,20 @@ interface SessionBody {
   accessTokenExpiresAt: string;
   refreshToken: string;
   user: Me;
+}
+
+/**
+ * `GET /players/me/profile` (apps/api leaderboards/routes.ts): level and XP from the online matches
+ * the API recorded, lifetime numbers and the last 10 matches (newest first).
+ */
+export interface PlayerProfile {
+  xp: number;
+  level: number;
+  xpIntoLevel: number;
+  /** 0 at the top level */
+  xpForNextLevel: number;
+  stats: { matches: number; wins: number; kills: number; deaths: number; assists: number; damage: number; headshots: number; bestStreak: number; playtimeS: number };
+  recent: { matchId: string; endedAt: string; map: string; placement: number; kills: number; deaths: number; assists: number; left: boolean; xpGained: number }[];
 }
 
 /** `GET /auth/account`: whether this account is saved with an email (apps/api auth/accountRoutes.ts). */
@@ -74,6 +90,8 @@ export interface SavedLoadout {
 }
 
 export interface RoomJoin {
+  /** Play now (POST /rooms/quick): true when it joined someone else's open Play now room (audit 2 P-07) */
+  joined?: boolean;
   code: string;
   roomId: string;
   /** null: this site's own /ws/<code> */
@@ -155,6 +173,12 @@ export class Api {
     setAccountGrants(me?.grants);
   }
   private readonly signInListeners = new Set<(me: Me) => void>();
+  /**
+   * The account can't play online now (audit-2 L-04): suspended until `until`, or banned (`until`
+   * null). Set by a refresh the API refused with account_disabled; the token is kept, so the same
+   * account comes back once a suspension ends.
+   */
+  disabled: { until: string | null } | null = null;
   private readonly roomHooks: (() => Promise<void>)[] = [];
 
   constructor(
@@ -246,8 +270,14 @@ export class Api {
     if (!token) return false;
     try {
       this.adopt(await this.request<SessionBody>('POST', '/auth/refresh', { refreshToken: token }));
+      this.disabled = null;
       return true;
     } catch (e) {
+      if (e instanceof ApiError && e.code === 'account_disabled') {
+        // suspended or banned: keep the token (a new guest would just dodge it)
+        this.disabled = { until: typeof e.extra.until === 'string' ? e.extra.until : null };
+        return false;
+      }
       if (e instanceof ApiError && !e.offline) {
         storeRefreshToken(null);
         this.refreshFallback = null;
@@ -262,9 +292,19 @@ export class Api {
     return (await this.refresh()) ? this.me : null;
   }
 
-  /** A new guest account (docs/07 §3), named `nickname` or a generated name. */
-  async guest(nickname?: string): Promise<Me> {
-    return this.adopt(await this.request<SessionBody>('POST', '/auth/guest', nickname === undefined ? {} : { nickname }));
+  /**
+   * A new guest account (docs/07 §3), named `nickname` or a generated name. `minor`: this device said
+   * under 18 (only the flag goes, never the year): the account trains only (audit-2 L-03).
+   */
+  async guest(nickname?: string, minor = false): Promise<Me> {
+    return this.adopt(await this.request<SessionBody>('POST', '/auth/guest', { ...(nickname === undefined ? {} : { nickname }), ...(minor ? { minor: true } : {}) }));
+  }
+
+  /** This device said under 18 (audit-2 L-03): the account trains only from now on. */
+  async markMinor(): Promise<Me> {
+    const me = await this.request<Me>('PUT', '/me/age', { minor: true }, true);
+    this.me = me;
+    return me;
   }
 
   // ---- saved accounts: email + password (apps/api auth/accountRoutes.ts)
@@ -391,6 +431,25 @@ export class Api {
   private async roomHooksDone(): Promise<void> {
     if (!this.roomHooks.length) return;
     await Promise.race([Promise.all(this.roomHooks.map((h) => h().catch(() => {}))), new Promise((r) => setTimeout(r, 2000))]);
+  }
+
+  /**
+   * Play now's room (audit 2 P-07): an open Play now room with other people in it, else a new one of
+   * our own. An API from before it (404): a new room, as Create room makes.
+   */
+  async quickRoom(): Promise<RoomJoin> {
+    await this.roomHooksDone();
+    try {
+      return await this.request<RoomJoin>('POST', '/rooms/quick', {}, true);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) return this.request<RoomJoin>('POST', '/rooms', {}, true);
+      throw e;
+    }
+  }
+
+  /** The player's level, XP and recent online matches (shell/progress.ts caches it). */
+  profileMe(): Promise<PlayerProfile> {
+    return this.request<PlayerProfile>('GET', '/players/me/profile', undefined, true);
   }
 
   async createRoom(): Promise<RoomJoin> {

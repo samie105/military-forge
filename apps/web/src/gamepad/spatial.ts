@@ -18,9 +18,12 @@ export interface Rect {
 const CROSS_WEIGHT = 2;
 /**
  * A control that doesn't line up with the focus at all (no overlap across the move) loses this much
- * (px): pressing right from a button picks the next one on its row, even past a nearer one a row down.
+ * (px). Across (left, right): pressing right from a button picks the next one on its row, even past a
+ * nearer one a row down. Up and down less: a page under a top bar rarely lines up with its tabs, and
+ * "down" from Home's tabs must reach the poster's Play now just below, not the Training card 450 px
+ * further down that happens to sit under the tab (audit 2, N-03).
  */
-const OUT_OF_LINE = 400;
+const OUT_OF_LINE = { across: 400, upDown: 120 } as const;
 
 /** The gap between two ranges (0 when they overlap). */
 const gap = (a0: number, a1: number, b0: number, b1: number) => Math.max(0, Math.max(a0, b0) - Math.min(a1, b1));
@@ -67,7 +70,7 @@ export function navScore(from: Rect, to: Rect, dir: NavDir): number | null {
     const beyond = dir === 'right' ? to.left >= from.right - 1 : dir === 'left' ? to.right <= from.left + 1 : dir === 'down' ? to.top >= from.bottom - 1 : to.bottom <= from.top + 1;
     if (!beyond) return null;
   }
-  return along + CROSS_WEIGHT * cross + (cross > 0 ? OUT_OF_LINE : 0) + 0.05 * centre;
+  return along + CROSS_WEIGHT * cross + (cross > 0 ? (dir === 'up' || dir === 'down' ? OUT_OF_LINE.upDown : OUT_OF_LINE.across) : 0) + 0.05 * centre;
 }
 
 /** The index of the best candidate in `dir` from `from`, or −1 when nothing lies that way. */

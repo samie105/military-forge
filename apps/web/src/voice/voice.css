@@ -237,3 +237,28 @@ html.reduce-motion .vc-tag__ring, html.reduce-motion .vc-bars i { transition: no
 .vc-sheetwrap.screen--phone .vc-person { min-height: 48px; }
 .vc-sheetwrap.screen--phone .switch { font-size: 14px; }
 html.reduce-motion :is(.vc-sheet, .vc-scrim) { animation-name: vc-fade !important; animation-duration: 120ms !important; }
+
+/* the first-voice note (VoiceHud.tsx, audit-2 L-10): once, top centre, out of the fight's middle */
+.vc-notewrap { position: relative; pointer-events: none; }
+.vc-firstnote {
+  position: absolute;
+  top: calc(var(--safe-t) + 132px);
+  left: 50%;
+  translate: -50% 0;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: max-content;
+  max-width: 880px;
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1.5px solid var(--c-line-strong);
+  border-radius: var(--r-sm);
+  background: var(--c-ink-800);
+  color: var(--c-text);
+  font-size: var(--fs-16);
+  line-height: 1.35;
+  pointer-events: auto;
+}
+.vc-firstnote > span { flex: 1; }
+.vc-notewrap.screen--phone .vc-firstnote { top: calc(var(--safe-t) + 52px); max-width: 600px; gap: 8px; padding: 6px 10px; font-size: var(--fs-14); }

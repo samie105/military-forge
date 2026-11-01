@@ -89,11 +89,16 @@ export { MsgType } from './wire';
  *     7 = none) that v17–v20 decoders never read; the MatchSettings CMD's JSON takes `teams` (lobby
  *     only); CMD kind 14 SetTeam (host, lobby: JSON { id, team }); TUNING gains `friendlyFire`. No
  *     snapshot, INPUT, ROSTER or HELLO change. (v20 is spectating's.)
+ * v22 (safety, host remove; audit-2 L-11): CMD kind 15 RemovePlayer (host, match rooms, any phase: the
+ *     player's id as a decimal string) · close code 4009 Removed (that player's session ends at once and
+ *     the room keeps them out while it's open: by the ticket's account, else the name). Nothing else
+ *     changes, so v17–v21 clients still join; they never send it.
  */
-export const PROTOCOL_VERSION = 21;
+export const PROTOCOL_VERSION = 22;
 /**
- * The oldest client a server still admits. v18–v21 only added messages and trailing fields an
- * older client never reads or sends, so v17 pages still play (without voice, looks, spectating or teams).
+ * The oldest client a server still admits. v18–v22 only added messages and trailing fields an
+ * older client never reads or sends, so v17 pages still play (without voice, looks, spectating,
+ * teams or host remove).
  */
 export const MIN_PROTOCOL_VERSION = 17;
 
@@ -171,6 +176,8 @@ export const CloseCode = {
   TicketInvalid: 4007,
   /** v20: a spectator for a room that already has all the spectators it takes (the admin's spectate.cap) */
   SpectatorsFull: 4008,
+  /** v22: the room's host removed this player; the room keeps them out while it's open (audit-2 L-11) */
+  Removed: 4009,
   /**
    * The game server is restarting for an update (the standard WebSocket "service restart"): rejoin the
    * room with a fresh ticket once it's back (docs/net-trial.md §5). Clients before it reconnected and
@@ -213,6 +220,8 @@ export const CmdKind = {
   Spectate: 13,
   /** v21: host, lobby only: JSON `{ id, team }` moves that player to that team (team modes) */
   SetTeam: 14,
+  /** v22: host, any phase: remove that player (payload: their id, decimal); closed with CloseCode.Removed */
+  RemovePlayer: 15,
 } as const;
 
 /** v20: HELLO's flags (after the look). */
@@ -267,6 +276,17 @@ export function parseSetTeam(payload: string): { id: number; team: number } | nu
   return Number.isInteger(id) && Number.isInteger(team) && (id as number) >= 0 && (id as number) < 32 && (team as number) >= 0 && (team as number) < 4 ? { id: id as number, team: team as number } : null;
 }
 
+/** v22: a RemovePlayer CMD's payload → the player id; null when malformed. */
+export function parseRemovePlayer(payload: string): number | null {
+  if (!/^\d{1,2}$/.test(payload)) return null;
+  const id = Number(payload);
+  return id < 32 ? id : null;
+}
+
+/** v22: the host removes player `id` from the room. */
+export function encodeRemovePlayerCmd(id: number): Uint8Array {
+  return encodeCmd(CmdKind.RemovePlayer, String(id));
+}
 
 export const MAX_INPUTS_PER_PACKET = 4;
 

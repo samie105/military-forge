@@ -17,7 +17,7 @@ import { wrapAngle } from '../touch/stick';
 import { currentDevice, noteKeys, notePad, onInputDevice } from './device';
 import { quickSelect } from '../quickSelect';
 import { AIM_MIN_PUSH, MOVE_ZONES, createAimState, createMoveState, dashDirection, heldBits, moveStep, navRepeats, padDashStrength, padThrowStrength, reticleDistance, shapeAxes, stepAim, stickNavDirection, triggerHeld, type NavDir, type StickVector } from './mapping';
-import { activate, findScroller, focusFirst, focusedIn, focusables, hasTabs, moveFocus, rememberFocus, restoreFocus, switchTab, type FocusAnchor } from './menus';
+import { activate, findScroller, focusEl, focusFirst, focusedIn, focusables, hasOwnHints, hasTabs, marked, moveFocus, needsFocus, preferredControl, pressMarked, rememberFocus, restoreFocus, stepFocusedFar, stepsSideways, stepsUpDown, switchTab, type FocusAnchor } from './menus';
 import { rumbleFor, scaleRumble, type Rumble } from './rumble';
 import { DEFAULT_PAD_SETTINGS, HOLD_TAKE_MS, buttonMap, type ButtonMap, type PadSettings } from './settings';
 import { AXIS, B, BUTTON_COUNT, isDualSense, padFamily } from './standard';
@@ -31,6 +31,10 @@ export interface PadHost {
   menuScope(): Element | null;
   /** game screens with buttons over play (the warm-up's Ready…): a tap of Share / View reaches them */
   overlayScope?(): Element | null;
+  /** a friend's invite or request toast: a tap of Share / View reaches it from the menus too, Triangle / Y answers it */
+  toastScope?(): Element | null;
+  /** a card over play that waits for an answer (the first-run controls card): the pad goes to it on its own */
+  blockingScope?(): Element | null;
   /** Circle / B in a menu: back out (Escape in the app) */
   back(): void;
   /** Options / Menu: the in-match menu (Escape in the app) */
@@ -59,6 +63,10 @@ export const AUTO_FIRE = { dwell: 100, linger: 150 };
 export const SELECT_TAP_MS = 250;
 /** Two such taps this close together: the big map (minimap/). */
 export const SELECT_DOUBLE_TAP_MS = 400;
+/** A screen's main button drawn this long after the pad landed still takes it (the creator's body cards; ms). */
+const LATE_FIRST_MS = 3000;
+/** A rebind listening: Share / View held this long clears the slot (a tap binds it; audit 2, N-10). */
+export const CAPTURE_CLEAR_MS = 1000;
 /** Reticle reach smoothing per tick (the reticle glides as the stick's push changes). */
 const RETICLE_EASE = 0.35;
 /** Right-stick scrolling in menus: px per frame at full push. */
@@ -122,11 +130,21 @@ export class PadManager {
   private aimHeldMag = 0.5;
   private flick: { t: number; mag: number }[] = [];
   private nav: { dir: NavDir | null; downAt: number; lastAt: number } = { dir: null, downAt: 0, lastAt: 0 };
-  /** a game overlay the pad was sent into with a Share / View tap */
+  /** a game overlay the pad was sent into with a Share / View tap (or a blocking card, on its own) */
   private overlay: Element | null = null;
+  /** the overlay sits over the menus (a toast, the controls card): it keeps the pad while it shows */
+  private overlayOnTop = false;
+  /** the blocking card the pad last went to on its own (B left it: not again) */
+  private autoEntered: Element | null = null;
+  /** inside a sample (the sim's tick): presses that change screens wait until it's done */
+  private sampling = false;
+  /** where the pad landed on its own (focusFirst), until it moves: a screen whose first control draws late (the creator's body cards, the Locker's tab) gets it then */
+  private landed: Element | null = null;
+  private landedAt = 0;
   private scroller: { scope: Element; el: Element | null } | null = null;
   private menuFocus: FocusAnchor | null = null;
   private capture: ((button: number) => void) | null = null;
+  private captureEnd: { cancel(): void; clear(): void } | null = null;
   private scoreboardDown = false;
   /** when View / Share was last tapped (a double tap opens the big map) */
   private selectTapAt = -Infinity;
@@ -215,9 +233,13 @@ export class PadManager {
     return this.pads().find((p) => p.index === this.index) ?? null;
   }
 
-  /** The next button pressed goes to `fn` (Settings → Controller → rebind); null cancels. */
-  captureNext(fn: ((button: number) => void) | null): void {
+  /**
+   * The next button pressed goes to `fn` (Settings → Controller → rebind); null cancels. With `end`,
+   * Options / Menu cancels it and Share / View held a second clears the slot (a pad's own way out).
+   */
+  captureNext(fn: ((button: number) => void) | null, end: { cancel(): void; clear(): void } | null = null): void {
     this.capture = fn;
+    this.captureEnd = fn ? end : null;
     this.notify();
   }
 
@@ -318,6 +340,13 @@ export class PadManager {
     this.flick.push({ t: now, mag: this.move.mag });
     while (this.flick.length > 1 && now - this.flick[0]!.t > FLICK_WINDOW) this.flick.shift();
 
+    // a card over play that waits for an answer takes the pad as it shows (audit 2, N-13: ✕ / A was Jet under "Got it")
+    const blocking = this.host.blockingScope?.() ?? null;
+    if (blocking && blocking !== this.autoEntered) {
+      this.autoEntered = blocking;
+      this.overlay = blocking;
+      this.overlayOnTop = true;
+    } else if (!blocking) this.autoEntered = null;
     const scope = this.menuScope();
     const mode: Mode = this.capture ? 'capture' : scope ? 'menu' : 'play';
     if (mode !== this.mode) {
@@ -343,7 +372,7 @@ export class PadManager {
         done();
         this.notify();
       }
-    } else if (mode === 'capture') this.pollCapture();
+    } else if (mode === 'capture') this.pollCapture(now);
     else if (mode === 'menu') this.pollMenu(scope!, now);
     else this.pollPlay(now);
     for (let i = 0; i < BUTTON_COUNT; i++) this.prevHeld[i] = this.held[i]!;
@@ -368,7 +397,8 @@ export class PadManager {
 
   private menuScope(): Element | null {
     if (this.overlay && (!this.overlay.isConnected || !focusables(this.overlay).length)) this.overlay = null;
-    const scope = this.host.menuScope() ?? this.overlay;
+    const menu = this.host.menuScope();
+    const scope = this.overlay && (this.overlayOnTop || !menu) ? this.overlay : (menu ?? this.overlay);
     if (scope) return scope;
     // menus that block play without a screen of their own: the whole shell
     return this.host.sampler?.blocked ? (document.getElementById('shell') ?? document.body) : null;
@@ -376,17 +406,31 @@ export class PadManager {
 
   // ------------------------------------------------------------------ capture (rebinding)
 
-  private pollCapture(): void {
-    for (let i = 0; i < BUTTON_COUNT; i++) {
-      if (!this.pressed(i)) continue;
-      const fn = this.capture!;
+  private pollCapture(now: number): void {
+    const end = this.captureEnd;
+    const finish = (button: number, then: () => void) => {
       this.capture = null;
-      // the press that was bound must not also press the focused button when the menu gets the pad back
-      this.suppressed[i] = true;
-      fn(i);
+      this.captureEnd = null;
+      // the press that ended it must not also press the focused button when the menu gets the pad back
+      if (button >= 0 && this.held[button]) this.suppressed[button] = true;
+      then();
       this.notify();
-      return;
+    };
+    // Options / Menu (never a binding) cancels; Share / View held clears the slot, a tap of it binds it
+    if (end && this.pressed(B.Start)) return finish(B.Start, end.cancel);
+    if (end && this.held[B.Select] && !this.suppressed[B.Select] && now - this.downAt[B.Select]! >= CAPTURE_CLEAR_MS) return finish(B.Select, end.clear);
+    for (let i = 0; i < BUTTON_COUNT; i++) {
+      const bound = end && i === B.Select ? this.released(i) && !this.suppressed[i] : this.pressed(i);
+      if (!bound) continue;
+      const fn = this.capture!;
+      return finish(i, () => fn(i));
     }
+  }
+
+  /** A press that may change the screen: inside a sample it waits for the tick to end (audit 2: leaving a room from the lobby mid-tick threw). */
+  private act(fn: () => void): void {
+    if (this.sampling) queueMicrotask(fn);
+    else fn();
   }
 
   // ------------------------------------------------------------------ menus
@@ -396,25 +440,47 @@ export class PadManager {
       this.menuFocus = null;
       return;
     }
-    if (!focusedIn(scope)) {
+    if (!focusedIn(scope) || needsFocus(scope)) {
       const restored = restoreFocus(scope, this.menuFocus);
-      if (!restored) focusFirst(scope);
+      this.landed = restored ? null : focusFirst(scope);
+      this.landedAt = now;
+    } else if (this.landed && document.activeElement === this.landed && now - this.landedAt < LATE_FIRST_MS) {
+      const first = preferredControl(scope);
+      if (first && first !== this.landed) {
+        focusEl(first);
+        this.landed = first;
+      }
     }
     this.menuFocus = rememberFocus(scope) ?? this.menuFocus;
-    if (this.pressed(B.South)) activate(scope);
+    const inOverlay = this.overlay !== null && scope === this.overlay;
+    if (this.pressed(B.South)) this.act(() => activate(scope));
     if (this.pressed(B.East)) {
-      if (this.overlay && scope === this.overlay) this.leaveOverlay();
-      else this.host.back();
+      if (inOverlay) this.leaveOverlay();
+      // the screen's own Back (Not now, Stay, Cancel), else the app's Escape
+      else this.act(() => pressMarked(scope, 'data-pad-back') || this.host.back());
     }
     if (this.pressed(B.Start)) {
-      if (this.overlay && scope === this.overlay) this.leaveOverlay();
-      this.host.pause();
+      if (inOverlay) this.leaveOverlay();
+      // Home's Settings; elsewhere the app's Escape (the in-match menu)
+      this.act(() => (!inOverlay && pressMarked(scope, 'data-pad-start')) || this.host.pause());
     }
-    if (this.pressed(B.L1)) switchTab(scope, -1, (tab) => { this.menuFocus = rememberFocus(scope, tab); });
-    if (this.pressed(B.R1)) switchTab(scope, 1, (tab) => { this.menuFocus = rememberFocus(scope, tab); });
+    // L1 / R1: a select or a slider ten steps at a time, else the tabs
+    const tabbed = (tab: HTMLElement) => {
+      this.menuFocus = rememberFocus(scope, tab);
+    };
+    if (this.pressed(B.L1)) this.act(() => stepFocusedFar(scope, -1) || switchTab(scope, -1, tabbed));
+    if (this.pressed(B.R1)) this.act(() => stepFocusedFar(scope, 1) || switchTab(scope, 1, tabbed));
+    // a friend's toast over the menus: a tap of Share / View goes to it (and back); Triangle / Y answers it (audit 2, N-06)
+    const toast = this.host.toastScope?.() ?? null;
+    if (this.released(B.Select) && now - this.downAt[B.Select]! < SELECT_TAP_MS) {
+      if (inOverlay) this.leaveOverlay();
+      else if (toast) this.enterOverlay(toast);
+    }
+    if (toast && this.pressed(B.North)) this.act(() => void pressMarked(toast, 'data-pad-y'));
 
     // the D-pad, or the left stick past half-way: focus moves (held: repeats)
     const dir: NavDir | null = this.held[B.Up] ? 'up' : this.held[B.Down] ? 'down' : this.held[B.Left] ? 'left' : this.held[B.Right] ? 'right' : stickNavDirection(this.axes[0]!, this.axes[1]!);
+    if (dir || this.pressed(B.South)) this.landed = null;
     if (!dir) this.nav.dir = null;
     else if (dir !== this.nav.dir) {
       this.nav = { dir, downAt: now, lastAt: now };
@@ -438,6 +504,8 @@ export class PadManager {
     const el = this.overlay && focusedIn(this.overlay);
     el?.blur();
     this.overlay = null;
+    this.overlayOnTop = false;
+    this.notify();
   }
 
   /** Play → menus: nothing stays held, no throw is left aimed. */
@@ -521,11 +589,13 @@ export class PadManager {
     this.zoomBefore = this.zoomBefore === z ? null : z;
   }
 
-  private enterOverlay(): void {
-    const scope = this.host.overlayScope?.() ?? null;
+  /** Into the buttons over play (a View / Share tap), or a toast over the menus. */
+  private enterOverlay(scope: Element | null = this.host.overlayScope?.() ?? null): void {
     if (!scope) return;
     this.overlay = scope;
+    this.overlayOnTop = scope === (this.host.toastScope?.() ?? null);
     focusFirst(scope);
+    this.notify();
   }
 
   /** A held grenade's strength: the aim stick's push, or its last push while it rests. */
@@ -549,7 +619,12 @@ export class PadManager {
    * strength. `(sx, sy)`: the shoulder the aim is measured from.
    */
   apply(out: Input, sx: number, sy: number, now: number = performance.now()): void {
-    this.poll(now);
+    this.sampling = true;
+    try {
+      this.poll(now);
+    } finally {
+      this.sampling = false;
+    }
     if (this.index < 0 || this.mode !== 'play' || !this.settings.enabled) return;
     const s = this.settings;
     const held = this.held.map((h, i) => h && !this.suppressed[i]);
@@ -674,10 +749,27 @@ export class PadManager {
     return !!p.vibrationActuator || !!p.hapticActuators?.length;
   }
 
-  /** For the Settings panel and the hint bar: in a menu now, and whether that menu has tabs. */
-  get state(): { mode: Mode; tabs: boolean; overlay: boolean; family: string; connected: boolean } {
+  /**
+   * For the Settings panel and the hint bar: in a menu now, whether that menu has tabs and its own
+   * hints, a toast to answer (and whether the pad is in it), what the focus steps (a select left and right,
+   * a letter box up and down), whether the listening rebind can be cancelled.
+   */
+  get state(): { mode: Mode; tabs: boolean; overlay: boolean; family: string; connected: boolean; ownHints: boolean; toast: 'none' | 'waiting' | 'in'; answer: string | null; steps: 'sideways' | 'updown' | null; endable: boolean } {
     const scope = this.mode === 'menu' ? this.menuScope() : null;
-    return { mode: this.mode, tabs: !!scope && hasTabs(scope), overlay: !!this.host.overlayScope?.(), family: this.family, connected: this.index >= 0 };
+    const toast = this.host.toastScope?.() ?? null;
+    const focus = scope ? focusedIn(scope) : null;
+    return {
+      mode: this.mode,
+      tabs: !!scope && hasTabs(scope),
+      overlay: !!this.host.overlayScope?.(),
+      family: this.family,
+      connected: this.index >= 0,
+      ownHints: !!scope && scope !== this.overlay && hasOwnHints(scope),
+      toast: !toast ? 'none' : scope === toast ? 'in' : 'waiting',
+      answer: toast && this.mode === 'menu' ? (marked(toast, 'data-pad-y')?.getAttribute('data-pad-y') || null) : null,
+      steps: stepsSideways(focus) ? 'sideways' : stepsUpDown(focus) ? 'updown' : null,
+      endable: this.captureEnd !== null,
+    };
   }
 
   /** Dev builds and the test page: the raw reading and what it maps to. */

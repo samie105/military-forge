@@ -40,6 +40,7 @@ import {
   limitTuning,
   lookSeed,
   maps,
+  SPAWN_COVER,
   type AdminValues,
   type LookVouch,
   type Tuning,
@@ -77,6 +78,7 @@ import {
   isUnreliableMessage,
   parseLookCmd,
   parseSetTeam,
+  parseRemovePlayer,
   protocolSupported,
   ROOM_SETTING_LIMITS,
   type ClientMessage,
@@ -105,6 +107,7 @@ import {
   TEAM_MODES,
   copyInput,
   createInput,
+  ticks,
   type Input,
   type MatchRules,
   type MatchStanding,
@@ -267,6 +270,9 @@ const BACKPRESSURE_LIMIT = 16 * 1024;
 /** docs/05 §14: INPUT packets are tiny; anything bigger is malformed */
 const MAX_INPUT_BYTES = 64;
 
+/** The longest a new player's spawn cover waits for its first press (a page that never plays isn't shielded for good). */
+export const JOIN_COVER_MAX_TICKS = 10 * 60;
+
 export class Client {
   playerId = -1;
   /** the API account this connection's join ticket named (rooms.ts); null = a guest without one, or a dev room */
@@ -371,6 +377,13 @@ export class Client {
   get joined(): boolean {
     return this.playerId >= 0;
   }
+
+  /**
+   * A new player still loading in (audit L-16): its spawn cover waits for its first press, so the
+   * seconds a page takes to draw the match never eat it. The game tick it joined on; -1 once it played
+   * (or the wait ran out: JOIN_COVER_MAX_TICKS).
+   */
+  coverWaitSince = -1;
 
   /** in the room: a player, or a spectator (gets the room's messages) */
   get inRoom(): boolean {
@@ -486,6 +499,11 @@ function standingWire(s: MatchStanding): MatchStandingWire {
     bestStreak: s.bestStreak,
     team: s.team,
   };
+}
+
+/** v22: whom a removal keeps out: the ticket's account, else the name (case folded) */
+function removalKey(accountId: string | null, name: string): string {
+  return accountId ? `account:${accountId}` : `name:${name.toLowerCase()}`;
 }
 
 export class Room {
@@ -935,6 +953,11 @@ export class Room {
       if (look) this.wear(resumed, look);
       return;
     }
+    // v22: a player the host removed stays out of this room, as a player or a spectator
+    if (this.removed.has(removalKey(client.accountId, sanitizeName(rawName, '')))) {
+      this.kick(client, CloseCode.Removed, 'the host removed you from this room');
+      return;
+    }
     // v20: a spectator takes a seat, not a slot
     if (spectate && client.protocolVersion >= 20) {
       this.seatSpectator(client, rawName, look);
@@ -961,6 +984,7 @@ export class Room {
     if (worn) this.looks.set(p, cosmeticLoadoutWireIds(worn));
     this.sessions.set(session.token, session);
     if (this.match && !this.host) this.host = session;
+    client.coverWaitSince = this.game.tick;
     this.attach(client, session, false);
     this.broadcastRoster();
     this.matchDirty = true;
@@ -1047,6 +1071,13 @@ export class Room {
       const move = parseSetTeam(payload);
       if (!move) client.strikes++;
       else if (this.match && this.host === client.session && this.match.setTeam(move.id, move.team)) this.matchDirty = true;
+      return;
+    }
+    if (kind === CmdKind.RemovePlayer) {
+      // v22, host only, any phase: that player leaves now and can't come back to this room
+      const id = parseRemovePlayer(payload);
+      if (id === null) client.strikes++;
+      else if (this.match && this.host === client.session) this.removePlayer(id);
       return;
     }
     if (kind === CmdKind.SetLook) {
@@ -1493,6 +1524,22 @@ export class Room {
     this.offAdmin();
   }
 
+  /**
+   * v22: the host removes a player (not a bot, not the host): their session ends now, connected or
+   * waiting to reconnect, and their account (or, without a ticket, their name) is kept out of the room.
+   */
+  private removePlayer(id: number): void {
+    let target: Session | null = null;
+    for (const s of this.sessions.values()) if (s.playerId === id) target = s;
+    const p = this.game.players[id];
+    if (!target || target === this.host || !p || p.isBot) return;
+    const identity = this.identities.get(p) ?? `name:${p.name}`;
+    this.removed.add(identity.startsWith('account:') ? identity : removalKey(null, identity.slice('name:'.length)));
+    this.log(`[room ${this.code}] the host removed ${p.name}`);
+    if (target.client) this.kick(target.client, CloseCode.Removed, 'the host removed you from this room');
+    else this.endSession(target);
+  }
+
   /** Kicked players leave at once (no reconnect grace). */
   private kick(client: Client, code: number, reason: string): void {
     if (client.closed) return;
@@ -1512,6 +1559,8 @@ export class Room {
   private readonly looks = new WeakMap<PlayerState, number[]>();
   /** who each human is beyond their slot (Match.identityOf): the join's account, else the name */
   private readonly identities = new WeakMap<PlayerState, string>();
+  /** v22: who the host removed (removalKey): kept out while the room is open */
+  private readonly removed = new Set<string>();
 
   private identityOf(id: number): string | null {
     const p = this.game.players[id];
@@ -1686,6 +1735,12 @@ export class Room {
         me!.held = true;
         this.inputs[c.playerId] = undefined;
         applied = c.inputs.next - 1;
+      }
+      // a new player's spawn cover starts with their first press, not at the spawn (audit L-16): a
+      // match in progress dropped them into the fight while their page was still drawing it
+      if (c.coverWaitSince >= 0) {
+        if ((took && main.buttons !== 0) || current - c.coverWaitSince >= JOIN_COVER_MAX_TICKS) c.coverWaitSince = -1;
+        else if (me?.alive && me.coverTicks > 0) me.coverTicks = Math.max(me.coverTicks, ticks(SPAWN_COVER.seconds));
       }
       // the rewind cap allows for this client's view delay: interpolation (+ input batching when
       // slim, once it has been slim for LOW_BW_WARMUP_TICKS)

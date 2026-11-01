@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { debrief } from '../../src/tour/debrief';
 import { newFacts, reduceFacts } from '../../src/tour/facts';
-import { HOME_IDLE_MS, HOME_STOPS, STOPS, homeStopsDue, homeStopsWanted } from '../../src/tour/homeStops';
+import { HOME_IDLE_MS, HOME_STOPS, STOPS, homeStopsDue, homeStopsRetired, homeStopsWanted, stopsToShow } from '../../src/tour/homeStops';
 import type { MatchSummary } from '../../src/tour/track';
 
 const f0 = newFacts(0);
@@ -21,7 +21,7 @@ describe('the Debrief', () => {
   });
 
   it('one thing to try, most pressing first, never blaming', () => {
-    expect(debrief(m({ kills: 1, deaths: { gun: 9 } }), f0, null).tryNext).toMatch(/^Easier start\?/);
+    expect(debrief(m({ kills: 1, deaths: { gun: 9 }, bots: 'normal' }), f0, null).tryNext).toMatch(/^Easier start\?/);
     expect(debrief(m({ kills: 3, deaths: { gas: 2 } }), f0, null).tryNext).toMatch(/^Gas: the middle kills/);
     expect(debrief(m({ kills: 3, deaths: { self: 1, grenade: 1 } }), f0, null).tryNext).toMatch(/^Hold to aim/);
     expect(debrief(m({ kills: 3 }), f0, null).tryNext).toBe("You didn't dash: dashes dodge fire.");
@@ -44,6 +44,21 @@ describe('Home stops', () => {
     const played = reduceFacts(f0, { k: 'match', online: false, finished: true, kills: 1, deaths: {}, moves: [] });
     expect(homeStopsWanted(played)).toBe(true);
     expect(homeStopsWanted(reduceFacts(played, { k: 'tour', tour: HOME_STOPS, skipped: true }))).toBe(false);
+  });
+
+  it('only for features not used yet, and not for a returning player (audit 2 P-14)', () => {
+    const match = { k: 'match', online: true, finished: true, kills: 0, deaths: {}, moves: [] } as const;
+    const playNow = reduceFacts(reduceFacts(f0, { k: 'room', how: 'created' }), match);
+    expect(stopsToShow(playNow).map((s) => s.id)).toEqual(['join', 'locker']); // Play now made a room
+    expect(homeStopsWanted(playNow)).toBe(true);
+    const all = [{ k: 'room', how: 'joined' }, { k: 'soldier-saved' }].reduce((f, e) => reduceFacts(f, e as never), playNow);
+    expect(stopsToShow(all)).toEqual([]);
+    expect(homeStopsWanted(all)).toBe(false);
+    expect(homeStopsRetired(all)).toBe(true);
+    const twice = reduceFacts(reduceFacts(f0, match), match);
+    expect(homeStopsWanted(twice)).toBe(false);
+    expect(homeStopsRetired(twice)).toBe(true);
+    expect(homeStopsRetired(reduceFacts(twice, { k: 'tour', tour: HOME_STOPS, finished: true }))).toBe(false);
   });
 
   it('never on the Home a match just ended into; only after Home sat idle (P1-5)', () => {

@@ -132,6 +132,22 @@ export interface DeathInfo {
   killer: string;
   /** what did it (sprite href), '' for none */
   icon: string;
+  /** how close it was (audit 2 P-05): "You hit them for 66 · they had 34 left", '' for none */
+  detail?: string;
+}
+
+/**
+ * How close a death was (audit 2 P-05), from the hits this life already counted: what you did to your
+ * killer, and what they had left. Fell, the gas and your own doing need no second line but the gas's.
+ */
+export function deathDetail(how: { fell: boolean; suicide: boolean; gas: boolean }, dealt: number, killerHp: number | null): string {
+  if (how.fell) return '';
+  if (how.gas) return 'The gas: cross its edge fast, or fly over it';
+  if (how.suicide) return '';
+  if (dealt <= 0) return "You didn't hit them";
+  const hit = `You hit them for ${Math.round(dealt)}`;
+  if (killerHp === null) return hit;
+  return killerHp > 0 ? `${hit} · they had ${Math.max(1, Math.round(killerHp))} left` : `${hit} · they went down too`;
 }
 
 /** What hudFrame needs besides the input: the HUD's own memory. */
@@ -564,6 +580,7 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
     v['death.label'] = death.label;
     v['death.killer'] = death.killer;
     v['death.icon'] = death.icon;
+    v['death.detail'] = death.detail ?? '';
     const waiting = me.respawnTicks > 0;
     v['death.lead'] = waiting ? 'Respawn in' : 'Respawning…';
     const left = Math.ceil(me.respawnTicks / 60);
@@ -830,6 +847,8 @@ export class Hud {
   private feedKey = 0;
   private lastHitAt = -Infinity;
   private hitMarkerUntil = 0;
+  /** Settings → Graphics → Hit markers (audit L-20): off, a landed shot shows no mark */
+  hitMarkers = true;
   private killMarkerUntil = 0;
   private hitHow = { head: false, rico: false, blast: false };
   private pulseMarker = false;
@@ -855,6 +874,9 @@ export class Hud {
   private readonly quick: { root: HTMLElement; items: HTMLElement; pointer: HTMLElement; key: string; hi: number; at: string };
   private lastActive = -1;
   private death: DeathInfo | null = null;
+  /** damage you dealt this life, by target (the death card's "how close": P-05); cleared on your spawn */
+  private readonly dealt = new Map<number, number>();
+  private wasAlive = true;
   private keys: HudKeys = {};
   private keyCodes: Partial<Record<keyof HudKeys, string | undefined>> = {};
   private netDetail = '';
@@ -1012,15 +1034,18 @@ export class Hud {
         }
       }
       if (e.type === 'hit' && e.attacker === localId && e.target !== localId) {
+        this.dealt.set(e.target, (this.dealt.get(e.target) ?? 0) + Math.max(0, e.damage));
         how.hit = true;
         if (e.zone === HitZone.Head) how.head = true;
         if (isBlastSource(e.source)) how.blast = true;
       }
       if (e.type === 'ricochet' && e.shooter === localId && e.hit === 2 && e.target !== localId) how.rico = true;
       if (e.type === 'death' && e.killer === localId && e.victim !== localId) this.killMarkerUntil = now + KILL_MARKER_MS;
+      // a player who went down starts a new life: what you did to the last one doesn't count against the next
+      if (e.type === 'death' && e.victim !== localId) this.dealt.delete(e.victim);
       if (e.type === 'dash' && e.player === localId) this.dash = { dir: e.dir, until: now + DASH_HINT_MS };
     }
-    if (how.hit) {
+    if (how.hit && this.hitMarkers) {
       this.hitMarkerUntil = now + HIT_MARKER_MS;
       this.hitHow = { head: how.head, rico: how.rico, blast: how.blast };
       this.pulseMarker = true;
@@ -1038,11 +1063,15 @@ export class Hud {
         this.kill = null;
       }
       if (entry.mine === 'victim') {
+        const died = events.find((ev): ev is Extract<SimEvent, { type: 'death' }> => ev.type === 'death' && ev.victim === localId);
+        const killer = died && died.killer !== localId && died.killer >= 0 ? died.killer : -1;
+        const them = killer >= 0 ? this.others.find((p) => p.id === killer) : undefined;
+        const detail = deathDetail({ fell: entry.fell, suicide: entry.suicide, gas: died?.source === DamageSource.Gas }, killer >= 0 ? (this.dealt.get(killer) ?? 0) : 0, them ? (them.alive ? them.hp : 0) : null);
         this.death = entry.fell
-          ? { label: 'You fell', killer: '', icon: '' }
+          ? { label: 'You fell', killer: '', icon: '', detail }
           : entry.suicide
-            ? { label: 'Taken out by', killer: 'yourself', icon: entry.icon }
-            : { label: 'Taken out by', killer: playerName(entry.killer, entry.killerBot), icon: entry.icon };
+            ? { label: 'Taken out by', killer: 'yourself', icon: entry.icon, detail }
+            : { label: 'Taken out by', killer: playerName(entry.killer, entry.killerBot), icon: entry.icon, detail };
       }
     }
   }
@@ -1052,6 +1081,10 @@ export class Hud {
     const now = performance.now();
     this.me = frame.players.find((p) => p.id === frame.localId) ?? null;
     this.others = frame.players;
+    // back in play: a new life, the hits of the last one are done with (P-05)
+    const alive = this.me?.alive ?? true;
+    if (alive && !this.wasAlive) this.dealt.clear();
+    this.wasAlive = alive;
     if (input.showNet && now - this.netAt > 250) {
       this.netAt = now;
       this.netDetail = netGraph(frame.net);
@@ -1584,6 +1617,8 @@ export class Hud {
       foot.append('Hold ');
       drawButtonCap(el('kbd', 'kbd', foot), this.keyCodes.scoreboard, this.keys.scoreboard || 'Tab');
       foot.append(' to keep this open · ranked by score: kills minus self-kills · bots show no ping');
+      // the HUD takes no clicks: report, block, mute and the host's remove live in the menu (audit-2 L-01)
+      if (list.some((r) => !r.bot && !r.you && !r.left)) foot.append(' · Esc › Players to report, block or mute');
       this.board.replaceChildren(head, this.boardLead, table, foot);
       this.boardKey = key;
     }

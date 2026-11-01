@@ -5,6 +5,7 @@
  * at once; presets, "Copy JSON" and "Save as defaults" sit in the bar. model.ts has the logic.
  */
 import { analyticsGroup } from './analytics';
+import { moderationGroup } from './moderation';
 import { reportsGroup } from './reports';
 import { storeGroup } from './store';
 import { AdminApiError, adminCall, clampValue, formatValue, grouped, matches, readToken, withValue, type AdminFieldView, type AdminStateView } from './model';
@@ -217,6 +218,8 @@ function render(s: AdminStateView): void {
     for (const [section, fields] of sections) body.append(el('section', { class: 'admin__section' }, el('h2', {}, section), ...fields.map(row)));
     groups.push(el('details', { class: 'admin__group', ...(groups.length === 0 ? { open: '' } : {}) }, el('summary', {}, group, count), body));
   }
+  // what players reported about each other, and the owner's moderation (moderation.ts, audit-2 L-04)
+  groups.push(moderationGroup(token!, el));
   // the players' problem reports (reports.ts): the API's, under the same token
   groups.push(reportsGroup(token!, el));
   // the store's wallets, ledger and payments (store.ts, docs/17): the API's, under the same token

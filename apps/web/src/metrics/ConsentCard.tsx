@@ -8,8 +8,10 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { Icon } from '../ui/Icon';
 import { focusFree, homeAsk, useHomeStopsRunning, type HomeAsk } from '../tour/homeQueue';
-import { promptDue, type ConsentState } from './consent';
+import { consentAskable, promptDue, type ConsentState } from './consent';
 import { metrics } from './index';
+import { ADS_LIVE } from '../ads/live';
+import { useTourFacts } from '../tour/live';
 import './consent.css';
 
 const idle: ConsentState = { choice: { analytics: false, at: 0, via: 'settings' }, mode: 'opt-in', ready: false, browserNo: false, segments: false };
@@ -22,7 +24,17 @@ export function useConsent(): ConsentState {
 
 /** Whether the question is due (Home's queue, tour/homeQueue.ts, puts it before the Home stops and Next orders). */
 export function useConsentDue(): boolean {
-  return promptDue(useConsent()) !== null;
+  const facts = useTourFacts();
+  return promptDue(useConsent()) !== null && consentAskable(facts ? facts.matches.finished : null);
+}
+
+/**
+ * The card's words (the owner's, 26 Oct). While the billboard ads are off (ads/live.ts), the clause about
+ * the ads goes: it would be a reason to say no, and not quite true.
+ */
+export function consentLine(due: 'ask' | 'tell', adsLive = ADS_LIVE): string {
+  if (due === 'ask') return adsLive ? 'We use how you play to improve the game and to pick the ads you see. Never your name. You can change this in Settings.' : 'We use how you play to improve the game. Never your name. You can change this in Settings.';
+  return adsLive ? 'We count how you play (never your name) to fix what breaks, balance the guns and pick house ads.' : 'We count how you play (never your name) to fix what breaks and balance the guns.';
 }
 
 /**
@@ -37,7 +49,8 @@ export const PRIVACY_URL = '/privacy.html';
 
 export function ConsentCard({ where }: { where: 'home' | 'phone' }) {
   const s = useConsent();
-  const due = promptDue(s);
+  const asked = useConsentDue();
+  const due = asked ? promptDue(s) : null;
   const m = metrics();
   // one thing at a time on Home (audit 31 Oct, D-01): a Home stops pass already running goes first
   const showing = useHomeAsk() === 'consent';
@@ -59,7 +72,7 @@ export function ConsentCard({ where }: { where: 'home' | 'phone' }) {
           {due === 'ask' ? 'Can we use your play data?' : 'Helping improve the game'}
         </b>
         <span id="mf-consent-line" className="mf-consent__line">
-          {due === 'ask' ? 'We use how you play to improve the game and to pick the ads you see. Never your name. You can change this in Settings.' : 'We count how you play (never your name) to fix what breaks, balance the guns and pick house ads.'}{' '}
+          {consentLine(due)}{' '}
           <a href={PRIVACY_URL} target="_blank" rel="noopener" className="mf-consent__link">
             Privacy
           </a>

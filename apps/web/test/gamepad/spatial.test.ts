@@ -50,6 +50,17 @@ describe('spatial navigation', () => {
     expect(pickNext(button, [wideField], 'up')).toBe(0);
   });
 
+  it('down from Home’s tabs reaches Play now just below, not the card under the tab far down (audit 2, N-03)', () => {
+    // Home at 1280 × 800: the Play tab, the poster's Play now and Create room (below left), the Training card (under the tab)
+    const playTab = box(356, 24, 66, 42);
+    const playNow = box(85, 281, 258, 75);
+    const create = box(86, 364, 242, 55);
+    const training = box(322, 515, 247, 128);
+    expect(pickNext(playTab, [playNow, create, training], 'down')).toBe(0);
+    // across a row the line still wins: right from a button skips a nearer one a row down (above)
+    expect(pickNext(box(0, 0), [box(110, 60), box(300, 0)], 'right')).toBe(1);
+  });
+
   it('something that contains the focus or sits behind it is not "that way"', () => {
     expect(navScore(box(100, 100), box(50, 50, 300, 300), 'right')).toBeNull();
     expect(navScore(box(100, 100), box(100, 100), 'down')).toBeNull();

@@ -72,6 +72,9 @@ export const uiSounds = {
   'ui.back': ui('Back', (r) => switchClick(r, 1500, 1.3), { gain: 0.32 }),
   'ui.toggle': ui('Switch', (r) => sequence(r, 0.1, [[0, switchClick(r, 2600), 1], [0.03, clack(r, 1800, 0.8, 0.04), 0.4]]), { gain: 0.35 }),
   'ui.tick': ui('Slider tick', (r) => switchClick(r, 3000, 0.4), { gain: 0.15, cooldown: 0.04 }),
+  // the gun's own warning on its last rounds (audit L-21: low ammo was only shown): a dry metal tick
+  'ui.lowammo': ui('Low ammo', (r) => sequence(r, 0.09, [[0, clack(r, 2400, 0.7, 0.03), 1], [0.025, switchClick(r, 1700, 0.35), 0.6]]), { gain: 0.24, cooldown: 0.2 }),
+  'ui.lastround': ui('Last round', (r) => sequence(r, 0.06, [[0, clack(r, 3200, 0.6, 0.02), 1]]), { gain: 0.16, cooldown: 0.2 }),
   'ui.toast': ui('Toast (radio in)', (r) => sequence(r, 0.2, [[0, squelch(r, 0.06), 0.6], [0.06, radioBlip(r, 1200, 0.05), 0.8]]), { gain: 0.35, cooldown: 0.3 }),
   'ui.error': ui('Error', (r) => sequence(r, 0.35, [[0, squelch(r, 0.05), 0.5], [0.05, radioBlip(r, 320, 0.1), 1], [0.18, radioBlip(r, 280, 0.12), 1]]), { gain: 0.35, cooldown: 0.3 }),
   'ui.ready': ui('Ready (stamp)', (r) => sequence(r, 0.3, [[0, thump(r, 0.15, 160, 60, 0.07), 1], [0, clack(r, 1500, 0.8, 0.1), 0.8], [0.06, radioBlip(r, 1000, 0.04), 0.4]]), { gain: 0.4 }),

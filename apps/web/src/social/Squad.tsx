@@ -9,7 +9,7 @@ import { ControllerContext } from '../shell/context';
 import { Icon } from '../ui/Icon';
 import { Avatar } from './FriendsPanel';
 import { mountSocialSprite } from './icons';
-import { HOME_POLL_MS, badgeCount, onlineFriends, socialOf, statusText, useSel, type SocialController } from './social';
+import { HOME_POLL_MS, badgeCount, onlineFriends, socialAllowed, socialOf, statusText, useSel, type SocialController } from './social';
 import './social.css';
 
 const never = () => () => {};
@@ -25,10 +25,8 @@ export function useSocial(): SocialController | null {
   useEffect(() => {
     if (social) mountSocialSprite();
   }, [social]);
-  const isOnline = () => {
-    const p = social?.shell.store.getState().profile;
-    return !!p && !p.offline;
-  };
+  // signed in, online and 18+ (audit-2 L-03: an under-18 device has no friends, search or invites)
+  const isOnline = () => socialAllowed(social?.shell.store.getState().profile ?? null);
   const online = useSyncExternalStore(social ? social.shell.store.subscribe : never, isOnline, isOnline);
   return online ? social : null;
 }

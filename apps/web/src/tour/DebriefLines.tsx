@@ -10,7 +10,7 @@ import { drillDone, isTouchDevice } from '../touch';
 import { DEBRIEF_MATCHES, debrief } from './debrief';
 import { liveTourMemory, useTourFacts } from './live';
 import { takeCard } from './NextOrders';
-import { recommend, type OrdersContext } from './orders';
+import { CARDS, badLastMatch, recommend, type Card, type OrdersContext } from './orders';
 import './orders.css';
 
 export function DebriefLines() {
@@ -21,8 +21,19 @@ export function DebriefLines() {
   const last = liveTourMemory()?.lastMatch ?? null;
   const [now] = useState(() => Date.now());
   if (!ctl || !facts || !last || facts.matches.finished > DEBRIEF_MATCHES) return null;
-  const top = recommend(facts, context, now)[0] ?? null;
-  const d = debrief(last, facts, top);
+  const cards = recommend(facts, context, now);
+  const input = context.touch || context.pad ? 'sticks' : 'mouse';
+  // the easier start carries "One more, Easy bots" as its button (audit 2 P-03); the next line is then the card after it
+  // (not in a room with other people: friends aren't left for easier bots)
+  const alone = (facts.last?.people ?? 0) <= 1;
+  const again = alone && debrief(last, facts, null, input).easier ? (cards.find((c) => c.id === AGAIN) ?? againCard()) : null;
+  const top = cards.find((c) => !again || c.id !== AGAIN) ?? null;
+  const d = debrief(last, facts, top, input);
+  const take = (card: Card, rank: number) => {
+    liveTourMemory()?.fact({ k: 'card', card: card.id, what: 'acted', at: Date.now() });
+    liveTourMemory()?.record({ t: 'card.tapped', card: card.id, rank, score: Math.round(card.score) });
+    takeCard(ctl, card);
+  };
   return (
     <section className="mf-debrief m-p3" aria-label="Debrief">
       <p>
@@ -30,30 +41,68 @@ export function DebriefLines() {
         <b>{d.done}</b>
       </p>
       {d.tryNext && (
-        <p>
+        <p className={again ? 'mf-debrief__next mf-debrief__try' : undefined}>
           <Icon name="target" />
-          {d.tryNext}
+          <span>{d.tryNext}</span>
+          {again && (
+            <button type="button" className="btn btn--paper btn--sm m-p8" onClick={() => take(again, 0)}>
+              {again.title}
+            </button>
+          )}
         </p>
       )}
-      {top && d.next && (
+      {/* the easier start's button is the next order: one thing at a time */}
+      {top && d.next && !again && (
         <p className="mf-debrief__next">
           <Icon name="arrow-right" />
           <span>
             <b>{d.next.title}</b> · {d.next.reason}
           </span>
-          <button
-            type="button"
-            className="btn btn--paper btn--sm m-p8"
-            onClick={() => {
-              liveTourMemory()?.fact({ k: 'card', card: top.id, what: 'acted', at: Date.now() });
-              liveTourMemory()?.record({ t: 'card.tapped', card: top.id, rank: 0, score: Math.round(top.score) });
-              takeCard(ctl, top);
-            }}
-          >
+          <button type="button" className="btn btn--paper btn--sm m-p8" onClick={() => take(top, again ? 1 : 0)}>
             {top.cta}
           </button>
         </p>
       )}
     </section>
   );
+}
+
+/**
+ * Results' "One more, Easy bots" after a bad loss against bots (audit 2 P-03), once the Debrief isn't
+ * offering it on its own try line (after the first few matches, or a loss that isn't the easier start).
+ */
+export function AgainEasy() {
+  const ctl = useContext(ControllerContext);
+  const facts = useTourFacts();
+  const last = liveTourMemory()?.lastMatch ?? null;
+  const [touch] = useState(() => isTouchDevice() || currentDevice().pad !== null);
+  if (!ctl || !facts || !badLastMatch(facts)) return null;
+  // the Debrief already offers it: on its try line (the easier start), or as its next order
+  const debriefShows = !!last && facts.matches.finished <= DEBRIEF_MATCHES;
+  const context: OrdersContext = { offline: !!ctl.store.getState().profile?.offline, touch: isTouchDevice(), pad: currentDevice().pad !== null, drillDone: drillDone() };
+  const debriefOffers = debriefShows && (debrief(last, facts, null, touch ? 'sticks' : 'mouse').easier || recommend(facts, context, Date.now())[0]?.id === AGAIN);
+  if (debriefOffers) return null;
+  const card = againCard();
+  return (
+    <button
+      type="button"
+      className="btn btn--paper btn--block m-p8 mf-again"
+      onClick={() => {
+        liveTourMemory()?.fact({ k: 'card', card: card.id, what: 'acted', at: Date.now() });
+        liveTourMemory()?.record({ t: 'card.tapped', card: card.id, rank: 0, score: Math.round(card.score) });
+        takeCard(ctl, card);
+      }}
+    >
+      <Icon name="target" />
+      {card.title}
+    </button>
+  );
+}
+
+const AGAIN = 'again-easy';
+
+/** Next orders' "One more, Easy bots", for the easier start's button when the list doesn't hold it (taken, or resting). */
+function againCard(): Card {
+  const def = CARDS.find((c) => c.id === AGAIN)!;
+  return { id: def.id, title: def.title, line: def.line, cta: def.cta, action: def.action, reason: '', score: def.base };
 }

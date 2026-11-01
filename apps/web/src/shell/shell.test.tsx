@@ -12,13 +12,14 @@ import { ShellController, type GameHost } from './controller';
 import { bannerOf, sameBanner } from './mapEventBanner';
 import { createShellStore, runCleanup } from './store';
 import { localMatchRules } from './localMatch';
-import { formatClock, matchView, ordinal, placeholderXp, sameView, type MatchView } from './matchView';
+import { formatClock, matchView, ordinal, sameView, type MatchView } from './matchView';
+import { matchGain } from './progress';
 import type { LobbyView } from './onlineView';
 import { Alert, connectStep, reconnectSecondsLeft } from './screens/Connection';
 import { Countdown, countdownState, rulesLine } from './screens/Countdown';
-import { codeLetters, joinState } from './screens/Join';
-import { Lobby, killsLabel, lobbyMaps, minutesLabel } from './screens/Lobby';
-import { enterAction, nameState } from './screens/NameEntry';
+import { codeLetters, cycleLetter, joinState } from './screens/Join';
+import { LeaveRoomConfirm, Lobby, killsLabel, lobbyMaps, minutesLabel } from './screens/Lobby';
+import { enterAction, nameState, suggestName } from './screens/NameEntry';
 import { Pause, leaveCost, pauseHeading } from './screens/Pause';
 import { Results, reasonChip, winnerOf } from './screens/Results';
 import { NameTagPreview, autoText, resetPatch } from './screens/Settings';
@@ -78,10 +79,13 @@ describe('matchView', () => {
     expect(sameView(a, null)).toBe(false);
   });
 
-  it('formats clocks, ordinals and the XP placeholder', () => {
+  it("formats clocks and ordinals; a match's XP is the server's one rule (packages/shared, audit 2 P-04)", () => {
     expect([formatClock(5), formatClock(272), formatClock(720), formatClock(-3)]).toEqual(['0:05', '4:32', '12:00', '0:00']);
     expect([1, 2, 3, 4, 11, 12, 13, 21, 22, 101].map(ordinal)).toEqual(['1st', '2nd', '3rd', '4th', '11th', '12th', '13th', '21st', '22nd', '101st']);
-    expect(placeholderXp({ placement: 1, kills: 3, assists: 2 } as never)).toBe(100 + 30 + 10 + 50);
+    expect(matchGain(0, { placement: 1, kills: 3, assists: 2 }).gain).toBe(100 + 30 + 10 + 50);
+    expect(matchGain(0, { placement: 3, kills: 0, assists: 0 }).gain).toBe(125); // 2nd and 3rd: +25
+    // 250 + 135 = 385: level 2 (100) to level 3 (300), 85 of the 300 to level 4
+    expect(matchGain(250, { placement: 2, kills: 1, assists: 0 })).toMatchObject({ gain: 135, levelUp: true, after: { level: 3, xpIntoLevel: 85, xpForNextLevel: 300 } });
   });
 });
 
@@ -147,6 +151,7 @@ const results: MatchResults = {
     standing(4, 'Ade', 1, { score: 10, kills: 10, deaths: 2, assists: 1, damageDealt: 1234, bestStreak: 6, rating: 1234, mvp: true }),
     standing(0, 'Strafer', 2, { isBot: true, deaths: 5 }),
     standing(7, 'Kemi', 3, { left: true, score: -1, suicides: 1, deaths: 1 }),
+    standing(9, 'Tunde', 3, { score: -50, deaths: 3 }),
   ],
 };
 
@@ -217,6 +222,41 @@ describe("results (the kit's screen 10)", () => {
       <Results view={view({ humans: 1 })} results={{ ...solo, standings: [standing(4, 'Ade', 1, { score: 5, kills: 5 }), standing(0, 'Mantis', 2, { isBot: true })] }} actions={actions} training={{ leave: vi.fn() }} />,
     );
     expect(won).toMatch(/res__name[^>]*>Victory</);
+  });
+});
+
+describe('results alone against bots (audit 2 P-02, P-03, P-06)', () => {
+  const alone: MatchResults = {
+    ...results,
+    standings: [standing(0, '[BOT] Badger', 1, { isBot: true, score: 9, kills: 9, mvp: true }), standing(4, 'Ade', 4, { kills: 0, deaths: 4, damageDealt: 30 }), standing(2, '[BOT] Mantis', 2, { isBot: true }), standing(3, '[BOT] Kestrel', 3, { isBot: true })],
+  };
+  const room = { isHost: true, hostId: 4, code: 'KMTXRA', leave: vi.fn() };
+  // the share buttons need the shell (its share sheet)
+  const withShell = (node: import("react").ReactNode) => renderToStaticMarkup(<ControllerContext.Provider value={{ store: createShellStore(), shareLink: vi.fn() } as unknown as ShellController}>{node}</ControllerContext.Provider>);
+
+  it('the player is the headline; no bot gets the MVP card, the tag or "Beat me"', () => {
+    const html = renderToStaticMarkup(<Results view={view({ humans: 1 })} results={alone} actions={actions} room={room} />);
+    expect(html).toMatch(/res__name[^>]*>4th place</);
+    expect(html).toContain('Badger won · ');
+    expect(html).not.toContain('results.mvp');
+    expect(html).not.toContain('Beat me');
+    expect(html).not.toMatch(/tag--brass/);
+    expect(html).toContain('mf-res__me'); // your soldier, not the winner's trophy
+  });
+
+  it('Play again is the primary button; Share the room drops to a quiet one under it', () => {
+    const html = withShell(<Results view={view({ humans: 1 })} results={alone} actions={actions} room={room} />);
+    expect(html).toMatch(/btn--volt btn--xl btn--block[^"]*"[^>]*>.*?Play again/);
+    expect(html).not.toMatch(/btn--volt btn--xl btn--block[^"]*"[^>]*>(?:(?!<\/button>).)*Share the room/);
+    expect(html).toMatch(/btn--ghost[^"]*"[^>]*>(?:(?!<\/button>).)*Share the room/);
+    expect(html).not.toContain('results.votes');
+    expect(html).toContain('Back to lobby');
+  });
+
+  it('with people, a person still gets the MVP card and sharing leads', () => {
+    const html = withShell(<Results view={view({ results })} results={results} actions={actions} room={{ ...room, code: 'KMTXRA' }} />);
+    expect(html).toContain('results.mvp');
+    expect(html).toMatch(/btn--volt btn--xl btn--block[^"]*"[^>]*>(?:(?!<\/button>).)*Share the room/);
   });
 });
 
@@ -299,6 +339,7 @@ describe('lobby (screen 4)', () => {
     expect(html).toMatch(/<svg viewBox="0 0 \d+ \d+"[^>]*><path fill="var\(--c-qr-dark\)"/);
     expect(html).toMatch(/Roster <span class="num">2<\/span><span class="lobby__of">\/8</);
     expect(html).toMatch(/<span class="num">1<\/span> of 2 ready/);
+
     expect(html.match(/prow prow--open/g)).toHaveLength(6);
     expect(html).toMatch(/prow is-you.*Ade.*Host.*You/);
     expect(html).toMatch(/role="radio" aria-checked="true"[^>]*>5</);
@@ -314,6 +355,22 @@ describe('lobby (screen 4)', () => {
     expect(html).not.toMatch(/thumb--|thumb__/);
     // the first rows load at once, the ones further down the list as it scrolls
     expect(html.match(/loading="eager"/g)).toHaveLength(4);
+  });
+
+  it('a controller lands on the match, never on Leave; Leave asks first (audit 2, N-04)', () => {
+    const host = render(true);
+    expect(host).toMatch(/data-pad-leave="true"[^>]*>(?:(?!<\/button>).)*Leave<\/button>/);
+    expect(host).toMatch(/data-pad-first="true"[^>]*>(?:(?!<\/button>).)*Start now/);
+    expect(render(false)).toMatch(/role="switch"[^>]*data-pad-first="true"/);
+    // the question itself: Stay first, B and Escape are Stay
+    const confirm = renderToStaticMarkup(
+      <ControllerContext.Provider value={{ leave: vi.fn() } as unknown as ShellController}>
+        <LeaveRoomConfirm onStay={vi.fn()} />
+      </ControllerContext.Provider>,
+    );
+    expect(confirm).toContain('Leave the room?');
+    expect(confirm).toContain('You can come back with the room link while the room is open.');
+    expect(confirm).toMatch(/data-pad-first="true" data-pad-back="true">Stay/);
   });
 
   it('a guest reads the settings, and the highlight follows the guest', () => {
@@ -354,6 +411,26 @@ describe('join, names, connection, pause and settings', () => {
     expect(codeLetters('kmt-x1ra')).toBe('KMTXRA');
     expect(codeLetters('ILO')).toBe('');
     expect([joinState('', false, null), joinState('KMT', false, null), joinState('KMTXRA', true, null), joinState('KMTXRA', false, null), joinState('KMTXRB', false, 'No room')]).toEqual(['empty', 'typing', 'pasted', 'ready', 'error']);
+  });
+
+  it('join with a controller: up and down step a box through the code letters, wrapping round (audit 2, N-05)', () => {
+    // an empty box: down starts at A, up at Z
+    expect(cycleLetter('', 0, 1)).toEqual({ code: 'A', at: 0 });
+    expect(cycleLetter('', 0, -1)).toEqual({ code: 'Z', at: 0 });
+    // a letter steps over the ones codes skip (I, L, O) and wraps
+    expect(cycleLetter('KH', 1, 1)).toEqual({ code: 'KJ', at: 1 });
+    expect(cycleLetter('KZ', 1, 1)).toEqual({ code: 'KA', at: 1 });
+    // a box past the code's end steps the next free one; never past six letters
+    expect(cycleLetter('KM', 4, 1)).toEqual({ code: 'KMA', at: 2 });
+    expect(cycleLetter('KMTXRA', 5, -1).code).toBe('KMTXRZ');
+    // a friend code's own alphabet and length
+    expect(cycleLetter('', 0, 1, '23456789ABCDEFGHJKMNPQRSTVWXYZ', 8)).toEqual({ code: '2', at: 0 });
+  });
+
+  it('Edit name: Suggest a name gives a generated name the name rules take (audit 2, N-05)', () => {
+    expect(suggestName(() => 0)).toBe('SwiftFalcon100');
+    expect(suggestName(() => 0.999)).toBe('BlazingRocket999');
+    for (let i = 0; i < 20; i++) expect(suggestName()).toMatch(/^[A-Z][a-z]+[A-Z][a-z]+[1-9][0-9]{2}$/);
   });
 
   it("name entry: the kit's states from what the API said", () => {
@@ -433,7 +510,7 @@ describe('join, names, connection, pause and settings', () => {
 
   it('settings: Reset this tab resets that section only', () => {
     expect(resetPatch('controls')).toMatchObject({ doubleTapDash: true });
-    expect(resetPatch('graphics')).toEqual({ graphics: 'auto', showFps: false, blood: false, showKillEffects: true });
+    expect(resetPatch('graphics')).toEqual({ graphics: 'auto', showFps: false, blood: false, showKillEffects: true, damageNumbers: true, hitMarkers: true });
     expect(Object.keys(resetPatch('accessibility')!)).toEqual(['reduceFlashes', 'softBursts', 'reduceMotion', 'reduceTransparency', 'colorBlind', 'textScale']);
     expect(resetPatch('touch')).toBeNull();
   });

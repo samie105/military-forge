@@ -187,6 +187,7 @@ function desktop(): string {
 
     <div class="respawn plate" data-state="spectating" role="status">
       <p class="respawn__by"><span class="hud-label" data-bind="death.label"></span> <b data-bind="death.killer"></b><svg class="ic--kf" aria-hidden="true" data-state="death-weapon"><use data-bind-attr="href: death.icon"/></svg></p>
+      <p class="respawn__detail" data-bind="death.detail"></p>
       <p class="respawn__timer"><span data-bind="death.lead"></span> <b data-bind="player.respawnIn" data-bind-attr="class: death.numClass"></b> <span data-bind="death.unit"></span></p>
       <div class="bar bar--respawn"><i></i></div>
     </div>

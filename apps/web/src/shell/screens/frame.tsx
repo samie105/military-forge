@@ -5,6 +5,7 @@
  * Plus the hand-off that carries the ID card from name entry into Home's player chip (motion P2).
  */
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
+import { PadKbd, useInputDevice } from '../../gamepad/react';
 import { Icon } from '../../ui/Icon';
 import { logicalRect } from '../../ui/landscape';
 import { rollText, type Box } from '../../ui/motion';
@@ -28,6 +29,8 @@ export function Backdrop({ word }: { word: string }) {
 /** The server's round trip in the top bar (the API's, every 10 s); "Offline" when it can't be reached. */
 /** What Home says when the game server can't be reached: once, in the Play now poster (desktop and phone). */
 export const OFFLINE_LINE = "Can't reach the server. Training with bots still works.";
+/** a suspended or banned account (audit-2 L-04): the server answered, it just won't let this account play online */
+export const SUSPENDED_LINE = "This account can't play online right now. Training with bots still works.";
 
 export function NetPill({ offline = false }: { offline?: boolean }) {
   const ping = useServerPing();
@@ -50,21 +53,31 @@ export function NetPill({ offline = false }: { offline?: boolean }) {
   );
 }
 
-/** The key hints along the bottom of a menu, and the right-hand note (`end`). */
+/**
+ * The key hints along the bottom of a menu, and the right-hand note (`end`). While a controller plays
+ * they're its buttons (each Hint's `pad`), and the pad's floating hint bar stays away (gamepad/: one
+ * set of prompts at a time, in the device in hand: UX audit 2, N-09 and N-15).
+ */
 export function Hints({ children, end }: { children?: ReactNode; end?: ReactNode }) {
   return (
-    <footer className="menu-hints">
+    <footer className="menu-hints" data-pad-hints>
       {children}
       {end && <span className="menu-hints__end">{end}</span>}
     </footer>
   );
 }
 
-/** One hint: a keycap (or two) and what it does. */
-export function Hint({ keys, children }: { keys: ReactNode; children: ReactNode }) {
+/**
+ * One hint: a keycap (or two) and what it does. `pad`: the controller's button(s) for it (glyphs
+ * while a pad plays, `padText` its words if they differ); a hint with no pad button hides then, and
+ * one with only `pad` shows only then.
+ */
+export function Hint({ keys, pad, padText, children }: { keys?: ReactNode; pad?: string | readonly string[]; padText?: ReactNode; children: ReactNode }) {
+  const padInUse = useInputDevice().kind === 'pad';
+  if (padInUse ? !pad : !keys) return null;
   return (
     <span>
-      {keys} {children}
+      {padInUse ? [pad!].flat().map((code) => <PadKbd key={code} code={code} />) : keys} {padInUse && padText !== undefined ? padText : children}
     </span>
   );
 }

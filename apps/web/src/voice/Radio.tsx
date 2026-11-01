@@ -21,6 +21,7 @@ import { voiceChat } from './index';
 import { LongPress, RadioPress } from './press';
 import { setVoiceSettings, voiceSettings, type VoiceSettings } from './settings';
 import { closeComms, commsSheet, openComms } from './sheet';
+import { PlayerMore, roomTarget } from '../social/ReportSheet';
 import type { Speaking, VoiceChat, VoiceState } from './voice';
 
 function useStoreSel<T, U>(store: StoreApi<T>, select: (s: T) => U): U {
@@ -379,8 +380,9 @@ export function CommsSheet({ shell, chat = voiceChat, phone = false }: { shell: 
               {people.map((p) => {
                 const flags = peers[p.id] ?? 0;
                 const muted = mutes.includes(p.id);
+                const blocked = typeof chat.isBlocked === 'function' && chat.isBlocked(p.id);
                 const talk = speaking[p.id];
-                const what = muted ? 'Muted' : talk ? `${routeLabel(talk)} · talking` : !(flags & PEER_VOICE) ? 'Voice off' : !(flags & PEER_MIC) ? 'Listening' : flags & PEER_PARTY ? 'Party' : 'On voice';
+                const what = blocked ? 'Blocked · muted' : muted ? 'Muted' : talk ? `${routeLabel(talk)} · talking` : !(flags & PEER_VOICE) ? 'Voice off' : !(flags & PEER_MIC) ? 'Listening' : flags & PEER_PARTY ? 'Party' : 'On voice';
                 return (
                   <li key={p.id} className={`vc-person${talk && !muted ? ' is-talking' : ''}${muted ? ' is-muted' : ''}`}>
                     <span className="avatar vc-av" aria-hidden="true">
@@ -390,9 +392,11 @@ export function CommsSheet({ shell, chat = voiceChat, phone = false }: { shell: 
                       <b>{p.name}</b>
                       <span>{what}</span>
                     </span>
-                    <button type="button" className={`btn btn--sm btn--icon ${muted ? 'btn--danger' : 'btn--ghost'}`} aria-pressed={muted} aria-label={muted ? `Unmute ${p.name}` : `Mute ${p.name}`} onClick={() => chat.setMuted(p.id, !muted)}>
+                    <button type="button" className={`btn btn--sm btn--icon ${muted ? 'btn--danger' : 'btn--ghost'}`} aria-pressed={muted} aria-label={muted ? `Unmute ${p.name}` : `Mute ${p.name}`} disabled={blocked} onClick={() => chat.setMuted(p.id, !muted)}>
                       <Icon name={muted ? 'sx-vol-x' : 'sx-vol'} />
                     </button>
+                    {/* report, block, the host's remove (social/ReportSheet.tsx) */}
+                    <PlayerMore target={roomTarget(p, 'comms')} onOpen={closeComms} />
                   </li>
                 );
               })}

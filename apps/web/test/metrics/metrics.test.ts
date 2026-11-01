@@ -3,7 +3,8 @@ import type { ClientBatch } from '@military-forge/shared';
 import { describe, expect, it } from 'vitest';
 import { AdViewCounter } from '../../src/metrics/adViews';
 import { MetricsClient, newSessionId, type Transport } from '../../src/metrics/client';
-import { CONSENT_KEY, Consent, analyticsOn, anonymousOn, promptDue, readChoice } from '../../src/metrics/consent';
+import { CONSENT_KEY, Consent, analyticsOn, anonymousOn, consentAskable, promptDue, readChoice } from '../../src/metrics/consent';
+import { consentLine } from '../../src/metrics/ConsentCard';
 import { affinity, contextTags, type AdContext } from '../../src/render3d/ads/audience';
 import { houseManifest, type AdSlot, type HousePool } from '../../src/render3d/ads/manifest';
 
@@ -158,5 +159,19 @@ describe('house-ad audience', () => {
     const touch = frames((x) => affinity(x, ctx));
     expect(plain.filter((c) => c.startsWith('house:w')).length).toBe(touch.filter((c) => c.startsWith('house:w')).length);
     expect(touch.filter((c) => c === 'house:d1').length).toBeGreaterThan(plain.filter((c) => c === 'house:d1').length);
+  });
+});
+
+describe('the play-data question waits for play (audit 2 P-08)', () => {
+  it('asked after the first finished match, not before; the debug client (no memory) does not wait', () => {
+    expect(consentAskable(0)).toBe(false);
+    expect(consentAskable(1)).toBe(true);
+    expect(consentAskable(null)).toBe(true);
+  });
+
+  it("keeps the owner's words, without the ads while the ads are off", () => {
+    expect(consentLine('ask', false)).toBe('We use how you play to improve the game. Never your name. You can change this in Settings.');
+    expect(consentLine('ask', true)).toContain('to pick the ads you see');
+    expect(consentLine('tell', false)).not.toMatch(/ads/);
   });
 });

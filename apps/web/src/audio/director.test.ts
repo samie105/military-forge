@@ -294,6 +294,20 @@ describe('the gun in hand', () => {
     expect(sink.ids().filter((id) => id === 'rifle.empty')).toHaveLength(2);
   });
 
+  it('the last rounds tick by ear: once as the magazine crosses the low line, lighter on the last round (audit L-21)', () => {
+    const { sink, step } = setup();
+    const gun = (mag: number) => player(ME, { weapons: [{ def: K47.index, mag, reserve: 90, reloadTicks: 0 }, { def: NO_WEAPON, mag: 0, reserve: 0, reloadTicks: 0 }] });
+    const low = Math.max(1, Math.floor(K47.mag * 0.2));
+    for (let m = low + 2; m >= 1; m--) step(frame([gun(m)]));
+    const ids = sink.ids();
+    expect(ids.filter((id) => id === 'ui.lowammo')).toHaveLength(1);
+    expect(ids.filter((id) => id === 'ui.lastround')).toHaveLength(K47.mag >= 8 && low > 1 ? 1 : 0);
+    // a fresh magazine, then down again: it ticks again
+    step(frame([gun(K47.mag)]));
+    step(frame([gun(low)]));
+    expect(sink.ids().filter((id) => id === 'ui.lowammo')).toHaveLength(2);
+  });
+
   it('a melee swing whooshes once per swing (its ticks count up)', () => {
     const { sink, step } = setup();
     step(frame([player(ME)]));

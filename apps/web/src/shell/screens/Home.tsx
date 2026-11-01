@@ -3,7 +3,8 @@
  * Play with friends (Create room), Join with code, Training, the player's nameplate and what they
  * spawn with, field orders with the player's own keys, and the sitrep ticker of the maps. Enter
  * creates a room. Arriving from name entry, the ID card becomes the player chip (motion P2); the
- * rows rise in turn (P3). The kit's "Last match" card waits for match history (not kept yet).
+ * rows rise in turn (P3). The chip is the player's own soldier and level (audit 2 P-09, P-04); the
+ * side column ends with the last online match and a personal best once there is one (P-10).
  */
 import { FRAG, maps, weapons } from '@military-forge/content';
 import { savedGunIndices } from '../../locker/accountSync';
@@ -16,17 +17,22 @@ import { sharedElement } from '../../ui/motion';
 import { Screen } from '../../ui/Screen';
 import { useCtl } from '../context';
 import type { ShellStore } from '../store';
-import { Backdrop, Hint, Hints, NetPill, OFFLINE_LINE, takeCard } from './frame';
+import { Backdrop, Hint, Hints, NetPill, OFFLINE_LINE, SUSPENDED_LINE, takeCard } from './frame';
 import { MAP_CARDS, lobbyMaps } from './Lobby';
 import { FriendsButton, SquadCard } from '../../social/SocialLayer';
 import { SavedAdsList } from '../../ads/SavedAds';
 import { NextOrders } from '../../tour/NextOrders';
 import { currentDevice } from '../../gamepad';
+import { useInputDevice, useShownControls } from '../../gamepad/react';
 import { drillDone, isTouchDevice } from '../../touch';
 import { InstallButton } from '../../pwa/InstallButton';
 import { ConsentCard, useHomeAsk } from '../../metrics/ConsentCard';
 import { HomeSoldier } from '../../presentation/HomeSoldier';
 import { PosterImg, QUICK_MATCH_ART } from '../posters';
+import { PlayNowBots } from '../../tour/PlayNowBots';
+import { Portrait } from '../../portrait/Portrait';
+import { useMyLook } from '../../looks/mine';
+import { LastMatchCard, LevelLine, LevelTag } from './Progress';
 
 /** The brand: the emblem and the name, once in the whole UI (round two's .brand on Home). */
 export function Brand() {
@@ -60,23 +66,33 @@ export function nameplateChars(name: string): number {
   return Math.max(4, Math.round(n * 10) / 10);
 }
 
+/** Focus on a control (Enter presses it), not the page or the poster (Enter is Play now then). */
+function onControl(el: Element | null): boolean {
+  return !!el && el !== document.body && el.matches('button, a[href], input, select, textarea, [role="button"], [role="tab"], [role="radio"], [role="switch"], [role="slider"], [contenteditable="true"]');
+}
+
 export function Home({ store }: { store: ShellStore }) {
   const ctl = useCtl();
   const profile = useStore(store, (s) => s.profile);
-  const settings = useStore(store, (s) => s.settings);
   const offline = !!profile?.offline;
-  const chip = useRef<HTMLSpanElement>(null);
+  const chip = useRef<HTMLButtonElement>(null);
+  // the player's own soldier is their avatar everywhere (owner rule; audit 2 P-09)
+  const look = useMyLook();
   // what Next orders know of this device now (tour/orders.ts)
   const [ordersContext] = useState(() => ({ offline, touch: isTouchDevice(), pad: currentDevice().pad !== null, drillDone: drillDone() }));
   // one thing at a time (audit 31 Oct, D-01): the play-data question, then the Home stops, then Next orders
   const ask = useHomeAsk();
+  // the controller's buttons in the prompts while one plays (audit 2, N-09)
+  const pad = useInputDevice().kind === 'pad';
+  const shown = useShownControls(store);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // Enter is Play with friends only when nothing has focus: on a focused button it presses that button.
+      // Enter is Play now when no control has focus: on a focused button it presses that button. After a
+      // click on the poster or the page (focus on a non-control), still Play now (audit 2, N-16).
       // Not under an overlay (Join, the QR panels), nor when a box took it (a pasted code's Enter: the box
       // may be gone by now, focus on body)
-      if (e.code === 'Enter' && !e.defaultPrevented && !store.getState().overlay && (document.activeElement === null || document.activeElement === document.body)) {
+      if (e.code === 'Enter' && !e.defaultPrevented && !store.getState().overlay && !onControl(document.activeElement)) {
         e.preventDefault();
         ctl.playNow();
       }
@@ -102,8 +118,9 @@ export function Home({ store }: { store: ShellStore }) {
       <div className="menu">
         <header className="menu-top home__top">
           <Brand />
-          <nav className="tabs home__tabs" aria-label="Main">
-            <button type="button" className="tab" aria-current="page">
+          {/* L1 / R1 step through it with a controller (audit 2, N-11); Play is where you are: no tab stop, no pad stop (N-03, N-16) */}
+          <nav className="tabs home__tabs" aria-label="Main" data-pad-tabs>
+            <button type="button" className="tab" aria-current="page" tabIndex={-1} data-pad-skip>
               <Icon name="play" />
               Play
             </button>
@@ -119,7 +136,8 @@ export function Home({ store }: { store: ShellStore }) {
               <Icon name="gem" />
               Store
             </button>
-            <button type="button" className="tab m-p8" onClick={() => ctl.openSettings()}>
+            {/* Options / Menu on Home (gamepad/menus.ts data-pad-start) */}
+            <button type="button" className="tab m-p8" data-pad-start onClick={() => ctl.openSettings()}>
               <Icon name="gear" />
               Settings
             </button>
@@ -128,12 +146,14 @@ export function Home({ store }: { store: ShellStore }) {
           <InstallButton />
           <FriendsButton />
           <NetPill offline={offline} />
-          <span ref={chip} className="me-chip">
-            <span className="avatar" aria-hidden="true">
-              {([...name.trim()][0] ?? '?').toUpperCase()}
+          {/* the name chip opens your account (audit N-21: it looked like a button and did nothing) */}
+          <button type="button" ref={chip} className="me-chip m-p8" aria-label={`You: ${name}. Your account`} onClick={() => ctl.openAccount()}>
+            <span className="avatar avatar--portrait" aria-hidden="true">
+              <Portrait look={look} size={64} name={name} />
             </span>
             <b data-bind="player.name">{name}</b>
-          </span>
+            <LevelTag />
+          </button>
         </header>
 
         <div className="menu-body home">
@@ -154,15 +174,16 @@ export function Home({ store }: { store: ShellStore }) {
               <h2 className="display home__poster-title">Play now</h2>
               {/* offline: the one place Home says so (audit 28 Oct: it said it four ways) */}
               <p className={offline ? 'home__poster-sub home__poster-sub--off' : 'home__poster-sub'} role={offline ? 'status' : undefined}>
-                {offline ? OFFLINE_LINE : 'A room of your own, bots fill it, the fight starts at once. Friends join by its code.'}
+                {offline ? (profile?.suspended ? SUSPENDED_LINE : OFFLINE_LINE) : 'Bots fill the room and the fight starts at once. Others on Play now may join. Friends join by its code.'}
               </p>
               <div className="home__poster-cta">
                 {/* one tap to a fight (mobile audit P1-6); Create room is the friends' way in */}
-                <button className="btn btn--ink btn--xl home__create m-p8" type="button" data-tour="play" onClick={() => ctl.playNow()}>
+                {/* a controller lands here first: ✕ / A plays (audit 2, N-03) */}
+                <button className="btn btn--ink btn--xl home__create m-p8" type="button" data-tour="play" data-pad-first onClick={() => ctl.playNow()}>
                   <Icon name="play" />
                   Play now
                 </button>
-                <Cap lg>Enter</Cap>
+                {!pad && <Cap lg>Enter</Cap>}
                 <button className="btn btn--paper btn--lg m-p8" type="button" data-tour="create" disabled={offline} onClick={() => ctl.go({ to: 'create' })}>
                   <Icon name="users-plus" />
                   Create room
@@ -176,6 +197,8 @@ export function Home({ store }: { store: ShellStore }) {
                   </span>
                 </button>
               </div>
+              {/* Play now's bots, in plain sight and the player's to change (audit 2 P-01) */}
+              {!offline && <PlayNowBots />}
               <span className="hazard" aria-hidden="true"></span>
             </article>
             <div className="home__row">
@@ -229,6 +252,8 @@ export function Home({ store }: { store: ShellStore }) {
                   <span>Frag ×{FRAG.spawnCount}</span>
                 </span>
               </span>
+              {/* the level, a number and a bar (audit 2 P-04): online matches earn it */}
+              {!offline && <LevelLine />}
               {!offline && (
                 <button type="button" className="btn btn--ghost btn--sm m-p8" onClick={() => ctl.openOverlay('name')}>
                   <Icon name="edit" />
@@ -244,19 +269,22 @@ export function Home({ store }: { store: ShellStore }) {
               context={ordersContext}
               held={ask !== null}
               fallback={
+            <>
+            {/* the last online match and a personal best to beat (audit 2 P-10) */}
+            {!offline && <LastMatchCard style={row(5)} />}
             <section className="card card--print home__news m-p3" style={row(5)}>
               <span className="label label--volt">Field orders</span>
               <ul>
                 <li>
                   <Icon name="g-frag" className="ic--fill" />
                   <span>
-                    <b>Grenade belt</b> · tap <Kbd code={settings.bindings.grenade[0]} /> to throw, hold it to aim the arc
+                    <b>Grenade belt</b> · tap <Kbd code={shown.bindings.grenade[0]} /> to throw, hold it to aim the arc
                   </span>
                 </li>
                 <li>
                   <Icon name="dash" />
                   <span>
-                    <b>Dash</b> · <Kbd code={settings.bindings.dash[0]} /> with a direction, 8 ways
+                    <b>Dash</b> · <Kbd code={shown.bindings.dash[0]} /> with a direction, 8 ways
                   </span>
                 </li>
                 <li>
@@ -266,11 +294,12 @@ export function Home({ store }: { store: ShellStore }) {
                   </span>
                 </li>
               </ul>
-              <button type="button" className="btn btn--paper btn--sm btn--block m-p8" onClick={() => ctl.openSettings('controls')}>
-                <Icon name="keyboard" />
-                All the keys
+              <button type="button" className="btn btn--paper btn--sm btn--block m-p8" onClick={() => ctl.openSettings(pad ? 'controller' : 'controls')}>
+                <Icon name={pad ? 'sliders' : 'keyboard'} />
+                {pad ? 'All the buttons' : 'All the keys'}
               </button>
             </section>
+            </>
               }
             />
             {/* the billboard ads the player saved during play (tap-to-save): only what they chose */}
@@ -288,9 +317,12 @@ export function Home({ store }: { store: ShellStore }) {
             ))}
           </div>
         </div>
+        {/* no "Esc Menu": Escape on Home has no menu to open (audit 2, N-09) */}
         <Hints>
           <Hint keys={<Cap>Enter</Cap>}>Play now</Hint>
-          <Hint keys={<Cap>Esc</Cap>}>Menu</Hint>
+          <Hint pad="Pad0">Select</Hint>
+          <Hint pad={['Pad4', 'Pad5']}>Locker, Armory, Store</Hint>
+          <Hint pad="Pad9">Settings</Hint>
         </Hints>
       </div>
       {/* play stats: the one-time choice (docs/16 §6.2) */}

@@ -217,3 +217,7 @@ html:is(.mf-narrow, .mf-big-text):where(:not(.mf-phone)) .mf-cr-fit [data-active
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__view .seg { flex-direction: column; }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__view .seg__opt { min-height: 44px; min-width: 64px; }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__stage canvas { left: 76px; width: calc(100% - 76px); }
+
+/* phones: every control a thumb's 48 px (audit N-17, A-16: they were 44 px, the bare minimum) */
+:where(html.mf-phone) :where(.mf-cr-fit) :is(.mf-cr__steps button, .menu-top .btn--sm, .mf-cr__view .seg__opt, .mf-cr__panel .tab, .mf-cr__act .btn) { min-height: var(--touch-min, 48px); }
+:where(html.mf-phone) :where(.mf-cr-fit) .menu-top .btn--sm { min-width: var(--touch-min, 48px); }

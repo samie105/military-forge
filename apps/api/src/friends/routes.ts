@@ -9,12 +9,15 @@
  *   POST   /friends/requests/:id/decline → 204
  *   DELETE /friends/requests/:id         → 204 (take back your request)
  *   DELETE /friends/:id                  → 204 (unfriend)
- *   POST   /friends/blocks { id }        → 204 (also ends a friendship and requests)
+ *   POST   /friends/blocks { id } | { name } → 204 (anyone, friend or not; also ends a friendship and requests)
  *   DELETE /friends/blocks/:id           → 204
  *   POST   /friends/code                 → { code } (a new friend code; the old one stops working)
  *   GET    /friends/search?q=            → { players: FoundPlayer[] } (names starting with q, closest first, at most 8)
  *   GET    /friends/recent               → { players: FoundPlayer[] } (played with recently, not friends yet)
- *   PUT    /friends/settings { findable } → { findable } ("Let players find me by name")
+ *   PUT    /friends/settings { findable?, requestsFrom? } → { findable, requestsFrom }
+ *          ("Let players find me by name"; who may send you requests: 'anyone' | 'played' | 'code')
+ *
+ * An account whose device said under 18 gets 403 `adults_only` from every route (audit-2 L-03).
  *
  * Search (31 Oct) answers as you type, so its limits are wider than Add a friend's, but they still
  * stop a sweep: a few dozen searches a minute and a couple of hundred an hour per player, more per IP
@@ -23,9 +26,11 @@
  */
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { requireAuth } from '../auth/middleware';
+import { adultsOnly, requireAuth } from '../auth/middleware';
 import type { AuthService } from '../auth/sessions';
 import type { Config } from '../config';
+import type { Db } from '../db/client';
+import { REQUESTS_FROM } from '../db/schema';
 import { clientRateLimitKey } from '../http/clientIp';
 import type { AppEnv } from '../http/context';
 import { ApiError, readJson } from '../http/errors';
@@ -35,18 +40,22 @@ import { formatFriendCode } from './code';
 import { USER_ID, searchKey, type FriendsService } from './service';
 
 const RequestBody = z.union([z.strictObject({ name: z.string().min(1).max(64) }), z.strictObject({ code: z.string().min(1).max(32) })]);
-const BlockBody = z.strictObject({ id: z.string().regex(USER_ID) });
-const SettingsBody = z.strictObject({ findable: z.boolean() });
+/** a block by id (the friends panel's rows), or by exact name (a room's rows: the scoreboard, the lobby, voice) */
+const BlockBody = z.union([z.strictObject({ id: z.string().regex(USER_ID) }), z.strictObject({ name: z.string().min(1).max(64) })]);
+const SettingsBody = z
+  .strictObject({ findable: z.boolean().optional(), requestsFrom: z.enum(REQUESTS_FROM).optional() })
+  .refine((b) => b.findable !== undefined || b.requestsFrom !== undefined, 'Nothing to change');
 
 function userParam(raw: string): string {
   if (!USER_ID.test(raw)) throw new ApiError(400, 'invalid_player_id', 'Not a player id');
   return raw;
 }
 
-export function friendRoutes(deps: { config: Config; kv: Kv; auth: AuthService; friends: FriendsService }): Hono<AppEnv> {
-  const { config, kv, auth, friends } = deps;
+export function friendRoutes(deps: { config: Config; db: Db; kv: Kv; auth: AuthService; friends: FriendsService }): Hono<AppEnv> {
+  const { config, db, kv, auth, friends } = deps;
   const app = new Hono<AppEnv>();
   app.use(requireAuth(auth));
+  app.use(adultsOnly(db));
   const write = (userId: string) => enforceRateLimit(kv, LIMITS.friendWrite, userId);
 
   app.get('/', async (c) => {
@@ -77,7 +86,7 @@ export function friendRoutes(deps: { config: Config; kv: Kv; auth: AuthService; 
     const { userId } = c.get('auth')!;
     await write(userId);
     const body = await readJson(c, SettingsBody);
-    return c.json({ findable: await friends.setFindable(userId, body.findable) });
+    return c.json(await friends.setSettings(userId, body));
   });
 
   app.post('/requests', async (c) => {
@@ -114,7 +123,17 @@ export function friendRoutes(deps: { config: Config; kv: Kv; auth: AuthService; 
     const { userId } = c.get('auth')!;
     await write(userId);
     const body = await readJson(c, BlockBody);
-    await friends.block(userId, body.id);
+    let id: string;
+    if ('id' in body) id = body.id;
+    else {
+      // by name: the same lookup (and limits) as a request by name, so it can't sweep the player list
+      await enforceRateLimit(kv, LIMITS.friendLookup, userId);
+      const found = await friends.find({ name: body.name });
+      if (!found) throw new ApiError(404, 'player_not_found', 'No player has that name');
+      id = found.id;
+    }
+    await friends.block(userId, id);
+    c.get('log').info({ userId, by: 'id' in body ? 'id' : 'name' }, 'player blocked');
     return c.body(null, 204);
   });
 

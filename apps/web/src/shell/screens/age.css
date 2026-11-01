@@ -42,6 +42,8 @@
   font: var(--fw-bold) var(--fs-18) / 1.2 var(--f-ui);
 }
 .age-card__field select:focus-visible { outline: none; border-color: var(--c-volt); box-shadow: 0 0 0 2px var(--c-volt-soft); }
+/* a controller is in use: how it steps the year (AgeQuestion.tsx) */
+.age-q__pad { display: flex; align-items: center; gap: var(--sp-1); color: var(--c-muted); font-size: var(--fs-16); font-weight: var(--fw-bold); }
 /* AgeQuestion.tsx's birthday follow-up (only for the year a player turns 18), on the gate and the account form */
 .age-q__birthday { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; margin: 0; padding: 0; border: 0; }
 .age-q__birthday legend { padding: 0; margin-bottom: var(--sp-1); font-size: var(--fs-16); font-weight: var(--fw-bold); }

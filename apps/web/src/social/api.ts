@@ -53,7 +53,21 @@ export interface FriendsList {
   max: number;
   /** "Let players find me by name" (absent from an older API: on) */
   findable?: boolean;
+  /** who may send you friend requests (absent from an older API: anyone) */
+  requestsFrom?: RequestsFrom;
 }
+
+/** Who may send you friend requests (apps/api profiles.requests_from). */
+export type RequestsFrom = 'anyone' | 'played' | 'code';
+
+/** Why a player is reported (apps/api REPORT_REASONS). */
+export type ReportReason = 'name' | 'voice' | 'cheating' | 'spam' | 'underage' | 'other';
+
+/** Where the Report sheet was opened (apps/api REPORT_PLACES). */
+export type ReportPlace = 'scoreboard' | 'lobby' | 'results' | 'deathcam' | 'friends' | 'search' | 'recent' | 'request' | 'invite' | 'comms' | 'other';
+
+/** A report about a player: by account id (the friends panel's rows) or exact name (a room's rows). */
+export type PlayerReport = ({ id: string } | { name: string }) & { reason: ReportReason; note?: string; room?: string; place?: ReportPlace };
 
 export type RequestResult = { status: 'requested'; user: Person } | { status: 'friends'; friend: Friend };
 
@@ -115,6 +129,16 @@ export class FriendsApi {
     return this.api.authed('POST', '/friends/blocks', { id });
   }
 
+  /** Block by exact name: a room's players carry no account id. */
+  blockByName(name: string): Promise<void> {
+    return this.api.authed('POST', '/friends/blocks', { name });
+  }
+
+  /** Report a player (the Report sheet): 201 a new report, 200 one already made today. */
+  report(body: PlayerReport): Promise<{ id: number; already?: true }> {
+    return this.api.authed('POST', '/reports/player', body);
+  }
+
   unblock(id: string): Promise<void> {
     return this.api.authed('DELETE', `/friends/blocks/${encodeURIComponent(id)}`);
   }
@@ -135,6 +159,10 @@ export class FriendsApi {
 
   setFindable(findable: boolean): Promise<{ findable: boolean }> {
     return this.api.authed('PUT', '/friends/settings', { findable });
+  }
+
+  setRequestsFrom(requestsFrom: RequestsFrom): Promise<{ findable: boolean; requestsFrom: RequestsFrom }> {
+    return this.api.authed('PUT', '/friends/settings', { requestsFrom });
   }
 
   /** `now`: the server's clock, so a phone with a wrong clock still counts down right */

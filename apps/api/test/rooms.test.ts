@@ -7,7 +7,7 @@ import { generateSigningKey } from '../src/auth/keys';
 import { verifyJwt } from '../src/auth/tokens';
 import { loadouts } from '../src/db/schema';
 import { LIMITS } from '../src/http/rateLimit';
-import { ROOM_TTL_MS, TICKET_AUDIENCE, TICKET_ISSUER, keepRooms, type JoinTicketClaims, type RoomJoin } from '../src/rooms/routes';
+import { QUICK_OPEN_MS, QUICK_PEOPLE, ROOM_TTL_MS, TICKET_AUDIENCE, TICKET_ISSUER, keepRooms, type JoinTicketClaims, type RoomJoin } from '../src/rooms/routes';
 import { bearer, createGuest, createTestApi, json, type TestApi } from './helpers';
 
 let api: TestApi;
@@ -222,5 +222,69 @@ describe('GET /rooms/:code (the invite link, mobile audit P1-3)', () => {
     expect(body.host!.length).toBeGreaterThan(2);
     expect((await api.app.request('/rooms/QQQQQQ', { headers: { 'x-forwarded-for': api.ip() } })).status).toBe(404);
     expect((await api.app.request('/rooms/x', { headers: { 'x-forwarded-for': api.ip() } })).status).toBe(400);
+  });
+});
+
+describe('POST /rooms/quick (Play now, audit 2 P-07)', () => {
+  const quick = async (token: string) => {
+    const res = await api.app.request('/rooms/quick', json({}, { ...bearer(token), 'x-forwarded-for': api.ip() }));
+    return { status: res.status, body: (await res.json()) as RoomJoin & { joined: boolean } };
+  };
+  // a fresh start: the open Play now rooms of earlier tests have aged out
+  const fresh = () => api.clock.advance(QUICK_OPEN_MS + 1);
+
+  it('the second Play now joins the first one\'s room; a full one, or your own, makes a new one', async () => {
+    if (api.kv.kind !== 'memory') return; // the clock moves
+    fresh();
+    const a = await createGuest(api);
+    const first = await quick(a.accessToken);
+    expect(first.status).toBe(201);
+    expect(first.body.joined).toBe(false);
+    const b = await createGuest(api);
+    const second = await quick(b.accessToken);
+    expect(second.status).toBe(200);
+    expect(second.body).toMatchObject({ code: first.body.code, joined: true });
+    for (let i = 2; i < QUICK_PEOPLE; i++) expect((await quick((await createGuest(api)).accessToken)).body.code).toBe(first.body.code);
+    const late = await quick((await createGuest(api)).accessToken);
+    expect(late.body.joined).toBe(false); // a seat for a person: no more than QUICK_PEOPLE
+    expect(late.body.code).not.toBe(first.body.code);
+    // your own room (or one you left) isn't offered back: a fresh one
+    const again = await quick(a.accessToken);
+    expect(again.body.code).not.toBe(first.body.code);
+  });
+
+  it('a Create room room is never offered; nor an old Play now room, nor one everyone left', async () => {
+    if (api.kv.kind !== 'memory') return;
+    fresh();
+    const host = await createGuest(api);
+    const priv = ((await (await create(host.accessToken)).json()) as RoomJoin).code;
+    const p = await quick((await createGuest(api)).accessToken);
+    expect(p.body.code).not.toBe(priv);
+    api.clock.advance(QUICK_OPEN_MS + 1);
+    expect((await quick((await createGuest(api)).accessToken)).body.code).not.toBe(p.body.code);
+    // everyone gone (their pages stopped saying they're in it): not offered
+    fresh();
+    const lone = await createGuest(api);
+    const left = await quick(lone.accessToken);
+    await api.app.request('/me/presence', { method: 'DELETE', headers: bearer(lone.accessToken) });
+    expect((await quick((await createGuest(api)).accessToken)).body.code).not.toBe(left.body.code);
+  });
+
+  it('never puts you with a player you blocked, or one who blocked you (audit-2 L-02)', async () => {
+    if (api.kv.kind !== 'memory') return;
+    for (const blockerFirst of [true, false]) {
+      fresh();
+      const a = await createGuest(api);
+      const b = await createGuest(api);
+      const [by, of] = blockerFirst ? [a, b] : [b, a];
+      const res = await api.app.request('/friends/blocks', json({ id: of.user.id }, { ...bearer(by.accessToken), 'x-forwarded-for': api.ip() }));
+      expect(res.status).toBe(204);
+      const first = await quick(a.accessToken);
+      const second = await quick(b.accessToken);
+      expect(second.body.joined).toBe(false);
+      expect(second.body.code).not.toBe(first.body.code);
+      // someone else still gets in
+      expect((await quick((await createGuest(api)).accessToken)).body.joined).toBe(true);
+    }
   });
 });

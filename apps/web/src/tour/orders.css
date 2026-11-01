@@ -45,3 +45,30 @@ html.mf-short .mf-orders__line { display: none; }
 .mf-debrief p { display: flex; align-items: center; gap: var(--sp-2); margin: 0; font-size: var(--fs-16); color: var(--c-text); }
 .mf-debrief .ic { width: 18px; height: 18px; flex: none; color: var(--c-volt); }
 .mf-debrief__next span { flex: 1; min-width: 0; }
+/* the easier start with its button (audit 2 P-03): the words keep the line, the button goes under them */
+.mf-debrief__try { flex-wrap: wrap; }
+.mf-debrief__try > span { flex: 1 1 calc(100% - 26px); }
+.mf-debrief__try > .btn { margin-left: 26px; }
+
+/* Play now's bots under its button (tour/PlayNowBots.tsx, audit 2 P-01): one quiet line, a 4-way pick */
+.mf-pnbots { position: relative; z-index: 1; margin-top: var(--sp-3); font-size: var(--fs-16); font-weight: var(--fw-semi); color: var(--c-text); }
+.mf-pnbots__line { display: flex; align-items: center; flex-wrap: wrap; gap: 0 var(--sp-1); margin: 0; }
+.mf-pnbots__line b { font-weight: var(--fw-black); }
+.mf-pnbots__why { color: var(--c-muted); }
+.mf-pnbots__change {
+  min-height: 40px; padding: 0 var(--sp-1); border: 0; background: none; color: inherit; cursor: pointer;
+  font: inherit; font-weight: var(--fw-bold); text-decoration: underline; text-underline-offset: 3px;
+}
+.mf-pnbots__change:hover, .mf-pnbots__change:focus-visible { color: var(--c-volt); }
+.mf-pnbots__pick { display: inline-flex; flex-wrap: wrap; gap: var(--sp-1); padding: var(--sp-1); border-radius: var(--r-xs); background: color-mix(in srgb, var(--c-ink-950) 82%, transparent); }
+.mf-pnbots__opt {
+  min-height: 40px; min-width: 64px; padding: 0 var(--sp-3); border: var(--bw) solid var(--c-line); border-radius: var(--r-xs);
+  background: transparent; color: var(--c-text); cursor: pointer; font: inherit; font-weight: var(--fw-bold);
+}
+.mf-pnbots__opt[aria-checked='true'] { background: var(--c-volt); border-color: var(--c-volt); color: var(--c-volt-ink); }
+.mf-pnbots--phone { margin-top: 0; font-size: calc(13px * var(--text-scale, 1)); }
+.mf-pnbots--phone .mf-pnbots__change, .mf-pnbots--phone .mf-pnbots__opt { min-height: 36px; }
+.mf-pnbots--phone .mf-pnbots__opt { min-width: 52px; padding: 0 var(--sp-2); }
+
+/* Results: Play now's bots just moved (BotsMoved) */
+.mf-bots-moved { margin: var(--sp-3) 0 0; font-size: var(--fs-16); color: var(--c-text); }

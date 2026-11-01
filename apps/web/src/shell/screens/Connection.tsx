@@ -68,7 +68,7 @@ function ConnFrame({ states, label, children }: { states: string[]; label: strin
   );
 }
 
-export function Connecting({ code, step, creating = false, local = false, onCancel }: { code: string | null; step: ConnectStep; creating?: boolean; local?: boolean; onCancel: () => void }) {
+export function Connecting({ code, step, creating = false, local = false, note, onCancel }: { code: string | null; step: ConnectStep; creating?: boolean; local?: boolean; note?: string; onCancel: () => void }) {
   return (
     <ConnFrame states={['connecting']} label="Connecting">
       <div className="conn ticket m-p1" role="alertdialog" aria-labelledby="conn-connecting">
@@ -78,7 +78,9 @@ export function Connecting({ code, step, creating = false, local = false, onCanc
         <h1 id="conn-connecting" className="display conn__title">
           {creating && !code ? 'Making your room' : code ? `Joining room ${code}` : 'Finding the room'}
         </h1>
-        <p className="conn__body">{creating && !code ? 'A room of your own, with a link to send your friends.' : local ? 'Straight to the host’s phone over the Wi-Fi: a few seconds.' : 'Getting you in: a few seconds.'}</p>
+        <p className="conn__body" role={note ? 'status' : undefined}>
+          {note ?? (creating && !code ? 'A room of your own, with a link to send your friends.' : local ? 'Straight to the host’s phone over the Wi-Fi: a few seconds.' : 'Getting you in: a few seconds.')}
+        </p>
         <ol className="conn__steps">
           {(local ? LOCAL_STEPS : STEPS).map(([now, done], i) =>
             i < step ? (
@@ -100,7 +102,8 @@ export function Connecting({ code, step, creating = false, local = false, onCanc
           )}
         </ol>
         <div className="conn__actions">
-          <button className="btn btn--ghost btn--xl m-p8" type="button" onClick={blurAfter(onCancel)}>
+          {/* not where a controller lands (a mash of ✕ / A while joining cancelled it: audit 2, N-04): its ○ / B cancels */}
+          <button className="btn btn--ghost btn--xl m-p8" type="button" data-pad-skip data-pad-back onClick={blurAfter(onCancel)}>
             <Icon name="close" />
             Cancel
           </button>
@@ -191,7 +194,7 @@ export function MapLoading({
           <div className="bar load__bar" role="progressbar" aria-label="Loading the map" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} style={{ '--load': pct / 100 } as CSSProperties}>
             <i></i>
           </div>
-          <button className="btn btn--ghost m-p8 mf-load__cancel" type="button" onClick={blurAfter(onCancel)}>
+          <button className="btn btn--ghost m-p8 mf-load__cancel" type="button" data-pad-skip data-pad-back onClick={blurAfter(onCancel)}>
             <Icon name="close" />
             Cancel
           </button>
@@ -241,7 +244,7 @@ const BACK_MS = 1200;
  * count rolling (P4); when the connection is back it leaves accelerating and a green "Back" chip
  * stamps in (P7) for 1.2 s.
  */
-export function ReconnectBanner({ connection }: { connection: ConnectionView }) {
+export function ReconnectBanner({ connection, playing = true }: { connection: ConnectionView; playing?: boolean }) {
   useTicker(1000);
   const reconnecting = connection.state === 'reconnecting';
   const [phase, setPhase] = useState<'off' | 'on' | 'leaving' | 'back'>(reconnecting ? 'on' : 'off');
@@ -282,13 +285,14 @@ export function ReconnectBanner({ connection }: { connection: ConnectionView }) 
           <span className="spinner"></span>
           <span className="mf-reconnect__body">
             <span>
-              <b>{connection.code === 1012 ? 'The server updated.' : 'Connection dropped.'}</b> {connection.code === 1012 ? 'Rejoining' : 'Reconnecting'} · try <RollNum value={Math.min(now, of || now)} />
+              <b>{connection.code === 1012 ? 'The server is restarting.' : 'Connection dropped.'}</b> {connection.code === 1012 ? 'Rejoining' : 'Reconnecting'} · try <RollNum value={Math.min(now, of || now)} />
               {of > 0 && <> of {of}</>}
               {left > 0 ? ` · ${left} s left` : ''}
             </span>
             {of > 0 && <TryPips made={Math.min(now, of)} of={of} />}
           </span>
-          <span className="reconnect__sub">{connection.code === 1012 ? 'Back in the same room in a moment' : 'The match keeps running'}</span>
+          {/* the match keeps running only when one is (audit L-18: the lobby said so too) */}
+          <span className="reconnect__sub">{connection.code === 1012 ? 'Back in the same room in a moment' : playing ? 'The match keeps running' : 'Your place is kept for a minute'}</span>
         </div>
       )}
     </Screen>

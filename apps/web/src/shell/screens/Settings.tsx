@@ -4,7 +4,7 @@
  * Account (save this soldier with an email and password, sign in, sign out: account/AccountPanel.tsx).
  * Everything saves on this device as it changes; Back (Esc) and Done close it.
  */
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useStore } from 'zustand';
 import { framesPerSecond, netHistory, NET_HISTORY } from '../../stats';
 import { getTouchSettings, onTouchChange, openTouchEditor, resetTouchLayout, setTouchPreset, setTouchSettings, type TouchSettings } from '../../touch';
@@ -12,6 +12,7 @@ import { ASSIST_HELP, ASSIST_NAMES, DEFAULT_TOUCH_SETTINGS, PRESET_HELP, PRESET_
 import { ASSIST_LEVELS, type AssistLevel } from '../../input/assist';
 import { canVibrate } from '../../touch/platform';
 import { PadControls } from '../../gamepad/PadSettings';
+import { useInputDevice } from '../../gamepad/react';
 import { DEFAULT_PAD_SETTINGS } from '../../gamepad/settings';
 import { Icon } from '../../ui/Icon';
 import { FirePicker } from './FirePicker';
@@ -22,25 +23,118 @@ import { Slider } from '../../ui/Slider';
 import { useCtl, useKeyboardLayout, useTicker } from '../context';
 import { ACTIONS, MAX_BINDINGS, defaultBindings, keyLabel, rebind, unbind, type ActionDef, type ActionId } from '../controls';
 import { VoiceSettingsSection } from '../../voice/VoiceHud';
-import { DEFAULT_AUDIO, DEFAULT_SETTINGS, type AudioSettings, type GraphicsPreset, type Settings, type SettingsTab, type ShellStore } from '../store';
-import { Backdrop } from './frame';
+import { DEFAULT_AUDIO, DEFAULT_SETTINGS, SETTINGS_TABS, settingsTabs, shownSettingsTab, type AudioSettings, type GraphicsPreset, type Settings, type SettingsTab, type ShellStore } from '../store';
+import { Backdrop, Hint } from './frame';
 import { InstallButton } from '../../pwa/InstallButton';
 import { SendReport } from '../../diag/SendReport';
 import { buildId } from 'virtual:title-info';
 import { AccountPanel } from '../account/AccountPanel';
 import { PrivacySettings } from '../../metrics/PrivacySettings';
 
-export const TABS: readonly { id: SettingsTab; label: string; icon: string }[] = [
-  { id: 'graphics', label: 'Graphics', icon: 'monitor' },
-  { id: 'audio', label: 'Audio', icon: 'speaker' },
-  { id: 'controls', label: 'Controls', icon: 'keyboard' },
-  { id: 'controller', label: 'Controller', icon: 'sliders' },
-  { id: 'accessibility', label: 'Accessibility', icon: 'access' },
-  { id: 'network', label: 'Network', icon: 'globe' },
-  { id: 'touch', label: 'Touch', icon: 'target' },
-  { id: 'account', label: 'Account', icon: 'user' },
-  { id: 'privacy', label: 'Privacy', icon: 'eye' },
-];
+/** Every tab, in the shared order (store.ts SETTINGS_TABS); a device shows useSettingsTabs()'s. */
+export const TABS = SETTINGS_TABS;
+
+/** A touch screen here (a tablet, a touch laptop), or touch controls switched on: the Touch tab shows. */
+function hasTouchScreen(): boolean {
+  try {
+    return window.matchMedia('(any-pointer: coarse)').matches || navigator.maxTouchPoints > 0 || getTouchSettings().mode === 'on';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The tabs this device shows (audit N-21): the same names on both layouts, the device in hand first
+ * (Controls with keys, Controller with a pad, Touch on a touch screen); Touch only where there's touch,
+ * Controller once a pad has been used here.
+ */
+export function useSettingsTabs(phone: boolean): (typeof SETTINGS_TABS)[number][] {
+  const device = useInputDevice();
+  const [touch] = useState(hasTouchScreen);
+  const current = device.kind === 'pad' ? 'pad' : device.kind === 'touch' || (phone && device.kind === 'keys') ? 'touch' : 'keyboard';
+  return useMemo(() => settingsTabs({ current, touch, pad: device.pad !== null, phone }), [current, touch, device.pad, phone]);
+}
+
+/**
+ * "Reset this tab" asks once before it resets (audit N-17, C-22: one tap reset a whole section, and on
+ * phones it sat beside Done): Reset or Keep. Asking gives up by itself after a few seconds.
+ */
+export function ResetTab({ label, question, onReset, className = 'btn btn--ghost btn--sm m-p8' }: { label: string; question: string; onReset: () => void; className?: string }) {
+  const [asking, setAsking] = useState(false);
+  useEffect(() => {
+    if (!asking) return undefined;
+    const t = window.setTimeout(() => setAsking(false), 8000);
+    return () => window.clearTimeout(t);
+  }, [asking]);
+  if (!asking)
+    return (
+      <button type="button" className={className} onClick={() => setAsking(true)}>
+        <Icon name="refresh" />
+        {label}
+      </button>
+    );
+  return (
+    <span className="mf-reset" role="group" aria-label={question}>
+      <span className="mf-reset__q">{question}</span>
+      <button type="button" className="btn btn--danger btn--sm m-p8" autoFocus onClick={blurAfter(() => (setAsking(false), onReset()))}>
+        Reset
+      </button>
+      <button type="button" className="btn btn--ghost btn--sm m-p8" onClick={blurAfter(() => setAsking(false))}>
+        Keep
+      </button>
+    </span>
+  );
+}
+
+/**
+ * First flight again, from the controls tabs (audit N-20: it was only ever offered by Next orders,
+ * which moves on). Not inside a room: starting it would leave the match.
+ */
+export function FlightRow({ phone = false }: { phone?: boolean }) {
+  const ctl = useCtl();
+  const inRoom = useStore(ctl.store, (s) => s.screen.name === 'room' || s.screen.name === 'finding');
+  if (inRoom) return null;
+  const button = (
+    <button type="button" className="btn btn--paper btn--sm m-p8" onClick={blurAfter(() => ctl.startFlight())}>
+      <Icon name="target" />
+      Replay First flight
+    </button>
+  );
+  if (phone)
+    return (
+      <div className="pm-set m-p3">
+        <div className="pm-set__text">
+          <b>Learn the controls</b>
+          <span>First flight: five orders in the range, about 90 s.</span>
+        </div>
+        <div className="pm-set__ctl">{button}</div>
+      </div>
+    );
+  return (
+    <div className="srow mf-set__flight">
+      <div className="srow__txt">
+        <b>Learn the controls</b>
+        <span>First flight: five orders in the range, about 90 s. Nothing counts.</span>
+      </div>
+      <div className="srow__ctrl">{button}</div>
+    </div>
+  );
+}
+
+/** Send a report at the foot of every tab (audit N-21, C-23: it lived in Network alone). */
+function ReportRow({ tab }: { tab: SettingsTab }) {
+  return (
+    <div className="srow mf-set__report">
+      <div className="srow__txt">
+        <b>Something went wrong?</b>
+        <span>Send us what happened on this device, so we can fix it.</span>
+      </div>
+      <div className="srow__ctrl">
+        <SendReport context={`settings: ${tab}`} />
+      </div>
+    </div>
+  );
+}
 
 /** What each preset changes (render3d/presets.ts), in words. */
 const QUALITY: readonly { id: GraphicsPreset; name: string; text: string }[] = [
@@ -106,6 +200,24 @@ function Graphics({ settings }: { settings: Settings }) {
         </div>
         <div className="srow__ctrl" data-bind="settings.showKillEffects">
           <Switch on={settings.showKillEffects} onChange={(showKillEffects) => ctl.updateSettings({ showKillEffects })} label="Show other players' kill effects" />
+        </div>
+      </div>
+      <div className="srow">
+        <div className="srow__txt">
+          <b>Damage numbers</b>
+          <span>The number that rises off a soldier you hit.</span>
+        </div>
+        <div className="srow__ctrl" data-bind="settings.damageNumbers">
+          <Switch on={settings.damageNumbers} onChange={(damageNumbers) => ctl.updateSettings({ damageNumbers })} label="Damage numbers" />
+        </div>
+      </div>
+      <div className="srow">
+        <div className="srow__txt">
+          <b>Hit markers</b>
+          <span>The marks round your crosshair when a shot lands.</span>
+        </div>
+        <div className="srow__ctrl" data-bind="settings.hitMarkers">
+          <Switch on={settings.hitMarkers} onChange={(hitMarkers) => ctl.updateSettings({ hitMarkers })} label="Hit markers" />
         </div>
       </div>
       <div className="srow">
@@ -729,7 +841,7 @@ function Touch() {
 export function resetPatch(tab: SettingsTab): Partial<Settings> | null {
   switch (tab) {
     case 'graphics':
-      return { graphics: DEFAULT_SETTINGS.graphics, showFps: DEFAULT_SETTINGS.showFps, blood: DEFAULT_SETTINGS.blood, showKillEffects: DEFAULT_SETTINGS.showKillEffects };
+      return { graphics: DEFAULT_SETTINGS.graphics, showFps: DEFAULT_SETTINGS.showFps, blood: DEFAULT_SETTINGS.blood, showKillEffects: DEFAULT_SETTINGS.showKillEffects, damageNumbers: DEFAULT_SETTINGS.damageNumbers, hitMarkers: DEFAULT_SETTINGS.hitMarkers };
     case 'audio':
       return { audio: DEFAULT_AUDIO };
     case 'controls':
@@ -750,7 +862,8 @@ export function resetPatch(tab: SettingsTab): Partial<Settings> | null {
 export function SettingsScreen({ store }: { store: ShellStore }) {
   const ctl = useCtl();
   const settings = useStore(store, (s) => s.settings);
-  const tab = useStore(store, (s) => s.settingsTab);
+  const tabs = useSettingsTabs(false);
+  const tab = shownSettingsTab(useStore(store, (s) => s.settingsTab), tabs);
   const inRoom = useStore(store, (s) => s.screen.name === 'room');
   const reset = () => {
     const patch = resetPatch(tab);
@@ -802,16 +915,16 @@ export function SettingsScreen({ store }: { store: ShellStore }) {
   }, [tab]);
   // the tab list: arrow keys move between sections (one tab stop: roving tabindex), Home and End jump
   const onTabKey = (e: ReactKeyboardEvent<HTMLElement>) => {
-    const i = TABS.findIndex((t) => t.id === tab);
+    const i = tabs.findIndex((t) => t.id === tab);
     const step: Record<string, number> = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 };
     let next = -1;
-    if (e.key in step) next = (i + step[e.key]! + TABS.length) % TABS.length;
+    if (e.key in step) next = (i + step[e.key]! + tabs.length) % tabs.length;
     else if (e.key === 'Home') next = 0;
-    else if (e.key === 'End') next = TABS.length - 1;
+    else if (e.key === 'End') next = tabs.length - 1;
     if (next < 0) return;
     e.preventDefault();
-    ctl.setSettingsTab(TABS[next]!.id);
-    nav.current?.querySelector<HTMLElement>(`[data-tab="${TABS[next]!.id}"]`)?.focus();
+    ctl.setSettingsTab(tabs[next]!.id);
+    nav.current?.querySelector<HTMLElement>(`[data-tab="${tabs[next]!.id}"]`)?.focus();
   };
   return (
     <Screen name="settings" kind="menu" states={[tab]} label="Settings" modal dialog>
@@ -829,7 +942,7 @@ export function SettingsScreen({ store }: { store: ShellStore }) {
         <div className="menu-body set">
           <nav ref={nav} className="tabs tabs--v set__tabs mf-set__tabs" role="tablist" aria-orientation="vertical" aria-label="Settings sections" onKeyDown={onTabKey}>
             <span ref={bar} className="m-p5 m-p5--y mf-set__bar" aria-hidden="true"></span>
-            {TABS.map((t) => (
+            {tabs.map((t) => (
               <button key={t.id} type="button" className="tab" role="tab" data-tab={t.id} aria-selected={tab === t.id} tabIndex={tab === t.id ? 0 : -1} onClick={() => ctl.setSettingsTab(t.id)}>
                 <Icon name={t.icon} />
                 {t.label}
@@ -843,7 +956,7 @@ export function SettingsScreen({ store }: { store: ShellStore }) {
             {tab === 'controls' && <Controls settings={settings} />}
             {tab === 'controller' && (
               <div className="tabpanel mf-tabpanel" role="tabpanel" aria-label="Controller">
-                <PadControls pad={settings.pad} onChange={(pad) => ctl.updateSettings({ pad })} reduceFlashes={settings.reduceFlashes} />
+                <PadControls pad={settings.pad} onChange={(pad) => ctl.updateSettings({ pad })} />
               </div>
             )}
             {tab === 'accessibility' && <Accessibility settings={settings} />}
@@ -856,18 +969,17 @@ export function SettingsScreen({ store }: { store: ShellStore }) {
               </div>
             )}
             {tab === 'privacy' && <PrivacySettings />}
+            {(tab === 'controls' || tab === 'controller' || tab === 'touch') && <FlightRow />}
+            {tab !== 'network' && <ReportRow tab={tab} />}
           </div>
         </div>
         <footer className="menu-hints">
-          {tab !== 'account' && (
-            <button className="btn btn--ghost btn--sm m-p8" type="button" onClick={blurAfter(reset)}>
-              <Icon name="refresh" />
-              Reset this tab
-            </button>
-          )}
-          <span>
-            <Cap>Esc</Cap> Back
+          {tab !== 'account' && <ResetTab key={tab} label="Reset this tab" question={`Reset ${tabs.find((t) => t.id === tab)?.label ?? 'this tab'} to its defaults?`} onReset={reset} />}
+          {/* a controller's buttons here too (frame.tsx Hint): the pad's floating bar stays away (audit 2, N-09 / N-15) */}
+          <span data-pad-hints>
+            <Cap pad="Pad1">Esc</Cap> Back
           </span>
+          <Hint pad={['Pad4', 'Pad5']}>Tabs</Hint>
           <span className="menu-hints__end">
             <button className="btn btn--volt m-p8" type="button" onClick={blurAfter(() => ctl.back())}>
               Done

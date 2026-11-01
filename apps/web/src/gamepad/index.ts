@@ -12,7 +12,7 @@
 import type { Input, SimEvent } from '@military-forge/sim';
 import type { Camera } from '../camera';
 import type { ThrowLatch } from '../input';
-import { appMenuScope, appOverlayScope, sendKey } from './menus';
+import { appBlockingScope, appMenuScope, appOverlayScope, appToastScope, sendKey } from './menus';
 import { PadManager, type PadFrame, type PadHost } from './manager';
 import type { MapDef } from '@military-forge/content';
 import { currentDevice, currentPadFamily, onInputDevice, setGlyphSetting, startDeviceTracking } from './device';
@@ -64,6 +64,8 @@ export function mountGamepad(d: GamepadDeps): PadManager {
     camera: d.camera,
     menuScope: () => appMenuScope(),
     overlayScope: () => appOverlayScope(),
+    toastScope: () => appToastScope(),
+    blockingScope: () => appBlockingScope(),
     back: escape,
     pause: escape,
     scoreboard: (down) => {
@@ -136,8 +138,11 @@ function hint(code: string, words: string): string {
 
 /**
  * A small bar in the bottom-right corner while a pad drives the menus: what Cross / A, Circle / B
- * and L1 / R1 do here; over play, that Share / View reaches the buttons on screen. The pad's own
- * element (not the HUD's or the shell's); `html[data-input="pad"]` shows it.
+ * and L1 / R1 do here; over play, that Share / View reaches the buttons on screen; a friend's toast
+ * to answer (audit 2, N-06); left and right on a select, up and down on a letter box. The pad's own
+ * element (not the HUD's or the shell's); `html[data-input="pad"]` shows it. A screen with its own
+ * hint row (frame.tsx Hints, in the pad's glyphs) keeps it away, and it moves to the top when it would
+ * sit on the focused control (N-15).
  */
 function mountHints(m: PadManager): void {
   const bar = document.createElement('div');
@@ -151,19 +156,34 @@ function mountHints(m: PadManager): void {
     let html = '';
     const s = currentDevice().kind === 'pad' ? m.state : null;
     if (s?.connected) {
-      if (s.mode === 'capture') html = `<span class="mf-pad-hints__i"><span class="mf-pad-hints__t">Press the button you want…</span></span>`;
-      else if (s.mode === 'menu') html = hint('Pad0', 'Select') + hint('Pad1', 'Back') + (s.tabs ? hint('Pad4', '') + hint('Pad5', 'Tabs') : '');
-      else if (s.overlay) html = hint('Pad8', 'Buttons on screen');
+      const toast = s.toast === 'waiting' ? hint('Pad8', s.mode === 'menu' ? 'Answer' : 'Buttons on screen') + (s.answer ? hint('Pad3', s.answer) : '') : '';
+      if (s.mode === 'capture') html = `<span class="mf-pad-hints__i"><span class="mf-pad-hints__t">Press the button you want</span></span>` + (s.endable ? hint('Pad9', 'Cancel') + hint('PadHold8', 'Clear') : '');
+      else if (s.mode === 'menu' && s.ownHints) html = toast;
+      else if (s.mode === 'menu') {
+        const steps = s.steps === 'sideways' ? hint('Pad14', '') + hint('Pad15', 'Change') : s.steps === 'updown' ? hint('Pad12', '') + hint('Pad13', 'Letter') : '';
+        html = steps + hint('Pad0', 'Select') + hint('Pad1', 'Back') + (s.tabs ? hint('Pad4', '') + hint('Pad5', 'Tabs') : '') + toast;
+      } else if (s.overlay) html = hint('Pad8', 'Buttons on screen');
     }
     if (html !== last) {
       last = html;
       bar.innerHTML = html;
       bar.hidden = html === '';
     }
+    // over the focused control (the creator's Save, a binding row): the bar goes to the top instead
+    const f = document.activeElement;
+    let top = false;
+    if (!bar.hidden && f && f !== document.body) {
+      bar.classList.remove('mf-pad-hints--top');
+      const a = f.getBoundingClientRect();
+      const b = bar.getBoundingClientRect();
+      top = a.right > b.left && a.left < b.right && a.bottom > b.top && a.top < b.bottom;
+    }
+    bar.classList.toggle('mf-pad-hints--top', top);
   };
   bar.hidden = true;
   m.onChange(draw);
   onInputDevice(draw);
-  // overlays come and go without the pad's mode changing (the warm-up bar, the controls card)
+  // overlays come and go without the pad's mode changing (the warm-up bar, the controls card), and focus moves
   setInterval(draw, 400);
+  document.addEventListener('focusin', draw);
 }

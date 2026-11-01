@@ -1,11 +1,23 @@
 import { cosmeticsForSlot, getCosmetic } from '@military-forge/content';
 import { describe, expect, it } from 'vitest';
 import { tileHtml } from '../../src/locker';
-import { lockedLine } from '../../src/locker/tiles';
+import { lockedLine, rowPriced, shownInRow } from '../../src/locker/tiles';
 
 describe('Locker items (round two)', () => {
   const hat = cosmeticsForSlot('headgear')[0]!;
   const dye = cosmeticsForSlot('dye').find((d) => d.colour)!;
+
+  it('a row of skin tones carries no price words; the ones that cannot be had yet wait (audit 2 P-11)', () => {
+    const tones = cosmeticsForSlot('skinTone').filter((c) => shownInRow(c, false));
+    expect(tones.map((c) => c.id)).not.toContain('skin_chrome');
+    expect(tones.map((c) => c.id)).not.toContain('skin_zombie');
+    expect(shownInRow(getCosmetic('skin_chrome')!, true)).toBe(true); // owned: it shows
+    expect(rowPriced(tones)).toBe(false);
+    const tone = tileHtml(tones[0]!, false, true, undefined, false, 'shirt', rowPriced(tones));
+    expect(tone).not.toContain('>Free<');
+    expect(tone).not.toContain('tag--ghost');
+    expect(tileHtml(tones[0]!, true, true, undefined, false, 'shirt', false)).toContain('tag--you'); // On stays
+  });
 
   it('says On, Free (a starter item), Owned, or how to get a locked one', () => {
     expect(tileHtml(hat, true, true)).toContain('tag--you');

@@ -44,8 +44,12 @@ export function AgeGate({ refused, phone = false }: { refused: boolean; phone?: 
           <h1 id="age-title" className="display age-card__title">
             Sorry, online play is for adults
           </h1>
-          <p className="age-card__lead">{GAME_NAME} is for players 18 and over, so online rooms stay closed on this device. Thanks for telling us honestly.</p>
+          <p className="age-card__lead">{GAME_NAME} is for players 18 and over, so online rooms, friends and voice stay closed on this device. Training against bots is open to everyone. Thanks for telling us honestly.</p>
           <div className="age-card__actions">
+            <button type="button" className="btn btn--paper" onClick={blurAfter(() => ctl.go({ to: 'training' }))}>
+              <Icon name="play" />
+              Training
+            </button>
             <button type="button" className="btn btn--ghost" onClick={blurAfter(() => ctl.go({ to: 'home' }))}>
               <Icon name="back" />
               Back
@@ -76,6 +80,7 @@ export function AgeGate({ refused, phone = false }: { refused: boolean; phone?: 
           <AgeQuestion
             idBase="age"
             fieldClass="age-card__field"
+            padFirst
             value={answer}
             onChange={(a) => {
               setAnswer(a);
@@ -93,7 +98,8 @@ export function AgeGate({ refused, phone = false }: { refused: boolean; phone?: 
               Continue
               <Icon name="arrow-right" />
             </button>
-            <button type="button" className="btn btn--ghost" onClick={blurAfter(() => ctl.go({ to: 'home' }))}>
+            {/* a controller's B (gamepad/menus.ts) */}
+            <button type="button" className="btn btn--ghost" data-pad-back onClick={blurAfter(() => ctl.go({ to: 'home' }))}>
               Not now
             </button>
           </div>

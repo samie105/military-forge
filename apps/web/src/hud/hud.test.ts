@@ -2,7 +2,7 @@
 import { BUZZ, DRAGON, HAMMER, HitZone, K47, NO_WEAPON, SHREDDER, THUMPER, WIDOW, createTuning, defaultTuning, weaponPickup, weapons } from '@military-forge/content';
 import { DamageSource, MatchPhase } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
-import { Linger, blastName, hudFrame, netGraph, pingLook, type HudInput, type HudMemory } from './hud';
+import { Linger, blastName, deathDetail, hudFrame, netGraph, pingLook, type HudInput, type HudMemory } from './hud';
 import { conditions, leaderLine, crateCompare, damageArc, dashHint, dashStatus, eventLook, feedFromEvents, fuelView, grenadeBelt, healthView, isBlastSource, isBurnTick, pickupIcon, pickupNear, pickupPrompt, screenAngle, takeControl, shieldStatus, tunedSummary, weaponCards, weaponFamily, weightWords, type HudPlayer, type ScoreRow } from './model';
 import { StateTokens, stateMatches } from './state';
 import { HUD_VARS, hudTemplate } from './template';
@@ -14,6 +14,20 @@ const names = new Map([
   [1, 'Kemi'],
   [2, 'Tunde'],
 ]);
+
+describe('the death card says how close it was (audit 2 P-05)', () => {
+  it('what you did to your killer and what they had left; no hit; fell, the gas, yourself', () => {
+    const shot = { fell: false, suicide: false, gas: false };
+    expect(deathDetail(shot, 66, 34)).toBe('You hit them for 66 · they had 34 left');
+    expect(deathDetail(shot, 65.6, 0.4)).toBe('You hit them for 66 · they had 1 left'); // never "0 left" for the living
+    expect(deathDetail(shot, 100, 0)).toBe('You hit them for 100 · they went down too');
+    expect(deathDetail(shot, 0, 100)).toBe("You didn't hit them");
+    expect(deathDetail(shot, 40, null)).toBe('You hit them for 40');
+    expect(deathDetail({ ...shot, fell: true }, 0, null)).toBe('');
+    expect(deathDetail({ ...shot, suicide: true }, 0, null)).toBe('');
+    expect(deathDetail({ ...shot, gas: true }, 0, null)).toMatch(/^The gas/);
+  });
+});
 
 describe('kill feed', () => {
   it('names killer, weapon and victim; marks headshots, suicides, falls and your part', () => {
@@ -377,7 +391,9 @@ describe('hudFrame', () => {
   it('dead: who did it, the respawn countdown and its bar', () => {
     const dead = { ...me, alive: false, respawnTicks: 90 };
     const { values: v, tokens } = hudFrame(input({ frame: { tick: 1, localId: 0, players: [dead], grenades: [] } }), { ...memory, death: { label: 'Taken out by', killer: 'Kemi', icon: '#icon-wpn-widow' } });
-    expect(v).toMatchObject({ 'death.killer': 'Kemi', 'death.lead': 'Respawn in', 'player.respawnIn': '2', 'death.unit': 's', 'v.respawn': '0.5' });
+    expect(v).toMatchObject({ 'death.killer': 'Kemi', 'death.lead': 'Respawn in', 'player.respawnIn': '2', 'death.unit': 's', 'v.respawn': '0.5', 'death.detail': '' });
+    const close = hudFrame(input({ frame: { tick: 1, localId: 0, players: [dead], grenades: [] } }), { ...memory, death: { label: 'Taken out by', killer: 'Kemi', icon: '', detail: 'You hit them for 66 · they had 34 left' } });
+    expect(close.values['death.detail']).toBe('You hit them for 66 · they had 34 left');
     expect(tokens).toEqual(expect.arrayContaining(['spectating', 'death-weapon']));
     expect(tokens).not.toContain('reticle');
   });

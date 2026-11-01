@@ -360,6 +360,20 @@ html.reduce-motion .pm-turn__card .ic { animation: none; }
 .pm-home > .mf-orders :is(.btn, .mf-orders__later) { min-height: var(--touch-min, 48px); }
 /* large text: the column goes (as the soldier's stage does); the cards wait for Home at a smaller size */
 .is-text-lg .pm-home > .mf-orders { display: none; }
+/* audit 2 P-15: the right column's top slot, where it can be reached (it fell under the bottom bar);
+   the Squad strip steps down to the column's foot */
+.pm-home > .mf-orders { grid-column: 3; grid-row: 1; align-self: start; max-height: 100%; padding: 8px; }
+.pm-home > .mf-orders > .label { font-size: 11px; }
+.pm-home > .mf-orders .mf-orders__top { padding: 8px 10px; gap: 2px; }
+.pm-home > .mf-orders .mf-orders__title { font-size: 20px; }
+.pm-home > .mf-orders .mf-orders__why { font-size: 11px; }
+.pm-home > .mf-orders .mf-orders__act .btn { min-width: 0; max-width: 100%; padding: 0 12px; font-size: var(--fs-14); }
+.pm-home > .mf-orders .mf-orders__later { min-height: 36px; }
+/* the Squad strip takes the column's foot, and the orders the rest (they scroll if they must) */
+.pm-home:has(> .mf-orders) > .sx-psquad { align-self: end; margin-bottom: 0; }
+.pm-home:has(> .sx-psquad) > .mf-orders { max-height: calc(100% - 50px); }
+/* Create room on a solid paper plate: readable over the poster's art (P-15) */
+.mf-fit--phone .mf-qm .pm-create-room:not(:disabled) { background: var(--c-paper); color: var(--c-paper-text); border-color: var(--c-ink-950); }
 /* the Debrief under your own line on Results: compact, its button a full target */
 .pm-res .mf-debrief { margin: 0; padding: 6px 10px; gap: 4px; }
 .pm-res .mf-debrief p { font-size: 14px; }
@@ -458,3 +472,14 @@ html.reduce-motion .pm-turn__card .ic { animation: none; }
 .mf-fit--phone .pm-home .pm-col { gap: 8px; }
 .mf-fit--phone .pm-home .pm-tk { padding: 8px 12px; }
 .mf-fit--phone .pm-home .pm-tk__sub { display: none; }
+
+/* phone Results: the people you just played with, Add friend beside each (audit 2 P-06) */
+.pm-res__people { display: grid; gap: var(--sp-1); margin: 0; padding: 0; list-style: none; }
+.pm-res__people li { display: flex; align-items: center; gap: var(--sp-2); min-height: 40px; font-size: calc(13px * var(--text-scale, 1)); }
+/* Settings' foot (audit N-17): Reset (it asks first) and Send a report, away from Done */
+.pm-set--foot { justify-content: flex-start; flex-wrap: wrap; gap: 8px; }
+.pm-set--foot .btn { min-height: var(--touch-min); }
+.pm-set--foot .mf-reset { flex-wrap: wrap; }
+/* the rail's names are the desktop's now (audit N-21: "Accessibility", not "Access"): a touch tighter so they fit */
+.pm-rail__i { padding: 0 6px; gap: 6px; }
+.pm-rail__i span { font-size: 13px; }

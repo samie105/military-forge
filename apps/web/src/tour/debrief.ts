@@ -13,6 +13,8 @@ export const DEBRIEF_MATCHES = 5;
 
 export interface Debrief {
   done: string;
+  /** the try line is the easier start: it carries Next orders' "One more, Easy bots" as its button */
+  easier: boolean;
   /** the match got a kill: the done line earns its check mark (a 0-kill match gets no tick) */
   scored: boolean;
   /** null when there's nothing to suggest */
@@ -22,17 +24,27 @@ export interface Debrief {
 
 const MOVE_NAMES: Partial<Record<Move, string>> = { dash: 'dash', grenade: 'grenades', take: 'took a gun', melee: 'melee', shield: 'shield', 'aimed-throw': 'aimed throws' };
 
-export function debrief(m: MatchSummary, f: Facts, top: Card | null): Debrief {
+/**
+ * What the player is aiming with (audit 2 P-17): aim assist is sticks only (input/assist.ts), so a
+ * mouse player is never told to turn it up.
+ */
+export type AimInput = 'mouse' | 'sticks';
+
+export function debrief(m: MatchSummary, f: Facts, top: Card | null, input: AimInput = 'mouse'): Debrief {
   const used = [...new Set(m.moves)].map((x) => MOVE_NAMES[x]).filter((x): x is string => !!x);
   const kills = m.kills === 0 ? 'No kills this time' : `${m.kills} ${m.kills === 1 ? 'kill' : 'kills'}`;
   const done = used.length ? `${kills} · ${used.slice(0, 3).join(', ')}` : kills;
   const deaths = Object.values(m.deaths).reduce((a, b) => a + (b ?? 0), 0);
   let tryNext: string | null = null;
-  if (deaths >= 8 && m.kills <= 1) tryNext = 'Easier start? Easy bots, or turn aim assist up.';
+  // no kill and a few deaths (audit 2 P-03), or a hard time: the easier start, said for the input in
+  // hand; against Easy bots already, just the aiming tip
+  const easier = (m.kills === 0 && deaths >= 3) || (m.kills <= 1 && deaths >= 8);
+  const aim = input === 'sticks' ? 'turn aim assist up' : 'fire in bursts: the first shots land';
+  if (easier) tryNext = m.bots === 'easy' ? `One more go? ${aim[0]!.toUpperCase()}${aim.slice(1)}.` : input === 'sticks' ? 'Easier start? Easy bots, or turn aim assist up.' : 'Easier start? Try Easy bots. Fire in bursts: the first shots land.';
   else if ((m.deaths.gas ?? 0) >= 2) tryNext = 'Gas: the middle kills. Cross the edge fast, or fly over.';
   else if ((m.deaths.self ?? 0) + (m.deaths.grenade ?? 0) >= 2) tryNext = 'Hold to aim: the arc shows where it lands.';
   else if (!m.moves.includes('dash')) tryNext = "You didn't dash: dashes dodge fire.";
   else if (!m.moves.includes('grenade')) tryNext = 'No grenades: tap to throw, hold to aim.';
   else if (!m.moves.includes('take') && f.moves.take === 0) tryNext = 'No guns taken: walk over one to take it.';
-  return { done, scored: m.kills > 0, tryNext, next: top ? { title: top.title, reason: top.reason } : null };
+  return { done, easier, scored: m.kills > 0, tryNext, next: top ? { title: top.title, reason: top.reason } : null };
 }

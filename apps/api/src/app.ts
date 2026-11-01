@@ -48,6 +48,8 @@ import { ProfileService } from './me/profiles';
 import { meRoutes } from './me/routes';
 import { NicknamePolicy } from './nickname/rules';
 import { nicknameRoutes } from './nickname/routes';
+import { adminModerationRoutes } from './reports/moderation';
+import { playerReportRoutes } from './reports/player';
 import { reportRoutes } from './reports/routes';
 import { roomRoutes } from './rooms/routes';
 import { createStore, type Store } from './store';
@@ -203,9 +205,9 @@ export function createApp(deps: AppDeps) {
   const party = new PartyService(db, kv, bus, now);
   const invites = new InviteService(db, kv, bus, friends, presence, party, now);
   app.route('/events', eventRoutes({ auth, kv, bus, now }));
-  app.route('/friends', friendRoutes({ config, kv, auth, friends }));
-  app.route('/invites', inviteRoutes({ kv, auth, invites, now }));
-  app.route('/party', partyRoutes({ kv, auth, party }));
+  app.route('/friends', friendRoutes({ config, db, kv, auth, friends }));
+  app.route('/invites', inviteRoutes({ db, kv, auth, invites, now }));
+  app.route('/party', partyRoutes({ db, kv, auth, party }));
   app.route('/players', playerPresenceRoute({ auth, presence, areFriends: (a, b) => friends.areFriends(a, b) }));
   // the game server's match results: on only with its public key (RESULTS_PUBLIC_KEY)
   const analytics = deps.analytics ?? new AnalyticsService(db, kv, config.analytics, log, now);
@@ -217,10 +219,19 @@ export function createApp(deps: AppDeps) {
   }
   // play stats: the pages' batches, Delete my data, the segments and the owner's dashboard (docs/16)
   app.route('/analytics', analyticsRoutes({ config, kv, auth, analytics }));
-  app.route('/me', meRoutes({ config, db, kv, auth, profiles }));
+  // an under-18 answer (audit-2 L-03): friends, requests and the party end; nobody finds the account
+  const onMinor = async (userId: string) => {
+    await friends.forgetSocial(userId);
+    await party.leave(userId);
+  };
+  app.route('/me', meRoutes({ config, db, kv, auth, profiles, onMinor }));
   app.route('/nicknames', nicknameRoutes({ config, kv, auth, profiles }));
   // problem reports (Send a report, and a failed connection's own): kept 7 days, read by the owner; the bot check when it's on
+  // a player's report about another player (the Report sheet, audit-2 L-01): Postgres, 180 days
+  app.route('/reports/player', playerReportRoutes({ db, kv, auth, now }));
   app.route('/reports', reportRoutes({ config, kv, now, botCheck }));
+  // the owner's moderation: player reports, rename, suspend, ban (audit-2 L-04)
+  app.route('/admin/moderation', adminModerationRoutes({ config, db, profiles, now, touched: (ids) => tell(ids, { type: 'friends' }), friendIds: (id) => friends.friendIds(id) }));
   // the store (docs/17): off without Flutterwave's keys, but the owner's tools and ownership work either way
   const checkPassword = async (userId: string, password: string) => {
     const cred = await accounts.credentialOf(userId);

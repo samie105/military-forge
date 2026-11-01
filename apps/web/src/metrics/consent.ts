@@ -64,6 +64,15 @@ export function promptDue(s: ConsentState): 'ask' | 'tell' | null {
   return s.mode === 'opt-in' ? 'ask' : 'tell';
 }
 
+/**
+ * The question waits for the device's first finished match (audit 2 P-08): nothing stands between a
+ * new player and the first fight, and until then only anonymous counts go, as before. Without the
+ * onboarding memory (the debug client) it doesn't wait.
+ */
+export function consentAskable(finishedMatches: number | null): boolean {
+  return finishedMatches === null || finishedMatches >= 1;
+}
+
 /** Anonymous counts (errors, ad delivery) may go: everyone but a browser saying no (unless the player said yes). */
 export function anonymousOn(s: ConsentState): boolean {
   return s.choice?.analytics === true || !s.browserNo;

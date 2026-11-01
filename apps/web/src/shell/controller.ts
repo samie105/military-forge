@@ -8,14 +8,16 @@ import { GAME_NAME, normalizeRoomCode } from '@military-forge/shared';
 import { MatchPhase } from '@military-forge/sim';
 import type { OnlineMode } from '../onlineMode';
 import { diag } from '../diag/log';
-import { finishedMatches } from '../tour/facts';
+import { RECRUIT_MATCHES, playNowBotLevel, type BotLevel } from '../tour/facts';
 import type { LocalMode } from '../localMode';
 import { adultOnDevice, ageOnDevice, answerAge } from './age';
-import { alertFromApiError } from './alerts';
+import { alertFromApiError, suspendedAlert } from './alerts';
 import { Api, ApiError, NICKNAME_REASONS, type AdultAnswer, type Me, type NicknameCheck, type RoomJoin } from './api';
 import { sanitizePadSettings } from '../gamepad/settings';
 import { sanitizeBindings } from './controls';
-import { DEFAULT_SETTINGS, type AccountIntent, type AudioSettings, type GraphicsPreset, type Intent, type Overlay, type Profile, type Settings, type SettingsTab, type ShellState, type ShellStore, type TuneNote } from './store';
+import { NavHistory, pageNav, setNavHooks, type Layer } from './history';
+import { activeRouteBack } from './focus';
+import { DEFAULT_SETTINGS, SETTINGS_TABS, findRoute, type AccountIntent, type AudioSettings, type GraphicsPreset, type Intent, type Overlay, type Profile, type Settings, type SettingsTab, type ShellState, type ShellStore, type TuneNote } from './store';
 
 /**
  * What training plays: a local match against bots (the default), First flight (the onboarding's range:
@@ -111,17 +113,20 @@ export function offlineName(chosen?: string | null, storage: () => Storage = () 
 /** Flags set this session: where storage fails (Safari private mode), a card still shows once per session. */
 const sessionFlags = new Set<string>();
 
-/** Play now gives a player Easy bots until this many matches are finished on the device (audit B-30) */
-export const RECRUIT_MATCHES = 3;
-/** how long Play now waits for the room to say its bots are Easy before it starts anyway (ms) */
-const QUICK_EASY_WAIT_MS = 2500;
+/** Before Play now's bots followed results, they were Easy for this many finished matches (audit B-30) */
+export { RECRUIT_MATCHES };
+/** how long Play now waits for the room to say its bots are at the level asked before it starts anyway (ms) */
+const QUICK_BOTS_WAIT_MS = 2500;
 
-/** Fewer than RECRUIT_MATCHES matches finished on this device (the tour's facts): Play now's bots are Easy. */
-export function recruitOnDevice(storage: () => Storage): boolean {
+/**
+ * Play now's bot level on this device (audit 2 P-01, tour/facts.ts `bots`): Easy to start, a step up
+ * after two top-two finishes, down after two last places, or the player's own pick.
+ */
+export function playNowBots(storage: () => Storage): BotLevel {
   try {
-    return finishedMatches(storage()) < RECRUIT_MATCHES;
+    return playNowBotLevel(storage());
   } catch {
-    return false;
+    return 'normal';
   }
 }
 
@@ -192,6 +197,8 @@ export function sanitizeSettings(raw: unknown, defaults: Settings = DEFAULT_SETT
     doubleTapDash: flag(s.doubleTapDash, defaults.doubleTapDash),
     blood: flag(s.blood, defaults.blood),
     showKillEffects: flag(s.showKillEffects, defaults.showKillEffects),
+    damageNumbers: flag(s.damageNumbers, defaults.damageNumbers),
+    hitMarkers: flag(s.hitMarkers, defaults.hitMarkers),
     bindings: sanitizeBindings(s.bindings),
     pad: sanitizePadSettings(s.pad),
   };
@@ -293,14 +300,29 @@ export function roomSocketUrl(room: Pick<RoomJoin, 'code' | 'gsUrl'>, loc?: Pick
   return `${page.protocol === 'https:' ? 'wss' : 'ws'}://${page.host}/ws/${room.code}`;
 }
 
+/** This device said under 18 (age.ts): training only (audit-2 L-03). */
+const minorOnDevice = (): boolean => ageOnDevice()?.adult === false;
+
 function profileOf(me: Me): Profile {
-  return { nickname: me.nickname, changeableAt: me.nicknameChangeableAt, offline: false };
+  const minor = me.minor === true || minorOnDevice();
+  return { nickname: me.nickname, changeableAt: me.nicknameChangeableAt, offline: false, ...(minor ? { minor: true } : {}) };
 }
 
 export class ShellController {
   private noticeTimer = 0;
   /** Settings was opened from the in-match menu: Back returns there */
   private settingsFrom: 'menu' | null = null;
+  /**
+   * The back stack (history.ts, audit N-18): a room or training ('play'), routes, overlays and the
+   * Friends panel are one browser entry each, and Back, Escape and a pad's B close the same one.
+   */
+  readonly nav: NavHistory;
+  /** the room's link while one is open (the 'play' layer's path), undefined in training */
+  private playPath: string | undefined;
+  /** layers drawn outside the shell's store (the Friends panel, the invite picker): how each closes */
+  private readonly layerClosers = new Map<string, () => void>();
+  /** the #hash the page opened on (#/settings/audio, #/friends, #/join): opened once the player is in */
+  private deepLink: string;
 
   constructor(
     readonly store: ShellStore,
@@ -310,7 +332,23 @@ export class ShellController {
     const settings = loadSettings();
     store.setState({ settings });
     host.applySettings(settings);
-    window.addEventListener('popstate', () => this.onPopState());
+    this.deepLink = typeof location === 'undefined' ? '' : (location.hash ?? '');
+    this.nav = new NavHistory(pageNav());
+    // a route opened by setting the address (Home's tabs: location.hash = '#/locker'), or typed
+    this.nav.resolve = (hash) => {
+      const id = /^#\/([a-z-]+)$/.exec(hash)?.[1];
+      return id && findRoute(id) ? this.routeLayer(id) : null;
+    };
+    setNavHooks({ closeTop: () => this.closeTop(), closeRoute: () => this.closeRoute(), openRoute: (id) => this.openRoute(id), swapRoute: (id) => this.swapRoute(id) });
+    // a route the address names as the page opens (a reload on #/locker): over Home, so Back is Home
+    const opened = /^#\/([a-z-]+)$/.exec(this.deepLink)?.[1];
+    if (opened && findRoute(opened)) this.openRoute(opened);
+    // the tab's title says where the player is (audit C-41, D-29); Home keeps index.html's
+    const pageTitle = typeof document === 'undefined' ? '' : document.title;
+    store.subscribe((s) => {
+      const t = tabTitle(s) ?? pageTitle;
+      if (typeof document !== 'undefined' && document.title !== t) document.title = t;
+    });
     // the match ended under the menu or Settings (mobile audit P1-2): they close, so Results shows (the
     // pause must never say the match is running after its end)
     store.subscribe((s, before) => {
@@ -319,23 +357,23 @@ export class ShellController {
     });
     // Play now's room (P1-6): as soon as it's ours and full enough (bots count), the countdown starts.
     // The 18+ step on a first visit keeps it: answered, the room comes and starts as promised (audit A-02)
-    // A recruit's (fewer than RECRUIT_MATCHES finished) gets Easy bots first (audit B-30): the start
-    // waits until the room says its bots are Easy.
+    // Its bots play at the device's Play now level (audit B-30, audit 2 P-01): the start waits until the
+    // room says its bots are at it.
     store.subscribe((s) => {
       if (!this.quickStart && !this.quickRoom) return;
       if (s.screen.name !== 'room' && s.screen.name !== 'finding' && !(s.screen.name === 'age' && !s.screen.refused)) {
         this.quickStart = false;
         this.quickRoom = false;
-        this.recruitBots = false;
+        this.wantBots = null;
         return;
       }
       if (!this.quickStart || !quickStartReady(s)) return;
-      if (this.recruitBots && s.lobby!.bots > 0 && s.lobby!.botLevel !== 'easy') {
+      if (this.wantBots && s.lobby!.bots > 0 && s.lobby!.botLevel !== this.wantBots) {
         if (this.botsAskedAt === 0) {
-          this.host.online?.setMatchSettings({ botLevel: 'easy' });
+          this.host.online?.setMatchSettings({ botLevel: this.wantBots });
           this.botsAskedAt = performance.now();
           // a room that never says so (an older server) starts anyway, a moment later
-          window.setTimeout(() => this.startQuick(), QUICK_EASY_WAIT_MS);
+          window.setTimeout(() => this.startQuick(), QUICK_BOTS_WAIT_MS);
         }
         return;
       }
@@ -366,6 +404,34 @@ export class ShellController {
     const link = takeAccountLink();
     await this.bootSession();
     if (link) this.openAccount(link);
+    else this.openDeepLink();
+  }
+
+  /**
+   * The layer the address named as the page opened (a shared #/settings/controls, a reload with
+   * Settings open: audit N-19): over the first screen, once. #/friends is the Friends panel's
+   * (takeDeepLink); routes opened with the controller.
+   */
+  private openDeepLink(): void {
+    const hash = this.deepLink;
+    const settings = /^#\/settings(?:\/([a-z]+))?$/.exec(hash);
+    const screen = this.store.getState().screen.name;
+    if (screen === 'name' || screen === 'age') return; // the first visit's steps come first
+    if (settings) {
+      const tab = SETTINGS_TABS.find((t) => t.id === settings[1])?.id;
+      this.deepLink = '';
+      this.openSettings(tab);
+    } else if (hash === '#/join' && screen === 'home') {
+      this.deepLink = '';
+      this.openOverlay('join');
+    }
+  }
+
+  /** The address named `what` as the page opened (#/friends): true once, for the one who opens it. */
+  takeDeepLink(what: string): boolean {
+    if (this.deepLink !== `#/${what}`) return false;
+    this.deepLink = '';
+    return true;
   }
 
   private async bootSession(): Promise<void> {
@@ -380,6 +446,16 @@ export class ShellController {
       this.go(intent.to === 'join' || intent.to === 'training' ? intent : { to: 'home' });
       return;
     }
+    if (!me && this.api.disabled) {
+      // suspended or banned (audit-2 L-04): training only, under the account's own name if we knew it
+      this.set({ profile: { nickname: offlineName(), changeableAt: null, offline: true, suspended: this.api.disabled } });
+      if (onlineIntent(intent)) this.set({ screen: { name: 'error', alert: suspendedAlert(this.api.disabled.until), retry: null } });
+      else {
+        this.go(intent);
+        this.notify(suspendedAlert(this.api.disabled.until).message);
+      }
+      return;
+    }
     if (!me) {
       // a room link on a first visit: the 18+ step before the name (age.ts)
       if (onlineIntent(intent) && this.ageGate(intent)) return;
@@ -387,7 +463,19 @@ export class ShellController {
       return;
     }
     this.set({ profile: profileOf(me) });
+    // a device that said under 18 before the account knew (audit-2 L-03): tell it, once
+    if (minorOnDevice() && !me.minor) this.markMinor();
     this.go(intent);
+  }
+
+  /** The account learns this device said under 18 (only the flag): it trains only from now on. */
+  private markMinor(): void {
+    void this.api.markMinor().then(
+      (me) => this.set({ profile: profileOf(me) }),
+      () => {
+        /* the device's answer still keeps friends and voice off here; the next start tries again */
+      },
+    );
   }
 
   /**
@@ -397,8 +485,12 @@ export class ShellController {
   private ageGate(then: Intent): boolean {
     const age = ageOnDevice();
     if (age?.adult) return false;
+    // asked from Home (Play now, Create room): Back closes it, Home (audit N-18); on a first visit
+    // from a link there's nothing under it
+    const fromHome = this.store.getState().screen.name === 'home';
     this.closeOverlay();
     this.host.stop();
+    if (fromHome && !this.nav.has('age')) this.nav.push({ key: 'age', hash: '', popped: () => this.go({ to: 'home' }) });
     this.set({ screen: { name: 'age', then, ...(age ? { refused: true } : {}) }, match: null, lobby: null, connection: null });
     return true;
   }
@@ -414,6 +506,10 @@ export class ShellController {
     const then = screen.name === 'age' ? screen.then : ({ to: 'home' } as const);
     if (!record.adult) {
       diag('age', 'under 18: no online play');
+      // friends, search and voice go too (audit-2 L-03), here and on the account
+      const p = this.profile;
+      if (p) this.set({ profile: { ...p, minor: true } });
+      if (this.api.me && !this.api.me.minor) this.markMinor();
       this.set({ screen: { name: 'age', then, refused: true } });
       return 'refused';
     }
@@ -424,18 +520,20 @@ export class ShellController {
   /** Navigation. Anything that needs the API waits for a name first; an online room, for the 18+ step. */
   go(intent: Intent): void {
     this.closeOverlay();
+    // the age question answered (or Not now): its entry goes
+    this.nav.close('age');
     if (onlineIntent(intent) && this.ageGate(intent)) return;
     switch (intent.to) {
       case 'home':
         // the first-run controls card comes before play or not at all: not on the Home a match ended into
         this.tipsQueued = false;
         this.host.stop();
-        this.setUrl('/');
+        this.leavePlay();
         this.set({ screen: { name: 'home' }, match: null, lobby: null, connection: null, tips: false });
         return;
       case 'training':
         this.host.stop();
-        this.setUrl('/');
+        this.enterPlay(undefined);
         this.host.startTraining(this.profile?.nickname ?? 'You');
         this.set({ screen: { name: 'training' }, lobby: null, connection: null, tips: false });
         this.firstTips(); // the first time: the controls card, with training held still under it
@@ -454,6 +552,10 @@ export class ShellController {
           this.set({ screen: { name: 'name', then: intent } });
           return;
         }
+        if (this.profile.suspended) {
+          this.set({ screen: { name: 'error', alert: suspendedAlert(this.profile.suspended.until), retry: null } });
+          return;
+        }
         if (this.profile.offline) {
           // no API: a code may still be a local room's, through the game server's relay (local rooms
           // have no spectators: watching one needs the API)
@@ -461,6 +563,7 @@ export class ShellController {
           this.set({ screen: { name: 'error', alert: alertFromApiError(new ApiError(0, 'network', 'offline'), intent.to === 'create' ? undefined : intent.code), retry: intent } });
           return;
         }
+        this.enterPlay(intent.to === 'create' ? undefined : `/r/${intent.code}`);
         void this.findRoom(intent);
         return;
     }
@@ -470,11 +573,13 @@ export class ShellController {
   private async hostLocal(): Promise<void> {
     if (!this.host.startLocalHost) return;
     this.host.stop();
+    this.enterPlay(undefined);
     this.set({ screen: { name: 'finding', code: null, creating: true }, match: null, lobby: null });
     diag('room', 'host a local room');
     const code = await this.host.startLocalHost(this.profile!.nickname);
     diag('room', code ? `local room ${code} up` : 'local room up with no code (no relay: QR codes only)');
-    this.setUrl(code ? `/r/${code}` : '/');
+    if (this.store.getState().screen.name !== 'finding') return; // gone back meanwhile
+    this.enterPlay(code ? `/r/${code}` : undefined);
     this.set({ screen: { name: 'room', code, local: true } });
     this.firstTips();
   }
@@ -489,7 +594,7 @@ export class ShellController {
     this.host.stop();
     this.set({ match: null, lobby: null });
     this.host.startLocalJoin(this.profile.nickname, answered ? { answered } : { code });
-    this.setUrl(code ? `/r/${code}` : '/');
+    this.enterPlay(code ? `/r/${code}` : undefined);
     this.set({ screen: { name: 'room', code, local: true } });
     this.firstTips();
   }
@@ -502,9 +607,13 @@ export class ShellController {
     const local = intent.to === 'join' && code ? this.localRoomExists(code).catch(() => false) : null;
     try {
       // a watcher's ticket is the same join ticket: the HELLO says "as a spectator"
-      const room = code === null ? await this.api.createRoom() : await this.api.joinRoom(code);
+      const room = code === null ? (intent.to === 'create' && intent.quick ? await this.api.quickRoom() : await this.api.createRoom()) : await this.api.joinRoom(code);
+      // cancelled meanwhile (Cancel, Back, B): the room isn't entered after all
+      if (this.store.getState().screen.name !== 'finding') return;
+      if (room.joined) this.joinedQuick();
       this.enterRoom(room, intent.to === 'watch');
     } catch (e) {
+      if (this.store.getState().screen.name !== 'finding') return;
       diag('room', `${intent.to} ${code ?? ''}: the API said ${e instanceof ApiError ? `${e.code} (${e.status})` : (e as Error)?.message}`);
       // not one of the server's rooms: a local room's link (its QR, Share room link) lands here, so
       // ask the relay before saying there's no room (the owner, 24 Oct: "the local room flow is
@@ -593,7 +702,7 @@ export class ShellController {
 
   /** Into the room the API found: to play, or (`watch`) as a spectator. */
   private enterRoom(room: RoomJoin, watch = false): void {
-    this.setUrl(`/r/${room.code}`);
+    this.enterPlay(`/r/${room.code}`);
     const code = room.code;
     const refreshTicket = () =>
       this.api.joinRoom(code).then(
@@ -678,7 +787,7 @@ export class ShellController {
   startFlight(): void {
     this.closeOverlay();
     this.host.stop();
-    this.setUrl('/');
+    this.enterPlay(undefined);
     this.host.startTraining(this.profile?.nickname ?? 'You', 'flight');
     this.set({ screen: { name: 'training', tour: 'first-flight' }, lobby: null, connection: null, tips: false });
   }
@@ -687,9 +796,9 @@ export class ShellController {
   private quickStart = false;
   /** we're in (or on the way to) Play now's room: its lobby is gone in a moment */
   private quickRoom = false;
-  /** Play now for a recruit: the room's bots go to Easy before the start (audit B-30) */
-  private recruitBots = false;
-  /** when Easy bots were asked for (performance.now), 0 = not yet */
+  /** Play now's bot level: the room's bots go to it before the start (audit B-30, audit 2 P-01) */
+  private wantBots: BotLevel | null = null;
+  /** when the bots' level was asked for (performance.now), 0 = not yet */
   private botsAskedAt = 0;
 
   /** Play now's countdown, once: the room is ours and has its players. */
@@ -701,20 +810,43 @@ export class ShellController {
 
   /**
    * Play now (mobile audit P1-6): one tap to a fight. Online: a room of our own that bots fill, its
-   * countdown started at once (friends can still join by its code). No API (offline): training
-   * against bots. No name yet: the name screen first, then the same.
+   * countdown started at once (friends can still join by its code), its bots at this device's Play now
+   * level (or `bots`, once: Next orders' "One more, Easy bots"). No API (offline): training against
+   * bots. No name yet: the name screen first, then the same.
    */
-  playNow(): void {
+  playNow(bots?: BotLevel): void {
     if (!this.profile) {
       this.set({ screen: { name: 'name', then: { to: 'training' } } });
       return;
     }
-    if (this.profile.offline) return this.go({ to: 'training' });
+    if (this.profile.offline) return bots === 'easy' ? this.train('live-fire') : this.go({ to: 'training' });
     this.quickStart = true;
     this.quickRoom = true;
-    this.recruitBots = recruitOnDevice(() => localStorage);
+    this.wantBots = bots ?? playNowBots(() => localStorage);
     this.botsAskedAt = 0;
-    this.go({ to: 'create' });
+    // its own level (Easy, once) is a room of our own; otherwise first an open Play now room with people in it (P-07)
+    this.go(bots ? { to: 'create' } : { to: 'create', quick: true });
+  }
+
+  /**
+   * Play now found someone else's open room (audit 2 P-07): its host starts it and its bots stay at
+   * the level it has; once its lobby is here, one line says so ("Bots here: Normal"). Found empty (the
+   * others just left), it's ours and starts as our own room would.
+   */
+  private joinedQuick(): void {
+    const stop = this.store.subscribe((s) => {
+      if (s.screen.name !== 'room' && s.screen.name !== 'finding') return stop();
+      const l = s.lobby;
+      if (!l) return;
+      stop();
+      // everyone else had gone (it's ours now, waiting): it starts as our own would; else it's theirs to run
+      if (!quickStartReady(s) && !(l.isHost && (s.match === null || s.match.phase === MatchPhase.Waiting))) {
+        this.quickStart = false;
+        this.wantBots = null;
+      }
+      const people = l.players.filter((p) => !p.isBot).length;
+      this.notify(`In a Play now room with ${people - 1} ${people - 1 === 1 ? 'other player' : 'other players'}${l.bots > 0 ? ` · Bots here: ${l.botLevel[0]!.toUpperCase()}${l.botLevel.slice(1)}` : ''}`);
+    });
   }
 
   /** Live fire: a recruit's first match, against 3 Easy bots (first to 5 kills, or 3 minutes). */
@@ -728,7 +860,7 @@ export class ShellController {
     if (kind === 'match') return this.go({ to: 'training' });
     this.closeOverlay();
     this.host.stop();
-    this.setUrl('/');
+    this.enterPlay(undefined);
     this.host.startTraining(this.profile?.nickname ?? 'You', kind);
     this.set({ screen: { name: 'training' }, lobby: null, connection: null, tips: false });
   }
@@ -765,7 +897,7 @@ export class ShellController {
   /** Sets the player's name: a new guest account the first time, a nickname change after. */
   async setName(nickname: string | null): Promise<NameResult> {
     try {
-      const me = !this.api.me ? await this.api.guest(nickname ?? undefined) : nickname && nickname.trim() !== this.api.me.nickname ? await this.api.changeNickname(nickname) : this.api.me;
+      const me = !this.api.me ? await this.api.guest(nickname ?? undefined, minorOnDevice()) : nickname && nickname.trim() !== this.api.me.nickname ? await this.api.changeNickname(nickname) : this.api.me;
       this.set({ profile: profileOf(me) });
     } catch (e) {
       if (!(e instanceof ApiError)) return { ok: false, error: (e as Error).message };
@@ -834,7 +966,7 @@ export class ShellController {
     }
     this.closeOverlay();
     this.host.stop();
-    this.setUrl('/');
+    this.leavePlay();
     this.set({ profile: null, screen: { name: 'name', then: { to: 'home' } }, match: null, lobby: null, connection: null });
     return null;
   }
@@ -848,15 +980,25 @@ export class ShellController {
   // ---- overlays and settings ----
 
   openOverlay(overlay: Exclude<Overlay, null>): void {
+    const now = this.store.getState().overlay;
     this.set({ overlay });
     this.host.setInputBlocked(true);
+    // one entry each: Settings over the pause menu stacks (Back returns to the menu); one overlay in
+    // another's place takes its entry
+    const layer = this.overlayLayer(overlay);
+    const top = this.nav.top()?.key ?? '';
+    if (now !== null && now !== 'menu' && top.startsWith('overlay:')) this.nav.replaceTop(layer);
+    else if (now === overlay && top === layer.key) this.nav.replaceTop(layer);
+    else this.nav.push(layer);
   }
 
   closeOverlay(): void {
     if (this.store.getState().overlay === null) return;
     this.settingsFrom = null;
-    this.set({ overlay: null });
+    this.set({ overlay: null, menuAsk: false });
     this.host.setInputBlocked(false);
+    const first = this.nav.keys().find((k) => k.startsWith('overlay:'));
+    if (first) this.nav.close(first);
   }
 
   /** Back from an overlay: Settings opened from the in-match menu goes back to it, anything else closes. */
@@ -865,6 +1007,7 @@ export class ShellController {
     if (overlay === 'settings' && this.settingsFrom === 'menu') {
       this.settingsFrom = null;
       this.set({ overlay: 'menu' });
+      this.nav.close('overlay:settings');
     } else this.closeOverlay();
   }
 
@@ -878,13 +1021,158 @@ export class ShellController {
 
   setSettingsTab(tab: SettingsTab): void {
     this.set({ settingsTab: tab });
+    // the address names the tab (#/settings/controls): a reload or a shared link opens it
+    if (this.nav.top()?.key === 'overlay:settings') this.nav.replaceTop(this.overlayLayer('settings'));
   }
 
-  /** Esc: back out of whatever is open, or the in-match menu during play. */
+  /** Esc: back out of whatever is open, or the in-match menu during play (closeTop). */
   toggleMenu(): void {
-    const { overlay, screen } = this.store.getState();
-    if (overlay) this.back();
-    else if (screen.name === 'room' || screen.name === 'training') this.openOverlay('menu');
+    this.closeTop();
+  }
+
+  /**
+   * The one way back (history.ts closeTop; Escape, a controller's B): the top layer closes, the way its
+   * own Back or ✕ would. Nothing open in a room or training: the pause menu. Home: nothing (false).
+   */
+  closeTop(): boolean {
+    const top = this.nav.top();
+    const own = top ? this.layerClosers.get(top.key) : undefined;
+    if (own) {
+      own();
+      return true;
+    }
+    const s = this.store.getState();
+    if (s.overlay) {
+      this.back();
+      return true;
+    }
+    if (s.route) {
+      this.escapeRoute();
+      return true;
+    }
+    switch (s.screen.name) {
+      case 'age':
+        // asked from Home: Not now; a first visit's (a link) has nothing under it
+        if (!this.nav.has('age')) return false;
+        this.go({ to: 'home' });
+        return true;
+      case 'finding':
+      case 'error':
+        this.go({ to: 'home' });
+        return true;
+      case 'room':
+      case 'training':
+        this.openOverlay('menu');
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  // ---- the back stack's layers (history.ts) ----
+
+  private overlayLayer(overlay: Exclude<Overlay, null>): Layer {
+    // the pause menu has no address of its own (a reload doesn't bring it back); the rest name themselves
+    const hash = overlay === 'menu' ? '' : overlay === 'settings' ? `#/settings/${this.store.getState().settingsTab}` : `#/${overlay}`;
+    return { key: `overlay:${overlay}`, hash, popped: () => this.overlayPopped() };
+  }
+
+  /** The browser's Back closed an overlay: the one under it (the pause menu under Settings) shows, or none. */
+  private overlayPopped(): void {
+    const keys = this.nav.keys().filter((k) => k.startsWith('overlay:'));
+    const top = (keys.at(-1)?.slice('overlay:'.length) ?? null) as Overlay;
+    if (top === this.store.getState().overlay) return;
+    this.settingsFrom = top === 'settings' && keys.includes('overlay:menu') ? 'menu' : null;
+    this.set({ overlay: top, ...(top === null ? { menuAsk: false } : {}) });
+    this.host.setInputBlocked(top !== null || this.store.getState().route !== null);
+  }
+
+  private routeLayer(id: string): Layer {
+    return { key: `route:${id}`, hash: `#/${id}`, popped: () => activeRouteBack()?.() };
+  }
+
+  /** A route over what's open (#/<id>): one entry. */
+  openRoute(id: string): void {
+    this.nav.push(this.routeLayer(id));
+  }
+
+  /** Route to route with no new entry: back to `id` when it's right under this one, else in this one's place. */
+  swapRoute(id: string): void {
+    const keys = this.nav.keys();
+    const top = keys.at(-1) ?? '';
+    if (top.startsWith('route:') && keys.at(-2) === `route:${id}`) this.nav.close(top);
+    else if (top.startsWith('route:')) this.nav.replaceTop(this.routeLayer(id));
+    else this.openRoute(id);
+  }
+
+  /** The open route closes (its Back, Done): back over its entry. */
+  closeRoute(): void {
+    const id = this.nav.routeId();
+    if (id) this.nav.close(`route:${id}`);
+  }
+
+  /** Escape (or B) in a route: the route's own Back when it has one (the first-run creator's Skip), else it closes. */
+  private escapeRoute(): void {
+    const back = activeRouteBack();
+    if (back) back();
+    else this.closeRoute();
+  }
+
+  /**
+   * A layer drawn outside the shell's store (the Friends panel, the invite picker) opened: one entry;
+   * Escape, B and the browser's Back close it with `close`.
+   */
+  openLayer(key: string, hash: string, close: () => void): void {
+    this.layerClosers.set(key, close);
+    if (!this.nav.has(key)) this.nav.push({ key, hash, popped: close });
+  }
+
+  /** …and it closed itself: back over its entry. */
+  closedLayer(key: string): void {
+    this.layerClosers.delete(key);
+    this.nav.close(key);
+  }
+
+  /**
+   * A room (from finding it to its results) or training is the 'play' layer: one entry with the
+   * room's link. The browser's Back on it never leaves at once (audit N-07): it comes back and asks.
+   */
+  private enterPlay(path: string | undefined): void {
+    this.playPath = path;
+    if (this.nav.has('play')) this.nav.update('play', { path });
+    else this.nav.push({ key: 'play', hash: '', path, popped: () => this.playPopped() });
+  }
+
+  /** Out of the room or training: back over its entries; the address is Home's (a room the page opened on too). */
+  private leavePlay(): void {
+    this.playPath = undefined;
+    this.nav.setBasePath('/');
+    this.nav.close('play');
+  }
+
+  /**
+   * The browser's Back (Android's back gesture) took the room's or training's entry. Still joining, a
+   * failed join or a lost connection: that's leaving. Otherwise the entry comes back and the pause
+   * menu opens: in a match or training as it is (Resume, Leave), in a lobby or the results on "Leave
+   * the room?" (audit N-07, N-18).
+   */
+  private playPopped(): void {
+    const s = this.store.getState();
+    const name = s.screen.name;
+    const joining = name === 'room' && (!s.connection || s.connection.state === 'connecting' || s.connection.state === 'joining' || s.connection.state === 'failed');
+    if (name === 'finding' || name === 'error' || joining) {
+      this.host.online?.leave();
+      this.go({ to: 'home' });
+      return;
+    }
+    if (name !== 'room' && name !== 'training') return;
+    this.nav.push({ key: 'play', hash: '', path: this.playPath, popped: () => this.playPopped() });
+    const phase = s.match?.phase;
+    const ask = name === 'room' && (phase === undefined || phase === MatchPhase.Waiting || phase === MatchPhase.Ending || phase === MatchPhase.Postgame || phase === MatchPhase.Closed);
+    if (s.overlay === 'menu') return;
+    this.closeOverlay();
+    this.set({ menuAsk: ask });
+    this.openOverlay('menu');
   }
 
   updateSettings(patch: Partial<Settings>): void {
@@ -901,10 +1189,11 @@ export class ShellController {
     this.set({ tuneNote: { ...note, id: ++this.tuneNotes } });
   }
 
-  notify(message: string): void {
+  /** A short-lived line ("Link copied"); `ms`: how long it stays (a longer one for news to read). */
+  notify(message: string, ms = 2200): void {
     this.set({ notice: message });
     window.clearTimeout(this.noticeTimer);
-    this.noticeTimer = window.setTimeout(() => this.set({ notice: null }), 2200);
+    this.noticeTimer = window.setTimeout(() => this.set({ notice: null }), ms);
   }
 
   /** Copies the room's link; `quiet` when the screen shows it itself (the lobby's button turns green). */
@@ -939,29 +1228,31 @@ export class ShellController {
     }
     await this.copyLink(code);
   }
+}
 
-  // ---- browser history ----
-
-  /** the path and query the shell last stood on: a popstate that changes only the #hash isn't the shell's */
-  private lastPath = typeof location === 'undefined' ? '' : location.pathname + location.search;
-
-  private setUrl(path: string): void {
-    if (location.pathname + location.search !== path) history.pushState(null, '', path);
-    this.lastPath = location.pathname + location.search;
-  }
-
-  private onPopState(): void {
-    // a #hash of its own (the landing's #about, a route's #/locker): the screens stay as they are
-    const path = location.pathname + location.search;
-    if (path === this.lastPath) return;
-    this.lastPath = path;
-    const intent = intentFromLocation(location);
-    const screen = this.store.getState().screen;
-    if (intent.to === 'join' && screen.name === 'room' && screen.code === intent.code) return;
-    if (intent.to === 'home' && (screen.name === 'home' || screen.name === 'training')) return;
-    if (screen.name === 'room') this.host.online?.leave();
-    this.go(intent);
-  }
+/**
+ * The browser tab's title for where the player is (audit C-41, D-29): "Lobby · KTVGBD · Military Forge",
+ * "In match · Street Market · …", "Settings · Controls · …". Null: the page's own (Home, the first
+ * visit's steps), the one index.html gives search results.
+ */
+export function tabTitle(s: Pick<ShellState, 'screen' | 'overlay' | 'route' | 'match' | 'lobby' | 'connection' | 'settingsTab'>): string | null {
+  const t = (...parts: string[]) => [...parts, GAME_NAME].join(' · ');
+  if (s.route) return t(s.route.title);
+  if (s.overlay === 'settings') return t('Settings', SETTINGS_TABS.find((x) => x.id === s.settingsTab)?.label ?? '');
+  if (s.overlay === 'join') return t('Join a room');
+  if (s.overlay === 'name') return t('Your name');
+  const sc = s.screen;
+  if (sc.name === 'training') return t(sc.tour ? 'First flight' : s.match && s.match.phase !== MatchPhase.Waiting ? 'Training' : 'Warm-up');
+  if (sc.name === 'finding') return t(sc.creating ? 'Making a room' : `Joining ${sc.code ?? ''}`.trim());
+  if (sc.name === 'error') return t(sc.alert.title);
+  if (sc.name !== 'room') return null;
+  if (!s.connection || s.connection.state === 'connecting' || s.connection.state === 'joining' || (s.connection.state === 'reconnecting' && !s.match)) return t(`Joining ${sc.code}`);
+  if (s.connection.state === 'failed') return t('Connection lost');
+  const phase = s.match?.phase;
+  const map = s.match?.mapName || s.lobby?.mapName || '';
+  if (phase === MatchPhase.Countdown || phase === MatchPhase.InProgress) return t('In match', ...(map ? [map] : []));
+  if (phase === MatchPhase.Ending || phase === MatchPhase.Postgame || phase === MatchPhase.Closed) return t('Results');
+  return t('Lobby', ...(sc.code ? [sc.code] : []));
 }
 
 /**

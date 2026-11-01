@@ -78,6 +78,9 @@ export const TOUR_COPY = {
   confirmed: 'Confirmed',
   complete: 'Flight complete',
   completeBody: (secs: number) => `${secs} s. Next: a match against 3 Easy bots.`,
+  /** most orders skipped (audit 2 P-16): no Flight complete for that, and the Field manual keeps it open */
+  skippedTitle: 'Flight skipped',
+  skippedBody: (done: number, of: number) => `${done} of ${of} orders flown. Fly it again from Home.`,
   liveFire: 'Live fire',
   later: 'Later',
 } as const;

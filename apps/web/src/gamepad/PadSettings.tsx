@@ -103,7 +103,7 @@ function BindButton({ action, index, button, capture, onCapture }: { action: Pad
   if (listening)
     return (
       <button type="button" className="btn btn--volt btn--sm mf-bindbtn" aria-live="polite" onClick={() => onCapture(null)}>
-        Press a button…
+        Press a button
       </button>
     );
   return (
@@ -124,25 +124,33 @@ export function PadControls({ pad, onChange, reduceFlashes = false, phone = fals
   const latest = useRef({ pad, onChange });
   latest.current = { pad, onChange };
 
-  // a rebind: the pad's next button press (or Esc to cancel, Backspace to clear, or the time running out)
+  // a rebind: the pad's next button press (or Esc / Options to cancel, Backspace / View held to clear, or the time running out)
   useEffect(() => {
     if (!capture || !manager) return;
     const done = () => setCapture(null);
-    manager.captureNext((button) => {
-      done();
+    const clear = () => {
       const { pad, onChange } = latest.current;
-      const { bindings, took } = rebindPad(pad.bindings, capture.action, button, capture.index);
-      onChange({ ...pad, bindings });
-      const from = took && PAD_ACTIONS.find((a) => a.id === took);
-      setMoved(from ? `That button was set for ${from.label}: it moved here, so ${from.label} lost it.` : null);
-    });
+      if (capture.index < pad.bindings[capture.action].length) onChange({ ...pad, bindings: unbindPad(pad.bindings, capture.action, capture.index) });
+      done();
+    };
+    manager.captureNext(
+      (button) => {
+        done();
+        const { pad, onChange } = latest.current;
+        const { bindings, took } = rebindPad(pad.bindings, capture.action, button, capture.index);
+        onChange({ ...pad, bindings });
+        const from = took && PAD_ACTIONS.find((a) => a.id === took);
+        setMoved(from ? `That button was set for ${from.label}: it moved here, so ${from.label} lost it.` : null);
+      },
+      // the pad's own way out (audit 2, N-10: only the keyboard could cancel or clear)
+      { cancel: done, clear },
+    );
     const onKey = (e: KeyboardEvent) => {
       if (e.code !== 'Escape' && e.code !== 'Backspace' && e.code !== 'Delete') return;
       e.preventDefault();
       e.stopPropagation();
-      const { pad, onChange } = latest.current;
-      if (e.code !== 'Escape' && capture.index < pad.bindings[capture.action].length) onChange({ ...pad, bindings: unbindPad(pad.bindings, capture.action, capture.index) });
-      done();
+      if (e.code === 'Escape') done();
+      else clear();
     };
     window.addEventListener('keydown', onKey, true);
     const timer = window.setTimeout(done, CAPTURE_S * 1000);
@@ -214,7 +222,15 @@ export function PadControls({ pad, onChange, reduceFlashes = false, phone = fals
       </div>
       {!phone && (
         <p className="mf-set__note">
-          Press a button below, then the controller button you want. <Cap>Esc</Cap> cancels, <Cap>Backspace</Cap> clears it. In menus the D-pad or the left stick moves, {device.kind === 'pad' ? <PadKbd code="Pad0" /> : 'the bottom button'} selects, {device.kind === 'pad' ? <PadKbd code="Pad1" /> : 'the right one'} goes back.
+          {device.kind === 'pad' ? (
+            <>
+              Press a button below, then the controller button you want. <PadKbd code="Pad9" /> cancels, holding <PadKbd code="Pad8" /> clears it. In menus the D-pad or the left stick moves, <PadKbd code="Pad0" /> selects, <PadKbd code="Pad1" /> goes back.
+            </>
+          ) : (
+            <>
+              Press a button below, then the controller button you want. <Cap>Esc</Cap> (or the controller's menu button) cancels, <Cap>Backspace</Cap> (or holding its view button) clears it. In menus the D-pad or the left stick moves, the bottom button selects, the right one goes back.
+            </>
+          )}
         </p>
       )}
       {phone ? (

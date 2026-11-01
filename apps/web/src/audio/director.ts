@@ -141,6 +141,8 @@ export class AudioDirector {
   private readonly headOn = new Set<number>();
   private lowFuelAt = -Infinity;
   private fireWasHeld = false;
+  /** the local gun's rounds last frame (its weapon index and slot), for the low-ammo tick (audit L-21) */
+  private ammoWas = { def: -1, slot: -1, mag: -1 };
   private coughAt = -Infinity;
   private blindPeak = 0;
 
@@ -560,6 +562,16 @@ export class AudioDirector {
       s.play(ws.empty);
     }
     this.fireWasHeld = x.fireHeld;
+    // the last rounds, by ear (audit L-21): a quiet tick as the magazine crosses the low-ammo line
+    // (hud/model.ts lowAmmo: a fifth), once a magazine; a lighter one on the last round of a gun of 8 or more
+    const def = w && w.def !== NO_WEAPON ? weapons[w.def] : undefined;
+    const was = this.ammoWas;
+    if (w && def && ws && ws.family !== 'melee' && was.def === w.def && was.slot === me.active && w.mag < was.mag && w.reloadTicks === 0) {
+      const low = Math.max(1, Math.floor(def.mag * 0.2));
+      if (w.mag === 1 && def.mag >= 8 && low > 1) s.play('ui.lastround');
+      else if (w.mag <= low && was.mag > low) s.play('ui.lowammo');
+    }
+    this.ammoWas = { def: w?.def ?? -1, slot: me.active, mag: w?.mag ?? -1 };
     // a flashbang: the world muffled and (unless softened) the ears ringing
     const blind = me.blind ?? 0;
     if (blind > this.blindPeak + 0.25 && blind > 0.35) {

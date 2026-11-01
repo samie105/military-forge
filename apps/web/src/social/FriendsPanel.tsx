@@ -10,11 +10,14 @@
 import { cosmeticLoadoutFromWireIds } from '@military-forge/content';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Portrait } from '../portrait/Portrait';
+import { PadKbd, useInputDevice } from '../gamepad/react';
+import { cycleLetter } from '../shell/screens/Join';
 import { usePhoneLayout } from '../shell/screens/phone/layout';
 import { Icon } from '../ui/Icon';
 import type { FoundPlayer, Friend, FriendsList, LookIds, Person } from './api';
 import { IncomingInvites, InviteButton } from './Invites';
 import { addedText, agoText, statusText, useSel, type FriendsTab, type SocialController } from './social';
+import { PlayerMore } from './ReportSheet';
 
 /**
  * A player's face: their own soldier (the owner's rule: a player's character is their avatar
@@ -56,14 +59,21 @@ function PanelBody({ social, phone }: { social: SocialController; phone: boolean
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.code !== 'Escape') return;
+      // the player sheet over the panel takes its own Esc (ReportSheet.tsx)
+      if (social.store.getState().sheet) return;
       e.preventDefault();
       e.stopImmediatePropagation();
       if (social.store.getState().search.query) social.clearSearch();
       else social.closePanel();
     };
     window.addEventListener('keydown', onKey, true);
+    // focus goes back to what opened the panel when it closes (audit N-14: it fell to Home's Play tab)
+    const opener = document.activeElement as HTMLElement | null;
     drawer.current?.focus({ preventScroll: true });
-    return () => window.removeEventListener('keydown', onKey, true);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      if (opener?.isConnected && opener !== document.body && !opener.closest('[inert]')) opener.focus({ preventScroll: true });
+    };
   }, [social]);
 
   const online = list?.friends.filter((f) => f.status !== 'offline').length ?? 0;
@@ -183,10 +193,15 @@ function AddFriend({ social, phone }: { social: SocialController; phone: boolean
   const list = useSel(social.store, (s) => s.list);
   const text = useSel(social.store, (s) => s.search.query);
   const added = addedNow && addedText(addedNow, list);
+  // a controller has no keys to type a name with: it adds by friend code, letter by letter (audit 2, N-05)
+  const pad = useInputDevice().kind === 'pad';
+  const send = async (value: string) => {
+    const outcome = await social.add(value);
+    if (outcome?.tone === 'ok') social.clearSearch();
+  };
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    const outcome = await social.add(text);
-    if (outcome?.tone === 'ok') social.clearSearch();
+    await send(text);
   };
   return (
     <form className="sx-add" role="search" onSubmit={(e) => void submit(e)}>
@@ -217,6 +232,7 @@ function AddFriend({ social, phone }: { social: SocialController; phone: boolean
         {phone ? '' : adding ? 'Sending' : 'Send'}
         {phone && <span className="vh">Send request</span>}
       </button>
+      {pad && <PadFriendCode busy={adding} onSend={(code) => void send(code)} />}
       {added && (
         <p className={`status ${added.tone === 'ok' ? 'status--ok' : 'status--warn'} sx-add__out`} role="status">
           <Icon name={added.tone === 'ok' ? 'ok' : 'warn'} size="sm" />
@@ -224,6 +240,66 @@ function AddFriend({ social, phone }: { social: SocialController; phone: boolean
         </p>
       )}
     </form>
+  );
+}
+
+/** A friend code's letters (apps/api friends/code.ts: no 0/O, 1/I/L, U). */
+export const FRIEND_CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTVWXYZ';
+const FRIEND_CODE_LENGTH = 8;
+
+/** A friend code as the API takes it: `7KQ4-M9XP`. */
+export const friendCodeText = (letters: string): string => (letters.length > 4 ? `${letters.slice(0, 4)}-${letters.slice(4)}` : letters);
+
+/**
+ * A friend code with a controller: eight boxes, up and down step each one's letter (gamepad/menus.ts
+ * data-pad-cycle), ✕ / A moves along and on the last box sends the request. Shown while a pad plays;
+ * names still need a keyboard (Steam Deck and phones raise their own on the field above).
+ */
+function PadFriendCode({ busy, onSend }: { busy: boolean; onSend: (code: string) => void }) {
+  const [code, setCode] = useState('');
+  const boxes = useRef<(HTMLInputElement | null)[]>([]);
+  const focus = (i: number) => boxes.current[Math.max(0, Math.min(FRIEND_CODE_LENGTH - 1, i))]?.focus({ preventScroll: true });
+  const onKey = (i: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      const next = cycleLetter(code, i, e.key === 'ArrowDown' ? 1 : -1, FRIEND_CODE_ALPHABET, FRIEND_CODE_LENGTH);
+      setCode(next.code);
+      focus(next.at);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (code.length < FRIEND_CODE_LENGTH) focus(Math.min(code.length, i + 1));
+      else if (!busy) onSend(friendCodeText(code));
+    } else if (e.key === 'Backspace') {
+      e.preventDefault();
+      if (i < code.length) setCode(code.slice(0, i) + code.slice(i + 1));
+      focus(i > 0 && i >= code.length ? i - 1 : i);
+    }
+  };
+  return (
+    <div className="sx-padcode">
+      <p className="sx-note sx-padcode__lead">
+        Type a name with a keyboard, or add them by friend code: <PadKbd code="Pad12" />
+        <PadKbd code="Pad13" /> picks each letter, <PadKbd code="Pad0" /> moves on and sends.
+      </p>
+      <div className="sx-padcode__row" role="group" aria-label="Friend code, 8 letters">
+        {Array.from({ length: FRIEND_CODE_LENGTH }, (_, i) => (
+          <span key={i} className="sx-padcode__slot">
+            {i === 4 && <span className="sx-padcode__dash" aria-hidden="true">-</span>}
+            <input
+              ref={(el) => {
+                boxes.current[i] = el;
+              }}
+              className={`sx-padcode__cell${code[i] ? ' is-filled' : ''}`}
+              readOnly
+              value={code[i] ?? ''}
+              aria-label={`Friend code letter ${i + 1}`}
+              data-pad-cycle
+              onKeyDown={(e) => onKey(i, e)}
+            />
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -268,7 +344,7 @@ function asCode(text: string): boolean {
 }
 
 /** A player found by name or met in a match, with what you can do now: Add, Request sent, Accept, Friends. */
-export function FoundRow({ social, player, line }: { social: SocialController; player: FoundPlayer; line: string }) {
+export function FoundRow({ social, player, line, place = 'search' }: { social: SocialController; player: FoundPlayer; line: string; place?: 'search' | 'recent' }) {
   const busy = useSel(social.store, (s) => !!s.busy[player.id]);
   const relation = useSel(social.store, () => social.relationOf(player));
   return (
@@ -299,6 +375,8 @@ export function FoundRow({ social, player, line }: { social: SocialController; p
           Add
         </button>
       )}
+      {/* report, block (audit-2 L-01, L-02): a stranger too */}
+      <PlayerMore target={{ name: player.nickname, id: player.id, look: player.look, place }} />
     </div>
   );
 }
@@ -369,7 +447,7 @@ function PlayedWith({ social }: { social: SocialController }) {
     <div className="sx-group">
       <Section title="Played with recently" tone="muted" count={people.length} />
       {people.map((p) => (
-        <FoundRow key={p.id} social={social} player={p} line={p.at ? `Played ${agoText(p.at)}` : `Level ${p.level}`} />
+        <FoundRow key={p.id} social={social} player={p} line={p.at ? `Played ${agoText(p.at)}` : `Level ${p.level}`} place="recent" />
       ))}
     </div>
   );
@@ -442,6 +520,8 @@ function IncomingRow({ social, person }: { social: SocialController; person: Per
       <button type="button" className="btn btn--ghost btn--sm sx-act" disabled={busy} onClick={() => void social.decline(person)} aria-label={`Decline ${person.nickname}`}>
         Decline
       </button>
+      {/* block a stranger who keeps asking, or report them (audit-2 L-01, L-02) */}
+      <PlayerMore target={{ name: person.nickname, id: person.id, look: person.look, place: 'request' }} />
     </div>
   );
 }
@@ -501,6 +581,18 @@ export function FriendRow({ social, friend, extra }: { social: SocialController;
             <button type="button" role="menuitem" className="sx-menu__item" onClick={() => setMenu('remove')}>
               <Icon name="user-x" size="sm" />
               Remove friend
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="sx-menu__item"
+              onClick={() => {
+                setMenu('closed');
+                social.openReport({ name: friend.nickname, id: friend.id, look: friend.look ?? null, place: 'friends' });
+              }}
+            >
+              <Icon name="sx-flag" size="sm" />
+              Report
             </button>
             <button type="button" role="menuitem" className="sx-menu__item sx-menu__item--bad" onClick={() => setMenu('block')}>
               <Icon name="sx-ban" size="sm" />

@@ -105,6 +105,8 @@ interface FloatText {
   text: string;
   color: string;
   age: number;
+  /** a damage number: bigger, with a dark edge */
+  outline?: boolean;
 }
 
 interface FeedLine {
@@ -346,6 +348,10 @@ export class Renderer {
    * times a second at most then, as they do under Reduce flashes.
    */
   reducedMotion = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  /** the numbers off a hit (Settings → Graphics, audit L-20) */
+  damageNumbers = true;
+  /** the hit and kill marks round the reticle (Settings → Graphics, audit L-20) */
+  hitMarkers = true;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -453,17 +459,20 @@ export class Renderer {
           this.floats.push({ target: e.player, x: Number.NaN, y: Number.NaN, text: `+ ${pickupDefs[e.item]?.name ?? 'item'}`, color: COLORS.shield, age: 0 });
           break;
         case 'hit':
-          this.floats.push({
+          if (this.damageNumbers)
+            this.floats.push({
             target: e.target,
             // placed over the target once it's drawn; one that's out of view (our hit on a player
             // the AOI culls) shows no number rather than one at the map origin
             x: Number.NaN,
             y: Number.NaN,
             text: e.damage.toFixed(0),
-            color: e.zone === HitZone.Head ? '#ff7b72' : '#e6edf3',
+            // white, and a headshot in the head marker's amber (audit L-20: light grey read badly on light walls)
+            color: e.zone === HitZone.Head ? '#ffa657' : '#ffffff',
             age: 0,
+            outline: true,
           });
-          if (e.attacker === localId && e.target !== localId) this.hitMarker = { age: 0, head: e.zone === HitZone.Head, kill: false };
+          if (this.hitMarkers && e.attacker === localId && e.target !== localId) this.hitMarker = { age: 0, head: e.zone === HitZone.Head, kill: false };
           break;
         case 'death': {
           const killer = e.killer >= 0 ? (this.names.get(e.killer) ?? `#${e.killer}`) : 'world';
@@ -471,7 +480,7 @@ export class Renderer {
           const how = KILL_ICONS[e.source] ?? weapons[e.source]?.name ?? '?';
           this.feed.push({ text: e.killer === e.victim ? `${victim} ✝ (${how})` : `${killer} ▸ ${victim} (${how})`, age: 0 });
           if (this.feed.length > 6) this.feed.shift();
-          if (e.killer === localId && e.victim !== localId) this.hitMarker = { age: 0, head: false, kill: true };
+          if (this.hitMarkers && e.killer === localId && e.victim !== localId) this.hitMarker = { age: 0, head: false, kill: true };
           break;
         }
         case 'dash': {
@@ -1443,9 +1452,19 @@ export class Renderer {
         f.y = target.y + 1.9;
       }
       if (Number.isNaN(f.x)) continue;
-      ctx.fillStyle = f.color;
       ctx.globalAlpha = 1 - f.age / 0.8;
-      ctx.fillText(f.text, cam.toScreenX(f.x), cam.toScreenY(f.y) - f.age * 30);
+      const fx = cam.toScreenX(f.x);
+      const fy = cam.toScreenY(f.y) - f.age * 30;
+      if (f.outline) {
+        // a dark edge, so the number reads on any wall (L-20)
+        ctx.font = 'bold 15px ui-monospace, monospace';
+        ctx.lineWidth = 3;
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = 'rgba(8,10,6,0.9)';
+        ctx.strokeText(f.text, fx, fy);
+      } else ctx.font = 'bold 13px ui-monospace, monospace';
+      ctx.fillStyle = f.color;
+      ctx.fillText(f.text, fx, fy);
       ctx.globalAlpha = 1;
     }
     for (const line of this.feed) line.age += dt;

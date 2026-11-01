@@ -75,13 +75,15 @@ import { mountAdClicks } from './ads';
 import { padShownBindings } from './gamepad/prompts';
 import { startLandscape } from './ui/landscape';
 import { startMultiTouchTaps } from './ui/multiTouchTap';
+import { startRovingGroups } from './ui/roving';
 import type { Frame } from './view';
 import { creatorSeen } from './creator/model';
 import { titleWanted } from './shell/title';
+import { openRoute, swapRoute } from './shell/history';
 import { startTourMemory, type TourMemory } from './tour';
 import { FirstFlight } from './tour/firstFlight';
 import { FIRST_FLIGHT } from './tour/flight';
-import { homeStopsDue, homeStopsWanted, runHomeStops } from './tour/homeStops';
+import { HOME_STOPS, homeStopsDue, homeStopsRetired, homeStopsWanted, runHomeStops } from './tour/homeStops';
 import { HintRunner } from './tour/hintsRun';
 import type { Device } from './tour/log';
 import { provideTourMemory } from './tour/live';
@@ -90,6 +92,7 @@ import { readReturn, withoutReturn, type StoreView } from './store/model';
 import type { StoreApi } from './store/screen';
 import { launchedInstalled } from './pwa/install';
 import { metrics, promptDue, startMetrics } from './metrics';
+import { consentAskable } from './metrics/consent';
 import { buildId } from 'virtual:title-info';
 import { mountTourReadout } from './tour/readout';
 import { BackdropPacer } from './ui/backdrop';
@@ -136,6 +139,8 @@ startLandscape();
 const lowEnd = startLowEnd();
 // a tap on a menu button while a thumb rests on a dial: the browser sends no click, so this does
 if (navigator.maxTouchPoints > 0) startMultiTouchTaps();
+// option groups: one tab stop each, the arrows choose (audit 1, D-10)
+startRovingGroups();
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const view3dCanvas = document.getElementById('view3d') as HTMLCanvasElement;
@@ -394,6 +399,8 @@ function applyHudKeys(): void {
   if (!settings || !hud) return;
   const b = currentDevice().kind === 'pad' ? padShownBindings(settings.pad) : settings.bindings;
   const key = (action: keyof typeof b) => b[action][0];
+  // the big map's cap: its key, or a pad's double tap of the scoreboard's button (audit 2, N-09)
+  minimap?.setKey(currentDevice().kind === 'pad' ? `${capText(b.scoreboard[0] ?? 'Pad8')} ×2` : mapKeys[0] ? capText(mapKeys[0]) : null);
   hud.setKeys({ dash: key('dash'), grenade: key('grenade'), cycleGrenade: key('cycleGrenade'), shield: key('shield'), swap: key('swap'), reload: key('reload'), scoreboard: key('scoreboard'), interact: key('interact'), fire: key('fire'), stats: settings.bindings.stats?.[0] });
 }
 onInputDevice(applyHudKeys);
@@ -548,6 +555,10 @@ const host: GameHost = {
     view3d.setBlood(next.blood);
     // other players' kill effects (Settings → Graphics, on by default; docs/17 §3.7)
     view3d.setShowKillEffects(next.showKillEffects);
+    // the numbers off a hit and the hit markers (audit L-20): the 2D layer draws both, the HUD its marker
+    renderer.damageNumbers = next.damageNumbers;
+    renderer.hitMarkers = next.hitMarkers;
+    if (hud) hud.hitMarkers = next.hitMarkers;
     if (mode instanceof OnlineMode && mode.net.lowBandwidth !== next.lowBandwidth) mode.net.setLowBandwidth(next.lowBandwidth);
     sampler.bindings = toKeyBindings(next.bindings);
     sampler.doubleTapDash = next.doubleTapDash;
@@ -556,14 +567,13 @@ const host: GameHost = {
     hud?.setStatsKeys(uiCodes(next.bindings, 'stats'));
     hud?.setScoreboardKeys(scoreboardKeys);
     mapKeys = uiCodes(next.bindings, 'map');
-    minimap?.setKey(mapKeys[0] ? capText(mapKeys[0]) : null);
     minimap?.setColorBlind(next.colorBlind);
     minimap?.setReducedMotion(next.reduceMotion);
     voiceChat.talkKeys = uiCodes(next.bindings, 'talk');
     voiceChat.padButtons = next.pad.enabled ? next.pad.bindings.talk : [];
     applyHudKeys();
-    // controllers: their settings, and no rumble under Reduce flashes
-    applyPadSettings(next.pad, next.reduceFlashes);
+    // controllers: their settings; rumble has its own switch, Reduce flashes leaves it alone (audit L-22)
+    applyPadSettings(next.pad, false);
     // the sound: bus volumes and mutes, and Accessibility's "Soften loud bursts"
     audio.applySettings(next.audio, next.softBursts);
     // Reduce flashes: the flashbang effect (fx, which remembers it) and the UI (the kit's html.reduce-flashes)
@@ -661,7 +671,7 @@ registerRoute({
             onExit: close,
             onCreator: () => openCreator('locker'),
             // the Store (its header button, and "Get it in the Store" on a locked store skin)
-            onStore: () => (location.hash = '#/store'),
+            onStore: () => openRoute('store'),
             ...(loadoutSync ? { store: loadoutSync.store, guns: loadoutSync.guns } : {}),
           }),
     ),
@@ -692,8 +702,8 @@ registerRoute({
 // The Store as a shell route (#/store; docs/17). Back from Flutterwave's page, the address carries the payment: it's
 // taken off the address (a reload mustn't ask again) and handed to the Store, whose API verifies it before crediting.
 if (storeReturn) {
-  history.replaceState(null, '', withoutReturn(location.href));
-  location.hash = '#/store';
+  // the address names the Store in place (no extra entry): the shell opens it over Home (history.ts)
+  history.replaceState(null, '', withoutReturn(location.href).replace(/#.*$/, '') + '#/store');
 }
 let storeBack = storeReturn;
 registerRoute({
@@ -727,7 +737,9 @@ registerRoute({
               close();
               shell.controller?.openSettings('account');
             },
-            onWear: (itemId) => void wearItem(loadoutSync?.store ?? null, itemId).then(() => (location.hash = '#/locker')),
+            // back to the Locker when it opened the Store, else the Locker in the Store's place (one entry)
+            onWear: (itemId) => void wearItem(loadoutSync?.store ?? null, itemId).then(() => swapRoute('locker')),
+            onLocker: () => swapRoute('locker'),
             // what the account owns reaches the Locker and the look at once (looks/grants.ts)
             onOwned: (owned) => {
               if (api?.me) api.me = { ...api.me, grants: owned };
@@ -750,7 +762,7 @@ function storageOrNull(): Storage | null {
 }
 function openCreator(from: 'first' | 'locker'): void {
   creatorFrom = from;
-  location.hash = '#/creator';
+  openRoute('creator');
 }
 registerRoute({
   id: 'creator',
@@ -767,16 +779,20 @@ registerRoute({
             first: from === 'first',
             onExit: (how) => {
               if (how === 'saved') tourMemory?.fact({ k: 'soldier-saved' });
-              if (from === 'locker') location.hash = '#/locker';
-              // the first time: the Briefing's one question next (the onboarding tour)
-              else if (from === 'first' && briefingWanted()) location.hash = '#/briefing';
+              // the first time: the Briefing's one question next (the onboarding tour), in the creator's
+              // place; from the Locker, back to it (its entry is right under this one)
+              if (from === 'first' && briefingWanted()) swapRoute('briefing');
               else close();
             },
             ...(loadoutSync ? { store: loadoutSync.store } : {}),
           });
-          return () => {
-            creatorFrom = null;
-            unmount();
+          return {
+            unmount: () => {
+              creatorFrom = null;
+              unmount();
+            },
+            // the first time, Escape, B and Back are its "Skip for now" (audit N-08): the Briefing next
+            ...(from === 'first' ? { back: () => el.querySelector<HTMLButtonElement>('[data-action="skip"]')?.click() } : {}),
           };
         },
     );
@@ -832,7 +848,7 @@ if (loadoutSync) document.addEventListener('visibilitychange', () => document.vi
 // the onboarding's memory (docs/design/onboarding-research.md phase 1): facts and the event log, on this
 // device only; ?tourlog shows them on the page
 if (appMode) {
-  tourMemory = startTourMemory({ store: shell.store, storage: storageOrNull(), invited: location.pathname.startsWith('/r/') });
+  tourMemory = startTourMemory({ store: shell.store, storage: storageOrNull(), invited: location.pathname.startsWith('/r/'), localBots: () => host.local?.botLevel ?? null });
   // the installable app: the install prompt caught, the worker registered, updates on Home only (src/pwa)
   startPwa(shell.store, storageOrNull());
   // problem reports (diag/): the in-game name and the tour's last steps go with one
@@ -1053,7 +1069,8 @@ if (appMode && tourMemory) {
   let lastInputAt = performance.now();
   const consentDue = () => {
     const m = metrics();
-    return !!m && promptDue(m.consent.get()) !== null;
+    // asked only after the first finished match (audit 2 P-08, metrics/ConsentCard.tsx)
+    return !!m && promptDue(m.consent.get()) !== null && consentAskable(memory.facts.get().matches.finished);
   };
   for (const type of ['pointerdown', 'keydown', 'wheel'] as const) window.addEventListener(type, () => (lastInputAt = performance.now()), { capture: true, passive: true });
   onInputDevice(() => (lastInputAt = performance.now())); // a pad's press
@@ -1066,6 +1083,8 @@ if (appMode && tourMemory) {
       stopStops = null;
       return;
     }
+    // a returning player past the point a tour helps: done, without showing it (audit 2 P-14)
+    if (homeStopsRetired(memory.facts.get())) memory.fact({ k: 'tour', tour: HOME_STOPS, finished: true });
     if (stopStops || stopsPoll || cameFromMatch || !homeStopsWanted(memory.facts.get())) return;
     stopsPoll = window.setInterval(() => {
       if (!homeStopsDue(cameFromMatch, lastInputAt, performance.now())) return;

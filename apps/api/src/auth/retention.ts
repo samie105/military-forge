@@ -7,15 +7,20 @@
  * - `email_tokens` (auth/accounts.ts, the "Save my account" and reset links): deleted 7 days after
  *   they expired, or 7 days after they were used (or replaced, or cancelled).
  *
- * The 7 days keep the recent ones for working out what happened to a player's sign-in. Nothing else
- * is touched here: guest accounts, matches, logs and play stats keep the retention they have.
+ * The 7 days keep the recent ones for working out what happened to a player's sign-in.
+ *
+ * Also (audit-2, 1 Nov): player reports (reports/player.ts) after 180 days, and remembered declined
+ * friend requests (friends/service.ts) after 30. Nothing else is touched here: guest accounts,
+ * matches, logs, the moderation log and play stats keep the retention they have.
  *
  * index.ts runs the sweep every hour (and once soon after the API starts), in batches so a big backlog
  * never holds a long lock, and logs what went. It never throws out of the timer.
  */
 import { inArray, lt, or } from 'drizzle-orm';
 import type { Db } from '../db/client';
-import { emailTokens, sessions } from '../db/schema';
+import { friendRequestDeclines, emailTokens, playerReports, sessions } from '../db/schema';
+import { DECLINE_MEMORY_MS } from '../friends/service';
+import { PLAYER_REPORT_TTL_MS } from '../reports/player';
 import type { Logger } from '../log';
 
 /** how long an expired, revoked or used record stays before the sweep deletes it */
@@ -30,6 +35,8 @@ const MAX_BATCHES = 200;
 export interface SweepResult {
   sessions: number;
   emailLinks: number;
+  playerReports: number;
+  declines: number;
 }
 
 /** Deletes in batches of `batch` until none are left (or MAX_BATCHES); returns how many went. */
@@ -64,14 +71,28 @@ export async function sweepEndedSignIns(db: Db, now: number, batch = RETENTION_B
     const gone = await db.delete(emailTokens).where(inArray(emailTokens.id, old)).returning({ id: emailTokens.id });
     return gone.length;
   }, batch);
-  return { sessions: sessionCount, emailLinks: linkCount };
+  const reportCount = await deleteInBatches(async () => {
+    const old = db
+      .select({ id: playerReports.id })
+      .from(playerReports)
+      .where(lt(playerReports.createdAt, new Date(now - PLAYER_REPORT_TTL_MS)))
+      .limit(batch);
+    const gone = await db.delete(playerReports).where(inArray(playerReports.id, old)).returning({ id: playerReports.id });
+    return gone.length;
+  }, batch);
+  // declines have a two-column key: one statement, they're small
+  const declines = await db
+    .delete(friendRequestDeclines)
+    .where(lt(friendRequestDeclines.at, new Date(now - DECLINE_MEMORY_MS)))
+    .returning({ from: friendRequestDeclines.fromId });
+  return { sessions: sessionCount, emailLinks: linkCount, playerReports: reportCount, declines: declines.length };
 }
 
 /** A sweep for the timer: logs what went (or why it failed), never throws. */
 export async function runRetentionSweep(db: Db, now: number, log: Logger): Promise<SweepResult | null> {
   try {
     const result = await sweepEndedSignIns(db, now);
-    if (result.sessions || result.emailLinks) log.info({ retention: 'sweep', ...result }, 'old sessions and email links deleted');
+    if (result.sessions || result.emailLinks || result.playerReports || result.declines) log.info({ retention: 'sweep', ...result }, 'old sign-in records, reports and declines deleted');
     return result;
   } catch (err) {
     log.error({ err: err instanceof Error ? { name: err.name, message: err.message } : String(err) }, 'retention sweep failed');

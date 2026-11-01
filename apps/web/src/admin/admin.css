@@ -297,3 +297,10 @@ body {
 .admin__store-action input[type='text'], .admin__store-account > input { flex: 1; min-width: 200px; }
 .admin__store-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .admin__store-table td { padding: 4px 6px; border-bottom: 1px solid var(--c-line, #333); }
+
+/* ---- Player reports (moderation.ts, audit-2 L-04) ---- */
+.admin__mod-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; width: 100%; padding: 8px 0; border: 0; border-top: 1px solid rgb(255 255 255 / .1); background: none; color: inherit; font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.admin__mod-row:hover, .admin__mod-row:focus-visible { background: rgb(255 255 255 / .05); outline: none; }
+.admin__mod-player { margin-top: 12px; }
+.admin__mod-player:empty { display: none; }
+.admin__mod-list { margin: 4px 0 8px; padding-left: 18px; font-size: 14px; }

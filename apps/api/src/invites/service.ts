@@ -23,8 +23,10 @@ import type { PresenceService } from '../presence/presence';
 import type { PartyService } from './party';
 
 export const INVITE_TTL_MS = 120_000;
-/** the same invite again (same friend, same room) no sooner than this: a double tap, a stuck button */
-export const REINVITE_MS = 5_000;
+/** the same friend again (any room) no sooner than this: a toast every few seconds is noise (audit-2 L-23) */
+export const REINVITE_MS = 60_000;
+/** after a friend declines one, no invite from you to them for this long (audit-2 L-23) */
+export const DECLINED_QUIET_MS = 5 * 60_000;
 /** invites kept per list (to you, from you) */
 const LIST_MAX = 20;
 
@@ -45,6 +47,8 @@ export interface Invite {
 const invKey = (id: string) => `inv:${id}`;
 const toKey = (userId: string) => `inv:to:${userId}`;
 const fromKey = (userId: string) => `inv:from:${userId}`;
+/** set when `to` declines an invite from `from`: quiet for DECLINED_QUIET_MS */
+const declinedKey = (from: string, to: string) => `inv:no:${from}:${to}`;
 
 export class InviteService {
   constructor(
@@ -125,11 +129,18 @@ export class InviteService {
     if (theirs.room === room) throw new ApiError(409, 'already_in_room', "They're in this room already");
 
     const at = this.now();
-    const previous = (await this.sent(fromId)).find((i) => i.to.id === toId && i.room === room && !i.answer);
-    if (previous && at - Date.parse(previous.at) < REINVITE_MS) {
-      const retryAfter = Math.ceil((REINVITE_MS - (at - Date.parse(previous.at))) / 1000);
+    const quiet = await this.kv.get(declinedKey(fromId, toId));
+    if (quiet) {
+      const retryAfter = Math.max(1, Math.ceil((Number(quiet) + DECLINED_QUIET_MS - at) / 1000));
+      throw new ApiError(429, 'invite_declined', 'They said no to your last invite: try again in a few minutes', { retryAfter }, { 'Retry-After': String(retryAfter) });
+    }
+    const sent = await this.sent(fromId);
+    const last = sent.find((i) => i.to.id === toId);
+    if (last && at - Date.parse(last.at) < REINVITE_MS) {
+      const retryAfter = Math.ceil((REINVITE_MS - (at - Date.parse(last.at))) / 1000);
       throw new ApiError(429, 'rate_limited', 'Invite sent: give them a moment', { retryAfter }, { 'Retry-After': String(retryAfter) });
     }
+    const previous = sent.find((i) => i.to.id === toId && i.room === room && !i.answer);
     const invite: Invite = {
       id: previous?.id ?? `i_${randomBytes(9).toString('base64url')}`,
       from: { id: fromId, nickname: await this.nickname(fromId) },
@@ -166,6 +177,7 @@ export class InviteService {
   }
 
   async decline(userId: string, id: string): Promise<void> {
-    await this.answer(userId, id, 'declined');
+    const inv = await this.answer(userId, id, 'declined');
+    await this.kv.set(declinedKey(inv.from.id, userId), String(this.now()), { ttlMs: DECLINED_QUIET_MS });
   }
 }

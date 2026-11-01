@@ -32,7 +32,11 @@ export interface AuthRouteDeps {
   audit?: Audit;
 }
 
-const GuestBody = z.object({ nickname: z.string().max(64).optional() });
+/**
+ * `minor`: the device said under 18 (the web's age step, audit-2 L-03). Only the flag, never the year:
+ * the account trains only, and nobody can find it.
+ */
+const GuestBody = z.object({ nickname: z.string().max(64).optional(), minor: z.literal(true).optional() });
 const RefreshBody = z.object({ refreshToken: z.string().max(256).optional() });
 /** retries when a generated guest name collides at insert time */
 const GUEST_INSERT_ATTEMPTS = 5;
@@ -90,10 +94,11 @@ export function authRoutes(deps: AuthRouteDeps): Hono<AppEnv> {
       const userId = newId('u', at.getTime());
       try {
         const issued = await db.transaction(async (tx) => {
-          await tx.insert(users).values({ id: userId, createdAt: at, lastSeenAt: at });
+          const minor = body.minor === true;
+          await tx.insert(users).values({ id: userId, createdAt: at, lastSeenAt: at, minor });
           await tx.insert(identities).values({ provider: 'guest', providerUid: userId, userId, createdAt: at });
           // a name the player typed counts as their choice (starts the cooldown); a generated one doesn't
-          await tx.insert(profileTable).values({ userId, nickname: name.nickname, nicknameNorm: name.norm, nicknameChangedAt: chosen ? at : null });
+          await tx.insert(profileTable).values({ userId, nickname: name.nickname, nicknameNorm: name.norm, nicknameChangedAt: chosen ? at : null, findable: !minor });
           return auth.createSession(tx, userId, device(c));
         });
         c.get('log').info({ userId }, 'guest account created');
@@ -113,9 +118,14 @@ export function authRoutes(deps: AuthRouteDeps): Hono<AppEnv> {
     if (!token) return errorResponse(c, 401, 'invalid_refresh_token', 'No refresh token in the cookie or body');
     const result = await auth.rotate(token, device(c));
     if (!result.ok) {
-      clearRefreshCookie(c, config.cookie);
       c.get('log').info({ reason: result.error }, 'refresh rejected');
-      return errorResponse(c, result.error === 'account_disabled' ? 403 : 401, result.error, 'Refresh token rejected; sign in again');
+      if (result.error === 'account_disabled') {
+        // suspended or banned (audit-2 L-04): the page keeps its token and says so; the cookie stays too,
+        // so the same account comes back when a suspension ends (a new guest would just dodge it)
+        return errorResponse(c, 403, 'account_disabled', "This account can't play online right now", { until: result.until });
+      }
+      clearRefreshCookie(c, config.cookie);
+      return errorResponse(c, 401, result.error, 'Refresh token rejected; sign in again');
     }
     return sessionResponse(c, result, 200);
   });

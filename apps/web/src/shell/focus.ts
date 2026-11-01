@@ -12,3 +12,53 @@ export function releaseShellFocus(doc: Pick<Document, 'activeElement'> | undefin
   el.blur();
   return true;
 }
+
+// ---- routes: what Escape does in the open one, and where focus goes back when it closes (audit N-14)
+
+let routeBack: (() => void) | null = null;
+
+/** The open route's own Back (RouteView sets it from the route's mount): Escape, B and the browser's Back use it. */
+export function setActiveRouteBack(fn: (() => void) | null): void {
+  routeBack = fn;
+}
+
+export function activeRouteBack(): (() => void) | null {
+  return routeBack;
+}
+
+/** What opened the route, told apart by what a person sees on it (the screen under it re-renders while the route is up). */
+interface Opener {
+  label: string;
+  tag: string;
+}
+
+let opener: Opener | null = null;
+
+function labelOf(el: Element): string {
+  return (el.getAttribute('aria-label') ?? el.textContent ?? '').replace(/\s+/g, ' ').trim();
+}
+
+/** A route opens: remember the control that opened it (the focused one, when it's a button or a link in #shell). */
+export function rememberOpener(doc: Document | undefined = globalThis.document): void {
+  const el = doc?.activeElement;
+  opener = el && el !== doc.body && el.closest?.('#shell') && /^(BUTTON|A)$/.test(el.tagName) ? { label: labelOf(el), tag: el.tagName } : null;
+}
+
+/**
+ * The route closed: focus goes back to the control that opened it (Home's Locker tab, not the first
+ * control on the page), once the screen under it is back. Nothing remembered: nothing moves.
+ */
+export function returnFocus(doc: Document | undefined = globalThis.document, later: (fn: () => void) => void = (fn) => requestAnimationFrame(() => fn())): void {
+  const want = opener;
+  opener = null;
+  if (!want || !doc) return;
+  later(() => {
+    if (doc.activeElement?.closest?.('[aria-modal="true"]')) return; // a dialog opened meanwhile has it
+    for (const el of doc.querySelectorAll<HTMLElement>(`#shell ${want.tag.toLowerCase()}`)) {
+      if (labelOf(el) === want.label && el.getClientRects().length > 0) {
+        el.focus({ preventScroll: true });
+        return;
+      }
+    }
+  });
+}

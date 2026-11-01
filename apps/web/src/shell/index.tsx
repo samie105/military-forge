@@ -17,6 +17,7 @@ import { bannerOf, sameBanner } from './mapEventBanner';
 import { matchView, sameView } from './matchView';
 import { lobbyView, onlineMatchView, sameLobby } from './onlineView';
 import { startFitting } from '../ui/fit';
+import { rememberOpener, returnFocus } from './focus';
 import { mountSprite } from '../ui/sprite';
 import { createShellStore, findRoute, onRoutesChanged, type ConnectionView, type ShellActions, type ShellStore } from './store';
 // the kit's stylesheet (tokens, components) is linked from index.html so the loading screen has it
@@ -82,12 +83,19 @@ export function mountShell(parent: HTMLElement = document.body, options: ShellOp
       },
     },
   });
+  // the route open: the back stack's (history.ts: a #hash opens one, Back closes it); the debug client's, the hash
   const syncRoute = () => {
-    const route = findRoute(location.hash.replace(/^#\/?/, ''));
+    const id = controller ? controller.nav.routeId() : location.hash.replace(/^#\/?/, '');
+    const route = id ? findRoute(id) : null;
+    const before = store.getState().route;
+    // focus goes back to what opened it when it closes (audit N-14)
+    if (route && !before) rememberOpener();
     store.setState({ route });
+    if (!route && before) returnFocus();
     host?.setInputBlocked(route !== null || store.getState().overlay !== null);
   };
-  window.addEventListener('hashchange', syncRoute);
+  if (controller) controller.nav.onChange(syncRoute);
+  else window.addEventListener('hashchange', syncRoute);
   onRoutesChanged(syncRoute);
   syncRoute();
 
@@ -106,6 +114,9 @@ export function mountShell(parent: HTMLElement = document.body, options: ShellOp
       if (online) view = onlineMatchView(online);
       else if (local?.match) view = matchView(local.match, local.localId);
       const lobby = online ? lobbyView(online) : null;
+      // something to say once about the room (an update stopped the match: audit L-24)
+      const note = online?.takeNotice?.();
+      if (note) controller?.notify(note, 7000);
       const connection = online ? online.connection : null;
       if (!sameView(state.match, view) || !sameLobby(state.lobby, lobby) || !sameConnection(state.connection, connection)) {
         store.setState({ match: view, lobby, connection: connection && { ...connection } });

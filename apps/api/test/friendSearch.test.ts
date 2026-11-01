@@ -117,7 +117,7 @@ describe('"Let players find me by name"', () => {
     expect((await list(me)).findable).toBe(true);
     expect(await names(other, 'quiet')).toEqual(['Quiet_Kay']);
     const off = await put(me, '/friends/settings', { findable: false });
-    expect(await off.json()).toEqual({ findable: false });
+    expect(await off.json()).toEqual({ findable: false, requestsFrom: 'anyone' });
     expect((await list(me)).findable).toBe(false);
     expect(await names(other, 'quiet')).toEqual([]);
     expect(await (await post(other, '/friends/requests', { name: 'Quiet_Kay' })).json()).toMatchObject({ status: 'requested' });

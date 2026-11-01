@@ -4,7 +4,7 @@
  * and a little about this device now in, ranked cards out. No server. The Field manual (§5) is the
  * six-item checklist beside it. The words are here, in one table, like tour/copy.ts.
  */
-import { MOVES, type Facts } from './facts';
+import { MOVES, lastPlace, type Facts } from './facts';
 import { FIRST_FLIGHT } from './flight';
 import type { Move } from './log';
 
@@ -12,6 +12,8 @@ import type { Move } from './log';
 export type CardAction =
   | { kind: 'flight' }
   | { kind: 'train'; bots: 'easy' | 'normal' | 'hard' }
+  /** the kind of match just played, again, with Easy bots: Play now (online) or Live fire (training) */
+  | { kind: 'again'; bots: 'easy' }
   | { kind: 'create' }
   | { kind: 'join' }
   | { kind: 'local' }
@@ -47,7 +49,20 @@ type Def = Omit<Card, 'score' | 'reason'> & {
   base: number;
   /** eligible: the reason (and 1–1.5 for how strongly), or null */
   when: (f: Facts, c: OrdersContext) => { reason: string; relevance?: number } | null;
+  /** a card that comes back: taken, it returns when this (epoch ms of what made it due) is later */
+  rearm?: (f: Facts) => number | null;
 };
+
+/**
+ * The last match went badly (audit 2 P-03): no kills, or last place, against bots, with no other
+ * person there (a room with friends isn't left for easier bots). Its card is the honest pull back in.
+ */
+export function badLastMatch(f: Facts): boolean {
+  const l = f.last;
+  return !!l && l.finished && l.bots !== null && l.people <= 1 && (l.kills === 0 || lastPlace(l.placement, l.of));
+}
+
+const ordinalPlace = (n: number) => `${n}${(n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10]) ?? 'th'}`;
 
 const DAY_MS = 86_400_000;
 export const COOL_DOWN_MS = 7 * DAY_MS;
@@ -62,6 +77,16 @@ const MOVE_WORDS: Partial<Record<Move, [title: string, line: string]>> = {
 
 /** The catalogue (§5), most important first. */
 export const CARDS: readonly Def[] = [
+  {
+    id: 'again-easy',
+    title: 'One more, Easy bots',
+    line: 'Three Easy bots, the same rules.',
+    cta: 'Play again',
+    action: { kind: 'again', bots: 'easy' },
+    base: 96,
+    rearm: (f) => f.last?.at ?? null,
+    when: (f) => (badLastMatch(f) ? { reason: f.last!.kills === 0 ? 'No kills last match' : `${ordinalPlace(f.last!.placement)} of ${f.last!.of} last match` } : null),
+  },
   {
     id: 'finish-flight',
     title: 'Finish First flight',
@@ -109,7 +134,8 @@ export const CARDS: readonly Def[] = [
     cta: 'Create room',
     action: { kind: 'create' },
     base: 70,
-    when: (f, c) => (!c.offline && played(f) >= 1 && f.rooms.created + f.rooms.joined === 0 ? { reason: `${played(f)} ${played(f) === 1 ? 'match' : 'matches'} solo so far` } : null),
+    // after a first kill (audit 2 P-03): a recruit who hasn't scored yet isn't sent to organise friends
+    when: (f, c) => (!c.offline && played(f) >= 1 && f.kills > 0 && f.rooms.created + f.rooms.joined === 0 ? { reason: `${played(f)} ${played(f) === 1 ? 'match' : 'matches'} solo so far` } : null),
   },
   {
     id: 'join-code',
@@ -166,7 +192,8 @@ export const CARDS: readonly Def[] = [
     id: 'learn-controls',
     title: 'Learn every control',
     line: 'The full touch drill, one control at a time.',
-    cta: 'Touch settings',
+    // what the button does, not where it goes (audit N-20)
+    cta: 'Learn the controls',
     action: { kind: 'settings', tab: 'touch' },
     base: 35,
     when: (f, c) => (c.touch && played(f) >= 3 && !c.drillDone ? { reason: 'Swaps, shields and more' } : null),
@@ -210,7 +237,8 @@ export function recommend(f: Facts, c: OrdersContext, now: number): Card[] {
   const out: Card[] = [];
   for (const d of CARDS) {
     const seen = f.cards[d.id];
-    if (seen?.actedAt != null) continue; // taken: retired
+    // taken: retired (a card that comes back returns when what made it due is newer than the tap)
+    if (seen?.actedAt != null && !(d.rearm && (d.rearm(f) ?? 0) > seen.actedAt)) continue;
     if (seen?.dismissedAt != null && now - seen.dismissedAt < COOL_DOWN_MS) continue; // Not now: 7 days
     const hit = d.when(f, c);
     if (!hit) continue;

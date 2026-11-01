@@ -1,3 +1,4 @@
+import { fieldManual } from '../../src/tour/orders';
 import { describe, expect, it } from 'vitest';
 import { K47, weaponPickup } from '@military-forge/content';
 import { Btn, type SimEvent } from '@military-forge/sim';
@@ -435,6 +436,21 @@ describe('First flight: the runner', () => {
     expect(g.steps()).toEqual(['run:shown', 'run:abandoned']);
     expect(g.log.entries().find((e) => e.t === 'tour.end')).toMatchObject({ result: 'abandoned' });
     expect(flightWasOpen(g.storage)).toBe(false);
+  });
+
+  it('skipping every order is not flying it: Flight skipped, the Field manual keeps it open (audit 2 P-16)', () => {
+    const h = harness();
+    for (let i = 0; i < 12 && h.last()?.id !== 'first-flight:done'; i++) {
+      h.tick();
+      const id = h.last().id;
+      if (id === 'first-flight:done') break;
+      h.spot.onSkip?.(id, false);
+    }
+    h.tick();
+    expect(h.last()).toMatchObject({ id: 'first-flight:done', title: 'Flight skipped' });
+    expect(h.facts.get().tours[FIRST_FLIGHT]).toMatchObject({ finished: false, skipped: true });
+    expect(fieldManual(h.facts.get(), false).find((m) => m.id === 'flight')?.done).toBe(false);
+    expect(h.log.entries().find((e) => e.t === 'tour.end')).toMatchObject({ result: 'skipped-all' });
   });
 
   it('no grenades: Throw skips itself; Restart goes back to Run', () => {

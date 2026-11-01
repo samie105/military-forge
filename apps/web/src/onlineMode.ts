@@ -70,6 +70,15 @@ export const QUIET_OUTAGE_MS = 3000;
 
 /** a server that said it's updating is back in a few seconds (systemd restarts it at once): the first rejoin waits this long */
 const SERVER_UPDATE_WAIT_MS = 3000;
+/**
+ * A server draining for an update (scripts/net-trial/restart.sh) turns new rooms away until its
+ * matches end, 10 minutes at most: a player arriving meanwhile is retried this often, for that long
+ * (audit L-05: they were told their Wi-Fi was broken, and a report went by itself).
+ */
+const SERVER_UPDATE_RETRY_MS = 5000;
+export const SERVER_UPDATE_WINDOW_MS = 10 * 60_000;
+/** what the shell says once, after an update stopped the match this page was in (audit L-24) */
+export const MATCH_STOPPED_NOTE = 'The match was stopped for a server update. Your room is still here.';
 /** how often the watchdog looks (a timer: it runs behind the lobby and in a hidden tab too) */
 const WATCHDOG_MS = 100;
 /**
@@ -88,6 +97,7 @@ const FATAL_CLOSE = new Set<number>([
   CloseCode.NoRoom,
   CloseCode.TicketInvalid,
   CloseCode.SpectatorsFull,
+  CloseCode.Removed,
   1000,
   1008,
   1011,
@@ -339,6 +349,17 @@ export class OnlineMode {
 
   /** a WELCOME came on some connection of this mode: a drop now is a reconnect, not a first join */
   private everConnected = false;
+  /** an update closed the room while its match ran here (L-24) */
+  private matchStoppedByUpdate = false;
+  /** a line for the shell to show once (takeNotice) */
+  private notice: string | null = null;
+
+  /** What the shell should say once about this room (an update stopped the match: L-24), null when nothing. */
+  takeNotice(): string | null {
+    const n = this.notice;
+    this.notice = null;
+    return n;
+  }
 
   /** Back in view: whatever went wrong in the background is retried now, and silence counted from now. */
   private visibilityChanged(): void {
@@ -462,6 +483,11 @@ export class OnlineMode {
   /** Host: the room's limits and map (lobby only) and its bots (any phase, v17). */
   setMatchSettings(settings: { timeLimit?: number; killLimit?: number; mapId?: string; bots?: number; botLevel?: 'easy' | 'normal' | 'hard'; teams?: number }): void {
     this.sendCmd(CmdKind.MatchSettings, JSON.stringify(settings));
+  }
+
+  /** v22, the host: remove player `id` from the room; they can't come back to it (audit-2 L-11). */
+  removePlayer(id: number): void {
+    this.sendCmd(CmdKind.RemovePlayer, String(id));
   }
 
   /** Host, lobby (v21 team modes): a player onto a team. */
@@ -596,12 +622,18 @@ export class OnlineMode {
     if (!this.droppedAt) this.droppedAt = now;
     // the server is updating (a deploy): its rooms go with it. Rejoin with a fresh ticket once it's
     // back (it takes a few seconds), not a resume it can't know about ("ticket expired", 23 Oct 2026)
+    // A player who was never let in (a server draining for an update turns new rooms away) waits the
+    // same way, retried every few seconds for as long as a drain lasts, with no report: it's our update
     const updating = code === CloseCode.ServerUpdating || (code === 1001 && /restart/i.test(reason));
-    if (updating && this.net.sessionToken !== '' && this.options.refreshTicket && now - this.droppedAt < RECONNECT_WINDOW_MS) {
+    if (updating && this.options.refreshTicket && now - this.droppedAt < SERVER_UPDATE_WINDOW_MS) {
       this.net.onClose();
-      this.conn = { ...FRESH, state: 'reconnecting', detail: 'the server updated', code: CloseCode.ServerUpdating, since: this.droppedAt, until: this.droppedAt + RECONNECT_WINDOW_MS, attempt: 1 };
-      this.status = 'the server updated: rejoining…';
-      this.reconnectTimer = window.setTimeout(() => this.rejoinWithFreshTicket(why, CloseCode.ServerUpdating), SERVER_UPDATE_WAIT_MS);
+      // the match this page was in, if it ran: when we're back in a lobby, the shell says why (L-24)
+      const phase = this.matchState?.phase;
+      if (phase === MatchPhase.InProgress || phase === MatchPhase.Countdown) this.matchStoppedByUpdate = true;
+      this.reconnectAttempt += 1;
+      this.conn = { ...FRESH, state: 'reconnecting', detail: 'the server is restarting', code: CloseCode.ServerUpdating, since: this.droppedAt, until: this.droppedAt + SERVER_UPDATE_WINDOW_MS, attempt: this.reconnectAttempt };
+      this.status = 'the server is restarting: rejoining…';
+      this.reconnectTimer = window.setTimeout(() => this.rejoinWithFreshTicket(why, CloseCode.ServerUpdating), this.everConnected && this.reconnectAttempt === 1 ? SERVER_UPDATE_WAIT_MS : SERVER_UPDATE_RETRY_MS);
       return;
     }
     // back after the room let our player go: rejoin as a new player with a fresh ticket
@@ -657,18 +689,21 @@ export class OnlineMode {
     if (code === CloseCode.DuplicateSession || code === 1000) saveToken(this.options.room, null);
     diag('net', `gave up: ${this.conn.detail} (code ${code}, ${this.reconnectAttempt} tries, ${heard ? 'had joined' : 'never joined'})`);
     // the owner can read what happened on this phone (diag/report.ts): a report goes by itself; leaving isn't a failure
-    if (code !== 1000 && code !== CloseCode.DuplicateSession && !this.options.host) autoReport(`${this.options.local ? 'local room' : 'room'} ${this.options.room || ''}: ${this.conn.detail} (${code})`);
+    // …but not for our own update (audit L-05)
+    if (code !== 1000 && code !== CloseCode.DuplicateSession && code !== CloseCode.Removed && code !== CloseCode.ServerUpdating && !this.options.host) autoReport(`${this.options.local ? 'local room' : 'room'} ${this.options.room || ''}: ${this.conn.detail} (${code})`);
     this.onFatal(`${this.status} — is the game server running? (pnpm dev)`);
   }
 
   private rejoinWithFreshTicket(why: string, code: number = CloseCode.TicketInvalid): void {
     this.net.onClose();
-    this.conn = { ...FRESH, state: 'reconnecting', detail: why, code, since: this.droppedAt, until: this.droppedAt + RECONNECT_WINDOW_MS, attempt: Math.max(1, this.reconnectAttempt) };
+    // an update's window is as long as a drain can last (L-05)
+    const windowMs = code === CloseCode.ServerUpdating ? SERVER_UPDATE_WINDOW_MS : RECONNECT_WINDOW_MS;
+    this.conn = { ...FRESH, state: 'reconnecting', detail: code === CloseCode.ServerUpdating ? 'the server is restarting' : why, code, since: this.droppedAt, until: this.droppedAt + windowMs, attempt: Math.max(1, this.reconnectAttempt) };
     this.status = `rejoining… (${why})`;
     const retry = () => {
       if (this.disposed) return;
-      if (performance.now() - this.droppedAt >= RECONNECT_WINDOW_MS) {
-        this.giveUp(CloseCode.TicketInvalid, 'could not rejoin the room');
+      if (performance.now() - this.droppedAt >= windowMs) {
+        this.giveUp(code === CloseCode.ServerUpdating ? CloseCode.ServerUpdating : CloseCode.TicketInvalid, code === CloseCode.ServerUpdating ? 'the server is still restarting' : 'could not rejoin the room');
         return;
       }
       this.options.refreshTicket!().then(
@@ -710,6 +745,9 @@ export class OnlineMode {
         this.status = msg.resumed ? `connected (resumed after ${((performance.now() - this.droppedAt) / 1000).toFixed(1)} s)` : 'connected';
         diag('net', `welcomed: ${this.status}`);
         this.conn = { ...FRESH, state: 'connected', detail: '', code: 0 };
+        // back after an update that stopped our match: a new player in the room's lobby (L-24)
+        if (this.matchStoppedByUpdate && !msg.resumed) this.notice = MATCH_STOPPED_NOTE;
+        this.matchStoppedByUpdate = false;
         this.everConnected = true;
         this.closeSpare(); // back without it
         this.droppedAt = 0;

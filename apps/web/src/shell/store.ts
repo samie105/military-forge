@@ -9,6 +9,7 @@ import { defaultBindings, type Bindings } from './controls';
 import type { MapEventBanner } from './mapEventBanner';
 import type { MatchView } from './matchView';
 import type { LobbyView } from './onlineView';
+import { closeRouteByNav } from './history';
 
 export interface ShellActions {
   playAgain(): void;
@@ -16,8 +17,12 @@ export interface ShellActions {
   ready(): void;
 }
 
-/** What a route's mount returns: a cleanup function, or a handle with unmount() (W2's mountLocker). */
-export type RouteCleanup = (() => void) | { unmount(): void } | void;
+/**
+ * What a route's mount returns: a cleanup function, or a handle with unmount() (W2's mountLocker).
+ * `back`: what Escape, a pad's B and the browser's Back do on it, when that isn't closing it (the
+ * first-run creator's is its "Skip for now": audit N-08).
+ */
+export type RouteCleanup = (() => void) | { unmount(): void; back?(): void } | void;
 
 export interface ShellRoute {
   /** opened at #/<id> */
@@ -44,8 +49,9 @@ export interface ShellRoute {
 /** A route's mount, as `load()` resolves it. */
 export type RouteMount = (el: HTMLElement, close: () => void) => RouteCleanup;
 
-/** Leaves the open route. */
+/** Leaves the open route: back over its entry (history.ts); the debug client clears the address. */
 export function closeRoute(): void {
+  if (closeRouteByNav()) return;
   if (location.hash) location.hash = '';
 }
 
@@ -56,7 +62,8 @@ export function runCleanup(cleanup: RouteCleanup): void {
 
 /** Where the player wants to go next (the app shell's navigation). */
 /** `local`: host a local room (same Wi-Fi, lan/); `watch`: a room by code as a spectator (v20: no slot, no input) */
-export type Intent = { to: 'home' } | { to: 'create' } | { to: 'join'; code: string } | { to: 'watch'; code: string } | { to: 'training' } | { to: 'local' };
+/** `quick`: Play now's create, which first looks for an open Play now room (audit 2 P-07) */
+export type Intent = { to: 'home' } | { to: 'create'; quick?: boolean } | { to: 'join'; code: string } | { to: 'watch'; code: string } | { to: 'training' } | { to: 'local' };
 
 export type Screen =
   | { name: 'boot' }
@@ -78,6 +85,51 @@ export type Overlay = 'menu' | 'settings' | 'join' | 'name' | 'lan-add' | 'lan-j
 
 /** Settings sections (the kit's five tabs, and Touch for the phone controls). */
 export type SettingsTab = 'graphics' | 'audio' | 'controls' | 'controller' | 'accessibility' | 'network' | 'touch' | 'account' | 'privacy';
+
+/**
+ * Settings' tabs, one list for the desktop and phone layouts with the same names (audit N-21, D-17:
+ * the phone said "Access" and "Pad"), in the order the rest follow: the controls tabs, then Graphics,
+ * Audio, Accessibility, Network, Account, Privacy. settingsTabs() puts the device in hand first.
+ */
+export const SETTINGS_TABS: readonly { id: SettingsTab; label: string; icon: string }[] = [
+  { id: 'controls', label: 'Controls', icon: 'keyboard' },
+  { id: 'controller', label: 'Controller', icon: 'sliders' },
+  { id: 'touch', label: 'Touch', icon: 'touch' },
+  { id: 'graphics', label: 'Graphics', icon: 'monitor' },
+  { id: 'audio', label: 'Audio', icon: 'speaker' },
+  { id: 'accessibility', label: 'Accessibility', icon: 'access' },
+  { id: 'network', label: 'Network', icon: 'globe' },
+  { id: 'account', label: 'Account', icon: 'user' },
+  { id: 'privacy', label: 'Privacy', icon: 'eye' },
+];
+
+/** What this device can play with, for Settings' tabs. */
+export interface TabDevices {
+  /** the input in hand now */
+  current: 'keyboard' | 'touch' | 'pad';
+  /** a touch screen (any-pointer: coarse) */
+  touch: boolean;
+  /** a controller has been used here */
+  pad: boolean;
+  /** the phone layout (no keyboard tab: phones play by touch or pad) */
+  phone: boolean;
+}
+
+/**
+ * The tabs this device shows, the device in hand first (audit N-21): Touch only with a touch screen,
+ * Controller once a pad has been used, Controls (keys) on the desktop layout. Same names everywhere.
+ */
+export function settingsTabs(d: TabDevices): (typeof SETTINGS_TABS)[number][] {
+  const shown = SETTINGS_TABS.filter((t) => (t.id === 'touch' ? d.touch || d.current === 'touch' : t.id === 'controller' ? d.pad || d.current === 'pad' : t.id === 'controls' ? !d.phone : true));
+  const first: SettingsTab = d.current === 'pad' ? 'controller' : d.current === 'touch' ? 'touch' : 'controls';
+  const lead = shown.find((t) => t.id === first);
+  return lead ? [lead, ...shown.filter((t) => t !== lead)] : shown;
+}
+
+/** The tab to show: the one asked for when this device has it, else its first. */
+export function shownSettingsTab(tab: SettingsTab, tabs: readonly { id: SettingsTab }[]): SettingsTab {
+  return tabs.some((t) => t.id === tab) ? tab : (tabs[0]?.id ?? 'graphics');
+}
 
 /**
  * What Settings → Account opens on: the sign-in form (the name screen's "Sign in"), or an emailed
@@ -113,6 +165,10 @@ export interface Profile {
   changeableAt: string | null;
   /** the API can't be reached: training only, with a local name */
   offline: boolean;
+  /** this device or the account said under 18 (audit-2 L-03): training only, no friends or voice */
+  minor?: boolean;
+  /** the account is suspended (until then) or banned (until null): training only (audit-2 L-04) */
+  suspended?: { until: string | null };
 }
 
 export type GraphicsPreset = 'low' | 'medium' | 'high';
@@ -166,6 +222,10 @@ export interface Settings {
   blood: boolean;
   /** other players' kill effects (docs/17 §3.7: a skin line's stardust); off draws the default death for their kills */
   showKillEffects: boolean;
+  /** the numbers that rise off a soldier you hit (audit L-20: a switch for them) */
+  damageNumbers: boolean;
+  /** the marks round the crosshair when your shot lands (audit L-20) */
+  hitMarkers: boolean;
   /** every action's keys and mouse buttons (controls.ts) */
   bindings: Bindings;
   /** game controllers: buttons, sticks, triggers, rumble (Settings → Controls → Controller; gamepad/settings.ts) */
@@ -189,6 +249,8 @@ export const DEFAULT_SETTINGS: Settings = {
   doubleTapDash: true,
   blood: false,
   showKillEffects: true,
+  damageNumbers: true,
+  hitMarkers: true,
   bindings: defaultBindings(),
   pad: DEFAULT_PAD_SETTINGS,
 };
@@ -246,6 +308,8 @@ export interface ShellState {
   spectateQueue: SpectateQueueId;
   /** Settings → Account's opening form, taken (and cleared) by the panel */
   accountIntent: AccountIntent | null;
+  /** the pause menu opens on "Leave the room?" (the browser's Back in a lobby or the results: audit N-07) */
+  menuAsk?: boolean;
 }
 
 export type TitleState = 'on' | 'pressed' | 'leaving' | 'off';

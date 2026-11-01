@@ -5,8 +5,9 @@
  * card. Without a controller (the dev debug client at `/`) only the match overlays show. Nothing
  * here runs per frame: the store changes when something visible does.
  */
+import { CloseCode } from '@military-forge/protocol';
 import { MatchPhase } from '@military-forge/sim';
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useContext, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useStore } from 'zustand';
 import { assetLoad, type AssetLoad } from '../assetLoad';
 import { useShownControls } from '../gamepad/react';
@@ -33,10 +34,11 @@ import { SettingsScreen } from './screens/Settings';
 import { TipsCard } from './screens/Tips';
 import { TitleScreen } from './screens/Title';
 import { TuneToast } from './screens/Tune';
-import { releaseShellFocus } from './focus';
+import { releaseShellFocus, setActiveRouteBack } from './focus';
+import { closeTop } from './history';
 import { PhoneHome, PhoneJoin, PhoneLanAddPlayer, PhoneLanJoin, PhoneLobby, PhoneNameEntry, PhonePause, PhoneResults, PhoneSettings, PhoneTips, usePhoneLayout } from './screens/phone';
 import { afterPaint, loadRoute, retryRoute } from './routeLoad';
-import { closeRoute, runCleanup, type RouteCleanup, type RouteMount, type ShellActions, type ShellRoute, type ShellStore } from './store';
+import { closeRoute, runCleanup, type ConnectionView, type RouteCleanup, type RouteMount, type ShellActions, type ShellRoute, type ShellStore } from './store';
 import { SocialLayer } from '../social/SocialLayer';
 import { PwaHost } from '../pwa/InstallToast';
 import { metricsError } from '../metrics/hooks';
@@ -48,7 +50,22 @@ const ENDED = new Set<MatchPhase>([MatchPhase.Ending, MatchPhase.Postgame, Match
 
 export function App({ store, controller = null }: { store: ShellStore; controller?: ShellController | null }) {
   const route = useStore(store, (s) => s.route);
-  if (route) return <RouteView route={route} />;
+  // Escape: the one way back (history.ts closeTop): the top layer closes, routes and overlays alike;
+  // dialogs inside a screen (a confirm, the Friends panel's search) take it first in the capture phase
+  useEffect(() => {
+    if (!controller) return undefined;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code === 'Escape' && !e.defaultPrevented && closeTop()) e.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [controller]);
+  if (route)
+    return (
+      <ControllerContext.Provider value={controller}>
+        <RouteView route={route} />
+      </ControllerContext.Provider>
+    );
   if (!controller) return <DebugScreens store={store} />;
   return (
     <ControllerContext.Provider value={controller}>
@@ -80,17 +97,6 @@ function AppScreens({ store }: { store: ShellStore }) {
   useEffect(() => {
     if (phase === MatchPhase.Countdown || phase === MatchPhase.InProgress) releaseShellFocus();
   }, [phase]);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.code === 'Escape' && !location.hash) {
-        e.preventDefault();
-        ctl.toggleMenu();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [ctl]);
 
   let body = null;
   switch (screen.name) {
@@ -174,13 +180,26 @@ function RoomScreen({ store, code }: { store: ShellStore; code: string }) {
   const local = useStore(store, (s) => s.screen.name === 'room' && s.screen.local === true);
 
   const loading = useLoadingHold(connection?.state === 'connected', !!match, match?.phase === MatchPhase.Waiting);
+  const failed = connection?.state === 'failed';
+  // the network came back while the Lost card shows: rejoin by itself, once (audit L-18)
+  useEffect(() => {
+    if (!failed || typeof window === 'undefined') return undefined;
+    const onOnline = () => ctl.rejoin();
+    window.addEventListener('online', onOnline, { once: true });
+    return () => window.removeEventListener('online', onOnline);
+  }, [failed, ctl]);
   if (!connection || connection.state === 'connecting' || connection.state === 'joining') {
     return <Connecting code={code} step={connectStep(connection, !!match)} local={local} onCancel={() => ctl.leave()} />;
+  }
+  // a server draining for an update turned the room away before we were in: we wait, and say why
+  // (audit L-05: it said "Check your data or Wi-Fi"); it lets us in by itself when it's back
+  if (waitingOutUpdate(connection, !!match)) {
+    return <Connecting code={code} step={1} local={local} note={SERVER_RESTARTING} onCancel={() => ctl.leave()} />;
   }
   if (loading) {
     return <MapLoading code={code} lobby={lobby} mapName={lobby?.mapName || match?.mapName || ''} haveMatch={!!match} load={loading} bindings={bindings} onCancel={() => ctl.leave()} />;
   }
-  if (connection.state === 'failed') return <Alert alert={alertFromConnection(connection, code, watching, local)} onRejoin={() => ctl.rejoin()} />;
+  if (failed) return <Alert alert={alertFromConnection(connection, code, watching, local)} onRejoin={() => ctl.rejoin()} />;
   const host = lobby?.players.find((p) => p.host);
   return (
     <>
@@ -190,14 +209,22 @@ function RoomScreen({ store, code }: { store: ShellStore; code: string }) {
         ENDED.has(match.phase) &&
         match.results &&
         (phone ? (
-          <PhoneResults view={match} results={match.results} actions={actions} room={{ isHost: lobby?.isHost ?? false, hostId: host?.id ?? -1, code, leave: () => ctl.leave() }} code={code} />
+          <PhoneResults view={match} results={match.results} actions={actions} room={{ isHost: lobby?.isHost ?? false, hostId: host?.id ?? -1, code, local, leave: () => ctl.leave() }} code={code} />
         ) : (
-          <Results view={match} results={match.results} actions={actions} room={{ isHost: lobby?.isHost ?? false, hostId: host?.id ?? -1, code, leave: () => ctl.leave() }} />
+          <Results view={match} results={match.results} actions={actions} room={{ isHost: lobby?.isHost ?? false, hostId: host?.id ?? -1, code, local, leave: () => ctl.leave() }} />
         ))}
-      <ReconnectBanner connection={connection} />
+      <ReconnectBanner connection={connection} playing={match?.phase === MatchPhase.InProgress || match?.phase === MatchPhase.Countdown} />
     </>
   );
 }
+
+/** Turned away by a server draining for an update before we were in: the Connecting card waits, and says why (L-05). */
+export function waitingOutUpdate(c: Pick<ConnectionView, 'state' | 'code'>, haveMatch: boolean): boolean {
+  return c.state === 'reconnecting' && c.code === CloseCode.ServerUpdating && !haveMatch;
+}
+
+/** The Connecting card's line while a server drains for an update (audit L-05). */
+export const SERVER_RESTARTING = 'The server is restarting · back in a moment';
 
 /**
  * The map loading screen's hold (shell/mapLoading.ts): from the room letting us in until the first
@@ -273,10 +300,12 @@ export type RouteState = 'loading' | 'ready' | 'failed';
 
 function RouteView({ route }: { route: ShellRoute }) {
   const el = useRef<HTMLDivElement>(null);
+  const ctl = useContext(ControllerContext);
   const [state, setState] = useState<RouteState>(route.load ? 'loading' : 'ready');
   useEffect(() => {
+    // the debug client has no back stack: Escape closes the route here (the app's goes through closeTop)
     const onKey = (e: KeyboardEvent) => {
-      if (e.code === 'Escape') closeRoute();
+      if (e.code === 'Escape' && !ctl) closeRoute();
     };
     window.addEventListener('keydown', onKey);
     let gone = false;
@@ -284,6 +313,9 @@ function RouteView({ route }: { route: ShellRoute }) {
     const show = (mount: RouteMount) => {
       if (gone) return;
       cleanup = mount(el.current!, closeRoute);
+      // what Escape, B and Back do here when it isn't closing (the first-run creator's Skip for now)
+      const back = cleanup && typeof cleanup === 'object' ? cleanup.back : undefined;
+      setActiveRouteBack(back ? () => back.call(cleanup) : null);
       setState('ready');
     };
     if (route.load) {
@@ -301,9 +333,10 @@ function RouteView({ route }: { route: ShellRoute }) {
     return () => {
       gone = true;
       window.removeEventListener('keydown', onKey);
+      setActiveRouteBack(null);
       runCleanup(cleanup);
     };
-  }, [route]);
+  }, [route, ctl]);
   return (
     // a full-screen page of its own (the Locker, the creator): a named region (a div can't carry aria-label)
     <section className="mf-route kit-v2" aria-label={route.title} aria-busy={state === 'loading'}>

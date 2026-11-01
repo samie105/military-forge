@@ -243,7 +243,7 @@ describe('the controller check in Settings', () => {
 });
 
 describe('menus and play', () => {
-  it('in a menu nothing reaches the sim; ○ / B goes back', () => {
+  it('in a menu nothing reaches the sim; ○ / B goes back', async () => {
     const menu = { open: true };
     const { sample, calls } = setup(menu);
     press(B.R2);
@@ -251,6 +251,17 @@ describe('menus and play', () => {
     press(B.R2, false);
     press(B.East);
     sample();
+    // a press inside the sim's tick waits for the tick to end (audit 2: leaving the lobby mid-tick threw)
+    expect(calls.back).toBe(0);
+    await Promise.resolve();
+    expect(calls.back).toBe(1);
+  });
+
+  it('between ticks (the frame’s own poll) ○ / B goes back at once', () => {
+    const { poll, calls } = setup({ open: true });
+    poll();
+    press(B.East);
+    poll();
     expect(calls.back).toBe(1);
   });
 
@@ -332,6 +343,38 @@ describe('menus and play', () => {
     pad.axes = [0, 0, 0, -0.7];
     sample();
     expect(currentDevice().kind).toBe('pad');
+  });
+
+  it('a rebind: Options cancels it, View held a second clears it, a tap of View binds it (audit 2, N-10)', () => {
+    const { m, poll, calls } = setup({ open: true });
+    const seen: string[] = [];
+    const end = { cancel: () => seen.push('cancel'), clear: () => seen.push('clear') };
+    m.captureNext((b) => seen.push(`bound ${b}`), end);
+    poll();
+    press(B.Start);
+    poll();
+    expect(seen).toEqual(['cancel']);
+    expect(m.capturing).toBe(false);
+    expect(calls.pause).toBe(0); // the Options that cancelled doesn't also open the menu
+    press(B.Start, false);
+    poll();
+
+    m.captureNext((b) => seen.push(`bound ${b}`), end);
+    press(B.Select);
+    poll();
+    expect(seen).toEqual(['cancel']); // a press of View alone waits: a tap or a hold?
+    press(B.Select, false);
+    poll();
+    expect(seen).toEqual(['cancel', `bound ${B.Select}`]);
+
+    m.captureNext((b) => seen.push(`bound ${b}`), end);
+    press(B.Select);
+    m.poll(2000);
+    m.poll(2000 + 1100);
+    expect(seen).toEqual(['cancel', `bound ${B.Select}`, 'clear']);
+    press(B.Select, false);
+    m.poll(3200);
+    expect(m.capturing).toBe(false);
   });
 
   it('a rebind listens for the next button and keeps it from the menus', () => {

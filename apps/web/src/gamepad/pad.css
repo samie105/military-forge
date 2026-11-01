@@ -64,6 +64,11 @@ html[data-input='pad'] body:not(.mf) :focus {
 .mf-pad-hints[hidden] {
   display: none;
 }
+/* it would sit on the focused control (the creator's Save, a binding row): the top right instead (audit 2, N-15) */
+html body .mf-pad-hints.mf-pad-hints--top {
+  top: calc(max(16px, env(safe-area-inset-top)) + 64px);
+  bottom: auto;
+}
 .mf-pad-hints__i {
   display: inline-flex;
   align-items: center;
@@ -181,7 +186,8 @@ html[data-input='pad'] .mf-touch :is(.dial__knob, .dial__base, .dial__groove, .d
 .mf-pad-layout--menu { position: fixed; left: max(16px, env(safe-area-inset-left)); bottom: calc(max(16px, env(safe-area-inset-bottom)) + 64px); z-index: 62; width: 320px; }
 .mf-pad-layout--menu .mf-pad-layout__drawing { width: 100%; }
 .mf-pad-layout--menu.mf-pad-layout--phone { position: fixed; left: max(10px, env(safe-area-inset-left)); right: auto; top: auto; bottom: 50px; }
-html[data-input='pad'] .mf-pad-focused {
+/* only while it still has focus (a dialog's autofocus took it: one ring, not two) */
+html[data-input='pad'] .mf-pad-focused:focus {
   outline: 3px solid var(--c-volt, #d6ff3b) !important;
   outline-offset: 3px !important;
   box-shadow: var(--sh-focus, 0 0 0 4px #0e100b, 0 0 0 7px #d6ff3b), 0 0 22px 7px var(--c-volt-soft, #d6ff3b24) !important;

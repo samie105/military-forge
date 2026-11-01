@@ -6,7 +6,7 @@
  */
 import { MatchPhase, type SimEvent } from '@military-forge/sim';
 import type { ShellState, ShellStore } from '../shell/store';
-import { FactStore, daysBetween, type FactEvent, type Facts } from './facts';
+import { BOT_STEPS, FactStore, daysBetween, type BotLevel, type FactEvent, type Facts } from './facts';
 import { EventLog, type Device, type Move, type TourLogEvent } from './log';
 import { MatchTracker, type MatchSummary } from './track';
 
@@ -40,6 +40,8 @@ export interface TourMemoryOptions {
   invited?: boolean;
   now?: () => number;
   clock?: () => number;
+  /** training's bots, their level (main.ts: the local mode's), null = none */
+  localBots?: () => string | null;
 }
 
 export function startTourMemory(o: TourMemoryOptions): TourMemory {
@@ -69,8 +71,12 @@ export function startTourMemory(o: TourMemoryOptions): TourMemory {
     const results = s.match?.results;
     const me = results?.standings.find((r) => r.id === s.match?.localId && !r.left);
     const won = finished && !!me && me.key === results?.winnerKey;
+    // where they finished among the players there at the end (Play now's bots follow it: P-01)
+    const of = results ? results.standings.filter((r) => !r.left).length : 0;
+    const people = results ? results.standings.filter((r) => !r.left && !r.isBot).length : 0;
+    const bots = BOT_STEPS.includes(sum.bots as BotLevel) ? (sum.bots as BotLevel) : null;
     log.record({ t: 'match.end', online: sum.online, bots: sum.bots, kills: sum.kills, deaths: sum.deaths, moves: sum.moves });
-    facts.apply({ k: 'match', online: sum.online, finished, won, kills: sum.kills, deaths: sum.deaths, moves: sum.moves });
+    facts.apply({ k: 'match', online: sum.online, finished, won, kills: sum.kills, deaths: sum.deaths, moves: sum.moves, placement: finished && me ? me.placement : 0, of, people, bots, at: now() });
   };
 
   let last: ShellState = o.store.getState();
@@ -83,7 +89,7 @@ export function startTourMemory(o: TourMemoryOptions): TourMemory {
     const playing = s.screen.name === 'room' || s.screen.name === 'training';
     if (phase === MatchPhase.InProgress && was !== MatchPhase.InProgress && !tracker.active) {
       const online = s.screen.name === 'room';
-      tracker.begin(online, online ? (s.lobby ? (s.lobby.bots > 0 ? s.lobby.botLevel : null) : null) : 'normal');
+      tracker.begin(online, online ? (s.lobby ? (s.lobby.bots > 0 ? s.lobby.botLevel : null) : null) : o.localBots ? o.localBots() : 'normal');
     }
     if (tracker.active && phase !== undefined && ENDED.has(phase)) finish(s, true);
     else if (tracker.active && (!playing || !s.match)) finish(s, false);

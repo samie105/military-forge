@@ -65,3 +65,4 @@ html[data-touch-crate] .ph .pt-pickup { display: none; }
    so Take, melee or the shield showing there stays clear */
 #hud .ph .pt-pickup { top: calc(var(--safe-t) + 44px); bottom: auto; left: auto; right: calc(var(--safe-r) + 276px); translate: none; }
 #hud .ph .pt-cmp { top: calc(var(--safe-t) + 44px); bottom: auto; left: auto; right: calc(var(--safe-r) + 276px); transform: none; }
+.ph .respawn__detail { font-size: var(--fs-14); }

@@ -17,6 +17,13 @@ import './orders.css';
 export function takeCard(ctl: ShellController, card: Card): void {
   const a = card.action;
   if (a.kind === 'flight') ctl.startFlight();
+  else if (a.kind === 'again') {
+    // the kind of match just played: online, Play now with Easy bots once; training, Live fire
+    const last = liveTourMemory()?.facts.get().last;
+    ctl.host.online?.leave(); // from a room's Results: out of it first, as Leave does
+    if (last?.online && !ctl.store.getState().profile?.offline) ctl.playNow('easy');
+    else ctl.train('live-fire');
+  }
   else if (a.kind === 'train') ctl.train(a.bots === 'easy' ? 'live-fire' : a.bots === 'hard' ? 'hard' : 'match');
   else if (a.kind === 'create') ctl.go({ to: 'create' });
   else if (a.kind === 'join') ctl.openOverlay('join');

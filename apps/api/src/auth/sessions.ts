@@ -40,7 +40,19 @@ export interface IssuedRefresh {
   refreshTokenExpiresAt: Date;
 }
 
-export type RotateResult = ({ ok: true } & IssuedRefresh) | { ok: false; error: 'invalid_refresh_token' | 'session_revoked' | 'account_disabled' };
+export type RotateResult =
+  | ({ ok: true } & IssuedRefresh)
+  | { ok: false; error: 'invalid_refresh_token' | 'session_revoked' }
+  /** suspended until `until` (ISO), or banned for good (`until` null): the session is kept for when it ends */
+  | { ok: false; error: 'account_disabled'; until: string | null };
+
+/**
+ * An account may play: active, or suspended (status 'banned' with an end, audit-2 L-04) and the end has
+ * passed. 'banned' without an end is a ban for good; 'deleted' never plays.
+ */
+export function accountActive(status: string, bannedUntil: Date | null, now: number): boolean {
+  return status === 'active' || (status === 'banned' && bannedUntil !== null && bannedUntil.getTime() <= now);
+}
 
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
@@ -98,11 +110,11 @@ export class AuthService {
   /** The session exists, isn't revoked or expired, and its user is active. */
   async sessionActive(sessionId: string, userId: string): Promise<boolean> {
     const [row] = await this.db
-      .select({ expiresAt: sessions.expiresAt, status: users.status })
+      .select({ expiresAt: sessions.expiresAt, status: users.status, bannedUntil: users.bannedUntil })
       .from(sessions)
       .innerJoin(users, eq(users.id, sessions.userId))
       .where(and(eq(sessions.id, sessionId), eq(sessions.userId, userId), isNull(sessions.revokedAt)));
-    return !!row && row.status === 'active' && row.expiresAt.getTime() > this.now();
+    return !!row && accountActive(row.status, row.bannedUntil, this.now()) && row.expiresAt.getTime() > this.now();
   }
 
   /** New session for a user, inside the caller's transaction (account creation). */
@@ -129,7 +141,7 @@ export class AuthService {
     if (!parsed) return { ok: false, error: 'invalid_refresh_token' };
     return this.db.transaction(async (tx): Promise<RotateResult> => {
       const [s] = await tx
-        .select({ session: sessions, status: users.status })
+        .select({ session: sessions, status: users.status, bannedUntil: users.bannedUntil })
         .from(sessions)
         .innerJoin(users, eq(users.id, sessions.userId))
         .where(eq(sessions.id, parsed.sessionId))
@@ -148,7 +160,10 @@ export class AuthService {
         await tx.update(sessions).set({ revokedAt: new Date(now) }).where(eq(sessions.id, session.id));
         return { ok: false, error: 'session_revoked' };
       }
-      if (s.status !== 'active') return { ok: false, error: 'account_disabled' };
+      // a suspension keeps the session (a guest can't sign in again): it works again when the suspension ends
+      if (!accountActive(s.status, s.bannedUntil, now)) {
+        return { ok: false, error: 'account_disabled', until: s.status === 'banned' && s.bannedUntil ? s.bannedUntil.toISOString() : null };
+      }
 
       if (previous) {
         // two tabs raced: hand back the token the winner got, and leave the session as it is

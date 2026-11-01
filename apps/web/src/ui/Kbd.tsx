@@ -3,7 +3,7 @@
  * Mouse buttons get the kit's mouse glyphs. `code` is a KeyboardEvent.code or 'Mouse0'…'Mouse4'.
  */
 import { isPadCode } from '../gamepad/glyphs';
-import { PadKbd } from '../gamepad/react';
+import { PadKbd, useInputDevice } from '../gamepad/react';
 import { Icon } from './Icon';
 import { MOUSE_CAPS, capText } from './icons';
 
@@ -22,7 +22,9 @@ export function Kbd({ code, lg = false, layout, className }: { code: string | un
   );
 }
 
-/** A fixed key that isn't a binding (Esc, Enter, Wheel). */
-export function Cap({ children, lg = false }: { children: string; lg?: boolean }) {
+/** A fixed key that isn't a binding (Esc, Enter, Wheel). `pad`: the controller's button for it, shown while a pad plays (Esc: ○ / B). */
+export function Cap({ children, lg = false, pad }: { children: string; lg?: boolean; pad?: string }) {
+  const padInUse = useInputDevice().kind === 'pad';
+  if (pad && padInUse) return <PadKbd code={pad} lg={lg} />;
   return <kbd className={lg ? 'kbd kbd--lg' : 'kbd'}>{children}</kbd>;
 }

@@ -64,6 +64,13 @@
       "when": 1793457416322,
       "tag": "0008_friend_search",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793495242940,
+      "tag": "0009_safety",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,6 @@
 /**
  * A friend request that arrived while you were elsewhere (audit C-26): a small toast in the invite
- * toast's look, with Accept and Later (×). It sits where the invite toast does (social.md: top centre in
+ * toast's look, with Accept, Block (a quiet one, asked once: audit-2 L-02) and Later (×). It sits where the invite toast does (social.md: top centre in
  * the menus; mid-match top left under the net plate, clear of the HUD's middle) and gives way to an
  * invite, which can't wait. The request stays in Friends whatever you do; the toast puts itself away
  * after a while (sooner mid-match). It never takes the keyboard.
@@ -54,6 +54,7 @@ export function RequestToast({ social }: { social: SocialController }) {
               <button
                 type="button"
                 className="btn btn--volt btn--sm sx-act"
+                data-pad-y="Accept"
                 disabled={waiting}
                 onClick={() => {
                   social.hideRequestToast(person.id);
@@ -62,6 +63,17 @@ export function RequestToast({ social }: { social: SocialController }) {
               >
                 <Icon name="check" />
                 Accept
+              </button>
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm sx-act"
+                disabled={waiting}
+                onClick={() => {
+                  social.hideRequestToast(person.id);
+                  social.openPlayer({ name: person.nickname, id: person.id, look: person.look, place: 'request' }, 'block');
+                }}
+              >
+                Block
               </button>
               <button type="button" className="btn btn--ghost btn--icon btn--sm sx-act" aria-label="Later: keep it in Friends" onClick={() => social.hideRequestToast(person.id)}>
                 <Icon name="close" />

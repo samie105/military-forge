@@ -68,7 +68,7 @@ import { EMAILS, confirmLink, resetLink, type EmailSender } from './email';
 import { requireAuth } from './middleware';
 import { PASSWORD_REASON_TEXT, parseEmail, normalizeEmail, passwordProblem, type PasswordHasher } from './passwords';
 import { deviceOf, sessionResponder } from './routes';
-import type { AuthService } from './sessions';
+import { accountActive, type AuthService } from './sessions';
 import { BACKOFF, emailSubject, type Subject, type Throttle } from './throttle';
 
 export interface AccountRouteDeps {
@@ -262,9 +262,10 @@ export function accountRoutes(deps: AccountRouteDeps): Hono<AppEnv> {
       throw new ApiError(401, 'invalid_credentials', WRONG);
     }
     await throttle.clear(account);
-    if (found.status !== 'active') {
+    if (!accountActive(found.status, found.bannedUntil, now())) {
       audit(c, 'login_disabled', { userId: found.userId });
-      throw new ApiError(403, 'account_disabled', 'This account is disabled');
+      const until = found.status === 'banned' && found.bannedUntil ? found.bannedUntil.toISOString() : null;
+      throw new ApiError(403, 'account_disabled', "This account can't play online right now", { until });
     }
     // parameters raised since this hash was made: store one with today's
     if (hasher.needsRehash(found.passwordHash)) await accounts.setPassword(found.userId, await hasher.hash(body.password));

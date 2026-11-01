@@ -9,3 +9,4 @@ export * from './utf8';
 export * from './progression';
 export * from './analytics';
 export * from './age';
+export * from './guestNames';

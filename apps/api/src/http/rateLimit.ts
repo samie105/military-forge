@@ -48,8 +48,12 @@ export const LIMITS = {
   friendsRead: { name: 'friends', limit: 60, windowMs: 60_000 },
   /** accept, decline, cancel, remove, block, unblock, a new code, invite answers, leaving a party: per user */
   friendWrite: { name: 'friendwrite', limit: 120, windowMs: 10 * 60_000 },
-  /** invites sent, per user (the same invite again waits 5 s: invites/service.ts) */
+  /** invites sent, per user (the same friend again waits a minute: invites/service.ts) */
   inviteSend: { name: 'invite', limit: 40, windowMs: 10 * 60_000 },
+  /** invites to the same friend, per sender and friend (audit-2 L-23): a toast mid-fight is noise */
+  invitePair: { name: 'invitepair', limit: 5, windowMs: 10 * 60_000 },
+  /** player reports (the Report sheet), per reporter (audit-2 L-01) */
+  playerReport: { name: 'playerreport', limit: 10, windowMs: 60 * 60_000 },
   /** push-channel connects per user (GET /events; one per tab every ~15 min, more on a bad network) */
   eventsConnect: { name: 'events', limit: 30, windowMs: 60_000 },
   /** problem reports per IP (Send a report, and the automatic one a failed connection sends) */

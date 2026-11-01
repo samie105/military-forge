@@ -65,3 +65,6 @@ html:is(.mf-short, .mf-big-text):where(:not(.mf-phone)) :where(.mf-br-fit) .mf-b
 
 /* Reduce motion: no lift */
 html.reduce-motion :where(.mf-br-fit) .mf-br__answer:hover { transform: none; }
+
+/* phones: Change and Skip all training at a thumb's 48 px (audit N-17: 44 px) */
+:where(html.mf-phone) :where(.mf-br-fit) .mf-br__link { min-height: var(--touch-min, 48px); }

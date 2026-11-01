@@ -26,7 +26,7 @@ import {
 } from '@military-forge/content';
 import { CharacterAssembler, type CharacterInstance } from '../character';
 import { LocalLoadoutStore, accountInventory, ownedOnly, randomLoadout, withDye, withItem, type Inventory, type LoadoutStore } from '../locker/loadouts';
-import { SLOT_GLYPH, THUMB_FOCUS, escapeHtml, ic, lockedLine, tileHtml } from '../locker/tiles';
+import { SLOT_GLYPH, THUMB_FOCUS, escapeHtml, ic, lockedLine, rowPriced, shownInRow, tileHtml } from '../locker/tiles';
 import { Turntable, type FocusPreset, type LightPreset } from '../locker/turntable';
 import { startFitting } from '../ui/fit';
 import { moveIndicator } from '../ui/motion';
@@ -86,7 +86,8 @@ export function bodyCardsHtml(cards: readonly BodyCard[], body: Body, artPending
       const pending = artPending.has(c.body);
       const note = absent ? 'Not available yet' : pending ? 'Deploys on the standard body for now' : `${c.builds} ${c.builds === 1 ? 'build' : 'builds'}`;
       const tag = on ? `<span class="tag tag--you">${ic('check')}On</span>` : pending ? '<span class="tag tag--soon">Soon</span>' : '';
-      return `<button type="button" class="mf-cr__body${on ? ' is-on' : ''}${pending ? ' is-pending' : ''}" role="radio" aria-checked="${on}" data-body="${c.body}"${absent ? ' disabled' : ''}>
+      // the chosen body is where a controller lands (not the camera's Full chip: audit 2, N-04)
+      return `<button type="button" class="mf-cr__body${on ? ' is-on' : ''}${pending ? ' is-pending' : ''}" role="radio" aria-checked="${on}" data-body="${c.body}"${on ? ' data-pad-first' : ''}${absent ? ' disabled' : ''}>
         <span class="mf-cr__body-art" aria-hidden="true">${ic('user')}</span>
         <b class="mf-cr__body-name">${escapeHtml(c.name)}</b>
         ${tag}
@@ -118,7 +119,7 @@ export function mountCreator(container: HTMLElement, options: CreatorOptions = {
           <span class="eyebrow">${first ? 'Enlistment · last step' : 'Locker'}</span>
           <h1 class="menu-top__title">Create your soldier</h1>
         </div>
-        <ol class="mf-cr__steps" aria-label="Steps">
+        <ol class="mf-cr__steps" aria-label="Steps" data-pad-tabs>
           <li data-step="body"><button type="button" data-goto="body"><b class="num">1</b>Body</button></li>
           <li data-step="look"><button type="button" data-goto="look"><b class="num">2</b>Look</button></li>
         </ol>
@@ -219,7 +220,9 @@ export function mountCreator(container: HTMLElement, options: CreatorOptions = {
   };
 
   const grid = (slot: CosmeticSlot, label: string, heading: boolean, glyph: string): string => {
-    const items = itemsFor(slot, body);
+    // no price words on a body (audit 2 P-11): skin tones that can't be had yet wait, starters carry no Free
+    const items = itemsFor(slot, body).filter((c: CosmeticDef) => shownInRow(c, inventory.owns(c.id)));
+    const priced = rowPriced(items);
     const tiles = (channel?: DyeChannel) =>
       items
         .map((c: CosmeticDef) =>
@@ -230,6 +233,7 @@ export function mountCreator(container: HTMLElement, options: CreatorOptions = {
             channel,
             trying?.id === c.id && trying.channel === channel,
             SLOT_GLYPH[slot] ?? glyph,
+            priced,
           ),
         )
         .join('');

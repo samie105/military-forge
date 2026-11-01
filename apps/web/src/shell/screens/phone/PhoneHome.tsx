@@ -1,5 +1,5 @@
 /**
- * M2 · Phone home (the kit's data-screen="m-home"): the brand, the server's ping and your initial (tap:
+ * M2 · Phone home (the kit's data-screen="m-home"): the brand, the server's ping and your soldier with your level (tap:
  * your name); the Play-with-friends poster with Create room; Join and Training tickets; your soldier's
  * stage with your name; the bottom nav (Play, Locker, Armory, Settings). Same actions as the desktop
  * Home. Motion: the poster's title focus-pulls (P1), the rest rises in a stagger (P3), presses P8.
@@ -10,7 +10,6 @@ import { Icon } from "../../../ui/Icon";
 import { useCtl, useServerPing } from "../../context";
 import type { ShellStore } from "../../store";
 import { PhoneScreen, rise } from "./layout";
-import { initial } from "./parts";
 import { FriendsButton, PhoneSquad } from "../../../social/SocialLayer";
 import { SavedAdsList } from "../../../ads/SavedAds";
 import { InstallToast } from "../../../pwa/InstallToast";
@@ -21,8 +20,12 @@ import { currentDevice } from "../../../gamepad";
 import { drillDone, isTouchDevice } from "../../../touch";
 import { InstallButton } from "../../../pwa/InstallButton";
 import { HomeSoldier } from "../../../presentation/HomeSoldier";
-import { OFFLINE_LINE } from "../frame";
+import { OFFLINE_LINE, SUSPENDED_LINE } from "../frame";
 import { PosterImg, QUICK_MATCH_ART } from "../../posters";
+import { PlayNowBots } from "../../../tour/PlayNowBots";
+import { Portrait } from "../../../portrait/Portrait";
+import { useMyLook } from "../../../looks/mine";
+import { LevelTag, useLoadProgress } from "../Progress";
 
 export function PhoneHome({ store }: { store: ShellStore }) {
   const ctl = useCtl();
@@ -32,6 +35,8 @@ export function PhoneHome({ store }: { store: ShellStore }) {
   const ping = useServerPing();
   const offline = !!profile?.offline;
   const name = profile?.nickname ?? "";
+  const look = useMyLook();
+  useLoadProgress(); // the level on the avatar (audit 2 P-04): one request per Home visit
   // what Next orders know of this device now (tour/orders.ts), as the desktop Home
   const [ordersContext] = useState(() => ({
     offline,
@@ -82,12 +87,16 @@ export function PhoneHome({ store }: { store: ShellStore }) {
           )}
           <button
             type="button"
-            className="avatar pm-av m-p8"
+            className="avatar avatar--portrait pm-av m-p8"
             aria-label={`You: ${name}. Change your name`}
             disabled={offline}
             onClick={() => ctl.openOverlay("name")}
           >
-            {initial(name)}
+            {/* the player's own soldier (owner rule; audit 2 P-09) and level (P-04) */}
+            <span className="pm-av__face">
+              <Portrait look={look} size={64} name={name} />
+            </span>
+            {!offline && <LevelTag />}
           </button>
         </header>
 
@@ -112,14 +121,14 @@ export function PhoneHome({ store }: { store: ShellStore }) {
               type="button"
               className="btn btn--ink pm-create pm-play m-p8"
               data-tour="play"
+              data-pad-first
               onClick={() => ctl.playNow()}
             >
               <Icon name="play" />
               Play now
             </button>
-            <span className="pm-poster__note">
-              {offline ? OFFLINE_LINE : "Bots fill the room · friends join by code"}
-            </span>
+            {/* offline, the line says so; online, Play now's bots, in plain sight and the player's to change (audit 2 P-01) */}
+            {offline ? <span className="pm-poster__note">{profile?.suspended ? SUSPENDED_LINE : OFFLINE_LINE}</span> : <PlayNowBots phone />}
             <button
               type="button"
               className="btn btn--ghost btn--sm pm-create-room m-p8"
@@ -202,8 +211,9 @@ export function PhoneHome({ store }: { store: ShellStore }) {
           <SavedAdsList where="home" variant="dock" />
         </div>
 
-        <nav className="pm-nav m-p3" style={rise(5)} aria-label="Main">
-          <button type="button" className="pm-nav__i is-on" aria-current="page">
+        {/* a controller: L1 / R1 step through it, it starts on Play now, not here (audit 2, N-03 / N-11) */}
+        <nav className="pm-nav m-p3" style={rise(5)} aria-label="Main" data-pad-tabs>
+          <button type="button" className="pm-nav__i is-on" aria-current="page" tabIndex={-1} data-pad-skip>
             <Icon name="play" />
             <span>Home</span>
           </button>
@@ -235,6 +245,7 @@ export function PhoneHome({ store }: { store: ShellStore }) {
           <button
             type="button"
             className="pm-nav__i m-p8"
+            data-pad-start
             onClick={() => ctl.openSettings()}
           >
             <Icon name="gear" />

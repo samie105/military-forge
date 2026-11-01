@@ -8,7 +8,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AccountPanel } from './account/AccountPanel';
 import { accountErrorText } from './account/model';
-import { AGE_KEY, adultOnDevice, ageOnDevice, answerAge, birthYears } from './age';
+import { AGE_KEY, adultOnDevice, ageOnDevice, answerAge, birthYears, stepBirthYear } from './age';
 import { Api, ApiError, type AccountInfo } from './api';
 import { ControllerContext } from './context';
 import { RECRUIT_MATCHES, ShellController, type GameHost } from './controller';
@@ -130,14 +130,15 @@ describe('the gate before online rooms', () => {
 
   it('an adult carries on where they were going, and is not asked again', async () => {
     const createRoom = vi.fn(async () => room);
-    const { store, ctl } = setup({ createRoom });
+    const quickRoom = vi.fn(async () => room);
+    const { store, ctl } = setup({ createRoom, quickRoom });
     ctl.playNow();
-    expect(store.getState().screen).toEqual({ name: 'age', then: { to: 'create' } });
+    expect(store.getState().screen).toEqual({ name: 'age', then: { to: 'create', quick: true } });
     expect(ctl.answerAge(1995)).toBe('ok');
-    await vi.waitFor(() => expect(createRoom).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(quickRoom).toHaveBeenCalledOnce());
     ctl.go({ to: 'home' });
     ctl.go({ to: 'create' });
-    await vi.waitFor(() => expect(createRoom).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(createRoom).toHaveBeenCalledOnce());
   });
 
   // Play now's room once it's up: ours, in the lobby, with bots in it at `botLevel`
@@ -150,10 +151,10 @@ describe('the gate before online rooms', () => {
   it("Play now on a first visit: the answer carries on into the fight, with no extra step (audit A-02)", async () => {
     const createRoom = vi.fn(async () => room);
     const online = { startMatch: vi.fn(), setMatchSettings: vi.fn() };
-    const { store, ctl } = setup({ createRoom }, online);
+    const { store, ctl } = setup({ createRoom, quickRoom: createRoom }, online);
     saved.set(FACTS_KEY, JSON.stringify({ v: 1, matches: { local: 3, online: 0, finished: 3, wonInARow: 0 } })); // no recruit: the room's own bots
     ctl.playNow();
-    expect(store.getState().screen).toEqual({ name: 'age', then: { to: 'create' } });
+    expect(store.getState().screen).toEqual({ name: 'age', then: { to: 'create', quick: true } });
     expect(ctl.answerAge(1995)).toBe('ok');
     await vi.waitFor(() => expect(store.getState().screen).toMatchObject({ name: 'room', code: 'KMTXRA' }));
     lobbyUp(store, 'normal');
@@ -164,7 +165,7 @@ describe('the gate before online rooms', () => {
   it(`Play now for a recruit (fewer than ${RECRUIT_MATCHES} matches finished): Easy bots, then the start (audit B-30)`, async () => {
     const createRoom = vi.fn(async () => room);
     const online = { startMatch: vi.fn(), setMatchSettings: vi.fn() };
-    const { store, ctl } = setup({ createRoom }, online);
+    const { store, ctl } = setup({ createRoom, quickRoom: createRoom }, online);
     answerAge(1995, NOW);
     saved.set(FACTS_KEY, JSON.stringify({ v: 1, matches: { local: 2, online: 0, finished: 2, wonInARow: 0 } }));
     ctl.playNow();
@@ -177,10 +178,64 @@ describe('the gate before online rooms', () => {
     expect(online.setMatchSettings).toHaveBeenCalledOnce();
   });
 
+  it("Play now asks for the device's own level (audit 2 P-01): Hard when it stepped up there", async () => {
+    const quickRoom = vi.fn(async () => room);
+    const online = { startMatch: vi.fn(), setMatchSettings: vi.fn() };
+    const { store, ctl } = setup({ quickRoom }, online);
+    answerAge(1995, NOW);
+    saved.set(FACTS_KEY, JSON.stringify({ v: 1, matches: { local: 0, online: 9, finished: 9, wonInARow: 2 }, bots: { level: 'hard', pinned: false, good: 0, bad: 0, moved: null } }));
+    ctl.playNow();
+    await vi.waitFor(() => expect(store.getState().screen).toMatchObject({ name: 'room' }));
+    lobbyUp(store, 'normal');
+    expect(online.setMatchSettings).toHaveBeenCalledExactlyOnceWith({ botLevel: 'hard' });
+  });
+
+  it('"One more, Easy bots" (audit 2 P-03): a room of our own (never a stranger\'s), Easy once', async () => {
+    const createRoom = vi.fn(async () => room);
+    const quickRoom = vi.fn(async () => room);
+    const online = { startMatch: vi.fn(), setMatchSettings: vi.fn(), leave: vi.fn() };
+    const { store, ctl } = setup({ createRoom, quickRoom }, online);
+    answerAge(1995, NOW);
+    saved.set(FACTS_KEY, JSON.stringify({ v: 1, matches: { local: 0, online: 9, finished: 9, wonInARow: 0 }, bots: { level: 'normal', pinned: false, good: 0, bad: 1, moved: null } }));
+    ctl.playNow('easy');
+    await vi.waitFor(() => expect(createRoom).toHaveBeenCalledOnce());
+    expect(quickRoom).not.toHaveBeenCalled();
+    lobbyUp(store, 'normal');
+    expect(online.setMatchSettings).toHaveBeenCalledExactlyOnceWith({ botLevel: 'easy' });
+  });
+
+  it("Play now that lands in someone else's open room (audit 2 P-07): their host starts it, their bots stay", async () => {
+    const quickRoom = vi.fn(async () => ({ ...room, joined: true }));
+    const online = { startMatch: vi.fn(), setMatchSettings: vi.fn() };
+    const { store, ctl } = setup({ quickRoom }, online);
+    answerAge(1995, NOW);
+    ctl.playNow();
+    await vi.waitFor(() => expect(store.getState().screen).toMatchObject({ name: 'room', code: 'KMTXRA' }));
+    store.setState({
+      match: { phase: MatchPhase.Waiting, results: null } as unknown as MatchView,
+      lobby: { isHost: false, minPlayers: 2, players: [{ id: 0, isBot: false }, { id: 1, isBot: false }, { id: 2, isBot: true }], bots: 3, botLevel: 'normal' } as unknown as LobbyView,
+    });
+    expect(online.startMatch).not.toHaveBeenCalled();
+    expect(online.setMatchSettings).not.toHaveBeenCalled();
+    expect(store.getState().notice).toBe('In a Play now room with 1 other player · Bots here: Normal');
+  });
+
+  it('a Play now room found empty (the others just left) is ours: it starts as our own would', async () => {
+    const quickRoom = vi.fn(async () => ({ ...room, joined: true }));
+    const online = { startMatch: vi.fn(), setMatchSettings: vi.fn() };
+    const { store, ctl } = setup({ quickRoom }, online);
+    answerAge(1995, NOW);
+    saved.set(FACTS_KEY, JSON.stringify({ v: 1, matches: { local: 0, online: 9, finished: 9, wonInARow: 0 }, bots: { level: 'normal', pinned: false, good: 0, bad: 0, moved: null } }));
+    ctl.playNow();
+    await vi.waitFor(() => expect(store.getState().screen).toMatchObject({ name: 'room', code: 'KMTXRA' }));
+    lobbyUp(store, 'normal');
+    expect(online.startMatch).toHaveBeenCalledOnce();
+  });
+
   it('Play now under 18: the quick start goes with the refusal (nothing starts later)', () => {
     const createRoom = vi.fn(async () => room);
     const online = { startMatch: vi.fn(), setMatchSettings: vi.fn() };
-    const { store, ctl } = setup({ createRoom }, online);
+    const { store, ctl } = setup({ createRoom, quickRoom: createRoom }, online);
     ctl.playNow();
     expect(ctl.answerAge(2012)).toBe('refused');
     store.setState({ screen: { name: 'room', code: 'KMTXRA' } });
@@ -345,5 +400,32 @@ describe('Save your account: one 18+ question (the gate\'s), and the Terms', () 
     expect(accountErrorText(new ApiError(400, 'bot_check_required', 'x'))).toBe("Finish the check that you're not a bot, then try again.");
     expect(accountErrorText(new ApiError(403, 'bot_check_failed', 'x'))).toBe("The check that you're not a bot didn't pass. Try it again.");
     expect(accountErrorText(new ApiError(503, 'bot_check_unavailable', 'x'))).toBe("Couldn't check you're not a bot just now. Try again in a moment.");
+  });
+});
+
+describe('the year with a controller or the arrow keys (audit 2, N-01)', () => {
+  const years = [2021, 2020, 2019, 2018, 2017];
+  it('from nothing picked, any step shows the youngest year listed (neutral: no answer that gets in comes first)', () => {
+    expect(stepBirthYear('', 'ArrowLeft', years)).toBe('2021');
+    expect(stepBirthYear('', 'ArrowRight', years)).toBe('2021');
+    expect(stepBirthYear('', 'PageDown', years)).toBe('2021');
+  });
+  it('left and right step a year, the page keys (L1 / R1) ten, and stop at either end', () => {
+    expect(stepBirthYear('2019', 'ArrowLeft', years)).toBe('2018');
+    expect(stepBirthYear('2019', 'ArrowRight', years)).toBe('2020');
+    expect(stepBirthYear('2019', 'PageDown', years)).toBe('2017');
+    expect(stepBirthYear('2019', 'PageUp', years)).toBe('2021');
+    expect(stepBirthYear('2017', 'ArrowLeft', years)).toBe('2017');
+  });
+  it('leaves other keys to the browser (up and down open or walk the list as always)', () => {
+    expect(stepBirthYear('2019', 'ArrowUp', years)).toBeNull();
+    expect(stepBirthYear('2019', 'Enter', years)).toBeNull();
+  });
+  it('reaches 1990 from nothing in five presses with the real list', () => {
+    const now = Date.UTC(2026, 10, 1);
+    const all = birthYears(now);
+    let y = '';
+    for (const k of ['ArrowLeft', 'PageDown', 'PageDown', 'PageDown', 'ArrowLeft']) y = stepBirthYear(y, k, all)!;
+    expect(y).toBe('1990');
   });
 });

@@ -9,6 +9,10 @@ import { sql } from 'drizzle-orm';
 import { bigserial, boolean, check, index, integer, jsonb, pgTable, primaryKey, smallint, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 export const USER_STATUSES = ['active', 'banned', 'deleted'] as const;
+
+/** Who may send a player friend requests (profiles.requests_from). */
+export const REQUESTS_FROM = ['anyone', 'played', 'code'] as const;
+export type RequestsFrom = (typeof REQUESTS_FROM)[number];
 export type UserStatus = (typeof USER_STATUSES)[number];
 
 /**
@@ -37,6 +41,17 @@ export const users = pgTable(
     adultConfirmedAt: timestamp('adult_confirmed_at', tz),
     /** the birth year they gave with it: never a full date of birth (data minimisation) */
     birthYear: smallint('birth_year'),
+    /**
+     * The device said under 18 (audit-2 L-03): training only. No friends, search, requests, invites,
+     * party or online rooms, and nobody can find the account. Only the flag, never the year; once set,
+     * only the owner clears it (the admin page's moderation, for a wrong answer).
+     */
+    minor: boolean('minor').notNull().default(false),
+    /**
+     * A suspension's end (audit-2 L-04): with status 'banned', the account is refused until then; null
+     * with 'banned' is a ban for good. The session check (auth/sessions.ts) reads both.
+     */
+    bannedUntil: timestamp('banned_until', tz),
   },
   (t) => [
     check('users_status_check', sql`${t.status} in ('active', 'banned', 'deleted')`),
@@ -82,10 +97,19 @@ export const profiles = pgTable(
      * name search (friends/service.ts search). Their exact name and friend code still find them.
      */
     findable: boolean('findable').notNull().default(true),
+    /**
+     * Who may send this player friend requests (audit-2 L-09, the friends panel's Privacy): 'anyone',
+     * 'played' (someone they shared a match with in the last 30 days) or 'code' (only with their
+     * friend code). Their friend code always works: it's handed out on purpose.
+     */
+    requestsFrom: text('requests_from', { enum: REQUESTS_FROM }).notNull().default('anyone'),
   },
   // name search is a prefix match on the skeleton (friends/service.ts search): text_pattern_ops lets
   // `like 'abc%'` use the index whatever the database's collation
-  (t) => [index('profiles_nickname_norm_prefix_idx').on(t.nicknameNorm.op('text_pattern_ops'))],
+  (t) => [
+    index('profiles_nickname_norm_prefix_idx').on(t.nicknameNorm.op('text_pattern_ops')),
+    check('profiles_requests_from_check', sql`${t.requestsFrom} in ('anyone', 'played', 'code')`),
+  ],
 );
 
 /** One row per signed-in device: the refresh token family (auth/sessions.ts). */
@@ -304,6 +328,81 @@ export const blocks = pgTable(
     createdAt: timestamp('created_at', tz).notNull(),
   },
   (t) => [primaryKey({ columns: [t.userId, t.blockedId] }), index('blocks_blocked_id_idx').on(t.blockedId), check('blocks_not_self', sql`${t.userId} <> ${t.blockedId}`)],
+);
+
+/**
+ * A friend request the player said no to (audit-2 L-09): `from_id` can't ask `to_id` again for 30 days
+ * (friends/service.ts DECLINE_MEMORY_MS). A new request in that time looks sent and stores nothing,
+ * like one to a player who blocked you. The retention sweep deletes old rows.
+ */
+export const friendRequestDeclines = pgTable(
+  'friend_request_declines',
+  {
+    fromId: text('from_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    toId: text('to_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    at: timestamp('at', tz).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.fromId, t.toId] }), index('friend_request_declines_at_idx').on(t.at)],
+);
+
+// ---------------------------------------------------------------- moderation (audit-2 L-01, L-04)
+
+export const REPORT_REASONS = ['name', 'voice', 'cheating', 'spam', 'underage', 'other'] as const;
+export type ReportReason = (typeof REPORT_REASONS)[number];
+
+/**
+ * A player's report about another player (the Report sheet, reports/player.ts): who, about whom, why,
+ * where it happened. Apart from the automatic connection reports (reports/routes.ts, the KV). Kept 180
+ * days (the retention sweep); `handled_at` and `action` are the owner's (the admin page). Plain text
+ * ids, no foreign keys: a report outlives a deleted account, like the store's audit.
+ */
+export const playerReports = pgTable(
+  'player_reports',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    reporterId: text('reporter_id').notNull(),
+    targetId: text('target_id').notNull(),
+    /** the name they had when reported (a rename doesn't hide what was reported) */
+    targetName: text('target_name').notNull(),
+    reason: text('reason', { enum: REPORT_REASONS }).notNull(),
+    note: text('note'),
+    /** the room's code, when it happened in one */
+    room: text('room'),
+    /** where the sheet was opened: scoreboard, lobby, results, deathcam, friends, request, invite, comms */
+    place: text('place'),
+    createdAt: timestamp('created_at', tz).notNull(),
+    handledAt: timestamp('handled_at', tz),
+    /** what the owner did: rename, suspend, ban, dismiss, … */
+    action: text('action'),
+  },
+  (t) => [
+    index('player_reports_created_at_idx').on(t.createdAt),
+    index('player_reports_target_id_idx').on(t.targetId, t.createdAt),
+    index('player_reports_reporter_target_idx').on(t.reporterId, t.targetId, t.createdAt),
+    check('player_reports_reason_check', sql`${t.reason} in ('name', 'voice', 'cheating', 'spam', 'underage', 'other')`),
+  ],
+);
+
+/**
+ * The owner's moderation actions (rename, suspend, ban, unban, dismiss, under-18 cleared, closed),
+ * each with its reason: append-only, kept when the account goes (user_id is plain text).
+ */
+export const moderationAudit = pgTable(
+  'moderation_audit',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    at: timestamp('at', tz).notNull(),
+    actor: text('actor').notNull(),
+    action: text('action').notNull(),
+    userId: text('user_id'),
+    reason: text('reason').notNull(),
+    detail: jsonb('detail').$type<Record<string, unknown>>().notNull(),
+  },
+  (t) => [index('moderation_audit_user_id_idx').on(t.userId, t.id), index('moderation_audit_at_idx').on(t.at)],
 );
 
 // ---------------------------------------------------------------- the store (docs/17 §2, docs/06 §7)

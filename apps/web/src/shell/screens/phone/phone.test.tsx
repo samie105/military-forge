@@ -128,7 +128,7 @@ describe('m-home', () => {
     const html = withCtl(ctl(), <PhoneHome store={store} />);
     expect(html).toContain('Offline');
     // Play now is the hero (mobile audit P1-6), Create room the smaller second
-    expect(html).toMatch(/<button type="button" class="btn btn--ink pm-create pm-play m-p8" data-tour="play">/);
+    expect(html).toMatch(/<button type="button" class="btn btn--ink pm-create pm-play m-p8" data-tour="play" data-pad-first="true">/);
     expect(html).toMatch(/<button type="button" class="btn btn--ghost btn--sm pm-create-room m-p8" data-tour="create" disabled="">/);
     expect(html).toMatch(/<button type="button" class="ticket rivets pm-tk m-p3 m-p8" style="--i:3">/); // Training, enabled
   });
@@ -338,14 +338,27 @@ describe('m-results', () => {
     expect(renderToStaticMarkup(<PhoneResults view={view()} results={noMvp} actions={actions} training={{ leave: vi.fn() }} />)).not.toContain('pm-mvp');
   });
 
-  it("training (solo): no vote, Play again beside Leave, and a bot's MVP card doesn't take the screen (audit 28 Oct)", () => {
+  it("training (solo): no vote, Play again leads and Leave below, and a bot's MVP card doesn't take the screen (audit 28 Oct, audit 2 P-03)", () => {
     const html = renderToStaticMarkup(<PhoneResults view={view({ humans: 1 })} results={results} actions={actions} training={{ leave: vi.fn() }} />);
     expect(html).not.toContain('Play again?');
     expect(html).not.toContain('results.votes');
-    expect(html).toMatch(/pm-res__more.*Play again.*Leave/);
+    expect(html).toMatch(/btn--volt btn--block[^"]*"[^>]*>.*?Play again.*Share the result.*pm-res__more.*Leave/);
+    expect(html).toContain('XP counts in online matches only.');
     expect(html).not.toContain('>Lobby<');
     expect(html).not.toContain('pm-mvp');
     expect(html).toMatch(/results\.winner">2nd place · Kemi won</);
+  });
+});
+
+describe('m-results alone against bots (audit 2 P-02, P-03)', () => {
+  const alone: MatchResults = { ...results, standings: [standing(2, '[BOT] Kestrel', 1, { isBot: true, score: 9, kills: 9, mvp: true }), standing(0, 'Ade', 2, { score: 2, kills: 2 }), standing(3, '[BOT] Mantis', 3, { isBot: true, score: 1 })] };
+  it('the player is the headline, no bot MVP card, Play again leads (no vote to count)', () => {
+    const html = renderToStaticMarkup(<PhoneResults view={view({ humans: 1 })} results={alone} actions={actions} room={{ isHost: true, hostId: 0, code: 'KMTXRA', leave: vi.fn() }} code="KMTXRA" />);
+    expect(html).toMatch(/results\.winner">2nd place · Kestrel won</);
+    expect(html).not.toContain('pm-mvp');
+    expect(html).not.toContain('results.votes');
+    expect(html).toMatch(/btn--volt btn--block[^"]*"[^>]*>.*?Play again/);
+    expect(html).toMatch(/btn--ghost btn--block btn--sm[^"]*"[^>]*>.*?Share the result/);
   });
 });
 

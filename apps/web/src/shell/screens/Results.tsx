@@ -1,6 +1,7 @@
 /**
  * 10 · Results (round two's data-screen="results"): the winner and why the match ended, your place
- * and numbers, the final standings, the MVP card and the rematch vote. Local matches (training) and
+ * and numbers, the final standings, the MVP card and the rematch vote. Alone with bots (audit 2 P-02,
+ * P-03), you are the headline, no bot gets the MVP card, and Play again leads. Local matches (training) and
  * rooms share it; rooms add the host's "Back to lobby", sharing and leaving. Training is the player's own: they are the
  * headline (Victory, 2nd place…), and it ends with Play again or Leave (no vote, no lobby). Motion: the screen
  * floods from the clock (P6), the winner focus-pulls in (P1), the MVP card stamps (P7), the standings
@@ -22,9 +23,15 @@ import { formatClock, noun, ordinal, playerName, resultHeadline, type MatchView 
 import type { ShellActions } from '../store';
 import { Backdrop, NetPill } from './frame';
 import { PlayerAvatar } from '../../presentation/PlayerAvatar';
+import { PlayerPortrait } from '../../portrait/Portrait';
 import { SavedAdsList } from '../../ads/SavedAds';
 import { TeamStandings, teamWinner } from '../../teams/TeamResults';
 import { TeamMark } from '../../teams/TeamRoster';
+import { PlayerMore } from '../../social/ReportSheet';
+import { AddFriendButton, RowActions } from '../../social/AddFriend';
+import { BotsMoved } from '../../tour/PlayNowBots';
+import { AgainEasy } from '../../tour/DebriefLines';
+import { MatchXp } from './Progress';
 
 export interface ResultsExtras {
   /** a room: the host may send everyone back to the lobby */
@@ -33,7 +40,22 @@ export interface ResultsExtras {
   hostId: number;
   /** the room's code (the MVP card's challenge, sharing) */
   code?: string;
+  /** a local room (same Wi-Fi): no XP, and names there aren't accounts (no Add friend) */
+  local?: boolean;
   leave(): void;
+}
+
+/**
+ * The humans still here at the end (audit 2 P-02): one means a solo match against bots, where the
+ * player is the headline, and Play again leads.
+ */
+export function humansAtEnd(standings: readonly Pick<MatchStanding, 'isBot' | 'left'>[]): number {
+  return standings.filter((s) => !s.isBot && !s.left).length;
+}
+
+/** The match MVP worth a card: a person, never a bot (audit 2 P-02; the server's flag stays as it is). */
+export function humanMvp<T extends Pick<MatchStanding, 'mvp' | 'isBot'>>(standings: readonly T[]): T | undefined {
+  return standings.find((s) => s.mvp && !s.isBot);
 }
 
 export interface Winner {
@@ -73,15 +95,20 @@ export function Results({ view, results, actions, room, training }: { view: Matc
   const winner = teamMode ? teamWinner(results) : winnerOf(results.standings);
   const top = results.standings.find((s) => s.placement === 1);
   const chip = reasonChip(results, view.killLimit);
-  const mvp = results.standings.find((s) => s.mvp);
+  // the MVP card is a person's (P-02): a bot is never celebrated
+  const mvp = humanMvp(results.standings);
   const voting = view.phase === MatchPhase.Ending || view.phase === MatchPhase.Postgame;
   const closed = view.phase === MatchPhase.Closed;
   const humans = Math.max(view.humans, view.votes);
   const host = !room || room.isHost;
   // training (solo): the player is the headline, and it ends with Play again or Leave
   const solo = !!training && !room;
+  // a room where you were the only person (audit 2 P-02, P-03): you are the headline, and Play again leads
+  const alone = !!room && !!me && humansAtEnd(results.standings) === 1;
   const present = results.standings.filter((s) => !s.left);
-  const headline = solo && me && !teamMode ? resultHeadline(me, present) : null;
+  const headline = (solo || alone) && me && !teamMode ? resultHeadline(me, present) : null;
+  // XP and friends belong to online rooms (the API records them); training and local rooms say so
+  const online = !!room && !room.local;
   const states = [chip.state === 'time-up' ? 'time-up' : 'kill-limit', host ? 'host' : 'guest', view.voted ? 'voted' : 'not-voted'];
   const code = room?.code;
   const ctl = useContext(ControllerContext);
@@ -110,7 +137,8 @@ export function Results({ view, results, actions, room, training }: { view: Matc
         <div className="menu-body res">
           <section className="res__win" aria-labelledby="res-title">
             <div className="res__poster">
-              <Icon name="trophy" className="mf-res__trophy" />
+              {/* your own soldier when you didn't win (audit 2 P-02, B-27): the trophy is the winner's */}
+              {headline && me && !headline.win ? <span className="mf-res__me" aria-hidden="true"><PlayerPortrait id={me.id} name={me.name} size={256} /></span> : <Icon name="trophy" className="mf-res__trophy" />}
               <span className="stamp stamp--ink stamp--lg res__stamp m-p7">{headline ? (headline.win ? 'Winner' : headline.text === 'Draw' ? 'Draw' : 'Debrief') : winner.draw ? 'Draw' : 'Winner'}</span>
             </div>
             <h1 id="res-title" className="display res__name m-p1" data-bind="results.winner">
@@ -140,6 +168,10 @@ export function Results({ view, results, actions, room, training }: { view: Matc
                 </span>
               </div>
             )}
+            {/* progress you can see (audit 2 P-04): this match's XP and the level, online only */}
+            {me && <MatchXp me={me} online={online} matchKey={`${code ?? 'local'}:${results.number}`} />}
+            {/* Auto just moved Play now's bots (audit 2 P-01): said once */}
+            <BotsMoved />
             {/* the first few matches: what you did, one thing to try, the next order (the onboarding tour) */}
             <DebriefLines />
           </section>
@@ -182,7 +214,7 @@ export function Results({ view, results, actions, room, training }: { view: Matc
                               </span>
                             )}
                             {you && <span className="tag tag--you">You</span>}
-                            {s.mvp && (
+                            {s.mvp && !s.isBot && (
                               <span className="tag tag--brass">
                                 <Icon name="medal" />
                                 MVP
@@ -190,6 +222,13 @@ export function Results({ view, results, actions, room, training }: { view: Matc
                             )}
                             {s.isBot && <span className="tag tag--bot">Bot</span>}
                             {s.left && <span className="tag tag--ghost">Left</span>}
+                            {/* the people you just played with: Add friend (audit 2 P-06), and report, block, mute, the host's remove (L-01, L-02, L-11); a player who left has no room id */}
+                            {!you && !s.isBot && ((online && !s.left) || room) && (
+                              <RowActions>
+                                {online && !s.left && <AddFriendButton name={s.name} compact />}
+                                {room && <PlayerMore target={{ name: s.name, ...(s.left ? {} : { pid: s.id }), place: 'results' }} />}
+                              </RowActions>
+                            )}
                           </span>
                         </th>
                         <td className="num">{s.kills}</td>
@@ -239,7 +278,8 @@ export function Results({ view, results, actions, room, training }: { view: Matc
                 </div>
               </figure>
             )}
-            {code && ctl && (
+            {/* with people here, sharing the room leads; alone against bots, Play again does (audit 2 P-03) */}
+            {code && ctl && !alone && (
               <button className="btn btn--volt btn--xl btn--block m-p8" type="button" onClick={blurAfter(() => void ctl.shareLink(code))}>
                 <Icon name="share" />
                 <span className="btn__stack">
@@ -248,8 +288,17 @@ export function Results({ view, results, actions, room, training }: { view: Matc
                 </span>
               </button>
             )}
-            <div className="votes card" aria-label={solo ? 'Play again' : 'Play again votes'}>
-              {!solo && (
+            {(solo || alone) && !view.voted && (
+              // where a controller lands (not Share: audit 2, N-04)
+              <button className="btn btn--volt btn--xl btn--block m-p8" type="button" data-pad-first disabled={!voting} onClick={blurAfter(actions.playAgain)}>
+                <Icon name="refresh" />
+                Play again
+              </button>
+            )}
+            {/* a bad loss against bots, alone: one more, a bit easier (P-03) */}
+            {(solo || alone) && <AgainEasy />}
+            <div className="votes card" aria-label={solo || alone ? 'Play again' : 'Play again votes'}>
+              {!solo && !alone && (
                 <div className="votes__top">
                   <b>Play again?</b>
                   <span className="pips votes__pips" aria-hidden="true">
@@ -269,9 +318,18 @@ export function Results({ view, results, actions, room, training }: { view: Matc
                     You voted
                   </button>
                 ) : (
-                  <button className="btn btn--paper m-p8" type="button" disabled={!voting} onClick={blurAfter(actions.playAgain)}>
-                    <Icon name="refresh" />
-                    Play again
+                  !(solo || alone) && (
+                    <button className="btn btn--paper m-p8" type="button" data-pad-first disabled={!voting} onClick={blurAfter(actions.playAgain)}>
+                      <Icon name="refresh" />
+                      Play again
+                    </button>
+                  )
+                )}
+                {/* alone: the room's link drops to a quiet button (friends can still come) */}
+                {alone && code && ctl && (
+                  <button className="btn btn--ghost m-p8" type="button" onClick={blurAfter(() => void ctl.shareLink(code))}>
+                    <Icon name="share" />
+                    Share the room
                   </button>
                 )}
                 {/* a room's host: everyone back to the lobby (training has no lobby) */}
@@ -282,7 +340,7 @@ export function Results({ view, results, actions, room, training }: { view: Matc
                   </button>
                 )}
                 {(room ?? training) && (
-                  <button className="btn btn--ghost m-p8" type="button" onClick={blurAfter(() => (room ?? training)!.leave())}>
+                  <button className="btn btn--ghost m-p8" type="button" data-pad-leave onClick={blurAfter(() => (room ?? training)!.leave())}>
                     <Icon name="door-out" />
                     {room ? 'Leave room' : 'Leave'}
                   </button>

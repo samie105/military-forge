@@ -17,7 +17,7 @@ import {
 } from '@military-forge/protocol';
 import { Btn, createHitPose, createInput } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
-import { HOLD_TICKS, Room, type ClientConn } from '../src/room';
+import { HOLD_TICKS, JOIN_COVER_MAX_TICKS, Room, type ClientConn } from '../src/room';
 
 class FakeConn implements ClientConn {
   readonly sent: Uint8Array[] = [];
@@ -554,5 +554,37 @@ describe('Room', () => {
       expect(join(room, 'C').conn.closed?.code).toBe(CloseCode.RoomFull);
       expect(join(room, 'A', a.welcome.sessionToken).welcome.resumed).toBe(true);
     });
+  });
+});
+
+describe("a new player's spawn cover (audit L-16)", () => {
+  it('waits for their first press, not their spawn: loading never eats it', () => {
+    const room = new Room({ dummies: false });
+    const a = join(room, 'A');
+    room.tick();
+    const p = room.game.players[a.client.playerId]!;
+    expect(p.alive).toBe(true);
+    expect(p.coverTicks).toBeGreaterThan(0);
+    // 3 s of a page still drawing the match (no input, or inputs with nothing pressed): still covered
+    for (let i = 0; i < 180; i++) {
+      if (i % 2 === 0) sendInput(room, a.client, room.game.tick, 0);
+      room.tick();
+    }
+    expect(p.coverTicks).toBeGreaterThan(80);
+    // the first press: the 1.5 s run down from here
+    sendInput(room, a.client, room.game.tick, Btn.Right);
+    room.tick();
+    for (let i = 0; i < 100; i++) {
+      sendInput(room, a.client, room.game.tick, Btn.Right);
+      room.tick();
+    }
+    expect(p.coverTicks).toBe(0);
+  });
+
+  it("a page that never plays isn't shielded for good", () => {
+    const room = new Room({ dummies: false });
+    const a = join(room, 'A');
+    for (let i = 0; i < JOIN_COVER_MAX_TICKS + 120; i++) room.tick();
+    expect(room.game.players[a.client.playerId]!.coverTicks).toBe(0);
   });
 });

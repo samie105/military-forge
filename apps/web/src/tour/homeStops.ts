@@ -27,9 +27,32 @@ export const STOPS: readonly Stop[] = [
   { id: 'locker', title: 'Your kit.', body: 'Change it any time.' },
 ];
 
-/** The pass is due: never run here, and a match played (or a veteran's first Home). */
+/** A stop's feature already used (audit 2 P-14): a tour of it would only be in the way. */
+export function stopUsed(id: Stop['id'], f: Facts): boolean {
+  if (id === 'create') return f.rooms.created > 0; // Play now's room counts
+  if (id === 'join') return f.rooms.joined > 0;
+  return f.soldierSaved || f.screens.includes('locker');
+}
+
+/** The stops still worth showing on this device. */
+export function stopsToShow(f: Facts): Stop[] {
+  return STOPS.filter((s) => !stopUsed(s.id, f));
+}
+
+/** Past the point a tour helps (audit 2 P-14): two matches finished, or every stop's feature used. */
+export const STOPS_PAST_MATCHES = 2;
+
+/**
+ * The pass is due: never run here, a match played (or a veteran's first Home), and still before
+ * first use: under STOPS_PAST_MATCHES finished matches with a stop left to show.
+ */
 export function homeStopsWanted(f: Facts): boolean {
-  return !f.tours[HOME_STOPS] && (f.experience === 'veteran' || f.matches.local + f.matches.online >= 1);
+  return !f.tours[HOME_STOPS] && (f.experience === 'veteran' || f.matches.local + f.matches.online >= 1) && !homeStopsRetired(f);
+}
+
+/** A returning player who never had the pass: it's marked done without showing (main.ts), Settings can replay it. */
+export function homeStopsRetired(f: Facts): boolean {
+  return !f.tours[HOME_STOPS] && (f.matches.finished >= STOPS_PAST_MATCHES || stopsToShow(f).length === 0);
 }
 
 /** Home must sit idle this long (no tap, key or pad press) before the pass may start. */
@@ -50,7 +73,8 @@ const target = (id: Stop['id']): HTMLElement | null => {
 
 /** Runs the pass now if any stop's target is on screen; returns a stop function (or null: nothing to show). */
 export function runHomeStops(memory: TourMemory, device: () => Device, spotlight?: Spotlight): (() => void) | null {
-  const stops = STOPS.filter((s) => target(s.id));
+  const used = memory.facts.get();
+  const stops = stopsToShow(used).filter((s) => target(s.id));
   if (!stops.length) return null;
   const spot = spotlight ?? new Spotlight({ phone: () => document.documentElement.classList.contains('mf-phone') });
   const persona = (): Persona => memory.facts.get().experience ?? (memory.facts.get().invited ? 'invited' : 'unknown');

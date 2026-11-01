@@ -53,6 +53,8 @@ export async function createTestApi(env: Record<string, string> = {}, options: T
   const database = await openDatabase(config);
   if (database.kind === 'postgres') {
     await database.db.execute(sql`truncate table users cascade`);
+    // no foreign keys (they outlive accounts): emptied on their own
+    await database.db.execute(sql`truncate table player_reports, moderation_audit`);
     await database.db.execute(sql`truncate table analytics_events, analytics_daily, analytics_hourly, analytics_player_days, analytics_players, analytics_forget`);
   }
   // on a shared Valkey each test API gets keys of its own, so runs and files don't share rate-limit buckets

@@ -24,6 +24,8 @@ export interface Me {
   xp: number;
   /** store items this account owns: bought, or granted (config COSMETIC_GRANTS, the admin page); absent = none */
   grants?: string[];
+  /** the device said under 18 (audit-2 L-03): training only; absent = no */
+  minor?: true;
 }
 
 export interface NicknameAvailability {
@@ -57,6 +59,7 @@ export class ProfileService {
         nicknameChangedAt: profiles.nicknameChangedAt,
         level: profiles.level,
         xp: profiles.xp,
+        minor: users.minor,
         isGuest: sql<boolean>`not exists (select 1 from ${identities} where ${identities.userId} = ${users.id} and ${identities.provider} <> 'guest')`,
       })
       .from(users)
@@ -73,6 +76,7 @@ export class ProfileService {
       level: row.level,
       xp: row.xp,
       ...(owned.length ? { grants: [...owned] } : {}),
+      ...(row.minor ? { minor: true as const } : {}),
     };
   }
 

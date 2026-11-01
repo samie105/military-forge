@@ -184,3 +184,13 @@ describe('helpers', () => {
     for (const s of ['Ade', 'Ọlá', 'राज', 'Kemi 🚀']) expect(utf8Decode(utf8Encode(s))).toBe(s);
   });
 });
+
+describe('generated names (guestNames: the API’s guests, the game’s Suggest a name)', () => {
+  it('an adjective, a noun and three digits, at most 16 characters', async () => {
+    const { GUEST_ADJECTIVES, GUEST_NOUNS, guestNickname } = await import('../src');
+    expect(guestNickname((lo) => lo)).toBe('SwiftFalcon100');
+    expect(guestNickname((_lo, hi) => hi - 1)).toBe('BlazingRocket999');
+    const longest = Math.max(...GUEST_ADJECTIVES.map((a) => a.length)) + Math.max(...GUEST_NOUNS.map((n) => n.length)) + 3;
+    expect(longest).toBeLessThanOrEqual(16);
+  });
+});

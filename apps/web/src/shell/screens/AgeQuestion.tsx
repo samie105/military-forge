@@ -6,7 +6,8 @@
  * birthday, because the year alone can't say (audit 28 Oct: one question, never a second
  * "I am 18 or older" box).
  */
-import { birthYears, asksBirthday } from '../age';
+import { birthYears, asksBirthday, stepBirthYear } from '../age';
+import { PadKbd, useInputDevice } from '../../gamepad/react';
 import './age.css';
 
 /** `turned18`: null until answered (and only asked for the year they turn 18) */
@@ -19,15 +20,30 @@ export const ageAnswered = (a: AgeAnswer): boolean => a.year !== '' && (!asksBir
 
 /**
  * `idBase`: the select is `${idBase}-year`; `fieldClass`: the field's look where it sits (the
- * gate's card or the account form).
+ * gate's card or the account form); `padFirst`: a controller lands on the year first (the gate).
  */
-export function AgeQuestion({ idBase, fieldClass, value, onChange }: { idBase: string; fieldClass: string; value: AgeAnswer; onChange: (a: AgeAnswer) => void }) {
+export function AgeQuestion({ idBase, fieldClass, value, onChange, padFirst = false }: { idBase: string; fieldClass: string; value: AgeAnswer; onChange: (a: AgeAnswer) => void; padFirst?: boolean }) {
   const birthday = value.year !== '' && asksBirthday(Number(value.year));
+  const pad = useInputDevice().kind === 'pad';
   return (
     <>
       <div className={fieldClass}>
         <label htmlFor={`${idBase}-year`}>Year you were born</label>
-        <select id={`${idBase}-year`} value={value.year} onChange={(e) => onChange({ year: e.target.value, turned18: null })} required>
+        {/* a controller can't open the list: left and right step the year, L1 / R1 ten (menus.ts sends the keys; audit 2, N-01) */}
+        <select
+          id={`${idBase}-year`}
+          value={value.year}
+          data-pad-first={padFirst || undefined}
+          aria-describedby={pad ? `${idBase}-year-pad` : undefined}
+          onChange={(e) => onChange({ year: e.target.value, turned18: null })}
+          onKeyDown={(e) => {
+            const year = stepBirthYear(value.year, e.key);
+            if (year === null) return;
+            e.preventDefault();
+            if (year !== value.year) onChange({ year, turned18: null });
+          }}
+          required
+        >
           <option value="">Choose…</option>
           {birthYears().map((y) => (
             <option key={y} value={y}>
@@ -35,6 +51,13 @@ export function AgeQuestion({ idBase, fieldClass, value, onChange }: { idBase: s
             </option>
           ))}
         </select>
+        {pad && (
+          <span id={`${idBase}-year-pad`} className="age-q__pad">
+            <PadKbd code="Pad14" />
+            <PadKbd code="Pad15" /> one year · <PadKbd code="Pad4" />
+            <PadKbd code="Pad5" /> ten years
+          </span>
+        )}
       </div>
       {birthday && (
         <fieldset className="age-q__birthday">

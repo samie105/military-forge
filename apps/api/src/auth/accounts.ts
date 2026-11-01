@@ -32,6 +32,8 @@ export interface Credential {
   userId: string;
   passwordHash: string;
   status: UserStatus;
+  /** a suspension's end (status 'banned'); null = none, or a ban for good */
+  bannedUntil: Date | null;
 }
 
 export interface UsedToken {
@@ -49,7 +51,7 @@ export class AccountService {
   /** The account an email signs in to, with its hash; null when no account has that email. */
   async lookup(email: string): Promise<Credential | null> {
     const [row] = await this.db
-      .select({ userId: identities.userId, passwordHash: passwordCredentials.passwordHash, status: users.status })
+      .select({ userId: identities.userId, passwordHash: passwordCredentials.passwordHash, status: users.status, bannedUntil: users.bannedUntil })
       .from(identities)
       .innerJoin(passwordCredentials, eq(passwordCredentials.userId, identities.userId))
       .innerJoin(users, eq(users.id, identities.userId))

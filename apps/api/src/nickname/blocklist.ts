@@ -41,5 +41,18 @@ export const IMPERSONATION: TermList = {
   word: ['mod', 'mods', 'staff', 'support', 'gm', 'system', 'server', 'owner', 'bot'],
 };
 
+/**
+ * The studio's and the game's own names, reserved in code for every deploy (audit-2 L-12: the env's
+ * RESERVED_NICKNAMES adds the owner's and staff handles on top). `anywhere` and `word` as above;
+ * `exact`: only the whole name (digits and separators at the ends aside), because the word turns up in
+ * innocent names ("IronForge" stays free, "Forge" and "Forge_7" don't).
+ */
+export const BRAND_RESERVED: TermList & { exact: readonly string[] } = {
+  anywhere: ['deetstudio', 'worldstreet', 'anticheat', 'devteam', 'customerservice', 'customercare'],
+  edge: [],
+  word: ['deet', 'ceo', 'founder'],
+  exact: ['forge', 'theforge'],
+};
+
 /** Innocent words that contain an `anywhere` or `edge` term; cut out of the name before matching. */
 export const ALLOWLIST: readonly string[] = ['scunthorpe', 'shiitake'];

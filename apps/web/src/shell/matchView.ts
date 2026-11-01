@@ -135,14 +135,6 @@ export function kdRatio(s: Pick<MatchStanding, 'kills' | 'deaths'>): string {
   return (s.kills / Math.max(1, s.deaths)).toFixed(2);
 }
 
-/**
- * XP placeholder until progression lands (docs/13 §R; the API's results worker will award the
- * real XP): 100 for finishing, 10 per kill, 5 per assist, 50 for winning outright (not a draw).
- */
-export function placeholderXp(s: MatchStanding, won = s.placement === 1): number {
-  return 100 + 10 * s.kills + 5 * s.assists + (won ? 50 : 0);
-}
-
 /** A name next to a Bot badge: the bots' own "[BOT] " tag (packages/bots) is left to the badge. */
 export function playerName(name: string, bot: boolean): string {
   return bot ? name.replace(/^\[BOT\]\s*/, '') : name;

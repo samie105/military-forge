@@ -16,6 +16,11 @@
  *   high   40 kbps Opus · 20 ms frames  (Wi-Fi, 5G: low RTT, no loss)
  * Under loss (≥ 3 %) each packet also carries the previous frame (packet-level FEC); the receiver
  * fills a gap with it, and covers anything still missing (playout.ts).
+ *
+ * Mutes stick (audit-2 L-10): a mute is kept by the player's name (names are unique; a room's players
+ * carry no account id) on this device, up to 200, and applied in every room as the roster arrives.
+ * Everyone you blocked (Friends) is muted the same way, proximity too, and can't be unmuted here. The
+ * first time a voice plays, a one-time note says what it is and how to turn voices off.
  */
 import { VOICE } from '@military-forge/content';
 import {
@@ -115,9 +120,45 @@ export interface VoiceState {
   speaking: Readonly<Record<number, Speaking>>;
   /** the room talks in the fallback codec */
   fallback: boolean;
-  /** players we muted (this room only) */
+  /** players muted in this room, by id: ours (kept by name, every room) and everyone blocked */
   mutes: readonly number[];
   tier: Tier;
+  /** the one-time first-voice note is up (audit-2 L-10) */
+  firstNote: boolean;
+}
+
+/** where mutes are kept, by name (folded), newest last */
+export const MUTES_KEY = 'voice.mutes.v1';
+export const MUTES_MAX = 200;
+/** set once the first-voice note has been shown */
+export const FIRST_NOTE_KEY = 'voice.firstNote.v1';
+
+/** A name as mutes keep it (case and width folded, as the game keeps names unique). */
+export const muteKey = (name: string): string => name.normalize('NFKC').trim().toLowerCase();
+
+function loadMutes(): string[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(MUTES_KEY) ?? '[]') as unknown;
+    return Array.isArray(raw) ? raw.filter((n): n is string => typeof n === 'string').slice(-MUTES_MAX) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveMutes(names: readonly string[]): void {
+  try {
+    localStorage.setItem(MUTES_KEY, JSON.stringify(names.slice(-MUTES_MAX)));
+  } catch {
+    /* private mode: this visit only */
+  }
+}
+
+function noteShown(): boolean {
+  try {
+    return localStorage.getItem(FIRST_NOTE_KEY) === '1';
+  } catch {
+    return false;
+  }
 }
 
 const SPEAKING_MS = 300;
@@ -157,7 +198,13 @@ export class VoiceChat {
     fallback: false,
     mutes: [],
     tier: 'normal',
+    firstNote: false,
   }));
+  /** muted names (muteKey), kept on this device: every room applies them */
+  private savedMutes: string[] = loadMutes();
+  /** blocked names (muteKey), from the friends list: muted everywhere, never unmuted here */
+  private blockedNames = new Set<string>();
+  private noteDone = noteShown();
   private link: VoiceLink | null = null;
   private offLink: (() => void)[] = [];
   private readonly mic: Mic;
@@ -235,7 +282,64 @@ export class VoiceChat {
     }
     this.offLink.push(link.onVoice((b) => this.onWire(b)));
     this.offLink.push(link.onConnected(() => this.sendSettings()));
+    this.syncMutes();
     this.sendSettings();
+  }
+
+  /** The player is muted by name: one we muted before (any room), or someone blocked. */
+  private mutedByName(id: number): boolean {
+    const n = this.link?.playerNames.get(id);
+    if (!n || id === this.link?.localId) return false;
+    const key = muteKey(n);
+    return this.blockedNames.has(key) || this.savedMutes.includes(key);
+  }
+
+  /** Whether a player is blocked (Friends): their mute can't be lifted here. */
+  isBlocked(id: number): boolean {
+    const n = this.link?.playerNames.get(id);
+    return !!n && this.blockedNames.has(muteKey(n));
+  }
+
+  /**
+   * Everyone the roster names that we muted before or blocked goes on this room's mute list (the
+   * server then stops sending them); runs as the roster and the voice state arrive.
+   */
+  syncMutes(): void {
+    const link = this.link;
+    if (!link) return;
+    const mutes = new Set(this.state.mutes);
+    let added = false;
+    for (const id of link.playerNames.keys()) {
+      if (!mutes.has(id) && this.mutedByName(id)) {
+        mutes.add(id);
+        this.dropSpeaker(id);
+        added = true;
+      }
+    }
+    if (!added) return;
+    this.set({ mutes: [...mutes] });
+    this.sendSettings();
+  }
+
+  /** The friends list's blocked players (names): muted in every room, proximity too (audit-2 L-10). */
+  setBlockedNames(names: readonly string[]): void {
+    const next = new Set(names.map(muteKey));
+    const lifted = [...this.blockedNames].filter((n) => !next.has(n));
+    this.blockedNames = next;
+    // an unblock lifts that mute here unless it was muted on its own
+    if (lifted.length && this.link) {
+      const ids = [...this.link.playerNames].filter(([, n]) => lifted.includes(muteKey(n)) && !this.savedMutes.includes(muteKey(n))).map(([id]) => id);
+      if (ids.length) {
+        this.set({ mutes: this.state.mutes.filter((id) => !ids.includes(id)) });
+        this.sendSettings();
+      }
+    }
+    this.syncMutes();
+  }
+
+  /** Put the first-voice note away. */
+  dismissFirstNote(): void {
+    this.set({ firstNote: false });
   }
 
   private applySettings(s: VoiceSettings): void {
@@ -287,11 +391,18 @@ export class VoiceChat {
     }
   }
 
-  /** Mute (or unmute) one player for yourself, for this room. */
+  /** Mute (or unmute) one player for yourself: this room now, and every room after (kept by name). */
   setMuted(id: number, muted: boolean): void {
+    if (!muted && this.isBlocked(id)) return;
     const mutes = new Set(this.state.mutes);
     if (muted) mutes.add(id);
     else mutes.delete(id);
+    const n = this.link?.playerNames.get(id);
+    if (n && id !== this.link?.localId) {
+      const key = muteKey(n);
+      this.savedMutes = [...this.savedMutes.filter((k) => k !== key), ...(muted ? [key] : [])].slice(-MUTES_MAX);
+      saveMutes(this.savedMutes);
+    }
     this.set({ mutes: [...mutes] });
     if (muted) this.dropSpeaker(id);
     this.sendSettings();
@@ -460,6 +571,8 @@ export class VoiceChat {
         for (const p of st.peers) peers[p.id] = p.flags;
         const wasFallback = this.state.fallback;
         this.set({ peers, fallback: st.fallback });
+        // someone new on voice: our kept mutes and blocks reach them before they're heard
+        this.syncMutes();
         if (st.fallback !== wasFallback) {
           // the room switched codecs: start the encoder over (frames in flight are dropped)
           this.encoder?.close();
@@ -479,6 +592,21 @@ export class VoiceChat {
       return;
     }
     if (this.state.mutes.includes(v.speaker) || !this.settings.enabled) return;
+    if (this.mutedByName(v.speaker)) {
+      // the roster named them after the voice state came: never heard, not even one frame
+      this.syncMutes();
+      return;
+    }
+    if (!this.noteDone) {
+      // the first voice this device ever plays: say what it is and how to stop it (once)
+      this.noteDone = true;
+      try {
+        localStorage.setItem(FIRST_NOTE_KEY, '1');
+      } catch {
+        /* private mode: once a visit */
+      }
+      this.set({ firstNote: true });
+    }
     this.counters.heard++;
     if (v.codec === VoiceCodec.Opus) this.counters.opusFrames++;
     else this.counters.fallbackFrames++;

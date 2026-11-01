@@ -10,8 +10,9 @@
  * A spectator (v20: in the room with no slot) gets no Ready, Start or warm-up: the footer says it's
  * watching, with Join next round (and Stay watching once in line for a slot).
  *
- * The kit's Same-Wi-Fi link, host tools (add or remove bots, kick), bot count and level, time of day
- * and a map choice aren't in the room protocol yet: their places stay empty (the PR lists them).
+ * Each other player's row has a ⋯ (social/ReportSheet.tsx): Report, Block, Mute and, for the host,
+ * Remove from room (protocol v22, audit-2 L-11). The kit's Same-Wi-Fi link and time of day aren't in the
+ * room protocol yet: their places stay empty (the PR lists them).
  */
 import { maps, type MapEventKind } from '@military-forge/content';
 import { ROOM_SETTING_LIMITS } from '@military-forge/protocol';
@@ -19,6 +20,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import { useStore } from 'zustand';
 import { Icon } from '../../ui/Icon';
 import { LobbyInvite } from '../../social/SocialLayer';
+import { PlayerMore, roomTarget } from '../../social/ReportSheet';
 import { Screen, blurAfter } from '../../ui/Screen';
 import { eventLook } from '../../hud/model';
 import { useCtl } from '../context';
@@ -31,9 +33,11 @@ import { Backdrop, RollNum, remember } from './frame';
 import { BotSettings, botsLine, type BotLevel } from '../roomBots';
 import { TipsCard } from './Tips';
 import { PlayerAvatar } from '../../presentation/PlayerAvatar';
+import { AddFriendButton, RowActions } from '../../social/AddFriend';
 import { LobbyRadio } from '../../voice/Radio';
 import { TeamModePicker, TeamRoster, modeName } from '../../teams/TeamRoster';
 import { MapPoster } from '../posters';
+import { leaveCost } from './Pause';
 
 /** Players a room takes (the game server's default maxHumans: MATCH_STATE doesn't carry it). */
 export const ROOM_SLOTS = 8;
@@ -133,7 +137,7 @@ function pingLook(ms: number): { cls: string; sig: string } {
   return ms <= 200 ? { cls: 'prow__ping prow__ping--warn', sig: 'sig sig--bad' } : { cls: 'prow__ping prow__ping--warn', sig: 'sig sig--bad' };
 }
 
-function PlayerRow({ p, hostView, leaving, i }: { p: LobbyPlayer; hostView: boolean; leaving: boolean; i: number }) {
+function PlayerRow({ p, hostView, leaving, i, friendly = false }: { p: LobbyPlayer; hostView: boolean; leaving: boolean; i: number; friendly?: boolean }) {
   const you = p.you ? (hostView ? ' is-you' : ' is-you-guest') : '';
   const ping = pingLook(p.pingMs);
   return (
@@ -149,7 +153,15 @@ function PlayerRow({ p, hostView, leaving, i }: { p: LobbyPlayer; hostView: bool
       )}
       {p.isBot && <span className="tag tag--bot">Bot</span>}
       {p.you && <span className="tag tag--you">You</span>}
+      {/* report, block, mute, the host's remove (audit-2 L-01, L-02, L-11) */}
+      {!leaving && <PlayerMore target={roomTarget(p, 'lobby')} />}
       <span className="prow__fill"></span>
+      {/* the people in the room with you (audit 2 P-06); Report / Block sit in the same slot */}
+      {friendly && !p.you && !p.isBot && (
+        <RowActions>
+          <AddFriendButton name={p.name} compact />
+        </RowActions>
+      )}
       {p.isBot ? (
         <span className="prow__ping">
           <Icon name="bot" size="sm" />
@@ -298,6 +310,62 @@ export function LocalRoomNote({ lobby }: { lobby: LobbyView }) {
   );
 }
 
+/**
+ * The lobby's Leave asks once, as the in-match menu's does (audit 2, N-04: one ✕ / A on the pad's
+ * first focus threw the player out of the room they'd just made, its code and its bots). `asking`
+ * while it shows; Escape (and a controller's B, on Stay) is Stay, not the in-match menu.
+ */
+export function useLeaveConfirm(): { asking: boolean; ask: (e: { currentTarget: HTMLElement }) => void; stay: () => void } {
+  const [asking, setAsking] = useState(false);
+  // Stay puts the keyboard back on Leave, where it was
+  const opener = useRef<HTMLElement | null>(null);
+  const stay = () => {
+    setAsking(false);
+    requestAnimationFrame(() => opener.current?.isConnected && opener.current.focus({ preventScroll: true }));
+  };
+  useEffect(() => {
+    if (!asking) return undefined;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'Escape') return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      stay();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [asking]);
+  const ask = (e: { currentTarget: HTMLElement }) => {
+    opener.current = e.currentTarget;
+    e.currentTarget.blur();
+    setAsking(true);
+  };
+  return { asking, ask, stay };
+}
+
+/** "Leave the room?" over the lobby: Leave room, or Stay (focused first). */
+export function LeaveRoomConfirm({ onStay }: { onStay: () => void }) {
+  const ctl = useCtl();
+  return (
+    <Screen name="leave-room" kind="game" modal dialog label="Leave the room?">
+      <div className="pause__confirm mf-leave-confirm ticket m-p1" role="alertdialog" aria-labelledby="leave-room-t" aria-describedby="leave-room-desc">
+        <h2 id="leave-room-t" className="display">
+          Leave the room?
+        </h2>
+        <p id="leave-room-desc">{leaveCost(null, true)}</p>
+        <div className="conn__actions">
+          <button className="btn btn--danger btn--xl m-p8" type="button" data-pad-leave onClick={blurAfter(() => ctl.leave())}>
+            <Icon name="door-out" />
+            Leave room
+          </button>
+          <button className="btn btn--paper btn--xl m-p8" type="button" autoFocus data-pad-first data-pad-back onClick={blurAfter(onStay)}>
+            Stay
+          </button>
+        </div>
+      </div>
+    </Screen>
+  );
+}
+
 /** How long Copy link says "Copied" (motion spec §4.1: 1.6 s, then back). */
 const COPIED_MS = 1600;
 
@@ -308,6 +376,7 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
   const { spectating, queued } = useSpectating();
   const [folded, setFolded] = useState(false);
   const [copied, setCopied] = useState(false);
+  const leaving = useLeaveConfirm();
   const [timeLimit, showTime] = useRoomSetting(lobby.timeLimit);
   const [kills, showKills] = useRoomSetting(lobby.killLimit);
   const [bots, showBots] = useRoomSetting(lobby.bots);
@@ -355,11 +424,12 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
   const row = (i: number) => ({ '--i': i }) as CSSProperties;
 
   return (
+    <>
     <Screen name="lobby" kind="menu" states={[host ? 'host' : 'guest', lobby.ready ? 'ready' : 'not-ready', copied ? 'copied' : 'link-idle', ...(spectating ? ['watching'] : [])]} label="Room lobby">
       <Backdrop word="ROOM" />
       <div className="menu">
         <header className="menu-top lobby__top">
-          <button className="btn btn--ghost btn--sm m-p8" type="button" onClick={blurAfter(() => ctl.leave())}>
+          <button className="btn btn--ghost btn--sm m-p8" type="button" data-pad-leave onClick={leaving.ask}>
             <Icon name="door-out" />
             Leave
           </button>
@@ -490,7 +560,7 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
             ) : (
             <ol className="prows">
               {rows.map(({ item: p, leaving }, i) => (
-                <PlayerRow key={p.id} p={p} hostView={host} leaving={leaving} i={i} />
+                <PlayerRow key={p.id} p={p} hostView={host} leaving={leaving} i={i} friendly={!lobby.local} />
               ))}
               {Array.from({ length: open }, (_, i) => (
                 <li key={`open${i}`} className="prow prow--open">
@@ -647,7 +717,7 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
               </p>
               <span className="menu-top__spacer"></span>
               {lobby.ready ? (
-                <button className="btn btn--ghost btn--xl m-p8" type="button" role="switch" aria-checked="true" onClick={blurAfter(() => online?.setReady(false))}>
+                <button className="btn btn--ghost btn--xl m-p8" type="button" role="switch" aria-checked="true" data-pad-first={!host || !enough || undefined} onClick={blurAfter(() => online?.setReady(false))}>
                   <Icon name="check" />
                   You're ready
                 </button>
@@ -657,6 +727,8 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
                   type="button"
                   role="switch"
                   aria-checked="false"
+                  // a controller lands on the match, never on Leave (audit 2, N-04): a guest's Ready, a host's Start now
+                  data-pad-first={!host || !enough || undefined}
                   onClick={(e) => {
                     remember('start', e.currentTarget);
                     blurAfter(() => online?.setReady(true))(e);
@@ -670,6 +742,7 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
                 <button
                   className={allReady ? 'btn btn--paper btn--xl m-p8 mf-glow' : 'btn btn--paper btn--xl m-p8'}
                   type="button"
+                  data-pad-first
                   disabled={!enough}
                   title={enough ? 'Start the countdown now' : `Needs ${lobby.minPlayers} players`}
                   onClick={(e) => {
@@ -696,6 +769,8 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
         </footer>
       </div>
     </Screen>
+    {leaving.asking && <LeaveRoomConfirm onStay={leaving.stay} />}
+    </>
   );
 }
 

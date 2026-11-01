@@ -11,12 +11,17 @@
  * Finding players (31 Oct, "add a search friend feature, let's make it a bit social"): a prefix search
  * on names, and the people you played with recently. Search finds players who chose their name and
  * left "Let players find me by name" on; neither ever shows anyone blocked, either way.
+ *
+ * Safety (audit-2, 1 Nov): block anyone (by id or exact name), not only friends; a declined request
+ * can't be sent again for 30 days (it looks sent, nothing is stored); at most 50 requests wait for one
+ * player (the oldest go); a player chooses who may send them requests (anyone, people they played
+ * with, or only with their friend code); an account whose device said under 18 is never found.
  */
 import { and, asc, count, desc, eq, gt, inArray, isNotNull, isNull, like, max, ne, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Db } from '../db/client';
 import { isUniqueViolation } from '../db/client';
-import { blocks, friendRequests, friendships, matchPlayers, matches, profiles, users } from '../db/schema';
+import { blocks, friendRequestDeclines, friendRequests, friendships, matchPlayers, matches, profiles, users, type RequestsFrom } from '../db/schema';
 import { ApiError } from '../http/errors';
 import { skeleton } from '../nickname/normalize';
 import type { PresenceService, PresenceStatus } from '../presence/presence';
@@ -27,6 +32,12 @@ import { savedLooks, type LookIds } from './looks';
 export const MAX_FRIENDS = 200;
 /** Most requests one player may have waiting for an answer. */
 export const MAX_OUTGOING_REQUESTS = 50;
+/** Most requests waiting for one player: a new one past this drops the oldest (audit-2 L-09). */
+export const MAX_INCOMING_REQUESTS = 50;
+/** A declined request can't be sent again for this long (audit-2 L-09). */
+export const DECLINE_MEMORY_MS = 30 * 86_400_000;
+/** "People I've played with" (requests_from 'played'): a match together this recently. */
+export const PLAYED_WITH_DAYS = 30;
 const CODE_ATTEMPTS = 6;
 
 /** A name search needs this many letters (of the name's skeleton: case, separators and lookalikes folded). */
@@ -95,6 +106,14 @@ export interface FriendsList {
   max: number;
   /** "Let players find me by name" (Settings → Privacy) */
   findable: boolean;
+  /** who may send you friend requests (audit-2 L-09) */
+  requestsFrom: RequestsFrom;
+}
+
+/** The friends panel's Privacy settings. */
+export interface FriendSettings {
+  findable: boolean;
+  requestsFrom: RequestsFrom;
 }
 
 export type RequestResult = { status: 'requested'; user: PersonView } | { status: 'friends'; friend: FriendView };
@@ -164,7 +183,7 @@ export class FriendsService {
       .select({ id: profiles.userId, nickname: profiles.nickname })
       .from(profiles)
       .innerJoin(users, eq(users.id, profiles.userId))
-      .where(and(where, eq(users.status, 'active')));
+      .where(and(where, eq(users.status, 'active'), eq(users.minor, false)));
     return row ?? null;
   }
 
@@ -217,7 +236,7 @@ export class FriendsService {
         .innerJoin(profiles, eq(profiles.userId, blocks.blockedId))
         .where(eq(blocks.userId, userId))
         .orderBy(asc(blocks.createdAt)),
-      this.db.select({ findable: profiles.findable }).from(profiles).where(eq(profiles.userId, userId)),
+      this.db.select({ findable: profiles.findable, requestsFrom: profiles.requestsFrom }).from(profiles).where(eq(profiles.userId, userId)),
     ]);
     const blockedIds = new Set(blocked.map((b) => b.id));
     const [presence, looks] = await Promise.all([
@@ -250,6 +269,7 @@ export class FriendsService {
       blocked: blocked.map((r) => ({ id: r.id, nickname: r.nickname, at: r.at.toISOString() })),
       max: MAX_FRIENDS,
       findable: mine[0]?.findable ?? true,
+      requestsFrom: mine[0]?.requestsFrom ?? 'anyone',
     };
   }
 
@@ -277,8 +297,10 @@ export class FriendsService {
 
   /**
    * Ask `target` to be friends. Asking someone who already asked you makes you friends at once;
-   * asking a friend or asking twice changes nothing. Asking someone who blocked you looks like any
-   * other request (it waits, unseen).
+   * asking a friend or asking twice changes nothing. Asking someone who blocked you, or who declined
+   * you in the last 30 days, looks like any other request (it waits unseen, or nothing is stored).
+   * Asking by name someone who takes requests only by friend code, or only from people they played
+   * with, is refused with `requests_closed` (a setting, not a secret).
    */
   async request(userId: string, target: FriendTarget): Promise<RequestResult> {
     const other = await this.find(target);
@@ -295,6 +317,10 @@ export class FriendsService {
     if (theirs) return { status: 'friends', friend: await this.accept(userId, other.id) };
 
     const at = new Date(this.now());
+    // a friend code is handed out on purpose: it always gets through their setting
+    if (!('code' in target)) await this.requireOpen(userId, other.id);
+    // they said no lately: it looks sent, and nothing reaches them (audit-2 L-09)
+    if (await this.declinedLately(userId, other.id)) return { status: 'requested', user: { id: other.id, nickname: other.nickname, at: at.toISOString() } };
     await this.db.transaction(async (tx) => {
       const [mine] = await tx.select({ n: count() }).from(friendRequests).where(eq(friendRequests.fromId, userId));
       const [already] = await tx
@@ -304,6 +330,14 @@ export class FriendsService {
       if (already) return;
       if ((mine?.n ?? 0) >= MAX_OUTGOING_REQUESTS) throw new ApiError(409, 'too_many_requests', `You have ${MAX_OUTGOING_REQUESTS} requests waiting: cancel some first`);
       await this.requireRoom(tx, userId, 'you');
+      // at most MAX_INCOMING_REQUESTS wait for one player: the oldest make room
+      const waiting = await tx
+        .select({ from: friendRequests.fromId })
+        .from(friendRequests)
+        .where(eq(friendRequests.toId, other.id))
+        .orderBy(desc(friendRequests.createdAt))
+        .offset(MAX_INCOMING_REQUESTS - 1);
+      if (waiting.length) await tx.delete(friendRequests).where(and(eq(friendRequests.toId, other.id), inArray(friendRequests.fromId, waiting.map((w) => w.from))));
       await tx.insert(friendRequests).values({ fromId: userId, toId: other.id, createdAt: at }).onConflictDoNothing();
     });
     // their badge lights up at once (unless they blocked you: then nothing reaches them)
@@ -313,6 +347,43 @@ export class FriendsService {
       .from(friendRequests)
       .where(and(eq(friendRequests.fromId, userId), eq(friendRequests.toId, other.id)));
     return { status: 'requested', user: { id: other.id, nickname: other.nickname, at: (row?.at ?? at).toISOString() } };
+  }
+
+  /** `toId` declined a request from `fromId` in the last {@link DECLINE_MEMORY_MS}. */
+  async declinedLately(fromId: string, toId: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ at: friendRequestDeclines.at })
+      .from(friendRequestDeclines)
+      .where(and(eq(friendRequestDeclines.fromId, fromId), eq(friendRequestDeclines.toId, toId), gt(friendRequestDeclines.at, new Date(this.now() - DECLINE_MEMORY_MS))));
+    return !!row;
+  }
+
+  /** 403 `requests_closed` unless `toId` takes requests by name from `fromId` (their requests_from). */
+  private async requireOpen(fromId: string, toId: string): Promise<void> {
+    const [row] = await this.db.select({ from: profiles.requestsFrom }).from(profiles).where(eq(profiles.userId, toId));
+    const setting = row?.from ?? 'anyone';
+    if (setting === 'anyone') return;
+    if (setting === 'played' && (await this.playedTogether(fromId, toId))) return;
+    throw new ApiError(
+      403,
+      'requests_closed',
+      setting === 'code' ? 'They take friend requests by friend code only: ask them for theirs' : 'They take friend requests only from people they have played with',
+      { requestsFrom: setting },
+    );
+  }
+
+  /** The two shared a match that ended in the last {@link PLAYED_WITH_DAYS} days. */
+  async playedTogether(a: string, b: string): Promise<boolean> {
+    const mine = alias(matchPlayers, 'mine');
+    const them = alias(matchPlayers, 'them');
+    const [row] = await this.db
+      .select({ id: mine.matchId })
+      .from(mine)
+      .innerJoin(them, and(eq(them.matchId, mine.matchId), eq(them.userId, b)))
+      .innerJoin(matches, eq(matches.id, mine.matchId))
+      .where(and(eq(mine.userId, a), gt(matches.endedAt, new Date(this.now() - PLAYED_WITH_DAYS * 86_400_000))))
+      .limit(1);
+    return !!row;
   }
 
   private async requireRoom(db: Pick<Db, 'select'>, userId: string, who: 'you' | 'they'): Promise<void> {
@@ -336,6 +407,9 @@ export class FriendsService {
       await this.requireRoom(tx, fromId, 'they');
       await tx.delete(friendRequests).where(and(eq(friendRequests.fromId, userId), eq(friendRequests.toId, fromId)));
       await tx
+        .delete(friendRequestDeclines)
+        .where(or(and(eq(friendRequestDeclines.fromId, userId), eq(friendRequestDeclines.toId, fromId)), and(eq(friendRequestDeclines.fromId, fromId), eq(friendRequestDeclines.toId, userId))));
+      await tx
         .insert(friendships)
         .values([
           { userId, friendId: fromId, createdAt: at },
@@ -355,9 +429,21 @@ export class FriendsService {
     return !!row;
   }
 
-  /** Say no to `fromId`'s request (they aren't told; their request just goes). */
+  /**
+   * Say no to `fromId`'s request (they aren't told; their request just goes). They can't ask again for
+   * {@link DECLINE_MEMORY_MS}: a new request looks sent and reaches nobody.
+   */
   async decline(userId: string, fromId: string): Promise<void> {
-    await this.db.delete(friendRequests).where(and(eq(friendRequests.fromId, fromId), eq(friendRequests.toId, userId)));
+    const gone = await this.db
+      .delete(friendRequests)
+      .where(and(eq(friendRequests.fromId, fromId), eq(friendRequests.toId, userId)))
+      .returning({ from: friendRequests.fromId });
+    if (!gone.length) return;
+    const at = new Date(this.now());
+    await this.db
+      .insert(friendRequestDeclines)
+      .values({ fromId, toId: userId, at })
+      .onConflictDoUpdate({ target: [friendRequestDeclines.fromId, friendRequestDeclines.toId], set: { at } });
   }
 
   /** Take back your request to `toId`. */
@@ -422,9 +508,37 @@ export class FriendsService {
 
   /** "Let players find me by name" on or off. */
   async setFindable(userId: string, findable: boolean): Promise<boolean> {
-    const [row] = await this.db.update(profiles).set({ findable }).where(eq(profiles.userId, userId)).returning({ findable: profiles.findable });
+    return (await this.setSettings(userId, { findable })).findable;
+  }
+
+  /** The friends panel's Privacy: "Let players find me by name", who may send requests. */
+  async setSettings(userId: string, change: Partial<FriendSettings>): Promise<FriendSettings> {
+    const set = { ...(change.findable !== undefined ? { findable: change.findable } : {}), ...(change.requestsFrom !== undefined ? { requestsFrom: change.requestsFrom } : {}) };
+    const [row] = Object.keys(set).length
+      ? await this.db.update(profiles).set(set).where(eq(profiles.userId, userId)).returning({ findable: profiles.findable, requestsFrom: profiles.requestsFrom })
+      : await this.db.select({ findable: profiles.findable, requestsFrom: profiles.requestsFrom }).from(profiles).where(eq(profiles.userId, userId));
     if (!row) throw new ApiError(404, 'not_found', 'No profile for this account');
-    return row.findable;
+    return row;
+  }
+
+  /**
+   * The device said under 18 (audit-2 L-03): nobody finds the account, and every friendship and request
+   * it had ends (both sides' lists change).
+   */
+  async forgetSocial(userId: string): Promise<void> {
+    const ended = await this.db.transaction(async (tx) => {
+      await tx.update(profiles).set({ findable: false }).where(eq(profiles.userId, userId));
+      const gone = await tx
+        .delete(friendships)
+        .where(or(eq(friendships.userId, userId), eq(friendships.friendId, userId)))
+        .returning({ a: friendships.userId, b: friendships.friendId });
+      const requests = await tx
+        .delete(friendRequests)
+        .where(or(eq(friendRequests.fromId, userId), eq(friendRequests.toId, userId)))
+        .returning({ a: friendRequests.fromId, b: friendRequests.toId });
+      return [...gone, ...requests].flatMap((r) => [r.a, r.b]);
+    });
+    this.touched([...new Set([userId, ...ended])]);
   }
 
   /**
@@ -448,6 +562,7 @@ export class FriendsService {
           eq(profiles.findable, true),
           isNotNull(profiles.nicknameChangedAt),
           eq(users.status, 'active'),
+          eq(users.minor, false),
           ne(profiles.userId, userId),
           sql`not exists (select 1 from ${blocks} where (${blocks.userId} = ${userId} and ${blocks.blockedId} = ${profiles.userId}) or (${blocks.userId} = ${profiles.userId} and ${blocks.blockedId} = ${userId}))`,
         ),
@@ -495,7 +610,7 @@ export class FriendsService {
         .select({ id: profiles.userId, nickname: profiles.nickname, level: profiles.level })
         .from(profiles)
         .innerJoin(users, eq(users.id, profiles.userId))
-        .where(and(inArray(profiles.userId, ids), eq(users.status, 'active'))),
+        .where(and(inArray(profiles.userId, ids), eq(users.status, 'active'), eq(users.minor, false))),
     ]);
     const hidden = new Set([...friends, ...blocked.map((r) => (r.a === userId ? r.b : r.a))]);
     const byId = new Map(people.map((p) => [p.id, p]));

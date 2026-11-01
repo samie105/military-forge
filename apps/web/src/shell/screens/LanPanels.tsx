@@ -429,7 +429,7 @@ function Frame({ title, eyebrow, name, children, note }: { title: string; eyebro
           </p>
         </div>
         <Hints>
-          <Hint keys={<Cap>Esc</Cap>}>Back</Hint>
+          <Hint keys={<Cap>Esc</Cap>} pad="Pad1">Back</Hint>
         </Hints>
       </div>
     </Screen>

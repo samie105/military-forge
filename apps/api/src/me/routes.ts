@@ -1,4 +1,9 @@
-/** /me: the signed-in player's own account (docs/07 §11). */
+/**
+ * /me: the signed-in player's own account (docs/07 §11).
+ *
+ *   PUT /me/age { minor: true } → Me   the device said under 18 (audit-2 L-03): only the flag, never the
+ *                                      year. Training only from then on; the owner alone clears it.
+ */
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -15,9 +20,18 @@ import type { Kv } from '../kv/kv';
 import type { ProfileService } from './profiles';
 
 const PatchMe = z.object({ nickname: z.string().max(64) });
+const AgeBody = z.strictObject({ minor: z.literal(true) });
 
-export function meRoutes(deps: { config: Config; db: Db; kv: Kv; auth: AuthService; profiles: ProfileService }): Hono<AppEnv> {
-  const { config, db, kv, auth, profiles } = deps;
+export function meRoutes(deps: {
+  config: Config;
+  db: Db;
+  kv: Kv;
+  auth: AuthService;
+  profiles: ProfileService;
+  /** the account turned under-18: its friends, requests and party end (app.ts) */
+  onMinor?: (userId: string) => Promise<void>;
+}): Hono<AppEnv> {
+  const { config, db, kv, auth, profiles, onMinor } = deps;
   const app = new Hono<AppEnv>();
   app.use(requireAuth(auth));
 
@@ -32,6 +46,21 @@ export function meRoutes(deps: { config: Config; db: Db; kv: Kv; auth: AuthServi
     await enforceRateLimit(kv, LIMITS.profileUpdate, userId);
     const body = await readJson(c, PatchMe);
     return c.json(await profiles.changeNickname(userId, body.nickname));
+  });
+
+  app.put('/age', async (c) => {
+    const { userId } = c.get('auth')!;
+    await enforceRateLimit(kv, LIMITS.profileUpdate, userId);
+    await readJson(c, AgeBody);
+    const [was] = await db.select({ minor: users.minor }).from(users).where(eq(users.id, userId));
+    if (was && !was.minor) {
+      await db.update(users).set({ minor: true }).where(eq(users.id, userId));
+      await onMinor?.(userId);
+      c.get('log').info({ userId }, 'account marked under 18');
+    }
+    const me = await profiles.me(userId);
+    if (!me) throw new ApiError(404, 'not_found', 'Account not found');
+    return c.json(me);
   });
 
   /** Account deletion (docs/10 §7 data rights): the user row cascades to identities, profile and sessions. */

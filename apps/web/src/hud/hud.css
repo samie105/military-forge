@@ -161,3 +161,7 @@ html.reduce-motion #hud { transition: none; }
 #hud[data-active-state~="dash-cooldown"] .mf-hud-desktop .bar--fuel .mf-fuel__cost { background: color-mix(in srgb, var(--c-hp) 55%, transparent); }
 #hud[data-active-state~="dash-cooldown"] .mf-hud-desktop .dash { opacity: 0.55; }
 #hud[data-active-state~="dash-cooldown"] .mf-hud-desktop .dash__icon { visibility: visible; color: var(--c-muted); }
+
+/* the death card's second line: how close it was (audit 2 P-05) */
+.respawn__detail { margin: 0; font-size: var(--fs-16); font-weight: var(--fw-semi); color: var(--c-text); opacity: .9; }
+.respawn__detail:empty { display: none; }

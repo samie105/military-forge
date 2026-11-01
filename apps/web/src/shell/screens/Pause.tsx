@@ -21,6 +21,7 @@ import { ROOM_SLOTS } from './Lobby';
 import { inviteFriends } from '../../social/SocialLayer';
 import { CommsButton } from '../../voice/Radio';
 import { SendReport } from '../../diag/SendReport';
+import { PlayersButton } from '../../social/ReportSheet';
 
 /** What leaving costs, in the confirm dialog's words. */
 export function leaveCost(match: MatchView | null, inRoom: boolean): string {
@@ -70,7 +71,8 @@ export function Pause({ store }: { store: ShellStore }) {
   const screen = useStore(store, (s) => s.screen);
   const match = useStore(store, (s) => s.match);
   const lobby = useStore(store, (s) => s.lobby);
-  const [confirm, setConfirm] = useState(false);
+  // the browser's Back in a lobby or the results opens the menu on its leave question (audit N-07)
+  const [confirm, setConfirm] = useState(() => store.getState().menuAsk === true);
   const room = screen.name === 'room' ? screen.code : null;
   // First flight runs (the onboarding tour): Restart it, or Skip training
   const tour = screen.name === 'training' && !!screen.tour;
@@ -149,6 +151,8 @@ export function Pause({ store }: { store: ShellStore }) {
           )}
           {/* voice (voice/Radio.tsx): the comms sheet, for the mouse, the keyboard and a controller */}
           {room && <CommsButton className="btn btn--ink btn--xl btn--block pause__btn m-p3 m-p8" />}
+          {/* the room's people: report, block, mute, the host's remove (audit-2 L-01, L-02, L-11) */}
+          {room && <PlayersButton className="btn btn--ink btn--xl btn--block pause__btn m-p3 m-p8" />}
           <button className="btn btn--ink btn--xl btn--block pause__btn m-p3 m-p8" style={row(3)} type="button" onClick={blurAfter(() => ctl.openSettings())}>
             <Icon name="gear" />
             Settings
@@ -163,6 +167,16 @@ export function Pause({ store }: { store: ShellStore }) {
               <span className="btn__sub">Your keys and tips</span>
             </span>
           </button>
+          {/* training (not a room: it would leave the match): First flight again (audit N-20) */}
+          {screen.name === 'training' && !tour && (
+            <button className="btn btn--ink btn--xl btn--block pause__btn m-p3 m-p8" style={row(4)} type="button" onClick={blurAfter(() => ctl.startFlight())}>
+              <Icon name="target" />
+              <span className="btn__stack">
+                First flight
+                <span className="btn__sub">Learn the controls, about 90 s</span>
+              </span>
+            </button>
+          )}
         </div>
         <div className="pause__end">
           <button className="btn btn--ghost btn--xl btn--block pause__btn m-p3 m-p8" style={row(5)} type="button" onClick={blurAfter(() => setConfirm(true))}>
@@ -170,7 +184,7 @@ export function Pause({ store }: { store: ShellStore }) {
             {leaveLabel}
           </button>
           <p className="pause__foot">
-            <Cap>Esc</Cap> back to the fight
+            <Cap pad="Pad1">Esc</Cap> back to the fight
           </p>
         </div>
       </nav>

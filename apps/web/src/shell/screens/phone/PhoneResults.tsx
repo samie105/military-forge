@@ -20,7 +20,11 @@ import { blurAfter } from '../../../ui/Screen';
 import { roomLink } from '../../controller';
 import { noun, ordinal, playerName, resultHeadline, type MatchView } from '../../matchView';
 import type { ShellActions } from '../../store';
-import { reasonChip, winnerOf, type ResultsExtras } from '../Results';
+import { humanMvp, humansAtEnd, reasonChip, winnerOf, type ResultsExtras } from '../Results';
+import { AddFriendButton, RowActions } from '../../../social/AddFriend';
+import { BotsMoved } from '../../../tour/PlayNowBots';
+import { AgainEasy } from '../../../tour/DebriefLines';
+import { MatchXp } from '../Progress';
 import { PhoneScreen, rise } from './layout';
 import { Roll, ShareChip, shareData, useShareChip } from './parts';
 import { SavedAdsList } from '../../../ads/SavedAds';
@@ -42,11 +46,16 @@ export function PhoneResults({ view, results, actions, room, training, code }: {
   const teamMode = (results.teamScores?.length ?? 0) > 0;
   const winner = teamMode ? teamWinner(results) : winnerOf(results.standings);
   const chip = reasonChip(results, view.killLimit);
-  // training (solo): the player is the headline; a bot's MVP card doesn't take the screen
+  // training (solo), or a room where you were the only person (audit 2 P-02): the player is the
+  // headline, and Play again leads; a bot's MVP card never takes the screen
   const solo = !!training && !room;
-  const headline = solo && me && !teamMode ? resultHeadline(me, results.standings.filter((s) => !s.left)) : null;
-  const best = results.standings.find((s) => s.mvp);
-  const mvp = solo && best !== me ? undefined : best;
+  const alone = !!room && !!me && humansAtEnd(results.standings) === 1;
+  const headline = (solo || alone) && me && !teamMode ? resultHeadline(me, results.standings.filter((s) => !s.left)) : null;
+  const best = humanMvp(results.standings);
+  const mvp = (solo || alone) && best !== me ? undefined : best;
+  const online = !!room && !room.local;
+  // the people you just played with (audit 2 P-06): Add friend for each
+  const people = online ? results.standings.filter((s) => !s.isBot && !s.left && s !== me) : [];
   const voting = view.phase === MatchPhase.Ending || view.phase === MatchPhase.Postgame;
   const closed = view.phase === MatchPhase.Closed;
   const humans = Math.max(1, view.humans, view.votes);
@@ -105,6 +114,9 @@ export function PhoneResults({ view, results, actions, room, training, code }: {
               </span>
             </div>
           )}
+          {/* this match's XP and the level, online only (audit 2 P-04); Auto moving Play now's bots (P-01) */}
+          {me && <MatchXp me={me} online={online} matchKey={`${code ?? 'local'}:${results.number}`} />}
+          <BotsMoved />
           {/* the first few matches: what you did, one thing to try, the next order (the onboarding tour) */}
           <DebriefLines />
           <div className="ticket pm-result m-p3" style={rise(2)}>
@@ -117,11 +129,31 @@ export function PhoneResults({ view, results, actions, room, training, code }: {
             </b>
             {teamMode && <TeamStandings results={results} myTeam={view.myTeam ?? -1} compact />}
           </div>
-          <button type="button" className="btn btn--volt btn--block m-p3" style={rise(3)} onClick={blurAfter(share)}>
+          {/* alone against bots, Play again leads and sharing steps back (audit 2 P-03) */}
+          {(solo || alone) && (
+            <button type="button" className="btn btn--volt btn--block m-p3" style={rise(3)} data-pad-first disabled={!voting || view.voted} onClick={blurAfter(actions.playAgain)}>
+              <Icon name={view.voted ? 'check' : 'refresh'} />
+              {view.voted ? 'Starting again' : 'Play again'}
+            </button>
+          )}
+          {(solo || alone) && <AgainEasy />}
+          <button type="button" className={solo || alone ? 'btn btn--ghost btn--block btn--sm m-p3' : 'btn btn--volt btn--block m-p3'} style={rise(3)} onClick={blurAfter(share)}>
             <Icon name="share" />
             Share the result
           </button>
-          {!solo && (
+          {people.length > 0 && (
+            <ul className="pm-res__people m-p3" style={rise(4)} aria-label="Played with">
+              {people.map((p) => (
+                <li key={p.key}>
+                  <b>{playerName(p.name, p.isBot)}</b>
+                  <RowActions>
+                    <AddFriendButton name={p.name} />
+                  </RowActions>
+                </li>
+              ))}
+            </ul>
+          )}
+          {!solo && !alone && (
             <div className="pm-vote m-p3" style={rise(4)}>
               <b>Play again?</b>
               <span className="pips votes__pips" aria-hidden="true">
@@ -139,7 +171,7 @@ export function PhoneResults({ view, results, actions, room, training, code }: {
                   Voted
                 </span>
               ) : (
-                <button type="button" className="btn btn--paper btn--sm" disabled={!voting} onClick={blurAfter(actions.playAgain)}>
+                <button type="button" className="btn btn--paper btn--sm" data-pad-first disabled={!voting} onClick={blurAfter(actions.playAgain)}>
                   <Icon name="refresh" />
                   Vote
                 </button>
@@ -148,13 +180,6 @@ export function PhoneResults({ view, results, actions, room, training, code }: {
           )}
           {(room || training) && (
             <div className="pm-res__more m-p3" style={rise(5)}>
-              {/* training (solo): Play again (no vote to count) beside Leave */}
-              {solo && (
-                <button type="button" className="btn btn--paper btn--sm" disabled={!voting || view.voted} onClick={blurAfter(actions.playAgain)}>
-                  <Icon name="refresh" />
-                  Play again
-                </button>
-              )}
               {room?.isHost && (
                 <button type="button" className="btn btn--ghost btn--sm" disabled={closed} onClick={blurAfter(actions.backToLobby)}>
                   <Icon name="back" />

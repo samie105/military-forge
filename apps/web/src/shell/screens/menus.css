@@ -84,6 +84,8 @@ html.reduce-motion .kit-v2 .cd__go.m-p7.is-leaving { animation: m-fade-out 120ms
 /* Results: the winner's poster holds the trophy (the kit's preview art isn't the game's); the standings
    in the kit's table look, your row and the winner's marked */
 .kit-v2 .mf-res__trophy { position: absolute; left: 50%; top: 52%; width: 240px; height: 240px; translate: -50% -50%; color: var(--c-brass-ink); stroke-width: 1.2; }
+.kit-v2 .mf-res__me { position: absolute; left: 50%; top: 52%; width: 200px; height: 200px; translate: -50% -50%; border-radius: 50%; overflow: hidden; border: var(--bw-chunky, 3px) solid var(--c-ink-950); background: var(--c-paper); }
+.kit-v2 .mf-res__me img { width: 100%; height: 100%; object-fit: cover; }
 .kit-v2 .mf-standings__who { display: inline-flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
 .kit-v2 .mf-standings .avatar { width: 32px; height: 32px; font-size: var(--fs-16); }
 .kit-v2 .mf-standings .avatar .ic { width: 18px; height: 18px; }
@@ -250,6 +252,8 @@ html.mf-narrow .kit-v2 .mf-standings :is(th, td) { padding-inline: var(--sp-1); 
 html.mf-big-text .kit-v2 .pause { width: 700px; }
 html.mf-big-text .kit-v2 .pause__btn { font-size: var(--fs-20); }
 html.mf-big-text .kit-v2 .pause__confirm { left: 820px; }
+/* the lobby's "Leave the room?" (Lobby.tsx LeaveRoomConfirm): the in-match menu's confirm, centred over the lobby */
+html .kit-v2 .pause__confirm.mf-leave-confirm { left: 50%; transform: translate(-50%, -50%) rotate(-1deg); }
 html.mf-short .kit-v2 .pause { top: var(--sp-8); bottom: var(--sp-8); gap: var(--sp-3); padding: var(--sp-6) var(--sp-7); }
 html.mf-short .kit-v2 .pause__title { font-size: var(--fs-88); margin-bottom: 0; }
 html.mf-short .kit-v2 .pause__title--long { font-size: var(--fs-64); }
@@ -455,3 +459,10 @@ html.reduce-motion .kit-v2 .mf-wait .spinner { border-color: var(--c-volt); }
 .kit-v2 .cb__sw { display: inline-flex; gap: 2px; font-size: var(--fs-18); }
 .kit-v2 .cb__sw i { font-style: normal; color: var(--a); }
 .kit-v2 .cb__sw i + i { color: var(--b); }
+
+/* "Reset this tab" asks once (audit N-17, C-22): the question and its two buttons in the button's place */
+.kit-v2 .mf-reset { display: inline-flex; align-items: center; gap: var(--sp-2); flex-wrap: nowrap; }
+.kit-v2 .mf-reset__q { font-size: var(--fs-14); font-weight: var(--fw-bold); }
+/* the name chip opens Settings → Account (audit N-21) */
+.kit-v2 button.me-chip { font: inherit; color: inherit; cursor: pointer; }
+.kit-v2 button.me-chip:hover { border-color: var(--c-line-strong, var(--c-muted)); }

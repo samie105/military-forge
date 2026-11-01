@@ -83,3 +83,21 @@ export function birthYears(now = Date.now()): number[] {
   const year = new Date(now).getUTCFullYear();
   return Array.from({ length: MAX_AGE - 4 }, (_, i) => year - 5 - i);
 }
+
+/** The year field's own keys: one year with left and right, ten with the page keys (a controller's L1 / R1). */
+const YEAR_STEPS: Readonly<Record<string, number>> = { ArrowLeft: -1, ArrowRight: 1, PageDown: -10, PageUp: 10 };
+
+/**
+ * The year after a key on the year field, or null for a key it leaves to the browser. A controller
+ * can't open a select's list, so it steps the year (UX audit 2, N-01: a pad couldn't get past the
+ * 18+ question); the keyboard gets the same keys. From nothing picked, the first step shows the
+ * youngest year listed (neutral: no answer that gets in comes first); steps stop at either end.
+ */
+export function stepBirthYear(current: string, key: string, years: readonly number[] = birthYears()): string | null {
+  const by = YEAR_STEPS[key];
+  if (by === undefined || !years.length) return null;
+  const newest = years[0]!;
+  const oldest = years[years.length - 1]!;
+  if (current === '') return String(newest);
+  return String(Math.max(oldest, Math.min(newest, Number(current) + by)));
+}

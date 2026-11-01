@@ -14,12 +14,12 @@ import {
   encodeVoiceUp,
   type VoiceSettingsCmd,
 } from '@military-forge/protocol';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { MicState } from './capture';
 import { ADPCM_RATE, SAMPLE_RATE, adpcmDecode, adpcmEncode, dbfs, levelOf } from './codec';
 import { Playout, seqBefore } from './playout';
 import { DEFAULT_VOICE, sanitizeVoice, setVoiceSettings, voiceSettings } from './settings';
-import { TIERS, VoiceChat, chooseTier, falloff, type Mic, type VoiceLink, type VoiceOutput } from './voice';
+import { FIRST_NOTE_KEY, MUTES_KEY, TIERS, VoiceChat, chooseTier, falloff, type Mic, type VoiceLink, type VoiceOutput } from './voice';
 
 afterEach(() => setVoiceSettings(DEFAULT_VOICE));
 
@@ -298,5 +298,88 @@ describe('VoiceChat', () => {
     expect(voiceSettings.getState()).toEqual(DEFAULT_VOICE);
     expect(CmdKind.Voice).toBe(11);
     expect(MsgType.VoiceUp).toBe(0x29);
+  });
+});
+
+describe('mutes that stick, blocks that mute, the first-voice note (audit-2 L-10)', () => {
+  const stored = new Map<string, string>();
+  const withStorage = () => {
+    stored.clear();
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => stored.get(k) ?? null,
+      setItem: (k: string, v: string) => void stored.set(k, v),
+      removeItem: (k: string) => void stored.delete(k),
+    });
+  };
+  afterEach(() => vi.unstubAllGlobals());
+  const frame = (seq: number) => encodeVoiceUp({ seq, codec: VoiceCodec.Adpcm, channel: VoiceChannel.Near, level: 9, frameMs: 20, frame: adpcmEncode(tone(20)), redundant: null });
+
+  it('a mute is kept by name and applied in the next room, whatever id the player has there', async () => {
+    withStorage();
+    const { make } = fakeMic();
+    const chat = new VoiceChat(() => null, null, make, async () => ({ opusEncode: false, opusDecode: false }));
+    const first = fakeLink();
+    chat.attach(first.link);
+    chat.setMuted(2, true); // Tunde
+    expect(JSON.parse(stored.get(MUTES_KEY)!)).toEqual(['tunde']);
+    // the next room (a rematch, another code): Tunde is id 4 now
+    const next = fakeLink();
+    (next.link.playerNames as Map<number, string>).clear();
+    for (const [id, n] of [[0, 'You'], [1, 'Kemi'], [4, 'TUNDE']] as const) (next.link.playerNames as Map<number, string>).set(id, n);
+    chat.attach(next.link);
+    await settle();
+    expect(chat.state.mutes).toEqual([4]);
+    expect(next.cmds.at(-1)!.mute).toEqual([4]);
+    // a page opened later (another tab, tomorrow) reads them back
+    const later = new VoiceChat(() => null, null, fakeMic().make, async () => ({ opusEncode: false, opusDecode: false }));
+    const l3 = fakeLink();
+    later.attach(l3.link);
+    expect(later.state.mutes).toEqual([2]);
+    // unmuting forgets it
+    later.setMuted(2, false);
+    expect(JSON.parse(stored.get(MUTES_KEY)!)).toEqual([]);
+  });
+
+  it('blocked players are muted in every room (proximity too), never heard even for a frame, and stay muted', async () => {
+    const { make } = fakeMic();
+    const audioOut = fakeAudio();
+    const out: VoiceOutput = { ctx: audioOut.ctx as never, destination: {} as AudioNode, hrtf: false, occluder: null };
+    const chat = new VoiceChat(() => out, null, make, async () => ({ opusEncode: false, opusDecode: false }));
+    chat.setBlockedNames(['kemi']);
+    const l = fakeLink();
+    chat.attach(l.link);
+    await settle();
+    expect(chat.state.mutes).toEqual([1]);
+    expect(chat.isBlocked(1)).toBe(true);
+    l.deliver(encodeVoiceDown(1, VoiceRoute.Proximity, false, frame(1)));
+    expect(audioOut.started).toHaveLength(0);
+    // the mute button can't lift a block
+    chat.setMuted(1, false);
+    expect(chat.state.mutes).toEqual([1]);
+    // unblocked (Friends): heard again
+    chat.setBlockedNames([]);
+    expect(chat.state.mutes).toEqual([]);
+  });
+
+  it('the first voice this device plays shows the note once', async () => {
+    withStorage();
+    const { make } = fakeMic();
+    const audioOut = fakeAudio();
+    const out: VoiceOutput = { ctx: audioOut.ctx as never, destination: {} as AudioNode, hrtf: false, occluder: null };
+    const chat = new VoiceChat(() => out, null, make, async () => ({ opusEncode: false, opusDecode: false }));
+    const l = fakeLink();
+    chat.attach(l.link);
+    expect(chat.state.firstNote).toBe(false);
+    l.deliver(encodeVoiceDown(2, VoiceRoute.Proximity, false, frame(1)));
+    expect(chat.state.firstNote).toBe(true);
+    expect(stored.get(FIRST_NOTE_KEY)).toBe('1');
+    chat.dismissFirstNote();
+    l.deliver(encodeVoiceDown(2, VoiceRoute.Proximity, false, frame(2)));
+    expect(chat.state.firstNote).toBe(false);
+    const again = new VoiceChat(() => out, null, fakeMic().make, async () => ({ opusEncode: false, opusDecode: false }));
+    const l2 = fakeLink();
+    again.attach(l2.link);
+    l2.deliver(encodeVoiceDown(2, VoiceRoute.Proximity, false, frame(3)));
+    expect(again.state.firstNote).toBe(false);
   });
 });

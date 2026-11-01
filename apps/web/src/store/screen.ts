@@ -12,7 +12,7 @@
  * mountStore() keeps the state and wires the buttons.
  */
 import { escapeHtml, ic } from '../locker/tiles';
-import { ageOnDevice, answerAge, asksBirthday, birthYears } from '../shell/age';
+import { ageOnDevice, answerAge, asksBirthday, birthYears, stepBirthYear } from '../shell/age';
 import { startFitting } from '../ui/fit';
 import { mountSprite } from '../ui/sprite';
 import {
@@ -58,6 +58,8 @@ export interface StoreOptions {
   onSaveAccount(): void;
   /** "Wear it": put the item on and open the Locker */
   onWear(itemId: string): void;
+  /** the closed store's "Go to the Locker" (audit N-22, D-22: it was a dead end); none: the button closes the store */
+  onLocker?(): void;
   /** the account's items changed (the Locker and the look learn at once) */
   onOwned(owned: string[]): void;
   /** to Flutterwave's page */
@@ -260,7 +262,7 @@ export function storeBody(s: StoreState): string {
   const v = s.view;
   if (!v) return `<div class="mf-st__state" role="status"><p class="mf-st__note">Loading the store…</p></div>`;
   if (!v.enabled) {
-    return `<div class="mf-st__state" role="status">${ic('gem', 'ic ic--lg')}<p class="display mf-st__head">The store opens soon</p><p class="mf-st__note">Everything you’ve earned is in the Locker.</p></div>`;
+    return `<div class="mf-st__state" role="status">${ic('gem', 'ic ic--lg')}<p class="display mf-st__head">The store opens soon</p><p class="mf-st__note">Everything you’ve earned is in the Locker.</p><button type="button" class="btn btn--paper m-p8" data-action="locker">${ic('shirt')} Go to the Locker</button></div>`;
   }
   const blocked = blockedText(v);
   const notice = s.notice
@@ -471,11 +473,22 @@ export function mountStore(container: HTMLElement, o: StoreOptions): { unmount()
     birthday.hidden = !(sel.value && asksBirthday(Number(sel.value)));
     for (const r of birthday.querySelectorAll<HTMLInputElement>('[data-age-turned]')) r.checked = false;
   });
+  // the year with a controller (it can't open the list) or the arrow keys: left and right a year, the page keys ten (audit 2, N-01)
+  fit.addEventListener('keydown', (e) => {
+    const sel = (e.target as Element).closest<HTMLSelectElement>('[data-age-year]');
+    const year = sel && stepBirthYear(sel.value, e.key);
+    if (!sel || year === null || year === undefined) return;
+    e.preventDefault();
+    if (year === sel.value) return;
+    sel.value = year;
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  });
   fit.addEventListener('click', (e) => {
     const b = (e.target as Element).closest<HTMLElement>('button, [data-action="cancel"]');
     if (!b || (b as HTMLButtonElement).disabled) return;
     const v = s.view?.enabled ? s.view : null;
     if (b.dataset.action === 'exit') o.onExit();
+    else if (b.dataset.action === 'locker') (o.onLocker ?? o.onExit)();
     else if (b.dataset.action === 'retry') {
       s.failed = null;
       paint();

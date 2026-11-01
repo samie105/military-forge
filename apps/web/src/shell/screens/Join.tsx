@@ -8,6 +8,7 @@ import { ROOM_CODE_ALPHABET, ROOM_CODE_LENGTH, normalizeRoomCode } from '@milita
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '../../ui/Icon';
 import { Cap } from '../../ui/Kbd';
+import { PadKbd, useInputDevice } from '../../gamepad/react';
 import { Screen } from '../../ui/Screen';
 import { useCtl } from '../context';
 import { Backdrop, Hint, Hints, NetPill } from './frame';
@@ -19,6 +20,20 @@ const LETTERS = new RegExp(`[^${ROOM_CODE_ALPHABET}]`, 'g');
 /** What a box accepts from typed text: the code's letters only, upper case. */
 export function codeLetters(text: string): string {
   return text.toUpperCase().replace(LETTERS, '');
+}
+
+/**
+ * A letter box stepped up or down (a controller has no keyboard: the arcade's initials, audit 2,
+ * N-05): box `i`'s letter one along `alphabet` (wrapping round), from the code as it stands. A box past
+ * the code's end steps the next free one; an empty one starts at the alphabet's first letter (down) or
+ * its last (up). `max`: the code's length.
+ */
+export function cycleLetter(code: string, i: number, dir: 1 | -1, alphabet: string = ROOM_CODE_ALPHABET, max: number = ROOM_CODE_LENGTH): { code: string; at: number } {
+  const at = Math.max(0, Math.min(i, code.length, max - 1));
+  const now = code[at];
+  const k = now === undefined ? -1 : alphabet.indexOf(now);
+  const next = k < 0 ? (dir > 0 ? alphabet[0]! : alphabet[alphabet.length - 1]!) : alphabet[(k + dir + alphabet.length) % alphabet.length]!;
+  return { code: (code.slice(0, at) + next + code.slice(at + 1)).slice(0, max), at };
 }
 
 export function joinState(code: string, pasted: boolean, error: string | null): JoinState {
@@ -108,12 +123,22 @@ export function useJoinCode({ autoFocus = true }: { autoFocus?: boolean } = {}) 
       focus(at);
     } else if (e.key === 'ArrowLeft') focus(i - 1);
     else if (e.key === 'ArrowRight') focus(i + 1);
-    else if (e.key === 'Enter') {
+    else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      // up and down step the letter (a controller's D-pad: gamepad/menus.ts data-pad-cycle; the keyboard's arrows too)
+      e.preventDefault();
+      const next = cycleLetter(code, i, e.key === 'ArrowDown' ? 1 : -1);
+      setCode(next.code);
+      setPasted(false);
+      setError(null);
+      focus(next.at);
+    } else if (e.key === 'Enter') {
       // the phone keyboard's Go: the browser has no form to submit here, so the box joins itself
-      // (and Home under this overlay doesn't also take the Enter as Create room)
+      // (and Home under this overlay doesn't also take the Enter as Create room). Short of 6 letters,
+      // the next box (a controller's ✕ / A moves along, then joins)
       e.preventDefault();
       e.stopPropagation();
-      void join();
+      if (code.length < ROOM_CODE_LENGTH) focus(Math.min(code.length, i + 1));
+      else void join();
     }
   };
 
@@ -141,6 +166,7 @@ export function Join() {
   const ctl = useCtl();
   const { code, state, error, busy, pending, boxes, join, watch, onKey, onType, pasteLink } = useJoinCode();
   const blocked = code.length !== ROOM_CODE_LENGTH || busy || state === 'error';
+  const pad = useInputDevice().kind === 'pad';
 
   return (
     <Screen name="join" kind="menu" states={[state === 'ready' ? 'pasted' : state]} label="Join with code" dialog>
@@ -176,6 +202,7 @@ export function Join() {
                   spellCheck={false}
                   aria-label={`Letter ${i + 1}`}
                   data-bind={`join.code.${i}`}
+                  data-pad-cycle
                   value={code[i] ?? ''}
                   onKeyDown={(e) => onKey(i, e)}
                   onChange={(e) => onType(i, e.target.value)}
@@ -197,8 +224,17 @@ export function Join() {
             <div className="join__status" role="status" aria-live="polite">
               {state === 'empty' && (
                 <span className="status status--busy">
-                  <Icon name="keyboard" />
-                  Type or paste: letters only (codes skip I, L and O)
+                  {pad ? (
+                    <>
+                      <PadKbd code="Pad12" />
+                      <PadKbd code="Pad13" /> picks each letter, <PadKbd code="Pad0" /> moves on (codes skip I, L and O)
+                    </>
+                  ) : (
+                    <>
+                      <Icon name="keyboard" />
+                      Type or paste: letters only (codes skip I, L and O)
+                    </>
+                  )}
                 </span>
               )}
               {state === 'typing' && (
@@ -217,7 +253,7 @@ export function Join() {
               {state === 'ready' && (
                 <span className="status status--ok">
                   <Icon name="ok" />
-                  Code {code}: press Enter to join
+                  Code {code}: press {pad ? <PadKbd code="Pad0" /> : 'Enter'} to join
                 </span>
               )}
               {state === 'error' && (
@@ -238,7 +274,8 @@ export function Join() {
                 <Icon name="eye" />
                 {pending === 'watch' ? 'Watching…' : 'Watch'}
               </button>
-              <button className="btn btn--paper btn--xl m-p8" type="button" onClick={pasteLink}>
+              {/* not for a controller: the browser's clipboard question can't be answered with one (audit 2, N-05) */}
+              <button className="btn btn--paper btn--xl m-p8" type="button" data-pad-skip onClick={pasteLink}>
                 <Icon name="paste" />
                 Paste link
               </button>
@@ -280,7 +317,11 @@ export function Join() {
         <Hints>
           <Hint keys={<Cap>Enter</Cap>}>Join</Hint>
           <Hint keys={<Cap>Ctrl V</Cap>}>Paste</Hint>
-          <Hint keys={<Cap>Esc</Cap>}>Back</Hint>
+          <Hint pad={['Pad12', 'Pad13']}>Letter</Hint>
+          <Hint pad="Pad0">Next letter, then Join</Hint>
+          <Hint keys={<Cap>Esc</Cap>} pad="Pad1">
+            Back
+          </Hint>
         </Hints>
       </div>
     </Screen>

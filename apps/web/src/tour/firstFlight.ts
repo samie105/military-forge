@@ -103,6 +103,8 @@ export class FirstFlight {
   private drawn = '';
   /** the whole flight's time, in seconds, for the finish card */
   private finishedIn = 0;
+  /** it ended with under FLOWN_MIN orders done: skipped, not finished (P-16); finishedIn holds the count then */
+  private skipped = false;
   /** where the gun Pick up offers lies (null before that order) */
   private gunAt: { x: number; y: number } | null = null;
 
@@ -283,10 +285,18 @@ export class FirstFlight {
   private finish(): void {
     this.state = 'done';
     const ms = Math.round(this.clock() - this.started);
-    this.d.memory.record({ t: 'tour.end', tour: FIRST_FLIGHT, result: 'finished', ms });
-    this.d.memory.fact({ k: 'tour', tour: FIRST_FLIGHT, finished: true });
+    // skipping through isn't flying it (audit 2 P-16): under FLOWN_MIN orders done, it ends as skipped,
+    // the Field manual keeps it open and Next orders offer it again; Live fire is still offered
+    const flown = this.tour.toJSON().done.length;
+    this.skipped = flown < FLOWN_MIN;
+    this.d.memory.record({ t: 'tour.end', tour: FIRST_FLIGHT, result: this.skipped ? 'skipped-all' : 'finished', ms });
+    this.d.memory.fact({ k: 'tour', tour: FIRST_FLIGHT, ...(this.skipped ? { skipped: true } : { finished: true }) });
     this.tour.setOpen(false);
     this.save();
+    if (this.skipped) {
+      this.finishedIn = flown;
+      return this.showDone();
+    }
     // a quick flight (§3.3): recruit hints off, more on offer
     const facts = this.d.memory.facts.get();
     if (ms < PROMOTE_UNDER_MS && !this.tour.toJSON().skipped.length && !facts.promoted) {
@@ -302,10 +312,10 @@ export class FirstFlight {
     this.spot.show({
       id: DONE_ID,
       target: [],
-      eyebrow: TOUR_COPY.orders(n, n),
-      progress: [n, n],
-      title: TOUR_COPY.complete,
-      body: TOUR_COPY.completeBody(this.finishedIn),
+      eyebrow: TOUR_COPY.orders(this.skipped ? this.finishedIn : n, n),
+      progress: [this.skipped ? this.finishedIn : n, n],
+      title: this.skipped ? TOUR_COPY.skippedTitle : TOUR_COPY.complete,
+      body: this.skipped ? TOUR_COPY.skippedBody(this.finishedIn, n) : TOUR_COPY.completeBody(this.finishedIn),
       primary: { label: TOUR_COPY.liveFire },
       skipLabel: TOUR_COPY.later,
       variant: 'strip',
@@ -314,7 +324,7 @@ export class FirstFlight {
       block: 'none',
       dim: 0,
     });
-    this.spot.stamp(TOUR_COPY.confirmed);
+    if (!this.skipped) this.spot.stamp(TOUR_COPY.confirmed);
   }
 
   private leave(how: 'live-fire' | 'later' | 'home'): void {
@@ -413,6 +423,8 @@ export class FirstFlight {
 }
 
 const DONE_ID = `${FIRST_FLIGHT}:done`;
+/** First flight counts as flown with at least this many orders done, not skipped (audit 2 P-16) */
+export const FLOWN_MIN = 3;
 
 function personaOf(memory: TourMemory): Persona {
   const f = memory.facts.get();

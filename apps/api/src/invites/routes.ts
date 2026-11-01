@@ -7,11 +7,15 @@
  *   POST /invites/:id/decline        → 204
  *   GET  /party                      → { party: PartyView | null }
  *   POST /party/leave                → 204
+ *
+ * Invites to the same friend: one a minute and 5 in 10 minutes, and none for 5 minutes after they
+ * decline one (audit-2 L-23). Under-18 accounts get 403 `adults_only` (audit-2 L-03).
  */
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { requireAuth } from '../auth/middleware';
+import { adultsOnly, requireAuth } from '../auth/middleware';
 import type { AuthService } from '../auth/sessions';
+import type { Db } from '../db/client';
 import { USER_ID } from '../friends/service';
 import type { AppEnv } from '../http/context';
 import { ApiError, readJson } from '../http/errors';
@@ -28,10 +32,11 @@ function inviteParam(raw: string): string {
   return raw;
 }
 
-export function inviteRoutes(deps: { kv: Kv; auth: AuthService; invites: InviteService; now: () => number }): Hono<AppEnv> {
-  const { kv, auth, invites, now } = deps;
+export function inviteRoutes(deps: { db: Db; kv: Kv; auth: AuthService; invites: InviteService; now: () => number }): Hono<AppEnv> {
+  const { db, kv, auth, invites, now } = deps;
   const app = new Hono<AppEnv>();
   app.use(requireAuth(auth));
+  app.use(adultsOnly(db));
 
   app.get('/', async (c) => {
     const { userId } = c.get('auth')!;
@@ -45,6 +50,7 @@ export function inviteRoutes(deps: { kv: Kv; auth: AuthService; invites: InviteS
     const { userId } = c.get('auth')!;
     const body = await readJson(c, SendBody);
     await enforceRateLimit(kv, LIMITS.inviteSend, userId);
+    await enforceRateLimit(kv, LIMITS.invitePair, `${userId}:${body.to}`);
     const invite = await invites.send(userId, body.to, body.room ?? null);
     c.get('log').info({ userId, to: body.to, room: invite.room }, 'invite sent');
     return c.json({ invite }, 201);
@@ -66,10 +72,11 @@ export function inviteRoutes(deps: { kv: Kv; auth: AuthService; invites: InviteS
   return app;
 }
 
-export function partyRoutes(deps: { kv: Kv; auth: AuthService; party: PartyService }): Hono<AppEnv> {
-  const { kv, auth, party } = deps;
+export function partyRoutes(deps: { db: Db; kv: Kv; auth: AuthService; party: PartyService }): Hono<AppEnv> {
+  const { db, kv, auth, party } = deps;
   const app = new Hono<AppEnv>();
   app.use(requireAuth(auth));
+  app.use(adultsOnly(db));
 
   app.get('/', async (c) => {
     const { userId } = c.get('auth')!;

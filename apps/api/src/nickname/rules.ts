@@ -7,7 +7,7 @@
  */
 import { randomInt } from 'node:crypto';
 import { GAME_NAME } from '@military-forge/shared';
-import { ALLOWLIST, IMPERSONATION, PROFANITY, type TermList } from './blocklist';
+import { ALLOWLIST, BRAND_RESERVED, IMPERSONATION, PROFANITY, type TermList } from './blocklist';
 import { cleanNickname, filterForm, skeleton, tokens, unusualLatin } from './normalize';
 
 export const NICKNAME_MIN = 3;
@@ -105,10 +105,19 @@ export class NicknamePolicy {
   private readonly profanity = new TermMatcher(PROFANITY, ALLOWLIST);
   private readonly impersonation: TermMatcher;
 
-  /** @param reserved extra protected names (staff), matched like `admin`: as a word or at either end */
+  private readonly exact = new Set(BRAND_RESERVED.exact.map((t) => filterForm(t)));
+
+  /**
+   * @param reserved extra protected names (staff: the env's RESERVED_NICKNAMES), matched like `admin`: as
+   * a word or at either end. The game's and the studio's names (BRAND_RESERVED) are always reserved.
+   */
   constructor(reserved: readonly string[] = []) {
     this.impersonation = new TermMatcher(
-      { ...IMPERSONATION, anywhere: [...IMPERSONATION.anywhere, GAME_NAME], edge: [...IMPERSONATION.edge, ...reserved] },
+      {
+        anywhere: [...IMPERSONATION.anywhere, ...BRAND_RESERVED.anywhere, GAME_NAME],
+        edge: [...IMPERSONATION.edge, ...BRAND_RESERVED.edge, ...reserved],
+        word: [...IMPERSONATION.word, ...BRAND_RESERVED.word],
+      },
       ALLOWLIST,
     );
   }
@@ -127,7 +136,7 @@ export class NicknamePolicy {
     if (!scriptsAllowed(scripts)) return { ok: false, reason: 'mixed_scripts' };
     if (unusualLatin(nickname)) return { ok: false, reason: 'invalid_characters' };
     if (this.profanity.matches(nickname)) return { ok: false, reason: 'profanity' };
-    if (this.impersonation.matches(nickname)) return { ok: false, reason: 'reserved' };
+    if (this.impersonation.matches(nickname) || this.exact.has(filterForm(nickname.replace(DIGITS_AT_ENDS, '')))) return { ok: false, reason: 'reserved' };
     return { ok: true, nickname, norm: skeleton(nickname) };
   }
 }

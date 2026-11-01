@@ -96,6 +96,11 @@ export class LocalMode {
     this.reset();
   }
 
+  /** The bots' level here (the tour's match record: Play now's level follows matches at it), null = none. */
+  get botLevel(): LocalBots['level'] | null {
+    return this.bots?.level ?? null;
+  }
+
   /** Fresh world (keeps the current live tuning). Recordings start from here so they replay exactly. */
   reset(): void {
     const tuning = { ...this.game.tuning };

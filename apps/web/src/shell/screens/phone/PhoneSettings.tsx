@@ -18,12 +18,11 @@ import { FirePicker } from '../FirePicker';
 import { Switch, blurAfter } from '../../../ui/Screen';
 import { Slider } from '../../../ui/Slider';
 import { useCtl } from '../../context';
-import type { AudioSettings, Settings, SettingsTab, ShellStore } from '../../store';
+import { settingsTabs, shownSettingsTab, type AudioSettings, type Settings, type SettingsTab, type ShellStore } from '../../store';
 import { VoiceSettingsSection } from '../../../voice/VoiceHud';
-import { TEXT_SIZES, autoText, resetPatch } from '../Settings';
+import { FlightRow, ResetTab, TEXT_SIZES, autoText, resetPatch, useSettingsTabs } from '../Settings';
 import { PhoneScreen, rise } from './layout';
 import { PadControls } from '../../../gamepad/PadSettings';
-import { useInputDevice } from '../../../gamepad/react';
 import { InstallButton } from '../../../pwa/InstallButton';
 import { SendReport } from '../../../diag/SendReport';
 import { buildId } from 'virtual:title-info';
@@ -31,22 +30,15 @@ import { AccountPanel } from '../../account/AccountPanel';
 import { PrivacySettings } from '../../../metrics/PrivacySettings';
 
 /** The phone's sections: Touch first; no key bindings (Controls) on a phone. */
-export const PHONE_TABS: readonly { id: SettingsTab; label: string; icon: string }[] = [
-  { id: 'touch', label: 'Touch', icon: 'touch' },
-  { id: 'graphics', label: 'Graphics', icon: 'monitor' },
-  { id: 'audio', label: 'Audio', icon: 'speaker' },
-  { id: 'accessibility', label: 'Access', icon: 'access' },
-  { id: 'network', label: 'Network', icon: 'globe' },
-  { id: 'account', label: 'Account', icon: 'user' },
-  { id: 'privacy', label: 'Privacy', icon: 'eye' },
-];
-
-/** A controller's section ("Pad"), once a pad has been used on this phone (gamepad/). */
-const PAD_TAB = { id: 'controller', label: 'Pad', icon: 'sliders' } as const satisfies (typeof PHONE_TABS)[number];
+/**
+ * A phone's tabs with no controller used yet: the desktop's names and order (store.ts settingsTabs,
+ * audit N-21; "Access" and "Pad" were the phone's own names), Touch first, no Controls (keys).
+ */
+export const PHONE_TABS = settingsTabs({ current: 'touch', touch: true, pad: false, phone: true });
 
 /** The tab a phone shows: the store's, unless it's one the phone leaves to the desktop (Controls). */
 export function phoneTab(tab: SettingsTab): SettingsTab {
-  return PHONE_TABS.some((t) => t.id === tab) ? tab : 'touch';
+  return shownSettingsTab(tab, PHONE_TABS);
 }
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
@@ -259,6 +251,12 @@ function Graphics({ settings }: { settings: Settings }) {
       <Row i={1} label="Blood effects" desc="Off by default.">
         <Switch on={settings.blood} onChange={(blood) => ctl.updateSettings({ blood })} label="Blood effects" />
       </Row>
+      <Row i={2} label="Damage numbers" desc="The number off a soldier you hit.">
+        <Switch on={settings.damageNumbers} onChange={(damageNumbers) => ctl.updateSettings({ damageNumbers })} label="Damage numbers" />
+      </Row>
+      <Row i={2} label="Hit markers" desc="Marks when a shot lands.">
+        <Switch on={settings.hitMarkers} onChange={(hitMarkers) => ctl.updateSettings({ hitMarkers })} label="Hit markers" />
+      </Row>
       <Row i={2} label="Show FPS" desc="A frame counter in the corner.">
         <Switch on={settings.showFps} onChange={(showFps) => ctl.updateSettings({ showFps })} label="Show FPS" />
       </Row>
@@ -366,10 +364,8 @@ function Network({ settings }: { settings: Settings }) {
 export function PhoneSettings({ store }: { store: ShellStore }) {
   const ctl = useCtl();
   const settings = useStore(store, (s) => s.settings);
-  const padSeen = useInputDevice().pad !== null;
-  const tabs = padSeen ? [...PHONE_TABS, PAD_TAB] : PHONE_TABS;
-  const stored = useStore(store, (s) => s.settingsTab);
-  const tab = padSeen && stored === 'controller' ? 'controller' : phoneTab(stored);
+  const tabs = useSettingsTabs(true);
+  const tab = shownSettingsTab(useStore(store, (s) => s.settingsTab), tabs);
   const reset = () => {
     const patch = resetPatch(tab);
     if (patch) ctl.updateSettings(patch);
@@ -386,12 +382,7 @@ export function PhoneSettings({ store }: { store: ShellStore }) {
           <b className="display pm-h">Settings</b>
           <span className="menu-top__spacer"></span>
           <InstallButton />
-          {tab !== 'account' && (
-            <button type="button" className="btn btn--ghost btn--sm" onClick={blurAfter(reset)}>
-              <Icon name="refresh" />
-              Reset {label}
-            </button>
-          )}
+          {/* Reset moved to the panel's foot (audit N-17: it sat beside Done, under the right thumb) */}
           <button type="button" className="btn btn--volt btn--sm" onClick={blurAfter(() => ctl.back())}>
             <Icon name="check" />
             Done
@@ -415,7 +406,13 @@ export function PhoneSettings({ store }: { store: ShellStore }) {
             {tab === 'network' && <Network settings={settings} />}
             {tab === 'account' && <AccountPanel store={store} variant="phone" />}
             {tab === 'privacy' && <PrivacySettings phone />}
-            {tab === 'controller' && <PadControls phone pad={settings.pad} onChange={(pad) => ctl.updateSettings({ pad })} reduceFlashes={settings.reduceFlashes} />}
+            {tab === 'controller' && <PadControls phone pad={settings.pad} onChange={(pad) => ctl.updateSettings({ pad })} />}
+            {(tab === 'touch' || tab === 'controller') && <FlightRow phone />}
+            {/* the tab's foot: Reset (asks first) and, outside Network (which has its own), Send a report */}
+            <div className="pm-set pm-set--foot m-p3">
+              {tab !== 'account' && <ResetTab key={tab} label={`Reset ${label}`} question={`Reset ${label}?`} onReset={reset} className="btn btn--ghost btn--sm" />}
+              {tab !== 'network' && <SendReport context={`settings: ${tab}`} />}
+            </div>
           </section>
         </div>
       </div>

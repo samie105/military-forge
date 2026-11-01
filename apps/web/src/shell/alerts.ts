@@ -13,9 +13,35 @@ function codeLine(name: string, room?: string): string {
   return room ? `${name} · room ${room}` : name;
 }
 
+/**
+ * The account is suspended (until `until`) or banned (audit-2 L-04). No support email yet (the owner's
+ * call, L-07): Send a report is the way to say it's a mistake.
+ */
+export function suspendedAlert(until: string | null): AlertInfo {
+  const when = until ? ` until ${new Date(until).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : '';
+  return {
+    kind: 'refused',
+    title: "Can't play online right now",
+    message: `This account can't play online${when}. ${STILL_WORKS} If you think this is a mistake, send a report from Settings › Network.`,
+    code: until ? 'ACCOUNT_SUSPENDED' : 'ACCOUNT_DISABLED',
+    action: null,
+  };
+}
+
+/** Online play, friends and voice are 18+ (audit-2 L-03); training is open to everyone. */
+export const ADULTS_ONLY_ALERT: AlertInfo = {
+  kind: 'refused',
+  title: 'Online play is for adults',
+  message: 'Online rooms, friends and voice are for players 18 and over. Training against bots is open to everyone.',
+  code: 'ADULTS_ONLY',
+  action: null,
+};
+
 /** An API failure while creating or looking up a room (before the game server is involved). */
 export function alertFromApiError(e: unknown, room?: string): AlertInfo {
   if (e instanceof ApiError) {
+    if (e.code === 'adults_only') return ADULTS_ONLY_ALERT;
+    if (e.code === 'account_disabled') return suspendedAlert(typeof e.extra.until === 'string' ? e.extra.until : null);
     if (e.code === 'room_not_found')
       return { kind: 'room-not-found', title: 'Room not found', message: 'This room has closed, or the link is wrong. Rooms close when everyone leaves.', code: codeLine('ROOM_NOT_FOUND', room), action: 'rejoin' };
     if (e.code === 'invalid_room_code')
@@ -38,8 +64,13 @@ export function alertFromApiError(e: unknown, room?: string): AlertInfo {
  * `watching`: we came to watch (v20), so a retry watches again and a room nobody is in says so.
  */
 export function alertFromConnection(c: Pick<ConnectionView, 'code' | 'detail' | 'attempt' | 'lastPingMs' | 'lossPct'>, room: string, watching = false, local = false): AlertInfo {
+  // v22: the host removed us (audit-2 L-11); the room keeps us out, so there's nothing to retry
+  if (c.code === CloseCode.Removed) return { kind: 'refused', title: 'Removed from the room', message: 'The host removed you from this room.', code: codeLine('REMOVED', room || undefined), action: null };
   if (local) return alertFromLocal(c, room);
   switch (c.code) {
+    case CloseCode.ServerUpdating:
+      // our update, not the player's connection (audit L-05): no "check your Wi-Fi"
+      return { kind: 'new-version', title: 'Updating the server', message: `The game is getting an update. Try again in a few minutes, usually less. ${STILL_WORKS}`, code: codeLine('SERVER_UPDATING', room), action: 'rejoin' };
     case CloseCode.VersionMismatch:
       return { kind: 'new-version', title: 'New version available', message: 'The game was updated. Reload to get the latest version, then rejoin with the same link.', code: 'VERSION_MISMATCH', action: 'reload' };
     case CloseCode.RoomFull:

@@ -8,7 +8,8 @@
  * The scoreboard's rows light up for whoever is talking (`#hud .sb tr[data-pid]`, hud.ts).
  */
 import { MatchPhase } from '@military-forge/sim';
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react';
+import { useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react';
+import { ControllerContext } from '../shell/context';
 import type { StoreApi } from 'zustand/vanilla';
 import { usePhoneLayout } from '../shell/screens/phone/layout';
 import type { ShellStore } from '../shell/store';
@@ -18,7 +19,7 @@ import { Switch } from '../ui/Screen';
 import { voiceChat } from './index';
 import { CommsRadio, CommsSheet, MicMeter, useCommsOpen, useVoice, useVoiceSettings } from './Radio';
 import { setVoiceSettings } from './settings';
-import { closeComms } from './sheet';
+import { closeComms, openComms } from './sheet';
 import type { VoiceChat } from './voice';
 
 export { CommsButton, CommsRadio, routeLabel, useVoice, useVoiceSettings } from './Radio';
@@ -65,8 +66,57 @@ function useDialogUp(box: RefObject<HTMLElement | null>): boolean {
   return up;
 }
 
+/** how long the first-voice note stays if it isn't put away */
+export const FIRST_NOTE_MS = 12_000;
+export const FIRST_NOTE_TEXT = 'You can hear players near you, opponents too. Hold a name to mute them, or open Comms to turn voices off.';
+
+/**
+ * The first time a voice plays on this device (audit-2 L-10): one quiet line saying what it is and how
+ * to stop it, once. It goes by itself.
+ */
+function FirstVoiceNote({ chat, phone }: { chat: VoiceChat; phone: boolean }) {
+  const up = useVoice((s) => s.firstNote, chat);
+  useEffect(() => {
+    if (!up) return undefined;
+    const t = window.setTimeout(() => chat.dismissFirstNote(), FIRST_NOTE_MS);
+    return () => window.clearTimeout(t);
+  }, [up, chat]);
+  if (!up) return null;
+  return (
+    <div className={`mf-fit ${phone ? 'mf-fit--phone ' : ''}kit-v2 mf-voice mf-voice--note`}>
+      <section className={`screen screen--game vc-notewrap${phone ? ' screen--phone' : ''}`} aria-label="Voice chat note">
+        <p className="vc-firstnote" role="status">
+          <Icon name="radio" size="sm" />
+          <span>{FIRST_NOTE_TEXT}</span>
+          <button
+            type="button"
+            className="btn btn--ink btn--sm"
+            onClick={() => {
+              chat.dismissFirstNote();
+              openComms();
+            }}
+          >
+            Comms
+          </button>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => chat.dismissFirstNote()}>
+            OK
+          </button>
+        </p>
+      </section>
+    </div>
+  );
+}
+
+/** This device or account said under 18 (audit-2 L-03): no voice at all. */
+function useMinor(): boolean {
+  const ctl = useContext(ControllerContext);
+  const get = () => !!ctl?.store?.getState().profile?.minor;
+  return useSyncExternalStore(ctl?.store ? ctl.store.subscribe : () => () => {}, get, get);
+}
+
 /** The room's voice: the radio in a match, the comms sheet when open. Nothing outside online rooms, or with voice chat off. */
 export function VoiceHud({ shell, chat = voiceChat }: { shell: ShellStore; chat?: VoiceChat }) {
+  const minor = useMinor();
   const active = useVoice((s) => s.active, chat);
   const talking = useVoice((s) => s.talking, chat);
   const screen = useStoreSel(shell, (s) => s.screen.name);
@@ -89,7 +139,7 @@ export function VoiceHud({ shell, chat = voiceChat }: { shell: ShellStore; chat?
   }, [here, open]);
   // someone to talk to: another human in the room (bots don't listen)
   const humans = useStoreSel(shell, (s) => (s.lobby?.players ?? []).filter((p) => !p.isBot && !p.you).length);
-  if (!here) return null;
+  if (!here || minor) return null;
   // the lobby (Waiting) has the radio in its own top bar; the match has it on the HUD
   const radio = humans > 0 && phase !== null && phase !== MatchPhase.Waiting && overlay === null && !open;
   return (
@@ -103,6 +153,7 @@ export function VoiceHud({ shell, chat = voiceChat }: { shell: ShellStore; chat?
         </div>
       )}
       {open && <CommsSheet shell={shell} chat={chat} phone={phone} />}
+      {!open && <FirstVoiceNote chat={chat} phone={phone} />}
     </>
   );
 }
@@ -141,6 +192,12 @@ function Seg<T extends string>({ value, options, onChange, label, phone }: { val
 }
 
 export function VoiceSettingsSection({ chat = voiceChat }: { chat?: VoiceChat }) {
+  const minor = useMinor();
+  if (minor) return null;
+  return <VoiceSettingsRows chat={chat} />;
+}
+
+function VoiceSettingsRows({ chat }: { chat: VoiceChat }) {
   const s = useVoiceSettings();
   const mic = useVoice((v) => v.mic, chat);
   const support = useVoice((v) => v.support, chat);
@@ -185,7 +242,7 @@ export function VoiceSettingsSection({ chat = voiceChat }: { chat?: VoiceChat })
       <Row phone={phone} label="Mic volume" desc="How loud you are to others.">
         <Slider value={s.micVolume / 2} onChange={(v) => setVoiceSettings({ micVolume: Math.round(v * 40) / 20 })} label="Mic volume" valueText={pct(s.micVolume)} />
       </Row>
-      <Row phone={phone} label="Voice chat volume" desc="Everyone you hear. Mute one player from the radio's comms.">
+      <Row phone={phone} label="Voice chat volume" desc="Everyone you hear. Mute one player from the radio's comms: it stays muted in every room.">
         <Slider value={s.chatVolume} onChange={(chatVolume) => setVoiceSettings({ chatVolume })} label="Voice chat volume" valueText={pct(s.chatVolume)} />
       </Row>
       <Row phone={phone} label="Proximity voice" desc="Anyone near your soldier hears you, enemies too, from where you stand. Your party hears you anywhere (B).">

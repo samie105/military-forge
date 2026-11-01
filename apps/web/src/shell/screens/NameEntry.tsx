@@ -4,13 +4,16 @@
  * or another rule broken (the API's reason, in words). When the check itself fails (the API down, a
  * 5xx, a 429, a tunnel hiccup) the name is unchecked and Continue lets the API decide on submit.
  */
+import { guestNickname } from '@military-forge/shared';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useStore } from 'zustand';
+import { currentDevice } from '../../gamepad';
 import { Cap } from '../../ui/Kbd';
 import { Icon } from '../../ui/Icon';
 import { Screen } from '../../ui/Screen';
 import { NICKNAME_REASONS, type NicknameCheck } from '../api';
 import { useCtl } from '../context';
+import { useLevelNumber } from './Progress';
 import type { ShellStore } from '../store';
 import { joiningLine, useJoining } from './joining';
 import { Backdrop, Hint, Hints, NetPill, rememberCard } from './frame';
@@ -72,8 +75,14 @@ function cardNumber(name: string): string {
   return `${s.slice(0, 3)} ${s.slice(3)}`;
 }
 
+/** A generated name for Edit name's "Suggest a name" (the parts the API gives a new guest: shared guestNames). */
+export function suggestName(random: () => number = Math.random): string {
+  return guestNickname((lo, hi) => lo + Math.floor(random() * (hi - lo)));
+}
+
 export function NameEntry({ store, first }: { store: ShellStore; first: boolean }) {
   const ctl = useCtl();
+  const level = useLevelNumber();
   const profile = useStore(store, (s) => s.profile);
   // an invite link: whose room this leads into (P1-3)
   const joining = useJoining(store);
@@ -89,8 +98,11 @@ export function NameEntry({ store, first }: { store: ShellStore; first: boolean 
   const input = useRef<HTMLInputElement>(null);
   const card = useRef<HTMLElement>(null);
 
-  // no scroll jump on a phone: the field is where it is, the keyboard comes up under it
-  useEffect(() => input.current?.focus({ preventScroll: true }), []);
+  // no scroll jump on a phone: the field is where it is, the keyboard comes up under it. A controller
+  // starts on the buttons instead (Pick one for me, Suggest a name: it has no keys to type with)
+  useEffect(() => {
+    if (currentDevice().kind !== 'pad') input.current?.focus({ preventScroll: true });
+  }, []);
   // the live check, debounced while typing
   useEffect(() => {
     setCheck(null);
@@ -173,8 +185,9 @@ export function NameEntry({ store, first }: { store: ShellStore; first: boolean 
               </b>
               <div className="idcard__meta">
                 <span>
-                  <span className="label">Rank</span>
-                  <b>Recruit</b>
+                  {/* the level the API keeps (audit 2 P-04), not a rank that never changed */}
+                  <span className="label">Level</span>
+                  <b className="num">{level}</b>
                 </span>
                 <span>
                   <span className="label">Card no.</span>
@@ -189,7 +202,7 @@ export function NameEntry({ store, first }: { store: ShellStore; first: boolean 
             {state === 'available' && <span className="stamp stamp--brass stamp--lg idcard__stamp m-p7">Cleared</span>}
             <div className="dogtag" aria-hidden="true">
               <span>{preview}</span>
-              <small>Recruit · {cardNumber(preview)}</small>
+              <small>Level {level} · {cardNumber(preview)}</small>
             </div>
           </figure>
 
@@ -299,7 +312,7 @@ export function NameEntry({ store, first }: { store: ShellStore; first: boolean 
               </button>
               {first ? (
                 <>
-                  <button type="button" className="btn btn--ghost btn--xl m-p8" disabled={busy} onClick={() => void submit(null)}>
+                  <button type="button" className="btn btn--ghost btn--xl m-p8" data-pad-first disabled={busy} onClick={() => void submit(null)}>
                     <Icon name="dice" />
                     Pick one for me
                   </button>
@@ -310,16 +323,33 @@ export function NameEntry({ store, first }: { store: ShellStore; first: boolean 
                   </button>
                 </>
               ) : (
-                <button type="button" className="btn btn--ghost btn--xl m-p8" onClick={() => ctl.closeOverlay()}>
-                  Cancel
-                </button>
+                <>
+                  {/* a name to start from, for a controller or anyone short of one (audit 2, N-05); Save keeps it */}
+                  <button type="button" className="btn btn--ghost btn--xl m-p8" data-pad-first disabled={busy} onClick={() => {
+                      setName(suggestName());
+                      setError(null);
+                      setSuggestions([]);
+                    }}>
+                    <Icon name="dice" />
+                    Suggest a name
+                  </button>
+                  <button type="button" className="btn btn--ghost btn--xl m-p8" data-pad-back onClick={() => ctl.closeOverlay()}>
+                    Cancel
+                  </button>
+                </>
               )}
             </div>
           </div>
         </form>
         <Hints>
-          <Hint keys={<Cap>Enter</Cap>}>{first ? 'Continue' : 'Save'}</Hint>
-          {!first && <Hint keys={<Cap>Esc</Cap>}>Cancel</Hint>}
+          <Hint keys={<Cap>Enter</Cap>} pad="Pad0" padText="Select">
+            {first ? 'Continue' : 'Save'}
+          </Hint>
+          {!first && (
+            <Hint keys={<Cap>Esc</Cap>} pad="Pad1">
+              Cancel
+            </Hint>
+          )}
         </Hints>
       </div>
     </Screen>

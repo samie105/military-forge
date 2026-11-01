@@ -145,8 +145,9 @@ describe('invites', () => {
     expect(Date.parse(inv.expiresAt) - Date.parse(inv.at)).toBe(INVITE_TTL_MS);
 
     // they join: a second invite to the same room is pointless
-    await post(friend, `/rooms/${room.code}/join`);
     api.clock.advance(REINVITE_MS);
+    await post(friend, `/rooms/${room.code}/join`);
+    await beat(host, room.code);
     expect(await errorCode(await invite(host, friend))).toBe('already_in_room');
   });
 
@@ -192,14 +193,18 @@ describe('invites', () => {
     expect(await errorCode(await post(friend, `/invites/${inv.id}/accept`))).toBe('invite_not_found');
   });
 
-  it('inviting the same friend again sends the same invite again (after a few seconds), with fresh time', async () => {
+  it('inviting the same friend again sends the same invite again (after a minute), with fresh time', async () => {
     const host = await createGuest(api);
     const friend = await createGuest(api);
     await befriend(api.app, host, friend);
-    await makeRoom(host);
+    const room = await makeRoom(host);
     const first = ((await (await invite(host, friend)).json()) as { invite: Invite }).invite;
     expect((await invite(host, friend)).status).toBe(429); // a double tap
-    api.clock.advance(REINVITE_MS);
+    api.clock.advance(REINVITE_MS / 2);
+    await beat(host, room.code);
+    expect((await invite(host, friend)).status).toBe(429); // still under a minute
+    api.clock.advance(REINVITE_MS / 2);
+    await beat(host, room.code);
     const again = ((await (await invite(host, friend)).json()) as { invite: Invite }).invite;
     expect(again.id).toBe(first.id);
     expect(Date.parse(again.expiresAt)).toBeGreaterThan(Date.parse(first.expiresAt));

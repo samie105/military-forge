@@ -33,7 +33,7 @@ import { moveIndicator } from '../ui/motion';
 import { mountSprite } from '../ui/sprite';
 import css from './locker.css?inline';
 import { LocalLoadoutStore, accountInventory, ownedOnly, randomLoadout, withDye, withItem, type Inventory, type LoadoutStore } from './loadouts';
-import { SLOT_GLYPH, THUMB_FOCUS, escapeHtml, ic, lockedLine, tileHtml } from './tiles';
+import { SLOT_GLYPH, THUMB_FOCUS, escapeHtml, ic, lockedLine, rowPriced, shownInRow, tileHtml } from './tiles';
 import { getPortrait, peekPortrait, type PortraitRequest } from '../portrait';
 import { Turntable, type FocusPreset, type LightPreset } from './turntable';
 
@@ -231,7 +231,9 @@ export function mountLocker(container: HTMLElement, options: LockerOptions = {})
     const body = loadoutBody(loadout);
     const section = (slot: CosmeticSlot, label: string, multi: boolean) => {
       // what fits the soldier's body (the creator switches body)
-      const list = cosmeticsForSlot(slot).filter((c) => fitsBody(c, body));
+      const list = cosmeticsForSlot(slot).filter((c) => fitsBody(c, body) && shownInRow(c, inventory.owns(c.id)));
+      // Free only where paid items sit beside it (audit 2 P-11)
+      const priced = rowPriced(list);
       const tiles = (channel?: DyeChannel) =>
         list
           .map((c) =>
@@ -242,6 +244,7 @@ export function mountLocker(container: HTMLElement, options: LockerOptions = {})
               channel,
               trying?.id === c.id && trying.channel === channel,
               SLOT_GLYPH[slot] ?? t.icon,
+              priced,
             ),
           )
           .join('');

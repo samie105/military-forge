@@ -12,6 +12,7 @@ import { Icon } from '../ui/Icon';
 import { blurAfter } from '../ui/Screen';
 import { TEAM_LETTERS, TEAM_NAMES, TEAM_SHAPES } from './palette';
 import './teams.css';
+import { PlayerMore, roomTarget } from '../social/ReportSheet';
 
 /** "Free-for-all", "2 teams" … for labels; "Team deathmatch" names the mode. */
 export function modeName(teams: number): string {
@@ -75,6 +76,8 @@ export function TeamRoster({ players, teams, host, onMove, phone = false }: { pl
                 {p.isBot && <span className="tag tag--bot">Bot</span>}
                 {p.you && <span className="tag tag--you">You</span>}
                 {!p.isBot && <span className={p.ready ? 'mf-team__ready is-ready' : 'mf-team__ready'}>{p.ready ? 'Ready' : 'Wait'}</span>}
+                {/* report, block, mute, the host's remove (audit-2 L-01, L-02, L-11) */}
+                <PlayerMore target={roomTarget(p, 'lobby')} />
               </li>
             ))}
           </ol>

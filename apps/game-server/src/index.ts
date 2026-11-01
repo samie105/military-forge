@@ -172,15 +172,23 @@ const admin =
     : null;
 if (admin) console.log(`[admin] admin API on 127.0.0.1:${admin.port} (the playtest's /admin; defaults save to ${adminDefaults})`);
 
+/** how long a stop waits for match results still on their way to the API */
+const RESULTS_FLUSH_MS = 4000;
+
 /** Everyone is told the server is updating (they rejoin when it's back), then it stops. */
 function stop(): void {
   server.rooms.closeEveryone(CloseCode.ServerUpdating, 'server updated: rejoin');
-  // let the closes go out
-  setTimeout(() => {
-    admin?.close();
-    server.close();
-    process.exit(0);
-  }, 300);
+  // the results of matches that just ended (a drain's cap ends the ones still running: audit L-24)
+  // reach the API before the process goes, a few seconds at most; they live in memory only
+  const flushed = results ? Promise.race([results.settle(), new Promise((done) => setTimeout(done, RESULTS_FLUSH_MS))]) : Promise.resolve();
+  // …and the closes go out
+  void flushed.then(() =>
+    setTimeout(() => {
+      admin?.close();
+      server.close();
+      process.exit(0);
+    }, 300),
+  );
 }
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, stop);
 

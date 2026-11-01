@@ -49,6 +49,7 @@ export function PhoneJoin() {
                   aria-label={`Letter ${i + 1}`}
                   value={code[i] ?? ''}
                   onKeyDown={(e) => onKey(i, e)}
+                  data-pad-cycle
                   onChange={(e) => onType(i, e.target.value)}
                 />
               ))}

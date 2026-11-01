@@ -22,17 +22,20 @@ import { playerName } from '../../matchView';
 import type { LobbyPlayer, LobbyView } from '../../onlineView';
 import { encodeQr, qrSvgPath } from '../../qr';
 import { MapPoster } from '../../posters';
-import { KILL_STEP, ROOM_SLOTS, TIME_CHOICES, killsLabel, lobbyMaps, minutesLabel, useRoomSetting, useSpectating } from '../Lobby';
+import { KILL_STEP, ROOM_SLOTS, TIME_CHOICES, killsLabel, lobbyMaps, minutesLabel, useLeaveConfirm, useRoomSetting, useSpectating } from '../Lobby';
+import { leaveCost } from '../Pause';
 import { PhoneScreen, rise } from './layout';
 import { LobbyInvite } from '../../../social/SocialLayer';
 import { Roll, ShareChip, Sheet, shareRoom, useShareChip } from './parts';
 import { PhoneTips } from './PhoneTips';
 import { PlayerAvatar } from '../../../presentation/PlayerAvatar';
+import { AddFriendButton, RowActions } from '../../../social/AddFriend';
 import { TeamRoster } from '../../../teams/TeamRoster';
 import { BOT_LEVELS, BOT_LEVEL_NAMES, botFillChoices, botsLine, type BotLevel } from '../../roomBots';
 import { LobbyRadio } from '../../../voice/Radio';
+import { PlayerMore, roomTarget } from '../../../social/ReportSheet';
 
-function Row({ p, i }: { p: LobbyPlayer; i: number }) {
+function Row({ p, i, friendly = false }: { p: LobbyPlayer; i: number; friendly?: boolean }) {
   const ready = p.ready || p.isBot;
   return (
     <li className={`pm-row m-p3${p.you ? ' is-you' : ''}`} style={rise(i)}>
@@ -47,11 +50,19 @@ function Row({ p, i }: { p: LobbyPlayer; i: number }) {
       )}
       {p.isBot && <span className="tag tag--bot">Bot</span>}
       <span className="menu-top__spacer"></span>
+      {/* the people in the room with you (audit 2 P-06); Report / Block sit in the same slot */}
+      {friendly && !p.you && !p.isBot && (
+        <RowActions>
+          <AddFriendButton name={p.name} compact />
+        </RowActions>
+      )}
       {/* keyed by the state, so a player readying up stamps in (P7) */}
       <span key={ready ? 'ready' : 'wait'} className={`prow__ready${ready ? ' is-ready m-p7' : ''}`}>
         <Icon name={ready ? 'check' : 'clock'} size="sm" />
         {ready ? 'Ready' : 'Wait'}
       </span>
+      {/* report, block, mute, the host's remove (audit-2 L-01, L-02, L-11) */}
+      <PlayerMore target={roomTarget(p, 'lobby')} />
     </li>
   );
 }
@@ -265,6 +276,7 @@ export function PhoneLobby({ lobby, tips = null }: { lobby: LobbyView; tips?: Bi
   const { spectating, queued } = useSpectating();
   const [folded, setFolded] = useState(false);
   const [rules, setRules] = useState(false);
+  const leaving = useLeaveConfirm();
   const [chip, showChip] = useShareChip();
   const link = roomLink(lobby.code);
   const qr = useMemo(() => qrSvgPath(encodeQr(link), 1), [link]);
@@ -287,7 +299,8 @@ export function PhoneLobby({ lobby, tips = null }: { lobby: LobbyView; tips?: Bi
     <PhoneScreen name="m-lobby" label="Room lobby" word="ROOM" states={[host ? 'host' : 'guest', lobby.ready ? 'ready' : 'not-ready', chip ? 'shared' : 'link-idle', ...(spectating ? ['watching'] : [])]}>
       <div className="pm">
         <header className="pm-top">
-          <button type="button" className="btn btn--ghost btn--icon btn--sm m-p8" aria-label="Leave the room" onClick={blurAfter(() => ctl.leave())}>
+          {/* asks once, as the in-match menu does (audit 2, N-04) */}
+          <button type="button" className="btn btn--ghost btn--icon btn--sm m-p8" aria-label="Leave the room" data-pad-leave onClick={leaving.ask}>
             <Icon name="back" />
           </button>
           <b className="display pm-h">Room</b>
@@ -373,7 +386,7 @@ export function PhoneLobby({ lobby, tips = null }: { lobby: LobbyView; tips?: Bi
             ) : (
             <ol>
               {lobby.players.map((p, i) => (
-                <Row key={p.id} p={p} i={i + 2} />
+                <Row key={p.id} p={p} i={i + 2} friendly={!lobby.local} />
               ))}
             </ol>
             )}
@@ -411,12 +424,12 @@ export function PhoneLobby({ lobby, tips = null }: { lobby: LobbyView; tips?: Bi
                 </div>
               ) : (
                 <div className="pm-bar">
-                  <button type="button" className={`btn btn--sm m-p8 ${lobby.ready ? 'btn--ghost is-ready' : 'btn--ghost'}`} aria-pressed={lobby.ready} onClick={blurAfter(() => online?.setReady(!lobby.ready))}>
+                  <button type="button" className={`btn btn--sm m-p8 ${lobby.ready ? 'btn--ghost is-ready' : 'btn--ghost'}`} aria-pressed={lobby.ready} data-pad-first={!host || !enough || undefined} onClick={blurAfter(() => online?.setReady(!lobby.ready))}>
                     <Icon name={lobby.ready ? 'check' : 'clock'} />
                     Ready
                   </button>
                   {host && (
-                    <button type="button" className="btn btn--paper btn--sm m-p8" disabled={!enough} title={enough ? 'Start the countdown now' : `Needs ${lobby.minPlayers} players`} onClick={blurAfter(() => online?.startMatch())}>
+                    <button type="button" className="btn btn--paper btn--sm m-p8" data-pad-first disabled={!enough} title={enough ? 'Start the countdown now' : `Needs ${lobby.minPlayers} players`} onClick={blurAfter(() => online?.startMatch())}>
                       <Icon name="play" />
                       Start
                     </button>
@@ -428,6 +441,24 @@ export function PhoneLobby({ lobby, tips = null }: { lobby: LobbyView; tips?: Bi
         </div>
       </div>
       <RulesSheet lobby={lobby} open={rules} onClose={() => setRules(false)} />
+      <Sheet open={leaving.asking} onClose={leaving.stay} label="Leave the room?">
+        <div className="pm-sheet__head">
+          <span className="pm-sheet__icon" aria-hidden="true">
+            <Icon name="door-out" />
+          </span>
+          <b className="display">Leave the room?</b>
+        </div>
+        <p className="pm-sheet__note">{leaveCost(null, true)}</p>
+        <div className="pm-bar">
+          <button type="button" className="btn btn--danger btn--sm m-p8" data-pad-leave onClick={blurAfter(() => ctl.leave())}>
+            <Icon name="door-out" />
+            Leave room
+          </button>
+          <button type="button" className="btn btn--paper btn--sm m-p8" autoFocus data-pad-back onClick={blurAfter(leaving.stay)}>
+            Stay
+          </button>
+        </div>
+      </Sheet>
     </PhoneScreen>
   );
 }

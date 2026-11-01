@@ -5,6 +5,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { HOME_STOPS, runHomeStops } from '../../src/tour/homeStops';
+import { newFacts } from '../../src/tour/facts';
 import { homeAsk, homeStopsRunning } from '../../src/tour/homeQueue';
 import type { TourMemory } from '../../src/tour/index';
 import type { SpotStep, Spotlight } from '../../src/ui/spotlight';
@@ -85,7 +86,7 @@ function fakeMemory() {
   const memory = {
     record: () => {},
     fact: (e: unknown) => facts.push(e),
-    facts: { get: () => ({ experience: 'veteran', invited: false }) },
+    facts: { get: () => newFacts(0) },
   } as unknown as TourMemory;
   return { memory, facts };
 }

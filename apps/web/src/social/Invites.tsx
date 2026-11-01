@@ -12,10 +12,12 @@
 import { MatchPhase } from '@military-forge/sim';
 import { useEffect, useState, type CSSProperties } from 'react';
 import { usePhoneLayout } from '../shell/screens/phone/layout';
+import { PadKbd, useInputDevice } from '../gamepad/react';
 import { Icon } from '../ui/Icon';
 import type { Friend, FriendsList, LookIds } from './api';
 import { Avatar } from './FriendsPanel';
 import { INVITE_SECONDS, clockText, secondsLeft, statusText, useSel, type ClientInvite, type SocialController } from './social';
+import { PlayerMore } from './ReportSheet';
 
 /** A friend's look, from the friends list (an invite names its sender only): undefined when unknown. */
 export function lookOf(list: FriendsList | null, id: string | undefined): LookIds | undefined {
@@ -45,14 +47,29 @@ export function InviteToast({ social }: { social: SocialController }) {
   const shown = invites.filter((i) => !hidden[i.id] && secondsLeft(i) > 0);
   const inv = shown[0];
   const look = useSel(social.store, (s) => lookOf(s.list, inv?.from.id));
+  const pad = useInputDevice().kind === 'pad';
   useTick(!!inv);
-  // the panel shows invites itself, and the picker is busy with yours
-  if (!inv || panelOpen || pickerOpen) return null;
-  const left = secondsLeft(inv);
+  const up = !!inv && !panelOpen && !pickerOpen;
   const inPlay = (screen === 'room' || screen === 'training') && (phase === MatchPhase.Countdown || phase === MatchPhase.InProgress);
   // top left only over the bare game (a menu over it keeps its own left side)
   const playing = inPlay && overlay === null;
   const inMatch = screen === 'room' && inPlay;
+  // in the menus, J joins (the toast never takes the keyboard's focus: audit 2, N-06); never in play, where keys are the game's
+  useEffect(() => {
+    if (!up || playing || !inv) return undefined;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'KeyJ' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+      const t = e.target as Element | null;
+      if (t && t.closest('input, textarea, select, [contenteditable="true"]')) return;
+      e.preventDefault();
+      void social.acceptInvite(inv);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [up, playing, inv, social]);
+  // the panel shows invites itself, and the picker is busy with yours
+  if (!inv || !up) return null;
+  const left = secondsLeft(inv);
   return (
     <div className={`mf-fit ${phone ? 'mf-fit--phone ' : ''}kit-v2 mf-social-toast`}>
       <section className={`screen screen--game sx-tscreen${phone ? ' screen--phone sx-tscreen--phone' : ''}`} data-screen="invite-toast" aria-label="Invite">
@@ -75,9 +92,11 @@ export function InviteToast({ social }: { social: SocialController }) {
             <i></i>
           </span>
           <div className="sx-toast__acts">
-            <button type="button" className="btn btn--volt btn--sm sx-act" onClick={() => void social.acceptInvite(inv)}>
+            {/* a controller's Triangle / Y in the menus (gamepad/manager.ts data-pad-y); its View / Share comes to the buttons */}
+            <button type="button" className="btn btn--volt btn--sm sx-act" data-pad-y="Join" onClick={() => void social.acceptInvite(inv)}>
               <Icon name="arrow-right" />
               Join
+              {!playing && !phone && (pad ? <PadKbd code="Pad3" /> : <kbd className="kbd">J</kbd>)}
             </button>
             <button type="button" className="btn btn--ghost btn--sm sx-act" onClick={() => void social.declineInvite(inv)}>
               Decline
@@ -91,6 +110,8 @@ export function InviteToast({ social }: { social: SocialController }) {
             )}
             <span className="menu-top__spacer"></span>
             {inMatch && !phone && <span className="sx-toast__note">Joining leaves this match</span>}
+            {/* report or block the sender (audit-2 L-01, L-02): the toast goes, the sheet takes over */}
+            <PlayerMore target={{ name: inv.from.nickname, id: inv.from.id, look, place: 'invite' }} onOpen={() => social.hideInvite(inv)} />
             <button type="button" className="btn btn--ghost btn--icon btn--sm sx-act" aria-label="Later: keep it in Friends" onClick={() => social.hideInvite(inv)}>
               <Icon name="close" />
             </button>

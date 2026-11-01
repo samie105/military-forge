@@ -24,13 +24,15 @@ import { inviteFriends } from '../../../social/SocialLayer';
 import { Roll, ShareChip, Sheet, shareRoom, useShareChip } from './parts';
 import { InstallButton } from '../../../pwa/InstallButton';
 import { SendReport } from '../../../diag/SendReport';
+import { PlayersButton } from '../../../social/ReportSheet';
 
 export function PhonePause({ store }: { store: ShellStore }) {
   const ctl = useCtl();
   const screen = useStore(store, (s) => s.screen);
   const match = useStore(store, (s) => s.match);
   const lobby = useStore(store, (s) => s.lobby);
-  const [confirm, setConfirm] = useState(false);
+  // the browser's Back in a lobby or the results opens the menu on its leave question (audit N-07)
+  const [confirm, setConfirm] = useState(() => store.getState().menuAsk === true);
   const [chip, showChip] = useShareChip();
   const room = screen.name === 'room' ? screen.code : null;
   const playing = match?.phase === MatchPhase.InProgress;
@@ -92,6 +94,8 @@ export function PhonePause({ store }: { store: ShellStore }) {
               )}
             </button>
           )}
+          {/* the room's people: report, block, mute, the host's remove (audit-2 L-01, L-02, L-11) */}
+          {room && <PlayersButton className="btn btn--ink btn--sm btn--block m-p3 m-p8" compact />}
           <div className="pm-pause__row m-p3" style={rise(3)}>
             <button type="button" className="btn btn--ink btn--sm m-p8" onClick={blurAfter(() => ctl.openSettings())}>
               <Icon name="gear" />
@@ -99,6 +103,13 @@ export function PhonePause({ store }: { store: ShellStore }) {
             </button>
             <InstallButton />
           </div>
+          {/* training (not a room: it would leave the match): First flight again (audit N-20) */}
+          {screen.name === 'training' && !screen.tour && (
+            <button type="button" className="btn btn--ink btn--sm btn--block m-p3 m-p8" style={rise(3)} onClick={blurAfter(() => ctl.startFlight())}>
+              <Icon name="target" />
+              First flight · learn the controls
+            </button>
+          )}
           {/* the buttons' fade, right here (the owner, 23 Oct: "a way to fade the buttons") */}
           <ButtonFadeQuick className="pm-fadequick m-p3" />
           {/* something went wrong: what happened on this phone, to us (diag/) */}

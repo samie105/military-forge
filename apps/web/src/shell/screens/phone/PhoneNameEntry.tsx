@@ -16,14 +16,16 @@ import { Icon } from '../../../ui/Icon';
 import { blurAfter } from '../../../ui/Screen';
 import { NICKNAME_REASONS, type NicknameCheck } from '../../api';
 import { useCtl } from '../../context';
+import { useLevelNumber } from '../Progress';
 import type { ShellStore } from '../../store';
 import { joiningLine, useJoining } from '../joining';
-import { NAME_MAX, NAME_MIN, nameState, useEnterKey } from '../NameEntry';
+import { NAME_MAX, NAME_MIN, nameState, suggestName, useEnterKey } from '../NameEntry';
 import { PhoneScreen, rise, useRotated } from './layout';
 import { TurnTip, markTurnTipSeen, useTurnTipSeen } from './TurnTip';
 
 export function PhoneNameEntry({ store, first }: { store: ShellStore; first: boolean }) {
   const ctl = useCtl();
+  const level = useLevelNumber();
   const profile = useStore(store, (s) => s.profile);
   // an invite link: whose room this leads into (P1-3)
   const joining = useJoining(store);
@@ -116,8 +118,9 @@ export function PhoneNameEntry({ store, first }: { store: ShellStore; first: boo
               {preview}
             </b>
             <span className="pm-id__meta">
-              <span className="label">Rank</span>
-              <b>Recruit</b>
+              {/* the level the API keeps (audit 2 P-04), not a rank that never changed */}
+              <span className="label">Level</span>
+              <b className="num">{level}</b>
             </span>
             {state === 'available' && <span className="stamp stamp--brass pm-id__stamp m-p7">Cleared</span>}
           </div>
@@ -229,7 +232,7 @@ export function PhoneNameEntry({ store, first }: { store: ShellStore; first: boo
           <div className="pm-ne__more m-p3" style={rise(4)}>
             {first ? (
               <>
-                <button type="button" className="btn btn--ghost btn--sm m-p8" disabled={busy} onClick={blurAfter(() => void submit(null))}>
+                <button type="button" className="btn btn--ghost btn--sm m-p8" data-pad-first disabled={busy} onClick={blurAfter(() => void submit(null))}>
                   <Icon name="dice" />
                   Pick one for me
                 </button>
@@ -240,9 +243,16 @@ export function PhoneNameEntry({ store, first }: { store: ShellStore; first: boo
                 </button>
               </>
             ) : (
-              <button type="button" className="btn btn--ghost btn--sm m-p8" onClick={blurAfter(() => ctl.closeOverlay())}>
-                Cancel
-              </button>
+              <>
+                {/* a name to start from (a controller has no keys to type one: audit 2, N-05); Save keeps it */}
+                <button type="button" className="btn btn--ghost btn--sm m-p8" data-pad-first disabled={busy} onClick={() => pick(suggestName())}>
+                  <Icon name="dice" />
+                  Suggest a name
+                </button>
+                <button type="button" className="btn btn--ghost btn--sm m-p8" data-pad-back onClick={blurAfter(() => ctl.closeOverlay())}>
+                  Cancel
+                </button>
+              </>
             )}
             {changeable && changeable.getTime() > Date.now() && !first ? (
               <span className="pm-ne__help">Name changes are once a week: next on {changeable.toLocaleDateString()}.</span>

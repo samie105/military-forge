@@ -61,6 +61,8 @@ describe('the Store screen', () => {
     expect(blockedText(view(account({ canBuy: false, reason: 'banned' })))?.line).toMatch(/Settings → Network/);
     expect(blockedText(view(null))?.title).not.toMatch(/Sign in/);
     expect(storeBody(state({ enabled: false }))).toContain('The store opens soon');
+    // not a dead end (audit N-22, D-22): the Locker is one tap away
+    expect(storeBody(state({ enabled: false }))).toMatch(/data-action="locker"[^>]*>.*Go to the Locker/);
   });
 
   it('the confirm shows the price in Brass and naira and the balance after; short of Brass it says how much more', () => {

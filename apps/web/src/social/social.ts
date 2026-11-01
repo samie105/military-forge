@@ -16,13 +16,18 @@
  * field searches names as you type (from 2 letters, 300 ms after the last key, answers kept a minute),
  * and Played with recently lists the people from your last matches. A request that arrives while you
  * are elsewhere shows a toast (audit C-26).
+ *
+ * Safety (audit-2, 1 Nov): Report and Block from every place players meet (the Report sheet,
+ * ReportSheet.tsx: the friends panel's rows, the toasts, the lobby, results, the comms sheet and the
+ * pause menu's Players), by account id where the row has one, else by the exact name; a room's host
+ * removes a player from there too. An under-18 device or account has none of this (training only).
  */
 import { useSyncExternalStore } from 'react';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { ApiError, type Api } from '../shell/api';
 import { OFFLINE_TITLE } from '../shell/offline';
 import type { Intent, ShellStore } from '../shell/store';
-import { FriendsApi, asFriendCode, type FoundPlayer, type Friend, type FriendsList, type Invite, type Party, type Person, type Relation } from './api';
+import { FriendsApi, asFriendCode, type FoundPlayer, type Friend, type FriendsList, type Invite, type LookIds, type Party, type Person, type Relation, type ReportPlace, type ReportReason, type RequestsFrom } from './api';
 import { EventStream } from './events';
 
 export type FriendsTab = 'friends' | 'requests' | 'blocked';
@@ -75,6 +80,40 @@ export interface SocialState {
   recent: readonly FoundPlayer[] | null;
   /** friend requests that arrived while you were elsewhere, for the toast (audit C-26), oldest first */
   requestToasts: readonly Person[];
+  /** the player sheet: report, block, mute, remove (audit-2 L-01, L-02, L-11); null = closed */
+  sheet: PlayerSheetState | null;
+  /** names blocked by name this session, before the list reloads (a room's rows carry no id) */
+  blockedNames: readonly string[];
+}
+
+/**
+ * Someone the player can report, block, mute or (the host) remove: by account id where the row has one
+ * (the friends panel, the toasts), else by exact name (a room's rows: names are unique); `pid`: their id
+ * in the room we're in (the host's Remove, the voice mute).
+ */
+export interface PlayerTarget {
+  name: string;
+  id?: string;
+  pid?: number;
+  look?: LookIds;
+  place: ReportPlace;
+}
+
+/**
+ * The player sheet (ReportSheet.tsx): `players` the room's people (the pause menu's Players), `actions`
+ * one player's (Report, Block, Mute, the host's Remove), `report` the form, `sent` its thanks, `block`
+ * and `remove` their confirms. `fromList`: Back goes to the room's people.
+ */
+export type SheetView = 'players' | 'actions' | 'report' | 'sent' | 'block' | 'remove';
+
+export interface PlayerSheetState {
+  view: SheetView;
+  target: PlayerTarget | null;
+  fromList: boolean;
+  /** a report or a block on its way */
+  sending: boolean;
+  /** why the last one didn't go */
+  error: string | null;
 }
 
 /** An invite with when it runs out on this device's clock (ms since the epoch). */
@@ -89,7 +128,7 @@ export interface SocialShell {
   readonly api: Pick<Api, 'authed' | 'onSignIn'> & Partial<Pick<Api, 'stream'>>;
   readonly store: ShellStore;
   /** the running game: an invite accepted mid-match leaves this room for good first */
-  readonly host?: { readonly online: { leave(): void } | null };
+  readonly host?: { readonly online: { leave(): void; removePlayer?(id: number): void } | null };
   go(intent: Intent): void;
   notify(message: string): void;
   /** the room link for people who aren't friends yet (the picker) */
@@ -138,6 +177,12 @@ export function friendErrorText(e: unknown): string {
       return "They're in your room already";
     case 'not_friends':
       return 'You can invite friends only: send them the room link';
+    case 'requests_closed':
+      return e.message;
+    case 'invite_declined':
+      return 'They said no to your last invite. Try again in a few minutes';
+    case 'adults_only':
+      return 'Friends and online play are for players 18 and over';
     default:
       return e.offline ? `${OFFLINE_TITLE}. Try again in a moment` : e.message;
   }
@@ -225,12 +270,14 @@ export class SocialController {
       search: EMPTY_SEARCH,
       recent: null,
       requestToasts: [],
+      sheet: null,
+      blockedNames: [],
     }));
     // a different player signed in (a new guest): nothing of the last one's stays
     shell.api.onSignIn(() => {
       this.searchCache.clear();
       this.toasted.clear();
-      this.store.setState({ list: null, error: null, added: null, busy: {}, invites: [], sent: {}, unseen: 0, hidden: {}, party: null, search: EMPTY_SEARCH, recent: null, requestToasts: [] });
+      this.store.setState({ list: null, error: null, added: null, busy: {}, invites: [], sent: {}, unseen: 0, hidden: {}, party: null, search: EMPTY_SEARCH, recent: null, requestToasts: [], sheet: null, blockedNames: [] });
       if (this.watchers.size) void this.refresh();
       if (this.push) {
         this.push.stop();
@@ -381,10 +428,9 @@ export class SocialController {
     this.store.setState(partial);
   }
 
-  /** Friends need a signed-in, online player (no friends in offline training). */
+  /** Friends need a signed-in, online, adult player (no friends in offline training, none under 18: audit-2 L-03). */
   get available(): boolean {
-    const p = this.shell.store.getState().profile;
-    return !!p && !p.offline;
+    return socialAllowed(this.shell.store.getState().profile);
   }
 
   /** Loads the list now (one load at a time; a second call shares it). */
@@ -556,6 +602,59 @@ export class SocialController {
     return ok;
   }
 
+  /** Who may send you friend requests (Settings → Privacy, audit-2 L-09). */
+  async setRequestsFrom(from: RequestsFrom): Promise<boolean> {
+    const before = this.store.getState().list;
+    if (before) this.set({ list: { ...before, requestsFrom: from } });
+    try {
+      const { requestsFrom } = await this.friends.setRequestsFrom(from);
+      const list = this.store.getState().list;
+      if (list) this.set({ list: { ...list, requestsFrom } });
+      return true;
+    } catch (e) {
+      const list = this.store.getState().list;
+      if (list) this.set({ list: { ...list, requestsFrom: before?.requestsFrom ?? 'anyone' } });
+      this.shell.notify(friendErrorText(e));
+      return false;
+    }
+  }
+
+  /**
+   * Where you stand with a player you just played with, by their name (Results' and the lobby's rows
+   * know names, not accounts: audit 2 P-06). Names are unique, so the list's names say it; null
+   * before the list has loaded.
+   */
+  relationByName(nickname: string): Relation | null {
+    const list = this.store.getState().list;
+    if (!list) return null;
+    const same = (p: { nickname: string }) => p.nickname.toLowerCase() === nickname.toLowerCase();
+    if (list.friends.some(same)) return 'friends';
+    if (list.incoming.some(same)) return 'incoming';
+    if (list.outgoing.some(same)) return 'sent';
+    if (list.blocked.some(same)) return null; // blocked: no button at all
+    return 'none';
+  }
+
+  /**
+   * Add friend from a match's row (audit 2 P-06): the same request as the panel's Add by name; the
+   * other player gets the usual request toast. Their request to you is accepted instead.
+   */
+  async addByName(nickname: string): Promise<boolean> {
+    const key = `name:${nickname.toLowerCase()}`;
+    const theirs = this.store.getState().list?.incoming.find((p) => p.nickname.toLowerCase() === nickname.toLowerCase());
+    if (theirs) return this.accept(theirs);
+    let became = 'requested' as 'requested' | 'friends';
+    const ok = await this.act(
+      key,
+      (l) => (l.outgoing.some((r) => r.nickname === nickname) ? l : { ...l, outgoing: [{ id: key, nickname, at: new Date().toISOString() }, ...l.outgoing] }),
+      async () => {
+        became = (await this.friends.request({ name: nickname })).status;
+      },
+    );
+    if (ok) this.shell.notify(became === 'friends' ? `You and ${nickname} are friends now` : `Request sent to ${nickname}`);
+    return ok;
+  }
+
   /** "Let players find me by name" (Settings → Privacy). */
   async setFindable(on: boolean): Promise<boolean> {
     const before = this.store.getState().list;
@@ -664,6 +763,105 @@ export class SocialController {
       }),
       () => this.friends.block(who.id),
     );
+  }
+
+  // ---- safety: report, block anyone, the host's remove (audit-2 L-01, L-02, L-11) ----
+
+  /** You've blocked this player (by the list, or by name this session). */
+  isBlocked(t: Pick<PlayerTarget, 'id' | 'name'>): boolean {
+    const st = this.store.getState();
+    const name = foldName(t.name);
+    return !!st.list?.blocked.some((b) => (t.id ? b.id === t.id : foldName(b.nickname) === name)) || st.blockedNames.some((n) => n === name);
+  }
+
+  /** Every name you've blocked (voice mutes them in every room). */
+  blockedNameList(): string[] {
+    const st = this.store.getState();
+    return [...new Set([...(st.list?.blocked.map((b) => foldName(b.nickname)) ?? []), ...st.blockedNames])];
+  }
+
+  /**
+   * Block anyone: by id where the row has one (they leave friends and requests at once), else by exact
+   * name (a room's rows). They aren't told; their voice is muted in every room from now on.
+   */
+  async blockPlayer(t: PlayerTarget): Promise<boolean> {
+    if (t.id) {
+      const ok = await this.block({ id: t.id, nickname: t.name });
+      if (ok) this.set({ blockedNames: [...new Set([...this.store.getState().blockedNames, foldName(t.name)])] });
+      if (ok) this.shell.notify(`Blocked ${t.name}. They aren't told.`);
+      return ok;
+    }
+    try {
+      await this.friends.blockByName(t.name);
+      this.set({ blockedNames: [...new Set([...this.store.getState().blockedNames, foldName(t.name)])] });
+      this.shell.notify(`Blocked ${t.name}. They aren't told.`);
+      void this.refresh();
+      return true;
+    } catch (e) {
+      this.shell.notify(friendErrorText(e));
+      return false;
+    }
+  }
+
+  /** One player's sheet (a row's ⋯): Report, Block, Mute, the host's Remove; or straight to one of them. */
+  openPlayer(target: PlayerTarget, view: Exclude<SheetView, 'players' | 'sent'> = 'actions'): void {
+    const was = this.store.getState().sheet;
+    this.set({ sheet: { view, target, fromList: was?.view === 'players' || (was?.fromList ?? false), sending: false, error: null } });
+  }
+
+  /** The Report form for this player. */
+  openReport(target: PlayerTarget): void {
+    this.openPlayer(target, 'report');
+  }
+
+  /** The pause menu's Players: everyone in the room, each with Report, Block, Mute and (the host) Remove. */
+  openPlayers(): void {
+    this.set({ sheet: { view: 'players', target: null, fromList: false, sending: false, error: null } });
+  }
+
+  /** Another view of the same sheet (a confirm, the form). */
+  sheetView(view: SheetView): void {
+    const sheet = this.store.getState().sheet;
+    if (sheet) this.set({ sheet: { ...sheet, view, error: null } });
+  }
+
+  /** Back: to the room's people when the sheet came from there, else closed. */
+  sheetBack(): void {
+    const sheet = this.store.getState().sheet;
+    if (sheet?.fromList && sheet.view !== 'players') this.openPlayers();
+    else this.closeSheet();
+  }
+
+  closeSheet(): void {
+    this.set({ sheet: null });
+  }
+
+  /** Send the report: who, why, a note if they wrote one, and the room we're in. */
+  async sendReport(reason: ReportReason, note: string): Promise<boolean> {
+    const sheet = this.store.getState().sheet;
+    const target = sheet?.target;
+    if (!sheet || !target || sheet.sending) return false;
+    this.set({ sheet: { ...sheet, sending: true, error: null } });
+    const text = note.trim().slice(0, REPORT_NOTE_MAX);
+    const room = this.myRoom();
+    const still = () => this.store.getState().sheet?.target === target;
+    try {
+      await this.friends.report({ ...(target.id ? { id: target.id } : { name: target.name }), reason, place: target.place, ...(text ? { note: text } : {}), ...(room ? { room } : {}) });
+      if (still()) this.set({ sheet: { ...this.store.getState().sheet!, view: 'sent', sending: false, error: null } });
+      return true;
+    } catch (e) {
+      if (still()) this.set({ sheet: { ...this.store.getState().sheet!, sending: false, error: reportErrorText(e) } });
+      return false;
+    }
+  }
+
+  /** The room's host removes `t` (their room id): they leave now and can't come back to this room. */
+  removeFromRoom(t: PlayerTarget): boolean {
+    const online = this.shell.host?.online;
+    if (t.pid === undefined || !online?.removePlayer) return false;
+    online.removePlayer(t.pid);
+    this.shell.notify(`${t.name} was removed from the room`);
+    return true;
   }
 
   unblock(person: Person): Promise<boolean> {
@@ -790,6 +988,26 @@ export class SocialController {
 }
 
 const EMPTY_SEARCH: SearchState = { query: '', status: 'idle', players: [], error: null };
+
+/** a report's note at most (apps/api REPORT_NOTE_MAX) */
+export const REPORT_NOTE_MAX = 300;
+
+/** Names compare as the game shows them unique: case and width folded (the API folds lookalikes too). */
+export function foldName(name: string): string {
+  return name.normalize('NFKC').trim().toLowerCase();
+}
+
+/** Friends and everything social need a signed-in, online, adult player (audit-2 L-03). */
+export function socialAllowed(p: { offline: boolean; minor?: boolean } | null): boolean {
+  return !!p && !p.offline && !p.minor;
+}
+
+/** In words, for a report that didn't go. */
+export function reportErrorText(e: unknown): string {
+  if (e instanceof ApiError && e.code === 'rate_limited') return "You've sent a lot of reports in the last hour. Try again later.";
+  if (e instanceof ApiError && e.code === 'player_not_found') return "We couldn't find that player. They may have changed their name.";
+  return friendErrorText(e);
+}
 
 /** In words, for a failed search. */
 export function searchErrorText(e: unknown): string {

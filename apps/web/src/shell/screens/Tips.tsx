@@ -30,6 +30,8 @@ export function tipsRows(bindings: Settings['bindings']): [string, readonly stri
     ['Shield up / sling', keys('shield')],
     ['Dual wield', keys('dual')],
     ['Scoreboard (hold)', keys('scoreboard')],
+    // shown only on the HUD's keycaps before (audit 2, N-16); a pad's is a double tap of the scoreboard's button (the card's own row)
+    ...(isPadCode(bindings.left[0]) ? [] : ([['Big map', keys('map')]] as [string, readonly string[]][])),
   ];
 }
 
@@ -54,7 +56,8 @@ export function TipsCard({ bindings, doubleTapDash = true }: { bindings: Setting
   const pad = isPadCode(bindings.left[0]);
   return (
     <Screen name="tips" kind="game" label="How to play">
-      <aside className="mf-tips card card--print m-p1" aria-label="How to play">
+      {/* over play it waits for an answer: a controller goes straight to Got it (gamepad/manager.ts; audit 2, N-13) */}
+      <aside className="mf-tips card card--print m-p1" aria-label="How to play" data-pad-modal>
         <p className="eyebrow">How to play</p>
         <h2 className="display mf-tips__h">Controls</h2>
         <dl className="mf-tips__keys">
@@ -77,6 +80,14 @@ export function TipsCard({ bindings, doubleTapDash = true }: { bindings: Setting
               )}
             </dd>
           </div>
+          {pad && (
+            <div>
+              <dt>Big map</dt>
+              <dd>
+                <Kbd code={bindings.scoreboard[0] ?? 'Pad8'} /> <span className="muted small">twice</span>
+              </dd>
+            </div>
+          )}
           <div>
             <dt>Menu</dt>
             <dd>{pad ? <Kbd code="Pad9" /> : <kbd className="kbd">Esc</kbd>}</dd>
@@ -93,7 +104,7 @@ export function TipsCard({ bindings, doubleTapDash = true }: { bindings: Setting
         </ul>
         <div className="mf-tips__actions">
           {/* no autoFocus: the card sits over live play, where Space and the arrows are the game's */}
-          <button type="button" className="btn btn--volt btn--xl m-p8" onClick={blurAfter(() => ctl.closeTips())}>
+          <button type="button" className="btn btn--volt btn--xl m-p8" data-pad-first onClick={blurAfter(() => ctl.closeTips())}>
             Got it
           </button>
           <button
@@ -104,8 +115,8 @@ export function TipsCard({ bindings, doubleTapDash = true }: { bindings: Setting
               ctl.openSettings(pad ? 'controller' : 'controls');
             })}
           >
-            <Icon name="keyboard" />
-            Change keys
+            <Icon name={pad ? 'sliders' : 'keyboard'} />
+            {pad ? 'Change buttons' : 'Change keys'}
           </button>
         </div>
       </aside>

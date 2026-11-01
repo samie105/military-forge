@@ -87,6 +87,26 @@
 .sx-add__input:focus-visible { outline: none; border-color: var(--c-volt); box-shadow: 0 0 0 3px var(--c-volt-soft); }
 .sx-add__send { min-height: 56px; }
 .sx-add__out { grid-column: 1 / -1; font-size: var(--fs-16); }
+/* a friend code with a controller (FriendsPanel.tsx PadFriendCode): eight letter boxes under the find field */
+.sx-padcode { grid-column: 1 / -1; display: flex; flex-direction: column; gap: var(--sp-2); }
+.sx-padcode__lead { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.sx-padcode__row { display: flex; align-items: center; gap: 6px; }
+.sx-padcode__slot { display: inline-flex; align-items: center; gap: 6px; }
+.sx-padcode__dash { color: var(--c-muted); font: var(--fw-bold) var(--fs-24) / 1 var(--f-ui); }
+.sx-padcode__cell {
+  width: 46px;
+  height: 56px;
+  padding: 0;
+  text-align: center;
+  background: var(--c-ink-950);
+  color: var(--c-text);
+  border: var(--bw) solid var(--c-line);
+  border-radius: var(--r-xs);
+  font: var(--fw-black, 800) var(--fs-28) / 1 var(--f-display);
+  caret-color: transparent;
+}
+.sx-padcode__cell.is-filled { border-color: var(--c-line-strong); }
+.sx-padcode__cell:focus-visible, .sx-padcode__cell:focus { outline: none; border-color: var(--c-volt); box-shadow: 0 0 0 3px var(--c-volt-soft); }
 
 /* tabs */
 .sx-tabs { display: flex; gap: var(--sp-2); }
@@ -381,3 +401,40 @@ html.reduce-motion .sx-toast__bar i { transition: none; }
 /* the party on Home */
 .sx-party { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); border-radius: var(--r-xs); background: var(--c-ink-850); box-shadow: inset 0 0 0 1.5px var(--c-line); }
 .sx-party__names { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-14); color: var(--c-text); }
+
+/* ---- the player sheet (ReportSheet.tsx, audit-2 L-01/L-02/L-11): report, block, mute, remove ---- */
+.sx-psheet { width: 720px; overflow-y: auto; }
+.sx-psheet__title { font-size: var(--fs-48); color: var(--c-text); overflow-wrap: anywhere; }
+.sx-psheet__acts, .sx-psheet__form { display: flex; flex-direction: column; gap: var(--sp-3); }
+.sx-psheet__act { justify-content: flex-start; min-height: 68px; text-align: left; }
+.sx-psheet__back { min-height: 52px; }
+.sx-psheet__row { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+.sx-psheet__row .sx-act { min-height: 52px; font-size: var(--fs-16); }
+.sx-psheet__lead { margin: 0; color: var(--c-text); font-size: var(--fs-20); line-height: 1.4; }
+.sx-psheet__state { display: flex; align-items: center; gap: var(--sp-2); margin: 0; min-height: 52px; }
+.sx-tone--warn { color: var(--c-danger-text); }
+.sx-reasons { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); margin: 0; padding: 0; border: 0; }
+.sx-reasons legend { grid-column: 1 / -1; padding: 0 0 var(--sp-2); }
+.sx-reason { display: flex; align-items: center; gap: var(--sp-3); min-height: 52px; padding: 0 var(--sp-3); border-radius: var(--r-xs); background: var(--c-ink-800); box-shadow: inset 0 0 0 1.5px var(--c-line); color: var(--c-text); font-size: var(--fs-16); font-weight: var(--fw-bold); cursor: pointer; }
+.sx-reason input { width: 20px; height: 20px; margin: 0; accent-color: var(--c-volt); }
+.sx-reason.is-on { box-shadow: inset 0 0 0 2px var(--c-volt); }
+.sx-reason:focus-within { outline: 2px solid var(--c-volt); outline-offset: 2px; }
+.sx-reportnote { position: relative; display: flex; flex-direction: column; gap: var(--sp-2); }
+.sx-reportnote textarea { min-height: 88px; padding: var(--sp-3); border: 1.5px solid var(--c-line-strong); border-radius: var(--r-xs); background: var(--c-ink-900, var(--c-ink-800)); color: var(--c-text); font: inherit; font-size: var(--fs-16); resize: vertical; }
+.sx-reportnote textarea:focus-visible { outline: 2px solid var(--c-volt); outline-offset: 1px; }
+.sx-reportnote__count { align-self: flex-end; color: var(--c-muted); font-size: var(--fs-14); }
+.sx-row--btn { width: 100%; border: 0; color: var(--c-text); text-align: left; cursor: pointer; }
+.sx-row--btn:hover, .sx-row--btn:focus-visible { background: var(--c-ink-600); outline: none; }
+.sx-more-btn { flex: none; }
+.sx-screen--phone .sx-psheet { width: 520px; }
+.sx-screen--phone .sx-psheet__title { font-size: var(--fs-24); }
+.sx-screen--phone .sx-psheet__act { min-height: var(--touch-min); }
+.sx-screen--phone .sx-psheet__lead { font-size: var(--fs-14); }
+.sx-screen--phone .sx-reason { min-height: var(--touch-min); font-size: var(--fs-14); }
+.sx-screen--phone .sx-reportnote textarea { min-height: 56px; font-size: var(--fs-14); }
+.sx-screen--phone .sx-psheet__row .sx-act { min-height: var(--touch-min); font-size: var(--fs-14); }
+/* a match row's actions (social/AddFriend.tsx, audit 2 P-06): Add friend, and beside it Report / Block */
+.mf-row-actions { display: inline-flex; align-items: center; gap: var(--sp-1); margin-left: auto; flex: none; }
+.mf-addfriend { min-height: 36px; padding: 0 var(--sp-2); gap: var(--sp-1); white-space: nowrap; }
+.mf-addfriend .ic { width: 16px; height: 16px; }
+.mf-addfriend--sent { display: inline-flex; align-items: center; gap: 4px; }

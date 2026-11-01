@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Api, ApiError } from './api';
 import { ACTIONS, defaultBindings, keyLabel, rebind, sanitizeBindings, toKeyBindings, uiCodes, unbind } from './controls';
 import { SETTINGS_REV, intentFromLocation, roomSocketUrl, sanitizeSettings } from './controller';
-import { DEFAULT_SETTINGS } from './store';
+import { DEFAULT_SETTINGS, settingsTabs, shownSettingsTab } from './store';
 import { lobbyView, onlineMatchView, sameLobby, type OnlineSource } from './onlineView';
 import { encodeQr, qrSvgPath } from './qr';
 
@@ -309,5 +309,29 @@ describe('QR codes', () => {
     let h = 0x811c9dc5;
     for (const m of encodeQr('https://abc-def.trycloudflare.com/r/KQXMZP').modules) h = Math.imul(h ^ (m ? 1 : 0), 0x01000193);
     expect(h >>> 0).toMatchInlineSnapshot(`3876071400`);
+  });
+});
+
+describe("Settings' tabs (audit N-21)", () => {
+  const ids = (d: Parameters<typeof settingsTabs>[0]) => settingsTabs(d).map((t) => t.id);
+  it('one list, the same names on both layouts, the device in hand first', () => {
+    // a mouse-and-keyboard PC: no Touch, no Controller until a pad is used
+    expect(ids({ current: 'keyboard', touch: false, pad: false, phone: false })).toEqual(['controls', 'graphics', 'audio', 'accessibility', 'network', 'account', 'privacy']);
+    // a pad used: Controller, first while it's the device
+    expect(ids({ current: 'pad', touch: false, pad: true, phone: false })).toEqual(['controller', 'controls', 'graphics', 'audio', 'accessibility', 'network', 'account', 'privacy']);
+    expect(ids({ current: 'keyboard', touch: true, pad: true, phone: false })).toEqual(['controls', 'controller', 'touch', 'graphics', 'audio', 'accessibility', 'network', 'account', 'privacy']);
+    // a phone: Touch first, no keys tab; a pad there gets Controller (it was "Pad")
+    expect(ids({ current: 'touch', touch: true, pad: false, phone: true })).toEqual(['touch', 'graphics', 'audio', 'accessibility', 'network', 'account', 'privacy']);
+    expect(ids({ current: 'touch', touch: true, pad: true, phone: true })).toEqual(['touch', 'controller', 'graphics', 'audio', 'accessibility', 'network', 'account', 'privacy']);
+    const labels = settingsTabs({ current: 'touch', touch: true, pad: true, phone: true }).map((t) => t.label);
+    expect(labels).toContain('Accessibility');
+    expect(labels).toContain('Controller');
+    expect(labels).not.toContain('Access');
+    expect(labels).not.toContain('Pad');
+  });
+  it('a tab this device hides opens its first', () => {
+    const tabs = settingsTabs({ current: 'keyboard', touch: false, pad: false, phone: false });
+    expect(shownSettingsTab('touch', tabs)).toBe('controls');
+    expect(shownSettingsTab('audio', tabs)).toBe('audio');
   });
 });

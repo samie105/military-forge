@@ -1,0 +1,38 @@
+/*
+ * The level where the player looks (shell/screens/Progress.tsx, audit 2 P-04, P-10): one line and a
+ * thin bar that fills once. Field Print: tokens only, no glow, no confetti.
+ */
+.mf-lvbar { display: block; height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--c-text) 18%, transparent); overflow: hidden; }
+.mf-lvbar i { display: block; height: 100%; width: 100%; background: var(--c-volt); transform: scaleX(var(--lv-fill, 0)); transform-origin: left center; transition: transform 900ms var(--ease-settle, ease-out); }
+@media (prefers-reduced-motion: reduce) { .mf-lvbar i { transition: none; } }
+html.mf-reduce-motion .mf-lvbar i { transition: none; }
+
+.mf-xp { display: grid; gap: var(--sp-2); margin-top: var(--sp-3); max-width: 520px; }
+.mf-xp__line { display: flex; align-items: center; flex-wrap: wrap; gap: 0 var(--sp-1); margin: 0; font-size: var(--fs-16); color: var(--c-text); }
+.mf-xp__line b { font-weight: var(--fw-black); }
+.mf-xp__up { margin-left: var(--sp-2); }
+.mf-xp--none { display: flex; align-items: center; gap: var(--sp-2); margin: var(--sp-3) 0 0; font-size: var(--fs-14); color: var(--c-muted); }
+
+/* Home: the chip's "Lv 3", the nameplate's line and bar */
+.mf-lv { font-size: var(--fs-14); font-weight: var(--fw-black); letter-spacing: .06em; color: var(--c-volt); white-space: nowrap; }
+.mf-lvline { display: grid; gap: 4px; width: min(100%, 280px); font-size: var(--fs-16); color: var(--c-text); }
+.me-chip .avatar--portrait { overflow: hidden; }
+
+/* Home: Last match and personal bests (P-10) */
+.mf-lastmatch { display: grid; gap: var(--sp-2); }
+.mf-lastmatch__line { margin: 0; font-size: var(--fs-16); color: var(--c-text); }
+.mf-lastmatch__bests { display: grid; gap: var(--sp-1); margin: 0; padding: 0; list-style: none; font-size: var(--fs-14); color: var(--c-muted); }
+.mf-lastmatch__bests li { display: flex; align-items: center; gap: var(--sp-2); }
+.mf-lastmatch__bests b { color: var(--c-text); }
+
+/* the phone: the avatar's level under it */
+.avatar.pm-av { position: relative; overflow: visible; }
+.pm-av__face { display: block; width: 100%; height: 100%; border-radius: 50%; overflow: hidden; }
+.pm-av .mf-lv { position: absolute; left: 50%; bottom: -6px; translate: -50% 0; padding: 0 4px; border-radius: 4px; background: var(--c-ink-950); font-size: 10px; line-height: 14px; }
+
+/* phone Results: the XP line stays one line and a hairline bar */
+.pm-res .mf-xp { margin-top: 0; gap: 3px; }
+.pm-res .mf-xp__line { font-size: calc(13px * var(--text-scale, 1)); }
+.pm-res .mf-xp__up { margin-left: 6px; font-size: 12px; }
+.pm-res .mf-lvbar { height: 4px; }
+.pm-res .mf-xp--none { margin: 0; font-size: 12px; }
