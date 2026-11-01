@@ -97,6 +97,8 @@ export interface PlayerTarget {
   pid?: number;
   look?: LookIds;
   place: ReportPlace;
+  /** a Lobby message being reported (place chat): the report keeps a copy of it */
+  messageId?: string;
 }
 
 /**
@@ -846,7 +848,7 @@ export class SocialController {
     const room = this.myRoom();
     const still = () => this.store.getState().sheet?.target === target;
     try {
-      await this.friends.report({ ...(target.id ? { id: target.id } : { name: target.name }), reason, place: target.place, ...(text ? { note: text } : {}), ...(room ? { room } : {}) });
+      await this.friends.report({ ...(target.id ? { id: target.id } : { name: target.name }), reason, place: target.place, ...(text ? { note: text } : {}), ...(room ? { room } : {}), ...(target.messageId ? { message: target.messageId } : {}) });
       if (still()) this.set({ sheet: { ...this.store.getState().sheet!, view: 'sent', sending: false, error: null } });
       return true;
     } catch (e) {
@@ -1006,6 +1008,7 @@ export function socialAllowed(p: { offline: boolean; minor?: boolean } | null): 
 export function reportErrorText(e: unknown): string {
   if (e instanceof ApiError && e.code === 'rate_limited') return "You've sent a lot of reports in the last hour. Try again later.";
   if (e instanceof ApiError && e.code === 'player_not_found') return "We couldn't find that player. They may have changed their name.";
+  if (e instanceof ApiError && e.code === 'message_not_found') return 'That message is gone already.';
   return friendErrorText(e);
 }
 

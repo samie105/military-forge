@@ -102,6 +102,11 @@ export interface Config {
    * free, with or without Flutterwave's keys (store/claims.ts), until the end date (ms; null = no end). Empty = none.
    */
   claims: { items: string[]; until: number | null };
+  /**
+   * The Lobby feed (lobby/): `freeText` (CHAT_FREE_TEXT, default off) lets players who pass the gate
+   * (lobby/gate.ts) type their own words; off, the feed takes quick chat only and the web shows no box.
+   */
+  chat: { freeText: boolean };
 }
 
 export interface AnalyticsConfig {
@@ -173,6 +178,7 @@ const EnvSchema = z.object({
   FLUTTERWAVE_API_URL: z.url({ protocol: /^https?$/, error: 'must be an http(s):// URL' }).optional(),
   STORE_CLAIMABLE: list.default([]),
   STORE_CLAIM_UNTIL: z.string().min(1).optional(),
+  CHAT_FREE_TEXT: bool.default(false),
 });
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
@@ -264,5 +270,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
         ? { secretKey: e.FLUTTERWAVE_SECRET_KEY, publicKey: e.FLUTTERWAVE_PUBLIC_KEY, webhookHash: e.FLUTTERWAVE_WEBHOOK_HASH, apiUrl: (e.FLUTTERWAVE_API_URL ?? FLUTTERWAVE_API_URL).replace(/\/+$/, '') }
         : null,
     claims: { items: [...new Set(e.STORE_CLAIMABLE)], until: claimUntil },
+    chat: { freeText: e.CHAT_FREE_TEXT },
   };
 }

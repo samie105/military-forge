@@ -78,6 +78,13 @@
       "when": 1793556711566,
       "tag": "0011_rooms_online",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793572320311,
+      "tag": "0012_lobby_feed",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,6 @@
 /** Redis/Valkey implementation of {@link Kv} (ioredis). */
 import { Redis } from 'ioredis';
-import type { Kv, ZEntry } from './kv';
+import type { Kv, StreamEntry, ZEntry } from './kv';
 
 // INCR, then start the window on the first hit only; one round trip, atomic.
 const INCR_WINDOW = `
@@ -84,6 +84,16 @@ export class RedisKv implements Kv {
 
   async expire(key: string, ttlMs: number): Promise<void> {
     await this.redis.pexpire(key, ttlMs);
+  }
+
+  async xadd(key: string, value: string, maxLen: number): Promise<string> {
+    return (await this.redis.xadd(key, 'MAXLEN', '~', maxLen, '*', 'v', value)) ?? '';
+  }
+
+  async xrevrange(key: string, count: number): Promise<StreamEntry[]> {
+    if (count <= 0) return [];
+    const rows = await this.redis.xrevrange(key, '+', '-', 'COUNT', count);
+    return rows.map(([id, fields]) => ({ id, value: fields[fields.indexOf('v') + 1] ?? '' }));
   }
 
   async ping(): Promise<boolean> {

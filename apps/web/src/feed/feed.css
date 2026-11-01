@@ -1,0 +1,187 @@
+/*
+ * The Lobby feed (feed/LobbyFeed.tsx): the friends panel's drawer and rows (social.css) plus these.
+ * Field Print tokens only; desktop sizes are 1920×1080 design px, phone sizes 812×375 (--phone-fit).
+ * New lines rise in by P3; under Reduce motion they only fade (kit.css).
+ */
+
+/* ---- the top bar's button and its unread dot ---- */
+.lf-btn { position: relative; flex: none; gap: var(--sp-2); }
+.lf-btn .ic { width: var(--ic); height: var(--ic); }
+.lf-btn__word { font-size: var(--fs-16); font-weight: var(--fw-black); letter-spacing: var(--ls-label); text-transform: uppercase; }
+.lf-btn--phone { min-height: 44px; width: 44px; }
+.lf-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--c-volt);
+  border: 2px solid var(--c-ink-950);
+}
+
+/* ---- the drawer ---- */
+.lf-drawer { width: 720px; }
+.lf-sub { margin-top: calc(var(--sp-2) * -1); }
+
+/* Fight night: brass, pinned */
+.lf-fight {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  background: color-mix(in srgb, var(--c-brass) 10%, var(--c-ink-850));
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c-brass) 55%, transparent);
+  border-radius: 0 var(--r-lg) 0 var(--r-lg);
+}
+.lf-fight.is-live { background: color-mix(in srgb, var(--c-volt) 10%, var(--c-ink-850)); box-shadow: inset 0 0 0 1.5px var(--c-volt-line); }
+.lf-fight__mark { display: grid; place-items: center; flex: none; width: 48px; height: 48px; border-radius: 50%; background: var(--c-brass); color: var(--c-brass-ink); }
+.lf-fight.is-live .lf-fight__mark { background: var(--c-volt); color: var(--c-volt-ink); }
+.lf-fight__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.lf-fight__title { font-size: var(--fs-28); color: var(--c-text); line-height: var(--lh-tight); }
+.lf-fight__line { font-size: var(--fs-14); font-weight: var(--fw-semi); color: var(--c-muted); }
+.lf-fight__acts { display: flex; flex-wrap: wrap; gap: var(--sp-2); justify-content: flex-end; }
+
+/* the lines */
+.lf-list { margin: 0; padding: 0 var(--sp-1) 0 0; list-style: none; gap: var(--sp-2); outline: none; }
+.lf-list:focus-visible { box-shadow: 0 0 0 2px var(--c-focus); border-radius: var(--r-xs); }
+.lf-item { display: block; }
+.lf-empty { list-style: none; }
+
+.lf-card, .lf-msg { display: flex; align-items: flex-start; gap: var(--sp-3); padding: var(--sp-3); border-radius: var(--r-xs); }
+.lf-card { background: var(--c-ink-850); box-shadow: inset 0 0 0 1.5px var(--c-line); }
+.lf-card--room_posted { box-shadow: inset 0 0 0 1.5px var(--c-volt-line); }
+.lf-card--welcome { background: color-mix(in srgb, var(--c-ok) 7%, var(--c-ink-850)); }
+.lf-card__mark { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: var(--r-xs); background: var(--c-ink-700); color: var(--c-volt); }
+.lf-card--match_result .lf-card__mark, .lf-card--level_up .lf-card__mark { color: var(--c-brass); }
+.lf-card--welcome .lf-card__mark { color: var(--c-ok); }
+.lf-card__body, .lf-msg__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.lf-card__line { font-size: var(--fs-18); color: var(--c-text); }
+.lf-card__line b, .lf-msg__who { font-weight: var(--fw-black); }
+.lf-card__sub { font-size: var(--fs-14); font-weight: var(--fw-semi); color: var(--c-muted); }
+.lf-card__acts { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-1); }
+
+.lf-msg { background: var(--c-ink-800); }
+.lf-msg--mine { background: color-mix(in srgb, var(--c-volt) 6%, var(--c-ink-800)); }
+.lf-msg .avatar { width: 40px; height: 40px; flex: none; }
+.lf-msg__head { display: flex; align-items: baseline; gap: var(--sp-2); }
+.lf-msg__who { font-size: var(--fs-16); color: var(--c-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lf-msg__time { font-size: var(--fs-14); color: var(--c-muted-2); white-space: nowrap; }
+.lf-msg__to { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-14); color: var(--c-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lf-msg__to .ic { flex: none; }
+.lf-msg__text { font-size: var(--fs-20); font-weight: var(--fw-semi); color: var(--c-text); overflow-wrap: anywhere; }
+.lf-msg__text--emote { font-size: var(--fs-36); line-height: 1; }
+.lf-msg__acts { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-1); }
+.lf-msg__side { display: flex; align-items: center; gap: var(--sp-1); flex: none; }
+
+/* a one-tap reply: a small paper tab */
+.lf-chip {
+  min-height: 40px;
+  padding: 0 var(--sp-3);
+  border: 1.5px solid var(--c-line-strong);
+  border-radius: var(--r-pill);
+  background: var(--c-ink-700);
+  color: var(--c-text);
+  font: var(--fw-bold) var(--fs-14)/1 var(--f-ui);
+  white-space: nowrap;
+  flex: none;
+  cursor: pointer;
+}
+.lf-chip:hover:not(:disabled) { border-color: var(--c-volt-line); }
+.lf-chip:focus-visible, .lf-phrase:focus-visible { outline: 3px solid var(--c-focus); outline-offset: 2px; }
+.lf-chip:disabled, .lf-phrase:disabled { opacity: .55; cursor: default; }
+
+.lf-quiet { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); color: var(--c-muted); font-size: var(--fs-14); font-weight: var(--fw-semi); list-style: none; }
+.lf-trouble { align-items: center; }
+.lf-trouble span { flex: 1; }
+
+/* saying something */
+.lf-compose { display: flex; flex-direction: column; gap: var(--sp-2); padding-top: var(--sp-2); border-top: 1.5px solid var(--c-line); }
+.lf-compose__row { display: flex; align-items: center; gap: var(--sp-3); }
+.lf-compose__open { min-height: 48px; }
+.lf-compose__chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); min-width: 0; }
+.lf-notice { margin: 0; }
+.lf-muted { display: flex; align-items: flex-start; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border-radius: var(--r-xs); background: color-mix(in srgb, var(--c-warn) 10%, var(--c-ink-850)); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c-warn) 60%, transparent); color: var(--c-text); font-size: var(--fs-16); }
+.lf-muted .ic { color: var(--c-warn); flex: none; }
+.lf-rules { display: flex; align-items: center; gap: var(--sp-3); }
+.lf-type { display: flex; gap: var(--sp-2); }
+.lf-type__input {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 var(--sp-3);
+  background: var(--c-paper);
+  color: var(--c-paper-text);
+  border: var(--bw) solid var(--c-ink-950);
+  border-radius: var(--r-xs);
+  font: var(--fw-semi) var(--fs-16)/1 var(--f-ui);
+}
+.lf-type__input:focus-visible { outline: 3px solid var(--c-focus); outline-offset: 2px; }
+
+.lf-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.lf-mutelist { flex-basis: 100%; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--sp-1); }
+.lf-mutelist li { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); padding: 0 var(--sp-3); background: var(--c-ink-800); border-radius: var(--r-xs); font-size: var(--fs-16); }
+.lf-hidden-note { flex-basis: 100%; margin: 0; }
+
+/* ---- the quick chat sheet: over the drawer's foot ---- */
+.lf-sheet-wrap { position: absolute; inset: 0; pointer-events: auto; }
+.lf-sheet {
+  position: absolute;
+  right: var(--sp-6);
+  bottom: var(--sp-6);
+  width: 760px;
+  max-height: calc(100% - var(--sp-10));
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  overflow-y: auto;
+}
+.lf-sheet__title { font-size: var(--fs-36); color: var(--c-text); }
+.lf-sheet__to { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lf-phrases { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-2); }
+.lf-emotes { display: flex; gap: var(--sp-2); }
+.lf-phrase {
+  min-height: 52px;
+  padding: 0 var(--sp-3);
+  border: 1.5px solid var(--c-line-strong);
+  border-radius: var(--r-xs);
+  background: var(--c-ink-800);
+  color: var(--c-text);
+  font: var(--fw-bold) var(--fs-16)/1.1 var(--f-ui);
+  text-align: left;
+  cursor: pointer;
+}
+.lf-phrase:hover:not(:disabled) { border-color: var(--c-volt-line); background: var(--c-ink-700); }
+.lf-phrase--emote { flex: 1; text-align: center; font-size: var(--fs-28); }
+
+/* ---- phones (812×375) ---- */
+.sx-screen--phone .lf-drawer { width: 520px; }
+.sx-screen--phone .lf-fight { gap: 8px; padding: 6px 8px; }
+.sx-screen--phone .lf-fight__mark { width: 32px; height: 32px; }
+.sx-screen--phone .lf-fight__title { font-size: var(--fs-20); }
+.sx-screen--phone .lf-fight__line { font-size: 11px; }
+.sx-screen--phone .lf-card, .sx-screen--phone .lf-msg { gap: 8px; padding: 6px 8px; }
+.sx-screen--phone .lf-card__mark { width: 28px; height: 28px; }
+.sx-screen--phone .lf-card__mark .ic { width: var(--ic-sm); height: var(--ic-sm); }
+.sx-screen--phone .lf-msg .avatar { width: 28px; height: 28px; }
+.sx-screen--phone .lf-card__line { font-size: var(--fs-14); }
+.sx-screen--phone .lf-card__sub, .sx-screen--phone .lf-msg__time, .sx-screen--phone .lf-msg__to { font-size: 11px; }
+.sx-screen--phone .lf-msg__who { font-size: var(--fs-14); }
+.sx-screen--phone .lf-msg__text { font-size: var(--fs-16); }
+.sx-screen--phone .lf-msg__text--emote { font-size: var(--fs-28); }
+.sx-screen--phone .lf-chip { min-height: var(--touch-min); font-size: 12px; padding: 0 10px; }
+.sx-screen--phone .lf-compose { gap: 6px; padding-top: 6px; }
+.sx-screen--phone .lf-compose__row { gap: 6px; }
+.sx-screen--phone .lf-compose__open { min-height: var(--touch-min); }
+.sx-screen--phone .lf-compose__chips { flex-wrap: nowrap; overflow-x: auto; }
+.sx-screen--phone .lf-muted { font-size: var(--fs-14); padding: 8px; }
+.sx-screen--phone .lf-controls { gap: 6px; }
+.sx-screen--phone .lf-controls .sx-act { min-height: 36px; font-size: 11px; padding: 0 8px; }
+.sx-screen--phone .lf-msg__side .sx-act.btn--icon { width: 40px; min-height: 40px; }
+.sx-screen--phone .lf-msg__side .lf-chip { min-height: 40px; }
+.sx-screen--phone .lf-compose__open { padding: 0 12px; }
+.sx-screen--phone .lf-sheet { top: 0; bottom: 0; right: 0; width: 560px; max-height: none; gap: 7px; padding: max(10px, var(--safe-t)) max(var(--phone-notch), var(--safe-r)) max(10px, var(--safe-b)) 16px; border-radius: var(--r-lg) 0 0 var(--r-lg); }
+.sx-screen--phone .lf-sheet__title { font-size: var(--fs-24); }
+.sx-screen--phone .lf-phrase { min-height: var(--touch-min); font-size: 13px; padding: 0 8px; }
+.sx-screen--phone .lf-phrase--emote { font-size: var(--fs-24); }
+.sx-screen--phone .lf-phrases { gap: 6px; }

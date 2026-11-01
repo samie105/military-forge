@@ -1,7 +1,7 @@
 /**
  * Everything social that floats over the app (App.tsx mounts it once, after the overlays): the
  * friends panel, the invite picker, the invite toast, the friend request toast and the player sheet
- * (report, block, mute, remove: ReportSheet.tsx). It also opens the push channel while a signed-in,
+ * (report, block, mute, remove: ReportSheet.tsx) and the Lobby feed's panel (feed/). It also opens the push channel while a signed-in,
  * online, adult player is here. Nothing renders without one (an under-18 device trains only: audit-2
  * L-03), and voice chat mutes everyone the player blocked, in every room (L-10).
  */
@@ -14,12 +14,14 @@ import { RequestToast } from './RequestToast';
 import { useSocial } from './Squad';
 import { socialAllowed, socialOf } from './social';
 import { voiceChat } from '../voice/index';
+import { LobbyPanel, useFeed } from '../feed/LobbyFeed';
 import { VoiceHud } from '../voice/VoiceHud';
 import './social.css';
 import '../voice/voice.css';
 
 export function SocialLayer() {
   const social = useSocial();
+  const feed = useFeed();
   const ctl = useContext(ControllerContext);
   useEffect(() => {
     if (!social) return undefined;
@@ -44,6 +46,14 @@ export function SocialLayer() {
     const layers = [
       { key: 'friends', hash: '#/friends', open: () => social.store.getState().panel.open, close: () => social.closePanel() },
       { key: 'invite', hash: '', open: () => social.store.getState().picker, close: () => social.closePicker() },
+      // the Lobby feed (feed/): its own store
+      ...(feed
+        ? [
+            { key: 'lobby', hash: '#/lobby', open: () => feed.store.getState().open, close: () => feed.close() },
+            // its quick chat sheet: Back closes the sheet first
+            { key: 'lobby-chat', hash: '', open: () => feed.store.getState().picker !== null, close: () => feed.closePicker() },
+          ]
+        : []),
     ];
     const was = new Map(layers.map((l) => [l.key, false]));
     const sync = () => {
@@ -56,9 +66,15 @@ export function SocialLayer() {
       }
     };
     if (ctl.takeDeepLink('friends')) social.openPanel();
+    if (feed && ctl.takeDeepLink('lobby')) feed.open();
     sync();
-    return social.store.subscribe(sync);
-  }, [social, ctl]);
+    const offFeed = feed?.store.subscribe(sync);
+    const offSocial = social.store.subscribe(sync);
+    return () => {
+      offSocial();
+      offFeed?.();
+    };
+  }, [social, feed, ctl]);
   return (
     <>
       {/* voice chat works in any online room, local rooms with no account too */}
@@ -66,6 +82,7 @@ export function SocialLayer() {
       {social && (
         <>
           <FriendsPanel social={social} />
+          {feed && <LobbyPanel feed={feed} social={social} />}
           <InvitePicker social={social} />
           <InviteToast social={social} />
           <RequestToast social={social} />
@@ -95,3 +112,4 @@ export function LobbyInvite({ phone = false }: { phone?: boolean }) {
 }
 
 export { FriendsButton, PhoneSquad, SquadCard } from './Squad';
+export { LobbyButton } from '../feed/LobbyFeed';

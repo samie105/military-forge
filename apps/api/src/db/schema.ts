@@ -6,7 +6,7 @@
  * move time.
  */
 import { sql } from 'drizzle-orm';
-import { bigserial, boolean, check, index, integer, jsonb, pgTable, primaryKey, smallint, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { bigint, bigserial, boolean, check, index, integer, jsonb, pgTable, primaryKey, smallint, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 export const USER_STATUSES = ['active', 'banned', 'deleted'] as const;
 
@@ -52,6 +52,8 @@ export const users = pgTable(
      * with 'banned' is a ban for good. The session check (auth/sessions.ts) reads both.
      */
     bannedUntil: timestamp('banned_until', tz),
+    /** when they accepted the Lobby's chat rules (free text, lobby/gate.ts); null = not yet */
+    chatRulesAt: timestamp('chat_rules_at', tz),
   },
   (t) => [
     check('users_status_check', sql`${t.status} in ('active', 'banned', 'deleted')`),
@@ -388,11 +390,16 @@ export const playerReports = pgTable(
     handledAt: timestamp('handled_at', tz),
     /** what the owner did: rename, suspend, ban, dismiss, … */
     action: text('action'),
+    /** place 'chat': the Lobby message reported (chat_messages.id; plain, it may be deleted since) */
+    messageId: bigint('message_id', { mode: 'number' }),
+    /** place 'chat': the message as it was when reported (who, what, when), kept with the report */
+    snapshot: jsonb('snapshot').$type<Record<string, unknown>>(),
   },
   (t) => [
     index('player_reports_created_at_idx').on(t.createdAt),
     index('player_reports_target_id_idx').on(t.targetId, t.createdAt),
     index('player_reports_reporter_target_idx').on(t.reporterId, t.targetId, t.createdAt),
+    index('player_reports_message_id_idx').on(t.messageId),
     check('player_reports_reason_check', sql`${t.reason} in ('name', 'voice', 'cheating', 'spam', 'underage', 'other')`),
   ],
 );
@@ -414,6 +421,54 @@ export const moderationAudit = pgTable(
   },
   (t) => [index('moderation_audit_user_id_idx').on(t.userId, t.id), index('moderation_audit_at_idx').on(t.at)],
 );
+
+// ---------------------------------------------------------------- the Lobby feed (lobby/)
+
+export const CHAT_KINDS = ['chat', 'room_posted', 'match_result', 'welcome', 'level_up'] as const;
+export type ChatKind = (typeof CHAT_KINDS)[number];
+
+/**
+ * The Lobby feed (lobby/feed.ts, @military-forge/shared lobbyFeed.ts): players' messages and the system
+ * cards, kept 30 days (the retention sweep). A message is stored as its quick-chat id (`quick`), never
+ * its words; `body` holds free text only when CHAT_FREE_TEXT is on. `author_id` (a message, a room's
+ * host) and `subject_id` (the player a card is about) cascade, so Delete my data takes their lines and
+ * the cards that name them. `hidden_at`: hidden by reports (3 distinct, lobby/feed.ts); the owner's
+ * delete removes the row (the report keeps its snapshot, the moderation log its words).
+ */
+export const chatMessages = pgTable(
+  'chat_messages',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    kind: text('kind', { enum: CHAT_KINDS }).notNull(),
+    authorId: text('author_id').references(() => users.id, { onDelete: 'cascade' }),
+    subjectId: text('subject_id').references(() => users.id, { onDelete: 'cascade' }),
+    quick: text('quick'),
+    body: text('body'),
+    card: jsonb('card').$type<Record<string, unknown>>(),
+    replyTo: bigint('reply_to', { mode: 'number' }),
+    createdAt: timestamp('created_at', tz).notNull(),
+    hiddenAt: timestamp('hidden_at', tz),
+  },
+  (t) => [
+    index('chat_messages_created_at_idx').on(t.createdAt),
+    index('chat_messages_author_id_idx').on(t.authorId),
+    index('chat_messages_subject_id_idx').on(t.subjectId),
+    check('chat_messages_kind_check', sql`${t.kind} in ('chat', 'room_posted', 'match_result', 'welcome', 'level_up')`),
+  ],
+);
+
+/**
+ * The owner's chat mute (moderation.ts `chat_mute`): no Lobby messages until `until`, for `reason`.
+ * The muted player sees both (GET /lobby). One row per account; an unmute deletes it.
+ */
+export const chatMutes = pgTable('chat_mutes', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  until: timestamp('until', tz).notNull(),
+  reason: text('reason').notNull(),
+  at: timestamp('at', tz).notNull(),
+});
 
 // ---------------------------------------------------------------- the store (docs/17 §2, docs/06 §7)
 

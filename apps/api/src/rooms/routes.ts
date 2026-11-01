@@ -480,6 +480,7 @@ export function roomRoutes(deps: {
       kind: 'room_posted',
       code,
       hostName: name,
+      hostId: userId,
       mode: state?.teams ?? null,
       map: state?.map ?? null,
       people,

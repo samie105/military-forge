@@ -64,6 +64,16 @@ export const LIMITS = {
   playerReport: { name: 'playerreport', limit: 10, windowMs: 60 * 60_000 },
   /** push-channel connects per user (GET /events; one per tab every ~15 min, more on a bad network) */
   eventsConnect: { name: 'events', limit: 30, windowMs: 60_000 },
+  /**
+   * The Lobby feed (lobby/routes.ts): messages per account a minute and an hour (and one every 3 s,
+   * kept with a key of its own), per IP loosely (guest accounts are cheap to make), reads while the
+   * panel is open and its live stream's connects.
+   */
+  lobbyMinute: { name: 'lobbymin', limit: 10, windowMs: 60_000 },
+  lobbyHour: { name: 'lobbyhour', limit: 100, windowMs: 60 * 60_000 },
+  lobbyIp: { name: 'lobbyip', limit: 120, windowMs: 10 * 60_000 },
+  lobbyRead: { name: 'lobbyread', limit: 60, windowMs: 60_000 },
+  lobbyConnect: { name: 'lobbyev', limit: 30, windowMs: 60_000 },
   /** problem reports per IP (Send a report, and the automatic one a failed connection sends) */
   report: { name: 'report', limit: 6, windowMs: 10 * 60_000 },
   /**

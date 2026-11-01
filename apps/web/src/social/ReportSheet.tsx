@@ -30,6 +30,15 @@ export const REPORT_REASONS: readonly (readonly [ReportReason, string])[] = [
   ['other', 'Something else'],
 ];
 
+/** The reasons for a Lobby message (place chat): no voice there, and spam means the feed. */
+export const CHAT_REPORT_REASONS: readonly (readonly [ReportReason, string])[] = [
+  ['spam', 'Spamming the Lobby'],
+  ['name', 'Offensive name'],
+  ['cheating', 'Cheating'],
+  ['underage', 'Under 18'],
+  ['other', 'Something else'],
+];
+
 /** What the sheet says once a report is in: nothing the owner can't keep. */
 export const REPORT_THANKS = "Thanks. We read every report and act on the ones that break the rules. We won't tell them it was you.";
 export const BLOCK_LINE = "They won't be told, and can't see you or reach you. You won't hear them in any room.";
@@ -234,8 +243,8 @@ function ReportForm({ social, target }: { social: SocialController; target: Play
       }}
     >
       <fieldset className="sx-reasons">
-        <legend className="sx-note">What did {target.name} do?</legend>
-        {REPORT_REASONS.map(([id, label]) => (
+        <legend className="sx-note">{target.messageId ? `What's wrong with ${target.name}'s message?` : `What did ${target.name} do?`}</legend>
+        {(target.place === 'chat' ? CHAT_REPORT_REASONS : REPORT_REASONS).map(([id, label]) => (
           <label key={id} className={`sx-reason${reason === id ? ' is-on' : ''}`}>
             <input type="radio" name="sx-reason" value={id} checked={reason === id} onChange={() => setReason(id)} />
             <span>{label}</span>

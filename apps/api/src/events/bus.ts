@@ -7,8 +7,12 @@
  * process), so several API processes behind one proxy deliver to whichever holds the stream.
  * Events are fire-and-forget: a player with no stream open misses them and catches up from the
  * REST routes (GET /friends, GET /invites) when they next look.
+ *
+ * Topics (the Lobby feed, lobby/): a broadcast to every stream that listens to a topic, whoever it
+ * belongs to. Valkey carries them on `tp:{topic}` (the same subscriber connection, a second pattern).
+ * Only open feed panels listen (GET /lobby/events), so a phone on Home pays nothing for them.
  */
-import type { LobbyFeedEvent } from '@military-forge/shared';
+import type { LobbyStreamEvent } from '@military-forge/shared';
 import { quietRedisErrors } from '../kv/redis';
 import { Redis } from 'ioredis';
 
@@ -25,11 +29,14 @@ export type SocialEvent =
   /** your invite was answered */
   | { type: 'invite_answered'; id: string; to: string; answer: 'accepted' | 'declined' }
   /** your party changed (someone joined or left): reload it */
-  | { type: 'party' }
-  /** the Lobby feed (on the LOBBY_FEED_TOPIC, not a player's own stream): a host posted their room (lobby/feed.ts) */
-  | { type: 'lobby_feed'; event: LobbyFeedEvent };
+  | { type: 'party' };
+// the Lobby feed's lines (a posted room among them) go out on a topic: TopicEvent below
 
 export type Listener = (event: SocialEvent) => void;
+
+/** What a topic carries (only the Lobby feed's so far). */
+export type TopicEvent = LobbyStreamEvent;
+export type TopicListener = (event: TopicEvent) => void;
 
 export interface EventBus {
   publish(userId: string, event: SocialEvent): Promise<void>;
@@ -37,7 +44,36 @@ export interface EventBus {
   subscribe(userId: string, listener: Listener): () => void;
   /** How many streams this process holds for a player (a cap per player). */
   listeners(userId: string): number;
+  /** To everyone listening to `topic`, on any API process. */
+  publishTopic(topic: string, event: TopicEvent): Promise<void>;
+  /** Listen to a topic; returns the stop. */
+  subscribeTopic(topic: string, listener: TopicListener): () => void;
   close(): Promise<void>;
+}
+
+/** Topic listeners in this process. */
+class Topics {
+  private readonly byTopic = new Map<string, Set<TopicListener>>();
+
+  add(topic: string, listener: TopicListener): () => void {
+    let set = this.byTopic.get(topic);
+    if (!set) this.byTopic.set(topic, (set = new Set()));
+    set.add(listener);
+    return () => {
+      set.delete(listener);
+      if (!set.size) this.byTopic.delete(topic);
+    };
+  }
+
+  deliver(topic: string, event: TopicEvent): void {
+    for (const l of this.byTopic.get(topic) ?? []) {
+      try {
+        l(event);
+      } catch {
+        /* one broken stream never stops the others */
+      }
+    }
+  }
 }
 
 class Local {
@@ -70,6 +106,15 @@ class Local {
 
 export class MemoryBus implements EventBus {
   private readonly local = new Local();
+  private readonly topics = new Topics();
+
+  async publishTopic(topic: string, event: TopicEvent): Promise<void> {
+    this.topics.deliver(topic, event);
+  }
+
+  subscribeTopic(topic: string, listener: TopicListener): () => void {
+    return this.topics.add(topic, listener);
+  }
 
   async publish(userId: string, event: SocialEvent): Promise<void> {
     this.local.deliver(userId, event);
@@ -89,31 +134,35 @@ export class MemoryBus implements EventBus {
 /** Valkey pub/sub: one publisher connection, one subscriber connection per process. */
 export class RedisBus implements EventBus {
   private readonly local = new Local();
+  private readonly topics = new Topics();
   private readonly pub: Redis;
   private readonly sub: Redis;
   private readonly prefix: string;
+  private readonly topicPrefix: string;
 
   /** @param prefix channel prefix (tests on a shared Valkey get their own) */
   constructor(url: string, prefix = '') {
     this.prefix = `${prefix}ev:`;
+    this.topicPrefix = `${prefix}tp:`;
     this.pub = new Redis(url, { maxRetriesPerRequest: 1, connectTimeout: 5_000, lazyConnect: true });
     this.sub = new Redis(url, { connectTimeout: 5_000, lazyConnect: true });
     quietRedisErrors(this.pub, 'events (publish)');
     quietRedisErrors(this.sub, 'events (subscribe)');
     this.sub.on('pmessage', (_pattern: string, channel: string, message: string) => {
-      let event: SocialEvent;
+      let event: SocialEvent | TopicEvent;
       try {
-        event = JSON.parse(message) as SocialEvent;
+        event = JSON.parse(message) as SocialEvent | TopicEvent;
       } catch {
         return;
       }
-      this.local.deliver(channel.slice(this.prefix.length), event);
+      if (channel.startsWith(this.topicPrefix)) this.topics.deliver(channel.slice(this.topicPrefix.length), event as TopicEvent);
+      else this.local.deliver(channel.slice(this.prefix.length), event as SocialEvent);
     });
   }
 
   async connect(): Promise<this> {
     await Promise.all([this.pub.connect(), this.sub.connect()]);
-    await this.sub.psubscribe(`${this.prefix}*`);
+    await this.sub.psubscribe(`${this.prefix}*`, `${this.topicPrefix}*`);
     return this;
   }
 
@@ -127,6 +176,14 @@ export class RedisBus implements EventBus {
 
   listeners(userId: string): number {
     return this.local.count(userId);
+  }
+
+  async publishTopic(topic: string, event: TopicEvent): Promise<void> {
+    await this.pub.publish(`${this.topicPrefix}${topic}`, JSON.stringify(event));
+  }
+
+  subscribeTopic(topic: string, listener: TopicListener): () => void {
+    return this.topics.add(topic, listener);
   }
 
   async close(): Promise<void> {

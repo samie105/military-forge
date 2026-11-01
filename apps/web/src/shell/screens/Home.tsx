@@ -19,7 +19,7 @@ import { useCtl } from '../context';
 import type { ShellStore } from '../store';
 import { Backdrop, Hint, Hints, NetPill, OFFLINE_LINE, SUSPENDED_LINE, takeCard } from './frame';
 import { MAP_CARDS, lobbyMaps } from './Lobby';
-import { FriendsButton, SquadCard } from '../../social/SocialLayer';
+import { FriendsButton, LobbyButton, SquadCard } from '../../social/SocialLayer';
 import { SavedAdsList } from '../../ads/SavedAds';
 import { NextOrders } from '../../tour/NextOrders';
 import { currentDevice } from '../../gamepad';
@@ -150,6 +150,7 @@ export function Home({ store }: { store: ShellStore }) {
           </nav>
           <span className="menu-top__spacer"></span>
           <InstallButton />
+          <LobbyButton />
           <FriendsButton />
           <NetPill offline={offline} />
           {/* the name chip opens your account (audit N-21: it looked like a button and did nothing) */}

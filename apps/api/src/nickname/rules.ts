@@ -71,7 +71,7 @@ function termPattern(term: string): string {
 
 const DIGITS_AT_ENDS = /^[0-9]+|[0-9]+$/g;
 
-class TermMatcher {
+export class TermMatcher {
   private readonly anywhere: RegExp | null;
   private readonly edge: RegExp | null;
   private readonly word: RegExp | null;

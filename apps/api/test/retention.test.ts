@@ -85,10 +85,10 @@ describe('the retention sweep', () => {
   it('works in batches until nothing old is left', async () => {
     const now = api.clock.now();
     const old = await Promise.all(Array.from({ length: 5 }, () => sessionWith({ expiresAt: now - 10 * DAY })));
-    expect(await sweepEndedSignIns(db, now, 2)).toEqual({ sessions: 5, emailLinks: 0, playerReports: 0, declines: 0 });
+    expect(await sweepEndedSignIns(db, now, 2)).toEqual({ sessions: 5, emailLinks: 0, playerReports: 0, declines: 0, chatMessages: 0 });
     expect(await sessionIds(old.map((s) => s.sessionId))).toEqual([]);
     // nothing left: a second run deletes nothing
-    expect(await sweepEndedSignIns(db, now, 2)).toEqual({ sessions: 0, emailLinks: 0, playerReports: 0, declines: 0 });
+    expect(await sweepEndedSignIns(db, now, 2)).toEqual({ sessions: 0, emailLinks: 0, playerReports: 0, declines: 0, chatMessages: 0 });
   });
 
   it('logs what went, and a failure is logged, never thrown out of the timer', async () => {
@@ -96,7 +96,7 @@ describe('the retention sweep', () => {
     const log = pino({ level: 'info' }, { write: (line: string) => void lines.push(JSON.parse(line) as Record<string, unknown>) });
     const now = api.clock.now();
     await sessionWith({ expiresAt: now - 9 * DAY });
-    expect(await runRetentionSweep(db, now, log)).toEqual({ sessions: 1, emailLinks: 0, playerReports: 0, declines: 0 });
+    expect(await runRetentionSweep(db, now, log)).toEqual({ sessions: 1, emailLinks: 0, playerReports: 0, declines: 0, chatMessages: 0 });
     expect(lines.at(-1)).toMatchObject({ retention: 'sweep', sessions: 1, emailLinks: 0, msg: 'old sign-in records, reports and declines deleted' });
     const broken = { select: () => { throw new Error('database down'); } } as unknown as Db;
     expect(await runRetentionSweep(broken, now, log)).toBeNull();

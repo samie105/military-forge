@@ -21,7 +21,7 @@ describe('tablesInCopyOrder', () => {
     const names = tablesInCopyOrder().map(getTableName);
     expect(names[0]).toBe('users');
     expect(names.indexOf('matches')).toBeLessThan(names.indexOf('match_players'));
-    expect(new Set(names)).toEqual(new Set(['users', 'identities', 'profiles', 'sessions', 'loadouts', 'matches', 'match_players', 'stats_lifetime', 'friendships', 'friend_requests', 'blocks', 'password_credentials', 'email_tokens', 'wallets', 'ledger', 'payments', 'inventory', 'store_audit', 'friend_request_declines', 'player_reports', 'moderation_audit']));
+    expect(new Set(names)).toEqual(new Set(['users', 'identities', 'profiles', 'sessions', 'loadouts', 'matches', 'match_players', 'stats_lifetime', 'friendships', 'friend_requests', 'blocks', 'password_credentials', 'email_tokens', 'wallets', 'ledger', 'payments', 'inventory', 'store_audit', 'friend_request_declines', 'player_reports', 'moderation_audit', 'chat_messages', 'chat_mutes']));
   });
 });
 

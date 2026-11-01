@@ -3,7 +3,9 @@
  * players reported about each other from the game's Report sheet, newest first, with who, about whom,
  * when, where and why. A report opens to the account's standing and the owner's actions on it, each
  * with a reason (kept in the moderation log): Rename (a generated name), Suspend 24 hours or 7 days,
- * Ban, Unban, Dismiss, Clear the under-18 mark, Close the account. Kept apart from Reports (the
+ * Ban, Unban, Dismiss, Clear the under-18 mark, Close the account; for the Lobby feed, Mute in the Lobby
+ * 24 hours or 7 days (the player sees the reason and the end), Unmute, and Delete a reported message
+ * (its words stay in the report's snapshot and the log). Kept apart from Reports (the
  * devices' automatic connection logs). A find box acts on an account nobody reported (an under-18
  * account a parent wrote about).
  */
@@ -32,23 +34,25 @@ export interface ModerationReport {
   action: string | null;
   reporter: { id: string; nickname: string | null };
   target: ModerationTarget;
+  /** a Lobby message (place chat): its id and the copy kept with the report */
+  message?: { id: string; snapshot: { text?: string; at?: string } | null } | null;
 }
 
 export interface ModerationHistory {
-  player: { id: string; nickname: string; standing: string; bannedUntil: string | null; minor: boolean; createdAt: string; lastSeenAt: string; level: number } | null;
+  player: { id: string; nickname: string; standing: string; bannedUntil: string | null; minor: boolean; createdAt: string; lastSeenAt: string; level: number; chatMute?: { until: string; reason: string } | null } | null;
   reports: ModerationReport[];
   reportsBy: number;
   audit: { id: number; at: string; actor: string; action: string; reason: string; detail: Record<string, unknown> }[];
 }
 
-export type ModerationAction = 'rename' | 'suspend' | 'ban' | 'unban' | 'dismiss' | 'clear_minor' | 'close';
+export type ModerationAction = 'rename' | 'suspend' | 'ban' | 'unban' | 'dismiss' | 'clear_minor' | 'close' | 'chat_mute' | 'chat_unmute' | 'delete_message';
 
 /** The reasons as the game's sheet words them. */
 export const REASON_LABELS: Readonly<Record<string, string>> = {
   name: 'Offensive name',
   voice: 'Abusive voice',
   cheating: 'Cheating',
-  spam: 'Spamming requests or invites',
+  spam: 'Spamming (requests, invites or the Lobby)',
   underage: 'Under 18',
   other: 'Something else',
 };
@@ -78,7 +82,8 @@ export function standingText(t: Pick<ModerationTarget, 'standing' | 'until'>): s
 export function reportLine(r: ModerationReport): string {
   const where = [r.place, r.room ? `room ${r.room}` : ''].filter(Boolean).join(' · ');
   const renamed = r.target.nickname && r.target.nickname !== r.target.name ? ` (now ${r.target.nickname})` : '';
-  return `${new Date(r.at).toLocaleString()} · ${REASON_LABELS[r.reason] ?? r.reason} · ${r.target.name}${renamed} · by ${r.reporter.nickname ?? 'a closed account'}${where ? ` · ${where}` : ''}`;
+  const said = r.message?.snapshot?.text ? ` · said “${r.message.snapshot.text}”` : '';
+  return `${new Date(r.at).toLocaleString()} · ${REASON_LABELS[r.reason] ?? r.reason} · ${r.target.name}${renamed} · by ${r.reporter.nickname ?? 'a closed account'}${where ? ` · ${where}` : ''}${said}`;
 }
 
 type El = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs?: Record<string, string>, ...children: (Node | string)[]) => HTMLElementTagNameMap[K];
@@ -138,7 +143,7 @@ export function moderationGroup(token: string, el: El): HTMLElement {
       'p',
       {},
       el('b', {}, p?.nickname ?? '(closed account)'),
-      ` · ${standing}${p?.minor ? ' · under 18' : ''}${p ? ` · level ${p.level} · since ${new Date(p.createdAt).toLocaleDateString()} · last seen ${new Date(p.lastSeenAt).toLocaleString()}` : ''} · ${id}`,
+      ` · ${standing}${p?.minor ? ' · under 18' : ''}${p?.chatMute ? ` · muted in the Lobby until ${new Date(p.chatMute.until).toLocaleString()}` : ''}${p ? ` · level ${p.level} · since ${new Date(p.createdAt).toLocaleDateString()} · last seen ${new Date(p.lastSeenAt).toLocaleString()}` : ''} · ${id}`,
     );
     const buttons = p
       ? el(
@@ -151,10 +156,25 @@ export function moderationGroup(token: string, el: El): HTMLElement {
           ...(p.standing === 'active' ? [act('ban', 'Ban', {}, true)] : [act('unban', 'Unban')]),
           act('dismiss', 'Dismiss reports'),
           ...(p.minor ? [act('clear_minor', 'Clear under 18')] : []),
+          ...(p.chatMute ? [act('chat_unmute', 'Unmute in Lobby')] : [act('chat_mute', 'Mute in Lobby 24 h', { hours: 24 }), act('chat_mute', 'Mute in Lobby 7 days', { hours: 168 })]),
           act('close', 'Close account', {}, true),
         )
       : el('p', { class: 'admin__note' }, 'This account was closed. Its reports and the log stay.');
-    const reports = h.reports.length ? el('ul', { class: 'admin__mod-list' }, ...h.reports.map((r) => el('li', {}, `${reportLine(r)}${r.note ? ` · “${r.note}”` : ''}${r.handledAt ? ` · ${r.action ?? 'handled'}` : ' · open'}`))) : el('p', { class: 'admin__note' }, 'No reports about this account.');
+    const reports = h.reports.length
+      ? el(
+          'ul',
+          { class: 'admin__mod-list' },
+          ...h.reports.map((r) =>
+            el(
+              'li',
+              {},
+              `${reportLine(r)}${r.note ? ` · “${r.note}”` : ''}${r.handledAt ? ` · ${r.action ?? 'handled'}` : ' · open'}`,
+              // a Lobby message: delete it for everyone (the report keeps its copy)
+              ...(p && r.message ? [' ', act('delete_message', 'Delete message', { message: r.message.id }, true)] : []),
+            ),
+          ),
+        )
+      : el('p', { class: 'admin__note' }, 'No reports about this account.');
     const log = h.audit.length
       ? el('ul', { class: 'admin__mod-list' }, ...h.audit.map((a) => el('li', {}, `${new Date(a.at).toLocaleString()} · ${a.action} · ${a.reason}${a.detail.nickname ? ` · now ${String(a.detail.nickname)}` : ''}${a.detail.until ? ` · until ${new Date(String(a.detail.until)).toLocaleString()}` : ''}`)))
       : el('p', { class: 'admin__note' }, 'Nothing done yet.');

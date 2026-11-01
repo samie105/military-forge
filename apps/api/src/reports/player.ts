@@ -9,6 +9,11 @@
  *        (the same reporter about the same player within a day: one report, the first one kept)
  *
  * The reported player is never told who reported them. Bots have no account, so they can't be reported.
+ *
+ * A Lobby message (place `chat`, `message`: its id): the report keeps a snapshot of the message as it
+ * was (who, what, when), so it survives the message being deleted; one report per reporter and
+ * message (not per player and day); and with enough distinct reports the message hides itself until
+ * the owner looks (lobby/feed.ts `reported`).
  */
 import { normalizeRoomCode } from '@military-forge/shared';
 import { and, eq, gt } from 'drizzle-orm';
@@ -23,6 +28,7 @@ import type { AppEnv } from '../http/context';
 import { ApiError, readJson } from '../http/errors';
 import { LIMITS, enforceRateLimit } from '../http/rateLimit';
 import type { Kv } from '../kv/kv';
+import { messageText } from '../lobby/feed';
 import { skeleton } from '../nickname/normalize';
 
 /** how long a player report is kept (the retention sweep) */
@@ -31,7 +37,7 @@ export const PLAYER_REPORT_TTL_MS = 180 * 86_400_000;
 export const REPORT_DEDUPE_MS = 86_400_000;
 export const REPORT_NOTE_MAX = 300;
 /** where the sheet can be opened (free text would be a second note) */
-export const REPORT_PLACES = ['scoreboard', 'lobby', 'results', 'deathcam', 'friends', 'search', 'recent', 'request', 'invite', 'comms', 'other'] as const;
+export const REPORT_PLACES = ['scoreboard', 'lobby', 'results', 'deathcam', 'friends', 'search', 'recent', 'request', 'invite', 'comms', 'chat', 'other'] as const;
 
 /** who: `id` (the friends panel's rows) or `name` (a room's rows), exactly one */
 const ReportBody = z
@@ -42,11 +48,19 @@ const ReportBody = z
     note: z.string().max(REPORT_NOTE_MAX).optional(),
     room: z.string().max(16).optional(),
     place: z.enum(REPORT_PLACES).optional(),
+    /** a Lobby message's id (place `chat`) */
+    message: z.string().regex(/^\d{1,18}$/).optional(),
   })
   .refine((b) => (b.id === undefined) !== (b.name === undefined), 'Say who: an id or a name');
 
-export function playerReportRoutes(deps: { db: Db; kv: Kv; auth: AuthService; now: () => number }): Hono<AppEnv> {
-  const { db, kv, auth, now } = deps;
+/** What the reports need from the Lobby feed (lobby/feed.ts LobbyFeed). */
+export interface ChatReports {
+  message(id: number): Promise<{ id: number; kind: string; authorId: string | null; quick: string | null; body: string | null; createdAt: Date; name: string | null } | null>;
+  reported(id: number): Promise<boolean>;
+}
+
+export function playerReportRoutes(deps: { db: Db; kv: Kv; auth: AuthService; now: () => number; chat?: ChatReports }): Hono<AppEnv> {
+  const { db, kv, auth, now, chat } = deps;
   const app = new Hono<AppEnv>();
   app.use(requireAuth(auth));
 
@@ -61,10 +75,25 @@ export function playerReportRoutes(deps: { db: Db; kv: Kv; auth: AuthService; no
     if (target.id === userId) throw new ApiError(400, 'cannot_report_self', "That's you");
 
     const at = now();
+    // a Lobby message: it must be this player's, and the report keeps it as it is now
+    let messageId: number | null = null;
+    let snapshot: Record<string, unknown> | null = null;
+    if (body.message !== undefined) {
+      const msg = chat ? await chat.message(Number(body.message)) : null;
+      if (!msg || msg.kind !== 'chat' || msg.authorId !== target.id) throw new ApiError(404, 'message_not_found', 'That message is gone');
+      messageId = msg.id;
+      snapshot = { messageId: msg.id, at: msg.createdAt.toISOString(), name: msg.name ?? target.nickname, quick: msg.quick, text: messageText(msg.quick, msg.body) };
+    }
     const [already] = await db
       .select({ id: playerReports.id })
       .from(playerReports)
-      .where(and(eq(playerReports.reporterId, userId), eq(playerReports.targetId, target.id), gt(playerReports.createdAt, new Date(at - REPORT_DEDUPE_MS))));
+      .where(
+        and(
+          eq(playerReports.reporterId, userId),
+          eq(playerReports.targetId, target.id),
+          messageId !== null ? eq(playerReports.messageId, messageId) : gt(playerReports.createdAt, new Date(at - REPORT_DEDUPE_MS)),
+        ),
+      );
     if (already) return c.json({ id: already.id, already: true });
 
     const note = body.note?.trim();
@@ -78,11 +107,14 @@ export function playerReportRoutes(deps: { db: Db; kv: Kv; auth: AuthService; no
         reason: body.reason,
         note: note ? note : null,
         room: room || null,
-        place: body.place ?? null,
+        place: messageId !== null ? 'chat' : (body.place ?? null),
         createdAt: new Date(at),
+        messageId,
+        snapshot,
       })
       .returning({ id: playerReports.id });
     c.get('log').info({ userId, reason: body.reason, place: body.place ?? null }, 'player reported');
+    if (messageId !== null && chat) await chat.reported(messageId).catch((err: unknown) => c.get('log').warn({ err }, 'lobby report check failed'));
     return c.json({ id: row!.id }, 201);
   });
 

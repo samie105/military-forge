@@ -4,16 +4,18 @@
  *   401 bad_signature … (the token)  ·  400 invalid_request (the body)  ·  404 when RESULTS_PUBLIC_KEY isn't set
  */
 import type { KeyObject } from 'node:crypto';
+import type { LobbyFeedPublisher } from '@military-forge/shared';
 import { Hono } from 'hono';
 import type { Db } from '../db/client';
 import type { AppEnv } from '../http/context';
 import { ApiError } from '../http/errors';
 import type { Leaderboards } from '../leaderboards/service';
+import { matchCards } from '../lobby/feed';
 import { MatchReportBody, checkReportAuth } from './report';
 import { recordMatch } from './service';
 
-export function matchRoutes(deps: { db: Db; key: KeyObject; leaderboards: Leaderboards; now: () => number }): Hono<AppEnv> {
-  const { db, key, leaderboards, now } = deps;
+export function matchRoutes(deps: { db: Db; key: KeyObject; leaderboards: Leaderboards; now: () => number; lobby?: LobbyFeedPublisher }): Hono<AppEnv> {
+  const { db, key, leaderboards, now, lobby } = deps;
   const app = new Hono<AppEnv>();
 
   app.post('/matches', async (c) => {
@@ -44,7 +46,9 @@ export function matchRoutes(deps: { db: Db; key: KeyObject; leaderboards: Leader
       result.players.map((p) => p.userId),
       Date.parse(report.endedAt),
     ).catch((err: unknown) => c.get('log').error({ err }, 'leaderboard update failed'));
-    return c.json(result, 201);
+    // the Lobby feed: the result, newcomers' welcomes, level milestones (post() never throws)
+    if (lobby) for (const card of matchCards(report, result.players, report.endedAt)) await lobby.post(card);
+    return c.json({ recorded: true, players: result.players.map(({ userId, xpGained, xp, level }) => ({ userId, xpGained, xp, level })) }, 201);
   });
 
   return app;

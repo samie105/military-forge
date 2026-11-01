@@ -27,6 +27,13 @@ export interface Kv {
   zrem(key: string, members: readonly string[]): Promise<void>;
   /** Sets a key's time to live (any kind of key). */
   expire(key: string, ttlMs: number): Promise<void>;
+  /**
+   * Streams (the Lobby feed, lobby/feed.ts): appends `value` and trims the stream to about `maxLen`
+   * entries (Valkey's `MAXLEN ~`); returns the entry's id.
+   */
+  xadd(key: string, value: string, maxLen: number): Promise<string>;
+  /** The newest `count` entries, newest first. */
+  xrevrange(key: string, count: number): Promise<StreamEntry[]>;
   ping(): Promise<boolean>;
   close(): Promise<void>;
 }
@@ -34,6 +41,11 @@ export interface Kv {
 export interface ZEntry {
   member: string;
   score: number;
+}
+
+export interface StreamEntry {
+  id: string;
+  value: string;
 }
 
 interface Entry {
@@ -47,6 +59,7 @@ export class MemoryKv implements Kv {
   readonly kind = 'memory';
   private readonly entries = new Map<string, Entry>();
   private readonly zsets = new Map<string, { members: Map<string, number>; expiresAt: number }>();
+  private readonly streams = new Map<string, { entries: StreamEntry[]; seq: number }>();
   private readonly sweepTimer: ReturnType<typeof setInterval>;
 
   constructor(private readonly now: () => number = Date.now, sweepEveryMs = 60_000) {
@@ -74,9 +87,10 @@ export class MemoryKv implements Kv {
 
   async del(key: string): Promise<boolean> {
     const existed = this.live(key) !== undefined || this.zset(key) !== undefined;
+    const stream = this.streams.delete(key);
     this.entries.delete(key);
     this.zsets.delete(key);
-    return existed;
+    return existed || stream;
   }
 
   async zadd(key: string, entries: readonly ZEntry[]): Promise<void> {
@@ -111,6 +125,20 @@ export class MemoryKv implements Kv {
     if (e) e.expiresAt = at;
     const z = this.zset(key);
     if (z) z.expiresAt = at;
+  }
+
+  async xadd(key: string, value: string, maxLen: number): Promise<string> {
+    let st = this.streams.get(key);
+    if (!st) this.streams.set(key, (st = { entries: [], seq: 0 }));
+    const id = `${this.now()}-${++st.seq}`;
+    st.entries.push({ id, value });
+    if (st.entries.length > maxLen) st.entries.splice(0, st.entries.length - maxLen);
+    return id;
+  }
+
+  async xrevrange(key: string, count: number): Promise<StreamEntry[]> {
+    const entries = this.streams.get(key)?.entries ?? [];
+    return entries.slice(Math.max(0, entries.length - count)).reverse();
   }
 
   private sorted(key: string): ZEntry[] {
@@ -149,6 +177,7 @@ export class MemoryKv implements Kv {
     clearInterval(this.sweepTimer);
     this.entries.clear();
     this.zsets.clear();
+    this.streams.clear();
   }
 
   sweep(): void {

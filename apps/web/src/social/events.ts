@@ -49,6 +49,8 @@ export class EventStream {
     /** the connection opened or dropped (the app catches up on what it missed when it opens) */
     private readonly onState: (connected: boolean) => void = () => {},
     private readonly doc: Pick<Document, 'visibilityState' | 'addEventListener'> | null = typeof document === 'undefined' ? null : document,
+    /** the stream's route (the Lobby feed's is /lobby/events) */
+    private readonly path = '/events',
   ) {
     this.doc?.addEventListener('visibilitychange', () => {
       if (this.running && this.doc?.visibilityState === 'visible' && !this.connected && this.retry) {
@@ -103,7 +105,7 @@ export class EventStream {
   private async once(): Promise<'expired' | 'failed'> {
     const abort = (this.abort = new AbortController());
     try {
-      const res = await this.api.stream('/events', abort.signal);
+      const res = await this.api.stream(this.path, abort.signal);
       if (!res.ok || !res.body) {
         await res.body?.cancel().catch(() => {});
         return 'failed';

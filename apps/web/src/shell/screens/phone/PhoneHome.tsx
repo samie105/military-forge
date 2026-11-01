@@ -10,7 +10,7 @@ import { Icon } from "../../../ui/Icon";
 import { useCtl, useServerPing } from "../../context";
 import type { ShellStore } from "../../store";
 import { PhoneScreen, rise } from "./layout";
-import { FriendsButton, PhoneSquad } from "../../../social/SocialLayer";
+import { FriendsButton, LobbyButton, PhoneSquad } from "../../../social/SocialLayer";
 import { SavedAdsList } from "../../../ads/SavedAds";
 import { InstallToast } from "../../../pwa/InstallToast";
 import { ConsentCard, useHomeAsk } from "../../../metrics/ConsentCard";
@@ -66,6 +66,7 @@ export function PhoneHome({ store }: { store: ShellStore }) {
           </span>
           <span className="menu-top__spacer"></span>
           <InstallButton inTopBar />
+          <LobbyButton phone />
           <FriendsButton phone />
           {offline ? (
             <span className="status status--warn pm-pill">

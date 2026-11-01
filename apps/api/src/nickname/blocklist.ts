@@ -56,3 +56,23 @@ export const BRAND_RESERVED: TermList & { exact: readonly string[] } = {
 
 /** Innocent words that contain an `anywhere` or `edge` term; cut out of the name before matching. */
 export const ALLOWLIST: readonly string[] = ['scunthorpe', 'shiitake'];
+
+/**
+ * The Lobby's free text (lobby/filter.ts, off unless CHAT_FREE_TEXT): `CHAT_REFUSE` turns a whole
+ * message away (hate slurs, sexual harm); everything in PROFANITY plus `CHAT_EXTRA` is masked word by
+ * word. CHAT_EXTRA is where Nigerian Pidgin, Yoruba, Igbo and Hausa insults go once a native speaker
+ * has reviewed them (the free text stays off until then); the same matching rules as above apply.
+ */
+export const CHAT_REFUSE: TermList = {
+  anywhere: ['nigger', 'nigga', 'faggot', 'pedophil', 'paedophil', 'molest', 'kkk', 'hitler'],
+  edge: [],
+  word: ['rape', 'rapist', 'pedo', 'paedo', 'nazi'],
+};
+
+export const CHAT_EXTRA: TermList = {
+  // Pidgin, Yoruba, Igbo, Hausa: empty until a native speaker reviews a list (PROFANITY already has
+  // ashawo and olosho). One word per entry, as it is spelled most often; the matcher folds the rest.
+  anywhere: [],
+  edge: [],
+  word: [],
+};

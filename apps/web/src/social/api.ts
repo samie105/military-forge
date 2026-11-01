@@ -64,10 +64,10 @@ export type RequestsFrom = 'anyone' | 'played' | 'code';
 export type ReportReason = 'name' | 'voice' | 'cheating' | 'spam' | 'underage' | 'other';
 
 /** Where the Report sheet was opened (apps/api REPORT_PLACES). */
-export type ReportPlace = 'scoreboard' | 'lobby' | 'results' | 'deathcam' | 'friends' | 'search' | 'recent' | 'request' | 'invite' | 'comms' | 'other';
+export type ReportPlace = 'scoreboard' | 'lobby' | 'results' | 'deathcam' | 'friends' | 'search' | 'recent' | 'request' | 'invite' | 'comms' | 'chat' | 'other';
 
 /** A report about a player: by account id (the friends panel's rows) or exact name (a room's rows). */
-export type PlayerReport = ({ id: string } | { name: string }) & { reason: ReportReason; note?: string; room?: string; place?: ReportPlace };
+export type PlayerReport = ({ id: string } | { name: string }) & { reason: ReportReason; note?: string; room?: string; place?: ReportPlace; /** a Lobby message (place chat) */ message?: string };
 
 export type RequestResult = { status: 'requested'; user: Person } | { status: 'friends'; friend: Friend };
 

@@ -41,10 +41,11 @@ import type { Logger } from './log';
 import { leaderboardRoutes, profileRoutes } from './leaderboards/routes';
 import { Leaderboards } from './leaderboards/service';
 import { loadoutRoutes } from './loadouts/routes';
+import { LobbyFeed } from './lobby/feed';
+import { lobbyRoutes } from './lobby/routes';
 import { matchRoutes } from './matches/routes';
 import { resultsPublicKey } from './matches/report';
 import { PresenceService, mePresenceRoutes, playerPresenceRoute } from './presence/presence';
-import { BusLobbyFeed } from './lobby/feed';
 import { onlineRoutes } from './online/routes';
 import { OnlineService, appearsOffline } from './online/service';
 import { roomStateRoutes } from './rooms/state';
@@ -212,6 +213,9 @@ export function createApp(deps: AppDeps) {
   const online = new OnlineService(db, kv, presence, friends, config.cosmeticGrants, now);
   const invites = new InviteService(db, kv, bus, friends, presence, party, now, online);
   app.route('/events', eventRoutes({ auth, kv, bus, now }));
+  // the Lobby feed on Home (lobby/): cards and quick chat; Rooms' Post to Lobby calls lobby.publish()
+  const lobby = new LobbyFeed(db, kv, bus, now, log);
+  app.route('/lobby', lobbyRoutes({ config, db, kv, auth, bus, feed: lobby, now }));
   app.route('/friends', friendRoutes({ config, db, kv, auth, friends }));
   app.route('/invites', inviteRoutes({ db, kv, auth, invites, now }));
   app.route('/party', partyRoutes({ db, kv, auth, party }));
@@ -221,7 +225,7 @@ export function createApp(deps: AppDeps) {
   const analytics = deps.analytics ?? new AnalyticsService(db, kv, config.analytics, log, now);
   if (config.resultsPublicKeyPem) {
     const key = resultsPublicKey(config.resultsPublicKeyPem);
-    app.route('/internal', matchRoutes({ db, key, leaderboards, now }));
+    app.route('/internal', matchRoutes({ db, key, leaderboards, now, lobby }));
     // the game server's per-match play stats (docs/16 §3.2), signed with the same key
     app.route('/internal/analytics', internalAnalyticsRoutes({ key, analytics, now }));
     // the rooms' heartbeat for the Rooms list (rooms/state.ts), signed with the same key
@@ -238,10 +242,10 @@ export function createApp(deps: AppDeps) {
   app.route('/nicknames', nicknameRoutes({ config, kv, auth, profiles }));
   // problem reports (Send a report, and a failed connection's own): kept 7 days, read by the owner; the bot check when it's on
   // a player's report about another player (the Report sheet, audit-2 L-01): Postgres, 180 days
-  app.route('/reports/player', playerReportRoutes({ db, kv, auth, now }));
+  app.route('/reports/player', playerReportRoutes({ db, kv, auth, now, chat: lobby }));
   app.route('/reports', reportRoutes({ config, kv, now, botCheck }));
   // the owner's moderation: player reports, rename, suspend, ban (audit-2 L-04)
-  app.route('/admin/moderation', adminModerationRoutes({ config, db, profiles, now, touched: (ids) => tell(ids, { type: 'friends' }), friendIds: (id) => friends.friendIds(id) }));
+  app.route('/admin/moderation', adminModerationRoutes({ config, db, profiles, now, touched: (ids) => tell(ids, { type: 'friends' }), friendIds: (id) => friends.friendIds(id), chat: lobby }));
   // the store (docs/17): off without Flutterwave's keys, but the owner's tools and ownership work either way
   const checkPassword = async (userId: string, password: string) => {
     const cred = await accounts.credentialOf(userId);
@@ -250,9 +254,8 @@ export function createApp(deps: AppDeps) {
   app.route('/store', storeRoutes({ config, db, kv, auth, wallet: store.wallet, payments: store.payments, flutterwave: store.flutterwave, claims: store.claims, checkPassword }));
   if (store.payments && store.flutterwave) app.route('/webhooks', flutterwaveWebhook({ payments: store.payments, flutterwave: store.flutterwave }));
   app.route('/admin/store', adminStoreRoutes({ config, db, wallet: store.wallet, payments: store.payments }));
-  // Post to Lobby goes to the Lobby feed (lobby/feed.ts; the feed itself is its own workstream)
-  const feed = new BusLobbyFeed(kv, bus, now);
-  app.route('/rooms', roomRoutes({ config, db, kv, auth, profiles, presence, party, feed, ticketKey: deps.ticketKey ?? null, now }));
+  // Post to Lobby goes into the Lobby feed (lobby/feed.ts) as a room_posted card
+  app.route('/rooms', roomRoutes({ config, db, kv, auth, profiles, presence, party, feed: lobby, ticketKey: deps.ticketKey ?? null, now }));
 
   app.notFound((c) => errorResponse(c, 404, 'not_found', `No route for ${c.req.method} ${c.req.path}`));
   app.onError((err, c) => {

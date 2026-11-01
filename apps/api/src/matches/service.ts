@@ -17,10 +17,17 @@ export interface RecordedPlayer {
   level: number;
 }
 
+/** What the Lobby feed's cards need too (lobby/feed.ts matchCards): never sent back to the game server. */
+export interface RecordedLine extends RecordedPlayer {
+  levelBefore: number;
+  /** this was the player's first recorded match (the welcome card) */
+  firstMatch: boolean;
+}
+
 export interface RecordResult {
   /** false: this match id was already recorded, nothing changed */
   recorded: boolean;
-  players: RecordedPlayer[];
+  players: RecordedLine[];
 }
 
 export async function recordMatch(db: Db, report: MatchReportBody, now: () => number): Promise<RecordResult> {
@@ -51,7 +58,7 @@ export async function recordMatch(db: Db, report: MatchReportBody, now: () => nu
       ? new Set((await tx.select({ id: users.id }).from(users).where(and(inArray(users.id, ids), eq(users.status, 'active')))).map((r) => r.id))
       : new Set<string>();
 
-    const out: RecordedPlayer[] = [];
+    const out: RecordedLine[] = [];
     for (const [userId, p] of lines) {
       if (!active.has(userId)) continue;
       const finished = !p.left;
@@ -84,7 +91,7 @@ export async function recordMatch(db: Db, report: MatchReportBody, now: () => nu
         playtimeS: finished ? report.durationS : 0,
       };
       const s = statsLifetime;
-      await tx
+      const [lifetime] = await tx
         .insert(s)
         .values({ userId, weaponId: ALL_WEAPONS, ...totals })
         .onConflictDoUpdate({
@@ -100,7 +107,8 @@ export async function recordMatch(db: Db, report: MatchReportBody, now: () => nu
             bestStreak: sql`greatest(${s.bestStreak}, ${totals.bestStreak})`,
             playtimeS: sql`${s.playtimeS} + ${totals.playtimeS}`,
           },
-        });
+        })
+        .returning({ matches: s.matches });
       for (const [source, kills] of Object.entries(p.killsBy)) {
         if (source === ALL_WEAPONS || kills <= 0) continue;
         await tx
@@ -116,7 +124,7 @@ export async function recordMatch(db: Db, report: MatchReportBody, now: () => nu
       if (!row) continue;
       const level = levelForXp(row.xp);
       await tx.update(profiles).set({ level }).where(eq(profiles.userId, userId));
-      out.push({ userId, xpGained, xp: row.xp, level });
+      out.push({ userId, xpGained, xp: row.xp, level, levelBefore: levelForXp(row.xp - xpGained), firstMatch: lifetime?.matches === 1 });
     }
     return { recorded: true, players: out };
   });

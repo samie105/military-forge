@@ -189,8 +189,11 @@ describe('Post to Lobby (POST /rooms/:code/post)', () => {
     await patch(host, code, { tag: 'new' });
     await beat([entry(code, { hostId: host.user.id, ids: [host.user.id], people: 2, bots: 2, seats: 6, teams: 2 })]);
     const heard: LobbyFeedEvent[] = [];
-    const stop = api.bus.subscribe(LOBBY_FEED_TOPIC, (e) => {
-      if (e.type === 'lobby_feed') heard.push(e.event);
+    const stop = api.bus.subscribeTopic(LOBBY_FEED_TOPIC, (e) => {
+      if (e.type === 'entry' && e.entry.kind === 'room_posted') {
+        const { id: _id, at, ...card } = e.entry;
+        heard.push({ ...card, at: Date.parse(at) });
+      }
     });
     const post = (p: SessionBody) => api.app.request(`/rooms/${code}/post`, json({}, bearer(p.accessToken)));
     expect(await errorOf(await post(other))).toBe('not_host');
@@ -199,7 +202,7 @@ describe('Post to Lobby (POST /rooms/:code/post)', () => {
     expect(await res.json()).toMatchObject({ posted: true, visibility: 'public' });
     await new Promise((r) => setTimeout(r, 20)); // a shared Valkey's pub/sub is a hop away
     stop();
-    expect(heard).toEqual([{ kind: 'room_posted', code, hostName: host.user.nickname, mode: 2, map: 'street-market', people: 2, bots: 2, seats: 6, tag: 'new', lang: null, at: api.clock.now() }]);
+    expect(heard).toEqual([{ kind: 'room_posted', code, hostName: host.user.nickname, hostId: host.user.id, mode: 2, map: 'street-market', people: 2, bots: 2, seats: 6, tag: 'new', lang: null, at: api.clock.now() }]);
     const again = await post(host);
     expect(again.status).toBe(429);
     expect(Number(again.headers.get('retry-after'))).toBeGreaterThan(0);

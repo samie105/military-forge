@@ -10,7 +10,7 @@
  * The 7 days keep the recent ones for working out what happened to a player's sign-in.
  *
  * Also (audit-2, 1 Nov): player reports (reports/player.ts) after 180 days, and remembered declined
- * friend requests (friends/service.ts) after 30. Nothing else is touched here: guest accounts,
+ * friend requests (friends/service.ts) after 30. The Lobby feed's lines (lobby/feed.ts) after 30 days. Nothing else is touched here: guest accounts,
  * matches, logs, the moderation log and play stats keep the retention they have.
  *
  * index.ts runs the sweep every hour (and once soon after the API starts), in batches so a big backlog
@@ -18,7 +18,8 @@
  */
 import { inArray, lt, or } from 'drizzle-orm';
 import type { Db } from '../db/client';
-import { friendRequestDeclines, emailTokens, playerReports, sessions } from '../db/schema';
+import { chatMessages, friendRequestDeclines, emailTokens, playerReports, sessions } from '../db/schema';
+import { CHAT_TTL_MS } from '../lobby/feed';
 import { DECLINE_MEMORY_MS } from '../friends/service';
 import { PLAYER_REPORT_TTL_MS } from '../reports/player';
 import type { Logger } from '../log';
@@ -37,6 +38,8 @@ export interface SweepResult {
   emailLinks: number;
   playerReports: number;
   declines: number;
+  /** the Lobby feed's lines */
+  chatMessages: number;
 }
 
 /** Deletes in batches of `batch` until none are left (or MAX_BATCHES); returns how many went. */
@@ -85,14 +88,23 @@ export async function sweepEndedSignIns(db: Db, now: number, batch = RETENTION_B
     .delete(friendRequestDeclines)
     .where(lt(friendRequestDeclines.at, new Date(now - DECLINE_MEMORY_MS)))
     .returning({ from: friendRequestDeclines.fromId });
-  return { sessions: sessionCount, emailLinks: linkCount, playerReports: reportCount, declines: declines.length };
+  const chatCount = await deleteInBatches(async () => {
+    const old = db
+      .select({ id: chatMessages.id })
+      .from(chatMessages)
+      .where(lt(chatMessages.createdAt, new Date(now - CHAT_TTL_MS)))
+      .limit(batch);
+    const gone = await db.delete(chatMessages).where(inArray(chatMessages.id, old)).returning({ id: chatMessages.id });
+    return gone.length;
+  }, batch);
+  return { sessions: sessionCount, emailLinks: linkCount, playerReports: reportCount, declines: declines.length, chatMessages: chatCount };
 }
 
 /** A sweep for the timer: logs what went (or why it failed), never throws. */
 export async function runRetentionSweep(db: Db, now: number, log: Logger): Promise<SweepResult | null> {
   try {
     const result = await sweepEndedSignIns(db, now);
-    if (result.sessions || result.emailLinks || result.playerReports || result.declines) log.info({ retention: 'sweep', ...result }, 'old sign-in records, reports and declines deleted');
+    if (result.sessions || result.emailLinks || result.playerReports || result.declines || result.chatMessages) log.info({ retention: 'sweep', ...result }, 'old sign-in records, reports and declines deleted');
     return result;
   } catch (err) {
     log.error({ err: err instanceof Error ? { name: err.name, message: err.message } : String(err) }, 'retention sweep failed');

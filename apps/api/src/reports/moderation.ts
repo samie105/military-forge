@@ -14,6 +14,11 @@
  *        clear_minor the under-18 mark goes (a wrong answer the player asked to correct)
  *        close       the account is deleted (an under-18 account, or the owner's call): name, friends,
  *                    progress; its reports and this log stay
+ *        chat_mute   no Lobby messages for `hours` (1–720, default 24); the player sees it, with the
+ *                    reason and the end time (GET /lobby)
+ *        chat_unmute the chat mute ends now
+ *        delete_message  `message` (a Lobby message of theirs) is deleted for everyone; its words stay
+ *                    in this log's detail and in the reports' snapshots
  *
  * Suspend and ban use users.status 'banned' (with banned_until for a suspension) and the session check
  * every request already makes (auth/sessions.ts), so they take effect on the player's next request. The
@@ -27,7 +32,8 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Config } from '../config';
 import { isUniqueViolation, type Db } from '../db/client';
-import { identities, moderationAudit, playerReports, profiles, users } from '../db/schema';
+import { chatMutes, identities, moderationAudit, playerReports, profiles, users } from '../db/schema';
+import { messageText } from '../lobby/feed';
 import { USER_ID } from '../friends/service';
 import type { AppEnv } from '../http/context';
 import { ApiError, readJson } from '../http/errors';
@@ -35,10 +41,10 @@ import type { ProfileService } from '../me/profiles';
 import { randomGuestNickname } from '../nickname/rules';
 import { ownerOnly } from './routes';
 
-export const MODERATION_ACTIONS = ['rename', 'suspend', 'ban', 'unban', 'dismiss', 'clear_minor', 'close'] as const;
+export const MODERATION_ACTIONS = ['rename', 'suspend', 'ban', 'unban', 'dismiss', 'clear_minor', 'close', 'chat_mute', 'chat_unmute', 'delete_message'] as const;
 export type ModerationAction = (typeof MODERATION_ACTIONS)[number];
 /** these close the account's open reports */
-const CLOSES_REPORTS: ReadonlySet<ModerationAction> = new Set(['rename', 'suspend', 'ban', 'dismiss', 'close']);
+const CLOSES_REPORTS: ReadonlySet<ModerationAction> = new Set(['rename', 'suspend', 'ban', 'dismiss', 'close', 'chat_mute', 'delete_message']);
 export const SUSPEND_MAX_HOURS = 720;
 const RENAME_ATTEMPTS = 8;
 
@@ -46,7 +52,15 @@ const ActionBody = z.strictObject({
   action: z.enum(MODERATION_ACTIONS),
   reason: z.string().trim().min(1).max(200),
   hours: z.number().int().min(1).max(SUSPEND_MAX_HOURS).optional(),
+  /** delete_message: the Lobby message's id */
+  message: z.string().regex(/^\d{1,18}$/).optional(),
 });
+
+/** What moderation needs from the Lobby feed (lobby/feed.ts LobbyFeed). */
+export interface ChatModeration {
+  message(id: number): Promise<{ id: number; kind: string; authorId: string | null; quick: string | null; body: string | null; createdAt: Date; hiddenAt: Date | null } | null>;
+  remove(id: number): Promise<boolean>;
+}
 
 export interface ModerationDeps {
   config: Config;
@@ -57,6 +71,8 @@ export interface ModerationDeps {
   touched?: (userIds: readonly string[]) => void;
   /** their friends, so a rename or a closed account reaches the friends' lists */
   friendIds?: (userId: string) => Promise<string[]>;
+  /** the Lobby feed: delete_message */
+  chat?: ChatModeration;
 }
 
 export function adminModerationRoutes(deps: ModerationDeps): Hono<AppEnv> {
@@ -88,7 +104,9 @@ export function adminModerationRoutes(deps: ModerationDeps): Hono<AppEnv> {
     if (!u) return null;
     const suspended = u.status === 'banned' && u.bannedUntil !== null && u.bannedUntil.getTime() > now();
     const standing = u.status === 'banned' ? (u.bannedUntil === null ? 'banned' : suspended ? 'suspended' : 'active') : u.status;
-    return { ...u, standing, createdAt: u.createdAt.toISOString(), lastSeenAt: u.lastSeenAt.toISOString(), bannedUntil: suspended ? iso(u.bannedUntil) : null };
+    const [mute] = await db.select({ until: chatMutes.until, reason: chatMutes.reason }).from(chatMutes).where(eq(chatMutes.userId, id));
+    const chatMute = mute && mute.until.getTime() > now() ? { until: mute.until.toISOString(), reason: mute.reason } : null;
+    return { ...u, standing, chatMute, createdAt: u.createdAt.toISOString(), lastSeenAt: u.lastSeenAt.toISOString(), bannedUntil: suspended ? iso(u.bannedUntil) : null };
   }
 
   /** Reports as the page lists them: who, about whom (then and now), when, where, why. */
@@ -105,6 +123,8 @@ export function adminModerationRoutes(deps: ModerationDeps): Hono<AppEnv> {
         place: playerReports.place,
         handledAt: playerReports.handledAt,
         action: playerReports.action,
+        messageId: playerReports.messageId,
+        snapshot: playerReports.snapshot,
         reporterId: playerReports.reporterId,
         reporterName: reporter.nickname,
         targetId: playerReports.targetId,
@@ -142,6 +162,7 @@ export function adminModerationRoutes(deps: ModerationDeps): Hono<AppEnv> {
         place: r.place,
         handledAt: iso(r.handledAt),
         action: r.action,
+        message: r.messageId === null ? null : { id: String(r.messageId), snapshot: r.snapshot },
         reporter: { id: r.reporterId, nickname: r.reporterName },
         target: {
           id: r.targetId,
@@ -232,6 +253,9 @@ export function adminModerationRoutes(deps: ModerationDeps): Hono<AppEnv> {
     const at = new Date(now());
     const detail: Record<string, unknown> = { before: { nickname: before.nickname, standing: before.standing, until: before.bannedUntil, minor: before.minor } };
     const friends = body.action === 'rename' || body.action === 'close' ? ((await deps.friendIds?.(id)) ?? []) : [];
+    // delete_message: theirs, and still there (checked before anything changes)
+    const msg = body.action === 'delete_message' ? (body.message !== undefined && deps.chat ? await deps.chat.message(Number(body.message)) : null) : null;
+    if (body.action === 'delete_message' && (!msg || msg.kind !== 'chat' || msg.authorId !== id)) throw new ApiError(404, 'message_not_found', 'No such message from this player');
 
     switch (body.action) {
       case 'rename':
@@ -257,6 +281,23 @@ export function adminModerationRoutes(deps: ModerationDeps): Hono<AppEnv> {
         break;
       case 'close':
         await db.delete(users).where(eq(users.id, id));
+        break;
+      case 'chat_mute': {
+        const hours = body.hours ?? 24;
+        const until = new Date(at.getTime() + hours * 3_600_000);
+        await db
+          .insert(chatMutes)
+          .values({ userId: id, until, reason: body.reason, at })
+          .onConflictDoUpdate({ target: chatMutes.userId, set: { until, reason: body.reason, at } });
+        Object.assign(detail, { hours, until: until.toISOString() });
+        break;
+      }
+      case 'chat_unmute':
+        await db.delete(chatMutes).where(eq(chatMutes.userId, id));
+        break;
+      case 'delete_message':
+        detail.message = { id: String(msg!.id), at: msg!.createdAt.toISOString(), quick: msg!.quick, text: messageText(msg!.quick, msg!.body), hidden: msg!.hiddenAt !== null };
+        await deps.chat!.remove(msg!.id);
         break;
     }
     if (CLOSES_REPORTS.has(body.action)) {
