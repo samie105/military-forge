@@ -6,8 +6,12 @@
 # STG (set: staging), API_PORT, GAME_PORT, ADMIN_PORT. Unset, they are production's.
 # One Caddy serves both: production owns /etc/caddy/Caddyfile (the global options, its site, and an
 # import of $SITES); staging writes only $SITES/staging.caddy. Neither deploy rewrites the other's site.
+# MF_OLD_HOSTS (production; deploy.sh): addresses the game has left. Each serves the moving page
+# (scripts/net-trial/moved, copied to $MOVED) that carries the player's browser data to $ORIGIN.
 # shellcheck disable=SC2154
 SITES=${MF_CADDY_SITES:-/etc/caddy/mf-env}
+OLD_HOSTS=${MF_OLD_HOSTS:-}
+MOVED=${MF_MOVED_DIR:-$(dirname "$PUB")/moved}
 
 # The Caddyfile (staging: its site alone), on stdout.
 site_caddyfile() {
@@ -90,7 +94,43 @@ site_caddyfile() {
 	}
 }
 EOF
+  [ -n "$stg" ] || site_old_hosts
   [ -n "$stg" ] || printf '\nimport %s/*.caddy\n' "$SITES"
+}
+
+# The old addresses' sites: the build's hashed files (a tab still open there), the moving page's
+# script and its worker (it retires the game's, whose cache would keep the old pages up), and the
+# moving page for every other path, so a room link (/r/CODE) arrives at the same room.
+site_old_hosts() {
+  local h
+  for h in $OLD_HOSTS; do
+    [ "$h" = "$HOST" ] && continue
+    printf '\n%s {\n' "$h"
+    [ "$TLS" = internal ] && printf '\ttls internal\n'
+    cat <<EOF
+	header {
+		Content-Security-Policy "default-src 'self'; style-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		X-Robots-Tag noindex
+	}
+	@moved path /moved.js /sw.js
+	route {
+		header Cache-Control no-cache
+		file_server /assets/* {
+			root $WEB
+		}
+		file_server @moved {
+			root $MOVED
+		}
+		rewrite * /index.html
+		file_server {
+			root $MOVED
+		}
+	}
+}
+EOF
+  done
 }
 
 # Writes /etc/caddy/Caddyfile and restarts Caddy, only when it changed (a restart drops every
@@ -140,10 +180,26 @@ site_fill() {
     [ -f "$WEB/$f" ] && sed -i "s#%ORIGIN%#$ORIGIN#g" "$WEB/$f"
   done
   sed -i 's#</head>#<meta name="mf-tune" content="host" /></head>#' "$WEB/index.html"
-  [ -n "${STG:-}" ] || return 0
+  [ -n "${STG:-}" ] || { site_moved; return 0; }
   for f in "$WEB"/*.html; do
     if grep -q '<meta name="robots"' "$f"; then sed -i 's#<meta name="robots" content="[^"]*"#<meta name="robots" content="noindex, nofollow"#g' "$f"
     else sed -i 's#</head>#<meta name="robots" content="noindex, nofollow" /></head>#' "$f"; fi
   done
   printf 'User-agent: *\nDisallow: /\n' >"$WEB/robots.txt"
+}
+
+# The moving page for the old addresses, filled in for this one, and the game page's list of them:
+# boot.js takes a hand-over only from a page whose referrer is one of them.
+site_moved() {
+  [ -n "$OLD_HOSTS" ] || return 0
+  local h f src=${MF_MOVED_SRC:-$SRC/scripts/net-trial/moved}
+  mkdir -p "$MOVED"
+  for f in index.html moved.js sw.js; do
+    sed -e "s#%NEW_ORIGIN%#$ORIGIN#g" -e "s#%NEW_HOST%#$HOST#g" "$src/$f" >"$MOVED/$f.new" && mv "$MOVED/$f.new" "$MOVED/$f"
+  done
+  chmod 0755 "$MOVED"
+  chmod 0644 "$MOVED"/*
+  for h in $OLD_HOSTS; do
+    [ "$h" = "$HOST" ] || sed -i "s#</head>#<meta name=\"mf-moved-from\" content=\"https://$h\" /></head>#" "$WEB/index.html"
+  done
 }

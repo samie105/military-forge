@@ -6,7 +6,7 @@
  */
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
@@ -167,13 +167,38 @@ describe('deploy.sh', () => {
     git('fetch', '-q', 'public');
     assert.equal(run('promote.sh', [git('rev-parse', 'public/main')]).status, 0);
     let bin = stubs();
-    let r = run('deploy.sh', ['production'], { PATH: `${bin}:${process.env.PATH}`, MF_BOX: 'mf@10.0.0.1' });
+    let r = run('deploy.sh', ['production'], { PATH: `${bin}:${process.env.PATH}`, MF_BOX: 'mf@10.0.0.1', MF_PROD_HOST: '' });
     assert.equal(r.status, 0, r.out);
     assert.match(readFileSync(join(bin, 'ssh.log'), 'utf8'), /env MF_ENV=production MF_REF=production bash \/root\/mf-setup-production\.sh/);
     assert.match(r.out, /https:\/\/10-0-0-1\.sslip\.io\/ 200/);
     bin = stubs(1);
-    r = run('deploy.sh', ['production'], { PATH: `${bin}:${process.env.PATH}`, MF_BOX: 'mf@10.0.0.1' });
+    r = run('deploy.sh', ['production'], { PATH: `${bin}:${process.env.PATH}`, MF_BOX: 'mf@10.0.0.1', MF_PROD_HOST: '' });
     assert.notEqual(r.status, 0);
     assert.match(r.out, /setup failed \(rc=1\)/);
+  });
+  it("production on its own name: only once the name leads to the box, then the box's sslip.io address moves players there (1 Nov 2026)", () => {
+    const bin = stubs();
+    const dig = (ip) => {
+      writeFileSync(join(bin, 'dig'), `#!/bin/bash\nprintf '%s\\n' "$*" >>"${bin}/dig.log"\necho ${ip}\n`);
+      chmodSync(join(bin, 'dig'), 0o755);
+    };
+    const env = { PATH: `${bin}:${process.env.PATH}`, MF_BOX: 'mf@10.0.0.1', MF_PROD_HOST: 'play.example.test' };
+    dig('203.0.113.9');
+    let r = run('deploy.sh', ['production'], env);
+    assert.notEqual(r.status, 0);
+    assert.match(r.out, /play\.example\.test leads to '203\.0\.113\.9', not 10\.0\.0\.1: add its A record/);
+    assert.ok(!existsSync(join(bin, 'ssh.log')), 'nothing ran on the box');
+    dig('10.0.0.1');
+    r = run('deploy.sh', ['production'], env);
+    assert.equal(r.status, 0, r.out);
+    assert.match(readFileSync(join(bin, 'dig.log'), 'utf8'), /A play\.example\.test @1\.1\.1\.1/);
+    assert.match(readFileSync(join(bin, 'ssh.log'), 'utf8'), /env MF_ENV=production MF_REF=production MF_HOST=play\.example\.test MF_OLD_HOSTS=10-0-0-1\.sslip\.io bash \/root\/mf-setup-production\.sh/);
+    assert.match(r.out, /https:\/\/play\.example\.test\/ 200/);
+    assert.match(r.out, /production ok: https:\/\/play\.example\.test runs/);
+    // staging keeps the box's own address
+    r = run('deploy.sh', ['staging'], env);
+    assert.equal(r.status, 0, r.out);
+    assert.match(r.out, /https:\/\/staging\.10-0-0-1\.sslip\.io\/ 200/);
+    assert.match(readFileSync(join(bin, 'ssh.log'), 'utf8'), /env MF_ENV=staging MF_REF=main bash/);
   });
 });

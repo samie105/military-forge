@@ -8,6 +8,9 @@ DEV=${MF_DEV_REMOTE:-origin}
 PUB=${MF_PUBLIC_REMOTE:-public}
 BOX=${MF_BOX:-mf@40.123.240.224}
 BOX_KEY=${MF_BOX_KEY:-$HOME/.ssh/mf-azure}
+# production's address (the owner, 1 Nov 2026: a name under the studio's domain, whose DNS is at
+# name.com). Staging stays at staging.<box>.sslip.io. Empty: production on <box>.sslip.io as before.
+PROD_HOST=${MF_PROD_HOST-forgedforce.deet.studio}
 # the public repo's author: the owner's GitHub noreply address, never a personal one
 PUB_NAME=samie105
 PUB_EMAIL=42389790+samie105@users.noreply.github.com

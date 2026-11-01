@@ -6,7 +6,15 @@ Three places run the game. Code moves one way: **local → dev `main` → stagin
 |---|---|---|---|
 | **Local** | your machine: `pnpm dev`, `pnpm playtest --local` | your working tree | in memory / PGlite, thrown away |
 | **Staging** | https://staging.40-123-240-224.sslip.io | public repo `main` | its own database and Valkey, test data |
-| **Production** | https://40-123-240-224.sslip.io | public repo `production` | the players' |
+| **Production** | https://forgedforce.deet.studio | public repo `production` | the players' |
+
+**Production's address** is `PROD_HOST` in `scripts/release/lib.sh` (1 Nov 2026: a name under the
+studio's domain; its A record, at name.com, points at the VM). `deploy.sh production` refuses until the
+name leads to the VM, because Caddy couldn't get its certificate and the site would go dark. The VM's own
+address, https://40-123-240-224.sslip.io, then serves only a moving page (`scripts/net-trial/moved`):
+browsers keep a site's data per address, so it hands each player's sign-in and settings over to the
+new address once (`#mf-move=`, taken by `apps/web/public/boot.js` only from that page), keeps room links
+(`/r/CODE`) and retires the old service worker. Staging stays on the VM's own name.
 
 Staging and production share one Azure VM (2 vCPU, 4 GB) and cost nothing extra. Staging is the same
 build with a small "Staging" tag at the top of the screen, `noindex` on every page and response, and

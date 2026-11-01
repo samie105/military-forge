@@ -5,7 +5,8 @@
 # (/tmp/mf-deploy-<env>.log, 0600): it holds the admin token, so it is never printed here.
 # docs/release.md
 #   scripts/release/deploy.sh staging       # public main       -> https://staging.<box>.sslip.io
-#   scripts/release/deploy.sh production    # public production -> https://<box>.sslip.io
+#   scripts/release/deploy.sh production    # public production -> https://$PROD_HOST (lib.sh); the
+#                                           # box's own <box>.sslip.io then moves players there
 # shellcheck disable=SC1091
 . "$(dirname "$0")/lib.sh"
 env=${1:-}
@@ -28,12 +29,20 @@ fi
 ip=${BOX#*@}
 host=${ip//./-}.sslip.io
 [ "$env" = staging ] && host=staging.$host
+hosts=''
+if [ "$env" = production ] && [ -n "$PROD_HOST" ]; then
+  # Caddy can't get a certificate for a name that doesn't lead here yet: the site would go dark
+  resolved=$(dig +short A "$PROD_HOST" @1.1.1.1 2>/dev/null | tail -1)
+  [ "$resolved" = "$ip" ] || die "$PROD_HOST leads to '${resolved:-nothing}', not $ip: add its A record at the DNS host first"
+  hosts=" MF_HOST=$PROD_HOST MF_OLD_HOSTS=$host"
+  host=$PROD_HOST
+fi
 site=${MF_SITE:-https://$host}
 echo "deploying $env: $PUB/$branch ${c:0:7} ($(git log -1 --format=%s "$c")) on $BOX"
 ssh=(ssh -o BatchMode=yes -o ConnectTimeout=20 -i "$BOX_KEY" "$BOX")
 git show "$setup" | "${ssh[@]}" "sudo sh -c 'umask 077 && cat >/root/mf-setup-$env.sh'"
 # one deploy at a time on the box (both share apt, Caddy and Postgres)
-out=$("${ssh[@]}" "umask 077; sudo flock -w 1800 /run/mf-deploy.lock env MF_ENV=$env MF_REF=$branch bash /root/mf-setup-$env.sh >/tmp/mf-deploy-$env.log 2>&1; echo rc=\$?; grep -aE '^\[mf-trial [0-9:]+\] (commit |== )' /tmp/mf-deploy-$env.log | tail -4")
+out=$("${ssh[@]}" "umask 077; sudo flock -w 1800 /run/mf-deploy.lock env MF_ENV=$env MF_REF=$branch$hosts bash /root/mf-setup-$env.sh >/tmp/mf-deploy-$env.log 2>&1; echo rc=\$?; grep -aE '^\[mf-trial [0-9:]+\] (commit |== )' /tmp/mf-deploy-$env.log | tail -4")
 # the phase lines carry no secrets; the redaction is a second guard
 printf '%s\n' "$out" | sed -E 's/(#t=|token[=:/]|TOKEN=)[^ ]*/\1<hidden>/g'
 rc=$(printf '%s\n' "$out" | sed -n 's/^rc=\([0-9]*\)$/\1/p' | head -1)

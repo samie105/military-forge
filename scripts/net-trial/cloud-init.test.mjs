@@ -416,3 +416,46 @@ describe('site.sh: one Caddy for both environments', () => {
     }
   });
 });
+
+describe('site.sh: the game on a new address, the old one moving players there (1 Nov 2026)', () => {
+  const moved = { HOST: 'play.example.test', ORIGIN: 'https://play.example.test', MF_OLD_HOSTS: 'a-b.sslip.io' };
+  it('serves the old address as its own site: the build\'s hashed files, the moving page\'s script and worker, the moving page for the rest', () => {
+    const caddyfile = runSite('site_caddyfile', moved);
+    assert.match(caddyfile, /^play\.example\.test \{$/m);
+    const old = caddyfile.slice(caddyfile.indexOf('\na-b.sslip.io {\n'));
+    assert.ok(old.length > 1 && caddyfile.indexOf('\na-b.sslip.io {\n') > caddyfile.indexOf('play.example.test {'), 'after the game\'s site');
+    assert.ok(old.indexOf('a-b.sslip.io {') < old.indexOf('import /etc/caddy/mf-env/*.caddy'), 'before the staging import');
+    assert.match(old, /file_server \/assets\/\* \{\n\t\t\troot \/srv\/web\n/);
+    assert.match(old, /@moved path \/moved\.js \/sw\.js\n/);
+    assert.match(old, /file_server @moved \{\n\t\t\troot \/srv\/moved\n/);
+    assert.ok(old.indexOf('file_server @moved') < old.indexOf('rewrite * /index.html'));
+    assert.match(old, /X-Robots-Tag noindex/);
+    assert.doesNotMatch(old, /reverse_proxy/, 'no API or game there: the move comes first');
+    // no old address, or staging: no such site
+    assert.doesNotMatch(runSite('site_caddyfile'), /@moved/);
+    assert.doesNotMatch(runSite('site_caddyfile', { ...moved, STG: '1', HOST: 'staging.a-b.sslip.io' }), /@moved/);
+  });
+  it('fills the moving page in for the new address, and lists the old one on the game page for boot.js', async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const dir = mkdtempSync(join(tmpdir(), 'mf-moved-'));
+    const shim = 'sed() { if [ "$1" = -i ] && [ "$(uname)" = Darwin ]; then shift; command sed -i "" "$@"; else command sed "$@"; fi; }; ';
+    try {
+      const web = join(dir, 'web');
+      execFileSync('mkdir', ['-p', web]);
+      writeFileSync(join(web, 'index.html'), '<head><link href="%ORIGIN%/x"></head>');
+      runSite(`${shim}site_fill`, { ...moved, WEB: web, MF_MOVED_DIR: join(dir, 'moved'), MF_MOVED_SRC: join(here, 'moved') });
+      const page = readFileSync(join(dir, 'moved/index.html'), 'utf8');
+      const script = readFileSync(join(dir, 'moved/moved.js'), 'utf8');
+      assert.ok(page.includes('href="https://play.example.test/">play.example.test</a>') && !page.includes('%NEW_'));
+      assert.match(page, /<meta name="referrer" content="origin" \/>/);
+      assert.ok(script.includes("var to = 'https://play.example.test' + location.pathname + location.search;"));
+      assert.ok(readFileSync(join(dir, 'moved/sw.js'), 'utf8').includes('registration.unregister()'));
+      const index = readFileSync(join(web, 'index.html'), 'utf8');
+      assert.ok(index.includes('<meta name="mf-moved-from" content="https://a-b.sslip.io" />'));
+      assert.ok(index.includes('https://play.example.test/x'));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

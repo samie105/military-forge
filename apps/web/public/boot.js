@@ -9,7 +9,40 @@
  *     as soon as it's ready, Title.tsx) and About the game (a dialog: focus moves in, Tab stays in,
  *     Escape and Close shut it, focus goes back);
  *   - turns the loading screen's tips every 4 s and shows "Still loading" after 20 s.
+ *   - first of all, takes a player's browser data handed over by the game's old address (below).
  */
+
+// The game's old address hands a player's browser data over once (scripts/net-trial/moved): the
+// guest's sign-in and settings, in a #mf-move= fragment. Only from an address the server lists
+// (<meta name="mf-moved-from">, site.sh) as the referrer, and never over what this browser already
+// has here. Before the app's bundle, which reads them.
+(function () {
+  var h = location.hash;
+  if (h.indexOf('#mf-move=') !== 0) return;
+  try {
+    history.replaceState(history.state, '', location.pathname + location.search);
+  } catch {
+    // the fragment stays in the address; nothing else depends on it
+  }
+  var from = document.referrer;
+  var metas = document.querySelectorAll('meta[name="mf-moved-from"]');
+  var ok = false;
+  for (var i = 0; i < metas.length; i++) {
+    if (metas[i].content && from.indexOf(metas[i].content + '/') === 0) ok = true;
+  }
+  if (!ok) return;
+  try {
+    var data = JSON.parse(decodeURIComponent(h.slice(9)));
+    for (var k in data) {
+      if (Object.prototype.hasOwnProperty.call(data, k) && typeof data[k] === 'string' && localStorage.getItem(k) === null) {
+        localStorage.setItem(k, data[k]);
+      }
+    }
+  } catch {
+    // a broken hand-over or blocked storage: the player starts here as a new guest
+  }
+})();
+
 (function () {
   var root = document.documentElement;
   root.classList.add('mf-js');

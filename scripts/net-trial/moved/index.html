@@ -1,0 +1,25 @@
+<!doctype html>
+<!-- The game's old address (site.sh, MF_OLD_HOSTS): every page there is this one. moved.js hands the
+     player's browser data to the new address and goes there; %NEW_ORIGIN% is filled at deploy. The
+     referrer is the origin, so the new page can tell the hand-over came from here (boot.js). -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="origin" />
+    <meta name="robots" content="noindex" />
+    <title>Forged Force has a new address</title>
+    <style>
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding-inline: 16px; background: #0e100b; color: #f1ecdc; font: 17px/1.5 system-ui, sans-serif; text-align: center; }
+      h1 { font-size: 1.6rem; margin: 0 0 0.4rem; }
+      a { color: #d6ff3b; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Forged Force has a new address</h1>
+      <p>Taking you and your soldier to <a id="to" href="%NEW_ORIGIN%/">%NEW_HOST%</a>.</p>
+    </main>
+    <script src="/moved.js"></script>
+  </body>
+</html>
