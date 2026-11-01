@@ -19,7 +19,13 @@ PORT=${MF_GAME_PORT:-9001}
 log() { printf '[mf-restart %s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
 health() { curl -fs -o /dev/null -m 3 "http://127.0.0.1:$PORT/health"; }
 
-game_tree() { git -C "$SRC" rev-parse HEAD:apps/game-server HEAD:packages HEAD:pnpm-lock.yaml HEAD:package.json 2>/dev/null | sha256sum | cut -c1-16; }
+# staging's checkout belongs to its own user, and root's git refuses a tree it doesn't own unless told
+# it's safe. A tree it can't read prints nothing, and nothing never matches: the game restarts.
+game_tree() {
+  local ids
+  ids=$(git -c safe.directory="$SRC" -C "$SRC" rev-parse HEAD:apps/game-server HEAD:packages HEAD:pnpm-lock.yaml HEAD:package.json 2>/dev/null) || ids=''
+  [ -n "$ids" ] && printf '%s\n' "$ids" | sha256sum | cut -c1-16
+}
 
 restart_game() {
   local new old pid
@@ -27,7 +33,7 @@ restart_game() {
   old=$(cat "$DATA/game-tree" 2>/dev/null)
   if ! systemctl is-active -q "$GAME"; then
     systemctl restart "$GAME" || return 1
-  elif [ -n "$old" ] && [ "$new" = "$old" ]; then
+  elif [ -n "$new" ] && [ "$new" = "$old" ]; then
     log 'the game server is unchanged: not restarted (its matches play on)'
     return 0
   else
@@ -46,7 +52,7 @@ restart_game() {
   fi
   for _ in $(seq 120); do health && break; sleep 1; done
   health || return 1
-  echo "$new" >"$DATA/game-tree"
+  if [ -n "$new" ]; then echo "$new" >"$DATA/game-tree"; else rm -f "$DATA/game-tree"; fi
   log 'the game server runs the new code'
 }
 

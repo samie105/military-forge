@@ -72,6 +72,17 @@ describe('cloud-init.sh', () => {
     assert.ok(!/systemctl restart \$services/.test(text), 'no plain restart of the game server');
     assert.match(site, /if cmp -s "\$new" \/etc\/caddy\/Caddyfile; then rm "\$new"; else mv /);
   });
+  it("restart.sh reads staging's checkout as root, and a tree it can't read restarts the game (never 'unchanged')", () => {
+    const restart = readFileSync(join(here, 'restart.sh'), 'utf8');
+    assert.match(restart, /git -c safe\.directory="\$SRC" -C "\$SRC" rev-parse/);
+    assert.match(restart, /elif \[ -n "\$new" \] && \[ "\$new" = "\$old" \]; then/);
+    // the functions alone (not the restart loop), on a folder that isn't a checkout: no tree at all
+    const fns = restart.slice(0, restart.indexOf('\nstatus=0'));
+    const out = execFileSync('bash', ['-c', `${fns}\nSRC=/nonexistent-mf-src; printf '[%s]' "$(game_tree)"`], { encoding: 'utf8' });
+    assert.equal(out, '[]');
+    const real = execFileSync('bash', ['-c', `${fns}\nSRC=${join(here, '..', '..')}; game_tree`], { encoding: 'utf8' }).trim();
+    assert.match(real, /^[0-9a-f]{16}$/);
+  });
   it('never prints the owner secrets to the public status page', () => {
     const status = text.slice(text.indexOf('status() {'), text.indexOf('[ -n "${OWNER:-}" ] || return 0'));
     assert.ok(!/ADMIN_TOKEN|EXPORT_TOKEN|\$OWNER/.test(status.replace('| redact', '')), 'the public part of status() must not use the secrets');
