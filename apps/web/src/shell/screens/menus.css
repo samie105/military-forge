@@ -145,10 +145,9 @@ html.reduce-motion .kit-v2 .mf-tabpanel.mf-tabpanel--leaving { animation: m-fade
 :where(.kit-v2) .net-pill, :where(.kit-v2) .brand__words { white-space: nowrap; }
 html.mf-narrow .kit-v2 .home { grid-template-columns: 640px minmax(0, 1fr) 340px; gap: var(--sp-7); }
 /* the laptop's box: the top bar keeps every tab and the player chip in view (audit 28 Oct: at 1280×800
-   the chip ran off the right edge); big text also drops the pill's word (it keeps its ms) */
+   the chip ran off the right edge) */
 html.mf-narrow .kit-v2 .home__top { gap: var(--sp-4); }
 html.mf-narrow .kit-v2 .home__top .tab { padding: 0 var(--sp-3); }
-html.mf-narrow.mf-big-text .kit-v2 .net-pill__word { display: none; }
 /*
  * Home's top bar fits at every width (UX audit 31 Oct, C-03 + D-04: from 768 to 1920 wide the player chip ran
  * off the right edge, or out of sight at 1920, and Install app pushed the Server pill into the edge). Home's
@@ -171,7 +170,6 @@ html.mf-narrow.mf-big-text .kit-v2 .net-pill__word { display: none; }
   .kit-v2 .home__top .mf-install-btn__word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 @container home-top (width < 1700px) {
-  .kit-v2 .home__top .net-pill__word { display: none; }
   .kit-v2 .home__top .me-chip > b { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .kit-v2 .home__top .me-chip { padding-right: 6px; }
 }

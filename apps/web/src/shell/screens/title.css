@@ -88,8 +88,10 @@
   right: 64px; bottom: 48px; padding: 10px 18px; font-size: 20px; font-weight: var(--fw-bold); color: var(--c-text);
   background: var(--c-ink-900); border: var(--bw) solid var(--c-line); border-radius: var(--r-frost-sm, var(--r-md)); text-shadow: none;
 }
-.mf-title__corner--net i { width: 12px; height: 12px; border-radius: 50%; background: var(--c-muted); }
-.mf-title__corner--net i.is-live { background: var(--c-ok); }
+.mf-title__corner--net .sig { height: 18px; gap: 3px; }
+.mf-title__corner--net .sig i { width: 5px; }
+.mf-title__corner--net .sig i:nth-child(1) { height: 5px; } .mf-title__corner--net .sig i:nth-child(2) { height: 9px; }
+.mf-title__corner--net .sig i:nth-child(3) { height: 13px; } .mf-title__corner--net .sig i:nth-child(4) { height: 18px; }
 @supports (backdrop-filter: blur(1px)) {
   html:not(.reduce-transparency):not(.gfx-low):not(.mf-lowend) .mf-title:not(.is-phone) .mf-title__corner--net {
     background: var(--frost-fill, var(--c-ink-900)); border-color: var(--frost-line, var(--c-line)); backdrop-filter: blur(var(--blur-hud, 12px));
@@ -119,7 +121,6 @@
 .mf-title.is-phone .mf-title__prompt small { font-size: 34px; }
 .mf-title.is-phone .mf-title__corner { font-size: 30px; }
 .mf-title.is-phone .mf-title__corner--net { right: 70px; bottom: 10px; padding: 6px 18px; font-size: 26px; }
-.mf-title.is-phone .mf-title__corner--net i { width: 18px; height: 18px; }
 .mf-title.is-phone.is-leaving .mf-title__world { animation: none; }
 
 /* ---- reduce motion (the game's switch; it starts from the system's): nothing drifts or pushes; the

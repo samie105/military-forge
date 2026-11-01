@@ -667,6 +667,10 @@ a.ticket{ color:var(--c-paper-text); }
 .sig i{ width:4px; background:currentColor; border-radius:var(--r-xxs); }
 .sig i:nth-child(1){ height:4px; } .sig i:nth-child(2){ height:7px; } .sig i:nth-child(3){ height:10px; } .sig i:nth-child(4){ height:14px; }
 .sig--warn i:nth-child(4){ opacity:.25; } .sig--bad i:nth-child(3),.sig--bad i:nth-child(4){ opacity:.25; }
+/* the bars a round trip earns (ui/ping.ts pingQuality); the rest stay as dim slots */
+.sig[data-bars="3"] i:nth-child(4), .sig[data-bars="2"] i:nth-child(n+3), .sig[data-bars="1"] i:nth-child(n+2){ opacity:.25; }
+.sig.ping--good{ color:var(--c-ok); } .sig.ping--mid{ color:var(--c-warn); } .sig.ping--bad{ color:var(--c-hp); }
+.ping{ display:inline-flex; align-items:center; gap:var(--sp-2); font-variant-numeric:tabular-nums; }
 .lobby__tools{ display:flex; align-items:center; gap:var(--sp-4); margin-top:auto; }
 .lobby__note{ display:flex; align-items:center; gap:var(--sp-2); font-size:var(--fs-14); color:var(--c-muted); }
 .maps{ display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-3); }

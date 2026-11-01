@@ -17,12 +17,12 @@ import { GAME_NAME } from '@military-forge/shared';
 import { keyArt } from 'virtual:title-info';
 import { landingOwns, onPlay } from '../../ui/landing';
 import { reduced } from '../../ui/motion';
-import { Screen } from '../../ui/Screen';
+import { Ping, Screen } from '../../ui/Screen';
 import { useServerPing } from '../context';
 import { usePhoneLayout } from './phone';
 import { useRotated } from './phone/layout';
 import { TurnTip, markTurnTipSeen, useTurnTipSeen } from './phone/TurnTip';
-import { TITLE_LEAVE_MS, TITLE_LEAVE_REDUCED_MS, continuesTitle, regionLabel } from '../title';
+import { TITLE_LEAVE_MS, TITLE_LEAVE_REDUCED_MS, continuesTitle } from '../title';
 import type { ShellStore } from '../store';
 import './title.css';
 
@@ -115,7 +115,6 @@ export function TitleScreen({ store }: { store: ShellStore }) {
   const booting = useStore(store, (s) => s.screen.name === 'boot');
   const phone = usePhoneLayout();
   const ping = useServerPing();
-  const [region, setRegion] = useState<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const tap = promptKind(phone, coarsePointer()) === 'tap';
   const pad = usePadConnected();
@@ -134,20 +133,6 @@ export function TitleScreen({ store }: { store: ShellStore }) {
   const [samples, setSamples] = useState(0);
   useEffect(() => setSamples((n) => n + 1), [ping]);
 
-  // the server's region (the box's probe config), else "Local server" / the host. Only the HTTPS boxes
-  // serve a probe config: a local or LAN playtest (plain http) has none, so it isn't asked for (a 404 in
-  // the console otherwise: audit 28 Oct)
-  useEffect(() => {
-    let live = true;
-    const probe = location.protocol === 'https:' ? fetch(`${import.meta.env.BASE_URL}probe-config.json`) : Promise.resolve(null);
-    probe
-      .then((r) => (r?.ok && r.headers.get('content-type')?.includes('json') ? r.json() : null))
-      .catch(() => null)
-      .then((c: unknown) => live && setRegion(regionLabel(location.hostname, c as { regions?: { name?: string }[] } | null)));
-    return () => {
-      live = false;
-    };
-  }, []);
 
   // any key, click, tap or controller button continues (the key never reaches the screen underneath);
   // not while the turn card asks (its button is the one thing to press)
@@ -307,12 +292,11 @@ export function TitleScreen({ store }: { store: ShellStore }) {
             </>
           )}
         </div>
-        {/* the server and its ping (not on a phone: the title there is the key art and one line) */}
-        {!phone && (
+        {/* the connection, once it's measured (not on a phone: the title there is the key art and one
+            line); no server name (the owner, 1 Nov 2026) */}
+        {!phone && ping >= 0 && samples > 2 && (
           <span className="mf-title__corner mf-title__corner--net">
-            <i className={ping >= 0 ? 'is-live' : ''} aria-hidden="true" />
-            Server: {region ?? '…'}
-            {ping >= 0 && samples > 2 ? ` · ${Math.round(ping)} ms` : ''}
+            <Ping ms={ping} />
           </span>
         )}
       </Screen>

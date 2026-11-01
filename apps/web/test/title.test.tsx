@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { shellCues } from '../src/audio/ui';
 import { TitleScreen, pressTitle, promptKind } from '../src/shell/screens/Title';
 import { createShellStore } from '../src/shell/store';
-import { continuesTitle, regionLabel, titleWanted } from '../src/shell/title';
+import { continuesTitle, titleWanted } from '../src/shell/title';
 
 const want = (path: string, search = '', webdriver = false, appMode = true) => titleWanted({ appMode, path, params: new URLSearchParams(search), webdriver });
 
@@ -58,13 +58,6 @@ describe('the title screen: the corners and the prompt', () => {
     expect(promptKind(true, true)).toBe('tap');
     expect(promptKind(false, true)).toBe('tap');
     expect(promptKind(false, false)).toBe('key');
-  });
-
-  it("names the server's region: the box's probe config, this computer in dev, else the host", () => {
-    expect(regionLabel('40-123-240-224.sslip.io', { regions: [{ name: 'Johannesburg' }] })).toBe('Johannesburg');
-    expect(regionLabel('localhost', null)).toBe('Local server');
-    expect(regionLabel('127.0.0.1', null)).toBe('Local server');
-    expect(regionLabel('play.example.org', {})).toBe('play.example.org');
   });
 
   it('draws the lockup, one keyboard prompt (no pad line without a pad, no build id) and the art', () => {

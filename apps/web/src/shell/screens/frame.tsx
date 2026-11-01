@@ -9,6 +9,7 @@ import { PadKbd, useInputDevice } from '../../gamepad/react';
 import { Icon } from '../../ui/Icon';
 import { logicalRect } from '../../ui/landscape';
 import { rollText, type Box } from '../../ui/motion';
+import { Ping } from '../../ui/Screen';
 import './menus.css';
 import { useServerPing } from '../context';
 
@@ -26,29 +27,28 @@ export function Backdrop({ word }: { word: string }) {
   );
 }
 
-/** The server's round trip in the top bar (the API's, every 10 s); "Offline" when it can't be reached. */
 /** What Home says when the game server can't be reached: once, in the Play now poster (desktop and phone). */
 export const OFFLINE_LINE = "Can't reach the server. Training with bots still works.";
 /** a suspended or banned account (audit-2 L-04): the server answered, it just won't let this account play online */
 export const SUSPENDED_LINE = "This account can't play online right now. Training with bots still works.";
 
+/**
+ * The connection in the top bar: the kit's signal bars and the round trip (the API's, every 10 s), no
+ * server name (the owner, 1 Nov 2026); "Offline" when it can't be reached.
+ */
 export function NetPill({ offline = false }: { offline?: boolean }) {
   const ping = useServerPing();
   if (offline)
     return (
       <span className="net-pill" aria-label="Offline: can't reach the server">
-        <span className="dot dot--bad"></span>
         <Icon name="unplug" size="sm" />
         Offline
       </span>
     );
   if (!(ping >= 0)) return null;
-  const dot = ping <= 100 ? 'dot' : ping <= 200 ? 'dot dot--warn' : 'dot dot--bad';
   return (
-    <span className="net-pill" title="Round trip to the game's server">
-      <span className={dot}></span>
-      <span className="net-pill__word">Server</span>
-      <span className="num">{Math.round(ping)} ms</span>
+    <span className="net-pill" title="Your connection to the game">
+      <Ping ms={ping} />
     </span>
   );
 }

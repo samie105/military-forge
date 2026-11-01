@@ -21,19 +21,6 @@ export function continuesTitle(e: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaK
   return !['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Fn', 'OS', 'Tab'].includes(e.key);
 }
 
-/** The net trial's /probe-config.json on the box (scripts/net-trial/cloud-init.sh): its region's name. */
-interface ProbeConfig {
-  regions?: { name?: string }[];
-}
-
-/** Where the server is, for the corner: the box's region, "Local server" in dev, else the host. */
-export function regionLabel(hostname: string, probe: ProbeConfig | null): string {
-  const named = probe?.regions?.[0]?.name;
-  if (named) return named;
-  if (/^(localhost|127\.|\[::1\]|0\.0\.0\.0)/.test(hostname) || hostname.endsWith('.local')) return 'Local server';
-  return hostname;
-}
-
 /** How long the push into the next screen takes: one scene (--m-scene); Reduce motion: a 120 ms fade. */
 export const TITLE_LEAVE_MS = 520;
 export const TITLE_LEAVE_REDUCED_MS = 120;

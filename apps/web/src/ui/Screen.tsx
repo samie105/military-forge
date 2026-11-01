@@ -59,21 +59,25 @@ export function Screen({
 }
 
 
+/**
+ * A round trip as the kit's signal bars and its milliseconds: the bars it earns lit in its quality's
+ * colour (ui/ping.ts), the number in the text's. No server name (the owner, 1 Nov 2026).
+ */
 export function Ping({ ms, label, bars = true }: { ms: number; label?: string | undefined; bars?: boolean }) {
   if (!(ms >= 0)) return <span className="ping muted">{label ? `${label} · ` : ''}no ping</span>;
   const q = pingQuality(ms);
   return (
-    <span className={`ping ${q.cls}`}>
+    <span className="ping" aria-label={`${label ? `${label}: ` : 'Connection: '}${Math.round(ms)} ms`}>
       {bars && (
-        <span className="sig" data-bars={q.bars} aria-hidden="true">
+        <span className={`sig ${q.cls}`} data-bars={q.bars} aria-hidden="true">
           <i></i>
           <i></i>
           <i></i>
           <i></i>
         </span>
       )}
-      {label && <span className="ping__label">{label}</span>}
-      <span className="num">{Math.round(ms)} ms</span>
+      {label && <span className="ping__label" aria-hidden="true">{label}</span>}
+      <span className="num" aria-hidden="true">{Math.round(ms)} ms</span>
     </span>
   );
 }
