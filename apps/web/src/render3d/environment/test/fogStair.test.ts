@@ -10,7 +10,10 @@ import { fogStairMap, maps, type MapDef } from '@military-forge/content';
 import { Vector3, type BufferGeometry, type Mesh } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+// the boards are tested switched on; ads/live.ts ships them off for now (owner, 31 Oct)
+const live = vi.hoisted(() => ({ ADS_LIVE: true }));
+vi.mock('../../../ads/live', () => live);
 import { MapEnvironment, environmentFor } from '../index';
 import { layoutItems, placePoint, placementMatrix, type KitLayout } from '../layout';
 import { mapGrade } from '../looks';

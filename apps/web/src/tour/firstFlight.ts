@@ -37,7 +37,7 @@ import { Tour, loadTour, saveTour, type TourEvent } from './tour';
 
 /** The range as the tour reads it. */
 export interface FlightWorld {
-  me: FlightSample & { id: number; grenades: number };
+  me: FlightSample & { id: number; grenades: number; guns?: number };
   /** the targets (the range's dummies) standing now */
   targets: readonly { id: number; x: number; y: number }[];
   isTarget(id: number): boolean;
@@ -63,6 +63,17 @@ export interface FlightDeps {
   touchRect(id: TouchControl): Box | null;
   /** a menu or a route covers play: the tour waits */
   covered(): boolean;
+  /**
+   * Pick up: a gun the recruit doesn't carry, put on the floor by them (LocalMode.offerGun). Where it
+   * lies, or null when it can't be (the order then skips itself).
+   */
+  offerGun?(): { x: number; y: number } | null;
+  /** the sim buttons held on any tick since the last call (LocalMode.takePresses): Reload ticks on its press */
+  presses?(): number;
+  /** touch's Auto fire allowed or held off (touch/index.ts holdAutoFire); told every frame */
+  autoFire?(on: boolean): void;
+  /** a world point the view frames with the soldier (Camera.focus), or null; told every frame */
+  frameOn?(point: { x: number; y: number } | null): void;
   /** "Live fire" on the finish card */
   liveFire(): void;
   /** "Later" on the finish card, or Skip training: back to Home */
@@ -92,6 +103,8 @@ export class FirstFlight {
   private drawn = '';
   /** the whole flight's time, in seconds, for the finish card */
   private finishedIn = 0;
+  /** where the gun Pick up offers lies (null before that order) */
+  private gunAt: { x: number; y: number } | null = null;
 
   constructor(private readonly d: FlightDeps) {
     this.clock = d.clock ?? (() => performance.now());
@@ -111,11 +124,37 @@ export class FirstFlight {
     return this.state === 'done' || this.state === 'over' ? this.state : (this.tour.step?.id ?? 'done');
   }
 
+  /**
+   * The gun may fire by itself (touch's Auto fire): not before the Fire order, so Run and Fly don't
+   * shoot at the range's targets on their own and Fire starts with a full magazine (audit A-17).
+   */
+  get autoFire(): boolean {
+    const id = this.current;
+    return id !== 'run' && id !== 'fly';
+  }
+
+  /**
+   * On a phone, what the view should frame with the soldier while an order points at a target (Fire,
+   * Throw): the nearest target, so it stands in the open middle and not under a thumb's controls
+   * (audit A-18). null: the plain follow.
+   */
+  focus(): { x: number; y: number } | null {
+    if (this.state !== 'goal' && this.state !== 'confirm') return null;
+    const id = this.tour.step?.id;
+    if ((id !== 'hit' && id !== 'throw') || this.d.device() !== 'touch') return null;
+    const w = this.d.world();
+    if (!w || !w.me.alive) return null;
+    const t = nearest(w.targets, w.me.x);
+    return t ? { x: t.x, y: t.y + 1 } : null;
+  }
+
   /** Every frame, after the sim stepped and the camera moved. */
   frame(): void {
     if (this.state === 'over') return;
     const w = this.d.world();
     if (!w) return;
+    this.d.autoFire?.(this.autoFire);
+    this.d.frameOn?.(this.focus());
     const covered = this.d.covered();
     if (covered !== this.covered) {
       this.covered = covered;
@@ -136,11 +175,22 @@ export class FirstFlight {
     if (this.tour.finished) return this.finish();
     if (!this.begun) {
       this.tracker.begin(w.me);
+      this.d.presses?.(); // a press before this goal began doesn't count for it
       const t = nearest(w.targets, w.me.x);
       this.toward = t && t.x < w.me.x ? -1 : 1;
       this.begun = true;
+      // Pick up: a gun on the floor by the recruit; none to be had, the order skips itself
+      if (this.tour.step?.id === 'take') {
+        this.gunAt = this.d.offerGun?.() ?? null;
+        if (!this.gunAt) {
+          this.tour.skip();
+          this.save();
+          this.begun = false;
+          return;
+        }
+      }
     }
-    for (const e of this.tracker.frame(w.me)) if (this.state === 'goal') this.act(e, w);
+    for (const e of this.tracker.frame({ ...w.me, presses: this.d.presses?.() ?? 0 })) if (this.state === 'goal') this.act(e, w);
     if (this.state === 'goal') this.draw();
     this.spot.update();
     this.offerHelp();
@@ -199,6 +249,8 @@ export class FirstFlight {
       this.save();
     }
     this.state = 'over';
+    this.d.autoFire?.(true);
+    this.d.frameOn?.(null);
     if (this.d.spotlight) void this.spot.hide();
     else this.spot.dispose();
   }
@@ -206,7 +258,7 @@ export class FirstFlight {
   // ---- internals
 
   private ctx(w: FlightWorld): FlightContext {
-    return { grenades: w.me.grenades };
+    return { grenades: w.me.grenades, ...(w.me.guns !== undefined ? { guns: w.me.guns } : {}) };
   }
 
   private act(e: TourEvent, w: FlightWorld): void {
@@ -334,6 +386,9 @@ export class FirstFlight {
       const t = nearest(w.targets, w.me.x);
       if (!t) return null;
       p = { x: t.x, y: t.y + 1 }; // the chest
+    } else if (marker === 'gun') {
+      if (!this.gunAt) return null;
+      p = { x: this.gunAt.x, y: this.gunAt.y + 0.4 };
     } else p = markerPoint(marker, this.tracker.origin, this.toward);
     const s = this.d.toScreen(p.x, p.y);
     return { x: s.x, y: s.y };

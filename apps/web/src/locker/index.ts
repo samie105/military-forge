@@ -10,7 +10,8 @@ import {
   DEFAULT_COSMETIC_LOADOUT,
   DYE_CHANNELS,
   RARITY_STYLE,
-  cosmeticSourceLabel,
+  cosmeticArtPending,
+  cosmeticOnSale,
   cosmeticsForSlot,
   getCosmetic,
   fitsBody,
@@ -32,7 +33,7 @@ import { moveIndicator } from '../ui/motion';
 import { mountSprite } from '../ui/sprite';
 import css from './locker.css?inline';
 import { LocalLoadoutStore, accountInventory, ownedOnly, randomLoadout, withDye, withItem, type Inventory, type LoadoutStore } from './loadouts';
-import { SLOT_GLYPH, THUMB_FOCUS, escapeHtml, ic, tileHtml } from './tiles';
+import { SLOT_GLYPH, THUMB_FOCUS, escapeHtml, ic, lockedLine, tileHtml } from './tiles';
 import { getPortrait, peekPortrait, type PortraitRequest } from '../portrait';
 import { Turntable, type FocusPreset, type LightPreset } from './turntable';
 
@@ -53,8 +54,8 @@ export interface LockerOptions {
   /** "Create your soldier": the character creator (body first, then the look); omitted = no button */
   onCreator?: () => void;
   /**
-   * The Store (#/store): a Store button in the header, and "Get it in the Store" on a locked store item (the
-   * Galaxy Relic, a launch gift for now: docs/17 §9); omitted = neither
+   * The Store (#/store): a Store button in the header, and "Get it in the Store" on a locked item the Store
+   * sells (content's STORE_ON_SALE: the Galaxy Relic line, docs/17 §9); omitted = neither
    */
   onStore?: () => void;
 }
@@ -263,7 +264,8 @@ export function mountLocker(container: HTMLElement, options: LockerOptions = {})
     for (const tile of panel.querySelectorAll<HTMLElement>('.item[data-id]:not([data-channel])')) {
       const glyph = tile.querySelector<HTMLElement>('.mf-item__glyph');
       const def = getCosmetic(tile.dataset.id ?? '');
-      if (!glyph || !def || def.slot === 'dye' || def.slot === 'bodyType' || def.slot.startsWith('skin_')) continue;
+      // a part not drawn yet keeps its glyph: its picture would be the standard issue (the Track Jacket, C-09)
+      if (!glyph || !def || def.slot === 'dye' || def.slot === 'bodyType' || def.slot.startsWith('skin_') || cosmeticArtPending(def)) continue;
       const req: PortraitRequest = { look: withItem(loadout, def.slot as LoadoutSlot, def.id), size: 128, pose: HEAD_SLOTS.has(def.slot) ? 'portrait' : 'poster-1' };
       const y = THUMB_FOCUS[def.slot];
       const put = (img: { url: string; fallback?: boolean } | null) => {
@@ -336,11 +338,10 @@ export function mountLocker(container: HTMLElement, options: LockerOptions = {})
     } else if (d.id) {
       // try it on: the soldier wears it; Wear it keeps it (an item you own)
       const item = getCosmetic(d.id)!;
-      const how = cosmeticSourceLabel(item.source);
       const owned = inventory.owns(item.id);
-      detail.textContent = `${item.name} · ${RARITY_STYLE[item.rarity].label}${owned ? '' : ` · Locked. How to get it: ${how}`}`;
-      // a store item: the way to it, one tap away
-      if (!owned && item.source.kind === 'store' && options.onStore) {
+      detail.textContent = `${item.name} · ${RARITY_STYLE[item.rarity].label}${owned ? '' : ` · ${lockedLine(item)}`}`;
+      // an item the Store sells: the way to it, one tap away (one it doesn't sell yet gets no button: C-09)
+      if (!owned && cosmeticOnSale(item) && options.onStore) {
         detail.insertAdjacentHTML('beforeend', ` <button type="button" class="btn btn--volt btn--sm m-p8 mf-lk__get" data-action="store">${ic('gem')}Get it in the Store</button>`);
       }
       trying = { id: item.id, ...(d.channel ? { channel: d.channel as DyeChannel } : {}) };

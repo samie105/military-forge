@@ -11,13 +11,18 @@
  * Invites (PR 2): invite a friend to your room (the panel, the lobby, the pause menu's picker), and
  * answer theirs from the toast (menus and mid-match) or the panel. An invite lasts 2 minutes; its
  * countdown runs on this device's clock, set from the server's at load (a phone's clock may be off).
+ *
+ * Finding players (31 Oct, "add a search friend feature, let's make it a bit social"): the panel's
+ * field searches names as you type (from 2 letters, 300 ms after the last key, answers kept a minute),
+ * and Played with recently lists the people from your last matches. A request that arrives while you
+ * are elsewhere shows a toast (audit C-26).
  */
 import { useSyncExternalStore } from 'react';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { ApiError, type Api } from '../shell/api';
 import { OFFLINE_TITLE } from '../shell/offline';
 import type { Intent, ShellStore } from '../shell/store';
-import { FriendsApi, asFriendCode, type Friend, type FriendsList, type Invite, type Party, type Person } from './api';
+import { FriendsApi, asFriendCode, type FoundPlayer, type Friend, type FriendsList, type Invite, type Party, type Person, type Relation } from './api';
 import { EventStream } from './events';
 
 export type FriendsTab = 'friends' | 'requests' | 'blocked';
@@ -25,6 +30,19 @@ export type FriendsTab = 'friends' | 'requests' | 'blocked';
 export interface AddOutcome {
   tone: 'ok' | 'warn';
   message: string;
+  /** a request sent: to whom (the line follows them when they accept, audit C-27) */
+  to?: { id: string; nickname: string };
+}
+
+/**
+ * The name search: `short` under 2 letters, `busy` while asking, `done` with the players, `failed`
+ * with why (Can't reach the server, too many searches).
+ */
+export interface SearchState {
+  query: string;
+  status: 'idle' | 'short' | 'busy' | 'done' | 'failed';
+  players: readonly FoundPlayer[];
+  error: string | null;
 }
 
 export interface SocialState {
@@ -52,6 +70,11 @@ export interface SocialState {
   live: boolean;
   /** the invite picker (lobby, pause menu) */
   picker: boolean;
+  search: SearchState;
+  /** Played with recently (the panel loads it when it opens); null before the first load */
+  recent: readonly FoundPlayer[] | null;
+  /** friend requests that arrived while you were elsewhere, for the toast (audit C-26), oldest first */
+  requestToasts: readonly Person[];
 }
 
 /** An invite with when it runs out on this device's clock (ms since the epoch). */
@@ -77,6 +100,12 @@ export interface SocialShell {
 
 export const PANEL_POLL_MS = 30_000;
 export const HOME_POLL_MS = 60_000;
+/** the name search waits this long after the last key */
+export const SEARCH_DEBOUNCE_MS = 300;
+/** an answer is reused this long (backspacing, typing the same name again) */
+const SEARCH_CACHE_MS = 60_000;
+/** a request this new, found on the first load of the list, still gets its toast */
+const REQUEST_TOAST_FRESH_MS = 2 * 60_000;
 /** an invite's life (apps/api INVITE_TTL_MS) */
 export const INVITE_SECONDS = 120;
 /** the list's refresh while the push channel is open (it only catches friends going quiet) */
@@ -95,8 +124,10 @@ export function friendErrorText(e: unknown): string {
     case 'too_many_requests':
     case 'friends_full':
       return e.message;
-    case 'rate_limited':
-      return 'Too many tries: wait a few minutes';
+    case 'rate_limited': {
+      const wait = Number(e.extra.retryAfter);
+      return wait > 0 && wait <= 90 ? `Too many tries: wait ${Math.ceil(wait)} s` : 'Too many tries: wait a few minutes';
+    }
     case 'no_request':
       return 'That request is gone';
     case 'invite_not_found':
@@ -137,9 +168,20 @@ export function clockText(seconds: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
-/** A friend's status line: "In a match · KMTXRA", "Online", "Last seen 2 h ago". */
+/** Letters a search counts (separators and spaces don't): 2 are needed. */
+export function searchLetters(text: string): number {
+  return [...text.replace(/[\s_.-]+/gu, '')].length;
+}
+
+/**
+ * A friend's status line: "In a match · room KMTXRA", "In the lobby · room KMTXRA" (a room whose match
+ * hasn't started: audit C-27), "Online · in the menus", "Last seen 2 h ago".
+ */
 export function statusText(f: Friend, now = Date.now()): string {
-  if (f.status === 'in_room') return f.room ? `In a match · room ${f.room}` : 'In a match';
+  if (f.status === 'in_room') {
+    const where = f.playing === true ? 'In a match' : f.playing === false ? 'In the lobby' : 'In a room';
+    return f.room ? `${where} · room ${f.room}` : where;
+  }
   if (f.status === 'online') return 'Online · in the menus';
   const ago = agoText(f.lastSeenAt, now);
   return ago ? `Last seen ${ago}` : 'Offline';
@@ -154,6 +196,11 @@ export class SocialController {
   private inFlight: Promise<void> | null = null;
   private push: EventStream | null = null;
   private sweeper: ReturnType<typeof setInterval> | null = null;
+  private searchTimer: ReturnType<typeof setTimeout> | null = null;
+  private searchSeq = 0;
+  private readonly searchCache = new Map<string, { at: number; players: FoundPlayer[] }>();
+  /** requests that had their toast (or were here before we looked): never toasted again */
+  private readonly toasted = new Set<string>();
 
   constructor(
     readonly shell: SocialShell,
@@ -175,10 +222,15 @@ export class SocialController {
       party: null,
       live: false,
       picker: false,
+      search: EMPTY_SEARCH,
+      recent: null,
+      requestToasts: [],
     }));
     // a different player signed in (a new guest): nothing of the last one's stays
     shell.api.onSignIn(() => {
-      this.store.setState({ list: null, error: null, added: null, busy: {}, invites: [], sent: {}, unseen: 0, hidden: {}, party: null });
+      this.searchCache.clear();
+      this.toasted.clear();
+      this.store.setState({ list: null, error: null, added: null, busy: {}, invites: [], sent: {}, unseen: 0, hidden: {}, party: null, search: EMPTY_SEARCH, recent: null, requestToasts: [] });
       if (this.watchers.size) void this.refresh();
       if (this.push) {
         this.push.stop();
@@ -228,6 +280,8 @@ export class SocialController {
     switch (type) {
       case 'friends':
         void this.refresh();
+        // a request answered, a friend gone: the people met in matches may change too
+        if (this.store.getState().panel.open) void this.loadRecent();
         return;
       case 'presence': {
         const list = this.store.getState().list;
@@ -235,7 +289,11 @@ export class SocialController {
         const id = d.id as string;
         if (!list.friends.some((f) => f.id === id)) return;
         const status = d.status as Friend['status'];
-        const friends = list.friends.map((f) => (f.id === id ? { ...f, status, room: (d.room as string | null) ?? null, lastSeenAt: new Date().toISOString() } : f));
+        const changed = (f: Friend): Friend => {
+          const { playing: _was, ...rest } = f;
+          return { ...rest, status, room: (d.room as string | null) ?? null, lastSeenAt: new Date().toISOString(), ...(typeof d.playing === 'boolean' ? { playing: d.playing } : {}) };
+        };
+        const friends = list.friends.map((f) => (f.id === id ? changed(f) : f));
         const order = { in_room: 0, online: 1, offline: 2 } as const;
         friends.sort((a, b) => order[a.status] - order[b.status] || a.nickname.localeCompare(b.nickname));
         this.set({ list: { ...list, friends } });
@@ -337,7 +395,10 @@ export class SocialController {
     this.inFlight = this.friends
       .list()
       .then(
-        (list) => this.set({ list, error: null }),
+        (list) => {
+          this.noteRequests(this.store.getState().list, list);
+          this.set({ list, error: null });
+        },
         (e: unknown) => this.set({ error: friendErrorText(e) }),
       )
       .finally(() => {
@@ -375,16 +436,141 @@ export class SocialController {
     }, every);
   }
 
+  /**
+   * New requests to you get a toast (audit C-26): the ones that weren't in the last list. On the first
+   * load there's no last list, so only requests from the last 2 minutes count as new. Never while the
+   * panel is open (it shows them), never twice for one request.
+   */
+  private noteRequests(before: FriendsList | null, after: FriendsList): void {
+    const known = before ? new Set(before.incoming.map((p) => p.id)) : null;
+    const now = Date.now();
+    const st = this.store.getState();
+    const fresh = after.incoming.filter((p) => !this.toasted.has(p.id) && (known ? !known.has(p.id) : now - Date.parse(p.at) < REQUEST_TOAST_FRESH_MS));
+    for (const p of after.incoming) this.toasted.add(p.id);
+    const waiting = new Set(after.incoming.map((p) => p.id));
+    // answered elsewhere (another tab, the panel): its toast goes
+    const toasts = st.requestToasts.filter((p) => waiting.has(p.id));
+    this.set({ requestToasts: st.panel.open ? [] : [...toasts, ...fresh] });
+  }
+
+  /** Put a request's toast away (the request stays in Friends). */
+  hideRequestToast(id: string): void {
+    this.set({ requestToasts: this.store.getState().requestToasts.filter((p) => p.id !== id) });
+  }
+
   // ---- the panel ----
 
   openPanel(tab?: FriendsTab): void {
     const panel = this.store.getState().panel;
-    // what's waiting is seen once the panel shows it
-    this.set({ panel: { open: true, tab: tab ?? panel.tab }, added: null, unseen: 0 });
+    // what's waiting is seen once the panel shows it (request toasts too)
+    this.set({ panel: { open: true, tab: tab ?? panel.tab }, added: null, unseen: 0, requestToasts: [] });
+    void this.loadRecent();
   }
 
   closePanel(): void {
+    this.clearSearch();
     this.set({ panel: { ...this.store.getState().panel, open: false } });
+  }
+
+  // ---- finding players ----
+
+  /**
+   * The search field changed: under 2 letters it just says so; otherwise it asks the API 300 ms after
+   * the last key (an answer from the last minute is shown at once). Only the latest answer lands.
+   */
+  setQuery(text: string): void {
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+    this.searchTimer = null;
+    const seq = ++this.searchSeq;
+    const query = text.trim();
+    if (!query) {
+      this.set({ search: EMPTY_SEARCH });
+      return;
+    }
+    const before = this.store.getState().search;
+    if (searchLetters(query) < 2) {
+      this.set({ search: { query: text, status: 'short', players: [], error: null } });
+      return;
+    }
+    const key = query.toLowerCase();
+    const cached = this.searchCache.get(key);
+    if (cached && Date.now() - cached.at < SEARCH_CACHE_MS) {
+      this.set({ search: { query: text, status: 'done', players: cached.players, error: null } });
+      return;
+    }
+    // the last answer stays on screen while the next one comes (no flicker as you type)
+    this.set({ search: { query: text, status: 'busy', players: before.status === 'done' || before.status === 'busy' ? before.players : [], error: null } });
+    this.searchTimer = setTimeout(() => {
+      this.searchTimer = null;
+      void this.friends.search(query).then(
+        ({ players }) => {
+          this.searchCache.set(key, { at: Date.now(), players });
+          if (seq === this.searchSeq) this.set({ search: { query: text, status: 'done', players, error: null } });
+        },
+        (e: unknown) => {
+          if (seq === this.searchSeq) this.set({ search: { query: text, status: 'failed', players: [], error: searchErrorText(e) } });
+        },
+      );
+    }, SEARCH_DEBOUNCE_MS);
+  }
+
+  clearSearch(): void {
+    this.setQuery('');
+  }
+
+  /** Played with recently (the panel's Friends tab). Keeps the last list when the API can't be reached. */
+  async loadRecent(): Promise<void> {
+    if (!this.available) return;
+    try {
+      this.set({ recent: (await this.friends.recent()).players });
+    } catch {
+      /* the section just waits for the next look */
+    }
+  }
+
+  /**
+   * Where you stand with a player now: the friends list knows best (it follows accepts and cancels as
+   * they happen), else what the search said.
+   */
+  relationOf(p: Pick<FoundPlayer, 'id' | 'relation'>): Relation {
+    const list = this.store.getState().list;
+    if (!list) return p.relation;
+    if (list.friends.some((f) => f.id === p.id)) return 'friends';
+    if (list.incoming.some((r) => r.id === p.id)) return 'incoming';
+    if (list.outgoing.some((r) => r.id === p.id)) return 'sent';
+    // the list was loaded after the search: a request it doesn't hold any more was answered or taken back
+    return p.relation === 'friends' ? 'friends' : 'none';
+  }
+
+  /** Add a player found by name or met in a match: Request sent at once, back to Add if the API says no. */
+  async addPlayer(p: Pick<FoundPlayer, 'id' | 'nickname' | 'look'>): Promise<boolean> {
+    let became = 'requested' as 'requested' | 'friends';
+    const ok = await this.act(
+      p.id,
+      (l) => (l.outgoing.some((r) => r.id === p.id) ? l : { ...l, outgoing: [{ id: p.id, nickname: p.nickname, at: new Date().toISOString(), look: p.look }, ...l.outgoing] }),
+      async () => {
+        became = (await this.friends.request({ name: p.nickname })).status;
+      },
+    );
+    if (ok) this.shell.notify(became === 'friends' ? `You and ${p.nickname} are friends now` : `Request sent to ${p.nickname}`);
+    return ok;
+  }
+
+  /** "Let players find me by name" (Settings → Privacy). */
+  async setFindable(on: boolean): Promise<boolean> {
+    const before = this.store.getState().list;
+    if (before) this.set({ list: { ...before, findable: on } });
+    try {
+      const { findable } = await this.friends.setFindable(on);
+      const list = this.store.getState().list;
+      if (list) this.set({ list: { ...list, findable } });
+      return true;
+    } catch (e) {
+      const list = this.store.getState().list;
+      if (list) this.set({ list: { ...list, findable: before?.findable ?? !on } });
+      this.shell.notify(friendErrorText(e));
+      return false;
+    }
   }
 
   setTab(tab: FriendsTab): void {
@@ -411,7 +597,7 @@ export class SocialController {
       outcome =
         result.status === 'friends'
           ? { tone: 'ok', message: `You and ${result.friend.nickname} are friends now` }
-          : { tone: 'ok', message: `Request sent to ${result.user.nickname}. It waits until they answer.` };
+          : { tone: 'ok', message: `Request sent to ${result.user.nickname}. It waits until they answer.`, to: { id: result.user.id, nickname: result.user.nickname } };
       void this.refresh();
     } catch (e) {
       outcome = { tone: 'warn', message: friendErrorText(e) };
@@ -601,6 +787,24 @@ export class SocialController {
   closePicker(): void {
     this.set({ picker: false });
   }
+}
+
+const EMPTY_SEARCH: SearchState = { query: '', status: 'idle', players: [], error: null };
+
+/** In words, for a failed search. */
+export function searchErrorText(e: unknown): string {
+  if (e instanceof ApiError && e.code === 'rate_limited') {
+    const wait = Number(e.extra.retryAfter);
+    return wait > 0 && wait <= 90 ? `Too many searches in a row. Wait ${Math.ceil(wait)} s and try again.` : 'Too many searches in a row. Wait a few minutes and try again.';
+  }
+  if (!(e instanceof ApiError) || e.offline) return `${OFFLINE_TITLE}. Check your connection and try again.`;
+  return friendErrorText(e);
+}
+
+/** The line under a request you sent, now: it follows them when they accept (audit C-27). */
+export function addedText(added: AddOutcome, list: FriendsList | null): AddOutcome {
+  if (added.to && list?.friends.some((f) => f.id === added.to!.id)) return { tone: 'ok', message: `${added.to.nickname} accepted: you're friends now` };
+  return added;
 }
 
 /** The Friends badge: requests waiting for you, and invites you haven't seen. */

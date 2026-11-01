@@ -71,7 +71,9 @@ describe('item tiles', () => {
   it('locked tiles say how to get the item; rarity has a shape and a label', () => {
     const html = tileHtml(getCosmetic('eyewear_gas_mask')!, false, false);
     expect(html).toContain('mm-locked');
-    expect(html).toContain('Battle pass S1 tier 34');
+    // no battle pass exists: it says so plainly (audit 31 Oct, C-10)
+    expect(html).toContain('Coming soon');
+    expect(html).not.toContain('Battle pass');
     expect(html).toContain('aria-label="Rare"');
     expect(html).toContain('role="radio" aria-checked="false"'); // a radio: aria-checked only (On says what's worn)
     const owned = tileHtml(getCosmetic('dye_red')!, true, true, 'primary');

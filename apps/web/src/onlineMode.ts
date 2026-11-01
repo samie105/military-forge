@@ -35,6 +35,7 @@ import { mapEventView } from './mapEvent';
 import { AimLinePreview } from './aimLine';
 import { ThrowPreview } from './throwPreview';
 import type { Renderer } from './render';
+import { SpawnCoverWatch } from './spawnCover';
 import { connectGame, type GameTransport, type TransportHandlers } from './transport';
 import { mobilityView, shieldView, type CloudView, type Frame, type PlayerView, type RewindView } from './view';
 
@@ -183,6 +184,8 @@ export type TuningListener = (before: Tuning, after: Tuning, live: boolean, admi
 export class OnlineMode {
   /** the throw arc while a grenade throw is aimed (both views draw it) */
   private readonly throwPreview = new ThrowPreview();
+  /** who is under spawn cover now (audit B-10), from the events */
+  private readonly cover = new SpawnCoverWatch();
   private readonly aimLine = new AimLinePreview();
   private transport: GameTransport | null = null;
   /** how the current/last connection was made, for the net graph */
@@ -252,7 +255,7 @@ export class OnlineMode {
   private adminSeen: AdminValues = {};
   /** tuning keys the latest OVERRIDES changed: the TUNING right after it is the admin's for those */
   private adminKeys = new Set<keyof Tuning>();
-  /** the room's tuning without the admin's: what "Tuned by host" compares with */
+  /** the room's tuning without the admin's: what "Custom rules" compares with */
   private baseFor: AdminValues | null = null;
   private base: Tuning = defaultTuning;
   private lastTuning: Tuning | null = null;
@@ -763,8 +766,10 @@ export class OnlineMode {
         // own shots are drawn from the prediction the moment they're fired; skip the server's copies
         const me = this.net.myId;
         // SOUND events (gunfire off screen) have no renderer: the sound plays them, from their side
+        const sim = msg.events.filter((e): e is SimEvent => e.type !== 'sound');
+        this.cover.onEvents(sim); // spawn cover, as the server's sim runs it (own shots included)
         this.renderer.onEvents(
-          msg.events.filter((e): e is SimEvent => e.type !== 'sound' && !(e.type === 'shot' && e.shooter === me)),
+          sim.filter((e) => !(e.type === 'shot' && e.shooter === me)),
           me,
         );
         const sounds = msg.events.filter((e) => e.type === 'sound');
@@ -793,7 +798,7 @@ export class OnlineMode {
     return () => this.hostListeners.delete(fn);
   }
 
-  /** The room's tuning before any host's edits: the defaults with the admin's values ("Tuned by host" compares with it). */
+  /** The room's tuning before any host's edits: the defaults with the admin's values ("Custom rules" compares with it). */
   tuningBase(): Tuning {
     const values = this.net.adminValues;
     if (values !== this.baseFor) {
@@ -915,6 +920,9 @@ export class OnlineMode {
     const drained = this.net.drainEvents();
     const own: SimEvent[] = drained.filter((e) => e.type === 'shot' || e.type === 'dash');
     if (own.length) this.renderer.onEvents(own, this.net.myId);
+    // our spawn cover ends as we fire, at once (the server's copy of the shot follows)
+    this.cover.onEvents(drained);
+    this.cover.advance(dt);
     // our throws and launches, heard the moment they happen (the server's copies follow)
     audio.onEvents(
       drained.filter((e) => e.type === 'throw' || e.type === 'launch'),
@@ -1042,6 +1050,7 @@ export class OnlineMode {
       weapons: p.weapons.map((w) => ({ def: w.def, mag: w.mag, reserve: w.reserve, reloadTicks: w.reloadTicks })),
       meleeTicks: p.meleeTicks,
       dashing: p.dashTicks > 0,
+      cover: p.alive && this.cover.has(p.id),
       shield: shieldView(p),
       shieldHp: p.shieldHp,
       ...mobilityView(pred.game, p),
@@ -1073,6 +1082,7 @@ export class OnlineMode {
       active: src.active,
       dual: src.dual,
       dashing: src.dashing,
+      cover: src.alive && this.cover.has(src.id),
       burning: src.burning,
       windup: src.windup,
       // v16: a remote swing at the render tick (a miss shows too, not only the hit that lands)

@@ -107,6 +107,7 @@ export function hashGame(game: Game): number {
     f.opt(0x114, p.jetDisabledTicks);
     f.opt(0x115, p.burnTicks);
     f.opt(0x116, p.burnBy + 1);
+    f.opt(0x117, p.coverTicks); // spawn cover (GameOptions.spawnCover): 0 in every game without it
     // a minigun's spin and a burst in progress (the owner's more guns): hashed only when set
     for (let i = 0; i < 2; i++) {
       f.opt(0x130 + 2 * i, p.weapons[i]!.spin);

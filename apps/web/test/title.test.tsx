@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { shellCues } from '../src/audio/ui';
-import { TitleScreen, pressTitle } from '../src/shell/screens/Title';
+import { TitleScreen, pressTitle, promptKind } from '../src/shell/screens/Title';
 import { createShellStore } from '../src/shell/store';
 import { continuesTitle, regionLabel, titleWanted } from '../src/shell/title';
 
@@ -54,6 +54,12 @@ describe('the title screen: what continues', () => {
 });
 
 describe('the title screen: the corners and the prompt', () => {
+  it('the prompt follows the input: a finger taps (phones and touch tablets), a keyboard presses a key (A-38)', () => {
+    expect(promptKind(true, true)).toBe('tap');
+    expect(promptKind(false, true)).toBe('tap');
+    expect(promptKind(false, false)).toBe('key');
+  });
+
   it("names the server's region: the box's probe config, this computer in dev, else the host", () => {
     expect(regionLabel('40-123-240-224.sslip.io', { regions: [{ name: 'Johannesburg' }] })).toBe('Johannesburg');
     expect(regionLabel('localhost', null)).toBe('Local server');
@@ -61,13 +67,15 @@ describe('the title screen: the corners and the prompt', () => {
     expect(regionLabel('play.example.org', {})).toBe('play.example.org');
   });
 
-  it('draws the lockup, the desktop prompt, the build and the fallback art', () => {
+  it('draws the lockup, one keyboard prompt (no pad line without a pad, no build id) and the art', () => {
     const html = renderToStaticMarkup(<TitleScreen store={createShellStore({ title: 'on', screen: { name: 'home' } })} />);
     expect(html).toContain('data-screen="title"');
     expect(html).toContain('Military Forge');
-    expect(html).toContain('Press any key · click');
-    expect(html).toContain('or any controller button');
-    expect(html).toMatch(/build [0-9a-f]{7,}|build dev/);
+    // audit 31 Oct A-24: the key cap carries "Any key" once; A-39: the controller's line only with a pad connected
+    expect(html).toMatch(/<span class="mf-title__press">Press<kbd class="kbd kbd--lg">Any key<\/kbd><\/span>/);
+    expect(html.match(/any key/gi)).toHaveLength(1);
+    expect(html).not.toContain('controller');
+    expect(html).not.toMatch(/\bbuild\b/i);
     // the Forge's key art (#185): AVIF first, WebP as the fallback, and the soldiers' parallax layer
     expect(html).toMatch(/<picture><source type="image\/avif" srcSet="[^"]*key-art-desktop\.avif"\/><img class="mf-title__art" src="[^"]*key-art-desktop\.webp"/);
     expect(html).toContain('key-art-desktop-fg.avif');

@@ -2,9 +2,10 @@
  * MATCH_STATE (0x23) → the shell's view models: the same MatchView the local match produces (so the
  * countdown, status and results screens don't care where a match runs) plus the online lobby.
  */
-import { maps } from '@military-forge/content';
+import { maps, type Tuning } from '@military-forge/content';
 import type { BotLevelWire, MatchStateMsg } from '@military-forge/protocol';
 import { MatchPhase, TICK_RATE, type MatchResults } from '@military-forge/sim';
+import { tunedSummary } from '../hud/model';
 import { playerName, type MatchView } from './matchView';
 
 /** What the shell reads from an online mode (onlineMode.ts implements it). */
@@ -15,6 +16,9 @@ export interface OnlineSource {
   readonly localId: number;
   readonly matchState: MatchStateMsg | null;
   serverTickNow(now?: number): number;
+  /** the room's tuning, and the same before any host's edits (the server's own values are the game's) */
+  tuning?(): Tuning;
+  tuningBase?(): Tuning;
 }
 
 export interface LobbyPlayer {
@@ -51,6 +55,27 @@ export interface LobbyView {
   botLevel: BotLevelWire;
   /** team modes (v21): 0 = free-for-all, else 2–4 teams */
   teams?: number;
+  /**
+   * What the room's host changed with Tune the game ("Gravity 0.6× · Dash speed 1.4×"; '' = nothing):
+   * the lobby says "Custom rules". The server's own values are just the game's (audit B-11).
+   */
+  rules?: string;
+}
+
+let rulesFor: Tuning | null = null;
+let rulesBase: Tuning | null = null;
+let rulesText = '';
+/** tunedSummary, once per tuning object (the mode hands the same one until the room's tuning changes) */
+function roomRules(src: OnlineSource): string {
+  if (!src.tuning || !src.tuningBase) return '';
+  const t = src.tuning();
+  const base = src.tuningBase();
+  if (t !== rulesFor || base !== rulesBase) {
+    rulesFor = t;
+    rulesBase = base;
+    rulesText = tunedSummary(t, base);
+  }
+  return rulesText;
 }
 
 const ENDED = new Set<number>([MatchPhase.Ending, MatchPhase.Postgame, MatchPhase.Closed]);
@@ -163,13 +188,14 @@ export function lobbyView(src: OnlineSource): LobbyView | null {
     bots: s.rules.bots,
     botLevel: s.rules.botLevel,
     teams: s.teams ?? 0,
+    rules: roomRules(src),
   };
 }
 
 export function sameLobby(a: LobbyView | null, b: LobbyView | null): boolean {
   if (!a || !b) return a === b;
   if (a.players.length !== b.players.length) return false;
-  for (const k of ['code', 'local', 'isHost', 'ready', 'minPlayers', 'timeLimit', 'killLimit', 'mapId', 'bots', 'botLevel', 'teams'] as const) if (a[k] !== b[k]) return false;
+  for (const k of ['code', 'local', 'isHost', 'ready', 'minPlayers', 'timeLimit', 'killLimit', 'mapId', 'bots', 'botLevel', 'teams', 'rules'] as const) if (a[k] !== b[k]) return false;
   return a.players.every((p, i) => {
     const q = b.players[i]!;
     return p.id === q.id && p.name === q.name && p.isBot === q.isBot && p.ready === q.ready && p.host === q.host && p.you === q.you && p.pingMs === q.pingMs && p.team === q.team;

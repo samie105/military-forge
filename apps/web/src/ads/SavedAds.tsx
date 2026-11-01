@@ -9,6 +9,7 @@
  */
 import { useEffect, useId, useSyncExternalStore } from 'react';
 import { Icon } from '../ui/Icon';
+import { ADS_LIVE } from './live';
 import { noteFor, savedAds, type SavedAd, type SavedAds as Queue } from './saved';
 import './ads.css';
 
@@ -27,7 +28,7 @@ export function SavedAdsList({ where, variant = 'full', queue = savedAds() }: { 
   );
   const titleId = useId();
   useEffect(() => queue.prune(), [queue]);
-  if (!list.length) return null;
+  if (!list.length || !ADS_LIVE) return null;
   return (
     <section className={`card mf-saved mf-saved--${variant}`} aria-labelledby={titleId} data-where={where}>
       <div className="mf-saved__top">

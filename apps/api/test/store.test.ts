@@ -8,7 +8,7 @@ import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rowsOf } from '../src/analytics/partitions';
 import { ledger, users } from '../src/db/schema';
-import { DEFAULT_COSMETIC_LOADOUT } from '@military-forge/content';
+import { DEFAULT_COSMETIC_LOADOUT, STORE_ON_SALE } from '@military-forge/content';
 import { bearer, createGuest, createTestApi, json, type SessionBody, type TestApi } from './helpers';
 import { TEST_KEYS, fakeFlutterwave, type FakeFlutterwave } from './fakeFlutterwave';
 
@@ -93,6 +93,11 @@ describe('the store', () => {
     ]);
     // the money shown is the cheapest bundle that covers the price (docs/17 §2.2)
     expect(v.items.map((i) => i.money?.bundleId)).toEqual(['brass_1050', 'brass_2200']);
+  });
+
+  it('the store sells exactly what content says is on sale (the Locker shows "Get it in the Store" for those only)', async () => {
+    const v = await store();
+    expect(v.items.map((i) => i.itemId).sort()).toEqual([...STORE_ON_SALE].sort());
   });
 
   it('a guest sees the store but must save the account to buy; a saved account without the 18+ answer can’t either', async () => {

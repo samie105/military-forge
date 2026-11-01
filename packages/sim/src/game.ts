@@ -2,7 +2,7 @@
  * The authoritative simulation of one room (docs/06 §5.3). The same class runs headless on the
  * game server, in the browser for local play/prediction, and in golden-replay tests.
  */
-import { NO_WEAPON, createTuning, getMap, mapTiers, tierIndexAt, weapons, type DummySpawn, type MapDef, type Tuning } from '@military-forge/content';
+import { NO_WEAPON, SPAWN_COVER, createTuning, getMap, mapTiers, tierIndexAt, weapons, type DummySpawn, type MapDef, type Tuning } from '@military-forge/content';
 import { IdAllocator } from '@military-forge/shared';
 import { botInput } from './bots';
 import { CloudState, stepClouds } from './clouds';
@@ -11,7 +11,7 @@ import { MAX_CLOUDS, MAX_GRENADES, MAX_PICKUPS, MAX_PLAYERS, ticks } from './con
 import { DamageSource, type SimEvent } from './events';
 import { GrenadeState, forgetOwner, stepGrenade, stepStatus } from './grenades';
 import { stepBurn } from './projectiles';
-import { copyInput, type Input } from './input';
+import { Btn, copyInput, type Input } from './input';
 import { MapMechanics, createBodyEnv } from './mechanics';
 import { depenetrate, quantizeMovement, stepMovement } from './movement';
 import { PickupState, createSpawners, dropCarried, resetPickups, stepPickups, type SpawnerState } from './pickups';
@@ -38,7 +38,16 @@ export interface GameOptions {
    * after it's taken (pickups.ts). A server flag; the playtest turns it on.
    */
   armory?: boolean;
+  /**
+   * Spawn cover (content SPAWN_COVER; audit B-10): after a respawn nobody else can hurt a player for a
+   * moment, until they attack. Rooms and training turn it on; off by default, so replays recorded
+   * before it play as they did.
+   */
+  spawnCover?: boolean;
 }
+
+/** The buttons that end a player's spawn cover: firing (either trigger), a grenade, a melee swing. */
+const ATTACK_BUTTONS = Btn.Fire | Btn.Fire2 | Btn.Grenade | Btn.Melee;
 
 /** Team spawns: how much a teammate nearby counts, against an enemy far away (metres per metre). */
 const TEAM_SPAWN_PULL = 0.35;
@@ -59,6 +68,8 @@ export class Game {
   readonly grenades: GrenadeState[] = Array.from({ length: MAX_GRENADES }, (_, i) => new GrenadeState(i));
   /** pickups on/off for this game (GameOptions.pickups) */
   readonly pickupsEnabled: boolean;
+  /** spawn cover on/off for this game (GameOptions.spawnCover) */
+  readonly spawnCover: boolean;
   /** items lying on the map (alive ones) */
   readonly pickups: PickupState[] = Array.from({ length: MAX_PICKUPS }, (_, i) => new PickupState(i));
   /** the map's spawners; empty with pickups off */
@@ -73,6 +84,11 @@ export class Game {
   mech: MapMechanics | null;
   /** set by Match.step outside the warm-up and the match: bots keep their aim, press nothing */
   inputsFrozen = false;
+  /**
+   * Your own grenades, flames and gas hurt you (docs/03 §8). First flight's range turns it off: a
+   * recruit's practice throw at their feet costs nothing (no punishing states; audit A-14).
+   */
+  selfHarm = true;
   /**
    * Extra ticks of their own for players catching up (the server: a client's inputs arrived late, the
    * player stood held while they were missing; room.ts): after this tick's step, each player runs
@@ -91,6 +107,7 @@ export class Game {
     this.tuning = createTuning(options.tuning);
     this.seed = (options.seed ?? 1) >>> 0;
     this.pickupsEnabled = options.pickups ?? false;
+    this.spawnCover = options.spawnCover ?? false;
     this.spawners = this.pickupsEnabled ? createSpawners(this.map, this.world, options.armory ?? false) : [];
     resetPickups(this);
     if (options.dummies) for (const d of this.map.dummies) this.addDummy(d);
@@ -228,6 +245,8 @@ export class Game {
       }
     }
     p.spawn(sx, sy, this.tuning);
+    // spawn cover for people and bots (never the range's dummies: they're there to be shot)
+    if (this.spawnCover && (!p.isBot || p.brain)) p.coverTicks = ticks(SPAWN_COVER.seconds);
     giveLoadout(p, weapons, respawnGuns(p));
     depenetrate(this.world, p, this.tuning);
     this.events.push({ type: 'spawn', player: p.id });
@@ -294,16 +313,19 @@ export class Game {
 
   /**
    * Whether `attacker` may hurt `target` (team modes): friendly fire off, teammates don't hurt each
-   * other (bullets, blasts, flames, gas, swings); your own grenade still hurts you.
+   * other (bullets, blasts, flames, gas, swings); your own grenade still hurts you (unless `selfHarm` is off).
    */
   canHurt(attacker: number, target: PlayerState): boolean {
-    if (this.tuning.friendlyFire >= 1 || attacker === target.id) return true;
+    if (attacker === target.id) return this.selfHarm;
+    if (this.tuning.friendlyFire >= 1) return true;
     const by = this.players[attacker];
     return !by || !allies(by, target);
   }
 
   damage(target: PlayerState, amount: number, attacker: number, source: number, zone: number): void {
     if (!target.alive || amount <= 0 || !this.canHurt(attacker, target)) return;
+    // spawn cover: only your own grenade or fire still hurts you
+    if (target.coverTicks > 0 && attacker !== target.id) return;
     target.hp -= amount;
     target.regenDelay = ticks(this.tuning.healthRegenDelay);
     if (attacker !== target.id) {
@@ -364,6 +386,8 @@ export class Game {
       const y0 = p.y;
       if (stepMovement(this.world, p, t, mech ? mech.bodyEnv(p, t, bodyEnv) : null)) this.events.push({ type: 'dash', player: p.id, x: x0, y: y0, dir: p.dashDir, chain: p.dashChain });
     }
+    // spawn cover runs down, or ends as its player attacks, before anyone fires this tick
+    for (const p of this.players) if (p?.alive && !p.held && p.coverTicks > 0) stepCover(p);
     // the shield key and carry modes, before anyone fires: every shot this tick meets the same shields
     for (const p of this.players) if (p?.alive && !p.held) stepShield(p);
     for (const p of this.players) if (p?.alive && !p.held) stepWeapons(this, p);
@@ -419,6 +443,7 @@ export class Game {
       const y0 = p.y;
       const mech = this.mech;
       if (stepMovement(this.world, p, this.tuning, mech ? mech.bodyEnv(p, this.tuning, bodyEnv) : null)) this.events.push({ type: 'dash', player: p.id, x: x0, y: y0, dir: p.dashDir, chain: p.dashChain });
+      if (p.coverTicks > 0) stepCover(p);
       stepShield(p);
       stepWeapons(this, p);
       stepBurn(this, p);
@@ -436,4 +461,9 @@ export class Game {
     }
     p.prevButtons = p.input.buttons;
   }
+}
+
+/** One tick of a player's spawn cover: down by a tick, or gone the moment they attack. */
+function stepCover(p: PlayerState): void {
+  p.coverTicks = p.input.buttons & ATTACK_BUTTONS ? 0 : p.coverTicks - 1;
 }

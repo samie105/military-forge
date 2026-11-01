@@ -1,12 +1,13 @@
 /**
  * Everything social that floats over the app (App.tsx mounts it once, after the overlays): the
- * friends panel, the invite picker and the invite toast. It also opens the push channel while a
+ * friends panel, the invite picker, the invite toast and the friend request toast. It also opens the push channel while a
  * signed-in, online player is here. Nothing renders without one.
  */
 import { useContext, useEffect } from 'react';
 import { ControllerContext, type useCtl } from '../shell/context';
 import { FriendsPanel } from './FriendsPanel';
 import { InviteFriendsBlock, InvitePicker, InviteToast } from './Invites';
+import { RequestToast } from './RequestToast';
 import { useSocial } from './Squad';
 import { socialOf } from './social';
 import { VoiceHud } from '../voice/VoiceHud';
@@ -32,6 +33,7 @@ export function SocialLayer() {
           <FriendsPanel social={social} />
           <InvitePicker social={social} />
           <InviteToast social={social} />
+          <RequestToast social={social} />
         </>
       )}
     </>

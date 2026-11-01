@@ -1,23 +1,35 @@
 /**
  * The friends panel (board "SOCIAL · friends, invites, voice", S2/P2): a Frost-glass drawer from the
- * right on desktop (1920×1080 design px) and a sheet on phones (812×375). Your friend code, Add a
- * friend (exact name or code), and three tabs: Friends (requests on top, then In a match / Online /
- * Offline), Requests (to you and sent), Blocked. Each friend row: Join their room, and a menu with
- * Remove and Block (each asked once more). Esc or the scrim closes it.
+ * right on desktop (1920×1080 design px) and a sheet on phones (812×375). Your friend code, the find
+ * field (names as you type, or an exact name or friend code with Send), and three tabs: Friends
+ * (requests on top, then In a room / Online / Offline, then Played with recently), Requests (to you and
+ * sent), Blocked. While the field holds a search, the players found take the tabs' place. Each friend
+ * row: Join their room, and a menu with Remove and Block (each asked once more). Esc clears the search,
+ * then closes the panel; so does the scrim.
  */
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { cosmeticLoadoutFromWireIds } from '@military-forge/content';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { Portrait } from '../portrait/Portrait';
 import { usePhoneLayout } from '../shell/screens/phone/layout';
 import { Icon } from '../ui/Icon';
-import type { Friend, FriendsList, Person } from './api';
+import type { FoundPlayer, Friend, FriendsList, LookIds, Person } from './api';
 import { IncomingInvites, InviteButton } from './Invites';
-import { statusText, useSel, type FriendsTab, type SocialController } from './social';
+import { addedText, agoText, statusText, useSel, type FriendsTab, type SocialController } from './social';
 
-const initial = (name: string) => ([...name.trim()][0] ?? '?').toUpperCase();
-
-export function Avatar({ name, status, ring }: { name: string; status?: Friend['status'] | undefined; ring?: boolean | undefined }) {
+/**
+ * A player's face: their own soldier (the owner's rule: a player's character is their avatar
+ * everywhere, audit C-28), the silhouette with their initial until it lands or when they never saved
+ * a look. A status dot and a volt ring for friends in a room.
+ */
+export function Avatar({ name, look, status, ring }: { name: string; look?: LookIds | undefined; status?: Friend['status'] | undefined; ring?: boolean | undefined }) {
+  const key = look ? look.join('.') : '';
+  // the ids stand for the look: a new array with the same ids is the same soldier
+  const loadout = useMemo(() => (look ? cosmeticLoadoutFromWireIds(look) : null), [key]);
   return (
-    <span className={`avatar sx-av${ring ? ' sx-av--ring' : ''}`} aria-hidden="true">
-      {initial(name)}
+    <span className={`avatar avatar--portrait sx-av${ring ? ' sx-av--ring' : ''}`} aria-hidden="true">
+      <span className="sx-av__face">
+        <Portrait look={loadout} size={64} name={name} />
+      </span>
       {status && <i className={`sx-dot sx-dot--${status}`}></i>}
     </span>
   );
@@ -37,15 +49,17 @@ function PanelBody({ social, phone }: { social: SocialController; phone: boolean
   const list = useSel(social.store, (s) => s.list);
   const error = useSel(social.store, (s) => s.error);
   const tab = useSel(social.store, (s) => s.panel.tab);
+  const searching = useSel(social.store, (s) => s.search.status !== 'idle');
   const drawer = useRef<HTMLDivElement>(null);
 
-  // Esc closes the panel (and only the panel: the shell's menu toggle doesn't see it)
+  // Esc clears a search, then closes the panel (and only the panel: the shell's menu toggle doesn't see it)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.code !== 'Escape') return;
       e.preventDefault();
       e.stopImmediatePropagation();
-      social.closePanel();
+      if (social.store.getState().search.query) social.clearSearch();
+      else social.closePanel();
     };
     window.addEventListener('keydown', onKey, true);
     drawer.current?.focus({ preventScroll: true });
@@ -85,36 +99,42 @@ function PanelBody({ social, phone }: { social: SocialController; phone: boolean
           {!phone && <CodeCard social={social} list={list} />}
           <AddFriend social={social} phone={phone} />
 
-          <div className="sx-tabs" role="tablist" aria-label="Friends lists">
-            <Tab social={social} tab="friends" on={tab === 'friends'}>
-              Friends{list ? ` · ${list.friends.length}` : ''}
-            </Tab>
-            <Tab social={social} tab="requests" on={tab === 'requests'} badge={requests}>
-              Requests
-            </Tab>
-            <Tab social={social} tab="blocked" on={tab === 'blocked'}>
-              Blocked
-            </Tab>
-          </div>
+          {searching ? (
+            <SearchResults social={social} phone={phone} />
+          ) : (
+            <>
+              <div className="sx-tabs" role="tablist" aria-label="Friends lists">
+                <Tab social={social} tab="friends" on={tab === 'friends'}>
+                  Friends{list ? ` · ${list.friends.length}` : ''}
+                </Tab>
+                <Tab social={social} tab="requests" on={tab === 'requests'} badge={requests}>
+                  Requests
+                </Tab>
+                <Tab social={social} tab="blocked" on={tab === 'blocked'}>
+                  Blocked
+                </Tab>
+              </div>
 
-          <div className="sx-list" role="tabpanel">
-            {error && (
-              <p className="status status--warn sx-note">
-                <Icon name="warn" size="sm" />
-                {error}
-              </p>
-            )}
-            {!list && !error && <p className="status status--busy sx-note">Loading your friends…</p>}
-            {list && tab === 'friends' && <FriendsTabView social={social} list={list} />}
-            {list && tab === 'requests' && <RequestsTabView social={social} list={list} />}
-            {list && tab === 'blocked' && <BlockedTabView social={social} list={list} />}
-            {phone && (
-              <p className="sx-privacy sx-privacy--inlist">
-                <Icon name="lock" size="sm" />
-                Only friends see your status and your room.
-              </p>
-            )}
-          </div>
+              <div className="sx-list" role="tabpanel">
+                {error && (
+                  <p className="status status--warn sx-note">
+                    <Icon name="warn" size="sm" />
+                    {error}
+                  </p>
+                )}
+                {!list && !error && <p className="status status--busy sx-note">Loading your friends…</p>}
+                {list && tab === 'friends' && <FriendsTabView social={social} list={list} />}
+                {list && tab === 'requests' && <RequestsTabView social={social} list={list} />}
+                {list && tab === 'blocked' && <BlockedTabView social={social} list={list} />}
+                {phone && (
+                  <p className="sx-privacy sx-privacy--inlist">
+                    <Icon name="lock" size="sm" />
+                    Only friends see your status and your room.
+                  </p>
+                )}
+              </div>
+            </>
+          )}
 
           <p className="sx-privacy">
             <Icon name="lock" size="sm" />
@@ -153,32 +173,46 @@ function CodeCard({ social, list }: { social: SocialController; list: FriendsLis
   );
 }
 
+/**
+ * The find field: a name as you type (the players found show below it), or Send for an exact name or
+ * a friend code (the old Add a friend).
+ */
 function AddFriend({ social, phone }: { social: SocialController; phone: boolean }) {
   const adding = useSel(social.store, (s) => s.adding);
-  const added = useSel(social.store, (s) => s.added);
-  const [text, setText] = useState('');
+  const addedNow = useSel(social.store, (s) => s.added);
+  const list = useSel(social.store, (s) => s.list);
+  const text = useSel(social.store, (s) => s.search.query);
+  const added = addedNow && addedText(addedNow, list);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     const outcome = await social.add(text);
-    if (outcome?.tone === 'ok') setText('');
+    if (outcome?.tone === 'ok') social.clearSearch();
   };
   return (
-    <form className="sx-add" onSubmit={(e) => void submit(e)}>
+    <form className="sx-add" role="search" onSubmit={(e) => void submit(e)}>
       <label className="sx-add__field">
-        <span className="vh">Add a friend by exact name or friend code</span>
+        <span className="vh">Find players by name, or add a friend by exact name or friend code</span>
+        <Icon name="sx-search" size="sm" />
         <input
           className="sx-add__input"
+          type="search"
           value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Exact name or friend code"
+          onChange={(e) => social.setQuery(e.target.value)}
+          placeholder={phone ? 'Name or friend code' : 'Player name or friend code'}
           maxLength={32}
           autoComplete="off"
           autoCapitalize="off"
           spellCheck={false}
           enterKeyHint="send"
+          aria-controls="sx-found"
         />
+        {text && (
+          <button type="button" className="sx-add__clear" aria-label="Clear the search" onClick={() => social.clearSearch()}>
+            <Icon name="close" size="sm" />
+          </button>
+        )}
       </label>
-      <button type="submit" className="btn btn--volt btn--sm sx-add__send" disabled={adding || !text.trim()}>
+      <button type="submit" className="btn btn--volt btn--sm sx-add__send" disabled={adding || !text.trim()} title="Send a request to this exact name or friend code">
         <Icon name="users-plus" />
         {phone ? '' : adding ? 'Sending' : 'Send'}
         {phone && <span className="vh">Send request</span>}
@@ -193,6 +227,82 @@ function AddFriend({ social, phone }: { social: SocialController; phone: boolean
   );
 }
 
+/** The players a search found, or why there are none (too short, none, can't reach the server, too many). */
+function SearchResults({ social, phone }: { social: SocialController; phone: boolean }) {
+  const search = useSel(social.store, (s) => s.search);
+  const code = asCode(search.query);
+  let note: ReactNode = null;
+  if (search.status === 'short') note = <p className="sx-note">Type at least 2 letters of their name.</p>;
+  else if (search.status === 'busy' && !search.players.length) note = <p className="status status--busy sx-note">Searching…</p>;
+  else if (search.status === 'failed')
+    note = (
+      <p className="status status--warn sx-note">
+        <Icon name="warn" size="sm" />
+        {search.error}
+      </p>
+    );
+  else if (search.status === 'done' && !search.players.length)
+    note = (
+      <div className="sx-empty">
+        <Icon name="sx-search" size="lg" />
+        <p>
+          <b>No player's name starts with "{search.query.trim()}".</b> Check the spelling, or ask them for their friend code. Some players turn search off.
+        </p>
+      </div>
+    );
+  return (
+    <div className="sx-list sx-found" id="sx-found" role="region" aria-label="Players found" aria-busy={search.status === 'busy'}>
+      <h3 className="sx-sec sx-sec--volt">Players{search.players.length ? ` · ${search.players.length}` : ''}</h3>
+      {code && <p className="sx-note">That looks like a friend code: press {phone ? 'the add button' : 'Send'} to add it.</p>}
+      <div aria-live="polite">{note}</div>
+      {search.players.map((p) => (
+        <FoundRow key={p.id} social={social} player={p} line={`Level ${p.level}`} />
+      ))}
+    </div>
+  );
+}
+
+/** A code-shaped search (`7KQ4-M9XP`): Send adds by it. */
+function asCode(text: string): boolean {
+  return /^[23456789ABCDEFGHJKMNPQRSTVWXYZ]{4}[\s-]?[23456789ABCDEFGHJKMNPQRSTVWXYZ]{4}$/i.test(text.trim());
+}
+
+/** A player found by name or met in a match, with what you can do now: Add, Request sent, Accept, Friends. */
+export function FoundRow({ social, player, line }: { social: SocialController; player: FoundPlayer; line: string }) {
+  const busy = useSel(social.store, (s) => !!s.busy[player.id]);
+  const relation = useSel(social.store, () => social.relationOf(player));
+  return (
+    <div className="sx-row" aria-busy={busy}>
+      <Avatar name={player.nickname} look={player.look} />
+      <span className="sx-row__who">
+        <b>{player.nickname}</b>
+        <span className="sx-row__line">{line}</span>
+      </span>
+      {relation === 'friends' ? (
+        <span className="tag sx-tag sx-tag--ok sx-sent">
+          <Icon name="check" size="sm" />
+          Friends
+        </span>
+      ) : relation === 'sent' ? (
+        <span className="tag sx-tag sx-tag--muted sx-sent" title="It waits until they answer">
+          <Icon name="sx-hourglass" size="sm" />
+          Request sent
+        </span>
+      ) : relation === 'incoming' ? (
+        <button type="button" className="btn btn--volt btn--sm sx-act" disabled={busy} onClick={() => void social.accept({ id: player.id, nickname: player.nickname, at: '', look: player.look })} aria-label={`Accept ${player.nickname}'s request`}>
+          <Icon name="check" />
+          Accept
+        </button>
+      ) : (
+        <button type="button" className="btn btn--volt btn--sm sx-act" disabled={busy} onClick={() => void social.addPlayer(player)} aria-label={`Add ${player.nickname} as a friend`}>
+          <Icon name="users-plus" />
+          Add
+        </button>
+      )}
+    </div>
+  );
+}
+
 function Section({ title, tone, count }: { title: string; tone: 'volt' | 'ok' | 'muted'; count: number }) {
   return (
     <h3 className={`sx-sec sx-sec--${tone}`}>
@@ -203,7 +313,8 @@ function Section({ title, tone, count }: { title: string; tone: 'volt' | 'ok' | 
 
 function FriendsTabView({ social, list }: { social: SocialController; list: FriendsList }) {
   const groups: [string, 'volt' | 'ok' | 'muted', Friend[]][] = [
-    ['In a match', 'volt', list.friends.filter((f) => f.status === 'in_room')],
+    // a room in its lobby or mid-match (each row says which: audit C-27)
+    ['In a room', 'volt', list.friends.filter((f) => f.status === 'in_room')],
     ['Online', 'ok', list.friends.filter((f) => f.status === 'online')],
     ['Offline', 'muted', list.friends.filter((f) => f.status === 'offline')],
   ];
@@ -227,7 +338,7 @@ function FriendsTabView({ social, list }: { social: SocialController; list: Frie
         <div className="sx-empty">
           <Icon name="sx-friends" size="lg" />
           <p>
-            <b>No friends yet.</b> Send someone your code, or add them by their exact name.
+            <b>No friends yet.</b> Find them by name above, or send someone your code.
           </p>
         </div>
       )}
@@ -242,7 +353,25 @@ function FriendsTabView({ social, list }: { social: SocialController; list: Frie
             </div>
           ),
       )}
+      <PlayedWith social={social} />
     </>
+  );
+}
+
+/** Played with recently: people from your last matches who aren't friends yet (nothing when there are none). */
+function PlayedWith({ social }: { social: SocialController }) {
+  const recent = useSel(social.store, (s) => s.recent);
+  const list = useSel(social.store, (s) => s.list);
+  // a friend made since the last load leaves at once
+  const people = recent?.filter((p) => !list?.friends.some((f) => f.id === p.id)) ?? [];
+  if (!people.length) return null;
+  return (
+    <div className="sx-group">
+      <Section title="Played with recently" tone="muted" count={people.length} />
+      {people.map((p) => (
+        <FoundRow key={p.id} social={social} player={p} line={p.at ? `Played ${agoText(p.at)}` : `Level ${p.level}`} />
+      ))}
+    </div>
   );
 }
 
@@ -287,7 +416,7 @@ function PersonRow({ social, person, line, children }: { social: SocialControlle
   const busy = useSel(social.store, (s) => !!s.busy[person.id]);
   return (
     <div className="sx-row" aria-busy={busy}>
-      <Avatar name={person.nickname} />
+      <Avatar name={person.nickname} look={person.look} />
       <span className="sx-row__who">
         <b>{person.nickname}</b>
         <span className="sx-row__line">{line}</span>
@@ -301,7 +430,7 @@ function IncomingRow({ social, person }: { social: SocialController; person: Per
   const busy = useSel(social.store, (s) => !!s.busy[person.id]);
   return (
     <div className="sx-row sx-row--req" aria-busy={busy}>
-      <Avatar name={person.nickname} />
+      <Avatar name={person.nickname} look={person.look} />
       <span className="sx-row__who">
         <b>{person.nickname}</b>
         <span className="sx-row__line sx-tone--volt">Wants to be friends</span>
@@ -351,7 +480,7 @@ export function FriendRow({ social, friend, extra }: { social: SocialController;
   }
   return (
     <div className={`sx-row sx-row--${friend.status}`} aria-busy={busy}>
-      <Avatar name={friend.nickname} status={friend.status} ring={friend.status === 'in_room'} />
+      <Avatar name={friend.nickname} look={friend.look} status={friend.status} ring={friend.status === 'in_room'} />
       <span className="sx-row__who">
         <b>{friend.nickname}</b>
         <span className={`sx-row__line sx-tone--${tone}`}>{friend.room && friend.room === myRoom ? 'In your room' : statusText(friend)}</span>

@@ -4,9 +4,13 @@
  * the API notes it whenever a player makes or joins a room; a player whose beats stop goes offline by
  * themselves. Being in Valkey, it survives an API restart.
  *
- *   PUT    /me/presence { room?: CODE | null } → { status, room, lastSeenAt }   (your own view)
+ *   PUT    /me/presence { room?: CODE | null, playing?: boolean } → { status, room, lastSeenAt, playing? }   (your own view)
  *   DELETE /me/presence                         → 204 (page closed, signed out: offline now)
- *   GET    /players/:id/presence               → { status: offline | online | in_room, room, lastSeenAt }
+ *   GET    /players/:id/presence               → { status: offline | online | in_room, room, lastSeenAt, playing? }
+ *
+ * `playing` (31 Oct, audit C-27): in a room, whether a match is on (the countdown to the scoreboard) or
+ * the room is in its lobby, so a host waiting for friends doesn't show as "In a match". Pages from
+ * before it don't send it, and their room shows without either.
  *
  * Presence is private (23 Oct): only you and your friends see it. Friends see the room's code too
  * (a code is an invitation, and friends are who you'd invite); anyone else gets 403 `not_friends`,
@@ -30,6 +34,8 @@ interface PresenceRecord {
   status: 'online' | 'in_room';
   room: string | null;
   ts: string;
+  /** in_room: a match is on (absent: the page didn't say) */
+  playing?: boolean;
 }
 
 export const presenceKey = (userId: string) => `presence:${userId}`;
@@ -51,14 +57,16 @@ export class PresenceService {
     this.changed = listener;
   }
 
-  /** `room`: a room code the player is in (only kept when that room exists). */
-  async beat(userId: string, room: string | null): Promise<PresenceRecord> {
+  /** `room`: a room code the player is in (only kept when that room exists); `playing`: a match is on in it. */
+  async beat(userId: string, room: string | null, playing?: boolean): Promise<PresenceRecord> {
     const code = room ? normalizeRoomCode(room) : null;
     const inRoom = code !== null && (await this.kv.get(`room:${code}`)) !== null;
-    const record: PresenceRecord = { status: inRoom ? 'in_room' : 'online', room: inRoom ? code : null, ts: new Date(this.now()).toISOString() };
+    const record: PresenceRecord = { status: inRoom ? 'in_room' : 'online', room: inRoom ? code : null, ts: new Date(this.now()).toISOString(), ...(inRoom && playing !== undefined ? { playing } : {}) };
     const before = this.changed ? await this.get(userId) : null;
     await this.kv.set(presenceKey(userId), JSON.stringify(record), { ttlMs: PRESENCE_TTL_MS });
-    if (before && (before.status !== record.status || before.room !== record.room)) await this.tellChange(userId, { status: record.status, room: record.room, lastSeenAt: record.ts });
+    if (before && (before.status !== record.status || before.room !== record.room || before.playing !== record.playing)) {
+      await this.tellChange(userId, { status: record.status, room: record.room, lastSeenAt: record.ts, ...(record.playing !== undefined ? { playing: record.playing } : {}) });
+    }
     return record;
   }
 
@@ -89,19 +97,22 @@ export interface PresenceView {
   status: PresenceStatus;
   room: string | null;
   lastSeenAt: string | null;
+  /** in_room: a match is on (true) or the room is in its lobby (false); absent when the page didn't say */
+  playing?: boolean;
 }
 
 function parsePresence(raw: string | null): PresenceView {
   if (!raw) return { status: 'offline', room: null, lastSeenAt: null };
   try {
     const r = JSON.parse(raw) as PresenceRecord;
-    return { status: r.status === 'in_room' ? 'in_room' : 'online', room: r.room ?? null, lastSeenAt: r.ts ?? null };
+    const inRoom = r.status === 'in_room';
+    return { status: inRoom ? 'in_room' : 'online', room: r.room ?? null, lastSeenAt: r.ts ?? null, ...(inRoom && typeof r.playing === 'boolean' ? { playing: r.playing } : {}) };
   } catch {
     return { status: 'offline', room: null, lastSeenAt: null };
   }
 }
 
-const Beat = z.strictObject({ room: z.string().max(16).nullable().optional() });
+const Beat = z.strictObject({ room: z.string().max(16).nullable().optional(), playing: z.boolean().optional() });
 
 export function mePresenceRoutes(deps: { auth: AuthService; kv: Kv; presence: PresenceService }): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
@@ -110,8 +121,8 @@ export function mePresenceRoutes(deps: { auth: AuthService; kv: Kv; presence: Pr
     const { userId } = c.get('auth')!;
     await enforceRateLimit(deps.kv, LIMITS.presence, userId);
     const body = await readJson(c, Beat);
-    const r = await deps.presence.beat(userId, body.room ?? null);
-    return c.json({ status: r.status, room: r.room, lastSeenAt: r.ts });
+    const r = await deps.presence.beat(userId, body.room ?? null, body.playing);
+    return c.json({ status: r.status, room: r.room, lastSeenAt: r.ts, ...(r.playing !== undefined ? { playing: r.playing } : {}) });
   });
   app.delete('/', async (c) => {
     await deps.presence.clear(c.get('auth')!.userId);
@@ -130,7 +141,7 @@ export function playerPresenceRoute(deps: { auth: AuthService; presence: Presenc
     // private: yourself and your friends only (a stranger can't tell whether you exist, either)
     if (who !== self && !(await deps.areFriends(self, who))) throw new ApiError(403, 'not_friends', "Only friends see each other's status");
     const p = await deps.presence.get(who);
-    return c.json({ status: p.status, room: p.room, lastSeenAt: p.lastSeenAt });
+    return c.json({ status: p.status, room: p.room, lastSeenAt: p.lastSeenAt, ...(p.playing !== undefined ? { playing: p.playing } : {}) });
   });
   return app;
 }

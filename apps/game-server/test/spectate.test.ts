@@ -118,6 +118,7 @@ function killNextStep(room: Room, victim: number, killer: number) {
     game.step = step;
     const v = game.players[victim]!;
     v.respawnTicks = 0;
+    v.coverTicks = 0; // past its spawn cover (audit B-10): the kill lands
     game.damage(v, 9999, killer, 0, 0);
     v.respawnTicks = 100_000; // stays dead through the test
   };

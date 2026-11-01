@@ -5,7 +5,7 @@
  * `recommend`, pure, on the facts this device keeps; every card shown, taken or put off is logged.
  * Without the onboarding memory (the debug client), or with no card to show, Home keeps `fallback`.
  */
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Icon } from '../ui/Icon';
 import { useCtl } from '../shell/context';
 import type { ShellController } from '../shell/controller';
@@ -25,7 +25,8 @@ export function takeCard(ctl: ShellController, card: Card): void {
   else ctl.openSettings(a.tab);
 }
 
-export function NextOrders({ context, fallback }: { context: OrdersContext; fallback: ReactNode }) {
+/** `held`: Home is asking something else first (tour/homeQueue.ts); the column keeps `fallback` meanwhile, and no card counts as shown. */
+export function NextOrders({ context, fallback, held = false }: { context: OrdersContext; fallback: ReactNode; held?: boolean }) {
   const ctl = useCtl();
   const facts = useTourFacts();
   // the cards as Home opened: one taken or put off leaves, but new facts don't reshuffle what's on screen
@@ -41,16 +42,19 @@ export function NextOrders({ context, fallback }: { context: OrdersContext; fall
       })
     : [];
 
-  // each card counts as shown once per visit to Home
+  // each card counts as shown once per visit to Home, when it is (not while held back)
+  const logged = useRef(false);
   useEffect(() => {
+    if (held || logged.current) return;
+    logged.current = true;
     const memory = liveTourMemory();
     shown.forEach((c, rank) => {
       memory?.fact({ k: 'card', card: c.id, what: 'shown', at: Date.now() });
       memory?.record({ t: 'card.shown', card: c.id, rank, score: Math.round(c.score) });
     });
-  }, [shown]);
+  }, [shown, held]);
 
-  if (!facts || !cards.length) return <>{fallback}</>;
+  if (held || !facts || !cards.length) return <>{fallback}</>;
   const act = (card: Card, rank: number, what: 'acted' | 'dismissed') => {
     liveTourMemory()?.fact({ k: 'card', card: card.id, what, at: Date.now() });
     liveTourMemory()?.record({ t: what === 'acted' ? 'card.tapped' : 'card.dismissed', card: card.id, rank, score: Math.round(card.score) });

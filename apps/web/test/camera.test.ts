@@ -208,6 +208,32 @@ describe('tall maps: the view leans the way you fly (maps-vertical)', () => {
     expect(at(x - 3, { left: 0.3, right: 0.56 })).toBeCloseTo(at(x - 3, null), 3);
   });
 
+  it('a focus point (First flight on a phone) puts the target in the open upper middle, the soldier in the band (audit A-18)', () => {
+    const map = getMap('street-market');
+    const x = (map.bounds.minX + map.bounds.maxX) / 2;
+    const band = { left: 0.3, right: 0.56 };
+    const run = (target: { x: number; y: number }, me: { x: number; y: number }) => {
+      const cam = new Camera();
+      cam.resize(844, 390);
+      cam.viewScale = 0.8;
+      cam.soldierBand = band;
+      cam.focus = target;
+      for (let i = 0; i < 240; i++) cam.follow(me.x, me.y, me.x, me.y + 0.9, 1 / 60, map);
+      return { me: { x: cam.toScreenX(me.x) / 844, y: cam.toScreenY(me.y) / 390 }, target: { x: cam.toScreenX(target.x) / 844, y: cam.toScreenY(target.y) / 390 } };
+    };
+    // 4 m to the right on the same ground: the target in the middle, above the thumbs' controls
+    const near = run({ x: x + 4, y: 21 }, { x, y: 20 });
+    expect(near.target.x).toBeCloseTo(0.45, 2);
+    expect(near.target.y).toBeLessThan(0.4);
+    expect(near.me.x).toBeGreaterThanOrEqual(band.left - 1e-6);
+    // far away: the band keeps the soldier between the thumbs
+    expect(run({ x: x + 30, y: 21 }, { x, y: 20 }).me.x).toBeGreaterThanOrEqual(band.left - 1e-6);
+    // flown up a tower 8 m over the target: the view comes down to it, the soldier still on screen
+    const high = run({ x: x + 6, y: 21 }, { x, y: 28 });
+    expect(high.target.y).toBeLessThan(0.75);
+    expect(high.me.y).toBeGreaterThan(0.05);
+  });
+
   it('look-ahead off keeps the view on the soldier', () => {
     const cam = new Camera();
     cam.resize(812, 375);

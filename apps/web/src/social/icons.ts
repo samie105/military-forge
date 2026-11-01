@@ -17,6 +17,8 @@ const SYMBOLS: Record<string, string> = {
   onair: '<path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/>',
   hand: '<path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12M11 11V4a1.5 1.5 0 0 1 3 0v7M14 11V5.5a1.5 1.5 0 0 1 3 0V13M17 9.5a1.5 1.5 0 0 1 3 0V15a6.5 6.5 0 0 1-6.5 6.5h-1A6.5 6.5 0 0 1 7 18.4L4.6 14.6a1.5 1.5 0 0 1 2.5-1.7L8 14"/>',
   hourglass: '<path d="M6 2.5h12M6 21.5h12M7.5 2.5c0 5 9 5 9 9.5s-9 4.5-9 9.5M16.5 2.5c0 5-9 5-9 9.5s9 4.5 9 9.5"/>',
+  // the friends panel's find field
+  search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.4 15.4l6.1 6.1"/>',
 };
 
 const ID = 'mf-social-sprite';

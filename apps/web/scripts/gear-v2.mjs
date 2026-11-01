@@ -142,7 +142,7 @@ try {
   }
 
   // ---- the world tags: training by the rack, then by a lone crate
-  await page.goto(`${base}/?app&time=600`, { waitUntil: 'load' });
+  await page.goto(`${base}/?app&time=600&armory=1&map=movement-test`, { waitUntil: 'load' });
   await page.waitForSelector('[data-screen="home"]', { timeout: 30_000 });
   await page.evaluate(() => window.__game.shell.controller.go({ to: 'training' }));
   await page.waitForSelector('#hud[data-active-state~="match"]', { timeout: 60_000 });

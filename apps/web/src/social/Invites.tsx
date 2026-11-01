@@ -13,9 +13,14 @@ import { MatchPhase } from '@military-forge/sim';
 import { useEffect, useState, type CSSProperties } from 'react';
 import { usePhoneLayout } from '../shell/screens/phone/layout';
 import { Icon } from '../ui/Icon';
-import type { Friend } from './api';
+import type { Friend, FriendsList, LookIds } from './api';
 import { Avatar } from './FriendsPanel';
 import { INVITE_SECONDS, clockText, secondsLeft, statusText, useSel, type ClientInvite, type SocialController } from './social';
+
+/** A friend's look, from the friends list (an invite names its sender only): undefined when unknown. */
+export function lookOf(list: FriendsList | null, id: string | undefined): LookIds | undefined {
+  return id ? list?.friends.find((f) => f.id === id)?.look : undefined;
+}
 
 /** Re-renders every `ms` while `on` (countdowns). */
 function useTick(on: boolean, ms = 1000): void {
@@ -39,6 +44,7 @@ export function InviteToast({ social }: { social: SocialController }) {
   const phone = usePhoneLayout();
   const shown = invites.filter((i) => !hidden[i.id] && secondsLeft(i) > 0);
   const inv = shown[0];
+  const look = useSel(social.store, (s) => lookOf(s.list, inv?.from.id));
   useTick(!!inv);
   // the panel shows invites itself, and the picker is busy with yours
   if (!inv || panelOpen || pickerOpen) return null;
@@ -53,7 +59,7 @@ export function InviteToast({ social }: { social: SocialController }) {
         <div className={`sx-toast m-p9${playing ? ' sx-toast--play' : ''}`} role="alertdialog" aria-labelledby={`sx-inv-${inv.id}`} key={inv.id}>
           <span className="sx-toast__edge" aria-hidden="true"></span>
           <div className="sx-toast__top">
-            <Avatar name={inv.from.nickname} ring />
+            <Avatar name={inv.from.nickname} look={look} ring />
             <span className="sx-toast__text">
               <span className="label label--volt sx-toast__label">Invite · {inv.from.nickname}</span>
               <b id={`sx-inv-${inv.id}`} className="sx-toast__title">
@@ -157,9 +163,10 @@ export function IncomingInvites({ social }: { social: SocialController }) {
 }
 
 function InviteRow({ social, inv }: { social: SocialController; inv: ClientInvite }) {
+  const look = useSel(social.store, (s) => lookOf(s.list, inv.from.id));
   return (
     <div className="sx-row sx-row--invite">
-      <Avatar name={inv.from.nickname} ring />
+      <Avatar name={inv.from.nickname} look={look} ring />
       <span className="sx-row__who">
         <b>{inv.from.nickname}</b>
         <span className="sx-row__line sx-tone--brass">
@@ -231,7 +238,7 @@ function PickerBody({ social, room, phone }: { social: SocialController; room: s
             )}
             {friends.map((f) => (
               <div key={f.id} className={`sx-row sx-row--${f.status}`}>
-                <Avatar name={f.nickname} status={f.status} ring={f.status === 'in_room'} />
+                <Avatar name={f.nickname} look={f.look} status={f.status} ring={f.status === 'in_room'} />
                 <span className="sx-row__who">
                   <b>{f.nickname}</b>
                   <span className={`sx-row__line sx-tone--${f.room === room ? 'ok' : f.status === 'in_room' ? 'volt' : f.status === 'online' ? 'ok' : 'muted'}`}>

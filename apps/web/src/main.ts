@@ -12,7 +12,10 @@
  *                ?bots=<0-12>&botlevel=easy|normal|hard (?bots=0: the dummy targets)
  *   /?map=flux-lab   local mode on another map: street-market (W8's kit, drawn by render3d/environment),
  *                    lunar-outpost, storm-front, flux-lab (map mechanics demos, docs/02 §20), mechanics-test,
- *                    movement-test (default). Online, the server picks (--map=).
+ *                    movement-test (default). Online, the server picks (--map=). The app's training
+ *                    is on Street Market (First flight on the movement test's range) unless ?map= says
+ *                    otherwise.
+ *   /?armory=1   the test armory: a rack of one of every gun by the spawns, in local play (off otherwise)
  *   /?time=60&kills=5&countdown=3       local match rules (0 = no limit); /?sandbox: free play, no match
  *   /?render=2d  the canvas-2D view instead (3D is the default, online too); ?gfx=low|medium|high;
  *                ?softgl accepts software WebGL for 3D (automated browsers always do; players on it get 2D)
@@ -38,7 +41,7 @@ import { warmNavGraph } from './navWarm';
 import { Minimap } from './minimap/minimap';
 import { capText } from './ui/icons';
 import { LoadoutSync } from './locker/accountSync';
-import { PresenceBeat } from './presence';
+import { PRESENCE_BEAT_MS, PresenceBeat, matchOn } from './presence';
 import { LocalMode } from './localMode';
 import { OnlineMode } from './onlineMode';
 import { mountHud, type ScoreRow } from './hud';
@@ -47,7 +50,7 @@ import { connectAnswered, joinByCode, lanSignalUrl, normalizeLanCode } from './l
 import { Renderer, type RenderOptions } from './render';
 import { localMatchRules, mountShell, registerRoute, type GameHost, type RouteMount, type Settings } from './shell';
 import { loadSettings, trainingPaused } from './shell/controller';
-import type { GraphicsSetting } from './shell/store';
+import type { GraphicsSetting, ShellState } from './shell/store';
 import { defaultBindings, keyLabel, toKeyBindings, uiCodes } from './shell/controls';
 import { LIVE_FIRE_RULES } from './shell/localMatch';
 // the 3D view's boot-time parts (no three.js): the view itself is a chunk of its own (view3d/)
@@ -65,7 +68,7 @@ import { relationOf } from './teams/marking';
 import { TeamStrip } from './teams/hudStrip';
 import { posterUp } from './presentation/state';
 import { countFrame, framesPerSecond, recordNet } from './stats';
-import { getTouchSettings, isTouchDevice, mountTouch, onTouchAction, onTouchHintsReset, rearmTouch, setTouchMatchLive, touchActive, touchChoosing, touchControlRect, touchDrillRunning, touchHintsDoneBy, touchHintsPossible, touchHintsSeen, type ControlId } from './touch';
+import { getTouchSettings, holdAutoFire, isTouchDevice, mountTouch, onTouchAction, onTouchHintsReset, rearmTouch, setTouchMatchLive, touchActive, touchChoosing, touchControlRect, touchDrillRunning, touchHintsDoneBy, touchHintsPossible, touchHintsSeen, type ControlId } from './touch';
 import type { HintId, TouchHintId } from './tour/hints';
 import { applyPadSettings, currentDevice, isPadCode, mountGamepad, onInputDevice } from './gamepad';
 import { mountAdClicks } from './ads';
@@ -86,7 +89,7 @@ import { keepForOffline, startPwa } from './pwa';
 import { readReturn, withoutReturn, type StoreView } from './store/model';
 import type { StoreApi } from './store/screen';
 import { launchedInstalled } from './pwa/install';
-import { startMetrics } from './metrics';
+import { metrics, promptDue, startMetrics } from './metrics';
 import { buildId } from 'virtual:title-info';
 import { mountTourReadout } from './tour/readout';
 import { BackdropPacer } from './ui/backdrop';
@@ -100,6 +103,9 @@ import { SpectateInput } from './spectate/input';
 import { SpectatePicker } from './spectate/picker';
 import { diag, hookDiagErrors } from './diag/log';
 import { setReportSources } from './diag/report';
+import { showStagingBadge } from './stagingBadge';
+
+showStagingBadge();
 
 // the device's event log for problem reports (diag/): script errors from the first moment
 hookDiagErrors();
@@ -166,6 +172,14 @@ class GameInput extends InputSampler {
 /** local mode's map (the debug client's map links, or `?map=` for training); online, the server's */
 const requestedMap = params.get('map');
 const localMapId = requestedMap && maps[requestedMap] ? requestedMap : 'movement-test';
+/**
+ * The app's training (Live fire, a recruit's first match, and Training from Home) is on a finished map
+ * the bots know well, not the movement test's grey boxes (audit A-01); `?map=` still picks another.
+ * First flight keeps the range: its targets and stops are built on FLIGHT_MAP_ID's dummies.
+ */
+const TRAINING_MAP_ID = 'street-market';
+const FLIGHT_MAP_ID = 'movement-test';
+const trainingMapId = requestedMap && maps[requestedMap] ? requestedMap : TRAINING_MAP_ID;
 
 // local mode: the ?map= map; online mode: the server's, from WELCOME (followed in frame())
 let map: MapDef = getMap(online ? 'movement-test' : localMapId);
@@ -449,7 +463,7 @@ const host: GameHost = {
     // First flight: the range's targets, no match; Live fire: a recruit's first match, 3 Easy bots
     const rules = kind === 'flight' ? null : kind === 'live-fire' ? LIVE_FIRE_RULES : localMatchRules(params);
     const bots = kind === 'flight' ? null : kind === 'live-fire' ? LIVE_FIRE_BOTS : kind === 'hard' ? { ...LIVE_FIRE_BOTS, level: 'hard' as const } : localBots(params, rules !== null);
-    const local = new LocalMode(sampler, camera, renderer, nickname, rules, localMapId, bots);
+    const local = new LocalMode(sampler, camera, renderer, nickname, rules, kind === 'flight' ? FLIGHT_MAP_ID : trainingMapId, bots);
     setMode(local);
     // the Armory's "Try it in training": that gun in your hand (the second slot as usual), once
     const tryGun = tryWeapon;
@@ -629,7 +643,7 @@ if (appMode) {
 function warmTrainingNav(): void {
   if (navWarmed || !appMode || online) return;
   navWarmed = true;
-  void warmNavGraph(getMap(localMapId)).then((r) => {
+  void warmNavGraph(getMap(trainingMapId)).then((r) => {
     if (import.meta.env.DEV) (window as unknown as { __navWarm: typeof r }).__navWarm = r;
   });
 }
@@ -813,7 +827,7 @@ audio.setLookOf((id, isLocal) => loadouts3d.for({ id, isLocal }));
 // the saved loadout (look + guns) follows the account: read at sign-in, kept on this device as the offline cache
 const loadoutSync = shell.controller ? new LoadoutSync(shell.controller.api) : null;
 // "here" to the API every 30 s while visible, with the room when in an online match (presence.ts)
-presence = shell.controller ? new PresenceBeat(shell.controller.api, () => onlineRoom) : null;
+presence = shell.controller ? new PresenceBeat(shell.controller.api, () => onlineRoom, document, window, PRESENCE_BEAT_MS, { playing: () => matchOn(shell.store.getState().match?.phase), subscribe: (fn) => shell.store.subscribe(fn) }) : null;
 if (loadoutSync) document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && void loadoutSync.flush());
 // the onboarding's memory (docs/design/onboarding-research.md phase 1): facts and the event log, on this
 // device only; ?tourlog shows them on the page
@@ -968,7 +982,7 @@ function newFlight(memory: TourMemory): FirstFlight {
       const targets: { id: number; x: number; y: number }[] = [];
       for (const p of local.game.players) if (p?.script && p.alive) targets.push({ id: p.id, x: p.x, y: p.y });
       return {
-        me: { id: me.id, x: me.x, y: me.y, grounded: me.grounded, alive: me.alive, grenades: me.grenadeCounts.reduce((a, b) => a + b, 0) },
+        me: { id: me.id, x: me.x, y: me.y, grounded: me.grounded, alive: me.alive, grenades: me.grenadeCounts.reduce((a, b) => a + b, 0), active: me.active, guns: me.weapons.filter((w) => !!weapons[w.def]).length },
         targets,
         isTarget: (id) => !!local.game.players[id]?.script,
       };
@@ -989,6 +1003,11 @@ function newFlight(memory: TourMemory): FirstFlight {
       chooser ??= document.querySelector<HTMLElement>('.mf-choose');
       return s.overlay !== null || s.route !== null || s.tips || (!!chooser && !chooser.hidden);
     },
+    // reload, swap and pick up (audit A-20); no Auto fire before Fire (A-17); a phone frames the target (A-18)
+    offerGun: () => host.local?.offerGun() ?? null,
+    presses: () => host.local?.takePresses() ?? 0,
+    autoFire: (on) => holdAutoFire(!on),
+    frameOn: (point) => (camera.focus = point),
     liveFire: () => shell.controller?.startLiveFire(),
     home: () => shell.controller?.go({ to: 'home' }),
   });
@@ -1026,19 +1045,20 @@ if (appMode && tourMemory) {
   onTouchHintsReset(() => hints?.resetTouch());
   // Home's three stops (§3.5): once, after a match was played (or a veteran's first Home), but never on
   // the Home a match just ended into, and only once Home has sat idle (mobile audit P1-5: let the player
-  // breathe). Leaving Home or opening anything over it ends the pass.
+  // breathe). Leaving Home or opening anything over it ends the pass. The play-data question goes first
+  // (audit 31 Oct, D-01: one thing at a time, tour/homeQueue.ts): the pass waits until it's answered.
   let stopStops: (() => void) | null = null;
   let stopsPoll = 0;
   let cameFromMatch = false;
   let lastInputAt = performance.now();
+  const consentDue = () => {
+    const m = metrics();
+    return !!m && promptDue(m.consent.get()) !== null;
+  };
   for (const type of ['pointerdown', 'keydown', 'wheel'] as const) window.addEventListener(type, () => (lastInputAt = performance.now()), { capture: true, passive: true });
   onInputDevice(() => (lastInputAt = performance.now())); // a pad's press
-  shell.store.subscribe((s, before) => {
-    if (s.screen.name === 'home' && before.screen.name !== 'home') {
-      cameFromMatch = before.screen.name === 'room' || before.screen.name === 'training';
-      lastInputAt = performance.now(); // the idle time counts from arriving on Home
-    }
-    const calm = s.screen.name === 'home' && s.title === 'off' && s.route === null && s.overlay === null && !s.tips;
+  const stopsCheck = (s: ShellState) => {
+    const calm = s.screen.name === 'home' && s.title === 'off' && s.route === null && s.overlay === null && !s.tips && (stopStops !== null || !consentDue());
     if (!calm) {
       window.clearInterval(stopsPoll);
       stopsPoll = 0;
@@ -1052,9 +1072,18 @@ if (appMode && tourMemory) {
       window.clearInterval(stopsPoll);
       stopsPoll = 0;
       const now = shell.store.getState();
-      if (now.screen.name === 'home' && now.route === null && now.overlay === null && homeStopsWanted(memory.facts.get())) stopStops = runHomeStops(memory, tourDevice);
+      if (now.screen.name === 'home' && now.route === null && now.overlay === null && !consentDue() && homeStopsWanted(memory.facts.get())) stopStops = runHomeStops(memory, tourDevice);
     }, 1000);
+  };
+  shell.store.subscribe((s, before) => {
+    if (s.screen.name === 'home' && before.screen.name !== 'home') {
+      cameFromMatch = before.screen.name === 'room' || before.screen.name === 'training';
+      lastInputAt = performance.now(); // the idle time counts from arriving on Home
+    }
+    stopsCheck(s);
   });
+  // the question answered (or due late): look again
+  metrics()?.consent.subscribe(() => stopsCheck(shell.store.getState()));
   // a reload during First flight goes straight back in at the next goal (and ?flight starts it: playtests)
   let checked = false;
   const stopResume = shell.store.subscribe((s) => {
@@ -1364,7 +1393,7 @@ function frame(now: number): void {
     hud.update({
       frame: f,
       tuning: mode.tuning(),
-      // "Tuned by host" names what the host changed from the room's own (the admin's values aren't its)
+      // "Custom rules" (the scoreboard) is what the host changed from the room's own: the server's values are just the game's
       ...(mode instanceof OnlineMode ? { tuningBase: mode.tuningBase() } : {}),
       match: state.match,
       zoom: camera.zoom + 1,
@@ -1377,7 +1406,6 @@ function frame(now: number): void {
       reduceFlashes: settings?.reduceFlashes ?? false,
       flash: fxState().flash,
       scoreRows,
-      adminTuned: mode instanceof OnlineMode && mode.net.adminTuned,
       throwAim: sampler.throwAim,
       quickThrowAt: sampler.quickThrowAt,
       blood: settings?.blood ?? false,

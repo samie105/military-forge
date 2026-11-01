@@ -5,6 +5,7 @@
  */
 import { useState, type ReactNode } from 'react';
 import { OFFICIAL_URL, TERMS_URL } from '../shell/pages';
+import { FindMeSetting } from '../social/FindMe';
 import { Switch } from '../ui/Screen';
 import { analyticsOn } from './consent';
 import { PRIVACY_URL, useConsent } from './ConsentCard';
@@ -71,6 +72,7 @@ export function PrivacySettings({ phone = false }: { phone?: boolean }) {
       >
         <Switch on={on} onChange={(v) => m?.consent.set(v, 'settings')} label="Share play data" />
       </Row>
+      <FindMeSetting phone={phone} />
       <Row phone={phone} label="Always kept: match stats" desc="What happens in an online match: kills, deaths, the guns you used, how long you played and when you left, with your player id. The game needs them to run matches, keep your level and the leaderboards, and balance the weapons." />
       <Row phone={phone} label="Counted without any id" desc="Errors on this device, and which billboard ads were on screen, saved and visited: totals that can’t be tied to you. Off when your browser sends Global Privacy Control." />
       <Row phone={phone} label="How long" desc="Single events: 90 days. Your daily summary (days played, matches, device): 13 months. After that only totals with no player in them." />

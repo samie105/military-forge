@@ -111,6 +111,6 @@ async function scene(query, prefix) {
 }
 
 console.log(`weapon crate screenshots → ${out}`);
-await scene('?sandbox', '3d-');
-await scene('?sandbox&render=2d', '2d-');
+await scene('?sandbox&armory=1', '3d-');
+await scene('?sandbox&render=2d&armory=1', '2d-');
 await browser.close();

@@ -62,22 +62,38 @@ export type CosmeticSource =
   | { kind: 'achievement'; label: string }
   | { kind: 'event'; label: string };
 
-/** "How to get" text for locked items in the Locker (docs/04 §6). */
-export function cosmeticSourceLabel(source: CosmeticSource): string {
-  switch (source.kind) {
-    case 'starter':
-      return 'Starter item';
-    case 'level':
-      return `Reach level ${source.level}`;
-    case 'battlePass':
-      return `Battle pass S${source.season} tier ${source.tier}`;
-    case 'store':
-      return 'Store';
-    case 'achievement':
-      return `Achievement: ${source.label}`;
-    case 'event':
-      return `Event: ${source.label}`;
-  }
+/**
+ * What the Store sells today, by item id: the API's store/catalog.ts (which holds the prices) checks at load
+ * that its STORE_ITEMS are exactly these. A store item not listed isn't on sale yet.
+ */
+export const STORE_ON_SALE: readonly string[] = ['skin_k47_galaxy_relic', 'skin_k47_galaxy_relic_fx'];
+
+/** The Store sells this item now (the Locker's "Get it in the Store" leads somewhere). */
+export function cosmeticOnSale(def: Pick<CosmeticDef, 'id' | 'source'>): boolean {
+  return def.source.kind === 'store' && STORE_ON_SALE.includes(def.id);
+}
+
+/**
+ * How a player gets an item, as the Locker and the creator say it (docs/04 §6; UX audit 31 Oct, A-07, C-09,
+ * C-10): only what the game has today. Starter items are free; an item on sale is in the Store; the rest wait
+ * on things that aren't in the game yet (levels a player can see, the battle pass, achievements, events, and
+ * store items not on sale), so they say so plainly instead of naming a requirement nobody can meet.
+ * `tag`: a tile's few words; `line`: the try-on's sentence.
+ */
+export function cosmeticHowToGet(def: Pick<CosmeticDef, 'id' | 'source'>): { tag: string; line: string } {
+  if (def.source.kind === 'starter') return { tag: 'Free', line: 'Free for everyone.' };
+  if (cosmeticOnSale(def)) return { tag: 'In the Store', line: 'Sold in the Store.' };
+  if (def.source.kind === 'store') return { tag: 'Coming soon', line: 'Coming to the Store.' };
+  return { tag: 'Coming soon', line: 'Not available yet.' };
+}
+
+/**
+ * A part without art of its own yet (no manifest, and not one of the body's own starter pieces): the soldier
+ * wears the body's own part in its place, so a picture of it would show the standard issue (the Track Jacket
+ * showed Rookie Fatigues: audit 31 Oct, C-09). The Locker keeps the type's glyph for it.
+ */
+export function cosmeticArtPending(def: Pick<CosmeticDef, 'slot' | 'assets' | 'source'>): boolean {
+  return (PART_SLOTS as readonly string[]).includes(def.slot) && !def.assets.manifest && def.source.kind !== 'starter';
 }
 
 export interface CosmeticAssets {

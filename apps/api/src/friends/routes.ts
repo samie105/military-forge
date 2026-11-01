@@ -12,6 +12,14 @@
  *   POST   /friends/blocks { id }        → 204 (also ends a friendship and requests)
  *   DELETE /friends/blocks/:id           → 204
  *   POST   /friends/code                 → { code } (a new friend code; the old one stops working)
+ *   GET    /friends/search?q=            → { players: FoundPlayer[] } (names starting with q, closest first, at most 8)
+ *   GET    /friends/recent               → { players: FoundPlayer[] } (played with recently, not friends yet)
+ *   PUT    /friends/settings { findable } → { findable } ("Let players find me by name")
+ *
+ * Search (31 Oct) answers as you type, so its limits are wider than Add a friend's, but they still
+ * stop a sweep: a few dozen searches a minute and a couple of hundred an hour per player, more per IP
+ * (many players share one behind a carrier's NAT), at most 8 names each, and only players who let
+ * themselves be found.
  */
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -24,10 +32,11 @@ import { ApiError, readJson } from '../http/errors';
 import { LIMITS, enforceRateLimit } from '../http/rateLimit';
 import type { Kv } from '../kv/kv';
 import { formatFriendCode } from './code';
-import { USER_ID, type FriendsService } from './service';
+import { USER_ID, searchKey, type FriendsService } from './service';
 
 const RequestBody = z.union([z.strictObject({ name: z.string().min(1).max(64) }), z.strictObject({ code: z.string().min(1).max(32) })]);
 const BlockBody = z.strictObject({ id: z.string().regex(USER_ID) });
+const SettingsBody = z.strictObject({ findable: z.boolean() });
 
 function userParam(raw: string): string {
   if (!USER_ID.test(raw)) throw new ApiError(400, 'invalid_player_id', 'Not a player id');
@@ -44,6 +53,31 @@ export function friendRoutes(deps: { config: Config; kv: Kv; auth: AuthService; 
     const { userId } = c.get('auth')!;
     await enforceRateLimit(kv, LIMITS.friendsRead, userId);
     return c.json(await friends.list(userId));
+  });
+
+  app.get('/search', async (c) => {
+    const { userId } = c.get('auth')!;
+    const q = (c.req.query('q') ?? '').trim();
+    if (q.length > 32) throw new ApiError(400, 'invalid_query', 'Search for at most 32 letters');
+    // too short to search: answered without a lookup, so it costs nothing
+    if (!searchKey(q)) return c.json({ players: [] });
+    await enforceRateLimit(kv, LIMITS.friendSearch, userId);
+    await enforceRateLimit(kv, LIMITS.friendSearchHour, userId);
+    await enforceRateLimit(kv, LIMITS.friendSearchIp, clientRateLimitKey(c, config));
+    return c.json({ players: await friends.search(userId, q) });
+  });
+
+  app.get('/recent', async (c) => {
+    const { userId } = c.get('auth')!;
+    await enforceRateLimit(kv, LIMITS.friendsRead, userId);
+    return c.json({ players: await friends.recent(userId) });
+  });
+
+  app.put('/settings', async (c) => {
+    const { userId } = c.get('auth')!;
+    await write(userId);
+    const body = await readJson(c, SettingsBody);
+    return c.json({ findable: await friends.setFindable(userId, body.findable) });
   });
 
   app.post('/requests', async (c) => {

@@ -60,8 +60,6 @@ html[data-touch-controls] #hud .mf-hud-fit:not(.mf-hud-fit--phone) { display: no
 #hud[data-active-state~="heavy-hit"] .reticle__x { transform: none; }
 /* the dash hint's arrow points the way the last dash went */
 #hud .dash__hint .ic { transform: rotate(var(--hint-rot, 0deg)); }
-/* the owner's admin page changed gameplay numbers on this server: the tag in brass */
-#hud .mf-hud-admin { border-color: var(--c-brass); color: var(--c-brass); }
 
 /* announcements (showBanner) under the map event's place */
 .mf-hud-banners { position: absolute; top: 330px; left: 50%; translate: -50% 0; display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); }

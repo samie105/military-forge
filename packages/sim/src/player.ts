@@ -142,6 +142,8 @@ export class PlayerState {
   /** the flamethrower: ticks left burning (projectiles.ts stepBurn), and who set it (damage credit) */
   burnTicks = 0;
   burnBy = -1;
+  /** spawn cover (content SPAWN_COVER, GameOptions.spawnCover): ticks left in which nobody else can hurt this player; attacking ends it */
+  coverTicks = 0;
 
   kills = 0;
   deaths = 0;
@@ -231,6 +233,7 @@ export class PlayerState {
     this.jetDisabledTicks = 0;
     this.burnTicks = 0;
     this.burnBy = -1;
+    this.coverTicks = 0;
     this.lastAttacker = -1;
     this.lastAttackTick = -1;
     this.prevButtons = 0;

@@ -361,6 +361,19 @@ export function stepPickups(game: Game): void {
 }
 
 /**
+ * A crate of `weapon` on the floor below (x, y), there until taken (First flight's "Pick up" order: the
+ * web's LocalMode puts one by the recruit). False over a pit, for a gun with no crate, or with no room.
+ */
+export function dropWeapon(game: Game, weapon: number, x: number, y: number): boolean {
+  const item = weaponPickup(weapon);
+  if (!item || !game.pickupsEnabled || !game.world.raycast(x, y + 0.5, 0, -1, DROP_FALL_MAX, 0, ray)) return false;
+  const k = allocPickup(game);
+  if (!k) return false;
+  place(k, item, x, quantize(ray.y, POS_INV), 0, 0, -1, -1);
+  return true;
+}
+
+/**
  * Death: `p` lets go of what it carries. A shield falls straight down to the floor below with the HP
  * it had left and stays DROPPED_PICKUP_SECONDS (over a pit, or with pickups off, it is gone).
  */

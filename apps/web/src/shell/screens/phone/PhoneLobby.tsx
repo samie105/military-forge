@@ -249,6 +249,7 @@ function RulesSheet({ lobby, open, onClose }: { lobby: LobbyView; open: boolean;
       </div>
       <p className="pm-sheet__note">
         {minutesLabel(timeLimit)} · {killsLabel(kills)} · {botsLine(bots, botLevel)}
+        {lobby.rules ? ' · Custom rules' : ''}
       </p>
     </Sheet>
   );

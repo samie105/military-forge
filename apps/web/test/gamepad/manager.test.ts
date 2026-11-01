@@ -276,6 +276,7 @@ describe('menus and play', () => {
 
   it('disconnect releases gameplay input and restores keyboard prompts', () => {
     const { m, sample } = setup();
+    sample();
     press(B.R2);
     expect(sample().buttons & Btn.Fire).toBe(Btn.Fire);
     expect(currentDevice().kind).toBe('pad');
@@ -293,6 +294,32 @@ describe('menus and play', () => {
     for (let i = 0; i < 10; i++) sample();
     expect(currentDevice().kind).toBe('keys');
     pad.axes = [0.9, 0, -1, -1];
+    sample();
+    expect(currentDevice().kind).toBe('pad');
+  });
+
+  it('a button stuck down or a stick that never centres keeps the keyboard prompts; a real press after it is let go turns them (A-39)', () => {
+    noteKeys();
+    press(B.South);
+    pad.axes = [0, 0, 0.8, 0];
+    const { sample } = setup();
+    for (let i = 0; i < 10; i++) sample();
+    expect(currentDevice().kind).toBe('keys');
+    press(B.South, false);
+    sample();
+    expect(currentDevice().kind).toBe('keys');
+    press(B.South);
+    sample();
+    expect(currentDevice().kind).toBe('pad');
+    // the stick, once seen centred, counts too
+    press(B.South, false);
+    sample();
+    noteKeys();
+    sample();
+    expect(currentDevice().kind).toBe('keys');
+    pad.axes = [0, 0, 0, 0];
+    sample();
+    pad.axes = [0, 0, 0.8, 0];
     sample();
     expect(currentDevice().kind).toBe('pad');
   });

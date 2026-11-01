@@ -6,7 +6,7 @@
  * (docs/02 §20).
  */
 import { addBots, botSpecs } from '@military-forge/bots';
-import { DEFAULT_LOADOUT, getMap, weapons, NO_WEAPON, type MapDef, type Tuning } from '@military-forge/content';
+import { DEFAULT_LOADOUT, K47, getMap, weaponPickup, weapons, NO_WEAPON, type MapDef, type Tuning } from '@military-forge/content';
 import {
   DT,
   Game,
@@ -15,6 +15,8 @@ import {
   SmokeSight,
   blindIntensity,
   createInput,
+  createRayHit,
+  dropWeapon,
   type Input,
   type MatchCommandKind,
   type MatchRules,
@@ -38,6 +40,8 @@ import { mobilityView, shieldView, type CloudView, type Frame, type PlayerView }
 const MAX_CATCHUP = 5;
 /** First flight: the nearest target this far from the start (LocalMode.toRange) */
 const RANGE_TARGET_M = 4;
+/** First flight's Pick up: the gun this far from the recruit, on their floor (LocalMode.offerGun) */
+const RANGE_GUN_M = 1.5;
 const SEED = 1234;
 
 export class LocalMode {
@@ -59,6 +63,8 @@ export class LocalMode {
   private readonly sight = new SmokeSight();
   /** the most blinded we were over this frame's ticks (a flashbang inside a hitch still shows) */
   private peakBlind = 0;
+  /** the buttons held on any tick since takePresses last asked (First flight: Reload ticks on its press) */
+  private presses = 0;
   lastReplay: ReplayFile | null = null;
   /**
    * Training holds still (the pause menu, Settings from it, the controls card): no ticks run, so
@@ -68,8 +74,8 @@ export class LocalMode {
   paused = false;
   /** dev give-weapon: the local player's [slot 1, slot 2] weapons, kept across resets and recorded in replays */
   loadout: [number, number] = [DEFAULT_LOADOUT[0], DEFAULT_LOADOUT[1]];
-  /** the test armory (a rack of one of every gun near the spawns): on in local play, off with ?armory=0 */
-  private readonly armory = typeof location === 'undefined' || new URLSearchParams(location.search).get('armory') !== '0';
+  /** the test armory (a rack of one of every gun near the spawns): a dev tool, on only with ?armory=1 (audit A-01: never in a recruit's training) */
+  private readonly armory = typeof location !== 'undefined' && new URLSearchParams(location.search).get('armory') === '1';
   /** dev: `?grenades` gives the local player every grenade type (until map pickups hand them out); in replays too */
   private readonly grenadeLoadout: number[] | null = typeof location !== 'undefined' && new URLSearchParams(location.search).has('grenades') ? fullBelt() : null;
 
@@ -79,13 +85,13 @@ export class LocalMode {
     private readonly renderer: Renderer,
     private readonly name: string,
     private readonly matchRules: Partial<MatchRules> | null = null,
-    /** ?map= (docs/02 §20 demo maps: lunar-outpost, storm-front, flux-lab, mechanics-test) */
+    /** the debug client's ?map= (docs/02 §20 demo maps: lunar-outpost, storm-front, flux-lab, mechanics-test); the app's training map (main.ts) */
     mapId = 'movement-test',
     /** ?bots= / ?botlevel= (localBots.ts); null = the map's dummies */
     private readonly bots: LocalBots | null = null,
   ) {
     this.map = getMap(mapId);
-    this.game = new Game({ map: this.map, seed: SEED, dummies: !bots, pickups: true, armory: this.armory });
+    this.game = new Game({ map: this.map, seed: SEED, dummies: !bots, pickups: true, armory: this.armory, spawnCover: true });
     this.me = this.game.addPlayer(name);
     this.reset();
   }
@@ -93,7 +99,7 @@ export class LocalMode {
   /** Fresh world (keeps the current live tuning). Recordings start from here so they replay exactly. */
   reset(): void {
     const tuning = { ...this.game.tuning };
-    this.game = new Game({ map: this.map, seed: SEED, dummies: !this.bots, pickups: true, armory: this.armory, tuning });
+    this.game = new Game({ map: this.map, seed: SEED, dummies: !this.bots, pickups: true, armory: this.armory, spawnCover: true, tuning });
     this.me = this.game.addPlayer(this.name);
     // bots join after the human, as replays put them back (botReplaySetup)
     if (this.bots) addBots(this.game, this.bots.count, this.bots.level);
@@ -166,8 +172,17 @@ export class LocalMode {
    * First flight (the onboarding tour): the local player at the spawn nearest the range's targets (the
    * map's dummies). For a recruit's first shots the targets stand still, and the nearest stands in the
    * open RANGE_TARGET_M from the start, on its ground (the movement test's is otherwise behind low cover).
+   * Nothing on the range punishes: your own grenade doesn't hurt you (audit A-14), and no riot shield
+   * turns up on the recruit's path (A-13: it came up unexplained, and a raised one blocks the Dash order).
    */
   toRange(): void {
+    this.game.selfHarm = false;
+    for (const s of this.game.spawners) {
+      if (s.def.pool !== 'shield') continue;
+      // held full: it never puts one out (no match here resets it); one already out goes
+      s.active = s.maxActive;
+      for (const k of this.game.pickups) if (k.alive && k.spawner === s.index) k.alive = false;
+    }
     const target = this.map.dummies[0];
     let best = this.map.spawns[0];
     if (!target || !best) return;
@@ -183,6 +198,40 @@ export class LocalMode {
     near.x = near.homeX = best.x + RANGE_TARGET_M * (Math.sign(near.x - best.x) || 1);
     near.y = near.homeY = best.y;
     near.vx = near.vy = 0;
+  }
+
+  /** The buttons held on any tick since the last call (First flight's Reload order: a tap shorter than a frame still counts). */
+  takePresses(): number {
+    const b = this.presses;
+    this.presses = 0;
+    return b;
+  }
+
+  /**
+   * First flight's Pick up order: a gun the local player doesn't carry (the K47, else the first other
+   * gun with a crate) on the floor RANGE_GUN_M from them, on the floor they stand over: away from the
+   * range's targets (not under a target's name tag), else toward them, else closer (never down a pit).
+   * Where it lies, or null when there is no such floor or no room.
+   */
+  offerGun(): { x: number; y: number } | null {
+    const me = this.me;
+    if (!me.alive) return null;
+    const held = new Set(me.weapons.map((w) => w.def));
+    const gun = !held.has(K47.index) ? K47 : weapons.find((w) => !held.has(w.index) && weaponPickup(w.index));
+    if (!gun) return null;
+    let near: PlayerState | null = null;
+    for (const p of this.game.players) if (p?.script && (!near || Math.abs(p.x - me.x) < Math.abs(near.x - me.x))) near = p;
+    const away = near && near.x < me.x ? 1 : -1;
+    const ray = createRayHit();
+    const floorAt = (x: number) => (this.game.world.raycast(x, me.y + 0.5, 0, -1, 64, 0, ray) ? ray.y : null);
+    const ground = floorAt(me.x);
+    if (ground === null) return null;
+    for (const dx of [away * RANGE_GUN_M, -away * RANGE_GUN_M, away, -away]) {
+      const y = floorAt(me.x + dx);
+      if (y === null || Math.abs(y - ground) > 0.6 || !dropWeapon(this.game, gun.index, me.x + dx, me.y)) continue;
+      return { x: me.x + dx, y };
+    }
+    return null;
   }
 
   /**
@@ -214,6 +263,7 @@ export class LocalMode {
         dummies: !this.bots,
         pickups: true,
         ...(this.armory ? { armory: true } : {}),
+        spawnCover: true,
         tuning: { ...this.game.tuning },
         loadouts: [[...this.loadout]],
         ...(this.grenadeLoadout ? { grenadeLoadouts: [this.grenadeLoadout.slice()] } : {}),
@@ -267,6 +317,7 @@ export class LocalMode {
       this.sampler.sample(this.camera, this.me.shoulderX(t), this.me.shoulderY(t), this.input);
       this.jetWatch.step(this.me, this.input.buttons, performance.now(), () => `training${this.match ? `, phase ${this.match.phase}` : ''}${this.game.inputsFrozen ? ', frozen' : ''}`);
       this.inputs[this.me.id] = this.input;
+      this.presses |= this.input.buttons;
       if (this.match) this.match.step(this.inputs);
       else this.game.step(this.inputs);
       this.recorder?.record(this.input);
@@ -314,6 +365,7 @@ export class LocalMode {
         weapons: p.weapons.map((w) => ({ def: w.def, mag: w.mag, reserve: w.reserve, reloadTicks: w.reloadTicks })),
         meleeTicks: p.meleeTicks,
         dashing: p.dashTicks > 0,
+        cover: p.alive && p.coverTicks > 0,
         shield: shieldView(p),
         shieldHp: p.shieldHp,
         ...(p === this.me ? mobilityView(this.game, p) : {}),

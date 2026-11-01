@@ -84,7 +84,7 @@ function SquadCardBody({ social }: { social: SocialController }) {
       {shown.length > 0 ? (
         <div className="sx-squad__strip">
           {shown.map((f) => (
-            <Avatar key={f.id} name={f.nickname} status={f.status} ring={f.status === 'in_room'} />
+            <Avatar key={f.id} name={f.nickname} look={f.look} status={f.status} ring={f.status === 'in_room'} />
           ))}
           {on.length > shown.length && <span className="avatar avatar--open sx-av">+{on.length - shown.length}</span>}
         </div>
@@ -142,7 +142,7 @@ function PhoneSquadBody({ social }: { social: SocialController }) {
       {on.length > 0 && (
         <span className="sx-psquad__strip">
           {on.slice(0, 3).map((f) => (
-            <Avatar key={f.id} name={f.nickname} status={f.status} ring={f.status === 'in_room'} />
+            <Avatar key={f.id} name={f.nickname} look={f.look} status={f.status} ring={f.status === 'in_room'} />
           ))}
           {on.length > 3 && <span className="avatar avatar--open sx-av">+{on.length - 3}</span>}
         </span>

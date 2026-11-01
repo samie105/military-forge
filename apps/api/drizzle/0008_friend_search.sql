@@ -1,0 +1,2 @@
+ALTER TABLE "profiles" ADD COLUMN "findable" boolean DEFAULT true NOT NULL;--> statement-breakpoint
+CREATE INDEX "profiles_nickname_norm_prefix_idx" ON "profiles" USING btree ("nickname_norm" text_pattern_ops);

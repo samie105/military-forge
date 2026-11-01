@@ -24,7 +24,8 @@ export function InstallButton({ className = '', inTopBar = false }: { className?
       onClick={() => askInstall(facts?.matches.finished ?? 0)}
     >
       <Icon name="download" />
-      Install app
+      {/* the word gives way first when Home's top bar is tight (menus.css): the icon stays, the name is still read */}
+      <span className="mf-install-btn__word">Install app</span>
     </button>
   );
 }

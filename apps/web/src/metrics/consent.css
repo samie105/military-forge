@@ -23,6 +23,10 @@
   color: var(--c-paper);
   animation: mf-consent-in 240ms var(--ease-arrive, ease-out) both;
 }
+/* it takes the focus as it appears (ConsentCard.tsx): the card itself, so no ring on it; Tab reaches the buttons */
+.mf-consent:focus {
+  outline: none;
+}
 .mf-consent--home {
   left: 64px;
   translate: none;

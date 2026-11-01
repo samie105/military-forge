@@ -107,7 +107,9 @@ export function rollPlan(prev: string, next: string): { char: string; changed: b
 /**
  * P4: shows `next` in `el`, rolling the characters that changed: the old one leaves upward and the new
  * one arrives from below (60–120 ms, a 2 px vertical blur), per character, in tabular figures. A
- * change mid-roll finishes the running one first. Under Reduce motion the text just changes.
+ * change mid-roll drops the glyphs still leaving and finishes the arriving ones first, so a cell never
+ * holds more than its glyph and the one leaving (audit B-02: a busy or hidden page delivers finish
+ * events late or never, and the clock piled up "5:05765432"). Under Reduce motion the text just changes.
  */
 export function rollText(el: HTMLElement, next: string): void {
   const prev = el.dataset.roll ?? el.textContent ?? '';
@@ -119,7 +121,11 @@ export function rollText(el: HTMLElement, next: string): void {
   }
   el.classList.add('m-roll');
   const cells = [...el.children] as HTMLElement[];
-  for (const c of cells) for (const a of c.getAnimations?.({ subtree: true }) ?? []) a.finish();
+  for (const c of cells) {
+    // the newest glyph is the cell's last child; anything before it is still leaving: drop it now
+    while (c.childElementCount > 1) c.firstElementChild!.remove();
+    for (const a of c.getAnimations?.({ subtree: true }) ?? []) a.finish();
+  }
   const plan = rollPlan(prev, next);
   if (cells.length !== plan.length || !cells.every((c) => c.classList.contains('m-roll__c'))) {
     // a new length (or plain text): rebuild, rolling in only what changed
@@ -144,9 +150,12 @@ export function rollText(el: HTMLElement, next: string): void {
     cell.append(glyph);
     rollIn(glyph);
     if (old) {
-      const out = old.animate([{ transform: 'none', filter: 'blur(0)' }, { transform: 'translateY(-100%)', filter: `blur(${token('--m-roll-blur', '2px')})`, opacity: 0 }], { duration: 100, easing: token('--ease-leave', 'ease-in') });
-      out.onfinish = () => old.remove();
-      out.oncancel = () => old.remove();
+      // fill forwards: if the remove comes late the glyph stays gone rather than snapping back on top
+      const out = old.animate([{ transform: 'none', filter: 'blur(0)' }, { transform: 'translateY(-100%)', filter: `blur(${token('--m-roll-blur', '2px')})`, opacity: 0 }], { duration: 100, easing: token('--ease-leave', 'ease-in'), fill: 'forwards' });
+      const drop = () => old.remove();
+      out.onfinish = drop;
+      out.oncancel = drop;
+      setTimeout(drop, 150);
     }
   });
 }

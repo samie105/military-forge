@@ -311,7 +311,8 @@ export class BotBrain implements Brain {
       if (line) this.inReach = dist < BASH_REACH || this.gunner.bestSlot(self, dist, used) >= 0;
       if (!this.planned) {
         const centre = this.aim.track(self, q, sx, sy);
-        if (line) {
+        // spawn cover (a soldier shimmering at a spawn): it keeps its aim on them and saves the shots
+        if (line && q.coverTicks === 0) {
           trig.target = q;
           trig.dist = dist;
           trig.used = used;

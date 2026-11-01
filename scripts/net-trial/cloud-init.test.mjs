@@ -43,7 +43,8 @@ describe('cloud-init.sh', () => {
   });
   it('clones the public repo and plays Street Market with bots by default', () => {
     assert.match(text, /^REPO="\$\{MF_REPO:-https:\/\/github\.com\/samie105\/military-forge\}"$/m);
-    assert.match(text, /^REF="\$\{MF_REF:-main\}"$/m);
+    // production runs the public production branch; staging (below) runs main (docs/release.md)
+    assert.match(text, /^REF="\$\{MF_REF:-production\}"$/m);
     assert.match(text, /^MAP="street-market"$/m);
     assert.match(text, /^BOTS="4"$/m);
   });
@@ -57,7 +58,7 @@ describe('cloud-init.sh', () => {
     const after = text.indexOf('[ -f "$S" ] && . "$S" && { site_caddy');
     assert.ok(first > 0 && first < fetch, 'the last deploy\'s config before the fetch');
     assert.ok(after > fetch && after < text.indexOf("phase 'installing Node"), "this commit's config after it");
-    assert.match(text, /elif ! grep -qs "\^\$HOST \{" \/etc\/caddy\/Caddyfile; then/, 'a new box only: never replaces a working config with the first one');
+    assert.match(text, /elif \[ -z "\$STG" \] && ! grep -qs "\^\$HOST \{" \/etc\/caddy\/Caddyfile; then/, 'a new box only (production): never replaces a working config with the first one');
     assert.match(text, /^site_fill$/m);
   });
   it('sets the game server up for the gateway before it starts, and the gateway after the box is ready', () => {
@@ -67,7 +68,7 @@ describe('cloud-init.sh', () => {
     assert.ok(gateway > text.indexOf('phase ready'), 'wt-setup.sh gateway after ready (WebSocket works meanwhile)');
   });
   it('restarts the services through restart.sh (no match is dropped by a deploy), and Caddy only when its config changed', () => {
-    assert.match(text, /^bash "\$SRC\/scripts\/net-trial\/restart\.sh" \$services /m);
+    assert.match(text, /^MF_SRC=\$SRC MF_DATA=\$DATA MF_GAME_UNIT=\$\{N\}game MF_GAME_PORT=\$GAME_PORT bash "\$SRC\/scripts\/net-trial\/restart\.sh" \$services /m);
     assert.ok(!/systemctl restart \$services/.test(text), 'no plain restart of the game server');
     assert.match(site, /if cmp -s "\$new" \/etc\/caddy\/Caddyfile; then rm "\$new"; else mv /);
   });
@@ -99,8 +100,9 @@ describe('data.sh', () => {
     assert.match(data, /requirepass %s/);
     assert.match(data, /\(umask 077 && printf 'PG_PASS=%s\\nKV_PASS=%s\\n' "\$\(r 24\)" "\$\(r 24\)" >"\$ETC\/db"\)/);
     assert.match(data, /chmod 0600 "\$ETC\/db"/);
-    assert.match(data, /^DB_URL="postgres:\/\/mf:\$PG_PASS@127\.0\.0\.1:5432\/mf"$/m);
-    assert.match(data, /^KV_URL="redis:\/\/:\$KV_PASS@127\.0\.0\.1:6379"$/m);
+    assert.match(data, /^DB=mf KV_PORT=6379$/m);
+    assert.match(data, /^DB_URL="postgres:\/\/\$DB:\$PG_PASS@127\.0\.0\.1:5432\/\$DB"$/m);
+    assert.match(data, /^KV_URL="redis:\/\/:\$KV_PASS@127\.0\.0\.1:\$KV_PORT"$/m);
   });
   it('never puts a password on a command line', () => {
     for (const line of data.split('\n').filter((l) => /\$(PG|KV)_PASS/.test(l))) {
@@ -119,7 +121,7 @@ describe('data.sh', () => {
   });
 });
 
-for (const name of ['wt-setup.sh', 'where.sh', 'site.sh']) {
+for (const name of ['wt-setup.sh', 'where.sh', 'site.sh', 'restart.sh']) {
   describe(name, () => {
     const file = join(here, name);
     it('is a bash script that parses', () => {
@@ -240,5 +242,166 @@ describe('where.sh (audit 28 Oct)', () => {
     const aws = `case "$*" in *api/token*) printf tok; exit 0 ;; *availability-zone*) printf af-south-1-los-1a; exit 0 ;; esac`;
     assert.equal(await whereOn(aws), 'los|Lagos|AWS af-south-1-los-1a');
     assert.equal(await whereOn(''), 'box|this box|');
+  });
+});
+
+/**
+ * cloud-init.sh's settings and environment block (everything before it logs or installs), run in bash:
+ * the values it settles on, as an object.
+ */
+function settings(env = {}, name = 'cloud-init.sh') {
+  const head = text.slice(0, text.indexOf("PHASE='starting'")).replace('exec > >(tee -a "$LOG") 2>&1', ':');
+  const vars = ['MF_ENV', 'REF', 'HOST', 'SRC', 'WEB', 'ETC', 'DATA', 'PUB', 'NODE_DIR', 'LOG', 'U', 'N', 'STG', 'SETUP', 'API_PORT', 'GAME_PORT', 'ADMIN_PORT'];
+  const out = execFileSync('bash', ['-c', `${head}\n${vars.map((v) => `printf '%s=%s\\n' ${v} "$${v}"`).join('\n')}`, name], { encoding: 'utf8', env: { PATH: process.env.PATH, ...env } });
+  return Object.fromEntries(out.trim().split('\n').map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]));
+}
+
+describe('environments: production and staging on one box (docs/release.md)', () => {
+  it('production, with no MF_ENV, keeps every path, port, unit name and user it had', () => {
+    assert.deepEqual(settings(), {
+      MF_ENV: 'production', REF: 'production', HOST: '', SRC: '/opt/military-forge/src', WEB: '/opt/military-forge/web', ETC: '/etc/military-forge', DATA: '/var/lib/military-forge',
+      PUB: '/opt/military-forge/public', NODE_DIR: '/opt/node', LOG: '/var/log/mf-trial.log', U: 'mf', N: 'mf-', STG: '', SETUP: 'mf-trial-setup', API_PORT: '8787', GAME_PORT: '9001', ADMIN_PORT: '9002',
+    });
+  });
+  it('staging has its own of each, runs main, and is what mf-staging-setup runs by default', () => {
+    const staging = {
+      MF_ENV: 'staging', REF: 'main', HOST: '', SRC: '/opt/military-forge-staging/src', WEB: '/opt/military-forge-staging/web', ETC: '/etc/military-forge-staging', DATA: '/var/lib/military-forge-staging',
+      PUB: '/opt/military-forge-staging/public', NODE_DIR: '/opt/military-forge-staging/node', LOG: '/var/log/mf-trial-staging.log', U: 'mf-staging', N: 'mf-stg-', STG: '1', SETUP: 'mf-staging-setup', API_PORT: '8887', GAME_PORT: '9101', ADMIN_PORT: '9102',
+    };
+    assert.deepEqual(settings({ MF_ENV: 'staging' }), staging);
+    assert.deepEqual(settings({}, '/usr/local/sbin/mf-staging-setup'), staging);
+    assert.equal(settings({ MF_ENV: 'production' }, '/usr/local/sbin/mf-staging-setup').MF_ENV, 'production', 'an explicit MF_ENV wins');
+  });
+  it('takes MF_REF in either environment, and refuses an unknown one', () => {
+    assert.equal(settings({ MF_REF: 'main' }).REF, 'main');
+    assert.equal(settings({ MF_ENV: 'staging', MF_REF: 'abc' }).REF, 'abc');
+    assert.throws(() => settings({ MF_ENV: 'prod' }), /production or staging/);
+  });
+  it('names staging under the box name, builds it with VITE_ENV=staging and caps its units', () => {
+    assert.match(text, /^HOST=\$\{STG:\+staging\.\}\$HOST$/m);
+    assert.match(text, /as_mf env NODE_ENV=production \$\{STG:\+VITE_ENV=staging\} NODE_OPTIONS/);
+    assert.match(text, /ReadWritePaths=\$DATA\$\{STG:\+\nMemoryMax=700M\nCPUWeight=20\}\n\[Install\]/);
+    assert.match(text, /^EnvironmentFile=\$ETC\/\$\{1#"\$N"\}\.env$/m);
+  });
+  it('staging stops at code from before staging (its site.sh would write production\'s Caddyfile)', () => {
+    assert.match(text, /^stg_ok\(\) \{ \[ -z "\$STG" \] \|\| grep -qs site_caddy_staging "\$S"; \}$/m);
+    assert.match(text, /^if \[ -f "\$S" \] && stg_ok; then \. "\$S"; site_caddy/m, 'before the fetch: the last deploy\'s code');
+    const guard = text.indexOf('stg_ok || fail');
+    assert.ok(guard > text.indexOf('log "commit $COMMIT"') && guard < text.indexOf('[ -f "$S" ] && . "$S" && { site_caddy'), 'after it: this commit\'s');
+    assert.match(site, /^site_caddy_staging\(\) \{$/m);
+  });
+  it('leaves production\'s Caddyfile, room, probe and WebTransport to production', () => {
+    assert.match(text, /elif \[ -z "\$STG" \] && ! grep -qs "\^\$HOST \{" \/etc\/caddy\/Caddyfile; then/);
+    const prodOnly = text.slice(text.indexOf('if [ -z "$STG" ]; then # production only'), text.indexOf('systemctl daemon-reload\nsystemctl enable'));
+    for (const s of ['mf-room', 'wt-setup.sh', 'bash "$W" env', 'mf-probe']) assert.ok(prodOnly.includes(s), s);
+    assert.match(text, /^\[ -z "\$STG" \] && \[ -f "\$W" \] && MF_HOST=\$HOST MF_ORIGIN_PORT=\$ORIGIN_PORT bash "\$W" gateway$/m);
+  });
+  it('data.sh: staging gets its own database and Valkey, and never takes a live Flutterwave key', async () => {
+    assert.match(data, /^\[ -n "\$STG" \] && DB=mf_staging KV_PORT=6380$/m);
+    assert.match(data, /kv_unit=valkey-server@staging/);
+    assert.match(data, /maxmemory 64mb/);
+    const prodConf = data.slice(data.indexOf('if [ -z "$STG" ]; then\n  kv_unit=valkey-server'), data.indexOf('else\n  # a whole config'));
+    assert.ok(prodConf.includes('/etc/postgresql/16/main/conf.d/military-forge.conf') && prodConf.includes('/etc/valkey/military-forge.conf'), 'the shared servers\' settings: production only');
+    const re = /grep -qsE '([^']+)' "\$ETC\/store\.env"/.exec(data)?.[1];
+    assert.ok(re);
+    const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const dir = mkdtempSync(join(tmpdir(), 'mf-store-'));
+    try {
+      const live = (body) => {
+        writeFileSync(join(dir, 'store.env'), body);
+        try {
+          execFileSync('grep', ['-qsE', re, join(dir, 'store.env')]);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      assert.equal(live("FLUTTERWAVE_SECRET_KEY='FLWSECK-abcdef123456-X'\n"), true);
+      assert.equal(live('FLUTTERWAVE_PUBLIC_KEY=FLWPUBK-abcdef123456-X\n'), true);
+      assert.equal(live("FLUTTERWAVE_SECRET_KEY='FLWSECK_TEST-abcdef123456-X'\nFLUTTERWAVE_PUBLIC_KEY='FLWPUBK_TEST-abcdef123456-X'\n"), false);
+      assert.equal(live("STORE_CLAIMABLE='a,b'\n"), false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('site.sh: one Caddy for both environments', () => {
+  const staging = { STG: '1', HOST: 'staging.a-b.sslip.io', ORIGIN: 'https://staging.a-b.sslip.io', API_PORT: '8887', GAME_PORT: '9101', ADMIN_PORT: '9102', WEB: '/srv/web-s', PUB: '/srv/pub-s' };
+  it('production: the global options, its site on its ports, then the import of the other sites', () => {
+    const prod = runSite('site_caddyfile');
+    assert.ok(prod.startsWith('{\n\tservers {\n\t\tprotocols h1 h2\n\t}\n}\n\na-b.sslip.io {\n'));
+    assert.ok(prod.endsWith('\n}\n\nimport /etc/caddy/mf-env/*.caddy\n'));
+    for (const s of ['reverse_proxy 127.0.0.1:8787', 'reverse_proxy @game 127.0.0.1:9001', 'reverse_proxy /admin/api/* 127.0.0.1:9002', 'reverse_proxy @probe 127.0.0.1:9300']) assert.ok(prod.includes(s), s);
+    assert.doesNotMatch(prod, /nofollow/);
+  });
+  it('staging: its site alone, on its ports, noindex everywhere, no probe', () => {
+    const stg = runSite('site_caddyfile', staging);
+    assert.ok(stg.startsWith('staging.a-b.sslip.io {\n'));
+    assert.doesNotMatch(stg, /servers \{|^import /m);
+    for (const s of ['reverse_proxy 127.0.0.1:8887', 'reverse_proxy @game 127.0.0.1:9101', 'reverse_proxy /admin/api/* 127.0.0.1:9102', 'respond @probe 404', '\t\tX-Robots-Tag "noindex, nofollow"\n', 'root /srv/web-s']) assert.ok(stg.includes(s), s);
+    assert.match(stg, /not header_regexp Origin \^https:\/\/staging\\\.a-b\\\.sslip\\\.io/);
+    assert.doesNotMatch(stg, /9300|8787|9001/);
+  });
+  it('a staging deploy writes only its own file, reloads only on a change, and puts everything back when Caddy refuses', async () => {
+    const { mkdtempSync, writeFileSync, rmSync, existsSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const dir = mkdtempSync(join(tmpdir(), 'mf-caddy-'));
+    const caddyfile = join(dir, 'Caddyfile');
+    const sites = join(dir, 'sites');
+    const env = { ...staging, MF_CADDYFILE: caddyfile, MF_CADDY_SITES: sites, DATA: dir };
+    // caddy and systemctl stand-ins: validation passes unless $dir/refuse exists; reloads are counted
+    const stubs = `caddy() { [ ! -e "${dir}/refuse" ]; }; systemctl() { echo "systemctl $*"; }; `;
+    try {
+      const prod = runSite('site_caddyfile', { MF_CADDY_SITES: sites });
+      writeFileSync(caddyfile, prod.replace(/\nimport .*\n$/, '')); // a production deploy from before staging
+      assert.match(runSite(`${stubs}site_caddy`, env), /^systemctl reload caddy$/m);
+      assert.equal(readFileSync(caddyfile, 'utf8'), `${prod.replace(/\nimport .*\n$/, '')}\nimport ${sites}/*.caddy\n`, 'production\'s site untouched; the import added once');
+      assert.equal(readFileSync(join(sites, 'staging.caddy'), 'utf8'), runSite('site_caddyfile', env));
+      assert.equal(runSite(`${stubs}site_caddy`, env), '', 'unchanged: no reload');
+      // a new staging config Caddy refuses: the old one stays
+      writeFileSync(join(dir, 'refuse'), '');
+      const before = readFileSync(join(sites, 'staging.caddy'), 'utf8');
+      assert.throws(() => runSite(`${stubs}site_caddy`, { ...env, API_PORT: '8888' }));
+      assert.equal(readFileSync(join(sites, 'staging.caddy'), 'utf8'), before);
+      assert.ok(!existsSync(join(sites, 'staging.caddy.new')));
+      // production's own deploy writes the import itself: a staging deploy then changes nothing
+      writeFileSync(caddyfile, prod);
+      rmSync(join(dir, 'refuse'));
+      assert.equal(runSite(`${stubs}site_caddy`, env), '');
+      assert.equal(readFileSync(caddyfile, 'utf8'), prod);
+      // no production site yet: staging refuses rather than write a Caddyfile of its own
+      writeFileSync(caddyfile, '{\n}\n');
+      assert.throws(() => runSite(`${stubs}site_caddy`, env), (e) => /set production up first/.test(e.stdout));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  it('staging pages say noindex (replacing the build\'s robots tag) and robots.txt disallows everything', async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const web = mkdtempSync(join(tmpdir(), 'mf-site-'));
+    const shim = 'sed() { if [ "$1" = -i ] && [ "$(uname)" = Darwin ]; then shift; command sed -i "" "$@"; else command sed "$@"; fi; }; ';
+    try {
+      writeFileSync(join(web, 'index.html'), '<head><meta name="robots" content="index, follow, max-image-preview:large" /><link href="%ORIGIN%/x"></head>');
+      writeFileSync(join(web, 'admin.html'), '<head><title>a</title></head>');
+      writeFileSync(join(web, 'robots.txt'), 'User-agent: *\nAllow: /\nSitemap: %ORIGIN%/sitemap.xml\n');
+      runSite(`${shim}site_fill`, { ...staging, WEB: web });
+      const index = readFileSync(join(web, 'index.html'), 'utf8');
+      assert.match(index, /<meta name="robots" content="noindex, nofollow" \/>/);
+      assert.doesNotMatch(index, /index, follow/);
+      assert.ok(index.includes('https://staging.a-b.sslip.io/x'));
+      assert.match(readFileSync(join(web, 'admin.html'), 'utf8'), /<meta name="robots" content="noindex, nofollow" \/><\/head>/);
+      assert.equal(readFileSync(join(web, 'robots.txt'), 'utf8'), 'User-agent: *\nDisallow: /\n');
+      // production: the build's own robots tag and robots.txt stay
+      writeFileSync(join(web, 'index.html'), '<head><meta name="robots" content="index, follow" /></head>');
+      writeFileSync(join(web, 'robots.txt'), 'User-agent: *\nAllow: /\n');
+      runSite(`${shim}site_fill`, { WEB: web });
+      assert.match(readFileSync(join(web, 'index.html'), 'utf8'), /content="index, follow"/);
+      assert.equal(readFileSync(join(web, 'robots.txt'), 'utf8'), 'User-agent: *\nAllow: /\n');
+    } finally {
+      rmSync(web, { recursive: true, force: true });
+    }
   });
 });

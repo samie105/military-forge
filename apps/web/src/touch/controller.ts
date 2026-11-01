@@ -199,6 +199,8 @@ export class TouchController {
   private weaponDef: (typeof weapons)[number] | undefined;
   /** the fire mode this moment: the player's, or Release for a precision gun (effectiveFire) */
   private fireNow: FireMode = 'auto';
+  /** Auto fire's trigger held off (touch/index.ts holdAutoFire: First flight before its Fire order) */
+  autoFireHeld = false;
   /** where the last sample aimed from (the shoulder, world m): the dev hook's, for the checks */
   private readonly shoulder = { x: 0, y: 0 };
   private readonly skin: TouchSkin;
@@ -482,7 +484,7 @@ export class TouchController {
     this.shoulder.y = sy;
     // the fire mode for the gun in hand; Auto's trigger; Release's charged guns (held while aiming)
     this.fireNow = effectiveFire(this.settings.fire, this.weaponDef, this.settings.precisionRelease);
-    s.autoFiring = this.fireNow === 'auto' && this.touchOwnsAim && this.autoTrigger.step(onAutoTarget(this.aimAngle, sx, sy, this.visible, autoRange(this.weaponDef)), performance.now());
+    s.autoFiring = this.fireNow === 'auto' && !this.autoFireHeld && this.touchOwnsAim && this.autoTrigger.step(onAutoTarget(this.aimAngle, sx, sy, this.visible, autoRange(this.weaponDef)), performance.now());
     if (this.fireNow !== 'auto') this.autoTrigger.reset();
     s.chargeHold = this.fireNow === 'release' && this.weaponDef?.fireMode === 'charge' && s.aimActive && s.aim.mag > 0;
     // a fixed aim stick that landed past its fire line fires once the landing has settled (LAND_ARM)

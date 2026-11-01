@@ -7,21 +7,38 @@
  * Privacy: presence (online, in a match and which room) is shown to friends only. A block is never
  * revealed: requests from a player you blocked are kept out of your list (not refused), so the
  * sender sees what any unanswered request looks like.
+ *
+ * Finding players (31 Oct, "add a search friend feature, let's make it a bit social"): a prefix search
+ * on names, and the people you played with recently. Search finds players who chose their name and
+ * left "Let players find me by name" on; neither ever shows anyone blocked, either way.
  */
-import { and, asc, count, eq, inArray, isNull, or } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, inArray, isNotNull, isNull, like, max, ne, or, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import type { Db } from '../db/client';
 import { isUniqueViolation } from '../db/client';
-import { blocks, friendRequests, friendships, profiles, users } from '../db/schema';
+import { blocks, friendRequests, friendships, matchPlayers, matches, profiles, users } from '../db/schema';
 import { ApiError } from '../http/errors';
 import { skeleton } from '../nickname/normalize';
 import type { PresenceService, PresenceStatus } from '../presence/presence';
 import { formatFriendCode, newFriendCode, normalizeFriendCode } from './code';
+import { savedLooks, type LookIds } from './looks';
 
 /** Most friends one account may have (both sides are checked when a request is accepted). */
 export const MAX_FRIENDS = 200;
 /** Most requests one player may have waiting for an answer. */
 export const MAX_OUTGOING_REQUESTS = 50;
 const CODE_ATTEMPTS = 6;
+
+/** A name search needs this many letters (of the name's skeleton: case, separators and lookalikes folded). */
+export const SEARCH_MIN_LETTERS = 2;
+/** Most players one search shows, closest first. */
+export const SEARCH_RESULTS = 8;
+/** Prefix matches (in index order) the closest-first sort looks through: a 2-letter search stays cheap. */
+const SEARCH_SCAN = 200;
+/** Played with recently: your last matches looked at, how far back, and how many people shown. */
+const RECENT_MATCHES = 20;
+const RECENT_DAYS = 30;
+export const RECENT_PLAYERS = 10;
 
 export const USER_ID = /^u_[0-9a-hjkmnp-tv-z]{26}$/;
 
@@ -36,6 +53,10 @@ export interface FriendView {
   lastSeenAt: string | null;
   /** friends since */
   since: string;
+  /** in_room: true in a match (countdown to the end), false in the lobby; absent when their page didn't say */
+  playing?: boolean;
+  /** their soldier (cosmetic wire ids) for the avatar; null: no saved look */
+  look: LookIds;
 }
 
 /** Someone in a request or on the block list. */
@@ -44,6 +65,22 @@ export interface PersonView {
   nickname: string;
   /** when the request was made, or the block */
   at: string;
+  /** requests: their soldier for the avatar (blocked players get none) */
+  look?: LookIds;
+}
+
+/** Where you stand with a player a search or Played with recently shows. */
+export type Relation = 'none' | 'sent' | 'incoming' | 'friends';
+
+/** A player found by name, or met in a match. */
+export interface FoundPlayer {
+  id: string;
+  nickname: string;
+  level: number;
+  look: LookIds;
+  relation: Relation;
+  /** Played with recently: when your last match together ended */
+  at?: string;
 }
 
 export interface FriendsList {
@@ -56,6 +93,8 @@ export interface FriendsList {
   outgoing: PersonView[];
   blocked: PersonView[];
   max: number;
+  /** "Let players find me by name" (Settings → Privacy) */
+  findable: boolean;
 }
 
 export type RequestResult = { status: 'requested'; user: PersonView } | { status: 'friends'; friend: FriendView };
@@ -72,7 +111,13 @@ export class FriendsService {
     private readonly now: () => number,
     /** the push channel: these players' friends lists changed (app.ts wires it to the event bus) */
     private readonly touched: (userIds: readonly string[]) => void = () => {},
+    /** the owner's COSMETIC_GRANTS (config): owned like bought items, for the avatars' looks */
+    private readonly grants: ReadonlyMap<string, readonly string[]> = new Map(),
   ) {}
+
+  private looks(players: readonly { id: string; level: number }[]): Promise<Map<string, LookIds>> {
+    return savedLooks(this.db, this.grants, players);
+  }
 
   /** The player's friend code (stored form), made on first use. */
   async codeOf(userId: string): Promise<string> {
@@ -146,22 +191,22 @@ export class FriendsService {
   }
 
   async list(userId: string): Promise<FriendsList> {
-    const [code, friendRows, incoming, outgoing, blocked] = await Promise.all([
+    const [code, friendRows, incoming, outgoing, blocked, mine] = await Promise.all([
       this.codeOf(userId),
       this.db
-        .select({ id: friendships.friendId, since: friendships.createdAt, nickname: profiles.nickname, lastSeenAt: users.lastSeenAt })
+        .select({ id: friendships.friendId, since: friendships.createdAt, nickname: profiles.nickname, level: profiles.level, lastSeenAt: users.lastSeenAt })
         .from(friendships)
         .innerJoin(profiles, eq(profiles.userId, friendships.friendId))
         .innerJoin(users, eq(users.id, friendships.friendId))
         .where(eq(friendships.userId, userId)),
       this.db
-        .select({ id: friendRequests.fromId, at: friendRequests.createdAt, nickname: profiles.nickname })
+        .select({ id: friendRequests.fromId, at: friendRequests.createdAt, nickname: profiles.nickname, level: profiles.level })
         .from(friendRequests)
         .innerJoin(profiles, eq(profiles.userId, friendRequests.fromId))
         .where(eq(friendRequests.toId, userId))
         .orderBy(asc(friendRequests.createdAt)),
       this.db
-        .select({ id: friendRequests.toId, at: friendRequests.createdAt, nickname: profiles.nickname })
+        .select({ id: friendRequests.toId, at: friendRequests.createdAt, nickname: profiles.nickname, level: profiles.level })
         .from(friendRequests)
         .innerJoin(profiles, eq(profiles.userId, friendRequests.toId))
         .where(eq(friendRequests.fromId, userId))
@@ -172,15 +217,28 @@ export class FriendsService {
         .innerJoin(profiles, eq(profiles.userId, blocks.blockedId))
         .where(eq(blocks.userId, userId))
         .orderBy(asc(blocks.createdAt)),
+      this.db.select({ findable: profiles.findable }).from(profiles).where(eq(profiles.userId, userId)),
     ]);
-    const presence = await this.presence.getMany(friendRows.map((f) => f.id));
+    const blockedIds = new Set(blocked.map((b) => b.id));
+    const [presence, looks] = await Promise.all([
+      this.presence.getMany(friendRows.map((f) => f.id)),
+      this.looks([...friendRows, ...incoming.filter((r) => !blockedIds.has(r.id)), ...outgoing]),
+    ]);
     const friends = friendRows.map((f, i): FriendView => {
       const p = presence[i]!;
-      return { id: f.id, nickname: f.nickname, status: p.status, room: p.room, lastSeenAt: p.lastSeenAt ?? f.lastSeenAt.toISOString(), since: f.since.toISOString() };
+      return {
+        id: f.id,
+        nickname: f.nickname,
+        status: p.status,
+        room: p.room,
+        lastSeenAt: p.lastSeenAt ?? f.lastSeenAt.toISOString(),
+        since: f.since.toISOString(),
+        ...(p.playing !== undefined ? { playing: p.playing } : {}),
+        look: looks.get(f.id) ?? null,
+      };
     });
     friends.sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || a.nickname.localeCompare(b.nickname));
-    const blockedIds = new Set(blocked.map((b) => b.id));
-    const person = (r: { id: string; at: Date; nickname: string }): PersonView => ({ id: r.id, nickname: r.nickname, at: r.at.toISOString() });
+    const person = (r: { id: string; at: Date; nickname: string }): PersonView => ({ id: r.id, nickname: r.nickname, at: r.at.toISOString(), look: looks.get(r.id) ?? null });
     return {
       code: formatFriendCode(code),
       friends,
@@ -189,22 +247,32 @@ export class FriendsService {
         .map(person)
         .reverse(),
       outgoing: outgoing.map(person).reverse(),
-      blocked: blocked.map(person),
+      blocked: blocked.map((r) => ({ id: r.id, nickname: r.nickname, at: r.at.toISOString() })),
       max: MAX_FRIENDS,
+      findable: mine[0]?.findable ?? true,
     };
   }
 
   /** One friend's view (after an accept), or null when they aren't a friend. */
   async friend(userId: string, friendId: string): Promise<FriendView | null> {
     const [row] = await this.db
-      .select({ id: friendships.friendId, since: friendships.createdAt, nickname: profiles.nickname, lastSeenAt: users.lastSeenAt })
+      .select({ id: friendships.friendId, since: friendships.createdAt, nickname: profiles.nickname, level: profiles.level, lastSeenAt: users.lastSeenAt })
       .from(friendships)
       .innerJoin(profiles, eq(profiles.userId, friendships.friendId))
       .innerJoin(users, eq(users.id, friendships.friendId))
       .where(and(eq(friendships.userId, userId), eq(friendships.friendId, friendId)));
     if (!row) return null;
-    const p = await this.presence.get(friendId);
-    return { id: row.id, nickname: row.nickname, status: p.status, room: p.room, lastSeenAt: p.lastSeenAt ?? row.lastSeenAt.toISOString(), since: row.since.toISOString() };
+    const [p, looks] = await Promise.all([this.presence.get(friendId), this.looks([row])]);
+    return {
+      id: row.id,
+      nickname: row.nickname,
+      status: p.status,
+      room: p.room,
+      lastSeenAt: p.lastSeenAt ?? row.lastSeenAt.toISOString(),
+      since: row.since.toISOString(),
+      ...(p.playing !== undefined ? { playing: p.playing } : {}),
+      look: looks.get(row.id) ?? null,
+    };
   }
 
   /**
@@ -351,4 +419,125 @@ export class FriendsService {
       .where(and(eq(friendships.userId, userId), inArray(friendships.friendId, [...ids])));
     return new Set(rows.map((r) => r.id));
   }
+
+  /** "Let players find me by name" on or off. */
+  async setFindable(userId: string, findable: boolean): Promise<boolean> {
+    const [row] = await this.db.update(profiles).set({ findable }).where(eq(profiles.userId, userId)).returning({ findable: profiles.findable });
+    if (!row) throw new ApiError(404, 'not_found', 'No profile for this account');
+    return row.findable;
+  }
+
+  /**
+   * Players whose name starts with `query` (case, separators and lookalikes folded, as names are kept
+   * unique), closest first: the exact name, then the shortest. Only players who chose their name and
+   * let themselves be found; never you, nor anyone blocked either way. An empty list for a query under
+   * {@link SEARCH_MIN_LETTERS} letters.
+   */
+  async search(userId: string, query: string): Promise<FoundPlayer[]> {
+    const key = searchKey(query);
+    if (!key) return [];
+    // the skeleton folds `rn` to `m` and `vv` to `w`, so "Mar" must also find "Marnie" (`mamle`)
+    const prefixes = [key, ...(key.endsWith('r') ? [`${key.slice(0, -1)}m`] : []), ...(key.endsWith('v') ? [`${key.slice(0, -1)}w`] : [])];
+    const rows = await this.db
+      .select({ id: profiles.userId, nickname: profiles.nickname, norm: profiles.nicknameNorm, level: profiles.level })
+      .from(profiles)
+      .innerJoin(users, eq(users.id, profiles.userId))
+      .where(
+        and(
+          or(...prefixes.map((p) => like(profiles.nicknameNorm, `${escapeLike(p)}%`))),
+          eq(profiles.findable, true),
+          isNotNull(profiles.nicknameChangedAt),
+          eq(users.status, 'active'),
+          ne(profiles.userId, userId),
+          sql`not exists (select 1 from ${blocks} where (${blocks.userId} = ${userId} and ${blocks.blockedId} = ${profiles.userId}) or (${blocks.userId} = ${profiles.userId} and ${blocks.blockedId} = ${userId}))`,
+        ),
+      )
+      .orderBy(asc(profiles.nicknameNorm))
+      .limit(SEARCH_SCAN);
+    rows.sort((a, b) => Number(b.norm === key) - Number(a.norm === key) || a.norm.length - b.norm.length || (a.norm < b.norm ? -1 : a.norm > b.norm ? 1 : 0));
+    return this.found(userId, rows.slice(0, SEARCH_RESULTS));
+  }
+
+  /**
+   * People you played a match with lately (your last {@link RECENT_MATCHES} matches, {@link RECENT_DAYS}
+   * days), the most recent first: not friends already, never anyone blocked either way. Bots never
+   * have match lines, so they never show.
+   */
+  async recent(userId: string): Promise<FoundPlayer[]> {
+    const mine = alias(matchPlayers, 'mine');
+    const them = alias(matchPlayers, 'them');
+    const since = new Date(this.now() - RECENT_DAYS * 86_400_000);
+    const lastMatches = this.db
+      .select({ id: mine.matchId })
+      .from(mine)
+      .innerJoin(matches, eq(matches.id, mine.matchId))
+      .where(and(eq(mine.userId, userId), gt(matches.endedAt, since)))
+      .orderBy(desc(matches.endedAt))
+      .limit(RECENT_MATCHES);
+    const lastSeen = max(matches.endedAt);
+    const met = await this.db
+      .select({ id: them.userId, at: lastSeen })
+      .from(them)
+      .innerJoin(matches, eq(matches.id, them.matchId))
+      .where(and(inArray(them.matchId, lastMatches), ne(them.userId, userId)))
+      .groupBy(them.userId)
+      .orderBy(desc(lastSeen))
+      .limit(RECENT_PLAYERS * 5);
+    if (!met.length) return [];
+    const ids = met.map((m) => m.id);
+    const [friends, blocked, people] = await Promise.all([
+      this.friendsAmong(userId, ids),
+      this.db
+        .select({ a: blocks.userId, b: blocks.blockedId })
+        .from(blocks)
+        .where(or(and(eq(blocks.userId, userId), inArray(blocks.blockedId, ids)), and(inArray(blocks.userId, ids), eq(blocks.blockedId, userId)))),
+      this.db
+        .select({ id: profiles.userId, nickname: profiles.nickname, level: profiles.level })
+        .from(profiles)
+        .innerJoin(users, eq(users.id, profiles.userId))
+        .where(and(inArray(profiles.userId, ids), eq(users.status, 'active'))),
+    ]);
+    const hidden = new Set([...friends, ...blocked.map((r) => (r.a === userId ? r.b : r.a))]);
+    const byId = new Map(people.map((p) => [p.id, p]));
+    const rows = met.flatMap((m) => {
+      const p = byId.get(m.id);
+      return p && !hidden.has(m.id) && m.at ? [{ ...p, at: new Date(m.at).toISOString() }] : [];
+    });
+    return this.found(userId, rows.slice(0, RECENT_PLAYERS));
+  }
+
+  /** Players with their look and where you stand with each. */
+  private async found(userId: string, rows: readonly { id: string; nickname: string; level: number; at?: string }[]): Promise<FoundPlayer[]> {
+    if (!rows.length) return [];
+    const ids = rows.map((r) => r.id);
+    const [friends, requests, looks] = await Promise.all([
+      this.friendsAmong(userId, ids),
+      this.db
+        .select({ from: friendRequests.fromId, to: friendRequests.toId })
+        .from(friendRequests)
+        .where(or(and(eq(friendRequests.fromId, userId), inArray(friendRequests.toId, ids)), and(inArray(friendRequests.fromId, ids), eq(friendRequests.toId, userId)))),
+      this.looks(rows),
+    ]);
+    const sent = new Set(requests.filter((r) => r.from === userId).map((r) => r.to));
+    const incoming = new Set(requests.filter((r) => r.to === userId).map((r) => r.from));
+    return rows.map((r) => ({
+      id: r.id,
+      nickname: r.nickname,
+      level: r.level,
+      look: looks.get(r.id) ?? null,
+      relation: friends.has(r.id) ? 'friends' : incoming.has(r.id) ? 'incoming' : sent.has(r.id) ? 'sent' : 'none',
+      ...(r.at ? { at: r.at } : {}),
+    }));
+  }
+}
+
+/** A search's key: the query's skeleton, or '' when it's under {@link SEARCH_MIN_LETTERS} letters. */
+export function searchKey(query: string): string {
+  const key = skeleton(query.slice(0, 32));
+  return [...key].length >= SEARCH_MIN_LETTERS ? key : '';
+}
+
+/** A LIKE pattern matching `text` itself (`%`, `_` and the backslash escaped). */
+function escapeLike(text: string): string {
+  return text.replace(/[\\%_]/g, (c) => `\\${c}`);
 }

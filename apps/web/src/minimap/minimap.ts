@@ -485,7 +485,7 @@ export class Minimap {
   }
 
   /**
-   * Desktop: the HUD's top-left pills (fps, connection, Tuned by host) sit under the minimap, so they
+   * Desktop: the HUD's top-left pills (fps, connection) sit under the minimap, so they
    * start below it (audit 28 Oct: the map covered them). `bottom`: the map's foot in page px; null: no map there.
    */
   private clearHud(bottom: number | null): void {

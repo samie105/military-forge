@@ -197,6 +197,11 @@ function readJson(storage: Pick<Storage, 'getItem'> | null, key: string): unknow
   }
 }
 
+/** Matches finished on this device (any kind: training, Live fire, online), 0 when storage is blocked. */
+export function finishedMatches(storage: Pick<Storage, 'getItem'> | null): number {
+  return sanitizeFacts(readJson(storage, FACTS_KEY), 0).matches.finished;
+}
+
 /** The facts, kept on the device; failing storage keeps them for the session. */
 export class FactStore {
   private facts: Facts;

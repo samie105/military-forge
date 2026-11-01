@@ -57,6 +57,13 @@
       "when": 1793191927494,
       "tag": "0007_store",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793457416322,
+      "tag": "0008_friend_search",
+      "breakpoints": true
     }
   ]
 }

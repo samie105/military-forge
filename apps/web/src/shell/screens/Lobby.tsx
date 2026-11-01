@@ -552,6 +552,13 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
                 <Icon name="bot" size="sm" />
                 <b data-bind="room.bots">{botsLine(bots, botLevel)}</b>
               </span>
+              {/* the host changed the game's numbers (Tune the game); the server's own are just the game's */}
+              {lobby.rules ? (
+                <span title={`The host changed: ${lobby.rules}`}>
+                  <Icon name="sliders" size="sm" />
+                  <b>Custom rules</b>
+                </span>
+              ) : null}
             </div>
             {host && (
               <div className="lobby__opts">

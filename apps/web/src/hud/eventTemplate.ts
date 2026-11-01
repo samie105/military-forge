@@ -43,7 +43,7 @@ export function eventTemplate(): string {
     <div class="mf-eva__row">
       ${EVENT_ICON}
       <span class="mf-eva__text"><b data-bind="event.name"></b><span data-bind="event.effect"></span></span>
-      <b class="mf-eva__time num"><span data-bind-roll="event.timeLeft"></span> s</b>
+      <b class="mf-eva__time num"><span data-bind="event.timeLeft"></span> s</b>
     </div>
     <div class="mf-eva__bar" aria-hidden="true"><i></i></div>
   </div>

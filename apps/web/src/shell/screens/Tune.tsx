@@ -4,8 +4,8 @@
  * on the real tuning keys with content's own ranges and steps, each with its default marked, Reset,
  * and Copy values (the JSON of what differs). "All values" opens the full dev panel (every key)
  * under the rows. Motion (ui-motion-spec.md §4.1): the panel slides in from the right edge (P9), the
- * rows rise in turn (P3), a changed value rolls (P4); everyone in the room sees "Tuned by host" (P7,
- * the HUD) and a guest gets TuneToast, below.
+ * rows rise in turn (P3), a changed value rolls (P4); everyone in the room sees "Custom rules" (the
+ * lobby and the scoreboard, never the match HUD: audit B-11) and a guest gets TuneToast, below.
  */
 import { changedTuning, defaultTuning, type Tuning } from '@military-forge/content';
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
@@ -222,7 +222,7 @@ let lastNote = 0;
 /**
  * A guest's word that the host just retuned the room (the kit's toast under the clock): "Ade changed
  * Gravity to 12 m/s² · Dash chain window to 0.6 s". It comes in from the top (P9) and leaves after 3.2 s;
- * "Tuned by host" stays on the HUD.
+ * "Custom rules" stays in the lobby and on the scoreboard.
  */
 export function TuneToast({ note }: { note: TuneNote | null }) {
   const [shown, setShown] = useState<TuneNote | null>(null);

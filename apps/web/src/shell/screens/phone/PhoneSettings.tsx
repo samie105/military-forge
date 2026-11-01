@@ -26,6 +26,7 @@ import { PadControls } from '../../../gamepad/PadSettings';
 import { useInputDevice } from '../../../gamepad/react';
 import { InstallButton } from '../../../pwa/InstallButton';
 import { SendReport } from '../../../diag/SendReport';
+import { buildId } from 'virtual:title-info';
 import { AccountPanel } from '../../account/AccountPanel';
 import { PrivacySettings } from '../../../metrics/PrivacySettings';
 
@@ -354,6 +355,7 @@ function Network({ settings }: { settings: Settings }) {
         <span className="pm-set__text">
           <b>Something went wrong?</b>
           <span>Send us what happened on this phone, so we can fix it. A failed room connection sends one by itself.</span>
+          <span className="num">Build {buildId}</span>
         </span>
         <SendReport context="settings" />
       </div>

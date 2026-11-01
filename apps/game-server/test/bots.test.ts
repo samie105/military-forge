@@ -228,6 +228,29 @@ describe("the host's bots", () => {
     expect(rules(ade)).toMatchObject({ bots: 8, botLevel: 'hard' });
   });
 
+  it("a new level in the lobby takes the bots there at once, so Play now's start meets the level the lobby shows (audit B-30)", () => {
+    const room = matchRoom();
+    const ade = join(room, 'Ade');
+    run(room, 1);
+    expect(room.bots).toHaveLength(3);
+    const level = () => room.bots.map((b) => (b.brain as unknown as { level: { id: string } }).level.id);
+    expect(level()).toEqual(['normal', 'normal', 'normal']);
+    settings(room, ade, { botLevel: 'easy' });
+    // the same command batch: the bots are back, at Easy, before a Start right behind it is read
+    expect(room.bots).toHaveLength(3);
+    expect(level()).toEqual(['easy', 'easy', 'easy']);
+    room.receive(ade.client, encodeCmd(CmdKind.StartMatch, ''));
+    run(room, 12);
+    expect(room.match!.phase).toBe(MatchPhase.Countdown);
+    expect(rules(ade)).toMatchObject({ bots: 4, botLevel: 'easy' });
+    // mid-match, the ones playing keep their place (and their standing)
+    run(room, 2 * 60);
+    const playing = room.bots.map((b) => b.name);
+    settings(room, ade, { botLevel: 'hard' });
+    run(room, 1);
+    expect(room.bots.map((b) => b.name)).toEqual(playing);
+  });
+
   it('reads the setting strictly: a number of players up to the room size and a known level', () => {
     const cur = { target: 4, level: 'normal' as const };
     expect(parseBotSettings('{"bots":0}', cur)).toEqual({ target: 0, level: 'normal' });

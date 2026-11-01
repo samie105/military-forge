@@ -29,8 +29,8 @@ const TOUCH_FIRE = {
   release: (aim: string) => `Aim the ${aim} stick, lift to fire.`,
 } as const;
 
-/** The five goals, per device. */
-export const FLIGHT_COPY: Record<'run' | 'fly' | 'hit' | 'dash' | 'throw', (device: Device, touch: Words) => FlightCopy> = {
+/** The goals, per device. */
+export const FLIGHT_COPY: Record<'run' | 'fly' | 'hit' | 'reload' | 'swap' | 'take' | 'dash' | 'throw', (device: Device, touch: Words) => FlightCopy> = {
   run: (d, t) =>
     d === 'touch'
       ? { title: 'Run.', body: `Drag the ${t.moveSide} stick.`, help: `Thumb on the ${t.moveSide} half, slide.` }
@@ -45,6 +45,19 @@ export const FLIGHT_COPY: Record<'run' | 'fly' | 'hit' | 'dash' | 'throw', (devi
     d === 'touch'
       ? { title: 'Fire.', body: TOUCH_FIRE[t.fire as keyof typeof TOUCH_FIRE]?.(other(t.moveSide)) ?? TOUCH_FIRE.pull(other(t.moveSide)), help: '3 hits on the ringed target.' }
       : { title: 'Fire.', body: '3 hits on the target.', help: d === 'pad' ? 'Aim with the other stick. The ring marks the target.' : 'Aim with the mouse. The ring marks the target.' },
+  // reload, swap and pick up (audit A-20): one short order each, between Fire and Dash
+  reload: (d) =>
+    d === 'touch'
+      ? { title: 'Reload.', body: 'Tap Reload.', help: 'Reload while nobody is shooting at you.' }
+      : { title: 'Reload.', body: 'Top up the magazine.', help: 'Reload while nobody is shooting at you.' },
+  swap: (d) =>
+    d === 'touch'
+      ? { title: 'Swap.', body: 'Tap Swap.', help: 'Faster than reloading when a gun runs dry.' }
+      : { title: 'Swap.', body: 'Switch to your other gun.', help: 'Faster than reloading when a gun runs dry.' },
+  take: (d) =>
+    d === 'touch'
+      ? { title: 'Pick up.', body: 'Stand on the gun, tap Take.', help: 'The gun in your hand drops in its place.' }
+      : { title: 'Pick up.', body: 'Stand on the gun and take it.', help: 'The gun in your hand drops in its place.' },
   dash: (d, t) =>
     d === 'touch'
       ? t.dashButton

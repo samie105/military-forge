@@ -5,8 +5,7 @@
  * dials and their buttons, is the touch module's (touch/skin.ts): HP and fuel ride the move dial,
  * the ammo the aim dial, so nothing here duplicates them.
  *
- *   top left     the kill line (the newest kill only), or the low-health cue while it lasts; ping, and
- *                "Tuned by admin" under it while the owner's admin page has changed this server's numbers
+ *   top left     the kill line (the newest kill only), or the low-health cue while it lasts; ping
  *   top centre   the clock and the score
  *   centre       the reticle (by transform: hud.ts) with the hit, headshot, ricochet, launch and kill
  *                markers (the desktop's), the damage arcs
@@ -53,7 +52,6 @@ export function phoneHudTemplate(): string {
     <ol class="phud-feed pt-feed" aria-label="Kill feed" data-state="!low-hp"></ol>
     <div class="pt-cue plate" data-state="low-hp+alive" role="status">${ic('hp', 'ic--sm')}<b>Low health</b><span data-bind="player.hpCue"></span></div>
     <div class="pt-clock plate" data-state="match"><b class="num" data-bind="match.timeLeft"></b><span><span class="hud-label">You</span> <b class="num" data-bind="match.myScore"></b><i></i><span class="hud-label" data-bind="match.leaderShort"></span> <b class="num" data-bind="match.leaderScore"></b></span></div>
-    <span class="phud-admin hud-label" data-state="admin">Tuned by admin</span>
     <span class="pt-ping" data-state="net"><span data-bind-attr="class: net.phoneClass"><span class="sig" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span data-bind="net.ping"></span></span><span class="pt-ping__more num" data-bind="net.short"></span></span>
     <span class="pt-arcwarn mf-arcwarn" data-state="arc-warning" role="status">${ic('warn', 'ic--sm')}Arc bends<span data-bind-show="event.name"> · <span data-bind="event.name"></span></span></span>
     <div class="pickup plate pt-pickup" data-state="pickup" role="status" data-bind-attr="data-tone: pickup.item.tone"><svg class="ic ic--sm" aria-hidden="true"><use data-bind-attr="href: pickup.icon"/></svg><span data-state="pickup-item"><b data-bind="pickup.item.title"></b> <span class="pt-pickup__line" data-bind="pickup.item.line"></span></span><span data-state="!pickup-item" data-bind="pickup.text"></span></div>

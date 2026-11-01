@@ -1,11 +1,11 @@
 import { MatchPhase } from '@military-forge/sim';
 import { describe, expect, it } from 'vitest';
-import { offlineName, tipsCalm, trainingPaused } from '../src/shell/controller';
+import { offlineName, tipsCalm, tipsLeaveWithLobby, trainingPaused } from '../src/shell/controller';
 import { createShellStore, type ShellState } from '../src/shell/store';
 import type { MatchView } from '../src/shell/matchView';
 
 const state = (over: Partial<ShellState>): ShellState => ({ ...createShellStore().getState(), title: 'off', ...over });
-const match = (phase: number) => ({ phase }) as unknown as MatchView;
+const match = (phase: number, results: unknown = null) => ({ phase, results }) as unknown as MatchView;
 
 describe('no card over a running match (mobile audit P0-3), and only before play (audit 28 Oct)', () => {
   it("a room's lobby or warm-up, and training (it holds still under the card), are calm; Home is not (after a match: too late)", () => {
@@ -22,6 +22,26 @@ describe('no card over a running match (mobile audit P0-3), and only before play
     expect(tipsCalm(state({ screen: { name: 'home' }, overlay: 'menu' }))).toBe(false);
     expect(tipsCalm(state({ screen: { name: 'home' }, title: 'on' }))).toBe(false);
     expect(tipsCalm(state({ screen: { name: 'home' }, tips: true }))).toBe(false);
+  });
+});
+
+describe('never over Results (audit B-01: the card opened over the first online match\'s results)', () => {
+  const room = (phase: number, results: unknown = null, over: Partial<ShellState> = {}) => state({ screen: { name: 'room', code: 'ABCDEF' }, match: match(phase, results), ...over });
+
+  it('the lobby after a match is not calm: it comes with the results', () => {
+    expect(tipsCalm(room(MatchPhase.Waiting, { standings: [] }))).toBe(false);
+    for (const phase of [MatchPhase.Ending, MatchPhase.Postgame, MatchPhase.Closed]) expect(tipsCalm(room(phase, { standings: [] }))).toBe(false);
+    expect(tipsCalm(room(MatchPhase.Waiting))).toBe(true);
+  });
+
+  it("the card released in the lobby closes as the countdown starts, unless the player asked for it", () => {
+    expect(tipsLeaveWithLobby(room(MatchPhase.Waiting), room(MatchPhase.Countdown, null, { tips: true }))).toBe(true);
+    expect(tipsLeaveWithLobby(room(MatchPhase.Waiting), room(MatchPhase.Countdown, null, { tips: true, tipsAsked: true }))).toBe(false);
+    expect(tipsLeaveWithLobby(room(MatchPhase.Waiting), room(MatchPhase.Waiting, null, { tips: true }))).toBe(false);
+    expect(tipsLeaveWithLobby(room(MatchPhase.Countdown), room(MatchPhase.InProgress, null, { tips: true }))).toBe(false);
+    // training holds still under the card: it stays
+    const training = (phase: number) => state({ screen: { name: 'training' }, match: match(phase), tips: true });
+    expect(tipsLeaveWithLobby(training(MatchPhase.Waiting), training(MatchPhase.Countdown))).toBe(false);
   });
 });
 

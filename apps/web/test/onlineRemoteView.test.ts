@@ -2,6 +2,7 @@ import { HAMMER, K47 } from '@military-forge/content';
 import type { SnapshotPlayer } from '@military-forge/protocol';
 import { describe, expect, it } from 'vitest';
 import { OnlineMode } from '../src/onlineMode';
+import { SpawnCoverWatch } from '../src/spawnCover';
 import type { PlayerView } from '../src/view';
 
 /** A remote player as a snapshot carries it. */
@@ -34,8 +35,8 @@ const remote = (over: Partial<SnapshotPlayer> = {}): SnapshotPlayer => ({
 });
 
 describe("OnlineMode's view of a remote player", () => {
-  // remoteView needs only the names it reads from the net client
-  const mode = Object.assign(Object.create(OnlineMode.prototype), { net: { names: new Map<number, string>() } }) as unknown as {
+  // remoteView needs only the names it reads from the net client, and who is under spawn cover
+  const mode = Object.assign(Object.create(OnlineMode.prototype), { net: { names: new Map<number, string>() }, cover: new SpawnCoverWatch() }) as unknown as {
     remoteView(src: SnapshotPlayer, isLocal: boolean, x: number, y: number, meleeTicks?: number): PlayerView;
   };
 

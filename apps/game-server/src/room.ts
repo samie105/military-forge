@@ -130,6 +130,8 @@ export interface RoomOptions {
   pickups?: boolean;
   /** the test armory: a rack of one of every gun near the spawns, back 2 s after it's taken (default off; the playtest turns it on) */
   armory?: boolean;
+  /** spawn cover (sim GameOptions.spawnCover, content SPAWN_COVER; audit B-10): default on */
+  spawnCover?: boolean;
   /** send a snapshot every N ticks (2 → 30 Hz) */
   snapshotEvery?: number;
   /** allow dev commands (live tuning, respawn) */
@@ -556,7 +558,7 @@ export class Room {
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const room = this;
     this.log = options.log ?? ((msg) => console.error(msg));
-    this.game = new Game({ seed: options.seed ?? 1, mapId: options.mapId ?? 'movement-test', dummies: options.dummies ?? true, pickups: options.pickups ?? true, armory: options.armory ?? false });
+    this.game = new Game({ seed: options.seed ?? 1, mapId: options.mapId ?? 'movement-test', dummies: options.dummies ?? true, pickups: options.pickups ?? true, armory: options.armory ?? false, spawnCover: options.spawnCover ?? true });
     this.maxHumans = options.maxHumans ?? 8;
     this.snapshotEvery = options.snapshotEvery ?? 2;
     this.dev = options.dev ?? true;
@@ -1339,9 +1341,18 @@ export class Room {
         const bots = parseBotSettings(payload, this.hostFill ?? { target: this.fill?.target ?? 0, level: this.fill?.level ?? 'normal' });
         if (bots === null) break;
         if (bots) {
+          const was = this.botFill?.level;
           this.hostFill = bots;
           this.prepareBotGraph();
           this.log(`[room] host sets bots: ${bots.target > 0 ? `fill to ${bots.target} (${bots.level})` : 'off'}`);
+          // a new level in the lobby: the bots there take it now (they go, and the fill brings them
+          // back at that level), so the match starts against the level the lobby shows (audit B-30:
+          // Play now's Easy bots for a recruit). Mid-match, the ones playing keep their standing.
+          if (m.phase === MatchPhase.Waiting && was !== undefined && bots.level !== was && this.bots.length > 0) {
+            for (const bot of this.bots.splice(0)) removeBot(this.game, bot);
+            this.fillWithBots();
+            this.matchDirty = true;
+          }
         }
         if (m.phase !== MatchPhase.Waiting) break;
         // v21: the mode (free-for-all or 2–4 teams); the kill limit follows it unless this CMD names one

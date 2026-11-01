@@ -3,20 +3,25 @@
  * to continue … to enter the game and have a nice experience"; card 01 on the Pen file's AGENT BRIDGE
  * board, drawn on the "TITLE SCREEN · tap anywhere" board). The Forge's key art full-bleed (a dark
  * olive fallback until it lands), the lockup, slow smoke, a light sweep and a little parallax; "Press
- * any key" (desktop) or "Tap anywhere" (phone), any controller button too. The press unlocks the
+ * any key" (a keyboard) or "Tap anywhere" (a finger: phones and touch tablets), and the controller's
+ * line only while one is connected; any controller button continues too. The press unlocks the
  * sound (the music starts with a war-tone hit, audio/ui.ts) and the camera pushes through into the
  * next screen, already drawn underneath: your name the first time, else Home. Phones keep it cheap:
- * one layer moves, no blur. Reduce motion: no drift, a short cross-fade out.
+ * one layer moves, no blur. Reduce motion: no drift, a short cross-fade out. An upright phone gets the
+ * turn-your-phone card over it first (phone/TurnTip.tsx). The build id isn't shown to players: it goes
+ * with every report (diag/report.ts) and Settings → Network shows it.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useStore } from 'zustand';
 import { GAME_NAME } from '@military-forge/shared';
-import { buildId, keyArt } from 'virtual:title-info';
+import { keyArt } from 'virtual:title-info';
 import { landingOwns, onPlay } from '../../ui/landing';
 import { reduced } from '../../ui/motion';
 import { Screen } from '../../ui/Screen';
 import { useServerPing } from '../context';
 import { usePhoneLayout } from './phone';
+import { useRotated } from './phone/layout';
+import { TurnTip, markTurnTipSeen, useTurnTipSeen } from './phone/TurnTip';
 import { TITLE_LEAVE_MS, TITLE_LEAVE_REDUCED_MS, continuesTitle, regionLabel } from '../title';
 import type { ShellStore } from '../store';
 import './title.css';
@@ -48,6 +53,36 @@ function loopWelcome(phone: boolean): boolean {
   if (phone || !keyArt.desktopLoop.length || reduced()) return false;
   if (document.documentElement.classList.contains('gfx-low')) return false;
   return !(navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData;
+}
+
+/** The prompt's words follow the input (UX audit 31 Oct, A-38): a finger taps (phones and touch tablets), a keyboard presses a key. */
+export function promptKind(phone: boolean, coarse: boolean): 'tap' | 'key' {
+  return phone || coarse ? 'tap' : 'key';
+}
+
+const coarsePointer = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+
+/** A controller is connected (browsers list one only once a button on it was pressed): its line shows only then (A-39). */
+function padConnected(): boolean {
+  try {
+    return typeof navigator.getGamepads === 'function' && [...navigator.getGamepads()].some((p) => !!p?.connected);
+  } catch {
+    return false;
+  }
+}
+
+function usePadConnected(): boolean {
+  const [on, setOn] = useState(padConnected);
+  useEffect(() => {
+    const check = () => setOn(padConnected());
+    window.addEventListener('gamepadconnected', check);
+    window.addEventListener('gamepaddisconnected', check);
+    return () => {
+      window.removeEventListener('gamepadconnected', check);
+      window.removeEventListener('gamepaddisconnected', check);
+    };
+  }, []);
+  return on;
 }
 
 /** Leaves the title: the press now, the push once the app is ready (still booting: a loading line). */
@@ -82,6 +117,17 @@ export function TitleScreen({ store }: { store: ShellStore }) {
   const ping = useServerPing();
   const [region, setRegion] = useState<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
+  const tap = promptKind(phone, coarsePointer()) === 'tap';
+  const pad = usePadConnected();
+  // an upright phone: the turn card first, once (A-25); turning the phone counts as seen
+  const rotated = useRotated();
+  const turnSeen = useTurnTipSeen();
+  const turnTip = rotated && !turnSeen && state === 'on';
+  const turnShown = useRef(false);
+  useEffect(() => {
+    if (turnTip) turnShown.current = true;
+    else if (turnShown.current && !turnSeen) markTurnTipSeen();
+  }, [turnTip, turnSeen]);
 
   // the ping's first sample is taken while the page still loads (807 ms on a phone, mobile audit
   // P1-16): the chip shows a number from the second one on
@@ -103,9 +149,10 @@ export function TitleScreen({ store }: { store: ShellStore }) {
     };
   }, []);
 
-  // any key, click, tap or controller button continues (the key never reaches the screen underneath)
+  // any key, click, tap or controller button continues (the key never reaches the screen underneath);
+  // not while the turn card asks (its button is the one thing to press)
   useEffect(() => {
-    if (state !== 'on') return undefined;
+    if (state !== 'on' || turnTip) return undefined;
     const onKey = (e: KeyboardEvent) => {
       // the About sheet and the link into it (ui/landing.ts) keep their keys
       if (landingOwns(e.target) || !continuesTitle(e)) return;
@@ -146,7 +193,7 @@ export function TitleScreen({ store }: { store: ShellStore }) {
       window.removeEventListener('pointerdown', onPointer, true);
       cancelAnimationFrame(frame);
     };
-  }, [state, store]);
+  }, [state, store, turnTip]);
 
   // while the title is up, the screen waiting under it isn't painted (it shows as the title leaves):
   // its giant background word was the page's largest paint, seconds after the landing's (mobile audit)
@@ -158,7 +205,7 @@ export function TitleScreen({ store }: { store: ShellStore }) {
   }, [state]);
 
   // the landing's Play now (index.html): pressed while the page loaded, or on the About sheet
-  useEffect(() => (state === 'on' ? onPlay(() => pressTitle(store)) : undefined), [state, store]);
+  useEffect(() => (state === 'on' && !turnTip ? onPlay(() => pressTitle(store)) : undefined), [state, store, turnTip]);
 
   // pressed while the app was getting ready: go as soon as it is
   useEffect(() => {
@@ -245,21 +292,21 @@ export function TitleScreen({ store }: { store: ShellStore }) {
                 <i />
               </span>
             </>
-          ) : phone ? (
-            <>
-              <span className="mf-title__press">Tap anywhere to continue</span>
-            </>
           ) : (
             <>
-              <span className="mf-title__press">
-                <kbd className="kbd kbd--lg">Any key</kbd>
-                Press any key · click
-              </span>
-              <small>or any controller button</small>
+              {/* one prompt for the input in hand (audit 31 Oct, A-24, A-38): the key cap carries its own words */}
+              {tap ? (
+                <span className="mf-title__press">Tap anywhere to continue</span>
+              ) : (
+                <span className="mf-title__press">
+                  Press
+                  <kbd className="kbd kbd--lg">Any key</kbd>
+                </span>
+              )}
+              {pad && <small>or any button on your controller</small>}
             </>
           )}
         </div>
-        <span className="mf-title__corner mf-title__corner--build">build {buildId}</span>
         {/* the server and its ping (not on a phone: the title there is the key art and one line) */}
         {!phone && (
           <span className="mf-title__corner mf-title__corner--net">
@@ -269,6 +316,11 @@ export function TitleScreen({ store }: { store: ShellStore }) {
           </span>
         )}
       </Screen>
+      {turnTip && (
+        <div className="mf-title__turn">
+          <TurnTip line="Military Forge plays in landscape." onDone={markTurnTipSeen} />
+        </div>
+      )}
     </div>
   );
 }

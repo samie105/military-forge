@@ -58,24 +58,35 @@ export const identities = pgTable(
   (t) => [primaryKey({ columns: [t.provider, t.providerUid] }), index('identities_user_id_idx').on(t.userId)],
 );
 
-export const profiles = pgTable('profiles', {
-  userId: text('user_id')
-    .primaryKey()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  /** display form (NFKC, trimmed) */
-  nickname: text('nickname').notNull(),
-  /** confusable skeleton (nickname/normalize.ts): one name per skeleton */
-  nicknameNorm: text('nickname_norm').notNull().unique(),
-  /** last change the player chose; null = still the generated guest name (first change is free) */
-  nicknameChangedAt: timestamp('nickname_changed_at', tz),
-  level: integer('level').notNull().default(1),
-  xp: integer('xp').notNull().default(0),
-  /**
-   * The short code friends add you by (friends/code.ts: 8 letters and digits, no lookalikes), made
-   * the first time it's needed; null until then. A new code (rotate) retires the old one.
-   */
-  friendCode: text('friend_code').unique(),
-});
+export const profiles = pgTable(
+  'profiles',
+  {
+    userId: text('user_id')
+      .primaryKey()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** display form (NFKC, trimmed) */
+    nickname: text('nickname').notNull(),
+    /** confusable skeleton (nickname/normalize.ts): one name per skeleton */
+    nicknameNorm: text('nickname_norm').notNull().unique(),
+    /** last change the player chose; null = still the generated guest name (first change is free) */
+    nicknameChangedAt: timestamp('nickname_changed_at', tz),
+    level: integer('level').notNull().default(1),
+    xp: integer('xp').notNull().default(0),
+    /**
+     * The short code friends add you by (friends/code.ts: 8 letters and digits, no lookalikes), made
+     * the first time it's needed; null until then. A new code (rotate) retires the old one.
+     */
+    friendCode: text('friend_code').unique(),
+    /**
+     * "Let players find me by name" (Settings → Privacy): off keeps the player out of the friends panel's
+     * name search (friends/service.ts search). Their exact name and friend code still find them.
+     */
+    findable: boolean('findable').notNull().default(true),
+  },
+  // name search is a prefix match on the skeleton (friends/service.ts search): text_pattern_ops lets
+  // `like 'abc%'` use the index whatever the database's collation
+  (t) => [index('profiles_nickname_norm_prefix_idx').on(t.nicknameNorm.op('text_pattern_ops'))],
+);
 
 /** One row per signed-in device: the refresh token family (auth/sessions.ts). */
 export const sessions = pgTable(

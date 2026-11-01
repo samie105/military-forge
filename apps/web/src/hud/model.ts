@@ -470,9 +470,9 @@ export function dashHint(dir: number): { words: string; rose: number; arrow: num
 }
 
 /**
- * The "Tuned by host" tag: what the room's host changed, the first two by name (2 → "Gravity 0.6× ·
- * Dash speed 1.4×"), against `base`: the defaults, or online the defaults with the admin's values
- * (those show as "Tuned by admin", not as the host's).
+ * "Custom rules" (the lobby, the scoreboard): what the room's host changed, the first two by name
+ * (2 → "Gravity 0.6× · Dash speed 1.4×"), against `base`: the defaults, or online the defaults with
+ * the admin's values (those are just the game's on that server: players never see a badge for them).
  */
 export function tunedSummary(t: Tuning, base: Tuning = defaultTuning): string {
   const parts: string[] = [];

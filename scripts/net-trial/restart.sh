@@ -9,12 +9,15 @@
 #   in the game server, 10 min by default); then every player is told the server updated (close 1012)
 #   and rejoins the same room on the new code once systemd has started it again.
 # - Anything else restarts as before.
-# Needs root. MF_SRC: the checkout (default /opt/military-forge/src).
+# Needs root. MF_SRC: the checkout (default /opt/military-forge/src); MF_DATA, MF_GAME_UNIT and
+# MF_GAME_PORT: staging's (docs/release.md; production's by default).
 set -uo pipefail
 SRC=${MF_SRC:-/opt/military-forge/src}
 DATA=${MF_DATA:-/var/lib/military-forge}
+GAME=${MF_GAME_UNIT:-mf-game}
+PORT=${MF_GAME_PORT:-9001}
 log() { printf '[mf-restart %s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
-health() { curl -fs -o /dev/null -m 3 http://127.0.0.1:9001/health; }
+health() { curl -fs -o /dev/null -m 3 "http://127.0.0.1:$PORT/health"; }
 
 game_tree() { git -C "$SRC" rev-parse HEAD:apps/game-server HEAD:packages HEAD:pnpm-lock.yaml HEAD:package.json 2>/dev/null | sha256sum | cut -c1-16; }
 
@@ -22,23 +25,23 @@ restart_game() {
   local new old pid
   new=$(game_tree)
   old=$(cat "$DATA/game-tree" 2>/dev/null)
-  if ! systemctl is-active -q mf-game; then
-    systemctl restart mf-game || return 1
+  if ! systemctl is-active -q "$GAME"; then
+    systemctl restart "$GAME" || return 1
   elif [ -n "$old" ] && [ "$new" = "$old" ]; then
     log 'the game server is unchanged: not restarted (its matches play on)'
     return 0
   else
-    pid=$(systemctl show -p MainPID --value mf-game)
+    pid=$(systemctl show -p MainPID --value "$GAME")
     log 'the game server changed: draining it (new rooms wait; running matches finish, 10 min at most)'
-    systemctl kill -s USR2 mf-game || return 1
+    systemctl kill -s USR2 "$GAME" || return 1
     # systemd starts the new code when the old one stops; the cap's own 10 min plus a margin
     for _ in $(seq 690); do
-      [ "$(systemctl show -p MainPID --value mf-game)" != "$pid" ] && break
+      [ "$(systemctl show -p MainPID --value "$GAME")" != "$pid" ] && break
       sleep 1
     done
-    if [ "$(systemctl show -p MainPID --value mf-game)" = "$pid" ]; then
+    if [ "$(systemctl show -p MainPID --value "$GAME")" = "$pid" ]; then
       log 'it did not stop by itself: restarting it'
-      systemctl restart mf-game || return 1
+      systemctl restart "$GAME" || return 1
     fi
   fi
   for _ in $(seq 120); do health && break; sleep 1; done
@@ -50,7 +53,7 @@ restart_game() {
 status=0
 for s in "$@"; do
   case $s in
-  mf-game) restart_game || status=1 ;;
+  "$GAME") restart_game || status=1 ;;
   *) systemctl restart "$s" || status=1 ;;
   esac
 done

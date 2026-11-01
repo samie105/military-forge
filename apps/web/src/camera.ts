@@ -30,6 +30,12 @@ const FALL_LEAN = 0.65;
  * taller than its half view): the focus keeps this far (m) inside the top and bottom edges.
  */
 const KEEP_ON_SCREEN = 2.5;
+/**
+ * With a focus point, where it sits: this share of the half height above the middle and of the half
+ * width left of it (a phone's open area: the thumbs' controls are low, the button arc on the right).
+ */
+const FOCUS_RAISE = 0.35;
+const FOCUS_LEFT = 0.1;
 /** 1/s: how quickly the lean follows the flight */
 const FLIGHT_EASE = 3;
 /** a close view pulls back out above this vertical speed (m/s) … */
@@ -65,6 +71,14 @@ export class Camera {
    * Galaxy S23 the soldier stood under JET and the grenade at the start of Street Market). null: anywhere.
    */
   soldierBand: { left: number; right: number } | null = null;
+  /**
+   * A world point to frame with the soldier (First flight's target on a phone: audit A-18): the view
+   * pulls back to the zoom level's width and puts the point a little up and left of the middle, the open part of a
+   * phone's screen, instead of leaning toward the reticle or the way it flies; the soldier band and
+   * KEEP_ON_SCREEN keep the soldier in view. Only the offline range sets it, so the AOI's lean budget
+   * doesn't bind it. null: the plain follow.
+   */
+  focus: { x: number; y: number } | null = null;
   /**
    * The soldier's vertical speed (m/s), set before `follow`: the view leans the way it flies. 0 (or
    * never set) keeps the plain follow.
@@ -141,7 +155,7 @@ export class Camera {
     const lean = Math.max(0, Math.min(1, this.lookAhead));
     const vy = Number.isFinite(this.flightVy) ? this.flightVy : 0;
     const easeIn = this.initialised ? 1 - Math.exp(-dt * FLIGHT_EASE) : 1;
-    this.flightPull += ((Math.abs(vy) > PULL_SPEED ? lean : 0) - this.flightPull) * (this.initialised ? 1 - Math.exp(-dt * PULL_EASE) : 1);
+    this.flightPull += ((this.focus ? 1 : Math.abs(vy) > PULL_SPEED ? lean : 0) - this.flightPull) * (this.initialised ? 1 - Math.exp(-dt * PULL_EASE) : 1);
     const { halfW, halfH } = this.halfExtents;
     const budget = this.leanBudget;
     const rising = Math.max(0, Math.min(1, (vy - RISE_FROM) / (RISE_FULL - RISE_FROM)));
@@ -154,15 +168,15 @@ export class Camera {
     const la = VIEW_LOOKAHEAD * lean;
     const lx = Math.max(-halfW * la, Math.min(halfW * la, (mouseWorldX - cx) * la));
     const ly = Math.max(-halfH * la, Math.min(halfH * la, (mouseWorldY - cy) * la));
-    let tx = cx + lx;
+    let tx = this.focus ? this.focus.x + FOCUS_LEFT * halfW : cx + lx;
     // the soldier stays between the thumbs' controls: the view leans no further than that
     const band = this.soldierBand;
     if (band && band.right > band.left) {
       const w = 2 * halfW;
       tx = Math.max(px - (band.right - 0.5) * w, Math.min(px - (band.left - 0.5) * w, tx));
     }
-    const reach = Math.min(budget, Math.max(0, halfH - KEEP_ON_SCREEN));
-    let ty = cy + Math.max(-reach, Math.min(reach, ly + this.flightLean));
+    const reach = this.focus ? Math.max(0, halfH - KEEP_ON_SCREEN) : Math.min(budget, Math.max(0, halfH - KEEP_ON_SCREEN));
+    let ty = cy + Math.max(-reach, Math.min(reach, this.focus ? this.focus.y - FOCUS_RAISE * halfH - cy : ly + this.flightLean));
     const b = map.bounds;
     const padX = halfW * Math.max(0, this.edgeOverrun.x);
     const padDown = halfH * Math.max(0, this.edgeOverrun.down);

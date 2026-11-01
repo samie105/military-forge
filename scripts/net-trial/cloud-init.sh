@@ -1,11 +1,14 @@
 #!/bin/bash
 # Military Forge trial server, Ubuntu 24.04: cloud-init user data (docs/net-trial.md).
-# Re-run: sudo /usr/local/sbin/mf-trial-setup
+# Re-run: sudo /usr/local/sbin/mf-trial-setup (staging: mf-staging-setup). Releases: docs/release.md
 # shellcheck disable=SC2015,SC2016,SC2019,SC2086,SC1090,SC1091
 
 # -- settings
 REPO="${MF_REPO:-https://github.com/samie105/military-forge}"
-REF="${MF_REF:-main}"
+REF="${MF_REF:-production}"
+# production, or staging beside it (docs/release.md)
+[ "${0##*/}" = mf-staging-setup ] && : "${MF_ENV:=staging}"
+MF_ENV="${MF_ENV:-production}"
 MAP="street-market"
 BOTS="4"
 BOT_LEVEL="normal"
@@ -18,10 +21,16 @@ HOST="${MF_HOST:-}" TLS="${MF_TLS:-auto}" ORIGIN_PORT="${MF_ORIGIN_PORT:-}"
 
 set -uo pipefail
 umask 022
-LOG=/var/log/mf-trial.log
+case $MF_ENV in # E: the paths' suffix, U: the user, N: the units' prefix, P: the ports' offset
+production) E='' U=mf N=mf- P=0 STG='' NODE_DIR=/opt/node SETUP=mf-trial-setup ;;
+staging) E=-staging U=mf-staging N=mf-stg- P=100 STG=1 NODE_DIR=/opt/military-forge-staging/node SETUP=mf-staging-setup REF="${MF_REF:-main}" ;;
+*) echo "MF_ENV: production or staging" >&2; exit 2 ;;
+esac
+API_PORT=$((8787 + P)) GAME_PORT=$((9001 + P)) ADMIN_PORT=$((9002 + P))
+LOG=/var/log/mf-trial$E.log
 exec > >(tee -a "$LOG") 2>&1
-SRC=/opt/military-forge/src WEB=/opt/military-forge/web ETC=/etc/military-forge DATA=/var/lib/military-forge
-PUB=/opt/military-forge/public NODE_DIR=/opt/node
+SRC=/opt/military-forge$E/src WEB=/opt/military-forge$E/web ETC=/etc/military-forge$E DATA=/var/lib/military-forge$E
+PUB=/opt/military-forge$E/public
 export DEBIAN_FRONTEND=noninteractive HOME=${HOME:-/root} PATH="$NODE_DIR/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 PHASE='starting' ROOM='' COMMIT='' PROBE=0
 
@@ -62,7 +71,7 @@ phase() { PHASE="$1"; log "== $1"; status; }
 fail() { phase "failed: $1"; console "MILITARY FORGE setup FAILED: $1 ($ORIGIN/trial-status/)"; exit 1; }
 
 # -- the address
-log "Military Forge trial setup ($REPO $REF)"
+log "Military Forge trial setup ($REPO $REF${STG:+, staging})"
 if [ -z "$HOST" ]; then
   ip=''
   t=$(curl -fsS -m 3 -X PUT -H 'X-aws-ec2-metadata-token-ttl-seconds: 300' http://169.254.169.254/latest/api/token 2>/dev/null) &&
@@ -72,6 +81,7 @@ if [ -z "$HOST" ]; then
   [[ $ip =~ ^[0-9.]+$ ]] || { log "no public IPv4 (turn on auto-assign public IP)"; exit 1; }
   HOST="${ip//./-}.sslip.io"
 fi
+HOST=${STG:+staging.}$HOST
 ORIGIN="https://$HOST${ORIGIN_PORT:+:$ORIGIN_PORT}"
 log "this box: $ORIGIN"
 mkdir -p "$PUB/trial-status" "$WEB" "$DATA/probe"
@@ -86,25 +96,27 @@ fi
 # -- packages
 for _ in 1 2 3; do apt-get update -q >/dev/null && apt-get install -y -q --no-install-recommends caddy git curl ca-certificates jq openssl xz-utils postgresql-16 valkey-server >/dev/null && break; sleep 10; done
 type -P caddy jq pg_dump valkey-server >/dev/null||fail 'apt-get install'
-id mf >/dev/null 2>&1 || useradd --system --home-dir "$DATA" --shell /usr/sbin/nologin mf
-install -d -o mf -g mf -m 0750 "$DATA" "$DATA/probe"
-install -d -o mf -g mf -m 0755 "$SRC"
-install -d -o root -g mf -m 0750 "$ETC"
+id $U >/dev/null 2>&1 || useradd --system --home-dir "$DATA" --shell /usr/sbin/nologin $U
+install -d -o $U -g $U -m 0750 "$DATA" "$DATA/probe"
+install -d -o $U -g $U -m 0755 "$SRC"
+install -d -o root -g $U -m 0750 "$ETC"
 chmod 0755 "$PUB" "$PUB/trial-status"
-cp -f "$0" /usr/local/sbin/mf-trial-setup 2>/dev/null && chmod 0700 /usr/local/sbin/mf-trial-setup
+cp -f "$0" /usr/local/sbin/$SETUP 2>/dev/null && chmod 0700 /usr/local/sbin/$SETUP
 
 # -- secrets (made once)
 r() { openssl rand -hex "$1"; }
 [ -s "$ETC/secrets" ] || (umask 077; printf 'ADMIN_TOKEN=%s\nEXPORT_TOKEN=%s\nOWNER=%s\n' "$(r 24)" "$(r 24)" "$(r 12)" >"$ETC/secrets")
 . "$ETC/secrets"
-for k in access ticket; do [ -s "$ETC/$k.key" ] || openssl genpkey -algorithm ed25519 -out "$ETC/$k.key"; chown root:mf "$ETC/$k.key"; chmod 0640 "$ETC/$k.key"; done
+for k in access ticket; do [ -s "$ETC/$k.key" ] || openssl genpkey -algorithm ed25519 -out "$ETC/$k.key"; chown root:$U "$ETC/$k.key"; chmod 0640 "$ETC/$k.key"; done
 
 # -- Caddy first (status page during setup). Its config is site.sh's (from the code): a re-run uses the
-# last deploy's (unchanged: no restart); a new box serves the status page until the code is in
+# last deploy's (unchanged: no restart); a new box serves the status page until the code is in.
+# Staging writes only its own site, with code that knows it (older site.sh would write production's)
 S=$SRC/scripts/net-trial/site.sh
+stg_ok() { [ -z "$STG" ] || grep -qs site_caddy_staging "$S"; }
 [ -f "$WEB/index.html" ] || page "$WEB/index.html" 'Setting up' 1 "<p>Setting up: <a href=\"/trial-status/\">status</a></p>"
-if [ -f "$S" ]; then . "$S"; site_caddy || fail 'the Caddy config'
-elif ! grep -qs "^$HOST {" /etc/caddy/Caddyfile; then
+if [ -f "$S" ] && stg_ok; then . "$S"; site_caddy || fail 'the Caddy config'
+elif [ -z "$STG" ] && ! grep -qs "^$HOST {" /etc/caddy/Caddyfile; then
   t=''; [ "$TLS" = internal ] && t=$'\ttls internal\n'
   printf '{\n\tservers {\n\t\tprotocols h1 h2\n\t}\n%s}\n\n%s {\n%s\tredir / /trial-status/\n\theader Cache-Control no-store\n\troot * %s\n\tfile_server\n}\n' "${ACME_EMAIL:+	email $ACME_EMAIL
 }" "$HOST" "$t" "$PUB" >/etc/caddy/Caddyfile && systemctl restart caddy || fail 'starting Caddy'
@@ -114,14 +126,16 @@ log "Caddy up (Let's Encrypt needs ports 80 and 443 open)"
 
 # -- the code
 phase 'downloading the game'
-as_mf() { runuser -u mf -- env HOME="$DATA" PATH="$PATH" "$@"; }
+as_mf() { runuser -u $U -- env HOME="$DATA" PATH="$PATH" "$@"; }
 if [ -d "$SRC/.git" ]; then
+  as_mf git -C "$SRC" remote set-url origin "$REPO"
   try as_mf git -C "$SRC" fetch -q --depth 1 origin "$REF" && as_mf git -C "$SRC" reset -q --hard FETCH_HEAD || fail "git fetch $REF"
 else
   try as_mf git clone -q --depth 1 --branch "$REF" "$REPO" "$SRC" || fail "git clone $REPO"
 fi
 COMMIT=$(as_mf git -C "$SRC" log -1 --format='%h %cs')
 log "commit $COMMIT"
+stg_ok || fail "$REF predates staging"
 # this commit's Caddy config (headers, caching, compression): Caddy restarts only if it changed
 [ -f "$S" ] && . "$S" && { site_caddy || log "Caddy refused the new config: kept the old one"; }
 IFS='|' read -r PID pn pp < <(bash "$SRC/scripts/net-trial/where.sh" 2>/dev/null); PID=${PID:-box}
@@ -150,7 +164,7 @@ phase 'installing dependencies'
 (cd "$SRC" && as_mf node scripts/fetch-uws.mjs --quiet) || log "uWebSockets.js didn't download: the game server uses ws"
 
 phase 'building the web app'
-(cd "$SRC/apps/web" && as_mf env NODE_ENV=production NODE_OPTIONS=--max-old-space-size=2560 node_modules/.bin/vite build) >"$DATA/build.log" 2>&1 ||
+(cd "$SRC/apps/web" && as_mf env NODE_ENV=production ${STG:+VITE_ENV=staging} NODE_OPTIONS=--max-old-space-size=2560 node_modules/.bin/vite build) >"$DATA/build.log" 2>&1 ||
   { tail -20 "$DATA/build.log"; fail 'the web build'; }
 rm -rf "$WEB.new" && cp -a "$SRC/apps/web/dist" "$WEB.new" || fail 'copying the build'
 # keep 14 days of old hashed js/css (open pages)
@@ -161,18 +175,18 @@ if [ -d "$WEB/assets" ]; then
 fi
 rm -rf "$WEB" && mv "$WEB.new" "$WEB" || fail 'copying the build'
 site_fill
-[ -f "$WEB/probe.html" ] && [ -f "$SRC/scripts/net-trial/probe-server/server.mjs" ] && PROBE=1
+[ -z "$STG" ] && [ -f "$WEB/probe.html" ] && [ -f "$SRC/scripts/net-trial/probe-server/server.mjs" ] && PROBE=1
 
 # -- services
 . "$SRC/scripts/net-trial/data.sh" # Postgres and Valkey: sets DB_URL, KV_URL
 phase 'starting the game'
 pem() { awk '{printf "%s\\n", $0}'; }
-envfile() { (umask 027; cat >"$ETC/$1"); chown root:mf "$ETC/$1"; }
+envfile() { (umask 027; cat >"$ETC/$1"); chown root:$U "$ETC/$1"; }
 ROOM=$(cat "$ETC/room-code" 2>/dev/null | tr -dc A-Z)
 envfile api.env <<EOF
 NODE_ENV='production'
 API_HOST='127.0.0.1'
-API_PORT='8787'
+API_PORT='$API_PORT'
 DATABASE_URL='$DB_URL'
 REDIS_URL='$KV_URL'
 ACCESS_TOKEN_PRIVATE_KEY='$(pem <"$ETC/access.key")'
@@ -187,9 +201,9 @@ EOF
 envfile game.env <<EOF
 NODE_ENV='production'
 HOST='127.0.0.1'
-PORT='9001'
+PORT='$GAME_PORT'
 DEFAULT_ROOM='0'
-MAX_ROOMS='24'
+MAX_ROOMS='$((${STG:-0} ? 4 : 24))'
 JOIN_TICKET_PUBLIC_KEY='$(openssl pkey -in "$ETC/ticket.key" -pubout | pem)'
 TRUST_PROXY='1'
 MAP='$MAP'
@@ -198,7 +212,7 @@ BOT_LEVEL='$BOT_LEVEL'
 HOST_TUNING='1'
 ARMORY='1'
 ADMIN_TOKEN='$ADMIN_TOKEN'
-ADMIN_PORT='9002'
+ADMIN_PORT='$ADMIN_PORT'
 ADMIN_DEFAULTS='$DATA/admin-defaults.json'
 EOF
 envfile probe.env <<EOF
@@ -218,12 +232,12 @@ unit() { # unit <name> <description> <dir> <command>
   cat >"/etc/systemd/system/$1.service" <<EOF
 [Unit]
 Description=$2
-After=network-online.target postgresql.service valkey-server.service
+After=network-online.target postgresql.service valkey-server${STG:+@staging}.service
 [Service]
-User=mf
-Group=mf
+User=$U
+Group=$U
 WorkingDirectory=$3
-EnvironmentFile=$ETC/${1#mf-}.env
+EnvironmentFile=$ETC/${1#"$N"}.env
 Environment=PATH=$NODE_DIR/bin:/usr/bin:/bin
 ExecStart=$4
 Restart=always
@@ -233,38 +247,42 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=yes
-ReadWritePaths=$DATA
+ReadWritePaths=$DATA${STG:+
+MemoryMax=700M
+CPUWeight=20}
 [Install]
 WantedBy=multi-user.target
 EOF
 }
-unit mf-api 'Military Forge API' "$SRC/apps/api" "$NODE_DIR/bin/node --import tsx $SRC/apps/api/src/index.ts"
-unit mf-game 'Military Forge game server' "$SRC/apps/game-server" "$NODE_DIR/bin/node --max-semi-space-size=64 --import tsx $SRC/apps/game-server/src/index.ts"
-unit mf-probe 'Military Forge ping probe' "$SRC" "$NODE_DIR/bin/node $SRC/scripts/net-trial/probe-server/server.mjs"
+unit ${N}api "Military Forge API${STG:+ (staging)}" "$SRC/apps/api" "$NODE_DIR/bin/node --import tsx $SRC/apps/api/src/index.ts"
+unit ${N}game "Military Forge game server${STG:+ (staging)}" "$SRC/apps/game-server" "$NODE_DIR/bin/node --max-semi-space-size=64 --import tsx $SRC/apps/game-server/src/index.ts"
+[ -z "$STG" ] && unit mf-probe 'Military Forge ping probe' "$SRC" "$NODE_DIR/bin/node $SRC/scripts/net-trial/probe-server/server.mjs"
 
+services="${N}api ${N}game" timer=''
+if [ -z "$STG" ]; then # production only: the trial room, the probe, WebTransport
+timer=mf-room.timer
 install -m 0755 "$SRC/scripts/net-trial/mf-room.sh" /usr/local/sbin/mf-room
 printf '[Unit]\nDescription=Military Forge: keep the trial room open\nAfter=mf-api.service\n[Service]\nType=oneshot\nExecStart=/usr/local/sbin/mf-room\n' >/etc/systemd/system/mf-room.service
 printf '[Unit]\nDescription=Military Forge: keep the trial room open\n[Timer]\nOnBootSec=5min\nOnUnitActiveSec=2h\n[Install]\nWantedBy=timers.target\n' >/etc/systemd/system/mf-room.timer
 
 W="$SRC/scripts/net-trial/wt-setup.sh"
 [ -f "$W" ] && bash "$W" env
-systemctl daemon-reload
-services='mf-api mf-game'
 [ "$PROBE" = 1 ] && services="$services mf-probe"
-systemctl enable --quiet $services mf-room.timer
-bash "$SRC/scripts/net-trial/restart.sh" $services && systemctl start mf-room.timer || fail 'starting the services'
-[ "$PROBE" = 1 ] || systemctl disable --now --quiet mf-probe 2>/dev/null
+fi
+systemctl daemon-reload
+systemctl enable --quiet $services $timer
+MF_SRC=$SRC MF_DATA=$DATA MF_GAME_UNIT=${N}game MF_GAME_PORT=$GAME_PORT bash "$SRC/scripts/net-trial/restart.sh" $services && { [ -z "$timer" ] || systemctl start $timer; } || fail 'starting the services'
+[ "$PROBE" = 1 ] || [ -n "$STG" ] || systemctl disable --now --quiet mf-probe 2>/dev/null
 wait_up() { for _ in $(seq 300); do curl -fs -o /dev/null -m 3 "$2" && return 0; sleep 1; done; journalctl -u "$3" -n 20 --no-pager; fail "$1 did not start"; }
-wait_up 'the API' http://127.0.0.1:8787/health mf-api
-wait_up 'the game server' http://127.0.0.1:9001/health mf-game
+wait_up 'the API' http://127.0.0.1:$API_PORT/health ${N}api
+wait_up 'the game server' http://127.0.0.1:$GAME_PORT/health ${N}game
 [ "$PROBE" = 1 ] && wait_up 'the probe' http://127.0.0.1:9300/probe-api/health mf-probe
-/usr/local/sbin/mf-room || fail 'making the room'
-ROOM=$(tr -dc A-Z <"$ETC/room-code")
+[ -n "$STG" ] || { /usr/local/sbin/mf-room || fail 'making the room'; ROOM=$(tr -dc A-Z <"$ETC/room-code"); }
 phase ready
 
 b="
 ===== MILITARY FORGE TRIAL SERVER READY =====
-Room:   $ORIGIN/r/$ROOM
+Room:   ${ROOM:+$ORIGIN/r/$ROOM}
 Status: $ORIGIN/trial-status/
 Probe:  $([ $PROBE = 1 ] && echo "$ORIGIN/probe" || echo 'not in this build')
 Owner:  $ORIGIN/owner-$OWNER/ (private: admin link, results)
@@ -272,5 +290,5 @@ Admin:  $ORIGIN/admin#t=$ADMIN_TOKEN
 ============================================="
 log "$b"
 console "$b"
-[ -f "$W" ] && MF_HOST=$HOST MF_ORIGIN_PORT=$ORIGIN_PORT bash "$W" gateway
+[ -z "$STG" ] && [ -f "$W" ] && MF_HOST=$HOST MF_ORIGIN_PORT=$ORIGIN_PORT bash "$W" gateway
 exit 0

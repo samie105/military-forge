@@ -17,6 +17,7 @@
  * `drawsPlane` turns true.
  */
 import type { MapDef } from '@military-forge/content';
+import { ADS_LIVE } from '../../ads/live';
 import {
   AdditiveBlending,
   BufferAttribute,
@@ -220,7 +221,7 @@ export class MapEnvironment {
       },
       (err: unknown) => console.error(`environment ${def.mapId}: kit not loaded, drawing the collision instead`, err),
     );
-    const ads = def.ads ? this.loadAds(def.ads, baseUrl, fetchJson) : undefined;
+    const ads = def.ads && ADS_LIVE ? this.loadAds(def.ads, baseUrl, fetchJson) : undefined;
     this.ready = Promise.all([this.kitReady, this.backdrop?.ready, ads]).then(() => {
       // a texture that arrived after dispose()
       if (this.disposed && this.backdrop) disposeTextures(this.backdrop.textures);

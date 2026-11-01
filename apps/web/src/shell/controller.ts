@@ -8,6 +8,7 @@ import { GAME_NAME, normalizeRoomCode } from '@military-forge/shared';
 import { MatchPhase } from '@military-forge/sim';
 import type { OnlineMode } from '../onlineMode';
 import { diag } from '../diag/log';
+import { finishedMatches } from '../tour/facts';
 import type { LocalMode } from '../localMode';
 import { adultOnDevice, ageOnDevice, answerAge } from './age';
 import { alertFromApiError } from './alerts';
@@ -109,6 +110,20 @@ export function offlineName(chosen?: string | null, storage: () => Storage = () 
 
 /** Flags set this session: where storage fails (Safari private mode), a card still shows once per session. */
 const sessionFlags = new Set<string>();
+
+/** Play now gives a player Easy bots until this many matches are finished on the device (audit B-30) */
+export const RECRUIT_MATCHES = 3;
+/** how long Play now waits for the room to say its bots are Easy before it starts anyway (ms) */
+const QUICK_EASY_WAIT_MS = 2500;
+
+/** Fewer than RECRUIT_MATCHES matches finished on this device (the tour's facts): Play now's bots are Easy. */
+export function recruitOnDevice(storage: () => Storage): boolean {
+  try {
+    return finishedMatches(storage()) < RECRUIT_MATCHES;
+  } catch {
+    return false;
+  }
+}
 
 function flagged(key: string, storage: () => Storage): boolean {
   if (sessionFlags.has(key)) return true;
@@ -300,18 +315,31 @@ export class ShellController {
     // pause must never say the match is running after its end)
     store.subscribe((s, before) => {
       if (matchEnded(before, s) && (s.overlay === 'menu' || s.overlay === 'settings')) this.closeOverlay();
+      if (tipsLeaveWithLobby(before, s)) this.set({ tips: false });
     });
-    // Play now's room (P1-6): as soon as it's ours and full enough (bots count), the countdown starts
+    // Play now's room (P1-6): as soon as it's ours and full enough (bots count), the countdown starts.
+    // The 18+ step on a first visit keeps it: answered, the room comes and starts as promised (audit A-02)
+    // A recruit's (fewer than RECRUIT_MATCHES finished) gets Easy bots first (audit B-30): the start
+    // waits until the room says its bots are Easy.
     store.subscribe((s) => {
-      if (!this.quickStart) return;
-      if (s.screen.name !== 'room' && s.screen.name !== 'finding') {
+      if (!this.quickStart && !this.quickRoom) return;
+      if (s.screen.name !== 'room' && s.screen.name !== 'finding' && !(s.screen.name === 'age' && !s.screen.refused)) {
         this.quickStart = false;
+        this.quickRoom = false;
+        this.recruitBots = false;
         return;
       }
-      if (quickStartReady(s)) {
-        this.quickStart = false;
-        this.host.online?.startMatch();
+      if (!this.quickStart || !quickStartReady(s)) return;
+      if (this.recruitBots && s.lobby!.bots > 0 && s.lobby!.botLevel !== 'easy') {
+        if (this.botsAskedAt === 0) {
+          this.host.online?.setMatchSettings({ botLevel: 'easy' });
+          this.botsAskedAt = performance.now();
+          // a room that never says so (an older server) starts anyway, a moment later
+          window.setTimeout(() => this.startQuick(), QUICK_EASY_WAIT_MS);
+        }
+        return;
       }
+      this.startQuick();
     });
     // the tuning panel goes away with host rights (another player became host, or we left), and
     // steps aside while a menu is open
@@ -599,7 +627,9 @@ export class ShellController {
 
   /** Every frame (shell.update) and on queueing: opens the queued controls card when it's calm. */
   releaseTips(): void {
-    if (!this.tipsQueued || !tipsCalm(this.store.getState()) || this.host.cardUp?.()) return;
+    // Play now's lobby is gone in a moment (its countdown starts at once): the card waits for a calm
+    // lobby rather than open there unseen and count as shown (audit B-01)
+    if (!this.tipsQueued || this.quickRoom || !tipsCalm(this.store.getState()) || this.host.cardUp?.()) return;
     this.tipsQueued = false;
     // shown once per device: the decision is saved the moment it opens, so however it then closes (Got
     // it, starting a match, leaving, Escape, a route, the lobby folding it) it never comes back by
@@ -655,6 +685,19 @@ export class ShellController {
 
   /** Play now's room waits to start its countdown (playNow) */
   private quickStart = false;
+  /** we're in (or on the way to) Play now's room: its lobby is gone in a moment */
+  private quickRoom = false;
+  /** Play now for a recruit: the room's bots go to Easy before the start (audit B-30) */
+  private recruitBots = false;
+  /** when Easy bots were asked for (performance.now), 0 = not yet */
+  private botsAskedAt = 0;
+
+  /** Play now's countdown, once: the room is ours and has its players. */
+  private startQuick(): void {
+    if (!this.quickStart || !quickStartReady(this.store.getState())) return;
+    this.quickStart = false;
+    this.host.online?.startMatch();
+  }
 
   /**
    * Play now (mobile audit P1-6): one tap to a fight. Online: a room of our own that bots fill, its
@@ -668,6 +711,9 @@ export class ShellController {
     }
     if (this.profile.offline) return this.go({ to: 'training' });
     this.quickStart = true;
+    this.quickRoom = true;
+    this.recruitBots = recruitOnDevice(() => localStorage);
+    this.botsAskedAt = 0;
     this.go({ to: 'create' });
   }
 
@@ -922,12 +968,22 @@ export class ShellController {
  * A moment the first-run controls card may open in, before play (mobile audit P0-3; audit 28 Oct: it
  * must come before the first match, never after it): a room's lobby and warm-up (no countdown, no
  * clock), or training, which holds still under the card (trainingPaused). Never First flight (it
- * teaches the controls itself), never over another overlay.
+ * teaches the controls itself), never over another overlay, and never once a match there has ended:
+ * the lobby after a match is Waiting too, but it comes with the results (audit B-01).
  */
 export function tipsCalm(s: ShellState): boolean {
   if (s.overlay !== null || s.route !== null || s.tips || s.title !== 'off') return false;
   if (s.screen.name === 'training') return !s.screen.tour;
-  return s.screen.name === 'room' && (s.match === null || s.match.phase === MatchPhase.Waiting);
+  return s.screen.name === 'room' && (s.match === null || (s.match.phase === MatchPhase.Waiting && s.match.results === null));
+}
+
+/**
+ * The first-run card goes with the lobby it opened in (audit B-01): released there (the lobby's own
+ * panel) and not asked for, it closes as the countdown starts, so it never comes back as a card over
+ * the match or its results. Seen already: it was saved as seen the moment it opened (releaseTips).
+ */
+export function tipsLeaveWithLobby(before: ShellState, now: ShellState): boolean {
+  return now.tips && now.tipsAsked !== true && now.screen.name === 'room' && before.match?.phase === MatchPhase.Waiting && !!now.match && now.match.phase !== MatchPhase.Waiting;
 }
 
 /**

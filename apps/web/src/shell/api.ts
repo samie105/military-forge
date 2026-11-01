@@ -426,9 +426,9 @@ export class Api {
     return this.request<SavedLoadout>('PUT', `/me/loadout/${slot}`, { look: loadout.look, guns: loadout.guns }, true);
   }
 
-  /** "I'm here" (presence, every 30 s while the page is visible): in `room` when in one. */
-  async beatPresence(room: string | null): Promise<void> {
-    await this.request<unknown>('PUT', '/me/presence', { room }, true);
+  /** "I'm here" (presence, every 30 s while the page is visible): in `room` when in one, `playing` while its match is on. */
+  async beatPresence(room: string | null, playing?: boolean): Promise<void> {
+    await this.request<unknown>('PUT', '/me/presence', { room, ...(room && playing !== undefined ? { playing } : {}) }, true);
   }
 
   /** Offline now (the page is going away). */

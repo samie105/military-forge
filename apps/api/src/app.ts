@@ -197,9 +197,9 @@ export function createApp(deps: AppDeps) {
   const tell = (userIds: readonly string[], event: Parameters<EventBus['publish']>[1]) => {
     for (const id of userIds) void bus.publish(id, event).catch((err: unknown) => log.warn({ err }, 'event not published'));
   };
-  const friends = new FriendsService(db, presence, now, (ids) => tell(ids, { type: 'friends' }));
+  const friends = new FriendsService(db, presence, now, (ids) => tell(ids, { type: 'friends' }), config.cosmeticGrants);
   // a status or room change reaches the player's friends at once (presence stays friends-only)
-  presence.onChange(async (userId, p) => tell(await friends.friendIds(userId), { type: 'presence', id: userId, status: p.status, room: p.room }));
+  presence.onChange(async (userId, p) => tell(await friends.friendIds(userId), { type: 'presence', id: userId, status: p.status, room: p.room, ...(p.playing !== undefined ? { playing: p.playing } : {}) }));
   const party = new PartyService(db, kv, bus, now);
   const invites = new InviteService(db, kv, bus, friends, presence, party, now);
   app.route('/events', eventRoutes({ auth, kv, bus, now }));

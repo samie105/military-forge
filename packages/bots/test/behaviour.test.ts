@@ -81,6 +81,19 @@ describe('behaviour tree (10 Hz): roam, fight, hunt, fall back', () => {
     expect(raised).toBe(true);
   });
 
+  it('holds its fire at a player under spawn cover (audit B-10), aiming all the while; fires once it ends', () => {
+    const game = new Game({ map: flatMap(), seed: 2, spawnCover: true });
+    const bot = botAt(game, 10);
+    const target = dummyAt(game, 22);
+    target.coverTicks = 120; // as a person would have, fresh from a spawn
+    const covered = run(game, 60);
+    expect(brainOf(bot).target).toBe(target.id);
+    expect(covered.some((e) => e.type === 'shot' && e.shooter === bot.id)).toBe(false);
+    target.coverTicks = 0;
+    const after = run(game, 60);
+    expect(after.some((e) => e.type === 'shot' && e.shooter === bot.id)).toBe(true);
+  });
+
   it('falls back out of sight to regenerate when hurt, then fights again', () => {
     const game = new Game({ map: flatMap([rect(30, 0, 31, 6)]), seed: 4 });
     const bot = botAt(game, 40, { level: 'normal' });

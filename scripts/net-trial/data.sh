@@ -10,13 +10,19 @@
 #     server gets it and the API its public half, through systemd drop-ins.
 #   - A box that ran on PGlite: its rows move into Postgres once; the old directory stays as
 #     $DATA/pglite.imported-<time>.
+#   - Staging (MF_ENV=staging, docs/release.md): its own database and role (mf_staging) in the same
+#     Postgres, and a Valkey of its own (valkey-server@staging, port 6380, 64 MB). The shared servers'
+#     settings and the nightly backups are production's: staging leaves them alone.
 
 phase 'setting up Postgres and Valkey'
+: "${U:=mf}" "${N:=mf-}" "${STG:=}" # cloud-init.sh's environment (production when it predates staging)
+DB=mf KV_PORT=6379
+[ -n "$STG" ] && DB=mf_staging KV_PORT=6380
 [ -s "$ETC/db" ] || (umask 077 && printf 'PG_PASS=%s\nKV_PASS=%s\n' "$(r 24)" "$(r 24)" >"$ETC/db")
 chown root:root "$ETC/db" && chmod 0600 "$ETC/db"
 . "$ETC/db"
-DB_URL="postgres://mf:$PG_PASS@127.0.0.1:5432/mf"
-KV_URL="redis://:$KV_PASS@127.0.0.1:6379"
+DB_URL="postgres://$DB:$PG_PASS@127.0.0.1:5432/$DB"
+KV_URL="redis://:$KV_PASS@127.0.0.1:$KV_PORT"
 
 # Ubuntu's cluster 16/main already listens on localhost only and asks for a password over TCP (scram);
 # saying so here keeps it that way. Valkey: localhost, a password, and every write in the append-only
@@ -25,24 +31,35 @@ KV_URL="redis://:$KV_PASS@127.0.0.1:6379"
 # (24 Oct 2026: every deploy restarted Valkey, and the API logged ECONNREFUSED until it was back)
 data_changed=''
 put_conf() { cmp -s "$1.new" "$1" && rm -f "$1.new" || { mv "$1.new" "$1" && data_changed="$data_changed $2"; }; }
-printf "listen_addresses = 'localhost'\n" >/etc/postgresql/16/main/conf.d/military-forge.conf.new
-put_conf /etc/postgresql/16/main/conf.d/military-forge.conf postgresql
-(umask 027 && printf 'bind 127.0.0.1 -::1\nprotected-mode yes\nport 6379\nrequirepass %s\nappendonly yes\nmaxmemory-policy noeviction\n' "$KV_PASS" >/etc/valkey/military-forge.conf.new)
-chown valkey:valkey /etc/valkey/military-forge.conf.new
-put_conf /etc/valkey/military-forge.conf valkey-server
-grep -qx 'include /etc/valkey/military-forge.conf' /etc/valkey/valkey.conf || { echo 'include /etc/valkey/military-forge.conf' >>/etc/valkey/valkey.conf && data_changed="$data_changed valkey-server"; }
+if [ -z "$STG" ]; then
+  kv_unit=valkey-server
+  printf "listen_addresses = 'localhost'\n" >/etc/postgresql/16/main/conf.d/military-forge.conf.new
+  put_conf /etc/postgresql/16/main/conf.d/military-forge.conf postgresql
+  (umask 027 && printf 'bind 127.0.0.1 -::1\nprotected-mode yes\nport 6379\nrequirepass %s\nappendonly yes\nmaxmemory-policy noeviction\n' "$KV_PASS" >/etc/valkey/military-forge.conf.new)
+  chown valkey:valkey /etc/valkey/military-forge.conf.new
+  put_conf /etc/valkey/military-forge.conf valkey-server
+  grep -qx 'include /etc/valkey/military-forge.conf' /etc/valkey/valkey.conf || { echo 'include /etc/valkey/military-forge.conf' >>/etc/valkey/valkey.conf && data_changed="$data_changed valkey-server"; }
+else
+  # a whole config of its own for the packaged template unit (it reads /etc/valkey/valkey-<name>.conf);
+  # its files sit beside production's in /var/lib/valkey under names of their own
+  kv_unit=valkey-server@staging
+  (umask 027 && printf 'bind 127.0.0.1 -::1\nprotected-mode yes\nport %s\nrequirepass %s\ndir /var/lib/valkey\ndbfilename dump-staging.rdb\nappendonly yes\nappenddirname appendonlydir-staging\nsave ""\nmaxmemory 64mb\nmaxmemory-policy noeviction\n' "$KV_PORT" "$KV_PASS" >/etc/valkey/valkey-staging.conf.new)
+  chown valkey:valkey /etc/valkey/valkey-staging.conf.new
+  put_conf /etc/valkey/valkey-staging.conf $kv_unit
+fi
 # shellcheck disable=SC2086 # $data_changed is a list of unit names
-systemctl enable --quiet --now postgresql valkey-server && { [ -z "$data_changed" ] || systemctl restart $data_changed; } || fail 'starting Postgres and Valkey'
+systemctl enable --quiet --now postgresql $kv_unit && { [ -z "$data_changed" ] || systemctl restart $data_changed; } || fail 'starting Postgres and Valkey'
 for _ in $(seq 60); do pg_isready -q -h /var/run/postgresql && break; sleep 1; done
 
 # the API's role and database (the password goes in on stdin, not the command line)
 (cd / && runuser -u postgres -- psql -qX -v ON_ERROR_STOP=1 >/dev/null) <<EOF || fail 'the Postgres role'
-SELECT 'CREATE ROLE mf LOGIN' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'mf')\gexec
-ALTER ROLE mf PASSWORD '$PG_PASS';
-SELECT 'CREATE DATABASE mf OWNER mf' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'mf')\gexec
+SELECT 'CREATE ROLE $DB LOGIN' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$DB')\gexec
+ALTER ROLE $DB PASSWORD '$PG_PASS';
+SELECT 'CREATE DATABASE $DB OWNER $DB' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '$DB')\gexec
 EOF
 
-# nightly backups
+# nightly backups (production's database)
+if [ -z "$STG" ]; then
 install -d -o postgres -g postgres -m 0700 /var/backups/military-forge
 cat >/usr/local/sbin/mf-backup <<'EOF'
 #!/bin/bash
@@ -60,39 +77,45 @@ chmod 0755 /usr/local/sbin/mf-backup
 printf '[Unit]\nDescription=Military Forge: back up the database\nAfter=postgresql.service\n[Service]\nType=oneshot\nUser=postgres\nUMask=0077\nExecStart=/usr/local/sbin/mf-backup\n' >/etc/systemd/system/mf-backup.service
 printf '[Unit]\nDescription=Military Forge: back up the database nightly\n[Timer]\nOnCalendar=*-*-* 02:30:00 UTC\nPersistent=true\n[Install]\nWantedBy=timers.target\n' >/etc/systemd/system/mf-backup.timer
 systemctl daemon-reload && systemctl enable --now --quiet mf-backup.timer || fail 'the backup timer'
+fi
 
 # match results (docs/07 §12): the game server signs each finished match with a key of its own and
 # the API checks it with the public half; systemd drop-ins hand them to the two services
 [ -s "$ETC/results.key" ] || openssl genpkey -algorithm ed25519 -out "$ETC/results.key"
-chown root:mf "$ETC/results.key" && chmod 0640 "$ETC/results.key"
+chown root:"$U" "$ETC/results.key" && chmod 0640 "$ETC/results.key"
 oneline() { awk '{printf "%s\\n", $0}'; }
 (umask 027 && printf "RESULTS_PRIVATE_KEY='%s'\nAPI_URL='http://127.0.0.1:8787'\n" "$(oneline <"$ETC/results.key")" >"$ETC/game-results.env")
 (umask 027 && printf "RESULTS_PUBLIC_KEY='%s'\n" "$(openssl pkey -in "$ETC/results.key" -pubout | oneline)" >"$ETC/api-results.env")
-chown root:mf "$ETC/game-results.env" "$ETC/api-results.env"
+chown root:"$U" "$ETC/game-results.env" "$ETC/api-results.env"
 for u in game api; do
-  mkdir -p "/etc/systemd/system/mf-$u.service.d"
-  printf '[Service]\nEnvironmentFile=%s/%s-results.env\n' "$ETC" "$u" >"/etc/systemd/system/mf-$u.service.d/results.conf"
+  mkdir -p "/etc/systemd/system/$N$u.service.d"
+  printf '[Service]\nEnvironmentFile=%s/%s-results.env\n' "$ETC" "$u" >"/etc/systemd/system/$N$u.service.d/results.conf"
 done
 
 # account emails ("Forgot password?", confirming a saved account's email; apps/api auth/email.ts):
 # off until the owner writes $ETC/email.env (0640 root:mf) with EMAIL_PROVIDER, EMAIL_API_KEY and
 # EMAIL_FROM (docs/net-trial.md §6). The links open CORS_ORIGINS' address. A drop-in reads the file;
 # the leading '-' lets the API start without it.
-mkdir -p /etc/systemd/system/mf-api.service.d
-printf '[Service]\nEnvironmentFile=-%s/email.env\n' "$ETC" >/etc/systemd/system/mf-api.service.d/email.conf
-if [ -f "$ETC/email.env" ]; then chown root:mf "$ETC/email.env" && chmod 0640 "$ETC/email.env"; fi
+mkdir -p "/etc/systemd/system/${N}api.service.d"
+printf '[Service]\nEnvironmentFile=-%s/email.env\n' "$ETC" >"/etc/systemd/system/${N}api.service.d/email.conf"
+if [ -f "$ETC/email.env" ]; then chown root:"$U" "$ETC/email.env" && chmod 0640 "$ETC/email.env"; fi
 
 # the store (docs/17, apps/api store/): off until the owner writes $ETC/store.env (0640 root:mf) with
 # STORE_CLAIMABLE / STORE_CLAIM_UNTIL (the launch gift) and, for payments, FLUTTERWAVE_SECRET_KEY,
 # FLUTTERWAVE_PUBLIC_KEY and FLUTTERWAVE_WEBHOOK_HASH. Like email.env, a drop-in reads it and a deploy
-# never rewrites it.
-printf '[Service]\nEnvironmentFile=-%s/store.env\n' "$ETC" >/etc/systemd/system/mf-api.service.d/store.conf
-if [ -f "$ETC/store.env" ]; then chown root:mf "$ETC/store.env" && chmod 0640 "$ETC/store.env"; fi
+# never rewrites it. Staging takes Flutterwave's test keys only (FLWSECK_TEST-…): a live key there
+# leaves its store off.
+printf '[Service]\nEnvironmentFile=-%s/store.env\n' "$ETC" >"/etc/systemd/system/${N}api.service.d/store.conf"
+if [ -n "$STG" ] && grep -qsE '^FLUTTERWAVE_(SECRET|PUBLIC)_KEY=.?FLW(SEC|PUB)K-' "$ETC/store.env"; then
+  log "staging: $ETC/store.env holds a live Flutterwave key; the store stays off (test keys only)"
+  rm -f "/etc/systemd/system/${N}api.service.d/store.conf"
+fi
+if [ -f "$ETC/store.env" ]; then chown root:"$U" "$ETC/store.env" && chmod 0640 "$ETC/store.env"; fi
 
 # once: PGlite's rows into Postgres. The API stops first (PGlite has one writer); cloud-init.sh starts it again.
 if [ -f "$DATA/pglite/PG_VERSION" ]; then
   phase 'moving the PGlite data into Postgres'
-  systemctl stop mf-api 2>/dev/null
+  systemctl stop "${N}api" 2>/dev/null
   (cd "$SRC/apps/api" && DATABASE_URL="$DB_URL" as_mf node --import tsx scripts/import-pglite.ts "$DATA/pglite") || fail 'moving the PGlite data into Postgres'
   mv "$DATA/pglite" "$DATA/pglite.imported-$(date -u +%Y%m%d-%H%M%S)"
 fi

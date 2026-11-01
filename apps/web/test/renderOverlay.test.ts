@@ -91,6 +91,14 @@ describe('2D overlay over the 3D view', () => {
     expect(rects.some((rect) => rect.color === '#ff4d5e' || rect.color === '#3fd0c9')).toBe(false);
   });
 
+  it('a soldier under spawn cover (audit B-10) shimmers, in a pale outline; the others do not', () => {
+    const { r, strokes, frame } = setup();
+    const isCover = (stroke: string) => stroke.startsWith('rgba(242,238,223');
+    frame.players.push(playerView({ id: 1, isLocal: false, x: 20, cover: true }), playerView({ id: 2, isLocal: false, x: 22 }));
+    r.render(frame, 1 / 60, opts({ hud: 'none' }), '');
+    expect(strokes.filter(isCover)).toHaveLength(1);
+  });
+
   it('leaves grenades, tracers, ricochets, blasts and dashes to render3d', () => {
     const { r, fills, strokes, frame, blast, shot, dash, bounce } = setup();
     r.onEvents([blast, shot, dash, bounce], 0);

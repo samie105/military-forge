@@ -111,9 +111,7 @@ export interface HudInput {
   flash: number;
   /** the Tab scoreboard's rows (asked for only while it is open) */
   scoreRows(): ScoreRow[] | null;
-  /** the owner changed gameplay numbers on this server (the admin page): a small tag */
-  adminTuned?: boolean;
-  /** what "Tuned by host" compares with: the room's tuning before the host's edits (default: the shipped defaults) */
+  /** what the scoreboard's "Custom rules" compares with: the room's tuning before the host's edits (default: the shipped defaults) */
   tuningBase?: Tuning;
   /** while a grenade throw is aimed (held past a tap): the strength it would go with, 0..7; −1 otherwise */
   throwAim?: number;
@@ -267,7 +265,7 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
   for (const [k, text] of Object.entries(mem.keys) as [keyof HudKeys, string][]) v[`bind.${k}.0`] = text;
   v['bind.stats.0'] ??= '';
 
-  // match clock and score, and what the room's host tuned
+  // match clock and score (what the room's host tuned is the scoreboard's and the lobby's, never the HUD's: audit B-11)
   const m = input.match;
   const playing = !!m && m.phase === MatchPhase.InProgress;
   on('match', playing);
@@ -280,9 +278,6 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
   v['match.myScore'] = String(m?.myScore ?? 0);
   v['match.leaderShort'] = m?.leaderName || 'Leader';
   v['match.leaderScore'] = String(m?.leaderScore ?? 0);
-  const tuned = tunedOnce(t, input.tuningBase ?? defaultTuning);
-  on('tuned', tuned !== '');
-  v['match.tunedSummary'] = tuned;
 
   // the map event (docs/02 §20.7) as a sequence: the warning with its countdown, the impact as it
   // starts, the strip while it runs, the all-clear after (EventTimeline); its screen treatment by kind
@@ -350,7 +345,6 @@ export function hudFrame(input: HudInput, mem: HudMemory): HudFrame {
     v['net.detail'] = mem.netDetail;
   }
   on('fps', input.showFps && input.fps > 0);
-  on('admin', input.adminTuned === true);
   v['fps.value'] = String(Math.round(input.fps));
 
   on('board', mem.boardOpen);
@@ -1134,7 +1128,7 @@ export class Hud {
     if (this.scoreboardOpen && now - this.scoreboardAt > 250) {
       const fresh = this.scoreboardAt === 0;
       this.scoreboardAt = now;
-      this.drawScoreboard(input.scoreRows(), input.match, fresh);
+      this.drawScoreboard(input.scoreRows(), input.match, fresh, tunedOnce(input.tuning, input.tuningBase ?? defaultTuning));
     }
   }
 
@@ -1522,19 +1516,22 @@ export class Hud {
   /**
    * The Tab scoreboard (the kit's .sb): built when it opens (the panel focus-pulls in at --m-fast,
    * the rows rise 20 ms apart), then its cells are rewritten in place four times a second; a new
-   * order or player rebuilds the rows without the entrance.
+   * order or player rebuilds the rows without the entrance. `rules`: what the room's host tuned
+   * (tunedSummary), shown as "Custom rules" by the mode; never on the HUD itself (audit B-11).
    */
-  private drawScoreboard(rows: ScoreRow[] | null, match: MatchView | null, fresh: boolean): void {
+  private drawScoreboard(rows: ScoreRow[] | null, match: MatchView | null, fresh: boolean, rules = ''): void {
     // team modes (v21, teams/scoreboard.ts): grouped by team, the leading team first
     const teamed = (rows ?? []).some((r) => (r.team ?? -1) >= 0);
     const list = teamed ? orderByTeam(rows ?? []) : (rows ?? []);
-    const key = list.map((r) => `${r.key}:${r.bot ? 1 : 0}:${r.you ? 1 : 0}:${r.host ? 1 : 0}:${r.left ? 1 : 0}:${r.name}:${r.team ?? -1}`).join('|');
+    const key = `${rules}#` + list.map((r) => `${r.key}:${r.bot ? 1 : 0}:${r.you ? 1 : 0}:${r.host ? 1 : 0}:${r.left ? 1 : 0}:${r.name}:${r.team ?? -1}`).join('|');
     const clock = match?.phase === MatchPhase.InProgress ? formatClock(match.untimed ? match.secondsElapsed : match.secondsLeft) : '';
     if (fresh || key !== this.boardKey) {
       const head = el('header', 'sb__head');
       el('h1', 'display', head).textContent = 'Scoreboard';
       const limit = match ? (match.killLimit > 0 ? `first to ${match.killLimit}` : 'no kill limit') : '';
-      el('span', 'sb__meta', head).textContent = [teamed ? 'Team deathmatch' : 'Deathmatch', match?.mapName ?? '', teamed && limit ? `first team to ${match!.killLimit}` : limit].filter(Boolean).join(' · ');
+      const meta = el('span', 'sb__meta', head);
+      meta.textContent = [teamed ? 'Team deathmatch' : 'Deathmatch', match?.mapName ?? '', teamed && limit ? `first team to ${match!.killLimit}` : limit, rules ? 'Custom rules' : ''].filter(Boolean).join(' · ');
+      if (rules) meta.title = `The host changed: ${rules}`;
       this.boardClock = el('b', 'sb__clock num', head);
       // who leads and where you stand (rewritten below with the scores)
       this.boardLead = el('p', 'sb__lead');

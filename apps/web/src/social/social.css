@@ -44,6 +44,7 @@
 
 .sx-tag { min-height: 32px; padding: 0 var(--sp-3); box-shadow: inset 0 0 0 var(--bw) currentColor; background: color-mix(in srgb, var(--c-ink-950) 70%, transparent); }
 .sx-tag--ok { color: var(--c-ok); }
+.sx-tag--muted { color: var(--c-muted); }
 .sx-live { width: 8px; height: 8px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 30%, transparent); }
 
 /* your friend code: a paper stamp */
@@ -64,13 +65,15 @@
 .sx-code__sub { font-size: var(--fs-14); font-weight: var(--fw-semi); }
 .sx-code__copy { flex: none; }
 
-/* add a friend */
+/* the find field: a name as you type, or Send for an exact name or a friend code */
 .sx-add { display: grid; grid-template-columns: 1fr auto; gap: var(--sp-3); align-items: center; }
-.sx-add__field { display: block; min-width: 0; }
+.sx-add__field { position: relative; display: block; min-width: 0; }
+.sx-add__field > .ic { position: absolute; left: var(--sp-4); top: 50%; translate: 0 -50%; color: var(--c-muted); pointer-events: none; }
 .sx-add__input {
   width: 100%;
   min-height: 56px;
-  padding: 0 var(--sp-4);
+  padding: 0 52px 0 calc(var(--sp-4) + var(--ic-sm) + var(--sp-3));
+  appearance: none;
   background: var(--c-ink-900);
   color: var(--c-text);
   border: var(--bw) solid var(--c-line-strong);
@@ -78,6 +81,9 @@
   font: var(--fw-semi) var(--fs-18)/1 var(--f-ui);
 }
 .sx-add__input::placeholder { color: var(--c-muted-2); }
+.sx-add__input::-webkit-search-cancel-button { appearance: none; }
+.sx-add__clear { position: absolute; right: 6px; top: 50%; translate: 0 -50%; display: grid; place-items: center; width: 44px; height: 44px; border-radius: var(--r-xs); color: var(--c-muted); }
+.sx-add__clear:hover, .sx-add__clear:focus-visible { color: var(--c-text); background: var(--c-ink-700); outline: none; }
 .sx-add__input:focus-visible { outline: none; border-color: var(--c-volt); box-shadow: 0 0 0 3px var(--c-volt-soft); }
 .sx-add__send { min-height: 56px; }
 .sx-add__out { grid-column: 1 / -1; font-size: var(--fs-16); }
@@ -130,12 +136,18 @@
 .sx-act.btn--icon { width: 40px; padding: 0; }
 .sx-act .ic { width: var(--ic-sm); height: var(--ic-sm); }
 
-/* avatars with a status dot (green online, volt in a match, grey offline) and a volt ring */
+/* avatars: the player's soldier (portrait/), with a status dot (green online, volt in a room, grey
+   offline) and a volt ring; the face clips to the disc, the dot sits over its edge */
 .sx-av { position: relative; }
+.sx-av.avatar--portrait { overflow: visible; }
+.sx-av__face { position: absolute; inset: 0; border-radius: 50%; overflow: hidden; }
 .sx-av--ring { box-shadow: 0 0 0 3px var(--c-volt); }
 .sx-dot { position: absolute; right: -3px; bottom: -3px; width: 15px; height: 15px; border-radius: 50%; border: var(--bw) solid var(--c-ink-950); background: var(--c-muted-2); }
 .sx-dot--online { background: var(--c-ok); }
 .sx-dot--in_room { background: var(--c-volt); }
+
+/* the players a search found (they take the tabs' place while the field holds a search) */
+.sx-found .sx-empty p { margin: 0; }
 
 /* the ⋯ menu */
 .sx-menu { position: relative; flex: none; }
@@ -197,6 +209,9 @@
 .sx-screen--phone .sx-close { width: var(--touch-min); }
 .sx-screen--phone .sx-codechip { min-height: var(--touch-min); }
 .sx-screen--phone .sx-add__input, .sx-screen--phone .sx-add__send { min-height: var(--touch-min); font-size: var(--fs-14); }
+.sx-screen--phone .sx-add__input { padding: 0 var(--touch-min) 0 34px; }
+.sx-screen--phone .sx-add__field > .ic { left: 10px; }
+.sx-screen--phone .sx-add__clear { right: 0; width: var(--touch-min); height: var(--touch-min); }
 .sx-screen--phone .sx-add__out { font-size: var(--fs-14); }
 .sx-screen--phone .sx-tab { min-height: 40px; padding: 0 10px; font-size: var(--fs-14); }
 .sx-screen--phone .sx-tabs { flex: none; }
@@ -268,7 +283,12 @@
   color: var(--c-text);
   pointer-events: auto;
 }
-.sx-toast--play { top: calc(var(--safe-t) + 112px); left: calc(var(--safe-l) + var(--hud-m)); right: auto; margin: 0; }
+/* in play: top left, under the HUD's top-left stack (minimap, net and fps plates: ~210 px), clear of the
+   kill feed (top right), the score strip (top centre) and the vitals (bottom left) */
+.sx-toast--play { top: calc(var(--safe-t) + var(--hud-m) + 236px); left: calc(var(--safe-l) + var(--hud-m)); right: auto; margin: 0; }
+/* a friend request (audit C-26): one row, no countdown */
+.sx-toast--req .sx-toast__title { font-size: var(--fs-24); }
+.sx-toast--req .sx-toast__acts .sx-act { min-height: 48px; }
 @supports (backdrop-filter: blur(1px)) {
   html:not(.reduce-transparency):not(.gfx-low) .sx-toast {
     background: color-mix(in srgb, var(--c-ink-950) 82%, transparent);
@@ -306,6 +326,7 @@ html.reduce-motion .sx-toast__bar i { transition: none; }
 .sx-tscreen--phone .sx-toast__acts { gap: 6px; }
 .sx-tscreen--phone .sx-toast__acts .sx-act { min-height: 40px; font-size: 12px; padding: 0 10px; }
 .sx-tscreen--phone .sx-toast__acts .btn--icon { width: 40px; }
+.sx-tscreen--phone .sx-toast--req .sx-toast__title { font-size: var(--fs-14); }
 
 /* the picker */
 .sx-picker {

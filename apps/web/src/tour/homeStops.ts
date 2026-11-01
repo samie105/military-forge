@@ -4,10 +4,12 @@
  * Locker. Each has Next (the last, Done), Skip, and Escape skips the pass; pressing the target itself
  * does what it says and ends the pass. Once per device (`tours['home-stops']`), every stop logged.
  * Targets are Home's `data-tour` hooks; a stop whose target isn't there (offline: Create room is off)
- * is left out, and with none there (the phone Home, until it has the hooks) the pass waits.
+ * is left out, and with none there the pass waits. Home queues it after the play-data question and
+ * before Next orders (tour/homeQueue.ts): while it runs, the stop on screen has the focus (its Next).
  */
 import { Spotlight, type SpotStep } from '../ui/spotlight';
 import type { Facts } from './facts';
+import { focusFree, setHomeStopsRunning } from './homeQueue';
 import type { TourMemory } from './index';
 import type { Device, Persona } from './log';
 
@@ -63,6 +65,7 @@ export function runHomeStops(memory: TourMemory, device: () => Device, spotlight
     memory.record({ t: 'tour.end', tour: HOME_STOPS, result, ms: 0 });
     memory.fact({ k: 'tour', tour: HOME_STOPS, ...(result === 'finished' ? { finished: true } : { skipped: true }) });
     document.removeEventListener('click', onTargetClick, true);
+    setHomeStopsRunning(false);
     void spot.hide().then(() => !spotlight && spot.dispose());
   };
   const show = () => {
@@ -81,7 +84,11 @@ export function runHomeStops(memory: TourMemory, device: () => Device, spotlight
       primary: { label: i === stops.length - 1 ? 'Done' : 'Next' },
       announce: `Stop ${i + 1} of ${stops.length}. ${s.title} ${s.body}`,
     };
+    // the focus that was on the last stop's Next (its callout is redrawn) or nowhere goes to this one's
+    const active = document.activeElement;
+    const takeFocus = focusFree() || (active !== null && spot.contains(active));
     spot.show(step);
+    if (takeFocus) spot.focusCallout();
     log(s.id, 'shown');
   };
   const next = (status: 'done' | 'skipped') => {
@@ -93,16 +100,18 @@ export function runHomeStops(memory: TourMemory, device: () => Device, spotlight
   // a tap on the screen itself (not the callout) does what it says and ends the pass: on the ringed
   // control that's this stop done, anywhere else the pass is left (P1-5: a tap is never eaten as Next)
   const onTargetClick = (e: MouseEvent) => {
-    if (over || !(e.target instanceof Node) || spotEl()?.contains(e.target)) return;
+    // this pass's own overlay: other spotlights (the hints' idle one) leave an empty .mf-spot in the page,
+    // and the first in the document isn't this one (audit 31 Oct A-03: Next read as a click outside)
+    if (over || !(e.target instanceof Node) || spot.contains(e.target)) return;
     const el = target(stops[i]!.id);
     const hit = !!el && el.contains(e.target);
     log(stops[i]!.id, hit ? 'done' : 'abandoned');
     end(hit ? 'finished' : 'abandoned');
   };
-  const spotEl = () => document.querySelector('.mf-spot');
   document.addEventListener('click', onTargetClick, true);
   // once per device: on record the moment it starts, however it ends (or if the page goes under it)
   memory.fact({ k: 'tour', tour: HOME_STOPS });
+  setHomeStopsRunning(true);
   spot.onPrimary = () => next('done');
   spot.onSkip = (_id, all) => {
     if (!all) return next('skipped');

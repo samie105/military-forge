@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { SimEvent } from '@military-forge/sim';
+import { K47, weaponPickup } from '@military-forge/content';
+import { Btn, type SimEvent } from '@military-forge/sim';
 import { defaultBindings } from '../../src/shell/controls';
 import { nextDevice } from '../../src/tour/briefing';
 import { FLIGHT_COPY, TOUR_COPY } from '../../src/tour/copy';
@@ -93,10 +94,21 @@ describe('the tour model', () => {
 describe('First flight: the goals', () => {
   const devices: Device[] = ['keyboard', 'pad', 'touch'];
 
-  it('five goals, run → fly → fire → dash → throw; three hits; Throw needs grenades', () => {
-    expect(FLIGHT_GOALS.map((g) => g.id)).toEqual(['run', 'fly', 'hit', 'dash', 'throw']);
+  it('eight goals, run → fly → fire → reload → swap → pick up → dash → throw; three hits; Throw needs grenades, Swap two guns', () => {
+    expect(FLIGHT_GOALS.map((g) => g.id)).toEqual(['run', 'fly', 'hit', 'reload', 'swap', 'take', 'dash', 'throw']);
     expect(FLIGHT_GOALS.find((g) => g.id === 'hit')?.count).toBe(3);
     expect(FLIGHT_GOALS.find((g) => g.id === 'throw')?.needs?.({ grenades: 0 })).toBe(false);
+    expect(FLIGHT_GOALS.find((g) => g.id === 'swap')?.needs?.({ grenades: 0, guns: 1 })).toBe(false);
+    expect(FLIGHT_GOALS.find((g) => g.id === 'swap')?.needs?.({ grenades: 0 })).toBe(true);
+  });
+
+  it('reload, swap and pick up show their own keys, plates and touch controls (audit A-20)', () => {
+    expect(goalView('reload', 'keyboard')).toMatchObject({ title: 'Reload.', keys: ['reload'], hud: 'ammo', marker: null });
+    expect(goalView('swap', 'keyboard')).toMatchObject({ title: 'Swap.', keys: ['swap'], hud: 'slung' });
+    expect(goalView('take', 'keyboard')).toMatchObject({ title: 'Pick up.', keys: ['interact'], marker: 'gun' });
+    expect(goalView('reload', 'touch')).toMatchObject({ touch: 'reload', keys: [], body: 'Tap Reload.' });
+    expect(goalView('swap', 'touch')).toMatchObject({ touch: 'swap', body: 'Tap Swap.' });
+    expect(goalView('take', 'touch')).toMatchObject({ touch: 'take', marker: 'gun' });
   });
 
   it('keys come from the bindings by action; touch rings its controls and shows no caps', () => {
@@ -156,17 +168,29 @@ describe('First flight: the tracker', () => {
     expect(t.frame(at(0, 9, false, false))).toEqual([]); // dead
   });
 
-  it('the local player\'s hits on a target, dashes and throws', () => {
+  it('the local player\'s hits on a target, guns picked up, dashes and throws', () => {
     const t = new FlightTracker();
+    const gun = weaponPickup(K47.index)!.index;
     const ev: SimEvent[] = [
       { type: 'hit', attacker: 1, target: 5, damage: 10, zone: 0, source: 0 },
       { type: 'hit', attacker: 1, target: 2, damage: 10, zone: 0, source: 0 }, // not a target
       { type: 'hit', attacker: 3, target: 5, damage: 10, zone: 0, source: 0 }, // not mine
+      { type: 'pickup', player: 1, item: gun, x: 0, y: 0 },
+      { type: 'pickup', player: 1, item: 0, x: 0, y: 0 }, // a shield or grenades: not a gun
+      { type: 'pickup', player: 3, item: gun, x: 0, y: 0 },
       { type: 'dash', player: 1, x: 0, y: 0, dir: 0 },
       { type: 'dash', player: 3, x: 0, y: 0, dir: 0 },
       { type: 'throw', owner: 1, grenade: 0 },
     ];
-    expect(t.events(ev, 1, (id) => id === 5)).toEqual(['hit-dummy', 'dash', 'throw']);
+    expect(t.events(ev, 1, (id) => id === 5)).toEqual(['hit-dummy', 'take', 'dash', 'throw']);
+  });
+
+  it('Reload on its press (a full magazine too); Swap once the slot in hand changes', () => {
+    const t = new FlightTracker();
+    t.begin({ ...at(0), active: 0 });
+    expect(t.frame({ ...at(0), active: 0, presses: Btn.Fire })).toEqual([]);
+    expect(t.frame({ ...at(0), active: 0, presses: Btn.Fire | Btn.Reload })).toEqual(['reload']);
+    expect(t.frame({ ...at(0), active: 1, presses: 0 })).toEqual(['swap']);
   });
 
   it('markers: the run 4 m away from the targets (they end up in front), 4 m up; the nearest target', () => {
@@ -181,7 +205,7 @@ describe('First flight: the tracker', () => {
 // ---- the runner, with a fake range, spotlight and clock
 
 function harness(storage = new MemoryStorage()) {
-  const me = { id: 1, x: 0, y: 0, grounded: true, alive: true, grenades: 2 };
+  const me = { id: 1, x: 0, y: 0, grounded: true, alive: true, grenades: 2, active: 0, guns: 2 };
   const world: FlightWorld = { me, targets: [{ id: 5, x: 12, y: 0 }], isTarget: (id) => id === 5 };
   let now = 0;
   let covered = false;
@@ -212,6 +236,10 @@ function harness(storage = new MemoryStorage()) {
   const facts = new FactStore(storage, () => 1000);
   const memory = { log, facts, record: (e: Parameters<EventLog['record']>[0]) => log.record(e), fact: (e: FactEvent) => facts.apply(e) } as unknown as TourMemory;
   const went: string[] = [];
+  let presses = 0;
+  const offered: { x: number; y: number }[] = [];
+  let gunOffer: { x: number; y: number } | null = { x: 1.5, y: 0 };
+  const seen = { autoFire: [] as boolean[], focus: null as { x: number; y: number } | null };
   const flight = new FirstFlight({
     memory,
     storage,
@@ -224,6 +252,14 @@ function harness(storage = new MemoryStorage()) {
     touchWords: () => ({ moveSide: 'left', fire: 'auto' }),
     touchRect: () => null,
     covered: () => covered,
+    offerGun: () => (gunOffer && offered.push(gunOffer), gunOffer),
+    presses: () => {
+      const b = presses;
+      presses = 0;
+      return b;
+    },
+    autoFire: (on) => seen.autoFire.at(-1) !== on && seen.autoFire.push(on),
+    frameOn: (p) => (seen.focus = p),
     liveFire: () => went.push('live-fire'),
     home: () => went.push('home'),
     clock: () => now,
@@ -235,18 +271,64 @@ function harness(storage = new MemoryStorage()) {
   };
   const last = () => shown[shown.length - 1]!;
   const steps = () => (log.entries() as Logged[]).filter((e) => e.t === 'tour.step').map((e) => (e.t === 'tour.step' ? `${e.step}:${e.status}` : ''));
-  return { flight, me, world, spot, shown, stamps, last, tick, log, facts, went, steps, storage, setCovered: (c: boolean) => (covered = c), setDevice: (d: Device) => (device = d), hides: () => hides };
+  return {
+    flight,
+    me,
+    world,
+    spot,
+    shown,
+    stamps,
+    last,
+    tick,
+    log,
+    facts,
+    went,
+    steps,
+    storage,
+    offered,
+    seen,
+    press: (b: number) => (presses |= b),
+    noGun: () => (gunOffer = null),
+    setCovered: (c: boolean) => (covered = c),
+    setDevice: (d: Device) => (device = d),
+    hides: () => hides,
+  };
+}
+
+const GUN = weaponPickup(K47.index)!.index;
+
+/** Run, Fly, Fire, then Reload, Swap and Pick up, each done (the harness's range). */
+function throughTake(h: ReturnType<typeof harness>): void {
+  h.tick();
+  h.me.x = 3.1;
+  h.tick();
+  h.tick(CONFIRM_MS);
+  h.me.y = 3.6;
+  h.me.grounded = false;
+  h.tick();
+  h.tick(CONFIRM_MS);
+  h.flight.onEvents(Array(3).fill({ type: 'hit', attacker: 1, target: 5, damage: 10, zone: 0, source: 0 }), 1);
+  h.tick(CONFIRM_MS);
+  h.press(Btn.Reload);
+  h.tick();
+  h.tick(CONFIRM_MS);
+  h.me.active = 1;
+  h.tick();
+  h.tick(CONFIRM_MS);
+  h.flight.onEvents([{ type: 'pickup', player: 1, item: GUN, x: 1.5, y: 0 }], 1);
+  h.tick(CONFIRM_MS);
 }
 
 describe('First flight: the runner', () => {
-  it('runs the five goals by doing them, stamps each, and offers Live fire at the end', () => {
+  it('runs the eight goals by doing them, stamps each, and offers Live fire at the end', () => {
     const h = harness();
     h.tick();
-    expect(h.last()).toMatchObject({ id: 'first-flight:run', title: 'Run.', keys: ['A', 'D'], block: 'none', eyebrow: TOUR_COPY.orders(1, 5), progress: [0, 5] });
+    expect(h.last()).toMatchObject({ id: 'first-flight:run', title: 'Run.', keys: ['A', 'D'], block: 'none', eyebrow: TOUR_COPY.orders(1, 8), progress: [0, 8] });
+    expect(h.seen.autoFire).toEqual([false]); // no Auto fire before Fire (audit A-17)
     h.me.x = 3.1;
     h.tick();
     expect(h.stamps).toEqual(['Confirmed']);
-    expect(h.last().progress).toEqual([1, 5]);
+    expect(h.last().progress).toEqual([1, 8]);
     h.tick(CONFIRM_MS);
     expect(h.last()).toMatchObject({ id: 'first-flight:fly', keys: ['W'] });
     h.me.y = 3.6;
@@ -254,10 +336,28 @@ describe('First flight: the runner', () => {
     h.tick();
     h.tick(CONFIRM_MS);
     expect(h.last().id).toBe('first-flight:hit');
+    expect(h.seen.autoFire).toEqual([false, true]);
+    expect(h.seen.focus).toBeNull(); // a keyboard: the plain follow
     const hit: SimEvent = { type: 'hit', attacker: 1, target: 5, damage: 10, zone: 0, source: 0 };
     h.flight.onEvents([hit], 1);
     expect(h.last().body).toContain('1/3');
     h.flight.onEvents([hit, hit], 1);
+    // R pressed during the stamp doesn't count for Reload
+    h.press(Btn.Reload);
+    h.tick(CONFIRM_MS);
+    expect(h.last()).toMatchObject({ id: 'first-flight:reload', keys: ['R'] });
+    h.tick();
+    expect(h.last().id).toBe('first-flight:reload');
+    h.press(Btn.Reload);
+    h.tick();
+    h.tick(CONFIRM_MS);
+    expect(h.last()).toMatchObject({ id: 'first-flight:swap', keys: ['Q'] });
+    h.me.active = 1;
+    h.tick();
+    h.tick(CONFIRM_MS);
+    expect(h.last()).toMatchObject({ id: 'first-flight:take', keys: ['E'] });
+    expect(h.offered).toHaveLength(1);
+    h.flight.onEvents([{ type: 'pickup', player: 1, item: GUN, x: 1.5, y: 0 }], 1);
     h.tick(CONFIRM_MS);
     expect(h.last()).toMatchObject({ id: 'first-flight:dash', keys: ['Shift'] });
     h.flight.onEvents([{ type: 'dash', player: 1, x: 0, y: 0, dir: 0 }], 1);
@@ -265,9 +365,9 @@ describe('First flight: the runner', () => {
     h.flight.onEvents([{ type: 'throw', owner: 1, grenade: 0 }], 1);
     h.tick(CONFIRM_MS);
     expect(h.last()).toMatchObject({ id: 'first-flight:done', primary: { label: 'Live fire' }, skipLabel: 'Later' });
-    expect(h.steps()).toEqual(['run:shown', 'run:done', 'fly:shown', 'fly:done', 'hit:shown', 'hit:done', 'dash:shown', 'dash:done', 'throw:shown', 'throw:done']);
+    expect(h.steps()).toEqual(['run', 'fly', 'hit', 'reload', 'swap', 'take', 'dash', 'throw'].flatMap((s) => [`${s}:shown`, `${s}:done`]));
     expect(h.log.entries().find((e) => e.t === 'tour.end')).toMatchObject({ result: 'finished' });
-    expect(h.facts.get().tours[FIRST_FLIGHT]).toMatchObject({ finished: true, done: ['run', 'fly', 'hit', 'dash', 'throw'] });
+    expect(h.facts.get().tours[FIRST_FLIGHT]).toMatchObject({ finished: true, done: ['run', 'fly', 'hit', 'reload', 'swap', 'take', 'dash', 'throw'] });
     expect(h.facts.get().promoted).toBe(true); // well under 40 s
     expect(flightWasOpen(h.storage)).toBe(false);
     h.spot.onPrimary?.('first-flight:done');
@@ -340,14 +440,7 @@ describe('First flight: the runner', () => {
   it('no grenades: Throw skips itself; Restart goes back to Run', () => {
     const h = harness();
     h.me.grenades = 0;
-    h.tick();
-    for (const go of [() => (h.me.x = 4), () => ((h.me.y = 4), (h.me.grounded = false))]) {
-      go();
-      h.tick();
-      h.tick(CONFIRM_MS);
-    }
-    h.flight.onEvents(Array(3).fill({ type: 'hit', attacker: 1, target: 5, damage: 10, zone: 0, source: 0 }), 1);
-    h.tick(CONFIRM_MS);
+    throughTake(h);
     h.flight.onEvents([{ type: 'dash', player: 1, x: 0, y: 0, dir: 0 }], 1);
     h.tick(CONFIRM_MS);
     expect(h.last().id).toBe('first-flight:done');
@@ -355,5 +448,46 @@ describe('First flight: the runner', () => {
     h.flight.restart();
     h.tick();
     expect(h.last().id).toBe('first-flight:run');
+  });
+
+  it('one gun: Swap skips itself; no gun to offer: Pick up skips itself', () => {
+    const h = harness();
+    h.me.guns = 1;
+    h.noGun();
+    h.tick();
+    h.me.x = 3.1;
+    h.tick();
+    h.tick(CONFIRM_MS);
+    h.me.y = 3.6;
+    h.me.grounded = false;
+    h.tick();
+    h.tick(CONFIRM_MS);
+    h.flight.onEvents(Array(3).fill({ type: 'hit', attacker: 1, target: 5, damage: 10, zone: 0, source: 0 }), 1);
+    h.tick(CONFIRM_MS);
+    h.press(Btn.Reload);
+    h.tick();
+    h.tick(CONFIRM_MS);
+    h.tick();
+    expect(h.last().id).toBe('first-flight:dash');
+    expect(loadTour(h.storage, FIRST_FLIGHT)?.skipped).toEqual(['swap', 'take']);
+  });
+
+  it('a phone frames the target with the soldier while Fire runs; a keyboard never does (audit A-18)', () => {
+    const h = harness();
+    h.setDevice('touch');
+    h.tick();
+    expect(h.seen.focus).toBeNull(); // Run: the plain follow
+    h.me.x = 3.1;
+    h.tick();
+    h.tick(CONFIRM_MS);
+    h.me.y = 3.6;
+    h.me.grounded = false;
+    h.tick();
+    h.tick(CONFIRM_MS);
+    h.tick();
+    expect(h.seen.focus).toEqual({ x: 12, y: 1 });
+    h.flight.dispose();
+    expect(h.seen.focus).toBeNull();
+    expect(h.seen.autoFire.at(-1)).toBe(true);
   });
 });

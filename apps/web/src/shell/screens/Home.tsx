@@ -24,7 +24,7 @@ import { NextOrders } from '../../tour/NextOrders';
 import { currentDevice } from '../../gamepad';
 import { drillDone, isTouchDevice } from '../../touch';
 import { InstallButton } from '../../pwa/InstallButton';
-import { ConsentCard } from '../../metrics/ConsentCard';
+import { ConsentCard, useHomeAsk } from '../../metrics/ConsentCard';
 import { HomeSoldier } from '../../presentation/HomeSoldier';
 import { PosterImg, QUICK_MATCH_ART } from '../posters';
 
@@ -49,6 +49,17 @@ function sitrep(): string[] {
   return lobbyMaps('').map((id) => [maps[id]?.name, MAP_CARDS[id]?.blurb].filter(Boolean).join(' · '));
 }
 
+/**
+ * A name's length for the nameplate's type size (menus.css: the column's width over --chars), in average
+ * letters of the display face, uppercase: W and M run wide, I and 1 narrow (UX audit 31 Oct, C-03: a
+ * 16-letter name of Ws and Ms ran under Next orders).
+ */
+export function nameplateChars(name: string): number {
+  let n = 0;
+  for (const c of name.toUpperCase()) n += /[WM]/.test(c) ? 1.4 : /[I1.,:;'!|]/.test(c) ? 0.5 : 1;
+  return Math.max(4, Math.round(n * 10) / 10);
+}
+
 export function Home({ store }: { store: ShellStore }) {
   const ctl = useCtl();
   const profile = useStore(store, (s) => s.profile);
@@ -57,6 +68,8 @@ export function Home({ store }: { store: ShellStore }) {
   const chip = useRef<HTMLSpanElement>(null);
   // what Next orders know of this device now (tour/orders.ts)
   const [ordersContext] = useState(() => ({ offline, touch: isTouchDevice(), pad: currentDevice().pad !== null, drillDone: drillDone() }));
+  // one thing at a time (audit 31 Oct, D-01): the play-data question, then the Home stops, then Next orders
+  const ask = useHomeAsk();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -192,7 +205,7 @@ export function Home({ store }: { store: ShellStore }) {
             <HomeSoldier store={store} name={name} className="mf-home__soldier">
               <Icon name="helmet" className="mf-home__helmet" />
             </HomeSoldier>
-            <div className="home__nameplate mf-home__nameplate" style={{ '--chars': Math.max(4, name.length) } as CSSProperties}>
+            <div className="home__nameplate mf-home__nameplate" style={{ '--chars': nameplateChars(name) } as CSSProperties}>
               <span className="stamp stamp--volt m-p7">Ready</span>
               <b className="display" data-bind="player.name">
                 {name}
@@ -229,6 +242,7 @@ export function Home({ store }: { store: ShellStore }) {
             <SquadCard />
             <NextOrders
               context={ordersContext}
+              held={ask !== null}
               fallback={
             <section className="card card--print home__news m-p3" style={row(5)}>
               <span className="label label--volt">Field orders</span>

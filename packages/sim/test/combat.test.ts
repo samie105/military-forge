@@ -268,6 +268,20 @@ describe('frag grenade', () => {
     expect(100 - p.hp).toBeCloseTo(110 * FRAG.explosion.selfDamageMul, 0);
   });
 
+  it("with selfHarm off (First flight's range) the thrower's own frag costs nothing, and still hurts others", () => {
+    const { game, p } = makeGame(flatMap());
+    game.selfHarm = false;
+    placeOnGround(game, p, 5);
+    const other = dummyAt(game, 6.5);
+    hold(game, p, 0, 5);
+    const g = game.allocGrenade()!;
+    Object.assign(g, { alive: true, owner: p.id, x: 5.5, y: 0.5, vx: 0, vy: 0, fuse: 1 });
+    hold(game, p, 0, 1);
+    expect(p.hp).toBe(100);
+    expect(game.events.some((e) => e.type === 'hit' && e.target === p.id)).toBe(false);
+    expect(other.hp).toBeLessThan(100);
+  });
+
   /** Sets off a frag at (x, y) owned by the shooter, then follows `target` until it lands. */
   function blastAndFollow(target: { x: number; y: number; grounded: boolean; alive: boolean; vx: number }, game: Game, owner: number, x: number, y: number) {
     const g = game.allocGrenade()!;

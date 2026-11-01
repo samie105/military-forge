@@ -1,8 +1,8 @@
 /**
  * The Locker's item tiles (round two's kit .item), shared with the character creator: an item's art,
- * its rarity's shape (colour-blind safe), its name and On / Owned / how to get it.
+ * its rarity's shape (colour-blind safe), its name and On / Free / Owned / how to get it.
  */
-import { RARITY_STYLE, cosmeticSourceLabel, type CosmeticDef, type DyeChannel } from '@military-forge/content';
+import { RARITY_STYLE, cosmeticArtPending, cosmeticHowToGet, type CosmeticDef, type DyeChannel } from '@military-forge/content';
 
 export const SHAPES: Record<string, string> = {
   circle: '<circle cx="6" cy="6" r="4.6"/>',
@@ -31,13 +31,23 @@ export function escapeHtml(text: string): string {
 }
 
 /**
+ * A locked item's words on try-on (the Locker and the creator): how to get it, naming only what the game
+ * has (content's cosmeticHowToGet), and for a part not drawn yet, why the soldier still wears the
+ * standard issue (the Track Jacket: audit 31 Oct, C-09).
+ */
+export function lockedLine(item: CosmeticDef): string {
+  return `Locked. ${cosmeticHowToGet(item).line}${cosmeticArtPending(item) ? ' Not drawn yet: the soldier shows the standard issue.' : ''}`;
+}
+
+/**
  * One item in the kit's look (.item): its art (a colour's swatch, or the section's glyph on its
- * rarity's tint), its rarity's shape (colour-blind safe), its name, and On / Owned / how to get it.
- * `picked`: the one being tried on.
+ * rarity's tint), its rarity's shape (colour-blind safe), its name, and On / Free / Owned / how to get
+ * it. A starter item says Free, not Owned (everyone has it: audit 31 Oct, A-07). `picked`: the one being
+ * tried on.
  */
 export function tileHtml(item: CosmeticDef, equipped: boolean, owned: boolean, channel?: DyeChannel, picked = false, glyph = 'shirt'): string {
   const r = RARITY_STYLE[item.rarity];
-  const how = owned ? '' : cosmeticSourceLabel(item.source);
+  const how = owned ? '' : cosmeticHowToGet(item).tag;
   const title = `${item.name} · ${r.label}${how ? ` · Locked: ${how}` : ''}`;
   const art = item.colour
     ? `<span class="item__sw" style="--sw:${item.colour}"></span>`
@@ -45,7 +55,7 @@ export function tileHtml(item: CosmeticDef, equipped: boolean, owned: boolean, c
   const tag = equipped
     ? `<span class="tag tag--you">${ic('check')}On</span>`
     : owned
-      ? '<span class="tag tag--ghost">Owned</span>'
+      ? `<span class="tag tag--ghost">${item.source.kind === 'starter' ? 'Free' : 'Owned'}</span>`
       : `<span class="tag tag--ghost mm-how">${ic('lock')}${escapeHtml(how)}</span>`;
   const cls = ['item', 'mm-tile', equipped ? 'is-on' : '', owned ? '' : 'is-locked mm-locked', picked ? 'is-picked' : ''].filter(Boolean).join(' ');
   return `<button type="button" class="${cls}" role="radio" aria-checked="${picked}" style="--rarity:${r.colour}" data-id="${item.id}"${channel ? ` data-channel="${channel}"` : ''} title="${escapeHtml(title)}">

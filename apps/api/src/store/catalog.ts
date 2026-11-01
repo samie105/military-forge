@@ -6,7 +6,7 @@
  * DRAFT PRICES: the USD tier is docs/17 §2.3's; the naira tier is a placeholder until the local price research
  * (docs/17 Q3). The currency's name is not final either (Q1): "Brass" is the doc's placeholder.
  */
-import { getCosmetic } from '@military-forge/content';
+import { STORE_ON_SALE, getCosmetic } from '@military-forge/content';
 
 export const CURRENCY_NAME = 'Brass';
 
@@ -62,6 +62,10 @@ export const STORE_ITEMS: readonly StoreItem[] = [
 for (const item of STORE_ITEMS) {
   const def = getCosmetic(item.itemId);
   if (!def || def.source.kind !== 'store') throw new Error(`store/catalog.ts: ${item.itemId} is not a store item in content`);
+}
+// the Locker offers "Get it in the Store" by content's STORE_ON_SALE: the two lists must name the same items
+if (STORE_ITEMS.length !== STORE_ON_SALE.length || STORE_ITEMS.some((i) => !STORE_ON_SALE.includes(i.itemId))) {
+  throw new Error(`store/catalog.ts: STORE_ITEMS must match content's STORE_ON_SALE (${STORE_ON_SALE.join(', ')})`);
 }
 
 export function getStoreItem(id: string): StoreItem | undefined {

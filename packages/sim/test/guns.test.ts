@@ -17,7 +17,7 @@ import {
   weapons,
 } from '@military-forge/content';
 import { describe, expect, it } from 'vitest';
-import { ARMORY_RESPAWN, Btn, DamageSource, Game, PRE_SPIN_HOLD, SPINNING_SPEED_MUL, SPIN_FULL, SegFlag, createRayHit, heldSpeedMul, type SimEvent } from '../src';
+import { ARMORY_RESPAWN, Btn, DamageSource, Game, PRE_SPIN_HOLD, SPINNING_SPEED_MUL, SPIN_FULL, SegFlag, createRayHit, dropWeapon, heldSpeedMul, type SimEvent } from '../src';
 import { dummyAt, flatMap, hold, makeGame, placeOnGround } from './helpers';
 
 function shots(game: Game): Extract<SimEvent, { type: 'shot' }>[] {
@@ -167,6 +167,22 @@ describe('weapon crates (more guns)', () => {
     hold(game, p, Btn.Interact, 1);
     expect([p.weapons[0].def, p.weapons[0].mag]).toEqual([HAMMER.index, 2]);
     expect(item().map((k) => k.def)).toEqual([weaponPickup(WIDOW.index)!.index]);
+  });
+
+  it("dropWeapon (First flight's Pick up order) puts a full crate on the floor below, there until taken with E", () => {
+    const game = new Game({ map: flatMap([], [], 120), seed: 4, pickups: true });
+    const p = game.addPlayer('p');
+    game.setLoadout(p, [HAMMER.index, BUZZ.index]);
+    placeOnGround(game, p, 30);
+    expect(dropWeapon(game, WIDOW.index, 20, 3)).toBe(true);
+    const k = game.pickups.find((x) => x.alive)!;
+    expect(k).toMatchObject({ def: weaponPickup(WIDOW.index)!.index, x: 20, y: 0, ttl: 0, mag: WIDOW.mag, reserve: WIDOW.reserve });
+    hold(game, p, 0, 60 * 60);
+    expect(k.alive).toBe(true);
+    p.x = 20;
+    hold(game, p, Btn.Interact, 1);
+    expect(p.weapons[0].def).toBe(WIDOW.index);
+    expect(dropWeapon(new Game({ map: flatMap([], [], 120) }), WIDOW.index, 20, 3)).toBe(false); // pickups off
   });
 
   it('a gun taken from a crate comes back, full, after a death', () => {

@@ -84,7 +84,6 @@
 
 /* ---- the corners ---- */
 .mf-title__corner { position: absolute; display: inline-flex; align-items: center; gap: 10px; font-size: 18px; font-weight: var(--fw-semi); color: var(--c-muted); text-shadow: var(--ts-hud); }
-.mf-title__corner--build { left: 64px; bottom: 56px; letter-spacing: .12em; text-transform: uppercase; }
 .mf-title__corner--net {
   right: 64px; bottom: 48px; padding: 10px 18px; font-size: 20px; font-weight: var(--fw-bold); color: var(--c-text);
   background: var(--c-ink-900); border: var(--bw) solid var(--c-line); border-radius: var(--r-frost-sm, var(--r-md)); text-shadow: none;
@@ -119,8 +118,6 @@
 .mf-title.is-phone .mf-title__press { font-size: 54px; }
 .mf-title.is-phone .mf-title__prompt small { font-size: 34px; }
 .mf-title.is-phone .mf-title__corner { font-size: 30px; }
-/* the corners sit under the prompt's line, not on it (audit 28 Oct: the build stamp ran into "Tap anywhere") */
-.mf-title.is-phone .mf-title__corner--build { left: 70px; bottom: 14px; font-size: 22px; }
 .mf-title.is-phone .mf-title__corner--net { right: 70px; bottom: 10px; padding: 6px 18px; font-size: 26px; }
 .mf-title.is-phone .mf-title__corner--net i { width: 18px; height: 18px; }
 .mf-title.is-phone.is-leaving .mf-title__world { animation: none; }
@@ -136,3 +133,6 @@ html.reduce-motion .mf-title.is-leaving :is(.mf-title__world, .mf-title__fg, .mf
 
 /* the screen waiting under the title isn't painted until the title leaves (Title.tsx: html.mf-title-up) */
 html.mf-title-up #shell .mf-fit > .screen:not([data-screen="title"]) { visibility: hidden; }
+
+/* an upright phone: the turn card (phone/TurnTip.tsx) over the title, at the phone screens' scale, outside the title's box */
+.mf-title__turn { position: fixed; inset: 0; z-index: var(--z-panel); zoom: var(--phone-fit, 1); pointer-events: auto; --pm-head: 1; }

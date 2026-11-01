@@ -16,7 +16,7 @@ function friend(id: string, nickname: string, status: Friend['status'], room: st
 function sampleList(): FriendsList {
   return {
     code: '7KQ4-M9XP',
-    friends: [friend('u_k', 'Kemi', 'in_room', 'KMTXRA'), friend('u_t', 'Tunde', 'online'), friend('u_s', 'Seun', 'offline')],
+    friends: [{ ...friend('u_k', 'Kemi', 'in_room', 'KMTXRA'), playing: true }, friend('u_t', 'Tunde', 'online'), friend('u_s', 'Seun', 'offline')],
     incoming: [{ id: 'u_b', nickname: 'Bisi', at: new Date(NOW).toISOString() }],
     outgoing: [{ id: 'u_a', nickname: 'Ade_07', at: new Date(NOW).toISOString() }],
     blocked: [],
@@ -57,7 +57,10 @@ describe('friend codes and words', () => {
   });
 
   it("says where a friend is, and when they were last seen", () => {
-    expect(statusText(friend('u', 'K', 'in_room', 'KMTXRA'), NOW)).toBe('In a match · room KMTXRA');
+    expect(statusText({ ...friend('u', 'K', 'in_room', 'KMTXRA'), playing: true }, NOW)).toBe('In a match · room KMTXRA');
+    // a host waiting in their lobby isn't in a match (audit C-27); an older page doesn't say
+    expect(statusText({ ...friend('u', 'K', 'in_room', 'KMTXRA'), playing: false }, NOW)).toBe('In the lobby · room KMTXRA');
+    expect(statusText(friend('u', 'K', 'in_room', 'KMTXRA'), NOW)).toBe('In a room · room KMTXRA');
     expect(statusText(friend('u', 'T', 'online'), NOW)).toBe('Online · in the menus');
     expect(statusText(friend('u', 'S', 'offline'), NOW)).toBe('Last seen 2 h ago');
     expect(agoText(new Date(NOW - 30_000).toISOString(), NOW)).toBe('just now');
@@ -102,7 +105,7 @@ describe('SocialController', () => {
     const social = new SocialController(shell, null);
     const outcome = await social.add('abcd-efgh');
     expect(asked).toEqual([{ code: 'ABCDEFGH' }, { name: 'abcd-efgh' }]);
-    expect(outcome).toEqual({ tone: 'ok', message: 'Request sent to ABCDEFGH. It waits until they answer.' });
+    expect(outcome).toEqual({ tone: 'ok', message: 'Request sent to ABCDEFGH. It waits until they answer.', to: { id: 'u_x', nickname: 'ABCDEFGH' } });
     expect(social.store.getState().added).toEqual(outcome);
   });
 
@@ -180,7 +183,7 @@ describe('SocialController', () => {
 });
 
 describe('the panel', () => {
-  it('shows your code, the requests on top, then in a match / online / offline', async () => {
+  it('shows your code, the requests on top, then in a room / online / offline', async () => {
     const { shell } = fakeShell({ 'GET /friends': () => sampleList() });
     const social = new SocialController(shell, null);
     await social.refresh();
@@ -188,7 +191,7 @@ describe('the panel', () => {
     const html = renderToStaticMarkup(<FriendsPanel social={social} />);
     expect(html).toContain('7KQ4-M9XP');
     expect(html).toContain('Wants to be friends');
-    const order = ['Requests · 1', 'In a match · 1', 'Online · 1', 'Offline · 1'].map((t) => html.indexOf(t));
+    const order = ['Requests · 1', 'In a room · 1', 'Online · 1', 'Offline · 1'].map((t) => html.indexOf(t));
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(html).toContain('In a match · room KMTXRA');

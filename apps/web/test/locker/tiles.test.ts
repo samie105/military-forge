@@ -1,18 +1,38 @@
 import { cosmeticsForSlot, getCosmetic } from '@military-forge/content';
 import { describe, expect, it } from 'vitest';
 import { tileHtml } from '../../src/locker';
+import { lockedLine } from '../../src/locker/tiles';
 
 describe('Locker items (round two)', () => {
   const hat = cosmeticsForSlot('headgear')[0]!;
   const dye = cosmeticsForSlot('dye').find((d) => d.colour)!;
 
-  it('says On, Owned, or how to get a locked one', () => {
+  it('says On, Free (a starter item), Owned, or how to get a locked one', () => {
     expect(tileHtml(hat, true, true)).toContain('tag--you');
     expect(tileHtml(hat, true, true)).toContain('is-on');
-    expect(tileHtml(hat, false, true)).toContain('>Owned<');
+    // everyone has a starter item: it reads Free, not Owned (audit 31 Oct, A-07)
+    expect(hat.source.kind).toBe('starter');
+    expect(tileHtml(hat, false, true)).toContain('>Free<');
+    expect(tileHtml(getCosmetic('skin_k47_galaxy_relic')!, false, true)).toContain('>Owned<');
     const locked = tileHtml(hat, false, false);
     expect(locked).toContain('is-locked');
     expect(locked).toContain('#icon-lock');
+  });
+
+  it('a locked item names only what the game has: no levels, battle pass or events (A-07, C-10)', () => {
+    for (const id of ['body_slim', 'skin_chrome', 'skin_zombie', 'eyewear_gas_mask', 'headgear_crown']) {
+      const html = tileHtml(getCosmetic(id)!, false, false);
+      expect(html, id).toContain('Coming soon');
+      expect(html, id).not.toMatch(/level|battle pass|tier|event|undead|achievement/i);
+    }
+    expect(tileHtml(getCosmetic('skin_k47_galaxy_relic')!, false, false)).toContain('In the Store');
+  });
+
+  it("a store item the Store doesn't sell says it's coming, and one not drawn yet says why it looks like the standard issue (C-09)", () => {
+    const jacket = getCosmetic('top_track_jacket')!;
+    expect(tileHtml(jacket, false, false)).toContain('Coming soon');
+    expect(lockedLine(jacket)).toBe('Locked. Coming to the Store. Not drawn yet: the soldier shows the standard issue.');
+    expect(lockedLine(getCosmetic('skin_k47_galaxy_relic')!)).toBe('Locked. Sold in the Store.');
   });
 
   it("shows a colour's swatch, else the section's glyph, with the rarity's shape", () => {

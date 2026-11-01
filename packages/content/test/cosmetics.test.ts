@@ -12,7 +12,10 @@ import {
   cosmeticLoadoutFromWireIds,
   cosmeticLoadoutHash,
   cosmeticLoadoutWireIds,
-  cosmeticSourceLabel,
+  STORE_ON_SALE,
+  cosmeticArtPending,
+  cosmeticHowToGet,
+  cosmeticOnSale,
   cosmetics,
   cosmeticsForSlot,
   fitsBody,
@@ -113,11 +116,28 @@ describe('cosmetics: data', () => {
     for (const c of cosmetics) expect(RARITIES).toContain(c.rarity);
   });
 
-  it('how-to-get labels', () => {
-    expect(cosmeticSourceLabel({ kind: 'battlePass', season: 1, tier: 34 })).toBe('Battle pass S1 tier 34');
-    expect(cosmeticSourceLabel({ kind: 'achievement', label: '100 headshots' })).toBe('Achievement: 100 headshots');
-    expect(cosmeticSourceLabel({ kind: 'level', level: 5 })).toBe('Reach level 5');
-    expect(cosmeticSourceLabel({ kind: 'store' })).toBe('Store');
+  it('how to get an item names only what the game has (UX audit 31 Oct: A-07, C-09, C-10)', () => {
+    const how = (id: string) => cosmeticHowToGet(getCosmetic(id)!);
+    expect(how('headgear_field_cap')).toEqual({ tag: 'Free', line: 'Free for everyone.' });
+    expect(how('skin_k47_galaxy_relic')).toEqual({ tag: 'In the Store', line: 'Sold in the Store.' });
+    // a store item the Store doesn't sell, a level, the battle pass, an event, an achievement: none exist to point at
+    expect(how('top_track_jacket')).toEqual({ tag: 'Coming soon', line: 'Coming to the Store.' });
+    for (const id of ['body_slim', 'skin_chrome', 'skin_zombie', 'headgear_crown']) expect(how(id), id).toEqual({ tag: 'Coming soon', line: 'Not available yet.' });
+    // no item's words name a level, a pass, a tier or an event
+    for (const c of cosmetics) expect(Object.values(cosmeticHowToGet(c)).join(' '), c.id).not.toMatch(/level|pass|tier|event|achievement|night of/i);
+  });
+
+  it('what the Store sells is a store item in content', () => {
+    for (const id of STORE_ON_SALE) expect(getCosmetic(id)?.source.kind, id).toBe('store');
+    expect(cosmeticOnSale(getCosmetic('top_track_jacket')!)).toBe(false);
+  });
+
+  it('a part without its own art is known (its picture would be the standard issue)', () => {
+    const pending = cosmetics.filter(cosmeticArtPending).map((c) => c.id);
+    expect(pending).toContain('top_track_jacket');
+    expect(pending).toContain('legs_cargo_shorts');
+    // the body's own pieces draw themselves
+    for (const id of ['top_fatigues', 'legs_fatigues', 'headgear_none', 'hair_body', 'headgear_field_cap']) expect(pending, id).not.toContain(id);
   });
 });
 

@@ -23,6 +23,7 @@ export * from './maps/types';
 export * from './pickups';
 export * from './projectiles';
 export * from './shield';
+export * from './spawnCover';
 export * from './tuning';
 export * from './weapons';
 export * from './loadoutGuns';

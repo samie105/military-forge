@@ -250,6 +250,16 @@ export class Spotlight {
     return this.step;
   }
 
+  /** Whether a node is part of this overlay (its callout, Skip, the primary): another spotlight's never is. */
+  contains(node: Node): boolean {
+    return this.el.contains(node);
+  }
+
+  /** Moves focus to the callout's primary button (else the callout): a menu pass that doesn't block still takes the keyboard. */
+  focusCallout(): void {
+    (this.callout.querySelector<HTMLElement>('[data-spot="primary"]') ?? this.callout).focus({ preventScroll: true });
+  }
+
   /**
    * Shows a step, or moves to it from the one shown (the same overlay: the ring travels, the path morphs).
    * The same step again (its id) updates it in place: no travel, and its time-out keeps running.
@@ -265,6 +275,8 @@ export class Spotlight {
     this.el.classList.toggle('is-blocking', blocking);
     this.el.classList.toggle('is-phone', this.phone());
     this.el.classList.toggle('is-strip', step.variant === 'strip');
+    // a strip with a button (First flight's finish): its line may take two rows, never cut off (audit A-15)
+    this.el.classList.toggle('has-primary', !!step.primary);
     this.el.classList.toggle('is-reduced', this.reducedMotion());
     this.el.classList.remove('is-leaving');
     if (!same) this.el.classList.remove('is-timeout');

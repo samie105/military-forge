@@ -1,6 +1,9 @@
 /** Tap-to-save's queue (de-duplication, expiry, counts) and its cards (results screen, Home). */
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+// the cards are tested with the boards on; live.ts ships them off for now (31 Oct)
+const live = vi.hoisted(() => ({ ADS_LIVE: true }));
+vi.mock('../../src/ads/live', () => live);
 import { SavedAdsList } from '../../src/ads/SavedAds';
 import { AD_STATS_UPLOAD, SAVED_KEY, SAVED_MAX, SAVED_TTL_MS, STATS_KEY, SavedAds, cleanSaved, type KeyValue } from '../../src/ads/saved';
 import { hintLine } from '../../src/ads/mount';
@@ -106,6 +109,17 @@ describe('the saved-ads queue', () => {
 });
 
 describe('the cards and the toast', () => {
+  afterEach(() => {
+    live.ADS_LIVE = true;
+  });
+
+  it('nothing at all while the ads are switched off, even with ads saved earlier', () => {
+    const { q } = queue();
+    q.save(deet, 'house:deet-napkin-motion', 'DEET Studios: Napkin to live URL.', null);
+    live.ADS_LIVE = false;
+    expect(renderToStaticMarkup(<SavedAdsList where="results" queue={q} />)).toBe('');
+  });
+
   it('nothing at all when nothing is saved', () => {
     const { q } = queue();
     expect(renderToStaticMarkup(<SavedAdsList where="results" queue={q} />)).toBe('');

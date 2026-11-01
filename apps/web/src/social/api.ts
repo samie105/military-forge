@@ -6,6 +6,9 @@ import type { Api } from '../shell/api';
 
 export type PresenceStatus = 'online' | 'in_room' | 'offline';
 
+/** A player's soldier as cosmetic wire ids (their avatar); null: no saved look (the silhouette). */
+export type LookIds = number[] | null;
+
 export interface Friend {
   id: string;
   nickname: string;
@@ -14,12 +17,30 @@ export interface Friend {
   room: string | null;
   lastSeenAt: string | null;
   since: string;
+  /** in_room: a match is on (true) or the room is in its lobby (false); absent from older pages */
+  playing?: boolean;
+  look?: LookIds;
 }
 
 export interface Person {
   id: string;
   nickname: string;
   at: string;
+  look?: LookIds;
+}
+
+/** Where you stand with a player a search or Played with recently shows. */
+export type Relation = 'none' | 'sent' | 'incoming' | 'friends';
+
+/** A player found by name (GET /friends/search), or met in a match (GET /friends/recent). */
+export interface FoundPlayer {
+  id: string;
+  nickname: string;
+  level: number;
+  look: LookIds;
+  relation: Relation;
+  /** Played with recently: when the last match together ended */
+  at?: string;
 }
 
 export interface FriendsList {
@@ -30,6 +51,8 @@ export interface FriendsList {
   outgoing: Person[];
   blocked: Person[];
   max: number;
+  /** "Let players find me by name" (absent from an older API: on) */
+  findable?: boolean;
 }
 
 export type RequestResult = { status: 'requested'; user: Person } | { status: 'friends'; friend: Friend };
@@ -98,6 +121,20 @@ export class FriendsApi {
 
   newCode(): Promise<{ code: string }> {
     return this.api.authed('POST', '/friends/code', {});
+  }
+
+  /** Players whose name starts with `q` (2 letters at least), closest first, at most 8. */
+  search(q: string): Promise<{ players: FoundPlayer[] }> {
+    return this.api.authed('GET', `/friends/search?q=${encodeURIComponent(q)}`);
+  }
+
+  /** The people from your last matches who aren't friends yet. */
+  recent(): Promise<{ players: FoundPlayer[] }> {
+    return this.api.authed('GET', '/friends/recent');
+  }
+
+  setFindable(findable: boolean): Promise<{ findable: boolean }> {
+    return this.api.authed('PUT', '/friends/settings', { findable });
   }
 
   /** `now`: the server's clock, so a phone with a wrong clock still counts down right */

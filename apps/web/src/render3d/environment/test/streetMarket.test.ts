@@ -8,7 +8,10 @@ import { streetMarketMap, type MapDef } from '@military-forge/content';
 import { Box3, Mesh, type BufferGeometry } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+// the boards are tested switched on; ads/live.ts ships them off for now (owner, 31 Oct)
+const live = vi.hoisted(() => ({ ADS_LIVE: true }));
+vi.mock('../../../ads/live', () => live);
 import { MapEnvironment, environmentFor, withTimeout } from '../index';
 import { layoutItems, placePoint, type KitLayout } from '../layout';
 import { mapGrade } from '../looks';
@@ -136,6 +139,21 @@ describe('Street Market: the environment', () => {
     expect(names.filter((n) => n !== 'sky').length).toBeLessThanOrEqual(15);
     expect(env.boards?.meshes).toHaveLength(2);
     env.dispose();
+  });
+
+  it('draws no billboards while the ads are switched off', async () => {
+    live.ADS_LIVE = false;
+    try {
+      const env = await build();
+      const names: string[] = [];
+      env.background.traverse((o) => (o as Mesh).isMesh && names.push(o.name));
+      expect(names).not.toContain('ads-4:3');
+      expect(names).not.toContain('ads-6:1');
+      expect(env.boards).toBeNull();
+      env.dispose();
+    } finally {
+      live.ADS_LIVE = true;
+    }
   });
 
   it('keeps the dressing behind the gameplay band and the foreground in front of it', async () => {

@@ -26,6 +26,7 @@ import { DEFAULT_AUDIO, DEFAULT_SETTINGS, type AudioSettings, type GraphicsPrese
 import { Backdrop } from './frame';
 import { InstallButton } from '../../pwa/InstallButton';
 import { SendReport } from '../../diag/SendReport';
+import { buildId } from 'virtual:title-info';
 import { AccountPanel } from '../account/AccountPanel';
 import { PrivacySettings } from '../../metrics/PrivacySettings';
 
@@ -473,6 +474,8 @@ function Network({ settings, inRoom }: { settings: Settings; inRoom: boolean }) 
         <div className="srow__txt">
           <b>Something went wrong?</b>
           <span>Send us what happened on this device, so we can fix it. A failed room connection sends one by itself.</span>
+          {/* the build this device runs (it went with every report; it was on the title screen until audit 31 Oct, A-24) */}
+          <span className="num">Build {buildId}</span>
         </div>
         <div className="srow__ctrl">
           <SendReport context="settings" />

@@ -11,10 +11,14 @@ import { accountErrorText } from './account/model';
 import { AGE_KEY, adultOnDevice, ageOnDevice, answerAge, birthYears } from './age';
 import { Api, ApiError, type AccountInfo } from './api';
 import { ControllerContext } from './context';
-import { ShellController, type GameHost } from './controller';
+import { RECRUIT_MATCHES, ShellController, type GameHost } from './controller';
 import { AgeGate } from './screens/AgeGate';
 import { AgeQuestion, ageAnswered } from './screens/AgeQuestion';
+import type { LobbyView } from './onlineView';
+import type { MatchView } from './matchView';
 import { createShellStore, type ShellState } from './store';
+import { MatchPhase } from '@military-forge/sim';
+import { FACTS_KEY } from '../tour/facts';
 
 const NOW = Date.parse('2026-10-28T12:00:00Z');
 const saved = new Map<string, string>();
@@ -101,8 +105,8 @@ describe('what the device keeps', () => {
 });
 
 describe('the gate before online rooms', () => {
-  function setup(api: Partial<Api> = {}) {
-    const host = { local: null, online: null, startTraining: vi.fn(), startOnline: vi.fn(), stop: vi.fn(), applySettings: vi.fn(), setInputBlocked: vi.fn() } as unknown as GameHost;
+  function setup(api: Partial<Api> = {}, online: Partial<GameHost['online']> | null = null) {
+    const host = { local: null, online, startTraining: vi.fn(), startOnline: vi.fn(), stop: vi.fn(), applySettings: vi.fn(), setInputBlocked: vi.fn() } as unknown as GameHost;
     const store = createShellStore();
     vi.stubGlobal('window', Object.assign(new EventTarget(), { setTimeout, clearTimeout }));
     vi.stubGlobal('location', { pathname: '/', search: '', hash: '', origin: 'https://play.example', host: 'play.example', protocol: 'https:' });
@@ -134,6 +138,54 @@ describe('the gate before online rooms', () => {
     ctl.go({ to: 'home' });
     ctl.go({ to: 'create' });
     await vi.waitFor(() => expect(createRoom).toHaveBeenCalledTimes(2));
+  });
+
+  // Play now's room once it's up: ours, in the lobby, with bots in it at `botLevel`
+  const lobbyUp = (store: ReturnType<typeof createShellStore>, botLevel: 'easy' | 'normal') =>
+    store.setState({
+      match: { phase: MatchPhase.Waiting, results: null } as unknown as MatchView,
+      lobby: { isHost: true, minPlayers: 2, players: [{ id: 0 }, { id: 1 }, { id: 2 }, { id: 3 }], bots: 3, botLevel } as unknown as LobbyView,
+    });
+
+  it("Play now on a first visit: the answer carries on into the fight, with no extra step (audit A-02)", async () => {
+    const createRoom = vi.fn(async () => room);
+    const online = { startMatch: vi.fn(), setMatchSettings: vi.fn() };
+    const { store, ctl } = setup({ createRoom }, online);
+    saved.set(FACTS_KEY, JSON.stringify({ v: 1, matches: { local: 3, online: 0, finished: 3, wonInARow: 0 } })); // no recruit: the room's own bots
+    ctl.playNow();
+    expect(store.getState().screen).toEqual({ name: 'age', then: { to: 'create' } });
+    expect(ctl.answerAge(1995)).toBe('ok');
+    await vi.waitFor(() => expect(store.getState().screen).toMatchObject({ name: 'room', code: 'KMTXRA' }));
+    lobbyUp(store, 'normal');
+    expect(online.startMatch).toHaveBeenCalledOnce();
+    expect(online.setMatchSettings).not.toHaveBeenCalled();
+  });
+
+  it(`Play now for a recruit (fewer than ${RECRUIT_MATCHES} matches finished): Easy bots, then the start (audit B-30)`, async () => {
+    const createRoom = vi.fn(async () => room);
+    const online = { startMatch: vi.fn(), setMatchSettings: vi.fn() };
+    const { store, ctl } = setup({ createRoom }, online);
+    answerAge(1995, NOW);
+    saved.set(FACTS_KEY, JSON.stringify({ v: 1, matches: { local: 2, online: 0, finished: 2, wonInARow: 0 } }));
+    ctl.playNow();
+    await vi.waitFor(() => expect(store.getState().screen).toMatchObject({ name: 'room' }));
+    lobbyUp(store, 'normal');
+    expect(online.setMatchSettings).toHaveBeenCalledExactlyOnceWith({ botLevel: 'easy' });
+    expect(online.startMatch).not.toHaveBeenCalled();
+    lobbyUp(store, 'easy');
+    expect(online.startMatch).toHaveBeenCalledOnce();
+    expect(online.setMatchSettings).toHaveBeenCalledOnce();
+  });
+
+  it('Play now under 18: the quick start goes with the refusal (nothing starts later)', () => {
+    const createRoom = vi.fn(async () => room);
+    const online = { startMatch: vi.fn(), setMatchSettings: vi.fn() };
+    const { store, ctl } = setup({ createRoom }, online);
+    ctl.playNow();
+    expect(ctl.answerAge(2012)).toBe('refused');
+    store.setState({ screen: { name: 'room', code: 'KMTXRA' } });
+    lobbyUp(store, 'easy');
+    expect(online.startMatch).not.toHaveBeenCalled();
   });
 
   it('an under-18 sees the refusal, now and next time; no room is asked for', () => {

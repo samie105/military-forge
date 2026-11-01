@@ -1718,8 +1718,13 @@ html.canvas .ticker__run{ animation:none; }
 .m-roll__c > span + span{ position:absolute; left:0; top:0; }
 /* P5 two-spring indicator (a tab underline, a toggle knob): motion.ts moveIndicator sets its edges in px */
 .m-p5{ position:absolute; left:0; width:1px; transform-origin:0 50%; transform:translateX(calc(var(--m5-l) * 1px)) scaleX(calc(var(--m5-r) - var(--m5-l))); transition:--m5-l var(--m-base) var(--ease-arrive), --m5-r var(--m-base) var(--ease-arrive); }
-/* P6 flood: motion.ts flood draws a .m-p6 circle from the trigger; at most one on screen */
-.m-p6{ position:fixed; z-index:var(--z-modal); border-radius:50%; pointer-events:none; background:var(--m-flood, var(--c-volt)); }
+/* P6 flood: motion.ts flood draws a .m-p6 circle from the trigger; at most one on screen. Its circle is
+   drawn by script (clip-path), which stalls while the page is busy, and a match's start is the busiest
+   moment there is (the map, soldiers and shaders load): a phone then held the screen in solid volt for
+   about a second (audit B-25). The fade-out runs on the compositor, so whatever the script is doing,
+   the sheet is gone 640 ms after it shows: the end of its own grow and contract (320 + 320 ms) */
+.m-p6{ position:fixed; z-index:var(--z-modal); border-radius:50%; pointer-events:none; background:var(--m-flood, var(--c-volt)); animation:m-p6-guard 160ms linear 480ms both; }
+@keyframes m-p6-guard{ to{ opacity:0; } }
 /* P7 stamp: READY, MVP, HOST, "Fits the body", the new-gun label */
 .m-p7{ animation:m-stamp var(--m-fast) var(--ease-settle) both; }
 @keyframes m-stamp{ from{ scale:var(--m-stamp-scale); opacity:0; } 40%{ opacity:1; } to{ scale:1; opacity:1; } }

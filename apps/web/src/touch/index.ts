@@ -308,6 +308,14 @@ export function setTouchMatchLive(live: boolean): void {
   controller?.setMatchLive(live);
 }
 
+/**
+ * Auto fire held off (First flight's Run and Fly: the gun mustn't shoot the range's targets by itself
+ * before the Fire order; audit A-17). Pushing the aim stick to its rim still fires.
+ */
+export function holdAutoFire(held: boolean): void {
+  if (controller) controller.autoFireHeld = held;
+}
+
 /** A match's countdown begins, or GO: the controls start clean (TouchController.rearm). */
 export function rearmTouch(why: string): void {
   controller?.rearm(why);

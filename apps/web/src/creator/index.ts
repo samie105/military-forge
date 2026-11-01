@@ -13,7 +13,7 @@ import {
   DYE_CHANNELS,
   DEFAULT_COSMETIC_LOADOUT,
   RARITY_STYLE,
-  cosmeticSourceLabel,
+  cosmeticArtPending,
   getCosmetic,
   loadoutBody,
   sanitizeCosmeticLoadout,
@@ -26,7 +26,7 @@ import {
 } from '@military-forge/content';
 import { CharacterAssembler, type CharacterInstance } from '../character';
 import { LocalLoadoutStore, accountInventory, ownedOnly, randomLoadout, withDye, withItem, type Inventory, type LoadoutStore } from '../locker/loadouts';
-import { SLOT_GLYPH, THUMB_FOCUS, escapeHtml, ic, tileHtml } from '../locker/tiles';
+import { SLOT_GLYPH, THUMB_FOCUS, escapeHtml, ic, lockedLine, tileHtml } from '../locker/tiles';
 import { Turntable, type FocusPreset, type LightPreset } from '../locker/turntable';
 import { startFitting } from '../ui/fit';
 import { moveIndicator } from '../ui/motion';
@@ -288,7 +288,8 @@ export function mountCreator(container: HTMLElement, options: CreatorOptions = {
     for (const tile of list.querySelectorAll<HTMLElement>('.item[data-id]:not([data-channel])')) {
       const glyph = tile.querySelector<HTMLElement>('.mf-item__glyph');
       const def = getCosmetic(tile.dataset.id ?? '');
-      if (!glyph || !def || def.slot === 'dye' || def.slot === 'bodyType') continue;
+      // a part not drawn yet keeps its glyph: its picture would be the standard issue (the Track Jacket, C-09)
+      if (!glyph || !def || def.slot === 'dye' || def.slot === 'bodyType' || cosmeticArtPending(def)) continue;
       const req: PortraitRequest = { look: withItem(draft, def.slot as LoadoutSlot, def.id), size: 128, pose: HEAD_SLOTS.has(def.slot) ? 'portrait' : 'poster-1' };
       const put = (img: { url: string; fallback?: boolean } | null) => {
         if (!img || img.fallback || !glyph.isConnected) return;
@@ -326,7 +327,7 @@ export function mountCreator(container: HTMLElement, options: CreatorOptions = {
     if (!owned) {
       // a locked item tries on, and says how to get it
       trying = { id, ...(channel ? { channel } : {}) };
-      detail.textContent = `${item.name} · ${RARITY_STYLE[item.rarity].label} · Locked. How to get it: ${cosmeticSourceLabel(item.source)}`;
+      detail.textContent = `${item.name} · ${RARITY_STYLE[item.rarity].label} · ${lockedLine(item)}`;
       show();
       render();
       return;

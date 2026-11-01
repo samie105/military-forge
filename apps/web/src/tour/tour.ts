@@ -6,7 +6,7 @@
  */
 
 /** What ticks a step: something the player did in play, or a shell action (ui:*). */
-export type TourEvent = 'move' | 'reach' | 'hit-dummy' | 'dash' | 'throw' | 'ui:create' | 'ui:join' | 'ui:locker' | 'ui:ready';
+export type TourEvent = 'move' | 'reach' | 'hit-dummy' | 'reload' | 'swap' | 'take' | 'dash' | 'throw' | 'ui:create' | 'ui:join' | 'ui:locker' | 'ui:ready';
 
 export interface TourStepDef<C = unknown> {
   id: string;

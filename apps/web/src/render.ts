@@ -289,6 +289,8 @@ function statusTags(p: PlayerView, long = false): string {
   if (p.jetDisabledTicks) tags.push(`${long ? 'JETPACK OFFLINE' : 'EMP'}${secs(p.jetDisabledTicks)}`);
   if (p.gasTicks) tags.push(long ? 'GAS: get out!' : 'GAS');
   if (p.burning) tags.push(long ? 'ON FIRE' : 'FIRE');
+  // yours only: the others show theirs as the shimmer (drawCover)
+  if (p.cover && p.isLocal) tags.push('SPAWN COVER');
   return tags.join(' · ');
 }
 
@@ -926,6 +928,7 @@ export class Renderer {
     const sx = cam.toScreenX(p.x);
     const sy = cam.toScreenY(p.y + h + 0.32);
     if (sx < -40 || sx > cam.width + 40 || sy < cam.band.top + 18 || sy > cam.band.bottom - 8) return;
+    if (p.cover) this.drawCover(p, h, r);
     const amount = Math.max(0, Math.min(1, p.hp / t.healthMax));
     const width = 54;
     // the frame: dark, edged in the relation colour for the others (yours is the HUD's)
@@ -966,6 +969,30 @@ export class Renderer {
       ctx.font = 'bold 10px ui-monospace, monospace';
       ctx.fillText(status, sx, sy - 19);
     }
+  }
+
+  /**
+   * Spawn cover (audit B-10): a soft pale shimmer around the soldier while nobody else can hurt them,
+   * so a shooter sees why their shots do nothing. A slow breath (about 1.3 a second), never a strobe;
+   * steady with Reduce motion. In 2D and over the 3D view alike.
+   */
+  private drawCover(p: PlayerView, height: number, radius: number): void {
+    const ctx = this.ctx;
+    const cam = this.camera;
+    const x = cam.toScreenX(p.x);
+    const top = cam.toScreenY(p.y + height + 0.12);
+    const bottom = cam.toScreenY(p.y - 0.05);
+    const half = (radius + 0.16) * cam.ppm;
+    const breath = this.reducedMotion ? 0.5 : 0.5 + 0.5 * Math.sin(performance.now() / 120);
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(x - half, top, half * 2, bottom - top, half);
+    ctx.fillStyle = `rgba(242,238,223,${(0.06 + 0.06 * breath).toFixed(3)})`;
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = `rgba(242,238,223,${(0.35 + 0.3 * breath).toFixed(3)})`;
+    ctx.stroke();
+    ctx.restore();
   }
 
   /**

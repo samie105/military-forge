@@ -19,6 +19,7 @@ import { logicalPoint, logicalRect } from '../ui/landscape';
 import type { Frame } from '../view';
 import { weaponUnderfoot } from '../weaponItems';
 import { FIRE_SETTLE_MS, FireLog, PadTap, TapTracker, decide, keySaves, middleClickSaves, type Pending } from './gesture';
+import { ADS_LIVE } from './live';
 import { savedAds, type SavedAds } from './saved';
 import { AdToast, savedLine } from './toast';
 
@@ -47,9 +48,9 @@ export interface AdClicks {
   toast: AdToast;
 }
 
-/** Mounts tap-to-save once; null without a 3D view (the boards are 3D only). */
+/** Mounts tap-to-save once; null without a 3D view (the boards are 3D only) or with the ads off. */
 export function mountAdClicks(d: AdClickDeps): AdClicks | null {
-  if (!d.view3d) return null;
+  if (!d.view3d || !ADS_LIVE) return null;
   const { sampler, camera, canvas } = d;
   const queue = d.queue ?? savedAds();
   const toast = new AdToast();

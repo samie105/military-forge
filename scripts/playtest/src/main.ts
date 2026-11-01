@@ -24,7 +24,7 @@
  * Flags: --no-build (reuse apps/web/dist) · --local (no tunnel: http://127.0.0.1:<port>) ·
  *        --port <n> (the local proxy port) · --api-port <n> · --game-port <n> (default: any free ones) ·
  *        --tunnel-protocol quic|http2 (default quic, falling back to http2 when UDP is blocked) ·
- *        --map <id> (the rooms' map: movement-test by default; lunar-outpost, storm-front, flux-lab, …) ·
+ *        --map <id> (the rooms' map: street-market by default, as live; movement-test, lunar-outpost, storm-front, flux-lab, …) ·
  *        --bots <n> (bots keep each room at n players: 4 by default, so two people get a real match;
  *        0 = no bots) · --bot-level easy|normal|hard (default normal) ·
  *        --no-armory (no test armory: by default every room has a rack of one of every gun by the spawns) ·
@@ -495,7 +495,8 @@ async function main(): Promise<void> {
   const accessKey = generateKeyPairSync('ed25519');
   const ticketKey = generateKeyPairSync('ed25519');
   const resultsKey = generateKeyPairSync('ed25519');
-  const map = option('map');
+  // the rooms' map: a finished one, as live (cloud-init's MAP), not the movement test's grey boxes (audit A-01)
+  const map = option('map') ?? 'street-market';
   const bots = option('bots') ?? '4';
   const botLevel = option('bot-level') ?? 'normal';
   // the room's host may tune the game live (fuel, jet, gravity, dash, blasts, grenades…) and copy
@@ -520,7 +521,7 @@ async function main(): Promise<void> {
       RESULTS_PRIVATE_KEY: resultsKey.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
       API_URL: `http://127.0.0.1:${apiPort}`,
       TRUST_PROXY: '1',
-      ...(map ? { MAP: map } : {}),
+      MAP: map,
       BOTS: bots,
       BOT_LEVEL: botLevel,
       HOST_TUNING: tune ? '1' : '0',

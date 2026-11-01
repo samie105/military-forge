@@ -37,9 +37,6 @@ html.reduce-motion .mf-hud-phone { --m-rise: 0px; }
 .pt-ping__more:empty { display: none; }
 .pt-ping .ping--mid .sig i:nth-child(4), .pt-ping .ping--bad .sig i:nth-child(n + 3) { opacity: 0.25; }
 
-/* the owner's admin page changed this server's numbers: a brass tag under the ping, clear of the clock */
-.ph .phud-admin { position: absolute; left: calc(var(--safe-l) + 4px); top: calc(var(--safe-t) + 48px + 20px * var(--text-scale, 1)); color: var(--c-brass); text-shadow: var(--ts-hud); white-space: nowrap; }
-
 /* the pickup line, for what has no button (a shield, grenades); a crate's gun has the take button */
 /* at the bottom between the dials, where the take button stands for a crate's gun: clear of every
    control (the gun pill, shield and zoom above; the action fan right), sideways or turned upright */

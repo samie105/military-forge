@@ -170,7 +170,7 @@ Measured on 23 Oct 2026 (NOTES §43): no gap lined up with a server stall.
 ## 5. Update, stop, delete
 
 - **New code:** user data runs only on the first boot.
-  - With SSH: `sudo /usr/local/sbin/mf-trial-setup` pulls `main` again, rebuilds and restarts. The room, the admin link, the keys, the database and the probe results stay.
+  - With SSH: `sudo /usr/local/sbin/mf-trial-setup` pulls the public repo's `production` branch again (`main` before 31 Oct 2026), rebuilds and restarts. Releases, staging and rollbacks: [release.md](release.md). The room, the admin link, the keys, the database and the probe results stay.
   - `mf-trial-setup` is the copy of the script the box first ran. To run a newer `cloud-init.sh` (for example the one that added Postgres and Valkey), pull the code, then run the new script from it; it replaces `mf-trial-setup` with itself:
     ```sh
     cd /opt/military-forge/src && sudo -u mf git fetch -q --depth 1 origin main && sudo -u mf git reset -q --hard FETCH_HEAD

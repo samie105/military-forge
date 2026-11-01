@@ -14,7 +14,7 @@ import { initial } from "./parts";
 import { FriendsButton, PhoneSquad } from "../../../social/SocialLayer";
 import { SavedAdsList } from "../../../ads/SavedAds";
 import { InstallToast } from "../../../pwa/InstallToast";
-import { ConsentCard, useConsentDue } from "../../../metrics/ConsentCard";
+import { ConsentCard, useHomeAsk } from "../../../metrics/ConsentCard";
 import { useState } from "react";
 import { NextOrders } from "../../../tour/NextOrders";
 import { currentDevice } from "../../../gamepad";
@@ -26,7 +26,8 @@ import { PosterImg, QUICK_MATCH_ART } from "../../posters";
 
 export function PhoneHome({ store }: { store: ShellStore }) {
   const ctl = useCtl();
-  const consentDue = useConsentDue();
+  // one thing at a time (audit 31 Oct, D-01): the play-data question, then the Home stops, then Next orders
+  const ask = useHomeAsk();
   const profile = useStore(store, (s) => s.profile);
   const ping = useServerPing();
   const offline = !!profile?.offline;
@@ -169,6 +170,7 @@ export function PhoneHome({ store }: { store: ShellStore }) {
           {/* Next orders (the onboarding's cards) take the soldier's column while there's one to show */}
           <NextOrders
             context={ordersContext}
+            held={ask !== null}
             fallback={
               <div
                 className="pm-stage m-p3"
@@ -241,8 +243,8 @@ export function PhoneHome({ store }: { store: ShellStore }) {
         </nav>
       </div>
       {/* install the game, play full screen (the owner, 23 Oct): Android's prompt, or iPhone's two taps */}
-      {/* play stats: the one-time choice (docs/16 §6.2); the install toast waits while it's up */}
-      {consentDue ? <ConsentCard where="phone" /> : <InstallToast where="home" />}
+      {/* play stats: the one-time choice (docs/16 §6.2); the install toast waits while it or the Home stops are up */}
+      {ask === "consent" ? <ConsentCard where="phone" /> : ask === null && <InstallToast where="home" />}
     </PhoneScreen>
   );
 }

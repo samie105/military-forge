@@ -2,6 +2,7 @@
  * The app shell's pure parts: links and room URLs, saved settings and key bindings, the online
  * match/lobby views from MATCH_STATE, the API client's session handling, and the QR encoder.
  */
+import { createTuning, defaultTuning } from '@military-forge/content';
 import type { MatchStateMsg } from '@military-forge/protocol';
 import { Btn, MatchPhase } from '@military-forge/sim';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -177,6 +178,17 @@ describe('online match and lobby views', () => {
     expect(lobbyView(source(state(), 2))!.isHost).toBe(true);
     expect(sameLobby(view, lobbyView(source(state())))).toBe(true);
     expect(sameLobby(view, lobbyView(source(state({ hostId: 5 }))))).toBe(false);
+  });
+
+  it('the lobby says "Custom rules" only for what the host tuned, never for the server\'s own values (audit B-11)', () => {
+    const serverValues = createTuning({ gravity: defaultTuning.gravity * 0.6 });
+    const tuned = (t: ReturnType<typeof createTuning>): OnlineSource => ({ ...source(state()), tuning: () => t, tuningBase: () => serverValues });
+    expect(lobbyView(source(state()))!.rules).toBe('');
+    // the admin's defaults are the game's on this server: no cue
+    expect(lobbyView(tuned(serverValues))!.rules).toBe('');
+    const host = createTuning({ ...serverValues, dashSpeed: defaultTuning.dashSpeed * 1.4 });
+    expect(lobbyView(tuned(host))!.rules).toBe('Dash speed 1.4×');
+    expect(sameLobby(lobbyView(tuned(serverValues)), lobbyView(tuned(host)))).toBe(false);
   });
 
   it("the lobby carries the room's bots, and a change to them is a change (v17)", () => {

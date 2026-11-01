@@ -5,8 +5,9 @@
  * after an answer, and not at all when the browser asks sites not to track it. Settings → Privacy
  * changes the answer any time.
  */
-import { useSyncExternalStore } from 'react';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { Icon } from '../ui/Icon';
+import { focusFree, homeAsk, useHomeStopsRunning, type HomeAsk } from '../tour/homeQueue';
 import { promptDue, type ConsentState } from './consent';
 import { metrics } from './index';
 import './consent.css';
@@ -19,9 +20,17 @@ export function useConsent(): ConsentState {
   return useSyncExternalStore(m ? (fn) => m.consent.subscribe(fn) : noop, () => m?.consent.get() ?? idle, () => idle);
 }
 
-/** Whether Home has the card up now (PhoneHome keeps the install toast back meanwhile). */
+/** Whether the question is due (Home's queue, tour/homeQueue.ts, puts it before the Home stops and Next orders). */
 export function useConsentDue(): boolean {
   return promptDue(useConsent()) !== null;
+}
+
+/**
+ * What Home is asking now (tour/homeQueue.ts): this question, the Home stops, or nothing. Next orders and the
+ * phone's install toast wait while it's anything.
+ */
+export function useHomeAsk(): HomeAsk {
+  return homeAsk(useConsentDue() && metrics() !== null, useHomeStopsRunning());
 }
 
 export const PRIVACY_URL = '/privacy.html';
@@ -30,10 +39,17 @@ export function ConsentCard({ where }: { where: 'home' | 'phone' }) {
   const s = useConsent();
   const due = promptDue(s);
   const m = metrics();
-  if (!due || !m) return null;
+  // one thing at a time on Home (audit 31 Oct, D-01): a Home stops pass already running goes first
+  const showing = useHomeAsk() === 'consent';
+  const card = useRef<HTMLElement>(null);
+  // the question takes the focus as it appears (it came last in the tab order: D-01), unless the player is on something
+  useEffect(() => {
+    if (showing && focusFree()) card.current?.focus({ preventScroll: true });
+  }, [showing]);
+  if (!due || !m || !showing) return null;
   const answer = (yes: boolean) => m.consent.set(yes, due === 'ask' ? 'prompt' : 'notice');
   return (
-    <aside className={`mf-consent mf-consent--${where}`} role="dialog" aria-labelledby="mf-consent-title" aria-describedby="mf-consent-line">
+    <aside ref={card} tabIndex={-1} className={`mf-consent mf-consent--${where}`} role="dialog" aria-labelledby="mf-consent-title" aria-describedby="mf-consent-line">
       <span className="mf-consent__tile" aria-hidden="true">
         <Icon name="eye" />
       </span>

@@ -52,6 +52,8 @@ export interface PlayerView {
   weapons: WeaponView[];
   /** melee swing progress (sim PlayerState.meleeTicks): 0 idle, 1 = swing started. Online, remote players' comes from the snapshots (v16), fractional between ticks */
   meleeTicks?: number;
+  /** spawn cover (audit B-10): nobody else can hurt them yet; it ends when they attack (local: the sim's; online: spawnCover.ts) */
+  cover?: boolean;
   /** in a dash burst (docs/02 §21): pose and streak. The 'dash' event carries its start and direction */
   dashing?: boolean;
   /**

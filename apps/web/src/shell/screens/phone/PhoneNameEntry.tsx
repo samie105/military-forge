@@ -20,37 +20,7 @@ import type { ShellStore } from '../../store';
 import { joiningLine, useJoining } from '../joining';
 import { NAME_MAX, NAME_MIN, nameState, useEnterKey } from '../NameEntry';
 import { PhoneScreen, rise, useRotated } from './layout';
-
-/** The upright-phone tip on the name screen was seen (once a phone). */
-export const TURN_TIP_KEY = 'mf.phone.turnTip.v1';
-
-function turnTipSeen(): boolean {
-  try {
-    return localStorage.getItem(TURN_TIP_KEY) === 'seen';
-  } catch {
-    return false;
-  }
-}
-
-/**
- * The first screen on an upright phone: the page plays turned onto its side (ui/landscape.ts), and the
- * phone's keyboard would open along the glass, under a sideways form. Once, a card that reads upright
- * asks to turn the phone (the game itself never asks: it just plays sideways).
- */
-function TurnTip({ onDone }: { onDone: () => void }) {
-  return (
-    <div className="pm-turn" role="dialog" aria-label="Turn your phone sideways">
-      <div className="pm-turn__card plate">
-        <Icon name="rotate" />
-        <b className="display">Turn your phone sideways</b>
-        <p>Military Forge plays in landscape, and your name is easier to type that way too.</p>
-        <button type="button" className="btn btn--ghost btn--sm" onClick={blurAfter(onDone)}>
-          Keep it upright
-        </button>
-      </div>
-    </div>
-  );
-}
+import { TurnTip, markTurnTipSeen, useTurnTipSeen } from './TurnTip';
 
 export function PhoneNameEntry({ store, first }: { store: ShellStore; first: boolean }) {
   const ctl = useCtl();
@@ -123,16 +93,8 @@ export function PhoneNameEntry({ store, first }: { store: ShellStore; first: boo
   };
 
   const rotated = useRotated();
-  const [turnSeen, setTurnSeen] = useState(turnTipSeen);
+  const turnSeen = useTurnTipSeen();
   const turnTip = first && rotated && !turnSeen;
-  const doneTurn = () => {
-    try {
-      localStorage.setItem(TURN_TIP_KEY, 'seen');
-    } catch {
-      /* private mode: it shows again next time */
-    }
-    setTurnSeen(true);
-  };
 
   return (
     <PhoneScreen name="m-name" label="Your name" word="RECRUIT" modal={!first} dialog={!first} states={[state, turnTip ? 'turn-tip' : null]}>
@@ -290,7 +252,7 @@ export function PhoneNameEntry({ store, first }: { store: ShellStore; first: boo
           </div>
         </div>
       </form>
-      {turnTip && <TurnTip onDone={doneTurn} />}
+      {turnTip && <TurnTip line="Military Forge plays in landscape, and your name is easier to type that way too." onDone={markTurnTipSeen} />}
     </PhoneScreen>
   );
 }

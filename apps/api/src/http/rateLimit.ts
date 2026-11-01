@@ -36,7 +36,15 @@ export const LIMITS = {
    */
   friendLookup: { name: 'friendlook', limit: 20, windowMs: 10 * 60_000 },
   friendLookupIp: { name: 'friendlookip', limit: 60, windowMs: 10 * 60_000 },
-  /** reading the friends list, per user (the panel refreshes every 30 s while open) */
+  /**
+   * the friends panel's name search (GET /friends/search), which asks as the player types: enough for
+   * several names a minute, too few to sweep the player list (8 names an answer, players who opted out
+   * never show). Per user a minute and an hour, and per IP an hour (loose: carrier-grade NAT).
+   */
+  friendSearch: { name: 'friendsearch', limit: 40, windowMs: 60_000 },
+  friendSearchHour: { name: 'friendsearchh', limit: 300, windowMs: 60 * 60_000 },
+  friendSearchIp: { name: 'friendsearchip', limit: 1200, windowMs: 60 * 60_000 },
+  /** reading the friends list, per user (the panel refreshes every 30 s while open); also Played with recently */
   friendsRead: { name: 'friends', limit: 60, windowMs: 60_000 },
   /** accept, decline, cancel, remove, block, unblock, a new code, invite answers, leaving a party: per user */
   friendWrite: { name: 'friendwrite', limit: 120, windowMs: 10 * 60_000 },

@@ -57,12 +57,10 @@ function desktop(): string {
     <div class="hud-tl">
       <div class="hud-net plate" data-state="fps"><span class="num" data-bind="fps.value"></span><span class="hud-net__loss">fps</span></div>
       <div class="hud-net plate" data-state="net" data-bind-attr="title: net.detail; data-detail: net.detail; data-tone: net.tone"><span class="sig" data-bind-attr="class: net.sig" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="num" data-bind="net.ping"></span><span class="hud-net__jit num" data-bind="net.jitter"></span><span class="hud-net__loss num"><span data-bind="net.loss"></span> loss</span><span class="hud-net__via" data-bind="net.via" data-bind-attr="title: net.viaTitle"></span></div>
-      <div class="tuned plate mf-hud-admin" data-state="admin" title="This server runs its own gameplay settings">${ic('sliders', 'ic--sm')}<b>Tuned by admin</b></div>
-      <div class="tuned plate m-p7" data-state="tuned">${ic('sliders', 'ic--sm')}<b>Tuned by host</b><span data-bind="match.tunedSummary"></span></div>
     </div>
 
     <div class="hud-match">
-      <div class="hud-clock plate" data-state="match" data-tour="clock"><span class="hud-label" data-bind="match.mode"></span><b class="hud-clock__time num" data-bind-roll="match.timeLeft"></b><span class="hud-label" data-bind="match.limit"></span></div>
+      <div class="hud-clock plate" data-state="match" data-tour="clock"><span class="hud-label" data-bind="match.mode"></span><b class="hud-clock__time num" data-bind="match.timeLeft"></b><span class="hud-label" data-bind="match.limit"></span></div>
       <div class="hud-score" data-state="match" data-tour="scores">
         <div class="hud-score__cell plate is-you"><span class="hud-label">You</span><b class="num" data-bind-roll="match.myScore"></b></div>
         <div class="hud-score__cell plate"><span class="hud-label">Lead · <span data-bind="match.leaderShort"></span></span><b class="num" data-bind-roll="match.leaderScore"></b></div>
@@ -112,7 +110,7 @@ function desktop(): string {
         <div class="mf-belt"><ul class="belt__list"></ul><i class="m-p5 mf-belt__sel" aria-hidden="true"></i></div>
       </div>
       <div class="slots">
-        <div class="slot slot--slung plate" data-state="slung" aria-label="The other slot, on your back">
+        <div class="slot slot--slung plate" data-state="slung" data-tour="slung" aria-label="The other slot, on your back">
           <span class="slot__back">${ic('backpack', 'ic--sm')}<span class="hud-label">On back</span></span>
           <span class="slot__wpn-sm"><svg class="ic--wpn" aria-hidden="true" data-state="slung-item"><use data-bind-attr="href: player.slot.1.icon"/></svg><span class="slot__none" data-state="slung-empty">Empty</span></span>
           <b class="slot__name-sm" data-bind="player.slot.1.name"></b>

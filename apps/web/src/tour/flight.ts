@@ -1,11 +1,13 @@
 /**
- * First flight (docs/design/onboarding-research.md §3.4; controls research item 8): five goals in the
- * range, about 90 s, each ticked by doing it. This is the pure part, unit-tested: the goals, what each
+ * First flight (docs/design/onboarding-research.md §3.4; controls research item 8): eight short goals
+ * in the range, about 90 s, each ticked by doing it (the spec's five, plus reload, swap and pick up:
+ * audit A-20). This is the pure part, unit-tested: the goals, what each
  * device is shown for them (the HUD plate or touch control to ring, the world marker, the actions whose
  * keys the callout shows), and the tracker that turns the sim's frames and events into tour events.
  * The runner that shows them through the spotlight is tour/firstFlight.ts.
  */
-import type { SimEvent } from '@military-forge/sim';
+import { pickups } from '@military-forge/content';
+import { Btn, type SimEvent } from '@military-forge/sim';
 import type { ActionId } from '../shell/controls';
 import { FLIGHT_COPY, type FlightCopy } from './copy';
 import type { Device } from './log';
@@ -29,12 +31,14 @@ export const CONFIRM_MS = 600;
 /** a whole First flight under this is a promotion (§3.3): recruit hints off */
 export const PROMOTE_UNDER_MS = 40_000;
 
-export type FlightGoalId = 'run' | 'fly' | 'hit' | 'dash' | 'throw';
+export type FlightGoalId = 'run' | 'fly' | 'hit' | 'reload' | 'swap' | 'take' | 'dash' | 'throw';
 
 /** what the goals' `needs` read */
 export interface FlightContext {
   /** grenades on the local player's belt */
   grenades: number;
+  /** guns the local player carries (Swap needs two; unknown: assume two) */
+  guns?: number;
 }
 
 export interface FlightGoal extends TourStepDef<FlightContext> {
@@ -45,16 +49,21 @@ export const FLIGHT_GOALS: readonly FlightGoal[] = [
   { id: 'run', done: ['move'] },
   { id: 'fly', done: ['reach'] },
   { id: 'hit', done: ['hit-dummy'], count: HITS },
+  { id: 'reload', done: ['reload'] },
+  // one gun only (a loadout with an empty slot): skipped by itself
+  { id: 'swap', done: ['swap'], needs: (c) => (c.guns ?? 2) >= 2 },
+  // a gun put on the floor by the recruit (FlightDeps.offerGun)
+  { id: 'take', done: ['take'] },
   { id: 'dash', done: ['dash'] },
   // no grenades on this belt (a map without them): skipped by itself
   { id: 'throw', done: ['throw'], needs: (c) => c.grenades > 0 },
 ];
 
-/** Where in the world a goal points: the run's end, the height to reach, the nearest target. */
-export type Marker = 'run' | 'up' | 'target';
+/** Where in the world a goal points: the run's end, the height to reach, the nearest target, the gun to pick up. */
+export type Marker = 'run' | 'up' | 'target' | 'gun';
 
 /** A touch control the tour can ring (touch/layout.ts ControlId). */
-export type TouchControl = 'move' | 'aim' | 'fire' | 'dash' | 'grenade' | 'jet';
+export type TouchControl = 'move' | 'aim' | 'fire' | 'dash' | 'grenade' | 'jet' | 'reload' | 'swap' | 'take';
 
 export interface GoalView {
   title: string;
@@ -63,7 +72,7 @@ export interface GoalView {
   /** the actions whose keys (or pad glyphs) follow the body: the player's own bindings */
   keys: readonly ActionId[];
   /** the HUD plate to ring (`data-tour`), when the device has the HUD's plates */
-  hud: 'fuel' | 'dash' | 'belt' | null;
+  hud: 'fuel' | 'dash' | 'belt' | 'ammo' | 'slung' | null;
   /** the touch control to ring (touch only) */
   touch: TouchControl | null;
   marker: Marker | null;
@@ -85,6 +94,9 @@ const SHAPE: Record<FlightGoalId, Omit<GoalView, 'title' | 'body' | 'help'>> = {
   run: { keys: ['left', 'right'], hud: null, touch: 'move', marker: 'run' },
   fly: { keys: ['jet'], hud: 'fuel', touch: 'move', marker: 'up' },
   hit: { keys: ['fire'], hud: null, touch: 'aim', marker: 'target' },
+  reload: { keys: ['reload'], hud: 'ammo', touch: 'reload', marker: null },
+  swap: { keys: ['swap'], hud: 'slung', touch: 'swap', marker: null },
+  take: { keys: ['interact'], hud: null, touch: 'take', marker: 'gun' },
   dash: { keys: ['dash'], hud: 'dash', touch: 'dash', marker: null },
   throw: { keys: ['grenade'], hud: 'belt', touch: 'grenade', marker: 'target' },
 };
@@ -113,20 +125,28 @@ export interface FlightSample {
   y: number;
   grounded: boolean;
   alive: boolean;
+  /** the slot in hand (a change ticks Swap) */
+  active?: number;
+  /** the sim buttons held on any tick since the last frame (LocalMode.takePresses: Reload ticks on its press) */
+  presses?: number;
 }
 
 /**
  * The sim, read for the tour: "move" once the player is RUN_M from where the goal began, "reach" once
- * REACH_M over the ground it began on (the lowest ground stood on since), and the local player's hits
- * on a target, dashes and throws from the sim's events. `begin` starts a goal's measure.
+ * REACH_M over the ground it began on (the lowest ground stood on since), "reload" on a press of
+ * Reload (a full magazine has nothing to reload, the press still teaches the key), "swap" once the
+ * slot in hand changes, and the local player's hits on a target, guns picked up, dashes and throws
+ * from the sim's events. `begin` starts a goal's measure.
  */
 export class FlightTracker {
   private x0 = Number.NaN;
   private ground = Number.NaN;
+  private active = -1;
 
   begin(me: FlightSample): void {
     this.x0 = me.x;
     this.ground = me.y;
+    this.active = me.active ?? -1;
   }
 
   /** where the goal began (NaN before `begin`) */
@@ -139,6 +159,8 @@ export class FlightTracker {
     const out: TourEvent[] = [];
     if (Math.abs(me.x - this.x0) >= RUN_M) out.push('move');
     if (me.y - this.ground >= REACH_M) out.push('reach');
+    if ((me.presses ?? 0) & Btn.Reload) out.push('reload');
+    if (me.active !== undefined && this.active >= 0 && me.active !== this.active) out.push('swap');
     // the ground the climb is measured from: the lowest stood on (a ledge reached counts before this)
     if (me.grounded && me.y < this.ground) this.ground = me.y;
     return out;
@@ -148,6 +170,7 @@ export class FlightTracker {
     const out: TourEvent[] = [];
     for (const e of events) {
       if (e.type === 'hit' && e.attacker === me && e.target !== me && isTarget(e.target)) out.push('hit-dummy');
+      else if (e.type === 'pickup' && e.player === me && pickups[e.item]?.kind === 'weapon') out.push('take');
       else if (e.type === 'dash' && e.player === me) out.push('dash');
       else if (e.type === 'throw' && e.owner === me) out.push('throw');
     }
@@ -156,7 +179,7 @@ export class FlightTracker {
 }
 
 /** The world point a marker sits on, from where the goal began; `toward` is the targets' side (±1). */
-export function markerPoint(marker: Exclude<Marker, 'target'>, origin: { x: number; ground: number }, toward: number): { x: number; y: number } {
+export function markerPoint(marker: 'run' | 'up', origin: { x: number; ground: number }, toward: number): { x: number; y: number } {
   return marker === 'run' ? { x: origin.x - RUN_MARKER_M * toward, y: origin.ground + 1 } : { x: origin.x + 1.5 * toward, y: origin.ground + UP_M };
 }
 

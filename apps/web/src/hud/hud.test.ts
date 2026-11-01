@@ -362,9 +362,7 @@ describe('hudFrame', () => {
     });
     expect(Number(v['v.reload'])).toBeGreaterThan(0);
     expect(tokens).toEqual(expect.arrayContaining(['alive', 'low-hp', 'shield', 'shield-up', 'emp', 'dash-cooldown', 'reloading', 'weapon', 'gun', 'slung', 'slung-item', 'slung-gun', 'belt', 'event', 'event-warning', 'pickup', 'pickup-item', 'reticle', 'hit', 'fps']));
-    for (const not of ['match', 'spectating', 'event-active', 'pickup-crate', 'dual', 'switching', 'empty', 'low-ammo', 'aiming', 'tuned', 'headshot', 'kill', 'launched', 'blood-on', 'admin']) expect(tokens).not.toContain(not);
-    // the owner's admin page changed gameplay numbers on this server: the small tag
-    expect(hudFrame(input({ adminTuned: true }), memory).tokens).toContain('admin');
+    for (const not of ['match', 'spectating', 'event-active', 'pickup-crate', 'dual', 'switching', 'empty', 'low-ammo', 'aiming', 'headshot', 'kill', 'launched', 'blood-on']) expect(tokens).not.toContain(not);
   });
 
   it('a weapon crate underfoot names the take control and the gun, with the gun icon', () => {
@@ -509,7 +507,7 @@ describe('round two desktop HUD', () => {
     expect(f.values).toMatchObject({ 'event.timeLeft': '18', 'event.startsIn': '', 'v.event': '0.75', 'event.icon': '#icon-ev-emp' });
   });
 
-  it('"Tuned by host" when the room plays changed values: the first two by name', () => {
+  it('"Custom rules" (scoreboard, lobby) when the room plays changed values: the first two by name', () => {
     expect(tunedSummary(createTuning())).toBe('');
     expect(tunedSummary(createTuning({ gravity: defaultTuning.gravity * 0.6, dashSpeed: defaultTuning.dashSpeed * 1.4 }))).toBe('Gravity 0.6× · Dash speed 1.4×');
     // online, the admin's values are the room's own: only what the host changed on top is the host's (the audit, M3)
@@ -517,9 +515,10 @@ describe('round two desktop HUD', () => {
     expect(tunedSummary(createTuning({ gravity: defaultTuning.gravity * 0.6 }), adminBase)).toBe('');
     expect(tunedSummary(createTuning({ gravity: defaultTuning.gravity * 0.6, dashSpeed: defaultTuning.dashSpeed * 1.4 }), adminBase)).toBe('Dash speed 1.4×');
     expect(tunedSummary(createTuning({ gravity: defaultTuning.gravity * 0.5, dashSpeed: defaultTuning.dashSpeed * 2, walkMax: defaultTuning.walkMax * 1.5 }))).toBe('Gravity 0.5× · Dash speed 2× · 1 more');
+    // never on the HUD in the match: no tag, no line (audit B-11)
     const tuned = hudFrame(base({ tuning: createTuning({ gravity: defaultTuning.gravity * 0.6 }) }), mem);
-    expect(tuned.tokens).toContain('tuned');
-    expect(tuned.values['match.tunedSummary']).toBe('Gravity 0.6×');
+    expect(tuned.tokens.filter((t) => t === 'tuned' || t === 'admin')).toEqual([]);
+    expect(Object.keys(tuned.values).filter((k) => k.includes('tuned'))).toEqual([]);
   });
 
   it('the crate compare: per-shot damage, rounds a minute, range, weight in words, mag; lighter is better', () => {

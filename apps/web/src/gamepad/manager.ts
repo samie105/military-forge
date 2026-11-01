@@ -95,6 +95,14 @@ export class PadManager {
    * the prompts to its glyphs. Taken at the pad's first reading.
    */
   private rest: number[] | null = null;
+  /**
+   * Which buttons and axes may turn the prompts to the pad's glyphs: each once it has been seen at rest since
+   * the pad's first reading. A button stuck down or an axis that never centres (a worn stick, a device that
+   * isn't a pad at all) is never a person playing (UX audit 31 Oct, A-39: "A Select / B Back" showed with
+   * no one using a controller). Play and the menus still read every press.
+   */
+  private readonly armed = new Array<boolean>(BUTTON_COUNT).fill(false);
+  private readonly axisArmed = [false, false, false, false];
   /** the aim stick's raw push (its angle holds under AIM_MIN_PUSH) */
   private aimRaw = 0;
   private readonly moveState = createMoveState();
@@ -291,10 +299,15 @@ export class PadManager {
       const threshold = i === B.R2 ? s.fireThreshold : i === B.L2 ? s.aimThreshold : 0.5;
       this.held[i] = triggerHeld(value, pressed, this.held[i]!, threshold);
       if (this.held[i] && !this.prevHeld[i]) this.downAt[i] = now;
-      active ||= this.held[i]!;
+      if (!this.held[i]) this.armed[i] = true;
+      active ||= this.held[i]! && this.armed[i]!;
     }
     const rest = this.rest!;
-    active ||= this.axes.some((a, i) => Math.abs(a - rest[i]!) > 0.5);
+    this.axes.forEach((a, i) => {
+      const off = Math.abs(a - rest[i]!);
+      if (off < 0.25) this.axisArmed[i] = true;
+      active ||= this.axisArmed[i]! && off > 0.5;
+    });
     if (active) notePad(this.family, this.dualSense);
 
     // sticks (the left moves and the right aims, or swapped)
@@ -339,7 +352,10 @@ export class PadManager {
   private read(pad: Gamepad): void {
     for (let i = 0; i < BUTTON_COUNT; i++) this.raw[i] = pad.buttons[i]?.value ?? 0;
     this.axes = [pad.axes[AXIS.LX] ?? 0, pad.axes[AXIS.LY] ?? 0, pad.axes[AXIS.RX] ?? 0, pad.axes[AXIS.RY] ?? 0];
-    this.rest ??= pad.mapping === 'standard' ? [0, 0, 0, 0] : [...this.axes];
+    if (this.rest) return;
+    this.rest = pad.mapping === 'standard' ? [0, 0, 0, 0] : [...this.axes];
+    this.armed.fill(false);
+    this.axisArmed.fill(false);
   }
 
   private pressed(i: number): boolean {
