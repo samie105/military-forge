@@ -1,83 +1,82 @@
-# Key art v2: our soldiers on the title screen
+# Key art v3: one hero, mid-boost, over the Lagos street
 
 ![Desktop](../../apps/web/public/art/key-art/key-art-desktop.webp)
 
-The owner, 23 Oct, on #185:
-- the poster "should use our 3D characters instead, like our fighters' faces instead of the near-real one";
-- the background "could be something 3D-ish … a nice image of a map we might build later";
-- and "I just don't want it to look like we're promoting war". So it is a sunny rooftop arena, with the rifles held low.
-- **The soldiers:** the game's own Rookie and female soldier (`characters/rookie`, `characters/rookie_female`) in their default kit, with their real faces, skeleton, clips and weapons, rendered in Cycles:
-  - **Rookie:** the K-47, held low across him, pointing down.
-  - **Her:** the Longbow, held low the same way. Nothing is aimed.
-  - Both are on jet hover with their exhaust, turned toward the camera like a team photo.
-- **The world:** a concept of a map we could build later. It is a sunny rooftop arena in a colourful city, laid out like a jetpack course, in the game's own low-poly 3D look (generated, with the Street Market map render as the style reference):
-  - rooftops at different heights with ledges and railings, and a catwalk;
-  - water tanks, rooftop gardens and parasols;
-  - bunting and blank billboard frames;
-  - no damage, fire or smoke.
-- **Layout (as #185):** the soldiers in the middle; the upper third is calm sky for the logo, and the bottom strip is dark rubble for "TAP ANYWHERE".
-- **The title screen is unchanged:** the same file names as #185 (`virtual:title-info` picks them up).
+The opening's research (1 Nov) found v2's art too passive: two soldiers standing with rifles low, khaki on beige,
+a flat eye-level camera, and the lockup sitting on their helmets. v3 is one action frame:
+
+- **Hero:** one soldier in our toy-soldier look (round khaki helmet with teal goggles, khaki fatigues, olive vest,
+  rounded proportions), from a low three-quarter angle, mid-boost on a bright jetpack flame, rifle raised and
+  firing. The muzzle flash is the brightest point. A volt armband carries the kit's action colour.
+- **Depth:** a teammate higher and smaller behind him, and an enemy silhouette cut off at the right edge.
+- **Setting:** our Lagos street market at golden hour: umbrellas, yellow minibuses, power lines and bunting,
+  apartment blocks with water tanks, palms. A teal-blue sky against the orange flame.
+- **Composition:** a bottom-left to top-right diagonal (the smoke trail into the climb); the upper left is open
+  sky, so the lockup and the title's left column never cross the hero.
+
+> The owner's 23 Oct note on v2 asked for nothing that looks like promoting war (rifles low, no fire). v3
+> follows the 1 Nov opening brief instead (a raised rifle, firing), with no blood, wreckage or casualties. If the
+> owner wants v2's calm back, v2's sources are still here (below) and `compose_key_art.py` still makes them.
 
 ## Files (`apps/web/public/art/key-art/`)
 
 | File | Size | What |
 |---|---|---|
-| `key-art-desktop.{webp,avif}` | 2560×1440 | 16:9 |
-| `key-art-phone.{webp,avif}` | 2340×1080 | 19.5:9: its own camera, a little wider, over the map's middle rows |
-| `poster-portrait.{webp,avif}`, `poster-portrait-phone.{webp,avif}` | 1600×2400, 1080×1620 | 2:3 poster: its own camera over the map's 2:3 crop |
-| `key-art-desktop-fg.{webp,avif}`, `key-art-phone-fg.{webp,avif}` | as their frames | the soldiers alone (alpha), pixel-aligned with their frame, for the parallax layer |
-| `key-art-desktop-loop.{mp4,webm}` | 1280×720, 5 s, 24 fps, silent; 198 / 398 KB | the ambient loop: the hover's bob and the flames' flicker over the still plate. Its first frame is the desktop frame's pose, and it loops seamlessly (its last frame is one step from its first). Use `key-art-desktop.webp` as its poster. |
+| `key-art-desktop.{webp,avif}` | 2560×1440, 143 / 92 KB | 16:9, the title and the landing |
+| `key-art-desktop-fg.{webp,avif}` | 2560×1440, 114 / 43 KB | the hero alone (alpha), pixel-aligned: the desktop parallax layer |
+| `key-art-phone.{webp,avif}` | 2340×1080, 110 / 70 KB | 19.5:9, a band of the same frame (a phone shows no parallax layer) |
 
-Every phone file is under 400 KB: the phone frame is 111–153 KB, the poster 55–77 KB and the phone foreground 43–78 KB (AVIF / WebP). Serve AVIF with WebP as the fallback.
+v2's ambient loop (`key-art-desktop-loop.*`), its phone foreground and its 2:3 posters are gone: they showed the
+old frame. `virtual:title-info` (vite.config.ts) lists only the files that are here, so the title simply plays
+no loop. The About sheet's thumbnails (`apps/web/public/art/landing/keyart.*`, `poster.*`) come from v3 too, and
+the share image and the poster set are `apps/web/scripts/og-image.mjs` (see `art/posters/README.md`).
 
 ## How it is made
-1. **Map plate** (Higgsfield GPT Image 2.5, high, 4k, 16:9; 2 variants, the second picked): jobs `f3d3ed33…`, `eb4bbd06…`.
-   - **References:** the Street Market overview (the game's map style) and a test render of our two soldiers (their look).
-   - **Source:** [plate-map-4k.jpg](plate-map-4k.jpg).
-2. **The soldiers** ([render_key_art.py](../pipeline/render_key_art.py), Blender 5.2 Cycles, Metal):
-   - **Rig and meshes:** the Rookie's armature and clips from `rookie.blend`; her skeleton is his. Every mesh comes from the art GLBs (body, the default helmet, boots and Twin Tank, each body's own fit) and is bound to it by vertex-group name.
-   - **Pose:** the game's layering. `jet_hover` on every bone, then the aim pose on the upper body, then the off hand IK'd onto the weapon's `offhand` node (the clips' arm solver).
-   - **Weapons:** on `socket_weapon_R` in the game's frame (+Y muzzle, +Z top).
-   - **Light (a bright afternoon, the plate's):**
-     - a warm sun high on the right and in front;
-     - a soft blue sky fill all round;
-     - a gentle key from the front left and a white rim from behind;
-     - small lights in each flame, kept weak (stronger, one soldier's lit the other's front).
-   - **Exhaust:** soft emission cones from each nozzle (`nozzles` in the Twin Tank's manifest and her `bodies.female` fit), flickering.
-   - **Look:** AgX, Punchy (daylight flattens the vinyl; the plate is saturated).
-   - **Shots:** desktop 3840×2160 and phone 3840×1772 at 96 samples, poster 1600×2400 at 128, all denoised; the loop at 1280×720, 32 samples a frame.
-3. **Compose** ([compose_key_art.py](../pipeline/compose_key_art.py)):
-   - each render over its crop of the plate;
-   - a glow on the flames only (bright and saturated);
-   - WebP q80 / AVIF q55, stepped down until each phone file is under 400 KB;
-   - the loop's frames over the still plate, then H.264 (crf 26, faststart) and VP9 (crf 38).
 
-**Seamless loop:**
-- the hover clip plays a whole number of cycles;
-- the flames flicker on the loop's period;
-- its first frame is the desktop frame's pose.
+1. **Generate** (Higgsfield; references: v2's desktop frame for the characters' look, the Street Market map's
+   in-game shot for the street):
+   - 16:9 at 2k: two Nano Banana 2.1 and one GPT Image 2.5 high (jobs `4693c541…`, `39fa9fd7…`, `1f88acff…`).
+     Picked: `39fa9fd7-eaaf-43cc-9353-f621dc90f949` (golden hour, the clearest diagonal, faces with intent).
+   - 9:16 and 4:5 from the pick (Nano Banana 2.1, 2k, the pick and v2 as references; two of each, the second of
+     each picked): 9:16 `84d9ddb8-ea18-4877-96c2-02b9635a2d27`, 4:5 `c2498969-73c8-4a9a-a58b-4ee7e034c056`.
+   - The hero cut out of the pick (Higgsfield background remover, `e115822c-2e78-4998-9de8-02a450adaff0`).
+2. **Sources** (`art/key-art/`): `v3-desktop.jpg` (2752×1536), `v3-hero.webp` (lossless, alpha),
+   `v3-tall-9x16.jpg` (1536×2752), `v3-tall-4x5.jpg` (1856×2304).
+3. **Web files:** `bash art/pipeline/key_art_v3.sh` (ImageMagick, cwebp, avifenc): the 16:9 middle at 2560×1440,
+   the phone band from y 120, WebP q80 and AVIF q55, phone files under 400 KB.
 
-Sources (`art/key-art/`): the frames at full size (JPEG q93), the plate, and the soldiers' layers (lossless WebP), for a later re-grade. The render script reads the female soldier from `characters/rookie_female` (#203).
+<details><summary>The 16:9 prompt (the pick's, exact text)</summary>
 
-```bash
-blender -b --factory-startup --python art/pipeline/render_key_art.py -- desktop desktop.png --size 3840x2160 --samples 96
-blender -b --factory-startup --python art/pipeline/render_key_art.py -- phone phone.png --size 3840x1772 --samples 96
-blender -b --factory-startup --python art/pipeline/render_key_art.py -- poster poster.png --size 1600x2400 --samples 128
-blender -b --factory-startup --python art/pipeline/render_key_art.py -- desktop x.png --size 1280x720 --samples 32 --frames 0-119 --loop-out loop/
-python3 art/pipeline/compose_key_art.py art/key-art/plate-map-4k.jpg desktop.png phone.png poster.png --poster-x 1700 --loop loop/
-```
-
-<details><summary>Map plate prompt (exact text)</summary>
-
-"A stylised 3D game environment render: a concept for a new map in the same game as the first reference image (the game's own low-poly street map), drawn in exactly that 3D look but richer and more polished, so it matches the chunky vinyl-toy characters in the second reference image. It is a sunny rooftop arena in a colourful, friendly city on a bright afternoon, laid out like a jetpack sport course for a side-scrolling 2.5D game: rooftops at different heights with ledges and railings, a catwalk bridging two roofs, round water tanks on stilts, rooftop gardens with potted plants and striped parasols, strings of colourful bunting and fabric banners with no writing, empty billboard frames, satellite dishes. Behind: a layered skyline of pastel apartment towers and soft round clouds. Chunky low-poly shapes with clean bevelled edges, flat-shaded painted surfaces in warm cream, terracotta, teal and soft yellow, gentle ambient occlusion, like a polished 3D diorama, NOT photographic. Clear blue sky with a warm sun high on the right, soft shadows, cheerful and calm. Absolutely no damage, no ruins, no fire, no smoke, no weapons, no military vehicles, no war. Composition for a title screen: keep the upper third a calm blue sky for a game logo, keep the centre of the frame open at mid height (two characters will be placed there later), and keep the bottom strip a calm rooftop parapet in soft shade for a line of text. No people, no characters, no text, no letters, no logos, no flags, nothing from any other game."
+"Action key art for a stylised 3D jetpack shooter game, cinematic low-angle shot. Keep the character design from
+the first reference exactly: chunky toy-soldier proportions, oversized round head, round khaki helmet with teal
+goggles, khaki uniform, olive vest, brown boots, smooth soft 3D render. A single hero soldier mid-boost, rocketing
+diagonally up toward the top right on a jetpack spewing a bright orange flame, body leaning into the climb, rifle
+shouldered and firing, a big white-hot muzzle flash at the barrel tip that is the brightest spot in the frame.
+Intense, determined expression. Neon yellow-green armband. Behind and above, smaller, a teammate soldier on a
+jetpack. An enemy soldier silhouette partly cut off at the right frame edge, in shadow. Background: a Lagos street
+market at golden hour like the second reference, seen from street level looking up: striped market umbrellas,
+yellow minibuses parked below, power lines and colourful bunting across the street, apartment blocks, palm trees,
+warm sunset glow against a deep teal-blue sky, a few sparks and spent shell casings in the air. Composition: hero
+placed right of centre, smoke trail from the bottom-left corner, the entire upper-left area is empty clear sky
+reserved for a title logo. Vivid colours, strong contrast between orange flame and blue sky. No text, no letters,
+no writing, no logos, no watermark."
 
 </details>
 
-## Spend: 25.25 credits
+## Spend: 15.75 credits (of the 40 allowed)
+
 | Step | Credits |
 |---|---|
-| a photoreal plate: #185's city with its soldiers removed, then 21:9 and 2:3 outpaints (superseded: a 3D map instead) | 8.25 |
-| 2 war-torn map plates at dusk, GPT Image 2.5 high 4k (superseded: "not promoting war") | 8.50 |
-| 2 sunny-arena plates, GPT Image 2.5 high 4k (4.25 each) | 8.50 |
+| 16:9 at 2k: 2 × Nano Banana 2.1 (2.00) and 1 × GPT Image 2.5 high (2.75) | 6.75 |
+| 9:16 and 4:5 at 2k: 4 × Nano Banana 2.1 (2.00) | 8.00 |
+| the hero's cutout (background remover) | 1.00 |
 
-The Forge stands at **306.75 of its 400**.
+The Higgsfield balance went from 101.75 to 86.00.
+
+---
+
+# Key art v2 (superseded 1 Nov): the sources kept here
+
+`key-art-desktop-4k.jpg`, `key-art-phone-4k.jpg`, `plate-map-4k.jpg`, `poster-portrait.jpg` and `soldiers-*.webp`
+are v2's: the game's own Rookie and female soldier rendered in Blender (`render_key_art.py`) over a generated
+rooftop plate, composed by `compose_key_art.py`. Their story and prompts are in this file's history.

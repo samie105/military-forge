@@ -26,12 +26,14 @@ import { PlayNowBots } from "../../../tour/PlayNowBots";
 import { Portrait } from "../../../portrait/Portrait";
 import { useMyLook } from "../../../looks/mine";
 import { LevelTag, useLoadProgress } from "../Progress";
+import { KeepName } from "../KeepName";
 
 export function PhoneHome({ store }: { store: ShellStore }) {
   const ctl = useCtl();
   // one thing at a time (audit 31 Oct, D-01): the play-data question, then the Home stops, then Next orders
   const ask = useHomeAsk();
   const profile = useStore(store, (s) => s.profile);
+  const nameAsk = useStore(store, (s) => s.nameAsk === true && !!s.profile && !s.profile.offline);
   const ping = useServerPing();
   const offline = !!profile?.offline;
   const name = profile?.nickname ?? "";
@@ -255,7 +257,8 @@ export function PhoneHome({ store }: { store: ShellStore }) {
       </div>
       {/* install the game, play full screen (the owner, 23 Oct): Android's prompt, or iPhone's two taps */}
       {/* play stats: the one-time choice (docs/16 §6.2); the install toast waits while it or the Home stops are up */}
-      {ask === "consent" ? <ConsentCard where="phone" /> : ask === null && <InstallToast where="home" />}
+      {/* a first visit's generated callsign: keep it or change it (KeepName.tsx), before the install toast */}
+      {ask === "consent" ? <ConsentCard where="phone" /> : ask === null && (nameAsk ? <KeepName where="phone-home" /> : <InstallToast where="home" />)}
     </PhoneScreen>
   );
 }

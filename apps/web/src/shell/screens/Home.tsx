@@ -33,6 +33,7 @@ import { PlayNowBots } from '../../tour/PlayNowBots';
 import { Portrait } from '../../portrait/Portrait';
 import { useMyLook } from '../../looks/mine';
 import { LastMatchCard, LevelLine, LevelTag } from './Progress';
+import { KeepName } from './KeepName';
 
 /** The brand: the emblem and the name, once in the whole UI (round two's .brand on Home). */
 export function Brand() {
@@ -264,6 +265,8 @@ export function Home({ store }: { store: ShellStore }) {
           </div>
 
           <aside className="home__side">
+            {/* a first visit's generated callsign: keep it or change it (one thing at a time: after the other asks) */}
+            {ask === null && <KeepName where="home" />}
             <SquadCard />
             <NextOrders
               context={ordersContext}

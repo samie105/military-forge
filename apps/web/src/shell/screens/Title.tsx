@@ -11,11 +11,13 @@
  * turn-your-phone card over it first (phone/TurnTip.tsx). The build id isn't shown to players: it goes
  * with every report (diag/report.ts) and Settings → Network shows it.
  */
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { useStore } from 'zustand';
 import { GAME_NAME } from '@military-forge/shared';
 import { keyArt } from 'virtual:title-info';
+import { Icon } from '../../ui/Icon';
 import { landingOwns, onPlay } from '../../ui/landing';
+import { Lockup } from '../../ui/Lockup';
 import { reduced } from '../../ui/motion';
 import { Ping, Screen } from '../../ui/Screen';
 import { useServerPing } from '../context';
@@ -85,11 +87,27 @@ function usePadConnected(): boolean {
   return on;
 }
 
-/** Leaves the title: the press now, the push once the app is ready (still booting: a loading line). */
-export function pressTitle(store: ShellStore): void {
+/**
+ * Leaves the title: the press now, the push once the app is ready (still booting: a loading line). `play`: the
+ * press was the landing's Play now (a first visit then goes straight into Play now: controller.ts enlist).
+ */
+export function pressTitle(store: ShellStore, play = false): void {
   const s = store.getState();
   if (s.title !== 'on') return;
-  store.setState({ titleHit: performance.now(), title: s.screen.name === 'boot' ? 'pressed' : 'leaving' });
+  store.setState({ titleHit: performance.now(), title: s.screen.name === 'boot' ? 'pressed' : 'leaving', ...(play ? { titlePlay: true } : {}) });
+}
+
+/** How long the opening beat runs (title.css: the push, then the lockup lands at 0.4 s for --m-slow). */
+export const INTRO_MS = 1200;
+
+/**
+ * How far into the opening beat the page is (ms), when the landing started one (boot.js: html.mf-intro and
+ * window.__mfIntroAt) and it isn't over yet: the title carries on from there instead of starting it again.
+ */
+export function introElapsed(now: number, at: unknown, reduce: boolean): number | null {
+  if (reduce || typeof at !== 'number' || !Number.isFinite(at)) return null;
+  const e = now - at;
+  return e >= 0 && e < INTRO_MS ? e : null;
 }
 
 /**
@@ -190,7 +208,7 @@ export function TitleScreen({ store }: { store: ShellStore }) {
   }, [state]);
 
   // the landing's Play now (index.html): pressed while the page loaded, or on the About sheet
-  useEffect(() => (state === 'on' && !turnTip ? onPlay(() => pressTitle(store)) : undefined), [state, store, turnTip]);
+  useEffect(() => (state === 'on' && !turnTip ? onPlay(() => pressTitle(store, true)) : undefined), [state, store, turnTip]);
 
   // pressed while the app was getting ready: go as soon as it is
   useEffect(() => {
@@ -223,6 +241,9 @@ export function TitleScreen({ store }: { store: ShellStore }) {
     };
   }, [phone]);
 
+  // the opening beat, picked up where the landing has it (decided once, at the first draw)
+  const [intro] = useState(() => (typeof window === 'undefined' ? null : introElapsed(performance.now(), (window as Window & { __mfIntroAt?: unknown }).__mfIntroAt, reduced())));
+
   // the loop: decided once mounted (the graphics and motion settings are on <html> by then)
   const [loop, setLoop] = useState(false);
   useEffect(() => setLoop(loopWelcome(phone)), [phone]);
@@ -234,7 +255,12 @@ export function TitleScreen({ store }: { store: ShellStore }) {
   const hasArt = back.length > 0;
   const waiting = state === 'pressed';
   return (
-    <div ref={root} className={`mf-title is-${state}${phone ? ' is-phone' : ''}${hasArt ? ' has-art' : ''}`} tabIndex={-1}>
+    <div
+      ref={root}
+      className={`mf-title is-${state}${phone ? ' is-phone' : ''}${hasArt ? ' has-art' : ''}${intro !== null ? ' is-intro' : ''}`}
+      style={intro !== null ? ({ '--intro-delay': `${-Math.round(intro)}ms` } as CSSProperties) : undefined}
+      tabIndex={-1}
+    >
       <Screen name="title" kind="game" modal states={[state, phone ? 'phone' : 'desktop', hasArt ? 'art' : 'fallback', loop ? 'loop' : '']} label={GAME_NAME}>
         <div className="mf-title__world" aria-hidden="true">
           {hasArt ? <Picture files={back} className="mf-title__art" /> : <div className="mf-title__fallback" />}
@@ -255,14 +281,10 @@ export function TitleScreen({ store }: { store: ShellStore }) {
         )}
         <div className="mf-title__sweep" aria-hidden="true" />
         <div className="mf-title__vignette" aria-hidden="true" />
+        {/* the vector lockup, top left: the hero is right of centre in the key art (v3) */}
         <div className="mf-title__lockup">
-          <span className="mf-title__name">
-            <svg className="mf-title__emblem" aria-hidden="true">
-              <use href="#icon-emblem" />
-            </svg>
-            <b className="display" data-bind="brand.name">
-              {GAME_NAME}
-            </b>
+          <span className="mf-title__name" data-bind="brand.name">
+            <Lockup label={GAME_NAME} className="mf-title__mark" />
           </span>
           <span className="mf-title__sub">
             <i aria-hidden="true" />
@@ -279,14 +301,22 @@ export function TitleScreen({ store }: { store: ShellStore }) {
             </>
           ) : (
             <>
-              {/* one prompt for the input in hand (audit 31 Oct, A-24, A-38): the key cap carries its own words */}
+              {/* one prompt for the input in hand (audit 31 Oct, A-24, A-38): the key cap carries its own words; a
+                  finger gets one big plate to tap (the whole screen takes it). Full strength, never faded: the
+                  volt cue under it is what moves */}
               {tap ? (
-                <span className="mf-title__press">Tap anywhere to continue</span>
-              ) : (
-                <span className="mf-title__press">
-                  Press
-                  <kbd className="kbd kbd--lg">Any key</kbd>
+                <span className="mf-title__press mf-title__press--plate">
+                  <Icon name="play" />
+                  Tap to play
                 </span>
+              ) : (
+                <>
+                  <span className="mf-title__press">
+                    Press
+                    <kbd className="kbd kbd--lg">Any key</kbd>
+                  </span>
+                  <i className="mf-title__cue" aria-hidden="true" />
+                </>
               )}
               {pad && <small>or any button on your controller</small>}
             </>

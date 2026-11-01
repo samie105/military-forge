@@ -1,9 +1,12 @@
 /*
- * The title screen (Title.tsx): the key art full-bleed in the menus' fitted box (sizes are the box's
- * 1920×1080 design pixels), Field Print's type and Frost's glass on the server pill. Desktop: the art
- * follows the pointer a little (--px, --py), two smoke banks drift, a light sweeps now and then. Phone:
- * one layer moves (the world drifts, smoke inside it), no sweep, no blur. Reduce motion: nothing
- * drifts; leaving is a short cross-fade. Tokens only.
+ * The title screen (Title.tsx) and the landing's hero (index.html, the same classes): the key art full-bleed in
+ * the menus' fitted box (sizes are the box's 1920×1080 design pixels), Field Print's type and Frost's glass on
+ * the server pill. Key art v3 puts the hero right of centre, so the lockup (ui/Lockup.tsx) and the prompt hold
+ * the left column over an ink scrim and never cross him. Desktop: the art follows the pointer a little (--px,
+ * --py), two smoke banks drift, a light sweeps now and then. Phone: one layer moves (the world drifts, smoke
+ * inside it), no sweep, no blur. The opening beat (html.mf-intro, boot.js): the art pushes in out of the dark
+ * and the lockup lands (1.12 → 1); the title picks it up where the landing is (--intro-delay). Reduce motion:
+ * no beat, nothing drifts; leaving is a short cross-fade. Tokens only.
  */
 .mf-title .screen { background: var(--c-ink-950); cursor: pointer; }
 .mf-title .screen:focus-visible { outline: none; }
@@ -53,34 +56,53 @@
 .mf-title__vignette {
   position: absolute; inset: 0; pointer-events: none;
   background:
-    linear-gradient(180deg, color-mix(in srgb, #000 55%, transparent) 0%, transparent 26%),
-    radial-gradient(120% 100% at 50% 45%, transparent 50%, color-mix(in srgb, #000 70%, transparent) 100%),
-    linear-gradient(180deg, transparent 70%, color-mix(in srgb, var(--c-ink-950) 75%, transparent) 100%);
+    linear-gradient(90deg, color-mix(in srgb, var(--c-ink-950) 62%, transparent) 0%, color-mix(in srgb, var(--c-ink-950) 30%, transparent) 30%, transparent 50%),
+    radial-gradient(55% 60% at 0% 100%, color-mix(in srgb, var(--c-ink-950) 70%, transparent), transparent),
+    radial-gradient(120% 100% at 60% 45%, transparent 55%, color-mix(in srgb, var(--c-ink-950) 60%, transparent) 100%);
 }
 
-/* ---- the lockup ---- */
+/* ---- the lockup: top left, clear of the hero (the vector wordmark, ui/Lockup.tsx) ---- */
 .mf-title__lockup {
-  position: absolute; left: 50%; top: 4%; translate: -50% 0; display: flex; flex-direction: column; align-items: center; gap: var(--sp-4);
+  position: absolute; left: 88px; top: 64px; width: 700px; display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-5);
+  transform-origin: 30% 40%;
   transition: transform 520ms cubic-bezier(.6, 0, .3, 1), opacity 420ms ease-in;
 }
-.mf-title__name { display: inline-flex; align-items: center; gap: 24px; }
-.mf-title__emblem { width: 108px; height: 108px; color: var(--c-volt); flex: none; filter: drop-shadow(5px 5px 0 var(--c-brass)); }
-.mf-title__name .display { font-size: 156px; line-height: .9; color: var(--c-text); text-shadow: 8px 8px 0 var(--c-brass), 0 0 40px color-mix(in srgb, #000 60%, transparent); letter-spacing: .01em; white-space: nowrap; }
-.mf-title__sub { display: inline-flex; align-items: center; gap: var(--sp-5); font-size: 26px; font-weight: var(--fw-black); letter-spacing: .36em; text-transform: uppercase; color: var(--c-text); text-shadow: var(--ts-hud); }
-.mf-title__sub i { width: 72px; height: 8px; background: var(--c-volt); }
+.mf-title__name { display: block; width: 100%; margin: 0; filter: drop-shadow(0 12px 28px color-mix(in srgb, var(--c-ink-950) 45%, transparent)); }
+.mf-title__mark { display: block; width: 100%; }
+/* the name in words, for crawlers and screen readers (the landing's h1): the lockup draws it */
+.mf-title__word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.mf-title__sub { display: inline-flex; align-items: center; gap: var(--sp-5); padding-left: 8px; font-size: 24px; font-weight: var(--fw-black); letter-spacing: .36em; text-transform: uppercase; color: var(--c-text); text-shadow: var(--ts-hud); }
+.mf-title__sub i { width: 64px; height: 8px; background: var(--c-volt); }
 
-/* ---- the prompt: a slow breath ---- */
+/* ---- the prompt: bottom left, at full strength, a volt cue pulsing under it ---- */
 .mf-title__prompt {
-  position: absolute; left: 50%; bottom: 44px; translate: -50% 0; display: flex; flex-direction: column; align-items: center; gap: 14px;
-  text-align: center; white-space: nowrap; transition: opacity 240ms ease-in;
+  position: absolute; left: 96px; bottom: 72px; display: flex; flex-direction: column; align-items: flex-start; gap: 14px;
+  text-align: left; white-space: nowrap; transition: opacity 240ms ease-in;
 }
-.mf-title__press { display: inline-flex; align-items: center; gap: 22px; font-size: 34px; font-weight: var(--fw-black); letter-spacing: .3em; text-transform: uppercase; color: var(--c-text); text-shadow: var(--ts-hud); animation: mf-title-breath 2.8s ease-in-out infinite; }
-.mf-title__press .kbd { letter-spacing: .12em; animation: none; }
+.mf-title__press { display: inline-flex; align-items: center; gap: 22px; font-size: 34px; font-weight: var(--fw-black); letter-spacing: .3em; text-transform: uppercase; color: var(--c-text); text-shadow: var(--ts-hud); }
+.mf-title__press .kbd { letter-spacing: .12em; }
+.mf-title__cue { display: block; width: 100%; height: 6px; background: var(--c-volt); transform-origin: left center; animation: mf-title-cue 1.4s ease-in-out infinite alternate; }
+@keyframes mf-title-cue { from { transform: scaleX(.35); opacity: .55; } to { transform: scaleX(1); opacity: 1; } }
+/* a finger: one big plate that looks like the button it is (the whole screen takes the tap) */
+.mf-title__press--plate {
+  min-height: var(--btn-h-xl); padding: 0 44px 0 36px; gap: 18px; font-size: 40px; letter-spacing: .14em;
+  color: var(--c-volt-ink); background: var(--c-volt); border-radius: var(--r-sm); box-shadow: var(--sh-press); text-shadow: none;
+}
+.mf-title__press--plate .ic { width: 40px; height: 40px; }
 .mf-title__prompt small { font-size: 20px; color: var(--c-muted); text-shadow: var(--ts-hud); }
-@keyframes mf-title-breath { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
 .mf-title__loading { position: relative; display: block; width: 360px; height: 4px; overflow: hidden; background: color-mix(in srgb, var(--c-paper) 18%, transparent); }
 .mf-title__loading i { position: absolute; inset: 0; width: 35%; background: var(--c-volt); animation: mf-title-load 1.1s ease-in-out infinite; }
 @keyframes mf-title-load { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+
+/* ---- the opening beat (boot.js sets html.mf-intro on the landing; the title joins in at --intro-delay):
+   the art pushes in out of the dark over 1.2 s, the lockup lands at 0.4 s (one P7 stamp, ≤1.5% settle).
+   The art never starts transparent: it is the page's largest paint, and Play now shows from the first frame ---- */
+html.mf-intro .mf-title.is-intro .mf-title__art { animation: mf-title-push 1200ms var(--ease-arrive) var(--intro-delay, 0ms) both; }
+html.mf-intro .mf-title.is-intro .mf-title__lockup { animation: mf-title-slam var(--m-slow) var(--ease-settle) calc(var(--intro-delay, 0ms) + 400ms) both; }
+@keyframes mf-title-push { from { scale: 1.07; filter: brightness(.35); } 45% { filter: brightness(1); } to { scale: 1; filter: none; } }
+@keyframes mf-title-slam { from { scale: 1.12; opacity: 0; } 35% { opacity: 1; } to { scale: 1; opacity: 1; } }
+/* the press cuts the beat short: the push into the next screen takes over from where things are */
+html.mf-intro .mf-title.is-intro.is-leaving :is(.mf-title__art, .mf-title__lockup) { animation: none; }
 
 /* ---- the corners ---- */
 .mf-title__corner { position: absolute; display: inline-flex; align-items: center; gap: 10px; font-size: 18px; font-weight: var(--fw-semi); color: var(--c-muted); text-shadow: var(--ts-hud); }
@@ -112,20 +134,24 @@
 .mf-title.is-phone .mf-title__smoke { animation: none; }
 .mf-title.is-phone :is(.mf-title__smoke--b, .mf-title__sweep, .mf-title__fg) { display: none; }
 @keyframes mf-title-drift { from { transform: translate3d(-2%, 1%, 0) scale(1.04); } to { transform: translate3d(2%, -1%, 0) scale(1.08); } }
-.mf-title.is-phone .mf-title__lockup { top: 3%; gap: var(--sp-2); }
-.mf-title.is-phone .mf-title__name .display { font-size: 160px; }
-.mf-title.is-phone .mf-title__emblem { width: 104px; height: 104px; }
-.mf-title.is-phone .mf-title__sub { font-size: 34px; }
-.mf-title.is-phone .mf-title__prompt { bottom: 56px; gap: 8px; }
+.mf-title.is-phone .mf-title__lockup { left: 70px; top: 36px; width: 760px; gap: var(--sp-2); }
+.mf-title.is-phone .mf-title__name { filter: none; }
+.mf-title.is-phone .mf-title__sub { font-size: 28px; letter-spacing: .24em; white-space: nowrap; }
+.mf-title.is-phone .mf-title__prompt { left: 70px; bottom: 56px; gap: 8px; }
 .mf-title.is-phone .mf-title__press { font-size: 54px; }
+.mf-title.is-phone .mf-title__press--plate { min-height: 140px; padding: 0 64px 0 52px; gap: 26px; font-size: 60px; }
+.mf-title.is-phone .mf-title__press--plate .ic { width: 60px; height: 60px; }
 .mf-title.is-phone .mf-title__prompt small { font-size: 34px; }
+/* a phone: the push without the brightness step (a filter over the whole frame costs a phone a frame or two) */
+html.mf-intro .mf-title.is-intro.is-phone .mf-title__art { animation-name: mf-title-push-phone; }
+@keyframes mf-title-push-phone { from { scale: 1.07; } to { scale: 1; } }
 .mf-title.is-phone .mf-title__corner { font-size: 30px; }
 .mf-title.is-phone .mf-title__corner--net { right: 70px; bottom: 10px; padding: 6px 18px; font-size: 26px; }
 .mf-title.is-phone.is-leaving .mf-title__world { animation: none; }
 
 /* ---- reduce motion (the game's switch; it starts from the system's): nothing drifts or pushes; the
    loading bar fills its track and breathes, so it never looks frozen; leaving is a 120 ms fade ---- */
-html.reduce-motion .mf-title :is(.mf-title__world, .mf-title__smoke, .mf-title__sweep, .mf-title__press) { animation: none !important; }
+html.reduce-motion .mf-title :is(.mf-title__world, .mf-title__smoke, .mf-title__sweep, .mf-title__press, .mf-title__cue, .mf-title__art, .mf-title__lockup) { animation: none !important; }
 html.reduce-motion .mf-title .mf-title__sweep { display: none; }
 html.reduce-motion .mf-title .mf-title__loading i { width: 100%; transform: none; animation: m-wait 1.2s ease-in-out infinite alternate !important; }
 html.reduce-motion .mf-title.is-leaving .screen { animation: mf-title-fade 120ms linear forwards !important; }

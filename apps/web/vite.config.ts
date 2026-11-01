@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin, type ProxyOptions } from 'vite';
 // the brand lives in one place (packages/shared/src/brand.ts): pages get it at build time
 import { GAME_NAME } from '../../packages/shared/src/brand';
+// the vector lockup (src/ui/lockupArt.ts, made by art/pipeline/lockup.py): the landing draws it in its first frame
+import { lockupMarkup } from './src/ui/lockupArt';
 // the crawl and install files: /manifest.webmanifest, /robots.txt, /sitemap.xml (docs/seo.md)
 import { seo } from './seo';
 // the installable app's service worker, /sw.js (src/pwa registers it)
@@ -35,7 +37,8 @@ const proxy: Record<string, ProxyOptions> = {
 };
 
 /**
- * `%GAME_NAME%` in the HTML pages (title, link previews) → the game's name. `%ORIGIN%` (link
+ * `%GAME_NAME%` in the HTML pages (title, link previews) → the game's name. `%LOCKUP%` → the lockup's SVG
+ * (decoration: the h1's words are beside it), the same markup the title screen draws. `%ORIGIN%` (link
  * previews need absolute image URLs) is the site's public address: the playtest proxy fills it in
  * per request, so the build keeps it; in dev the URLs stay relative.
  */
@@ -48,7 +51,7 @@ const contactHtml = PRIVACY_CONTACT && /^[^\s<>"@]+@[^\s<>"@]+\.[a-z]{2,}$/i.tes
 const brand: Plugin = {
   name: 'brand',
   transformIndexHtml: (html, ctx) => {
-    const named = html.replaceAll('%GAME_NAME%', GAME_NAME).replaceAll('%PRIVACY_CONTACT%', contactHtml);
+    const named = html.replaceAll('%GAME_NAME%', GAME_NAME).replaceAll('%PRIVACY_CONTACT%', contactHtml).replaceAll('%LOCKUP%', lockupMarkup(null, 'mf-title__mark'));
     return ctx.server ? named.replaceAll('%ORIGIN%', '') : named;
   },
 };

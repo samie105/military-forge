@@ -1,0 +1,22 @@
+/*
+ * "Keep this name?" (KeepName.tsx): one ink plate with a volt edge, the callsign in the stencil face, two
+ * buttons. Desktop sizes are the fitted box's; the phone's are the phone screens' own. Tokens only.
+ */
+.mf-keepname {
+  display: grid; gap: var(--sp-2) var(--sp-4); padding: var(--sp-4) var(--sp-5);
+  background: var(--c-plate-strong); border: var(--bw) solid var(--c-line-strong); border-left: 6px solid var(--c-volt); border-radius: var(--r-sm);
+  box-shadow: var(--sh-card-sm);
+}
+.mf-keepname__q { margin: 0; font-size: var(--fs-18); font-weight: var(--fw-semi); line-height: var(--lh-snug); color: var(--c-text); }
+.mf-keepname__q .display { font-size: 1.35em; letter-spacing: var(--ls-display); color: var(--c-volt); overflow-wrap: anywhere; }
+.mf-keepname__acts { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+.mf-keepname--results { margin-top: var(--sp-4); max-width: 640px; }
+.mf-keepname--phone { padding: 10px 14px; gap: 6px 12px; }
+.mf-keepname--phone .mf-keepname__q { font-size: var(--fs-16); }
+.mf-keepname--phone .btn { min-height: var(--touch-min); padding-inline: 14px; }
+.mf-keepname--phone .label { font-size: var(--fs-14); }
+/* the phone's Home: a card over the right column, above the tab bar, in the place the other one-time asks use */
+.mf-keepname--phone-home {
+  position: absolute; z-index: var(--z-panel); right: var(--safe-r, 44px); bottom: calc(var(--safe-b, 21px) + 64px);
+  width: 268px; padding: 10px 12px;
+}

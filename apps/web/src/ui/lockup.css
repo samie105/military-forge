@@ -1,0 +1,12 @@
+/*
+ * The lockup's paint (ui/Lockup.tsx, the landing): the kit's tokens on the generated paths. Back to front: the
+ * hard offset shadow and the thick outline (ink), the volt shield with its ink cut, FORGED in paper white and
+ * FORCE in volt. One colour (.mf-lockup--mono): currentColor, no outline or shadow; it reads at 120 px wide.
+ */
+.mf-lockup-box { display: contents; }
+.mf-lockup { display: block; width: 100%; height: auto; overflow: visible; }
+.mf-lockup :is(.mf-lockup__shadow, .mf-lockup__line) { fill: var(--c-ink-950); stroke: var(--c-ink-950); }
+.mf-lockup :is(.mf-lockup__shield, .mf-lockup__mark, .mf-lockup__w2) { fill: var(--c-volt); }
+.mf-lockup .mf-lockup__cut { fill: var(--c-cut); }
+.mf-lockup .mf-lockup__w1 { fill: var(--c-text); }
+.mf-lockup--mono .mf-lockup__face :is(path) { fill: currentColor; }

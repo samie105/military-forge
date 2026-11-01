@@ -82,6 +82,8 @@ const SETTINGS_KEY = 'settings.v1';
 export const SETTINGS_REV = 3;
 const OFFLINE_NAME_KEY = 'profile.offlineName.v1';
 const TIPS_SEEN_KEY = 'tips.seen.v1';
+/** "Keep this name?" is due (KeepName.tsx): set when a first visit gets a generated callsign, cleared once answered */
+export const NAME_ASK_KEY = 'callsign.ask.v1';
 
 /** This session's offline name, where storage fails: the same name all session. */
 let sessionOfflineName: string | null = null;
@@ -143,6 +145,15 @@ function flag(key: string, storage: () => Storage): void {
   sessionFlags.add(key);
   try {
     storage().setItem(key, '1');
+  } catch {
+    /* this session only */
+  }
+}
+
+function unflag(key: string, storage: () => Storage): void {
+  sessionFlags.delete(key);
+  try {
+    storage().removeItem(key);
   } catch {
     /* this session only */
   }
@@ -330,7 +341,7 @@ export class ShellController {
     readonly api: Api = new Api(),
   ) {
     const settings = loadSettings();
-    store.setState({ settings });
+    store.setState({ settings, nameAsk: flagged(NAME_ASK_KEY, () => localStorage) });
     host.applySettings(settings);
     this.deepLink = typeof location === 'undefined' ? '' : (location.hash ?? '');
     this.nav = new NavHistory(pageNav());
@@ -418,7 +429,7 @@ export class ShellController {
     const hash = this.deepLink;
     const settings = /^#\/settings(?:\/([a-z]+))?$/.exec(hash);
     const screen = this.store.getState().screen.name;
-    if (screen === 'name' || screen === 'age') return; // the first visit's steps come first
+    if (screen === 'name' || screen === 'age' || screen === 'boot') return; // the first visit's steps come first (enlist opens it after)
     if (settings) {
       const tab = SETTINGS_TABS.find((t) => t.id === settings[1])?.id;
       this.deepLink = '';
@@ -461,6 +472,14 @@ export class ShellController {
     if (!me) {
       // a room link on a first visit: the 18+ step before the name (age.ts)
       if (onlineIntent(intent) && this.ageGate(intent)) return;
+      // a first visit through the title (a real browser at the front door): no name step. The press
+      // makes the guest with a generated callsign, then Home, or Play now from the landing's Play now;
+      // "Keep this name?" comes after the first match (enlist, KeepName.tsx). A room link, the debug
+      // client and automation (no title) keep the name step.
+      if (this.store.getState().title !== 'off' && (intent.to === 'home' || intent.to === 'training')) {
+        this.awaitFirstPress(intent);
+        return;
+      }
       this.set({ screen: { name: 'name', then: intent } });
       return;
     }
@@ -468,6 +487,58 @@ export class ShellController {
     // a device that said under 18 before the account knew (audit-2 L-03): tell it, once
     if (minorOnDevice() && !me.minor) this.markMinor();
     this.go(intent);
+  }
+
+  /**
+   * A first visit through the title: the screen stays 'boot' (the title says "Getting ready…" if pressed
+   * meanwhile) until the press, which enlists. A visitor who never presses (a crawler) makes no account.
+   */
+  private awaitFirstPress(intent: Intent): void {
+    let started = false;
+    const check = (s: ShellState) => {
+      if (started || s.title === 'on') return;
+      started = true;
+      stop();
+      void this.enlist(intent);
+    };
+    const stop = this.store.subscribe(check);
+    check(this.store.getState());
+  }
+
+  /**
+   * The first press: a guest account with the API's generated callsign (the same as the name step's "Pick
+   * one for me"), then where the visit was going, or straight into Play now when the press was the
+   * landing's Play now (the 18+ step first, as for any online room). No API: training under a local name,
+   * as at any boot. Any other failure: the name step, so nobody is stuck on the title.
+   */
+  async enlist(intent: Intent): Promise<void> {
+    try {
+      const me = await this.api.guest(undefined, minorOnDevice());
+      this.set({ profile: profileOf(me), nameAsk: true });
+      flag(NAME_ASK_KEY, () => localStorage);
+      diag('name', 'first visit: a generated callsign (Keep this name? comes later)');
+    } catch (e) {
+      if (!(e instanceof ApiError && e.offline)) {
+        this.set({ screen: { name: 'name', then: intent } });
+        return;
+      }
+      this.set({ profile: { nickname: offlineName(), changeableAt: null, offline: true } });
+    }
+    if (this.store.getState().titlePlay && !this.profile?.offline && !this.profile?.minor) this.playNow();
+    else this.go(this.profile?.offline && intent.to !== 'training' ? { to: 'home' } : intent);
+    this.openDeepLink();
+  }
+
+  /** "Keep this name?": kept. The question goes for good. */
+  keepName(): void {
+    this.set({ nameAsk: false });
+    unflag(NAME_ASK_KEY, () => localStorage);
+  }
+
+  /** "Keep this name?": Change. Edit name opens; the question goes either way (it was answered). */
+  changeName(): void {
+    this.keepName();
+    this.openOverlay('name');
   }
 
   /** The account learns this device said under 18 (only the flag): it trains only from now on. */

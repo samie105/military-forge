@@ -8,6 +8,7 @@
  *   - runs the landing's two links before the app is up: Play now (remembered: the title continues
  *     as soon as it's ready, Title.tsx) and About the game (a dialog: focus moves in, Tab stays in,
  *     Escape and Close shut it, focus goes back);
+ *   - starts the landing's opening beat (html.mf-intro; the title joins in from window.__mfIntroAt);
  *   - turns the loading screen's tips every 4 s and shows "Still loading" after 20 s.
  *   - first of all, takes a player's browser data handed over by the game's old address (below).
  */
@@ -88,6 +89,12 @@
   var room = /^\/r\/([A-Za-z]{6})\/?$/.exec(location.pathname);
   var roomish = !!room || /[?&]lan(=|&|$)/.test(location.search);
   root.classList.add(roomish ? 'mf-boot-room' : 'mf-boot-landing');
+  // the landing's opening beat (title.css): the art pushes in, the lockup lands. Not under Reduce motion, and
+  // not for a room link (the loading screen shows); the title picks it up from this moment (Title.tsx)
+  if (!roomish && !reduce) {
+    root.classList.add('mf-intro');
+    window.__mfIntroAt = performance.now();
+  }
   if (room) {
     document.getElementById('boot-code').textContent = room[1].toUpperCase();
     document.getElementById('boot-room').hidden = false;

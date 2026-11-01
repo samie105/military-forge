@@ -62,10 +62,24 @@ describe('the landing page (index.html)', () => {
 
   it("draws with the title screen's own classes, so the title takes over without a seam", () => {
     const titleCss = read('../src/shell/screens/title.css');
-    for (const cls of ['mf-title__world', 'mf-title__art', 'mf-title__fg', 'mf-title__smoke--a', 'mf-title__sweep', 'mf-title__vignette', 'mf-title__lockup', 'mf-title__name', 'mf-title__emblem', 'mf-title__sub']) {
+    for (const cls of ['mf-title__world', 'mf-title__art', 'mf-title__fg', 'mf-title__smoke--a', 'mf-title__sweep', 'mf-title__vignette', 'mf-title__lockup', 'mf-title__name', 'mf-title__word', 'mf-title__sub']) {
       expect(html, cls).toContain(cls);
       expect(titleCss, cls).toContain(`.${cls}`);
     }
+    // the lockup is the title's own vector art, filled in at build time (vite.config.ts), with its colours
+    expect(html).toMatch(/<h1 class="mf-title__name">%LOCKUP%<span class="mf-title__word">%GAME_NAME%<\/span><\/h1>/);
+    expect(html).toContain('<link rel="stylesheet" href="/src/ui/lockup.css" />');
+    expect(titleCss).toContain('.mf-title__mark');
+  });
+
+  it('the first frame: a big volt Play now with the plain facts under it, and the opening beat', () => {
+    expect(html).toMatch(/<a id="land-play" class="btn btn--volt mf-land__play" href="#play">[\s\S]*?Play now<\/a>\s*<\/div>\s*<p class="mf-land__free">Free · no download · phone or PC<\/p>/);
+    expect(html).toContain('class="mf-title mf-land__hero has-art is-intro"');
+    const boot = read('../public/boot.js');
+    // the beat starts only on the landing and never under Reduce motion; the title joins in from its start
+    expect(boot).toMatch(/if \(!roomish && !reduce\) \{\s*root\.classList\.add\('mf-intro'\);\s*window\.__mfIntroAt = performance\.now\(\);/);
+    const titleCss = read('../src/shell/screens/title.css');
+    expect(titleCss).toMatch(/html\.reduce-motion \.mf-title :is\([^)]*\.mf-title__art[^)]*\.mf-title__lockup[^)]*\) \{ animation: none !important; \}/);
   });
 });
 

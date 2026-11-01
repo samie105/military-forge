@@ -302,6 +302,13 @@ export interface ShellState {
   title: TitleState;
   /** performance.now() of the press that left the title (0 = none yet): the audio's war-tone hit */
   titleHit: number;
+  /** the press was the landing's Play now (not any key): a first visit goes straight into Play now */
+  titlePlay?: boolean;
+  /**
+   * "Keep this name?" is due (KeepName.tsx): a first visit through the title got a generated callsign
+   * instead of a name step (controller.ts enlist), and hasn't said yet whether to keep it.
+   */
+  nameAsk?: boolean;
   /** the room took us as a spectator (v20, onlineMode's `spectating`): the lobby offers no Ready or Start */
   spectating: boolean;
   /** a spectator's wish to play (SPECTATE's queue): 0 watching, 1 the moment a slot is free, 2 next round */

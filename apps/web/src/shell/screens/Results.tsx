@@ -32,6 +32,7 @@ import { AddFriendButton, RowActions } from '../../social/AddFriend';
 import { BotsMoved } from '../../tour/PlayNowBots';
 import { AgainEasy } from '../../tour/DebriefLines';
 import { MatchXp } from './Progress';
+import { KeepName } from './KeepName';
 
 export interface ResultsExtras {
   /** a room: the host may send everyone back to the lobby */
@@ -145,6 +146,8 @@ export function Results({ view, results, actions, room, training }: { view: Matc
               {headline ? headline.text : winner.name}
             </h1>
             {teamMode && <TeamStandings results={results} myTeam={view.myTeam ?? -1} />}
+            {/* after the first match: keep the callsign the first visit was given? (KeepName.tsx) */}
+            <KeepName where="results" />
             {top && !winner.draw && !teamMode && !(headline && top === me) && (
               <p className="res__line">
                 {headline && <>{winner.name} won · </>}

@@ -30,6 +30,7 @@ import { Roll, ShareChip, shareData, useShareChip } from './parts';
 import { SavedAdsList } from '../../../ads/SavedAds';
 import { DebriefLines } from '../../../tour/DebriefLines';
 import { TeamStandings, teamWinner } from '../../../teams/TeamResults';
+import { KeepName } from '../KeepName';
 
 /** The words a shared result says: who won the match, where, and how you did. */
 export function resultText(view: Pick<MatchView, 'mapName'>, results: MatchResults, localId: number): string {
@@ -117,6 +118,8 @@ export function PhoneResults({ view, results, actions, room, training, code }: {
           {/* this match's XP and the level, online only (audit 2 P-04); Auto moving Play now's bots (P-01) */}
           {me && <MatchXp me={me} online={online} matchKey={`${code ?? 'local'}:${results.number}`} />}
           <BotsMoved />
+          {/* after the first match: keep the callsign the first visit was given? (KeepName.tsx) */}
+          <KeepName where="phone" />
           {/* the first few matches: what you did, one thing to try, the next order (the onboarding tour) */}
           <DebriefLines />
           <div className="ticket pm-result m-p3" style={rise(2)}>

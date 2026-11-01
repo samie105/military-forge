@@ -1,3 +1,30 @@
+# Posters
+
+Two sets live under this name: the **share posters** (the key art in one frame, for posts and stores) and the
+**map posters** (frames from the game itself, below).
+
+## Share posters and the link preview
+
+| File | Size | For |
+|---|---|---|
+| `apps/web/public/og-image.jpg` | 1200×630 | link previews (`og:image`, `twitter:image`) |
+| `apps/web/public/art/posters/forged-force-1600x900.jpg` | 1600×900 | wide posts, store headers |
+| `apps/web/public/art/posters/forged-force-1080x1350.jpg` | 1080×1350 | 4:5 feed posts |
+| `apps/web/public/art/posters/forged-force-1080x1080.jpg` | 1080×1080 | square posts |
+| `apps/web/public/art/posters/forged-force-1080x1920.jpg` | 1080×1920 | stories: the top 250 px and bottom 340 px carry no words |
+
+**One frame system:** the key art v3 (`art/key-art/`: the wide frame for the wide sizes, the 4:5 and 9:16
+generations for the tall ones, never a crop of the wide one), an ink scrim where the words sit, the lockup
+(`apps/web/public/art/brand/forged-force-lockup.svg`), the hook "Fly. Dash. Fight." in the kit's stencil with
+*Fight.* in volt, a volt corner tab "Free in your browser", the emblem bottom right and `forgedforce.deet.studio`
+bottom left. Colours are the kit's tokens (`src/ui/kit.css` is linked), the type the kit's two families.
+
+**Remake them** (after a new key art or a rebrand; the lockup first if the name changed: `art/pipeline/lockup.py`):
+
+```bash
+node apps/web/scripts/og-image.mjs      # headless Chrome; local files only, nothing to serve
+```
+
 # Map posters and the Quick match key art
 
 Every map a room can pick has a poster, and Home's Quick match has key art. They are frames from the game itself, not drawings or generated pictures: each map runs a real local match against bots in the debug client, using the map's own geometry, light, backdrops, soldiers and effects, on the High preset and this machine's GPU. Only the 3D view shows. The HUD, the 2D layer (names and damage numbers) and the debug bars are hidden.
