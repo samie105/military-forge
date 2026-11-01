@@ -40,6 +40,7 @@ import { PhoneHome, PhoneJoin, PhoneLanAddPlayer, PhoneLanJoin, PhoneLobby, Phon
 import { afterPaint, loadRoute, retryRoute } from './routeLoad';
 import { closeRoute, runCleanup, type ConnectionView, type RouteCleanup, type RouteMount, type ShellActions, type ShellRoute, type ShellStore } from './store';
 import { SocialLayer } from '../social/SocialLayer';
+import { RoomsScreen } from '../rooms/RoomsScreen';
 import { PwaHost } from '../pwa/InstallToast';
 import { metricsError } from '../metrics/hooks';
 
@@ -140,6 +141,7 @@ function AppScreens({ store }: { store: ShellStore }) {
       {overlay === 'menu' && (phone ? <PhonePause store={store} /> : <Pause store={store} />)}
       {overlay === 'settings' && (phone ? <PhoneSettings store={store} /> : <SettingsScreen store={store} />)}
       {overlay === 'join' && (phone ? <PhoneJoin /> : <Join />)}
+      {overlay === 'rooms' && <RoomsScreen phone={phone} />}
       {overlay === 'lan-add' && (phone ? <PhoneLanAddPlayer /> : <LanAddPlayer />)}
       {overlay === 'lan-join' && (phone ? <PhoneLanJoin /> : <LanJoin />)}
       {overlay === 'name' && (phone ? <PhoneNameEntry store={store} first={false} /> : <NameEntry store={store} first={false} />)}

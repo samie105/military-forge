@@ -10,3 +10,5 @@ export * from './progression';
 export * from './analytics';
 export * from './age';
 export * from './guestNames';
+export * from './rooms';
+export * from './lobbyFeed';

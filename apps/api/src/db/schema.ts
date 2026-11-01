@@ -103,6 +103,16 @@ export const profiles = pgTable(
      * friend code). Their friend code always works: it's handed out on purpose.
      */
     requestsFrom: text('requests_from', { enum: REQUESTS_FROM }).notNull().default('anyone'),
+    /**
+     * "Appear offline" (Online now, 1 Nov 2026): friends see the player offline, and they leave every
+     * list of who's on (recent players, Looking for a match) and the online count.
+     */
+    appearOffline: boolean('appear_offline').notNull().default(false),
+    /**
+     * "Show me to people I played with" (Online now): off by default; on, the players they shared a
+     * match with in the last 7 days see them under Recent players online (presence stays private otherwise).
+     */
+    onlineToRecent: boolean('online_to_recent').notNull().default(false),
   },
   // name search is a prefix match on the skeleton (friends/service.ts search): text_pattern_ops lets
   // `like 'abc%'` use the index whatever the database's collation

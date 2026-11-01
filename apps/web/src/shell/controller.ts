@@ -434,9 +434,9 @@ export class ShellController {
       const tab = SETTINGS_TABS.find((t) => t.id === settings[1])?.id;
       this.deepLink = '';
       this.openSettings(tab);
-    } else if (hash === '#/join' && screen === 'home') {
+    } else if ((hash === '#/join' || hash === '#/rooms') && screen === 'home') {
       this.deepLink = '';
-      this.openOverlay('join');
+      this.openOverlay(hash === '#/join' ? 'join' : 'rooms');
     }
   }
 
@@ -743,6 +743,43 @@ export class ShellController {
     this.host.stop();
     this.set({ match: null, lobby: null });
     this.enterRoom(room, watch);
+    return 'ok';
+  }
+
+  /**
+   * A room picked in the Rooms list (rooms/): the API checks again that it's open to us and has a seat.
+   * Taken meanwhile (it filled, went private, or isn't ours to see): Play now instead, which finds the
+   * next best room the same way ("Taken. Joining the next best room").
+   */
+  async joinListed(code: string): Promise<'ok' | 'taken' | 'error'> {
+    if (!this.profile || this.profile.offline || !adultOnDevice()) {
+      this.go({ to: 'join', code });
+      return 'error';
+    }
+    let room: RoomJoin;
+    try {
+      room = await this.api.joinRoom(code, 'list');
+    } catch (e) {
+      if (e instanceof ApiError && (e.code === 'room_taken' || e.code === 'room_not_found')) {
+        this.closeOverlay();
+        this.playNow();
+        this.notify('Taken. Joining the next best room');
+        return 'taken';
+      }
+      if (e instanceof ApiError && (e.code === 'no_session' || e.status === 401)) {
+        this.closeOverlay();
+        this.set({ profile: null, screen: { name: 'name', then: { to: 'join', code } } });
+        return 'error';
+      }
+      this.closeOverlay();
+      const alert = alertFromApiError(e, code);
+      this.set({ screen: { name: 'error', alert, retry: alert.action ? { to: 'join', code } : null } });
+      return 'error';
+    }
+    this.closeOverlay();
+    this.host.stop();
+    this.set({ match: null, lobby: null });
+    this.enterRoom(room);
     return 'ok';
   }
 

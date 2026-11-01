@@ -71,6 +71,13 @@
       "when": 1793495242940,
       "tag": "0009_safety",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793556711566,
+      "tag": "0011_rooms_online",
+      "breakpoints": true
     }
   ]
 }

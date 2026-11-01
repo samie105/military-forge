@@ -102,6 +102,7 @@ Kick (with optional 10-minute room ban), lock room, transfer host, start match, 
 `WAITING` (lobby, settings, ready-up, warm-up yard) → `COUNTDOWN` → `IN_PROGRESS` → `ENDING` → back to `WAITING` with the same players (rematch is one click). A room closes after 10 min idle with no players, or 2 h hard limit (configurable for streamers).
 
 ### 5.5 Room browser
+*Built as the Rooms list, 1 Nov 2026: see §14. What follows is the first plan.*
 - Lists public rooms in your region(s): name, mode, map, players/max, ping, password 🔒, host, "joinable mid-round".
 - Filters: mode, map, not full, has friends, language.
 - Joining mid-round: you spawn at the next respawn. Drop Zone custom rooms let you join as a spectator only.
@@ -330,3 +331,30 @@ The design and the wire are in docs/05 §17. The social parts:
   - Mute all opponents;
   - push-to-talk by default;
   - a greyed Report (`data-hook="report"`) waits for reporting (§10).
+
+## 14. The Rooms list and Online now (built, 1 Nov 2026)
+
+The owner asked for "a session where people can enter like the room and all post it, or find anyone online".
+
+**Who sees a room.** The host picks in the lobby: **Private** (code only; Create room's default), **Friends** (the host's friends and party) or **Public**. Play now rooms are listed as **Open** by themselves. A preset tag (*New players welcome, Chill, Practice, Sweaty*) and a language are optional; there are no free-text titles, so nothing in a listing needs moderating.
+
+**Room state.** The game server posts every room's phase, mode, map, people, bots, free slots, time left and who is in it to `POST /internal/rooms/state` about every 10 s (apps/game-server `roomState.ts`), signed like match results (subject `roomstate`). The API keeps each room 30 s (`roomstate:{code}`), so a room that stops beating leaves the list. Nothing on the players' wire changes.
+
+**The list (`GET /rooms`).** One ranking (apps/api `rooms/listing.ts`) orders it and Play now picks from it:
+1. rooms with a friend inside, or a friend's;
+2. then rooms in their lobby;
+3. then the most people among rooms with a seat free;
+4. then the newest.
+
+A block either way, with the host or anyone playing, hides the room. Full rooms show only with Show full on, and offer Watch. The page pins a "Bots ready · join any time" row (Play now) on top, so the list is never empty.
+
+**Joining from the list** (`POST /rooms/:code/join { from: 'list' }`) checks visibility, blocks, adult status and a free seat again. If any fails, the answer is `409 room_taken` (a block is never named), and the page plays Play now: "Taken. Joining the next best room".
+
+**Post to Lobby** (`POST /rooms/:code/post`): the host only, once per room every 5 minutes; a private room becomes public. It publishes a `room_posted` event for the Lobby feed (interface: packages/shared `lobbyFeed.ts`; publisher: apps/api `lobby/feed.ts`). The lobby also has Share to WhatsApp.
+
+**Online now (`/online`).**
+- **Counts:** people online and in matches, never bots. Under 5 online it says how many played today instead.
+- **Recent players online:** people you played with in the last 7 days who turned on "Show me to people I played with" (off by default).
+- **Looking for a match:** a switch that lasts 15 minutes and lists you (name, level, the mode you want). Anyone you haven't blocked (nor been blocked by) may invite you, under the usual invite limits. Such an invite doesn't put you in their party.
+- **Appear offline:** friends see you offline with no last-seen time, and you leave the count and every list. Strangers never see a private room's code or anyone's last-seen time.
+

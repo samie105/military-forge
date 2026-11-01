@@ -38,6 +38,7 @@ import { LobbyRadio } from '../../voice/Radio';
 import { TeamModePicker, TeamRoster, modeName } from '../../teams/TeamRoster';
 import { MapPoster } from '../posters';
 import { leaveCost } from './Pause';
+import { RoomListing } from '../../rooms/RoomListing';
 
 /** Players a room takes (the game server's default maxHumans: MATCH_STATE doesn't carry it). */
 export const ROOM_SLOTS = 8;
@@ -536,6 +537,8 @@ export function Lobby({ lobby, tips = null, doubleTapDash = true }: { lobby: Lob
             )}
             {/* friends (social/): invite them straight to this room */}
             {!lobby.local && <LobbyInvite />}
+            {/* who finds the room in Rooms, its tag and language, Post to Lobby (rooms/) */}
+            {!lobby.local && lobby.code !== '' && <RoomListing code={lobby.code} />}
             {lobby.local && <LocalRoomNote lobby={lobby} />}
             <span className="hazard" aria-hidden="true"></span>
           </section>

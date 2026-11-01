@@ -213,7 +213,7 @@ export class FriendsService {
     const [code, friendRows, incoming, outgoing, blocked, mine] = await Promise.all([
       this.codeOf(userId),
       this.db
-        .select({ id: friendships.friendId, since: friendships.createdAt, nickname: profiles.nickname, level: profiles.level, lastSeenAt: users.lastSeenAt })
+        .select({ id: friendships.friendId, since: friendships.createdAt, nickname: profiles.nickname, level: profiles.level, lastSeenAt: users.lastSeenAt, hidden: profiles.appearOffline })
         .from(friendships)
         .innerJoin(profiles, eq(profiles.userId, friendships.friendId))
         .innerJoin(users, eq(users.id, friendships.friendId))
@@ -240,7 +240,8 @@ export class FriendsService {
     ]);
     const blockedIds = new Set(blocked.map((b) => b.id));
     const [presence, looks] = await Promise.all([
-      this.presence.getMany(friendRows.map((f) => f.id)),
+      // as friends see it: Appear offline shows offline (presence.ts)
+      this.presence.getManyVisible(friendRows.map((f) => f.id)),
       this.looks([...friendRows, ...incoming.filter((r) => !blockedIds.has(r.id)), ...outgoing]),
     ]);
     const friends = friendRows.map((f, i): FriendView => {
@@ -250,7 +251,8 @@ export class FriendsService {
         nickname: f.nickname,
         status: p.status,
         room: p.room,
-        lastSeenAt: p.lastSeenAt ?? f.lastSeenAt.toISOString(),
+        // Appear offline: no last-seen time either (it would say "just now")
+        lastSeenAt: f.hidden ? null : (p.lastSeenAt ?? f.lastSeenAt.toISOString()),
         since: f.since.toISOString(),
         ...(p.playing !== undefined ? { playing: p.playing } : {}),
         look: looks.get(f.id) ?? null,
@@ -276,19 +278,19 @@ export class FriendsService {
   /** One friend's view (after an accept), or null when they aren't a friend. */
   async friend(userId: string, friendId: string): Promise<FriendView | null> {
     const [row] = await this.db
-      .select({ id: friendships.friendId, since: friendships.createdAt, nickname: profiles.nickname, level: profiles.level, lastSeenAt: users.lastSeenAt })
+      .select({ id: friendships.friendId, since: friendships.createdAt, nickname: profiles.nickname, level: profiles.level, lastSeenAt: users.lastSeenAt, hidden: profiles.appearOffline })
       .from(friendships)
       .innerJoin(profiles, eq(profiles.userId, friendships.friendId))
       .innerJoin(users, eq(users.id, friendships.friendId))
       .where(and(eq(friendships.userId, userId), eq(friendships.friendId, friendId)));
     if (!row) return null;
-    const [p, looks] = await Promise.all([this.presence.get(friendId), this.looks([row])]);
+    const [p, looks] = await Promise.all([this.presence.visible(friendId), this.looks([row])]);
     return {
       id: row.id,
       nickname: row.nickname,
       status: p.status,
       room: p.room,
-      lastSeenAt: p.lastSeenAt ?? row.lastSeenAt.toISOString(),
+      lastSeenAt: row.hidden ? null : (p.lastSeenAt ?? row.lastSeenAt.toISOString()),
       since: row.since.toISOString(),
       ...(p.playing !== undefined ? { playing: p.playing } : {}),
       look: looks.get(row.id) ?? null,
@@ -578,10 +580,11 @@ export class FriendsService {
    * days), the most recent first: not friends already, never anyone blocked either way. Bots never
    * have match lines, so they never show.
    */
-  async recent(userId: string): Promise<FoundPlayer[]> {
+  async recent(userId: string, opts: { days?: number; limit?: number } = {}): Promise<FoundPlayer[]> {
     const mine = alias(matchPlayers, 'mine');
     const them = alias(matchPlayers, 'them');
-    const since = new Date(this.now() - RECENT_DAYS * 86_400_000);
+    const limit = opts.limit ?? RECENT_PLAYERS;
+    const since = new Date(this.now() - (opts.days ?? RECENT_DAYS) * 86_400_000);
     const lastMatches = this.db
       .select({ id: mine.matchId })
       .from(mine)
@@ -597,7 +600,7 @@ export class FriendsService {
       .where(and(inArray(them.matchId, lastMatches), ne(them.userId, userId)))
       .groupBy(them.userId)
       .orderBy(desc(lastSeen))
-      .limit(RECENT_PLAYERS * 5);
+      .limit(limit * 5);
     if (!met.length) return [];
     const ids = met.map((m) => m.id);
     const [friends, blocked, people] = await Promise.all([
@@ -618,7 +621,7 @@ export class FriendsService {
       const p = byId.get(m.id);
       return p && !hidden.has(m.id) && m.at ? [{ ...p, at: new Date(m.at).toISOString() }] : [];
     });
-    return this.found(userId, rows.slice(0, RECENT_PLAYERS));
+    return this.found(userId, rows.slice(0, limit));
   }
 
   /** Players with their look and where you stand with each. */

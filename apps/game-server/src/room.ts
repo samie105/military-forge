@@ -23,6 +23,7 @@
  * leaving for good brings a bot in, and the last human out takes them all. They're players like any
  * other (roster, snapshots, standings, the `[BOT]` tag on their names), running in the room's sim.
  */
+import type { RoomPhase, RoomStateEntry } from '@military-forge/shared';
 import { adminJson, adminValues, onAdminValues } from './adminState';
 import { VoiceRelay } from './voice';
 import { MatchRecorder, type ResultsSink } from './matchRecorder';
@@ -688,6 +689,40 @@ export class Room {
   /** player id of the host, -1 = none (or not a match room) */
   get hostId(): number {
     return this.host?.playerId ?? -1;
+  }
+
+  /**
+   * How the room is doing, for the Rooms list (roomState.ts sends it to the API about every 10 s):
+   * its phase, mode and map, people and bots counted apart (spectators are neither), the slots a person
+   * could still take, the match's time left, and the account ids of its host and its people (never
+   * shown: the API checks blocks and friends with them). Match rooms only; null otherwise.
+   */
+  listing(): Omit<RoomStateEntry, 'code'> | null {
+    const m = this.match;
+    if (!m) return null;
+    const phase: RoomPhase =
+      m.phase === MatchPhase.Waiting ? 'lobby' : m.phase === MatchPhase.Countdown ? 'starting' : m.phase === MatchPhase.InProgress ? 'playing' : 'results';
+    const accountOf = (s: Session | null): string | null => {
+      const p = s ? this.game.players[s.playerId] : undefined;
+      const id = p && !p.isBot ? this.identities.get(p) : undefined;
+      return id?.startsWith('account:') ? id.slice('account:'.length) : null;
+    };
+    const ids: string[] = [];
+    for (const s of this.sessions.values()) {
+      const id = accountOf(s);
+      if (id && !ids.includes(id)) ids.push(id);
+    }
+    return {
+      phase,
+      teams: m.teams,
+      map: this.game.map.id,
+      people: this.humanCount,
+      bots: this.bots.length,
+      seats: this.freeSlots,
+      timeLeftS: phase === 'playing' && m.rules.timeLimit > 0 ? Math.ceil(m.ticksLeft / ticks(1)) : null,
+      hostId: accountOf(this.host),
+      ids,
+    };
   }
 
   /**

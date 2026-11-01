@@ -8,7 +8,9 @@
  * Invites live in Valkey only (they're 2 minutes long): `inv:{id}` (the invite, with its answer once
  * given), `inv:to:{userId}` and `inv:from:{userId}` (ids, newest last), all expiring with the
  * newest invite. Only friends can invite each other, so a block (which ends the friendship) stops
- * invites too.
+ * invites too. One way past that (Online now, 1 Nov 2026): a player who turned on Looking for a match
+ * may be invited by anyone they haven't blocked (nor been blocked by), under the same limits; such an
+ * invite doesn't put them in the inviter's party (party voice is for people who know each other).
  */
 import { randomBytes } from 'node:crypto';
 import { normalizeRoomCode } from '@military-forge/shared';
@@ -42,6 +44,8 @@ export interface Invite {
   expiresAt: string;
   /** set once the friend answers */
   answer?: InviteAnswer;
+  /** not friends: they were Looking for a match (no party on accept) */
+  stranger?: true;
 }
 
 const invKey = (id: string) => `inv:${id}`;
@@ -59,6 +63,8 @@ export class InviteService {
     private readonly presence: PresenceService,
     private readonly party: PartyService,
     private readonly now: () => number,
+    /** Looking for a match (online/service.ts): such a player may be invited by people who aren't friends */
+    private readonly lfg: { isLooking(userId: string): Promise<boolean> } | null = null,
   ) {}
 
   private async nickname(userId: string): Promise<string> {
@@ -122,7 +128,12 @@ export class InviteService {
    */
   async send(fromId: string, toId: string, rawRoom: string | null): Promise<Invite> {
     if (fromId === toId) throw new ApiError(400, 'cannot_invite_self', "That's you");
-    if (!(await this.friends.areFriends(fromId, toId))) throw new ApiError(403, 'not_friends', 'You can invite friends only: send them the room link instead');
+    let stranger = false;
+    if (!(await this.friends.areFriends(fromId, toId))) {
+      const open = this.lfg !== null && (await this.lfg.isLooking(toId)) && !(await this.friends.hasBlocked(fromId, toId)) && !(await this.friends.hasBlocked(toId, fromId));
+      if (!open) throw new ApiError(403, 'not_friends', 'You can invite friends only: send them the room link instead');
+      stranger = true;
+    }
     const room = rawRoom ? normalizeRoomCode(rawRoom) : (await this.presence.get(fromId)).room;
     if (!room || !(await this.kv.get(`room:${room}`))) throw new ApiError(404, 'room_not_found', 'Make or join a room first, then invite');
     const theirs = await this.presence.get(toId);
@@ -148,6 +159,7 @@ export class InviteService {
       room,
       at: new Date(at).toISOString(),
       expiresAt: new Date(at + INVITE_TTL_MS).toISOString(),
+      ...(stranger ? { stranger: true as const } : {}),
     };
     await this.kv.set(invKey(invite.id), JSON.stringify(invite), { ttlMs: INVITE_TTL_MS });
     await this.push(toKey(toId), invite.id);
@@ -172,7 +184,7 @@ export class InviteService {
   /** Accept: the room's code to join (the usual join flow), and you're in the inviter's party. */
   async accept(userId: string, id: string): Promise<{ invite: Invite; room: string; party: boolean }> {
     const invite = await this.answer(userId, id, 'accepted');
-    const party = await this.party.join(userId, invite.from.id);
+    const party = invite.stranger ? false : await this.party.join(userId, invite.from.id);
     return { invite, room: invite.room, party };
   }
 

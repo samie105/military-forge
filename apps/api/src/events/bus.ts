@@ -8,6 +8,7 @@
  * Events are fire-and-forget: a player with no stream open misses them and catches up from the
  * REST routes (GET /friends, GET /invites) when they next look.
  */
+import type { LobbyFeedEvent } from '@military-forge/shared';
 import { quietRedisErrors } from '../kv/redis';
 import { Redis } from 'ioredis';
 
@@ -24,7 +25,9 @@ export type SocialEvent =
   /** your invite was answered */
   | { type: 'invite_answered'; id: string; to: string; answer: 'accepted' | 'declined' }
   /** your party changed (someone joined or left): reload it */
-  | { type: 'party' };
+  | { type: 'party' }
+  /** the Lobby feed (on the LOBBY_FEED_TOPIC, not a player's own stream): a host posted their room (lobby/feed.ts) */
+  | { type: 'lobby_feed'; event: LobbyFeedEvent };
 
 export type Listener = (event: SocialEvent) => void;
 

@@ -28,6 +28,14 @@ export const LIMITS = {
   /** custom rooms created, per user and per IP (docs/07 §5.1) */
   roomCreate: { name: 'roomnew', limit: 10, windowMs: 10 * 60_000 },
   roomCreateIp: { name: 'roomnewip', limit: 30, windowMs: 10 * 60_000 },
+  /** the Rooms list (GET /rooms), per user: the page refreshes it every 10 s while it's open */
+  roomsRead: { name: 'roomsread', limit: 30, windowMs: 60_000 },
+  /** a host's listing changes (who sees the room, its tag, its language), per user */
+  roomEdit: { name: 'roomedit', limit: 30, windowMs: 10 * 60_000 },
+  /** Online now (the counts, recent players, Looking for a match), per user: the page asks every 20 s while it's open */
+  onlineRead: { name: 'onlineread', limit: 60, windowMs: 60_000 },
+  /** Looking for a match on or off, and Online now's privacy switches, per user */
+  onlineWrite: { name: 'onlinewrite', limit: 30, windowMs: 10 * 60_000 },
   /** joins with a code that doesn't exist, per IP (docs/07 §5.1: brute-forcing codes is pointless) */
   roomJoinMiss: { name: 'roommiss', limit: 5, windowMs: 60_000 },
   /**

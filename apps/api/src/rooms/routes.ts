@@ -8,52 +8,59 @@
  * (`nick`: their nickname, which passed the nickname rules) and the room. The game server checks it
  * with the public key alone (apps/game-server tickets.ts). Without a ticket key (dev) it's null.
  *
- * Play now (audit 2 P-07): POST /rooms/quick first joins an open Play now room (made by Play now in
- * the last QUICK_OPEN_MS, with people still in it and a seat for a person), else makes one as POST /
- * does. Rooms made by Create room are never offered, nor one with a player you blocked or who blocked
- * you (audit-2 L-02). The game server swaps a bot out for each person who joins, so nothing on the
- * wire changes.
+ * Play now (audit 2 P-07): POST /rooms/quick takes the Rooms list's top row it may join (listing.ts:
+ * one ranking for both), else makes a new Play now room, which is listed as Open. A private room is
+ * never offered, nor one with a player you blocked or who blocked you (audit-2 L-02). The game server
+ * swaps a bot out for each person who joins, so nothing on the wire changes.
+ *
+ * The Rooms list (1 Nov 2026, the owner: "a session where people can enter like the room and all post
+ * it, or find anyone online"):
+ *   GET   /rooms                    → { rooms: RoomRow[] }: the rooms you may see, ranked (listing.ts)
+ *   GET   /rooms/:code/settings     → { visibility, tag, lang, host, nextPostAt }
+ *   PATCH /rooms/:code { visibility?, tag?, lang? }: the host only
+ *   POST  /rooms/:code/post         → Post to Lobby (the host; one per room every 5 min; a private room becomes public)
+ *   POST  /rooms/:code/join { from: 'list' }: joining from the list checks again that you may see the
+ *         room, that no block stands either way and that a seat is free; else 409 `room_taken` (the
+ *         page then plays Play now: "Taken. Joining the next best room"). A block is never named.
+ * A room's state (phase, people, bots, seats) comes from the game server's heartbeat (state.ts).
  */
 import { randomBytes } from 'node:crypto';
 import { allowedLook, cosmeticLoadoutWireIds, cosmeticUnlocked, loadoutGunIndices, sanitizeCosmeticLoadout } from '@military-forge/content';
-import { normalizeRoomCode, roomCodeFromBytes } from '@military-forge/shared';
+import { ROOM_LANGS, ROOM_POST_COOLDOWN_MS, ROOM_TAGS, ROOM_VISIBILITIES, normalizeRoomCode, roomCodeFromBytes, type RoomRow } from '@military-forge/shared';
 import { and, eq, inArray, or } from 'drizzle-orm';
 import { Hono, type Context } from 'hono';
+import { z } from 'zod';
 import type { SigningKey } from '../auth/keys';
 import { adultsOnly, requireAuth } from '../auth/middleware';
 import type { AuthService } from '../auth/sessions';
 import { signJwt, type StandardClaims } from '../auth/tokens';
 import type { Config } from '../config';
 import type { Db } from '../db/client';
-import { blocks, loadouts } from '../db/schema';
+import { blocks, friendships, loadouts, profiles as profileRows } from '../db/schema';
 import { clientRateLimitKey } from '../http/clientIp';
 import type { AppEnv } from '../http/context';
-import { ApiError } from '../http/errors';
+import { ApiError, readJson } from '../http/errors';
 import { LIMITS, enforceRateLimit } from '../http/rateLimit';
 import type { Kv } from '../kv/kv';
+import type { LobbyFeed } from '../lobby/feed';
 import type { ProfileService } from '../me/profiles';
 import type { PartyService } from '../invites/party';
 import type { PresenceService } from '../presence/presence';
+import { QUICK_OPEN_MS, ROOM_PLAYERS_KEPT, listed, playNowPick, rankRooms, rowOf, visibilityOf, visibleTo, type Candidate, type RankedRow, type RoomRecord, type Viewer } from './listing';
+import { readRoomStates } from './state';
+
+export { QUICK_MIN_LEFT_S, QUICK_OPEN_MS, QUICK_PEOPLE, type RoomRecord } from './listing';
 
 /** A code stays joinable this long after its last join (docs/07 §5.4: rooms live ≤ 2 h idle-free; playtests run long). */
 export const ROOM_TTL_MS = 6 * 3600_000;
 const MINT_ATTEMPTS = 8;
 
-interface RoomRecord {
-  host: string;
-  createdAt: string;
-  /** made by Play now: open to other Play now players while it's young (audit 2 P-07) */
-  quick?: true;
-  /** Play now: the players given a ticket to it */
-  players?: string[];
-}
-
-/** A Play now room takes other Play now players this long after it was made (its countdown and ~2 minutes of play). */
-export const QUICK_OPEN_MS = 150_000;
-/** at most this many people in a Play now room (the bots make up the rest: 3 bots fill to 4) */
-export const QUICK_PEOPLE = 4;
-/** the open Play now rooms, newest first (a sorted set: score = when made) */
-export const QUICK_OPEN_KEY = 'rooms:quick';
+/** the rooms in the Rooms list (Play now's, and those whose host made them Friends or Public): a sorted set, score = when made */
+export const LISTED_KEY = 'rooms:listed';
+/** most listed rooms one list looks at */
+const LIST_SCAN = 200;
+/** most rows one list returns */
+export const LIST_MAX = 60;
 
 /**
  * Holds room codes open (config.keepRooms, at start-up): a code already known stays as it is; a new
@@ -124,6 +131,31 @@ async function savedLoadout(db: Db, userId: string, level: number, grants: reado
   };
 }
 
+/** A room's listing settings, as its lobby shows them. */
+export interface RoomSettings {
+  visibility: RoomRow['visibility'];
+  tag: RoomRow['tag'];
+  lang: RoomRow['lang'];
+  /** you are its host (you may change these and post it) */
+  host: boolean;
+  /** a Play now room: listed as Open, its listing isn't the host's to change */
+  quick: boolean;
+  /** when Post to Lobby may be used again (ISO); null: now */
+  nextPostAt: string | null;
+}
+
+const RoomChange = z
+  .strictObject({
+    visibility: z.enum(ROOM_VISIBILITIES).optional(),
+    tag: z.enum(ROOM_TAGS).nullable().optional(),
+    lang: z.enum(ROOM_LANGS).nullable().optional(),
+  })
+  .refine((b) => b.visibility !== undefined || b.tag !== undefined || b.lang !== undefined, 'Nothing to change');
+
+const JoinBody = z.strictObject({ from: z.enum(['code', 'list']).optional() });
+
+const postedKey = (code: string) => `roompost:${code}`;
+
 export function roomRoutes(deps: {
   config: Config;
   db?: Db;
@@ -132,10 +164,12 @@ export function roomRoutes(deps: {
   profiles: ProfileService;
   presence?: PresenceService;
   party?: PartyService;
+  /** the Lobby feed (Post to Lobby); absent: posting is off */
+  feed?: LobbyFeed;
   ticketKey: SigningKey | null;
   now: () => number;
 }): Hono<AppEnv> {
-  const { config, db, kv, auth, profiles, presence, party, ticketKey, now } = deps;
+  const { config, db, kv, auth, profiles, presence, party, feed, ticketKey, now } = deps;
   const app = new Hono<AppEnv>();
 
   /** The room's host's nickname from its record (null: unreadable, or the host is gone). */
@@ -198,16 +232,36 @@ export function roomRoutes(deps: {
     };
   };
 
+  function parseRecord(raw: string | null): RoomRecord | null {
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as RoomRecord;
+    } catch {
+      return null;
+    }
+  }
+
+  /** The record again with `userId` among its players (the list's "who's inside" before the game server says). */
+  async function addPlayer(code: string, record: RoomRecord, userId: string): Promise<RoomRecord> {
+    const players = [...(record.players ?? [record.host]).filter((p) => p !== userId), userId].slice(-ROOM_PLAYERS_KEPT);
+    const next: RoomRecord = { ...record, players };
+    await kv.set(`room:${code}`, JSON.stringify(next), { ttlMs: ROOM_TTL_MS });
+    if (listed(next)) await kv.zadd(LISTED_KEY, [{ member: code, score: Date.parse(next.createdAt) || now() }]);
+    return next;
+  }
+
   /** A new room with this host (rate limited per player and per IP); its code. */
   async function mint(c: Context<AppEnv>, userId: string, quick: boolean): Promise<string> {
     await enforceRateLimit(kv, LIMITS.roomCreate, userId);
     await enforceRateLimit(kv, LIMITS.roomCreateIp, clientRateLimitKey(c, config));
-    const record: RoomRecord = { host: userId, createdAt: new Date(now()).toISOString(), ...(quick ? { quick: true, players: [userId] } : {}) };
+    const at = now();
+    const record: RoomRecord = { host: userId, createdAt: new Date(at).toISOString(), players: [userId], ...(quick ? { quick: true } : {}) };
     for (let i = 0; i < MINT_ATTEMPTS; i++) {
       const code = roomCodeFromBytes(randomBytes(16));
       if (await kv.set(`room:${code}`, JSON.stringify(record), { ttlMs: ROOM_TTL_MS, onlyIfAbsent: true })) {
         c.get('log').info({ userId, code, quick }, 'room created');
-        if (quick) await kv.zadd(QUICK_OPEN_KEY, [{ member: code, score: now() }]);
+        // a Play now room is listed as Open at once; a Create room room is private until its host says
+        if (quick) await kv.zadd(LISTED_KEY, [{ member: code, score: at }]);
         return code;
       }
     }
@@ -219,62 +273,112 @@ export function roomRoutes(deps: {
     return c.json(await join(await mint(c, userId, false), userId), 201);
   });
 
-  /**
-   * People in a Play now room now: those given a ticket whose presence still says this room (the page
-   * beats every 30 s, a closed one is gone within a minute). Without presence: everyone given one.
-   */
-  async function peopleIn(code: string, players: readonly string[]): Promise<number> {
-    if (!presence) return players.length;
-    return (await presence.getMany(players)).filter((p) => p.room === code).length;
+  /** Who is looking: their friends, party mates, and everyone blocked either way. */
+  async function viewerOf(userId: string): Promise<Viewer> {
+    if (!db) return { id: userId, friends: new Set(), party: new Set(), blocked: new Set() };
+    const [friendRows, blockRows, partyIds] = await Promise.all([
+      db.select({ id: friendships.friendId }).from(friendships).where(eq(friendships.userId, userId)),
+      db
+        .select({ a: blocks.userId, b: blocks.blockedId })
+        .from(blocks)
+        .where(or(eq(blocks.userId, userId), eq(blocks.blockedId, userId))),
+      party ? party.memberIds(userId) : Promise.resolve([]),
+    ]);
+    return {
+      id: userId,
+      friends: new Set(friendRows.map((r) => r.id)),
+      party: new Set(partyIds.filter((id) => id !== userId)),
+      blocked: new Set(blockRows.map((r) => (r.a === userId ? r.b : r.a))),
+    };
   }
 
-  /** Whether `userId` blocked any of `others`, or any of them blocked `userId`. */
-  async function blockedWith(userId: string, others: readonly string[]): Promise<boolean> {
-    if (!db || !others.length) return false;
-    const [row] = await db
-      .select({ userId: blocks.userId })
-      .from(blocks)
-      .where(or(and(eq(blocks.userId, userId), inArray(blocks.blockedId, [...others])), and(eq(blocks.blockedId, userId), inArray(blocks.userId, [...others]))))
-      .limit(1);
-    return !!row;
-  }
-
-  /** The youngest open Play now room with a seat for a person, not `userId`'s own; old ones leave the list. */
-  async function openQuickRoom(userId: string): Promise<{ code: string; record: RoomRecord } | null> {
-    const listed = await kv.ztop(QUICK_OPEN_KEY, 20);
-    const stale: string[] = [];
-    let found: { code: string; record: RoomRecord } | null = null;
-    for (const { member: code, score } of listed) {
-      if (now() - score > QUICK_OPEN_MS) {
-        stale.push(code);
-        continue;
-      }
-      if (found) continue;
-      const raw = await kv.get(`room:${code}`);
-      const record = raw ? (JSON.parse(raw) as RoomRecord) : null;
-      if (!record?.quick) {
-        stale.push(code);
-        continue;
-      }
-      const players = record.players ?? [record.host];
-      if (players.includes(userId)) continue; // your own (or one you left): a fresh room instead
-      if (await blockedWith(userId, players)) continue; // a block either way keeps you apart (audit-2 L-02)
-      const people = await peopleIn(code, players);
-      if (people > 0 && people < QUICK_PEOPLE) found = { code, record };
+  /** Nicknames by id, in one query (or one by one without a database). */
+  async function namesOf(ids: readonly string[]): Promise<Map<string, string>> {
+    const unique = [...new Set(ids)];
+    if (!unique.length) return new Map();
+    if (db) {
+      const rows = await db.select({ id: profileRows.userId, nickname: profileRows.nickname }).from(profileRows).where(inArray(profileRows.userId, unique));
+      return new Map(rows.map((r) => [r.id, r.nickname]));
     }
-    if (stale.length) await kv.zrem(QUICK_OPEN_KEY, stale);
-    return found;
+    const out = new Map<string, string>();
+    for (const id of unique) {
+      const me = await profiles.me(id);
+      if (me) out.set(id, me.nickname);
+    }
+    return out;
   }
 
-  /** Play now: an open Play now room with other people in it, else a new one (201). `joined` says which. */
+  /**
+   * Every listed room with what's known of it now. A room whose record is gone leaves the list; so does
+   * one the game server hasn't spoken of and nobody's presence says they're in, once it's no longer young.
+   */
+  async function candidates(): Promise<Candidate[]> {
+    const listedNow = await kv.ztop(LISTED_KEY, LIST_SCAN);
+    const codes = listedNow.map((e) => e.member);
+    if (!codes.length) return [];
+    const [raws, states] = await Promise.all([kv.mget(codes.map((code) => `room:${code}`)), readRoomStates(kv, codes)]);
+    const stale: string[] = [];
+    const pending: { code: string; record: RoomRecord; state: Candidate['state'] }[] = [];
+    for (const [i, code] of codes.entries()) {
+      const record = parseRecord(raws[i] ?? null);
+      if (!record || !listed(record)) {
+        stale.push(code);
+        continue;
+      }
+      pending.push({ code, record, state: states[i] ?? null });
+    }
+    // before the game server says (a room just made, or a server without the heartbeat): the people whose presence says this room
+    const unknown = pending.filter((p) => !p.state);
+    const askIds = [...new Set(unknown.flatMap((p) => p.record.players ?? [p.record.host]))];
+    const seen = presence && askIds.length ? await presence.getMany(askIds) : [];
+    const roomOf = new Map(askIds.map((id, i) => [id, seen[i]?.room ?? null]));
+    const out: Omit<Candidate, 'hostName'>[] = [];
+    for (const p of pending) {
+      let ids: string[];
+      let people: number;
+      if (p.state) {
+        ids = p.state.ids;
+        people = p.state.people;
+      } else {
+        const players = p.record.players ?? [p.record.host];
+        ids = presence ? players.filter((id) => roomOf.get(id) === p.code) : players;
+        people = ids.length;
+        if (people === 0 && now() - Date.parse(p.record.createdAt) > QUICK_OPEN_MS) {
+          stale.push(p.code);
+          continue;
+        }
+      }
+      out.push({ code: p.code, record: p.record, state: p.state, hostId: p.state?.hostId ?? p.record.host, ids, people });
+    }
+    if (stale.length) await kv.zrem(LISTED_KEY, stale);
+    const names = await namesOf(out.map((c) => c.hostId));
+    return out.map((c) => ({ ...c, hostName: names.get(c.hostId) ?? 'A player' }));
+  }
+
+  /** The rooms `viewer` may see, ranked, with their records (Play now picks from these). */
+  async function rankedFor(viewer: Viewer): Promise<(RankedRow & { record: RoomRecord })[]> {
+    const rows = (await candidates()).filter((c) => people(c) > 0 && visibleTo(c, viewer)).map((c) => ({ ...rowOf(c, viewer), record: c.record }));
+    return rankRooms(rows);
+  }
+  const people = (c: Candidate) => (c.state ? c.state.people : c.people);
+
+  /** The Rooms list: the rooms you may see, ranked; full ones too (the page hides them unless asked). */
+  app.get('/', async (c) => {
+    const { userId } = c.get('auth')!;
+    await enforceRateLimit(kv, LIMITS.roomsRead, userId);
+    const ranked = await rankedFor(await viewerOf(userId));
+    const rooms: RoomRow[] = ranked.slice(0, LIST_MAX).map(({ hostId: _h, ids: _i, record: _r, ...row }) => row);
+    return c.json({ rooms });
+  });
+
+  /** Play now: the list's top row you may join, else a new Play now room (201). `joined` says which. */
   app.post('/quick', async (c) => {
     const { userId } = c.get('auth')!;
-    const open = await openQuickRoom(userId);
-    if (open) {
-      const record: RoomRecord = { ...open.record, players: [...(open.record.players ?? [open.record.host]), userId] };
-      await kv.set(`room:${open.code}`, JSON.stringify(record), { ttlMs: ROOM_TTL_MS });
-      c.get('log').info({ userId, code: open.code }, 'play now: joined an open room');
-      return c.json({ ...(await join(open.code, userId)), joined: true });
+    const pick = playNowPick(await rankedFor(await viewerOf(userId)), userId, now());
+    if (pick) {
+      await addPlayer(pick.code, pick.record, userId);
+      c.get('log').info({ userId, code: pick.code }, 'play now: joined an open room');
+      return c.json({ ...(await join(pick.code, userId)), joined: true });
     }
     return c.json({ ...(await join(await mint(c, userId, true), userId)), joined: false }, 201);
   });
@@ -285,6 +389,110 @@ export function roomRoutes(deps: {
     throw new ApiError(status, code, message);
   }
 
+  /** The room's host now: the game server's when it has said (the host can change), else its maker. */
+  async function hostOf(code: string, record: RoomRecord): Promise<string> {
+    const [state] = await readRoomStates(kv, [code]);
+    return state?.hostId ?? record.host;
+  }
+
+  /** A room by code (a miss counts toward the wrong-code limit, as on join: codes can't be swept here either). */
+  async function roomByCode(c: Context<AppEnv>): Promise<{ code: string; record: RoomRecord }> {
+    const code = normalizeRoomCode(c.req.param('code') ?? '');
+    const record = code ? parseRecord(await kv.get(`room:${code}`)) : null;
+    if (!code || !record) return miss(c, 'That room is gone', 404, 'room_not_found');
+    return { code, record };
+  }
+
+  /** A room by code for its host's changes: 404 when it's gone, 403 when you aren't its host. */
+  async function hostedRoom(c: Context<AppEnv>): Promise<{ code: string; record: RoomRecord }> {
+    const { code, record } = await roomByCode(c);
+    if ((await hostOf(code, record)) !== c.get('auth')!.userId) throw new ApiError(403, 'not_host', 'Only the host changes this');
+    return { code, record };
+  }
+
+  async function settingsOf(code: string, record: RoomRecord, userId: string): Promise<RoomSettings> {
+    const posted = Number((await kv.get(postedKey(code))) ?? 0);
+    const next = posted + ROOM_POST_COOLDOWN_MS;
+    return {
+      visibility: visibilityOf(record),
+      tag: record.tag ?? null,
+      lang: record.lang ?? null,
+      host: (await hostOf(code, record)) === userId,
+      quick: record.quick === true,
+      nextPostAt: posted && next > now() ? new Date(next).toISOString() : null,
+    };
+  }
+
+  /** What the lobby shows of the room's listing (anyone in it may ask; only the host changes it). */
+  app.get('/:code/settings', async (c) => {
+    const { code, record } = await roomByCode(c);
+    return c.json(await settingsOf(code, record, c.get('auth')!.userId));
+  });
+
+  /** The host's listing: who sees the room, its tag and its language. A Play now room stays Open. */
+  app.patch('/:code', async (c) => {
+    const { userId } = c.get('auth')!;
+    await enforceRateLimit(kv, LIMITS.roomEdit, userId);
+    const { code, record } = await hostedRoom(c);
+    const change = await readJson(c, RoomChange);
+    if (record.quick && change.visibility !== undefined && change.visibility !== 'public') throw new ApiError(409, 'quick_room', 'A Play now room is always open');
+    const next: RoomRecord = { ...record };
+    if (change.visibility !== undefined && !record.quick) next.visibility = change.visibility;
+    if (change.tag !== undefined) {
+      if (change.tag === null) delete next.tag;
+      else next.tag = change.tag;
+    }
+    if (change.lang !== undefined) {
+      if (change.lang === null) delete next.lang;
+      else next.lang = change.lang;
+    }
+    await kv.set(`room:${code}`, JSON.stringify(next), { ttlMs: ROOM_TTL_MS });
+    if (listed(next)) await kv.zadd(LISTED_KEY, [{ member: code, score: Date.parse(next.createdAt) || now() }]);
+    else await kv.zrem(LISTED_KEY, [code]);
+    c.get('log').info({ userId, code, visibility: visibilityOf(next) }, 'room listing changed');
+    return c.json(await settingsOf(code, next, userId));
+  });
+
+  /**
+   * Post to Lobby: the room as a card in the Lobby feed (lobby/feed.ts). The host only, once per room
+   * every 5 minutes (429 with Retry-After). Posting is public: a Private room becomes Public.
+   */
+  app.post('/:code/post', async (c) => {
+    if (!feed) throw new ApiError(404, 'not_found', 'Posting is off on this server');
+    const { userId } = c.get('auth')!;
+    const { code, record } = await hostedRoom(c);
+    const at = now();
+    const last = Number((await kv.get(postedKey(code))) ?? 0);
+    if (last && at - last < ROOM_POST_COOLDOWN_MS) {
+      const retryAfter = Math.max(1, Math.ceil((last + ROOM_POST_COOLDOWN_MS - at) / 1000));
+      throw new ApiError(429, 'rate_limited', 'Posted already: once every 5 minutes', { retryAfter }, { 'Retry-After': String(retryAfter) });
+    }
+    if (!(await kv.set(postedKey(code), String(at), { ttlMs: ROOM_POST_COOLDOWN_MS, onlyIfAbsent: true }))) {
+      throw new ApiError(429, 'rate_limited', 'Posted already: once every 5 minutes', { retryAfter: 1 }, { 'Retry-After': '1' });
+    }
+    const next: RoomRecord = record.quick || record.visibility === 'public' || record.visibility === 'friends' ? record : { ...record, visibility: 'public' };
+    if (next !== record) await kv.set(`room:${code}`, JSON.stringify(next), { ttlMs: ROOM_TTL_MS });
+    await kv.zadd(LISTED_KEY, [{ member: code, score: Date.parse(next.createdAt) || at }]);
+    const [state] = await readRoomStates(kv, [code]);
+    const name = (await namesOf([userId])).get(userId) ?? 'A player';
+    const people = state?.people ?? 1;
+    await feed.publish({
+      kind: 'room_posted',
+      code,
+      hostName: name,
+      mode: state?.teams ?? null,
+      map: state?.map ?? null,
+      people,
+      bots: state?.bots ?? null,
+      seats: state?.seats ?? Math.max(0, 8 - people),
+      tag: next.tag ?? null,
+      lang: next.lang ?? null,
+      at,
+    });
+    c.get('log').info({ userId, code }, 'room posted to the lobby');
+    return c.json({ posted: true, ...(await settingsOf(code, next, userId)) }, 201);
+  });
+
   app.post('/:code/join', async (c) => {
     const ipKey = clientRateLimitKey(c, config);
     const misses = Number((await kv.get(`rl:${LIMITS.roomJoinMiss.name}:${ipKey}`)) ?? 0);
@@ -294,10 +502,18 @@ export function roomRoutes(deps: {
     }
     const code = normalizeRoomCode(c.req.param('code'));
     if (!code) return miss(c, 'Room codes are 6 letters', 400, 'invalid_room_code');
-    const record = await kv.get(`room:${code}`);
-    if (!record) return miss(c, `No room ${code}: check the code, or ask for a new link`, 404, 'room_not_found');
-    await kv.set(`room:${code}`, record, { ttlMs: ROOM_TTL_MS }); // sliding: a room in use stays joinable
-    return c.json(await join(code, c.get('auth')!.userId));
+    const { from } = await readJson(c, JoinBody);
+    const raw = await kv.get(`room:${code}`);
+    const record = parseRecord(raw);
+    if (!raw || !record) return miss(c, `No room ${code}: check the code, or ask for a new link`, 404, 'room_not_found');
+    const { userId } = c.get('auth')!;
+    // from the list: may you see it still, does a block stand either way, is a seat free? One answer for all three
+    if (from === 'list') {
+      const row = (await rankedFor(await viewerOf(userId))).find((r) => r.code === code);
+      if (!row || (row.seats <= 0 && !row.ids.includes(userId))) throw new ApiError(409, 'room_taken', 'Taken. Joining the next best room');
+    }
+    await addPlayer(code, record, userId); // sliding: a room in use stays joinable
+    return c.json(await join(code, userId));
   });
 
   return app;

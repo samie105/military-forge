@@ -466,9 +466,10 @@ export class Api {
     }
   }
 
-  async joinRoom(code: string): Promise<RoomJoin> {
+  /** `from: 'list'`: picked in the Rooms list (the API checks again that it's open to you and has a seat: else `room_taken`). */
+  async joinRoom(code: string, from?: 'list'): Promise<RoomJoin> {
     await this.roomHooksDone();
-    return this.request<RoomJoin>('POST', `/rooms/${encodeURIComponent(code)}/join`, {}, true);
+    return this.request<RoomJoin>('POST', `/rooms/${encodeURIComponent(code)}/join`, from ? { from } : {}, true);
   }
 
   /** The account's saved loadout in `slot`, or null when nothing is saved there yet (204; an older API: 404 no_loadout). */

@@ -34,6 +34,7 @@ import { TeamRoster } from '../../../teams/TeamRoster';
 import { BOT_LEVELS, BOT_LEVEL_NAMES, botFillChoices, botsLine, type BotLevel } from '../../roomBots';
 import { LobbyRadio } from '../../../voice/Radio';
 import { PlayerMore, roomTarget } from '../../../social/ReportSheet';
+import { RoomListing } from '../../../rooms/RoomListing';
 
 function Row({ p, i, friendly = false }: { p: LobbyPlayer; i: number; friendly?: boolean }) {
   const ready = p.ready || p.isBot;
@@ -366,6 +367,8 @@ export function PhoneLobby({ lobby, tips = null }: { lobby: LobbyView; tips?: Bi
             )}
             {/* friends (social/): invite them straight to this room */}
             {!lobby.local && <LobbyInvite phone />}
+            {/* who finds the room in Rooms, Post to Lobby, WhatsApp (rooms/): a chip that opens a sheet */}
+            {!lobby.local && lobby.code !== '' && <RoomListing code={lobby.code} phone />}
             <ShareChip outcome={chip} />
             <span className="hazard" aria-hidden="true"></span>
           </section>

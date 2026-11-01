@@ -81,7 +81,8 @@ export type Screen =
   | { name: 'error'; alert: AlertInfo; retry: Intent | null };
 
 /** `lan-add`: the host adds a player by QR codes; `lan-join`: join a local room by the host's QR code (no internet) */
-export type Overlay = 'menu' | 'settings' | 'join' | 'name' | 'lan-add' | 'lan-join' | null;
+/** `rooms`: the Rooms list and Online now (rooms/) */
+export type Overlay = 'menu' | 'settings' | 'join' | 'name' | 'lan-add' | 'lan-join' | 'rooms' | null;
 
 /** Settings sections (the kit's five tabs, and Touch for the phone controls). */
 export type SettingsTab = 'graphics' | 'audio' | 'controls' | 'controller' | 'accessibility' | 'network' | 'touch' | 'account' | 'privacy';

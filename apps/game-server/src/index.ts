@@ -6,6 +6,7 @@ import { adminValues, loadAdminDefaults, setAdminValues, startAdminServer } from
 import { describeNetSim, parseNetSim } from '@military-forge/netcode';
 import { CloseCode } from '@military-forge/protocol';
 import { ResultsReporter, resultsPrivateKey } from './results';
+import { RoomStateReporter } from './roomState';
 import { createServer, nodeScheduler } from './server';
 import { TicketVerifier, ticketPublicKey } from './tickets';
 import { defaultGatewaySocket } from './transports';
@@ -163,6 +164,14 @@ console.log(
     (wtSocket ? ` · WebTransport gateway socket ${wtSocket}` : ''),
 );
 
+// The Rooms list (roomState.ts): with the same key and API, each room's state goes to the API about
+// every 10 s, so players can find open rooms (people and bots counted apart). No key: no list.
+const roomState =
+  process.env.RESULTS_PRIVATE_KEY && process.env.API_URL
+    ? new RoomStateReporter(process.env.API_URL.replace(/\/+$/, ''), resultsPrivateKey(process.env.RESULTS_PRIVATE_KEY), () => server.rooms.rooms)
+    : null;
+roomState?.start();
+
 const admin =
   adminToken && adminPort > 0
     ? await startAdminServer({ token: adminToken, port: adminPort, defaultsFile: adminDefaults, log: console.log }).catch((e: Error) => {
@@ -177,6 +186,7 @@ const RESULTS_FLUSH_MS = 4000;
 
 /** Everyone is told the server is updating (they rejoin when it's back), then it stops. */
 function stop(): void {
+  roomState?.stop();
   server.rooms.closeEveryone(CloseCode.ServerUpdating, 'server updated: rejoin');
   // the results of matches that just ended (a drain's cap ends the ones still running: audit L-24)
   // reach the API before the process goes, a few seconds at most; they live in memory only

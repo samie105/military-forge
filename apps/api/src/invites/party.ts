@@ -74,6 +74,13 @@ export class PartyService {
     return id;
   }
 
+  /** The ids in the player's party, them included (none: empty); reading doesn't keep it alive. */
+  async memberIds(userId: string): Promise<string[]> {
+    const id = await this.kv.get(ofKey(userId));
+    const p = id ? await this.read(id) : null;
+    return p?.members.includes(userId) ? [...p.members] : [];
+  }
+
   async view(userId: string): Promise<PartyView | null> {
     const id = await this.kv.get(ofKey(userId));
     const p = id ? await this.read(id) : null;

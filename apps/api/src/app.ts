@@ -44,6 +44,10 @@ import { loadoutRoutes } from './loadouts/routes';
 import { matchRoutes } from './matches/routes';
 import { resultsPublicKey } from './matches/report';
 import { PresenceService, mePresenceRoutes, playerPresenceRoute } from './presence/presence';
+import { BusLobbyFeed } from './lobby/feed';
+import { onlineRoutes } from './online/routes';
+import { OnlineService, appearsOffline } from './online/service';
+import { roomStateRoutes } from './rooms/state';
 import { ProfileService } from './me/profiles';
 import { meRoutes } from './me/routes';
 import { NicknamePolicy } from './nickname/rules';
@@ -188,7 +192,8 @@ export function createApp(deps: AppDeps) {
       now,
     }),
   );
-  const presence = new PresenceService(kv, now);
+  // Appear offline (online/): friends see the player offline, and the online count leaves them out
+  const presence = new PresenceService(kv, now, (userId) => appearsOffline(db, userId));
   app.route('/me/loadout', loadoutRoutes({ db, kv, auth, now, grants: (userId) => profiles.ownedOf(userId) }));
   app.route('/me/presence', mePresenceRoutes({ auth, kv, presence }));
   const leaderboards = new Leaderboards(db, kv, now);
@@ -203,11 +208,14 @@ export function createApp(deps: AppDeps) {
   // a status or room change reaches the player's friends at once (presence stays friends-only)
   presence.onChange(async (userId, p) => tell(await friends.friendIds(userId), { type: 'presence', id: userId, status: p.status, room: p.room, ...(p.playing !== undefined ? { playing: p.playing } : {}) }));
   const party = new PartyService(db, kv, bus, now);
-  const invites = new InviteService(db, kv, bus, friends, presence, party, now);
+  // Online now (online/): the counts, recent players on, Looking for a match (whose players anyone may invite)
+  const online = new OnlineService(db, kv, presence, friends, config.cosmeticGrants, now);
+  const invites = new InviteService(db, kv, bus, friends, presence, party, now, online);
   app.route('/events', eventRoutes({ auth, kv, bus, now }));
   app.route('/friends', friendRoutes({ config, db, kv, auth, friends }));
   app.route('/invites', inviteRoutes({ db, kv, auth, invites, now }));
   app.route('/party', partyRoutes({ db, kv, auth, party }));
+  app.route('/online', onlineRoutes({ db, kv, auth, online }));
   app.route('/players', playerPresenceRoute({ auth, presence, areFriends: (a, b) => friends.areFriends(a, b) }));
   // the game server's match results: on only with its public key (RESULTS_PUBLIC_KEY)
   const analytics = deps.analytics ?? new AnalyticsService(db, kv, config.analytics, log, now);
@@ -216,6 +224,8 @@ export function createApp(deps: AppDeps) {
     app.route('/internal', matchRoutes({ db, key, leaderboards, now }));
     // the game server's per-match play stats (docs/16 §3.2), signed with the same key
     app.route('/internal/analytics', internalAnalyticsRoutes({ key, analytics, now }));
+    // the rooms' heartbeat for the Rooms list (rooms/state.ts), signed with the same key
+    app.route('/internal', roomStateRoutes({ kv, key, now }));
   }
   // play stats: the pages' batches, Delete my data, the segments and the owner's dashboard (docs/16)
   app.route('/analytics', analyticsRoutes({ config, kv, auth, analytics }));
@@ -240,7 +250,9 @@ export function createApp(deps: AppDeps) {
   app.route('/store', storeRoutes({ config, db, kv, auth, wallet: store.wallet, payments: store.payments, flutterwave: store.flutterwave, claims: store.claims, checkPassword }));
   if (store.payments && store.flutterwave) app.route('/webhooks', flutterwaveWebhook({ payments: store.payments, flutterwave: store.flutterwave }));
   app.route('/admin/store', adminStoreRoutes({ config, db, wallet: store.wallet, payments: store.payments }));
-  app.route('/rooms', roomRoutes({ config, db, kv, auth, profiles, presence, party, ticketKey: deps.ticketKey ?? null, now }));
+  // Post to Lobby goes to the Lobby feed (lobby/feed.ts; the feed itself is its own workstream)
+  const feed = new BusLobbyFeed(kv, bus, now);
+  app.route('/rooms', roomRoutes({ config, db, kv, auth, profiles, presence, party, feed, ticketKey: deps.ticketKey ?? null, now }));
 
   app.notFound((c) => errorResponse(c, 404, 'not_found', `No route for ${c.req.method} ${c.req.path}`));
   app.onError((err, c) => {

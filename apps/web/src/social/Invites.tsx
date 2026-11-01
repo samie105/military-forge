@@ -18,6 +18,7 @@ import type { Friend, FriendsList, LookIds } from './api';
 import { Avatar } from './FriendsPanel';
 import { INVITE_SECONDS, clockText, secondsLeft, statusText, useSel, type ClientInvite, type SocialController } from './social';
 import { PlayerMore } from './ReportSheet';
+import { LookingInvites } from '../rooms/LookingInvites';
 
 /** A friend's look, from the friends list (an invite names its sender only): undefined when unknown. */
 export function lookOf(list: FriendsList | null, id: string | undefined): LookIds | undefined {
@@ -276,6 +277,8 @@ function PickerBody({ social, room, phone }: { social: SocialController; room: s
                 )}
               </div>
             ))}
+            {/* people looking for a match (rooms/): anyone not blocked may invite them */}
+            <LookingInvites social={social} room={room} />
           </div>
           <div className="sx-divider">
             <span className="label label--volt">Not friends yet?</span>

@@ -1,7 +1,7 @@
 /**
  * M2 · Phone home (the kit's data-screen="m-home"): the brand, the server's ping and your soldier with your level (tap:
  * your name); the Play-with-friends poster with Create room; Join and Training tickets; your soldier's
- * stage with your name; the bottom nav (Play, Locker, Armory, Settings). Same actions as the desktop
+ * stage with your name; the bottom nav (Play, Rooms, Locker, Armory, Settings). Same actions as the desktop
  * Home. Motion: the poster's title focus-pulls (P1), the rest rises in a stagger (P3), presses P8.
  */
 import { GAME_NAME } from "@military-forge/shared";
@@ -218,6 +218,16 @@ export function PhoneHome({ store }: { store: ShellStore }) {
           <button type="button" className="pm-nav__i is-on" aria-current="page" tabIndex={-1} data-pad-skip>
             <Icon name="play" />
             <span>Home</span>
+          </button>
+          {/* the open rooms and who's on (rooms/) */}
+          <button
+            type="button"
+            className="pm-nav__i m-p8"
+            disabled={offline}
+            onClick={() => ctl.openOverlay("rooms")}
+          >
+            <Icon name="globe" />
+            <span>Rooms</span>
           </button>
           <button
             type="button"

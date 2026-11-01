@@ -1,5 +1,5 @@
 /**
- * 2 · Home (round two's data-screen="home"): the brand, the tabs (Play, Locker, Armory, Settings),
+ * 2 · Home (round two's data-screen="home"): the brand, the tabs (Play, Rooms, Locker, Armory, Settings),
  * Play with friends (Create room), Join with code, Training, the player's nameplate and what they
  * spawn with, field orders with the player's own keys, and the sitrep ticker of the maps. Enter
  * creates a room. Arriving from name entry, the ID card becomes the player chip (motion P2); the
@@ -124,6 +124,11 @@ export function Home({ store }: { store: ShellStore }) {
             <button type="button" className="tab" aria-current="page" tabIndex={-1} data-pad-skip>
               <Icon name="play" />
               Play
+            </button>
+            {/* the open rooms and who's on (rooms/): an overlay over Home, #/rooms */}
+            <button type="button" className="tab m-p8" disabled={offline} onClick={() => ctl.openOverlay('rooms')}>
+              <Icon name="globe" />
+              Rooms
             </button>
             <button type="button" className="tab m-p8" data-tour="locker" onClick={() => (location.hash = '#/locker')}>
               <Icon name="shirt" />
@@ -324,7 +329,7 @@ export function Home({ store }: { store: ShellStore }) {
         <Hints>
           <Hint keys={<Cap>Enter</Cap>}>Play now</Hint>
           <Hint pad="Pad0">Select</Hint>
-          <Hint pad={['Pad4', 'Pad5']}>Locker, Armory, Store</Hint>
+          <Hint pad={['Pad4', 'Pad5']}>Rooms, Locker, Armory, Store</Hint>
           <Hint pad="Pad9">Settings</Hint>
         </Hints>
       </div>
