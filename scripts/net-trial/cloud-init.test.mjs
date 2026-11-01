@@ -122,7 +122,8 @@ describe('data.sh', () => {
   });
   it('gives the game server a results key of its own and the API its public half; Caddy hides the route', () => {
     assert.match(data, /openssl genpkey -algorithm ed25519 -out "\$ETC\/results\.key"/);
-    assert.match(data, /RESULTS_PRIVATE_KEY=.*API_URL='http:\/\/127\.0\.0\.1:8787'/);
+    // the environment's own API: staging's game server once reported to production's (1 Nov 2026)
+    assert.match(data, /RESULTS_PRIVATE_KEY=.*API_URL='http:\/\/127\.0\.0\.1:%s'.*"\$\{API_PORT:-8787\}" >"\$ETC\/game-results\.env"/);
     assert.match(data, /RESULTS_PUBLIC_KEY=.*openssl pkey -in "\$ETC\/results\.key" -pubout/);
     assert.match(site, /respond \/api\/internal\/\* 404/);
   });

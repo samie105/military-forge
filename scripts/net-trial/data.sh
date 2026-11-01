@@ -80,11 +80,13 @@ systemctl daemon-reload && systemctl enable --now --quiet mf-backup.timer || fai
 fi
 
 # match results (docs/07 §12): the game server signs each finished match with a key of its own and
-# the API checks it with the public half; systemd drop-ins hand them to the two services
+# the API checks it with the public half; systemd drop-ins hand them to the two services. The game
+# server reports to its own environment's API ($API_PORT): staging's once sent production's (1 Nov
+# 2026), which refused them
 [ -s "$ETC/results.key" ] || openssl genpkey -algorithm ed25519 -out "$ETC/results.key"
 chown root:"$U" "$ETC/results.key" && chmod 0640 "$ETC/results.key"
 oneline() { awk '{printf "%s\\n", $0}'; }
-(umask 027 && printf "RESULTS_PRIVATE_KEY='%s'\nAPI_URL='http://127.0.0.1:8787'\n" "$(oneline <"$ETC/results.key")" >"$ETC/game-results.env")
+(umask 027 && printf "RESULTS_PRIVATE_KEY='%s'\nAPI_URL='http://127.0.0.1:%s'\n" "$(oneline <"$ETC/results.key")" "${API_PORT:-8787}" >"$ETC/game-results.env")
 (umask 027 && printf "RESULTS_PUBLIC_KEY='%s'\n" "$(openssl pkey -in "$ETC/results.key" -pubout | oneline)" >"$ETC/api-results.env")
 chown root:"$U" "$ETC/game-results.env" "$ETC/api-results.env"
 for u in game api; do
