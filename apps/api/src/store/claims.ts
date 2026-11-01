@@ -68,7 +68,7 @@ export class ClaimService {
     if (age.adult !== true || age.birthYear === undefined) throw new ApiError(400, 'age_required', 'Confirm you are 18 or older, with the year you were born');
     const answer = birthYearAnswer(age.birthYear, new Date(this.now()).getUTCFullYear());
     if (answer === 'invalid') throw new ApiError(400, 'invalid_birth_year', "That year doesn't look right");
-    if (answer === 'minor') throw new ApiError(403, 'underage', 'Military Forge is for players 18 and over');
+    if (answer === 'minor') throw new ApiError(403, 'underage', 'Forged Force is for players 18 and over');
     await this.db.update(users).set({ adultConfirmedAt: new Date(this.now()), birthYear: age.birthYear }).where(eq(users.id, userId));
   }
 }

@@ -731,7 +731,7 @@
 ## V. Compliance, legal, accessibility & localisation
 
 - [ ] `632` **MVP** IP clean-room rules: no original names, assets, sounds, layouts (01 §12)
-- [ ] `633` **MVP** "Military Forge" full trademark clearance (US/EU/UK/India/Nigeria) + lawyer opinion; then domain + social handles
+- [ ] `633` **MVP** "Forged Force" full trademark clearance (US/EU/UK/India/Nigeria) + lawyer opinion; then domain + social handles
 - [ ] `634` **L** Lawyer IP review of marketing copy ("inspired by")
 - [ ] `635` **L** Terms of Service + Privacy Policy (versioned, localised, re-accept on change)
 - [ ] `636` **L** Cookie/consent banner with equal "Reject all"; TCF v2.2 if programmatic ads

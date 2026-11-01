@@ -1,4 +1,4 @@
-You're designing round two of the user interface for **Military Forge**, a fast 2.5D multiplayer shooter that runs in the browser. Round one, the kit `military-forge-ui.html`, is already built into the game. This round adds the screens for everything the team has built since. You also have **full creative freedom on the look**: a bold new visual concept is welcome, as long as the structure and markers below stay. Make something people screenshot and send to their friends.
+You're designing round two of the user interface for **Forged Force**, a fast 2.5D multiplayer shooter that runs in the browser. Round one, the kit `military-forge-ui.html`, is already built into the game. This round adds the screens for everything the team has built since. You also have **full creative freedom on the look**: a bold new visual concept is welcome, as long as the structure and markers below stay. Make something people screenshot and send to their friends.
 
 ## The world your UI lives in
 The other teams are building this right now. Your concept should feel like it belongs here.

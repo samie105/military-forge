@@ -318,7 +318,7 @@ export function TitleScreen({ store }: { store: ShellStore }) {
       </Screen>
       {turnTip && (
         <div className="mf-title__turn">
-          <TurnTip line="Military Forge plays in landscape." onDone={markTurnTipSeen} />
+          <TurnTip line="Forged Force plays in landscape." onDone={markTurnTipSeen} />
         </div>
       )}
     </div>

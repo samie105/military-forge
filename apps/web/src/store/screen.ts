@@ -181,7 +181,7 @@ function claimMarkup(item: StoreItemView, view: Extract<StoreView, { enabled: tr
       : '';
   const body =
     rule === 'minor'
-      ? '<p class="mf-st__dlg-line"><b>Military Forge is for players 18 and older.</b> This device’s answer says otherwise, so the gift can’t be claimed here.</p>'
+      ? '<p class="mf-st__dlg-line"><b>Forged Force is for players 18 and older.</b> This device’s answer says otherwise, so the gift can’t be claimed here.</p>'
       : rule === 'signin'
         ? '<p class="mf-st__dlg-line">The gift needs your account: check your connection, then open the store again.</p>'
         : `<p class="mf-st__dlg-line">A launch gift: free for now, and yours to keep after the gift ends.${until} It changes the look only: the same gun, the same stats.</p>${guest}${ask}`;

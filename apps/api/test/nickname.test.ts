@@ -139,7 +139,7 @@ describe('NicknamePolicy', () => {
     },
   );
 
-  it.each(['Admin', 'AdminJoe', 'Joe_Admin', 'xX_Mod_Xx', 'SuperModGuy', 'Moderator1', 'Official Ade', 'Military Forge', 'M1litaryF0rge', 'TheGameMaster', 'Support', 'Richie', 'RichieFan', 'R1chie'])(
+  it.each(['Admin', 'AdminJoe', 'Joe_Admin', 'xX_Mod_Xx', 'SuperModGuy', 'Moderator1', 'Official Ade', 'Forged Force', 'ForgedForce_7', 'F0rgedF0rce', 'M1litaryF0rge', 'MilitaryForge', 'TheGameMaster', 'Support', 'Richie', 'RichieFan', 'R1chie'])(
     'blocks impersonation: %s',
     (name) => {
       expect(reason(name)).toBe('reserved');

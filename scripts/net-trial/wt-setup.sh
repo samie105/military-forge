@@ -120,8 +120,8 @@ systemctl kill -s HUP mf-wt.service 2>/dev/null
 exit 0
 EOF
 chmod 0755 /usr/local/sbin/mf-wt-cert
-printf '[Unit]\nDescription=Military Forge: copy the TLS certificate for WebTransport\n[Service]\nType=oneshot\nExecStart=/usr/local/sbin/mf-wt-cert\n' >/etc/systemd/system/mf-wt-cert.service
-printf '[Unit]\nDescription=Military Forge: copy the TLS certificate for WebTransport\n[Timer]\nOnBootSec=2min\nOnCalendar=daily\n[Install]\nWantedBy=timers.target\n' >/etc/systemd/system/mf-wt-cert.timer
+printf '[Unit]\nDescription=Forged Force: copy the TLS certificate for WebTransport\n[Service]\nType=oneshot\nExecStart=/usr/local/sbin/mf-wt-cert\n' >/etc/systemd/system/mf-wt-cert.service
+printf '[Unit]\nDescription=Forged Force: copy the TLS certificate for WebTransport\n[Timer]\nOnBootSec=2min\nOnCalendar=daily\n[Install]\nWantedBy=timers.target\n' >/etc/systemd/system/mf-wt-cert.timer
 got=0
 for _ in $(seq 60); do /usr/local/sbin/mf-wt-cert && got=1 && break; sleep 5; done
 [ $got = 1 ] || {
@@ -132,7 +132,7 @@ for _ in $(seq 60); do /usr/local/sbin/mf-wt-cert && got=1 && break; sleep 5; do
 # ---------- the service ----------
 cat >/etc/systemd/system/mf-wt.service.new <<EOF
 [Unit]
-Description=Military Forge WebTransport gateway (UDP 443)
+Description=Forged Force WebTransport gateway (UDP 443)
 After=network-online.target mf-game.service
 [Service]
 User=mf

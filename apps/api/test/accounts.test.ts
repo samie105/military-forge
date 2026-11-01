@@ -431,7 +431,7 @@ describe('with email on (EMAIL_PROVIDER set)', () => {
       await api.settle();
       const sent = mailTo(email);
       expect(sent).toHaveLength(1);
-      expect(sent[0]!.subject).toBe('Confirm your email for Military Forge');
+      expect(sent[0]!.subject).toBe('Confirm your email for Forged Force');
       expect(sent[0]!.text).not.toContain(PW);
       const token = mail.token(sent[0], 'confirm')!;
       expect(sent[0]!.text).toContain(`https://play.example/#confirm=${token}`);
@@ -459,7 +459,7 @@ describe('with email on (EMAIL_PROVIDER set)', () => {
       expect(await taken.json()).toEqual(await free.json());
       await api.settle();
       const note = mailTo(owner.email).at(-1)!;
-      expect(note.subject).toBe('You already have a Military Forge account');
+      expect(note.subject).toBe('You already have a Forged Force account');
       expect(mail.token(note, 'confirm')).toBeNull();
       expect(((await (await c.me(other.accessToken)).json()) as { isGuest: boolean }).isGuest).toBe(true);
     });
@@ -493,7 +493,7 @@ describe('with email on (EMAIL_PROVIDER set)', () => {
       expect(mail.sent.length - before).toBe(1);
       expect(mailTo(ghost)).toHaveLength(0);
       const m = mailTo(p.email).at(-1)!;
-      expect(m.subject).toBe('Reset your Military Forge password');
+      expect(m.subject).toBe('Reset your Forged Force password');
       expect(m.text).toMatch(/https:\/\/play\.example\/#reset=t_[0-9a-z]{26}\./);
     });
 

@@ -1,4 +1,4 @@
-# Military Forge
+# Forged Force
 
 > The name lives in exactly two places, `GAME_NAME`/`GAME_SLUG` in `packages/shared/src/brand.ts` and the `@military-forge/*` package scope, so a rebrand is a search-and-replace, not a refactor. A full trademark search comes before filing (docs/01 §12).
 

@@ -1,5 +1,5 @@
 /**
- * "Install Military Forge, play full screen" (the owner, 23 Oct; Pen: PWA · INSTALL TOAST · phones):
+ * "Install Forged Force, play full screen" (the owner, 23 Oct; Pen: PWA · INSTALL TOAST · phones):
  * a Field Print toast on a Frost plate, on Home only (on Results it sat over the Lobby button: scripts/landscape-overflow.mjs). Android Chrome and Samsung Internet:
  * Install opens the browser's own prompt. iPhone Safari: the two taps (Share, Add to Home Screen).
  * When it shows is install.ts's call (shouldOffer); it never shows once installed.
@@ -35,7 +35,7 @@ export function InstallToast({ where }: { where: 'home' | 'results' }) {
     setOpen(false);
   };
   return (
-    <aside className={`mf-install mf-install--${where}${s.kind === 'ios' ? ' mf-install--ios' : ''}${top ? ' mf-install--top' : ''}`} role="dialog" aria-label={s.kind === 'ios' ? 'Add Military Forge to your Home Screen' : 'Install Military Forge'}>
+    <aside className={`mf-install mf-install--${where}${s.kind === 'ios' ? ' mf-install--ios' : ''}${top ? ' mf-install--top' : ''}`} role="dialog" aria-label={s.kind === 'ios' ? 'Add Forged Force to your Home Screen' : 'Install Forged Force'}>
       <span className="mf-install__tile" aria-hidden="true">
         {s.kind === 'ios' ? <Icon name="share" /> : <Icon name="download" />}
       </span>
@@ -45,7 +45,7 @@ export function InstallToast({ where }: { where: 'home' | 'results' }) {
         <>
           <span className="mf-install__words">
             <span className="mf-install__eyebrow">Play full screen</span>
-            <b className="mf-install__title display">Install Military Forge</b>
+            <b className="mf-install__title display">Install Forged Force</b>
             <span className="mf-install__line">No browser bars. It opens sideways, from your home screen.</span>
           </span>
           <button type="button" className="mf-install__later" onClick={close}>
@@ -106,7 +106,7 @@ export const INSTALLED_MS = 8000;
 
 /**
  * Over every screen (App.tsx): the iPhone guide an Install app button opened (Home, Settings, the pause
- * menu), and, once installed, "Installed: open Military Forge from your home screen for full screen".
+ * menu), and, once installed, "Installed: open Forged Force from your home screen for full screen".
  */
 export function PwaHost() {
   const s = useSyncExternalStore(pwaStore.subscribe, pwaStore.getState, pwaStore.getState);
@@ -127,14 +127,14 @@ export function PwaHost() {
           </span>
           <span className="mf-install__words">
             <b className="mf-install__title display">Installed</b>
-            <span className="mf-install__line">Open Military Forge from your home screen for full screen.</span>
+            <span className="mf-install__line">Open Forged Force from your home screen for full screen.</span>
           </span>
           <button type="button" className="mf-install__later" onClick={closeInstalled}>
             OK
           </button>
         </aside>
       ) : (
-        <aside className="mf-install mf-install--ios mf-install--top" role="dialog" aria-label="Add Military Forge to your Home Screen">
+        <aside className="mf-install mf-install--ios mf-install--top" role="dialog" aria-label="Add Forged Force to your Home Screen">
           <span className="mf-install__tile" aria-hidden="true">
             <Icon name="share" />
           </span>

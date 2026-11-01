@@ -86,10 +86,10 @@ You need an AWS account with billing set up. Pick the region from the region men
    - At first the browser may not reach it. Caddy gets its certificate within a minute or two of boot.
    - The page shows each step (installing packages, downloading the game, installing Node and pnpm, installing dependencies, building, starting) and then **ready**, with the room link.
    - If a step fails, the page shows the end of the log, with the secrets hidden.
-6. **Read the private links without SSH.** Select the instance → **Actions** → **Monitor and troubleshoot** → **Get system log**. Scroll to the end, or search for **`MILITARY FORGE TRIAL SERVER READY`**. The box looks like this:
+6. **Read the private links without SSH.** Select the instance → **Actions** → **Monitor and troubleshoot** → **Get system log**. Scroll to the end, or search for **`FORGED FORCE TRIAL SERVER READY`**. The box looks like this:
 
    ```
-   ===== MILITARY FORGE TRIAL SERVER READY =====
+   ===== FORGED FORCE TRIAL SERVER READY =====
    Room:   https://102-89-10-20.sslip.io/r/KQXMZP
    Status: https://102-89-10-20.sslip.io/trial-status/
    Probe:  https://102-89-10-20.sslip.io/probe
@@ -215,7 +215,7 @@ What the owner sets up (nothing here is created for you):
    ```sh
    EMAIL_PROVIDER='resend'
    EMAIL_API_KEY='re_...'
-   EMAIL_FROM='Military Forge <no-reply@your-domain.com>'
+   EMAIL_FROM='Forged Force <no-reply@your-domain.com>'
    ```
    Optional: `EMAIL_API_URL` for another provider with the same API (default `https://api.resend.com/emails`), and `APP_URL` if the links should open an address other than the box's own (`CORS_ORIGINS`).
 4. **Restart the API:** `sudo systemctl daemon-reload && sudo systemctl restart mf-api`. The setup script (`scripts/net-trial/data.sh`) adds the drop-in that reads the file at the next deploy; it is not in `cloud-init.sh`, which is at EC2's 16 KB limit.

@@ -1,4 +1,4 @@
-Military Forge: motion data credits
+Forged Force: motion data credits
 
 Some of the soldiers' animations are made from motion capture, retargeted and restyled for the game's characters.
 

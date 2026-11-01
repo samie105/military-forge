@@ -82,7 +82,7 @@ describe('guessing backoff', () => {
 describe('HttpEmailSender', () => {
   it('posts a Resend-style request with the key as a bearer token', async () => {
     const calls: { url: string; init: RequestInit }[] = [];
-    const sender = new HttpEmailSender({ apiUrl: 'https://mail.example/emails', apiKey: 're_test_key', from: 'Military Forge <no-reply@example.com>' }, async (url, init) => {
+    const sender = new HttpEmailSender({ apiUrl: 'https://mail.example/emails', apiKey: 're_test_key', from: 'Forged Force <no-reply@example.com>' }, async (url, init) => {
       calls.push({ url: String(url), init: init! });
       return new Response('{"id":"x"}', { status: 200 });
     });
@@ -91,7 +91,7 @@ describe('HttpEmailSender', () => {
     expect(calls[0]!.url).toBe('https://mail.example/emails');
     expect((calls[0]!.init.headers as Record<string, string>).authorization).toBe('Bearer re_test_key');
     const body = JSON.parse(String(calls[0]!.init.body)) as Record<string, unknown>;
-    expect(body).toMatchObject({ from: 'Military Forge <no-reply@example.com>', to: ['kemi@example.com'], subject: 'Reset your Military Forge password' });
+    expect(body).toMatchObject({ from: 'Forged Force <no-reply@example.com>', to: ['kemi@example.com'], subject: 'Reset your Forged Force password' });
     expect(String(body.text)).toContain('https://play.example/#reset=t_x.y');
   });
 
@@ -116,8 +116,8 @@ describe('email config', () => {
 
   it('resend needs a key and a sender address; the API URL defaults to Resend', () => {
     expect(() => loadConfig({ NODE_ENV: 'test', EMAIL_PROVIDER: 'resend' })).toThrow(ConfigError);
-    const c = loadConfig({ NODE_ENV: 'test', EMAIL_PROVIDER: 'resend', EMAIL_API_KEY: 're_12345678', EMAIL_FROM: 'Military Forge <no-reply@example.com>' });
-    expect(c.email).toEqual({ provider: 'resend', apiUrl: 'https://api.resend.com/emails', apiKey: 're_12345678', from: 'Military Forge <no-reply@example.com>' });
+    const c = loadConfig({ NODE_ENV: 'test', EMAIL_PROVIDER: 'resend', EMAIL_API_KEY: 're_12345678', EMAIL_FROM: 'Forged Force <no-reply@example.com>' });
+    expect(c.email).toEqual({ provider: 'resend', apiUrl: 'https://api.resend.com/emails', apiKey: 're_12345678', from: 'Forged Force <no-reply@example.com>' });
   });
 
   it('refuses the log provider and plain-http links in production', () => {

@@ -152,7 +152,7 @@ export function errorText(code: string, extra: Record<string, unknown> = {}): st
     case 'invalid_birth_year':
       return 'Pick the year you were born to claim it.';
     case 'underage':
-      return 'Military Forge is for players 18 and older.';
+      return 'Forged Force is for players 18 and older.';
     case 'store_off':
       return 'The store isn’t open yet.';
     case 'password_required':

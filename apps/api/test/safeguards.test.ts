@@ -54,7 +54,7 @@ describe('18+ only: saving an account (the test clock is in 2026)', () => {
       const guest = await createGuest(api);
       const res = await c.save(guest, { birthYear, adult: true });
       expect(res.status).toBe(403);
-      expect(await errorOf(res)).toMatchObject({ code: 'underage', message: 'Military Forge is for players 18 and over' });
+      expect(await errorOf(res)).toMatchObject({ code: 'underage', message: 'Forged Force is for players 18 and over' });
       expect(await userRow(api, guest.user.id)).toEqual({ adultConfirmedAt: null, birthYear: null });
       expect(((await (await api.app.request('/me', { headers: bearer(guest.accessToken) })).json()) as { isGuest: boolean }).isGuest).toBe(true);
     }

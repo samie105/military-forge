@@ -1233,7 +1233,7 @@ export class ShellController {
 }
 
 /**
- * The browser tab's title for where the player is (audit C-41, D-29): "Lobby · KTVGBD · Military Forge",
+ * The browser tab's title for where the player is (audit C-41, D-29): "Lobby · KTVGBD · Forged Force",
  * "In match · Street Market · …", "Settings · Controls · …". Null: the page's own (Home, the first
  * visit's steps), the one index.html gives search results.
  */

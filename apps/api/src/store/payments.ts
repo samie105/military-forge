@@ -145,7 +145,7 @@ export class PaymentService {
         redirectUrl: `${returnTo}/?store=return`,
         email: who.email,
         name: profile?.nickname ?? 'Player',
-        title: 'Military Forge',
+        title: 'Forged Force',
         description: `${bundle.brass.toLocaleString('en')} ${CURRENCY_NAME} (${formatMoney(amountMinor, currency)})`,
       });
       this.log.info({ store: 'checkout', userId, txRef, bundleId, currency, amountMinor }, 'checkout opened');

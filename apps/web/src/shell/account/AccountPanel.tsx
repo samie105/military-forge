@@ -211,7 +211,7 @@ export function AccountPanel({ store, variant, preset }: { store: ShellStore; va
       if (age && !age.adult) {
         body = (
           <>
-            <Row variant={variant} label="Save your account" desc="Military Forge is for players 18 and over, so accounts can’t be saved on this device." block />
+            <Row variant={variant} label="Save your account" desc="Forged Force is for players 18 and over, so accounts can’t be saved on this device." block />
             <div className="acct-actions">{cancel}</div>
           </>
         );

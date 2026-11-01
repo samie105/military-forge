@@ -2,7 +2,7 @@
 
 **Owner, 19 Oct 2026:** "I need the controls to have a nice and creative user experience… I can't even understand the controls myself, some things aren't explained. Make the buttons swipeable, like the frags for example, and for other buttons research ways to make it creative so gamers can enjoy doing things with the buttons", plus camera controls.
 
-This note covers three things: what touch shooters and platform fighters do on phones in general, what fits Military Forge (a 2.5D jetpack shooter played sideways with two thumbs), and what v3 builds.
+This note covers three things: what touch shooters and platform fighters do on phones in general, what fits Forged Force (a 2.5D jetpack shooter played sideways with two thumbs), and what v3 builds.
 
 It describes patterns, not any one game's UI. Everything here is our own design in the round-two kit's look.
 
@@ -28,7 +28,7 @@ It describes patterns, not any one game's UI. Everything here is our own design 
 - **A gesture shows what it did.** The grenade fan shows the belt, the radial shows its choices, and the swipe dashes leave the dash ring's tick.
 - **Teach in context.** A hint appears the first time something becomes possible (two grenade types on the belt, a second gun, a crate underfoot), then never again.
 
-## 2. What fits Military Forge
+## 2. What fits Forged Force
 
 The game is played sideways with two thumbs:
 

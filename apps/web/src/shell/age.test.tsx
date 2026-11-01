@@ -415,7 +415,7 @@ describe('Save your account: one 18+ question (the gate\'s), and the Terms', () 
   });
 
   it("the API's answers in words", () => {
-    expect(accountErrorText(new ApiError(403, 'underage', 'x'))).toBe('Military Forge is for players 18 and over, so this account can’t be saved.');
+    expect(accountErrorText(new ApiError(403, 'underage', 'x'))).toBe('Forged Force is for players 18 and over, so this account can’t be saved.');
     expect(accountErrorText(new ApiError(400, 'age_required', 'x'))).toBe('Pick the year you were born, then try again.');
     expect(accountErrorText(new ApiError(400, 'bot_check_required', 'x'))).toBe("Finish the check that you're not a bot, then try again.");
     expect(accountErrorText(new ApiError(403, 'bot_check_failed', 'x'))).toBe("The check that you're not a bot didn't pass. Try it again.");

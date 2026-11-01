@@ -1,5 +1,5 @@
 /**
- * The 18+ step (the owner, 28 Oct 2026: Military Forge is for adults). One question, asked once on
+ * The 18+ step (the owner, 28 Oct 2026: Forged Force is for adults). One question, asked once on
  * this device: by the age gate before its first online room (create, join, watch, a local room:
  * controller.ts), or by "Save your account" or the store's claim when the player gets there first
  * (they show the same question: AgeGate.tsx's AgeQuestion). The answer kept here is what a save

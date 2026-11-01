@@ -63,7 +63,7 @@ export function accountErrorText(e: unknown): string {
     case 'invalid_birth_year':
       return "That year doesn't look right.";
     case 'underage':
-      return 'Military Forge is for players 18 and over, so this account can’t be saved.';
+      return 'Forged Force is for players 18 and over, so this account can’t be saved.';
     case 'bot_check_required':
       return "Finish the check that you're not a bot, then try again.";
     case 'bot_check_failed':

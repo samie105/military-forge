@@ -48,7 +48,7 @@ export const IMPERSONATION: TermList = {
  * innocent names ("IronForge" stays free, "Forge" and "Forge_7" don't).
  */
 export const BRAND_RESERVED: TermList & { exact: readonly string[] } = {
-  anywhere: ['deetstudio', 'worldstreet', 'anticheat', 'devteam', 'customerservice', 'customercare'],
+  anywhere: ['deetstudio', 'worldstreet', 'militaryforge', 'anticheat', 'devteam', 'customerservice', 'customercare'],
   edge: [],
   word: ['deet', 'ceo', 'founder'],
   exact: ['forge', 'theforge'],

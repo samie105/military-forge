@@ -124,7 +124,7 @@ export function accountRoutes(deps: AccountRouteDeps): Hono<AppEnv> {
     if (answer === 'invalid') throw new ApiError(400, 'invalid_birth_year', "That year doesn't look right");
     if (answer === 'minor') {
       audit(c, 'save_refused_underage', { userId });
-      throw new ApiError(403, 'underage', 'Military Forge is for players 18 and over');
+      throw new ApiError(403, 'underage', 'Forged Force is for players 18 and over');
     }
     return body.birthYear;
   }

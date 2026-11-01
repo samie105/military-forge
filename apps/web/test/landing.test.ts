@@ -12,7 +12,7 @@ describe('the landing page (index.html)', () => {
   it('has one h1 (the name), a title, a description of a useful length, a canonical and link previews', () => {
     expect(all(/<h1\b/g)).toHaveLength(1);
     expect(html).toMatch(/<h1[^>]*>[\s\S]*%GAME_NAME%[\s\S]*<\/h1>/);
-    const description = /<meta name="description" content="([^"]+)"/.exec(html)![1]!.replace('%GAME_NAME%', 'Military Forge');
+    const description = /<meta name="description" content="([^"]+)"/.exec(html)![1]!.replace('%GAME_NAME%', 'Forged Force');
     expect(description.length).toBeGreaterThan(70);
     expect(description.length).toBeLessThanOrEqual(170);
     for (const tag of ['<link rel="canonical" href="%ORIGIN%/"', 'property="og:image" content="%ORIGIN%/og-image.jpg"', 'name="twitter:card" content="summary_large_image"', '<link rel="manifest"', 'name="theme-color"', 'viewport-fit=cover']) {
@@ -23,10 +23,10 @@ describe('the landing page (index.html)', () => {
 
   it('describes the game for search engines: JSON-LD VideoGame, WebSite and Organization', () => {
     const raw = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(html)![1]!;
-    const data = JSON.parse(raw.replaceAll('%GAME_NAME%', 'Military Forge').replaceAll('%ORIGIN%', 'https://example.test')) as { '@graph': { '@type': string; name?: string; offers?: { price: string } }[] };
+    const data = JSON.parse(raw.replaceAll('%GAME_NAME%', 'Forged Force').replaceAll('%ORIGIN%', 'https://example.test')) as { '@graph': { '@type': string; name?: string; offers?: { price: string } }[] };
     const types = data['@graph'].map((n) => n['@type']);
     expect(types).toEqual(['VideoGame', 'WebSite', 'Organization']);
-    expect(data['@graph'][0]!.name).toBe('Military Forge');
+    expect(data['@graph'][0]!.name).toBe('Forged Force');
     expect(data['@graph'][0]!.offers!.price).toBe('0');
   });
 
@@ -37,7 +37,7 @@ describe('the landing page (index.html)', () => {
     expect(html).toMatch(/id="about"[^>]*role="dialog"[^>]*aria-labelledby="about-h"/);
     expect(html).toContain('id="about-h"');
     // the game's name lives in packages/shared/src/brand.ts only
-    expect(html).not.toMatch(/Military Forge/);
+    expect(html).not.toMatch(/Forged Force/);
   });
 
   it('its links take taps while the game loads, and it never shows through the app once that is up (26 Oct: no blank page)', () => {
@@ -70,10 +70,10 @@ describe('the landing page (index.html)', () => {
 });
 
 describe('the crawl and install files (seo.ts)', () => {
-  const files = seoFiles('Military Forge', { '/': '2026-10-23', '/terms.html': '2026-10-28' });
+  const files = seoFiles('Forged Force', { '/': '2026-10-23', '/terms.html': '2026-10-28' });
   it('a web app manifest that installs the game sideways, with icons and a short name that fits under the icon (audit 28 Oct)', () => {
     const m = JSON.parse(files['manifest.webmanifest']) as { name: string; short_name: string; orientation: string; start_url: string; icons: { sizes: string; purpose: string }[] };
-    expect(m.name).toBe('Military Forge');
+    expect(m.name).toBe('Forged Force');
     expect(m.short_name).toBe('Forge');
     expect(m.short_name.length).toBeLessThanOrEqual(12);
     expect(m.orientation).toBe('landscape');
@@ -96,7 +96,7 @@ describe('the crawl and install files (seo.ts)', () => {
   });
   it('llms.txt: a title, a one-line summary and absolute links to the pages', () => {
     const llms = files['llms.txt'];
-    expect(llms.startsWith('# Military Forge\n\n> ')).toBe(true);
+    expect(llms.startsWith('# Forged Force\n\n> ')).toBe(true);
     expect(llms).toContain('](%ORIGIN%/privacy.html)');
     expect(llms).not.toMatch(/\u2014/); // no em dashes
   });

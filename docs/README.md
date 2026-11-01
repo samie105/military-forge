@@ -1,4 +1,4 @@
-# MILITARY FORGE — Game Plan
+# FORGED FORCE — Game Plan
 
 > Name chosen 16 Oct 2026, **pending trademark clearance** (see [01 §12](01-game-design.md#12-naming-ip-and-clean-room-rules)).
 

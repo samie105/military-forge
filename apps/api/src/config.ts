@@ -208,7 +208,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   }
   if (e.EMAIL_PROVIDER === 'resend') {
     if (!e.EMAIL_API_KEY) issues.push('EMAIL_API_KEY: required with EMAIL_PROVIDER=resend');
-    if (!e.EMAIL_FROM) issues.push('EMAIL_FROM: required with EMAIL_PROVIDER=resend (e.g. "Military Forge <no-reply@example.com>")');
+    if (!e.EMAIL_FROM) issues.push('EMAIL_FROM: required with EMAIL_PROVIDER=resend (e.g. "Forged Force <no-reply@example.com>")');
   }
   if (e.EMAIL_PROVIDER === 'log' && production) issues.push('EMAIL_PROVIDER: log writes reset links to the log; not in production');
   if (e.EMAIL_PROVIDER === 'resend' && production && e.EMAIL_API_URL && !e.EMAIL_API_URL.startsWith('https://')) issues.push('EMAIL_API_URL: must be https:// in production');

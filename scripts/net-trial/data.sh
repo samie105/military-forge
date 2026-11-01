@@ -74,8 +74,8 @@ mv "$f.tmp" "$f"
 ls -1 "$d"/mf-*.dump | head -n -7 | xargs -r rm -f --
 EOF
 chmod 0755 /usr/local/sbin/mf-backup
-printf '[Unit]\nDescription=Military Forge: back up the database\nAfter=postgresql.service\n[Service]\nType=oneshot\nUser=postgres\nUMask=0077\nExecStart=/usr/local/sbin/mf-backup\n' >/etc/systemd/system/mf-backup.service
-printf '[Unit]\nDescription=Military Forge: back up the database nightly\n[Timer]\nOnCalendar=*-*-* 02:30:00 UTC\nPersistent=true\n[Install]\nWantedBy=timers.target\n' >/etc/systemd/system/mf-backup.timer
+printf '[Unit]\nDescription=Forged Force: back up the database\nAfter=postgresql.service\n[Service]\nType=oneshot\nUser=postgres\nUMask=0077\nExecStart=/usr/local/sbin/mf-backup\n' >/etc/systemd/system/mf-backup.service
+printf '[Unit]\nDescription=Forged Force: back up the database nightly\n[Timer]\nOnCalendar=*-*-* 02:30:00 UTC\nPersistent=true\n[Install]\nWantedBy=timers.target\n' >/etc/systemd/system/mf-backup.timer
 systemctl daemon-reload && systemctl enable --now --quiet mf-backup.timer || fail 'the backup timer'
 fi
 

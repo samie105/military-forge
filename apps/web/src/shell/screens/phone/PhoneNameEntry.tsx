@@ -262,7 +262,7 @@ export function PhoneNameEntry({ store, first }: { store: ShellStore; first: boo
           </div>
         </div>
       </form>
-      {turnTip && <TurnTip line="Military Forge plays in landscape, and your name is easier to type that way too." onDone={markTurnTipSeen} />}
+      {turnTip && <TurnTip line="Forged Force plays in landscape, and your name is easier to type that way too." onDone={markTurnTipSeen} />}
     </PhoneScreen>
   );
 }

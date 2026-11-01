@@ -21,7 +21,7 @@
 import type { Plugin } from 'vite';
 
 export function serviceWorkerSource(version: string, chunks: readonly string[] = []): string {
-  return `/* Military Forge service worker, build ${version} (apps/web/pwa.ts) */
+  return `/* Forged Force service worker, build ${version} (apps/web/pwa.ts) */
 const VERSION = ${JSON.stringify(version)};
 // the game page's code, every chunk it can load (the Locker's, the portraits'…): kept once the player
 // heads for play, so training starts offline even where a chunk never loaded online

@@ -1,6 +1,6 @@
 # Audio design: the mix rules
 
-How Military Forge's sound is mixed, so changes keep the same feel. The code is `apps/web/src/audio` (NOTES §28); the sounds themselves are recipes in `sounds/`, and the sound board (`/sounds.html`) plays any of them from anywhere around you.
+How Forged Force's sound is mixed, so changes keep the same feel. The code is `apps/web/src/audio` (NOTES §28); the sounds themselves are recipes in `sounds/`, and the sound board (`/sounds.html`) plays any of them from anywhere around you.
 
 **Tone:** war, not a toy. Close gunfire is a hard, dry crack with a body you feel; blasts are deep and long with debris; hits are thuds; the interface is muted clicks and radio blips; the music is drones and drums in minor keys. Nothing bright, bouncy or major-key.
 

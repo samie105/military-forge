@@ -1,7 +1,7 @@
 # WorldStreet billboard masters
 
 Masters for WorldStreet's in-world billboards (Street Market), designed in Deet's Pen file, board
-"DEET × Military Forge — billboard set v2" (node n8HYKf), exported at docs/14 §3.1's upload sizes
+"DEET × Forged Force — billboard set v2" (node n8HYKf), exported at docs/14 §3.1's upload sizes
 (Screens 2048×1536, Hoardings 2304×384). `apps/web/scripts/house-ads.py` grades them into the
 runtime layers (`--sponsored-only`).
 

@@ -134,7 +134,7 @@ describe('the cards and the toast', () => {
     expect(html.match(/<a /g)).toHaveLength(2);
     expect(html).toContain('target="_blank"');
     expect(html).toContain('rel="noopener noreferrer"');
-    expect(html).toContain('href="https://deet.studio/?utm_source=military-forge&amp;utm_medium=billboard&amp;utm_campaign=street-market&amp;utm_content=deet-napkin-motion"');
+    expect(html).toContain('href="https://deet.studio/?utm_source=forged-force&amp;utm_medium=billboard&amp;utm_campaign=street-market&amp;utm_content=deet-napkin-motion"');
     expect(html).toContain('aria-label="Remove the Deet Studios ad"');
     expect(html).toContain('(opens in a new tab)');
     expect(html.match(/Trading involves risk\. 18\+\./g)).toHaveLength(1);

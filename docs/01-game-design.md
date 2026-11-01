@@ -1,6 +1,6 @@
 # 01 — Game Design
 
-> Game name: **MILITARY FORGE** (chosen 17 Oct 2026 after a preliminary screen; full trademark search before filing, see §12).
+> Game name: **FORGED FORCE** (chosen 17 Oct 2026 after a preliminary screen; full trademark search before filing, see §12).
 > A 2.5D online jetpack shooter for the browser: the chaos and feel of classic 2D jetpack shooters, rebuilt in 3D, playable in a tab, with rooms, groups and a drop-in battle royale.
 
 ---
@@ -232,7 +232,7 @@ Elements:
 - **Do not** use any other game's name, branding, character names, map names verbatim, UI art, sounds, or any ripped assets. Game mechanics aren't copyrightable; trade dress and assets are.
 - Our maps reuse **archetypes** (tower, tombs, base), never copied layouts. The working map names above (Outpost, Catacombs, Pyramid, Bottleneck, Crossfire) are **placeholders to rename** before launch.
 - Weapons use original names (03-weapons §2).
-- **Name: "Military Forge".** Chosen 17 Oct 2026 after a preliminary screen (web, app stores, US trademark mirrors) found no game or game-software mark with that name. Before spending on branding:
+- **Name: "Forged Force".** Chosen 1 Nov 2026 (it was "Military Forge" from 17 Oct, which the owner found too plain). A preliminary screen on 28 Oct (web, app stores, trademark search) found no game, app or mark with that name; the nearest are *Forged to Fight* and *Forged Battalion*. The .com is taken, so the planned address is forgedforce.games. Before spending on branding:
   1. Run full clearance searches: USPTO (TSDR), EUIPO, UK IPO, **India IP office**, Nigeria's trademark registry, and the WIPO Global Brand Database, in classes 9 and 41.
   2. Get a short written opinion from a trademark lawyer.
   3. Keep the name in a single config constant (`GAME_NAME`, package scope, domain) so a rebrand stays cheap.

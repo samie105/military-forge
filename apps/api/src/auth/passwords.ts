@@ -102,6 +102,9 @@ const COMMON = new Set([
   'militaryforge',
   'militaryforge1',
   'militaryforge123',
+  'forgedforce',
+  'forgedforce1',
+  'forgedforce123',
 ]);
 
 /** True when `pw` is one run of at most 3 characters repeated ("aaaaaaaaaa", "121212…", "abcabc…"). */

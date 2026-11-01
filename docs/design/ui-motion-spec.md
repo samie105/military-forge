@@ -1,4 +1,4 @@
-# Military Forge motion system (one system, desktop and phone)
+# Forged Force motion system (one system, desktop and phone)
 
 The owner's words: "the UI should have nice motion … the desktop too … the same nice motion … and use cases for each of them." This file is that one system. Both UI agents (desktop and phone) build from it, so every screen moves the same way. It sits on top of the round-two kit (`military-forge-ui-v2.html`) and its wiring brief (`ui-v2-wiring-brief.md`). The kit decides how things look; this file decides how they move.
 

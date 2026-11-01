@@ -1,5 +1,5 @@
 #!/bin/bash
-# Military Forge trial server, Ubuntu 24.04: cloud-init user data (docs/net-trial.md).
+# Forged Force trial server, Ubuntu 24.04: cloud-init user data (docs/net-trial.md).
 # Re-run: sudo /usr/local/sbin/mf-trial-setup (staging: mf-staging-setup). Releases: docs/release.md
 # shellcheck disable=SC2015,SC2016,SC2019,SC2086,SC1090,SC1091
 
@@ -54,7 +54,7 @@ status() { # the public page and its JSON; the owner's page once the secrets exi
   [ "$PHASE" = ready ] && ready=1
   [ -n "$ROOM" ] && room_link="$ORIGIN/r/$ROOM"
   [ "$PROBE" = 1 ] && probe_link="$ORIGIN/probe"
-  h="<h1>Military Forge trial server</h1><p class=k>$(date -u '+%Y-%m-%d %H:%M UTC') · $HOST · ${COMMIT:-?}</p><p>Status: <b>$(printf '%s' "$PHASE" | esc)</b></p>"
+  h="<h1>Forged Force trial server</h1><p class=k>$(date -u '+%Y-%m-%d %H:%M UTC') · $HOST · ${COMMIT:-?}</p><p>Status: <b>$(printf '%s' "$PHASE" | esc)</b></p>"
   [ $ready = 1 ] || h="$h<p class=k>Setup takes ~15 min; this page refreshes.</p>"
   [ -n "$room_link" ] && h="$h<p>Game room ($BOTS-player bot fill, $MAP):<br><a href=\"$room_link\">$room_link</a></p><p class=k>Phones: hold sideways.</p>"
   [ -n "$probe_link" ] && h="$h<p>Ping test:<br><a href=\"$probe_link\">$probe_link</a></p>"
@@ -68,10 +68,10 @@ status() { # the public page and its JSON; the owner's page once the secrets exi
 }
 
 phase() { PHASE="$1"; log "== $1"; status; }
-fail() { phase "failed: $1"; console "MILITARY FORGE setup FAILED: $1 ($ORIGIN/trial-status/)"; exit 1; }
+fail() { phase "failed: $1"; console "FORGED FORCE setup FAILED: $1 ($ORIGIN/trial-status/)"; exit 1; }
 
 # -- the address
-log "Military Forge trial setup ($REPO $REF${STG:+, staging})"
+log "Forged Force trial setup ($REPO $REF${STG:+, staging})"
 if [ -z "$HOST" ]; then
   ip=''
   t=$(curl -fsS -m 3 -X PUT -H 'X-aws-ec2-metadata-token-ttl-seconds: 300' http://169.254.169.254/latest/api/token 2>/dev/null) &&
@@ -254,16 +254,16 @@ CPUWeight=20}
 WantedBy=multi-user.target
 EOF
 }
-unit ${N}api "Military Forge API${STG:+ (staging)}" "$SRC/apps/api" "$NODE_DIR/bin/node --import tsx $SRC/apps/api/src/index.ts"
-unit ${N}game "Military Forge game server${STG:+ (staging)}" "$SRC/apps/game-server" "$NODE_DIR/bin/node --max-semi-space-size=64 --import tsx $SRC/apps/game-server/src/index.ts"
-[ -z "$STG" ] && unit mf-probe 'Military Forge ping probe' "$SRC" "$NODE_DIR/bin/node $SRC/scripts/net-trial/probe-server/server.mjs"
+unit ${N}api "Forged Force API${STG:+ (staging)}" "$SRC/apps/api" "$NODE_DIR/bin/node --import tsx $SRC/apps/api/src/index.ts"
+unit ${N}game "Forged Force game server${STG:+ (staging)}" "$SRC/apps/game-server" "$NODE_DIR/bin/node --max-semi-space-size=64 --import tsx $SRC/apps/game-server/src/index.ts"
+[ -z "$STG" ] && unit mf-probe 'Forged Force ping probe' "$SRC" "$NODE_DIR/bin/node $SRC/scripts/net-trial/probe-server/server.mjs"
 
 services="${N}api ${N}game" timer=''
 if [ -z "$STG" ]; then # production only: the trial room, the probe, WebTransport
 timer=mf-room.timer
 install -m 0755 "$SRC/scripts/net-trial/mf-room.sh" /usr/local/sbin/mf-room
-printf '[Unit]\nDescription=Military Forge: keep the trial room open\nAfter=mf-api.service\n[Service]\nType=oneshot\nExecStart=/usr/local/sbin/mf-room\n' >/etc/systemd/system/mf-room.service
-printf '[Unit]\nDescription=Military Forge: keep the trial room open\n[Timer]\nOnBootSec=5min\nOnUnitActiveSec=2h\n[Install]\nWantedBy=timers.target\n' >/etc/systemd/system/mf-room.timer
+printf '[Unit]\nDescription=Forged Force: keep the trial room open\nAfter=mf-api.service\n[Service]\nType=oneshot\nExecStart=/usr/local/sbin/mf-room\n' >/etc/systemd/system/mf-room.service
+printf '[Unit]\nDescription=Forged Force: keep the trial room open\n[Timer]\nOnBootSec=5min\nOnUnitActiveSec=2h\n[Install]\nWantedBy=timers.target\n' >/etc/systemd/system/mf-room.timer
 
 W="$SRC/scripts/net-trial/wt-setup.sh"
 [ -f "$W" ] && bash "$W" env
@@ -281,7 +281,7 @@ wait_up 'the game server' http://127.0.0.1:$GAME_PORT/health ${N}game
 phase ready
 
 b="
-===== MILITARY FORGE TRIAL SERVER READY =====
+===== FORGED FORCE TRIAL SERVER READY =====
 Room:   ${ROOM:+$ORIGIN/r/$ROOM}
 Status: $ORIGIN/trial-status/
 Probe:  $([ $PROBE = 1 ] && echo "$ORIGIN/probe" || echo 'not in this build')

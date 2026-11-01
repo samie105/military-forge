@@ -106,7 +106,7 @@ Billboard ads in the seasons (14 §8.1): mobile-web ads arrive with S2 touch con
 
 | # | Decision | Default if nobody decides |
 |---|---|---|
-| 1 | Game name: **Military Forge** chosen (preliminary screen) → full trademark clearance + lawyer opinion | clear before any branding spend (target: end of Phase 1); keep backups ready |
+| 1 | Game name: **Forged Force** chosen (preliminary screen) → full trademark clearance + lawyer opinion | clear before any branding spend (target: end of Phase 1); keep backups ready |
 | 2 | Own netcode vs Colyseus 0.18 | own netcode (05 §16); revisit at the end of Phase 0 |
 | 3 | Node vs Rust game server long-term | Node until tick p99 or cost forces it (likely Phase 5+) |
 | 4 | GameLift vs Agones-on-bare-metal at growth | decide at 3k CCU based on team ops skill |

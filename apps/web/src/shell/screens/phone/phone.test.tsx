@@ -91,7 +91,7 @@ describe('when the phone menus apply', () => {
 
 describe('the share sheet', () => {
   it('the system sheet when there is one; the link copied when not; a cancelled sheet says nothing', async () => {
-    const data = { title: 'Military Forge', text: 'Join my room:', url: 'https://x/r/KMTXRA' };
+    const data = { title: 'Forged Force', text: 'Join my room:', url: 'https://x/r/KMTXRA' };
     const clipboard = { writeText: vi.fn(() => Promise.resolve()) };
     expect(await shareData(data, { share: () => Promise.resolve(), clipboard } as never)).toBe('shared');
     const abort = Object.assign(new Error('no'), { name: 'AbortError' });
@@ -104,9 +104,9 @@ describe('the share sheet', () => {
   });
 
   it('a shared result says who won, where, and how you did', () => {
-    expect(resultText(view(), results, 0)).toBe('Kemi won on Lunar Outpost in Military Forge: I came 2nd with 6 kills.');
+    expect(resultText(view(), results, 0)).toBe('Kemi won on Lunar Outpost in Forged Force: I came 2nd with 6 kills.');
     const draw: MatchResults = { ...results, standings: [standing(1, 'Kemi', 1, { score: 3 }), standing(0, 'Ade', 2, { score: 3, kills: 1 })] };
-    expect(resultText(view(), draw, 0)).toBe('A draw on Lunar Outpost in Military Forge: I came 2nd with 1 kill.');
+    expect(resultText(view(), draw, 0)).toBe('A draw on Lunar Outpost in Forged Force: I came 2nd with 1 kill.');
   });
 });
 

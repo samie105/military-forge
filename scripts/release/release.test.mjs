@@ -43,7 +43,7 @@ before(() => {
   // the public repo starts from a parentless snapshot, as the real one did
   commit('README', 'v0\n', 'first');
   const owner = { ...gitEnv, GIT_AUTHOR_NAME: 'samie105', GIT_AUTHOR_EMAIL: '42389790+samie105@users.noreply.github.com', GIT_COMMITTER_NAME: 'samie105', GIT_COMMITTER_EMAIL: '42389790+samie105@users.noreply.github.com' };
-  const first = execFileSync('git', ['commit-tree', 'HEAD^{tree}', '-m', 'Military Forge'], { cwd: work, env: owner, encoding: 'utf8' }).trim();
+  const first = execFileSync('git', ['commit-tree', 'HEAD^{tree}', '-m', 'Forged Force'], { cwd: work, env: owner, encoding: 'utf8' }).trim();
   git('push', '-q', 'public', `${first}:refs/heads/main`);
   git('push', '-q', 'origin', 'main');
 });

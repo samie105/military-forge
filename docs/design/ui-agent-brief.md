@@ -1,4 +1,4 @@
-You are designing the user interface for **Military Forge**, a fast 2.5D multiplayer shooter that runs in the web browser. Soldiers fly with jetpacks, fight with guns, grenades, melee and riot shields, and dash in 8 directions. The world is rendered in 3D but played on a flat side-view plane. Matches last about 5 minutes. Friends play together by sharing a room link (often on WhatsApp). The first players are in Nigeria and India. Desktop with keyboard and mouse comes first; phones in landscape follow soon.
+You are designing the user interface for **Forged Force**, a fast 2.5D multiplayer shooter that runs in the web browser. Soldiers fly with jetpacks, fight with guns, grenades, melee and riot shields, and dash in 8 directions. The world is rendered in 3D but played on a flat side-view plane. Matches last about 5 minutes. Friends play together by sharing a room link (often on WhatsApp). The first players are in Nigeria and India. Desktop with keyboard and mouse comes first; phones in landscape follow soon.
 
 ## What to deliver
 

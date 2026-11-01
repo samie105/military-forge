@@ -523,11 +523,11 @@ describe('the tab title (C-41, D-29)', () => {
   const base = { overlay: null, route: null, match: null, lobby: null, connection: null, settingsTab: 'graphics' } as const;
   it('names the screen; Home keeps the page’s own', () => {
     expect(tabTitle({ ...base, screen: { name: 'home' } })).toBeNull();
-    expect(tabTitle({ ...base, screen: { name: 'room', code: 'KTVGBD' }, connection: { ...connected }, lobby: lobby(), match: match(MatchPhase.Waiting) })).toBe('Lobby · KTVGBD · Military Forge');
-    expect(tabTitle({ ...base, screen: { name: 'room', code: 'KTVGBD' }, connection: { ...connected }, lobby: lobby(), match: match(MatchPhase.InProgress) })).toBe('In match · Street Market · Military Forge');
-    expect(tabTitle({ ...base, screen: { name: 'room', code: 'KTVGBD' }, connection: { ...connected }, lobby: lobby(), match: match(MatchPhase.Postgame) })).toBe('Results · Military Forge');
-    expect(tabTitle({ ...base, screen: { name: 'home' }, overlay: 'settings', settingsTab: 'controls' })).toBe('Settings · Controls · Military Forge');
-    expect(tabTitle({ ...base, screen: { name: 'home' }, route: { id: 'locker', title: 'Locker' } })).toBe('Locker · Military Forge');
-    expect(tabTitle({ ...base, screen: { name: 'training', tour: 'first-flight' } })).toBe('First flight · Military Forge');
+    expect(tabTitle({ ...base, screen: { name: 'room', code: 'KTVGBD' }, connection: { ...connected }, lobby: lobby(), match: match(MatchPhase.Waiting) })).toBe('Lobby · KTVGBD · Forged Force');
+    expect(tabTitle({ ...base, screen: { name: 'room', code: 'KTVGBD' }, connection: { ...connected }, lobby: lobby(), match: match(MatchPhase.InProgress) })).toBe('In match · Street Market · Forged Force');
+    expect(tabTitle({ ...base, screen: { name: 'room', code: 'KTVGBD' }, connection: { ...connected }, lobby: lobby(), match: match(MatchPhase.Postgame) })).toBe('Results · Forged Force');
+    expect(tabTitle({ ...base, screen: { name: 'home' }, overlay: 'settings', settingsTab: 'controls' })).toBe('Settings · Controls · Forged Force');
+    expect(tabTitle({ ...base, screen: { name: 'home' }, route: { id: 'locker', title: 'Locker' } })).toBe('Locker · Forged Force');
+    expect(tabTitle({ ...base, screen: { name: 'training', tour: 'first-flight' } })).toBe('First flight · Forged Force');
   });
 });

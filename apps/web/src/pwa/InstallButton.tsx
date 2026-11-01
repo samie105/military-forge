@@ -20,7 +20,7 @@ export function InstallButton({ className = '', inTopBar = false }: { className?
     <button
       type="button"
       className={`btn btn--ghost btn--sm mf-install-btn m-p8 ${className}`.trim()}
-      title={s.kind === 'ios' ? 'Add Military Forge to your Home Screen: full screen, no browser bars' : 'Install Military Forge: full screen, from your home screen'}
+      title={s.kind === 'ios' ? 'Add Forged Force to your Home Screen: full screen, no browser bars' : 'Install Forged Force: full screen, from your home screen'}
       onClick={() => askInstall(facts?.matches.finished ?? 0)}
     >
       <Icon name="download" />

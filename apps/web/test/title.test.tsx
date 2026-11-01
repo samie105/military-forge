@@ -70,7 +70,7 @@ describe('the title screen: the corners and the prompt', () => {
   it('draws the lockup, one keyboard prompt (no pad line without a pad, no build id) and the art', () => {
     const html = renderToStaticMarkup(<TitleScreen store={createShellStore({ title: 'on', screen: { name: 'home' } })} />);
     expect(html).toContain('data-screen="title"');
-    expect(html).toContain('Military Forge');
+    expect(html).toContain('Forged Force');
     // audit 31 Oct A-24: the key cap carries "Any key" once; A-39: the controller's line only with a pad connected
     expect(html).toMatch(/<span class="mf-title__press">Press<kbd class="kbd kbd--lg">Any key<\/kbd><\/span>/);
     expect(html.match(/any key/gi)).toHaveLength(1);

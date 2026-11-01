@@ -107,7 +107,7 @@ font-ui "Barlow Semi Condensed" · font-display "Big Shoulders Stencil"
 
 - It swaps every colour, the UI font, the surface model and the decoration.
 - Its palette is round one's palette word for word. The v2 kit's own header says round two replaced it: "teal/sand frost became STREET PRINT".
-- It brands itself as a round-two alternative ("Military Forge · V2 'Thumb Dials'", the phone HUD's "Concept B").
+- It brands itself as a round-two alternative ("Forged Force · V2 'Thumb Dials'", the phone HUD's "Concept B").
 
 **Frost does not replace round two on its own authority.** The owner's decision of 18 Oct ("`military-forge-ui-v2.html` is the source of truth for every screen") still stands. The 19 Oct note lists both boards as a "shared design source" without choosing between them. Frost covers about 17 screens and one HUD state, against round two's 27 screens and many states. **Whether to reskin is the owner's call.** Until the owner decides, the safe reading is: keep Field Print as the look, and port Frost's new features (§1) into Field Print's components.
 

@@ -60,11 +60,11 @@ export function emailSenderFor(config: Config, log: Logger): EmailSender | null 
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
 
 function message(to: string, subject: string, lines: string[], link?: { url: string; label: string }): EmailMessage {
-  const text = [...lines, ...(link ? ['', `${link.label}: ${link.url}`] : []), '', '— Military Forge'].join('\n');
+  const text = [...lines, ...(link ? ['', `${link.label}: ${link.url}`] : []), '', '— Forged Force'].join('\n');
   const html = [
     ...lines.map((l) => `<p>${escapeHtml(l)}</p>`),
     ...(link ? [`<p><a href="${escapeHtml(link.url)}">${escapeHtml(link.label)}</a></p>`] : []),
-    '<p>— Military Forge</p>',
+    '<p>— Forged Force</p>',
   ].join('\n');
   return { to, subject, text, html };
 }
@@ -77,14 +77,14 @@ export const EMAILS = {
   reset: (to: string, url: string) =>
     message(
       to,
-      'Reset your Military Forge password',
-      ['Someone asked to reset the password of the Military Forge account saved with this email.', 'The link works once, for 30 minutes. If it wasn’t you, ignore this email: your password stays as it is.'],
+      'Reset your Forged Force password',
+      ['Someone asked to reset the password of the Forged Force account saved with this email.', 'The link works once, for 30 minutes. If it wasn’t you, ignore this email: your password stays as it is.'],
       { url, label: 'Choose a new password' },
     ),
   confirm: (to: string, url: string) =>
     message(
       to,
-      'Confirm your email for Military Forge',
+      'Confirm your email for Forged Force',
       ['Open this link to finish saving your soldier with this email. Then you can sign in on any phone or computer.', 'The link works once, for 24 hours. If it wasn’t you, ignore this email.'],
       { url, label: 'Save my account' },
     ),
@@ -92,11 +92,11 @@ export const EMAILS = {
   alreadySaved: (to: string, appUrl: string) =>
     message(
       to,
-      'You already have a Military Forge account',
+      'You already have a Forged Force account',
       [
-        'Someone tried to save a soldier with this email, but it already has a Military Forge account.',
+        'Someone tried to save a soldier with this email, but it already has a Forged Force account.',
         'If it was you, sign in with this email instead (Settings, Account). If you forgot the password, use “Forgot password?” there. If it wasn’t you, ignore this email.',
       ],
-      { url: appUrl, label: 'Open Military Forge' },
+      { url: appUrl, label: 'Open Forged Force' },
     ),
 };
