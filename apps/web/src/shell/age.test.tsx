@@ -178,6 +178,26 @@ describe('the gate before online rooms', () => {
     expect(online.setMatchSettings).toHaveBeenCalledOnce();
   });
 
+  it('Play now still starts when the page updates while Home is still up (the back stack answers the room entry: audit 2 N-18 with P-01)', async () => {
+    const quickRoom = vi.fn(async () => room);
+    const online = { startMatch: vi.fn(), setMatchSettings: vi.fn() };
+    const { store, ctl } = setup({ quickRoom }, online);
+    answerAge(1995, NOW);
+    saved.set(FACTS_KEY, JSON.stringify({ v: 1, matches: { local: 0, online: 9, finished: 9, wonInARow: 0 }, bots: { level: 'easy', pinned: false, good: 0, bad: 0, moved: null } }));
+    // main.ts answers a new back-stack entry with a store update, before the screen leaves Home
+    const push = ctl.nav.push.bind(ctl.nav);
+    ctl.nav.push = (layer) => {
+      push(layer);
+      store.setState({ notice: null, tips: false });
+    };
+    ctl.playNow();
+    await vi.waitFor(() => expect(store.getState().screen).toMatchObject({ name: 'room' }));
+    lobbyUp(store, 'normal');
+    expect(online.setMatchSettings).toHaveBeenCalledExactlyOnceWith({ botLevel: 'easy' });
+    lobbyUp(store, 'easy');
+    expect(online.startMatch).toHaveBeenCalledOnce();
+  });
+
   it("Play now asks for the device's own level (audit 2 P-01): Hard when it stepped up there", async () => {
     const quickRoom = vi.fn(async () => room);
     const online = { startMatch: vi.fn(), setMatchSettings: vi.fn() };

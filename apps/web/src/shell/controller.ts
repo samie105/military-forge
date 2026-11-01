@@ -359,9 +359,11 @@ export class ShellController {
     // The 18+ step on a first visit keeps it: answered, the room comes and starts as promised (audit A-02)
     // Its bots play at the device's Play now level (audit B-30, audit 2 P-01): the start waits until the
     // room says its bots are at it.
-    store.subscribe((s) => {
+    // Play now is set on Home a moment before the screen moves (the room's back-stack entry goes first,
+    // and the page answers it): only a move to another screen ends it, not an update while on Home.
+    store.subscribe((s, before) => {
       if (!this.quickStart && !this.quickRoom) return;
-      if (s.screen.name !== 'room' && s.screen.name !== 'finding' && !(s.screen.name === 'age' && !s.screen.refused)) {
+      if (s.screen !== before.screen && s.screen.name !== 'room' && s.screen.name !== 'finding' && !(s.screen.name === 'age' && !s.screen.refused)) {
         this.quickStart = false;
         this.quickRoom = false;
         this.wantBots = null;
