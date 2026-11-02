@@ -133,7 +133,7 @@
     if (!about || root.classList.contains('mf-about-open') === open) return;
     if (open) {
       if (!opener) opener = document.activeElement;
-      root.classList.add('mf-about-open');
+      root.classList.add('mf-about-open', 'mf-about-seen');
       about.focus({ preventScroll: true });
     } else {
       root.classList.remove('mf-about-open');

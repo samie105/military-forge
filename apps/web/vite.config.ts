@@ -1,11 +1,11 @@
 import { execSync } from 'node:child_process';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin, type ProxyOptions } from 'vite';
 // the brand lives in one place (packages/shared/src/brand.ts): pages get it at build time
 import { GAME_NAME } from '../../packages/shared/src/brand';
-// the vector lockup (src/ui/lockupArt.ts, made by art/pipeline/lockup.py): the landing draws it in its first frame
-import { lockupMarkup } from './src/ui/lockupArt';
+// the lockup (art/pipeline/lockup.py's colour file): the landing draws it in its first frame, as a picture
+import { lockupPictureMarkup } from './src/ui/lockupImage';
 // the crawl and install files: /manifest.webmanifest, /robots.txt, /sitemap.xml (docs/seo.md)
 import { seo } from './seo';
 // the installable app's service worker, /sw.js (src/pwa registers it)
@@ -37,8 +37,9 @@ const proxy: Record<string, ProxyOptions> = {
 };
 
 /**
- * `%GAME_NAME%` in the HTML pages (title, link previews) → the game's name. `%LOCKUP%` → the lockup's SVG
- * (decoration: the h1's words are beside it), the same markup the title screen draws. `%ORIGIN%` (link
+ * `%GAME_NAME%` in the HTML pages (title, link previews) → the game's name. `%LOCKUP%` → the lockup as a
+ * picture (decoration: the h1's words are beside it; src/ui/lockupImage.ts says why a picture), the same paths
+ * and colours the title screen draws. `%ORIGIN%` (link
  * previews need absolute image URLs) is the site's public address: the playtest proxy fills it in
  * per request, so the build keeps it; in dev the URLs stay relative.
  */
@@ -48,10 +49,16 @@ const proxy: Record<string, ProxyOptions> = {
  */
 const PRIVACY_CONTACT = process.env.PRIVACY_CONTACT?.trim();
 const contactHtml = PRIVACY_CONTACT && /^[^\s<>"@]+@[^\s<>"@]+\.[a-z]{2,}$/i.test(PRIVACY_CONTACT) ? `<a href="mailto:${PRIVACY_CONTACT}">${PRIVACY_CONTACT}</a>` : 'Settings → Network → <b>Send a report</b> in the game (write your request in the note)';
+const lockupImg = lockupPictureMarkup(
+  readFileSync(fileURLToPath(new URL('./public/art/brand/forged-force-lockup-1000.avif', import.meta.url))).toString('base64'),
+  '/art/brand/forged-force-lockup-1000.webp',
+  'mf-title__mark',
+  'landing-lockup',
+);
 const brand: Plugin = {
   name: 'brand',
   transformIndexHtml: (html, ctx) => {
-    const named = html.replaceAll('%GAME_NAME%', GAME_NAME).replaceAll('%PRIVACY_CONTACT%', contactHtml).replaceAll('%LOCKUP%', lockupMarkup(null, 'mf-title__mark'));
+    const named = html.replaceAll('%GAME_NAME%', GAME_NAME).replaceAll('%PRIVACY_CONTACT%', contactHtml).replaceAll('%LOCKUP%', lockupImg);
     return ctx.server ? named.replaceAll('%ORIGIN%', '') : named;
   },
 };

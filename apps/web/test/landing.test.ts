@@ -1,8 +1,10 @@
 /** The landing (index.html, ui/landing.ts) and the crawl files (seo.ts): docs/seo.md. */
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { seoFiles } from '../seo';
+import { afterFirstPaint } from '../src/ui/firstPaint';
 import { landingOwns, onPlay, releaseLanding } from '../src/ui/landing';
+import { LOCKUP_PICTURE, lockupPictureMarkup } from '../src/ui/lockupImage';
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 const html = read('../index.html');
@@ -66,10 +68,12 @@ describe('the landing page (index.html)', () => {
       expect(html, cls).toContain(cls);
       expect(titleCss, cls).toContain(`.${cls}`);
     }
-    // the lockup is the title's own vector art, filled in at build time (vite.config.ts), with its colours
+    // the lockup is the title's own art, filled in at build time (vite.config.ts) as a picture of the pipeline's
+    // colour file (ui/lockupImage.ts), so it needs no stylesheet of its own
     expect(html).toMatch(/<h1 class="mf-title__name">%LOCKUP%<span class="mf-title__word">%GAME_NAME%<\/span><\/h1>/);
-    expect(html).toContain('<link rel="stylesheet" href="/src/ui/lockup.css" />');
-    expect(titleCss).toContain('.mf-title__mark');
+    expect(html).not.toContain('/src/ui/lockup.css');
+    expect(read('../vite.config.ts')).toMatch(/lockupPictureMarkup\(\s*readFileSync\([^)]*'\.\/public\/art\/brand\/forged-force-lockup-1000\.avif'[\s\S]*?'\/art\/brand\/forged-force-lockup-1000\.webp',\s*'mf-title__mark',\s*'landing-lockup',\s*\)/);
+    expect(titleCss).toMatch(/\.mf-title__mark \{[^}]*height: auto;/);
   });
 
   it('the first frame: a big volt Play now with the plain facts under it, and the opening beat', () => {
@@ -80,6 +84,127 @@ describe('the landing page (index.html)', () => {
     expect(boot).toMatch(/if \(!roomish && !reduce\) \{\s*root\.classList\.add\('mf-intro'\);\s*window\.__mfIntroAt = performance\.now\(\);/);
     const titleCss = read('../src/shell/screens/title.css');
     expect(titleCss).toMatch(/html\.reduce-motion \.mf-title :is\([^)]*\.mf-title__art[^)]*\.mf-title__lockup[^)]*\) \{ animation: none !important; \}/);
+  });
+});
+
+describe('the first screen paints at once (first screen audit, 1 Nov 2026)', () => {
+  const titleCss = read('../src/shell/screens/title.css');
+  const keyframes = (name: string) => new RegExp(`@keyframes ${name} \\{((?:[^{}]*\\{[^}]*\\})*)\\s*\\}`).exec(titleCss)?.[1];
+
+  it('the opening beat moves what is already there: none of its keyframes hides the art or the lockup', () => {
+    const used = [...titleCss.matchAll(/html\.mf-intro [^{]*\{ animation(?:-name)?: ([\w-]+)/g)].map((m) => m[1]!).filter((n) => n !== 'none');
+    expect(used).toEqual(expect.arrayContaining(['mf-title-push', 'mf-title-slam', 'mf-title-push-phone']));
+    for (const name of new Set(used)) {
+      const body = keyframes(name);
+      expect(body, name).toBeDefined();
+      expect(body, name).not.toMatch(/opacity:\s*0(\.0*)?\s*[;}]|visibility:\s*hidden|display:\s*none/);
+      // never pushed off screen either
+      expect(body, name).not.toMatch(/translate/);
+    }
+  });
+
+  it("the lockup is a picture in the first frame (a page's largest paint counts pictures and text, never inline SVG paths)", () => {
+    const pic = lockupPictureMarkup('QUJD', '/art/brand/x.webp', 'mf-title__mark', 'landing-lockup');
+    expect(pic).toBe(
+      '<picture><source type="image/avif" srcset="data:image/avif;base64,QUJD" />' +
+        '<img class="mf-title__mark" src="/art/brand/x.webp" width="1000" height="504" alt="" elementtiming="landing-lockup" fetchpriority="high" draggable="false" /></picture>',
+    );
+    // the picture is the vector file's shape (its viewBox), small enough to go inline, and drawn in the kit's colours
+    const file = read('../public/art/brand/forged-force-lockup.svg');
+    const [, , w, h] = /viewBox="([-\d.]+) ([-\d.]+) ([\d.]+) ([\d.]+)"/.exec(file)!.slice(1).map(Number);
+    expect(LOCKUP_PICTURE.width / LOCKUP_PICTURE.height).toBeCloseTo(w! / h!, 1);
+    const avif = readFileSync(new URL('../public/art/brand/forged-force-lockup-1000.avif', import.meta.url));
+    expect(avif.subarray(4, 12).toString('latin1')).toBe('ftypavif');
+    expect(avif.length).toBeLessThan(24 * 1024);
+    expect(readFileSync(new URL('../public/art/brand/forged-force-lockup-1000.webp', import.meta.url)).subarray(8, 12).toString('latin1')).toBe('WEBP');
+    for (const colour of ['#070806', '#d6ff3b', '#0e100b', '#f2eedf']) expect(file).toContain(colour);
+  });
+
+  it("the game's chunk waits for the landing's first frame, and the About sheet's screens wait for the sheet", () => {
+    const entry = read('../src/boot.ts');
+    expect(entry).toMatch(/afterFirstPaint\(landing \? 'landing-lockup' : null\)\.then\(/);
+    expect(entry).toContain("classList.contains('mf-boot-landing')");
+    // the hero's decorative layers wait for that frame; without scripts they show at once
+    expect(entry).toMatch(/\.then\(\(\) => \{\s*(?:\/\/[^\n]*\s*)?document\.documentElement\.classList\.add\('mf-painted'\);\s*return import\('\.\/main'\)/);
+    expect(html).toContain('@media (scripting: enabled) { html:not(.mf-painted) .mf-land__hero :is(.mf-title__fg, .mf-title__sweep, .mf-title__smoke) { visibility: hidden; opacity: 0; } }');
+    expect(html).toMatch(/html:not\(\.mf-about-seen\) \.mf-about:not\(:target\) \.mf-about__shots \{ display: none; \}/);
+    expect(read('../public/boot.js')).toContain("root.classList.add('mf-about-open', 'mf-about-seen');");
+  });
+});
+
+describe('afterFirstPaint (ui/firstPaint.ts)', () => {
+  type Entry = { name: string; identifier?: string };
+  type Cb = (list: { getEntries: () => Entry[] }) => void;
+  const realPO = globalThis.PerformanceObserver;
+  const realPerf = globalThis.performance;
+  function stub(painted: string[], supported = ['paint', 'element']) {
+    const observers: { cb: Cb; disconnected: boolean; opts?: unknown }[] = [];
+    class FakePO {
+      static supportedEntryTypes = supported;
+      o: (typeof observers)[number];
+      constructor(cb: Cb) {
+        this.o = { cb, disconnected: false };
+        observers.push(this.o);
+      }
+      observe(opts: unknown) {
+        this.o.opts = opts;
+      }
+      disconnect() {
+        this.o.disconnected = true;
+      }
+    }
+    Object.assign(globalThis, { PerformanceObserver: FakePO, performance: { getEntriesByType: () => painted.map((name) => ({ name })) } });
+    return observers;
+  }
+  const flush = () => new Promise<void>((r) => queueMicrotask(r));
+  afterEach(() => {
+    Object.assign(globalThis, { PerformanceObserver: realPO, performance: realPerf });
+    vi.useRealTimers();
+  });
+
+  it('waits for the named picture on screen, not for the first words', async () => {
+    vi.useFakeTimers();
+    const observers = stub(['first-paint', 'first-contentful-paint']);
+    let done = false;
+    void afterFirstPaint('landing-lockup').then(() => (done = true));
+    expect(observers[0]!.opts).toEqual({ type: 'element', buffered: true });
+    observers[0]!.cb({ getEntries: () => [{ name: 'image-paint', identifier: 'something-else' }] });
+    await flush();
+    expect(done).toBe(false);
+    observers[0]!.cb({ getEntries: () => [{ name: 'image-paint', identifier: 'landing-lockup' }] });
+    await flush();
+    expect(done).toBe(true);
+    expect(observers[0]!.disconnected).toBe(true);
+  });
+
+  it('without a picture (or element timing): the first contentful paint, not a plain first paint', async () => {
+    vi.useFakeTimers();
+    for (const [element, supported] of [[null, ['paint', 'element']], ['landing-lockup', ['paint']]] as const) {
+      const observers = stub([], [...supported]);
+      let done = false;
+      void afterFirstPaint(element).then(() => (done = true));
+      expect(observers[0]!.opts).toEqual({ type: 'paint', buffered: true });
+      observers[0]!.cb({ getEntries: () => [{ name: 'first-paint' }] });
+      await flush();
+      expect(done).toBe(false);
+      observers[0]!.cb({ getEntries: () => [{ name: 'first-contentful-paint' }] });
+      await flush();
+      expect(done).toBe(true);
+    }
+  });
+
+  it('at once when the frame is already painted, and after the cap when it never comes (a background tab)', async () => {
+    vi.useFakeTimers();
+    stub(['first-paint', 'first-contentful-paint']);
+    await expect(afterFirstPaint(null, 2500)).resolves.toBeUndefined();
+    const observers = stub([]);
+    let done = false;
+    void afterFirstPaint('landing-lockup', 2500).then(() => (done = true));
+    await vi.advanceTimersByTimeAsync(2499);
+    expect(done).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(done).toBe(true);
+    expect(observers[0]!.disconnected).toBe(true);
   });
 });
 

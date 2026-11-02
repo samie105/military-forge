@@ -67,7 +67,8 @@ export function Ping({ ms, label, bars = true }: { ms: number; label?: string | 
   if (!(ms >= 0)) return <span className="ping muted">{label ? `${label} · ` : ''}no ping</span>;
   const q = pingQuality(ms);
   return (
-    <span className="ping" aria-label={`${label ? `${label}: ` : 'Connection: '}${Math.round(ms)} ms`}>
+    // an image of the connection (the bars and the number, read as one line): a plain span may not carry a label
+    <span className="ping" role="img" aria-label={`${label ? `${label}: ` : 'Connection: '}${Math.round(ms)} ms`}>
       {bars && (
         <span className={`sig ${q.cls}`} data-bars={q.bars} aria-hidden="true">
           <i></i>

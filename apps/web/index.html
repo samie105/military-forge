@@ -75,8 +75,6 @@
     <link rel="stylesheet" href="/src/ui/frost.css" />
     <!-- the title screen's look: the landing draws its first frame with it (the rest of the app's CSS comes with the game chunk) -->
     <link rel="stylesheet" href="/src/shell/screens/title.css" />
-    <!-- the vector lockup's colours (the hero's h1 draws it, filled in at build time: vite.config.ts) -->
-    <link rel="stylesheet" href="/src/ui/lockup.css" />
     <style>
       /* the game is the page: no scrolling, no rubber-band or pull-to-refresh, no double-tap zoom in the
          menus (a pinch still zooms them), so the browser's bars have nothing to come back on (full
@@ -130,6 +128,12 @@
          foreground art jumped when the fit came (CLS 0.176 on desktop, audit 28 Oct). Without scripts
          it shows at once */
       @media (scripting: enabled) { html:not(.mf-js) .mf-land__hero .screen { visibility: hidden; } }
+      /* the hero's extras join once the first frame is on screen (src/boot.ts sets html.mf-painted): the
+         parallax foreground (at rest it sits exactly on the art), the light sweep (it starts off screen) and the
+         smoke (it fades in). A slow or software GPU took about a second over them before it showed anything
+         (first screen audit, 1 Nov 2026) */
+      @media (scripting: enabled) { html:not(.mf-painted) .mf-land__hero :is(.mf-title__fg, .mf-title__sweep, .mf-title__smoke) { visibility: hidden; opacity: 0; } }
+      .mf-land__hero .mf-title__smoke { transition: opacity 800ms linear; }
       .mf-land__hero .screen { width: var(--fit-w, 1920px); height: var(--fit-h, 1080px); zoom: var(--fit, 1); }
       .mf-land__hero .mf-title__name { font: inherit; }
       .mf-land__hero picture { display: contents; }
@@ -220,6 +224,10 @@
       .mf-about__shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 16px; margin: 0; padding: 0; list-style: none; }
       .mf-about__shots figure { margin: 0; }
       .mf-about__shots img { display: block; width: 100%; height: auto; border-radius: var(--r-sm); background: var(--c-ink-800); }
+      /* the screens wait for the sheet: lazy pictures in a hidden (not undisplayed) sheet still load, and on a slow
+         phone their 60 KB took the line from the first frame's font (boot.js marks the first open; without
+         scripts, :target opens it) */
+      html:not(.mf-about-seen) .mf-about:not(:target) .mf-about__shots { display: none; }
       .mf-about__shots figcaption { margin-top: 6px; font-size: 14px; color: var(--c-muted); }
       .mf-about details { border-top: 2px solid var(--c-line); }
       .mf-about summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; padding: 8px 0; font-size: 18px; font-weight: 700; color: var(--c-text); cursor: pointer; list-style: none; }

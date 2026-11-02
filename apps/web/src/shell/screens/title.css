@@ -5,8 +5,8 @@
  * the left column over an ink scrim and never cross him. Desktop: the art follows the pointer a little (--px,
  * --py), two smoke banks drift, a light sweeps now and then. Phone: one layer moves (the world drifts, smoke
  * inside it), no sweep, no blur. The opening beat (html.mf-intro, boot.js): the art pushes in out of the dark
- * and the lockup lands (1.12 → 1); the title picks it up where the landing is (--intro-delay). Reduce motion:
- * no beat, nothing drifts; leaving is a short cross-fade. Tokens only.
+ * and the lockup stamps down (1.12 → 1, never hidden); the title picks it up where the landing is
+ * (--intro-delay). Reduce motion: no beat, nothing drifts; leaving is a short cross-fade. Tokens only.
  */
 .mf-title .screen { background: var(--c-ink-950); cursor: pointer; }
 .mf-title .screen:focus-visible { outline: none; }
@@ -68,7 +68,7 @@
   transition: transform 520ms cubic-bezier(.6, 0, .3, 1), opacity 420ms ease-in;
 }
 .mf-title__name { display: block; width: 100%; margin: 0; filter: drop-shadow(0 12px 28px color-mix(in srgb, var(--c-ink-950) 45%, transparent)); }
-.mf-title__mark { display: block; width: 100%; }
+.mf-title__mark { display: block; width: 100%; height: auto; }
 /* the name in words, for crawlers and screen readers (the landing's h1): the lockup draws it */
 .mf-title__word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .mf-title__sub { display: inline-flex; align-items: center; gap: var(--sp-5); padding-left: 8px; font-size: 24px; font-weight: var(--fw-black); letter-spacing: .36em; text-transform: uppercase; color: var(--c-text); text-shadow: var(--ts-hud); }
@@ -95,12 +95,14 @@
 @keyframes mf-title-load { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
 
 /* ---- the opening beat (boot.js sets html.mf-intro on the landing; the title joins in at --intro-delay):
-   the art pushes in out of the dark over 1.2 s, the lockup lands at 0.4 s (one P7 stamp, ≤1.5% settle).
-   The art never starts transparent: it is the page's largest paint, and Play now shows from the first frame ---- */
+   the art pushes in out of the dark over 1.2 s, the lockup stamps down at 0.4 s (1.12 → 1, one P7 stamp, ≤1.5%
+   settle). Nothing starts hidden: the first frame already shows the art, the lockup (the page's largest paint,
+   ui/lockupImage.ts) and Play now, so the beat only moves what is there (first screen audit, 1 Nov 2026:
+   test/landing.test.ts holds it) ---- */
 html.mf-intro .mf-title.is-intro .mf-title__art { animation: mf-title-push 1200ms var(--ease-arrive) var(--intro-delay, 0ms) both; }
 html.mf-intro .mf-title.is-intro .mf-title__lockup { animation: mf-title-slam var(--m-slow) var(--ease-settle) calc(var(--intro-delay, 0ms) + 400ms) both; }
 @keyframes mf-title-push { from { scale: 1.07; filter: brightness(.35); } 45% { filter: brightness(1); } to { scale: 1; filter: none; } }
-@keyframes mf-title-slam { from { scale: 1.12; opacity: 0; } 35% { opacity: 1; } to { scale: 1; opacity: 1; } }
+@keyframes mf-title-slam { from { scale: 1.12; } to { scale: 1; } }
 /* the press cuts the beat short: the push into the next screen takes over from where things are */
 html.mf-intro .mf-title.is-intro.is-leaving :is(.mf-title__art, .mf-title__lockup) { animation: none; }
 
