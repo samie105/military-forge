@@ -5,7 +5,7 @@
  * its own size. mountBriefing injects this sheet and removes it. Tokens only.
  */
 .mf-br-fit { position: fixed; inset: 0; overflow: hidden; z-index: 1; }
-.mf-br-fit > .screen { width: var(--fit-w, 1920px); height: var(--fit-h, 1080px); zoom: var(--fit, 1); }
+.mf-br-fit > .screen { width: var(--fit-w, 1920px); height: var(--fit-h, 1080px); zoom: var(--fit, 1); --zoom: var(--fit, 1); }
 
 :where(.mf-br-fit) .mf-br {
   position: relative; z-index: 1; height: 100%; box-sizing: border-box;
@@ -47,7 +47,7 @@ html:is(.mf-short, .mf-big-text):where(:not(.mf-phone)) :where(.mf-br-fit) .mf-b
 html:is(.mf-short, .mf-big-text):where(:not(.mf-phone)) :where(.mf-br-fit) .mf-br__t { font-size: var(--fs-48); }
 
 /* ---- a phone: its own size; two cards side by side, the question above ---- */
-:where(html.mf-phone) .mf-br-fit > .screen { zoom: 1; width: 100%; height: 100%; }
+:where(html.mf-phone) .mf-br-fit > .screen { zoom: 1; --zoom: 1; width: 100%; height: 100%; }
 :where(html.mf-phone) :where(.mf-br-fit) .bg__word { display: none; }
 :where(html.mf-phone) :where(.mf-br-fit) .mf-br {
   gap: var(--sp-3);
@@ -58,10 +58,10 @@ html:is(.mf-short, .mf-big-text):where(:not(.mf-phone)) :where(.mf-br-fit) .mf-b
 :where(html.mf-phone) :where(.mf-br-fit) .mf-br__answers { grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; max-width: 720px; gap: var(--sp-3); margin-top: 0; }
 :where(html.mf-phone) :where(.mf-br-fit) .mf-br__answer { min-height: 132px; padding: var(--sp-4) var(--sp-6) var(--sp-4) var(--sp-4); gap: var(--sp-1); border-radius: var(--r-frost-sm, 0 18px 0 18px); }
 :where(html.mf-phone) :where(.mf-br-fit) .mf-br__t { font-size: 26px; }
-:where(html.mf-phone) :where(.mf-br-fit) .mf-br__s { font-size: 13px; }
+:where(html.mf-phone) :where(.mf-br-fit) .mf-br__s { font-size: var(--fs-13); }
 :where(html.mf-phone) :where(.mf-br-fit) .mf-br__go { right: var(--sp-3); top: var(--sp-3); width: 24px; height: 24px; }
-:where(html.mf-phone) :where(.mf-br-fit) .mf-br__device { margin: 0; font-size: 14px; }
-:where(html.mf-phone) :where(.mf-br-fit) .mf-br__skip { font-size: 14px; }
+:where(html.mf-phone) :where(.mf-br-fit) .mf-br__device { margin: 0; font-size: var(--fs-14); }
+:where(html.mf-phone) :where(.mf-br-fit) .mf-br__skip { font-size: var(--fs-14); }
 
 /* Reduce motion: no lift */
 html.reduce-motion :where(.mf-br-fit) .mf-br__answer:hover { transform: none; }

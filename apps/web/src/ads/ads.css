@@ -33,7 +33,7 @@ html.reduce-motion :is(.mf-adtoast, .mf-adtoast.is-on){ transform:translate(-50%
 .mf-saved__text{ display:flex; flex-direction:column; gap:2px; min-width:0; }
 .mf-saved__name{ color:var(--c-text); font-weight:var(--fw-black); font-size:var(--fs-16); }
 .mf-saved__title{ color:var(--c-muted); font-size:var(--fs-14); line-height:var(--lh-snug); overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
-.mf-saved__note{ color:var(--c-paper-3, var(--c-muted)); font-size:12px; letter-spacing:.02em; }
+.mf-saved__note{ color:var(--c-paper-3, var(--c-muted)); font-size:var(--fs-12); letter-spacing:.02em; }
 .mf-saved__act{ display:flex; gap:var(--sp-2); align-items:center; }
 .mf-saved__act > a{ flex:1; }
 .mf-saved .btn{ min-height:44px; }

@@ -12,7 +12,7 @@
 .mf-report__auto { opacity: .8; }
 .mf-fit--phone .mf-report :is(.btn) { min-height: var(--touch-min, 48px); }
 .mf-report__bad { flex-basis: 100%; }
-.mf-fit--phone .mf-report__what { font-size: 13px; }
+.mf-fit--phone .mf-report__what { font-size: var(--fs-13); }
 /* a phone's settings panel is short: Send and Cancel first, what's sent under them */
 .mf-fit--phone .mf-report__acts { order: -1; }
 /* the note sits above Send, so what you write comes before the button that sends it */

@@ -14,8 +14,8 @@
  */
 #hud { position: fixed; inset: 0; z-index: 5; pointer-events: none; }
 #hud * { pointer-events: none; }
-#hud .mf-hud-fit > .screen { width: var(--hud-w, 1920px); height: var(--hud-h, 1080px); zoom: var(--hud-fit, 1); background: transparent; }
-#hud .mf-hud-fit--phone > .screen { width: var(--phone-w, 812px); height: var(--phone-h, 375px); zoom: var(--phone-fit, 1); }
+#hud .mf-hud-fit > .screen { width: var(--hud-w, 1920px); height: var(--hud-h, 1080px); zoom: var(--hud-fit, 1); --zoom: var(--hud-fit, 1); background: transparent; }
+#hud .mf-hud-fit--phone > .screen { width: var(--phone-w, 812px); height: var(--phone-h, 375px); zoom: var(--phone-fit, 1); --zoom: var(--phone-fit, 1); }
 html:not([data-touch-controls]) #hud .mf-hud-fit--phone,
 html[data-touch-controls] #hud .mf-hud-fit:not(.mf-hud-fit--phone) { display: none; }
 

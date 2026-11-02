@@ -6,9 +6,9 @@
  */
 import { useRef, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
 import { useFocusTrap } from '../../../ui/focusTrap';
-import { LANDSCAPE_PHONE_QUERY, UPRIGHT_PHONE_QUERY, isPhoneShape, isRotated } from '../../../ui/landscape';
+import { LANDSCAPE_PHONE_QUERY, TIER_QUERIES, UPRIGHT_PHONE_QUERY, isRotated, usesPhoneLayouts } from '../../../ui/landscape';
 
-/** A phone held sideways: a finger for a pointer and no more than 500 px of height (tablets keep the desktop menus). */
+/** A phone held sideways: a finger for a pointer and no more than 500 px of height. */
 export const PHONE_QUERY = LANDSCAPE_PHONE_QUERY;
 
 /** Dev builds: `?phone` forces the phone menus in any window (screenshots, a desktop browser). */
@@ -16,15 +16,18 @@ function forced(): boolean {
   return import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).has('phone');
 }
 
-/** A phone, held sideways or upright (an upright phone plays turned onto its side: ui/landscape.ts). */
+/**
+ * The phone layouts apply: a phone held sideways or upright (an upright phone plays turned onto its
+ * side), a touch tablet, or a short window (ui/landscape.ts layoutTier: UX-95).
+ */
 export function isPhoneLayout(): boolean {
   if (forced()) return true;
-  return isPhoneShape();
+  return usesPhoneLayouts();
 }
 
 function subscribe(onChange: () => void): () => void {
   if (typeof matchMedia !== 'function') return () => {};
-  const mqs = [matchMedia(PHONE_QUERY), matchMedia(UPRIGHT_PHONE_QUERY)];
+  const mqs = TIER_QUERIES.map((q) => matchMedia(q));
   for (const mq of mqs) mq.addEventListener('change', onChange);
   return () => mqs.forEach((mq) => mq.removeEventListener('change', onChange));
 }

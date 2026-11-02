@@ -80,7 +80,7 @@ const results: MatchResults = {
 };
 
 describe('when the phone menus apply', () => {
-  it('a phone held sideways (a finger, landscape, up to 500 px high); tablets and desktops keep theirs', () => {
+  it('a phone held sideways (a finger, landscape, up to 500 px high); a desktop keeps its own (tablets: test/readable.test.ts)', () => {
     expect(PHONE_QUERY).toBe('(orientation: landscape) and (max-height: 500px) and (pointer: coarse)');
     vi.stubGlobal('matchMedia', (q: string) => ({ matches: q === PHONE_QUERY }));
     expect(isPhoneLayout()).toBe(true);

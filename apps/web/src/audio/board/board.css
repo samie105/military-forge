@@ -194,7 +194,7 @@ body {
   filter: brightness(1.1);
 }
 .snd__bus {
-  font-size: 11px;
+  font-size: var(--fs-12);
   letter-spacing: var(--ls-label);
   text-transform: uppercase;
   color: var(--c-brass);

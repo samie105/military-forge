@@ -67,8 +67,14 @@ html.mf-short .mf-orders__line { display: none; }
   background: transparent; color: var(--c-text); cursor: pointer; font: inherit; font-weight: var(--fw-bold);
 }
 .mf-pnbots__opt[aria-checked='true'] { background: var(--c-volt); border-color: var(--c-volt); color: var(--c-volt-ink); }
-.mf-pnbots--phone { margin-top: 0; font-size: calc(13px * var(--text-scale, 1)); }
+.mf-pnbots--phone { margin-top: 0; font-size: var(--fs-13); }
 .mf-pnbots--phone .mf-pnbots__change, .mf-pnbots--phone .mf-pnbots__opt { min-height: 36px; }
+/* a finger: the whole kit's target size (UX-91: "Change" was 59×38); the line keeps its height (the box
+   reaches over the margin it gives back) */
+@media (pointer: coarse) {
+  .mf-pnbots :is(.mf-pnbots__change, .mf-pnbots__opt) { min-height: var(--touch-min); min-width: var(--touch-min); }
+  .mf-pnbots .mf-pnbots__change { margin-block: calc((36px - var(--touch-min)) / 2); }
+}
 .mf-pnbots--phone .mf-pnbots__opt { min-width: 52px; padding: 0 var(--sp-2); }
 
 /* Results: Play now's bots just moved (BotsMoved) */

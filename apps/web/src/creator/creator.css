@@ -6,7 +6,7 @@
  * own size, 812×375 and up. mountCreator injects this sheet and removes it. Tokens only.
  */
 .mf-cr-fit { position: fixed; inset: 0; overflow: hidden; z-index: 1; }
-.mf-cr-fit > .screen { width: var(--fit-w, 1920px); height: var(--fit-h, 1080px); zoom: var(--fit, 1); }
+.mf-cr-fit > .screen { width: var(--fit-w, 1920px); height: var(--fit-h, 1080px); zoom: var(--fit, 1); --zoom: var(--fit, 1); }
 
 :where(.mf-cr-fit) .mf-cr {
   display: grid;
@@ -138,7 +138,7 @@ html.mf-big-text:where(:not(.mf-phone)) :where(.mf-cr-fit) .mf-cr__act [data-act
 html:is(.mf-narrow, .mf-big-text):where(:not(.mf-phone)) .mf-cr-fit [data-active-state~="stand-in"] .mf-cr__hint { display: none; }
 
 /* ---- a phone (812×375 and up, held sideways or upright and turned): unzoomed, stage left, panel right ---- */
-:where(html.mf-phone) .mf-cr-fit > .screen { zoom: 1; width: 100%; height: 100%; }
+:where(html.mf-phone) .mf-cr-fit > .screen { zoom: 1; --zoom: 1; width: 100%; height: 100%; }
 :where(html.mf-phone) :where(.mf-cr-fit) .bg__word { display: none; }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr {
   grid-template: auto minmax(0, 1fr) / minmax(0, 1fr) minmax(0, 1.15fr); grid-template-areas: 'head head' 'stage panel'; column-gap: var(--sp-2);
@@ -159,7 +159,7 @@ html:is(.mf-narrow, .mf-big-text):where(:not(.mf-phone)) .mf-cr-fit [data-active
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__placeholder .stamp { font-size: var(--fs-14); padding: 2px 8px; }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__placeholder { right: auto; flex-direction: row; align-items: center; gap: var(--sp-2); }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__placeholder p { display: none; }
-:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__placeholder-short { display: inline; font-size: 12px; color: var(--c-text); }
+:where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__placeholder-short { display: inline; font-size: var(--fs-12); color: var(--c-text); }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__view { right: auto; }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__panel { padding: var(--sp-2) var(--sp-3); gap: var(--sp-2); }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-cr__panel .tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
@@ -177,7 +177,7 @@ html:is(.mf-narrow, .mf-big-text):where(:not(.mf-phone)) .mf-cr-fit [data-active
 :where(html.mf-phone) :where(.mf-cr-fit) .item { padding: 6px; gap: 4px; }
 :where(html.mf-phone) :where(.mf-cr-fit) .item__art { height: 52px; }
 :where(html.mf-phone) :where(.mf-cr-fit) .item__name { font-size: var(--fs-14); }
-:where(html.mf-phone) :where(.mf-cr-fit) .item .tag { font-size: 11px; }
+:where(html.mf-phone) :where(.mf-cr-fit) .item .tag { font-size: var(--fs-12); }
 /* a locked item's how-to ("Reach level 5") wraps rather than ellipsising */
 :where(html.mf-phone) :where(.mf-cr-fit) .item .tag { white-space: normal; height: auto; min-height: 20px; line-height: 1.2; padding-block: 2px; text-align: left; }
 :where(html.mf-phone) :where(.mf-cr-fit) .mf-item__glyph .ic { width: 30px; height: 30px; }

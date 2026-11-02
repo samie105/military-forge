@@ -23,6 +23,27 @@
 export const LANDSCAPE_PHONE_QUERY = '(orientation: landscape) and (max-height: 500px) and (pointer: coarse)';
 /** A phone held upright: no wider than 500 px, a finger for a pointer. Tablets (768 px up) never turn. */
 export const UPRIGHT_PHONE_QUERY = '(orientation: portrait) and (max-width: 500px) and (pointer: coarse)';
+/**
+ * A tablet: a finger for a pointer and no side as short as a phone's (an iPad or an Android tablet,
+ * either way up). The desktop menus drew at 48–64 % there: 7–9 px text, 23–33 px buttons under a
+ * finger (audit A-37, D-02; UX-95). It takes the phone layouts, made for a thumb, at up to 1.5× (fit.ts).
+ */
+export const TABLET_QUERY = '(pointer: coarse) and (min-width: 501px) and (min-height: 501px)';
+/**
+ * A short window, whatever points: a laptop at 175 % browser zoom or more, a squat window. The desktop
+ * menus need 900 design pixels of height and zoom no lower than 0.8 for them; under 500 px that can't
+ * hold, so it takes the phone layouts too (and browser zoom finally makes them bigger: web-quality D-03).
+ */
+export const SHORT_WINDOW_QUERY = '(orientation: landscape) and (max-height: 500px)';
+
+/**
+ * Which layouts the menus wear (fit.ts, App.tsx, the CSS's html.mf-phone):
+ *   phone    a phone either way up: the phone layouts at the phone's fit (upright: turned)
+ *   tablet   a touch tablet: the phone layouts, scaled up to TABLET_MAX_FIT, never turned
+ *   short    a short window with a mouse: the phone layouts
+ *   desktop  the 1920×1080 designs zoomed to the window (0.8 and up on a laptop)
+ */
+export type LayoutTier = 'phone' | 'tablet' | 'short' | 'desktop';
 
 export interface Point {
   x: number;
@@ -47,10 +68,26 @@ export function isRotated(): boolean {
   return matches(UPRIGHT_PHONE_QUERY);
 }
 
-/** A phone, held either way: the phone layouts apply (rotated or not). */
+/** A phone, held either way (rotated or not): full screen and the landscape lock are asked for on a tap. */
 export function isPhoneShape(): boolean {
   return matches(LANDSCAPE_PHONE_QUERY) || matches(UPRIGHT_PHONE_QUERY);
 }
+
+/** The tier of layouts for this window and pointer, right now (see LayoutTier). */
+export function layoutTier(): LayoutTier {
+  if (isPhoneShape()) return 'phone';
+  if (matches(TABLET_QUERY)) return 'tablet';
+  if (matches(SHORT_WINDOW_QUERY)) return 'short';
+  return 'desktop';
+}
+
+/** The phone layouts apply: a phone, a touch tablet or a short window. */
+export function usesPhoneLayouts(tier: LayoutTier = layoutTier()): boolean {
+  return tier !== 'desktop';
+}
+
+/** Every query a tier depends on: listen to these to follow the tier (a tablet turned, a window resized). */
+export const TIER_QUERIES = [UPRIGHT_PHONE_QUERY, LANDSCAPE_PHONE_QUERY, TABLET_QUERY, SHORT_WINDOW_QUERY] as const;
 
 /** The window's size as the page lays out in it: landscape when turned. */
 export function viewport(rotated = isRotated(), w = innerWidth, h = innerHeight): { w: number; h: number } {
@@ -91,14 +128,20 @@ export function logicalRect(el: Element): Box {
 
 // ---- the page's state: the class, the box's size, full screen and the lock ----
 
-/** <html> classes: mf-rotated (turned now), mf-phone (a phone layout either way: the CSS's phone switch). */
-export function applyLandscape(root: HTMLElement = document.documentElement): void {
+/**
+ * <html> classes: mf-rotated (turned now), mf-phone (the phone layouts, the CSS's phone switch: a phone,
+ * a touch tablet or a short window) and mf-tablet (a tablet wearing them). Returns the tier.
+ */
+export function applyLandscape(root: HTMLElement = document.documentElement): LayoutTier {
   const rotated = isRotated();
+  const tier = layoutTier();
   root.classList.toggle('mf-rotated', rotated);
-  root.classList.toggle('mf-phone', rotated || matches(LANDSCAPE_PHONE_QUERY));
+  root.classList.toggle('mf-phone', usesPhoneLayouts(tier));
+  root.classList.toggle('mf-tablet', tier === 'tablet');
   // the turned body's size: the screen's, swapped (index.html)
   root.style.setProperty('--app-w', `${innerHeight}px`);
   root.style.setProperty('--app-h', `${innerWidth}px`);
+  return tier;
 }
 
 interface LockableOrientation {
@@ -149,7 +192,7 @@ export function startLandscape(): void {
   };
   update();
   window.addEventListener('resize', update);
-  for (const q of [UPRIGHT_PHONE_QUERY, LANDSCAPE_PHONE_QUERY]) matchMedia(q).addEventListener?.('change', update);
+  for (const q of TIER_QUERIES) matchMedia(q).addEventListener?.('change', update);
   // a tap on a phone (Play, Join, Continue, a dial): full screen and the lock need a user's gesture. Not
   // once only: full screen lost (a swipe from an edge, the keyboard, another page such as the Armory),
   // the next tap takes it back, so the browser's bars don't come back to stay (the owner, 23 Oct)

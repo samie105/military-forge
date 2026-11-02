@@ -147,13 +147,7 @@
   --fstretch-tight:78%;         /* Archivo width axis */
   --fstretch-wide:118%;
   --text-scale:1;               /* 1..1.5, every size below multiplies */
-  --fs-14:calc(14px * var(--text-scale));
-  --fs-16:calc(16px * var(--text-scale));
-  --fs-18:calc(18px * var(--text-scale));
-  --fs-20:calc(20px * var(--text-scale));
-  --fs-24:calc(24px * var(--text-scale));
-  --fs-28:calc(28px * var(--text-scale));
-  --fs-36:calc(36px * var(--text-scale));
+  /* --fs-12 … --fs-36 live in the floors block below the :root (they keep a rendered floor) */
   --fs-48:calc(48px * var(--text-scale));
   --fs-64:calc(64px * var(--text-scale));
   --fs-88:calc(88px * var(--text-scale));
@@ -175,11 +169,11 @@
   --safe-b:max(0px, env(safe-area-inset-bottom));
   --safe-l:max(0px, env(safe-area-inset-left));
   --phone-notch:44px;           /* min side inset on phones, landscape */
-  --touch-min:48px;
+  /* --touch-min (48 px, and 44 rendered on a touch screen) lives in the floors block below */
 
   /* ---- sizes ---- */
   --bw:2px; --bw-chunky:3px;
-  --btn-h:64px; --btn-h-xl:88px; --btn-h-sm:48px;
+  /* --btn-h (64), --btn-h-sm (48) and --btn-h-xl (88): the floors block below */
   --kbd-h:32px;
   --bar-h:12px; --bar-h-lg:18px;
   --ic-sm:18px; --ic:24px; --ic-lg:32px; --ic-xl:48px;
@@ -246,6 +240,48 @@
   --m-roll-blur:2px;   /* P4 roll counter */
   --m-edge:24px;       /* P9 edge banner's travel */
 }
+/* =========================================================================
+   READABLE FLOORS · the type and target sizes, in rendered pixels (UX-90, UX-91, UX-95, UX-96)
+   The screens are designs zoomed to the window (ui/fit.ts): a 1920×1080 menu at 0.8 on a laptop drew the
+   14 px labels at 11.2 px, and a phone screen at 0.82 drew its 48 px targets at 39 px. So each size token
+   keeps a floor in what the player sees:
+     --zoom        the zoom of the screen the token is read in. Every zoomed root sets it beside its own
+                   `zoom` (app.css .mf-fit, phone.css, hud.css, the routes' fits…), and this block is
+                   declared again on every root, so its floors divide by that root's zoom
+     --fs-min      no text renders smaller (labels, chips, key hints): 12.5 px
+     --fs-body-min body copy and anything bigger renders at least this: 14 px
+     --tap         the smallest hit box on a touch screen, rendered: 44 px (0 with a mouse)
+   Text size (--text-scale, Settings) multiplies on top of the floor, so it always enlarges.
+   ========================================================================= */
+:root{
+  --zoom:1;
+  --fs-min:12.5px;
+  --fs-body-min:14px;
+  --tap:0px;
+}
+@media (pointer: coarse){ :root{ --tap:44px; } }
+:root, .screen, .idcard, .mf-notice, .mf-tstrip, .mf-install--ios{
+  --fs-12:calc(max(12px, var(--fs-min) / var(--zoom)) * var(--text-scale));
+  --fs-13:calc(max(13px, var(--fs-min) / var(--zoom)) * var(--text-scale));
+  --fs-14:calc(max(14px, var(--fs-min) / var(--zoom)) * var(--text-scale));
+  --fs-16:calc(max(16px, var(--fs-body-min) / var(--zoom)) * var(--text-scale));
+  --fs-18:calc(max(18px, var(--fs-body-min) / var(--zoom)) * var(--text-scale));
+  --fs-20:calc(max(20px, var(--fs-body-min) / var(--zoom)) * var(--text-scale));
+  --fs-24:calc(max(24px, var(--fs-body-min) / var(--zoom)) * var(--text-scale));
+  --fs-28:calc(max(28px, var(--fs-body-min) / var(--zoom)) * var(--text-scale));
+  --fs-36:calc(max(36px, var(--fs-body-min) / var(--zoom)) * var(--text-scale));
+  /* body copy on a screen that draws its paragraphs at 14 px (the phone kit): 14 rendered at least */
+  --fs-body:calc(max(14px, var(--fs-body-min) / var(--zoom)) * var(--text-scale));
+  /* targets: the kit's sizes, and never under --tap rendered */
+  --touch-min:max(48px, var(--tap) / var(--zoom));
+  --hit-min:max(44px, var(--tap) / var(--zoom));
+  --btn-h:max(64px, var(--tap) / var(--zoom));
+  --btn-h-sm:max(48px, var(--tap) / var(--zoom));
+  --btn-h-xl:max(88px, var(--tap) / var(--zoom));
+  /* the touch floor itself, in this root's design px (0 with a mouse): a compact control keeps its
+     design size and grows only where a small phone's zoom would put it under --tap: max(40px, var(--tap-floor)) */
+  --tap-floor:calc(var(--tap) / var(--zoom));
+}
 /* Reduce motion is the game's own switch (html.reduce-motion), which starts from the system's setting
    (shell/controller.ts loadSettings; boot.js before the app): the kit's durations become short fades */
 html.reduce-motion{ --dur-fast:120ms; --dur:120ms; --dur-slow:120ms; }
@@ -256,6 +292,7 @@ html.reduce-motion{ --dur-fast:120ms; --dur:120ms; --dur-slow:120ms; }
 :where(.mf) *{ margin:0; padding:0; }
 .mf{ color:var(--c-text); font-family:var(--f-ui); font-size:var(--fs-16); line-height:var(--lh-body); -webkit-font-smoothing:antialiased; }
 :where(.mf) :is(button,input){ font:inherit; color:inherit; }
+:where(.mf) small{ font-size:max(var(--fs-12), .85em); } /* the browser's `smaller` drew 10 px notes at a laptop's zoom */
 :where(.mf) button{ background:none; border:0; cursor:pointer; }
 :where(.mf) :is(ol,ul){ list-style:none; }
 :where(.mf) :is(img,svg){ display:block; }
@@ -292,7 +329,7 @@ html.reduce-motion{ --dur-fast:120ms; --dur:120ms; --dur-slow:120ms; }
    SCREEN FRAME
    ========================================================================= */
 .screen{ position:relative; width:1920px; height:1080px; overflow:hidden; isolation:isolate; background:var(--c-ink-900); font-family:var(--f-ui); color:var(--c-text); font-size:var(--fs-18); }
-.screen--phone{ width:812px; height:375px; font-size:var(--fs-14); }
+.screen--phone{ width:812px; height:375px; font-size:var(--fs-body); }
 
 /* ---- menu backdrop: blurred world, dark scrim, halftone that slowly pans, giant drifting stencil word ---- */
 .bg{ position:absolute; inset:0; z-index:var(--z-world); overflow:hidden; pointer-events:none; }
@@ -422,7 +459,7 @@ html.reduce-motion{ --dur-fast:120ms; --dur:120ms; --dur-slow:120ms; }
 
 /* segmented choice */
 .seg{ display:inline-flex; padding:var(--sp-1); gap:var(--sp-1); background:var(--c-ink-950); border:var(--bw) solid var(--c-line); border-radius:var(--r-sm); flex-wrap:wrap; }
-.seg__opt{ display:inline-flex; align-items:center; justify-content:center; gap:var(--sp-2); min-height:44px; min-width:56px; padding:0 var(--sp-3); border-radius:var(--r-xs); color:var(--c-muted); font-size:var(--fs-16); font-weight:var(--fw-bold); }
+.seg__opt{ display:inline-flex; align-items:center; justify-content:center; gap:var(--sp-2); min-height:var(--hit-min); min-width:56px; padding:0 var(--sp-3); border-radius:var(--r-xs); color:var(--c-muted); font-size:var(--fs-16); font-weight:var(--fw-bold); }
 .seg__opt[aria-checked="true"]{ background:var(--c-volt); color:var(--c-volt-ink); }
 .seg__opt .ic{ width:20px; height:20px; }
 .seg--paper{ background:var(--c-paper-2); border-color:var(--c-paper-line); }
@@ -431,7 +468,7 @@ html.reduce-motion{ --dur-fast:120ms; --dur:120ms; --dur-slow:120ms; }
 .seg--block{ display:flex; } .seg--block .seg__opt{ flex:1; }
 
 /* switch */
-.switch{ display:inline-flex; align-items:center; gap:var(--sp-3); min-height:44px; font-weight:var(--fw-bold); }
+.switch{ display:inline-flex; align-items:center; gap:var(--sp-3); min-height:var(--hit-min); font-weight:var(--fw-bold); }
 .switch__track{ position:relative; width:64px; height:34px; border-radius:var(--r-pill); background:var(--c-ink-950); border:var(--bw) solid var(--c-line-strong); flex:none; }
 .switch__track::after{ content:""; position:absolute; top:3px; left:3px; width:24px; height:24px; border-radius:50%; background:var(--c-muted-2); transition:transform var(--dur) var(--ease-pop); }
 .switch[aria-checked="true"] .switch__track{ background:var(--c-volt); border-color:var(--c-ink-950); }
@@ -440,15 +477,18 @@ html.reduce-motion{ --dur-fast:120ms; --dur:120ms; --dur-slow:120ms; }
 .switch[aria-checked="true"] .switch__state{ color:var(--c-volt); }
 
 /* slider · track + fill from ONE number --v (0..1) + default tick --d */
-.slider{ position:relative; display:block; height:28px; flex:1; min-width:120px; }
-.slider__track{ position:absolute; left:0; right:0; top:10px; height:8px; border-radius:var(--r-pill); background:var(--c-ink-950); box-shadow:inset 0 0 0 var(--bw) var(--c-line); overflow:hidden; }
+/* its hit box: the 28 px visual centred in --sl-hit (a touch screen: --touch-min), the extra height
+   given back by a negative margin so rows don't move (UX-91: the sliders were 29 px under a finger) */
+.slider{ --sl-h:28px; --sl-pad:max(0px, (var(--sl-hit, 0px) - var(--sl-h)) / 2); position:relative; display:block; height:calc(var(--sl-h) + 2 * var(--sl-pad)); margin-block:calc(-1 * var(--sl-pad)); flex:1; min-width:120px; }
+@media (pointer: coarse){ .slider{ --sl-hit:var(--touch-min); } }
+.slider__track{ position:absolute; left:0; right:0; top:calc(10px + var(--sl-pad)); height:8px; border-radius:var(--r-pill); background:var(--c-ink-950); box-shadow:inset 0 0 0 var(--bw) var(--c-line); overflow:hidden; }
 .slider__track > :is(i, .slider__fill){ position:absolute; inset:0; background:var(--c-volt); transform-origin:0 50%; transform:scaleX(var(--v,.5)); }
-.slider__def{ position:absolute; top:4px; width:3px; height:20px; left:calc(var(--d,.5) * 100% - 1px); background:var(--c-paper); border-radius:var(--r-xxs); opacity:.6; }
-.slider__thumb{ position:absolute; top:0; left:calc(var(--v,.5) * 100% - 14px); width:28px; height:28px; border-radius:var(--r-xs); background:var(--c-paper); border:var(--bw-chunky) solid var(--c-ink-950); transform:rotate(45deg) scale(.85); }
+.slider__def{ position:absolute; top:calc(4px + var(--sl-pad)); width:3px; height:20px; left:calc(var(--d,.5) * 100% - 1px); background:var(--c-paper); border-radius:var(--r-xxs); opacity:.6; }
+.slider__thumb{ position:absolute; top:var(--sl-pad); left:calc(var(--v,.5) * 100% - 14px); width:28px; height:28px; border-radius:var(--r-xs); background:var(--c-paper); border:var(--bw-chunky) solid var(--c-ink-950); transform:rotate(45deg) scale(.85); }
 /* the labels under a stepped slider (Text size): each sits under its own stop, the end ones flush with
    the track's ends, so they never run together (audit 28 Oct) */
-.slider--ticks{ height:56px; }
-.slider__ticks{ position:absolute; left:0; right:0; top:34px; height:20px; color:var(--c-muted); font-size:var(--fs-14); font-weight:var(--fw-bold); font-variant-numeric:tabular-nums; pointer-events:none; }
+.slider--ticks{ --sl-h:56px; }
+.slider__ticks{ position:absolute; left:0; right:0; top:calc(34px + var(--sl-pad)); height:20px; color:var(--c-muted); font-size:var(--fs-14); font-weight:var(--fw-bold); font-variant-numeric:tabular-nums; pointer-events:none; }
 .slider__ticks > span{ position:absolute; top:0; left:calc(var(--t) * 100%); translate:calc(var(--t) * -100%) 0; white-space:nowrap; }
 .slider__ticks > span.is-on{ color:var(--c-text); }
 /* a settings slider with its mute button and value on one line */
@@ -1162,7 +1202,7 @@ html.reduce-motion .evb{ animation:none; }
 .trow__dot{ width:8px; height:8px; border-radius:50%; background:var(--c-volt); }
 .trow__val{ margin-left:auto; font-size:var(--fs-16); }
 .trow.is-changed .trow__val{ color:var(--c-volt); }
-.trow .slider{ height:24px; } .trow .slider__track{ top:8px; } .trow .slider__thumb{ width:24px; height:24px; left:calc(var(--v) * 100% - 12px); } .trow .slider__def{ top:2px; }
+.trow .slider{ --sl-h:24px; } .trow .slider__track{ top:calc(8px + var(--sl-pad)); } .trow .slider__thumb{ width:24px; height:24px; left:calc(var(--v) * 100% - 12px); } .trow .slider__def{ top:calc(2px + var(--sl-pad)); }
 .trow__def{ margin-left:auto; font-size:var(--fs-14); color:var(--c-muted-2); }
 .trow__def b{ color:var(--c-muted); font-weight:var(--fw-bold); }
 .trow__val{ margin-left:var(--sp-3) !important; min-width:4.6em; text-align:right; }
@@ -1598,11 +1638,18 @@ html.canvas .ticker__run{ animation:none; }
 [data-active-state~="low-hp"] .dial__lbl--hp{ color:var(--c-hp); }
 
 /* ---- phone menus ---- */
+/* the touch floor on the phone screens (UX-91): a small phone zooms them under 1 (0.82 at 667×375), which
+   took 48 px buttons, the nav and the segments under 44 px. Floors only: --hit-min is 44 design px
+   wherever the zoom is 1 or more, so a phone at full size draws exactly as designed */
+@media (pointer: coarse){
+  .mf-fit.mf-fit--phone :is(.btn, .tab, .pm-nav__i, .seg__opt, .switch){ min-height:var(--hit-min); }
+  .mf-fit.mf-fit--phone :is(.btn--icon, .seg__opt){ min-width:var(--hit-min); }
+}
 .pm{ position:relative; z-index:var(--z-hud); height:100%; padding:var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l); display:flex; flex-direction:column; gap:8px; }
 .pm-top{ display:flex; align-items:center; gap:10px; height:48px; flex:none; }
 .pm-brand .brand__emblem{ width:36px; height:36px; }
 .pm-brand .display{ font-size:var(--fs-24); }
-.pm-pill{ min-height:40px; padding:0 12px; font-size:var(--fs-14); }
+.pm-pill{ min-height:max(40px, var(--tap-floor)); padding:0 12px; font-size:var(--fs-14); }
 .pm-av{ width:40px; height:40px; font-size:var(--fs-20); }
 .pm-h{ font-size:var(--fs-28); }
 .pm-code{ font-size:var(--fs-20); }

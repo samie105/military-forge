@@ -46,7 +46,7 @@ html.reduce-motion .load__art { animation: none; }
 .pm-maps { flex: 1 0 100%; display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
 .pm-map { position: relative; display: flex; flex-direction: column; min-height: 48px; padding: 0; overflow: hidden; text-align: left; background: var(--c-ink-850); color: var(--c-text); border: var(--bw-chunky) solid var(--c-line); border-radius: var(--r-sm); font: inherit; cursor: pointer; }
 .pm-map .mapart { aspect-ratio: 2 / 1; height: auto; border-bottom: var(--bw) solid var(--c-ink-950); }
-.pm-map__name { padding: 5px 8px 6px; font-size: calc(13px * var(--text-scale, 1)); font-weight: var(--fw-bold); line-height: 1.15; }
+.pm-map__name { padding: 5px 8px 6px; font-size: var(--fs-13); font-weight: var(--fw-bold); line-height: 1.15; }
 .pm-map[aria-checked='true'] { border-color: var(--c-volt); box-shadow: var(--sh-card-sm); }
 .pm-map[aria-checked='true'] .pm-map__name { background: var(--c-volt); color: var(--c-volt-ink); }
 .pm-map:disabled { cursor: default; }

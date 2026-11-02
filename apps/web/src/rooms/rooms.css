@@ -58,7 +58,7 @@
 .rm-phase--lobby { color: var(--c-ok); }
 .rm-phase--starting { color: var(--c-warn); }
 .rm-row__tags { display: flex; flex-wrap: wrap; gap: var(--sp-1); min-width: 0; }
-.rm-tag { min-height: 24px; font-size: 12px; }
+.rm-tag { min-height: 24px; font-size: var(--fs-12); }
 .rm-tag .ic { width: 14px; height: 14px; }
 .rm-row__end { display: flex; align-items: center; gap: var(--sp-3); justify-content: flex-end; }
 .rm-row__seats { font-size: var(--fs-16); font-weight: var(--fw-black); color: var(--c-ok); white-space: nowrap; }
@@ -108,22 +108,22 @@
 .rm-listing .rm-lang select { min-height: 40px; }
 
 /* the phone's chip in the share card, and its sheet */
-.rm-lchip { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 10px; border-radius: var(--r-pill); background: var(--c-ink-950); color: var(--c-text); font-size: var(--fs-14); font-weight: var(--fw-black); text-transform: uppercase; letter-spacing: 0.06em; border: 0; }
+.rm-lchip { display: inline-flex; align-items: center; gap: 6px; min-height: max(36px, var(--tap-floor)); padding: 0 10px; border-radius: var(--r-pill); background: var(--c-ink-950); color: var(--c-text); font-size: var(--fs-14); font-weight: var(--fw-black); text-transform: uppercase; letter-spacing: 0.06em; border: 0; }
 .pm-sheet .rm-listing__row { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .pm-sheet .label { min-width: 0; }
 .pm-sheet .rm-listing__hint { margin: 0; color: var(--c-muted); font-size: var(--fs-14); }
 .pm-sheet .rm-listing__acts { display: flex; gap: var(--sp-2); padding-top: var(--sp-2); }
 .pm-sheet .rm-listing__guest { margin: 0; display: flex; align-items: center; gap: var(--sp-2); }
-.pm-sheet .seg__opt { min-height: 40px; min-width: 0; padding: 0 10px; font-size: var(--fs-14); }
+.pm-sheet .seg__opt { min-height: max(40px, var(--tap-floor)); min-width: 0; padding: 0 10px; font-size: var(--fs-14); }
 
 /* ---- phones (812×375) ---- */
-.rm--phone .rm-tabs .seg__opt { min-height: 40px; font-size: var(--fs-14); }
+.rm--phone .rm-tabs .seg__opt { min-height: max(40px, var(--tap-floor)); font-size: var(--fs-14); }
 .rm--phone .rm-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .rm-list-wrap--phone { gap: 6px; flex: 1; }
 .rm-list-wrap--phone .rm-bar { gap: 6px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
-.rm-list-wrap--phone .rm-seg .seg__opt { min-height: 36px; min-width: 0; padding: 0 10px; font-size: var(--fs-14); }
-.rm-list-wrap--phone .rm-chip { min-height: 40px; padding: 0 10px; font-size: var(--fs-14); }
-.rm-list-wrap--phone .rm-lang select { min-height: 40px; font-size: 16px; } /* 16px: iOS doesn't zoom into the field */
+.rm-list-wrap--phone .rm-seg .seg__opt { min-height: max(36px, var(--tap-floor)); min-width: 0; padding: 0 10px; font-size: var(--fs-14); }
+.rm-list-wrap--phone .rm-chip { min-height: max(40px, var(--tap-floor)); padding: 0 10px; font-size: var(--fs-14); }
+.rm-list-wrap--phone .rm-lang select { min-height: max(40px, var(--tap-floor)); font-size: 16px; } /* 16px: iOS doesn't zoom into the field */
 .rm-list-wrap--phone .rm-bar .switch { font-size: var(--fs-14); }
 .rm-list-wrap--phone .rm-status { min-height: 20px; font-size: var(--fs-14); }
 .rm-list-wrap--phone .rm-row { grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr) auto; min-height: 60px; gap: 10px; padding: 6px 10px; }
@@ -131,15 +131,15 @@
 .rm-list-wrap--phone .rm-row--ghost { min-height: 60px; }
 .rm-list-wrap--phone .rm-row__icon { width: 40px; height: 40px; }
 .rm-list-wrap--phone .rm-row__title { font-size: var(--fs-16); }
-.rm-list-wrap--phone .rm-row__sub, .rm-list-wrap--phone .rm-row__people, .rm-list-wrap--phone .rm-row__phase { font-size: 12px; }
+.rm-list-wrap--phone .rm-row__sub, .rm-list-wrap--phone .rm-row__people, .rm-list-wrap--phone .rm-row__phase { font-size: var(--fs-12); }
 .rm-list-wrap--phone .rm-row__end { gap: 6px; flex-direction: column; align-items: flex-end; }
-.rm-list-wrap--phone .rm-row__seats { font-size: 12px; }
+.rm-list-wrap--phone .rm-row__seats { font-size: var(--fs-12); }
 .rm-list-wrap--phone .rm-row__act { min-width: 84px; min-height: var(--touch-min); }
 .rm-list-wrap--phone .rm-empty { padding: 8px 10px; font-size: var(--fs-14); }
 .rm-online--phone { flex: 1; padding: 10px; gap: 10px; }
 .rm-online--phone .rm-online__count { font-size: var(--fs-24); }
 .rm-online--phone .rm-lfg { padding: 10px; }
-.rm-online--phone .rm-seg .seg__opt { min-height: 36px; min-width: 0; font-size: var(--fs-14); }
+.rm-online--phone .rm-seg .seg__opt { min-height: max(36px, var(--tap-floor)); min-width: 0; font-size: var(--fs-14); }
 .rm-online--phone .sx-row { min-height: 52px; }
 .rm-closed--phone { margin-top: var(--sp-4); padding: var(--sp-4); }
 .rm-closed--phone p { font-size: var(--fs-16); }

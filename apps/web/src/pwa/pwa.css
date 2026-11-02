@@ -28,13 +28,13 @@ html.reduce-motion .mf-install { animation: none; }
 .mf-install__tile { display: grid; place-items: center; flex: none; width: 48px; height: 48px; margin-left: 14px; background: var(--c-volt); color: var(--c-volt-ink); border-radius: 0 10px 0 10px; }
 .mf-install__tile .ic { width: 26px; height: 26px; }
 .mf-install__words { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
-.mf-install__eyebrow { font-size: 11px; font-weight: var(--fw-black, 800); letter-spacing: .14em; text-transform: uppercase; color: var(--c-volt); }
+.mf-install__eyebrow { font-size: var(--fs-12); font-weight: var(--fw-black, 800); letter-spacing: .14em; text-transform: uppercase; color: var(--c-volt); }
 .mf-install__title { font-size: 26px; line-height: 1; text-transform: uppercase; color: var(--c-paper); }
-.mf-install__line { font-size: 13px; font-weight: var(--fw-semi, 600); color: #b5b9a2; }
-.mf-install__steps { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; color: #b5b9a2; }
+.mf-install__line { font-size: var(--fs-13); font-weight: var(--fw-semi, 600); color: #b5b9a2; }
+.mf-install__steps { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: var(--fs-14); color: #b5b9a2; }
 .mf-install__step { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .mf-install__step b { color: var(--c-paper); font-weight: var(--fw-black, 800); }
-.mf-install__step i { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--c-paper); color: #15170f; font: normal var(--fw-black, 900) 12px/1 inherit; }
+.mf-install__step i { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--c-paper); color: #15170f; font: normal var(--fw-black, 900) var(--fs-12)/1 inherit; }
 .mf-install__then { color: #b5b9a2; }
 .mf-install__go {
   display: inline-flex; align-items: center; gap: 8px; flex: none; min-height: 48px; padding: 0 20px;
@@ -43,7 +43,7 @@ html.reduce-motion .mf-install { animation: none; }
 }
 .mf-install__later {
   flex: none; min-height: 48px; padding: 0 10px; border: 0; background: none; color: var(--c-paper);
-  font: inherit; font-size: 14px; font-weight: var(--fw-black, 800); text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+  font: inherit; font-size: var(--fs-14); font-weight: var(--fw-black, 800); text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
 }
 /* phone Home: docked over the bottom nav, never over the Play poster (UX-14: it covered Play now and Create
    room), one slim row the nav's height: the eyebrow and title, Not now, Install. The nav is back once it's answered. */
@@ -69,8 +69,8 @@ html.reduce-motion .mf-install { animation: none; }
 .mf-install--ios .mf-install__tile .ic { width: 20px; height: 20px; }
 .mf-install--ios .mf-install__eyebrow { display: none; }
 .mf-install--ios .mf-install__title { font-size: 18px; }
-.mf-install--ios .mf-install__steps { gap: 6px; font-size: 13px; }
-.mf-install--ios .mf-install__go { min-height: 44px; padding: 0 14px; font-size: 14px; }
+.mf-install--ios .mf-install__steps { gap: 6px; font-size: var(--fs-13); }
+.mf-install--ios .mf-install__go { min-height: 44px; padding: 0 14px; font-size: var(--fs-14); }
 .mf-install--top { top: var(--safe-t, 10px); bottom: auto; width: auto; max-width: 600px; }
 
 /* Install app (InstallButton.tsx): the kit's small ghost button, its icon in volt, a volt edge so it
@@ -83,7 +83,7 @@ html.reduce-motion .mf-install { animation: none; }
 /* PwaHost: the guide a button opened, and the installed confirmation, over any screen */
 .mf-pwa-host .mf-install { pointer-events: auto; position: absolute; left: 50%; translate: -50% 0; width: max-content; max-width: calc(100vw - 32px); }
 /* outside the phone screens' zoom: the same size as on them (a phone's --phone-fit; 1 on a desktop) */
-.mf-pwa-host .mf-install--ios { zoom: min(1, var(--phone-fit, 1)); }
+.mf-pwa-host .mf-install--ios { zoom: min(1, var(--phone-fit, 1)); --zoom: min(1, var(--phone-fit, 1)); }
 .mf-pwa-host .mf-install--top { top: max(10px, var(--sa-t, 0px)); }
 .mf-install--done .mf-install__line { white-space: normal; }
 .is-text-lg .mf-install--done .mf-install__line { display: block; }

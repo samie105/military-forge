@@ -6,7 +6,7 @@
  * removes it. Tokens only, but for the Galaxy Relic's own hues (content's tracer colours) in its art panel.
  */
 .mf-st-fit { position: fixed; inset: 0; overflow: hidden; z-index: 1; }
-.mf-st-fit > .screen { width: var(--fit-w, 1920px); height: var(--fit-h, 1080px); zoom: var(--fit, 1); }
+.mf-st-fit > .screen { width: var(--fit-w, 1920px); height: var(--fit-h, 1080px); zoom: var(--fit, 1); --zoom: var(--fit, 1); }
 
 :where(.mf-st-fit) .mf-st { position: relative; z-index: 1; height: 100%; display: flex; flex-direction: column; box-sizing: border-box; }
 :where(.mf-st-fit) .mf-st__chip { display: inline-flex; align-items: center; gap: var(--sp-3); }
@@ -177,7 +177,7 @@ html.reduce-motion :where(.mf-st-fit) .mf-st__fx-win img { animation: none; tran
 html:is(.mf-short, .mf-big-text):where(:not(.mf-phone)) :where(.mf-st-fit) .mf-st__line-name { font-size: var(--fs-48); }
 
 /* ---- a phone: its own size, one column, the page scrolls ---- */
-:where(html.mf-phone) .mf-st-fit > .screen { zoom: 1; width: 100%; height: 100%; }
+:where(html.mf-phone) .mf-st-fit > .screen { zoom: 1; --zoom: 1; width: 100%; height: 100%; }
 :where(html.mf-phone) :where(.mf-st-fit) .bg__word { display: none; }
 /* the kit's menu box is the desktop's (a 112 px header, wide gutters): the phone's own, like the Armory's */
 html.mf-phone :where(.mf-st-fit) .mf-st { padding: 0; }
@@ -187,33 +187,33 @@ html.mf-phone :where(.mf-st-fit) .mf-st .menu-top {
 }
 html.mf-phone :where(.mf-st-fit) .mf-st .menu-top__title { font-size: var(--fs-28); }
 html.mf-phone :where(.mf-st-fit) .mf-st .menu-top .btn--icon { min-width: 44px; min-height: 44px; }
-html.mf-phone :where(.mf-st-fit) .mf-st .eyebrow { font-size: 11px; gap: var(--sp-2); }
+html.mf-phone :where(.mf-st-fit) .mf-st .eyebrow { font-size: var(--fs-12); gap: var(--sp-2); }
 html.mf-phone :where(.mf-st-fit) .mf-st .eyebrow::before { width: 14px; }
-html.mf-phone :where(.mf-st-fit) .mf-st .tag { font-size: 10px; padding: 2px 6px; }
-html.mf-phone :where(.mf-st-fit) .mf-st .btn--volt:not(.btn--sm) { min-height: 40px; padding-inline: var(--sp-4); }
-:where(html.mf-phone) :where(.mf-st-fit) .mf-st__bal { font-size: 14px; padding: 4px 10px; }
+html.mf-phone :where(.mf-st-fit) .mf-st .tag { font-size: var(--fs-12); padding: 2px 6px; }
+html.mf-phone :where(.mf-st-fit) .mf-st .btn--volt:not(.btn--sm) { min-height: max(40px, var(--tap-floor)); padding-inline: var(--sp-4); }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__bal { font-size: var(--fs-14); padding: 4px 10px; }
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__bal b { font-size: 16px; }
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__body {
   gap: var(--sp-3);
   padding: var(--sp-2) max(var(--sp-4), env(safe-area-inset-right)) max(var(--sp-5), env(safe-area-inset-bottom)) max(var(--sp-4), env(safe-area-inset-left));
 }
-:where(html.mf-phone) :where(.mf-st-fit) .mf-st__note { font-size: 14px; }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__note { font-size: var(--fs-14); }
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__notice, :where(html.mf-phone) :where(.mf-st-fit) .mf-st__gate { font-size: 15px; padding: var(--sp-3); gap: var(--sp-2); flex-wrap: wrap; }
-:where(html.mf-phone) :where(.mf-st-fit) .mf-st__gate p { font-size: 13px; }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__gate p { font-size: var(--fs-13); }
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__grid { grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__line { padding: var(--sp-3); gap: var(--sp-2); border-radius: var(--r-frost-sm, 0 18px 0 18px); }
 html.mf-phone :where(.mf-st-fit) .mf-st .mf-st__tier-art { margin: calc(-1 * var(--sp-3)) calc(-1 * var(--sp-3)) 0; }
-html.mf-phone :where(.mf-st-fit) .mf-st .mf-st__fx figcaption { font-size: 10px; }
+html.mf-phone :where(.mf-st-fit) .mf-st .mf-st__fx figcaption { font-size: var(--fs-12); }
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__line-name { font-size: 34px; }
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__tiers { gap: var(--sp-2); }
 /* a narrow phone (or big text): the tiers one under the other */
 @media (max-width: 560px) { :where(html.mf-phone:not(.mf-rotated)) :where(.mf-st-fit) .mf-st__tiers { grid-template-columns: minmax(0, 1fr); } }
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__tier { padding: var(--sp-3); gap: var(--sp-2); }
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__tier-name { font-size: 20px; }
-:where(html.mf-phone) :where(.mf-st-fit) .mf-st__tier-line { font-size: 13px; }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__tier-line { font-size: var(--fs-13); }
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__price { font-size: 15px; }
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__price b { font-size: 20px; }
-:where(html.mf-phone) :where(.mf-st-fit) .mf-st__money { font-size: 13px; }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__money { font-size: var(--fs-13); }
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__acts { margin-top: 0; }
 /*
  * A phone: each tier is one row, the picture on the left and the name, line and Claim on the right, the
@@ -228,13 +228,13 @@ html.mf-phone :where(.mf-st-fit) .mf-st .mf-st__tier-art { grid-row: 1 / span 2;
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__get-t { font-size: 28px; }
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__bundle { padding: var(--sp-2) var(--sp-3); }
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__amount { font-size: 17px; flex-wrap: wrap; }
-html.mf-phone :where(.mf-st-fit) .mf-st .mf-st__pay .btn { min-width: 84px; min-height: 36px; padding: 0 var(--sp-3); font-size: 13px; }
-html.mf-phone :where(.mf-st-fit) .mf-st .mf-st__acts .btn { min-height: 36px; font-size: 13px; }
-:where(html.mf-phone) :where(.mf-st-fit) .mf-st__limit { font-size: 14px; }
-:where(html.mf-phone) :where(.mf-st-fit) .mf-st__pays li { grid-template-columns: 1fr 1fr 1fr; font-size: 13px; }
+html.mf-phone :where(.mf-st-fit) .mf-st .mf-st__pay .btn { min-width: 84px; min-height: max(36px, var(--tap-floor)); padding: 0 var(--sp-3); font-size: var(--fs-13); }
+html.mf-phone :where(.mf-st-fit) .mf-st .mf-st__acts .btn { min-height: max(36px, var(--tap-floor)); font-size: var(--fs-13); }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__limit { font-size: var(--fs-14); }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__pays li { grid-template-columns: 1fr 1fr 1fr; font-size: var(--fs-13); }
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__dlg { padding: var(--sp-5); width: calc(100% - 2 * var(--sp-4)); border-radius: var(--r-frost-sm, 0 18px 0 18px); }
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__dlg-t { font-size: 26px; }
 :where(html.mf-phone) :where(.mf-st-fit) .mf-st__dlg-price { font-size: 22px; }
-:where(html.mf-phone) :where(.mf-st-fit) .mf-st__dlg-line { font-size: 14px; }
-html.mf-phone :where(.mf-st-fit) .mf-st .mf-st__age select { min-height: 36px; font-size: 14px; }
-html.mf-phone :where(.mf-st-fit) .mf-st .mf-st__age-l, html.mf-phone :where(.mf-st-fit) .mf-st .mf-st__age-c { font-size: 13px; min-height: 36px; }
+:where(html.mf-phone) :where(.mf-st-fit) .mf-st__dlg-line { font-size: var(--fs-14); }
+html.mf-phone :where(.mf-st-fit) .mf-st .mf-st__age select { min-height: max(36px, var(--tap-floor)); font-size: var(--fs-14); }
+html.mf-phone :where(.mf-st-fit) .mf-st .mf-st__age-l, html.mf-phone :where(.mf-st-fit) .mf-st .mf-st__age-c { font-size: var(--fs-13); min-height: 36px; }

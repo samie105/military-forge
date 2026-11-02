@@ -78,7 +78,7 @@ html.reduce-motion .mf-consent {
   flex: 1;
   min-width: 0;
   padding: 0 10px;
-  font-size: 14px;
+  font-size: var(--fs-14);
 }
 html.reduce-transparency .mf-consent {
   background: #0e100b;
@@ -108,7 +108,7 @@ html.reduce-transparency .mf-consent {
   min-width: 0;
 }
 .mf-consent__eyebrow {
-  font-size: 11px;
+  font-size: var(--fs-12);
   font-weight: var(--fw-black, 800);
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -121,7 +121,7 @@ html.reduce-transparency .mf-consent {
   color: var(--c-paper);
 }
 .mf-consent__line {
-  font-size: 13px;
+  font-size: var(--fs-13);
   font-weight: var(--fw-semi, 600);
   color: #b5b9a2;
 }

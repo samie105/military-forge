@@ -95,7 +95,7 @@
 .mf-touch[data-sticks='fixed'] .mf-ctl-aim .dial__fireline { inset: 47px; }
 .dial__cancel { inset: 74px; border-radius: 50%; border: 2px solid var(--c-paper); }
 .mf-ctl-aim[data-fire='release'].mf-down .dial__cancel { display: block; }
-.dial__tag { left: 50%; bottom: 20px; translate: -50% 0; padding: 1px 6px; border-radius: var(--r-xs); background: var(--c-volt); color: var(--c-volt-ink); font-size: 11px; font-weight: var(--fw-black); letter-spacing: 0.08em; text-transform: uppercase; }
+.dial__tag { left: 50%; bottom: 20px; translate: -50% 0; padding: 1px 6px; border-radius: var(--r-xs); background: var(--c-volt); color: var(--c-volt-ink); font-size: var(--fs-12); font-weight: var(--fw-black); letter-spacing: 0.08em; text-transform: uppercase; }
 .mf-ctl-aim[data-fire='auto'] .dial__tag { display: block; }
 /* once the stick has aimed (controller.ts aimLearned) the tag has done its job: it fades off the ring */
 .mf-ctl-aim.mf-aimed .dial__tag { opacity: 0; visibility: hidden; transition: opacity 600ms ease-out, visibility 0s linear 600ms; }
@@ -104,7 +104,7 @@
 .dial-btn--fire { width: 84px; height: 84px; align-content: center; gap: 1px; }
 .mf-touch .mf-ctl .dial-btn--fire { background: color-mix(in srgb, var(--c-volt) 88%, transparent); border-color: var(--c-ink-950); }
 .mf-touch .mf-ctl .dial-btn--fire .ic { color: var(--c-volt-ink); width: 26px; height: 26px; }
-.dial-btn--fire .dial-btn__word { font: var(--fw-black) 13px/1 var(--f-ui, inherit); letter-spacing: 0.1em; text-transform: uppercase; color: var(--c-volt-ink); }
+.dial-btn--fire .dial-btn__word { font: var(--fw-black) var(--fs-13)/1 var(--f-ui, inherit); letter-spacing: 0.1em; text-transform: uppercase; color: var(--c-volt-ink); }
 .dial-btn--fire .tb__sub { color: var(--c-volt-ink); }
 .mf-ctl-fireLeft .dial-btn--fire { width: 72px; height: 72px; }
 .mf-touch .mf-ctl.mf-down .dial-btn--fire { box-shadow: 0 0 0 4px color-mix(in srgb, var(--c-volt) 40%, transparent); }
@@ -268,9 +268,9 @@ html.reduce-motion .mf-ctl.mf-teach::before { animation: none; opacity: 0.9; }
 .mf-choose__opt { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-height: var(--touch-min); padding: 8px; border-radius: var(--r-sm); border: 2px solid var(--c-line-strong); background: color-mix(in srgb, var(--c-ink-950) 70%, transparent); color: var(--c-text); text-align: left; cursor: pointer; }
 .mf-choose__opt.is-on { border-color: var(--c-volt); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-volt) 25%, transparent); }
 .mf-choose__opt b { font-size: var(--fs-16); font-weight: var(--fw-black); text-transform: uppercase; letter-spacing: 0.04em; }
-.mf-choose__opt > span:last-child { font-size: 12px; line-height: 1.25; color: var(--c-muted); }
+.mf-choose__opt > span:last-child { font-size: var(--fs-12); line-height: 1.25; color: var(--c-muted); }
 .mf-choose__opt .fa { max-height: 64px; }
-.mf-choose__tag { padding: 1px 5px; border-radius: var(--r-xs); background: var(--c-volt); color: var(--c-volt-ink); font-size: 10px; font-weight: var(--fw-black); text-transform: uppercase; letter-spacing: 0.06em; }
+.mf-choose__tag { padding: 1px 5px; border-radius: var(--r-xs); background: var(--c-volt); color: var(--c-volt-ink); font-size: var(--fs-12); font-weight: var(--fw-black); text-transform: uppercase; letter-spacing: 0.06em; }
 .mf-choose__note { margin: 0; font-size: var(--fs-14); color: var(--c-muted); }
 .mf-text-lg .mf-choose__opt > span:last-child { display: none; }
 
@@ -291,7 +291,7 @@ html.reduce-motion .mf-ctl.mf-teach::before { animation: none; opacity: 0.9; }
    this in 10 seconds"); it rides the skin's zoom, and fades with the plate ---- */
 .mf-touch .mf-cap {
   position: absolute; left: 50%; top: calc(100% + 3px); translate: -50% 0;
-  font: var(--fw-black, 900) 10px/1 var(--f-ui, inherit); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap;
+  font: var(--fw-black, 900) var(--fs-12)/1 var(--f-ui, inherit); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap;
   color: var(--c-paper); text-shadow: 0 1px 2px rgb(0 0 0 / .85); pointer-events: none;
   /* on a plate of its own: a soldier's name tag behind a button can't read as its word (the owner's iPhone,
      24 Oct: SWAP over "Jetter") */

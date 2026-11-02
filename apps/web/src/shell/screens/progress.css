@@ -28,11 +28,11 @@ html.mf-reduce-motion .mf-lvbar i { transition: none; }
 /* the phone: the avatar's level under it */
 .avatar.pm-av { position: relative; overflow: visible; }
 .pm-av__face { display: block; width: 100%; height: 100%; border-radius: 50%; overflow: hidden; }
-.pm-av .mf-lv { position: absolute; left: 50%; bottom: -6px; translate: -50% 0; padding: 0 4px; border-radius: 4px; background: var(--c-ink-950); font-size: 10px; line-height: 14px; }
+.pm-av .mf-lv { position: absolute; left: 50%; bottom: -6px; translate: -50% 0; padding: 0 4px; border-radius: 4px; background: var(--c-ink-950); font-size: var(--fs-12); line-height: 14px; }
 
 /* phone Results: the XP line stays one line and a hairline bar */
 .pm-res .mf-xp { margin-top: 0; gap: 3px; }
-.pm-res .mf-xp__line { font-size: calc(13px * var(--text-scale, 1)); }
-.pm-res .mf-xp__up { margin-left: 6px; font-size: 12px; }
+.pm-res .mf-xp__line { font-size: var(--fs-13); }
+.pm-res .mf-xp__up { margin-left: 6px; font-size: var(--fs-12); }
 .pm-res .mf-lvbar { height: 4px; }
-.pm-res .mf-xp--none { margin: 0; font-size: 12px; }
+.pm-res .mf-xp--none { margin: 0; font-size: var(--fs-12); }

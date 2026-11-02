@@ -8,7 +8,8 @@
  *                                  keep at least 1600×900 design pixels to reflow in (menuFit)
  *   --hud-fit, --hud-w, --hud-h    the desktop HUD: the same, kept between 0.75 and 1.5 so its text
  *                                  stays readable in small windows (it anchors to the corners)
- *   --phone-fit, --phone-w, ...    the phone HUD: min(w/812, h/375)
+ *   --phone-fit, --phone-w, ...    the phone menus and HUD: min(w/812, h/375); on a touch tablet or a
+ *                                  short window (landscape.ts LayoutTier) no more than TABLET_MAX_FIT
  *
  * Set on <html> once and on every resize, with two classes for the menus' smaller boxes (app.css
  * reflows the wide screens in them): html.mf-narrow under 1800 design pixels wide, html.mf-short
@@ -17,8 +18,13 @@
  * neither its full height nor the reflow, so Home, the Armory, the lobby, the creator and the results
  * ran off the bottom (audit 28 Oct). On an upright phone the page is turned (landscape.ts) and the window's size is
  * the turned box's.
+ *
+ * Tablets and short windows wear the phone layouts (landscape.ts layoutTier): the desktop menus at a
+ * tablet's 0.48–0.64 drew 7–9 px text and 23–33 px buttons (UX-95). Whatever the zoom, the kit's type
+ * and target tokens keep a floor in rendered pixels (kit.css: --zoom, --fs-min, --tap), so a laptop's
+ * 0.8 no longer draws 11.2 px labels (UX-90).
  */
-import { applyLandscape, viewport } from './landscape';
+import { applyLandscape, viewport, type LayoutTier } from './landscape';
 
 export const DESIGN_W = 1920;
 export const DESIGN_H = 1080;
@@ -34,6 +40,12 @@ export const MENU_MIN_H = 900;
 export const SHORT_H = DESIGN_H;
 /** below this many design pixels wide, their narrow ones (html.mf-narrow) */
 export const NARROW_W = 1800;
+/**
+ * The phone layouts on a tablet or a short window zoom no more than this: a 1024×768 tablet is 1.26
+ * (812×609 design pixels), a 1280×800 one 1.5 rather than 1.58, a 12.9-inch iPad 1.5 rather than 1.68
+ * (911×683): thumb-sized, never poster-sized.
+ */
+export const TABLET_MAX_FIT = 1.5;
 
 /** The menus' reflow classes for a fit: narrow under NARROW_W, short under SHORT_H (rounding slack: 0.5 px). */
 export function menuShape(f: Fit): { narrow: boolean; short: boolean } {
@@ -65,11 +77,16 @@ export function menuFit(vw: number, vh: number): Fit {
   return { fit, w: vw / fit, h: vh / fit };
 }
 
+/** The phone layouts' fit: a phone's min(w/812, h/375); a tablet's or a short window's capped at TABLET_MAX_FIT. */
+export function phoneFit(vw: number, vh: number, tier: LayoutTier = 'phone'): Fit {
+  return fitTo(vw, vh, PHONE_W, PHONE_H, 0, tier === 'phone' ? Infinity : TABLET_MAX_FIT);
+}
+
 let started = false;
 
 function apply(root: HTMLElement): void {
-  // the page's own size: a phone held upright lays out sideways (landscape.ts)
-  applyLandscape(root);
+  // the page's own size: a phone held upright lays out sideways (landscape.ts); and its tier
+  const tier = applyLandscape(root);
   const { w: vw, h: vh } = viewport();
   const set = (name: 'fit' | 'hud' | 'phone', f: Fit) => {
     const fit = name === 'fit' ? '--fit' : `--${name}-fit`;
@@ -83,7 +100,7 @@ function apply(root: HTMLElement): void {
   root.classList.toggle('mf-narrow', shape.narrow);
   root.classList.toggle('mf-short', shape.short);
   set('hud', fitTo(vw, vh, DESIGN_W, DESIGN_H, HUD_MIN_FIT, HUD_MAX_FIT));
-  set('phone', fitTo(vw, vh, PHONE_W, PHONE_H));
+  set('phone', phoneFit(vw, vh, tier));
 }
 
 /** Keeps the fit variables up to date (idempotent). */

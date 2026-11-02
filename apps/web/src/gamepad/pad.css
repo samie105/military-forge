@@ -57,7 +57,7 @@ html[data-input='pad'] body:not(.mf) :focus {
   background: color-mix(in srgb, var(--c-ink-900, #0e100b) 82%, transparent);
   border: 1px solid var(--c-paper-line, #ab9b6c);
   color: var(--c-paper, #ece3c8);
-  font: 600 calc(14px * var(--text-scale, 1)) / 1 var(--f-ui, system-ui, sans-serif);
+  font: 600 var(--fs-14) / 1 var(--f-ui, system-ui, sans-serif);
   pointer-events: none;
   white-space: nowrap;
 }
@@ -83,7 +83,7 @@ html.mf-phone .mf-pad-hints {
   right: max(12px, var(--sa-r, 0px));
   gap: 10px;
   padding: 4px 10px;
-  font-size: 12px;
+  font-size: var(--fs-12);
 }
 html:not([data-input='pad']) .mf-pad-hints {
   display: none;
@@ -128,23 +128,23 @@ html[data-input='pad'] .mf-touch :is(.dial__knob, .dial__base, .dial__groove, .d
   pointer-events: none;
 }
 .mf-pad-layout[hidden], html:not([data-input='pad']) .mf-pad-layout { display: none; }
-.mf-pad-layout__top { display: flex; justify-content: space-between; align-items: center; color: var(--c-muted-2, #959a80); font: var(--fw-bold, 700) 10px/1 var(--f-ui, sans-serif); letter-spacing: .14em; }
+.mf-pad-layout__top { display: flex; justify-content: space-between; align-items: center; color: var(--c-muted-2, #959a80); font: var(--fw-bold, 700) var(--fs-12)/1 var(--f-ui, sans-serif); letter-spacing: .14em; }
 .mf-pad-layout__status { display: inline-flex; align-items: center; gap: 5px; color: var(--c-volt, #d6ff3b); }
 .mf-pad-layout__light { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; }
 .mf-pad-layout__head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: var(--sp-2, 8px) 0 var(--sp-3, 12px); border-bottom: 1px solid var(--c-line, #3c4430); }
 .mf-pad-layout__head b { font: var(--fw-display, 800) 20px/1 var(--f-display, var(--f-ui, sans-serif)); text-transform: uppercase; letter-spacing: .025em; }
-.mf-pad-layout__head > span { color: var(--c-muted-2, #959a80); font: var(--fw-bold, 700) 9px/1 var(--f-ui, sans-serif); letter-spacing: .1em; white-space: nowrap; }
+.mf-pad-layout__head > span { color: var(--c-muted-2, #959a80); font: var(--fw-bold, 700) var(--fs-12)/1 var(--f-ui, sans-serif); letter-spacing: .1em; white-space: nowrap; }
 .mf-pad-layout__drawing { display: block; width: 100%; height: auto; margin: 10px 0 2px; overflow: visible; }
 .mf-pad-layout__body { fill: #30352b; stroke: #848c77; }
 .mf-pad-layout__touch, .mf-pad-layout__well { fill: #181c16; stroke: #77806b; }
 .mf-pad-layout__drawing .mf-padglyph__svg { width: auto; height: 24px; }
 .mf-pad-layout__button { color: #ece3c8; fill: #191e17; }
 .mf-pad-layout__button.is-pressed, .mf-pad-layout__touch.is-pressed { color: var(--c-volt, #d6ff3b); fill: #586b1b; stroke: var(--c-volt, #d6ff3b); }
-.mf-pad-layout__legend { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 6px; padding-top: var(--sp-2, 8px); border-top: 1px solid var(--c-line, #3c4430); font: var(--fw-semi, 600) 11px/1.2 var(--f-ui, sans-serif); }
+.mf-pad-layout__legend { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 6px; padding-top: var(--sp-2, 8px); border-top: 1px solid var(--c-line, #3c4430); font: var(--fw-semi, 600) var(--fs-12)/1.2 var(--f-ui, sans-serif); }
 .mf-pad-layout__action { display: flex; align-items: center; gap: 4px; padding: 3px 5px; border-radius: var(--r-xs, 4px); color: var(--c-muted, #b5b9a2); }
 .mf-pad-layout__action.is-cued { background: var(--c-volt-soft, #d6ff3b24); color: var(--c-text, #f2eedf); }
 .mf-pad-layout__legend .mf-padglyph__svg { display: block; height: 23px; }
-.mf-pad-layout__sticks { display: flex; align-items: center; justify-content: center; gap: 5px; margin-top: var(--sp-2, 8px); padding-top: var(--sp-2, 8px); border-top: 1px solid var(--c-line, #3c4430); color: var(--c-muted-2, #959a80); font: var(--fw-semi, 600) 11px/1 var(--f-ui, sans-serif); }
+.mf-pad-layout__sticks { display: flex; align-items: center; justify-content: center; gap: 5px; margin-top: var(--sp-2, 8px); padding-top: var(--sp-2, 8px); border-top: 1px solid var(--c-line, #3c4430); color: var(--c-muted-2, #959a80); font: var(--fw-semi, 600) var(--fs-12)/1 var(--f-ui, sans-serif); }
 .mf-pad-layout__sticks .mf-padglyph__svg { height: 21px; }
 .mf-padglyph__ps0 { color: #4aa7f5; }
 .mf-padglyph__ps1 { color: #ef626a; }
@@ -181,8 +181,8 @@ html[data-input='pad'] .mf-touch :is(.dial__knob, .dial__base, .dial__groove, .d
 .mf-pad-layout__cue { display: flex; align-items: center; gap: var(--sp-2, 8px); margin: 0 0 var(--sp-2, 8px); padding: var(--sp-2, 8px); border-left: 3px solid var(--c-volt, #d6ff3b); background: var(--c-volt-soft, #d6ff3b24); }
 .mf-pad-layout__cue-icon .mf-padglyph__svg { width: 32px; height: 32px; }
 .mf-pad-layout__cue > span:last-child { display: flex; flex-direction: column; gap: 3px; }
-.mf-pad-layout__cue small { color: var(--c-muted, #b5b9a2); font: var(--fw-bold, 700) 9px/1 var(--f-ui, sans-serif); letter-spacing: .12em; }
-.mf-pad-layout__cue b { color: var(--c-text, #f2eedf); font: var(--fw-black, 800) 14px/1 var(--f-ui, sans-serif); text-transform: uppercase; }
+.mf-pad-layout__cue small { color: var(--c-muted, #b5b9a2); font: var(--fw-bold, 700) var(--fs-12)/1 var(--f-ui, sans-serif); letter-spacing: .12em; }
+.mf-pad-layout__cue b { color: var(--c-text, #f2eedf); font: var(--fw-black, 800) var(--fs-14)/1 var(--f-ui, sans-serif); text-transform: uppercase; }
 .mf-pad-layout--menu { position: fixed; left: max(16px, env(safe-area-inset-left)); bottom: calc(max(16px, env(safe-area-inset-bottom)) + 64px); z-index: 62; width: 320px; }
 .mf-pad-layout--menu .mf-pad-layout__drawing { width: 100%; }
 .mf-pad-layout--menu.mf-pad-layout--phone { position: fixed; left: max(10px, env(safe-area-inset-left)); right: auto; top: auto; bottom: 50px; }
@@ -198,34 +198,34 @@ html[data-input='pad'] .mf-pad-focused:focus {
   .mf-pad-layout__drawing { width: 170px; margin-inline: auto; }
 }
 .mf-pad-layout--phone { position: absolute; right: 12px; top: 54px; width: 170px; padding: 8px; }
-.mf-pad-layout--phone .mf-pad-layout__top { font-size: 8px; }
-.mf-pad-layout--phone .mf-pad-layout__head b { font-size: 14px; }
+.mf-pad-layout--phone .mf-pad-layout__top { font-size: var(--fs-12); }
+.mf-pad-layout--phone .mf-pad-layout__head b { font-size: var(--fs-14); }
 .mf-pad-layout--phone .mf-pad-layout__head > span:last-child,
 .mf-pad-layout--phone .mf-pad-layout__sticks { display: none; }
 .mf-pad-layout--phone .mf-pad-layout__drawing { width: 130px; margin: 5px auto; }
-.mf-pad-layout--phone .mf-pad-layout__legend { font-size: 10px; gap: 3px; padding-top: 5px; }
+.mf-pad-layout--phone .mf-pad-layout__legend { font-size: var(--fs-12); gap: 3px; padding-top: 5px; }
 .mf-pad-layout--phone .mf-pad-layout__legend .mf-padglyph__svg { height: 18px; }
 .mf-pad-layout--phone .mf-pad-layout__cue { padding: 5px; }
 .mf-pad-layout--phone .mf-pad-layout__cue-icon .mf-padglyph__svg { width: 23px; height: 23px; }
-.mf-pad-layout--phone .mf-pad-layout__cue small { font-size: 7px; }
-.mf-pad-layout--phone .mf-pad-layout__cue b { font-size: 10px; }
+.mf-pad-layout--phone .mf-pad-layout__cue small { font-size: var(--fs-12); }
+.mf-pad-layout--phone .mf-pad-layout__cue b { font-size: var(--fs-12); }
 
 /* The Settings chooser uses the same controller assets, surfaces, and selection colour as the HUD. */
 .mf-padset__preview { width: min(100%, 560px); display: grid; place-items: center; gap: var(--sp-2, 8px); padding: var(--sp-3, 12px); border: var(--bw, 2px) solid var(--c-line-strong, #5d6749); border-radius: var(--r-sm, 6px); background: radial-gradient(ellipse at 50% 42%, var(--c-olive-600, #4a5729), var(--c-ink-800, #1a1e14) 72%); }
 .mf-padset__preview img { display: block; width: min(100%, 390px); max-height: 240px; object-fit: contain; filter: drop-shadow(0 8px 12px #0009); }
 .mf-padset__preview span { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; }
 .mf-padset__preview b { color: var(--c-text, #f2eedf); font: var(--fw-bold, 700) 15px/1.2 var(--f-ui, sans-serif); }
-.mf-padset__preview small { color: var(--c-muted-2, #959a80); font: var(--fw-semi, 600) 11px/1.2 var(--f-ui, sans-serif); }
+.mf-padset__preview small { color: var(--c-muted-2, #959a80); font: var(--fw-semi, 600) var(--fs-12)/1.2 var(--f-ui, sans-serif); }
 .mf-pad-style { width: min(100%, 560px); display: grid; gap: var(--sp-2, 8px); }
 .mf-pad-style__auto, .mf-pad-style__card { color: var(--c-text, #f2eedf); background: var(--c-ink-800, #1a1e14); border: var(--bw, 2px) solid var(--c-line-strong, #5d6749) !important; border-radius: var(--r-sm, 6px); }
 .mf-pad-style__auto[aria-checked='true'], .mf-pad-style__card[aria-checked='true'] { border-color: var(--c-volt, #d6ff3b) !important; box-shadow: inset 0 0 0 1px var(--c-volt-line, #d6ff3b88), 0 0 0 3px var(--c-volt-soft, #d6ff3b24); }
 .mf-pad-style__auto { min-height: 46px; padding: 7px var(--sp-3, 12px); display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2, 8px); font-weight: var(--fw-bold, 700); text-align: left; }
-.mf-pad-style__auto small { color: var(--c-muted, #b5b9a2); font-size: 11px; font-weight: var(--fw-semi, 600); }
+.mf-pad-style__auto small { color: var(--c-muted, #b5b9a2); font-size: var(--fs-12); font-weight: var(--fw-semi, 600); }
 .mf-pad-style__cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2, 8px); }
 .mf-pad-style__card { min-width: 0; min-height: 116px; padding: var(--sp-1, 4px); display: flex; flex-direction: column; align-items: stretch; text-align: left; }
 .mf-pad-style__card img { width: 100%; height: 68px; object-fit: contain; background: radial-gradient(ellipse at center, var(--c-olive-600, #4a5729), var(--c-ink-800, #1a1e14) 75%); border-radius: var(--r-xs, 4px); }
-.mf-pad-style__card span { margin: 5px 5px 1px; font-weight: var(--fw-bold, 700); font-size: 12px; }
-.mf-pad-style__card small { margin: 0 5px 4px; color: var(--c-muted-2, #959a80); font-size: 10px; letter-spacing: .05em; }
+.mf-pad-style__card span { margin: 5px 5px 1px; font-weight: var(--fw-bold, 700); font-size: var(--fs-12); }
+.mf-pad-style__card small { margin: 0 5px 4px; color: var(--c-muted-2, #959a80); font-size: var(--fs-12); letter-spacing: .05em; }
 .mf-pad-style__card[aria-checked='true'] span { color: var(--c-volt, #d6ff3b); }
 @media (max-width: 640px) {
   .mf-pad-style__auto { align-items: flex-start; flex-direction: column; }

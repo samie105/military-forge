@@ -113,7 +113,7 @@ html.mf-narrow .vs__side--r { right: 140px; }
 .screen--phone .vs__slash { top: 150px; height: 150px; left: -60px; right: -60px; }
 .screen--phone .vs__slash--brass { top: 300px; height: 18px; }
 .screen--phone .vs__head { left: calc(44px + var(--safe-l)); top: calc(18px + var(--safe-t)); gap: 0; }
-.screen--phone .vs__kicker { font-size: 11px; letter-spacing: .2em; }
+.screen--phone .vs__kicker { font-size: var(--fs-12); letter-spacing: .2em; }
 .screen--phone .vs__map { font-size: 44px; }
 .screen--phone .vs__rules { display: none; }
 .screen--phone .vs__stamp { right: calc(32px + var(--safe-r)); top: calc(30px + var(--safe-t)); font-size: 40px; padding: 2px 12px; border-width: 3px; }
@@ -124,7 +124,7 @@ html.mf-narrow .vs__side--r { right: 140px; }
 .screen--phone .vs__card.is-you::after { bottom: -7px; height: 3px; }
 .screen--phone .vs__body { width: 84px; height: 126px; }
 .screen--phone .vs__name { font-size: 16px; padding: 2px 4px; }
-.screen--phone .vs__tags .tag { font-size: 9px; padding: 1px 5px; }
+.screen--phone .vs__tags .tag { font-size: var(--fs-12); padding: 1px 5px; }
 .screen--phone .vs__card--compact { width: 72px; }
 .screen--phone .vs__face { width: 60px; height: 60px; }
 .screen--phone .vs__side { bottom: calc(12px + var(--safe-b)); }
@@ -142,13 +142,13 @@ html.mf-narrow .vs__side--r { right: 140px; }
 .screen--phone .vs__rows--rows .vs__face { width: 52px; height: 52px; }
 .screen--phone .vs__teams .vs__face { width: 40px; height: 40px; }
 .screen--phone .vs__teams .vs__name { font-size: 20px; }
-.screen--phone .vs__teamhead { font-size: 14px; gap: 6px; }
+.screen--phone .vs__teamhead { font-size: var(--fs-14); gap: 6px; }
 .screen--phone .vs__teamhead b { font-size: 18px; white-space: nowrap; }
-.screen--phone .vs__teams[data-teams="3"] .vs__teamhead b, .screen--phone .vs__teams[data-teams="4"] .vs__teamhead b { font-size: 14px; }
+.screen--phone .vs__teams[data-teams="3"] .vs__teamhead b, .screen--phone .vs__teams[data-teams="4"] .vs__teamhead b { font-size: var(--fs-14); }
 .screen--phone .vs__stamp--mark { font-size: 28px; }
 .screen--phone .vs-strip { height: calc(44px + var(--safe-t)); padding: var(--safe-t) calc(16px + var(--safe-r)) 0 calc(16px + var(--safe-l)); gap: 10px; }
 .screen--phone .vs-strip__map { font-size: 22px; }
-.screen--phone .vs-strip__mode { font-size: 10px; letter-spacing: .12em; }
+.screen--phone .vs-strip__mode { font-size: var(--fs-12); letter-spacing: .12em; }
 .screen--phone .vs-strip__face { width: 28px; height: 28px; border-width: 2px; }
 .screen--phone .vs-strip__faces { gap: 4px; }
 

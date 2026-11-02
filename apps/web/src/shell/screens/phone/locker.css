@@ -28,4 +28,4 @@
 :where(html.mf-phone) .mf-route .mm-tile { min-height: 64px; }
 :where(html.mf-phone) .mf-route .mm-controls { left: 4px; right: 4px; bottom: 4px; transform: none; flex-wrap: wrap; justify-content: center; gap: 4px; }
 :where(html.mf-phone) .mf-route .mm-seg button { min-height: 48px; min-width: 48px; padding: 0 8px; }
-:where(html.mf-phone) .mf-route .mm-detail { top: 4px; left: 6px; right: 6px; font-size: 12px; }
+:where(html.mf-phone) .mf-route .mm-detail { top: 4px; left: 6px; right: 6px; font-size: var(--fs-12); }

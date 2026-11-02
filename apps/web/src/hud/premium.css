@@ -99,7 +99,7 @@
 #hud .mf-hud-phone .mf-wtag__plate { gap: 4px; padding: 1px 6px; border-width: 1.5px; }
 #hud .mf-hud-phone .mf-wtag__plate .ic--kf { width: 28px; height: 10.5px; }
 #hud .mf-hud-phone .mf-wtag__plate .ic--sm { width: 14px; height: 14px; }
-#hud .mf-hud-phone .mf-wtag__name { font-size: calc(12px * var(--text-scale, 1)); }
+#hud .mf-hud-phone .mf-wtag__name { font-size: var(--fs-12); }
 #hud .mf-hud-phone .mf-wtag__stem { height: 12px; }
 
 /* the compare card (compact, it sits over the bottom of play): the key in a ring, the verb over the new
@@ -156,7 +156,7 @@
 .ph .pt-cmp__head .ic--kf { flex: none; width: 34px; height: 13px; color: var(--c-text); }
 .ph .pt-cmp__name { font-size: var(--fs-16); line-height: 1.1; }
 /* the Take button's word as the button wears it (touch.css .mf-cap): the prompt and the button read alike */
-.ph .pt-cmp__cap { flex: none; padding: 2px 5px; border-radius: var(--r-xs); background: rgb(0 0 0 / .62); color: var(--c-paper); font: var(--fw-black) 10px/1 var(--f-ui, inherit); letter-spacing: .08em; text-transform: uppercase; text-shadow: none; }
+.ph .pt-cmp__cap { flex: none; padding: 2px 5px; border-radius: var(--r-xs); background: rgb(0 0 0 / .62); color: var(--c-paper); font: var(--fw-black) var(--fs-12)/1 var(--f-ui, inherit); letter-spacing: .08em; text-transform: uppercase; text-shadow: none; }
 .ph .pt-cmp__key { flex: none; }
 .ph .pt-cmp__key.kbd--pad > .mf-padglyph__svg { height: 22px; }
 /* the bars, asked for: the chip widens to hold them */
@@ -499,16 +499,16 @@ html:is(.mf-glass-off, .gfx-low) #hud .mf-evfx > i { animation: none; }
 #hud .mf-loadout ol.mf-loadout__nades { display: none; }
 
 /* the phone's kill line and item line: one short line each, a size down */
-.ph .pt-feed .kf { gap: 5px; padding: 2px 8px; font-size: calc(13px * var(--text-scale, 1)); }
+.ph .pt-feed .kf { gap: 5px; padding: 2px 8px; font-size: var(--fs-13); }
 .ph .pt-feed .kf .ic { width: 15px; height: 15px; }
 .ph .pt-feed .kf .ic--wpn, .ph .pt-feed .kf [href^='#icon-wpn-'] { width: 32px; height: 12px; }
-#hud .ph .pt-pickup { max-width: 220px; padding: 2px 8px; gap: 5px; font-size: calc(13px * var(--text-scale, 1)); white-space: nowrap; }
+#hud .ph .pt-pickup { max-width: 220px; padding: 2px 8px; gap: 5px; font-size: var(--fs-13); white-space: nowrap; }
 #hud .ph .pt-pickup > span { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 #hud .ph .pt-pickup .ic { flex: none; width: 15px; height: 15px; }
 
 /* the grenade belt fanned from the grenade button (touch layer, swipe it): the icons and counts, the name
    only on the one the swipe lands on */
-.mf-touch-fx .mf-fan__row { height: 26px; margin-bottom: 3px; padding: 0 8px; gap: 5px; font-size: calc(13px * var(--text-scale, 1)); }
+.mf-touch-fx .mf-fan__row { height: 26px; margin-bottom: 3px; padding: 0 8px; gap: 5px; font-size: var(--fs-13); }
 .mf-touch-fx .mf-fan__row:not(.is-landing) span { display: none; }
 
 /* the gun ring (touch layer: hold the swap button): a ring round the swap button, the choices on its
@@ -519,7 +519,7 @@ html:is(.mf-glass-off, .gfx-low) #hud .mf-evfx > i { animation: none; }
 /* the ring: a dark glass disc, its rim, and the track the choices sit on (a thin volt circle at --ring-r) */
 .mf-touch-fx .mf-radial::before { content: ""; position: absolute; left: 0; top: 0; width: calc(2 * (var(--ring-r) + var(--ring-pad))); height: calc(2 * (var(--ring-r) + var(--ring-pad))); translate: -50% -50%; box-sizing: border-box; border-radius: 50%; border: 1.5px solid var(--glass-rim, rgb(255 255 255 / .22)); background: radial-gradient(circle, transparent calc(var(--ring-r) - 1px), rgb(214 255 59 / .32) calc(var(--ring-r) - 1px) calc(var(--ring-r) + 1px), transparent calc(var(--ring-r) + 1px)), radial-gradient(circle closest-side, rgb(10 12 8 / .42), rgb(10 12 8 / .26) 78%, rgb(10 12 8 / .12)); pointer-events: none; animation: mf-fan-in var(--m-fast) var(--ease-arrive) both; }
 .mf-touch-fx .mf-radial::after { content: ""; position: absolute; left: 0; top: 0; width: 24px; height: 24px; translate: -50% -50%; box-sizing: border-box; border-radius: 50%; border: 1.5px solid rgb(255 255 255 / .35); background: linear-gradient(45deg, transparent calc(50% - 1.2px), var(--c-paper) calc(50% - 1.2px) calc(50% + 1.2px), transparent calc(50% + 1.2px)) center / 11px 11px no-repeat, linear-gradient(-45deg, transparent calc(50% - 1.2px), var(--c-paper) calc(50% - 1.2px) calc(50% + 1.2px), transparent calc(50% + 1.2px)) center / 11px 11px no-repeat, rgb(0 0 0 / .66); pointer-events: none; }
-.mf-touch-fx .mf-radial__it { z-index: 1; min-width: 56px; max-width: 76px; padding: 4px 6px; gap: 1px; font-size: calc(12px * var(--text-scale, 1)); }
+.mf-touch-fx .mf-radial__it { z-index: 1; min-width: 56px; max-width: 76px; padding: 4px 6px; gap: 1px; font-size: var(--fs-12); }
 .mf-touch-fx .mf-radial__it b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .mf-touch-fx .mf-radial__it .ic { width: 18px; height: 18px; }
 .mf-touch-fx .mf-radial__it .ic--kf { width: 40px; height: 15px; }

@@ -206,15 +206,27 @@ html.mf-narrow .kit-v2 .home__top .tab { padding: 0 var(--sp-3); }
   .kit-v2 .home__top .tab { padding: 0 var(--sp-3); }
 }
 @container home-top (width < 1960px) {
-  .kit-v2 .home__top .mf-install-btn { padding-inline: var(--sp-3); }
-  .kit-v2 .home__top .mf-install-btn__word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .kit-v2 .home__top :is(.mf-install-btn, .lf-btn) { padding-inline: var(--sp-3); }
+  .kit-v2 .home__top :is(.mf-install-btn__word, .lf-btn__word) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
+/* a laptop (1280–1440 wide: 1456–1656 here): the labels keep the text floor (kit.css), so the tabs give up
+   their icons and the chip its name before anything reaches the edge (the Lobby button and Install app
+   already show their icons only) */
 @container home-top (width < 1700px) {
   .kit-v2 .home__top .me-chip > b { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .kit-v2 .home__top .me-chip { padding-right: 6px; }
+  .kit-v2 .home__top .tab .ic { display: none; }
 }
 @container home-top (width < 1560px) {
-  .kit-v2 .home__top .tab .ic { display: none; }
+  .kit-v2 .home__top { gap: var(--sp-3); }
+  .kit-v2 .home__top .tab { padding: 0 var(--sp-2); }
+}
+/* Text size 130 % and up in a laptop's box: the tabs close right up so the chip stays on screen */
+@container home-top (width < 1700px) {
+  html.mf-big-text .kit-v2 .home__top { gap: var(--sp-2); }
+  html.mf-big-text .kit-v2 .home__top .tab { padding: 0 var(--sp-1); }
+  html.mf-big-text .kit-v2 .home__top .me-chip { gap: 0; padding: 4px; }
+  html.mf-big-text .kit-v2 .home__top .me-chip > :not(.avatar, img, svg) { display: none; }
 }
 /* the stage's corner brackets frame the helmet; in a short box the nameplate climbs into them */
 /* lighter Home (audit 28 Oct): the stage's corner brackets crossed the nameplate's loadout below 1920 wide; they go */
@@ -273,6 +285,24 @@ html.mf-short.mf-big-text .kit-v2 [data-screen='results'] .mvp { display: none; 
 html.mf-narrow.mf-big-text .kit-v2 .mf-col-dmg { display: none; }
 .kit-v2 .mf-standings th, .kit-v2 .mf-standings td { white-space: nowrap; }
 html.mf-narrow .kit-v2 .mf-standings :is(th, td) { padding-inline: var(--sp-1); }
+/* the standings in a laptop's middle column (1280–1440 wide: under 780 design px): the column heads keep the
+   text floor (kit.css), so the row closes up, a row's Add and ⋯ are mouse-sized, and with those buttons in the
+   rows the damage column gives way (it stays on the winner's card and your own line, as at big text), so
+   the buttons stay inside the table */
+.kit-v2 .res__mid { container: res-mid / inline-size; }
+@container res-mid (width < 780px) {
+  .kit-v2 .mf-standings thead th { letter-spacing: .02em; }
+  .kit-v2 .mf-standings__who { gap: var(--sp-1); }
+  .kit-v2 .mf-standings .avatar { width: 26px; height: 26px; }
+  .kit-v2 .mf-standings .tag { letter-spacing: 0; padding-inline: var(--sp-1); }
+  .kit-v2 .mf-standings__act .mf-row-actions { gap: 2px; }
+  .kit-v2 .mf-standings:has(td.mf-standings__act .btn) .mf-col-dmg { display: none; }
+}
+@media (pointer: fine) {
+  @container res-mid (width < 780px) {
+    .kit-v2 .mf-standings__act .btn--icon { width: 40px; min-height: 40px; }
+  }
+}
 
 /* Pause: the head and Resume stay at the top and Leave at the foot, always in view (audit 28 Oct:
    Leave was below the fold); the items between keep their height and scroll when the plate can't hold
@@ -371,7 +401,7 @@ html.mf-short.mf-big-text .kit-v2 .pause__btn .btn__sub { display: none; }
    the field, Continue and "Pick one for me" sit above the fold, and the form column never runs past
    the right edge (its grid track can shrink below the title's longest word) */
 html:is(.mf-narrow, .mf-short) .kit-v2 .ne { grid-template-columns: 500px minmax(0, 1fr); gap: var(--sp-8); }
-html:is(.mf-narrow, .mf-short) .kit-v2 .ne .idcard { zoom: 0.8; }
+html:is(.mf-narrow, .mf-short) .kit-v2 .ne .idcard { zoom: 0.8; --zoom: calc(var(--fit, 1) * 0.8); } /* its text keeps the floor (kit.css) */
 html:is(.mf-narrow, .mf-short) .kit-v2 .ne__form { min-width: 0; gap: var(--sp-4); }
 html.mf-short .kit-v2 .ne__title { font-size: var(--fs-120); }
 html.mf-short.mf-big-text .kit-v2 .ne__title { font-size: var(--fs-88); }

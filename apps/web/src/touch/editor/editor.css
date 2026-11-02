@@ -57,7 +57,7 @@
   border: 1.5px solid color-mix(in srgb, var(--c-paper) 25%, transparent);
   background: color-mix(in srgb, var(--c-ink-950) 82%, transparent);
   color: var(--c-text);
-  font: var(--fw-black) 13px/1 var(--f-ui);
+  font: var(--fw-black) var(--fs-13)/1 var(--f-ui);
   letter-spacing: .06em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -78,7 +78,7 @@
 .mf-bay__base > .ic:first-child { color: var(--c-volt); }
 .mf-bay__base > .ic:last-child { width: 16px; height: 16px; }
 .mf-bay__save { background: var(--c-volt); color: var(--c-volt-ink); border-color: var(--c-volt); padding: 0 16px 0 12px; }
-.mf-bay__live { position: absolute; left: 50%; top: calc(max(10px, var(--sa-t)) + 48px); translate: -50% 0; padding: 3px 10px; border-radius: 12px; background: color-mix(in srgb, var(--c-ink-950) 80%, transparent); color: var(--c-volt); font: var(--fw-black) 11px/1.3 var(--f-ui); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; display: none; }
+.mf-bay__live { position: absolute; left: 50%; top: calc(max(10px, var(--sa-t)) + 48px); translate: -50% 0; padding: 3px 10px; border-radius: 12px; background: color-mix(in srgb, var(--c-ink-950) 80%, transparent); color: var(--c-volt); font: var(--fw-black) var(--fs-12)/1.3 var(--f-ui); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; display: none; }
 .mf-bay.is-live:not([data-preset='claw']) .mf-bay__live { display: block; }
 /* Claw keeps its menu and scores at the top centre: the base button drops its word there */
 .mf-bay[data-preset='claw'] .mf-bay__base :is(b, .ic:last-child) { display: none; }
@@ -94,7 +94,7 @@ html[data-touch-editing] .mf-spot { visibility: hidden !important; }
 .mf-bay__card { position: absolute; width: 228px; display: flex; flex-direction: column; gap: 2px; padding: 6px 10px 6px 12px; border-radius: 16px; background: color-mix(in srgb, var(--c-ink-950) 88%, transparent); border: 2px solid var(--c-volt); animation: mf-bay-pop 160ms var(--ease-arrive) both; }
 @keyframes mf-bay-pop { from { opacity: 0; scale: 0.92; } }
 .mf-bay__card-h { display: flex; align-items: center; gap: 8px; min-height: 44px; }
-.mf-bay__card-h b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--fw-black) 14px/1 var(--f-ui); letter-spacing: .08em; text-transform: uppercase; }
+.mf-bay__card-h b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--fw-black) var(--fs-14)/1 var(--f-ui); letter-spacing: .08em; text-transform: uppercase; }
 .mf-bay__row { display: flex; align-items: center; gap: 8px; min-height: 44px; }
 .mf-bay__glyph { display: grid; place-items: center; width: 22px; height: 22px; color: var(--c-paper); }
 .mf-bay__glyph .ic { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; }
@@ -126,7 +126,7 @@ html[data-touch-editing] .mf-spot { visibility: hidden !important; }
 .mf-bay__base-card[aria-checked='true'] .mf-bay__base-name b { color: var(--c-volt); }
 .mf-bay__hands { display: inline-flex; color: var(--c-muted); }
 .mf-bay__hands .ic { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; }
-.mf-bay__mirror { display: inline-flex; align-items: center; gap: 8px; height: var(--touch-min, 48px); padding: 0 12px 0 14px; border-radius: 24px; border: 1.5px solid color-mix(in srgb, var(--c-paper) 25%, transparent); background: color-mix(in srgb, var(--c-ink-950) 82%, transparent); color: var(--c-text); font: var(--fw-black) 13px/1 var(--f-ui); letter-spacing: .06em; text-transform: uppercase; }
+.mf-bay__mirror { display: inline-flex; align-items: center; gap: 8px; height: var(--touch-min, 48px); padding: 0 12px 0 14px; border-radius: 24px; border: 1.5px solid color-mix(in srgb, var(--c-paper) 25%, transparent); background: color-mix(in srgb, var(--c-ink-950) 82%, transparent); color: var(--c-text); font: var(--fw-black) var(--fs-13)/1 var(--f-ui); letter-spacing: .06em; text-transform: uppercase; }
 .mf-bay__mirror .ic { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; }
 .mf-bay__switch { position: relative; width: 40px; height: 24px; border-radius: 12px; background: color-mix(in srgb, var(--c-paper) 18%, transparent); }
 .mf-bay__switch::after { content: ''; position: absolute; left: 3px; top: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--c-paper); transition: translate var(--m-fast) var(--ease-arrive); }

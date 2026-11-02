@@ -9,7 +9,7 @@
 #hud .mf-spec-pill { pointer-events: auto; cursor: pointer; font: inherit; color: inherit; background: none; border: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 #hud .mf-spec button *,
 #hud .mf-spec-pill * { pointer-events: none; }
-#hud .mf-spec .kbd { font-size: 11px; min-width: 22px; padding: 1px 5px; margin: 0 4px; opacity: .85; }
+#hud .mf-spec .kbd { font-size: var(--fs-12); min-width: 22px; padding: 1px 5px; margin: 0 4px; opacity: .85; }
 
 /* desktop: [◀ PREV Q] WATCHING NAME (hp, gun · kills) [E NEXT ▶] | [FREE CAM F] [JOIN NEXT ROUND ↵] */
 #hud .mf-hud-desktop .mf-spec { gap: var(--sp-4); padding: 10px 14px; backdrop-filter: blur(10px) saturate(1.1); -webkit-backdrop-filter: blur(10px) saturate(1.1); }
@@ -43,16 +43,16 @@
 #hud .mf-spec--phone [data-spec='next'] { right: calc(var(--safe-r, 0px) + 12px); }
 #hud .mf-spec--phone .mf-spec__who { display: flex; flex-direction: column; align-items: center; min-width: 200px; padding: 6px 18px 8px; }
 #hud .mf-spec--phone .mf-spec__who .display { font-size: 26px; }
-#hud .mf-spec--phone .mf-spec__line { font-size: 10px; }
+#hud .mf-spec--phone .mf-spec__line { font-size: var(--fs-12); }
 #hud .mf-spec .mf-spec__thumb { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: var(--c-plate); border: var(--bw, 1px) solid var(--c-plate-line); color: var(--c-text); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 #hud .mf-spec .mf-spec__thumb:active { background: var(--c-volt); color: var(--c-volt-ink); }
 #hud .mf-spec__thumb .ic { width: 24px; height: 24px; }
-#hud .mf-spec-pill { position: absolute; bottom: calc(var(--safe-b, 0px) + 12px); min-height: 48px; padding: 0 20px; border-radius: 26px; display: inline-flex; align-items: center; gap: 8px; font-weight: var(--fw-black); letter-spacing: .14em; text-transform: uppercase; font-size: 14px; }
+#hud .mf-spec-pill { position: absolute; bottom: calc(var(--safe-b, 0px) + 12px); min-height: 48px; padding: 0 20px; border-radius: 26px; display: inline-flex; align-items: center; gap: 8px; font-weight: var(--fw-black); letter-spacing: .14em; text-transform: uppercase; font-size: var(--fs-14); }
 #hud .mf-spec-pill.mf-spec-pill--free { left: calc(var(--safe-l, 0px) + 12px); background: var(--c-plate); border: var(--bw, 1px) solid var(--c-plate-line); color: var(--c-text); }
 #hud .mf-spec-pill.mf-spec-pill--join { right: calc(var(--safe-r, 0px) + 12px); background: var(--c-volt); color: var(--c-volt-ink); }
 #hud .mf-spec-pill.mf-spec-pill--join[data-queued='yes'] { background: var(--c-brass); color: var(--c-brass-ink, var(--c-volt-ink)); }
-#hud .mf-spec-tag--phone { position: absolute; left: 50%; top: calc(var(--safe-t, 0px) + 52px); transform: translateX(-50%); padding: 6px 12px; font-size: 11px; white-space: nowrap; }
-#hud .mf-spec-tag--phone-eyes { position: absolute; right: calc(var(--safe-r, 0px) + 4px); top: calc(var(--safe-t, 0px) + 40px); padding: 4px 10px; font-size: 11px; color: var(--c-text); }
+#hud .mf-spec-tag--phone { position: absolute; left: 50%; top: calc(var(--safe-t, 0px) + 52px); transform: translateX(-50%); padding: 6px 12px; font-size: var(--fs-12); white-space: nowrap; }
+#hud .mf-spec-tag--phone-eyes { position: absolute; right: calc(var(--safe-r, 0px) + 4px); top: calc(var(--safe-t, 0px) + 40px); padding: 4px 10px; font-size: var(--fs-12); color: var(--c-text); }
 
 /* while watching or on the death cam the touch controls step aside: the world takes drags and pinches */
 :root.mf-spectating .mf-touch { display: none !important; }

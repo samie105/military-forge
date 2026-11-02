@@ -8,7 +8,7 @@
 .lf-btn { position: relative; flex: none; gap: var(--sp-2); }
 .lf-btn .ic { width: var(--ic); height: var(--ic); }
 .lf-btn__word { font-size: var(--fs-16); font-weight: var(--fw-black); letter-spacing: var(--ls-label); text-transform: uppercase; }
-.lf-btn--phone { min-height: 44px; width: 44px; }
+.lf-btn--phone { min-height: var(--hit-min); width: var(--hit-min); }
 .lf-dot {
   position: absolute;
   top: 4px;
@@ -159,29 +159,29 @@
 .sx-screen--phone .lf-fight { gap: 8px; padding: 6px 8px; }
 .sx-screen--phone .lf-fight__mark { width: 32px; height: 32px; }
 .sx-screen--phone .lf-fight__title { font-size: var(--fs-20); }
-.sx-screen--phone .lf-fight__line { font-size: 11px; }
+.sx-screen--phone .lf-fight__line { font-size: var(--fs-12); }
 .sx-screen--phone .lf-card, .sx-screen--phone .lf-msg { gap: 8px; padding: 6px 8px; }
 .sx-screen--phone .lf-card__mark { width: 28px; height: 28px; }
 .sx-screen--phone .lf-card__mark .ic { width: var(--ic-sm); height: var(--ic-sm); }
 .sx-screen--phone .lf-msg .avatar { width: 28px; height: 28px; }
 .sx-screen--phone .lf-card__line { font-size: var(--fs-14); }
-.sx-screen--phone .lf-card__sub, .sx-screen--phone .lf-msg__time, .sx-screen--phone .lf-msg__to { font-size: 11px; }
+.sx-screen--phone .lf-card__sub, .sx-screen--phone .lf-msg__time, .sx-screen--phone .lf-msg__to { font-size: var(--fs-12); }
 .sx-screen--phone .lf-msg__who { font-size: var(--fs-14); }
 .sx-screen--phone .lf-msg__text { font-size: var(--fs-16); }
 .sx-screen--phone .lf-msg__text--emote { font-size: var(--fs-28); }
-.sx-screen--phone .lf-chip { min-height: var(--touch-min); font-size: 12px; padding: 0 10px; }
+.sx-screen--phone .lf-chip { min-height: var(--touch-min); font-size: var(--fs-12); padding: 0 10px; }
 .sx-screen--phone .lf-compose { gap: 6px; padding-top: 6px; }
 .sx-screen--phone .lf-compose__row { gap: 6px; }
 .sx-screen--phone .lf-compose__open { min-height: var(--touch-min); }
 .sx-screen--phone .lf-compose__chips { flex-wrap: nowrap; overflow-x: auto; }
 .sx-screen--phone .lf-muted { font-size: var(--fs-14); padding: 8px; }
 .sx-screen--phone .lf-controls { gap: 6px; }
-.sx-screen--phone .lf-controls .sx-act { min-height: 36px; font-size: 11px; padding: 0 8px; }
-.sx-screen--phone .lf-msg__side .sx-act.btn--icon { width: 40px; min-height: 40px; }
-.sx-screen--phone .lf-msg__side .lf-chip { min-height: 40px; }
+.sx-screen--phone .lf-controls .sx-act { min-height: max(36px, var(--tap-floor)); font-size: var(--fs-12); padding: 0 8px; }
+.sx-screen--phone .lf-msg__side .sx-act.btn--icon { width: max(40px, var(--tap-floor)); min-height: max(40px, var(--tap-floor)); }
+.sx-screen--phone .lf-msg__side .lf-chip { min-height: max(40px, var(--tap-floor)); }
 .sx-screen--phone .lf-compose__open { padding: 0 12px; }
 .sx-screen--phone .lf-sheet { top: 0; bottom: 0; right: 0; width: 560px; max-height: none; gap: 7px; padding: max(10px, var(--safe-t)) max(var(--phone-notch), var(--safe-r)) max(10px, var(--safe-b)) 16px; border-radius: var(--r-lg) 0 0 var(--r-lg); }
 .sx-screen--phone .lf-sheet__title { font-size: var(--fs-24); }
-.sx-screen--phone .lf-phrase { min-height: var(--touch-min); font-size: 13px; padding: 0 8px; }
+.sx-screen--phone .lf-phrase { min-height: var(--touch-min); font-size: var(--fs-13); padding: 0 8px; }
 .sx-screen--phone .lf-phrase--emote { font-size: var(--fs-24); }
 .sx-screen--phone .lf-phrases { gap: 6px; }

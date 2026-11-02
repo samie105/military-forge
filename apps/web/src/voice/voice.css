@@ -7,7 +7,7 @@
 
 /* ---- the layer: the HUD's own fit, so the radio lines up with the vitals (desktop) ---- */
 .mf-voice { z-index: var(--z-hud); }
-.mf-voice:not(.mf-fit--phone) > .screen { width: var(--hud-w, 1920px); height: var(--hud-h, 1080px); zoom: var(--hud-fit, 1); }
+.mf-voice:not(.mf-fit--phone) > .screen { width: var(--hud-w, 1920px); height: var(--hud-h, 1080px); zoom: var(--hud-fit, 1); --zoom: var(--hud-fit, 1); }
 .vc-screen { position: relative; pointer-events: none; }
 .vc-screen.is-covered .vc-radio { visibility: hidden; }
 
@@ -55,7 +55,7 @@
 .vc-radio__btn:focus-visible { outline: 3px solid var(--c-volt); outline-offset: 3px; }
 @keyframes vc-radio-in { from { scale: 0.6; opacity: 0; } }
 /* how many others are on voice */
-.vc-radio__n { position: absolute; right: -4px; top: -4px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--c-volt); color: var(--c-volt-ink); font: var(--fw-black) 11px/20px var(--f-ui); text-align: center; }
+.vc-radio__n { position: absolute; right: -4px; top: -4px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--c-volt); color: var(--c-volt-ink); font: var(--fw-black) var(--fs-12)/20px var(--f-ui); text-align: center; }
 /* on air: volt, a touch bigger, the ring breathing with your voice */
 .vc-radio.is-talking .vc-radio__btn, .vc-radio.is-locked .vc-radio__btn {
   scale: 1.15;
@@ -74,11 +74,11 @@
 .vc-radio.is-sliding .vc-radio__lock { background: color-mix(in srgb, var(--c-volt) calc(var(--slide, 0) * 100%), var(--c-ink-950)); color: var(--c-volt-ink); }
 .vc-screen:not(.vc-screen--phone) .vc-radio:not(.is-holding) .vc-radio__lock { display: none; }
 @keyframes vc-drop { from { opacity: 0; translate: 0 -12px; } }
-.vc-radio__key { min-width: 28px; padding: 2px 6px; border-radius: 6px; background: var(--c-ink-850, var(--c-plate)); border: 1.5px solid var(--c-line-strong); color: var(--c-text); font: var(--fw-black) 14px/1.2 var(--f-ui); text-align: center; text-shadow: none; }
-.vc-radio__cap { padding: 1px 6px; border-radius: 4px; background: color-mix(in srgb, var(--c-ink-950) 80%, transparent); color: var(--c-text); font: var(--fw-black) 10px/1.3 var(--f-ui); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+.vc-radio__key { min-width: 28px; padding: 2px 6px; border-radius: 6px; background: var(--c-ink-850, var(--c-plate)); border: 1.5px solid var(--c-line-strong); color: var(--c-text); font: var(--fw-black) var(--fs-14)/1.2 var(--f-ui); text-align: center; text-shadow: none; }
+.vc-radio__cap { padding: 1px 6px; border-radius: 4px; background: color-mix(in srgb, var(--c-ink-950) 80%, transparent); color: var(--c-text); font: var(--fw-black) var(--fs-12)/1.3 var(--f-ui); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
 .vc-radio--inline .vc-radio__cap { display: none; }
 /* ON AIR / LIVE: under the radio on a phone (beside it in the lobbies, on desktop) */
-.vc-radio__air { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 14px; background: color-mix(in srgb, var(--c-ink-950) 85%, transparent); border: 1.5px solid var(--c-volt); color: var(--c-volt); font: var(--fw-black) 12px/1 var(--f-ui); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; align-self: center; }
+.vc-radio__air { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 14px; background: color-mix(in srgb, var(--c-ink-950) 85%, transparent); border: 1.5px solid var(--c-volt); color: var(--c-volt); font: var(--fw-black) var(--fs-12)/1 var(--f-ui); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; align-self: center; }
 .vc-radio__air i { width: 8px; height: 8px; border-radius: 50%; background: var(--c-hp); animation: vc-blink 1s steps(2, start) infinite; }
 @keyframes vc-blink { to { visibility: hidden; } }
 .vc-screen--phone .vc-radio__air { position: absolute; right: calc(var(--rd) + 8px); top: calc(var(--rd) / 2 - 14px); }
@@ -88,7 +88,7 @@
 .vc-chips { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .vc-screen:not(.vc-screen--phone) .vc-chips { align-items: flex-start; }
 .vc-radio--inline .vc-chips { flex-direction: row; }
-.vc-chips__more { padding: 2px 8px; border-radius: 10px; background: var(--c-volt); color: var(--c-volt-ink); font: var(--fw-black) 12px/1.4 var(--f-ui); }
+.vc-chips__more { padding: 2px 8px; border-radius: 10px; background: var(--c-volt); color: var(--c-volt-ink); font: var(--fw-black) var(--fs-12)/1.4 var(--f-ui); }
 .vc-chip {
   --ring: var(--c-volt);
   position: relative;
@@ -101,7 +101,7 @@
   background: var(--frost-fill-hud, var(--c-plate));
   border: 2px solid var(--ring);
   color: var(--c-text);
-  font: var(--fw-bold) 14px/1 var(--f-ui);
+  font: var(--fw-bold) var(--fs-14)/1 var(--f-ui);
   pointer-events: auto;
   touch-action: none;
   -webkit-user-select: none;
@@ -123,9 +123,9 @@
 .vc-chip.is-muting .vc-av { box-shadow: none; background: conic-gradient(var(--c-hp) 0 var(--fill, 0%), var(--c-paper) 0); animation: vc-mute-fill 500ms linear both; }
 @property --fill { syntax: '<percentage>'; inherits: false; initial-value: 0%; }
 @keyframes vc-mute-fill { to { --fill: 100%; } }
-.vc-av { width: 28px; height: 28px; font-size: 14px; box-shadow: 0 0 0 calc(2px + var(--lvl, 0) * 3px) var(--ring, var(--c-volt)); }
-.vc-screen--phone .vc-chip { height: 32px; font-size: 12px; }
-.vc-screen--phone .vc-av { width: 24px; height: 24px; font-size: 12px; }
+.vc-av { width: 28px; height: 28px; font-size: var(--fs-14); box-shadow: 0 0 0 calc(2px + var(--lvl, 0) * 3px) var(--ring, var(--c-volt)); }
+.vc-screen--phone .vc-chip { height: 32px; font-size: var(--fs-12); }
+.vc-screen--phone .vc-av { width: 24px; height: 24px; font-size: var(--fs-12); }
 /* three bars that follow the voice's level */
 .vc-bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 16px; }
 .vc-bars i { width: 3px; border-radius: 2px; background: var(--ring, var(--c-volt)); height: calc(3px + var(--lvl, 0) * 13px); transition: height var(--m-fast, .16s) linear; }
@@ -147,7 +147,7 @@ html.reduce-motion :is(.vc-radio__btn, .vc-chip, .vc-radio__lock), html.reduce-m
   background: color-mix(in srgb, var(--c-ink-950) 80%, transparent);
   border: 1.5px solid var(--c-volt);
   color: var(--c-text);
-  font: var(--fw-bold) 13px/1 var(--f-ui);
+  font: var(--fw-bold) var(--fs-13)/1 var(--f-ui);
   white-space: nowrap;
   will-change: transform;
 }
@@ -236,11 +236,11 @@ html.reduce-motion .vc-tag__ring, html.reduce-motion .vc-bars i { transition: no
 /* phones: the 812×375 frame; the sheet a third of it, the safe area on the right */
 .vc-sheetwrap.screen--phone .vc-sheet { width: calc(340px + var(--safe-r)); padding: calc(var(--safe-t) + 8px) calc(var(--safe-r) + 12px) calc(var(--safe-b) + 6px) 14px; border-radius: 22px 0 0 22px; }
 .vc-sheetwrap.screen--phone .vc-sheet__t b { font-size: 26px; }
-.vc-sheetwrap.screen--phone .vc-sheet__t span { font-size: 11px; }
+.vc-sheetwrap.screen--phone .vc-sheet__t span { font-size: var(--fs-12); }
 .vc-sheetwrap.screen--phone .vc-sheet__body { gap: 8px; }
-.vc-sheetwrap.screen--phone .vc-seg .seg__opt { font-size: 13px; }
+.vc-sheetwrap.screen--phone .vc-seg .seg__opt { font-size: var(--fs-13); }
 .vc-sheetwrap.screen--phone .vc-person { min-height: 48px; }
-.vc-sheetwrap.screen--phone .switch { font-size: 14px; }
+.vc-sheetwrap.screen--phone .switch { font-size: var(--fs-14); }
 html.reduce-motion :is(.vc-sheet, .vc-scrim) { animation-name: vc-fade !important; animation-duration: 120ms !important; }
 
 /* the first-voice note (VoiceHud.tsx, audit-2 L-10): once, top centre, out of the fight's middle */

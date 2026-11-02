@@ -17,7 +17,7 @@
   pointer-events: none;
 }
 .mf-fit { position: fixed; inset: 0; overflow: hidden; pointer-events: none; }
-.mf-fit > .screen { width: var(--fit-w, 1920px); height: var(--fit-h, 1080px); zoom: var(--fit, 1); pointer-events: auto; }
+.mf-fit > .screen { width: var(--fit-w, 1920px); height: var(--fit-h, 1080px); zoom: var(--fit, 1); --zoom: var(--fit, 1); pointer-events: auto; }
 .mf-fit > .screen--game { background: transparent; pointer-events: none; }
 .mf-fit > .screen--game :is(button, a, input, select, .panel, .modal, .mf-lobby-strip) { pointer-events: auto; }
 .mf-fit--modal > .screen--game { pointer-events: auto; }
@@ -33,6 +33,7 @@
   width: max-content;
   margin: 0 auto;
   zoom: var(--fit, 1);
+  --zoom: var(--fit, 1);
   display: flex;
   align-items: center;
   gap: var(--sp-3);
@@ -150,7 +151,7 @@ html.mf-short .lobby .roomcode span { height: 80px; }
  * while a menu is open. Under "All values", tweakpane draws every key in the kit's colours.
  */
 .mf-tune-root { position: fixed; inset: 0; z-index: calc(var(--z-panel) + 5); pointer-events: none; }
-.mf-tune__out textarea { width: 100%; height: 120px; resize: vertical; font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--c-text); background: var(--c-ink-950); border: var(--bw) solid var(--c-line); border-radius: var(--r-sm); padding: var(--sp-2); }
+.mf-tune__out textarea { width: 100%; height: 120px; resize: vertical; font: var(--fs-13)/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--c-text); background: var(--c-ink-950); border: var(--bw) solid var(--c-line); border-radius: var(--r-sm); padding: var(--sp-2); }
 .mf-tune__pane .tp-rotv {
   --tp-base-background-color: var(--c-ink-800);
   --tp-base-shadow-color: transparent;
@@ -162,19 +163,15 @@ html.mf-short .lobby .roomcode span { height: 80px; }
   --tp-button-foreground-color: var(--c-text);
   --tp-groove-foreground-color: var(--c-line);
   font-family: var(--f-ui);
-  font-size: 13px;
+  font-size: var(--fs-13);
 }
 
 /* a dialog screen takes focus itself when it opens (ui/focusTrap.ts): no ring around the whole screen */
 .mf-fit > .screen[role="dialog"]:focus { outline: none; box-shadow: none; }
 
 /* small phones (an iPhone SE, a 360-px Android held sideways) zoom the 812×375 phone screens below
-   0.92, which would put their 48-px targets under 44 px: the touch tokens grow to keep 44 CSS px
-   (WCAG 2.5.5). Such phones zoom by their width, so the screens have the height to spare. */
-.mf-fit.mf-fit--phone > .screen {
-  --touch-min: max(48px, calc(44px / var(--phone-fit, 1)));
-  --btn-h-sm: max(48px, calc(44px / var(--phone-fit, 1)));
-}
+   0.92, which would put their 48-px targets under 44 px: the kit's target tokens keep 44 CSS px on a
+   touch screen at any zoom (kit.css READABLE FLOORS: --tap over --zoom; WCAG 2.5.5). */
 
 /*
  * Fade edges on the phone's scroll areas (the owner, 24 Oct: "some things need to be scrolling

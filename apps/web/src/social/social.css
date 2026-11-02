@@ -109,7 +109,7 @@
 .sx-padcode__cell:focus-visible, .sx-padcode__cell:focus { outline: none; border-color: var(--c-volt); box-shadow: 0 0 0 3px var(--c-volt-soft); }
 
 /* tabs */
-.sx-tabs { display: flex; gap: var(--sp-2); }
+.sx-tabs { display: flex; flex-wrap: wrap; gap: var(--sp-2); } /* big text: Blocked takes a second row rather than run out of the panel */
 .sx-tab { min-height: 44px; padding: 0 var(--sp-4); font-size: var(--fs-16); border: 1.5px solid var(--c-line-strong); border-radius: var(--r-xs); }
 .sx-tab[aria-selected="true"] { border-color: var(--c-ink-950); }
 .sx-badge {
@@ -134,7 +134,7 @@
 .sx-sec--ok { color: var(--c-ok); }
 .sx-sec--muted { color: var(--c-muted); }
 .sx-note { color: var(--c-muted); font-size: var(--fs-16); }
-.sx-more { align-self: flex-start; min-height: 36px; font-size: var(--fs-14); }
+.sx-more { align-self: flex-start; min-height: max(36px, var(--tap-floor)); font-size: var(--fs-14); }
 .sx-empty { display: flex; align-items: center; gap: var(--sp-4); padding: var(--sp-5); border: var(--bw) dashed var(--c-line-strong); border-radius: var(--r-sm); color: var(--c-muted); font-size: var(--fs-16); }
 .sx-empty b { color: var(--c-text); }
 .sx-empty .ic { color: var(--c-volt); flex: none; }
@@ -206,7 +206,7 @@
 }
 .sx-squad__head { display: flex; align-items: center; gap: var(--sp-2); }
 .sx-squad__count { font-size: var(--fs-14); font-weight: var(--fw-black); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--c-ok); }
-.sx-squad__add { min-height: 40px; width: 40px; }
+.sx-squad__add { min-height: max(40px, var(--tap-floor)); width: max(40px, var(--tap-floor)); }
 .sx-squad__strip { display: flex; align-items: center; gap: var(--sp-3); }
 .sx-squad__strip .avatar { width: 52px; height: 52px; font-size: var(--fs-28); }
 .sx-squad__empty { color: var(--c-muted); font-size: var(--fs-16); }
@@ -215,7 +215,7 @@
 .sx-squad__open { min-height: 48px; }
 
 /* ---- phones (P1/P2): the same pieces at 812×375 ---- */
-.sx-codechip { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 10px; border-radius: var(--r-xs); background: var(--c-paper); color: var(--c-paper-text); border: var(--bw) solid var(--c-ink-950); font: var(--fw-black) var(--fs-16)/1 var(--f-ui); letter-spacing: .06em; }
+.sx-codechip { display: inline-flex; align-items: center; gap: 6px; min-height: max(36px, var(--tap-floor)); padding: 0 10px; border-radius: var(--r-xs); background: var(--c-paper); color: var(--c-paper-text); border: var(--bw) solid var(--c-ink-950); font: var(--fw-black) var(--fs-16)/1 var(--f-ui); letter-spacing: .06em; }
 /* the squad strip takes the stage's top, so the stage keeps its own cell (auto-placement would move it down) */
 .pm-home:has(> .sx-psquad) > .pm-stage { grid-area: 1 / 3; }
 .sx-screen--phone .sx-drawer { width: 480px; gap: 7px; padding: max(10px, var(--safe-t)) max(var(--phone-notch), var(--safe-r)) max(10px, var(--safe-b)) 16px; border-radius: var(--r-lg) 0 0 var(--r-lg); }
@@ -223,7 +223,7 @@
 .sx-screen--phone .sx-drawer__title { font-size: var(--fs-28); }
 .sx-screen--phone .sx-tag { min-height: 26px; font-size: var(--fs-14); }
 .sx-screen--phone .sx-code { gap: 8px; padding: 6px 10px; box-shadow: none; border-width: var(--bw); }
-.sx-screen--phone .sx-code__label { font-size: 11px; }
+.sx-screen--phone .sx-code__label { font-size: var(--fs-12); }
 .sx-screen--phone .sx-code__code { font-size: var(--fs-24); }
 .sx-screen--phone :is(.sx-code__copy, .sx-close) { min-height: var(--touch-min); }
 .sx-screen--phone .sx-close { width: var(--touch-min); }
@@ -233,7 +233,7 @@
 .sx-screen--phone .sx-add__field > .ic { left: 10px; }
 .sx-screen--phone .sx-add__clear { right: 0; width: var(--touch-min); height: var(--touch-min); }
 .sx-screen--phone .sx-add__out { font-size: var(--fs-14); }
-.sx-screen--phone .sx-tab { min-height: 40px; padding: 0 10px; font-size: var(--fs-14); }
+.sx-screen--phone .sx-tab { min-height: var(--touch-min); padding: 0 10px; font-size: var(--fs-14); }
 .sx-screen--phone .sx-tabs { flex: none; }
 /* on a phone the privacy line ends the list (it scrolls with it) */
 .sx-screen--phone .sx-drawer > .sx-privacy { display: none; }
@@ -243,15 +243,15 @@
 .sx-screen--phone .sx-row .avatar { width: 32px; height: 32px; font-size: var(--fs-16); }
 .sx-screen--phone .sx-dot { width: 11px; height: 11px; }
 .sx-screen--phone .sx-row__who b { font-size: var(--fs-16); }
-.sx-screen--phone .sx-row__line { font-size: 12px; }
-.sx-screen--phone .sx-act { min-height: var(--touch-min); padding: 0 10px; font-size: 12px; }
+.sx-screen--phone .sx-row__line { font-size: var(--fs-12); }
+.sx-screen--phone .sx-act { min-height: var(--touch-min); padding: 0 10px; font-size: var(--fs-12); }
 .sx-screen--phone .sx-act.btn--icon { width: var(--touch-min); }
-.sx-screen--phone .sx-sec { font-size: 11px; margin-top: 2px; }
-.sx-screen--phone .sx-privacy { font-size: 11px; }
+.sx-screen--phone .sx-sec { font-size: var(--fs-12); margin-top: 2px; }
+.sx-screen--phone .sx-privacy { font-size: var(--fs-12); }
 .sx-screen--phone .sx-note { font-size: var(--fs-14); }
 .sx-screen--phone .sx-empty { padding: 10px; font-size: var(--fs-14); }
 
-.sx-fbtn--phone { min-height: 44px; width: 44px; }
+.sx-fbtn--phone { min-height: var(--hit-min); width: var(--hit-min); }
 .sx-psquad {
   grid-column: 3;
   grid-row: 1;
@@ -267,11 +267,11 @@
   border-radius: 0 var(--r-md) 0 var(--r-md);
 }
 .sx-psquad__head { display: flex; align-items: center; gap: 4px; }
-.sx-psquad__head .label { font-size: 11px; }
-.sx-psquad .sx-squad__count { font-size: 11px; }
+.sx-psquad__head .label { font-size: var(--fs-12); }
+.sx-psquad .sx-squad__count { font-size: var(--fs-12); }
 .sx-psquad__strip { display: flex; gap: 6px; }
 .sx-psquad__strip .avatar { width: 34px; height: 34px; font-size: var(--fs-18); }
-.sx-psquad__join { min-height: 36px; font-size: 12px; padding: 0 10px; box-shadow: var(--sh-press-sm); }
+.sx-psquad__join { min-height: max(36px, var(--tap-floor)); font-size: var(--fs-12); padding: 0 10px; box-shadow: var(--sh-press-sm); }
 .is-text-lg .sx-psquad { display: none; }
 
 /* ---- invites (S3/S4/P3) ---- */
@@ -332,20 +332,20 @@ html.reduce-motion .sx-toast__bar i { transition: none; }
 .sx-toast__acts .sx-act { min-height: 48px; font-size: var(--fs-16); }
 .sx-toast__note { color: var(--c-muted); font-size: var(--fs-14); }
 
-.sx-soon { min-height: 20px; font-size: 11px; }
+.sx-soon { min-height: 20px; font-size: var(--fs-12); }
 
 .sx-tscreen--phone .sx-toast { top: max(52px, var(--safe-t)); width: 384px; gap: 6px; padding: 8px 10px 8px 14px; }
 .sx-tscreen--phone .sx-toast__edge { width: 4px; }
 .sx-tscreen--phone .sx-toast--play { left: 0; right: 0; margin: 0 auto; }
 .sx-tscreen--phone .sx-toast__top { gap: 8px; }
 .sx-tscreen--phone .sx-toast__top .avatar { width: 32px; height: 32px; font-size: var(--fs-16); }
-.sx-tscreen--phone .sx-toast__label { font-size: 10px; }
+.sx-tscreen--phone .sx-toast__label { font-size: var(--fs-12); }
 .sx-tscreen--phone .sx-toast__title { font-size: var(--fs-14); }
 .sx-tscreen--phone .sx-toast__clock { font-size: var(--fs-14); }
 .sx-tscreen--phone .sx-toast__bar { height: 3px; }
 .sx-tscreen--phone .sx-toast__acts { gap: 6px; }
-.sx-tscreen--phone .sx-toast__acts .sx-act { min-height: 40px; font-size: 12px; padding: 0 10px; }
-.sx-tscreen--phone .sx-toast__acts .btn--icon { width: 40px; }
+.sx-tscreen--phone .sx-toast__acts .sx-act { min-height: var(--touch-min); font-size: var(--fs-12); padding: 0 10px; }
+.sx-tscreen--phone .sx-toast__acts .btn--icon { width: max(40px, var(--tap-floor)); }
 .sx-tscreen--phone .sx-toast--req .sx-toast__title { font-size: var(--fs-14); }
 
 /* the picker */
@@ -388,7 +388,7 @@ html.reduce-motion .sx-toast__bar i { transition: none; }
 .sx-screen--phone .sx-stamp { font-size: var(--fs-24); border-width: var(--bw); }
 .sx-screen--phone .sx-picker__list { max-height: none; }
 .sx-screen--phone .sx-share { flex-wrap: nowrap; gap: 6px; }
-.sx-screen--phone .sx-share .sx-act { min-height: var(--touch-min); font-size: 12px; padding: 0 10px; gap: 6px; }
+.sx-screen--phone .sx-share .sx-act { min-height: var(--touch-min); font-size: var(--fs-12); padding: 0 10px; gap: 6px; }
 
 /* the lobby's Invite friends block (desktop poster, phone share card) */
 .sx-invblock { display: flex; align-items: center; gap: var(--sp-4); width: 100%; min-height: 72px; padding: var(--sp-3) var(--sp-5); border-radius: var(--r-sm); background: var(--c-ink-950); color: var(--c-volt); text-align: left; }
@@ -436,5 +436,11 @@ html.reduce-motion .sx-toast__bar i { transition: none; }
 /* a match row's actions (social/AddFriend.tsx, audit 2 P-06): Add friend, and beside it Report / Block */
 .mf-row-actions { display: inline-flex; align-items: center; gap: var(--sp-1); margin-left: auto; flex: none; }
 .mf-addfriend { min-height: 36px; padding: 0 var(--sp-2); gap: var(--sp-1); white-space: nowrap; }
+/* a finger: a room row's Add and ⋯, the drawer's actions, at the kit's target size (UX-91: 39×37, 42×42) */
+@media (pointer: coarse) {
+  :is(.sx-act, .mf-addfriend) { min-height: var(--touch-min); }
+  :is(.sx-act, .mf-addfriend).btn--icon, .sx-act.btn--icon { width: var(--touch-min); min-width: var(--touch-min); }
+  .mf-addfriend { min-width: var(--touch-min); }
+}
 .mf-addfriend .ic { width: 16px; height: 16px; }
 .mf-addfriend--sent { display: inline-flex; align-items: center; gap: 4px; }
