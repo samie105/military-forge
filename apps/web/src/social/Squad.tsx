@@ -55,11 +55,38 @@ export function FriendsButton({ phone = false }: { phone?: boolean }) {
   );
 }
 
-/** Home's Squad card (desktop, the right column): who's on, Join, and the way into the panel. */
-export function SquadCard() {
+/**
+ * Home's Squad card (desktop, the right column): who's on, Join, and the way into the panel. `compact`:
+ * one line (while another card leads Home's rail: one card at a time, UX atlas 1 Nov, UX-11), the count
+ * and the way into the panel; a friend's room to join still shows as its own row.
+ */
+export function SquadCard({ compact = false }: { compact?: boolean }) {
   const social = useSocial();
   if (!social) return null;
-  return <SquadCardBody social={social} />;
+  return compact ? <SquadRow social={social} /> : <SquadCardBody social={social} />;
+}
+
+function SquadRow({ social }: { social: SocialController }) {
+  useEffect(() => social.watch(HOME_POLL_MS), [social]);
+  const list = useSel(social.store, (s) => s.list);
+  const on = onlineFriends(list);
+  const requests = list?.incoming.length ?? 0;
+  const inRoom = on.find((f) => f.status === 'in_room' && f.room) ?? null;
+  return (
+    <section className="sx-squadrow m-p3" aria-label="Squad: friends online">
+      <button type="button" className="sx-squadrow__open m-p8" onClick={() => social.openPanel('friends')}>
+        <span className="label label--volt">Squad</span>
+        <span className="sx-squad__count">· {list ? `${on.length} online` : '…'}</span>
+        {requests > 0 && <span className="sx-squadrow__req">· {requests} {requests === 1 ? 'request' : 'requests'}</span>}
+        <Icon name="chev-right" size="sm" className="sx-squadrow__chev" />
+      </button>
+      {inRoom && (
+        <button type="button" className="btn btn--paper btn--sm sx-act" onClick={() => social.join(inRoom)}>
+          Join {inRoom.nickname}
+        </button>
+      )}
+    </section>
+  );
 }
 
 function SquadCardBody({ social }: { social: SocialController }) {

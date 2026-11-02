@@ -90,7 +90,10 @@ let sessionOfflineName: string | null = null;
 
 /**
  * The name used while the API can't be reached: `chosen` (saved for next time), else the one saved on
- * this device, else a new PilotNNN saved at once, so it stays the same on every load (audit 28 Oct).
+ * this device, which is the player's own name from the last time the API answered (rememberName: UX
+ * atlas 1 Nov, UX-15, a flaky connection no longer turns the player into someone else), else, on a
+ * device that has never been online, a new PilotNNN saved at once, so it stays the same on every load
+ * (audit 28 Oct). Home says it's offline beside the name either way.
  */
 export function offlineName(chosen?: string | null, storage: () => Storage = () => localStorage): string {
   const typed = chosen?.trim();
@@ -110,6 +113,18 @@ export function offlineName(chosen?: string | null, storage: () => Storage = () 
     /* this session only */
   }
   return name;
+}
+
+/** The player's own name, as the API last knew it: what the offline Home and training use (offlineName). */
+export function rememberName(nickname: string, storage: () => Storage = () => localStorage): void {
+  const name = nickname.trim();
+  if (!name) return;
+  sessionOfflineName = name;
+  try {
+    if (storage().getItem(OFFLINE_NAME_KEY) !== name) storage().setItem(OFFLINE_NAME_KEY, name);
+  } catch {
+    /* this session only */
+  }
 }
 
 /** Flags set this session: where storage fails (Safari private mode), a card still shows once per session. */
@@ -314,6 +329,11 @@ export function roomSocketUrl(room: Pick<RoomJoin, 'code' | 'gsUrl'>, loc?: Pick
 /** This device said under 18 (age.ts): training only (audit-2 L-03). */
 const minorOnDevice = (): boolean => ageOnDevice()?.adult === false;
 
+/** The profile while the API can't be reached (or won't let this account play online): a local name, and this device's under-18 answer. */
+function offlineProfile(nickname?: string | null, extra: Partial<Profile> = {}): Profile {
+  return { nickname: offlineName(nickname), changeableAt: null, offline: true, ...(minorOnDevice() ? { minor: true } : {}), ...extra };
+}
+
 function profileOf(me: Me): Profile {
   const minor = me.minor === true || minorOnDevice();
   return { nickname: me.nickname, changeableAt: me.nicknameChangeableAt, offline: false, ...(minor ? { minor: true } : {}) };
@@ -354,6 +374,10 @@ export class ShellController {
     // a route the address names as the page opens (a reload on #/locker): over Home, so Back is Home
     const opened = /^#\/([a-z-]+)$/.exec(this.deepLink)?.[1];
     if (opened && findRoute(opened)) this.openRoute(opened);
+    // the player's own name, kept for a time the API can't be reached (UX-15: never a stranger's name offline)
+    store.subscribe((s, before) => {
+      if (s.profile !== before.profile && s.profile && !s.profile.offline) rememberName(s.profile.nickname);
+    });
     // the tab's title says where the player is (audit C-41, D-29); Home keeps index.html's
     const pageTitle = typeof document === 'undefined' ? '' : document.title;
     store.subscribe((s) => {
@@ -455,13 +479,13 @@ export class ShellController {
       me = await this.api.restore();
     } catch {
       // the API is down: training still works, with a local name (the same one on every load)
-      this.set({ profile: { nickname: offlineName(), changeableAt: null, offline: true } });
+      this.set({ profile: offlineProfile() });
       this.go(intent.to === 'join' || intent.to === 'training' ? intent : { to: 'home' });
       return;
     }
     if (!me && this.api.disabled) {
       // suspended or banned (audit-2 L-04): training only, under the account's own name if we knew it
-      this.set({ profile: { nickname: offlineName(), changeableAt: null, offline: true, suspended: this.api.disabled } });
+      this.set({ profile: offlineProfile(null, { suspended: this.api.disabled }) });
       if (onlineIntent(intent)) this.set({ screen: { name: 'error', alert: suspendedAlert(this.api.disabled.until), retry: null } });
       else {
         this.go(intent);
@@ -522,7 +546,7 @@ export class ShellController {
         this.set({ screen: { name: 'name', then: intent } });
         return;
       }
-      this.set({ profile: { nickname: offlineName(), changeableAt: null, offline: true } });
+      this.set({ profile: offlineProfile() });
     }
     if (this.store.getState().titlePlay && !this.profile?.offline && !this.profile?.minor) this.playNow();
     else this.go(this.profile?.offline && intent.to !== 'training' ? { to: 'home' } : intent);
@@ -1013,7 +1037,7 @@ export class ShellController {
       if (!(e instanceof ApiError)) return { ok: false, error: (e as Error).message };
       if (e.offline) {
         // no API: keep a local name (the one typed, else this device's) and let the player train
-        this.set({ profile: { nickname: offlineName(nickname), changeableAt: null, offline: true } });
+        this.set({ profile: offlineProfile(nickname) });
       } else if (e.code === 'nickname_taken') return { ok: false, error: NICKNAME_REASONS.taken, suggestions: (e.extra.suggestions as string[] | undefined) ?? [] };
       else if (e.code === 'invalid_nickname') return { ok: false, error: NICKNAME_REASONS[String(e.extra.reason)] ?? e.message };
       else if (e.code === 'nickname_cooldown') return { ok: false, error: `You can change your name again on ${new Date(String(e.extra.nicknameChangeableAt)).toLocaleDateString()}` };

@@ -503,3 +503,28 @@ html.reduce-motion .kit-v2 .mf-wait .spinner { border-color: var(--c-volt); }
 /* the name chip opens Settings → Account (audit N-21) */
 .kit-v2 button.me-chip { font: inherit; color: inherit; cursor: pointer; }
 .kit-v2 button.me-chip:hover { border-color: var(--c-line-strong, var(--c-muted)); }
+
+/*
+ * One Home for every player state (UX atlas 1 Nov, batch 3; shell/homeState.ts). The poster's one action is
+ * the only loud thing; the rest of Home is quieter than it.
+ */
+/* under 18: the one quiet line under the nameplate that says why Home is Training (a sentence, not a stamp) */
+.kit-v2 .home__state-note { max-width: 520px; min-height: 0; padding: var(--sp-2) var(--sp-3); white-space: normal; text-transform: none; letter-spacing: 0; font-size: var(--fs-16); font-weight: var(--fw-semi); line-height: var(--lh-snug); }
+/* the rail, one card at a time (UX-11): with a last match, Field orders steps aside */
+.kit-v2 .home__side .mf-lastmatch ~ .home__news { display: none; }
+/* the Squad folded to a line while another card leads the rail (social/Squad.tsx SquadRow) */
+.kit-v2 .sx-squadrow { display: flex; align-items: center; gap: var(--sp-3); }
+.kit-v2 .sx-squadrow__open {
+  display: flex; flex: 1; align-items: center; gap: var(--sp-2); min-width: 0; min-height: var(--touch-min); padding: 0 var(--sp-4);
+  background: var(--c-plate); border: var(--bw) solid var(--c-line); border-radius: var(--r-sm); color: var(--c-text); font: inherit; cursor: pointer;
+}
+.kit-v2 .sx-squadrow__open:hover { border-color: var(--c-line-strong); }
+.kit-v2 .sx-squadrow__req { font-size: var(--fs-14); font-weight: var(--fw-bold); color: var(--c-warn); }
+.kit-v2 .sx-squadrow__chev { margin-left: auto; color: var(--c-muted); }
+/* the Sitrep ticker runs one pass on arrival, then rests (UX-11, D-20: a loop that never stops pulls the eye
+   from Play now); Reduce motion stops it outright (kit.css) */
+.kit-v2 .home__ticker .ticker__run { animation-iteration-count: 1; animation-fill-mode: forwards; }
+/* a way in that waits (offline, suspended) reads as waiting: the ticket's words dim (its rise animation owns
+   the ticket's own opacity), the tab dims; the reason is the sub-line or the title */
+.kit-v2 button.home__ticket:disabled > * { opacity: .5; }
+.kit-v2 .home__tabs .tab:disabled { opacity: .45; cursor: not-allowed; }

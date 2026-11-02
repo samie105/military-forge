@@ -123,14 +123,16 @@ describe('m-home', () => {
     expect(html).toMatch(/pm-poster mf-qm[^>]*><span class="mf-qm__art" aria-hidden="true"><img class="mf-qm__img" src="\/assets\/posters\/quick-match\.webp" srcSet="[^"]*quick-match@2x\.webp 1520w"/);
   });
 
-  it('offline: Create room waits, Play now (training against bots) and Training still work', () => {
+  it('offline: Training is the poster (UX-15), Create room waits and says why, Join and First flight still work', () => {
     const store = createShellStore({ profile: { nickname: 'Ade', changeableAt: null, offline: true } as never });
     const html = withCtl(ctl(), <PhoneHome store={store} />);
     expect(html).toContain('Offline');
-    // Play now is the hero (mobile audit P1-6), Create room the smaller second
-    expect(html).toMatch(/<button type="button" class="btn btn--ink pm-create pm-play m-p8" data-tour="play" data-pad-first="true">/);
-    expect(html).toMatch(/<button type="button" class="btn btn--ghost btn--sm pm-create-room m-p8" data-tour="create" disabled="">/);
-    expect(html).toMatch(/<button type="button" class="ticket rivets pm-tk m-p3 m-p8" style="--i:3">/); // Training, enabled
+    // the one primary is Training (offline, Play now would only train anyway); Create room the smaller second, waiting
+    expect(html).toMatch(/<button type="button" class="btn btn--ink pm-create pm-play m-p8" data-tour="play" data-pad-first="true" data-home-primary="">.*?Training<\/button>/);
+    expect(textOf(html)).not.toContain('Play now');
+    expect(html).toMatch(/<button type="button" class="btn btn--ghost btn--sm pm-create-room m-p8" data-tour="create" disabled="" aria-description="Needs a connection">/);
+    expect(html).toMatch(/<button type="button" class="ticket rivets pm-tk m-p3 m-p8" style="--i:2" data-tour="join">/); // Join, enabled (a local room's code)
+    expect(textOf(html)).toContain('First flight');
   });
 });
 

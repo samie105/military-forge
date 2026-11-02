@@ -10,8 +10,12 @@ import { useTourFacts } from '../tour/live';
 import { askInstall, pwaStore } from './index';
 import './pwa.css';
 
-/** `inTopBar`: Home's top bar, where the iPhone's suggestion sits while it's up (the button steps aside for it). */
-export function InstallButton({ className = '', inTopBar = false }: { className?: string; inTopBar?: boolean }) {
+/**
+ * `inTopBar`: Home's top bar, where the iPhone's suggestion sits while it's up (the button steps aside for it).
+ * `icon`: Home's quiet icon chip, the size of Friends beside it (UX atlas 1 Nov, UX-11 / UX-14: it was the
+ * loudest thing in the top bar); the toast and Settings carry the words, the name is still read.
+ */
+export function InstallButton({ className = '', inTopBar = false, icon = false }: { className?: string; inTopBar?: boolean; icon?: boolean }) {
   const s = useSyncExternalStore(pwaStore.subscribe, pwaStore.getState, pwaStore.getState);
   const facts = useTourFacts();
   if (!s.kind || s.installed) return null;
@@ -19,13 +23,14 @@ export function InstallButton({ className = '', inTopBar = false }: { className?
   return (
     <button
       type="button"
-      className={`btn btn--ghost btn--sm mf-install-btn m-p8 ${className}`.trim()}
+      className={`btn btn--ghost btn--sm mf-install-btn${icon ? ' btn--icon mf-install-btn--icon' : ''} m-p8 ${className}`.trim()}
       title={s.kind === 'ios' ? 'Add Forged Force to your Home Screen: full screen, no browser bars' : 'Install Forged Force: full screen, from your home screen'}
+      {...(icon ? { 'aria-label': 'Install app' } : {})}
       onClick={() => askInstall(facts?.matches.finished ?? 0)}
     >
       <Icon name="download" />
       {/* the word gives way first when Home's top bar is tight (menus.css): the icon stays, the name is still read */}
-      <span className="mf-install-btn__word">Install app</span>
+      {!icon && <span className="mf-install-btn__word">Install app</span>}
     </button>
   );
 }

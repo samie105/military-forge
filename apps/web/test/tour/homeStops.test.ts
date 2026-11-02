@@ -6,7 +6,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { HOME_STOPS, runHomeStops } from '../../src/tour/homeStops';
 import { newFacts } from '../../src/tour/facts';
-import { homeAsk, homeStopsRunning } from '../../src/tour/homeQueue';
+import { homeAsk, homeStopsRunning, homeTurn, stopsMayStart } from '../../src/tour/homeQueue';
+import { HOME_IDLE_MS, STOPS, homeStopsDue, keepClearOf } from '../../src/tour/homeStops';
 import type { TourMemory } from '../../src/tour/index';
 import type { SpotStep, Spotlight } from '../../src/ui/spotlight';
 
@@ -137,5 +138,48 @@ describe("Home's queue (D-01)", () => {
     expect(homeAsk(false, true)).toBe('stops');
     expect(homeAsk(true, true)).toBe('stops');
     expect(homeAsk(false, false)).toBeNull();
+  });
+});
+
+describe("Home's queue: one at a time, never over a panel (UX atlas 1 Nov, UX-06 / UX-14)", () => {
+  const calm = { consentDue: false, stopsRunning: false, nameDue: false, installUp: false };
+
+  it('a running pass, then the play-data question, then "Keep this name?", then the install toast', () => {
+    expect(homeTurn({ consentDue: true, stopsRunning: true, nameDue: true, installUp: true })).toBe('stops');
+    expect(homeTurn({ ...calm, consentDue: true, nameDue: true, installUp: true })).toBe('consent');
+    expect(homeTurn({ ...calm, nameDue: true, installUp: true })).toBe('name');
+    expect(homeTurn({ ...calm, installUp: true })).toBe('install');
+    expect(homeTurn(calm)).toBeNull();
+  });
+
+  it('the stops go last: only with nobody else asking and no layer open over Home', () => {
+    expect(stopsMayStart(calm, 0)).toBe(true);
+    for (const k of ['consentDue', 'nameDue', 'installUp', 'stopsRunning'] as const) expect(stopsMayStart({ ...calm, [k]: true }, 0)).toBe(false);
+    // the Friends panel (or the Lobby feed, an overlay, a route) is open: wait
+    expect(stopsMayStart(calm, 1)).toBe(false);
+  });
+
+  it('the idle timer never starts the pass under an open panel', () => {
+    expect(homeStopsDue(false, 0, HOME_IDLE_MS, 0)).toBe(true);
+    expect(homeStopsDue(false, 0, HOME_IDLE_MS, 1)).toBe(false);
+    expect(homeStopsDue(true, 0, HOME_IDLE_MS, 0)).toBe(false);
+  });
+
+  it('each stop sits below its target, clear of the Play poster (Create room, inside it: clear of Play now)', () => {
+    const poster = { contains: (n: unknown) => n === targets.create };
+    const play = new FakeNode('play now');
+    const doc = g.document as { querySelector: (sel: string) => unknown };
+    const plain = doc.querySelector;
+    doc.querySelector = (sel: string) => (sel === '[data-home-poster]' ? poster : sel === '[data-home-primary]' ? play : plain(sel));
+    expect(keepClearOf(targets.join as unknown as Element)).toBe(poster);
+    expect(keepClearOf(targets.create as unknown as Element)).toBe(play);
+    const { spot, shown } = fakeSpot();
+    runHomeStops(fakeMemory().memory, () => 'keyboard', spot as unknown as Spotlight);
+    expect(shown[0]!.place).toBe('below');
+    expect(shown[0]!.keepClear?.()).toBe(play);
+  });
+
+  it('the stops say what to do (UX-06 c): make a room and send the link; the 6 letters', () => {
+    expect(STOPS.map((s) => `${s.title} ${s.body}`)).toEqual(['Play with friends. Make a room, send the link.', 'Got a code? Type the 6 letters here.', 'Your kit. Change it any time.']);
   });
 });

@@ -48,6 +48,12 @@ export interface SpotStep {
   /** key caps (already the player's own: Kbd text or a pad glyph's label), shown after the body */
   keys?: readonly string[];
   place?: SpotPlace;
+  /**
+   * What else the callout keeps clear of, after its targets (Home's stops: the Play poster, so a coach
+   * mark never sits on Play now: UX atlas 1 Nov, UX-06). A side that covers it is taken only when
+   * every side that clears the target covers it too, and then the one that covers it least.
+   */
+  keepClear?: () => Element | null;
   /** 'outside': menus (the dim blocks, the hole passes); 'none' (default): play, nothing is blocked */
   block?: 'outside' | 'none';
   /**
@@ -159,9 +165,10 @@ function overlapArea(a: Box, b: Box): number {
 /**
  * Where the callout goes, clear of the target: the preferred side, then the opposite, then the others
  * (phones prefer top-centre, never over a thumb dial). Each candidate is shifted along its side to stay
- * inside `safe`; the first that doesn't cover the target wins, else the one covering it least.
+ * inside `safe`; the first that covers neither the target nor `keepClear` wins; else the first clear of
+ * the target that covers `keepClear` least; else the one covering the target least.
  */
-export function placeCallout(target: Box | null, size: { width: number; height: number }, safe: Box, place: SpotPlace, gap = 16): { left: number; top: number; side: Exclude<SpotPlace, 'auto'> } {
+export function placeCallout(target: Box | null, size: { width: number; height: number }, safe: Box, place: SpotPlace, gap = 16, keepClear: Box | null = null): { left: number; top: number; side: Exclude<SpotPlace, 'auto'> } {
   const clampX = (x: number) => Math.max(safe.left, Math.min(safe.right - size.width, x));
   const clampY = (y: number) => Math.max(safe.top, Math.min(safe.bottom - size.height, y));
   const topCentre = { left: clampX(safe.left + (safe.width - size.width) / 2), top: safe.top, side: 'top-centre' as const };
@@ -180,18 +187,28 @@ export function placeCallout(target: Box | null, size: { width: number; height: 
   const order: (keyof typeof at)[] =
     place === 'top-centre' ? ['top-centre', 'below', 'above', 'right', 'left'] : place === 'auto' ? [...sides] : [place, opposite[place], ...sides];
   const hole = inflate(target, gap / 2);
+  const clear = keepClear ? inflate(keepClear, gap / 2) : null;
   let best = at[order[0]!];
   let least = Infinity;
+  let calm: (typeof at)[keyof typeof at] | null = null;
+  let calmCover = Infinity;
   for (const side of order) {
     const p = at[side];
-    const cover = overlapArea(box(p.left, p.top, size.width, size.height), hole);
-    if (cover === 0) return p;
-    if (cover < least) {
+    const card = box(p.left, p.top, size.width, size.height);
+    const cover = overlapArea(card, hole);
+    if (cover === 0) {
+      const over = clear ? overlapArea(card, clear) : 0;
+      if (over === 0) return p;
+      if (over < calmCover) {
+        calmCover = over;
+        calm = p;
+      }
+    } else if (cover < least) {
       least = cover;
       best = p;
     }
   }
-  return best;
+  return calm ?? best;
 }
 
 // ---------------------------------------------------------------- the component
@@ -456,7 +473,8 @@ export class Spotlight {
       const [left, right] = stripSides(safe.left, safe.right, top, top + 48);
       safe = box(left, top, right - left, safe.bottom - top);
     }
-    const at = placeCallout(step.anchor === 'none' ? null : unionBox(holes), size, safe, place);
+    const avoid = step.keepClear?.();
+    const at = placeCallout(step.anchor === 'none' ? null : unionBox(holes), size, safe, place, 16, avoid ? logicalRect(avoid) : null);
     c.style.transform = `translate3d(${n(at.left)}px, ${n(at.top)}px, 0)`;
     c.dataset.side = at.side;
   }

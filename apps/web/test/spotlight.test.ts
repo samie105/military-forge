@@ -58,6 +58,21 @@ describe('the spotlight: placing the callout', () => {
     expect(shifted.left + size.width).toBeLessThanOrEqual(safe.right);
   });
 
+  it("keeps clear of what it's told to (Home's Play poster: UX atlas 1 Nov, UX-06) when a side allows, else covers it least", () => {
+    // Join with code under the poster, near the window's foot: below doesn't fit, above would sit on the poster
+    const join = box(60, 560, 310, 120);
+    const poster = box(60, 120, 640, 420);
+    const at = placeCallout(join, size, safe, 'below', 16, poster);
+    expect(at.side).toBe('right');
+    // without it, the old order: above (on the poster)
+    expect(placeCallout(join, size, safe, 'below').side).toBe('above');
+    // never on the target to clear the poster: with no clear side, the least cover of the poster
+    const tight = box(12, 12, 700, 700);
+    const least = placeCallout(box(300, 300, 100, 100), size, tight, 'right', 16, box(12, 12, 700, 700));
+    expect(least.side).not.toBe('right'); // right is clamped onto the target
+    expect(['below', 'above']).toContain(least.side);
+  });
+
   it('on a phone it sits top-centre, never over a thumb dial', () => {
     const phone = box(12, 12, 788, 351);
     expect(placeCallout(box(30, 220, 130, 130), { width: 320, height: 90 }, phone, 'top-centre')).toEqual({ left: 246, top: 12, side: 'top-centre' });

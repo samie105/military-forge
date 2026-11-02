@@ -37,6 +37,10 @@ export interface Card {
 export interface OrdersContext {
   /** no API: room cards are hidden */
   offline: boolean;
+  /** an under-18 device (audit-2 L-03): training only, so no card leads to a room, local ones too (UX-01) */
+  minor?: boolean;
+  /** a suspended account (offline is set too): the reason a card gives says so, not the server */
+  suspended?: boolean;
   /** a touch screen with the touch controls (phone cards) */
   touch: boolean;
   /** a controller has been used here */
@@ -223,7 +227,7 @@ export const CARDS: readonly Def[] = [
     cta: 'Local room',
     action: { kind: 'local' },
     base: 25,
-    when: (f, c) => (c.offline || f.rooms.created >= 2 ? { reason: c.offline ? "The game server can't be reached" : 'You host often' } : null),
+    when: (f, c) => (c.offline || f.rooms.created >= 2 ? { reason: c.suspended ? 'Online play is paused' : c.offline ? "The game server can't be reached" : 'You host often' } : null),
   },
 ];
 
@@ -231,6 +235,9 @@ export const CARDS: readonly Def[] = [
 export function novelty(shown: number): number {
   return shown >= 6 ? 0.3 : shown >= 3 ? 0.6 : 1;
 }
+
+/** Cards that lead to a room with other players: never offered under 18 (the 18+ step would only say no). */
+const ROOM_ACTIONS: ReadonlySet<CardAction['kind']> = new Set(['create', 'join', 'local']);
 
 /** The cards for Home, best first: the first is the primary (volt), then up to two more. */
 export function recommend(f: Facts, c: OrdersContext, now: number): Card[] {
@@ -240,6 +247,7 @@ export function recommend(f: Facts, c: OrdersContext, now: number): Card[] {
     // taken: retired (a card that comes back returns when what made it due is newer than the tap)
     if (seen?.actedAt != null && !(d.rearm && (d.rearm(f) ?? 0) > seen.actedAt)) continue;
     if (seen?.dismissedAt != null && now - seen.dismissedAt < COOL_DOWN_MS) continue; // Not now: 7 days
+    if (c.minor && ROOM_ACTIONS.has(d.action.kind)) continue;
     const hit = d.when(f, c);
     if (!hit) continue;
     const score = d.base * Math.min(1.5, Math.max(1, hit.relevance ?? 1)) * novelty(seen?.shown ?? 0);

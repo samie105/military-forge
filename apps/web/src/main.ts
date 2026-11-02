@@ -84,10 +84,11 @@ import { startTourMemory, type TourMemory } from './tour';
 import { FirstFlight } from './tour/firstFlight';
 import { FIRST_FLIGHT } from './tour/flight';
 import { HOME_STOPS, homeStopsDue, homeStopsRetired, homeStopsWanted, runHomeStops } from './tour/homeStops';
+import { stopsMayStart } from './tour/homeQueue';
 import { HintRunner } from './tour/hintsRun';
 import type { Device } from './tour/log';
 import { provideTourMemory } from './tour/live';
-import { keepForOffline, startPwa } from './pwa';
+import { keepForOffline, pwaStore, startPwa } from './pwa';
 import { readReturn, withoutReturn, type StoreView } from './store/model';
 import type { StoreApi } from './store/screen';
 import { launchedInstalled } from './pwa/install';
@@ -1061,8 +1062,9 @@ if (appMode && tourMemory) {
   onTouchHintsReset(() => hints?.resetTouch());
   // Home's three stops (§3.5): once, after a match was played (or a veteran's first Home), but never on
   // the Home a match just ended into, and only once Home has sat idle (mobile audit P1-5: let the player
-  // breathe). Leaving Home or opening anything over it ends the pass. The play-data question goes first
-  // (audit 31 Oct, D-01: one thing at a time, tour/homeQueue.ts): the pass waits until it's answered.
+  // breathe). Leaving Home or opening anything over it (an overlay, a route, the Friends panel, the Lobby
+  // feed) ends the pass, and it never starts while one is open (UX-06). The play-data question, "Keep this
+  // name?" and the install toast go first (one thing at a time, tour/homeQueue.ts): the pass waits its turn.
   let stopStops: (() => void) | null = null;
   let stopsPoll = 0;
   let cameFromMatch = false;
@@ -1074,8 +1076,16 @@ if (appMode && tourMemory) {
   };
   for (const type of ['pointerdown', 'keydown', 'wheel'] as const) window.addEventListener(type, () => (lastInputAt = performance.now()), { capture: true, passive: true });
   onInputDevice(() => (lastInputAt = performance.now())); // a pad's press
+  // whose turn it is on Home (tour/homeQueue.ts, UX-06): the stops go last, and never over an open layer
+  const layersOpen = () => shell.controller?.nav.keys().length ?? 0;
+  const turnInput = (s: ShellState) => ({
+    consentDue: consentDue(),
+    stopsRunning: stopStops !== null,
+    nameDue: s.nameAsk === true && !!s.profile && !s.profile.offline,
+    installUp: pwaStore.getState().toastUp,
+  });
   const stopsCheck = (s: ShellState) => {
-    const calm = s.screen.name === 'home' && s.title === 'off' && s.route === null && s.overlay === null && !s.tips && (stopStops !== null || !consentDue());
+    const calm = s.screen.name === 'home' && s.title === 'off' && s.route === null && s.overlay === null && !s.tips && layersOpen() === 0 && (stopStops !== null || stopsMayStart(turnInput(s), 0));
     if (!calm) {
       window.clearInterval(stopsPoll);
       stopsPoll = 0;
@@ -1087,11 +1097,11 @@ if (appMode && tourMemory) {
     if (homeStopsRetired(memory.facts.get())) memory.fact({ k: 'tour', tour: HOME_STOPS, finished: true });
     if (stopStops || stopsPoll || cameFromMatch || !homeStopsWanted(memory.facts.get())) return;
     stopsPoll = window.setInterval(() => {
-      if (!homeStopsDue(cameFromMatch, lastInputAt, performance.now())) return;
+      if (!homeStopsDue(cameFromMatch, lastInputAt, performance.now(), layersOpen())) return;
       window.clearInterval(stopsPoll);
       stopsPoll = 0;
       const now = shell.store.getState();
-      if (now.screen.name === 'home' && now.route === null && now.overlay === null && !consentDue() && homeStopsWanted(memory.facts.get())) stopStops = runHomeStops(memory, tourDevice);
+      if (now.screen.name === 'home' && now.route === null && now.overlay === null && stopsMayStart(turnInput(now), layersOpen()) && homeStopsWanted(memory.facts.get())) stopStops = runHomeStops(memory, tourDevice);
     }, 1000);
   };
   shell.store.subscribe((s, before) => {
@@ -1101,8 +1111,12 @@ if (appMode && tourMemory) {
     }
     stopsCheck(s);
   });
-  // the question answered (or due late): look again
+  // the question answered (or due late), a panel opened or closed, the install toast came or went: look again
   metrics()?.consent.subscribe(() => stopsCheck(shell.store.getState()));
+  shell.controller?.nav.onChange(() => stopsCheck(shell.store.getState()));
+  pwaStore.subscribe((p, was) => {
+    if (p.toastUp !== was.toastUp) stopsCheck(shell.store.getState());
+  });
   // a reload during First flight goes straight back in at the next goal (and ?flight starts it: playtests)
   let checked = false;
   const stopResume = shell.store.subscribe((s) => {

@@ -27,10 +27,8 @@ export function Backdrop({ word }: { word: string }) {
   );
 }
 
-/** What Home says when the game server can't be reached: once, in the Play now poster (desktop and phone). */
-export const OFFLINE_LINE = "Can't reach the server. Training with bots still works.";
-/** a suspended or banned account (audit-2 L-04): the server answered, it just won't let this account play online */
-export const SUSPENDED_LINE = "This account can't play online right now. Training with bots still works.";
+/** What Home says offline and for a suspended account: the lines live with Home's states (shell/homeState.ts). */
+export { OFFLINE_LINE, SUSPENDED_LINE } from '../homeState';
 
 /**
  * The connection in the top bar: the kit's signal bars and the round trip (the API's, every 10 s), no

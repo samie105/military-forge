@@ -4,8 +4,9 @@
  * Locker. Each has Next (the last, Done), Skip, and Escape skips the pass; pressing the target itself
  * does what it says and ends the pass. Once per device (`tours['home-stops']`), every stop logged.
  * Targets are Home's `data-tour` hooks; a stop whose target isn't there (offline: Create room is off)
- * is left out, and with none there the pass waits. Home queues it after the play-data question and
- * before Next orders (tour/homeQueue.ts): while it runs, the stop on screen has the focus (its Next).
+ * is left out, and with none there the pass waits. Home queues it last (tour/homeQueue.ts: the
+ * play-data question, "Keep this name?" and the install toast go first, and nothing may be open over
+ * Home): while it runs, the stop on screen has the focus (its Next).
  */
 import { Spotlight, type SpotStep } from '../ui/spotlight';
 import type { Facts } from './facts';
@@ -22,8 +23,8 @@ interface Stop {
 }
 
 export const STOPS: readonly Stop[] = [
-  { id: 'create', title: 'Play with friends.', body: 'Share the code.' },
-  { id: 'join', title: 'Got a code?', body: 'In here.' },
+  { id: 'create', title: 'Play with friends.', body: 'Make a room, send the link.' },
+  { id: 'join', title: 'Got a code?', body: 'Type the 6 letters here.' },
   { id: 'locker', title: 'Your kit.', body: 'Change it any time.' },
 ];
 
@@ -60,10 +61,21 @@ export const HOME_IDLE_MS = 6000;
 
 /**
  * When the pass may start (P1-5: let the player breathe): on a Home visit that didn't come straight
- * from a match, after HOME_IDLE_MS without input. Pure: main.ts feeds the times.
+ * from a match, after HOME_IDLE_MS without input, and with nothing open over Home (UX atlas 1 Nov,
+ * UX-06: it started under an open Friends panel). Pure: main.ts feeds the times and the open layers.
  */
-export function homeStopsDue(cameFromMatch: boolean, lastInputAt: number, now: number): boolean {
-  return !cameFromMatch && now - lastInputAt >= HOME_IDLE_MS;
+export function homeStopsDue(cameFromMatch: boolean, lastInputAt: number, now: number, layersOpen = 0): boolean {
+  return !cameFromMatch && layersOpen === 0 && now - lastInputAt >= HOME_IDLE_MS;
+}
+
+/**
+ * What a stop's card keeps clear of (UX-06 a: stop 2's card sat on Play now): the Play poster, or,
+ * for a target inside it (Create room), the poster's primary button. Home marks both.
+ */
+export function keepClearOf(el: Element | null): Element | null {
+  const poster = document.querySelector('[data-home-poster]');
+  if (!poster) return null;
+  return el && poster.contains(el) ? document.querySelector('[data-home-primary]') : poster;
 }
 
 const target = (id: Stop['id']): HTMLElement | null => {
@@ -98,6 +110,9 @@ export function runHomeStops(memory: TourMemory, device: () => Device, spotlight
     const step: SpotStep = {
       id: `${HOME_STOPS}:${s.id}`,
       target: { kind: 'element', el: () => target(s.id) },
+      // below the target and off the poster: never over Play now (UX-06 a)
+      place: 'below',
+      keepClear: () => keepClearOf(target(s.id)),
       // never blocking (mobile audit P1-5): the dim shows the way but every tap reaches the screen
       block: 'none',
       dim: 0.5,

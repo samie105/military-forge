@@ -32,8 +32,11 @@ export function takeCard(ctl: ShellController, card: Card): void {
   else ctl.openSettings(a.tab);
 }
 
-/** `held`: Home is asking something else first (tour/homeQueue.ts); the column keeps `fallback` meanwhile, and no card counts as shown. */
-export function NextOrders({ context, fallback, held = false }: { context: OrdersContext; fallback: ReactNode; held?: boolean }) {
+/**
+ * `held`: Home is asking something else first (tour/homeQueue.ts); the column keeps `fallback` meanwhile, and no card counts as shown.
+ * `after`: what follows the cards while they show (Home's rail: one card at a time, the Squad as a one-line row under them: UX-11).
+ */
+export function NextOrders({ context, fallback, held = false, after = null }: { context: OrdersContext; fallback: ReactNode; held?: boolean; after?: ReactNode }) {
   const ctl = useCtl();
   const facts = useTourFacts();
   // the cards as Home opened: one taken or put off leaves, but new facts don't reshuffle what's on screen
@@ -71,56 +74,59 @@ export function NextOrders({ context, fallback, held = false }: { context: Order
   const done = manual.filter((m) => m.done).length;
   const [first, ...more] = cards;
   return (
-    <section className="card card--print mf-orders m-p3" aria-label="Next orders" data-tour="orders">
-      <span className="label label--volt">Next orders</span>
-      <article className="mf-orders__top">
-        <span className="mf-orders__why">{first!.reason}</span>
-        <b className="display mf-orders__title">{first!.title}</b>
-        <p className="mf-orders__line">{first!.line}</p>
-        <div className="mf-orders__act">
-          <button type="button" className="btn btn--ink btn--sm m-p8" onClick={() => act(first!, 0, 'acted')}>
-            {first!.cta}
-            <Icon name="arrow-right" />
-          </button>
-          <button type="button" className="mf-orders__later" onClick={() => act(first!, 0, 'dismissed')}>
-            Not now
-          </button>
-        </div>
-      </article>
-      {more.map((c, i) => (
-        <article key={c.id} className="mf-orders__more">
-          <span className="mf-orders__text">
-            <b>{c.title}</b>
-            <span className="mf-orders__why">{c.reason}</span>
-          </span>
-          <button type="button" className="btn btn--paper btn--sm m-p8" onClick={() => act(c, i + 1, 'acted')}>
-            {c.cta}
-          </button>
-          <button type="button" className="mf-orders__x" aria-label={`Not now: ${c.title}`} title="Not now" onClick={() => act(c, i + 1, 'dismissed')}>
-            <Icon name="close" />
-          </button>
+    <>
+      <section className="card card--print mf-orders m-p3" aria-label="Next orders" data-tour="orders">
+        <span className="label label--volt">Next orders</span>
+        <article className="mf-orders__top">
+          <span className="mf-orders__why">{first!.reason}</span>
+          <b className="display mf-orders__title">{first!.title}</b>
+          <p className="mf-orders__line">{first!.line}</p>
+          <div className="mf-orders__act">
+            <button type="button" className="btn btn--ink btn--sm m-p8" onClick={() => act(first!, 0, 'acted')}>
+              {first!.cta}
+              <Icon name="arrow-right" />
+            </button>
+            <button type="button" className="mf-orders__later" onClick={() => act(first!, 0, 'dismissed')}>
+              Not now
+            </button>
+          </div>
         </article>
-      ))}
-      <details className="mf-manual">
-        <summary>
-          <Icon name="check" />
-          Field manual · {done}/{manual.length}
-        </summary>
-        <ul>
-          {manual.map((m) => (
-            <li key={m.id} className={m.done ? 'is-done' : ''}>
-              <span className="mf-manual__box" aria-hidden="true">
-                {m.done && <Icon name="check" />}
-              </span>
-              <span>
-                {m.label}
-                {m.optional && <span className="mf-manual__opt"> · optional</span>}
-              </span>
-              <span className="mf-manual__sr">{m.done ? ', done' : ', to do'}</span>
-            </li>
-          ))}
-        </ul>
-      </details>
-    </section>
+        {more.map((c, i) => (
+          <article key={c.id} className="mf-orders__more">
+            <span className="mf-orders__text">
+              <b>{c.title}</b>
+              <span className="mf-orders__why">{c.reason}</span>
+            </span>
+            <button type="button" className="btn btn--paper btn--sm m-p8" onClick={() => act(c, i + 1, 'acted')}>
+              {c.cta}
+            </button>
+            <button type="button" className="mf-orders__x" aria-label={`Not now: ${c.title}`} title="Not now" onClick={() => act(c, i + 1, 'dismissed')}>
+              <Icon name="close" />
+            </button>
+          </article>
+        ))}
+        <details className="mf-manual">
+          <summary>
+            <Icon name="check" />
+            Field manual · {done}/{manual.length}
+          </summary>
+          <ul>
+            {manual.map((m) => (
+              <li key={m.id} className={m.done ? 'is-done' : ''}>
+                <span className="mf-manual__box" aria-hidden="true">
+                  {m.done && <Icon name="check" />}
+                </span>
+                <span>
+                  {m.label}
+                  {m.optional && <span className="mf-manual__opt"> · optional</span>}
+                </span>
+                <span className="mf-manual__sr">{m.done ? ', done' : ', to do'}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      </section>
+      {after}
+    </>
   );
 }

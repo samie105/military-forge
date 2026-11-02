@@ -502,3 +502,15 @@ html.reduce-motion .pm-turn__card .ic { animation: none; }
 /* the rail's names are the desktop's now (audit N-21: "Accessibility", not "Access"): a touch tighter so they fit */
 .pm-rail__i { padding: 0 6px; gap: 6px; }
 .pm-rail__i span { font-size: 13px; }
+
+/* One Home for every player state (UX atlas 1 Nov, batch 3; shell/homeState.ts) */
+/* under 18: the one quiet line that says why Home is Training, under its two tickets */
+.pm-state-note { margin: 0; padding: 6px 10px; border-radius: var(--r-xs); background: var(--c-paper); color: var(--c-paper-text); font-size: var(--fs-14); font-weight: var(--fw-bold); line-height: var(--lh-snug); }
+/* the name under the soldier steps down to fit its column instead of cutting off (UX-14: "ATLAS84…") */
+.mf-fit--phone .pm-stage { container-type: inline-size; }
+.mf-fit--phone .pm-stage .pm-name { font-size: min(calc(36px * var(--pm-head)), calc((100cqi - 16px) / (var(--chars, 6) * 0.62))); text-overflow: clip; }
+.mf-fit--phone .pm-tk:disabled > * { opacity: .5; }
+.mf-fit--phone .pm-nav__i:disabled { opacity: .45; cursor: not-allowed; }
+/* "Keep this name?" on the phone's Home keeps to the stage's column, clear of the tickets (the column is the box
+   less the poster's 330, the tickets' 160 and two 12 px gaps) */
+.mf-fit--phone .mf-keepname--phone-home { width: max(200px, calc(100% - var(--safe-l, 44px) - var(--safe-r, 44px) - 514px)); }

@@ -4,7 +4,8 @@
  * question first (it's asked once and answered in a tap), then the stops (main.ts starts them only
  * once it's answered), then Next orders, which keep the column's usual card until both are done.
  * A pass already running when the question becomes due (the API's answer came late) finishes first.
- * Whichever is showing takes the focus (ConsentCard, homeStops.ts).
+ * Whichever is showing takes the focus (ConsentCard, homeStops.ts). "Keep this name?" and the install
+ * toast queue the same way (homeTurn below), and the stops never start over an open panel.
  */
 import { useSyncExternalStore } from 'react';
 
@@ -15,6 +16,43 @@ export type HomeAsk = 'consent' | 'stops' | null;
 export function homeAsk(consentDue: boolean, stopsRunning: boolean): HomeAsk {
   if (stopsRunning) return 'stops';
   return consentDue ? 'consent' : null;
+}
+
+/**
+ * Whose turn it is on Home (UX atlas 1 Nov, UX-06 / UX-14): one ask at a time, in this order. A Home
+ * stops pass already running finishes first; then the play-data question; then "Keep this name?";
+ * then the install toast (phones). The Home stops are the last in line: they start only when nobody
+ * else has the turn and nothing is open over Home (stopsMayStart).
+ */
+export type HomeTurn = 'stops' | 'consent' | 'name' | 'install' | null;
+
+export interface HomeTurnInput {
+  /** the play-data question is due (metrics/ConsentCard.tsx) */
+  consentDue: boolean;
+  /** a Home stops pass is on screen */
+  stopsRunning: boolean;
+  /** "Keep this name?" is due (KeepName.tsx: a generated callsign, online) */
+  nameDue: boolean;
+  /** the install toast is up (pwa/InstallToast.tsx) */
+  installUp: boolean;
+}
+
+/** Pure: who has the turn now. */
+export function homeTurn(i: HomeTurnInput): HomeTurn {
+  if (i.stopsRunning) return 'stops';
+  if (i.consentDue) return 'consent';
+  if (i.nameDue) return 'name';
+  if (i.installUp) return 'install';
+  return null;
+}
+
+/**
+ * The Home stops may start: nobody else has the turn and no layer is open over Home (the Friends
+ * panel, the Lobby feed, an overlay, a route: shell/history.ts's open layers). A coach mark never
+ * appears dimmed behind a panel (UX-06 b).
+ */
+export function stopsMayStart(i: HomeTurnInput, layersOpen: number): boolean {
+  return !i.stopsRunning && homeTurn(i) === null && layersOpen === 0;
 }
 
 let running = false;

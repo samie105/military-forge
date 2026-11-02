@@ -45,6 +45,18 @@ html.reduce-motion .mf-install { animation: none; }
   flex: none; min-height: 48px; padding: 0 10px; border: 0; background: none; color: var(--c-paper);
   font: inherit; font-size: 14px; font-weight: var(--fw-black, 800); text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
 }
+/* phone Home: docked over the bottom nav, never over the Play poster (UX-14: it covered Play now and Create
+   room), one slim row the nav's height: the eyebrow and title, Not now, Install. The nav is back once it's answered. */
+.mf-install--home:not(.mf-install--top) {
+  bottom: var(--safe-b, 21px); gap: var(--sp-3); padding: var(--sp-1) var(--sp-2) var(--sp-1) 0;
+}
+.mf-install--home:not(.mf-install--top) .mf-install__line { display: none; }
+.mf-install--home:not(.mf-install--top) .mf-install__tile { width: 36px; height: 36px; margin-left: var(--sp-3); }
+.mf-install--home:not(.mf-install--top) .mf-install__tile .ic { width: 20px; height: 20px; }
+.mf-install--home:not(.mf-install--top) .mf-install__title { font-size: var(--fs-20); }
+.mf-install--home:not(.mf-install--top) .mf-install__go { min-height: var(--touch-min, 48px); padding: 0 var(--sp-4); font-size: var(--fs-14); }
+.mf-install--home:not(.mf-install--top) .mf-install__later { min-height: var(--touch-min, 48px); }
+
 /* large text: the line goes, the title steps down */
 .is-text-lg .mf-install__line { display: none; }
 .is-text-lg .mf-install__title { font-size: 22px; }
@@ -62,9 +74,12 @@ html.reduce-motion .mf-install { animation: none; }
 .mf-install--top { top: var(--safe-t, 10px); bottom: auto; width: auto; max-width: 600px; }
 
 /* Install app (InstallButton.tsx): the kit's small ghost button, its icon in volt, a volt edge so it
-   reads as the one thing to do in a top bar of status pills (Pen: PWA board · Install app) */
-.mf-install-btn { border-color: color-mix(in srgb, var(--c-volt) 70%, transparent); white-space: nowrap; }
-.mf-install-btn .ic { color: var(--c-volt); }
+   reads as the one thing to do in a top bar of status pills (Pen: PWA board · Install app). On Home it's
+   a quiet icon chip like Friends (UX atlas 1 Nov, UX-11 / UX-14: it outshouted Play now): no volt. */
+.mf-install-btn { white-space: nowrap; }
+.mf-install-btn:not(.mf-install-btn--icon) { border-color: color-mix(in srgb, var(--c-volt) 70%, transparent); }
+.mf-install-btn:not(.mf-install-btn--icon) .ic { color: var(--c-volt); }
+.pm-top .mf-install-btn--icon { flex: none; min-height: 44px; width: 44px; }
 /* PwaHost: the guide a button opened, and the installed confirmation, over any screen */
 .mf-pwa-host .mf-install { pointer-events: auto; position: absolute; left: 50%; translate: -50% 0; width: max-content; max-width: calc(100vw - 32px); }
 /* outside the phone screens' zoom: the same size as on them (a phone's --phone-fit; 1 on a desktop) */

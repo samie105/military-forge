@@ -5,6 +5,11 @@
  * creates a room. Arriving from name entry, the ID card becomes the player chip (motion P2); the
  * rows rise in turn (P3). The chip is the player's own soldier and level (audit 2 P-09, P-04); the
  * side column ends with the last online match and a personal best once there is one (P-10).
+ *
+ * One Home for every player state (UX atlas 1 Nov, batch 3; shell/homeState.ts): first visit and
+ * returning player get Play now; an under-18 device, offline and a suspended account get Training as
+ * the poster, and nothing on Home leads to a refusal. The rail shows one card at a time ("Keep this
+ * name?", then Next orders, then the Squad; the rest fold to a line), and the ticker runs one pass.
  */
 import { FRAG, maps, weapons } from '@military-forge/content';
 import { savedGunIndices } from '../../locker/accountSync';
@@ -17,7 +22,7 @@ import { sharedElement } from '../../ui/motion';
 import { Screen } from '../../ui/Screen';
 import { useCtl } from '../context';
 import type { ShellStore } from '../store';
-import { Backdrop, Hint, Hints, NetPill, OFFLINE_LINE, SUSPENDED_LINE, takeCard } from './frame';
+import { Backdrop, Hint, Hints, NetPill, takeCard } from './frame';
 import { MAP_CARDS, lobbyMaps } from './Lobby';
 import { FriendsButton, LobbyButton, SquadCard } from '../../social/SocialLayer';
 import { SavedAdsList } from '../../ads/SavedAds';
@@ -34,6 +39,8 @@ import { Portrait } from '../../portrait/Portrait';
 import { useMyLook } from '../../looks/mine';
 import { LastMatchCard, LevelLine, LevelTag } from './Progress';
 import { KeepName } from './KeepName';
+import type { HomePlan, Way } from '../homeState';
+import { homePrimary, useHomePlan } from '../useHomePlan';
 
 /** The brand: the emblem and the name, once in the whole UI (round two's .brand on Home). */
 export function Brand() {
@@ -72,15 +79,25 @@ function onControl(el: Element | null): boolean {
   return !!el && el !== document.body && el.matches('button, a[href], input, select, textarea, [role="button"], [role="tab"], [role="radio"], [role="switch"], [role="slider"], [contenteditable="true"]');
 }
 
+/** A room button's sub-line: why it waits (a Way that's off), else `line`. */
+const wayLine = (way: Way, line?: string) => (way.show === 'off' ? way.why : line);
+
 export function Home({ store }: { store: ShellStore }) {
   const ctl = useCtl();
   const profile = useStore(store, (s) => s.profile);
   const offline = !!profile?.offline;
+  const plan = useHomePlan(store);
+  const primary = plan.primary;
+  // the nameplate's tag: no connection, or an account that can't go online
+  const tagIcon = offline && !profile?.suspended ? 'unplug' : 'lock';
+  const training = primary === 'training';
+  // "Keep this name?" is due: it leads the rail (one card at a time, UX-11)
+  const nameDue = useStore(store, (s) => s.nameAsk === true && !!s.profile && !s.profile.offline);
   const chip = useRef<HTMLButtonElement>(null);
   // the player's own soldier is their avatar everywhere (owner rule; audit 2 P-09)
   const look = useMyLook();
   // what Next orders know of this device now (tour/orders.ts)
-  const [ordersContext] = useState(() => ({ offline, touch: isTouchDevice(), pad: currentDevice().pad !== null, drillDone: drillDone() }));
+  const [ordersContext] = useState(() => ({ offline, minor: plan.state === 'minor', suspended: plan.state === 'suspended', touch: isTouchDevice(), pad: currentDevice().pad !== null, drillDone: drillDone() }));
   // one thing at a time (audit 31 Oct, D-01): the play-data question, then the Home stops, then Next orders
   const ask = useHomeAsk();
   // the controller's buttons in the prompts while one plays (audit 2, N-09)
@@ -89,18 +106,18 @@ export function Home({ store }: { store: ShellStore }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // Enter is Play now when no control has focus: on a focused button it presses that button. After a
-      // click on the poster or the page (focus on a non-control), still Play now (audit 2, N-16).
-      // Not under an overlay (Join, the QR panels), nor when a box took it (a pasted code's Enter: the box
-      // may be gone by now, focus on body)
+      // Enter is the poster's action (Play now, or Training) when no control has focus: on a focused button it
+      // presses that button. After a click on the poster or the page (focus on a non-control), still the
+      // poster's (audit 2, N-16). Not under an overlay (Join, the QR panels), nor when a box took it (a
+      // pasted code's Enter: the box may be gone by now, focus on body)
       if (e.code === 'Enter' && !e.defaultPrevented && !store.getState().overlay && !onControl(document.activeElement)) {
         e.preventDefault();
-        ctl.playNow();
+        homePrimary(ctl, { primary });
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [ctl, offline, store]);
+  }, [ctl, primary, store]);
 
   // from name entry: the ID card becomes the player chip (motion P2)
   useLayoutEffect(() => {
@@ -126,10 +143,12 @@ export function Home({ store }: { store: ShellStore }) {
               Play
             </button>
             {/* the open rooms and who's on (rooms/): an overlay over Home, #/rooms */}
-            <button type="button" className="tab m-p8" disabled={offline} onClick={() => ctl.openOverlay('rooms')}>
-              <Icon name="globe" />
-              Rooms
-            </button>
+            {plan.rooms.show !== 'none' && (
+              <button type="button" className="tab m-p8" disabled={plan.rooms.show === 'off'} title={wayLine(plan.rooms)} onClick={() => ctl.openOverlay('rooms')}>
+                <Icon name="globe" />
+                Rooms
+              </button>
+            )}
             <button type="button" className="tab m-p8" data-tour="locker" onClick={() => (location.hash = '#/locker')}>
               <Icon name="shirt" />
               Locker
@@ -149,7 +168,7 @@ export function Home({ store }: { store: ShellStore }) {
             </button>
           </nav>
           <span className="menu-top__spacer"></span>
-          <InstallButton />
+          <InstallButton icon />
           <LobbyButton />
           <FriendsButton />
           <NetPill offline={offline} />
@@ -166,9 +185,10 @@ export function Home({ store }: { store: ShellStore }) {
         <div className="menu-body home">
           <div className="home__play">
             <span className="eyebrow m-p3" style={row(0)}>
-              Ops briefing · Deathmatch with friends
+              {training ? 'Ops briefing · Training against bots' : 'Ops briefing · Deathmatch with friends'}
             </span>
-            <article className="poster halftone-ink home__poster mf-qm m-p3" style={row(1)}>
+            {/* the one primary action (UX-01, UX-15): Play now, or Training when online play isn't open to this player */}
+            <article className={`poster halftone-ink home__poster mf-qm m-p3${training ? ' home__poster--training' : ''}`} style={row(1)} data-home-poster="">
               {/* Quick match's key art: a Street Market fight from the game itself (scripts/map-posters.mjs), shaded where the words sit */}
               <span className="mf-qm__art" aria-hidden="true">
                 <PosterImg poster={QUICK_MATCH_ART} sizes="(max-width: 900px) 70vw, 820px" className="mf-qm__img" />
@@ -177,50 +197,52 @@ export function Home({ store }: { store: ShellStore }) {
               <b className="home__poster-no display" aria-hidden="true">
                 01
               </b>
-              <span className="serial">Op 01 · Quick match</span>
-              <h2 className="display home__poster-title">Play now</h2>
-              {/* offline: the one place Home says so (audit 28 Oct: it said it four ways) */}
-              <p className={offline ? 'home__poster-sub home__poster-sub--off' : 'home__poster-sub'} role={offline ? 'status' : undefined}>
-                {offline ? (profile?.suspended ? SUSPENDED_LINE : OFFLINE_LINE) : 'Bots fill the room and the fight starts at once. Others on Play now may join. Friends join by its code.'}
+              <span className="serial">{training ? 'Op 01 · Training' : 'Op 01 · Quick match'}</span>
+              <h2 className="display home__poster-title">{training ? 'Training' : 'Play now'}</h2>
+              {/* offline or suspended: the one place Home says why (audit 28 Oct: it said it four ways) */}
+              <p className={plan.state === 'offline' || plan.state === 'suspended' ? 'home__poster-sub home__poster-sub--off' : 'home__poster-sub'} role={plan.state === 'offline' || plan.state === 'suspended' ? 'status' : undefined}>
+                {plan.line}
               </p>
               <div className="home__poster-cta">
-                {/* one tap to a fight (mobile audit P1-6); Create room is the friends' way in */}
-                {/* a controller lands here first: ✕ / A plays (audit 2, N-03) */}
-                <button className="btn btn--ink btn--xl home__create m-p8" type="button" data-tour="play" data-pad-first onClick={() => ctl.playNow()}>
-                  <Icon name="play" />
-                  Play now
+                {/* one tap to a fight (mobile audit P1-6); a controller lands here first: ✕ / A presses it (audit 2, N-03) */}
+                <button className="btn btn--ink btn--xl home__create m-p8" type="button" data-tour="play" data-pad-first data-home-primary="" onClick={() => homePrimary(ctl, plan)}>
+                  <Icon name={training ? 'target' : 'play'} />
+                  {training ? 'Training' : 'Play now'}
                 </button>
                 {!pad && <Cap lg>Enter</Cap>}
-                <button className="btn btn--paper btn--lg m-p8" type="button" data-tour="create" disabled={offline} onClick={() => ctl.go({ to: 'create' })}>
-                  <Icon name="users-plus" />
-                  Create room
-                </button>
+                {/* Create room is the friends' way in; offline or suspended it waits and says why; under 18 it isn't drawn */}
+                {plan.create.show !== 'none' && (
+                  <button className="btn btn--paper btn--lg m-p8" type="button" data-tour="create" disabled={plan.create.show === 'off'} onClick={() => ctl.go({ to: 'create' })}>
+                    <Icon name="users-plus" />
+                    {plan.create.show === 'off' ? (
+                      <span className="btn__stack">
+                        Create room
+                        <span className="btn__sub">{wayLine(plan.create)}</span>
+                      </span>
+                    ) : (
+                      'Create room'
+                    )}
+                  </button>
+                )}
                 {/* a local room (lan/): this device hosts, friends on the same Wi-Fi or hotspot join; it works with the internet slow or down */}
-                <button className="btn btn--paper btn--lg mf-home__local m-p8" type="button" onClick={() => ctl.go({ to: 'local' })} title="Host on this device: friends on the same Wi-Fi or hotspot join. Works without internet.">
-                  <Icon name="wifi" />
-                  <span className="btn__stack">
-                    Local room
-                    <span className="btn__sub">Same Wi-Fi · works offline</span>
-                  </span>
-                </button>
+                {plan.local.show !== 'none' && (
+                  <button className="btn btn--paper btn--lg mf-home__local m-p8" type="button" onClick={() => ctl.go({ to: 'local' })} title="Host on this device: friends on the same Wi-Fi or hotspot join. Works without internet.">
+                    <Icon name="wifi" />
+                    <span className="btn__stack">
+                      Local room
+                      <span className="btn__sub">Same Wi-Fi · works offline</span>
+                    </span>
+                  </button>
+                )}
               </div>
               {/* Play now's bots, in plain sight and the player's to change (audit 2 P-01) */}
-              {!offline && <PlayNowBots />}
+              {plan.bots && <PlayNowBots />}
               <span className="hazard" aria-hidden="true"></span>
             </article>
             <div className="home__row">
-              <button type="button" className="ticket rivets home__ticket m-p3" style={row(2)} data-tour="join" onClick={() => ctl.openOverlay('join')}>
-                <Icon name="link" className="home__ghost" />
-                <span className="label">02 · Got a code?</span>
-                <b className="display">Join with code</b>
-                <span className="home__ticket-sub">6 letters, or paste the link</span>
-              </button>
-              <button type="button" className="ticket rivets home__ticket m-p3" style={row(3)} onClick={() => ctl.go({ to: 'training' })}>
-                <Icon name="target" className="home__ghost" />
-                <span className="label">03 · Solo</span>
-                <b className="display">Training</b>
-                <span className="home__ticket-sub">Practice against bots</span>
-              </button>
+              {plan.tickets.map((t, i) => (
+                <HomeTicket key={t} kind={t} n={i + 2} style={row(i + 2)} plan={plan} />
+              ))}
             </div>
           </div>
 
@@ -236,7 +258,15 @@ export function Home({ store }: { store: ShellStore }) {
               <Icon name="helmet" className="mf-home__helmet" />
             </HomeSoldier>
             <div className="home__nameplate mf-home__nameplate" style={{ '--chars': nameplateChars(name) } as CSSProperties}>
-              <span className="stamp stamp--volt m-p7">Ready</span>
+              {/* offline or suspended: said beside the name, so the name never changes silently (UX-15) */}
+              {plan.tag?.tone === 'warn' ? (
+                <span className="tag tag--warn m-p7" role="status">
+                  <Icon name={tagIcon} size="sm" />
+                  {plan.tag.text}
+                </span>
+              ) : (
+                <span className="stamp stamp--volt m-p7">Ready</span>
+              )}
               <b className="display" data-bind="player.name">
                 {name}
               </b>
@@ -259,8 +289,10 @@ export function Home({ store }: { store: ShellStore }) {
                   <span>Frag ×{FRAG.spawnCount}</span>
                 </span>
               </span>
+              {/* under 18: one quiet line says why Home is Training (UX-01; honest, no "change your answer") */}
+              {plan.tag?.tone === 'paper' && <p className="tag tag--paper home__state-note">{plan.tag.text}</p>}
               {/* the level, a number and a bar (audit 2 P-04): online matches earn it */}
-              {!offline && <LevelLine />}
+              {!offline && plan.state !== 'minor' && <LevelLine />}
               {!offline && (
                 <button type="button" className="btn btn--ghost btn--sm m-p8" onClick={() => ctl.openOverlay('name')}>
                   <Icon name="edit" />
@@ -270,17 +302,21 @@ export function Home({ store }: { store: ShellStore }) {
             </div>
           </div>
 
+          {/* one card at a time (UX-11): "Keep this name?" while it's due, else Next orders while there are any,
+              else the Squad with the last match (or Field orders); whatever doesn't lead folds to a line */}
           <aside className="home__side">
             {/* a first visit's generated callsign: keep it or change it (one thing at a time: after the other asks) */}
             {ask === null && <KeepName where="home" />}
-            <SquadCard />
             <NextOrders
               context={ordersContext}
-              held={ask !== null}
+              held={ask !== null || nameDue}
+              after={<SquadCard compact />}
               fallback={
             <>
-            {/* the last online match and a personal best to beat (audit 2 P-10) */}
-            {!offline && <LastMatchCard style={row(5)} />}
+            <SquadCard compact={nameDue} />
+            {/* the last online match and a personal best to beat (audit 2 P-10); Field orders when there's none */}
+            {!offline && !nameDue && <LastMatchCard style={row(5)} />}
+            {!nameDue && (
             <section className="card card--print home__news m-p3" style={row(5)}>
               <span className="label label--volt">Field orders</span>
               <ul>
@@ -308,6 +344,7 @@ export function Home({ store }: { store: ShellStore }) {
                 {pad ? 'All the buttons' : 'All the keys'}
               </button>
             </section>
+            )}
             </>
               }
             />
@@ -328,14 +365,44 @@ export function Home({ store }: { store: ShellStore }) {
         </div>
         {/* no "Esc Menu": Escape on Home has no menu to open (audit 2, N-09) */}
         <Hints>
-          <Hint keys={<Cap>Enter</Cap>}>Play now</Hint>
+          <Hint keys={<Cap>Enter</Cap>}>{training ? 'Training' : 'Play now'}</Hint>
           <Hint pad="Pad0">Select</Hint>
-          <Hint pad={['Pad4', 'Pad5']}>Rooms, Locker, Armory, Store</Hint>
+          <Hint pad={['Pad4', 'Pad5']}>{plan.rooms.show === 'none' ? 'Locker, Armory, Store' : 'Rooms, Locker, Armory, Store'}</Hint>
           <Hint pad="Pad9">Settings</Hint>
         </Hints>
       </div>
       {/* play stats: the one-time choice (docs/16 §6.2) */}
       <ConsentCard where="home" />
     </Screen>
+  );
+}
+
+const TICKETS = {
+  join: { icon: 'link', label: 'Got a code?', title: 'Join with code', line: '' },
+  training: { icon: 'target', label: 'Solo', title: 'Training', line: 'Practice against bots' },
+  flight: { icon: 'jet', label: 'Learn the moves', title: 'First flight', line: 'Five orders in the range, about 90 s' },
+  'live-fire': { icon: 'bot', label: 'First fight', title: 'Live fire', line: 'Three Easy bots, first to 5' },
+} as const;
+
+/** One of the two tickets under the poster (UX-11: two equal tickets); what they are is the state's (homeState.ts). */
+function HomeTicket({ kind, n, style, plan }: { kind: HomePlan['tickets'][number]; n: number; style: CSSProperties; plan: HomePlan }) {
+  const ctl = useCtl();
+  const t = TICKETS[kind];
+  const off = kind === 'join' && plan.join.show === 'off';
+  const run = () => {
+    if (kind === 'join') ctl.openOverlay('join');
+    else if (kind === 'training') ctl.go({ to: 'training' });
+    else if (kind === 'flight') ctl.startFlight();
+    else ctl.train('live-fire');
+  };
+  return (
+    <button type="button" className="ticket rivets home__ticket m-p3" style={style} disabled={off} {...(kind === 'join' ? { 'data-tour': 'join' } : {})} onClick={run}>
+      <Icon name={t.icon} className="home__ghost" />
+      <span className="label">
+        {String(n).padStart(2, '0')} · {t.label}
+      </span>
+      <b className="display">{t.title}</b>
+      <span className="home__ticket-sub">{kind === 'join' ? plan.joinLine : t.line}</span>
+    </button>
   );
 }

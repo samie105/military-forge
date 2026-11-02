@@ -1,13 +1,14 @@
 /*
  * Next orders and the Field manual on Home's side column (tour/NextOrders.tsx; the Pen board's D4): the
- * top card in volt print, two compact rows, the manual folded. Tokens only.
+ * top card in paper print (volt is Home's one primary, the poster: UX atlas 1 Nov, UX-11), two compact
+ * rows, the manual folded. Tokens only.
  */
 .mf-orders { display: flex; flex-direction: column; gap: var(--sp-3); }
 .mf-orders__top {
   display: flex; flex-direction: column; gap: var(--sp-1); padding: var(--sp-4);
-  background: var(--c-volt); color: var(--c-volt-ink); border-radius: var(--r-frost-sm, 0 18px 0 18px);
+  background: var(--c-paper); color: var(--c-paper-text); border-left: var(--bw-chunky) solid var(--c-volt); border-radius: var(--r-frost-sm, 0 18px 0 18px);
 }
-.mf-orders__top .mf-orders__why { color: var(--c-volt-ink); opacity: .78; }
+.mf-orders__top .mf-orders__why { color: var(--c-paper-text); opacity: .78; }
 .mf-orders__title { font-size: var(--fs-36); line-height: 1; }
 .mf-orders__line { margin: 0; font-size: var(--fs-16); font-weight: var(--fw-bold); }
 .mf-orders__why { font-size: var(--fs-14); font-weight: var(--fw-black); letter-spacing: .08em; text-transform: uppercase; color: var(--c-muted); }

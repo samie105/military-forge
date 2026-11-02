@@ -24,6 +24,8 @@ function KeepNameCard({ ctl, where }: { ctl: ShellController; where: Where }) {
   const ask = useStore(store, (s) => s.nameAsk === true);
   const profile = useStore(store, (s) => s.profile);
   if (!ask || !profile || profile.offline) return null;
+  // on Home the poster keeps the one volt button (UX atlas 1 Nov, UX-11): the question's answers are paper and ghost there
+  const onHome = where === 'home' || where === 'phone-home';
   return (
     <section className={`mf-keepname mf-keepname--${where}${where === 'phone-home' ? ' mf-keepname--phone' : ''} m-p3`} aria-labelledby="mf-keepname-q">
       <span className="label label--volt">Your callsign</span>
@@ -31,11 +33,11 @@ function KeepNameCard({ ctl, where }: { ctl: ShellController; where: Where }) {
         You're playing as <b className="display">{profile.nickname}</b>. Keep this name?
       </p>
       <div className="mf-keepname__acts">
-        <button type="button" className="btn btn--volt btn--sm m-p8" data-act="keep-name" onClick={() => ctl.keepName()}>
+        <button type="button" className={`btn ${onHome ? 'btn--paper' : 'btn--volt'} btn--sm m-p8`} data-act="keep-name" onClick={() => ctl.keepName()}>
           <Icon name="ok" />
           Keep it
         </button>
-        <button type="button" className="btn btn--paper btn--sm m-p8" data-act="change-name" onClick={() => ctl.changeName()}>
+        <button type="button" className={`btn ${onHome ? 'btn--ghost' : 'btn--paper'} btn--sm m-p8`} data-act="change-name" onClick={() => ctl.changeName()}>
           <Icon name="edit" />
           Change
         </button>
